@@ -23,6 +23,9 @@
 #include "drms_types.h"
 #include "fftw3.h"
 
+#define PRINTJSD 0
+#define DEBUGMSGS 0
+
 char *module_name = "demo_td08062007";
 
 #define kRecSetIn      "recsin"
@@ -49,6 +52,165 @@ typedef enum
    kDemoError_BadParameter,
    kDemoError_CouldntCreateArray
 } DemoError_t;
+
+
+/* For testing - convert record structure into jsd-file format */
+
+#if PRINTJSD
+void drms_keyword_print_jsd(DRMS_Keyword_t *key) {
+    printf("Keyword:%s",key->info->name);
+    if (key->info->islink) {
+      printf(", link, %s, %s, %s\n", key->info->linkname, 
+	     key->info->target_key,
+	     key->info->description);
+    } else {
+      printf(", %s", drms_type2str(key->info->type));
+      if (key->info->isconstant) 
+	printf(", constant");
+      else
+	printf(", variable");
+      if (key->info->per_segment) 
+	printf(", segment");
+      else 
+	printf(", record");
+      printf(", ");
+      if (key->info->type == DRMS_TYPE_STRING) {
+	char qf[DRMS_MAXFORMATLEN+2];
+	sprintf(qf, "\"%s\"", key->info->format);
+	printf(qf, key->value.string_val);
+      }
+      else 
+	drms_keyword_printval(key);      
+      if (key->info->unit[0] != ' ') {
+	printf(", %s, %s, \"%s\"", key->info->format,
+	       key->info->unit,
+	       key->info->description);
+      } else {
+	printf(", %s, none, \"%s\"", key->info->format,
+	       key->info->description);
+      }
+    }
+    printf("\n");
+}
+
+void drms_segment_print_jsd(DRMS_Segment_t *seg) {
+  int i;
+  printf("Data: %s, ", seg->info->name);
+  if (seg->info->islink) {
+    printf("link, %s, %s", seg->info->linkname, seg->info->target_seg);
+    if (seg->info->naxis) {
+      printf(", %d", seg->info->naxis);
+      printf(", %d", seg->axis[0]);
+      for (i=1; i<seg->info->naxis; i++) {
+	printf(", %d", seg->axis[i]);
+      }
+    }
+  } else {
+    switch(seg->info->scope)
+      {
+      case DRMS_CONSTANT:
+	printf("constant");
+	break;
+      case DRMS_VARIABLE:
+	printf("variable");
+	break;
+      case DRMS_VARDIM:
+	printf("vardim");
+	break;
+      default:
+	printf("Illegal value: %d", (int)seg->info->scope);
+      }
+    printf(", %s, %d", drms_type2str(seg->info->type), seg->info->naxis);
+    if (seg->info->naxis) {
+      printf(", %d", seg->axis[0]);
+      for (i=1; i<seg->info->naxis; i++) {
+	printf(", %d", seg->axis[i]);
+      }
+    }
+    printf(", %s, ", seg->info->unit);  
+    switch(seg->info->protocol)
+      {
+      case DRMS_GENERIC:
+	printf("generic");
+	break;
+      case DRMS_BINARY:
+	printf("binary");
+	break;
+      case DRMS_BINZIP:
+	printf("binzip");
+	break;
+      case DRMS_FITZ:
+	printf("fitz");
+	break;
+      case DRMS_FITS:
+	printf("fits");
+	break;
+      case DRMS_MSI:
+	printf("msi");
+	break;
+      case DRMS_TAS:
+	printf("tas");
+	if (seg->info->naxis) {
+	  printf(", %d", seg->blocksize[0]);      
+	  for (i=1; i<seg->info->naxis; i++)
+	    printf(", %d", seg->blocksize[i]);
+	}
+	break;
+      default:
+	printf("Illegal value: %d", (int)seg->info->protocol);
+      }
+  }
+  printf(", \"%s\"\n", seg->info->description);
+}
+
+void drms_link_print_jsd(DRMS_Link_t *link) {
+  printf("Link: %s, %s, ", link->info->name, link->info->target_series);
+  if (link->info->type == STATIC_LINK)
+    printf("static");
+  else
+    printf("dynamic");
+  printf(", \"%s\"\n", link->info->description);
+}
+
+void print_jsd(DRMS_Record_t *rec) {
+  const int fwidth=17;
+  int i;
+  HIterator_t hit;
+  DRMS_Link_t *link;
+  DRMS_Keyword_t *key;
+  DRMS_Segment_t *seg;
+
+  printf("#=====General Series Information=====\n");
+  printf("%-*s\t%s\n",fwidth,"Seriesname:",rec->seriesinfo->seriesname);
+  printf("%-*s\t\"%s\"\n",fwidth,"Author:",rec->seriesinfo->author);
+  printf("%-*s\t%s\n",fwidth,"Owner:",rec->seriesinfo->owner);
+  printf("%-*s\t%d\n",fwidth,"Unitsize:",rec->seriesinfo->unitsize);
+  printf("%-*s\t%d\n",fwidth,"Archive:",rec->seriesinfo->archive);
+  printf("%-*s\t%d\n",fwidth,"Retention:",rec->seriesinfo->retention);
+  printf("%-*s\t%d\n",fwidth,"Tapegroup:",rec->seriesinfo->tapegroup);
+  if (rec->seriesinfo->pidx_num) {
+    printf("%-*s\t%s",fwidth,"Index:",rec->seriesinfo->pidx_keywords[0]->info->name);
+    for (i=1; i<rec->seriesinfo->pidx_num; i++)
+      printf(", %s", (rec->seriesinfo->pidx_keywords[i])->info->name);
+    printf("\n");
+  }
+  printf("%-*s\t%s\n",fwidth,"Description:",rec->seriesinfo->description);
+  printf("\n#=====Links=====\n");
+  hiter_new(&hit, &rec->links); 
+  while( (link = (DRMS_Link_t *)hiter_getnext(&hit)) )
+    drms_link_print_jsd(link);
+
+  printf("\n#=====Keywords=====\n");
+  hiter_new(&hit, &rec->keywords);
+  while( (key = (DRMS_Keyword_t *)hiter_getnext(&hit)) )
+    drms_keyword_print_jsd(key);
+
+  printf("\n#=====Segments=====\n");
+  hiter_new(&hit, &rec->segments);
+  while( (seg = (DRMS_Segment_t *)hiter_getnext(&hit)) )
+    drms_segment_print_jsd(seg);
+}
+#endif // PRINTJSD
 
 /* CreateOutSeries
  *
@@ -109,6 +271,10 @@ static int CreateOutSeries(DRMS_Env_t *env, DRMS_Record_t *rec)
 	       di.axis[0] = (segproto->axis)[1] / 2;
 	       di.axis[1] = (segproto->axis)[2] / 2;
 	       drms_segment_setdims(segproto, &di);
+
+#if PRINTJSD
+	       print_jsd(prototype);
+#endif 
 	    
 	       status = drms_create_series_fromprototype(&prototype, kOutSeries, 0);
 	       if (status == DRMS_SUCCESS)
@@ -412,10 +578,19 @@ int DoIt(void)
 	       drms_series_exists(drms_env, dsout, &status);
 	       if (status == DRMS_ERROR_UNKNOWNSERIES)
 	       {
+#if DEBUGMSGS
+		  fprintf(stdout, "env cache before\n\n");
+		  hcon_print(&(drms_env->series_cache));
+#endif
+
 		  if (CreateOutSeries(drms_env, rec))
 		  {
 		     error = kDemoError_CouldntCreateSeries;
 		  }
+#if DEBUGMSGS
+		  fprintf(stdout, "env cache after\n\n");
+		  hcon_print(&(drms_env->series_cache));
+#endif
 	       }
 	       else if (status != DRMS_SUCCESS)
 	       {

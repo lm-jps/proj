@@ -336,7 +336,7 @@ static int KeysEqual(DRMSContainer_t *keys1, DRMSContainer_t *keys2)
 	  DRMS_Keyword_t **currKey2 = NULL;
 	  while ((currKey = (DRMS_Keyword_t **)hiter_getnext(&(keys1->iter))) != NULL)
 	  {
-	       if ((currKey2 = hcon_lookup(keys2->items, (*currKey)->info->name)) == NULL)
+	       if ((currKey2 = hcon_lookup_lower(keys2->items, (*currKey)->info->name)) == NULL)
 	       {
 		    ret = 0;
 		    break;
@@ -371,7 +371,7 @@ static int CreateMatchingSegs(DRMSContainer_t *segs1, DRMSContainer_t *segs2, DR
      while ((currSeg = (DRMS_Segment_t *)hiter_getnext(&(segs1->iter))) != NULL)
      {
 	  if (segs1 == segs2 ||
-	      hcon_lookup(segs2->items, currSeg->info->name) != NULL)
+	      hcon_lookup_lower(segs2->items, currSeg->info->name) != NULL)
 	  {
 	       nMatch++;
 
@@ -470,8 +470,8 @@ static int ValidateBinaryOperands(DRMS_Env_t *drmsEnv,
 	       {
 		    char *aSegName = segNameArr[iSeg];
 		    
-		    if (hcon_lookup(inSegs->items, aSegName) == NULL ||
-			hcon_lookup(withSegs->items, aSegName) == NULL)
+		    if (hcon_lookup_lower(inSegs->items, aSegName) == NULL ||
+			hcon_lookup_lower(withSegs->items, aSegName) == NULL)
 		    {
 			 error = 1;
 			 fprintf(stderr, "Segment %s not present in an input recordset.\n", 
