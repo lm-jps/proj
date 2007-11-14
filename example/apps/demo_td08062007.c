@@ -53,6 +53,12 @@ typedef enum
    kDemoError_CouldntCreateArray
 } DemoError_t;
 
+typedef enum
+{
+   kOutputSeriesDisp_Unknown,
+   kOutputSeriesDisp_DoesntExist,
+   kOutputSeriesDisp_Exists,
+} OutputSeriesDisp_t;
 
 /* For testing - convert record structure into jsd-file format */
 
@@ -535,28 +541,89 @@ int DoIt(void)
    int status = DRMS_SUCCESS;
    DemoError_t error = kDemoError_Success;
    char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
+   char rquery[DRMS_MAXQUERYLEN];
    char *dsout = cmdparams_get_str(&cmdparams, kDSOut, NULL);
    DRMS_RecordSet_t *inRecSet = NULL;
-   int isDSDS;
-   char *pQ = (*inRecQuery == '{') ? inRecQuery + 1 : inRecQuery;
+   DRMS_RecordQueryType_t rqueryType;
+   OutputSeriesDisp_t disp;
 
-   isDSDS = DSDS_IsDSDSSpec(pQ);
+   rqueryType = drms_record_getquerytype(inRecQuery);
 
-   if (isDSDS)
+   if (rqueryType == kRecordQueryType_DSDS)
    {
       fprintf(stdout, "Fetching records from DSDS");
       fflush(stdout);
       LogTime(1, NULL);
    }
 
-   inRecSet = drms_open_records(drms_env, inRecQuery, &status);
+   drms_series_exists(drms_env, dsout, &status);
+   disp = (status == DRMS_ERROR_UNKNOWNSERIES) ? kOutputSeriesDisp_DoesntExist : 
+     ((status != DRMS_SUCCESS) ? kOutputSeriesDisp_Unknown : kOutputSeriesDisp_Exists);
 
-   if (isDSDS)
+   if (disp == kOutputSeriesDisp_Unknown)
    {
-      LogTime(0, "");
+      error = kDemoError_CouldntCheckSeries;
+   }
+   else
+   {
+      if (disp == kOutputSeriesDisp_Exists && 
+	  !strchr(inRecQuery, '[') && 
+	  rqueryType == kRecordQueryType_LOCAL)
+      {
+	 /* series exists, so use its prime keys when creating records from local
+	  * data files (unless user specified prime keys on cmd-line) */
+	 int nPKeys = 0;
+	 char **pkArray = NULL;
+   
+	 pkArray = drms_series_createpkeyarray(drms_env, dsout, &nPKeys, &status);
+	 if (status == DRMS_SUCCESS)
+	 {
+	    char *buf = (char *)malloc(sizeof(char) * DRMS_MAXNAMELEN * nPKeys + 32);
+	    *buf = '\0';
+	    int iKey;
+
+	    for (iKey = 0; iKey < nPKeys; iKey++)
+	    {
+	       if (!iKey == 0)
+	       {
+		  strcat(buf, ",");
+	       }
+
+	       strcat(buf, pkArray[iKey]);
+	    }
+
+	    snprintf(rquery, sizeof(rquery), "%s[%s]", inRecQuery, buf);
+
+	    if (buf)
+	    {
+	       free(buf);
+	    }
+
+	    drms_series_destroypkeyarray(&pkArray, nPKeys);
+	 }
+	 else
+	 {
+	    error = kDemoError_CouldntCheckSeries;
+	 }
+      }
+      else
+      {
+	 /* drms query */
+	 snprintf(rquery, sizeof(rquery), "%s", inRecQuery);
+      }
+
+      if (!error)
+      {
+	 inRecSet = drms_open_records(drms_env, rquery, &status);
+
+	 if (rqueryType == kRecordQueryType_DSDS)
+	 {
+	    LogTime(0, "");
+	 }
+      }
    }
 
-   if (status == DRMS_SUCCESS)
+   if (!error && status == DRMS_SUCCESS)
    {
       int nRecs = inRecSet->n;
       int iRec;
@@ -566,56 +633,41 @@ int DoIt(void)
       DRMS_Segment_t *segout = NULL;
       DRMS_Segment_t *segin = NULL;
 
+      if (nRecs > 0)
+      {
+	 if (disp == kOutputSeriesDisp_DoesntExist)
+	 {
+#if DEBUGMSGS
+	    fprintf(stdout, "env cache before\n\n");
+	    hcon_print(&(drms_env->series_cache));
+#endif
+
+	    if (CreateOutSeries(drms_env, inRecSet->records[0]))
+	    {
+	       error = kDemoError_CouldntCreateSeries;
+	    }
+
+#if DEBUGMSGS
+	    fprintf(stdout, "env cache after\n\n");
+	    hcon_print(&(drms_env->series_cache));
+#endif	    
+	 }
+      }
+
       for (iRec = 0; !error && iRec < nRecs; iRec++)
       {
 	 DRMS_Record_t *rec = inRecSet->records[iRec];
 	 if (rec)
 	 {
-	    if (iRec == 0)
+	    fprintf(stdout, "Record %d\n", iRec);
+	    fflush(stdout);
+	    
+	    /* Check for compatibility of each record with existing series. */
+	    if (!CheckCompat(drms_env, rec, dsout))
 	    {
-	       fprintf(stdout, "Record %d\n", iRec);
-	       fflush(stdout);
-
-	       /* Create output series if necessary. */
-	       drms_series_exists(drms_env, dsout, &status);
-	       if (status == DRMS_ERROR_UNKNOWNSERIES)
-	       {
-#if DEBUGMSGS
-		  fprintf(stdout, "env cache before\n\n");
-		  hcon_print(&(drms_env->series_cache));
-#endif
-
-		  if (CreateOutSeries(drms_env, rec))
-		  {
-		     error = kDemoError_CouldntCreateSeries;
-		  }
-#if DEBUGMSGS
-		  fprintf(stdout, "env cache after\n\n");
-		  hcon_print(&(drms_env->series_cache));
-#endif
-	       }
-	       else if (status != DRMS_SUCCESS)
-	       {
-		  error = kDemoError_CouldntCheckSeries;
-	       }
-	       else
-	       {
-		  /* Check for compatibility of each record with existing series. */
-		  if (!CheckCompat(drms_env, rec, dsout))
-		  {
-		     error = kDemoError_InputIncompatibleWithSeries;
-		  }
-	       }
+	       error = kDemoError_InputIncompatibleWithSeries;
 	    }
-	    else
-	    {
-	       /* Check for compatibility of each record with existing series. */
-	       if (!CheckCompat(drms_env, rec, dsout))
-	       {
-		  error = kDemoError_InputIncompatibleWithSeries;
-	       }
-	    }
-
+	    
 	    if (!error)
 	    {
 	       segin = drms_segment_lookupnum(rec, 0);
