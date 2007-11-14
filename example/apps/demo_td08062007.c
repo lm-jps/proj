@@ -256,7 +256,8 @@ static int CreateOutSeries(DRMS_Env_t *env, DRMS_Record_t *rec)
 	    }
 	    else 
 	    {
-	       if (segproto->info->protocol == DRMS_DSDS)
+	       if (segproto->info->protocol == DRMS_DSDS ||
+		   segproto->info->protocol == DRMS_LOCAL)
 	       {
 		  /* Input is a DSDS series. */
 		  segproto->info->protocol = DRMS_FITS;
@@ -317,7 +318,8 @@ static int CheckCompat(DRMS_Env_t *env, DRMS_Record_t *rec, const char *dsout)
       {
 	 DRMS_SegmentDimInfo_t di;
 
-	 if (segproto->info->protocol == DRMS_DSDS)
+	 if (segproto->info->protocol == DRMS_DSDS ||
+	     segproto->info->protocol == DRMS_LOCAL)
 	 {
 	    /* Input is a DSDS series. */
 	    segproto->info->protocol = DRMS_FITS;
