@@ -50,7 +50,10 @@ typedef enum
    kDemoError_UnsupportedDimensionality,
    kDemoError_UnsupportedDataType,
    kDemoError_BadParameter,
-   kDemoError_CouldntCreateArray
+   kDemoError_CouldntCreateArray,
+   kDemoError_UnknownSeries,
+   kDemoError_BadQuerySyntax,
+   kDemoError_DrmsOpen
 } DemoError_t;
 
 typedef enum
@@ -620,10 +623,34 @@ int DoIt(void)
 	 {
 	    LogTime(0, "");
 	 }
+
+	 if (status == DRMS_ERROR_UNKNOWNSERIES)
+	 {
+	    error = kDemoError_UnknownSeries;
+	    fprintf(stderr, "Unknown series.\n");
+	 }
+	 else if (status == DRMS_ERROR_INVALIDDATA)
+	 {
+	    error = kDemoError_BadQuerySyntax;
+	 }
+	 else if (status == DRMS_INEXACT)
+	 {
+	    error = kDemoError_BadQuerySyntax;
+	    fprintf(stderr, "Error in drms_open_records(), err num %d.\n"
+		    "Probably bad series query syntax, or invalid local file/directory name.\n", 
+		    status);
+	 }
+	 else if (status != DRMS_SUCCESS)
+	 {
+	    error = kDemoError_DrmsOpen;
+	    fprintf(stderr, "Error in drms_open_records(), err num %d.\n"
+		    "Probably bad series query syntax, or invalid local file/directory name.\n", 
+		    status);
+	 }
       }
    }
 
-   if (!error && status == DRMS_SUCCESS)
+   if (!error)
    {
       int nRecs = inRecSet->n;
       int iRec;
