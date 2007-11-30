@@ -57,7 +57,8 @@
 #define MAXFILES 512		/* max # of file can handle in tlmdir */
 #define NUMTIMERS 10		/* number of seperate timers avail */
 #define TESTAPPID 0x199		/* appid of test pattern packet */
-#define TESTVALUE 0xc0b		/* first value in test pattern packet */
+#define TESTVALUE 0             /* first value in test pattern packet */
+  	                                 /* previous used 0xc0b */
 
 FILE *h0logfp;                  /* fp for h0 ouput log for this run */
 
@@ -342,7 +343,7 @@ void now_do_alrm_sig()
     fid = ID2FID(decomp_stat[i].ID);
     openimg_ptr = (OPENIMG *)getopenimg(openimg_hdr, fsn);
     if(openimg_ptr != NULL) {
-      h0log("#Timeout: Found an open image fsn=%d sec=%d call_time=%d\n",
+      h0log("#Timeout: Found an open image fsn=%u sec=%d call_time=%d\n",
             openimg_ptr->fsn, openimg_ptr->sec, call_time()); /*!!TEMP*/
       if((openimg_ptr->sec + ALRMSEC) <= call_time()) { /* image timed out */
         h0log("decmpress_print_status() says:\n");
@@ -350,7 +351,7 @@ void now_do_alrm_sig()
         h0log("Write partial image for timed out image.\n");
         status = decompress_flush_image(fsn, fid, &image);
         if(status == SUCCESS) {
-          h0log("*SUCCESS FLUSH of partial image fsn=%d\n", fsn);
+	  h0log("*SUCCESS FLUSH of partial image fsn=%u\n", fsn);
 /**********************************************!!!OLD**************
           if(catalog_image(image)) {
             h0log("Error on catalog_image()\n");
@@ -367,11 +368,11 @@ void now_do_alrm_sig()
             h0log("%s\n", cmd);
             system(cmd);
           }
-          h0log("*SUCCESS FLUSH of partial image %s for fsn=%d\n", 
+	  h0log("*SUCCESS FLUSH of partial image %s for fsn=%u\n",
 			imgfile, fsn);
         }
         else {
-          h0log("Can't flush image for fsn = %d\n", fsn);
+	  h0log("Can't flush image for fsn = %u\n", fsn);
         }
         remopenimg(&openimg_hdr, fsn);
       }
@@ -430,10 +431,10 @@ void now_do_term_sig()
         h0log("%s\n", cmd);
         system(cmd);
       }
-      h0log("*SUCCESS FLUSH of partial image %s for fsn=%d\n", imgfile, fsn);
+      h0log("*SUCCESS FLUSH of partial image %s for fsn=%u\n", imgfile, fsn);
     }
     else {
-      h0log("Can't flush image for fsn = %d. Status=%d\n", fsn, status);
+      h0log("Can't flush image for fsn = %u. Status=%d\n", fsn, status);
     }
   }
   free(decomp_stat);
@@ -645,6 +646,9 @@ int get_tlm(char *file)
     appid = MDI_getshort(cbuf+18);
     appid = appid & 0x07ff;
     if(appid == TESTAPPID) {	/* appid of test pattern */
+
+  	       continue;                 /* !!TEMP just go to next pkt */
+
       /*h0log("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
 			TESTAPPID, vcdu_seq_num);*/
       for(i=0, j=TESTVALUE; i < 877; i=i+2, j++) {
@@ -678,7 +682,7 @@ int get_tlm(char *file)
       cnt2 = MDI_getshort(cbuf+34);
       fsnx = (unsigned int)(cnt1<<16)+(unsigned int)(cnt2);
       if(fsnx != fsn_prev) {            /* the fsn has changed */
-        h0log("*FSN has changed from %d to %d\n", fsn_prev, fsnx);
+	h0log("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
         /* close the image of the prev fsn if not 0 */
         if(fsn_prev != 0) {
           for(nx=0; nx < numcontexts; nx++) {
@@ -694,7 +698,7 @@ int get_tlm(char *file)
                 fid = ID2FID(Context[nx]->ID);
                 status = decompress_flush_image(fsn, fid, &partimg);
                 if(status == SUCCESS) {
-                  h0log("*SUCCESS FLUSH of partial image fsn=%d\n", fsn);
+		  h0log("*SUCCESS FLUSH of partial image fsn=%u\n", fsn);
 /**********************************************!!!OLD**************
                   if(catalog_image(partimg)) {
                     h0log("Error on catalog_image()\n");
@@ -715,7 +719,7 @@ int get_tlm(char *file)
                   }
                 }
                 else {
-                  h0log("*FAILURE to flush prev fsn=%d\n", fsn);
+		  h0log("*FAILURE to flush prev fsn=%u\n", fsn);
                 }
                 remopenimg(&openimg_hdr, fsn); /* remove in case it's there */
             }

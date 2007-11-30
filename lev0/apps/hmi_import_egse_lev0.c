@@ -361,25 +361,59 @@ printf("   %s\n", (RALmode ? "RAL mode" : "DCHRI mode"));
         {
         char *fits_val_str = dr_attrvalue_str(fits_attr);
 // fprintf(stderr, "	Found usename=%s value=%s\n",usename,fits_val_str);
-        drms_setkey_string(rec, keyname, fits_val_str);
+/* emergency patch to shutter times */
+/* problem starts at version 435
+   P% show_keys "ds=hmi_ground.lev0[628720-628730]" key=FSN,PACKET_VERSION_NUMBER,HMI_SHM_IMG_CLOSE_BOTTOM,DATEORIG
+   FSN     PACKET_VERSION_NUMBER   HMI_SHM_IMG_CLOSE_BOTTOM        DATEORIG
+   0628720 424     3782456 2007-10-04 13:26:55
+   0628721 424     3777470 2007-10-04 13:26:52
+   0628722 424     0       2007-10-04 13:26:57
+   0628723 424     0       2007-10-04 13:26:59
+   0628724 435     0       2007-10-04 23:00:40
+   0628725 435     0       2007-10-04 23:01:09
+   0628726 435     0       2007-10-04 23:01:49
+   0628727 435     3       2007-10-04 23:02:39
+   0628728 435     0       2007-10-04 23:03:29
+*/
+  	 
+	int fixversion = dr_getkey_int(tmpdr, "HVN00F");
+	int newfixversion = dr_getkey_int(tmpdr, "HVNISP");
+	if ((newfixversion >= 435 || fixversion >= 435) &&
+	    (strcmp(usename,"HSHMICLB") == 0 ||
+	     strcmp(usename,"HSHMICLM") == 0 ||
+	     strcmp(usename,"HSHMICLT") == 0 ||
+	     strcmp(usename,"HSHMIOPB") == 0 ||
+	     strcmp(usename,"HSHMIOPM") == 0 ||
+	     strcmp(usename,"HSHMIOPT") == 0 ))
+	{
+  	   double dv = atof(fits_val_str);
+  	   int iv = 1000*dv;
+	   printf("XXX fix version = %d, in string = %s\n", fixversion, fits_val_str);
+	   printf("XXX iv = %d\n", iv);
+  	   drms_setkey_int(rec, keyname, iv);
+  	   dr_setkey_int(tmpdr, usename, iv);
+	}
+	else
+	  /* end of shutter patch */
+	  drms_setkey_string(rec, keyname, fits_val_str);
         if (strcmp(usename, shortname) != 0)
-		{
-		free(fits_attr->name);
-		fits_attr->name = strdup(shortname);
-		}
+	{
+	   free(fits_attr->name);
+	   fits_attr->name = strdup(shortname);
+	}
         if (RALmode)
-	  {
-	  if (!strcmp(shortname,"HPCUPOLR") ||
-	      !strcmp(shortname,"HPCUPOLM") ||
-	      !strcmp(shortname,"HPCURETR") ||
-	      !strcmp(shortname,"HPCURETM") )
-	    dr_setkey_double(tmpdr, shortname, strtod(fits_val_str, NULL));
-	  }
+	{
+	   if (!strcmp(shortname,"HPCUPOLR") ||
+	       !strcmp(shortname,"HPCUPOLM") ||
+	       !strcmp(shortname,"HPCURETR") ||
+	       !strcmp(shortname,"HPCURETM") )
+	     dr_setkey_double(tmpdr, shortname, strtod(fits_val_str, NULL));
+	}
         free(fits_val_str);
         }
       else
-        {
-	/* set the dr key to the drms default value */
+      {
+	 /* set the dr key to the drms default value */
 fprintf(stderr, " using default value for %s\n", shortname);
         dr_setkey_drmstype(tmpdr, shortname, key);
         }

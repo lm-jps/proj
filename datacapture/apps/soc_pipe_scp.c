@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
     while((dp=readdir(dfd)) != NULL) {
       /* First copy .tlm files. */
       if(strstr(dp->d_name, ".tlm")) {
-        sprintf(cmd, "scp -p %s/%s %s:%s 1> /dev/null 2>&1",
+	sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
 			sourcedir, dp->d_name, hostname, targetdir);
         printk("%s\n", cmd);
         if(system(cmd)) {
@@ -240,7 +240,7 @@ int main(int argc, char *argv[])
     for(j = 0; j < i; j++) {
       if(!strcmp(nontlmnames[j], ".") || !strcmp(nontlmnames[j], "..")) 
         continue;
-      sprintf(cmd, "scp -p %s/%s %s:%s 1> /dev/null 2>&1",
+      sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
 			sourcedir, nontlmnames[j], hostname, targetdir);
       printk("%s\n", cmd);
       if(system(cmd)) {

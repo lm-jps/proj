@@ -1,4 +1,4 @@
-#! $Id: in_air_cal3.p,v 1.1 2007/10/16 22:48:16 arta Exp $
+#! $Id: in_air_cal3.p,v 1.2 2007/11/30 22:16:20 arta Exp $
 #! $Name:  $
 #! Description: In-air calibration polarization tuning table
 # Lasted updated by:  J. Drake
@@ -313,3 +313,13 @@
 337   62   61   54 # ModC6
 338   62   91   24 # ModC6
 339   62   91   54 # ModC6
+340   84  129   74 # ModA7 # From Juan 071030
+341   84  129   44 # ModA7 # From Juan 071030
+342   95  129   86 # ModA7 # From Juan 071030
+343   95  129   56 # ModA7 # From Juan 071030
+344   97  129   35 # ModC7 # From Juan 071030
+345   97  129    5 # ModC7 # From Juan 071030
+346   97  129   50 # ModC7 # From Juan 071030
+347   97  129   80 # ModC7 # From Juan 071030
+348   82  129   50 # ModC7 # From Juan 071030
+349   82  129   80 # ModC7 # From Juan 071030

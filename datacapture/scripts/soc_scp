@@ -10,8 +10,12 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #e.g.
 #soc_scp hmi 60 60 /dds/dds2soc /usr/local/logs/soc/soc_scp_hmi_jim_2007.02.14_12:10:02.log
 #
-$GENTLM1 = "VCz.tlm";           #file of telemetry to inject in sim mode
-$GENTLM2 = "VCz.tlm";           #file of telemetry to inject in sim mode
+
+$GENTLM1 = "/dds/stage/VC01_2007_293_00_50_25_0000012ef6d_11445_00.tlm";
+$GENTLM2 = "/dds/stage/VC01_2007_293_00_50_56_000001403b2_11445_00.tlm";
+  	 
+#$GENTLM1 = "VCz.tlm";           #file of telemetry to inject in sim mode
+#$GENTLM2 = "VCz.tlm";           #file of telemetry to inject in sim mode
 $flipflop = 0;
 $QAC_SIZE = 1003;               #size of a qac file (!!!TBD)
 
@@ -132,7 +136,8 @@ if(!$init) {
   print TXT "TLM_FILE_SIZE=$size\n";
 }
 else {
-  print TXT "TLM_FILE_SIZE=99\n"; 		#force size error
+  #print TXT "TLM_FILE_SIZE=99\n";              #force size error
+  print TXT "TLM_FILE_SIZE=$size\n";
   $init = 0;
 }
   print TXT "TLM_FILE_FINGER_PRINT=$md5tlm\n";
@@ -186,6 +191,7 @@ else {
       #print DSF "$x $size 2\n";
       #print DSF "$x $size 3\n"; #!!TEMP illegal value
     }
+    #print DSF "FILE_NAME=junk_err_file.err\nSTATUS=1\n"; #!!!TEMP err file
     close(DSF);
     @alltlm = ();
   }

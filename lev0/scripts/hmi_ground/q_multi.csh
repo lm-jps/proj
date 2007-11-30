@@ -19,7 +19,7 @@ while ($f <= $l)
   if ($n > $BATCHSIZE) then
     @ tl = $f + $BATCHSIZE - 1
   endif
-  drms_run -lifetime 30 q_import_lev0_CIF_from_DSDS.csh $f $tl $LEVEL >& set.$set.$$ &
+  drms_run -lifetime 30 -L q_import_lev0_CIF_from_DSDS.csh $f $tl $LEVEL >& set.$set.$$ &
   @ set = $set + 1
   @ f = $tl + 1
 end

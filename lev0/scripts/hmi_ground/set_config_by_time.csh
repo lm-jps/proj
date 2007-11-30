@@ -1,6 +1,6 @@
 #! /bin/csh -f
 set noglob
- set echo
+# set echo
 
 # set_config_by_time {T_OBS} {FSN} {DRMSSESSION}
 

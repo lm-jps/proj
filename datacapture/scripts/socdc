@@ -25,10 +25,13 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #
 use Tk;
 
-$GENTLM1 = "VCz.tlm";		#file of telemetry to inject in sim mode
-$GENTLM2 = "VCz.tlm";		#file of telemetry to inject in sim mode
-#$GENTLM1 = "VC02_1.tlm";		#file of telemetry to inject in sim mode
-#$GENTLM2 = "VC02_2.tlm";		#file of telemetry to inject in sim mode
+$GENTLM1 = "/dds/stage/VC01_2007_293_00_50_25_0000012ef6d_11445_00.tlm";
+$GENTLM2 = "/dds/stage/VC01_2007_293_00_50_56_000001403b2_11445_00.tlm";
+
+#$GENTLM1 = "VCz.tlm";          #file of telemetry to inject in sim mode
+#$GENTLM2 = "VCz.tlm";          #file of telemetry to inject in sim mode
+#$GENTLM1 = "VC02_1.tlm";               #file of telemetry to inject in sim mode
+#$GENTLM2 = "VC02_2.tlm";               #file of telemetry to inject in sim mode
 #$GENTLM1 = "tlm5";		#file of telemetry to inject in sim mode
 #$GENTLM2 = "tlm5";		#file of telemetry to inject in sim mode
 #$GENTLM1 = "gentlm1.out";	#file of telemetry to inject in sim mode
@@ -1703,6 +1706,7 @@ sub Sim_DDS
 #   my $atime,my $mtime,my $ctime,my $blksize,my $blocks) = 
 #   stat "$DIRDDS2SOC/$tlmfile";
   $size = (-s "$DIRDDS2SOC/$tlmfile");
+  print "size = $size\n";  #!!!TEMP
   push(@alltlm, $tlmfile);
   #Now make a corresponding .qac file for the .tlm file
   #A .qac file looks like:
@@ -1814,7 +1818,7 @@ sub Sim_DDS
 #by ls_update are in @filenames.
 sub socget {
   $t = &labeltime;
-  print LOG "$t Call to socget()\n";
+  #print LOG "$t Call to socget()\n";
   #Get all the .qac files in the current $DIRDDS2SOC dir
   @qacfiles = grep(/\.qac/, @filenames);
   #Get all the .dsf files in the current $DIRDDS2SOC dir
@@ -1956,7 +1960,7 @@ sub socget {
       print LOG "*  **WARNING: qac size expect=$qacsize, got=$getsize\n";
     }
     if($errfilename ne "00000000000000000000000000000000000000000000000") {
-      print LOG "*  **WARNING: .err file received\n";
+      print LOG "*  **WARNING: .err file received: $errfilename\n";
       $f = "$DIRDDS2SOC/$errfilename";
       $getsize = (-s $f);
       if(!$getsize) {
@@ -1964,16 +1968,20 @@ sub socget {
         #new 28Jun2007 - request rexmit
         $rexmitname = $errfilename;
         $size = $errfilesize;
-        $rexmit = 1;
+        if(!grep(/$rexmitname/, @xmitpend)) {         #no dups
+          push(@rexmitfiles, "$rexmitname");
+  	}
+  	next;           # contine while shift(@qacfiles)
       }
       else {
         if($errfilesize != $getsize) {
           print LOG "*  **WARNING: Bad errfile size $errfilename\n";
           print LOG "*  **WARNING: size expect=$errfilesize, got=$getsize\n";
         }
-        $cmd = "mv $DIRDDS2SOC/$errfilename $DIRREJECT";#reject the .err file
+        $cmd = "mv -f $DIRDDS2SOC/$errfilename $DIRREJECT";#reject the .err file
         print LOG "$cmd\n";
         `$cmd`;
+        push(@tlmreceived, $errfilename); #we will ack it in the .asf
       }
     }
     if($gapcntr != 0) {			#info for all gaps not in .qac file
@@ -1988,14 +1996,14 @@ sub socget {
     if(!$tlmfile) {
       print LOG "\n*  **ERROR: No TLM_FILE_NAME= in $file\n";
       print LOG "  The .tlm file will not be processed.\n";
-      $cmd = "mv $DIRDDS2SOC/$file $DIRREJECT";	#reject the .qac file
+      $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
       #there might be a .tlm file anyway so move it too
       $pos = rindex($file, '.');
       $part = substr($file, 0, $pos);
       $tlmfile = "$part".".tlm";
-      $cmd = "mv $DIRDDS2SOC/$tlmfile $DIRREJECT";
+      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";
       print LOG "$cmd\n";
       `$cmd`;
       next;
@@ -2006,7 +2014,7 @@ sub socget {
       if(!$getsize) {
         print LOG "\n*  **ERROR: Missing $tlmfile\n";
         print LOG "  Retransmission request will be made.\n";
-        $cmd = "mv $DIRDDS2SOC/$file $DIRREJECT";	#reject the .qac file
+        $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";    #reject the .qac file
         print LOG "$cmd\n";
         `$cmd`;
         $rexmitname = $tlmfile;
@@ -2021,10 +2029,10 @@ sub socget {
     if(!$size) {
       print LOG "*  **ERROR: No TLM_FILE_SIZE= in $file\n";
       print LOG "  Retransmission request will be made.\n";
-      $cmd = "mv $DIRDDS2SOC/$file $DIRREJECT";	#reject the .qac file
+      $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
-      $cmd = "mv $DIRDDS2SOC/$tlmfile $DIRREJECT";	#and the .tlm file
+      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";   #and the .tlm file
       print LOG "$cmd\n";
       `$cmd`;
       $rexmitname = $tlmfile;
@@ -2034,10 +2042,10 @@ sub socget {
       if($size != $getsize) {
         print LOG "*  **ERROR: Incorrect tlm size $tlmfile\n";
         print LOG "  Retransmission request will be made.\n";
-        $cmd = "mv $DIRDDS2SOC/$file $DIRREJECT";	#reject the .qac file
+        $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";    #reject the .qac file
         print LOG "$cmd\n";
         `$cmd`;
-        $cmd = "mv $DIRDDS2SOC/$tlmfile $DIRREJECT"; #and the .tlm file
+        $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT"; #and the .tlm file
         print LOG "$cmd\n";
         `$cmd`;
         $rexmitname = $tlmfile;
@@ -2047,10 +2055,10 @@ sub socget {
     if($tlmfingerprint ne $md5tlm) {
       print LOG "*  **ERROR: TLM_FILE_FINGER_PRINT not verified\n";
       print LOG "  Retransmission request will be made.\n";
-      $cmd = "mv $DIRDDS2SOC/$file $DIRREJECT";	#reject the .qac file
+      $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
-      $cmd = "mv $DIRDDS2SOC/$tlmfile $DIRREJECT";	#and the .tlm file
+      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";   #and the .tlm file
       print LOG "$cmd\n";
       `$cmd`;
       $rexmitname = $tlmfile;
@@ -2059,10 +2067,10 @@ sub socget {
     if($eofmarker ne "C5C5") {
       print LOG "*  **ERROR: No EOF_MARKER tag in $file\n";
       print LOG "  Retransmission request will be made.\n";
-      $cmd = "mv $DIRDDS2SOC/$file $DIRREJECT";	#reject the .qac file
+      $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
-      $cmd = "mv $DIRDDS2SOC/$tlmfile $DIRREJECT";	#and the .tlm file
+      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";   #and the .tlm file
       print LOG "$cmd\n";
       `$cmd`;
       $rexmitname = $tlmfile;
@@ -2090,7 +2098,7 @@ sub socget {
       #$cmd = "cp -p $ftlm $DIRSOC2PIPE";	#cp .tlm to pipe dir
       #print LOG "  $cmd\n";
       #`$cmd`;
-      $cmd = "mv $ftlm $DIRSOC2SOC";		#move the good .tlm file
+      $cmd = "mv -f $ftlm $DIRSOC2SOC";         #move the good .tlm file
       print LOG "  $cmd\n";
       `$cmd`;
       #$cmd = "cp -p $DIRDDS2SOC/$file $DIRSOC2PIPE"; #cp .qac to pipe dir
@@ -2098,9 +2106,9 @@ sub socget {
       #`$cmd`;
       if($qacx) {
         $filex = $file."x";			   #make this a .qacx file 
-        $cmd = "mv $DIRDDS2SOC/$file $DIRSOC2SOC/$filex";
+        $cmd = "mv -f $DIRDDS2SOC/$file $DIRSOC2SOC/$filex";
       } else {
-        $cmd = "mv $DIRDDS2SOC/$file $DIRSOC2SOC"; #and the good .qac file
+        $cmd = "mv -f $DIRDDS2SOC/$file $DIRSOC2SOC"; #and the good .qac file
       }
       print LOG "  $cmd\n";
       `$cmd`;
@@ -2139,6 +2147,9 @@ sub socget {
     # 2    |Retransmit     |SOC requested retransmit                      |
     # 3    |Acknowledge    |SOC acknowledges receipt of this TLM file.    |
     while($line = shift(@x)) {
+      if($line =~ /^EOF_MARKER=/) {
+        last;
+      }
       #($lfile, $lsize, $lstat) = split(/\s/, $line); #old format
       #!!!TBD ck for correct sequence of lines
       if($line =~ /^FILE_NAME=/) {
