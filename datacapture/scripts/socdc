@@ -59,6 +59,9 @@ $pid1 = -1;
 $flipflop = 0;
 $fitzmode = " ";
 @xmitpend = ();
+#@tlmreceived = ();
+%Hoftlmreceived = ();           #hash key is tlm file name
+@rexmitfiles = ();
 
 #Set up environment for hk decode to Carl's for now...
 $ENV{'HK_CONFIG_DIRECTORY'} = "/home/carl/EGSE/tables/hk_config_file/";
@@ -1981,7 +1984,8 @@ sub socget {
         $cmd = "mv -f $DIRDDS2SOC/$errfilename $DIRREJECT";#reject the .err file
         print LOG "$cmd\n";
         `$cmd`;
-        push(@tlmreceived, $errfilename); #we will ack it in the .asf
+        #push(@tlmreceived, $errfilename); #we will ack it in the .asf
+  	$Hoftlmreceived{$errfilename} = 1; #we will ack it in the .asf
       }
     }
     if($gapcntr != 0) {			#info for all gaps not in .qac file
@@ -2082,7 +2086,8 @@ sub socget {
       }
     }
     else {
-      push(@tlmreceived, $tlmfile);
+      #push(@tlmreceived, $tlmfile);
+      $Hoftlmreceived{$tlmfile} = 1;
       $qacx = 0;
       if(grep(/$tlmfile/, @xmitpend)) {		#this is a rexmission
         $qacx = 1;
@@ -2162,9 +2167,11 @@ sub socget {
         chomp($lstat);
       }
       if($lstat == 1) {
-        if(grep(/$lfile/, @tlmreceived)) {      #send back positive ack
+        #if(grep(/$lfile/, @tlmreceived)) {      #send back positive ack
+  	if($Hoftlmreceived{$lfile}) {           #send back positive ack
           print ASF "FILE_NAME=$lfile\nSTATUS=3\n";
           print DSFPIPE "FILE_NAME=$lfile\nSTATUS=$lstat\n"; #for pipe .dsf
+          delete($Hoftlmreceived{$lfile});
         }
         else {
           if(!grep(/$lfile/, @rexmitfiles)) {	#we never saw this file
@@ -2193,7 +2200,7 @@ sub socget {
     print LOG "  SENT: $asf:\n";
     @cat = `cat $asffile`;
     print LOG " @cat\n";
-    @tlmreceived = ();
+    #@tlmreceived = ();
     @rexmitfiles = ();
   }
 }
