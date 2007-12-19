@@ -23,62 +23,119 @@
 
 /* NOTE that this module uses the dr library cloned from the sds library !! */
 
-/* The program copies a lev0 FITS file into a matching DRMS record, setting the
- * DRMS keywords from the FITS file.  Additional keywords are written into both
- * the DRMS and FITS headers so the lev0 data can be accessed as a stand-along FITS
- * file or via DRMS segment read calls.
- *
- * The program can accept either RAL EGSE generated lev0 FITS files or
- * CIF/DCHRI HS-bus lev0 files produced from the telemetry via the SSIM.
- * The RAL (vs CIF) mode is set with the -r command line arg and saved in the keyword CONFIG
- */
+/**
+   @defgroup hmi_import_egse_lev0 hmi_import_egse_lev0
 
-/* Outline of this program 
- * Init: 
- *	Get command line flags and args
- *	Create a new output record into DRMS struct
- *	Read input lev0 FITS file into DR struct.
- *	Set some keywords from command line info
- * Loop through output keywords
- *   begin
- *	Get DRMS name and FITS shortname from rec
- *	if shortname in input file, use it
- *      else if shortname in alias list
- *		if one of aliases in input file, use it
- *		else set default value in FITS file
- *   if keyword is prime key T_OBS
- *      if t_obs command line keyword is present then use its value
- *	else if RAL mode
- *		Use filename for T_OBS
- *	else
- *		look in keyword named in timekey command line arg
- *		but if not found default to SHS keyword.
- *   if keyword is prime key FSN
- *	get FSN from possibly aliased keyword
- *   if keyword is TELEM_T set telem time value from SHS
- *   else
- *	for all other keywords copy value from
- *	FITS to DRMS if present, if not present
- *	set FITS value from DRMS default values from JSD.
- *	if RAL mode then fix the PCU position values.
- *   End of loop 
- * if CIF mode then
- *   begin
- *   if FSN < FSN_TAI_FIXED then add 33 seconds to T_OBS.
- *   get test config info from auxillary file
- *	call external program (set_config_by_time.csh) to update config info in
- *      an ancillary dataseries.  Pass the FSN and T_OBS to this program.
- *	Then open the newly made record in the ancillar series and copy
- *	the configuration keywords into both DRMS and FITS headers.
- *   set mechanism values via index keywords using tables.
- *   end of CIF special code
- * Save new FITS file with all keywords in segment with original filename
- * Close DRMS record 
- * Done
- */
+   Import level0 FITS files into DRMS.
 
+   The program copies a lev0 FITS file into a matching DRMS record, setting the
+   DRMS keywords from the FITS file.  Additional keywords are written into both
+   the DRMS and FITS headers so the lev0 data can be accessed as a stand-along FITS
+   file or via DRMS segment read calls.
+
+   The program can accept either RAL EGSE generated lev0 FITS files or
+   CIF/DCHRI HS-bus lev0 files produced from the telemetry via the SSIM.
+   The CIF or RAL mode is set in the CONFIG command line arg and saved in the keyword @c CONFIG.
+ 
+   @code
+ Outline of this program 
+  Init: 
+  Get command line flags and args
+  Create a new output record into DRMS struct
+  Read input lev0 FITS file into DR struct.
+ 	Set some keywords from command line info
+  Loop through output keywords
+    begin
+ 	Get DRMS name and FITS shortname from rec
+ 	if shortname in input file, use it
+       else if shortname in alias list
+ 		if one of aliases in input file, use it
+ 		else set default value in FITS file
+    if keyword is prime key T_OBS
+ 	if RAL mode
+ 		Use filename for T_OBS
+ 	else
+ 		look in keyword named in timekey command line arg
+ 		but if not found default to SHS keyword.
+    if keyword is prime key FSN
+ 	get FSN from possibly aliased keyword
+    if keyword is TELEM_T set telem time value from SHS
+    else
+ 	for all other keywords copy value from
+ 	FITS to DRMS if present, if not present
+ 	set FITS value from DRMS default values from JSD.
+ 	if RAL mode then fix the PCU position values.
+    End of loop 
+  if CIF mode then
+    begin
+    get test config info from auxillary file
+ 	call external program (set_config_by_time.csh) to update config info in
+       an ancillary dataseries.  Pass the FSN and T_OBS to this program.
+ 	Then open the newly made record in the ancillar series and copy
+ 	the configuration keywords into both DRMS and FITS headers.
+    set mechanism values via index keywords using tables.
+    end of CIF special code
+  Save new FITS file with all keywords in segment with original filename
+  Close DRMS record 
+  Done
+   @endcode
+
+   @par Synopsis:
+   @code
+      import_egse_lev0 [-RhrvDRIVER_FLAGS] in=<lev0_FITS_file>] [out=<lev0_DRMS_series>] 
+                       [fsn_key=<fsn_keyword>] [time_key=<obs_time_keyword>] 
+                       [keymap=<alias_table>] [dsds=<egse_lev0_DSDS_name>]
+   @endcode
+
+   @par Flags:
+   @c -R: Add 2 to HCAMID if exposure > 0.
+   @par
+   @c -h: Print usage message and quit.
+   @par
+   @c -r: RAL EGSE data expected.
+   @par
+   @c -v: Verbose - noisy.
+
+   @par Driver flags: 
+   @ref jsoc_main
+  
+   @param in
+   Specifies the EGSE produced level0 FITS file.  If it was produced by the
+   RAL Camera EGSE the @a -r flag should also be specified.
+
+   @param out
+   This is the destination dataseries for the level 0 data.  For HMI is will be
+   @a hmi_ground.lev0.  It must have both @a FSN and @a T_OBS as prime keys and 
+   of type ::DRMS_TYPE_INT and ::DRMS_TYPE_TIME respectively.  No record filter
+   should be specified.
+   The keywords description is used for the shortname that will be used for the
+   FITS keyword name.  Thus each keyword must have at least the shortname as the
+   first word in the description in the JSD file.  For convenience the keymap
+   entries are also present as comments.
+
+   @param fsn_key
+   The name of the keyword in the input FITS file that should be used for the Filtergram
+   Sequence Number, FSN.  The default is @c FSN for CIF mode and @c HSQFGSN for RAL mode. 
+   
+   @param time_key
+   The name of the keyword to be used for the observation time @a T_OBS target keyword.
+   The default is @c HOBITSEC.  If the time_key defined keyword is not present, 
+   then @c SHS will be used. At least one must be present.
+   
+   @param keymap
+   The optional name of an alias file. The alias file should contain one line for each
+   target shortname that may have an alternate in the input lev0 file.  Up to 
+   9 aliases may be provided. The first word (white space delimited) on the line is 
+   the target.  Subsequent words are possible aliases.  A maximum of 256 alias 
+   lines are allowed.
+
+   @param dsds
+   If present the value of this keyword is stored in the @c DSDS_SRC keyword to record
+   the source of the input data.  It can be a "prog:level:series" name or simply
+   the filename of the input data.
+*/
+/* @{ */
 /* Defined constants */
-
 #define MAX_KEYMAPS     10
 #define MAX_KEYS        256
 
@@ -130,6 +187,7 @@ ModuleArgs_t module_args[] =
 };
 
 char *module_name = "import_egse_lev0";
+/* @} */
 
 /* Support functions */
 
