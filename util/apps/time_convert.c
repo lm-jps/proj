@@ -4,6 +4,128 @@
  * flag argument of time zone.  Default is UTC for conversion to ascii.
  */
 
+/**
+   @defgroup time_convert time_convert
+
+   @brief Convert among the internal DRMS time representation and other time representations.
+
+   @par Synopsis:
+   @code
+   time_convert -h
+   time_convert s=<secondsJSOC> | sdo=<secondsSDO> | egse=<secondsEGSE> | time=<calenderTime> |
+                ord=<ordinalDate> [o=jsoc | o=sdo | o=egse | o=ord | o=cal] [zone=<zone>]
+
+   @endcode
+
+   Converts internal DRMS time (seconds since 15 seconds 
+   before January 1, 1977 UTC) to an external ascii string 
+   representation. The exact external representation depends on the command-line
+   arguments provided to this utility. Possiblities include: <tt>SDO time</tt>, 
+   <tt>EGSE time</tt>, <tt>Ordinal date</tt>, and <tt>Calendar time</tt>.  
+   <tt>SDO time</tt> is the number of seconds that have elapsed since 
+   January 1, 1958 TAI, i.e. SDO onboard time. The full format is the string
+   representation of a double data type. <tt>EGSE time</tt> is 
+   the number of seconds that have elapsed since @e APPROXIMATELY January 1, 2004 UTC
+   (actual epoch is 2003.12.30_23:59:36.000_UTC). The full format is also the string
+   representation of a double data type. <tt>Ordinal date</tt> is 
+   the day number of the year (starting at day 1 on January 1). The full format
+   is YYYY.DDD[_ZZZ], where YYYY is the year, DDD is the day number, and ZZZ is the
+   zone (e.g., UTC, TDT, PDT, etc.). <tt>Calendar time</tt> gives the year, month, date, hour, 
+   minutes, and seconds for a given system of time (like @e UTC). The full format is
+   specified in <tt>JSOC TN 07-001</tt> (http://jsoc.stanford.edu/doc/timerep.html), 
+   but in short it looks like:
+
+   @par
+   1.  year.month.fracday[_type]
+   @par
+   2.  year.month.day_hour:minute[:second][_type]
+   @par
+   3.  {MJD|JD}_julday[_type]
+
+   where @a type refers to the time system or time zone (e.g., @e UTC, or @e PST), @e MJD and
+   @e JD refer to Modified Julian Date and Julian Date, and @e julday refers to a Julian 
+   day number.
+
+   Alternatively, and with the appropriate command-line parameters, @ref time_convert 
+   converts from any supported time representation to any other representation.
+
+   If multiple input format strings are specified as arguments 
+   (e.g., time_convert s=234235235.35 ord=1982.035), only one will be used. A descriptive 
+   string will be printed describing which input string was used. Given a definitive
+   input format, @ref time_convert chooses a default output format. If the input is 
+   an internal time, an SDO time, an EGSE time, or an ordinal date, the default output 
+   is a calendar time. If the definitive input format is a calendar time, the default
+   output is an internal time. The default output format can be overwritten
+   by providing the @a o=format argument. 
+
+   When the output format is either an ordinal time or a calendar time, the 
+   time can be expressed in any of several supported time systems (e.g., @e UTC,
+   @e TDT, @e TAI, or even a time zone, like @e PDT). This is accomplished by
+   supplying the appropriate @a zone=system argument. Refer to 
+   <tt>JSOC TN 07-001</tt> (http://jsoc.stanford.edu/doc/timerep.html) for a 
+   complete list of the supported "zones".
+
+   @par Flags:
+   @c -h: Show usage message.
+
+   @param s An input time formatted as an internal time. 
+   <secondsJSOC> is seconds since 15 seconds before January 1, 1977 UTC.
+   @param sdo  An input time formatted as an SDO time.
+   <secondsSDO> is seconds since January 1, 1958 TAI.
+   @param egse  An input time formatted as an EGSE time.
+   <secondsEGSE> is seconds since 2003.12.30_23:59:36.000_UTC
+   @param time  An input time formatted as a calendar time.
+   <calenderTime> is as specified in 
+   <tt>JSOC TN 07-001</tt> (http://jsoc.stanford.edu/doc/timerep.html)
+   @param ord An input time formatted as an ordinal date.
+   <ordinalDate> is yyyy.ddd[_zone], where @a zone is any supported 
+   time system as specified in  <tt>JSOC TN 07-001</tt> 
+   (http://jsoc.stanford.edu/doc/timerep.html).
+   @param o The output format to be used. "jsoc" refers to internal time; 
+   "sdo" refers to SDO time; "egse" refers to EGSE time; 
+   "ord" refers to ordinal date; and "cal" refers to calendar time.
+
+   @par Example to convert an internal time to the default output format (UTC calendar time):
+   @code
+   time_convert s=234253535.23
+   @endcode
+
+   @par Example to convert an internal time to the default output format (calendar time), but in TAI time:
+   @code
+   time_convert s=234253535.23 zone=TAI
+   @endcode
+
+   @par Example to convert an internal time to an EGSE time:
+   @code
+   time_convert s=234253535.23 o=egse
+   @endcode
+
+   @par Example to convert an EGSE time to a calendar time in the PDT time zone:
+   @code
+   time_convert egse=232533636.362 o=cal zone=PDT
+   @endcode
+
+   @par Example to convert an ordinal time to a calendar time in the TDT system:
+   @code
+   time_convert ord=2007.352 o=cal zone=TDT
+   @endcode
+
+   @par Example to convert a calendar time to an internal time:
+   @code
+   time_convert time=1998.02.04_06:00:17.230_UTC
+   @endcode
+
+   @par Example to convert a calendar time to an internal time (explicitly):
+   @code
+   time_convert time=1998.02.04_06:00:17.230_UTC o=jsoc
+   @endcode
+
+   @par Example to convert a calendar time to an SDO time
+   @code
+   time_convert time=1998.02.04_06:00:17.230_UTC o=sdo
+   @endcode
+*/
+/* @{ */
 #include <stdlib.h>
 #include <time.h>
 #include <errno.h>
@@ -26,6 +148,7 @@ ModuleArgs_t module_args[] =
 };
 
 ModuleArgs_t *gModArgs = module_args;
+/* @} */
 
 CmdParams_t cmdparams;
 
