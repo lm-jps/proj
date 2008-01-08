@@ -547,12 +547,12 @@ int DoIt(void)
    char rquery[DRMS_MAXQUERYLEN];
    char *dsout = cmdparams_get_str(&cmdparams, kDSOut, NULL);
    DRMS_RecordSet_t *inRecSet = NULL;
-   DRMS_RecordQueryType_t rqueryType;
+   DRMS_RecordSetType_t rqueryType;
    OutputSeriesDisp_t disp;
 
    rqueryType = drms_record_getquerytype(inRecQuery);
 
-   if (rqueryType == kRecordQueryType_DSDS)
+   if (rqueryType == kRecordSetType_DSDS)
    {
       fprintf(stdout, "Fetching records from DSDS");
       fflush(stdout);
@@ -571,7 +571,7 @@ int DoIt(void)
    {
       if (disp == kOutputSeriesDisp_Exists && 
 	  !strchr(inRecQuery, '[') && 
-	  rqueryType == kRecordQueryType_LOCAL)
+	  rqueryType == kRecordSetType_LOCAL)
       {
 	 /* series exists, so use its prime keys when creating records from local
 	  * data files (unless user specified prime keys on cmd-line) */
@@ -619,7 +619,7 @@ int DoIt(void)
       {
 	 inRecSet = drms_open_records(drms_env, rquery, &status);
 
-	 if (rqueryType == kRecordQueryType_DSDS)
+	 if (rqueryType == kRecordSetType_DSDS)
 	 {
 	    LogTime(0, "");
 	 }
