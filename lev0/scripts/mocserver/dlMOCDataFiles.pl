@@ -28,7 +28,7 @@ use FileHandle;
 use IPC::Open2;
 use IPC::Open3;
 
-$EXP = "/home/jsoc/sdo/sftpScript.exp";
+$EXP = "/home/jsoc/cvs/JSOC/scripts/sftpScript.exp";
 # Use $EXP below for testing
 # $EXP = "./sftpScript.exp";
 $RQARG = "hmiroboto\@129.165.8.6";
