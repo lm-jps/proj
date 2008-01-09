@@ -20,6 +20,7 @@ set doy = `date +%j`
 set fullspec = ""
 set pspec = ""
 set cspec = ""
+set specprefix = "filespec:"
 set filesuffix = "[0-9][0-9][0-9]_[0-9][0-9]\.hkt\S*"
 
 set pbegin = "none"
@@ -51,12 +52,12 @@ else
 endif
 
 if ($pbegin != "none") then 
-  set pspec = "${pyr}_|s[$pbegin-$pend]::000[1-9]_${pyr}_$filesuffix\n${pyr}_|s[$pbegin-$pend]::00[1-5][0-9]_${pyr}_$filesuffix\n${pyr}_|s[$pbegin-$pend]::006[0-3]_${pyr}_$filesuffix\n${pyr}_|s[$pbegin-$pend]::0129_${pyr}_$filesuffix\n" 
+  set pspec = "${specprefix}${pyr}_|s[$pbegin-$pend]::000[1-9]_${pyr}_$filesuffix\n${specprefix}${pyr}_|s[$pbegin-$pend]::00[1-5][0-9]_${pyr}_$filesuffix\n${specprefix}${pyr}_|s[$pbegin-$pend]::006[0-3]_${pyr}_$filesuffix\n${specprefix}${pyr}_|s[$pbegin-$pend]::0129_${pyr}_$filesuffix\n" 
 endif 
 
 # Add current year days
 if ($cbegin != "none") then
-  set cspec = "${yr}_|s[$cbegin-$cend]::000[1-9]_${yr}_$filesuffix\n${yr}_|s[$cbegin-$cend]::00[1-5][0-9]_${yr}_$filesuffix\n${yr}_|s[$cbegin-$cend]::006[0-3]_${yr}_$filesuffix\n${yr}_|s[$cbegin-$cend]::0129_${yr}_$filesuffix\n"
+  set cspec = "${specprefix}${yr}_|s[$cbegin-$cend]::000[1-9]_${yr}_$filesuffix\n${specprefix}${yr}_|s[$cbegin-$cend]::00[1-5][0-9]_${yr}_$filesuffix\n${specprefix}${yr}_|s[$cbegin-$cend]::006[0-3]_${yr}_$filesuffix\n${specprefix}${yr}_|s[$cbegin-$cend]::0129_${yr}_$filesuffix\n"
 else
   # error
   echo "Error getting today's date."
