@@ -44,7 +44,6 @@ set FN = $FFN
 while ($FN <= $LFFN)
   set DNAME = "file"$FN
   set LEV0_PATH = $TAPEDIR/$DNAME
-  set LEV0_PATH = $TAPEDIR
   if (-d $LEV0_PATH) then
     set FITSNAME = `/bin/ls $LEV0_PATH/00*.fits`
     if ($status == 0) then
@@ -85,8 +84,8 @@ end
 
 rm -rf $BATCHDIR
 
-set FSN = $FFN
-while ($FSN <= $LFFN)
+set FSN = $FFSN
+while ($FSN <= $LFSN)
   set QLOG = $JSROOT/logs/log.$FSN
   set OK = `grep -c "import done.*.fits" $QLOG`
   if ($OK > 0) then
