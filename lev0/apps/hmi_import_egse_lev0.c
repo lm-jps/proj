@@ -26,7 +26,9 @@
 /**
    @defgroup hmi_import_egse_lev0 hmi_import_egse_lev0
 
-   Import level0 FITS files into DRMS.
+   Import ground test level0 FITS files into DRMS.
+
+   This program is used only for processing of pre-launch data.
 
    The program copies a lev0 FITS file into a matching DRMS record, setting the
    DRMS keywords from the FITS file.  Additional keywords are written into both
