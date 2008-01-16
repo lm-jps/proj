@@ -571,7 +571,7 @@ int DoIt(void)
    {
       if (disp == kOutputSeriesDisp_Exists && 
 	  !strchr(inRecQuery, '[') && 
-	  rqueryType == kRecordSetType_LOCAL)
+	  rqueryType == kRecordSetType_PlainFile)
       {
 	 /* series exists, so use its prime keys when creating records from local
 	  * data files (unless user specified prime keys on cmd-line) */
