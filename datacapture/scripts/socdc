@@ -390,6 +390,11 @@ sub Submit_b
     print "Will attempt input processing in approx $tlmsechalf seconds\n";
     print LOG "Will attempt input processing in approx $tlmsechalf seconds\n";
   }
+  else {
+    $cmd = "/bin/rm -f $DIRDDS2SOC/*.dsf"; #rm all the .dsf files to start
+    print LOG "$cmd\n";
+    `$cmd`;
+  }
   if($dds_sim eq 'yes') {	#simulate the DDS sending files to SOC
     #@alltlm = ();
     #$dsfmin = 1;
@@ -1852,7 +1857,7 @@ sub socget {
         ($x, $tlmfingerprint) = split(/=/);
         chomp($tlmfingerprint);
       }
-      elsif(/^TLM_CRC_FAILURES/) {
+      elsif(/^TLM_FILE_CRC_FAILURES/) {
         ($x, $tlmcrcfailures) = split(/=/);
         chomp($tlmcrcfailures);
       }
@@ -2014,8 +2019,7 @@ sub socget {
     }
     else {
       $ftlm = "$DIRDDS2SOC/$tlmfile";
-      $getsize = (-s $ftlm);
-      if(!$getsize) {
+      if(!-e $ftlm) {
         print LOG "\n*  **ERROR: Missing $tlmfile\n";
         print LOG "  Retransmission request will be made.\n";
         $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";    #reject the .qac file
@@ -2023,8 +2027,11 @@ sub socget {
         `$cmd`;
         $rexmitname = $tlmfile;
         $rexmit = 1;
+        $sizeok = 0;
       }
       else {
+        $getsize = (-s $ftlm);
+  	$sizeok = 1;
         print LOG "  Found: $tlmfile\n";
         $md5res = `/usr/bin/md5sum -b $ftlm`;
         ($md5tlm, $b) = split(/\s/, $md5res);
@@ -2043,7 +2050,7 @@ sub socget {
       $rexmit = 1;
     }
     else {
-      if($size != $getsize) {
+      if(($size != $getsize) && $sizeok) {
         print LOG "*  **ERROR: Incorrect tlm size $tlmfile\n";
         print LOG "  Retransmission request will be made.\n";
         $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";    #reject the .qac file
