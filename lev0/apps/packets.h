@@ -21,30 +21,32 @@
 
 
 /*************** Type definitions *******************/
-
+/* !!!NOOP these out for now. for ingest_lev0 developement.
+/* They are defined elsewhere
+/*
 /* Keyword value types. */
-typedef enum {DRMS_TYPE_INT8, DRMS_TYPE_INT16, DRMS_TYPE_INT32, 
-              DRMS_TYPE_INT64, DRMS_TYPE_UINT8, DRMS_TYPE_UINT16, 
-              DRMS_TYPE_UINT32, DRMS_TYPE_UINT64, 
-              DRMS_TYPE_FLOAT, DRMS_TYPE_DOUBLE, 
-              DRMS_TYPE_TIME, DRMS_TYPE_STRING} DRMS_Type_t;
-
-typedef union DRMS_Type_Value
-{
-  int8_t   int8_val;
-  int16_t  int16_val;
-  int32_t  int32_val;
-  int64_t  int64_val;
-  uint8_t  uint8_val;
-  uint16_t uint16_val;
-  uint32_t uint32_val;
-  uint64_t uint64_val;
-  float   float_val;
-  double  double_val;
-  double  time_val;
-  char   *string_val;
-} DRMS_Type_Value_t;
-
+/*typedef enum {DRMS_TYPE_INT8, DRMS_TYPE_INT16, DRMS_TYPE_INT32, 
+/*              DRMS_TYPE_INT64, DRMS_TYPE_UINT8, DRMS_TYPE_UINT16, 
+/*              DRMS_TYPE_UINT32, DRMS_TYPE_UINT64, 
+/*              DRMS_TYPE_FLOAT, DRMS_TYPE_DOUBLE, 
+/*              DRMS_TYPE_TIME, DRMS_TYPE_STRING} DRMS_Type_t;
+/*
+/*typedef union DRMS_Type_Value
+/*{
+/*  int8_t   int8_val;
+/*  int16_t  int16_val;
+/*  int32_t  int32_val;
+/*  int64_t  int64_val;
+/*  uint8_t  uint8_val;
+/*  uint16_t uint16_val;
+/*  uint32_t uint32_val;
+/*  uint64_t uint64_val;
+/*  float   float_val;
+/*  double  double_val;
+/*  double  time_val;
+/*  char   *string_val;
+/*} DRMS_Type_Value_t;
+*/
 
 /************* Keyword struct ****************/
 #define MAX_KEYWORD_NAME_SIZE 64
