@@ -4,7 +4,11 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-SUMEXE_$(d)	:= $(addprefix $(d)/, ingest_lev0)
+ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0)
+ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o)
+
+#SUMEXE_$(d)	:= $(addprefix $(d)/, ingest_lev0)
+SUMEXE_$(d)	:= $(ingestlev0_$(d))
 CEXE_$(d)       := $(addprefix $(d)/, fix_hmi_config_file_date)
 CEXE		:= $(CEXE) $(CEXE_$(d))
 MODEXESUMS	:= $(MODEXESUMS) $(SUMEXE_$(d))
@@ -21,7 +25,8 @@ MODEXEDR_SOCK	:= $(MODEXEDR_SOCK) $(MODEXEDR_$(d):%=%_sock)
 MODEXEDROBJ	:= $(MODEXEDROBJ) $(MODEXEDR_$(d):%=%.o)
 
 ALLEXE_$(d)	:= $(MODEXE_$(d)) $(MODEXEDR_$(d)) $(SUMEXE_$(d)) $(CEXE_$(d))
-OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) 
+#OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) 
+OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(ingestlev0_obj_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.o.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
@@ -32,6 +37,8 @@ CLEAN		:= $(CLEAN) \
 TGT_BIN	        := $(TGT_BIN) $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d))
 
 S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d)))
+
+$(ingestlev0_$(d)):	$(ingestlev0_obj_$(d))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
