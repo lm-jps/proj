@@ -10,12 +10,13 @@
 #define MAX(a,b)			((a) < (b) ? (b) : (a))
 #define MIN(a,b)			((a) > (b) ? (b) : (a))
 
-/////////////////////////////////////////////////////
-int imgstat(const IMG *img, STAT *stat, int has_hist)
-/////////////////////////////////////////////////////
+///////////////////////////////////////////////
+int imgstat(IMG *img, STAT *stat, int has_hist)
+///////////////////////////////////////////////
 {
     double s = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, t, ss;
-    const unsigned *h = img->hist, n = img->datavals;
+    const unsigned *h = img->hist;
+    unsigned n = img->datavals;
     unsigned u;
     int i;
 
@@ -42,7 +43,7 @@ int imgstat(const IMG *img, STAT *stat, int has_hist)
 	    s3 += (t *= i);
 	    s4 += (t *= i);
 	}
-    } else {
+    } else {	// no histogram; must be from a retransmitted tlm file
 	u = 0;
 	for (i=0; i<MAXPIXELS; ++i) {
 	    if (img->dat[i] == BLANK)
@@ -53,8 +54,10 @@ int imgstat(const IMG *img, STAT *stat, int has_hist)
 	    s3 += (t *= img->dat[i]);
 	    s4 += (t *= img->dat[i]);
 	}
-	if (u != n)
-	    return -2;	// Something is wrong with img->datavals.
+	// if we don't have the histogram, we can't trust the
+	// datavals value stored in the img struct
+	img->datavals = u;
+	n = u;
     }
 
     //
@@ -194,7 +197,7 @@ int imgdecode(unsigned short *impdu, IMG *img)
 //
 // initialize img struct and read various tables.
 //
-    if (img->initialized) 
+    if (img->initialized > 0) 
 	goto ___DECODE_START___;
 
     u = impdu[4] & 0x7ffu;	// APID
@@ -223,8 +226,13 @@ int imgdecode(unsigned short *impdu, IMG *img)
 	img->R = (impdu[16] >> 8) & 0xf;
     }
 
-    for (i = 0; i < MAXPIXELS; ++i)
-	img->dat[i] = BLANK;
+    //
+    // if img->initialized < 0, meaning the packet is in a retransmitted
+    // tlm file, don't wipe out the data
+    //
+    if (img->initialized == 0)
+	for (i = 0; i < MAXPIXELS; ++i)
+	    img->dat[i] = BLANK;
 
     for (i = 0; i < MAXHIST; ++i)
 	img->hist[i] = 0;
