@@ -74,10 +74,7 @@ void drms_keyword_print_jsd(DRMS_Keyword_t *key) {
 	     key->info->description);
     } else {
       printf(", %s", drms_type2str(key->info->type));
-      if (key->info->isconstant) 
-	printf(", constant");
-      else
-	printf(", variable");
+      printf(", %s", drms_keyword_recscopestr(key, NULL));
       if (key->info->per_segment) 
 	printf(", segment");
       else 
