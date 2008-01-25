@@ -5,37 +5,14 @@
  *
  * This is a module that runs with DRMS and continuously extracts images and HK
  * data from .tlm files that appear in the given input dir. It outputs images
- * to the DRMS dataset hmi.lev0 and hk data to hmi.!!!!TBD!!!.
+ * to the DRMS dataset hmi.lev0 and hk data to appropriate hk datasets.
 
  * Call: ingest_lev0 vc=VC05 indir=/tmp/jim outdir=/tmp/jim/out [logfile=name]
 
  * DESCRIPTION:
 
-*!!!!TBD UPDATE THIS DESCRIP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+*!!!!TBD UPDATE THIS DESCRIP!!!!!!!!!! e.g. how started !!!!!!!!!!!!!!!!!!!!!
 
- * The ingest_lev0 program is started by the DDS_SOC program when it is first
- * run. This program has the SUMS API interface to get and put SUM storage. 
- * The ingest_tlm is given the input dir to monitor as an argument when
- * it is invoked. This dir is normally the $DIRSOC2SOC directory that the 
- * DDS files are moved into after they are validated. Ingest_tlm is also
- * given the dir to copy files to after it is done ingesting them into SUMS.
- * This is normally the $DIRSOC2PIPE directory that the files are staged to
- * for pickup by the pipeline processing backend system.
- * When ingest_tlm sees a 
- * new .qac file, it will confirm the .tlm file and allocate disk storage via 
- * SUM_Allocate() and copy the current files into this storage and do a 
- * SUM_Put() to make the storage archivable by SUMS. When the files have been 
- * ingested into SUMS the program then moves them from $DIRSOC2SOC to 
- * $DIRSOC2PIPE for the backend pipeline system to begin processing.
- * 
- * Ingest_tlm is also passed the pipeline to soc dir that the pipeline backend
- * system writes .parc file to, to indicate which storage units have been 
- * archived in the backend. We will read these files and update the sum_main
- * table for the given storage unit with the safe_tape info provided.
- *
- * Called:
- *ingest_tlm [-v] -pVC02 /dir_to_ingest /dir_to_pipeline /dir_from_pipeline [log]
- *
  */
 
 #include <jsoc_main.h>
@@ -47,16 +24,17 @@
 #include <ctype.h>
 #include <signal.h>
 #include <strings.h>
-#include <sum_rpc.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/stat.h> /* for umask(2) */
 #include <dirent.h>
 #include <unistd.h> /* for alarm(2) among other things... */
 #include <printk.h>
+#include "imgdecode.h"
+#include "packets.h"
+/************************************
 #include "imgstruct.h"
 #include "hmi_compression.h"
-/************************************
 #include "decompress.h"
 #include "load_hk_config_files.h"
 *************************************/
@@ -74,6 +52,7 @@
 #define NUMTIMERS 8		/* number of seperate timers avail */
 #define TESTAPPID 0x199		/* appid of test pattern packet */
 #define TESTVALUE 0xc0b		/* first value in test pattern packet */
+#define MAXERRMSGCNT 10		/* max # of err msg before skip the tlm file*/
 
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 /* List of default parameter values. */
@@ -95,17 +74,11 @@ char *module_name = "ingest_lev0";
 FILE *h0logfp;                  /* fp for h0 ouput log for this run */
 IMG Image, ImageOld;
 CCSDS_Packet_t *Hk;
+DRMS_Record_t *rs;
+DRMS_Segment_t *segment;
+DRMS_Array_t *segArray;
 static char datestr[32];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
-static float tsum[NUMTIMERS];
-
-/* Declarations for static functions */
-static void open_sum(void);
-/* static double du_dir(void);*/
-static time_t call_time(void);
-static void now_do_alrm_sig();
-
-extern int numcontexts;
 
 unsigned int fsn = 0;
 unsigned int fsn_prev = 0;
@@ -131,9 +104,7 @@ int total_missing_vcdu;
 int dsds_tid;			/* originally the tid of dsds_svc */
 				/* now the tid of pe_rpc that gets us to dsds*/
 int abort_active;		/* set while doing an abort */
-int sigalrmflg = 0;		/* set on signal so prog will know */
 int sigtermflg = 0;		/* set on signal so prog will know */
-int tlmactive = 0;              /* set when tlm lev0 processing is active */
 int pflg = 0;
 int imagedircnt = 0;            /* inc each time write an image to IMAGEDIR */
 int ALRMSEC = 60;               /* seconds for alarm signal */
@@ -262,109 +233,6 @@ OPENIMG *getopenimg(OPENIMG *list, unsigned int fsn)
 }
 
 
-void mk_test_ds() {
-  DRMS_RecordSet_t *rset;
-  DRMS_Record_t *rs, *rs_old, *rsc;
-  DRMS_Segment_t *segment, *segmentc;
-  DRMS_Array_t *segArray, *cArray, *oldArray;
-  char seriesname[80];
-  int dstatus, i;
-  unsigned short *rdat = Image.data;
-
-      rs = drms_create_record(drms_env, LEV0SERIESNAME, 
-		DRMS_PERMANENT, &dstatus);
-      if(dstatus) {
-        printk("Can't create record for %s\n", LEV0SERIESNAME);
-        return;			/* !!!TBD ck this */
-      }
-      segment = drms_segment_lookup(rs, "file");
-      for(i=0; i < MAXPIXELS; i++) {
-        Image.data[i] = i;
-      }
-      rdat = Image.data;
-      segArray = drms_array_create(DRMS_TYPE_SHORT,
-                                           segment->info->naxis,
-                                           segment->axis,
-                                           rdat,
-                                           &dstatus);
-      if(dstatus) {
-        printk("Can't create array for %s\n", LEV0SERIESNAME);
-        return;			/* !!!TBD ck this */
-      }
-  dstatus = drms_setkey_int(rs, "fsn", 666);
-  dstatus = drms_segment_write(segment, segArray, 0);
-  if(dstatus) {
-    printk("Can't drms_segment_write() for %s\n", LEV0SERIESNAME);
-    return;			/* !!!TBD ck this */
-  }
-  /*drms_free_array(segArray);*/
-  if((dstatus = drms_close_record(rs, DRMS_INSERT_RECORD))) {
-    printk("**ERROR: drms_close_record failed for %s\n", LEV0SERIESNAME);
-  }
-}
-
-void temp_drms_test_stuff() 
-{
-  DRMS_RecordSet_t *rset;
-  DRMS_Record_t *rs, *rs_old, *rsc;
-  DRMS_Segment_t *segment, *segmentc;
-  DRMS_Array_t *segArray, *cArray, *oldArray;
-  char seriesname[80];
-  uint64_t ds_index;
-  int status, i;
-  unsigned short *rdat = Image.data;
-
-      ImageOld.valid = 0;  /* !!!TBD with Keh-Cheng */
-      rset = drms_open_records(drms_env, "su_production.lev0_test[666]", &status);
-    /* !!!TBD handle case of no current record */
-      if(status) {
-        printk("Can't do drms_open_records(hmi_ground.lev0[963801])\n");
-        return;
-      }
-      rs_old = rset->records[0];
-      ds_index = rs_old->sunum;
-      rsc = drms_clone_record(rs_old, DRMS_PERMANENT,
-                                DRMS_COPY_SEGMENTS, &status);
-      if(status) {
-        printk("Can't do drms_clone_record()\n");
-        return;
-      }
-      drms_close_records(rset, DRMS_FREE_RECORD);
-      status = drms_setkey_int(rsc, "fsn", 701);
-      /*segmentc = drms_segment_lookup(rsc, "file");*/
-      segmentc = drms_segment_lookupnum(rsc, 0);
-      cArray = drms_segment_read(segmentc, DRMS_TYPE_SHORT, &status);
-      if(status) {
-        printk("Can't do drms_segment_read()\n");
-        return;
-      }
-      unsigned short *adata = (unsigned short *)cArray->data;
-      for(i=0; i < MAXPIXELS; i++) {
-        /*ImageOld.data[i] = cArray->data[i]; /* !!!ck this */
-        ImageOld.data[i] = *adata++;
-      }
-      rdat = ImageOld.data;
-      oldArray = drms_array_create(DRMS_TYPE_SHORT, 
-                                             segmentc->info->naxis,
-                                             segmentc->axis,
-                                             rdat,
-                                             &status);
-      if(status) {
-        printk("Can't do drms_array_create()\n");
-        return;
-      }
-      status = drms_segment_write(segmentc, oldArray, 0);
-      if (status) {
-        printk("ERROR: drms_segment_write error=%d\n", status);
-        /* !!TBD decide what to do here */
-      }
-      oldArray->data = NULL;
-      drms_free_array(oldArray);
-      if((status = drms_close_record(rsc, DRMS_INSERT_RECORD))) {
-        printk("**ERROR: drms_close_record failed for %s\n", LEV0SERIESNAME);
-      }
-}
-
 void BeginTimer(int n)
 {
   gettimeofday (&first[n], NULL);
@@ -401,6 +269,38 @@ int h0log(const char *fmt, ...)
   return(0);
 }
 
+/* Close out an image.
+*/
+void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
+		IMG *Img, int fsn)
+{
+  int status;
+
+  drms_setkey_int(rs, "TELNUM", Img->telnum);
+  drms_setkey_int(rs, "APID", Img->apid);
+  drms_setkey_int(rs, "CROPID", Img->cropid);
+  drms_setkey_int(rs, "LUTID", Img->luid);
+  drms_setkey_int(rs, "TAPCODE", Img->tap);
+  drms_setkey_int(rs, "N", Img->N);
+  drms_setkey_int(rs, "K", Img->K);
+  drms_setkey_int(rs, "R", Img->R);
+  drms_setkey_int(rs, "TOTVALS", Img->totalvals);
+  drms_setkey_int(rs, "DATAVALS", Img->datavals);
+  drms_setkey_int(rs, "NPACKETS", Img->npackets);
+  drms_setkey_int(rs, "NERRORS", Img->nerrors);
+  drms_setkey_int(rs, "EOIERROR", Img->last_pix_err);
+  status = drms_segment_write(seg, array, 0);
+  if (status) {
+    printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
+  }
+  array->data = NULL;        /* must do before free */
+  drms_free_array(array);
+  if((status = drms_close_record(rs, DRMS_INSERT_RECORD))) {
+    printk("**ERROR: drms_close_record failed for %s fsn=%u\n",
+                        LEV0SERIESNAME, fsn);
+  }
+}
+
 /* Got a fatal error sometime after registering with SUMS. 
  * Degregister and close with SUMS as approriate.
  */
@@ -417,32 +317,22 @@ void abortit(int stat)
   exit(stat);
 }
 
-/* Called every 60 sec to check if timeout on opened images.
- * Sets flag only as the libhmicomp lib is not reentrant.
- * The main program will check for the flag when it is safe to do the 
- * processing and call now_do_alrm_sig() if set.
+/* Called 60 secs after the last .tlm file was seen.
+ * Will close any opened image. NOTE: a reprocessed image cannot
+ * be open. It is always closed at the end of get_tlm().
  */
 void alrm_sig(int sig)
 {
   signal(SIGALRM, alrm_sig);
-  if(!tlmactive)
-    now_do_alrm_sig();
-  else
-    sigalrmflg = 1;
-  return;
-}
-
-void now_do_alrm_sig()
-{
-  sigalrmflg = 0;
-  alarm(ALRMSEC);
-  return;
+  if(Image.initialized) {
+    close_image(rs, segment, segArray, &Image, fsn_prev);
+  }
+  printk("*Closed image on timeout FSN=%u\n", fsn_prev);
 }
 
 void sighandler(int sig)
 {
   sigtermflg = 1;
-  return;
 }
 
 void now_do_term_sig()
@@ -451,28 +341,6 @@ void now_do_term_sig()
 }
 
 
-time_t call_time() 
-{
-  time_t tsec;
-
-  tsec = time(NULL);
-  return(tsec - (time_t)SEC1970TO2004); /* make the epoch 2004 */
-}
-
-/* Open with the sum_svc.
- * Sets the global handle, sum, to the value returned by SUM_open().
- */
-/* !!!TBD obsolete */
-void open_sum()
-{
-  if((sum = SUM_open(NULL, NULL, printk)) == 0) {
-    printk("***Failed on SUM_open()\n");
-    abortit(3);
-  }
-  uid=sum->uid;			/* uid assigned to this open */
-  printk("*Opened with sum_svc as uid=%ld\n", uid); 
-}
-
 int compare_names(const void *a, const void *b)
 {
   NAMESORT *x=(NAMESORT *)a, *y=(NAMESORT *)b;
@@ -490,37 +358,9 @@ unsigned short MDI_getshort (unsigned char *c)    /*  machine independent  */
 }
 
 /* !!!TEMP to make */
-int kehcheng_code(unsigned short *tbuf, IMG *Image)
-{
-  return(0);
-}
-
-int kehcheng_code_reestablish(unsigned int fsnx, IMG *ImageOld)
-{
-  return(0);
-}
-
 int decode_hk_next_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk)
 {
-}
-
-/* Close out an image.
-*/
-int close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
-		int fsn)
-{
-  int status;
-
-  status = drms_segment_write(seg, array, 0);
-  if (status) {
-    printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
-  }
-  array->data = NULL;        /* must do before free */
-  drms_free_array(array);
-  if((status = drms_close_record(rs, DRMS_INSERT_RECORD))) {
-    printk("**ERROR: drms_close_record failed for %s fsn=%u\n",
-                        LEV0SERIESNAME, fsn);
-  }
+  return(0);
 }
 
 
@@ -529,29 +369,30 @@ int close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 int get_tlm(char *file, int rexmit, int higherver)
 {
   static DRMS_RecordSet_t *rset;
-  static DRMS_Record_t *rs, *rs_old, *rsc;
-  static DRMS_Segment_t *segment, *segmentc;
-  static DRMS_Array_t *segArray, *cArray, *oldArray;
+  static DRMS_Record_t *rs_old, *rsc;
+  static DRMS_Segment_t *segmentc;
+  static DRMS_Array_t *cArray, *oldArray;
   FILE *fpin;
   IMG *Img;
-  unsigned short *rdat;
+  short *rdat;
   unsigned char cbuf[PKTSZ];
-  char errtxt[128], rexmit_dsname[256];
+  char rexmit_dsname[256];
   long long gap_42_cnt;
-  int status, rstatus, dstatus, fpkt_cnt, i, j, sync_bad_cnt, nx;
-  int imagecnt, appid, datval, eflg, firstflg;
+  int status, rstatus, dstatus, fpkt_cnt, i, j, sync_bad_cnt;
+  int imagecnt, appid, datval, eflg, firstflg, errmsgcnt;
   unsigned int cnt1, cnt2, cnt3, fsnx, gap_24_cnt;
   int zero_pn;
   unsigned short pksync1, pksync2;
   float ftmp;
 
-  BeginTimer(1);			/* time tlm file processing */
   if(!(fpin = fopen(file, "r"))) {	/* open the tlm input */
     printk("*Can't open tlm file %s\n", file);
     return(1);
   }
+  alarm(ALRMSEC);			//timeout if don't get another .tlm file
+  BeginTimer(1);			/* time tlm file processing */
   printk("*Processing tlm file %s\n", file);
-  fpkt_cnt = sync_bad_cnt = imagecnt = eflg = 0;
+  fpkt_cnt = sync_bad_cnt = imagecnt = eflg = errmsgcnt = 0;
   zero_pn = gap_24_cnt = gap_42_cnt = 0;
   firstflg = 1; 
   if(rexmit || higherver) {
@@ -647,150 +488,204 @@ int get_tlm(char *file, int rexmit, int higherver)
       continue; 		/* go on to next packet */
     }
 
-  /* Parse tlm packet headers. */
-  if(appid == APID_HMI_SCIENCE_1 || appid == APID_HMI_SCIENCE_2 || 
+    /* Parse tlm packet headers. */
+    if(appid == APID_HMI_SCIENCE_1 || appid == APID_HMI_SCIENCE_2 || 
 	appid == APID_AIA_SCIENCE_1 || appid == APID_AIA_SCIENCE_2)
-  {
-    cnt1 = MDI_getshort(cbuf+32);
-    cnt2 = MDI_getshort(cbuf+34);
-    fsnx = (unsigned int)(cnt1<<16)+(unsigned int)(cnt2);
-    if(rexmit || higherver) {
-      Img = &ImageOld;
-      if(fsnx != fsn_prev) {            /* the fsn has changed */
-        if(fsn_prev != 0) {  /* close image of prev fsn if not 0 */
-          close_image(rsc, segmentc, oldArray, fsn_prev);
-          imagecnt++;
-        }
-        fsn_prev = fsnx;
-        Img->valid = 0;  /* !!!TBD ck with Keh-Cheng */
-        sprintf(rexmit_dsname, "su_production.lev0_test[%u]", fsnx);
-        printk("Open prev ds: %s\n", rexmit_dsname);
-        rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
-        if(rstatus) {
-          printk("Can't do drms_open_records(%s)\n", rexmit_dsname);
-          return(1);		/* !!!TBD */
-        }
-        if(!rset || (rset->n == 0)) {
-          printk("No prev ds\n");	/* start a new image */
-          Img->valid = 0;
-          rsc = drms_create_record(drms_env, LEV0SERIESNAME,
-				DRMS_PERMANENT, &rstatus);
+    {
+      cnt1 = MDI_getshort(cbuf+32);
+      cnt2 = MDI_getshort(cbuf+34);
+      fsnx = (unsigned int)(cnt1<<16)+(unsigned int)(cnt2);
+      if(rexmit || higherver) {
+        if(fsnx != fsn_prev) {            /* the fsn has changed */
+          if(fsn_prev != 0) {  /* close image of prev fsn if not 0 */
+            close_image(rsc, segmentc, oldArray, Img, fsn_prev);
+            imagecnt++;
+          }
+          Img = &ImageOld;
+          fsn_prev = fsnx;
+          sprintf(rexmit_dsname, "su_production.lev0_test[%u]", fsnx);
+          printk("Open prev ds: %s\n", rexmit_dsname);
+          rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
           if(rstatus) {
+            printk("Can't do drms_open_records(%s)\n", rexmit_dsname);
+            return(1);		/* !!!TBD */
+          }
+          if(!rset || (rset->n == 0)) {
+            printk("No prev ds\n");	/* start a new image */
+            Img->initialized = 0;
+            Img->reopened = 0;
+            rsc = drms_create_record(drms_env, LEV0SERIESNAME,
+  				DRMS_PERMANENT, &rstatus);
+            if(rstatus) {
+              printk("Can't create record for %s\n", LEV0SERIESNAME);
+              continue;                     /* !!!TBD ck this */
+            }
+            rstatus = drms_setkey_int(rsc, "FSN", fsnx);
+            segmentc = drms_segment_lookup(rsc, "file");
+            rdat = Img->dat;
+            oldArray = drms_array_create(DRMS_TYPE_SHORT,
+                                               segmentc->info->naxis,
+                                               segmentc->axis,
+                                               rdat,
+                                               &dstatus);
+          }
+          else {
+            Img->initialized = 1;
+            Img->reopened = 1;
+            Img->fsn = fsnx;
+            Img->apid = appid;
+            rs_old = rset->records[0];
+            rsc = drms_clone_record(rs_old, DRMS_PERMANENT, 
+    				DRMS_COPY_SEGMENTS, &rstatus);
+            if(rstatus) {
+              printk("Can't do drms_clone_record()\n");
+              return(1);		/* !!!TBD ck */
+            }
+            drms_close_records(rset, DRMS_FREE_RECORD);
+            rstatus = drms_setkey_int(rsc, "FSN", fsnx);
+            Img->telnum = drms_getkey_int(rsc, "TELNUM", &rstatus);
+            Img->cropid = drms_getkey_int(rsc, "CROPID", &rstatus);
+            Img->luid = drms_getkey_int(rsc, "LUTID", &rstatus);
+            Img->tap = drms_getkey_int(rsc, "TAPCODE", &rstatus);
+            Img->N = drms_getkey_int(rsc, "N", &rstatus);
+            Img->K = drms_getkey_int(rsc, "K", &rstatus);
+            Img->R = drms_getkey_int(rsc, "R", &rstatus);
+            Img->totalvals = drms_getkey_int(rsc, "TOTVALS", &rstatus);
+            Img->datavals = drms_getkey_int(rsc, "DATAVALS", &rstatus);
+            Img->npackets = drms_getkey_int(rsc, "NPACKETS", &rstatus);
+            Img->nerrors = drms_getkey_int(rsc, "NERRORS", &rstatus);
+            Img->last_pix_err = drms_getkey_int(rsc, "EOIERROR", &rstatus);
+            segmentc = drms_segment_lookupnum(rsc, 0);
+            cArray = drms_segment_read(segmentc, DRMS_TYPE_SHORT, &rstatus);
+            if(rstatus) {
+              printk("Can't do drms_segment_read()\n");
+              return(1);		/* !!!!TBD ck */
+            }
+            short *adata = (short *)cArray->data;
+            memcpy(Img->dat, adata, 2*MAXPIXELS);
+            rdat = Img->dat;
+            oldArray = drms_array_create(DRMS_TYPE_SHORT, 
+                                               segmentc->info->naxis,
+                                               segmentc->axis,
+                                               rdat,
+                                               &dstatus);
+          }
+        }
+      }
+      else {			// continuing normal stream
+        if(fsnx != fsn_prev) {            /* the fsn has changed */
+          printk("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
+          if(fsn_prev != 0) {	/* close the image of the prev fsn if not 0 */
+            close_image(rs, segment, segArray, Img, fsn_prev);
+            imagecnt++;
+          }
+          /* start a new image */
+          Img = &Image;
+          Img->initialized = 0;
+          Img->reopened = 0;
+          fsn_prev = fsnx;
+          rs = drms_create_record(drms_env, LEV0SERIESNAME, 
+  		DRMS_PERMANENT, &dstatus);
+          if(dstatus) {
             printk("Can't create record for %s\n", LEV0SERIESNAME);
-            continue;                     /* !!!TBD ck this */
+            continue;			/* !!!TBD ck this */
           }
-          rstatus = drms_setkey_int(rsc, "fsn", fsnx);
-          segmentc = drms_segment_lookup(rsc, "file");
-          for(i=0; i < MAXPIXELS; i++) {  /* !!!TEMP put in pattern */
-            Img->data[i] = i;
-          }
-          rdat = Img->data;
-          oldArray = drms_array_create(DRMS_TYPE_SHORT,
-                                             segmentc->info->naxis,
-                                             segmentc->axis,
-                                             rdat,
-                                             &dstatus);
-        }
-        else {
-          rs_old = rset->records[0];
-          rsc = drms_clone_record(rs_old, DRMS_PERMANENT, 
-  				DRMS_COPY_SEGMENTS, &rstatus);
-          if(rstatus) {
-            printk("Can't do drms_clone_record()\n");
-            return(1);		/* !!!TBD ck */
-          }
-          drms_close_records(rset, DRMS_FREE_RECORD);
-          rstatus = drms_setkey_int(rsc, "fsn", fsnx);
-          segmentc = drms_segment_lookupnum(rsc, 0);
-          cArray = drms_segment_read(segmentc, DRMS_TYPE_SHORT, &rstatus);
-          if(rstatus) {
-            printk("Can't do drms_segment_read()\n");
-            return(1);		/* !!!!TBD ck */
-          }
-          unsigned short *adata = (unsigned short *)cArray->data;
-          for(i=0; i < MAXPIXELS; i++) {
-            Img->data[i] = *adata++;
-          }
-          rdat = Img->data;
-          oldArray = drms_array_create(DRMS_TYPE_SHORT, 
-                                             segmentc->info->naxis,
-                                             segmentc->axis,
-                                             rdat,
-                                             &dstatus);
+          dstatus = drms_setkey_int(rs, "FSN", fsnx);
+          segment = drms_segment_lookup(rs, "file");
+          rdat = Img->dat;
+          segArray = drms_array_create(DRMS_TYPE_SHORT,
+                                               segment->info->naxis,
+                                               segment->axis,
+                                               rdat,
+                                               &dstatus);
         }
       }
-    }
-    else {			// continuing normal stream
-      Img = &Image;
-      if(fsnx != fsn_prev) {            /* the fsn has changed */
-        printk("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
-        if(fsn_prev != 0) {	/* close the image of the prev fsn if not 0 */
-          close_image(rs, segment, segArray, fsn_prev);
-          imagecnt++;
-        }
-        /* start a new image */
-        Img->valid = 0;
-        fsn_prev = fsnx;
-        rs = drms_create_record(drms_env, LEV0SERIESNAME, 
-		DRMS_PERMANENT, &dstatus);
-        if(dstatus) {
-          printk("Can't create record for %s\n", LEV0SERIESNAME);
-          continue;			/* !!!TBD ck this */
-        }
-        dstatus = drms_setkey_int(rs, "fsn", fsnx);
-        segment = drms_segment_lookup(rs, "file");
-        for(i=0; i < MAXPIXELS; i++) {	/* !!!TEMP put in pattern */
-          Img->data[i] = i;
-        }
-        rdat = Img->data;
-        segArray = drms_array_create(DRMS_TYPE_SHORT,
-                                             segment->info->naxis,
-                                             segment->axis,
-                                             rdat,
-                                             &dstatus);
+      /* call with pointer to M_PDU_Header */
+      /* rstatus = kehcheng_code((unsigned short *)(cbuf+16), Img);*/
+      /*rstatus = imgdecode((unsigned short *)(cbuf+16), Img);*/
+      rstatus = imgdecode((unsigned short *)(cbuf+10), Img);
+      switch(rstatus) {
+      case 0:
+        /* A science data VCDU was successfully decoded */
+        break;
+      case IMGDECODE_DECOMPRESS_ERROR:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_DECOMPRESS_ERROR\n");
+        break;
+      case IMGDECODE_TOO_MANY_PIXELS:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_TOO_MANY_PIXELS\n");
+        break;
+      case IMGDECODE_BAD_N:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_BAD_N\n");
+        break;
+      case IMGDECODE_BAD_APID:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_BAD_APID\n");
+        break;
+      case IMGDECODE_NO_LOOKUP_TABLE:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_NO_LOOKUP_TABLE\n");
+        break;
+      case IMGDECODE_LOOKUP_ID_MISMATCH:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_LOOKUP_ID_MISMATCH\n");
+        break;
+      case IMGDECODE_BAD_LOOKUP_TABLE:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_BAD_LOOKUP_TABLE\n");
+        break;
+      case IMGDECODE_NO_CROP_TABLE:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_NO_CROP_TABLE\n");
+        break;
+      case IMGDECODE_CROP_ID_MISMATCH:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_CROP_ID_MISMATCH\n");
+        break;
+      case IMGDECODE_BAD_CROP_GEOMETRY:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_BAD_CROP_GEOMETRY\n");
+        break;
+      case IMGDECODE_BAD_CROP_TABLE:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_BAD_CROP_TABLE\n");
+        break;
+      case IMGDECODE_BAD_CROP_SKIP_TAKE:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_BAD_CROP_SKIP_TAKE\n");
+        break;
+      case IMGDECODE_BAD_OFFSET:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_BAD_OFFSET\n");
+        break;
+      case IMGDECODE_OUT_OF_MEMORY:
+        errmsgcnt++;
+        printk("*imgdecode() ret: IMGDECODE_OUT_OF_MEMORY\n");
+        break;
+      default:
+        errmsgcnt++;
+        printk("*imgdecode() ret: unknown err status = %d:\n", rstatus);
+        break;
+      }
+      if(errmsgcnt >= MAXERRMSGCNT) {
+        printk("*Too many errors. Skipping this tlm file.\n");
+        return(1);	/* !!!TBD change. don't skip entire tlm file */
       }
     }
-    /* call with pointer to M_PDU_Header */
-    rstatus = kehcheng_code((unsigned short *)(cbuf+16), Img);
-    /*printk("kehcheng_code() rstatus = %d\n", rstatus); /* !!TEMP */
-    switch(rstatus) {
-    case SUCCESS:
-      /* 0: A science data VCDU was successfully decoded
-      /* The coresponding image is not yet complete.
-      */
-      break;
-/*******
-    case CORRUPT_DATA:
-      break;
-    case IMAGE_COMPLETE:
-      break;
-    case ERR_LAST_PIXEL:
-      break;
-    case BAD_CROP:
-      break;
-    case BAD_LOOKUP:
-      break;
-********/
-    default:
-      printk("*kehcheng_code() returns err status = %d:\n", rstatus);
-      break;
+    else {			/* send the HK data to Carl */
+      rstatus = decode_hk_next_vcdu((unsigned short *)(cbuf+10), &Hk);
     }
-  }
-  else {			/* send the HK data to Carl */
-    rstatus = decode_hk_next_vcdu((unsigned short *)(cbuf+10), &Hk);
-  }
-    if(sigtermflg) { now_do_term_sig(); }
-    if(sigalrmflg) { now_do_alrm_sig(); } /* !!!TBD for timed out images*/
   }				/* end of rd of vcdu pkts */
   fclose(fpin);
-
   if(!eflg) {
     printk("*No errors in tlm file\n");
   }
   if(rexmit || higherver) {	/* close the opened record */
-    close_image(rsc, segmentc, oldArray, fsnx);
+    close_image(rsc, segmentc, oldArray, Img, fsnx);
     imagecnt++;
-    fsn_prev = fsn_pre_rexmit;	// restore original
+    fsn_prev = fsn_pre_rexmit;	// restore orig for next normal .tlm file
   }
   ftmp = EndTimer(1);
   printk("**Processed %s\n**with %d images and %d VCDUs in %f sec\n\n",
@@ -806,13 +701,6 @@ int get_tlm(char *file, int rexmit, int higherver)
     printk("**WARNING: IM_PDU 42bit cntr gaps=%lld; expected=%lld\n",
 	 gap_42_cnt, total_missing_im_pdu);
   }
-/***********************************************************************
-  tsum[1] += ftmp;
-  printk("Time for IMAGECOMPLETE summary = %fsec\n", tsum[2]);
-  printk("Time for fitz write summary = %fsec\n", tsum[3]);
-  printk("Time for catalog_image summary = %fsec\n", tsum[4]+tsum[5]+tsum[6]);
-  printk("Time for tlm file image summary = %fsec\n \n", tsum[1]);
-*************************************************************************/
   return(0);
 }
 
@@ -841,7 +729,7 @@ void do_pipe2soc() {
   char line[128], fname[128], cmd[128];
   char *su_name, *ptape_id, *ptape_date;
 
-  char *frompipedir; /* !!!TEMP to compile */
+  char *frompipedir = "/tmp"; /* !!!TEMP to compile */
 
   /* only run this on the primary channel ingest_lev0 process */
   if(strcmp(pchan, "VC01") && strcmp(pchan, "VC02")) { return; }
@@ -900,22 +788,18 @@ void do_ingest()
   NAMESORT *nameptr;
   struct dirent *dp;
   float ttmp;
-  int found, i, j, status;
+  int i, j, status;
   int rexmit, higherversion;
   char path[DRMS_MAXPATHLEN];
-  char name[128], line[128], mvname[128], tlmfile[128], tlmname[96];
+  char name[128], line[128], tlmfile[128], tlmname[96];
   char cmd[128], xxname[128], tlmsize[80], vername[16];
   char *token, *filename;
 
-  /* init summary timers */
-  for(i=0; i < NUMTIMERS; i++) {
-    tsum[i] = 0.0;
-  }
   if((dfd=opendir(tlmdir)) == NULL) {
     printk("**Can't opendir(%s) to find files\n", tlmdir);
     abortit(3);
   }
-  found = 0; i = 0;
+  i = 0;
   if((nameptr = (NAMESORT *)malloc(MAXFILES * sizeof(NAMESORT))) == NULL) {
     printk("***Can't alloc memory for file name sort\n");
     abortit(3);
@@ -937,7 +821,9 @@ void do_ingest()
 
   for(j=0; j < i; j++) {
     /*printk("####QSORT FILES: %s\n", nameptr[j].name); /* !!TEMP */
-    /* OLD. the .dsf file is now moved by dds_soc program to outdir */
+    /* NOTE: the dsf files stay in the indir for now */
+    /* Currently the cron job pipefe_rm does this:
+    /* `/bin/mv $dsfname /dds/socdc/hmi/dsf`
     /********************
     if(strstr(nameptr[j].name, ".dsf")) {
       sprintf(cmd, "/bin/mv %s/%s %s", tlmdir, nameptr[j].name, outdir);
@@ -964,7 +850,6 @@ void do_ingest()
       free(nameptr[j].name);
       continue;
     }
-    found = 1;
     /* NOTE: the qac file is already verified by the caller of ingest_lev0 */
     while(fgets(line, 256, fp)) {	/* get qac file lines */
       if(line[0] == '#' || line[0] == '\n') continue;
@@ -1049,8 +934,6 @@ void do_ingest()
     if(system(cmd)) {
       printk("***Error on: %s\n", cmd);
     }
-    /*tsum[7] += EndTimer(7);*/
-    /*printk("Time for cp and mv of raw files = %fsec\n", tsum[7]);*/
 
     /* new stuff to do lev0 below !!!!TBD check !!! */
     sprintf(xxname, "%s/%s.tlm", path, tlmname);
@@ -1060,20 +943,17 @@ void do_ingest()
       higherversion = 1;
       printk("Higher version tlm found: %s.tlm\n", tlmname);
     }
-    tlmactive = 1;              /* set active for sigalrm */\
     if(get_tlm(xxname, rexmit, higherversion)) { /* lev0 extraction of image */
       printk("***Error in lev0 extraction for %s\n", xxname);
     }
     /*temp_drms_test_stuff(); /* !!!TEMP for testing */
     /*mk_test_ds();	      /* !!!TEMP for testing */
 
-    tlmactive = 0;
     ttmp = EndTimer(NUMTIMERS-1);
     printk("Rate tlm %s bytes in %f sec\n", tlmsize, ttmp);
     /*return; /* !!!TEMP for testing */
   }
   free(nameptr);
-  /*if(!found) { printk("No .qac files found in %s\n", DIRDDS); }*/
 }
 
 /* Initial setup stuff called when main is first entered.
@@ -1116,9 +996,8 @@ void setup()
     }
   }
   umask(002);			/* allow group write */
-  Image.valid = 0;		/* init the two image structures */
-  ImageOld.valid = 0;
-  /*open_sum();			/* open with sum_svc */
+  Image.initialized = 0;	/* init the two image structures */
+  ImageOld.initialized = 0;
 }
 
 /* Module main function. */
@@ -1155,13 +1034,12 @@ int DoIt(void)
   if((h0logfp=fopen(logname, "w")) == NULL)
     fprintf(stderr, "**Can't open the log file %s\n", logname);
   setup();
-  alarm(ALRMSEC);               /* ck for partial images every 60 sec */
   while(wflg) {
     do_ingest();                /* loop to get files from the input dir */
-    /*drms_commit(drms_env);	/* !!!TEMP for test */
-    sleep(2);
     if(sigtermflg) { now_do_term_sig(); }
+    sleep(120);			/* !!!TEMP */
     wflg = 0;			/* !!!TEMP */
   }
+  return(0);
 }
 
