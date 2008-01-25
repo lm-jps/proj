@@ -46,6 +46,7 @@ typedef struct {
 
 typedef struct {
     int initialized;
+    int reopened;
     unsigned telnum;
     unsigned fsn;
     unsigned apid;
@@ -74,6 +75,6 @@ typedef struct {
 } STAT;
 
 int imgdecode(unsigned short *impdu, IMG *img);
-int imgstat(IMG *img, STAT *stat, int has_hist);
+int imgstat(IMG *img, STAT *stat);
 
 #endif

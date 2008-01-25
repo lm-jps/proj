@@ -10,9 +10,9 @@
 #define MAX(a,b)			((a) < (b) ? (b) : (a))
 #define MIN(a,b)			((a) > (b) ? (b) : (a))
 
-///////////////////////////////////////////////
-int imgstat(IMG *img, STAT *stat, int has_hist)
-///////////////////////////////////////////////
+/////////////////////////////////
+int imgstat(IMG *img, STAT *stat)
+/////////////////////////////////
 {
     double s = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, t, ss;
     const unsigned *h = img->hist;
@@ -24,7 +24,7 @@ int imgstat(IMG *img, STAT *stat, int has_hist)
     if (n == 0)
 	return -1;
 
-    if (has_hist) {
+    if (!img->reopened) {
 	while (h[stat->min] == 0)
 	    ++stat->min;
 
@@ -43,7 +43,13 @@ int imgstat(IMG *img, STAT *stat, int has_hist)
 	    s3 += (t *= i);
 	    s4 += (t *= i);
 	}
-    } else {	// no histogram; must be from a retransmitted tlm file
+    } else {
+	//
+	// This image has been reopened.  We don't have the histogram,
+	// and we can't trust img->datavals (because there may be 
+	// overlaps).  Rescan the data array to find the true datavals
+	// and also do the sums.
+	//
 	u = 0;
 	for (i=0; i<MAXPIXELS; ++i) {
 	    if (img->dat[i] == BLANK)
@@ -54,14 +60,12 @@ int imgstat(IMG *img, STAT *stat, int has_hist)
 	    s3 += (t *= img->dat[i]);
 	    s4 += (t *= img->dat[i]);
 	}
-	// if we don't have the histogram, we can't trust the
-	// datavals value stored in the img struct
 	img->datavals = u;
 	n = u;
     }
 
     //
-    // one-pass formulae with doubble precision accumulators good enough
+    // one-pass formulae with double precision accumulators good enough
     //
     s /= n; 
     ss = s*s;
@@ -197,7 +201,7 @@ int imgdecode(unsigned short *impdu, IMG *img)
 //
 // initialize img struct and read various tables.
 //
-    if (img->initialized > 0) 
+    if (img->initialized) 
 	goto ___DECODE_START___;
 
     u = impdu[4] & 0x7ffu;	// APID
@@ -226,13 +230,8 @@ int imgdecode(unsigned short *impdu, IMG *img)
 	img->R = (impdu[16] >> 8) & 0xf;
     }
 
-    //
-    // if img->initialized < 0, meaning the packet is in a retransmitted
-    // tlm file, don't wipe out the data
-    //
-    if (img->initialized == 0)
-	for (i = 0; i < MAXPIXELS; ++i)
-	    img->dat[i] = BLANK;
+    for (i = 0; i < MAXPIXELS; ++i)
+	img->dat[i] = BLANK;
 
     for (i = 0; i < MAXHIST; ++i)
 	img->hist[i] = 0;
@@ -474,7 +473,7 @@ __DECOMPRESS_FAILURE__:
 __DECOMPRESS_SUCCESS__:
 
     u = img->datavals + ndecoded;
-    if (u > img->totalvals) {
+    if (u > img->totalvals && !img->reopened) {
 	++img->nerrors;
 	return IMGDECODE_TOO_MANY_PIXELS;
     }
@@ -607,6 +606,7 @@ int main()
     int npkt, ierr;
     
     img.initialized = 0;
+    img.reopened = 0;
     ofsn = 0;
     npkt = 0;
 
@@ -616,9 +616,10 @@ int main()
 	    continue;
 	fsn = (buf[32] << 24) + (buf[33] << 16) + (buf[34] << 8) + buf[35]; 
 	if (fsn != ofsn && img.initialized) {
-	    imgstat(&img, &imstat, 1);
+	    imgstat(&img, &imstat);
 	    img2fits(&img, &imstat);
 	    img.initialized = 0;
+	    img.reopened = 0;
 	}
 
 	ierr = imgdecode(buf2+5,&img);
@@ -630,7 +631,7 @@ int main()
 
     // write final image
     if (img.initialized) {
-	imgstat(&img, &imstat, 1);
+	imgstat(&img, &imstat);
 	img2fits(&img, &imstat);
     }
 
