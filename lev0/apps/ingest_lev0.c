@@ -45,7 +45,7 @@
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 512		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
-#define IMAGE_NUM_COMMIT 16	//number of complete images until commit
+#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
 #define TESTAPPID 0x199		//appid of test pattern packet
 #define TESTVALUE 0xc0b		//first value in test pattern packet
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
@@ -125,12 +125,12 @@ int nice_intro ()
   if (usage)
     {
     printf ("Usage:\ningest_lev0 [-vh] "
-	"vc=<virt chan> indir=</dir> outdir=</dir> [logfile=<file>]\n"
+	"vc=<virt chan> indir=</dir> [outdir=</dir>] [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
 	"vc= primary virt channel to listen to e.g. VC02\n"
 	"indir= directory containing the files to ingest\n"
-	"outdir= directory to move the files to after the ingest\n"
+	"outdir= optional dir to copy the files to after the ingest\n"
 	"logfile= optional log file name. Will create one if not given\n");
     return(1);
     }
@@ -251,7 +251,6 @@ int compare_names(const void *a, const void *b)
   NAMESORT *x=(NAMESORT *)a, *y=(NAMESORT *)b;
   return(strcmp(x->name+4, y->name+4)); // skip VC02/VC05 in compare 
 }
-
 
 unsigned short MDI_getshort (unsigned char *c)    //  machine independent  
 {
@@ -732,33 +731,34 @@ void do_ingest()
       printk("***ERROR: No path to segment for %s\n", TLMSERIESNAME);
       abortit(3);
     }
-    sprintf(cmd, "cp -p %s %s", name, path);
-    printk("*cp qac to %s\n", path);
+    if(outdir) {
+      sprintf(cmd, "cp -p %s %s", name, outdir);
+      printk("*cp qac file to %s\n", outdir);
+      printk("%s\n", cmd);
+      if(system(cmd)) {
+        printk("***Error on: %s\n", cmd);
+      }
+      sprintf(cmd, "cp -p %s %s", tlmfile, outdir);
+      printk("*cp tlm file to %s\n", outdir);
+      printk("%s\n", cmd);
+      if(system(cmd)) {
+        printk("***Error on: %s\n", cmd);
+      }
+    }
+    sprintf(cmd, "/bin/mv %s %s", name, path);
+    printk("*mv qac to %s\n", path);
     printk("%s\n", cmd);
     if(status = system(cmd)) {
       printk("**ERROR: %d on: %s\n", status, cmd);
     }
-    sprintf(cmd, "cp -p %s %s", tlmfile, path);
-    printk("*cp tlm to %s\n", path);
+    sprintf(cmd, "/bin/mv %s %s", tlmfile, path);
+    printk("*mv tlm to %s\n", path);
     printk("%s\n", cmd);
     if(system(cmd)) {
       printk("**ERROR: on: %s\n", cmd);
     }
     if((status = drms_close_record(rs_tlm, DRMS_INSERT_RECORD))) {
       printk("**ERROR: drms_close_record failed for %s\n", TLMSERIESNAME);
-    }
-
-    sprintf(cmd, "/bin/mv %s %s", name, outdir);
-    printk("*mv qac file to %s\n", outdir);
-    printk("%s\n", cmd);
-    if(system(cmd)) {
-      printk("***Error on: %s\n", cmd);
-    }
-    sprintf(cmd, "/bin/mv %s %s", tlmfile, outdir);
-    printk("*mv tlm file to %s\n", outdir);
-    printk("%s\n", cmd);
-    if(system(cmd)) {
-      printk("***Error on: %s\n", cmd);
     }
 
     sprintf(xxname, "%s/%s.tlm", path, tlmname);
@@ -836,8 +836,7 @@ int DoIt(void)
     return(1);
   }
   if (strcmp(outdir, NOTSPECIFIED) == 0) {
-    fprintf(stderr, "'outdir' must be specified.  Abort\n");
-    return(1);
+    outdir = NULL;
   }
   if (strcmp(logfile, NOTSPECIFIED) == 0) {
     sprintf(logname, H0LOGFILE, username, vc, gettimetag());
