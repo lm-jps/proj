@@ -11,7 +11,7 @@
 
  * DESCRIPTION:
 
-*!!!!TBD UPDATE THIS DESCRIP!!!!!!!!!! e.g. how started !!!!!!!!!!!!!!!!!!!!!
+ *!!!!TBD UPDATE THIS DESCRIP!!!!!!!!!! e.g. how started !!!!!!!!!!!!!!!!!!!!!
 
  */
 
@@ -22,7 +22,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <signal.h>
 #include <strings.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -32,29 +31,19 @@
 #include <printk.h>
 #include "imgdecode.h"
 #include "packets.h"
-/************************************
-#include "imgstruct.h"
-#include "hmi_compression.h"
-#include "decompress.h"
-#include "load_hk_config_files.h"
-*************************************/
 
 #define LEV0SERIESNAME "su_production.lev0_test"
 #define TLMSERIESNAME "su_production.tlm_test"
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.log"
-#define DIRDDS "/egse/ssim2soc"
-#define IMAGEDIR "/tmp/jim"	/* dir to put the last IMAGEDIRCNT images */
-#define IMAGEDIRCNT 20		/* # of images to save */
-#define SEC1970TO2004 1072828800 /* approx #of secs from 1970 to 2004 */
 #define PKTSZ 1788		/* size of VCDU pkt */
-#define DEFAULTDB "jsoc"	/* the default db to connect to */
 #define MAXFILES 512		/* max # of file can handle in tlmdir */
 #define NUMTIMERS 8		/* number of seperate timers avail */
+#define IMAGE_NUM_COMMIT 16	/* number of complete images until commit */
 #define TESTAPPID 0x199		/* appid of test pattern packet */
 #define TESTVALUE 0xc0b		/* first value in test pattern packet */
 #define MAXERRMSGCNT 10		/* max # of err msg before skip the tlm file*/
-
 #define NOTSPECIFIED "***NOTSPECIFIED***"
+
 /* List of default parameter values. */
 ModuleArgs_t module_args[] = { 
   {ARG_STRING, "vc", NOTSPECIFIED, "Primary virt channel to listen to"},
@@ -73,6 +62,7 @@ char *module_name = "ingest_lev0";
 
 FILE *h0logfp;                  /* fp for h0 ouput log for this run */
 IMG Image, ImageOld;
+IMG *Img;
 CCSDS_Packet_t *Hk;
 DRMS_Record_t *rs;
 DRMS_Segment_t *segment;
@@ -84,12 +74,6 @@ unsigned int fsn = 0;
 unsigned int fsn_prev = 0;
 unsigned int fsn_pre_rexmit = 0;
 unsigned int fid = 0;
-SUM_t *sum;
-SUMID_t uid = 0;
-char **cptr;
-uint64_t *dsixpt;
-uint64_t alloc_index;
-char alloc_wd[64];
 
 long long vcdu_seq_num;
 long long vcdu_seq_num_next;
@@ -97,26 +81,13 @@ long long total_missing_im_pdu;
 unsigned int vcdu_24_cnt, vcdu_24_cnt_next;
 int verbose;			/* set by get_cmd() */
 double reqbytes;		/* # of bytes requested */
-double dsize;			/* # of bytes used */
-double bytes_used;		/* total #of bytes for all cataloged output */
 int total_tlm_vcdu;
 int total_missing_vcdu;
-int dsds_tid;			/* originally the tid of dsds_svc */
-				/* now the tid of pe_rpc that gets us to dsds*/
-int abort_active;		/* set while doing an abort */
-int sigtermflg = 0;		/* set on signal so prog will know */
-int pflg = 0;
-int imagedircnt = 0;            /* inc each time write an image to IMAGEDIR */
-int ALRMSEC = 60;               /* seconds for alarm signal */
-int dbxflg;			/* user defined while running dbx, else N/A */
-int debugflg;			/* run all pvm servers in the debug mode */
-				/* also do keyiterate. Don't use w/tae */ 
-char database[MAX_STR];
-char pdshost[MAX_STR];
+int imagecnt = 0;		/* num of images since last commit */
+int ALRMSEC = 40;               /* seconds for alarm signal */
 char timetag[32];
 char pchan[8];			/* primary channel to listen to e.g. VC02 */
 char rchan[8];			/* redundant channel to listen to e.g. VC10 */
-char *dbname = DEFAULTDB;	/* !!TBD pass this in as an arg */
 char *username;			/* from getenv("USER") */
 char *tlmdir;			/* tlm dir name passed in */
 char *outdir;			/* output dir for .tlm file (can be /dev/null)*/
@@ -141,15 +112,6 @@ struct namesort {		/* sorted file names in tlmdir */
 };
 typedef struct namesort NAMESORT;
 
-/* linked list of open images */
-struct openimg {
-  struct openimg *next;
-  time_t sec;
-  unsigned int fsn;
-};
-typedef struct openimg OPENIMG;
-OPENIMG *openimg_hdr = NULL;	/* linked list of open images */
-OPENIMG *openimg_ptr;		/* current enty */
 
 int nice_intro ()
   {
@@ -180,56 +142,6 @@ char *gettimetag()
   sprintf(timetag, "%04d.%02d.%02d.%02d%02d%02d",
         (t_ptr->tm_year+1900), (t_ptr->tm_mon+1), t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
   return(timetag);
-}
-
-
-/* NOTE: This my be vestigial. Now we can only have one open image per process. !!CHECK */
-/* Add an entry with the given values to the OPENIMG linked list */
-void setopenimg(OPENIMG **list, time_t sec, unsigned int fsn)
-{
-  OPENIMG *newone;
-
-  newone = (OPENIMG *)malloc(sizeof(OPENIMG));
-  newone->next = *list;
-  newone->sec = sec;
-  newone->fsn = fsn;
-  *list = newone;
-}
-
-/* remove the OPENIMG list entry with the given fsn */
-void remopenimg(OPENIMG **list, unsigned int fsn)
-{
-  OPENIMG *walk = *list;
-  OPENIMG *trail = NULL;
-
-  while(walk) {
-    if(walk->fsn != fsn) {
-      trail = walk;
-      walk = walk->next;
-    }
-    else {
-      if(trail)
-        trail->next = walk->next;
-      else
-        *list = walk->next;
-      free(walk);
-      walk = NULL;
-    }
-  }
-}
-
-/* get the OPENIMG list entry with the given fsn. return null if none. */
-OPENIMG *getopenimg(OPENIMG *list, unsigned int fsn)
-{
-  OPENIMG *walk = list;
-
-  while(walk) {
-    if(walk->fsn != fsn)
-      walk = walk->next;
-    else
-      return walk;
-  }
-  return walk;
 }
 
 
@@ -301,44 +213,35 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   }
 }
 
-/* Got a fatal error sometime after registering with SUMS. 
- * Degregister and close with SUMS as approriate.
+/* Got a fatal error. 
  */
 void abortit(int stat)
 {
   printk("***Abort in progress ...\n");
-  if(uid ) {			/* we've registered with SUMS */
-    SUM_close(sum, printk);
-    printk("*Closed with sum_svc uid=%ld\n", uid);
-  }
   printk("**Exit ingest_lev0 w/ status = %d\n", stat);
-  /*msg("Exit ingest_lev0 w/ status = %d\n\n", stat);*/
   if (h0logfp) fclose(h0logfp);
   exit(stat);
 }
 
 /* Called 60 secs after the last .tlm file was seen.
  * Will close any opened image. NOTE: a reprocessed image cannot
- * be open. It is always closed at the end of get_tlm().
+ * be active. It is always closed at the end of get_tlm().
  */
 void alrm_sig(int sig)
 {
   signal(SIGALRM, alrm_sig);
   if(Image.initialized) {
     close_image(rs, segment, segArray, &Image, fsn_prev);
+    printk("*Closed image on timeout FSN=%u\n", fsn_prev);
+    printk("alrm_sig: drms_server_end_transaction()\n");
+    drms_server_end_transaction(drms_env, 0 , 0); //commit
+    printk("alrm_sig: drms_server_begin_transaction()\n");
+    drms_server_begin_transaction(drms_env); //start another cycle
+    fsn_prev = 0;	//make sure don't try to flush this image
+    imagecnt = 0;	//and start a new transaction interval
   }
-  printk("*Closed image on timeout FSN=%u\n", fsn_prev);
 }
 
-void sighandler(int sig)
-{
-  sigtermflg = 1;
-}
-
-void now_do_term_sig()
-{
-  abortit(2);
-}
 
 
 int compare_names(const void *a, const void *b)
@@ -373,13 +276,12 @@ int get_tlm(char *file, int rexmit, int higherver)
   static DRMS_Segment_t *segmentc;
   static DRMS_Array_t *cArray, *oldArray;
   FILE *fpin;
-  IMG *Img;
   short *rdat;
   unsigned char cbuf[PKTSZ];
   char rexmit_dsname[256];
   long long gap_42_cnt;
   int status, rstatus, dstatus, fpkt_cnt, i, j, sync_bad_cnt;
-  int imagecnt, appid, datval, eflg, firstflg, errmsgcnt;
+  int appid, datval, eflg, firstflg, errmsgcnt, fileimgcnt;
   unsigned int cnt1, cnt2, cnt3, fsnx, gap_24_cnt;
   int zero_pn;
   unsigned short pksync1, pksync2;
@@ -389,17 +291,15 @@ int get_tlm(char *file, int rexmit, int higherver)
     printk("*Can't open tlm file %s\n", file);
     return(1);
   }
-  alarm(ALRMSEC);			//timeout if don't get another .tlm file
-  BeginTimer(1);			/* time tlm file processing */
+  BeginTimer(1);			//time tlm file processing
   printk("*Processing tlm file %s\n", file);
-  fpkt_cnt = sync_bad_cnt = imagecnt = eflg = errmsgcnt = 0;
+  fpkt_cnt = sync_bad_cnt = eflg = errmsgcnt = fileimgcnt = 0;
   zero_pn = gap_24_cnt = gap_42_cnt = 0;
   firstflg = 1; 
   if(rexmit || higherver) {
     fsn_pre_rexmit = fsn_prev;		/* restore this at end of rexmit tlm*/
     fsn_prev = 0;			/* cause a new image */
   }
-  /*BeginTimer(2);			/* time each image */
   /* read a VCDU packet */
   while((status = fread(cbuf,sizeof(char),PKTSZ,fpin) ) == PKTSZ) {
     pksync1 = MDI_getshort(cbuf);
@@ -500,8 +400,10 @@ int get_tlm(char *file, int rexmit, int higherver)
           if(fsn_prev != 0) {  /* close image of prev fsn if not 0 */
             close_image(rsc, segmentc, oldArray, Img, fsn_prev);
             imagecnt++;
+            fileimgcnt++;
           }
           Img = &ImageOld;
+          errmsgcnt = 0;
           fsn_prev = fsnx;
           sprintf(rexmit_dsname, "su_production.lev0_test[%u]", fsnx);
           printk("Open prev ds: %s\n", rexmit_dsname);
@@ -577,12 +479,21 @@ int get_tlm(char *file, int rexmit, int higherver)
           printk("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
           if(fsn_prev != 0) {	/* close the image of the prev fsn if not 0 */
             close_image(rs, segment, segArray, Img, fsn_prev);
-            imagecnt++;
+            //force a commit to DB on an image boundry & not during a rexmit
+            if(imagecnt++ >= IMAGE_NUM_COMMIT) {
+              printk("drms_server_end_transaction()\n");
+              drms_server_end_transaction(drms_env, 0 , 0);
+              printk("drms_server_begin_transaction()\n");
+              drms_server_begin_transaction(drms_env); //start another cycle
+              imagecnt = 0;
+            }
+            fileimgcnt++;
           }
           /* start a new image */
           Img = &Image;
           Img->initialized = 0;
           Img->reopened = 0;
+          errmsgcnt = 0;
           fsn_prev = fsnx;
           rs = drms_create_record(drms_env, LEV0SERIESNAME, 
   		DRMS_PERMANENT, &dstatus);
@@ -601,77 +512,71 @@ int get_tlm(char *file, int rexmit, int higherver)
         }
       }
       /* call with pointer to M_PDU_Header */
-      /* rstatus = kehcheng_code((unsigned short *)(cbuf+16), Img);*/
-      /*rstatus = imgdecode((unsigned short *)(cbuf+16), Img);*/
       rstatus = imgdecode((unsigned short *)(cbuf+10), Img);
       switch(rstatus) {
       case 0:
         /* A science data VCDU was successfully decoded */
         break;
       case IMGDECODE_DECOMPRESS_ERROR:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_DECOMPRESS_ERROR\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_DECOMPRESS_ERROR\n");
         break;
       case IMGDECODE_TOO_MANY_PIXELS:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_TOO_MANY_PIXELS\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_TOO_MANY_PIXELS\n");
         break;
       case IMGDECODE_BAD_N:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_BAD_N\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_BAD_N\n");
         break;
       case IMGDECODE_BAD_APID:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_BAD_APID\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_BAD_APID\n");
         break;
       case IMGDECODE_NO_LOOKUP_TABLE:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_NO_LOOKUP_TABLE\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_NO_LOOKUP_TABLE\n");
         break;
       case IMGDECODE_LOOKUP_ID_MISMATCH:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_LOOKUP_ID_MISMATCH\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_LOOKUP_ID_MISMATCH\n");
         break;
       case IMGDECODE_BAD_LOOKUP_TABLE:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_BAD_LOOKUP_TABLE\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_BAD_LOOKUP_TABLE\n");
         break;
       case IMGDECODE_NO_CROP_TABLE:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_NO_CROP_TABLE\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_NO_CROP_TABLE\n");
         break;
       case IMGDECODE_CROP_ID_MISMATCH:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_CROP_ID_MISMATCH\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_CROP_ID_MISMATCH\n");
         break;
       case IMGDECODE_BAD_CROP_GEOMETRY:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_BAD_CROP_GEOMETRY\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_BAD_CROP_GEOMETRY\n");
         break;
       case IMGDECODE_BAD_CROP_TABLE:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_BAD_CROP_TABLE\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_BAD_CROP_TABLE\n");
         break;
       case IMGDECODE_BAD_CROP_SKIP_TAKE:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_BAD_CROP_SKIP_TAKE\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_BAD_CROP_SKIP_TAKE\n");
         break;
       case IMGDECODE_BAD_OFFSET:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_BAD_OFFSET\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_BAD_OFFSET\n");
         break;
       case IMGDECODE_OUT_OF_MEMORY:
-        errmsgcnt++;
-        printk("*imgdecode() ret: IMGDECODE_OUT_OF_MEMORY\n");
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: IMGDECODE_OUT_OF_MEMORY\n");
         break;
       default:
-        errmsgcnt++;
-        printk("*imgdecode() ret: unknown err status = %d:\n", rstatus);
+        if(errmsgcnt++ < MAXERRMSGCNT)
+          printk("*imgdecode() ret: unknown err status = %d:\n", rstatus);
         break;
-      }
-      if(errmsgcnt >= MAXERRMSGCNT) {
-        printk("*Too many errors. Skipping this tlm file.\n");
-        return(1);	/* !!!TBD change. don't skip entire tlm file */
       }
     }
     else {			/* send the HK data to Carl */
@@ -685,11 +590,12 @@ int get_tlm(char *file, int rexmit, int higherver)
   if(rexmit || higherver) {	/* close the opened record */
     close_image(rsc, segmentc, oldArray, Img, fsnx);
     imagecnt++;
+    fileimgcnt++;
     fsn_prev = fsn_pre_rexmit;	// restore orig for next normal .tlm file
   }
   ftmp = EndTimer(1);
   printk("**Processed %s\n**with %d images and %d VCDUs in %f sec\n\n",
-	file, imagecnt, fpkt_cnt, ftmp);
+	file, fileimgcnt, fpkt_cnt, ftmp);
   if(fpkt_cnt != total_tlm_vcdu) {
     printk("**WARNING: Found #vcdu=%d; expected=%d\n", fpkt_cnt, total_tlm_vcdu);
   }
@@ -704,78 +610,6 @@ int get_tlm(char *file, int rexmit, int higherver)
   return(0);
 }
 
-/* This is called from the main loop to check if any .parc files are in
- * the pipeline to soc dir ($DIRPIPE2SOC).
- * The .parc file is sent to /dds/pipe2soc/aia or /dds/pipe2soc/hmi
- * every time the pipeline back end system does a tapearc. (during development
- * the .parc files are sent by the cron job /home/jim/cvs/jsoc/scripts/pipefe_rm
- * on d00.)
- * The .parc file
- * has info on storage units that were archived successfully by the backend,
- * and so can be marked as such in the data capture sum_main table.
- * The sum_main table is updated for its safe_tape info from the .parc.
- * A .parc file looks like:
- * dcs0.jsoc:/dds/pipe2soc/aia> t AIA_2007_131_11_56.parc 
- * VC01_2007_131_11_51_39_0123456789A_FFFFF_00 000000S1 666 2007-04-12 17:15:45
- * VC04_2007_131_11_52_09_0123456789A_FFFFF_00 000000S1 666 2007-04-12 17:15:45
- *
- * storage_unit_name pipeline_tape_id_archived_on tape_fn date
-*/
-void do_pipe2soc() {
-  DIR *dfd;
-  struct dirent *dp;
-  FILE *fp;
-  int ptape_fn, complete;
-  char line[128], fname[128], cmd[128];
-  char *su_name, *ptape_id, *ptape_date;
-
-  char *frompipedir = "/tmp"; /* !!!TEMP to compile */
-
-  /* only run this on the primary channel ingest_lev0 process */
-  if(strcmp(pchan, "VC01") && strcmp(pchan, "VC02")) { return; }
-
-    if(DS_ConnectDB_Q(dbname)) {
-      printk("**Can't connect to DB %s\n", dbname);
-      abortit(3);
-    }
-
-  if((dfd=opendir(frompipedir)) == NULL) {
-    printk("**Can't opendir(%s) to find files\n", frompipedir);
-    abortit(3);
-  }
-  while((dp=readdir(dfd)) != NULL) {
-    if(strstr(dp->d_name, ".parc")) {
-      sprintf(fname, "%s/%s", frompipedir, dp->d_name);
-      if(!(fp=fopen(fname, "r"))) {
-        printk("***Can't open %s\n", fname);
-        continue;
-      }
-      printk("Found parc file: %s\n", fname);
-      complete = 1;
-      while(fgets(line, 128, fp)) {       /* get .parc file lines */
-        if(line[0] == '#' || line[0] == '\n') continue;
-        printk("%s", line);
-        su_name = (char *)strtok(line, " ");
-        ptape_id = (char *)strtok(NULL, " ");
-        ptape_fn = atoi((char *)strtok(NULL, " "));
-        ptape_date = (char *)strtok(NULL, "\n");
-        if(SUMLIB_SafeTapeUpdate(su_name,ptape_id,ptape_fn,ptape_date)) {
-          printk("**ERROR in SUMLIB_SafeTapeUpdate(%s...)\n", su_name);
-          complete = 0;
-        }
-      }
-      fclose(fp);
-      if(complete) {
-        sprintf(cmd, "/bin/rm -f %s", fname);
-        printk("%s\n", cmd);
-        system(cmd);
-      }
-    }
-  }
-  closedir(dfd);
-  DS_DisConnectDB_Q();
-}
-
 /* This is the main loop that gets the .qac and .tlm files and 
  * puts them into ds TLMSERIESNAME and extracts the lev0 and puts it in 
  * LEV0SERIESNAME in DRMS.
@@ -787,7 +621,6 @@ void do_ingest()
   DIR *dfd;
   NAMESORT *nameptr;
   struct dirent *dp;
-  float ttmp;
   int i, j, status;
   int rexmit, higherversion;
   char path[DRMS_MAXPATHLEN];
@@ -838,7 +671,6 @@ void do_ingest()
       free(nameptr[j].name);
       continue;
     }
-    BeginTimer(NUMTIMERS-1);
     rexmit = higherversion = 0;
     if(strstr(nameptr[j].name, ".qacx")) {  	/* this is a rexmit file */
       rexmit = 1;
@@ -869,7 +701,7 @@ void do_ingest()
         reqbytes = (double)atol(token);
         /*reqbytes += (double)1000000;*/	/* add some overhead */
       }
-      else if(strstr(line, "TOTAL_TLM_VCDU=")) {
+      else if((strstr(line, "TOTAL_TLM_VCDU=")) || (strstr(line, "TOTAL_VCDU="))) {
         token = (char *)strtok(line, "=");
         token = (char *)strtok(NULL, "\n");
         total_tlm_vcdu = atoi(token);
@@ -887,7 +719,7 @@ void do_ingest()
       }
     }
     fclose(fp);
-/* !!!NEW 12/28/07 drms calls to ingest qac/tlm to DB */
+    alarm(ALRMSEC);		//restart alarm if no more files come
     rs_tlm = drms_create_record(drms_env, TLMSERIESNAME, 
 				DRMS_PERMANENT, &status);
     if(status) {
@@ -919,10 +751,8 @@ void do_ingest()
     if((status = drms_close_record(rs_tlm, DRMS_INSERT_RECORD))) {
       printk("**ERROR: drms_close_record failed for %s\n", TLMSERIESNAME);
     }
-    /*drms_commit(drms_env);*/
 
     sprintf(cmd, "/bin/mv %s %s", name, outdir);
-    /*BeginTimer(7);*/
     printk("*mv qac file to %s\n", outdir);
     printk("%s\n", cmd);
     if(system(cmd)) {
@@ -935,7 +765,6 @@ void do_ingest()
       printk("***Error on: %s\n", cmd);
     }
 
-    /* new stuff to do lev0 below !!!!TBD check !!! */
     sprintf(xxname, "%s/%s.tlm", path, tlmname);
     filename = (char *)rindex(tlmname, '_');
     sprintf(vername, "%s", filename);	/* e.g. _00 or _01 etc. */
@@ -946,12 +775,6 @@ void do_ingest()
     if(get_tlm(xxname, rexmit, higherversion)) { /* lev0 extraction of image */
       printk("***Error in lev0 extraction for %s\n", xxname);
     }
-    /*temp_drms_test_stuff(); /* !!!TEMP for testing */
-    /*mk_test_ds();	      /* !!!TEMP for testing */
-
-    ttmp = EndTimer(NUMTIMERS-1);
-    printk("Rate tlm %s bytes in %f sec\n", tlmsize, ttmp);
-    /*return; /* !!!TEMP for testing */
   }
   free(nameptr);
 }
@@ -965,10 +788,6 @@ void setup()
   struct tm *t_ptr;
   char string[128], cwdbuf[128], idstr[256];
 
-  if (signal(SIGINT, SIG_IGN) != SIG_IGN)
-    signal(SIGINT, sighandler);
-  if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
-    signal(SIGTERM, sighandler);
   signal(SIGALRM, alrm_sig);
 
   tval = time(NULL);
@@ -1036,9 +855,8 @@ int DoIt(void)
   setup();
   while(wflg) {
     do_ingest();                /* loop to get files from the input dir */
-    if(sigtermflg) { now_do_term_sig(); }
-    sleep(120);			/* !!!TEMP */
-    wflg = 0;			/* !!!TEMP */
+    sleep(10);			/* !!!TEMP */
+    /*wflg = 0;			/* !!!TEMP */
   }
   return(0);
 }
