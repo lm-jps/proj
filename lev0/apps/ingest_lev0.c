@@ -4,16 +4,23 @@
  *-----------------------------------------------------------------------------
  *
  * This is a module that runs with DRMS and continuously extracts images and HK
- * data from .tlm files that appear in the given input dir. It outputs images
- * to the DRMS dataset hmi.lev0 and hk data to appropriate hk datasets.
-
- * Call: ingest_lev0 vc=VC05 indir=/tmp/jim outdir=/tmp/jim/out [logfile=name]
-
- * DESCRIPTION:
-
- *!!!!TBD UPDATE THIS DESCRIP!!!!!!!!!! e.g. how started !!!!!!!!!!!!!!!!!!!!!
-
- */
+ * data from .tlm files that appear in the given input dir. It puts the .tlm
+ * and .qac files in the DRMS dataset hmi.tlm and also in the outdir if
+ * given.  It extracts images from the .tlm files an puts them in
+ * the DRMS dataset hmi.lev0 and extracts hk data to appropriate hk datasets.
+ *
+ * Call for testing (set TLMSERIESNAME and LEV0SERIESNAME to test datasets): 
+ *   ingest_lev0 vc=VC05 indir=/tmp/jim outdir=/tmp/jim/out [logfile=name]
+ *
+ * OPERATION:
+ * This is normally run on the dedicated lev0 host. Four instances are run.
+ * No outdir= is given, i.e. the .tlm and .qac files only end up in SUMS.
+ *
+ * ingest_lev0 vc=VC02 indir=/dds/socdc/hmi
+ * ingest_lev0 vc=VC05 indir=/dds/socdc/hmi
+ * ingest_lev0 vc=VC10 indir=/dds/socdc/aia
+ * ingest_lev0 vc=VC13 indir=/dds/socdc/aia
+ */ 
 
 #include <jsoc_main.h>
 #include <cmdparams.h>
@@ -25,26 +32,26 @@
 #include <strings.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <sys/stat.h> /* for umask(2) */
+#include <sys/stat.h>	//for umask(2)
 #include <dirent.h>
-#include <unistd.h> /* for alarm(2) among other things... */
+#include <unistd.h>	//for alarm(2) among other things...
 #include <printk.h>
 #include "imgdecode.h"
 #include "packets.h"
 
 #define LEV0SERIESNAME "su_production.lev0_test"
 #define TLMSERIESNAME "su_production.tlm_test"
-#define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.log"
-#define PKTSZ 1788		/* size of VCDU pkt */
-#define MAXFILES 512		/* max # of file can handle in tlmdir */
-#define NUMTIMERS 8		/* number of seperate timers avail */
-#define IMAGE_NUM_COMMIT 16	/* number of complete images until commit */
-#define TESTAPPID 0x199		/* appid of test pattern packet */
-#define TESTVALUE 0xc0b		/* first value in test pattern packet */
-#define MAXERRMSGCNT 10		/* max # of err msg before skip the tlm file*/
+#define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
+#define PKTSZ 1788		//size of VCDU pkt
+#define MAXFILES 512		//max # of file can handle in tlmdir
+#define NUMTIMERS 8		//number of seperate timers avail
+#define IMAGE_NUM_COMMIT 16	//number of complete images until commit
+#define TESTAPPID 0x199		//appid of test pattern packet
+#define TESTVALUE 0xc0b		//first value in test pattern packet
+#define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 
-/* List of default parameter values. */
+// List of default parameter values. 
 ModuleArgs_t module_args[] = { 
   {ARG_STRING, "vc", NOTSPECIFIED, "Primary virt channel to listen to"},
   {ARG_STRING, "indir", NOTSPECIFIED, "directory containing the files to ingest"},
@@ -57,10 +64,10 @@ ModuleArgs_t module_args[] = {
 
 CmdParams_t cmdparams;
 
-/* Module name presented to DRMS. */
+// Module name presented to DRMS. 
 char *module_name = "ingest_lev0";
 
-FILE *h0logfp;                  /* fp for h0 ouput log for this run */
+FILE *h0logfp;		// fp for h0 ouput log for this run 
 IMG Image, ImageOld;
 IMG *Img;
 CCSDS_Packet_t *Hk;
@@ -79,20 +86,19 @@ long long vcdu_seq_num;
 long long vcdu_seq_num_next;
 long long total_missing_im_pdu;
 unsigned int vcdu_24_cnt, vcdu_24_cnt_next;
-int verbose;			/* set by get_cmd() */
-double reqbytes;		/* # of bytes requested */
+int verbose;			// set by get_cmd() 
 int total_tlm_vcdu;
 int total_missing_vcdu;
-int imagecnt = 0;		/* num of images since last commit */
-int ALRMSEC = 40;               /* seconds for alarm signal */
+int imagecnt = 0;		// num of images since last commit 
+int ALRMSEC = 70;               // seconds for alarm signal 
 char timetag[32];
-char pchan[8];			/* primary channel to listen to e.g. VC02 */
-char rchan[8];			/* redundant channel to listen to e.g. VC10 */
-char *username;			/* from getenv("USER") */
-char *tlmdir;			/* tlm dir name passed in */
-char *outdir;			/* output dir for .tlm file (can be /dev/null)*/
-char *logfile;			/* optional log name passed in */
-char *vc;			/* virtual channel to process, e.g. VC02 */
+char pchan[8];			// primary channel to listen to e.g. VC02 
+char rchan[8];			// redundant channel to listen to e.g. VC10 
+char *username;			// from getenv("USER") 
+char *tlmdir;			// tlm dir name passed in 
+char *outdir;			// output dir for .tlm file (can be /dev/null)
+char *logfile;			// optional log name passed in 
+char *vc;			// virtual channel to process, e.g. VC02 
 struct p_r_chans {
   char *pchan;
   char *rchan;
@@ -100,14 +106,14 @@ struct p_r_chans {
 typedef struct p_r_chans P_R_CHANS;
 
 P_R_CHANS p_r_chan_pairs[] = {
-{"VC01", "VC09"},		/* AIA */
-{"VC04", "VC12"},		/* AIA */
-{"VC02", "VC10"},		/* HMI */
-{"VC05", "VC13"},		/* HMI */
+{"VC01", "VC09"},		// AIA 
+{"VC04", "VC12"},		// AIA 
+{"VC02", "VC10"},		// HMI 
+{"VC05", "VC13"},		// HMI 
 {"n/a", "n/a"}
 };
 
-struct namesort {		/* sorted file names in tlmdir */
+struct namesort {		// sorted file names in tlmdir 
   char *name;
 };
 typedef struct namesort NAMESORT;
@@ -131,7 +137,7 @@ int nice_intro ()
   return (0);
   }
 
-/* Returns a time tag like  yyyy.mm.dd.hhmmss */
+// Returns a time tag like  yyyy.mm.dd.hhmmss 
 char *gettimetag()
 {
   struct timeval tvalr;
@@ -161,8 +167,7 @@ float EndTimer(int n)
     (float) (second[n].tv_usec-first[n].tv_usec)/1000000.0;
 }
 
-/* Outputs the variable format message (re: printf) to the log file.
- */
+// Outputs the variable format message (re: printf) to the log file.
 int h0log(const char *fmt, ...)
 {
   va_list args;
@@ -173,7 +178,7 @@ int h0log(const char *fmt, ...)
   if(h0logfp) {
     fprintf(h0logfp, string);
     fflush(h0logfp);
-  } else {			/* couldn't open log */
+  } else {			// couldn't open log 
     printf(string);
     fflush(stdout);
   }
@@ -181,8 +186,7 @@ int h0log(const char *fmt, ...)
   return(0);
 }
 
-/* Close out an image.
-*/
+// Close out an image.
 void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 		IMG *Img, int fsn)
 {
@@ -205,7 +209,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   if (status) {
     printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
   }
-  array->data = NULL;        /* must do before free */
+  array->data = NULL;        // must do before free 
   drms_free_array(array);
   if((status = drms_close_record(rs, DRMS_INSERT_RECORD))) {
     printk("**ERROR: drms_close_record failed for %s fsn=%u\n",
@@ -213,8 +217,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   }
 }
 
-/* Got a fatal error. 
- */
+// Got a fatal error. 
 void abortit(int stat)
 {
   printk("***Abort in progress ...\n");
@@ -223,10 +226,9 @@ void abortit(int stat)
   exit(stat);
 }
 
-/* Called 60 secs after the last .tlm file was seen.
- * Will close any opened image. NOTE: a reprocessed image cannot
- * be active. It is always closed at the end of get_tlm().
- */
+// Called 60 secs after the last .tlm file was seen.
+// Will close any opened image. NOTE: a reprocessed image cannot
+// be active. It is always closed at the end of get_tlm().
 void alrm_sig(int sig)
 {
   signal(SIGALRM, alrm_sig);
@@ -247,11 +249,11 @@ void alrm_sig(int sig)
 int compare_names(const void *a, const void *b)
 {
   NAMESORT *x=(NAMESORT *)a, *y=(NAMESORT *)b;
-  return(strcmp(x->name+4, y->name+4)); /* skip VC02/VC05 in compare */
+  return(strcmp(x->name+4, y->name+4)); // skip VC02/VC05 in compare 
 }
 
 
-unsigned short MDI_getshort (unsigned char *c)    /*  machine independent  */
+unsigned short MDI_getshort (unsigned char *c)    //  machine independent  
 {
   unsigned short s = 0;
 
@@ -260,15 +262,14 @@ unsigned short MDI_getshort (unsigned char *c)    /*  machine independent  */
   return s;
 }
 
-/* !!!TEMP to make */
+// !!!TEMP to make 
 int decode_hk_next_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk)
 {
   return(0);
 }
 
 
-/* Process the tlm file to validate and to extract the lev0 image.
-*/
+// Process the tlm file to validate and to extract the lev0 image.
 int get_tlm(char *file, int rexmit, int higherver)
 {
   static DRMS_RecordSet_t *rset;
@@ -287,7 +288,7 @@ int get_tlm(char *file, int rexmit, int higherver)
   unsigned short pksync1, pksync2;
   float ftmp;
 
-  if(!(fpin = fopen(file, "r"))) {	/* open the tlm input */
+  if(!(fpin = fopen(file, "r"))) {	// open the tlm input 
     printk("*Can't open tlm file %s\n", file);
     return(1);
   }
@@ -297,26 +298,26 @@ int get_tlm(char *file, int rexmit, int higherver)
   zero_pn = gap_24_cnt = gap_42_cnt = 0;
   firstflg = 1; 
   if(rexmit || higherver) {
-    fsn_pre_rexmit = fsn_prev;		/* restore this at end of rexmit tlm*/
-    fsn_prev = 0;			/* cause a new image */
+    fsn_pre_rexmit = fsn_prev;		// restore this at end of rexmit tlm
+    fsn_prev = 0;			// cause a new image 
   }
-  /* read a VCDU packet */
+  // read a VCDU packet 
   while((status = fread(cbuf,sizeof(char),PKTSZ,fpin) ) == PKTSZ) {
     pksync1 = MDI_getshort(cbuf);
     pksync2 = MDI_getshort(cbuf+2);
-    if((pksync1 == 0) && (pksync2 == 0)) { /* skip 0 pn code */
-      if(!zero_pn) {			/* give msg for 1st one only */
+    if((pksync1 == 0) && (pksync2 == 0)) { // skip 0 pn code 
+      if(!zero_pn) {			// give msg for 1st one only 
         printk("*0 PN code at pkt# %d\n", fpkt_cnt);
         printk("*Subsequent ones will be ignored until non-0 again\n");
         zero_pn = 1;
       }
-      fpkt_cnt++;			/* count # of pkts found */
+      fpkt_cnt++;			// count # of pkts found 
       continue;
     }
     if((pksync1 != 0x1acf) || (pksync2 != 0xfc1d)) {
       printk("*Lost sync at VCDU pkt# %d. pksync1=%x pksync2=%x\n", 
 		fpkt_cnt, pksync1, pksync2);
-      fpkt_cnt++;			/* count # of pkts found */
+      fpkt_cnt++;			// count # of pkts found 
       eflg++;
       if(sync_bad_cnt++ > 4) {
         printk("**Too many out of sync packets.\n");
@@ -326,11 +327,11 @@ int get_tlm(char *file, int rexmit, int higherver)
       zero_pn = 0;
       continue;
     }
-    if(firstflg) {		/* print first good sync found */
+    if(firstflg) {		// print first good sync found 
       printk("*VCDU pkt# %d sync = %x %x\n", fpkt_cnt, pksync1, pksync2);
     }
-    fpkt_cnt++;			/* count # of pkts found */
-    /* get 24 bit VCDU counter */
+    fpkt_cnt++;			// count # of pkts found 
+    // get 24 bit VCDU counter 
     cnt1 = MDI_getshort(cbuf+6);
     cnt2 = MDI_getshort(cbuf+8);
     cnt2 = (cnt2 >> 8)& 0xFF;
@@ -341,21 +342,21 @@ int get_tlm(char *file, int rexmit, int higherver)
       printk("*VCDU 24bit seq num out of sequence. exp: %u  rec: %u\n", 
 	    vcdu_24_cnt_next, vcdu_24_cnt);
       if(vcdu_24_cnt_next > vcdu_24_cnt) {
-        printk("*NOTE: VCDU 24 bit counter retarded\n"); /*cntr does go thru 0*/
+        printk("*NOTE: VCDU 24 bit counter retarded\n"); //cntr does go thru 0
         printk("*NOTE: gap report will be inaccurate (tbd)\n");
       }
-      if(!firstflg) {		/* don't count gap across .tlm files */
+      if(!firstflg) {		// don't count gap across .tlm files 
         gap_24_cnt += vcdu_24_cnt - vcdu_24_cnt_next;
       }
     }
     vcdu_24_cnt_next = vcdu_24_cnt + 1;
-    /* now get the 42bit IM_PDU counter */
+    // now get the 42bit IM_PDU counter 
     cnt1 = MDI_getshort(cbuf+10);
     cnt2 = MDI_getshort(cbuf+12);
     cnt3 = MDI_getshort(cbuf+14);
     cnt1 = cnt1 & 0x03ff;
     vcdu_seq_num = (cnt1*4294967296) + (cnt2*65536) + cnt3;
-    /* printk("vcdu_seq_num = %lld\n", vcdu_seq_num); */
+    // printk("vcdu_seq_num = %lld\n", vcdu_seq_num); 
     if(vcdu_seq_num_next != vcdu_seq_num) {
       printk("*IM_PDU seq num out of sequence. exp: %lld  rec: %lld\n", 
 	    vcdu_seq_num_next, vcdu_seq_num);
@@ -363,32 +364,32 @@ int get_tlm(char *file, int rexmit, int higherver)
         printk("*NOTE: IM_PDU 42 bit counter retarded\n");
         printk("*NOTE: gap report will be inaccurate\n");
       }
-      if(!firstflg) {		/* don't count gap across .tlm files */
+      if(!firstflg) {		// don't count gap across .tlm files 
         gap_42_cnt += vcdu_seq_num - vcdu_seq_num_next;
       }
       eflg++;
     }
     firstflg = 0;
     vcdu_seq_num_next = vcdu_seq_num + 1;
-    /* get the App ID. Low 11 bit of short at buf+18 */
+    // get the App ID. Low 11 bit of short at buf+18 
     appid = MDI_getshort(cbuf+18);
     appid = appid & 0x07ff;
-    if(appid == TESTAPPID) {	/* appid of test pattern */
+    if(appid == TESTAPPID) {	// appid of test pattern 
       printk("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
 			TESTAPPID, vcdu_seq_num);
       for(i=0, j=TESTVALUE; i < 877; i=i+2, j++) {
-        datval = MDI_getshort(cbuf+32+i);	/* next data value */
+        datval = MDI_getshort(cbuf+32+i);	// next data value 
         if(datval != j) {
           printk("*Test data value=%0x, expected=%0x for IM_PDU Cntr=%lld\n", 
 		datval, j, vcdu_seq_num);
           eflg++;
-          break;		/* skip the rest of this packet */
+          break;		// skip the rest of this packet 
         }
       }
-      continue; 		/* go on to next packet */
+      continue; 		// go on to next packet 
     }
 
-    /* Parse tlm packet headers. */
+    // Parse tlm packet headers. 
     if(appid == APID_HMI_SCIENCE_1 || appid == APID_HMI_SCIENCE_2 || 
 	appid == APID_AIA_SCIENCE_1 || appid == APID_AIA_SCIENCE_2)
     {
@@ -396,8 +397,8 @@ int get_tlm(char *file, int rexmit, int higherver)
       cnt2 = MDI_getshort(cbuf+34);
       fsnx = (unsigned int)(cnt1<<16)+(unsigned int)(cnt2);
       if(rexmit || higherver) {
-        if(fsnx != fsn_prev) {            /* the fsn has changed */
-          if(fsn_prev != 0) {  /* close image of prev fsn if not 0 */
+        if(fsnx != fsn_prev) {            // the fsn has changed 
+          if(fsn_prev != 0) {  // close image of prev fsn if not 0 
             close_image(rsc, segmentc, oldArray, Img, fsn_prev);
             imagecnt++;
             fileimgcnt++;
@@ -410,17 +411,17 @@ int get_tlm(char *file, int rexmit, int higherver)
           rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
           if(rstatus) {
             printk("Can't do drms_open_records(%s)\n", rexmit_dsname);
-            return(1);		/* !!!TBD */
+            return(1);		// !!!TBD 
           }
           if(!rset || (rset->n == 0)) {
-            printk("No prev ds\n");	/* start a new image */
+            printk("No prev ds\n");	// start a new image 
             Img->initialized = 0;
             Img->reopened = 0;
             rsc = drms_create_record(drms_env, LEV0SERIESNAME,
   				DRMS_PERMANENT, &rstatus);
             if(rstatus) {
               printk("Can't create record for %s\n", LEV0SERIESNAME);
-              continue;                     /* !!!TBD ck this */
+              continue;                     // !!!TBD ck this 
             }
             rstatus = drms_setkey_int(rsc, "FSN", fsnx);
             segmentc = drms_segment_lookup(rsc, "file");
@@ -441,7 +442,7 @@ int get_tlm(char *file, int rexmit, int higherver)
     				DRMS_COPY_SEGMENTS, &rstatus);
             if(rstatus) {
               printk("Can't do drms_clone_record()\n");
-              return(1);		/* !!!TBD ck */
+              return(1);		// !!!TBD ck 
             }
             drms_close_records(rset, DRMS_FREE_RECORD);
             rstatus = drms_setkey_int(rsc, "FSN", fsnx);
@@ -461,7 +462,7 @@ int get_tlm(char *file, int rexmit, int higherver)
             cArray = drms_segment_read(segmentc, DRMS_TYPE_SHORT, &rstatus);
             if(rstatus) {
               printk("Can't do drms_segment_read()\n");
-              return(1);		/* !!!!TBD ck */
+              return(1);		// !!!!TBD ck 
             }
             short *adata = (short *)cArray->data;
             memcpy(Img->dat, adata, 2*MAXPIXELS);
@@ -475,9 +476,9 @@ int get_tlm(char *file, int rexmit, int higherver)
         }
       }
       else {			// continuing normal stream
-        if(fsnx != fsn_prev) {            /* the fsn has changed */
+        if(fsnx != fsn_prev) {            // the fsn has changed 
           printk("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
-          if(fsn_prev != 0) {	/* close the image of the prev fsn if not 0 */
+          if(fsn_prev != 0) {	// close the image of the prev fsn if not 0 
             close_image(rs, segment, segArray, Img, fsn_prev);
             //force a commit to DB on an image boundry & not during a rexmit
             if(imagecnt++ >= IMAGE_NUM_COMMIT) {
@@ -489,7 +490,7 @@ int get_tlm(char *file, int rexmit, int higherver)
             }
             fileimgcnt++;
           }
-          /* start a new image */
+          // start a new image 
           Img = &Image;
           Img->initialized = 0;
           Img->reopened = 0;
@@ -499,7 +500,7 @@ int get_tlm(char *file, int rexmit, int higherver)
   		DRMS_PERMANENT, &dstatus);
           if(dstatus) {
             printk("Can't create record for %s\n", LEV0SERIESNAME);
-            continue;			/* !!!TBD ck this */
+            continue;			// !!!TBD ck this 
           }
           dstatus = drms_setkey_int(rs, "FSN", fsnx);
           segment = drms_segment_lookup(rs, "file");
@@ -511,11 +512,11 @@ int get_tlm(char *file, int rexmit, int higherver)
                                                &dstatus);
         }
       }
-      /* call with pointer to M_PDU_Header */
+      // call with pointer to M_PDU_Header 
       rstatus = imgdecode((unsigned short *)(cbuf+10), Img);
       switch(rstatus) {
       case 0:
-        /* A science data VCDU was successfully decoded */
+        // A science data VCDU was successfully decoded 
         break;
       case IMGDECODE_DECOMPRESS_ERROR:
         if(errmsgcnt++ < MAXERRMSGCNT)
@@ -579,15 +580,15 @@ int get_tlm(char *file, int rexmit, int higherver)
         break;
       }
     }
-    else {			/* send the HK data to Carl */
+    else {			// send the HK data to Carl 
       rstatus = decode_hk_next_vcdu((unsigned short *)(cbuf+10), &Hk);
     }
-  }				/* end of rd of vcdu pkts */
+  }				// end of rd of vcdu pkts 
   fclose(fpin);
   if(!eflg) {
     printk("*No errors in tlm file\n");
   }
-  if(rexmit || higherver) {	/* close the opened record */
+  if(rexmit || higherver) {	// close the opened record 
     close_image(rsc, segmentc, oldArray, Img, fsnx);
     imagecnt++;
     fileimgcnt++;
@@ -610,10 +611,9 @@ int get_tlm(char *file, int rexmit, int higherver)
   return(0);
 }
 
-/* This is the main loop that gets the .qac and .tlm files and 
- * puts them into ds TLMSERIESNAME and extracts the lev0 and puts it in 
- * LEV0SERIESNAME in DRMS.
- */
+// This is the main loop that gets the .qac and .tlm files and 
+// puts them into ds TLMSERIESNAME and extracts the lev0 and puts it in 
+// LEV0SERIESNAME in DRMS.
 void do_ingest()
 {
   FILE *fp;
@@ -625,7 +625,7 @@ void do_ingest()
   int rexmit, higherversion;
   char path[DRMS_MAXPATHLEN];
   char name[128], line[128], tlmfile[128], tlmname[96];
-  char cmd[128], xxname[128], tlmsize[80], vername[16];
+  char cmd[128], xxname[128], vername[16];
   char *token, *filename;
 
   if((dfd=opendir(tlmdir)) == NULL) {
@@ -639,8 +639,8 @@ void do_ingest()
   }
 
   while((dp=readdir(dfd)) != NULL) {
-    /* printk("%s\n", dp->d_name) ; continue;*/ /* !!TEMP */
-    /* Only accept our files. */
+    // printk("%s\n", dp->d_name) ; continue; // !!TEMP 
+    // Only accept our files. 
     if(strstr(dp->d_name, pchan) || strstr(dp->d_name, rchan) || strstr(dp->d_name, ".dsf")) {
       nameptr[i++].name = strdup(dp->d_name);
       if(i >= MAXFILES) {
@@ -653,11 +653,11 @@ void do_ingest()
   qsort(nameptr, i, sizeof(NAMESORT), &compare_names);
 
   for(j=0; j < i; j++) {
-    /*printk("####QSORT FILES: %s\n", nameptr[j].name); /* !!TEMP */
-    /* NOTE: the dsf files stay in the indir for now */
-    /* Currently the cron job pipefe_rm does this:
-    /* `/bin/mv $dsfname /dds/socdc/hmi/dsf`
-    /********************
+    //printk("####QSORT FILES: %s\n", nameptr[j].name); // !!TEMP 
+    // NOTE: the dsf files stay in the indir for now 
+    // Currently the cron job pipefe_rm does this:
+    // `/bin/mv $dsfname /dds/socdc/hmi/dsf`
+    /*******************
     if(strstr(nameptr[j].name, ".dsf")) {
       sprintf(cmd, "/bin/mv %s/%s %s", tlmdir, nameptr[j].name, outdir);
       printk("*mv dsf file to %s\n", outdir);
@@ -666,13 +666,13 @@ void do_ingest()
         printk("***Error on: %s\n", cmd);
       }
     }
-    *********************/
-    if(!strstr(nameptr[j].name, ".qac")) {	/* can be .qac or .qacx */
+    ********************/
+    if(!strstr(nameptr[j].name, ".qac")) {	// can be .qac or .qacx 
       free(nameptr[j].name);
       continue;
     }
     rexmit = higherversion = 0;
-    if(strstr(nameptr[j].name, ".qacx")) {  	/* this is a rexmit file */
+    if(strstr(nameptr[j].name, ".qacx")) {  	// this is a rexmit file 
       rexmit = 1;
     }
     sprintf(name, "%s/%s", tlmdir, nameptr[j].name);
@@ -682,8 +682,8 @@ void do_ingest()
       free(nameptr[j].name);
       continue;
     }
-    /* NOTE: the qac file is already verified by the caller of ingest_lev0 */
-    while(fgets(line, 256, fp)) {	/* get qac file lines */
+    // NOTE: the qac file is already verified by the caller of ingest_lev0 
+    while(fgets(line, 256, fp)) {	// get qac file lines 
       if(line[0] == '#' || line[0] == '\n') continue;
       if(strstr(line, "TLM_FILE_NAME=")) {
         token = (char *)strtok(line, "=");
@@ -696,10 +696,6 @@ void do_ingest()
         token = (char *)strtok(line, "=");
         token = (char *)strtok(NULL, "=");
         printk("*tlm file size is %s", token);
-        sprintf(tlmsize, "%s", token);
-        tlmsize[strlen(token)-1] = 0;
-        reqbytes = (double)atol(token);
-        /*reqbytes += (double)1000000;*/	/* add some overhead */
       }
       else if((strstr(line, "TOTAL_TLM_VCDU=")) || (strstr(line, "TOTAL_VCDU="))) {
         token = (char *)strtok(line, "=");
@@ -727,7 +723,7 @@ void do_ingest()
       abortit(3);
     }
     filename = (char *)rindex(tlmname, '.');
-    *filename = 0;			/* elim .tlm for filename */
+    *filename = 0;			// elim .tlm for filename 
     if((status = drms_setkey_string(rs_tlm, "filename", tlmname))) {
       printk("**ERROR: drms_setkey_string failed for 'filename'\n");
     }
@@ -767,20 +763,19 @@ void do_ingest()
 
     sprintf(xxname, "%s/%s.tlm", path, tlmname);
     filename = (char *)rindex(tlmname, '_');
-    sprintf(vername, "%s", filename);	/* e.g. _00 or _01 etc. */
-    if(strcmp(vername, "_00")) {	/* this is a higher vers # file */
+    sprintf(vername, "%s", filename);	// e.g. _00 or _01 etc. 
+    if(strcmp(vername, "_00")) {	// this is a higher vers # file 
       higherversion = 1;
       printk("Higher version tlm found: %s.tlm\n", tlmname);
     }
-    if(get_tlm(xxname, rexmit, higherversion)) { /* lev0 extraction of image */
+    if(get_tlm(xxname, rexmit, higherversion)) { // lev0 extraction of image 
       printk("***Error in lev0 extraction for %s\n", xxname);
     }
   }
   free(nameptr);
 }
 
-/* Initial setup stuff called when main is first entered.
- */
+// Initial setup stuff called when main is first entered.
 void setup()
 {
   int i;
@@ -795,15 +790,15 @@ void setup()
   sprintf(datestr, "%d.%02d.%02d_%02d:%02d:%02d", 
 	  (t_ptr->tm_year+1900), (t_ptr->tm_mon+1),
 	  t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
-  printk_set(h0log, h0log);	/* set for printk calls */
+  printk_set(h0log, h0log);	// set for printk calls 
   printk("%s\n", datestr);
   getcwd(cwdbuf, 126);
   sprintf(idstr, "Cwd: %s\nCall: ", cwdbuf);
   sprintf(string, "ingest_lev0 started as pid=%d user=%s\n", getpid(), username);
   strcat(idstr, string);
   printk("*%s", idstr);
-  strcpy(pchan, vc);		/* virtual channel primary */
-  for(i=0; ; i++) {		/* ck for valid and get redundant chan */
+  strcpy(pchan, vc);		// virtual channel primary 
+  for(i=0; ; i++) {		// ck for valid and get redundant chan 
     if(!strcmp(p_r_chan_pairs[i].pchan, pchan)) {
       strcpy(rchan, p_r_chan_pairs[i].rchan);
       break;
@@ -814,12 +809,12 @@ void setup()
       abortit(1);
     }
   }
-  umask(002);			/* allow group write */
-  Image.initialized = 0;	/* init the two image structures */
+  umask(002);			// allow group write 
+  Image.initialized = 0;	// init the two image structures 
   ImageOld.initialized = 0;
 }
 
-/* Module main function. */
+// Module main function. 
 int DoIt(void)
 {
   char logname[128];
@@ -845,7 +840,7 @@ int DoIt(void)
     return(1);
   }
   if (strcmp(logfile, NOTSPECIFIED) == 0) {
-    sprintf(logname, H0LOGFILE, username, gettimetag());
+    sprintf(logname, H0LOGFILE, username, vc, gettimetag());
   }
   else {
     sprintf(logname, "%s", logfile);
@@ -854,9 +849,9 @@ int DoIt(void)
     fprintf(stderr, "**Can't open the log file %s\n", logname);
   setup();
   while(wflg) {
-    do_ingest();                /* loop to get files from the input dir */
-    sleep(10);			/* !!!TEMP */
-    /*wflg = 0;			/* !!!TEMP */
+    do_ingest();                // loop to get files from the input dir 
+    sleep(10);			// !!!TEMP 
+    //wflg = 0;			// !!!TEMP 
   }
   return(0);
 }
