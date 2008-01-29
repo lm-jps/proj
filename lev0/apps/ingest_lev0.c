@@ -235,13 +235,16 @@ void alrm_sig(int sig)
   if(Image.initialized) {
     close_image(rs, segment, segArray, &Image, fsn_prev);
     printk("*Closed image on timeout FSN=%u\n", fsn_prev);
-    printk("alrm_sig: drms_server_end_transaction()\n");
-    drms_server_end_transaction(drms_env, 0 , 0); //commit
-    printk("alrm_sig: drms_server_begin_transaction()\n");
-    drms_server_begin_transaction(drms_env); //start another cycle
-    fsn_prev = 0;	//make sure don't try to flush this image
-    imagecnt = 0;	//and start a new transaction interval
   }
+  else {
+    printk("*No image to close on timeout\n");
+  }
+  printk("alrm_sig: drms_server_end_transaction()\n");
+  drms_server_end_transaction(drms_env, 0 , 0); //commit
+  printk("alrm_sig: drms_server_begin_transaction()\n");
+  drms_server_begin_transaction(drms_env); //start another cycle
+  fsn_prev = 0;	//make sure don't try to flush this image
+  imagecnt = 0;	//and start a new transaction interval
 }
 
 
@@ -849,7 +852,7 @@ int DoIt(void)
   setup();
   while(wflg) {
     do_ingest();                // loop to get files from the input dir 
-    sleep(10);			// !!!TEMP 
+    sleep(10);
     //wflg = 0;			// !!!TEMP 
   }
   return(0);
