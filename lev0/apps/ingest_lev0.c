@@ -192,7 +192,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 {
   int status;
 
-  drms_setkey_int(rs, "TELNUM", Img->telnum);
+  drms_setkey_int(rs, "CAMERA", Img->telnum);
   drms_setkey_int(rs, "APID", Img->apid);
   drms_setkey_int(rs, "CROPID", Img->cropid);
   drms_setkey_int(rs, "LUTID", Img->luid);
@@ -377,15 +377,17 @@ int get_tlm(char *file, int rexmit, int higherver)
     appid = MDI_getshort(cbuf+18);
     appid = appid & 0x07ff;
     if(appid == TESTAPPID) {	// appid of test pattern 
-      printk("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
+      if(errmsgcnt++ < MAXERRMSGCNT) {
+        printk("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
 			TESTAPPID, vcdu_seq_num);
-      for(i=0, j=TESTVALUE; i < 877; i=i+2, j++) {
-        datval = MDI_getshort(cbuf+32+i);	// next data value 
-        if(datval != j) {
-          printk("*Test data value=%0x, expected=%0x for IM_PDU Cntr=%lld\n", 
-		datval, j, vcdu_seq_num);
-          eflg++;
-          break;		// skip the rest of this packet 
+        for(i=0, j=TESTVALUE; i < 877; i=i+2, j++) {
+          datval = MDI_getshort(cbuf+32+i);	// next data value 
+          if(datval != j) {
+            printk("*Test data value=%0x, expected=%0x for IM_PDU Cntr=%lld\n", 
+  		datval, j, vcdu_seq_num);
+            eflg++;
+            break;		// skip the rest of this packet 
+          }
         }
       }
       continue; 		// go on to next packet 
@@ -448,7 +450,7 @@ int get_tlm(char *file, int rexmit, int higherver)
             }
             drms_close_records(rset, DRMS_FREE_RECORD);
             rstatus = drms_setkey_int(rsc, "FSN", fsnx);
-            Img->telnum = drms_getkey_int(rsc, "TELNUM", &rstatus);
+            Img->telnum = drms_getkey_int(rsc, "CAMERA", &rstatus);
             Img->cropid = drms_getkey_int(rsc, "CROPID", &rstatus);
             Img->luid = drms_getkey_int(rsc, "LUTID", &rstatus);
             Img->tap = drms_getkey_int(rsc, "TAPCODE", &rstatus);
