@@ -48,7 +48,7 @@
 #define ERROR_SAVING_FILE_LINE  1
 #define ERROR_SAVING_APID_LINE  1
 #define SUCESSFUL               0
-#define SUCCESSFUL              0
+#define HK_SUCCESSFUL              0
 #define MAX_SIZE_CHANGE_TIME    15
 #define MAX_SIZE_CHANGE_DATE    15
 #define MAX_CHAR_VERSION_NUMBER 10
@@ -185,6 +185,7 @@ HK_Config_Files* check_file_version_number( HK_Config_Files *top_ptr_to_configs,
 						char *version_number );
 HK_Config_Files * reread_all_files(APID_Pointer_HK_Configs *apid_ptr, char version_number[]);
 int check_free_configs_flag(void);
+int (*printkerr)(const char *fmt, ...);
 
 
 #ifndef  LOAD_HK_C
