@@ -38,6 +38,9 @@
 #include <printk.h>
 #include "imgdecode.h"
 #include "packets.h"
+#include "decode_hk_vcdu.h"
+#include "decode_hk.h"
+#include "load_hk_config_files.h"
 
 #define LEV0SERIESNAME "su_production.lev0_test"
 #define TLMSERIESNAME "su_production.tlm_test"
@@ -192,7 +195,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 {
   int status;
 
-  drms_setkey_int(rs, "CAMERA", Img->telnum);
+  drms_setkey_int(rs, "TELNUM", Img->telnum);
   drms_setkey_int(rs, "APID", Img->apid);
   drms_setkey_int(rs, "CROPID", Img->cropid);
   drms_setkey_int(rs, "LUTID", Img->luid);
@@ -264,11 +267,7 @@ unsigned short MDI_getshort (unsigned char *c)    //  machine independent
   return s;
 }
 
-// !!!TEMP to make 
-int decode_hk_next_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk)
-{
-  return(0);
-}
+extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk);
 
 
 // Process the tlm file to validate and to extract the lev0 image.
@@ -289,6 +288,8 @@ int get_tlm(char *file, int rexmit, int higherver)
   int zero_pn;
   unsigned short pksync1, pksync2;
   float ftmp;
+int decode_status=0;
+int whk_status=0;
 
   if(!(fpin = fopen(file, "r"))) {	// open the tlm input 
     printk("*Can't open tlm file %s\n", file);
@@ -377,17 +378,15 @@ int get_tlm(char *file, int rexmit, int higherver)
     appid = MDI_getshort(cbuf+18);
     appid = appid & 0x07ff;
     if(appid == TESTAPPID) {	// appid of test pattern 
-      if(errmsgcnt++ < MAXERRMSGCNT) {
-        printk("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
+      printk("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
 			TESTAPPID, vcdu_seq_num);
-        for(i=0, j=TESTVALUE; i < 877; i=i+2, j++) {
-          datval = MDI_getshort(cbuf+32+i);	// next data value 
-          if(datval != j) {
-            printk("*Test data value=%0x, expected=%0x for IM_PDU Cntr=%lld\n", 
-  		datval, j, vcdu_seq_num);
-            eflg++;
-            break;		// skip the rest of this packet 
-          }
+      for(i=0, j=TESTVALUE; i < 877; i=i+2, j++) {
+        datval = MDI_getshort(cbuf+32+i);	// next data value 
+        if(datval != j) {
+          printk("*Test data value=%0x, expected=%0x for IM_PDU Cntr=%lld\n", 
+		datval, j, vcdu_seq_num);
+          eflg++;
+          break;		// skip the rest of this packet 
         }
       }
       continue; 		// go on to next packet 
@@ -450,7 +449,7 @@ int get_tlm(char *file, int rexmit, int higherver)
             }
             drms_close_records(rset, DRMS_FREE_RECORD);
             rstatus = drms_setkey_int(rsc, "FSN", fsnx);
-            Img->telnum = drms_getkey_int(rsc, "CAMERA", &rstatus);
+            Img->telnum = drms_getkey_int(rsc, "TELNUM", &rstatus);
             Img->cropid = drms_getkey_int(rsc, "CROPID", &rstatus);
             Img->luid = drms_getkey_int(rsc, "LUTID", &rstatus);
             Img->tap = drms_getkey_int(rsc, "TAPCODE", &rstatus);
@@ -585,7 +584,44 @@ int get_tlm(char *file, int rexmit, int higherver)
       }
     }
     else {			// send the HK data to Carl 
-      rstatus = decode_hk_next_vcdu((unsigned short *)(cbuf+10), &Hk);
+      printf("1-ingest_lev0:calling decode_next_hk_vcdu:\n");
+      decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk);
+printf("2-ingest_lev0--after decode_next_hk_vcdu:rstatus is %d\n",rstatus);
+printf("3-ingest_lev0--after decode_next_hk_vcdu:decode status is %d\n",decode_status);
+      switch (decode_status) {
+        case SUCCESS_HK_NEED_TO_WTD_CTD:
+          /* write to drms hk keywords to level 0 data series */
+          printf("4-ingest_lev0:-->SUCCESS returned from decode_next_hk_vcdu:\n->write kw to drms lev0 data series\n->commit to drms for level 0 series and level0 for APID series\n");
+          whk_status = write_hk_to_drms(rsc, &Hk);
+          hk_ccsds_free(&Hk);
+          rstatus=0;
+          break;
+        case SUCCESS_HK_NEED_TO_CTD:
+          printf("ingest_lev0:-->SUCCESS returned from decode_next_hk_vcdu:\n->NO write of kw's to drms lev0 data series\n->BUT commit to drms for level0 by APID data series\n\n");
+          break;
+        case SUCCESS_SKIP_IMAGE:
+          printf("ingest_lev0:-->Warning: passed image vcdu, Sucessfully skipped in  decode_next_hk_vcdu\n");
+          break;
+        case SUCCESS_SKIP_PROCESSING_APID:
+          printf("ingest_lev0:-->Warning:passed apid not on processing list, Sucessfully skipped in decode_next_hk_vcdu\n");
+          break;
+        case ERROR_NODATA:
+          printf("ingest_lev0:-->Warning: returned ERROR_NODATA from decode_next_hk_vcdu\n");
+          break;
+        default:
+          printf("ingest_lev0:-->Default returned from decode_next_hk_vcdu-checking status\n");
+          if (rstatus<0)
+          {
+            printf("ingest_lev0:-->ERROR: decode_next_hk_vcdu returned error <%d>\n", rstatus);
+          }
+          else
+          {
+            printf("ingest_lev0:-->ERROR: decode_next_hk_vcdu returned unexpected rstatus <%d>\n", rstatus);
+          }
+          break;
+      }
+
+
     }
   }				// end of rd of vcdu pkts 
   fclose(fpin);
