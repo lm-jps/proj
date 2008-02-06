@@ -1,0 +1,10 @@
+### Environment Variable Used To Run Lev0 HK Decode Code
+setenv HK_CONFIG_DIRECTORY           /home2/dimp/cvs/EGSE/tables/hk_config_file/
+setenv HK_JSVNMAP_DIRECTORY          /home2/dimp/cvs/EGSE/tables/hk_jsn_map_file
+setenv HK_ZERO_FILL_FLAG             0
+setenv HK_INITIAL_HEADER_APID        431
+setenv HK_INITIAL_HEADER_PKT_VERSION 1.67
+setenv HK_DF_HSB_DIRECTORY           /home1/carl/cvs/JSOC/proj/lev0/apps/data/hk_hsb_dayfile
+setenv HK_LEV0_DATA_ID_NAME          lev0
+setenv HK_SUFFIX_JSVNMAP_FILENAME    -JSVN-TO-PVN
+setenv HK_LEV0_PROJECT_NAME          su_carl
