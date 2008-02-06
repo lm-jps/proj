@@ -2,6 +2,7 @@
 #define __PACKETS_H
 
 #include <stdint.h>
+#include <drms_types.h>
 
 
 #define PACKETHEADERWORDS   (19) 
@@ -21,42 +22,41 @@
 
 
 /*************** Type definitions *******************/
-/* !!!NOOP these out for now. for ingest_lev0 developement.
-/* They are defined elsewhere
-/*
-/* Keyword value types. */
-/*typedef enum {DRMS_TYPE_INT8, DRMS_TYPE_INT16, DRMS_TYPE_INT32, 
-/*              DRMS_TYPE_INT64, DRMS_TYPE_UINT8, DRMS_TYPE_UINT16, 
-/*              DRMS_TYPE_UINT32, DRMS_TYPE_UINT64, 
-/*              DRMS_TYPE_FLOAT, DRMS_TYPE_DOUBLE, 
-/*              DRMS_TYPE_TIME, DRMS_TYPE_STRING} DRMS_Type_t;
-/*
-/*typedef union DRMS_Type_Value
-/*{
-/*  int8_t   int8_val;
-/*  int16_t  int16_val;
-/*  int32_t  int32_val;
-/*  int64_t  int64_val;
-/*  uint8_t  uint8_val;
-/*  uint16_t uint16_val;
-/*  uint32_t uint32_val;
-/*  uint64_t uint64_val;
-/*  float   float_val;
-/*  double  double_val;
-/*  double  time_val;
-/*  char   *string_val;
-/*} DRMS_Type_Value_t;
-*/
 
-/************* Keyword struct ****************/
+/* Keyword value types. */
+typedef enum {KW_TYPE_INT8, KW_TYPE_INT16, KW_TYPE_INT32, 
+              KW_TYPE_INT64, KW_TYPE_UINT8, KW_TYPE_UINT16,
+              KW_TYPE_UINT32, KW_TYPE_UINT64, 
+              KW_TYPE_FLOAT, KW_TYPE_DOUBLE, 
+              KW_TYPE_TIME, KW_TYPE_STRING} KW_Type_t;
+
+typedef union KW_Type_Value
+{
+  int8_t   int8_val;
+  int16_t  int16_val;
+  int32_t  int32_val;
+ int64_t  int64_val;
+  uint8_t  uint8_val;
+  uint16_t uint16_val;
+  uint32_t uint32_val;
+  uint64_t uint64_val;
+  float   float_val;
+  double  double_val;
+  double  time_val;
+  char   *string_val;
+} KW_Type_Value_t;
+
+
+//************* Keyword struct ****************/
 #define MAX_KEYWORD_NAME_SIZE 64
+#define MAX_FITS_NAME_SIZE     9 
 typedef struct HK_Keyword_struct {
      char           name[MAX_KEYWORD_NAME_SIZE]; 
-     char           fitsname[9];
+     char           fitsname[MAX_FITS_NAME_SIZE];
      int64_t        raw_value;    /* 64 bit integer should be able to
                                      hold any header field */
-     DRMS_Type_t       eng_type;  /* Engineering value type. */
-     DRMS_Type_Value_t eng_value; /* Engineering value. */
+     KW_Type_t       eng_type;  /* Engineering value type. */
+     KW_Type_Value_t eng_value; /* Engineering value. */
      struct HK_Keyword_struct  *next;
 } HK_Keyword_t;
 
@@ -132,5 +132,8 @@ int decode_hk_packets(unsigned short *ptr, CCSDS_Packet_t **pk_head);
 /* Decoder for single CCSCS HK packet to be written by Carl. */
 int decode_hk_keywords(unsigned short *ptr, int apid, HK_Keyword_t **kw_head);
 
+void test_function(int a, int b);
+
+int decode_next_hk_vcdu( unsigned short vcdu[PACKETWORDS], CCSDS_Packet_t **hk_packets);
 
 #endif
