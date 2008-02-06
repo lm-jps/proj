@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0)
-ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o)
+ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o)
 
 #SUMEXE_$(d)	:= $(addprefix $(d)/, ingest_lev0)
 SUMEXE_$(d)	:= $(ingestlev0_$(d))
