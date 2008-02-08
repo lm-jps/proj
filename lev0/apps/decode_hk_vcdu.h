@@ -59,6 +59,7 @@
 #define ERROR_HK_FAILED_TO_FIND_TIMECODES (-24)
 #define ERROR_HK_FAILED_CLOSE_DRMS_RECORD (-25)
 #define ERROR_HK_FAILED_OPEN_DRMS_RECORD  (-26)
+#define ERROR_HK_FAILED_GETTING_FSN       (-27)
 
 /*  Overall decode_next_hk_vcdu status after saving 
     packet data to files and decode of hk packets for
@@ -87,6 +88,6 @@
 
 /* Functions */
 void  hk_ccsds_free(CCSDS_Packet_t **p);
-int   decode_next_hk_vcdu( unsigned short vcdu[PACKETWORDS], CCSDS_Packet_t **hk_packets);
+int   decode_next_hk_vcdu( unsigned short vcdu[PACKETWORDS], CCSDS_Packet_t **hk_packets, unsigned int **fsn);
 
 #endif
