@@ -267,7 +267,7 @@ unsigned short MDI_getshort (unsigned char *c)    //  machine independent
   return s;
 }
 
-extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk);
+extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int **Fsn);
 
 
 // Process the tlm file to validate and to extract the lev0 image.
@@ -288,8 +288,9 @@ int get_tlm(char *file, int rexmit, int higherver)
   int zero_pn;
   unsigned short pksync1, pksync2;
   float ftmp;
-int decode_status=0;
-int whk_status=0;
+  int decode_status=0;
+  int whk_status=0;
+  unsigned int **Fsn;
 
   if(!(fpin = fopen(file, "r"))) {	// open the tlm input 
     printk("*Can't open tlm file %s\n", file);
@@ -587,16 +588,24 @@ int whk_status=0;
     }
     else {			// send the HK data to Carl 
       printf("1-ingest_lev0:calling decode_next_hk_vcdu:\n");
-      decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk);
-printf("2-ingest_lev0--after decode_next_hk_vcdu:rstatus is %d\n",rstatus);
-printf("3-ingest_lev0--after decode_next_hk_vcdu:decode status is %d\n",decode_status);
+      decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk, &Fsn);
+      printf("2-ingest_lev0--after decode_next_hk_vcdu:rstatus is %d\n",rstatus);
+      printf("3-ingest_lev0--after decode_next_hk_vcdu:decode status is %d\n",decode_status);
       switch (decode_status) {
         case SUCCESS_HK_NEED_TO_WTD_CTD:
+          if(rsc) {
           /* write to drms hk keywords to level 0 data series */
           printf("4-ingest_lev0:-->SUCCESS returned from decode_next_hk_vcdu:\n->write kw to drms lev0 data series\n->commit to drms for level 0 series and level0 for APID series\n");
+          printf("5-ingest_lev0:-- record passed is <%ld> \n",rsc);
           whk_status = write_hk_to_drms(rsc, &Hk);
           hk_ccsds_free(&Hk);
           rstatus=0;
+          }
+          else {
+          printf("6-ingest_lev0:-- record passed is <%ld> skipping write to su_production.lev0_test\n",rsc);
+          hk_ccsds_free(&Hk);
+
+          }
           break;
         case SUCCESS_HK_NEED_TO_CTD:
           printf("ingest_lev0:-->SUCCESS returned from decode_next_hk_vcdu:\n->NO write of kw's to drms lev0 data series\n->BUT commit to drms for level0 by APID data series\n\n");
@@ -606,6 +615,9 @@ printf("3-ingest_lev0--after decode_next_hk_vcdu:decode status is %d\n",decode_s
           break;
         case SUCCESS_SKIP_PROCESSING_APID:
           printf("ingest_lev0:-->Warning:passed apid not on processing list, Sucessfully skipped in decode_next_hk_vcdu\n");
+          break;
+        case ERROR_HK_FAILED_GETTING_FSN:
+          printf("ingest_lev0:-->Warning: returned could not find FSN in decode_next_hk_vcdu\n");
           break;
         case ERROR_NODATA:
           printf("ingest_lev0:-->Warning: returned ERROR_NODATA from decode_next_hk_vcdu\n");
