@@ -134,6 +134,6 @@ int decode_hk_keywords(unsigned short *ptr, int apid, HK_Keyword_t **kw_head);
 
 void test_function(int a, int b);
 
-int decode_next_hk_vcdu( unsigned short vcdu[PACKETWORDS], CCSDS_Packet_t **hk_packets, unsigned int **Fsn);
+int decode_next_hk_vcdu( unsigned short vcdu[PACKETWORDS], CCSDS_Packet_t **hk_packets, unsigned int *Fsn);
 
 #endif
