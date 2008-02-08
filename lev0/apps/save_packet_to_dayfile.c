@@ -42,19 +42,14 @@ extern void sprint_time (char *at, TIME t, char *zone, int precision);
 int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t **df_head) 
 {
   /* declarations */
-  char df_name[100];
-  char *dfile;
   HK_Dayfile_Packet_t **pkt, *temp_pkt,*prev_pkt;
   HK_Dayfile_Data_t *dd, *dd_tmp, *found_dfd;
   int lpd_status;
   int cfp_status;
-  unsigned short w;
-  double tc_sec;
   int wdf_status;
   int ldfd_status;
+  unsigned short w;
 
-  /* init variables */
-  dfile= df_name;
 
   /* load packet in HK_Dayfile_Packet_t node */
   lpd_status=load_packet_data( word_ptr, &pkt);
@@ -112,7 +107,7 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
         if (check_dfd_file(word_ptr, apid))
         {
           /* write packets there and free dayfile node and pkt nodes */
-          wdf_status=write_packet_to_dayfile( &dd_tmp);
+          wdf_status= write_packet_to_dayfile( &dd_tmp);
           wdf_status= free_dayfile_data( &dd_tmp);
 
           /* load dfd nodes with existing dayfiles for this packet time */
@@ -245,7 +240,7 @@ int load_packet_data( unsigned short *word_ptr, HK_Dayfile_Packet_t **pkt)
 
   /* get and set packet size to write to pkt node data struct */
   w = word_ptr[2]; 
-  pp->length = (w  >> 8 & 0x00FF) + (w & 0x00FF);
+  pp->length = (unsigned short)((w  >> 8 & 0x00FF) + (w & 0x00FF));
 
   /* load packet data in pkt node data struct */
   for (i = 0 ; i < pp->length/2 + 4; i++)
@@ -432,7 +427,7 @@ int get_yr_from_pkttime(double tc_sec)
   strcat(at,"\0");
 
   /* get year and return value */
-  sscanf(at,"%d.%*d.%*d_%*d:%*d:%*d.%*s",&year);
+  sscanf(at,"%hd",&year);
   return (year);
 }
 /******************** get month from pkt time *****************/
@@ -447,7 +442,7 @@ int get_month_from_pkttime(double tc_sec)
   strcat(at,"\0");
 
   /* get month and return value */
-  sscanf(at,"%*d.%d.%*d_%*d:%*d:%*d.%*s",&month);
+  sscanf(at,"%*d.%hd",&month);
   return (month);
 }
 /******************** get day from pkt time *****************/
@@ -462,7 +457,7 @@ int get_day_from_pkttime(double tc_sec)
   strcat(at,"\0");
 
   /* get month and return value */
-  sscanf(at,"%*d.%*d.%d_%*d:%*d:%*d.%*s",&day);
+  sscanf(at,"%*d.%*d.%hd",&day);
   return (day);
 }
 /******************** get hour from pkt time *****************/
@@ -477,7 +472,7 @@ int get_hour_from_pkttime(double tc_sec)
   strcat(at,"\0");
 
   /* get hour and return value */
-  sscanf(at,"%*d.%*d.%*d_%d:%*d:%*d.%*s",&hour);
+  sscanf(at,"%*d.%*d.%*d_%hd",&hour);
   return (hour);
 }
 
@@ -511,8 +506,8 @@ char * get_dayfilename(int apid, double tc_sec)
 int check_for_pkt_time( HK_Dayfile_Data_t **fdfd, unsigned short *word_ptr)
 {
   /* declarations */
-  int pkt_yr,pkt_month,pkt_day, pkt_hour;
   HK_Dayfile_Data_t *t_dfd;
+  int pkt_yr,pkt_month,pkt_day;
 
   /* initialized variables */
   t_dfd = *fdfd;
@@ -521,7 +516,6 @@ int check_for_pkt_time( HK_Dayfile_Data_t **fdfd, unsigned short *word_ptr)
   pkt_yr=get_yr_from_pkttime(get_packet_time(word_ptr));
   pkt_month=get_month_from_pkttime(get_packet_time(word_ptr));
   pkt_day=get_day_from_pkttime(get_packet_time(word_ptr));
-  pkt_hour=get_hour_from_pkttime(get_packet_time(word_ptr));
 
   /* check if in range of current dayfile */
   if (( t_dfd->year == pkt_yr) && (t_dfd->month == pkt_month) && (t_dfd->day == pkt_day)) 
@@ -543,9 +537,8 @@ int check_for_pkt_time( HK_Dayfile_Data_t **fdfd, unsigned short *word_ptr)
 void set_time_values(HK_Dayfile_Data_t **dn, double tcsec)
 {
   /* declarations */
-  short year,month,day, hour, minute, second;
-  char at[200];
   HK_Dayfile_Data_t *td;
+  char at[200];
 
   /* init variables */
   td= *dn;
@@ -555,7 +548,7 @@ void set_time_values(HK_Dayfile_Data_t **dn, double tcsec)
   strcat(at,"\0");
 
   /* set time values in dayfile node*/
-  sscanf(at,"%d.%d.%d_%d:%d:%d.%*s", &td->year, &td->month,
+  sscanf(at,"%hd.%hd.%hd_%hd:%hd:%hd", &td->year, &td->month,
          &td->day, &td->hour, &td->minute, &td->second);
   return;
 }
@@ -565,11 +558,9 @@ void set_time_values(HK_Dayfile_Data_t **dn, double tcsec)
 int check_dfd_file( unsigned short *word_ptr, int apid)
 {
   /*declarations*/
-  HK_Dayfile_Data_t *dd,*t_dd;
+  DIR *dir_p;
   char dn[MAX_DIRECTORY_NAME];
   char *p_dn;
-  char dirname[200];
-  DIR *dir_p;
   struct dirent *dir_entry_p;
 
   /* get directory name for HSB dayfiles */
@@ -620,7 +611,6 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
   DIR *dir_p;
   HK_Dayfile_Data_t *dd,*t_dd;
   char dn[MAX_DIRECTORY_NAME];
-  char dirname[200];
   char *p_dn;
   struct dirent *dir_entry_p;
 
@@ -666,8 +656,8 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
         t_dd=dd;
 
         /* set apid value and time values in HK_DAYFILE_DATA struct*/
-         sscanf(dir_entry_p->d_name, "hsb_%d_%d_%d_%d_%d_%d_%d.%*s", 
-                &dd->apid,&dd->year,&dd->month,&dd->day,&dd->hour,&dd->minute, &dd->second, &dd->version);
+         sscanf(dir_entry_p->d_name, "hsb_%hd_%hd_%hd_%hd_%hd_%hd_%hd", 
+                &dd->apid,&dd->year,&dd->month,&dd->day,&dd->hour,&dd->minute, &dd->second );
 
         /* set filename -12-18-2007 */
         strcpy(dd->dayfile, dir_entry_p->d_name);
@@ -681,8 +671,8 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
         assert(t_dd = malloc(sizeof(HK_Dayfile_Data_t)));
 
         /* set apid value and time values in HK_DAYFILE_DATA struct*/
-        sscanf(dir_entry_p->d_name, "hsb_%d_%d_%d_%d_%d_%d_%d.%*s",
-               &t_dd->apid,&t_dd->year,&t_dd->month,&t_dd->day,&t_dd->hour,&t_dd->minute, &t_dd->second, &t_dd->version);
+        sscanf(dir_entry_p->d_name, "hsb_%hd_%hd_%hd_%hd_%hd_%hd_%hd",
+               &t_dd->apid,&t_dd->year,&t_dd->month,&t_dd->day,&t_dd->hour,&t_dd->minute, &t_dd->second);
 
         /* set filename -12-18-2007 */
         /* create next data-dayfile node */
@@ -707,8 +697,7 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
 int check_filename_pkt_time(char *fn, unsigned short *word_ptr) 
 {
   /* declarations */
-  char file[100];
-  int pkt_yr,pkt_month,pkt_day, pkt_hour;
+  int pkt_yr,pkt_month,pkt_day;
   int fn_yr,fn_month,fn_day;
 
   /* get times from current packet */
@@ -735,8 +724,6 @@ int check_filename_pkt_time(char *fn, unsigned short *word_ptr)
 int check_filename_apid(char *fn, int apid) 
 {
   /* declarations */
-  char file[100];
-  int pkt_yr,pkt_month,pkt_day, pkt_hour;
   int fn_yr,fn_month,fn_day;
   int fn_apid;
 
