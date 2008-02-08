@@ -88,6 +88,6 @@
 
 /* Functions */
 void  hk_ccsds_free(CCSDS_Packet_t **p);
-int   decode_next_hk_vcdu( unsigned short vcdu[PACKETWORDS], CCSDS_Packet_t **hk_packets, unsigned int **fsn);
+int   decode_next_hk_vcdu( unsigned short vcdu[PACKETWORDS], CCSDS_Packet_t **hk_packets, unsigned int *fsn);
 
 #endif
