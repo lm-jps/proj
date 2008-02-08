@@ -72,10 +72,10 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
   /* check if record is set like for case of Lev 0.5 data series*/
   if(record)
   {
-printf("w-t-d:1:got record passed \n");
+printf("w-t-d:1:got record passed calling write hk to drms from ingest_lev0.c\n");
     rec_alreadycreated_flag = 1;
   }
-  else printf("w-t-d:2:got no record passed \n");
+  else printf("w-t-d:2:got no record passed so calling write hk to drms from hk_decode_vcdu.c\n");
 
  /* check 3 environment variables are set */
  /* get project name */
