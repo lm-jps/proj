@@ -226,9 +226,9 @@ static int ValidateSeries(DRMS_Env_t *drmsEnv,
 	 for (; status == DRMS_SUCCESS && idx < nNames; idx++)
 	 {
 	    DRMS_SegmentInfo_t *aSegInfo = hcon_lookupindex(segProtoI, idx);
-	    segNames[idx] = (char *)malloc(sizeof(char) * DRMS_MAXNAMELEN);
-	    strncpy(segNames[idx], aSegInfo->name, DRMS_MAXNAMELEN);
-	    segNames[idx][DRMS_MAXNAMELEN - 1] = '\0';
+	    segNames[idx] = (char *)malloc(sizeof(char) * DRMS_MAXSEGNAMELEN);
+	    strncpy(segNames[idx], aSegInfo->name, DRMS_MAXSEGNAMELEN);
+	    segNames[idx][DRMS_MAXSEGNAMELEN - 1] = '\0';
 
 	    DRMS_Segment_t *segproto = drms_segment_lookup(prototype, segNames[idx]);
 	    status = drms_segment_setdims(segproto, &dims);
@@ -265,8 +265,8 @@ static int ValidateSeries(DRMS_Env_t *drmsEnv,
 	    else
 	    {
 	       /* Must populate matchSegNames container. */
-	       *matchSegNames = hcon_create(DRMS_MAXNAMELEN, 
-					    DRMS_MAXNAMELEN, 
+	       *matchSegNames = hcon_create(DRMS_MAXSEGNAMELEN, 
+					    DRMS_MAXSEGNAMELEN, 
 					    NULL, 
 					    NULL,
 					    (void **)segNames,
@@ -368,8 +368,8 @@ int DoIt(void)
 										 NULL));
   int embed = cmdparams_get_int(&cmdparams, "e", NULL);
 
-  char inSeriesName[DRMS_MAXNAMELEN];
-  char outSeriesName[DRMS_MAXNAMELEN];
+  char inSeriesName[DRMS_MAXSERIESNAMELEN];
+  char outSeriesName[DRMS_MAXSERIESNAMELEN];
   HContainer_t *matchSegNames = NULL; /* container of names of matching segments */
 
   /* No set of record sets in drms, so just loop over records in record set */

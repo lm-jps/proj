@@ -222,7 +222,7 @@ static int CreateDRMSPrimeKeyContainer(DRMS_Record_t *recTemplate, DRMSContainer
 
 	  if (conPrimeKeys->items != NULL)
 	  {
-	       hcon_init(conPrimeKeys->items, sizeof(DRMS_Keyword_t *), DRMS_MAXNAMELEN, NULL, NULL);
+	       hcon_init(conPrimeKeys->items, sizeof(DRMS_Keyword_t *), DRMS_MAXKEYNAMELEN, NULL, NULL);
 	       int iPrimeKeysMax = recTemplate->seriesinfo->pidx_num - 1;
 	       int iPrimeKeys = 0;
 	       
@@ -383,7 +383,7 @@ static int CreateMatchingSegs(DRMSContainer_t *segs1, DRMSContainer_t *segs2, DR
 			 if (matchSet->items != NULL)
 			 {
 			      hcon_init(matchSet->items, sizeof(DRMS_Segment_t *), 
-					DRMS_MAXNAMELEN, 
+					DRMS_MAXSEGNAMELEN, 
 					NULL, 
 					NULL);
 			 }
@@ -1238,8 +1238,8 @@ int DoIt(void)
 				     * keywords. */
 	  int bSeriesOutEqSeriesIn = 0;
 	  ArithOp_t op = kArithOpUnknown;
-	  char inSeriesName[DRMS_MAXNAMELEN];
-	  char withSeriesName[DRMS_MAXNAMELEN];
+	  char inSeriesName[DRMS_MAXSERIESNAMELEN];
+	  char withSeriesName[DRMS_MAXSERIESNAMELEN];
 
 	  char *recSetIn = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
 	  char *withRecSet = cmdparams_get_str(&cmdparams, kWithRecSet, NULL);
@@ -1250,7 +1250,7 @@ int DoIt(void)
 	  char *segList = cmdparams_get_str(&cmdparams, kSegList, NULL);
 	  char *opStr = cmdparams_get_str(&cmdparams, kOp, NULL);
 
-	  char actualOutputSeries[DRMS_MAXNAMELEN];
+	  char actualOutputSeries[DRMS_MAXSERIESNAMELEN];
 	  /* xxx DO SCALILNG/OFFSET PARAMS LATER */
 
 	  char *segNameArr[kMaxSegs];

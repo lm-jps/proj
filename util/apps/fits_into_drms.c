@@ -50,7 +50,7 @@ HContainer_t *gDict = NULL;
 
 typedef struct SegInfo_struct 
 {
-  char segname[DRMS_MAXNAMELEN];
+  char segname[DRMS_MAXSEGNAMELEN];
   int naxis;
   int dims[DRMS_MAXRANK];
   char dimsStr[kMAXDIMSSTR];
@@ -181,7 +181,7 @@ static int SanitizeKeywordName(const char *kwName, char *sanitizedName, int size
     * be missing some of the keywords. */
    if (!IsValidDRMSKeyName(pcIn))
    {
-      char buf[DRMS_MAXNAMELEN];
+      char buf[DRMS_MAXKEYNAMELEN];
       if(GenerateDRMSKeyName(pcIn, buf, sizeof(buf)))
       {
 	 snprintf(sanitizedName, size, "%s", buf);
@@ -554,7 +554,7 @@ static int ReadAndParseFitsFile(const char *fileName,
 			   kwName, 
 			   dr_attrvalue_str(attr));
 		    
-		    char sanitizedName[DRMS_MAXNAMELEN];
+		    char sanitizedName[DRMS_MAXKEYNAMELEN];
 		    *error = SanitizeKeywordName(kwName, sanitizedName, sizeof(sanitizedName));
 
 		    if (!*error)
@@ -988,7 +988,7 @@ static int CreateSeriesFromFits(DRMS_Env_t *drmsEnv,
 
    /* identifies which keywords require kw-specific names */
    *segSpKeys = hcon_create(sizeof(int),
-			    sizeof(char) * DRMS_MAXNAMELEN,
+			    sizeof(char) * DRMS_MAXKEYNAMELEN,
 			    NULL, NULL, NULL, NULL, 0);
 
    int nKeys = 0;
@@ -1282,7 +1282,7 @@ static int InsertRecord(DRMS_Record_t **record,
 	 }
 	 else
 	 {
-	    char keyname[DRMS_MAXNAMELEN];
+	    char keyname[DRMS_MAXKEYNAMELEN];
 	    for (iSeg = 0; iSeg < nSegs; iSeg++)
 	    {
 	       snprintf(keyname, sizeof(keyname), "%s[%d]", kwNames[kwIndex], iSeg);
@@ -1386,7 +1386,7 @@ static int ValidatePKeysAndSeries(DRMS_Env_t *env,
       }
 
       *segSpKeys = hcon_create(sizeof(int),
-			       sizeof(char) * DRMS_MAXNAMELEN,
+			       sizeof(char) * DRMS_MAXKEYNAMELEN,
 			       NULL, NULL, NULL, NULL, 0);
 
       if (*segSpKeys)

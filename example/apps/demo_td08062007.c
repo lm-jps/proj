@@ -578,7 +578,7 @@ int DoIt(void)
 	 pkArray = drms_series_createpkeyarray(drms_env, dsout, &nPKeys, &status);
 	 if (status == DRMS_SUCCESS)
 	 {
-	    char *buf = (char *)malloc(sizeof(char) * DRMS_MAXNAMELEN * nPKeys + 32);
+	    char *buf = (char *)malloc(sizeof(char) * DRMS_MAXKEYNAMELEN * nPKeys + 32);
 	    *buf = '\0';
 	    int iKey;
 
