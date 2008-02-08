@@ -16,7 +16,7 @@ static unsigned short *decode_ccsds(unsigned short *w, CCSDS_Packet_t *p);
 
 /*************  function prototypes ******************/
 TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
-int lookup_fsn(CCSDS_Packet_t **ptr, unsigned int **Fsn);
+int lookup_fsn(CCSDS_Packet_t **ptr, unsigned int *Fsn);
 int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t **df_head); 
 int write_packet_to_dayfile(HK_Dayfile_Data_t **df_head); 
 int filter_out_non_isps(CCSDS_Packet_t **ptr);
@@ -91,7 +91,7 @@ extern int free_dayfile_pkt_data( HK_Dayfile_Data_t **df_head);
 */
 
 /*************************  decode next hk vcdu  ****************************/
-int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_packets, unsigned int **Fsn)
+int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_packets, unsigned int *Fsn)
 {
   /* declarations */
   CCSDS_Packet_t ccsds, *p, *p_hk;
@@ -361,7 +361,7 @@ printf("hk_decode_next_vcdu:APID is <%d>\n", ccsds.apid);
       /*got a ISP node in CCSDS_Packet_t link list so set to value for
         lev0 top module to know to write to level0 data series*/
       /* lookup FSN value to pass back */
-      fsn_status= lookup_fsn(hk_packets, Fsn);
+      fsn_status= lookup_fsn(hk_packets, &Fsn);
       if(fsn_status)
       {
          lev0_status = ERROR_HK_FAILED_GETTING_FSN; /* set to -27 */
@@ -369,7 +369,7 @@ printf("hk_decode_next_vcdu:APID is <%d>\n", ccsds.apid);
       else
       {
          /* successfully got FSN value */
-         printf("fsn_status is <%d> Fsn is <%u>\n", fsn_status, **Fsn);
+         printf("fsn_status is <%d> Fsn is <%u>\n", fsn_status, *Fsn);
          lev0_status = SUCCESS_HK_NEED_TO_WTD_CTD; /* set to 1 */
       }
     }
@@ -479,17 +479,18 @@ int filter_out_non_isps(CCSDS_Packet_t **ptr)
 
 
 /********************** lookup FSN function ******************/
-int lookup_fsn(CCSDS_Packet_t **ptr, unsigned int **Fsn)
+int lookup_fsn(CCSDS_Packet_t **ptr, unsigned int *Fsn)
 {
   /* declarations */
   CCSDS_Packet_t *p;
   HK_Keyword_t *kw;
-  unsigned int *fsn;
+  unsigned int fsn=0;
   int status=1;  //not found case
 
   /* initialized variables */
   p= *ptr;
   kw=p->keywords;
+  *Fsn=&fsn;
 
   /* locate Fsn */
   while(kw)
@@ -497,9 +498,8 @@ int lookup_fsn(CCSDS_Packet_t **ptr, unsigned int **Fsn)
     
     if (strstr(kw->name, "FILTERGRAM_SN") || strstr(kw->name, "FRAME_SN"))
     {  
-       *fsn=kw->eng_value.uint32_val;
+       fsn=kw->eng_value.uint32_val;
        status = 0;
-       *Fsn= fsn;
        break;
     }
     else
