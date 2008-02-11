@@ -17,21 +17,23 @@
 #include "timeio.h"
 #include <dirent.h>
 
-
 /*************  function prototypes ******************/
 int  check_filename_pkt_time(char *fn, unsigned short *word_ptr);
-int  load_packet_data( unsigned short *word_ptr, HK_Dayfile_Packet_t **pkt);
-int  load_dfd_node(unsigned short *word_ptr,HK_Dayfile_Data_t **df_head);
+int  check_for_pkt_time( HK_Dayfile_Data_t **fdfd, unsigned short *word_ptr);
+int  check_dfd_file( unsigned short *word_ptr, int apid);
 int  free_dayfile_data( HK_Dayfile_Data_t **df_head); 
 int  free_dayfile_pkt_data( HK_Dayfile_Data_t **df_head); 
-int  check_for_pkt_time( HK_Dayfile_Data_t **fdfd, unsigned short *word_ptr);
-void set_time_values(HK_Dayfile_Data_t **dn, double tcsec);
-double get_packet_time(unsigned short *word_ptr);
+double  get_packet_time(unsigned short *word_ptr);
 char   *get_dayfilename(int apid, double tc_sec);
-int  get_yr_from_pkttime(double tc_sec);
-int  get_month_from_pkttime(double tc_sec);
 int  get_day_from_pkttime(double tc_sec);
 int  get_hour_from_pkttime(double tc_sec);
+int  get_month_from_pkttime(double tc_sec);
+int  get_yr_from_pkttime(double tc_sec);
+int  load_dfd_node(unsigned short *word_ptr,HK_Dayfile_Data_t **df_head);
+int  load_packet_data( unsigned short *word_ptr, HK_Dayfile_Packet_t **pkt);
+void set_time_values(HK_Dayfile_Data_t **dn, double tcsec);
+int  write_packet_to_dayfile(HK_Dayfile_Data_t **df_head); 
+
 /*********** extern function prototypes **************/
 extern TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 extern void sprint_time (char *at, TIME t, char *zone, int precision);
@@ -45,11 +47,8 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
   HK_Dayfile_Packet_t **pkt, *temp_pkt,*prev_pkt;
   HK_Dayfile_Data_t *dd, *dd_tmp, *found_dfd;
   int lpd_status;
-  int cfp_status;
   int wdf_status;
   int ldfd_status;
-  unsigned short w;
-
 
   /* load packet in HK_Dayfile_Packet_t node */
   lpd_status=load_packet_data( word_ptr, &pkt);
@@ -97,7 +96,7 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
     {
       /* check if packet time for this packet is for same day- 
          if not need to create new dayfile filename  */
-      if (cfp_status=check_for_pkt_time( &found_dfd, word_ptr))
+      if (check_for_pkt_time( &found_dfd, word_ptr))
       {
          ;//printf("SPFD(10): dfd node is within pkt time \n");
       }
@@ -114,7 +113,7 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
           ldfd_status = load_dfd_node(word_ptr, &dd_tmp);
 
           /* set head node */
-          *df_head=dd_tmp;  //DEC 19
+          *df_head=dd_tmp;
 
           /* call to get found_dfd node for this packet*/
           if (check_for_dfd(apid, dd_tmp, &found_dfd)) 
@@ -126,8 +125,8 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
         {   
           /* if files not there for given time and apid then reuse dfd node */
           /* write packets there and free -only- pkt nodes */
-          wdf_status=write_packet_to_dayfile( &dd_tmp);
-          wdf_status=free_dayfile_pkt_data( &dd_tmp); 
+          wdf_status = write_packet_to_dayfile( &dd_tmp);
+          wdf_status = free_dayfile_pkt_data( &dd_tmp); 
 
           /* reuse existing node and reset time and dayfile name */
           strcpy(found_dfd->dayfile, get_dayfilename(found_dfd->apid, get_packet_time(word_ptr)));
@@ -158,7 +157,7 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
     { 
       /* if does not exist make new node for apid */
       assert(dd = malloc(sizeof(HK_Dayfile_Data_t)));
-      dd->apid=apid;
+      dd->apid=(short)apid;
       (void)set_time_values(&dd,  get_packet_time(word_ptr));
       strcpy(dd->dayfile, get_dayfilename(dd->apid, get_packet_time(word_ptr)));
       dd->next=NULL;
