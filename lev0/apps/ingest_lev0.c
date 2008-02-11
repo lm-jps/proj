@@ -593,13 +593,16 @@ int get_tlm(char *file, int rexmit, int higherver)
       decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk, &Fsn);
       printf("2-ingest_lev0--after decode_next_hk_vcdu:rstatus is %d\n",rstatus);
       printf("3-ingest_lev0--after decode_next_hk_vcdu:decode status is %d\n",decode_status);
+      printf("4-ingest_lev0--after decode_next_hk_vcdu() Fsn = %u\n", Fsn);
       switch (decode_status) {
         case SUCCESS_HK_NEED_TO_WTD_CTD:
+      printf("6-ingest_lev0--after case:SUCCESS_HK_NEED_TO_WTD_CTD- Fsn = %u\n", Fsn);
           printk("2####decode_next_hk_vcdu() Fsn = %u\n", Fsn);
           if(rs) {
+      printf("7-ingest_lev0--after case:if(rs) Fsn = %u\n", Fsn);
           /* write to drms hk keywords to level 0 data series */
-          printf("4-ingest_lev0:-->SUCCESS returned from decode_next_hk_vcdu:\n->write kw to drms lev0 data series\n->commit to drms for level 0 series and level0 for APID series\n");
-          printf("5-ingest_lev0:-- record passed is <%ld> \n",rs);
+          printf("8-ingest_lev0:-->SUCCESS returned from decode_next_hk_vcdu:\n->write kw to drms lev0 data series\n->commit to drms for level 0 series and level0 for APID series\n");
+          printf("9-ingest_lev0:-- record passed is <%ld> \n",rs);
           whk_status = write_hk_to_drms(rs, &Hk);
           hk_ccsds_free(&Hk);
           rstatus=0;
