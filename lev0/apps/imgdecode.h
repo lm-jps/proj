@@ -1,9 +1,15 @@
 #ifndef IMGDECODE_INCL
 #define IMGDECODE_INCL 1
 
-#define PACKETHEADERWORDS		19
-#define PACKETDATAWORDS			869
-#define PACKETWORDS			888
+#ifndef PACKETHEADERWORDS
+#define PACKETHEADERWORDS               19
+#endif
+#ifndef PACKETDATAWORDS
+#define PACKETDATAWORDS                 869
+#endif
+#ifndef PACKETWORDS
+#define PACKETWORDS                     888
+#endif
 
 #define MAXPIXELS			16777216	// 4096*4096
 #define MAXHIST				16384		// 14-bit
