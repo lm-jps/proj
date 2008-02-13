@@ -1,4 +1,4 @@
-# !/usr/bin/perl -w 
+#!/usr/bin/perl -w 
 
 # This script downloads the latest data files from the MOC Product Server (@Goddard).
 # It reads in a config file (default is ___), which is specified by the -c parameter.
