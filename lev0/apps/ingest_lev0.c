@@ -36,8 +36,8 @@
 #include <dirent.h>
 #include <unistd.h>	//for alarm(2) among other things...
 #include <printk.h>
+#include "packets.h"
 #include "imgdecode.h"
-//#include "packets.h"
 #include "decode_hk_vcdu.h"
 #include "decode_hk.h"
 #include "load_hk_config_files.h"
