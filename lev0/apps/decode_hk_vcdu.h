@@ -60,6 +60,7 @@
 #define ERROR_HK_FAILED_CLOSE_DRMS_RECORD (-25)
 #define ERROR_HK_FAILED_OPEN_DRMS_RECORD  (-26)
 #define ERROR_HK_FAILED_GETTING_FSN       (-27)
+#define ERROR_HK_FAILED_OPEN_DAYFILE      (-28)
 
 /*  Overall decode_next_hk_vcdu status after saving 
     packet data to files and decode of hk packets for
