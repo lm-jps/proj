@@ -639,30 +639,28 @@ int get_tlm(char *file, int rexmit, int higherver)
           rstatus=0;
           break;
         case SUCCESS_HK_NEED_TO_CTD:
-          printf("ingest_lev0:-->SUCCESS returned from decode_next_hk_vcdu:\n->NO write of kw's to drms lev0 data series\n->BUT commit to drms for level0 by APID data series\n\n");
+          /*NO need to write  keywords's to drms for level0 data series 
+            BUT need to commit to drms for level0 by APID data series*/
           break;
         case SUCCESS_SKIP_IMAGE:
-          printf("ingest_lev0:-->Warning: passed image vcdu, Sucessfully skipped in  decode_next_hk_vcdu\n");
+          printk("decode_next_hk_vcdu() ret:Warning:SUCCESS_SKIP_IMAGE\n");
           break;
         case SUCCESS_SKIP_PROCESSING_APID:
-          printf("ingest_lev0:-->Warning:passed apid not on processing list, Sucessfully skipped in decode_next_hk_vcdu\n");
+          printk("decode_next_hk_vcdu() ret:Warning:SUCCESS_SKIP_PROCESSING_APID:\n");
           break;
         case ERROR_HK_FAILED_GETTING_FSN:
-          printf("ingest_lev0:-->Warning: returned could not find FSN in decode_next_hk_vcdu\n");
+          printk("decode_next_hk_vcdu() ret:Warning:ERROR_HK_FAILED_GETTING_FSN:\n");
           break;
         case ERROR_NODATA:
-          printf("ingest_lev0:-->Warning: returned ERROR_NODATA from decode_next_hk_vcdu\n");
-          break;
+          printk("decode_next_hk_vcdu() ret:Warning:ERROR_NODATA\n");
+        case ERROR_HK_ENVIRONMENT_VARS_NOT_SET:
+          printk("decode_next_hk_vcdu() ret:ERROR:ERROR_HK_ENVIRONMENT_VARS_NOT_SET\n");
+           break;
+        case ERROR_HK_FAILED_OPEN_DAYFILE:
+          printk("decode_next_hk_vcdu() ret:ERROR:ERROR_HK_FAILED_OPEN_DAYFILE\n");
+           break;
         default:
-          printf("ingest_lev0:-->Default returned from decode_next_hk_vcdu-checking status\n");
-          if (rstatus<0)
-          {
-            printf("ingest_lev0:-->ERROR: decode_next_hk_vcdu returned error <%d>\n", rstatus);
-          }
-          else
-          {
-            printf("ingest_lev0:-->ERROR: decode_next_hk_vcdu returned unexpected rstatus <%d>\n", rstatus);
-          }
+          printk("decode_next_hk_vcdu() ret:Warning:Unexpected return code for decode_status:<%d>:\n", decode_status);
           break;
       }
 
