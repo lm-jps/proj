@@ -172,8 +172,6 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
               "for packet version number %s. "
               "If don't exist, run make_hkpdf.pl script to create files.\n",
                __FILE__, __LINE__, apid, version_number);
-printf("decode_hk:  HK_DECODER_ERROR_NO_CONFIG_DATA apid:<%d>pvn:<%s>\n", apid,version_number);
- 
     return HK_DECODER_ERROR_NO_CONFIG_DATA;
   }
 
@@ -186,7 +184,6 @@ printf("decode_hk:  HK_DECODER_ERROR_NO_CONFIG_DATA apid:<%d>pvn:<%s>\n", apid,v
    * Version number for STANFORD_TLM_HMI_AIA file               *
    * Version number for parameter                               *
    **************************************************************/
-  printf("APID = <%x> PACKET VERSION NUMBER = < %s >\n",apid,version_number);
   matching_config = check_packet_version_number(config_files,version_number);
   if ( matching_config == NULL )
   {
