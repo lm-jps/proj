@@ -151,7 +151,6 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
     w = decode_ccsds(w, &ccsds);
     
     /* Branch depending on the APID. */
-printf("hk_decode_next_vcdu:APID is <%d>\n", ccsds.apid);
     switch(ccsds.apid)
     {  
     /*************************************/
@@ -236,6 +235,13 @@ printf("hk_decode_next_vcdu:APID is <%d>\n", ccsds.apid);
       /* write packet to dayfile */
       spfd = save_packet_to_dayfile(hkstart ,ccsds.apid, &dfd) ;
       hk_status=spfd;
+      if (hk_status == ERROR_HK_ENVIRONMENT_VARS_NOT_SET) 
+      {
+         /* never got a chance to save  packets */
+         lev0_status= ERROR_HK_ENVIRONMENT_VARS_NOT_SET;
+         lz_status[j++] = hk_status;
+         return (lev0_status);
+       }
 
      // take out if SOME means only decoded some and 
      // does  not mean  decoded and wrote-dayfile some 
@@ -260,6 +266,13 @@ printf("hk_decode_next_vcdu:APID is <%d>\n", ccsds.apid);
         /* write packet to dayfile */
         spfd = save_packet_to_dayfile(hkstart ,ccsds.apid, &dfd) ;
         hk_status=spfd;
+        if (hk_status == ERROR_HK_ENVIRONMENT_VARS_NOT_SET) 
+        {
+          /* never got a chance to save packets */
+          lev0_status= ERROR_HK_ENVIRONMENT_VARS_NOT_SET;
+          lz_status[j++] = hk_status;
+          return (lev0_status);
+        }
       }
 
       // take out if SOME means only decoded some and 
@@ -282,15 +295,17 @@ printf("hk_decode_next_vcdu:APID is <%d>\n", ccsds.apid);
   /* finished VCDU, now write saved dayfile packets to filesystem 
      and free dayfile structure. Currentily write out dayfile after each VCDU.
      Also keeps using initial packet times filename to write packets too.*/
-  if(dfd &&  hk_status != HK_SUCCESS_SKIP_IMAGE && hk_status != HK_SUCCESS_SKIP_IMAGE)
+  if(dfd &&  hk_status != HK_SUCCESS_SKIP_IMAGE )
   {
     if (writeFlag == HK_WRITE_AFTER_VCDU_COUNT)
     {
       wdf_status = write_packet_to_dayfile( &dfd); 
-      if (HK_SUCCESS_WRITE_DAYFILE != wdf_status) 
+      if (HK_SUCCESS_WRITE_DAYFILE != wdf_status ) 
       {
-        printkerr("Warning at %s, line %d: Return status failed for "
-                  "write_packet_to_dayfile\n", __FILE__, __LINE__);
+        printkerr("ERROR at %s, line %d: Return status failed for "
+                  "write_packet_to_dayfile. Probably can't open dayfile.\n", 
+                   __FILE__, __LINE__);
+        return (ERROR_HK_FAILED_OPEN_DAYFILE);
       }
       wdf_status=free_dayfile_pkt_data( &dfd); 
       if (HK_SUCCESS_WRITE_DAYFILE != wdf_status) 
@@ -304,10 +319,8 @@ printf("hk_decode_next_vcdu:APID is <%d>\n", ccsds.apid);
   }
   if(*hk_packets &&  hk_status != HK_SUCCESS_SKIP_IMAGE) 
   {
-      //printf("hk_decode_next_vcdu:1:write to drms to level0 by APID data series \n");
       /* write Keywords to DRMS in Level 0 Data Series by APID */
       wd_status = write_hk_to_drms(record, hk_packets);
-      //printf("hk_decode_next_vcdu:2:write to drms to level0 by APID data series status is <%d>\n", wd_status);
 
       if (wd_status == HK_SUCCESS_WROTE_TO_DRMS) 
       {
@@ -369,7 +382,6 @@ printf("hk_decode_next_vcdu:APID is <%d>\n", ccsds.apid);
       else
       {
          /* successfully got FSN value */
-         printf("decode_next_hk_vcdu:fsn_status is <%d> Fsn is <%u>\n", fsn_status, *Fsn);
          lev0_status = SUCCESS_HK_NEED_TO_WTD_CTD; /* set to 1 */
       }
     }
@@ -522,7 +534,6 @@ int get_status( int lz[], int jj)
   /* errors when writing to dayfile, decoding hk, etc.        */
   for (k=0, count_errors=0,skip_apids=0, last_error=0; k < jj; k++)
   {
-     //printf("Level O Status is [%d]= %d\n", k,lz[k]);
      /* count errors  and apids skipped*/
      if (lz[k] < 0 )
      {
@@ -573,7 +584,6 @@ TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
 static TIME sdo_epoch;
 int ss=(sdo_ss >> 16) & 0xFFFF;
 static int firstcall = 1;
-// printf(" SDO_to_DRMS (1)\n");
 if (firstcall)
   { /* time_1958 - time_1977_TAI, to be added to SDO time to get DRMS time */
   firstcall = 0;
