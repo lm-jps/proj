@@ -7,6 +7,7 @@
  *                                                                           *
  ****************************************************************************/
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include "decode_hk.h"
 #include "packets.h"
@@ -16,8 +17,10 @@
 #include <time.h>
 #include "timeio.h"
 #include <dirent.h>
+#include "printk.h"
 
 /*************  function prototypes ******************/
+int check_filename_apid(char *fn, int apid); 
 int  check_filename_pkt_time(char *fn, unsigned short *word_ptr);
 int  check_for_pkt_time( HK_Dayfile_Data_t **fdfd, unsigned short *word_ptr);
 int  check_dfd_file( unsigned short *word_ptr, int apid);
@@ -46,18 +49,26 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
   /* declarations */
   HK_Dayfile_Packet_t **pkt, *temp_pkt,*prev_pkt;
   HK_Dayfile_Data_t *dd, *dd_tmp, *found_dfd;
-  int lpd_status;
   int wdf_status;
   int ldfd_status;
 
   /* load packet in HK_Dayfile_Packet_t node */
-  lpd_status=load_packet_data( word_ptr, &pkt);
+  if(!load_packet_data( word_ptr, &pkt))
+  {
+    printkerr("ERROR at %s, line %d: Could not load packet data to "
+              "day file data structure.\n"
+               __FILE__, __LINE__);
+  }
 
   /* Handle restart case where stopped data flow and restarted
      so that the dayfile names are not any longer in memory */
   if (*df_head == NULL)
   {
     ldfd_status = load_dfd_node(word_ptr, &dd_tmp);
+    if (ldfd_status == ERROR_HK_ENVIRONMENT_VARS_NOT_SET) 
+    {
+           return (ERROR_HK_ENVIRONMENT_VARS_NOT_SET);
+    }
     if(ldfd_status) 
     {
       *df_head= dd_tmp;
@@ -107,10 +118,18 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
         {
           /* write packets there and free dayfile node and pkt nodes */
           wdf_status= write_packet_to_dayfile( &dd_tmp);
+          if (wdf_status == 0) 
+          {
+            return (ERROR_HK_ENVIRONMENT_VARS_NOT_SET);
+          }
           wdf_status= free_dayfile_data( &dd_tmp);
 
           /* load dfd nodes with existing dayfiles for this packet time */
           ldfd_status = load_dfd_node(word_ptr, &dd_tmp);
+          if (ldfd_status == ERROR_HK_ENVIRONMENT_VARS_NOT_SET) 
+          {
+            return (ERROR_HK_ENVIRONMENT_VARS_NOT_SET);
+          }
 
           /* set head node */
           *df_head=dd_tmp;
@@ -126,6 +145,10 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
           /* if files not there for given time and apid then reuse dfd node */
           /* write packets there and free -only- pkt nodes */
           wdf_status = write_packet_to_dayfile( &dd_tmp);
+          if (wdf_status == 0) 
+          { 
+            return (ERROR_HK_ENVIRONMENT_VARS_NOT_SET);
+          }
           wdf_status = free_dayfile_pkt_data( &dd_tmp); 
 
           /* reuse existing node and reset time and dayfile name */
@@ -309,6 +332,14 @@ int write_packet_to_dayfile(HK_Dayfile_Data_t **df_head)
 
   /* get directory */
   p_dn = getenv("HK_DF_HSB_DIRECTORY");
+  if(!p_dn) 
+  {
+    printkerr("ERROR at %s, line %d: Could not get directory environment "
+              "variable:<HK_DF_HSB_DIRECTORY>. Set the env variable "
+              "HK_DF_HSB_DIRECTORY to existing directory name. \n",
+              __FILE__,__LINE__);
+    return ( ERROR_HK_ENVIRONMENT_VARS_NOT_SET );
+  }
   strcpy(dn,p_dn);
   
   /* loop thru data dayfile structure and write packets to dayfile based on apid */
@@ -323,6 +354,14 @@ int write_packet_to_dayfile(HK_Dayfile_Data_t **df_head)
 
     /* open filename */
     file_ptr = fopen( filename ,"a");
+    if(!file_ptr) 
+    {
+      printkerr("ERROR at %s, line %d: Could not open file at:"
+                "<%s>. Check have permission  "
+                "to write to directory or check if directory exists. \n",
+                __FILE__,__LINE__, filename);
+      return ( ERROR_HK_FAILED_OPEN_DAYFILE);
+    }
 
     /* loop thru each packet node in data-dayfile node and write 
        packet to file using packet length stored in packet node*/
@@ -587,8 +626,7 @@ int check_dfd_file( unsigned short *word_ptr, int apid)
       /* For each filename create dfd node and
          set apid,filename,year,month,day, hour for each dfd node */
       /* check if dayfile loading is within range of latest incoming packet */
-      //if ( !check_filename_pkt_time(dir_entry_p->d_name, word_ptr)  )
-      if ( (!check_filename_pkt_time(dir_entry_p->d_name, word_ptr)) || (!check_filename_apid(dir_entry_p->d_name,apid)) )  // DEC 18
+      if ( (!check_filename_pkt_time(dir_entry_p->d_name, word_ptr)) || (!check_filename_apid(dir_entry_p->d_name,apid)) )
       {
            continue; /* not an dayfile filename within time range- skip*/
       }
@@ -615,19 +653,26 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
 
   /* initialize variables */
   dd=NULL;
+  p_dn=dn;
 
   /* get directory name for HSB dayfiles */
   p_dn = getenv("HK_DF_HSB_DIRECTORY");
-  strcpy(dn,p_dn);
+  if(!p_dn){
+    printkerr("Error at %s, line %d: Could not set environment variable. "
+	      "Check if environment variable <HK_DF_HSB_DIRECTORY> is set .\n",
+              __FILE__,__LINE__);
+    return ERROR_HK_ENVIRONMENT_VARS_NOT_SET;
+  }
 
- /* open directory - if some files there do below*/
-  if ((dir_p = opendir(dn)) == NULL)
+  /* open directory - if some files there do below*/
+  if ((dir_p = opendir(p_dn)) == NULL)
   {
     printkerr("Error at %s, line %d: Could not open directory <%s>. "
 	      "Check if environment variable <HK_DF_HSB_DIRECTORY> is set .\n",
               __FILE__,__LINE__,dn);
     return NULL;
   }
+
   /* read dot hkt files names based on current time of word_ptr filter out some filename.*/
   while( (dir_entry_p = readdir(dir_p)) != NULL ) 
   {
