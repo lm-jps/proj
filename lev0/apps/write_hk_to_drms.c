@@ -34,7 +34,6 @@ void  free_jsvn_map( JSOC_Version_Map_t  *top_jm);
  *****************************************************************************/
 int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 {
-
   /* declaration to set drms record */
   DRMS_Type_t keytype;
   DRMS_Type_Value_t key_anyval;
@@ -142,7 +141,6 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
       /* create or lookup data series name */
       strcpy(query , lookup_data_series_name(ccsds,&jmap)); 
-      //printf("write_hk_to_drms:query is <%s>\n", query);
 
       /* create record in drms */
       rs = drms_create_records( drms_env, 1, query, DRMS_PERMANENT, &status);
@@ -154,7 +152,6 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
                   __FILE__ , __LINE__ , query);
        ccsds= ccsds->next;
        continue;
-       //return (ERROR_HK_FAILED_OPEN_DRMS_RECORD);
       }
       else
       {
@@ -401,9 +398,11 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
       /* check got good return status */
       if (status)
       {
-        printkerr("Warning at %s, line %d: Cannot setkey in drms record."
+        /*printkerr("Warning at %s, line %d: Cannot setkey in drms record."
                   " For keyword <%s>\n",
                  __FILE__,__LINE__, keyname);
+         To do: need to filter out items not in series so don't get warning!!
+        */
       }
 
       /* Next Keyword Node */
