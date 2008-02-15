@@ -861,10 +861,12 @@ void do_ingest()
 // Initial setup stuff called when main is first entered.
 void setup()
 {
+  FILE *fp;
   int i;
   time_t tval;
   struct tm *t_ptr;
   char string[128], cwdbuf[128], idstr[256];
+  char envfile[100], s1[256],s2[256],s3[256], line[256];
 
   signal(SIGALRM, alrm_sig);
 
@@ -895,6 +897,28 @@ void setup()
   umask(002);			// allow group write 
   Image.initialized = 0;	// init the two image structures 
   ImageOld.initialized = 0;
+
+  //set environment variables for hk code
+  //create filename and path
+  strcpy(envfile,"./SOURCE_ENV_FOR_HK_DECODE");
+  //fopen file
+  if(!(fp=fopen(envfile, "r"))) {
+      printk("***Can't open %s\n", envfile);
+  }
+  //read in lines
+  while( fgets(line, MAXLINE_IN_FILE, fp) != NULL )
+  {
+    if (!strncmp(line, "#", 1)) {
+      continue; /*skip comments */
+    }
+    else  {
+      sscanf(line, "%s %s %s ", s1,s2,s3);
+      // set each line to setenv();
+      setenv(s2, s3, 1);
+    }
+  }
+  //close file
+  fclose(fp);
 }
 
 // Module main function. 
