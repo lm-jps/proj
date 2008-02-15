@@ -221,6 +221,8 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "NPACKETS", Img->npackets);
   drms_setkey_int(rs, "NERRORS", Img->nerrors);
   drms_setkey_int(rs, "EOIERROR", Img->last_pix_err);
+  drms_setkey_int(rs, "HEADRERR", Img->headerr);
+  drms_setkey_int(rs, "OVERFLOW", Img->overflow);
   status = drms_segment_write(seg, array, 0);
   if (status) {
     printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
@@ -381,6 +383,8 @@ int fsn_change_rexmit()
     Img->N = drms_getkey_int(rsc, "N", &rstatus);
     Img->K = drms_getkey_int(rsc, "K", &rstatus);
     Img->R = drms_getkey_int(rsc, "R", &rstatus);
+    Img->overflow = drms_getkey_int(rsc, "OVERFLOW", &rstatus);
+    Img->headerr = drms_getkey_int(rsc, "HEADRERR", &rstatus);
     Img->totalvals = drms_getkey_int(rsc, "TOTVALS", &rstatus);
     Img->datavals = drms_getkey_int(rsc, "DATAVALS", &rstatus);
     Img->npackets = drms_getkey_int(rsc, "NPACKETS", &rstatus);
