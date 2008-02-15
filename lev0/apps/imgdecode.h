@@ -65,6 +65,8 @@ typedef struct {
     unsigned npackets;
     unsigned nerrors;
     int last_pix_err;
+    int overflow;
+    int headerr;
     uint64_t first_packet_time;
     short dat[MAXPIXELS];
     unsigned hist[MAXHIST];

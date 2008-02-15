@@ -156,6 +156,7 @@ int imgdecode(unsigned short *impdu, IMG *img)
 {
     unsigned short old, final, diff, w, h, skp, tak;
     int i, N, K, bits2go, wordcnt, nzero;
+    int headerr, overlfow;
     unsigned u, bitbuf, sgn, low, fs, kmask, nmask, nmk;
     unsigned offset, ndecoded;
     uint64_t uu;
@@ -213,6 +214,8 @@ int imgdecode(unsigned short *impdu, IMG *img)
     img->telnum = impdu[11] >> 14;
     img->fsn = ((impdu[11] & 0x3fff) << 16) + impdu[12];
     img->cropid = impdu[15] >> 4;
+    img->overflow = impdu[15] & 1;
+    img->headerr = (impdu[15] >> 1) & 1;
     img->luid = impdu[17] >> 8;
     img->tap = impdu[16] >> 12;
     u = impdu[16] & 0xff;	// compression ID
@@ -321,6 +324,15 @@ ___DECODE_START___:
     uu = ((uint64_t)impdu[7] << 32) + ((uint64_t)impdu[8] << 16) + impdu[9];
     if (uu < img->first_packet_time)
 	img->first_packet_time = uu;
+
+    //
+    // check overflow and header error flags
+    //
+    if (!img->overflow)
+	img->overflow = impdu[15] & 1;
+    if (!img->headerr) 
+	img->headerr = (impdu[15] >> 1) & 1;
+
 
     //
     // where does this packet start?
