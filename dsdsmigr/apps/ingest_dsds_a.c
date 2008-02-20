@@ -163,6 +163,7 @@ int DoIt(void)
 
    for (iRec=0; iRec<nRecs; iRec++)
       {
+      char *DataFile;
       DRMS_Record_t *inRec, *outRec;
       DRMS_Keyword_t *outKey;
       DRMS_Segment_t *inSeg, *outSeg;
@@ -173,7 +174,7 @@ int DoIt(void)
       inRec = inRecSet->records[iRec];
       outRec = outRecSet->records[iRec];
 
-//if(iRec<2 || iRec>358)fprintf(stderr,"starting record %d\n",iRec);
+//fprintf(stderr,"starting record %d\n",iRec);
 
       hiter_new(&outKey_list, &outRec->keywords);
 //      hiter_new(&seg_list, &outRec->segments);
@@ -185,6 +186,7 @@ int DoIt(void)
 	{
 	char *wantKey, *keyName = outKey->info->name;
         int action = keyNameCheck(keyName, &wantKey);
+//fprintf(stderr,"rec=%d, %s %d\n",iRec,keyName,action);
         switch (action)
           {
 	  case ACT_NOP:
@@ -195,7 +197,7 @@ int DoIt(void)
 		inValue = drms_getkey_p(inRec, wantKey, &status);
 		if (status == DRMS_ERROR_UNKNOWNKEYWORD)
 			break;
-			if (status)fprintf(stderr,"*** ACT_COPY drms_getkey_p status=%d\n",status);
+			if (status)fprintf(stderr,"*** ACT_COPY drms_getkey_p %s status=%d\n",wantKey,status);
 		drms_setkey_p(outRec, keyName, &inValue);
 		if ((inValue.type == DRMS_TYPE_STRING) && inValue.value.string_val)
 		  free(inValue.value.string_val);
@@ -206,7 +208,7 @@ int DoIt(void)
 		{ /* on CROTA1 set CROTA1, CROTA2, SAT_ROT, INST_ROT */
 		double pangle, sat_rot;
 		pangle = drms_getkey_double(inRec, "SOLAR_P", &status);
-			if (status)fprintf(stderr,"*** ACT_COPY drms_getkey_double status=%d\n",status);
+			if (status)fprintf(stderr,"*** ACT_COPY drms_getkey_double SOLAR_P status=%d\n",status);
 		sat_rot = -pangle;
 		drms_setkey_double(outRec, "CROTA1", sat_rot);
 		drms_setkey_double(outRec, "CROTA2", sat_rot);
@@ -218,9 +220,9 @@ int DoIt(void)
 		{ /* on CRPIX1 set CRPIX1, CRPIX2, CRVAL1, CRVAL2 */
 		double x0, y0;
 		x0 = drms_getkey_double(inRec, "X0", &status);
-			if (status)fprintf(stderr,"*** ACT_CENTER drms_getkey_double status=%d\n",status);
+			if (status)fprintf(stderr,"*** ACT_CENTER drms_getkey_double X0 status=%d\n",status);
 		y0 = drms_getkey_double(inRec, "Y0", &status);
-			if (status)fprintf(stderr,"*** ACT_CENTER drms_getkey_double status=%d\n",status);
+			if (status)fprintf(stderr,"*** ACT_CENTER drms_getkey_double Y0 status=%d\n",status);
 		drms_setkey_double(outRec, "CRPIX1", x0+1.0);
 		drms_setkey_double(outRec, "CRPIX2", y0+1.0);
 		drms_setkey_double(outRec, "CRVAL1", 0.0);
@@ -236,12 +238,12 @@ int DoIt(void)
 		double t_step;
 		double exptime, mjd_day, mjd_time;
 		t_rec = drms_getkey_time(inRec, "T_REC", &status);
-			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_time status=%d\n",status);
+			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_REC status=%d\n",status);
 		t_step = drms_getkey_double(outRec, "T_REC_step", &status); /* note from outRec */
-			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_double status=%d\n",status);
+			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_double T_REC_step status=%d\n",status);
 		exptime = t_step; /* note - for lev1.5 */
 		t_obs = drms_getkey_time(inRec, "T_OBS", &status);
-			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_time status=%d\n",status);
+			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_OBS status=%d\n",status);
 		date__obs = t_obs - exptime/2.0;
 		mjd = date__obs + MJD_epoch;
 		mjd_day = floor(mjd / 86400.0);
@@ -264,7 +266,7 @@ int DoIt(void)
 #define AU_m (1.49597892e11)
 		double au;
 		au = drms_getkey_double(inRec, "OBS_DIST", &status);
-			if (status)fprintf(stderr,"*** ACT_AU drms_getkey_double status=%d\n",status);
+			if (status)fprintf(stderr,"*** ACT_AU drms_getkey_double OBS_DIST status=%d\n",status);
 		drms_setkey_double(outRec, "DSUN_OBS", au * AU_m);
 		break;
 		}
@@ -276,7 +278,7 @@ int DoIt(void)
                 inValue = drms_getkey_p(inRec, keyName, &status);
 		if (status == DRMS_ERROR_UNKNOWNKEYWORD)
 			break;
-			if (status)fprintf(stderr,"*** DEFAULT drms_getkey_p status=%d\n",status);
+			if (status)fprintf(stderr,"*** DEFAULT drms_getkey_p %s status=%d\n",keyName, status);
                 drms_setkey_p(outRec, keyName, &inValue);
 		if ((inValue.type == DRMS_TYPE_STRING) && inValue.value.string_val)
 		  free(inValue.value.string_val);
@@ -287,22 +289,30 @@ int DoIt(void)
         }
 
       /* assume only one segment */
-        inSeg = drms_segment_lookupnum(inRec, 0);
-        outSeg = drms_segment_lookupnum(outRec, 0);
-        if (inSeg && outSeg)
-          {
-          DRMS_Array_t *data;
+//fprintf(stderr,"rec=%d, start data segment\n",iRec);
+	DataFile = drms_getkey_string(inRec,"DATAFILE",&status);
+		if (status)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
+	if (*DataFile)
+	  {
+//fprintf(stderr,"rec=%d, DATAFILE=%s\n",iRec,DataFile);
+          inSeg = drms_segment_lookupnum(inRec, 0);
+          outSeg = drms_segment_lookupnum(outRec, 0);
+          if (inSeg && outSeg)
+            {
+            DRMS_Array_t *data;
 //if (iRec==0)
-          data = drms_segment_read(inSeg, outSeg->info->type, &status);
-          if (!data)
-                {
-                fprintf(stderr, "Bad data record %d\n",iRec);
-                DIE_status("giveup\n");
-                }
-          drms_segment_write(outSeg, data, 0);
-          }
-        else
-          DIE("Bad data segment lookup, in or out\n");
+            data = drms_segment_read(inSeg, outSeg->info->type, &status);
+            if (!data)
+                  {
+                  fprintf(stderr, "Bad data record %d\n",iRec);
+                  DIE_status("giveup\n");
+                  }
+            drms_segment_write(outSeg, data, 0);
+            }
+          else
+            DIE("Bad data segment lookup, in or out\n");
+	  }
+//fprintf(stderr,"rec=%d, finish data segment\n",iRec);
 
 
       /* loop through all target links */
