@@ -4,7 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODEXE_$(d)	:= $(addprefix $(d)/, store_ds_fd_M_01h_lev1_8 store_ds_fd_M_96m_01d_lev1_8 store_ds_fd_V_01h_lev1_8 store_ds_fd_V_30s_01h_lev1_8 store_ds_vw_V_06h_lev1_8)
+MODEXE_$(d)	:= $(addprefix $(d)/, store_ds_fd_M_01h_lev1_8 store_ds_fd_M_96m_01d_lev1_8 store_ds_fd_V_01h_lev1_8 store_ds_fd_V_30s_01h_lev1_8 store_ds_vw_V_06h_lev1_8 ingest_dsds_a)
 MODEXESUMS_$(d)	:= $(addprefix $(d)/, sum_pe_svc sum_pe)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d)) $(MODEXESUMS_$(d))
 
