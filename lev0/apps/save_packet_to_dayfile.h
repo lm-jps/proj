@@ -1,7 +1,11 @@
 #ifndef __SAVE_PACKET_TO_DAYFILE_H
-#define __SAVE_PACKET_TO_DAYFILE:w
+#define __SAVE_PACKET_TO_DAYFILE_H
 
-
+/* defines used within save_packets_to_dayfile */
+#define HK_DF_CHECK_FOUND               1
+#define HK_DF_CHECK_NOT_FOUND           0
+#define HK_DF_LOAD_PACKET_SUCCESS       1
+#define HK_DF_DAYFILE_LOAD_SUCCESS      1
 /* Structures */
 
 /***************** HK Dayfile Packet struct *************************/
