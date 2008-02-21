@@ -24,6 +24,7 @@ int check_filename_apid(char *fn, int apid);
 int  check_filename_pkt_time(char *fn, unsigned short *word_ptr);
 int  check_for_pkt_time( HK_Dayfile_Data_t **fdfd, unsigned short *word_ptr);
 int  check_dfd_file( unsigned short *word_ptr, int apid);
+int check_for_dfd(int apid, HK_Dayfile_Data_t *dfd,  HK_Dayfile_Data_t **fdfd);
 int  free_dayfile_data( HK_Dayfile_Data_t **df_head); 
 int  free_dayfile_pkt_data( HK_Dayfile_Data_t **df_head); 
 double  get_packet_time(unsigned short *word_ptr);
@@ -47,7 +48,7 @@ extern void sprint_time (char *at, TIME t, char *zone, int precision);
 int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t **df_head) 
 {
   /* declarations */
-  HK_Dayfile_Packet_t **pkt, *temp_pkt,*prev_pkt;
+  HK_Dayfile_Packet_t *pkt, *temp_pkt,*prev_pkt;
   HK_Dayfile_Data_t *dd, *dd_tmp, *found_dfd;
   int wdf_status;
   int ldfd_status;
@@ -69,7 +70,8 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
     {
            return (ERROR_HK_ENVIRONMENT_VARS_NOT_SET);
     }
-    if(ldfd_status) 
+    /* set head of data dayfile link list */
+    if(ldfd_status == HK_DF_DAYFILE_LOAD_SUCCESS) 
     {
       *df_head= dd_tmp;
     }
@@ -83,7 +85,7 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
     assert(dd = malloc(sizeof(HK_Dayfile_Data_t)));
 
     /* set apid value and time values in HK_DAYFILE_DATA struct*/
-    dd->apid=apid;
+    dd->apid=(short)apid;
     (void)set_time_values(&dd,  get_packet_time(word_ptr));
 
     /* set dayfile name based on first packet time */
@@ -109,7 +111,7 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
          if not need to create new dayfile filename  */
       if (check_for_pkt_time( &found_dfd, word_ptr))
       {
-         ;//printf("SPFD(10): dfd node is within pkt time \n");
+         ;//printf("save_packet_for_dayfile: dfd node is within pkt time \n");
       }
       else //No match-reset packet time to first packet time  and new dayfile name or use file
       {
@@ -247,10 +249,12 @@ double get_packet_time(unsigned short *word_ptr)
 int load_packet_data( unsigned short *word_ptr, HK_Dayfile_Packet_t **pkt)
 {
   HK_Dayfile_Packet_t *pp;
-  unsigned short w;
-  int i;
   char vn[10];
   char *ptr_vn;
+  int i;
+  unsigned short w;
+
+  /* initialized variables */
   ptr_vn =vn;
 
   /* create packet data node */
@@ -287,7 +291,7 @@ int load_packet_data( unsigned short *word_ptr, HK_Dayfile_Packet_t **pkt)
 
   /*set pkt pointer to created node with data so can send back*/
   *pkt =pp;
-  return 1;
+  return (HK_DF_LOAD_PACKET_SUCCESS);
 }
 
 
@@ -309,12 +313,12 @@ int check_for_dfd(int apid, HK_Dayfile_Data_t *dfd,  HK_Dayfile_Data_t **fdfd)
     {
       found_dfd=dfd_t;
       *fdfd=found_dfd; 
-      return (1);
+      return (HK_DF_CHECK_FOUND);
     }
     dfd_t=dfd_t->next;
   }
   found_dfd=NULL;
-  return (0);
+  return (HK_DF_CHECK_NOT_FOUND);
 }
 
 
@@ -559,13 +563,13 @@ int check_for_pkt_time( HK_Dayfile_Data_t **fdfd, unsigned short *word_ptr)
   if (( t_dfd->year == pkt_yr) && (t_dfd->month == pkt_month) && (t_dfd->day == pkt_day)) 
   {
     /* case of within range of current dayfile-data node's filename */
-    return 1;
+    return (HK_DF_CHECK_FOUND) ;
   }
   else
   {
     /* case of NOT within range of current dayfile-data node's filename */
     /* case of new day for packet time */
-    return 0;
+    return (HK_DF_CHECK_NOT_FOUND) ;
   }
 }
 
@@ -611,7 +615,7 @@ int check_dfd_file( unsigned short *word_ptr, int apid)
     printkerr("Error at %s, line %d: Could not open directory <%s>. "
 	      "Check if environment variable <HK_DF_HSB_DIRECTORY> is set .\n",
               __FILE__,__LINE__,dn);
-    return NULL;
+    return ERROR_HK_FAILED_OPEN_DAYFILE;
   }
 
   /* read dot hkt files names based on current time of word_ptr filter out some filename.*/
@@ -632,11 +636,11 @@ int check_dfd_file( unsigned short *word_ptr, int apid)
       }
       else 
       {
-            return 1;
+            return (HK_DF_CHECK_FOUND );
       }
     }
   }
-  return 0;
+  return (HK_DF_CHECK_NOT_FOUND);
 }
 
 
@@ -670,7 +674,7 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
     printkerr("Error at %s, line %d: Could not open directory <%s>. "
 	      "Check if environment variable <HK_DF_HSB_DIRECTORY> is set .\n",
               __FILE__,__LINE__,dn);
-    return NULL;
+    return ERROR_HK_FAILED_OPEN_DAYFILE;
   }
 
   /* read dot hkt files names based on current time of word_ptr filter out some filename.*/
@@ -732,7 +736,7 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
     }
   }
   // Check value returned here
-  return 0;
+  return HK_DF_DAYFILE_LOAD_SUCCESS;
 }
 
 
@@ -754,11 +758,11 @@ int check_filename_pkt_time(char *fn, unsigned short *word_ptr)
   /* check filename time is within range */
   if ( (pkt_yr == fn_yr) && (pkt_month == fn_month)  && (pkt_day == fn_day) )
   {
-    return 1;
+    return (HK_DF_CHECK_FOUND);
   }
   else 
   {
-    return 0;
+    return (HK_DF_CHECK_NOT_FOUND) ;
   }
 
 }
@@ -778,11 +782,11 @@ int check_filename_apid(char *fn, int apid)
   /* check filename time is within range */
   if (apid == fn_apid)
   {
-    return 1;
+    return (HK_DF_CHECK_FOUND);
   }
   else 
   {
-    return 0;
+    return (HK_DF_CHECK_NOT_FOUND) ;
   }
 }
 
