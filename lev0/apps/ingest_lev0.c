@@ -53,6 +53,7 @@
 #define TESTVALUE 0xc0b		//first value in test pattern packet
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
 #define NOTSPECIFIED "***NOTSPECIFIED***"
+#define ENVFILE "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
 
 extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int *Fsn);
 extern int write_hk_to_drms();
@@ -904,10 +905,11 @@ void setup()
 
   //set environment variables for hk code
   //create filename and path
-  strcpy(envfile,"./SOURCE_ENV_FOR_HK_DECODE");
+  strcpy(envfile, ENVFILE );
   //fopen file
   if(!(fp=fopen(envfile, "r"))) {
-      printk("***Can't open %s\n", envfile);
+      printk("***Can't open %s. Check setting is correct\n", envfile);
+      exit(0);
   }
   //read in lines
   while( fgets(line, MAXLINE_IN_FILE, fp) != NULL )
