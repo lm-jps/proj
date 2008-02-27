@@ -12,6 +12,8 @@
 
 
 /* Structures */
+
+
 /***************** Map Data struct *************************/
 typedef struct Map_Data_struct 
 {
@@ -20,12 +22,11 @@ typedef struct Map_Data_struct
   char dsn[HK_LEV0_MAX_DSNAME_STR];
   struct Map_Data_struct *next;
 } Map_Data_t;
-
 /***************** JSOC_Version_Map struct *************************/
 typedef struct JSOC_Version_Map_struct 
 {
   short apid;
-  struct Map_data_t *mdata;
+  Map_Data_t *mdata;
   struct JSOC_Version_Map_struct *next;
 } JSOC_Version_Map_t;
 
