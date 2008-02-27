@@ -46,7 +46,7 @@
 #include "load_hk_config_files.h"
 
 
-
+#define LEV0FILEON "/usr/local/logs/soc/LEV0FILEON" //touch to turnon lev0
 #define H0LOGFILE "/tmp/h0.%s.%d.log"
 #define DIRDDS "/egse/ssim2soc"
 #define IMAGEDIR "/tmp/jim"	/* dir to put the last IMAGEDIRCNT images */
@@ -90,6 +90,7 @@ long long vcdu_seq_num_next;
 long long total_missing_im_pdu;
 unsigned int vcdu_24_cnt, vcdu_24_cnt_next;
 int verbose;			/* set by get_cmd() */
+int lev0_on_flag;
 double reqbytes;		/* # of bytes requested */
 double dsize;			/* # of bytes used */
 double bytes_used;		/* total #of bytes for all cataloged output */
@@ -322,6 +323,7 @@ void abortit(int stat)
 void alrm_sig(int sig)
 {
   signal(SIGALRM, alrm_sig);
+  if(!lev0_on_flag) return;
   if(!tlmactive)
     now_do_alrm_sig();
   else
@@ -664,12 +666,14 @@ int get_tlm(char *file)
     }
 
     /* Parse tlm packet headers. */
-/** !!!TEMP noop processing for Jul 2006 test w/ DDS **************/
+  if(lev0_on_flag) {
     rstatus = decompress_next_vcdu((unsigned short *)(cbuf+10), 
 			&images, &hk_packets);
-/*******************************************************************/
-/*rstatus = SUCCESS;*/
-/*goto BYPASS;*/
+  }
+  else {
+    /*goto BYPASS;*/ 	     rstatus = SUCCESS;
+    goto BYPASS;
+  }
 
     /*h0log("decompress_next_vcdu() rstatus = %d\n", rstatus); /* !!TEMP */
     switch(rstatus) {
@@ -1129,12 +1133,28 @@ void setup(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+  FILE *dolev0fp;
+
   get_cmd(argc, argv);		/* check the calling sequence */
   setup(argc, argv);		/* start pvm and init things */
   alarm(ALRMSEC);		/* ck for partial images every 60 sec */
   while(1) {
     do_ingest();		/* loop to get files from the input dir */
     do_pipe2soc();		/* get any .parc files from pipeline backend */
+    //see if we should now process to lev0
+    if((dolev0fp=fopen(LEV0FILEON, "r")) != NULL) {
+      if(!lev0_on_flag) {
+	printk("Found file: %s. Lev0 processing now active.\n", LEV0FILEON);
+	lev0_on_flag = 1;
+      }
+      fclose(dolev0fp);
+    }
+    else {
+      if(lev0_on_flag) {
+	printk("Not Found: %s. Lev0 processing not active.\n", LEV0FILEON);
+	lev0_on_flag = 0;
+      }
+    }
     sleep(4);
     if(sigtermflg) { now_do_term_sig(); }
   }

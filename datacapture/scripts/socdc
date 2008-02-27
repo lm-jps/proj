@@ -1,8 +1,8 @@
 eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
     if 0;
 #
-#/home/production/cvs/EGSE/src/perl_tk/socplay (!!!TEMP dev version)
-#HMI Science Operation Center (SOC) Simulation.
+#/home/production/cvs/JSOC/proj/datacapture/scripts/socdc
+#
 #Perl/Tk gui.
 #Shows files transfered from DDS to SOC and SOC to DDS.
 #
@@ -650,7 +650,7 @@ sub Top_STATUS
   $embssec = $fff->Entry(qw/-relief sunken -width 5/)->
 		pack(-side=> 'left', -pady => 0);
   $embssec->insert(0, "<0>");
-  $fff->Label(-text => '#Re-xmit Pend:', -background =>"$bgcolor")->
+  $fff->Label(-text => '#Rexmit in last .asf:', -background =>"$bgcolor")->
 		pack(-side=> 'left', -pady => 0);
   $embsrex = $fff->Entry(qw/-relief sunken -width 5/)->
 		pack(-side=> 'left', -pady => 0);
@@ -700,7 +700,7 @@ sub Top_STATUS
   $embssecz = $fffz->Entry(qw/-relief sunken -width 5/)->
 		pack(-side=> 'left', -pady => 0);
   $embssecz->insert(0, "<0>");
-  $fffz->Label(-text => '#Re-xmit Pend:', -background =>"$bgcolor")->
+  $fffz->Label(-text => '#Rexmit in last .asf:', -background =>"$bgcolor")->
 		pack(-side=> 'left', -pady => 0);
   $embsrexz = $fffz->Entry(qw/-relief sunken -width 5/)->
 		pack(-side=> 'left', -pady => 0);
@@ -1960,15 +1960,28 @@ sub socget {
       }
     }
     close(TXT);
-    #ck size of .qac file and give warning msg only, if wrong
+    #ck size of .qac file and give warning msg and skip if wrong
     $f = "$DIRDDS2SOC/$file";
     $getsize = (-s $f);
     if($qacsize != $getsize) {
       print LOG "*  **WARNING: Bad qac size $file\n";
       print LOG "*  **WARNING: qac size expect=$qacsize, got=$getsize\n";
+
+      print LOG "*  **REJECT .qac and any .tlm file\n";
+      $cmd = "mv -f $f $DIRREJECT";     #reject the .qac file
+      print LOG "$cmd\n";
+      `$cmd`;
+      #there might be a .tlm file anyway so move it too
+      $pos = rindex($file, '.');
+      $part = substr($file, 0, $pos);
+      $tlmfile = "$part".".tlm";
+      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";
+      print LOG "$cmd\n";
+      `$cmd`;
+      next;
     }
     if($errfilename ne "00000000000000000000000000000000000000000000000") {
-      print LOG "*  **WARNING: .err file received: $errfilename\n";
+      print LOG "*  **WARNING: .err file in qac: $errfilename\n";
       $f = "$DIRDDS2SOC/$errfilename";
       $getsize = (-s $f);
       if(!$getsize) {
@@ -1979,7 +1992,14 @@ sub socget {
         if(!grep(/$rexmitname/, @xmitpend)) {         #no dups
           push(@rexmitfiles, "$rexmitname");
   	}
+
+        if(!$tlmfile || $tlmfile eq "00000000000000000000000000000000000000000000000")  {
+          $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";  #reject the .qac file
+          print LOG "$cmd\n";
+          `$cmd`;
   	next;           # contine while shift(@qacfiles)
+        }
+        #otherwise continue and process the .tlm file
       }
       else {
         if($errfilesize != $getsize) {
@@ -1991,6 +2011,7 @@ sub socget {
         `$cmd`;
         #push(@tlmreceived, $errfilename); #we will ack it in the .asf
   	$Hoftlmreceived{$errfilename} = 1; #we will ack it in the .asf
+        #continue on to process any .tlm file
       }
     }
     if($gapcntr != 0) {			#info for all gaps not in .qac file
@@ -2002,7 +2023,7 @@ sub socget {
       print LOG "\n*  **Info incomplete for $totalgaps gaps not in .qac file. Proceed anyway.\n";
       #proceed anyway and try to process the .tlm file
     }
-    if(!$tlmfile) {
+    if(!$tlmfile || $tlmfile eq "00000000000000000000000000000000000000000000000") {
       print LOG "\n*  **ERROR: No TLM_FILE_NAME= in $file\n";
       print LOG "  The .tlm file will not be processed.\n";
       $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
@@ -2063,7 +2084,7 @@ sub socget {
         $rexmit = 1;
       }
     }
-    if($tlmfingerprint ne $md5tlm) {
+    if(($tlmfingerprint ne $md5tlm) && $sizeok) {
       print LOG "*  **ERROR: TLM_FILE_FINGER_PRINT not verified\n";
       print LOG "  Retransmission request will be made.\n";
       $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
@@ -2075,7 +2096,7 @@ sub socget {
       $rexmitname = $tlmfile;
       $rexmit = 1;
     }
-    if($eofmarker ne "C5C5") {
+    if(($eofmarker ne "C5C5") && $sizeok) {
       print LOG "*  **ERROR: No EOF_MARKER tag in $file\n";
       print LOG "  Retransmission request will be made.\n";
       $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
@@ -2148,6 +2169,7 @@ sub socget {
     $asf = substr($dsffile, 0, $pos);
     $asf = $asf.".asf";
     $asffile = "$DIRSOC2DDS/asf/$asf";
+    $recntva = $recntvb = 0;
     if(!open(ASF, ">$asffile")) {
       print LOG "*  **ERROR: Can't open $asffile\n";
       print LOG "  Skip attempt to make a .asf file for this cycle.\n";
@@ -2183,6 +2205,8 @@ sub socget {
         else {
           if(!grep(/$lfile/, @rexmitfiles)) {	#we never saw this file
             print ASF "FILE_NAME=$lfile\nSTATUS=2\n";
+            if($lfile =~ /$vaname/) { $recntva++; }
+  	    else { $recntvb++; }
             push(@xmitpend, $lfile);		#remember we requested this
           }
         }
@@ -2198,6 +2222,8 @@ sub socget {
     while($line = shift(@rexmitfiles)) {
       chomp($line);
       print ASF "FILE_NAME=$line\nSTATUS=2\n";
+      if($line =~ /$vaname/) { $recntva++; }
+        else { $recntvb++; }
       print LOG "  Rexmit request for: $line\n"; #!!TEMP
       push(@xmitpend, $line);			#remember we requested this
     }
@@ -2210,6 +2236,10 @@ sub socget {
     #@tlmreceived = ();
     @rexmitfiles = ();
   }
+  $embsrex->delete(0, 'end');
+  $embsrex->insert(0, "$recntva");
+  $embsrexz->delete(0, 'end');
+  $embsrexz->insert(0, "$recntvb");
 }
 
 #Fork off the ingest processing if not done already

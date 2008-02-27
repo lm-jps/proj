@@ -32,6 +32,7 @@ char *series = "ds_mdi.fd_V_30s_01h_lev1_8";	/* our series name */
 
 /* Some global variables for this module. */
 int verbose = 0;
+char msgtxt[1024];
 
 /* Check DRMS session status and calling arguments and set verbose variable */
 int nice_intro()
@@ -50,6 +51,16 @@ int nice_intro()
      cmdparams_printall(&cmdparams);
   return(0);
   }
+
+void Mailit(char *str) {
+  char mcmd[1096];
+
+  printf("%s", str);
+  sprintf(mcmd, "echo \"%s\" | Mail -s \"store_ds_fd_V_01h_lev1_8\" jim,jeneen,thailand", str);
+  if(system(mcmd)) {
+    fprintf(stderr, "Failed: %s\n", mcmd);
+  }
+}
 
 /* Module main function. */
 int DoIt(void)
@@ -70,13 +81,15 @@ int s_start, s_end, pid, i, level_num, ds_index;
 template = drms_template_record(drms_env, series, &status);
 if (template==NULL && status == DRMS_ERROR_UNKNOWNSERIES)
   {
-    printf("Series '%s' does not exist. Give up.\n", series);
+    sprintf(msgtxt, "Series '%s' does not exist. Give up.\n", series);
+    Mailit(msgtxt);
     return(1);
   }
 else
   if(status)
     {
-    fprintf(stderr, "DRMS problem looking up series.\n");
+    sprintf(msgtxt, "DRMS problem looking up series.\n");
+    Mailit(msgtxt);
     return(status);
     }
 
@@ -86,12 +99,14 @@ series_num = cmdparams_get_str(&cmdparams, "series_num", NULL);
 
 if (strcmp(series_num, NOTSPECIFIED) == 0)
   {
-  fprintf(stderr, "'series_num' must be specified.  Abort\n");
+  sprintf(msgtxt, "'series_num' must be specified.  Abort\n");
+  Mailit(msgtxt);
   return(1);
   }
 
 if((rsp = index(series_num, ','))) {
-  fprintf(stderr, "No \",\" allowed in series_num=n-m\n");
+  sprintf(msgtxt, "No \",\" allowed in series_num=n-m\n");
+  Mailit(msgtxt);
   return(1);
 }
 if((rsp = index(series_num, '-'))) {
@@ -105,7 +120,8 @@ else {
   s_end = s_start;
 }
 if(s_start == 0 || (s_start > s_end)) {
-  fprintf(stderr, "series_num error\n");
+  sprintf(msgtxt, "series_num error\n");
+  Mailit(msgtxt);
   return(1);
 }
 pid = getpid();
@@ -195,47 +211,68 @@ for(i = s_start; i <= s_end; i++) {
 rec = drms_create_record(drms_env, series, DRMS_PERMANENT, &status);
 if (!rec || status)
     {
-    printf("drms_create_record failed, series=%s, status=%d.  Aborting.\n", series,status);
+    sprintf(msgtxt, "drms_create_record failed, series=%s, status=%d.  Aborting.\n", series,status);
+    Mailit(msgtxt);
     return(status);
     }
 if ((status = drms_setkey_string(rec, "T_BEGIN", t_begin)))
    {
-   if (status == DRMS_ERROR_UNKNOWNKEYWORD)
-     printf("ERROR: series %s does not have a keyword named 'T_BEGIN'\n", series);
-   else
-     printf("ERROR: drms_setkey_string failed for 'T_BEGIN'\n");
+   if (status == DRMS_ERROR_UNKNOWNKEYWORD) {
+     sprintf(msgtxt, "ERROR: series %s does not have a keyword named 'T_BEGIN'\n", series);
+     Mailit(msgtxt);
+   }
+   else {
+     sprintf(msgtxt, "ERROR: drms_setkey_string failed for 'T_BEGIN'\n");
+     Mailit(msgtxt);
+   }
    return(1);
    }
 if ((status = drms_setkey_string(rec, "create_date", create_date)))
    {
-   if (status == DRMS_ERROR_UNKNOWNKEYWORD)
-     printf("ERROR: series %s does not have a keyword named 'create_date'\n", series);
-   else
-     printf("ERROR: drms_setkey_string failed for 'create_date'\n");
+   if (status == DRMS_ERROR_UNKNOWNKEYWORD) {
+     sprintf(msgtxt, "ERROR: series %s does not have a keyword named 'create_date'\n", series);
+     Mailit(msgtxt);
+   }
+   else {
+     sprintf(msgtxt, "ERROR: drms_setkey_string failed for 'create_date'\n");
+     Mailit(msgtxt);
+   }
    return(1);
    }
 if ((status = drms_setkey_int(rec, "series_num", i)))
    {
-   if (status == DRMS_ERROR_UNKNOWNKEYWORD)
-     printf("ERROR: series %s does not have a keyword named 'series_num'\n", series);
-   else
-     printf("ERROR: drms_setkey_string failed for 'series_num'\n");
+   if (status == DRMS_ERROR_UNKNOWNKEYWORD) {
+     sprintf(msgtxt, "ERROR: series %s does not have a keyword named 'series_num'\n", series);
+     Mailit(msgtxt);
+   }
+   else {
+     sprintf(msgtxt, "ERROR: drms_setkey_string failed for 'series_num'\n");
+     Mailit(msgtxt);
+   }
    return(1);
    }
 if ((status = drms_setkey_int(rec, "level_num", level_num))) 
    {
-   if (status == DRMS_ERROR_UNKNOWNKEYWORD)
-     printf("WARNING: series %s does not have a keyword named 'level_num'\n", series);
-   else
-     printf("WARNING: drms_setkey_string failed for 'level_num'\n");
+   if (status == DRMS_ERROR_UNKNOWNKEYWORD) {
+     sprintf(msgtxt, "WARNING: series %s does not have a keyword named 'level_num'\n", series);
+     Mailit(msgtxt);
+   }
+   else {
+     sprintf(msgtxt, "WARNING: drms_setkey_string failed for 'level_num'\n");
+     Mailit(msgtxt);
+   }
    return(1);
    }
 if ((status = drms_setkey_int(rec, "ds_index", ds_index))) 
    {
-   if (status == DRMS_ERROR_UNKNOWNKEYWORD)
-     printf("WARNING: series %s does not have a keyword named 'ds_index'\n", series);
-   else
-     printf("WARNING: drms_setkey_string failed for 'ds_index'\n");
+   if (status == DRMS_ERROR_UNKNOWNKEYWORD) {
+     sprintf(msgtxt, "WARNING: series %s does not have a keyword named 'ds_index'\n", series);
+     Mailit(msgtxt);
+   }
+   else {
+     sprintf(msgtxt, "WARNING: drms_setkey_string failed for 'ds_index'\n"); 
+     Mailit(msgtxt);
+   }
    return(1);
    }
 
@@ -243,14 +280,16 @@ if ((status = drms_setkey_int(rec, "ds_index", ds_index)))
 drms_record_directory(rec, path, 1);
 if (! *path)
   {
-  fprintf(stderr,"no path found\n");
+  sprintf(msgtxt, "no path found\n");
+  Mailit(msgtxt);
   return(1);
   }
 sprintf(cmd, "cp -r %s %s", wd, path);
 status = system(cmd);
 if (status)
     {
-    printf("Copy failed: %s\n", cmd);
+    sprintf(msgtxt, "Copy failed: %s\n", cmd);
+    Mailit(msgtxt);
     return(status);
     }
 else
@@ -258,9 +297,10 @@ else
 
 /*if(j == 3) return(1);		/* !!!TEMP debug test */
 
-if ((status = drms_close_record(rec, DRMS_INSERT_RECORD)))
-  printf("drms_close_record failed!\n");
-
+if ((status = drms_close_record(rec, DRMS_INSERT_RECORD))) {
+  sprintf(msgtxt, "drms_close_record failed!\n");
+  Mailit(msgtxt);
+}
 }
 return(status);
 }
