@@ -1,10 +1,10 @@
 /*****************************************************************************
  * Filename: save_packet_to_dayfile.c                                        *
  * Author: Carl                                                              *
- * Create Date: August, 5, 2005                                              *
- * Description: This file contains modules to decode housekeeping data.      *
- * (C) Stanford University, 2005                                             *
- *                                                                           *
+ * Create Date: February, 2, 2008                                            *
+ * Description: This file contains modules to save housekeeping packets      *
+ *              from high speed bus to dayfiles.                             *
+ * (C) Stanford University, 2008                                             *
  ****************************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
