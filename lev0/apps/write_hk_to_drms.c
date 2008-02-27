@@ -1,6 +1,11 @@
-/*************************************************************************
- * WRITE HK TO DRMS.C FILE                                               *
- *************************************************************************/
+/*****************************************************************************
+ * Filename: write_hk_to_drms.c                                              *
+ * Author: Carl                                                              *
+ * Create Date: February, 2, 2008                                            *
+ * Description: This file contains modules to write housekeeping keywords    *
+ *              to DRMS.                                                     *
+ * (C) Stanford University, 2008                                             *
+ ****************************************************************************/
 #include "jsoc_main.h"
 #include "packets.h"
 #include "decode_hk_vcdu.h" 
@@ -13,7 +18,7 @@ TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 char *get_packet_version_number( HK_Keyword_t *kw);
 char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jmap);
 void load_map_data(int apid, JSOC_Version_Map_t  *jm);
-char *find_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t  *jm);
+int find_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t  *jm, char *dsn);
 int   get_pkt_time_from_timecodes(HK_Keyword_t *hk, TIME *ptime);
 int   check_for_apid(int apid, JSOC_Version_Map_t  *jm);
 void  free_jsvn_map( JSOC_Version_Map_t  *top_jm);
@@ -30,7 +35,9 @@ void  free_jsvn_map( JSOC_Version_Map_t  *top_jm);
  *              and value looked up in the PVN-TO-JSVN map files based apid  *
  *              and packet_version_number and finally used data series name  *
  *              to loop thru HK_Keyword_t structure and write keyword long   *
- *              names and keyword values to data series name.                *
+ *              names and keyword values to Level 0 by APID data series name.*
+ *              Or write keyword short names and keyword values to Level 0   *
+ *              data series.
  *****************************************************************************/
 int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 {
@@ -42,16 +49,14 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
   TIME pkt_time;
   char keyname[HK_LEV0_MAX_LONG_KW_NAME];
   char query[HK_LEV0_MAX_DSNAME_STR];
-  //char pkt_ver_num[HK_LEV0_MAX_PVN_STR];
-  char pkt_ver_num[50];
+  char pkt_ver_num[HK_LEV0_MAX_PVN_STR];
   char project_name[HK_LEV0_MAX_PROJECT_NAME];
   char  datatype_name[HK_LEV0_MAX_DATATYPE_NAME];
-  char ds_name[HK_LEV0_MAX_DSNAME_STR];
-  char *pvn, *dtname, *pjname, *dsn;
+  char *pvn, *dtname, *pjname;
   char *directory ;
   char *suffix_filename ;
   int  status;
-  int rec_alreadycreated_flag=0;
+  int rec_alreadycreated_flag;
 
   /* CCSDS and keyword variables and structure to get 
      value to use to set in drms */
@@ -60,18 +65,25 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
   /* global pointer to structure containing map of packet version numbers
      and JSOC Version numbers to use to lookup values for data series name */
-  static JSOC_Version_Map_t **jmap;
+  static JSOC_Version_Map_t *jmap;
 
   /* initialize variables */
   TIME *ptime= &pkt_time;
   ccsds=*ccsds_pkt;
   pvn = pkt_ver_num;
-  dsn = ds_name;
+  pjname=project_name;
+  dtname=datatype_name;
 
-  /* check if record is set like for case of Lev 0.5 data series*/
+
+  /* check if record is set like for case of Lev 0 data series*/
   if(record)
   {
     rec_alreadycreated_flag = 1;
+  }
+  else 
+  {
+    /*setting for writing to DRMS Level 0 by APIDi data series*/
+    rec_alreadycreated_flag=0; 
   }
 
  /* check 3 environment variables are set */
@@ -218,7 +230,8 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
       key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
       /* set packet version number */
       strcpy(key_anyval.string_val, pvn);
-      status = drms_setkey(rec, keyname, keytype, &key_anyval.string_val);
+      //status = drms_setkey(rec, keyname, keytype, &(key_anyval.string_val));
+      status = drms_setkey(rec, keyname, keytype, &key_anyval);
     }
     else
     {
@@ -229,7 +242,8 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
       key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
       /* set packet version number */
       strcpy(key_anyval.string_val, pvn);
-      status = drms_setkey(rec, keyname, keytype, &key_anyval.string_val);
+      //status = drms_setkey(rec, keyname, keytype, key_anyval.string_val);
+      status = drms_setkey(rec, keyname, keytype, &key_anyval);
     }
     /* free memory */
     free (key_anyval.string_val);
@@ -240,151 +254,147 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
     { /* inner while */
       if(kw->eng_type == KW_TYPE_UINT8)
       {
-        /* set drms type but promote up for unsigned values */
-        keytype= DRMS_TYPE_SHORT;
         if(rec_alreadycreated_flag) 
         {
           strcpy(keyname, kw->fitsname);
-          /* set drms value by casting up for unsigned values */
-          key_anyval.short_val = (int16_t)kw->eng_value.uint8_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
         else   
         {
           strcpy(keyname, kw->name);
-          /* set drms value by casting up for unsigned values */
-          key_anyval.short_val = (int16_t)kw->eng_value.uint8_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
+
+        /* set drms type but promote up for unsigned values */
+        keytype= DRMS_TYPE_SHORT;
+
+        /* set drms value by casting up for unsigned values */
+        key_anyval.short_val = (int16_t)kw->eng_value.uint8_val;
+        status = drms_setkey(rec, keyname, keytype, &key_anyval);
+
       }
       else if(kw->eng_type == KW_TYPE_UINT16)
       {
-        /* set drms type but promote up for unsigned values */
-        keytype= DRMS_TYPE_INT;
         if(rec_alreadycreated_flag) 
         {
-          /* set drms value by casting up for unsigned values */
           strcpy(keyname, kw->fitsname);
-          key_anyval.int_val = (int32_t)kw->eng_value.uint16_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
         else   
         {
-          /* set drms value by casting up for unsigned values */
           strcpy(keyname, kw->name);
-          key_anyval.int_val = (int32_t)kw->eng_value.uint16_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
+
+        /* set drms type but promote up for unsigned values */
+        keytype= DRMS_TYPE_INT;
+
+        /* set drms value by casting up for unsigned values */
+        key_anyval.int_val = (int32_t)kw->eng_value.uint16_val;
+        status = drms_setkey(rec, keyname, keytype, &key_anyval);
+
       }
       else if(kw->eng_type == KW_TYPE_UINT32)
       {
-        /* set drms type but promote up for unsigned values */
-        keytype= DRMS_TYPE_LONGLONG;
         if(rec_alreadycreated_flag) 
         {
           strcpy(keyname, kw->fitsname);
-          /* set drms value by casting up for unsigned values */
-          key_anyval.longlong_val = (int64_t)kw->eng_value.uint32_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
         else   
         {
           strcpy(keyname, kw->name);
-          /* set drms value by casting up for unsigned values */
-          key_anyval.longlong_val = (int64_t)kw->eng_value.uint32_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
+
+        /* set drms type but promote up for unsigned values */
+        keytype= DRMS_TYPE_LONGLONG;
+
+        /* set drms value by casting up for unsigned values */
+        key_anyval.longlong_val = (int64_t)kw->eng_value.uint32_val;
+        status = drms_setkey(rec, keyname, keytype, &key_anyval);
+
       }
       else if(kw->eng_type == KW_TYPE_INT8)
       {
-        /* set drms type but promote up for unsigned values */
-        keytype= DRMS_TYPE_CHAR;
         if(rec_alreadycreated_flag) 
         {
           strcpy(keyname, kw->fitsname);
-          key_anyval.short_val = kw->eng_value.int16_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
         else   
         {
           strcpy(keyname, kw->name);
-          key_anyval.short_val = kw->eng_value.int16_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
+        /* set drms type but promote up for unsigned values */
+        keytype= DRMS_TYPE_CHAR;
+        key_anyval.short_val = kw->eng_value.int16_val;
+        status = drms_setkey(rec, keyname, keytype, &key_anyval);
+
       }
       else if(kw->eng_type == KW_TYPE_DOUBLE)
       {
-        /* set drms type but promote up for unsigned values */
-        keytype= DRMS_TYPE_DOUBLE;
         if(rec_alreadycreated_flag) 
         {
           strcpy(keyname, kw->fitsname);
-          key_anyval.double_val = kw->eng_value.double_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
         else   
         {
           strcpy(keyname, kw->name);
-          key_anyval.double_val = kw->eng_value.double_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
+
+        /* set drms type but promote up for unsigned values */
+        keytype= DRMS_TYPE_DOUBLE;
+        key_anyval.double_val = kw->eng_value.double_val;
+        status = drms_setkey(rec, keyname, keytype, &key_anyval);
+
       }
       else if(kw->eng_type == KW_TYPE_INT16)
       {
-        /* set drms type  */
-        keytype= DRMS_TYPE_SHORT;
         if(rec_alreadycreated_flag) 
         {
           strcpy(keyname, kw->fitsname);
-          key_anyval.short_val = kw->eng_value.int16_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
         else   
         {
           strcpy(keyname, kw->name);
-          key_anyval.short_val = kw->eng_value.int16_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
+
+        /* set drms type  */
+        keytype= DRMS_TYPE_SHORT;
+        key_anyval.short_val = kw->eng_value.int16_val;
+        status = drms_setkey(rec, keyname, keytype, &key_anyval);
+
       }
       else if(kw->eng_type == KW_TYPE_INT32)
       {
-        /* set drms type  */
-        keytype= DRMS_TYPE_INT;
         if(rec_alreadycreated_flag) 
         {
           strcpy(keyname, kw->fitsname);
-          key_anyval.int_val= kw->eng_value.int32_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
         else   
         {
           strcpy(keyname, kw->name);
-          key_anyval.int_val= kw->eng_value.int32_val;
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
         }
+        /* set drms type  */
+        keytype= DRMS_TYPE_INT;
+        key_anyval.int_val= kw->eng_value.int32_val;
+        status = drms_setkey(rec, keyname, keytype, &key_anyval);
+
       }
       else if(kw->eng_type == KW_TYPE_STRING)
       {
-        /* set drms type  */
-        keytype= DRMS_TYPE_STRING;
         if(rec_alreadycreated_flag) 
         {
           strcpy(keyname, kw->fitsname);
-          /*allocate memory for string */
-          key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
-          strcpy(key_anyval.string_val, kw->eng_value.string_val);
-          status = drms_setkey(rec, keyname, keytype, &key_anyval.string_val);
-          free(key_anyval.string_val);
         }
         else   
         {
           strcpy(keyname, kw->name);
-          /*allocate memory for string */
-          key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
-          strcpy(key_anyval.string_val, kw->eng_value.string_val);
-          status = drms_setkey(rec, keyname, keytype, &key_anyval);
-          free(key_anyval.string_val);
         }
+
+        /* set drms type  */
+        keytype= DRMS_TYPE_STRING;
+
+        /*allocate memory for string */
+        key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
+        strcpy(key_anyval.string_val, kw->eng_value.string_val);
+        status = drms_setkey(rec, keyname, keytype, &key_anyval);
+        free(key_anyval.string_val);
+
       }
       else
       {
@@ -395,16 +405,18 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
       }
 
 
+#ifdef DEBUG_WRITE_HK_TO_DRMS
       /* check got good return status */
       if (status)
       {
-        /*printkerr("Warning at %s, line %d: Cannot setkey in drms record."
+        /* compile in by adding -DDEBUG_WRITE_HK_TO_DRMS in makefile */
+        printkerr("Carl testing:Warning at %s, line %d: Cannot setkey in drms record."
                   " For keyword <%s>\n",
                  __FILE__,__LINE__, keyname);
-         To do: need to filter out items not in series so don't get warning!!
-        */
       }
-
+#else
+#endif
+        
       /* Next Keyword Node */
       kw=kw->next;
 
@@ -487,7 +499,6 @@ char *get_packet_version_number( HK_Keyword_t *kw)
 char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jmap_ptr) 
 {
    /* declarations */
-   HK_Keyword_t *kw;
    JSOC_Version_Map_t *jm, *tmp_jm, *last_jm, *prev_jm;
    char data_series_name[HK_LEV0_MAX_DSNAME_STR];
    char *dsn;
@@ -500,16 +511,13 @@ char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jm
    /* get apid */
    apid = ccsds_ptr->apid;
 
-   /* get ptr to keyword link list */
-   kw = ccsds_ptr->keywords;
-
    /*check if structure has node with data series name */
    if (!jm)
    {
       /* if empty structure then create top node */
       assert(jm = (JSOC_Version_Map_t *)malloc(sizeof(JSOC_Version_Map_t))); 
       *jmap_ptr=jm;
-      jm->apid=apid;
+      jm->apid=(short)apid;
       jm->next=NULL;
 
       /* load Map_Data nodes and create data series names 
@@ -518,12 +526,13 @@ char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jm
   
       /* find data series name in Map_Data nodes based on 
          packet version number and return*/
-      dsn=find_data_series_name(ccsds_ptr, jm);
+      (void)find_data_series_name(ccsds_ptr, jm, dsn);
+
    }
    else
    {
      /*find data series name based on packet version number and apid */
-     dsn=find_data_series_name(ccsds_ptr, jm);
+     (void)find_data_series_name(ccsds_ptr, jm, dsn);
 
      /* if don't find then read map file and load into 
         JSOC Version Number Map structure */
@@ -543,12 +552,12 @@ char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jm
            /* NOTE NEED TO TEST THIS CASE !!! */
            /* found in JSOC_Version_Map node apid needed */
            /* free entire jm structure */
-           free_jsvn_map(jm);
+           (void)free_jsvn_map(jm);
            /* recreate jm structure by loading on demand PVN-TO-JSVN file data*/
            /* create top node */
            assert(jm = (JSOC_Version_Map_t *)malloc(sizeof(JSOC_Version_Map_t)));
            *jmap_ptr=jm;
-           jm->apid=apid;
+           jm->apid=(short)apid;
            jm->next=NULL;
                                                                                                 
            /* load Map_Data nodes and create data series names for each 
@@ -556,7 +565,7 @@ char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jm
            load_map_data(apid, jm);
                                                                                                 
            /* find data series name in Map_Data nodes based on packet version number*/
-           dsn=find_data_series_name(ccsds_ptr, jm);
+           (void)find_data_series_name(ccsds_ptr, jm, dsn);
        } 
        else 
        { 
@@ -564,7 +573,7 @@ char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jm
          /* go to end of JSOC Version Map nodes and add node */
          /* first create JSOC Version Map node */
          assert(tmp_jm = (JSOC_Version_Map_t *)malloc(sizeof(JSOC_Version_Map_t))); 
-         tmp_jm->apid= apid;
+         tmp_jm->apid= (short)apid;
          tmp_jm->next= NULL;
 
          /* link in list of map data to JSOC Version Map node */
@@ -575,7 +584,7 @@ char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jm
          prev_jm->next =tmp_jm;
 
          /* find data series name based on apid and packet version number */
-         dsn=find_data_series_name(ccsds_ptr, jm);
+         (void)find_data_series_name(ccsds_ptr, jm, dsn);
        } /* else if did not find JSOC_Version_Map node with needed apid */
 
      } /* end if did not find dsn value */
@@ -596,7 +605,7 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
 {
   /*declarations */
   FILE *file_ptr;
-  Map_Data_t *dm, *tmp_dm, *prev_dm;
+  Map_Data_t  *tmp_dm, *prev_dm;
   char directory_filename[HK_LEV0_MAX_FILE_NAME];
   char fn[HK_LEV0_MAX_FILE_NAME];
   char sn[HK_LEV0_MAX_FILE_NAME];
@@ -612,7 +621,6 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
 
   /* initialized variables */
   suffix_filename=sn;
-  dm = jm->mdata;
 
   /* get project name */
   pn = getenv("HK_LEV0_PROJECT_NAME");
@@ -629,7 +637,7 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
   sprintf(directory_filename, "%s/%s", directory, filename);
 
   /* get apid  and set to JSOC Version Map node*/
-  jm->apid=apid;
+  jm->apid=(short)apid;
 
   /* open JSOC Version Map file and read */
   file_ptr=fopen(directory_filename,"r");
@@ -655,14 +663,14 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
       /* for each line load map data in Map_Data_t structure */
       if (!tmp_dm)
       {
-        assert(tmp_dm = (JSOC_Version_Map_t *)malloc(sizeof(Map_Data_t))); 
+        assert(tmp_dm = (Map_Data_t*)malloc(sizeof(Map_Data_t))); 
         tmp_dm->next= NULL;
-        jm->mdata =tmp_dm;
+        jm->mdata = tmp_dm;
         prev_dm =tmp_dm;
       }
       else
       {
-        assert(tmp_dm = (JSOC_Version_Map_t *)malloc(sizeof(Map_Data_t))); 
+        assert(tmp_dm = (Map_Data_t*)malloc(sizeof(Map_Data_t))); 
         tmp_dm->next= NULL;
         prev_dm->next =tmp_dm;
         prev_dm= tmp_dm;
@@ -701,7 +709,7 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
  *                                       JSOC_Version_Map_t  *jm)        *
  * DESCRIPTION: find data series name in JSOC Version Map structure      *
  *************************************************************************/
-char *find_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t  *jm)
+int find_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t  *jm, char *dsn)
 {
   /* declarations */
   JSOC_Version_Map_t  *tmp_jm;
@@ -724,7 +732,7 @@ char *find_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t  *jm)
   // Then return data series name if found and return null if did not find.
   if (!jm) 
   {
-    ;//return null below
+    return 0;
   }
   else
   {
@@ -757,7 +765,8 @@ char *find_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t  *jm)
       }
     } /* while loop thru jm nodes */
   }
-  return (data_series_name);
+  strcpy(dsn, data_series_name);
+  return 1;
 }
 
 
@@ -830,7 +839,7 @@ int get_pkt_time_from_timecodes(HK_Keyword_t *hk,  TIME *ptime)
  *************************************************************************/
 int check_for_apid(int apid, JSOC_Version_Map_t  *top_jm)
 {
-  JSOC_Version_Map_t  *tmp_jm, *prev_jm;
+  JSOC_Version_Map_t *tmp_jm;
   tmp_jm= top_jm;
 
   while( tmp_jm)
@@ -839,7 +848,6 @@ int check_for_apid(int apid, JSOC_Version_Map_t  *top_jm)
      {
        return 1; //FOUND
      }
-     prev_jm = tmp_jm;
      tmp_jm= tmp_jm->next;
   }
   return 0;//DID NOT FIND
@@ -874,5 +882,5 @@ void free_jsvn_map( JSOC_Version_Map_t  *top_jm)
      tmp_jm= tmp_jm->next;
      free(prev_jm);
   }
-  return 0;
+  return;
 }
