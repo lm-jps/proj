@@ -15,58 +15,51 @@ int imgstat(IMG *img, STAT *stat)
 /////////////////////////////////
 {
     double s = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, t, ss;
-    const unsigned *h = img->hist;
+    unsigned *h = img->hist;
     unsigned n = img->datavals;
     unsigned u;
     int i;
 
-    memset(stat, 0, sizeof(STAT));
     if (n == 0)
 	return -1;
 
-    if (!img->reopened) {
-	while (h[stat->min] == 0)
-	    ++stat->min;
-
-	stat->max = MAXHIST - 1;
-	while (h[stat->max] == 0)
-	    --stat->max;
-
-	stat->median = stat->min;
-	i = h[stat->median];
-	while (2*i < n)
-	    i += h[++stat->median];
-
-	for (i = stat->min; i <= stat->max; ++i) {
-	    s += (t = i*h[i]);
-	    s2 += (t *= i);
-	    s3 += (t *= i);
-	    s4 += (t *= i);
-	}
-    } else {
+    if (img->reopened) {
 	//
-	// This image has been reopened.  We don't have the histogram,
-	// and we can't trust img->datavals (because there may be 
-	// overlaps).  Rescan the data array to find the true datavals
-	// and also do the sums.
+	// This image has been reopened.  Need to reconstruct histogram.
 	//
-	u = 0;
-	for (i=0; i<MAXPIXELS; ++i) {
+	for (i = 0; i < MAXHIST; ++i)
+	    h[i] = 0;
+	n = 0;
+	for (i = 0; i < MAXPIXELS; ++i) {
 	    if (img->dat[i] == BLANK)
 		continue;
-	    ++u;
-	    s += (t = img->dat[i]);
-	    s2 += (t *= img->dat[i]);
-	    s3 += (t *= img->dat[i]);
-	    s4 += (t *= img->dat[i]);
+	    ++h[img->dat[i]];
+	    ++n;
 	}
-	img->datavals = u;
-	n = u;
+	img->datavals = n;
     }
 
-    //
-    // one-pass formulae with double precision accumulators good enough
-    //
+    memset(stat, 0, sizeof(STAT));
+
+    while (h[stat->min] == 0)
+	++stat->min;
+
+    stat->max = MAXHIST - 1;
+    while (h[stat->max] == 0)
+	--stat->max;
+
+    stat->median = stat->min;
+    i = h[stat->median];
+    while (2*i < n)
+	i += h[++stat->median];
+
+    for (i = stat->min; i <= stat->max; ++i) {
+	s += (t = i*h[i]);
+	s2 += (t *= i);
+	s3 += (t *= i);
+	s4 += (t *= i);
+    }
+
     s /= n; 
     ss = s*s;
     stat->mean = s;
