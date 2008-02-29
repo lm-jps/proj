@@ -561,9 +561,9 @@ fprintf(stderr, " using default value for %s\n", shortname);
  * Note on time codes.
  * SDO/HMI,AIA keeps time in a 48-bit counter in units of 1/(2^16) seconds.  Thus
  * the top 32 bits is a seconds counter and the bottom 16 bits is a sub-seconds
- * counter.  The epoch is 1958.01.01_00:00:00.
+ * counter (left adjusted in a 32-bit field).  The epoch is 1958.01.01_00:00:00.
  * Thus to convert HMI,AIA instrument time in two variables, e.g. SHS and SHSS to
- * a DRMS time the conversion is:  t_drms = SDO_EPOCH + SHS + SHSS/65536.0
+ * a DRMS time the conversion is:  t_drms = SDO_EPOCH + SHS + (SHSS>>16)/65536.0
  * where SDO_EPOCH = sscan_time("1958.01.01_00:00:00");
  * TAI and UTC are same at 1 Jan 1958.
  */
@@ -576,7 +576,7 @@ if (firstcall)
   firstcall = 0;
   sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   }
-return(sdo_epoch + (TIME)sdo_s + (TIME)sdo_ss/65536.0);
+return(sdo_epoch + (TIME)sdo_s + (TIME)((sdo_ss>>16)&0xFFFF)/65536.0);
 }
 
 /* Function to set HMI mechanism position keywords */
