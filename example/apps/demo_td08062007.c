@@ -255,11 +255,7 @@ static int CreateOutSeries(DRMS_Env_t *env, DRMS_Record_t *rec)
 	    {
 	       error = kDemoError_UnsupportedDimensionality;
 	    }
-	    else if (segproto->info->type != DRMS_TYPE_FLOAT && 
-		     segproto->info->type != DRMS_TYPE_DOUBLE)
-	    {
-	       error = kDemoError_UnsupportedDataType;
-	    }
+	    
 	    else 
 	    {
 	       if (segproto->info->protocol == DRMS_DSDS ||
@@ -273,6 +269,11 @@ static int CreateOutSeries(DRMS_Env_t *env, DRMS_Record_t *rec)
 		  /* Input is a true DRMS series. */
 	       }
 
+	       if (segproto->info->type != DRMS_TYPE_DOUBLE)
+	       {
+		  segproto->info->type = DRMS_TYPE_FLOAT;
+	       }
+	       
 	       drms_segment_getdims(segproto, &di);
 	       di.naxis = 2;
 	       di.axis[0] = (segproto->axis)[1] / 2;
@@ -333,6 +334,11 @@ static int CheckCompat(DRMS_Env_t *env, DRMS_Record_t *rec, const char *dsout)
 	 else
 	 {
 	    /* Input is a true DRMS series. */
+	 }
+
+	 if (segproto->info->type != DRMS_TYPE_DOUBLE)
+	 {
+	    segproto->info->type = DRMS_TYPE_FLOAT;
 	 }
 
 	 /* Data saved has a different format than data input. Modify prototype 
@@ -699,27 +705,24 @@ int DoIt(void)
 	       {
 		  DRMS_Array_t *arrin = NULL;
 		  DRMS_Array_t *arrout = NULL;
+		  DRMS_Type_t outType = 
+		    (segin->info->type != DRMS_TYPE_DOUBLE) ? DRMS_TYPE_FLOAT: DRMS_TYPE_DOUBLE;
 
 		  fprintf(stdout, "  reading data");
 		  fflush(stdout);
 		  LogTime(1, NULL);
 
-		  arrin = drms_segment_read(segin, segin->info->type, &status);
+		  arrin = drms_segment_read(segin, outType, &status);
 
 		  LogTime(0, "");
 
 		  if (arrin)
 		  {
 		     int naxis = drms_array_naxis(arrin);
-		     DRMS_Type_t type = arrin->type;
 
 		     if (naxis != 3)
 		     {
 			error = kDemoError_UnsupportedDimensionality;
-		     }
-		     else if (type != DRMS_TYPE_FLOAT && type != DRMS_TYPE_DOUBLE)
-		     {
-			error = kDemoError_UnsupportedDataType;
 		     }
 		   
 		     if (error == kDemoError_Success)
