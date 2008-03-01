@@ -5,8 +5,8 @@
 # defined by 464-GS-ICD-0068.
 
 # DRMS series in which to place the data files
-#my($series) = "su_arta.TestFDSData";
-my($series) = "moc.fds";
+my($series) = "sdo.moc_fds";
+#my($series) = "su_arta.testfds";
 
 # Primary key
 my(@primaryKey);
@@ -15,6 +15,15 @@ $primaryKey[1] = "FDS_PRODUCT_COMP";
 $primaryKey[2] = "OBS_DATE";
 $primaryKey[3] = "DATA_FORMAT";
 $primaryKey[4] = "FILE_VERSION";
+
+# Return codes
+$RET_OK = 12251966;
+$RET_BADUSAGE = 1;
+$RET_BADINPUT = 2;
+$RET_SHOWKEYS = 3;
+$RET_COPYFAIL = 4;
+$RET_TIMECONV = 5;
+$RET_SETKEYS = 6;
 
 # Segment name(s)
 my(@segmentName);
@@ -98,7 +107,7 @@ my($argc) = scalar(@ARGV);
 if ($argc != 1)
 {
     PrintUsage();
-    exit(1);
+    exit($RET_BADUSAGE);
 }
 else
 {
@@ -112,7 +121,8 @@ else
     }
     else
     {
-	die "Could not find input file/directory $ARGV[0].\n"
+	print STDERR "Could not find input file/directory $ARGV[0].\n";
+	exit($RET_BADINPUT);
     }
 }
 
@@ -121,7 +131,12 @@ if (defined($inputDir))
     print STDOUT "Input dir is \"$inputDir\".\n";
 
     # enumerate all files
-    open(INPUTDIR, "/bin/ls -1 $inputDir |") || die "Could not read from directory \"$inputDir\".\n";
+    if (!open(INPUTDIR, "/bin/ls -1 $inputDir |"))
+    {
+	print STDERR "Could not read from directory \"$inputDir\".\n";
+	exit($RET_BADINPUT);
+    }
+
     while ($line = <INPUTDIR>)
     {
 	chomp($line);
@@ -290,7 +305,7 @@ foreach $oneKey (@skCmdsKeys)
 print STDOUT "\nNumber of records added: $numRecsAdded\n";
 print STDOUT "Number of files (segments) added: $numFilesAdded\n";
 
-exit(0);
+exit($RET_OK);
 
 sub PrintUsage
 {
@@ -325,7 +340,11 @@ sub CallSetKey
 	my($convTime);
 	my($tcCmdLine) = "time_convert ord=${fileYr}\.${fileD}_UT o=cal zone=UT |";
 
-	open (TIMECONV, $tcCmdLine) || die "Couldn't run time_conv: $tcCmdLine\n";
+	if (!open(TIMECONV, $tcCmdLine))
+	{
+	    print STDERR "Couldn't run time_conv: $tcCmdLine\n";
+	    exit($RET_TIMECONV);
+	}
 	
 	if (defined($convTime = <TIMECONV>))
 	{
@@ -337,11 +356,16 @@ sub CallSetKey
 	    
 	    $skCmd = "set_keys -c ds=$series $primaryKey[0]=$dataType $primaryKey[1]=$prodComp $primaryKey[2]=$jsocDate $primaryKey[3]=$fileFormat $primaryKey[4]=$fileVersion $segmentName[0]=$filePath";
 	    print STDOUT "  Running $skCmd\n";
-	    system($skCmd) == 0 || die "Error calling set_keys: $?\n";
+	    if (system($skCmd) != 0)
+	    {
+		print STDERR "Error calling set_keys: $?\n";
+		exit($RET_SETKEYS);
+	    }
+
 	    $numRecsAdded++;
 	    $numFilesAdded++;
 	    # XXX - this doesn't work anymore
-	    # VerifyFileCopy($series, $dataType, $prodComp, $jsocDate, $fileFormat, $fileVersion, $filePath);
+	    VerifyFileCopy($series, $dataType, $prodComp, $jsocDate, $fileFormat, $fileVersion, $filePath);
 	}
 	
 	close (TIMECONV);
@@ -353,17 +377,20 @@ sub VerifyFileCopy
     my($series, $dataType, $prodComp, $jsocDate, $dataFormat, $fileVersion, $srcFilePath) = @_;
 
     my($skResultLine);
-    my($skCmdLine) = "show_keys -apq ds=$series\[$primaryKey[0]=$dataType\]\[$primaryKey[1]=$prodComp\]\[$primaryKey[2]=$jsocDate\]\[$primaryKey[3]=$dataFormat\]\[$primaryKey[4]=$fileVersion\] seg=$segmentName[0] |";
+    my($skCmdLine) = "show_keys -pq ds=$series\[$primaryKey[0]=$dataType\]\[$primaryKey[1]=$prodComp\]\[$primaryKey[2]=$jsocDate\]\[$primaryKey[3]=$dataFormat\]\[$primaryKey[4]=$fileVersion\] seg=$segmentName[0] |";
 
-    print STDOUT "  Verifying $skCmdLine\n";
-
-    open (SHOWKEYS, $skCmdLine) || die "Couldn't run show_keys: $skCmdLine\n";
+    if (!open(SHOWKEYS, $skCmdLine))
+    {
+	print STDERR "Couldn't run show_keys: $skCmdLine\n";
+	exit($RET_SHOWKEYS);
+    }
 
     if (defined($skResultLine = <SHOWKEYS>))
     {
+	print STDOUT "showkeys: $skResultLine";
 	# there should be only one line returned by show_keys
 	chomp($skResultLine);
-	if ($skResultLine =~ /$\s*\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(.+)/)
+	if ($skResultLine =~ /^\s*(\S+)\s*$/)
 	{
 	    my($fileListRet) = $1;
 	    my($dstFilePath);
@@ -373,13 +400,20 @@ sub VerifyFileCopy
 		if ($dstFilePath)
 		{
 		    # error - show_keys returned more than one file
-		    print(<STDERR>, "  File $1 in DRMS unexpected.\n");
+		    print STDERR "  File $1 in DRMS unexpected.\n";
 		    close(SHOWKEYS);
-		    exit(1);
+		    exit($RET_SHOWKEYS);
 		}
 
 		$dstFilePath = $1;
-		$fileListRet = $2;
+		if (defined($2))
+		{
+		    $fileListRet = $2;
+		}
+		else
+		{
+		    last;
+		}
 	    }
 	    
 	    my($strLoc);
@@ -408,26 +442,41 @@ sub VerifyFileCopy
 	    
 	    if ($oneSrcSegFile ne $oneDstSegFile)
 	    {
-		print(<STDERR>, "  File in DRMS unexpected.\n");
-		print(<STDERR>, "    Expected: $oneSrcSegFile, Actual: $oneDstSegFile\n");
+		print STDERR "  File in DRMS unexpected.\n";
+		print STDERR "    Expected: $oneSrcSegFile, Actual: $oneDstSegFile\n";
 		close(SHOWKEYS);
-		exit(1);
+		exit($RET_COPYFAIL);
 	    }
 	    else
 	    {
 		# segment file names match - now compare files
 		my($cmpCmd) = "cmp $srcFilePath $dstFilePath";
-		system($cmpCmd) == 0 || die "  $srcFilePath  not successfully copied into DRMS.\n";
-		print STDOUT  "  $srcFilePath successfully copied into DRMS.\n";
+		my($cres);
+		if (system($cmpCmd) != 0)
+		{
+		    print STDERR "  $srcFilePath  not successfully copied into DRMS.\n";
+		    exit($RET_COPYFAIL);
+		}
+
+		$cres = $? >> 8;
+		if ($cres == 0)
+		{
+		    print STDOUT  "  $srcFilePath successfully copied into DRMS.\n";
+		}
+		else
+		{
+		    print STDERR  "  $srcFilePath NOT successfully copied into DRMS.\n";
+		    exit($RET_COPYFAIL);
+		}
 	    }
 	}
     }
     else
     {
 	# show_keys failure
-	print(<STDERR>, "show_keys didn't find any records for <$primaryKey[0]=$dataType, $primaryKey[1]=$prodComp, $primaryKey[2]=$jsocDate, $primaryKey[3]=$dataFormat, $primaryKey[4]=$fileVersion>.\n");
+	print STDERR "show_keys didn't find any records for <$primaryKey[0]=$dataType, $primaryKey[1]=$prodComp, $primaryKey[2]=$jsocDate, $primaryKey[3]=$dataFormat, $primaryKey[4]=$fileVersion>.\n";
 	close(SHOWKEYS);
-	exit(1);
+	exit($RET_SHOWKEYS);
     }
 
     close(SHOWKEYS);
