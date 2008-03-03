@@ -35,11 +35,11 @@
 #define APID_AIA_SEQ_1                  536
 #define APID_AIA_SEQ_2                  576
 #define APID_AIA_OBT_1                  540
-#define APID_AIA_OBT_2                  586
+#define APID_AIA_OBT_2                  580
 
 /* Return status send back to from 
    decode_next_hk_vcdu to Jim's top lev0 module */
-/*********NOTE: CTD: COMMIT TO DRMSi*********/ 
+/*********NOTE: CTD: COMMIT TO DRMS*********/ 
 /*********NOTE: WTD: WRITE TO DRMS***********/ 
 #define SUCCESS_HK_NEED_TO_CTD            (0)
 #define SUCCESS_HK_NEED_TO_WTD_CTD        (1)
