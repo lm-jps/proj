@@ -6,9 +6,7 @@ Unitsize:        	1
 Archive:         	0
 Retention:       	10
 Tapegroup:       	2
-Primekey:		FSN
-DBindex:		FSN,T_OBS 
-
+Index:           	FSN
 Description:     	HMI Level0 test data for ingest_lev0 development
 
 #=====Links=====
