@@ -1993,6 +1993,10 @@ sub socget {
           push(@rexmitfiles, "$rexmitname");
   	}
 
+        #the err file will be acked in the asf when it is rexmited
+  	#if change the above so don't ask for an err file rexmit the do this:
+  	#$Hoftlmreceived{$errfilename} = 1; #we will ack it in the .asf
+
         if(!$tlmfile || $tlmfile eq "00000000000000000000000000000000000000000000000")  {
           $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";  #reject the .qac file
           print LOG "$cmd\n";
