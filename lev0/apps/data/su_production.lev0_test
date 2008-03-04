@@ -6,22 +6,25 @@ Unitsize:        	1
 Archive:         	0
 Retention:       	10
 Tapegroup:       	2
-Primekey:           	FSN
-DBindex:           	FSN,T_OBS
+PrimeKeys:           	FSN
+DBIndex:           	FSN,T_OBS
 Description:     	HMI Level0 test data for ingest_lev0 development
 #=====Links=====
 #===============  (0) Keywords from keywords document in ~jsoc/keywords  ===============
 #Update notes:
+#Carl:Last update March 4, 2oo8
 #Carl:Last update completed for jsd based on feedback from Phil on 2_20-2008 to team. Delete item in (4)
 #Carl:Updated complete jsd based on updates sent via email on 2-15-2008 to team.
 Keyword:ORIGIN,     string, constant, record, "SDO-SDP", %s, "none", "ORIGIN Location where file made"
 Keyword:DATE,       string, variable, record,       " ", %s, "none", "DATE date_time of processing, ISO 8601"
-Keyword:INSTRUME,   string, constant, record, "SDO/HMI", %s, "none", "For HMI:SDO/HMI or For AIA:SDO/AIA"
-Keyword:TELESOP,    string, variable, record,         0, %s, "none", "For HMI:HMI_SIDE1 or HMI_FRONT2. For AIA: AIA_i where i=1,2,3,4"
+Keyword:INSTRUME,   string, variable, record,         0, %s, "none", "For HMI:HMI_SIDE1 or HMI_FRONT2. For AIA: AIA_i where i=1,2,3,4"
+Keyword:TELESOP,    string, constant, record, "SDO/HMI", %s, "none", "For HMI:SDO/HMI or For AIA:SDO/AIA"
 Keyword:DATE__OBS,    time, variable, record, 1977.01.01_00:00:00_TAI, UTC, "UTC", "[DATE-OBS] -  Date when observation started. T_OBS - (EXPTIME/2)"
 Keyword:CAMERA,        int, variable, record,         0, %d, "none", "HMI: 1 or 2. For AIA: 1,2,3,or 4."
 Keyword:T_OBS,        time, variable, record, 1977.01.01_00:00:00_UTC, UTC, "UTC", "T_OBS Observation time"
-Keyword:EXPTIME,     float,variable, record,       0.0, %f, "none","Exposure duration"
+Keyword:EXPTIME,     float,variable,  record,       0.0, %f, "none","Exposure duration"
+Keyword:TIME,       double,variable,  record,   0, %lf, "none", "Time of observation in seconds within a day"
+Keyword:MJD,        double,variable,  record,   0, %lf, "none", "Date of observation -modified julian day"
 #=============   (1) Image Configuration Keywords, statistics,     =====================
 Keyword:IMGAPID,       int,variable,  record,   0,  %d, "none", "Image Application ID"
 Keyword:BITSELID,      int,variable,  record,   0,  %d, "none", "BITSELID"
@@ -51,7 +54,7 @@ Keyword:TOTVALS,       int, variable, record,   0,  %d, "none", "TOTVALS expecte
 #==============  (2)  ISP Keywords               =======================================
 Keyword:ISPPKTVN,   string, variable, record,   0,  %s, "none", "PACKET_VERSION_NUMBER"
 Keyword:ISPSNAME,   string, variable, record,   0,  %s, "none", "ISP SERIES NAME"
-Keyword:ISPPT,        time, variable, record, 1977.01.01_00:00:00_UTC, UTC, "UTC", "PACKET_TIME"
+Keyword:ISPPT,        time, variable, record, 1977.01.01_00:00:00_TAI, UTC, "UTC", "PACKET_TIME"
 #Keyword:ISPAPID,     short, variable, record,   0,  %d, "none", "ISP APID"
 Keyword:HCF1ENCD,      int, variable, record,   0,  %d, "none", "HMI_CF1_ENCODER"
 Keyword:HCF2ENCD,      int, variable, record,   0,  %d, "none", "HMI_CF2_ENCODER"
