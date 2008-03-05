@@ -657,6 +657,7 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
 
   /* initialize variables */
   dd=NULL;
+*dfd= dd;
   p_dn=dn;
 
   /* get directory name for HSB dayfiles */
