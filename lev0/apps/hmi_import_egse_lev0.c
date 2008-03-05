@@ -576,7 +576,7 @@ if (firstcall)
   firstcall = 0;
   sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   }
-return(sdo_epoch + (TIME)sdo_s + (TIME)((sdo_ss>>16)&0xFFFF)/65536.0);
+return(sdo_epoch + (TIME)sdo_s + ((TIME)sdo_ss)/65536.0);
 }
 
 /* Function to set HMI mechanism position keywords */
