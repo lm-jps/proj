@@ -57,6 +57,8 @@
 
 extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int *Fsn);
 extern int write_hk_to_drms();
+extern void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg);
+extern int set_HMI_mech_values(DRMS_Record_t *rec);
 
 // List of default parameter values. 
 ModuleArgs_t module_args[] = { 
@@ -99,8 +101,9 @@ long long vcdu_seq_num;
 long long vcdu_seq_num_next;
 long long total_missing_im_pdu;
 unsigned int vcdu_24_cnt, vcdu_24_cnt_next;
-int verbose;			// set by get_cmd() 
+int verbose;
 int appid;
+int hmiaiaflg;			// 0=hmi, 1=aia
 int whk_status;
 int total_tlm_vcdu;
 int total_missing_vcdu;
@@ -118,14 +121,15 @@ char *vc;			// virtual channel to process, e.g. VC02
 struct p_r_chans {
   char *pchan;
   char *rchan;
+  int instru;		//0=hmi, 1=aia
 };
 typedef struct p_r_chans P_R_CHANS;
 
 P_R_CHANS p_r_chan_pairs[] = {
-{"VC01", "VC09"},		// AIA 
-{"VC04", "VC12"},		// AIA 
-{"VC02", "VC10"},		// HMI 
-{"VC05", "VC13"},		// HMI 
+{"VC01", "VC09", 1},		// AIA 
+{"VC04", "VC12", 1},		// AIA 
+{"VC02", "VC10", 0},		// HMI 
+{"VC05", "VC13", 0},		// HMI 
 {"n/a", "n/a"}
 };
 
@@ -206,10 +210,25 @@ int h0log(const char *fmt, ...)
 void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 		IMG *Img, int fsn)
 {
+  STAT stat;
   int status;
 
   printk("*Closing image for fsn = %u\n", fsn);
-  drms_setkey_int(rs, "CAMERA", Img->telnum);
+  if(imgstat(Img, &stat)) {
+    printk("**Error on imgstat() for fsn = %u\n", fsn);
+  }
+  else {
+    drms_setkey_short(rs, "DATAMIN", stat.min);
+    drms_setkey_short(rs, "DATAMAX", stat.max);
+    drms_setkey_short(rs, "DATAMEDN", stat.median);
+    drms_setkey_double(rs, "DATAMEAN", stat.mean);
+    drms_setkey_double(rs, "DATARMS", stat.rms);
+    drms_setkey_double(rs, "DATASKEW", stat.skew);
+    drms_setkey_double(rs, "DATAKURT", stat.kurt);
+  }
+  if(hmiaiaflg == 1) {		//AIA
+    drms_setkey_int(rs, "CAMERA", (Img->telnum)+1);
+  }
   drms_setkey_int(rs, "APID", Img->apid);
   drms_setkey_int(rs, "CROPID", Img->cropid);
   drms_setkey_int(rs, "LUTID", Img->luid);
@@ -630,7 +649,12 @@ int get_tlm(char *file, int rexmit, int higherver)
                 continue;			//get next vcdu
               }
             }
-            whk_status = write_hk_to_drms(rsc, &Hk); //write ISP keywords to drms
+            //calculate and setkey some values from the keywords returned
+            HMI_compute_exposure_times(rsc, Hk->keywords, hmiaiaflg);
+            whk_status = write_hk_to_drms(rsc, &Hk); //ISP keywords to drms
+            if(whk_status = set_HMI_mech_values(rsc)) {
+              printk("***ERROR: mechanism position keywords are wrong!\n");
+            }
           }
           else {					//normal stream
             if(fsnx != fsn_prev) {          // the fsn has changed 
@@ -638,7 +662,12 @@ int get_tlm(char *file, int rexmit, int higherver)
                 continue;			//get next vcdu
               }
             }
-            whk_status = write_hk_to_drms(rs, &Hk); //write ISP keywords to drms
+            //calculate and setkey some values from the keywords returned
+            HMI_compute_exposure_times(rs, Hk->keywords, hmiaiaflg);
+            whk_status = write_hk_to_drms(rs, &Hk); //ISP keywords to drms
+            if(whk_status = set_HMI_mech_values(rs)) {
+              printk("***ERROR: mechanism position keywords are wrong!\n");
+            }
           }
           hk_ccsds_free(&Hk);
           rstatus=0;
@@ -891,6 +920,7 @@ void setup()
   for(i=0; ; i++) {		// ck for valid and get redundant chan 
     if(!strcmp(p_r_chan_pairs[i].pchan, pchan)) {
       strcpy(rchan, p_r_chan_pairs[i].rchan);
+      hmiaiaflg = p_r_chan_pairs[i].instru;
       break;
     }
     if(!strcmp(p_r_chan_pairs[i].pchan, "n/a")) {
