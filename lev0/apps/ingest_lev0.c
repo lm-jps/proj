@@ -211,13 +211,14 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 		IMG *Img, int fsn)
 {
   STAT stat;
-  int status;
+  int status, n, k;
 
   printk("*Closing image for fsn = %u\n", fsn);
   if(imgstat(Img, &stat)) {
     printk("**Error on imgstat() for fsn = %u\n", fsn);
   }
   else {
+    /****************************************************
     drms_setkey_short(rs, "DATAMIN", stat.min);
     drms_setkey_short(rs, "DATAMAX", stat.max);
     drms_setkey_short(rs, "DATAMEDN", stat.median);
@@ -225,17 +226,25 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     drms_setkey_double(rs, "DATARMS", stat.rms);
     drms_setkey_double(rs, "DATASKEW", stat.skew);
     drms_setkey_double(rs, "DATAKURT", stat.kurt);
+    ****************************************************/
+    drms_setkey_short(rs, "MIN", stat.min);
+    drms_setkey_short(rs, "MAX", stat.max);
+    drms_setkey_short(rs, "MEDIAN", stat.median);
+    drms_setkey_double(rs, "MEAN", stat.mean);
+    drms_setkey_double(rs, "RMS", stat.rms);
+    drms_setkey_double(rs, "SKEW", stat.skew);
+    drms_setkey_double(rs, "KURT", stat.kurt);
   }
-  if(hmiaiaflg == 1) {		//AIA
-    drms_setkey_int(rs, "CAMERA", (Img->telnum)+1);
-  }
+  drms_setkey_int(rs, "CAMERA", (Img->telnum)+1);
   drms_setkey_int(rs, "APID", Img->apid);
   drms_setkey_int(rs, "CROPID", Img->cropid);
   drms_setkey_int(rs, "LUTID", Img->luid);
   drms_setkey_int(rs, "TAPCODE", Img->tap);
-  drms_setkey_int(rs, "N", Img->N);
-  drms_setkey_int(rs, "K", Img->K);
-  drms_setkey_int(rs, "R", Img->R);
+  n = (Img->N) & 0x1F;
+  n = n << 3;
+  k = (Img->K) & 0x07;
+  drms_setkey_int(rs, "COMPID", n+k);
+  drms_setkey_int(rs, "BITSELID", Img->R);
   drms_setkey_int(rs, "TOTVALS", Img->totalvals);
   drms_setkey_int(rs, "DATAVALS", Img->datavals);
   drms_setkey_int(rs, "NPACKETS", Img->npackets);
@@ -333,7 +342,10 @@ int fsn_change_normal()
     return(1);
   }
   dstatus = drms_setkey_int(rs, "FSN", fsnx);
-  segment = drms_segment_lookup(rs, "file");
+  if(!(segment = drms_segment_lookup(rs, "image"))) {
+    printk("No drms_segment_lookup(rs, image)\n");
+    return(1);
+  }
   rdat = Img->dat;
   segArray = drms_array_create(DRMS_TYPE_SHORT,
                                        segment->info->naxis,
@@ -375,7 +387,10 @@ int fsn_change_rexmit()
       return(1);                     // !!!TBD ck this 
     }
     rstatus = drms_setkey_int(rsc, "FSN", fsnx);
-    segmentc = drms_segment_lookup(rsc, "file");
+    if(!(segmentc = drms_segment_lookup(rsc, "image"))) {
+      printk("No drms_segment_lookup(rsc, image)\n");
+      return(1);
+    }
     rdat = Img->dat;
     oldArray = drms_array_create(DRMS_TYPE_SHORT,
                                        segmentc->info->naxis,
@@ -397,6 +412,7 @@ int fsn_change_rexmit()
     drms_close_records(rset, DRMS_FREE_RECORD);
     rstatus = drms_setkey_int(rsc, "FSN", fsnx);
     Img->telnum = drms_getkey_int(rsc, "CAMERA", &rstatus);
+    Img->telnum--;
     Img->cropid = drms_getkey_int(rsc, "CROPID", &rstatus);
     Img->luid = drms_getkey_int(rsc, "LUTID", &rstatus);
     Img->tap = drms_getkey_int(rsc, "TAPCODE", &rstatus);
