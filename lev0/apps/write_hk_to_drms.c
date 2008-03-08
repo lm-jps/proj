@@ -141,17 +141,30 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
     if (rec_alreadycreated_flag)
     {
-      /* skip-don't need to lookup  data series name to create record-
-         just set to record passed in function arguments */ 
+      /* use record passed by main lev0 module to write to drms */
       rec= record;
       strcpy(pvn , get_packet_version_number(ccsds->keywords));   
+
+      /* lookup data series name and set in DRMS*/
+      keytype= DRMS_TYPE_STRING;
+      strcpy(keyname, "ISPSNAME");
+
+      /*allocate memory for string value */
+      key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
+
+      /* get isp series name */
+      strcpy(key_anyval.string_val, lookup_data_series_name(ccsds,&jmap));
+      status = drms_setkey(rec, keyname, keytype, &key_anyval);
+
+      /* free memory */
+      free (key_anyval.string_val);
     }
     else
     {
       /* get packet version number */
       strcpy(pvn , get_packet_version_number(ccsds->keywords));   
 
-      /* create or lookup data series name */
+      /*  lookup data series name */
       strcpy(query , lookup_data_series_name(ccsds,&jmap)); 
 
       /* create record in drms */
@@ -195,21 +208,18 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
     {
       /*if (fsn < FSN_TAI_FIXED) added based on input from Phil*/
       /* check if need to get actual fsn and check if less than  1,000,000*/
-      //*ptime += 33.0;
+      //*ptime += 33.0; removed based on input from Phil 3-1-2008
                                                                                  
-      /* set PACKET_TIME keyword using data from TIMECODE keywords*/
+      /* set PACKET_TIME or ISPPKTIM keyword using data from TIMECODE keywords*/
       /* set drms type and long telemetry name  */
-      /* !!NOTE!!:May need to do before senting CCSDS_Packet_t struct back to Jim */
       keytype= DRMS_TYPE_TIME;
       strcpy(keyname, "PACKET_TIME");
-
       /* set packet time */
       key_anyval.time_val= *ptime;
-
       /* set record */
       if (rec_alreadycreated_flag)
       {
-        status = drms_setkey(rec, "ISPPT", keytype, &key_anyval);
+        status = drms_setkey(rec, "ISPPKTIM", keytype, &key_anyval);
       }
       else
       {
@@ -217,35 +227,25 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
       }
     }
                                                                                  
-    /* set PACKET_VERSION_NUMBER keyword using data from HMI_VER.. keyword */
-    /* set drms type and long telemetry name  */
-    /* !!NOTE!!:May need to do before senting CCSDS_Packet_t struct back to Jim */
-    /* set record */
+    /* set packet version number(xxx.yyy) keyword */
+    /* set drms type */
+    keytype= DRMS_TYPE_STRING;
     if (rec_alreadycreated_flag)
     {
-        status = drms_setkey(rec, keyname, keytype, &key_anyval);
-      keytype= DRMS_TYPE_STRING;
+      /* set  defined keyword name in lev0 data series  */
       strcpy(keyname, "ISPPKTVN");
-      /*allocate memory for string value */
-      key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
-      /* set packet version number */
-      strcpy(key_anyval.string_val, pvn);
-      //status = drms_setkey(rec, keyname, keytype, &(key_anyval.string_val));
-      status = drms_setkey(rec, keyname, keytype, &key_anyval);
     }
     else
     {
-        status = drms_setkey(rec, keyname, keytype, &key_anyval);
-      keytype= DRMS_TYPE_STRING;
+      /* set  -long- telemetry name (PACKET_VERSION_NUMBER) keyword for lev0 by APID data series */
       strcpy(keyname, "PACKET_VERSION_NUMBER");
-      /*allocate memory for string value */
-      key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
-      /* set packet version number */
-      strcpy(key_anyval.string_val, pvn);
-      //status = drms_setkey(rec, keyname, keytype, key_anyval.string_val);
-      status = drms_setkey(rec, keyname, keytype, &key_anyval);
     }
-    /* free memory */
+    /*allocate memory for string value */
+    key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
+    /* set packet version number */
+    strcpy(key_anyval.string_val, pvn);
+    status = drms_setkey(rec, keyname, keytype, &key_anyval);
+    /* free memory for string */
     free (key_anyval.string_val);
                                                                                  
     /* loop through keyword struct and load in record */
