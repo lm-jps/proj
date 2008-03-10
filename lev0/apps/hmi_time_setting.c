@@ -35,7 +35,7 @@ if (firstcall)
   firstcall = 0;
   sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   }
-return(sdo_epoch + (TIME)sdo_s + (TIME)((sdo_ss>>16)&0xFFFF)/65536.0);
+return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0;
 }
 
 static void sprint_time_ISO (char *tstring, TIME t)
@@ -68,7 +68,7 @@ char date_obs[100];
 sprint_time_ISO(date_obs, t_obs - exptime/2.0);
 TIME MJD_epoch = -3727641600.000; /* 1858.11.17_00:00:00_UT  */
 TIME date__obs = t_obs - exptime/2.0;
-TIME mjd = date__obs + MJD_epoch;
+TIME mjd = date__obs - MJD_epoch;
 double  mjd_day = floor(mjd / 86400.0);
 double  mjd_time = mjd - 86400.0 * mjd_day;
 
