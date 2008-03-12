@@ -14,7 +14,7 @@ Description:     	HMI Level0 test data for ingest_lev0 development
 Keyword:ORIGIN,     string, constant, record, "SDO/JSOC-SDP", %s, "none", "ORIGIN Location where file made"
 Keyword:DATE,       string, variable, record, "Not set", %s, "UTC", "Date_time of processing; ISO 8601"
 Keyword:DATE__OBS,  string, variable, record, "Not set", %s, "UTC", "[DATE-OBS] Date when observation started; ISO 8601"
-Keyword:T_OBS,        time, variable, record, 1977.01.01_00:00:00_UTC, 6, "UTC", "Observation time"
+Keyword:T_OBS,        time, variable, record, 1977.01.01_00:00:00_UTC, UTC, "UTC", "Observation time"
 Keyword:EXPTIME,    double, variable, record,      0.0, %lf,  "sec", "Exposure duration: mean shutter open time"
 Keyword:TIME,       double, variable, record,      0.0, %lf,  "sec", "Time of observation: seconds within a day"
 Keyword:MJD,        double, variable, record,      0.0, %lf,  "day", "Date of observation: modified julian day"
