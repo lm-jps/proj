@@ -465,7 +465,7 @@ int get_yr_from_pkttime(double tc_sec)
   char at[200];
 
   /* convert time code secs and subsecs into year,month,day,hour,minute,second */
-  (void)sprint_time (at,  tc_sec, "UT", 0);
+  (void)sprint_time (at,  tc_sec, "UTC", 0);
   strcat(at,"\0");
 
   /* get year and return value */
@@ -480,7 +480,7 @@ int get_month_from_pkttime(double tc_sec)
   char at[200];
 
   /* convert time code secs and subsecs into year,month,day,hour,minute,second */
-  (void)sprint_time (at,  tc_sec, "UT", 0);
+  (void)sprint_time (at,  tc_sec, "UTC", 0);
   strcat(at,"\0");
 
   /* get month and return value */
@@ -495,7 +495,7 @@ int get_day_from_pkttime(double tc_sec)
   char at[200];
 
   /* convert time code secs and subsecs into year,month,day,hour,minute,second */
-  (void)sprint_time (at,  tc_sec, "UT", 0);
+  (void)sprint_time (at,  tc_sec, "UTC", 0);
   strcat(at,"\0");
 
   /* get month and return value */
@@ -510,7 +510,7 @@ int get_hour_from_pkttime(double tc_sec)
   char at[200];
 
   /* convert time code secs and subsecs into year,month,day,hour,minute,second */
-  (void)sprint_time (at,  tc_sec, "UT", 0);
+  (void)sprint_time (at,  tc_sec, "UTC", 0);
   strcat(at,"\0");
 
   /* get hour and return value */
@@ -534,7 +534,7 @@ char * get_dayfilename(int apid, double tc_sec)
   fp = filename;
 
   /* convert time code secs and subsecs into year,month,day,hour,minute,second */
-  (void)sprint_time (at,  tc_sec, "UT", 0);
+  (void)sprint_time (at,  tc_sec, "UTC", 0);
   strcat(at,"\0");
 
   /* make filename based on what have */
@@ -586,7 +586,7 @@ void set_time_values(HK_Dayfile_Data_t **dn, double tcsec)
   td= *dn;
 
   /* convert time code secs and subsecs into year,month,day,hour,minute,second */
-  (void)sprint_time (at,  tcsec, "UT", 0);
+  (void)sprint_time (at,  tcsec, "UTC", 0);
   strcat(at,"\0");
 
   /* set time values in dayfile node*/
