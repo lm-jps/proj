@@ -86,54 +86,46 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
     rec_alreadycreated_flag=0; 
   }
 
- /* check 3 environment variables are set */
- /* get project name */
-  if (rec_alreadycreated_flag)
+  /* check 3 environment variables are set */
+  /* get project name */
+  pjname = getenv("HK_LEV0_PROJECT_NAME");
+  if(pjname == NULL) 
   {
-    /* don't need to create data series name */ 
+    printkerr("ERROR at %s, line %d: Could not get project name environment "
+              "variable:<HK_LEV0_PROJECT_NAME>. Set the env variable "
+              "HK_LEV0_PROJECT_NAME to data series project name"
+              "(hmi, aia, hmi_ground, etc.) for a existing data series name.\n",
+              __FILE__,__LINE__);
+    return  ERROR_HK_ENVIRONMENT_VARS_NOT_SET ;
   }
-  else
+
+  /* get data type name */
+  dtname = getenv("HK_LEV0_DATA_ID_NAME");
+  if(dtname == NULL) 
   {
-    /* start else if need to create data series name and drms record */
-    pjname = getenv("HK_LEV0_PROJECT_NAME");
-    if(pjname == NULL) 
-    {
-      printkerr("ERROR at %s, line %d: Could not get project name environment "
-                "variable:<HK_LEV0_PROJECT_NAME>. Set the env variable "
-                "HK_LEV0_PROJECT_NAME to data series project name"
-                "(hmi, aia, hmi_ground, etc.) for a existing data series name.\n",
+    printkerr("ERROR at %s, line %d: Could not get data type name environment "
+              "variable:<HK_LEV0_DATA_ID_NAME>. Set the env variable "
+              "HK_LEV0_DATA_ID_NAME to data series data type name"
+              "(lev0,lev0test, etc.) for a existing data series name\n",
+              __FILE__ , __LINE__ );
+     return (ERROR_HK_ENVIRONMENT_VARS_NOT_SET) ;
+  }
+
+  /* get directory and get file name suffix for file containing jsoc version numbers*/
+  directory = (char *)getenv("HK_JSVNMAP_DIRECTORY");
+  suffix_filename= (char *)getenv("HK_SUFFIX_JSVNMAP_FILENAME");
+  if(suffix_filename == NULL)
+  {
+    printkerr("ERROR at %s, line %d: Set environment variable <HK_SUFFIX_JSVNMAP_FILENAME>\n",
+               __FILE__,__LINE__);
+    return  (ERROR_HK_ENVIRONMENT_VARS_NOT_SET);
+  }
+  if(directory == NULL)
+  {
+    printkerr("ERROR at %s, line %d: Set environment variable <HK_JSVNMAP_DIRECTORY>\n",
                 __FILE__,__LINE__);
-      return  ERROR_HK_ENVIRONMENT_VARS_NOT_SET ;
-    }
-
-    /* get data type name */
-    dtname = getenv("HK_LEV0_DATA_ID_NAME");
-    if(dtname == NULL) 
-    {
-      printkerr("ERROR at %s, line %d: Could not get data type name environment "
-                "variable:<HK_LEV0_DATA_ID_NAME>. Set the env variable "
-                "HK_LEV0_DATA_ID_NAME to data series data type name"
-                "(lev0,lev0test, etc.) for a existing data series name\n",
-                __FILE__ , __LINE__ );
-      return (ERROR_HK_ENVIRONMENT_VARS_NOT_SET) ;
-    }
-
-    /* get directory and get file name suffix for file containing jsoc version numbers*/
-    directory = (char *)getenv("HK_JSVNMAP_DIRECTORY");
-    suffix_filename= (char *)getenv("HK_SUFFIX_JSVNMAP_FILENAME");
-    if(suffix_filename == NULL)
-    {
-      printkerr("ERROR at %s, line %d: Set environment variable <HK_SUFFIX_JSVNMAP_FILENAME>\n",
-                  __FILE__,__LINE__);
-      return  (ERROR_HK_ENVIRONMENT_VARS_NOT_SET);
-    }
-    if(directory == NULL)
-    {
-      printkerr("ERROR at %s, line %d: Set environment variable <HK_JSVNMAP_DIRECTORY>\n",
-                  __FILE__,__LINE__);
-      return  (ERROR_HK_ENVIRONMENT_VARS_NOT_SET) ;
-    }
-  } /* end of else if need to create data series name and record */
+    return  (ERROR_HK_ENVIRONMENT_VARS_NOT_SET) ;
+  }
 
   /* while loop threw CCSDS_Packet_t link list */
   while (ccsds)
