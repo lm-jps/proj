@@ -129,24 +129,9 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
   /* init values */
   matching_config= (HK_Config_Files *)NULL;
 
-  /* get environmental variables */
-  init_hdr_apid= getenv("HK_INITIAL_HEADER_APID");
-  init_hdr_pkt_version= getenv("HK_INITIAL_HEADER_PKT_VERSION");
-  if( !init_hdr_apid || !init_hdr_pkt_version)
-  {
-    ERRMSG("Please set. Could not find environment variables:  <HK_INITIAL_HEADER_APID> <HK_INITIAL_HEADER_PKT_VERSION>");
-    return HK_DECODER_ERROR_UNKNOWN_ENV_VARIABLE;
-  }
 
   /* Get Version Number  from byte 8 and byte 9  bit stream for hk packet  */
-  if (apid == 431) /*inital packet header is 8 bytes and called apid 431 */ 
-  {
-    strcpy(version_number,init_hdr_pkt_version);/*parameter version # from packet*/ 
-  }
-  else
-  {
-    get_version_number(word_ptr, version_number); 
-  }
+  get_version_number(word_ptr, version_number); 
 
   /* check if global pointer to configuration link list exists*/
   if (!global_apid_configs )
