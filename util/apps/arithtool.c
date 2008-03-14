@@ -1477,6 +1477,7 @@ int DoIt(void)
 				   else if (nSegsToProc != segsToProc.items->num_total)
 				   {
 					error = 1;
+					fprintf(stderr, "Target series is missing one or more required segments.\n");
 				   }
 			      }
 			 }
