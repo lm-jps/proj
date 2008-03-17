@@ -59,6 +59,7 @@ extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsign
 extern int write_hk_to_drms();
 extern void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg);
 extern int set_HMI_mech_values(DRMS_Record_t *rec);
+extern TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 
 // List of default parameter values. 
 ModuleArgs_t module_args[] = { 
@@ -113,6 +114,8 @@ int ALRMSEC = 70;               // seconds for alarm signal
 char timetag[32];
 char pchan[8];			// primary channel to listen to e.g. VC02 
 char rchan[8];			// redundant channel to listen to e.g. VC10 
+tlmnamekey[96];			// shortened tlm file name for TLMDSNAM keyword
+tlmnamekeyfirst[96];		// for TLMDSNAM keyword for 1st file of image
 char *username;			// from getenv("USER") 
 char *tlmdir;			// tlm dir name passed in 
 char *outdir;			// output dir for .tlm file (can be /dev/null)
@@ -218,7 +221,6 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     printk("**Error on imgstat() for fsn = %u\n", fsn);
   }
   else {
-    /****************************************************
     drms_setkey_short(rs, "DATAMIN", stat.min);
     drms_setkey_short(rs, "DATAMAX", stat.max);
     drms_setkey_short(rs, "DATAMEDN", stat.median);
@@ -226,16 +228,11 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     drms_setkey_double(rs, "DATARMS", stat.rms);
     drms_setkey_double(rs, "DATASKEW", stat.skew);
     drms_setkey_double(rs, "DATAKURT", stat.kurt);
-    ****************************************************/
-    drms_setkey_short(rs, "MIN", stat.min);
-    drms_setkey_short(rs, "MAX", stat.max);
-    drms_setkey_short(rs, "MEDIAN", stat.median);
-    drms_setkey_double(rs, "MEAN", stat.mean);
-    drms_setkey_double(rs, "RMS", stat.rms);
-    drms_setkey_double(rs, "SKEW", stat.skew);
-    drms_setkey_double(rs, "KURT", stat.kurt);
   }
-  drms_setkey_int(rs, "CAMERA", (Img->telnum)+1);
+  // CAMERA set by HMI_compute_exposure_times()
+  if(hmiaiaflg) {		// except for AIA use telnum 
+    drms_setkey_int(rs, "CAMERA", (Img->telnum)+1);
+  }
   drms_setkey_int(rs, "APID", Img->apid);
   drms_setkey_int(rs, "CROPID", Img->cropid);
   drms_setkey_int(rs, "LUTID", Img->luid);
@@ -252,6 +249,11 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "EOIERROR", Img->last_pix_err);
   drms_setkey_int(rs, "HEADRERR", Img->headerr);
   drms_setkey_int(rs, "OVERFLOW", Img->overflow);
+  drms_setkey_string(rs, "TLMDSNAM", tlmnamekeyfirst);
+  int pts = Img->first_packet_time >> 16;
+  int ptss = Img->first_packet_time & 0xffff;
+  TIME fpt = SDO_to_DRMS_time(pts, ptss);
+  drms_setkey_double(rs, "IMGFPT", fpt);
   status = drms_segment_write(seg, array, 0);
   if (status) {
     printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
@@ -336,6 +338,7 @@ int fsn_change_normal()
   Img->reopened = 0;
   errmsgcnt = 0;
   fsn_prev = fsnx;
+  sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
   rs = drms_create_record(drms_env, LEV0SERIESNAME, DRMS_PERMANENT, &dstatus);
   if(dstatus) {
     printk("Can't create record for %s\n", LEV0SERIESNAME);
@@ -381,6 +384,7 @@ int fsn_change_rexmit()
     printk("No prev ds\n");	// start a new image 
     Img->initialized = 0;
     Img->reopened = 0;
+    sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
     rsc = drms_create_record(drms_env, LEV0SERIESNAME, DRMS_PERMANENT, &rstatus);
     if(rstatus) {
       printk("Can't create record for %s\n", LEV0SERIESNAME);
@@ -426,6 +430,7 @@ int fsn_change_rexmit()
     Img->npackets = drms_getkey_int(rsc, "NPACKETS", &rstatus);
     Img->nerrors = drms_getkey_int(rsc, "NERRORS", &rstatus);
     Img->last_pix_err = drms_getkey_int(rsc, "EOIERROR", &rstatus);
+    sprintf(tlmnamekeyfirst, "%s", drms_getkey_string(rsc, "TLMDSNAM", &rstatus));
     segmentc = drms_segment_lookupnum(rsc, 0);
     cArray = drms_segment_read(segmentc, DRMS_TYPE_SHORT, &rstatus);
     if(rstatus) {
@@ -854,9 +859,11 @@ void do_ingest()
       printk("***Can't create record for %s\n", TLMSERIESNAME);
       abortit(3);
     }
+    strcpy((char *)tlmnamekey, (char *)tlmname);
     filename = (char *)rindex(tlmname, '.');
-    *filename = 0;			// elim .tlm for filename 
-    if((status = drms_setkey_string(rs_tlm, "filename", tlmname))) {
+    *filename = 0;			// elim .tlm 
+    *((char *)tlmnamekey+22) = 0;	// elim after hh_mm_ss
+    if((status = drms_setkey_string(rs_tlm, "filename", tlmnamekey))) {
       printk("**ERROR: drms_setkey_string failed for 'filename'\n");
     }
     drms_record_directory(rs_tlm, path, 0);
