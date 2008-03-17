@@ -61,26 +61,27 @@ double sheb = (hshmiclb - hshmiopb)*1.0e-6;
 double shem = (hshmiclm - hshmiopm)*1.0e-6;
 double shet = (hshmiclt - hshmiopt)*1.0e-6;
 double offset = ( hshmiclb + hshmiopb + hshmiclm + hshmiopm + hshmiclt + hshmiopt )/6.0e6;
+
 TIME t_obs = SDO_to_DRMS_time(hobitsec,hobitss) + offset;
 double exptime = (sheb + shem + shet)/3.0;
 double expsdev = sqrt((sheb*sheb + shem*shem + shet*shet)/3.0 - exptime*exptime);
 
-char date_obs[100];
+char date_obs[100], datestr[100];
 sprint_time_ISO(date_obs, t_obs - exptime/2.0);
 TIME MJD_epoch = -3727641600.000; /* 1858.11.17_00:00:00_UT  */
 TIME date__obs = t_obs - exptime/2.0;
 TIME mjd = date__obs - MJD_epoch;
 double  mjd_day = floor(mjd / 86400.0);
 double  mjd_time = mjd - 86400.0 * mjd_day;
+sprint_time(datestr, CURRENT_SYSTEM_TIME, "UT", 0);
 
-
-//drms_setkey_TIME(rec, "T_OBS", t_obs);
 drms_setkey_double(rec, "T_OBS", t_obs);
 drms_setkey_double(rec, "EXPTIME", exptime);
 drms_setkey_double(rec, "EXPSDEV", expsdev);
 drms_setkey_string(rec, "DATE__OBS", date_obs);
 drms_setkey_double(rec, "MJD", mjd_day);
 drms_setkey_double(rec, "TIME", mjd_time);
+drms_setkey_string(rec, "DATE", datestr);
 
 if(flg == 0) {			// HMI
   int camid = HK_getkey_int(isp, "HCAMID");
