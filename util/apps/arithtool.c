@@ -59,6 +59,7 @@ typedef enum
      kArithOpSqr,
      kArithOpRecip,
      kArithOpSubmean,
+     kArithOpNop,
      kArithOpLastDummy
 } ArithOp_t;
 
@@ -202,6 +203,10 @@ static ArithOp_t MapOp(char *opStr)
      else if (strncmp(opStr, "nomean", 6) == 0)
      {
 	  op = kArithOpSubmean;
+     }
+     else if (strncmp(opStr, "nop", 3) == 0)
+     {
+	op = kArithOpNop;
      }
 
      return op;
@@ -619,6 +624,11 @@ static int PerformOperation(ArithOp_t op, const double *pInData, const double *p
 		    *result = *lop - mean;
 		 }
 		 break;
+		  case kArithOpNop:
+		    {
+		       *result = *lop;
+		    }
+		    break;
 	       default:
 		 error = 1;
 		 *result = DRMS_MISSING_DOUBLE;
@@ -1100,8 +1110,11 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 
 				   if (!error)
 				   {
-					drms_segment_write(seg, segArray, 0);
-					drms_free_array(segArray);
+				      segArray->bzero = 0.0;
+				      segArray->bscale = 1.0;
+				      segArray->israw = 1;
+				      drms_segment_write(seg, segArray, 0);
+				      drms_free_array(segArray);
 				   }
 			      }
 			 }
