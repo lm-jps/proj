@@ -344,7 +344,7 @@ sub DownloadApplicableFiles
 	my($fullRdCmd);
 	my($filesDir);
 	my($oneFile);
-	
+
 	while ($oneFile = shift(@allFiles))
 	{
 	    if (defined($disposition = $STATMAP{$oneFile}))
@@ -357,7 +357,7 @@ sub DownloadApplicableFiles
 		    next;
 		}
 	    }
-	    
+
 	    # do the download
 	    $disposition = DownloadFile($localRoot, $oneFile);
 	    
@@ -581,11 +581,11 @@ sub DownloadFile
 	$ret = "couldn't download";
 	$error = 1;
     }
-    
+
     if (!$error)
     {
 	$fullRdCmd = $RDCMD . $theFile . " " . $localRoot . $theFile;
-	print "Downloading $theFile: ";
+	print "Executing $fullRdCmd: ";
 	$cmdRet = system($fullRdCmd . " >& /dev/null");
 
 	#print $fullRdCmd . "\n";
@@ -594,7 +594,7 @@ sub DownloadFile
 	{
 	    $ret = "couldn't download";
 	    $error = 1;
-	    print "BAD\n"
+	    print "FAILED\n"
 	}
 	else
 	{
