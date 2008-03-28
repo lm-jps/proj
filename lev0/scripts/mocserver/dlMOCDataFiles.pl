@@ -33,7 +33,7 @@ $EXP = "/home/jsoc/cvs/JSOC/scripts/sftpScript.exp";
 # $EXP = "./sftpScript.exp";
 $RQARG = "hmiroboto\@129.165.8.6";
 $RDCMD = "scp hmiroboto\@129.165.8.6:";
-%STATMAP;
+my(%STATMAP);
 $FSFILE = "fslist";
 
 my($configFile) = "mocDlSpec.txt"; # input file; defaults to config in working directory
@@ -118,7 +118,7 @@ else
 	}
 	else
 	{
-	    print stderr $arg;
+	    print STDERR $arg;
 	    PrintUsage();
 	    exit(1);
 	}
@@ -387,7 +387,7 @@ sub ProcessFileSpecs
     my($recFlag, $remoteRoot, @fileSpecs) = @_;
     my($oneFileSpec);
     my($line);
-    my($expFsArg);
+    my($expFsArg) = "";
     my($nFS) = scalar(@fileSpecs);
     my($createFile) = 0;
 
@@ -407,8 +407,8 @@ sub ProcessFileSpecs
     # pass filespecs in file
     my($path);
     my($filename);
-    my($mergedFS);
-    my($mergedFSPath);
+    my($mergedFS) = "";
+    my($mergedFSPath) = "";
     my(@parts);
     my($disposition);
     
@@ -615,7 +615,7 @@ sub ReadStatusFile
     my($line);
 
     # read
-    open(STATUSFILE, "< $statusFilePath") || "Couldn't access output file $statusFilePath.\n";
+    open(STATUSFILE, "< $statusFilePath") || die "Couldn't access output file $statusFilePath.\n";
 
     while ($line = <STATUSFILE>)
     {
