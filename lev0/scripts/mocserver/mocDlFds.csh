@@ -15,7 +15,7 @@ cd $fdsDataPath
 $cmdStr
 
 # ingest into fds data series - don't delete unless ingestion was successful
-"$scriptPath/fdsIngest.pl $fdsDataPath -r"
+$scriptPath/fdsIngest.pl $fdsDataPath -r
 
 # restore path
 cd $cp
