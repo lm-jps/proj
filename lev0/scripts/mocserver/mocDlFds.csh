@@ -5,11 +5,17 @@ set cp = `pwd`
 
 # actual bits
 set scriptPath = "/home/jsoc/cvs/JSOC/scripts"
-set fdsDataPath = "/home/jsoc/sdo/fds"
-set cmdStr = "$scriptPath/dlMOCDataFiles.pl -c $scriptPath/mocDlFdsSpec.txt -s $fdsDataPath/mocDlFdsStatus.txt -r $fdsDataPath/MOCFiles/ -t 30 $1"
+set fdsDataPath = "/surge/sdo/mocprods"
+set fdsSeries = "sdo.moc_fds"
+
+# download files from moc server to scratch disk
+set cmdStr = "$scriptPath/dlMOCDataFiles.pl -c $scriptPath/mocDlFdsSpec.txt -s $fdsDataPath/mocDlFdsStatus.txt -r $fdsDataPath -t 30 $1"
 
 cd $fdsDataPath
-perl $cmdStr
+$cmdStr
+
+# ingest into fds data series - don't delete unless ingestion was successful
+"$scriptPath/fdsIngest.pl $fdsDataPath -r"
 
 # restore path
 cd $cp

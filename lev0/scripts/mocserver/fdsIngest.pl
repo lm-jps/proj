@@ -4,9 +4,14 @@
 # DRMS as generic data segments.  The script groups data files into data products, as
 # defined by 464-GS-ICD-0068.
 
+use Cwd;
+
 # DRMS series in which to place the data files
 my($series) = "sdo.moc_fds";
+$JSOCDB = "jsoc_test";
 #my($series) = "su_arta.testfds";
+
+$removefiles = "no";
 
 # Primary key
 my(@primaryKey);
@@ -104,7 +109,7 @@ my(@contents);
 my($line);
 
 my($argc) = scalar(@ARGV);
-if ($argc != 1)
+if ($argc < 1 || $argc > 2)
 {
     PrintUsage();
     exit($RET_BADUSAGE);
@@ -118,11 +123,28 @@ else
     elsif (-f $ARGV[0])
     {
 	$inputFile = $ARGV[0];
+	if ($inputFile !~ /^\/.+/)
+	{
+	    # relative path
+	    my($cwd) = getcwd();
+	    $inputFile = "$cwd/$inputFile";
+	}
     }
     else
     {
 	print STDERR "Could not find input file/directory $ARGV[0].\n";
 	exit($RET_BADINPUT);
+    }
+
+    shift(@ARGV);
+}
+
+while ($arg = shift(@ARGV))
+{
+    if ($arg eq "-r")
+    {
+	# Remove files after successful ingestion
+	$removefiles = "yes";
     }
 }
 
@@ -130,20 +152,8 @@ if (defined($inputDir))
 {
     print STDOUT "Input dir is \"$inputDir\".\n";
 
-    # enumerate all files
-    if (!open(INPUTDIR, "/bin/ls -1 $inputDir |"))
-    {
-	print STDERR "Could not read from directory \"$inputDir\".\n";
-	exit($RET_BADINPUT);
-    }
-
-    while ($line = <INPUTDIR>)
-    {
-	chomp($line);
-	$contents[scalar(@contents)] = $line;
-    }
-
-    close(INPUTDIR);
+    # inputDir could contain subdirectories
+    @contents = EnumFiles($inputDir);
 }
 else
 {
@@ -156,7 +166,6 @@ my($ext);
 my($prefix);
 
 my($dataType);
-my($prodComp);
 my($date);
 my($fileFormat);
 my($fileVersion);
@@ -168,6 +177,7 @@ my($numFilesAdded) = 0;
 
 my(%skCmds);
 
+# @contents contains full absolute paths
 foreach $filename (@contents)
 {
     my($err) = 0;
@@ -177,7 +187,7 @@ foreach $filename (@contents)
     print STDOUT "Analyzing file $filename...\n";
 
     # Get filename base and extension
-    if ($filename =~ /(.+)\.(.+)/)
+    if ($filename =~ m&^.+/([^/]+)\.(.+)$&)
     {
 	$fileBase = $1;
 	$ext = $2;
@@ -201,7 +211,6 @@ foreach $filename (@contents)
 	    $err = 1;
 	    print STDOUT "  Filename $filename is not a recognized format.\n";
 	}
-
 
 	if (!$err)
 	{
@@ -251,36 +260,17 @@ foreach $filename (@contents)
     # Map the prefix to the data product type
     if ($dataType = $fdsTypeMap{$prefix})
     {	
-	my($filePath);
 	my($skKey);
 
-	$prodComp = $prefix;
-
-	if (defined($inputDir))
-	{
-	    if ($inputDir =~ /.+\/$/)
-	    {
-		$filePath = $inputDir . $filename;
-	    }
-	    else
-	    {
-		$filePath = $inputDir . "/" . $filename;
-	    }
-	}
-	else
-	{
-	    $filePath = $inputFile;
-	}
-	
-	$skKey = "$dataType.$prodComp.$date.$fileFormat.$fileVersion";
+	$skKey = "$dataType.$prefix.$date.$fileFormat.$fileVersion";
 	
 	if (defined($skCmds{$skKey}))
 	{
-	    print STDOUT "  $dataType.$prodComp.$date.$fileFormat.$fileVersion already defined\n";
+	    print STDOUT "  $dataType.$prefix.$date.$fileFormat.$fileVersion already defined\n";
 	}
 	else
 	{
-	    $skCmds{$skKey} = $filePath;
+	    $skCmds{$skKey} = $filename;
 	    $numFilesToAdd++;
 	}
     }
@@ -313,9 +303,34 @@ sub PrintUsage
     print STDOUT "\tingestFDS <input directory>\n";
 }
 
+sub EnumFiles
+{
+    my($indir) = @_;
+    my(@ret);
+
+    # enumerate all files
+    if (!open(INPUTDIR, "find $indir -mindepth 1 -type f |"))
+    {
+	print STDERR "Could not read from directory \"$inputDir\".\n";
+	exit($RET_BADINPUT);
+    }
+
+    while ($line = <INPUTDIR>)
+    {
+	chomp($line);
+	push(@ret, $line);
+    }
+
+    close(INPUTDIR);
+
+    return @ret;
+}
+
 sub CallSetKey
 {
     my($key, $filePath) = @_;
+
+    my($err) = 0;
 
     # Extract data type, product component, date, fileFormat, and fileVersion from $key
     my($dataType);
@@ -354,7 +369,7 @@ sub CallSetKey
 	    chomp($convTime);
 	    $jsocDate = $convTime;
 	    
-	    $skCmd = "set_keys -c ds=$series $primaryKey[0]=$dataType $primaryKey[1]=$prodComp $primaryKey[2]=$jsocDate $primaryKey[3]=$fileFormat $primaryKey[4]=$fileVersion $segmentName[0]=$filePath";
+	    $skCmd = "set_keys JSOC_DBNAME=$JSOCDB -c ds=$series $primaryKey[0]=$dataType $primaryKey[1]=$prodComp $primaryKey[2]=$jsocDate $primaryKey[3]=$fileFormat $primaryKey[4]=$fileVersion $segmentName[0]=$filePath";
 	    print STDOUT "  Running $skCmd\n";
 	    if (system($skCmd) != 0)
 	    {
@@ -364,8 +379,13 @@ sub CallSetKey
 
 	    $numRecsAdded++;
 	    $numFilesAdded++;
-	    # XXX - this doesn't work anymore
-	    VerifyFileCopy($series, $dataType, $prodComp, $jsocDate, $fileFormat, $fileVersion, $filePath);
+	    $err = VerifyFileCopy($series, $dataType, $prodComp, $jsocDate, $fileFormat, $fileVersion, $filePath);
+
+	    # delete source file, if requested
+	    if (!$err && $removefiles eq "yes")
+	    {
+		unlink($filePath);
+	    }
 	}
 	
 	close (TIMECONV);
@@ -377,7 +397,7 @@ sub VerifyFileCopy
     my($series, $dataType, $prodComp, $jsocDate, $dataFormat, $fileVersion, $srcFilePath) = @_;
 
     my($skResultLine);
-    my($skCmdLine) = "show_keys -pq ds=$series\[$primaryKey[0]=$dataType\]\[$primaryKey[1]=$prodComp\]\[$primaryKey[2]=$jsocDate\]\[$primaryKey[3]=$dataFormat\]\[$primaryKey[4]=$fileVersion\] seg=$segmentName[0] |";
+    my($skCmdLine) = "show_keys JSOC_DBNAME=$JSOCDB -pq ds=$series\[$primaryKey[0]=$dataType\]\[$primaryKey[1]=$prodComp\]\[$primaryKey[2]=$jsocDate\]\[$primaryKey[3]=$dataFormat\]\[$primaryKey[4]=$fileVersion\] seg=$segmentName[0] |";
 
     if (!open(SHOWKEYS, $skCmdLine))
     {
@@ -402,7 +422,7 @@ sub VerifyFileCopy
 		    # error - show_keys returned more than one file
 		    print STDERR "  File $1 in DRMS unexpected.\n";
 		    close(SHOWKEYS);
-		    exit($RET_SHOWKEYS);
+		    return ($RET_SHOWKEYS);
 		}
 
 		$dstFilePath = $1;
@@ -445,7 +465,7 @@ sub VerifyFileCopy
 		print STDERR "  File in DRMS unexpected.\n";
 		print STDERR "    Expected: $oneSrcSegFile, Actual: $oneDstSegFile\n";
 		close(SHOWKEYS);
-		exit($RET_COPYFAIL);
+		return ($RET_COPYFAIL);
 	    }
 	    else
 	    {
@@ -455,7 +475,7 @@ sub VerifyFileCopy
 		if (system($cmpCmd) != 0)
 		{
 		    print STDERR "  $srcFilePath  not successfully copied into DRMS.\n";
-		    exit($RET_COPYFAIL);
+		    return ($RET_COPYFAIL);
 		}
 
 		$cres = $? >> 8;
@@ -466,7 +486,7 @@ sub VerifyFileCopy
 		else
 		{
 		    print STDERR  "  $srcFilePath NOT successfully copied into DRMS.\n";
-		    exit($RET_COPYFAIL);
+		    return ($RET_COPYFAIL);
 		}
 	    }
 	}
@@ -476,8 +496,10 @@ sub VerifyFileCopy
 	# show_keys failure
 	print STDERR "show_keys didn't find any records for <$primaryKey[0]=$dataType, $primaryKey[1]=$prodComp, $primaryKey[2]=$jsocDate, $primaryKey[3]=$dataFormat, $primaryKey[4]=$fileVersion>.\n";
 	close(SHOWKEYS);
-	exit($RET_SHOWKEYS);
+	return ($RET_SHOWKEYS);
     }
 
     close(SHOWKEYS);
+
+    return 0;
 }

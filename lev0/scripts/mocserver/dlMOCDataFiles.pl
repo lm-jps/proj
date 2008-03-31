@@ -352,7 +352,16 @@ sub DownloadApplicableFiles
 		# Can't download files that have been downloaded already.  Also
 		# don't download files that failed to download previously (these
 		# should be retrieved manually).
-		if (!$forceDL || $disposition ne "notdownloaded")
+		if (!$forceDL)
+		{
+		    if ($disposition eq "notdownloaded")
+		    {
+			print STDOUT "Download of '$oneFile' failed previously - manually run download script.\n";
+		    }
+
+		    next;
+		}
+		elsif ($disposition ne "notdownloaded")
 		{
 		    next;
 		}
