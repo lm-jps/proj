@@ -8,7 +8,7 @@ use Cwd;
 
 # DRMS series in which to place the data files
 my($series) = "sdo.moc_fds";
-$JSOCDB = "jsoc_test";
+$JSOCDB = "jsoc";
 #my($series) = "su_arta.testfds";
 
 $removefiles = "no";
