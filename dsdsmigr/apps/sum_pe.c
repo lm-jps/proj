@@ -74,7 +74,7 @@ int write_log(const char *fmt, ...)
 }
 
 /* Return ptr to "mmm dd hh:mm:ss". Uses global datestr[]. */
-char *datestring()
+static char *datestring()
 {
   struct timeval tvalr;
   struct tm *t_ptr;
