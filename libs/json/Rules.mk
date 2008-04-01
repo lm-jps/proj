@@ -12,6 +12,8 @@ DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 
 CLEAN		:= $(CLEAN) $(OBJ_$(d)) $(LIBJSON) $(DEP_$(d))
 
+TGT_LIB		:= $(TGT_LIB) $(LIBJSON)
+
 S_$(d)		:= $(notdir $(LIBJSON))
 
 # Local rules
@@ -19,6 +21,7 @@ $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 
 $(LIBJSON):	$(OBJ_$(d))
 		$(ARCHIVE)
+		$(SLLIB)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
