@@ -8,6 +8,9 @@ d		:= $(dir)
 dir	:= $(d)/apps
 -include		$(SRCDIR)/$(dir)/Rules.mk
 
+dir	:= $(d)/webapps
+-include		$(SRCDIR)/$(dir)/Rules.mk
+
 # Standard things
 d		:= $(dirstack_$(sp))
 sp		:= $(basename $(sp))
