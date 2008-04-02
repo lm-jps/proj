@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, jsoc_export)
+MODEXE_$(d)	:= $(addprefix $(d)/, jsoc_export jsoc_info)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -26,6 +26,9 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/json
+$(MODEXE_$(d)):		$(LIBJSON)
+$(MODEXE_SOCK_$(d)):	$(LIBJSON)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
