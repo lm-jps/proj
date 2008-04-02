@@ -1,0 +1,624 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; CHARSET=iso-8859-1">
+<TITLE>JSOC Show_info: alt show_info</TITLE>
+<SCRIPT TYPE="text/javascript" SRC="prototype-1.6.0.2.js"></SCRIPT>
+
+<style type="text/css">
+body {
+  margin:0;
+  padding:0;
+  }
+#header {
+  position:relative;
+  top:0;
+  left:0;
+  width:100%;
+  background:#eee;
+  }
+
+#SeriesDiv { position:relative; margin:5px; }
+#MySeriesDiv { position:relative; margin:5px; }
+#SeriesInfoDiv { position:relative; margin:5px; }
+#SeriesInfoCmdDiv { position:relative; margin:5px; }
+#FullInfoDiv { position:relative; margin:5px; }
+
+#SeriesSelect { width:20em; }
+#KeysSelect { width:20em; }
+#SegsSelect { width:20em; }
+#SeriesFilter { width:20em; }
+#RecordSet { width:30em; }
+#SeriesButton { width:10em; }
+#FetchButton { width:10em; }
+
+#footer {
+  position:fixed;
+  bottom:0;
+  left:0;
+  width:100%;
+  background:#eee;
+  }
+
+</style>
+ 
+<script type="text/javascript">
+
+// 
+// Documents for the server side tools can be found at
+// http://jsoc.stanford.edu/jsocwiki/AjaxJsocConnect
+//
+
+// Global variables and initialize page locations
+
+var SeriesData = "";
+var CurrentSeries = 0;
+var SeriesName = "";
+var SeriesKeySegInfo = "";
+var KeyList = "";
+var SegList = "";
+var nkeysselected = 0;
+var nsegsselected = 0;
+var RecordCount = 0;
+var askedCount = 0;
+
+function CleanSeriesSelect()
+  {
+  for (var i=$("SeriesSelect").length; i > 0; i--)
+    {
+    $("SeriesSelect").remove(i-1);
+    }
+  CleanSeriesPick();
+  }
+
+
+function CleanSeriesPick()
+  {
+  $("KeyListPlace").innerHTML = "All Keywords";
+  $("SegListPlace").innerHTML = "All Segments";
+  $("DisplayPlace").innerHTML = "";
+  KeyList = "";
+  SegList = "";
+  $("SSPlace").innerHTML = "";
+  $("RSCount_Place").innerHTML = "";
+  RecordCount = 0;
+  nkeysselected = 0;
+  nsegsselected = 0;
+  askedCount = 0;
+  $("WantRecInfo").checked = 0;
+  $("RecSetPlace").innerHTML = "";
+  CleanKeysSelect();
+  }
+
+function CleanKeysSelect()
+  {
+  for (var i=$("KeysSelect").length; i > 0; i--)
+    $("KeysSelect").remove(i-1);
+  for (var i=$("SegsSelect").length; i > 0; i--)
+    $("SegsSelect").remove(i-1);
+  $("WantRecInfo").checked = 0;
+  $("DisplayPlace").innerHTML = "";
+  $("SegListPlace").innerHTML = "";
+  $("KeyListPlace").innerHTML = "";
+  KeyList =  "";
+  SegList =  "";
+  }
+
+function InitPage()
+  {
+  SeriesName = "";
+  $("SeriesFilter").value = "";
+  $("RecordSet").value = "";
+  $("Series_Info_Place").innerHTML = "";
+  $("Series_Name_Place").innerHTML = "";
+  $("FirstLastPlace").innerHTML = "";
+  $("SeriesCountPlace").innerHTML = "&nbsp;0";
+  CleanSeriesSelect();
+  }
+
+function insertOption(list,text)
+  {
+  var y=document.createElement('option');
+  y.text=text;
+  var x=document.getElementById(list);
+  try
+    {
+    x.add(y,null); // standards compliant
+    }
+  catch(ex)
+    {
+    x.add(y); // IE only
+    }
+  }
+
+// Section 1.0 support, Get list of series and build select list for 2.0
+
+function GetSeries()
+  {
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/show_series',
+    {
+    method: 'get',
+    parameters: {"filter" : $("SeriesFilter").value },
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no response text";
+      SeriesData = response.evalJSON();
+      CleanSeriesSelect();
+      for (var i = 0; i < SeriesData.n; i++)
+        {
+	insertOption("SeriesSelect",SeriesData.names[i].name);
+        }
+      $("SeriesCountPlace").innerHTML = SeriesData.n ;
+      },
+    onFailure: function()
+      {
+      alert('Something went wrong...');
+      }
+    });
+  }
+
+// Section 2.0 support Select seriesfrom select list made in section 1.0
+// Uses jsoc_info op=series_struct
+// Get list of all keywords and segments with supporting info
+// Fetches full list of keywords and segments for display in section 4 and
+// build select lists used in section 4 and 5.
+
+function PickSeries()
+  {
+  CleanSeriesPick();
+  SeriesName = $("SeriesSelect").options[$("SeriesSelect").selectedIndex].text;
+  CurrentSeries = $("SeriesSelect").selectedIndex;
+  $("Series_Name_Place").innerHTML = SeriesName;
+  $("RecSetPlace").innerHTML = SeriesName;
+  $("RecordSet").value = SeriesName;
+  $("Series_Info_Place").innerHTML = "PrimeKeys: " + SeriesData.names[CurrentSeries].primekeys + 
+      "<BR>   Note: " + SeriesData.names[CurrentSeries].note;
+  $("FirstLastPlace").innerHTML = "";
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+    {
+    method: 'get',
+    parameters: {"ds" : SeriesName, "op" : "series_struct" },
+
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no response text";
+      var data = response.evalJSON();
+      if (data.status == 1)
+        {
+        $("SSPlace").innerHTML = "No Series Struct Found";
+        $("SSKeysPlace").innerHTML = "";
+        CleanKeysSelect();
+        }
+      else
+        {
+	var n = data.primekeys.length;
+	var primes = "No PrimeKeys";
+	if (n > 0) primes = data.primekeys[0];
+	for (i=1; i<n; i++)
+	    primes = primes + ", " + data.primekeys[i];
+	n = data.dbindex.length;
+	var dbindex = "No DBindex";
+	if (n > 0) dbindex = data.dbindex[0];
+	for (i=1; i<n; i++)
+	    dbindex = dbindex + ", " + data.dbindex[i];
+        $("SSKeysPlace").innerHTML = "PrimeKeys: " + primes + ",&nbsp;&nbsp;DBindex: " + dbindex ;
+	var keywords = "No keywords";
+	n = data.keywords.length;
+	if (n > 0)
+	   {
+	   insertOption("KeysSelect","**NONE**");
+	   insertOption("KeysSelect","**ALL**");
+	   keywords = "<table BORDER=1><TR><TD>keyword</TD><TD>type</TD><TD>note</TD>"; 
+	   for (i=0; i<n; i++)
+	      {
+	      insertOption("KeysSelect",data.keywords[i].name);
+	      keywords = keywords +
+		"<TR><TD>" + data.keywords[i].name + "</TD><TD>" + data.keywords[i].type + "</TD><TD>" + data.keywords[i].note + "&nbsp;</TD>";
+	      }
+	   keywords = keywords + "</table><P>";
+	   }
+	var segments = "No segments";
+	n = data.segments.length;
+	if (n > 0)
+	   {
+	   segments = "<table BORDER=1><TR><TD>segment</TD><TD>units</TD><TD>dims</TD><TD>protocol</TD><TD>note</TD>";
+	   insertOption("SegsSelect","**NONE**");
+	   insertOption("SegsSelect","**ALL**");
+	   for (i=0; i<n; i++)
+	      {
+	      insertOption("SegsSelect",data.segments[i].name);
+	      segments = segments + "<TR><TD>" + data.segments[i].name + "</TD><TD>" + data.segments[i].units + "&nbsp;</TD><TD>" +
+		data.segments[i].dims + "&nbsp;</TD><TD>" + data.segments[i].protocol + "</TD><TD>" + data.segments[i].note + "&nbsp;</TD>";
+	      }
+	   segments = segments + "</table><P>";
+	   }
+	var links = "No links";
+	n = data.links.length;
+	if (n > 0)
+	   {
+	   links = "<table BORDER=1><TR><TD>link</TD><TD>target </TD><TD>kind</TD><TD>note</TD>";
+	   for (i=0; i<n; i++)
+	      links = links + "<TR><TD>" + data.links[i].name + "</TD><TD>" + data.links[i].target + "</TD><TD>" +
+		data.links[i].kind + "</TD><TD>" + data.links[i].note + "&nbsp;</TD>";
+	   links = links + "</table><P>";
+	   }
+	// Place structure table on screen
+        $("SSPlace").innerHTML =  keywords + "<BR>" + segments + "<BR>" + links;
+	// Place first and last record info on screen
+	if (data.Interval.MaxRecnum > 0)
+          $("FirstLastPlace").innerHTML = "First Record = " + data.Interval.FirstRecord + ", at recnum = " +
+	     data.Interval.FirstRecnum + "<BR> Last Record = " + data.Interval.LastRecord + ", at recnum = " +
+	     data.Interval.LastRecnum + "<BR>" + "Max recnum is " + data.Interval.MaxRecnum ;
+	else
+	  $("FirstLastPlace").innerHTML = "This series contains no records";
+        }
+      },
+    onFailure: function()
+      {
+      alert('Something went wrong...');
+      }
+    });
+  }
+
+// Section 3.0 support - Get record count
+// Uses jsoc_info op=rs_summary which may take a while but
+// also validates recordset query that will be used in section 6.
+
+function GetRSCount()
+  {
+  $("RSCount_Place").innerHTML = "Getting count - wait...";
+  RecordCount = -1;
+  askedCount = 1;
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+    {
+    method: 'get',
+    parameters: {"ds" : $("RecordSet").value, "op" : "rs_summary" },
+
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no response text";
+      var data = response.evalJSON();
+      if (data.status != 0)
+        {
+	RecordCount = 0;
+        $("RSCount_Place").innerHTML = "No RecordSet Count Found";
+        }
+      else
+	{ 
+	RecordCount = data.count;
+	$("RSCount_Place").innerHTML = data.count;
+	}
+      },
+    onFailure: function()
+      {
+      alert('Something went wrong...');
+      }
+    });
+  $("RecSetPlace").innerHTML = $("RecordSet").value;
+  }
+
+
+// Section 4, Select keys for fetching values
+// Uses select list of keyword names made in section 4.
+// Places result in list to be used in section 6.
+
+function PickKeys()
+  {
+  var ikey = 0;
+  nkeysselected = 0;
+  var nkeys = $("KeysSelect").length;
+  var selkeys =  "";
+  $("KeyListPlace").innerHTML = "";
+  $("DisplayPlace").innerHTML = "";
+  $("WantRecInfo").checked = 0;
+  KeyList =  "";
+  selkeys = "";
+  // check for **NONE**
+  if ($("KeysSelect")[0].selected)
+    {
+    nkeysselected = 0;
+    selkeys = "**NONE**";
+    KeyList = "**NONE**";
+    }
+  // check for **ALL**
+  else if ($("KeysSelect")[1].selected)
+    {
+    nkeysselected = nkeys - 2;
+    selkeys = "**ALL**";
+    KeyList = "**ALL**";
+    }
+  else
+   for (ikey=2; ikey < nkeys; ikey++)
+    if ($("KeysSelect")[ikey].selected)
+      {
+      if (nkeysselected)
+	{
+	selkeys = selkeys + ", ";
+        KeyList = KeyList + ",";
+	}
+      nkeysselected = nkeysselected + 1;
+      selkeys = selkeys + $("KeysSelect")[ikey].text;
+      KeyList = KeyList + $("KeysSelect")[ikey].text;
+      }
+  $("KeyListPlace").innerHTML = nkeysselected + " Keys Chosen:&nbsp;" + selkeys;
+  }
+
+// Section 5., Select segments for fetching pathnames
+// Uses select list of segment names made in section 4.
+// Places result in list to be used in section 6.
+
+function PickSegs()
+  {
+  var iseg = 0;
+  nsegsselected = 0;
+  var nsegs = $("SegsSelect").length;
+  var selsegs =  "";
+  $("SegListPlace").innerHTML = "";
+  $("DisplayPlace").innerHTML = "";
+  $("WantRecInfo").checked = 0;
+  SegList =  "";
+  selsegs = "";
+  // check for **NONE**
+  if ($("SegsSelect")[0].selected)
+    {
+    nsegsselected = 0;
+    selsegs = "**NONE**";
+    SegList = "**NONE**";
+    }
+  // check for **ALL**
+  else if ($("SegsSelect")[1].selected)
+    {
+    nsegsselected = nsegs - 2;
+    selsegs = "**ALL**";
+    SegList = "**ALL**";
+    }
+  else
+   for (iseg=0; iseg < nsegs; iseg++)
+    if ($("SegsSelect")[iseg].selected)
+      {
+      if (nsegsselected)
+	{
+	selsegs = selsegs + ", ";
+        SegList = SegList + ",";
+	}
+      nsegsselected = nsegsselected + 1;
+      selsegs = selsegs +  $("SegsSelect")[iseg].text;
+      SegList = SegList +  $("SegsSelect")[iseg].text;
+      }
+  $("SegListPlace").innerHTML = nsegsselected + " Segs Chosen:&nbsp;" + selsegs;
+  }
+
+// Section 6.0 - Get record values for selected keywords and segments
+// Uses jsoc_info op=rs_list
+// Places result in table.
+
+function GetKeyValues()
+  {
+  var getparameters = new Hash( {"ds" : $("RecordSet").value, "op" : "rs_list" });
+  $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
+  if (nkeysselected < 1 && nsegsselected < 1)
+    {
+    $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<BR>Please fo back to steps 4 and 5."; 
+    return;
+    }
+  if (nkeysselected)
+    getparameters = getparameters.merge({"key": KeyList});
+  else
+    getparameters = getparameters.merge({"key":"**NONE**"});
+  if (nsegsselected)
+    getparameters = getparameters.merge({"seg": SegList});
+  else
+    getparameters = getparameters.merge({"seg":"**NONE**"});
+  if ($("WantRecInfo").checked) getparameters = getparameters.merge({"R":1});
+  if (RecordCount == 0 && askedCount == 0)
+      GetRSCount();
+  if (RecordCount < 0)
+    {
+      $("DisplayPlace").innerHTML = "RecordSet count underway (step 3), please wait for it to complete before retrying";
+      return;
+    }
+  if (RecordCount == 0)
+    {
+    $("DisplayPlace").innerHTML = "There are no records in the chosen RecordSet";
+    return;
+    }
+  if (RecordCount > 10000)
+    {
+    $("DisplayPlace").innerHTML = "Requested Recordset is too large for this function, " + RecordCount + 
+	" records.<BR>Please go back to step 3 and choose a smaller recordset.";
+    return;
+    }
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+    {
+    method: 'get',
+    parameters: getparameters.toObject(),
+
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no response text";
+      var data = response.evalJSON();
+      var valuetable = "";
+      if (data.status == 1)
+        {
+        $("DisplayPlace").innerHTML = "No Recordset Key Values Found";
+        CleanKeysSelect();
+        }
+      else
+        {
+	var thissegdata = "";
+	nkeys = data.keywords.length;
+	nsegs = data.segments.length;
+	nrecs = data.count;
+        $("DisplayPlace").innerHTML = "Status = " + data.status + ", Recordset Key Values for " + data.count + " records returned, preparing page ...";
+        wantrecinfo = $("WantRecInfo").checked;
+	valuetable = "<table BORDER=1><TR>"
+	if (wantrecinfo)
+	  valuetable = valuetable +  "<TD>RecordName</TD><TD>Online</TD>"
+	for (ikey=0; ikey < nkeys; ++ikey)
+           valuetable = valuetable + "<TD>" + data.keywords[ikey].name + "</TD>";
+	for (iseg=0; iseg < nsegs; ++iseg)
+           valuetable = valuetable + "<TD>segment: " + data.segments[iseg].name + "</TD>";
+	valuetable = valuetable + "</TR>";
+
+	for (irec=0; irec < nrecs; irec++)
+	  {
+	  valuetable = valuetable + "<TR>";
+	  if (wantrecinfo)
+	    valuetable = valuetable +  "<TD>" + data.recinfo[irec].name + "</TD><TD>" + data.recinfo[irec].online +  "</TD>";
+	  for (ikey=0; ikey<nkeys; ikey++)
+           valuetable = valuetable + "<TD>" + data.keywords[ikey].values[irec] + "</TD>";
+	  for (iseg=0; iseg<nsegs; iseg++)
+	   {
+	   thissegdata = data.segments[iseg].values[irec];
+           if (wantrecinfo && data.recinfo[irec].online)
+	      {
+	      tmp = "<A HREF=http://jsoc.stanford.edu" + thissegdata + ">" + thissegdata + "</A>";
+	      thissegdata = tmp;
+	      }
+        $("DisplayPlace").innerHTML = "seg " + iseg + thissegdata + "done";
+           valuetable = valuetable + "<TD>" + thissegdata + "</TD>";
+	   }
+	  valuetable = valuetable + "</TR>";
+	  }
+	valuetable = valuetable + "</TABLE>";
+        $("DisplayPlace").innerHTML =  valuetable + "<BR>";
+        }
+      },
+    onFailure: function()
+      {
+      alert('Something went wrong...');
+      }
+    });
+  }
+
+</script>
+
+</HEAD>
+
+<BODY BGCOLOR="#FFFFFF" onload="InitPage();" >
+
+<DIV ID="header">
+<IMG src="http://hmi.stanford.edu/images/web/JSOC_120.gif"  style="vertical-align:middle" alt="JSOC logo">
+<B><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Show Info</big></B>
+<br clear=all>
+<HR>
+</DIV>
+
+<div id="SeriesDiv">
+<TABLE style="width:800">
+<TR>
+<TD width="20%">
+<H3>1. Find list of dataseries</H3>
+Enter the dataseries filter to search for seriesnames, or leave blank to select from all series.
+Series Filter <input id="SeriesFilter" type="text" name="filter" value="" onChange="GetSeries();" >
+<input id="SeriesButton" type="button" value="Fetch seriesname list" onClick="GetSeries();" > 
+<form id="SeriesForm" name="SeriesForm" method="GET"  action="" >
+</form>
+<P>
+</TD>
+<TD colspan=2 style="width:80%">
+<input type="button" value="reset page" onClick="InitPage();" >
+</TD>
+</TR>
+</div> <!-- /div SeriesDiv -->
+<HR>
+<div id="MySeriesDiv" >
+<TR>
+<TD  style="width:20%;vertical-align:top;height:150pt">
+<H3>2. Pick series to use</H3>
+There are
+<span id="SeriesCountPlace" style="background-color:#FFF8DC;width:2em">&nbsp;0</span>
+Series to choose from.
+<P>
+<form id="SeriesSelectForm" name="SeriesSelectForm" method="GET"  action="" >
+<select id="SeriesSelect" size=8 onclick="PickSeries()"> </select>
+</form>
+</TD>
+<TD colspan=2 style="width:80%;vertical-align:top;height:140pt">
+<H3>Information about selected series</H3>
+Series Selected is: 
+<span id="Series_Name_Place" style="background-color:#FFF8DC"></span>
+<P>
+<span id="Series_Info_Place" style="background-color:#FFF8DC"></span>
+<P>
+<span id="FirstLastPlace" style="background-color:#FFF8DC"></span>
+</TD>
+</TR>
+<TR>
+<TD colspan=2 width=40%>
+<H3>3. Get Record Count</H3>
+Enter RecordSet Specification.
+This request may take a while if the recordset is large<BR>
+Enter RecordSet Spec here<BR>
+<input id="RecordSet" type="text" value="" onChange="GetRSCount();" > 
+<BR>
+<input type="button" value="GetRecordCount" onClick="GetRSCount();" >
+Record Count:
+<span id="RSCount_Place" style="width:10em;background-color:#FFF8DC"></span>
+</TD>
+<TD rowspan=2 style="width:60%;vertical-align:top;height:300">
+<H3>List of All Keywords and Segments</H3>
+<span id="SSKeysPlace" style="background-color:#FFF8DC;"></span>
+<div id="SeriesInfoDiv" style="border:solid;border-width:thin;height:290;overflow:scroll">
+<span id="SSPlace" style="background-color:#FFF8DC;"></span>
+</div> <!-- /div SeriesInfoDiv -->
+</TD>
+</TR>
+</div> <!-- id="MySeriesDiv" -->
+<TR>
+<TD width="15%">
+<H3>4. Select Keywords</H3>
+Select Keywords for Detailed Lists
+<P>
+<input type="button" value="Select" onClick="PickKeys();" >
+<form id="KeysSelectForm">
+<select id="KeysSelect" size=10 multiple=true onChange="PickKeys();" > </select>
+</form>
+</TD><TD>
+<H3>5. Select Segments</H3>
+Select Segments for Detailed Lists
+<P>
+<input type="button" value="Select" onClick="PickSegs();" >
+<form id="SegsSelectForm">
+<select id="SegsSelect" size=10 multiple=true onChange="PickSegs();"> </select>
+</form>
+</TD>
+</TR>
+</TABLE>
+<HR>
+
+<div id="FullInfoDiv">
+<H3>6. Get Keyword and Segment Values Here</H3>
+RecordSet Query:&nbsp;
+<span id="RecSetPlace" style="background-color:#FFF8DC;"></span>
+Keywords to Fetch:&nbsp;
+<span id="KeyListPlace" style="background-color:#FFF8DC;"></span>
+<BR>
+Segments to Fetch:&nbsp;
+<span id="SegListPlace" style="background-color:#FFF8DC;"></span>
+
+<BR>
+<input type="checkbox" name="Get Record Query" id="WantRecInfo">
+Check to Get Record Query (online status and links if a segment selected)
+<BR>
+<input type="button" value="Fetch Keyword Values for RecordSet" onClick="GetKeyValues();" >
+</div> <!-- /div FullInfoDiv -->
+<P>
+<div id="FullDisplayInfoDiv" style="border:solid;border-width:thin;height:190;width:800;overflow:scroll">
+<span id="DisplayPlace" style="background-color:#FFF8DC;"></span>
+</div> <!-- /div SeriesInfoDiv -->
+Next Step Under Constructrion
+
+</div> <!-- /div FullDisplayInfoDiv -->
+
+<H3> done </H3>
+<DIV id="footer" style="vertical-align:bottom;text-align:center">
+<HR>
+<I>Home pages for:</I>
+<A HREF = "http://jsoc.stanford.edu/"><B>SDO-JSOC</B></A>
+<B>|</B>
+<A HREF = "http://sha.stanford.edu/"><B>SHA</B></A>
+<HR></DIV>
+</BODY>
+</HTML>
+
