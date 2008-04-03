@@ -46,9 +46,9 @@ if ( $account eq "carl")
 elsif ( $account eq "production")
 {
    print LF "-->Found <$account> account\n";
-   print LF "ERROR: Found account name <$account>- Need to update cicf.pl script with SSH settings.\n";
-   print LF `date`;
-   die "ERROR: Found account name <$account>- Need to update cicf.pl script with SSH settings";
+   $ENV{'SSH_ASKPASS'}="/usr/libexec/openssh/gnome-ssh-askpass";
+   print LF "-->working in <$account> account\n";
+   print LF "-->SSH setting for SSH_ASKPASS is <$ENV{'SSH_ASKPASS'}>\n";
 }
 else
 {
