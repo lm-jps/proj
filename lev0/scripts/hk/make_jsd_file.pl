@@ -3,9 +3,11 @@
 # Name:        make_jsd_file.pl - Make JSD File                              #
 # Description: Strip data from HKPDF files and create global and keyword     #
 #              section for the JSOC Series Definition file. Uses GTCIDS file #
-#              to get packet version number data. Use the APID-JSVN-TO-PVN   #
-#              files to get jsoc series version number. Run first to make    #
+#              to get packet version number data. Use the <APID>-JSVN-TO-PVN #
+#              map files to get jsoc series version number. Run first to make#
 #              prelim jsd files. Then run a second time to make final JSDs.  #
+#              The prelim files need to be there for all packet versions to  #
+#              successfully create final jsd file.                           #
 # Process:     (1)Run first to make prelim jsd files for needed APIDs.       #
 #              (2)Run do_jsvn_map_file.pl to make JSVN-TO-PVN map files for  #
 #                 each APID.                                                 #
@@ -28,7 +30,7 @@ $ENV{'HK_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_file";
 $ENV{'HK_JSD_PRELIM_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_prelim_file";
 $ENV{'HK_JSVN_MAP_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsn_map_file";
 $ENV{'HK_GTCIDS_FILE'}="gtcids.txt";
-$lnjsds=$ENV{'HK_LIST_NEW_JSDS'}="$hm/JSOC/proj/lev0/scripts/hk/new_jsd_files.txt";
+$lnjsds=$ENV{'HK_LIST_NEW_JSDS'}="$hm/cvs/JSOC/proj/lev0/scripts/hk/new_jsd_files.txt";
 
 if ($#ARGV < 0 || $#ARGV > 1) 
 {
@@ -589,5 +591,6 @@ sub create_jsd_file
 
 # Close output file
   close( OUTFILE);
+
 }
 
