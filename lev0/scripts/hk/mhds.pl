@@ -9,12 +9,17 @@
 # main program  
 ##get environment variables and initialize variables.
 $hm=$ENV{'HOME'};
+$ENV{'HK_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_file";
+$ENV{'HK_JSVN_MAP_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsn_map_file";
 
 #common setting for all environments
 $ENV{'MAILTO'}="";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
-$ENV{'CVS_RSH'}="/usr/bin/rsh";
+$ENV{'CVSROOT'}=":ext:sunroom.stanford.edu:/home/cvsuser/cvsroot";
+$ENV{'CVS_BINARY_ROOT'}="/home/cvsuser/cvs_binary_root";
+#$ENV{'CVS_RSH'}="/usr/bin/rsh";
+$ENV{'CVS_RSH'}="ssh";
 
 #list of apid to do use for display only-see real setting in cjds.pl
 $apids_to_do=$ENV{'HK_MHDS_APID_LIST'}="0017 0019 0021 0029 0445 0475 0529 0569";
@@ -62,6 +67,13 @@ print "-->Executing <make_jsd_file.pl final $fvn> to create final JSD files for 
 $retlog=`perl make_jsd_file.pl final $fvn`;
 print "-->Execution log from make_jsd_file.pl final <$fvn>\n$retlog\n";
 
+
+# check into cvs the new JSD files created when running make_jsd_file.pl final
+# check new jsd files for new ones
+&checkin_final_jsd();
+
+# check new jsd files for new ones
+&checkin_jsvn_maps();
 
 # check if list of new JSD files is created in make_jsd_file.pl.
 # if new JSD, then if on list of APIDS to do, create data series
@@ -154,4 +166,40 @@ sub show_help_info
  
   exit;
 }
-#############################################################################
+
+#################################################
+# Check in Final JSD files to CVS               #
+#################################################
+sub checkin_final_jsd
+{
+  my($njsds);
+  $njsds="$script_dir/new_jsd_files.txt";
+  open(NJS, "<$njsds") || die "-->ERROR:Can't Open and Read $njsds: $!\n";
+  while (<NJS>) { # regular expression- remove cr from file string
+    $_ =~ s/\n//g;
+
+    # add file to cvs
+    $lm=`cd  $ENV{'HK_JSD_DIRECTORY'} ; cvs add $_ `;
+    print "-->Adding < $_ > to $ENV{'HK_JSD_DIRECTORY'} directory. Log:$lm:\n";
+
+    # commit file to cvs
+    $lm=`cd  $ENV{'HK_JSD_DIRECTORY'} ; cvs commit -m \"auto checked into CVS new JSD file\"  $_ `;
+    print "-->Commiting < $_ > file in directory $ENV{'HK_JSD_DIRECTORY'}. Log:$lm:\n";
+  }
+  close NJS;
+}
+
+#################################################
+#  Checkin JSOC Version Number Map files to CVS #
+#################################################
+sub checkin_jsvn_maps()
+{
+  # add map file to cvs
+  $lm=`cd  $ENV{'HK_JSVN_MAP_DIRECTORY'} ; cvs add  *-JSVN-TO-PVN`;
+  print "-->Adding map files to $ENV{'HK_JSVN_MAP_DIRECTORY'} directory. Log:$lm\n";
+                                                                                
+  # commit file to cvs
+  $lm=`cd  $ENV{'HK_JSVN_MAP_DIRECTORY'} ; cvs commit -m \"auto checked into CVS new map files\"  *-JSVN-TO-PVN `;
+  #$lm=`cd  $ENV{'HK_JSVN_MAP_DIRECTORY'} ; pwd ; cvs status *-JSVN-TO-PVN*`;
+  print  "-->Commiting map files in directory $ENV{'HK_JSVN_MAP_DIRECTORY'}. Log:$lm:\n";
+}
