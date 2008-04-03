@@ -21,7 +21,7 @@ $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 
 #set up data series name parameters.
 $pjn=$ENV{'HK_DDF_PROJECT_NAME'}="instrument"; 
-$dtn=$ENV{'HK_DDF_DATA_ID_NAME'}="lev0testscript";
+$dtn=$ENV{'HK_DDF_DATA_ID_NAME'}="lev0";
 
 # set list of apids to do-if apid has new jsd file create data series in drms
 $apids_to_do=$ENV{'HK_MHDS_APID_LIST'}="0017 0019 0021 0029 0445 0475 0529 0569";
@@ -30,7 +30,7 @@ $apids_to_do=$ENV{'HK_MHDS_APID_LIST'}="0017 0019 0021 0029 0445 0475 0529 0569"
 # Common setting for all environments
 $ENV{'MAILTO'}="";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
-$ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
+$ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$hm/cvs/JSOC/bin/linux_ia32";
 $ENV{'CVS_RSH'}="ssh";
 #$ENV{'CVS_RSH'}="/usr/bin/rsh";
 
@@ -48,10 +48,9 @@ if ( $account eq "carl")
 }
 elsif ( $account eq "production")
 {
-   print "-->Found <$account> account\n";
-   print "ERROR: Found account name <$account>- Need to update cjds.pl script with SSH settings.\n";
-   print LF `date`;
-   die "ERROR: Found account name <$account>- Need to update cjds.pl script with SSH settings";
+   $ENV{'SSH_ASKPASS'}="/usr/libexec/openssh/gnome-ssh-askpass";
+   print LF "-->working in <$account> account\n";
+   print LF "-->SSH setting for SSH_ASKPASS is <$ENV{'SSH_ASKPASS'}>\n";
 }
 else
 {
@@ -61,7 +60,7 @@ else
 }
 
 # log message to standard out
-print "-->executing script cjds.pl to create JSD data series if needed\n";
+print "-->Executing script cjds.pl to create JSD data series if needed\n";
 
 # check list of new jsd files created in text file.
 $njsds="$script_dir/new_jsd_files.txt";
@@ -76,7 +75,7 @@ if ( -s $njsds )
 }
 
 #open file containing list of new jsd files created
-open(NJS, "$njsds") || die "Can't Open $njsds: $!\n";
+open(NJS, "$njsds") || die "-->ERROR:Can't Open $njsds: $!\n";
 
 # push new jsd created in list
 while (<NJS>)
@@ -121,7 +120,7 @@ foreach $f (@new_jsd_list)
       print "-->project name is $pjn,data type name is $dtn,apid value is $s_line[2], jsvn value is $s_line[3]\n";
 
       # create dynamically the instrument part of project name based on apid value
-      # for prelaunch using hmi_ground or aia_ground
+      # for prelaunch using hmi_ground or aia_ground or su_carl for initial jsoc testing
       if ( int $s_line[2] > 0 and int $s_line[2] < 34 )
       {
         # $pjn =~ s/^instrument/hmi/g;
@@ -161,16 +160,20 @@ foreach $f (@new_jsd_list)
 
       # replace series name with new name of data series and copy to JSOC jsd directory
       $lm=`chmod 777  $new_jsd_dir/$f`;
-      print "1) new jsd dir is  $new_jsd_dir\nfile is $f\nlog is $lm\n";
+      print "1)New jsd dir is  $new_jsd_dir\nfile is $f\nlog is $lm\n";
       $lm=`sed \"s/$f/$data_series_name/\" $new_jsd_dir/$f >   $target_jsd_dir/$data_series_name`; 
-      print "2) target jsd dir is $target_jsd_dir\n data series name is $data_series_name\nlog is $lm\n";
+      print "2)Target jsd dir is $target_jsd_dir\n data series name is $data_series_name\nlog is $lm\n";
       $lm=`chmod 777 $target_jsd_dir/$data_series_name `;
-      print "3) finish chmod of $target_jsd_dir and $data_series_name\nlog is  $lm\n";
+      print "3)Finish chmod of $target_jsd_dir and $data_series_name\nlog is  $lm\n";
 
-      # create series using create_series in Carl's JSOC environment for now -move to dimp eventually
-      #$lm= `ssh -l carl n00.stanford.edu \"/home1/carl/jsoc/bin/linux_ia32/create_series $target_jsd_dir/$data_series_name\" `;
-      $lm= `ssh -l carl n00.stanford.edu "create_series $target_jsd_dir/$data_series_name" `;
-      print "4) create series using target jsd dir $target_jsd_dir and series name $data_series_name\n log is $lm\n";
+      # create series using create_series in  JSOC environment 
+      #$lm= `ssh -l production d00.stanford.edu "create_series $target_jsd_dir/$data_series_name" `;
+      $lm= `create_series $target_jsd_dir/$data_series_name`;
+      print "4)Create series using target jsd dir $target_jsd_dir and series name $data_series_name\n log is $lm\n";
+
+      #Possible got location to check into cvs new JSD when use good names like hmi. and aia. 
+      #For now don't want to check su_carl jsd's so do nothing
+
 
       last;
     }
@@ -179,7 +182,7 @@ foreach $f (@new_jsd_list)
 print "-->Finished running cjds.pl - create jsoc data series\n";
 close NJS;
 ## clear file
-open(NJS, ">$njsds") || die "Can't Open $njsds: $!\n";
+open(NJS, ">$njsds") || die "-->ERROR:Can't Open $njsds: $!\n";
 close NJS;
 
 #################
