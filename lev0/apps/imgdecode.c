@@ -226,12 +226,6 @@ int imgdecode(unsigned short *impdu, IMG *img)
 	img->R = (impdu[16] >> 8) & 0xf;
     }
 
-    for (i = 0; i < MAXPIXELS; ++i)
-	img->dat[i] = BLANK;
-
-    for (i = 0; i < MAXHIST; ++i)
-	img->hist[i] = 0;
-
     img->datavals = 0;
     img->npackets = 0;
     img->nerrors = 0;
@@ -306,6 +300,12 @@ int imgdecode(unsigned short *impdu, IMG *img)
 	img->totalvals = cropt[img->cropid].totalpix;
     } else
 	img->totalvals = MAXPIXELS;
+
+    for (i = 0; i < MAXPIXELS; ++i)
+	img->dat[i] = BLANK;
+
+    for (i = 0; i < MAXHIST; ++i)
+	img->hist[i] = 0;
 
     img->initialized = 1;
 
