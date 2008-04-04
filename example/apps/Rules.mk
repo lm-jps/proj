@@ -32,7 +32,7 @@ FMATHMOD_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, demo_td08062007))
 MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d)) $(FMATHMOD_$(d))
 
 ifeq ($(COMPILER), icc)
-  FMODEXE_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, helloworld xinterp))
+  FMODEXE_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, helloworld xinterp ringfit_ssw))
   FMODEXE_GONG_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, f_ingest_gong_mrv f_dup_gong_mrv))
   GONGLIB_$(d)	:= $(d)/ingest_gong_mrv_lib.o
   FMODEXE	:= $(FMODEXE) $(FMODEXE_$(d)) $(FMODEXE_GONG_$(d))
