@@ -162,7 +162,12 @@ foreach $f (@new_jsd_list)
       $lm=`chmod 777  $new_jsd_dir/$f`;
       print "1)New jsd dir is  $new_jsd_dir\nfile is $f\nlog is $lm\n";
       $lm=`sed \"s/$f/$data_series_name/\" $new_jsd_dir/$f >   $target_jsd_dir/$data_series_name`; 
+
+      # set archive value to 0 for su_carl for now
+      $lm=`sed \"s/Archive:     1/Archive:     0/\" $target_jsd_dir/$data_series_name >   $target_jsd_dir/$data_series_name`; 
       print "2)Target jsd dir is $target_jsd_dir\n data series name is $data_series_name\nlog is $lm\n";
+
+      # chmod
       $lm=`chmod 777 $target_jsd_dir/$data_series_name `;
       print "3)Finish chmod of $target_jsd_dir and $data_series_name\nlog is  $lm\n";
 
