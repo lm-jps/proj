@@ -165,7 +165,7 @@ sub check_arguments()
     }
     elsif ($ARGV[0] eq "-g" )
     {
-      #get list of apids to create map files for based on apid current STHA file
+      #get list of apids to create map files for based on apids in current STHA file version
       $apid_list_flg = "2";
     }
     elsif ($ARGV[0] eq "-a" )
@@ -270,14 +270,36 @@ sub get_list_hkpdf_filename()
   #close directory file handle
   closedir DIR_HKPSD; 
   push(@hkpdf_filenames, "");
+
+  # get list of apids to do
+  (@apidslist)=&get_list_apids_to_do($ARGV[1]);
+
   # parse apids values from filename to get valid list of apids
   foreach $filename (@hkpdf_filenames)
   {
-     if (( index  $filename, "apid-" ) != -1)
-     {
+
+    # check apid is one we want to create jsd for.These are packets with VER_NUM keywords
+    # this skips doing prelim and final jsd that are not in list
+    if(substr($filename,0,5) eq "apid-" )
+    {
+        # get current apid
+        $currapid=substr($filename,5,3); 
+
+        # check list of apid want to create JSDs for
+        ($foundflg)=&check_apid_list(@apidslist,$currapid);
+
+        # if apid not in list skip creating jsd
+        if ($foundflg == 0)
+        {
+          next;#skip doing
+        }
+    }
+
+    if (( index  $filename, "apid-" ) != -1)
+    {
        
-       push(@all_apids, sprintf("%0.4d", hex  substr($filename,5,3)) );
-     }
+      push(@all_apids, sprintf("%0.4d", hex  substr($filename,5,3)) );
+    }
   }
 }
 #############################################################################
@@ -442,4 +464,42 @@ sub get_gtcids_lines
   }#end while
   close(FILE);
   close(OUTFILE);
+}
+###########################################
+#  check apid list to do                  #
+###########################################
+sub check_apid_list (@$)
+{
+  $foundflg=0;
+  foreach $a (@apidslist)
+  {
+    if($currapid =~ m/$a/i)
+    {
+      $foundflg=1;
+      last;
+    }
+  }
+ return ($foundflg);
+}
+###########################################
+#  get list of apids to do                #
+###########################################
+sub get_list_apids_to_do($)
+{
+  # misses VER_TEMPERATURE
+  # $files=`cd /home1/carl/cvs/TBL_JSOC/lev0/hk_config_file/$file_version/; grep VER_NUM apid*`;
+  # get all apids that have VER_NUM or VER_TEMPERATURE Keyword
+  my $files=`cd $ENV{'HK_CONFIG_DIRECTORY'}/$ARGV[1]/;  egrep '(VER_NUM|VER_TEMPERATURE)' apid*`;
+
+  # remove apid text regular expression
+  $files =~ s/(a.+?-)//g;
+
+  # remove everything from after apid number to end of line regular expression
+  $files =~ s/(-.+?\n)/ /g;
+
+  # split apids into separate field in array
+  my @apidslist = split(/ /, $files);
+
+  # return list of apids to do
+  return ( @apidslist);
 }
