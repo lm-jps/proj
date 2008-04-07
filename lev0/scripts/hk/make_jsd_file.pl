@@ -80,11 +80,32 @@ if($ffp == 1)
 }
 
 # (2) loop thru all HKPDF file and create a Final JSD file for each apid in filename
+# get list of apid to do
+(@apidslist)=&get_list_apids_to_do($file_version_number);
+
+# start loop
 foreach $file ( @fn_list)
 {
    if ( $file eq "." || $file eq ".." || $file eq "CVS")
    {
       next;#skip doing
+   }
+
+   # check apid is one we want to create jsd for.These are packets with VER_NUM keywords
+   # this skips doing prelim and final jsd that are not in list
+   if(substr($file,0,5) eq "apid-" )
+   {
+       # get current apid
+       $currapid=substr($file,5,3); 
+
+       # check list of apid want to create JSDs for
+       ($foundflg)=&check_apid_list(@apidslist,$currapid);
+
+       # if apid not in list skip creating jsd
+       if ($foundflg == 0)
+       {
+         next;#skip doing
+       }
    }
 
 # (3) get all lines in HKPDF file
@@ -593,4 +614,49 @@ sub create_jsd_file
   close( OUTFILE);
 
 }
+#$file_version="1.161";
+#(@apidslist)=&get_list_apids_to_do($file_version);
+#$aa="1bd";
+#($foundflag)=&check_apid_list(@apids,$aa);
+#print "FoundFlag is $foundflg\n";
 
+
+###########################################
+#  check apid list to do                  #
+###########################################
+sub check_apid_list (@$)
+{
+  $foundflg=0;
+  foreach $a (@apidslist)
+  {
+    if($currapid =~ m/$a/i)
+    {
+      $foundflg=1;
+      last;
+    }
+  }
+ return ($foundflg);
+}
+###########################################
+#  get list of apids to do                #
+###########################################
+sub get_list_apids_to_do($)
+{
+  # misses VER_TEMPERATURE
+  # $files=`cd /home1/carl/cvs/TBL_JSOC/lev0/hk_config_file/$file_version/; grep VER_NUM apid*`;
+  # get all apids that have VER_NUM or VER_TEMPERATURE Keyword
+  my $files=`cd $ENV{'HK_CONFIG_DIRECTORY'}/$file_version_number/;  egrep '(VER_NUM|VER_TEMPERATURE)' apid*`;
+
+  # remove apid text regular expression
+  $files =~ s/(a.+?-)//g;
+
+  # remove everything from after apid number to end of line regular expression
+  $files =~ s/(-.+?\n)/ /g;
+
+  # split apids into separate field in array
+  my @apidslist = split(/ /, $files);
+
+  # return list of apids to do
+print "apid list to do: \n@apidslist\n";
+  return ( @apidslist);
+}
