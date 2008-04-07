@@ -32,7 +32,7 @@ $solserv_dir="/home/jim/stanford-files";
 $ENV{'MAILTO'}="";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
-$logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq";
+$logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmq";
 $ENV{'CVS_RSH'}="ssh";
 
 # open log file
@@ -50,10 +50,9 @@ if ( $account eq "carl")
 }
 elsif ( $account eq "production")
 {
+   $ENV{'SSH_ASKPASS'}="/usr/libexec/openssh/gnome-ssh-askpass";
    print LF "-->working in <$account> account\n";
-   print LF "ERROR: Found account name <$account>- Need to update clmq.pl script with SSH settings.\n";
-   print LF `date`;
-   die "ERROR: Found account name <$account>- Need to update clmq.pl script with SSH settings";
+   print LF "-->SSH setting for SSH_ASKPASS is <$ENV{'SSH_ASKPASS'}>\n";
 }
 else
 {
@@ -121,7 +120,6 @@ while (<QFILE>)
   ##log email text
   print MF `date`;
   print MF "-->Doing update for Stanford <$account> account.\n";
-  #Pprint MF "-->Doing update for Stanford production account on ?yeti?\n";
   print MF "-->Doing updates based on $_";
 
   ##execute script to build hkpdf files, checkin files, update hmi0
