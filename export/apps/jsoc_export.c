@@ -17,7 +17,7 @@ typedef enum
 
 ModuleArgs_t module_args[] =
 {
-     {ARG_STRING, kArg_recid,  "", "Export series primary key value that identifies the output record."},
+     {ARG_INT, kArg_recid,  "", "Export series primary key value that identifies the output record."},
      {ARG_STRING, kArg_clname, kNotSpecified, "Export key map class."},
      {ARG_STRING, kArg_file,   kNotSpecified, "Export key map file."},
      {ARG_END}
@@ -31,9 +31,9 @@ int DoIt(void)
 
    const char *clname = NULL;
    const char *mapfile = NULL;
-   const char *reqid = NULL;
+   long long reqid = 0;
 
-   reqid = cmdparams_get_str(&cmdparams, kArg_recid, &drmsstat);
+   reqid = cmdparams_get_int64(&cmdparams, kArg_recid, &drmsstat);
    if (drmsstat != DRMS_SUCCESS)
    {
       fprintf(stderr, "Missing required argument '%s'.\n", kArg_recid);  
@@ -56,11 +56,11 @@ int DoIt(void)
 
       if (drmsstat != DRMS_SUCCESS)
       {
-	 fprintf(stderr, "Failure occurred while processing export Request ID '%s'.\n", reqid);
+	 fprintf(stderr, "Failure occurred while processing export Request ID '%lld'.\n", reqid);
       }
       else
       {
-	 fprintf(stdout, "Successfully processed export Request ID '%s'.\n", reqid);
+	 fprintf(stdout, "Successfully processed export Request ID '%lld'.\n", reqid);
       }
    }
 
