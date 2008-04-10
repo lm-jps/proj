@@ -34,14 +34,14 @@
 #define HKDDF_CNTRL_L            ""
 #define HKDDF_MAX_FILE_NAME      100
 #define HKDDF_MAXLINE_IN_FILE    200
-#define HKDDF_MAX_VERSION_LINES  100
+#define HKDDF_MAX_VERSION_LINES  1000
 #define HKDDF_MAX_APID_STR       5
 #define HKDDF_MAX_JSVN_STR       5
 #define HKDDF_MAX_PVN_STR        10
 #define HKDDF_MAX_DSNAME_STR     100
 #define HKDDF_MAX_PKT_SIZE       1000
 #define HKDDF_MAX_PVN_SIZE       50
-#define ENVFILE "./SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
+#define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
 
 /******************** includes ******************************************/
 #include <stdio.h>
@@ -52,13 +52,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdarg.h>
-#include <sys/time.h>
 #include "drms.h"
 #include "drms_names.h"
 #include "jsoc_main.h"
-#include "decompress.h"
-#include "dwt_compress.h"
-#include "db.h"
 #include "load_hk_config_files.h"
 #include "packets.h"
 #include "decode_hk.h"
@@ -77,18 +73,19 @@ ModuleArgs_t   *ggModArgs=module_args;
 char* module_name = "decode_dayfile";
 
 /******************* function prototypes  *******************************/
-void  write_to_drms(int apid, char packet_version_number[], char *data_series, HK_Keyword_t *kw_head);
-char* lookup_dsn( char *pvn, int count);
-int   get_packet_time_for_df(HK_Keyword_t *hk, TIME *ptime);
-int   load_ds_names(char *pn, char* didn, int apid);
-void  print_packet_time(HK_Keyword_t *kwh);
-void  save_packet_values1(unsigned char read_in_buffer[], char *out);
-void  save_packet_values2(unsigned char read_in_buffer[], char *pn, char *didn );
-void  saveprint_packet_values1(unsigned char read_in_buffer[], char *in, char *out);
-void  saveprint_packet_values2(unsigned char read_in_buffer[], char *in, char *pn, char *didn );
-TIME  SDO_to_DRMS_time1(int sdo_s, int sdo_ss);
+static int   get_packet_time_for_df(HK_Keyword_t *hk, TIME *ptime);
+static int   load_ds_names(char *pn, char* didn, int apid);
+static char* lookup_dsn( char *pvn, int count);
+static void  print_packet_time(HK_Keyword_t *kwh);
+static void  save_packet_values1(unsigned char read_in_buffer[], char *out);
+static void  save_packet_values2(unsigned char read_in_buffer[], char *pn, char *didn );
+static void  saveprint_packet_values1(unsigned char read_in_buffer[], char *in, char *out);
+static void  saveprint_packet_values2(unsigned char read_in_buffer[], char *in, char *pn, char *didn );
+static void  set_env_variables();
+static void  write_to_drms( char packet_version_number[], char *data_series, HK_Keyword_t *kw_head);
+static TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 
-/********************* externs   ****************************************/
+/********************* extern functions  *********************************/
 extern int DoIt(void);
 extern int nice_intro (void);
 
@@ -284,10 +281,10 @@ int DoIt(void)
 
 /*************************************************************************
  * WRITE TO DRMS                                                         *
- * FUNCTION: void write_to_drms(int,char [],char *,HK_Keyword_t *        *
+ * FUNCTION: void write_to_drms(char [],char *,HK_Keyword_t *            *
  * DESCRIPTION: Gets Packet time based on Time Codes.                    *
  *************************************************************************/
-void write_to_drms(int apid, char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_head)
+void write_to_drms(char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_head)
 {
   /* variable definitions */
   /* create series name variables*/
@@ -297,7 +294,7 @@ void write_to_drms(int apid, char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_
   HK_Keyword_t *kw;
   kw= kw_head;
   TIME pkt_time;
-  TIME *ptime= &pkt_time;
+
   /* variable to set drms record */
   DRMS_Type_t keytype;
   DRMS_Type_Value_t key_anyval;
@@ -333,7 +330,7 @@ void write_to_drms(int apid, char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_
   rec = rs->records[0];
 
   /* get and set packet_time in record*/
-  if (!get_packet_time_for_df(kw,ptime))
+  if (!get_packet_time_for_df(kw, &pkt_time))
   {
     /*did not set PACKET_TIME */
     printkerr("Error at %s, line %d: Could not set PACKET_TIME keyword.",
@@ -342,16 +339,12 @@ void write_to_drms(int apid, char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_
   }
   else 
   { 
-    /*if (fsn < FSN_TAI_FIXED) added based on input from Phil*/
-    /* check if need to get actual fsn and check if less than  1,000,000*/
-    *ptime += 33.0;
-
     /* set PACKET_TIME keyword using data from TIMECODE keywords*/
     /* set drms type and long telemetry name  */
     keytype= DRMS_TYPE_TIME;
     strcpy(keyname, "PACKET_TIME");
     /* set packet time */
-    key_anyval.time_val= *ptime;
+    key_anyval.time_val= pkt_time;
     /* set record */
     status = drms_setkey(rec, keyname, keytype, &key_anyval);
   }
@@ -481,7 +474,7 @@ void write_to_drms(int apid, char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_
  * where SDO_EPOCH = sscan_time("1958.01.01_00:00:00");
  * TAI and UTC are same at 1 Jan 1958.
  **********************************************************************************/
-TIME SDO_to_DRMS_time1(int sdo_s, int sdo_ss)
+TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
 {
 /*changes done:
 1.changed args from float to int 
@@ -550,12 +543,12 @@ int get_packet_time_for_df(HK_Keyword_t *hk,  TIME *ptime)
       printkerr("Error at %s, line %d: Did not find TIMECODE_SUBSECS value for"
                 "calculating the PACKET_TIME keyword and index. Returning error"
                 "status, but setting time using seconds only.\n",__FILE__,__LINE__);
-      *ptime =SDO_to_DRMS_time1(sec, 0);
+      *ptime =SDO_to_DRMS_time(sec, 0);
       return 0;
     }
     else
     { 
-      *ptime =SDO_to_DRMS_time1(sec, subsec);
+      *ptime =SDO_to_DRMS_time(sec, subsec);
       return 1;
     }
   }
@@ -615,8 +608,6 @@ void saveprint_packet_values1(unsigned char read_in_buffer[], char *in, char *ou
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
-  unsigned short test_apid;
-  
 
   for(k=0,factor=0,packet_length=0;  ; k++)
   {
@@ -793,7 +784,7 @@ void saveprint_packet_values1(unsigned char read_in_buffer[], char *in, char *ou
     }/*end of loop throught all keywords in single packet*/ 
 
     /* write values to DRMS using the data series name pass in argument list*/
-    write_to_drms(apid, packet_version_number, out, kw_head );
+    write_to_drms( packet_version_number, out, kw_head );
     print_packet_time(kw_head);
 
   }/* loop throught next packet and do all packets in file*/
@@ -998,7 +989,7 @@ void  save_packet_values2(unsigned char read_in_buffer[], char *pn,char *didn)
     }
     kw_head= ccsds.keywords;
     /* write values to DRMS with auto generated data series name*/
-    write_to_drms(apid, packet_version_number, data_seriesname, kw_head );
+    write_to_drms(packet_version_number, data_seriesname, kw_head );
   }/* loop throught next packet and do all packets in file*/
 }
 
@@ -1201,7 +1192,7 @@ void  saveprint_packet_values2(unsigned char read_in_buffer[], char *in,
 
 
     /* write values to DRMS with auto generated data series name*/
-    write_to_drms(apid, packet_version_number, data_seriesname, kw_head );
+    write_to_drms( packet_version_number, data_seriesname, kw_head );
     /*now print packet time */
     print_packet_time(kw_head);
     
@@ -1219,10 +1210,10 @@ void print_packet_time(HK_Keyword_t *kwh)
 {
   HK_Keyword_t *kw;
   TIME pkt_time;
-  TIME *ptime= &pkt_time;
   kw= kwh;
+  pkt_time=(TIME)0.0;
   /* get and set packet_time in record*/
-  if (!get_packet_time_for_df(kw,ptime))
+  if (!get_packet_time_for_df(kw, &pkt_time))
   {
     /*did not set PACKET_TIME */
     printf ( "--------------------------------------------------------------------------\n");
@@ -1233,11 +1224,8 @@ void print_packet_time(HK_Keyword_t *kwh)
   }
   else 
   { 
-    /*if (fsn < FSN_TAI_FIXED) added based on input from Phil*/
-    /* check if need to get actual fsn and check if less than  1,000,000*/
-    *ptime += 33.0;
     printf ( "--------------------------------------------------------------------------\n");
-    printf("PACKET_TIME                                     %15.5lf\n", *ptime);
+    printf("PACKET_TIME                                     %15.5lf\n", pkt_time);
     printf ( "--------------------------------------------------------------------------\n");
     printf ("%s\n",HKDDF_CNTRL_L);
   }
@@ -1325,7 +1313,7 @@ void save_packet_values1(unsigned char read_in_buffer[], char *out)
     }
     kw_head= ccsds.keywords;
     /* write values to DRMS*/
-    write_to_drms(apid, packet_version_number, out, kw_head );
+    write_to_drms( packet_version_number, out, kw_head );
   } /* loop throught next packet and do all packets in file*/
 }
 
@@ -1340,14 +1328,14 @@ void save_packet_values1(unsigned char read_in_buffer[], char *out)
 void set_env_variables()
 {
   FILE * fp;
-  char envfile[100], s1[256],s2[256],s3[256], line[256];
+  char envfile[500], s1[256],s2[256],s3[256], line[256];
   /* set environment variables for hk code that decodes dayfiles*/
   /* create filename and path */
   strcpy(envfile, ENVFILE );
   /* fopen file */
   if(!(fp=fopen(envfile, "r"))) 
   {
-      printf("***Can't open %s. Check setting is correct\n", envfile);
+      printf("Error:Can't open environment variable file <%s>. Check setting is correct\n", envfile);
       exit(0);
   }
   /* read in lines */
