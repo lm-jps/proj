@@ -123,8 +123,6 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
   int status;
   char version_number[MAX_CHAR_VERSION_NUMBER]; 
   HK_Config_Files *matching_config;
-  char *init_hdr_apid;
-  char *init_hdr_pkt_version;
 
   /* init values */
   matching_config= (HK_Config_Files *)NULL;
