@@ -1,2 +1,2 @@
 20,50 9-18 * * 1-5 /usr/bin/perl/home/production/cvs/JSOC/proj/lev0/scripts/hk/clmq.pl >/dev/null 2>&1
-
+0  18 * * 1-5 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ingest_hsb_dayfile.pl -v apidlist=/home/carl/cvs/JSOC/proj/lev0/scripts/hk/df_apid_list_day_file_hsb dsnlist=/home/carl/cvs/JSOC/proj/lev0/scripts/hk/df_apid_ds_list_for_hsb src=hsb  >/dev/null 2>&1
