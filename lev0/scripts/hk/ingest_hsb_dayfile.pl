@@ -1,8 +1,5 @@
 #!/usr/bin/perl
 ##############################################################################
-#NAME: ingest_hsb_dayfile.pl                                                 #
-#Author(s): Carl                                                             #
-##############################################################################
 # Name:        ingest_hsb_dayfile.pl - Ingest hsb dayfiles                   #
 # Description: Used to ingest high spreed bus formatted dayfiles to DRMS.    #
 #              The script can gather a list of dayfiles based on arguments   #
@@ -27,8 +24,21 @@
   $ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/surge/production/lev0/hk_hsb_dayfile";
   $ENV{'DF_INGEST_HSB_DEBUG'}="0";
 
+  #common setting for all environments
+  $hm=$ENV{'HOME'};
+  $ENV{'MAILTO'}="";
+  $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
+  $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
+
+  # set log file
+  $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-hsb";
+
   # set debug flag 1 to turn on and 0 to turn off
   $dflg=$ENV{'DF_INGEST_HSB_DEBUG'}="0";
+
+  # open log file
+  open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
+  print LF `date`;
 
   #check for any arguments passed in command
   &check_arguments();
@@ -51,6 +61,10 @@
 
   #ingest files in list as day files
   &ingest_day_files();
+ 
+  #close logfile
+  print LF `date`;
+  close LF;
 
 #############################################################################
 # subroutine check arguments and set flags                                  #
@@ -120,13 +134,13 @@ sub check_arguments()
       }
       else
       {
-         print "WARNING: Did not use src argument. Exiting script\n";
+         print LF "WARNING: Did not use src argument. Exiting script\n";
          exit;
       }
     }
     else
     {
-      print "Warning:arguments entered not correct\n";
+      print LF "Warning:arguments entered not correct\n";
       exit;
     }
   }
@@ -147,13 +161,13 @@ sub check_arguments()
       }
       else
       {
-         print "WARNING: Did not use src argument. Exiting script\n";
+         print LF "WARNING: Did not use src argument. Exiting script\n";
          exit;
       }
     }
     else
     {
-      print "Warning:arguments entered not correct\n";
+      print LF "Warning:arguments entered not correct\n";
       exit;
     }
  }
@@ -171,15 +185,15 @@ sub check_arguments()
        }
        else
        {
-         print "WARNING: Did not use src argument. Exiting script\n";
+         print LF "WARNING: Did not use src argument. Exiting script\n";
          exit;
        }
     }
     else
     {
-       print "Warning argument 3 is not correct: $ARGV[3]\n";
-       print "This is the data series name list. \n";
-       print "Existing. Enter correct value. \n";
+       print LF "Warning argument 3 is not correct: $ARGV[3]\n";
+       print LF "This is the data series name list. \n";
+       print LF "Existing. Enter correct value. \n";
        exit;
     }
   }
@@ -195,15 +209,15 @@ sub check_arguments()
        }
        else
        {
-         print "WARNING: Did not use src argument. Exiting script\n";
+         print LF "WARNING: Did not use src argument. Exiting script\n";
          exit;
        }
     }
     else
     {
-       print "Warning argument 3 is not correct: $ARGV[3]\n";
-       print "This is the data series name list. \n";
-       print "Existing. Enter correct value. \n";
+       print LF "Warning argument 3 is not correct: $ARGV[3]\n";
+       print LF "This is the data series name list. \n";
+       print LF "Existing. Enter correct value. \n";
        exit;
     }
   }
@@ -269,7 +283,7 @@ sub get_dayfile_list()
   #close directory file handle
   closedir DIR_DF; 
   push(@df_files, "");
-  if ($dflg eq "1") {print "get_dayfile_list():dayfile_list is @df_files\n";}
+  if ($dflg eq "1") {print LF "get_dayfile_list():dayfile_list is @df_files\n";}
 }
 #############################################################################
 # subroutine get_apid_to_do: gets list of apid to create maps files for     #
@@ -294,7 +308,7 @@ sub get_apid_to_do
     }
     close FILE_APID_LIST ;
 
-  if ($dflg eq "1") { print "get_apid_to_do():...doing decimal formatted apids\n @all_apids";}
+  if ($dflg eq "1") { print LF "get_apid_to_do():...doing decimal formatted apids\n @all_apids";}
   }
   elsif ($apid_list_flg eq "2")
   {
@@ -308,11 +322,11 @@ sub get_apid_to_do
       push(@all_apids, substr($ARGV[1],5));
 
     }
-    if ($dflg eq "1") { print "get_apid_to_do():...doing decimal formatted apids @all_apids\n";}
+    if ($dflg eq "1") { print LF "get_apid_to_do():...doing decimal formatted apids @all_apids\n";}
   }
   else 
   {
-    print "WARNING: Not valid apid list flag value\n";
+    print LF "WARNING: Not valid apid list flag value\n";
   }
 }
 #############################################################################
@@ -476,7 +490,7 @@ sub ingest_day_files()
     #get file
     $arg5="file=$dir_init_df/$file";
     @args=("$command","$arg1 ","$arg2 ","$arg3 ","$arg4 " ,"$arg5");
-    print"Load dayfile command: <@args>\n";
+    print LF "-->Load dayfile command: <@args>\n";
 
     if ($view_flg eq "1")
     {
@@ -486,12 +500,12 @@ sub ingest_day_files()
     {
       system(" @args ") == 0 or die "system(\"  @args\")\nFailure cause:Need to create data series. Check if exists:describe_series $dsn\nFailed:$?" ; 
       #$log=`@args`;
-      print $log;
-      if($dflg eq "1") {print "ingest_dayfiles():loading data to be loaded in data series only\n";}
+      #print LF $log;
+      if($dflg eq "1") {print LF "ingest_dayfiles():loading data to be loaded in data series only\n";}
     }
   }
   if ($view_flg eq "1")
   {
-      print "ingest_dayfile():skipping executing load of dayfiles above and viewing data to be loaded in data series only\n";
+      print LF "ingest_dayfile():skipping executing load of dayfiles above and viewing data to be loaded in data series only\n";
   }
 }
