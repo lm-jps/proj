@@ -6,23 +6,16 @@
 <SCRIPT TYPE="text/javascript" SRC="prototype-1.6.0.2.js"></SCRIPT>
 
 <style type="text/css">
-body {
-  margin:0;
-  padding:0;
-  }
-#header {
-  position:relative;
-  top:0;
-  left:0;
-  width:100%;
-  background:#eee;
-  }
+
+#body { margin:0; padding:0; }
+#header { position:relative; top:0; left:0; width:100%; background:#eee; }
+#footer { position:fixed; bottom:0; left:0; width:100%; background:#eee; }
 
 #SeriesDiv { position:relative; margin:5px; }
 #MySeriesDiv { position:relative; margin:5px; }
 #SeriesInfoDiv { position:relative; margin:5px; }
-#SeriesInfoCmdDiv { position:relative; margin:5px; }
 #FullInfoDiv { position:relative; margin:5px; }
+#FullDisplayInfoDiv { position:relative; margin:5px; }
 
 #SeriesSelect { width:20em; }
 #KeysSelect { width:20em; }
@@ -30,15 +23,6 @@ body {
 #SeriesFilter { width:20em; }
 #RecordSet { width:30em; }
 #SeriesButton { width:10em; }
-#FetchButton { width:10em; }
-
-#footer {
-  position:fixed;
-  bottom:0;
-  left:0;
-  width:100%;
-  background:#eee;
-  }
 
 </style>
  
@@ -46,7 +30,7 @@ body {
 
 // 
 // Documents for the server side tools can be found at
-// http://jsoc.stanford.edu/jsocwiki/AjaxJsocConnect
+// "http://jsoc.stanford.edu/jsocwiki/AjaxJsocConnect"
 //
 
 // Global variables and initialize page locations
@@ -166,8 +150,8 @@ function GetSeries()
 function PickSeries()
   {
   CleanSeriesPick();
-  SeriesName = $("SeriesSelect").options[$("SeriesSelect").selectedIndex].text;
   CurrentSeries = $("SeriesSelect").selectedIndex;
+  SeriesName = $("SeriesSelect").options[CurrentSeries].text;
   $("Series_Name_Place").innerHTML = SeriesName;
   $("RecSetPlace").innerHTML = SeriesName;
   $("RecordSet").value = SeriesName;
@@ -246,9 +230,10 @@ function PickSeries()
         $("SSPlace").innerHTML =  keywords + "<BR>" + segments + "<BR>" + links;
 	// Place first and last record info on screen
 	if (data.Interval.MaxRecnum > 0)
-          $("FirstLastPlace").innerHTML = "First Record = " + data.Interval.FirstRecord + ", at recnum = " +
-	     data.Interval.FirstRecnum + "<BR> Last Record = " + data.Interval.LastRecord + ", at recnum = " +
-	     data.Interval.LastRecnum + "<BR>" + "Max recnum is " + data.Interval.MaxRecnum ;
+          $("FirstLastPlace").innerHTML = "First Record = " + data.Interval.FirstRecord + 
+              "<BR>Last Record = " + data.Interval.LastRecord +
+	      "<BR>First Rec., Last Rec. and largest used recnums: " + data.Interval.FirstRecnum + ", " +
+              data.Interval.LastRecnum + ", " +  data.Interval.MaxRecnum + " resp." ;
 	else
 	  $("FirstLastPlace").innerHTML = "This series contains no records";
         }
