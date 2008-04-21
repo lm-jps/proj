@@ -368,7 +368,7 @@ sub DownloadApplicableFiles
 	    }
 
 	    # do the download
-	    $disposition = DownloadFile($localRoot, $oneFile);
+	    $disposition = DownloadFile($localRoot, $remoteRoot, $oneFile);
 	    
 	    if ($disposition eq "couldn't download")
 	    {
@@ -566,12 +566,13 @@ sub ProcessFileSpecs
 
 sub DownloadFile
 {
-    my($localRoot, $theFile) = @_;
+    my($localRoot, $remoteRoot, $theFile) = @_;
     my($ret);
     my($filesDir);
     my($fullRdCmd);
     my($cmdRet);
     my($error) = 0;
+    my($localFile);
 
     if($theFile =~ /(.+)\/[^\/]+$/)
     {
@@ -593,22 +594,40 @@ sub DownloadFile
 
     if (!$error)
     {
-	$fullRdCmd = $RDCMD . $theFile . " " . $localRoot . $theFile;
-	print "Executing $fullRdCmd: ";
-	$cmdRet = system($fullRdCmd . " >& /dev/null");
-
-	#print $fullRdCmd . "\n";
-
-	if ($cmdRet != 0)
+	# strip off remote root
+	if ($theFile =~ /^${remoteRoot}(.+)/)
 	{
-	    $ret = "couldn't download";
-	    $error = 1;
-	    print "FAILED\n"
+	    $localFile = $1;
+
+	    if (index($localFile, "/", 0) == 0)
+	    {
+		$localFile = substr($localFile, 1);
+	    }
+
+	    $fullRdCmd = $RDCMD . $theFile . " " . $localRoot . $localFile;
+	    print "Executing $fullRdCmd: ";
+
+	    $cmdRet = system($fullRdCmd . " >& /dev/null");
+
+	    #print $fullRdCmd . "\n";
+
+	    if ($cmdRet != 0)
+	    {
+		$ret = "couldn't download";
+		$error = 1;
+		print "FAILED\n";
+	    }
+	    else
+	    {
+		$ret = "downloaded";
+		print "OK\n";
+	    }
 	}
 	else
 	{
-	    $ret = "downloaded";
-	    print "OK\n";
+	    $ret = "couldn't download";
+	    $error = 1;
+	    print "Bad remote file '$theFile': not under root '$remoteRoot'.\n";
 	}
     }
 
