@@ -35,6 +35,7 @@ $RQARG = "hmiroboto\@129.165.8.6";
 $RDCMD = "scp hmiroboto\@129.165.8.6:";
 my(%STATMAP);
 $FSFILE = "fslist";
+$LOGALL = "LOGALL";
 
 my($configFile) = "mocDlSpec.txt"; # input file; defaults to config in working directory
 my($statusFile) = "mocDlStatus.txt"; # file to write status to; defaults to file in working directory
@@ -215,7 +216,7 @@ sub ParseConfigFile
     # specs[0] = nRecursive;
     # specs[1] = nNRecursive;
 
-    open(CFILE, $filePath) || die "Couldn't open config file: $filePath\n";
+    open(CFILE, $filePath) || die "$LOGALL: Couldn't open config file: $filePath\n";
     
     while($line = <CFILE>)
     {
@@ -241,7 +242,7 @@ sub ParseConfigFile
 	}
 	else
 	{
-	    die "Bad config file format: $line.\n";
+	    die "$LOGALL: Bad config file format: $line.\n";
 	}
 
 	# are there any modifiers in $fileSpec?
@@ -267,7 +268,7 @@ sub ParseConfigFile
 	    
 	    if (defined($modifier))
 	    {
-		die "Modifier not allowed in $line.\n";
+		die "LOGALL: Modifier not allowed in $line.\n";
 	    }
 	}
 	elsif ($directive eq "filespec")
@@ -281,7 +282,7 @@ sub ParseConfigFile
 		else
 		{
 		    # no other modifiers defined currently
-		    die "Bad fileSpec modifier $modifier.\n";
+		    die "$LOGALL: Bad fileSpec modifier $modifier.\n";
 		}
 	    }
 	    else
@@ -311,7 +312,7 @@ sub ParseConfigFile
 	}
 	else
 	{
-	    die "Invalid directive: " . $directive;
+	    die "$LOGALL: Invalid directive: " . $directive;
 	}
     }
 
@@ -320,8 +321,8 @@ sub ParseConfigFile
     
     if (!defined($remoteRoot) || !defined($localRoot))
     {
-	die "Missing remote or local root.\n";
-    }    
+	die "$LOGALL: Missing remote or local root.\n";
+    }
 
     @specs = ($remoteRoot, $nRecursive, $nNRecursive, @rSpecs, @nrSpecs);
 
@@ -356,7 +357,7 @@ sub DownloadApplicableFiles
 		{
 		    if ($disposition eq "notdownloaded")
 		    {
-			print STDOUT "Download of '$oneFile' failed previously - manually run download script.\n";
+			print STDOUT "$LOGALL: Download of '$oneFile' failed previously - manually run download script.\n";
 		    }
 
 		    next;
@@ -382,7 +383,7 @@ sub DownloadApplicableFiles
 	    }
 	    else
 	    {
-		die "Unknown download disposition $disposition.\n";
+		die "$LOGALL: Unknown download disposition $disposition.\n";
 	    }
 	}
     }
@@ -597,7 +598,7 @@ sub DownloadFile
 
 	if (!(-e $filesDir))
 	{
-	    print "Couldn't make local directory: $filesDir\n";
+	    print "$LOGALL: Couldn't make local directory: $filesDir\n";
 	    $ret = "couldn't download";
 	    $error = 1;
 	}
@@ -614,6 +615,7 @@ sub DownloadFile
 		$ret = "couldn't download";
 		$error = 1;
 		print "FAILED\n";
+		print "$LOGALL: Failed to download '$theFile'.\n";
 	    }
 	    else
 	    {
@@ -626,7 +628,7 @@ sub DownloadFile
     {
 	$ret = "couldn't download";
 	$error = 1;
-	print "Bad remote file '$theFile': not under root '$remoteRoot'.\n";
+	print "$LOGALL: Bad remote file '$theFile': not under root '$remoteRoot'.\n";
     }
 
     return $ret;
@@ -641,7 +643,7 @@ sub ReadStatusFile
     my($line);
 
     # read
-    open(STATUSFILE, "< $statusFilePath") || die "Couldn't access output file $statusFilePath.\n";
+    open(STATUSFILE, "< $statusFilePath") || die "$LOGALL: Couldn't access status file $statusFilePath.\n";
 
     while ($line = <STATUSFILE>)
     {
@@ -672,13 +674,13 @@ sub ReadStatusFile
 	}
 	else
 	{
-	    print "Bad status file, deleting $statusFilePath\n";
+	    print "$LOGALL: Bad status file, deleting $statusFilePath\n";
 	    %STATMAP = undef;
 	    system("unlink $statusFilePath");
 	    
 	    if (-e $statusFilePath)
 	    {
-		die "Couldn't access status file $statusFilePath\n";
+		die "$LOGALL: Couldn't access status file $statusFilePath\n";
 	    }
 	    
 	    last;
@@ -711,7 +713,7 @@ sub WriteStatusFile
     my($date);
 
     # write out date first
-    open(DATECMD, "date |") || die "Couldn't run date\n";
+    open(DATECMD, "date |") || die "$LOGALL: Couldn't run date\n";
     $date = <DATECMD>;
     chomp($date);
 
@@ -729,4 +731,3 @@ sub WriteStatusFile
         print STATUSFILE $aFile . "\t" . $status . "\n";
     }
 }
-

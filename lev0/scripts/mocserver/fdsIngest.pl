@@ -13,6 +13,8 @@ $JSOCDB = "jsoc";
 
 $removefiles = "no";
 
+$LOGALL = "LOGALL";
+
 # Primary key
 my(@primaryKey);
 $primaryKey[0] = "FDS_DATA_PRODUCT";
@@ -132,7 +134,7 @@ else
     }
     else
     {
-	print STDERR "Could not find input file/directory $ARGV[0].\n";
+	print STDERR "$LOGALL: Could not find input file/directory $ARGV[0].\n";
 	exit($RET_BADINPUT);
     }
 
@@ -195,7 +197,7 @@ foreach $filename (@contents)
     else
     {
 	$err = 1;
-	print STDOUT "  Filename $filename is not a recognized format.\n";
+	print STDOUT "$LOGALL:   Filename $filename is not a recognized format.\n";
     }
 
     # get prefix and date
@@ -209,7 +211,7 @@ foreach $filename (@contents)
 	else
 	{
 	    $err = 1;
-	    print STDOUT "  Filename $filename is not a recognized format.\n";
+	    print STDOUT "$LOGALL:   Filename $filename is not a recognized format.\n";
 	}
 
 	if (!$err)
@@ -246,7 +248,7 @@ foreach $filename (@contents)
 	    else
 	    {
 		$err = 1;
-		print STDOUT "  $ext is not a recognized format.\n";
+		print STDOUT "$LOGALL:   $ext is not a recognized format.\n";
 	    }
 	}
     }
@@ -311,7 +313,7 @@ sub EnumFiles
     # enumerate all files
     if (!open(INPUTDIR, "find $indir -mindepth 1 -type f |"))
     {
-	print STDERR "Could not read from directory \"$inputDir\".\n";
+	print STDERR "$LOGALL: Could not read from directory \"$inputDir\".\n";
 	exit($RET_BADINPUT);
     }
 
@@ -357,7 +359,7 @@ sub CallSetKey
 
 	if (!open(TIMECONV, $tcCmdLine))
 	{
-	    print STDERR "Couldn't run time_conv: $tcCmdLine\n";
+	    print STDERR "$LOGALL: Couldn't run time_conv: $tcCmdLine\n";
 	    exit($RET_TIMECONV);
 	}
 	
@@ -373,7 +375,7 @@ sub CallSetKey
 	    print STDOUT "  Running $skCmd\n";
 	    if (system($skCmd) != 0)
 	    {
-		print STDERR "Error calling set_keys: $?\n";
+		print STDERR "$LOGALL: Error calling set_keys: $?\n";
 		exit($RET_SETKEYS);
 	    }
 
@@ -401,7 +403,7 @@ sub VerifyFileCopy
 
     if (!open(SHOWKEYS, $skCmdLine))
     {
-	print STDERR "Couldn't run show_keys: $skCmdLine\n";
+	print STDERR "$LOGALL: Couldn't run show_keys: $skCmdLine\n";
 	exit($RET_SHOWKEYS);
     }
 
@@ -420,7 +422,7 @@ sub VerifyFileCopy
 		if ($dstFilePath)
 		{
 		    # error - show_keys returned more than one file
-		    print STDERR "  File $1 in DRMS unexpected.\n";
+		    print STDERR "$LOGALL:   File $1 in DRMS unexpected.\n";
 		    close(SHOWKEYS);
 		    return ($RET_SHOWKEYS);
 		}
@@ -462,8 +464,8 @@ sub VerifyFileCopy
 	    
 	    if ($oneSrcSegFile ne $oneDstSegFile)
 	    {
-		print STDERR "  File in DRMS unexpected.\n";
-		print STDERR "    Expected: $oneSrcSegFile, Actual: $oneDstSegFile\n";
+		print STDERR "$LOGALL:   File in DRMS unexpected.\n";
+		print STDERR "$LOGALL:     Expected: $oneSrcSegFile, Actual: $oneDstSegFile\n";
 		close(SHOWKEYS);
 		return ($RET_COPYFAIL);
 	    }
@@ -474,7 +476,7 @@ sub VerifyFileCopy
 		my($cres);
 		if (system($cmpCmd) != 0)
 		{
-		    print STDERR "  $srcFilePath  not successfully copied into DRMS.\n";
+		    print STDERR "$LOGALL:   $srcFilePath  not successfully copied into DRMS.\n";
 		    return ($RET_COPYFAIL);
 		}
 
@@ -485,7 +487,7 @@ sub VerifyFileCopy
 		}
 		else
 		{
-		    print STDERR  "  $srcFilePath NOT successfully copied into DRMS.\n";
+		    print STDERR  "$LOGALL:   $srcFilePath NOT successfully copied into DRMS.\n";
 		    return ($RET_COPYFAIL);
 		}
 	    }
