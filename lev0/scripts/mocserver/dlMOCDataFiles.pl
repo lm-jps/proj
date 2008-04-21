@@ -574,42 +574,40 @@ sub DownloadFile
     my($error) = 0;
     my($localFile);
 
-    if($theFile =~ /(.+)\/[^\/]+$/)
+    # strip off remote root
+    if ($theFile =~ /^${remoteRoot}(.+)/)
     {
-	$filesDir = $localRoot . $1;
-    }
-    
-    # make local directory, if necessary
-    if (!(-e $filesDir))
-    {
-	system("mkdir -p $filesDir");
-    }
+	$localFile = $1;
 
-    if (!(-e $filesDir))
-    {
-	print "Couldn't make local directory: $filesDir\n";
-	$ret = "couldn't download";
-	$error = 1;
-    }
-
-    if (!$error)
-    {
-	# strip off remote root
-	if ($theFile =~ /^${remoteRoot}(.+)/)
+	if (index($localFile, "/", 0) == 0)
 	{
-	    $localFile = $1;
+	    $localFile = substr($localFile, 1);
+	}
 
-	    if (index($localFile, "/", 0) == 0)
-	    {
-		$localFile = substr($localFile, 1);
-	    }
+	if($localFile =~ /(.+)\/[^\/]+$/)
+	{
+	    $filesDir = $localRoot . $1;
+	}
+	
+	# make local directory, if necessary
+	if (!(-e $filesDir))
+	{
+	    system("mkdir -p $filesDir");
+	}
 
+	if (!(-e $filesDir))
+	{
+	    print "Couldn't make local directory: $filesDir\n";
+	    $ret = "couldn't download";
+	    $error = 1;
+	}
+
+	if (!$error)
+	{
 	    $fullRdCmd = $RDCMD . $theFile . " " . $localRoot . $localFile;
 	    print "Executing $fullRdCmd: ";
 
 	    $cmdRet = system($fullRdCmd . " >& /dev/null");
-
-	    #print $fullRdCmd . "\n";
 
 	    if ($cmdRet != 0)
 	    {
@@ -623,12 +621,12 @@ sub DownloadFile
 		print "OK\n";
 	    }
 	}
-	else
-	{
-	    $ret = "couldn't download";
-	    $error = 1;
-	    print "Bad remote file '$theFile': not under root '$remoteRoot'.\n";
-	}
+    }
+    else
+    {
+	$ret = "couldn't download";
+	$error = 1;
+	print "Bad remote file '$theFile': not under root '$remoteRoot'.\n";
     }
 
     return $ret;
