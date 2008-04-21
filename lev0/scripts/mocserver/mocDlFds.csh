@@ -4,7 +4,7 @@
 set notlist = "arta@sun.stanford.edu jennifer@sun.stanford.edu rock@sun.stanford.edu"
 
 # save path
-set cp = echo $PWD
+set cp = `echo $PWD`
 
 set logFile = "/home/jsoc/sdo/fds/fds.log"
 set scriptPath = "/home/jsoc/cvs/JSOC/scripts"
