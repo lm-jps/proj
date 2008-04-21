@@ -1,7 +1,7 @@
 #!/bin/csh
 
 # notification list
-set $notlist = "arta@sun.stanford.edu jennifer@sun.stanford.edu rock@sun.stanford.edu"
+set notlist = "arta@sun.stanford.edu jennifer@sun.stanford.edu rock@sun.stanford.edu"
 
 # save path
 set cp = echo $PWD
