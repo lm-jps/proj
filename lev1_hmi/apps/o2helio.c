@@ -213,7 +213,12 @@ long long gGUID = 0;
 static double V2Hstr2Time(const char *timestr, V2HStatus_t *stat); 
 static void CheckO(const char *orientation, V2HStatus_t *stat);
 
-static void CleanParamMem()
+/* gParamCont holds pointers to data that gets allocated inside the record loop. 
+ * Should there be an error during loop execution, SkipErr() gets called, which
+ * frees this allocated data.  Otherwise, this memory gets freed at the end of 
+ * each loop iteration.
+ */
+static void FreeLoopMem()
 {
    if (gParamCont)
    {
@@ -221,7 +226,7 @@ static void CleanParamMem()
    }
 }
 
-static void FreeParam(const void *v)
+static void FreeLoopMemItem(const void *v)
 {
    /* v is a pointer to char * */
    void **vv = (void **)v;
@@ -231,7 +236,7 @@ static void FreeParam(const void *v)
    }
 }
 
-static void InsertParam(const char *keyn, const void *val)
+static void InsertLoopMemItem(const char *keyn, const void *val)
 {
    char buf[DRMS_MAXHASHKEYLEN];
 
@@ -239,7 +244,7 @@ static void InsertParam(const char *keyn, const void *val)
    {
       gParamCont = hcon_create(sizeof(void *), 
 			       DRMS_MAXHASHKEYLEN, 
-			       FreeParam, 
+			       FreeLoopMemItem, 
 			       NULL, 
 			       NULL, 
 			       NULL, 
@@ -261,14 +266,17 @@ static void InsertParam(const char *keyn, const void *val)
    }
 }
 
-static const char *V2HgetKeyStr(DRMS_Record_t *rec, const char *keyn, int *status)
+/* drms_getkey_string() allocs mem - so if it is called inside the record loop,
+ * a pointer to the allocated memory must be saved so that if SkipErr() is 
+ * called, that allocated memory won't be leaked.
+ */
+static const char *V2HGetKeyStrInLoop(DRMS_Record_t *rec, const char *keyn, int *status)
 {
-   /* drms_getkey_string allocs mem */
    void *mem = (void *)drms_getkey_string(rec, keyn, status);
 
    if (mem)
    {
-      InsertParam(keyn, mem);
+      InsertLoopMemItem(keyn, mem);
    }
 
    return (const char *)mem;
@@ -289,7 +297,7 @@ static inline void SkipErr(int status, DRMS_Record_t *rec, char *msg, ...)
    ds = drms_getkey_int(rec, kDSDS_DS, NULL);
    rn = drms_getkey_int(rec, kDSDS_RN, NULL);
    fprintf(stderr, "*** warning %d: %s (skipping record ds=%d, rn=%d)\n", status, buf, ds, rn);
-   CleanParamMem();
+   FreeLoopMem();
 }
 
 static inline void ParameterDef(int status, 
@@ -330,7 +338,7 @@ static inline void ParameterDef(int status,
             PNAME,                                                  \
   	    dsint,                                                  \
 	    rnint);                                                 \
-    CleanParamMem();                                                \            
+    FreeLoopMem();                                                \            
     return 1;                                                       \
   }
 
@@ -520,7 +528,7 @@ int DoIt(void)
 
 	    rn = drms_getkey_int(inrec, kDSDS_RN, &status);
 
-	    tobsstr = V2HgetKeyStr(inrec, kT_OBS, &status); /* v2helio owns string */
+	    tobsstr = V2HGetKeyStrInLoop(inrec, kT_OBS, &status); /* v2helio owns string */
 
 	    if ((!tobsstr) || (!*tobsstr))
 	    {
@@ -651,7 +659,7 @@ int DoIt(void)
 
 	    if (!skip_checko)
 	    {
-	       orientation = V2HgetKeyStr(inrec, kORIENT, &status);
+	       orientation = V2HGetKeyStrInLoop(inrec, kORIENT, &status);
 	       PARAMETER_ERROR(status, status, inrec, kORIENT);
 	       CheckO(orientation, &vret);
 	    } 
@@ -659,7 +667,7 @@ int DoIt(void)
 	    {
 	       char foo[] = "SESW    ";
 	       orientation = strdup(foo);
-	       InsertParam(foo, orientation);
+	       InsertLoopMemItem(foo, orientation);
 	    }
 
 	    obsdist = drms_getkey_double(inrec, kOBS_DIST, &status);
@@ -730,8 +738,8 @@ int DoIt(void)
 
 	    if (outarr)
 	    {
-	       InsertParam("arrayoutdata", outarr->data);
-	       InsertParam("arrayout", outarr);
+	       InsertLoopMemItem("arrayoutdata", outarr->data);
+	       InsertLoopMemItem("arrayout", outarr);
 	    }
 
 	    /* ??? how many of these attributes do we really need? */
@@ -938,11 +946,12 @@ int DoIt(void)
 
 	    gettimeofday(&tv, NULL);
 	    fprintf(stdout, 
-		    "rn %d done (%f elapsed)\n", 
+		    "rn %d done (%f ms elapsed)\n", 
 		    rn, 
-		    (float)((tv.tv_usec - tv0.tv_usec) / 1000));
+		    (float)((tv.tv_sec * 1000000.0 + tv.tv_usec -
+			     (tv0.tv_sec * 1000000.0 + tv0.tv_usec)) / 1000.0));
 	    
-	    CleanParamMem();
+	    FreeLoopMem();
 	 } /* outrec && inrec */
       } /* iRec */
    }
@@ -952,10 +961,11 @@ int DoIt(void)
       drms_close_records(inRecSet, DRMS_FREE_RECORD);
    }
 
-   CleanParamMem();
-
    gettimeofday(&tv, NULL);
-   fprintf(stdout, "Total time spent %f\n", (float)((tv.tv_usec - tv0.tv_usec) / 1000));
+   fprintf(stdout, 
+	   "Total time spent %f ms\n", 
+	   (float)((tv.tv_sec * 1000000.0 + tv.tv_usec -
+		    (tv0.tv_sec * 1000000.0 + tv0.tv_usec)) / 1000.0));
    return error;
 
 } /* end v2helio_strategy */
