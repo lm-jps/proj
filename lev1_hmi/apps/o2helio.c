@@ -549,7 +549,7 @@ int DoIt(void)
 	    if (segin)
 	    {
 	       inarr = drms_segment_read(segin, segin->info->type, &status);
-	       /* inarr gets freed somehow, so don't free here. */
+	       
 	    } /* segin */
 
 	    if (!segin || status != DRMS_SUCCESS || !inarr)
@@ -558,6 +558,9 @@ int DoIt(void)
 	       SkipErr(status, inrec, "no data to process");
 	       continue; /* go to next image */
 	    }
+
+	    InsertLoopMemItem("arrayindata", inarr->data);
+	    InsertLoopMemItem("arrayin", inarr);
 
 	    if (maxmissvals > 0) 
 	    {
