@@ -559,6 +559,7 @@ int DoIt(void)
 	       continue; /* go to next image */
 	    }
 
+	    /* Order is very important - the first will be freed before the second */
 	    InsertLoopMemItem("arrayindata", inarr->data);
 	    InsertLoopMemItem("arrayin", inarr);
 
@@ -741,6 +742,7 @@ int DoIt(void)
 
 	    if (outarr)
 	    {
+	       /* Order is very important - the first will be freed before the second */
 	       InsertLoopMemItem("arrayoutdata", outarr->data);
 	       InsertLoopMemItem("arrayout", outarr);
 	    }
