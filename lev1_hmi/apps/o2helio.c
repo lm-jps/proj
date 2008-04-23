@@ -799,6 +799,9 @@ int DoIt(void)
 	    /* magsynop needs to know whether the fits file contains radial values or not. */
 	    drms_copykey(outrec, inrec, FDRADIAL);
 
+	    drms_copykey(outrec, inrec, "series_num");
+	    drms_copykey(outrec, inrec, "rn");
+
 	    /* save the differential rotation correction parameters */
 	    if (carrStretch)
 	    {
