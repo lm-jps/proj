@@ -42,8 +42,11 @@
 #define kMAXROWS        65536
 
 /* cmd-line parameters */
-#define kRecSetIn       "recsin"
-#define kSeriesOut      "dsout"
+#define kRecSetIn       "in"
+#define kSeriesOut      "out"
+#define kSegIn          "segin"
+#define kSegOut         "segout"
+#define kNOTSPECIFIED   "not specified"
 #define kCarrStretch    "CARRSTRETCH"
 #define kMAXMISSVALS    "MAXMISSVALS"
 #define kAPODIZE        "APODIZE"
@@ -154,6 +157,8 @@ ModuleArgs_t module_args[] =
 {
    {ARG_STRING,  kRecSetIn, "", "Input data records."},
    {ARG_STRING,  kSeriesOut, "", "Output data series."},
+   {ARG_STRING,  kSegIn, kNOTSPECIFIED, ""},
+   {ARG_STRING,  kSegOut, kNOTSPECIFIED, ""},
    {ARG_FLOAT,   kMAPRMAX,  "0.95", "", ""},
    {ARG_INT,     kMAPMMAX,  "1536", "", ""},	/* determines mapcols */
 						/* default value is 3*512 */
@@ -295,6 +300,7 @@ static inline void SkipErr(int status, DRMS_Record_t *rec, char *msg, ...)
    ds = drms_getkey_int(rec, kDSDS_DS, NULL);
    rn = drms_getkey_int(rec, kDSDS_RN, NULL);
    fprintf(stderr, "*** warning %d: %s (skipping record ds=%d, rn=%d)\n", status, buf, ds, rn);
+   CleanParamMem();
 }
 
 static inline void ParameterDef(int status, 
@@ -355,7 +361,6 @@ int DoIt(void)
    int error = 0;
 
    const char *tobsstr, *trefstr, *orientation;
-   int ds;
    int rn;
    int paramsign;
    int longitude_shift, velocity_correction, interpolation, apodization;
@@ -373,7 +378,7 @@ int DoIt(void)
    V2HStatus_t vret = V2HStatus_Success;
    double tobs, tmearth, tref;
    double smajor, sminor, sangle;
-   double xscale, yscale, imagescale, xs;
+   double xscale, yscale, imagescale;
    int xpixels, ypixels, pixels;
    double obs_vr, obs_vw, obs_vn, vsign;
    double b0, bmax, bmin, sinBdelta;
@@ -398,6 +403,7 @@ int DoIt(void)
    LIBASTRO_Dist_t distP;
    DRMS_Record_t *outrec = NULL;
    DRMS_Segment_t *segin = NULL;
+   DRMS_Segment_t *segout = NULL;
    DRMS_Array_t *inarr = NULL;
    DRMS_Array_t *outarr = NULL;
 
@@ -487,6 +493,9 @@ int DoIt(void)
 
    char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
    DRMS_RecordSet_t *inRecSet = drms_open_records(drms_env, inRecQuery, &status);
+   char *outSeries = cmdparams_get_str(&cmdparams, kSeriesOut, NULL);
+   char *segnamein = cmdparams_get_str(&cmdparams, kSegIn, NULL);
+   char *segnameout = cmdparams_get_str(&cmdparams, kSegOut, NULL);
 
    if (status == DRMS_SUCCESS)
    {
@@ -502,7 +511,7 @@ int DoIt(void)
 	 /* create an out record */
 	 DRMS_RecordSet_t *rs = drms_create_records(drms_env, 
 						    1, 
-						    kSeriesOut,
+						    outSeries,
 						    DRMS_PERMANENT, 
 						    &status);
 
@@ -519,8 +528,7 @@ int DoIt(void)
 	    {
 	       /* XXX Do outseries stuff here. */
 	    }
-	    
-	    ds = drms_getkey_int(inrec, kDSDS_DS, &status);
+
 	    rn = drms_getkey_int(inrec, kDSDS_RN, &status);
 
 	    tobsstr = V2HgetKeyStr(inrec, kT_OBS, &status); /* v2helio owns string */
@@ -532,16 +540,19 @@ int DoIt(void)
 	       continue; /* go to next image */
 	    }
 
-	    segin = drms_segment_lookup(inrec, kDSDS_Segment);
+	    if (!strcmp(kNOTSPECIFIED, segnamein))
+	    {
+	       segin = drms_segment_lookupnum(inrec, 0);
+	    }
+	    else
+	    {
+	       segin = drms_segment_lookup(inrec, segnamein);
+	    }
 
 	    if (segin)
 	    {
 	       inarr = drms_segment_read(segin, segin->info->type, &status);
-	       if (inarr)
-	       {
-		  InsertParam("arraydata", inarr->data);
-		  InsertParam("array", inarr);
-	       } /* inarr */
+	       /* inarr gets freed somehow, so don't free here. */
 	    } /* segin */
 
 	    if (!segin || status != DRMS_SUCCESS || !inarr)
@@ -670,9 +681,6 @@ int DoIt(void)
 	    rsunDef = ARCSECSINRAD * S / sqrt(1.0 - S * S) / imagescale;	   
 	    ParameterDef(status, kR_SUN, rsunDef, &rsun, inrec);
    
-	    xs = drms_getkey_double(inrec, 
-				    kXSCALE, 
-				    &status); /* yeah, there is X_SCALE AND XSCALE */
 	    if (status == DRMS_SUCCESS)
 	    {
 	       /* New meaning of R_SUN, change value to old one if X_SCALE == Y_SCALE
@@ -729,6 +737,12 @@ int DoIt(void)
 	    {
 	       SkipErr(status, inrec, "unable to create output array");
 	       continue;
+	    }
+
+	    if (outarr)
+	    {
+	       InsertParam("arrayoutdata", outarr->data);
+	       InsertParam("arrayout", outarr);
 	    }
 
 	    /* ??? how many of these attributes do we really need? */
@@ -803,7 +817,6 @@ int DoIt(void)
 	       float *dat = (float *)inarr->data;
 	       double bfitzero = drms_getkey_double(inrec, kBFITZERO, &status);
 	       int i;
-	       char str[80];
 
 	       if (status == DRMS_SUCCESS || isnan(bfitzero)) 
 	       {
@@ -911,21 +924,25 @@ int DoIt(void)
 	    }
 
 	    /* Write to the out record */
-	    if (outrec)
+	    if (!strcmp(kNOTSPECIFIED, segnameout))
 	    {
-	       DRMS_Segment_t *segout = drms_segment_lookup(outrec, kDSDS_Segment);
-	       if (segout)
-	       {
-
-		  /* copy global keywords to out */
+	       segout = drms_segment_lookupnum(outrec, 0);
+	    }
+	    else
+	    {
+	       segout = drms_segment_lookup(outrec, segnameout);
+	    }
+	    
+	    if (segout)
+	    {
+	       /* copy global keywords to out */
 #if 0
-		  /* XXX */
-		    sds_append_attrs(out_vds->global_attributes, in_vds->global_attributes);
-		  vds_setkey_str(out_vds, "CONFORMS", "TS_EQ");
+	       /* XXX */
+	       sds_append_attrs(out_vds->global_attributes, in_vds->global_attributes);
+	       vds_setkey_str(out_vds, "CONFORMS", "TS_EQ");
 #endif
 
-		  drms_segment_write(segout, outarr, 0);
-	       }
+	       drms_segment_write(segout, outarr, 0);
 
 	       drms_close_records(rs, DRMS_INSERT_RECORD);
 	    }
@@ -935,7 +952,9 @@ int DoIt(void)
 		    "rn %d done (%f elapsed)\n", 
 		    rn, 
 		    (float)((tv.tv_usec - tv0.tv_usec) / 1000));
-	 } /* inrec */
+	    
+	    CleanParamMem();
+	 } /* outrec && inrec */
       } /* iRec */
    }
 

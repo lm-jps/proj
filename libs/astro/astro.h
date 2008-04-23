@@ -110,6 +110,24 @@ int Obs2helio(
 	       float   diffrotC,
 	       LIBASTRO_RotRate_t *rRates, /* rotation rates passed by reference*/
 	       int        size);
+int apodize(float *data,		/* input/output data array */
+	    double b0,		/* heliographic latitude of disk center */
+	    int cols, int rows,	/* width and height of input array */
+	    double Lmin,		/* start of longitude range */
+	    double Ldelta,		/* increment in longitude pre col */
+	    double sinBdelta,	/* increment in sin latitude per row */
+	    int apodlevel,		/* type of apodization */
+	    /* 0 to do no apodization */
+	    /* 1 to apodize in true solar coordinates */
+	    /* 2 to apodize in ideal solar coordinates */
+	    double apinner,		/* fractional radius to start apodization at */
+	    double apwidth,		/* width of apodization */
+	    int apel,		/* do elliptical apodization as described by 
+				 * apx and apy */
+	    double apx,		/* divide the x position by this before applying 
+				   apodization */
+	    double apy);	/* divide the y position by this before applying 
+				   apodization */
 
 float Ccint2(float *f, int nx, int ny, double x, double y);
 double Ccint2d(double *f, int nx, int ny, double x, double y);
