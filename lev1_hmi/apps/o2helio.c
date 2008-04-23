@@ -252,34 +252,23 @@ static void InsertParam(const char *keyn, const void *val)
       {
 	 snprintf(buf, sizeof(buf), "%s%lld", keyn, gGUID);
 	 gGUID++;
-	 hcon_insert(gParamCont, buf, val);
+	 hcon_insert(gParamCont, buf, &val);
       }
       else
       {
-	 hcon_insert(gParamCont, keyn, val);
+	 hcon_insert(gParamCont, keyn, &val);
       }
    }
 }
 
 static const char *V2HgetKeyStr(DRMS_Record_t *rec, const char *keyn, int *status)
 {
+   /* drms_getkey_string allocs mem */
    void *mem = (void *)drms_getkey_string(rec, keyn, status);
 
    if (mem)
    {
       InsertParam(keyn, mem);
-   }
-
-   return (const char *)mem;
-}
-
-static const char *V2HparamsGetStr(CmdParams_t *params, char *name, int *status)
-{
-   void *mem = (void *)cmdparams_get_str(params, name, status);
-
-   if (mem)
-   {
-      InsertParam(name, mem);
    }
 
    return (const char *)mem;
@@ -435,7 +424,7 @@ int DoIt(void)
    rmax = cmdparams_get_double(&cmdparams, kMAPRMAX, &status);
    refl0 = cmdparams_get_double(&cmdparams, kREF_L0, &status);
 
-   outtypeStr = V2HparamsGetStr(&cmdparams, kOUTTYPE, &status);
+   outtypeStr = cmdparams_get_str(&cmdparams, kOUTTYPE, &status);
    if (status == DRMS_SUCCESS && strcmp(outtypeStr, "no scaling") != 0)
    {
       outtype = drms_str2type(outtypeStr);
@@ -456,7 +445,7 @@ int DoIt(void)
 	      kTILTFEFF,
 	      &distP);
 
-   trefstr = V2HparamsGetStr(&cmdparams, kREF_T0, &status);
+   trefstr = cmdparams_get_str(&cmdparams, kREF_T0, &status);
    PARAMETER_ERROR(status, status, NULL, kREF_T0)
 
    tref = V2Hstr2Time(trefstr, &vret); /* secs */
