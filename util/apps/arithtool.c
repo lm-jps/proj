@@ -843,6 +843,17 @@ int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 			      error = 1;
 			 }
 		    }
+
+		    if (inSegArray)
+		    {
+		       drms_free_array(inSegArray);
+		    }
+		    
+		    if (withSegArray)
+		    {
+		       drms_free_array(withSegArray);
+		    }
+
 	       } /* while */
 	  }
 
@@ -1051,6 +1062,8 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 			      error = 1;
 			 }
 		    }
+
+		    drms_free_array(inSegArray);
 	       }
 	  } /* while */
 
