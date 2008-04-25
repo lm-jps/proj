@@ -308,6 +308,7 @@ int DoIt(void)
                   DIE_status("giveup\n");
                   }
             drms_segment_write(outSeg, data, 0);
+            drms_free_array(data);
             }
           else
             DIE("Bad data segment lookup, in or out\n");
