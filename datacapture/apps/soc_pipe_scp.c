@@ -1,5 +1,5 @@
 /*-----------------------------------------------------------------------------
- * cvs/jsoc/src/datacapture/soc_pipe_scp.c
+ * /home/production/cvs/JSOC/proj/datacapture/apps/soc_pipe_scp.c
  *-----------------------------------------------------------------------------
  *
  * DESCRIPTION:
