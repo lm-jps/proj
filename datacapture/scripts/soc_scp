@@ -11,9 +11,11 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #soc_scp hmi 60 60 /dds/dds2soc /usr/local/logs/soc/soc_scp_hmi_jim_2007.02.14_12:10:02.log
 #
 
-$GENTLM1 = "/dds/stage/VC01_2007_293_00_50_25_0000012ef6d_11445_00.tlm";
-$GENTLM2 = "/dds/stage/VC01_2007_293_00_50_56_000001403b2_11445_00.tlm";
+$GENTLM1 = "/dds/stage/VC02_2007_312_16_52_04_0000247c8a0_0e2d1_00.tlm";
+$GENTLM2 = "/dds/stage/VC05_2007_243_11_19_28_0123456789A_FFFFF_00.tlm";
   	 
+#$GENTLM1 = "/dds/stage/VC01_2007_293_00_50_25_0000012ef6d_11445_00.tlm";
+#$GENTLM2 = "/dds/stage/VC01_2007_293_00_50_56_000001403b2_11445_00.tlm";
 #$GENTLM1 = "VCz.tlm";           #file of telemetry to inject in sim mode
 #$GENTLM2 = "VCz.tlm";           #file of telemetry to inject in sim mode
 $flipflop = 0;
