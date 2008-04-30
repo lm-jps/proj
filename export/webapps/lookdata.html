@@ -45,6 +45,7 @@ var nkeysselected = 0;
 var nsegsselected = 0;
 var RecordCount = 0;
 var askedCount = 0;
+var KeyValsFetched = 0;
 
 function InitPage()
   {
@@ -93,6 +94,8 @@ function CleanSeriesPick()
 
 function CleanKeysSelect()
   {
+  KeyValsFetched = 0;
+  $("FetchKeyValsButton").style.backgroundColor = "#D8D8D8";
   for (var i=$("KeysSelect").length; i > 0; i--)
     $("KeysSelect").remove(i-1);
   for (var i=$("SegsSelect").length; i > 0; i--)
@@ -288,6 +291,11 @@ function GetRSCount()
       }
     });
   $("RecSetPlace").innerHTML = $("RecordSet").value;
+  if (KeyValsFetched == 1)
+    {
+    $("FetchKeyValsButton").value = "Update Keyword Values for RecordSet";
+    $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
+    }
   }
 
 
@@ -421,6 +429,8 @@ function GetKeyValues()
 	" records.<BR>Please go back to step 3 and choose a smaller recordset.";
     return;
     }
+  $("FetchKeyValsButton").value = "Processing ...";
+  $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
   new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
@@ -438,6 +448,9 @@ function GetKeyValues()
         }
       else
         {
+        $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
+        $("FetchKeyValsButton").style.backgroundColor = "#D8D8D8";
+        KeyValsFetched = 1;
 	var thissegdata = "";
 	nkeys = data.keywords.length;
 	nsegs = data.segments.length;
@@ -609,7 +622,7 @@ Segments to Fetch:&nbsp;
 <input type="checkbox" name="Get Record Query" id="WantRecInfo">
 Check to Get Record Query (online status and links if a segment selected)
 <BR>
-<input type="button" value="Fetch Keyword Values for RecordSet" onClick="GetKeyValues();" >
+<input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#D8D8D8" onClick="GetKeyValues();" >
 </div> <!-- /div FullInfoDiv -->
 <P>
 <div id="FullDisplayInfoDiv" style="border:solid;border-width:thin;height:190;width:800;overflow:scroll">
