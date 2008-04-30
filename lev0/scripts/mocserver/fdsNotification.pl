@@ -46,11 +46,11 @@ open(LOGFILE, "< $logFile") || die "Couldn't read log file $logFile.\n";
 
 while (defined($line = <LOGFILE>))
 {
+    print STDOUT "$line"; # print everything to cron log
     chomp($line);
 
     if ($line =~ /^${LOGALL}(.+)/)
     {
-#	print STDOUT "$1\n";
 	$mailMsg = "${mailMsg}$1\n";
 	$nlines++;
     }
