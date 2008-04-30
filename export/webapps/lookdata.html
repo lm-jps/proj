@@ -46,15 +46,31 @@ var nsegsselected = 0;
 var RecordCount = 0;
 var askedCount = 0;
 
+function InitPage()
+  {
+  $("SeriesFilter").value = "";
+  CleanSeriesSelect();
+  }
+
 function CleanSeriesSelect()
   {
   for (var i=$("SeriesSelect").length; i > 0; i--)
     {
     $("SeriesSelect").remove(i-1);
     }
-  CleanSeriesPick();
+  CleanSeriesInfo();
   }
 
+function CleanSeriesInfo()
+  {
+  SeriesName = "";
+  $("RecordSet").value = "";
+  $("Series_Info_Place").innerHTML = "";
+  $("Series_Name_Place").innerHTML = "";
+  $("FirstLastPlace").innerHTML = "";
+  $("SeriesCountPlace").innerHTML = "&nbsp;0";
+  CleanSeriesPick();
+  }
 
 function CleanSeriesPick()
   {
@@ -63,6 +79,7 @@ function CleanSeriesPick()
   $("DisplayPlace").innerHTML = "";
   KeyList = "";
   SegList = "";
+  $("SSKeysPlace").innerHTML = "";
   $("SSPlace").innerHTML = "";
   $("RSCount_Place").innerHTML = "";
   RecordCount = 0;
@@ -88,18 +105,6 @@ function CleanKeysSelect()
   SegList =  "";
   }
 
-function InitPage()
-  {
-  SeriesName = "";
-  $("SeriesFilter").value = "";
-  $("RecordSet").value = "";
-  $("Series_Info_Place").innerHTML = "";
-  $("Series_Name_Place").innerHTML = "";
-  $("FirstLastPlace").innerHTML = "";
-  $("SeriesCountPlace").innerHTML = "&nbsp;0";
-  CleanSeriesSelect();
-  }
-
 function insertOption(list,text)
   {
   var y=document.createElement('option');
@@ -119,6 +124,7 @@ function insertOption(list,text)
 
 function GetSeries()
   {
+  CleanSeriesInfo();
   new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/show_series',
     {
     method: 'get',
@@ -192,6 +198,8 @@ function PickSeries()
 	   {
 	   insertOption("KeysSelect","**NONE**");
 	   insertOption("KeysSelect","**ALL**");
+	   insertOption("KeysSelect","*logdir*");
+	   insertOption("KeysSelect","*recnum*");
 	   keywords = "<table BORDER=1><TR><TD>keyword</TD><TD>type</TD><TD>note</TD>"; 
 	   for (i=0; i<n; i++)
 	      {
@@ -306,14 +314,14 @@ function PickKeys()
     KeyList = "**NONE**";
     }
   // check for **ALL**
-  else if ($("KeysSelect")[1].selected)
-    {
-    nkeysselected = nkeys - 2;
-    selkeys = "**ALL**";
-    KeyList = "**ALL**";
-    }
+  // else if ($("KeysSelect")[1].selected)
+    // {
+    // nkeysselected = nkeys - 2;
+    // selkeys = "**ALL**";
+    // KeyList = "**ALL**";
+    // }
   else
-   for (ikey=2; ikey < nkeys; ikey++)
+   for (ikey=0; ikey < nkeys; ikey++)
     if ($("KeysSelect")[ikey].selected)
       {
       if (nkeysselected)
@@ -451,7 +459,18 @@ function GetKeyValues()
 	  if (wantrecinfo)
 	    valuetable = valuetable +  "<TD>" + data.recinfo[irec].name + "</TD><TD>" + data.recinfo[irec].online +  "</TD>";
 	  for (ikey=0; ikey<nkeys; ikey++)
-           valuetable = valuetable + "<TD>" + data.keywords[ikey].values[irec] + "</TD>";
+	   {
+	   this_keyval =  data.keywords[ikey].values[irec];
+	   if (data.keywords[ikey].name == "*logdir*")
+	     {
+	     if (this_keyval.charAt(0) == '/')
+	       {
+	       tmp = "<A HREF=http://jsoc.stanford.edu" + this_keyval + ">" + this_keyval + "</A>";
+	       this_keyval = tmp;
+	       }
+             }
+           valuetable = valuetable + "<TD>" + this_keyval + "</TD>";
+	   }
 	  for (iseg=0; iseg<nsegs; iseg++)
 	   {
 	   thissegdata = data.segments[iseg].values[irec];
@@ -480,7 +499,10 @@ function GetKeyValues()
 
 </HEAD>
 
+<!-- 
 <BODY BGCOLOR="#FFFFFF" onload="InitPage();" >
+-->
+<BODY BGCOLOR="#FFFFFF" >
 
 <DIV ID="header">
 <IMG src="http://hmi.stanford.edu/images/web/JSOC_120.gif"  style="vertical-align:middle" alt="JSOC logo">
@@ -501,7 +523,8 @@ Series Filter <input id="SeriesFilter" type="text" name="filter" value="" onChan
 </form>
 <P>
 </TD>
-<TD colspan=2 style="width:80%">
+<TD></TD>
+<TD  style="width:80%">
 <input type="button" value="reset page" onClick="InitPage();" >
 </TD>
 </TR>
