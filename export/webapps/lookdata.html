@@ -22,7 +22,7 @@
 #SegsSelect { width:20em; }
 #SeriesFilter { width:20em; }
 #RecordSet { width:30em; }
-#SeriesButton { width:10em; }
+#SeriesButton { width:15em; }
 
 </style>
  
@@ -164,9 +164,8 @@ function PickSeries()
   $("Series_Name_Place").innerHTML = SeriesName;
   $("RecSetPlace").innerHTML = SeriesName;
   $("RecordSet").value = SeriesName;
-  $("Series_Info_Place").innerHTML = "PrimeKeys: " + SeriesData.names[CurrentSeries].primekeys + 
-      "<BR>   Note: " + SeriesData.names[CurrentSeries].note;
-  $("FirstLastPlace").innerHTML = "";
+  $("Series_Info_Place").innerHTML = "Note: " + SeriesData.names[CurrentSeries].note;
+  $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
   new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
@@ -194,7 +193,8 @@ function PickSeries()
 	if (n > 0) dbindex = data.dbindex[0];
 	for (i=1; i<n; i++)
 	    dbindex = dbindex + ", " + data.dbindex[i];
-        $("SSKeysPlace").innerHTML = "PrimeKeys: " + primes + ",&nbsp;&nbsp;DBindex: " + dbindex ;
+        $("SSKeysPlace").innerHTML = "PrimeKeys: " + primes + "<BR>" +
+                                     "DBindex: " + dbindex + "<P>";
 	var keywords = "No keywords";
 	n = data.keywords.length;
 	if (n > 0)
@@ -457,7 +457,7 @@ function GetKeyValues()
 	nrecs = data.count;
         $("DisplayPlace").innerHTML = "Status = " + data.status + ", Recordset Key Values for " + data.count + " records returned, preparing page ...";
         wantrecinfo = $("WantRecInfo").checked;
-	valuetable = "<table BORDER=1><TR>"
+	valuetable = "<TABLE BORDER=1><TR>"
 	if (wantrecinfo)
 	  valuetable = valuetable +  "<TD>RecordName</TD><TD>Online</TD>"
 	for (ikey=0; ikey < nkeys; ++ikey)
@@ -512,14 +512,16 @@ function GetKeyValues()
 
 </HEAD>
 
-<!-- 
-<BODY BGCOLOR="#FFFFFF" onload="InitPage();" >
--->
 <BODY BGCOLOR="#FFFFFF" >
 
 <DIV ID="header">
-<IMG src="http://hmi.stanford.edu/images/web/JSOC_120.gif"  style="vertical-align:middle" alt="JSOC logo">
+<IMG src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
+  style="vertical-align:middle;height:60" alt="JSOC logo">
+&nbsp;&nbsp;&nbsp;
 <B><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Show Info</big></B>
+&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp;&nbsp;
+<input type="button" value="reset page" onClick="InitPage();" >
 <br clear=all>
 <HR>
 </DIV>
@@ -527,24 +529,17 @@ function GetKeyValues()
 <div id="SeriesDiv">
 <TABLE style="width:800">
 <TR>
-<TD width="20%">
+<TD  style="width:20%;vertical-align:top;height:150pt">
 <H3>1. Find list of dataseries</H3>
 Enter the dataseries filter to search for seriesnames, or leave blank to select from all series.
-Series Filter <input id="SeriesFilter" type="text" name="filter" value="" onChange="GetSeries();" >
-<input id="SeriesButton" type="button" value="Fetch seriesname list" onClick="GetSeries();" > 
-<form id="SeriesForm" name="SeriesForm" method="GET"  action="" >
-</form>
 <P>
+<!-- <form id="SeriesForm" name="SeriesForm" method="GET"  action="" >
+-->
+<input id="SeriesFilter" type="text" name="filter" value="" onChange="GetSeries();" >
+<P>
+<input id="SeriesButton" type="button" value="Fetch seriesname list" onClick="GetSeries();" > 
+</form>
 </TD>
-<TD></TD>
-<TD  style="width:80%">
-<input type="button" value="reset page" onClick="InitPage();" >
-</TD>
-</TR>
-</div> <!-- /div SeriesDiv -->
-<HR>
-<div id="MySeriesDiv" >
-<TR>
 <TD  style="width:20%;vertical-align:top;height:150pt">
 <H3>2. Pick series to use</H3>
 There are
@@ -555,19 +550,23 @@ Series to choose from.
 <select id="SeriesSelect" size=8 onclick="PickSeries()"> </select>
 </form>
 </TD>
-<TD colspan=2 style="width:80%;vertical-align:top;height:140pt">
+<TD style="width:60%;vertical-align:top;height:150pt">
 <H3>Information about selected series</H3>
-Series Selected is: 
+Current Series is: 
 <span id="Series_Name_Place" style="background-color:#FFF8DC"></span>
 <P>
 <span id="Series_Info_Place" style="background-color:#FFF8DC"></span>
 <P>
+<span id="SSKeysPlace" style="background-color:#FFF8DC;"></span>
 <span id="FirstLastPlace" style="background-color:#FFF8DC"></span>
+<BR>
 </TD>
 </TR>
+</div> <!-- /div SeriesDiv -->
+<div id="MySeriesDiv" >
 <TR>
 <TD colspan=2 width=40%>
-<H3>3. Get Record Count</H3>
+<H3>3. Select Records and Get Record Count</H3>
 Enter RecordSet Specification.
 This request may take a while if the recordset is large<BR>
 Enter RecordSet Spec here<BR>
@@ -579,7 +578,6 @@ Record Count:
 </TD>
 <TD rowspan=2 style="width:60%;vertical-align:top;height:300">
 <H3>List of All Keywords and Segments</H3>
-<span id="SSKeysPlace" style="background-color:#FFF8DC;"></span>
 <div id="SeriesInfoDiv" style="border:solid;border-width:thin;height:290;overflow:scroll">
 <span id="SSPlace" style="background-color:#FFF8DC;"></span>
 </div> <!-- /div SeriesInfoDiv -->
@@ -587,7 +585,7 @@ Record Count:
 </TR>
 </div> <!-- id="MySeriesDiv" -->
 <TR>
-<TD width="15%">
+<TD width="20%">
 <H3>4. Select Keywords</H3>
 Select Keywords for Detailed Lists
 <P>
