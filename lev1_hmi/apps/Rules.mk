@@ -4,7 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODEXE_$(d)	:= $(addprefix $(d)/, o2helio regrid)
+MODEXE_$(d)	:= $(addprefix $(d)/, o2helio regrid helio2mlat_j)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
