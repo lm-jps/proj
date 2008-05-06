@@ -977,7 +977,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
      int nSegs = 0;
 
      /* Open the inSeries. */
-     DRMS_RecordSet_t *inRecSet = drms_open_records(drmsEnv, inSeriesQuery, &status);
+     DRMS_RecordSet_t *inRecSet = drms_open_recordset(drmsEnv, inSeriesQuery, &status);
      DRMS_Record_t *inRec = NULL;
      error = (status != DRMS_SUCCESS);
 
@@ -990,8 +990,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
      int iRec = 0;
      for (; !error && iRec < nInRecs; iRec++)
      {
-	  inRec = inRecSet->records[iRec];
-
+	  inRec = drms_recordset_fetchnext(inRecSet, &status);
 	  fprintf(stdout, "Processing record %lld\n", inRec->recnum);
 
 	  hiter_rewind(&(segsToProc->iter));
