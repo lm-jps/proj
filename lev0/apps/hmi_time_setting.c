@@ -73,7 +73,7 @@ TIME date__obs = t_obs - exptime/2.0;
 TIME mjd = date__obs - MJD_epoch;
 double  mjd_day = floor(mjd / 86400.0);
 double  mjd_time = mjd - 86400.0 * mjd_day;
-sprint_time(datestr, CURRENT_SYSTEM_TIME, "UT", 0);
+sprint_time(datestr, CURRENT_SYSTEM_TIME, "ISO", 0);
 
 drms_setkey_double(rec, "T_OBS", t_obs);
 drms_setkey_double(rec, "EXPTIME", exptime);
