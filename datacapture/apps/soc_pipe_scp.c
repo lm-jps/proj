@@ -18,6 +18,10 @@
  *	soc_pipe_scp [-v] /source_dir /target_dir pipeline_host cadence
  *
  */
+//!!!!NOTE:: THIS WILL BE OBSOLETE WHEN WE MOUNT THE DCS /dds partition
+//		on the pipeline backend host. The ingest_lev0 process will
+//		then just take the files out of the /dds/soc2pipe/[hmi,aia]
+//		directory.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -201,10 +205,10 @@ int main(int argc, char *argv[])
   struct dirent *dp;
   int i, j;
   char cmd[256];
-  char *nontlmnames[MAXFILES];
+  char *cptr;
 
   get_cmd(argc, argv);		/* check the calling sequence */
-  setup(argc, argv);		/* start pvm and init things */
+  setup(argc, argv);		/* init things */
   while(1) {
     if((dfd=opendir(sourcedir)) == NULL) {
       printk("**Can't opendir(%s) to find files\n", sourcedir);
@@ -213,7 +217,7 @@ int main(int argc, char *argv[])
     i = 0;
     while((dp=readdir(dfd)) != NULL) {
       /* First copy .tlm files. */
-      if(strstr(dp->d_name, ".tlm")) {
+      if(cptr=strstr(dp->d_name, ".tlm")) {
 	sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
 			sourcedir, dp->d_name, hostname, targetdir);
         printk("%s\n", cmd);
@@ -226,30 +230,35 @@ int main(int argc, char *argv[])
             printk("***Error on: %s\n", cmd);
           }
         }
-      }
-      else {		/* non .tlm files */
-        nontlmnames[i++] = dp->d_name;
-        if(i >= MAXFILES) {
-          printk("***Fatal error. Too many (%d) files in %s\n", 
-		MAXFILES, sourcedir);
-          abortit(3);
-        }
-      }
-    }
-    /* now copy the non .tlm files */
-    for(j = 0; j < i; j++) {
-      if(!strcmp(nontlmnames[j], ".") || !strcmp(nontlmnames[j], "..")) 
-        continue;
-      sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
-			sourcedir, nontlmnames[j], hostname, targetdir);
-      printk("%s\n", cmd);
-      if(system(cmd)) {
-        printk("***Error on: %s\n", cmd);
-      }
-      else {
-        sprintf(cmd, "/bin/rm -f %s/%s", sourcedir, nontlmnames[j]);
+        //now cp the .qac file to the pipeline
+        strcpy(cptr, ".qac");
+        sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
+                        sourcedir, dp->d_name, hostname, targetdir);
+        printk("%s\n", cmd);
         if(system(cmd)) {
           printk("***Error on: %s\n", cmd);
+        }
+        else {
+          sprintf(cmd, "/bin/rm -f %s/%s", sourcedir, dp->d_name);
+          if(system(cmd)) {
+            printk("***Error on: %s\n", cmd);
+          }
+        }
+      }
+      else {		/* non .tlm files */
+        if(!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) 
+          continue;
+        sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
+			sourcedir, dp->d_name, hostname, targetdir);
+        printk("%s\n", cmd);
+        if(system(cmd)) {
+          printk("***Error on: %s\n", cmd);
+        }
+        else {
+          sprintf(cmd, "/bin/rm -f %s/%s", sourcedir, dp->d_name);
+          if(system(cmd)) {
+            printk("***Error on: %s\n", cmd);
+          }
         }
       }
     }
