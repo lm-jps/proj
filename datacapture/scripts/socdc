@@ -40,7 +40,9 @@ $GENTLM2 = "/dds/stage/VC01_2007_293_00_50_56_000001403b2_11445_00.tlm";
 #$GENTLM2 = "gentlm2.out";	#file of telemetry to inject in sim mode
 #$GENTLM1 = "hmi_primary.tlm";	#see mail from D. Smith July 22, 2004
 #$GENTLM2 = "hmi_primary.tlm";
-$CONFIGFILE = "DDSSOC_PLAY.cfg";	#file containing the config vrbls
+
+$GREPPS = "388";		#grep for this in ps -ef
+$CONFIGFILE = "DDSSOC_PLAY.cfg";#file containing the config vrbls
 $IMAGEDIR = "/tmp/jim";
 $REPEAT = 60000;		#default milliseconds for update cycle 
 $QAC_SIZE = 999;		#size of a qac file (!!!TBD)
@@ -2249,7 +2251,26 @@ sub socget {
 #Fork off the ingest processing if not done already
 sub Sched_ingest {
   #Now schedule the lev0 processing
-  #!!TBD detect if already running?
+  #kill stuff off if already running
+  @ps_prod = `ps -ef | grep $GREPPS`;
+  while($_ = shift(@ps_prod)) {
+    if(/^$GREPPS/) {              #do for all production processes
+      if(/soc_pipe_scp /) {
+        ($a, $psid, $c) = split(/\s+/, $_);
+        $process = "soc_pipe_scp";
+        print "Killing $process with kill -9 $psid\n";
+        `kill -9 $psid`; #!!!TEMP noop
+      }
+      #elsif(/tape_svc $DB/) {
+      #  ($a, $psid, $c) = split(/\s+/, $_);
+      #  $process = "tape_svc";
+      #}
+      else {
+        next;
+      }
+    }
+  }
+
   if($pid0 == -1) {
     if($pid0 = fork) {
       #This is the parent. The child's pid is in $pid0
