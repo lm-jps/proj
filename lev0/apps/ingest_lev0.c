@@ -10,7 +10,7 @@
  * the DRMS dataset LEV0SERIESNAME and extracts hk data to appropriate hk datasets.
  *
  * Call for testing (set TLMSERIESNAME and LEV0SERIESNAME to test datasets): 
- *   ingest_lev0 vc=VC05 indir=/tmp/jim outdir=/tmp/jim/out [logfile=name]
+ * ingest_lev0 vc=VC05 indir=/scr20/jim/tlm outdir=/scr20/jim/tlm/out [logfile=name]
  *
  * OPERATION:
  * This is normally run on the dedicated lev0 host. Four instances are run.
@@ -215,6 +215,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 {
   STAT stat;
   int status, n, k;
+  char tlmdsname[128];
 
   printk("*Closing image for fsn = %u\n", fsn);
   if(imgstat(Img, &stat)) {
@@ -233,7 +234,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   if(hmiaiaflg) {		// except for AIA use telnum 
     drms_setkey_int(rs, "CAMERA", (Img->telnum)+1);
   }
-  drms_setkey_int(rs, "APID", Img->apid);
+  drms_setkey_int(rs, "IMGAPID", Img->apid);
   drms_setkey_int(rs, "CROPID", Img->cropid);
   drms_setkey_int(rs, "LUTID", Img->luid);
   drms_setkey_int(rs, "TAPCODE", Img->tap);
@@ -249,7 +250,8 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "EOIERROR", Img->last_pix_err);
   drms_setkey_int(rs, "HEADRERR", Img->headerr);
   drms_setkey_int(rs, "OVERFLOW", Img->overflow);
-  drms_setkey_string(rs, "TLMDSNAM", tlmnamekeyfirst);
+  sprintf(tlmdsname, "%s[%s]", TLMSERIESNAME, tlmnamekeyfirst);
+  drms_setkey_string(rs, "TLMDSNAM", tlmdsname);
   int pts = Img->first_packet_time >> 16;
   int ptss = Img->first_packet_time & 0xffff;
   TIME fpt = SDO_to_DRMS_time(pts, ptss);
