@@ -15,30 +15,39 @@
 #include "cmdparams.h"
 #include "drms_env.h"
 
-#define kDefaultSeriesIn "sdo.fds"
-#define kDefaultSeriesOut "sdo.fdsStateVectors"
+#define kDefaultNamespace "sdo"
+#define kDefaultSeriesIn "moc_fds"
+#define kDefaultSeriesOut "fds_orbit_vectors"
+#define kDefaultSeriesHistory "sdo.fds_orbit_ingesthist"
 #define kObsTimeKey "OBS_DATE"
-#define kFdsDataProductKeyVal "[FDS_DATA_PRODUCT=predHelioOrb]"
+#define kFdsDataProductKeyValHel "[FDS_DATA_PRODUCT=predHelioOrb]"
+#define kFdsDataProductKeyValGeo "[FDS_DATA_PRODUCT=predGeoOrb]"
 #define kSVFileSegName "FILENAME"
 
 #define kSVLineMax 1024
 
 /* State-vector data keys */
 #define kSVKeyPrimary "OBS_DATE"
-#define kSVKeyX "X"
-#define kSVKeyY "Y"
-#define kSVKeyZ "Z"
-#define kSVKeyVx "Vx"
-#define kSVKeyVy "Vy"
-#define kSVKeyVz "Vz"
-
+#define kSVKeyXHELIO "X_HELIO"
+#define kSVKeyYHELIO "Y_HELIO"
+#define kSVKeyZHELIO "Z_HELIO"
+#define kSVKeyVxHELIO "Vx_HELIO"
+#define kSVKeyVyHELIO "Vy_HELIO"
+#define kSVKeyVzHELIO "Vz_HELIO"
+#define kSVKeyXGEO "X_GEO"
+#define kSVKeyYGEO "Y_GEO"
+#define kSVKeyZGEO "Z_GEO"
+#define kSVKeyVxGEO "Vx_GEO"
+#define kSVKeyVyGEO "Vy_GEO"
+#define kSVKeyVzGEO "Vz_GEO"
 
 ModuleArgs_t module_args[] =
 {
-  {ARG_FLAG, "h", "0", "help - print usage info"},
-  {ARG_STRING, "seriesIn", "NOT SPECIFIED", "name of series containing FDS data"},
+  {ARG_STRING, "ns", kDefaultNamespace, "working namespace (sdo, sdo_ground, sdo_dev)"},
+  {ARG_STRING, "seriesIn", kDefaultSeriesIn, "name of series containing FDS data"},
   {ARG_STRING, "timeRange", "NOT SPECIFIED", "time ranges separated by commas"},
-  {ARG_STRING, "seriesOut", "NOT SPECIFIED", "name of series in which to save extracted data"},
+  {ARG_STRING, "seriesOut", kDefaultSeriesOut, "name of series in which to save extracted data"},
+  {ARG_FLAG, "c", "0", "create the series only"},
   {ARG_END}
 };
 
@@ -64,359 +73,163 @@ int nice_intro ()
      return (0);
 }
 
-/* Sets all hours, minutes, and seconds to 0 */
-typedef enum
+static DRMS_Keyword_t *AddKey(DRMS_Record_t *prototype, 
+			      DRMS_Type_t type, 
+			      const char *name,
+			      const char *format,
+			      const char *unit,
+			      DRMS_RecScopeType_t scope,
+			      const char *desc,
+			      int isprime)
 {
-  kStripTimeStart = 0,
-  kStripTimeYear,
-  kStripTimeMonth,
-  kStripTimeDay,
-  kStripTimeHoursOrTimeZone,
-  kStripTimeHours,
-  kStripTimeMinutes,
-  kStripTimeSeconds,
-  kStripTimeTimeZone,
-  kStripTimeBadFormat
-} StripTimeState_t;
+   DRMS_Keyword_t *tKey = NULL;
 
-static int StripTimeRange(char *fullTR, char **strippedTR)
+   XASSERT(tKey = 
+	   hcon_allocslot_lower(&(prototype->keywords), name));
+   memset(tKey, 0, sizeof(DRMS_Keyword_t));
+   XASSERT(tKey->info = malloc(sizeof(DRMS_KeywordInfo_t)));
+   memset(tKey->info, 0, sizeof(DRMS_KeywordInfo_t));
+	    
+   if (tKey && tKey->info)
+   {
+      /* record */
+      tKey->record = prototype;
+
+      /* keyword info */
+      snprintf(tKey->info->name, 
+	       DRMS_MAXKEYNAMELEN,
+	       "%s",
+	       name);
+      tKey->info->type = type;
+      snprintf(tKey->info->format, DRMS_MAXFORMATLEN, "%s", format);
+      snprintf(tKey->info->unit, DRMS_MAXUNITLEN, "%s", unit);
+      tKey->info->recscope = scope;
+      tKey->info->isdrmsprime = isprime;
+      snprintf(tKey->info->description, DRMS_MAXCOMMENTLEN, "%s", desc);
+
+      /* default value - missing */
+      drms_missing(type, &(tKey->value));
+   }
+
+   return tKey;
+}
+
+static void CreateOutSeries(DRMS_Env_t *drmsEnv, char *outSeries, int *status)
 {
-     int error = 0;
+   int stat = DRMS_SUCCESS;
 
-     char *p = fullTR;
-     char *beginTime = fullTR;
-     char *stripped = (char *)malloc(sizeof(char) * strlen(fullTR) + 64);
-     char *strippedPtr = stripped;
-     int len = strlen(fullTR);
+   if (!drms_series_exists(drmsEnv, outSeries, &stat))
+   {
+      DRMS_Record_t *prototype = (DRMS_Record_t *)calloc(1, sizeof(DRMS_Record_t));
+	    
+      if (prototype)
+      {	       
+	 prototype->seriesinfo = calloc(1, sizeof(DRMS_SeriesInfo_t));
 
-     bzero(stripped, sizeof(char) * strlen(fullTR) + 64);
+	 if (prototype->seriesinfo)
+	 {
+	    DRMS_Keyword_t *pkey = NULL;
+	    DRMS_Keyword_t *akey = NULL;
+	    char keyname[DRMS_MAXKEYNAMELEN];
 
-     int year;
-     int month;
-     int day;
-     int hours;
-     int minutes;
-     double seconds;
-     char timeZone[128];
+	    prototype->env = drmsEnv;
+	    prototype->recnum = 0;
+	    prototype->sunum = -1;		 
+	    prototype->init = 1;
+	    prototype->sessionid = 0;
+	    prototype->sessionns = NULL;
+	    prototype->su = NULL;
+      
+	    /* Initialize container structure. */
+	    hcon_init(&prototype->segments, sizeof(DRMS_Segment_t), DRMS_MAXHASHKEYLEN, 
+		      (void (*)(const void *)) drms_free_segment_struct, 
+		      (void (*)(const void *, const void *)) drms_copy_segment_struct);
+	    /* Initialize container structures for links. */
+	    hcon_init(&prototype->links, sizeof(DRMS_Link_t), DRMS_MAXHASHKEYLEN, 
+		      (void (*)(const void *)) drms_free_link_struct, 
+		      (void (*)(const void *, const void *)) drms_copy_link_struct);
+	    /* Initialize container structure. */
+	    hcon_init(&prototype->keywords, sizeof(DRMS_Keyword_t), DRMS_MAXHASHKEYLEN, 
+		      (void (*)(const void *)) drms_free_keyword_struct, 
+		      (void (*)(const void *, const void *)) drms_copy_keyword_struct);
 
-     char *beginTZ = NULL;
+	    /* series info */
+	    char *user = getenv("USER");
+	    snprintf(prototype->seriesinfo->seriesname,
+		     DRMS_MAXSERIESNAMELEN,
+		     "%s",
+		     outSeries);
 
-     StripTimeState_t state = kStripTimeStart;
+	    strcpy(prototype->seriesinfo->author, "unknown");
+	    strcpy(prototype->seriesinfo->owner, "unknown");
 
-     do
-     {
-	  switch (state)
-	  {
-	  case kStripTimeStart:
+	    if (user)
 	    {
-		 if (sscanf(p, "%d", &year) == 0)
-		 {
-		      state = kStripTimeBadFormat;
-		 }
-		 else
-		 {
-		      beginTime = p;
-		      state = kStripTimeYear;
-		 }
-
-		 if (state != kStripTimeBadFormat)
-		 {
-		      p++;
-		 }
+	       if (strlen(user) < DRMS_MAXCOMMENTLEN)
+	       {
+		  strcpy(prototype->seriesinfo->author, user);
+	       }
+		    
+	       if (strlen(user) < DRMS_MAXOWNERLEN)
+	       {
+		  strcpy(prototype->seriesinfo->owner, user);
+	       }
 	    }
-	    break;
 
-	  case kStripTimeYear:
+	    /* discard "Owner", fill it with the dbuser */
+	    if (drmsEnv->session->db_direct) 
 	    {
-		 if (*p == '.')
-		 {
-		      state = kStripTimeMonth;
-		 }
-		 else if (sscanf(p, "%d", &year) == 0)
-		 {
-		      printf("Bad time format - parsing year (found %s).\n", p);
-		      state = kStripTimeBadFormat;
-		 }
-		 
-		 if (state != kStripTimeBadFormat)
-		 {
-		      p++;
-		 }
+	       strcpy(prototype->seriesinfo->owner, drmsEnv->session->db_handle->dbuser);
 	    }
-	    break;
 
-	  case kStripTimeMonth:
-	    {
-		 if (*p == '.')
-		 {
-		      state = kStripTimeDay;
-		 }
-		 else if (sscanf(p, "%d", &month) == 0)
-		 {
-		      printf("Bad time format - parsing month (found %s).\n", p);
-		      state = kStripTimeBadFormat;
-		 }
-		 
-		 if (state != kStripTimeBadFormat)
-		 {
-		      p++;
-		 }
-	    }
-	    break;
+	    prototype->seriesinfo->unitsize = 0;
 
-	  case kStripTimeDay:
-	    {
-		 if (*p == ':')
-		 {
-		      printf("Bad time format - parsing day (found %s).\n", p);
-		      state = kStripTimeBadFormat;
-		 }
-		 else if (*p == '_')
-		 { 
-		      /* Everything between beginTime and p has the year/month/day - need to find the timezone */
-		      strncpy(strippedPtr, beginTime, p - beginTime);
-		      strippedPtr += (p - beginTime);
-		      
-		      state = kStripTimeHoursOrTimeZone;
-		      beginTZ = p; /* In case the following is indeed a timezone */
-		 }
-		 else if (*p == '-' || *p == ',')
-		 {
-		      /* Everything between beginTime and p has the year/month/day - need to find the timezone */
-		      strncpy(strippedPtr, beginTime, p - beginTime);
-		      strippedPtr += (p - beginTime);
+	    snprintf(prototype->seriesinfo->description,
+		     DRMS_MAXCOMMENTLEN,
+		     "%s",
+		     "Helio- and Geo-centric orbit position and velocity vectors.  Prime key is observation date.");
 
-		      strncpy(strippedPtr, "_00:00", 6);
-		      strippedPtr += 6;
-		      *strippedPtr = *p;
-		      strippedPtr++;
-		      state = kStripTimeStart;
-		 }
-		 else if (*p == '/')
-		 {
-		      /* Parse duration */
-		 }
-		 else if (sscanf(p, "%d", &day) == 0)
-		 {
-		      state = kStripTimeBadFormat;
-		 }
-		 
-		 if (state != kStripTimeBadFormat)
-		 {
-		      p++;
-		 }
-	    }
-	    break;
+	    /* slotted keyword isdrmsprime, but not really prime */
+	    akey = AddKey(prototype, DRMS_TYPE_TIME, kSVKeyPrimary, "0", "UTC", kRecScopeType_TS_EQ, "slotted observation date", 1);
 
-	  case kStripTimeHoursOrTimeZone:
-	    {
-		 if (sscanf(p, "%d", &hours) != 0)
-		 {
-		      state = kStripTimeHours;
-		 }
-		 else
-		 {
-		      strncpy(strippedPtr, "_00:00", 6);
-		      strippedPtr += 6;
-		      state = kStripTimeTimeZone;
-		 }
-	    }
-	    break;
+	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "index");
+	    pkey = AddKey(prototype, kIndexKWType, keyname, kIndexKWFormat, "none", kRecScopeType_Index, "index for OBS_DATE", 1);
 
-	  case kStripTimeHours:
-	    {
-		 if (*p == ':')
-		 {
-		      state = kStripTimeMinutes;
-		 }
-		 else if (*p == '_')
-		 {
-		      beginTZ = p; 
-		      strncpy(strippedPtr, "_00:00", 6);
-		      strippedPtr += 6;
-		      state = kStripTimeTimeZone;
-		 }
-		 else if (*p == '-' || *p == '/' || *p == ',')
-		 {
-		      strncpy(strippedPtr, "_00:00", 6);
-		      strippedPtr += 6;
-		      *strippedPtr = *p;
-		      strippedPtr++;
-		      state = kStripTimeStart;
-		 }
-		 else if (sscanf(p, "%d", &hours) == 0)
-		 {
-		      printf("Bad time format - parsing hours (found %s).\n", p);
-		      state = kStripTimeBadFormat;
-		 }
-		 
-		 if (state != kStripTimeBadFormat)
-		 {
-		      p++;
-		 }
-	    }
-	    break;
+	    /* epoch */
+	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "epoch");
+	    akey = AddKey(prototype, DRMS_TYPE_TIME, keyname, "0", "UTC", kRecScopeType_Constant, "epoch for OBS_DATE", 0);
+	    akey->value.time_val = sscan_time("1993.01.01_12:00:00_UT");
 
-	  case kStripTimeMinutes:
-	    {
-		 if (*p == ':')
-		 {
-		      state = kStripTimeSeconds;
-		 }
-		 else if (*p == '_')
-		 {
-		      beginTZ = p; 
-		      strncpy(strippedPtr, "_00:00", 6);
-		      strippedPtr += 6;
-		      state = kStripTimeTimeZone;
-		 }
-		 else if (*p == '-' || *p == '/' || *p == ',')
-		 {
-		      strncpy(strippedPtr, "_00:00", 6);
-		      strippedPtr += 6;
-		      *strippedPtr = *p;
-		      strippedPtr++;
-		      state = kStripTimeStart;
-		 }
-		 else if (sscanf(p, "%d", &minutes) == 0)
-		 {
-		      printf("Bad time format - parsing minutes (found %s).\n", p);
-		      state = kStripTimeBadFormat;
-		 }
+	    /* step */
+	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "step");
+	    akey = AddKey(prototype, DRMS_TYPE_STRING, keyname, "%s", "none", kRecScopeType_Constant, "time step for OBS_DATE", 0);
+	    copy_string(&(akey->value.string_val), "1d");
 
-		 if (state != kStripTimeBadFormat)
-		 {
-		      p++;
-		 }
-	    }
-	    break;
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyXHELIO, "%f", "km", kRecScopeType_Variable, "X position", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyYHELIO, "%f", "km", kRecScopeType_Variable, "Y position", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyZHELIO, "%f", "km", kRecScopeType_Variable, "Z position", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVxHELIO, "%f", "km/sec", kRecScopeType_Variable, "velocity along X", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVyHELIO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Y", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVzHELIO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Z", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyXGEO, "%f", "km", kRecScopeType_Variable, "X position", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyYGEO, "%f", "km", kRecScopeType_Variable, "Y position", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyZGEO, "%f", "km", kRecScopeType_Variable, "Z position", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVxGEO, "%f", "km/sec", kRecScopeType_Variable, "velocity along X", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVyGEO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Y", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVzGEO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Z", 0);
 
-	  case kStripTimeSeconds:
-	    {
-		 if (*p == '_')
-		 {
-		      beginTZ = p; 
-		      strncpy(strippedPtr, "_00:00", 6);
-		      strippedPtr += 6;
-		      state = kStripTimeTimeZone;
-		 }
-		 else if (*p == '-' || *p == '/' || *p == ',')
-		 {
-		      strncpy(strippedPtr, "_00:00", 6);
-		      strippedPtr += 6;
-		      *strippedPtr = *p;
-		      strippedPtr++;
-		      state = kStripTimeStart;
-		 }
-		 else if (sscanf(p, "%lf", &seconds) == 0)
-		 {
-		      printf("Bad time format - parsing seconds (found %s).\n", p);
-		      state = kStripTimeBadFormat;
-		 }
-		 
-		 if (state != kStripTimeBadFormat)
-		 {
-		      p++;
-		 }
-	    }
-	    break;
+	    prototype->seriesinfo->pidx_keywords[0] = pkey;
+	    prototype->seriesinfo->pidx_num = 1;
+	 }
 
-	  case kStripTimeTimeZone:
-	    {
-		 if (*p == '-' || *p == '/' || *p == ',')
-		 {
-		      strncpy(strippedPtr, beginTZ, p - beginTZ);
-		      strippedPtr += (p - beginTZ);
-		      *strippedPtr = *p;
-		      strippedPtr++;
-		      state = kStripTimeStart;
-		 }
-		 else if (sscanf(p, "%s", timeZone) == 0)
-		 {
-		      printf("Bad time format - parsing time zone (found %s).\n", p);
-		      state = kStripTimeBadFormat;
-		 }
-		 
-		 if (state != kStripTimeBadFormat)
-		 {
-		      p++;
-		 }
-	    }
-	    break;
+	 stat = drms_create_series_fromprototype(&prototype, outSeries, 0);
+      }
+   }
 
-	  case kStripTimeBadFormat:
-	    {
-		 error = 1;
-		 printf("Bad time format.\n");
-	    }
-	    break;
-	  }
-
-     } while (p - fullTR < len && error == 0);
-    
-     /* We've run out of input chars - sometimes this leaves a valid time */
-
-     char lastChar[2];
-     lastChar[0]= fullTR[strlen(fullTR) - 1];
-     lastChar[1] = '\0';
-     int testInt;
-
-     if (state == kStripTimeStart || state == kStripTimeYear || state == kStripTimeMonth)
-     {
-	  printf("Bad time format - missing year or month or day.\n");
-	  state = kStripTimeBadFormat;
-	  error = 1;	  
-     }
-     else if (state == kStripTimeDay)
-     {
-	  if (sscanf(lastChar, "%d", &testInt) == 1)
-	  {
-	       strncpy(strippedPtr, beginTime, p - beginTime);
-	       strippedPtr += (p - beginTime);
-	       strncpy(strippedPtr, "_00:00", 6);
-	       strippedPtr += 6;
-	  }
-	  else
-	  {
-	       printf("Bad time format - invalid day.\n");
-	       state = kStripTimeBadFormat;
-	  }
-     }
-     else if (state == kStripTimeHoursOrTimeZone)
-     {
-	  printf("Bad time format - missing hours:minutes:seconds or timezone.\n");
-	  state = kStripTimeBadFormat;
-	  error = 1;
-     }
-     else if (state == kStripTimeHours || state == kStripTimeMinutes || state == kStripTimeSeconds)
-     { 
-	  if (sscanf(lastChar, "%d", &testInt) == 1)
-	  {
-	       strncpy(strippedPtr, "_00:00", 6);
-	       strippedPtr += 6;
-	  }
-	  else
-	  {
-	       printf("Bad time format - invalid minutes or seconds.\n");
-	       state = kStripTimeBadFormat;
-	  }
-     }
-     else if (state == kStripTimeTimeZone)
-     {
-	  strncpy(strippedPtr, beginTZ, p - beginTZ);
-	  strippedPtr += (p - beginTZ);
-     }
-
-     if (error == 0)
-     {
-	  *strippedTR = stripped;
-     }
-     else
-     {
-	  free(stripped);
-     }
-     
-     return error;
+   if (status)
+   {
+      *status = stat;
+   }
 }
 
 /* Caller must clean up records by calling drms_close_records() */
@@ -441,56 +254,6 @@ static int FetchRecords(DRMS_Env_t *drmsEnv, char *query, DRMS_RecordSet_t **rec
 static void FreeRecords(DRMS_RecordSet_t *recSet)
 {
      drms_close_records(recSet, DRMS_FREE_RECORD);
-}
-
-static int FetchSegments(DRMS_RecordSet_t *recSet, int nRecs, char *segName, DRMS_Segment_t ***segs, int *nSegs)
-{
-     int error = 0;
-     *nSegs = 0;
-
-     /* Loop through records in recSet */
-     int firstRec = 0;
-     int lastRec = nRecs - 1; /* zero-based index */
-     int iRec;
-
-     /* Max number of segs is one per record */
-     DRMS_Segment_t **newSegs = (DRMS_Segment_t **)malloc(sizeof(DRMS_Segment_t *) * nRecs);
-
-			      
-     /* loop over set of selected records */
-     int index = 0;
-     for (iRec = firstRec; iRec <= lastRec && error == 0; iRec++) 
-     {
-	  /* pointer to current record */
-	  DRMS_Record_t *rec = recSet->records[iRec];  
-
-	  if (rec)
-	  {
-	       DRMS_Segment_t *recSeg = drms_segment_lookup(rec, segName); 
-	       if (recSeg)
-	       {
-		    newSegs[index++] = recSeg;
-	       }
-	       else
-	       {
-		    error = 1;
-	       }
-	  }
-	  else
-	  {
-	       error = 1;
-	  }
-     }
-
-     *nSegs = index;
-     *segs = newSegs;
-
-     return error;
-}
-
-static void FreeSegments(DRMS_Segment_t **segments)
-{
-     free(segments);
 }
 
 static int ParseSVRecFields(char *recBuf, char **date, double *xVal, double *yVal, double *zVal, 
@@ -850,428 +613,519 @@ static void DestroyTimeRange(ValueRangeSet_t *head)
 
 static int SetSVKey(DRMS_Record_t *rec, char *keyName, DRMS_Type_Value_t value)
 {
-     int error = 0;
+   int error = 0;
 
-     DRMS_Keyword_t *keyword = drms_keyword_lookup(rec, keyName, 1);
+   if (rec != NULL && keyName != NULL)
+   {
+      error = drms_setkey(rec, keyName, DRMS_TYPE_DOUBLE, &value);
+      if (error != 0)
+      {
+	 printf("Failed to set key '%s' to record\n", keyName);
+      }
+   }
+   else
+   {
+      error = 1;
+      printf("Invalid record or keyword name.\n");
+   }
 
-     if (keyword != NULL)
-     {
-	  if (keyword->info->type == DRMS_TYPE_DOUBLE)
-	  {
-	       error = drms_setkey(rec, keyName, DRMS_TYPE_DOUBLE, &value);
-	       if (error != 0)
-	       {
-		    printf("Failed to add key %s to record\n", keyName);
-	       }
-	  }
-	  else
-	  {
-	       error = 1;
-	       printf("Key %s is not the correct type\n", keyName);
-	  }
-     }
-     else
-     {
-	  error = 1;
-	  printf("Key %s not found\n", keyName);
-     }
-
-     return error;
+   return error;
 }
 
-static int ExtractStateVectors(DRMS_Env_t *drmsEnv, char *filePath, char *timeRange, char *outSeries)
+static int ExtractStateVectors(DRMS_Env_t *drmsEnv, 
+			       char *filePathHELIO, 
+			       char *filePathGEO, 
+			       char *timeRange, 
+			       char *outSeries)
 {
-     int error = 0;
-     char *obsDate = NULL;
-     double xVal;
-     double yVal;
-     double zVal;
-     double vxVal;
-     double vyVal;
-     double vzVal;
+   int stat = DRMS_SUCCESS;
+   int error = 0;
+   char *obsDate = NULL;
+   double xValHel;
+   double yValHel;
+   double zValHel;
+   double vxValHel;
+   double vyValHel;
+   double vzValHel;
+   double xValGeo;
+   double yValGeo;
+   double zValGeo;
+   double vxValGeo;
+   double vyValGeo;
+   double vzValGeo;
 
-     int skippedRecs = 0;
-     int addedRecs = 0;
+   int skippedRecs = 0;
+   int addedRecs = 0;
 
-     ValueRangeSet_t *tRangeSet = NULL;
+   ValueRangeSet_t *tRangeSet = NULL;
 
-     printf("Extracting state vectors from file %s.\n", filePath);
+   char sbox[DRMS_MAXSERIESNAMELEN];
 
-     if (timeRange != NULL)
-     {
-	  printf("Time range is %s.\n", timeRange);
-	  error = CreateTimeRange(timeRange, &tRangeSet);
-     }
+   if (timeRange != NULL)
+   {
+      printf("Time range is %s.\n", timeRange);
+      error = CreateTimeRange(timeRange, &tRangeSet);
+   }
 
-     /* Read data from filePath one line at a time */
-     FILE *datafp = NULL;
+   /* Read heliocentric data from filePathHELIO one line at a time */
+   FILE *datafp = NULL;
 
-     if (error == 0);
-     {
-	  datafp = fopen(filePath, "r");
-     }
+   if (error == 0);
+   {
+      datafp = fopen(filePathHELIO, "r");
+   }
 
-     if (datafp != NULL)
-     {
-	  char lineBuf[kSVLineMax];
-	  char *lineIn = NULL;
-	  int oneMore = -1;
+   if (datafp != NULL)
+   {
+      char lineBuf[kSVLineMax];
+      int oneMore = -1;
 
-	  while ((lineIn = fgets(lineBuf, kSVLineMax, datafp)) != NULL)
-	  {
-	       if (oneMore == -1)
-	       { 
-		    if (strlen(lineBuf) >= 4)
-		    {
-			 if (strncmp(lineBuf, "Time", 4) == 0)
-			 {
-			      oneMore = 1;
-			 }
-		    }
+      CreateOutSeries(drmsEnv, outSeries, &stat);
 
-		    continue;
-	       }
-
-	       if (oneMore > 0)
+      while (fgets(lineBuf, kSVLineMax, datafp) != NULL)
+      {
+	 if (oneMore == -1)
+	 { 
+	    if (strlen(lineBuf) >= 4)
+	    {
+	       if (strncmp(lineBuf, "Time", 4) == 0)
 	       {
-		    oneMore--;
-		    continue;
+		  oneMore = 1;
 	       }
+	    }
 
-	       ParseSVRecFields(lineBuf, &obsDate, &xVal, &yVal, &zVal, &vxVal, &vyVal, &vzVal);
+	    continue;
+	 }
+
+	 if (oneMore > 0)
+	 {
+	    oneMore--;
+	    continue;
+	 }
+
+	 ParseSVRecFields(lineBuf, &obsDate, &xValHel, &yValHel, &zValHel, &vxValHel, &vyValHel, &vzValHel);
 	       
-	       /* Strip out records that do not fall within the range of times specified in fdsTRange */
-	       int bAns = 0;
-	       if (TimeInRange(obsDate, tRangeSet, &bAns) != 0)
-	       {
-		    error = 1;
-	       }
-	       else
-	       {
-		    if (bAns == 0)
-		    {
-			 skippedRecs++;
-			 continue;
-		    }
-	       }
+	 /* Strip out records that do not fall within the range of times specified in fdsTRange */
+	 int bAns = 0;
+	 if (TimeInRange(obsDate, tRangeSet, &bAns) != 0)
+	 {
+	    error = 1;
+	 }
+	 else
+	 {
+	    if (bAns == 0)
+	    {
+	       skippedRecs++;
+	       continue;
+	    }
+	 }
 
-	       DRMS_RecordSet_t *recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &error);
+	 /* Put these heliocentric data into temporary records in a sandbox series. */
+	 snprintf(sbox, sizeof(sbox), "%s_sbox", outSeries);
+
+	 CreateOutSeries(drmsEnv, sbox, &stat);
+
+	 /* Since these are DRMS_TRANSIENT, they should never get saved between runs of 
+	  * this module. */
+	 DRMS_RecordSet_t *recSet = drms_create_records(drms_env, 1, sbox, DRMS_TRANSIENT, &error);
 	  
-	       if (recSet != NULL && error == 0)
-	       {
-		    DRMS_Record_t *rec = recSet->records[0];
-		    int nPrime = rec->seriesinfo->pidx_num;
+	 if (recSet != NULL && error == 0)
+	 {
+	    DRMS_Record_t *rec = recSet->records[0];
+	    int nPrime = rec->seriesinfo->pidx_num;
 		    
-		    if (nPrime != 1)
-		    {
-			 error = 1;
-			 printf("The specified dataseries %s has the incorrect number of primary keys\n", outSeries);
-		    }
-		    else
-		    {
-			 /* Get the one primary keyword - it should match kSVKeyPrimary */
-			 DRMS_Keyword_t *primaryKey = (rec->seriesinfo->pidx_keywords)[0];
-			 char *actPrimaryKeyName = primaryKey->info->name;
-			 DRMS_Type_t actPrimaryKeyType =  primaryKey->info->type;
-			 
-			 if (strcmp(actPrimaryKeyName, kSVKeyPrimary) != 0)
-			 {
-			      error = 1;
-			      printf("Unexpected primary key in %s: actual - %s, expected - %s\n", 
-				     outSeries, actPrimaryKeyName, kSVKeyPrimary);
-			 }
-			 else
-			 {
-			      DRMS_Type_Value_t value;
+	    if (nPrime != 1)
+	    {
+	       error = 1;
+	       printf("The specified dataseries %s has the incorrect number of primary keys\n", outSeries);
+	    }
+	    else
+	    {
+	       DRMS_Type_Value_t value;
 			      
-			      /* Add primary key */
-			      if (actPrimaryKeyType != DRMS_TYPE_TIME)
-			      {
-				   error = 1;
-				   printf("Primary key in %s has wrong type\n", outSeries);
-			      }
-			      else
-			      {
-				   value.time_val = sscan_time(obsDate) - sscan_time("1977.01.01_00:00_TAI");
-				   error = drms_setkey(rec, actPrimaryKeyName, actPrimaryKeyType, &value);
-				   if (error != 0)
-				   {
-					printf("Failed to add key %s to record\n", actPrimaryKeyName);
-				   }
-			      }
-			      
-			      /* Add state vector keys */
-			      value.double_val = xVal;
-			      SetSVKey(rec, kSVKeyX, value);
-			      
-			      value.double_val = yVal;
-			      SetSVKey(rec, kSVKeyY, value);
-			      
-			      value.double_val = zVal;
-			      SetSVKey(rec, kSVKeyZ, value);
-			      
-			      value.double_val = vxVal;
-			      SetSVKey(rec, kSVKeyVx, value);
-			      
-			      value.double_val = vyVal;
-			      SetSVKey(rec, kSVKeyVy, value);
-			      
-			      value.double_val = vzVal;
-			      SetSVKey(rec, kSVKeyVz, value);
-			 }
-		    }    
-	       }
-	       else
+	       /* Add primary key */
+	       value.time_val = sscan_time(obsDate);
+	       error = drms_setkey(rec, kSVKeyPrimary, DRMS_TYPE_TIME, &value);
+	       if (error != 0)
 	       {
-		    error = 1;
-		    printf("The specified output series %s does not exist\n", outSeries);
+		  printf("Failed to set key '%s' to record\n", kSVKeyPrimary);
 	       }
+			      
+	       /* Add state vector keys */
+	       value.double_val = xValHel;
+	       SetSVKey(rec, kSVKeyXHELIO, value);
+			      
+	       value.double_val = yValHel;
+	       SetSVKey(rec, kSVKeyYHELIO, value);
+			      
+	       value.double_val = zValHel;
+	       SetSVKey(rec, kSVKeyZHELIO, value);
+			      
+	       value.double_val = vxValHel;
+	       SetSVKey(rec, kSVKeyVxHELIO, value);
+			      
+	       value.double_val = vyValHel;
+	       SetSVKey(rec, kSVKeyVyHELIO, value);
+			      
+	       value.double_val = vzValHel;
+	       SetSVKey(rec, kSVKeyVzHELIO, value);
+	    }    
+	 }
+	 else
+	 {
+	    error = 1;
+	    printf("The specified output series %s does not exist\n", outSeries);
+	 }
 	       
-	       if (error == 0)
-	       {
-		    error = drms_close_records(recSet, DRMS_INSERT_RECORD);
-		    if (error == 0)
-		    {
-			 printf("Added obsDate=%s, x=%f, y=%f, z=%f, vx=%f, vy=%f, vz=%f\n", obsDate, xVal, yVal, zVal, vxVal, vyVal, vzVal);
-			 addedRecs++;
-		    }
-	       }
-	       else
-	       {
-		    error = drms_close_records(recSet, DRMS_FREE_RECORD);
-		    break;
-	       }
+	 if (error == 0)
+	 {
+	    error = drms_close_records(recSet, DRMS_INSERT_RECORD);
+	    if (error == 0)
+	    {
+	       // printf("Added obsDate=%s, x=%f, y=%f, z=%f, vx=%f, vy=%f, vz=%f\n", obsDate, xValHel, yValHel, zValHel, vxValHel, vyValHel, vzValHel);
+	       addedRecs++;
+	    }
+	 }
+	 else
+	 {
+	    error = drms_close_records(recSet, DRMS_FREE_RECORD);
+	    break;
+	 }
 	       
-	  } /* end while */
+      } /* end while */
 
-	  fclose(datafp);
-     }
-     else
-     {
-	  /* Couldn't open file */
-	  error = 1;
-	  printf("Could not open %s for reading\n", filePath);
-     }
+      fclose(datafp);
+   }
+   else
+   {
+      /* Couldn't open file */
+      error = 1;
+      printf("Could not open %s for reading\n", filePathHELIO);
+   }
 
-     if (error == 0)
-     {
-	  printf("Added %d recs, skipped %d recs, for a total of %d recs examined in %s.\n", 
-		 addedRecs, skippedRecs, addedRecs + skippedRecs, filePath);
-     }
+   /* Geocentric orbit files - save these data in the real series, along with the heliocentric
+    * data from sbox series. */
+   if (error == 0);
+   {
+      datafp = fopen(filePathGEO, "r");
+   }
 
-     if (tRangeSet)
-     {
-	  DestroyTimeRange(tRangeSet);
-     }
+   if (datafp != NULL)
+   {
+      char lineBuf[kSVLineMax];
+      int oneMore = -1;
+      DRMS_RecordSet_t *rs = NULL;
+      char rsquery[DRMS_MAXQUERYLEN];
+      int nrecs;
+      DRMS_Record_t *rec = NULL;
+      DRMS_Type_t type;
+      DRMS_Type_Value_t value;
 
-     return error;
+      while (fgets(lineBuf, kSVLineMax, datafp) != NULL)
+      {
+	 if (oneMore == -1)
+	 { 
+	    if (strlen(lineBuf) >= 4)
+	    {
+	       if (strncmp(lineBuf, "Time", 4) == 0)
+	       {
+		  oneMore = 1;
+	       }
+	    }
+
+	    continue;
+	 }
+
+	 if (oneMore > 0)
+	 {
+	    oneMore--;
+	    continue;
+	 }
+
+	 ParseSVRecFields(lineBuf, &obsDate, &xValGeo, &yValGeo, &zValGeo, &vxValGeo, &vyValGeo, &vzValGeo);
+
+	 DRMS_RecordSet_t *recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &error);
+	 if (recSet != NULL && error == 0)
+	 {
+	    DRMS_Record_t *outrec = recSet->records[0];
+	    DRMS_Record_t *inrec = NULL;
+	    char tbuf[128];
+			      
+	    /* Set primary key */
+	    value.time_val = sscan_time(obsDate);
+	    error = drms_setkey(outrec, kSVKeyPrimary, DRMS_TYPE_TIME, &value);
+	    if (error != 0)
+	    {
+	       printf("Failed to set key '%s' to record\n", kSVKeyPrimary);
+	    }
+	    
+	    /* Find corresponding heliocentric data, if it exists */
+	    TIME od = sscan_time(obsDate);
+	    sprint_time(tbuf, od, "UTC", 0);
+	    snprintf(rsquery, sizeof(rsquery), "%s[%s]", sbox, tbuf);
+	    FetchRecords(drmsEnv, rsquery, &rs, &nrecs);
+	    if (rs && rs->n == 1)
+	    {
+	       inrec = rs->records[0]; /* heliocentric */
+
+	       /* Get heliocentric data */
+	       if (inrec)
+	       {
+		  value = drms_getkey(inrec, kSVKeyXHELIO, &type, &stat);
+		  SetSVKey(outrec, kSVKeyXHELIO, value);
+
+		  value = drms_getkey(inrec, kSVKeyYHELIO, &type, &stat);
+		  SetSVKey(outrec, kSVKeyYHELIO, value);
+
+		  value = drms_getkey(inrec, kSVKeyZHELIO, &type, &stat);
+		  SetSVKey(outrec, kSVKeyZHELIO, value);
+
+		  value = drms_getkey(inrec, kSVKeyVxHELIO, &type, &stat);
+		  SetSVKey(outrec, kSVKeyVxHELIO, value);
+
+		  value = drms_getkey(inrec, kSVKeyVyHELIO, &type, &stat);
+		  SetSVKey(outrec, kSVKeyVyHELIO, value);
+	       
+		  value = drms_getkey(inrec, kSVKeyVzHELIO, &type, &stat);
+		  SetSVKey(outrec, kSVKeyVzHELIO, value);
+	       }
+	      
+	       drms_close_records(rs, DRMS_FREE_RECORD);
+	    }
+
+	    /* Add geocentric state vector keys */
+	    value.double_val = xValGeo;
+	    SetSVKey(outrec, kSVKeyXGEO, value);
+			      
+	    value.double_val = yValGeo;
+	    SetSVKey(outrec, kSVKeyYGEO, value);
+			      
+	    value.double_val = zValGeo;
+	    SetSVKey(outrec, kSVKeyZGEO, value);
+			      
+	    value.double_val = vxValGeo;
+	    SetSVKey(outrec, kSVKeyVxGEO, value);
+			      
+	    value.double_val = vyValGeo;
+	    SetSVKey(outrec, kSVKeyVyGEO, value);
+			      
+	    value.double_val = vzValGeo;
+	    SetSVKey(outrec, kSVKeyVzGEO, value);
+
+	    drms_close_records(recSet, DRMS_INSERT_RECORD);
+	 }
+      }
+   }
+   else
+   {
+      /* Couldn't open file */
+      error = 1;
+      printf("Could not open %s for reading\n", filePathGEO);
+   }
+
+   if (tRangeSet)
+   {
+      DestroyTimeRange(tRangeSet);
+   }
+
+   return error;
 }
 
 int DoIt(void)
 {
+   int error = 0;
+   int stat = DRMS_SUCCESS;
 
-     if (nice_intro())
-     {
-	  return 0;
-     }
+   if (drms_env == NULL)
+   {
+      error = 1;
+   }
+   else
+   {
+      char *fdsSeries = NULL;
+      char *fdsTRange = NULL;
+      char *svSeries = NULL;
+	  
+      char *seriesIn = cmdparams_get_str(&cmdparams, "seriesIn", NULL);
+      char *timeRange = cmdparams_get_str(&cmdparams, "timeRange", NULL);
+      char *seriesOut = cmdparams_get_str(&cmdparams, "seriesOut", NULL);
 
-     int error = 0;
+      if (cmdparams_isflagset(&cmdparams, "c"))
+      {
+	 CreateOutSeries(drms_env, seriesOut, &stat);
+	 return 0;
+      }
 
+      fdsSeries = strdup(seriesIn);
+      svSeries = strdup(seriesOut);
+	  
+      XASSERT(fdsSeries && svSeries);
+	  
+      if (!fdsSeries || !svSeries)
+      {
+	 error = 1;
+      }
 
-     if (drms_env == NULL)
-     {
-	  error = 1;
-     }
-     else
-     {
-	  char *fdsSeries = NULL;
-	  char *fdsTRange = NULL;
-	  char *svSeries = NULL;
-	  
-	  char *seriesIn = cmdparams_get_str(&cmdparams, "seriesIn", NULL);
-	  char *timeRange = cmdparams_get_str(&cmdparams, "timeRange", NULL);
-	  char *seriesOut = cmdparams_get_str(&cmdparams, "seriesOut", NULL);
-	  
-	  if (strcmp(seriesIn, "NOT SPECIFIED") != 0)
-	  {
-	       fdsSeries = strdup(seriesIn);
-	  }
-	  else
-	  {
-	       fdsSeries = strdup(kDefaultSeriesIn);
-	  }
-	  
-	  if (strcmp(seriesOut, "NOT SPECIFIED") != 0)
-	  {
-	       svSeries = strdup(seriesOut);
-	  }
-	  else
-	  {
-	       svSeries = strdup(kDefaultSeriesOut);
-	  }
-	  
-	  XASSERT(fdsSeries && svSeries);
-	  
-	  if (!fdsSeries || !svSeries)
-	  {
+      /* Create the record set query */
+      if (error == 0)
+      {
+	 if (strcmp(timeRange, "NOT SPECIFIED") != 0)
+	 {
+	    size_t len = strlen(kObsTimeKey) + strlen(timeRange) + 3;
+	    fdsTRange = malloc(sizeof(char) * len + 1);
+	    if (fdsTRange != NULL)
+	    {
+	       snprintf(fdsTRange, len + 1, "[%s=%s]", kObsTimeKey, timeRange);
+	    }
+	    else
+	    {
 	       error = 1;
-	  }
-
-	  /* Create the record set query */
-	  if (error == 0)
-	  {
-	       if (strcmp(timeRange, "NOT SPECIFIED") != 0)
-	       {
-		    size_t len = strlen(kObsTimeKey) + strlen(timeRange) + 3;
-		    fdsTRange = malloc(sizeof(char) * len + 1);
-		    if (fdsTRange != NULL)
-		    {
-			 /* Must strip off hours and minutes, since the filenames contain only YYYYDDD */
-			 char *strippedTR = NULL;
-			 error = StripTimeRange(timeRange, &strippedTR);
-
-			 printf("Time range: %s, stripped time range: %s\n", timeRange, strippedTR);
-
-			 if (error == 0 && strippedTR != NULL)
-			 {
-			      snprintf(fdsTRange, len + 1, "[%s=%s]", kObsTimeKey, strippedTR);
-			      free(strippedTR);
-			 }
-			 else
-			 {
-			      error = 1;
-			 }
-		    }
-		    else
-		    {
-			 error = 1;
-		    }
-	       }
-	  }
+	    }
+	 }
+      }
 	  
-	  if (error == 0)
-	  {
-	       char *recSetQuery = NULL;
-	       size_t len = strlen(fdsSeries) + strlen(kFdsDataProductKeyVal);
+      if (error == 0)
+      {
+	 char *recSetQuery = NULL;
+	 size_t len = strlen(fdsSeries) + strlen(kFdsDataProductKeyValHel);
 	       
-	       if (fdsTRange != NULL)
-	       {
-		    len += strlen(fdsTRange);
-		    recSetQuery = malloc(sizeof(char) * len + 1);
-		    if (recSetQuery != NULL)
-		    {
-			 snprintf(recSetQuery, len + 1, "%s%s%s", fdsSeries, fdsTRange, kFdsDataProductKeyVal);
-		    }
-		    else
-		    {
-			 error = 1;
-		    }
-	       }
-	       else
-	       {
-		    recSetQuery = malloc(sizeof(char) * len + 1);
-		    snprintf(recSetQuery, len + 1, "%s%s", fdsSeries, kFdsDataProductKeyVal);
-		    if (recSetQuery == NULL)
-		    {
-			 error = 1;
-		    }
-	       }
+	 if (fdsTRange != NULL)
+	 {
+	    len += strlen(fdsTRange);
+	    recSetQuery = malloc(sizeof(char) * len + 1);
+	    if (recSetQuery != NULL)
+	    {
+	       snprintf(recSetQuery, len + 1, "%s%s%s", fdsSeries, fdsTRange, kFdsDataProductKeyValHel);
+	    }
+	    else
+	    {
+	       error = 1;
+	    }
+	 }
+	 else
+	 {
+	    recSetQuery = malloc(sizeof(char) * len + 1);
+	    snprintf(recSetQuery, len + 1, "%s%s", fdsSeries, kFdsDataProductKeyValHel);
+	    if (recSetQuery == NULL)
+	    {
+	       error = 1;
+	    }
+	 }
 
-	       printf("Record set query is %s\n", recSetQuery);
+	 printf("Heliocentric record set query is %s\n", recSetQuery);
 
-	       if (recSetQuery == NULL)
-	       {
-		    error = 1;
-	       }
+	 if (recSetQuery == NULL)
+	 {
+	    error = 1;
+	 }
 	       
-	       if (error == 0)
+	 if (error == 0)
+	 {
+	    /* Query database to locate the record(s) for a given time range */
+	    int nRecs = 0;
+	    DRMS_RecordSet_t *recordSet = NULL;
+	    DRMS_Record_t *rec = NULL;
+	    int irec;
+		
+	    error = FetchRecords(drms_env, recSetQuery, &recordSet, &nRecs);
+	    free(recSetQuery);    
+
+	    for (irec = 0; error == 0 && irec < nRecs; irec++)
+	    {   	     
+	       printf("Number of records fetched is %d\n", nRecs);
+	      
+	       rec = recordSet->records[irec];
+
+	       if (rec)
 	       {
-		    /* Query database to locate the record(s) for a given time range */
-		    int nRecs = 0;
-		    DRMS_RecordSet_t *recordSet = NULL;
-		    
-		    error = FetchRecords(drms_env, recSetQuery, &recordSet, &nRecs);
-		    free(recSetQuery);
-
-		    if (error == 0 && recordSet != NULL)
-		    {
-			 printf("Number of records fetched is %d\n", nRecs);
-
-			 if (nRecs == 0)
-			 {
-			      printf ("** No records in selected data set **\n");
-			 }
-			 else
-			 {
-			      /* Got the record(s), now fetch the segments for the record(s) */ 
-			      int nSegs = 0;
-			      DRMS_Segment_t **segments = NULL;
-
-			      error = FetchSegments(recordSet, nRecs, kSVFileSegName, &segments, &nSegs);
-
-
-			      printf("Number of segments fetched is %d\n", nSegs);
-
-			      if (error == 0)
-			      {
-				   char fname[DRMS_MAXPATHLEN];
-				   char path[DRMS_MAXPATHLEN];
-				   int segToProc = 0;
+		  char path[DRMS_MAXPATHLEN];
 				   
-				   while (segToProc < nSegs && error == 0)
-				   {
-					DRMS_Segment_t *seg = segments[segToProc];
+		  DRMS_Segment_t *helioseg = drms_segment_lookup(rec, kSVFileSegName);
 
-					if (seg != NULL)
-					{
-					     drms_record_directory(seg->record, path, 1);
-					     int len = strlen(path) + strlen(seg->filename) + 1;
-					     char *filePath = malloc(sizeof(char) * len + 1);
-					     if (filePath)
-					     {
-						  snprintf(filePath, len + 1, "%s/%s", path, seg->filename);
-						  char *tRange = (strcmp(timeRange, "NOT SPECIFIED") == 0) ? NULL : timeRange;
-						  error = ExtractStateVectors(drms_env, filePath, tRange, svSeries);
-						  free(filePath);
-					     }
-					     else
-					     {
-						  error = 1;
-					     }
-					}
-					
-					segToProc++;
-				   }
+		  if (helioseg != NULL)
+		  {
+		     drms_record_directory(rec, path, 1);
+		     len = strlen(path) + strlen(helioseg->filename) + 1;
+		     char *filePathHel = malloc(sizeof(char) * len + 1);
+		     if (filePathHel)
+		     {
+			snprintf(filePathHel, len + 1, "%s/%s", path, helioseg->filename);
+			char *tRange = (strcmp(timeRange, "NOT SPECIFIED") == 0) ? NULL : timeRange;
+
+
+			/* Geocentric vectors */
+			char rsqueryGEO[DRMS_MAXQUERYLEN];
+			DRMS_RecordSet_t *rsGEO = NULL;
+			int nrecsGEO = 0;
+			char *filePathGeo = NULL;
+			DRMS_Segment_t *geoseg = NULL;
+
+			snprintf(rsqueryGEO, 
+				 sizeof(rsqueryGEO),
+				 "%s%s%s", 
+				 fdsSeries, 
+				 fdsTRange, 
+				 kFdsDataProductKeyValGeo);
+
+			error = FetchRecords(drms_env, rsqueryGEO, &rsGEO, &nrecsGEO);
+
+			if (nrecsGEO != 1)
+			{
+			   fprintf(stderr, "Should only be one record returned.\n");
+			}
+
+			if (rsGEO)
+			{
+			   geoseg = drms_segment_lookup(rsGEO->records[0], kSVFileSegName);
+
+			   if (geoseg != NULL)
+			   {
+			      drms_record_directory(rsGEO->records[0], path, 1);
+			      len = strlen(path) + strlen(geoseg->filename) + 1;
+			      filePathGeo = malloc(sizeof(char) * len + 1);
+
+			      if (filePathGeo)
+			      {
+				 snprintf(filePathGeo, len + 1, "%s/%s", path, geoseg->filename);
+				 error = ExtractStateVectors(drms_env, filePathHel, filePathGeo, tRange, svSeries);
+				 free(filePathGeo);
 			      }
+			   }
 
-			      FreeSegments(segments);
-			 }
+			   FreeRecords(rsGEO);
+			}
 
-			 FreeRecords(recordSet);
-		    }
+			free(filePathHel);
+
+		     }
+		     else
+		     {
+			error = 1;
+		     }		     
+		  }
 	       }
-	  }
+	      
+	    }
+
+	    FreeRecords(recordSet);
+	 }
+      }
 	  
-	  if (fdsSeries)
-	  {
-	       free(fdsSeries);
-	  }
+      if (fdsSeries)
+      {
+	 free(fdsSeries);
+      }
 	  
-	  if (fdsTRange)
-	  {
-	       free(fdsTRange);
-	  }
+      if (fdsTRange)
+      {
+	 free(fdsTRange);
+      }
 	  
-	  if (svSeries)
-	  {
-	       free(svSeries);
-	  }
-     }
+      if (svSeries)
+      {
+	 free(svSeries);
+      }
+   }
      
-     return error;
+   return error;
 }
-
-
-
-
-
