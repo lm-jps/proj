@@ -35,7 +35,6 @@
 ##############################################################################
 #(1)common setting for all environmnents
 $hm=$ENV{'HOME'};
-$hm="/home1/carl";
 $ENV{'MAILTO'}="";
 $exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/cvs/JSOC/bin/linux_x86_64";
 $script_dir=$ENV{'HK_SCRIPT_DIR'}="$hm/cvs/JSOC/proj/lev0/scripts/hk";
@@ -84,7 +83,7 @@ if($logfile eq "")
 #(6) open log file
 open(LF,">>$logfile") || die "ERROR in gdfdrms.pl:Can't Open-0 <$logfile>: $!\n; exit;";
 print LF `date`;
-print LF "-->(0)Getting dayfiles from DRMS from data series:$dsnm\n";
+print LF "-->(0)Getting dayfiles from DRMS from data series <$dsnm>";
 
 #(7) check for any arguments passed in command
 &check_arguments();
@@ -166,6 +165,7 @@ sub check_arguments()
     elsif (substr($ARGV[1],0,4) eq "src=" )
     {
       $source=substr($ARGV[1],4,6);
+        print LF " for source <$source>\n";
         if($dflg) {print LF "--->debug:src is $source\n";}
     }
     else
@@ -185,6 +185,7 @@ sub check_arguments()
     elsif (substr($ARGV[2],0,4) eq "src=" )
     {
       $source=substr($ARGV[2],4,6);
+      print LF " for source <$source>\n";
       if($dflg) {print LF "-->debug:src is $source\n";}
     }
     else
@@ -200,6 +201,7 @@ sub check_arguments()
     if ( substr($ARGV[3],0,4) eq "src=") 
     {
       $source=substr($ARGV[3],4,6);
+      print LF " for source <$source>\n";
       if($dflg) {print LF "-->debug:src is $source\n";}
     }
     else
@@ -214,6 +216,7 @@ sub check_arguments()
     if ( substr($ARGV[4],0,4) eq "src=") 
     {
       $source=substr($ARGV[4],4,6);
+      print LF " for source <$source>\n";
       if($dflg) {print LF "-->debug:src is $source\n";}
     }
     else
