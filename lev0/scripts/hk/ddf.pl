@@ -1,22 +1,31 @@
 #!/usr/bin/perl
 ##############################################################################
-# Name:        dfd.pl - CRON to Get  hmi,sdo,aia dayfiles from DRMS & send to#
-#                       decode_dayfile for decoding keywords and then write  #
-#                       keywords to DRMS hk data series by apid.             #
-# Description: Sets values to process dayfiles for hmi dayfiles for today.   # 
-#              Sets up environment variable for hmi input dayfile series.    #
+# Name:        ddf.pl - decode day files                                     #
+#              CRON to Get  hmi,sdo,aia dayfiles from DRMS & send to for     #
+#              decoding keywords and then write keywords to DRMS hk data     #
+#              series by apid. This script sets values to process dayfiles   #
+#              for either hmi,aia, or sdo  dayfiles for today. Sets up       #
+#              environment variable for hmi,aia, or sdo input dayfile series.#
 #              Can turn on debug flag using DF_GDFDRMS_DEBUG and this is     #
 #              passed to gdfdrms.pl. Can turn on  report flag which will     #
 #              turn on reporting in gdfdrms.pl. Key item to set is           #
-#              DF_SERIES_NAME correctly. This is used as input               #
-#              data series to gather dayfiles need to process.               #
-#              APIDs to process determined by input arguments in gdfdrms.pl. #
+#              DF_SERIES_NAME correctly. Set to <proj name>_ground.hk_dayfile#
+#              currently. This day file series name is used as               #
+#              input  data series to gather dayfiles need to process.        #
+#              APIDs to process determined by input arguments to gdfdrms.pl. #
+#              Currently input args to gdfdrms.pl are for today, for apids   #
+#              set in apidlist argument, and for source set in src argument. #
 #              Log file is set using $logfile and is passed to gdfdrms.pl.   #
 #              Setup and create apidlist files:ddf_apid_list_hmi_egse,etc    #
+#              This script can be run at command line too.                   #
 # Execution:   (1)Run option to process dayfiles for today:                  #
-#             perl hmi_dfd.pl <project name of day file series> <source>     #
+#                                                                            #
+#                 perl hmi_dfd.pl <project name of day file series> <source> #
+#                                                                            #
 #              (2)The run options are show in help listing:                  #
-#                   perl dfd.pl  -h                                          #
+#                                                                            #
+#                 perl dfd.pl  -h                                            #
+#                                                                            #
 # Examples Execution(Possible cases as of today):                            #
 #              perl ddf.pl hmi egsefm                                        #
 #              perl ddf.pl hmi egseem                                        #
@@ -30,7 +39,7 @@
 #              perl ddf.pl sdo rtmon                                         #
 # Limitation:  Setup required environment variables at top of file.          #
 #              Must have input dayfile series(i.e.,hmi.hk_dayfile,           #
-#              sdo.hk_dayfile, etc).
+#              sdo.hk_dayfile, etc). Must have apidlist file.                #
 # Author:      Carl                                                          #
 # Date:        Move from EGSE to JSOC software environment on May,7, 2008    #
 ##############################################################################
@@ -52,7 +61,7 @@ $ENV{'MAILTO'}="";
 #(3)set debug mode
 $dflg=$ENV{'DF_GDFDRMS_DEBUG'}=1;
 
-#(4)setup log file for --HMI--
+#(4)setup log file for with name based on input argument(hmi,aia,sdo), 
 $logfile=$ENV{'HK_DF_LOGFILE'}="$script_dir/log-$dspnm-ddf";
 
 ####open log and record log info####
@@ -61,14 +70,14 @@ if ($dflg) {print LF `date`;}
 if ($dflg) {print LF "--->ddf.pl:debug:log file is <$ENV{'HK_DF_LOGFILE'}>\n";}
 if ($dflg) {print LF "--->ddf.pl:debug:source argument is <$src>\n";}
 
-#(5)set report mode on or off. if turn on, set report name want to use below.
-$rptflg=$ENV{'DF_REPORT_FLAG'}=1;
+#(5)set report mode on or off. if turn on, set report name want to use below.Creates gzipped report.
+$rptflg=$ENV{'DF_REPORT_FLAG'}=0;
 
-#(6)set report naming convention for --HMI-- if reporting on
+#(6)set report naming convention for using input argument(hmi,aia,sdo) if reporting is turned on
 $ENV{'DF_PROJECT_NAME_FOR_REPORT'}="$dspnm";
 $ENV{'DF_DATA_TYPE_NAME_FOR_REPORT'}="lev0";
 
-#(7)set input data series to use  to check for dayfiles to decode for
+#(7)set input data series to use  to check for dayfiles to decode for based on input arg(hmi,sdo,aia)
 $dsnm=$ENV{'DF_SERIES_NAME'}="$dspnm\_ground.hk_dayfile"; #test LMSAL formatted dayfiles
 ##used to test hsb dayfiles input files from drms
 #$dsnm=$ENV{'DF_SERIES_NAME'}="su_carl.hk_dayfile";   #test hsb formatted dayfiles
@@ -80,7 +89,11 @@ if ($dflg) {print LF "--->ddf.pl:debug:input dayfile is <$dsnm>\n";}
 $list=&get_apid_list();
 
 #(9)set up command for  dayfile series with source egse
-$command="perl $script_dir/gdfdrms.pl apidlist=$script_dir/$list start=20080419 end=20080419 src=$src";
+# execute and retrieve dayfile for today and decode keywords.
+$command="perl $script_dir/gdfdrms.pl  apidlist=$script_dir/$list  src=$src";
+
+#Note:Used to test with known data. do:perl ddf.pl hmi egsefm
+#$command="perl $script_dir/gdfdrms.pl  apidlist=$script_dir/$list  start=20080419 end=20080419 src=$src";
 
 ####log info####
 if ($dflg) {print LF "--->ddf.pl:debug:Running:Command running:<$command>\n";}
@@ -99,7 +112,7 @@ if ($dflg) {close(LF);}
 #############################################################################
 sub get_apid_list
 {
-  #as convention keep apid list in file using this format
+  #as convention keep apid list in file using this format so can easily add or delete apids
   return( "ddf_apid_list_$dspnm\_$src");
 }
 
@@ -142,5 +155,4 @@ sub check_agruments()
      print "Usage: perl ddf.pl <project name of input dayfile> <dayfile source>\nwhere project name is hmi,aia,sdo.\nwhere source is either:hsb,moc,egsefm.\n";
      exit;
   }
-
 }
