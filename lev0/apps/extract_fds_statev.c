@@ -18,13 +18,21 @@
 #define kDefaultNamespace "sdo"
 #define kDefaultSeriesIn "moc_fds"
 #define kDefaultSeriesOut "fds_orbit_vectors"
-#define kDefaultSeriesHistory "sdo.fds_orbit_ingesthist"
-#define kObsTimeKey "OBS_DATE"
-#define kFdsDataProductKeyValHel "[FDS_DATA_PRODUCT=predHelioOrb]"
-#define kFdsDataProductKeyValGeo "[FDS_DATA_PRODUCT=predGeoOrb]"
+#define kSeriesHistory "fds_orbit_ingesthist"
+#define kObsDateKey "OBS_DATE"
+#define kFdsDataProductKey "FDS_DATA_PRODUCT"
+#define kFdsProductCompKey "FDS_PRODUCT_COMP"
+#define kFdsDataFormatKey "DATA_FORMAT"
+#define kFileVersionKey "FILE_VERSION"
+#define kFdsDataProductHELIO "predHelioOrb"
+#define kFdsDataProductGEO "predGeoOrb"
+#define kFdsProductCompHELIO "ORBIT_HELIO"
+#define kFdsProductCompGEO "ORBIT_GEO"
+
 #define kSVFileSegName "FILENAME"
 
 #define kSVLineMax 1024
+#define kMaxHashKey 1024
 
 /* State-vector data keys */
 #define kSVKeyPrimary "OBS_DATE"
@@ -41,11 +49,14 @@
 #define kSVKeyVyGEO "Vy_GEO"
 #define kSVKeyVzGEO "Vz_GEO"
 
+#define kSVKey_idHELIO "id_HELIO"
+#define kSVKey_idGEO "id_GEO"
+
 ModuleArgs_t module_args[] =
 {
   {ARG_STRING, "ns", kDefaultNamespace, "working namespace (sdo, sdo_ground, sdo_dev)"},
   {ARG_STRING, "seriesIn", kDefaultSeriesIn, "name of series containing FDS data"},
-  {ARG_STRING, "timeRange", "NOT SPECIFIED", "time ranges separated by commas"},
+  {ARG_STRING, "timeRange", "NOT SPECIFIED", "DRMS time interval encompassing data file dates"},
   {ARG_STRING, "seriesOut", kDefaultSeriesOut, "name of series in which to save extracted data"},
   {ARG_FLAG, "c", "0", "create the series only"},
   {ARG_END}
@@ -211,12 +222,17 @@ static void CreateOutSeries(DRMS_Env_t *drmsEnv, char *outSeries, int *status)
 	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVxHELIO, "%f", "km/sec", kRecScopeType_Variable, "velocity along X", 0);
 	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVyHELIO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Y", 0);
 	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVzHELIO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Z", 0);
+
+	    AddKey(prototype, DRMS_TYPE_STRING, kSVKey_idHELIO, "%s", "unique id", kRecScopeType_Variable, "sdo.fds prime key values to locate source", 0);
+
 	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyXGEO, "%f", "km", kRecScopeType_Variable, "X position", 0);
 	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyYGEO, "%f", "km", kRecScopeType_Variable, "Y position", 0);
 	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyZGEO, "%f", "km", kRecScopeType_Variable, "Z position", 0);
 	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVxGEO, "%f", "km/sec", kRecScopeType_Variable, "velocity along X", 0);
 	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVyGEO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Y", 0);
 	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVzGEO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Z", 0);
+
+	    AddKey(prototype, DRMS_TYPE_STRING, kSVKey_idGEO, "%s", "unique id", kRecScopeType_Variable, "sdo.fds prime key values to locate source", 0);
 
 	    prototype->seriesinfo->pidx_keywords[0] = pkey;
 	    prototype->seriesinfo->pidx_num = 1;
@@ -249,11 +265,6 @@ static int FetchRecords(DRMS_Env_t *drmsEnv, char *query, DRMS_RecordSet_t **rec
      }
 
      return error;
-}
-
-static void FreeRecords(DRMS_RecordSet_t *recSet)
-{
-     drms_close_records(recSet, DRMS_FREE_RECORD);
 }
 
 static int ParseSVRecFields(char *recBuf, char **date, double *xVal, double *yVal, double *zVal, 
@@ -367,250 +378,6 @@ static int ParseSVRecFields(char *recBuf, char **date, double *xVal, double *yVa
      return error;
 }
 
-static int ParseDuration(char *durationStr, double *duration)
-{
-     int error = 0;
-
-     char *end;
-     char *p = durationStr;
-     double dval = (int)strtod(p, &end);
-
-     if ((dval == 0 && end==p) || 
-	 ((dval == HUGE_VALF || dval == -HUGE_VALF) && errno == ERANGE))
-     {
-	  fprintf(stderr,"Syntax Error: Expected finite floating point value at "
-		  "beginning of time duration, found '%s'.\n", p);
-	  error = 1;
-     }
-     else
-     {
-	  p = end;
-     }
-
-     if (error == 0)
-     {
-	  switch(*p++)
-	  {
-	  case 's':
-	    *duration = 1.0 * dval;
-	    break;
-	  case 'm':
-	    *duration = 60.0 * dval;
-	    break;
-	  case 'h':
-	    *duration = 3600.0 * dval;
-	    break;
-	  case 'd':
-	    *duration = 86400.0 * dval;
-	    break;
-	  default:
-	    fprintf(stderr,"Syntax Error: Time duration unit must be one of 's', "
-		    "'m', 'h', 'd', found '%c', '%s'.\n", *(p-1), p);
-	    error = 1;
-	  }
-     }
-
-     return error;
-}
-
-/* If <timeQuery> is within the range specified by <rs>, *bAns is set to 1, otherwise it is set to 0 */
-/* The data types in <rs> must be of type DRMS_TYPE_TIME */
-/* Adapted from sql_primekey_value_set() */
-static int TimeInRange(char *time, ValueRangeSet_t *rs, int *bAns)
-{
-     int error = 0;
-     int bInRange = 0;
-
-     /* Convert time string into drmsTime */
-     TIME timeQuery = sscan_time(time) - sscan_time("1977.01.01_00:00_TAI");
-
-     do 
-     {
-	  if (rs->type == SINGLE_VALUE)
-	  {
-	       bInRange = (rs->start.time_val == timeQuery) ? 1 : 0;
-	       if (bInRange == 1)
-	       {
-		    break;
-	       }
-	  }
-	  else
-	  {
-	       if (rs->type == START_END)
-	       {
-		    /* For the interval case, rs->x is the end of the interval */
-		    if (timeQuery >= rs->start.time_val && timeQuery <= rs->x.time_val)
-		    {
-			 bInRange = 1;
-			 break;
-		    }
-	       }
-	       else if (rs->type == START_DURATION)
-	       {
-		    /* For the duration case, rs->x is the increment from rs->start */
-		    TIME endTime = rs->start.time_val + rs->x.time_val;
-		    if (timeQuery >= rs->start.time_val && timeQuery < endTime)
-		    {
-			 bInRange = 1;
-			 break;
-		    }
-	       }
-
-	       if (rs->has_skip)
-	       {
-		    fprintf(stderr,"(has_skip == 1) not yet supported in value queries.\n");
-		    error = 1;
-		    break;
-	       }
-	  }
-	  
-	  rs = rs->next;
-     } while (rs);     
-     
-     if (error == 0)
-     {
-	  *bAns = bInRange;
-     }
-     else
-     {
-	  *bAns = 0;
-     }
-     
-     return error;
-}
-
-static int CreateTimeRange(char *timeRange, ValueRangeSet_t **rs)
-{
-     int error = 0;
-
-     if (timeRange == NULL)
-     {
-	  error = 1;
-     }
-     else
-     {
-	  int n;
-	  char *p = timeRange;
-	  ValueRangeSet_t *vr = NULL;
-	  ValueRangeSet_t *head = NULL;
-	  
-	  do 
-	  {
-	       if (vr)
-	       {
-		    XASSERT(vr->next = (ValueRangeSet_t *)malloc(sizeof(ValueRangeSet_t)));
-		    vr = vr->next;
-		    memset(vr, 0, sizeof(ValueRangeSet_t));
-	       }
-	       else 
-	       {
-		    XASSERT(vr = (ValueRangeSet_t *)malloc(sizeof(ValueRangeSet_t)));
-		    head = vr;
-		    memset(vr,0,sizeof( ValueRangeSet_t));
-	       }
-	       
-	       /* Get start */
-	       if ((n = drms_sscanf(p, DRMS_TYPE_TIME, &vr->start)) == 0)    
-	       {
-		    fprintf(stderr,"Syntax Error: Expected start value of type %s in"
-			    " value range, found '%s'.\n", drms_type2str(DRMS_TYPE_TIME), p);
-		    error = 1;
-		    break;
-	       }
-	       else
-	       {
-		    p += n;     
-	       }
-	       
-	       if (*p == '-')
-	       {
-		    vr->type = START_END;
-	       }
-	       else if (*p == '/')
-	       {
-		    vr->type = START_DURATION;
-	       }
-	       else
-	       {
-		    vr->type = SINGLE_VALUE;
-	       }
-	       
-	       /* Get end or duration "x" */
-	       if (vr->type != SINGLE_VALUE)
-	       {
-		    ++p;
-		    
-		    if (vr->type == START_END)
-		    {
-			 if ((n = drms_sscanf(p, DRMS_TYPE_TIME, &vr->x)) == 0)    
-			 {
-			      fprintf(stderr,"Syntax Error: Expected end value of"
-				      " type %s in value range, found '%s'.\n", drms_type2str(DRMS_TYPE_TIME), p);
-			      error = 1;
-			      break;
-			 }
-			 else
-			 {
-			      p += n;
-			 }
-		    }
-		    else
-		    {
-			 if (ParseDuration(p, &vr->x.time_val))
-			 {
-			      fprintf(stderr,"Syntax Error: Expected time duration "
-				      " in value range, found '%s'.\n", p);
-			      error = 1;
-			      break;
-			 }	  
-		    }
-		    /* Get skip */
-		    if (*p == '@')
-		    {
-			 ++p;
-			 vr->has_skip = 1;
-			 if (ParseDuration(p, &vr->skip.time_val))    
-			 {
-			      fprintf(stderr,"Syntax Error: Expected skip (time duration)"
-				      " in value range, found '%s'.\n", p);
-			      error = 1;
-			      break;
-			 }
-		    }
-		    else
-		    {
-			 vr->has_skip = 0;
-		    }
-	       }
-	  } while (*p++ == ',');
-	  
-	  
-	  if (error == 0)
-	  {
-	       *rs = head;
-	  }
-	  else
-	  {
-	       *rs = NULL;
-	  }
-     }
-
-     return error;
-}
-
-static void DestroyTimeRange(ValueRangeSet_t *head)
-{
-     /* Clean up range structures */
-     ValueRangeSet_t *vr = NULL;
-     
-     while (head)
-     { 
-	  vr = head->next; 
-	  free(head); 
-	  head = vr; 
-     }
-}
-
 static int SetSVKey(DRMS_Record_t *rec, char *keyName, DRMS_Type_Value_t value)
 {
    int error = 0;
@@ -634,8 +401,9 @@ static int SetSVKey(DRMS_Record_t *rec, char *keyName, DRMS_Type_Value_t value)
 
 static int ExtractStateVectors(DRMS_Env_t *drmsEnv, 
 			       char *filePathHELIO, 
+			       char *idHELIO,
 			       char *filePathGEO, 
-			       char *timeRange, 
+			       char *idGEO,
 			       char *outSeries)
 {
    int stat = DRMS_SUCCESS;
@@ -654,23 +422,14 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
    double vyValGeo;
    double vzValGeo;
 
-   int skippedRecs = 0;
    int addedRecs = 0;
 
-   ValueRangeSet_t *tRangeSet = NULL;
-
    char sbox[DRMS_MAXSERIESNAMELEN];
-
-   if (timeRange != NULL)
-   {
-      printf("Time range is %s.\n", timeRange);
-      error = CreateTimeRange(timeRange, &tRangeSet);
-   }
 
    /* Read heliocentric data from filePathHELIO one line at a time */
    FILE *datafp = NULL;
 
-   if (error == 0);
+   if (error == 0 && filePathHELIO);
    {
       datafp = fopen(filePathHELIO, "r");
    }
@@ -704,21 +463,6 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 	 }
 
 	 ParseSVRecFields(lineBuf, &obsDate, &xValHel, &yValHel, &zValHel, &vxValHel, &vyValHel, &vzValHel);
-	       
-	 /* Strip out records that do not fall within the range of times specified in fdsTRange */
-	 int bAns = 0;
-	 if (TimeInRange(obsDate, tRangeSet, &bAns) != 0)
-	 {
-	    error = 1;
-	 }
-	 else
-	 {
-	    if (bAns == 0)
-	    {
-	       skippedRecs++;
-	       continue;
-	    }
-	 }
 
 	 /* Put these heliocentric data into temporary records in a sandbox series. */
 	 snprintf(sbox, sizeof(sbox), "%s_sbox", outSeries);
@@ -769,6 +513,8 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 			      
 	       value.double_val = vzValHel;
 	       SetSVKey(rec, kSVKeyVzHELIO, value);
+
+	       drms_setkey_string(rec, kSVKey_idHELIO, idHELIO);
 	    }    
 	 }
 	 else
@@ -791,7 +537,12 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 	    error = drms_close_records(recSet, DRMS_FREE_RECORD);
 	    break;
 	 }
-	       
+#if 1
+	 if (addedRecs == 10)
+	 {
+	    break;
+	 }
+#endif       
       } /* end while */
 
       fclose(datafp);
@@ -805,7 +556,7 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
    /* Geocentric orbit files - save these data in the real series, along with the heliocentric
     * data from sbox series. */
-   if (error == 0);
+   if (error == 0 && filePathGEO);
    {
       datafp = fopen(filePathGEO, "r");
    }
@@ -817,7 +568,6 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
       DRMS_RecordSet_t *rs = NULL;
       char rsquery[DRMS_MAXQUERYLEN];
       int nrecs;
-      DRMS_Record_t *rec = NULL;
       DRMS_Type_t type;
       DRMS_Type_Value_t value;
 
@@ -888,6 +638,8 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 	       
 		  value = drms_getkey(inrec, kSVKeyVzHELIO, &type, &stat);
 		  SetSVKey(outrec, kSVKeyVzHELIO, value);
+
+		  drms_setkey_string(inrec, kSVKey_idGEO, idGEO);
 	       }
 	      
 	       drms_close_records(rs, DRMS_FREE_RECORD);
@@ -914,6 +666,14 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
 	    drms_close_records(recSet, DRMS_INSERT_RECORD);
 	 }
+	 
+#if 1
+	 addedRecs--;
+	 if (addedRecs == 0)
+	 {
+	    break;
+	 }
+#endif        
       }
    }
    else
@@ -921,11 +681,6 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
       /* Couldn't open file */
       error = 1;
       printf("Could not open %s for reading\n", filePathGEO);
-   }
-
-   if (tRangeSet)
-   {
-      DestroyTimeRange(tRangeSet);
    }
 
    return error;
@@ -942,28 +697,24 @@ int DoIt(void)
    }
    else
    {
-      char *fdsSeries = NULL;
+      char seriesin[DRMS_MAXSERIESNAMELEN];
+      char seriesout[DRMS_MAXSERIESNAMELEN];
+      char serieshist[DRMS_MAXSERIESNAMELEN];
       char *fdsTRange = NULL;
-      char *svSeries = NULL;
-	  
-      char *seriesIn = cmdparams_get_str(&cmdparams, "seriesIn", NULL);
+
+      char *ns = cmdparams_get_str(&cmdparams, "ns", NULL);
+      char *si = cmdparams_get_str(&cmdparams, "seriesIn", NULL);
+      char *so = cmdparams_get_str(&cmdparams, "seriesOut", NULL);
       char *timeRange = cmdparams_get_str(&cmdparams, "timeRange", NULL);
-      char *seriesOut = cmdparams_get_str(&cmdparams, "seriesOut", NULL);
+
+      snprintf(seriesin, sizeof(seriesin), "%s.%s", ns, si);
+      snprintf(seriesout, sizeof(seriesout), "%s.%s", ns, so);
+      snprintf(serieshist, sizeof(serieshist), "%s.%s", ns, kSeriesHistory);
 
       if (cmdparams_isflagset(&cmdparams, "c"))
       {
-	 CreateOutSeries(drms_env, seriesOut, &stat);
+	 CreateOutSeries(drms_env, seriesout, &stat);
 	 return 0;
-      }
-
-      fdsSeries = strdup(seriesIn);
-      svSeries = strdup(seriesOut);
-	  
-      XASSERT(fdsSeries && svSeries);
-	  
-      if (!fdsSeries || !svSeries)
-      {
-	 error = 1;
       }
 
       /* Create the record set query */
@@ -971,11 +722,11 @@ int DoIt(void)
       {
 	 if (strcmp(timeRange, "NOT SPECIFIED") != 0)
 	 {
-	    size_t len = strlen(kObsTimeKey) + strlen(timeRange) + 3;
+	    size_t len = strlen(kObsDateKey) + strlen(timeRange) + 3;
 	    fdsTRange = malloc(sizeof(char) * len + 1);
 	    if (fdsTRange != NULL)
 	    {
-	       snprintf(fdsTRange, len + 1, "[%s=%s]", kObsTimeKey, timeRange);
+	       snprintf(fdsTRange, len + 1, "[%s=%s]", kObsDateKey, timeRange);
 	    }
 	    else
 	    {
@@ -986,145 +737,317 @@ int DoIt(void)
 	  
       if (error == 0)
       {
-	 char *recSetQuery = NULL;
-	 size_t len = strlen(fdsSeries) + strlen(kFdsDataProductKeyValHel);
-	       
-	 if (fdsTRange != NULL)
+	 /* Query database to locate the record(s) for a given time range */
+	 DRMS_RecordSet_t *rsInput = NULL;
+	 DRMS_RecordSet_t *rsHistory = NULL;
+	 DRMS_RecordSet_t *rsHELIO = NULL;
+	 DRMS_RecordSet_t *rsGEO = NULL;
+	 char queryInput[DRMS_MAXQUERYLEN];
+	 char queryHistory[DRMS_MAXQUERYLEN];
+	 char *filePathHELIO = NULL;
+	 char *filePathGEO = NULL;
+	 char queryHELIO[DRMS_MAXQUERYLEN];
+	 char queryGEO[DRMS_MAXQUERYLEN];
+	 char hashbuf[kMaxHashKey];
+	 char hashbufHELIO[kMaxHashKey];
+	 char hashbufGEO[kMaxHashKey];
+
+	 char *obs = NULL;
+	 char *dataprod = NULL;
+	 char *prodcomp = NULL;
+	 char *format = NULL;
+	 int filevers;
+
+	 int history = 0;
+
+	 /* Need to get the date of the last helio record ingested */
+	 if (drms_series_exists(drms_env, serieshist, &stat))
 	 {
-	    len += strlen(fdsTRange);
-	    recSetQuery = malloc(sizeof(char) * len + 1);
-	    if (recSetQuery != NULL)
-	    {
-	       snprintf(recSetQuery, len + 1, "%s%s%s", fdsSeries, fdsTRange, kFdsDataProductKeyValHel);
-	    }
-	    else
-	    {
-	       error = 1;
-	    }
+	    /* kSeriesHistory keeps track of all orbit data already ingested into 
+	     * seriesout.  So, open all records in seriesin, iterate through each
+	     * record and skip any records that are already in kSeriesHistory. */
+
+	    history = 1;
+	 }
+
+	 if (fdsTRange)
+	 {
+	    snprintf(queryInput, 
+		     sizeof(queryInput), 
+		     "%s[%s=%s]%s,%s[%s=%s]%s", 
+		     seriesin, 
+		     kFdsDataProductKey,
+		     kFdsDataProductHELIO,
+		     fdsTRange,
+		     seriesin, 
+		     kFdsDataProductKey,
+		     kFdsDataProductGEO,
+		     fdsTRange);
 	 }
 	 else
 	 {
-	    recSetQuery = malloc(sizeof(char) * len + 1);
-	    snprintf(recSetQuery, len + 1, "%s%s", fdsSeries, kFdsDataProductKeyValHel);
-	    if (recSetQuery == NULL)
-	    {
-	       error = 1;
-	    }
+	    snprintf(queryInput, 
+		     sizeof(queryInput), 
+		     "%s[%s=%s],%s[%s=%s]", 
+		     seriesin, 
+		     kFdsDataProductKey,
+		     kFdsDataProductHELIO,
+		     seriesin, 
+		     kFdsDataProductKey,
+		     kFdsDataProductGEO);
 	 }
 
-	 printf("Heliocentric record set query is %s\n", recSetQuery);
-
-	 if (recSetQuery == NULL)
+	 rsInput = drms_open_records(drms_env, queryInput, &stat);
+	 if (rsInput && rsInput->n > 0)
 	 {
-	    error = 1;
-	 }
-	       
-	 if (error == 0)
-	 {
-	    /* Query database to locate the record(s) for a given time range */
-	    int nRecs = 0;
-	    DRMS_RecordSet_t *recordSet = NULL;
-	    DRMS_Record_t *rec = NULL;
+	    DRMS_Record_t *recin = NULL;
 	    int irec;
-		
-	    error = FetchRecords(drms_env, recSetQuery, &recordSet, &nRecs);
-	    free(recSetQuery);    
+	    char path[DRMS_MAXPATHLEN];
+	    Hash_Table_t proclist;
+	    hash_init(&proclist, 
+		      23, 
+		      0,
+		      (int (*)(const void *, const void *))strcmp, 
+		      hash_universal_hash);
 
-	    for (irec = 0; error == 0 && irec < nRecs; irec++)
-	    {   	     
-	       printf("Number of records fetched is %d\n", nRecs);
-	      
-	       rec = recordSet->records[irec];
+	    for (irec = 0; irec < rsInput->n && !error; irec++)
+	    {
+	       recin = rsInput->records[irec];
 
-	       if (rec)
+	       if (recin)
 	       {
-		  char path[DRMS_MAXPATHLEN];
-				   
-		  DRMS_Segment_t *helioseg = drms_segment_lookup(rec, kSVFileSegName);
+		  obs = drms_getkey_string(recin, kObsDateKey, &stat);
+		  dataprod = drms_getkey_string(recin, kFdsDataProductKey, &stat);
+		  prodcomp = drms_getkey_string(recin, kFdsProductCompKey, &stat);
+		  format = drms_getkey_string(recin, kFdsDataFormatKey, &stat);
+		  filevers = drms_getkey_int(recin, kFileVersionKey, &stat);
 
-		  if (helioseg != NULL)
+		  /* Skip if this record has already been ingested */
+		  if (history)
 		  {
-		     drms_record_directory(rec, path, 1);
-		     len = strlen(path) + strlen(helioseg->filename) + 1;
-		     char *filePathHel = malloc(sizeof(char) * len + 1);
-		     if (filePathHel)
+		     snprintf(queryHistory, 
+			      sizeof(queryHistory), 
+			      "%s[%s=%s][%s=%s][%s=%s][%s=%s][%s=%d]",
+			      serieshist,
+			      kObsDateKey,
+			      obs,
+			      kFdsDataProductKey,
+			      dataprod,
+			      kFdsProductCompKey,
+			      prodcomp,
+			      kFdsDataFormatKey,
+			      format,
+			      kFileVersionKey,
+			      filevers);
+			      
+		     rsHistory = drms_open_records(drms_env, queryHistory, &stat);
+		     if (rsHistory && rsHistory->n > 0)
 		     {
-			snprintf(filePathHel, len + 1, "%s/%s", path, helioseg->filename);
-			char *tRange = (strcmp(timeRange, "NOT SPECIFIED") == 0) ? NULL : timeRange;
+			/* skip - already ingested */
+			drms_close_records(rsHistory, DRMS_FREE_RECORD);
+			continue;			
+		     }
+		  }
 
+		  /* Skip if this record has been processed in this session */
+		  snprintf(hashbuf,
+			   sizeof(hashbuf), 
+			   "[%s=%s][%s=%s][%s=%s][%s=%s][%s=%d]", 
+			   kObsDateKey,
+			   obs,
+			   kFdsDataProductKey,
+			   dataprod,
+			   kFdsProductCompKey,
+			   prodcomp,
+			   kFdsDataFormatKey,
+			   format,
+			   kFileVersionKey,
+			   filevers);
 
-			/* Geocentric vectors */
-			char rsqueryGEO[DRMS_MAXQUERYLEN];
-			DRMS_RecordSet_t *rsGEO = NULL;
-			int nrecsGEO = 0;
-			char *filePathGeo = NULL;
-			DRMS_Segment_t *geoseg = NULL;
+		  if (hash_member(&proclist, hashbuf))
+		  {
+		     continue;
+		  }
 
-			snprintf(rsqueryGEO, 
-				 sizeof(rsqueryGEO),
-				 "%s%s%s", 
-				 fdsSeries, 
-				 fdsTRange, 
-				 kFdsDataProductKeyValGeo);
+		  /* record is okay to ingest - but first collect HELIO and GEO in pairs */
+		  snprintf(queryHELIO, 
+			   sizeof(queryHELIO), 
+			   "%s[%s=%s][%s=%s][%s=%s][%s=%s][%s=%d]",
+			   seriesin,
+			   kObsDateKey,
+			   obs,
+			   kFdsDataProductKey,
+			   kFdsDataProductHELIO,
+			   kFdsProductCompKey,
+			   kFdsProductCompHELIO,
+			   kFdsDataFormatKey,
+			   format,
+			   kFileVersionKey,
+			   filevers);
 
-			error = FetchRecords(drms_env, rsqueryGEO, &rsGEO, &nrecsGEO);
+		  snprintf(queryGEO, 
+			   sizeof(queryGEO), 
+			   "%s[%s=%s][%s=%s][%s=%s][%s=%s][%s=%d]",
+			   seriesin,
+			   kObsDateKey,
+			   obs,
+			   kFdsDataProductKey,
+			   kFdsDataProductGEO,
+			   kFdsProductCompKey,
+			   kFdsProductCompGEO,
+			   kFdsDataFormatKey,
+			   format,
+			   kFileVersionKey,
+			   filevers);
 
-			if (nrecsGEO != 1)
-			{
-			   fprintf(stderr, "Should only be one record returned.\n");
-			}
+		  rsHELIO = drms_open_records(drms_env, queryHELIO, &stat);
 
-			if (rsGEO)
-			{
-			   geoseg = drms_segment_lookup(rsGEO->records[0], kSVFileSegName);
-
-			   if (geoseg != NULL)
-			   {
-			      drms_record_directory(rsGEO->records[0], path, 1);
-			      len = strlen(path) + strlen(geoseg->filename) + 1;
-			      filePathGeo = malloc(sizeof(char) * len + 1);
-
-			      if (filePathGeo)
-			      {
-				 snprintf(filePathGeo, len + 1, "%s/%s", path, geoseg->filename);
-				 error = ExtractStateVectors(drms_env, filePathHel, filePathGeo, tRange, svSeries);
-				 free(filePathGeo);
-			      }
-			   }
-
-			   FreeRecords(rsGEO);
-			}
-
-			free(filePathHel);
-
+		  if (rsHELIO && stat != DRMS_ERROR_UNKNOWNSERIES)
+		  {
+		     if (rsHELIO->n != 1)
+		     {
+			fprintf(stderr, "Expected only one record with query '%s'\n", queryHELIO);
+			error = 1;
 		     }
 		     else
 		     {
+			/* Get the HELIO filepath */
+			DRMS_Record_t *recHELIO = rsHELIO->records[0];
+			   
+			DRMS_Segment_t *helioseg = drms_segment_lookup(recHELIO, kSVFileSegName);
+
+			if (helioseg != NULL)
+			{
+			   drms_record_directory(recHELIO, path, 1);
+			   size_t len = strlen(path) + strlen(helioseg->filename) + 1;
+			   filePathHELIO = malloc(sizeof(char) * len + 1);
+			   if (filePathHELIO)
+			   {
+			      snprintf(filePathHELIO, len + 1, "%s/%s", path, helioseg->filename);
+			   }
+			}
+		     }
+
+		     // drms_close_records(rsHELIO, DRMS_FREE_RECORD);
+		  }
+
+		  rsGEO = drms_open_records(drms_env, queryGEO, &stat);
+
+		  if (rsGEO && stat != DRMS_ERROR_UNKNOWNSERIES)
+		  {
+		     if (rsGEO->n != 1)
+		     {
+			fprintf(stderr, "Expected only one record with query '%s'\n", queryGEO);
 			error = 1;
-		     }		     
+		     }
+		     else
+		     {
+			/* Get the GEO filepath */
+			DRMS_Record_t *recGEO = rsGEO->records[0];
+			   
+			DRMS_Segment_t *geoseg = drms_segment_lookup(recGEO, kSVFileSegName);
+			   
+			if (geoseg != NULL)
+			{
+			   drms_record_directory(recGEO, path, 1);
+			   size_t len = strlen(path) + strlen(geoseg->filename) + 1;
+			   filePathGEO = malloc(sizeof(char) * len + 1);
+			   if (filePathGEO)
+			   {
+			      snprintf(filePathGEO, len + 1, "%s/%s", path, geoseg->filename);
+			   }
+			}
+		     }
+
+		     // drms_close_records(rsGEO, DRMS_FREE_RECORD);
+		  }
+		  
+		  if (filePathHELIO)
+		  {
+		     snprintf(hashbufHELIO,
+			      sizeof(hashbufHELIO), 
+			      "[%s=%s][%s=%s][%s=%s][%s=%s][%s=%d]", 
+			      kObsDateKey,
+			      obs,
+			      kFdsDataProductKey,
+			      kFdsDataProductHELIO,
+			      kFdsProductCompKey,
+			      kFdsProductCompHELIO,
+			      kFdsDataFormatKey,
+			      format,
+			      kFileVersionKey,
+			      filevers);
+		  }
+
+		  if (filePathGEO)
+		  {
+		     snprintf(hashbufGEO,
+			      sizeof(hashbufGEO), 
+			      "[%s=%s][%s=%s][%s=%s][%s=%s][%s=%d]", 
+			      kObsDateKey,
+			      obs,
+			      kFdsDataProductKey,
+			      kFdsDataProductGEO,
+			      kFdsProductCompKey,
+			      kFdsProductCompGEO,
+			      kFdsDataFormatKey,
+			      format,
+			      kFileVersionKey,
+			      filevers);
+		  }
+
+		  error = ExtractStateVectors(drms_env, 
+					      filePathHELIO, 
+					      hashbufHELIO,
+					      filePathGEO,
+					      hashbufGEO,
+					      seriesout);
+		  if (!error)
+		  {
+		     /* Track that these input files have been processed so that the input rec loop
+		      * doesn't attempt to duplicate ingestion of a file */
+		     if (filePathHELIO)
+		     {
+			hash_insert(&proclist, hashbufHELIO, NULL);
+		     }
+
+		     if (filePathGEO)
+		     {
+			hash_insert(&proclist, hashbufGEO, NULL);
+		     }
 		  }
 	       }
-	      
-	    }
+	    } /* record loop */
 
-	    FreeRecords(recordSet);
+	    drms_close_records(rsInput, DRMS_FREE_RECORD);
+	    hash_free(&proclist);
 	 }
-      }
-	  
-      if (fdsSeries)
-      {
-	 free(fdsSeries);
+
+	 if (obs)
+	 {
+	    free(obs);
+	 }
+
+	 if (dataprod)
+	 {
+	    free(dataprod);
+	 }
+
+	 if (prodcomp)
+	 {
+	    free(prodcomp);
+	 }
+
+	 if (format)
+	 {
+	    free(format);
+	 }
       }
 	  
       if (fdsTRange)
       {
 	 free(fdsTRange);
-      }
-	  
-      if (svSeries)
-      {
-	 free(svSeries);
-      }
+      }	  
    }
      
    return error;
