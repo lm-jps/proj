@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ##############################################################################
 # Name:        ddf.pl - decode day files                                     #
-#              CRON to Get  hmi,sdo,aia dayfiles from DRMS & send to for     #
+#              CRON to get hmi,sdo,aia dayfiles from DRMS & send to for      #
 #              decoding keywords and then write keywords to DRMS hk data     #
 #              series by apid. This script sets values to process dayfiles   #
 #              for either hmi,aia, or sdo  dayfiles for today. Sets up       #
@@ -20,7 +20,7 @@
 #              This script can be run at command line too.                   #
 # Execution:   (1)Run option to process dayfiles for today:                  #
 #                                                                            #
-#                 perl hmi_dfd.pl <project name of day file series> <source> #
+#                 perl ddf.pl <project name of day file series> <source>     #
 #                                                                            #
 #              (2)The run options are show in help listing:                  #
 #                                                                            #
