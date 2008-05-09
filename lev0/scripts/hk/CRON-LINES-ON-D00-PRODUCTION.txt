@@ -1,1 +1,7 @@
-0 18 * * 0-6 /usr/bin/perl /home/carl/cvs/JSOC/proj/lev0/scripts/hk/ingest_hsb_dayfile.pl  apidlist=/home/production/cvs/JSOC/proj/lev0/scripts/hk/df_apid_list_day_file_hsb dsnlist=/home/production/cvs/JSOC/proj/lev0/scripts/hk/df_apid_ds_list_for_hsb src=hsb
+#### cron job to ingest lev 0 dayfile into DRMS  ####################
+0  18 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ingest_hsb_dayfile.pl  apidlist=/home/production/cvs/JSOC/proj/lev0/scripts/hk/df_apid_list_day_file_hsb dsnlist=/home/production/cvs/JSOC/proj/lev0/scripts/hk/df_apid_ds_list_for_hsb src=hsb
+#### cron job to decode dayfiles from hmi.hk_dayfile with source equal to egsefm into keywords to HK by APID series#####
+0  19 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ddf.pl hmi egsefm  >/dev/null 2>&1
+#### cron job to decode dayfiles from hmi.hk_dayfile with source equal to hsb into keywords to HK by APID series #####
+30 19 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ddf.pl hmi hsb  >/dev/null 2>&1
+
