@@ -40,24 +40,20 @@ $exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/cvs/JSOC/bin/linux_x86_64";
 $script_dir=$ENV{'HK_SCRIPT_DIR'}="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$exec_dir";
 
-#old jsoc-->$exec_dir=$ENV{'DF_EXEC_PATH'}="/home/carl/cvs/JSOC/bin/linux_x86_64";
-#old jsoc-->$script_dir=$ENV{'HK_SCRIPT_DIR'}="$hm/jsoc/src/pipeline/hk_decode";
-
 #(2) set debug flag 1 to turn on and 0 to turn off
 $dflg=$ENV{'DF_GDFDRMS_DEBUG'};
 
 #(3) set report flag to turn on and off report creation and set report name 
 $rptflg=$ENV{'DF_REPORT_FLAG'};
 $pjn=$ENV{'DF_PROJECT_NAME_FOR_REPORT'};
-##if($pjn == 0)
 if($pjn eq "")
 {
-   $pjn=$ENV{'DF_PROJECT_NAME_FOR_REPORT'}="su_carl";
+  $pjn=$ENV{'DF_PROJECT_NAME_FOR_REPORT'}="su_carl";
 }
 $dtn=$ENV{'DF_DATA_TYPE_NAME_FOR_REPORT'};
 if($dtn == 0)
 {
-   $dtn=$ENV{'DF_DATA_TYPE_NAME_FOR_REPORT'}="lev0";
+  $dtn=$ENV{'DF_DATA_TYPE_NAME_FOR_REPORT'}="lev0";
 }
 
 #(4) set dayfile data series to get dayfiles from
@@ -67,7 +63,7 @@ if($dsnm == 0)
 {
    ##used to test egsefm input dayfiles from drms
    $dsnm=$ENV{'DF_SERIES_NAME'}="hmi_ground.hk_dayfile"; #test LMSAL formatted dayfiles
-   #$dsnm=$ENV{'DF_SERIES_NAME'}; #test LMSAL formatted dayfiles
+
    ##used to test hsb dayfiles input files from drms
    #$dsnm=$ENV{'DF_SERIES_NAME'}="su_carl.hk_dayfile";   #test hsb formatted dayfiles
 }
@@ -77,7 +73,6 @@ $logfile=$ENV{'HK_DF_LOGFILE'};
 if($logfile eq "")
 {
    $logfile="$script_dir/log-gdfdrms";#send log here when run at command line
-   #$logfile="$script_dir/log-default-ddf";#send log here when run at command line
 }
 
 #(6) open log file
@@ -118,7 +113,6 @@ sub check_arguments()
   {
     $help_flg="1";
   }
-    
   if ($#ARGV >= 0)
   {
     if ($ARGV[0] eq "-h" || $ARGV[0] eq "-help" || $ARGV[0] eq "-H")
