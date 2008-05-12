@@ -31,8 +31,8 @@ $ENV{'MAILTO'}="";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
 $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq";
-#$ENV{'CVS_RSH'}="ssh";
-$ENV{'CVS_RSH'}="/usr/bin/rsh";
+$ENV{'CVS_RSH'}="ssh";
+#$ENV{'CVS_RSH'}="/usr/bin/rsh";
 
 # set environment variables for cron job executing this script based on machine
 $account=`whoami`;
