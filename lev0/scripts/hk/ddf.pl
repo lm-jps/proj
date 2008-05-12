@@ -24,7 +24,7 @@
 #                                                                            #
 #              (2)The run options are show in help listing:                  #
 #                                                                            #
-#                 perl dfd.pl  -h                                            #
+#                 perl ddf.pl  -h                                            #
 #                                                                            #
 # Examples Execution(Possible cases as of today):                            #
 #              perl ddf.pl hmi egsefm                                        #
