@@ -9,7 +9,7 @@
 #              Send email status to jsoc_ops team.                           #
 # Execution:   (1)To run standalone:clmq.pl                                  #
 #              (2)To run in cron is normal way to run. See example below.    #
-#              (3)For help: clmq.pl -h                                       #
+#              (3)For help: clmq.pl -h  (open-to be done)                    #
 # Example      Cron:0,30 9-18 * * 1-5 /usr/bin/perl                          #
 #               /home1/carl/cvs/JSOC/proj/lev0/scripts/hk/clmq.pl >          #
 #               /dev/null 2>&1                                               #
@@ -146,13 +146,14 @@ while (<QFILE>)
   #print MF `date`;
   # don't need to send to solserv,see above, since EGSE scripts aleady do this.
   print MF "-->Ready to move tar file to outside machine if needed. TAR file located at $tar_src_dir/TAR.$sfvn\n";
-  print MF "-->Or can do a cvs update to get hk configuration files checked into JSOC CVS.\n";
+  print MF "-->Or can do a cvs update for your workspace to get hk configuration files checked into JSOC Production CVS directory:$tar_src_dir\n";
   print MF `date`;
 
   ## send mail status on update
   $lm=`mail -s "For carl\@yeti only: update completed for hk config files" carl\@sun.stanford.edu < $mailfile`;
  ##P$lm=`mail -s "For production\@yeti only: update completed for hk config files" jsoc_ops\@sun.stanford.edu < $mailfile`;
 
+  
   ##execute script to build of jsd, jsvn map files, create series if needed 
   ## get ground file version number to name of tar file
   $pos= index $gfname, "-";
@@ -177,3 +178,9 @@ close QFILE;
 print LF `date`;
 close LF;
 close MF;
+if ($uflag eq "y")
+{
+  #set MF file to blank work was completed
+  open(MF,">$mailfile") || die "Can't Open $mailfile: $!\n";
+  close MF;
+}
