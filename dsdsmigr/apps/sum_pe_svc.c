@@ -9,6 +9,7 @@
 
 #include "jsoc.h"
 #include "cmdparams.h"
+#include <stdlib.h>
 #include <SUM.h>
 #include <soi_error.h>
 #include <sys/errno.h>
@@ -17,6 +18,8 @@
 #include <signal.h>
 #include <sum_rpc.h>
 #include <printk.h>
+
+static char PGPORTDRMS[] = "5432";	//port for jsoc db
 
 ModuleArgs_t module_args[] =
 { 
@@ -239,6 +242,7 @@ int main(int argc, char **argv)
 /*  DRMS_Record_t *rec; */
   register SVCXPRT *transp;
 
+  setenv("PGPORT", PGPORTDRMS, 1);	//PGPORT for jsoc db
   /* Get command line arguments */
   status = cmdparams_parse (&cmdparams, argc, argv);
   if (status == CMDPARAMS_QUERYMODE) {
