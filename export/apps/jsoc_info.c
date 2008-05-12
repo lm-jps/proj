@@ -149,6 +149,33 @@ static void CGI_unescape_url (char *url) {
   url[x] = '\0';
 }
 
+/* drms_record_getlogdir */
+
+/* Returns path of directory that contains any saved log information for the given record */
+/* If log is offline, returns message, if log was not saved or otherwise not found returns NULL */
+/* The returned char* should be freed after use. */
+
+char *drms_record_getlogdir(DRMS_Record_t *rec)
+  { 
+  char *logpath;
+  char query[DRMS_MAXQUERYLEN];
+  DB_Text_Result_t *qres;
+
+  sprintf(query,
+    "select online_loc, online_status from sum_main a, %s.drms_session b where a.ds_index = b.sunum and b.sessionid=%lld",
+    rec->sessionns, rec->sessionid);
+  if ((qres = drms_query_txt(drms_env->session, query)) && qres->num_rows > 0)
+    {
+    if (qres->field[0][1][0] == 'Y')
+      logpath = strdup(qres->field[0][0]);
+    else
+      logpath = strdup("Log Offline");
+    }
+  else
+    logpath = NULL;
+  db_free_text_result(qres);
+  return logpath;
+  }
 
 int drms_count_records(DRMS_Env_t *env, char *recordsetname, int *status)
   {
@@ -194,19 +221,9 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "ds", "Not Specified", "<record_set query>"},
   {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>"},
   {ARG_STRING, "seg", "Not Specified", "<comma delimited segment list>"},
-{ARG_FLAG, "a", "0", "Show info for all keywords"},
-{ARG_FLAG, "h", "0", "help - print usage info"},
-{ARG_FLAG, "j", "0", "list series info in jsd format"},
-{ARG_FLAG, "l", "0", "just list series keywords with descriptions"},
-{ARG_INT, "n", "0", "number of records to show, +from first, -from last"},
-{ARG_FLAG, "p", "0", "list the record\'s storage_unit path"},
-{ARG_FLAG, "P", "0", "list the record\'s storage_unit path but no retrieve"},
-{ARG_FLAG, "k", "0", "keyword list one per line"},
-{ARG_FLAG, "q", "0", "quiet - skip header of chosen keywords"},
-{ARG_FLAG, "r", "0", "recnum - show record number as first keyword"},
-  {ARG_FLAG, "R", "0", "RecInfo - show record name as query"},
-{ARG_FLAG, "s", "0", "stats - show some statistics about the series"},
-  {ARG_FLAG, "z", "0", "JSON formatted output - present output in JSON format"},
+  {ARG_FLAG, "h", "0", "help - show usage"},
+  {ARG_FLAG, "R", "0", "Show record query"},
+  {ARG_FLAG, "z", "0", "emit JSON output"},
   {ARG_STRING, "QUERY_STRING", "Not Specified", "AJAX query from the web"},
   {ARG_END}
 };
@@ -218,29 +235,14 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
-    printf ("Usage:\njsoc_info [-ahjklpqr] "
+    printf ("Usage:\njsoc_info {-h} "
 	"op=<command> ds=<recordset query> {n=0} {key=<keylist>} {seg=<segment_list>}\n"
         "  details are:\n"
-"  -a: show information for all keywords\n"
-"  -h: help - show this message then exit\n"
-"  -j: list all series, keyword, segment, and link items in jsd file format, then exit\n"
-"  -k: list keyword names and values, one per line\n"
-"  -l: list all keywords with description, then exit\n"
-"  -p: list the record's storage_unit path (retrieve if necessary)\n"
-"  -P: list the record's storage_unit path (no retrieve)\n"
-"  -q: quiet - skip header of chosen keywords\n"
-"  -r: recnum - show record number as first keyword\n"
-        "  -R: RecInfo - show record RecInfo as query\n"
-"  -s: stats - show some statistics for how many records, etc.\n"
-"  -z: present the output in JSON format\n"
 	"op=<command> tell which ajax function to execute\n"
 	"ds=<recordset query> as <series>{[record specifier]} - required\n"
-"n=0 number of records in query to show, +n from start or -n from end\n"
 	"key=<comma delimited keyword list>, for all use -a flag\n"
 	"seg=<comma delimited segment list>\n"
-"The -p or -P flag will show the record directory by itself or as part of the\n"
-"full path to the segment file if seg=<segmentname> is specified.\n"
-"Note that the -p flag will cause the data to be staged if offline.\n");
+	);
     return(1);
     }
   return (0);
@@ -696,7 +698,6 @@ int DoIt(void)
       }
   
     /* get list of keywords to print for each record */
-redoKeys:
     nkeys = 0;
     if (keys_listed) 
       { /* get specified list */
@@ -711,19 +712,15 @@ redoKeys:
 	  }
 	if (strcmp(thiskey, "**ALL**")==0)
           {
-	  keys_listed = 0;
-	  goto redoKeys; /* Ugh */
+          DRMS_Keyword_t *key;
+          HIterator_t hit;
+          hiter_new (&hit, &recordset->records[0]->keywords);
+          while ((key = (DRMS_Keyword_t *)hiter_getnext (&hit)))
+            keys[nkeys++] = strdup (key->info->name);
 	  }
-  	keys[nkeys++] = strdup(thiskey);
+  	else
+	  keys[nkeys++] = strdup(thiskey);
 	}
-      }
-    else
-      { /* get list of all keywords */
-      DRMS_Keyword_t *key;
-      HIterator_t hit;
-      hiter_new (&hit, &recordset->records[0]->keywords);
-      while ((key = (DRMS_Keyword_t *)hiter_getnext (&hit)))
-        keys[nkeys++] = strdup (key->info->name);
       }
     free (keylist);
     /* place to put an array of keyvals per keyword */
@@ -736,7 +733,6 @@ redoKeys:
       }
   
     /* get list of segments to show for each record */
-redoSegs:
     nsegs = 0;
     if (segs_listed) 
       { /* get specified segment list */
@@ -751,19 +747,15 @@ redoSegs:
 	  }
 	if (strcmp(thisseg, "**ALL**")==0)
 	  {
-	  segs_listed = 0;
-	  goto redoSegs; /* Ugh */
+          DRMS_Segment_t *seg;
+          HIterator_t hit;
+          hiter_new (&hit, &recordset->records[0]->segments);
+          while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit)))
+            segs[nsegs++] = strdup (seg->info->name);
 	  }
-  	segs[nsegs++] = strdup(thisseg);
+  	else
+	  segs[nsegs++] = strdup(thisseg);
 	}
-      }
-    else
-      { /* get list of all segments */
-      DRMS_Segment_t *seg;
-      HIterator_t hit;
-      hiter_new (&hit, &recordset->records[0]->segments);
-      while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit)))
-        segs[nsegs++] = strdup (seg->info->name);
       }
     free (seglist);
     /* place to put an array of segvals per segment */
@@ -792,27 +784,49 @@ redoSegs:
       /* now get keyword information */
       for (ikey=0; ikey<nkeys; ikey++) 
         {
-        DRMS_Keyword_t *rec_key_ikey = drms_keyword_lookup (rec, keys[ikey], 1); 
+        DRMS_Keyword_t *rec_key_ikey; 
         json_t *thiskeyval = keyvals[ikey]; 
         json_t *val;
         char rawval[20000];
         char *jsonval;
-        drms_sprintfval_format(rawval, rec_key_ikey->info->type, &(rec_key_ikey->value),
-		rec_key_ikey->info->format, 0);
-        switch (rec_key_ikey->info->type)
+        if (strcmp(keys[ikey],"*recnum*") == 0)
+	  {
+	  sprintf(rawval,"%ld",rec->recnum);
+	  val = json_new_number(rawval);
+	  }
+        else if (strcmp(keys[ikey], "*logdir*") == 0)
           {
-          case DRMS_TYPE_STRING:
-          case DRMS_TYPE_TIME:
+	  char *logdir = drms_record_getlogdir(rec);
+	  if (logdir)
+	    {
+	    jsonval = string_to_json(logdir);
+	    free(logdir);
+	    }
+	  else
+	    jsonval = string_to_json("NO LOG");
+	  val = json_new_string(jsonval);
+  	  free(jsonval);
+          }
+        else
+	  {
+          rec_key_ikey = drms_keyword_lookup (rec, keys[ikey], 1); 
+          drms_sprintfval_format(rawval, rec_key_ikey->info->type, &(rec_key_ikey->value),
+		rec_key_ikey->info->format, 0);
+          switch (rec_key_ikey->info->type)
+            {
+            case DRMS_TYPE_STRING:
+            case DRMS_TYPE_TIME:
 		jsonval = string_to_json(rawval);
 		val = json_new_string(jsonval);
 		free(jsonval);
 		break;
-          default:
+            default:
 		if (strcmp(rawval,"nan")==0)
 		    val = json_new_number("99999999.99999");
 		else
 		    val = json_new_number(rawval);
-          }
+            }
+	  }
         json_insert_child(thiskeyval, val);
         }
   

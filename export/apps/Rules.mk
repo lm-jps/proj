@@ -7,11 +7,14 @@ d		:= $(dir)
 # NOTE: Add the base of the module's filename below (next to mymod)
 MODEXE_$(d)	:= $(addprefix $(d)/, jsoc_export jsoc_info)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
+CEXE_$(d)       := $(addprefix $(d)/, GetJsocRequestID)
+CEXE            := $(CEXE) $(CEXE_$(d))
+
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
 MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 
-EXE_$(d)	:= $(MODEXE_$(d)) 
+EXE_$(d)        := $(MODEXE_$(d)) $(CEXE_$(d))
 OBJ_$(d)	:= $(EXE_$(d):%=%.o) 
 DEP_$(d)	:= $(OBJ_$(d):%=%.o.d)
 CLEAN		:= $(CLEAN) \
