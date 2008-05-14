@@ -37,6 +37,9 @@
 #define kSeriesOut "seriesOut"
 #define kSegList "segments"
 #define kOp "op"
+#define kBzero "bzero"
+#define kBscale "bscale"
+#define kDatatype "dtype"
 #define kNotSpecified "NOT SPECIFIED"
 #define kMaxSegs 1024
 #define kMaxQuery 2048
@@ -71,6 +74,9 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, kSeriesOut, kNotSpecified, "Name of series in which to save extracted data."},
   {ARG_STRING, kSegList, kNotSpecified, "Comma-separated list of segments on which to operate."},
   {ARG_STRING, kOp, "", "The operation to perform."},
+  {ARG_DOUBLE, kBzero, "0.0", "For integer output, the bzero to use."},
+  {ARG_DOUBLE, kBscale, "1.0", "For integer output, the bscale to use."},
+  {ARG_NUME, kDatatype, "double", "Data type of in-memory data array.", "char,short,int,longlong,float,double"},
   {ARG_END}
 };
 
@@ -104,55 +110,6 @@ static int NiceIntro()
      }
 
      return 0;
-}
-
-/* XXX Implement the rest of the types. */
-/* anything compared to a NaN will return false */
-int IsMissingData(DRMS_Type_t type, const void *data)
-{
-   int ret = 0;
-
-   switch(type)
-   {
-   case DRMS_TYPE_FLOAT:
-      if (*((float *)data) != *((float *)data))
-      {
-	 /* The data is a NaN */
-	 ret = 1;
-      }
-      else if (DRMS_MISSING_FLOAT != DRMS_MISSING_FLOAT)
-      {
-	 /* The missing value is a NaN, but data isn't NaN. */
-	 ret = 0;
-      }
-      else
-      {
-	 /* Neither the data nor the missing value is a NaN. */
-	 ret = (*((float *)data) == DRMS_MISSING_FLOAT);
-      }
-      break;
-   case DRMS_TYPE_DOUBLE:
-      if (*((double *)data) != *((double *)data))
-      {
-	 /* The data is a NaN */
-	 ret = 1;
-      }
-      else if (DRMS_MISSING_DOUBLE != DRMS_MISSING_DOUBLE)
-      {
-	 /* The missing value is a NaN, but data isn't NaN. */
-	 ret = 0;
-      }
-      else
-      {
-	 /* Neither the data nor the missing value is a NaN. */
-	 ret = (*((double *)data) == DRMS_MISSING_DOUBLE);
-      }
-      break;
-   default:
-     fprintf(stderr, "Unexpected type %d.\n", type);
-   }
-
-   return ret;
 }
 
 /* No need for an associative array since this mapping will be performed one time. */
@@ -237,8 +194,8 @@ static int CreateDRMSPrimeKeyContainer(DRMS_Record_t *recTemplate, DRMSContainer
 		    if (keyword != NULL)
 		    {
 			 DRMS_Keyword_t **newKeyword = 
-			   (DRMS_Keyword_t **)hcon_allocslot(conPrimeKeys->items, 
-							     keyword->info->name);
+			   (DRMS_Keyword_t **)hcon_allocslot_lower(conPrimeKeys->items, 
+								   keyword->info->name);
 			 
 			 if (newKeyword != NULL)
 			 {
@@ -400,7 +357,7 @@ static int CreateMatchingSegs(DRMSContainer_t *segs1, DRMSContainer_t *segs2, DR
 		    }
 		    
 		    DRMS_Segment_t **newSeg = 
-		      (DRMS_Segment_t **)hcon_allocslot(matchSet->items, currSeg->info->name);
+		      (DRMS_Segment_t **)hcon_allocslot_lower(matchSet->items, currSeg->info->name);
 		    
 		    if (newSeg != NULL && *newSeg != NULL)
 		    {
@@ -424,8 +381,7 @@ static int CreateMatchingSegs(DRMSContainer_t *segs1, DRMSContainer_t *segs2, DR
      return nMatch;
 }
 
-static int ValidateBinaryOperands(DRMS_Env_t *drmsEnv, 
-				  char *recSetIn, 
+static int ValidateBinaryOperands(char *recSetIn, 
 				  char **segNameArr, 
 				  int nSegs, 
 				  DRMSContainer_t *inKeys, DRMSContainer_t *inSegs, 
@@ -518,10 +474,7 @@ static char *CreateStrFromDRMSValue(DRMS_Record_t *rec, char *keyName, int *erro
      return drms_getkey_string(rec, keyName, error);
 }
 
-/* Gets as far as it can, filling in with MISSINGS if necessary.  Returns 1
-* if any error happens. */
-static int PerformOperation(ArithOp_t op, const double *pInData, const double *pWithData, 
-			    int nElements, double *pOutData, double mean)
+static int MultChar(const char *pInData, const char *pWithData, int nElements, char *pOutData)
 {
    int error = 0;
 
@@ -529,31 +482,31 @@ static int PerformOperation(ArithOp_t op, const double *pInData, const double *p
    int percentDone = 0;
    int update = 0;
 
-   const double *rop = NULL;
-   const double *lop = NULL;
+   const char *rop = NULL;
+   const char *lop = NULL;
 
    if (!pInData)
    {
       error = 1;
       fprintf(stderr, "Missing input data.\n");
    }
-   else if (IsBinaryOp(op) && !pWithData)
+   else if (!pWithData)
    {
       error = 1;
       fprintf(stderr, "Missing input data.\n");
    }
    else
    {
-      double *result = NULL;
+      char *result = NULL;
       unsigned int index = 0;
 
       for (; index < nElements; index++) 
       {
 	 result = &(pOutData[index]);
-	 *result = DRMS_MISSING_DOUBLE;
+	 *result = DRMS_MISSING_CHAR;
 
-	 if (!IsMissingData(DRMS_TYPE_DOUBLE, &(pInData[index])) && (!IsBinaryOp(op) ||
-	     !IsMissingData(DRMS_TYPE_DOUBLE, &(pWithData[index])))) 
+	 if (!drms_ismissing_char(pInData[index]) && 
+	     (!!drms_ismissing_char(pWithData[index])))
 	 {
 	    percentDone = index * 100/nElements;
 	    
@@ -572,84 +525,4383 @@ static int PerformOperation(ArithOp_t op, const double *pInData, const double *p
 	    }
 
 	    lop = &(pInData[index]);
-	    
-	    if (IsBinaryOp(op))
-	    {
-	       rop = &(pWithData[index]);
-
-	       switch (op)
-	       {
-	       case kArithOpMul:
-		 *result = *lop * *rop;
-		 break;
-	       case kArithOpDiv:
-		 *result = *lop / *rop;
-		 break;
-	       case kArithOpAdd:
-		 *result = *lop + *rop;
-		 break;
-	       case kArithOpSub:
-		 *result = *lop - *rop;
-		 break;
-	       default:
-		 error = 1;
-		 *result = DRMS_MISSING_DOUBLE;
-		 fprintf(stderr, "Expecting a binary operator, got %d instead.\n", op);
-	       }	       
-	    }
-	    else
-	    {
-	       switch (op)
-	       {
-	       case kArithOpAbs:
-		 *result = fabsf(*lop);
-		 break;
-	       case kArithOpSqrt:
-		 *result = sqrt(fabsf(*lop));
-		 break;
-	       case kArithOpLog:
-		 *result = log10(*lop);
-		 break;
-	       case kArithOpPow:
-		 *result = pow(10.0, *lop);
-		 break;
-	       case kArithOpSqr:
-		 *result = *lop * *lop;
-		 break;
-	       case kArithOpRecip:
-		 *result = ((*lop != 0.0) ? 1.0 / *lop : DRMS_MISSING_DOUBLE);
-		 break;
-	       case kArithOpSubmean:
-		 {
-		    *result = *lop - mean;
-		 }
-		 break;
-		  case kArithOpNop:
-		    {
-		       *result = *lop;
-		    }
-		    break;
-	       default:
-		 error = 1;
-		 *result = DRMS_MISSING_DOUBLE;
-		 fprintf(stderr, "Expecting a unary operator, got %d instead.\n", op);
-	       }	       
-	    }	    	    
+	    rop = &(pWithData[index]);
+	    *result = *lop * *rop;
 	 }
-      } /* for elements */
-      
+      }
+
       fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
       fflush(stdout);
-   }				   
+   }
+
+   return error;
+}
+
+static int MultShort(const short *pInData, const short *pWithData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *rop = NULL;
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]) && 
+	     (!!drms_ismissing_short(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop * *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int MultInt(const int *pInData, const int *pWithData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *rop = NULL;
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]) && 
+	     (!!drms_ismissing_int(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop * *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int MultLongLong(const long long *pInData, 
+			const long long *pWithData, 
+			int nElements, 
+			long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *rop = NULL;
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]) && 
+	     (!!drms_ismissing_longlong(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop * *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int MultFloat(const float *pInData, const float *pWithData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *rop = NULL;
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]) && 
+	     (!!drms_ismissing_float(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop * *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int MultDouble(const double *pInData, const double *pWithData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *rop = NULL;
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]) && 
+	     (!!drms_ismissing_double(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop * *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int DivChar(const char *pInData, const char *pWithData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *rop = NULL;
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]) && 
+	     (!!drms_ismissing_char(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop / *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int DivShort(const short *pInData, const short *pWithData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *rop = NULL;
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]) && 
+	     (!!drms_ismissing_short(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop / *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int DivInt(const int *pInData, const int *pWithData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *rop = NULL;
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]) && 
+	     (!!drms_ismissing_int(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop / *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int DivLongLong(const long long *pInData, 
+		       const long long *pWithData, 
+		       int nElements, 
+		       long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *rop = NULL;
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]) && 
+	     (!!drms_ismissing_longlong(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop / *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int DivFloat(const float *pInData, const float *pWithData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *rop = NULL;
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]) && 
+	     (!!drms_ismissing_float(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop / *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int DivDouble(const double *pInData, const double *pWithData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *rop = NULL;
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]) && 
+	     (!!drms_ismissing_double(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop / *rop;
+
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AddChar(const char *pInData, const char *pWithData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *rop = NULL;
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]) && 
+	     (!!drms_ismissing_char(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop + *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AddShort(const short *pInData, const short *pWithData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *rop = NULL;
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]) && 
+	     (!!drms_ismissing_short(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop + *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AddInt(const int *pInData, const int *pWithData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *rop = NULL;
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]) && 
+	     (!!drms_ismissing_int(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop + *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AddLongLong(const long long *pInData, 
+		       const long long *pWithData, 
+		       int nElements, 
+		       long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *rop = NULL;
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]) && 
+	     (!!drms_ismissing_longlong(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop + *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AddFloat(const float *pInData, const float *pWithData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *rop = NULL;
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]) && 
+	     (!!drms_ismissing_float(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop + *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AddDouble(const double *pInData, const double *pWithData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *rop = NULL;
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]) && 
+	     (!!drms_ismissing_double(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop + *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubChar(const char *pInData, const char *pWithData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *rop = NULL;
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]) && 
+	     (!!drms_ismissing_char(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop - *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubShort(const short *pInData, const short *pWithData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *rop = NULL;
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]) && 
+	     (!!drms_ismissing_short(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop - *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubInt(const int *pInData, const int *pWithData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *rop = NULL;
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]) && 
+	     (!!drms_ismissing_int(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop - *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubLongLong(const long long *pInData, 
+		       const long long *pWithData, 
+		       int nElements, 
+		       long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *rop = NULL;
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]) && 
+	     (!!drms_ismissing_longlong(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop - *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubFloat(const float *pInData, const float *pWithData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *rop = NULL;
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]) && 
+	     (!!drms_ismissing_float(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop - *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubDouble(const double *pInData, const double *pWithData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *rop = NULL;
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (!pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]) && 
+	     (!!drms_ismissing_double(pWithData[index])))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    rop = &(pWithData[index]);
+	    *result = *lop - *rop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AbsChar(const char *pInData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = abs(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AbsShort(const short *pInData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = abs(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AbsInt(const int *pInData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = abs(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AbsLongLong(const long long *pInData, int nElements, long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = llabs(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AbsFloat(const float *pInData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = fabsf(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int AbsDouble(const double *pInData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = fabs(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrtChar(const char *pInData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = sqrt(abs(*lop));
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrtShort(const short *pInData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = sqrt(abs(*lop));
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrtInt(const int *pInData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = sqrt(abs(*lop));
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrtLongLong(const long long *pInData, int nElements, long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = sqrt(llabs(*lop));
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrtFloat(const float *pInData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = sqrt(fabsf(*lop));
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrtDouble(const double *pInData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = sqrt(fabs(*lop));
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int LogChar(const char *pInData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = log10(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int LogShort(const short *pInData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = log10(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int LogInt(const int *pInData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = log10(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int LogLongLong(const long long *pInData, int nElements, long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = log10(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int LogFloat(const float *pInData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = log10f(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int LogDouble(const double *pInData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = log10(*lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int PowChar(const char *pInData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = pow(10.0, *lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int PowShort(const short *pInData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = pow(10.0, *lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int PowInt(const int *pInData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = pow(10.0, *lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int PowLongLong(const long long *pInData, int nElements, long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = pow(10.0, *lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int PowFloat(const float *pInData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = powf(10.0, *lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int PowDouble(const double *pInData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = pow(10.0, *lop);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrChar(const char *pInData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop * *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrShort(const short *pInData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop * *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrInt(const int *pInData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop * *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrLongLong(const long long *pInData, int nElements, long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop * *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrFloat(const float *pInData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop * *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SqrDouble(const double *pInData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop * *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int RecipChar(const char *pInData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = ((*lop != 0.0) ? 1.0 / *lop : DRMS_MISSING_CHAR);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int RecipShort(const short *pInData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = ((*lop != 0.0) ? 1.0 / *lop : DRMS_MISSING_SHORT);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int RecipInt(const int *pInData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = ((*lop != 0.0) ? 1.0 / *lop : DRMS_MISSING_INT);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int RecipLongLong(const long long *pInData, int nElements, long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = ((*lop != 0.0) ? 1.0 / *lop : DRMS_MISSING_LONGLONG);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int RecipFloat(const float *pInData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = ((*lop != 0.0) ? 1.0 / *lop : DRMS_MISSING_FLOAT);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int RecipDouble(const double *pInData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = ((*lop != 0.0) ? 1.0 / *lop : DRMS_MISSING_DOUBLE);
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubmeanChar(const char *pInData, int nElements, char *pOutData, double mean)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop - mean;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubmeanShort(const short *pInData, int nElements, short *pOutData, double mean)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop - mean;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubmeanInt(const int *pInData, int nElements, int *pOutData, double mean)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop - mean;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubmeanLongLong(const long long *pInData, int nElements, long long *pOutData, double mean)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop - mean;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubmeanFloat(const float *pInData, int nElements, float *pOutData, double mean)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop - mean;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int SubmeanDouble(const double *pInData, int nElements, double *pOutData, double mean)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop - mean;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int NopChar(const char *pInData, int nElements, char *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const char *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      char *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_CHAR;
+
+	 if (!drms_ismissing_char(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int NopShort(const short *pInData, int nElements, short *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const short *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      short *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_SHORT;
+
+	 if (!drms_ismissing_short(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int NopInt(const int *pInData, int nElements, int *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const int *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      int *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_INT;
+
+	 if (!drms_ismissing_int(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int NopLongLong(const long long *pInData, int nElements, long long *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const long long *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      long long *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_LONGLONG;
+
+	 if (!drms_ismissing_longlong(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int NopFloat(const float *pInData, int nElements, float *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const float *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      float *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_FLOAT;
+
+	 if (!drms_ismissing_float(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+
+static int NopDouble(const double *pInData, int nElements, double *pOutData)
+{
+   int error = 0;
+
+   int first = 1;
+   int percentDone = 0;
+   int update = 0;
+
+   const double *lop = NULL;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      double *result = NULL;
+      unsigned int index = 0;
+
+      for (; index < nElements; index++) 
+      {
+	 result = &(pOutData[index]);
+	 *result = DRMS_MISSING_DOUBLE;
+
+	 if (!drms_ismissing_double(pInData[index]))
+	 {
+	    percentDone = index * 100/nElements;
+	    
+	    if (first)
+	    {
+	       fprintf(stdout, "%03d%% done", percentDone);
+	       first = 0;
+	    }
+	    else if (percentDone == update)
+	    {
+	       update++;
+	       fprintf(stdout, 
+		       "\b\b\b\b\b\b\b\b\b%03d%% done", 
+		       percentDone);
+	       fflush(stdout);
+	    }
+
+	    lop = &(pInData[index]);
+	    *result = *lop;
+	 }
+      }
+
+      fprintf(stdout, "\b\b\b\b\b\b\b\b\b100%% done\n");
+      fflush(stdout);
+   }
+
+   return error;
+}
+		 
+/* Gets as far as it can, filling in with MISSINGS if necessary.  Returns 1
+* if any error happens. */
+static int PerformOperation(ArithOp_t op, DRMS_Type_t dtype, 
+			    const void *pInData, const void *pWithData, 
+			    int nElements, void *pOutData, double mean)
+{
+   int error = 0;
+
+   if (!pInData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else if (IsBinaryOp(op) && !pWithData)
+   {
+      error = 1;
+      fprintf(stderr, "Missing input data.\n");
+   }
+   else
+   {
+      if (IsBinaryOp(op))
+      {
+	 switch (op)
+	 {
+	    case kArithOpMul:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return MultChar(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return MultShort(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return MultInt(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return MultLongLong(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return MultFloat(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return MultDouble(pInData, pWithData, nElements, pOutData);
+	      }
+	      break;
+	    case kArithOpDiv:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return DivChar(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return DivShort(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return DivInt(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return DivLongLong(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return DivFloat(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return DivDouble(pInData, pWithData, nElements, pOutData);
+	      }
+	      break;
+	    case kArithOpAdd:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return AddChar(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return AddShort(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return AddInt(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return AddLongLong(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return AddFloat(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return AddDouble(pInData, pWithData, nElements, pOutData);
+	      }
+	      break;
+	    case kArithOpSub:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return SubChar(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return SubShort(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return SubInt(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return SubLongLong(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return SubFloat(pInData, pWithData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return SubDouble(pInData, pWithData, nElements, pOutData);
+	      }
+	      break;
+	    default:
+	      error = 1;
+	      fprintf(stderr, "Expecting a binary operator, got %d instead.\n", (int)op);
+	 }	       
+      }
+      else
+      {
+	 switch (op)
+	 {
+	    case kArithOpAbs:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return AbsChar(pInData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return AbsShort(pInData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return AbsInt(pInData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return AbsLongLong(pInData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return AbsFloat(pInData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return AbsDouble(pInData, nElements, pOutData);
+	      }
+	      break;
+	    case kArithOpSqrt:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return SqrtChar(pInData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return SqrtShort(pInData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return SqrtInt(pInData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return SqrtLongLong(pInData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return SqrtFloat(pInData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return SqrtDouble(pInData, nElements, pOutData);
+	      }
+	      break;
+	    case kArithOpLog:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return LogChar(pInData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return LogShort(pInData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return LogInt(pInData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return LogLongLong(pInData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return LogFloat(pInData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return LogDouble(pInData, nElements, pOutData);
+	      }
+	      break;
+	    case kArithOpPow:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return PowChar(pInData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return PowShort(pInData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return PowInt(pInData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return PowLongLong(pInData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return PowFloat(pInData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return PowDouble(pInData, nElements, pOutData);
+	      }
+	      break;
+	    case kArithOpSqr:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return SqrChar(pInData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return SqrShort(pInData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return SqrInt(pInData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return SqrLongLong(pInData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return SqrFloat(pInData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return SqrDouble(pInData, nElements, pOutData);
+	      }
+	      break;
+	    case kArithOpRecip:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return RecipChar(pInData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return RecipShort(pInData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return RecipInt(pInData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return RecipLongLong(pInData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return RecipFloat(pInData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return RecipDouble(pInData, nElements, pOutData);
+	      }
+	      break;
+	    case kArithOpSubmean:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return SubmeanChar(pInData, nElements, pOutData, mean);
+		 case DRMS_TYPE_SHORT:
+		   return SubmeanShort(pInData, nElements, pOutData, mean);
+		 case DRMS_TYPE_INT:
+		   return SubmeanInt(pInData, nElements, pOutData, mean);
+		 case DRMS_TYPE_LONGLONG:
+		   return SubmeanLongLong(pInData, nElements, pOutData, mean);
+		 case DRMS_TYPE_FLOAT:
+		   return SubmeanFloat(pInData, nElements, pOutData, mean);
+		 case DRMS_TYPE_DOUBLE:
+		   return SubmeanDouble(pInData, nElements, pOutData, mean);
+	      }
+	      break;
+	    case kArithOpNop:
+	      switch (dtype)
+	      {
+		 case DRMS_TYPE_CHAR:
+		   return NopChar(pInData, nElements, pOutData);
+		 case DRMS_TYPE_SHORT:
+		   return NopShort(pInData, nElements, pOutData);
+		 case DRMS_TYPE_INT:
+		   return NopInt(pInData, nElements, pOutData);
+		 case DRMS_TYPE_LONGLONG:
+		   return NopLongLong(pInData, nElements, pOutData);
+		 case DRMS_TYPE_FLOAT:
+		   return NopFloat(pInData, nElements, pOutData);
+		 case DRMS_TYPE_DOUBLE:
+		   return NopDouble(pInData, nElements, pOutData);
+	      }
+	      break;
+	    default:
+	      error = 1;
+	      fprintf(stderr, "Expecting a unary operator, got %d instead.\n", (int)op);
+	 }
+      }
+   }
 				   
    return error;
 }
 
-int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
+/* XXX - WARNING: Not modified to work with non-double data!!! But DoUnaryOp was */
+int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 	       DRMSContainer_t *inPrimeKeys, DRMSContainer_t *segsToProc, 
-	       char *inSeriesName, char *inSeriesQuery, 
+	       char *inSeriesQuery, 
 	       char *withSeriesName, char *withSeriesQuery, 
-	       char *seriesOut)
+	       char *seriesOut, double bzero, double bscale)
 {
      int error = 0;
      int status = 0;
@@ -830,7 +5082,13 @@ int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 			      if (pOutData[iSeg] != NULL && outSegNames[iSeg] != NULL)
 			      {
 				 /* Shouldn't return an error - all params checked */
-				 PerformOperation(op, pInData, pWithData, nElementsIn, pOutData[iSeg], 0.0);
+				 PerformOperation(op, 
+						  dtype,
+						  pInData, 
+						  pWithData, 
+						  nElementsIn, 
+						  pOutData[iSeg], 
+						  0.0);
 				 iSeg++;
 			      }
 			      else
@@ -909,8 +5167,11 @@ int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 
 				   if (!error)
 				   {
-					drms_segment_write(seg, segArray, 0);
-					drms_free_array(segArray);
+				      segArray->bzero = bzero;
+				      segArray->bscale = bscale;
+				      segArray->israw = 0;
+				      drms_segment_write(seg, segArray, 0);
+				      drms_free_array(segArray);
 				   }
 			      }
 			      
@@ -964,14 +5225,14 @@ int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
      return error;
 }
 
-static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
-		     DRMSContainer_t *inPrimeKeys, DRMSContainer_t *segsToProc, 
-		     char *inSeriesName, char *inSeriesQuery, 
-		     char *seriesOut)
+static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
+		     DRMSContainer_t *segsToProc, 
+		     char *inSeriesQuery, 
+		     char *seriesOut, double bzero, double bscale)
 {
      int error = 0;
      int status = 0;
-     double **pOutData = NULL;
+     void *pOutData = NULL;
      char **outSegNames = NULL; 
      int nInRecs = 0;
      int nSegs = 0;
@@ -999,7 +5260,28 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 	  DRMS_Segment_t *inSeg = NULL;
 	  DRMS_Array_t *inSegArray = NULL;
 	  
-	  pOutData = (double **)malloc(sizeof(double *) * nSegs);
+	  switch (dtype)
+	  {
+	     case DRMS_TYPE_CHAR:
+	       pOutData = (char **)malloc(sizeof(char *) * nSegs);
+	       break;
+	     case DRMS_TYPE_SHORT:
+	       pOutData = (short **)malloc(sizeof(short *) * nSegs);
+	       break;
+	     case DRMS_TYPE_INT:
+	       pOutData = (int **)malloc(sizeof(int *) * nSegs);
+	       break;
+	     case DRMS_TYPE_LONGLONG:
+	       pOutData = (long long **)malloc(sizeof(long long *) * nSegs);
+	       break;
+	     case DRMS_TYPE_FLOAT:
+	       pOutData = (float **)malloc(sizeof(float *) * nSegs);
+	       break;
+	     case DRMS_TYPE_DOUBLE:
+	       pOutData = (double **)malloc(sizeof(double *) * nSegs);
+	       break;
+	  }
+
 	  outSegNames = (char **)malloc(sizeof(char *) * nSegs);
 
 	  unsigned int iSeg = 0;
@@ -1014,7 +5296,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 	       XASSERT(inSeg != NULL);
 	       if (inSeg != NULL)
 	       {
-		    inSegArray = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
+		    inSegArray = drms_segment_read(inSeg, dtype, &status);
 
 		    error = (status != DRMS_SUCCESS);
 		   
@@ -1022,30 +5304,129 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 		    {
 			 /* Have inSeries seg data - do unary op. */
 			 int nElementsIn = drms_array_count(inSegArray);
-			 double *pInData = inSegArray->data;
+			 void *pInData = inSegArray->data;
+			 void *pOut = NULL;
 
-			 pOutData[iSeg] = (double *)malloc(sizeof(double) * nElementsIn);
+			 switch (dtype)
+			 {
+			    case DRMS_TYPE_CHAR:
+			      ((char **)(pOutData))[iSeg] = (char *)malloc(sizeof(char) * nElementsIn);
+			      pOut = (void *)(((char **)(pOutData))[iSeg]);
+			      break;
+			    case DRMS_TYPE_SHORT:
+			      ((short **)(pOutData))[iSeg] = (short *)malloc(sizeof(short) * nElementsIn);
+			      pOut = (void *)(((short **)(pOutData))[iSeg]);
+			      break;
+			    case DRMS_TYPE_INT:
+			      ((int **)(pOutData))[iSeg] = (int *)malloc(sizeof(int) * nElementsIn);
+			      pOut = (void *)(((int **)(pOutData))[iSeg]);
+			      break;
+			    case DRMS_TYPE_LONGLONG:
+			      ((long long **)(pOutData))[iSeg] = (long long *)malloc(sizeof(long long) * nElementsIn);
+			      pOut = (void *)(((long long **)(pOutData))[iSeg]);
+			      break;
+			    case DRMS_TYPE_FLOAT:
+			      ((float **)(pOutData))[iSeg] = (float *)malloc(sizeof(float) * nElementsIn);
+			      pOut = (void *)(((float **)(pOutData))[iSeg]);
+			      break;
+			    case DRMS_TYPE_DOUBLE:
+			      ((double **)(pOutData))[iSeg] = (double *)malloc(sizeof(double) * nElementsIn);
+			      pOut = (void *)(((double **)(pOutData))[iSeg]);
+			      break;
+			 }
+
 			 outSegNames[iSeg] = strdup((*seg)->info->name);
 
-			 if (pOutData[iSeg] != NULL && outSegNames[iSeg] != NULL)
+			 if (pOut != NULL && outSegNames[iSeg] != NULL)
 			 {
 			    double mean = 0.0;
 
 			    /* calc mean, if op == submean */
 			    if (op == kArithOpSubmean)
 			    {
-			       int n = 0;
-			       double *pData = pInData;
+			       int n = 0;			      
+			       int iData = 0;
 			       
-			       int iData = 0;					
-			       for (; iData < nElementsIn; iData++, pData++)
+			       switch (dtype)
 			       {
-				  // if (*pData != DRMS_MISSING_DOUBLE)
-				  if (!IsMissingData(DRMS_TYPE_DOUBLE, pData))
-				  {
-				     mean += *pData;
-				     n += 1;
-				  }
+				  case DRMS_TYPE_CHAR:
+				    {
+				       char *pData = pInData;
+				       for (; iData < nElementsIn; iData++, pData++)
+				       {
+					  if (!drms_ismissing_char(*pData))
+					  {
+					     mean += (double)*pData;
+					     n += 1;
+					  }
+				       }
+				    }
+				    break;
+				  case DRMS_TYPE_SHORT:
+				    {
+				       short *pData = pInData;
+				       for (; iData < nElementsIn; iData++, pData++)
+				       {
+					  if (!drms_ismissing_short(*pData))
+					  {
+					     mean += (double)*pData;
+					     n += 1;
+					  }
+				       }
+				    }
+				    break;
+				  case DRMS_TYPE_INT:
+				    {
+				       int *pData = pInData;
+				       for (; iData < nElementsIn; iData++, pData++)
+				       {
+					  if (!drms_ismissing_int(*pData))
+					  {
+					     mean += (double)*pData;
+					     n += 1;
+					  }
+				       }
+				    }
+				    break;
+				  case DRMS_TYPE_LONGLONG:
+				    {
+				       long long *pData = pInData;
+				       for (; iData < nElementsIn; iData++, pData++)
+				       {
+					  if (!drms_ismissing_longlong(*pData))
+					  {
+					     mean += (double)*pData;
+					     n += 1;
+					  }
+				       }
+				    }
+				    break;
+				  case DRMS_TYPE_FLOAT:
+				    {
+				       float *pData = pInData;
+				       for (; iData < nElementsIn; iData++, pData++)
+				       {
+					  if (!drms_ismissing_float(*pData))
+					  {
+					     mean += (double)*pData;
+					     n += 1;
+					  }
+				       }
+				    }
+				    break;
+				  case DRMS_TYPE_DOUBLE:
+				    {
+				       double *pData = pInData;
+				       for (; iData < nElementsIn; iData++, pData++)
+				       {
+					  if (!drms_ismissing_double(*pData))
+					  {
+					     mean += (double)*pData;
+					     n += 1;
+					  }
+				       }
+				    }
+				    break;
 			       }
 			       
 			       if (n > 0)
@@ -1054,8 +5435,13 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 			       }
 			    }
 			
-			    PerformOperation(op, pInData, NULL, nElementsIn, pOutData[iSeg], mean);
-			    iSeg++;
+			    PerformOperation(op, 
+					     dtype,
+					     pInData, 
+					     NULL, 
+					     nElementsIn, 
+					     pOut, 
+					     mean);
 			 }
 			 else
 			 {
@@ -1065,6 +5451,8 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 
 		    drms_free_array(inSegArray);
 	       }
+
+	       iSeg++;
 	  } /* while */
 
 	  if (!error)
@@ -1106,30 +5494,53 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op,
 		    {
 			 if (pOutData != NULL && outSegNames != NULL)
 			 {
-			      DRMS_Segment_t *inSeg = drms_segment_lookup(inRec, 
-									  outSegNames[index]);
-			      DRMS_Segment_t *seg = drms_segment_lookup(rec, outSegNames[index]);
+			    DRMS_Segment_t *inseg = drms_segment_lookup(inRec, outSegNames[index]);
+			    DRMS_Segment_t *outseg = drms_segment_lookup(rec, outSegNames[index]);
 
-			      if (inSeg != NULL && seg != NULL)
-			      {
-				   /* segArray now owns pOutData[index]. */
-				   DRMS_Array_t *segArray = drms_array_create(DRMS_TYPE_DOUBLE,
-									      inSeg->info->naxis, 
-									      inSeg->axis, 
-									      pOutData[index],
-									      &status);
+			    if (inseg != NULL && outseg != NULL)
+			    {
+			       /* segArray now owns pOutData[index]. */
+			       void *pOut = NULL;
 
-				   error = (status != DRMS_SUCCESS);
+			       switch (dtype)
+			       {
+				  case DRMS_TYPE_CHAR:
+				    pOut = (void *)(((char **)(pOutData))[index]);
+				    break;
+				  case DRMS_TYPE_SHORT:
+				    pOut = (void *)(((short **)(pOutData))[index]);
+				    break;
+				  case DRMS_TYPE_INT:
+				    pOut = (void *)(((int **)(pOutData))[index]);
+				    break;
+				  case DRMS_TYPE_LONGLONG:
+				    pOut = (void *)(((long long **)(pOutData))[index]);
+				    break;
+				  case DRMS_TYPE_FLOAT:
+				    pOut = (void *)(((float **)(pOutData))[index]);
+				    break;
+				  case DRMS_TYPE_DOUBLE:
+				    pOut = (void *)(((double **)(pOutData))[index]);
+				    break;
+			       }
 
-				   if (!error)
-				   {
-				      segArray->bzero = 0.0;
-				      segArray->bscale = 1.0;
-				      segArray->israw = 1;
-				      drms_segment_write(seg, segArray, 0);
-				      drms_free_array(segArray);
-				   }
-			      }
+			       DRMS_Array_t *segArray = drms_array_create(dtype,
+									  inseg->info->naxis, 
+									  inseg->axis, 
+									  pOut,
+									  &status);
+
+			       error = (status != DRMS_SUCCESS);
+
+			       if (!error)
+			       {
+				  segArray->bzero = bzero;
+				  segArray->bscale = bscale;
+				  segArray->israw = 0;
+				  drms_segment_write(outseg, segArray, 0);
+				  drms_free_array(segArray);
+			       }
+			    }
 			 }
 		    }
 		    
@@ -1275,6 +5686,10 @@ int DoIt(void)
 						      * could be 'NOT SPECIFIED' */
 	  char *segList = cmdparams_get_str(&cmdparams, kSegList, NULL);
 	  char *opStr = cmdparams_get_str(&cmdparams, kOp, NULL);
+
+	  double bzerov = cmdparams_get_double(&cmdparams, kBzero, NULL);
+	  double bscalev = cmdparams_get_double(&cmdparams, kBscale, NULL);
+	  DRMS_Type_t dtype = cmdparams_get_int(&cmdparams, kDatatype, NULL);
 
 	  char actualOutputSeries[DRMS_MAXSERIESNAMELEN];
 	  /* xxx DO SCALILNG/OFFSET PARAMS LATER */
@@ -1445,8 +5860,7 @@ int DoIt(void)
 
 		    if (!error)
 		    {
-			 error = ValidateBinaryOperands(drms_env, 
-							recSetIn, 
+			 error = ValidateBinaryOperands(recSetIn, 
 							segNameArr, 
 							nSegs, 
 							&inSeriesPrimeKeys, 
@@ -1543,23 +5957,26 @@ int DoIt(void)
 		    {
 			 error = DoBinaryOp(drms_env,
 					    op,
+					    dtype,
 					    &inSeriesPrimeKeys, 
-					    &segsToProc, 
-					    inSeriesName,
+					    &segsToProc,
 					    recSetIn,
 					    withSeriesName, 
 					    withRecSet,
-					    actualOutputSeries);
+					    actualOutputSeries,
+					    bzerov,
+					    bscalev);
 		    }
 		    else
 		    {
 			 error = DoUnaryOp(drms_env,
 					   op,
-					   &inSeriesPrimeKeys, 
+					   dtype,
 					   &segsToProc, 
-					   inSeriesName,
 					   recSetIn,
-					   actualOutputSeries);
+					   actualOutputSeries,
+					   bzerov,
+					   bscalev);
 		    }
 
 	       } /* Do operation */
