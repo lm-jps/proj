@@ -27,14 +27,15 @@
   #common setting for all environments
   $hm=$ENV{'HOME'};
   $ENV{'MAILTO'}="";
+  $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
   $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
-  $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
+  $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
   # set log file
   $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-hsb";
 
   # set debug flag 1 to turn on and 0 to turn off
-  $dflg=$ENV{'DF_INGEST_HSB_DEBUG'}="0";
+  $dflg=$ENV{'DF_INGEST_HSB_DEBUG'};
 
   # open log file
   open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
