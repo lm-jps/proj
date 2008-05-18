@@ -308,7 +308,14 @@ void drms_sprint_rec_query(char *text, DRMS_Record_t *rec)
       char val[1000];
       pkey = external_pkeys[iprime];
       rec_key = drms_keyword_lookup (rec, pkey, 1);
-      drms_sprintfval_format(val, rec_key->info->type, &(rec_key->value), rec_key->info->format, 0);
+      if (rec_key->info->type == DRMS_TYPE_TIME)
+      {
+	 drms_sprintfval_format(val, rec_key->info->type, &(rec_key->value), rec_key->info->unit, 0);
+      }
+      else
+      {
+	 drms_sprintfval_format(val, rec_key->info->type, &(rec_key->value), rec_key->info->format, 0);
+      }
       strcat(text, "[");
       strcat(text, val);
       strcat(text, "]");
@@ -789,6 +796,7 @@ int DoIt(void)
         json_t *val;
         char rawval[20000];
         char *jsonval;
+
         if (strcmp(keys[ikey],"*recnum*") == 0)
 	  {
 	  sprintf(rawval,"%ld",rec->recnum);
@@ -810,8 +818,16 @@ int DoIt(void)
         else
 	  {
           rec_key_ikey = drms_keyword_lookup (rec, keys[ikey], 1); 
-          drms_sprintfval_format(rawval, rec_key_ikey->info->type, &(rec_key_ikey->value),
-		rec_key_ikey->info->format, 0);
+	  if (rec_key_ikey->info->type == DRMS_TYPE_TIME)
+	  {
+	     drms_sprintfval_format(rawval, rec_key_ikey->info->type, &(rec_key_ikey->value),
+				    rec_key_ikey->info->unit, 0);
+	  }
+	  else
+	  {
+	     drms_sprintfval_format(rawval, rec_key_ikey->info->type, &(rec_key_ikey->value),
+				 rec_key_ikey->info->format, 0);
+	  }
           switch (rec_key_ikey->info->type)
             {
             case DRMS_TYPE_STRING:

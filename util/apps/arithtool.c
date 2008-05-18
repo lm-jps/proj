@@ -76,7 +76,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, kOp, "", "The operation to perform."},
   {ARG_DOUBLE, kBzero, "0.0", "For integer output, the bzero to use."},
   {ARG_DOUBLE, kBscale, "1.0", "For integer output, the bscale to use."},
-  {ARG_NUME, kDatatype, "double", "Data type of in-memory data array.", "char,short,int,longlong,float,double"},
+  {ARG_NUME, kDatatype, "double", "Data type of in-memory data array.", "char,short,int,longlong,float,double,raw"},
   {ARG_END}
 };
 
@@ -5236,6 +5236,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
      char **outSegNames = NULL; 
      int nInRecs = 0;
      int nSegs = 0;
+     DRMS_Type_t actualtype;
 
      /* Open the inSeries. */
      DRMS_RecordSet_t *inRecSet = drms_open_records(drmsEnv, inSeriesQuery, &status);
@@ -5248,6 +5249,9 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 	  nSegs = segsToProc->items->num_total;
      }
 
+     double *insegBZERO = (double *)malloc(sizeof(double) * nSegs);
+     double *insegBSCALE = (double *)malloc(sizeof(double) * nSegs);
+
      int iRec = 0;
      for (; !error && iRec < nInRecs; iRec++)
      {
@@ -5259,29 +5263,10 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 	  DRMS_Segment_t **seg = NULL;
 	  DRMS_Segment_t *inSeg = NULL;
 	  DRMS_Array_t *inSegArray = NULL;
-	  
-	  switch (dtype)
-	  {
-	     case DRMS_TYPE_CHAR:
-	       pOutData = (char **)malloc(sizeof(char *) * nSegs);
-	       break;
-	     case DRMS_TYPE_SHORT:
-	       pOutData = (short **)malloc(sizeof(short *) * nSegs);
-	       break;
-	     case DRMS_TYPE_INT:
-	       pOutData = (int **)malloc(sizeof(int *) * nSegs);
-	       break;
-	     case DRMS_TYPE_LONGLONG:
-	       pOutData = (long long **)malloc(sizeof(long long *) * nSegs);
-	       break;
-	     case DRMS_TYPE_FLOAT:
-	       pOutData = (float **)malloc(sizeof(float *) * nSegs);
-	       break;
-	     case DRMS_TYPE_DOUBLE:
-	       pOutData = (double **)malloc(sizeof(double *) * nSegs);
-	       break;
-	  }
 
+	  actualtype = dtype;
+	  
+	  pOutData = malloc(sizeof(void *) * nSegs);
 	  outSegNames = (char **)malloc(sizeof(char *) * nSegs);
 
 	  unsigned int iSeg = 0;
@@ -5298,6 +5283,11 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 	       {
 		    inSegArray = drms_segment_read(inSeg, dtype, &status);
 
+		    if (dtype == DRMS_TYPE_RAW)
+		    {
+		       actualtype = inSeg->info->type;
+		    }
+
 		    error = (status != DRMS_SUCCESS);
 		   
 		    if (!error)
@@ -5307,7 +5297,10 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 			 void *pInData = inSegArray->data;
 			 void *pOut = NULL;
 
-			 switch (dtype)
+			 insegBZERO[iSeg] = inSegArray->bzero;
+			 insegBSCALE[iSeg] = inSegArray->bscale;
+
+			 switch (actualtype)
 			 {
 			    case DRMS_TYPE_CHAR:
 			      ((char **)(pOutData))[iSeg] = (char *)malloc(sizeof(char) * nElementsIn);
@@ -5347,7 +5340,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 			       int n = 0;			      
 			       int iData = 0;
 			       
-			       switch (dtype)
+			       switch (actualtype)
 			       {
 				  case DRMS_TYPE_CHAR:
 				    {
@@ -5436,7 +5429,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 			    }
 			
 			    PerformOperation(op, 
-					     dtype,
+					     actualtype,
 					     pInData, 
 					     NULL, 
 					     nElementsIn, 
@@ -5502,7 +5495,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 			       /* segArray now owns pOutData[index]. */
 			       void *pOut = NULL;
 
-			       switch (dtype)
+			       switch (actualtype)
 			       {
 				  case DRMS_TYPE_CHAR:
 				    pOut = (void *)(((char **)(pOutData))[index]);
@@ -5524,7 +5517,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 				    break;
 			       }
 
-			       DRMS_Array_t *segArray = drms_array_create(dtype,
+			       DRMS_Array_t *segArray = drms_array_create(actualtype,
 									  inseg->info->naxis, 
 									  inseg->axis, 
 									  pOut,
@@ -5534,9 +5527,18 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 
 			       if (!error)
 			       {
-				  segArray->bzero = bzero;
-				  segArray->bscale = bscale;
-				  segArray->israw = 0;
+				  if (dtype == DRMS_TYPE_RAW)
+				  {
+				     segArray->bzero = insegBZERO[index];
+				     segArray->bscale = insegBSCALE[index];
+				     segArray->israw = 1;
+				  }
+				  else
+				  {
+				     segArray->bzero = bzero;
+				     segArray->bscale = bscale;
+				     segArray->israw = 0;
+				  }
 				  drms_segment_write(outseg, segArray, 0);
 				  drms_free_array(segArray);
 			       }
@@ -5578,6 +5580,16 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 	  }
 
      } /* foreach (record) */
+
+     if (insegBZERO)
+     {
+	free(insegBZERO);
+     }
+
+     if (insegBSCALE)
+     {
+	free(insegBSCALE);
+     }
 
      if (inRecSet != NULL)
      {
@@ -5690,6 +5702,10 @@ int DoIt(void)
 	  double bzerov = cmdparams_get_double(&cmdparams, kBzero, NULL);
 	  double bscalev = cmdparams_get_double(&cmdparams, kBscale, NULL);
 	  DRMS_Type_t dtype = cmdparams_get_int(&cmdparams, kDatatype, NULL);
+	  if (dtype > DRMS_TYPE_DOUBLE)
+	  {
+	     dtype = DRMS_TYPE_RAW;
+	  }
 
 	  char actualOutputSeries[DRMS_MAXSERIESNAMELEN];
 	  /* xxx DO SCALILNG/OFFSET PARAMS LATER */

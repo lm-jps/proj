@@ -1298,50 +1298,33 @@ static int InsertRecord(DRMS_Record_t **record,
    if (!error)
    {
       /* Create segment. */
-      for (iSeg = 0; iSeg < nSegs; iSeg++)
+      for (iSeg = 0; !error && iSeg < nSegs; iSeg++)
       {
 	 DRMS_Segment_t *segment = drms_segment_lookup(rec, segInfo[iSeg].segname);
 	 if (segment) 
 	 {
-	    /* Set bzero and bscale keywords to 0 and 1.  DR always
-	     * converts data so that bzero == 0 and bscale == 1.0. 
-	     * Later conversions of the segment may change these values.
-	     */
-	    status = drms_segment_setscaling(segment, 0.0, 1.0);
-			
-	    if (status != 0)
+	    /* Create data array. */
+	    DRMS_Array_t dataArr;
+	    dataArr.naxis = segInfo[iSeg].naxis;
+	    int iDim = 0;
+	    for (; iDim < dataArr.naxis; iDim++)
+	    {
+	       dataArr.axis[iDim] = (segInfo[iSeg].dims)[iDim];
+	    }
+	    dataArr.bzero = 0.0;
+	    dataArr.bscale = 1.0;
+	    dataArr.type = drmsDataType[iSeg];
+	    dataArr.israw = 1;
+	    dataArr.data = data[iSeg];
+			 
+	    status = drms_segment_write(segment, &dataArr, 0);
+
+	    if (status) 
 	    {
 	       error = 1;
 	       fprintf(stderr, 
-		       "Failed to set segment scaling, status %d\n",
+		       "ERROR: drms_segment_write failed with status = %d\n", 
 		       status);
-	    }
-
-	    if (!error)
-	    {
-	       /* Create data array. */
-	       DRMS_Array_t dataArr;
-	       dataArr.naxis = segInfo[iSeg].naxis;
-	       int iDim = 0;
-	       for (; iDim < dataArr.naxis; iDim++)
-	       {
-		  dataArr.axis[iDim] = (segInfo[iSeg].dims)[iDim];
-	       }
-	       dataArr.bzero = 0.0;
-	       dataArr.bscale = 1.0;
-	       dataArr.type = drmsDataType[iSeg];
-	       dataArr.israw = 1;
-	       dataArr.data = data[iSeg];
-			 
-	       status = drms_segment_write(segment, &dataArr, 0);
-
-	       if (status) 
-	       {
-		  error = 1;
-		  fprintf(stderr, 
-			  "ERROR: drms_segment_write failed with status = %d\n", 
-			  status);
-	       }
 	    }
 	 }
       }/* seg loop*/
