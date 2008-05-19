@@ -22,7 +22,7 @@
 # main program                                                               #
 ##############################################################################
   #set environment variables
-  $ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/tmp20/production/hmi_hk/";
+  $ENV{'DF_HSB_DAYFILE_DIRECTORY'};
   $ENV{'DF_INGEST_HSB_DEBUG'}="0";
 
   # set debug flag 1 to turn on and 0 to turn off
@@ -453,7 +453,7 @@ sub ingest_day_files()
     #get command
     $command="set_keys -c ";
     # get series name
-    $fapid = substr($file, 4,11);
+    $fapid = substr($file, 11,4);
     $dsn=get_series_name();
     $arg1=sprintf("%s%s","ds=", $dsn);
     # get date value
