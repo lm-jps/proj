@@ -158,6 +158,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
       /*  lookup data series name */
       strcpy(query , lookup_data_series_name(ccsds,&jmap)); 
+      //printf("query is %s\n", query);
 
       /* create record in drms */
       rs = drms_create_records( drms_env, 1, query, DRMS_PERMANENT, &status);
@@ -310,11 +311,12 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         else   
         {
           strcpy(keyname, kw->name);
-        }
-        /* set drms type but promote up for unsigned values */
-        keytype= DRMS_TYPE_CHAR;
-        key_anyval.short_val = kw->eng_value.int16_val;
-        status = drms_setkey(rec, keyname, keytype, &key_anyval);
+	}
+
+         /* set drms type but promote up drms short since byte is a number value that can contain non-valid chars */
+         keytype= DRMS_TYPE_SHORT;
+         key_anyval.short_val = (int16_t)kw->eng_value.int8_val;
+         status = drms_setkey(rec, keyname, keytype, &key_anyval);
 
       }
       else if(kw->eng_type == KW_TYPE_DOUBLE)
