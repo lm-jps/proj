@@ -396,9 +396,9 @@ void write_to_drms(char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_head)
     else if(kw->eng_type == KW_TYPE_INT8)
     {
       /* set drms type but promote up for unsigned values */
-      keytype= DRMS_TYPE_CHAR;
+      keytype= DRMS_TYPE_SHORT;
       strcpy(keyname, kw->name);
-      key_anyval.char_val = kw->eng_value.int8_val;
+      key_anyval.short_val = (int16_t)kw->eng_value.int8_val;
       status = drms_setkey(rec, keyname, keytype, &key_anyval);
     }
     else if(kw->eng_type == KW_TYPE_DOUBLE)
