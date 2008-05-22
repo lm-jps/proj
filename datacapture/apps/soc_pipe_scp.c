@@ -31,6 +31,7 @@
 #include <dirent.h>
 #include <sum_rpc.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h> /* for alarm(2) among other things... */
 #include <printk.h>
@@ -203,8 +204,9 @@ int main(int argc, char *argv[])
 {
   DIR *dfd;
   struct dirent *dp;
+  struct stat statbuf;
   int i, j;
-  char cmd[256];
+  char cmd[256], qacfile[128];
   char *cptr;
 
   get_cmd(argc, argv);		/* check the calling sequence */
@@ -232,6 +234,14 @@ int main(int argc, char *argv[])
         }
         //now cp the .qac file to the pipeline
         strcpy(cptr, ".qac");
+        sprintf(qacfile, "%s/%s", sourcedir, dp->d_name);
+        if(stat(qacfile, &statbuf)) {	//.qac not there
+          sleep(2);
+          if(stat(qacfile, &statbuf)) { //.qac still not there
+            printk("***Error: Can't find %s\n", qacfile);
+            continue;
+          }
+        }
         sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
                         sourcedir, dp->d_name, hostname, targetdir);
         printk("%s\n", cmd);
@@ -246,7 +256,8 @@ int main(int argc, char *argv[])
         }
       }
       else {		/* non .tlm files */
-        if(!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) 
+        if(!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..") 
+		|| strstr(dp->d_name, ".qac")) //.qac done above with .tlm
           continue;
         sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
 			sourcedir, dp->d_name, hostname, targetdir);
