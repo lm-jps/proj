@@ -42,8 +42,10 @@
 #include "decode_hk.h"
 #include "load_hk_config_files.h"
 
-#define LEV0SERIESNAME "su_production.lev0_test"
-#define TLMSERIESNAME "su_production.tlm_test"
+//#define LEV0SERIESNAME "su_production.lev0_test"
+//#define TLMSERIESNAME "su_production.tlm_test"
+#define LEV0SERIESNAME "hmi.lev0_60d"
+#define TLMSERIESNAME "hmi.tlm_60d"
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 512		//max # of file can handle in tlmdir
@@ -284,8 +286,10 @@ void alrm_sig(int sig)
 {
   signal(SIGALRM, alrm_sig);
   if(Image.initialized) {
-    close_image(rs, segment, segArray, &Image, fsn_prev);
-    printk("*Closed image on timeout FSN=%u\n", fsn_prev);
+    if(rs) {		//make sure have a created record
+      close_image(rs, segment, segArray, &Image, fsn_prev);
+      printk("*Closed image on timeout FSN=%u\n", fsn_prev);
+    }
   }
   else {
     printk("*No image to close on timeout\n");
@@ -323,16 +327,18 @@ int fsn_change_normal()
 
   printk("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
   if(fsn_prev != 0) {	// close the image of the prev fsn if not 0 
-    close_image(rs, segment, segArray, Img, fsn_prev);
-    //force a commit to DB on an image boundry & not during a rexmit
-    if(imagecnt++ >= IMAGE_NUM_COMMIT) {
-      printk("drms_server_end_transaction()\n");
-      drms_server_end_transaction(drms_env, 0 , 0);
-      printk("drms_server_begin_transaction()\n");
-      drms_server_begin_transaction(drms_env); //start another cycle
-      imagecnt = 0;
+    if(rs) {		// make sure have a created record
+      close_image(rs, segment, segArray, Img, fsn_prev);
+      //force a commit to DB on an image boundry & not during a rexmit
+      if(imagecnt++ >= IMAGE_NUM_COMMIT) {
+        printk("drms_server_end_transaction()\n");
+        drms_server_end_transaction(drms_env, 0 , 0);
+        printk("drms_server_begin_transaction()\n");
+        drms_server_begin_transaction(drms_env); //start another cycle
+        imagecnt = 0;
+      }
+      fileimgcnt++;
     }
-    fileimgcnt++;
   }
   // start a new image 
   Img = &Image;
@@ -343,7 +349,7 @@ int fsn_change_normal()
   sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
   rs = drms_create_record(drms_env, LEV0SERIESNAME, DRMS_PERMANENT, &dstatus);
   if(dstatus) {
-    printk("Can't create record for %s\n", LEV0SERIESNAME);
+    printk("**ERROR: Can't create record for %s fsn=%u\n", LEV0SERIESNAME, fsnx);
     return(1);
   }
   dstatus = drms_setkey_int(rs, "FSN", fsnx);
@@ -367,10 +373,12 @@ int fsn_change_rexmit()
   char rexmit_dsname[256];
   int rstatus, dstatus;
 
-  if(fsn_prev != 0) {  // close image of prev fsn if not 0 
-    close_image(rsc, segmentc, oldArray, Img, fsn_prev);
-    imagecnt++;
-    fileimgcnt++;
+  if(fsn_prev != 0) {   // close image of prev fsn if not 0 
+    if(rsc) {		//make sure have created record
+      close_image(rsc, segmentc, oldArray, Img, fsn_prev);
+      imagecnt++;
+      fileimgcnt++;
+    }
   }
   Img = &ImageOld;
   errmsgcnt = 0;
@@ -389,7 +397,7 @@ int fsn_change_rexmit()
     sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
     rsc = drms_create_record(drms_env, LEV0SERIESNAME, DRMS_PERMANENT, &rstatus);
     if(rstatus) {
-      printk("Can't create record for %s\n", LEV0SERIESNAME);
+      printk("Can't create record for %s fsn=%u\n", LEV0SERIESNAME, fsnx);
       return(1);                     // !!!TBD ck this 
     }
     rstatus = drms_setkey_int(rsc, "FSN", fsnx);
@@ -728,10 +736,12 @@ int get_tlm(char *file, int rexmit, int higherver)
     printk("*No errors in tlm file\n");
   }
   if(rexmit || higherver) {	// close the opened record 
-    close_image(rsc, segmentc, oldArray, Img, fsnx);
-    imagecnt++;
-    fileimgcnt++;
-    fsn_prev = fsn_pre_rexmit;	// restore orig for next normal .tlm file
+    if(rsc) {			// make sure have created record
+      close_image(rsc, segmentc, oldArray, Img, fsnx);
+      imagecnt++;
+      fileimgcnt++;
+      fsn_prev = fsn_pre_rexmit; // restore orig for next normal .tlm file
+    }
   }
   ftmp = EndTimer(1);
   printk("**Processed %s\n**with %d images and %d VCDUs in %f sec\n\n",
