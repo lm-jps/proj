@@ -5134,7 +5134,7 @@ int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 		    while ((outKey = (DRMS_Keyword_t *)hiter_getnext(&hit)) != NULL)
 		    {
 			 inKey = drms_keyword_lookup(inRec, outKey->info->name, 1);
-			 if (inKey != NULL)
+			 if (inKey != NULL && !drms_keyword_isindex(inKey))
 			 {
 			      status = drms_setkey(rec, 
 						   outKey->info->name, 
@@ -5470,7 +5470,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 		    while ((outKey = (DRMS_Keyword_t *)hiter_getnext(&hit)) != NULL)
 		    {
 			 inKey = drms_keyword_lookup(inRec, outKey->info->name, 1);
-			 if (inKey != NULL)
+			 if (inKey != NULL && !drms_keyword_isindex(inKey))
 			 {
 			      status = drms_setkey(rec, 
 						   outKey->info->name, 
