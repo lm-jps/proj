@@ -42,10 +42,14 @@
 #include "decode_hk.h"
 #include "load_hk_config_files.h"
 
-//#define LEV0SERIESNAME "su_production.lev0_test"
-//#define TLMSERIESNAME "su_production.tlm_test"
-#define LEV0SERIESNAME "hmi.lev0_60d"
-#define TLMSERIESNAME "hmi.tlm_60d"
+#define LEV0SERIESNAMEHMI "su_production.lev0_test"
+#define TLMSERIESNAMEHMI "su_production.tlm_test"
+#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
+#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+//#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
+//#define TLMSERIESNAMEHMI "hmi.tlm_60d"
+//#define LEV0SERIESNAMEAIA "aia.lev0_60d"
+//#define TLMSERIESNAMEAIA "aia.tlm_60d"
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 512		//max # of file can handle in tlmdir
@@ -116,6 +120,8 @@ int ALRMSEC = 70;               // seconds for alarm signal
 char timetag[32];
 char pchan[8];			// primary channel to listen to e.g. VC02 
 char rchan[8];			// redundant channel to listen to e.g. VC10 
+tlmseriesname[96];		// e.g. hmi.tlm
+lev0seriesname[96];		// e.g. hmi.lev0
 tlmnamekey[96];			// shortened tlm file name for TLMDSNAM keyword
 tlmnamekeyfirst[96];		// for TLMDSNAM keyword for 1st file of image
 char *username;			// from getenv("USER") 
@@ -252,7 +258,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "EOIERROR", Img->last_pix_err);
   drms_setkey_int(rs, "HEADRERR", Img->headerr);
   drms_setkey_int(rs, "OVERFLOW", Img->overflow);
-  sprintf(tlmdsname, "%s[%s]", TLMSERIESNAME, tlmnamekeyfirst);
+  sprintf(tlmdsname, "%s[%s]", tlmseriesname, tlmnamekeyfirst);
   drms_setkey_string(rs, "TLMDSNAM", tlmdsname);
   int pts = Img->first_packet_time >> 16;
   int ptss = Img->first_packet_time & 0xffff;
@@ -266,7 +272,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_free_array(array);
   if((status = drms_close_record(rs, DRMS_INSERT_RECORD))) {
     printk("**ERROR: drms_close_record failed for %s fsn=%u\n",
-                        LEV0SERIESNAME, fsn);
+                        lev0seriesname, fsn);
   }
 }
 
@@ -347,9 +353,9 @@ int fsn_change_normal()
   errmsgcnt = 0;
   fsn_prev = fsnx;
   sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
-  rs = drms_create_record(drms_env, LEV0SERIESNAME, DRMS_PERMANENT, &dstatus);
+  rs = drms_create_record(drms_env, lev0seriesname, DRMS_PERMANENT, &dstatus);
   if(dstatus) {
-    printk("**ERROR: Can't create record for %s fsn=%u\n", LEV0SERIESNAME, fsnx);
+    printk("**ERROR: Can't create record for %s fsn=%u\n", lev0seriesname, fsnx);
     return(1);
   }
   dstatus = drms_setkey_int(rs, "FSN", fsnx);
@@ -395,9 +401,9 @@ int fsn_change_rexmit()
     Img->initialized = 0;
     Img->reopened = 0;
     sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
-    rsc = drms_create_record(drms_env, LEV0SERIESNAME, DRMS_PERMANENT, &rstatus);
+    rsc = drms_create_record(drms_env, lev0seriesname, DRMS_PERMANENT, &rstatus);
     if(rstatus) {
-      printk("Can't create record for %s fsn=%u\n", LEV0SERIESNAME, fsnx);
+      printk("Can't create record for %s fsn=%u\n", lev0seriesname, fsnx);
       return(1);                     // !!!TBD ck this 
     }
     rstatus = drms_setkey_int(rsc, "FSN", fsnx);
@@ -585,6 +591,7 @@ int get_tlm(char *file, int rexmit, int higherver)
       cnt1 = MDI_getshort(cbuf+32);
       cnt2 = MDI_getshort(cbuf+34);
       fsnx = (unsigned int)(cnt1<<16)+(unsigned int)(cnt2);
+      fsnx = fsnx & 0x3fffffff;		//low 30bits for fsn */
       if(rexmit || higherver) {
         if(fsnx != fsn_prev) {          // the fsn has changed
           if(fsn_change_rexmit()) {	//handle old & new images
@@ -761,8 +768,8 @@ int get_tlm(char *file, int rexmit, int higherver)
 }
 
 // This is the main loop that gets the .qac and .tlm files and 
-// puts them into ds TLMSERIESNAME and extracts the lev0 and puts it in 
-// LEV0SERIESNAME in DRMS.
+// puts them into ds tlmseriesname and extracts the lev0 and puts it in 
+// lev0seriesname in DRMS.
 void do_ingest()
 {
   FILE *fp;
@@ -865,10 +872,10 @@ void do_ingest()
     }
     fclose(fp);
     alarm(ALRMSEC);		//restart alarm if no more files come
-    rs_tlm = drms_create_record(drms_env, TLMSERIESNAME, 
+    rs_tlm = drms_create_record(drms_env, tlmseriesname, 
 				DRMS_PERMANENT, &status);
     if(status) {
-      printk("***Can't create record for %s\n", TLMSERIESNAME);
+      printk("***Can't create record for %s\n", tlmseriesname);
       abortit(3);
     }
     strcpy((char *)tlmnamekey, (char *)tlmname);
@@ -880,7 +887,7 @@ void do_ingest()
     }
     drms_record_directory(rs_tlm, path, 0);
     if(!*path) {
-      printk("***ERROR: No path to segment for %s\n", TLMSERIESNAME);
+      printk("***ERROR: No path to segment for %s\n", tlmseriesname);
       abortit(3);
     }
     if(outdir) {
@@ -910,7 +917,7 @@ void do_ingest()
       printk("**ERROR: on: %s\n", cmd);
     }
     if((status = drms_close_record(rs_tlm, DRMS_INSERT_RECORD))) {
-      printk("**ERROR: drms_close_record failed for %s\n", TLMSERIESNAME);
+      printk("**ERROR: drms_close_record failed for %s\n", tlmseriesname);
     }
 
     sprintf(xxname, "%s/%s.tlm", path, tlmname);
@@ -963,6 +970,14 @@ void setup()
       fprintf(stderr, "!!ERROR: Invalid VCid (%s) specified. Abort\n", pchan);
       abortit(1);
     }
+  }
+  if(hmiaiaflg) {
+    sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIA);
+    sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIA);
+  }
+  else {
+    sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
+    sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMI);
   }
   umask(002);			// allow group write 
   Image.initialized = 0;	// init the two image structures 
