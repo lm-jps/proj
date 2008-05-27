@@ -6,12 +6,12 @@
  *              to DRMS.                                                     *
  * (C) Stanford University, 2008                                             *
  ****************************************************************************/
+#define  DEBUG_WHTD  0
 #include "jsoc_main.h"
 #include "packets.h"
 #include "decode_hk_vcdu.h" 
 #include "write_hk_to_drms.h"
 #include "printk.h"
-
 /***********************   Protoype Functions  *******************************/
 int   write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt);
 TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
@@ -88,24 +88,44 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
   /* check 3 environment variables are set */
   /* get project name */
-  pjname = getenv("HK_LEV0_PROJECT_NAME");
+  pjname = getenv("HK_LEV0_BY_APID_PROJECT_NAME_HMI");
   if(pjname == NULL) 
   {
     printkerr("ERROR at %s, line %d: Could not get project name environment "
-              "variable:<HK_LEV0_PROJECT_NAME>. Set the env variable "
-              "HK_LEV0_PROJECT_NAME to data series project name"
-              "(hmi, aia, hmi_ground, etc.) for a existing data series name.\n",
+              "variable:<HK_LEV0_BY_APID_PROJECT_NAME_HMI>. Set the env variable "
+              "HK_LEV0_BY_APID_PROJECT_NAME_HMI to data series project name"
+              "(hmi, hmi_ground, su_carl,etc.) for a existing data series name.\n",
+              __FILE__,__LINE__);
+    return  ERROR_HK_ENVIRONMENT_VARS_NOT_SET ;
+  }
+  pjname = getenv("HK_LEV0_BY_APID_PROJECT_NAME_AIA");
+  if(pjname == NULL) 
+  {
+    printkerr("ERROR at %s, line %d: Could not get project name environment "
+              "variable:<HK_LEV0_BY_APID_PROJECT_NAME_AIA>. Set the env variable "
+              "HK_LEV0_BY_APID_PROJECT_NAME_HMI to data series project name"
+              "(aia, aia_ground, su_carl,etc.) for a existing data series name.\n",
+              __FILE__,__LINE__);
+    return  ERROR_HK_ENVIRONMENT_VARS_NOT_SET ;
+  }
+  pjname = getenv("HK_LEV0_BY_APID_PROJECT_NAME_SDO");
+  if(pjname == NULL) 
+  {
+    printkerr("ERROR at %s, line %d: Could not get project name environment "
+              "variable:<HK_LEV0_BY_APID_PROJECT_NAME_SDO>. Set the env variable "
+              "HK_LEV0_BY_APID_PROJECT_NAME_SDO to data series project name"
+              "(sdo, sdo_ground, su_carl,etc.) for a existing data series name.\n",
               __FILE__,__LINE__);
     return  ERROR_HK_ENVIRONMENT_VARS_NOT_SET ;
   }
 
   /* get data type name */
-  dtname = getenv("HK_LEV0_DATA_ID_NAME");
+  dtname = getenv("HK_LEV0_BY_APID_DATA_ID_NAME");
   if(dtname == NULL) 
   {
     printkerr("ERROR at %s, line %d: Could not get data type name environment "
-              "variable:<HK_LEV0_DATA_ID_NAME>. Set the env variable "
-              "HK_LEV0_DATA_ID_NAME to data series data type name"
+              "variable:<HK_LEV0_BY_APID_DATA_ID_NAME>. Set the env variable "
+              "HK_LEV0_BY_APID_DATA_ID_NAME to data series data type name"
               "(lev0,lev0test, etc.) for a existing data series name\n",
               __FILE__ , __LINE__ );
      return (ERROR_HK_ENVIRONMENT_VARS_NOT_SET) ;
@@ -158,7 +178,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
       /*  lookup data series name */
       strcpy(query , lookup_data_series_name(ccsds,&jmap)); 
-      //printf("query is %s\n", query);
+      if (DEBUG_WHTD) printf("query is %s\n", query);
 
       /* create record in drms */
       rs = drms_create_records( drms_env, 1, query, DRMS_PERMANENT, &status);
@@ -608,6 +628,7 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
   char *suffix_filename;
   char line[HK_LEV0_MAXLINE_IN_FILE];
   char *pn;
+  char *pn1,*pn2,*pn3;
   int  wn, dn;
 
   /* initialized variables */
@@ -617,10 +638,27 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
   suffix_filename=sn;
 
   /* get project name */
-  pn = getenv("HK_LEV0_PROJECT_NAME");
+ if(apid <= HK_HSB_HIGHEST_HMI_APID && apid >= HK_HSB_LOWEST_HMI_APID  || (apid <= HK_LR_HIGHEST_HMI_APID  && apid >= HK_LR_LOWEST_HMI_APID))
+  {
+    pn = getenv("HK_LEV0_BY_APID_PROJECT_NAME_HMI");
+  }
+  else if((apid <= HK_HSB_HIGHEST_AIA_APID && apid >= HK_HSB_LOWEST_AIA_APID) || (apid <= HK_LR_HIGHEST_AIA_APID && apid >= HK_LR_LOWEST_AIA_APID))
+  {
+    pn = getenv("HK_LEV0_BY_APID_PROJECT_NAME_AIA");
+  }
+  else if((apid <= HK_LR_HIGHEST_SDO_APID) && (apid >= HK_LR_LOWEST_SDO_APID))
+  {
+    pn = getenv("HK_LEV0_BY_APID_PROJECT_NAME_SDO");
+  }
+  else
+  {
+    printkerr("Warning at %s, line %d: APID is not in range of ",
+              "HMI, AIA, or SDO. APID: <%d>\n",
+               __FILE__, __LINE__, apid);
+  }
 
   /* get data type name */
-  didn = getenv("HK_LEV0_DATA_ID_NAME");
+  didn = getenv("HK_LEV0_BY_APID_DATA_ID_NAME");
 
   /* get directory and file name  with jsoc version numbers*/
   directory = (char *)getenv("HK_JSVNMAP_DIRECTORY");
