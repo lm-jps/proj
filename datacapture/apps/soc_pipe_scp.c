@@ -225,6 +225,7 @@ int main(int argc, char *argv[])
         printk("%s\n", cmd);
         if(system(cmd)) {
           printk("***Error on: %s\n", cmd);
+          continue;		//don't try to copy the .qac
         }
         else {
           sprintf(cmd, "/bin/rm -f %s/%s", sourcedir, dp->d_name);
