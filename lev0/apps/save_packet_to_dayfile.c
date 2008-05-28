@@ -39,7 +39,7 @@ void set_time_values(HK_Dayfile_Data_t **dn, double tcsec);
 int  write_packet_to_dayfile(HK_Dayfile_Data_t **df_head); 
 
 /*********** extern function prototypes **************/
-extern TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
+static  TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 extern void sprint_time (char *at, TIME t, char *zone, int precision);
 
 
@@ -237,7 +237,8 @@ double get_packet_time(unsigned short *word_ptr)
   pkt_subsecs |= (unsigned int) ( (*wptr) << 8 & 0x00FF0000);
 
   /* call function to convert secs and subs to double seconds */ 
-  pkt_time = SDO_to_DRMS_time(pkt_secs, pkt_subsecs);
+  int shifted_ss=(pkt_subsecs >> 16) & 0xFFFF;
+  pkt_time = SDO_to_DRMS_time(pkt_secs, shifted_ss);
   //pkt_time += 33.0;
   tc=pkt_time;
   return tc;
@@ -791,3 +792,17 @@ int check_filename_apid(char *fn, int apid)
   }
 }
 
+/*********************/
+/* SDO_to_DRMS_time  */
+/*********************/
+static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss) 
+{
+static int firstcall = 1;
+static TIME sdo_epoch;
+if (firstcall)
+  { 
+  firstcall = 0;
+  sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
+  } 
+return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
+}
