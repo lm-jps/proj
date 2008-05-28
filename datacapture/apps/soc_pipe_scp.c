@@ -220,7 +220,7 @@ int main(int argc, char *argv[])
     while((dp=readdir(dfd)) != NULL) {
       /* First copy .tlm files. */
       if(cptr=strstr(dp->d_name, ".tlm")) {
-	sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
+	sprintf(cmd, "/usr/bin/scp %s/%s %s:%s 1> /dev/null 2>&1",
 			sourcedir, dp->d_name, hostname, targetdir);
         printk("%s\n", cmd);
         if(system(cmd)) {
@@ -243,7 +243,7 @@ int main(int argc, char *argv[])
             continue;
           }
         }
-        sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
+        sprintf(cmd, "/usr/bin/scp %s/%s %s:%s 1> /dev/null 2>&1",
                         sourcedir, dp->d_name, hostname, targetdir);
         printk("%s\n", cmd);
         if(system(cmd)) {
@@ -260,7 +260,7 @@ int main(int argc, char *argv[])
         if(!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..") 
 		|| strstr(dp->d_name, ".qac")) //.qac done above with .tlm
           continue;
-        sprintf(cmd, "scp %s/%s %s:%s 1> /dev/null 2>&1",
+        sprintf(cmd, "/usr/bin/scp %s/%s %s:%s 1> /dev/null 2>&1",
 			sourcedir, dp->d_name, hostname, targetdir);
         printk("%s\n", cmd);
         if(system(cmd)) {
