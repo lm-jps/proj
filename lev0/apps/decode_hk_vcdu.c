@@ -15,7 +15,6 @@ static unsigned short *decode_im_pdu(unsigned short *w, IM_PDU_Packet_t *p);
 static unsigned short *decode_ccsds(unsigned short *w, CCSDS_Packet_t *p);
 
 /*************  function prototypes ******************/
-TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 int lookup_fsn(CCSDS_Packet_t **ptr, unsigned int *Fsn);
 int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t **df_head); 
 int write_packet_to_dayfile(HK_Dayfile_Data_t **df_head); 
@@ -570,24 +569,3 @@ int get_status( int lz[], int jj)
   }
   else return lz[0];
 }
-
-/********************************************************/
-/* SDO_to_DRMS_time --Need to hook up to library to get */
-/********************************************************/
-TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss) 
-{
-/*changes done:
-1.changed args from float to int 
-2.added line below...int ss.. 
-3.changed return statement with ss parameter!
-*/
-static TIME sdo_epoch;
-int ss=(sdo_ss >> 16) & 0xFFFF;
-static int firstcall = 1;
-if (firstcall)
-  { /* time_1958 - time_1977_TAI, to be added to SDO time to get DRMS time */
-  firstcall = 0;
-  sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
-  } 
-return(sdo_epoch + (TIME)sdo_s + (TIME)ss/65536.0);
-}  
