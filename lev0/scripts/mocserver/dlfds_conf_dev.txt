@@ -1,0 +1,7 @@
+log = /home/jsoc/sdo_dev/fds/fds.log
+scrpath = /home/jsoc/cvs/Development/JSOC/scripts
+binpath = /home/jsoc/cvs/Development/JSOC/bin
+permdpath = /home/jsoc/sdo_dev/fds
+dpath = /surge/sdo_dev/mocprods
+series = sdo_dev.fds
+notify = arta@sun.stanford.edu jennifer@sun.stanford.edu rock@sun.stanford.edu
