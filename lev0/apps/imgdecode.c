@@ -212,7 +212,7 @@ int imgdecode(unsigned short *impdu, IMG *img)
     img->luid = impdu[17] >> 8;
     img->tap = impdu[16] >> 12;
     u = impdu[16] & 0xff;	// compression ID
-    if (u == 0) {
+    if (u == 0 || u == 128) {
 	// raw mode
 	img->N = 16;
 	img->K = 0;
