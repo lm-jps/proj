@@ -34,7 +34,7 @@ my($cmd);
 
 if ($argc != 1)
 {
-    die "Invalid argument list.";
+    die "Invalid argument list.\n";
 }
 else
 {
@@ -48,8 +48,6 @@ else
 	$force = "-f";
     }
 }
-
-print "config file $cfgfile\n";
 
 open(CFGFILE, "< $cfgfile");
 
@@ -109,7 +107,6 @@ local $ENV{"PATH"} = "$binPath/$jsocmach:$ENV{\"PATH\"}";
 #print "l=$logfile, sp=$scriptPath, bp=$binPath, pdp=$permdataPath, dp=$dataPath, s=$seriesname, n=$notlist\n";
 
 # Download FDS files to /surge
-
 $cmd = "$scriptPath/dlMOCDataFiles\.pl -c $scriptPath/mocDlFdsSpec.txt -s $permdataPath/mocDlFdsStatus.txt -r $dataPath -t 30 $force";
 
 system("$cmd 1>$logfile 2>&1");
