@@ -28,9 +28,7 @@ use FileHandle;
 use IPC::Open2;
 use IPC::Open3;
 
-use FindBin qw($Bin);
-
-$EXP = "$Bin/sftpScript.exp";
+$EXP = "/home/jsoc/cvs/JSOC/scripts/sftpScript.exp";
 # Use $EXP below for testing
 # $EXP = "./sftpScript.exp";
 $RQARG = "hmiroboto\@129.165.8.6";
@@ -121,7 +119,7 @@ else
 	}
 	else
 	{
-	    print STDERR "Invalid argument '$arg'\n";
+	    print STDERR $arg;
 	    PrintUsage();
 	    exit(1);
 	}

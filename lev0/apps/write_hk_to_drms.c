@@ -11,9 +11,10 @@
 #include "decode_hk_vcdu.h" 
 #include "write_hk_to_drms.h"
 #include "printk.h"
+
 /***********************   Protoype Functions  *******************************/
 int   write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt);
-static TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
+TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 char *get_packet_version_number( HK_Keyword_t *kw);
 char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jmap);
 void load_map_data(int apid, JSOC_Version_Map_t  *jm);
@@ -87,44 +88,24 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
   /* check 3 environment variables are set */
   /* get project name */
-  pjname = getenv("HK_LEV0_BY_APID_PROJECT_NAME_HMI");
+  pjname = getenv("HK_LEV0_PROJECT_NAME");
   if(pjname == NULL) 
   {
     printkerr("ERROR at %s, line %d: Could not get project name environment "
-              "variable:<HK_LEV0_BY_APID_PROJECT_NAME_HMI>. Set the env variable "
-              "HK_LEV0_BY_APID_PROJECT_NAME_HMI to data series project name"
-              "(hmi, hmi_ground, su_carl,etc.) for a existing data series name.\n",
-              __FILE__,__LINE__);
-    return  ERROR_HK_ENVIRONMENT_VARS_NOT_SET ;
-  }
-  pjname = getenv("HK_LEV0_BY_APID_PROJECT_NAME_AIA");
-  if(pjname == NULL) 
-  {
-    printkerr("ERROR at %s, line %d: Could not get project name environment "
-              "variable:<HK_LEV0_BY_APID_PROJECT_NAME_AIA>. Set the env variable "
-              "HK_LEV0_BY_APID_PROJECT_NAME_HMI to data series project name"
-              "(aia, aia_ground, su_carl,etc.) for a existing data series name.\n",
-              __FILE__,__LINE__);
-    return  ERROR_HK_ENVIRONMENT_VARS_NOT_SET ;
-  }
-  pjname = getenv("HK_LEV0_BY_APID_PROJECT_NAME_SDO");
-  if(pjname == NULL) 
-  {
-    printkerr("ERROR at %s, line %d: Could not get project name environment "
-              "variable:<HK_LEV0_BY_APID_PROJECT_NAME_SDO>. Set the env variable "
-              "HK_LEV0_BY_APID_PROJECT_NAME_SDO to data series project name"
-              "(sdo, sdo_ground, su_carl,etc.) for a existing data series name.\n",
+              "variable:<HK_LEV0_PROJECT_NAME>. Set the env variable "
+              "HK_LEV0_PROJECT_NAME to data series project name"
+              "(hmi, aia, hmi_ground, etc.) for a existing data series name.\n",
               __FILE__,__LINE__);
     return  ERROR_HK_ENVIRONMENT_VARS_NOT_SET ;
   }
 
   /* get data type name */
-  dtname = getenv("HK_LEV0_BY_APID_DATA_ID_NAME");
+  dtname = getenv("HK_LEV0_DATA_ID_NAME");
   if(dtname == NULL) 
   {
     printkerr("ERROR at %s, line %d: Could not get data type name environment "
-              "variable:<HK_LEV0_BY_APID_DATA_ID_NAME>. Set the env variable "
-              "HK_LEV0_BY_APID_DATA_ID_NAME to data series data type name"
+              "variable:<HK_LEV0_DATA_ID_NAME>. Set the env variable "
+              "HK_LEV0_DATA_ID_NAME to data series data type name"
               "(lev0,lev0test, etc.) for a existing data series name\n",
               __FILE__ , __LINE__ );
      return (ERROR_HK_ENVIRONMENT_VARS_NOT_SET) ;
@@ -177,11 +158,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
       /*  lookup data series name */
       strcpy(query , lookup_data_series_name(ccsds,&jmap)); 
-#ifdef DEBUG_WRITE_HK_TO_DRMS
-      printkerr("DEBUG:Message at %s, line %d: Writing to DRMS data"
-                " series <%s>\n", __FILE__,__LINE__, query);
-#else
-#endif
+      //printf("query is %s\n", query);
 
       /* create record in drms */
       rs = drms_create_records( drms_env, 1, query, DRMS_PERMANENT, &status);
@@ -214,7 +191,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
          status = drms_close_records(rs, DRMS_INSERT_RECORD);
       }
       /* assume need to have packet time set for both cases so do this */
-      printkerr("ERROR at %s, line %d: Could not set PACKET_TIME keyword. "
+      printkerr("Warning at %s, line %d: Could not set PACKET_TIME keyword. "
                 "Because the TIME CODE values were not found in keywords. "
                 "Exiting write to drms of data series <%s> and closing record.\n",
                   __FILE__ , __LINE__ , query);
@@ -427,7 +404,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
       if (status)
       {
         /* compile in by adding -DDEBUG_WRITE_HK_TO_DRMS in makefile */
-        printkerr("DEBUG:Warning at %s, line %d: Cannot setkey in drms record."
+        printkerr("Carl testing:Warning at %s, line %d: Cannot setkey in drms record."
                   " For keyword <%s>\n",
                  __FILE__,__LINE__, keyname);
       }
@@ -631,7 +608,6 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
   char *suffix_filename;
   char line[HK_LEV0_MAXLINE_IN_FILE];
   char *pn;
-  char *pn1,*pn2,*pn3;
   int  wn, dn;
 
   /* initialized variables */
@@ -641,27 +617,10 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
   suffix_filename=sn;
 
   /* get project name */
- if(apid <= HK_HSB_HIGHEST_HMI_APID && apid >= HK_HSB_LOWEST_HMI_APID  || (apid <= HK_LR_HIGHEST_HMI_APID  && apid >= HK_LR_LOWEST_HMI_APID))
-  {
-    pn = getenv("HK_LEV0_BY_APID_PROJECT_NAME_HMI");
-  }
-  else if((apid <= HK_HSB_HIGHEST_AIA_APID && apid >= HK_HSB_LOWEST_AIA_APID) || (apid <= HK_LR_HIGHEST_AIA_APID && apid >= HK_LR_LOWEST_AIA_APID))
-  {
-    pn = getenv("HK_LEV0_BY_APID_PROJECT_NAME_AIA");
-  }
-  else if((apid <= HK_LR_HIGHEST_SDO_APID) && (apid >= HK_LR_LOWEST_SDO_APID))
-  {
-    pn = getenv("HK_LEV0_BY_APID_PROJECT_NAME_SDO");
-  }
-  else
-  {
-    printkerr("Warning at %s, line %d: APID is not in range of ",
-              "HMI, AIA, or SDO. APID: <%d>\n",
-               __FILE__, __LINE__, apid);
-  }
+  pn = getenv("HK_LEV0_PROJECT_NAME");
 
   /* get data type name */
-  didn = getenv("HK_LEV0_BY_APID_DATA_ID_NAME");
+  didn = getenv("HK_LEV0_DATA_ID_NAME");
 
   /* get directory and file name  with jsoc version numbers*/
   directory = (char *)getenv("HK_JSVNMAP_DIRECTORY");
@@ -859,8 +818,7 @@ int get_pkt_time_from_timecodes(HK_Keyword_t *hk,  TIME *ptime)
     }
     else
     {
-      int shifted_ss=(subsec >> 16) & 0xFFFF;
-      *ptime =SDO_to_DRMS_time(sec, shifted_ss);
+      *ptime =SDO_to_DRMS_time(sec, subsec);
       return 1;
     }
   }
@@ -919,18 +877,4 @@ void free_jsvn_map( JSOC_Version_Map_t  *top_jm)
      free(prev_jm);
   }
   return;
-}
-/*********************/
-/* SDO_to_DRMS_time  */
-/*********************/
-static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss) 
-{
-static int firstcall = 1;
-static TIME sdo_epoch;
-if (firstcall)
-  { 
-  firstcall = 0;
-  sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
-  } 
-return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
 }
