@@ -1,6 +1,0 @@
-##### On Production:ingest dayfile from HSB #######
-0 18 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ingest_hsb_dayfile.pl apidlist=/home/production/cvs/JSOC/proj/lev0/scripts/hk/df_apid_list_day_file_hsb dsnlist=/home/production/cvs/JSOC/proj/lev0/scripts/hk/df_apid_ds_list_for_hsb src=hsb   >/dev/null 2>&1
-##### On Production:dfd.pl -decode dayfile  - for hmi egse dayfiles ########
-0 19  * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ddf.pl hmi egsefm  >/dev/null 2>&1
-##### On Production:dfd.pl -decode dayfile  - for hmi hsb dayfiles ########
-#30 19 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ddf.pl hmi hsb  >/dev/null 2>&1

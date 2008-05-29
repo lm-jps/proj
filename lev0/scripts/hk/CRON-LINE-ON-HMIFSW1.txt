@@ -1,1 +1,0 @@
-15,45 9-17 * * 1-5 /usr/bin/perl /home/cimilluca/ssf_to_jsoc.pl >/dev/null 2>&1

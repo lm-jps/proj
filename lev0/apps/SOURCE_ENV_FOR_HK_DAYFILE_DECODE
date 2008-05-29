@@ -1,6 +1,0 @@
-setenv  HK_DDF_PROJECT_NAME          su_carl
-setenv  HK_DDF_DATA_ID_NAME          lev0
-setenv  HK_JSVNMAP_DIRECTORY          /home/production/lev0/hk_jsn_map_file
-setenv  HK_SUFFIX_JSVNMAP_FILENAME    -JSVN-TO-PVN
-setenv  HK_CONFIG_DIRECTORY           /home/production/lev0/hk_config_file/
-setenv  HK_GTCIDS_FILE                gtcids.txt
