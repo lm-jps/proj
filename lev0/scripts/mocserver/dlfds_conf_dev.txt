@@ -4,4 +4,6 @@ binpath = /home/jsoc/cvs/Development/JSOC/bin
 permdpath = /home/jsoc/sdo_dev/fds
 dpath = /tmp21/jsoc/sdo_dev/mocprods
 series = sdo_dev.fds
+dbuser = production
+dbname = jsoc
 notify = arta@sun.stanford.edu jennifer@sun.stanford.edu rock@sun.stanford.edu

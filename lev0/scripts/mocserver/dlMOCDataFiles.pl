@@ -30,9 +30,7 @@ use IPC::Open3;
 
 use FindBin qw($Bin);
 
-$EXP = "$Bin/sftpScript.exp";
-# Use $EXP below for testing
-# $EXP = "./sftpScript.exp";
+$EXP = "sftpScript.exp";
 $RQARG = "hmiroboto\@129.165.8.6";
 $RDCMD = "scp hmiroboto\@129.165.8.6:";
 my(%STATMAP);

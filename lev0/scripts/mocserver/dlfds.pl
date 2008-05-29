@@ -12,6 +12,8 @@ my($kBINPATH) = "binpath";
 my($kPERMDATAPATH) = "permdpath";
 my($kDATAPATH) = "dpath";
 my($kSERIESNAME) = "series";
+my($kDBUSER) = "dbuser";
+my($kDBNAME) = "dbname";
 my($kNOTLIST) = "notify";
 
 my($jsocmach);
@@ -28,6 +30,8 @@ my($binPath);
 my($permdataPath);
 my($dataPath);
 my($seriesname);
+my($dbuser);
+my($dbname);
 my($notlist);
 
 my($cmd);
@@ -88,33 +92,35 @@ while($line = <CFGFILE>)
     {
 	$logfile = $1;
     }
-
-    if ($line =~ /$kSCRIPTPATH\s*=\s*(\S+)\s*/)
+    elsif ($line =~ /$kSCRIPTPATH\s*=\s*(\S+)\s*/)
     {
 	$scriptPath = $1;
     }
-
-    if ($line =~ /$kBINPATH\s*=\s*(\S+)\s*/)
+    elsif ($line =~ /$kBINPATH\s*=\s*(\S+)\s*/)
     {
 	$binPath = $1;
     }
-
-    if ($line =~ /$kPERMDATAPATH\s*=\s*(\S+)\s*/)
+    elsif ($line =~ /$kPERMDATAPATH\s*=\s*(\S+)\s*/)
     {
 	$permdataPath = $1;
     }
-
-    if ($line =~ /$kDATAPATH\s*=\s*(\S+)\s*/)
+    elsif ($line =~ /$kDATAPATH\s*=\s*(\S+)\s*/)
     {
 	$dataPath = $1;
     }
-
-    if ($line =~ /$kSERIESNAME\s*=\s*(\S+)\s*/)
+    elsif ($line =~ /$kSERIESNAME\s*=\s*(\S+)\s*/)
     {
 	$seriesname = $1;
     }
-
-    if ($line =~ /$kNOTLIST\s*=\s*(.+)/)
+    elsif ($line =~ /$kDBUSER\s*=\s*(\S+)\s*/)
+    {
+	$dbuser = $1;
+    }
+    elsif ($line =~ /$kDBNAME\s*=\s*(\S+)\s*/)
+    {
+	$dbname = $1;
+    }
+    elsif ($line =~ /$kNOTLIST\s*=\s*(.+)/)
     {
 	$notlist = $1;
     }
@@ -133,22 +139,22 @@ else
 
 # For JSOC modules and scripts, use the paths specified in the config file
 local $ENV{"PATH"} = "$scriptPath:$binPath/$jsocmach:$ENV{\"PATH\"}";
+local $ENV{"JSOC_DBUSER"} = $dbuser;
+local $ENV{"JSOC_DBNAME"} = $dbname;
 
-#print "l=$logfile, sp=$scriptPath, bp=$binPath, pdp=$permdataPath, dp=$dataPath, s=$seriesname, n=$notlist\n";
+# print "l=$logfile, sp=$scriptPath, bp=$binPath, pdp=$permdataPath, dp=$dataPath, s=$seriesname, n=$notlist\n";
 
-# Download FDS files to /surge
-$cmd = "$scriptPath/dlMOCDataFiles\.pl -c $scriptPath/mocDlFdsSpec.txt -s $permdataPath/mocDlFdsStatus.txt -r $dataPath -t 30 $force";
+# Download FDS files to $dataPath
+$cmd = "dlMOCDataFiles\.pl -c mocDlFdsSpec.txt -s $permdataPath/mocDlFdsStatus.txt -r $dataPath -t 30 $force";
 
 system("$cmd 1>$logfile 2>&1");
 
-exit(1);
-
 # Ingest FDS files into $seriesname
-$cmd = "$scriptPath/fdsIngest\.pl $dataPath -r -s $seriesname";
+$cmd = "fdsIngest\.pl $dataPath -s $seriesname -r";
 system("$cmd 1>$logfile 2>&1");
 
 # Notify people who care if an error has occurred
-$cmd = "$scriptPath/fdsNotification\.pl -l $logfile -n $notlist";
+$cmd = "fdsNotification\.pl -l $logfile -n $notlist";
 system($cmd);
 
 sub PrintUsage

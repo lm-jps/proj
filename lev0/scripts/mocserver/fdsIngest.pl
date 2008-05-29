@@ -6,10 +6,8 @@
 
 use Cwd;
 
-# DRMS series in which to place the data files
+# DRMS series in which to place the data files; default is sdo.fds
 my($series) = "sdo.fds";
-$JSOCDB = "jsoc";
-#my($series) = "su_arta.testfds";
 
 $removefiles = "no";
 
@@ -111,7 +109,7 @@ my(@contents);
 my($line);
 
 my($argc) = scalar(@ARGV);
-if ($argc < 1 || $argc > 2)
+if ($argc < 2)
 {
     PrintUsage();
     exit($RET_BADUSAGE);
@@ -143,14 +141,14 @@ else
 
 while ($arg = shift(@ARGV))
 {
-    if ($arg eq "-r")
+    if ($arg eq "-s")
+    {
+	$series = shift(@ARGV);
+    }
+    elsif ($arg eq "-r")
     {
 	# Remove files after successful ingestion
 	$removefiles = "yes";
-    }
-    elsif ($arg eq "-s")
-    {
-	$series = shift(@ARGV);
     }
 }
 
@@ -375,7 +373,7 @@ sub CallSetKey
 	    chomp($convTime);
 	    $jsocDate = $convTime;
 	    
-	    $skCmd = "set_keys JSOC_DBNAME=$JSOCDB -c ds=$series $primaryKey[0]=$dataType $primaryKey[1]=$prodComp $primaryKey[2]=$jsocDate $primaryKey[3]=$fileFormat $primaryKey[4]=$fileVersion $segmentName[0]=$filePath";
+	    $skCmd = "set_keys -c ds=$series $primaryKey[0]=$dataType $primaryKey[1]=$prodComp $primaryKey[2]=$jsocDate $primaryKey[3]=$fileFormat $primaryKey[4]=$fileVersion $segmentName[0]=$filePath";
 	    print STDOUT "  Running $skCmd\n";
 	    if (system($skCmd) != 0)
 	    {
@@ -403,7 +401,7 @@ sub VerifyFileCopy
     my($series, $dataType, $prodComp, $jsocDate, $dataFormat, $fileVersion, $srcFilePath) = @_;
 
     my($skResultLine);
-    my($skCmdLine) = "show_keys JSOC_DBNAME=$JSOCDB -pq ds=$series\[$primaryKey[0]=$dataType\]\[$primaryKey[1]=$prodComp\]\[$primaryKey[2]=$jsocDate\]\[$primaryKey[3]=$dataFormat\]\[$primaryKey[4]=$fileVersion\] seg=$segmentName[0] |";
+    my($skCmdLine) = "show_keys -pq ds=$series\[$primaryKey[0]=$dataType\]\[$primaryKey[1]=$prodComp\]\[$primaryKey[2]=$jsocDate\]\[$primaryKey[3]=$dataFormat\]\[$primaryKey[4]=$fileVersion\] seg=$segmentName[0] |";
 
     if (!open(SHOWKEYS, $skCmdLine))
     {
