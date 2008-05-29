@@ -234,6 +234,10 @@ int main(int argc, char *argv[])
           }
           else {
             printk("Retry OK: %s\n", cmd);
+            sprintf(cmd, "/bin/rm -f %s/%s", sourcedir, dp->d_name);
+            if(system(cmd)) {
+              printk("***Error on: %s\n", cmd);
+            }
           }
         }
         else {
