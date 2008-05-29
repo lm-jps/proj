@@ -128,9 +128,12 @@ while($line = <CFGFILE>)
 
 close(CFGFILE);
 
+local $ENV{"JSOCROOT"} = "$Bin/../../../..";
+
 if (!defined($ENV{"JSOC_MACHINE"}))
 {
     $jsocmach = `$ENV{"JSOCROOT"}/build/jsoc_machine.csh`;
+    chomp($jsocmach); # back-ticks cause a newline to be appended.
 }
 else
 {
@@ -145,13 +148,13 @@ local $ENV{"JSOC_DBNAME"} = $dbname;
 # print "l=$logfile, sp=$scriptPath, bp=$binPath, pdp=$permdataPath, dp=$dataPath, s=$seriesname, n=$notlist\n";
 
 # Download FDS files to $dataPath
-$cmd = "dlMOCDataFiles\.pl -c mocDlFdsSpec.txt -s $permdataPath/mocDlFdsStatus.txt -r $dataPath -t 30 $force";
+$cmd = "dlMOCDataFiles\.pl -c $scriptPath/mocDlFdsSpec.txt -s $permdataPath/mocDlFdsStatus.txt -r $dataPath -t 30 $force";
 
 system("$cmd 1>$logfile 2>&1");
 
 # Ingest FDS files into $seriesname
 $cmd = "fdsIngest\.pl $dataPath -s $seriesname -r";
-system("$cmd 1>$logfile 2>&1");
+system("$cmd 1>>$logfile 2>&1");
 
 # Notify people who care if an error has occurred
 $cmd = "fdsNotification\.pl -l $logfile -n $notlist";
