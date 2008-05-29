@@ -7,7 +7,7 @@
 use Cwd;
 
 # DRMS series in which to place the data files
-my($series) = "sdo.moc_fds";
+my($series) = "sdo.fds";
 $JSOCDB = "jsoc";
 #my($series) = "su_arta.testfds";
 
@@ -147,6 +147,10 @@ while ($arg = shift(@ARGV))
     {
 	# Remove files after successful ingestion
 	$removefiles = "yes";
+    }
+    elsif ($arg eq "-s")
+    {
+	$series = shift(@ARGV);
     }
 }
 
