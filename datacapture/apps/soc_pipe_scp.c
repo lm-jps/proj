@@ -225,13 +225,15 @@ int main(int argc, char *argv[])
         printk("%s\n", cmd);
         if(system(cmd)) {
           printk("***Error on: %s\n", cmd);
-          printk("Retry:\n");
           sprintf(svfile, "/tmp/scp_stdout_%d.log", i++);
 	  sprintf(cmd, "/usr/bin/scp %s/%s %s:%s 1> %s 2>&1",
 			sourcedir, dp->d_name, hostname, targetdir, svfile);
           if(system(cmd)) {
             printk("***Error on Retry: %s\n", cmd);
             continue;		//don't try to copy the .qac
+          }
+          else {
+            printk("Retry OK: %s\n", cmd);
           }
         }
         else {
