@@ -32,21 +32,50 @@ my($notlist);
 
 my($cmd);
 
-if ($argc != 1)
+if ($argc == 0)
 {
     die "Invalid argument list.\n";
 }
 else
 {
-    $arg = shift(@ARGV);
-    if ($arg eq $kDEV || $arg eq $kGROUND || $arg eq $kLIVE)
+    while ($arg = shift(@ARGV))
     {
-	$cfgfile = "$Bin/${kCFGPREFIX}_$arg.txt";
+	if ($arg eq "-b")
+	{
+	    $branch = shift(@ARGV);
+
+	    if ($branch ne $kDEV && $branch ne $kGROUND && $branch ne $kLIVE)
+	    {	
+		PrintUsage();
+		exit(1);
+	    }
+	}
+	elsif ($arg eq "-c")
+	{
+	    $cfgfile = shift(@ARGV);
+	}
+	elsif ($arg eq "-f")
+	{
+	    $force = "-f";
+	}
+	else
+	{
+	    PrintUsage();
+	    exit(1);
+	}
     }
-    elsif ($arg eq "-f")
-    {
-	$force = "-f";
-    }
+}
+
+if (!defined($cfgfile) && defined($branch))
+{
+    # Use defalt configuration file
+    $cfgfile = "$Bin/${kCFGPREFIX}_$branch.txt";
+}
+
+if (!(-f $cfgfile))
+{
+    printf STDERR "Cannot read configuration file.";
+    exit(1);
 }
 
 open(CFGFILE, "< $cfgfile");
@@ -102,7 +131,8 @@ else
     $jsocmach = $ENV{"JSOC_MACHINE"};
 }
 
-local $ENV{"PATH"} = "$binPath/$jsocmach:$ENV{\"PATH\"}";
+# For JSOC modules and scripts, use the paths specified in the config file
+local $ENV{"PATH"} = "$scriptPath:$binPath/$jsocmach:$ENV{\"PATH\"}";
 
 #print "l=$logfile, sp=$scriptPath, bp=$binPath, pdp=$permdataPath, dp=$dataPath, s=$seriesname, n=$notlist\n";
 
@@ -120,3 +150,8 @@ system("$cmd 1>$logfile 2>&1");
 # Notify people who care if an error has occurred
 $cmd = "$scriptPath/fdsNotification\.pl -l $logfile -n $notlist";
 system($cmd);
+
+sub PrintUsage
+{
+    print "\tdlfds.pl {-b <branch> | -c <config file>} [-f]\n"
+}

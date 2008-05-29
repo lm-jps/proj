@@ -1,9 +1,9 @@
 # *********************** Global information ************************
-Seriesname:	"sdo.fds"
+Seriesname:	"sdo_dev.fds"
 #Seriesname:	"su_arta.testfds"
 Description:	"This series contains ingested FDS data files."
 Author:		"Art Amezcua"
-Owner:		"production"
+Owner:		"jsoc"
 Unitsize:	150
 #Archive:	1
 Archive:	0
