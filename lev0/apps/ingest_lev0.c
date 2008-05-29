@@ -65,7 +65,7 @@ extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsign
 extern int write_hk_to_drms();
 extern void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg);
 extern int set_HMI_mech_values(DRMS_Record_t *rec);
-extern TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
+TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 
 // List of default parameter values. 
 ModuleArgs_t module_args[] = { 
@@ -116,14 +116,15 @@ int total_tlm_vcdu;
 int total_missing_vcdu;
 int errmsgcnt, fileimgcnt;
 int imagecnt = 0;		// num of images since last commit 
+int tmpcnt = 0;			//!!TEMP
 int ALRMSEC = 70;               // seconds for alarm signal 
 char timetag[32];
 char pchan[8];			// primary channel to listen to e.g. VC02 
 char rchan[8];			// redundant channel to listen to e.g. VC10 
-tlmseriesname[96];		// e.g. hmi.tlm
-lev0seriesname[96];		// e.g. hmi.lev0
-tlmnamekey[96];			// shortened tlm file name for TLMDSNAM keyword
-tlmnamekeyfirst[96];		// for TLMDSNAM keyword for 1st file of image
+char tlmseriesname[96];		// e.g. hmi.tlm
+char lev0seriesname[96];	// e.g. hmi.lev0
+char tlmnamekey[96];		// shortened tlm file name for TLMDSNAM keyword
+char tlmnamekeyfirst[96];	// for TLMDSNAM keyword for 1st file of image
 char *username;			// from getenv("USER") 
 char *tlmdir;			// tlm dir name passed in 
 char *outdir;			// output dir for .tlm file (can be /dev/null)
@@ -167,6 +168,19 @@ int nice_intro ()
     }
   return (0);
   }
+
+static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
+{
+static int firstcall = 1;
+static TIME sdo_epoch;
+if (firstcall)
+  {
+  firstcall = 0;
+  sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
+  }
+/* XXX fix build 3/18/2008, arta */
+return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
+}
 
 // Returns a time tag like  yyyy.mm.dd.hhmmss 
 char *gettimetag()
@@ -913,8 +927,8 @@ void do_ingest()
     sprintf(cmd, "/bin/mv %s %s", tlmfile, path);
     printk("*mv tlm to %s\n", path);
     printk("%s\n", cmd);
-    if(system(cmd)) {
-      printk("**ERROR: on: %s\n", cmd);
+    if(status = system(cmd)) {
+      printk("**ERROR: %d on: %s\n", status, cmd);
     }
     if((status = drms_close_record(rs_tlm, DRMS_INSERT_RECORD))) {
       printk("**ERROR: drms_close_record failed for %s\n", tlmseriesname);
