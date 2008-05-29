@@ -34,6 +34,7 @@
 # main program                                                               #
 ##############################################################################
 #(1)common setting for all environmnents
+$ENV{'SUMSERVER'}="d02.Stanford.EDU";
 $hm=$ENV{'HOME'};
 $ENV{'MAILTO'}="";
 $exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/cvs/JSOC/bin/linux_x86_64";
@@ -724,7 +725,7 @@ sub decode_keywords_for_dayfiles()
                $log2=`/bin/gzip -f $script_dir/Report-$filename-$series`;
 
                # move report to familar place or to be deterined place if needed
-               # $log3=`/bin/mv $script_dir/Report-$filename-$series.gz /home1/carl/REPORTS-KEYWORDS-INGESTED/ `;
+               # $log3=`/bin/mv $script_dir/Report-$filename-$series.gz /home/carl/REPORTS-KEYWORDS-INGESTED/ `;
 
                # add filename to did file list when successfully processed dayfile already
                print DFILE "$there\n";
