@@ -704,8 +704,10 @@ int get_tlm(char *file, int rexmit, int higherver)
             //calculate and setkey some values from the keywords returned
             HMI_compute_exposure_times(rsc, Hk->keywords, hmiaiaflg);
             whk_status = write_hk_to_drms(rsc, &Hk); //ISP keywords to drms
-            if(whk_status = set_HMI_mech_values(rsc)) {
-              printk("***ERROR: mechanism position keywords are wrong!\n");
+            if(!hmiaiaflg) {
+              if(whk_status = set_HMI_mech_values(rsc)) {
+                printk("***ERROR: mechanism position keywords are wrong!\n");
+              }
             }
           }
           else {					//normal stream
@@ -717,8 +719,10 @@ int get_tlm(char *file, int rexmit, int higherver)
             //calculate and setkey some values from the keywords returned
             HMI_compute_exposure_times(rs, Hk->keywords, hmiaiaflg);
             whk_status = write_hk_to_drms(rs, &Hk); //ISP keywords to drms
-            if(whk_status = set_HMI_mech_values(rs)) {
-              printk("***ERROR: mechanism position keywords are wrong!\n");
+            if(!hmiaiaflg) {
+              if(whk_status = set_HMI_mech_values(rs)) {
+                printk("***ERROR: mechanism position keywords are wrong!\n");
+              }
             }
           }
           hk_ccsds_free(&Hk);
