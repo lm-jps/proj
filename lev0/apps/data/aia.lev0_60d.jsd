@@ -73,9 +73,9 @@ Keyword:AIMSHOBE,   double, variable, record,"DRMS_MISSING_VALUE", %lf, "none", 
 Keyword:AIMSHOTC,   double, variable, record,"DRMS_MISSING_VALUE", %lf, "none", "AIA_IMG_SH_OPEN_TOP_CENTR"
 Keyword:AIMSHOTE,   double, variable, record,"DRMS_MISSING_VALUE", %lf, "none", "AIA_IMG_SH_OPEN_TOP_EDGE"
 #==============  (4) ISP Keywords upsdates for apid 529 jsd file with version number 10
-Keyword:AECDELAY,      int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_AEC_DELAY"
-Keyword:AECMODE,    string, variable, record,"DRMS_MISSING_VALUE",  %s, "none", "AIA_IMG_AEC_MODE"
-Keyword:AECTYPE,     short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_IMG_AEC_TYPE"
+Keyword:A82F6,         int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_AEC_DELAY"
+Keyword:A8215-00,   string, variable, record,"DRMS_MISSING_VALUE",  %s, "none", "AIA_IMG_AEC_MODE"
+Keyword:AIAECTYP,    short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_IMG_AEC_TYPE"
 Keyword:AIASEN,        int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_AS_ENCODER"
 Keyword:AIAWVLEN,      int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_WAVELENGTH"
 Keyword:AIFRMLID,      int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_FRMLIST_ID"
@@ -89,9 +89,9 @@ Keyword:AIMGFSN,       int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", 
 Keyword:AIMGSHCE, longlong, variable, record,"DRMS_MISSING_VALUE", %ld, "none", "AIA_IMG_SH_CMDED_EXPOSURE"
 Keyword:AIMGSHEN,    short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_IMG_SH_ENCODER"
 Keyword:AISTATE,    string, variable, record,"DRMS_MISSING_VALUE",  %s, "none", "AIA_IMG_ISS_LOOP"
-Keyword:ASQFSN,   longlong, variable, record,"DRMS_MISSING_VALUE", %ld, "none", "AIA_SEQ_FRAME_SN"
-Keyword:ASQHDR,   longlong, variable, record,"DRMS_MISSING_VALUE", %ld, "none", "AIA_SEQ_HEADER"
-Keyword:ASQTNUM,     short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_SEQ_TEL_NUM"
+Keyword:A827A-00, longlong, variable, record,"DRMS_MISSING_VALUE", %ld, "none", "AIA_SEQ_FRAME_SN"
+Keyword:A827A,    longlong, variable, record,"DRMS_MISSING_VALUE", %ld, "none", "AIA_SEQ_HEADER"
+Keyword:A827A-01     short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_SEQ_TEL_NUM"
 #==============Segments===============
 Data: image, vardim, short, 2, 4096, 4096, dn, fits, "lev0 data fits file with headers"
 
