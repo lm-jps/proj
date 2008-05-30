@@ -91,7 +91,7 @@ Keyword:AIMGSHEN,    short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", 
 Keyword:AISTATE,    string, variable, record,"DRMS_MISSING_VALUE",  %s, "none", "AIA_IMG_ISS_LOOP"
 Keyword:A827A-00, longlong, variable, record,"DRMS_MISSING_VALUE", %ld, "none", "AIA_SEQ_FRAME_SN"
 Keyword:A827A,    longlong, variable, record,"DRMS_MISSING_VALUE", %ld, "none", "AIA_SEQ_HEADER"
-Keyword:A827A-01     short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_SEQ_TEL_NUM"
+Keyword:A827A-01,    short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_SEQ_TEL_NUM"
 #==============Segments===============
 Data: image, vardim, short, 2, 4096, 4096, dn, fits, "lev0 data fits file with headers"
 
