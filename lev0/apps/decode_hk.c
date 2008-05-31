@@ -184,6 +184,11 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
        ;
     }
   }
+#ifdef DEBUG_DECODE_HK
+  printkerr("DEBUG:Message at %s, line %d: Found config for apid <%x> and packet version number <%s>\n",
+                 __FILE__, __LINE__,apid, version_number);
+#else
+#endif
   if ( matching_config == NULL )
   {
     /* Still no matching config information. Return an error code. */
