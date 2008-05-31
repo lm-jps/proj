@@ -21,7 +21,7 @@ Keyword:MJD,        double, variable, record,"DRMS_MISSING_VALUE", %lf,  "day", 
 Keyword:TELESCOP,   string, constant, record,"SDO/HMI",             %s, "none", "For HMI: SDO/HMI"
 Keyword:INSTRUME,   string, variable, record,"DRMS_MISSING_VALUE",  %s, "none", "For HMI: HMI_SIDE1 or HMI_FRONT2"
 Keyword:CAMERA,        int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "For HMI: 1 or 2"
-Keyword:WAVELNTH,    float, constant, record,617.3,                 %f,   "nm", "For HMI: 617.3 nm"
+Keyword:WAVELNTH,    float, constant, record,617.33,                %f,   "nm", "For HMI: 617.33 nm"
 #==============  (1) Image Configuration Keywords
 Keyword:IMGAPID,       int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "Image Application ID"
 Keyword:IMGFPT,       time, variable, record,"DRMS_MISSING_VALUE",   2,    TAI, "FIRST_PACKET_TIME"
