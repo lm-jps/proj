@@ -2,8 +2,8 @@
 setenv HK_CONFIG_DIRECTORY               /home/production/cvs/TBL_JSOC/lev0/hk_config_file/
 setenv HK_JSVNMAP_DIRECTORY              /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file
 setenv HK_DF_HSB_DIRECTORY               /tmp21/production/hk_hsb_dayfile
-setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
+setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0_60d
 setenv HK_SUFFIX_JSVNMAP_FILENAME        -JSVN-TO-PVN
-setenv HK_LEV0_BY_APID_PROJECT_NAME_AIA  su_carl
-setenv HK_LEV0_BY_APID_PROJECT_NAME_HMI  su_carl
-setenv HK_LEV0_BY_APID_PROJECT_NAME_SDO  su_carl
+setenv HK_LEV0_BY_APID_PROJECT_NAME_AIA  aia
+setenv HK_LEV0_BY_APID_PROJECT_NAME_HMI  hmi
+setenv HK_LEV0_BY_APID_PROJECT_NAME_SDO  sdo
