@@ -989,7 +989,7 @@ void do_ingest()
         reqbytes = (double)atol(token);
         /*reqbytes += (double)1000000;*/	/* add some overhead */
       }
-      else if(strstr(line, "TOTAL_TLM_VCDU=")) {
+      else if(strstr(line, "TOTAL_TLM_IM_PDU=")) {
         token = (char *)strtok(line, "=");
         token = (char *)strtok(NULL, "\n");
         total_tlm_vcdu = atoi(token);
