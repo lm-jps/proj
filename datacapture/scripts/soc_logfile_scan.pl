@@ -52,7 +52,7 @@ while(<ID>) {
       $pos2 = index($_, "VCDUs");
       $vcducnt = substr($_, $pos1, ($pos2-$pos1));
       $impducnt += $vcducnt;
-      print "!!TEMP vcducnt = $vcducnt impducnt = $impducnt\n";
+      #print "!!TEMP vcducnt = $vcducnt impducnt = $impducnt\n";
       last;
     }
   }
