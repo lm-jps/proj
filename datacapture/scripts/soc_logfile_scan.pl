@@ -49,9 +49,10 @@ while(<ID>) {
 #      print "$_";
       $pos1 = index($_, "and ");
       $pos1 = $pos1+4;
+      $pos2 = index($_, "VCDUs");
       $vcducnt = substr($_, $pos1, ($pos2-$pos1));
-      #print "!!TEMP vcducnt = $vcducnt\n";
       $impducnt += $vcducnt;
+      print "!!TEMP vcducnt = $vcducnt impducnt = $impducnt\n";
       last;
     }
   }
