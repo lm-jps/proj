@@ -252,6 +252,124 @@ static void CreateOutSeries(DRMS_Env_t *drmsEnv, char *outSeries, int *status)
    }
 }
 
+static void CreateHistSeries(DRMS_Env_t *drmsEnv, char *histSeries, int *status)
+{
+   int stat = DRMS_SUCCESS;
+
+   if (!drms_series_exists(drmsEnv, histSeries, &stat))
+   {
+      DRMS_Record_t *prototype = (DRMS_Record_t *)calloc(1, sizeof(DRMS_Record_t));
+	    
+      if (prototype)
+      {	       
+	 prototype->seriesinfo = calloc(1, sizeof(DRMS_SeriesInfo_t));
+
+	 if (prototype->seriesinfo)
+	 {
+	    DRMS_Keyword_t *pkey1 = NULL;
+	    DRMS_Keyword_t *pkey2 = NULL;
+	    DRMS_Keyword_t *pkey3 = NULL;
+	    DRMS_Keyword_t *pkey4 = NULL;
+	    DRMS_Keyword_t *pkey5 = NULL;
+	    DRMS_Keyword_t *akey = NULL;
+	    char keyname[DRMS_MAXKEYNAMELEN];
+
+	    prototype->env = drmsEnv;
+	    prototype->recnum = 0;
+	    prototype->sunum = -1;		 
+	    prototype->init = 1;
+	    prototype->sessionid = 0;
+	    prototype->sessionns = NULL;
+	    prototype->su = NULL;
+      
+	    /* Initialize container structure. */
+	    hcon_init(&prototype->segments, sizeof(DRMS_Segment_t), DRMS_MAXHASHKEYLEN, 
+		      (void (*)(const void *)) drms_free_segment_struct, 
+		      (void (*)(const void *, const void *)) drms_copy_segment_struct);
+	    /* Initialize container structures for links. */
+	    hcon_init(&prototype->links, sizeof(DRMS_Link_t), DRMS_MAXHASHKEYLEN, 
+		      (void (*)(const void *)) drms_free_link_struct, 
+		      (void (*)(const void *, const void *)) drms_copy_link_struct);
+	    /* Initialize container structure. */
+	    hcon_init(&prototype->keywords, sizeof(DRMS_Keyword_t), DRMS_MAXHASHKEYLEN, 
+		      (void (*)(const void *)) drms_free_keyword_struct, 
+		      (void (*)(const void *, const void *)) drms_copy_keyword_struct);
+
+	    /* series info */
+	    char *user = getenv("USER");
+	    snprintf(prototype->seriesinfo->seriesname,
+		     DRMS_MAXSERIESNAMELEN,
+		     "%s",
+		     histSeries);
+
+	    strcpy(prototype->seriesinfo->author, "unknown");
+	    strcpy(prototype->seriesinfo->owner, "unknown");
+
+	    if (user)
+	    {
+	       if (strlen(user) < DRMS_MAXCOMMENTLEN)
+	       {
+		  strcpy(prototype->seriesinfo->author, user);
+	       }
+		    
+	       if (strlen(user) < DRMS_MAXOWNERLEN)
+	       {
+		  strcpy(prototype->seriesinfo->owner, user);
+	       }
+	    }
+
+	    /* discard "Owner", fill it with the dbuser */
+	    if (drmsEnv->session->db_direct) 
+	    {
+	       strcpy(prototype->seriesinfo->owner, drmsEnv->session->db_handle->dbuser);
+	    }
+
+	    prototype->seriesinfo->unitsize = 0;
+
+	    snprintf(prototype->seriesinfo->description,
+		     DRMS_MAXCOMMENTLEN,
+		     "%s",
+		     "Helio- and Geo-centric orbit position and velocity vectors ingestion history.");
+
+	    /* slotted keyword isdrmsprime, but not really prime */
+	    akey = AddKey(prototype, DRMS_TYPE_TIME, kObsDateKey, "0", "UTC", kRecScopeType_TS_EQ, "slotted observation date", 1);
+
+	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "index");
+	    pkey1 = AddKey(prototype, kIndexKWType, keyname, kIndexKWFormat, "none", kRecScopeType_Index, "index for OBS_DATE", 1);
+
+	    /* epoch */
+	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "epoch");
+	    akey = AddKey(prototype, DRMS_TYPE_TIME, keyname, "0", "UTC", kRecScopeType_Constant, "epoch for OBS_DATE", 0);
+	    akey->value.time_val = sscan_time("1993.01.01_00:00:30_UT");
+
+	    /* step */
+	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "step");
+	    akey = AddKey(prototype, DRMS_TYPE_STRING, keyname, "%s", "none", kRecScopeType_Constant, "time step for OBS_DATE", 0);
+	    copy_string(&(akey->value.string_val), "1m");
+
+            pkey2 = AddKey(prototype, DRMS_TYPE_STRING, kFdsDataProductKey, "%s", "none", kRecScopeType_Variable, "FDS data product", 1);
+            pkey3 = AddKey(prototype, DRMS_TYPE_STRING, kFdsProductCompKey, "%s", "none", kRecScopeType_Variable, "FDS data product component", 1);
+            pkey4 = AddKey(prototype, DRMS_TYPE_STRING, kFdsDataFormatKey, "%s", "none", kRecScopeType_Variable, "Format of data file contained in segment", 1);
+            pkey5 = AddKey(prototype, DRMS_TYPE_INT, kFileVersionKey, "%d", "none", kRecScopeType_Variable, "FDS data product", 1);
+
+	    prototype->seriesinfo->pidx_keywords[0] = pkey1;
+	    prototype->seriesinfo->pidx_keywords[1] = pkey2;
+	    prototype->seriesinfo->pidx_keywords[2] = pkey3;
+	    prototype->seriesinfo->pidx_keywords[3] = pkey4;
+	    prototype->seriesinfo->pidx_keywords[4] = pkey5;
+	    prototype->seriesinfo->pidx_num = 5;
+	 }
+
+	 stat = drms_create_series_fromprototype(&prototype, histSeries, 0);
+      }
+   }
+
+   if (status)
+   {
+      *status = stat;
+   }
+}
+
 /* Caller must clean up records by calling drms_close_records() */
 static int FetchRecords(DRMS_Env_t *drmsEnv, char *query, DRMS_RecordSet_t **recordSet, int *nRecs)
 {
@@ -382,25 +500,18 @@ static int ParseSVRecFields(char *recBuf, char **date, double *xVal, double *yVa
      return error;
 }
 
-static int SetSVKey(DRMS_Record_t *rec, char *keyName, DRMS_Type_Value_t value)
+static int IsDiff(double v1, double v2)
 {
-   int error = 0;
-
-   if (rec != NULL && keyName != NULL)
+   if (!drms_ismissing_double(v1) && !drms_ismissing_double(v2))
    {
-      error = drms_setkey(rec, keyName, DRMS_TYPE_DOUBLE, &value);
-      if (error != 0)
-      {
-	 printf("Failed to set key '%s' to record\n", keyName);
-      }
+      return (fabs(v1 - v2) > 1.0e-11 * (fabs(v1) + fabs(v2)));
    }
-   else
+   else if (!drms_ismissing_double(v1) || !drms_ismissing_double(v2))
    {
-      error = 1;
-      printf("Invalid record or keyword name.\n");
+      return 1;
    }
 
-   return error;
+   return 0;
 }
 
 static int ExtractStateVectors(DRMS_Env_t *drmsEnv, 
@@ -437,17 +548,29 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
    /* Read heliocentric data from filePathHELIO one line at a time */
    FILE *datafp = NULL;
 
-   if (error == 0 && filePathHELIO);
+   if (filePathHELIO);
    {
       datafp = fopen(filePathHELIO, "r");
+      if (datafp == NULL)
+      {
+         error = 1;
+         fprintf(stderr, "Could not open %s for reading\n", filePathHELIO);
+      }
    }
 
-   if (datafp != NULL)
+   if (datafp)
    {
       char lineBuf[kSVLineMax];
       int oneMore = -1;
 
       CreateOutSeries(drmsEnv, outSeries, &stat);
+
+      if (filePathGEO)
+      {
+         /* Put these heliocentric data into temporary records in a sandbox series. */
+         snprintf(sbox, sizeof(sbox), "%s_sbox", outSeries);
+         CreateOutSeries(drmsEnv, sbox, &stat);
+      }
 
       while (!error && fgets(lineBuf, kSVLineMax, datafp) != NULL)
       {
@@ -475,62 +598,101 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 	 DRMS_RecordSet_t *recSet = NULL;
 	 if (filePathGEO)
 	 {
-	    /* Put these heliocentric data into temporary records in a sandbox series. */
-	    snprintf(sbox, sizeof(sbox), "%s_sbox", outSeries);
-
-	    CreateOutSeries(drmsEnv, sbox, &stat);
-
 	    /* Since these are DRMS_TRANSIENT, they should never get saved between runs of 
 	     * this module. */
-	    recSet = drms_create_records(drms_env, 1, sbox, DRMS_TRANSIENT, &error);
+	    recSet = drms_create_records(drms_env, 1, sbox, DRMS_TRANSIENT, &stat);
 	 }
 	 else
 	 {
-	    recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &error);
+            /* Before creating a new output record, check to see if data have changed. There 
+             * exist HELIO input data only. */
+            char query[DRMS_MAXQUERYLEN];
+            snprintf(query, sizeof(query), "%s[%s]", outSeries, obsDate);
+            DRMS_RecordSet_t *rssav = drms_open_records(drmsEnv, query, &stat);
+
+            if (rssav && rssav->n > 0)
+            {
+               DRMS_Record_t *savrec = rssav->records[0];
+               double xValHelSav = drms_getkey_double(savrec, kSVKeyXHELIO, &stat);
+               double yValHelSav = drms_getkey_double(savrec, kSVKeyYHELIO, &stat);
+               double zValHelSav = drms_getkey_double(savrec, kSVKeyZHELIO, &stat);
+               double vxValHelSav = drms_getkey_double(savrec, kSVKeyVxHELIO, &stat);
+               double vyValHelSav = drms_getkey_double(savrec, kSVKeyVyHELIO, &stat);
+               double vzValHelSav = drms_getkey_double(savrec, kSVKeyVzHELIO, &stat);
+
+               if (IsDiff(xValHelSav, xValHel) || IsDiff(yValHelSav, yValHel) ||  
+                   IsDiff(zValHelSav, zValHel) || IsDiff(vxValHelSav, vxValHel) ||
+                   IsDiff(vyValHelSav, vyValHel) || IsDiff(vzValHelSav, vzValHel))
+               {
+                  /* Difference in HELIO values exists */                  
+                   recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
+
+                   /* Need to copy GEO values over to new output record. 
+                    * HELIO values are set below. */
+                   DRMS_Record_t *outrec = recSet->records[0];
+                   drms_setkey_double(outrec, 
+                                      kSVKeyXGEO, 
+                                      drms_getkey_double(savrec, kSVKeyXGEO, &stat));
+                   drms_setkey_double(outrec, 
+                                      kSVKeyYGEO, 
+                                      drms_getkey_double(savrec, kSVKeyYGEO, &stat));
+                   drms_setkey_double(outrec, 
+                                      kSVKeyZGEO, 
+                                      drms_getkey_double(savrec, kSVKeyZGEO, &stat));
+                   drms_setkey_double(outrec, 
+                                      kSVKeyVxGEO, 
+                                      drms_getkey_double(savrec, kSVKeyVxGEO, &stat));
+                   drms_setkey_double(outrec, 
+                                      kSVKeyVyGEO, 
+                                      drms_getkey_double(savrec, kSVKeyVyGEO, &stat));
+                   drms_setkey_double(outrec, 
+                                      kSVKeyVzGEO, 
+                                      drms_getkey_double(savrec, kSVKeyVzGEO, &stat));
+			      
+                   char *id = drms_getkey_string(savrec, kSVKey_idGEO, &stat);
+                   if (id)
+                   {
+                      drms_setkey_string(outrec, kSVKey_idGEO, id);
+                      free(id);
+                   }
+               }
+            }
+            else
+            {
+               recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
+            }
+
+            if (rssav)
+            {
+               drms_close_records(rssav, DRMS_FREE_RECORD);
+            }
 	 }
 
 	 if (recSet != NULL && error == 0)
 	 {
-	    DRMS_Record_t *rec = recSet->records[0];
-	    int nPrime = rec->seriesinfo->pidx_num;
+	    DRMS_Record_t *outrec = recSet->records[0];
+	    int nPrime = outrec->seriesinfo->pidx_num;
 		    
 	    if (nPrime != 1)
 	    {
 	       error = 1;
-	       printf("The specified dataseries %s has the incorrect number of primary keys\n", outSeries);
+	       printf("The specified dataseries %s has the incorrect number of primary keys\n", 
+                      outSeries);
 	    }
 	    else
 	    {
-	       DRMS_Type_Value_t value;
-			      
 	       /* Add primary key */
-	       value.time_val = sscan_time(obsDate);
-	       error = drms_setkey(rec, kSVKeyPrimary, DRMS_TYPE_TIME, &value);
-	       if (error != 0)
-	       {
-		  printf("Failed to set key '%s' to record\n", kSVKeyPrimary);
-	       }
+               TIME obstime = sscan_time(obsDate);
+               error = drms_setkey_time(outrec, kSVKeyPrimary, obstime);
 			      
-	       /* Add state vector keys */
-	       value.double_val = xValHel;
-	       SetSVKey(rec, kSVKeyXHELIO, value);
-			      
-	       value.double_val = yValHel;
-	       SetSVKey(rec, kSVKeyYHELIO, value);
-			      
-	       value.double_val = zValHel;
-	       SetSVKey(rec, kSVKeyZHELIO, value);
-			      
-	       value.double_val = vxValHel;
-	       SetSVKey(rec, kSVKeyVxHELIO, value);
-			      
-	       value.double_val = vyValHel;
-	       SetSVKey(rec, kSVKeyVyHELIO, value);
-			      
-	       value.double_val = vzValHel;
-	       SetSVKey(rec, kSVKeyVzHELIO, value);
-
-	       drms_setkey_string(rec, kSVKey_idHELIO, idHELIO);
+	       /* Add HELIO state vector keys */
+               error |= drms_setkey_double(outrec, kSVKeyXHELIO, xValHel);
+               error |= drms_setkey_double(outrec, kSVKeyYHELIO, yValHel);
+               error |= drms_setkey_double(outrec, kSVKeyZHELIO, zValHel);
+               error |= drms_setkey_double(outrec, kSVKeyVxHELIO, vxValHel);
+               error |= drms_setkey_double(outrec, kSVKeyVyHELIO, vyValHel);
+               error |= drms_setkey_double(outrec, kSVKeyVzHELIO, vzValHel);
+               error |= drms_setkey_string(outrec, kSVKey_idHELIO, idHELIO);
 	    }    
 	 }
 	 else
@@ -559,6 +721,8 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 	    error = drms_close_records(recSet, DRMS_FREE_RECORD);
 	    break;
 	 }
+
+         recSet = NULL;
 #if DEBUG
 	 /* Just to speed things up during debugging */
 	 if (throttle == 10)
@@ -569,30 +733,33 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
       } /* end while */
 
       fclose(datafp);
-   }
-   else
-   {
-      /* Couldn't open file */
-      error = 1;
-      printf("Could not open %s for reading\n", filePathHELIO);
+      datafp = NULL;
    }
 
    /* Geocentric orbit files - save these data in the real series, along with the heliocentric
     * data from sbox series. */
-   if (error == 0 && filePathGEO);
+   if (error == 0);
    {
-      datafp = fopen(filePathGEO, "r");
+      if (filePathGEO)
+      {
+         datafp = fopen(filePathGEO, "r");
+         if (datafp == NULL)
+         {
+            error = 1;
+            fprintf(stderr, "Could not open %s for reading\n", filePathGEO);
+         }
+      }
    }
 
-   if (datafp != NULL)
+   if (datafp)
    {
       char lineBuf[kSVLineMax];
       int oneMore = -1;
-      DRMS_RecordSet_t *rs = NULL;
+      DRMS_RecordSet_t *rssbox = NULL;
+      DRMS_RecordSet_t *recSet = NULL;
       char rsquery[DRMS_MAXQUERYLEN];
       int nrecs;
-      DRMS_Type_t type;
-      DRMS_Type_Value_t value;
+      int helioexist;
 
       while (!error && fgets(lineBuf, kSVLineMax, datafp) != NULL)
       {
@@ -617,95 +784,197 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
 	 ParseSVRecFields(lineBuf, &obsDate, &xValGeo, &yValGeo, &zValGeo, &vxValGeo, &vyValGeo, &vzValGeo);
 
-	 DRMS_RecordSet_t *recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &error);
-	 char *idHELIOtmp = NULL;
+         /* Find corresponding heliocentric data, if they exist */
+         helioexist = 0;
+         xValHel = D_NAN;
+         yValHel = D_NAN;
+         zValHel = D_NAN;
+         vxValHel = D_NAN;
+         vyValHel = D_NAN;
+         vzValHel = D_NAN;
+         char *idHELIOtmp = NULL;
+
+         TIME od = sscan_time(obsDate);
+         char tbuf[128];
+         sprint_time(tbuf, od, "UTC", 0);
+         snprintf(rsquery, sizeof(rsquery), "%s[%s]", sbox, tbuf);
+         FetchRecords(drmsEnv, rsquery, &rssbox, &nrecs);
+         if (rssbox && rssbox->n == 1)
+         {
+            DRMS_Record_t *sboxrec = rssbox->records[0]; /* heliocentric */
+
+            /* Get heliocentric data */
+            if (sboxrec)
+            {
+               xValHel = drms_getkey_double(sboxrec, kSVKeyXHELIO, &stat);
+               yValHel = drms_getkey_double(sboxrec, kSVKeyYHELIO, &stat);
+               zValHel = drms_getkey_double(sboxrec, kSVKeyZHELIO, &stat);
+               vxValHel = drms_getkey_double(sboxrec, kSVKeyVxHELIO, &stat);
+               vyValHel = drms_getkey_double(sboxrec, kSVKeyVyHELIO, &stat);
+               vzValHel = drms_getkey_double(sboxrec, kSVKeyVzHELIO, &stat);
+               idHELIOtmp = drms_getkey_string(sboxrec, kSVKey_idHELIO, &stat);
+            }
+
+            helioexist = 1;
+         }
+
+         if (rssbox)
+         {
+            drms_close_records(rssbox, DRMS_FREE_RECORD);
+         }
+
+         /* Before creating a new output record, check to see if data have changed. 
+          * There is GEO input, and there is HELIO input if helioexist == 1. */
+         char query[DRMS_MAXQUERYLEN];
+         snprintf(query, sizeof(query), "%s[%s]", outSeries, obsDate);
+         DRMS_RecordSet_t *rssav = drms_open_records(drmsEnv, query, &stat);
+
+         if (rssav && rssav->n > 0)
+         {
+            int heliodiff = 0;
+            int geodiff = 0;
+
+            DRMS_Record_t *savrec = rssav->records[0];
+
+            double xValHelSav = drms_getkey_double(savrec, kSVKeyXHELIO, &stat);
+            double yValHelSav = drms_getkey_double(savrec, kSVKeyYHELIO, &stat);
+            double zValHelSav = drms_getkey_double(savrec, kSVKeyZHELIO, &stat);
+            double vxValHelSav = drms_getkey_double(savrec, kSVKeyVxHELIO, &stat);
+            double vyValHelSav = drms_getkey_double(savrec, kSVKeyVyHELIO, &stat);
+            double vzValHelSav = drms_getkey_double(savrec, kSVKeyVzHELIO, &stat);
+            
+            double xValGeoSav = drms_getkey_double(savrec, kSVKeyXGEO, &stat);
+            double yValGeoSav = drms_getkey_double(savrec, kSVKeyYGEO, &stat);
+            double zValGeoSav = drms_getkey_double(savrec, kSVKeyZGEO, &stat);
+            double vxValGeoSav = drms_getkey_double(savrec, kSVKeyVxGEO, &stat);
+            double vyValGeoSav = drms_getkey_double(savrec, kSVKeyVyGEO, &stat);
+            double vzValGeoSav = drms_getkey_double(savrec, kSVKeyVzGEO, &stat);
+
+            /* Some of these HELIO and GEO data could be missing. */
+            geodiff = (IsDiff(xValGeoSav, xValGeo) || IsDiff(yValGeoSav, yValGeo) ||  
+                       IsDiff(zValGeoSav, zValGeo) || IsDiff(vxValGeoSav, vxValGeo) ||
+                       IsDiff(vyValGeoSav, vyValGeo) || IsDiff(vzValGeoSav, vzValGeo));            
+
+            if (helioexist)
+            {
+               heliodiff = (IsDiff(xValHelSav, xValHel) || IsDiff(yValHelSav, yValHel) ||  
+                            IsDiff(zValHelSav, zValHel) || IsDiff(vxValHelSav, vxValHel) ||
+                            IsDiff(vyValHelSav, vyValHel) || IsDiff(vzValHelSav, vzValHel));
+            }
+
+            if (geodiff && (!helioexist || heliodiff))
+            {
+               /* Difference in values exists */                  
+               recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
+
+               if (!helioexist)
+               {
+                  /* No input HELIO file. Need to copy old HELIO values over to new output record. 
+                   * GEO valus are set below. */
+                  DRMS_Record_t *outrec = recSet->records[0];
+                  drms_setkey_double(outrec, 
+                                     kSVKeyXHELIO, 
+                                     drms_getkey_double(savrec, kSVKeyXHELIO, &stat));
+                  drms_setkey_double(outrec, 
+                                     kSVKeyYHELIO, 
+                                     drms_getkey_double(savrec, kSVKeyYHELIO, &stat));
+                  drms_setkey_double(outrec, 
+                                     kSVKeyZHELIO, 
+                                     drms_getkey_double(savrec, kSVKeyZHELIO, &stat));
+                  drms_setkey_double(outrec, 
+                                     kSVKeyVxHELIO, 
+                                     drms_getkey_double(savrec, kSVKeyVxHELIO, &stat));
+                  drms_setkey_double(outrec, 
+                                     kSVKeyVyHELIO, 
+                                     drms_getkey_double(savrec, kSVKeyVyHELIO, &stat));
+                  drms_setkey_double(outrec, 
+                                     kSVKeyVzHELIO, 
+                                     drms_getkey_double(savrec, kSVKeyVzHELIO, &stat));
+			      
+                  char *id = drms_getkey_string(savrec, kSVKey_idHELIO, &stat);
+                  if (id)
+                  {
+                     drms_setkey_string(outrec, kSVKey_idHELIO, id);
+                     free(id);
+                  }
+               }                   
+            }
+         }
+         else
+         {
+            recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
+         }
+
+         if (rssav)
+         {
+            drms_close_records(rssav, DRMS_FREE_RECORD);
+         }
 
 	 if (recSet != NULL && error == 0)
 	 {
 	    DRMS_Record_t *outrec = recSet->records[0];
-	    DRMS_Record_t *inrec = NULL;
-	    char tbuf[128];
-			      
+
 	    /* Set primary key */
-	    value.time_val = sscan_time(obsDate);
-	    error = drms_setkey(outrec, kSVKeyPrimary, DRMS_TYPE_TIME, &value);
-	    if (error != 0)
-	    {
-	       printf("Failed to set key '%s' to record\n", kSVKeyPrimary);
-	    }
-	    
-	    /* Find corresponding heliocentric data, if it exists */
-	    TIME od = sscan_time(obsDate);
-	    sprint_time(tbuf, od, "UTC", 0);
-	    snprintf(rsquery, sizeof(rsquery), "%s[%s]", sbox, tbuf);
-	    FetchRecords(drmsEnv, rsquery, &rs, &nrecs);
-	    if (rs && rs->n == 1)
-	    {
-	       inrec = rs->records[0]; /* heliocentric */
-
-	       /* Get heliocentric data */
-	       if (inrec)
-	       {
-		  value = drms_getkey(inrec, kSVKeyXHELIO, &type, &stat);
-		  SetSVKey(outrec, kSVKeyXHELIO, value);
-
-		  value = drms_getkey(inrec, kSVKeyYHELIO, &type, &stat);
-		  SetSVKey(outrec, kSVKeyYHELIO, value);
-
-		  value = drms_getkey(inrec, kSVKeyZHELIO, &type, &stat);
-		  SetSVKey(outrec, kSVKeyZHELIO, value);
-
-		  value = drms_getkey(inrec, kSVKeyVxHELIO, &type, &stat);
-		  SetSVKey(outrec, kSVKeyVxHELIO, value);
-
-		  value = drms_getkey(inrec, kSVKeyVyHELIO, &type, &stat);
-		  SetSVKey(outrec, kSVKeyVyHELIO, value);
-	       
-		  value = drms_getkey(inrec, kSVKeyVzHELIO, &type, &stat);
-		  SetSVKey(outrec, kSVKeyVzHELIO, value);
-		  
-		  idHELIOtmp = drms_getkey_string(inrec, kSVKey_idHELIO, &stat);
-		  if (idHELIOtmp)
-		  {
-		     drms_setkey_string(outrec, kSVKey_idHELIO, idHELIOtmp);
-		     free(idHELIOtmp);
-		     idHELIOtmp = NULL;
-		  }
-	       }
-	      
-	       drms_close_records(rs, DRMS_FREE_RECORD);
-	       
-	       addedRecsHELIO++;
-	    }
+	    TIME obstime = sscan_time(obsDate);
+	    error = drms_setkey_time(outrec, kSVKeyPrimary, obstime);
 
 	    /* Add geocentric state vector keys */
-	    value.double_val = xValGeo;
-	    SetSVKey(outrec, kSVKeyXGEO, value);
-			      
-	    value.double_val = yValGeo;
-	    SetSVKey(outrec, kSVKeyYGEO, value);
-			      
-	    value.double_val = zValGeo;
-	    SetSVKey(outrec, kSVKeyZGEO, value);
-			      
-	    value.double_val = vxValGeo;
-	    SetSVKey(outrec, kSVKeyVxGEO, value);
-			      
-	    value.double_val = vyValGeo;
-	    SetSVKey(outrec, kSVKeyVyGEO, value);
-			      
-	    value.double_val = vzValGeo;
-	    SetSVKey(outrec, kSVKeyVzGEO, value);
+            error |= drms_setkey_double(outrec, kSVKeyXGEO, xValGeo);
+            error |= drms_setkey_double(outrec, kSVKeyYGEO, yValGeo);
+            error |= drms_setkey_double(outrec, kSVKeyZGEO, zValGeo);
+            error |= drms_setkey_double(outrec, kSVKeyVxGEO, vxValGeo);
+            error |= drms_setkey_double(outrec, kSVKeyVyGEO, vyValGeo);
+            error |= drms_setkey_double(outrec, kSVKeyVzGEO, vzValGeo);
+	    error |= drms_setkey_string(outrec, kSVKey_idGEO, idGEO);
 
-	    drms_setkey_string(outrec, kSVKey_idGEO, idGEO);
+            if (helioexist)
+            {
+               error |= drms_setkey_double(outrec, kSVKeyXHELIO, xValHel);
+               error |= drms_setkey_double(outrec, kSVKeyYHELIO, yValHel);
+               error |= drms_setkey_double(outrec, kSVKeyZHELIO, zValHel);
+               error |= drms_setkey_double(outrec, kSVKeyVxHELIO, vxValHel);
+               error |= drms_setkey_double(outrec, kSVKeyVyHELIO, vyValHel);
+               error |= drms_setkey_double(outrec, kSVKeyVzHELIO, vzValHel);
 
-	    error = (drms_close_records(recSet, DRMS_INSERT_RECORD) != DRMS_SUCCESS);
+               if (idHELIOtmp)
+               {
+                  error |= drms_setkey_string(outrec, kSVKey_idHELIO, idHELIOtmp);
+               }
+            }
 
-	    if (!error)
+            if (error == 0)
+            {
+               error = (drms_close_records(recSet, DRMS_INSERT_RECORD) != DRMS_SUCCESS);
+            }
+            else
+            {
+               drms_close_records(recSet, DRMS_FREE_RECORD);
+            }
+
+            recSet = NULL;
+
+            if (!error)
 	    {
 	       addedRecsGEO++;
 	    }
+            
+            if (helioexist && !error)
+            {
+               addedRecsHELIO++;
+            }
 	 }
+
+         if (recSet != NULL)
+         {
+            drms_close_records(recSet, DRMS_FREE_RECORD);
+            recSet = NULL;
+         }
+
+         if (idHELIOtmp)
+         {
+            free(idHELIOtmp);
+            idHELIOtmp = NULL;
+         }
 	 
 #if DEBUG
 	 throttle--;
@@ -715,12 +984,9 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 	 }
 #endif        
       } /* while */
-   }
-   else
-   {
-      /* Couldn't open file */
-      error = 1;
-      printf("Could not open %s for reading\n", filePathGEO);
+
+      fclose(datafp);
+      datafp = NULL;
    }
 
    if (!error)
@@ -830,6 +1096,11 @@ int DoIt(void)
 	     * seriesout.  So, open all records in seriesin, iterate through each
 	     * record and skip any records that are already in kSeriesHistory. */
 
+            /* Need this history series because not all files in seriesin will be 
+             * ingested.  If a file is an updated version of a data file,
+             * but the data don't change, then we add a record in serieshist, but
+             * not in seriesout. */
+
 	    history = 1;
 	 }
 
@@ -930,20 +1201,42 @@ int DoIt(void)
 		     continue;
 		  }
 
-		  /* record is okay to ingest - but first collect HELIO and GEO in pairs */
-		  snprintf(queryCORE, 
-			   sizeof(queryCORE), 
-			   "%s[%s=%s][%s=%s][%s=%d]",
-			   seriesin,
-			   kObsDateKey,
-			   obs,
-			   kFdsDataFormatKey,
-			   format,
-			   kFileVersionKey,
-			   filevers);
+                  /* record is okay to process (and possible ingest) - but first collect
+                   * HELIO and GEO in pairs */
+                  snprintf(queryCORE, 
+                           sizeof(queryCORE), 
+                           "%s[%s=%s][%s=%s][%s=%d]",
+                           seriesin,
+                           kObsDateKey,
+                           obs,
+                           kFdsDataFormatKey,
+                           format,
+                           kFileVersionKey,
+                           filevers);
 
 		  hcon_insert(proclist, queryCORE, queryCORE);
 	       } 
+
+	       if (obs)
+	       {
+		   free(obs);
+	       }
+
+	       if (dataprod)
+	       {
+		   free(dataprod);
+	       }
+
+	       if (prodcomp)
+	       {
+		   free(prodcomp);
+	       }
+
+	       if (format)
+	       {
+		   free(format);
+	       }
+
 	    } /* record loop */
 
 	    drms_close_records(rsInput, DRMS_FREE_RECORD);
@@ -954,8 +1247,35 @@ int DoIt(void)
 	 HIterator_t *hit = hiter_create(proclist);
 	 char *iquery = NULL;
 	   
-	 while ((iquery = (char *)hiter_getnext(hit)) != NULL)
+	 while ((iquery = (char *)hiter_getnext(hit)) != NULL && !error)
 	 {
+#if 0
+            /* If iquery starts with "###", then either the helio or geo (or both) 
+             * record does not need to be ingested - the data have already been 
+             * ingested from a file of an earlier version (but the data have not changed). */
+            if (strncmp(iquery, "###", 3) == 0)
+            {
+               /* If there is another identical query, except that it does NOT start
+                * with "###", then this means either the helio or geo data DID change 
+                * so we have to reingest the data (and it may have been ingested in
+                * this session already). */
+               if (hcon_member(proclist, iquery[3]))
+               {
+                  /* The other matching record had data that did change.  When iquery 
+                   * points to that record, data for both helio and geo will be ingested.
+                   * Ignore this query. */
+                  continue;
+               }
+               else
+               {
+                  /* There was a file with an updated version that had data that does not
+                   * differ from data that has already been ingested. But we have to 
+                   * mark in the history that these data have been processed. */
+                  oktoadd = 0;
+                  iquery = iquery[3];
+               }
+            }
+#endif
 	    snprintf(queryHELIO, 
 		     sizeof(queryHELIO), 
 		     "%s[%s=%s][%s=%s]",
@@ -1001,11 +1321,12 @@ int DoIt(void)
 		     }
 		  }
 	       }
-
-	       drms_close_records(rsHELIO, DRMS_FREE_RECORD);
 	    }
 
-	    rsGEO = drms_open_records(drms_env, queryGEO, &stat);
+            if (!error)
+            {
+               rsGEO = drms_open_records(drms_env, queryGEO, &stat);
+            }
 
 	    if (rsGEO && stat != DRMS_ERROR_UNKNOWNSERIES)
 	    {
@@ -1032,40 +1353,122 @@ int DoIt(void)
 		     }
 		  }
 	       }
-
-	       drms_close_records(rsGEO, DRMS_FREE_RECORD);
 	    }
-		  
-	    error = ExtractStateVectors(drms_env, 
-					filePathHELIO, 
-					queryHELIO,
-					filePathGEO,
-					queryGEO,
-					seriesout);
-	 }
+
+            if (!error)
+            {
+               error = ExtractStateVectors(drms_env, 
+                                           filePathHELIO, 
+                                           queryHELIO,
+                                           filePathGEO,
+                                           queryGEO,
+                                           seriesout);
+            }
+	    
+	    if (!error)
+	    {
+              /* Add a record to the history series so that this record doesn't get
+               * reingested - need to create 2 records, one for helio and one for
+               * geo */
+              if (!history)
+              {
+                 /* Create history series. */
+                 CreateHistSeries(drms_env, serieshist, &stat);
+              }
+              
+	      DRMS_RecordSet_t *rshist = drms_create_records(drms_env, 
+							     2, 
+							     serieshist, 
+							     DRMS_PERMANENT,
+							     &stat);
+	      DRMS_Record_t *rechist = NULL;
+	      DRMS_Record_t *recsv = NULL;
+	      TIME obsval = 0;
+	      char *dprodval = NULL;
+	      char *prodcompval = NULL;
+	      char *formatval = NULL;
+	      int fileversval = 0;
+
+	      if (rshist)
+	      {
+                 recsv = rsHELIO->records[0];
+                 obsval = drms_getkey_time(recsv, kObsDateKey, &stat);
+		 dprodval = drms_getkey_string(recsv, kFdsDataProductKey, &stat);
+		 prodcompval = drms_getkey_string(recsv, kFdsProductCompKey, &stat);
+		 formatval = drms_getkey_string(recsv, kFdsDataFormatKey, &stat);
+		 fileversval = drms_getkey_int(recsv, kFileVersionKey, &stat);
+
+		 rechist = rshist->records[0];
+		 drms_setkey_time(rechist, kObsDateKey, obsval);
+		 drms_setkey_string(rechist, kFdsDataProductKey, dprodval);
+		 drms_setkey_string(rechist, kFdsProductCompKey, prodcompval);
+		 drms_setkey_string(rechist, kFdsDataFormatKey, formatval);
+		 drms_setkey_int(rechist, kFileVersionKey, fileversval);
+
+		 if (dprodval)
+		 {
+		    free(dprodval);
+		 }
+
+		 if (prodcompval)
+		 {
+		    free(prodcompval);
+		 }
+
+		 if (formatval)
+		 {
+		    free(formatval);
+		 }
+
+		 recsv = rsGEO->records[0];
+		 obsval = drms_getkey_time(recsv, kObsDateKey, &stat);
+		 dprodval = drms_getkey_string(recsv, kFdsDataProductKey, &stat);
+		 prodcompval = drms_getkey_string(recsv, kFdsProductCompKey, &stat);
+		 formatval = drms_getkey_string(recsv, kFdsDataFormatKey, &stat);
+		 fileversval = drms_getkey_int(recsv, kFileVersionKey, &stat);
+
+		 rechist = rshist->records[1];
+		 drms_setkey_time(rechist, kObsDateKey, obsval);
+		 drms_setkey_string(rechist, kFdsDataProductKey, dprodval);
+		 drms_setkey_string(rechist, kFdsProductCompKey, prodcompval);
+		 drms_setkey_string(rechist, kFdsDataFormatKey, formatval);
+		 drms_setkey_int(rechist, kFileVersionKey, fileversval);
+
+		 if (dprodval)
+		 {
+		    free(dprodval);
+		 }
+
+		 if (prodcompval)
+		 {
+		    free(prodcompval);
+		 }
+
+		 if (formatval)
+		 {
+		    free(formatval);
+		 }
+
+                 drms_close_records(rshist, DRMS_INSERT_RECORD);
+	      }
+	    }
+
+	    if (rsHELIO)
+	    {
+	       drms_close_records(rsHELIO, DRMS_FREE_RECORD);
+               rsHELIO = NULL;
+	    }
+
+	    if (rsGEO)
+	    {
+	       drms_close_records(rsGEO, DRMS_FREE_RECORD);
+               rsGEO = NULL;
+	    }
+
+	 } /* iquery - core queries */
 
 	 hiter_destroy(&hit);
 	 hcon_destroy(&proclist);
-
-	 if (obs)
-	 {
-	    free(obs);
-	 }
-
-	 if (dataprod)
-	 {
-	    free(dataprod);
-	 }
-
-	 if (prodcomp)
-	 {
-	    free(prodcomp);
-	 }
-
-	 if (format)
-	 {
-	    free(format);
-	 }
       }
 	  
       if (fdsTRange)
