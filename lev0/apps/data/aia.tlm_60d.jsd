@@ -2,7 +2,7 @@ Seriesname:     aia.tlm_60d
 Author:         jim
 Owners:         production
 Unitsize:       1
-Archive:        1
+Archive:        0
 Retention:      1
 Tapegroup:      105
 Index:          filename

@@ -77,7 +77,7 @@ Keyword:A82F6,         int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", 
 Keyword:A8215_00,   string, variable, record,"DRMS_MISSING_VALUE",  %s, "none", "AIA_IMG_AEC_MODE"
 Keyword:AIAECTYP,    short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_IMG_AEC_TYPE"
 Keyword:AIASEN,        int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_AS_ENCODER"
-Keyword:AIAWVLEN,      int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_WAVELENGTH"
+Keyword:A856C,       short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_IMG_WAVELENGTH"
 Keyword:AIFRMLID,      int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_FRMLIST_ID"
 Keyword:AIFTSID,       int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_FTS_ID"
 Keyword:AIFWEN,        int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_FW_ENCODER"
