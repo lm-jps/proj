@@ -3,7 +3,7 @@ Seriesname:            aia.lev0_60d
 Author:                 "production"
 Owner:                  jim
 Unitsize:               1
-Archive:                0
+Archive:                1
 Retention:              60
 Tapegroup:              103
 PrimeKeys:              FSN
