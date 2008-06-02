@@ -4,7 +4,7 @@
 #Will read the given soc log file for an instrument and vc, e.g. 
 #soc_aia_VC01_production_2008.05.30_09:34:34.log
 #and collect some statistics.
-#
+#NOTE: this is not designed to work for all time. It is a quick hack.
 
 $YEARSCAN = "2008";	#look for this date stamp in log file
 
@@ -21,14 +21,37 @@ if($#ARGV != 0) {
 $infile = $ARGV[0];
 open(ID, $infile) || die "Can't open $infile: $!\n";
 print "Scan of: $infile\n";
+while(<ID>) {			#first get the start time
+  if(/^$YEARSCAN/) {
+    print "$_";
+    $date = substr($_, 0, 10);
+    print "First date: $date\n";
+    last;
+  }
+}
+
+$tlmfilecnt = 0; $impducnt = 0;
 while(<ID>) {
   if(/^$YEARSCAN/) {
     print "$_";
+    $newdate = substr($_, 0, 10);
+    if($date ne $newdate) {
+      print "tlm file count = $tlmfilecnt  IM_PDU count = $impducnt\n";
+      print "New Date: $newdate\n";
+      $tlmfilecnt = 0; $impducnt = 0;
+      $date = $newdate;
+    }
   }
   if(/^\*\*Processed/) {
-    print "$_";
-    while(<ID>) {
-      print "$_";
+     $tlmfilecnt++;
+#    print "$_";
+    while(<ID>) {		#this is 'compete images ' line
+#      print "$_";
+      $pos1 = index($_, "and ");
+      $pos1 = $pos1+4;
+      $vcducnt = substr($_, $pos1, ($pos2-$pos1));
+      #print "!!TEMP vcducnt = $vcducnt\n";
+      $impducnt += $vcducnt;
       last;
     }
   }
