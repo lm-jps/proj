@@ -11,7 +11,9 @@ my($kSCRIPTPATH) = "scrpath";
 my($kBINPATH) = "binpath";
 my($kPERMDATAPATH) = "permdpath";
 my($kDATAPATH) = "dpath";
-my($kSERIESNAME) = "series";
+my($kNAMESPACE) = "ns";
+my($kFDSSERIESNAME) = "fdsseries";
+my($kORBVSERIESNAME) = "orbvseries";
 my($kDBUSER) = "dbuser";
 my($kDBNAME) = "dbname";
 my($kNOTLIST) = "notify";
@@ -29,7 +31,9 @@ my($scriptPath);
 my($binPath);
 my($permdataPath);
 my($dataPath);
-my($seriesname);
+my($namespace);
+my($fdsseriesname);
+my($orbvseriesname);
 my($dbuser);
 my($dbname);
 my($notlist);
@@ -108,9 +112,17 @@ while($line = <CFGFILE>)
     {
 	$dataPath = $1;
     }
-    elsif ($line =~ /$kSERIESNAME\s*=\s*(\S+)\s*/)
+    elsif ($line =~ /$kNAMESPACE\s*=\s*(\S+)\s*/)
     {
-	$seriesname = $1;
+	$namespace = $1;
+    }
+    elsif ($line =~ /$kFDSSERIESNAME\s*=\s*(\S+)\s*/)
+    {
+	$fdsseriesname = $1;
+    }
+    elsif ($line =~ /$kORBVSERIESNAME\s*=\s*(\S+)\s*/)
+    {
+	$orbvseriesname = $1;
     }
     elsif ($line =~ /$kDBUSER\s*=\s*(\S+)\s*/)
     {
@@ -145,15 +157,17 @@ local $ENV{"PATH"} = "$scriptPath:$binPath/$jsocmach:$ENV{\"PATH\"}";
 local $ENV{"JSOC_DBUSER"} = $dbuser;
 local $ENV{"JSOC_DBNAME"} = $dbname;
 
-# print "l=$logfile, sp=$scriptPath, bp=$binPath, pdp=$permdataPath, dp=$dataPath, s=$seriesname, n=$notlist\n";
-
 # Download FDS files to $dataPath
 $cmd = "dlMOCDataFiles\.pl -c $scriptPath/mocDlFdsSpec.txt -s $permdataPath/mocDlFdsStatus.txt -r $dataPath -t 30 $force";
 
 system("$cmd 1>$logfile 2>&1");
 
-# Ingest FDS files into $seriesname
-$cmd = "fdsIngest\.pl $dataPath -s $seriesname -r";
+# Ingest FDS files into $fdsseriesname
+$cmd = "fdsIngest\.pl $dataPath -s $namespace\.$fdsseriesname -r";
+system("$cmd 1>>$logfile 2>&1");
+
+# Ingest orbit vectors into $orbvSeries
+$cmd = "extract_fds_statev ns=$namespace seriesIn=$fdsseriesname seriesOut=$orbvseriesname";
 system("$cmd 1>>$logfile 2>&1");
 
 # Notify people who care if an error has occurred

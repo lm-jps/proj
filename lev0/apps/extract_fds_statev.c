@@ -15,10 +15,10 @@
 #include "cmdparams.h"
 #include "drms_env.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define kDefaultNamespace "sdo"
-#define kDefaultSeriesIn "moc_fds"
+#define kDefaultSeriesIn "fds"
 #define kDefaultSeriesOut "fds_orbit_vectors"
 #define kSeriesHistory "fds_orbit_ingesthist"
 #define kObsDateKey "OBS_DATE"
