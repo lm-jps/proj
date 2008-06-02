@@ -57,5 +57,7 @@ while(<ID>) {
     }
   }
 }
+print "tlm file count = $tlmfilecnt  IM_PDU count = $impducnt\n";
+
 close(ID);
 
