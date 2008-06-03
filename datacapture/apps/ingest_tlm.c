@@ -949,7 +949,7 @@ void do_ingest()
     /* OLD. the .dsf file is now moved by dds_soc program to pipedir */
     /********************
     if(strstr(nameptr[j].name, ".dsf")) {
-      sprintf(cmd, "/bin/mv %s/%s %s", tlmdir, nameptr[j].name, pipedir);
+      sprintf(cmd, "/bin/mv -f %s/%s %s", tlmdir, nameptr[j].name, pipedir);
       printk("*mv dsf file to %s\n", pipedir);
       printk("%s\n", cmd);
       if(system(cmd)) {
@@ -1061,14 +1061,14 @@ void do_ingest()
       printk("Marked for archive data unit ds_index=%ld\n", *dsixpt);
     }
 
-    sprintf(cmd, "/bin/mv %s %s", name, pipedir);
+    sprintf(cmd, "/bin/mv -f %s %s", name, pipedir);
     /*StartTimer(7);*/
     printk("*mv qac file to %s\n", pipedir);
     printk("%s\n", cmd);
     if(system(cmd)) {
       printk("***Error on: %s\n", cmd);
     }
-    sprintf(cmd, "/bin/mv %s %s", tlmfile, pipedir);
+    sprintf(cmd, "/bin/mv -f %s %s", tlmfile, pipedir);
     printk("*mv tlm file to %s\n", pipedir);
     printk("%s\n", cmd);
     if(system(cmd)) {
