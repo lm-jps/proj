@@ -42,14 +42,14 @@
 #include "decode_hk.h"
 #include "load_hk_config_files.h"
 
-#define LEV0SERIESNAMEHMI "su_production.lev0_test"
-#define TLMSERIESNAMEHMI "su_production.tlm_test"
-#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
-#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
-//#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
-//#define TLMSERIESNAMEHMI "hmi.tlm_60d"
-//#define LEV0SERIESNAMEAIA "aia.lev0_60d"
-//#define TLMSERIESNAMEAIA "aia.tlm_60d"
+//#define LEV0SERIESNAMEHMI "su_production.lev0_test"
+//#define TLMSERIESNAMEHMI "su_production.tlm_test"
+//#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
+//#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
+#define TLMSERIESNAMEHMI "hmi.tlm_60d"
+#define LEV0SERIESNAMEAIA "aia.lev0_60d"
+#define TLMSERIESNAMEAIA "aia.tlm_60d"
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 512		//max # of file can handle in tlmdir
@@ -403,7 +403,10 @@ int fsn_change_rexmit()
   Img = &ImageOld;
   errmsgcnt = 0;
   fsn_prev = fsnx;
-  sprintf(rexmit_dsname, "su_production.lev0_test[%u]", fsnx);
+  if(hmiaiaflg) 
+    sprintf(rexmit_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
+  else 
+    sprintf(rexmit_dsname, "%s[%u]", LEV0SERIESNAMEHMI, fsnx);
   printk("Open prev ds: %s\n", rexmit_dsname);
   rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
   if(rstatus) {
