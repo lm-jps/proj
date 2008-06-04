@@ -309,7 +309,6 @@ void drms_sprint_rec_query(char *text, DRMS_Record_t *rec)
       pkey = external_pkeys[iprime];
       rec_key = drms_keyword_lookup (rec, pkey, 1);
       drms_keyword_snprintfval(rec_key, val, sizeof(val));
-
       strcat(text, "[");
       strcat(text, val);
       strcat(text, "]");
@@ -380,7 +379,6 @@ if (DEBUG) fprintf(stderr,"   starting DBindex\n");
   json_insert_child(dbindex, indexarray);
   json_insert_child(jroot,dbindex);
 
-if (DEBUG) fprintf(stderr,"   starting keywords\n");
   /* show all keywords */
   json_t *allkeys = json_new_string("keywords");
   json_t *keyarray = json_new_array();
@@ -389,16 +387,16 @@ if (DEBUG) fprintf(stderr,"   starting keywords\n");
     {
     json_t *keyinfo = json_new_object();
     json_t *keytype;
-if (DEBUG) fprintf(stderr,"      starting %s\n",key->info->name);
     json_insert_pair_into_object(keyinfo, "name", json_new_string(key->info->name));
     if (key->info->islink)
 	keytype = json_new_string("link");
     else
 	keytype = json_new_string(drms_type_names[key->info->type]);
     json_insert_pair_into_object(keyinfo, "type", keytype);
-if (DEBUG) fprintf(stderr,"      starting note %s\n",key->info->description);
+    notework = string_to_json(key->info->unit);
+    json_insert_pair_into_object(keyinfo, "units", json_new_string(notework));
+    free(notework);
     notework = string_to_json(key->info->description);
-if (DEBUG) fprintf(stderr,"      continuing note %s\n",notework);
     json_insert_pair_into_object(keyinfo, "note", json_new_string(notework));
     free(notework);
     json_insert_child(keyarray, keyinfo);
@@ -406,7 +404,6 @@ if (DEBUG) fprintf(stderr,"      continuing note %s\n",notework);
   json_insert_child(allkeys,keyarray);
   json_insert_child(jroot,allkeys);
   
-if (DEBUG) fprintf(stderr,"   starting segments\n");
   /* show the segments */
   json_t *allsegs = json_new_string("segments");
   json_t *segarray = json_new_array();
@@ -672,7 +669,7 @@ int DoIt(void)
     int ikey, nkeys = 0;
     int iseg, nsegs = 0;
     char count[100];
-    json_t *jroot, **keyvals = NULL, **segvals = NULL, *recinfo;
+    json_t *jroot, **keyvals = NULL, **segvals = NULL, **segdims = NULL, *recinfo;
     json_t *json_keywords = json_new_array();
     json_t *json_segments = json_new_array();
     char *json;
@@ -759,13 +756,18 @@ int DoIt(void)
 	}
       }
     free (seglist);
-    /* place to put an array of segvals per segment */
+    /* place to put an arrays of segvals and segdims per segment */
     if (nsegs)
+      {
       segvals = (json_t **)malloc(nsegs * sizeof(json_t *));
+      segdims = (json_t **)malloc(nsegs * sizeof(json_t *));
+      }
     for (iseg=0; iseg<nsegs; iseg++)
       {
       json_t *val = json_new_array();
       segvals[iseg] = val;
+      val = json_new_array();
+      segdims[iseg] = val;
       }
 
     /* loop over set of selected records */
@@ -838,11 +840,16 @@ int DoIt(void)
         {
         DRMS_Segment_t *rec_seg_iseg = drms_segment_lookup (rec, segs[iseg]); 
         char *jsonpath;
+        char *jsondims;
         char path[DRMS_MAXPATHLEN];
         json_t *thissegval = segvals[iseg]; 
+        json_t *thissegdim = segdims[iseg]; 
         json_t *obj = json_new_object();
         json_t *val;
+        int iaxis, naxis = rec_seg_iseg->info->naxis;
+        char dims[100], dimval[20];
 
+        // Get paths into segvals
         drms_record_directory (rec, path, 0);
   	strncat(path, "/", DRMS_MAXPATHLEN);
   	strncat(path, rec_seg_iseg->filename, DRMS_MAXPATHLEN);
@@ -850,6 +857,19 @@ int DoIt(void)
         json_insert_child(thissegval, json_new_string(jsonpath));
         free(jsonpath);
         online = strncmp(path, "/SUM",4) == 0;
+
+        // Get seg dimension info into segdims
+        dims[0] = '\0';
+        for (iaxis=0; iaxis<naxis; iaxis++)
+          {
+          if (iaxis)
+            strcat(dims, "x");
+          sprintf(dimval,"%d",rec_seg_iseg->axis[iaxis]);
+          strcat(dims, dimval);
+          }
+        jsondims = string_to_json(dims);
+        json_insert_child(thissegdim, json_new_string(jsondims));
+        free(jsondims);
         }
 
       /* finish record info for this record */
@@ -880,6 +900,7 @@ int DoIt(void)
         json_t *segobj = json_new_object();
         json_insert_pair_into_object(segobj, "name", segname);
         json_insert_pair_into_object(segobj, "values", segvals[iseg]);
+        json_insert_pair_into_object(segobj, "dims", segdims[iseg]);
         json_insert_child(json_segments, segobj);
         }
       json_insert_pair_into_object(jroot, "segments", json_segments);
