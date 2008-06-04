@@ -843,6 +843,7 @@ BYPASS:
  * The sum_main table is updated for its safe_tape info from the .parc.
  * A .parc file looks like:
  * dcs0.jsoc:/dds/pipe2soc/aia> t AIA_2007_131_11_56.parc 
+ * #owning_series_name                         tape_id  fn  date
  * VC01_2007_131_11_51_39_0123456789A_FFFFF_00 000000S1 666 2007-04-12 17:15:45
  * VC04_2007_131_11_52_09_0123456789A_FFFFF_00 000000S1 666 2007-04-12 17:15:45
  *
@@ -892,9 +893,12 @@ void do_pipe2soc() {
       fclose(fp);
       if(complete) {
         sprintf(cmd, "/bin/rm -f %s", fname);
-        printk("%s\n", cmd);
-        system(cmd);
       }
+      else {
+        sprintf(cmd, "/bin/mv -f %s %s/err", fname, frompipedir);
+      }
+      printk("%s\n", cmd);
+      system(cmd);
     }
   }
   closedir(dfd);
