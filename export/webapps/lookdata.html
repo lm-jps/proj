@@ -46,11 +46,23 @@ var nsegsselected = 0;
 var RecordCount = 0;
 var askedCount = 0;
 var KeyValsFetched = 0;
+var ExportRecordSetOK = 0;
+var ExportProtocolOK = 0;
+var ExportMethodOK = 0;
+var ExportUserOK = 0;
+var ExportNotifyOK = 0;
+var ExportReadyOK = 0;
 
 function InitPage()
   {
   $("SeriesFilter").value = "";
   CleanSeriesSelect();
+  ExportUserOK = 0;
+  ExportNotifyOK = 0;
+  $("ExportRequestor").value = "";
+  $("ExportNotify").value = "";
+  $("ExportNotifyConf").value = "";
+  $("RequestID").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   }
 
 function CleanSeriesSelect()
@@ -65,7 +77,17 @@ function CleanSeriesSelect()
 function CleanSeriesInfo()
   {
   SeriesName = "";
+  ExportReadyOK = 0;
+  ExportProtocolOK = 0;
+  ExportRecordSetOK = 0;
+  ExportMethodOK = 0;
   $("RecordSet").value = "";
+  $("ExportRecordSet").innerHTML = "";
+  $("ExportProtocol").value = "as-is";
+  $("ExportMethod").value = "url_quick";
+  $("ExportButton").value = "Submit Export Request";
+  $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
+  $("ExportButton").style.backgroundColor = "#D8D8D8";
   $("Series_Info_Place").innerHTML = "";
   $("Series_Name_Place").innerHTML = "";
   $("FirstLastPlace").innerHTML = "";
@@ -203,12 +225,15 @@ function PickSeries()
 	   insertOption("KeysSelect","**ALL**");
 	   insertOption("KeysSelect","*logdir*");
 	   insertOption("KeysSelect","*recnum*");
-	   keywords = "<table BORDER=1><TR><TD>keyword</TD><TD>type</TD><TD>note</TD>"; 
+	   keywords = "<table BORDER=1><TR><TD>keyword</TD><TD>type</TD><TD>unit</TD><TD>note</TD>"; 
 	   for (i=0; i<n; i++)
 	      {
 	      insertOption("KeysSelect",data.keywords[i].name);
-	      keywords = keywords +
-		"<TR><TD>" + data.keywords[i].name + "</TD><TD>" + data.keywords[i].type + "</TD><TD>" + data.keywords[i].note + "&nbsp;</TD>";
+	      keywords = keywords + "<TR><TD>" +
+		data.keywords[i].name + "</TD><TD>" +
+		data.keywords[i].type + "</TD><TD>" +
+		data.keywords[i].units + "&nbsp;</TD><TD>" +
+		data.keywords[i].note + "&nbsp;</TD>";
 	      }
 	   keywords = keywords + "</table><P>";
 	   }
@@ -284,6 +309,9 @@ function GetRSCount()
 	RecordCount = data.count;
 	$("RSCount_Place").innerHTML = data.count;
 	}
+      $("ExportRecordSet").innerHTML = $("RecordSet").value;
+      ExportReadyOK = 0;
+      ExportRecordSetOK = 1;
       },
     onFailure: function()
       {
@@ -463,7 +491,10 @@ function GetKeyValues()
 	for (ikey=0; ikey < nkeys; ++ikey)
            valuetable = valuetable + "<TD>" + data.keywords[ikey].name + "</TD>";
 	for (iseg=0; iseg < nsegs; ++iseg)
+           {
            valuetable = valuetable + "<TD>segment: " + data.segments[iseg].name + "</TD>";
+           valuetable = valuetable + "<TD>seg_dims: " + data.segments[iseg].name + "</TD>";
+           }
 	valuetable = valuetable + "</TR>";
 
 	for (irec=0; irec < nrecs; irec++)
@@ -486,6 +517,7 @@ function GetKeyValues()
 	   }
 	  for (iseg=0; iseg<nsegs; iseg++)
 	   {
+	   thissegdims = data.segments[iseg].dims[irec];
 	   thissegdata = data.segments[iseg].values[irec];
            if (wantrecinfo && data.recinfo[irec].online)
 	      {
@@ -494,6 +526,7 @@ function GetKeyValues()
 	      }
         $("DisplayPlace").innerHTML = "seg " + iseg + thissegdata + "done";
            valuetable = valuetable + "<TD>" + thissegdata + "</TD>";
+           valuetable = valuetable + "<TD>" + thissegdims + "</TD>";
 	   }
 	  valuetable = valuetable + "</TR>";
 	  }
@@ -503,6 +536,319 @@ function GetKeyValues()
       },
     onFailure: function()
       {
+      alert('Something went wrong...');
+      }
+    });
+  }
+
+// Section 7. - Export request
+
+function ExportNop()
+  {
+  }
+
+function SetExportMethod()
+  {
+  $("ExportMethod").value = $("ExportMethod").value.toLowerCase();
+  if ($("ExportMethod").value == "url" || $("ExportMethod").value == "url_quick")
+    ExportMethodOK = 1;
+  else
+    {
+    alert("Please set Method to url or url_quick");
+    ExportMethodOK = 0;
+    }
+  }
+
+function SetExportProtocol()
+  {
+  var tmp = $("ExportProtocol").value.toUpperCase();
+  if ($("ExportProtocol").value == "as-is" || tmp == "FITS")
+    {
+    if (tmp == "FITS")
+      {
+      $("ExportProtocol").value = "FITS";
+      ExportProtocolOK = 2;
+      }
+    else
+      ExportProtocolOK = 1;
+    }
+  else
+    {
+    ExportProtocolOK = 0;
+    alert('Export Protocol - must be "as-is" or "FITS"'); 
+    $("ExportProtocol").value = "";
+    }
+  }
+
+function SetExportUser()
+  {
+  if ($("ExportRequestor").value.length != 0)
+    ExportUserOK = 1;
+  else
+    {
+    alert("Please set non-empty name for Requestor");
+    ExportUserOK = 0;
+    }
+  }
+
+function SetExportNotify()
+  {
+  var tmp1 = $("ExportNotify").value.toUpperCase();
+  var tmp2 = $("ExportNotifyConf").value.toUpperCase();
+  if (tmp1.length == 0)
+    {
+    ExportNotifyOK = 0;
+    alert("Please enter e-mail address in Notify and Confirm fields.");
+    return;
+    }
+  if ( tmp1 == tmp2 )
+    {
+    if ( tmp1 ==  "SOLARMAIL" )
+      ExportNotifyOK = 2;
+    else if ( tmp1 == "NONE" || tmp1 == "NO")
+      ExportNotifyOK = 3;
+    else
+      ExportNotifyOK = 1;
+    }
+  else
+    {
+    alert("Please enter same e-mail address in both places.");
+    ExportNotifyOK = 0;
+    }
+  }
+
+// id="ExportButton" type="button" value="Submit Export Request" style="background-color:#D8D8D8" onClick="GetExport();" >
+
+function GetExport()
+  {
+  if (ExportReadyOK == 3)
+    {
+    alert("Processing request, please wait...");
+    return;
+    }
+  if (ExportRecordSetOK == 0)
+    {
+    $("ExportButtonMsg").innerHTML = "Retry after step 3.";
+    alert("RecordSet not verified, go to Step 3 then retry export request.");
+    return;
+    }
+  SetExportMethod();
+  if (ExportMethodOK == 0)
+    {
+    $("ExportButtonMsg").innerHTML = "Retry after entering export method";
+    alert("Method not given, Enter export method then retry export request.");
+    return;
+    }
+  SetExportProtocol();
+  if (ExportProtocolOK == 0)
+    {
+    $("ExportButtonMsg").innerHTML = "Retry after entering export protocol";
+    alert("Protocol not given, Enter export protocol then retry export request.");
+    return;
+    }
+  if ($("ExportProtocol").value == "FITS" || $("ExportProtocol").value == "as-is")
+    {
+    }
+  else
+    {
+    SetExportUser();
+    if (ExportUserOK == 0)
+      {
+      $("ExportButtonMsg").innerHTML = "Retry after entering your identification in Requestor field";
+      alert("Requestor not given, Enter name you will use in Requestor field then retry export request.");
+      return;
+      }
+    SetExportNotify();
+    if (ExportNotifyOK == 0)
+      {
+      $("ExportButtonMsg").innerHTML = "Retry after entering your e-mail address in Notify field";
+      alert("Notify email not given or confirmed, Enter 'solarmail' or 'no' or email address then retry export request.");
+      return;
+      }
+    }
+  if (ExportReadyOK == 0)
+    {
+    ExportReadyOK = 3;
+    $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
+    $("ExportButton").value = "Processing ...";
+    $("ExportButton").style.backgroundColor = "#FFD8D8";
+    var ExportRecordSetTmp = $("ExportRecordSet").innerHTML;
+    var exportparameters = new Hash( {"op" : "exp_request",
+                 		     "ds" : ExportRecordSetTmp, 
+                 		     "requestor" : $("ExportRequestor").value,
+                 		     "notify" : $("ExportNotify").value,
+                 		     "method" : $("ExportMethod").value,
+			 	     "format" : "json",
+                 		     "protocol" : $("ExportProtocol").value });
+    }
+  else if (ExportReadyOK == 1)
+    {
+    var requestidtmp = $("RequestID").innerHTML;
+    var exportparameters = new Hash( {"op" : "exp_status","requestid":requestidtmp});
+    }
+  else // ExportReadyOK == 2
+    {
+    $("ExportRecordSet").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+    ExportRecordSetOK = 0;
+    alert("Export Request Complete, Please change RecordSet to make another request");
+    return;
+    }
+
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch.csh',
+    {
+    method: 'get',
+    parameters: exportparameters.toObject(),
+
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no response text";
+      var data = response.evalJSON();
+      if (data.status == 4)
+        {
+        alert("Requested RecordSet not found or specification error, status=4, error=" + data.error);
+        ExportReadyOK = 0;
+        $("ExportButton").value = "Bad Recordset";
+        $("ExportButtonMsg").innerHTML = data.error;
+        $("RequestID").innerHTML = "";
+        $("ExportStatus").innerHTML = "RecordSet not found";
+        $("ExportLocation").innerHTML = "";
+        }
+      else if (data.status == 3)
+        {
+        alert("Requested RecordSet is too large for chosen export method.  Please contact the JSOC for help.");
+        $("ExportButtonMsg").innerHTML = "Export Too Large";
+        ExportReadyOK = 0;
+        $("ExportButton").value = "FAILURE ...";
+        $("ExportButton").style.backgroundColor = "#D8D8D8";
+        $("RequestID").innerHTML = data.requestid;
+        $("ExportStatus").innerHTML = "Needs Intervention, size=" + data.size + ", contact: " + data.contact;
+        $("ExportLocation").innerHTML = "";
+        }
+      else if (data.status == 1 || data.status == 2)
+	{
+        if (data.status == 1)
+          $("StatusButtonMsg").innerHTML = "Export request is being processed";
+        else  // status==2
+          $("StatusButtonMsg").innerHTML = "Export request waiting for processing";
+        ExportReadyOK = 1;
+        $("ExportButton").value = "Request Export Status";
+        $("ExportButton").style.backgroundColor = "#D8D8D8";
+        $("ExportStatus").innerHTML = "Processing, size=" + data.size + ", estimate " + data.wait + " seconds remaining";
+        $("RequestID").innerHTML = data.requestid;
+        $("StatusRequestID").value = data.requestid;
+        $("ExportLocation").innerHTML = "";
+        }
+      else // status == 0 implies url_quick format and all online as-is
+        {
+        var valuetable = "";
+        var count = data.count;
+        $("ExportButtonMsg").innerHTML = "Fetch your data at URLs below before starting next request";
+        ExportReadyOK = 2;
+        $("ExportButton").value = "Submit Export Request";
+        $("ExportButton").style.backgroundColor = "#D8D8D8";
+        $("RequestID").innerHTML = data.requestid;
+        $("ExportStatus").innerHTML = "Data Ready, size=" + data.size;
+      
+        valuetable = "<TABLE BORDER=1>"
+        valuetable = valuetable + "<TR><TD>File</TD><TD>Record</TD><TD>Filename</TD></TR>"
+        for (ifile=0; ifile < count; ifile++)
+          {
+          valuetable = valuetable + "<TR>";
+          valuetable = valuetable +  "<TD>" + (ifile + 1) + "</TD>";
+          valuetable = valuetable +  "<TD>" + data.data[ifile].record + "</TD>";
+
+          thisfile = data.data[ifile].filename;
+          tmp = "<A HREF=http://jsoc.stanford.edu" + thisfile + ">" + thisfile + "</A>";
+          valuetable = valuetable +  "<TD>" + tmp + "</TD>";
+	  valuetable = valuetable + "</TR>";
+	  }
+	valuetable = valuetable + "</TABLE>";
+        $("ExportLocation").innerHTML =  valuetable + "<BR>";
+        }
+      },
+    onFailure: function()
+      {
+      $("ExportButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
+      ExportReadyOK = 0;
+      $("ExportButton").value = "FAILURE ...";
+      $("ExportButton").style.backgroundColor = "#FFB0B0";
+      alert('Something went wrong...');
+      }
+    });
+  }
+
+function ClearStatus()
+  {
+  $("StatusButton").style.backgroundColor = "#D8D8D8";
+  $("StatusStatus").innerHTML = "";
+  $("StatusButtonMsg").innerHTML = "Waiting new status request...";
+  $("StatusButton").value = "Submit Status Request";
+  $("StatusRequestID").value = "";
+  }
+
+function GetStatus()
+  {
+  if ($("StatusRequestID").value.length == 0)
+    {
+    alert("Enter Status Update RequestID");
+    return;
+    }
+  $("StatusButton").style.backgroundColor = "#FFD8D8";
+  $("StatusStatus").innerHTML = "";
+  $("StatusButtonMsg").innerHTML = "Processing status request ...";
+  $("StatusButton").value = "Processing ...";
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch.csh',
+    {
+    method: 'get',
+    parameters: {"op" : "exp_status", "requestid" : $("StatusRequestID").value }, 
+
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no response text";
+      var data = response.evalJSON();
+      if (data.status == 4)
+        {
+        alert("Requested RecordSet not found or specification error, status=4, error=" + data.error);
+        StatusReadyOK = 0;
+        $("StatusButton").value = "Bad Recordset";
+        $("StatusButtonMsg").innerHTML = data.error + ", processing perhaps not started yet or bad RequestID";
+        }
+      else if (data.status == 3)
+        {
+        alert("Requested RecordSet is too large for chosen export method.  Please contact the JSOC for help.");
+        $("StatusButtonMsg").innerHTML = "Export Too Large";
+        $("StatusButton").value = "FAILURE ...";
+        $("StatusButton").style.backgroundColor = "#D8D8D8";
+        $("StatusStatus").innerHTML = "Needs Intervention, size=" + data.size + ", contact: " + data.contact;
+        $("RequestID").innerHTML = data.requestid;
+        }
+      else if (data.status == 1 || data.status == 2)
+	{
+        if (data.status == 1)
+          $("StatusButtonMsg").innerHTML = "Export request is being processed";
+        else  // status==2
+          $("StatusButtonMsg").innerHTML = "Export request waiting for processing";
+        $("StatusButton").value = "Submit Status Request";
+        $("StatusButton").style.backgroundColor = "#D8D8D8";
+        $("StatusStatus").innerHTML = "Processing, size=" + data.size + ", estimate " + data.wait + " seconds remaining";
+        $("RequestID").innerHTML = data.requestid;
+        }
+      else // status == 0
+        {
+        $("StatusButtonMsg").innerHTML = "Please only click once for status request.";
+        $("StatusButton").value = "Submit Status Request";
+        $("StatusButton").style.backgroundColor = "#D8D8D8";
+        $("StatusStatus").innerHTML = "Data Ready, size=" + data.size;
+        $("RequestID").innerHTML = data.requestid;
+        var StatusLoc = "http://jsoc.stanford.edu/" + data.dir;
+        $("StatusLocation").innerHTML = "<A HREF='" + StatusLoc + "'>" + StatusLoc + "</A>";
+        }
+      },
+    onFailure: function()
+      {
+      $("StatusButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
+      $("StatusButton").value = "FAILURE ...";
+      $("StatusButton").style.backgroundColor = "#FFB0B0";
       alert('Something went wrong...');
       }
     });
@@ -524,9 +870,9 @@ function GetKeyValues()
 <input type="button" value="reset page" onClick="InitPage();" >
 <br clear=all>
 <HR>
-</DIV>
+</DIV> <!-- end DIV header -->
 
-<div id="SeriesDiv">
+<DIV id="SeriesDiv">
 <TABLE style="width:800">
 <TR>
 <TD  style="width:20%;vertical-align:top;height:150pt">
@@ -562,34 +908,34 @@ Current Series is:
 <BR>
 </TD>
 </TR>
-</div> <!-- /div SeriesDiv -->
-<div id="MySeriesDiv" >
+</DIV> <!-- /DIV SeriesDiv -->
+
+<DIV id="MySeriesDiv" >
 <TR>
 <TD colspan=2 width=40%>
 <H3>3. Select Records and Get Record Count</H3>
 Enter RecordSet Specification.
 This request may take a while if the recordset is large<BR>
-Enter RecordSet Spec here<BR>
+Enter RecordSet Spec here
+<P>
 <input id="RecordSet" type="text" value="" onChange="GetRSCount();" > 
-<BR>
+<P>
 <input type="button" value="GetRecordCount" onClick="GetRSCount();" >
-Record Count:
+Record Count:&nbsp;&nbsp;
 <span id="RSCount_Place" style="width:10em;background-color:#FFF8DC"></span>
 </TD>
 <TD rowspan=2 style="width:60%;vertical-align:top;height:300">
 <H3>List of All Keywords and Segments</H3>
-<div id="SeriesInfoDiv" style="border:solid;border-width:thin;height:290;overflow:scroll">
+<DIV id="SeriesInfoDiv" style="border:solid;border-width:thin;height:290;overflow:scroll">
 <span id="SSPlace" style="background-color:#FFF8DC;"></span>
-</div> <!-- /div SeriesInfoDiv -->
+</DIV> <!-- /DIV SeriesInfoDiv -->
 </TD>
 </TR>
-</div> <!-- id="MySeriesDiv" -->
 <TR>
 <TD width="20%">
 <H3>4. Select Keywords</H3>
 Select Keywords for Detailed Lists
 <P>
-<input type="button" value="Select" onClick="PickKeys();" >
 <form id="KeysSelectForm">
 <select id="KeysSelect" size=10 multiple=true onChange="PickKeys();" > </select>
 </form>
@@ -597,16 +943,16 @@ Select Keywords for Detailed Lists
 <H3>5. Select Segments</H3>
 Select Segments for Detailed Lists
 <P>
-<input type="button" value="Select" onClick="PickSegs();" >
 <form id="SegsSelectForm">
 <select id="SegsSelect" size=10 multiple=true onChange="PickSegs();"> </select>
 </form>
 </TD>
 </TR>
 </TABLE>
+</DIV> <!-- id="MySeriesDiv" -->
 <HR>
 
-<div id="FullInfoDiv">
+<DIV id="FullInfoDiv">
 <H3>6. Get Keyword and Segment Values Here</H3>
 RecordSet Query:&nbsp;
 <span id="RecSetPlace" style="background-color:#FFF8DC;"></span>
@@ -621,14 +967,82 @@ Segments to Fetch:&nbsp;
 Check to Get Record Query (online status and links if a segment selected)
 <BR>
 <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#D8D8D8" onClick="GetKeyValues();" >
-</div> <!-- /div FullInfoDiv -->
+</DIV> <!-- /DIV FullInfoDiv -->
 <P>
-<div id="FullDisplayInfoDiv" style="border:solid;border-width:thin;height:190;width:800;overflow:scroll">
+<DIV id="FullDisplayInfoDiv" style="border:solid;border-width:thin;height:190;width:800;overflow:scroll">
 <span id="DisplayPlace" style="background-color:#FFF8DC;"></span>
-</div> <!-- /div SeriesInfoDiv -->
-Next Step Under Constructrion
+</DIV> <!-- /DIV FullDisplayInfoDiv -->
+<HR>
 
-</div> <!-- /div FullDisplayInfoDiv -->
+<DIV id="ExportRequestDiv">
+<H3>7. Export Desired Data</H3>
+This section can be used to request an export of the RecordSet identified in section 3 above.
+If the data is not online the request may take minutes to hours.  If you enter an email address you will be notified
+when the data is ready.  After the request is submitted, you will recieve ON THIS PAGE a "Request_ID" that will be used
+to access the data when it is ready.  If you do not provide an email address you must save the Request_ID in order to
+access the data.
+<P>
+<TABLE>
+<TR><TD style="width:10em" >RecordSet</TD><TD>
+<span id="ExportRecordSet" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
+</TD><TD>Record set selected in Step 3 above.</TR>
+<TR><TD>Protocol</TD><TD>
+<input id="ExportProtocol" type="text" name="ExportProtocol" value="as-is" onChange="ExportNop();" >
+</TD><TD>Choose protocol, "FITS" or "as-is".</TR>
+<TR><TD>Method</TD><TD>
+<input id="ExportMethod" type="text" name="ExportMethod" value="url_quick" onChange="ExportNop();" >
+</TD><TD>Choose method, url or url_quick for now.</TR>
+<TR><TD>Requestor</TD><TD>
+<input id="ExportRequestor" type="text" name="ExportRequestor" value="" onChange="ExportNop();" >
+</TD><TD>Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</TR>
+<TR><TD>Notify</TD><TD>
+<input id="ExportNotify" type="text" name="ExportNotify" value="" onChange="ExportNop();" >
+</TD><TD>Provide your email address for notification.  You may enter "Solarmail" if your address is up to date
+or "none" or "no" if you do not want/need to be notified upon export process completion. May be omitted for online delivery.</TD></TR>
+<TR><TD>Confirm Email</TD><TD>
+<input id="ExportNotifyConf" type="text" name="ExportNotifyConf" value="" onChange="ExportNop();" >
+</TD><TD>Please confirm e-mail address.</TD></TR>
+<TR><TD colspan=2 align="center" >
+<input id="ExportButton" type="button" value="Submit Export Request" style="background-color:#D8D8D8" onClick="GetExport();" > 
+</TD><TD><span id="ExportButtonMsg">Please only click once for export request.</span ></TD></TR>
+<TR><TD>RequestID</TD><TD>
+<span id="RequestID" style="background-color:#FFF8DC;">&nbsp;</span>
+</TD><TD>This is the ID tag for your export request.</TR>
+<TR><TD>Status</TD><TD colspan=2>
+<span id="ExportStatus" style="background-color:#FFF8DC;"> </span >
+</TD></TR>
+<TR><TD>Data Location</TD><TD colspan=2>
+<span id="ExportLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
+</TD></TR>
+</TABLE>
+<HR>
+<H3>8. Check Status of Prior Export Request</H3>
+NOTE - The code to actually do the export is not working yet...<P>
+<TABLE>
+<TR><TD style="width:10em" >RequestID</TD><TD>
+<input type="text" id="StatusRequestID" name="StatusRequestID" style="background-color:#FFF8DC;" value="&nbsp;" onChange="GetStatus();">
+</TD><TD>This is the ID tag for your export request.</TR>
+
+<TR><TD colspan=2 align="center" >
+<input id="StatusButton" type="button" value="Submit Status Request" style="background-color:#D8D8D8" onClick="GetStatus();" > 
+</TD><TD><span id="StatusButtonMsg">Please only click once for status request.</span ></TD></TR>
+
+<TR><TD colspan=2 align="center" >
+<input id="ClearButton" type="button" value="Clear Request" style="background-color:#D8D8D8" onClick="ClearStatus();" > 
+</TD><TD>Clear old status RequestID</TD></TR>
+
+<TR><TD>Status</TD><TD colspan=2>
+<span id="StatusStatus" style="background-color:#FFF8DC;"> </span >
+</TD></TR>
+
+<TR><TD>Data Location</TD><TD colspan=2>
+<span id="StatusLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
+</TD></TR>
+</TABLE>
+<P>
+
+Next Step Under Constructrion
+</DIV> <!-- id="ExportRequestDiv" -->
 
 <H3> done </H3>
 <DIV id="footer" style="vertical-align:bottom;text-align:center">
