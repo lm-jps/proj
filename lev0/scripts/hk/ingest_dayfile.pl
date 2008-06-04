@@ -61,7 +61,7 @@
   # set path to dayfiles using source -these vary based on where dayfiles are placed
  if ($source eq "hsb")
  {
-   #for testing #
+   #for testing#
    #$ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/home1/carl/cvs/JSOC/proj/lev0/apps/data/hk_hsb_dayfile";
    #$ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/surge/production/lev0/hk_hsb_dayfile";
    #for production#
@@ -69,14 +69,14 @@
  }
  elsif ($source eq "moc")
  {
-   #for testing #
+   #for testing#
    #$ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/home/carl/cvs/JSOC/proj/lev0/scripts/hk/SDO";
    #for production#
    $ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_moc_dayfile";
  }
  elsif ($source eq "egsefm")
  {
-   #for testing #
+   #for testing#
    #$ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/tmp20/production/hmi_hk";
    #for production#
    $ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_egsefm_dayfile";
@@ -596,7 +596,12 @@ sub ingest_day_files()
       $day=substr($file,6,2);
       $skdate=sprintf("%s.%s.%s",$year,$month,$day); 
     }
-    $arg2="DATE=$skdate";
+
+    #set DATEx to format like this:2008.05.29_00:00:00.000_TAI
+    # convert old string format to time variable for new DATE variable type time
+    $time_skdate=sprintf("%10.10s_00:00:00_TAI",$skdate);
+
+    $arg2="DATE=$time_skdate";
 
     #get apid
     if ($source eq "hsb")
