@@ -50,6 +50,15 @@
 #define TLMSERIESNAMEHMI "hmi.tlm_60d"
 #define LEV0SERIESNAMEAIA "aia.lev0_60d"
 #define TLMSERIESNAMEAIA "aia.tlm_60d"
+//When change to these data series below to save real data.
+//#define TLMSERIESNAMEHMI "hmi.tlm"
+//#define LEV0SERIESNAMEAIA "aia.lev0"
+//#define TLMSERIESNAMEAIA "aia.tlm"
+//#define LEV0SERIESNAMEHMI "hmi.lev0"
+//Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
+//setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
+//setenv HK_DF_HSB_DIRECTORY               /tmp21/production/lev0/hk_hsb_dayfile
+
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 512		//max # of file can handle in tlmdir
