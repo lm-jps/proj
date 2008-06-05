@@ -245,7 +245,7 @@ int DoIt(void)
 		t_obs = drms_getkey_time(inRec, "T_OBS", &status);
 			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_OBS status=%d\n",status);
 		date__obs = t_obs - exptime/2.0;
-		mjd = date__obs + MJD_epoch;
+		mjd = date__obs - MJD_epoch; /* sign error corrected by tplarson 2008.05.29 */
 		mjd_day = floor(mjd / 86400.0);
 		mjd_time = mjd - 86400.0 * mjd_day;
 		now = (double)time(NULL);
