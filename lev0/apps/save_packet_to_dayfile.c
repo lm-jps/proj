@@ -737,6 +737,7 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
       }
     }
   }
+  closedir(dir_p);
   // Check value returned here
   return HK_DF_DAYFILE_LOAD_SUCCESS;
 }
