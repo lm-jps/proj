@@ -641,6 +641,7 @@ int check_dfd_file( unsigned short *word_ptr, int apid)
       }
     }
   }
+  closedir(dir_p);
   return (HK_DF_CHECK_NOT_FOUND);
 }
 
