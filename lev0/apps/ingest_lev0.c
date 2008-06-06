@@ -61,7 +61,7 @@
 
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
-#define MAXFILES 512		//max # of file can handle in tlmdir
+#define MAXFILES 8192		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
 #define IMAGE_NUM_COMMIT 12	//number of complete images until commit
 #define TESTAPPID 0x199		//appid of test pattern packet
@@ -125,7 +125,8 @@ int total_tlm_vcdu;
 int total_missing_vcdu;
 int errmsgcnt, fileimgcnt;
 int imagecnt = 0;		// num of images since last commit 
-int tmpcnt = 0;			//!!TEMP
+int sigalrmflg = 0;             // set on signal so prog will know 
+int sigtermflg = 0;             // set on signal so prog will know 
 int ALRMSEC = 70;               // seconds for alarm signal 
 char timetag[32];
 char pchan[8];			// primary channel to listen to e.g. VC02 
@@ -311,26 +312,18 @@ void abortit(int stat)
 // Called 60 secs after the last .tlm file was seen.
 // Will close any opened image. NOTE: a reprocessed image cannot
 // be active. It is always closed at the end of get_tlm().
+// Can't do the code here because of re-entrancy problem.
 void alrm_sig(int sig)
 {
   signal(SIGALRM, alrm_sig);
-  if(Image.initialized) {
-    if(rs) {		//make sure have a created record
-      close_image(rs, segment, segArray, &Image, fsn_prev);
-      printk("*Closed image on timeout FSN=%u\n", fsn_prev);
-    }
-  }
-  else {
-    printk("*No image to close on timeout\n");
-  }
-  printk("alrm_sig: drms_server_end_transaction()\n");
-  drms_server_end_transaction(drms_env, 0 , 0); //commit
-  printk("alrm_sig: drms_server_begin_transaction()\n");
-  drms_server_begin_transaction(drms_env); //start another cycle
-  fsn_prev = 0;	//make sure don't try to flush this image
-  imagecnt = 0;	//and start a new transaction interval
+  sigalrmflg = 1;		//tell main loop of signal
 }
 
+void sighandler(int sig)
+{
+  sigtermflg = 1;		//tell main loop
+  return;
+}
 
 
 int compare_names(const void *a, const void *b)
@@ -831,6 +824,7 @@ void do_ingest()
       nameptr[i++].name = strdup(dp->d_name);
       if(i >= MAXFILES) {
         printk("***Fatal error. Too many (%d) files in %s\n", MAXFILES, tlmdir);
+        printf("***Fatal error. Too many (%d) files in %s\n", MAXFILES, tlmdir);
         abortit(3);
       }
     }
@@ -975,6 +969,10 @@ void setup()
   char envfile[100], s1[256],s2[256],s3[256], line[256];
 
   signal(SIGALRM, alrm_sig);
+  if (signal(SIGINT, SIG_IGN) != SIG_IGN)
+    signal(SIGINT, sighandler);
+  if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
+    signal(SIGTERM, sighandler);
 
   tval = time(NULL);
   t_ptr = localtime(&tval);
@@ -1072,6 +1070,26 @@ int DoIt(void)
   setup();
   while(wflg) {
     do_ingest();                // loop to get files from the input dir 
+    if(sigalrmflg) {		// process an alarm timout for no data in
+      if(Image.initialized) {
+        if(rs) {		//make sure have a created record
+          close_image(rs, segment, segArray, &Image, fsn_prev);
+          printk("*Closed image on timeout FSN=%u\n", fsn_prev);
+        }
+      }
+      else {
+        printk("*No image to close on timeout\n");
+      }
+      printk("alrm_sig: drms_server_end_transaction()\n");
+      drms_server_end_transaction(drms_env, 0 , 0); //commit
+      printk("alrm_sig: drms_server_begin_transaction()\n");
+      drms_server_begin_transaction(drms_env); //start another cycle
+      fsn_prev = 0;	//make sure don't try to flush this image
+      imagecnt = 0;	//and start a new transaction interval
+      sigalrmflg = 0;
+    }
+    //detect if exit. NOTE: do_ingest() can take long time if lots of files
+    if(sigtermflg) abortit(2);
     sleep(10);
     //wflg = 0;			// !!!TEMP 
   }
