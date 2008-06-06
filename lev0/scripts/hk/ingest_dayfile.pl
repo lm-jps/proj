@@ -3,6 +3,7 @@
 # Name:        ingest_dayfile.pl - Ingest hsb or moc or egsefm dayfiles      #
 # Description: Used to ingest high spreed bus formatted dayfiles to DRMS     #
 #              or moc dayfiles from moc server or egsefm dayfiles from LMSAL.#
+#              Will ingest xml from moc. Currently no xml for hsb and egsefm.#
 #              The script can gather a list of dayfiles based on arguments   #
 #              used for script and then write those file to DRMS. There are  #
 #              a few different ways to gather up files based on apid and     #
@@ -14,10 +15,12 @@
 # Limitation:  Setup required environment variables at top of file based on  #
 #              where running. Script works using hsb,moc  dayfile file       #
 #              format. Here are example input day file based on source of    #
-#              file:                                                         #
+#              dayfiles:                                                     #
 #                   hsb_0445_2008_04_15_10_41_00.hkt  <hsb>                  #
 #                   0022_2008_050_02.hkt              <moc>                  #
 #                   200805030_0x01d.hkt               <egsefm>               #
+#             Here is formt of moc xml files:                                #
+#                   0022_2008_050_02.hkt.xml          <moc>                  #
 # Author:      Carl                                                          #
 # Date:        Move from EGSE to JSOC software environment on April 15, 2008 #
 ##############################################################################
@@ -441,7 +444,7 @@ sub get_list_to_ingest()
         # or 20070216vac_cal_open.0x0002 or 20070221_1840_text.0x0002
         $new=substr($file,15,1);
         if ( (( index  $file, "ls" ) == -1) and ( ( index  $file, "vac" ) == -1) and
-             (( index  $file, "text" ) == -1) and ( $new ne "x" ))
+             (( index  $file, "text" ) == -1) and ( $new ne "x" ) and (index  $file, "xml") == -1 )
         {
           #if found one file with apid and date range then push file on list of lists
           if ($date_range_flg eq "1")
@@ -548,6 +551,8 @@ sub get_series_name()
 #sub check_apid_list (@$)
 sub ingest_day_files()
 {
+  $file="";
+  $xmlfile="";
   foreach $file (@list)
   {
     #get command
@@ -596,11 +601,11 @@ sub ingest_day_files()
       $day=substr($file,6,2);
       $skdate=sprintf("%s.%s.%s",$year,$month,$day); 
     }
-
-    #set DATEx to format like this:2008.05.29_00:00:00.000_TAI
-    # convert old string format to time variable for new DATE variable type time
+    #DATE=2008.05.29_00:00:00.000_TAI
+    # fix string format to DATE in time variable
     $time_skdate=sprintf("%10.10s_00:00:00_TAI",$skdate);
 
+    #$arg2="DATE=$skdate";
     $arg2="DATE=$time_skdate";
 
     #get apid
@@ -621,9 +626,31 @@ sub ingest_day_files()
     #get source
     $arg4="SOURCE=$source";
 
-    #get file
+    #get day file name
     $arg5="file=$dir_init_df/$file";
-    @args=("$command","$arg1 ","$arg2 ","$arg3 ","$arg4 " ,"$arg5");
+    if($dflg eq "1") {print  "dayfile arg:<$arg5>\n";}
+
+    #get xml file name
+    if ($source eq "hsb")
+    {
+      #$xfile=sprintf("%s/%s.xml",$dir_init_df,$file);
+      #$arg6="xmlfile=$xfile";
+      $arg6="";
+    }
+    elsif  ($source eq "moc")
+    {
+      $xfile=sprintf("%s/%s.xml",$dir_init_df,$file);
+      $arg6="xmlfile=$xfile";
+    }
+    elsif ($source eq "egsefm")
+    {
+      #$xfile=sprintf("%s/%sx",$dir_init_df,$file);
+      #$arg6="xmlfile=$xfile";
+      $arg6="";
+    }
+    if($dflg eq "1") {print  "xmlfile arg: <$arg6>\n";}
+
+    @args=("$command","$arg1 ","$arg2 ","$arg3 ","$arg4 " ,"$arg5", "$arg6");
     print LF "-->Load dayfile command: <@args>\n";
 
     if ($view_flg eq "1")
@@ -632,10 +659,12 @@ sub ingest_day_files()
     }
     else
     {
+      # load dayfile 
       system(" @args ") == 0 or die "system(\"  @args\")\nFailure cause:Need to create data series. Check if exists:describe_series $dsn\nFailed:$?" ; 
       #$log=`@args`;
       #print LF $log;
       if($dflg eq "1") {print LF "ingest_dayfiles:loading data to be loaded in data series only\n";}
+
     }
   }
   if ($view_flg eq "1")
