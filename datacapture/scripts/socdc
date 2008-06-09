@@ -49,7 +49,8 @@ $QAC_SIZE = 999;		#size of a qac file (!!!TBD)
 $FILETYPES = "filetypes.txt";
 $INSTANCE = 0;			#0=hmi, 1=aia
 $DIRPIPEFE = "/dds/socdc";	#pipeline front end dir to send data to
-$FEHOST = "d00.stanford.edu";   #pipeline front end host name
+#$FEHOST = "d00.stanford.edu";   #pipeline front end host name
+$FEHOST = "d01i";   #pipeline front end host name
 $THISHOST = `hostname`;
 $pos = index($THISHOST, '.');
 $THISHOST = substr($THISHOST, 0, $pos);
@@ -1985,8 +1986,8 @@ sub socget {
     if($errfilename ne "00000000000000000000000000000000000000000000000") {
       print LOG "*  **WARNING: .err file in qac: $errfilename\n";
       $f = "$DIRDDS2SOC/$errfilename";
-      $getsize = (-s $f);
-      if(!$getsize) {
+      $getsizeerr = (-s $f);
+      if(!$getsizeerr) {
         print LOG "\n*  **WARNING: Missing $errfilename\n";
         #new 28Jun2007 - request rexmit
         $rexmitname = $errfilename;
@@ -2008,9 +2009,9 @@ sub socget {
         #otherwise continue and process the .tlm file
       }
       else {
-        if($errfilesize != $getsize) {
+        if($errfilesize != $getsizeerr) {
           print LOG "*  **WARNING: Bad errfile size $errfilename\n";
-          print LOG "*  **WARNING: size expect=$errfilesize, got=$getsize\n";
+          print LOG "*  **WARNING: size expect=$errfilesize, got=$getsizeerr\n";
         }
         $cmd = "mv -f $DIRDDS2SOC/$errfilename $DIRREJECT";#reject the .err file
         print LOG "$cmd\n";
