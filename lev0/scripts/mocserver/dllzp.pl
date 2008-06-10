@@ -1,22 +1,24 @@
 #!/usr/bin/perl -w 
 
 use FindBin qw($Bin);
+use Time::Local;
 
 my($kDEV) = "dev";
 my($kGROUND) = "ground";
 my($kLIVE) = "live";
-my($kCFGPREFIX) = "dlfds_conf";
+my($kCFGPREFIX) = "dllzp_conf";
 my($kLOGFILE) = "log";
 my($kSCRIPTPATH) = "scrpath";
 my($kBINPATH) = "binpath";
 my($kPERMDATAPATH) = "permdpath";
 my($kDATAPATH) = "dpath";
 my($kNAMESPACE) = "ns";
-my($kFDSSERIESNAME) = "fdsseries";
-my($kORBVSERIESNAME) = "orbvseries";
 my($kDBUSER) = "dbuser";
 my($kDBNAME) = "dbname";
 my($kNOTLIST) = "notify";
+
+my($kSPECPREFIX) = "filespec:";
+my($kFILESUFFIX) = "[0-9][0-9][0-9]_[0-9][0-9]\\.hkt\\S*";
 
 my($jsocmach);
 
@@ -32,13 +34,24 @@ my($binPath);
 my($permdataPath);
 my($dataPath);
 my($namespace);
-my($fdsseriesname);
-my($orbvseriesname);
 my($dbuser);
 my($dbname);
 my($notlist);
 
 my($cmd);
+
+my($fullspec);
+my($pspec);  # previous years' days
+my($cspec);  # current years' days
+my($pbegin); # dofy to begin range, previous year
+my($pend);
+my($cbegin); # dofy to begin range, current year
+my($cend);
+my($yr);     # current year
+my($dofy);   # current day of year
+my($yr90);   # year 90 days ago
+my($dofy90); # day of year 90 days ago
+my($pyr);    # previous year
 
 my($logcontent) = "";
 
@@ -118,14 +131,6 @@ while($line = <CFGFILE>)
     {
 	$namespace = $1;
     }
-    elsif ($line =~ /$kFDSSERIESNAME\s*=\s*(\S+)\s*/)
-    {
-	$fdsseriesname = $1;
-    }
-    elsif ($line =~ /$kORBVSERIESNAME\s*=\s*(\S+)\s*/)
-    {
-	$orbvseriesname = $1;
-    }
     elsif ($line =~ /$kDBUSER\s*=\s*(\S+)\s*/)
     {
 	$dbuser = $1;
@@ -161,25 +166,61 @@ local $ENV{"JSOC_DBNAME"} = $dbname;
 
 $logcontent = $logcontent . "which: " . `which dlMOCDataFiles\.pl`;
 $logcontent = $logcontent . "which: " . `which sftpScript\.exp`;
-$logcontent = $logcontent . "which: " . `which fdsIngest\.pl`;
-$logcontent = $logcontent . "which: " . `which extract_fds_statev`;
+
+# Create specification file
+my(@timearr);
+my(@threemosago);
+@timearr = localtime(); # today
+@threemosago = localtime(time - 90 * 86400); # 90 days ago
+
+$yr = $timearr[5] + 1900;
+$dofy = $timearr[7]; 
+
+$yr90 = $threemosago[5] + 1900;
+$dofy90 = $threemosago[7];
+
+if ($yr90 < $yr)
+{
+    $pbegin = sprintf("%03d", $dofy90);
+    $pend = 366;
+    $pyr = $yr - 1;
+    $cbegin = 1;
+    $cend = $dofy;
+}
+else
+{
+    $cbegin = sprintf("%03d", $dofy90);
+    $cend = sprintf("%03d", $dofy);
+}
+
+$pspec = "";
+$cspec = "";
+
+if (defined($pbegin))
+{
+    $pspec = "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::000[1-9]_${pyr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::00[1-5][0-9]_${pyr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::006[0-3]_${pyr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::0129_${pyr}_$kFILESUFFIX\n";
+}
+
+if (defined($cbegin))
+{
+    $cspec = "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::000[1-9]_${yr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::00[1-5][0-9]_${yr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::006[0-3]_${yr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::0129_${yr}_$kFILESUFFIX\n";
+}
+
+$fullspec = "$pspec$cspec";
+
+open(SPECFILE, ">$permdataPath/mocDlLzpSpec.txt");
+print SPECFILE "root:moc\n\n";
+print SPECFILE $fullspec;
+close(SPECFILE);
 
 # Dump log
-open(LOGFILE, ">$logfile") || die "Couldn't write to logfile '$logfile'\n";;
+open(LOGFILE, ">$logfile") || die "Couldn't write to logfile '$logfile'\n";
 print LOGFILE $logcontent;
 close(LOGFILE);
 
-# Download FDS files to $dataPath
-$cmd = "dlMOCDataFiles\.pl -c $scriptPath/mocDlFdsSpec.txt -s $permdataPath/mocDlFdsStatus.txt -r $dataPath -t 30 $force";
+# Download LZP files to $dataPath
+$cmd = "dlMOCDataFiles\.pl -c $permdataPath/mocDlLzpSpec.txt -s $permdataPath/mocDlLzpStatus.txt -r $dataPath -t 120 $force";
 
-system("$cmd 1>>$logfile 2>&1");
-
-# Ingest FDS files into $fdsseriesname
-$cmd = "fdsIngest\.pl $dataPath -s $namespace\.$fdsseriesname -r";
-system("$cmd 1>>$logfile 2>&1");
-
-# Ingest orbit vectors into $orbvSeries
-$cmd = "extract_fds_statev ns=$namespace seriesIn=$fdsseriesname seriesOut=$orbvseriesname";
 system("$cmd 1>>$logfile 2>&1");
 
 # Notify people who care if an error has occurred
@@ -188,5 +229,5 @@ system($cmd);
 
 sub PrintUsage
 {
-    print "\tdlfds.pl {-b <branch> | -c <config file>} [-f]\n"
+    print "\tdllzp.pl {-b <branch> | -c <config file>} [-f]\n"
 }

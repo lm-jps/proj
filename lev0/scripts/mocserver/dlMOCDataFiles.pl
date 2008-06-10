@@ -51,6 +51,8 @@ my($nNRSpecs) = 0;
 my(@successDL);
 my(@unsuccessDL);
 
+my($datadir) = "";
+
 my($argc) = scalar(@ARGV);
 if ($argc == 0)
 {
@@ -82,6 +84,15 @@ else
 		PrintUsage();
 		exit(1);
 	    }
+            
+            # Use the directory containing the status file as the location to 
+            # dump extra files - for debugging purposes
+            my($lslash) = rindex($statusFile, "/");
+
+            if ($lslash >= 0)
+            {
+                $datadir = substr($statusFile, 0, $lslash);
+            }
 	}
 	elsif ($arg eq "-r")
 	{
@@ -411,7 +422,7 @@ sub ProcessFileSpecs
 
     if ($createFile)
     {
-	open(FSFILE, ">$FSFILE") || die "Couldn't write fs file.\n";
+	open(FSFILE, ">$datadir/$FSFILE") || die "Couldn't write fs file.\n";
     }
     
     # pass filespecs in file
@@ -480,7 +491,7 @@ sub ProcessFileSpecs
     
     if ($createFile)
     {
-	$expFsArg = "f=" . $FSFILE;
+	$expFsArg = "f=" . "$datadir/$FSFILE";
     }
     
     if (defined($timeout))
@@ -491,7 +502,7 @@ sub ProcessFileSpecs
     $expCmd = $EXP . " " . $RQARG . " " . $remoteRoot . " " . $timeout . " " . $expFsArg . " |";
     print $expCmd . "\n";
 
-    open(EXPSESSION, $expCmd) || die "Couldn't run expect script.\n";
+    open(EXPSESSION, $expCmd) || die "Couldn't run expect script '$expCmd'.\n";
     
     my($emptyDir) = 0;
     my($wasSpec) = 0;
