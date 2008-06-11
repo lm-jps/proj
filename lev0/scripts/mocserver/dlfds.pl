@@ -175,7 +175,7 @@ $cmd = "dlMOCDataFiles\.pl -c $scriptPath/mocDlFdsSpec.txt -s $permdataPath/mocD
 system("$cmd 1>>$logfile 2>&1");
 
 # Ingest FDS files into $fdsseriesname
-$cmd = "fdsIngest\.pl $dataPath -s $namespace\.$fdsseriesname -r";
+$cmd = "fdsIngest\.pl $dataPath/fds -s $namespace\.$fdsseriesname -r";
 system("$cmd 1>>$logfile 2>&1");
 
 # Ingest orbit vectors into $orbvSeries
