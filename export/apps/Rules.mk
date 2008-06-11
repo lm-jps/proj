@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, jsoc_export jsoc_info)
+MODEXE_$(d)	:= $(addprefix $(d)/, jsoc_export jsoc_info jsoc_fetch jsoc_export_manage)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 CEXE_$(d)       := $(addprefix $(d)/, GetJsocRequestID)
 CEXE            := $(CEXE) $(CEXE_$(d))

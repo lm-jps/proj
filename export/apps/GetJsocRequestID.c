@@ -45,11 +45,16 @@ nowtime = time(0);
 now = gmtime(&nowtime);
 new_date = 10000*(now->tm_year+1900) + 100*(now->tm_mon+1) + now->tm_mday;
 if (old_date != new_date)
+  {
+  FILE *history = fopen("/home/jsoc/exports/RequestID.history", "a");
+  fprintf(history,"%s_%d_%03d\n", fixedpart, old_date, RequestIDsn);
+  fclose(history);
   RequestIDsn = 1;
+  }
 else
   RequestIDsn += 1;
 rewind(fp);
-sprintf(RequestID,"%s_%d_%d", fixedpart, new_date, RequestIDsn);
+sprintf(RequestID,"%s_%d_%03d", fixedpart, new_date, RequestIDsn);
 
 fprintf(fp,"%s\n",RequestID);
 rewind(fp);
