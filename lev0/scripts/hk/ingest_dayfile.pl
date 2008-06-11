@@ -64,25 +64,22 @@
   # set path to dayfiles using source -these vary based on where dayfiles are placed
  if ($source eq "hsb")
  {
-   #for testing#
-   #$ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/home1/carl/cvs/JSOC/proj/lev0/apps/data/hk_hsb_dayfile";
-   #$ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/surge/production/lev0/hk_hsb_dayfile";
+   #$ENV{'DF_DAYFILE_DIRECTORY'}="/home1/carl/cvs/JSOC/proj/lev0/apps/data/hk_hsb_dayfile";
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/surge/production/lev0/hk_hsb_dayfile";
    #for production#
-   $ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_hsb_dayfile";
+   #$ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_hsb_dayfile";
  }
  elsif ($source eq "moc")
  {
-   #for testing#
-   #$ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/home/carl/cvs/JSOC/proj/lev0/scripts/hk/SDO";
+   #$ENV{'DF_DAYFILE_DIRECTORY'}="/home/carl/cvs/JSOC/proj/lev0/scripts/hk/SDO";
    #for production#
-   $ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_moc_dayfile";
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0_60d/hk_moc_dayfile";
  }
  elsif ($source eq "egsefm")
  {
-   #for testing#
-   #$ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/tmp20/production/hmi_hk";
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp20/production/hmi_hk";
    #for production#
-   $ENV{'DF_HSB_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_egsefm_dayfile";
+   #$ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_egsefm_dayfile";
  }
 
   #get list of initial jsoc definition files to use
@@ -299,9 +296,9 @@ sub show_help_info
   print "        Example: ingest_dayfile.pl -v apidlist=./df_apid_list_day_file_hsb start=20070216 end=20070218 dsnlist=./df_apid_ds_list_for_hsb src=hsb\n\n";
   print "*Note:Currently using option ():\n" ;
   print "(2) Requires setup of JSD file and create series before running script.\n";
-  print "(3) Requires setup of environment variable DF_HSB_DAYFILE_DIRECTORY\n";
+  print "(3) Requires setup of environment variable DF_DAYFILE_DIRECTORY\n";
   print "(3a)Used to store location of input day files of this script.\n";
-  print "(3b)Example setting: setenv DF_HSB_DAYFILE_DIRECTORY /tmp20/production/hmi_hk \n";
+  print "(3b)Example setting: setenv DF_DAYFILE_DIRECTORY /tmp20/production/hmi_hk \n";
   print "(4) Requires setup of apid list in file when use \"apidlist\" option\n";
   print "(4a)Enter values in file in decimal format(i.e.,0001,0015,0021,0445,0475).\n";
   print "(4b)Example format and file of apid list is located in this current file: ./df_apid_list_day_files\n";
@@ -322,7 +319,7 @@ sub show_help_info
 sub get_dayfile_list()
 {
   #Open input data files
-  $dir_init_df=$ENV{'DF_HSB_DAYFILE_DIRECTORY'};
+  $dir_init_df=$ENV{'DF_DAYFILE_DIRECTORY'};
   #open directory file handle to read in initial jsd files.
   opendir(DIR_DF, $dir_init_df) || die "Can't open-1:$!\n";
   #get list of day files
@@ -551,8 +548,7 @@ sub get_series_name()
 #sub check_apid_list (@$)
 sub ingest_day_files()
 {
-  $file="";
-  $xmlfile="";
+  $file=""; $xfile="";
   foreach $file (@list)
   {
     #get command
@@ -628,7 +624,7 @@ sub ingest_day_files()
 
     #get day file name
     $arg5="file=$dir_init_df/$file";
-    if($dflg eq "1") {print  "dayfile arg:<$arg5>\n";}
+    if($dflg eq "1") {print LF  "ingest_dayfiles:dayfile arg:<$arg5>\n";}
 
     #get xml file name
     if ($source eq "hsb")
@@ -648,10 +644,12 @@ sub ingest_day_files()
       #$arg6="xmlfile=$xfile";
       $arg6="";
     }
-    if($dflg eq "1") {print  "xmlfile arg: <$arg6>\n";}
+    if($dflg eq "1") {print LF "ingest_dayfiles:xmlfile arg: <$arg6>\n";}
 
+    # check command line to load dayfiles in DRMS day file data series
     @args=("$command","$arg1 ","$arg2 ","$arg3 ","$arg4 " ,"$arg5", "$arg6");
     print LF "-->Load dayfile command: <@args>\n";
+
 
     if ($view_flg eq "1")
     {
@@ -659,8 +657,55 @@ sub ingest_day_files()
     }
     else
     {
+
       # load dayfile 
       system(" @args ") == 0 or die "system(\"  @args\")\nFailure cause:Need to create data series. Check if exists:describe_series $dsn\nFailed:$?" ; 
+
+      # check if files loaded, if are add to file for deleting.
+      # create command line
+      $ckcommand="show_keys";
+      @checkargs=("$ckcommand","$arg1\[$time_skdate\]\[$aid\]\[$source\]","-p seg=file,xmlfile \| grep -v file");
+      if($dflg eq "1") {print LF "ingest_dayfiles:check arguments are <@checkargs>\n";}
+      # execute check for files loaded in drms
+      $check_ret_values=`@checkargs`;
+      # check values received
+      $check_ret_values =~ s/\n//g;
+      if($dflg eq "1") {print LF "ingest_dayfiles:<$check_ret_values>\n";}
+      # split file and xmlfile values returned
+      @s_ret_values = split ' ', $check_ret_values;
+      if($dflg eq "1") {print LF "ingest_dayfiles:first is <$s_ret_values[0]>\n";};
+      if($dflg eq "1") {print LF "ingest_dayfiles:second is <$s_ret_values[1]>\n";}
+      # check if files exist
+      if ( -e $s_ret_values[0])
+      {
+         if($dflg eq "1") {print LF "ingest_dayfiles:file exists:$s_ret_values[0]\n";}
+         #parse just filename
+         my($directory, $filename) = $s_ret_values[0]=~ m/(.*\/)(.*)$/;
+         if($dflg eq "1") {print LF "ingest_dayfiles:filename is <$filename>\n";}
+         #add just filename to delete_file list
+         if($filename ne "")
+         {
+           open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+           print DELFILE "$filename\n";
+           close DELFILE;
+         }
+      }
+      if ( -e $s_ret_values[1])
+      {
+        if($dflg eq "1") {print LF "ingest_dayfiles:file exists:$s_ret_values[1]\n";}
+        #parse just filename
+        my($directory, $xmlfilename) = $s_ret_values[1]=~ m/(.*\/)(.*)$/;
+        if($dflg eq "1") {print LF "ingest_dayfiles:xmlfilename is <$xmlfilename>\n";}
+        #add just filename to delete_file list
+        if($xmlfilename ne "")
+        {
+          open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+          print DELFILE "$xmlfilename\n";
+          close DELFILE;
+        }
+      }
+
+
       #$log=`@args`;
       #print LF $log;
       if($dflg eq "1") {print LF "ingest_dayfiles:loading data to be loaded in data series only\n";}
