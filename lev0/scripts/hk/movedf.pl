@@ -40,7 +40,7 @@ elsif ($source eq "egsefm")
 
 # open log file
 open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
-if ($dflg eq "1") {print LF `date`;};
+print LF `date`;
 
 # move files over to /tmp21/production/lev0/hk_moc_dayfile
 foreach $hkt (@list_hkt_files)
@@ -55,8 +55,8 @@ foreach $xml (@list_xml_files)
  if ($dflg eq "1") {print LF " Move XML is <$xml>\n";}
  $log=`cp  $xml /tmp21/production/lev0_60d/hk_moc_dayfile`;
 }
-close LF;
 print LF "--->Moved df and xml files to :$doff_dir\n";
+close LF;
 
 #ingest all dayfiles and xml files
 #$log=`perl ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc dsnlist=./df_apid_ds_list_for_moc src=moc`
@@ -82,5 +82,6 @@ close DELFILE;
 #set MF file to blank work was completed
 open(DELFILE, ">$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
 close DELFILE;
+print LF `date`;
 close LF;
 
