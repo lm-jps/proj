@@ -312,6 +312,9 @@ function GetRSCount()
       $("ExportRecordSet").innerHTML = $("RecordSet").value;
       ExportReadyOK = 0;
       ExportRecordSetOK = 1;
+      $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
+      $("ExportButton").value = "Submit Export Request";
+      $("ExportButton").style.backgroundColor = "#D8D8D8";
       },
     onFailure: function()
       {
@@ -339,7 +342,7 @@ function PickKeys()
   var selkeys =  "";
   $("KeyListPlace").innerHTML = "";
   $("DisplayPlace").innerHTML = "";
-  $("WantRecInfo").checked = 0;
+  // $("WantRecInfo").checked = 0;
   KeyList =  "";
   selkeys = "";
   // check for **NONE**
@@ -384,7 +387,7 @@ function PickSegs()
   var selsegs =  "";
   $("SegListPlace").innerHTML = "";
   $("DisplayPlace").innerHTML = "";
-  $("WantRecInfo").checked = 0;
+  // $("WantRecInfo").checked = 0;
   SegList =  "";
   selsegs = "";
   // check for **NONE**
