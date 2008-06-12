@@ -42,14 +42,16 @@
 #include "decode_hk.h"
 #include "load_hk_config_files.h"
 
-//#define LEV0SERIESNAMEHMI "su_production.lev0_test"
-//#define TLMSERIESNAMEHMI "su_production.tlm_test"
-//#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
-//#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
-#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
-#define TLMSERIESNAMEHMI "hmi.tlm_60d"
-#define LEV0SERIESNAMEAIA "aia.lev0_60d"
-#define TLMSERIESNAMEAIA "aia.tlm_60d"
+#define LEV0SERIESNAMEHMI "su_production.lev0_test"
+#define TLMSERIESNAMEHMI "su_production.tlm_test"
+#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
+#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+
+//#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
+//#define TLMSERIESNAMEHMI "hmi.tlm_60d"
+//#define LEV0SERIESNAMEAIA "aia.lev0_60d"
+//#define TLMSERIESNAMEAIA "aia.tlm_60d"
+
 //When change to these data series below to save real data.
 //#define TLMSERIESNAMEHMI "hmi.tlm"
 //#define LEV0SERIESNAMEAIA "aia.lev0"
@@ -94,7 +96,7 @@ char *module_name = "ingest_lev0";
 
 FILE *h0logfp;		// fp for h0 ouput log for this run 
 IMG Image, ImageOld;
-IMG *Img;
+IMG *Img, *ImgO, *ImgC;
 static CCSDS_Packet_t *Hk;
 static DRMS_Record_t *rs;
 static DRMS_Segment_t *segment;
@@ -119,7 +121,7 @@ long long total_missing_im_pdu;
 unsigned int vcdu_24_cnt, vcdu_24_cnt_next;
 int verbose;
 int appid;
-int hmiaiaflg;			// 0=hmi, 1=aia
+int hmiaiaflg;			//0=hmi, 1=aia
 int whk_status;
 int total_tlm_vcdu;
 int total_missing_vcdu;
@@ -131,10 +133,11 @@ int ALRMSEC = 70;               // seconds for alarm signal
 char timetag[32];
 char pchan[8];			// primary channel to listen to e.g. VC02 
 char rchan[8];			// redundant channel to listen to e.g. VC10 
-char tlmseriesname[96];		// e.g. hmi.tlm
-char lev0seriesname[96];	// e.g. hmi.lev0
-char tlmnamekey[96];		// shortened tlm file name for TLMDSNAM keyword
-char tlmnamekeyfirst[96];	// for TLMDSNAM keyword for 1st file of image
+char tlmseriesname[128];	// e.g. hmi.tlm
+char lev0seriesname[128];	// e.g. hmi.lev0
+char tlmnamekey[128];		// shortened tlm file name for TLMDSNAM keyword
+char tlmnamekeyfirst[128];	// for TLMDSNAM keyword for 1st file of image
+char oldtlmdsnam[128];		// TLMDSNAM keyword from prev rec in db
 char *username;			// from getenv("USER") 
 char *tlmdir;			// tlm dir name passed in 
 char *outdir;			// output dir for .tlm file (can be /dev/null)
@@ -243,14 +246,14 @@ int h0log(const char *fmt, ...)
 
 // Close out an image.
 void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
-		IMG *Img, int fsn)
+		IMG *img, int fsn)
 {
   STAT stat;
   int status, n, k;
   char tlmdsname[128];
 
   printk("*Closing image for fsn = %u\n", fsn);
-  if(imgstat(Img, &stat)) {
+  if(imgstat(img, &stat)) {
     printk("**Error on imgstat() for fsn = %u\n", fsn);
   }
   else {
@@ -264,28 +267,29 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   }
   // CAMERA set by HMI_compute_exposure_times()
   if(hmiaiaflg) {		// except for AIA use telnum 
-    drms_setkey_int(rs, "CAMERA", (Img->telnum)+1);
+    drms_setkey_int(rs, "CAMERA", (img->telnum)+1);
   }
-  drms_setkey_int(rs, "IMGAPID", Img->apid);
-  drms_setkey_int(rs, "CROPID", Img->cropid);
-  drms_setkey_int(rs, "LUTID", Img->luid);
-  drms_setkey_int(rs, "TAPCODE", Img->tap);
-  n = (Img->N) & 0x1F;
+  drms_setkey_int(rs, "IMGAPID", img->apid);
+  drms_setkey_int(rs, "CROPID", img->cropid);
+  drms_setkey_int(rs, "LUTID", img->luid);
+  drms_setkey_int(rs, "TAPCODE", img->tap);
+  n = (img->N) & 0x1F;
   n = n << 3;
-  k = (Img->K) & 0x07;
+  k = (img->K) & 0x07;
   drms_setkey_int(rs, "COMPID", n+k);
-  drms_setkey_int(rs, "BITSELID", Img->R);
-  drms_setkey_int(rs, "TOTVALS", Img->totalvals);
-  drms_setkey_int(rs, "DATAVALS", Img->datavals);
-  drms_setkey_int(rs, "NPACKETS", Img->npackets);
-  drms_setkey_int(rs, "NERRORS", Img->nerrors);
-  drms_setkey_int(rs, "EOIERROR", Img->last_pix_err);
-  drms_setkey_int(rs, "HEADRERR", Img->headerr);
-  drms_setkey_int(rs, "OVERFLOW", Img->overflow);
-  sprintf(tlmdsname, "%s[%s]", tlmseriesname, tlmnamekeyfirst);
+  drms_setkey_int(rs, "BITSELID", img->R);
+  drms_setkey_int(rs, "TOTVALS", img->totalvals);
+  drms_setkey_int(rs, "DATAVALS", img->datavals);
+  drms_setkey_int(rs, "NPACKETS", img->npackets);
+  drms_setkey_int(rs, "NERRORS", img->nerrors);
+  drms_setkey_int(rs, "EOIERROR", img->last_pix_err);
+  drms_setkey_int(rs, "HEADRERR", img->headerr);
+  drms_setkey_int(rs, "OVERFLOW", img->overflow);
+  snprintf(tlmdsname, 128, "%s[%s]", tlmseriesname, tlmnamekeyfirst);
+printf("tlmdsname = %s\n", tlmdsname); //!!!!TEMP
   drms_setkey_string(rs, "TLMDSNAM", tlmdsname);
-  int pts = Img->first_packet_time >> 16;
-  int ptss = Img->first_packet_time & 0xffff;
+  int pts = img->first_packet_time >> 16;
+  int ptss = img->first_packet_time & 0xffff;
   TIME fpt = SDO_to_DRMS_time(pts, ptss);
   drms_setkey_double(rs, "IMGFPT", fpt);
   status = drms_segment_write(seg, array, 0);
@@ -298,6 +302,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     printk("**ERROR: drms_close_record failed for %s fsn=%u\n",
                         lev0seriesname, fsn);
   }
+  img->initialized = 0;		//indicate image is ready for use again
 }
 
 // Got a fatal error. 
@@ -341,29 +346,12 @@ unsigned short MDI_getshort (unsigned char *c)    //  machine independent
   return s;
 }
 
-// An fsn has changed in the context of a normal stream of
-// tlm files. Returns 0 on success.
-int fsn_change_normal()
+//fsn_normal_new_image()
+int fsn_normal_new_image() 
 {
   int dstatus;
 
-  printk("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
-  if(fsn_prev != 0) {	// close the image of the prev fsn if not 0 
-    if(rs) {		// make sure have a created record
-      close_image(rs, segment, segArray, Img, fsn_prev);
-      //force a commit to DB on an image boundry & not during a rexmit
-      if(imagecnt++ >= IMAGE_NUM_COMMIT) {
-        printk("drms_server_end_transaction()\n");
-        drms_server_end_transaction(drms_env, 0 , 0);
-        printk("drms_server_begin_transaction()\n");
-        drms_server_begin_transaction(drms_env); //start another cycle
-        imagecnt = 0;
-      }
-      fileimgcnt++;
-    }
-  }
   // start a new image 
-  Img = &Image;
   Img->initialized = 0;
   Img->reopened = 0;
   errmsgcnt = 0;
@@ -385,6 +373,109 @@ int fsn_change_normal()
                                        segment->axis,
                                        rdat,
                                        &dstatus);
+  ImgC = Img;		//set current image pointer
+  return(0);
+} 
+
+// An fsn has changed in the context of a normal stream of
+// tlm files. Returns 0 on success.
+int fsn_change_normal()
+{
+  int dstatus, rstatus;
+  char reopen_dsname[256];
+  char *cptr;
+
+  printk("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
+  if(fsn_prev == 0) {	//startup mode. restore any prev image
+    errmsgcnt = 0;
+    fsn_prev = fsnx;
+    if(hmiaiaflg)
+      sprintf(reopen_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
+    else
+      sprintf(reopen_dsname, "%s[%u]", LEV0SERIESNAMEHMI, fsnx);
+    printk("Open normal prev ds: %s\n", reopen_dsname);
+    rset = drms_open_records(drms_env, reopen_dsname, &rstatus);
+    if(rstatus) {
+      printk("Can't do drms_open_records(%s)\n", reopen_dsname);
+      return(1);          // !!!TBD
+    }
+    if(!rset || (rset->n == 0)) {
+      printk("No prev ds\n");     // start a new image
+      fsn_normal_new_image();
+    }
+    else {
+      Img->initialized = 1;
+      Img->reopened = 1;
+      Img->fsn = fsnx;
+      Img->apid = appid;
+      rs_old = rset->records[0];
+      rs = drms_clone_record(rs_old, DRMS_PERMANENT, DRMS_COPY_SEGMENTS, &rstatus);
+      if(rstatus) {
+        printk("Can't do drms_clone_record()\n");
+        return(1);		// !!!TBD ck 
+      }
+      drms_close_records(rset, DRMS_FREE_RECORD);
+      rstatus = drms_setkey_int(rs, "FSN", fsnx);
+      Img->telnum = drms_getkey_int(rs, "CAMERA", &rstatus);
+      Img->telnum--;
+      Img->cropid = drms_getkey_int(rs, "CROPID", &rstatus);
+      Img->luid = drms_getkey_int(rs, "LUTID", &rstatus);
+      Img->tap = drms_getkey_int(rs, "TAPCODE", &rstatus);
+      Img->N = drms_getkey_int(rs, "N", &rstatus);
+      Img->K = drms_getkey_int(rs, "K", &rstatus);
+      Img->R = drms_getkey_int(rs, "R", &rstatus);
+      Img->overflow = drms_getkey_int(rs, "OVERFLOW", &rstatus);
+      Img->headerr = drms_getkey_int(rs, "HEADRERR", &rstatus);
+      Img->totalvals = drms_getkey_int(rs, "TOTVALS", &rstatus);
+      Img->datavals = drms_getkey_int(rs, "DATAVALS", &rstatus);
+      Img->npackets = drms_getkey_int(rs, "NPACKETS", &rstatus);
+      Img->nerrors = drms_getkey_int(rs, "NERRORS", &rstatus);
+      Img->last_pix_err = drms_getkey_int(rs, "EOIERROR", &rstatus);
+      snprintf(oldtlmdsnam, 128, "%s", drms_getkey_string(rs, "TLMDSNAM",&rstatus));
+      cptr = strstr(oldtlmdsnam, "VC");
+      if(cptr) 
+        snprintf(tlmnamekeyfirst, 23, "%s", cptr);
+      else
+        sprintf(tlmnamekeyfirst, "%s", "UNK");
+printf("tlmnamekeyfirst = %s\n", tlmnamekeyfirst); //!!!TEMP
+      segment = drms_segment_lookupnum(rs, 0);
+      cArray = drms_segment_read(segment, DRMS_TYPE_SHORT, &rstatus);
+      if(rstatus) {
+        printk("Can't do drms_segment_read()\n");
+        return(1);		// !!!!TBD ck 
+      }
+      short *adata = (short *)cArray->data;
+      memcpy(Img->dat, adata, 2*MAXPIXELS);
+      rdat = Img->dat;
+      segArray = drms_array_create(DRMS_TYPE_SHORT, 
+                                         segment->info->naxis,
+                                         segment->axis,
+                                         rdat,
+                                         &dstatus);
+      ImgC = Img;           //set current image pointer
+    }
+  }
+  else {
+    if(rs) {		// make sure have a created record
+      close_image(rs, segment, segArray, Img, fsn_prev);
+      //force a commit to DB on an image boundry & not during a rexmit
+      if(imagecnt++ >= IMAGE_NUM_COMMIT) {
+        printk("drms_server_end_transaction()\n");
+        drms_server_end_transaction(drms_env, 0 , 0);
+        printk("drms_server_begin_transaction()\n");
+        drms_server_begin_transaction(drms_env); //start another cycle
+        imagecnt = 0;
+      }
+      fileimgcnt++;
+    }
+    else {
+      printk("**ERROR: Null record ptr for an opened image fsn=%u\n",fsn_prev);
+    }
+    if(fsn_normal_new_image()) {
+      printk("**ERROR: Can't create new image\n");
+      return(1);
+    }
+  }
   return(0);
 }
 
@@ -394,15 +485,18 @@ int fsn_change_rexmit()
 {
   char rexmit_dsname[256];
   int rstatus, dstatus;
+  char *cptr;
 
   if(fsn_prev != 0) {   // close image of prev fsn if not 0 
     if(rsc) {		//make sure have created record
-      close_image(rsc, segmentc, oldArray, Img, fsn_prev);
+      close_image(rsc, segmentc, oldArray, ImgO, fsn_prev);
       imagecnt++;
       fileimgcnt++;
     }
+    else {
+      printk("**ERROR: Null record ptr for an rexmit image fsn=%u\n",fsn_prev);
+    }
   }
-  Img = &ImageOld;
   errmsgcnt = 0;
   fsn_prev = fsnx;
   if(hmiaiaflg) 
@@ -417,8 +511,8 @@ int fsn_change_rexmit()
   }
   if(!rset || (rset->n == 0)) {
     printk("No prev ds\n");	// start a new image 
-    Img->initialized = 0;
-    Img->reopened = 0;
+    ImgO->initialized = 0;
+    ImgO->reopened = 0;
     sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
     rsc = drms_create_record(drms_env, lev0seriesname, DRMS_PERMANENT, &rstatus);
     if(rstatus) {
@@ -430,7 +524,7 @@ int fsn_change_rexmit()
       printk("No drms_segment_lookup(rsc, image)\n");
       return(1);
     }
-    rdat = Img->dat;
+    rdat = ImgO->dat;
     oldArray = drms_array_create(DRMS_TYPE_SHORT,
                                        segmentc->info->naxis,
                                        segmentc->axis,
@@ -438,10 +532,10 @@ int fsn_change_rexmit()
                                        &dstatus);
   }
   else {
-    Img->initialized = 1;
-    Img->reopened = 1;
-    Img->fsn = fsnx;
-    Img->apid = appid;
+    ImgO->initialized = 1;
+    ImgO->reopened = 1;
+    ImgO->fsn = fsnx;
+    ImgO->apid = appid;
     rs_old = rset->records[0];
     rsc = drms_clone_record(rs_old, DRMS_PERMANENT, DRMS_COPY_SEGMENTS, &rstatus);
     if(rstatus) {
@@ -450,22 +544,28 @@ int fsn_change_rexmit()
     }
     drms_close_records(rset, DRMS_FREE_RECORD);
     rstatus = drms_setkey_int(rsc, "FSN", fsnx);
-    Img->telnum = drms_getkey_int(rsc, "CAMERA", &rstatus);
-    Img->telnum--;
-    Img->cropid = drms_getkey_int(rsc, "CROPID", &rstatus);
-    Img->luid = drms_getkey_int(rsc, "LUTID", &rstatus);
-    Img->tap = drms_getkey_int(rsc, "TAPCODE", &rstatus);
-    Img->N = drms_getkey_int(rsc, "N", &rstatus);
-    Img->K = drms_getkey_int(rsc, "K", &rstatus);
-    Img->R = drms_getkey_int(rsc, "R", &rstatus);
-    Img->overflow = drms_getkey_int(rsc, "OVERFLOW", &rstatus);
-    Img->headerr = drms_getkey_int(rsc, "HEADRERR", &rstatus);
-    Img->totalvals = drms_getkey_int(rsc, "TOTVALS", &rstatus);
-    Img->datavals = drms_getkey_int(rsc, "DATAVALS", &rstatus);
-    Img->npackets = drms_getkey_int(rsc, "NPACKETS", &rstatus);
-    Img->nerrors = drms_getkey_int(rsc, "NERRORS", &rstatus);
-    Img->last_pix_err = drms_getkey_int(rsc, "EOIERROR", &rstatus);
-    sprintf(tlmnamekeyfirst, "%s", drms_getkey_string(rsc, "TLMDSNAM", &rstatus));
+    ImgO->telnum = drms_getkey_int(rsc, "CAMERA", &rstatus);
+    ImgO->telnum--;
+    ImgO->cropid = drms_getkey_int(rsc, "CROPID", &rstatus);
+    ImgO->luid = drms_getkey_int(rsc, "LUTID", &rstatus);
+    ImgO->tap = drms_getkey_int(rsc, "TAPCODE", &rstatus);
+    ImgO->N = drms_getkey_int(rsc, "N", &rstatus);
+    ImgO->K = drms_getkey_int(rsc, "K", &rstatus);
+    ImgO->R = drms_getkey_int(rsc, "R", &rstatus);
+    ImgO->overflow = drms_getkey_int(rsc, "OVERFLOW", &rstatus);
+    ImgO->headerr = drms_getkey_int(rsc, "HEADRERR", &rstatus);
+    ImgO->totalvals = drms_getkey_int(rsc, "TOTVALS", &rstatus);
+    ImgO->datavals = drms_getkey_int(rsc, "DATAVALS", &rstatus);
+    ImgO->npackets = drms_getkey_int(rsc, "NPACKETS", &rstatus);
+    ImgO->nerrors = drms_getkey_int(rsc, "NERRORS", &rstatus);
+    ImgO->last_pix_err = drms_getkey_int(rsc, "EOIERROR", &rstatus);
+    snprintf(oldtlmdsnam, 128, "%s", drms_getkey_string(rsc, "TLMDSNAM",&rstatus));
+    cptr = strstr(oldtlmdsnam, "VC");
+    if(cptr) 
+      snprintf(tlmnamekeyfirst, 23, "%s", cptr);
+    else
+      sprintf(tlmnamekeyfirst, "%s", "UNK");
+printf("tlmnamekeyfirst = %s\n", tlmnamekeyfirst); //!!!TEMP
     segmentc = drms_segment_lookupnum(rsc, 0);
     cArray = drms_segment_read(segmentc, DRMS_TYPE_SHORT, &rstatus);
     if(rstatus) {
@@ -473,14 +573,15 @@ int fsn_change_rexmit()
       return(1);		// !!!!TBD ck 
     }
     short *adata = (short *)cArray->data;
-    memcpy(Img->dat, adata, 2*MAXPIXELS);
-    rdat = Img->dat;
+    memcpy(ImgO->dat, adata, 2*MAXPIXELS);
+    rdat = ImgO->dat;
     oldArray = drms_array_create(DRMS_TYPE_SHORT, 
                                        segmentc->info->naxis,
                                        segmentc->axis,
                                        rdat,
                                        &dstatus);
   }
+  ImgC = ImgO;		//set current image pointer
   return(0);
 }
 
@@ -509,7 +610,13 @@ int get_tlm(char *file, int rexmit, int higherver)
   zero_pn = gap_24_cnt = gap_42_cnt = 0;
   firstflg = 1; 
   if(rexmit || higherver) {
-    fsn_pre_rexmit = fsn_prev;		// restore this at end of rexmit tlm
+    if(Img->initialized) {		// close normal mode image
+      if(rs) 
+        close_image(rs, segment, segArray, Img, fsn_prev);
+      else
+        printk("**ERROR: Null record ptr for an opened image fsn=%u\n",fsn_prev);
+    }
+    fsn_pre_rexmit = fsn_prev;		// restore this at end of rexmit tlm file
     fsn_prev = 0;			// cause a new image 
   }
   // read a VCDU packet 
@@ -626,7 +733,7 @@ int get_tlm(char *file, int rexmit, int higherver)
         }
       }
       // send the sci data to Keh-Cheng. call with pointer to M_PDU_Header 
-      rstatus = imgdecode((unsigned short *)(cbuf+10), Img);
+      rstatus = imgdecode((unsigned short *)(cbuf+10), ImgC);
       switch(rstatus) {
       case 0:
         // A science data VCDU was successfully decoded 
@@ -694,7 +801,7 @@ int get_tlm(char *file, int rexmit, int higherver)
       }
     }
     else {			// send the HK data to Carl 
-      //printk("$$$$$ appid for Carl =  0x%x %d\n", appid, appid); //!!TEMP
+      printk("$$$$$ appid for Carl =  0x%x %d\n", appid, appid); //!!TEMP
       decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk, &Fsn);
       switch (decode_status) {
         case SUCCESS_HK_NEED_TO_WTD_CTD:
@@ -767,10 +874,12 @@ int get_tlm(char *file, int rexmit, int higherver)
   }
   if(rexmit || higherver) {	// close the opened record 
     if(rsc) {			// make sure have created record
-      close_image(rsc, segmentc, oldArray, Img, fsnx);
+      close_image(rsc, segmentc, oldArray, ImgO, fsnx);
       imagecnt++;
       fileimgcnt++;
-      fsn_prev = fsn_pre_rexmit; // restore orig for next normal .tlm file
+      //fsn_prev = fsn_pre_rexmit; // restore orig for next normal .tlm file
+      fsn_prev = 0;		//need for restart of normal mode
+      rsc = 0;
     }
   }
   ftmp = EndTimer(1);
@@ -779,10 +888,10 @@ int get_tlm(char *file, int rexmit, int higherver)
   if(fpkt_cnt != total_tlm_vcdu) {
     printk("**WARNING: Found #vcdu=%d; expected=%d\n", fpkt_cnt, total_tlm_vcdu);
   }
-  if(gap_24_cnt != total_missing_vcdu) {
-    printk("**WARNING: VCDU 24bit cntr gaps=%d; expected=%d\n",
-	 gap_24_cnt, total_missing_vcdu);
-  }
+  //if(gap_24_cnt != total_missing_vcdu) {
+  //  printk("**WARNING: VCDU 24bit cntr gaps=%d; expected=%d\n",
+  //      gap_24_cnt, total_missing_vcdu);
+  //}
   if(gap_42_cnt != total_missing_im_pdu) {
     printk("**WARNING: IM_PDU 42bit cntr gaps=%lld; expected=%lld\n",
 	 gap_42_cnt, total_missing_im_pdu);
@@ -877,7 +986,7 @@ void do_ingest()
         token = (char *)strtok(NULL, "=");
         printk("*tlm file size is %s", token);
       }
-      else if((strstr(line, "TOTAL_TLM_VCDU=")) || (strstr(line, "TOTAL_VCDU="))) {
+      else if((strstr(line, "TOTAL_TLM_IM_PDU=")) || (strstr(line, "TOTAL_VCDU="))) {
         token = (char *)strtok(line, "=");
         token = (char *)strtok(NULL, "\n");
         total_tlm_vcdu = atoi(token);
@@ -896,16 +1005,21 @@ void do_ingest()
     }
     fclose(fp);
     alarm(ALRMSEC);		//restart alarm if no more files come
+    strcpy((char *)tlmnamekey, (char *)tlmname);
+    filename = (char *)rindex(tlmname, '.');
+    if(!filename) {
+      printk("**ERROR: Bad formed tlm name in qac file\n");
+      printk("  tlm name = %s\n", tlmname);
+      continue;
+    }
+    *filename = 0;			// elim .tlm 
+    *((char *)tlmnamekey+22) = 0;	// elim after hh_mm_ss
     rs_tlm = drms_create_record(drms_env, tlmseriesname, 
 				DRMS_PERMANENT, &status);
     if(status) {
       printk("***Can't create record for %s\n", tlmseriesname);
       abortit(3);
     }
-    strcpy((char *)tlmnamekey, (char *)tlmname);
-    filename = (char *)rindex(tlmname, '.');
-    *filename = 0;			// elim .tlm 
-    *((char *)tlmnamekey+22) = 0;	// elim after hh_mm_ss
     if((status = drms_setkey_string(rs_tlm, "filename", tlmnamekey))) {
       printk("**ERROR: drms_setkey_string failed for 'filename'\n");
     }
@@ -1010,6 +1124,10 @@ void setup()
   umask(002);			// allow group write 
   Image.initialized = 0;	// init the two image structures 
   ImageOld.initialized = 0;
+  Img = &Image;
+  ImgO = &ImageOld;
+  Img->initialized = 0;
+  ImgO->initialized = 0;
 
   //set environment variables for hk code
   //create filename and path
@@ -1072,7 +1190,7 @@ int DoIt(void)
     do_ingest();                // loop to get files from the input dir 
     if(sigalrmflg) {		// process an alarm timout for no data in
       if(Image.initialized) {
-        if(rs) {		//make sure have a created record
+        if(rs && fsn_prev) {	//make sure have a created record
           close_image(rs, segment, segArray, &Image, fsn_prev);
           printk("*Closed image on timeout FSN=%u\n", fsn_prev);
         }
