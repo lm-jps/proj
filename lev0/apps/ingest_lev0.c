@@ -286,7 +286,6 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "HEADRERR", img->headerr);
   drms_setkey_int(rs, "OVERFLOW", img->overflow);
   snprintf(tlmdsname, 128, "%s[%s]", tlmseriesname, tlmnamekeyfirst);
-printf("tlmdsname = %s\n", tlmdsname); //!!!!TEMP
   drms_setkey_string(rs, "TLMDSNAM", tlmdsname);
   int pts = img->first_packet_time >> 16;
   int ptss = img->first_packet_time & 0xffff;
@@ -437,7 +436,6 @@ int fsn_change_normal()
         snprintf(tlmnamekeyfirst, 23, "%s", cptr);
       else
         sprintf(tlmnamekeyfirst, "%s", "UNK");
-printf("tlmnamekeyfirst = %s\n", tlmnamekeyfirst); //!!!TEMP
       segment = drms_segment_lookupnum(rs, 0);
       cArray = drms_segment_read(segment, DRMS_TYPE_SHORT, &rstatus);
       if(rstatus) {
