@@ -60,6 +60,8 @@
 //Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
 //setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
 //setenv HK_DF_HSB_DIRECTORY               /tmp21/production/lev0/hk_hsb_dayfile
+//setenv HK_JSVNMAP_DIRECTORY              /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod
+
 
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
