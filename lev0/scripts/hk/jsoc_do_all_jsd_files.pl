@@ -1,13 +1,15 @@
 #!/usr/bin/perl
 ##############################################################################
-# Name:        do_all_jsd_files.pl - do all jsd files                        #
+# Name:        jsoc_do_all_jsd_files.pl - do all jsd files                   #
 # Description: Used to create all preliminary and final JSD file if needed.  #
 #              Uses the file version numbers in HK_CONFIG_FILES to get list  #
 #              of file version to do. By using argument can create prelimary #
 #              or final JSDs.                                                #
-# Execution:   (1)To run to create prelim jsd's: do_all_jsd_file.pl prelim   #
-#              (2)To run to create final jsd's:  do_all_jsd_file.pl final    #
-#              (3)For help: do_all_jsd_file.pl -h                            #
+# Execution:   (1)To run to create prelim jsd's:                             #
+#                 jsoc_do_all_jsd_file.pl prelim                             #
+#              (2)To run to create final jsd's:                              #
+#                 jsoc_do_all_jsd_file.pl final                              #
+#              (3)For help: jsoc_do_all_jsd_file.pl -h                       #
 # Limitation:  The limitation is for creating preliminary and final JSD files#
 #              is the HK_CONFIG_FILES variable set to place where all file   #
 #              version directories are.                                      #
@@ -93,9 +95,9 @@ sub show_help
 
   print "Help Listing\n";
   print "(1)  Ways to Execute Perl Script: \n";
-  print "(1a) Create All Preliminary JSD Files: do_all_jsd_file.pl prelim \n";
-  print "(1b) Create All Final JSD Files:       do_all_jsd_file.pl final\n";
-  print "(1c) Get Help Information:             do_all_jsd_file.pl -h \n";
+  print "(1a) Create All Preliminary JSD Files: jsoc_do_all_jsd_file.pl prelim \n";
+  print "(1b) Create All Final JSD Files:       jsoc_do_all_jsd_file.pl final\n";
+  print "(1c) Get Help Information:             jsoc_do_all_jsd_file.pl -h \n";
   print "(2)  Environment variable HK_CONFIG_DIRECTORY\n";
   print "(2a) Used to get list of file versions number to do to process create all JSD again\n";
 }
