@@ -8,8 +8,17 @@
 # Execution:   movedf.pl                                                     #
 ##############################################################################
 # set Environment Variables
-my $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/home1/jsoc/sdo/lzp/MOCFiles/moc/lzp/2008_111";
+# for test pickup dayfile location:
+$pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/home1/jsoc/sdo/lzp/MOCFiles/moc/lzp/2008_111";
+# for production use:
+#$pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/home1/jsoc/sdo/lzp/MOCFiles/moc/lzp/";
+
+# for 60d test dropoff - tested with this initially
 my $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0_60d/hk_moc_dayfile";
+# for lev0 cpt dropoff
+#my $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0/hk_moc_dayfile";
+
+# debug flag
 my $dflg=$ENV{'DF_MOVEDF_DEBUG'}="0";
 
 #common setting for all environments
@@ -20,9 +29,12 @@ $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
 my $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 my $source="moc";
 
-# pick up files there
+# pick up dayfiles and xml files there
 @list_hkt_files=`find $pup_dir | grep \.hkt\$`;
 @list_xml_files=`find $pup_dir | grep \.hkt.xml\$`;
+#for production use - gather files there starting at june 1, 2008 to 2029
+#@list_hkt_files=`find $pup_dir  | egrep '(2008_[1][5][2-9]|2008_[1][6-9][0-9]|2008_[2-3][0-9][0-9]2009_[0-3][0-9][0-9]|20[1-2][0-9]_[0-3][0-9][0-9])' | grep \.hkt\$`;
+#@list_xml_files=`find $pup_dir  | egrep '(2008_[1][5][2-9]|2008_[1][6-9][0-9]|2008_[2-3][0-9][0-9]2009_[0-3][0-9][0-9]|20[1-2][0-9]_[0-3][0-9][0-9])' | grep \.hkt\.xml\$`;
 
 # set log file based on sdo, moc, or egsefm
 if ($source eq "hsb")
