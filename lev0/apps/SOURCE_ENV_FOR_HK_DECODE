@@ -1,9 +1,10 @@
-### Environment Variable Used To Run Lev0 HK Decode Code --Made to run on Production-Need to fix for local workspace
+### Environment Variable Used To Run Lev0 HK Decode Code --Made to run on Production-fix for local workspace
 setenv HK_CONFIG_DIRECTORY               /home/production/cvs/TBL_JSOC/lev0/hk_config_file/
-setenv HK_JSVNMAP_DIRECTORY              /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file
-setenv HK_DF_HSB_DIRECTORY               /tmp21/production/lev0_60d/hk_hsb_dayfile
-setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0_60d
+setenv HK_JSVNMAP_DIRECTORY              /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod
+setenv HK_DF_HSB_DIRECTORY               /tmp21/production/lev0/hk_hsb_dayfile
+setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
 setenv HK_SUFFIX_JSVNMAP_FILENAME        -JSVN-TO-PVN
 setenv HK_LEV0_BY_APID_PROJECT_NAME_AIA  aia
 setenv HK_LEV0_BY_APID_PROJECT_NAME_HMI  hmi
 setenv HK_LEV0_BY_APID_PROJECT_NAME_SDO  sdo
+
