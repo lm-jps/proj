@@ -1,14 +1,14 @@
 #!/usr/bin/perl
 #############################################################################
-# Name:        do_jsvn_map_file.pl  - Do JSOC version number map file       #
+# Name:        jsoc_do_jsvn_map_file.pl  - Do JSOC version number map file  #
 # Description: Creates map of Jsoc series version number to packet version  #
 #              number file for each apid. The apid list can be inputed 3    #
 #              ways. Need to create help log and checks for arguments.      #
 # Execution:   (1) To run :                                                 #
-#                  do_jsvn_map_file.pl -f                                   # 
-#                  do_jsvn_map_file.pl -g <file version number              # 
-#                  do_jsvn_map_file.pl -a <apid number>                     # 
-#                  do_jsvn_map_file.pl -h                                   # 
+#                jsoc_do_jsvn_map_file.pl -f                                # 
+#                jsoc_do_jsvn_map_file.pl -g <file version number           # 
+#                jsoc_do_jsvn_map_file.pl -a <apid number>                  # 
+#                jsoc_do_jsvn_map_file.pl -h                                # 
 # Logic:       (1)read and process arguments                                #
 #              (2)If -g is argument read in folder and read in files in     #
 #                 folder to get all apids in filenames.                     #
@@ -22,7 +22,7 @@
 #                 packet-version-number, file-version-number,etc and writing#
 #                 line with values from JSVN_LIST.                          #
 # Execution:   (1) To run :                                                 #
-#                   do_jsvn_map_file.pl                                     # 
+#                  jsoc_do_jsvn_map_file.pl                                 # 
 # Author:      Carl                                                         #
 # Date:        Move from EGSE to JSOC software environment on March 21, 2008#
 #############################################################################
@@ -193,14 +193,14 @@ sub show_help_info
   print "Help Listing\n";
   print "(1)Ways to Execute Perl Script: \n";
   print "(1a)Create map files using -g option will create map files with all apids contained in folder specified :";
-  print " do_jsvn_map_file.pl -g <apid-#-version# folder>\n";
-  print "    Example: do_jsvn_map_file.pl -g 1.140\n"; 
+  print " jsoc_do_jsvn_map_file.pl -g <apid-#-version# folder>\n";
+  print "    Example: jsoc_do_jsvn_map_file.pl -g 1.140\n"; 
   print "(1b)Create map files using argument passed for apid number will create map file for that apid only:";
-  print " do_jsvn_map_file.pl -a <apid-value in dec.chars>\n";
-  print "    Example: do_jsvn_map_file.pl -a 0445\n"; 
-  print "(1c)Create map files using list of apids in file, where filename is set in environment variable HK_APID_LIST_DAY_FILES: do_jsvn_map_file.pl -f \n";
-  print "    Example: do_jsvn_map_file.pl -f \n"; 
-  print "(1d)Get Help Information: do_jsvn_map_file.pl -h  or  do_jsvn_map_file.pl -help\n";
+  print " jsoc_do_jsvn_map_file.pl -a <apid-value in dec.chars>\n";
+  print "    Example: jsoc_do_jsvn_map_file.pl -a 0445\n"; 
+  print "(1c)Create map files using list of apids in file, where filename is set in environment variable HK_APID_LIST_DAY_FILES: jsoc_do_jsvn_map_file.pl -f \n";
+  print "    Example: jsoc_do_jsvn_map_file.pl -f \n"; 
+  print "(1d)Get Help Information: jsoc_do_jsvn_map_file.pl -h  or  jsoc_do_jsvn_map_file.pl -help\n";
   print "***Note:Currently using option -g\n";
   print "(2)Environment variable HK_APID_LIST_DAY_FILES\n"; 
   print "(2a)Used to list apid to process using argument -f\n";
