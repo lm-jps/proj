@@ -50,7 +50,7 @@
 #define H0LOGFILE "/tmp/h0.%s.%d.log"
 #define DIRDDS "/egse/ssim2soc"
 #define IMAGEDIR "/tmp/jim"	/* dir to put the last IMAGEDIRCNT images */
-#define IMAGEDIRCNT 20		/* # of images to save */
+#define IMAGEDIRCNT 100		/* # of images to save */
 #define SEC1970TO2004 1072828800 /* approx #of secs from 1970 to 2004 */
 #define PKTSZ 1788		/* size of VCDU pkt */
 #define DEFAULTDB "jsocdc"	/* the default db to connect to */
