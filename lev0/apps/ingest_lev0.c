@@ -42,10 +42,12 @@
 #include "decode_hk.h"
 #include "load_hk_config_files.h"
 
-#define LEV0SERIESNAMEHMI "su_production.lev0_test"
-#define TLMSERIESNAMEHMI "su_production.tlm_test"
-#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
-#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+#define RESTART_CNT 2	//#of tlm files to process before restart
+
+//#define LEV0SERIESNAMEHMI "su_production.lev0_test"
+//#define TLMSERIESNAMEHMI "su_production.tlm_test"
+//#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
+//#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
 //#define TLMSERIESNAMEHMI "hmi.tlm_60d"
@@ -53,10 +55,10 @@
 //#define TLMSERIESNAMEAIA "aia.tlm_60d"
 
 //When change to these data series below to save real data.
-//#define TLMSERIESNAMEHMI "hmi.tlm"
-//#define LEV0SERIESNAMEAIA "aia.lev0"
-//#define TLMSERIESNAMEAIA "aia.tlm"
-//#define LEV0SERIESNAMEHMI "hmi.lev0"
+#define TLMSERIESNAMEHMI "hmi.tlm"
+#define LEV0SERIESNAMEAIA "aia.lev0"
+#define TLMSERIESNAMEAIA "aia.tlm"
+#define LEV0SERIESNAMEHMI "hmi.lev0"
 //Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
 //setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
 //setenv HK_DF_HSB_DIRECTORY               /tmp21/production/lev0/hk_hsb_dayfile
@@ -88,6 +90,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
+  {ARG_FLAG, "r", "0", "restart flag"},
   {ARG_END}
 };
 
@@ -128,13 +131,18 @@ int whk_status;
 int total_tlm_vcdu;
 int total_missing_vcdu;
 int errmsgcnt, fileimgcnt;
+int file_processed_count = 0;	// ingest_lev0 restarts when = RESTART_CNT
 int imagecnt = 0;		// num of images since last commit 
+int restartflg = 0;		// set when ingest_lev0 is called for a restart
 int sigalrmflg = 0;             // set on signal so prog will know 
 int sigtermflg = 0;             // set on signal so prog will know 
 int ALRMSEC = 70;               // seconds for alarm signal 
+char logname[128];
+char argvc[32], argindir[96], arglogfile[96], argoutdir[96];
 char timetag[32];
 char pchan[8];			// primary channel to listen to e.g. VC02 
 char rchan[8];			// redundant channel to listen to e.g. VC10 
+char stopfile[80];		// e.g. /usr/local/logs/lev0/VC04_stop
 char tlmseriesname[128];	// e.g. hmi.tlm
 char lev0seriesname[128];	// e.g. hmi.lev0
 char tlmnamekey[128];		// shortened tlm file name for TLMDSNAM keyword
@@ -145,6 +153,7 @@ char *tlmdir;			// tlm dir name passed in
 char *outdir;			// output dir for .tlm file (can be /dev/null)
 char *logfile;			// optional log name passed in 
 char *vc;			// virtual channel to process, e.g. VC02 
+struct stat stbuf;
 struct p_r_chans {
   char *pchan;
   char *rchan;
@@ -167,7 +176,7 @@ typedef struct namesort NAMESORT;
 
 
 int nice_intro ()
-  {
+{
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
@@ -175,14 +184,17 @@ int nice_intro ()
 	"vc=<virt chan> indir=</dir> [outdir=</dir>] [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
+	"  -r: restart. only used when we restart our selves periodically\n"
 	"vc= primary virt channel to listen to e.g. VC02\n"
 	"indir= directory containing the files to ingest\n"
 	"outdir= optional dir to copy the files to after the ingest\n"
 	"logfile= optional log file name. Will create one if not given\n");
     return(1);
     }
+  verbose = cmdparams_get_int (&cmdparams, "v", NULL);
+  restartflg = cmdparams_get_int (&cmdparams, "r", NULL);
   return (0);
-  }
+}
 
 static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
 {
@@ -325,8 +337,24 @@ void alrm_sig(int sig)
   sigalrmflg = 1;		//tell main loop of signal
 }
 
+// User signal 1 is sent by ilev0_alrm1.pl to tell us to exit.
+void usr1_sig(int sig)
+{
+  printk("%s usr1_sig received\n", datestr);
+  sleep(1);
+  sigtermflg = 1;              // tell main loop to exit
+}
+
+void usr2_sig(int sig)
+{
+  printk("%s usr2_sig received\n", datestr);
+  sleep(1);
+  sigtermflg = 1;              // tell main loop to exit
+}
+
 void sighandler(int sig)
 {
+  printk("%s signal received\n", datestr);
   sigtermflg = 1;		//tell main loop
   return;
 }
@@ -565,7 +593,6 @@ int fsn_change_rexmit()
       snprintf(tlmnamekeyfirst, 23, "%s", cptr);
     else
       sprintf(tlmnamekeyfirst, "%s", "UNK");
-printf("tlmnamekeyfirst = %s\n", tlmnamekeyfirst); //!!!TEMP
     segmentc = drms_segment_lookupnum(rsc, 0);
     cArray = drms_segment_read(segmentc, DRMS_TYPE_SHORT, &rstatus);
     if(rstatus) {
@@ -718,6 +745,7 @@ int get_tlm(char *file, int rexmit, int higherver)
       cnt2 = MDI_getshort(cbuf+34);
       fsnx = (unsigned int)(cnt1<<16)+(unsigned int)(cnt2);
       fsnx = fsnx & 0x3fffffff;		//low 30bits for fsn */
+      if(fsnx == 0) continue;		//a 0 fsn is not acceptable
       if(rexmit || higherver) {
         if(fsnx != fsn_prev) {          // the fsn has changed
           if(fsn_change_rexmit()) {	//handle old & new images
@@ -1018,7 +1046,7 @@ void do_ingest()
 				DRMS_PERMANENT, &status);
     if(status) {
       printk("***Can't create record for %s\n", tlmseriesname);
-      abortit(3);
+      continue;
     }
     if((status = drms_setkey_string(rs_tlm, "filename", tlmnamekey))) {
       printk("**ERROR: drms_setkey_string failed for 'filename'\n");
@@ -1026,7 +1054,7 @@ void do_ingest()
     drms_record_directory(rs_tlm, path, 0);
     if(!*path) {
       printk("***ERROR: No path to segment for %s\n", tlmseriesname);
-      abortit(3);
+      continue;
     }
     if(outdir) {
       sprintf(cmd, "cp -p %s %s", name, outdir);
@@ -1068,6 +1096,9 @@ void do_ingest()
     if(get_tlm(xxname, rexmit, higherversion)) { // lev0 extraction of image 
       printk("***Error in lev0 extraction for %s\n", xxname);
     }
+    if(stat(stopfile, &stbuf) == 0) { break; } //signal to stop
+    //if(++file_processed_count >= RESTART_CNT) break; 
+    //if(sigtermflg) break;
   }
   free(nameptr);
 }
@@ -1083,6 +1114,14 @@ void setup()
   char envfile[100], s1[256],s2[256],s3[256], line[256];
 
   signal(SIGALRM, alrm_sig);
+  //signal(SIGUSR1, &usr1_sig);	//handle signal 16 sent by ilev0_alrm1.pl
+  signal(SIGUSR2, &usr2_sig);	//handle signal 16 sent by ilev0_alrm1.pl
+  if (signal(SIGINT, SIG_IGN) != SIG_IGN)
+    signal(SIGINT, sighandler);
+  if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
+    signal(SIGTERM, sighandler);
+
+  tval = time(NULL);
   if (signal(SIGINT, SIG_IGN) != SIG_IGN)
     signal(SIGINT, sighandler);
   if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
@@ -1100,7 +1139,18 @@ void setup()
   sprintf(string, "ingest_lev0 started as pid=%d user=%s\n", getpid(), username);
   strcat(idstr, string);
   printk("*%s", idstr);
+  if(restartflg) printk("-r ");
+  sprintf(argvc, "vc=%s", vc);
+  sprintf(argindir, "indir=%s", tlmdir);
+  sprintf(arglogfile, "logfile=%s", logname);
+  if(outdir) {
+    sprintf(argoutdir, "outdir=%s", outdir);
+    printk("%s %s %s %s\n", argvc, argindir, argoutdir, arglogfile);
+  } else {
+    printk("%s %s %s\n", argvc, argindir, arglogfile);
+  }
   strcpy(pchan, vc);		// virtual channel primary 
+  sprintf(stopfile, "/usr/local/logs/lev0/%s_stop", pchan);
   for(i=0; ; i++) {		// ck for valid and get redundant chan 
     if(!strcmp(p_r_chan_pairs[i].pchan, pchan)) {
       strcpy(rchan, p_r_chan_pairs[i].rchan);
@@ -1156,8 +1206,10 @@ void setup()
 // Module main function. 
 int DoIt(void)
 {
-  char logname[128];
+  pid_t pid;
   int wflg = 1;
+  char *args[6];
+  char callcmd[128];
 
   if (nice_intro())
     return (0);
@@ -1183,11 +1235,20 @@ int DoIt(void)
   else {
     sprintf(logname, "%s", logfile);
   }
-  if((h0logfp=fopen(logname, "w")) == NULL)
-    fprintf(stderr, "**Can't open the log file %s\n", logname);
+  if(restartflg) {
+    sleep(12);		//make sure old ingest_lev0 is done
+    if((h0logfp=fopen(logname, "a")) == NULL)
+      fprintf(stderr, "**Can't open for append the log file %s\n", logname);
+  }
+  else {
+    if((h0logfp=fopen(logname, "w")) == NULL)
+      fprintf(stderr, "**Can't open the log file %s\n", logname);
+  }
   setup();
   while(wflg) {
     do_ingest();                // loop to get files from the input dir 
+/****************************************************************************
+    //note alrm sig doesn't work for multi-threaded process
     if(sigalrmflg) {		// process an alarm timout for no data in
       if(Image.initialized) {
         if(rs && fsn_prev) {	//make sure have a created record
@@ -1206,10 +1267,97 @@ int DoIt(void)
       imagecnt = 0;	//and start a new transaction interval
       sigalrmflg = 0;
     }
+**************************************************************************/
+
+/************************************************************************
+    if(file_processed_count >= RESTART_CNT) {	//restart this ingest
+      if((pid = fork()) < 0) {
+        printk("***Can't fork(). errno=%d\n", errno);
+      }
+      else if(pid == 0) {                   // this is the beloved child 
+        printk("\nexecvp of ingest_lev0\n");
+        args[0] = "ingest_lev0";
+          args[1] = "-r";
+          args[2] = argvc;
+          args[3] = argindir;
+          args[4] = arglogfile;
+          if(outdir) {
+            args[5] = argoutdir;
+            args[6] = NULL;
+          } else {
+            args[5] = NULL;
+          }
+        if(execvp(args[0], args) < 0) {
+          printk("***Can't execvp() ingest_lev0. errno=%d\n", errno);
+          exit(1);
+        }
+      }
+      //now parent closed any open image
+      if(Image.initialized) {
+        if(rs) {		//make sure have a created record
+          close_image(rs, segment, segArray, &Image, fsn_prev);
+          printk("*Closed image on restart FSN=%u\n", fsn_prev);
+        }
+      }
+      else {
+        printk("*No image to close on restart\n");
+      }
+      printk("restart: drms_server_end_transaction()\n");
+      drms_server_end_transaction(drms_env, 0 , 0); //commit
+      wflg = 0;		//exit DoIt
+      continue;
+    }
+**************************************************************************/
+
+//    if(file_processed_count >= RESTART_CNT) {	//restart this ingest
+//      //now parent closed any open image
+//      if(Image.initialized) {
+//        if(rs) {		//make sure have a created record
+//          close_image(rs, segment, segArray, &Image, fsn_prev);
+//          printk("*Closed image on restart FSN=%u\n", fsn_prev);
+//        }
+//      }
+//      else {
+//        printk("*No image to close on restart\n");
+//      }
+//      /***************************************************************
+//      printk("restart: drms_server_end_transaction()\n");
+//      drms_server_end_transaction(drms_env, 0 , 0); //commit left overs
+//      **********************************************************/
+//      sprintf(callcmd, "ingest_lev0 -r %s %s %s &", argvc,argindir,arglogfile);
+//      if(system(callcmd)) {
+//        printk("**ERROR on: %s\n", callcmd);
+//      }
+//      wflg = 0;		//leave DoIt()
+//      continue;
+//    }
+//!!!TEMP test
+    if(stat(stopfile, &stbuf) == 0) {
+      printk("Found file: %s. Terminate.\n", stopfile);
+      //now close any open image
+      if(Image.initialized) {
+        if(rs) {		//make sure have a created record
+          close_image(rs, segment, segArray, &Image, fsn_prev);
+        }
+      }
+      else {
+        printk("*No image to close on exit\n");
+      }
+      sprintf(callcmd, "/bin/rm -f %s", stopfile);
+      system(callcmd);
+      sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exit", pchan);
+      system(callcmd);		//let the world know we're gone
+      wflg = 0; //leave DoIt()
+      continue;
+    }
     //detect if exit. NOTE: do_ingest() can take long time if lots of files
-    if(sigtermflg) abortit(2);
-    sleep(10);
-    //wflg = 0;			// !!!TEMP 
+    //!!NOTE: it may be the DRMS server that gets the ^C
+    //man signal say undefined for multi-threaded process
+    if(sigtermflg) {
+      wflg = 0; //leave DoIt()
+      continue;
+    }
+    sleep(2);
   }
   return(0);
 }
