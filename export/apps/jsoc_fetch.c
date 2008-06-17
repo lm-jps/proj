@@ -77,6 +77,7 @@ ModuleArgs_t module_args[] =
 { 
   {ARG_STRING, "op", "Not Specified", "<Operation>"},
   {ARG_STRING, "ds", "Not Specified", "<record_set query>"},
+  {ARG_STRING, "seg", "Not Specified", "<record_set segment list>"},
   {ARG_STRING, "requestid", "Not Specified", "JSOC export request identifier"},
   {ARG_STRING, "process", "Not Specified", "string containing program and arguments"},
   {ARG_STRING, "requestor", "Not Specified", "name of requestor"},
@@ -101,6 +102,7 @@ int nice_intro ()
         "  details are:\n"
 	"op=<command> tell which ajax function to execute\n"
 	"ds=<recordset query> as <series>{[record specifier]} - required\n"
+	"seg=<list of segment names to append to dataset spec\n"
 	"requestid=JSOC export request identifier\n"
 	"process=string containing program and arguments\n"
 	"requestor=name of requestor\n"
@@ -230,14 +232,19 @@ TIME timenow()
   return(now);
   }
 
-#define JSONDIE(msg) \
+#define JSONDIE(msg) {JSONDIE2(msg,"");}
+
+#define JSONDIE2(msg,info) \
   {	\
   char *msgjson;	\
   char errval[10];	\
   char *json;	\
+  char message[10000]; \
   json_t *jroot = json_new_object();	\
-if (DEBUG) fprintf(stderr,"%s\n",msg);	\
-  msgjson = string_to_json(msg);	\
+if (DEBUG) fprintf(stderr,"%s%s\n",msg,info);	\
+  strcpy(message,msg); \
+  strcat(message,info); \
+  msgjson = string_to_json(message);	\
   json_insert_pair_into_object(jroot, "status", json_new_number("4"));	\
   json_insert_pair_into_object(jroot, "error", json_new_string(msgjson));	\
   json_tree_to_string(jroot,&json);	\
@@ -253,6 +260,7 @@ int DoIt(void)
 						/* Get command line arguments */
   char *op;
   char *in;
+  char *seglist;
   char *requestid;
   char *process;
   char *requestor;
@@ -303,6 +311,7 @@ int DoIt(void)
   op = cmdparams_get_str (&cmdparams, "op", NULL);
   requestid = cmdparams_get_str (&cmdparams, "requestid", NULL);
   in = cmdparams_get_str (&cmdparams, "ds", NULL);
+  seglist = cmdparams_get_str (&cmdparams, "seg", NULL);
   process = cmdparams_get_str (&cmdparams, "process", NULL);
   format = cmdparams_get_str (&cmdparams, "format", NULL);
   method = cmdparams_get_str (&cmdparams, "method", NULL);
@@ -325,12 +334,22 @@ int DoIt(void)
     int segcount = 0;
     int irec;
     int all_online = 1;
+    char dsquery[DRMS_MAXQUERYLEN];
     DRMS_RecordSet_t *rs;
     export_series = EXPORT_SERIES_NEW;
     size=0;
-    rs = drms_open_records(drms_env, in, &status);
+    strncpy(dsquery,in,DRMS_MAXQUERYLEN);
+    if (index(dsquery,'[') == NULL)
+      strcat(dsquery,"[]");
+    if (strcmp(seglist,"Not Specified") != 0 && strcmp(seglist,"**ALL**") != 0)
+      {
+      strncat(dsquery, "{", DRMS_MAXQUERYLEN);
+      strncat(dsquery, seglist, DRMS_MAXQUERYLEN);
+      strncat(dsquery, "}", DRMS_MAXQUERYLEN);
+      }
+    rs = drms_open_records(drms_env, dsquery, &status);
     if (!rs)
-	JSONDIE("Can not open RecordSet");
+	JSONDIE2("Can not open RecordSet: ",dsquery);
 
     // Do survey of recordset
     all_online = 1;
@@ -377,7 +396,7 @@ int DoIt(void)
         return(0);
         }  
       else
-        JSONDIE("format not implemented yet");
+        JSONDIE2("format not implemented yet: ",format);
       }
 
     // Must do full export processing
@@ -442,7 +461,7 @@ int DoIt(void)
       JSONDIE("Cant create new export control record");
 
     drms_setkey_string(export_log, "RequestID", requestid);
-    drms_setkey_string(export_log, "DataSet", in);
+    drms_setkey_string(export_log, "DataSet", dsquery);
     drms_setkey_string(export_log, "Processing", process);
     drms_setkey_string(export_log, "Protocol", protocol);
     drms_setkey_string(export_log, "Method", method);
@@ -465,9 +484,9 @@ int DoIt(void)
   sprintf(status_query, "%s[%s]", export_series, requestid);
   exports = drms_open_records(drms_env, status_query, &status);
   if (!exports)
-    JSONDIE("Cant locate export series");
+    JSONDIE2("Cant locate export series: ", status_query);
   if (exports->n < 1)
-    JSONDIE("Cant locate export request");
+    JSONDIE2("Cant locate export request: ", status_query);
   export_log = exports->records[0];
 
   status     = drms_getkey_int(export_log, "Status", NULL);
@@ -579,7 +598,7 @@ int DoIt(void)
       }
     }
   else
-    JSONDIE("format not implemented yet");
+    JSONDIE2("format not implemented yet: ", format);
 
   return(0);
 }

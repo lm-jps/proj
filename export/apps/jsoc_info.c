@@ -379,6 +379,7 @@ if (DEBUG) fprintf(stderr,"   starting DBindex\n");
   json_insert_child(dbindex, indexarray);
   json_insert_child(jroot,dbindex);
 
+if (DEBUG) fprintf(stderr,"   starting all keywords\n");
   /* show all keywords */
   json_t *allkeys = json_new_string("keywords");
   json_t *keyarray = json_new_array();
@@ -387,6 +388,7 @@ if (DEBUG) fprintf(stderr,"   starting DBindex\n");
     {
     json_t *keyinfo = json_new_object();
     json_t *keytype;
+if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
     json_insert_pair_into_object(keyinfo, "name", json_new_string(key->info->name));
     if (key->info->islink)
 	keytype = json_new_string("link");
@@ -394,16 +396,20 @@ if (DEBUG) fprintf(stderr,"   starting DBindex\n");
 	keytype = json_new_string(drms_type_names[key->info->type]);
     json_insert_pair_into_object(keyinfo, "type", keytype);
     notework = string_to_json(key->info->unit);
+if (DEBUG) fprintf(stderr,"   starting  units for keyword %s\n",key->info->name);
     json_insert_pair_into_object(keyinfo, "units", json_new_string(notework));
+if (DEBUG) fprintf(stderr,"   done  units for keyword %s\n",key->info->name);
     free(notework);
     notework = string_to_json(key->info->description);
     json_insert_pair_into_object(keyinfo, "note", json_new_string(notework));
     free(notework);
     json_insert_child(keyarray, keyinfo);
     }
+if (DEBUG) fprintf(stderr,"   done all keywords loop\n");
   json_insert_child(allkeys,keyarray);
   json_insert_child(jroot,allkeys);
   
+if (DEBUG) fprintf(stderr,"   starting show segments\n");
   /* show the segments */
   json_t *allsegs = json_new_string("segments");
   json_t *segarray = json_new_array();
@@ -614,6 +620,7 @@ int DoIt(void)
     char *p, *seriesname;
     json_t *jroot;
     char *json;
+    char *final_json;
     DRMS_Record_t *rec;
     int status=0;
     /* Only want keyword info so get only the template record for drms series or first record for other data */
@@ -627,9 +634,10 @@ int DoIt(void)
     get_series_stats(rec, jroot);
     json_insert_pair_into_object(jroot, "status", json_new_number("0"));
     json_tree_to_string(jroot,&json);
+    final_json = json_format_string(json);
     /* send the output json back to client */
     printf("Content-type: application/json\n\n");
-    printf("%s\n",json);
+    printf("%s\n",final_json);
     fflush(stdout);
     free(seriesname);
     return(0);
@@ -639,7 +647,7 @@ int DoIt(void)
   if (strcmp(op,"rs_summary") == 0) 
     {
     json_t *jroot;
-    char *json;
+    char *json, *final_json;
     int count=0, status=0;
     char val[100];
     jroot = json_new_object();
@@ -652,8 +660,10 @@ int DoIt(void)
     json_insert_pair_into_object(jroot, "count", json_new_number(val));
     json_insert_pair_into_object(jroot, "status", json_new_number("0"));
     json_tree_to_string(jroot,&json);
+    final_json = json_format_string(json);
+    /* send the output json back to client */
     printf("Content-type: application/json\n\n");
-    printf("%s\n",json);
+    printf("%s\n",final_json);
     fflush(stdout);
     return(0);
     }
@@ -673,6 +683,7 @@ int DoIt(void)
     json_t *json_keywords = json_new_array();
     json_t *json_segments = json_new_array();
     char *json;
+    char *final_json;
     int status=0;
     int irec, nrecs;
     jroot = json_new_object();
@@ -910,8 +921,9 @@ int DoIt(void)
     
     drms_close_records(recordset, DRMS_FREE_RECORD);
     json_tree_to_string(jroot,&json);
+    final_json = json_format_string(json);
     printf("Content-type: application/json\n\n");
-    printf("%s\n",json);
+    printf("%s\n",final_json);
     fflush(stdout);
     return(0);
     }

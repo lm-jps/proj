@@ -303,7 +303,9 @@ int DoIt(void)
       // cd to SU in export record
       fprintf(fp, "cd $REQDIR\n");
       // Force staging and get paths to export files
-      fprintf(fp, "show_info_sock -p -q -r -I '%s' > ./index.raw\n", dataset); 
+      // fprintf(fp, "jsoc_export_as_is_sock op=rs_list ds='%s' > ./index.json\n", dataset); 
+      fprintf(fp, "jsoc_export_as_is op=rs_list ds='%s' seg='**ALL**' > ./index.json\n", dataset); 
+      // fprintf(fp, "show_info_sock -p -q -r -I '%s' > ./index.raw\n", dataset); 
       // convert raw file list into index.XXX packing list files. 
       fprintf(fp, "# jsoc_export_packinglist < ./index.raw\n"); 
       // set status=done and mark this version of the export record permanent
@@ -328,7 +330,7 @@ int DoIt(void)
     drms_close_record(export_rec, DRMS_INSERT_RECORD);
 
     // SU now contains both qsub script and drms_run script, ready to execute and lock the record.
-    sprintf(command,"qsub -q j.q "
+    sprintf(command,"qsub -q x.q,o.q,j.q "
 	" -o /home/jsoc/exports/tmp/%s.runlog "
 	" -e /home/jsoc/exports/tmp/%s.runlog "
 	"  %s/%s.qsub ",
