@@ -63,7 +63,11 @@ function InitPage()
   $("ExportNotify").value = "";
   $("ExportNotifyConf").value = "";
   $("RequestID").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   }
+
 
 function CleanSeriesSelect()
   {
@@ -546,6 +550,27 @@ function GetKeyValues()
 
 // Section 7. - Export request
 
+function CreateDataTable(data, valuetable)
+  {
+  valuetable = "";
+  var count = data.count;
+  valuetable = "<TABLE BORDER=1>"
+  valuetable = valuetable + "<TR><TD>File</TD><TD>Record</TD><TD>Filename</TD></TR>"
+  for (ifile=0; ifile < count; ifile++)
+    {
+    valuetable = valuetable + "<TR>";
+    valuetable = valuetable +  "<TD>" + (ifile + 1) + "</TD>";
+    valuetable = valuetable +  "<TD>" + data.data[ifile].record + "</TD>";
+
+    thisfile = data.data[ifile].filename;
+    tmp = "<A HREF=http://jsoc.stanford.edu" + thisfile + ">" + thisfile + "</A>";
+    valuetable = valuetable +  "<TD>" + tmp + "</TD>";
+    valuetable = valuetable + "</TR>";
+    }
+  valuetable = valuetable + "</TABLE>";
+  return valuetable;
+  }
+
 function ExportNop()
   {
   }
@@ -672,6 +697,8 @@ function GetExport()
   if (ExportReadyOK == 0)
     {
     ExportReadyOK = 3;
+    $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+    $("ExportLocation").innerHTML = "";
     $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
     $("ExportButton").value = "Processing ...";
     $("ExportButton").style.backgroundColor = "#FFD8D8";
@@ -683,6 +710,8 @@ function GetExport()
                  		     "method" : $("ExportMethod").value,
 			 	     "format" : "json",
                  		     "protocol" : $("ExportProtocol").value });
+    if (nsegsselected)
+      exportparameters = exportparameters.merge({"seg": SegList});
     }
   else if (ExportReadyOK == 1)
     {
@@ -751,21 +780,7 @@ function GetExport()
         $("ExportButton").style.backgroundColor = "#D8D8D8";
         $("RequestID").innerHTML = data.requestid;
         $("ExportStatus").innerHTML = "Data Ready, size=" + data.size;
-      
-        valuetable = "<TABLE BORDER=1>"
-        valuetable = valuetable + "<TR><TD>File</TD><TD>Record</TD><TD>Filename</TD></TR>"
-        for (ifile=0; ifile < count; ifile++)
-          {
-          valuetable = valuetable + "<TR>";
-          valuetable = valuetable +  "<TD>" + (ifile + 1) + "</TD>";
-          valuetable = valuetable +  "<TD>" + data.data[ifile].record + "</TD>";
-
-          thisfile = data.data[ifile].filename;
-          tmp = "<A HREF=http://jsoc.stanford.edu" + thisfile + ">" + thisfile + "</A>";
-          valuetable = valuetable +  "<TD>" + tmp + "</TD>";
-	  valuetable = valuetable + "</TR>";
-	  }
-	valuetable = valuetable + "</TABLE>";
+        valuetable = CreateDataTable(data, valuetable);
         $("ExportLocation").innerHTML =  valuetable + "<BR>";
         }
       },
@@ -796,6 +811,8 @@ function GetStatus()
     alert("Enter Status Update RequestID");
     return;
     }
+  $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   $("StatusButton").style.backgroundColor = "#FFD8D8";
   $("StatusStatus").innerHTML = "";
   $("StatusButtonMsg").innerHTML = "Processing status request ...";
@@ -838,6 +855,7 @@ function GetStatus()
         }
       else // status == 0
         {
+        var valuetable = "";
         $("StatusButtonMsg").innerHTML = "Please only click once for status request.";
         $("StatusButton").value = "Submit Status Request";
         $("StatusButton").style.backgroundColor = "#D8D8D8";
@@ -845,6 +863,9 @@ function GetStatus()
         $("RequestID").innerHTML = data.requestid;
         var StatusLoc = "http://jsoc.stanford.edu/" + data.dir;
         $("StatusLocation").innerHTML = "<A HREF='" + StatusLoc + "'>" + StatusLoc + "</A>";
+        $("ExportStatus").innerHTML = "Data Ready, size=" + data.size;
+        valuetable = CreateDataTable(data, valuetable);
+        $("StatusDataLocation").innerHTML =  valuetable + "<BR>";
         }
       },
     onFailure: function()
@@ -979,7 +1000,10 @@ Check to Get Record Query (online status and links if a segment selected)
 
 <DIV id="ExportRequestDiv">
 <H3>7. Export Desired Data</H3>
-This section can be used to request an export of the RecordSet identified in section 3 above.
+This section can be used to request an export of the RecordSet identified in Section 3 above.
+If you wish a subset of possible segment files, specify the desired list in Section 5 above or using the "{<seglist>}" notation
+after the then required closing "]" in the record query.
+It is a good idea to preview the selection in Section 6 before requesting the export.
 If the data is not online the request may take minutes to hours.  If you enter an email address you will be notified
 when the data is ready.  After the request is submitted, you will recieve ON THIS PAGE a "Request_ID" that will be used
 to access the data when it is ready.  If you do not provide an email address you must save the Request_ID in order to
@@ -1040,6 +1064,10 @@ NOTE - The code to actually do the export is not working yet...<P>
 
 <TR><TD>Data Location</TD><TD colspan=2>
 <span id="StatusLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
+</TD></TR>
+
+<TR><TD colspan=3>
+<span id="StatusDataLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
 </TD></TR>
 </TABLE>
 <P>
