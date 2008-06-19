@@ -5490,6 +5490,15 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 			    DRMS_Segment_t *inseg = drms_segment_lookup(inRec, outSegNames[index]);
 			    DRMS_Segment_t *outseg = drms_segment_lookup(rec, outSegNames[index]);
 
+                            if (nSegs == 1 && (inseg == NULL || outseg == NULL))
+                            {
+                               /* Perhaps the two series have just one segment, but the names 
+                                * don't match - go ahead and use the one outseries segment 
+                                * to hold the results. */
+                               inseg = drms_segment_lookupnum(inRec, 0);
+                               outseg = drms_segment_lookupnum(rec, 0);
+                            }
+
 			    if (inseg != NULL && outseg != NULL)
 			    {
 			       /* segArray now owns pOutData[index]. */
@@ -5696,6 +5705,8 @@ int DoIt(void)
 					      kSeriesOut, 
 					      NULL); /* actual param string
 						      * could be 'NOT SPECIFIED' */
+          int pfile = 0; /* is the input series a plain file? */
+
 	  char *segList = cmdparams_get_str(&cmdparams, kSegList, NULL);
 	  char *opStr = cmdparams_get_str(&cmdparams, kOp, NULL);
 
@@ -5746,23 +5757,47 @@ int DoIt(void)
 
 	  if (!error)
 	  {
-	       snprintf(inSeriesName, sizeof(inSeriesName), recSetIn);
-	       char *pChar = strchr(inSeriesName, '[');
-	       if (pChar != NULL)
-	       {
-		    *pChar = '\0';
-	       }
+             if (drms_record_getquerytype(recSetIn) == kRecordSetType_PlainFile)
+             {
+                pfile = 1;
+             }
+             else
+             {
+                snprintf(inSeriesName, sizeof(inSeriesName), recSetIn);
+                char *pChar = strchr(inSeriesName, '[');
+                if (pChar != NULL)
+                {
+                   *pChar = '\0';
+                }
+             }
 	  }
 
 	  if (!error)
 	  {
-	       /* Ensure inSeries exists in the database. */
-	       inRecTemplate = drms_template_record(drms_env, inSeriesName, &status);
-	       error = (status != 0);
-	       if (error)
-	       {
-		    fprintf(stderr, "BAILING: inSeries does not exist\n");
-	       }
+             /* Ensure inSeries exists in the database. */
+             if (!pfile)
+             {
+                inRecTemplate = drms_template_record(drms_env, inSeriesName, &status);
+                error = (status != 0);
+                if (error)
+                {
+                   fprintf(stderr, "BAILING: inSeries does not exist\n");
+                }
+             }
+             else
+             {
+                DRMS_RecordSet_t *pfileRS = drms_open_records(drms_env, recSetIn, &status);
+                if (pfileRS && pfileRS->n > 0)
+                {
+                   const char *pfileSeries = pfileRS->records[0]->seriesinfo->seriesname;
+                   inRecTemplate = drms_template_record(drms_env, pfileSeries, &status);
+                }
+                else
+                {
+                   error = 1;
+                   fprintf(stderr, "BAILING: plain file query does not resolve into any fits files.\n");
+                }
+             }
 	  }
 
 	  if (!error && strcmp(seriesOut, kNotSpecified) != 0)
@@ -5820,14 +5855,15 @@ int DoIt(void)
 	       
 	       if (!error)
 	       {
-		    error = CreateDRMSPrimeKeyContainer(inRecTemplate, 
-							&inSeriesPrimeKeys, 
-							ReleaseHContainer);
+                 
+                  error = CreateDRMSPrimeKeyContainer(inRecTemplate, 
+                                                      &inSeriesPrimeKeys, 
+                                                      ReleaseHContainer);
 	       }
 	       
 	       if (!error)
 	       {
-		    CreateDRMSSegmentContainer(inRecTemplate, &inSeriesSegs, NULL);
+                  CreateDRMSSegmentContainer(inRecTemplate, &inSeriesSegs, NULL);
 	       }
 
 	       if (!error && bSeriesOut && bSeriesOutExists && !bSeriesOutEqSeriesIn)
@@ -5906,64 +5942,77 @@ int DoIt(void)
 	       /* Validate output series */
 	       if (!error)
 	       {
-		    if (bSeriesOut && bSeriesOutExists)
-		    {
-			 if(!bSeriesOutEqSeriesIn)
-			 {
-			      /* Ensure that the existing outSeries' prime keys match 
-			       * those of inSeries. */
-			      if (!KeysEqual(&inSeriesPrimeKeys, &outSeriesPrimeKeys))
-			      {
-				   error = 1;
-			      }
+                  if (pfile)
+                  {
+                     if (!bSeriesOut)
+                     {
+                        /* No output series specified, and only a pfile input specified */
+                        error = 1;
+                     }
+                     else
+                     {
+                        strncpy(actualOutputSeries, seriesOut, sizeof(actualOutputSeries));
+                     }
+                  }
+                  else if (bSeriesOut && bSeriesOutExists)
+                  {
+                     if(!bSeriesOutEqSeriesIn)
+                     {
+                        /* Ensure that the existing outSeries' prime keys match 
+                         * those of inSeries. */
+                        if (!KeysEqual(&inSeriesPrimeKeys, &outSeriesPrimeKeys))
+                        {
+                           error = 1;
+                        }
 			      
-			      /* Ensure that the existing outSeries' segments are a superset of 
-			       * those of segToProc. 
-			       */ 
-			      if (!error)
-			      {
-				   int nSegsToProc = CreateMatchingSegs(&outSeriesSegs, 
-									&segsToProc, 
-									NULL);
+                        /* Ensure that the existing outSeries' segments are a superset of 
+                         * those of segToProc. 
+                         */ 
+                        if (!error)
+                        {
+                           int nSegsToProc = CreateMatchingSegs(&outSeriesSegs, 
+                                                                &segsToProc, 
+                                                                NULL);
 				   
-				   if (nSegsToProc == -1)
-				   {
-					error = 1;
-				   }
-				   else if (nSegsToProc != segsToProc.items->num_total)
-				   {
-					error = 1;
-					fprintf(stderr, "Target series is missing one or more required segments.\n");
-				   }
-			      }
-			 }
+                           if (nSegsToProc == -1)
+                           {
+                              error = 1;
+                           }
+                           else if (nSegsToProc != segsToProc.items->num_total)
+                           {
+                              error = 1;
+                              fprintf(stderr, "Target series is missing one or more required segments.\n");
+                           }
+                        }
+                     }
 
-			 strncpy(actualOutputSeries, seriesOut, sizeof(actualOutputSeries));
-		    }
-		    else if (bSeriesOut && !bSeriesOutExists)
-		    { 
-		       /*
-			 error = (DRMS_SUCCESS != 
-				  drms_create_seriesfromseries(drms_env, 
-							       inSeriesName, 
-							       seriesOut, 
-							       1, 0, 2, 1, 
-							       kOutSeriesDesc,
-							       1));
-		       */
-		       error = 1;
-		       fprintf(stdout, "Need to call drms_create_seriesfromtemplate()!!!\n");
-		       XASSERT(0);
+                     strncpy(actualOutputSeries, seriesOut, sizeof(actualOutputSeries));
+                  }
+                  else if (bSeriesOut && !bSeriesOutExists)
+                  { 
+                     /*
+                       error = (DRMS_SUCCESS != 
+                       drms_create_seriesfromseries(drms_env, 
+                       inSeriesName, 
+                       seriesOut, 
+                       1, 0, 2, 1, 
+                       kOutSeriesDesc,
+                       1));
+                     */
+                     error = 1;
+                     fprintf(stdout, "Need to call drms_create_seriesfromtemplate()!!!\n");
+                     XASSERT(0);
 
-			 if (!error)
-			 {
-			      strncpy(actualOutputSeries, seriesOut, sizeof(actualOutputSeries));
-			 }
-		    }
-		    else
-		    {
-			 strncpy(actualOutputSeries, inSeriesName, sizeof(actualOutputSeries));
-		    }
+                     if (!error)
+                     {
+                        strncpy(actualOutputSeries, seriesOut, sizeof(actualOutputSeries));
+                     }
+                  }
+                  else
+                  {
+                     /* outseries not specified at all */
+                     strncpy(actualOutputSeries, inSeriesName, sizeof(actualOutputSeries));
+                  }
 	       }
 
 	       /* Do operation */

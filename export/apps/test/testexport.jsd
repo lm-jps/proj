@@ -13,14 +13,14 @@ Description:            JSOC data exports
 #=====Links=====
 
 #=====Keywords=====
-Keyword:RequestID, string, variable, record, " ", %d, NA, "Export request identifier"
-Keyword:DataSet, string, variable, record, " ", %s, NA, "Dataset requested"
-Keyword:Seg, string, variable, record, " ", %s, NA, "Segments requested"
-Keyword:ExpTime, time, variable, record, -4712.01.01_11:59:28_UT, UT, time, "Time of export"
-Keyword:FilenameFmt, string, variable, record, "%d", %s, NA, "File basname format"
+Keyword:RequestID, string, variable, record, "", %s, NA, "Export request identifier"
+Keyword:DataSet, string, variable, record, "", %s, NA, "Dataset requested"
+Keyword:Seg, string, variable, record, "", %s, NA, "Segments requested"
+Keyword:ExpTime, time, variable, record, DRMS_MISSING_VALUE, 1, UT, "Time of export"
+Keyword:FilenameFmt, string, variable, record, "%d", %s, NA, "File basename format"
 Keyword:Format, int, variable, record, -1, %d, NA, "Data format code"
-Keyword:Notify, string, variable, record, " ", %s, NA, "Notification address"
-Keyword:ReqTime, time, variable, record, -4712.01.01_11:59:28_UT, UT, time, "Time of request"
+Keyword:Notify, string, variable, record, "", %s, NA, "Notification address"
+Keyword:ReqTime, time, variable, record, DRMS_MISSING_VALUE, 1, UT, "Time of request"
 Keyword:Requestor, string, variable, record, "anon", %s, NA, "Name of requestor"
 Keyword:Size, int, variable, record, 0, %d, MB, "Volume of data requested"
 Keyword:Status, int, variable, record, -1, %d, NA, "Status of request"
