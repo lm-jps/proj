@@ -563,7 +563,7 @@ function CreateDataTable(data, valuetable)
     valuetable = valuetable +  "<TD>" + data.data[ifile].record + "</TD>";
 
     thisfile = data.data[ifile].filename;
-    tmp = "<A HREF=http://jsoc.stanford.edu" + thisfile + ">" + thisfile + "</A>";
+    tmp = "<A HREF=http://jsoc.stanford.edu" + data.dir + "/" + thisfile + ">" + thisfile + "</A>";
     valuetable = valuetable +  "<TD>" + tmp + "</TD>";
     valuetable = valuetable + "</TR>";
     }
@@ -861,7 +861,7 @@ function GetStatus()
         $("StatusButton").style.backgroundColor = "#D8D8D8";
         $("StatusStatus").innerHTML = "Data Ready, size=" + data.size;
         $("RequestID").innerHTML = data.requestid;
-        var StatusLoc = "http://jsoc.stanford.edu/" + data.dir;
+        var StatusLoc = "http://jsoc.stanford.edu/" + data.dir + "/";
         $("StatusLocation").innerHTML = "<A HREF='" + StatusLoc + "'>" + StatusLoc + "</A>";
         $("ExportStatus").innerHTML = "Data Ready, size=" + data.size;
         valuetable = CreateDataTable(data, valuetable);
