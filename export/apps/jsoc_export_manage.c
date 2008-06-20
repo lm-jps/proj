@@ -112,10 +112,10 @@ make_qsub_call(char *requestid, char *reqdir, int requestorid)
   fprintf(fp, "  sleep 1\nend \n");
   fprintf(fp, "drms_run %s/%s.drmsrun -V --nolog >>& /home/jsoc/exports/tmp/%s.runlog \n", reqdir, requestid, requestid);
   fprintf(fp, "set DRMS_ERROR=$status\n");
-  fprintf(fp, "set NewRecnum=`cat /home/jsoc/exports/tmp/%s.recnum` \n", requestid);
-  fprintf(fp, "while (`show_info -q -r 'jsoc.export[%s]'` < $NewRecnum)\n", requestid);
-  fprintf(fp, "  echo waiting for jsocdb drms_run commit >> /home/jsoc/exports/tmp/%s.runlog \n",requestid);
-  fprintf(fp, "  sleep 1\nend \n");
+fprintf(fp, "set NewRecnum=`cat /home/jsoc/exports/tmp/%s.recnum` \n", requestid);
+fprintf(fp, "while (`show_info -q -r 'jsoc.export[%s]'` < $NewRecnum)\n", requestid);
+fprintf(fp, "  echo waiting for jsocdb drms_run commit >> /home/jsoc/exports/tmp/%s.runlog \n",requestid);
+fprintf(fp, "  sleep 1\nend \n");
   if (requestorid)
      fprintf(fp, "set Notify=`show_info -q 'jsoc.export_user[? RequestorID=%d ?]' key=Notify` \n", requestorid);
   fprintf(fp, "set REQDIR = `show_info -q -p 'jsoc.export[%s]'` \n", requestid);
@@ -137,7 +137,7 @@ make_qsub_call(char *requestid, char *reqdir, int requestorid)
      fprintf(fp, "Results at http://jsoc.stanford.edu/$REQDIR\n");
      fprintf(fp, "!\n");
      }
-  fprintf(fp, "  rm -f /home/jsoc/exports/tmp/%s.recnum\n", requestid);
+fprintf(fp, "  rm -f /home/jsoc/exports/tmp/%s.recnum\n", requestid);
   fprintf(fp, "  rm -f /home/jsoc/exports/tmp/%s.runlog\n", requestid);
   fprintf(fp, "endif\n");
   fclose(fp);
@@ -180,6 +180,7 @@ int DoIt(void)
   char *shipto;
   char *method;
   char *protocol;
+  char *filenamefmt;
   char *errorreply;
   char reqdir[DRMS_MAXPATHLEN];
   char command[DRMS_MAXPATHLEN];
@@ -225,6 +226,7 @@ int DoIt(void)
       dataset    = drms_getkey_string(export_log, "DataSet", NULL);
       process    = drms_getkey_string(export_log, "Processing", NULL);
       protocol   = drms_getkey_string(export_log, "Protocol", NULL);
+      filenamefmt= drms_getkey_string(export_log, "FilenameFmt", NULL);
       method     = drms_getkey_string(export_log, "Method", NULL);
       format     = drms_getkey_string(export_log, "Format", NULL);
       reqtime    = drms_getkey_time(export_log, "ReqTime", NULL);
@@ -258,6 +260,7 @@ int DoIt(void)
     drms_setkey_string(export_rec, "DataSet", dataset);
     drms_setkey_string(export_rec, "Processing", process);
     drms_setkey_string(export_rec, "Protocol", protocol);
+    drms_setkey_string(export_rec, "FilenameFmt", filenamefmt);
     drms_setkey_string(export_rec, "Method", method);
     drms_setkey_string(export_rec, "Format", format);
     drms_setkey_time(export_rec, "ReqTime", now);
@@ -296,21 +299,22 @@ int DoIt(void)
       fprintf(fp, "#! /bin/csh -f\n");
       fprintf(fp, "set echo\n");
       // force clone with copy segment. 
-//    fprintf(fp, "set_keys_sock -t -C ds='jsoc.export[%s]' Status=1\n", requestid);
+//      fprintf(fp, "set_keys_sock -t -C ds='jsoc.export[%s]' Status=1\n", requestid);
       fprintf(fp, "set_keys_sock    -C ds='jsoc.export[%s]' Status=1\n", requestid);
       // Get new SU for the export record
       fprintf(fp, "set REQDIR = `show_info_sock -q -p 'jsoc.export[%s]'`\n", requestid);
       // cd to SU in export record
       fprintf(fp, "cd $REQDIR\n");
-      // Force staging and get paths to export files
-      // fprintf(fp, "jsoc_export_as_is_sock op=rs_list ds='%s' > ./index.json\n", dataset); 
-      fprintf(fp, "jsoc_export_as_is op=rs_list ds='%s' seg='**ALL**' > ./index.json\n", dataset); 
-      // fprintf(fp, "show_info_sock -p -q -r -I '%s' > ./index.raw\n", dataset); 
-      // convert raw file list into index.XXX packing list files. 
-      fprintf(fp, "# jsoc_export_packinglist < ./index.raw\n"); 
+fprintf(fp, "printenv > %s.env\n", requestid);
+fprintf(fp, "echo $HOSTNAME\n");
+      // Force staging and get paths to export files with list in index.txt
+      fprintf(fp, "jsoc_export_as_is ds='%s' requestid=%s filenamfmt=%s\n", dataset, requestid,  filenamefmt); 
+      // convert index.txt list into index.json and index.html packing list files. 
+      fprintf(fp, "jsoc_export_make_index\n");
       // set status=done and mark this version of the export record permanent
       fprintf(fp, "set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
-      fprintf(fp, "show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
+// make drms_run completion lock file
+fprintf(fp, "show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
       // copy the drms_run log file
       fprintf(fp, "cp /home/jsoc/exports/tmp/%s.runlog ./%s.runlog \n", requestid, requestid);
       fclose(fp);

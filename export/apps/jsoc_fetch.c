@@ -84,6 +84,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "notify", "Not Specified", "email address of requestor"},
   {ARG_STRING, "shipto", "Not Specified", "mail address of requestor"},
   {ARG_STRING, "protocol", "as-is", "exported file protocol"},
+  {ARG_STRING, "filenamefmt", "{seriesname}.{recnum:%d}.{segment}", "exported file filename format"},
   {ARG_STRING, "format", "json", "return content type"},
   {ARG_STRING, "method", "url", "return method"},
   {ARG_FLAG, "h", "0", "help - show usage"},
@@ -109,6 +110,7 @@ int nice_intro ()
 	"notify=email address of requestor\n"
 	"shipto=mail address of requestor\n"
 	"protocol=exported file protocol\n"
+	"filenamefmt=exported file filename format\n"
 	"format=return content type\n"
 	"method=return method\n"
 	"h=help - show usage\n"
@@ -208,6 +210,7 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
   json_insert_pair_into_object(jroot, "count", json_new_number(numval));
   sprintf(numval, "%ld", size);
   json_insert_pair_into_object(jroot, "size", json_new_number(numval));
+  json_insert_pair_into_object(jroot, "dir", json_new_string(""));
   json_insert_pair_into_object(jroot, "data", data);
   return(count);
   }
@@ -270,6 +273,7 @@ int DoIt(void)
   char *shipto;
   char *method;
   char *protocol;
+  char *filenamefmt;
   char *errorreply;
   int size;
   TIME reqtime;
@@ -316,6 +320,7 @@ int DoIt(void)
   format = cmdparams_get_str (&cmdparams, "format", NULL);
   method = cmdparams_get_str (&cmdparams, "method", NULL);
   protocol = cmdparams_get_str (&cmdparams, "protocol", NULL);
+  filenamefmt = cmdparams_get_str (&cmdparams, "filenamefmt", NULL);
   requestor = cmdparams_get_str (&cmdparams, "requestor", NULL);
   notify = cmdparams_get_str (&cmdparams, "notify", NULL);
   shipto = cmdparams_get_str (&cmdparams, "shipto", NULL);
@@ -464,6 +469,7 @@ int DoIt(void)
     drms_setkey_string(export_log, "DataSet", dsquery);
     drms_setkey_string(export_log, "Processing", process);
     drms_setkey_string(export_log, "Protocol", protocol);
+    drms_setkey_string(export_log, "FilenameFmt", filenamefmt);
     drms_setkey_string(export_log, "Method", method);
     drms_setkey_string(export_log, "Format", format);
     drms_setkey_time(export_log, "ReqTime", now);
@@ -493,6 +499,7 @@ int DoIt(void)
   in         = drms_getkey_string(export_log, "DataSet", NULL);
   process = drms_getkey_string(export_log, "Processing", NULL);
   protocol   = drms_getkey_string(export_log, "Protocol", NULL);
+  filenamefmt = drms_getkey_string(export_log, "FilenameFmt", NULL);
   method     = drms_getkey_string(export_log, "Method", NULL);
   format     = drms_getkey_string(export_log, "Format", NULL);
   reqtime    = drms_getkey_time(export_log, "ReqTime", NULL);
