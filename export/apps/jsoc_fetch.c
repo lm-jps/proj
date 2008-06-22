@@ -10,6 +10,9 @@
 #include "drms_names.h"
 #include "json.h"
 
+#include <time.h>
+
+
 #define EXPORT_SERIES "jsoc.export"
 #define EXPORT_SERIES_NEW "jsoc.export_new"
 #define EXPORT_USER "jsoc.export_user"
@@ -121,6 +124,42 @@ int nice_intro ()
   return (0);
   }
 
+char *json_text_to_string(char *in)
+  {
+  char *o, *new = (char *)malloc(strlen(in)+1);
+  char *i;
+  for (i=in, o=new; *i; )
+    {
+    if (*i == '\\')
+      {
+      i++;
+      if (*i == '/' || *i == '"' || *i == '\\' )
+        { *o++ = *i++; continue;}
+      else if (*i == 'b')
+	{ *o++ = '\b'; i++; continue;}
+      else if (*i == 'f')
+	{ *o++ = '\f'; i++; continue;}
+      else if (*i == 'r')
+	{ *o++ = '\r'; i++; continue;}
+      else if (*i == 't')
+	{ *o++ = '\t'; i++; continue;}
+      else if (*i == 'n')
+	{ *o++ = '\n'; i++; continue;}
+// need to do uXXXX too!
+      }
+    *o++ = *i++;
+    }
+  *o = '\0';
+  return(new);
+  }
+
+char *string_to_json(char *in)
+  {
+  char *new;
+  new = json_escape(in);
+  return(new);
+  }
+
 void drms_sprint_rec_query(char *text, DRMS_Record_t *rec)
   {
   int iprime, nprime=0;
@@ -206,28 +245,40 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
       json_insert_child(data, recobj);
       }
     }
-  sprintf(numval, "%ld", count);
-  json_insert_pair_into_object(jroot, "count", json_new_number(numval));
-  sprintf(numval, "%ld", size);
-  json_insert_pair_into_object(jroot, "size", json_new_number(numval));
-  json_insert_pair_into_object(jroot, "dir", json_new_string(""));
-  json_insert_pair_into_object(jroot, "data", data);
+  if (jroot) // i.e. if dojson, else will be NULL for the dotxt case.
+    {
+    sprintf(numval, "%ld", count);
+    json_insert_pair_into_object(jroot, "count", json_new_number(numval));
+    sprintf(numval, "%ld", size);
+    json_insert_pair_into_object(jroot, "size", json_new_number(numval));
+    json_insert_pair_into_object(jroot, "dir", json_new_string(""));
+    json_insert_pair_into_object(jroot, "data", data);
+    }
+  else
+    {
+    json_t *recobj = data->child;
+    printf("count=%ld\n", count);
+    printf("size=%ld\n", size);
+    printf("dir=/\n");
+    printf("# DATA\n");
+    while (recobj)
+      {
+      char *ascii_query, *ascii_path;
+      json_t *record = recobj->child;
+      json_t *filename = record->next;
+      json_t *recquery = record->child;
+      json_t *pathname = filename->child;
+      ascii_query = json_text_to_string(recquery->text);
+      ascii_path = json_text_to_string(pathname->text);
+      printf("%s\t%s\n",ascii_query, ascii_path);
+      free(ascii_query);
+      free(ascii_path);
+      recobj = recobj->next;
+      }
+    }
   return(count);
   }
 
-char *string_to_json(char *in)
-  {
-  char *new, *c = in;
-  wchar_t *tmp, *work;
-  tmp = work = (wchar_t *)malloc(sizeof(wchar_t)*(strlen(in)+1));
-  while (c && *c) *tmp++ = *c++;
-  *tmp = NULL;
-  new = json_escape(work);
-  free(work);
-  return(new);
-  }
-
-#include <time.h>
 TIME timenow()
   {
   TIME UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
@@ -235,26 +286,35 @@ TIME timenow()
   return(now);
   }
 
-#define JSONDIE(msg) {JSONDIE2(msg,"");}
+#define JSONDIE(msg) {die(dojson,msg,"");}
+#define JSONDIE2(msg,info) {die(dojson,msg,"");}
 
-#define JSONDIE2(msg,info) \
-  {	\
-  char *msgjson;	\
-  char errval[10];	\
-  char *json;	\
-  char message[10000]; \
-  json_t *jroot = json_new_object();	\
-if (DEBUG) fprintf(stderr,"%s%s\n",msg,info);	\
-  strcpy(message,msg); \
-  strcat(message,info); \
-  msgjson = string_to_json(message);	\
-  json_insert_pair_into_object(jroot, "status", json_new_number("4"));	\
-  json_insert_pair_into_object(jroot, "error", json_new_string(msgjson));	\
-  json_tree_to_string(jroot,&json);	\
-  printf("Content-type: application/json\n\n");	\
-  printf("%s\n",json);	\
-  fflush(stdout);	\
-  return(1);	\
+die(int dojson, char *msg, char *info)
+  {
+  char *msgjson;
+  char errval[10];
+  char *json;
+  char message[10000];
+  json_t *jroot = json_new_object();
+if (DEBUG) fprintf(stderr,"%s%s\n",msg,info);
+  strcpy(message,msg); 
+  strcat(message,info); 
+  if (dojson)
+    {
+    msgjson = string_to_json(message);
+    json_insert_pair_into_object(jroot, "status", json_new_number("4"));
+    json_insert_pair_into_object(jroot, "error", json_new_string(msgjson));
+    json_tree_to_string(jroot,&json);
+    printf("Content-type: application/json\n\n");	
+    printf("%s\n",json);
+    }
+  else
+    {
+    printf("Content-type: text/plain\n\n");
+    printf("status=4\nerror=%s\n", message);
+    }
+  fflush(stdout);
+  return(1);
   }
 
 /* Module main function. */
@@ -289,6 +349,8 @@ int DoIt(void)
   char new_requestid[200];
   char status_query[1000];
   char *export_series; 
+
+time_t t1, t0 = time(NULL);
 
   if (nice_intro ()) return (0);
 
@@ -379,6 +441,7 @@ int DoIt(void)
         char *json;
         char *strval;
         int count;
+fprintf(stderr, "jsoc_fetch A t=%d\n", time(NULL)-t0);
         json_t *jroot = json_new_object();
         count = quick_export_rs(jroot, rs, 0, size); // add count, size, and array data of names and paths
         json_insert_pair_into_object(jroot, "requestid", json_new_string(""));
@@ -391,17 +454,26 @@ int DoIt(void)
         free(strval);
         json_insert_pair_into_object(jroot, "wait", json_new_number("0"));
         json_insert_pair_into_object(jroot, "status", json_new_number("0"));
+fprintf(stderr, "jsoc_fetch B t=%d\n", time(NULL)-t0);
         json_tree_to_string(jroot,&json);
-
+fprintf(stderr, "jsoc_fetch C t=%d\n", time(NULL)-t0);
         printf("Content-type: application/json\n\n");
         printf("%s\n",json);
         fflush(stdout);
-
         free(json);
-        return(0);
         }  
       else
-        JSONDIE2("format not implemented yet: ",format);
+	{
+	printf("Content-type: text/plain\n\n");
+	printf("# JSOC Quick Data Export of as-is files.\n");
+	printf("status=0\n");
+	printf("requestid=\"Not Specified\"\n");
+	printf("method=%s\n", method);
+	printf("protocol=%s\n", protocol);
+	printf("wait=0\n");
+        quick_export_rs(NULL, rs, 0, size); // add count, size, and array data of names and paths
+	}
+      return(0);
       }
 
     // Must do full export processing
@@ -539,48 +611,66 @@ int DoIt(void)
     }
 
   // Return status information to user
-  if (dojson)
+  if (1)
     {
     char *json;
     char *strval;
     char numval[100];
     json_t *jsonval;
-    json_t *jroot = json_new_object();
+    json_t *jroot=NULL;
 
     if (status > 0)
       {
-      sprintf(numval, "%d", status);
-      json_insert_pair_into_object(jroot, "status", json_new_number(numval));
-      strval = string_to_json(requestid);
-      json_insert_pair_into_object(jroot, "requestid", json_new_string(strval));
-      free(strval);
-      strval = string_to_json(method);
-      json_insert_pair_into_object(jroot, "method", json_new_string(strval));
-      free(strval);
-      strval = string_to_json(protocol);
-      json_insert_pair_into_object(jroot, "protocol", json_new_string(strval));
-      free(strval);
-      sprintf(numval, "%1.0lf", waittime);
-      json_insert_pair_into_object(jroot, "wait", json_new_number(numval));
-      sprintf(numval, "%ld", size);
-      json_insert_pair_into_object(jroot, "size", json_new_number(numval));
-      if (errorreply)
-        {
-        strval = string_to_json(errorreply);
-        json_insert_pair_into_object(jroot, "error", json_new_string(strval));
+      if (dojson)
+	{
+        jroot = json_new_object();
+        sprintf(numval, "%d", status);
+        json_insert_pair_into_object(jroot, "status", json_new_number(numval));
+        strval = string_to_json(requestid);
+        json_insert_pair_into_object(jroot, "requestid", json_new_string(strval));
         free(strval);
-        }
-      if (status > 2)
-        {
-        strval = string_to_json("jsoc_help@jsoc.stanford.edu");
-        json_insert_pair_into_object(jroot, "contact", json_new_string(strval));
+        strval = string_to_json(method);
+        json_insert_pair_into_object(jroot, "method", json_new_string(strval));
         free(strval);
+        strval = string_to_json(protocol);
+        json_insert_pair_into_object(jroot, "protocol", json_new_string(strval));
+        free(strval);
+        sprintf(numval, "%1.0lf", waittime);
+        json_insert_pair_into_object(jroot, "wait", json_new_number(numval));
+        sprintf(numval, "%ld", size);
+        json_insert_pair_into_object(jroot, "size", json_new_number(numval));
+        if (errorreply)
+          {
+          strval = string_to_json(errorreply);
+          json_insert_pair_into_object(jroot, "error", json_new_string(strval));
+          free(strval);
+          }
+        if (status > 2)
+          {
+          strval = string_to_json("jsoc_help@jsoc.stanford.edu");
+          json_insert_pair_into_object(jroot, "contact", json_new_string(strval));
+          free(strval);
+          }
+        json_tree_to_string(jroot,&json);
+        printf("Content-type: application/json\n\n");
+        printf("%s\n",json);
         }
-      json_tree_to_string(jroot,&json);
-      printf("Content-type: application/json\n\n");
-      printf("%s\n",json);
+      else
+        {
+	printf("Content-type: text/plain\n\n");
+        printf("# JSOC Data Export Not Ready.\n");
+        printf("status=%d\n", status);
+        printf("requestid=%s\n", requestid);
+        printf("method=%s\n", method);
+        printf("protocol=%s\n", protocol);
+        printf("wait=%d\n",waittime);
+	printf("size=%ld\n",size);
+        if (errorreply)
+	  printf("error=\"%s\"\n", errorreply);
+	if (status > 2)
+	  printf("contact=jsoc_help@jsoc.stanford.edu\n");
+        }
       fflush(stdout);
-      return(0);
       }
     else  // (status == 0)
       {
@@ -589,24 +679,24 @@ int DoIt(void)
       char logpath[DRMS_MAXPATHLEN];
       FILE *fp;
       int c;
+      char *indexfile = (dojson ? "index.json" : "index.txt");
+      jroot = json_new_object();
       drms_record_directory(export_log, logpath, 0);
       strncat(logpath, "/", DRMS_MAXPATHLEN);
-      strncat(logpath, "index.json", DRMS_MAXPATHLEN);
+      strncat(logpath, indexfile, DRMS_MAXPATHLEN);
       fp = fopen(logpath, "r");
       if (!fp)
-        JSONDIE("Export should be complete but return index.json file not found");
+        JSONDIE2("Export should be complete but return %s file not found", indexfile);
 
-      printf("Content-type: application/json\n\n");
+      if (dojson)
+        printf("Content-type: application/json\n\n");
+      else
+	printf("Content-type: text/plain\n\n");
       while ((c = fgetc(fp)) != EOF)
         putchar(c);
       fclose(fp);
       fflush(stdout);
-      return(0);
       }
     }
-  else
-    JSONDIE2("format not implemented yet: ", format);
-
   return(0);
-}
-
+  }

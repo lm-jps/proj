@@ -127,6 +127,7 @@ retrieve_file drms_query describe_series
 #include "drms_names.h"
 #include "json.h"
 // #include "json.h"
+#include <time.h>
 
 static char x2c (char *what) {
   register char digit;
@@ -320,14 +321,9 @@ void drms_sprint_rec_query(char *text, DRMS_Record_t *rec)
   }
 
 char * string_to_json(char *in)
-  {
-  char *new, *c = in;
-  wchar_t *tmp, *work;
-  tmp = work = (wchar_t *)malloc(sizeof(wchar_t)*(strlen(in)+1));
-  while (c && *c) *tmp++ = *c++;
-  *tmp = NULL;
-  new = json_escape(work);
-  free(work);
+  { // for json vers 0.9 no longer uses wide chars
+  char *new;
+  new = json_escape(in);
   return(new);
   }
 
@@ -582,6 +578,7 @@ int DoIt(void)
   char *web_query;
   int from_web, keys_listed, segs_listed;
 
+  time_t t1, t0=time(NULL);
 /* JSON building places */
 
   if (nice_intro ()) return (0);
@@ -694,6 +691,7 @@ int DoIt(void)
     if (!recordset) 
       JSONDIE(" jsoc_info: series not found.");
   
+fprintf(stderr, "jsoc_info A t=%d\n", (t1=time(NULL), t1-t0));
     nrecs = recordset->n;
     if (nrecs == 0)
       {
@@ -920,8 +918,12 @@ int DoIt(void)
       json_insert_pair_into_object(jroot, "status", json_new_number("0"));
     
     drms_close_records(recordset, DRMS_FREE_RECORD);
+fprintf(stderr, "jsoc_info B t=%d\n", (t1=time(NULL), t1-t0));
     json_tree_to_string(jroot,&json);
-    final_json = json_format_string(json);
+fprintf(stderr, "jsoc_info C t=%d\n", (t1=time(NULL), t1-t0));
+    // final_json = json_format_string(json);
+final_json = json;
+fprintf(stderr, "jsoc_info D t=%d\n", (t1=time(NULL), t1-t0));
     printf("Content-type: application/json\n\n");
     printf("%s\n",final_json);
     fflush(stdout);

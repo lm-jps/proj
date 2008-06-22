@@ -40,13 +40,8 @@ static void CGI_unescape_url (char *url) {
 
 char * string_to_json(char *in)
   {
-  char *new, *c = in;
-  wchar_t *tmp, *work;
-  tmp = work = (wchar_t *)malloc(sizeof(wchar_t)*(strlen(in)+1));
-  while (c && *c) *tmp++ = *c++;
-  *tmp = NULL;
-  new = json_escape(work);
-  free(work);
+  char *new;
+  new = json_escape(in);
   return(new);
   }
 
