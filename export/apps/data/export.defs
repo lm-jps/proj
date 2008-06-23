@@ -1,0 +1,27 @@
+# Export series keywords
+
+kExportKW_ReqID = RequestID
+kExportKW_Request = DataSet
+kExportKW_Requestor = Requestor
+kExportKW_Notification = Notify
+kExportKW_ReqTime = ReqTime
+kExportKW_ExpTime = ExpTime
+kExportKW_DataSize = Size
+kExportKW_Format = Format
+kExportKW_FileNameFormat = FilenameFmt
+kExportKW_Status = Status
+
+# Packing list metadata 'keyword' names
+
+kMD_Version = Version
+kMD_RequestID = RequestID
+kMD_Size = Size
+kMD_Count = Count
+kMD_ExpTime = ExpTime
+kMD_Notify = Notify
+kMD_Dir = Dir
+
+# Packing-list file name
+kPackListFileName = index.txt
+
+# 
