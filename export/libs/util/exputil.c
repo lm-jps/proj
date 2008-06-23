@@ -13,7 +13,7 @@ ExpUtlStat_t exputl_mk_expfilename(DRMS_Segment_t *seg,
    if (filenamefmt)
      snprintf(format, sizeof(format), "%s", filenamefmt);
    else
-     snprintf(format, sizeof(format), "{seriesname}.{recnum:%%ld}.{segment}");
+     snprintf(format, sizeof(format), "{seriesname}.{recnum:%%lld}.{segment}");
    fmt = format;
    *fn = '\0';
    while (*fmt)
@@ -21,7 +21,6 @@ ExpUtlStat_t exputl_mk_expfilename(DRMS_Segment_t *seg,
       char *last;
       if (*fmt == '{')
       {
-         DRMS_Keyword_t *kw;
          char *val;
          char *p;
          char *keyname;
