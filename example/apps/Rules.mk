@@ -66,7 +66,9 @@ S_$(d)		:= $(notdir $(MODEXE_$(d))  $(MODEXE_SOCK_$(d)) $(FMATHMOD_$(d)) $(FMODE
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(OBJF_$(d)):		$(SRCDIR)/$(d)/Rules.mk
+$(OBJF_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
 $(OBJFMATH_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH)
 $(FMATHMOD_$(d)):	LL_TGT := $(LL_TGT) $(FMATHLIBSL) -lfftw3f

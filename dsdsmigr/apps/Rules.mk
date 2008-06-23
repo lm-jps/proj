@@ -31,6 +31,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXESUMS_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
 $(MODEXESUMS_$(d)) $(MODEXESUMS_SOCK_$(d)):	$(LIBSUMSAPI) $(LIBSUM)
 

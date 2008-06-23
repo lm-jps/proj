@@ -26,6 +26,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../libs/astro
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBASTRO)
 
 # Shortcuts

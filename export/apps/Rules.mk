@@ -2,7 +2,6 @@
 sp 		:= $(sp).x
 dirstack_$(sp)	:= $(d)
 d		:= $(dir)
-CF_TGT 		:= $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
@@ -32,6 +31,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/json -I$(SRCDIR)/$(d)/../libs/util
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(MODEXE_$(d)):		$(LIBJSON) $(LIBEXPUTL)
 $(MODEXE_SOCK_$(d)):	$(LIBJSON) $(LIBEXPUTL)
 

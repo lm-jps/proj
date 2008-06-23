@@ -22,6 +22,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)))
 
 # Local rules
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
+$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(EXE_$(d)):	LL_TGT :=  -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq
 
 # Shortcuts
