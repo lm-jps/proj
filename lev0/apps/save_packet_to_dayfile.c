@@ -430,7 +430,7 @@ int free_dayfile_data( HK_Dayfile_Data_t **df_head)
 {
   /* declarations */
   HK_Dayfile_Data_t *dfd, *t_dfd;
-  HK_Dayfile_Packet_t *pp;
+  HK_Dayfile_Packet_t *pp, *t_pp;
 
   dfd= *df_head;
   if (dfd)
@@ -440,9 +440,10 @@ int free_dayfile_data( HK_Dayfile_Data_t **df_head)
     while (t_dfd)
     {
       /* free all pkt nodes attached to data dayfile node*/
-      for ( pp=t_dfd->pkt; pp ; pp=pp->next)
+      for ( pp=t_dfd->pkt; pp ; pp=t_pp)
       {
-        free((HK_Dayfile_Packet_t*) t_dfd->pkt);
+        t_pp = pp->next;
+        free((HK_Dayfile_Packet_t*) pp);
       }
 
       /* go to next dayfile node */
