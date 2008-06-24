@@ -6,15 +6,33 @@
 #              Check if successfully loaded dayfile. If so remove dayfile    #
 #              from file system.                                             #
 # Execution:   movedf.pl                                                     #
+# Setup Process: (1)Setup path to pickup directory where Art's scripts puts  #
+#                   dayfile from moc product server.                         #
+#                (2)Setup path to dropoff directory where this script drops  #
+#                   off dayfile using move for ingest_dayfile.pl to get files#
+#                   from.                                                    #
+#                (3)Setup map file which tells ingest_dayfile.pl script      #
+#                   where to put each apid to which dayfile series.          #
+#                   (i.e., apid 1 goes to hmi.hk_dayfile and apid 40 goes to #
+#                    aia.hk_dayfile series)                                  #
+#                (4)Setup apid list file which tells ingest_dayfile.pl       #
+#                   script which apids to process.                           #
+#                (5)Setup DF_DAYFILE_DIRECTORY environment variable use in   #
+#                   ingest_dayfile.pl script to pickup files to ingest to    #
+#                   value of the dropoff directory in this script($doff_dir).#
 ##############################################################################
 # set Environment Variables
+# Process setup (1):
 # for test pickup dayfile location:
-$pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/home1/jsoc/sdo/lzp/MOCFiles/moc/lzp/2008_111";
+# $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/home1/jsoc/sdo/lzp/MOCFiles/moc/lzp/2008_111";
+# for test art's test directory
+$pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp21/jsoc/sdo_dev/mocprods/lzp";
 # for production use:
 #$pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/home1/jsoc/sdo/lzp/MOCFiles/moc/lzp/";
 
-# for 60d test dropoff - tested with this initially
-my $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0_60d/hk_moc_dayfile";
+# Process setup (2)
+# for production - tested with this initially
+my $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0/hk_moc_dayfile";
 # for lev0 cpt dropoff
 #my $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0/hk_moc_dayfile";
 
@@ -30,11 +48,12 @@ my $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 my $source="moc";
 
 # pick up dayfiles and xml files there
-@list_hkt_files=`find $pup_dir | grep \.hkt\$`;
-@list_xml_files=`find $pup_dir | grep \.hkt.xml\$`;
-#for production use - gather files there starting at june 1, 2008 to 2029
-#@list_hkt_files=`find $pup_dir  | egrep '(2008_[1][5][2-9]|2008_[1][6-9][0-9]|2008_[2-3][0-9][0-9]2009_[0-3][0-9][0-9]|20[1-2][0-9]_[0-3][0-9][0-9])' | grep \.hkt\$`;
-#@list_xml_files=`find $pup_dir  | egrep '(2008_[1][5][2-9]|2008_[1][6-9][0-9]|2008_[2-3][0-9][0-9]2009_[0-3][0-9][0-9]|20[1-2][0-9]_[0-3][0-9][0-9])' | grep \.hkt\.xml\$`;
+#carl test with files from 2008_111
+#@list_hkt_files=`find $pup_dir | grep \.hkt\$`;
+#@list_xml_files=`find $pup_dir | grep \.hkt.xml\$`;
+#for production use - gather day and xml files there starting at june 1, 2008 to 2029
+@list_hkt_files=`find $pup_dir  | egrep '(2008_[1][5][2-9]|2008_[1][6-9][0-9]|2008_[2-3][0-9][0-9]2009_[0-3][0-9][0-9]|20[1-2][0-9]_[0-3][0-9][0-9])' | grep \.hkt\$`;
+@list_xml_files=`find $pup_dir  | egrep '(2008_[1][5][2-9]|2008_[1][6-9][0-9]|2008_[2-3][0-9][0-9]2009_[0-3][0-9][0-9]|20[1-2][0-9]_[0-3][0-9][0-9])' | grep \.hkt\.xml\$`;
 
 # set log file based on sdo, moc, or egsefm
 if ($source eq "hsb")
@@ -59,17 +78,20 @@ foreach $hkt (@list_hkt_files)
 {
  $hkt =~ s/\n//g;
  if ($dflg eq "1") {print LF " Move HKT is <$hkt>\n";}
- $log=`cp  $hkt /tmp21/production/lev0_60d/hk_moc_dayfile`;
+ $log=`cp  $hkt  $doff_dir`;
 }
 foreach $xml (@list_xml_files)
 {
  $xml =~ s/\n//g;
  if ($dflg eq "1") {print LF " Move XML is <$xml>\n";}
- $log=`cp  $xml /tmp21/production/lev0_60d/hk_moc_dayfile`;
+ $log=`cp  $xml  $doff_dir`;
 }
 print LF "--->Moved df and xml files to :$doff_dir\n";
+$log=`chmod 777 $doff_dir/*`;
+print LF "--->chmod to 777 for df and xml files in :$doff_dir\n";
 close LF;
 
+#Process setup (3) and (4)
 #ingest all dayfiles and xml files
 #$log=`perl ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc dsnlist=./df_apid_ds_list_for_moc src=moc`
 $log=`perl ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc-CARLS dsnlist=./df_apid_ds_list_for_moc-CARLS src=moc`;
@@ -96,4 +118,3 @@ open(DELFILE, ">$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_
 close DELFILE;
 print LF `date`;
 close LF;
-
