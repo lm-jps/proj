@@ -206,7 +206,7 @@ int DoIt(void)
   if (strcmp(op,"process") == 0) 
     {
     int irec;
-    exports_new_orig = drms_open_records(drms_env, EXPORT_SERIES_NEW"[? Status=2 ?]", &status);
+    exports_new_orig = drms_open_records(drms_env, EXPORT_SERIES_NEW"[][? Status=2 ?]", &status);
     if (!exports_new_orig)
 	DIE("Can not open RecordSet");
     if (exports_new_orig->n < 1)  // No new exports to process.
@@ -233,6 +233,9 @@ int DoIt(void)
       esttime    = drms_getkey_time(export_log, "EstTime", NULL); // Crude guess for now
       size       = drms_getkey_int(export_log, "Size", NULL);
       requestorid = drms_getkey_int(export_log, "Requestor", NULL);
+      printf("New Request #%d/%d: %s, Status=%d, Processing=%s, DataSet=%s, Protocol=%s, Method=%s\n",
+	irec, exports_new->n, requestid, status, process, dataset, protocol, method);
+      fflush(stdout);
 
       // Get user nitification email address
       sprintf(requestorquery, "%s[? RequestorID = %ld ?]", EXPORT_USER, requestorid);
@@ -250,113 +253,115 @@ int DoIt(void)
         notify = NULL;
       drms_close_records(requestor_rs, DRMS_FREE_RECORD);
 
-    // Create new record in export control series, this one must be DRMS_PERMANENT
-    // It will contain the scripts to do the export and set the status to processing
-    export_rec = drms_create_record(drms_env, EXPORT_SERIES, DRMS_PERMANENT, &status);
-    if (!export_rec)
-      DIE("Cant create export control record");
-
-    drms_setkey_string(export_rec, "RequestID", requestid);
-    drms_setkey_string(export_rec, "DataSet", dataset);
-    drms_setkey_string(export_rec, "Processing", process);
-    drms_setkey_string(export_rec, "Protocol", protocol);
-    drms_setkey_string(export_rec, "FilenameFmt", filenamefmt);
-    drms_setkey_string(export_rec, "Method", method);
-    drms_setkey_string(export_rec, "Format", format);
-    drms_setkey_time(export_rec, "ReqTime", now);
-    drms_setkey_time(export_rec, "EstTime", now+10); // Crude guess for now
-    drms_setkey_longlong(export_rec, "Size", (long long)size);
-    drms_setkey_int(export_rec, "Requestor", requestorid);
-
-    // check  security risk dataset spec or processing request
-    if (isbadDataSet(dataset) || isbadProcessing(process))
-      { 
-      fprintf(stderr," Illegal format detected - security risk!\n"
-		     "RequestID= %s\n"
-                     " Processing = %s\n, DataSet=%s\n",
-		     requestid, process, dataset);
-      drms_setkey_int(export_rec, "Status", 4);
+      // Create new record in export control series, this one must be DRMS_PERMANENT
+      // It will contain the scripts to do the export and set the status to processing
+      export_rec = drms_create_record(drms_env, EXPORT_SERIES, DRMS_PERMANENT, &status);
+      if (!export_rec)
+        DIE("Cant create export control record");
+  
+      drms_setkey_string(export_rec, "RequestID", requestid);
+      drms_setkey_string(export_rec, "DataSet", dataset);
+      drms_setkey_string(export_rec, "Processing", process);
+      drms_setkey_string(export_rec, "Protocol", protocol);
+      drms_setkey_string(export_rec, "FilenameFmt", filenamefmt);
+      drms_setkey_string(export_rec, "Method", method);
+      drms_setkey_string(export_rec, "Format", format);
+      drms_setkey_time(export_rec, "ReqTime", now);
+      drms_setkey_time(export_rec, "EstTime", now+10); // Crude guess for now
+      drms_setkey_longlong(export_rec, "Size", (long long)size);
+      drms_setkey_int(export_rec, "Requestor", requestorid);
+  
+      // check  security risk dataset spec or processing request
+      if (isbadDataSet(dataset) || isbadProcessing(process))
+        { 
+        fprintf(stderr," Illegal format detected - security risk!\n"
+  		     "RequestID= %s\n"
+                       " Processing = %s\n, DataSet=%s\n",
+  		     requestid, process, dataset);
+        drms_setkey_int(export_rec, "Status", 4);
+        drms_close_record(export_rec, DRMS_INSERT_RECORD);
+        continue;
+        }
+  
+      drms_record_directory(export_rec, reqdir, 1);
+  
+      // Insert qsub command to execute processing script into SU
+      make_qsub_call(requestid, reqdir, (notify ? requestorid : 0));
+  
+      // Insert export processing drms_run script into export record SU
+      // The script components must clone the export record with COPY_SEGMENTS in the first usage
+      // and with SHARE_SEGMENTS in subsequent modules in the script.  All but the last module
+      // in the script may clone as DRMS_TRANSIENT.
+      // Remember all modules in this script mut be _sock modules.
+      if (strcmp(process, "no_op") == 0 || (strcmp(process,"Not Specified")==0 && strcmp(protocol,"as-is")==0))
+        { // export of as-is records that need staging
+        FILE *fp;
+        char runscript[DRMS_MAXPATHLEN];
+        sprintf(runscript, "%s/%s.drmsrun", reqdir, requestid);
+        fp = fopen(runscript, "w");
+        fprintf(fp, "#! /bin/csh -f\n");
+        fprintf(fp, "set echo\n");
+        // force clone with copy segment. 
+  //      fprintf(fp, "set_keys_sock -t -C ds='jsoc.export[%s]' Status=1\n", requestid);
+        fprintf(fp, "set_keys_sock    -C ds='jsoc.export[%s]' Status=1\n", requestid);
+        // Get new SU for the export record
+        fprintf(fp, "set REQDIR = `show_info_sock -q -p 'jsoc.export[%s]'`\n", requestid);
+        // cd to SU in export record
+        fprintf(fp, "cd $REQDIR\n");
+  fprintf(fp, "printenv > %s.env\n", requestid);
+  fprintf(fp, "echo $HOSTNAME\n");
+        // Force staging and get paths to export files with list in index.txt
+        fprintf(fp, "jsoc_export_as_is ds='%s' requestid=%s filenamfmt=%s\n", dataset, requestid,  filenamefmt); 
+        // convert index.txt list into index.json and index.html packing list files. 
+        fprintf(fp, "jsoc_export_make_index\n");
+        // set status=done and mark this version of the export record permanent
+        fprintf(fp, "set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
+  // make drms_run completion lock file
+  fprintf(fp, "show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
+        // copy the drms_run log file
+        fprintf(fp, "cp /home/jsoc/exports/tmp/%s.runlog ./%s.runlog \n", requestid, requestid);
+        fclose(fp);
+        chmod(runscript, 0555);
+        }
+      else if (strcmp(process, "SOMEOTHERCOMMAND") == 0)
+        { // some other export processing request - e.g. get external FITS files
+        }
+      else
+        { // Unrecognized processing request
+  // fprintf(stderr,"XX jsoc_export_manage FAIL Do not know what to do, requestid=%s, process=%s, protocol=%s, method=%s\n",
+  //        requestid, process, protocol, method);
+        drms_setkey_int(export_log, "Status", 4);
+        drms_close_record(export_rec, DRMS_FREE_RECORD);
+        continue;
+        }
+  
+      drms_setkey_int(export_rec, "Status", 1);
       drms_close_record(export_rec, DRMS_INSERT_RECORD);
-      continue;
-      }
+  
+      // SU now contains both qsub script and drms_run script, ready to execute and lock the record.
+      sprintf(command,"qsub -q x.q,o.q,j.q "
+  	" -o /home/jsoc/exports/tmp/%s.runlog "
+  	" -e /home/jsoc/exports/tmp/%s.runlog "
+  	"  %s/%s.qsub ",
+  	requestid, requestid, reqdir, requestid, requestid);
+  /*
+  	"  >>& /home/jsoc/exports/tmp/%s.runlog",
+  */
+      if (system(command))
+        DIE("Submission of qsub command failed");
+  
+      drms_setkey_int(export_log, "Status", 1);
+      printf("Request %s submitted\n",requestid);
+      } // end looping on new export requests
 
-    drms_record_directory(export_rec, reqdir, 1);
-
-    // Insert qsub command to execute processing script into SU
-    make_qsub_call(requestid, reqdir, (notify ? requestorid : 0));
-
-    // Insert export processing drms_run script into export record SU
-    // The script components must clone the export record with COPY_SEGMENTS in the first usage
-    // and with SHARE_SEGMENTS in subsequent modules in the script.  All but the last module
-    // in the script may clone as DRMS_TRANSIENT.
-    // Remember all modules in this script mut be _sock modules.
-    if (strcmp(process, "no_op") == 0 || (strcmp(process,"Not Specified")==0 && strcmp(protocol,"as-is")==0))
-      { // export of as-is records that need staging
-      FILE *fp;
-      char runscript[DRMS_MAXPATHLEN];
-      sprintf(runscript, "%s/%s.drmsrun", reqdir, requestid);
-      fp = fopen(runscript, "w");
-      fprintf(fp, "#! /bin/csh -f\n");
-      fprintf(fp, "set echo\n");
-      // force clone with copy segment. 
-//      fprintf(fp, "set_keys_sock -t -C ds='jsoc.export[%s]' Status=1\n", requestid);
-      fprintf(fp, "set_keys_sock    -C ds='jsoc.export[%s]' Status=1\n", requestid);
-      // Get new SU for the export record
-      fprintf(fp, "set REQDIR = `show_info_sock -q -p 'jsoc.export[%s]'`\n", requestid);
-      // cd to SU in export record
-      fprintf(fp, "cd $REQDIR\n");
-fprintf(fp, "printenv > %s.env\n", requestid);
-fprintf(fp, "echo $HOSTNAME\n");
-      // Force staging and get paths to export files with list in index.txt
-      fprintf(fp, "jsoc_export_as_is ds='%s' requestid=%s filenamfmt=%s\n", dataset, requestid,  filenamefmt); 
-      // convert index.txt list into index.json and index.html packing list files. 
-      fprintf(fp, "jsoc_export_make_index\n");
-      // set status=done and mark this version of the export record permanent
-      fprintf(fp, "set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
-// make drms_run completion lock file
-fprintf(fp, "show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
-      // copy the drms_run log file
-      fprintf(fp, "cp /home/jsoc/exports/tmp/%s.runlog ./%s.runlog \n", requestid, requestid);
-      fclose(fp);
-      chmod(runscript, 0555);
-      }
-    else if (strcmp(process, "SOMEOTHERCOMMAND") == 0)
-      { // some other export processing request - e.g. get external FITS files
-      }
-    else
-      { // Unrecognized processing request
-      drms_setkey_int(export_rec, "Status", 4);
-      drms_close_record(export_rec, DRMS_INSERT_RECORD);
-      continue;
-      }
-
-    drms_setkey_int(export_rec, "Status", 1);
-    drms_close_record(export_rec, DRMS_INSERT_RECORD);
-
-    // SU now contains both qsub script and drms_run script, ready to execute and lock the record.
-    sprintf(command,"qsub -q x.q,o.q,j.q "
-	" -o /home/jsoc/exports/tmp/%s.runlog "
-	" -e /home/jsoc/exports/tmp/%s.runlog "
-	"  %s/%s.qsub ",
-	requestid, requestid, reqdir, requestid, requestid);
-/*
-	"  >>& /home/jsoc/exports/tmp/%s.runlog",
-*/
-    if (system(command))
-      DIE("Submission of qsub command failed");
-
-    drms_setkey_int(export_log, "Status", 1);
-    printf("Request %s submitted\n",requestid);
-    } // end looping on new export requests
-
-  drms_close_records(exports_new, DRMS_INSERT_RECORD);
-  return(0);
-  } // End process new requests.
- else if (strcmp(op, "SOMETHINGELSE") == 0)
-   {
-   }
- else 
-DIE("Operation not allowed");
-return(1);
-}
+    drms_close_records(exports_new, DRMS_INSERT_RECORD);
+    return(0);
+    } // End process new requests.
+  else if (strcmp(op, "SOMETHINGELSE") == 0)
+    {
+    }
+  else 
+    DIE("Operation not allowed");
+  return(1);
+  }
 

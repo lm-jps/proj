@@ -691,7 +691,6 @@ int DoIt(void)
     if (!recordset) 
       JSONDIE(" jsoc_info: series not found.");
   
-fprintf(stderr, "jsoc_info A t=%d\n", (t1=time(NULL), t1-t0));
     nrecs = recordset->n;
     if (nrecs == 0)
       {
@@ -860,6 +859,8 @@ fprintf(stderr, "jsoc_info A t=%d\n", (t1=time(NULL), t1-t0));
 
         // Get paths into segvals
         drms_record_directory (rec, path, 0);
+        if (!*path)
+	  JSONDIE("Can not retrieve record path, SUMS may be offline");
   	strncat(path, "/", DRMS_MAXPATHLEN);
   	strncat(path, rec_seg_iseg->filename, DRMS_MAXPATHLEN);
         jsonpath = string_to_json(path);
@@ -918,12 +919,9 @@ fprintf(stderr, "jsoc_info A t=%d\n", (t1=time(NULL), t1-t0));
       json_insert_pair_into_object(jroot, "status", json_new_number("0"));
     
     drms_close_records(recordset, DRMS_FREE_RECORD);
-fprintf(stderr, "jsoc_info B t=%d\n", (t1=time(NULL), t1-t0));
     json_tree_to_string(jroot,&json);
-fprintf(stderr, "jsoc_info C t=%d\n", (t1=time(NULL), t1-t0));
     // final_json = json_format_string(json);
 final_json = json;
-fprintf(stderr, "jsoc_info D t=%d\n", (t1=time(NULL), t1-t0));
     printf("Content-type: application/json\n\n");
     printf("%s\n",final_json);
     fflush(stdout);
