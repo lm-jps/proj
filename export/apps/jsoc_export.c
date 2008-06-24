@@ -28,14 +28,16 @@ typedef enum
 
 #define kNotSpecified    "NOT SPECIFIED"
 #define kArg_reqid       "reqid"
+#define kArg_version     "version"
+#define kArg_method      "method"
+#define kArg_protocol    "protocol"
 #define kArg_rsquery     "rsquery"
 #define kArg_expSeries   "expseries"
 #define kArg_ffmt        "ffmt"
 #define kArg_path        "path"
-#define kArg_notifylist  "notify"
 #define kArg_clname      "kmclass"
 #define kArg_kmfile      "kmfile"
-#define kArg_version     "version"
+
 
 #define kDef_expSeries   "jsoc.exports"
 
@@ -60,12 +62,13 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, kArg_version, "",  "jsoc export version."},
      {ARG_STRING, kArg_reqid, "", 
         "Export series primary key value that identifies the output record."},
+     {ARG_STRING, kArg_method, "",  "jsoc export method (eg, url or ftp)."},
+     {ARG_STRING, kArg_protocol, "",  "file conversion method (eg, convert to fits)."},
      {ARG_STRING, kArg_rsquery, kNotSpecified, 
         "Record-set query that specifies data to be exported."},
      {ARG_STRING, kArg_expSeries, kDef_expSeries, "Series to which exported data are saved."},
      {ARG_STRING, kArg_ffmt, kNotSpecified, "Export filename template."},
      {ARG_STRING, kArg_path, kNotSpecified, "Path to which fits files are output."},
-     {ARG_STRING, kArg_notifylist, kNotSpecified, "People to whom results of the export were sent."},
      {ARG_STRING, kArg_clname, kNotSpecified,  "Export key map class."},
      {ARG_STRING, kArg_kmfile, kNotSpecified,  "Export key map file."},
      {ARG_END}
@@ -426,7 +429,6 @@ static int Mapexport(DRMS_Env_t *env,
                      const char *pklfilename, 
                      int *tcount, 
                      char **outpath, 
-                     char **notifylist, 
                      TIME *exptime, 
                      FILE **pklist, 
                      MymodError_t *status)
@@ -465,16 +467,6 @@ static int Mapexport(DRMS_Env_t *env,
 
       recout = rsout->records[0];
       rsinquery = drms_getkey_string(recout, drms_defs_getval("kExportKW_Request"), &stat);
-      
-      if (notifylist)
-      {
-         kval = drms_getkey_string(recout, drms_defs_getval("kExportKW_Notification"), &stat);
-         if (kval)
-         {
-            *notifylist = strdup(kval);
-            free(kval);
-         }
-      }
       
       kval = drms_getkey_string(recout, drms_defs_getval("kExportKW_FileNameFormat"), &stat);
       if (kval)
@@ -575,7 +567,24 @@ static int Mapexport(DRMS_Env_t *env,
    return tsize;
 }
 
-MymodError_t AppendContent(FILE *dst, FILE *src)
+static char *GenErrMsg(const char *fmt, ...)
+{
+   char *msgout = NULL;
+   char errmsg[4096];
+
+   va_list ap;
+   va_start(ap, fmt);
+   vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
+
+   msgout = strdup(errmsg);
+   fprintf(stderr, errmsg);
+   
+   va_end (ap);
+
+   return msgout;
+}
+
+static MymodError_t AppendContent(FILE *dst, FILE *src)
 {
    MymodError_t err = kMymodErr_Success;
    char buf[32768];
@@ -637,6 +646,8 @@ int DoIt(void)
 
    const char *version = NULL;
    const char *reqid = NULL;
+   const char *method = NULL;
+   const char *protocol = NULL;
    const char *rsquery = NULL;
    const char *clname = NULL;
    const char *mapfile = NULL;
@@ -644,25 +655,31 @@ int DoIt(void)
    /* "packing list" header/metadata */
    char *md_version = NULL;
    char *md_reqid = NULL;
-   char *md_size = NULL; /* total bytes exported */
+   char *md_method = NULL;
+   char *md_protocol = NULL;
    char *md_count = NULL; /* number of files exported */
-   // char *status = NULL; /* */
+   char *md_size = NULL; /* total bytes exported */
    char *md_exptime = NULL;
-   char *md_notifylist = NULL;
    char *md_dir = NULL; /* same as outpath, the /SUMX path that contains the exported files
                          * before they are downloaded by the user */
+   char *md_status = NULL; 
+   char *md_error = NULL;
 
    if (drms_defs_register(DEFS_MKPATH("/data/export.defs")))
    {
+      md_error = GenErrMsg("jsoc_export failure - missing definition file.\n");
       err = kMymodErr_CantRegisterDefs;
    }
    else
    {
       snprintf(pklistfname, sizeof(pklistfname), "%s", drms_defs_getval("kPackListFileName"));
       snprintf(pklistfnameTMP, sizeof(pklistfnameTMP), "%s.tmp", pklistfname);
-      version = cmdparams_get_str(&cmdparams, kArg_version, &drmsstat);
 
+      version = cmdparams_get_str(&cmdparams, kArg_version, &drmsstat);
       reqid = cmdparams_get_str(&cmdparams, kArg_reqid, &drmsstat);
+      method = cmdparams_get_str(&cmdparams, kArg_method, &drmsstat);
+      protocol = cmdparams_get_str(&cmdparams, kArg_protocol, &drmsstat);
+
       rsquery = cmdparams_get_str(&cmdparams, kArg_rsquery, &drmsstat);
 
       clname = cmdparams_get_str(&cmdparams, kArg_clname, &drmsstat);
@@ -677,11 +694,15 @@ int DoIt(void)
          mapfile = NULL;
       }
 
+      md_version = strdup(version);
+      md_reqid = strdup(reqid);
+      md_method = strdup(method);
+      md_protocol = strdup(protocol);
+
       if (strcmp(rsquery, kNotSpecified) == 0)
       {
          /* Packing list items come from the export series. */
          char *outpath = NULL;
-         char *notifylist = NULL;
 
          /* No record-set query provided - must use series to get rsquery */
          const char *expseries = NULL;
@@ -697,16 +718,13 @@ int DoIt(void)
                            pklistfnameTMP, 
                            &tcount, 
                            &outpath, 
-                           &notifylist, 
                            &exptime, 
                            &pklistTMP,
                            &err);
 
          if (err != kMymodErr_Success)
          {
-            fprintf(stderr, 
-                    "Failure occurred while processing export Request ID '%s'.\n", 
-                    reqid);
+            md_error = GenErrMsg("Failure occurred while processing export Request ID '%s'.\n", reqid);
             err = kMymodErr_ExportFailed;
          }
          else
@@ -714,7 +732,6 @@ int DoIt(void)
             snprintf(pklistpathTMP, sizeof(pklistpathTMP), "%s/%s", outpath, pklistfnameTMP);
 
             /* Set packing list info */
-            md_notifylist = strdup(notifylist);
             md_dir = strdup(outpath);
          }
 
@@ -722,16 +739,11 @@ int DoIt(void)
          {
             free(outpath);
          }
-         if (notifylist)
-         {
-            free(notifylist);
-         }
       }
       else
       {
          /* Packing list items that come from the cmd-line arguments. */
          const char *outpath = NULL;
-         const char *notifylist = NULL;
 
          /* Filename Format comes from cmd-line argument */
          const char *ffmt = NULL;
@@ -741,12 +753,6 @@ int DoIt(void)
          {
             /* Use current working directory by default */
             outpath = getenv(kPWD);
-         }
-
-         notifylist = cmdparams_get_str(&cmdparams, kArg_notifylist, &drmsstat);
-         if (strcmp(notifylist, kNotSpecified) == 0)
-         {
-            notifylist = NULL;
          }
 
          ffmt = cmdparams_get_str(&cmdparams, kArg_ffmt, &drmsstat);
@@ -763,44 +769,38 @@ int DoIt(void)
          if (pklistTMP)
          {
             /* Call export code, filling in tsize, tcount, and exptime */
-            if (err == kMymodErr_Success)
-            {
-               tsize = MapexportToDir(drms_env, 
-                                      rsquery, 
-                                      ffmt, 
-                                      outpath, 
-                                      pklistTMP, 
-                                      clname, 
-                                      mapfile, 
-                                      &tcount, 
-                                      &exptime, 
-                                      &err);
-            }
+            tsize = MapexportToDir(drms_env, 
+                                   rsquery, 
+                                   ffmt, 
+                                   outpath, 
+                                   pklistTMP, 
+                                   clname, 
+                                   mapfile, 
+                                   &tcount, 
+                                   &exptime, 
+                                   &err);
          }
          else
          {
             err = kMymodErr_CantOpenPackfile;
-            fprintf(stderr, "Couldn't open packing-list file '%s'.\n",  pklistpathTMP);
+            md_error = GenErrMsg("Couldn't open packing-list file '%s'.\n",  pklistpathTMP);
          }
 
          if (err != kMymodErr_Success)
          {
-            fprintf(stderr, 
-                    "Failure occurred while processing export Request ID '%s'.\n", 
-                    reqid);
+            md_error = GenErrMsg("Failure occurred while processing export Request ID '%s'.\n", reqid);
             err = kMymodErr_ExportFailed;
          }
          else
          {
             /* Set packing list info */
-            md_notifylist = notifylist && *notifylist ? strdup(notifylist) : strdup("");
             md_dir = strdup(outpath);
          }
       }
 
       if (drmsstat != DRMS_SUCCESS)
       {
-         fprintf(stderr, "DRMS error '%d'.\n", drmsstat);
+         md_error = GenErrMsg("DRMS error '%d'.\n", drmsstat);
       }
       else if (err == kMymodErr_Success)
       {
@@ -808,63 +808,96 @@ int DoIt(void)
          int strsize = 0;
          sprint_time(tstr, exptime, "UT", 0);
 
-         /* temporarily hold content section of packing list - 
-          * don't hold this in memory because this section may be
-          * large.  Let IO figure out the best way to hold 
-          * the data in memory. */
-         err = kMymodErr_PackfileFailure;
-
-         /* open 'real' pack list */
-         snprintf(pklistpath, sizeof(pklistpath), "%s/%s", md_dir, pklistfname);
-         pklist = fopen(pklistpath, "w+");
-
-         if (pklist)
-         {
-            /* Set packing list info not already set */
-            md_version = strdup(version);
-            md_reqid = strdup(reqid);
-            strsize = 64;
-            md_size = malloc(strsize);
-            snprintf(md_size, strsize, "%lld", tsize);
-            md_count = malloc(strsize);
-            snprintf(md_count, strsize, "%d", tcount);
-            md_exptime = strdup(tstr);
-
-            if (!fseek(pklistTMP, 0, SEEK_SET))
-            {
-               WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Version"), md_version);
-               WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_RequestID"), md_reqid);
-               WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Size"), md_size);
-               WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Count"), md_count);
-               WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_ExpTime"), md_exptime);
-               WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Notify"), md_notifylist);
-               WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Dir"), md_dir);
-
-               fflush(pklist);
-
-               /* Copy the content from the temporary pklist into the real pklist */
-               err = AppendContent(pklist, pklistTMP);
-            }
-         }
+         /* Set packing list info not already set */
+         strsize = 64;
+         md_size = malloc(strsize);
+         snprintf(md_size, strsize, "%lld", tsize);
+         md_count = malloc(strsize);
+         snprintf(md_count, strsize, "%d", tcount);
+         md_exptime = strdup(tstr);
       }
 
       fprintf(stdout, "'%lld' bytes exported.\n", tsize); 
+   }
 
-      if (pklistTMP)
+   /* open 'real' pack list */
+   if (md_dir)
+   {
+      snprintf(pklistpath, sizeof(pklistpath), "%s/%s", md_dir, pklistfname);
+      pklist = fopen(pklistpath, "w+");
+   }
+
+   if (pklist)
+   {
+      if (fseek(pklistTMP, 0, SEEK_SET))
       {
-         /* close tmp packing-list file */
-         fclose(pklistTMP);
-         pklistTMP = NULL;
+         md_error = GenErrMsg("Failure accessing packing-list file '%s'.\n", pklistfnameTMP);
+         err = kMymodErr_PackfileFailure;
+      }
+   }
+   else
+   {
+      md_error = GenErrMsg("Failure opening packing-list file '%s'.\n", pklistfname);
+      err = kMymodErr_PackfileFailure;
+   }
 
-         /* delete temporary file */
-         unlink(pklistpathTMP);
+   /* For now, there is just success/failure in the packing-list file */
+   if (err == kMymodErr_Success)
+   {
+      md_status = strdup(drms_defs_getval("kMDStatus_Good"));
+   }
+   else
+   {
+      md_status = strdup(drms_defs_getval("kMDStatus_Bad"));
+   }
+
+   if (pklist)
+   {
+      /* write packing list */
+      WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Version"), md_version);
+      WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_RequestID"), md_reqid);
+      WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Method"), md_method);
+      WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Protocol"), md_protocol);
+      WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Count"), md_count ? md_count : "-1");
+      WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Size"), md_size ? md_size : "-1");
+      WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_ExpTime"), md_exptime ? md_exptime : "");
+      WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Dir"), md_dir ? md_dir : "");
+      WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Status"), md_status);
+
+      fflush(pklist);
+
+      if (err == kMymodErr_Success)
+      {
+         /* Copy the content from the temporary pklist into the real pklist */
+         err = AppendContent(pklist, pklistTMP);
       }
 
-      if (pklist)
+      if (err != kMymodErr_Success)
       {
-         /* close actual packing-list file */
-         fclose(pklist);
+         fflush(pklist);
+
+         /* If there is an error, write out the error message. */
+         WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Error"), md_error ? md_error : "");
       }
+   }
+
+
+
+   if (pklistTMP)
+   {
+      /* close tmp packing-list file */
+      fclose(pklistTMP);
+      pklistTMP = NULL;
+
+      /* delete temporary file */
+      unlink(pklistpathTMP);
+   }
+
+   if (pklist)
+   {
+      /* close actual packing-list file */
+      fclose(pklist);
+      pklist = NULL;
    }
 
    if (md_version)
@@ -875,25 +908,37 @@ int DoIt(void)
    {
       free(md_reqid);
    }
-   if (md_size)
+   if (md_method)
    {
-      free(md_size);
+      free(md_method);
+   }
+   if (md_protocol)
+   {
+      free(md_protocol);
    }
    if (md_count)
    {
       free(md_count);
    }
+   if (md_size)
+   {
+      free(md_size);
+   }
    if (md_exptime)
    {
       free(md_exptime);
    }
-   if (md_notifylist)
-   {
-      free(md_notifylist);
-   }
    if (md_dir)
    {
       free(md_dir);
+   }
+   if (md_status)
+   {
+      free(md_status);
+   }
+   if (md_error)
+   {
+      free(md_error);
    }
 
    return err;

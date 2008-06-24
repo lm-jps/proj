@@ -15,13 +15,18 @@ kExportKW_Status = Status
 
 kMD_Version = Version
 kMD_RequestID = RequestID
-kMD_Size = Size
+kMD_Method = Method
+kMD_Protocol = Protocol
 kMD_Count = Count
+kMD_Size = Size
 kMD_ExpTime = ExpTime
-kMD_Notify = Notify
 kMD_Dir = Dir
+kMD_Status = Status
+kMD_Error = Error
 
 # Packing-list file name
 kPackListFileName = index.txt
 
-
+# Pakcing-list file status values
+kMDStatus_Good = 0
+kMDStatus_Bad = 1
