@@ -73,7 +73,7 @@
  {
    #$ENV{'DF_DAYFILE_DIRECTORY'}="/home/carl/cvs/JSOC/proj/lev0/scripts/hk/SDO";
    #for production#
-   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0_60d/hk_moc_dayfile";
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_moc_dayfile";
  }
  elsif ($source eq "egsefm")
  {
