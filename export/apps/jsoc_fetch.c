@@ -441,7 +441,6 @@ time_t t1, t0 = time(NULL);
         char *json;
         char *strval;
         int count;
-fprintf(stderr, "jsoc_fetch A t=%d\n", time(NULL)-t0);
         json_t *jroot = json_new_object();
         count = quick_export_rs(jroot, rs, 0, size); // add count, size, and array data of names and paths
         json_insert_pair_into_object(jroot, "requestid", json_new_string(""));
@@ -454,9 +453,7 @@ fprintf(stderr, "jsoc_fetch A t=%d\n", time(NULL)-t0);
         free(strval);
         json_insert_pair_into_object(jroot, "wait", json_new_number("0"));
         json_insert_pair_into_object(jroot, "status", json_new_number("0"));
-fprintf(stderr, "jsoc_fetch B t=%d\n", time(NULL)-t0);
         json_tree_to_string(jroot,&json);
-fprintf(stderr, "jsoc_fetch C t=%d\n", time(NULL)-t0);
         printf("Content-type: application/json\n\n");
         printf("%s\n",json);
         fflush(stdout);
