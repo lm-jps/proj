@@ -112,6 +112,7 @@ char database[MAX_STR];
 char pdshost[MAX_STR];
 char pchan[8];			/* primary channel to listen to e.g. VC02 */
 char rchan[8];			/* redundant channel to listen to e.g. VC10 */
+char prependfits[8];		/* VC02 or VC10 for fits file name */
 char *dbname = DEFAULTDB;	/* !!TBD pass this in as an arg */
 char *username;			/* from getenv("USER") */
 char *tlmdir;			/* tlm dir name passed in as argv[0] */
@@ -359,14 +360,16 @@ void now_do_alrm_sig()
             h0log("Error on catalog_image()\n");
           }
 **********************************************!!!OLD**************/
-          sprintf(imgfile, "%s/%s_%09d.%d.fits", IMAGEDIR, pchan, fsn, imagedircnt++);
+          sprintf(imgfile, "%s/%s_%09d.%d.fits", 
+			IMAGEDIR, prependfits, fsn, imagedircnt++);
           if(decompress_writefitsimage(imgfile, image, 0)) {
             h0log("Error on output of %s\n", imgfile);
           }
           decompress_free_images(image);
           /* only keep the last 30 images */
           if(imagedircnt > IMAGEDIRCNT) {
-            sprintf(cmd,"/bin/rm %s/%s_*.%d.fits",IMAGEDIR,pchan,imagedircnt-IMAGEDIRCNT);
+            sprintf(cmd,"/bin/rm -f %s/%s_*.%d.fits",
+			IMAGEDIR,prependfits,imagedircnt-IMAGEDIRCNT);
             h0log("%s\n", cmd);
             system(cmd);
           }
@@ -422,14 +425,16 @@ void now_do_term_sig()
         h0log("Error on catalog_image()\n");
       }
 *********************************************************************/
-      sprintf(imgfile, "%s/%s_%09d.%d.fits", IMAGEDIR,pchan,fsn,imagedircnt++);
+      sprintf(imgfile, "%s/%s_%09d.%d.fits", 
+			IMAGEDIR,prependfits,fsn,imagedircnt++);
       if(decompress_writefitsimage(imgfile, image, 0)) {
         h0log("Error on output of %s\n", imgfile);
       }
       decompress_free_images(image);
       /* only keep the last 30 images */
       if(imagedircnt >= IMAGEDIRCNT) {
-        sprintf(cmd,"/bin/rm %s/%s_*.%d.fits",IMAGEDIR,pchan,imagedircnt-IMAGEDIRCNT);
+        sprintf(cmd,"/bin/rm -f %s/%s_*.%d.fits",
+			IMAGEDIR,prependfits,imagedircnt-IMAGEDIRCNT);
         h0log("%s\n", cmd);
         system(cmd);
       }
@@ -709,15 +714,15 @@ int get_tlm(char *file)
                   }
 **********************************************!!!OLD**************/
                   sprintf(imgfile, "%s/%s_%09d.%d.fits",
-                        IMAGEDIR, pchan, fsn, imagedircnt++);
+                        IMAGEDIR, prependfits, fsn, imagedircnt++);
                   if(decompress_writefitsimage(imgfile, partimg, 0)) {
                     h0log("Error on output of %s\n", imgfile);
                   }
                   decompress_free_images(partimg);
                   /* only keep the last 30 images */
                   if(imagedircnt >= IMAGEDIRCNT) {
-                    sprintf(cmd,"/bin/rm %s/%s_*.%d.fits",
-                          IMAGEDIR,pchan,imagedircnt-IMAGEDIRCNT);
+                    sprintf(cmd,"/bin/rm -f %s/%s_*.%d.fits",
+                          IMAGEDIR,prependfits,imagedircnt-IMAGEDIRCNT);
                     h0log("%s\n", cmd);
                     system(cmd);
                   }
@@ -762,13 +767,15 @@ int get_tlm(char *file)
           h0log("Error on catalog_image()\n");	
         }
 ********************************************!!OLD*********/
-        sprintf(imgfile, "%s/%s_%09d.%d.fits",IMAGEDIR,pchan,fsn,imagedircnt++);
+        sprintf(imgfile, "%s/%s_%09d.%d.fits",
+			IMAGEDIR,prependfits,fsn,imagedircnt++);
         if(decompress_writefitsimage(imgfile, images, 0)) {
           h0log("Error on output of %s\n", imgfile);
         }
         /* only keep the last 30 images */
         if(imagedircnt >= IMAGEDIRCNT) {
-          sprintf(cmd, "/bin/rm %s/%s_*.%d.fits",IMAGEDIR,pchan,imagedircnt-IMAGEDIRCNT);
+          sprintf(cmd, "/bin/rm -f %s/%s_*.%d.fits",
+			IMAGEDIR,prependfits,imagedircnt-IMAGEDIRCNT);
           h0log("%s\n", cmd);
           system(cmd);
         }
@@ -965,6 +972,8 @@ void do_ingest()
       free(nameptr[j].name);
       continue;
     }
+    if(strstr(nameptr[j].name, pchan)) strcpy(prependfits, pchan); 
+    if(strstr(nameptr[j].name, rchan)) strcpy(prependfits, rchan); 
     StartTimer(NUMTIMERS-1);
     sprintf(name, "%s/%s", tlmdir, nameptr[j].name);
     printk("\n*Found qac file:\n* %s\n", name);
