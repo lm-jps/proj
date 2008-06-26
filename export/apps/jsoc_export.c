@@ -854,6 +854,7 @@ int DoIt(void)
    if (pklist)
    {
       /* write packing list */
+      fprintf(pklist, "# JSOC \n");
       WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Version"), md_version);
       WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_RequestID"), md_reqid);
       WritePListRecord(kPL_metadata, pklist, drms_defs_getval("kMD_Method"), md_method);
@@ -869,6 +870,8 @@ int DoIt(void)
       if (err == kMymodErr_Success)
       {
          /* Copy the content from the temporary pklist into the real pklist */
+         fprintf(pklist, "# DATA \n");
+         fflush(pklist);
          err = AppendContent(pklist, pklistTMP);
       }
 

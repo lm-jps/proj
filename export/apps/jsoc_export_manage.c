@@ -55,10 +55,13 @@
 #include "drms.h"
 #include "drms_names.h"
 #include "json.h"
+#include "serverdefs.h"
 
 #define EXPORT_SERIES "jsoc.export"
 #define EXPORT_SERIES_NEW "jsoc.export_new"
 #define EXPORT_USER "jsoc.export_user"
+
+#define PACKLIST_VER "0.5"
 
 #define DIE(msg) { fprintf(stderr,"XXXX jsoc_exports_manager failure: %s\nstatus=%d",msg,status); exit(1); }
 
@@ -90,7 +93,7 @@ int nice_intro ()
   }
 
 // generate qsub script
-make_qsub_call(char *requestid, char *reqdir, int requestorid)
+make_qsub_call(char *requestid, char *reqdir, int requestorid, const char *dbname)
   {
   FILE *fp;
   char qsubscript[DRMS_MAXPATHLEN];
@@ -107,20 +110,21 @@ make_qsub_call(char *requestid, char *reqdir, int requestorid)
   // fprintf(fp, "source /home/phil/.sunrc\n");
   // fprintf(fp, "source /home/jsoc/.setJSOCenv\n");
   // fprintf(fp, "printenv\n");
-  fprintf(fp, "while (`show_info -q 'jsoc.export_new[%s]' key=Status` == 2)\n", requestid);
+  fprintf(fp, "while (`show_info -q 'jsoc.export_new[%s]' key=Status JSOC_DBNAME=%s` == 2)\n", requestid, dbname);
   fprintf(fp, "  echo waiting for jsocdb commit >> /home/jsoc/exports/tmp/%s.runlog \n",requestid);
   fprintf(fp, "  sleep 1\nend \n");
+  fprintf(fp,   "setenv JSOC_DBNAME %s\n", dbname);
   fprintf(fp, "drms_run %s/%s.drmsrun -V --nolog >>& /home/jsoc/exports/tmp/%s.runlog \n", reqdir, requestid, requestid);
   fprintf(fp, "set DRMS_ERROR=$status\n");
 fprintf(fp, "set NewRecnum=`cat /home/jsoc/exports/tmp/%s.recnum` \n", requestid);
-fprintf(fp, "while (`show_info -q -r 'jsoc.export[%s]'` < $NewRecnum)\n", requestid);
+fprintf(fp, "while (`show_info -q -r 'jsoc.export[%s]' JSOC_DBNAME=%s` < $NewRecnum)\n", requestid, dbname);
 fprintf(fp, "  echo waiting for jsocdb drms_run commit >> /home/jsoc/exports/tmp/%s.runlog \n",requestid);
 fprintf(fp, "  sleep 1\nend \n");
   if (requestorid)
-     fprintf(fp, "set Notify=`show_info -q 'jsoc.export_user[? RequestorID=%d ?]' key=Notify` \n", requestorid);
-  fprintf(fp, "set REQDIR = `show_info -q -p 'jsoc.export[%s]'` \n", requestid);
+     fprintf(fp, "set Notify=`show_info -q 'jsoc.export_user[? RequestorID=%d ?]' key=Notify JSOC_DBNAME=%s` \n", requestorid, dbname);
+  fprintf(fp, "set REQDIR = `show_info -q -p 'jsoc.export[%s]' JSOC_DBNAME=%s`\n", requestid, dbname);
   fprintf(fp, "if ($DRMS_ERROR) then\n");
-  fprintf(fp, "  set_keys -C ds='jsoc.export[%s]' Status=4\n", requestid);
+  fprintf(fp, "  set_keys -C ds='jsoc.export[%s]' Status=4 JSOC_DBNAME=%s\n", requestid, dbname);
   if (requestorid)
      {
      fprintf(fp, "  mail -n -s 'JSOC export FAILED - %s' $Notify <<!\n", requestid);
@@ -199,6 +203,13 @@ int DoIt(void)
   int status = 0;
 
   if (nice_intro ()) return (0);
+
+  const char *dbname = NULL;
+
+  if ((dbname = cmdparams_get_str(&cmdparams, "JSOC_DBNAME", NULL)) == NULL)
+  {
+     dbname = DBNAME;
+  }
 
   op = cmdparams_get_str (&cmdparams, "op", NULL);
 
@@ -286,7 +297,7 @@ int DoIt(void)
       drms_record_directory(export_rec, reqdir, 1);
   
       // Insert qsub command to execute processing script into SU
-      make_qsub_call(requestid, reqdir, (notify ? requestorid : 0));
+      make_qsub_call(requestid, reqdir, (notify ? requestorid : 0), dbname);
   
       // Insert export processing drms_run script into export record SU
       // The script components must clone the export record with COPY_SEGMENTS in the first usage
@@ -323,9 +334,43 @@ int DoIt(void)
         fclose(fp);
         chmod(runscript, 0555);
         }
-      else if (strcmp(process, "SOMEOTHERCOMMAND") == 0)
-        { // some other export processing request - e.g. get external FITS files
-        }
+      else if (strcmp(process, "fullres") == 0 && strcmp(protocol,"fits")==0)
+      {
+         // some other export processing request - e.g. get external FITS files
+         FILE *fp;
+         char runscript[DRMS_MAXPATHLEN];
+         sprintf(runscript, "%s/%s.drmsrun", reqdir, requestid);
+         fp = fopen(runscript, "w");
+         fprintf(fp, "#! /bin/csh -f\n");
+         fprintf(fp, "set echo\n");
+         fprintf(fp, "set_keys_sock -C ds='jsoc.export[%s]' Status=1\n", requestid);
+
+         // Get new SU for the export record
+         fprintf(fp, "set REQDIR = `show_info_sock -q -p 'jsoc.export[%s]'`\n", requestid);
+         //fprintf(fp, "echo \"REQDIR is $REQDIR (should be a dir before this parenthetical stuff)\"\n");
+
+         // cd to SU in export record
+         fprintf(fp, "cd $REQDIR\n");
+         fprintf(fp, "printenv > %s.env\n", requestid);
+         fprintf(fp, "echo $HOSTNAME\n");
+
+         // Force staging and get paths to export files with list in index.txt
+         fprintf(fp, "jsoc_export reqid=%s version=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol=%s JSOC_DBNAME=%s\n", requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, dbname);
+
+         // convert index.txt list into index.json and index.html packing list files. 
+         fprintf(fp, "jsoc_export_make_index\n");
+
+         // set status=done and mark this version of the export record permanent
+         fprintf(fp, "set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
+
+         // make drms_run completion lock file
+         fprintf(fp, "show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
+
+         // copy the drms_run log file
+         fprintf(fp, "cp /home/jsoc/exports/tmp/%s.runlog ./%s.runlog \n", requestid, requestid);
+         fclose(fp);
+         chmod(runscript, 0555);
+      }
       else
         { // Unrecognized processing request
   // fprintf(stderr,"XX jsoc_export_manage FAIL Do not know what to do, requestid=%s, process=%s, protocol=%s, method=%s\n",
@@ -343,7 +388,7 @@ int DoIt(void)
   	" -o /home/jsoc/exports/tmp/%s.runlog "
   	" -e /home/jsoc/exports/tmp/%s.runlog "
   	"  %s/%s.qsub ",
-  	requestid, requestid, reqdir, requestid, requestid);
+  	requestid, requestid, reqdir, requestid);
   /*
   	"  >>& /home/jsoc/exports/tmp/%s.runlog",
   */
