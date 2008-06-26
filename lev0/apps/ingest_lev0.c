@@ -410,7 +410,7 @@ int fsn_normal_new_image()
 // tlm files. Returns 0 on success.
 int fsn_change_normal()
 {
-  int dstatus, rstatus;
+  int dstatus, rstatus, compid, n, k;
   char reopen_dsname[256];
   char *cptr;
 
@@ -450,9 +450,13 @@ int fsn_change_normal()
       Img->cropid = drms_getkey_int(rs, "CROPID", &rstatus);
       Img->luid = drms_getkey_int(rs, "LUTID", &rstatus);
       Img->tap = drms_getkey_int(rs, "TAPCODE", &rstatus);
-      Img->N = drms_getkey_int(rs, "N", &rstatus);
-      Img->K = drms_getkey_int(rs, "K", &rstatus);
-      Img->R = drms_getkey_int(rs, "R", &rstatus);
+      compid = drms_getkey_int(rs, "COMPID", &rstatus);
+      k = compid & 0x07;		//low 3 bits
+      n = compid >> 3;			//next 5 bits
+      n = n & 0x1F;
+      Img->N = n;
+      Img->K = k;
+      Img->R = drms_getkey_int(rs, "BITSELID", &rstatus);
       Img->overflow = drms_getkey_int(rs, "OVERFLOW", &rstatus);
       Img->headerr = drms_getkey_int(rs, "HEADRERR", &rstatus);
       Img->totalvals = drms_getkey_int(rs, "TOTVALS", &rstatus);
@@ -481,6 +485,7 @@ int fsn_change_normal()
                                          rdat,
                                          &dstatus);
       ImgC = Img;           //set current image pointer
+      drms_free_array(cArray); //must free from drms_segment_read()
     }
   }
   else {
@@ -607,6 +612,7 @@ int fsn_change_rexmit()
                                        segmentc->axis,
                                        rdat,
                                        &dstatus);
+    drms_free_array(cArray); //must free from drms_segment_read()
   }
   ImgC = ImgO;		//set current image pointer
   return(0);
