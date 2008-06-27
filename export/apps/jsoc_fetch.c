@@ -17,6 +17,8 @@
 #define EXPORT_SERIES_NEW "jsoc.export_new"
 #define EXPORT_USER "jsoc.export_user"
 
+int dojson, dotxt, dohtml, doxml;
+
 static char x2c (char *what) {
   register char digit;
 
@@ -317,6 +319,42 @@ if (DEBUG) fprintf(stderr,"%s%s\n",msg,info);
   return(1);
   }
 
+send_file(DRMS_Record_t *rec, int segno)
+  {
+  DRMS_Segment_t *seg = drms_segment_lookupnum(rec, 0);
+  char path[DRMS_MAXPATHLEN];
+  char sudir[DRMS_MAXPATHLEN];
+  FILE *fp;
+  int b;
+
+  drms_record_directory(rec,sudir,0);
+  strcpy(path, "/web/jsoc/htdocs");
+  strncat(path, sudir, DRMS_MAXPATHLEN);
+  strncat(path, "/", DRMS_MAXPATHLEN);
+  strncat(path, seg->filename, DRMS_MAXPATHLEN);
+fprintf(stderr,"path: %s\n",path);
+  fp = fopen(path, "r");
+  if (!fp)
+    JSONDIE2("Can not open file for export: ",path);
+  switch (seg->info->protocol)
+    {
+    case DRMS_FITS:
+        printf("Content-Type: application/fits\n\n");	
+        break;
+    default:
+        printf("Content-Type: application/binary\n\n");	
+//  Content-Type: application/fits
+//Length: 152,640 (149K) [application/fits]
+
+        // look at file extension to guess file type here and print content type line
+    }
+  while ((b = fgetc(fp))!= EOF)
+    fputc(b, stdout);
+  fclose(fp);
+  fflush(stdout);
+  }
+
+
 /* Module main function. */
 int DoIt(void)
   {
@@ -350,7 +388,7 @@ int DoIt(void)
   char status_query[1000];
   char *export_series; 
 
-time_t t1, t0 = time(NULL);
+  dojson=1; dotxt=0; dohtml=0; doxml=0;
 
   if (nice_intro ()) return (0);
 
@@ -436,7 +474,11 @@ time_t t1, t0 = time(NULL);
       JSONDIE("There are no files in this RecordSet");
     if (strcmp(method,"url_quick")==0 && strcmp(protocol,"as-is")==0 && all_online)
       {
-      if (dojson)
+      if (0 && segcount == 1) // If only one file then do immediate delivery of that file.
+        {
+	send_file(rs->records[0], 0);
+        }
+      else if (dojson)
         {
         char *json;
         char *strval;

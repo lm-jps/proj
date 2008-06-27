@@ -334,7 +334,7 @@ int DoIt(void)
         fclose(fp);
         chmod(runscript, 0555);
         }
-      else if (strcmp(process, "fullres") == 0 && strcmp(protocol,"fits")==0)
+      else if (strcmp(process, "fullres") == 0 && strcasecmp(protocol,"fits")==0)
       {
          // some other export processing request - e.g. get external FITS files
          FILE *fp;
