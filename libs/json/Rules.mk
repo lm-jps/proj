@@ -6,7 +6,7 @@ d		:= $(dir)
 # Local variables
 LIBJSON		:= $(d)/libjson.a
 
-OBJ_$(d)	:= $(addprefix $(d)/, json.o json_helper.o rstring.o)
+OBJ_$(d)	:= $(addprefix $(d)/, json.o json_helper.o)
 
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 

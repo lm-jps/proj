@@ -23,12 +23,11 @@
 
 \note error handling is only in a very rudimentary form.
 \author Rui Maciel	rui_maciel@users.sourceforge.net
-\version v0.8
+\version v0.9
 */
 
 #include <wchar.h>
-#include <string.h>
-
+#include <stdint.h>
 
 #ifndef JSON_H
 #define JSON_H
@@ -38,7 +37,7 @@ extern "C"
 {
 #endif
 
-#define JSON_MAX_STRING_LENGTH 4096
+#define JSON_MAX_STRING_LENGTH SIZE_MAX-1
 
 /**
 The descriptions of the json_value node type
@@ -108,8 +107,8 @@ The structure which holds the pointers to the functions that will be called by t
 		int (*close_object) ();
 		int (*open_array) ();
 		int (*close_array) ();
-		int (*new_string) (wchar_t * text);
-		int (*new_number) (wchar_t * text);
+		int (*new_string) (char * text);
+		int (*new_number) (char * text);
 		int (*new_true) ();
 		int (*new_false) ();
 		int (*new_null) ();
@@ -223,11 +222,12 @@ Produces a JSON markup text document from a document tree
 
 
 /**
-Checks if the character in question is a JSON markup white space
-@param c the character to be analized
-@return 1 if it is, 0 if it isn't
+Produces a JSON markup text document from a json_t document tree to a text stream 
+@param root The document's root node
+@param text a pointer to a char string that will hold the JSON document text.
+@return  a json_error code describing how the operation went
 **/
-	int json_white_space (const wchar_t c);
+/*	enum json_error json_tree_to_file (json_t * root, FILE *file); */
 
 
 /**
@@ -246,20 +246,11 @@ Formats a JSON markup text contained in the given string
 
 
 /**
-Outputs a new UTF8 c-string which holds the same characters as the given string but replaces all non-BMP characters with the respective escape sequence.
-@param text a wchar_t text string
+Outputs a new UTF8 c-string which replaces all characters that must be escaped with their respective escaped versions
+@param text an UTF8 char text string
 @return an UTF-8 c-string holding the same text string but with escaped characters
 **/
-	char *json_escape (wchar_t * text);
-
-
-/**
-This function performs the same tast as json_escape() but it also escapes non-ASCII characters
-As with json_escape(), the produced string, if unaccounted for, may contribute to memory leaks.
-@param text a wchar_t text string
-@return a char string holding the same text string but composed solely of ASCII characters
-**/
-	char *json_escape_to_ascii (wchar_t * text);
+	char *json_escape (char * text);
 
 
 /**
@@ -271,20 +262,21 @@ struct json_parsing_info
 
 
 /**
-Produces a document tree from a JSON markup text string
+Produces a document tree sequentially from a JSON markup text fragment
 @param info the information necessary to resume parsing any incomplete document
-@param text a c-string containing information described by the JSON language, partial or complete.
+@param buffer a c-string containing a JSON document fragment
 @return a code describing how the operation ended up
 **/
-	enum json_error json_parse_string (struct json_parsing_info *info, char *buffer);
+	enum json_error json_parse_fragment (struct json_parsing_info *info, char *buffer);
 
 
 /**
 Produces a document tree from a JSON markup text string that contains a complete document
+@param root a reference to a pointer to a json_t type. The function allocates memory to the passed pointer and sets up the value
 @param text a c-string containing a complete JSON text document
 @return a pointer to the new document tree or NULL if some error occurred
 **/
-	json_t *json_parse_document (char *text);
+	enum json_error json_parse_document (json_t **root, char *text);
 
 
 /**
@@ -294,7 +286,7 @@ Function to perform a SAX-like parsing of any JSON document or document fragment
 @param c the character to be parsed
 @return a json_error code informing how the parsing went
 **/
-	enum json_error json_saxy_parse (struct json_saxy_parser_status *jsps, struct json_saxy_functions *jsf, wchar_t c);
+	enum json_error json_saxy_parse (struct json_saxy_parser_status *jsps, struct json_saxy_functions *jsf, char c);
 
 
 /**
