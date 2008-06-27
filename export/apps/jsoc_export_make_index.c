@@ -96,6 +96,7 @@ int main(int argc, char **argv)
   while (fgets(buf, 1000, index_txt))
     {
     char *p = buf + strlen(buf) - 1;
+    char *c;
     if (p >= buf && *p == '\n')
       *p = '\0'; 
     p = buf;
@@ -139,6 +140,9 @@ int main(int argc, char **argv)
 	while (isblank(*p) && p >= val)
           *p-- = '\0';
 
+        // Convert names to lower case.
+	for (c=name; *c; c++)
+           *c = tolower(*c);
 	// save dir for use in data section
 	if (strcmp(name, "dir") == 0)
 	  strncpy(dir, val, 1000);

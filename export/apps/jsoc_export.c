@@ -83,7 +83,7 @@ MymodError_t WritePListRecord(PLRecType_t rectype, FILE *pkfile, const char *f1,
    switch (rectype)
    {
       case kPL_metadata:
-        fprintf(pkfile, "%s = \"%s\"\n", f1, f2);
+        fprintf(pkfile, "%s=%s\n", f1, f2);
         break;
       case kPL_content:
         fprintf(pkfile, "%s\t%s\n", f1, f2);
