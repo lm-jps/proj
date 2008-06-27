@@ -778,6 +778,12 @@ int DoIt(void)
       segdims[iseg] = val;
       }
 
+    /* if any segment info wanted, stage the records */
+    if (nsegs)
+      {
+      drms_stage_records(recordset, 0, 0);
+      }
+
     /* loop over set of selected records */
     for (irec = 0; irec < nrecs; irec++) 
       {
