@@ -60,6 +60,7 @@ function InitPage()
   ExportUserOK = 0;
   ExportNotifyOK = 0;
   $("ExportRequestor").value = "";
+  $("ExportProcessing").value = "no_op";
   $("ExportNotify").value = "";
   $("ExportNotifyConf").value = "";
   $("RequestID").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -153,6 +154,7 @@ function insertOption(list,text)
 
 function GetSeries()
   {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   CleanSeriesInfo();
   new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/show_series',
     {
@@ -160,10 +162,12 @@ function GetSeries()
     parameters: {"filter" : $("SeriesFilter").value },
     onSuccess: function(transport, json)
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       SeriesData = response.evalJSON();
       CleanSeriesSelect();
-      for (var i = 0; i < SeriesData.n; i++)
+      var n = SeriesData.n;
+      for (var i = 0; i < n; i++)
         {
 	insertOption("SeriesSelect",SeriesData.names[i].name);
         }
@@ -171,6 +175,7 @@ function GetSeries()
       },
     onFailure: function()
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       alert('Something went wrong...');
       }
     });
@@ -184,6 +189,7 @@ function GetSeries()
 
 function PickSeries()
   {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   CleanSeriesPick();
   CurrentSeries = $("SeriesSelect").selectedIndex;
   SeriesName = $("SeriesSelect").options[CurrentSeries].text;
@@ -199,6 +205,7 @@ function PickSeries()
 
     onSuccess: function(transport, json)
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status == 1)
@@ -280,6 +287,7 @@ function PickSeries()
       },
     onFailure: function()
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       alert('Something went wrong...');
       }
     });
@@ -291,6 +299,7 @@ function PickSeries()
 
 function GetRSCount()
   {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCount_Place").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   askedCount = 1;
@@ -301,6 +310,7 @@ function GetRSCount()
 
     onSuccess: function(transport, json)
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status != 0)
@@ -322,6 +332,7 @@ function GetRSCount()
       },
     onFailure: function()
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       alert('Something went wrong...');
       }
     });
@@ -430,6 +441,7 @@ function PickSegs()
 
 function GetKeyValues()
   {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var getparameters = new Hash( {"ds" : $("RecordSet").value, "op" : "rs_list" });
   $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
   if (nkeysselected < 1 && nsegsselected < 1)
@@ -473,6 +485,7 @@ function GetKeyValues()
 
     onSuccess: function(transport, json)
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       var valuetable = "";
@@ -543,6 +556,7 @@ function GetKeyValues()
       },
     onFailure: function()
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       alert('Something went wrong...');
       }
     });
@@ -552,6 +566,7 @@ function GetKeyValues()
 
 function CreateDataTable(data, valuetable)
   {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   valuetable = "";
   var count = data.count;
   valuetable = "<TABLE BORDER=1>"
@@ -578,11 +593,11 @@ function ExportNop()
 function SetExportMethod()
   {
   $("ExportMethod").value = $("ExportMethod").value.toLowerCase();
-  if ($("ExportMethod").value == "url" || $("ExportMethod").value == "url_quick")
+  if ($("ExportMethod").value == "url" || $("ExportMethod").value == "url_quick" || $("ExportMethod").value == "url_direct")
     ExportMethodOK = 1;
   else
     {
-    alert("Please set Method to url or url_quick");
+    alert("Please set Method to url, url_quick, or url_direct");
     ExportMethodOK = 0;
     }
   }
@@ -594,11 +609,15 @@ function SetExportProtocol()
     {
     if (tmp == "FITS")
       {
+      $("ExportProcessing").value = "fullres";
       $("ExportProtocol").value = "FITS";
       ExportProtocolOK = 2;
       }
     else
+      {
+      $("ExportProcessing").value = "no_op";
       ExportProtocolOK = 1;
+      }
     }
   else
     {
@@ -645,10 +664,10 @@ function SetExportNotify()
     }
   }
 
-// id="ExportButton" type="button" value="Submit Export Request" style="background-color:#D8D8D8" onClick="GetExport();" >
 
 function GetExport()
   {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   if (ExportReadyOK == 3)
     {
     alert("Processing request, please wait...");
@@ -703,11 +722,14 @@ function GetExport()
     $("ExportButton").value = "Processing ...";
     $("ExportButton").style.backgroundColor = "#FFD8D8";
     var ExportRecordSetTmp = $("ExportRecordSet").innerHTML;
+// "method" : ($("ExportMethod").value == "url_direct" ? "url_quick" : $("ExportMethod").value),
+// "method" : $("ExportMethod").value,
     var exportparameters = new Hash( {"op" : "exp_request",
                  		     "ds" : ExportRecordSetTmp, 
+                 		     "process" : $("ExportProcessing").value,
                  		     "requestor" : $("ExportRequestor").value,
                  		     "notify" : $("ExportNotify").value,
-                 		     "method" : $("ExportMethod").value,
+ "method" : ($("ExportMethod").value == "url_direct" ? "url_quick" : $("ExportMethod").value),
 			 	     "format" : "json",
                  		     "protocol" : $("ExportProtocol").value });
     if (nsegsselected)
@@ -726,13 +748,14 @@ function GetExport()
     return;
     }
 
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch.csh',
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch',
     {
     method: 'get',
     parameters: exportparameters.toObject(),
 
     onSuccess: function(transport, json)
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status == 4)
@@ -770,7 +793,7 @@ function GetExport()
         $("StatusRequestID").value = data.requestid;
         $("ExportLocation").innerHTML = "";
         }
-      else // status == 0 implies url_quick format and all online as-is
+      else // status == 0 implies url_quick or url_direct format and all online as-is
         {
         var valuetable = "";
         var count = data.count;
@@ -782,10 +805,27 @@ function GetExport()
         $("ExportStatus").innerHTML = "Data Ready, size=" + data.size;
         valuetable = CreateDataTable(data, valuetable);
         $("ExportLocation").innerHTML =  valuetable + "<BR>";
+        if ($("ExportMethod").value == "url_direct")
+          {
+	  if (count > 1)
+	    {
+            $("ExportLocation").innerHTML =  "<B>Multiple files returned, direct fetch not possible. </B><P>" +
+		valuetable + "<BR>";
+	    }
+	  else
+	    {
+	    var path = encodeURI("http://jsoc.stanford.edu" + data.dir + "/" + data.data[0].filename);
+doucment.write("<link type=\"application/fits\" href="+path+" />");
+// fetch image
+            }
+          }
+	else
+          $("ExportLocation").innerHTML =  valuetable + "<BR>";
         }
       },
     onFailure: function()
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       $("ExportButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
       ExportReadyOK = 0;
       $("ExportButton").value = "FAILURE ...";
@@ -806,6 +846,7 @@ function ClearStatus()
 
 function GetStatus()
   {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   if ($("StatusRequestID").value.length == 0)
     {
     alert("Enter Status Update RequestID");
@@ -817,13 +858,14 @@ function GetStatus()
   $("StatusStatus").innerHTML = "";
   $("StatusButtonMsg").innerHTML = "Processing status request ...";
   $("StatusButton").value = "Processing ...";
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch.csh',
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch',
     {
     method: 'get',
     parameters: {"op" : "exp_status", "requestid" : $("StatusRequestID").value }, 
 
     onSuccess: function(transport, json)
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status == 4)
@@ -870,6 +912,7 @@ function GetStatus()
       },
     onFailure: function()
       {
+$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       $("StatusButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
       $("StatusButton").value = "FAILURE ...";
       $("StatusButton").style.backgroundColor = "#FFB0B0";
@@ -1013,12 +1056,15 @@ access the data.
 <TR><TD style="width:10em" >RecordSet</TD><TD>
 <span id="ExportRecordSet" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
 </TD><TD>Record set selected in Step 3 above.</TR>
+<TR><TD>Processing</TD><TD>
+<input id="ExportProcessing" type="text" name="ExportProcessing" value="no_op" onChange="ExportNop();" >
+</TD><TD>Set based on Protocol to no_op for as-is or fullres for FITS.</TR>
 <TR><TD>Protocol</TD><TD>
-<input id="ExportProtocol" type="text" name="ExportProtocol" value="as-is" onChange="ExportNop();" >
+<input id="ExportProtocol" type="text" name="ExportProtocol" value="as-is" onChange="SetExportProtocol();" >
 </TD><TD>Choose protocol, "FITS" or "as-is".</TR>
 <TR><TD>Method</TD><TD>
 <input id="ExportMethod" type="text" name="ExportMethod" value="url_quick" onChange="ExportNop();" >
-</TD><TD>Choose method, url or url_quick for now.</TR>
+</TD><TD>Choose method, url, url_quick, or url_direct for now.</TR>
 <TR><TD>Requestor</TD><TD>
 <input id="ExportRequestor" type="text" name="ExportRequestor" value="" onChange="ExportNop();" >
 </TD><TD>Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</TR>
@@ -1044,7 +1090,7 @@ or "none" or "no" if you do not want/need to be notified upon export process com
 </TABLE>
 <HR>
 <H3>8. Check Status of Prior Export Request</H3>
-NOTE - The code to actually do the export is not working yet...<P>
+<P>
 <TABLE>
 <TR><TD style="width:10em" >RequestID</TD><TD>
 <input type="text" id="StatusRequestID" name="StatusRequestID" style="background-color:#FFF8DC;" value="&nbsp;" onChange="GetStatus();">
@@ -1072,8 +1118,11 @@ NOTE - The code to actually do the export is not working yet...<P>
 </TABLE>
 <P>
 
-Next Step Under Constructrion
 </DIV> <!-- id="ExportRequestDiv" -->
+<DIV>
+Next Step Under Constructrion,<P>
+<span id="AjaxBusy">
+</DIV>
 
 <H3> done </H3>
 <DIV id="footer" style="vertical-align:bottom;text-align:center">
