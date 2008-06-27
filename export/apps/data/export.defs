@@ -13,20 +13,20 @@ kExportKW_Status = Status
 
 # Packing list metadata 'keyword' names
 
-kMD_Version = Version
-kMD_RequestID = RequestID
-kMD_Method = Method
-kMD_Protocol = Protocol
-kMD_Count = Count
-kMD_Size = Size
-kMD_ExpTime = ExpTime
-kMD_Dir = Dir
-kMD_Status = Status
-kMD_Error = Error
+kMD_Version = version
+kMD_RequestID = requestid
+kMD_Method = method
+kMD_Protocol = protocol
+kMD_Count = count
+kMD_Size = size
+kMD_ExpTime = exptime
+kMD_Dir = dir
+kMD_Status = status
+kMD_Error = error
 
 # Packing-list file name
 kPackListFileName = index.txt
 
-# Pakcing-list file status values
+# Packing-list file status values
 kMDStatus_Good = 0
 kMDStatus_Bad = 1
