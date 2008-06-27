@@ -231,12 +231,12 @@ int DoIt(void)
 
   if (dbname)
   {
-     pc += snprintf(dbids + pc, sizeof(dbids) - pc, "JSOC_DBNAME=%s", dbname);
+     pc += snprintf(dbids + pc, sizeof(dbids) - pc, "JSOC_DBNAME=%s ", dbname);
   }
 
   if (dbuser)
   {
-     pc += snprintf(dbids + pc, sizeof(dbids) - pc, "JSOC_DBUSER=%s", dbuser);
+     pc += snprintf(dbids + pc, sizeof(dbids) - pc, "JSOC_DBUSER=%s ", dbuser);
   }
 
   op = cmdparams_get_str (&cmdparams, "op", NULL);
@@ -412,7 +412,7 @@ int DoIt(void)
       drms_close_record(export_rec, DRMS_INSERT_RECORD);
   
       // SU now contains both qsub script and drms_run script, ready to execute and lock the record.
-      sprintf(command,"qsub -q x.q,o.q,j.q "
+      sprintf(command,"qsub -q x.q,o.q,j.q -V "
   	" -o /home/jsoc/exports/tmp/%s.runlog "
   	" -e /home/jsoc/exports/tmp/%s.runlog "
   	"  %s/%s.qsub ",
