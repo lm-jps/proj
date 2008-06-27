@@ -111,6 +111,12 @@ make_qsub_call(char *requestid, char *reqdir, int requestorid, const char *dbnam
   // fprintf(fp, "source /home/phil/.sunrc\n");
   // fprintf(fp, "source /home/jsoc/.setJSOCenv\n");
   // fprintf(fp, "printenv\n");
+
+  /* Set path based on export root (if set) */
+  fprintf(fp, "if (${?JSOCROOT_EXPORT}) then\n");
+  fprintf(fp, "  set path = ($JSOCROOT_EXPORT/bin/$JSOC_MACHINE $JSOCROOT_EXPORT/scripts $path)\n");
+  fprintf(fp,"endif\n");
+
   fprintf(fp, "while (`show_info -q 'jsoc.export_new[%s]' key=Status %s` == 2)\n", requestid, dbids);
   fprintf(fp, "  echo waiting for jsocdb commit >> /home/jsoc/exports/tmp/%s.runlog \n",requestid);
   fprintf(fp, "  sleep 1\nend \n");
@@ -214,7 +220,9 @@ int DoIt(void)
 
   const char *dbname = NULL;
   const char *dbuser = NULL;
+  const char *jsocroot = NULL;
   char dbids[128];
+  char jsocrootstr[128] = {0};
   int pc = 0;
 
   if (nice_intro ()) return (0);
@@ -227,6 +235,11 @@ int DoIt(void)
   if ((dbuser = cmdparams_get_str(&cmdparams, "JSOC_DBUSER", NULL)) == NULL)
   {
      dbuser = USER;
+  }
+
+  if ((jsocroot = cmdparams_get_str(&cmdparams, "JSOCROOT", NULL)) != NULL)
+  {
+     snprintf(jsocrootstr, sizeof(jsocrootstr), "JSOCROOT_EXPORT=%s", jsocroot);
   }
 
   if (dbname)
@@ -412,11 +425,11 @@ int DoIt(void)
       drms_close_record(export_rec, DRMS_INSERT_RECORD);
   
       // SU now contains both qsub script and drms_run script, ready to execute and lock the record.
-      sprintf(command,"qsub -q x.q,o.q,j.q -V "
+      sprintf(command,"qsub -q x.q,o.q,j.q -v %s "
   	" -o /home/jsoc/exports/tmp/%s.runlog "
   	" -e /home/jsoc/exports/tmp/%s.runlog "
   	"  %s/%s.qsub ",
-  	requestid, requestid, reqdir, requestid);
+        jsocrootstr, requestid, requestid, reqdir, requestid);
   /*
   	"  >>& /home/jsoc/exports/tmp/%s.runlog",
   */
