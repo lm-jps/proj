@@ -93,7 +93,8 @@ int nice_intro ()
   }
 
 // generate qsub script
-make_qsub_call(char *requestid, char *reqdir, int requestorid, const char *dbname)
+make_qsub_call(char *requestid, char *reqdir, int requestorid, const char *dbname, 
+               const char *dbuser, const char *dbids)
   {
   FILE *fp;
   char qsubscript[DRMS_MAXPATHLEN];
@@ -110,21 +111,28 @@ make_qsub_call(char *requestid, char *reqdir, int requestorid, const char *dbnam
   // fprintf(fp, "source /home/phil/.sunrc\n");
   // fprintf(fp, "source /home/jsoc/.setJSOCenv\n");
   // fprintf(fp, "printenv\n");
-  fprintf(fp, "while (`show_info -q 'jsoc.export_new[%s]' key=Status JSOC_DBNAME=%s` == 2)\n", requestid, dbname);
+  fprintf(fp, "while (`show_info -q 'jsoc.export_new[%s]' key=Status %s` == 2)\n", requestid, dbids);
   fprintf(fp, "  echo waiting for jsocdb commit >> /home/jsoc/exports/tmp/%s.runlog \n",requestid);
   fprintf(fp, "  sleep 1\nend \n");
-  fprintf(fp,   "setenv JSOC_DBNAME %s\n", dbname);
+  if (dbname)
+  {
+     fprintf(fp,   "setenv JSOC_DBNAME %s\n", dbname);
+  }
+  if (dbuser)
+  {
+     fprintf(fp,   "setenv JSOC_DBUSER %s\n", dbuser);
+  }
   fprintf(fp, "drms_run %s/%s.drmsrun -V --nolog >>& /home/jsoc/exports/tmp/%s.runlog \n", reqdir, requestid, requestid);
   fprintf(fp, "set DRMS_ERROR=$status\n");
 fprintf(fp, "set NewRecnum=`cat /home/jsoc/exports/tmp/%s.recnum` \n", requestid);
-fprintf(fp, "while (`show_info -q -r 'jsoc.export[%s]' JSOC_DBNAME=%s` < $NewRecnum)\n", requestid, dbname);
+fprintf(fp, "while (`show_info -q -r 'jsoc.export[%s]' %s` < $NewRecnum)\n", requestid, dbids);
 fprintf(fp, "  echo waiting for jsocdb drms_run commit >> /home/jsoc/exports/tmp/%s.runlog \n",requestid);
 fprintf(fp, "  sleep 1\nend \n");
   if (requestorid)
-     fprintf(fp, "set Notify=`show_info -q 'jsoc.export_user[? RequestorID=%d ?]' key=Notify JSOC_DBNAME=%s` \n", requestorid, dbname);
-  fprintf(fp, "set REQDIR = `show_info -q -p 'jsoc.export[%s]' JSOC_DBNAME=%s`\n", requestid, dbname);
+     fprintf(fp, "set Notify=`show_info -q 'jsoc.export_user[? RequestorID=%d ?]' key=Notify %s` \n", requestorid, dbids);
+  fprintf(fp, "set REQDIR = `show_info -q -p 'jsoc.export[%s]' %s`\n", requestid, dbids);
   fprintf(fp, "if ($DRMS_ERROR) then\n");
-  fprintf(fp, "  set_keys -C ds='jsoc.export[%s]' Status=4 JSOC_DBNAME=%s\n", requestid, dbname);
+  fprintf(fp, "  set_keys -C ds='jsoc.export[%s]' Status=4 %s\n", requestid, dbids);
   if (requestorid)
      {
      fprintf(fp, "  mail -n -s 'JSOC export FAILED - %s' $Notify <<!\n", requestid);
@@ -141,7 +149,9 @@ fprintf(fp, "  sleep 1\nend \n");
      fprintf(fp, "Results at http://jsoc.stanford.edu/$REQDIR\n");
      fprintf(fp, "!\n");
      }
-fprintf(fp, "  rm -f /home/jsoc/exports/tmp/%s.recnum\n", requestid);
+  fprintf(fp, "  rm -f /home/jsoc/exports/tmp/%s.recnum\n", requestid);
+  /* The log after the call to drms_run gets lost because of the following line - should preserve this
+   * somehow (but it can't go in the new inner REQDIR because that is read-only after drms_run returns. */
   fprintf(fp, "  rm -f /home/jsoc/exports/tmp/%s.runlog\n", requestid);
   fprintf(fp, "endif\n");
   fclose(fp);
@@ -202,13 +212,31 @@ int DoIt(void)
   char *export_series; 
   int status = 0;
 
-  if (nice_intro ()) return (0);
-
   const char *dbname = NULL;
+  const char *dbuser = NULL;
+  char dbids[128];
+  int pc = 0;
+
+  if (nice_intro ()) return (0);
 
   if ((dbname = cmdparams_get_str(&cmdparams, "JSOC_DBNAME", NULL)) == NULL)
   {
      dbname = DBNAME;
+  }
+
+  if ((dbuser = cmdparams_get_str(&cmdparams, "JSOC_DBUSER", NULL)) == NULL)
+  {
+     dbuser = USER;
+  }
+
+  if (dbname)
+  {
+     pc += snprintf(dbids + pc, sizeof(dbids) - pc, "JSOC_DBNAME=%s", dbname);
+  }
+
+  if (dbuser)
+  {
+     pc += snprintf(dbids + pc, sizeof(dbids) - pc, "JSOC_DBUSER=%s", dbuser);
   }
 
   op = cmdparams_get_str (&cmdparams, "op", NULL);
@@ -297,7 +325,7 @@ int DoIt(void)
       drms_record_directory(export_rec, reqdir, 1);
   
       // Insert qsub command to execute processing script into SU
-      make_qsub_call(requestid, reqdir, (notify ? requestorid : 0), dbname);
+      make_qsub_call(requestid, reqdir, (notify ? requestorid : 0), dbname, dbuser, dbids);
   
       // Insert export processing drms_run script into export record SU
       // The script components must clone the export record with COPY_SEGMENTS in the first usage
@@ -355,7 +383,7 @@ int DoIt(void)
          fprintf(fp, "echo $HOSTNAME\n");
 
          // Force staging and get paths to export files with list in index.txt
-         fprintf(fp, "jsoc_export reqid=%s version=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol=%s JSOC_DBNAME=%s\n", requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, dbname);
+         fprintf(fp, "jsoc_export reqid=%s version=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol=%s %s\n", requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, dbids);
 
          // convert index.txt list into index.json and index.html packing list files. 
          fprintf(fp, "jsoc_export_make_index\n");
