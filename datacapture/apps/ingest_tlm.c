@@ -902,7 +902,7 @@ void do_pipe2soc() {
         sprintf(cmd, "/bin/rm -f %s", fname);
       }
       else {
-        sprintf(cmd, "/bin/mv -f %s %s/err", fname, frompipedir);
+        sprintf(cmd, "/bin/mv -f %s %s/err/", fname, frompipedir);
       }
       printk("%s\n", cmd);
       system(cmd);
