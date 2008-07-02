@@ -708,11 +708,7 @@ int get_tlm(char *file)
                 status = decompress_flush_image(fsn, fid, &partimg);
                 if(status == SUCCESS) {
 		  h0log("*SUCCESS FLUSH of partial image fsn=%u\n", fsn);
-/**********************************************!!!OLD**************
-                  if(catalog_image(partimg)) {
-                    h0log("Error on catalog_image()\n");
-                  }
-**********************************************!!!OLD**************/
+                  imagecnt++;
                   sprintf(imgfile, "%s/%s_%09d.%d.fits",
                         IMAGEDIR, prependfits, fsn, imagedircnt++);
                   if(decompress_writefitsimage(imgfile, partimg, 0)) {
@@ -762,11 +758,6 @@ int get_tlm(char *file)
 		fsn, ftmp);
         tsum[2] += ftmp;
 ***********************************************************************/
-/********************************************!!OLD*********
-        if(catalog_image(images)) {
-          h0log("Error on catalog_image()\n");	
-        }
-********************************************!!OLD*********/
         sprintf(imgfile, "%s/%s_%09d.%d.fits",
 			IMAGEDIR,prependfits,fsn,imagedircnt++);
         if(decompress_writefitsimage(imgfile, images, 0)) {
