@@ -680,6 +680,11 @@ int get_tlm(char *file)
       cnt1 = MDI_getshort(cbuf+32);
       cnt2 = MDI_getshort(cbuf+34);
       fsnx = (unsigned int)(cnt1<<16)+(unsigned int)(cnt2);
+      fsnx = fsnx & 0x3fffffff;         //low 30bits for fsn */
+      if(fsnx == 0) {
+	h0log("Found fsn=0. Ignore.\n");
+        continue;			//a 0 fsn is not acceptable
+      }
       if(fsnx != fsn_prev) {            /* the fsn has changed */
 	h0log("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
         /* close the image of the prev fsn if not 0 */
