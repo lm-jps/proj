@@ -897,6 +897,7 @@ void do_pipe2soc() {
 void do_ingest()
 {
   FILE *fp;
+  FILE *dolev0fp;
   DIR *dfd;
   NAMESORT *nameptr;
   struct dirent *dp;
@@ -1078,7 +1079,20 @@ void do_ingest()
     tlmactive = 0;
     ttmp = StopTimer(NUMTIMERS-1);
     printk("Rate tlm %s bytes in %f sec\n", tlmsize, ttmp);
-
+    //see if we should now process to lev0
+    if((dolev0fp=fopen(LEV0FILEON, "r")) != NULL) {
+      if(!lev0_on_flag) {
+	printk("Found file: %s. Lev0 processing now active.\n", LEV0FILEON);
+	lev0_on_flag = 1;
+      }
+      fclose(dolev0fp);
+    }
+    else {
+      if(lev0_on_flag) {
+	printk("Not Found: %s. Lev0 processing not active.\n", LEV0FILEON);
+	lev0_on_flag = 0;
+      }
+    }
   }
   free(nameptr);
   /*if(!found) { printk("No .qac files found in %s\n", DIRDDS); }*/
@@ -1125,28 +1139,12 @@ void setup(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-  FILE *dolev0fp;
-
   get_cmd(argc, argv);		/* check the calling sequence */
   setup(argc, argv);		/* start pvm and init things */
   alarm(ALRMSEC);		/* ck for partial images every 60 sec */
   while(1) {
     do_ingest();		/* loop to get files from the input dir */
     do_pipe2soc();		/* get any .parc files from pipeline backend */
-    //see if we should now process to lev0
-    if((dolev0fp=fopen(LEV0FILEON, "r")) != NULL) {
-      if(!lev0_on_flag) {
-	printk("Found file: %s. Lev0 processing now active.\n", LEV0FILEON);
-	lev0_on_flag = 1;
-      }
-      fclose(dolev0fp);
-    }
-    else {
-      if(lev0_on_flag) {
-	printk("Not Found: %s. Lev0 processing not active.\n", LEV0FILEON);
-	lev0_on_flag = 0;
-      }
-    }
     sleep(4);
     if(sigtermflg) { now_do_term_sig(); }
   }
