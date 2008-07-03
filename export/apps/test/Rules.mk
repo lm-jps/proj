@@ -3,12 +3,9 @@ sp 		:= $(sp).x
 dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
-#dir	:= $(d)/test
-#-include		$(SRCDIR)/$(dir)/Rules.mk
-
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, jsoc_export jsoc_export_as_is jsoc_info jsoc_fetch jsoc_export_manage jsoc_export_make_index)
+MODEXE_$(d)	:= $(addprefix $(d)/, testexportarrkeys)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 # CEXE_$(d)       := $(addprefix $(d)/, GetJsocRequestID jsoc_export_make_index)
 CEXE_$(d)       := $(addprefix $(d)/, GetJsocRequestID)
@@ -33,7 +30,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/json -I$(SRCDIR)/$(d)/../libs/util
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/json -I$(SRCDIR)/$(d)/../../libs/util
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(MODEXE_$(d)):		$(LIBJSON) $(LIBEXPUTL)
 $(MODEXE_SOCK_$(d)):	$(LIBJSON) $(LIBEXPUTL)
