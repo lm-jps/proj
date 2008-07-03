@@ -1026,15 +1026,17 @@ void do_ingest()
             printk("*cp qac to %s\n", alloc_wd);
 	    printk("%s\n", cmd);
 	    if(status = system(cmd)) {
-	    printk("***Error %d on: %s\n", status, cmd);
-	    abortit(1);
+		printk("***Error %d on: %s\n", status, cmd);
+		//abortit(1);
+		continue;
 	    }
 	    sprintf(cmd, "cp -p %s %s", tlmfile, alloc_wd);
             printk("*cp tlm to %s\n", alloc_wd);
 	    printk("%s\n", cmd);
 	    if(system(cmd)) {
-	    printk("***Error on: %s\n", cmd);
-	    abortit(1);
+		printk("***Error on: %s\n", cmd);
+		//abortit(1);
+		continue;
 	    }
             /*tsum[7] += StopTimer(7);*/
 
