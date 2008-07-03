@@ -355,18 +355,13 @@ void now_do_alrm_sig()
         status = decompress_flush_image(fsn, fid, &image);
         if(status == SUCCESS) {
 	  h0log("*SUCCESS FLUSH of partial image fsn=%u\n", fsn);
-/**********************************************!!!OLD**************
-          if(catalog_image(image)) {
-            h0log("Error on catalog_image()\n");
-          }
-**********************************************!!!OLD**************/
-          sprintf(imgfile, "%s/%s_%09d.%d.fits", 
+          sprintf(imgfile, "%s/%s_%09u.%d.fits", 
 			IMAGEDIR, prependfits, fsn, imagedircnt++);
           if(decompress_writefitsimage(imgfile, image, 0)) {
             h0log("Error on output of %s\n", imgfile);
           }
           decompress_free_images(image);
-          /* only keep the last 30 images */
+          /* only keep the last n images */
           if(imagedircnt > IMAGEDIRCNT) {
             sprintf(cmd,"/bin/rm -f %s/%s_*.%d.fits",
 			IMAGEDIR,prependfits,imagedircnt-IMAGEDIRCNT);
@@ -420,18 +415,13 @@ void now_do_term_sig()
     fid = ID2FID(decomp_stat[i].ID);
     status = decompress_flush_image(fsn, fid, &image);
     if(status == SUCCESS) {
-/*********************************************************************
-      if(catalog_image(image)) {
-        h0log("Error on catalog_image()\n");
-      }
-*********************************************************************/
-      sprintf(imgfile, "%s/%s_%09d.%d.fits", 
+      sprintf(imgfile, "%s/%s_%09u.%d.fits", 
 			IMAGEDIR,prependfits,fsn,imagedircnt++);
       if(decompress_writefitsimage(imgfile, image, 0)) {
         h0log("Error on output of %s\n", imgfile);
       }
       decompress_free_images(image);
-      /* only keep the last 30 images */
+      /* only keep the last n images */
       if(imagedircnt >= IMAGEDIRCNT) {
         sprintf(cmd,"/bin/rm -f %s/%s_*.%d.fits",
 			IMAGEDIR,prependfits,imagedircnt-IMAGEDIRCNT);
@@ -709,13 +699,13 @@ int get_tlm(char *file)
                 if(status == SUCCESS) {
 		  h0log("*SUCCESS FLUSH of partial image fsn=%u\n", fsn);
                   imagecnt++;
-                  sprintf(imgfile, "%s/%s_%09d.%d.fits",
+                  sprintf(imgfile, "%s/%s_%09u.%d.fits",
                         IMAGEDIR, prependfits, fsn, imagedircnt++);
                   if(decompress_writefitsimage(imgfile, partimg, 0)) {
                     h0log("Error on output of %s\n", imgfile);
                   }
                   decompress_free_images(partimg);
-                  /* only keep the last 30 images */
+                  /* only keep the last n images */
                   if(imagedircnt >= IMAGEDIRCNT) {
                     sprintf(cmd,"/bin/rm -f %s/%s_*.%d.fits",
                           IMAGEDIR,prependfits,imagedircnt-IMAGEDIRCNT);
@@ -758,12 +748,12 @@ int get_tlm(char *file)
 		fsn, ftmp);
         tsum[2] += ftmp;
 ***********************************************************************/
-        sprintf(imgfile, "%s/%s_%09d.%d.fits",
+        sprintf(imgfile, "%s/%s_%09u.%d.fits",
 			IMAGEDIR,prependfits,fsn,imagedircnt++);
         if(decompress_writefitsimage(imgfile, images, 0)) {
           h0log("Error on output of %s\n", imgfile);
         }
-        /* only keep the last 30 images */
+        /* only keep the last n images */
         if(imagedircnt >= IMAGEDIRCNT) {
           sprintf(cmd, "/bin/rm -f %s/%s_*.%d.fits",
 			IMAGEDIR,prependfits,imagedircnt-IMAGEDIRCNT);
@@ -819,13 +809,6 @@ BYPASS:
     h0log("**WARNING: IM_PDU 42bit cntr gaps=%lld; expected=%lld\n",
 	 gap_42_cnt, total_missing_im_pdu);
   }
-/***********************************************************************
-  tsum[1] += ftmp;
-  h0log("Time for IMAGECOMPLETE summary = %fsec\n", tsum[2]);
-  h0log("Time for fitz write summary = %fsec\n", tsum[3]);
-  h0log("Time for catalog_image summary = %fsec\n", tsum[4]+tsum[5]+tsum[6]);
-  h0log("Time for tlm file image summary = %fsec\n \n", tsum[1]);
-*************************************************************************/
   return(0);
 }
 
