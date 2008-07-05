@@ -34,6 +34,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <strings.h>
+#include <errno.h>
 #include <sum_rpc.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -59,7 +60,6 @@
 #define TESTAPPID 0x199		/* appid of test pattern packet */
 #define TESTVALUE 0             /* first value in test pattern packet */
   	                                 /* previous used 0xc0b */
-
 FILE *h0logfp;                  /* fp for h0 ouput log for this run */
 
 static char datestr[32];
@@ -74,6 +74,7 @@ static void now_do_alrm_sig();
 
 extern int numcontexts;
 extern Decompress_Context_t *Context[];
+extern int errno;
 
 unsigned int fsn = 0;
 unsigned int fsn_prev = 0;
@@ -1027,6 +1028,7 @@ void do_ingest()
 	    printk("%s\n", cmd);
 	    if(status = system(cmd)) {
 		printk("***Error %d on: %s\n", status, cmd);
+                printk("errno = %d\n", errno);
 		//abortit(1);
 		continue;
 	    }
@@ -1035,6 +1037,7 @@ void do_ingest()
 	    printk("%s\n", cmd);
 	    if(system(cmd)) {
 		printk("***Error on: %s\n", cmd);
+                printk("errno = %d\n", errno);
 		//abortit(1);
 		continue;
 	    }
