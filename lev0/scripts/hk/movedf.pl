@@ -20,6 +20,10 @@
 #                (5)Setup DF_DAYFILE_DIRECTORY environment variable use in   #
 #                   ingest_dayfile.pl script to pickup files to ingest to    #
 #                   value of the dropoff directory in this script($doff_dir).#
+# Limitation:   The move-and-ingest-dayfiles process works for dayfiles from #
+#               the sdo moc product server only. This script is not used     #
+#               currently to move and  call ingest_dayfiles.pl for the HSB   #
+#               dayfiles and LMSAL dayfiles.                                 #
 ##############################################################################
 # set Environment Variables
 # Process setup (1):
@@ -79,12 +83,16 @@ foreach $hkt (@list_hkt_files)
  $hkt =~ s/\n//g;
  if ($dflg eq "1") {print LF " Move HKT is <$hkt>\n";}
  $log=`cp  $hkt  $doff_dir`;
+ # to use during production
+ #$log=`mv  $hkt  $doff_dir`;
 }
 foreach $xml (@list_xml_files)
 {
  $xml =~ s/\n//g;
  if ($dflg eq "1") {print LF " Move XML is <$xml>\n";}
  $log=`cp  $xml  $doff_dir`;
+ # to use during production
+ #$log=`mv  $xml  $doff_dir`;
 }
 print LF "--->Moved df and xml files to :$doff_dir\n";
 $log=`chmod 777 $doff_dir/*`;
