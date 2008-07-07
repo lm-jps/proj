@@ -64,6 +64,7 @@
   # set path to dayfiles using source -these vary based on where dayfiles are placed
  if ($source eq "hsb")
  {
+   # for testing during development #
    #$ENV{'DF_DAYFILE_DIRECTORY'}="/home1/carl/cvs/JSOC/proj/lev0/apps/data/hk_hsb_dayfile";
    $ENV{'DF_DAYFILE_DIRECTORY'}="/surge/production/lev0/hk_hsb_dayfile";
    #for production#
@@ -71,12 +72,14 @@
  }
  elsif ($source eq "moc")
  {
+   # for testing during development #
    #$ENV{'DF_DAYFILE_DIRECTORY'}="/home/carl/cvs/JSOC/proj/lev0/scripts/hk/SDO";
    #for production#
    $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_moc_dayfile";
  }
  elsif ($source eq "egsefm")
  {
+   # for testing during development #
    $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp20/production/hmi_hk";
    #for production#
    #$ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_egsefm_dayfile";
@@ -88,7 +91,7 @@
   #get list of apids to do 
   &get_apid_to_do();
 
-  #get list of apids to do 
+  #get date range to do 
   &get_date_to_do();
 
   #go through day files in delivery directory looking for all files for given apid
@@ -314,7 +317,7 @@ sub show_help_info
   exit;
 }
 #############################################################################
-# subroutine get_dayfile_list: get list lm day file brought over            #
+# subroutine get_dayfile_list: get list day files brought over              #
 #############################################################################
 sub get_dayfile_list()
 {
