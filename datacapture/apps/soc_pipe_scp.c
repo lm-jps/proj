@@ -250,10 +250,15 @@ int main(int argc, char *argv[])
         strcpy(cptr, ".qac");
         sprintf(qacfile, "%s/%s", sourcedir, dp->d_name);
         if(stat(qacfile, &statbuf)) {	//.qac not there
-          sleep(2);
+          sleep(1);
           if(stat(qacfile, &statbuf)) { //.qac still not there
-            printk("***Error: Can't find %s\n", qacfile);
-            continue;
+            //so try to find a .qacx
+            strcpy(cptr, ".qacx");
+            sprintf(qacfile, "%s/%s", sourcedir, dp->d_name);
+            if(stat(qacfile, &statbuf)) {	//.qacx not there
+              printk("***Error: Can't find qac[x] %s\n", qacfile);
+              continue;
+            }
           }
         }
         sprintf(cmd, "/usr/bin/scp %s/%s %s:%s 1> /dev/null 2>&1",
