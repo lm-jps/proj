@@ -41,13 +41,14 @@
 #include "decode_hk_vcdu.h"
 #include "decode_hk.h"
 #include "load_hk_config_files.h"
+#include "add_small_image.c"
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
-//#define LEV0SERIESNAMEHMI "su_production.lev0_test"
-//#define TLMSERIESNAMEHMI "su_production.tlm_test"
-//#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
-//#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+#define LEV0SERIESNAMEHMI "su_production.lev0_test"
+#define TLMSERIESNAMEHMI "su_production.tlm_test"
+#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
+#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
 //#define TLMSERIESNAMEHMI "hmi.tlm_60d"
@@ -55,10 +56,11 @@
 //#define TLMSERIESNAMEAIA "aia.tlm_60d"
 
 //When change to these data series below to save real data.
-#define TLMSERIESNAMEHMI "hmi.tlm"
-#define LEV0SERIESNAMEAIA "aia.lev0"
-#define TLMSERIESNAMEAIA "aia.tlm"
-#define LEV0SERIESNAMEHMI "hmi.lev0"
+//#define TLMSERIESNAMEHMI "hmi.tlm"
+//#define LEV0SERIESNAMEAIA "aia.lev0"
+//#define LEV0SERIESNAMEAIA "aia.lev0a"
+//#define TLMSERIESNAMEAIA "aia.tlm"
+//#define LEV0SERIESNAMEHMI "hmi.lev0"
 //Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
 //setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
 //setenv HK_DF_HSB_DIRECTORY               /tmp21/production/lev0/hk_hsb_dayfile
@@ -285,7 +287,9 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   }
   drms_setkey_int(rs, "IMGAPID", img->apid);
   drms_setkey_int(rs, "CROPID", img->cropid);
-  drms_setkey_int(rs, "LUTID", img->luid);
+  if(drms_setkey_int(rs, "LUTID", img->luid)) {
+    printk("ERROR on setkey_int for LUTID\n");
+  }
   drms_setkey_int(rs, "TAPCODE", img->tap);
   n = (img->N) & 0x1F;
   n = n << 3;
@@ -299,6 +303,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "EOIERROR", img->last_pix_err);
   drms_setkey_int(rs, "HEADRERR", img->headerr);
   drms_setkey_int(rs, "OVERFLOW", img->overflow);
+  drms_setkey_int(rs, "MISSVALS", img->totalvals - img->datavals);
   snprintf(tlmdsname, 128, "%s[%s]", tlmseriesname, tlmnamekeyfirst);
   drms_setkey_string(rs, "TLMDSNAM", tlmdsname);
   int pts = img->first_packet_time >> 16;
@@ -309,6 +314,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   if (status) {
     printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
   }
+  add_small_array(rs, array, 8, 16); //add Phil's png and small fits
   array->data = NULL;        // must do before free 
   drms_free_array(array);
   if((status = drms_close_record(rs, DRMS_INSERT_RECORD))) {
@@ -449,6 +455,10 @@ int fsn_change_normal()
       Img->telnum--;
       Img->cropid = drms_getkey_int(rs, "CROPID", &rstatus);
       Img->luid = drms_getkey_int(rs, "LUTID", &rstatus);
+      if(rstatus) {
+        Img->luid = 0;	//!!!TEMP try this
+        printk("ERROR on getkey_int for LUTID\n");
+      }
       Img->tap = drms_getkey_int(rs, "TAPCODE", &rstatus);
       compid = drms_getkey_int(rs, "COMPID", &rstatus);
       k = compid & 0x07;		//low 3 bits
