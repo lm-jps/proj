@@ -432,9 +432,9 @@ int fsn_change_normal()
     rset = drms_open_records(drms_env, reopen_dsname, &rstatus);
     if(rstatus) {
       printk("Can't do drms_open_records(%s)\n", reopen_dsname);
-      return(1);          // !!!TBD
+      //return(1);          // !!!TBD
     }
-    if(!rset || (rset->n == 0)) {
+    if(!rset || (rset->n == 0) || rstatus) {
       printk("No prev ds\n");     // start a new image
       fsn_normal_new_image();
     }
@@ -550,9 +550,9 @@ int fsn_change_rexmit()
   rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
   if(rstatus) {
     printk("Can't do drms_open_records(%s)\n", rexmit_dsname);
-    return(1);		// !!!TBD 
+    //return(1);		// !!!TBD 
   }
-  if(!rset || (rset->n == 0)) {
+  if(!rset || (rset->n == 0) || rstatus) {
     printk("No prev ds\n");	// start a new image 
     ImgO->initialized = 0;
     ImgO->reopened = 0;
@@ -845,7 +845,7 @@ int get_tlm(char *file, int rexmit, int higherver)
       }
     }
     else {			// send the HK data to Carl 
-      printk("$$$$$ appid for Carl =  0x%x %d\n", appid, appid); //!!TEMP
+      //printk("$$$$$ appid for Carl =  0x%x %d\n", appid, appid); //!!TEMP
       decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk, &Fsn);
       switch (decode_status) {
         case SUCCESS_HK_NEED_TO_WTD_CTD:
