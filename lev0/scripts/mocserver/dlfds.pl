@@ -1,5 +1,15 @@
 #!/usr/bin/perl -w 
 
+# This script (and sub-scripts) uses ssh to connect to the MOC Product Server.  Unless
+# certain actions are taken, sshd is going to ask for a password and/or key passphrase.
+# If sshd asks for a password or passphrase, the script will fail.  There are a few
+# options for preventing the authentication challenge from being issued (modifying the 
+# authorized_keys file on the MOC Product Server for one).  However, when run by 
+# production-type users, like 'jsoc' and 'production', care must be taken to not place
+# a passphrase-less pub key into the server's authorized_keys file.  Instead
+# the user should add a private key (that requires a passphrase) to the list of keys
+# known by ssh-agent.  Then the user may run this script.
+
 use FindBin qw($Bin);
 
 my($kDEV) = "dev";
@@ -17,6 +27,10 @@ my($kORBVSERIESNAME) = "orbvseries";
 my($kDBUSER) = "dbuser";
 my($kDBNAME) = "dbname";
 my($kNOTLIST) = "notify";
+
+my($kSSHCONFFILE) = "$ENV{'HOME'}/.ssh-agent";
+my($kSSH_AUTH_SOCK) = "SSH_AUTH_SOCK";
+my($kSSH_AGENT_PID) = "SSH_AGENT_PID";
 
 my($jsocmach);
 
@@ -75,6 +89,7 @@ else
 	}
     }
 }
+
 
 if (!defined($cfgfile) && defined($branch))
 {
@@ -155,24 +170,59 @@ else
 }
 
 # For JSOC modules and scripts, use the paths specified in the config file
-local $ENV{"PATH"} = "$scriptPath:$binPath/$jsocmach:$ENV{\"PATH\"}";
-local $ENV{"JSOC_DBUSER"} = $dbuser;
-local $ENV{"JSOC_DBNAME"} = $dbname;
+$ENV{"PATH"} = "$scriptPath:$binPath/$jsocmach:$ENV{\"PATH\"}";
+$ENV{"JSOC_DBUSER"} = $dbuser;
+$ENV{"JSOC_DBNAME"} = $dbname;
 
 $logcontent = $logcontent . "which: " . `which dlMOCDataFiles\.pl`;
 $logcontent = $logcontent . "which: " . `which sftpScript\.exp`;
 $logcontent = $logcontent . "which: " . `which fdsIngest\.pl`;
 $logcontent = $logcontent . "which: " . `which extract_fds_statev`;
 
-# Dump log
-open(LOGFILE, ">$logfile") || die "Couldn't write to logfile '$logfile'\n";;
-print LOGFILE $logcontent;
-close(LOGFILE);
-
 # Download FDS files to $dataPath
 $cmd = "dlMOCDataFiles\.pl -c $scriptPath/mocDlFdsSpec.txt -s $permdataPath/mocDlFdsStatus.txt -r $dataPath -t 30 $force";
 
-system("$cmd 1>>$logfile 2>&1");
+# Set the environment so that ssh-agent can be accessed by sftp and scp calls
+# (can't factor out the system call - it needs to be in the same scope as the 'local' statements)
+if (-e $kSSHCONFFILE)
+{
+    $logcontent = $logcontent . "found ssh-agent.\n";
+
+    # 'local' ensures that calls outside of this block don't see these environmental changes.
+    # It creates a copy of the environment, which then gets restored upon exit of the block.
+    local %ENV = %ENV;
+
+    # parse the file
+
+    open(SSHCONF, "<$kSSHCONFFILE") || die "Couldn't open ssh-agent configuration file '$kSSHCONFFILE'.\n";
+    while($line = <SSHCONF>)
+    {
+        chomp($line);
+        if ($line =~ /^setenv\s+(.+)\s+(.+);/)
+        {
+            $logcontent = $logcontent . "got ssh env var $1 = $2\n";
+            $ENV{$1} = $2;
+        }
+    }
+
+    # Dump log
+    open(LOGFILE, ">$logfile") || die "Couldn't write to logfile '$logfile'\n";
+    print LOGFILE $logcontent;
+    close(LOGFILE);
+
+    system("$cmd 1>>$logfile 2>&1");
+}
+else
+{
+    $logcontent = $logcontent . "couldn't find ssh-agent.\n";
+
+    # Dump log
+    open(LOGFILE, ">$logfile") || die "Couldn't write to logfile '$logfile'\n";
+    print LOGFILE $logcontent;
+    close(LOGFILE);
+
+    system("$cmd 1>>$logfile 2>&1");
+}
 
 # Ingest FDS files into $fdsseriesname
 $cmd = "fdsIngest\.pl $dataPath/fds -s $namespace\.$fdsseriesname -r";
