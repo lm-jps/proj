@@ -9,6 +9,10 @@
 # a passphrase-less pub key into the server's authorized_keys file.  Instead
 # the user should add a private key (that requires a passphrase) to the list of keys
 # known by ssh-agent.  Then the user may run this script.
+#
+# To set up ssh-agent, from the machine on which the cron job runs, type
+# 'nohup ssh-agent -c > /home/jsoc/.ssh-agent' then
+# 'ssh-add /home/jsoc/.ssh/id_rsa'
 
 use FindBin qw($Bin);
 
@@ -16,6 +20,7 @@ my($kDEV) = "dev";
 my($kGROUND) = "ground";
 my($kLIVE) = "live";
 my($kCFGPREFIX) = "dlfds_conf";
+my($kSSHAGENTCONF) = "ssh-agent_conf";
 my($kLOGFILE) = "log";
 my($kSCRIPTPATH) = "scrpath";
 my($kBINPATH) = "binpath";
@@ -28,10 +33,6 @@ my($kDBUSER) = "dbuser";
 my($kDBNAME) = "dbname";
 my($kNOTLIST) = "notify";
 
-my($kSSHCONFFILE) = "$ENV{'HOME'}/.ssh-agent";
-my($kSSH_AUTH_SOCK) = "SSH_AUTH_SOCK";
-my($kSSH_AGENT_PID) = "SSH_AGENT_PID";
-
 my($jsocmach);
 
 my($arg);
@@ -40,6 +41,7 @@ my($force) = "";
 my($cfgfile);
 my($line);
 
+my($sshagentConf);
 my($logfile);
 my($scriptPath);
 my($binPath);
@@ -109,7 +111,11 @@ while($line = <CFGFILE>)
 {
     chomp($line);
 
-    if ($line =~ /$kLOGFILE\s*=\s*(\S+)\s*/)
+    if ($line =~ /$kSSHAGENTCONF\s*=\s*(\S+)\s*/)
+    {
+        $sshagentConf = $1;
+    }
+    elsif ($line =~ /$kLOGFILE\s*=\s*(\S+)\s*/)
     {
 	$logfile = $1;
     }
@@ -184,7 +190,7 @@ $cmd = "dlMOCDataFiles\.pl -c $scriptPath/mocDlFdsSpec.txt -s $permdataPath/mocD
 
 # Set the environment so that ssh-agent can be accessed by sftp and scp calls
 # (can't factor out the system call - it needs to be in the same scope as the 'local' statements)
-if (-e $kSSHCONFFILE)
+if (-e $sshagentConf)
 {
     $logcontent = $logcontent . "found ssh-agent.\n";
 
@@ -194,7 +200,7 @@ if (-e $kSSHCONFFILE)
 
     # parse the file
 
-    open(SSHCONF, "<$kSSHCONFFILE") || die "Couldn't open ssh-agent configuration file '$kSSHCONFFILE'.\n";
+    open(SSHCONF, "<$sshagentConf") || die "Couldn't open ssh-agent configuration file '$sshagentConf'.\n";
     while($line = <SSHCONF>)
     {
         chomp($line);
@@ -214,7 +220,7 @@ if (-e $kSSHCONFFILE)
 }
 else
 {
-    $logcontent = $logcontent . "couldn't find ssh-agent.\n";
+    $logcontent = $logcontent . "couldn't find ssh-agent (no $sshagentConf).\n";
 
     # Dump log
     open(LOGFILE, ">$logfile") || die "Couldn't write to logfile '$logfile'\n";
