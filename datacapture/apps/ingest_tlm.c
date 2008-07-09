@@ -344,6 +344,7 @@ void now_do_alrm_sig()
   nx = decompress_status_all(&decomp_stat);
   for(i=0; i < nx; i++) {
     fsn = ID2FSN(decomp_stat[i].ID);
+    fsn = fsn & 0x3fffffff;         //make sure 30bits
     fid = ID2FID(decomp_stat[i].ID);
     openimg_ptr = (OPENIMG *)getopenimg(openimg_hdr, fsn);
     if(openimg_ptr != NULL) {
@@ -413,6 +414,7 @@ void now_do_term_sig()
     decompress_print_status(&decomp_stat[i]);
     h0log("Write partial image.\n");
     fsn = ID2FSN(decomp_stat[i].ID);
+    fsn = fsn & 0x3fffffff;         //make sure 30bits
     fid = ID2FID(decomp_stat[i].ID);
     status = decompress_flush_image(fsn, fid, &image);
     if(status == SUCCESS) {
@@ -692,6 +694,7 @@ int get_tlm(char *file)
         if(fsn_prev != 0) {
           for(nx=0; nx < numcontexts; nx++) {
             fsn = ID2FSN(Context[nx]->ID);
+            fsn = fsn & 0x3fffffff;         //make sure 30bits
             if(fsn == fsn_prev) {
               im = Context[nx]->image;
               if(im->keywords != NULL) {  /* the ISP is in */
