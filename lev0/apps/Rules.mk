@@ -41,12 +41,15 @@ S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 $(ingestlev0_$(d)):	$(ingestlev0_obj_$(d))
 
+
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBASTRO)
+
+$(ingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
 
 # Shortcuts
 .PHONY:	$(S_$(d))

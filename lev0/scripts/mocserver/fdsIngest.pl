@@ -13,13 +13,17 @@ $removefiles = "no";
 
 $LOGALL = "LOGALL";
 
-# Primary key
+# Primary key - these are sufficient to uniquely identify any data file
 my(@primaryKey);
-$primaryKey[0] = "FDS_DATA_PRODUCT";
+# skip 0 - there used to be a zero, but it was moved to otherKey[0]
 $primaryKey[1] = "FDS_PRODUCT_COMP";
 $primaryKey[2] = "OBS_DATE";
 $primaryKey[3] = "DATA_FORMAT";
 $primaryKey[4] = "FILE_VERSION";
+
+# other keys
+my(@otherKey);
+$otherKey[0] = "FDS_DATA_PRODUCT";
 
 # Return codes
 $RET_OK = 12251966;
@@ -73,7 +77,8 @@ $fdsTypeMap{"VALATT"} = "compAttValidation";
 #$fdsTypeMap{"VALORB"} = "compOrbValidation";
 #$fdsTypeMap{"CMD_MOMENTUM"} = "momentMgmntCmd";
 #$fdsTypeMap{"SPICE"} = "spice";
-$fdsTypeMap{"SUN_MOON_ANGLES"} = "predLunTrans";
+$fdsTypeMap{"SUN_MOON_ANGLES"} = "predSunMoonAngles";
+$fdsTypeMap{"LUNTRAN"} = "predLunTrans";
 #$fdsTypeMap{"CMD_ENG"} = "engSlewCmd";
 $fdsTypeMap{"CMD_HROLL"} = "calManeuverCmd";
 $fdsTypeMap{"CMD_EFOV"} = "calManeuverCmd";
@@ -96,11 +101,11 @@ $fdsTypeMap{"SOLAR_TRANSIT"} = "predSolarTrans";
 
 # timespan enum
 my(%fileFormatMap);
-$fileFormatMap{"kFileFormatEXCEL"} = "spreadsheet";
-$fileFormatMap{"kFileFormatSHORT"} = "shortTerm";
-$fileFormatMap{"kFileFormatLONG"} = "longTerm";
-$fileFormatMap{"kFileFormatCOMPRESSED"} = "compressed";
-$fileFormatMap{"kFileFormatVARIABLE"} = "variable";
+$fileFormatMap{"kFileFormatEXCEL"} = "X"; # spreadsheet
+$fileFormatMap{"kFileFormatSHORT"} = "S"; # short term
+$fileFormatMap{"kFileFormatLONG"} = "L"; # long term
+$fileFormatMap{"kFileFormatCOMPRESSED"} = "C"; # compressed
+$fileFormatMap{"kFileFormatVARIABLE"} = "V"; # variable
 
 # get input directory
 my($inputDir);
@@ -373,7 +378,7 @@ sub CallSetKey
 	    chomp($convTime);
 	    $jsocDate = $convTime;
 	    
-	    $skCmd = "set_keys -c ds=$series $primaryKey[0]=$dataType $primaryKey[1]=$prodComp $primaryKey[2]=$jsocDate $primaryKey[3]=$fileFormat $primaryKey[4]=$fileVersion $segmentName[0]=$filePath";
+	    $skCmd = "set_keys -c ds=$series $primaryKey[1]=$prodComp $primaryKey[2]=$jsocDate $primaryKey[3]=$fileFormat $primaryKey[4]=$fileVersion $otherKey[0]=$dataType $segmentName[0]=$filePath";
 	    print STDOUT "  Running $skCmd\n";
 	    if (system($skCmd) != 0)
 	    {
@@ -401,7 +406,7 @@ sub VerifyFileCopy
     my($series, $dataType, $prodComp, $jsocDate, $dataFormat, $fileVersion, $srcFilePath) = @_;
 
     my($skResultLine);
-    my($skCmdLine) = "show_keys -pq ds=$series\[$primaryKey[0]=$dataType\]\[$primaryKey[1]=$prodComp\]\[$primaryKey[2]=$jsocDate\]\[$primaryKey[3]=$dataFormat\]\[$primaryKey[4]=$fileVersion\] seg=$segmentName[0] |";
+    my($skCmdLine) = "show_keys -pq ds=$series\[$primaryKey[1]=$prodComp\]\[$primaryKey[2]=$jsocDate\]\[$primaryKey[3]=$dataFormat\]\[$primaryKey[4]=$fileVersion\] seg=$segmentName[0] |";
 
     if (!open(SHOWKEYS, $skCmdLine))
     {
@@ -498,7 +503,7 @@ sub VerifyFileCopy
     else
     {
 	# show_keys failure
-	print STDERR "show_keys didn't find any records for <$primaryKey[0]=$dataType, $primaryKey[1]=$prodComp, $primaryKey[2]=$jsocDate, $primaryKey[3]=$dataFormat, $primaryKey[4]=$fileVersion>.\n";
+	print STDERR "show_keys didn't find any records for <$otherKey[0]=$dataType, $primaryKey[1]=$prodComp, $primaryKey[2]=$jsocDate, $primaryKey[3]=$dataFormat, $primaryKey[4]=$fileVersion>.\n";
 	close(SHOWKEYS);
 	return ($RET_SHOWKEYS);
     }

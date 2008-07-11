@@ -15,7 +15,7 @@
 #include "cmdparams.h"
 #include "drms_env.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 #define kDefaultNamespace "sdo"
 #define kDefaultSeriesIn "fds"
@@ -26,8 +26,6 @@
 #define kFdsProductCompKey "FDS_PRODUCT_COMP"
 #define kFdsDataFormatKey "DATA_FORMAT"
 #define kFileVersionKey "FILE_VERSION"
-#define kFdsDataProductHELIO "predHelioOrb"
-#define kFdsDataProductGEO "predGeoOrb"
 #define kFdsProductCompHELIO "ORBIT_HELIO"
 #define kFdsProductCompGEO "ORBIT_GEO"
 
@@ -270,7 +268,6 @@ static void CreateHistSeries(DRMS_Env_t *drmsEnv, char *histSeries, int *status)
 	    DRMS_Keyword_t *pkey2 = NULL;
 	    DRMS_Keyword_t *pkey3 = NULL;
 	    DRMS_Keyword_t *pkey4 = NULL;
-	    DRMS_Keyword_t *pkey5 = NULL;
 	    DRMS_Keyword_t *akey = NULL;
 	    char keyname[DRMS_MAXKEYNAMELEN];
 
@@ -340,24 +337,22 @@ static void CreateHistSeries(DRMS_Env_t *drmsEnv, char *histSeries, int *status)
 	    /* epoch */
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "epoch");
 	    akey = AddKey(prototype, DRMS_TYPE_TIME, keyname, "0", "UTC", kRecScopeType_Constant, "epoch for OBS_DATE", 0);
-	    akey->value.time_val = sscan_time("1993.01.01_00:00:30_UT");
+	    akey->value.time_val = sscan_time("1993.01.01_12:00:00_UT");
 
 	    /* step */
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "step");
 	    akey = AddKey(prototype, DRMS_TYPE_STRING, keyname, "%s", "none", kRecScopeType_Constant, "time step for OBS_DATE", 0);
-	    copy_string(&(akey->value.string_val), "1m");
+	    copy_string(&(akey->value.string_val), "1440m");
 
-            pkey2 = AddKey(prototype, DRMS_TYPE_STRING, kFdsDataProductKey, "%s", "none", kRecScopeType_Variable, "FDS data product", 1);
-            pkey3 = AddKey(prototype, DRMS_TYPE_STRING, kFdsProductCompKey, "%s", "none", kRecScopeType_Variable, "FDS data product component", 1);
-            pkey4 = AddKey(prototype, DRMS_TYPE_STRING, kFdsDataFormatKey, "%s", "none", kRecScopeType_Variable, "Format of data file contained in segment", 1);
-            pkey5 = AddKey(prototype, DRMS_TYPE_INT, kFileVersionKey, "%d", "none", kRecScopeType_Variable, "FDS data product", 1);
+            pkey2 = AddKey(prototype, DRMS_TYPE_STRING, kFdsProductCompKey, "%s", "none", kRecScopeType_Variable, "FDS data product component", 1);
+            pkey3 = AddKey(prototype, DRMS_TYPE_STRING, kFdsDataFormatKey, "%s", "none", kRecScopeType_Variable, "Format of data file contained in segment", 1);
+            pkey4 = AddKey(prototype, DRMS_TYPE_INT, kFileVersionKey, "%d", "none", kRecScopeType_Variable, "FDS data product", 1);
 
 	    prototype->seriesinfo->pidx_keywords[0] = pkey1;
 	    prototype->seriesinfo->pidx_keywords[1] = pkey2;
 	    prototype->seriesinfo->pidx_keywords[2] = pkey3;
 	    prototype->seriesinfo->pidx_keywords[3] = pkey4;
-	    prototype->seriesinfo->pidx_keywords[4] = pkey5;
-	    prototype->seriesinfo->pidx_num = 5;
+	    prototype->seriesinfo->pidx_num = 4;
 	 }
 
 	 stat = drms_create_series_fromprototype(&prototype, histSeries, 0);
@@ -1080,7 +1075,6 @@ int DoIt(void)
 	 char path[DRMS_MAXPATHLEN];
 
 	 char *obs = NULL;
-	 char *dataprod = NULL;
 	 char *prodcomp = NULL;
 	 char *format = NULL;
 	 int filevers;
@@ -1110,12 +1104,12 @@ int DoIt(void)
 		     sizeof(queryInput), 
 		     "%s[%s=%s]%s,%s[%s=%s]%s", 
 		     seriesin, 
-		     kFdsDataProductKey,
-		     kFdsDataProductHELIO,
+		     kFdsProductCompKey,
+		     kFdsProductCompHELIO,
 		     fdsTRange,
 		     seriesin, 
-		     kFdsDataProductKey,
-		     kFdsDataProductGEO,
+		     kFdsProductCompKey,
+		     kFdsProductCompGEO,
 		     fdsTRange);
 	 }
 	 else
@@ -1124,26 +1118,27 @@ int DoIt(void)
 		     sizeof(queryInput), 
 		     "%s[%s=%s],%s[%s=%s]", 
 		     seriesin, 
-		     kFdsDataProductKey,
-		     kFdsDataProductHELIO,
+		     kFdsProductCompKey,
+		     kFdsProductCompHELIO,
 		     seriesin, 
-		     kFdsDataProductKey,
-		     kFdsDataProductGEO);
+		     kFdsProductCompKey,
+		     kFdsProductCompGEO);
 	 }
+
+         /* If no files to ingest, this will remain empty */
+         proclist = hcon_create(kMaxHashKey, 
+                                kMaxHashKey,
+                                NULL,
+                                NULL,
+                                NULL,
+                                NULL,
+                                0);
 
 	 rsInput = drms_open_records(drms_env, queryInput, &stat);
 	 if (rsInput && rsInput->n > 0)
 	 {
 	    DRMS_Record_t *recin = NULL;
 	    int irec;
-
-	    proclist = hcon_create(kMaxHashKey, 
-				   kMaxHashKey,
-				   NULL,
-				   NULL,
-				   NULL,
-				   NULL,
-				   0);
 
 	    for (irec = 0; irec < rsInput->n && !error; irec++)
 	    {
@@ -1152,7 +1147,6 @@ int DoIt(void)
 	       if (recin)
 	       {
 		  obs = drms_getkey_string(recin, kObsDateKey, &stat);
-		  dataprod = drms_getkey_string(recin, kFdsDataProductKey, &stat);
 		  prodcomp = drms_getkey_string(recin, kFdsProductCompKey, &stat);
 		  format = drms_getkey_string(recin, kFdsDataFormatKey, &stat);
 		  filevers = drms_getkey_int(recin, kFileVersionKey, &stat);
@@ -1162,17 +1156,15 @@ int DoIt(void)
 		  {
 		     snprintf(queryHistory, 
 			      sizeof(queryHistory), 
-			      "%s[%s=%s][%s=%s][%s=%s][%s=%s][%s=%d]",
+			      "%s[%s=%s][%s=%s][%s=%s][%s=%d]",
 			      serieshist,
-			      kObsDateKey,
-			      obs,
-			      kFdsDataProductKey,
-			      dataprod,
-			      kFdsProductCompKey,
+                              kObsDateKey,
+                              obs,
+                              kFdsProductCompKey,
 			      prodcomp,
-			      kFdsDataFormatKey,
+                              kFdsDataFormatKey,
 			      format,
-			      kFileVersionKey,
+                              kFileVersionKey,
 			      filevers);
 			      
 		     rsHistory = drms_open_records(drms_env, queryHistory, &stat);
@@ -1220,11 +1212,6 @@ int DoIt(void)
 	       if (obs)
 	       {
 		   free(obs);
-	       }
-
-	       if (dataprod)
-	       {
-		   free(dataprod);
 	       }
 
 	       if (prodcomp)
@@ -1278,21 +1265,29 @@ int DoIt(void)
 #endif
 	    snprintf(queryHELIO, 
 		     sizeof(queryHELIO), 
-		     "%s[%s=%s][%s=%s]",
+		     "%s[%s=%s]",
 		     iquery,
-		     kFdsDataProductKey,
-		     kFdsDataProductHELIO,
 		     kFdsProductCompKey,
 		     kFdsProductCompHELIO);
 
 	    snprintf(queryGEO, 
 		     sizeof(queryGEO), 
-		     "%s[%s=%s][%s=%s]",
+		     "%s[%s=%s]",
 		     iquery,
-		     kFdsDataProductKey,
-		     kFdsDataProductGEO,
 		     kFdsProductCompKey,
 		     kFdsProductCompGEO);
+
+            DRMS_Record_t *recsv = NULL;
+            TIME obsvalHELIO = 0;
+            char *dprodvalHELIO = NULL;
+            char *prodcompvalHELIO = NULL;
+            char *formatvalHELIO = NULL;
+            int fileversvalHELIO = 0;
+            TIME obsvalGEO = 0;
+            char *dprodvalGEO = NULL;
+            char *prodcompvalGEO = NULL;
+            char *formatvalGEO = NULL;
+            int fileversvalGEO = 0;
 
 	    rsHELIO = drms_open_records(drms_env, queryHELIO, &stat);
 
@@ -1320,6 +1315,13 @@ int DoIt(void)
 			snprintf(filePathHELIO, len + 1, "%s/%s", path, helioseg->filename);
 		     }
 		  }
+
+                  recsv = rsHELIO->records[0];
+                  obsvalHELIO = drms_getkey_time(recsv, kObsDateKey, &stat);
+                  dprodvalHELIO = drms_getkey_string(recsv, kFdsDataProductKey, &stat);
+                  prodcompvalHELIO = drms_getkey_string(recsv, kFdsProductCompKey, &stat);
+                  formatvalHELIO = drms_getkey_string(recsv, kFdsDataFormatKey, &stat);
+                  fileversvalHELIO = drms_getkey_int(recsv, kFileVersionKey, &stat);
 	       }
 	    }
 
@@ -1352,16 +1354,67 @@ int DoIt(void)
 			snprintf(filePathGEO, len + 1, "%s/%s", path, geoseg->filename);
 		     }
 		  }
+
+                  recsv = rsGEO->records[0];
+                  obsvalGEO = drms_getkey_time(recsv, kObsDateKey, &stat);
+                  dprodvalGEO = drms_getkey_string(recsv, kFdsDataProductKey, &stat);
+                  prodcompvalGEO = drms_getkey_string(recsv, kFdsProductCompKey, &stat);
+                  formatvalGEO = drms_getkey_string(recsv, kFdsDataFormatKey, &stat);
+                  fileversvalGEO = drms_getkey_int(recsv, kFileVersionKey, &stat);
 	       }
 	    }
 
             if (!error)
             {
+               /* Create HELIO and GEO ids */
+               char idHELIO[256];
+               char idGEO[256];
+
+               if (rsHELIO)
+               {
+                  char *datestr = drms_getkey_string(rsHELIO->records[0], 
+                                                     kObsDateKey, 
+                                                     &stat);
+                  snprintf(idHELIO, 
+                           sizeof(idHELIO), 
+                           "%s[%s][%s][%s][%d]", 
+                           rsHELIO->records[0]->seriesinfo->seriesname,
+                           prodcompvalHELIO,
+                           datestr,
+                           formatvalHELIO,
+                           fileversvalHELIO);
+
+                  if (datestr)
+                  {
+                     free(datestr);
+                  }
+               }
+
+               if (rsGEO)
+               {
+                  char *datestr = drms_getkey_string(rsGEO->records[0], 
+                                                     kObsDateKey, 
+                                                     &stat);
+                  snprintf(idGEO, 
+                           sizeof(idGEO), 
+                           "%s[%s][%s][%s][%d]", 
+                           rsGEO->records[0]->seriesinfo->seriesname,
+                           prodcompvalGEO,
+                           datestr,
+                           formatvalGEO,
+                           fileversvalGEO);
+
+                  if (datestr)
+                  {
+                     free(datestr);
+                  }
+               }
+
                error = ExtractStateVectors(drms_env, 
                                            filePathHELIO, 
-                                           queryHELIO,
+                                           idHELIO,
                                            filePathGEO,
-                                           queryGEO,
+                                           idGEO,
                                            seriesout);
             }
 	    
@@ -1382,72 +1435,22 @@ int DoIt(void)
 							     DRMS_PERMANENT,
 							     &stat);
 	      DRMS_Record_t *rechist = NULL;
-	      DRMS_Record_t *recsv = NULL;
-	      TIME obsval = 0;
-	      char *dprodval = NULL;
-	      char *prodcompval = NULL;
-	      char *formatval = NULL;
-	      int fileversval = 0;
 
 	      if (rshist)
 	      {
-                 recsv = rsHELIO->records[0];
-                 obsval = drms_getkey_time(recsv, kObsDateKey, &stat);
-		 dprodval = drms_getkey_string(recsv, kFdsDataProductKey, &stat);
-		 prodcompval = drms_getkey_string(recsv, kFdsProductCompKey, &stat);
-		 formatval = drms_getkey_string(recsv, kFdsDataFormatKey, &stat);
-		 fileversval = drms_getkey_int(recsv, kFileVersionKey, &stat);
-
-		 rechist = rshist->records[0];
-		 drms_setkey_time(rechist, kObsDateKey, obsval);
-		 drms_setkey_string(rechist, kFdsDataProductKey, dprodval);
-		 drms_setkey_string(rechist, kFdsProductCompKey, prodcompval);
-		 drms_setkey_string(rechist, kFdsDataFormatKey, formatval);
-		 drms_setkey_int(rechist, kFileVersionKey, fileversval);
-
-		 if (dprodval)
-		 {
-		    free(dprodval);
-		 }
-
-		 if (prodcompval)
-		 {
-		    free(prodcompval);
-		 }
-
-		 if (formatval)
-		 {
-		    free(formatval);
-		 }
-
-		 recsv = rsGEO->records[0];
-		 obsval = drms_getkey_time(recsv, kObsDateKey, &stat);
-		 dprodval = drms_getkey_string(recsv, kFdsDataProductKey, &stat);
-		 prodcompval = drms_getkey_string(recsv, kFdsProductCompKey, &stat);
-		 formatval = drms_getkey_string(recsv, kFdsDataFormatKey, &stat);
-		 fileversval = drms_getkey_int(recsv, kFileVersionKey, &stat);
+ 		 rechist = rshist->records[0];
+		 drms_setkey_time(rechist, kObsDateKey, obsvalHELIO);
+		 drms_setkey_string(rechist, kFdsDataProductKey, dprodvalHELIO);
+		 drms_setkey_string(rechist, kFdsProductCompKey, prodcompvalHELIO);
+		 drms_setkey_string(rechist, kFdsDataFormatKey, formatvalHELIO);
+		 drms_setkey_int(rechist, kFileVersionKey, fileversvalHELIO);
 
 		 rechist = rshist->records[1];
-		 drms_setkey_time(rechist, kObsDateKey, obsval);
-		 drms_setkey_string(rechist, kFdsDataProductKey, dprodval);
-		 drms_setkey_string(rechist, kFdsProductCompKey, prodcompval);
-		 drms_setkey_string(rechist, kFdsDataFormatKey, formatval);
-		 drms_setkey_int(rechist, kFileVersionKey, fileversval);
-
-		 if (dprodval)
-		 {
-		    free(dprodval);
-		 }
-
-		 if (prodcompval)
-		 {
-		    free(prodcompval);
-		 }
-
-		 if (formatval)
-		 {
-		    free(formatval);
-		 }
+		 drms_setkey_time(rechist, kObsDateKey, obsvalGEO);
+		 drms_setkey_string(rechist, kFdsDataProductKey, dprodvalGEO);
+		 drms_setkey_string(rechist, kFdsProductCompKey, prodcompvalGEO);
+		 drms_setkey_string(rechist, kFdsDataFormatKey, formatvalGEO);
+		 drms_setkey_int(rechist, kFileVersionKey, fileversvalGEO);
 
                  drms_close_records(rshist, DRMS_INSERT_RECORD);
 	      }
@@ -1464,6 +1467,36 @@ int DoIt(void)
 	       drms_close_records(rsGEO, DRMS_FREE_RECORD);
                rsGEO = NULL;
 	    }
+
+            if (dprodvalHELIO)
+            {
+               free(dprodvalHELIO);
+            }
+
+            if (prodcompvalHELIO)
+            {
+               free(prodcompvalHELIO);
+            }
+
+            if (formatvalHELIO)
+            {
+               free(formatvalHELIO);
+            }
+
+            if (dprodvalGEO)
+            {
+               free(dprodvalGEO);
+            }
+
+            if (prodcompvalGEO)
+            {
+               free(prodcompvalGEO);
+            }
+
+            if (formatvalGEO)
+            {
+               free(formatvalGEO);
+            }
 
 	 } /* iquery - core queries */
 
