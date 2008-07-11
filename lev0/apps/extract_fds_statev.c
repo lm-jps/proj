@@ -1375,12 +1375,14 @@ int DoIt(void)
                   char *datestr = drms_getkey_string(rsHELIO->records[0], 
                                                      kObsDateKey, 
                                                      &stat);
+
+                  /* Date must come first - the indexing code forces this */
                   snprintf(idHELIO, 
                            sizeof(idHELIO), 
                            "%s[%s][%s][%s][%d]", 
                            rsHELIO->records[0]->seriesinfo->seriesname,
-                           prodcompvalHELIO,
                            datestr,
+                           prodcompvalHELIO,
                            formatvalHELIO,
                            fileversvalHELIO);
 
@@ -1395,12 +1397,14 @@ int DoIt(void)
                   char *datestr = drms_getkey_string(rsGEO->records[0], 
                                                      kObsDateKey, 
                                                      &stat);
+
+                  /* Date must come first - the indexing code forces this */
                   snprintf(idGEO, 
                            sizeof(idGEO), 
                            "%s[%s][%s][%s][%d]", 
                            rsGEO->records[0]->seriesinfo->seriesname,
-                           prodcompvalGEO,
                            datestr,
+                           prodcompvalGEO,
                            formatvalGEO,
                            fileversvalGEO);
 
