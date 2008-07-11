@@ -131,9 +131,16 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
 
    for (ikey = 0; ikey < nkeys; ikey++)
    {
-      drms_keyword_snprintfval(recin->seriesinfo->dbidx_keywords[ikey], buf, sizeof(buf));
-      snprintf(query + snext, sizeof(query) - snext, "[%s]", buf);
-      snext += strlen(buf) + 2;
+      /* Iterate through prime keys */
+      const char *pkeyname = recin->seriesinfo->dbidx_keywords[ikey]->info->name;
+      DRMS_Keyword_t *pkey = NULL;
+
+      if ((pkey = hcon_lookup_lower(&recin->keywords, pkeyname)) != NULL)
+      {
+         drms_keyword_snprintfval(pkey, buf, sizeof(buf));
+         snprintf(query + snext, sizeof(query) - snext, "[%s]", buf);
+         snext += strlen(buf) + 2;
+      }
    }
 
    /* The input rs query can specify a subset of all the series' segments - 
