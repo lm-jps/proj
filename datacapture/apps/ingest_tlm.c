@@ -750,6 +750,7 @@ int get_tlm(char *file)
       while(images) {
         imagecnt++;
         fsn = IMAGE_FSN(images);
+        fsn = fsn & 0x3fffffff;         //make sure 30bits
         fid = IMAGE_FID(images);
 /***********************************************************************
         ftmp = StopTimer(2);
