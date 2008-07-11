@@ -293,6 +293,10 @@ else
     system("$cmd 1>>$logfile 2>&1");
 }
 
+# Make these group writeable so that production can delete them 
+$cmd = "chmod -R g+w $dataPath";
+system("$cmd 1>>$logfile 2>&1");
+
 # Notify people who care if an error has occurred
 $cmd = "fdsNotification\.pl -l $logfile -n $notlist";
 system($cmd);
