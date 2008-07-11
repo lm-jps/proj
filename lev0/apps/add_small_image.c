@@ -11,6 +11,8 @@
 #define MINMAX	1
 #define MAXMIN	2
 #define HISTEQ  3
+#define MINMAX99  4
+#define MAXMIN99  5
 
 int make_png(char *filename, unsigned char *data, int height, int width, int pallette, int bytepercolor, int colors)
   { // make png
@@ -60,6 +62,8 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp,
   float *inData = in->data;
   ndata = in->axis[0] * in->axis[1];
   out = (char *)malloc(ndata * bytepercolor * sizeof(char *));
+  int missingcolor = (bytepercolor == 1 ? 255 : 65535);
+  int maxcolor = missingcolor - 1;
   if (!out)
 	return(NULL);
 
@@ -70,7 +74,6 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp,
 	{
 	double min = 1.0e20;
 	double max = -min;
-        int maxcolor = (bytepercolor == 1 ? 255 : 65535);
 	if (bytepercolor != 1 && bytepercolor != 2)
 		{fprintf(stderr,"wrong bytes per color\n"); return(NULL);}
 	for (idata=0; idata<ndata; idata++)
@@ -94,7 +97,7 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp,
 	    }
           else
 	    {
-            newval = maxcolor;
+            newval = missingcolor;
 	    nmiss += 1;
 	    }
 	  if (bytepercolor == 1)
@@ -136,12 +139,74 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp,
 	for ( ; ihist<nhist; ihist++)
 	    hist[ihist] = ncolor;
 	for (idata=0; idata<ndata; idata++)
-	  {
-	  if (bytepercolor == 1)
-	    *((unsigned char *)out + idata) = hist[*((unsigned short *)outa+idata)];
-	  else
-            *((unsigned short *)out + idata) = hist[*((unsigned short *)outa+idata)];
-	  }
+          if (!isnan(inData[idata]))
+	    {
+	    if (bytepercolor == 1)
+	      *((unsigned char *)out + idata) = hist[*((unsigned short *)outa+idata)];
+	    else
+              *((unsigned short *)out + idata) = hist[*((unsigned short *)outa+idata)];
+	    }
+          else
+            {
+	    if (bytepercolor == 1)
+	      *((unsigned char *)out + idata) = missingcolor;
+	    else
+              *((unsigned short *)out + idata) = missingcolor;
+            }
+	free(outa);  
+	free(hist);
+	break;
+	}
+    case MINMAX99:
+    case MAXMIN99:
+	{
+	int ihist, nhist=65536;
+	int *hist = (int *)malloc(nhist * sizeof(int));
+	int icolor, ncolor = (bytepercolor == 1 ? 255 : 65535);
+	int total, want;
+	unsigned int newval;
+	double newmin, newmax;
+	char *outa;
+	outa = set_scaling(in, minp, maxp, nmissp, GREY, 1, 2, MINMAX);
+
+        // create histogram
+	for (ihist=0; ihist<nhist; ihist++)
+	  hist[ihist] = 0;
+	for (idata=0; idata<ndata; idata++)
+	  hist[*((unsigned short *)outa+idata)] += 1;
+
+        // find new min and max vals at cut points
+        want = ndata/200;
+        total = 0;
+	for (ihist=0; ihist<nhist; total += hist[ihist++])
+	  if (total >= want)
+	    break;
+        newmin = *minp + ((double)ihist/(double)nhist) * (*maxp - *minp);
+        total = 0;
+	for (ihist=nhist; ihist>=0; total += hist[ihist--])
+	  if (total >= want)
+	    break;
+        newmax = *minp + ((double)ihist/(double)nhist) * (*maxp - *minp);
+
+        for (idata=0; idata<ndata; idata++)
+          {
+          float val = inData[idata];
+          unsigned short newval;
+          if (!isnan(val))
+            {
+	    if (val <= newmin) val=newmin;
+	    if (val >= newmax) val=newmax;
+            newval = maxcolor*(val-newmin)/(newmax-newmin);
+            if (scaling == MAXMIN99)
+                newval = maxcolor - newval;
+            }
+          else
+            newval = missingcolor;
+          if (bytepercolor == 1)
+            *((unsigned char *)out + idata) = newval;
+          else
+            *((unsigned short *)out + idata) = newval;
+          }
 	free(outa);  
 	free(hist);
 	break;
@@ -233,9 +298,6 @@ int add_small_array(DRMS_Record_t *rec, DRMS_Array_t *big, int doScaleFits, int 
     strcat(smallFileName, "_sm.fits");
     strcpy(smallPathName, recdir);
     strcat(smallPathName, "/");
-#ifdef DEBUG
-sprintf(smallPathName, "./%03d_", IREC);
-#endif
     strcat(smallPathName, smallFileName);
     /* assume second segment, if it is present, is vardims FTIS for small image */
     if (rec->segments.num_total > 1)
@@ -282,9 +344,6 @@ sprintf(smallPathName, "./%03d_", IREC);
     strcat(imageFileName, ".png");
     strcpy(imagePathName, recdir);
     strcat(imagePathName, "/");
-#ifdef DEBUG
-sprintf(imagePathName, "./%03d_", IREC);
-#endif
     strcat(imagePathName, imageFileName);
     if (rec->segments.num_total > 2)
       { /* assume third segment, if exists, is for small image, generic segment */
@@ -293,7 +352,8 @@ sprintf(imagePathName, "./%03d_", IREC);
       strcpy(imageSeg->filename, imageFileName);
       }
     rebinArraySF(imageArray, big);
-    imgData = (unsigned char *)set_scaling(imageArray, &min, &max, &nmissing, GREY, 1, bytepercolor, HISTEQ);
+    // imgData = (unsigned char *)set_scaling(imageArray, &min, &max, &nmissing, GREY, 1, bytepercolor, HISTEQ);
+    imgData = (unsigned char *)set_scaling(imageArray, &min, &max, &nmissing, GREY, 1, bytepercolor, MINMAX99);
     drms_free_array(imageArray);
     if (!imgData)
       {
