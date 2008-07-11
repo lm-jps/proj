@@ -45,10 +45,10 @@
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
-#define LEV0SERIESNAMEHMI "su_production.lev0_test"
-#define TLMSERIESNAMEHMI "su_production.tlm_test"
-#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
-#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+//#define LEV0SERIESNAMEHMI "su_production.lev0_test"
+//#define TLMSERIESNAMEHMI "su_production.tlm_test"
+//#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
+//#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
 //#define TLMSERIESNAMEHMI "hmi.tlm_60d"
@@ -57,10 +57,15 @@
 
 //When change to these data series below to save real data.
 //#define TLMSERIESNAMEHMI "hmi.tlm"
+//#define LEV0SERIESNAMEHMI "hmi.lev0"
 //#define LEV0SERIESNAMEAIA "aia.lev0"
 //#define LEV0SERIESNAMEAIA "aia.lev0a"
 //#define TLMSERIESNAMEAIA "aia.tlm"
-//#define LEV0SERIESNAMEHMI "hmi.lev0"
+#define LEV0SERIESNAMEAIA "aia.lev0b"
+#define TLMSERIESNAMEAIA "aia.tlmb"
+#define LEV0SERIESNAMEHMI "hmi.lev0b"
+#define TLMSERIESNAMEHMI "hmi.tlmb"
+
 //Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
 //setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
 //setenv HK_DF_HSB_DIRECTORY               /tmp21/production/lev0/hk_hsb_dayfile
@@ -294,8 +299,14 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   n = (img->N) & 0x1F;
   n = n << 3;
   k = (img->K) & 0x07;
-  drms_setkey_int(rs, "COMPID", n+k);
-  drms_setkey_int(rs, "BITSELID", img->R);
+  if(img->N == 16) { 
+    drms_setkey_int(rs, "COMPID", 0);
+    drms_setkey_int(rs, "BITSELID", 0);
+  }
+  else { 
+    drms_setkey_int(rs, "COMPID", n+k);
+    drms_setkey_int(rs, "BITSELID", img->R);
+  }
   drms_setkey_int(rs, "TOTVALS", img->totalvals);
   drms_setkey_int(rs, "DATAVALS", img->datavals);
   drms_setkey_int(rs, "NPACKETS", img->npackets);
@@ -461,9 +472,14 @@ int fsn_change_normal()
       }
       Img->tap = drms_getkey_int(rs, "TAPCODE", &rstatus);
       compid = drms_getkey_int(rs, "COMPID", &rstatus);
-      k = compid & 0x07;		//low 3 bits
-      n = compid >> 3;			//next 5 bits
-      n = n & 0x1F;
+      if(compid == 0) {
+        n = 16; k = 0;
+      }
+      else {
+        k = compid & 0x07;		//low 3 bits
+        n = compid >> 3;			//next 5 bits
+        n = n & 0x1F;
+      }
       Img->N = n;
       Img->K = k;
       Img->R = drms_getkey_int(rs, "BITSELID", &rstatus);
@@ -527,7 +543,7 @@ int fsn_change_normal()
 int fsn_change_rexmit() 
 {
   char rexmit_dsname[256];
-  int rstatus, dstatus;
+  int rstatus, dstatus, compid, n, k;
   char *cptr;
 
   if(fsn_prev != 0) {   // close image of prev fsn if not 0 
@@ -592,9 +608,18 @@ int fsn_change_rexmit()
     ImgO->cropid = drms_getkey_int(rsc, "CROPID", &rstatus);
     ImgO->luid = drms_getkey_int(rsc, "LUTID", &rstatus);
     ImgO->tap = drms_getkey_int(rsc, "TAPCODE", &rstatus);
-    ImgO->N = drms_getkey_int(rsc, "N", &rstatus);
-    ImgO->K = drms_getkey_int(rsc, "K", &rstatus);
-    ImgO->R = drms_getkey_int(rsc, "R", &rstatus);
+    compid = drms_getkey_int(rsc, "COMPID", &rstatus);
+    if(compid == 0) {
+      n = 16; k = 0;
+    }
+    else {
+      k = compid & 0x07;              //low 3 bits
+      n = compid >> 3;                        //next 5 bits
+      n = n & 0x1F;
+    }
+    ImgO->N = n;
+    ImgO->K = k;
+    ImgO->R = drms_getkey_int(rsc, "BITSELID", &rstatus);
     ImgO->overflow = drms_getkey_int(rsc, "OVERFLOW", &rstatus);
     ImgO->headerr = drms_getkey_int(rsc, "HEADRERR", &rstatus);
     ImgO->totalvals = drms_getkey_int(rsc, "TOTVALS", &rstatus);
