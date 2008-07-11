@@ -13,12 +13,19 @@
 # To set up ssh-agent, from the machine on which the cron job runs, type
 # 'nohup ssh-agent -c > /home/jsoc/.ssh-agent' then
 # 'ssh-add /home/jsoc/.ssh/id_rsa'
+#
+# There -b flag is a short-cut to specify the configuration file.
+#  -b dev -   use the development configuration file.  This configuration file
+#             is intended to be used by running the script as user jsoc on 
+#             machine maelstrom.
+#  -b live -  use the 'live' (both pre- and post- launche) configuration file.  
+#             This configuration file is intended to be used by running 
+#             the script as user jsoc on machine j0.
 
 use FindBin qw($Bin);
 use Time::Local;
 
 my($kDEV) = "dev";
-my($kGROUND) = "ground";
 my($kLIVE) = "live";
 my($kCFGPREFIX) = "dllzp_conf";
 my($kSSHAGENTCONF) = "ssh-agent_conf";
@@ -83,7 +90,7 @@ else
 	{
 	    $branch = shift(@ARGV);
 
-	    if ($branch ne $kDEV && $branch ne $kGROUND && $branch ne $kLIVE)
+	    if ($branch ne $kDEV && $branch ne $kLIVE)
 	    {	
 		PrintUsage();
 		exit(1);
@@ -107,8 +114,17 @@ else
 
 if (!defined($cfgfile) && defined($branch))
 {
+    if ($branch eq $kLIVE)
+    {
+        $branch = "";
+    }
+    else
+    {
+        $branch = "_" . $branch;
+    }
+
     # Use defalt configuration file
-    $cfgfile = "$Bin/${kCFGPREFIX}_$branch.txt";
+    $cfgfile = "$Bin/${kCFGPREFIX}${branch}.txt";
 }
 
 if (!(-f $cfgfile))
