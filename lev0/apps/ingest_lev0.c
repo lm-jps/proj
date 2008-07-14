@@ -61,10 +61,10 @@
 //#define LEV0SERIESNAMEAIA "aia.lev0"
 //#define LEV0SERIESNAMEAIA "aia.lev0a"
 //#define TLMSERIESNAMEAIA "aia.tlm"
-#define LEV0SERIESNAMEAIA "aia.lev0b"
-#define TLMSERIESNAMEAIA "aia.tlmb"
-#define LEV0SERIESNAMEHMI "hmi.lev0b"
-#define TLMSERIESNAMEHMI "hmi.tlmb"
+#define LEV0SERIESNAMEAIA "aia.lev0c"
+#define TLMSERIESNAMEAIA "aia.tlmc"
+#define LEV0SERIESNAMEHMI "hmi.lev0c"
+#define TLMSERIESNAMEHMI "hmi.tlmc"
 
 //Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
 //setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
