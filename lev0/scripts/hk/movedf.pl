@@ -1,4 +1,4 @@
-#!/bin/perl
+#!/usr/bin/perl
 ##############################################################################
 # Name:        movedf.pl  - Move or get day files for processing then remove #
 # Description: Get dayfiles from moc server drop directory. Move files over  #
@@ -50,6 +50,7 @@ $ENV{'MAILTO'}="";
 $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
 my $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 my $source="moc";
+$ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
 # pick up dayfiles and xml files there
 #carl test with files from 2008_111
@@ -101,8 +102,11 @@ close LF;
 
 #Process setup (3) and (4)
 #ingest all dayfiles and xml files
-#$log=`perl ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc dsnlist=./df_apid_ds_list_for_moc src=moc`
-$log=`perl ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc-CARLS dsnlist=./df_apid_ds_list_for_moc-CARLS src=moc`;
+# for production
+print LF "--->executing </usr/bin/perl  $script_dir/ingest_dayfile.pl apidlist=$script_dir/df_apid_list_day_file_moc dsnlist=$script_dir/df_apid_ds_list_for_moc src=moc>\n";
+$log=`/usr/bin/perl  $script_dir/ingest_dayfile.pl apidlist=$script_dir/df_apid_list_day_file_moc dsnlist=$script_dir/df_apid_ds_list_for_moc src=moc`;
+# for testing
+#$log=`perl ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc-CARLS dsnlist=./df_apid_ds_list_for_moc-CARLS src=moc`;
 print LF "--->Processed df and xml files to data series\n";
 
 #reopen log
