@@ -33,7 +33,7 @@
   $ENV{'SUMSERVER'}="d02.Stanford.EDU";
   $hm=$ENV{'HOME'};
   $ENV{'MAILTO'}="";
-  $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
+  $exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
   $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
   $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
@@ -66,9 +66,9 @@
  {
    # for testing during development #
    #$ENV{'DF_DAYFILE_DIRECTORY'}="/home1/carl/cvs/JSOC/proj/lev0/apps/data/hk_hsb_dayfile";
-   $ENV{'DF_DAYFILE_DIRECTORY'}="/surge/production/lev0/hk_hsb_dayfile";
+   #$ENV{'DF_DAYFILE_DIRECTORY'}="/surge/production/lev0/hk_hsb_dayfile";
    #for production#
-   #$ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_hsb_dayfile";
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_hsb_dayfile";
  }
  elsif ($source eq "moc")
  {
@@ -555,7 +555,7 @@ sub ingest_day_files()
   foreach $file (@list)
   {
     #get command
-    $command="set_keys -c ";
+    $command="$exec_dir/set_keys -c ";
 
     # get series name
     if ($source eq "hsb")
