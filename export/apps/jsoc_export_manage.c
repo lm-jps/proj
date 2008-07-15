@@ -396,7 +396,7 @@ int DoIt(void)
          fprintf(fp, "echo $HOSTNAME\n");
 
          // Force staging and get paths to export files with list in index.txt
-         fprintf(fp, "jsoc_export reqid=%s version=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol=%s %s\n", requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, dbids);
+         fprintf(fp, "jsoc_export_as_fits reqid=%s version=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol=%s %s\n", requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, dbids);
 
          // convert index.txt list into index.json and index.html packing list files. 
          fprintf(fp, "jsoc_export_make_index\n");
