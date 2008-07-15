@@ -30,9 +30,9 @@
 # for test pickup dayfile location:
 # $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/home1/jsoc/sdo/lzp/MOCFiles/moc/lzp/2008_111";
 # for test art's test directory
-$pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp21/jsoc/sdo_dev/mocprods/lzp";
+# $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp21/jsoc/sdo_dev/mocprods/lzp";
 # for production use:
-#$pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/home1/jsoc/sdo/lzp/MOCFiles/moc/lzp/";
+$pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp21/jsoc/sdo/mocprods/lzp";
 
 # Process setup (2)
 # for production - tested with this initially
