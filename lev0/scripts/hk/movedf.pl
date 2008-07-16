@@ -36,7 +36,7 @@ $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp21/jsoc/sdo/mocprods/lzp";
 
 # Process setup (2)
 # for production - tested with this initially
-my $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0/hk_moc_dayfile";
+$doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0/hk_moc_dayfile";
 # for lev0 cpt dropoff
 #my $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0/hk_moc_dayfile";
 
@@ -77,37 +77,48 @@ elsif ($source eq "egsefm")
 # open log file
 open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
 print LF `date`;
+print LF "--->starting script movedf.pl\n";
 
 # move files over to /tmp21/production/lev0/hk_moc_dayfile
 foreach $hkt (@list_hkt_files)
 {
  $hkt =~ s/\n//g;
  if ($dflg eq "1") {print LF " Move HKT is <$hkt>\n";}
- $log=`cp  $hkt  $doff_dir`;
+ #$log=`cp  $hkt  $doff_dir`;
  # to use during production
- #$log=`mv  $hkt  $doff_dir`;
+ $log=`/bin/mv  $hkt  $doff_dir`;
+ if ($dflg eq "1") {print LF "log after mv: $log"};
 }
 foreach $xml (@list_xml_files)
 {
  $xml =~ s/\n//g;
  if ($dflg eq "1") {print LF " Move XML is <$xml>\n";}
- $log=`cp  $xml  $doff_dir`;
+ #$log=`cp  $xml  $doff_dir`;
  # to use during production
- #$log=`mv  $xml  $doff_dir`;
+ $log=`/bin/mv  $xml  $doff_dir`;
+ if ($dflg eq "1") {print LF "log after mv: $log"};
 }
 print LF "--->Moved df and xml files to :$doff_dir\n";
-$log=`chmod 777 $doff_dir/*`;
-print LF "--->chmod to 777 for df and xml files in :$doff_dir\n";
-close LF;
+$hkt_filecount=@list_hkt_files;   
+$xml_filecount=@list_xml_files;    
+print LF "--->hkt file count is:$hkt_filecount xml file count is:$xml_filecount\n";
 
-#Process setup (3) and (4)
-#ingest all dayfiles and xml files
-# for production
-print LF "--->executing </usr/bin/perl  $script_dir/ingest_dayfile.pl apidlist=$script_dir/df_apid_list_day_file_moc dsnlist=$script_dir/df_apid_ds_list_for_moc src=moc>\n";
-$log=`/usr/bin/perl  $script_dir/ingest_dayfile.pl apidlist=$script_dir/df_apid_list_day_file_moc dsnlist=$script_dir/df_apid_ds_list_for_moc src=moc`;
-# for testing
-#$log=`perl ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc-CARLS dsnlist=./df_apid_ds_list_for_moc-CARLS src=moc`;
-print LF "--->Processed df and xml files to data series\n";
+# check if files are there and chmod on files
+if($hkt_filecount > 0 or $xml_filecount > 0)
+{
+  $log=`chmod 777 $doff_dir/*`;
+  print LF "--->chmod to 777 for df and xml files in :$doff_dir\n";
+}
+close LF;
+# check if dayfile there before calling ingest_dayfile.pl script
+if($hkt_filecount > 0 or $xml_filecount > 0)
+{
+  #Process setup (3) and (4)
+  #ingest all dayfiles and xml files
+  # for production
+  $log=`/usr/bin/perl  $script_dir/ingest_dayfile.pl apidlist=$script_dir/df_apid_list_day_file_moc dsnlist=$script_dir/df_apid_ds_list_for_moc src=moc`;
+  print LF "--->Processed df and xml files to data series\n";
+}
 
 #reopen log
 open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
@@ -122,11 +133,15 @@ while (<DELFILE>)
    $log=`rm $doff_dir/$_`;
    if ($dflg eq "1") {print LF "$log\n";}
 }#while
+if($hkt_filecount > 0 or $xml_filecount > 0)
+{
 print LF "--->Deleting df and xml files that where successfully processed into data series\n";
+}
 
 close DELFILE;
 #set MF file to blank work was completed
 open(DELFILE, ">$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
 close DELFILE;
+print LF "--->exiting script movedf.pl\n";
 print LF `date`;
 close LF;
