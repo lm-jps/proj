@@ -41,7 +41,6 @@
 #include "decode_hk_vcdu.h"
 #include "decode_hk.h"
 #include "load_hk_config_files.h"
-#include "mypng.h"
 #include "add_small_image.c"
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
@@ -217,6 +216,19 @@ if (firstcall)
 return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
 }
 
+// Setup global datestr[] like: 2008.07.14_08:29:31
+char *do_datestr() {
+  time_t tval;
+  struct tm *t_ptr;
+
+  tval = time(NULL);
+  t_ptr = localtime(&tval);
+  sprintf(datestr, "%d.%02d.%02d_%02d:%02d:%02d", 
+	  (t_ptr->tm_year+1900), (t_ptr->tm_mon+1),
+	  t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
+  return(datestr);
+}
+
 // Returns a time tag like  yyyy.mm.dd.hhmmss 
 char *gettimetag()
 {
@@ -358,21 +370,21 @@ void alrm_sig(int sig)
 // User signal 1 is sent by ilev0_alrm1.pl to tell us to exit.
 void usr1_sig(int sig)
 {
-  printk("%s usr1_sig received\n", datestr);
+  printk("%s usr1_sig received\n", do_datestr());
   sleep(1);
   sigtermflg = 1;              // tell main loop to exit
 }
 
 void usr2_sig(int sig)
 {
-  printk("%s usr2_sig received\n", datestr);
+  printk("%s usr2_sig received\n", do_datestr());
   sleep(1);
   sigtermflg = 1;              // tell main loop to exit
 }
 
 void sighandler(int sig)
 {
-  printk("%s signal received\n", datestr);
+  printk("%s signal received\n", do_datestr());
   sigtermflg = 1;		//tell main loop
   return;
 }
@@ -1035,7 +1047,7 @@ void do_ingest()
       rexmit = 1;
     }
     sprintf(name, "%s/%s", tlmdir, nameptr[j].name);
-    printk("\n*Found qac file:\n* %s\n", name);
+    printk("%s\n*Found qac file:\n* %s\n", do_datestr(), name);
     if(!(fp=fopen(name, "r"))) {
       printk("***Can't open %s\n", name);
       free(nameptr[j].name);
@@ -1150,8 +1162,6 @@ void setup()
 {
   FILE *fp;
   int i;
-  time_t tval;
-  struct tm *t_ptr;
   char string[128], cwdbuf[128], idstr[256];
   char envfile[100], s1[256],s2[256],s3[256], line[256];
 
@@ -1163,17 +1173,7 @@ void setup()
   if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
     signal(SIGTERM, sighandler);
 
-  tval = time(NULL);
-  if (signal(SIGINT, SIG_IGN) != SIG_IGN)
-    signal(SIGINT, sighandler);
-  if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
-    signal(SIGTERM, sighandler);
-
-  tval = time(NULL);
-  t_ptr = localtime(&tval);
-  sprintf(datestr, "%d.%02d.%02d_%02d:%02d:%02d", 
-	  (t_ptr->tm_year+1900), (t_ptr->tm_mon+1),
-	  t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
+  do_datestr();
   printk_set(h0log, h0log);	// set for printk calls 
   printk("%s\n", datestr);
   getcwd(cwdbuf, 126);
