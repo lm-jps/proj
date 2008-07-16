@@ -186,6 +186,7 @@ int main(int argc, char **argv)
 	fprintf(index_html, "<TR><TD>%s</TD<TD><A HREF=\"http://jsoc.stanford.edu/%s/%s\">%s</A></TD></TR>\n", name, dir, val, val);
 	break;
       default:
+        fprintf(stderr, "Unsupported case '%d'.\n", state);
       }
     }
   fclose(index_txt);
