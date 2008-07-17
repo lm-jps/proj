@@ -24,7 +24,7 @@ d		:= $(dir)
 # For most science processing, you would want to use socket-connect modules to
 # take advantage of the ability to share data in a pipeline.
 
-MODEXE_$(d)	:= $(addprefix $(d)/, hello_world)
+MODEXE_$(d)	:= $(addprefix $(d)/, hello_world threadsigs)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(addsuffix _sock, $(addprefix $(d)/, hello_world scalesegments opendsdsrecs))
