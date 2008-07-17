@@ -55,6 +55,7 @@ typedef struct {
     int reopened;
     unsigned telnum;
     unsigned fsn;
+    unsigned fid;
     unsigned apid;
     unsigned cropid;
     unsigned luid;

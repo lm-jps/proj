@@ -206,6 +206,7 @@ int imgdecode(unsigned short *impdu, IMG *img)
     img->apid = u;
     img->telnum = impdu[11] >> 14;
     img->fsn = ((impdu[11] & 0x3fff) << 16) + impdu[12];
+    img->fid = ((impdu[13] & 0xff) << 16) + impdu[14];
     img->cropid = impdu[15] >> 4;
     img->overflow = impdu[15] & 1;
     img->headerr = (impdu[15] >> 1) & 1;
