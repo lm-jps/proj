@@ -42,6 +42,7 @@
 #include "decode_hk.h"
 #include "load_hk_config_files.h"
 #include "add_small_image.c"
+#include "mypng.h"
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
