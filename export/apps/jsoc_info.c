@@ -126,8 +126,9 @@ retrieve_file drms_query describe_series
 #include "drms.h"
 #include "drms_names.h"
 #include "json.h"
-// #include "json.h"
 #include <time.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 static char x2c (char *what) {
   register char digit;
@@ -781,7 +782,8 @@ int DoIt(void)
     /* if any segment info wanted, stage the records */
     if (nsegs)
       {
-      drms_stage_records(recordset, 0, 0);
+// remove this until bug fixed
+      // drms_stage_records(recordset, 0, 0);
       }
 
     /* loop over set of selected records */
@@ -812,6 +814,18 @@ int DoIt(void)
 	  sprintf(rawval,"%ld",rec->recnum);
 	  val = json_new_number(rawval);
 	  }
+        else if (strcmp(keys[ikey], "*dir_mtime*") == 0)
+          { // get record dir last change date
+	  struct stat buf;
+          char path[DRMS_MAXPATHLEN];
+          char timebuf[100];
+          drms_record_directory (rec, path, 0);
+          stat(path, &buf);
+          sprint_ut(timebuf, buf.st_mtime + UNIX_EPOCH);
+          jsonval = string_to_json(timebuf);
+          val = json_new_string(jsonval);
+          free(jsonval);
+          }
         else if (strcmp(keys[ikey], "*logdir*") == 0)
           {
 	  char *logdir = drms_record_getlogdir(rec);
@@ -828,6 +842,10 @@ int DoIt(void)
         else
 	  {
           rec_key_ikey = drms_keyword_lookup (rec, keys[ikey], 1); 
+          if (!rec_key_ikey)
+            {
+	    JSONDIE("Keyword not in series");
+            }
 	  drms_keyword_snprintfval(rec_key_ikey, rawval, sizeof(rawval));
 	  
           switch (rec_key_ikey->info->type)
