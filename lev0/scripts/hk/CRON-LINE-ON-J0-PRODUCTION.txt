@@ -1,1 +1,0 @@
-20,50 9-18 * * 1-5 /usr/bin/perl/home/production/cvs/JSOC/proj/lev0/scripts/hk/clmq.pl >/dev/null 2>&1
