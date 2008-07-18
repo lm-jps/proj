@@ -103,20 +103,7 @@ if (flg) {	/* AIA */
   double shete = (aimshcte - aimshote)*4.0e-6;
   double offset = ( aimshobc + aimshcbc + aimshobe + aimshcbe +
                     aimshotc + aimshctc + aimshote + aimshcte )/8.0e6;
-  if(aimgshce == 0) {			//use pkt time for t_obs
-    int axsec = HK_getkey_int(isp, "ATCS211");
-    int axssec = HK_getkey_int(isp, "ATCSS211");
-    if((axsec == DRMS_MISSING_INT) || (axssec == DRMS_MISSING_INT)) {
-      axsec = HK_getkey_int(isp, "ATCS239");
-      axssec = HK_getkey_int(isp, "ATCSS239");
-    }
-    if((axsec != DRMS_MISSING_INT) && (axssec != DRMS_MISSING_INT)) {
-      t_obs = SDO_to_DRMS_time(axsec, axssec);
-    }
-  }
-  else {
-    t_obs = SDO_to_DRMS_time(aimgots, aimgotss) + offset;
-  }
+  t_obs = SDO_to_DRMS_time(aimgots, aimgotss) + offset;
   exptime = (shebc + shebe + shetc + shete)/4.0;
   expsdev = sqrt((shebc*shebc + shebe*shebe + shetc*shetc +
                  shete*shete)/4.0 - exptime*exptime);
@@ -144,7 +131,6 @@ if (flg) {	/* AIA */
     else drms_setkey_string(rec, "A8215_00", "Off");
   }
 } else {	/* HMI */
-  int hshiexp = HK_getkey_int(isp, "HSHIEXP"); /* HMI_FSW_IMG_CMDED_EXPOSURE */
   int hobitsec = HK_getkey_int(isp, "HOBITSEC"); /* HMI_OBT_IMG_TIME_SHM_SEC */
   int hobitss  = HK_getkey_int(isp, "HOBITSS");  /* HMI_OBT_IMG_TIME_SHM_SS  */
   int hshmiclb = HK_getkey_int(isp, "HSHMICLB"); /* HMI_SHM_IMG_CLOSE_BOTTOM */
@@ -158,20 +144,7 @@ if (flg) {	/* AIA */
   double shet = (hshmiclt - hshmiopt)*1.0e-6;
   double offset = ( hshmiclb + hshmiopb + hshmiclm + hshmiopm + hshmiclt + hshmiopt )/6.0e6;
   
-  if(hshiexp == 0) {			//use pkt time for t_obs
-    int hxsec = HK_getkey_int(isp, "HTCS1BD");
-    int hxssec = HK_getkey_int(isp, "HTCSS1BD");
-    if((hxsec == DRMS_MISSING_INT) || (hxssec == DRMS_MISSING_INT)) {
-      hxsec = HK_getkey_int(isp, "HTCS1DB");
-      hxssec = HK_getkey_int(isp, "HTCSS1DB");
-    }
-    if((hxsec != DRMS_MISSING_INT) && (hxssec != DRMS_MISSING_INT)) {
-      t_obs = SDO_to_DRMS_time(hxsec, hxssec);
-    }
-  }
-  else {
-    t_obs = SDO_to_DRMS_time(hobitsec,hobitss) + offset;
-  }
+  t_obs = SDO_to_DRMS_time(hobitsec,hobitss) + offset;
   exptime = (sheb + shem + shet)/3.0;
   expsdev = sqrt((sheb*sheb + shem*shem + shet*shet)/3.0 - exptime*exptime);
   
