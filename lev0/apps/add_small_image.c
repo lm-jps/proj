@@ -1,5 +1,4 @@
-
-#include <png.h>
+#include "mypng.h"
 
 #define PNGDIE(msg) {fprintf(stderr,"%s\n",msg); \
 	if (png_ptr) png_destroy_write_struct(&png_ptr, &info_ptr); \
