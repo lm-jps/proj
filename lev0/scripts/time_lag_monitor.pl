@@ -3,19 +3,19 @@
 # time_lag_monitor.pl
 #
 #
-# This script uses show_info to get the DATE value of the latest record of a series.
-# The time_lag is monitorred regularly to see to make sure they are within limits.
+# This script uses show_info to get the time of the latest record of a series (key=DATE).
+# The time_lag is monitorred at regular interval to make sure it is within a specified limit.
 # If show_info fails multiple times or the time_lag is out of range, an alert message will be sent.
 #
-# Parameters:
+# Default Parameters:
 #
 # ds_names              : List of series to be monitored.
 # check_interval        : How often this script calls show_info.
 # time_lag_limit        : How far time_lag could be before sending a notify.
-# show_info_fails_limit : How many time in a row show_info fails before sending a notify.
+# get_time_fail_limit   : How many time in a row show_info fails before sending a notify.
 # alert_interval        : How often alert message can be sent.
 # sendto                : Whom will receive the alert.
-#                       : ie: "jim\@sun.stanford.edu, timh\@sun.stanford.edu, 4083481970\@txt.att.net";
+#                       : ie: "jim\@sun.stanford.edu, 4083481970\@txt.att.net";
 # log_filename          : "" for not logging
 #                       : ie: "/tmp02/timh/time_log_monitor.log"
 #
@@ -25,27 +25,27 @@
 
 use strict;
 use warnings;
+use Getopt::Long;
 
 my $DEBUG_MESSAGES_ON  = 1;
 
 
 
 #----------------------------
-# CURRENT SETTINGS:
+# DEFAULT SETTINGS:
 
 my @ds_names                = ("hmi.lev0c", "aia.lev0c");
-my $check_interval          = 6; # 6 in minutes. How often this script calls show_info.
+my $check_interval          = 5; # 5 in minutes. How often this script calls show_info.
 my $time_lag_limit          = 14;# 14 in minutes. How far time_lag could be before sending a notify.
-my $show_info_fails_limit   = 3; # 3 times. How many times show_info fails in consecutive before sending a notify.
+my $get_time_fail_limit     = 3; # 3 times. How many times show_info fails in consecutive before sending a notify.
 my $alert_interval          = 120; # 120 in minute. How often alert message can be sent.
-my $sendto                  = "jim\@sun.stanford.edu, timh\@sun.stanford.edu";
-my $log_filename            = "/tmp02/timh/time_lag_monitor.log"; # "" for not logging
-
+my $email_to                = "jim\@sun.stanford.edu, timh\@sun.stanford.edu";
+my $log_filename            = ""; #"/tmp02/timh/time_lag_monitor.log"; # "" for not logging
+my $help                    = 0;
 #----------------------------
 
 
 
-    
 TimeLagMonitor(@ds_names); # main loop.
 
 
@@ -60,6 +60,7 @@ exit;
 # Mail("timh\@sun.stanford.edu,4083481979\@txt.att.net","Something fails. Please Check!");
 # Simulated TimeString Test
 # print GetTimeDiff("2008-01-01T00:00:00Z", "2008-07-09T02:19:59Z");
+# ParseArgs();
 #
 
 #-------------------------------------------------------------------------------------------------
@@ -77,12 +78,17 @@ sub TimeLagMonitor
     my (@ds_names) = @_;
     my ($series_name, $time_string, $current_time_string, $minutes, $time_lag_hours, $time_lag_minutes);
     my ($error_message, $time_message);
-    my (%fail_record); # keep track how many fails for each series
+    my (%fail_record); # keep track how many get time fails for each series
     
     my $check_interval_in_seconds = $check_interval * 60;
     my $last_alert_time_string  = "2000-01-01T00:00:00Z";
   
 
+    if(ParseArgs() == 0) # got -help
+    {
+	return;
+    }
+    
     if($log_filename ne "")
     {
 	open (LOG_FILE,">$log_filename") || die "Can't Open : $log_filename $!\n";
@@ -143,7 +149,7 @@ sub TimeLagMonitor
 
 		$fail_record{$series_name} ++;
 
-		if($fail_record{$series_name} > $show_info_fails_limit) # multiple fails in a row, send alert
+		if($fail_record{$series_name} > $get_time_fail_limit) # multiple fails in a row, send alert
 		{
 		    $error_message = "[fail:$fail_record{$series_name}] ";
 		}
@@ -183,12 +189,13 @@ sub PrintCurrentSettings
 
     DebugMessage("#-----------------------------------------------------------------------------\n");
     DebugMessage("# CURRENT SETTINGS:\n");
+    DebugMessage("#\n");
     DebugMessage("#   ds_names               = @ds_names\n");
     DebugMessage("#   check_interval         = $check_interval minutes\n");
-    DebugMessage("#   lag_time_limit         = $time_lag_limit minutes\n");
-    DebugMessage("#   show_info_fails_limit  = $show_info_fails_limit times\n");
+    DebugMessage("#   time_lag_limit         = $time_lag_limit minutes\n");
+    DebugMessage("#   get_time_fail_limit    = $get_time_fail_limit times\n");
     DebugMessage("#   alert_interval         = $alert_interval minutes\n");
-    DebugMessage("#   send_to                = $sendto\n");
+    DebugMessage("#   email_to               = $email_to\n");
     DebugMessage("#   log_filename           = $log_filename\n");
     DebugMessage("#\n");
     DebugMessage("# (Hit Ctrl-C to terminate.)\n");
@@ -413,9 +420,7 @@ sub Alert
 
     DebugMessage("\n$message\n\n");
 
-    #SendEmail($sendto,"time_lag_monitor\@sun.stanford.edu",$message,"Please check Level 0 Processing. Thanks!");
-
-    Mail($sendto, $message);
+    Mail($email_to, $message);
 
 }
 
@@ -458,4 +463,119 @@ sub Mail
 }
 
 #-------------------------------------------------------------------------------------------------
+# ParseArgs()
+# If Args are included, use those parameters instead of default parameters, return True
+# If help was one of the args, PrintHelp() and return False
 
+sub ParseArgs
+{
+
+    my $parameters = GetParameters();
+
+    if (defined ($parameters->{ds_names}))
+    {
+	@ds_names = split(/,/, $parameters->{ds_names});
+    }
+    
+    if (defined ($parameters->{check_interval}))
+    {
+	$check_interval = $parameters->{check_interval};
+    }
+    
+    if (defined ($parameters->{time_lag_limit}))
+    {
+	$time_lag_limit = $parameters->{time_lag_limit};
+    }
+    
+    if (defined ($parameters->{get_time_fail_limit}))
+    {
+	$get_time_fail_limit = $parameters->{get_time_fail_limit};
+    }
+    
+    if (defined ($parameters->{alert_interval}))
+    {
+	$alert_interval = $parameters->{alert_interval};
+    }
+    
+    if (defined ($parameters->{email_to}))
+    {
+	$email_to = $parameters->{email_to};
+    }
+
+    if (defined ($parameters->{log_filename}))
+    {
+	$log_filename = $parameters->{log_filename};
+    }
+
+    if(defined ($parameters->{help}))
+    {
+	PrintHelp();
+	return 0; # -help only
+    }
+    
+    return 1;
+    
+ }
+
+#-------------------------------------------------------------------------------------------------
+# GetParamters () returns \%parameters
+# Use GetOptions() which provides standard, flexible ways to extract args 
+# ie: -check_interval = 6
+#     -check_interval 6
+#     -c 6 ...
+
+sub GetParameters
+{
+
+    my %parameters=();
+
+    GetOptions("ds_names=s"            => \$parameters{ds_names},
+	       "check_interval:i"      => \$parameters{check_interval},
+	       "time_lag_limit:i"      => \$parameters{time_lag_limit},
+	       "get_time_fail_limit:i" => \$parameters{get_time_fail_limit},
+	       "alert_interval:i"      => \$parameters{alert_interval},
+	       "email_to:s"            => \$parameters{email_to},
+	       "log_filename:s"        => \$parameters{log_filename},
+	       "help:s"                => \$parameters{help});
+
+
+    #foreach (keys %parameters)
+    #{
+    #	if(defined $parameters{$_})
+    #	{
+    #	    print "$_ = $parameters{$_}\n";
+    #	}
+    #}
+
+    print "\nUnprocess Parameters:\n" if $ARGV[0];
+    foreach (@ARGV)
+    {
+	print "$_\n";
+    }
+    
+    return \%parameters;
+
+}
+
+#-------------------------------------------------------------------------------------------------
+# PrintHelp()
+
+sub PrintHelp
+{
+       
+    print "\nUsage:\n\n";
+    print "time_lag_monitor.pl               : Use the default settings.\n";
+    print "time_lag_monitor.pl -h            : Print this Usage.\n\n";
+
+    print "To override default settings, use one of the following flags:\n\n";
+    print "    -d  or  -ds_names             = \"hmi.lev0c,aia.lev0c\" (comma separated list)\n";
+    print "    -c  or  -check_interval       = 5 (minutes)\n";
+    print "    -t  or  -time_lag_limit       = 14 (minutes)\n";
+    print "    -g  or  -get_time_fail_limit  = 3 (times)\n";    
+    print "    -a  or  -alert_interval       = 120 (minutes)\n";
+    print "    -e  or  -email_to             = \"jim\\\@sun.stanford.edu,4083481979\\\@txt.att.net\" (comma separated list)\n";
+    print "    -l  or  -log_filename         = \"/temp02/timh/time_lag_monitor.log\"\n\n";
+    
+}
+
+#-------------------------------------------------------------------------------------------------
