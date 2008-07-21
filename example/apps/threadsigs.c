@@ -92,14 +92,14 @@ int DoIt(void)
    {
       /* gLoop is shared by threads, so put access to it in a critical region */
       pthread_mutex_lock(&mutex);
-      if (gLoop != 0 && gLoop % 1000 == 0)
+      if (gLoop != 0 && gLoop % 10000 == 0)
       {
          fprintf(stdout, "Iteration # %d\n", gLoop);
       }
       pthread_mutex_unlock(&mutex);
 
       pthread_mutex_lock(&mutex);
-      if (gLoop != 0 && gLoop == 1000)
+      if (gLoop == 100000)
       {
          /* now send SIGALRM signal */
          pthread_kill(sigthread, SIGALRM);      
@@ -113,15 +113,19 @@ int DoIt(void)
       }
       else
       {
+         pthread_mutex_unlock(&mutex);
          break;
       }
+
       pthread_mutex_unlock(&mutex);
    }
 
    fprintf(stdout, "Got out of loop - exiting.\n");
 
-   /* wait for */
+   /* wait for signal thread to terminate - must do this before destroying mutex. */
    pthread_join(sigthread, NULL);
+
+   pthread_mutex_destroy(&mutex);
 
    return error;
 }
