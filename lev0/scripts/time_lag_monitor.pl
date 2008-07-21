@@ -77,12 +77,11 @@ sub TimeLagMonitor
 
     my (@ds_names) = @_;
     my ($series_name, $time_string, $current_time_string, $minutes, $time_lag_hours, $time_lag_minutes);
-    my ($error_message, $time_message);
+    my ($error_message, $time_message, $check_interval_in_seconds);
     my (%fail_record); # keep track how many get time fails for each series
-    
-    my $check_interval_in_seconds = $check_interval * 60;
     my $last_alert_time_string  = "2000-01-01T00:00:00Z";
   
+
 
     if(ParseArgs() == 0) # got -help
     {
@@ -105,6 +104,8 @@ sub TimeLagMonitor
 	$fail_record{$series_name} = 0; # init fail counts
     }
     DebugMessage("\n");
+
+    $check_interval_in_seconds = $check_interval * 60; #sleep time
 
 
 
@@ -155,7 +156,10 @@ sub TimeLagMonitor
 		}
 	    }
 	}
-	
+
+
+	DebugMessage("\n$time_message");	
+
 
 	if(length($error_message) != 0)
 	{
@@ -166,8 +170,6 @@ sub TimeLagMonitor
 	    }
 	}
 	
-
-	DebugMessage("$time_message\n");
 	
 	sleep($check_interval_in_seconds);
 
@@ -418,7 +420,8 @@ sub Alert
 {
     my $message = $_[0];
 
-    DebugMessage("\n$message\n\n");
+    #DebugMessage("\n$message\n\n");
+    DebugMessage(" <= Notified");
 
     Mail($email_to, $message);
 
@@ -574,7 +577,7 @@ sub PrintHelp
     print "    -g  or  -get_time_fail_limit  = 3 (times)\n";    
     print "    -a  or  -alert_interval       = 120 (minutes)\n";
     print "    -e  or  -email_to             = \"jim\\\@sun.stanford.edu,4083481979\\\@txt.att.net\" (comma separated list)\n";
-    print "    -l  or  -log_filename         = \"/temp02/timh/time_lag_monitor.log\"\n\n";
+    print "    -l  or  -log_filename         = \"/tmp02/timh/time_lag_monitor.log\"\n\n";
     
 }
 
