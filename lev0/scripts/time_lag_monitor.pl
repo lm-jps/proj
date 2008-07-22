@@ -1,13 +1,14 @@
-#!/usr/bin/perl -w
+#!/home/jsoc/bin/linux_x86_64/perl -w
+#(!/usr/bin/perl -w)
 #
 # time_lag_monitor.pl
 #
 #
-# This script uses show_info to get the time of the latest record of a series (key=DATE).
+# This script uses show_info to get the time of the latest record of a series (show_info ... key=DATE).
 # The time_lag is monitorred at regular interval to make sure it is within a specified limit.
 # If show_info fails multiple times or the time_lag is out of range, an alert message will be sent.
 #
-# Default Parameters:
+# Default Parameters:     (can be overrided with command line parameters)
 #
 # ds_names              : List of series to be monitored.
 # check_interval        : How often this script calls show_info.
@@ -15,9 +16,9 @@
 # get_time_fail_limit   : How many time in a row show_info fails before sending a notify.
 # alert_interval        : How often alert message can be sent.
 # sendto                : Whom will receive the alert.
-#                       : ie: "jim\@sun.stanford.edu, 4083481970\@txt.att.net";
+#                       : ie: 'jim@sun.stanford.edu, 4083481970@txt.att.net';
 # log_filename          : "" for not logging
-#                       : ie: "/tmp02/timh/time_log_monitor.log"
+#                       : ie: '/tmp02/timh/time_log_monitor.log'
 #
 # Note: all time are in minutes.
 #
@@ -32,15 +33,15 @@ my $DEBUG_MESSAGES_ON  = 1;
 
 
 #----------------------------
-# DEFAULT SETTINGS:
+# DEFAULT SETTINGS:           (can be overrided with command line parameters)
 
-my @ds_names                = ("hmi.lev0c", "aia.lev0c");
+my @ds_names                = ('hmi.lev0c', 'aia.lev0c');
 my $check_interval          = 5; # 5 in minutes. How often this script calls show_info.
 my $time_lag_limit          = 14;# 14 in minutes. How far time_lag could be before sending a notify.
 my $get_time_fail_limit     = 3; # 3 times. How many times show_info fails in consecutive before sending a notify.
 my $alert_interval          = 120; # 120 in minute. How often alert message can be sent.
-my $email_to                = "jim\@sun.stanford.edu, timh\@sun.stanford.edu";
-my $log_filename            = ""; #"/tmp02/timh/time_lag_monitor.log"; # "" for not logging
+my $email_to                = 'jim@sun.stanford.edu, timh@sun.stanford.edu';
+my $log_filename            = ""; #'/tmp02/timh/time_lag_monitor.log'; # '' for not logging
 my $help                    = 0;
 #----------------------------
 
@@ -55,11 +56,11 @@ exit;
 #-------------------------------------------------------------------------------------------------
 # For Testing and Reuse:
 #
-# PrintTimeLags("hmi.lev0c");
-# SendEmail("timh\@sun.stanford.edu","time_lag_monitor-host@sun.stanford.edu","Something fails.","Please Check!");
-# Mail("timh\@sun.stanford.edu,4083481979\@txt.att.net","Something fails. Please Check!");
+# PrintTimeLags('hmi.lev0c');
+# SendEmail('timh@sun.stanford.edu','time_lag_monitor@sun.stanford.edu','Something fails.','Please Check!');
+# Mail('timh@sun.stanford.edu,4083481979@txt.att.net','Something fails. Please Check!');
 # Simulated TimeString Test
-# print GetTimeDiff("2008-01-01T00:00:00Z", "2008-07-09T02:19:59Z");
+# print GetTimeDiff('2008-01-01T00:00:00Z', '2008-07-09T02:19:59Z');
 # ParseArgs();
 #
 
@@ -158,7 +159,7 @@ sub TimeLagMonitor
 	}
 
 
-	DebugMessage("\n$time_message");	
+	DebugMessage("$time_message\n");	
 
 
 	if(length($error_message) != 0)
@@ -420,8 +421,7 @@ sub Alert
 {
     my $message = $_[0];
 
-    #DebugMessage("\n$message\n\n");
-    DebugMessage(" <= Notified");
+    DebugMessage("$message\n");
 
     Mail($email_to, $message);
 
@@ -430,7 +430,7 @@ sub Alert
 #-------------------------------------------------------------------------------------------------
 # SendMail($to, $from, $subject, $message)
 #
-# Remember \ before @ in email address
+# $to: 'timh@sun.stanford.edu' or "timh\@sun.stanford.edu" or '4083481979@txt.att.net'
 #
 
 sub SendMail
@@ -450,7 +450,7 @@ sub SendMail
 #-------------------------------------------------------------------------------------------------
 # Mail($to, $subject)
 #
-# Remember \ before @ in email address
+# $to: 'timh@sun.stanford.edu' or "timh\@sun.stanford.edu" or '4083481979@txt.att.net'
 # Used unix "mail" to send message to multiple users.
 # From: user who ran the script
 # Subject = subject. Message is one liner for display on phone.
@@ -571,13 +571,13 @@ sub PrintHelp
     print "time_lag_monitor.pl -h            : Print this Usage.\n\n";
 
     print "To override default settings, use one of the following flags:\n\n";
-    print "    -d  or  -ds_names             = \"hmi.lev0c,aia.lev0c\" (comma separated list)\n";
+    print "    -d  or  -ds_names             = 'hmi.lev0c,aia.lev0c' (comma separated list)\n";
     print "    -c  or  -check_interval       = 5 (minutes)\n";
     print "    -t  or  -time_lag_limit       = 14 (minutes)\n";
     print "    -g  or  -get_time_fail_limit  = 3 (times)\n";    
     print "    -a  or  -alert_interval       = 120 (minutes)\n";
-    print "    -e  or  -email_to             = \"jim\\\@sun.stanford.edu,4083481979\\\@txt.att.net\" (comma separated list)\n";
-    print "    -l  or  -log_filename         = \"/tmp02/timh/time_lag_monitor.log\"\n\n";
+    print "    -e  or  -email_to             = 'jim\@sun.stanford.edu,4083481979\@txt.att.net' (comma separated list)\n";
+    print "    -l  or  -log_filename         = '/tmp02/timh/time_lag_monitor.log'\n\n";
     
 }
 
