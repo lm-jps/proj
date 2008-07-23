@@ -43,6 +43,7 @@
 #include "load_hk_config_files.h"
 #include "add_small_image.c"
 #include "mypng.h"
+#include "tdsignals.h"
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
@@ -103,13 +104,21 @@ ModuleArgs_t module_args[] = {
 };
 
 CmdParams_t cmdparams;
-
 // Module name presented to DRMS. 
-char *module_name = "ingest_lev0";
+char *module_name = "xingest_lev0";
+
+typedef enum
+{
+   kThreadSigErr_Success
+} ThreadSigErr_t;
+static int gLoop = 1;
+static pthread_mutex_t mutex;
+static struct timeval tv0;
+static td_alarm_t talarm = 0;
 
 FILE *h0logfp;		// fp for h0 ouput log for this run 
-IMG Image, ImageOld;
-IMG *Img, *ImgO, *ImgC;
+static IMG Image, ImageOld;
+static IMG *Img, *ImgO, *ImgC;
 static CCSDS_Packet_t *Hk;
 static DRMS_Record_t *rs;
 static DRMS_Segment_t *segment;
@@ -139,12 +148,12 @@ int whk_status;
 int total_tlm_vcdu;
 int total_missing_vcdu;
 int errmsgcnt, fileimgcnt;
-int file_processed_count = 0;	// ingest_lev0 restarts when = RESTART_CNT
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when ingest_lev0 is called for a restart
 int sigalrmflg = 0;             // set on signal so prog will know 
-int sigtermflg = 0;             // set on signal so prog will know 
-int ALRMSEC = 70;               // seconds for alarm signal 
+int ignoresigalrmflg = 0;       // set after a close_image()
+int firstfound = 0;		// set if see any file after startup
+int ALRMSEC = 60;               // must get 2 in a row for no image timeout
 char logname[128];
 char argvc[32], argindir[96], arglogfile[96], argoutdir[96];
 char timetag[32];
@@ -183,6 +192,27 @@ struct namesort {		// sorted file names in tlmdir
 typedef struct namesort NAMESORT;
 
 
+//Function callback that gets called when alarm 'rings'.  This runs in the signal
+//thread that receives, the alarm signal, not the main thread. */
+void shandler(int sig, pthread_mutex_t *mtx)
+{
+   float elapsed;
+   struct timeval tv1;
+   gettimeofday(&tv1, NULL);
+
+   elapsed = (float)((tv1.tv_sec * 1000000.0 + tv1.tv_usec -
+                      (tv0.tv_sec * 1000000.0 + tv0.tv_usec)) / 1000000.0);
+
+   printk("Thread '%lld' received alarm signal '%d'.\n", 
+		(long long )pthread_self(), sig);
+   printk("Elapsed time is %f seconds.\n", elapsed);
+
+   /* This isn't in the main thread, so put globals in a critical region. */
+   pthread_mutex_lock(mtx);
+   sigalrmflg = 1;
+   pthread_mutex_unlock(mtx);
+}
+
 int nice_intro ()
 {
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
@@ -321,6 +351,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     drms_setkey_int(rs, "COMPID", n+k);
     drms_setkey_int(rs, "BITSELID", img->R);
   }
+  drms_setkey_int(rs, "FID", img->fid);
   drms_setkey_int(rs, "TOTVALS", img->totalvals);
   drms_setkey_int(rs, "DATAVALS", img->datavals);
   drms_setkey_int(rs, "NPACKETS", img->npackets);
@@ -356,38 +387,6 @@ void abortit(int stat)
   printk("**Exit ingest_lev0 w/ status = %d\n", stat);
   if (h0logfp) fclose(h0logfp);
   exit(stat);
-}
-
-// Called 60 secs after the last .tlm file was seen.
-// Will close any opened image. NOTE: a reprocessed image cannot
-// be active. It is always closed at the end of get_tlm().
-// Can't do the code here because of re-entrancy problem.
-void alrm_sig(int sig)
-{
-  signal(SIGALRM, alrm_sig);
-  sigalrmflg = 1;		//tell main loop of signal
-}
-
-// User signal 1 is sent by ilev0_alrm1.pl to tell us to exit.
-void usr1_sig(int sig)
-{
-  printk("%s usr1_sig received\n", do_datestr());
-  sleep(1);
-  sigtermflg = 1;              // tell main loop to exit
-}
-
-void usr2_sig(int sig)
-{
-  printk("%s usr2_sig received\n", do_datestr());
-  sleep(1);
-  sigtermflg = 1;              // tell main loop to exit
-}
-
-void sighandler(int sig)
-{
-  printk("%s signal received\n", do_datestr());
-  sigtermflg = 1;		//tell main loop
-  return;
 }
 
 
@@ -979,6 +978,7 @@ int get_tlm(char *file, int rexmit, int higherver)
     printk("**WARNING: IM_PDU 42bit cntr gaps=%lld; expected=%lld\n",
 	 gap_42_cnt, total_missing_im_pdu);
   }
+  ignoresigalrmflg = 1;		//got a file. noop next alarm signal timeout
   return(0);
 }
 
@@ -1087,7 +1087,7 @@ void do_ingest()
       }
     }
     fclose(fp);
-    alarm(ALRMSEC);		//restart alarm if no more files come
+    //alarm(ALRMSEC);		//restart alarm if no more files come
     strcpy((char *)tlmnamekey, (char *)tlmname);
     filename = (char *)rindex(tlmname, '.');
     if(!filename) {
@@ -1148,12 +1148,11 @@ void do_ingest()
       higherversion = 1;
       printk("Higher version tlm found: %s.tlm\n", tlmname);
     }
+    firstfound = 1;			//a file has been seen
     if(get_tlm(xxname, rexmit, higherversion)) { // lev0 extraction of image 
       printk("***Error in lev0 extraction for %s\n", xxname);
     }
     if(stat(stopfile, &stbuf) == 0) { break; } //signal to stop
-    //if(++file_processed_count >= RESTART_CNT) break; 
-    //if(sigtermflg) break;
   }
   free(nameptr);
 }
@@ -1165,14 +1164,7 @@ void setup()
   int i;
   char string[128], cwdbuf[128], idstr[256];
   char envfile[100], s1[256],s2[256],s3[256], line[256];
-
-  signal(SIGALRM, alrm_sig);
-  //signal(SIGUSR1, &usr1_sig);	//handle signal 16 sent by ilev0_alrm1.pl
-  signal(SIGUSR2, &usr2_sig);	//handle signal 16 sent by ilev0_alrm1.pl
-  if (signal(SIGINT, SIG_IGN) != SIG_IGN)
-    signal(SIGINT, sighandler);
-  if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
-    signal(SIGTERM, sighandler);
+  ThreadSigErr_t error = kThreadSigErr_Success;
 
   do_datestr();
   printk_set(h0log, h0log);	// set for printk calls 
@@ -1242,8 +1234,19 @@ void setup()
       setenv(s2, s3, 1);
     }
   }
-  //close file
   fclose(fp);
+
+/***************************!!TBD ck this out later*************************
+  //setup a sigalrm for threads
+  //pthread_mutex_init(&mutex, NULL);
+
+  // Set alarm
+  gettimeofday(&tv0, NULL);
+  if (td_createalarm(ALRMSEC, shandler, &mutex, &talarm)) { //to shandler in ALRMSEC
+    pthread_mutex_destroy(&mutex); 
+    printk("Can't set an alarm signal for %dsec of no data\n", ALRMSEC);
+  }
+*****************************************************************************/
 }
 
 // Module main function. 
@@ -1279,7 +1282,7 @@ int DoIt(void)
     sprintf(logname, "%s", logfile);
   }
   if(restartflg) {
-    sleep(12);		//make sure old ingest_lev0 is done
+    //sleep(30);		//make sure old ingest_lev0 is done
     if((h0logfp=fopen(logname, "a")) == NULL)
       fprintf(stderr, "**Can't open for append the log file %s\n", logname);
   }
@@ -1290,91 +1293,34 @@ int DoIt(void)
   setup();
   while(wflg) {
     do_ingest();                // loop to get files from the input dir 
-/****************************************************************************
-    //note alrm sig doesn't work for multi-threaded process
     if(sigalrmflg) {		// process an alarm timout for no data in
-      if(Image.initialized) {
-        if(rs && fsn_prev) {	//make sure have a created record
-          close_image(rs, segment, segArray, &Image, fsn_prev);
-          printk("*Closed image on timeout FSN=%u\n", fsn_prev);
-        }
-      }
-      else {
-        printk("*No image to close on timeout\n");
-      }
-      printk("alrm_sig: drms_server_end_transaction()\n");
-      drms_server_end_transaction(drms_env, 0 , 0); //commit
-      printk("alrm_sig: drms_server_begin_transaction()\n");
-      drms_server_begin_transaction(drms_env); //start another cycle
-      fsn_prev = 0;	//make sure don't try to flush this image
-      imagecnt = 0;	//and start a new transaction interval
       sigalrmflg = 0;
-    }
-**************************************************************************/
-
-/************************************************************************
-    if(file_processed_count >= RESTART_CNT) {	//restart this ingest
-      if((pid = fork()) < 0) {
-        printk("***Can't fork(). errno=%d\n", errno);
+      td_destroyalarm(&talarm);
+      gettimeofday(&tv0, NULL);
+      if (td_createalarm(ALRMSEC, shandler, &mutex, &talarm)) { 
+        pthread_mutex_destroy(&mutex);
+        printk("Can't set an alarm signal for %dsec of no data\n", ALRMSEC);
       }
-      else if(pid == 0) {                   // this is the beloved child 
-        printk("\nexecvp of ingest_lev0\n");
-        args[0] = "ingest_lev0";
-          args[1] = "-r";
-          args[2] = argvc;
-          args[3] = argindir;
-          args[4] = arglogfile;
-          if(outdir) {
-            args[5] = argoutdir;
-            args[6] = NULL;
-          } else {
-            args[5] = NULL;
+      if(!ignoresigalrmflg && firstfound) {
+        if(Image.initialized) {
+          if(rs && fsn_prev) {	//make sure have a created record
+            close_image(rs, segment, segArray, &Image, fsn_prev);
+            printk("*Closed image on timeout FSN=%u\n", fsn_prev);
           }
-        if(execvp(args[0], args) < 0) {
-          printk("***Can't execvp() ingest_lev0. errno=%d\n", errno);
-          exit(1);
         }
-      }
-      //now parent closed any open image
-      if(Image.initialized) {
-        if(rs) {		//make sure have a created record
-          close_image(rs, segment, segArray, &Image, fsn_prev);
-          printk("*Closed image on restart FSN=%u\n", fsn_prev);
+        else {
+          printk("*No image to close on timeout\n");
         }
+        printk("alrm_sig: drms_server_end_transaction()\n");
+        drms_server_end_transaction(drms_env, 0 , 0); //commit
+        printk("alrm_sig: drms_server_begin_transaction()\n");
+        drms_server_begin_transaction(drms_env); //start another cycle
+        fsn_prev = 0;	//make sure don't try to flush this image
+        imagecnt = 0;	//and start a new transaction interval
       }
-      else {
-        printk("*No image to close on restart\n");
-      }
-      printk("restart: drms_server_end_transaction()\n");
-      drms_server_end_transaction(drms_env, 0 , 0); //commit
-      wflg = 0;		//exit DoIt
-      continue;
+      ignoresigalrmflg = 0;
     }
-**************************************************************************/
 
-//    if(file_processed_count >= RESTART_CNT) {	//restart this ingest
-//      //now parent closed any open image
-//      if(Image.initialized) {
-//        if(rs) {		//make sure have a created record
-//          close_image(rs, segment, segArray, &Image, fsn_prev);
-//          printk("*Closed image on restart FSN=%u\n", fsn_prev);
-//        }
-//      }
-//      else {
-//        printk("*No image to close on restart\n");
-//      }
-//      /***************************************************************
-//      printk("restart: drms_server_end_transaction()\n");
-//      drms_server_end_transaction(drms_env, 0 , 0); //commit left overs
-//      **********************************************************/
-//      sprintf(callcmd, "ingest_lev0 -r %s %s %s &", argvc,argindir,arglogfile);
-//      if(system(callcmd)) {
-//        printk("**ERROR on: %s\n", callcmd);
-//      }
-//      wflg = 0;		//leave DoIt()
-//      continue;
-//    }
-//!!!TEMP test
     if(stat(stopfile, &stbuf) == 0) {
       printk("Found file: %s. Terminate.\n", stopfile);
       //now close any open image
@@ -1386,6 +1332,9 @@ int DoIt(void)
       else {
         printk("*No image to close on exit\n");
       }
+      //No need to commit here. the exit will do it
+      //printk("restart: drms_server_end_transaction()\n"); 
+      //drms_server_end_transaction(drms_env, 0 , 0); //commit
       sprintf(callcmd, "/bin/rm -f %s", stopfile);
       system(callcmd);
       sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exit", pchan);
@@ -1393,15 +1342,14 @@ int DoIt(void)
       wflg = 0; //leave DoIt()
       continue;
     }
-    //detect if exit. NOTE: do_ingest() can take long time if lots of files
-    //!!NOTE: it may be the DRMS server that gets the ^C
-    //man signal say undefined for multi-threaded process
-    if(sigtermflg) {
-      wflg = 0; //leave DoIt()
-      continue;
-    }
     sleep(2);
   }
+  /*************!!TBD noop this out for now
+  td_destroyalarm(&talarm);
+  //pthread_mutex_destroy(&mutex);  //can't destroy here. used in shandler()
+  pthread_mutex_destroy(&mutex);  //if don't detroy here can end up w/2 ingest_lev0
+				  //on a restart by doingestlev0.pl ??
+  ***************************************************/
   return(0);
 }
 
