@@ -147,13 +147,13 @@ sub TimeLagMonitor
 	    }
 	    else # fail getting time_string 
 	    {
-		$time_message .= "             ";
+		$time_message .= "      [     ]*";
 
 		$fail_record{$series_name} ++;
 
 		if($fail_record{$series_name} > $get_time_fail_limit) # multiple fails in a row, send alert
 		{
-		    $error_message = "[fail:$fail_record{$series_name}] ";
+		    $error_message = "[miss:$fail_record{$series_name}] ";
 		}
 	    }
 	}
@@ -166,7 +166,7 @@ sub TimeLagMonitor
 	{
 	    if(GetMinuteDiff($last_alert_time_string, $current_time_string) > $alert_interval)
             {
-		Alert("time_lag_monitor => ".$error_message. $time_message);
+		Alert("time_lag_monitor (@ds_names) => ".$error_message. $time_message);
 		$last_alert_time_string = $current_time_string;
 	    }
 	}
