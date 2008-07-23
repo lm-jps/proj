@@ -233,6 +233,16 @@ int imgdecode(unsigned short *impdu, IMG *img)
     img->last_pix_err = 0;
     img->first_packet_time = UINT64_MAX;
 
+    for (i = 0; i < MAXPIXELS; ++i)
+	img->dat[i] = BLANK;
+
+    for (i = 0; i < MAXHIST; ++i)
+	img->hist[i] = 0;
+
+    img->initialized = 1;
+
+___DECODE_START___:
+
     //
     // read inverse lookup table
     //
@@ -301,16 +311,6 @@ int imgdecode(unsigned short *impdu, IMG *img)
 	img->totalvals = cropt[img->cropid].totalpix;
     } else
 	img->totalvals = MAXPIXELS;
-
-    for (i = 0; i < MAXPIXELS; ++i)
-	img->dat[i] = BLANK;
-
-    for (i = 0; i < MAXHIST; ++i)
-	img->hist[i] = 0;
-
-    img->initialized = 1;
-
-___DECODE_START___:
 
     //
     // update first_packet_time if necessary
