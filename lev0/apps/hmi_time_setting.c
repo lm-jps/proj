@@ -183,12 +183,13 @@ if (flg) {	/* AIA */
   else drms_setkey_string(rec, "INSTRUME", "HMI_FRONT2");
 }
   
-sprint_time_ISO(date_obs, t_obs - exptime/2.0);
+//sprint_time_ISO(date_obs, t_obs - exptime/2.0);
 TIME date__obs = t_obs - exptime/2.0;
 TIME mjd = date__obs - MJD_epoch;
 double  mjd_day = floor(mjd / 86400.0);
 double  mjd_time = mjd - 86400.0 * mjd_day;
 sprint_time(datestr, CURRENT_SYSTEM_TIME, "ISO", 0);
+sprint_time(date_obs, date__obs, "ISO", 0);
   
 drms_setkey_double(rec, "T_OBS", t_obs);
 drms_setkey_double(rec, "EXPTIME", exptime);
