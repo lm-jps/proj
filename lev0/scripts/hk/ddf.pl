@@ -59,7 +59,7 @@ $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
 $ENV{'MAILTO'}="";
 
 #(3)set debug mode
-$dflg=$ENV{'DF_GDFDRMS_DEBUG'}=1;
+$dflg=$ENV{'DF_GDFDRMS_DEBUG'}=0;
 
 #(4)setup log file for with name based on input argument(hmi,aia,sdo), 
 $logfile=$ENV{'HK_DF_LOGFILE'}="$script_dir/log-$dspnm-ddf";
