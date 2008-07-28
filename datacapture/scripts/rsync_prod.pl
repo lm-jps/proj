@@ -37,7 +37,7 @@ if($#ARGV == -1) {
 else {
   $logfile = $ARGV[0];
 }
-print "logfile = $logfile\n";
+#print "logfile = $logfile\n";
 
 #set up for ssh w/o password
 #$cmd = "source /home/production/cvs/JSOC/proj/datacapture/scripts/ssh_rsync_prod.source";
