@@ -1,9 +1,9 @@
 #=====General Series Information=====
-Seriesname:            aia.lev0c
+Seriesname:            aia.lev0d
 Author:                 "production"
 Owner:                  jim
 Unitsize:               1
-Archive:                1
+Archive:                0
 #Archive:                0
 Retention:              60
 Tapegroup:              3
@@ -15,7 +15,7 @@ Description:            AIA Level0 data for ingest_lev0
 Keyword:ORIGIN,     string, constant, record,"SDO/JSOC-SDP",        %s, "none", "ORIGIN Location where file made"
 Keyword:DATE,       string, variable, record,"DRMS_MISSING_VALUE",  %s,  "UTC", "Date_time of processing"
 Keyword:DATE__OBS,  string, variable, record,"DRMS_MISSING_VALUE",  %s,  "UTC", "[DATE-OBS] Date when observation started"
-Keyword:T_OBS,        time, variable, record,"DRMS_MISSING_VALUE",   2,    TAI, "Observation time"
+Keyword:T_OBS,        time, variable, record,"DRMS_MISSING_VALUE",   2,    UTC, "Observation time"
 Keyword:EXPTIME,    double, variable, record,"DRMS_MISSING_VALUE", %lf,  "sec", "Exposure duration: mean shutter open time"
 Keyword:TIME,       double, variable, record,"DRMS_MISSING_VALUE", %lf,  "sec", "Time of observation: seconds within a day"
 Keyword:MJD,        double, variable, record,"DRMS_MISSING_VALUE", %lf,  "day", "Date of observation: modified julian day"
@@ -25,7 +25,7 @@ Keyword:CAMERA,        int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", 
 Keyword:WAVELNTH,    float, variable, record,"DRMS_MISSING_VALUE",  %f,   "nm", "Wavelength"
 #==============  (1) Image Configuration Keywords
 Keyword:IMGAPID,       int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "Image Application ID"
-Keyword:IMGFPT,       time, variable, record,"DRMS_MISSING_VALUE",   2,    TAI, "FIRST_PACKET_TIME"
+Keyword:IMGFPT,       time, variable, record,"DRMS_MISSING_VALUE",   2,    UTC, "FIRST_PACKET_TIME"
 Keyword:BITSELID,      int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "Bit select ID, r"
 Keyword:COMPID,        int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "Compression ID; n,k"
 Keyword:CROPID,        int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "Crop table ID"
@@ -50,7 +50,7 @@ Keyword:DATASKEW,   double, variable, record,"DRMS_MISSING_VALUE", %lf, "none", 
 Keyword:DATAKURT,   double, variable, record,"DRMS_MISSING_VALUE", %lf, "none", "Kurtosis of all pixels"
 #==============  (3) ISP Keywords that match for apid 529 jsd files with version number 6 and 10
 Keyword:ISPSNAME,   string, variable, record,"DRMS_MISSING_VALUE",  %s, "none", "ISP SERIES NAME"
-Keyword:ISPPKTIM,     time, variable, record,"DRMS_MISSING_VALUE",   2,    TAI, "PACKET_TIME, Prime key value for the ISP record"
+Keyword:ISPPKTIM,     time, variable, record,"DRMS_MISSING_VALUE",   2,    UTC, "PACKET_TIME, Prime key value for the ISP record"
 Keyword:ISPPKTVN,   string, variable, record,"DRMS_MISSING_VALUE",  %s, "none", "PACKET_VERSION_NUMBER"
 Keyword:AIVNMST,       int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_VER_NUM_IMAGE_STATUS"
 Keyword:AIAECTI,       int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "AIA_IMG_AEC_TABLE_ID"
@@ -110,5 +110,7 @@ Keyword:AGT3SVZ,     short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", 
 Keyword:AGT4SVY,     short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_GT4_SUNVECTOR_Y"
 Keyword:AGT4SVZ,     short, variable, record,"DRMS_MISSING_VALUE", %hd, "none", "AIA_GT4_SUNVECTOR_Z"
 #==============Segments===============
-Data: image, vardim, short, 2, 4096, 4096, dn, fits, "lev0 data fits file with headers"
+Data: image, vardim, short, 2, 4096, 4096, dn, fits, "lev0 data fits file"
+Data: image_sm, vardim, short, 2, 512, 512, dn, fits, "lev0 data small fits file with headers"
+Data: image_png, vardim, short, 2, 256, 256, dn, generic, "lev0 data sm image"
 
