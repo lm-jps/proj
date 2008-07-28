@@ -44,6 +44,7 @@
 #include "add_small_image.c"
 #include "mypng.h"
 #include "tdsignals.h"
+#include "quallev0.h"
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
@@ -63,10 +64,10 @@
 //#define LEV0SERIESNAMEAIA "aia.lev0"
 //#define LEV0SERIESNAMEAIA "aia.lev0a"
 //#define TLMSERIESNAMEAIA "aia.tlm"
-#define LEV0SERIESNAMEAIA "aia.lev0c"
-#define TLMSERIESNAMEAIA "aia.tlmc"
-#define LEV0SERIESNAMEHMI "hmi.lev0c"
-#define TLMSERIESNAMEHMI "hmi.tlmc"
+#define LEV0SERIESNAMEAIA "aia.lev0d"
+#define TLMSERIESNAMEAIA "aia.tlmd"
+#define LEV0SERIESNAMEHMI "hmi.lev0d"
+#define TLMSERIESNAMEHMI "hmi.tlmd"
 
 //Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
 //setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
@@ -309,12 +310,89 @@ int h0log(const char *fmt, ...)
   return(0);
 }
 
+//Set the QUALLEV0 keyword
+void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn) 
+{
+  char *hwltnset;
+  char *hseqerr;
+  int status, hsqfgsn;
+  uint32_t missvals, datav;
+  uint32_t hcf1encd, hcf2encd, hps1encd, hps2encd, hps3encd; 
+  uint32_t hwt1encd, hwt2encd, hwt3encd, hwt4encd;
+  uint32_t hcf1pos, hcf2pos, hpl1pos, hpl2pos, hpl3pos, hwl1pos, hwl2pos;
+  uint32_t hwl3pos, hwl4pos;
+  uint32_t quallev0 = 0;
+
+  if(img->overflow) quallev0 = quallev0 | Q_OVFL;
+  if(img->headerr) quallev0 = quallev0 | Q_HDRERR;
+  if(img->nerrors) quallev0 = quallev0 | Q_CMPERR;
+  if(img->last_pix_err) quallev0 = quallev0 | Q_LPXERR;
+  hsqfgsn = drms_getkey_int(rs, "HSQFGSN", &status);
+  if(fsn != hsqfgsn) quallev0 = quallev0 | Q_NOISP;
+  missvals = img->totalvals - img->datavals;
+  if(missvals > 0) quallev0 = quallev0 | Q_MISS0;
+  datav = img->datavals;
+  if(missvals > (uint32_t)(datav * 0.01)) quallev0 = quallev0 | Q_MISS1;
+  if(missvals > (uint32_t)(datav * 0.05)) quallev0 = quallev0 | Q_MISS2;
+  if(missvals > (uint32_t)(datav * 0.25)) quallev0 = quallev0 | Q_MISS3;
+  if(hseqerr = drms_getkey_string(rs, "HSEQERR", &status)) {
+    if(strcmp(hseqerr, "SUCCESS")) quallev0 = quallev0 | Q_SEQERR;
+    free(hseqerr);
+  }
+  if(hwltnset = drms_getkey_string(rs, "HWLTNSET", &status)) {
+    if(!strcmp(hwltnset, "OPEN")) quallev0 = quallev0 | Q_ISSOPEN;
+    free(hwltnset);
+  }
+  hcf1encd = drms_getkey_int(rs, "HCF1ENCD", &status);
+  hcf1pos = drms_getkey_int(rs, "HCF1POS", &status);
+  if(!((hcf1encd == hcf1pos) || (hcf1encd == hcf1pos+1) || (hcf1encd == hcf1pos-1)))
+    quallev0 = quallev0 | Q_HCF1ENCD;
+  hcf2encd = drms_getkey_int(rs, "HCF2ENCD", &status);
+  hcf2pos = drms_getkey_int(rs, "HCF2POS", &status);
+  if(!((hcf2encd == hcf2pos) || (hcf2encd == hcf2pos+1) || (hcf2encd == hcf2pos-1)))
+    quallev0 = quallev0 | Q_HCF2ENCD;
+  hps1encd = drms_getkey_int(rs, "HPS1ENCD", &status);
+  hpl1pos = drms_getkey_int(rs, "HPL1POS", &status);
+  if(!((hps1encd == hpl1pos) || (hps1encd == hpl1pos+1) || (hps1encd == hpl1pos-1)))
+    quallev0 = quallev0 | Q_HPS1ENCD;
+  hps2encd = drms_getkey_int(rs, "HPS2ENCD", &status);
+  hpl2pos = drms_getkey_int(rs, "HPL2POS", &status);
+  if(!((hps2encd == hpl2pos) || (hps2encd == hpl2pos+1) || (hps2encd == hpl2pos-1)))
+    quallev0 = quallev0 | Q_HPS2ENCD;
+  hps3encd = drms_getkey_int(rs, "HPS3ENCD", &status);
+  hpl3pos = drms_getkey_int(rs, "HPL3POS", &status);
+  if(!((hps3encd == hpl3pos) || (hps3encd == hpl3pos+1) || (hps3encd == hpl3pos-1)))
+    quallev0 = quallev0 | Q_HPS3ENCD;
+  hwt1encd = drms_getkey_int(rs, "HWT1ENCD", &status);
+  hwl1pos = drms_getkey_int(rs, "HWL1POS", &status);
+  if(!((hwt1encd == hwl1pos) || (hwt1encd == hwl1pos+1) || (hwt1encd == hwl1pos-1)))
+    quallev0 = quallev0 | Q_HWT1ENCD;
+  hwt2encd = drms_getkey_int(rs, "HWT2ENCD", &status);
+  hwl2pos = drms_getkey_int(rs, "HWL2POS", &status);
+  if(!((hwt2encd == hwl2pos) || (hwt2encd == hwl2pos+1) || (hwt2encd == hwl2pos-1)))
+    quallev0 = quallev0 | Q_HWT2ENCD;
+  hwt2encd = drms_getkey_int(rs, "HWT2ENCD", &status);
+  hwl2pos = drms_getkey_int(rs, "HWL2POS", &status);
+  if(!((hwt2encd == hwl2pos) || (hwt2encd == hwl2pos+1) || (hwt2encd == hwl2pos-1)))
+    quallev0 = quallev0 | Q_HWT2ENCD;
+  hwt3encd = drms_getkey_int(rs, "HWT3ENCD", &status);
+  hwl3pos = drms_getkey_int(rs, "HWL3POS", &status);
+  if(!((hwt3encd == hwl3pos) || (hwt3encd == hwl3pos+1) || (hwt3encd == hwl3pos-1)))
+    quallev0 = quallev0 | Q_HWT3ENCD;
+  hwt4encd = drms_getkey_int(rs, "HWT4ENCD", &status);
+  hwl4pos = drms_getkey_int(rs, "HWL4POS", &status);
+  if(!((hwt4encd == hwl4pos) || (hwt4encd == hwl4pos+1) || (hwt4encd == hwl4pos-1)))
+    quallev0 = quallev0 | Q_HWT4ENCD;
+  drms_setkey_int(rs, "QUALLEV0", quallev0);
+}
+
 // Close out an image.
 void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 		IMG *img, int fsn)
 {
   STAT stat;
   int status, n, k;
+  uint32_t missvals;
   char tlmdsname[128];
 
   printk("*Closing image for fsn = %u\n", fsn);
@@ -359,13 +437,16 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "EOIERROR", img->last_pix_err);
   drms_setkey_int(rs, "HEADRERR", img->headerr);
   drms_setkey_int(rs, "OVERFLOW", img->overflow);
-  drms_setkey_int(rs, "MISSVALS", img->totalvals - img->datavals);
+  missvals = img->totalvals - img->datavals;
+  drms_setkey_int(rs, "MISSVALS", missvals);
   snprintf(tlmdsname, 128, "%s[%s]", tlmseriesname, tlmnamekeyfirst);
   drms_setkey_string(rs, "TLMDSNAM", tlmdsname);
   int pts = img->first_packet_time >> 16;
   int ptss = img->first_packet_time & 0xffff;
   TIME fpt = SDO_to_DRMS_time(pts, ptss);
   drms_setkey_double(rs, "IMGFPT", fpt);
+  do_quallev0(rs, img, fsn);		//set the QUALLEV0 keyword
+
   status = drms_segment_write(seg, array, 0);
   if (status) {
     printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
