@@ -47,7 +47,7 @@ my $help                    = 0;
 
 
 
-TimeLagMonitor(@ds_names); # main loop.
+TimeLagMonitor(); # main loop.
 
 
 exit;
@@ -65,7 +65,7 @@ exit;
 #
 
 #-------------------------------------------------------------------------------------------------
-# TimeLagMonitor(@ds_names) 
+# TimeLagMonitor() 
 #
 # This is the MAIN LOOP, runnning until Ctrl-C.
 # Given a list of ds_names, this script monitors the time_lag of each series name.
@@ -76,7 +76,6 @@ exit;
 sub TimeLagMonitor
 {
 
-    my (@ds_names) = @_;
     my ($series_name, $time_string, $current_time_string, $minutes, $time_lag_hours, $time_lag_minutes);
     my ($error_message, $time_message, $check_interval_in_seconds);
     my (%fail_record); # keep track how many get time fails for each series
@@ -153,7 +152,7 @@ sub TimeLagMonitor
 
 		if($fail_record{$series_name} > $get_time_fail_limit) # multiple fails in a row, send alert
 		{
-		    $error_message = "[miss:$fail_record{$series_name}] ";
+		    $error_message = "[absent:$fail_record{$series_name}] ";
 		}
 	    }
 	}
