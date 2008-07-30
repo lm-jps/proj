@@ -1376,7 +1376,7 @@ int DoIt(void)
     do_ingest();                // loop to get files from the input dir 
     if(sigalrmflg) {		// process an alarm timout for no data in
       sigalrmflg = 0;
-      td_destroyalarm(&talarm);
+      td_destroyalarm(&talarm, &mutex);
       gettimeofday(&tv0, NULL);
       if (td_createalarm(ALRMSEC, shandler, &mutex, &talarm)) { 
         pthread_mutex_destroy(&mutex);
