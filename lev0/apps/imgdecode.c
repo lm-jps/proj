@@ -248,7 +248,12 @@ ___DECODE_START___:
     // read inverse lookup table
     //
     if (img->luid && !lut[img->luid]) {
-	snprintf(fname, 64, TABLE_DIR "/lu/ilu%u", img->luid);
+	if (isAIA(img->apid))
+	    snprintf(fname, 64, TABLE_DIR "/lu/aia/ilu%u", img->luid);
+	else if (isHMI(img->apid))
+	    snprintf(fname, 64, TABLE_DIR "/lu/hmi/ilu%u", img->luid);
+	else
+	    return IMGDECODE_BAD_APID;
 	fp = fopen(fname, "r");
 	if (!fp) 
 	    return IMGDECODE_NO_LOOKUP_TABLE;
@@ -274,7 +279,12 @@ ___DECODE_START___:
     if (cropt[img->cropid].totalpix)
 	img->totalvals = cropt[img->cropid].totalpix;
     else if (img->cropid) {
-	snprintf(fname, 64, TABLE_DIR "/crop/crop%u", img->cropid);
+	if (isAIA(img->apid))
+	    snprintf(fname, 64, TABLE_DIR "/crop/aia/crop%u", img->cropid);
+	else if (isHMI(img->apid))
+	    snprintf(fname, 64, TABLE_DIR "/crop/hmi/crop%u", img->cropid);
+	else
+	    return IMGDECODE_BAD_APID;
 	fp = fopen(fname, "r");
 	if (!fp)
 	    return IMGDECODE_NO_CROP_TABLE;

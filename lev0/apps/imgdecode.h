@@ -23,6 +23,9 @@
 #define APID_AIA_SCIENCE_1 		500
 #define APID_AIA_SCIENCE_2 		510
 
+#define isAIA(x)	((x) == APID_AIA_SCIENCE_1 || (x) == APID_AIA_SCIENCE_2)
+#define isHMI(x)	((x) == APID_HMI_SCIENCE_1 || (x) == APID_HMI_SCIENCE_2)
+
 #define IMGDECODE_DECOMPRESS_ERROR	(-1)
 #define IMGDECODE_TOO_MANY_PIXELS	(-2)
 
