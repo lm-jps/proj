@@ -92,7 +92,7 @@ close DELFILE;
 #set MF file to blank work was completed
 open(DELFILE, ">$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_HSB_DELETE_FILE_LIST file: $!\n";
 close DELFILE;
-print LF "--->exiting script process_hsb_df.pl\n";
+print LF "--->exiting script getdf.pl\n";
 print LF `date`;
 close LF;
 ##############################################################################
