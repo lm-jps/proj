@@ -1,10 +1,4 @@
-##### On Production:ingest dayfile from HSB Created by Level 0 Software #######
-0 18 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ingest_dayfile.pl apidlist=/home/production/cvs/JSOC/proj/lev0/scripts/hk/df_apid_list_day_file_hsb dsnlist=/home/production/cvs/JSOC/proj/lev0/scripts/hk/df_apid_ds_list_for_hsb src=hsb   >/dev/null 2>&1
-##### On Production:ingest dayfile from MOC Product Server Day files #######
+##### ingest dayfile from MOC for production data series  #######
 0  22 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl >/dev/null 2>&1
-##### On Production:dfd.pl -decode dayfile  - for hmi egse dayfiles ########
-#0 19  * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ddf.pl hmi egsefm  >/dev/null 2>&1
-##### On Production:dfd.pl -decode dayfile  - for hmi hsb dayfiles ########
-#30 19 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/ddf.pl hmi hsb  >/dev/null 2>&1
- 
-
+##### ingest dayfile from HSB for production data series  #######
+0  21 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/getdf.pl hsb >/dev/null 2>&1
