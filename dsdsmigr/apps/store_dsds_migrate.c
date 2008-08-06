@@ -152,7 +152,7 @@ if (! *path)
   fprintf(stderr,"no path found\n");
   return(1);
   }
-sprintf(cmd, "cp -rp %s %s", in, path);
+sprintf(cmd, "cp -rp %s/* %s", in, path);
 status = system(cmd);
 if (status)
     {
