@@ -783,7 +783,7 @@ int DoIt(void)
     if (nsegs)
       {
 // remove this until bug fixed
-      // drms_stage_records(recordset, 0, 0);
+         drms_stage_records(recordset, 0, 0);
       }
 
     /* loop over set of selected records */
