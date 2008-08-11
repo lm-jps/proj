@@ -8,8 +8,6 @@
 #
 #rsync's dcs1:/home/production/cvs/JSOC to d00:/home/production/dcs1_backup
 #
-#NOTE!! were the backup is place is determined in 
-#/home/production/cvs/JSOC/proj/datacapture/scripts/ssh_rsync_prod.source
 #
 #Typically this is run as a user production cron job like so:
 #15 8-18 * * * /home/production/cvs/JSOC/proj/datacapture/scripts/rsync_prod.pl
@@ -37,7 +35,7 @@ if($#ARGV == -1) {
 else {
   $logfile = $ARGV[0];
 }
-print "logfile = $logfile\n";
+#print "logfile = $logfile\n";
 
 #set up for ssh w/o password
 #$cmd = "source /home/production/cvs/JSOC/proj/datacapture/scripts/ssh_rsync_prod.source";
