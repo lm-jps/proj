@@ -36,8 +36,8 @@ sub usage {
 
 #Return date in form e.g. 2008-05-29 11:38:18
 #where this value is $hrsprev+120sec previous to the current time.
-#NOTE: this format must match that in the jsoc_sums DB
-#Also sets $currdate to current time of form 2008-05-29_11:38:18
+#NOTE: this format must match that in the jsocdc DB
+#Also sets $currdate to current time of form 2008_135_12_10
 sub labeldate {
   local($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst,$date,$sec2,$min2,$hour2,$mday2,$year2);
   $secprev = ($hrsprev*3600) + 120;	#add extra 2 mins
@@ -56,7 +56,7 @@ sub labeldate {
   $mday2 = sprintf("%02d", $mday);
   $mon2 = sprintf("%02d", $mon+1);
   $year4 = sprintf("%04d", $year+1900);
-  $currdate = $year4."-".$mon2."-".$mday2."_".$hour2.":".$min2.":".$sec2;
+  $currdate = $year4."_".$yday."_".$hour2."_".$min2;
   return($date);
 }
 
