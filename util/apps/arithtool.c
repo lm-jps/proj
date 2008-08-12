@@ -359,7 +359,7 @@ static int CreateMatchingSegs(DRMSContainer_t *segs1, DRMSContainer_t *segs2, DR
 		    DRMS_Segment_t **newSeg = 
 		      (DRMS_Segment_t **)hcon_allocslot_lower(matchSet->items, currSeg->info->name);
 		    
-		    if (newSeg != NULL && *newSeg != NULL)
+		    if (newSeg != NULL)
 		    {
 			 *newSeg = currSeg;
 		    }
@@ -5852,6 +5852,12 @@ int DoIt(void)
 	       DRMSContainer_t segsToProc;
 	       DRMSContainer_t outSeriesPrimeKeys;
 	       DRMSContainer_t outSeriesSegs;
+
+               inSeriesPrimeKeys.items = NULL;
+               inSeriesSegs.items = NULL;
+               segsToProc.items = NULL;
+               outSeriesPrimeKeys.items = NULL;
+               outSeriesSegs.items = NULL;
 	       
 	       if (!error)
 	       {
