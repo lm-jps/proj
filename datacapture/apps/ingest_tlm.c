@@ -825,9 +825,11 @@ BYPASS:
 /* This is called from the main loop to check if any .parc files are in
  * the pipeline to soc dir ($DIRPIPE2SOC).
  * The .parc file is sent to /dds/pipe2soc/aia or /dds/pipe2soc/hmi
- * every time the pipeline back end system does a tapearc. (during development
- * the .parc files are sent by the cron job /home/jim/cvs/jsoc/scripts/pipefe_rm
- * on d00.)
+ * every time the pipeline back end system does a tapearc. 
+ * Actually by this cron job on d02:
+ *   0 0 * * * /home/production/cvs/JSOC/base/sums/scripts/build_parc_file.pl
+ * (during development the .parc files are sent by the cron job 
+ * /home/jim/cvs/jsoc/scripts/pipefe_rm on d00.)
  * The .parc file
  * has info on storage units that were archived successfully by the backend,
  * and so can be marked as such in the data capture sum_main table.
