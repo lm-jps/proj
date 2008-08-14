@@ -1382,7 +1382,7 @@ static int ValidatePKeysAndSeries(DRMS_Env_t *env,
 
 	    while((ki = (DRMS_KeywordInfo_t *)hiter_getnext(hit)) != NULL)
 	    {
-	       if (ki->per_segment)
+	       if ((ki->kwflags & kKeywordFlag_PerSegment) != 0)
 	       {
 		  hcon_insert(*segSpKeys, ki->name, &dummy);
 	       }

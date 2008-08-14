@@ -115,7 +115,16 @@ static DRMS_Keyword_t *AddKey(DRMS_Record_t *prototype,
       snprintf(tKey->info->format, DRMS_MAXFORMATLEN, "%s", format);
       snprintf(tKey->info->unit, DRMS_MAXUNITLEN, "%s", unit);
       tKey->info->recscope = scope;
-      tKey->info->isdrmsprime = isprime;
+
+      if (isprime)
+      {
+         drms_keyword_setintprime(tKey);
+      }
+      else
+      {
+         drms_keyword_unsetintprime(tKey);
+      }
+
       snprintf(tKey->info->description, DRMS_MAXCOMMENTLEN, "%s", desc);
 
       /* default value - missing */
