@@ -684,6 +684,7 @@ int DoIt(void)
     char *final_json;
     int status=0;
     int irec, nrecs;
+    int record_set_staged = 0;
     jroot = json_new_object();
     recinfo = json_new_array();
 
@@ -779,13 +780,6 @@ int DoIt(void)
       segdims[iseg] = val;
       }
 
-    /* if any segment info wanted, stage the records */
-    if (nsegs)
-      {
-// remove this until bug fixed
-         drms_stage_records(recordset, 0, 0);
-      }
-
     /* loop over set of selected records */
     for (irec = 0; irec < nrecs; irec++) 
       {
@@ -819,6 +813,13 @@ int DoIt(void)
 	  struct stat buf;
           char path[DRMS_MAXPATHLEN];
           char timebuf[100];
+          if (!record_set_staged)
+	    {
+            drms_stage_records(recordset, 0, 0);
+            record_set_staged = 1;
+//fprintf(stderr,"## jsoc_info time stage for rec=%d\n",irec,iseg);
+	    }
+//fprintf(stderr,"## jsoc_info time getdir for rec=%d\n",irec,iseg);
           drms_record_directory (rec, path, 0);
           stat(path, &buf);
           sprint_ut(timebuf, buf.st_mtime + UNIX_EPOCH);
@@ -882,6 +883,13 @@ int DoIt(void)
         char dims[100], dimval[20];
 
         // Get paths into segvals
+        if (!record_set_staged)
+	  {
+          drms_stage_records(recordset, 0, 0);
+          record_set_staged = 1;
+//fprintf(stderr,"## jsoc_info stage for rec=%d, seg=%d\n",irec,iseg);
+	  }
+//fprintf(stderr,"## jsoc_info getdir for rec=%d, seg=%d\n",irec,iseg);
         drms_record_directory (rec, path, 0);
         if (!*path)
 	  JSONDIE("Can not retrieve record path, SUMS may be offline");
