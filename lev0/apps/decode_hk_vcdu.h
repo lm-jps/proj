@@ -1,6 +1,7 @@
 #ifndef __DECODE_HK_VCDU_H
 #define __DECODE_HK_VCDU_H
 
+#include "drms_statuscodes.h"
 #include "packets.h"
 
 /* Defines for known HMI apids for packets */
@@ -61,6 +62,7 @@
 #define ERROR_HK_FAILED_OPEN_DRMS_RECORD  (-26)
 #define ERROR_HK_FAILED_GETTING_FSN       (-27)
 #define ERROR_HK_FAILED_OPEN_DAYFILE      (-28)
+#define ERROR_HK_FAILED_UNKNOWNSERIES     (DRMS_ERROR_UNKNOWNSERIES)   
 
 /*  Overall decode_next_hk_vcdu status after saving 
     packet data to files and decode of hk packets for
