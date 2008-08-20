@@ -185,12 +185,17 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
       /* create record in drms */
       rs = drms_create_records( drms_env, 1, query, DRMS_PERMANENT, &status);
-      if (!rs)
+      if (status < 0)
       {
-        printkerr("ERROR at %s, line %d: Could create record for data series "
-                  "<%s>. Because the data series needs to be created. "
-                  "Skipping write to drms of this data series.\n",
-                  __FILE__ , __LINE__ , query);
+        //Probably getting one of these error codes.
+        //DRMS_ERROR_UNKNOWNRECORD    (-10004)
+        //DRMS_ERROR_RECORDREADONLY   (-10015)
+        //DRMS_ERROR_BADRECORDCOUNT   (-10025)
+        printkerr("ERROR at %s, line %d: Could not create record for data "
+                  "series <%s> because of error code <%d>. Check code in "
+                  "drms_statuscodes.h file. Skipping write to drms of "
+                  "packet data to record in drms data series.\n",
+                  __FILE__ , __LINE__ , query,status);
        ccsds= ccsds->next;
        continue;
       }
@@ -427,9 +432,21 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
       if (status)
       {
         /* compile in by adding -DDEBUG_WRITE_HK_TO_DRMS in makefile */
-        printkerr("DEBUG:Warning at %s, line %d: Cannot setkey in drms record."
-                  " For keyword <%s>\n",
-                 __FILE__,__LINE__, keyname);
+        if (rec_alreadycreated_flag)
+        {
+          printkerr("DEBUG Messsage at %s, line %d: Warning-cannot setkey "
+                    "in drms record when writing to <Level 0 series>. "
+                    "Return status from drms_setkey was <%d>. "
+                    "For keyword <%s>\n", __FILE__,__LINE__, status, keyname);
+        }
+        else
+        {
+          printkerr("DEBUG Messsage at %s, line %d: Warning-cannot setkey "
+                    "in drms record when writing to <Level 0 By APID series>. "
+                    "Return status from drms_setkey was <%d>. "
+                    "For keyword <%s>\n", __FILE__,__LINE__, status, keyname);
+
+        }
       }
 #else
 #endif
