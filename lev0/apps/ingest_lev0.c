@@ -64,6 +64,7 @@
 //#define LEV0SERIESNAMEAIA "aia.lev0"
 //#define LEV0SERIESNAMEAIA "aia.lev0a"
 //#define TLMSERIESNAMEAIA "aia.tlm"
+
 #define LEV0SERIESNAMEAIA "aia.lev0d"
 #define TLMSERIESNAMEAIA "aia.tlmd"
 #define LEV0SERIESNAMEHMI "hmi.lev0d"
@@ -79,7 +80,8 @@
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 8192		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
-#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
+//#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
+#define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
 #define TESTAPPID 0x199		//appid of test pattern packet
 #define TESTVALUE 0xc0b		//first value in test pattern packet
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
@@ -106,7 +108,7 @@ ModuleArgs_t module_args[] = {
 
 CmdParams_t cmdparams;
 // Module name presented to DRMS. 
-char *module_name = "xingest_lev0";
+char *module_name = "ingest_lev0";
 
 typedef enum
 {
@@ -353,35 +355,31 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
     quallev0 = quallev0 | Q_HCF2ENCD;
   hps1encd = drms_getkey_int(rs, "HPS1ENCD", &status);
   hpl1pos = drms_getkey_int(rs, "HPL1POS", &status);
-  if(!((hps1encd == hpl1pos) || (hps1encd == hpl1pos+1) || (hps1encd == hpl1pos-1)))
+  if(!((hpl1pos == hps1encd) || (hpl1pos == (hps1encd+1) % 240)))
     quallev0 = quallev0 | Q_HPS1ENCD;
   hps2encd = drms_getkey_int(rs, "HPS2ENCD", &status);
   hpl2pos = drms_getkey_int(rs, "HPL2POS", &status);
-  if(!((hps2encd == hpl2pos) || (hps2encd == hpl2pos+1) || (hps2encd == hpl2pos-1)))
+  if(!((hpl2pos == hps2encd) || (hpl2pos == (hps2encd+1) % 240)))
     quallev0 = quallev0 | Q_HPS2ENCD;
   hps3encd = drms_getkey_int(rs, "HPS3ENCD", &status);
   hpl3pos = drms_getkey_int(rs, "HPL3POS", &status);
-  if(!((hps3encd == hpl3pos) || (hps3encd == hpl3pos+1) || (hps3encd == hpl3pos-1)))
+  if(!((hpl3pos == hps3encd) || (hpl3pos == (hps3encd+1) % 240)))
     quallev0 = quallev0 | Q_HPS3ENCD;
   hwt1encd = drms_getkey_int(rs, "HWT1ENCD", &status);
   hwl1pos = drms_getkey_int(rs, "HWL1POS", &status);
-  if(!((hwt1encd == hwl1pos) || (hwt1encd == hwl1pos+1) || (hwt1encd == hwl1pos-1)))
+  if(!((hwl1pos == hwt1encd) || (hwl1pos == (hwt1encd+1) % 240)))
     quallev0 = quallev0 | Q_HWT1ENCD;
   hwt2encd = drms_getkey_int(rs, "HWT2ENCD", &status);
   hwl2pos = drms_getkey_int(rs, "HWL2POS", &status);
-  if(!((hwt2encd == hwl2pos) || (hwt2encd == hwl2pos+1) || (hwt2encd == hwl2pos-1)))
-    quallev0 = quallev0 | Q_HWT2ENCD;
-  hwt2encd = drms_getkey_int(rs, "HWT2ENCD", &status);
-  hwl2pos = drms_getkey_int(rs, "HWL2POS", &status);
-  if(!((hwt2encd == hwl2pos) || (hwt2encd == hwl2pos+1) || (hwt2encd == hwl2pos-1)))
+  if(!((hwl2pos == hwt2encd) || (hwl2pos == (hwt2encd+1) % 240)))
     quallev0 = quallev0 | Q_HWT2ENCD;
   hwt3encd = drms_getkey_int(rs, "HWT3ENCD", &status);
   hwl3pos = drms_getkey_int(rs, "HWL3POS", &status);
-  if(!((hwt3encd == hwl3pos) || (hwt3encd == hwl3pos+1) || (hwt3encd == hwl3pos-1)))
+  if(!((hwl3pos == hwt3encd) || (hwl3pos == (hwt3encd+1) % 240)))
     quallev0 = quallev0 | Q_HWT3ENCD;
   hwt4encd = drms_getkey_int(rs, "HWT4ENCD", &status);
   hwl4pos = drms_getkey_int(rs, "HWL4POS", &status);
-  if(!((hwt4encd == hwl4pos) || (hwt4encd == hwl4pos+1) || (hwt4encd == hwl4pos-1)))
+  if(!((hwl4pos == hwt4encd) || (hwl4pos == (hwt4encd+1) % 240)))
     quallev0 = quallev0 | Q_HWT4ENCD;
   drms_setkey_int(rs, "QUALLEV0", quallev0);
 }
@@ -1267,6 +1265,8 @@ void setup()
   }
   strcpy(pchan, vc);		// virtual channel primary 
   sprintf(stopfile, "/usr/local/logs/lev0/%s_stop", pchan);
+  sprintf(string, "/bin/rm -f %s", stopfile);	//remove any stop file
+  system(string);
   for(i=0; ; i++) {		// ck for valid and get redundant chan 
     if(!strcmp(p_r_chan_pairs[i].pchan, pchan)) {
       strcpy(rchan, p_r_chan_pairs[i].rchan);
@@ -1374,6 +1374,7 @@ int DoIt(void)
   setup();
   while(wflg) {
     do_ingest();                // loop to get files from the input dir 
+/************************NOOP this out for now********************************
     if(sigalrmflg) {		// process an alarm timout for no data in
       sigalrmflg = 0;
       td_destroyalarm(&talarm, &mutex);
@@ -1401,6 +1402,7 @@ int DoIt(void)
       }
       ignoresigalrmflg = 0;
     }
+*****************************************************************************/
 
     if(stat(stopfile, &stbuf) == 0) {
       printk("Found file: %s. Terminate.\n", stopfile);
