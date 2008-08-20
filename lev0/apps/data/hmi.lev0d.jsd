@@ -100,5 +100,5 @@ Keyword:HWL3POS,       int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", 
 Keyword:HWL4POS,       int, variable, record,"DRMS_MISSING_VALUE",  %d, "none", "HMI_FSW_WT4_CMDED_TARGET"
 #==============Segments===============
 Data: image, vardim, short, 2, 4096, 4096, dn, fits, "lev0 data fits file"
-Data: image_sm, vardim, short, 2, 512, 512, dn, fits, "lev0 data small fits file with headers"
-Data: image_png, vardim, short, 2, 256, 256, dn, generic, "lev0 data sm image"
+# Data: image_sm, vardim, short, 2, 512, 512, dn, fits, "lev0 data small fits file with headers"
+# Data: image_png, vardim, short, 2, 256, 256, dn, generic, "lev0 data sm image"
