@@ -20,7 +20,7 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
 int write_packet_to_dayfile(HK_Dayfile_Data_t **df_head); 
 int filter_out_non_isps(CCSDS_Packet_t **ptr);
 int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt);
-int get_status( int lev0_status[], int status_count);
+int get_status( int lz_status[], int status_count);
  
 /*********** extern function prototypes **************/
 extern int free_dayfile_data( HK_Dayfile_Data_t **df_head); 
@@ -288,8 +288,30 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
       lz_status[j++] = hk_status;
       break;
     }// switch
+#ifdef DEBUG_DECODE_HK_VCDU
+    printkerr("DEBUG Message at %s, line %d: Processing packet for apid <%d>."
+              "\n",__FILE__, __LINE__, ccsds.apid);
+#else
+#endif
     w += ccsds.length/2;
   } while ( ccsds.apid>0 && (int)(w-buffer) < PACKETWORDS);
+
+
+#ifdef DEBUG_DECODE_HK_VCDU
+  /* check level 0 processing status */
+  /*   O = Processing HK TIME packet      */
+  /*   1 = Processing HK Decoding         */
+  /*   2 = Processing Saving of packet to dayfile */
+  /*   3 = Processing end of VCDU         */
+  printkerr("DEBUG Message at %s, line %d: Level O by APID processing type"
+            " number when processing packets for above apids", __FILE__, __LINE__);
+  for (i=0; i < j ;i++)
+  {
+      printkerr(":%d:",lz_status[i]); 
+  }
+  printkerr("\n"); 
+#else
+#endif
 
   /* finished VCDU, now write saved dayfile packets to filesystem 
      and free dayfile structure. Currentily write out dayfile after each VCDU.
@@ -321,6 +343,7 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
       /* write Keywords to DRMS in Level 0 Data Series by APID */
       wd_status = write_hk_to_drms(record, hk_packets);
 
+      /* check wd_status value */
       if (wd_status == HK_SUCCESS_WROTE_TO_DRMS) 
       {
         /* wrote successfully to drms -now free CCSDS_Packet_t nodes */
@@ -344,20 +367,33 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
       {
         lev0_status= ERROR_HK_FAILED_OPEN_DRMS_RECORD;
       }
+      else if (wd_status == ERROR_HK_FAILED_UNKNOWNSERIES)
+      {
+        // the success of write of level 0 by APID data series should
+        // not effect setting of lev0_status which is returned to ingest_lev0  
+        printkerr("ERROR at %s, line %d: Return status code <%d> "
+                  "for write_hk_to_drms function. Unknown data series "
+                  "when writing to Level0 by APID series. Create Series.\n"
+                  , __FILE__, __LINE__, wd_status);
+      }
       else 
       {
-        printkerr("Warning at %s, line %d: Return status unexpected "
-                  "for write_hk_to_drms\n", __FILE__, __LINE__);
-        
+        printkerr("Warning at %s, line %d: Return status <%d> unexpected "
+                  "for write_hk_to_drms. Check status code in "
+                  "drms_statuscodes.h.\n", __FILE__, __LINE__, wd_status);
       }
   }/* if  time to write hk packets to DRMS */
 
+#ifdef DEBUG_DECODE_HK_VCDU
   if (get_status( lz_status, j) != 4) 
   { 
-    /*printf("OVERALL Status on saving packets,decoding packets  <%d> and writing to drms lev0 hk series <%d>\n", 
-            get_status( lz_status, j), lev0_status);
-    */
+      printkerr("DEBUG Message at %s, line %d: Overall hk by apid processing "
+                "status for saving packets, decoding packets <%d> and writing "
+                "to drms lev0 hk series <%d>\n", 
+                __FILE__, __LINE__, get_status( lz_status, j), lev0_status);
   }
+#else
+#endif
  
   /* determine structure to pass back to LEV0 top module -note only want ISPs */
   /* first should not free ccsds nodes if ISPs there */
