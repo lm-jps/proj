@@ -69,7 +69,6 @@ if(system($cmd3)) {
 
 while(1) {
   sleep 3600;		#run ingest_lev0 for this long
-  #sleep 1800;		#run ingest_lev0 for this long
   $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stop"; #tell ingest to stop
   `$cmd`;
   $cmd = "touch /usr/local/logs/lev0/@vcnames[1]_stop";
@@ -78,47 +77,41 @@ while(1) {
   `$cmd`;
   $cmd = "touch /usr/local/logs/lev0/@vcnames[3]_stop";
   `$cmd`;
-  $f0 = $f1 = $f2 = $f3 = 0;
   while(1) {
-    if(-e "/usr/local/logs/lev0/@vcnames[0]_exit") {	#wait for exit signal
+    $found = 0;
+    #wait until they're all stopped
+    @ps_prod = `ps -ef | grep ingest_lev0`;
+    while($_ = shift(@ps_prod)) {
+      if(/vc VC01/ || /vc VC02/ || /vc VC04/ || /vc VC05/) {
+        $found = 1;
+        sleep 1;
+        last;
+      }
+    }
+    if(!$found) { last; }
+  }
+  sleep(10);			#make sure previous commit to db is done
+
       `$rmcmd0`;
-      sleep(10);		#make sure previous commit to db is done
       $cmd = "ingest_lev0 -r vc=@vcnames[0] indir=/dds/socdc/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
-      $f0 = 1;
-    }
-    if(-e "/usr/local/logs/lev0/@vcnames[1]_exit") {	#wait for exit signal
       `$rmcmd1`;
-      sleep(10);		#make sure previous commit to db is done
       $cmd = "ingest_lev0 -r vc=@vcnames[1] indir=/dds/socdc/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
-      $f1 = 1;
-    }
-    if(-e "/usr/local/logs/lev0/@vcnames[2]_exit") {	#wait for exit signal
       `$rmcmd2`;
-      sleep(10);		#make sure previous commit to db is done
       $cmd = "ingest_lev0 -r vc=@vcnames[2] indir=/dds/socdc/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
-      $f2 = 1;
-    }
-    if(-e "/usr/local/logs/lev0/@vcnames[3]_exit") {	#wait for exit signal
       `$rmcmd3`;
-      sleep(10);		#make sure previous commit to db is done
       $cmd = "ingest_lev0 -r vc=@vcnames[3] indir=/dds/socdc/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
-      $f3 = 1;
-    }
-    if($f0 && $f1 && $f2 && $f3) { last; }
-    sleep 1;
-  }
 }
 
 #Return date in form for a label e.g. 1998.01.07_14:42:00
