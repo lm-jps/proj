@@ -163,18 +163,30 @@ char *drms_record_getlogdir(DRMS_Record_t *rec)
   char query[DRMS_MAXQUERYLEN];
   DB_Text_Result_t *qres;
 
-  sprintf(query,
-    "select online_loc, online_status from sum_main a, %s.drms_session b where a.ds_index = b.sunum and b.sessionid=%lld",
-    rec->sessionns, rec->sessionid);
-  if ((qres = drms_query_txt(drms_env->session, query)) && qres->num_rows > 0)
+  sprintf(query, "select sunum from %s.drms_session where sessionid=%lld", rec->sessionns, rec->sessionid);
+  if ((qres = drms_query_txt(drms_env->session, query)) && qres->num_rows>0)
     {
-    if (qres->field[0][1][0] == 'Y')
-      logpath = strdup(qres->field[0][0]);
+    if (qres->field[0][0][0] == '\0')
+      logpath = strdup("No log avaliable");
     else
-      logpath = strdup("Log Offline");
+      {
+      DRMS_StorageUnit_t *su;
+      int status, save_retention = drms_env->retention;
+      int retrieve = 0;
+      su = malloc(sizeof(DRMS_StorageUnit_t));
+      su->sunum = atoll(qres->field[0][0]);
+      drms_env->retention = DRMS_LOG_RETENTION;
+      status = drms_su_getsudir(drms_env, su, retrieve);
+      if (!status)
+        logpath = strdup(su->sudir);
+      else
+        logpath = strdup("Log offline");
+      free(su);
+      drms_env->retention = save_retention;
+      }
     }
   else
-    logpath = NULL;
+    logpath = strdup("Log query failed");
   db_free_text_result(qres);
   return logpath;
   }
