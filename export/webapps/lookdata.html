@@ -55,7 +55,7 @@ var ExportReadyOK = 0;
 
 function InitPage()
   {
-  $("SeriesFilter").value = "";
+  $("SeriesFilter").value = "^[^d][^s][^d][^s][^\.]";
   CleanSeriesSelect();
   ExportUserOK = 0;
   ExportNotifyOK = 0;
@@ -945,6 +945,8 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 <TD  style="width:20%;vertical-align:top;height:150pt">
 <H3>1. Find list of dataseries</H3>
 Enter the dataseries filter to search for seriesnames, or leave blank to select from all series.
+(A very bad idea now that we have more than 6000 seriesnames.)
+The default filter excludes namespace dsds.
 <P>
 <!-- <form id="SeriesForm" name="SeriesForm" method="GET"  action="" >
 -->
