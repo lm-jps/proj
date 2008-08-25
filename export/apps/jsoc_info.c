@@ -2,123 +2,62 @@
 #define DEBUG 0
 
 /*
- *  jsoc_info - prints keyword information and/or file path for given recordset
+ *  jsoc_info - prints information about given recordset
  *
- *  new version of original show_keys expanded to have more than just keyword info.
+ *  This is a cgi-bin compatible version of show_info
  *
- *  Bugs:
- *	Fails (with a segmentation fault) if there are no records in the
- *	  requested series
- *	Fails (with a segmentation fault) if called with -p flag or with a
- *	  value for file and there are no data segments associated with the
- *	  requested series
  */
 
 /**
 \defgroup jsoc_info jsoc_info
 
-Prints keyword, segment, and other information and/or file path for given recordset.
+Prints keyword, segment, and other information and/or file path for given recordset, designed for use as a cgi-bin program.
 
-\ref jsoc_info can list the keyword names and values, and the segment
-names and file names (full paths) for each record in a record set. It
-can also list the full path to the record direcory in SUMS, which
-contains the segment files. Exactly what information gets printed is
-controlled by command-line flags (see below). The \a -k flag controls
-the format of the output.  If it is set, then the output is in table
-format, with a header row showing the keyword names.  Otherwise,
-keyword name=value pairs are listed one per line.  If the \a -a flag
-is set, \ref jsoc_info lists the names of all series keywords, prime
-keywords, and segments, and exits.  Otherwise, it prints keyword and
-segment information as specified by the other flags and arguments.  If
-the \a -p flag is set and \a seglist is specified, then the full paths
-for the segment files will be displayed. If the \a -p flag is set, but
-\a seglist is not specified, then only the full path to the record's
-storage unit will be displayed.
-
-The number of records for which information will be printed must be
-specified, either by supplying a \a record_set string that selects a
-subset of records from a series, or by supplying the \a n=nrecords
-argument, which indicates the number of records.
+\ref jsoc_info can list various kinds of information about a JSOC data series
+or recordset.  Exactly what information gets printed is
+controlled by command-line arguments (see below). 
+The output format is in json formatted text (see e.g. www.json.org).
+The output structure is described at: http://jsoc.stanford.edu/jsocwiki/AjaxJsocConnect.
 
 \par Synopsis:
 
 \code
-jsoc_info [-ajklpqrsDRIVER_FLAGS] ds=<record_set> [n=<nrecords>] [key=<keylist>] [seg=<seglist>]
+jsoc_info [-hRz] op=<command> ds=<record_set> [[key=<keylist>] [seg=<seglist>]
+or
+jsoc_info QUERY_STRING=<url equivalent of command-line args above>
 \endcode
 
-\b Example:
-To show the storage-unit paths for a maximum of 10
-records:
-\code
-  jsoc_info -p ds=su_arta.TestStoreFile n=10
-\endcode
-
-\b Example:
-To show information, in non-table format, for all keywords,
-plus the segment named file_seg, for a maximum of 10 records:
-\code
-  jsoc_info ds=su_arta.TestStoreFile -akr n=10 seg=file_seg
-\endcode
-
-\par Flags:
-\c -a: Show all keyword names and values for each  record  specified
-by \a record_set  or \a nrecords.  \a -a takes precedence over \a
-keylist.  
-\par
-\c -j: List the names of all series keywords, prime keywords, and
-segments, and links in jsd format and exit. 
-\par
-\c -k: List keyword name=value pairs, one per line. Otherwise print
-all keyword values on a single line and print a header line containing
-the keyword names (table format).
-\par
-\c -l: List the names of all series keywords, prime keywords,  and
-segments, and exit. 
-\par
-\c -p: Include in the output the full storage-unit path for each record
-\par
-\c -q: Quiet - omit the header line listing keyword names if the -k
-flag is set
-\par
-\c -r:  Include the record number in the output
-\par
-\c -s:  Include statistics of series in the output
-
-\par Driver flags: 
-\ref jsoc_main
+\param command
+Specifies the operation to be performed by jsoc_info.  Commands are "series_struct" which
+is like "show_info -l"; "rs_summary" which is like "show_info -c"; and "rs_list" which
+mimics show_info normal mode returning keyword and segment information as specified in the
+keylist and seglist parameters.
 
 \param record_set
 A series name followed by an optional record-set specification (i.e.,
 \a seriesname[RecordSet_filter]). Causes selection of a subset of
-records in the series. This argument is required, and if no record-set
-filter is specified, then \a n=nrecords must be present.
-
-\param nrecords
-\a nrecords specifies the maximum number of records for which
-information is printed.  If \a nrecords < 0, \ref jsoc_info displays
-information for the last \a nrecords records in the record set. If
-\a nrecords > 0, \ref jsoc_info displays information for the first
-\a nrecords records in the record set. If \a record_set contains a
-record set filter, then \a nrecords can reduce the total number of
-records for which information is displayed.
+records in the series. This argument is required.
 
 \param keylist
 Comma-separated list of keyword names. For each keyword listed,
-information will be displayed.  \a keylist is ignored in the case that
-the \a -a flag is set.
+information will be displayed. Several special psuedo keyword names
+are accepted.  These are: **ALL** means show all keywords (see show_info -a);
+**NONE** means show no keywords; *recnum* means show the hidden keyword "recnum";
+*logdir* means show the path to the processing log directory; and *dir_mtime* instructs
+jsoc_info to show the last modify time of the record directory in SUMS.
+The results are presented in arrays named "name" and "value".
 
 \param seglist
 Comma-separated list of segment names. For each segment listed, the
-full path to the segment's file is displayed
-(if the \a -p flag is set) or the file name of the
-segment's file name is displayed (if the \a -p flag is unset).
-
-\bug
-The program will produce superflous and non-meaningful output if
-called with the \a -p flag and \a seglist is provided on the command line.
+segment's filename is displayed.  If the record directory is online the full
+path will be provided.  If the R=1 parameter is set a "keyword" with name "online" will
+be set to 1 if the record files are online, or 0 if off-line.
+The psuedo segment names **ALL** and **NONE** result in all or no segment information
+being returned.  Additional segment information, e.g. axis dimensions, is also provided
+via the key_array "dims".
 
 \sa
-retrieve_file drms_query describe_series
+show_info
 
 @{
 */
