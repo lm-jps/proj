@@ -44,6 +44,8 @@
 #define kMaxSegs 1024
 #define kMaxQuery 2048
 #define kOutSeriesDesc "Output series for arithTool calculation."
+#define kInSliceLower "sl"
+#define kInSliceUpper "su"
 
 #define TESTER 0
 
@@ -70,6 +72,8 @@ ModuleArgs_t module_args[] =
 {
   {ARG_FLAG, "h", "0", "help - print usage info"},
   {ARG_STRING, kRecSetIn, "", "A set of records with segments upon which to operate."},
+  {ARG_INTS, kInSliceLower, "-1", "Bottom-left corner of slice (-1 means no slicing)"},
+  {ARG_INTS, kInSliceUpper, "-1", "Upper-right corner of slice (-1 means no slicing)"},
   {ARG_STRING, kWithRecSet, kNotSpecified, "For binary operations, the second operand."},
   {ARG_STRING, kSeriesOut, kNotSpecified, "Name of series in which to save extracted data."},
   {ARG_STRING, kSegList, kNotSpecified, "Comma-separated list of segments on which to operate."},
@@ -5227,7 +5231,7 @@ int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 
 static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 		     DRMSContainer_t *segsToProc, 
-		     char *inSeriesQuery, 
+		     char *inSeriesQuery, int *slicelower, int *sliceupper,
 		     char *seriesOut, double bzero, double bscale)
 {
      int error = 0;
@@ -5281,7 +5285,18 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 	       XASSERT(inSeg != NULL);
 	       if (inSeg != NULL)
 	       {
+                  if (slicelower && sliceupper)
+                  {
+                     inSegArray = drms_segment_readslice(inSeg, 
+                                                         dtype, 
+                                                         slicelower,
+                                                         sliceupper,
+                                                         &status);
+                  }
+                  else
+                  {
 		    inSegArray = drms_segment_read(inSeg, dtype, &status);
+                  }
 
 		    if (dtype == DRMS_TYPE_RAW)
 		    {
@@ -5527,8 +5542,8 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 			       }
 
 			       DRMS_Array_t *segArray = drms_array_create(actualtype,
-									  inseg->info->naxis, 
-									  inseg->axis, 
+									  outseg->info->naxis, 
+									  outseg->axis, 
 									  pOut,
 									  &status);
 
@@ -5700,6 +5715,23 @@ int DoIt(void)
 	  char withSeriesName[DRMS_MAXSERIESNAMELEN];
 
 	  char *recSetIn = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
+          int *slicelower = NULL;
+          int *sliceupper = NULL;
+
+          int slicedim = cmdparams_get_intarr(&cmdparams, kInSliceLower, &slicelower, NULL);
+          if (cmdparams_get_intarr(&cmdparams, kInSliceUpper, &sliceupper, NULL) != slicedim)
+          {
+             error = 1;
+             fprintf(stderr, "Slice dimension mismatch.\n");
+          }
+
+          if (slicedim > 0 && (slicelower[0] == -1 || sliceupper[0] == -1))
+          {
+             slicedim = 0;
+             slicelower = NULL;
+             sliceupper = NULL;
+          }
+
 	  char *withRecSet = cmdparams_get_str(&cmdparams, kWithRecSet, NULL);
 	  char *seriesOut = cmdparams_get_str(&cmdparams, 
 					      kSeriesOut, 
@@ -5712,7 +5744,7 @@ int DoIt(void)
 
 	  double bzerov = cmdparams_get_double(&cmdparams, kBzero, NULL);
 	  double bscalev = cmdparams_get_double(&cmdparams, kBscale, NULL);
-	  DRMS_Type_t dtype = cmdparams_get_int(&cmdparams, kDatatype, NULL);
+	  DRMS_Type_t dtype = (DRMS_Type_t)cmdparams_get_int(&cmdparams, kDatatype, NULL);
 	  if (dtype > DRMS_TYPE_DOUBLE)
 	  {
 	     dtype = DRMS_TYPE_RAW;
@@ -6045,6 +6077,8 @@ int DoIt(void)
 					   dtype,
 					   &segsToProc, 
 					   recSetIn,
+                                           slicelower,
+                                           sliceupper,
 					   actualOutputSeries,
 					   bzerov,
 					   bscalev);
