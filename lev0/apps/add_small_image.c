@@ -313,7 +313,7 @@ int add_small_array(DRMS_Record_t *rec, DRMS_Array_t *big, int doScaleFits, int 
       smallDimInfo.naxis = 2;
       smallDimInfo.axis[0] = smallDims[0];
       smallDimInfo.axis[1] = smallDims[1];
-      drms_segment_setdims(smallSeg, &smallDims);
+      drms_segment_setdims(smallSeg, &smallDimInfo);
       }
     // For SDO CCD images of 14 bits use FITS shorts as unsigned and keep full range.
     small->bzero = -(4.0*8192.0);
