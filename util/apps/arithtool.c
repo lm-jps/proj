@@ -46,6 +46,7 @@
 #define kOutSeriesDesc "Output series for arithTool calculation."
 #define kInSliceLower "sl"
 #define kInSliceUpper "su"
+#define kPosOut "pout"
 
 #define TESTER 0
 
@@ -76,6 +77,7 @@ ModuleArgs_t module_args[] =
   {ARG_INTS, kInSliceUpper, "-1", "Upper-right corner of slice (-1 means no slicing)"},
   {ARG_STRING, kWithRecSet, kNotSpecified, "For binary operations, the second operand."},
   {ARG_STRING, kSeriesOut, kNotSpecified, "Name of series in which to save extracted data."},
+  {ARG_INTS, kPosOut, "-1", "Bottom-left corner of the output data array at which data are to be written."},
   {ARG_STRING, kSegList, kNotSpecified, "Comma-separated list of segments on which to operate."},
   {ARG_STRING, kOp, "", "The operation to perform."},
   {ARG_DOUBLE, kBzero, "0.0", "For integer output, the bzero to use."},
@@ -5232,7 +5234,7 @@ int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 		     DRMSContainer_t *segsToProc, 
 		     char *inSeriesQuery, int *slicelower, int *sliceupper,
-		     char *seriesOut, double bzero, double bscale)
+		     char *seriesOut, int *pout, double bzero, double bscale)
 {
      int error = 0;
      int status = 0;
@@ -5541,11 +5543,37 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 				    break;
 			       }
 
-			       DRMS_Array_t *segArray = drms_array_create(actualtype,
-									  outseg->info->naxis, 
-									  outseg->axis, 
-									  pOut,
-									  &status);
+			       DRMS_Array_t *segArray = NULL;
+                               int actaxis[DRMS_MAXRANK];
+                               int end[DRMS_MAXRANK];
+                               int iaxis;
+
+                               if (slicelower && sliceupper)
+                               {
+                                  /* Must calculate new axis lengths */
+                                  for (iaxis = 0; iaxis < inseg->info->naxis; iaxis++)
+                                  {
+                                     actaxis[iaxis] = sliceupper[iaxis] - slicelower[iaxis] + 1;
+                                  }
+                               }
+                               else
+                               {
+                                  memcpy(actaxis, inseg->axis, sizeof(int) * inseg->info->naxis);
+                               }
+
+                               if (pout)
+                               {
+                                  for (iaxis = 0; iaxis < inseg->info->naxis; iaxis++)
+                                  {
+                                     end[iaxis] = actaxis[iaxis] + pout[iaxis] - 1;
+                                  }
+                               }
+
+                               segArray = drms_array_create(actualtype,
+                                                            inseg->info->naxis,
+                                                            actaxis,
+                                                            pOut,
+                                                            &status);
 
 			       error = (status != DRMS_SUCCESS);
 
@@ -5563,7 +5591,16 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 				     segArray->bscale = bscale;
 				     segArray->israw = 0;
 				  }
-				  drms_segment_write(outseg, segArray, 0);
+
+                                  if (pout == NULL)
+                                  {
+                                     drms_segment_write(outseg, segArray, 0);
+                                  }
+                                  else
+                                  {
+                                     drms_segment_writeslice(outseg, segArray, pout, end, 0);
+                                  }
+
 				  drms_free_array(segArray);
 			       }
 			    }
@@ -5717,6 +5754,7 @@ int DoIt(void)
 	  char *recSetIn = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
           int *slicelower = NULL;
           int *sliceupper = NULL;
+          int *posout = NULL;
 
           int slicedim = cmdparams_get_intarr(&cmdparams, kInSliceLower, &slicelower, NULL);
           if (cmdparams_get_intarr(&cmdparams, kInSliceUpper, &sliceupper, NULL) != slicedim)
@@ -5725,11 +5763,25 @@ int DoIt(void)
              fprintf(stderr, "Slice dimension mismatch.\n");
           }
 
-          if (slicedim > 0 && (slicelower[0] == -1 || sliceupper[0] == -1))
+          if (cmdparams_get_intarr(&cmdparams, kPosOut, &posout, NULL) != slicedim)
           {
-             slicedim = 0;
-             slicelower = NULL;
-             sliceupper = NULL;
+             error = 1;
+             fprintf(stderr, "Slice dimension mismatch.\n");
+          }
+
+          if (!error && slicedim > 0)
+          {
+             if (slicelower[0] == -1 || sliceupper[0] == -1)
+             {
+                slicedim = 0;
+                slicelower = NULL;
+                sliceupper = NULL;
+             }
+             
+             if (posout[0] == -1)
+             {
+                posout = NULL;
+             }
           }
 
 	  char *withRecSet = cmdparams_get_str(&cmdparams, kWithRecSet, NULL);
@@ -6080,6 +6132,7 @@ int DoIt(void)
                                            slicelower,
                                            sliceupper,
 					   actualOutputSeries,
+                                           posout,
 					   bzerov,
 					   bscalev);
 		    }
