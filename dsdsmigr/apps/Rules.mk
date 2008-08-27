@@ -33,7 +33,10 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXESUMS_SOCK_$(d)))
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
-$(MODEXESUMS_$(d)) $(MODEXESUMS_SOCK_$(d)):	$(LIBSUMSAPI) $(LIBSUM)
+$(MODEXESUMS_$(d)) $(MODEXESUMS_SOCK_$(d)):	$(LIBSUMSAPI) $(LIBSUM) 
+# $(LIBSUM) depends on libmisc.a, but the latter appears in the dependency list AFTER
+# $(LIBSUM).  Force make to find libmisc.a
+$(MODEXESUMS_$(d)) $(MODEXESUMS_SOCK_$(d)):	LL_TGT := $(LL_TGT) -Lbase/libs/misc -lmisc
 
 #$(STORDSDS_$(d)) $(STORDSDS_$(d):%=%_sock): LL_TGT := $(STORDSDS_EXTRA_LIBS)
 #$(STORDSDS_$(d)) $(STORDSDS_$(d):%=%_sock): $(STORDSDS_EXTRA_LIBS)
