@@ -311,6 +311,11 @@ if (DEBUG) fprintf(stderr,"   starting Primekeys\n");
     json_insert_child(primearray, json_new_null());
   json_insert_child(primekeys, primearray);
   json_insert_child(jroot,primekeys);
+ 
+  /* add description from seriesinfo */
+  notework = string_to_json(rec->seriesinfo->description);
+  json_insert_pair_into_object(jroot, "note", json_new_string(notework));
+  free(notework);
 
 if (DEBUG) fprintf(stderr,"   starting DBindex\n");
   /* show DB index keywords */
@@ -344,9 +349,7 @@ if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
 	keytype = json_new_string(drms_type_names[key->info->type]);
     json_insert_pair_into_object(keyinfo, "type", keytype);
     notework = string_to_json(key->info->unit);
-if (DEBUG) fprintf(stderr,"   starting  units for keyword %s\n",key->info->name);
     json_insert_pair_into_object(keyinfo, "units", json_new_string(notework));
-if (DEBUG) fprintf(stderr,"   done  units for keyword %s\n",key->info->name);
     free(notework);
     notework = string_to_json(key->info->description);
     json_insert_pair_into_object(keyinfo, "note", json_new_string(notework));
