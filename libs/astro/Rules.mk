@@ -6,7 +6,9 @@ d		:= $(dir)
 # Local variables
 LIBASTRO	:= $(d)/libastro.a
 
-OBJ_$(d)	:= $(addprefix $(d)/, procFdsData.o interp.o obs2helio.o apodize.o)
+JPLEPH_$(d)	:= $(addprefix $(d)/, jpleph.o)
+OBJ_$(d)	:= $(addprefix $(d)/, procFdsData.o interp.o obs2helio.o apodize.o iorbit.o) $(JPLEPH_$(d))
+
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 
 CLEAN		:= $(CLEAN) $(OBJ_$(d)) $(LIBASTRO) $(DEP_$(d))
@@ -18,6 +20,8 @@ S_$(d)		:= $(notdir $(LIBASTRO))
 
 # Local rules
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
+
+$(JPLEPH_$(d)):	FF_TGT := $(FF_TGT) -convert big_endian
 
 $(LIBASTRO):	$(OBJ_$(d))
 		$(ARCHIVE)

@@ -25,7 +25,8 @@ typedef enum
    kLIBASTRO_UnsupportedInterp,
    kLIBASTRO_UnsupportedMCOR,
    kLIBASTRO_UnsupportedVCOR,
-   kLIBASTRO_InconsistentConstraints
+   kLIBASTRO_InconsistentConstraints,
+   kLIBASTRO_InvalidArgs
 } LIBASTRO_Error_t;
 
 typedef enum
@@ -135,6 +136,9 @@ float Linint2(float *f, int nx, int ny, double x, double y);
 double Linint2d(double *f, int nx, int ny, double x, double y);
 int Regrid(DRMS_Array_t **dataArr, int *new_length, LIBASTRO_Interpolation_t scheme);
 float Imaginterp(DRMS_Segment_t *img, double x, double y);
+
+/* iorbit */
+LIBASTRO_Error_t iorbit(DRMS_Env_t *env, const char *rsquery, LinkedList_t **info);
 
 #endif // _DRMS_LIBASTRO_H
 
