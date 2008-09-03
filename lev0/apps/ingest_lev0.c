@@ -48,10 +48,10 @@
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
-//#define LEV0SERIESNAMEHMI "su_production.lev0_test"
-//#define TLMSERIESNAMEHMI "su_production.tlm_test"
-//#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
-//#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
+#define TLMSERIESNAMEHMI "su_production.tlm_test"
+#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
+#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
 //#define TLMSERIESNAMEHMI "hmi.tlm_60d"
@@ -65,10 +65,10 @@
 //#define LEV0SERIESNAMEAIA "aia.lev0a"
 //#define TLMSERIESNAMEAIA "aia.tlm"
 
-#define LEV0SERIESNAMEAIA "aia.lev0d"
-#define TLMSERIESNAMEAIA "aia.tlmd"
-#define LEV0SERIESNAMEHMI "hmi.lev0d"
-#define TLMSERIESNAMEHMI "hmi.tlmd"
+//#define LEV0SERIESNAMEAIA "aia.lev0d"
+//#define TLMSERIESNAMEAIA "aia.tlmd"
+//#define LEV0SERIESNAMEHMI "hmi.lev0d"
+//#define TLMSERIESNAMEHMI "hmi.tlmd"
 
 //Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
 //setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
@@ -1016,6 +1016,7 @@ int get_tlm(char *file, int rexmit, int higherver)
           break;
         case ERROR_NODATA:
           printk("decode_next_hk_vcdu() ret:Warning:ERROR_NODATA\n");
+          break;
         case ERROR_HK_ENVIRONMENT_VARS_NOT_SET:
           printk("decode_next_hk_vcdu() ret:ERROR:ERROR_HK_ENVIRONMENT_VARS_NOT_SET\n");
            break;
