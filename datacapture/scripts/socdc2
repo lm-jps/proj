@@ -2383,22 +2383,24 @@ sub Sched_ingest {
       &Exit_sub;
     }
   }
-  if($pid000 == -1) {
-    if($pid000 = fork) {
-      #This is the parent. The child's pid is in $pid000
-      print LOG "          \n"; 	#!!don't lose first few chars on line??
-      print LOG "fork ingest processing pid=$pid000 for $tlmfile.\n";
-    } elsif (defined $pid000) {   # $pid000 is zero here if defined.
-        print "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
-        print LOG "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
-        exec "soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec";
-    }  else {
-      #fork error
-      print "!!Abort: Can't fork: $!\n";
-      #exit(1);
-      &Exit_sub;
-    }
-  }
+#04Sep08 No longer need soc_pipe_scp. The $DIRSOC2PIPE is now NFS on the
+#backend pipeline machine (cl1n001 for now).
+#  if($pid000 == -1) {
+#    if($pid000 = fork) {
+#      #This is the parent. The child's pid is in $pid000
+#      print LOG "          \n"; 	#!!don't lose first few chars on line??
+#      print LOG "fork ingest processing pid=$pid000 for $tlmfile.\n";
+#    } elsif (defined $pid000) {   # $pid000 is zero here if defined.
+#        print "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
+#        print LOG "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
+#        exec "soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec";
+#    }  else {
+#      #fork error
+#      print "!!Abort: Can't fork: $!\n";
+#      #exit(1);
+#      &Exit_sub;
+#    }
+#  }
 }
 
 #Called from the Display log button on the top level pages.
