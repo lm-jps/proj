@@ -54,6 +54,7 @@ struct rui_cstring
 {
 	char *text;	/*<! char c-string */
 	size_t max;	/*<! usable memory allocated to text minus the space for the nul character */
+        size_t len;
 };
 
 typedef struct rui_cstring rcstring;
@@ -73,6 +74,7 @@ rcs_create (size_t length)
 		return NULL;
 
 	rcs->max = length;
+        rcs->len = 0;
 
 	rcs->text = calloc (rcs->max + 1, sizeof (char));
 	if (rcs->text == NULL)
@@ -102,27 +104,44 @@ rcs_free (rcstring ** rcs)
 
 }
 
-
-rstring_code
+/* The way json uses rcs_resize is VERY inefficient.  It increases the length of the output 
+ * string by the minimum necessary.  So, if we need to append a character, the size of the 
+ * output buffer is increased by 1 character only.  And if realloc cannot add 1 character
+ * contiguously, then it has to copy all the bytes to a new output buffer.  No wonder this
+ * was slow.  This realloc'ing would have to happen on every call once you reach the 
+ * maximum length of the output buffer.  If you have thousands of calls, you are 
+ * resizing and copying the entire output buffer thousands of times - with a linear
+ * increase in the size of the alloc and copy.
+ *
+ * Instead, use length as a minimum and simply double the buffer size.
+ */
+static inline rstring_code
 rcs_resize (rcstring * rcs, size_t length)
 {
 	char *temp;
 	assert (rcs != NULL);
 
-	temp = realloc (rcs->text, sizeof (char) * (length + 1));	/* length plus L'\0' */
+        /* length is the minimum needed */
+        size_t newmax = rcs->max;
+        while (newmax < length + 1)
+        {
+           newmax *= 2;
+        }
+
+	temp = realloc (rcs->text, sizeof (char) * (newmax + 1));	/* length plus L'\0' */
 	if (temp == NULL)
 	{
 		free (rcs);
 		return RS_MEMORY;
 	}
 	rcs->text = temp;
-	rcs->max = length;
+	rcs->max = newmax;
 	rcs->text[rcs->max] = L'\0';
 	return RS_OK;
 }
 
 
-rstring_code
+static inline rstring_code
 rcs_catcs (rcstring * pre, const char *pos, const size_t length)
 {
 	size_t pre_length;
@@ -130,7 +149,7 @@ rcs_catcs (rcstring * pre, const char *pos, const size_t length)
 	assert (pre != NULL);
 	assert (pos != NULL);
 
-	pre_length = strlen (pre->text);
+        pre_length = pre->len;
 
 	if (pre->max < pre_length + length)
 	{
@@ -139,18 +158,20 @@ rcs_catcs (rcstring * pre, const char *pos, const size_t length)
 	}
 	strncpy (pre->text + pre_length, pos, length);
 	pre->text[pre_length + length] = '\0';
+        pre->len += length;
 	return RS_OK;
 }
 
 
-rstring_code
+static inline rstring_code
 rcs_catc (rcstring * pre, const char c)
 {
 	size_t pre_length;
 
 	assert (pre != NULL);
 
-	pre_length = strlen (pre->text);
+        pre_length = pre->len;
+
 	if (pre->max <= pre_length)
 	{
 		pre->max += RSTRING_INCSTEP;
@@ -159,6 +180,7 @@ rcs_catc (rcstring * pre, const char c)
 	}
 	pre->text[pre_length] = c;
 	pre->text[pre_length + 1] = '\0';
+        pre->len++;
 	return RS_OK;
 }
 
@@ -172,9 +194,9 @@ rcs_unwrap (rcstring * rcs)
 	if (rcs->text == NULL)
 		out = NULL;
 	else
-		out = realloc (rcs->text, sizeof (char) * (strlen (rcs->text) + 1));
+          out = strdup(rcs->text);
 
-	free (rcs);
+	rcs_free (&rcs);
 	return out;
 }
 
@@ -185,7 +207,7 @@ rcs_length (rcstring * rcs)
 {
 	/*TODO account for UTF8 */
 	assert (rcs != NULL);
-	return strlen (rcs->text);
+        return rcs->len;
 }
 
 
@@ -502,7 +524,9 @@ json_tree_to_string (json_t * root, char **text)
 
 	cursor = root;
 	/* set up the output and temporary rwstrings */
-	output = rcs_create (5);
+
+        /* 5 makes things way too slow - we have to resize way too much */
+         output = rcs_create (8192);
 
 	/* start the convoluted fun */
       state1:			/* open value */

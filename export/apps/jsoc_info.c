@@ -518,6 +518,7 @@ if (DEBUG) fprintf(stderr,"%s\n",msg);	\
   json_tree_to_string(jroot,&json);	\
   printf("Content-type: application/json\n\n");	\
   printf("%s\n",json);	\
+  free(json); \
   fflush(stdout);	\
   return(1);	\
   }
@@ -587,9 +588,11 @@ int DoIt(void)
     json_insert_pair_into_object(jroot, "status", json_new_number("0"));
     json_tree_to_string(jroot,&json);
     final_json = json_format_string(json);
+    free(json);
     /* send the output json back to client */
     printf("Content-type: application/json\n\n");
     printf("%s\n",final_json);
+    free(final_json);
     fflush(stdout);
     free(seriesname);
     return(0);
@@ -613,9 +616,11 @@ int DoIt(void)
     json_insert_pair_into_object(jroot, "status", json_new_number("0"));
     json_tree_to_string(jroot,&json);
     final_json = json_format_string(json);
+    free(json);
     /* send the output json back to client */
     printf("Content-type: application/json\n\n");
     printf("%s\n",final_json);
+    free(final_json);
     fflush(stdout);
     return(0);
     }
@@ -655,6 +660,7 @@ int DoIt(void)
       json_tree_to_string(jroot,&json);
       printf("Content-type: application/json\n\n");
       printf("%s\n",json);
+      free(json);
       fflush(stdout);
       return(0);
       }
@@ -907,9 +913,10 @@ int DoIt(void)
     drms_close_records(recordset, DRMS_FREE_RECORD);
     json_tree_to_string(jroot,&json);
     // final_json = json_format_string(json);
-final_json = json;
+    final_json = json;
     printf("Content-type: application/json\n\n");
     printf("%s\n",final_json);
+    free(final_json);
     fflush(stdout);
     return(0);
     }
