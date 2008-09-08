@@ -374,6 +374,12 @@ sub Submit_b
     $cmd = "/bin/mkdir -p $DIRSOC2PIPE";
     print LOG "$cmd\n";
     `$cmd`;
+    $cmd = "/bin/rm -rf $DIRSOC2PIPE/dsf";
+    print LOG "$cmd\n";
+    `$cmd`;
+    $cmd = "/bin/mkdir -p $DIRSOC2PIPE/dsf";
+    print LOG "$cmd\n";
+    `$cmd`;
     $cmd = "/bin/rm -rf $DIRPIPE2SOC";
     print LOG "$cmd\n";
     `$cmd`;
@@ -852,6 +858,7 @@ sub ls_update_s2p
   $lbs3s->delete(0, 'end');
   shift(@soc2pipe_ls);			#elim "total" line in front of ls
   foreach $x (@soc2pipe_ls) {
+    if($x =~ /^d/) { next; }            #ignore subdirs
     ($a1,$a2,$a3,$a4,$size,$a6,$a7,$a8,$name) = split(/\s+/, $x);
     chomp($name);
     $lbs3s->insert('end', "$name");
