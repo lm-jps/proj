@@ -2,13 +2,17 @@
 #############################################################################
 # Name:        jsoc_do_jsvn_map_file.pl  - Do JSOC version number map file  #
 # Description: Creates map of Jsoc series version number to packet version  #
-#              number file for each apid. The apid list can be inputed 3    #
-#              ways. Need to create help log and checks for arguments.      #
+#              number file for each HK apid(1-63,400's, and 500's). Also    #
+#              create map of Jsoc series version number to file version     #
+#              number for each SDO HK APID(129).The apid list can be        #
+#              inputed 3 ways. Need to create help log and checks for       #
+#              arguments.                                                   #
 # Execution:   (1) To run :                                                 #
 #                jsoc_do_jsvn_map_file.pl -f                                # 
-#                jsoc_do_jsvn_map_file.pl -g <file version number           # 
+#                jsoc_do_jsvn_map_file.pl -g <file version number>  <HK|SDO># 
 #                jsoc_do_jsvn_map_file.pl -a <apid number>                  # 
 #                jsoc_do_jsvn_map_file.pl -h                                # 
+#                                                                           #
 # Logic:       (1)read and process arguments                                #
 #              (2)If -g is argument read in folder and read in files in     #
 #                 folder to get all apids in filenames.                     #
@@ -18,144 +22,212 @@
 #              (5)Create head of map file                                   #
 #              (6)Loop throught list of init JSD files and do differences of#
 #                 files and set JSVN_LIST with 1 or increment if different  #
-#              (7)Write table, by looping through GTCIDS lines capturing the#
-#                 packet-version-number, file-version-number,etc and writing#
-#                 line with values from JSVN_LIST.                          #
-# Execution:   (1) To run :                                                 #
-#                  jsoc_do_jsvn_map_file.pl                                 # 
+#              (7)Write map file, by looping through GTCIDS or SHCIDS       #
+#                 files' s lines capturing the packet-version-number,       #
+#                 file-version-number,etc and writing lines with values     #
+#                 from JSVN_LIST.                                           #
+# Example Execution:                                                        #
+#               (1)jsoc_do_jsvn_map_file.pl  -a 0129                        # 
+#               (2)jsoc_do_jsvn_map_file.pl  -a 0445                        # 
+#               (3)jsoc_do_jsvn_map_file.pl  -f                             # 
+#               (4)jsoc_do_jsvn_map_file.pl  -g 1.163 HK                    # 
+#               (5)jsoc_do_jsvn_map_file.pl  -g 1.2 SDO                     # 
+#                                                                           #
 # Author:      Carl                                                         #
 # Date:        Move from EGSE to JSOC software environment on March 21, 2008#
 #############################################################################
 # main program                                                              #
 #############################################################################
-  #check for any arguments passed in command
-  &check_arguments();
+
+#check for any arguments passed in command
+&check_arguments();
 
-  ##get environment variables and initialize variables.
-  $hm=$ENV{'HOME'};
-  $ENV{'HK_CONFIG_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_config_file";
-  $ENV{'HK_JSD_PRELIM_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_prelim_file/prod";
-  $ENV{'HK_JSVN_MAP_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod";
-  $ENV{'HK_GTCIDS_FILE'}="gtcids.txt";
+#get environment variables and initialize variables.
+$hm=$ENV{'HOME'};
+$ENV{'HK_CONFIG_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_config_file";
+$ENV{'HK_JSD_PRELIM_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_prelim_file/prod";
+$ENV{'HK_JSVN_MAP_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod";
+$ENV{'HK_GTCIDS_FILE'}="gtcids.txt";
+$ENV{'HK_SH_CONFIG_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/sdo_hk_config_file";
+$ENV{'HK_SHCIDS_FILE'}="shcids.txt";
 
-  #common setting for all environments
-  $ENV{'MAILTO'}="";
-  $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
-  $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
-  # set after set script_dir
-  $ENV{'HK_APID_LIST_DAY_FILES'}="$script_dir/hk_apid_list_mapping_jsvn";
+#common setting for all environments
+$ENV{'MAILTO'}="";
+$script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
+$ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
 
-  #get list of initial jsoc definition files to use
-  &get_list_init_jsds();
+#set after set script_dir - 
+#contains the listing of apids to process when use -f option.
+#the values are one apid per line in file.
+#the values should be in decimal format(i.e.,0445,0475,0129,etc) 
+$ENV{'HK_APID_LIST_DAY_FILES'}="$script_dir/hk_apid_list_mapping_jsvn";
 
-  #get list of apids to do map files for
-  &get_apid_to_do();
+#get list of initial jsoc definition files to use
+&get_list_init_jsds();
 
-  #go through jsd files looking for first apid
-  foreach $apid (@all_apids)
+#get list of apids to do map files for
+&get_apid_to_do();
+
+#go through jsd files looking for first apid
+foreach $apid (@all_apids)
+{
+  $strapid= substr($apid, 0, 4);
+  foreach $file (@jsdfiles)
   {
-    $strapid= substr($apid, 0, 4);
-    print "..doing apid <$strapid>\n";
-    foreach $file (@jsdfiles)
+    if ($file eq "")
     {
-      if ($file eq "")
-      {
-        #print "breaking. final item in list \n";
-        break;
-      }
-      #compare apid value in list with files
-      $find_str= sprintf("%s%s",  $strapid, "_");
-      if (( index  $file, $find_str ) != -1)
-      {
-        #if found one push on list of lists
-        push( @list, $file);
-      }
-    }#foreach file
-    #Check if have jsd files for this apid
-    $list_count=@list;
-    if ($list_count == 0)
+      #print "breaking. final item in list \n";
+      break;
+    }
+    #compare apid value in list with files
+    $find_str= sprintf("%s%s",  $strapid, "_");
+    if (( index  $file, $find_str ) != -1)
     {
-        print "WARNING: No JSD Files for apid(decimal character value) <$strapid>\n";
-        print "Check if HKPDF files exist for this apid and run make_jsd_file.pl to create jsd files\n";
-        break;
+      #if found one push on list of lists
+      push( @list, $file);
+    }
+  }#foreach file
+  #Check if have jsd files for this apid
+  $list_count=@list;
+  if ($list_count == 0)
+  {
+    print "WARNING:jsoc_do_jsvn_map_file.pl: No JSD Files for apid(decimal character value) <$strapid>\n";
+    print "Check if HKPDF files exist for this apid and run make_jsd_file.pl to create jsd files\n";
+    break;
+  }
+  else
+  {
+    $apidfile= shift(@list);
+    $firstfilename=$apidfile;
+    @jsvn_name = "";
+    $jsvn = 1;
+
+    #get hash key from prelim jsd filename's packet version number
+    @s_fn= split /\_/, $apidfile;#ASSUME using this format hmi.0001_001032
+    if ($s_fn[1] eq "ground.lev0")
+    {
+      print "ERROR: jsoc_do_jsvn_map_file.pl:Sorry script is assuming jsd names are hmi or aia or sdo format but might be getting <name>_ground!\n";
+      print "Exiting script. Adjust code to handle this case. Note jsd name using after split is:@s_fn\n";
+      exit;
+    }
+
+    # check if processing SDO or HK apids
+    if( $apid > 96 &&  $apid < 400) 
+    {
+      #for sdo apids, use start packet date range as hash value
+      $year = substr($s_fn[2],0,4);
+      $month = substr($s_fn[2],4,2);
+      $day = substr($s_fn[2],6,2);
+      $hashkey= sprintf("%s%s%s",  $year, $month,$day); #hash key is 20080914
     }
     else
-    {
-      $apidfile= shift(@list);
-      $firstfilename=$apidfile;
-      @jsvn_name = "";
-      $jsvn = 1;
-      #get hash key from prelim jsd filename's packet version number
-      @s_fn= split /\_/, $apidfile;#assume hmi.0001_001032
+    { 
+      #for hk apids, use packet version number as hash value
       $d = substr($s_fn[2],3,3);
       $w = substr($s_fn[2],2,1);
       $hashkey= sprintf("%s.%d",  $w, $d); #hash key is 1.32
-      #set first hash key to 1.
-      $jsvn_ht{$hashkey}=1;
-      # loop thru all prelim jsd files in list for given APID
-      while ($apidfile)
+    }
+
+    #set first hash key to 1.
+    $jsvn_ht{$hashkey}=1;
+
+    # loop thru all prelim jsd files in list for given APID
+    while ($apidfile)
+    {
+      # get file to compare with
+      $comparefile=shift(@list);
+    
+      #get packet version number to use as hash key in hash table
+      @s_fn= split /\_/, $comparefile;#assume hmi.0001_001032
+ #if(hex $apid > 96 && hex $apid < 400) 
+      if( $apid > 96 &&  $apid < 400) 
       {
-        # get file to compare with
-        $comparefile=shift(@list);
-        #get packet version number to use as hash key in hash table
-        @s_fn= split /\_/, $comparefile;#assume hmi.0001_001032
+        #for sdo apids, use start packet date range as hash value
+        $year = substr($s_fn[2],0,4);
+        $month = substr($s_fn[2],4,2);
+        $day = substr($s_fn[2],6,2);
+        $hashkey= sprintf("%s%s%s",  $year, $month,$day); #hash key is 20080914
+      }
+      else
+      {
         $d = substr($s_fn[2],3,3);
         $w = substr($s_fn[2],2,1);
         $hashkey= sprintf("%s.%d",  $w, $d); #use 1.32 as hash key 
-        # check if there is another file to compare with
-        if ( $comparefile eq "" )
-        {
-          #ends setting jsvn at end of file
-          $apidfile = $comparefile;
-        }
-        # compare files using diff command and set to 1++ is different in hash table
-        $difference =`diff -qs  $dir_init_jsds/$apidfile  $dir_init_jsds/$comparefile`;
-        if (( index $difference, "differ" ) != -1)
-        {
-           $jsvn++;
-           $jsvn_ht{$hashkey}=$jsvn;
-        }
-        elsif( (index $difference, "identical" ) != -1)
-        {
-           $jsvn_ht{$hashkey}=$jsvn;
-        }
-        elsif( (index $difference, "No such file" ) != -1)
-        {
-          print "WARNING:no such file ===> $difference";
-          print "WARNING:apidfile is $apidfile\n";
-        }
-        else
-        {
-          ;
-          #print "WARNING:Did not find either differ or identical state ====> $difference\n";
-          #print "WARNING:apidfile is $apidfile\n";
-        }
-        #get next file to compare
-        $apidfile=$comparefile;
-      }# while loop through all apidfiles in list for this apid find ones that differ      
-      $strapid= substr($apid, 0, 4);
-      # write header of APID's PVN-TO-JSVN file
-      &create_file_header;
-      # write each line in APID's PVN-TO-JSVN file for each JSVN number 
-      # corresponding to packet version number 
-      &get_gtcids_lines;
-      #clear out hash table and do next APID's PVN-TO-JSVN file
-      while (( $key, $value) = each (%jsvn_ht))
-      {
-        delete($jsvn_ht{$key});
       }
-    }#else-end
-  }#for each apid in list
+      # check if there is another file to compare with
+      if ( $comparefile eq "" )
+      {
+        #ends setting jsvn at end of file
+        $apidfile = $comparefile;
+      }
+      # compare files using diff command and set to 1++ is different in hash table
+      $difference =`diff -qs  $dir_init_jsds/$apidfile  $dir_init_jsds/$comparefile`;
+      if (( index $difference, "differ" ) != -1)
+      {
+        $jsvn++;
+        $jsvn_ht{$hashkey}=$jsvn;
+      }
+      elsif( (index $difference, "identical" ) != -1)
+      {
+        $jsvn_ht{$hashkey}=$jsvn;
+      }
+      elsif( (index $difference, "No such file" ) != -1)
+      {
+        print "WARNING:jsoc_do_jsvn_map_file.pl: no such file ===> $difference";
+        print "WARNING:jsoc_do_jsvn_map_file.pl: apidfile is $apidfile\n";
+      }
+      else
+      {
+        ;
+        #print "WARNING:jsoc_do_jsvn_map_file.pl: Did not find either differ or identical state ====> $difference\n";
+        #print "WARNING:jsoc_do_jsvn_map_file.pl: apidfile is $apidfile\n";
+      }
+      #get next file to compare
+      $apidfile=$comparefile;
+    }# while loop through all apidfiles in list for this apid find ones that differ      
+
+    # write header of APID's PVN-TO-JSVN file
+    $strapid= substr($apid, 0, 4);
+    &create_file_header($strapid);
+
+    # write each line in APID's PVN-TO-JSVN file for each JSVN number 
+    # corresponding to packet version number 
+    $apid =~ s/\n//g; #regular exp rm cr 
+    if( $apid > 96 &&  $apid < 400) 
+    {
+      print "-->creating map file for apid:<$apid>\n";
+      &get_shcids_lines;
+    }
+    elsif( $apid < 64 ||  $apid > 399)
+    {
+      print "-->creating map file for apid:<$apid>\n";
+      &get_gtcids_lines;
+    }
+    else
+    {
+      $ha= hex $apid;
+      print "ERROR:jsoc_do_jsvn_map_file.pl: apid decimal value unknown:<$apid>. The apid hex value is:<$ha>. Exiting script\n";
+      exit;
+    }
+
+    #clear out hash table and do next APID's PVN-TO-JSVN file
+    while (( $key, $value) = each (%jsvn_ht))
+    {
+     delete($jsvn_ht{$key});
+    }
+  }#else-end
+}#for each apid in list
+
 #############################################################################
 # subroutine check arguments and set flags                                  #
 #############################################################################
 sub check_arguments()
 {
-  $help_flg= "0";
-  $apid_list_flg="0";
-  if ($#ARGV >= 0)
+$help_flg= "0";
+$apid_list_flg="0";
+if ($#ARGV >= 0)
   {
-    if ($ARGV[0] eq "-h" || $ARGV[0] eq "help")
+    if ($ARGV[0] eq "-h" || $ARGV[0] eq "-help")
     {
       $help_flg = "1";
     }
@@ -168,12 +240,37 @@ sub check_arguments()
     {
       #get list of apids to create map files for based on apids in current STHA file version
       $apid_list_flg = "2";
+      if ($#ARGV != 2 or $ARGV[1] eq ""  or $ARGV[2] eq "" or ($ARGV[2] ne "HK" and  $ARGV[2] ne "SDO"))
+      {
+        print "\nERROR:jsoc_jsvn_map_file.pl: Did not enter correct arguments for -g flag:<$ARGV[0] $ARGV[1] $ARGV[2]>\n\n";
+        &show_help_info("USAGE");
+      }
     }
     elsif ($ARGV[0] eq "-a" )
     {
       #use apid following -a to create map files 
       #push decimal character value in this format dddd. Example: -a 0001
       $apid_list_flg = "3";
+      if ($ARGV[1] eq "" or $ARGV[1] eq "0")
+      {
+        print "\nERROR:jsoc_jsvn_map_file.pl: Did not enter apid value! Enter 4 digit decimal value for apids.\n\n";
+        &show_help_info("USAGE");
+      }
+      else
+      {
+        ;#print "got value:$ARGV[1]\n";
+      }
+      # check argument passed for -a is 4 digits
+      # regular expression -check got exactly 4 digits
+      if($ARGV[1] =~ m/^\d{4}/)
+      {
+          ;#match-got 4 digits
+      }
+      else
+      {
+        print "\nERROR:jsoc_jsvn_map_file.pl: Did not enter correct apid value:<$ARGV[1]>! Enter exactly 4 digit decimal value for apids including leading zeros(i.e.,0129, 0445 or 0001).\n\n";
+        &show_help_info("USAGE");
+      }
     }
   }
   else
@@ -182,46 +279,68 @@ sub check_arguments()
   }
   if ( $help_flg eq "1")
   {
-     &show_help_info;
+     &show_help_info("HELP");
   }
 }
+
 #############################################################################
 # subroutine show_help_info: show help information                          #
 #############################################################################
-sub show_help_info
+sub show_help_info($)
 {
-  print "Help Listing\n";
-  print "(1)Ways to Execute Perl Script: \n";
-  print "(1a)Create map files using -g option will create map files with all apids contained in folder specified :";
-  print " jsoc_do_jsvn_map_file.pl -g <apid-#-version# folder>\n";
-  print "    Example: jsoc_do_jsvn_map_file.pl -g 1.140\n"; 
-  print "(1b)Create map files using argument passed for apid number will create map file for that apid only:";
-  print " jsoc_do_jsvn_map_file.pl -a <apid-value in dec.chars>\n";
-  print "    Example: jsoc_do_jsvn_map_file.pl -a 0445\n"; 
-  print "(1c)Create map files using list of apids in file, where filename is set in environment variable HK_APID_LIST_DAY_FILES: jsoc_do_jsvn_map_file.pl -f \n";
-  print "    Example: jsoc_do_jsvn_map_file.pl -f \n"; 
-  print "(1d)Get Help Information: jsoc_do_jsvn_map_file.pl -h  or  jsoc_do_jsvn_map_file.pl -help\n";
-  print "***Note:Currently using option -g\n";
-  print "(2)Environment variable HK_APID_LIST_DAY_FILES\n"; 
-  print "(2a)Used to list apid to process using argument -f\n";
-  print "(2b)The values are in decimal character format.\n";
-  print "(2c)If set to 0x1BD 0x1DB then only 2 apid will be processed\n";
-  print "(3) Environment variable HK_JSVN_MAP_DIRECTORY\n";
-  print "(3a) Used to store location the output files of this script.\n";
-  print "(3b) The current format of files is : <APID-Value(dec.chars.)-JSVN-TO_PVN\n";
-  print "(4) Environment variable HK_GTCIDS_FILE\n";
-  print "(4a) Used to store filename of GROUND TO CODE IDS file to process.\n";
-  print "(4b) This file is input data for this script\n";
-  print "(4c) The filename format is gtcids.txt.\n";
-  print "(5) Environment variable HK_CONFIG_DIRECTORY\n";
-  print "(5a) Used to store location of -latest- GROUND TO CODE File(gtcids.txt) file.\n";
-  print "(5b) This file is the input for this script.\n";
-  print "(6) Environment variable HK_JSD_PRELIM_DIRECTORY\n";
-  print "(6a) Used to store location of -initally- created JSOC Series Definition files without headers.\n";
-  print "(6b) These files are input for this script to determine differences between initial JSD files.\n";
-  print "(6c) Based on differences the JSOC Series Version Number is created in the JSVN Map files.\n";
+  # get arg passed
+  $argpassed= $_[0];
+
+  if ($argpassed eq "HELP")
+  {
+    print "Help Listing\n";
+  }
+  else
+  {
+    print "Usage:\n";
+  }
+
+  if ($argpassed eq "USAGE" or $argpassed eq "HELP")
+  {
+    print "(1)Ways to Execute Perl Script: \n";
+    print "(1a)Create map files using -g option will create map files with all apids contained in folder specified :\n";
+    print "    jsoc_do_jsvn_map_file.pl -g <apid-#-version# folder> < SDO | HK >\n";
+    print "    Example: jsoc_do_jsvn_map_file.pl -g 1.140 HK\n\n"; 
+    print "(1b)Create map files using argument passed for apid number will create map file for that apid only:\n";
+    print "    jsoc_do_jsvn_map_file.pl -a <apid-value in dec.chars>\n";
+    print "    Example: jsoc_do_jsvn_map_file.pl -a 0445\n\n"; 
+    print "(1c)Create map files using list of apids in file:\n    jsoc_do_jsvn_map_file.pl -f \n";
+    print "    Where filename is set in environment variable HK_APID_LIST_DAY_FILES in this script. \n";
+    print "    Example: jsoc_do_jsvn_map_file.pl -f \n\n"; 
+    print "(1d)Get Help Information: jsoc_do_jsvn_map_file.pl -h  or  jsoc_do_jsvn_map_file.pl -help\n\n";
+  }
+  if ($argpassed eq "HELP")
+  {
+    print "***Note:Currently using option -g\n\n";
+    print "More information on Environment variables\n"; 
+    print "(2)Environment variable HK_APID_LIST_DAY_FILES\n"; 
+    print "(2a)Used to list apid to process using argument -f\n";
+    print "(2b)The values are in decimal character format.\n";
+    print "(2c)If set to 0445 and  0475 then only 2 apids will be processed\n";
+    print "(3) Environment variable HK_JSVN_MAP_DIRECTORY\n";
+    print "(3a) Used to store location to put output map files of this script.\n";
+    print "(3b) The current format of files is : <APID-Value(dec.chars.)-JSVN-TO_PVN\n";
+    print "(4) Environment variable HK_GTCIDS_FILE and HK_SHCIDS_FILE\n";
+    print "(4a) Used to store filename of GROUND TO CODE IDS file to process.\n";
+    print "(4b) Used to store filename of SDO HK CODE IDS file to process.\n";
+    print "(4c) These files are used as input data for this script\n";
+    print "(4d) The filename formats are currently gtcids.txt and shcids.txt.\n";
+    print "(5) Environment variable HK_CONFIG_DIRECTORY and HK_SH_CONFIG_DIRECTORY\n";
+    print "(5a) Used to store location of -latest- GROUND TO CODE File(gtcids.txt) and shcids.txt files.\n";
+    print "(5b) These files are the input for this script.\n";
+    print "(6) Environment variable HK_JSD_PRELIM_DIRECTORY\n";
+    print "(6a) Used to store location of -initally- created JSOC Series Definition files without headers.\n";
+    print "(6b) These files are input for this script to determine differences between initial JSD files.\n";
+    print "(6c) Based on differences the JSOC Series Version Number is created in the JSVN Map files.\n";
+  }
   exit;
 }
+
 #############################################################################
 # subroutine get_apid_to_do: gets list of apid to create maps files for     #
 #############################################################################
@@ -243,37 +362,54 @@ sub get_apid_to_do
   }
   elsif ($apid_list_flg eq "2")
   {
-     &get_list_hkpdf_filename;
+     &get_list_hkpdf_filename($ARGV[1],$ARGV[2]);
  
   }
   elsif ($apid_list_flg eq "3")
   {
     #push decimal character value in this format dddd.Example 0001
     push(@all_apids, $ARGV[1]);
-    print "...doing map file for apid  $ARGV[1]\n";
+    print "-->doing map file for apid  $ARGV[1]\n";
   }
   else 
   {
-    print "WARNING: Not valid apid list flag value\n";
+    print "WARNING: jsoc_do_jsvn_map_file.pl: Not valid apid list flag value\n";
   }
+  #print "apids to do: @all_apids\n";
 }
+
 #############################################################################
 # subroutine get_list_list_hkpdf_filenames                                  #
 #############################################################################
-sub get_list_hkpdf_filename()
+sub get_list_hkpdf_filename($$)
 {
-  my($dn);
-  $dn= $ENV{'HK_CONFIG_DIRECTORY'};
+  # declare locals and set args
+  my($dn,$arg_fvn,$arg_processing_type);
+  $arg_fvn=$_[0]; #first argument passed file version number
+  $arg_processing_type=$_[1];#second argument passed is process type flag
+
+  #set config directory based on processing type
+  if($arg_processing_type eq "SDO" )
+  {
+    $dn= $ENV{'HK_SH_CONFIG_DIRECTORY'};
+  }
+  elsif ($arg_processing_type eq "HK" )
+  {
+    $dn= $ENV{'HK_CONFIG_DIRECTORY'};
+  }
+
   #open directory file handle to read in initial jsd files.
-  opendir(DIR_HKPDF,"$dn/$ARGV[1]") || die "(2)Can't open folder <$dn$ARGV[1]>:$!\n";
+  opendir(DIR_HKPDF,"$dn/$arg_fvn") || die "(2)Can't open folder <$dn/$arg_fvn>:$!\n";
+
   #get list of hkpdf files
   @hkpdf_filenames=readdir( DIR_HKPDF );
+
   #close directory file handle
   closedir DIR_HKPSD; 
   push(@hkpdf_filenames, "");
 
   # get list of apids to do
-  (@apidslist)=&get_list_apids_to_do($ARGV[1]);
+  (@apidslist)=&get_list_apids_to_do($arg_fvn,$arg_processing_type);
 
   # parse apids values from filename to get valid list of apids
   foreach $filename (@hkpdf_filenames)
@@ -295,14 +431,13 @@ sub get_list_hkpdf_filename()
           next;#skip doing
         }
     }
-
     if (( index  $filename, "apid-" ) != -1)
     {
-       
       push(@all_apids, sprintf("%0.4d", hex  substr($filename,5,3)) );
     }
   }
 }
+
 #############################################################################
 # subroutine get_list_init_jsds: get list of jsd files to check             #
 #############################################################################
@@ -318,35 +453,79 @@ sub get_list_init_jsds()
   closedir DIR_JSD; 
   push(@jsdfiles, "");
 }
+
 #############################################################################
 # subroutine create file header: Create header of APID-JSVN-TO-PVN file     #
 #############################################################################
-sub create_file_header
+sub create_file_header($)
 {
+  #declare and set local variables
+  my ($string_apid,$hexapid);
+  $string_apid= $_[0];#passed argument in function
+
   #Open Output file
   $directory=$ENV{'HK_JSVN_MAP_DIRECTORY'};
+
   #create outfile file name
   $filename= sprintf("%4.4s-%s\n",  $apid, "JSVN-TO-PVN");
+
   #create file and start writing lines to hdr file
   open(OUTFILE, ">$directory/$filename") || die "(4)Can't Open  $directory/$filename: $!\n" ;
+
+  # get date to tag creation time of this map file
   &get_date;
-  &get_gtcids_lookup_column;
-  $hexapid = sprintf("%s%03X", "0x",$strapid);
-  print OUTFILE "##########################################################################################################################\n";
-  printf(OUTFILE  "# FILENAME:                  %s%s                                                                            #\n",
+
+  # check if processing SDO-HK apid or HK apid- if HK apid get column to lookup in gtcids file
+  if(hex $apid > 96 && hex $apid < 400)
+  {
+    ;#print "skip calling get_gtcids_lookup_column()\n";
+  }
+  else
+  { 
+    ;#print " calling get_gtcids_lookup_column()\n";
+    &get_gtcids_lookup_column;
+  }
+  
+  # begin outputing lines for JSD
+  $hexapid = sprintf("%s%03X", "0x",$string_apid);
+  print OUTFILE "##############################################################################################################################\n";
+  printf(OUTFILE  "# FILENAME:                  %s%s                                                                                #\n",
   $strapid,"-JSVN-TO-PVN");
-  print OUTFILE "# APID(decimal char. value): $strapid                                                                                        #\n";
-  print OUTFILE "# APID(hex. value):          $hexapid                                                                                       #\n";
-  print OUTFILE "# PACKET DESCRIPTION:                                                                                                    #\n";
-  print OUTFILE "# GTCIDS LOOKUP COLUMN:      $columnid                                                                                      #\n";
-  print OUTFILE "# DATE LAST UPDATED:         $theTime                                                                   #\n";
-  print OUTFILE "# DESCRIPTION OF COLUMNS:    The JSOC Series and packet version numbers are used to create series name.                  #\n"; 
-  print OUTFILE "#                            The File version number,Checkin Date/Time and master file is reference information.         #\n";
-  print OUTFILE "##########################################################################################################################\n";
-  print OUTFILE "# JSOC Series    | Packet         | File           | Checkin Date/Time   | Master File                                   #\n";
-  print OUTFILE "# Version Number | Version Number | Version Number |                     |                                               #\n";
-  print OUTFILE "##########################################################################################################################\n";
+  print OUTFILE "# APID(decimal char. value): $string_apid                                                                                            #\n";
+  print OUTFILE "# APID(hex. value):          $hexapid                                                                                           #\n";
+  print OUTFILE "# PACKET DESCRIPTION:                                                                                                        #\n";
+  if(hex $apid < 96 || hex $apid > 400)
+  {
+    print OUTFILE "# GTCIDS LOOKUP COLUMN:      $columnid                                                                                          #\n";
+  }
+  print OUTFILE "# DATE LAST UPDATED:         $theTime                                                                      #\n";
+  if(hex $apid > 96 && hex $apid < 400)
+  {
+    print OUTFILE "# DESCRIPTION OF COLUMNS:    The file version numbers are used to lookup JSOC series version number to create series         #\n"; 
+    print OUTFILE "#                            name for this SDO HK APID. The Start Packet Date/Time and master file is reference              #\n";
+    print OUTFILE "#                            information from the shcids.txt file. The Packet Version is not used for SDO HK APID            #\n";
+    print OUTFILE "#                            packets(i.e., 129), but are kept there to be consistent with HK APID map file.                  #\n";
+  }
+  else
+  {
+    print OUTFILE "# DESCRIPTION OF COLUMNS:    The JSOC Series and packet version numbers are used to create series name.                      #\n"; 
+    print OUTFILE "#                            The File version number,Checkin Date/Time and master file is reference information.             #\n";
+  }
+  print OUTFILE "##############################################################################################################################\n";
+
+  #check if processing SDO-HK apid(96-399) or HK apid(1-63,400's, or 500's)
+  if(hex $apid > 96 && hex $apid < 400)
+  {
+    print OUTFILE "# JSOC Series    | Packet         | File           | Start Packet Date/Time  | Master File                                   #\n";
+  }
+  else
+  {
+    print OUTFILE "# JSOC Series    | Packet         | File           | Checkin Date/Time       | Master File                                   #\n";
+  }
+  print OUTFILE "# Version Number | Version Number | Version Number |                         |                                               #\n";
+  print OUTFILE "##############################################################################################################################\n";
 } 
+
 #############################################################################
 # subroutine get_date: lookup date on your system to tag time               #
 # created <APID>-JSVN-TO-PVN files                                          #
@@ -358,7 +537,7 @@ sub get_date
   @weekDays = qw(Sun Mon Tue Wed Thu Fri Sat Sun);
   ($second, $minute, $hour, $dayOfMonth, $month, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = localtime();
   $year = 1900 + $yearOffset;
-  $theTime = "$hour:$minute:$second, $weekDays[$dayOfWeek] $months[$month] $dayOfMonth, $year";
+  $theTime = sprintf("%-02.2d:%-2.2d:%-2.2d %4s %4s %-02.2d %-4.4d",$hour,$minute,$second, $weekDays[$dayOfWeek], $months[$month], $dayOfMonth, $year);
 }
 #############################################################################
 # subroutine get_gtcids_lookup_column: Find column to lookup packet version #               
@@ -387,6 +566,7 @@ sub get_gtcids_lookup_column
     $columnid ="AIA_ID";
   }
 }
+
 #############################################################################
 # sub get_gtcids_lines: gets  lines from gtcids.txt file                    #
 #############################################################################
@@ -395,8 +575,7 @@ sub get_gtcids_lines
   my($dn,$fn,@all_gtcids_lines);
   #open GTCIDS file
   $dn_fn = sprintf("%s/%s",  $ENV{'HK_CONFIG_DIRECTORY'}, $ENV{'HK_GTCIDS_FILE'});
-  open(FILE, "$dn_fn") || die "(5)Can't Open: $!\n";
-  $i=1;
+  open(FILE, "$dn_fn") || die "(5)Can't Open file <$dn_fn>: $!\n";
   #loop throught lines in GTCIDS file
   while (<FILE>)
   {
@@ -427,7 +606,7 @@ sub get_gtcids_lines
       }
       else
       {
-         print "WARNING: Did not find columnid type <$columnid>\n";
+         print "WARNING:jsoc_do_jsvn_map_file.pl: Did not find columnid type <$columnid>\n";
       }
 
       # calculate start point for jsvn
@@ -440,24 +619,24 @@ sub get_gtcids_lines
       $str_fvn = sprintf("%s",$file_version_number);
       $str_pvn = sprintf("%s",$packet_version_number);
       @s_pvn = split /\./,  $str_pvn;
+
       # start adding lines from file version 1.32
       if ( int $s_fvn[1] < 32)
       {
         next; #skip
       }
-      #if jsvn hash table has this packet version number as key then have a JSVN.
       elsif ( $jsvn_ht{$packet_version_number} )
       {
+      #if jsvn hash table has this packet version number as key then have a JSVN.
         #create line for apid-JSVN-TO-PVN file
-        $jsn_map_line = sprintf(" %15.4d | %14s | %14s | %10s %8s | %47s", int $jsvn_ht{$packet_version_number},  $packet_version_number,  $file_version_number, $stha_ci_date, $stha_ci_time, $stha_gen_time);
+        $jsn_map_line = sprintf(" %15.4d | %14s | %14s | %10s %12s | %47s", int $jsvn_ht{$packet_version_number},  $packet_version_number,  $file_version_number, $stha_ci_date, $stha_ci_time, $stha_gen_time);
         print OUTFILE "$jsn_map_line";
-        $i++;
       }
-      #else just set the JSVN to 0000
       else
       {
+        #else just set the JSVN to 0000
         #create line for apid-JSVN-TO-PVN file
-        $jsn_map_line = sprintf(" %15.4d | %14s | %14s | %10s %8s | %47s", 0000,  $packet_version_number,  $file_version_number, $stha_ci_date, $stha_ci_time, $stha_gen_time);
+        $jsn_map_line = sprintf(" %15.4d | %14s | %14s | %10s %12s | %47s", 0000,  $packet_version_number,  $file_version_number, $stha_ci_date, $stha_ci_time, $stha_gen_time);
         print OUTFILE "$jsn_map_line";
       }
       $jsn_map_line="";
@@ -466,6 +645,7 @@ sub get_gtcids_lines
   close(FILE);
   close(OUTFILE);
 }
+
 ###########################################
 #  check apid list to do                  #
 ###########################################
@@ -485,12 +665,27 @@ sub check_apid_list (@$)
 ###########################################
 #  get list of apids to do                #
 ###########################################
-sub get_list_apids_to_do($)
+sub get_list_apids_to_do($$)
 {
+  my($argver,$argproctype,$files);
+  $argver=$_[0];
+  $argproctype=$_[1];
+
   # misses VER_TEMPERATURE
   # $files=`cd /home1/carl/cvs/TBL_JSOC/lev0/hk_config_file/$file_version/; grep VER_NUM apid*`;
   # get all apids that have VER_NUM or VER_TEMPERATURE Keyword
-  my $files=`cd $ENV{'HK_CONFIG_DIRECTORY'}/$ARGV[1]/;  egrep '(VER_NUM|VER_TEMPERATURE)' apid*`;
+  if($argproctype eq "HK")
+  {
+    $files=`cd $ENV{'HK_CONFIG_DIRECTORY'}/$argver/;  egrep '(VER_NUM|VER_TEMPERATURE)' apid*`;
+  }
+  elsif ($argproctype eq "SDO")
+  {
+    $files=`cd $ENV{'HK_SH_CONFIG_DIRECTORY'}/$argver/; grep -H "^APID" apid*`;
+  }
+  else
+  {
+    print "ERROR:jsoc_do_jsvn_map_file.pl: Could not understand processing type passed:$argproctype\n";
+  }
 
   # remove apid text regular expression
   $files =~ s/(a.+?-)//g;
@@ -503,4 +698,75 @@ sub get_list_apids_to_do($)
 
   # return list of apids to do
   return ( @apidslist);
+}
+
+#############################################################################
+# sub get_shcids_lines: gets  lines from shcids.txt file                    #
+#############################################################################
+sub get_shcids_lines
+{
+  # declare locals
+  my($dn,$fn,@all_shcids_lines);
+
+  #open SHCIDS file
+  $dn_fn = sprintf("%s/%s",  $ENV{'HK_SH_CONFIG_DIRECTORY'}, $ENV{'HK_SHCIDS_FILE'});
+  open(FILE, "$dn_fn") || die "(5)Can't Open: $dn_fn  $!\n";
+
+  #loop throught lines in SHCIDS file
+  while (<FILE>)
+  {                     
+    push(@all_shcids_lines, $_) ;
+    @s_line= split / \s*/,  $_;
+    if ( substr($s_line[0],0,1) eq '#')
+    {
+      next; #skip
+    }
+    else 
+    {
+      #load key parameters from each line to use in APID-JSVN-PVN map file
+      $file_version_number = $s_line[5];
+      $gts_ci_date = $s_line[0];
+      $gts_ci_time = $s_line[1];
+      $gts_name = $s_line[7];
+      $gts_ver = $s_line[8];
+
+      # check adminstrator for shcids.txt and SDO_HK_CODE_ids.txt file entered version and filename correctly
+      if($gts_ver eq "")
+      {
+         $gts_ver =~ s/\n//g; #regular exp rm cr 
+         $gts_name  =~ s/\n//g; #regular exp rm cr
+         print "ERROR:jsoc_do_jsvn_map_file.pl: The version number is not correct in shcids.txt file. Filename and Version value is < $gts_name  $gts_ver>.\n";
+         print "Fix this by updating last two columns in file like this: <GODDARD_TLM_SDO.txt   1.1>. Exiting script...\n";
+         exit;
+      }
+
+      # for SDO-HK apid the packet version number is not applicable so set it to 0.
+      $packet_version_number = "000.000";
+
+      # get hashkey based on date
+      $hasharraykey =  $gts_ci_date;
+      $hasharraykey =~ s/\n|\///g; #regular exp rm cr and slash
+
+      # load string values
+      $str_fvn = sprintf("%s",$file_version_number);
+      $str_pvn = sprintf("%s",$packet_version_number);
+
+      if ( $jsvn_ht{$hasharraykey} )
+      {
+        #create line for apid-JSVN-TO-PVN file
+        $jsn_map_line = sprintf(" %15.4d | %14s | %14s | %10s %8s | %19s %8.8s", int $jsvn_ht{$hasharraykey},  $packet_version_number,  $file_version_number, $gts_ci_date,$gts_ci_time,$gts_name, $gts_ver);
+        print OUTFILE "$jsn_map_line";
+      }
+      else
+      {
+        #else just set the JSVN to 0000
+        #create line for apid-JSVN-TO-PVN file
+        $jsn_map_line = sprintf(" %15.4d | %14s | %14s | %10s %8s | %19s %7s", 0000,  $packet_version_number,  $file_version_number, $gts_ci_date, $gts_ci_time, $gts_name,$gts_ver);
+        print OUTFILE "$jsn_map_line";
+      }
+      $jsn_map_line="";
+    }#else
+  }#end while
+  close(FILE);
+  close(OUTFILE);
 }
