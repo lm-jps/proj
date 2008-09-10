@@ -9,8 +9,8 @@
 # main program  
 ##get environment variables and initialize variables.
 $hm=$ENV{'HOME'};
-$ENV{'HK_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_file";
-$ENV{'HK_JSVN_MAP_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsn_map_file";
+$ENV{'HK_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_file/prod";
+$ENV{'HK_JSVN_MAP_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod";
 
 #common setting for all environments
 $ENV{'MAILTO'}="";
@@ -21,8 +21,10 @@ $ENV{'CVS_BINARY_ROOT'}="/home/cvsuser/cvs_binary_root";
 #$ENV{'CVS_RSH'}="/usr/bin/rsh";
 $ENV{'CVS_RSH'}="ssh";
 
-#list of apid to do use for display only-see real setting in cjds.pl
-$apids_to_do=$ENV{'HK_MHDS_APID_LIST'}="0017 0019 0021 0029 0445 0475 0529 0569";
+#list of apid to do use to tell script cjds.pl which new jsd files to create 
+#data series for
+$apids_to_do=$ENV{'HK_MHDS_APID_LIST'}="0129 0445 0475 0529 0569";
+#$apids_to_do=$ENV{'HK_MHDS_APID_LIST'}="ALL";
 
 #Log machine name and environment variables
 print "-->Starting running mhds.pl\n";
@@ -49,24 +51,23 @@ print "-->File Version number is < $fvn >\n";
 print "-->Start Run...\nIf needed, new data series will be made for these APIDS: $ENV{'HK_MHDS_APID_LIST'}\n";
 
 # make preliminary jsd files for current version
-print  "-->Executing  <make_jsd_file.pl prelim $fvn>\n";
-print  "-->Executing <make_jsd_file.pl prelim $fvn> to create preliminary JSD files for file version $fvn\n";
-$retlog=`perl make_jsd_file.pl prelim $fvn`;
-print  "-->Execution log from make_jsd_file.pl prelim <fvn>\n$retlog\n";
+print  "-->Executing  < jsoc_make_jsd_file.pl prelim $fvn HK >\n";
+print  "-->Executing <jsoc_make_jsd_file.pl prelim $fvn HK> to create preliminary JSD files for file version $fvn\n";
+$retlog=`perl jsoc_make_jsd_file.pl prelim $fvn  HK `;
+print  "-->Execution log from jsoc_make_jsd_file.pl prelim <$fvn> HK\n$retlog\n";
 
 # make all JSVN to PVN map files based on apids in 
 # current file version number folder  
-print "-->Executing  <do_jsvn_map_file.pl -g $fvn>\n";
-print "-->Executing <do_jsvn_map_file.pl -g $fvn> to create latest JSOC Version Number Map Files\n";
-$retlog=`perl do_jsvn_map_file.pl -g $fvn`;
-print "-->Execution log from do_jsvn_map_file.pl -g <fvn>\n$retlog\n";
+print "-->Executing  <jsoc_do_jsvn_map_file.pl -g $fvn HK >\n";
+print "-->Executing <jsoc_do_jsvn_map_file.pl -g $fvn HK> to create latest JSOC Version Number Map Files\n";
+$retlog=`perl jsoc_do_jsvn_map_file.pl -g  $fvn  HK `;
+print "-->Execution log from jsoc_do_jsvn_map_file.pl -g <$fvn> HK\n$retlog\n";
 
 # make final jsd files for current version
-print "-->Executing  <make_jsd_file.pl final $fvn>\n";
-print "-->Executing <make_jsd_file.pl final $fvn> to create final JSD files for file version $fvn\n";
-$retlog=`perl make_jsd_file.pl final $fvn`;
-print "-->Execution log from make_jsd_file.pl final <$fvn>\n$retlog\n";
-
+print "-->Executing  <jsoc_make_jsd_file.pl final $fvn HK >\n";
+print "-->Executing <jsoc_make_jsd_file.pl final $fvn HK > to create final JSD files for file version $fvn\n";
+$retlog=`perl jsoc_make_jsd_file.pl final $fvn  HK `;
+print "-->Execution log from jsoc_make_jsd_file.pl final <$fvn> HK\n$retlog\n";
 
 # check into cvs the new JSD files created when running make_jsd_file.pl final
 # check new jsd files for new ones
@@ -78,8 +79,9 @@ print "-->Execution log from make_jsd_file.pl final <$fvn>\n$retlog\n";
 # check if list of new JSD files is created in make_jsd_file.pl.
 # if new JSD, then if on list of APIDS to do, create data series
 # using project name and data type name specified in script
+# Turn off call to cjds.pl
 print "-->Executing <cjds.pl> to create keyword data series using new JSD file\n";
-$retlog=`perl cjds.pl`;
+$retlog=`perl cjds.pl  $apids_to_do `;
 print "-->Execution log for from cjds.pl:\n$retlog";
 
 #close 
@@ -150,8 +152,8 @@ sub show_help_info
   print "    The setting here(0019 0029 etc) tells script which APIDS to make new data series for.\n";
   print "(4) Verify before running the setting of project and data type name in cjds.pl script.\n";
   print "    The setting tells script what to use when creating data series name.\n";
-  print "    For example, project name, hmi_ground and data type name, lev0 will use these.\n";
-  print "    values to create series names: hmi_ground.lev_<APID VALUE>_<JVN VALUE>.\n";
+  print "    For example, project name, hmi and data type name, lev0 will use these.\n";
+  print "    values to create series names: hmi.lev0_<APID VALUE>_<JVN VALUE>.\n";
  
   print "(5) Note the new JSD files created are in file, new_jsd_files.txt. \n";
   print "    The make_jsd_file script creates items in file. The cjds.pl script \n";
@@ -163,7 +165,6 @@ sub show_help_info
   print "    and is used in mhds.pl to display only information in log\n";
   print "(8b)HK_MHDS_APID_LIST set to ALL will do create data series for all APIDs when a new jsd file is created.\n";
   print "(8c)HK_MHDS_APID_LIST set to 0029 0021 0019 0021 will create data series in DRMS for these APIDs only.\n";
- 
   exit;
 }
 
