@@ -3,10 +3,10 @@
 # Name:        cjds.pl - Create jsd data series                             #
 # Description: Creates JSD if have a new JSD version for HK by APID JSD's   #
 # Execution:   (1) To run :                                                 #
-# Execution:   cjds.pl                                                      # 
+# Execution:   cjds.pl  <list of apids to do | ALL >                        # 
+# Example Exc: cjds.pl  "0129 0445 0529 0475 0529"                          # 
 # Limitation:  The script needs these environment variables set properly:   #
-#              HK_NEW_JSD_TARGET, HK_JSD_DIRECTORY, HK_DDF_PROJECT_NAME,    #
-#              HK_DDF_DATA_ID_NAME, HK_MHDS_APID_LIST.                      #
+#              HK_JSD_DIRECTORY                                             #
 # NOTES:       Need to add help information.                                #
 # Author:      Carl                                                         #
 # Date:        Move from EGSE to JSOC software environment on March 21, 2008#
@@ -14,28 +14,26 @@
 # main program  
 # Set environment variables and variables
 $hm=$ENV{'HOME'};
-$ENV{'HK_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_file";
-$target_jsd_dir=$ENV{'HK_NEW_JSD_TARGET'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_file";
-$new_jsd_dir=$ENV{'HK_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_file";
+$exe_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
+$prod_jsd_dir=$ENV{'HK_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_file/prod";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 
-#set up data series name parameters.
-$pjn=$ENV{'HK_DDF_PROJECT_NAME'}="instrument"; 
-$dtn=$ENV{'HK_DDF_DATA_ID_NAME'}="lev0";
-
-# set list of apids to do-if apid has new jsd file create data series in drms
-$apids_to_do=$ENV{'HK_MHDS_APID_LIST'}="0017 0019 0021 0029 0445 0475 0529 0569";
-#$apids_to_do = "ALL";
+# new jsd files created in text file.
+$njsds=$ENV{'HK_NEW_JSD_FILE'}="$script_dir/new_jsd_files.txt";
 
 # Common setting for all environments
 $ENV{'MAILTO'}="";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
-$ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$hm/cvs/JSOC/bin/linux_ia32";
+$ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$exe_dir}";
 $ENV{'CVS_RSH'}="ssh";
 #$ENV{'CVS_RSH'}="/usr/bin/rsh";
 
 # check if do help
-&show_help_info;
+&check_arguments();
+
+# check args passed
+print "cjds:APIDs list to do is in ARGV[0] is $ARGV[0]\n";
+$apids_to_do=$ARGV[0];
 
 # set environment variables for cron job executing this script based on machine
 $account=`whoami`;
@@ -61,9 +59,6 @@ else
 
 # log message to standard out
 print "-->Executing script cjds.pl to create JSD data series if needed\n";
-
-# check list of new jsd files created in text file.
-$njsds="$script_dir/new_jsd_files.txt";
 
 # backup list of new jsd's created in case want to re-run
 if ( -s $njsds )
@@ -93,7 +88,6 @@ else
 {
   print "-->There was no new jsd files created. Therefore no new data series created.\n";
 }
-
 # check if new jsd files created are in list of apids to do
 foreach $f (@new_jsd_list)
 {
@@ -102,84 +96,31 @@ foreach $f (@new_jsd_list)
 
   # get list of apids to do
   @s_list=split(' ',$apids_to_do);
-  print "-->new jsd file has apid is $s_line[2]\n";
   print "-->apid to do list is $apids_to_do\n";
 
   # for each new jsd file check if in list of apids to do
   foreach $atd  (@s_list)
   {
     # if could not find  apid in jsd file name check next
-    if ((( index  $s_line[2],  $atd ) == -1) and (index  $atd,  "ALL") == -1) 
+    if ((( index  $s_line[1],  $atd ) == -1) and (index  $atd,  "ALL") == -1) 
     {
-      print "-->did not find <$s_line[2]> when checked $atd\n";
+      print "-->did not find <$s_line[1]> when checked $atd\n";
     }
     else
     {
       # log information to standard out
-      print "-->Found <$s_line[2]> in $apids_to_do\n";
-      print "-->project name is $pjn,data type name is $dtn,apid value is $s_line[2], jsvn value is $s_line[3]\n";
+      print "-->Found <$s_line[1]> in $apids_to_do\n";
+      print "-->new ds name and data series to create will be < $f >\n";
 
-      # create dynamically the instrument part of project name based on apid value
-      # for prelaunch using hmi_ground or aia_ground or su_carl for initial jsoc testing
-      if ( int $s_line[2] > 0 and int $s_line[2] < 34 )
-      {
-        # $pjn =~ s/^instrument/hmi/g;
-         $pjn =~ s/^instrument/su_carl/g;
-         print "-->instrument project name used is $pjn\n";
-      }
-      elsif ( int $s_line[2] > 33 and int $s_line[2] < 64 ) 
-      {
-         #$pjn =~ s/^instrument/aia/g;
-         $pjn =~ s/^instrument/su_carl/g;
-         print "-->instrument project name used is $pjn\n";
-      }
-      elsif ( int $s_line[2] > 399 and int $s_line[2] < 500 ) 
-      {
-         #$pjn =~ s/^instrument/hmi/g;
-         $pjn =~ s/^instrument/su_carl/g;
-         print "-->instrument project name used is $pjn\n";
-      }
-      elsif ( int $s_line[2] > 499 and int $s_line[2] < 600 ) 
-      {
-         #$pjn =~ s/^instrument/aia/g;
-         $pjn =~ s/^instrument/su_carl/g;
-         print "-->instrument project name used is $pjn\n";
-      }
-      else
-      {
-         print "-->not hmi or aia apid value $s_line[2]- skipping creating\n"; 
-         next;
-      }
-
-      # create data series 
-      $data_series_name=sprintf("%s.%s_%s_%s",$pjn,$ENV{'HK_DDF_DATA_ID_NAME'},$s_line[2],$s_line[3]);
-
-      # log information
-      print "-->new ds name and data series to create will be < $data_series_name >\n";
-      print "-->used project and data name to create new jsd file name from <$f>\n";
-
-      # replace series name with new name of data series and copy to JSOC jsd directory
-      $lm=`chmod 777  $new_jsd_dir/$f`;
-      print "1)New jsd dir is  $new_jsd_dir\nfile is $f\nlog is $lm\n";
-      $lm=`sed \"s/$f/$data_series_name/\" $new_jsd_dir/$f >   $target_jsd_dir/$data_series_name`; 
-
-      # set archive value to 0 for su_carl for now
-      $lm=`sed \"s/Archive:     1/Archive:     0/\" $target_jsd_dir/$data_series_name >   $target_jsd_dir/$data_series_name`; 
-      print "2)Target jsd dir is $target_jsd_dir\n data series name is $data_series_name\nlog is $lm\n";
-
-      # chmod
-      $lm=`chmod 777 $target_jsd_dir/$data_series_name `;
-      print "3)Finish chmod of $target_jsd_dir and $data_series_name\nlog is  $lm\n";
+      # chmod data series file 
+      $lm=` cd  $prod_jsd_dir; chmod 666  $f `;
+      print "-->Finish chmod of $prod_jsd_dir and $f\nlog after chmod command is $lm\n";
 
       # create series using create_series in  JSOC environment 
-      #$lm= `ssh -l production d00.stanford.edu "create_series $target_jsd_dir/$data_series_name" `;
-      $lm= `create_series $target_jsd_dir/$data_series_name`;
-      print "4)Create series using target jsd dir $target_jsd_dir and series name $data_series_name\n log is $lm\n";
+      $lm= `cd $prod_jsd_dir; $ENV{'DF_DRMS_EXECUTABLES'}/create_series  $f `;
+      print "-->Created series using jsd file at:<$prod_jsd_dir/$f>\n-->log from create_series command is $lm\n";
 
-      #Possible got location to check into cvs new JSD when use good names like hmi. and aia. 
-      #For now don't want to check su_carl jsd's so do nothing
-
-
+      # get next jsd in new jsd file list
       last;
     }
   }
@@ -190,27 +131,40 @@ close NJS;
 open(NJS, ">$njsds") || die "-->ERROR:Can't Open $njsds: $!\n";
 close NJS;
 
+###################
+# check_arguments #
+###################
+sub check_arguments
+{
+  if ( $ARGV[0] eq "-h" )
+  {
+    &show_help_info;
+  }
+  elsif ($#ARGV != 0)
+  {
+    print "ERROR:cjds.pl: Need to enter argument for apids to do.\n\n";
+    &show_help_info;
+  }
+}
 #################
 # show_help_info#
 #################
 sub show_help_info
 {
-  if ( $ARGV[0] eq "-h" )
-  {
-    print "Help Listing\n";
-    print "(1)Ways to Execute Perl Script: \n";
-    print "(1a)Create Data Series in DRMS based on item in file set by HK_MHDS_APID_LIST: cjds.pl\n";
-    print "(1b)Get Help Information: cjds.pl -h\n";
-    print "(2)Environment variable HK_JSD_DIRECTORY \n"; 
-    print "(2a)Used to locate the JSD file to use to create data series in DRMS\n";
-    print "(3) Environment variable HK_NEW_JSD_TARGET\n";
-    print "(3a) Used to copy new JSD files to in JSOC environment.\n";
-    print "(4) Environment variable HK_DDF_PROJECT_NAME\n";
-    print "(4a) Used to set project name of new data series to save in DRMS(i.e.,hmi_ground, su_carl, etc)\n";
-    print "(5) Environment variable HK_DDF_DATA_ID_NAME\n";
-    print "(5a) Used to set data type name of new data series to save in DRMS(i.e.,lev0, lev0test,etc.)\n";
-    print "(6) Environment variable HK_MHDS_APID_LIST\n";
-    print "(6a) Used to set a list of APIDS to create data series in DRMS(i.e, 0029 0019 0017 0021)\n";
-    exit;
-  }
+  print "Help Listing\n";
+  print "(1)Ways to Execute Perl Script: \n";
+  print "(1a)Create Data Series in DRMS based on item in new jsd file:\n";
+  print "    cjds.pl < list of decimal 4 digit apids | ALL > \n";
+  print "    Where list of decimal 4 digit apids are in format: <dddd><space><dddd><space>... \n";
+  print "    Where ALL mean create every data series found in new_jsd_file.txt file \n";
+  print "    Example: cjds.pl  ALL \n";
+  print "    Example: cjds.pl  \"0129 0445 0475\" \n";
+  print "(1b)Get Help Information: cjds.pl -h\n";
+  print "(2)Environment variable HK_JSD_DIRECTORY \n"; 
+  print "(2a)Used to locate the JSD file to use to create data series in DRMS\n";
+  print "(2)Environment variable HK_NEW_JSD_FILE \n"; 
+  print "(2a)Used to locate the list of new JSD series files recently create by jsoc_make_jsd_file.pl script.\n";
+  print "(2b)Create data series in file if the apid is passed in list of decimal 4 digit apids or if ALL is passed.\n";
+
+  exit;
 }
