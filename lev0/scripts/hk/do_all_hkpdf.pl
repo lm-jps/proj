@@ -5,6 +5,8 @@
 #              or final JSDs.                                                #
 # Execution:   (1)To run:      do_all_hkpdf.pl                               #
 #              (2)To get help: do_all_hkpdf.pl   -h                          #
+# limitation:  Need to move different version of STANFORD files to lmf_dir   #
+#              before running.                                               #
 # Author:      Carl                                                          #
 # Date:        Move from EGSE to JSOC software environment on March 27, 2008 #
 ##############################################################################
@@ -54,7 +56,10 @@ foreach $fvn (@file_ver_num_list)
   print "log is: $lm\n";
 
   # run script to make HKPDF files 
-  $lm=`cd $script_dir; ./make_hkpdf.pl 4 `;
+  #$lm=`cd $script_dir; ./make_hkpdf.pl 4 `;
+  # use new script
+  $all_hk_value="\"ALL_HK\"";
+  $lm=`cd $script_dir; ./make_hkpdf.pl sort=4 apidlist=$all_hk_value `;
   print "log is: $lm\n";
 }
 ######## show_help ##########
