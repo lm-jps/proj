@@ -48,10 +48,10 @@
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
-#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
-#define TLMSERIESNAMEHMI "su_production.tlm_test"
-#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
-#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+//#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
+//#define TLMSERIESNAMEHMI "su_production.tlm_test"
+//#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
+//#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
 //#define TLMSERIESNAMEHMI "hmi.tlm_60d"
@@ -69,6 +69,13 @@
 //#define TLMSERIESNAMEAIA "aia.tlmd"
 //#define LEV0SERIESNAMEHMI "hmi.lev0d"
 //#define TLMSERIESNAMEHMI "hmi.tlmd"
+
+#define LEV0SERIESNAMEAIA "aia.lev0e"
+//#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+#define TLMSERIESNAMEAIA "aia.tlme"
+#define LEV0SERIESNAMEHMI "hmi.lev0e"
+//#define TLMSERIESNAMEHMI "su_production.tlm_test"
+#define TLMSERIESNAMEHMI "hmi.tlme"
 
 //Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
 //setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
@@ -1106,19 +1113,18 @@ void do_ingest()
 
   for(j=0; j < i; j++) {
     //printk("####QSORT FILES: %s\n", nameptr[j].name); // !!TEMP 
-    // NOTE: the dsf files stay in the indir for now 
+    // NOTE: the dsf files is moved to indir/dsf e.g. (/dds/soc2pipe/aia/dsf)
     // Currently the cron job pipefe_rm does this:
     // `/bin/mv $dsfname /dds/socdc/hmi/dsf`
-    /*******************
     if(strstr(nameptr[j].name, ".dsf")) {
-      sprintf(cmd, "/bin/mv %s/%s %s", tlmdir, nameptr[j].name, outdir);
-      printk("*mv dsf file to %s\n", outdir);
+      //sprintf(cmd, "/bin/mv %s/%s %s", tlmdir, nameptr[j].name, outdir);
+      sprintf(cmd, "/bin/mv -f %s/%s %s/dsf/", tlmdir, nameptr[j].name, tlmdir);
+      printk("*mv dsf file to %s/dsf/\n", tlmdir);
       printk("%s\n", cmd);
       if(system(cmd)) {
         printk("***Error on: %s\n", cmd);
       }
     }
-    ********************/
     if(!strstr(nameptr[j].name, ".qac")) {	// can be .qac or .qacx 
       free(nameptr[j].name);
       continue;
