@@ -1,132 +1,187 @@
 #!/usr/bin/perl
 #############################################################################
-#NAME: make_hkdpf.pl
+#NAME:   make_hkdpf.pl - Make Housekeeping Data Packet format files
 #Author: Carl
-#Purpose:Strip data from STANFORD_TLM_HMI_AIA.txt file and create HKPDF files
-#        using the filename format apid-<#>-version-<#>. These HKPDF files 
-#        contain the required data for processing housekeeping data.
+#Purpose:Strip data from STANFORD_TLM_HMI_AIA.txt file or/and
+#        GODDARD_TLM_SDO.txt file and create HKPDF files using the filename 
+#        format apid-<#>-version-<#>. These HKPDF files contain the required 
+#        and minimum needed data for processing housekeeping data packets by 
+#        the Level 0 Software Applications.
 #Execution for help: make_hkpdf.pl -h 
-#Execution to create hkpdf files: make_hkpdf.pl 4 
+#Execution to create hkpdf files: 
+#  make_hkpdf.pl sort=<sort-num> apidlist=<list|keyword>
+#  make_hkpdf.pl sort=<sort-num> apidfile=<full path to file containing apids>
+#Example Execution commands:
+#  make_hkpdf.pl sort=4 apidlist="0x081"
+#  make_hkpdf.pl sort=4 apidlist="0x1BD 0x1DB"
+#  make_hkpdf.pl sort=4 apidlist="0x1BD 0x1DB 0x081"
+#  make_hkpdf.pl sort=4 apidlist="ALL_SDO"
+#  make_hkpdf.pl sort=4 apidlist="ALL_HK
+#  make_hkpdf.pl sort=4 apidlist="ALL"
 #Create Date:3/15/2008 
 #############################################################################
 # main function
 #############################################################################
-#get environment variables and initialize variables.
+#set environment variables and initialize variables.
 $hm=$ENV{'HOME'};
-$ENV{'HK_APID_LIST'} = "ALL";
+$script_version=1.2;
+
+# HK environment variable for processing STANFORD file
 $ENV{'HK_STHA_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/fromlmsal";
 $ENV{'HK_STHA_FILENAME'}="STANFORD_TLM_HMI_AIA.txt";
 $ENV{'HK_CONFIG_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_config_file/";
-$ENV{'HK_GTCIDS_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/fromlmsal";
-$ENV{'HK_GTCIDS_FILE'}="gtcids.txt";
+
+# SDO environment variables for processing GODDARD file
+$ENV{'HK_SH_CONFIG_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/sdo_hk_config_file/";
+$ENV{'HK_GTS_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/fromgoddard";
+$ENV{'HK_GTS_FILENAME'}="GODDARD_TLM_SDO.txt";
 
 #common setting for all environments
 $ENV{'MAILTO'}="";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
+
+#logfile
 $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq";
+
+#setup contants
+use constant NO_PROCESSING =>  0;
+use constant HK_PROCESSING =>  1;
+use constant SDO_PROCESSING => 2;
 
 #display environment variables
 #print "--->make_hkpdf enviroment variables:\n";
 #print `env `;
 
-if ( $ARGV[0] eq "-h" )
+# check arguments passed
+&check_arguments();
+
+# set apid values to process based on arguments passed
+if ($apid_list_flg == "1")
 {
-  print "Help Listing\n";
-  print "(1)Ways to Execute Perl Script: \n";
-  print "(1a)Create Files: make_hkdpf.pl \n";
-  print "(1b)Create Files: make_hkdpf.pl <sort-choice= 1, 2, 3, 4>\n";
-  print "where sort-choice equal to 0 or no argument is no sort \n";
-  print "where sort-choice equal to 1 is sort by keyword\n";
-  print "where sort-choice equal to 2 is sort by byte position\n";
-  print "where sort-choice equal to 3 is sort by long telem name\n";
-  print "where sort-choice equal to 4 is sort by byte and bit position\n";
-  print "************************************\n";
-  print "** Note:Currently using option 4! **\n";
-  print "************************************\n";
-  print "(1c)Get Help Information: make_hkdpf.pl -h \n";
-  print "(2)Environment variable HK_APID_LIST\n"; 
-  print "(2a)Used to control which apid to process\n";
-  print "(2b)If set to ALL all apid will be processed\n";
-  print "(2c)If set to 0x1BD 0x1DB then only 2 apid will be processed\n";
-  print "(3) Environment variable HK_STHA_DIRECTORY\n";
-  print "(3a) Used to store location of STANFORD_TLM_HMI_AIA.txt file.\n";
-  print "(4) Environment variable HK_STHA_FILE\n";
-  print "(4a) Used to store filename of STANFORD_TLM_HMI_AIA.txt file to process.\n";
-  print "(4b) This file is input data for this script\n";
-  print "(5) Environment variable HK_CONFIG_DIRECTORY\n";
-  print "(5a) Used to store location of hk config files for each apid\n";
-  print "(5b) These files are the output for this script.\n";
-  print "(5c) The filename format is apid-<apid#>-version-<version#>.\n";
-  exit;
+  ($apid_arg)=&set_apidlist_value($ARGV[1]);
 }
-# Set sort option to default and check for argument passed
-$sort_option="0";
-if ( $ARGV[0] eq "0" )
+elsif ($apid_file_flg == "1")
 {
-  $sort_option="0";
-}
-elsif ( $ARGV[0] eq "1" )
-{
-  $sort_option="1";
-}
-elsif ( $ARGV[0] eq "2" )
-{
-  $sort_option= "2";
-}
-elsif ( $ARGV[0] eq "3" )
-{
-  $sort_option="3";
-}
-elsif ( $ARGV[0] eq "4" )
-{
-  $sort_option="4";
-}
-elsif ( $ARGV[0] eq "" )
-{
-  $sort_option="0";
+  ($apid_arg)=&set_apidfile_value($ARGV[1]);
 }
 else
 {
-  print "**make_hk.pl:Error bad argument: choice 0, 1, 2, 3, 4 or no argument \n";
-  print "where sort-choice equal to 0 or no argument is no sort \n";
-  print "where sort-choice equal to 1 is sort by keyword\n";
-  print "where sort-choice equal to 2 is sort by byte position\n";
-  print "where sort-choice equal to 3 is sort by long telem name\n";
-  exit;
+   print "make_hkpdf.pl:ERROR: argument missing. Need to use apidlist or apidfile arguments!\n";
 }
-# (1) get all lines in STHA file
-&get_all_lines();
 
-# (2) get all apids to process based on environment variable 
-&get_apids_to_do;
+# check if need to process STANFORD or/and GODDARD file based on APIDS set in arguments
+# passed in apidlist or apidfile.  
+($hk_type_flag,$sdo_type_flag)=&check_types_to_do($apid_arg);
+if ($ret=&check_processing_flag($hk_type_flag) == HK_PROCESSING)
+{
+  #execute processing STANFORD file
+  print "Doing Processing of STANFORD file\n";
+  #make files for HK_PROCESSING
+  &make_files(HK_PROCESSING);
+  #LOG
+  print "Finished processing STANFORD file using make_hkpdf.pl \n";
+}
+if ($ret=&check_processing_flag($sdo_type_flag) == SDO_PROCESSING)
+{
+  #execute processing GODDARD file
+  print "Doing Processing of GODDARD file\n";
+  #make files for SDO_PROCESSING
+  &make_files(SDO_PROCESSING);
+  #LOG
+  print "Finished processing GODDARD file using make_hkpdf \n";
 
-#print "Please wait creating  < $all_apids_count > hkdpf files\n";
-# (3) create HKPDF filenames
-&create_hkpdf_filenames;
+}
 
-# (4) create HKPDF files
-&create_hkpdf_files;
+###############################################################################
+# sub make files:  
+###############################################################################
+sub make_files($)
+{
+  
+  # local variables and intialize variables
+  my($processing_type);
+  $processing_type=$_[0];
 
-# (5) print stats:total of apid files created
-#print ".. completed creating < $all_apids_count > hkdpf files\n";
+  # (1) get all lines in STHA file
+  &get_all_lines($processing_type);
 
-# (6) create workaround file apid-1AF-version-<current version number>
-#&create_hkpdf_for_1AF; not used anymore
+  # (2) get all apids to process based on environment variable 
+  &get_apids_to_do();
+  #print "Please wait creating  < $all_apids_count > hkdpf files\n";
 
-#LOG
-print "--->Finished running make_hkpdf \n";
+  # (3) create HKPDF filenames
+  &create_hkpdf_filenames($processing_type);
+
+  # (4) create HKPDF files
+  &create_hkpdf_files;
+
+  # (5) print stats:total of apid files created
+  #print ".. completed creating < $all_apids_count > hkdpf files\n";
+
+  # (6) create workaround file apid-1AF-version-<current version number>
+  #&create_hkpdf_for_1AF; not used anymore
+
+}
 
 
+###############################################################################
+# sub check type flag: check processing flag 
+###############################################################################
+sub check_processing_flag($flag)
+{
+  if ($_[0] == HK_PROCESSING )
+  {
+     #then bit one is set so return setting of HK_PROCESSING
+     return(HK_PROCESSING);
+  }
+  elsif ($_[0] == SDO_PROCESSING )
+  {
+     #then bit two is set so return setting of HK_PROCESSING
+     return(SDO_PROCESSING);
+  }
+  else
+  {
+     return($NO_PROCESSING);
+  }
+}
 ###############################################################################
 # sub get_all_lines: gets all lines in STANFORD_TLM_HMI_AIA.txt file
 ###############################################################################
-sub get_all_lines
+sub get_all_lines($)
 {
-  $dn=$ENV{'HK_STHA_DIRECTORY'};
-#print "$dn\n";
-  $fn=$ENV{'HK_STHA_FILENAME'};
-#print "$fn\n";
+  # initalize arrays
+  @all_lines=();
+  @all_pkt_lines=();
+  @all_apids=();
+  @all_fits_lines=();
+  @all_tlm_lines=();
+  @all_tlm_e=();
+  @all_tlm_t=();
+  @all_alg_lines=();
+  @all_dsc_lines=();
+  
+  # determine directory and filename to use based on processing  either GODDARD file or STANFORD file
+  my($processing_type);
+  $processing_type=$_[0];
+  if($processing_type == SDO_PROCESSING)
+  {
+    $dn=$ENV{'HK_GTS_DIRECTORY'};
+    $fn=$ENV{'HK_GTS_FILENAME'};
+  }
+  elsif ($processing_type == HK_PROCESSING)
+  {
+    $dn=$ENV{'HK_STHA_DIRECTORY'};
+    $fn=$ENV{'HK_STHA_FILENAME'};
+  }
+  else
+  {
+
+    print "make_hkpdf.pl:ERROR: Did not find processing type. Check values.\n";
+    exit;
+  }
+
+  # open either STANFORD file or GODDARD file for processing
   open(FILE, "$dn/$fn") || die "Can't Open $fn file: $!\n";
   while (<FILE>)
   {
@@ -135,7 +190,16 @@ sub get_all_lines
     if ( $s_line[0] eq "PKT")
     {
       push(@all_pkt_lines, $_) ;
-      push(@all_apids, $s_line[1]) ;
+      if($processing_type == HK_PROCESSING && hex $s_line[1] < 63 ||  hex $s_line[1] > 399)
+      {
+        # if processing STANFORD file push only these apids
+        push(@all_apids, $s_line[1]) ;
+      }
+      elsif ($processing_type == SDO_PROCESSING && hex $s_line[1] > 95 &&  hex $s_line[1] < 400)
+      {
+        # if processing GODDARD file push only these apids
+        push(@all_apids, $s_line[1]) ;
+      }
       next;
     }
     if ( $s_line[0] eq "FITS" )
@@ -179,9 +243,10 @@ sub get_all_lines
   $all_tlm_ecount=@all_tlm_e;
   $all_alg_count=@all_alg_lines;
   $all_dsc_count=@all_dsc_lines;
-##print "LINES=$line_count\nPKTS=$pkt_line_count\nAPIDS=$all_apids_count\n";
-#print "FITS=$all_fits_count\nTLMS=$all_tlm_count\nALGS=$all_alg_count\nDSCS=$all_dsc_count\n";
-#print "TLMS_T=$all_tlm_tcount\nTLMS_E=$all_tlm_ecount\n";
+  #statistics
+  #print "LINES=$line_count\nPKTS=$pkt_line_count\nAPIDS=$all_apids_count\n";
+  #print "FITS=$all_fits_count\nTLMS=$all_tlm_count\nALGS=$all_alg_count\nDSCS=$all_dsc_count\n";
+  #print "TLMS_T=$all_tlm_tcount\nTLMS_E=$all_tlm_ecount\n";
 }
 
 ###############################################################################
@@ -205,19 +270,68 @@ sub get_all_pkt_lines
   $all_apids_count=@all_apids;
 }
 
+###########################################
+#  check types to do                      #
+###########################################
+sub check_types_to_do($apid_arg)
+{
+  $sdo_type_flag=NO_PROCESSING;
+  $hk_type_flag=NO_PROCESSING;
+  if ( $apid_arg eq "ALL" || $apid_arg eq "")
+  {
+     $sdo_type_flag=SDO_PROCESSING;#set bit 2
+     $hk_type_flag=HK_PROCESSING;  #set bit 1
+  }
+  elsif ( $apid_arg eq "ALL_HK")
+  {
+     $sdo_type_flag=NO_PROCESSING; #set bit 2
+     $hk_type_flag=HK_PROCESSING;  #set bit 1
+  }
+  elsif ( $apid_arg eq "ALL_SDO")
+  {
+     $sdo_type_flag=SDO_PROCESSING; #set bit 2
+     $hk_type_flag=NO_PROCESSING;  #set bit 1
+  }
+  else
+  {
+     #check list of apids to deterine whether how to set type flag
+    @arg_items=split(' ',$apid_arg );
+    while (@arg_items)
+    {
+      $num= hex $arg_items[0];
+      if ($num > 95 and $num < 400)
+      {
+         $sdo_type_flag=SDO_PROCESSING;
+      }
+      elsif ($num > 0 and $num < 64)
+      {
+         $hk_type_flag=HK_PROCESSING;
+
+      }
+      elsif ($num > 399 and $num < 600)
+      {
+         $hk_type_flag=HK_PROCESSING;
+
+      }
+      shift @arg_items;
+    }
+   }
+   return ($hk_type_flag,$sdo_type_flag);
+}
 ###############################################################################
 # sub check_apid_to_do: check which apid to do, if ALL do all in STHA file
 ###############################################################################
 sub get_apids_to_do
 {
-  $arg=$ENV{'HK_APID_LIST'};
-  if ( $arg eq "ALL" || $arg eq "")
+  #$arg=$ENV{'HK_APID_LIST'};
+  $arg=$apid_arg;
+  if ( $arg eq "ALL" || $arg eq "ALL_HK" || $arg eq "ALL_SDO")
   {
      $apids_flag=ALL;
   }
   else 
   {
-     $apid_flag=SOME;
+     $apids_flag=SOME;
   }
 
   if ( $apids_flag ne "ALL")
@@ -233,17 +347,21 @@ sub get_apids_to_do
       shift @arg_items;
     }
   }
-$all_apids_count=@all_apids;
-print "APID List to process is as follows: @all_apids \n";
+  $all_apids_count=@all_apids;
+  #print "APID List to process is as follows: @all_apids \n";
 }
 
 ###############################################################################
 # sub create_hkpdf_filenames: create filenames for each apid.
 ###############################################################################
-sub create_hkpdf_filenames
+sub create_hkpdf_filenames($)
 {
-  my($i, $j);
-##get version number
+  # local variables and initialized variables
+  my($i, $j, $processing_type);
+  @filenames=();
+  $processing_type= $_[0];
+
+  # get version number
   $i=0;
   while ($all_lines[$i])
   {
@@ -251,15 +369,17 @@ sub create_hkpdf_filenames
     if ($file_line[1] eq "File" && $file_line[2] eq "RCS")
     {
       $version_number=$file_line[6];
-#print "VERSION NUMBER is: $version_number \n";
+      #print "VERSION NUMBER is: $version_number \n";
       last;
     }
     $i++;
   }
 
-##get apid number
+  ##get apid number
   $i=0;
-  while ( $all_apids[$i] )
+  $j=0;
+  $pkt_count=@all_pkt_lines;
+  while ( $all_apids[$i])
   {
     @apid_line=split(',',$all_pkt_lines[$j] );
     if ( hex $apid_line[1] ne  hex $all_apids[$i] )
@@ -272,17 +392,39 @@ sub create_hkpdf_filenames
       push(@filenames, sprintf("apid-%3.3s-version-%s\n",  $apid_line_hex[1], $version_number));
       $i++;
     }
+    if ( $j eq $pkt_count)
+    {
+      push(@filenames, sprintf("not-used"));
+        $i++;
+        $j=0;
+    }
   }
-##print "filename list:\n  @filenames \n";
 }
 ###############################################################################
 # sub create_hkpdf_files: create files for each apid to do.
 ###############################################################################
-sub create_hkpdf_files
+sub create_hkpdf_files($)
 {
-  my($i);
-  $directory=$ENV{'HK_CONFIG_DIRECTORY'};
-# Check if version_number folder exists
+  # set local variables and initialize variables
+  my($i,$processing_type);
+  $processing_type= $_[0];
+
+  # Determine directory to put HKPDF files
+  if($processing_type == SDO_PROCESSING)
+  {
+    $directory=$ENV{'HK_SH_CONFIG_DIRECTORY'};
+  }
+  elsif ($processing_type == HK_PROCESSING)
+  {
+    $directory=$ENV{'HK_CONFIG_DIRECTORY'};
+  }
+  else
+  {
+    print "make_hkpdf.pl:ERROR: Did not find processing type. Exiting.\n";
+    exit;
+  }
+
+  # Check if version_number folder exists
   opendir(DIR,"$directory") || die "Can't open: $!\n";
   @items=readdir(DIR);
   closedir(DIR);
@@ -299,30 +441,45 @@ sub create_hkpdf_files
   {
       mkdir( "$directory$version_number", 0755) || die "mkdir:$version_number: $!\n";
   }
-  print "Writing new files to directory: $directory$version_number \n";
+
   $i=0;
   while ($all_apids[$i])
   {
-# Create directory using environment variable, version number and filename
-    open(OUTFILE, ">$directory$version_number/$filenames[$i]") || die "Can't Open  $directory/$filenames[$i]: $!\n" ;
-    &create_file_line;
-    &create_apid_line( $all_apids[$i]) ;
-    &create_kwd_lines( $all_apids[$i]) ;
-    &create_acon_lines() ;
-    &create_dcon_lines() ;
-    close( OUTFILE);
-    $i++;
-    print "Finish file $i\n";
+    if($processing_type == HK_PROCESSING && hex $all_apids[$i] > 95 && hex $all_apids[$i] < 400)
+    {
+        $i++;
+    }
+    elsif($processing_type == SDO_PROCESSING && (hex $all_apids[$i] < 64 || hex $all_apids[$i] > 399))
+    {
+        $i++;
+    }
+    else
+    {
+      # Create directory using environment variable, version number and filename
+      open(OUTFILE, ">$directory$version_number/$filenames[$i]") || die "Can't Open  $directory/$filenames[$i]: $!\n" ;
+      &create_file_line($processing_type);
+      &create_apid_line( $all_apids[$i]) ;
+      &create_kwd_lines( $all_apids[$i]) ;
+      &create_acon_lines() ;
+      &create_dcon_lines() ;
+      close( OUTFILE);
+      print "Finish file $i. APID is $all_apids[$i]\n";
+      $i++;
+    }
   }
 }
 
 ###############################################################################
 # sub create_pkt_line: create FILE line for hkpdf file.
 ###############################################################################
-sub create_file_line
+sub create_file_line($)
 {
-  my($i,$f_line,$fileline);
+  # set local variables and initialize variables
+  my($i,$f_line,$fileline,$processing_type);
   $i=0;
+  $processing_type= $_[0];
+
+  # create file line
   while ($all_lines[$i])
   {
     @f_line=split(' ', $all_lines[$i]);
@@ -332,9 +489,22 @@ sub create_file_line
     }
     $i++;
   }        
-  $fileline=sprintf("%4.4s %24.24s  %-7s %-10s  %-8s\n","FILE",$f_line[5],$f_line[6], $f_line[7], $f_line[8]); 
-  print OUTFILE "# hkdpf file created by make_hkdpf.pl script \n";
+  # Determine if getting GODDARD or STANFORD filename inside file
+  if($processing_type == SDO_PROCESSING)
+  {
+    $fileline=sprintf("%4.4s %19.19s  %-7s %-10s  %-8s\n","FILE",$f_line[5],$f_line[6], $f_line[7], $f_line[8]); 
+  }
+  elsif ($processing_type == HK_PROCESSING)
+  {
+    $fileline=sprintf("%4.4s %24.24s  %-7s %-10s  %-8s\n","FILE",$f_line[5],$f_line[6], $f_line[7], $f_line[8]); 
+  }
+
+  # print time created file and version of this script used to create file
+  $datestamp=`date`;
+  $datestamp =~ s/\n//g;
+  print OUTFILE "# hkdpf file created by make_hkdpf.pl script.\n# date created file: $datestamp\n# script version: $script_version\n";
   print OUTFILE "$fileline";
+
 }
 ###############################################################################
 # sub create_apid_line: create apid line for hkpdf file.
@@ -347,7 +517,7 @@ sub create_apid_line
   while ( $all_pkt_lines[$i] )
   {
     @p_line=split(',',$all_pkt_lines[$i] );
-    if ( $p_line[1] eq $find_apid )
+    if ( hex $p_line[1] eq hex $find_apid )
     {
       last;
     }
@@ -373,13 +543,17 @@ sub create_apid_line
   {
     $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "SSIM", $p_line[5], $p_line[6]); 
   }
+  elsif ( hex $p_line[1] >= 96 && hex $p_line[1] <= 399)
+  {
+    $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "SDO", $p_line[5], $p_line[6]); 
+  }
   else
   {
     $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "UNKN", $p_line[5], $p_line[6]); 
   }
 
 
-##$apidline=sprintf("%4.4s %5.5s  %3.3s  %8.8s\n","APID",$p_line[1],$p_line[3], $p_line[6]); 
+  #$apidline=sprintf("%4.4s %5.5s  %3.3s  %8.8s\n","APID",$p_line[1],$p_line[3], $p_line[6]); 
   print OUTFILE "$apidline";
 }
 ###############################################################################
@@ -741,4 +915,230 @@ sub create_hkpdf_for_1AF
     close (OUTFILE);
   }
 }
+###############################################################################
+#sub check_arguments
+###############################################################################
+sub check_arguments
+{
 
+  $help_flg= "0";
+  $sort_flg= "0";
+  $apid_list_flg="0";
+  $apid_file_flg="0";
+  
+  if ($#ARGV < 1 || $#ARGV > 1)
+  {
+    $help_flg="1";
+  }
+    
+  if ($#ARGV >= 0)
+  {
+    if ($ARGV[0] eq "-h" || $ARGV[0] eq "-help" || $ARGV[0] eq "-H")
+    {
+      $help_flg = "1";
+    }
+    elsif (substr($ARGV[0],0,5) eq "sort=" )
+    {
+      #use file to get list of apids to create map files for
+      $sort_flg = "1";
+      &set_sort_value($ARGV[0]);
+    }
+    else
+    {
+       print  "ERROR: Did not use -h or sort arguments. Exiting script\n\n";
+       &show_help_info("USAGE");
+    }
+  }
+  if ($#ARGV >= 1)
+  {
+    if (substr($ARGV[1],0,9) eq "apidlist=" )
+    {
+      #use file to get list of apids to create map files for
+      $apid_list_flg = "1";
+      #($apid_arg)=&set_apidlist_value($ARGV[1]);
+    }
+    elsif (substr($ARGV[1],0,9) eq "apidfile=" )
+    {
+      #use apid following -a to create map files 
+      #push decimal character value in this format dddd. Example: -a 0001
+      $apid_file_flg = "1";
+      #&set_apidfile_value($ARGV[1]);
+    }
+    else
+    {
+       print  "ERROR: Did not use apidfile or apidlist arguments. Exiting script\n\n";
+       &show_help_info("USAGE");
+    }
+  }
+
+  if ( $help_flg eq "1")
+  {
+     &show_help_info("HELP");
+  }
+}
+###############################################################################
+#sub set_apidlist_value
+###############################################################################
+sub set_apidlist_value($)
+{
+  my($arg,$s_arg);
+  $arg=$_[0];
+  @s_arg=split("=",$arg );
+  if ( $s_arg[1] eq "")
+  {
+    print "make_hkpdf.pl:ERROR:exiting bad apidlist argument:<$s_arg[1]>\n";
+    exit;
+  } 
+  elsif($s_arg[1] eq "ALL") 
+  {
+    $apidlist_value=$s_arg[1];
+    print "Doing all apids in STANFORD and GODDARD files\n";
+  }
+  elsif($s_arg[1] eq "ALL_HK") 
+  {
+    $apidlist_value=$s_arg[1];
+    print "Doing all apids in STANFORD file only\n";
+  }
+  elsif($s_arg[1] eq "ALL_SDO") 
+  {
+    $apidlist_value=$s_arg[1];
+    print "Doing all apids in GODDARD file only\n";
+  }
+  else 
+  {
+    $apidlist_value=$s_arg[1];
+  }
+  #print "apidlist value is <$apidlist_value>\n";
+  return($apidlist_value);
+}
+###############################################################################
+#sub set_apidlist_value
+###############################################################################
+sub set_apidfile_value($)
+{
+  my($arg,$s_arg);
+  $arg=$_[0];
+  @s_arg=split("=",$arg );
+  if ( $s_arg[1] eq "")
+  {
+    print "make_hkpdf.pl:ERROR:exiting bad apidfile argument:<$s_arg[1]>\n";
+    exit;
+  } 
+  else 
+  {
+    $apidfile_value=$s_arg[1];
+    # open apidfile passed in as argument
+    open(FILEAPID, "$s_arg[1]") || die "Can't Open $s_arg[1] file: $!\n";
+    while (<FILEAPID>)
+    {
+      #read in apids 
+      $_ =~ s/\n//g; #regular exp rm cr
+      push(@all_apid_from_file, $_) ;
+    }
+    close(FILEAPID);
+    #print "apids from file: @all_apid_from_file\n";
+    # put in format for processing... 0x1BD 0x081
+    $apidfile_value=join(' ',@all_apid_from_file);
+    #return back values
+  }
+  return  $apidfile_value;
+}
+###############################################################################
+#sub set_sort_value
+###############################################################################
+sub set_sort_value($)
+{
+  my($arg);
+  $arg=$_[0];
+  # Set sort option to default and check for argument passed
+  $sort_option="0";
+  if ( $arg eq "sort=0" )
+  {
+    $sort_option="0";
+  }
+  elsif ( $arg eq "sort=1" )
+  {
+    $sort_option="1";
+  }
+  elsif ( $arg eq "sort=2" )
+  {
+    $sort_option= "2";
+  }
+  elsif ( $arg eq "sort=3" )
+  {
+    $sort_option="3";
+  }
+  elsif ( $arg eq "sort=4" )
+  {
+    $sort_option="4";
+  }
+  elsif ( $arg eq "" )
+  {
+    $sort_option="0";
+  }
+  else
+  {
+    print "**make_hk.pl:Error bad argument for sort parameter: choice 0, 1, 2, 3, 4 or no argument \n";
+    print "where sort-choice equal to 0 is no sort \n";
+    print "where sort-choice equal to 1 is sort by keyword\n";
+    print "where sort-choice equal to 2 is sort by byte position\n";
+    print "where sort-choice equal to 3 is sort by long telem name\n";
+    print "where sort-choice equal to 4 is sort by byte position and bit start position\n";
+    exit;
+  }
+}
+###############################################################################
+#sub show_help_info
+###############################################################################
+sub show_help_info($)
+{
+  my ($help_arg);
+  $help_arg=$_[0];
+  
+  
+  if($help_arg eq "HELP")
+  {
+    print "Help Listing\n";
+  }
+  else
+  {
+    print "Usage:\n";
+  }
+  print "(1)Ways to Execute Perl Script: \n";
+  print "(1a)Help Information : make_hkdpf.pl -h\n";
+  print "(1b)Create Files: make_hkdpf.pl sort=<0,1,2,3 or 4> apidfile=<full path to file>\n";
+  print "(1c)Create Files: make_hkdpf.pl sort=<0,1,2,3 or 4> apidlist=<list|keyword>\n";
+  print "where sort-choice equal to 0 is no sort \n";
+  print "where sort-choice equal to 1 is sort by keyword\n";
+  print "where sort-choice equal to 2 is sort by byte position\n";
+  print "where sort-choice equal to 3 is sort by long telem name\n";
+  print "where sort-choice equal to 4 is sort by byte and bit position\n";
+  print "************************************\n";
+  print "** Note:Currently using option 4! **\n";
+  print "************************************\n";
+  print "where apidfile is full path and filename containing list of apids to do\n";
+  print "where apidlist contains list of apids to do(i.e.,0x1BD 0x081 ).\n";
+  print "where apidlist contains keyword (i.e., ALL, ALL_HK, or ALL_SDO)on apids to do\n";
+  if($help_arg eq "HELP")
+  {
+    print "(2) Environment variable HK_STHA_DIRECTORY\n";
+    print "(2a) Used to store location of STANFORD_TLM_HMI_AIA.txt file.\n";
+    print "(3) Environment variable HK_STHA_FILE\n";
+    print "(3a) Used to store filename of STANFORD_TLM_HMI_AIA.txt file to process.\n";
+    print "(3b) This file is input data for this script\n";
+    print "(4) Environment variable HK_CONFIG_DIRECTORY\n";
+    print "(4a) Used to store location of hk config files for each apid\n";
+    print "(4b) These files are the output for this script.\n";
+    print "(4c) The filename format is apid-<apid#>-version-<version#>.\n";
+    print "(5) Environment variable HK_GTS_DIRECTORY\n";
+    print "(5a) Used to store location of GODDARD_TLM_SDO.txt file.\n";
+    print "(6) Environment variable HK_GTS_FILE\n";
+    print "(6a) Used to store filename of GODDARD_TLM_SDO.txt file to process.\n";
+    print "(6b) This file is input data for this script\n";
+    print "(7) Environment variable HK_SH_CONFIG_DIRECTORY\n";
+    print "(7a) Used to store location of sdo-hk config files for each apid\n";
+    print "(7b) These files are the output for this script.\n";
+    print "(7c) The filename format is apid-<apid#>-version-<version#>.\n";
+  }
+  exit;
+}
