@@ -92,8 +92,12 @@ $lm=`chmod 777 $tar_src_dir/gtcids.txt`;
 print "-->Building HKPDF files:\n";
 $arg1= "/usr/bin/perl" ;
 $arg2= " make_hkpdf.pl ";
-$arg3= " 4 ";
-@allarg= ("$arg1","$arg2","$arg3");
+#$arg3= " 4 ";
+#@allarg= ("$arg1","$arg2","$arg3");
+# new make_hkpdf.pl sort=4 apidlist="ALL_HK"
+$arg3= " sort=4 ";
+$arg4= " apidlist=\"ALL_HK\" ";
+@allarg= ("$arg1","$arg2","$arg3","$arg4");
 print "@allarg \n";
 $lm=`cd $script_dir;  @allarg`; 
 print "$lm\n";
