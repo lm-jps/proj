@@ -648,7 +648,6 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm)
   char *suffix_filename;
   char line[HK_LEV0_MAXLINE_IN_FILE];
   char *pn;
-  char *pn1,*pn2,*pn3;
   int  wn, dn;
 
   /* initialized variables */
