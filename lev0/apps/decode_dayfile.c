@@ -21,7 +21,7 @@
 # Example 1:   decode_dayfile in=/tmp20/20070202.0x001d (Best Option)        #
 # Example 2:   decode_dayfile in=/tmp20/20070202.0x001d                      #
 #                             out=su_carl.lev0_0029_0001                     #
-# Limitation:  Setup required for environment variables in                   #
+# Limitation:  Setup required for environment variables in file              #
 #              SETENV_HK_DAYFILE_DECODE. Currently the code read packet size #
 #              limit of 1000 bytes (HKDDF_MAX_PKT_SIZE ). Need to setup local#
 #              version of SETENV_HK_DAYFILE_DECODE file since file checked in#
@@ -32,15 +32,18 @@
 
 /******************** defines ***********************************************/
 #define HKDDF_CNTRL_L            ""
-#define HKDDF_MAX_FILE_NAME      100
 #define HKDDF_MAXLINE_IN_FILE    200
-#define HKDDF_MAX_VERSION_LINES  1000
+#define HKDDF_MAXNUM_PJNAMES     3
 #define HKDDF_MAX_APID_STR       5
-#define HKDDF_MAX_JSVN_STR       5
-#define HKDDF_MAX_PVN_STR        10
 #define HKDDF_MAX_DSNAME_STR     100
+#define HKDDF_MAX_FILE_NAME      100
+#define HKDDF_MAX_JSVN_STR       5
+#define HKDDF_MAX_LONG_KW_NAME   50
 #define HKDDF_MAX_PKT_SIZE       1000
+#define HKDDF_MAX_PJNAME         50 
 #define HKDDF_MAX_PVN_SIZE       50
+#define HKDDF_MAX_PVN_STR        10
+#define HKDDF_MAX_VERSION_LINES  1000
 /*#define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
 #define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
 
@@ -57,6 +60,7 @@
 #include "drms_names.h"
 #include "jsoc_main.h"
 #include "load_hk_config_files.h"
+#include "write_hk_to_drms.h"
 #include "packets.h"
 #include "decode_hk.h"
 #include "printk.h"
@@ -74,21 +78,31 @@ ModuleArgs_t   *ggModArgs=module_args;
 char* module_name = "decode_dayfile";
 
 /******************* function prototypes  *******************************/
+static char* get_ds_pjname(int apid, char proj_name[][]);
 static int   get_packet_time_for_df(HK_Keyword_t *hk, TIME *ptime);
 static int   load_ds_names(char *pn, char* didn, int apid);
-static char* lookup_dsn( char *pvn, int count);
+static char* lookup_dsn( int apid, char *pvn,char *fvn, int count);
 static void  print_packet_time(HK_Keyword_t *kwh);
-static void  save_packet_values1(unsigned char read_in_buffer[], char *out);
-static void  save_packet_values2(unsigned char read_in_buffer[], char *pn, char *didn );
-static void  saveprint_packet_values1(unsigned char read_in_buffer[], char *in, char *out);
-static void  saveprint_packet_values2(unsigned char read_in_buffer[], char *in, char *pn, char *didn );
+static void  save_packet_values1(unsigned char *read_in_buffer, char *out);
+static void  save_packet_values2(unsigned char *read_in_buffer, char projname[][], char *didn );
+static void  saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out);
+static void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in, char projname[][], char *didn);
 static void  set_env_variables();
-static void  write_to_drms( char packet_version_number[], char *data_series, HK_Keyword_t *kw_head);
+static void  write_to_drms( int apid, char packet_version_number[], char file_version_number[],char *data_series, HK_Keyword_t *kw_head);
 static TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 
 /********************* extern functions  *********************************/
+extern SHCIDS_Version_Number *global_shcids_vn;
+extern char * find_file_version_number(GTCIDS_Version_Number *top,char f_version_number[]);
+extern char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[],int apid);
+extern double  get_packet_time(unsigned short *word_ptr);
 extern int DoIt(void);
 extern int nice_intro (void);
+extern int check_for_sdo_apid(int apid);
+extern void sprint_time (char *at, TIME t, char *zone, int precision);
+/********************* extern globals  *********************************/
+extern GTCIDS_Version_Number *global_gtcids_vn;
+extern GTCIDS_Version_Number *global_gtcids_vn;
 
 /********************* structures   *************************************/
 /*structure used to save values from JSVN-TO-PVN map files */
@@ -97,8 +111,13 @@ struct jsvn_map_data
   char apid[HKDDF_MAX_APID_STR];
   char jvn[HKDDF_MAX_VERSION_LINES][HKDDF_MAX_JSVN_STR];
   char pvn[HKDDF_MAX_VERSION_LINES][HKDDF_MAX_PVN_STR];
+  char fvn[HKDDF_MAX_VERSION_LINES][HKDDF_MAX_PVN_STR];
   char dsn[HKDDF_MAX_VERSION_LINES][HKDDF_MAX_DSNAME_STR];
 } jsvn_list[1], *jmap=jsvn_list;
+
+/********************* enums      *************************************/
+/* used for projname array to lookup project name */
+enum project{pjnHMI,pjnAIA,pjnSDO};
 
 
 
@@ -140,15 +159,18 @@ int nice_intro (void)
  *************************************************************************/
 int DoIt(void)
 {
+/*#define HKDDF_READ_ARRAY_SIZE   6588020*/
+#define HKDDF_READ_ARRAY_SIZE  (25000001)
   /* variables */
   FILE *file_ptr;
   char *hk_df_fn;
   char hk_directory_filename[HKDDF_MAX_FILE_NAME];
-  char *pn;
+  char *pn1,*pn2,*pn3;
+  char projname[HKDDF_MAXNUM_PJNAMES][HKDDF_MAX_PJNAME];
   char *didn;
-  int i;
+  unsigned long int i;
   int out_flag;
-  unsigned char read_in_buffer[6588020];
+//unsigned char read_in_buffer[HKDDF_READ_ARRAY_SIZE];
   unsigned char *ptr_read_in_buffer;
 
   /* set environment variables */
@@ -156,7 +178,7 @@ int DoIt(void)
 
   /* parameter initialization */
   hk_df_fn= hk_directory_filename;
-  ptr_read_in_buffer = read_in_buffer;
+//ptr_read_in_buffer = read_in_buffer;
   out_flag=0;
 
   /* Get command line arguments */
@@ -183,20 +205,26 @@ int DoIt(void)
 
     /* check if environment variables setup for automatic creation of data  */
     /* series name project name */
-    pn = getenv("HK_DDF_PROJECT_NAME");
+    pn1 = getenv("HK_DDF_PROJECT_NAME_HMI");
+    pn2 = getenv("HK_DDF_PROJECT_NAME_AIA");
+    pn3 = getenv("HK_DDF_PROJECT_NAME_SDO");
     didn = getenv("HK_DDF_DATA_ID_NAME");
-    if(pn == NULL) 
+    if(pn1 == NULL || pn2 == NULL || pn3 == NULL ) 
     {
       printkerr("Error at %s, line %d: Could not get project name environment\n"
-                "variable:<HK_DDF_PROJECT_NAME>. Either set the env variable "
-                "HK_DDF_PROJECT_NAME  or set out argument to a value.\n"
-                "Exiting execution.\n-Example format for using out argument:"
-                "<project-name>.<data specifier>_<4 digit apid>_<4 digit jsvn number>\n"
-                "-Example name to use for out argument: < hmi_ground.lev0_0029_0001>\n"
-                "-Example of setting environment variable: setenv HK_DDF_PROJECT_NAME hmi_ground\n",
-                 __FILE__,__LINE__, pn);
+                "variable:<HK_DDF_PROJECT_NAME_HMI,HK_DDF_PROJECT_NAME_AIA, or/and HK_DDF_PROJECT_NAME_SDO>.\n"
+                "Either set the env variables HK_DDF_PROJECT_NAME_<xxx>  or set out argument to a value.\n"
+                "Exiting execution!!\n-Example format for using out argument:"
+                " <project-name>.<data specifier>_<4 digit apid>_<4 digit jsvn number>\n"
+                "-Example name to use for out argument: < hmi.lev0_0029_0001>\n"
+                "-Example of setting environment variable: setenv HK_DDF_PROJECT_NAME_HMI hmi\n",
+                 __FILE__,__LINE__);
       return (0);
     }
+    /* set each project name in array */
+    strcpy(projname[pjnHMI],pn1);
+    strcpy(projname[pjnAIA],pn2);
+    strcpy(projname[pjnSDO],pn3);
 
     /* series name data type name */
     if(didn == NULL) 
@@ -208,7 +236,7 @@ int DoIt(void)
                 "<project-name>.<data specifier>_<4 digit apid>_<4 digit jsvn number>\n"
                 "-Example name to use for out argument: < hmi_ground.lev0_0029_0001>\n"
                 "-Example of setting environment variable: setenv HK_DDF_DATA_ID_NAME lev0\n",
-                  __FILE__,__LINE__, pn);
+                  __FILE__,__LINE__);
       return (0);
     }
   }
@@ -218,7 +246,7 @@ int DoIt(void)
     out_flag=1; 
   }
 
-  /* get  in file name and open file*/
+  /* get  in filename and open file*/
   strcpy(hk_df_fn, in);
   strcat(hk_df_fn, "\0");
   file_ptr=fopen(hk_df_fn,"r");
@@ -229,27 +257,34 @@ int DoIt(void)
     return(0);
   }
 
+   ptr_read_in_buffer = (unsigned char *) malloc(sizeof(unsigned char) * HKDDF_READ_ARRAY_SIZE);
   /*read lines in file into buffer representing a packet*/
-  for(i=0; i < 6588020;i++) read_in_buffer[i]=0; ;
-  for(i = 0 ; fread(ptr_read_in_buffer,1,1,file_ptr) ; i++,ptr_read_in_buffer++) 
+  for(i=0; i < HKDDF_READ_ARRAY_SIZE;i++) ptr_read_in_buffer[i]=0; ;
+  for(i = 0 ; fread(ptr_read_in_buffer + i,1,1,file_ptr) ; i++) 
   {  
     ;/* do nothing*/
+   // printf("i is %lu\n",i);
+    if( i == HKDDF_READ_ARRAY_SIZE - 1)
+    {
+      printkerr("Error at %s, line %d: Array for reading dayfile is too small. :"
+                "<%lu>\n", __FILE__,__LINE__, i + 1);
+      return (0);
+    }
   }
-  ptr_read_in_buffer=NULL;
+  *(ptr_read_in_buffer + i)=NULL;
   fclose(file_ptr);
-  
   if(print_flag && out_flag)
   {
     /* start printing packet information and process keywords to drms*/
     /*  and use command line argument for data series name           */
-    saveprint_packet_values1(read_in_buffer, in, out);
+    saveprint_packet_values1(ptr_read_in_buffer, in, out);
     return 0;
   }
   else if(print_flag && !out_flag)
   {
     /* start printing packet information and process keywords to drms and */
     /* automatically create JSVN and use as data series name              */
-    saveprint_packet_values2(read_in_buffer, in, pn, didn );
+    saveprint_packet_values2(ptr_read_in_buffer, in, projname, didn );
     return 0;
   }
   else if (!print_flag && out_flag)
@@ -257,7 +292,7 @@ int DoIt(void)
     /* do not print packet information and use command line argument for */
     /* data series name. this is case where: if(out_flag && !print_flag) */
     /* write to drms only - do not print values to standard out          */
-    save_packet_values1(read_in_buffer, out);
+    save_packet_values1(ptr_read_in_buffer, out);
     return 0;
   }
   else if (!print_flag && !out_flag)
@@ -266,7 +301,7 @@ int DoIt(void)
     /* data series name. Environment variables need to be set for   */
     /* project name and data identifier name. write to drms only    */
     /* - do not print values to standard out                        */
-    save_packet_values2(read_in_buffer, pn, didn);
+    save_packet_values2(ptr_read_in_buffer, projname, didn);
     return 0;
   }
   else 
@@ -283,9 +318,10 @@ int DoIt(void)
 /*************************************************************************
  * WRITE TO DRMS                                                         *
  * FUNCTION: void write_to_drms(char [],char *,HK_Keyword_t *            *
- * DESCRIPTION: Gets Packet time based on Time Codes.                    *
+ * DESCRIPTION: Gets Packet time based on Time Codes. Set packet version *
+ *              number or file version number and keywords.              *
  *************************************************************************/
-void write_to_drms(char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_head)
+void write_to_drms(int apid, char pkt_ver_num[],char file_ver_num[], char *ds_name, HK_Keyword_t *kw_head)
 {
   /* variable definitions */
   /* create series name variables*/
@@ -293,13 +329,13 @@ void write_to_drms(char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_head)
   int status;
   /* keyword variables and structure */
   HK_Keyword_t *kw;
-  kw= kw_head;
   TIME pkt_time;
+  kw= kw_head;
 
   /* variable to set drms record */
   DRMS_Type_t keytype;
   DRMS_Type_Value_t key_anyval;
-  char keyname[50];
+  char keyname[HKDDF_MAX_LONG_KW_NAME];
   /* drms record create variables */
   DRMS_RecordSet_t *rs;
   DRMS_Record_t *rec;
@@ -308,7 +344,7 @@ void write_to_drms(char pkt_ver_num[],char *ds_name, HK_Keyword_t *kw_head)
   if(ds_name)
   {
     strcpy(query, ds_name) ;  
-printf("query is <%s>\n",query);
+    //printf("query is <%s>\n",query);
   }
   else
   {
@@ -351,14 +387,31 @@ printf("query is <%s>\n",query);
     status = drms_setkey(rec, keyname, keytype, &key_anyval);
   }
 
-  /* set PACKET_VERSION_NUMBER keyword using data from HMI_VER.. keyword */
-  /* set drms type and long telemetry name  */
-  keytype= DRMS_TYPE_STRING;
-  strcpy(keyname, "PACKET_VERSION_NUMBER");
-  /*allocate memory for string value */
-  key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
-  /* set packet version number */
-  strcpy(key_anyval.string_val, pkt_ver_num);
+  
+  /* if sdo hk packet then set file version number, otherwise set packet version number */
+  if(check_for_sdo_apid(apid))
+  {
+    /* for sdo hk packets */
+    /* set FILE_VERSION_NUMBER keyword using passed value */
+    /* set drms type and long telemetry name  */
+    keytype= DRMS_TYPE_STRING;
+    strcpy(keyname, "FILE_VERSION_NUMBER");
+    /*allocate memory for string value */
+    key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
+    /* set packet version number */
+    strcpy(key_anyval.string_val, file_ver_num);
+  }
+  else
+  {
+    /* set PACKET_VERSION_NUMBER keyword using data from HMI_VER.. keyword */
+    /* set drms type and long telemetry name  */
+    keytype= DRMS_TYPE_STRING;
+    strcpy(keyname, "PACKET_VERSION_NUMBER");
+    /*allocate memory for string value */
+    key_anyval.string_val = (char *)malloc(sizeof(char) * 100);
+    /* set packet version number */
+    strcpy(key_anyval.string_val, pkt_ver_num);
+  }
   /* set record */
   status = drms_setkey(rec, keyname, keytype, &key_anyval);
   /* free memory */
@@ -409,6 +462,14 @@ printf("query is <%s>\n",query);
       keytype= DRMS_TYPE_DOUBLE;
       strcpy(keyname, kw->name);
       key_anyval.double_val = kw->eng_value.double_val;
+      status = drms_setkey(rec, keyname, keytype, &key_anyval);
+    }
+    else if(kw->eng_type == KW_TYPE_FLOAT)
+    {
+      /* set drms type but promote up for unsigned values */
+      keytype= DRMS_TYPE_FLOAT;
+      strcpy(keyname, kw->name);
+      key_anyval.float_val = kw->eng_value.float_val;
       status = drms_setkey(rec, keyname, keytype, &key_anyval);
     }
     else if(kw->eng_type == KW_TYPE_INT16)
@@ -550,7 +611,7 @@ int get_packet_time_for_df(HK_Keyword_t *hk,  TIME *ptime)
  *              value. Looks up values in JSOC version number map files. *
  * Function: lookup_dsn(char* pvn, int apid, char *pvn, int cnt)         *
  *************************************************************************/
-char* lookup_dsn( char *pvn, int cnt)
+char* lookup_dsn( int apid, char *pvn, char *fvn, int cnt)
 {
   /* variables */
   int i;
@@ -559,19 +620,45 @@ char* lookup_dsn( char *pvn, int cnt)
   /* lookup jsvn associated with pvn */
   for(i=0; i < cnt ;i++)
   {
-    /* check if found pvn in packet */
-    if (!strcmp (jmap->pvn[i], pvn ))
+
+    if(check_for_sdo_apid(apid))
     {
-      found_jvn = 1;
-      break;
+
+      /* check if found pvn in packet */
+      if (!strcmp (jmap->fvn[i], fvn ))
+      {
+        found_jvn = 1;
+        break;
+      }
+    }
+    else
+    {
+      /* check if found pvn in packet */
+      if (!strcmp (jmap->pvn[i], pvn ))
+      {
+        found_jvn = 1;
+        break;
+      }
     }
   }
   if ( found_jvn != 1)
   {
-    printkerr("Error at %s, line %d: Did not find the data series name "
-              "for this packet version number. Maybe this is new configuration"
-              "and a new JVN-TO-PVN map files need to updated using script.\n",
-              __FILE__,__LINE__);
+    if(check_for_sdo_apid(apid))
+    {
+      printkerr("Error at %s, line %d: Did not find the data series name "
+                "for this file version number. Maybe this is new configuration "
+                "and a new JVN-TO-PVN map files need to updated using script.\n",
+                __FILE__,__LINE__);
+      return ((char *)"");
+    }
+    else
+    {
+      printkerr("Error at %s, line %d: Did not find the data series name "
+                "for this packet version number. Maybe this is new configuration "
+                "and a new JVN-TO-PVN map files need to updated using script.\n",
+                __FILE__,__LINE__);
+      return ((char *)"");
+    }
   }
   return ((char *)jmap->dsn[i]);
 }
@@ -584,142 +671,165 @@ char* lookup_dsn( char *pvn, int cnt)
  * DESCRIPTION: Prints translated and decoded packet values and writes    *
  * values to DRMS using the data series name passed in argument list      *
  **************************************************************************/
-void saveprint_packet_values1(unsigned char read_in_buffer[], char *in, char *out)
+void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out)
 {
   /* variables */
   CCSDS_Packet_t ccsds;
   HK_Keyword_t *kw_head;
-  int i,j,k,y,s;
+  char packet_version_number[HKDDF_MAX_PVN_SIZE];
+  char file_version_number[HKDDF_MAX_PVN_SIZE];
+  char data_seriesname[HKDDF_MAX_DSNAME_STR];
+  char *ptr_fvn;
+  int i,j,k,y,x,s;
   int apid;
   int factor;
   int packet_length;
-  char packet_version_number[HKDDF_MAX_PVN_SIZE];
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
+  char pkt_date[200]; //ascii time
 
+  /* go thru each packet and print to standout and save to drms */
   for(k=0,factor=0,packet_length=0;  ; k++)
   {
+
+    /* init dsn */
+    for(x=0; x < HKDDF_MAX_DSNAME_STR; data_seriesname[x]='\0', x++);
+
     /* set pointer to beginning of packets in buffer using factor parameter */
     factor = k * (packet_length + 6 + 1 ) ;
+
     /* Check if at end of all pkts */
-    if (read_in_buffer[5 + factor] == (int)NULL)
+    if (*(read_in_buffer+5+factor) == (int)NULL)
     {
+       /* printf for report information */
        printf("\n\n*****At end of file. Found %d packets in file.\n", k);
        break;
     }
-    /* get packet lenght */
-    packet_length=  read_in_buffer[5 + factor];
 
-    /* apid */
+    /* get packet lenght */
+    packet_length=  *(read_in_buffer+5+factor);
+
+    /* get apid */
     /* set 0th to 7th bits */
-    apid =  (unsigned  short int)( (read_in_buffer[ 1 + factor]) & 0x00FF );
+    apid =  (unsigned  short int)( (*(read_in_buffer+1+factor)) & 0x00FF );
     /* set 8th to 15th bits */
-    apid |= (unsigned  short int)( (read_in_buffer[ 0 + factor] << 8) & 0xFF00 );
+    apid |= (unsigned  short int)( (*(read_in_buffer+0+factor) << 8) & 0xFF00 );
     apid &= 0x07FF;
 
-    /* version number */
-    /*check if packet version is 0.0 -skip-print warning*/
-    if (( read_in_buffer[14 + factor ] == 0) && (read_in_buffer[15 + factor ] == 0))
+    /* get packet version number */
+    /* if ADP type apid, packet version number not used */
+    if(check_for_sdo_apid(apid))
     {
-      printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
-                "in packet data. Skip processing this packet, don't load to "
-                "DRMS and get next packet", __FILE__,__LINE__);
-      continue;
+       sprintf(packet_version_number,"%s","not applicable");
+    }
+    else
+    {
+      /*check if packet version is 0.0 -skip-print warning*/
+      if (( *(read_in_buffer+14+factor) == 0) && (*(read_in_buffer+15+factor) == 0))
+      {
+        printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
+                  "in packet data. Skip processing this packet, don't load to "
+                  "DRMS and get next packet", __FILE__,__LINE__);
+        continue;
+      }
+      /* check for version number set to zero and print warning messages. */
+      if ( *(read_in_buffer+14+factor) == 0 && *(read_in_buffer+15+factor))
+      {
+        printkerr("Warning at %s, line %d: Getting 0 for whole number(i.e.,0.1) for "
+                  "packet version number in packet data. Skip processing this packet,"
+                  "don't load to DRMS and get next packet", __FILE__,__LINE__);
+        continue;
+      }
+      /* if passed two tests above, then set packet version number */
+      sprintf(packet_version_number,"%03d.%03d",*(read_in_buffer+14+factor), *(read_in_buffer+15+factor));
     }
 
-    /* version number */
-    /*check if packet version is 0.0 -skip-print warning*/
-    if (( read_in_buffer[14 + factor ] == 0) && (read_in_buffer[15 + factor ] == 0))
-    {
-      printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
-                "in packet data. Skip processing this packet, don't load to "
-                "DRMS and get next packet", __FILE__,__LINE__);
-      continue;
-    }
-    sprintf(packet_version_number,"%03d.%03d",read_in_buffer[14 + factor ], read_in_buffer[15 + factor]);
-    /* check for version number set to zero and print warning messages. */
-    if ( read_in_buffer[14 + factor ] == 0 && read_in_buffer[15 + factor ])
-    {
-	printf("decode_dayfile: bad version number:going to set version number to 0.00 by default for now\n");
-        continue;
-    }
     /* Extract hk packets - initialize array with zeros */
     for(i=0; i < HKDDF_MAX_PKT_SIZE;i++) hk_pkt_buffer[i]=0x00;
+
     /* set buffer to values in packet and set packet version number to value in packet or some default value*/
-    for (i = 0 + factor, j=0 ; i <  packet_length + 6 + 1 + factor; i++)
+    for (i =0 + factor, j=0 ; i <  packet_length + 6 + 1 + factor; i++)
     {
-      if ( (i == (14 + factor ))  &&  (read_in_buffer[14 + factor ] == 0)) 
-      { 
-       	/*can set default value here if need to */
-	//hk_pkt_buffer[j++]= 0x01;
-	hk_pkt_buffer[j++]= 0x00; /*can set default value here if need to */
-      }
-      else if  ( (i == (15 + factor)) && (read_in_buffer[15 + factor] == 0))
-      {
-	/*can set default value here if need to */
-	//hk_pkt_buffer[j++]= 0x49; /*0x49 = 73(dec) */
-	hk_pkt_buffer[j++]= 0x00;
-      }
-      else if  ( i == (15 + factor) ||  i == (14 + factor))  
-      {
-	/* using packet version value found in packet */
-        hk_pkt_buffer[j++]= read_in_buffer[i];
-      }
-      else  
-      { 
-	/* set other values in array */
-	hk_pkt_buffer[j++]= read_in_buffer[i];
-      }
+        /* set values in array */
+        hk_pkt_buffer[j++]= *(read_in_buffer+i);
     } /* end for loop setting values for one extracted packet in buffer */
 
-    /* print packet keywords */
-    printf ( "--------------------------------------------------------------------------\n");
-    printf("Packet Number in day file = %-3d       Packet Lenght          = %d \n", k, packet_length);
-    printf("Apid                      = %-3.3x       Packet Version Number  = %s\n", apid,packet_version_number);
-    printf("In Day File               = %s\n", in);
-    printf("Out Series Name           = %s\n", out);
 
-    /* put in format for decode_hk to read by adjusting values in buffer *
-     * from unsigned char to unsigned short                              */
-    printf ( "--------------------------------------------------------------------------\n");
-    printf("Packet Values in unsigned shorts: \n"  );
+    /* format bytes in format required for decode_hk_keyword() function to process */
     for (i=0, y=0 ; i < packet_length + 6 + 1   ; i += 2, y++)
     {
       s_hk_pkt_buffer[y] = (unsigned short)(hk_pkt_buffer[i + 1] << 8  & 0xFF00 );
       s_hk_pkt_buffer[y] = (unsigned short)((hk_pkt_buffer[i] & 0x00FF) + s_hk_pkt_buffer[y]) ;
-      /*print information contained in packet being sent to decode_hk function */
-      printf("%2.2x",  s_hk_pkt_buffer[y]  & 0x00FF); 
-      printf("%2.2x ",  s_hk_pkt_buffer[y] >> 8 & 0x00FF); 
-      if ( i ==  14 || i == 30  || i == 46  || 
-           i == 62  || i == 78  || i == 94  || 
-           i == 110 || i == 126 || i == 142 ||
-           i == 158 || i == 174 || i == 190 ||
-           i == 206 || i == 222 || i == 238 )
-        printf("\n");
-   }
-   printf("\n");
+    }
 
-    /* send hk_pkt_buffer to decoder function */
+    /* send hk_pkt_buffer to decoder function and check status returned */
     word_ptr = s_hk_pkt_buffer;
-    s = decode_hk_keywords(word_ptr, apid,  &ccsds.keywords); 
-    if (s) 
+    s = decode_hk_keywords(word_ptr, apid,  &ccsds.keywords);
+    if (s)
     {
       printkerr("Error at %s, line %d: decode_hk_keyword function returned"
                 " error status number <%d>\n", __FILE__,__LINE__, s);
+      return;
     }
     kw_head= ccsds.keywords;
 
+    /* if sdo hk packet then lookup file version number using packet date */
+    if(check_for_sdo_apid(apid))
+    {
+      /* after load of shcids file during call to decode_hk_keywords -
+         get packet time to lookup sdo hk config file version to use */
+      (void)sprint_time (pkt_date, get_packet_time(word_ptr), "TAI", 0);
+      /* get file version number for ADP apid */
+      ptr_fvn=find_fvn_from_shcids(global_shcids_vn, pkt_date, apid);
+    }
+
+    /* get data name by automatically creating JSVN value based on */
+    /* packet version number                                       */
+    strcpy(file_version_number,ptr_fvn);
+    strcpy(data_seriesname, out);
+
+
+    /* print packet keywords */
+    printf ( "------------------------------------------------------------------------------\n");
+    printf("Packet Number in day file = %-3d       Packet Lenght          = %d \n", k, packet_length);
+    if(check_for_sdo_apid(apid))
+    {
+      printf("Apid                      = %-3.3x       File Version Number  = %s\n", apid,file_version_number);
+    }
+    else
+    {
+      printf("Apid                      = %-3.3x       Packet Version Number  = %s\n", apid,packet_version_number);
+    }
+    printf("In Day File               = %s\n", in);
+    printf("Out Series Name           = %s\n", out);
+    printf ( "------------------------------------------------------------------------------\n");
+    printf("Packet Values in unsigned shorts: \n"  );
+    for (i=0, y=0 ; i < packet_length + 6 + 1   ; i += 2, y++)
+    {
+      /*print information contained in packet being sent to decode_hk function */
+      printf("%2.2x",  s_hk_pkt_buffer[y]  & 0x00FF);
+      printf("%2.2x ",  s_hk_pkt_buffer[y] >> 8 & 0x00FF);
+      if ( i ==  14 || i == 30  || i == 46  ||
+           i == 62  || i == 78  || i == 94  ||
+           i == 110 || i == 126 || i == 142 ||
+           i == 158 || i == 174 || i == 190 ||
+           i == 206 || i == 222 || i == 238 ||
+           i == 254 || i == 270 || i == 286 )
+        printf("\n");
+    }
+    printf("\n");
+ 
     /* start printing report on keywords */
-    printf ( "--------------------------------------------------------------------------\n");
-    printf ("LONG TELEM MNEMONIC NAME       SHORT    RAW VALUE  ENGR VALUE  ENGR VALUE\n");
-    printf ("                               KEYWORD    (HEX)     (DECIMAL)    (HEX)   \n");
+    printf ( "-----------------------------------------------------------------------------\n");
+    printf ("LONG TELEM MNEMONIC NAME           SHORT    RAW VALUE  ENGR VALUE  ENGR VALUE\n");
+    printf ("                                   KEYWORD    (HEX)     (DECIMAL)    (HEX)   \n");
 
     /* loop throught all keywords in single packet*/
     for ( i=0; ccsds.keywords ; i++)
     {
-      printf ( "---------------------------------------------------------------------------\n");
-      printf ( "%-31.29s", ccsds.keywords->name);
+      printf ( "------------------------------------------------------------------------------\n");
+      printf ( "%-35.35s", ccsds.keywords->name);
       printf ( "%-9.8s",  ccsds.keywords->fitsname);
       printf ( "%-8.8lx",  (long int )ccsds.keywords->raw_value);
       
@@ -745,6 +855,7 @@ void saveprint_packet_values1(unsigned char read_in_buffer[], char *in, char *ou
       }
       else if(ccsds.keywords->eng_type == KW_TYPE_DOUBLE)
       {
+        //printf ( "%-16.16lx",  (int64_t )ccsds.keywords->raw_value);
 	printf("    %-12lf \n", ccsds.keywords->eng_value.double_val );
       }
       else if(ccsds.keywords->eng_type == KW_TYPE_INT8)
@@ -759,6 +870,10 @@ void saveprint_packet_values1(unsigned char read_in_buffer[], char *in, char *ou
       {
         printf("    %-12d %-10.8x\n", ccsds.keywords->eng_value.int32_val, ccsds.keywords->eng_value.int32_val);
       }
+      else if(ccsds.keywords->eng_type == KW_TYPE_FLOAT)
+      {
+        printf("    %-20.20f \n", ccsds.keywords->eng_value.float_val );
+      }
       else
       {
         printkerr("Warning at %s, line %d: Found Unknown KW_TYPE for this keyword:"
@@ -772,21 +887,54 @@ void saveprint_packet_values1(unsigned char read_in_buffer[], char *in, char *ou
 
     }/*end of loop throught all keywords in single packet*/ 
 
-    /* write values to DRMS using the data series name pass in argument list*/
-    write_to_drms( packet_version_number, out, kw_head );
+    /* write values to DRMS with data series name passed as argument*/
+    write_to_drms( apid, packet_version_number, file_version_number, out, kw_head );
+    /*now print packet time to report*/
     print_packet_time(kw_head);
 
   }/* loop throught next packet and do all packets in file*/
 }
 
 
+/**************************************************************************
+ * Get Data Series name                                                   *
+ * FUNCTION:  get_ds_pjname                                               *
+ * DESCRIPTION: Gets data series project name based on apid  using        *
+ *              values loaded in array. c                                 *
+ **************************************************************************/
+char* get_ds_pjname(int apid, char pjn[HKDDF_MAXNUM_PJNAMES][HKDDF_MAX_PJNAME])
+{
+  char *pn;
+
+  /* get project name */
+ if(apid <= HK_HSB_HIGHEST_HMI_APID && apid >= HK_HSB_LOWEST_HMI_APID  || (apid <= HK_LR_HIGHEST_HMI_APID  && apid >= HK_LR_LOWEST_HMI_APID))
+  {
+    pn = pjn[pjnHMI];
+  }
+  else if((apid <= HK_HSB_HIGHEST_AIA_APID && apid >= HK_HSB_LOWEST_AIA_APID) || (apid <= HK_LR_HIGHEST_AIA_APID && apid >= HK_LR_LOWEST_AIA_APID))
+  {
+    pn = pjn[pjnAIA];
+  }
+  else if((apid <= HK_LR_HIGHEST_SDO_APID) && (apid >= HK_LR_LOWEST_SDO_APID))
+  {
+    pn = pjn[pjnSDO];
+  }
+  else
+  {
+    printkerr("Warning at %s, line %d: APID is not in range of ",
+              "HMI, AIA, or SDO. APID: <%d>\n",
+               __FILE__, __LINE__, apid);
+    pn="\0";
+  }
+  return((char*)pn);
+}
+
 
 /**************************************************************************
  * Load Data Series Names                                                 *
  * FUNCTION:  load_ds_name                                                *
  * DESCRIPTION: Loads data series names in array with packet version in   *
  *              corresponding array.                                      *
- * STATUS: Completed.                                                     *
  **************************************************************************/
 int load_ds_names(char* pn, char* didn, int apid)
 {
@@ -797,7 +945,7 @@ int load_ds_names(char* pn, char* didn, int apid)
   char sn[HKDDF_MAX_FILE_NAME];
   char *directory ;
   char line[HKDDF_MAXLINE_IN_FILE];
-  int wn, dn;
+  int fwn,fdn, pwn, pdn;
   int count;
 
   /* initialize variables */
@@ -810,7 +958,7 @@ int load_ds_names(char* pn, char* didn, int apid)
   suffix_filename= (char *)getenv("HK_SUFFIX_JSVNMAP_FILENAME");
   if(suffix_filename == NULL)
   {
-    printf("Error: Set environxment variable <HK_SUFFIX_JSVNMAP_FILENAME>\n");
+    printf("Error: Set environment variable <HK_SUFFIX_JSVNMAP_FILENAME>\n");
     printkerr("Error at %s, line %d: Set environment variable <HK_SUFFIX_JSVNMAP_FILENAME>\n",
                 __FILE__,__LINE__);
   }
@@ -845,8 +993,10 @@ int load_ds_names(char* pn, char* didn, int apid)
     else
     {
       sscanf( line,
-        "%s | %d.%d | %*s | %*s", jmap->jvn[k], &wn,&dn);
-      sprintf(jmap->pvn[k],"%03d.%03d", wn,dn);
+        "%s | %d.%d | %d.%d | %*s", jmap->jvn[k], &pwn,&pdn,&fwn,&fdn);
+      sprintf(jmap->pvn[k],"%03d.%03d", pwn,pdn);
+      /*process file version number without leading zero like is done for packet version number*/
+      sprintf(jmap->fvn[k],"%d.%d", fwn,fdn);
       /* if jsvn is 0 make dsn null else set data series name in array*/
       if (!strcmp("0000",  jmap->jvn[k]))
       {
@@ -874,93 +1024,90 @@ int load_ds_names(char* pn, char* didn, int apid)
  * the packet version number in packet                                    *
  * STATUS: in progress                                                    *
  **************************************************************************/
-void  save_packet_values2(unsigned char read_in_buffer[], char *pn,char *didn)
+void  save_packet_values2(unsigned char *read_in_buffer, char projname[HKDDF_MAXNUM_PJNAMES][HKDDF_MAX_PJNAME],char *didn)
 {
   /* variables */
   CCSDS_Packet_t ccsds;
   HK_Keyword_t *kw_head;
+  char packet_version_number[HKDDF_MAX_PVN_SIZE];
+  char file_version_number[HKDDF_MAX_PVN_SIZE];
+  char data_seriesname[HKDDF_MAX_DSNAME_STR];
+  char *dname;
+  char *ptr_fvn;
   int i,j,k,y,x,s;
   int apid;
   int count;
   int factor;
   int packet_length;
-  char *dname;
-  char data_seriesname[HKDDF_MAX_DSNAME_STR];
-  char packet_version_number[HKDDF_MAX_PVN_SIZE];
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
+  char pkt_date[200]; //ascii time
 
+  /* go thru each packet and save to DRMS */
   for(k=0,factor=0, packet_length=0;  ; k++)
   {
+    //printf("Packet=%d\n",k);
     /* init dsn */
     for(x=0; x < HKDDF_MAX_DSNAME_STR; data_seriesname[x]='\0', x++);
     
     /* set pointer to beginning of packets in buffer using factor parameter */
     factor = k * (packet_length + 6 + 1 ) ;
+
     /* Check if at end of all pkts */
-    if (read_in_buffer[5 + factor] == (int)NULL)
+    if (*(read_in_buffer+5+factor) == (int)NULL)
     {
        break;
     }
+
     /* get packet lenght */
-    packet_length=  read_in_buffer[5 + factor];
-    /* apid */
+    packet_length=  *(read_in_buffer+5+factor);
+
+    /* get apid */
     /* set 0th to 7th bits */
-    apid =  (unsigned  short int)( (read_in_buffer[ 1 + factor]) & 0x00FF );
+    apid =  (unsigned  short int)( (*(read_in_buffer+1+factor)) & 0x00FF );
     /* set 8th to 15th bits */
-    apid |= (unsigned  short int)( (read_in_buffer[ 0 + factor] << 8) & 0xFF00 );
+    apid |= (unsigned  short int)( (*(read_in_buffer+0+factor) << 8) & 0xFF00 );
     apid &= 0x07FF;
-    /* version number */
-    /*check if packet version is 0.0 -skip-print warning*/
-    if (( read_in_buffer[14 + factor ] == 0) && (read_in_buffer[15 + factor ] == 0))
+
+    /* get packet version number */
+    /* if ADP type apid, packet version number not used */ 
+    if(check_for_sdo_apid(apid))
     {
-      printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
-                "in packet data. Skip processing this packet, don't load to "
-                "DRMS and get next packet", __FILE__,__LINE__);
-      continue;
+       sprintf(packet_version_number,"%s","not applicable");
     }
-    sprintf(packet_version_number,"%03d.%03d",read_in_buffer[14 + factor ], read_in_buffer[15 + factor]);
-    /* check for version number set to zero and print warning messages. */
-    if ( read_in_buffer[14 + factor ] == 0 && read_in_buffer[15 + factor ])
+    else
     {
-	printf("decode_dayfile: bad version number:going to set version number to 0.00 by default for now\n");
+      /*check if packet version is 0.0 -skip-print warning*/
+      if (( *(read_in_buffer+14+factor) == 0) && (*(read_in_buffer+15+factor) == 0))
+      {
+        printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
+                  "in packet data. Skip processing this packet, don't load to "
+                  "DRMS and get next packet", __FILE__,__LINE__);
         continue;
+      }
+      /* check for version number set to zero and print warning messages. */
+      if ( *(read_in_buffer+14+factor) == 0 && *(read_in_buffer+15+factor))
+      {
+        printkerr("Warning at %s, line %d: Getting 0 for whole number(i.e.,0.1) for "
+                  "packet version number in packet data. Skip processing this packet,"
+                  "don't load to DRMS and get next packet", __FILE__,__LINE__);
+        continue;
+      }
+      /* if passed two tests above, then set packet version number */
+      sprintf(packet_version_number,"%03d.%03d",*(read_in_buffer+14+factor), *(read_in_buffer+15+factor));
     }
+
     /* Extract hk packets - initialize array with zeros */
     for(i=0; i < HKDDF_MAX_PKT_SIZE;i++) hk_pkt_buffer[i]=0x00;
     /* set buffer to values in packet and set packet version number to value 
     /* in packet or some default value */
     for (i =0 + factor, j=0 ; i <  packet_length + 6 + 1 + factor; i++)
     {
-      if ( (i == (14 + factor ))  &&  (read_in_buffer[14 + factor ] == 0)) 
-      { 
-       	/*can set default value here if need to */
-	//hk_pkt_buffer[j++]= 0x01;
-	hk_pkt_buffer[j++]= 0x00; /*can set default value here if need to */
-      }
-      else if  ( (i == (15 + factor)) && (read_in_buffer[15 + factor] == 0))
-      {
-	/*can set default value here if need to */
-	//hk_pkt_buffer[j++]= 0x49; /*0x49 = 73(dec) */
-	hk_pkt_buffer[j++]= 0x00;
-      }
-      else if  ( i == (15 + factor) ||  i == (14 + factor))  
-      {
-	/* using packet version value found in packet */
-        hk_pkt_buffer[j++]= read_in_buffer[i];
-      }
-      else  
-      { 
-	/* set other values in array */
-	hk_pkt_buffer[j++]= read_in_buffer[i];
-      }
+	/* set values in array */
+	hk_pkt_buffer[j++]= *(read_in_buffer+i);
     } /* end for loop setting values for one extracted packet in buffer */
-    /* get data name by automatically creating JSVN value based on */
-    /* packet version number                                       */
-    count = load_ds_names(pn, didn, apid );
-    dname = lookup_dsn( packet_version_number, count);
-    strcpy(data_seriesname, dname);
+
     /* put in format for decode_hk to read by adjusting values in buffer  */
     /* from unsigned char to unsigned short and write bytes to report     */
     for (i=0, y=0 ; i < packet_length + 6 + 1   ; i += 2, y++)
@@ -968,6 +1115,7 @@ void  save_packet_values2(unsigned char read_in_buffer[], char *pn,char *didn)
       s_hk_pkt_buffer[y] = (unsigned short)(hk_pkt_buffer[i + 1] << 8  & 0xFF00 );
       s_hk_pkt_buffer[y] = (unsigned short)((hk_pkt_buffer[i] & 0x00FF) + s_hk_pkt_buffer[y]) ;
     }
+
     /* send hk_pkt_buffer to decoder function */
     word_ptr = s_hk_pkt_buffer;
     s = decode_hk_keywords(word_ptr, apid,  &ccsds.keywords);
@@ -977,38 +1125,61 @@ void  save_packet_values2(unsigned char read_in_buffer[], char *pn,char *didn)
                 " error status number <%d>\n", __FILE__,__LINE__, s);
     }
     kw_head= ccsds.keywords;
+
+    /*find file version if apid is sdo hk type */
+    if(check_for_sdo_apid(apid))
+    {
+      /* after load of shcids file during call to decode_hk_keywords -
+         get packet time to lookup sdo hk config file version to use */
+      (void)sprint_time (pkt_date, get_packet_time(word_ptr), "TAI", 0);
+      /* get file version number for ADP apid */
+      ptr_fvn=find_fvn_from_shcids(global_shcids_vn, pkt_date, apid);
+    }
+
+    /* get data name by automatically creating JSVN value based on */
+    /* packet version number                                       */
+    count = load_ds_names(get_ds_pjname(apid,projname), didn, apid);
+    strcpy(file_version_number,ptr_fvn);
+    dname = lookup_dsn( apid, packet_version_number, file_version_number, count);
+    strcpy(data_seriesname, dname);
+
     /* write values to DRMS with auto generated data series name*/
-    write_to_drms(packet_version_number, data_seriesname, kw_head );
+    write_to_drms( apid, packet_version_number, file_version_number, data_seriesname, kw_head );
+
   }/* loop throught next packet and do all packets in file*/
-}
+}/*save_packet_values2 */
 
 
 /**************************************************************************
  * PRINT PACKET VALUES 2                                                  *
- * FUNCTION: saveprint_packet_values2()                                       *
+ * FUNCTION: saveprint_packet_values2()                                   *
  * DESCRIPTION: Prints translated and decoded packet values and writes    *
  * values to DRMS. Also automatically creates data series name  based on  *
  * the packet version number in packet                                    *
- * STATUS: completed                                                      *
  **************************************************************************/
-void  saveprint_packet_values2(unsigned char read_in_buffer[], char *in, 
-                           char *pn,char *didn)
+void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in,
+                               char projname[HKDDF_MAXNUM_PJNAMES][HKDDF_MAX_PJNAME],
+                               char *didn)
 {
   /* variables */
   CCSDS_Packet_t ccsds;
   HK_Keyword_t *kw_head;
+  char packet_version_number[HKDDF_MAX_PVN_SIZE];
+  char file_version_number[HKDDF_MAX_PVN_SIZE];
+  char data_seriesname[HKDDF_MAX_DSNAME_STR];
+  char *dname;
+  char *ptr_fvn;
   int i,j,k,y,x,s;
   int apid;
   int count;
   int factor;
   int packet_length;
-  char packet_version_number[HKDDF_MAX_PVN_SIZE];
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
-  char data_seriesname[HKDDF_MAX_DSNAME_STR];
-  char *dname;
+  char pkt_date[200]; //ascii time
 
+  /* go thru each packet and print to standout and save to drms */
   for(k=0,factor=0, packet_length=0;  ; k++)
   {
     /* init dsn */
@@ -1016,85 +1187,122 @@ void  saveprint_packet_values2(unsigned char read_in_buffer[], char *in,
     
     /* set pointer to beginning of packets in buffer using factor parameter */
     factor = k * (packet_length + 6 + 1 ) ;
+
     /* Check if at end of all pkts */
-    if (read_in_buffer[5 + factor] == (int)NULL)
+    if (*(read_in_buffer+5+factor) == (int)NULL)
     {
        printf("\n\n*****At end of file. Found %d packets in file.\n", k);
        break;
     }
+
     /* get packet lenght */
-    packet_length=  read_in_buffer[5 + factor];
-    /* apid */
+    packet_length=  *(read_in_buffer+5+factor);
+
+    /* get apid */
     /* set 0th to 7th bits */
-    apid =  (unsigned  short int)( (read_in_buffer[ 1 + factor]) & 0x00FF );
+    apid =  (unsigned  short int)( (*(read_in_buffer+1+factor)) & 0x00FF );
     /* set 8th to 15th bits */
-    apid |= (unsigned  short int)( (read_in_buffer[ 0 + factor] << 8) & 0xFF00 );
+    apid |= (unsigned  short int)( (*(read_in_buffer+0+factor) << 8) & 0xFF00 );
     apid &= 0x07FF;
-    /* version number */
-    /*check if packet version is 0.0 -skip-print warning*/
-    if (( read_in_buffer[14 + factor ] == 0) && (read_in_buffer[15 + factor ] == 0))
+
+    /* get packet version number */
+    /* if ADP type apid, packet version number not used */
+    if(check_for_sdo_apid(apid))
     {
-      printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
-                "in packet data. Skip processing this packet, don't load to "
-                "DRMS and get next packet", __FILE__,__LINE__);
-      continue;
+       sprintf(packet_version_number,"%s","not applicable");
     }
-    sprintf(packet_version_number,"%03d.%03d",read_in_buffer[14 + factor ], read_in_buffer[15 + factor]);
-    /* check for version number set to zero and print warning messages. */
-    if ( read_in_buffer[14 + factor ] == 0 && read_in_buffer[15 + factor ])
+    else
     {
-	printf("decode_dayfile: bad version number:going to set version number to 0.00 by default for now\n");
+      /*check if packet version is 0.0 -skip-print warning*/
+      if (( *(read_in_buffer+14+factor) == 0) && (*(read_in_buffer+15+factor) == 0))
+      {
+        printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
+                  "in packet data. Skip processing this packet, don't load to "
+                  "DRMS and get next packet", __FILE__,__LINE__);
         continue;
+      }
+      /* check for version number set to zero and print warning messages. */
+      if ( *(read_in_buffer+14+factor) == 0 && *(read_in_buffer+15+factor))
+      {
+        printkerr("Warning at %s, line %d: Getting 0 for whole number(i.e.,0.1) for "
+                  "packet version number in packet data. Skip processing this packet,"
+                  "don't load to DRMS and get next packet", __FILE__,__LINE__);
+        continue;
+      }
+      /* if passed two tests above, then set packet version number */
+      sprintf(packet_version_number,"%03d.%03d",*(read_in_buffer+14+factor), *(read_in_buffer+15+factor));
+      strcat(packet_version_number,"\0");
     }
+
     /* Extract hk packets - initialize array with zeros */
     for(i=0; i < HKDDF_MAX_PKT_SIZE;i++) hk_pkt_buffer[i]=0x00;
     /* set buffer to values in packet and set packet version number to value 
     /* in packet or some default value */
     for (i =0 + factor, j=0 ; i <  packet_length + 6 + 1 + factor; i++)
     {
-      if ( (i == (14 + factor ))  &&  (read_in_buffer[14 + factor ] == 0)) 
-      { 
-       	/*can set default value here if need to */
-	//hk_pkt_buffer[j++]= 0x01;
-	hk_pkt_buffer[j++]= 0x00; /*can set default value here if need to */
-      }
-      else if  ( (i == (15 + factor)) && (read_in_buffer[15 + factor] == 0))
-      {
-	/*can set default value here if need to */
-	//hk_pkt_buffer[j++]= 0x49; /*0x49 = 73(dec) */
-	hk_pkt_buffer[j++]= 0x00;
-      }
-      else if  ( i == (15 + factor) ||  i == (14 + factor))  
-      {
-	/* using packet version value found in packet */
-        hk_pkt_buffer[j++]= read_in_buffer[i];
-      }
-      else  
-      { 
-	/* set other values in array */
-	hk_pkt_buffer[j++]= read_in_buffer[i];
-      }
+	/* set values in array */
+	hk_pkt_buffer[j++]= *(read_in_buffer+i);
     } /* end for loop setting values for one extracted packet in buffer */
-    /* get data name by automatically creating JSVN value based on */
-    /* packet version number                                       */
-    count = load_ds_names(pn, didn, apid);
-    dname = lookup_dsn( packet_version_number, count);
-    strcpy(data_seriesname, dname);
-    /* print packet keywords */
-    printf ( "--------------------------------------------------------------------------\n");
-    printf("Packet Number in day file = %-3d       Packet Lenght          = %d \n", k, packet_length);
-    printf("Apid                      = %-3.3x       Packet Version Number  = %s\n", apid,packet_version_number);
-    printf("In Day File               = %s\n", in);
-    printf("Out Series Name           = %s\n", data_seriesname);
 
-    /* put in format for decode_hk to read by adjusting values in buffer  */
-    /* from unsigned char to unsigned short and write bytes to report     */
-    printf ( "--------------------------------------------------------------------------\n");
-    printf("Packet Values in unsigned shorts: \n"  );
+
+    /* format bytes in format required for decode_hk_keyword() function to process */ 
     for (i=0, y=0 ; i < packet_length + 6 + 1   ; i += 2, y++)
     {
       s_hk_pkt_buffer[y] = (unsigned short)(hk_pkt_buffer[i + 1] << 8  & 0xFF00 );
       s_hk_pkt_buffer[y] = (unsigned short)((hk_pkt_buffer[i] & 0x00FF) + s_hk_pkt_buffer[y]) ;
+    }
+
+    /* send hk_pkt_buffer to decoder function and check status returned */
+    word_ptr = s_hk_pkt_buffer;
+    s = decode_hk_keywords(word_ptr, apid,  &ccsds.keywords);
+    if (s) 
+    {
+      printkerr("Error at %s, line %d: decode_hk_keyword function returned"
+                " error status number <%d>\n", __FILE__,__LINE__, s);
+      return;
+    }
+    kw_head= ccsds.keywords;
+
+    /* find file version number using packet date for sdo hk packets */
+    if(check_for_sdo_apid(apid))
+    {
+      /* after load of shcids file during call to decode_hk_keywords -
+         get packet time to lookup sdo hk config file version to use */
+      (void)sprint_time (pkt_date, get_packet_time(word_ptr), "TAI", 0);
+      /* get file version number for sdo-hk apids */
+      ptr_fvn=find_fvn_from_shcids(global_shcids_vn, pkt_date,apid);
+    }
+    else
+    {
+      /* get fvn for hk apids */
+      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number);
+    }
+    strcpy(file_version_number,ptr_fvn);
+
+    /* get data name by automatically creating JSVN value based on */
+    /* packet version number                                       */
+    count = load_ds_names(get_ds_pjname(apid,projname), didn, apid);
+    dname = lookup_dsn( apid, packet_version_number, file_version_number, count);
+    strcpy(data_seriesname, dname);
+
+    /* Move Print stuff here after call to decode_hk()!! */
+    /* print packet keywords */
+    printf ( "------------------------------------------------------------------------------\n");
+    printf("Packet Number in day file = %-3d       Packet Lenght          = %d \n", k, packet_length);
+    if(check_for_sdo_apid(apid))
+    {
+      printf("Apid                      = %-3.3x       File Version Number  = %s\n", apid,file_version_number);
+    }
+    else
+    {
+      printf("Apid                      = %-3.3x       Packet Version Number  = %s\n", apid,packet_version_number);
+    }
+    printf("In Day File               = %s\n", in);
+    printf("Out Series Name           = %s\n", data_seriesname);
+    printf ( "------------------------------------------------------------------------------\n");
+    printf("Packet Values in unsigned shorts: \n"  );
+    for (i=0, y=0 ; i < packet_length + 6 + 1   ; i += 2, y++)
+    {
       /*print information contained in packet being sent to decode_hk function */
       printf("%2.2x",  s_hk_pkt_buffer[y]  & 0x00FF); 
       printf("%2.2x ",  s_hk_pkt_buffer[y] >> 8 & 0x00FF); 
@@ -1102,36 +1310,25 @@ void  saveprint_packet_values2(unsigned char read_in_buffer[], char *in,
            i == 62  || i == 78  || i == 94  || 
            i == 110 || i == 126 || i == 142 ||
            i == 158 || i == 174 || i == 190 ||
-           i == 206 || i == 222 || i == 238 )
+           i == 206 || i == 222 || i == 238 ||
+           i == 254 || i == 270 || i == 286 )
         printf("\n");
     }
     printf("\n");
 
-    /* send hk_pkt_buffer to decoder function */
-    word_ptr = s_hk_pkt_buffer;
-    s = decode_hk_keywords(word_ptr, apid,  &ccsds.keywords);
-    if (s) 
-    {
-      printkerr("Error at %s, line %d: decode_hk_keyword function returned"
-                " error status number <%d>\n", __FILE__,__LINE__, s);
-    }
-    kw_head= ccsds.keywords;
-
     /* start print report on keywords */
-    printf ( "--------------------------------------------------------------------------\n");
-    printf ("LONG TELEM MNEMONIC NAME       SHORT    RAW VALUE  ENGR VALUE  ENGR VALUE\n");
-    printf ("                               KEYWORD    (HEX)     (DECIMAL)    (HEX)   \n");
+    printf ( "-----------------------------------------------------------------------------\n");
+    printf ("LONG TELEM MNEMONIC NAME           SHORT    RAW VALUE  ENGR VALUE  ENGR VALUE\n");
+    printf ("                                   KEYWORD    (HEX)     (DECIMAL)    (HEX)   \n");
 
     /* loop throught all keywords in single packet*/
     for ( i=0; ccsds.keywords ; i++)
     {
-      printf ( "---------------------------------------------------------------------------\n");
-      printf ( "%-31.29s", ccsds.keywords->name);
+      printf ( "------------------------------------------------------------------------------\n");
+      printf ( "%-35.35s", ccsds.keywords->name);
       printf ( "%-9.8s",  ccsds.keywords->fitsname);
-      //printf ( "%-8.8x",  ccsds.keywords->raw_value);
       printf ( "%-8.8lx", (long int) ccsds.keywords->raw_value);
 
-      //printf ( "%d",ccsds.keywords->raw_value);
       if( ccsds.keywords->eng_type == KW_TYPE_UINT8)
       {
 	printf("    %-12d %-10.2x\n",
@@ -1168,6 +1365,10 @@ void  saveprint_packet_values2(unsigned char read_in_buffer[], char *in,
       {
         printf("    %-12d %-10.8x\n", ccsds.keywords->eng_value.int32_val, ccsds.keywords->eng_value.int32_val);
       }
+      else if(ccsds.keywords->eng_type == KW_TYPE_FLOAT)
+      {
+        printf("    %-20.20f \n", ccsds.keywords->eng_value.float_val);
+      }
       else
       {
         printf("WARNING(decode_dayfile):****Found*** NO KW_TYPE\n");
@@ -1181,8 +1382,8 @@ void  saveprint_packet_values2(unsigned char read_in_buffer[], char *in,
 
 
     /* write values to DRMS with auto generated data series name*/
-    write_to_drms( packet_version_number, data_seriesname, kw_head );
-    /*now print packet time */
+    write_to_drms( apid, packet_version_number, file_version_number, data_seriesname, kw_head );
+    /*now print packet time to report*/
     print_packet_time(kw_head);
     
   }/* loop throught next packet and do all packets in file*/
@@ -1205,17 +1406,17 @@ void print_packet_time(HK_Keyword_t *kwh)
   if (!get_packet_time_for_df(kw, &pkt_time))
   {
     /*did not set PACKET_TIME */
-    printf ( "--------------------------------------------------------------------------\n");
+    printf ( "------------------------------------------------------------------------------\n");
     printf("ERROR: COULD NOT SET PACKET_TIME KEYWORD\n");
-    printf ( "--------------------------------------------------------------------------\n");
+    printf ( "------------------------------------------------------------------------------\n");
     printf ("%s\n",HKDDF_CNTRL_L);
     return;
   }
   else 
   { 
-    printf ( "--------------------------------------------------------------------------\n");
+    printf ( "------------------------------------------------------------------------------\n");
     printf("PACKET_TIME                                     %15.5lf\n", pkt_time);
-    printf ( "--------------------------------------------------------------------------\n");
+    printf ( "------------------------------------------------------------------------------\n");
     printf ("%s\n",HKDDF_CNTRL_L);
   }
   return;
@@ -1230,61 +1431,85 @@ void print_packet_time(HK_Keyword_t *kwh)
  * command line.                                                          *
  * STATUS:completed                                                       *
  **************************************************************************/
-void save_packet_values1(unsigned char read_in_buffer[], char *out)
+void save_packet_values1(unsigned char *read_in_buffer, char *out)
 {
   /* variables */
   CCSDS_Packet_t ccsds;
   HK_Keyword_t *kw_head;
+  char packet_version_number[HKDDF_MAX_PVN_SIZE];
+  char file_version_number[HKDDF_MAX_PVN_SIZE];
   int i,j,k,y,s;
   int apid;
   int factor;
   int packet_length;
-  char packet_version_number[HKDDF_MAX_PVN_SIZE];
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
+  char pkt_date[200]; //ascii time
+  char *ptr_fvn;
 
+  /* go thru each packet and save keywords to DRMS */
   for(k=0,factor=0,packet_length=0;  ; k++)
   {
+    //printf("Packet=%d\n",k);
     /* set pointer to beginning of packets in buffer using factor parameter */
     factor = k * (packet_length + 6 + 1 ) ;
+
     /* Check if at end of all pkts */
-    if (read_in_buffer[5 + factor] == (int)NULL)
+    if (*(read_in_buffer+5+factor) == (int)NULL)
     {
       break;
     }
+
     /* get packet lenght */
-    packet_length=  read_in_buffer[5 + factor];
-    /* apid */
+    packet_length=  *(read_in_buffer+5+factor);
+
+    /* get apid */
     /* set 0th to 7th bits */
-    apid =  (unsigned  short int)( (read_in_buffer[ 1 + factor]) & 0x00FF );
+    apid =  (unsigned  short int)( (*(read_in_buffer+1+factor)) & 0x00FF );
     /* set 8th to 15th bits */
-    apid |= (unsigned  short int)( (read_in_buffer[ 0 + factor] << 8) & 0xFF00 );
+    apid |= (unsigned  short int)( (*(read_in_buffer+0+factor) << 8) & 0xFF00 );
     apid &= 0x07FF;
+
     /* get packet version number */
-    /*check if packet version is 0.0 */
-    if (( (int)read_in_buffer[14 + factor ] == 0 ) && ((int)read_in_buffer[15 + factor ] == 0))
+    /* if sdo-hk type apid, packet version number not used, else get packet version number for hmi or aia hk packets */
+    if(check_for_sdo_apid(apid))
     {
-      printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
-                "in packet data. Skip processing this packet, don't load to "
-                "DRMS and get next packet", __FILE__,__LINE__);
-      continue;
+       sprintf(packet_version_number,"%s","not applicable");
     }
-    sprintf(packet_version_number, "%03d.%03d",read_in_buffer[14 + factor ], read_in_buffer[15 + factor]);
-    /* set buffer to values in packet and set packet version number to value in packet */
-    for (i = 0 + factor, j=0 ; i <  packet_length + 6 + 1 + factor; i++)
+    else
     {
-      if  ( i == (15 + factor) ||  i == (14 + factor))  
+      /*check if packet version is 0.0 -skip-print warning*/
+      if (( *(read_in_buffer+14+factor) == 0) && (*(read_in_buffer+15+factor) == 0))
       {
-        /* using packet version value found in packet */
-        hk_pkt_buffer[j++]= read_in_buffer[i];
+        printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
+                  "in packet data. Skip processing this packet, don't load to "
+                  "DRMS and get next packet", __FILE__,__LINE__);
+        continue;
       }
-      else  
-      { 
-        /* set other values in array */
-	hk_pkt_buffer[j++]= read_in_buffer[i];
+      /* check for version number set to zero and print warning messages. */
+      if ( *(read_in_buffer+14+factor) == 0 && *(read_in_buffer+15+factor))
+      {
+        printkerr("Warning at %s, line %d: Getting 0 for whole number(i.e.,0.1) for "
+                  "packet version number in packet data. Skip processing this packet,"
+                  "don't load to DRMS and get next packet", __FILE__,__LINE__);
+        continue;
       }
-    }/* end for loop setting values for one extracted packet in buffer */
+      /* if passed two tests above, then set packet version number */
+      sprintf(packet_version_number,"%03d.%03d",*(read_in_buffer+14+factor), *(read_in_buffer+15+factor));
+    }
+
+     /* Extract hk packets - initialize array with zeros */
+    for(i=0; i < HKDDF_MAX_PKT_SIZE;i++) hk_pkt_buffer[i]=0x00;
+    /* set buffer to values in packet and set packet version number to value
+    /* in packet or some default value */
+    for (i =0 + factor, j=0 ; i <  packet_length + 6 + 1 + factor; i++)
+    {
+        /* set values in array */
+        hk_pkt_buffer[j++]= *(read_in_buffer+i);
+    } /* end for loop setting values for one extracted packet in buffer */
+
+
     /* put in format for decode_hk to read by adjusting values  */
     /* in buffer from unsigned char to unsigned short           */
     for (i=0, y=0 ; i < packet_length + 6 + 1   ; i += 2, y++)
@@ -1301,8 +1526,22 @@ void save_packet_values1(unsigned char read_in_buffer[], char *out)
                 " error status number <%d>\n", __FILE__,__LINE__, s);
     }
     kw_head= ccsds.keywords;
-    /* write values to DRMS*/
-    write_to_drms( packet_version_number, out, kw_head );
+
+    /*find file version if apid is sdo hk type */
+    if(check_for_sdo_apid(apid))
+    {
+      /* after load of shcids file during call to decode_hk_keywords -
+         get packet time to lookup sdo hk config file version to use */
+      (void)sprint_time (pkt_date, get_packet_time(word_ptr), "TAI", 0);
+      /* get file version number for ADP apid */
+      ptr_fvn=find_fvn_from_shcids(global_shcids_vn, pkt_date, apid);
+    }
+    /* set file version number  */
+    strcpy(file_version_number,ptr_fvn);
+
+    /* write values to DRMS with data series name from command line argument*/
+    write_to_drms( apid, packet_version_number, file_version_number, out, kw_head );
+
   } /* loop throught next packet and do all packets in file*/
 }
 
