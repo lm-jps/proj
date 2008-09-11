@@ -30,68 +30,15 @@
  *                                                     to make deallocate    *
  *                                                     easier from other     *
  *                                                     functions.            *
+ * SHCIDS_Version_Number*   global_shcids_vn           Top pointer to the    *
+ *                                                     link list used to hold*
+ *                                                     the SDO HK Code ids   *
+ *                                                     file's file-version-  *
+ *                                                     number and packet-    *
+ *                                                     date-time data        *
+ *                                                     pairs.                *
  * (C) Stanford University, 2005                                             *
  * Revision History:                                                         *
- * ------- ------  -------------  ----------------------------------------   *
- * Draft/   Who    Date           Description                                *
- * Revision                                                                  *
- * ------- ------  -------------  ----------------------------------------   *
- * 0.0     Carl      8/5/2005     Created                                    *
- * 0.1     Carl      10/19/2005   Pass draft 0 revision 1 to Rasmus to       *
- *                                integrate with L0 code                     *
- * 0.2     Carl      10/31/2005   Pass back code after Rasmus did a first try*
- *                                at integrating code with L0 code.          *
- *                                Add reread_all_files function which re-    *
- *                                reads all config files when a configuration*
- *                                data for version number does not exist.    *
- *                                Updated code to load version number in     *
- *                                structures as string buffer rather than a  *
- *                                float.                                     *
- * 0.3   Rasmus/     11/18/2005   Almost completely re-written so Rasmus'    *
- *       Carl                     eyes don't bleed so much when he tries to  *
- *                                read it.                                   * 
- * 0.4   Rasmus      2005/11/28   Changed names of global variables for no   *
- *                                apparent reason.                           *
- * 0.5   Carl        11/29/2005   Also added fix for APID 431. Now can read  *
- *                                and process packets with APID 431.         *
- *                                Checked in to integrate with Jim and Rasmus*
- *                                code.                                      *
- * 0.6   Carl        11/30/2005   Added code to load in telemetry_name values*
- *                                Added code to read in the number apids to  *
- *                                to process based on files present in       *
- *                                HK_CONFIG_DIRECTORY                        *
- * 0.7   Carl        01/19/2006   Added code to load "real" Ground TO CODE   *
- *                                IDS file. Set next value in the GTCIDS_    *
- *                                Version_Number structure to null.          *
- *                                Added code to load new format for apid-#-  *
- *                                version-# files with KWD, DCON, ACON       *
- *                                reserve words in file.                     *
- * 0.8   Carl        01/19/2006   Added additional error message when cannot *
- *                                open file like cvs version 1.6. Also did   *
- *                                exit.                                      *
- * 0.9   Carl        01/25/2006   Add default path for GTCIDS file directory *
- *                                 ../../tables/hk_config_file               *
- * 0.10  Carl        03/23/2006   Currently apid-#-version-# files are read  *
- *                                into memory during initialization. This    *
- *                                updated code will read in apid-#-version-# *
- *                                files on demand. Removed some comments from* 
- *                                from code that did not make sense.         *
- *                                Rewrote reread function.                   *
- * 0.11  Carl        07/10/2006   Updated load of apid line for loading      *
- *                                packet_id_type to be used to determine     *
- *                                which packet version number to use in      *
- *                                GROUND_to_CODE_ids.txt file.               *
- *                                Added functions to load, create and free   *
- *                                nodes for  ALG and DSC  keywords data from *
- *                                ACON and DCON lines in the apid-#-version-#*
- *                                files. Added feature to check to clear     *
- *                                in-memory config data structure when file  *
- *                                exists HK_FREE_CONFIG_FLAG_FILE in         *
- *                                directory  ../../table/hk_config_data.     *
- *                                This ensures memory can be cleared while   *
- *                                process is running.                        *
- * 0.12  Carl        07/10/2006   Updated breaks to format file and added    *
- *                                comment                                    *
  *****************************************************************************/
 
 
@@ -116,16 +63,18 @@
 #include "load_hk_config_files.h"
 #undef LOAD_HK_C
 
-
 /***************************** function prototypes ****************************/
 APID_HKPFD_Files * allocate_apid_hkpfd_files_nodes(int *ptrFirstTimeFlag);
 void load_gtcids_data( GTCIDS_Version_Number* top_ptr_gtcids_data,
                        APID_Pointer_HK_Configs *top_apid_ptr_hk_configs);
+int check_for_sdo_apid(int apid);
 void deallocate_apid_hkpfd_files_nodes(APID_HKPFD_Files *top_ptr_apid_hkpfd_files_ptr) ;
 char * find_file_version_number(GTCIDS_Version_Number *top,char f_version_number[]);
+char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[],int apid);
 /***************************** global variables ******************************/
 APID_Pointer_HK_Configs *global_apid_configs;
 GTCIDS_Version_Number *global_gtcids_vn;
+SHCIDS_Version_Number *global_shcids_vn;
 
 
 
@@ -136,7 +85,7 @@ GTCIDS_Version_Number *global_gtcids_vn;
  * Description: This is the top level function to decode housekeeping keywords.
  * Status load_all_apids_hk_configs(): Tested
  *****************************************************************************/
-int load_all_apids_hk_configs(char version_number[])    
+int load_all_apids_hk_configs(int apid, char version_number[], char pkt_date[])    
 {
   /*  declarations  */
   APID_Pointer_HK_Configs *apid_ptr_hk_configs;
@@ -144,6 +93,7 @@ int load_all_apids_hk_configs(char version_number[])
   APID_HKPFD_Files *top_apid_hkpfd_files; 
   APID_HKPFD_Files *hkpfd_files;
   GTCIDS_Version_Number *top_ptr_gtcids_data;
+  SHCIDS_Version_Number *top_ptr_shcids_data;
   int apid_array[MAX_APID_POINTERS];
   int number_of_apids, i;
   char file_version_number[50];
@@ -153,13 +103,29 @@ int load_all_apids_hk_configs(char version_number[])
 
   /* Init parameter */
   ptr_fvn=file_version_number;
-  /* Load data from ground to code ids file */
-  top_ptr_gtcids_data = read_gtcids_hk_file(top_apid_ptr_hk_configs); 
-  /* Check for file version number in ground to code ids file */
-  ptr_fvn=find_file_version_number(top_ptr_gtcids_data, version_number);
+
+  /* Load data from ground to code ids file for apid 1-63,400's and 500's*/
+  top_ptr_gtcids_data = read_gtcids_hk_file(); 
+
+  /* Load data from sdo hk ids file for apids 129,etc */
+  top_ptr_shcids_data = read_shcids_hk_file(); 
+  
+  /* get file version number*/
+  if(check_for_sdo_apid(apid))
+  {
+    /* Check for file version number in ground to code ids file */
+    ptr_fvn=find_fvn_from_shcids(top_ptr_shcids_data, pkt_date, apid);
+  }
+  else
+  {
+    /* Check for file version number in ground to code ids file */
+    ptr_fvn=find_file_version_number(top_ptr_gtcids_data, version_number);
+  }
+
   /* load HK_Config_Files structures for each apid */
-  if ((top_apid_hkpfd_files = read_all_hk_config_files(ptr_fvn)) == NULL)
+  if ((top_apid_hkpfd_files = read_all_hk_config_files(apid, ptr_fvn)) == NULL)
     return ERROR_HK_NOSUCHDIR;
+
   /* get list of unique apids to read and allocate space for*/
   number_of_apids = 0;
   memset(apid_array, 0, sizeof(apid_array));
@@ -255,12 +221,9 @@ void load_config_data(APID_HKPFD_Files *hkpfd_files,
 {
   /*declarations*/
   APID_HKPFD_Files* p;
-  int apid;
-  char filename[MAX_FILE_NAME];
   FILE* file_ptr; 
-
-  /*intialized variables*/
-  int err_status=0;
+  char filename[MAX_FILE_NAME];
+  int apid;
 
   /* FOR LOOP through all files in directory */
   apid = hk_configs->apid;
@@ -271,7 +234,7 @@ void load_config_data(APID_HKPFD_Files *hkpfd_files,
     {
       sprintf(filename,"%s/%s",p->directory_name, p->filename);
       file_ptr = fopen( filename ,"r");
-      err_status = save_hdpf_new_formats(file_ptr, hk_configs);
+      (void)save_hdpf_new_formats(file_ptr, hk_configs);
       fclose(file_ptr);
     }
     p = p->next;
@@ -287,13 +250,13 @@ void load_config_data(APID_HKPFD_Files *hkpfd_files,
  *              .../HK-CONFIG-FILES.
  * Status load_filenames_from_directory(): Tested
  *****************************************************************************/
-APID_HKPFD_Files* read_all_hk_config_files(char f_version_number[])
+APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[])
 {
   /*declarations */
-  char dirname[200];
-  char *dn;
   APID_HKPFD_Files *top, *p; 
   DIR *dir_p;
+  char dirname[200];
+  char *dn;
   struct dirent *dir_entry_p;
 
   /* intialize variables */
@@ -301,14 +264,29 @@ APID_HKPFD_Files* read_all_hk_config_files(char f_version_number[])
   memset(dirname, 0x0, sizeof(dirname));
 
   /* get directory name */
-  dn = getenv("HK_CONFIG_DIRECTORY");
-  if(dn == NULL) 
+  if(check_for_sdo_apid(apid))
   {
-    printkerr("Error at %s, line %d: Could not get directory environment\n"
-              "variable:<HK_CONFIG_DIRECTORY>. Set the env variable "
-	      "HK_CONFIG_DIRECTORY to point to the config file directory.\n",
-              __FILE__,__LINE__,dn);
-    return NULL;
+    dn = getenv("HK_SHCIDS_DIRECTORY");
+    if(dn == NULL) 
+    {
+      printkerr("Error at %s, line %d: Could not get directory environment\n"
+                "variable:<HK_SHCIDS_DIRECTORY>. Set the env variable "
+	        "HK_SHCIDS_DIRECTORY to point to the config file directory.\n",
+                __FILE__,__LINE__,dn);
+      return NULL;
+    }
+  }
+  else
+  {
+    dn = getenv("HK_CONFIG_DIRECTORY");
+    if(dn == NULL) 
+    {
+      printkerr("Error at %s, line %d: Could not get directory environment\n"
+                "variable:<HK_CONFIG_DIRECTORY>. Set the env variable "
+	        "HK_CONFIG_DIRECTORY to point to the config file directory.\n",
+                __FILE__,__LINE__,dn);
+      return NULL;
+    }
   }
   /* Add file version number to directory path */
   strcpy( dirname, dn);
@@ -319,9 +297,9 @@ APID_HKPFD_Files* read_all_hk_config_files(char f_version_number[])
   if ((dir_p = opendir(dirname)) == NULL)
   {
     printkerr("Error at %s, line %d: Could not open directory <%s>. "
-	      "The directory with < %s > version number does not exist. "
-	      "Run make_hkpdf.pl script to create directory and config files.\n",
-              __FILE__,__LINE__,dirname, f_version_number);
+              "The directory with < %s > version number does not exist. "
+              "Run make_hkpdf.pl script to create directory and config files.\n",
+             __FILE__,__LINE__,dirname, f_version_number);
     return NULL;
   }
   /* read each entry until NULL.*/
@@ -341,8 +319,8 @@ APID_HKPFD_Files* read_all_hk_config_files(char f_version_number[])
     /* load dir and filename in structure link list */
     strcpy(p->filename, dir_entry_p->d_name);
     strcpy(p->directory_name, dirname);
-    /* parse filename to get apid and version number*/
-    sscanf(p->filename, "%*4s-%x-%*7s-%d",
+    /* parse filename to get apid and version number:changed 7-31-2008, %d to %s for p->version_number*/
+    sscanf(p->filename, "%*4s-%x-%*7s-%s",
 	   &p->apid, p->version_number); 
     file_loaded_flag=1;
   }
@@ -475,6 +453,15 @@ int save_hdpf_new_formats(FILE* file_ptr,APID_Pointer_HK_Configs *p_apid_ptr_hk_
                 &(ptr_config_node->number_bytes_used), 
                 ptr_config_node->packet_id_type, 
                 ptr_config_node->date);
+      }
+      else if( strstr(line, "SDO") )
+      {
+        sscanf( line,"%*s %x %d %*s %s", 
+                &(ptr_config_node->apid_number), 
+                &(ptr_config_node->number_bytes_used), 
+                ptr_config_node->date);
+        /* set to default HMI */
+        strcpy(ptr_config_node->packet_id_type,"SDO");
       }
       else if( strstr(line, "SSIM") )
       {
@@ -647,12 +634,18 @@ int load_hdpf_alg_lines(char alg_lines[MAX_NUM_ACON_LINES][MAXLINE_ACON_IN_FILE]
           kw->alg_ptr = (ALG_Conversion*)malloc (sizeof (ALG_Conversion));
           alg_node= kw->alg_ptr;
 
-          /* load values in alg node-assume number of coeffs to be 5*/
+          /* load values in alg node-assume number of coeffs to be 6*/
           k=0;
-          sscanf(alg_lines[i]," %*s %*s %d %lf %lf %lf %lf %lf %*lf %*s",
+          sscanf(alg_lines[i]," %*s %*s %d %lf %lf %lf %lf %lf %lf %*s",
             &(alg_node->number_of_coeffs), &(alg_node->coeff[k++]),
-            &(alg_node->coeff[k++]), &(alg_node->coeff[k++]),
-            &(alg_node->coeff[k++]), &(alg_node->coeff[k]) );
+             &(alg_node->coeff[k++]), &(alg_node->coeff[k++]),
+             &(alg_node->coeff[k++]), &(alg_node->coeff[k++]), &(alg_node->coeff[k]) );
+          if(alg_node->number_of_coeffs != 6 && alg_node->number_of_coeffs != 5)
+          {
+            printkerr("WARNING: Receive data value for number of coefficients that were not expected values "
+                      "which are <5 or 6>. If value larger then 6 then will exceed array allowed size. "
+                      "Number of coefficients got was:<%d> \n",alg_node->number_of_coeffs);
+          }
           break;
         } /* end of if tlm name equal */
       } /* end of for number of lines */
@@ -839,10 +832,9 @@ void deallocate_apid_ptr_hk_config_nodes(void)
   DSC_Conversion *tmp_dsc_node;
   DSC_Conversion *prev_dsc_node;
   ALG_Conversion *tmp_alg_node;
-  int free_flag=0;
 
   /* check if want to free all stored configurations */
-  if (!(free_flag= check_free_configs_flag()))
+  if (!( check_free_configs_flag()))
   {
      /*skip deallocating configuration data kept in memory*/
      return;
@@ -900,7 +892,7 @@ void deallocate_apid_ptr_hk_config_nodes(void)
  *              GTCIDS_Version_Number structure.
  * Status read_gtcids_hk_fi1e(): Reviewed and Tested
  *****************************************************************************/
-GTCIDS_Version_Number * read_gtcids_hk_file(APID_Pointer_HK_Configs *top_apid_ptr)
+GTCIDS_Version_Number * read_gtcids_hk_file()
 {
   /*declarations*/
   char *hk_gtcids_directory ;
@@ -928,7 +920,6 @@ GTCIDS_Version_Number * read_gtcids_hk_file(APID_Pointer_HK_Configs *top_apid_pt
     printkerr("Set the enviroment variables HK_CONFIG_DIRECTORY"
               " to point to config directory and HK_GTCIDS_FILE"
               " environment variable to point to the correct file name\n");
-    //exit (1);
     return NULL;
   }
   top_ptr_gtcids_vn = NULL;
@@ -998,7 +989,6 @@ void load_gtcids_data( GTCIDS_Version_Number* top_ptr_gtcids_data,
       tmp_apid_ptr_hk_configs ; 
       tmp_apid_ptr_hk_configs= tmp_apid_ptr_hk_configs->next) 
   {
-
     for( tmp_ptr_hk_configs = tmp_apid_ptr_hk_configs->ptr_hk_configs;
 	 tmp_ptr_hk_configs ;
 	 tmp_ptr_hk_configs= tmp_ptr_hk_configs->next) 
@@ -1038,7 +1028,6 @@ void load_gtcids_data( GTCIDS_Version_Number* top_ptr_gtcids_data,
  * Module Name: deallocate_GTCIDS_Version_Number
  * Description: This function deallocates GTCIDS_Version_Number Structure 
  *              link list.
- * Status: deallocate_GTCIDS_Version_Number(): Reviewed and Tested
  *****************************************************************************/
 void deallocate_GTCIDS_Version_Number(void) 
 {
@@ -1047,6 +1036,27 @@ void deallocate_GTCIDS_Version_Number(void)
 
   /* deallocate nodes in link list */
   p = global_gtcids_vn;
+
+  while(p)
+  {    
+    tmp = p->next;
+    free(p);
+    p = tmp;
+  } 
+}
+/***************************************************************************** 
+ * Deallocate SHCIDS Version Numbers
+ * Module Name: deallocate_SHCIDS_Version_Number
+ * Description: This function deallocates GTCIDS_Version_Number Structure 
+ *              link list.
+ *****************************************************************************/
+void deallocate_SHCIDS_Version_Number(void) 
+{
+  /*declarations */
+  SHCIDS_Version_Number *p,*tmp;
+
+  /* deallocate nodes in link list */
+  p = global_shcids_vn;
 
   while(p)
   {    
@@ -1086,28 +1096,55 @@ void deallocate_apid_hkpfd_files_nodes(APID_HKPFD_Files *ptr)
  *             
  * Status reread_all_files(): initial coding
  *****************************************************************************/
-HK_Config_Files*  reread_all_files(APID_Pointer_HK_Configs *apid_ptr_configs,char version_number[]) 
+HK_Config_Files*  reread_all_files(APID_Pointer_HK_Configs *apid_ptr_configs, 
+                                   char version_number[], char pkt_date[])
 {
   /*declarations*/
-  int apid;
+  APID_HKPFD_Files *hkpfd_files;
+  APID_HKPFD_Files *top_hkpfd_files;
   APID_Pointer_HK_Configs *p, *prev_p;
+  GTCIDS_Version_Number *ptr_gtcids_data;
+  SHCIDS_Version_Number *ptr_shcids_data;
   char file_version_number[50];
   char *ptr_fvn;
+  int apid;
   int found_flag;
-  GTCIDS_Version_Number *ptr_gtcids_data;
-  APID_HKPFD_Files *top_hkpfd_files;
-  APID_HKPFD_Files *hkpfd_files;
 
   /* init values */
   ptr_fvn=file_version_number;
-  ptr_gtcids_data = global_gtcids_vn;
 
   /*save apid value to look up later */
   apid= apid_ptr_configs->apid;
-  /* find file version number directory to read in files */
-  ptr_fvn=find_file_version_number(ptr_gtcids_data, version_number);
+
+
+  /* deallocate GTCIDS_VERSION and SHCIDS_VERSION nodes and reread gtcids.txt and shcids.txt files */
+  deallocate_GTCIDS_Version_Number(); 
+  deallocate_SHCIDS_Version_Number(); 
+  read_gtcids_hk_file();
+  read_shcids_hk_file();
+  ptr_gtcids_data = global_gtcids_vn;
+  ptr_shcids_data = global_shcids_vn;
+
+  if(check_for_sdo_apid(apid))
+  {
+    ptr_fvn=find_fvn_from_shcids(ptr_shcids_data, pkt_date, apid);
+#ifdef DEBUG_LOAD_HK_CONFIG_FILE
+printkerr("DEBUG:Message at %s, line %d: Rereading config files and shcids file to find file version:<%s> apid:<%d>\n", __FILE__, __LINE__, ptr_fvn, apid);
+#else
+#endif
+  }
+  else
+  {
+    /* find file version number directory to read in files */
+    ptr_fvn=find_file_version_number(ptr_gtcids_data, version_number);
+#ifdef DEBUG_LOAD_HK_CONFIG_FILE
+printkerr("DEBUG:Message at %s, line %d: Rereading config files and gtcids file to find file version:<%s> apid:<%d>\n", __FILE__, __LINE__,ptr_fvn, apid);
+#else
+#endif
+  }
+
   /* load HK_Config_Files structures for each apid */
-  if ((top_hkpfd_files = read_all_hk_config_files(ptr_fvn)) == NULL)
+  if ((top_hkpfd_files = read_all_hk_config_files(apid,ptr_fvn)) == NULL)
     return (HK_Config_Files*)NULL;
   /* check which apid node to add */
   for(hkpfd_files=top_hkpfd_files; hkpfd_files;
@@ -1137,12 +1174,18 @@ HK_Config_Files*  reread_all_files(APID_Pointer_HK_Configs *apid_ptr_configs,cha
   {
     load_config_data(top_hkpfd_files, p);
   }
-  /* load data for packet version numbers in hk config format link list*/
-  p=global_apid_configs; 
-  load_gtcids_data(ptr_gtcids_data, p);
+
+  if (!check_for_sdo_apid(apid))
+  {
+    /* load data for packet version numbers in hk config format link list*/
+    p=global_apid_configs; 
+    load_gtcids_data(ptr_gtcids_data, p);
+  }
+
   /* deallocate  top_apid_hkpfd_files link list */
   hkpfd_files=top_hkpfd_files;
   deallocate_apid_hkpfd_files_nodes(hkpfd_files) ;
+
   /* locate top HK_Config_Files Node for APID_Pointer node equal to lookup apid value */
   p = global_apid_configs;
   while (p)
@@ -1179,3 +1222,160 @@ char * find_file_version_number(GTCIDS_Version_Number *top, char p_version_numbe
   } /* End-for  */
   return ("");
 }
+/***************************************************************************** 
+ * Read SHCIDS(sdo_hk_code_ids.txt or shcids.txt) HK Files
+ * Module Name: read_shcids_hk_file
+ * Description: This function reads the SHCIDS file and loads data into the
+ *              SHCIDS_Version_Number structure.
+ * Status read_shcids_hk_fi1e(): Review and Test open tasks
+ *****************************************************************************/
+SHCIDS_Version_Number * read_shcids_hk_file()
+{
+  /*declarations*/
+  char *hk_shcids_directory ;
+  char *hk_shcids_filename;
+  char hk_shcids_directory_filename[MAX_FILE_NAME];
+  FILE *file_ptr;
+  char line[MAXLINE_IN_FILE];
+  SHCIDS_Version_Number *top_ptr_shcids_vn;
+  SHCIDS_Version_Number *ptr_shcids_vn;
+  char new_str[9];//yyyymmdd
+
+  /* get directory and file name */
+  hk_shcids_directory = getenv("HK_SHCIDS_DIRECTORY");
+  hk_shcids_filename= getenv("HK_SHCIDS_FILE");
+  if(hk_shcids_filename == NULL) 
+    hk_shcids_filename = "shcids.txt";
+  if(hk_shcids_directory == NULL) 
+    hk_shcids_directory = "/home/production/cvs/TBL_JSOC/lev0/hk_config_file/sdo_hk";
+  sprintf(hk_shcids_directory_filename, "%s/%s", hk_shcids_directory,
+	  hk_shcids_filename); 
+
+  /*open file & read  data into SHCIDS_Version_Number link list structure*/
+  file_ptr = fopen(hk_shcids_directory_filename, "r");
+  if(!file_ptr)
+  {
+    printkerr("Error:Couldn't open SDO HK Code IDS file %s.\n",hk_shcids_directory_filename);
+    printkerr("Set the enviroment variables HK_SHCIDS_DIRECTORY"
+              " to point to config directory and HK_SHCIDS_FILE"
+              " environment variable to point to the correct file name\n");
+    return NULL;
+  }
+  top_ptr_shcids_vn = NULL;
+  while( fgets(line, MAXLINE_IN_FILE, file_ptr) != NULL )
+  {
+    if(line[0] == '#') 
+      continue; /* skip comments */
+    else  
+    {
+      if (top_ptr_shcids_vn == NULL)    
+      {
+	top_ptr_shcids_vn = ptr_shcids_vn = malloc(sizeof(SHCIDS_Version_Number));
+	ptr_shcids_vn->next = (SHCIDS_Version_Number*)NULL;
+      } 
+      else  
+      {
+	ptr_shcids_vn->next = malloc(sizeof(SHCIDS_Version_Number));
+	ptr_shcids_vn = ptr_shcids_vn->next;
+        ptr_shcids_vn->next = (SHCIDS_Version_Number*)NULL;
+      }
+      ptr_shcids_vn->next= NULL;
+      /*Parse key values from file where header is:*/
+      /*# Start Dayfile Date/Time | APID | File Version ID | Master File and version*/
+      /*Assume always above, otherwise more code required here*/
+      sscanf( line,
+	      "%s %s |%d |%s | %*s",
+	      ptr_shcids_vn->change_date, 
+	      ptr_shcids_vn->change_time, 
+	      &ptr_shcids_vn->apid,
+	      ptr_shcids_vn->file_version_number);
+
+      /* add change date as integer value */
+      for(int i=0; i < 9; new_str[i++]='\0');
+      strncpy(new_str,ptr_shcids_vn->change_date,4); //get yyyy
+      strncat(new_str,&ptr_shcids_vn->change_date[5],2);//get mm
+      strncat(new_str,&ptr_shcids_vn->change_date[8],2);//get dd
+      sscanf(new_str,"%d",&ptr_shcids_vn->date); //convert to int
+    } 
+  } /* END-for fgets line */
+  fclose(file_ptr);
+  global_shcids_vn = top_ptr_shcids_vn; /* set global */
+  return(top_ptr_shcids_vn);
+}/* END-Module: read_shcids_hk_file */
+/***************************************************************************** 
+ * FIND FILE VERSION NUMBER IN SDO HK CODE IDS 
+ * Module Name: find_fvn_from_shcids()
+ * Description: Gets  file version number based on packet time
+ *             
+ * Status find_file_version_number(): Coded and unTested
+ *****************************************************************************/
+char * find_fvn_from_shcids(SHCIDS_Version_Number *top, char p_date[], int apid)
+{
+  /*declarations*/
+  SHCIDS_Version_Number  *tmp_ptr;
+  char new_str[9];
+  char *saved_fvn;
+  int current_date;
+  int pkt_date;
+  int saved_date;
+  int saved_flg=0;
+
+  /* change string date to integer value to make easier to compare */
+  for(int i=0; i < 9; new_str[i++]='\0');
+  strncpy(new_str,p_date,4);      //get yyyy
+  strncat(new_str,&p_date[5],2);  //get mm
+  strncat(new_str,&p_date[8],2);  //get dd
+  sscanf(new_str,"%d",&pkt_date); //convert to int
+
+  /* loop thru shcids.txt files data to find file version number */
+  for(tmp_ptr=top;tmp_ptr;tmp_ptr=tmp_ptr->next)    
+  {
+    if(pkt_date >= tmp_ptr->date  && tmp_ptr->apid == apid) 
+    {
+      if(saved_flg)
+      {
+        current_date=tmp_ptr->date;
+        if(current_date >= saved_date)
+        {
+          /*use latest date for fvn */
+          saved_date=current_date;
+          saved_fvn=tmp_ptr->file_version_number;
+         }
+       }
+       else
+       {
+         /* found fvn */
+         saved_date=tmp_ptr->date;
+         saved_fvn=tmp_ptr->file_version_number;
+         saved_flg=1;
+       }
+    }
+  } /* End-for  */
+  if(saved_flg) 
+  {
+    return ((char*)saved_fvn);
+  }
+  else
+  {
+    /* if did not find file version from SHCIDS file then set to zero */
+    return ("0.0");
+  }
+}
+/***************************************************************************** 
+ * CHECK FOR SDO HK APID
+ * Module Name: check_for_sdo_apid()
+ * Description: checks for sdo hk apid and returns 1 if true or 0 if false.
+ *****************************************************************************/
+int check_for_sdo_apid(int apid)
+{
+   if ((apid >= 96) && (apid <= 399))
+   {
+      return (1);//This is sdo hk apid
+   }
+   else
+   {
+      return (0);//This is hk apid between 1-63,400's or 500's
+   }
+
+}
+
