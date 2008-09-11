@@ -44,8 +44,8 @@
 #define HKDDF_MAX_PVN_SIZE       50
 #define HKDDF_MAX_PVN_STR        10
 #define HKDDF_MAX_VERSION_LINES  1000
-/*#define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
-#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
+#define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
+/*carl local file: #define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
 
 /******************** includes ******************************************/
 #include <stdio.h>
