@@ -10,22 +10,6 @@
  * Description: This file contains structures and link list structures       *
  *              used by the modules in decode_hk.c.                          *
  * (C) Stanford University, 2005                                             *
- * Revision History:                                                         *
- * Draft/Revision  Date           Description                                *
- * --------------  -------------  ----------------------------------------   *
- * 0.0               8/5/2005     Created                                    *
- * 0.1               10/31/2005   Added version number fields as string      *
- *                                buffer rather than as a float value        *
- * 0.2               11/04/2005   Changed HK_Keyword to HK_Keywords_Format   *
- *                                structure. Added Rasmus's HK_Keyword struct*
- *                                definition to integrate with L0 code       *
- *                                Added packets.h to file                    *
- * 0.3               01/19/2006   Added HK_DECODER_ERROR_UNKNOWN_ENV_VARIABLE*
- *                                define.                                    *
- * 0.4               05/10/2006   Updates for decode of analog and digital   *
- *                                type keywords. Added DSC_Conversion_struct *
- *                                and ALG_Conversion_struct to HK_Keyword_   *
- *                                Format structure.                          *
  *****************************************************************************/
 /*****************************includes****************************************/
 /*****************************defines*****************************************/
@@ -34,7 +18,7 @@
 #define KEYWORD_TYPE_SIZE                          10
 #define TELEMETRY_MNEMONIC_SIZE                    50
 #define HK_DECODER_SUCCESSFUL                      SUCCESS
-#define HK_DECODER_ERROR_UNKNOWN_APID   ERROR_HK_UNKNOWN_APID
+#define HK_DECODER_ERROR_UNKNOWN_APID              ERROR_HK_UNKNOWN_APID
 #define HK_DECODER_ERROR_NO_CONFIG_DATA            ERROR_HK_UNKNOWN_APID
 #define HK_DECODER_ERROR_CANNOT_FIND_VER_NUM       ERROR_HK_CANNOT_FIND_VER_NUM
 #define HK_DECODER_ERROR_CANNOT_LOAD_HK_VALUES     ERROR_HK_CANNOT_LOAD_HK_VALUES
@@ -58,7 +42,7 @@ typedef struct HK_Keywords_Format_struct
   char keyword_name[KEYWORD_NAME_SIZE]; /*Size is limited to 8 
                                          *from HMI-EGSE-FS document 
                                          */
-  unsigned int keyword_value;           /*Actual value of keyword from 
+  int64_t keyword_value;           /*Actual value of keyword from 
                                          *hk bit stream packet
                                          */
   char type[KEYWORD_TYPE_SIZE] ;        /*Used by Decoder to parse keyword
