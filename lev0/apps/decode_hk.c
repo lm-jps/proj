@@ -4,76 +4,6 @@
  * Create Date: August, 5, 2005                                              *
  * Description: This file contains modules to decode housekeeping data.      *
  * (C) Stanford University, 2005                                             *
- *                                                                           *
- * ----------------------   ------------------------- ---------------------  *
- * Type                     Name                       Description           *
- * ----------------------   ------------------------- ---------------------  *
- *  
- *                                                                           *
- * Revision History:                                                         *
- * --------------  -------------  ----------------------------------------   *
- * Draft/Revision  Date           Description                                *
- * --------------  -------------  ----------------------------------------   *
- * 0.0               8/5/2005     Created                                    *
- * 0.1               10/19/2005   Pass draft 0 revision 1 to Rasmus to       *
- *                                integrate with L0 code                     *
- * 0.2               10/27/2005   Pass back code after Rasmus did a first try*
- *                                at integrating code with L0 code.          *
- *                                Add reread_all_files function call which   *
- *                                reads all config files when a configuration*
- *                                data for version number does not exist.    *
- *                                Updated code to handle version number in   *
- *                                structures as string buffer rather than as *
- *                                float value.                               *
- * 0.3              11/14/2005    Updated get_version_number(),              *
- *                                decode_hk_keywords() and load_hk_value()   *
- *                                functions to integrate with                *
- *                                Rasmus's new api's and structures.         *
- *                                Create new function load_engr_values() to  *
- *                                load engr values into HK_Keyword_t         *
- *                                structure. Removed compiler warnings.      *
- * 0.4              11/16/2005    After Rasmus took code to integrate added: *
- *                                deallocate_hk_keywords_format() call to    *
- *                                deallocate memory nodes in link list.      *
- *                                Removed deallocate_pointers_hk_keywords()  *
- *                                function.                                  *
- * 0.5              2005/11/28    Re-wrote linked list handling. Removed     *
- *                                global variables. Shortened variable names.*
- * 0.6   carl      11/30/2005     Added code to fill in mnemonic value in    *
- *                                name and keyword value in fitsname in the  *
- *                                HK_Keyword_t structure.                    *
- * 0.7   carl      01/19/2006     Added environment variable for finding     *
- *                                config data for apid 431. Added error      *
- *                                when cannot find config data initially in  *
- *                                the link list of config data. Update call  *
- *                                to check_version_number() to check_packet_ *
- *                                version_number().                          *
- * 0.8   carl      04/04/2006     Added code to load configuration data on   *
- *                                demand. Added code to load conv_type in    *
- *                                the HK_Config_Format link list.            *
- *                                Added code to check and print warning if   *
- *                                keyword is a DSC value                     *
- * 0.9   carl      07/10/2006     Added code to decode analog and digital    *
- *                                type of keywords. Added code to decode     *
- *                                SB, IL1, and IS1 types of keywords. Added  *
- *                                code to print warning when digital line    *
- *                                values do not exist for digital keyword    *
- *                                types. Added code to read APID line's      *
- *                                packet type parameter to determine if      *
- *                                packet version number is HMI or AIA ID.    *
- *                                Confirmed deallocate_hk_keyword_format()   *
- *                                function deallocates nodes.                *
- *                                Updated code to handle case when no ACON   *
- *                                data line(no coeff values) for ALG type    *
- *                                keyword which in this case set engr value  *
- *                                to zero. Formatted structures in file.     *
- * 0.91  carl      08/22/2006     Updated line in get_version_number function*
- *                                to covert hex value to decimal values for  *
- *                                the packet version number.                 *
- * 0.92  carl      01/19/2007     Updated  load_hk_values() to get raw value *
- *                                for bits stream counting bit start position*
- *                                from left-to-right or from high bits to low*
- *                                bits. Initial release counted low to high. *
  *****************************************************************************/
 
 #include <stdio.h>
@@ -97,12 +27,20 @@
 /***************************** extern global variables ***********************/
 extern APID_Pointer_HK_Configs *global_apid_configs;
 extern GTCIDS_Version_Number*   global_gtcids_vn;
+extern SHCIDS_Version_Number*   global_shcids_vn;
 /**************************static function prototypes ************************/
 static void get_version_number(unsigned short *wd_ptr, char *ptr_vn);
 HK_Keywords_Format * load_hk_configs(HK_Config_Files *found_config);/*encode_hk uses-keep non-static*/
 static int load_hk_values(unsigned short *word_ptr, HK_Keywords_Format *hk_keywords);
 static int load_engr_values(HK_Keywords_Format *hk_keywords, HK_Keyword_t **kw_head);
 static void deallocate_hk_keywords_format(HK_Keywords_Format *head);   
+float translateint2float(int ival);
+double translateint2double(int64_t ival);
+double  get_packet_time(unsigned short *word_ptr);
+/*********** extern function prototypes **************/
+extern void sprint_time (char *at, TIME t, char *zone, int precision);
+extern int check_for_sdo_apid(int apid);
+extern char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[], int apid);
 
 
 /**********************housekeeping telemetry decode routines*****************/
@@ -117,24 +55,36 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
 #define ERRMSG(__msg__) printkerr("ERROR at %s, line %d: " #__msg__"\n",__FILE__,__LINE__);
 
   /* declarations */
-  HK_Keywords_Format *ptr_hk_keywords;
   APID_Pointer_HK_Configs *apid_configs;
   HK_Config_Files *config_files;
-  int status;
-  char version_number[MAX_CHAR_VERSION_NUMBER]; 
   HK_Config_Files *matching_config;
+  HK_Keywords_Format *ptr_hk_keywords;
+  char pkt_date[200]; //ascii time
+  char *ptr_fvn;
+  char version_number[MAX_CHAR_VERSION_NUMBER]; 
+  int status;
 
   /* init values */
   matching_config= (HK_Config_Files *)NULL;
 
-
-  /* Get Version Number  from byte 8 and byte 9  bit stream for hk packet  */
-  get_version_number(word_ptr, version_number); 
+  /* Get Version Number  from byte 8 and byte 9  bit stream for hk packet
+     or Get packet time from bytes for sdo hk packet    */
+  if (check_for_sdo_apid(apid))
+  {
+    /* get packet time to lookup sdo hk config version to use */
+    (void)sprint_time (pkt_date, get_packet_time(word_ptr), "TAI", 0);
+    strcat(version_number,"\0");
+  }
+  else
+  {
+    get_version_number(word_ptr, version_number); 
+    strcat(pkt_date,"\0");
+  }
 
   /* check if global pointer to configuration link list exists*/
   if (!global_apid_configs )
   {
-    load_all_apids_hk_configs(version_number);
+    load_all_apids_hk_configs(apid, version_number, pkt_date );
   }
 
   /* get pointer to HK_Config_File structure based on apid # */
@@ -142,58 +92,106 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
   while(apid_configs)   
   {
     if (apid_configs->apid == apid)  
+    {
       break; /*Found pointer apid pointer correct HK_Config_File structures */
+    }
     else
+    {
       apid_configs = apid_configs->next;
+    }
   }
 
+  /* check if found config node for this apid */
   if ( apid_configs == NULL) 
   {
-
-    printkerr("ERROR at %s, line %d: This apid <%x> does not have valid "
-              "config data to decode packet. Check if config files exists "
-              "for packet version number %s. "
-              "If don't exist, run make_hkpdf.pl script to create files.\n",
-               __FILE__, __LINE__, apid, version_number);
+    if(check_for_sdo_apid(apid))
+    {
+      printkerr("ERROR at %s, line %d: This apid <%x> does not have valid "
+                "config data to decode packet. Check if sdo hk config files exists "
+                "for file version number  <%s>. "
+                "If don't exist, run make_hkpdf.pl script to create files.\n",
+                __FILE__, __LINE__, apid, find_fvn_from_shcids(global_shcids_vn, pkt_date,apid));
+    }
+    else
+    {
+      printkerr("ERROR at %s, line %d: This apid <%x> does not have valid "
+		"config data to decode packet. Check if hk config files exists "
+		"for packet version number %s. "
+		"If don't exist, run make_hkpdf.pl script to create files.\n",
+		 __FILE__, __LINE__, apid, version_number);
+    }
     return HK_DECODER_ERROR_NO_CONFIG_DATA;
   }
 
   /*set pointer to configs to tmp pointer to get config data for this apid*/
   config_files = apid_configs->ptr_hk_configs;     
 
-  /**************************************************************
-   * Check if version number exists for hk-configurations       *
-   * There are two version numbers:                             *
-   * Version number for STANFORD_TLM_HMI_AIA file               *
-   * Version number for parameter                               *
-   **************************************************************/
-  matching_config = check_packet_version_number(config_files,version_number);
-  if ( matching_config == NULL )
+  /* check if config data exists in-memory */
+  //if(config_files->apid_number == 129)
+  if(check_for_sdo_apid(config_files->apid_number))
   {
-    /* Could not find matching config. Try to reload the config files. */
-    printkerr("WARNING at %s, line %d: For apid <%x> and packet version number <%s> "
-	      "-Cannot find config data to decode packet!!Rereading data files.\n",
-              __FILE__, __LINE__, apid, version_number,version_number);
-    
-    config_files = reread_all_files(apid_configs, version_number);
-    matching_config = check_packet_version_number(config_files,version_number);
-    if ( matching_config != NULL ) 
+    /* check the file version number based on packet time */
+    ptr_fvn= find_fvn_from_shcids(global_shcids_vn, pkt_date,config_files->apid_number);
+    matching_config = check_file_version_number(config_files, ptr_fvn);
+    if ( matching_config == NULL )
     {
-      printkerr("WARNING at %s, line %d: Found config for apid <%x> and version number <%s>\n",
-                 __FILE__, __LINE__,apid, version_number);
-       ;
+      /* Could not find matching config. Try to reload the config files. */
+      printkerr("WARNING at %s, line %d: For apid <%x> and file version number <%s> "
+                 "-Cannot find config data to decode packet!!Rereading data files.\n",
+                 __FILE__, __LINE__, apid, ptr_fvn, ptr_fvn);
+    
+      config_files = reread_all_files(apid_configs, version_number, pkt_date);
+      ptr_fvn= find_fvn_from_shcids(global_shcids_vn, pkt_date, config_files->apid_number);
+      matching_config = check_file_version_number(config_files, ptr_fvn);
+      if ( matching_config != NULL ) 
+      {
+        printkerr("WARNING at %s, line %d: Found sdo hk config data for apid <%x> and file version number <%s>\n",
+                   __FILE__, __LINE__,apid, version_number);
+      }
     }
-  }
 #ifdef DEBUG_DECODE_HK
-  printkerr("DEBUG:Message at %s, line %d: Found config for apid <%x> and packet version number <%s>\n",
+printkerr("DEBUG:Message at %s, line %d: Found sdo hk config for apid <%x> and file version number <%s>\n", 
+__FILE__, __LINE__,apid, ptr_fvn);
+#else
+#endif
+  }
+  else 
+  {
+    /***************************************************************
+     * Check if version number exists for hk-configurations        *
+     * There are two version numbers:                              *
+     * File Version number for STANFORD_TLM_HMI_AIA file           *
+     * Packet or Parameter Version number for parameter from packet*
+     ***************************************************************/
+    matching_config = check_packet_version_number(config_files,version_number);
+    if ( matching_config == NULL )
+    {
+      /* Could not find matching config. Try to reload the config files. */
+      printkerr("WARNING at %s, line %d: For apid <%x> and packet version number <%s> "
+                 "-Cannot find config data to decode packet!!Rereading data files.\n",
+                 __FILE__, __LINE__, apid, version_number,version_number);
+    
+      config_files = reread_all_files(apid_configs, version_number, pkt_date);
+      matching_config = check_packet_version_number(config_files,version_number);
+      if ( matching_config != NULL ) 
+      {
+        printkerr("WARNING at %s, line %d: Found config data for apid <%x> and packet version number <%s>\n",
+                   __FILE__, __LINE__,apid, version_number);
+      }
+    }
+#ifdef DEBUG_DECODE_HK
+  printkerr("DEBUG:Message at %s, line %d: Found config data for apid <%x> and packet version number <%s>\n",
                  __FILE__, __LINE__,apid, version_number);
 #else
 #endif
+  }
+
+
   if ( matching_config == NULL )
   {
     /* Still no matching config information. Return an error code. */
     //Took out-Carl-10-12-2007:
-    ERRMSG("Could not find  version number even after re-reading hk config files.");
+    ERRMSG("Could not find  packet version number even after re-reading hk config files.");
     return HK_DECODER_ERROR_CANNOT_FIND_VER_NUM; 
   }
   /* Load hk configs in HK_Keywords_Format structure  */
@@ -214,7 +212,7 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
   }
   else  
   {
-    ERRMSG("Could not find config data for this version number");
+    ERRMSG("Could not find config data for this packet version number");
     status = HK_DECODER_ERROR_CANNOT_LOAD_HK_VALUES;
   }
   return status;
@@ -248,6 +246,7 @@ static int load_engr_values(HK_Keywords_Format *hk_keywords, HK_Keyword_t **kw_h
   HK_Keyword_t  *kwt=NULL;
   DSC_Conversion *dsc;
   int i;
+
   /* Loop thru HK_Keywords_Format link list structure and find 
      first value to load */
   while(hk_keywords)
@@ -264,8 +263,10 @@ static int load_engr_values(HK_Keywords_Format *hk_keywords, HK_Keyword_t **kw_h
     /* load keyword name */ 
     strcpy(kwt->fitsname, hk_keywords->keyword_name); 
     strcpy(kwt->name, hk_keywords->telemetry_mnemonic_name); 
+
     /* load raw value */
     kwt->raw_value = hk_keywords->keyword_value;
+
     /* load engr value and type  */
     if ( hk_keywords->conv_type == 'R')
     {
@@ -299,6 +300,16 @@ static int load_engr_values(HK_Keywords_Format *hk_keywords, HK_Keyword_t **kw_h
       {
         kwt->eng_type = KW_TYPE_UINT32;
         kwt->eng_value.uint32_val = hk_keywords->keyword_value;
+      }
+      else if (!strcmp( hk_keywords->type , "SFP"))
+      {
+        kwt->eng_type = KW_TYPE_FLOAT;
+        kwt->eng_value.float_val = translateint2float(hk_keywords->keyword_value);
+      }
+      else if (!strcmp( hk_keywords->type , "DFP"))
+      {
+        kwt->eng_type = KW_TYPE_DOUBLE;
+        kwt->eng_value.double_val = (double)translateint2double(hk_keywords->keyword_value);
       }
       else 
       {
@@ -348,9 +359,26 @@ static int load_engr_values(HK_Keywords_Format *hk_keywords, HK_Keyword_t **kw_h
       {
         if(hk_keywords->alg)
         { 
+          kwt->eng_value.double_val=0.0;
           for (i=0; i  <  hk_keywords->alg->number_of_coeffs; i++)
           {
-            kwt->eng_value.double_val += hk_keywords->alg->coeff[i] * pow(hk_keywords->keyword_value, i);
+            /* check if going to load values in array that exceed array size */
+            if( i  == (MAX_NUMBER_COFFICIENTS))
+            {
+              printkerr("WARNING at %s, line %d: Cannot store all coefficients "
+                        "in array with total number of coefficients equal to <%d>. "
+                        "Can only store 6 coefficients in current array. Adjust array "
+                        "size,sscanf,and max number coefficients define in code "
+                        "if needed. Currently will scan in only 6 coefficients "
+                        "values. Skipping using other coefficient values to avoid "
+                        "overrunning array. This could effect analog value.\n",
+                        __FILE__, __LINE__, hk_keywords->alg->number_of_coeffs);
+            }
+            else
+            {
+
+              kwt->eng_value.double_val += hk_keywords->alg->coeff[i] * powl((double)hk_keywords->keyword_value, (double)i);
+            }
           }
         }
         else
@@ -510,6 +538,9 @@ static int load_hk_values(unsigned short *word_ptr, HK_Keywords_Format *ptr_hk_k
   unsigned int *w;
   unsigned char *byte_ptr;
   unsigned int keep_bits; /* 32 bits */
+  //unsigned int low_word, high_word;
+  uint32_t low_word, high_word;
+  uint64_t dfp_int;
 
   /* initialized variables */
   top_hk_keywords = ptr_hk_keywords;
@@ -565,6 +596,63 @@ static int load_hk_values(unsigned short *word_ptr, HK_Keywords_Format *ptr_hk_k
       /* adjust for bit length */
       ptr_hk_keywords->keyword_value =  (ptr_hk_keywords->keyword_value >> (32 - (ptr_hk_keywords->start_bit + ptr_hk_keywords->bit_length ))) & keep_bits ; 
     }                 
+    else if (!strcmp(ptr_hk_keywords->type, "SFP")) 
+    {  
+      /* set keep bits to zero */
+      keep_bits=0;
+      /* calculate keep bits mask to use*/
+      keep_bits = (unsigned int) (pow( 2, ptr_hk_keywords->bit_length ) - 1 ) ;
+      /* get raw value */
+      w = (unsigned int*) &(byte_ptr[ptr_hk_keywords->start_byte]);
+      /* set 0th to 7th bits */
+      ptr_hk_keywords->keyword_value =	(unsigned int) ( (*w) >> 24 & 0x000000FF);
+      /* set 8th to 15th bits */
+      ptr_hk_keywords->keyword_value |=	(unsigned int) ( (*w) >> 8 & 0x0000FF00);
+      /* set 24th to 31th bits */
+      ptr_hk_keywords->keyword_value |=	( unsigned int) ( (*w) << 24 & 0xFF000000);
+      /* set 16th to 23th bits */
+      ptr_hk_keywords->keyword_value |=	(unsigned int) ( (*w) << 8 & 0x00FF0000);
+      /* adjust for bit length */
+      ptr_hk_keywords->keyword_value =  (ptr_hk_keywords->keyword_value >> (32 - (ptr_hk_keywords->start_bit + ptr_hk_keywords->bit_length ))) & keep_bits ; 
+
+    }
+    else if (!strcmp(ptr_hk_keywords->type, "DFP")) 
+    {  
+      /* set keep bits to zero */
+      keep_bits=0;
+      /* calculate keep bits mask to use*/
+      keep_bits = (unsigned int) (pow( 2, ptr_hk_keywords->bit_length ) - 1 ) ;
+      /* get raw value of first word from packet */
+      w = (unsigned int *) &(byte_ptr[ptr_hk_keywords->start_byte]);
+      /* set 0th to 7th bits */
+      low_word = (unsigned int) ( (*w) >> 24   & 0x000000FF);
+      /* set 8th to 15th bits */
+      low_word |= (unsigned int) ( (*w) >> 8   & 0x0000FF00);
+      /* set 16th to 23th bits */
+      low_word |= (unsigned int) ( (*w) << 8   & 0x00FF0000);
+      /* set 24th to 31th bits */
+      low_word |= ( unsigned int) ( (*w) << 24 & 0xFF000000);
+      /* get raw value of second word from packet */
+      w = (unsigned int *) &(byte_ptr[ptr_hk_keywords->start_byte + 4]);
+      /* set 32th to 39th bits */
+      high_word |= (unsigned int) ( (*w) >> 24 & 0x000000FF);
+      /* set 40th to 47th bits */
+      high_word |= (unsigned int) ( (*w) >> 8 & 0x0000FF00);
+      /* set 48th to 55th bits */
+      high_word |= (unsigned int) ( (*w) << 8 & 0x00FF0000);
+      /* set 56th to 63nd bits */
+      high_word |= ( unsigned int) ( (*w) << 24 & 0xFF000000);
+      /* combine low and high words to make 64 bit int */
+      //1st try-dfp_int  = (uint64_t)low_word ;
+      dfp_int  = (uint64_t)high_word ;
+      //1st try-dfp_int |= (uint64_t)(((uint64_t)high_word << 32) & (0xFFFFFFFF00000000));
+      dfp_int |= (uint64_t)(((uint64_t)low_word << 32) & (0xFFFFFFFF00000000));
+      ptr_hk_keywords->keyword_value = (uint64_t)dfp_int; 
+
+      /* skip-adjust for bit length */
+     // ptr_hk_keywords->keyword_value =  (ptr_hk_keywords->keyword_value >> (32 - (ptr_hk_keywords->start_bit + ptr_hk_keywords->bit_length ))) & keep_bits ; 
+
+    }
     else  
     {
       printkerr("ERROR at %s, line %d: Did not find this bit length for keyword %s\n",
@@ -669,4 +757,139 @@ HK_Keyword_t *copy_hk_keywords(HK_Keyword_t *head)
     newhead = NULL;
 
   return newhead;
+}
+
+double translateint2double(int64_t ival)
+{
+#define HK_DPF_RADIX   2
+#define HK_DPF_BIAS    1023
+  /* declare variables */
+  int i, x;
+  int radix;
+  int bias;
+  int sign_bit;
+  int64_t imatissa;
+  int   iexp;
+  double calexp=0.0;
+  double cal_matissa=0.0;
+  double sum=0.0;
+  double d=0.0;
+  
+
+  /* 1.set sign bit*/
+  sign_bit=ival >> 63 & 0x00000000000001;
+
+  /* 2.radix*/
+  radix=HK_DPF_RADIX;
+
+  /* 3.bias */
+  bias=HK_DPF_BIAS;
+
+  /* 4.get exponent bits where e are exponent bits:
+       s     eee eeee eeee  mmmm mmmm mmmm mmmm mmmm mmmm mmmm mmmm mmmm mmmm mmmm mmmm mmmm
+       0th---1st------11th--12th--------------------------------------------------------52st
+  */
+  iexp=(ival >> 52) & 0x000007FF;
+ 
+  /* 5. calculate exponent value to use in formula */
+  calexp=(double)(iexp - bias);
+
+  /* 6. get 1.m value or matissa value to use in formula.
+        utilize bits in matissa to get summation value where 
+        if bit 12(matissa first bit) is one, sum=.5 and 
+        if bit 13(matissa second bit)  is two, sum=.25
+        or 2^-1 and 2 ^-2 respectively.
+   */
+  imatissa= (ival) & 0x000FFFFFFFFFFFFF;
+
+
+  /*loop thru matissa bits start at known low bit(bit 12 in word)*/
+  for (i =0, x=52; i < 53; i++, x--)
+  {
+    /* check if first bit to last bit in matissa are set */
+    //does not do large numbers::printf(" pow mask is %ld \n",(int) powl((int)2,(int)x));
+    if (imatissa & (int64_t)(powl((double)2, (double)x)))
+    {
+      /* if matissa bit set then add to sum value 
+         and calculate current value using bit position
+         i which goes from 1 to 52.  
+      */
+      sum += (double)(powl((double)2,(double)-i));
+    }
+  }
+  cal_matissa=(double)(1.0 +  sum);
+  /* 7. calculate 32 bit float using formula */
+  d= (double)((pow(-1,sign_bit)) * (cal_matissa) * pow(radix, calexp));
+  return(d);
+
+}
+/***************************************************************************** 
+ * Translateint2float
+ *
+ *****************************************************************************/
+float translateint2float(int ival)
+{
+#define HK_RADIX   2
+#define HK_BIAS    127
+  /* declare variables */
+  int radix;
+  int bias;
+  int sign_bit;
+  int imatissa;
+  int   iexp;
+  float calexp;
+  float cal_matissa;
+  float f;
+  int i,x;
+  float sum=0.0;
+
+  /* 1.set sign bit*/
+  sign_bit=ival >> 31;
+
+  /* 2.radix*/
+  radix=HK_RADIX;
+ 
+  /* 3.bias */
+  bias=HK_BIAS;
+
+  /* 4.get exponent bits where e are exponent bits:
+       s      eeeeeeee      mmm mmmm mmmm mmmm mmmm mmmm
+       0th---1st----8th----9th-------------------------31st
+  */
+  iexp=(ival >> 23) & 0x000000FF;
+ 
+   /* 5. calculate exponent value to use in formula */
+   calexp=(float)(iexp - bias);
+
+  /* 6. get 1.m value or matissa value to use in formula.
+        utilize bits in matissa to get summation value where 
+        if bit 9(matissa first bit) is one, sum=.5 and 
+        if bit 10(matissa second bit)  is two, sum=.25
+        or 2^-1 and 2 ^-2 respectively.
+   */
+  imatissa= (ival) & 0x007FFFFF;
+  /*loop thru matissa bits start at known low bit(bit 9 in word)*/
+  for (i =1, x=22; i < 24; i++, x--)
+  {
+    /* check if first bit to last bit in matissa are set */
+    if (imatissa & (unsigned int)(pow(2, x)))
+    {
+      /* if matissa bit set then add to sum value 
+         and calculate current value using bit position
+         i which goes from 1 to 23.  
+      */
+      sum += (float)pow(2, -i);
+    }
+  }
+  cal_matissa=1 +  sum;
+  
+
+  /* 7. calculate 32 bit float using formula */
+  f= (float)((pow(-1,sign_bit)) * (cal_matissa) * pow(radix, calexp));
+  return(f);
+
+  //Formula to calculate:
+  //value = (-1) ^ sign-bit *((radix) ^ (exponent - bias) * ((1) + 2^(-bit value=matissa))
+  // radix=2, bias=0x7f(127 decimal), matissa = 1 + 2^(bit-value-matissa)
+  // example for 3: value =(-1)^0 *(2) ^(128-127) * (1 + 2^(-1)
 }
