@@ -7,4 +7,6 @@ setenv HK_SUFFIX_JSVNMAP_FILENAME        -JSVN-TO-PVN
 setenv HK_LEV0_BY_APID_PROJECT_NAME_AIA  aia
 setenv HK_LEV0_BY_APID_PROJECT_NAME_HMI  hmi
 setenv HK_LEV0_BY_APID_PROJECT_NAME_SDO  sdo
+setenv HK_SHCIDS_FILE                    shcids.txt
+setenv HK_SHCIDS_DIRECTORY               /home/production/cvs/TBL_JSOC/lev0/sdo_hk_config_file/
 
