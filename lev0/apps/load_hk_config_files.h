@@ -9,30 +9,6 @@
  *              used to save the configuration formats for the Housekeeping  *
  *              Packet format from the high rate bit stream coming from      *
  *              the HMI-EGSE-SS telemetry simulator and DDS.                 *
- * Revision History:                                                         *
- * Draft/  Who    Date           Description                                 *
- * Version                                                                   *
- * ------- ----  -------------  ------------------------------------------   *
- * 0.0     Carl   08/05/2005     Created                                     *
- * 0.1     Carl   10/31/2005     Added version number fields as string       *
- *                               buffer rather than as a float value.        *
- * 0.2     Carl   01/19/2006     Add conv_type to keyword structure.         *
- *                               Increased MAXLINE_IN_FILE to 150 to read    *
- *                               Added  hmi_id_version_number and            *
- *                               aia_id_version_number to structures         *
- * 0.3     Carl   04/04/2006     Increase keyword lines read in from the     *
- *                               APID-#-VERSION-# files from 200 to array    *
- *                               size 3000. There where 756 lines loaded.    *
- * 0.4     Carl   05/10/2006     Added structures and define to do analog    *
- *                               and digital conversions of raw values to    *
- *                               engineering values.Added new functions and  *
- *                               updated function calls.                     *
- * 0.5     Carl  07/11/2006     Added Define parameter HMI_ID_TYPE,          *
- *                              AIA_ID_TYPE,etc. Added structures            *
- *                              ALG_Conversion_struct and                    *
- *                              DSC_Conversion_struct. Increase max number   *
- *                              of coffs to 6. Formatted structures in file. *
- *                              Added define for HK_MAX_TLM_NAME             *
  *****************************************************************************/
 /******************************defines****************************************/
 #define MAXLINE_IN_FILE         150
@@ -162,9 +138,21 @@ typedef  struct GTCIDS_Version_Number_struct
   char change_time[MAX_SIZE_CHANGE_TIME];
   struct GTCIDS_Version_Number_struct  *next;
 }   GTCIDS_Version_Number;
+/****************************************************************************/
+/*   Structure used to contain values of SHCIDS file                        */
+/****************************************************************************/
+typedef  struct SHCIDS_Version_Number_struct   
+{
+  char file_version_number[MAX_CHAR_VERSION_NUMBER];
+  int apid;
+  char change_date[MAX_SIZE_CHANGE_DATE];
+  int  date; //change_date's yyyymmdd as integer 
+  char change_time[MAX_SIZE_CHANGE_TIME];
+  struct SHCIDS_Version_Number_struct  *next;
+}   SHCIDS_Version_Number;
 /*************************function prototypes*********************************/
 
-APID_HKPFD_Files* read_all_hk_config_files(char file_version_number[]);
+APID_HKPFD_Files* read_all_hk_config_files(int apid, char file_version_number[]);
 
 void load_config_data( APID_HKPFD_Files* , APID_Pointer_HK_Configs* );
 int save_hdpf_new_formats(FILE* file_ptr,APID_Pointer_HK_Configs *ptr);
@@ -175,15 +163,17 @@ int load_hdpf_dsc_lines(char dsc_lines[][], int j, HK_Config_Files *ptr_config_n
 int load_hdpf_alg_lines(char alg_lines[][], int k, HK_Config_Files *ptr_config_node);
 DSC_Conversion* create_hdpf_dsc_nodes(Keyword_Parameter *ptr_hk_keyword);
 Keyword_Parameter* create_hdpf_keyword_nodes(HK_Config_Files *ptr_hk_config_node,int number_of_lines);  
-GTCIDS_Version_Number * read_gtcids_hk_file(APID_Pointer_HK_Configs *top_apid_ptr);
-int load_all_apids_hk_configs(char version_number[]);
+GTCIDS_Version_Number * read_gtcids_hk_file();
+SHCIDS_Version_Number * read_shcids_hk_file();
+int load_all_apids_hk_configs(int apid, char version_number[], char pkt_date[]);
 void deallocate_apid_ptr_hk_config_nodes(void);
 void deallocate_GTCIDS_Version_Number(void);
+void deallocate_SHCIDS_Version_Number(void);
 HK_Config_Files* check_packet_version_number( HK_Config_Files *top_ptr_to_configs,
 						char *version_number );
 HK_Config_Files* check_file_version_number( HK_Config_Files *top_ptr_to_configs,
 						char *version_number );
-HK_Config_Files * reread_all_files(APID_Pointer_HK_Configs *apid_ptr, char version_number[]);
+HK_Config_Files * reread_all_files(APID_Pointer_HK_Configs *apid_ptr, char version_number[], char pkt_date[]);
 int check_free_configs_flag(void);
 int (*printkerr)(const char *fmt, ...);
 
