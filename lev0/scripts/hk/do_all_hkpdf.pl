@@ -2,7 +2,6 @@
 ##############################################################################
 # Name:        do_all_hkpdf.pl   - do all hkpdf files                        #
 # Description: Used to create all HKPDF small apid files.                    #
-#              or final JSDs.                                                #
 # Execution:   (1)To run:      do_all_hkpdf.pl                               #
 #              (2)To get help: do_all_hkpdf.pl   -h                          #
 # limitation:  Need to move different version of STANFORD files to lmf_dir   #
