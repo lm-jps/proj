@@ -138,7 +138,22 @@ int Regrid(DRMS_Array_t **dataArr, int *new_length, LIBASTRO_Interpolation_t sch
 float Imaginterp(DRMS_Segment_t *img, double x, double y);
 
 /* iorbit */
-LIBASTRO_Error_t iorbit(DRMS_Env_t *env, const char *rsquery, LinkedList_t **info);
+enum IORBIT_Alg_enum
+{
+   IORBIT_Alg_Linear = 0
+};
+
+typedef enum IORBIT_Alg_enum IORBIT_Alg_t;
+
+LIBASTRO_Error_t iorbit_test(DRMS_Env_t *env, const char *orbseries);
+LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env, 
+                                const char *srcseries, 
+                                IORBIT_Alg_t alg,
+                                const double *tgttimes, 
+                                int nitems, 
+                                LinkedList_t **info);
+void iorbit_cleanup();
+
 
 #endif // _DRMS_LIBASTRO_H
 
