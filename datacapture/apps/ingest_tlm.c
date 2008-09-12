@@ -1065,15 +1065,16 @@ void do_ingest()
       printk("Marked for archive data unit ds_index=%ld\n", *dsixpt);
     }
 
-    sprintf(cmd, "/bin/mv -f %s %s", name, pipedir);
     /*StartTimer(7);*/
-    printk("*mv qac file to %s\n", pipedir);
+    //must move .tlm file first
+    sprintf(cmd, "/bin/mv -f %s %s", tlmfile, pipedir);
+    printk("*mv tlm file to %s\n", pipedir);
     printk("%s\n", cmd);
     if(system(cmd)) {
       printk("***Error on: %s\n", cmd);
     }
-    sprintf(cmd, "/bin/mv -f %s %s", tlmfile, pipedir);
-    printk("*mv tlm file to %s\n", pipedir);
+    sprintf(cmd, "/bin/mv -f %s %s", name, pipedir);
+    printk("*mv qac file to %s\n", pipedir);
     printk("%s\n", cmd);
     if(system(cmd)) {
       printk("***Error on: %s\n", cmd);
