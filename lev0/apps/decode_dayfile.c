@@ -45,7 +45,7 @@
 #define HKDDF_MAX_PVN_STR        10
 #define HKDDF_MAX_VERSION_LINES  1000
 #define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
-/*carl local file: #define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
+/* carl local test version:#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
 
 /******************** includes ******************************************/
 #include <stdio.h>
@@ -141,7 +141,7 @@ int nice_intro (void)
       "  out=<data series name>  -data series to write keyword values to in DRMS(optional field). \n"
       "  if don't enter out value, data series name will be created automatically using the apid and \n"
       "  packet version number in packets in day file. Also required to set environment variables \n"
-      "  for project name and data identifer name: HK_DDF_PROJECT_NAME & HK_DDF_DATA_ID_NAME.     \n"
+      "  for project names and data identifer name: HK_DDF_PROJECT_NAME_xxx & HK_DDF_DATA_ID_NAME. \n"
       "  Also need data series already created for this to program to load keywords in data series.\n"
       "  Example of running using automatic lookup of data series name and without print on:      \n"
       "           decode_dayfile in=/tmp20/production/hmi_hk/20070707.0x0029                      \n" );
