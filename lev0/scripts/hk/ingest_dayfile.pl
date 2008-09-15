@@ -755,7 +755,7 @@ sub get_df_date($$)
   if($dflg eq "1") {print LF "get_df_date:date for dayfile is $date_for_dayfile\n"};
 
   # get time in seconds
-  $tm_seconds=timelocal($sec,$min,$hour,$mday,$mon,$year);
+  $tm_seconds=timelocal($sec,$min,$hour,$mday,$monoffset,$year);
   if($dflg eq "1") {print LF "get_df_date:timelocal returned seconds are <$tm_seconds>\n"};
 
   #return value yyyy.mm.dd
