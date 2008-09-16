@@ -5467,14 +5467,26 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 
 	  if (!error)
 	  {
-	       /* If a record with the same primary key already exists, the new record will be
-		* a newer version of the original one.
-		*/
-	       DRMS_Record_t *rec = drms_create_record(drmsEnv, 
-						       seriesOut, 
-						       DRMS_PERMANENT, 
-						       &status);
-	       error = (status != DRMS_SUCCESS);
+               DRMS_Record_t *rec = NULL;
+
+               /* See if we have the record-creation permission */
+               if (drms_series_cancreaterecord(drmsEnv, seriesOut))
+               {
+
+                  /* If a record with the same primary key already exists, the new record will be
+                   * a newer version of the original one.
+                   */
+                  rec = drms_create_record(drmsEnv, 
+                                           seriesOut, 
+                                           DRMS_PERMANENT, 
+                                           &status);
+                  error = (status != DRMS_SUCCESS);
+               }
+               else
+               {
+                  fprintf(stderr, "Can't create new records in '%s'; permission denied.\n", seriesOut);
+                  error = 1;
+               }
 
 	       if (rec != NULL && !error)
 	       {
