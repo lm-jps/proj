@@ -308,6 +308,7 @@ static int GetGridVectors(DRMS_Env_t *env,
    //double firstpoint;
    //int popcache = 0;
    IORBIT_Slotpos_t slotpos;
+   int rehydrated = 0;
 
    if (gvectors)
    {
@@ -380,6 +381,14 @@ static int GetGridVectors(DRMS_Env_t *env,
 
             if (!vec)
             {
+               if (rehydrated)
+               {
+                  /* Just updated the cache, but got a miss - bail */
+                  fprintf(stderr, "Required grid point '%s' (slot) not in '%s'.\n", hashkey, srcseries);
+                  err = 1;
+                  break;
+               }
+
                FlushCache();
                /* Cache, starting with a slot (2 * npoints / 2) slots before the actualslot.
                 * Do this because we're walking backward in time in this for loop. */
@@ -389,9 +398,15 @@ static int GetGridVectors(DRMS_Env_t *env,
                   err = 1;
                   break;
                }
+
+               rehydrated = 1;
                
                /* Try again */
                continue;
+            }
+            else if (rehydrated)
+            {
+               rehydrated = 0;
             }
 
             slotpos = GetSlotPos(vec->obstime, tgttime);
@@ -406,7 +421,7 @@ static int GetGridVectors(DRMS_Env_t *env,
       }
 
       /* get the npoints / 2 points above tgttime (in chronological order) */
-      for (ipoint = npoints / 2 ; ipoint < npoints && !err; ipoint--)
+      for (ipoint = npoints / 2 ; ipoint < npoints && !err; ipoint++)
       {
          slotpos = kMISSING;
          actualslot = inslot;
@@ -418,6 +433,14 @@ static int GetGridVectors(DRMS_Env_t *env,
 
             if (!vec)
             {
+               if (rehydrated)
+               {
+                  /* Just updated the cache, but got a miss - bail */
+                  fprintf(stderr, "Required grid point '%s' (slot) not in '%s'.\n", hashkey, srcseries);
+                  err = 1;
+                  break;
+               }
+
                FlushCache();
                /* Cache, starting with actualslot.
                 * Do this because we're walking forward in time in this for loop. */
@@ -428,8 +451,14 @@ static int GetGridVectors(DRMS_Env_t *env,
                   break;
                }
                
+               rehydrated = 1;
+
                /* Try again */
                continue;
+            }
+            else if (rehydrated)
+            {
+               rehydrated = 0;
             }
 
             slotpos = GetSlotPos(vec->obstime, tgttime);
