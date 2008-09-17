@@ -26,7 +26,8 @@ typedef enum
    kLIBASTRO_UnsupportedMCOR,
    kLIBASTRO_UnsupportedVCOR,
    kLIBASTRO_InconsistentConstraints,
-   kLIBASTRO_InvalidArgs
+   kLIBASTRO_InvalidArgs,
+   kLIBASTRO_Interpolation
 } LIBASTRO_Error_t;
 
 typedef enum
@@ -144,6 +145,27 @@ enum IORBIT_Alg_enum
 };
 
 typedef enum IORBIT_Alg_enum IORBIT_Alg_t;
+
+/* Structure to return information caller of iorbit_getinfo() */
+struct IORBIT_Info_struct
+{
+  double obstime;
+  double hciX;
+  double hciY;
+  double hciZ;
+  double hciVX;
+  double hciVY;
+  double hciVZ;
+  double dsun_obs;
+  double obs_vr;
+  double obs_vw;
+  double obs_vn;
+  double crln_obs;
+  double crlt_obs;
+  double car_rot;
+};
+
+typedef struct IORBIT_Info_struct IORBIT_Info_t;
 
 LIBASTRO_Error_t iorbit_test(DRMS_Env_t *env, const char *orbseries);
 LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env, 

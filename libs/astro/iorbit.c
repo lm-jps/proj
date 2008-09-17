@@ -21,6 +21,13 @@
 #define kCACHEKEYSIZE 64
 #define kCACHESIZE 128
 
+#define kPI M_PI
+#define kDEG2RAD (kPI / 180)
+
+/* Ecliptic values */
+#define kALPHA (75.76 * kDEG2RAD)
+#define kDELTA (7.25 * kDEG2RAD)
+
 HContainer_t *gGridCache = NULL;
 
 enum IORBIT_Slotpos_enum
@@ -34,7 +41,7 @@ typedef enum IORBIT_Slotpos_enum IORBIT_Slotpos_t;
 
 struct IORBIT_Vector_struct
 {
-  long long slot; /* slot number */
+  long long slot; /* slot number - missing if vector is not for a grid time */
   double obstime; 
   double gciX;
   double gciY;
@@ -202,8 +209,6 @@ static int RehydrateCache(DRMS_Env_t *env,
       DRMS_RecordSet_t *rs = NULL;
       DRMS_Record_t *rec = NULL; /* record of orbit data from FDS */
       int iitem = 0;
-      //char sttimestr[64];
-      //double duration;
       char query[256];
       int drmsstatus;
       char hashkey[128];
@@ -211,9 +216,6 @@ static int RehydrateCache(DRMS_Env_t *env,
       memset(&vec, sizeof(IORBIT_Vector_t), 0);
 
       nitems = (npoints > kCACHESIZE) ? npoints : kCACHESIZE;
-      //duration = nitems * step;
-      //sprint_time(sttimestr, sttime, "TAI", 0);
-      //snprintf(query, sizeof(query), "%s[%s/%fs]", srcseries, sttimestr, duration);
       snprintf(query, sizeof(query), "%s[%s=%lld/%d]", srcseries, kOBSDATE_INDEX, stslot, nitems);
       rs = drms_open_records(env, query, &drmsstatus);
 
@@ -264,6 +266,32 @@ static int RehydrateCache(DRMS_Env_t *env,
    return nitems;
 }
 
+/* Determining the slot without having to go to psql, fetch records, and get it from a record 
+ * involves calling the DRMS function that knows how to calculate slot numbers.  There is
+ * some complexity involved when calculating the slot, so use drms_keyword_slotval2indexval().
+ */
+static long long GetSlot(DRMS_Keyword_t *slotkey, double tgttime)
+{
+#if 0
+   /* This worked previously - keep until sure about drms_keyword_slotval2indexval*/
+   long long slot1 = floor((tgttime - epoch + (step / 2.0)) / step);
+#endif
+
+   DRMS_Value_t valin;
+   DRMS_Value_t valout;
+
+   valin.type = DRMS_TYPE_TIME;
+   valin.value.time_val = tgttime;
+
+   if (drms_keyword_slotval2indexval(slotkey, &valin, &valout, NULL) != DRMS_SUCCESS)
+   {
+      fprintf(stderr, "Problem calculating the slot number from time '%f'.\n", tgttime);
+      valout.value.longlong_val = DRMS_MISSING_TIME;
+   }
+
+   return valout.value.longlong_val;
+}
+
 static IORBIT_Slotpos_t GetSlotPos(double slottime, double tgttime)
 { 
    IORBIT_Slotpos_t slotpos;
@@ -290,23 +318,19 @@ static IORBIT_Slotpos_t GetSlotPos(double slottime, double tgttime)
 /* Returns the grid vectors needed in order to interpolate values to tgttime */
 static int GetGridVectors(DRMS_Env_t *env,
                           const char *srcseries,
+                          DRMS_Keyword_t *slotkey,
                           double tgttime, 
                           IORBIT_Alg_t alg, 
-                          double epoch,
-                          double step,
                           IORBIT_Vector_t **gvectors)
 {
    int err = 0;
    int npoints = 0;
    int ipoint = 0;
-   //double *gpointsint = NULL;
+   int actpoints = 0;
    char hashkey[128];
    IORBIT_Vector_t *vec = NULL;
    long long inslot;
    long long actualslot;
-   //double closepoint;
-   //double firstpoint;
-   //int popcache = 0;
    IORBIT_Slotpos_t slotpos;
    int rehydrated = 0;
 
@@ -316,7 +340,6 @@ static int GetGridVectors(DRMS_Env_t *env,
       {
          case IORBIT_Alg_Linear:
            npoints = 2;
-           //gpointsint = malloc(sizeof(double) * npoints);
            break;
          default:
            fprintf(stderr, "Unsupported interpolation algorithm '%d'.\n", (int)alg);
@@ -327,45 +350,16 @@ static int GetGridVectors(DRMS_Env_t *env,
        * assume that observation time of the data in a slotted key's slot is the time at the beginning
        * of that slot.
        *
-       * So, scrap what I was doing. Instead, make the cache keyed by slot number. Then 
+       * So, make the grid-time vector cache keyed by slot number. Then 
        * map the tgttime to a slot, and check the cache for that slot. If it exists, then 
        * check the obsdate in the slot (it could fall anywhere within the slot because of 
        * the leap-seconds complication). If the obsdate is less than the tgttime, then
        * you have the closest value below the tgttime. If the obsdate is greater than the
        * tgttime, then you have the closest value above the tgttime. In this manner, 
        * you can get as many grid values as needed above and below the tgttime.
-
-
        */
-
-      /* The grid is a TSEQ slotted series, where the epoch is in the middle of the 
-       * zeroth slot, and the observation time is at the beginning of the slot. So, 
-       * if you find the slot that the tgt time lies within, that slot contains the
-       * data that is the closest, but smaller, time. */
-      inslot = floor((tgttime - epoch + (step / 2.0)) / step);
-      //      closepoint = inslot * step - (step / 2.0) + epoch; /* epoch lies in middle of zeroth slot */
-   
-      /* find first point */
-      //firstpoint = closepoint;
-      //ipoint = 1;
-
-      //while (ipoint < npoints / 2)
-      //{
-      //   firstpoint -= step;
-      //}
-
-      //gpointsint[0] = firstpoint;
-      //ipoint = 1;
-
-      //while (ipoint < npoints)
-      //{
-      //   gpointsint[ipoint] = gpointsint[ipoint - 1] + step;
-      //   ipoint++;
-      //}
-
-      /* with doubles in hand, convert to time strings so we can look them up in cache 
-       * and get the corresponding gci and hci values.
-       */     
+      inslot = GetSlot(slotkey, tgttime);
+ 
       *gvectors = malloc(sizeof(IORBIT_Vector_t) * npoints);
 
       /* get the npoints / 2 points below tgttime (in reverse order of course) */
@@ -417,6 +411,7 @@ static int GetGridVectors(DRMS_Env_t *env,
          {
             /* We have a slot that has data, and the obsdate is LT tgttime */
             (*gvectors)[ipoint] = *vec;
+            actpoints++;
          }
       }
 
@@ -469,9 +464,12 @@ static int GetGridVectors(DRMS_Env_t *env,
          {
             /* We have a slot that has data, and the obsdate is LT tgttime */
             (*gvectors)[ipoint] = *vec;
+            actpoints++;
          }
       }
    }
+
+   XASSERT(npoints == actpoints);
 
    return npoints;
 }
@@ -483,13 +481,13 @@ static int iorbit_interpolate(double time,
 {
    int err = 0;
 
-
    if (interpvec)
    {
       switch (alg)
       {
          case IORBIT_Alg_Linear:
            {
+              /* requires 2 input vectors */
               int igrid = 0;
               double frac1;
               double frac2;
@@ -497,6 +495,9 @@ static int iorbit_interpolate(double time,
               frac2 = (time - gridVecs[igrid].obstime) /  
                 (gridVecs[igrid + 1].obstime - gridVecs[igrid].obstime);
               frac1 = 1 - frac2;
+
+              interpvec->slot = DRMS_MISSING_TIME; /* not a grid time */
+              interpvec->obstime = time;
 
               interpvec->gciX = frac1 * gridVecs[igrid].gciX + frac2 * gridVecs[igrid + 1].gciX;
               interpvec->gciY = frac1 * gridVecs[igrid].gciY + frac2 * gridVecs[igrid + 1].gciY;
@@ -520,6 +521,54 @@ static int iorbit_interpolate(double time,
    else
    {
       err = 1;
+   }
+
+   return err;
+}
+
+int CalcSolarVelocities(IORBIT_Vector_t *vec, double hr, double *hvr, double *hvw, double *hvn)
+{
+   int err = 0;
+   
+   double hb; /* radians */
+   double hl; /* radians */
+   double shvx;
+   double shvy;
+   double shvz;
+
+   const double txx = cos(kALPHA);
+   const double txy = sin(kALPHA);
+   const double txz = 0.0;
+   const double tyx = -sin(kALPHA) * cos(kDELTA);
+   const double tyy = cos(kALPHA) * cos(kDELTA);
+   const double tyz = sin(kDELTA);
+   const double tzx = sin(kALPHA) * sin(kDELTA);
+   const double tzy = -cos(kALPHA) * sin(kDELTA);
+   const double tzz = cos(kDELTA);
+
+   /* beta and l0 angles */
+   hb = asin((tzx * vec->hciX + tzy * vec->hciY + tzz * vec->hciZ) / hr);
+   hl = atan2((tyx * vec->hciX + tyy * vec->hciY + tyz * vec->hciZ),  
+              (txx * vec->hciX + txy * vec->hciY + txz * vec->hciZ));
+
+   /* velocities transformed to solar-rotation-axis coordinates */
+   shvx = txx * vec->hciVX + txy * vec->hciVY + txz * vec->hciVZ;
+   shvy = tyx * vec->hciVX + tyy * vec->hciVY + tyz * vec->hciVZ;
+   shvz = tzx * vec->hciVX + tzy * vec->hciVY + tzz * vec->hciVZ;
+
+   if (hvr)
+   {
+      *hvr = cos(hb) * (cos(hl) * shvx + sin(hl) * shvy) + sin(hb) * shvz;
+   }
+
+   if (hvw)
+   {
+      *hvw = -sin(hl) * shvx + cos(hl) * shvy;
+   }
+
+   if (hvn)
+   {
+      *hvn = -sin(hb) * (cos(hl) * shvx + sin(hl) * shvy) + cos(hb) * shvz;
    }
 
    return err;
@@ -549,14 +598,17 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       int npkeys = 0;
       DRMS_Record_t *template = NULL;
       DRMS_Keyword_t *slotkw = NULL;
-      TIME epoch;
-      double step;
 
       IORBIT_Vector_t *vecs = NULL;
       IORBIT_Vector_t interpvec;
-      DRMS_SlotKeyUnit_t unit;
       int itime;
-      int ngrid;
+
+      double hvr;
+      double hvw;
+      double hvn;
+      double dsun_obs;
+
+      IORBIT_Info_t retvec;
 
       /* Ensure tgttimes are sorted in increasing value - missing values are removed */
       ntimes = SortTimes(tgttimes, nitems, &tgtsorted);
@@ -566,34 +618,68 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       /* There should be only one prime key in the source series */
       XASSERT(pkarr && npkeys == 1);
 
-      template = drms_template_record(env, srcseries, &drmsstat);
-      slotkw = drms_keyword_lookup(template, pkarr[0], 0);
-      epoch = drms_keyword_getslotepoch(slotkw, &drmsstat);
-      step = drms_keyword_getslotstep(slotkw, &unit, &drmsstat);
+      if (pkarr)
+      {
+         template = drms_template_record(env, srcseries, &drmsstat);
+         slotkw = drms_keyword_lookup(template, pkarr[0], 0);
+      }
 
       drms_series_destroypkeyarray(&pkarr, npkeys);
 
-      /* Use array of time strings to check for presence of gci/hci data in 
-       * grid cache - make some assumptions here 
-       *   1. The caller will ask for times in order.
-       *   2. The user won't request the same target times under normal
-       *      circumstances.
-       *
-       * Given these assumptions, the best way to refresh the cache is to 
-       * go in chronological order, using cached values until a miss happens.
-       * Then at that point, the cache is no longer useful - so wipe it out, get all
-       * subsequent values from DRMS, and use those values to populate the cache.
-       */
-      for (itime = 0; itime < ntimes; itime++)
+      if (slotkw)
       {
-         ngrid = GetGridVectors(env, srcseries, tgtsorted[itime], alg, epoch, step, &vecs);
+         *info = list_llcreate(sizeof(IORBIT_Info_t));
 
-         if (vecs)
+         /* Use array of time strings to check for presence of gci/hci data in 
+          * grid cache - make some assumptions here 
+          *   1. The caller will ask for times in order.
+          *   2. The user won't request the same target times under normal
+          *      circumstances.
+          *
+          * Given these assumptions, the best way to refresh the cache is to 
+          * go in chronological order, using cached values until a miss happens.
+          * Then at that point, the cache is no longer useful - so wipe it out, get all
+          * subsequent values from DRMS, and use those values to populate the cache.
+          */
+         for (itime = 0; itime < ntimes; itime++)
          {
-            iorbit_interpolate(tgtsorted[itime], alg, vecs, &interpvec); 
+            GetGridVectors(env, srcseries, slotkw, tgtsorted[itime], alg, &vecs);
+
+            if (vecs)
+            {
+               if (!iorbit_interpolate(tgtsorted[itime], alg, vecs, &interpvec))
+               {
+                  dsun_obs = sqrt(interpvec.hciX * interpvec.hciX +
+                                  interpvec.hciY * interpvec.hciY +
+                                  interpvec.hciZ * interpvec.hciZ);
+
+                  if (!CalcSolarVelocities(&interpvec, dsun_obs, &hvr, &hvw, &hvn))
+                  {
+                     retvec.obstime = interpvec.obstime;
+                     retvec.hciX = interpvec.hciX;
+                     retvec.hciY = interpvec.hciY;
+                     retvec.hciZ = interpvec.hciZ;
+                     retvec.hciVX = interpvec.hciVX;
+                     retvec.hciVY = interpvec.hciVY;
+                     retvec.hciVZ = interpvec.hciVZ;
+                     retvec.dsun_obs = dsun_obs;
+                     retvec.obs_vr = hvr;
+                     retvec.obs_vw = hvw;
+                     retvec.obs_vn = hvn;
+
+                     list_llinserttail(*info, &retvec);
+                  }
+               }
+               else
+               {
+                  /* error performing interpolation */
+                  fprintf(stderr, "Error performing interpolation.\n");
+                  err = kLIBASTRO_Interpolation;
+                  break;
+               }
+            }
          }
       }
-      
    }
    else
    {

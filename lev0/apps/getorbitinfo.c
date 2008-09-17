@@ -75,9 +75,35 @@ int DoIt(void)
          {
             status = kSDOORB_failure;
          }
+         else
+         {
+            /* This is a demonstration module - just print */
+            ListNode_t *node = NULL;
+            IORBIT_Info_t *infoitem = NULL;
+            char timestr[128];
+
+            fprintf(stdout, "%-32s%-20s%-20s%-20s%-20s\n", 
+                    "obstime", "dsun_obs", "obs_vr", "obs_vw", "obs_vn");
+
+            list_llreset(info);
+            while ((node = list_llnext(info)) != NULL)
+            {
+               infoitem = (IORBIT_Info_t *)(node->data);
+               sprint_time(timestr, infoitem->obstime, "UTC", 0);
+
+              
+               fprintf(stdout, "%-32s%-20.8f%-20.8f%-20.8f%-20.8f\n", 
+                       timestr, infoitem->dsun_obs, infoitem->obs_vr, infoitem->obs_vw, infoitem->obs_vn);
+            }
+         }
 
          iorbit_cleanup();
       }
+   }
+
+   if (info)
+   {
+      list_llfree(&info);
    }
 
    return status;
