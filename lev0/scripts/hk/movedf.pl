@@ -128,6 +128,7 @@ open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
 #Check if there and then delete all dayfiles that where ingested in dayfile data series 
 open(DELFILE, "$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
 @all_del_file_lines="";
+$delcount=0;
 while (<DELFILE>)
 {
    $_ =~ s/\n//g;
@@ -135,10 +136,29 @@ while (<DELFILE>)
    if ($dflg eq "1") {print LF "validated file saved to drms.deleting file from file system directory:$_\n";}
    $log=`rm $doff_dir/$_`;
    if ($dflg eq "1") {print LF "$log\n";}
+   $delcount++;
 }#while
 if($hkt_filecount > 0 or $xml_filecount > 0)
 {
-print LF "--->Deleting df and xml files that where successfully processed into data series\n";
+  print LF "--->Deleting df and xml files that where successfully processed into data series\n";
+}
+print LF "--->movedf.pl deleted <$delcount> xml and hkt files\n";
+
+#check if number of file got equal number loaded and deleted
+if ($delcount == ($hkt_filecount +   $xml_filecount) and $delcount != 0)
+{
+  print LF "--->status:successfully got all files loaded into DRMS\n";
+}
+elsif (($hkt_filecount +   $xml_filecount) == 0)
+{
+  print LF "--->status:warning got no files to loaded into DRMS\n";
+  ##note sent email here if occurs
+  sendEmail("carl\@sun.stanford.edu", "carl\@sun.stanford.edu", "JSOC:WARNING:Ingesting MOC dayfiles: status:no files loaded today", "Received count of hkt files:<$hkt_filecount>.\nReceived count of xml files:<$xml_filecount>\n");
+}
+else
+{
+  print LF "--->status:not sure of status but got delcount:$delcount hkt_filecount:$hkt_filecount xml_filecount:$xml_filecount\n";
+  sendEmail("carl\@sun.stanford.edu", "carl\@sun.stanford.edu", "JSOC:WARNING:Ingesting MOC dayfiles: status:not sure of status", "Received count of hkt files:<$hkt_filecount>.\nReceived count of xml files:<$xml_filecount>\nLoad and deleted dayfiles:<$delcount>\n");
 }
 
 close DELFILE;
@@ -151,7 +171,6 @@ close LF;
 
 # move log to logs directory every month
 &check_log();
-
 
 
 ##########################################
@@ -193,3 +212,19 @@ sub check_log()
   }
 }
 
+#####################
+# sendEmail         #
+#####################
+# Simple Email Function
+# ($to, $from, $subject, $message)
+sub sendEmail
+{
+my ($to, $from, $subject, $message) = @_;
+my $sendmail = '/usr/lib/sendmail';
+open(MAIL, "|$sendmail -oi -t");
+print MAIL "From: $from\n";
+print MAIL "To: $to\n";
+print MAIL "Subject: $subject\n\n";
+print MAIL "$message\n";
+close(MAIL);
+}
