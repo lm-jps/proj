@@ -50,6 +50,7 @@ char *module_name = "store_dsds_migrate";
 /* Some global variables for this module. */
 int verbose = 0;
 int jsdflg = 0;
+char *pname, *lname, *sname;
 
 static char * make_series_jsd(char *series);
 
@@ -65,7 +66,7 @@ int DoIt (void) {
 int status = 0;
 int lnum, snum;
 
-char *in, *pname, *lname, *sname, *note, *dirname, *cptr;
+char *in, *note, *dirname, *cptr;
 char path[DRMS_MAXPATHLEN];
 char drmsseries[256];
 char cmd[DRMS_MAXPATHLEN+1024];
@@ -181,13 +182,13 @@ char * make_series_jsd(char *series)
     "Tapegroup:      9\n"
     "PrimeKeys:      snum\n"
     "DBIndex:        snum,lnum\n"
-    "Description:    \"DSDS migrated dataset\"\n"
+    "Description:    prog:%s,level:%s,series:%s\n"
     "Keyword: dirname,  string, variable, record, \" \",  %%s, none, \"Original dirname\"\n"
     "Keyword: note,      string, variable, record, \" \",  %%s, none, \" \"\n"
     "Keyword: lnum,      int, variable, record, \"0\",  %%d, none, \"level: number\"\n"
     "Keyword: snum,      int, variable, record, \"-1\",  %%d, none, \"series: number\"\n"
     "Data: dir, constant, int, 0, none, generic, \" \"\n",
-    series, user, user);
+    series, user, user, pname, lname, sname);
   return (strdup(jsd));
   }
 
