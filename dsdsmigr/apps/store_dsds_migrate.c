@@ -2,7 +2,7 @@
 
 /* Usage:
  *  store_dsds_migrate pname=<name> lname=<name> lnum=<number> sname=<name> 
- *                                  snum=<number> dirname=<dir> {note=<comment>}
+ *              snum=<number> dsdsseries=<name> dirname=<dir> {note=<comment>}
  *         
  *     Store a dir into SUMS for a DSDS dataset of the given name.
  *     "dir" is the directory that will be copied in SUMS.
@@ -11,13 +11,16 @@
  * prog:mdi,level:lev1.5[4],series:fd_V_01h[60000] will be ingested into:
  *
  * dsds.mdi__lev1_5__fd_V_01h
+ *NOTE: "-" in the dsds name are changed to '_' in the drms name before the
+ *	call to this program.
  *
  * where PrimeKeys in the .jsd is the series#, and the level# is a DBIndex.
  * Note the double '__' to separate the fields.
  *
  * Example:
  *   store_dsds_migrate pname=mdi lname=lev1.5 lnum=4 sname=fd_V_01h snum=60000
- *			dirname=/PDS83/D9666638
+ *		dsdsseries=prog:mdi,level:lev1.5,series:fd_V_01h
+ *		dirname=/PDS83/D9666638
  *
  */
 #include "jsoc_main.h"
@@ -35,6 +38,7 @@ ModuleArgs_t module_args[] = {
   {ARG_INT, "lnum", "0", ""}, /* level: number (i.e. a version #) */
   {ARG_STRING, "sname", "", "series: name to store the dir into"},
   {ARG_INT, "snum", "-1", ""}, /* series: number */
+  {ARG_STRING, "dsdsseries", "", "orig name of dsds series prog: etc."},
   {ARG_STRING, "dirname", "", "Dir to store into SUMS"},
   {ARG_STRING, "note", "N/A", "comment field"},
   {ARG_FLAG, "v", "0", "verbose flag"},
@@ -51,6 +55,7 @@ char *module_name = "store_dsds_migrate";
 int verbose = 0;
 int jsdflg = 0;
 char *pname, *lname, *sname;
+char *dsdsseries;
 
 static char * make_series_jsd(char *series);
 
@@ -82,6 +87,7 @@ sname = cmdparams_get_str(&cmdparams, "sname", NULL);
 note = cmdparams_get_str(&cmdparams, "note", NULL);
 lnum = cmdparams_get_int (&cmdparams, "lnum", NULL);
 snum = cmdparams_get_int (&cmdparams, "snum", NULL);
+dsdsseries = cmdparams_get_str(&cmdparams, "dsdsseries", NULL);
 in = cmdparams_get_str(&cmdparams, "dirname", NULL);
 /* First, check to see that the dir exists */
 if (access(in, R_OK) != 0)
@@ -182,13 +188,13 @@ char * make_series_jsd(char *series)
     "Tapegroup:      9\n"
     "PrimeKeys:      snum\n"
     "DBIndex:        snum,lnum\n"
-    "Description:    prog:%s,level:%s,series:%s\n"
+    "Description:    \"%s\"\n"
     "Keyword: dirname,  string, variable, record, \" \",  %%s, none, \"Original dirname\"\n"
     "Keyword: note,      string, variable, record, \" \",  %%s, none, \" \"\n"
     "Keyword: lnum,      int, variable, record, \"0\",  %%d, none, \"level: number\"\n"
     "Keyword: snum,      int, variable, record, \"-1\",  %%d, none, \"series: number\"\n"
     "Data: dir, constant, int, 0, none, generic, \" \"\n",
-    series, user, user, pname, lname, sname);
+    series, user, user, dsdsseries);
   return (strdup(jsd));
   }
 
