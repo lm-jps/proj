@@ -48,6 +48,9 @@ elsif ($src eq "egsefm")
   $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-egsefm";
 }
 
+# set up where to put backup logs written monthly 
+$logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
+
 # open log file and append
 open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
 print LF `date`;
@@ -117,6 +120,9 @@ print LF "--->exiting script getdf.pl\n";
 print LF `date`;
 close LF;
 
+# move log to logs directory every month
+&check_log();
+
 ##############################################################################
 # check_arguments()                                                          #
 ##############################################################################
@@ -156,3 +162,43 @@ sub get_today_date
   $year = 1900 + $yearOffset;
   return(sprintf("%-04.4d%-02.2d%-02.2d",$year,$month+1,$dayOfMonth));
 }
+
+##########################################
+# check_log: used to create monthly logs #
+##########################################
+sub check_log()
+{
+  use Time::Local 'timelocal';
+  use POSIX;
+
+  # get current time
+  ($sec,$min,$hour,$mday,$monoffset,$yearoffset,$wday,$yday,$isdst) = localtime();
+
+  # set year using year offset
+  $year= $yearoffset + 1900;
+
+  # set month using month offset
+  $mon=$monoffset + 1;
+
+  #if date is the month of day is 1th then backup log
+  #since will run once a day should get one log
+  if ($mday == 1 )
+  {
+    #check if logs directory exists
+    if ( -e $logs_dir)
+    {
+      my $d=`date`;
+      #regular expression to add - were there are blanks
+      $d =~ s/^| /-/g;
+      $lm=`cp $script_dir/$logfile $logs_dir/$logfile-$d`;
+      #set log file to blank - copy was completed
+      open(LF, ">$script_dir/$logfile") || die "Can't Open $script_dir/$logfile file: $!\n";
+      close LF;
+    }
+    else
+    {
+      print "WARNING:movedf.pl:missing logs directory:<$logs_dir>. Create one at <$script_dir>\n";
+    }
+  }
+}
+
