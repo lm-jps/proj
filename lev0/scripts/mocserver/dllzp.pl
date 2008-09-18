@@ -210,10 +210,10 @@ my(@threemosago);
 @threemosago = localtime(time - 90 * 86400); # 90 days ago
 
 $yr = $timearr[5] + 1900;
-$dofy = $timearr[7]; 
+$dofy = $timearr[7] + 1; 
 
 $yr90 = $threemosago[5] + 1900;
-$dofy90 = $threemosago[7];
+$dofy90 = $threemosago[7] + 1;
 
 if ($yr90 < $yr)
 {
