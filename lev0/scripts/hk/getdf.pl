@@ -31,6 +31,11 @@ $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
+#email arguments
+$from_email="carl\@sun.stanford.edu";
+$to_email="carl\@sun.stanford.edu";
+$subject_email="JSOC:WARNING:Ingesting HSB dayfiles: status:no files loaded today";
+
 # check arguments
 &check_agruments();
 
@@ -109,6 +114,7 @@ if($hkt_filecount > 0)
 else
 {
   print LF "--->Skipping deleting dayfiles because no files ingested to hk_dayfile series\n";
+  sendEmail("$from_email", "$to_email", "$subject_email", "Warning Message:\n-->Received count of hkt day files of <$hkt_filecount> files from directory $doff_dir\n-->When executing </home/production/cvs/JSOC/proj/lev0/scripts/hk/getdf.pl hsb > from cron job.\n");
 }
 
 close DELFILE;
@@ -202,3 +208,19 @@ sub check_log()
   }
 }
 
+#####################
+# sendEmail         #
+#####################
+# Simple Email Function
+# ($to, $from, $subject, $message)
+sub sendEmail
+{
+my ($to, $from, $subject, $message) = @_;
+my $sendmail = '/usr/lib/sendmail';
+open(MAIL, "|$sendmail -oi -t");
+print MAIL "From: $from\n";
+print MAIL "To: $to\n";
+print MAIL "Subject: $subject\n\n";
+print MAIL "$message\n";
+close(MAIL);
+}
