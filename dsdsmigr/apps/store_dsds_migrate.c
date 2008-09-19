@@ -88,6 +88,10 @@ note = cmdparams_get_str(&cmdparams, "note", NULL);
 lnum = cmdparams_get_int (&cmdparams, "lnum", NULL);
 snum = cmdparams_get_int (&cmdparams, "snum", NULL);
 dsdsseries = cmdparams_get_str(&cmdparams, "dsdsseries", NULL);
+if(!dsdsseries) {
+  printf("Must give a dsdsseries= %s\n");
+  return(1);
+}
 in = cmdparams_get_str(&cmdparams, "dirname", NULL);
 /* First, check to see that the dir exists */
 if (access(in, R_OK) != 0)
