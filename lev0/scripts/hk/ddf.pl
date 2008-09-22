@@ -8,10 +8,7 @@
 #              environment variable for hmi,aia, or sdo input dayfile series.#
 #              Can turn on debug flag using DF_GDFDRMS_DEBUG and this is     #
 #              passed to gdfdrms.pl. Can turn on  report flag which will     #
-#              turn on reporting in gdfdrms.pl. Key item to set is           #
-#              DF_SERIES_NAME correctly. Set to <proj name>_ground.hk_dayfile#
-#              currently. This day file series name is used as               #
-#              input  data series to gather dayfiles need to process.        #
+#              turn on reporting in gdfdrms.pl.                              #
 #              APIDs to process determined by input arguments to gdfdrms.pl. #
 #              Currently input args to gdfdrms.pl are for today, for apids   #
 #              set in apidlist argument, and for source set in src argument. #
@@ -38,8 +35,7 @@
 #              perl ddf.pl sdo moc                                           #
 #              perl ddf.pl sdo rtmon                                         #
 # Limitation:  Setup required environment variables at top of file.          #
-#              Must have input dayfile series(i.e.,hmi.hk_dayfile,           #
-#              sdo.hk_dayfile, etc). Must have apidlist file.                #
+#               Must have apidlist file.                                     #
 # Author:      Carl                                                          #
 # Date:        Move from EGSE to JSOC software environment on May,7, 2008    #
 ##############################################################################
@@ -64,36 +60,33 @@ $dflg=$ENV{'DF_GDFDRMS_DEBUG'}=0;
 #(4)setup log file for with name based on input argument(hmi,aia,sdo), 
 $logfile=$ENV{'HK_DF_LOGFILE'}="$script_dir/log-$dspnm-ddf";
 
-####open log and record log info####
+#(5)open log and record log info if in debug mode
 if ($dflg) {open(LF,">>$logfile") || die "ERROR in ddf.pl:Can't Open <$logfile>: $!\n; exit;";}
 if ($dflg) {print LF `date`;}
 if ($dflg) {print LF "--->ddf.pl:debug:log file is <$ENV{'HK_DF_LOGFILE'}>\n";}
 if ($dflg) {print LF "--->ddf.pl:debug:source argument is <$src>\n";}
 
-#(5)set report mode on or off. if turn on, set report name want to use below.Creates gzipped report.
+#(6)set report mode on or off. if turn on, set report name want to use below.Creates gzipped report.
 $rptflg=$ENV{'DF_REPORT_FLAG'}=0;
 
-#(6)set report naming convention for using input argument(hmi,aia,sdo) if reporting is turned on
+#(7)set report naming convention for using input argument(hmi,aia,sdo) if reporting is turned on
 $ENV{'DF_PROJECT_NAME_FOR_REPORT'}="$dspnm";
 $ENV{'DF_DATA_TYPE_NAME_FOR_REPORT'}="lev0";
 
-#(7)set input data series to use  to check for dayfiles to decode for based on input arg(hmi,sdo,aia)
-$dsnm=$ENV{'DF_SERIES_NAME'}="$dspnm\_ground.hk_dayfile"; #test LMSAL formatted dayfiles
-##used to test hsb dayfiles input files from drms
-#$dsnm=$ENV{'DF_SERIES_NAME'}="su_carl.hk_dayfile";   #test hsb formatted dayfiles
-
 ####log info####
-if ($dflg) {print LF "--->ddf.pl:debug:input dayfile is <$dsnm>\n";}
+if ($dflg) {print LF "--->ddf.pl:debug:ARGV[0]: $ARGV[0]\n";}
+if ($dflg) {print LF "--->ddf.pl:debug:ARGV[1]: $ARGV[1]\n";}
+if ($dflg) {print LF "--->ddf.pl:debug:ARGV[2]: $ARGV[2]\n";}
 
 #(8)get apid list to use
 $list=&get_apid_list();
 
-#(9)set up command for  dayfile series with source egse
-# execute and retrieve dayfile for today and decode keywords.
+#(9)set up command for  getting dayfile from drms and then writing keywords to series
+# execute and retrieve dayfile marked with today's time stamp only and decode keywords.
 $command="perl $script_dir/gdfdrms.pl  apidlist=$script_dir/$list  src=$src";
 
 #Note:Used to test with known data. do:perl ddf.pl hmi egsefm
-#$command="perl $script_dir/gdfdrms.pl  apidlist=$script_dir/$list  start=20080419 end=20080419 src=$src";
+#$command="perl $script_dir/gdfdrms.pl  apidlist=$script_dir/$list  start=20080916 end=20080916 src=$src";
 
 ####log info####
 if ($dflg) {print LF "--->ddf.pl:debug:Running:Command running:<$command>\n";}
@@ -102,6 +95,7 @@ if ($dflg) {print LF "--->ddf.pl:debug:Running:Command running:<$command>\n";}
 $log=`$command`;
 
 ####log info####
+if($dflag) {print LF "--->ddf.pl:series name for input used was <$dsnm>\n";}
 if ($dflg) {print LF "--->ddf.pl:debug:Finished. Command Log is <$log>\n";}
 if ($dflg) {print LF `date`;}
 if ($dflg) {close(LF);}
