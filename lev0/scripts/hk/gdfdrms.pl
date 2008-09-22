@@ -23,11 +23,9 @@
 #              where running. Script works only using hsb dayfile file       #
 #              and LMSAL formats that are in DRMS. Here are examples input   #
 #              day file:                                                     #
-#              -For src=hsb:   hsb_0445_2008_04_15_10_41_00.hkt              #
-#              -For src=egsefm:200804019.0x001d                              #
-#              -For src=moc: For SDO files To be determined if fits into     #
-#                             hsb or egsefm format.Either way need to add    #
-#                             code to handle src=sdo                         #
+#              -For src=hsb:    hsb_0445_2008_04_15_10_41_00.hkt             #
+#              -For src=egsefm: 200804019.0x001d                             #
+#              -For src=moc:   0445_2008_04_15_10_41_01.hkt                  #
 # Author:      Carl                                                          #
 # Date:        Move from EGSE to JSOC software environment on May,2, 2008    #
 ##############################################################################
@@ -42,61 +40,68 @@ $script_dir=$ENV{'HK_SCRIPT_DIR'}="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$exec_dir";
 
 #(2) set debug flag 1 to turn on and 0 to turn off
-$dflg=$ENV{'DF_GDFDRMS_DEBUG'};
+$dflg=$ENV{'DF_GDFDRMS_DEBUG'}=0;
 
 #(3) set report flag to turn on and off report creation and set report name 
 $rptflg=$ENV{'DF_REPORT_FLAG'};
 $pjn=$ENV{'DF_PROJECT_NAME_FOR_REPORT'};
 if($pjn eq "")
 {
+  #default
   $pjn=$ENV{'DF_PROJECT_NAME_FOR_REPORT'}="su_carl";
 }
 $dtn=$ENV{'DF_DATA_TYPE_NAME_FOR_REPORT'};
 if($dtn == 0)
 {
+  #default
   $dtn=$ENV{'DF_DATA_TYPE_NAME_FOR_REPORT'}="lev0";
 }
 
-#(4) set dayfile data series to get dayfiles from
-$dsnm=$ENV{'DF_SERIES_NAME'}; 
+#(4) check for any arguments passed in command
+&check_arguments();
 
-if($dsnm == 0)
-{
-   ##used to test egsefm input dayfiles from drms
-   $dsnm=$ENV{'DF_SERIES_NAME'}="hmi_ground.hk_dayfile"; #test LMSAL formatted dayfiles
+#(5) set choices for input dayfile
+$dsnm_sdo=$ENV{'DF_SERIES_NAME'}="sdo.hk_dayfile"; 
+$dsnm_hmi=$ENV{'DF_SERIES_NAME'}="hmi.hk_dayfile"; 
+$dsnm_aia=$ENV{'DF_SERIES_NAME'}="aia.hk_dayfile"; 
 
-   ##used to test hsb dayfiles input files from drms
-   #$dsnm=$ENV{'DF_SERIES_NAME'}="su_carl.hk_dayfile";   #test hsb formatted dayfiles
-}
-
-#(5) setup log file -use logfile setting set in hmi_dfd.pl,aia_dfd.pl, sdo_dfd.pl or use setting below
+#(6) setup log file -use logfile setting set in hmi_dfd.pl,aia_dfd.pl, sdo_dfd.pl or use setting below
 $logfile=$ENV{'HK_DF_LOGFILE'};
 if($logfile eq "")
 {
    $logfile="$script_dir/log-gdfdrms";#send log here when run at command line
 }
 
-#(6) open log file
+#(7) setup log file -use logfile setting set in hmi_dfd.pl,aia_dfd.pl, sdo_dfd.pl or use setting below
+$logfile=$ENV{'HK_DF_LOGFILE'};
+if($logfile eq "")
+{
+   $logfile="$script_dir/log-gdfdrms";#send log here when run at command line
+}
+
+#(8) open log file
 open(LF,">>$logfile") || die "ERROR in gdfdrms.pl:Can't Open-0 <$logfile>: $!\n; exit;";
 print LF `date`;
-print LF "-->(0)Getting dayfiles from DRMS from data series <$dsnm>";
 
-#(7) check for any arguments passed in command
-&check_arguments();
+if($dsnm != 0)
+{
+  print LF "-->(0)Getting dayfiles from DRMS from data series <$dsnm>\n";
+}
 
-#(8) get list of apids to do 
+
+#(9) get list of apids to do 
 &get_apid_to_do();
 
-#(9)get list of dates to do 
+#(10)get list of dates to do 
 &get_date_to_do();
 
-#(10)go through day files in directory looking for all files for given apid and date range
+#(11)go through day files in directory looking for all files for given apid and date range
 &get_list_from_drms();
 
-#(11)decode keywords from list of  day files and write keywords to DRMS data series
+#(12)decode keywords from list of  day files and write keywords to DRMS data series
 &decode_keywords_for_dayfiles();
  
-#(12)close logfile
+#(13)close logfile
 print LF `date`;
 close LF;
 
@@ -312,10 +317,10 @@ sub get_apid_to_do
     open(FILE_APID_LIST, "$fn") || die "ERROR in gdfdrms.pl:Can't Open-2: $fn file: $!. Need to create apidlist file.\n";
     while (<FILE_APID_LIST>)
     {
-      push(@all_apids, $_) ;
+      push(@all_apids, int $_) ;
     }
     close FILE_APID_LIST ;
-    print  LF "-->(1)Doing decimal formatted apids: @all_apids";
+    print  LF "-->(1)Doing decimal formatted apids: @all_apids\n";
   }
   elsif ($apid_list_flg eq "2")
   {
@@ -335,8 +340,8 @@ sub get_apid_to_do
   {
     print LF "WARNING: Not valid apid list flag value\n";
   }
-
 }
+
 #############################################################################
 # subroutine get_date_to_do: gets date range to do                          #
 #############################################################################
@@ -365,7 +370,7 @@ sub get_date_to_do
      ($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = localtime();
      $year = 1900 + $yearOffset;
      $month= $monthOffset + 1;
-     if($dflag == 1) {print LF "--->debug: year this $year month is $month day is $dayOfMonth\n";}
+     if($dflg == 1) {print LF "--->debug: year this $year month is $month day is $dayOfMonth\n";}
      #create todays date format and push on list of dates to do
      $new_date= sprintf("%4d.%02.2d.%02.2d", $year,$month,$dayOfMonth);
      push(@all_dates, $new_date);
@@ -505,7 +510,42 @@ sub get_list_from_drms()
        # to test single date uncomment out
        #$d="2008.04.19";#for apid=19 and src=egse
        # create command to get all directory's with dayfile from given date,apid and source
-       $command=sprintf("show_keys ds=%s[%s][%s][%s] -P",$dsnm,$d,$apid_str,$source);
+
+       # append to date to have correct index to hk_dayfile series
+       $append_to_d="_00:00:00_TAI";
+
+       if ($source eq "moc" )
+       {
+          #if source is moc always grab dayfile from sdo.hk_dayfile
+          $dsnm=$dsnm_sdo;
+       }
+       elsif (($source eq "hsb" or source eq "hsb") and (int $apid_str > 32) and (int $apid_str < 64))
+       {
+          #if source is hsb or egsefm and apids are aia apids, then always grab dayfile from aia.hk_dayfile
+          $dsnm=$dsnm_aia;
+       }
+       elsif (($source eq "hsb" or source eq "egse") and (int $apid_str > 500) and (int $apid_str < 600))
+       {
+          #if source is hsb or egsefm and apids are aia apids, then always grab dayfile from aia.hk_dayfile
+          $dsnm=$dsnm_aia;
+       }
+       elsif (($source eq "hsb" or $source eq "egse")  and (int $apid_str > 0) and (int $apid_str < 33))
+       {
+          #if source is hsb or egsefm and apids are hmi apids, then always grab dayfile from hmi.hk_dayfile
+          $dsnm=$dsnm_hmi;
+       }
+       elsif (($source eq "hsb" or $source eq "egse") and (int $apid_str > 400) and (int $apid_str < 500))
+       {
+          #if source is hsb or egsefm and apids are hmi apids, then always grab dayfile from hmi.hk_dayfile
+          $dsnm=$dsnm_hmi;
+       }
+       else
+       {
+          print "WARNING:gdfdrms.pl:unexpected else-did not find source and apid case for setting input dayfile name!Exiting script.\n";
+          exit;
+       }
+ 
+       $command=sprintf("show_keys ds=%s[%s%s][%s][%s] -P",$dsnm,$d,$append_to_d,$apid_str,$source);
        if($dflg) {print LF "--->debug: command value:$command returned:$results\n"};
        $results=`$command`;
        $return=substr($results,0,5);
@@ -522,7 +562,7 @@ sub get_list_from_drms()
        $signal_num  = $? & 127;
        $dumped_core = $? & 128;
        if($dflg)  {print LF "--->debug:return code from command is <$exit_value>  <$signal_num>  <$dump_core>\n";}
-       if($dflag == 1) {print LF "COMMAND IS: <$command> \nresults:\n<$results>\n";}
+       if($dflg == 1) {print LF "COMMAND IS: <$command> \nresults:\n<$results>\n";}
 
        #returns a list of directories to get files
        if($dflg) {print LF "-->debug:directory for dayfiles for $d from drms:$results;"}
@@ -540,11 +580,11 @@ sub get_list_from_drms()
        {
          if (substr($item,0,8) eq "suidback"  )
          {
-           if($dflag) {print LF "-->Warning:no valid directory for dayfile\n";}
+           if($dflg) {print LF "-->Warning:no valid directory for dayfile\n";}
          }
          elsif  (substr($item,0,5) eq "SUDIR"  )
          {
-           if($dflag) {print LF "-->Warning:no valid directory for dayfile\n";}
+           if($dflg) {print LF "-->Warning:no valid directory for dayfile\n";}
          }
          else
          {  
@@ -558,22 +598,31 @@ sub get_list_from_drms()
 
            # read in files
            @df = readdir(DFDIR); #get a list of directory contents
+           if($dflg) { print LF "-->debug:files in directory are : @df \n";}
 
            # add file name and directory path to there_dir_list
            foreach $dird (@df)
            { 
              if ($dird eq "." or $dird eq "..")
              {
+                # skip . or ..  files found
+                 if($dflg == 1) {print LF "-->debug:skip . and .. files found.\n";}
+                next;
+             }
+             elsif( index($dird, 'xml') > 0 )
+             {
+                # skip  xml file found
+                 if($dflg == 1) {print LF "-->debug:skip xml file found \n";}
                 next;
              }
              else
              {
                # add directory and filename path to there_dir_list
-               if($dflag == 1) {print LF "-->debug:Found dird value : <$dird>\n";}
+               if($dflg == 1) {print LF "-->debug:Found dird value : <$dird>\n";}
                if ($source eq "egsefm")
                {
                   #parse files like this 20071108.0x0013 where 0013 is hex apid value
-                  if ($dflag == 1) {print LF "-->debug:parsing based on formated files from src eq lm\n";}
+                  if ($dflg == 1) {print LF "-->debug:egsefm:parsing based on formated files from src eq lm\n";}
                   #get apid need to convert hex apid to decimal apid
                   $apid=  hex substr($dird,11,4);
                   if($dflg) {print LF "Found <$apid> for source <$source>\n"};
@@ -581,9 +630,17 @@ sub get_list_from_drms()
                elsif ($source eq "hsb")
                {
                   #parse files like this hsb_0445_2007_11_08_16_51_31_00.hkt
-                  if ($dflag == 1) {print LF "-->debug:parsing based on formated files from src eq hsb\n";}
+                  if ($dflg == 1) {print LF "-->debug:hsb:parsing based on formated files from src eq hsb\n";}
                   #get apid which is a decimal value for hsb filenames
                   $apid=   int substr($dird,4,4);
+                  if($dflg) {print LF "-->debug:Found <$apid> for source <$source>\n"};
+               }
+               elsif ($source eq "moc")
+               {
+                  #parse files like this 0129_2008_260_02.hkt
+                  if ($dflg == 1) {print LF "-->debug:moc:parsing based on formated files from src eq moc\n";}
+                  #get apid which is a decimal value for hsb filenames
+                  $apid=   int substr($dird,0,4);
                   if($dflg) {print LF "-->debug:Found <$apid> for source <$source>\n"};
                }
                # check if apid is in apid list
@@ -592,7 +649,7 @@ sub get_list_from_drms()
                   if($dflg) {print LF "-->debug:loop thru apids:apid ==<$a>\n";}
                   if (int $a eq $apid)
                   {
-                    if($dflag == 1) {print LF "-->debug:Found $apid for file in the list of apids to do\n";}
+                    if($dflg == 1) {print LF "-->debug:Found $apid for file in the list of apids to do\n";}
                     push (@there_dir_list, "$item/$dird");
                     last;
                   }
@@ -669,9 +726,9 @@ sub decode_keywords_for_dayfiles()
       my($directory, $filename) = $there =~ m/(.*\/)(.*)$/;
 
       #double check if apid is in filename
-      if (( $apid eq int substr($filename,4,4) and $source eq "hsb") or ($hex_apid eq substr($filename,11,4) and $source eq "egsefm"))
+      if (( $apid eq int substr($filename,4,4) and $source eq "hsb") or ($hex_apid eq substr($filename,11,4) and $source eq "egsefm") or ( $apid eq  int substr($filename,0,4) and $source eq "moc"))
       {
-        if ($dflag == 1) {print LF "-->debug:there file to do is <$there> hex value of apid is <$hex_apid> decimal value of apid <$apid>\n";}
+        if ($dflg == 1) {print LF "-->debug:there file to do is <$there> hex value of apid is <$hex_apid> decimal value of apid <$apid>\n";}
         # set found flag to no 
         $found="n";
 
@@ -708,6 +765,10 @@ sub decode_keywords_for_dayfiles()
              {
                $series= sprintf("%s.%s_%04d", $pjn,$dtn, substr($filename,4,4));
              }
+             elsif($source eq "moc")
+             {
+               $series= sprintf("%s.%s_%04d", $pjn,$dtn, substr($filename,4,4));
+             }
 	     print LF  "-->(11)Series name used for reportname and creating hk series is $series \n";
 	     print LF  "-->(12)Report name for report is Report-$filename-$series \n";
            }
@@ -737,8 +798,8 @@ sub decode_keywords_for_dayfiles()
              else
              {
 	       # load this there file in DRMS
-               print LF "-->(13)Running script in mode for sending dayfiles to decode_dayfile exec to be decoded and written to DRMS without creating report file\n";
-               $log1=`decode_dayfile -p in=$there`;
+               print LF "-->(13)Running script in mode for sending dayfiles <$there> to decode_dayfile exec to be decoded and written to DRMS without creating report file\n";
+               $log1=`decode_dayfile in=$there`;
 
                # add filename to did file list when successfully processed dayfile already
                print DFILE "$there\n";
