@@ -25,8 +25,10 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #
 use Tk;
 
-$GENTLM1 = "/dds/stage/VC01_2007_293_00_50_25_0000012ef6d_11445_00.tlm";
-$GENTLM2 = "/dds/stage/VC01_2007_293_00_50_56_000001403b2_11445_00.tlm";
+#$GENTLM1 = "/dds/stage/VC01_2007_293_00_50_25_0000012ef6d_11445_00.tlm";
+#$GENTLM2 = "/dds/stage/VC01_2007_293_00_50_56_000001403b2_11445_00.tlm";
+$GENTLM1 = "/dds/stage/VC02_2007_312_16_52_04_0000247c8a0_0e2d1_00.tlm";
+$GENTLM2 = "/dds/stage/VC02_2007_312_16_52_44_0000248ab71_0e2d1_00.tlm";
 
 #$GENTLM1 = "VCz.tlm";          #file of telemetry to inject in sim mode
 #$GENTLM2 = "VCz.tlm";          #file of telemetry to inject in sim mode
@@ -2050,10 +2052,10 @@ for($k = 0; $k < 2; $k++) {
     if($errfilename ne "00000000000000000000000000000000000000000000000") {
       print LOG "*  **WARNING: .err file in qac: $errfilename\n";
       if($k == 0) {
-        $f = $DIRDDS2SOC/$errfilename;
+        $f = "$DIRDDS2SOC/$errfilename";
       }
       else {
-        $f = $DIRDDS2SOC/retrans/$errfilename;
+        $f = "$DIRDDS2SOC/retrans/$errfilename";
       }
       $getsizeerr = (-s $f);
       if(!$getsizeerr) {
