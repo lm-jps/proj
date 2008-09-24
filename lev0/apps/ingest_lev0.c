@@ -444,7 +444,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "MISSVALS", missvals);
   snprintf(tlmdsname, 128, "%s[%s]", tlmseriesname, tlmnamekeyfirst);
   drms_setkey_string(rs, "TLMDSNAM", tlmdsname);
-  int pts = img->first_packet_time >> 16;
+  unsigned int pts = img->first_packet_time >> 16;
   int ptss = img->first_packet_time & 0xffff;
   TIME fpt = SDO_to_DRMS_time(pts, ptss);
   drms_setkey_double(rs, "IMGFPT", fpt);
