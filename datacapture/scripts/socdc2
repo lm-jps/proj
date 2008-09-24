@@ -2034,19 +2034,29 @@ for($k = 0; $k < 2; $k++) {
       $cmd = "mv -f $f $DIRREJECT";     #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
-      #there might be a .tlm file anyway so move it too
+      #there might be a .tlm or .err file anyway so move it too
       $pos = rindex($file, '.');
       $part = substr($file, 0, $pos);
       $tlmf = "$part".".tlm";
+      $errf = "$part".".err";
       if($k == 0) {
         $ttlmf = "$DIRDDS2SOC/$tlmf";
+        $eerrf = "$DIRDDS2SOC/$errf";
       }
       else {
         $ttlmf = "$DIRDDS2SOC/retrans/$tlmf";
+        $eerrf = "$DIRDDS2SOC/retrans/$errf";
       }
-      $cmd = "mv -f $ttlmf $DIRREJECT";
-      print LOG "$cmd\n";
-      `$cmd`;
+      if(-e $ttlmf) {
+        $cmd = "mv -f $ttlmf $DIRREJECT";
+        print LOG "$cmd\n";
+        `$cmd`;
+      }
+      if(-e $eerrf) {
+        $cmd = "mv -f $eerrf $DIRREJECT";
+        print LOG "$cmd\n";
+        `$cmd`;
+      }
       next;
     }
     if($errfilename ne "00000000000000000000000000000000000000000000000") {
