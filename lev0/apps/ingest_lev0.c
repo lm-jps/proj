@@ -776,8 +776,14 @@ int get_tlm(char *file, int rexmit, int higherver)
   firstflg = 1; 
   if(rexmit || higherver) {
     if(Img->initialized) {		// close normal mode image
-      if(rs) 
+      if(rs) {
         close_image(rs, segment, segArray, Img, fsn_prev);
+        printk("drms_server_end_transaction()\n");
+        drms_server_end_transaction(drms_env, 0 , 0);
+        printk("drms_server_begin_transaction()\n");
+        drms_server_begin_transaction(drms_env); //start another cycle
+        imagecnt = 0;
+      }
       else
         printk("**ERROR: Null record ptr for an opened image fsn=%u\n",fsn_prev);
     }
@@ -1052,6 +1058,20 @@ int get_tlm(char *file, int rexmit, int higherver)
   ftmp = EndTimer(1);
   printk("**Processed %s\n**with %d images and %d VCDUs in %f sec\n\n",
 	file, fileimgcnt, fpkt_cnt, ftmp);
+
+  //now commit to DB in case another file doesn't come in
+/***************************TEMP***********************************
+NOTE: Can't do this unless close current image and then set fsn=0
+      so that the next tlm file will start by opening the image again.
+      I don't think that we want this. Instead find a way to get the ^C
+      instead of DRMS, and then do a close and commit.
+  printk("drms_server_end_transaction()\n");
+  drms_server_end_transaction(drms_env, 0 , 0);
+  printk("drms_server_begin_transaction()\n\n");
+  drms_server_begin_transaction(drms_env); //start another cycle
+  imagecnt = 0;
+***************************TEMP***********************************/
+
   if(fpkt_cnt != total_tlm_vcdu) {
     printk("**WARNING: Found #vcdu=%d; expected=%d\n", fpkt_cnt, total_tlm_vcdu);
   }
@@ -1295,6 +1315,7 @@ void setup()
     sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
     sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMI);
   }
+  printk("tlmseriesname=%s\nlev0seriesname=%s\n", tlmseriesname, lev0seriesname);
   umask(002);			// allow group write 
   Image.initialized = 0;	// init the two image structures 
   ImageOld.initialized = 0;
