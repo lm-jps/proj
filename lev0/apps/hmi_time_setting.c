@@ -111,6 +111,7 @@ if (flg) {	/* AIA */
       axssec = HK_getkey_int(isp, "ATCSS239");
     }
     if((axsec != DRMS_MISSING_INT) && (axssec != DRMS_MISSING_INT)) {
+      axssec = axssec >> 16;
       t_obs = SDO_to_DRMS_time(axsec, axssec);
     }
   }
@@ -166,6 +167,7 @@ if (flg) {	/* AIA */
       hxssec = HK_getkey_int(isp, "HTCSS1DB");
     }
     if((hxsec != DRMS_MISSING_INT) && (hxssec != DRMS_MISSING_INT)) {
+      hxssec = hxssec >> 16;
       t_obs = SDO_to_DRMS_time(hxsec, hxssec);
     }
   }
