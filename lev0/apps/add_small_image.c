@@ -290,7 +290,7 @@ int add_small_array(DRMS_Record_t *rec, DRMS_Array_t *big, int doScaleFits, int 
     int smallNx, smallNy;
     int smallDims[2];
     char smallFileName[DRMS_MAXSEGFILENAME];
-    char smallPathName[DRMS_MAXPATHLEN];
+    //char smallPathName[DRMS_MAXPATHLEN];
 
     smallNy = bigNy/doScaleFits;
     smallNx = bigNx/doScaleFits;
@@ -300,21 +300,23 @@ int add_small_array(DRMS_Record_t *rec, DRMS_Array_t *big, int doScaleFits, int 
     rebinArraySF(small, big);
     strcpy(smallFileName, bigSeg->info->name);
     strcat(smallFileName, "_sm.fits");
-    strcpy(smallPathName, recdir);
-    strcat(smallPathName, "/");
-    strcat(smallPathName, smallFileName);
+    //strcpy(smallPathName, recdir);
+    //strcat(smallPathName, "/");
+    //strcat(smallPathName, smallFileName);
     /* assume second segment, if it is present, is vardims FTIS for small image */
+    DRMS_Segment_t *smallSeg;
+    smallSeg = drms_segment_lookupnum(rec, 1);
+    strcpy(smallSeg->filename, smallFileName);
+
     if (rec->segments.num_total > 1)
-      {
-      DRMS_Segment_t *smallSeg;
-      DRMS_SegmentDimInfo_t smallDimInfo;
-      smallSeg = drms_segment_lookupnum(rec, 1);
-      strcpy(smallSeg->filename, smallFileName);
-      smallDimInfo.naxis = 2;
-      smallDimInfo.axis[0] = smallDims[0];
-      smallDimInfo.axis[1] = smallDims[1];
-      drms_segment_setdims(smallSeg, &smallDimInfo);
-      }
+    {
+       DRMS_SegmentDimInfo_t smallDimInfo;
+
+       smallDimInfo.naxis = 2;
+       smallDimInfo.axis[0] = smallDims[0];
+       smallDimInfo.axis[1] = smallDims[1];
+       drms_segment_setdims(smallSeg, &smallDimInfo);
+    }
     // For SDO CCD images of 14 bits use FITS shorts as unsigned and keep full range.
     small->bzero = -(4.0*8192.0);
     small->bscale = 4.0;
@@ -323,7 +325,10 @@ int add_small_array(DRMS_Record_t *rec, DRMS_Array_t *big, int doScaleFits, int 
     small->bzero = 8192.0;
     small->bscale = 0.25;
     small->israw = 1;
-    drms_export_tofitsfile(small, &rec->keywords, NULL, smallPathName);
+
+    drms_segment_writewithkeys(smallSeg, small, 0);
+
+    //drms_export_tofitsfile(small, &rec->keywords, NULL, smallPathName);
     drms_free_array(small);
     }
 
