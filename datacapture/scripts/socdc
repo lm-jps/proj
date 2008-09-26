@@ -25,8 +25,10 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #
 use Tk;
 
-$GENTLM1 = "/dds/stage/VC01_2007_293_00_50_25_0000012ef6d_11445_00.tlm";
-$GENTLM2 = "/dds/stage/VC01_2007_293_00_50_56_000001403b2_11445_00.tlm";
+#$GENTLM1 = "/dds/stage/VC01_2007_293_00_50_25_0000012ef6d_11445_00.tlm";
+#$GENTLM2 = "/dds/stage/VC01_2007_293_00_50_56_000001403b2_11445_00.tlm";
+$GENTLM1 = "/dds/stage/VC02_2007_312_16_52_04_0000247c8a0_0e2d1_00.tlm";
+$GENTLM2 = "/dds/stage/VC02_2007_312_16_52_44_0000248ab71_0e2d1_00.tlm";
 
 #$GENTLM1 = "VCz.tlm";          #file of telemetry to inject in sim mode
 #$GENTLM2 = "VCz.tlm";          #file of telemetry to inject in sim mode
@@ -341,6 +343,9 @@ sub Submit_b
     $cmd = "/bin/mkdir -p $DIRDDS2SOC";
     print LOG "$cmd\n";
     `$cmd`;
+    $cmd = "/bin/mkdir -p $DIRDDS2SOC/retrans";
+    print LOG "$cmd\n";
+    `$cmd`;
     $cmd = "/bin/rm -rf $DIRSOC2SOC";
     print LOG "$cmd\n";
     `$cmd`;
@@ -369,6 +374,12 @@ sub Submit_b
     print LOG "$cmd\n";
     `$cmd`;
     $cmd = "/bin/mkdir -p $DIRSOC2PIPE";
+    print LOG "$cmd\n";
+    `$cmd`;
+    $cmd = "/bin/rm -rf $DIRSOC2PIPE/dsf";
+    print LOG "$cmd\n";
+    `$cmd`;
+    $cmd = "/bin/mkdir -p $DIRSOC2PIPE/dsf";
     print LOG "$cmd\n";
     `$cmd`;
     $cmd = "/bin/rm -rf $DIRPIPE2SOC";
@@ -769,16 +780,29 @@ sub ls_update
   @selected = $lb->curselection();
   @dds2soc_ls = `ls -lt $DIRDDS2SOC`;
   #@dds2soc_ls = `ls -l $DIRDDS2SOC`;
+  @dds2soc_rex_ls = `ls -lt $DIRDDS2SOC/retrans`;
   @filenames = ();
+  @filenames_rex = ();
   $lb->delete(0, 'end');
   shift(@dds2soc_ls);			#elim "total" line in front of ls
   foreach $x (@dds2soc_ls) {
     if($x =~ /^l/) { next; }            #ignore links
+    if($x =~ /^d/) { next; }            #ignore dirs
     ($a1,$a2,$a3,$a4,$size,$a6,$a7,$a8,$name) = split(/\s+/, $x);
     chomp($name);
     #$lb->insert('end', "$name    $size");
     $lb->insert('end', "$name");
     push(@filenames, $name);
+  }
+  shift(@dds2soc_rex_ls);		#elim "total" line in front of ls
+  $lb->insert('end', "retrans:");
+  foreach $x (@dds2soc_rex_ls) {
+    if($x =~ /^l/) { next; }            #ignore links
+    ($a1,$a2,$a3,$a4,$size,$a6,$a7,$a8,$name) = split(/\s+/, $x);
+    chomp($name);
+    #$lb->insert('end', "$name    $size");
+    $lb->insert('end', "$name");
+    push(@filenames_rex, $name);
   }
   foreach(@selected) {
     $lb->selectionSet($_);
@@ -836,6 +860,7 @@ sub ls_update_s2p
   $lbs3s->delete(0, 'end');
   shift(@soc2pipe_ls);			#elim "total" line in front of ls
   foreach $x (@soc2pipe_ls) {
+    if($x =~ /^d/) { next; }            #ignore subdirs
     ($a1,$a2,$a3,$a4,$size,$a6,$a7,$a8,$name) = split(/\s+/, $x);
     chomp($name);
     $lbs3s->insert('end', "$name");
@@ -949,8 +974,14 @@ sub Dbl_click_dds
   }
   if(!defined $selected) { $file = "<none>"; $selected = -1; }
   else { $file = $filenames[$selected]; }
+  if(!$file) { 
+    $file = $filenames_rex[$selected - ($#filenames + 2)];
+    $file = "retrans/$file";
+  }
   #Note: the $selected may not pick up a file name after a screen update
-  if(!$file) { $file = "<none>"; }
+  if(!$file) { 
+    $file = "<none>";
+  }
   print LOG "$t Dbl_click_dds() file selected is: $file\n";
   $fullfile = "$DIRDDS2SOC/$file";
   
@@ -1313,9 +1344,16 @@ sub Show_qac_link
   my($i) = 0;
   $svpause = $pause;		#disable ls_update until show this qac file
   $pause = 1;
+  $found = 0;
   foreach(@filenames) {
-    if($_ eq $qfile) { last; }
+    if($_ eq $qfile) { $found=1; last; }
     $i++;
+  }
+  if(!$found) {
+    foreach(@filenames_rex) {
+      if($_ eq $qfile) { $found=1; last; }
+      $i++;
+    }
   }
   &Dbl_click_dds(NULL, $i);
 }
@@ -1830,18 +1868,34 @@ sub Sim_DDS
 sub socget {
   $t = &labeltime;
   #print LOG "$t Call to socget()\n";
-  #Get all the .qac files in the current $DIRDDS2SOC dir
-  @qacfiles = grep(/\.qac/, @filenames);
-  #Get all the .dsf files in the current $DIRDDS2SOC dir
-  @dsffiles = grep(/\.dsf/, @filenames);
   #
   #Determine if .qac file ok. See above for what a .qac file looks like.
-  #And determine if the given TLM file exists
-  while($file = shift(@qacfiles)) {
+  #And determine if the given TLM file exists.
+  #Go through this loop twice for files in $DIRDDS2SOC and $DIRDDS2SOC/retrans
+for($k = 0; $k < 2; $k++) {
+  if($k == 0) {
+    #Get all the .qac files in the current $DIRDDS2SOC dir
+    @qacfiles = grep(/\.qac/, @filenames);
+    @qacqac = @qacfiles;
+    #Get all the .dsf files in the current $DIRDDS2SOC dir
+    @dsffiles = grep(/\.dsf/, @filenames);
+  }
+  else {
+    #Get all the .qac files in the current $DIRDDS2SOC/retrans dir
+    @qacfiles_rex = grep(/\.qac/, @filenames_rex);
+    @qacqac = @qacfiles_rex;
+  }
+  while($file = shift(@qacqac)) {
     print LOG "  $scount: $file.\n";
     $scount++;
-    if(!open(TXT, "$DIRDDS2SOC/$file")) {
-      print LOG "\n*  **ERROR: Can't open $DIRDDS2SOC/$file\n";
+    if($k == 0) {
+      $ffile = "$DIRDDS2SOC/$file";
+    }
+    else {
+      $ffile = "$DIRDDS2SOC/retrans/$file";
+    }
+    if(!open(TXT, "$ffile")) {
+      print LOG "\n*  **ERROR: Can't open $ffile\n";
       next;
     }
     $tlmfile = 0; $size = 0; $tlmsize = 0; $rexmit = 0; $eofmarker = 0;
@@ -1851,6 +1905,12 @@ sub socget {
       if(/^TLM_FILE_NAME/) {
         ($x, $tlmfile) = split(/=/);
         chomp($tlmfile);
+        if($k == 0) {
+          $ttlmfile = "$DIRDDS2SOC/$tlmfile";
+        }
+        else {
+          $ttlmfile = "$DIRDDS2SOC/retrans/$tlmfile";
+        }
       }
       elsif(/^TLM_FILE_SIZE/) {
         ($x, $tlmsize) = split(/=/);
@@ -1964,7 +2024,7 @@ sub socget {
     }
     close(TXT);
     #ck size of .qac file and give warning msg and skip if wrong
-    $f = "$DIRDDS2SOC/$file";
+    $f = $ffile;
     $getsizeqac = (-s $f);
     if($qacsize != $getsizeqac) {
       print LOG "*  **WARNING: Bad qac size $file\n";
@@ -1974,18 +2034,39 @@ sub socget {
       $cmd = "mv -f $f $DIRREJECT";     #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
-      #there might be a .tlm file anyway so move it too
+      #there might be a .tlm or .err file anyway so move it too
       $pos = rindex($file, '.');
       $part = substr($file, 0, $pos);
-      $tlmfile = "$part".".tlm";
-      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";
-      print LOG "$cmd\n";
-      `$cmd`;
+      $tlmf = "$part".".tlm";
+      $errf = "$part".".err";
+      if($k == 0) {
+        $ttlmf = "$DIRDDS2SOC/$tlmf";
+        $eerrf = "$DIRDDS2SOC/$errf";
+      }
+      else {
+        $ttlmf = "$DIRDDS2SOC/retrans/$tlmf";
+        $eerrf = "$DIRDDS2SOC/retrans/$errf";
+      }
+      if(-e $ttlmf) {
+        $cmd = "mv -f $ttlmf $DIRREJECT";
+        print LOG "$cmd\n";
+        `$cmd`;
+      }
+      if(-e $eerrf) {
+        $cmd = "mv -f $eerrf $DIRREJECT";
+        print LOG "$cmd\n";
+        `$cmd`;
+      }
       next;
     }
     if($errfilename ne "00000000000000000000000000000000000000000000000") {
       print LOG "*  **WARNING: .err file in qac: $errfilename\n";
-      $f = "$DIRDDS2SOC/$errfilename";
+      if($k == 0) {
+        $f = "$DIRDDS2SOC/$errfilename";
+      }
+      else {
+        $f = "$DIRDDS2SOC/retrans/$errfilename";
+      }
       $getsizeerr = (-s $f);
       if(!$getsizeerr) {
         print LOG "\n*  **WARNING: Missing $errfilename\n";
@@ -2001,7 +2082,7 @@ sub socget {
   	#$Hoftlmreceived{$errfilename} = 1; #we will ack it in the .asf
 
         if(!$tlmfile || $tlmfile eq "00000000000000000000000000000000000000000000000")  {
-          $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";  #reject the .qac file
+          $cmd = "mv -f $ffile $DIRREJECT";  #reject the .qac file
           print LOG "$cmd\n";
           `$cmd`;
   	next;           # contine while shift(@qacfiles)
@@ -2013,7 +2094,7 @@ sub socget {
           print LOG "*  **WARNING: Bad errfile size $errfilename\n";
           print LOG "*  **WARNING: size expect=$errfilesize, got=$getsizeerr\n";
         }
-        $cmd = "mv -f $DIRDDS2SOC/$errfilename $DIRREJECT";#reject the .err file
+        $cmd = "mv -f $f $DIRREJECT";#reject the .err file
         print LOG "$cmd\n";
         `$cmd`;
         #push(@tlmreceived, $errfilename); #we will ack it in the .asf
@@ -2033,24 +2114,24 @@ sub socget {
     if(!$tlmfile || $tlmfile eq "00000000000000000000000000000000000000000000000") {
       print LOG "\n*  **ERROR: No TLM_FILE_NAME= in $file\n";
       print LOG "  The .tlm file will not be processed.\n";
-      $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
+      $cmd = "mv -f $ffile $DIRREJECT";      #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
       #there might be a .tlm file anyway so move it too
       $pos = rindex($file, '.');
       $part = substr($file, 0, $pos);
       $tlmfile = "$part".".tlm";
-      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";
+      $cmd = "mv -f $ttlmfile $DIRREJECT";
       print LOG "$cmd\n";
       `$cmd`;
       next;
     }
     else {
-      $ftlm = "$DIRDDS2SOC/$tlmfile";
+      $ftlm = "$ttlmfile";
       if(!-e $ftlm) {
         print LOG "\n*  **ERROR: Missing $tlmfile\n";
         print LOG "  Retransmission request will be made.\n";
-        $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";    #reject the .qac file
+        $cmd = "mv -f $ffile $DIRREJECT";    #reject the .qac file
         print LOG "$cmd\n";
         `$cmd`;
         $rexmitname = $tlmfile;
@@ -2068,10 +2149,10 @@ sub socget {
     if(!$tlmsize) {
       print LOG "*  **ERROR: No TLM_FILE_SIZE= in $file\n";
       print LOG "  Retransmission request will be made.\n";
-      $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
+      $cmd = "mv -f $ffile $DIRREJECT";      #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
-      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";   #and the .tlm file
+      $cmd = "mv -f $ttlmfile $DIRREJECT";   #and the .tlm file
       print LOG "$cmd\n";
       `$cmd`;
       $rexmitname = $tlmfile;
@@ -2082,10 +2163,10 @@ sub socget {
         print LOG "*  **ERROR: Incorrect tlm size $tlmfile\n";
         print LOG "*  size expect=$tlmsize, got=$getsize\n";
         print LOG "  Retransmission request will be made.\n";
-        $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";    #reject the .qac file
+        $cmd = "mv -f $ffile $DIRREJECT";    #reject the .qac file
         print LOG "$cmd\n";
         `$cmd`;
-        $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT"; #and the .tlm file
+        $cmd = "mv -f $ttlmfile $DIRREJECT"; #and the .tlm file
         print LOG "$cmd\n";
         `$cmd`;
         $rexmitname = $tlmfile;
@@ -2095,10 +2176,10 @@ sub socget {
     if(($tlmfingerprint ne $md5tlm) && $sizeok) {
       print LOG "*  **ERROR: TLM_FILE_FINGER_PRINT not verified\n";
       print LOG "  Retransmission request will be made.\n";
-      $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
+      $cmd = "mv -f $ffile $DIRREJECT";      #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
-      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";   #and the .tlm file
+      $cmd = "mv -f $ttlmfile $DIRREJECT";   #and the .tlm file
       print LOG "$cmd\n";
       `$cmd`;
       $rexmitname = $tlmfile;
@@ -2107,10 +2188,10 @@ sub socget {
     if(($eofmarker ne "C5C5") && $sizeok) {
       print LOG "*  **ERROR: No EOF_MARKER tag in $file\n";
       print LOG "  Retransmission request will be made.\n";
-      $cmd = "mv -f $DIRDDS2SOC/$file $DIRREJECT";      #reject the .qac file
+      $cmd = "mv -f $ffile $DIRREJECT";      #reject the .qac file
       print LOG "$cmd\n";
       `$cmd`;
-      $cmd = "mv -f $DIRDDS2SOC/$tlmfile $DIRREJECT";   #and the .tlm file
+      $cmd = "mv -f $ttlmfile $DIRREJECT";   #and the .tlm file
       print LOG "$cmd\n";
       `$cmd`;
       $rexmitname = $tlmfile;
@@ -2125,7 +2206,7 @@ sub socget {
       #push(@tlmreceived, $tlmfile);
       $Hoftlmreceived{$tlmfile} = 1;
       $qacx = 0;
-      if(grep(/$tlmfile/, @xmitpend)) {		#this is a rexmission
+      if($k == 1) {				#this is a rexmission
         $qacx = 1;
         @tmppend = ();
         while($x = shift(@xmitpend)) {		#remove from list
@@ -2147,9 +2228,9 @@ sub socget {
       #`$cmd`;
       if($qacx) {
         $filex = $file."x";			   #make this a .qacx file 
-        $cmd = "mv -f $DIRDDS2SOC/$file $DIRSOC2SOC/$filex";
+        $cmd = "mv -f $ffile $DIRSOC2SOC/$filex";
       } else {
-        $cmd = "mv -f $DIRDDS2SOC/$file $DIRSOC2SOC"; #and the good .qac file
+        $cmd = "mv -f $ffile $DIRSOC2SOC"; #and the good .qac file
       }
       print LOG "  $cmd\n";
       `$cmd`;
@@ -2158,6 +2239,7 @@ sub socget {
       &Sched_ingest;		#schedule the ingest processing
     }
   }
+}
   #Now process any .dsf files and send a proper .dsf file to the pipeline
   #backend system and reply to the DDS with an .asf file.
   while($dsffile = shift(@dsffiles)) {
@@ -2204,7 +2286,6 @@ sub socget {
         chomp($lstat);
       }
       if($lstat == 1) {
-        #if(grep(/$lfile/, @tlmreceived)) {      #send back positive ack
   	if($Hoftlmreceived{$lfile}) {           #send back positive ack
           print ASF "FILE_NAME=$lfile\nSTATUS=3\n";
           print DSFPIPE "FILE_NAME=$lfile\nSTATUS=$lstat\n"; #for pipe .dsf
@@ -2321,22 +2402,24 @@ sub Sched_ingest {
       &Exit_sub;
     }
   }
-  if($pid000 == -1) {
-    if($pid000 = fork) {
-      #This is the parent. The child's pid is in $pid000
-      print LOG "          \n"; 	#!!don't lose first few chars on line??
-      print LOG "fork ingest processing pid=$pid000 for $tlmfile.\n";
-    } elsif (defined $pid000) {   # $pid000 is zero here if defined.
-        print "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
-        print LOG "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
-        exec "soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec";
-    }  else {
-      #fork error
-      print "!!Abort: Can't fork: $!\n";
-      #exit(1);
-      &Exit_sub;
-    }
-  }
+#04Sep08 No longer need soc_pipe_scp. The $DIRSOC2PIPE is now NFS on the
+#backend pipeline machine (cl1n001 for now).
+#  if($pid000 == -1) {
+#    if($pid000 = fork) {
+#      #This is the parent. The child's pid is in $pid000
+#      print LOG "          \n"; 	#!!don't lose first few chars on line??
+#      print LOG "fork ingest processing pid=$pid000 for $tlmfile.\n";
+#    } elsif (defined $pid000) {   # $pid000 is zero here if defined.
+#        print "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
+#        print LOG "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
+#        exec "soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec";
+#    }  else {
+#      #fork error
+#      print "!!Abort: Can't fork: $!\n";
+#      #exit(1);
+#      &Exit_sub;
+#    }
+#  }
 }
 
 #Called from the Display log button on the top level pages.
