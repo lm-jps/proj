@@ -388,6 +388,9 @@ sub Submit_b
     $cmd = "/bin/mkdir -p $DIRPIPE2SOC";
     print LOG "$cmd\n";
     `$cmd`;
+    $cmd = "/bin/mkdir -p $DIRPIPE2SOC/err";
+    print LOG "$cmd\n";
+    `$cmd`;
     $cmd = "/bin/rm -rf $DIRREJECT";
     print LOG "$cmd\n";
     `$cmd`;
@@ -2079,7 +2082,7 @@ for($k = 0; $k < 2; $k++) {
 
         #the err file will be acked in the asf when it is rexmited
   	#if change the above so don't ask for an err file rexmit the do this:
-  	#$Hoftlmreceived{$errfilename} = 1; #we will ack it in the .asf
+  	$Hoftlmreceived{$errfilename} = 1; #we will ack it in the .asf
 
         if(!$tlmfile || $tlmfile eq "00000000000000000000000000000000000000000000000")  {
           $cmd = "mv -f $ffile $DIRREJECT";  #reject the .qac file
