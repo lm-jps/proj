@@ -587,6 +587,9 @@ int fsn_change_normal()
       Img->npackets = drms_getkey_int(rs, "NPACKETS", &rstatus);
       Img->nerrors = drms_getkey_int(rs, "NERRORS", &rstatus);
       Img->last_pix_err = drms_getkey_int(rs, "EOIERROR", &rstatus);
+      TIME fpt = drms_getkey_double(rs, "IMGFPT", &rstatus);
+      TIME sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
+      Img->first_packet_time = round(65536.0*(fpt - sdo_epoch));
       snprintf(oldtlmdsnam, 128, "%s", drms_getkey_string(rs, "TLMDSNAM",&rstatus));
       cptr = strstr(oldtlmdsnam, "VC");
       if(cptr) 
@@ -724,6 +727,9 @@ int fsn_change_rexmit()
     ImgO->npackets = drms_getkey_int(rsc, "NPACKETS", &rstatus);
     ImgO->nerrors = drms_getkey_int(rsc, "NERRORS", &rstatus);
     ImgO->last_pix_err = drms_getkey_int(rsc, "EOIERROR", &rstatus);
+    TIME fpt = drms_getkey_double(rsc, "IMGFPT", &rstatus);
+    TIME sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
+    ImgO->first_packet_time = round(65536.0*(fpt - sdo_epoch));
     snprintf(oldtlmdsnam, 128, "%s", drms_getkey_string(rsc, "TLMDSNAM",&rstatus));
     cptr = strstr(oldtlmdsnam, "VC");
     if(cptr) 
@@ -1315,7 +1321,10 @@ void setup()
     sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
     sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMI);
   }
-  printk("tlmseriesname=%s\nlev0seriesname=%s\n", tlmseriesname, lev0seriesname);
+  if(!restartflg) {
+    printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
+		tlmseriesname, lev0seriesname);
+  }
   umask(002);			// allow group write 
   Image.initialized = 0;	// init the two image structures 
   ImageOld.initialized = 0;
