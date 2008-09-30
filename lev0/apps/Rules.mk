@@ -13,17 +13,17 @@ xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
 #yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 
 #SUMEXE_$(d)	:= $(addprefix $(d)/, ingest_lev0)
-SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(test0_$(d)) 
+SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(test0_$(d))
 CEXE_$(d)       := $(addprefix $(d)/, fix_hmi_config_file_date)
 CEXE		:= $(CEXE) $(CEXE_$(d))
-MODEXESUMS	:= $(MODEXESUMS) $(SUMEXE_$(d))
+MODEXESUMS	:= $(MODEXESUMS) $(SUMEXE_$(d)) $(PEEXE_$(d))
 
 MODEXE_$(d)	:= $(addprefix $(d)/, convert_fds extract_fds_statev)
 MODEXEDR_$(d)	:= $(addprefix $(d)/, hmi_import_egse_lev0 aia_import_egse_lev0)
 MODEXE_USEF_$(d)	:= $(addprefix $(d)/, getorbitinfo)
 MODEXE_USEF 	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 MODEXEDR	:= $(MODEXEDR) $(MODEXEDR_$(d))
-MODEXE		:= $(MODEXE) $(SUMEXE_$(d)) $(MODEXE_$(d)) $(MODEXEDR_$(d))
+MODEXE		:= $(MODEXE) $(SUMEXE_$(d)) $(MODEXE_$(d)) $(MODEXEDR_$(d)) $(PEEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock) $(MODEXEDR_$(d):%=%_sock)
 MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
@@ -53,6 +53,7 @@ $(xingestlev0_$(d)):	$(ingestlev0_obj_$(d))
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng
+$(PEEXE_$(d)):		LL_TGT := -lecpg -lpq 
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)):	$(LIBASTRO)
 

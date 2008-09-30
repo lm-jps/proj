@@ -1,5 +1,5 @@
 #!/usr/bin/perl 
-#/home/production/cvs/JSOC/proj/lev0/apps/doingestlev0.pl
+#/home/production/cvs/JSOC/proj/lev0/apps/start_lev0.pl
 #Start up the four ingest_lev0 programs and periodically cause them
 #to exit and then restart them.
 #
@@ -11,8 +11,7 @@ if($user ne "388") {
 $host = `hostname`;
 if(!($host =~ /cl1n001/)) {
   print "This can only be run on the cl1n001 pipeline machine.\n";
-print "!!!TEMP in exception mode!!!\n";
-  #exit;
+  exit;
 }
 @vcnames = ("VC01", "VC04", "VC02", "VC05"); #primary channels
 $ldate = &labeldate();
@@ -46,10 +45,10 @@ if(system($rmcmd3)) {
 }
 
 #Now do the initial start of the 4 ingest_lev0
-$cmd0 = "ingest_lev0  vc=@vcnames[0] indir=/dds/socdc/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
-$cmd1 = "ingest_lev0  vc=@vcnames[1] indir=/dds/socdc/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
-$cmd2 = "ingest_lev0  vc=@vcnames[2] indir=/dds/socdc/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
-$cmd3 = "ingest_lev0  vc=@vcnames[3] indir=/dds/socdc/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
+$cmd0 = "ingest_lev0  vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
+$cmd1 = "ingest_lev0  vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
+$cmd2 = "ingest_lev0  vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
+$cmd3 = "ingest_lev0  vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
 print "$cmd0\n";
 if(system($cmd0)) {
   print "Failed: $cmd0\n";
@@ -66,6 +65,9 @@ print "$cmd3\n";
 if(system($cmd3)) {
   print "Failed: $cmd3\n";
 }
+
+#$SIG{INT} = \&catchc;
+#$SIG{INT} = 'IGNORE';
 
 while(1) {
   sleep 3600;		#run ingest_lev0 for this long
@@ -90,25 +92,25 @@ while(1) {
     }
     if(!$found) { last; }
   }
-  sleep(10);			#make sure previous commit to db is done
+  sleep(5);			#make sure previous commit to db is done
 
       `$rmcmd0`;
-      $cmd = "ingest_lev0 -r vc=@vcnames[0] indir=/dds/socdc/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
+      $cmd = "ingest_lev0 -r vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
       `$rmcmd1`;
-      $cmd = "ingest_lev0 -r vc=@vcnames[1] indir=/dds/socdc/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
+      $cmd = "ingest_lev0 -r vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
       `$rmcmd2`;
-      $cmd = "ingest_lev0 -r vc=@vcnames[2] indir=/dds/socdc/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
+      $cmd = "ingest_lev0 -r vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
       `$rmcmd3`;
-      $cmd = "ingest_lev0 -r vc=@vcnames[3] indir=/dds/socdc/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
+      $cmd = "ingest_lev0 -r vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }

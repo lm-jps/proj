@@ -48,9 +48,9 @@
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
-#define LEV0SERIESNAMEHMI "su_production.lev0_test"
+#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
 #define TLMSERIESNAMEHMI "su_production.tlm_test"
-#define LEV0SERIESNAMEAIA "su_production.lev0_test_aia"
+#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
 #define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
@@ -64,6 +64,7 @@
 //#define LEV0SERIESNAMEAIA "aia.lev0"
 //#define LEV0SERIESNAMEAIA "aia.lev0a"
 //#define TLMSERIESNAMEAIA "aia.tlm"
+
 //#define LEV0SERIESNAMEAIA "aia.lev0d"
 //#define TLMSERIESNAMEAIA "aia.tlmd"
 //#define LEV0SERIESNAMEHMI "hmi.lev0d"
@@ -75,7 +76,7 @@
 //setenv HK_JSVNMAP_DIRECTORY              /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod
 
 
-#define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
+#define H0LOGFILE "/usr/local/logs/lev0/xingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 8192		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
@@ -220,7 +221,7 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
-    printf ("Usage:\ningest_lev0 [-vh] "
+    printf ("Usage:\nxingest_lev0 [-vh] "
 	"vc=<virt chan> indir=</dir> [outdir=</dir>] [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
@@ -462,7 +463,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 void abortit(int stat)
 {
   printk("***Abort in progress ...\n");
-  printk("**Exit ingest_lev0 w/ status = %d\n", stat);
+  printk("**Exit xingest_lev0 w/ status = %d\n", stat);
   if (h0logfp) fclose(h0logfp);
   exit(stat);
 }
@@ -1015,6 +1016,7 @@ int get_tlm(char *file, int rexmit, int higherver)
           break;
         case ERROR_NODATA:
           printk("decode_next_hk_vcdu() ret:Warning:ERROR_NODATA\n");
+          break;
         case ERROR_HK_ENVIRONMENT_VARS_NOT_SET:
           printk("decode_next_hk_vcdu() ret:ERROR:ERROR_HK_ENVIRONMENT_VARS_NOT_SET\n");
            break;
@@ -1132,7 +1134,7 @@ void do_ingest()
       free(nameptr[j].name);
       continue;
     }
-    // NOTE: the qac file is already verified by the caller of ingest_lev0 
+    // NOTE: the qac file is already verified by the caller of xingest_lev0 
     while(fgets(line, 256, fp)) {	// get qac file lines 
       if(line[0] == '#' || line[0] == '\n') continue;
       if(strstr(line, "TLM_FILE_NAME=")) {
@@ -1249,7 +1251,7 @@ void setup()
   printk("%s\n", datestr);
   getcwd(cwdbuf, 126);
   sprintf(idstr, "Cwd: %s\nCall: ", cwdbuf);
-  sprintf(string, "ingest_lev0 started as pid=%d user=%s\n", getpid(), username);
+  sprintf(string, "xingest_lev0 started as pid=%d user=%s\n", getpid(), username);
   strcat(idstr, string);
   printk("*%s", idstr);
   if(restartflg) printk("-r ");
@@ -1264,6 +1266,8 @@ void setup()
   }
   strcpy(pchan, vc);		// virtual channel primary 
   sprintf(stopfile, "/usr/local/logs/lev0/%s_stop", pchan);
+  sprintf(string, "/bin/rm -f %s", stopfile);	//remove any stop file
+  system(string);
   for(i=0; ; i++) {		// ck for valid and get redundant chan 
     if(!strcmp(p_r_chan_pairs[i].pchan, pchan)) {
       strcpy(rchan, p_r_chan_pairs[i].rchan);
@@ -1374,7 +1378,7 @@ int DoIt(void)
 /************************NOOP this out for now********************************
     if(sigalrmflg) {		// process an alarm timout for no data in
       sigalrmflg = 0;
-      td_destroyalarm(&talarm);
+      td_destroyalarm(&talarm, &mutex);
       gettimeofday(&tv0, NULL);
       if (td_createalarm(ALRMSEC, shandler, &mutex, &talarm)) { 
         pthread_mutex_destroy(&mutex);
