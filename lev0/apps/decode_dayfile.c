@@ -1,5 +1,5 @@
 /*############################################################################
-# Name:        decode_dayfile.c - Decode Dayfile                             #
+# Name:        decode_dayfile.c - Decode Dayfiles                            #
 # Description: Decode dayfile decodes hk packet by sending packet to         #
 #              functions in decode_hk.c file. Keywords are decoded using the #
 #              the same functions that decodes hk keywords on high speed bus.#
@@ -30,6 +30,46 @@
 # Date:        Move from EGSE to JSOC software environment on April 10, 2008 #
 ############################################################################*/
 
+/* doxygen
+   @defgroup    decode_dayfile  decode_dayfile     
+
+   @code
+   Decode dayfile decodes hk packet by sending packet to functions in 
+   decode_hk.c file. Keywords are decoded using the the same functions that 
+   decodes hk keywords on high speed bus. This decode_dayfiles loops through 
+   all hk packets and sends data to be decoded to decode_hk.c and write data 
+   to DRMS data series based on apid, project name, data type name, and jsoc 
+   version number.When run without out parameter this code looks  up name of 
+   data series name to put keyword names and values in.
+   @endcode
+
+   @par Synopsis:
+   @code
+   decode_dayfile [-p] in=<day filename> [ out=<data series name> ] 
+   @endcode
+
+   @par Flags:
+   @c -p: Prints report on each packets keyword name and value to standout out
+   @par
+
+   @param in
+   The full path and input day file name(required field).
+
+   @param out
+   The data series name to write keyword names and values to(optional).
+   Normally do not run with this option.If not present, the code will
+   automatically create data series name using the apid and packet 
+   version number(for hmi and aia packets) in packets or packet time
+   for sdo packets in day files.  Also required to set environment 
+   variables for project names and data identifer name: 
+   HK_DDF_PROJECT_NAME_xxx & HK_DDF_DATA_ID_NAME. Need data series 
+   already created for this to program to load keywords in data series.
+*/
+    
+
+
+/*  @{ */
+/* Defined constants */
 /******************** defines ***********************************************/
 #define HKDDF_CNTRL_L            ""
 #define HKDDF_MAXLINE_IN_FILE    200
@@ -46,7 +86,7 @@
 #define HKDDF_MAX_VERSION_LINES  1000
 #define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
 /* carl local test version:#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
-
+/* @} */
 /******************** includes ******************************************/
 #include <stdio.h>
 #include <stdlib.h>
