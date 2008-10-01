@@ -479,7 +479,7 @@ __DECOMPRESS_FAILURE__:
 
     ++img->nerrors;
     u = offset + ndecoded;
-    if (u < img->totalvals && u > img->totalvals - 3) {
+    if (u < img->totalvals && u > img->totalvals - 4) {
 	img->last_pix_err = 1;
 	img->datavals += ndecoded;
 	++img->npackets;
