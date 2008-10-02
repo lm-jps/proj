@@ -783,6 +783,7 @@ void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out
       }
       /* if passed two tests above, then set packet version number */
       sprintf(packet_version_number,"%03d.%03d",*(read_in_buffer+14+factor), *(read_in_buffer+15+factor));
+      strcat(packet_version_number,"\0");/*added 10-2-2008*/
     }
 
     /* Extract hk packets - initialize array with zeros */
@@ -1136,6 +1137,8 @@ void  save_packet_values2(unsigned char *read_in_buffer, char projname[HKDDF_MAX
       }
       /* if passed two tests above, then set packet version number */
       sprintf(packet_version_number,"%03d.%03d",*(read_in_buffer+14+factor), *(read_in_buffer+15+factor));
+      strcat(packet_version_number,"\0");/*added 10-2-2008*/
+
     }
 
     /* Extract hk packets - initialize array with zeros */
@@ -1175,11 +1178,16 @@ void  save_packet_values2(unsigned char *read_in_buffer, char projname[HKDDF_MAX
       /* get file version number for ADP apid */
       ptr_fvn=find_fvn_from_shcids(global_shcids_vn, pkt_date, apid);
     }
+    else
+    {
+      /* get fvn for hk apids add 10-2-2008*/
+      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number); /*added 10-2-2008*/
+    }
+    strcpy(file_version_number,ptr_fvn);/*move to here -10-2-2008*/
 
     /* get data name by automatically creating JSVN value based on */
     /* packet version number                                       */
     count = load_ds_names(get_ds_pjname(apid,projname), didn, apid);
-    strcpy(file_version_number,ptr_fvn);
     dname = lookup_dsn( apid, packet_version_number, file_version_number, count);
     strcpy(data_seriesname, dname);
 
@@ -1537,6 +1545,7 @@ void save_packet_values1(unsigned char *read_in_buffer, char *out)
       }
       /* if passed two tests above, then set packet version number */
       sprintf(packet_version_number,"%03d.%03d",*(read_in_buffer+14+factor), *(read_in_buffer+15+factor));
+      strcat(packet_version_number,"\0");/*added 10-2-2008*/
     }
 
      /* Extract hk packets - initialize array with zeros */
