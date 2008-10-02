@@ -2,7 +2,7 @@
 <HTML>
 <HEAD>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; CHARSET=iso-8859-1">
-<TITLE>JSOC Show_info: alt show_info</TITLE>
+<TITLE>JSOC Lookdata</TITLE>
 <SCRIPT TYPE="text/javascript" SRC="prototype-1.6.0.2.js"></SCRIPT>
 
 <style type="text/css">
@@ -17,16 +17,19 @@
 #FullInfoDiv { position:relative; margin:5px; }
 #FullDisplayInfoDiv { position:relative; margin:5px; }
 
-#SeriesSelect { width:20em; }
+#SeriesSelect { width:40em; }
 #KeysSelect { width:20em; }
 #SegsSelect { width:20em; }
 #SeriesFilter { width:20em; }
-#RecordSet { width:30em; }
+#RecordSet { width:30em; font-size:100%; }
 #SeriesButton { width:15em; }
 
+#InfoTable { border-spacing:1px; white-space:nowrap; }
+td {padding:2px; }
 </style>
  
 <script type="text/javascript">
+// #ExportRequestDiv { position:relative; margin:5px; }
 
 // 
 // Documents for the server side tools can be found at
@@ -53,9 +56,12 @@ var ExportUserOK = 0;
 var ExportNotifyOK = 0;
 var ExportReadyOK = 0;
 
+var GetSeriesObject;
+var GetValuesObject;
+
 function InitPage()
   {
-  $("SeriesFilter").value = "^[^d][^s][^d][^s][^\.]";
+  $("SeriesFilter").value = "NOT ^dsds\\.";
   CleanSeriesSelect();
   ExportUserOK = 0;
   ExportNotifyOK = 0;
@@ -67,6 +73,8 @@ function InitPage()
   $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  // AbortGetKeyValues(); ---- do not do this here!!
+  // GetSeriesAbort(); ---- do not do this here!!
   }
 
 
@@ -93,10 +101,14 @@ function CleanSeriesInfo()
   $("ExportButton").value = "Submit Export Request";
   $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
   $("ExportButton").style.backgroundColor = "#D8D8D8";
+  $("SeriesButton").disabled = false;
+  $("FetchKeyValsButton").disabled = false;
+  $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
+  $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
   $("Series_Info_Place").innerHTML = "";
   $("Series_Name_Place").innerHTML = "";
   $("FirstLastPlace").innerHTML = "";
-  $("SeriesCountPlace").innerHTML = "&nbsp;0";
+  $("SeriesCountPlace").innerHTML = "<I>TBD</I>";
   CleanSeriesPick();
   }
 
@@ -114,7 +126,7 @@ function CleanSeriesPick()
   nkeysselected = 0;
   nsegsselected = 0;
   askedCount = 0;
-  $("WantRecInfo").checked = 0;
+  $("WantRecInfo").checked = 1;
   $("RecSetPlace").innerHTML = "";
   CleanKeysSelect();
   }
@@ -122,24 +134,65 @@ function CleanSeriesPick()
 function CleanKeysSelect()
   {
   KeyValsFetched = 0;
-  $("FetchKeyValsButton").style.backgroundColor = "#D8D8D8";
   for (var i=$("KeysSelect").length; i > 0; i--)
     $("KeysSelect").remove(i-1);
   for (var i=$("SegsSelect").length; i > 0; i--)
     $("SegsSelect").remove(i-1);
-  $("WantRecInfo").checked = 0;
+  $("WantRecInfo").checked = 1;
   $("DisplayPlace").innerHTML = "";
   $("SegListPlace").innerHTML = "";
   $("KeyListPlace").innerHTML = "";
   KeyList =  "";
   SegList =  "";
+  CleanOnLoad();
   }
 
-function insertOption(list,text)
+function CleanOnLoad()
+  {
+  $("AbortGetSeriesButton").hide();
+  $("AbortKeyValsButton").hide();
+  $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
+  $("SeriesButton").style.backgroundColor = "#FFFF80";
+  $("SeriesDiv").style.display="block";
+  $("SeriesDivButton").style.backgroundColor = "FFD8D8";
+  $("FullInfoDiv").style.display="block";
+  $("FullInfoDivButton").style.backgroundColor = "FFD8D8";
+  $("ExportRequestDiv").style.display="none";
+  $("ExportRequestDivButton").style.backgroundColor = "D8FFD8";
+  }
+
+// Hide and show DIVs on button click.
+// Arg is div id.
+// Button id should be div id with suffix of "Button"
+
+function ToggleSectionDiv(divname)
+  {
+  var button = $(divname + "Button");
+  var div = $(divname);
+  if (div.style.display == "block")
+    {
+    button.style.backgroundColor = "D8FFD8";
+    button.value = "Show Section";
+    div.style.display="none";
+    }
+  else
+    {
+    button.style.backgroundColor = "FFD8D8";
+    button.value = "Hide Section";
+    div.style.display="block";
+    }
+  }
+
+
+function insertOption(list,text,note)
   {
   var y=document.createElement('option');
-  y.text=text;
-  var x=document.getElementById(list);
+  y.value=text;
+  if (note.length)
+    y.text = text + "  --- " + note;
+  else
+    y.text = text;
+  var x = $(list);
   try
     {
     x.add(y,null); // standards compliant
@@ -150,35 +203,76 @@ function insertOption(list,text)
     }
   }
 
+var myGlobalHandlers = {
+	onCreate: function()
+	  {
+          $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+          Element.show('systemWorking');
+          },
+	onComplete: function()
+          {
+          if(Ajax.activeRequestCount == 0)
+            {
+            $("AjaxBusy").innerHTML = "0";
+	    Element.hide('systemWorking');
+            }
+          }
+};
+
+Ajax.Responders.register(myGlobalHandlers);
+
 // Section 1.0 support, Get list of series and build select list for 2.0
+
+function GetSeriesAbort()
+  {
+  if (GetSeriesObject == undefined)
+    {
+    return;
+    }
+  else if (GetSeriesObject.transport.readyState != 4)
+    {
+    GetSeriesObject.transport.abort();
+    $("SeriesButton").style.backgroundColor = "#FFFF80";
+    $("SeriesButton").value = "Fetch seriesname list";
+    $("SeriesButton").disabled = false;
+    $("AbortGetSeriesButton").hide();
+    }
+  }
 
 function GetSeries()
   {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   CleanSeriesInfo();
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/show_series',
+  $("SeriesButton").value = "Processing...";
+  $("SeriesButton").style.backgroundColor = "#FFC8C8";
+  $("SeriesButton").disabled = true;
+  $("AbortGetSeriesButton").show();
+  $("SeriesCountPlace").innerHTML = "<I>wait...</I>";
+  GetSeriesObject = new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/show_series',
     {
     method: 'get',
     parameters: {"filter" : $("SeriesFilter").value },
     onSuccess: function(transport, json)
       {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       SeriesData = response.evalJSON();
       CleanSeriesSelect();
       var n = SeriesData.n;
       for (var i = 0; i < n; i++)
         {
-	insertOption("SeriesSelect",SeriesData.names[i].name);
+	insertOption("SeriesSelect",SeriesData.names[i].name,SeriesData.names[i].note);
         }
       $("SeriesCountPlace").innerHTML = SeriesData.n ;
+      $("SeriesButton").style.backgroundColor = "#FFFF80";
+      $("SeriesButton").value = "Fetch seriesname list";
+      $("SeriesButton").disabled = false;
+      $("AbortGetSeriesButton").hide();
+      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
-    onFailure: function()
-      {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-      alert('Something went wrong...');
-      }
+    onFailure: function() { alert('Something went wrong...'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   }
 
 // Section 2.0 support Select seriesfrom select list made in section 1.0
@@ -186,17 +280,27 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 // Get list of all keywords and segments with supporting info
 // Fetches full list of keywords and segments for display in section 4 and
 // build select lists used in section 4 and 5.
+// If mode==0 then use the SeriesSelect box for the chosen series.
+// else if mode==1 then use the SeriesName variable as is and fetch
+// info and reset all associated references.
+// If mode==2 then the section 3 series name becomes the new SeriesName
+// and info for it will be found and displayed.
 
-function PickSeries()
+function PickSeries(mode)
   {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   CleanSeriesPick();
-  CurrentSeries = $("SeriesSelect").selectedIndex;
-  SeriesName = $("SeriesSelect").options[CurrentSeries].text;
+  if (mode == 0)
+    {
+    CurrentSeries = $("SeriesSelect").selectedIndex;
+    SeriesName = $("SeriesSelect").options[CurrentSeries].value;
+    }
+  if (mode != 2)
+    {
+    $("RecordSet").value = SeriesName;
+    }
   $("Series_Name_Place").innerHTML = SeriesName;
   $("RecSetPlace").innerHTML = SeriesName;
-  $("RecordSet").value = SeriesName;
-  $("Series_Info_Place").innerHTML = "Note: " + SeriesData.names[CurrentSeries].note;
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
   new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
     {
@@ -205,7 +309,7 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 
     onSuccess: function(transport, json)
       {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status == 1)
@@ -216,6 +320,7 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
         }
       else
         {
+        $("Series_Info_Place").innerHTML = "Note: " + data.note;
 	var n = data.primekeys.length;
 	var primes = "No PrimeKeys";
 	if (n > 0) primes = data.primekeys[0];
@@ -232,14 +337,14 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 	n = data.keywords.length;
 	if (n > 0)
 	   {
-	   insertOption("KeysSelect","**NONE**");
-	   insertOption("KeysSelect","**ALL**");
-	   insertOption("KeysSelect","*logdir*");
-	   insertOption("KeysSelect","*recnum*");
-	   keywords = "<table BORDER=1><TR><TD>keyword</TD><TD>type</TD><TD>unit</TD><TD>note</TD>"; 
+	   insertOption("KeysSelect","**NONE**", "");
+	   insertOption("KeysSelect","**ALL**", "");
+	   insertOption("KeysSelect","*logdir*", "");
+	   insertOption("KeysSelect","*recnum*", "");
+	   keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>unit</TH><TH>note</TH>"; 
 	   for (i=0; i<n; i++)
 	      {
-	      insertOption("KeysSelect",data.keywords[i].name);
+	      insertOption("KeysSelect",data.keywords[i].name, "");
 	      keywords = keywords + "<TR><TD>" +
 		data.keywords[i].name + "</TD><TD>" +
 		data.keywords[i].type + "</TD><TD>" +
@@ -253,11 +358,11 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 	if (n > 0)
 	   {
 	   segments = "<table BORDER=1><TR><TD>segment</TD><TD>units</TD><TD>dims</TD><TD>protocol</TD><TD>note</TD>";
-	   insertOption("SegsSelect","**NONE**");
-	   insertOption("SegsSelect","**ALL**");
+	   insertOption("SegsSelect","**NONE**", "");
+	   insertOption("SegsSelect","**ALL**", "");
 	   for (i=0; i<n; i++)
 	      {
-	      insertOption("SegsSelect",data.segments[i].name);
+	      insertOption("SegsSelect",data.segments[i].name, "");
 	      segments = segments + "<TR><TD>" + data.segments[i].name + "</TD><TD>" + data.segments[i].units + "&nbsp;</TD><TD>" +
 		data.segments[i].dims + "&nbsp;</TD><TD>" + data.segments[i].protocol + "</TD><TD>" + data.segments[i].note + "&nbsp;</TD>";
 	      }
@@ -284,13 +389,12 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 	else
 	  $("FirstLastPlace").innerHTML = "This series contains no records";
         }
+      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
-    onFailure: function()
-      {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-      alert('Something went wrong...');
-      }
+    onFailure: function() { alert('Something went wrong...'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   }
 
 // Section 3.0 support - Get record count
@@ -299,7 +403,29 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 
 function GetRSCount()
   {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  var posbracket = $("RecordSet").value.indexOf("[");
+  var posRbracket = $("RecordSet").value.indexOf("]");
+  if (posbracket == -1)
+    {
+    var thisSeriesName = $("RecordSet").value;
+    }
+  else
+    {
+    if (posRbracket == -1)
+      {
+      $("RSCount_Place").innerHTML = "ERROR - missing right bracket - ]";
+      return;
+      }
+    var thisSeriesName = $("RecordSet").value.substr(0,posbracket);
+    }
+  if (thisSeriesName != SeriesName)
+    {
+    $("RSCount_Place").innerHTML = "Getting series information - wait...";
+    SeriesName = thisSeriesName;
+    PickSeries(2);
+    }
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCount_Place").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   askedCount = 1;
@@ -310,7 +436,6 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 
     onSuccess: function(transport, json)
       {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status != 0)
@@ -324,24 +449,21 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 	$("RSCount_Place").innerHTML = data.count;
 	}
       $("ExportRecordSet").innerHTML = $("RecordSet").value;
+      $("RecSetPlace").innerHTML = $("RecordSet").value;
       ExportReadyOK = 0;
       ExportRecordSetOK = 1;
       $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
       $("ExportButton").value = "Submit Export Request";
       $("ExportButton").style.backgroundColor = "#D8D8D8";
+      if (KeyValsFetched == 1)
+        {
+        $("FetchKeyValsButton").value = "Update Keyword Values for RecordSet";
+        $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
+        }
       },
-    onFailure: function()
-      {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-      alert('Something went wrong...');
-      }
+    onFailure: function() { alert('Something went wrong...'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
-  $("RecSetPlace").innerHTML = $("RecordSet").value;
-  if (KeyValsFetched == 1)
-    {
-    $("FetchKeyValsButton").value = "Update Keyword Values for RecordSet";
-    $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
-    }
   }
 
 
@@ -439,9 +561,26 @@ function PickSegs()
 // Uses jsoc_info op=rs_list
 // Places result in table.
 
+function AbortGetKeyValues()
+  {
+  if (GetValuesObject == undefined)
+    {
+    return;
+    }
+  else if (GetValuesObject.transport.readyState != 4)
+    {
+    GetValuesObject.transport.abort();
+    $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
+    $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
+    $("FetchKeyValsButton").disabled = false;
+    $("AbortKeyValsButton").hide();
+    $("DisplayPlace").innerHTML = "Request aborted";
+    }
+  }
+
 function GetKeyValues()
   {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var getparameters = new Hash( {"ds" : $("RecordSet").value, "op" : "rs_list" });
   $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
   if (nkeysselected < 1 && nsegsselected < 1)
@@ -478,26 +617,29 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
     }
   $("FetchKeyValsButton").value = "Processing ...";
   $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  $("FetchKeyValsButton").disabled = true;
+  $("AbortKeyValsButton").show();
+  GetValuesObject = new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
     parameters: getparameters.toObject(),
 
     onSuccess: function(transport, json)
       {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       var valuetable = "";
       if (data.status == 1)
         {
-        $("DisplayPlace").innerHTML = "No Recordset Key Values Found";
-        CleanKeysSelect();
+        $("DisplayPlace").innerHTML = data.error;
+	AbortGetKeyValues();
         }
       else
         {
         $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
-        $("FetchKeyValsButton").style.backgroundColor = "#D8D8D8";
+        $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
+        $("FetchKeyValsButton").disabled = false;
+        $("AbortKeyValsButton").hide();
         KeyValsFetched = 1;
 	var thissegdata = "";
 	nkeys = data.keywords.length;
@@ -505,15 +647,15 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 	nrecs = data.count;
         $("DisplayPlace").innerHTML = "Status = " + data.status + ", Recordset Key Values for " + data.count + " records returned, preparing page ...";
         wantrecinfo = $("WantRecInfo").checked;
-	valuetable = "<TABLE BORDER=1><TR>"
+	valuetable = "<TABLE border=1 id='InfoTable' ><TR>"
 	if (wantrecinfo)
-	  valuetable = valuetable +  "<TD>RecordName</TD><TD>Online</TD>"
+	  valuetable = valuetable +  "<TH>RecordName</TH><TH>Online</TH>"
 	for (ikey=0; ikey < nkeys; ++ikey)
-           valuetable = valuetable + "<TD>" + data.keywords[ikey].name + "</TD>";
+           valuetable = valuetable + "<TH>" + data.keywords[ikey].name + "</TH>";
 	for (iseg=0; iseg < nsegs; ++iseg)
            {
-           valuetable = valuetable + "<TD>segment: " + data.segments[iseg].name + "</TD>";
-           valuetable = valuetable + "<TD>seg_dims: " + data.segments[iseg].name + "</TD>";
+           valuetable = valuetable + "<TH>segment: " + data.segments[iseg].name + "</TH>";
+           valuetable = valuetable + "<TH>seg_dims: " + data.segments[iseg].name + "</TH>";
            }
 	valuetable = valuetable + "</TR>";
 
@@ -554,11 +696,8 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
         $("DisplayPlace").innerHTML =  valuetable + "<BR>";
         }
       },
-    onFailure: function()
-      {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-      alert('Something went wrong...');
-      }
+    onFailure: function() { alert('Something went wrong...'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
   }
 
@@ -566,7 +705,7 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 
 function CreateDataTable(data, valuetable)
   {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   valuetable = "";
   var count = data.count;
   valuetable = "<TABLE BORDER=1>"
@@ -667,7 +806,7 @@ function SetExportNotify()
 
 function GetExport()
   {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   if (ExportReadyOK == 3)
     {
     alert("Processing request, please wait...");
@@ -729,7 +868,7 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
                  		     "process" : $("ExportProcessing").value,
                  		     "requestor" : $("ExportRequestor").value,
                  		     "notify" : $("ExportNotify").value,
- "method" : ($("ExportMethod").value == "url_direct" ? "url_quick" : $("ExportMethod").value),
+                                     "method" : ($("ExportMethod").value == "url_direct" ? "url_quick" : $("ExportMethod").value),
 			 	     "format" : "json",
                  		     "protocol" : $("ExportProtocol").value });
     if (nsegsselected)
@@ -755,7 +894,6 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 
     onSuccess: function(transport, json)
       {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status == 4)
@@ -815,7 +953,7 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 	  else
 	    {
 	    var path = encodeURI("http://jsoc.stanford.edu" + data.dir + "/" + data.data[0].filename);
-doucment.write("<link type=\"application/fits\" href="+path+" />");
+// doucment.write("<link type=\"application/fits\" href="+path+" />");
 // fetch image
             }
           }
@@ -825,14 +963,15 @@ doucment.write("<link type=\"application/fits\" href="+path+" />");
       },
     onFailure: function()
       {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       $("ExportButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
       ExportReadyOK = 0;
       $("ExportButton").value = "FAILURE ...";
       $("ExportButton").style.backgroundColor = "#FFB0B0";
       alert('Something went wrong...');
-      }
+      },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   }
 
 function ClearStatus()
@@ -846,7 +985,7 @@ function ClearStatus()
 
 function GetStatus()
   {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   if ($("StatusRequestID").value.length == 0)
     {
     alert("Enter Status Update RequestID");
@@ -865,7 +1004,6 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
 
     onSuccess: function(transport, json)
       {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status == 4)
@@ -912,108 +1050,114 @@ $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
     onFailure: function()
       {
-$("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       $("StatusButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
       $("StatusButton").value = "FAILURE ...";
       $("StatusButton").style.backgroundColor = "#FFB0B0";
       alert('Something went wrong...');
-      }
+      },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   }
 
 </script>
 
 </HEAD>
 
-<BODY BGCOLOR="#FFFFFF" >
+<BODY BGCOLOR="#FFFFFF" onLoad="CleanOnLoad();" >
 
 <DIV ID="header">
 <IMG src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
   style="vertical-align:middle;height:60" alt="JSOC logo">
 &nbsp;&nbsp;&nbsp;
-<B><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Show Info</big></B>
+<B><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Show Info and Export Requests</big></B>
 &nbsp;&nbsp;&nbsp;
 &nbsp;&nbsp;&nbsp;
 <input type="button" value="reset page" onClick="InitPage();" >
-<br clear=all>
+&nbsp;&nbsp;<span id="AjaxBusy">0</span> Requests Pending
+<span id='systemWorking'>, Loading...</span>
+<!-- <br clear=all> -->
 <HR>
 </DIV> <!-- end DIV header -->
-
+<input id="SeriesDivButton" type="button" value="Hide Section" style="background-color:#FFD8D8" onClick="ToggleSectionDiv('SeriesDiv');" >
+<B>1. Find list of dataseries, and 2. Pick series to use</B>
 <DIV id="SeriesDiv">
-<TABLE style="width:800">
+<TABLE style="width:98%">
 <TR>
-<TD  style="width:20%;vertical-align:top;height:150pt">
-<H3>1. Find list of dataseries</H3>
-Enter the dataseries filter to search for seriesnames, or leave blank to select from all series.
-(A very bad idea now that we have more than 6000 seriesnames.)
+<TD  style="width:50%;vertical-align:top;">
+Enter a dataseries match pattern to search for seriesnames, or leave blank to select from all series.
+(A very bad idea now that we have more than 13000 seriesnames.)
+A leading "NOT " means exclude names matching the subsequent pattern.
 The default filter excludes namespace dsds.
 <P>
-<!-- <form id="SeriesForm" name="SeriesForm" method="GET"  action="" >
--->
-<input id="SeriesFilter" type="text" name="filter" value="" onChange="GetSeries();" >
-<P>
-<input id="SeriesButton" type="button" value="Fetch seriesname list" onClick="GetSeries();" > 
-</form>
+<input id="SeriesFilter" type="text" name="filter" value="NOT ^dsds\." onChange="GetSeries();" >
+<BR>
+<input id="SeriesButton" type="button" value="Fetch seriesname list" style="background-color:#FFFF80" onClick="GetSeries();" > 
+<input id="AbortGetSeriesButton" type="button" value="Abort" style="background-color:#FFD0D0" onClick="GetSeriesAbort();" > 
+<br>
+<span id="SeriesCountPlace" style="background-color:#FFF8DC;width:2em"><I>TBD</I></span>
+Series match this selection filter.
 </TD>
-<TD  style="width:20%;vertical-align:top;height:150pt">
-<H3>2. Pick series to use</H3>
-There are
-<span id="SeriesCountPlace" style="background-color:#FFF8DC;width:2em">&nbsp;0</span>
-Series to choose from.
-<P>
-<form id="SeriesSelectForm" name="SeriesSelectForm" method="GET"  action="" >
-<select id="SeriesSelect" size=8 onclick="PickSeries()"> </select>
-</form>
+<TD  style="width:40%;vertical-align:top;">
+Select data series here.
+<BR>
+<select id="SeriesSelect" size=8 onclick="PickSeries(0)"> </select>
 </TD>
-<TD style="width:60%;vertical-align:top;height:150pt">
+<TD style="width:60%;vertical-align:top;">
+</TR>
+</TABLE>
+</DIV> <!-- /DIV SeriesDiv -->
+<HR>
+<DIV id="MySeriesDiv" >
+<TABLE style="width:98%">
+<TR>
+<TD style="width:20%;vertical-align:top;height:100pt">
 <H3>Information about selected series</H3>
 Current Series is: 
 <span id="Series_Name_Place" style="background-color:#FFF8DC"></span>
-<P>
-<span id="Series_Info_Place" style="background-color:#FFF8DC"></span>
-<P>
-<span id="SSKeysPlace" style="background-color:#FFF8DC;"></span>
-<span id="FirstLastPlace" style="background-color:#FFF8DC"></span>
 <BR>
+<span id="SSKeysPlace" style="background-color:#FFF8DC;"></span>
+</TD>
+<TD style="width:20%;">
+<span id="Series_Info_Place" style="background-color:#FFF8DC"></span>
+</TD>
+<TD  style="width:60%">
+<span id="FirstLastPlace" style="background-color:#FFF8DC"></span>
 </TD>
 </TR>
-</DIV> <!-- /DIV SeriesDiv -->
-
-<DIV id="MySeriesDiv" >
 <TR>
-<TD colspan=2 width=40%>
+<TD colspan=2  style="vertical-align:top;">
 <H3>3. Select Records and Get Record Count</H3>
-Enter RecordSet Specification.
-This request may take a while if the recordset is large<BR>
-Enter RecordSet Spec here
+Enter RecordSet Specification here for keyword listings and for export.
+Request may take a while if the recordset is large (more than a few thousand records).
 <P>
 <input id="RecordSet" type="text" value="" onChange="GetRSCount();" > 
 <P>
-<input type="button" value="GetRecordCount" onClick="GetRSCount();" >
+<input type="button" value="GetRecordCount"  style="background-color:#FFFF80" onClick="GetRSCount();" >
 Record Count:&nbsp;&nbsp;
 <span id="RSCount_Place" style="width:10em;background-color:#FFF8DC"></span>
 </TD>
-<TD rowspan=2 style="width:60%;vertical-align:top;height:300">
+<TD rowspan=2 style="width:60%;vertical-align:top;">
 <H3>List of All Keywords and Segments</H3>
-<DIV id="SeriesInfoDiv" style="border:solid;border-width:thin;height:290;overflow:scroll">
+<DIV id="SeriesInfoDiv" style="border:solid;border-width:thin;height:300;overflow:scroll">
 <span id="SSPlace" style="background-color:#FFF8DC;"></span>
-</DIV> <!-- /DIV SeriesInfoDiv -->
+</DIV>
 </TD>
 </TR>
 <TR>
-<TD width="20%">
+<TD >
 <H3>4. Select Keywords</H3>
 Select Keywords for Detailed Lists
-<P>
+<BR>
 <form id="KeysSelectForm">
-<select id="KeysSelect" size=10 multiple=true onChange="PickKeys();" > </select>
+<select id="KeysSelect" size=8 multiple=true onChange="PickKeys();" > </select>
 </form>
 </TD><TD>
 <H3>5. Select Segments</H3>
 Select Segments for Detailed Lists
-<P>
+<BR>
 <form id="SegsSelectForm">
-<select id="SegsSelect" size=10 multiple=true onChange="PickSegs();"> </select>
+<select id="SegsSelect" size=8 multiple=true onChange="PickSegs();"> </select>
 </form>
 </TD>
 </TR>
@@ -1021,36 +1165,46 @@ Select Segments for Detailed Lists
 </DIV> <!-- id="MySeriesDiv" -->
 <HR>
 
+<input id="FullInfoDivButton" type="button" value="Hide Section" style="background-color:#FFD8D8" onClick="ToggleSectionDiv('FullInfoDiv');" >
+<B>6. Get Keyword and Segment Values Here</B>
+<P>
 <DIV id="FullInfoDiv">
-<H3>6. Get Keyword and Segment Values Here</H3>
 RecordSet Query:&nbsp;
 <span id="RecSetPlace" style="background-color:#FFF8DC;"></span>
-Keywords to Fetch:&nbsp;
+&nbsp; Keywords to Fetch:&nbsp;
 <span id="KeyListPlace" style="background-color:#FFF8DC;"></span>
-<BR>
-Segments to Fetch:&nbsp;
+&nbsp; Segments to Fetch:&nbsp;
 <span id="SegListPlace" style="background-color:#FFF8DC;"></span>
 
 <BR>
 <input type="checkbox" name="Get Record Query" id="WantRecInfo">
-Check to Get Record Query (online status and links if a segment selected)
+Check to Get Record Query and online status and links if a segment selected.
 <BR>
-<input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#D8D8D8" onClick="GetKeyValues();" >
-</DIV> <!-- /DIV FullInfoDiv -->
+<input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
+<input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
 <P>
-<DIV id="FullDisplayInfoDiv" style="border:solid;border-width:thin;height:190;width:800;overflow:scroll">
+<DIV id="FullDisplayInfoDiv" style="border:solid;border-width:thin;height:190;width:98%;overflow:scroll">
 <span id="DisplayPlace" style="background-color:#FFF8DC;"></span>
 </DIV> <!-- /DIV FullDisplayInfoDiv -->
+</DIV> <!-- /DIV FullInfoDiv -->
 <HR>
 
+<input id="ExportRequestDivButton" type="button" value="Show Section" style="background-color:#D8FFD8" onClick="ToggleSectionDiv('ExportRequestDiv');" >
+<B>7. Request Export of Desired Data and Get Status of Prior Requests</B>
+<P>
 <DIV id="ExportRequestDiv">
-<H3>7. Export Desired Data</H3>
 This section can be used to request an export of the RecordSet identified in Section 3 above.
+<p>
 If you wish a subset of possible segment files, specify the desired list in Section 5 above or using the "{<seglist>}" notation
-after the then required closing "]" in the record query.
-It is a good idea to preview the selection in Section 6 before requesting the export.
-If the data is not online the request may take minutes to hours.  If you enter an email address you will be notified
-when the data is ready.  After the request is submitted, you will recieve ON THIS PAGE a "Request_ID" that will be used
+after the then required closing "]" in the record query in section 3 above.  Do not do both.
+<br>
+You may preview the selection in Section 6 before requesting the export.
+If the data is not online the request may take minutes to hours.
+<br>
+If you enter an email address you will be notified
+when the data is ready. 
+<p>
+After the request is submitted, you will recieve ON THIS PAGE a "Request_ID" that will be used
 to access the data when it is ready.  If you do not provide an email address you must save the Request_ID in order to
 access the data.
 <P>
@@ -1062,10 +1216,23 @@ access the data.
 <input id="ExportProcessing" type="text" name="ExportProcessing" value="no_op" onChange="ExportNop();" >
 </TD><TD>Set based on Protocol to no_op for as-is or fullres for FITS.</TR>
 <TR><TD>Protocol</TD><TD>
+<!--
 <input id="ExportProtocol" type="text" name="ExportProtocol" value="as-is" onChange="SetExportProtocol();" >
+-->
+<select id="ExportProtocol" name="ExportProtocol" style="width:15em"  inChange="SetExportProtocol();">
+  <option value="as-is">as-is
+  <option value="FITS">FITS
+</select>
 </TD><TD>Choose protocol, "FITS" or "as-is".</TR>
 <TR><TD>Method</TD><TD>
+<!--
 <input id="ExportMethod" type="text" name="ExportMethod" value="url_quick" onChange="ExportNop();" >
+-->
+<select id="ExportMethod" type="text" name="ExportMethod" style="width:15em" onChange="ExportNop();" >
+  <option value="url_quick">url_quick
+  <option value="url">url
+  <option value="url_direct">url_direct
+</select>
 </TD><TD>Choose method, url, url_quick, or url_direct for now.</TR>
 <TR><TD>Requestor</TD><TD>
 <input id="ExportRequestor" type="text" name="ExportRequestor" value="" onChange="ExportNop();" >
@@ -1091,7 +1258,7 @@ or "none" or "no" if you do not want/need to be notified upon export process com
 </TD></TR>
 </TABLE>
 <HR>
-<H3>8. Check Status of Prior Export Request</H3>
+<B>8. Check Status of Prior Export Request</B>
 <P>
 <TABLE>
 <TR><TD style="width:10em" >RequestID</TD><TD>
@@ -1118,22 +1285,15 @@ or "none" or "no" if you do not want/need to be notified upon export process com
 <span id="StatusDataLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
 </TD></TR>
 </TABLE>
-<P>
-
 </DIV> <!-- id="ExportRequestDiv" -->
-<DIV>
-Next Step Under Constructrion,<P>
-<span id="AjaxBusy">
-</DIV>
-
-<H3> done </H3>
-<DIV id="footer" style="vertical-align:bottom;text-align:center">
 <HR>
+<P style="height:1px">
+<DIV id="footer" style="vertical-align:bottom;text-align:center;">
 <I>Home pages for:</I>
 <A HREF = "http://jsoc.stanford.edu/"><B>SDO-JSOC</B></A>
 <B>|</B>
 <A HREF = "http://sha.stanford.edu/"><B>SHA</B></A>
-<HR></DIV>
+</DIV>
 </BODY>
 </HTML>
 
