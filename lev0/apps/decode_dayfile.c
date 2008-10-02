@@ -30,7 +30,7 @@
 # Date:        Move from EGSE to JSOC software environment on April 10, 2008 #
 ############################################################################*/
 
-/* doxygen
+/**doxygen
    @defgroup    decode_dayfile  decode_dayfile     
 
    @code
@@ -85,7 +85,7 @@
 #define HKDDF_MAX_PVN_STR        10
 #define HKDDF_MAX_VERSION_LINES  1000
 #define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
-/* carl local test version:#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
+/*carl local test version:#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
 /* @} */
 /******************** includes ******************************************/
 #include <stdio.h>
