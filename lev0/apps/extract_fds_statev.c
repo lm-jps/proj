@@ -52,6 +52,9 @@
 #define kSVKey_idHELIO "id_HELIO"
 #define kSVKey_idGEO "id_GEO"
 
+#define gChunkSize 8192
+#define gCacheKeySize 128
+
 ModuleArgs_t module_args[] =
 {
   {ARG_STRING, "ns", kDefaultNamespace, "working namespace (sdo, sdo_ground, sdo_dev)"},
@@ -214,6 +217,7 @@ static void CreateOutSeries(DRMS_Env_t *drmsEnv, char *outSeries, int *status)
 
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "index");
 	    pkey = AddKey(prototype, kIndexKWType, keyname, kIndexKWFormat, "none", kRecScopeType_Index, "index for OBS_DATE", 1);
+            drms_keyword_setimplicit(pkey);
 
 	    /* epoch */
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "epoch");
@@ -342,6 +346,7 @@ static void CreateHistSeries(DRMS_Env_t *drmsEnv, char *histSeries, int *status)
 
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "index");
 	    pkey1 = AddKey(prototype, kIndexKWType, keyname, kIndexKWFormat, "none", kRecScopeType_Index, "index for OBS_DATE", 1);
+            drms_keyword_setimplicit(pkey1);
 
 	    /* epoch */
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "epoch");
@@ -374,23 +379,149 @@ static void CreateHistSeries(DRMS_Env_t *drmsEnv, char *histSeries, int *status)
    }
 }
 
-/* Caller must clean up records by calling drms_close_records() */
-static int FetchRecords(DRMS_Env_t *drmsEnv, char *query, DRMS_RecordSet_t **recordSet, int *nRecs)
+static void CloseCachedRecords(HContainer_t **cache)
 {
-     int error = 0;
+   if (cache && *cache)
+   {
+      DRMS_RecordSet_t *rs = *((DRMS_RecordSet_t **)hcon_lookup(*cache, "bobmould"));
+      drms_close_records(rs, DRMS_FREE_RECORD);
+      rs = NULL;
 
-     *recordSet = drms_open_records(drmsEnv, query, &error);
+      /* destory cache */
+      hcon_destroy(cache);
+   }
+}
 
-     if (error != 0 || recordSet == NULL) 
-     {
-	  printf("drms_open_records failed, recSetQuery=%s, error=%d.  Aborting.\n", query, error);
-     }
-     else
-     {
-	  *nRecs = (*recordSet)->n;
-     }
+/* This uses record-chunking to find the correct record. Assumes records are in increasing time order,
+ * and calls to this function have increaing tbuf */
+/* Caller must clean up records by calling CloseCachedRecords() */
+static int FetchCachedRecord(DRMS_Env_t *drmsEnv, 
+                             char *series, 
+                             char *tbuf, 
+                             HContainer_t **cache,
+                             DRMS_Record_t **recout)
+{
+   int error = 0;
+   DRMS_RecordSet_t *rs = NULL;
+   int stop;
+   int rehydrated;
+   DRMS_Record_t **prec = NULL;
+   DRMS_Record_t *rec = NULL;
+   char *timestr = NULL;
+   int status = DRMS_SUCCESS;
 
-     return error;
+   if (!cache || !recout)
+   {
+      error = 1;
+   }
+   else
+   {
+      *recout = NULL;
+
+      if (*cache == NULL)
+      {
+         drms_recordset_setchunksize(gChunkSize);
+         rs = drms_open_recordset(drmsEnv, series, &status);
+
+         if (status != DRMS_SUCCESS || rs == NULL) 
+         {
+            fprintf(stderr, "drms_open_recordset() failed, query=%s, error=%d.  Aborting.\n", series, error);
+         }
+      }
+      /* attempt to find the record that matches tbuf */
+      else
+      { 
+         /* retrieve saved rs */
+         rs = *((DRMS_RecordSet_t **)hcon_lookup(*cache, "bobmould"));
+
+         if (rs->n > 0)
+         {
+            if ((prec = (DRMS_Record_t **)hcon_lookup(*cache, tbuf)) != NULL)
+            {
+               *recout = *prec;
+            }
+         }
+      }
+
+      if (rs->n > 0)
+      {
+         /* Have to loop on ALL chunks if can't find time in cache */
+         int morerecs = 1;
+         while (!prec && !error && morerecs)
+         {
+            /* either no cache, or cache, but miss - get more records, then try to find tbuf */
+            stop = 0;
+            rehydrated = 0;
+
+            /* must not call fetchnext() if previous call retrieved last rec in chunk, otherwise
+             * fetchnext() will blow away chunk, but the *cache will still point to recs 
+             * in the cache. */
+            while (!stop && (rec = drms_recordset_fetchnext(drmsEnv, rs, &status)) != NULL)
+            {
+               if (status == DRMS_CHUNKS_NEWCHUNK)
+               {
+                  if (*cache)
+                  {
+                     hcon_destroy(cache);
+                  }
+
+                  *cache = hcon_create(sizeof(DRMS_Record_t *), gCacheKeySize, NULL, NULL, NULL, NULL, 0);
+
+                  /* insert recordset */
+                  hcon_insert(*cache, "bobmould", &rs);
+               }
+               else if (status == DRMS_CHUNKS_LASTINCHUNK || status == DRMS_CHUNKS_LASTINRS)
+               {
+                  /* this record was the last in chunk - stop caching */
+                  stop = 1;
+               }
+
+               /* insert, using the obs_date keyword value */
+               timestr = drms_getkey_string(rec, kObsDateKey, &status);
+               if (timestr)
+               {
+                  hcon_insert(*cache, timestr, &rec);
+                  rehydrated = 1;
+               }
+               else
+               {
+                  error = 1;
+                  break;
+               }
+            }
+
+            if (status == DRMS_CHUNKS_NOMORERECS)
+            {
+               morerecs = 0;
+            }
+
+            /* Try to find tbuf again */
+            if (rehydrated)
+            {
+               if ((prec = (DRMS_Record_t **)hcon_lookup(*cache, tbuf)) != NULL)
+               {
+                  *recout = *prec;
+               }
+            }
+         }
+      }
+      else if (*cache == NULL)
+      {
+         *cache = hcon_create(sizeof(DRMS_Record_t *), gCacheKeySize, NULL, NULL, NULL, NULL, 0);
+
+         /* insert recordset */
+         hcon_insert(*cache, "bobmould", &rs);
+      }
+   }
+
+#if DEBUG
+   if (!prec)
+   {
+      fprintf(stderr, "Record for time '%s' not found in series '%s'.\n", tbuf, series);
+   }
+#endif
+
+   return error;
 }
 
 static int ParseSVRecFields(char *recBuf, char **date, double *xVal, double *yVal, double *zVal, 
@@ -759,11 +890,12 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
    {
       char lineBuf[kSVLineMax];
       int oneMore = -1;
-      DRMS_RecordSet_t *rssbox = NULL;
+      DRMS_Record_t *sboxrec = NULL;
       DRMS_RecordSet_t *recSet = NULL;
-      char rsquery[DRMS_MAXQUERYLEN];
-      int nrecs;
       int helioexist;
+      HContainer_t *heliocache = NULL;
+      HContainer_t *orbitcache = NULL;
+      DRMS_Record_t *savrec = NULL;
 
       while (!error && fgets(lineBuf, kSVLineMax, datafp) != NULL)
       {
@@ -801,44 +933,50 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
          TIME od = sscan_time(obsDate);
          char tbuf[128];
          sprint_time(tbuf, od, "UTC", 0);
-         snprintf(rsquery, sizeof(rsquery), "%s[%s]", sbox, tbuf);
-         FetchRecords(drmsEnv, rsquery, &rssbox, &nrecs);
-         if (rssbox && rssbox->n == 1)
+
+#if CHECK_TIME
+         StartTimer(25);
+#endif
+         FetchCachedRecord(drmsEnv, sbox, tbuf, &heliocache, &sboxrec);
+
+#if CHECK_TIME
+         fprintf(stdout, "Time to request one record out of 50K: %f", StopTimer(25));
+#endif
+
+         /* Get heliocentric data */
+         if (sboxrec)
          {
-            DRMS_Record_t *sboxrec = rssbox->records[0]; /* heliocentric */
-
-            /* Get heliocentric data */
-            if (sboxrec)
-            {
-               xValHel = drms_getkey_double(sboxrec, kSVKeyXHELIO, &stat);
-               yValHel = drms_getkey_double(sboxrec, kSVKeyYHELIO, &stat);
-               zValHel = drms_getkey_double(sboxrec, kSVKeyZHELIO, &stat);
-               vxValHel = drms_getkey_double(sboxrec, kSVKeyVxHELIO, &stat);
-               vyValHel = drms_getkey_double(sboxrec, kSVKeyVyHELIO, &stat);
-               vzValHel = drms_getkey_double(sboxrec, kSVKeyVzHELIO, &stat);
-               idHELIOtmp = drms_getkey_string(sboxrec, kSVKey_idHELIO, &stat);
-            }
-
+            xValHel = drms_getkey_double(sboxrec, kSVKeyXHELIO, &stat);
+            yValHel = drms_getkey_double(sboxrec, kSVKeyYHELIO, &stat);
+            zValHel = drms_getkey_double(sboxrec, kSVKeyZHELIO, &stat);
+            vxValHel = drms_getkey_double(sboxrec, kSVKeyVxHELIO, &stat);
+            vyValHel = drms_getkey_double(sboxrec, kSVKeyVyHELIO, &stat);
+            vzValHel = drms_getkey_double(sboxrec, kSVKeyVzHELIO, &stat);
+            idHELIOtmp = drms_getkey_string(sboxrec, kSVKey_idHELIO, &stat);
             helioexist = 1;
-         }
-
-         if (rssbox)
-         {
-            drms_close_records(rssbox, DRMS_FREE_RECORD);
          }
 
          /* Before creating a new output record, check to see if data have changed. 
           * There is GEO input, and there is HELIO input if helioexist == 1. */
          char query[DRMS_MAXQUERYLEN];
          snprintf(query, sizeof(query), "%s[%s]", outSeries, obsDate);
-         DRMS_RecordSet_t *rssav = drms_open_records(drmsEnv, query, &stat);
 
-         if (rssav && rssav->n > 0)
+#if CHECK_TIME
+         StartTimer(25);
+#endif
+         // DRMS_RecordSet_t *rssav = drms_open_records(drmsEnv, query, &stat);
+         /* Use new record-chunking way. */
+         //DRMS_RecordSet_t *rssav = drms_open_recordset(drmsEnv, query, &stat);
+         FetchCachedRecord(drmsEnv, outSeries, tbuf, &orbitcache, &savrec);
+
+#if CHECK_TIME
+         fprintf(stdout, "Time to request one record out of 150K: %f", StopTimer(25));
+#endif
+
+         if (savrec)
          {
             int heliodiff = 0;
             int geodiff = 0;
-
-            DRMS_Record_t *savrec = rssav->records[0];
 
             double xValHelSav = drms_getkey_double(savrec, kSVKeyXHELIO, &stat);
             double yValHelSav = drms_getkey_double(savrec, kSVKeyYHELIO, &stat);
@@ -868,7 +1006,8 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
             if (geodiff && (!helioexist || heliodiff))
             {
-               /* Difference in values exists */                  
+               /* Difference in values exists */
+
                recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
 
                if (!helioexist)
@@ -909,11 +1048,6 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
             recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
          }
 
-         if (rssav)
-         {
-            drms_close_records(rssav, DRMS_FREE_RECORD);
-         }
-
 	 if (recSet != NULL && error == 0)
 	 {
 	    DRMS_Record_t *outrec = recSet->records[0];
@@ -948,7 +1082,14 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
             if (error == 0)
             {
-               error = (drms_close_records(recSet, DRMS_INSERT_RECORD) != DRMS_SUCCESS);
+#if CHECK_TIME
+         StartTimer(25);
+#endif
+         error = (drms_close_records(recSet, DRMS_INSERT_RECORD) != DRMS_SUCCESS);
+
+#if CHECK_TIME
+         fprintf(stdout, "Time to commit one record out of 50K: %f", StopTimer(25));
+#endif
             }
             else
             {
@@ -988,6 +1129,9 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 	 }
 #endif        
       } /* while */
+
+      CloseCachedRecords(&heliocache);
+      CloseCachedRecords(&orbitcache);
 
       fclose(datafp);
       datafp = NULL;

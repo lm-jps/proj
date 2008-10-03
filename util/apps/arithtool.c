@@ -5240,29 +5240,24 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
      int status = 0;
      void *pOutData = NULL;
      char **outSegNames = NULL; 
-     int nInRecs = 0;
      int nSegs = 0;
      DRMS_Type_t actualtype;
 
      /* Open the inSeries. */
-     DRMS_RecordSet_t *inRecSet = drms_open_records(drmsEnv, inSeriesQuery, &status);
+     DRMS_RecordSet_t *inRecSet = drms_open_recordset(drmsEnv, inSeriesQuery, &status);
      DRMS_Record_t *inRec = NULL;
      error = (status != DRMS_SUCCESS);
 
      if (!error)
      {
-	  nInRecs = inRecSet->n;
 	  nSegs = segsToProc->items->num_total;
      }
 
      double *insegBZERO = (double *)malloc(sizeof(double) * nSegs);
      double *insegBSCALE = (double *)malloc(sizeof(double) * nSegs);
 
-     int iRec = 0;
-     for (; !error && iRec < nInRecs; iRec++)
+     while ((inRec = drms_recordset_fetchnext(drmsEnv, inRecSet, &status)) != NULL)
      {
-	  inRec = inRecSet->records[iRec];
-
 	  fprintf(stdout, "Processing record %lld\n", inRec->recnum);
 
 	  hiter_rewind(&(segsToProc->iter));
