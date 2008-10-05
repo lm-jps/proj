@@ -332,7 +332,20 @@ function PickSeries(mode)
 	for (i=1; i<n; i++)
 	    dbindex = dbindex + ", " + data.dbindex[i];
         $("SSKeysPlace").innerHTML = "PrimeKeys: " + primes + "<BR>" +
-                                     "DBindex: " + dbindex + "<P>";
+                                     "DBindex: " + dbindex + "<BR>";
+        if (data.segments.length > 0)
+	  {
+          if (data.archive > 0)
+            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
+		"Data is archived, online retention " + data.retention + " days<BR>";
+	  else
+            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
+		"Data NOT archived, online retention " + data.retention + " days<BR>";
+          $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "Unitsize: " + data.unitsize + " record" +
+	    (data.unitsize > 1 ? "s" : "") + "<P>";
+	  }
+	else
+          $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "No SUMS storage for this series<P>";
 	var keywords = "No keywords";
 	n = data.keywords.length;
 	if (n > 0)
@@ -341,6 +354,7 @@ function PickSeries(mode)
 	   insertOption("KeysSelect","**ALL**", "");
 	   insertOption("KeysSelect","*logdir*", "");
 	   insertOption("KeysSelect","*recnum*", "");
+	   insertOption("KeysSelect","*sunum*", "");
 	   keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>unit</TH><TH>note</TH>"; 
 	   for (i=0; i<n; i++)
 	      {
