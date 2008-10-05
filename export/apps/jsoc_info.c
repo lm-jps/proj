@@ -1,4 +1,3 @@
-#define DEBUG 1
 #define DEBUG 0
 
 /*
@@ -43,6 +42,7 @@ Comma-separated list of keyword names. For each keyword listed,
 information will be displayed. Several special psuedo keyword names
 are accepted.  These are: **ALL** means show all keywords (see show_info -a);
 **NONE** means show no keywords; *recnum* means show the hidden keyword "recnum";
+*sunum* means show the hidden keyword "sunum";
 *logdir* means show the path to the processing log directory; and *dir_mtime* instructs
 jsoc_info to show the last modify time of the record directory in SUMS.
 The results are presented in arrays named "name" and "value".
@@ -69,26 +69,28 @@ show_info
 #include <sys/types.h>
 #include <unistd.h>
 
-static char x2c (char *what) {
-  register char digit;
-
+static char x2c (char *what)
+  {
+  char digit;
   digit = (what[0] >= 'A' ? ((what[0] & 0xdf) - 'A')+10 : (what[0] - '0'));
   digit *= 16;
   digit += (what[1] >= 'A' ? ((what[1] & 0xdf) - 'A')+10 : (what[1] - '0'));
   return (digit);
-}
+  }
 
-static void CGI_unescape_url (char *url) {
-  register int x, y;
-
-  for (x = 0, y = 0; url[y]; ++x, ++y) {
-    if ((url[x] = url[y]) == '%') {
+static void CGI_unescape_url (char *url)
+  {
+  int x, y;
+  for (x = 0, y = 0; url[y]; ++x, ++y)
+    {
+    if ((url[x] = url[y]) == '%')
+      {
       url[x] = x2c (&url[y+1]);
       y += 2;
+      }
     }
-  }
   url[x] = '\0';
-}
+  }
 
 /* drms_record_getlogdir */
 
@@ -204,7 +206,7 @@ int nice_intro ()
 /* find first record in series that owns the given record */
 DRMS_RecordSet_t *drms_find_rec_first(DRMS_Record_t *rec, int wantprime)
   {
-  int iprime, nprime;
+  int nprime;
   int status;
   DRMS_RecordSet_t *rs;
   char query[DRMS_MAXQUERYLEN];
@@ -225,7 +227,7 @@ DRMS_RecordSet_t *drms_find_rec_first(DRMS_Record_t *rec, int wantprime)
 /* find last record in series that owns the given record */
 DRMS_RecordSet_t *drms_find_rec_last(DRMS_Record_t *rec, int wantprime)
   {
-  int iprime, nprime;
+  int nprime;
   int status;
   DRMS_RecordSet_t *rs;
   char query[DRMS_MAXQUERYLEN];
@@ -286,22 +288,35 @@ static void list_series_info(DRMS_Record_t *rec, json_t *jroot)
   DRMS_Segment_t *seg;
   DRMS_Link_t *link;
   HIterator_t hit;
-  int iprime;
+  char intstring[100];
   char *notework;
+  json_t *indexarray, *primearray, *keyarray, *segarray, *linkarray;
+  int npkeys;
 
-if (DEBUG) fprintf(stderr,"   starting Primekeys\n");
+  /* add description from seriesinfo */
+  notework = string_to_json(rec->seriesinfo->description);
+  json_insert_pair_into_object(jroot, "note", json_new_string(notework));
+  free(notework);
+  /* add retention, unitsize, archive, and tapegroup integers */
+  sprintf(intstring, "%d", rec->seriesinfo->retention);
+  json_insert_pair_into_object(jroot, "retention", json_new_number(intstring));
+  sprintf(intstring, "%d", rec->seriesinfo->unitsize);
+  json_insert_pair_into_object(jroot, "unitsize", json_new_number(intstring));
+  sprintf(intstring, "%d", rec->seriesinfo->archive);
+  json_insert_pair_into_object(jroot, "archive", json_new_number(intstring));
+  sprintf(intstring, "%d", rec->seriesinfo->tapegroup);
+  json_insert_pair_into_object(jroot, "tapegroup", json_new_number(intstring));
+  
   /* show the prime index keywords */
-  json_t *primekeys = json_new_string("primekeys");
-  json_t *primearray = json_new_array();
-  int npkeys = rec->seriesinfo->pidx_num;
+  primearray = json_new_array();
+  npkeys = rec->seriesinfo->pidx_num;
   if (npkeys > 0)
     {
     int i;
     for (i=0; i<npkeys; i++)
         {
-        DRMS_Keyword_t *skey, *pkey;
-	int status;
-        skey = pkey = rec->seriesinfo->pidx_keywords[i];
+        DRMS_Keyword_t *pkey;
+        pkey = rec->seriesinfo->pidx_keywords[i];
 	if (pkey->info->recscope > 1)
             pkey = drms_keyword_slotfromindex(pkey);
         json_insert_child(primearray, json_new_string(pkey->info->name));
@@ -309,18 +324,10 @@ if (DEBUG) fprintf(stderr,"   starting Primekeys\n");
     }
   else
     json_insert_child(primearray, json_new_null());
-  json_insert_child(primekeys, primearray);
-  json_insert_child(jroot,primekeys);
+  json_insert_pair_into_object(jroot, "primekeys", primearray);
  
-  /* add description from seriesinfo */
-  notework = string_to_json(rec->seriesinfo->description);
-  json_insert_pair_into_object(jroot, "note", json_new_string(notework));
-  free(notework);
-
-if (DEBUG) fprintf(stderr,"   starting DBindex\n");
   /* show DB index keywords */
-  json_t *dbindex = json_new_string("dbindex");
-  json_t *indexarray = json_new_array();
+  indexarray = json_new_array();
   if (rec->seriesinfo->dbidx_num > 0)
     {
     int i;
@@ -329,13 +336,11 @@ if (DEBUG) fprintf(stderr,"   starting DBindex\n");
     }
   else
     json_insert_child(indexarray, json_new_null());
-  json_insert_child(dbindex, indexarray);
-  json_insert_child(jroot,dbindex);
+  json_insert_pair_into_object(jroot, "dbindex", indexarray);
 
 if (DEBUG) fprintf(stderr,"   starting all keywords\n");
   /* show all keywords */
-  json_t *allkeys = json_new_string("keywords");
-  json_t *keyarray = json_new_array();
+  keyarray = json_new_array();
   hiter_new (&hit, &rec->keywords);
   while ((key = (DRMS_Keyword_t *)hiter_getnext (&hit)))
     {
@@ -356,22 +361,17 @@ if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
     free(notework);
     json_insert_child(keyarray, keyinfo);
     }
-if (DEBUG) fprintf(stderr,"   done all keywords loop\n");
-  json_insert_child(allkeys,keyarray);
-  json_insert_child(jroot,allkeys);
+  json_insert_pair_into_object(jroot, "keywords", keyarray);
   
-if (DEBUG) fprintf(stderr,"   starting show segments\n");
   /* show the segments */
-  json_t *allsegs = json_new_string("segments");
-  json_t *segarray = json_new_array();
+  segarray = json_new_array();
   if (rec->segments.num_total)
     {
     hiter_new (&hit, &rec->segments);
     while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit)))
       { /* segment name, units, protocol, dims, description */
       json_t *seginfo = json_new_object();
-      json_t *keytype;
-      int iaxis, naxis = seg->info->naxis;
+      int naxis = seg->info->naxis;
       json_insert_pair_into_object(seginfo, "name", json_new_string(seg->info->name));
       if (seg->info->islink)
 	    {
@@ -413,13 +413,10 @@ if (DEBUG) fprintf(stderr,"   starting show segments\n");
     }
 //  else
 //    json_insert_child(segarray, json_new_null());
-  json_insert_child(allsegs,segarray);
-  json_insert_child(jroot,allsegs);
+  json_insert_pair_into_object(jroot, "segments", segarray);
 
-if (DEBUG) fprintf(stderr,"   starting links\n");
   /* show the links */
-  json_t *alllinks = json_new_string("links");
-  json_t *linkarray = json_new_array();
+  linkarray = json_new_array();
   if (rec->links.num_total)
     {
     hiter_new (&hit, &rec->links);
@@ -437,15 +434,14 @@ if (DEBUG) fprintf(stderr,"   starting links\n");
     }
 //  else
 //    json_insert_child(linkarray,json_new_null());
-  json_insert_child(alllinks,linkarray);
-  json_insert_child(jroot,alllinks);
+  json_insert_pair_into_object(jroot, "links", linkarray);
   return;
   }
 
 void get_series_stats(DRMS_Record_t *rec, json_t *jroot)
   {
   DRMS_RecordSet_t *rs;
-  int iprime, nprime;
+  int nprime;
   int status;
   char query[DRMS_MAXQUERYLEN];
   json_t *interval = json_new_object();
@@ -465,20 +461,20 @@ void get_series_stats(DRMS_Record_t *rec, json_t *jroot)
     json_insert_pair_into_object(interval, "MaxRecnum", json_new_number("0"));
     if (rs) drms_free_records(rs);
     json_insert_pair_into_object(jroot, "Interval", interval);
-    return(0);
+    return;
     }
   else
     {
     char recquery[DRMS_MAXQUERYLEN];
     char *jsonquery;
     char val[100];
-    int status, count;
+    int status;
     drms_sprint_rec_query(recquery,rs->records[0]);
     jsonquery = string_to_json(recquery);
     status = json_insert_pair_into_object(interval, "FirstRecord", json_new_string(jsonquery));
 if (status != JSON_OK) fprintf(stderr, "json_insert_pair_into_object, status=%d, text=%s\n",status,jsonquery);
     free(jsonquery);
-    sprintf(val,"%d", rs->records[0]->recnum);
+    sprintf(val,"%ld", rs->records[0]->recnum);
     json_insert_pair_into_object(interval, "FirstRecnum", json_new_number(val));
     drms_free_records(rs);
   
@@ -491,7 +487,7 @@ if (status != JSON_OK) fprintf(stderr, "json_insert_pair_into_object, status=%d,
     jsonquery = string_to_json(recquery);
     json_insert_pair_into_object(interval, "LastRecord", json_new_string(jsonquery));
     free(jsonquery);
-    sprintf(val,"%d", rs->records[0]->recnum);
+    sprintf(val,"%ld", rs->records[0]->recnum);
     json_insert_pair_into_object(interval, "LastRecnum", json_new_number(val));
     drms_free_records(rs);
  
@@ -502,16 +498,14 @@ if (status != JSON_OK) fprintf(stderr, "json_insert_pair_into_object, status=%d,
     drms_free_records(rs);
     }
   json_insert_pair_into_object(jroot, "Interval", interval);
-  return(0);
+  return;
   }
 
 #define JSONDIE(msg) \
   {	\
   char *msgjson;	\
-  char errval[10];	\
   char *json;	\
   json_t *jroot = json_new_object();	\
-if (DEBUG) fprintf(stderr,"%s\n",msg);	\
   msgjson = string_to_json(msg);	\
   json_insert_pair_into_object(jroot, "status", json_new_number("1"));	\
   json_insert_pair_into_object(jroot, "error", json_new_string(msgjson));	\
@@ -526,16 +520,12 @@ if (DEBUG) fprintf(stderr,"%s\n",msg);	\
 /* Module main function. */
 int DoIt(void)
   {
-						/* Get command line arguments */
   char *op;
   char *in;
   char *keylist;
   char *seglist;
   char *web_query;
   int from_web, keys_listed, segs_listed;
-
-  time_t t1, t0=time(NULL);
-/* JSON building places */
 
   if (nice_intro ()) return (0);
 
@@ -544,7 +534,7 @@ int DoIt(void)
 
   if (from_web)
     {
-    char *getstring, *ds, *p;
+    char *getstring, *p;
     CGI_unescape_url(web_query);
     getstring = strdup (web_query);
     for (p=strtok(getstring,"&"); p; p=strtok(NULL, "&"))
@@ -768,6 +758,11 @@ int DoIt(void)
 	  sprintf(rawval,"%ld",rec->recnum);
 	  val = json_new_number(rawval);
 	  }
+        else if (strcmp(keys[ikey],"*sunum*") == 0)
+	  {
+	  sprintf(rawval,"%ld",rec->sunum);
+	  val = json_new_number(rawval);
+	  }
         else if (strcmp(keys[ikey], "*dir_mtime*") == 0)
           { // get record dir last change date
 	  struct stat buf;
@@ -777,9 +772,7 @@ int DoIt(void)
 	    {
             drms_stage_records(recordset, 0, 0);
             record_set_staged = 1;
-//fprintf(stderr,"## jsoc_info time stage for rec=%d\n",irec,iseg);
 	    }
-//fprintf(stderr,"## jsoc_info time getdir for rec=%d\n",irec,iseg);
           drms_record_directory (rec, path, 0);
           stat(path, &buf);
           sprint_ut(timebuf, buf.st_mtime + UNIX_EPOCH);
@@ -808,21 +801,10 @@ int DoIt(void)
 	    JSONDIE("Keyword not in series");
             }
 	  drms_keyword_snprintfval(rec_key_ikey, rawval, sizeof(rawval));
-	  
-          switch (rec_key_ikey->info->type)
-            {
-            case DRMS_TYPE_STRING:
-            case DRMS_TYPE_TIME:
-		jsonval = string_to_json(rawval);
-		val = json_new_string(jsonval);
-		free(jsonval);
-		break;
-            default:
-		if (strcmp(rawval,"nan")==0)
-		    val = json_new_number("99999999.99999");
-		else
-		    val = json_new_number(rawval);
-            }
+	  /* always report keyword values as strings */
+	  jsonval = string_to_json(rawval);
+	  val = json_new_string(jsonval);
+	  free(jsonval);
 	  }
         json_insert_child(thiskeyval, val);
         }
@@ -837,8 +819,6 @@ int DoIt(void)
         char path[DRMS_MAXPATHLEN];
         json_t *thissegval = segvals[iseg]; 
         json_t *thissegdim = segdims[iseg]; 
-        json_t *obj = json_new_object();
-        json_t *val;
         int iaxis, naxis = rec_seg_iseg->info->naxis;
         char dims[100], dimval[20];
 
@@ -847,14 +827,19 @@ int DoIt(void)
 	  {
           drms_stage_records(recordset, 0, 0);
           record_set_staged = 1;
-//fprintf(stderr,"## jsoc_info stage for rec=%d, seg=%d\n",irec,iseg);
 	  }
-//fprintf(stderr,"## jsoc_info getdir for rec=%d, seg=%d\n",irec,iseg);
         drms_record_directory (rec, path, 0);
-        if (!*path)
-	  JSONDIE("Can not retrieve record path, SUMS may be offline");
+//        if (!*path)
+//          JSONDIE("Can not retrieve record path, SUMS may be offline");
+if (!*path)
+  {
+  strcpy(path, "NoDataDirectory");
+  }
+else
+  {
   	strncat(path, "/", DRMS_MAXPATHLEN);
   	strncat(path, rec_seg_iseg->filename, DRMS_MAXPATHLEN);
+  }
         jsonpath = string_to_json(path);
         json_insert_child(thissegval, json_new_string(jsonpath));
         free(jsonpath);
@@ -920,5 +905,6 @@ int DoIt(void)
     fflush(stdout);
     return(0);
     }
-}
+  return(0);
+  }
 
