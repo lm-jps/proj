@@ -824,6 +824,11 @@ void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out
       /* get file version number for ADP apid */
       ptr_fvn=find_fvn_from_shcids(global_shcids_vn, pkt_date, apid);
     }
+    else
+    {
+      /* get fvn for hk apids add 10-6-2008*/
+      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number); /*added 10-6-2008*/
+    }
 
     /* get data name by automatically creating JSVN value based on */
     /* packet version number                                       */
@@ -1585,6 +1590,11 @@ void save_packet_values1(unsigned char *read_in_buffer, char *out)
       /* get file version number for ADP apid */
       ptr_fvn=find_fvn_from_shcids(global_shcids_vn, pkt_date, apid);
     }
+    else
+    {
+      /* get fvn for hk apids add 10-6-2008*/
+      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number); /*added 10-6-2008*/
+    }
     /* set file version number  */
     strcpy(file_version_number,ptr_fvn);
 
@@ -1592,7 +1602,7 @@ void save_packet_values1(unsigned char *read_in_buffer, char *out)
     write_to_drms( apid, packet_version_number, file_version_number, out, kw_head );
 
   } /* loop throught next packet and do all packets in file*/
-}
+}/*end of save_packet_values1*/
 
 
 /**************************************************************************
