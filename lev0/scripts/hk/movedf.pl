@@ -192,7 +192,7 @@ sub check_log()
 
   #if date is the end of month  then backup log
   #since will run once a day should get one log
-  if (($mday == 31 && ($mon == 1 || $mon == 3 || $mon == 5 || $mon == 7 || $mon == 8 || $mon == 10 || $mon == 12)) || ($mday == 30 && ($mon == 4 || $mon == 6 || $mon == 9 ||  $mon == 11)) || ($mon == 1 && mday == 28))
+  if (($mday == 31 && ($mon == 1 || $mon == 3 || $mon == 5 || $mon == 7 || $mon == 8 || $mon == 10 || $mon == 12)) || ($mday == 30 && ($mon == 4 || $mon == 6 || $mon == 9 ||  $mon == 11)) || ($mon == 2 && mday == 28))
   {
     #check if logs directory exists
     if ( -e $logs_dir)
