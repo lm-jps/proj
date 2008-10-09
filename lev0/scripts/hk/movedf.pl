@@ -63,22 +63,22 @@ $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABL
 # set log file based on sdo, moc, or egsefm
 if ($source eq "hsb")
 {
-  $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-hsb";
+  $logfile="log-df-hsb";
 }
 elsif ($source eq "moc")
 {
-  $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-moc";
+  $logfile="log-df-moc";
 }
 elsif ($source eq "egsefm")
 {
-  $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-egsefm";
+  $logfile="log-df-egsefm";
 }
 
 # set up where to put backup logs written monthly 
 $logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
 
 # open log file
-open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
+open(LF,">>$script_dir/$logfile") || die "Can't Open $script_dir/$logfile: $!\n";
 print LF `date`;
 print LF "--->starting script movedf.pl\n";
 
@@ -124,7 +124,7 @@ if($hkt_filecount > 0 or $xml_filecount > 0)
 }
 
 #reopen log
-open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
+open(LF,">>$script_dir/$logfile") || die "Can't Open $script_dir/$logfile: $!\n";
 #Check if there and then delete all dayfiles that where ingested in dayfile data series 
 open(DELFILE, "$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
 @all_del_file_lines="";
@@ -190,17 +190,14 @@ sub check_log()
   # set month using month offset
   $mon=$monoffset + 1;
 
-  #if date is the month of day is 1th then backup log
+  #if date is the end of month  then backup log
   #since will run once a day should get one log
-  if ($mday == 1 )
+  if (($mday == 31 && ($mon == 1 || $mon == 3 || $mon == 5 || $mon == 7 || $mon == 8 || $mon == 10 || $mon == 12)) || ($mday == 30 && ($mon == 4 || $mon == 6 || $mon == 9 ||  $mon == 11)) || ($mon == 1 && mday == 28))
   {
     #check if logs directory exists
     if ( -e $logs_dir)
     {
-      my $d=`date`;
-      #regular expression to add - were there are blanks
-      $d =~ s/^| /-/g;
-      $lm=`cp $script_dir/$logfile $logs_dir/$logfile-$d`;
+      $lm=`cp $script_dir/$logfile $logs_dir/$logfile-$mon-$year`;
       #set log file to blank - copy was completed
       open(LF, ">$script_dir/$logfile") || die "Can't Open $script_dir/$logfile file: $!\n";
       close LF;
