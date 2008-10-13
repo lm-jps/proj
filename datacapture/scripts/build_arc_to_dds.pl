@@ -102,11 +102,11 @@ if($user ne "production") {
   if($hostdb eq "dcs1") {
     open(PARC, ">$parchmi") || die "Can't open $parchmi: $!\n";
     $resultfile = $parchmi; $instru = "HMI";
-    $sql = "select owning_series from sum_main where archive_status='Y' and Arch_Tape_Date >= '$ldate' and (owning_series like 'VC02%' or owning_series like 'VC05%' or owning_series like 'VC10%' or owning_series like 'VC13%')";
+    $sql = "select owning_series from sum_main where archive_status='Y' and Arch_Tape_Date >= '$ldate' and (owning_series like 'VC02%' or owning_series like 'VC05%' or owning_series like 'VC10%' or owning_series like 'VC13%') and safe_tape!='' and offsite_ack='Y'";
   } else {
     open(PARC, ">$parcaia") || die "Can't open $parcaia: $!\n";
     $resultfile = $parcaia; $instru = "AIA";
-    $sql = "select owning_series from sum_main where archive_status='Y' and Arch_Tape_Date >= '$ldate' and (owning_series like 'VC01%' or owning_series like 'VC04%' or owning_series like 'VC09%' or owning_series like 'VC12%')";
+    $sql = "select owning_series from sum_main where archive_status='Y' and Arch_Tape_Date >= '$ldate' and (owning_series like 'VC01%' or owning_series like 'VC04%' or owning_series like 'VC09%' or owning_series like 'VC12%') and safe_tape!='' and offsite_ack='Y'";
   }
 
     $sth = $dbh->prepare($sql);
