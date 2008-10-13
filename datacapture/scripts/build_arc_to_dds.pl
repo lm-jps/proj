@@ -15,6 +15,9 @@
 #.tlm data since the 24 hour period prior to the time of this script
 #running. (e.g. if run after midnight on Wed, will find all the data 
 #archived since midnight of Tues).
+
+#!!!TBD: Also check that safe_tape and Offsite_Ack are true in the 
+#        sum_main before can send ack to DDS.
 #
 #The .arc file built looks like:
 #FILE_NAME=VC02_2008_182_19_57_55_0014211db08_1c298_00.tlm
