@@ -146,8 +146,8 @@ int setup () {
   if(cptr) *cptr = (char)NULL;
   pid = getpid();
   /* make sure only one sum_pe_svc runs */
-  sprintf(gfile, "/tmp/grep_sum_pe_svc.%d.log", pid);
-  sprintf(lfile, "/tmp/wc_sum_pe_svc.%d.log", pid);
+  sprintf(gfile, "/data1/tmp/grep_sum_pe_svc.%d.log", pid);
+  sprintf(lfile, "/data1/tmp/wc_sum_pe_svc.%d.log", pid);
   sprintf(acmd, "ps -ef | grep %s  1> %s 2>&1", "\" sum_pe_svc\"", gfile);
   if(system(acmd)) {
     printf("**Can't execute %s.\n", acmd);
