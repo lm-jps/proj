@@ -66,11 +66,21 @@ if(system($cmd3)) {
   print "Failed: $cmd3\n";
 }
 
+print "\nTo cleanly stop all ingest_lev0 and commit any open images, call:\n";
+print "stop_lev0.pl\n";
+
 #$SIG{INT} = \&catchc;
 #$SIG{INT} = 'IGNORE';
 
 while(1) {
-  sleep 3600;		#run ingest_lev0 for this long
+  for($i=0; $i < 720; $i++) {  #run this for 3600 seconds
+    sleep 5;
+    &ckingest;		#see if any ingest_lev0 are still running
+    if(!$ifound) {
+      print "\nAll ingest_lev0 have been stopped. Exit\n\n";
+      exit(0);
+    }
+  }
   $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stop"; #tell ingest to stop
   `$cmd`;
   $cmd = "touch /usr/local/logs/lev0/@vcnames[1]_stop";
@@ -114,6 +124,18 @@ while(1) {
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
+}
+
+sub ckingest {
+    $ifound = 0;
+    #see if they're all stopped
+    @ps_prod = `ps -ef | grep ingest_lev0`;
+    while($_ = shift(@ps_prod)) {
+      if(/vc VC01/ || /vc VC02/ || /vc VC04/ || /vc VC05/) {
+        $ifound = 1;
+        last;
+      }
+    }
 }
 
 #Return date in form for a label e.g. 1998.01.07_14:42:00
