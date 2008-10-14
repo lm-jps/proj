@@ -172,6 +172,7 @@ printk("[:#%lld]",rec->recnum);
 int DoIt(void) {
   int status = 0;
   uint32_t sumpeback;
+  char cmd[128];
   char *call_err;
   KEY *list=newkeylist();
   CLIENT *clntsumpesvc;
@@ -195,6 +196,8 @@ int DoIt(void) {
     printk("Error in file2keylist() for %s\n", keyfile);
     return(1);
   }
+  sprintf(cmd, "/bin/rm -f %s", keyfile);
+  system(cmd);
   keyiterate(logkey, list);            /* !!!TEMP */
   /* Create client handle used for calling the sum_pe_svc */
   clntsumpesvc = clnt_create(server, SUMPEPROG, SUMPEVERS, "tcp");
