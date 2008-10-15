@@ -1,10 +1,12 @@
 #!/usr/bin/perl
 ##############################################################################
 # Name:        ddf.pl - decode day files                                     #
+#              Simplifed script to decode dayfile for today only without     #
+#              using elaborate arguments used in gdfdrms.pl script.          #
 #              CRON to get hmi,sdo,aia dayfiles from DRMS & send to for      #
 #              decoding keywords and then write keywords to DRMS hk data     #
 #              series by apid. This script sets values to process dayfiles   #
-#              for either hmi,aia, or sdo  dayfiles for today. Sets up       #
+#              for either hmi,aia, or sdo  dayfiles for today only. Sets up  #
 #              environment variable for hmi,aia, or sdo input dayfile series.#
 #              Can turn on debug flag using DF_GDFDRMS_DEBUG and this is     #
 #              passed to gdfdrms.pl. Can turn on  report flag which will     #
@@ -13,7 +15,8 @@
 #              Currently input args to gdfdrms.pl are for today, for apids   #
 #              set in apidlist argument, and for source set in src argument. #
 #              Log file is set using $logfile and is passed to gdfdrms.pl.   #
-#              Setup and create apidlist files:ddf_apid_list_hmi_egse,etc    #
+#              Setup and create apidlist files:ddf_apid_list_sdo_rtmon,      #
+#              ddf_apid_list_hmi_hsb, ddf_apid_list_aia_hsb, etc.            #
 #              This script can be run at command line too.                   #
 # Execution:   (1)Run option to process dayfiles for today:                  #
 #                                                                            #
@@ -25,15 +28,15 @@
 #                                                                            #
 # Examples Execution(Possible cases as of today):                            #
 #              perl ddf.pl hmi egsefm                                        #
-#              perl ddf.pl hmi egseem                                        #
 #              perl ddf.pl hmi hsb                                           #
 #              perl ddf.pl hmi moc                                           #
 #              perl ddf.pl aia egsefm                                        #
-#              perl ddf.pl aia egseem                                        #
 #              perl ddf.pl aia hsb                                           #
 #              perl ddf.pl aia moc                                           #
 #              perl ddf.pl sdo moc                                           #
 #              perl ddf.pl sdo rtmon                                         #
+#              perl ddf.pl hmi rtmon                                         #
+#              perl ddf.pl aia rtmon                                         #
 # Limitation:  Setup required environment variables at top of file.          #
 #               Must have apidlist file.                                     #
 # Author:      Carl                                                          #
@@ -86,7 +89,7 @@ $list=&get_apid_list();
 $command="perl $script_dir/gdfdrms.pl  apidlist=$script_dir/$list  src=$src";
 
 #Note:Used to test with known data. do:perl ddf.pl hmi egsefm
-#$command="perl $script_dir/gdfdrms.pl  apidlist=$script_dir/$list  start=20080916 end=20080916 src=$src";
+#$command="perl $script_dir/gdfdrms.pl  apidlist=$script_dir/$list  start=20081001 end=20081001 src=$src";
 
 ####log info####
 if ($dflg) {print LF "--->ddf.pl:debug:Running:Command running:<$command>\n";}
@@ -122,12 +125,15 @@ sub check_agruments()
   #check arguments
   if ($#ARGV <= 0 || $#ARGV > 2 )
   {
-    print "Usage: perl ddf.pl <project name of input dayfile> <dayfile source>\nwhere project name is sdo,aia,hmi.\nwhere source is either:hsb,moc,egsefm.\n";
+    print "Function Description:Decode Dayfile script decodes keywords from dayfile into HK By APID data series for todays dayfiles.\n";
+    print "Usage: perl ddf.pl <project name of input dayfile> <dayfile source>\n";
+    print "\-where project name of input dayfile which is either sdo, aia, or hmi\(i.e.,sdo=sdo.hk_dayfile,hmi=hmi.hk_dayfile,aia=aia.hk_dayfile\).\n";
+    print "\-where source is source index value into dayfile data series and is either:hsb,moc,egsefm or rtmon.\n";
     exit;
   }
   elsif ("-h" eq substr($ARGV[0],0,2) )
   {
-     print "Usage: perl ddf.pl <project name of input dayfile> <dayfile source>\nwhere project name is hmi,aia,sdo.\nwhere source is either:hsb,moc,egsefm.\n";
+     print "Usage: perl ddf.pl <project name of input dayfile> <dayfile source>\nwhere project name is hmi,aia,sdo.\nwhere source is either:hsb,moc,egsefm,or rtmon.\n";
      exit;
   }
   elsif("hmi" eq substr($ARGV[0],0,3) or "aia" eq substr($ARGV[0],0,3) or "sdo" eq  substr($ARGV[0],0,3))
@@ -139,14 +145,14 @@ sub check_agruments()
     else
     {
       print "ERROR: Entered incorrect source value. Use egsefm,hsb, or moc.\n";
-      print "Usage: perl ddf.pl <project name of input dayfile> <dayfile source>\nwhere project name is hmi,aia,sdo.\nwhere source is either:hsb,moc,egsefm.\n";
+      print "Usage: perl ddf.pl <project name of input dayfile> <dayfile source>\nwhere project name is hmi,aia,sdo.\nwhere source is either:hsb,moc,egsefm or rtmon.\n";
       exit;
     }
   }
   else
   {
      print "ERROR: Entered incorrect project name for data series value. Use sdo,hmi or aia\n";
-     print "Usage: perl ddf.pl <project name of input dayfile> <dayfile source>\nwhere project name is hmi,aia,sdo.\nwhere source is either:hsb,moc,egsefm.\n";
+     print "Usage: perl ddf.pl <project name of input dayfile> <dayfile source>\nwhere project name is hmi,aia,sdo.\nwhere source is either:hsb,moc,egsefm or rtmon.\n";
      exit;
   }
 }
