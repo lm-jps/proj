@@ -19,18 +19,21 @@
 #              create to run as cron job or a command line.                  #
 # Execution:   (1)The run options are show in help listing:                  #
 #                   gdfdrms  -h                                              #
+#              (2)The execution options are show when run "gdfdrms  -h"      #
 # Limitation:  Setup required environment variables at top of file based on  #
 #              where running. Script works only using hsb dayfile file       #
 #              and LMSAL formats that are in DRMS. Here are examples input   #
 #              day file:                                                     #
-#              -For src=hsb:    hsb_0445_2008_04_15_10_41_00.hkt             #
+#              -For src=hsb   : hsb_0445_2008_04_15_10_41_00.hkt             #
 #              -For src=egsefm: 200804019.0x001d                             #
-#              -For src=moc:   0445_2008_04_15_10_41_01.hkt                  #
+#              -For src=rtmon : 200804019.0x001d                             #
+#              -For src=moc   :0445_2008_04_15_10_41_01.hkt                  #
 # Author:      Carl                                                          #
 # Date:        Move from EGSE to JSOC software environment on May,2, 2008    #
 ##############################################################################
 # main program                                                               #
 ##############################################################################
+
 #(1)common setting for all environmnents
 $ENV{'SUMSERVER'}="d02.Stanford.EDU";
 $hm=$ENV{'HOME'};
@@ -105,6 +108,7 @@ if($dsnm != 0)
 print LF `date`;
 close LF;
 
+
 #############################################################################
 # subroutine check arguments and set flags                                  #
 #############################################################################
@@ -165,8 +169,7 @@ sub check_arguments()
     elsif (substr($ARGV[1],0,4) eq "src=" )
     {
       $source=substr($ARGV[1],4,6);
-        print LF " for source <$source>\n";
-        if($dflg) {print LF "--->debug:src is $source\n";}
+      if($dflg) {print LF "--->gdfdrms.pl:DEBUG:src is $source\n";}
     }
     else
     {
@@ -185,8 +188,7 @@ sub check_arguments()
     elsif (substr($ARGV[2],0,4) eq "src=" )
     {
       $source=substr($ARGV[2],4,6);
-      print LF " for source <$source>\n";
-      if($dflg) {print LF "-->debug:src is $source\n";}
+      if($dflg) {print LF "gdfdrms.pl:DEBUG:src is $source\n";}
     }
     else
     {
@@ -201,8 +203,7 @@ sub check_arguments()
     if ( substr($ARGV[3],0,4) eq "src=") 
     {
       $source=substr($ARGV[3],4,6);
-      print LF " for source <$source>\n";
-      if($dflg) {print LF "-->debug:src is $source\n";}
+      if($dflg) {print LF "gdfdrms.pl:DEBUG:src is $source\n";}
     }
     else
     {
@@ -216,8 +217,7 @@ sub check_arguments()
     if ( substr($ARGV[4],0,4) eq "src=") 
     {
       $source=substr($ARGV[4],4,6);
-      print LF " for source <$source>\n";
-      if($dflg) {print LF "-->debug:src is $source\n";}
+      if($dflg) {print LF "gdfdrms.pl:DEBUG:src is $source\n";}
     }
     else
     {
@@ -228,13 +228,15 @@ sub check_arguments()
        exit;
     }
   }
-  if($dflg) {print LF "-->debug:SOURCE passed as argument is $source\n";}
+  if($dflg) {print LF "gdfdrms.pl:DEBUG:SOURCE passed as argument is $source\n";}
 
   if ( $help_flg eq "1")
   {
      &show_help_info;
   }
 }
+
+
 #############################################################################
 # subroutine show_help_info: show help information                          #
 #############################################################################
@@ -259,44 +261,23 @@ sub show_help_info
   print "(1f)View what going to save in data series by adding -v as first argument. This should work for 1a,1b,1c,and 1d cases.:\n
              gdfdrms -v apidlist=<file> start=<yyyymmdd> end=< yyyymmdd>  src=<source of dayfile>\n";
   print "             Example: gdfdrms.pl -v apidlist=./df_apid_list_day_files_hsb start=20070216 end=20070218  src=hsb\n\n";
-  print "*Note:Propose using option for cron jobs(1a): gdf.pl apidlist=<file containing APID list>  src=<Source of Dayfile>\n";
-#####NEED to update below:
-  print "(2) Requires setup input dayfile file series: TBD\n";
-  print "(3) Requires setup of environment variable DF_HSB_DAYFILE_DIRECTORY\n";
-  print "(3a)Used to store location of input day files of this script.\n";
-  print "(3b)Example setting: setenv DF_HSB_DAYFILE_DIRECTORY /tmp20/production/hmi_hk \n";
-  print "(4) Requires setup of apid list in file when use \"apidlist\" option\n";
-  print "(4a)Enter values in file in decimal format(i.e.,0001,0015,0021,0445,0475).\n";
-  print "(4b)Example format and file of apid list is located in this current file: ./df_apid_list_day_files\n";
-  print "(5) Requires setup of data series name and apid list in file when use \"dsname\" argument.\n";
-  print "(5a)Enter values in file in decimal format for APID value and this data series name(i.e.,0445  hmi_ground.hk_dayfile).\n";
-  print "(5b)Example format and file of apid list is located in this current file: ./df_apid_ds_list\n";
-  print "(5c)Create a file for different types of data to save files in correct series names.\n";
-  print "(5d)For example, create df_apid_ds_list_hmi_fsfm to save data in series names that are for hmi_fsfm machine.View example.\n";
-  print "(5e)Other Examples files:df_apid_ds_list_hmi_fsfm, df_apid_ds_list_hmi_fsem, df_apid_ds_list_aia_fsfm, df_apid_ds_list_aia_fsem, etc.\n";
-  print "(6)****Limitation****: a)Works only on hsb dayfile formats(i.e., hsb_0445_2007_11_08_16_52_11_00.hkt.\n";
-  print "                       b)Enter arguments in specified order when running script.\n";
+  print "*Note:Propose using option for cron jobs(1a): gdfdrms.pl apidlist=<file containing APID list>  src=<Source of Dayfile>\n";
+  print "(2) Requires setup and dayfile in hk dayfile data series(i.e.sdo.hk_dayfile,hmi.hk_dayfile,etc.)\n";
+  print "(2a)Set choices to possible dayfile in step #5 in script: #(5) set choices for input dayfile.\n";
+  print "(3) Requires setup of apid list in file when use \"apidlist\" option\n";
+  print "(3a)Enter values in file in decimal format(i.e.,0001,0015,0021,0445,0475).\n";
+  print "(3b)Example format and file of apid list is located in this current file: ./df_apid_list_day_files\n";
+  print "(4) Requires setup of data series name and apid list in file when use \"dsname\" argument.\n";
+  print "(4a)Enter values in file in decimal format for APID value and this data series name(i.e.,0445  hmi_ground.hk_dayfile).\n";
+  print "(4b)Example format and file of apid list is located in this current files: df_apid_list_rtmon,df_apid_list_hsb,etc.\n";
+  print "(4c)Create a file for different types of data to save files in correct series names.\n";
+  print "(4d)For example, create df_apid_ds_list_for_rtmon to direct which series to save decoded keywords.View example.\n";
+  print "(4e)Other Examples files:df_apid_ds_list_moc, df_apid_ds_list_hsb, df_apid_ds_list_hsb, df_apid_ds_list_egsefm, etc.\n";
+  print "(5)****Limitation****: a)Works only on hsb,rtmon,egsefm,and moc dayfile formats\n";
+  print "                       b)Enter arguments in specified order when running script is required.\n";
   exit;
 }
-#############################################################################
-# subroutine get_dayfile_list: get list lm day file brought over            #
-#############################################################################
-sub get_dayfile_list()
-{
-  #Open input data files
-  $dir_init_df=$ENV{'DF_HSB_DAYFILE_DIRECTORY'};
 
-  #open directory file handle to read in initial jsd files.
-  opendir(DIR_DF, $dir_init_df) || die "ERROR in gdfdrms.pl:Can't open-1:$!\n";
-
-  #get list of day files
-  @df_files=readdir( DIR_DF );
-
-  #close directory file handle
-  closedir DIR_DF; 
-  push(@df_files, "");
-  if ($dflg) {print LF "get_dayfile_list():dayfile_list is @df_files\n";}
-}
 #############################################################################
 # subroutine get_apid_to_do: gets list of apid to create maps files for     #
 #############################################################################
@@ -334,7 +315,7 @@ sub get_apid_to_do
       push(@all_apids, substr($ARGV[1],5));
 
     }
-    print  LF "-->(1)Doing decimal formatted apids: @all_apids";
+    print  LF "-->(1)Doing decimal formatted apids: @all_apids\n";
   }
   else 
   {
@@ -342,6 +323,7 @@ sub get_apid_to_do
   }
 }
 
+
 #############################################################################
 # subroutine get_date_to_do: gets date range to do                          #
 #############################################################################
@@ -370,7 +352,7 @@ sub get_date_to_do
      ($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = localtime();
      $year = 1900 + $yearOffset;
      $month= $monthOffset + 1;
-     if($dflg == 1) {print LF "--->debug: year this $year month is $month day is $dayOfMonth\n";}
+     if($dflg == 1) {print LF "gdfdrms.pl:DEBUG: year this $year month is $month day is $dayOfMonth\n";}
      #create todays date format and push on list of dates to do
      $new_date= sprintf("%4d.%02.2d.%02.2d", $year,$month,$dayOfMonth);
      push(@all_dates, $new_date);
@@ -378,6 +360,7 @@ sub get_date_to_do
      $date_r2=$date_r1=sprintf("%4d%02.2d%02.2d", $year,$month,$dayOfMonth);
   }
 }
+
 
 #############################################
 # get date list to do                       #
@@ -399,80 +382,86 @@ sub get_date_list_to_do()
     $new_date= sprintf("%4d.%02.2d.%02.2d", $start_yr,$start_mo,$start_day);
     push(@all_dates, $new_date);
   }
-  elsif ($start_yr == $end_yr and  $start_mo == $end_mo)
-  {
-    #only need to increment days
-    if($end_day > $start_day)
+  elsif ($start_yr != $end_yr or $start_mo != $end_mo or  $start_day != $end_day )
+  { 
+    $loop_yr=$start_yr;
+    $loop_mo= $start_mo;
+    $loop_day=$start_day;
+    $loop_yr_mo_day=sprintf("%4d%02.2d%02.2d", $loop_yr,$loop_mo,$loop_day); #setup loop start date(i.e.,20080901)
+    $end_yr_mo_day=sprintf("%4d%02.2d%02.2d", $end_yr,$end_mo,$end_day);     #setup loop end date(i.e.,20081231)
+
+    # loop thru all dates requested thru arguments and add date to list of dates to check if file in drms dayfile data series
+    while ( $loop_yr_mo_day  <=  $end_yr_mo_day)
     {
-      $loop_day= $start_day;
-      while ($loop_day <= $end_day and $loop_day <= 31)
+      #check if month is last day-
+      #if so set day to one or 
+      #if end of year day then reset month and day  or
+      #if not above cases, just increment day by one
+      if(&check_lastday_in_month) 
       {
-        if($dflg) {print LF "loop day is $loop_day\n";}
-        if ($dfg) {print LF "pushing this date: $start_yr.$start_mo.$loop_day\n";}
-        $new_date= sprintf("%4d.%02.2d.%02.2d", $start_yr,$start_mo,$loop_day);
+        #if end of month
+        if($dflg) {print LF "gdfdrms.pl:DEBUG:pushing this date: $loop_yr.$loop_mo.$loop_day\n"};
+        $new_date= sprintf("%4d.%02.2d.%02.2d", $loop_yr,$loop_mo,$loop_day);
+        push(@all_dates, $new_date);
+        $loop_day=1;
+        $loop_mo++;
+      }
+      elsif ($loop_mo == 12 && $loop_day == 31)
+      {
+         #if end of year
+        if($dflg) {print LF "gdfdrms.pl:DEBUG:pushing this date: $loop_yr.$loop_mo.$loop_day\n"};
+        $new_date= sprintf("%4d.%02.2d.%02.2d", $loop_yr,$loop_mo,$loop_day);
+        push(@all_dates, $new_date);
+        $loop_day=1; 
+        $loop_mo=1;
+        $loop_yr++;
+      }
+      else
+      {
+        #if not end of year or month then just increment day
+        if($dflg) {print LF "gdfdrms.pl:DEBUG:pushing this date: $loop_yr.$loop_mo.$loop_day\n"};
+        $new_date= sprintf("%4d.%02.2d.%02.2d", $loop_yr,$loop_mo,$loop_day);
         push(@all_dates, $new_date);
         $loop_day++;
       }
+      #set up next loop date number
+      $loop_yr_mo_day=sprintf("%4d%02.2d%02.2d", $loop_yr,$loop_mo,$loop_day);
     }
+    if($dflg) {print LF "gdfdrms.pl:DEBUG:list of dates to process:\n @all_dates\n"};
+
+
   }
-  elsif ($start_yr == $end_yr and  $start_mo < $end_mo )
-  { ##NOT TESTED!!
-    print LF "***************NOT TEST YET********\n";
-    #increment month and day
-    $loop_mo=$start_mo;
-    while ($loop_mo <= $end_mo and $loop_mo <= 12)
-    {
-       print LF "loop months from $start_mo to $end_mo\n";
-       print LF "loop days from $start_day to $end_day\n";
-       $loop_day= $start_day;
-       while ($loop_day <= $end_day and $loop_day <= 31)
-       {
-         print LF "loop day is $loop_day\n";
-         print LF "pushing this date: $start_yr.$start_mo.$loop_day\n";
-         $new_date= sprintf("%4d.%02.2d.%02.2d", $start_yr,$start_mo,$loop_day);
-         push(@all_dates, $new_date);
-         $loop_day++;
-         push(@all_dates, $new_date);
-         $loop_day++;
-       }
-       $loop_mo++;
-    }
+  else 
+  {
+    print LF "gdfdrms.pl:ERROR: Probably bad entry for dates\n";
+    print  "gdfdrms.pl:ERROR: Probably bad entry for dates\n";
   }
-  elsif ($start_yr < $end_yr )
-  { ##NOT TESTED YET!!
-    print LF "***************NOT TEST YET********\n";
-    #increment year,month and day case.
-    #increment year
-    $loop_yr=$start_yr;
-    while ($loop_yr <= $end_yr)
-    {
-      #increment month and day
-      $loop_mo=$start_mo;
-      while ($loop_mo <= $end_mo and $loop_mo <= 12)
-      {
-        print LF "loop months from $start_mo to $end_mo\n";
-        print LF "loop days from $start_day to $end_day\n";
-        $loop_day= $start_day;
-        while ($loop_day <= $end_day and $loop_day <= 31)
-        {
-          print LF "loop day is $loop_day\n";
-          print LF "pushing this date: $start_yr.$start_mo.$loop_day\n";
-          $new_date= sprintf("%4d.%02.2d.%02.2d", $start_yr,$start_mo,$loop_day);
-          push(@all_dates, $new_date);
-          $loop_day++;
-         } #while increment day
-         $loop_mo++;
-       } #while increment month
-       $loop_yr++;
-     } #while increment year
-   }#elsif year increment
-   else 
-   {
-     print LF "gdfdrms.pl:ERROR: Probably bad entry for dates\n";
-     print  "gdfdrms.pl:ERROR: Probably bad entry for dates\n";
-   }
 }
 
+###############################################################################
+# subroutine get_list_from_drms: get list of filenames to decode keywords for #
+###############################################################################
+sub check_lastday_in_month()
+{
+     if( (($loop_mo == 4 || $loop_mo == 6 || $loop_mo == 9 || $loop_mo == 11 ) && $loop_day == 30) || (($loop_mo == 1 || $loop_mo == 3 || $loop_mo == 5 || $loop_mo == 7 || $loop_mo == 8|| $loop_mo == 10) && $loop_day == 31))
+     {
+        return 1;
+     }
+     elsif ( $loop_mo == 2 && (($loop_day == 29 && $loop_yr == 2008) || ($loop_day == 29 && $loop_yr == 2012) || ($loop_day == 29 && $loop_yr == 2016) || ($loop_day == 29 && $loop_yr == 2020) || ($loop_day == 29 && $loop_yr == 2024)))
+     {
+        return 1;
+     }
+     elsif ( $loop_mo == 2 && $loop_day == 28 && $loop_yr != 2008 &&  $loop_yr != 2012 && $loop_yr != 2016  && $loop_yr != 2020 && $loop_yr != 2024 )
+     {
+        return 1;
+     }
+     else
+     {
+        return 0;
+     }
+}
+
+
 ###############################################################################
 # subroutine get_list_from_drms: get list of filenames to decode keywords for #
 ###############################################################################
@@ -514,9 +503,10 @@ sub get_list_from_drms()
        # append to date to have correct index to hk_dayfile series
        $append_to_d="_00:00:00_TAI";
 
-       if ($source eq "moc" )
+       # get source of dayfile to use based on apid and source values
+       if (($source eq "moc" or  $source eq "rtmon") and (int $apid_str > 96) and (int $apid_str < 400))
        {
-          #if source is moc always grab dayfile from sdo.hk_dayfile
+          #if source is moc or rtmon always grab dayfile from sdo.hk_dayfile for apid between 96-399
           $dsnm=$dsnm_sdo;
        }
        elsif (($source eq "hsb" or source eq "hsb") and (int $apid_str > 32) and (int $apid_str < 64))
@@ -544,14 +534,15 @@ sub get_list_from_drms()
           print "WARNING:gdfdrms.pl:unexpected else-did not find source and apid case for setting input dayfile name!Exiting script.\n";
           exit;
        }
+       if($dflg) {print "gdfdrms.pl:dsnm value is $dsnm\n"};
  
        $command=sprintf("show_keys ds=%s[%s%s][%s][%s] -P",$dsnm,$d,$append_to_d,$apid_str,$source);
-       if($dflg) {print LF "--->debug: command value:$command returned:$results\n"};
+       if($dflg) {print LF "gdfdrms.pl:DEBUG:command value:$command returned:$results\n"};
        $results=`$command`;
        $return=substr($results,0,5);
        if ("SUDIR" ne $return)
        {
-          if($dflg) {print LF "--->debug:warning(not an error) no record found: $command returned: $results\n"};
+          if($dflg) {print LF "--->gdfdrms.pl:DEBUG:warning(not an error) no record found: $command returned: $results\n"};
           #skip to next 
           print LF "-->(5)List of dayfiles for dates and apids are:\n@there_dir_list\n";
           next;
@@ -561,18 +552,18 @@ sub get_list_from_drms()
        $exit_value  = $? >> 8;
        $signal_num  = $? & 127;
        $dumped_core = $? & 128;
-       if($dflg)  {print LF "--->debug:return code from command is <$exit_value>  <$signal_num>  <$dump_core>\n";}
-       if($dflg == 1) {print LF "COMMAND IS: <$command> \nresults:\n<$results>\n";}
+       if($dflg)  {print LF "gdfdrms.pl:DEBUG:return code from command is <$exit_value>  <$signal_num>  <$dump_core>\n";}
+       if($dflg == 1) {print LF "gdfdrms.pl:DEBUG:COMMAND IS: <$command> \nresults:\n<$results>\n";}
 
        #returns a list of directories to get files
-       if($dflg) {print LF "-->debug:directory for dayfiles for $d from drms:$results;"}
+       if($dflg) {print LF "gdfdrms.pl:DEBUG:directory for dayfiles for $d from drms:$results;"}
        push(@dfdate, $results);
 
        #remove all change line, spaces, etc and put -- delimiter like 
        $results =~ s/#//g;
        $results =~ s/\/r|\n/:/g;
        $results =~ s/ //g;
-       if($dflg) {print LF "-->debug:directory for dayfiles cleaned:$results\n";}
+       if($dflg) {print LF "gdfdrms.pl:DEBUG:directory for dayfiles cleaned:$results\n";}
 
        # split line into directory locations of dayfiles 
        @s_results=split(':',$results );
@@ -580,11 +571,11 @@ sub get_list_from_drms()
        {
          if (substr($item,0,8) eq "suidback"  )
          {
-           if($dflg) {print LF "-->Warning:no valid directory for dayfile\n";}
+           if($dflg) {print LF "gdfdrms.pl:DEBUG:Warning:no valid directory for dayfile\n";}
          }
          elsif  (substr($item,0,5) eq "SUDIR"  )
          {
-           if($dflg) {print LF "-->Warning:no valid directory for dayfile\n";}
+           if($dflg) {print LF "gdfdrms.pl:DEBUG:Warning:no valid directory for dayfile\n";}
          }
          else
          {  
@@ -593,12 +584,12 @@ sub get_list_from_drms()
            #create loop of dates ranges to do to add to allthere list
 
            #open directory where file is and add files name to there list.
-           if($dflg) { print LF "-->debug:opening directory : $item \n";}
+           if($dflg) { print LF "gdfdrms.pl:DEBUG:opening directory : $item \n";}
            opendir(DFDIR, $item) || die "ERROR in gdfdrms.pl:Can't open-3 $item:$!\n"; #open subdirectory
 
            # read in files
            @df = readdir(DFDIR); #get a list of directory contents
-           if($dflg) { print LF "-->debug:files in directory are : @df \n";}
+           if($dflg) { print LF "gdfdrms.pl:DEBUG:files in directory are : @df \n";}
 
            # add file name and directory path to there_dir_list
            foreach $dird (@df)
@@ -606,50 +597,58 @@ sub get_list_from_drms()
              if ($dird eq "." or $dird eq "..")
              {
                 # skip . or ..  files found
-                 if($dflg == 1) {print LF "-->debug:skip . and .. files found.\n";}
+                 if($dflg == 1) {print LF "gdfdrms.pl:DEBUG:skip . and .. files found.\n";}
                 next;
              }
              elsif( index($dird, 'xml') > 0 )
              {
                 # skip  xml file found
-                 if($dflg == 1) {print LF "-->debug:skip xml file found \n";}
+                 if($dflg == 1) {print LF "gdfdrms.pl:DEBUG:skip xml file found \n";}
                 next;
              }
              else
              {
                # add directory and filename path to there_dir_list
-               if($dflg == 1) {print LF "-->debug:Found dird value : <$dird>\n";}
+               if($dflg == 1) {print LF "gdfdrms.pl:DEBUG:Found dird value : <$dird>\n";}
                if ($source eq "egsefm")
                {
                   #parse files like this 20071108.0x0013 where 0013 is hex apid value
-                  if ($dflg == 1) {print LF "-->debug:egsefm:parsing based on formated files from src eq lm\n";}
+                  if ($dflg == 1) {print LF "gdfdrms.pl:DEBUG::egsefm:parsing based on formated files from src eq lm\n";}
                   #get apid need to convert hex apid to decimal apid
                   $apid=  hex substr($dird,11,4);
-                  if($dflg) {print LF "Found <$apid> for source <$source>\n"};
+                  if($dflg) {print LF "gdfdrms.pl:DEBUG:Found <$apid> for source <$source>\n"};
+               }
+               elsif ($source eq "rtmon")
+               {
+                  #parse files like this 20071108.0x0013 where 0013 is hex apid value
+                  if ($dflg == 1) {print LF "gdfdrms.pl:DEBUG:rtmon:parsing based on formated files from src eq lm\n";}
+                  #get apid need to convert hex apid to decimal apid
+                  $apid=  hex substr($dird,11,4);
+                  if($dflg) {print LF "gdfdrms.pl:DEBUG:Found <$apid> for source <$source>\n"};
                }
                elsif ($source eq "hsb")
                {
                   #parse files like this hsb_0445_2007_11_08_16_51_31_00.hkt
-                  if ($dflg == 1) {print LF "-->debug:hsb:parsing based on formated files from src eq hsb\n";}
+                  if ($dflg == 1) {print LF "gdfdrms.pl:DEBUG:hsb:parsing based on formated files from src eq hsb\n";}
                   #get apid which is a decimal value for hsb filenames
                   $apid=   int substr($dird,4,4);
-                  if($dflg) {print LF "-->debug:Found <$apid> for source <$source>\n"};
+                  if($dflg) {print LF "gdfdrms.pl:DEBUG:Found <$apid> for source <$source>\n"};
                }
                elsif ($source eq "moc")
                {
                   #parse files like this 0129_2008_260_02.hkt
-                  if ($dflg == 1) {print LF "-->debug:moc:parsing based on formated files from src eq moc\n";}
+                  if ($dflg == 1) {print LF "gdfdrms.pl:DEBUG:moc:parsing based on formated files from src eq moc\n";}
                   #get apid which is a decimal value for hsb filenames
                   $apid=   int substr($dird,0,4);
-                  if($dflg) {print LF "-->debug:Found <$apid> for source <$source>\n"};
+                  if($dflg) {print LF "gdfdrms.pl:DEBUG:Found <$apid> for source <$source>\n"};
                }
                # check if apid is in apid list
                foreach $a (@all_apids)
                {
-                  if($dflg) {print LF "-->debug:loop thru apids:apid ==<$a>\n";}
+                  if($dflg) {print LF "gdfdrms.pl:DEBUG:loop thru apids:apid ==<$a>\n";}
                   if (int $a eq $apid)
                   {
-                    if($dflg == 1) {print LF "-->debug:Found $apid for file in the list of apids to do\n";}
+                    if($dflg == 1) {print LF "gdfdrms.pl:DEBUG:Found $apid for file in the list of apids to do\n";}
                     push (@there_dir_list, "$item/$dird");
                     last;
                   }
@@ -669,6 +668,7 @@ sub get_list_from_drms()
   }#else
 }
 
+
 ######################################################################################
 # subroutine decode_keywords_for_dayfiles(): get data series name by looking up apid #
 ######################################################################################
@@ -698,14 +698,14 @@ sub decode_keywords_for_dayfiles()
       {
         $_=~ s/\n//g;
         push(@alldid_apid, $_) ;
-        if($dflg) {print LF "-->debug: did dayfiles:<$_> \n";}
+        if($dflg) {print LF "gdfdrms.pl:DEBUG: did dayfiles:<$_> \n";}
       }
     }
     else
     {
       #create new file
       open(DFILE, ">$didfile") || die  "ERROR in gdfdrms.pl:Can't Open-5 to read:$didfile  $!\n";
-      if($dflg) {print  LF "-->debug: didfile is <$didfile> and was created \n";}
+      if($dflg) {print  LF "gdfdrms.pl:DEBUG: didfile is <$didfile> and was created \n";}
     }
     #close after reading or creating
     close DFILE;
@@ -720,22 +720,22 @@ sub decode_keywords_for_dayfiles()
       
       print LF "-->(8) Checking if need to decode_dayfile the dayfile:<$there>\n";
       $hex_apid = sprintf("%04x", $apid);
-      if($dflg) {print LF "-->debug:decimal apid is <$apid>  hex apid is <$hex_apid>\n";}
+      if($dflg) {print LF "gdfdrms.pl:DEBUG:decimal apid is <$apid>  hex apid is <$hex_apid>\n";}
 
       # get filename using regular expression
       my($directory, $filename) = $there =~ m/(.*\/)(.*)$/;
 
       #double check if apid is in filename
-      if (( $apid eq int substr($filename,4,4) and $source eq "hsb") or ($hex_apid eq substr($filename,11,4) and $source eq "egsefm") or ( $apid eq  int substr($filename,0,4) and $source eq "moc"))
+      if (( $apid eq int substr($filename,4,4) and $source eq "hsb") or ($hex_apid eq substr($filename,11,4) and $source eq "egsefm") or ( $apid eq  int substr($filename,0,4) and $source eq "moc")  or ($hex_apid eq substr($filename,11,4) and $source eq "rtmon"))
       {
-        if ($dflg == 1) {print LF "-->debug:there file to do is <$there> hex value of apid is <$hex_apid> decimal value of apid <$apid>\n";}
+        if ($dflg == 1) {print LF "gdfdrms.pl:DEBUG:there file to do is <$there> hex value of apid is <$hex_apid> decimal value of apid <$apid>\n";}
         # set found flag to no 
         $found="n";
 
         # loop thru DID files and check if in the THERE files list
         foreach $did (@alldid_apid)
         {
-          if($dfg == 1) { print LF "-->debug: did is <$did> and there <$there>\n"};
+          if($dfg == 1) { print LF "gdfdrms.pl:DEBUG: did is <$did> and there <$there>\n"};
           #if did equal there skip since already done
           if ( $did eq $there)
           {
@@ -745,7 +745,7 @@ sub decode_keywords_for_dayfiles()
           }
           else
           {
-            if($dflg) {print LF "-->debug:not equal there vs did-continue looking for:there:<$there> did:<$did>\n"};
+            if($dflg) {print LF "gdfdrms.pl:DEBUG:not equal there vs did-continue looking for:there:<$there> did:<$did>\n"};
             next;
           }
         }
@@ -758,6 +758,10 @@ sub decode_keywords_for_dayfiles()
            {
              # create series name and report name
              if ($source eq "egsefm")
+             {
+               $series= sprintf("%s.%s_%04d", $pjn,$dtn,hex substr($filename,11,4));
+             }
+             elsif ($source eq "rtmon")
              {
                $series= sprintf("%s.%s_%04d", $pjn,$dtn,hex substr($filename,11,4));
              }
