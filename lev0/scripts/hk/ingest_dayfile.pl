@@ -1,33 +1,35 @@
 #!/usr/bin/perl
 ##############################################################################
-# Name:        ingest_dayfile.pl - Ingest hsb or moc or egsefm dayfiles      #
+# Name:        ingest_dayfile.pl - Ingest hsb,rtmon, moc or egsefm dayfiles  #
 # Description: Used to ingest high spreed bus formatted dayfiles to DRMS     #
-#              or moc dayfiles from moc server or egsefm dayfiles from LMSAL.#
-#              Will ingest xml from moc. Currently no xml for hsb and egsefm.#
-#              The script can gather a list of dayfiles based on arguments   #
-#              used for script and then write those file to DRMS. There are  #
-#              a few different ways to gather up files based on apid and     #
-#              and dates. Set path to day files using environment variable   #
-#              DF_HSB_DAYFILE_DIRECTORY in this file. Switch on a small      #
-#              amount of debug using DF_INGEST_HSB_DEBUG set to 1 below.     #
-# Execution:   (1)The run options are show in help listing:                  #
+#              or moc dayfiles from moc server. Use egsefm or rtmon dayfiles #
+#              from LMSAL.Script ingests xml files from moc. Currently no xml#
+#              for hsb,rtmon and egsefm. The script can gather a list of     #
+#              dayfiles based on arguments used for script and then write    #
+#              those files to DRMS. There are a few different ways to gather #
+#              up files based on apid and and dates. Set path to day files   #
+#              using environment variable DF_DAYFILE_DIRECTORY in this file. #
+#              Switch on  debug by using DF_INGEST_DAYFILE_DEBUG set to 1    #
+#              below.                                                        #
+# Execution:   (1)The run options are shown in help listing:                 #
 #              ingest_dayfile -h                                             #
 # Limitation:  Setup required environment variables at top of file based on  #
 #              where running. Script works using hsb,moc  dayfile file       #
 #              format. Here are example input day file based on source of    #
 #              dayfiles:                                                     #
-#                   hsb_0445_2008_04_15_10_41_00.hkt  <hsb>                  #
-#                   0022_2008_050_02.hkt              <moc>                  #
-#                   200805030_0x01d.hkt               <egsefm>               #
-#             Here is formt of moc xml files:                                #
-#                   0022_2008_050_02.hkt.xml          <moc>                  #
+#                   hsb_0445_2008_04_15_10_41_00.hkt: <hsb>                  #
+#                   0022_2008_050_02.hkt            : <moc>                  #
+#                   200805030_0x01d.hkt             : <egsefm>               #
+#                   200805030_0x01d.hkt             : <rtmon>                #
+#              Here is formt of moc xml files:                               #
+#                   0022_2008_050_02.hkt.xml        : <moc>                  #
 # Author:      Carl                                                          #
 # Date:        Move from EGSE to JSOC software environment on April 15, 2008 #
 ##############################################################################
 # main program                                                               #
 ##############################################################################
   #set environment variables specific for this script
-  $ENV{'DF_INGEST_HSB_DEBUG'}="0";
+  $ENV{'DF_INGEST_DAYFILE_DEBUG'}=0;
 
   #common setting for all environments
   $ENV{'SUMSERVER'}="d02.Stanford.EDU";
@@ -38,7 +40,7 @@
   $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
   # set debug flag 1 to turn on and 0 to turn off
-  $dflg=$ENV{'DF_INGEST_HSB_DEBUG'};
+  $dflg=$ENV{'DF_INGEST_DAYFILE_DEBUG'};
 
   #check for any arguments passed in command
   &check_arguments();
@@ -56,7 +58,15 @@
   {
     $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-egsefm";
   }
-
+  elsif ($source eq "rtmon")
+  {
+    $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-rtmon";
+  }
+  else
+  {
+    print "exiting-no source file used!\n";
+    exit;
+  }
   # open log file
   open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
   print LF `date`;
@@ -84,6 +94,14 @@
    #for production#
    #$ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_egsefm_dayfile";
  }
+ elsif ($source eq "rtmon")
+ {
+   # for testing during development  #
+   #$ENV{'DF_DAYFILE_DIRECTORY'}="/home3/carl/LMSAL-DAYFILES";
+   #for production#
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_rtmon_dayfile";
+ }
+ if($dflg) {print "INPUT FILES AT: $ENV{'DF_DAYFILE_DIRECTORY'}\n"};
 
   #get list of initial jsoc definition files to use
   &get_dayfile_list();
@@ -100,7 +118,6 @@
 
   #get lookup table of data series names that go with each APID
   &get_dsn_list();
-
   #ingest files in list as day files
   &ingest_day_files();
  
@@ -280,12 +297,14 @@ sub show_help_info
         ingest_dayfile.pl apidlist=<filename containing APID List to do> dsnlist=<file with ds lookup list> src=<source of data>\n";
   print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_hsb dsnlist=./df_apid_ds_list_for_hsb src=hsb\n";
   print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc dsnlist=./df_apid_ds_list_for_moc src=moc\n";
-  print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_egsefm dsnlist=./df_apid_ds_list_for_src src=egsefm\n\n";
+  print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_egsefm dsnlist=./df_apid_ds_list_for_src src=egsefm\n";
+  print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_rtmon dsnlist=./df_apid_ds_list_for_rtmon src=rtmon\n\n";
   print "(1b)Ingest Day Files using apid option will ingest all files for given apid value:\n
         ingest_hsb_dayfile.pl apid=<apid-value in decimal format> dsnlist=<file with ds lookup list> src=<source of data>\n";
   print "        Example: ingest_dayfile.pl apid=029  dsnlist=./df_apid_ds_list_for_moc src=moc\n";
   print "        Example: ingest_dayfile.pl apid=445  dsnlist=./df_apid_ds_list_for_hsb src=hsb\n";
-  print "        Example: ingest_dayfile.pl apid=029  dsnlist=./df_apid_ds_list_for_egsefm src=egsefm\n\n";
+  print "        Example: ingest_dayfile.pl apid=029  dsnlist=./df_apid_ds_list_for_egsefm src=egsefm\n";
+  print "        Example: ingest_dayfile.pl apid=129  dsnlist=./df_apid_ds_list_for_rtmon src=rtmon\n\n";
   print "(1c)Ingest Day Files using date range with apidfile option:\n
         ingest_dayfile.pl apidlist=<file> start=<yyyymmdd> end=< yyyymmdd> dsnlist=<file with ds lookup list> src=<source of data>\n";
   print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc start=20080518 end=20080530 dsnlist=./df_apid_ds_list_for_moc src=moc\n\n";
@@ -297,22 +316,23 @@ sub show_help_info
   print "(1f)View what going to save in data series by adding -v as first argument. This should work for 1a,1b,1c,and 1d cases.:\n
         ingest_dayfile.pl -v apidlist=<file> start=<yyyymmdd> end=< yyyymmdd> dsnlist=<file with ds lookup list> src=<source of data>\n";
   print "        Example: ingest_dayfile.pl -v apidlist=./df_apid_list_day_file_hsb start=20070216 end=20070218 dsnlist=./df_apid_ds_list_for_hsb src=hsb\n\n";
-  print "*Note:Currently using option ():\n" ;
-  print "(2) Requires setup of JSD file and create series before running script.\n";
-  print "(3) Requires setup of environment variable DF_DAYFILE_DIRECTORY\n";
+  print "*Note:Currently using option (1a) in movedf.pl and getdf.pl scripts that are run as cron jobs on production.\n" ;
+  print "(2) Requires setup of HK By APID JSD file and create series before running scripti\(i.e., hmi.lev0_0445_0022, or sdo.lev0_0129_0022,etc.\).\n";
+  print "(3) Requires setup of environment variable for where the dayfile are located. The variable used is DF_DAYFILE_DIRECTORY\n";
   print "(3a)Used to store location of input day files of this script.\n";
-  print "(3b)Example setting: setenv DF_DAYFILE_DIRECTORY /tmp20/production/hmi_hk \n";
+  print "(3b)Example setting for egsefm files: setenv DF_DAYFILE_DIRECTORY /tmp20/production/hmi_hk \n";
   print "(4) Requires setup of apid list in file when use \"apidlist\" option\n";
   print "(4a)Enter values in file in decimal format(i.e.,0001,0015,0021,0445,0475).\n";
-  print "(4b)Example format and file of apid list is located in this current file: ./df_apid_list_day_files\n";
+  print "(4b)Example format and file of apid list is located in this current file: ./df_apid_list_day_file_hsb\n";
   print "(5) Requires setup of data series name and apid list in file when use \"dsname\" argument.\n";
   print "(5a)Enter values in file in decimal format for APID value and this data series name(i.e.,0445  hmi_ground.hk_dayfile).\n";
   print "(5b)Example format and file of apid list is located in this current file: ./df_apid_ds_list_for_hsb\n";
   print "(5c)Create a file for different types of data to save files in correct series names.\n";
-  print "(5d)For example, create df_apid_ds_list_for_hsb to save hsb dayfiles in series names that are for hmi.hk_dayfile and aia.hk_dayfile data series.View example.\n";
-  print "(5e)Other Examples files:df_apid_ds_list_for_hsb, df_apid_ds_list_for_egsefm, df_apid_ds_list_for_moc, df_apid_ds_list_for_egseem, etc.\n";
-  print "(6)****Limitation****: a)Works only on hsb dayfile formats(i.e., hsb_0445_2007_11_08_16_52_11_00.hkt.\n";
-  print "                       b)Works only on moc dayfile formats(i.e., 0029_2007_150_02.hkt.\n";
+  print "(5d)For example, create df_apid_ds_list_hsb to save hsb dayfiles packets in series names that are for hmi.hk_dayfile and aia.hk_dayfile data series.View example files in cvs.\n";
+  print "(5e)Other Examples files:df_apid_ds_list_rtmon, df_apid_ds_list_egsefm, df_apid_ds_list_moc, etc.\n";
+  print "(6)****Limitation****: a)Works only on hsb dayfile formats\(i.e., hsb_0445_2007_11_08_16_52_11_00.hkt, etc.\).\n";
+  print "                       b)Works only on moc dayfile formats\(i.e., 0029_2007_150_02.hkt.\).\n";
+  print "                       b)Works only on rtmon dayfile formats\(i.e., 20080925.0x0081,etc.\).\n";
   print "                       c)Enter arguments in specified order when running script.\n";
   exit;
 }
@@ -330,7 +350,7 @@ sub get_dayfile_list()
   #close directory file handle
   closedir DIR_DF; 
   push(@df_files, "");
-  if ($dflg eq "1") {print LF "get_dayfile_list():dayfile_list is @df_files\n";}
+  if ($dflg) {print LF "get_dayfile_list():dayfile_list is @df_files\n";}
 }
 #############################################################################
 # subroutine get_apid_to_do: gets list of apid to create maps files for     #
@@ -355,7 +375,7 @@ sub get_apid_to_do
     }
     close FILE_APID_LIST ;
 
-  if ($dflg eq "1") { print LF "get_apid_to_do():...doing decimal formatted apids\n @all_apids";}
+  if ($dflg) { print LF "get_apid_to_do():...doing decimal formatted apids\n @all_apids";}
   }
   elsif ($apid_list_flg eq "2")
   {
@@ -369,7 +389,7 @@ sub get_apid_to_do
       push(@all_apids, substr($ARGV[1],5));
 
     }
-    if ($dflg eq "1") { print LF "get_apid_to_do():...doing decimal formatted apids @all_apids\n";}
+    if ($dflg) { print LF "get_apid_to_do():...doing decimal formatted apids @all_apids\n";}
   }
   else 
   {
@@ -395,6 +415,8 @@ sub get_date_to_do
       $date_r2= substr($ARGV[3],4,8);
     }
   }
+  if ($dflg) { print LF "get_date_to_do():...doing date range $date_r1 to $date_r2\n";}
+
 }
 #############################################################################
 #############################################################################
@@ -409,10 +431,14 @@ sub get_list_to_ingest()
     $strapid=  $apid;
     foreach $file (@df_files)
     {
-      if ($file eq "")
+      if ($file eq "" ) 
       {
-        if ($dflg eq "1") {print LF "get_list_to_ingest:breaking. final item in list \n"};
+        if ($dflg) {print LF "get_list_to_ingest:breaking. final item in list \n"};
         break;
+      }
+      if ( $file eq "." or $file eq "..") 
+      {
+         next;
       }
 
       #compare apid value in list with files
@@ -428,13 +454,17 @@ sub get_list_to_ingest()
       {
         $find_str= sprintf(".%s%04s", "0x", $strapid);
       }
-      if ($dflg eq "1") { print LF "get_list_to_ingest:find str is $find_str\n";}
+      elsif ($source eq "rtmon")
+      {
+        $find_str= sprintf(".%s%04s", "0x", $strapid);
+      }
+      if ($dflg) { print LF "get_list_to_ingest:find str is $find_str\n";}
       if ($apid_list_flg eq "1")
       {
         #chop $find_str;
         $find_str =~ s/\n//g;
       }
-      if ($dflg eq "1") {print LF "get_list_to_ingest:compare file:<$file> vs apid:<$find_str>\n"};
+      if ($dflg) {print LF "get_list_to_ingest:compare file:<$file> vs apid:<$find_str>\n"};
 
       # check filenames and skip those in if clause
       if (( index  $file, $find_str ) != -1)
@@ -460,35 +490,37 @@ sub get_list_to_ingest()
             {
               $year= substr($file,5,4);
               $dyear= substr($file,10,3);
-              if($dflg eq "1") {print LF "get_list_to_ingest:year is $year\n"};
-              if ($dflg eq "1") {print LF "get_list_to_ingest:dyear is $dyear\n"};
+              if($dflg) {print LF "get_list_to_ingest:year is $year\n"};
+              if ($dflg) {print LF "get_list_to_ingest:dyear is $dyear\n"};
               ($filedate)=get_df_date($year, $dyear);
               $filedate =~ s/\.//g;
             }
-            elsif ($source eq "egsefm")
+            elsif ($source eq "egsefm" or $source eq "rtmon")
             {
                $filedate=substr($file,0,8); 
             }
-            if ($dflg eq "1") {print LF "get_list_to_ingest:filedate is $filedate\n"};
+            if ($dflg) {print LF "get_list_to_ingest:filedate is $filedate\n"};
 
             # check filename date is within range of dates entered as arguments
             if( (int $date_r1)  <= (int $filedate) and 
                 (int $date_r2)  >= (int $filedate ) )  
             {   
               push( @list, $file);
-              if ($dflg eq "1") { print LF "get_list_to_ingest:found one push file on list: $file\n"};
+              if ($dflg) { print LF "get_list_to_ingest:found one push file on list: $file\n"};
             }
           }
           else
           {
             #if no date then push on list based only on apid
             push( @list, $file);
-            if ($dflg eq "1") { print LF "get_list_to_ingest:found one push file on list: $file\n"};
+            if ($dflg) { print LF "get_list_to_ingest:found one push file on list: $file\n"};
           }
         }
-      }
+      }#end -if found apid in filename
     }#for each file find apid
   }#for each apid to do
+
+  if ($dflg) { print LF "get_list_to_ingest: list: @list\n"};
 }
 #############################################################################
 # subroutine get_dsn_list(): get list of data series name for each APID     #
@@ -524,7 +556,7 @@ sub get_dsn_list()
     push(@all_dsn_list, $_) ;
   }
   close FILE_DSN_LIST;
-  if($dflg eq "1") {print LF "get_dsn_list:Using data series names for each APID: \n @all_dsn_list\n";}
+if($dflg) {print "get_dsn_list:Using data series names for each APID: \n @all_dsn_list\n"};
 }
 #############################################################################
 # subroutine get_series_name(): get data series name by looking up apid     #
@@ -547,8 +579,6 @@ sub get_series_name()
 #############################################################################
 # subroutine ingest_day_files                                               #
 #############################################################################
-#($foundflg)=&check_apid_list(@apidslist,$currapid);
-#sub check_apid_list (@$)
 sub ingest_day_files()
 {
   $file=""; $xfile="";
@@ -566,7 +596,7 @@ sub ingest_day_files()
     {
       $fapid = substr($file, 0,4);
     }
-    elsif ($source eq "egsefm")
+    elsif ($source eq "egsefm" or $source eq "rtmon")
     {
       $fapid = substr($file, 11,4);
     }
@@ -577,6 +607,7 @@ sub ingest_day_files()
       exit;
     }
     $dsn=get_series_name();
+    if($dflg) {print LF "ingest_dayfile: found series name is <$dsn>\n"};
     $arg1=sprintf("%s%s","ds=", $dsn);
 
     # get date value
@@ -593,21 +624,22 @@ sub ingest_day_files()
       $dyear=substr($file,10,3);
       ($skdate)=get_df_date($year,$dyear);
     }
-    elsif ($source eq "egsefm")
+    elsif ($source eq "egsefm" or $source eq "rtmon")
     {
       $year=substr($file,0,4);
       $month=substr($file,4,2);
       $day=substr($file,6,2);
       $skdate=sprintf("%s.%s.%s",$year,$month,$day); 
     }
+
     #DATE=2008.05.29_00:00:00.000_TAI
     # fix string format to DATE in time variable
     $time_skdate=sprintf("%10.10s_00:00:00_TAI",$skdate);
 
-    #$arg2="DATE=$skdate";
+    # set argument DATE to run in set_key command
     $arg2="DATE=$time_skdate";
 
-    #get apid
+    #get apid and set APID value to run in set_key command
     if ($source eq "hsb")
     {
       $aid=substr($file,4,4);
@@ -616,18 +648,19 @@ sub ingest_day_files()
     {
       $aid=substr($file,0,4);
     }
-    elsif ($source eq "egsefm")
+    elsif ($source eq "egsefm" or $source eq "rtmon")
     {
+      #convert hex value to decimal
       $aid= hex substr($file,11, 4);
     }
     $arg3="APID=$aid";
-
+ 
     #get source
     $arg4="SOURCE=$source";
 
     #get day file name
     $arg5="file=$dir_init_df/$file";
-    if($dflg eq "1") {print LF  "ingest_dayfiles:dayfile arg:<$arg5>\n";}
+    if($dflg) {print LF  "ingest_dayfiles:dayfile arg:<$arg5>\n";}
 
     #get xml file name
     if ($source eq "hsb")
@@ -641,13 +674,13 @@ sub ingest_day_files()
       $xfile=sprintf("%s/%s.xml",$dir_init_df,$file);
       $arg6="xmlfile=$xfile";
     }
-    elsif ($source eq "egsefm")
+    elsif ($source eq "egsefm" or $source eq "rtmon")
     {
       #$xfile=sprintf("%s/%sx",$dir_init_df,$file);
       #$arg6="xmlfile=$xfile";
       $arg6="";
     }
-    if($dflg eq "1") {print LF "ingest_dayfiles:xmlfile arg: <$arg6>\n";}
+    if($dflg) {print LF "ingest_dayfiles:xmlfile arg: <$arg6>\n";}
 
     # check command line to load dayfiles in DRMS day file data series
     @args=("$command","$arg1 ","$arg2 ","$arg3 ","$arg4 " ,"$arg5", "$arg6");
@@ -668,23 +701,23 @@ sub ingest_day_files()
       # create command line
       $ckcommand="show_keys";
       @checkargs=("$ckcommand","$arg1\[$time_skdate\]\[$aid\]\[$source\]","-p seg=file,xmlfile \| grep -v file");
-      if($dflg eq "1") {print LF "ingest_dayfiles:check arguments are <@checkargs>\n";}
+      if($dflg) {print LF "ingest_dayfiles:check arguments are <@checkargs>\n";}
       # execute check for files loaded in drms
       $check_ret_values=`@checkargs`;
       # check values received
       $check_ret_values =~ s/\n//g;
-      if($dflg eq "1") {print LF "ingest_dayfiles:<$check_ret_values>\n";}
+      if($dflg) {print LF "ingest_dayfiles:<$check_ret_values>\n";}
       # split file and xmlfile values returned
       @s_ret_values = split ' ', $check_ret_values;
-      if($dflg eq "1") {print LF "ingest_dayfiles:first is <$s_ret_values[0]>\n";};
-      if($dflg eq "1") {print LF "ingest_dayfiles:second is <$s_ret_values[1]>\n";}
+      if($dflg) {print LF "ingest_dayfiles:first is <$s_ret_values[0]>\n"};
+      if($dflg) {print LF "ingest_dayfiles:second is <$s_ret_values[1]>\n"};
       # check if files exist
       if ( -e $s_ret_values[0])
       {
-         if($dflg eq "1") {print LF "ingest_dayfiles:file exists:$s_ret_values[0]\n";}
+         if($dflg) {print LF "ingest_dayfiles:file exists:$s_ret_values[0]\n";}
          #parse just filename
          my($directory, $filename) = $s_ret_values[0]=~ m/(.*\/)(.*)$/;
-         if($dflg eq "1") {print LF "ingest_dayfiles:filename is <$filename>\n";}
+         if($dflg) {print LF "ingest_dayfiles:filename is <$filename>\n";}
          #add just filename to delete_file list
          if($filename ne "")
          {
@@ -695,10 +728,10 @@ sub ingest_day_files()
       }
       if ( -e $s_ret_values[1])
       {
-        if($dflg eq "1") {print LF "ingest_dayfiles:file exists:$s_ret_values[1]\n";}
+        if($dflg) {print LF "ingest_dayfiles:file exists:$s_ret_values[1]\n";}
         #parse just filename
         my($directory, $xmlfilename) = $s_ret_values[1]=~ m/(.*\/)(.*)$/;
-        if($dflg eq "1") {print LF "ingest_dayfiles:xmlfilename is <$xmlfilename>\n";}
+        if($dflg) {print LF "ingest_dayfiles:xmlfilename is <$xmlfilename>\n";}
         #add just filename to delete_file list
         if($xmlfilename ne "")
         {
@@ -711,7 +744,7 @@ sub ingest_day_files()
 
       #$log=`@args`;
       #print LF $log;
-      if($dflg eq "1") {print LF "ingest_dayfiles:loading data to be loaded in data series only\n";}
+      if($dflg) {print LF "ingest_dayfiles:loading data to be loaded in data series only\n";}
 
     }
   }
@@ -739,7 +772,7 @@ sub get_df_date($$)
 
   # call mktime
   $unixtime=mktime('','','',$day1,$mon1,$year1,'','');
-  if($dflg eq "1") {print LF "get_df_date:unixtime is $unixtime\n"};
+  if($dflg) {print LF "get_df_date:unixtime is $unixtime\n"};
 
   #get broke up time
   ($sec,$min,$hour,$mday,$monoffset,$yearoffset,$wday,$yday,$isdst) = localtime($unixtime);
@@ -752,11 +785,11 @@ sub get_df_date($$)
 
   # create DATE for index for dayfile
   $date_for_dayfile=sprintf("%-4.4d.%-02.2d.%-02.2d",$year,$mon,$mday);
-  if($dflg eq "1") {print LF "get_df_date:date for dayfile is $date_for_dayfile\n"};
+  if($dflg) {print LF "get_df_date:date for dayfile is $date_for_dayfile\n"};
 
   # get time in seconds
   $tm_seconds=timelocal($sec,$min,$hour,$mday,$monoffset,$year);
-  if($dflg eq "1") {print LF "get_df_date:timelocal returned seconds are <$tm_seconds>\n"};
+  if($dflg) {print LF "get_df_date:timelocal returned seconds are <$tm_seconds>\n"};
 
   #return value yyyy.mm.dd
   return ($date_for_dayfile);
