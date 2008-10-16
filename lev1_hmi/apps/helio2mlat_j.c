@@ -143,7 +143,7 @@ int DoIt(void)
 
       for (iset = 0; iset < nsets; iset++)
       {
-	 while ((inrec = drms_recordset_fetchnextinset(inrecs, &iset, &status)) != NULL)
+	 while ((inrec = drms_recordset_fetchnextinset(drms_env, inrecs, &iset, &status)) != NULL)
 	 {
 	    /* create the corresponding output record (which may be 'blank) */
 	    orec = drms_create_record(drms_env, outseries, DRMS_PERMANENT, &status);
