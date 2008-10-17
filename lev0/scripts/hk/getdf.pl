@@ -1,19 +1,21 @@
 #!/usr/bin/perl
 ##############################################################################
 # Name:        getdf.pl  - get day files, ingest into dayfile data series    #
-#                          then remove day file                              #
-# Description: Get dayfiles from drop directory for hsb, egsefm(in future)   #
+#                          then valid files in data series and if there the  #
+#                          remove day files from file system.                #
+# Description: Get dayfiles from drop directory for sources hsb and rtmon.   #
 #              Call ingest_dayfile.pl and validate loaded dayfiles. If so    #
 #              remove dayfile from file system.                              #
 # Execution:   getdf.pl hsb                                                  #
 #              getdf.pl rtmon                                                #
 # Limitation:  The get dayfiles process works for dayfiles from              #
 #              the hsb and rtmon dayfiles only. This script is not used      #
-#              currently to move and  call ingest_dayfiles.pl for            #
-#              LMSAL dayfiles. This script does not check if dayfile is in   #
-#              data series before writing to data series, therefore can      #
-#              overwrite.  Script not used for moc prod server dayfiles(see  #
-#              movedf.pl script). The help flag is not implemented yet.      #
+#              currently to move dayfile to hk_rtmon_dayfile directory and   #
+#              call ingest_dayfiles.pl for LMSAL dayfiles. This script does  #
+#              not check if dayfile is in data series before writing to data #
+#              series, therefore can overwrite.  Script not used for moc prod#
+#              server dayfiles(see movedf.pl script). The help flag is not   #
+#              implemented yet.                                              #
 ##############################################################################
 # set Environment Variables
 
