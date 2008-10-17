@@ -1315,10 +1315,12 @@ char * find_fvn_from_shcids(SHCIDS_Version_Number *top, char p_date[], int apid)
   SHCIDS_Version_Number  *tmp_ptr;
   char new_str[9];
   char *saved_fvn;
+  char saved_fvn_str[50];
   int current_date;
   int pkt_date;
   int saved_date;
   int saved_flg=0;
+  saved_fvn=saved_fvn_str;
 
   /* change string date to integer value to make easier to compare */
   for(int i=0; i < 9; new_str[i++]='\0');
@@ -1358,7 +1360,12 @@ char * find_fvn_from_shcids(SHCIDS_Version_Number *top, char p_date[], int apid)
   else
   {
     /* if did not find file version from SHCIDS file then set to zero */
-    return ("0.0");
+    strcpy(saved_fvn,"BAD PKT DATE");
+    printkerr("Error at %s, line %d: Could not find date in shcids.txt file  "
+              "to look up file version to reference for config files. "
+              "Problem Packet Date used was:<%s>. Probably bad data for timecodes\n",
+                __FILE__,__LINE__,new_str);
+    return ((char*)saved_fvn);
   }
 }
 /***************************************************************************** 
