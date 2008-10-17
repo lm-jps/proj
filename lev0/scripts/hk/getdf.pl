@@ -6,19 +6,22 @@
 #              Call ingest_dayfile.pl and validate loaded dayfiles. If so    #
 #              remove dayfile from file system.                              #
 # Execution:   getdf.pl hsb                                                  #
-#              getdf.pl rtmon                                                #
+#              getdf.pl egsefm(in future)                                    #
 # Limitation:  The get dayfiles process works for dayfiles from              #
-#              the hsb and rtmon dayfiles only. This script is not used      #
+#              the hsb dayfiles only. This script is not used                #
 #              currently to move and  call ingest_dayfiles.pl for            #
 #              LMSAL dayfiles. This script does not check if dayfile is in   #
 #              data series before writing to data series, therefore can      #
 #              overwrite.  Script not used for moc prod server dayfiles(see  #
-#              movedf.pl script). The help flag is not implemented yet.      #
+#              movedf.pl script)                                             #
 ##############################################################################
 # set Environment Variables
 
+# drop off directory for location of HSB dayfiles,etc
+$doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/tmp21/production/lev0/hk_hsb_dayfile";
+
 # debug flag
-$dflg=$ENV{'DF_GETDF_DEBUG'}=0;
+$dflg=$ENV{'DF_GETDF_DEBUG'}="0";
 
 #common setting for all environments
 $ENV{'SUMSERVER'}="d02.Stanford.EDU";
@@ -28,7 +31,7 @@ $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
-#set common email arguments
+#email arguments
 $from_email="carl\@sun.stanford.edu";
 $to_email="carl\@sun.stanford.edu";
 $subject_email="JSOC:WARNING:Ingesting HSB dayfiles: status:no files loaded today";
@@ -36,14 +39,10 @@ $subject_email="JSOC:WARNING:Ingesting HSB dayfiles: status:no files loaded toda
 # check arguments
 &check_agruments();
 
-# set drop off directory for location of HSB or RTMON dayfiles,etc
 # set log file based on source of dayfiles
-# set subject mail arguments based on either HSB or RTMON args
 if ($src eq "hsb")
 {
-  $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/tmp21/production/lev0/hk_hsb_dayfile";
   $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-hsb";
-  $subject_email="JSOC:WARNING:Ingesting HSB dayfiles: status:no files loaded today";
 }
 elsif ($src eq "moc")
 {
@@ -53,16 +52,9 @@ elsif ($src eq "egsefm")
 {
   $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-egsefm";
 }
-elsif ($src eq "rtmon")
-{
-  $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/tmp21/production/lev0/hk_rtmon_dayfile";
-  $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-rtmon";
-  $subject_email="JSOC:WARNING:Ingesting RTMON dayfiles: status:no files loaded today";
-}
 
 # set up where to put backup logs written monthly 
-#$logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
-$logs_dir="$hm/cvs/myprod/JSOC/proj/lev0/scripts/hk/logs";
+$logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
 
 # open log file and append
 open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
@@ -91,20 +83,6 @@ if  ($src eq "hsb")
   print LF "--->Completed processing day files to data series using ingest_dayfile.pl script\n";
 
 }
-elsif ($src eq "rtmon")
-{
-  #log status to logfile
-  print LF "--->Date range is to do all existing \n";
-  print LF "--->Start processing day files to data series using ingest_dayfile.pl script\n";
-  close LF;
-
-  #call ingest_dayfile.pl script 
-  $log=`/usr/bin/perl  $script_dir/ingest_dayfile.pl  apidlist=$script_dir/df_apid_list_day_file_rtmon dsnlist=$script_dir/df_apid_ds_list_for_rtmon src=rtmon`;
-
-  #reopen log
-  open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
-  print LF "--->Completed processing day files to data series using ingest_dayfile.pl script\n";
-}
 elsif ($src eq "moc")
 {
   print "--->WARNING:Not used for source equal to <$src>. Note using movedf.pl for moc dayfile processing\n";
@@ -124,14 +102,14 @@ while (<DELFILE>)
 {
   $_ =~ s/\n//g;
   push(@all_del_file_lines, $_) ;
-  if ($dflg) {print LF "validated file saved to drms.deleting file from file system directory:$_\n";}
+  if ($dflg eq "1") {print LF "validated file saved to drms.deleting file from file system directory:$_\n";}
   $log=`rm $doff_dir/$_`;
-  if ($dflg) {print LF "$log\n";}
+  if ($dflg eq "1") {print LF "$log\n";}
   $hkt_filecount++;
 }#while
 if($hkt_filecount > 0)
 {
-  print LF "--->Deleted dayfiles that where successfully processed into data series. Number loaded to drms and deleted from filesystem:$hkt_filecount\n";
+  print LF "--->Deleted dayfiles that where successfully processed into data series. Number deleted:$hkt_filecount\n";
 }
 else
 {
@@ -161,22 +139,22 @@ sub check_agruments()
   #check arguments
   if ($#ARGV != 0 )
   {
-    print "Usage: perl getdf.pl  <dayfile source>\nwhere source is either:hsb,moc,egsefm or rtmon.\n";
+    print "Usage: perl getdf.pl  <dayfile source>\nwhere source is either:hsb,moc,egsefm.\n";
     exit;
   }
   elsif ("-h" eq substr($ARGV[0],0,2) )
   {
-     print "Usage: perl getdf.pl  <dayfile source>\nwhere source is either:hsb,moc,egsefm,or rtmon.\n";
+     print "Usage: perl getdf.pl  <dayfile source>\nwhere source is either:hsb,moc,egsefm.\n";
      exit;
   }
-  elsif("moc" eq substr($ARGV[0],0,3) or "hsb" eq substr($ARGV[0],0,3) or "egsefm" eq substr($ARGV[0],0,6)  or "rtmon" eq substr($ARGV[0],0,5))
+  elsif("moc" eq substr($ARGV[0],0,3) or "hsb" eq substr($ARGV[0],0,3) or "egsefm" eq substr($ARGV[0],0,6))
   {
     #print "okay\n";
   }
   else
   {
      print "ERROR: Entered incorrect source name for data series. Use moc,hsb,\n";
-     print "Usage: perl getdf.pl  <dayfile source>\nwhere source is either:hsb,moc,egsefm, or rtmon.\n";
+     print "Usage: perl getdf.pl  <dayfile source>\nwhere source is either:hsb,moc,egsefm.\n";
      exit;
   }
 }
