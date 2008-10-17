@@ -732,6 +732,7 @@ void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out
   /* go thru each packet and print to standout and save to drms */
   for(k=0,factor=0,packet_length=0;  ; k++)
   {
+printf("top k is %d\n", k);
 
     /* init dsn */
     for(x=0; x < HKDDF_MAX_DSNAME_STR; data_seriesname[x]='\0', x++);
@@ -810,8 +811,9 @@ void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out
     if (s)
     {
       printkerr("Error at %s, line %d: decode_hk_keyword function returned"
-                " error status number <%d>\n", __FILE__,__LINE__, s);
-      return;
+                " error status number <%d>\n\n", __FILE__,__LINE__, s);
+      continue;/*added-10-7-2008*/
+      
     }
     kw_head= ccsds.keywords;
 
@@ -1170,7 +1172,8 @@ void  save_packet_values2(unsigned char *read_in_buffer, char projname[HKDDF_MAX
     if (s) 
     {
       printkerr("Error at %s, line %d: decode_hk_keyword function returned"
-                " error status number <%d>\n", __FILE__,__LINE__, s);
+                " error status number <%d>\n\n", __FILE__,__LINE__, s);
+      continue;/*added-10-7-2008*/
     }
     kw_head= ccsds.keywords;
 
@@ -1311,8 +1314,8 @@ void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in,
     if (s) 
     {
       printkerr("Error at %s, line %d: decode_hk_keyword function returned"
-                " error status number <%d>\n", __FILE__,__LINE__, s);
-      return;
+                " error status number <%d>\n\n", __FILE__,__LINE__, s);
+      continue;/*added-10-7-2008*/
     }
     kw_head= ccsds.keywords;
 
@@ -1577,7 +1580,8 @@ void save_packet_values1(unsigned char *read_in_buffer, char *out)
     if (s) 
     {
       printkerr("Error at %s, line %d: decode_hk_keyword function returned"
-                " error status number <%d>\n", __FILE__,__LINE__, s);
+                " error status number <%d>\n\n", __FILE__,__LINE__, s);
+      continue;/*added-10-7-2008*/
     }
     kw_head= ccsds.keywords;
 
