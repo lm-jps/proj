@@ -107,9 +107,11 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
     if(check_for_sdo_apid(apid))
     {
       printkerr("ERROR at %s, line %d: This apid <%x> does not have valid "
-                "config data to decode packet. Check if sdo hk config files exists "
-                "for file version number  <%s>. "
-                "If don't exist, run make_hkpdf.pl script to create files.\n",
+                "config data to decode packet. Check if sdo hk config files "
+                "exists for file version number <%s>. "
+                "If don't exist, run make_hkpdf.pl script to create files. "
+                "If file version is  set to <BAD PKT DATE> then check if "
+                "packet date from packet time is a valid date. \n",
                 __FILE__, __LINE__, apid, find_fvn_from_shcids(global_shcids_vn, pkt_date,apid));
     }
     else
