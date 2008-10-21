@@ -8,7 +8,8 @@
  */
 
 /**
-\defgroup jsoc_info jsoc_info
+\defgroup jsoc_info jsoc_info - same as show info, except that can output json and run under cgi-bin
+@ingroup su_export
 
 Prints keyword, segment, and other information and/or file path for given recordset, designed for use as a cgi-bin program.
 

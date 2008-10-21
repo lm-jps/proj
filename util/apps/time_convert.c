@@ -6,6 +6,7 @@
 
 /**
    @defgroup time_convert time_convert
+   @ingroup su_util
 
    @brief Convert among the internal DRMS time representation and other time representations.
 

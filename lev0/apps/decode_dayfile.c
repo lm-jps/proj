@@ -29,9 +29,10 @@
 # Author:      Carl                                                          #
 # Date:        Move from EGSE to JSOC software environment on April 10, 2008 #
 ############################################################################*/
-
-/**doxygen
-   @defgroup    decode_dayfile  decode_dayfile     
+
+/**
+   @defgroup decode_dayfile decode_dayfile
+   @ingroup su_lev0
 
    @code
    Decode dayfile decodes hk packet by sending packet to functions in 
@@ -65,9 +66,6 @@
    HK_DDF_PROJECT_NAME_xxx & HK_DDF_DATA_ID_NAME. Need data series 
    already created for this to program to load keywords in data series.
 */
-    
-
-
 /*  @{ */
 /* Defined constants */
 /******************** defines ***********************************************/

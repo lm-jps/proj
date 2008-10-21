@@ -24,7 +24,8 @@
 /* NOTE that this module uses the dr library cloned from the sds library !! */
 
 /**
-   @defgroup hmi_import_egse_lev0 hmi_import_egse_lev0
+   @defgroup hmi_import_egse_lev0 hmi_import_egse_lev0 - ingest pre-launch level-0 data files
+   @ingroup su_lev0
 
    Import ground test level0 FITS files into DRMS.
 
