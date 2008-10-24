@@ -174,10 +174,10 @@ int drms_count_records(DRMS_Env_t *env, char *recordsetname, int *status)
 
 ModuleArgs_t module_args[] =
 { 
-  {ARG_STRING, "op", "Not Specified", "<Operation>"},
+  {ARG_STRING, "op", "Not Specified", "<Operation>, values are: series_struct, rs_summary, or rs_list "},
   {ARG_STRING, "ds", "Not Specified", "<record_set query>"},
-  {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>"},
-  {ARG_STRING, "seg", "Not Specified", "<comma delimited segment list>"},
+  {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *logdir*, *dir_mtime*  "},
+  {ARG_STRING, "seg", "Not Specified", "<comma delimited segment list>, segnames or special values: **ALL**, **NONE** "},
   {ARG_FLAG, "h", "0", "help - show usage"},
   {ARG_FLAG, "R", "0", "Show record query"},
   {ARG_FLAG, "z", "0", "emit JSON output"},
@@ -192,13 +192,17 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
-    printf ("Usage:\njsoc_info {-h} "
-	"op=<command> ds=<recordset query> {n=0} {key=<keylist>} {seg=<segment_list>}\n"
+    printf ("Usage:\njsoc_info {-h} {-z} {-R} "
+	"op=<command> ds=<recordset query> {key=<keylist>} {seg=<segment_list>}\n"
         "  details are:\n"
-	"op=<command> tell which ajax function to execute\n"
+	"-h -> print this message\n"
+	"-z -> emit json output, default at present.\n"
+	"-R -> include record query.\n"
+	"op=<command> tell which ajax function to execute, values are: series_struct, rs_summary, or rs_list \n"
 	"ds=<recordset query> as <series>{[record specifier]} - required\n"
-	"key=<comma delimited keyword list>, for all use -a flag\n"
-	"seg=<comma delimited segment list>\n"
+	"key=<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *logdir*, *dir_mtime* \n"
+	"seg=<comma delimited segment list>, segnames or special values: **ALL**, **NONE** \n"
+	"QUERY_STRING=<cgi-bin params>, parameter string as delivered from cgi-bin call.\n"
 	);
     return(1);
     }
