@@ -48,7 +48,8 @@
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
-#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
+//#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
+#define LEV0SERIESNAMEHMI "hmi.lev0e"
 #define TLMSERIESNAMEHMI "su_production.tlm_test"
 #define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
 #define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
@@ -158,6 +159,7 @@ int total_missing_vcdu;
 int errmsgcnt, fileimgcnt;
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when ingest_lev0 is called for a restart
+int abortflg = 0;
 int sigalrmflg = 0;             // set on signal so prog will know 
 int ignoresigalrmflg = 0;       // set after a close_image()
 int firstfound = 0;		// set if see any file after startup
@@ -540,7 +542,7 @@ int fsn_change_normal()
     rset = drms_open_records(drms_env, reopen_dsname, &rstatus);
     if(rstatus) {
       printk("Can't do drms_open_records(%s)\n", reopen_dsname);
-      //return(1);          // !!!TBD
+      return(1);          // !!!TBD
     }
     if(!rset || (rset->n == 0) || rstatus) {
       printk("No prev ds\n");     // start a new image
@@ -666,7 +668,7 @@ int fsn_change_rexmit()
   rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
   if(rstatus) {
     printk("Can't do drms_open_records(%s)\n", rexmit_dsname);
-    //return(1);		// !!!TBD 
+    return(1);		// !!!TBD 
   }
   if(!rset || (rset->n == 0) || rstatus) {
     printk("No prev ds\n");	// start a new image 
@@ -899,14 +901,19 @@ int get_tlm(char *file, int rexmit, int higherver)
       if(rexmit || higherver) {
         if(fsnx != fsn_prev) {          // the fsn has changed
           if(fsn_change_rexmit()) {	//handle old & new images
-            continue;			//get next vcdu
+            printk("***FATAL ERROR in fsn_change_rexmit()\n");
+            return(1);
           }
+        }
+        else {				//prev could be hk w/diff apid
+          ImgC->apid = appid;
         }
       }
       else {			// continuing normal stream
         if(fsnx != fsn_prev) {          // the fsn has changed 
           if(fsn_change_normal()) {	//handle old & new images
-            continue;			//get next vcdu
+            printk("***FATAL ERROR in fsn_change_normal()\n");
+            return(1);
           }
         }
       }
@@ -988,7 +995,8 @@ int get_tlm(char *file, int rexmit, int higherver)
           if(rexmit || higherver) {
             if(fsnx != fsn_prev) {          // the fsn has changed
               if(fsn_change_rexmit()) {	//handle old & new images
-                continue;			//get next vcdu
+                printk("***FATAL ERROR in fsn_change_rexmit()\n");
+                return(1);
               }
             }
             //calculate and setkey some values from the keywords returned
@@ -1003,7 +1011,8 @@ int get_tlm(char *file, int rexmit, int higherver)
           else {					//normal stream
             if(fsnx != fsn_prev) {          // the fsn has changed 
               if(fsn_change_normal()) {	//handle old & new images
-                continue;			//get next vcdu
+                printk("***FATAL ERROR in fsn_change_normal()\n");
+                return(1);
               }
             }
             //calculate and setkey some values from the keywords returned
@@ -1054,7 +1063,11 @@ int get_tlm(char *file, int rexmit, int higherver)
   if(rexmit || higherver) {	// close the opened record 
     if(rsc) {			// make sure have created record
       close_image(rsc, segmentc, oldArray, ImgO, fsnx);
-      imagecnt++;
+      printk("drms_server_end_transaction()\n");  //commit at end of file
+      drms_server_end_transaction(drms_env, 0 , 0);
+      printk("drms_server_begin_transaction()\n\n");
+      drms_server_begin_transaction(drms_env); //start another cycle
+      imagecnt = 0;
       fileimgcnt++;
       //fsn_prev = fsn_pre_rexmit; // restore orig for next normal .tlm file
       fsn_prev = 0;		//need for restart of normal mode
@@ -1264,8 +1277,10 @@ void do_ingest()
     firstfound = 1;			//a file has been seen
     if(get_tlm(xxname, rexmit, higherversion)) { // lev0 extraction of image 
       printk("***Error in lev0 extraction for %s\n", xxname);
+      printk("***Going to abort\n");
+      abortflg = 1;
     }
-    if(stat(stopfile, &stbuf) == 0) { break; } //signal to stop
+    if((stat(stopfile, &stbuf) == 0) || abortflg) { break; } //signal to stop
   }
   free(nameptr);
 }
@@ -1442,8 +1457,8 @@ int DoIt(void)
     }
 *****************************************************************************/
 
-    if(stat(stopfile, &stbuf) == 0) {
-      printk("Found file: %s. Terminate.\n", stopfile);
+    if((stat(stopfile, &stbuf) == 0) || abortflg) {
+      printk("Abort or Found file: %s. Terminate.\n", stopfile);
       //now close any open image
       if(Image.initialized) {
         if(rs) {		//make sure have a created record
