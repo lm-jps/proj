@@ -1,10 +1,10 @@
 /*############################################################################
 # Name:        decode_dayfile.c - Decode Dayfiles                            #
-# Description: Decode dayfile decodes hk packet by sending packet to         #
+# Description: Decode dayfile decodes hk packet by sending hk packets to     #
 #              functions in decode_hk.c file. Keywords are decoded using the #
 #              the same functions that decodes hk keywords on high speed bus.#
 #              This decode_dayfiles loops through all hk packets and sends   #
-#              data to be decoded to decode_hk.c and write data to DRMS data #
+#              data to be decoded to decode_hk.c and writes data to DRMS data#
 #              series based on apid, project name, data type name, and jsoc  #
 #              version number.When run without out parameter this code looks #
 #              up name of data series name to put keyword names and values in#
@@ -34,37 +34,84 @@
    @defgroup decode_dayfile decode_dayfile
    @ingroup su_lev0
 
-   @code
-   Decode dayfile decodes hk packet by sending packet to functions in 
-   decode_hk.c file. Keywords are decoded using the the same functions that 
-   decodes hk keywords on high speed bus. This decode_dayfiles loops through 
-   all hk packets and sends data to be decoded to decode_hk.c and write data 
-   to DRMS data series based on apid, project name, data type name, and jsoc 
-   version number.When run without out parameter this code looks  up name of 
-   data series name to put keyword names and values in.
-   @endcode
+   @brief Decodes housekeeping packet data from dayfiles and writes decoded keywords and values to DRMS series.
 
    @par Synopsis:
    @code
+   decode_dayfile -h
    decode_dayfile [-p] in=<day filename> [ out=<data series name> ] 
    @endcode
 
+   Decode dayfile decodes hk packet by sending packet to functions in 
+   decode_hk.c file. Keywords are decoded using the the same functions that 
+   decodes hk keywords on high speed bus. This decode_dayfiles loops through 
+   all hk packets and sends data to be decoded to decode_hk.c's functions 
+   which returns a structure containing keyword names, keyword values, keyword
+   and keyword variable types. Decode dayfile code then writes keywords names and 
+   values to a DRMS data series. DRMS data series is based on apid(i.e.,0445,0529), 
+   project name(i.e.,hmi,aia, sdo,etc.), data type name(i.e., lev0), and jsoc 
+   version number(0001, 0002, etc.).
+   
+   The in parameter is mandatory argument which should contain the directory and 
+   filename of the input dayfile. Currently only one dayfile is allowed for the in 
+   parameter.
+
+   The out parameter is optional. When run without out parameter, this 
+   code creates the data series name to put keyword names and values in. 
+   When run with the out parameter, this code will write keywords and values 
+   to the data series name defined by the out parameter value. For either case
+   there needs to be a data series already created. This code does not create
+   a data series but determines and then creates if necessary the data series 
+   name to write data to. 
+
+   When use the -p flag, a report on each packet is send to standard output. 
+   By using -p flag, the report output can be redirected to a file
+   (i.e., > Report_ISP_DAYFILE_OCTOBER_29_2008).
+
    @par Flags:
+   @c -h: Shows usage message.
    @c -p: Prints report on each packets keyword name and value to standout out
    @par
 
-   @param in
-   The full path and input day file name(required field).
+   @param in The full directoy path and file name to the input dayfile(required field).
 
-   @param out
-   The data series name to write keyword names and values to(optional).
-   Normally do not run with this option.If not present, the code will
+   @param out The data series name to write keyword names and values to(optional).
+   Normally do not run with this option. If not present, the code will
    automatically create data series name using the apid and packet 
    version number(for hmi and aia packets) in packets or packet time
    for sdo packets in day files.  Also required to set environment 
    variables for project names and data identifer name: 
-   HK_DDF_PROJECT_NAME_xxx & HK_DDF_DATA_ID_NAME. Need data series 
-   already created for this to program to load keywords in data series.
+   HK_DDF_PROJECT_NAME_xxx & HK_DDF_DATA_ID_NAME. These variables are in the the
+   SOURCE_ENV_FOR_HK_DAYFILE_DECODE file which is read in based on the setting of
+   define ENVFILE . The data series needs to be already created for this to program 
+   to load keywords in data series.  This code only creates the name of the data 
+   series to write to, it does not create data series. 
+
+   @par Example of running without out parameter using as in parameter an ISP dayfile from MOC Product Server:
+   @code
+   decode_dayfile in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt 
+   @endcode
+
+   @par Example of running with -p flag, without out parameter using as in parameter an ISP dayfile from MOC Product Server:
+   @code
+   decode_dayfile -p in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt  > Report_ISP_0029_2008_275_01.hkt 
+   @endcode
+
+   @par Example of running with out parameter using as in parameter an ISP dayfile from MOC Product Server:
+   @code
+   decode_dayfile in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt out=hmi.lev0_0029_0008
+   @endcode
+
+   @par Example of running with -p print flag with out parameter using as in parameter an ISP dayfile from MOC Product Server:
+   @code
+   decode_dayfile -p in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt out=hmi.lev0_0029_0008 >  Report_ISP_0029_2008_275_01.hkt
+   @endcode
+
+   @par Example of running help:
+   @code
+   decode_dayfile -h
+   @endcode
+
 */
 /*  @{ */
 /* Defined constants */
@@ -84,7 +131,6 @@
 #define HKDDF_MAX_VERSION_LINES  1000
 #define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
 /*carl local test version:#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
-/* @} */
 /******************** includes ******************************************/
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,14 +148,13 @@
 #include "packets.h"
 #include "decode_hk.h"
 #include "printk.h"
-
 
 /************* modules definitions **************************************/
 ModuleArgs_t module_args[] =
 {
   {ARG_STRING, "in", "Not Specified", "full path to day file"},
   {ARG_STRING, "out", "Not Specified", "Series name"},
-  {ARG_FLAG, "p", "0", "print values of  keywords to standard out"},
+  {ARG_FLAG, "p", "0", "print values of keywords to standard out"},
   {ARG_END}
 };
 ModuleArgs_t   *ggModArgs=module_args;
@@ -156,6 +201,8 @@ struct jsvn_map_data
 /********************* enums      *************************************/
 /* used for projname array to lookup project name */
 enum project{pjnHMI,pjnAIA,pjnSDO};
+
+/* @} */
 
 
 
