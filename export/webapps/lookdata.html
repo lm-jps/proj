@@ -127,6 +127,7 @@ function CleanSeriesPick()
   nsegsselected = 0;
   askedCount = 0;
   $("WantRecInfo").checked = 1;
+  $("AllowBigQueries").checked = 0;
   $("RecSetPlace").innerHTML = "";
   CleanKeysSelect();
   }
@@ -138,7 +139,6 @@ function CleanKeysSelect()
     $("KeysSelect").remove(i-1);
   for (var i=$("SegsSelect").length; i > 0; i--)
     $("SegsSelect").remove(i-1);
-  $("WantRecInfo").checked = 1;
   $("DisplayPlace").innerHTML = "";
   $("SegListPlace").innerHTML = "";
   $("KeyListPlace").innerHTML = "";
@@ -623,7 +623,7 @@ function GetKeyValues()
     $("DisplayPlace").innerHTML = "There are no records in the chosen RecordSet";
     return;
     }
-  if (RecordCount > 10000)
+  if (RecordCount > 10000 && !$("AllowBigQueries").checked)
     {
     $("DisplayPlace").innerHTML = "Requested Recordset is too large for this function, " + RecordCount + 
 	" records.<BR>Please go back to step 3 and choose a smaller recordset.";
@@ -1193,6 +1193,9 @@ RecordSet Query:&nbsp;
 <BR>
 <input type="checkbox" name="Get Record Query" id="WantRecInfo">
 Check to Get Record Query and online status and links if a segment selected.
+&nbsp; &nbsp; &nbsp; &nbsp;
+<input type="checkbox" name="AllowBigQueries" id="AllowBigQueries">
+Check to Allow Huge Record Queries.
 <BR>
 <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
 <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
