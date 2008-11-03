@@ -40,6 +40,8 @@ my($kDBUSER) = "dbuser";
 my($kDBNAME) = "dbname";
 my($kNOTLIST) = "notify";
 
+my($err) = 0;
+
 my($jsocmach);
 
 my($arg);
@@ -207,7 +209,11 @@ $cmd = "dlMOCDataFiles\.pl -c $scriptPath/mocDlFdsSpec.txt -s $permdataPath/mocD
 # (can't factor out the system call - it needs to be in the same scope as the 'local' statements)
 if (-e $sshagentConf)
 {
-    $logcontent = $logcontent . "found ssh-agent.\n";
+    my($agentpid);
+    my($agentcmd);
+    my($agentfound) = 0;
+    
+    $logcontent = $logcontent . "found ssh-agent environment variables.\n";
 
     # 'local' ensures that calls outside of this block don't see these environmental changes.
     # It creates a copy of the environment, which then gets restored upon exit of the block.
@@ -221,17 +227,57 @@ if (-e $sshagentConf)
         chomp($line);
         if ($line =~ /^setenv\s+(.+)\s+(.+);/)
         {
-            $logcontent = $logcontent . "got ssh env var $1 = $2\n";
+            $logcontent = $logcontent . "\tgot ssh env var $1 = $2\n";
             $ENV{$1} = $2;
         }
     }
+
+    # ensure that the environment variables point to a running ssh-agent
+    $agentpid = $ENV{'SSH_AGENT_PID'};
+    
+    if (defined($agentpid))
+    {
+        # $agentlink = readlink("/proc/$agentpid/exe");
+        #
+        # can't do what you'd like to do (read the link and see that it points to
+        # the ssh-agent process file) - only root can do that.
+        # Not sure why.  For other processes, you can read the links in /proc, and
+        # for links to ssh-agent outside of /proc, you can read the links.
+        # You can't even do if (-e "/proc/$agentpid/exe").
+        #
+        # You can look at /proc/$agentpid/cmdline though.
+        
+        $agentcmd = `cat "/proc/$agentpid/cmdline"`;
+        
+        if (defined($agentcmd))
+        {
+            if ($agentcmd =~ /ssh-agent/)
+            {
+                $agentfound = 1;
+            }
+        }
+    }
+    
+    if (!$agentfound)
+    {
+        $logcontent = $logcontent . "LOGALL: ssh-agent NOT RUNNING.\n";
+        $err = 1;
+    }
+    else
+    {
+        $logcontent = $logcontent . "ssh-agent running (pid $agentpid).\n";
+    }
+
 
     # Dump log
     open(LOGFILE, ">$logfile") || die "Couldn't write to logfile '$logfile'\n";
     print LOGFILE $logcontent;
     close(LOGFILE);
 
-    system("$cmd 1>>$logfile 2>&1");
+    if (!$err)
+    {
+        system("$cmd 1>>$logfile 2>&1");
+    }
 }
 else
 {
@@ -245,14 +291,17 @@ else
     system("$cmd 1>>$logfile 2>&1");
 }
 
-# Ingest FDS files into $fdsseriesname
-$cmd = "fdsIngest\.pl $dataPath/fds -s $namespace\.$fdsseriesname -r";
-system("$cmd 1>>$logfile 2>&1");
+if (!$err)
+{
+    # Ingest FDS files into $fdsseriesname
+    $cmd = "fdsIngest\.pl $dataPath/fds -s $namespace\.$fdsseriesname -r";
+    system("$cmd 1>>$logfile 2>&1");
 
-# Ingest orbit vectors into $orbvSeries
-$cmd = "extract_fds_statev ns=$namespace seriesIn=$fdsseriesname seriesOut=$orbvseriesname";
+    # Ingest orbit vectors into $orbvSeries
+    $cmd = "extract_fds_statev ns=$namespace seriesIn=$fdsseriesname seriesOut=$orbvseriesname";
 
-system("$cmd 1>>$logfile 2>&1");
+    system("$cmd 1>>$logfile 2>&1");
+}
 
 # Notify people who care if an error has occurred
 $cmd = "fdsNotification\.pl -l $logfile -n $notlist";

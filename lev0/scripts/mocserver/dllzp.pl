@@ -308,7 +308,7 @@ if (-e $sshagentConf)
 
     if (!$agentfound)
     {
-        $logcontent = $logcontent . "ssh-agent NOT RUNNING.\n";
+        $logcontent = $logcontent . "LOGALL: ssh-agent NOT RUNNING.\n";
         $err = 1;
     }
     else
