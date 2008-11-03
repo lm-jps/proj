@@ -153,7 +153,7 @@ elsif (($hkt_filecount +   $xml_filecount) == 0)
 {
   print LF "--->status:warning got no files to loaded into DRMS\n";
   ##note sent email here if occurs
-  sendEmail("carl\@sun.stanford.edu,arta\@sun.stanford.com,rock\@solarpost.stanford.edu", "carl\@sun.stanford.edu", "JSOC:WARNING:Ingesting MOC dayfiles: status:no files loaded today", "Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl> from cron job.\n"); 
+  sendEmail("carl\@sun.stanford.edu,arta\@sun.stanford.edu,rock\@solarpost.stanford.edu", "carl\@sun.stanford.edu", "JSOC:WARNING:Ingesting MOC dayfiles: status:no files loaded today", "Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl> from cron job.\n"); 
 }
 else
 {
