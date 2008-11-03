@@ -304,7 +304,7 @@ if (!$err)
 }
 
 # Notify people who care if an error has occurred
-$cmd = "fdsNotification\.pl -l $logfile -n $notlist";
+$cmd = "fdsNotification\.pl -l $logfile -s "Error downloading/ingesting MOC FDS data products" -n $notlist";
 system($cmd);
 
 sub PrintUsage

@@ -1,10 +1,11 @@
 #!/usr/bin/perl -w 
 
 $LOGALL = "LOGALL: ";
-$MAILSUBJ = "Error downloading/ingesting MOC FDS data products";
+$MAILSUBJ = "Error downloading/ingesting MOC data products";
 
 my($arg);
 my($logFile);
+my($mailsubj);
 my($notifyList) = "";
 my($mailMsg) = "";
 my($nlines) = 0;
@@ -36,6 +37,12 @@ while ($arg = shift(@ARGV))
 	    exit(1);
 	}
     }
+    
+    if ($arg eq "-s")
+    {
+        # mail subject
+        $mailsubj = shift(@ARGV);
+    }
 }
 
 if (!defined($logFile))
@@ -66,7 +73,12 @@ close(LOGFILE);
 
 if ($nlines > 0)
 {
-    open(MAILPIPE, "| /bin/mail -s \"$user\@$host - $MAILSUBJ\" $notifyList") || die "Couldn't open 'mail' pipe.\n";
+    if (!defined($mailsubj))
+    {
+        $mailsubj = $MAILSUBJ;
+    }
+
+    open(MAILPIPE, "| /bin/mail -s \"$user\@$host - $mailsubj\" $notifyList") || die "Couldn't open 'mail' pipe.\n";
     print MAILPIPE $mailMsg;
     close(MAILPIPE);
 }
