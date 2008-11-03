@@ -33,6 +33,7 @@ use FindBin qw($Bin);
 $EXP = "sftpScript.exp";
 $RQARG = "hmiroboto\@129.165.8.6";
 $RDCMD = "scp hmiroboto\@129.165.8.6:";
+$kMAXSCPTRIES = 5;
 my(%STATMAP);
 $FSFILE = "fslist";
 $LOGALL = "LOGALL";
@@ -616,10 +617,18 @@ sub DownloadFile
 
 	if (!$error)
 	{
+            my($iter);
 	    $fullRdCmd = $RDCMD . $theFile . " " . $localRoot . $localFile;
 	    print "Executing $fullRdCmd: ";
 
-	    $cmdRet = system($fullRdCmd . " >& /dev/null");
+            for ($iter = 0; $iter < $kMAXSCPTRIES; $iter++)
+            {
+                $cmdRet = system($fullRdCmd . " >& /dev/null");
+                if ($cmdRet == 0)
+                {
+                    last;
+                }
+            }
 
 	    if ($cmdRet != 0)
 	    {
