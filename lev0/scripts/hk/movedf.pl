@@ -43,6 +43,12 @@ $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0/hk_moc_dayfile";
 # debug flag
 my $dflg=$ENV{'DF_MOVEDF_DEBUG'}="0";
 
+#set common email arguments
+$from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
+$to_email="jsoc_ops\@sun.stanford.edu";
+$subject_email_no_files="JSOC:WARNING:Ingesting MOC dayfiles: status:no files loaded today";
+$subject_email_not_sure="JSOC:WARNING:Ingesting MOC dayfiles: status:not sure of status";
+
 #common setting for all environments
 $ENV{'SUMSERVER'}="d02.Stanford.EDU";
 $hm=$ENV{'HOME'};
@@ -153,12 +159,12 @@ elsif (($hkt_filecount +   $xml_filecount) == 0)
 {
   print LF "--->status:warning got no files to loaded into DRMS\n";
   ##note sent email here if occurs
-  sendEmail("carl\@sun.stanford.edu,arta\@sun.stanford.edu,rock\@solarpost.stanford.edu", "carl\@sun.stanford.edu", "JSOC:WARNING:Ingesting MOC dayfiles: status:no files loaded today", "Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl> from cron job.\n"); 
+  sendEmail("$to_email", "$from_email", "$subject_email_no_files","Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl> from cron job.\n");
 }
 else
 {
   print LF "--->status:not sure of status but got delcount:$delcount hkt_filecount:$hkt_filecount xml_filecount:$xml_filecount\n";
-  sendEmail("carl\@sun.stanford.edu", "carl\@sun.stanford.edu", "JSOC:WARNING:Ingesting MOC dayfiles: status:not sure of status", "Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl> from cron job.\n");
+  sendEmail("carl\@sun.stanford.edu", "$from_email", "$subject_email_not_sure", "Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl> from cron job.\n");
 }
 
 close DELFILE;
