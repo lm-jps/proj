@@ -67,18 +67,25 @@ if($thishost eq 'dcs3') {
 }
 
 if($thishost eq 'dcs0') {
-  @hosts = (dcs1,dcs2);
+  @hosts = (dcs1,dcs2,j0);
 }
 elsif($thishost eq 'dcs1') {
-  @hosts = (dcs0,dcs2);
+  @hosts = (dcs0,dcs2,j0);
 }
 elsif($thishost eq 'dcs2') {
-  @hosts = (dcs0,dcs1);
+  @hosts = (dcs0,dcs1,j0);
 }
 
 print "\nNow attempt to replicate this file other datacapture machines\n";
 while($x = shift(@hosts)) {
   $cmd = "scp $DCSTABFILE $x:$DCSTABDIR";
   print "$cmd\n";
-  system($cmd);
+  if(system($cmd)) {
+    if($x eq "j0") {
+      print "\n***FATAL ERROR: file must be copied to j0\n";
+    }
+    else {
+      print "*Looks like $x is off line?\n\n";
+    }
+  }
 }
