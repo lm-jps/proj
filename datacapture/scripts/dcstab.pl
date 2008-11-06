@@ -63,6 +63,7 @@ chomp($thishost);
 print "This host = $thishost\n";
 if($thishost eq 'dcs3') {
   print "Assignment complete on dcs3\n";
+  exit(0);
 }
 
 if($thishost eq 'dcs0') {
