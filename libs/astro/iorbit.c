@@ -595,6 +595,9 @@ static int iorbit_interpolate(IORBIT_Alg_t alg,
               IORBIT_Vector_t *veclow = NULL;
               IORBIT_Vector_t *vecmid = NULL;
               IORBIT_Vector_t *vechii = NULL;
+              double factorlow;
+              double factormid;
+              double factorhii;
 
               for (ipt = 0; ipt < ntgtpts; ipt++)
               {
@@ -604,13 +607,43 @@ static int iorbit_interpolate(IORBIT_Alg_t alg,
                  veclow = &(gridVecs[indices[ipt] - 1]); 
                  vecmid = &(gridVecs[indices[ipt]]); 
                  vechii = &(gridVecs[indices[ipt] + 1]); 
+                 factorlow = (tgttimes[ipt] - ptmid) * (tgttimes[ipt] - pthii) / 
+                   ((ptlow - ptmid) * (ptlow - pthii));
+                 factormid = (tgttimes[ipt] - ptlow) * (tgttimes[ipt] - pthii) / 
+                   ((ptmid - ptlow) * (ptmid - pthii));
+                 factorhii = (tgttimes[ipt] - ptlow) * (tgttimes[ipt] - ptmid) / 
+                   ((pthii - ptlow) * (pthii - ptmid));
 
-                 (*interp)->obstime = tgttimes[ipt];
-                 (*interp)->slot = DRMS_MISSING_LONGLONG;
-                 (*interp)->gciX = 
-                   veclow->gciX * (tgttimes[ipt] - ptmid) * (tgttimes[ipt] - pthii) / ((ptlow - ptmid) * (ptlow - pthii)) +
-                   vecmid->gciX * (tgttimes[ipt] - ptlow) * (tgttimes[ipt] - pthii) / ((ptmid - ptlow) * (ptmid - pthii)) +
-                   vechii->gciX * (tgttimes[ipt] - ptlow) * (tgttimes[ipt] - ptmid) / ((pthii - ptlow) * (pthii - ptmid));
+                 ((*interp)[ipt]).obstime = tgttimes[ipt];
+                 ((*interp)[ipt]).slot = DRMS_MISSING_LONGLONG;
+
+                 ((*interp)[ipt]).gciX = 
+                   veclow->gciX * factorlow + vecmid->gciX * factormid + vechii->gciX * factorhii;
+                 ((*interp)[ipt]).gciY = 
+                   veclow->gciY * factorlow + vecmid->gciY * factormid + vechii->gciY * factorhii;
+                 ((*interp)[ipt]).gciZ = 
+                   veclow->gciZ * factorlow + vecmid->gciZ * factormid + vechii->gciZ * factorhii;
+
+                 ((*interp)[ipt]).gciVX = 
+                   veclow->gciVX * factorlow + vecmid->gciVX * factormid + vechii->gciVX * factorhii;
+                 ((*interp)[ipt]).gciVY = 
+                   veclow->gciVY * factorlow + vecmid->gciVY * factormid + vechii->gciVY * factorhii;
+                 ((*interp)[ipt]).gciVZ = 
+                   veclow->gciVZ * factorlow + vecmid->gciVZ * factormid + vechii->gciVZ * factorhii;
+
+                 ((*interp)[ipt]).hciX = 
+                   veclow->hciX * factorlow + vecmid->hciX * factormid + vechii->hciX * factorhii;
+                 ((*interp)[ipt]).hciY = 
+                   veclow->hciY * factorlow + vecmid->hciY * factormid + vechii->hciY * factorhii;
+                 ((*interp)[ipt]).hciZ = 
+                   veclow->hciZ * factorlow + vecmid->hciZ * factormid + vechii->hciZ * factorhii;
+
+                 ((*interp)[ipt]).hciVX = 
+                   veclow->hciVX * factorlow + vecmid->hciVX * factormid + vechii->hciVX * factorhii;
+                 ((*interp)[ipt]).hciVY = 
+                   veclow->hciVY * factorlow + vecmid->hciVY * factormid + vechii->hciVY * factorhii;
+                 ((*interp)[ipt]).hciVZ = 
+                   veclow->hciVZ * factorlow + vecmid->hciVZ * factormid + vechii->hciVZ * factorhii;
               }
            }
            break;
@@ -675,13 +708,13 @@ int CalcSolarVelocities(IORBIT_Vector_t *vec, int nvecs, double **hr, double **h
       cvec = &(vec[ivec]);
 
       /* solar radius */
-      *hr[ivec] = sqrt(cvec->hciX * cvec->hciX +
-                       cvec->hciY * cvec->hciY +
-                       cvec->hciZ * cvec->hciZ);
+      (*hr)[ivec] = sqrt(cvec->hciX * cvec->hciX +
+                         cvec->hciY * cvec->hciY +
+                         cvec->hciZ * cvec->hciZ);
 
 
       /* beta and l0 angles */
-      hb[ivec] = asin((tzx * cvec->hciX + tzy * cvec->hciY + tzz * cvec->hciZ) / *hr[ivec]);
+      hb[ivec] = asin((tzx * cvec->hciX + tzy * cvec->hciY + tzz * cvec->hciZ) / (*hr)[ivec]);
       hl[ivec] = atan2((tyx * cvec->hciX + tyy * cvec->hciY + tyz * cvec->hciZ),  
                         (txx * cvec->hciX + txy * cvec->hciY + txz * cvec->hciZ));
 
@@ -692,17 +725,17 @@ int CalcSolarVelocities(IORBIT_Vector_t *vec, int nvecs, double **hr, double **h
 
       if (hvr)
       {
-         *hvr[ivec] = cos(hb[ivec]) * (cos(hl[ivec]) * shvx + sin(hl[ivec]) * shvy) + sin(hb[ivec]) * shvz;
+         (*hvr)[ivec] = cos(hb[ivec]) * (cos(hl[ivec]) * shvx + sin(hl[ivec]) * shvy) + sin(hb[ivec]) * shvz;
       }
 
       if (hvw)
       {
-         *hvw[ivec] = -sin(hl[ivec]) * shvx + cos(hl[ivec]) * shvy;
+         (*hvw)[ivec] = -sin(hl[ivec]) * shvx + cos(hl[ivec]) * shvy;
       }
 
       if (hvn)
       {
-         *hvn[ivec] = -sin(hb[ivec]) * (cos(hl[ivec]) * shvx + sin(hl[ivec]) * shvy) + cos(hb[ivec]) * shvz;
+         (*hvn)[ivec] = -sin(hb[ivec]) * (cos(hl[ivec]) * shvx + sin(hl[ivec]) * shvy) + cos(hb[ivec]) * shvz;
       }
    }
 
