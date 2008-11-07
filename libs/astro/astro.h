@@ -27,7 +27,8 @@ typedef enum
    kLIBASTRO_UnsupportedVCOR,
    kLIBASTRO_InconsistentConstraints,
    kLIBASTRO_InvalidArgs,
-   kLIBASTRO_Interpolation
+   kLIBASTRO_Interpolation,
+   kLIBASTRO_InsufficientData
 } LIBASTRO_Error_t;
 
 typedef enum
@@ -141,7 +142,8 @@ float Imaginterp(DRMS_Segment_t *img, double x, double y);
 /* iorbit */
 enum IORBIT_Alg_enum
 {
-   IORBIT_Alg_Linear = 0
+   IORBIT_Alg_Linear = 0,
+   IORBIT_Alg_Quadratic
 };
 
 typedef enum IORBIT_Alg_enum IORBIT_Alg_t;

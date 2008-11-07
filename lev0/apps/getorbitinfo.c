@@ -63,6 +63,10 @@ int DoIt(void)
       {
          interpalg = IORBIT_Alg_Linear;
       }
+      else if (strncasecmp(alg, "quad", strlen("quad")) == 0)
+      {
+         interpalg = IORBIT_Alg_Quadratic;
+      }
       else
       {
          fprintf(stderr, "Unsupported interpolation algorithm '%s'.\n", alg);
