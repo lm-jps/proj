@@ -6,8 +6,14 @@ $ENV{CVSROOT}=":ext:sunroom.stanford.edu:/home/cvsuser/cvsroot";
 
 # update hk config files
 print "..doing cvs update of hk config files\n";
+print "..please wait this may take a few minutes\n";
 system("cd /home/production/cvs/TBL_JSOC/lev0/hk_config_file; cvs update -d  . ");
 print "..completed cvs update of hk config files!\n\n\n";
+
+# update sdo hk config files
+print "..doing cvs update of sdo hk config files\n";
+system("cd /home/production/cvs/TBL_JSOC/lev0/sdo_hk_config_file; cvs update -d  . ");
+print "..completed cvs update of sdo hk config files!\n\n\n";
 
 #update jsoc version number lookup files
 print "..doing cvs update of hk jsoc version number lookup files.\n";
