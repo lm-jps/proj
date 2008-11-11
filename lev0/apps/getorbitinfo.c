@@ -8,6 +8,7 @@
 #define kORBSERIES "in"
 #define kINTERPALG "alg"
 #define kTGTTIMES "tgt"
+#define kGRIDTIMES "grid"
 #define kTESTHCI "t"
 
 ModuleArgs_t module_args[] =
@@ -15,6 +16,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, kORBSERIES, "sdo.fds_orbit_vectors", "Series containing orbit position and velocity vectors; it testing, then contains record-set query."},
   {ARG_STRING, kINTERPALG, "linear", "Supported algorithm to use when interpolating between grid times."},
   {ARG_DOUBLES, kTGTTIMES, "problem", "Array of internal times (doubles) for which orbit information is to be returned. "},
+  {ARG_STRING, kGRIDTIMES, "unspecified", "Record-set query that specifies grid-vector internal times."},
   {ARG_FLAG, kTESTHCI, "", "Test MOC HCI values."},
   {ARG_END}
 };
@@ -37,6 +39,7 @@ int DoIt(void)
    char *orbseries = NULL;
    char *alg = NULL;
    double *tgttimes = NULL;
+   const char *gridtimes = NULL;
    int ntimes = 0;
    int doHCItest;
 
@@ -47,8 +50,13 @@ int DoIt(void)
    {
       alg = cmdparams_get_str(&cmdparams, kINTERPALG, NULL);
       ntimes = cmdparams_get_dblarr(&cmdparams, kTGTTIMES, &tgttimes, NULL);
-   }
+      gridtimes = cmdparams_get_str(&cmdparams, kGRIDTIMES, NULL);
 
+      if (strcasecmp(gridtimes, "unspecified") == 0)
+      {
+         gridtimes = NULL;
+      }
+   }
 
    if (doHCItest)
    {
@@ -75,7 +83,13 @@ int DoIt(void)
 
       if (status == kSDOORB_success)
       {
-         if (iorbit_getinfo(drms_env, orbseries, interpalg, tgttimes, ntimes, &info) != kLIBASTRO_Success)
+         if (iorbit_getinfo(drms_env, 
+                            orbseries, 
+                            interpalg, 
+                            tgttimes, 
+                            ntimes, 
+                            gridtimes,
+                            &info) != kLIBASTRO_Success)
          {
             status = kSDOORB_failure;
          }
