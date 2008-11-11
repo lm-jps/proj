@@ -4,11 +4,11 @@
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.";
 $ENV{CVSROOT}=":ext:sunroom.stanford.edu:/home/cvsuser/cvsroot";
 
-# update hk config files
-print "..doing cvs update of hk config files\n";
+# update hmi and aia hk config files
+print "..doing cvs update of hmi and aia hk config files\n";
 print "..please wait this may take a few minutes\n";
 system("cd /home/production/cvs/TBL_JSOC/lev0/hk_config_file; cvs update -d  . ");
-print "..completed cvs update of hk config files!\n\n\n";
+print "..completed cvs update of hmi and aia hk config files!\n\n\n";
 
 # update sdo hk config files
 print "..doing cvs update of sdo hk config files\n";
