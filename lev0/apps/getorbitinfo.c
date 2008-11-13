@@ -38,6 +38,7 @@ int DoIt(void)
    IORBIT_Alg_t interpalg;
    char *orbseries = NULL;
    char *alg = NULL;
+   char *tgttimesstr = NULL;
    double *tgttimes = NULL;
    const char *gridtimes = NULL;
    int ntimes = 0;
@@ -49,7 +50,96 @@ int DoIt(void)
    if (!doHCItest)
    {
       alg = cmdparams_get_str(&cmdparams, kINTERPALG, NULL);
-      ntimes = cmdparams_get_dblarr(&cmdparams, kTGTTIMES, &tgttimes, NULL);
+
+      /* cmdparams or hash_insert has some kind of bug in it - if the string value of a cmdparams is too
+       * long, cmdparams will fail. */
+      tgttimesstr = cmdparams_get_str(&cmdparams, kTGTTIMES, NULL);
+      if (tgttimesstr[0] == '@')
+      {
+         /* read in the tgttimes from a file */
+         struct stat stBuf;
+         FILE *atfile = NULL;
+         char *filestr = NULL;
+         char lineBuf[LINE_MAX];
+         char *fullline = NULL;
+         int stgt = 48;
+
+         filestr = tgttimesstr + 1;
+
+         if (!stat(filestr, &stBuf))
+         {
+            if (S_ISREG(stBuf.st_mode))
+            {
+               /* read a line */
+               if ((atfile = fopen(filestr, "r")) == NULL)
+               {
+                  fprintf(stderr, "Cannot open @file %s for reading, skipping.\n", filestr);
+               }
+               else
+               {
+                  int len = 0;
+                  int itgt = 0;
+                  tgttimes = malloc(sizeof(double) * stgt);
+
+                  while (!(fgets(lineBuf, LINE_MAX, atfile) == NULL))
+                  {
+                     /* strip \n from end of lineBuf */
+                     len = strlen(lineBuf);
+
+                     fullline = strdup(lineBuf);
+
+                     if (len == LINE_MAX - 1)
+                     {
+                        /* may be more on this line */
+                        while (!(fgets(lineBuf, LINE_MAX, atfile) == NULL))
+                        {
+                           fullline = realloc(fullline, strlen(fullline) + strlen(lineBuf) + 1);
+                           snprintf(fullline + strlen(fullline), 
+                                    strlen(lineBuf) + 1, 
+                                    "%s",
+                                    lineBuf);
+                           if (strlen(lineBuf) > 1 && lineBuf[strlen(lineBuf) - 1] == '\n')
+                           {
+                              break;
+                           }
+                        }
+                     }
+
+                     len = strlen(fullline);
+
+                     if (fullline[len - 1] == '\n')
+                     {
+                        fullline[len - 1] = '\0';
+                     }
+
+                     /* fullline has a single time (string) */
+                     if (itgt == stgt)
+                     {
+                        stgt *= 2;
+                        tgttimes = realloc(tgttimes, sizeof(double) * stgt);
+                     }
+
+                     sscanf(fullline, "%lf", &(tgttimes[itgt]));
+
+                     if (fullline)
+                     {
+                        free(fullline);
+                        fullline = NULL;
+                     }
+
+                     itgt++;
+                  }
+                  
+                  ntimes = itgt;                  
+               }
+            }
+         }
+      }
+      else
+      {
+         ntimes = cmdparams_get_dblarr(&cmdparams, kTGTTIMES, &tgttimes, NULL);
+      }
+
       gridtimes = cmdparams_get_str(&cmdparams, kGRIDTIMES, NULL);
 
       if (strcasecmp(gridtimes, "unspecified") == 0)
@@ -112,6 +202,22 @@ int DoIt(void)
               
                fprintf(stdout, "%-32s%-20.8f%-20.8f%-20.8f%-20.8f\n", 
                        timestr, infoitem->dsun_obs, infoitem->obs_vr, infoitem->obs_vw, infoitem->obs_vn);
+            }
+
+            /* Now, let's print out interpolated heliocentric vectors for kicks */
+            fprintf(stdout, "\n\n");
+            fprintf(stdout, "%-32s%-12s%-20s%-20s%-20s%-20s%-20s%-20s\n", 
+                    "obstime", "secs", "hciX", "hciY", "hciZ", "hciVX", "hciVY", "hciVZ");
+            list_llreset(info);
+            while ((node = list_llnext(info)) != NULL)
+            {
+               infoitem = (IORBIT_Info_t *)(node->data);
+               sprint_time(timestr, infoitem->obstime, "UTC", 0);
+
+              
+               fprintf(stdout, "%-32s%-12.1f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f\n", 
+                       timestr, infoitem->obstime, infoitem->hciX, infoitem->hciY, infoitem->hciZ, 
+                       infoitem->hciVX, infoitem->hciVY, infoitem->hciVZ);
             }
          }
 

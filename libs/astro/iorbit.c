@@ -295,10 +295,22 @@ static IORBIT_Vector_t *LookupInCache(double tgttime, IORBIT_Slotpos_t pos)
             }
          }
       }
+      
+      /* top == bottom */
+      vec = &(gGridCache[top]);
 
-      /* top == bottom == result */
-      val = &(gGridCache[top]);
-      gGridCurrPos = top;
+      /* It is possible that gGridCache[top] isn't the correct result - it never gets tested if
+       * the bottom consistently failed until bottom == top. */
+      slotpos = GetSlotPos(vec->obstime, tgttime);
+      if (IsPos(slotpos, pos))
+      {
+         val = vec;
+         gGridCurrPos = top;
+      }
+      else
+      {
+         gGridCurrPos = -1;
+      }
    }
 
    return val;
@@ -315,9 +327,9 @@ static void FlushCache()
    CreateCache();
 }
 
+/* returns 1 if successfully caches NEW items */
 static int RehydrateCache(DRMS_Env_t *env,
                           const char *srcseries, 
-                          long long stslot,
                           const char *optfilter,
                           int nkeep)
 {
@@ -342,74 +354,44 @@ static int RehydrateCache(DRMS_Env_t *env,
       int firstitem;
       int lastitem;
 
-      if (!optfilter)
-      {
-         if (gCacheRS)
-         {
-            drms_close_records(gCacheRS, DRMS_FREE_RECORD);
-            gCacheRS = NULL;
-         }
-
-         snprintf(query, 
-                  sizeof(query), 
-                  "%s[%s=%lld/%d]", 
-                  srcseries, 
-                  kOBSDATE_INDEX, 
-                  stslot, 
-                  kCACHESIZE);
-
-         gCacheRS = drms_open_records(env, query, &drmsstatus);
-      }
-      else if (!gCacheRS)
+      if (!gCacheRS)
       {
          snprintf(query, 
                   sizeof(query), 
                   "%s", 
-                  optfilter);
+                  optfilter ? optfilter : srcseries);
 
          /* Use cursor to retrieve just a chunk */
          drms_recordset_setchunksize(kCACHESIZE);
          gCacheRS = drms_open_recordset(env, query, &drmsstatus);
       }
 
-      if (!optfilter)
+      /* may be fewer items than this, but this will handled in the loop below. */
+      if (newcache)
       {
-         lastitem = gCacheRS->n - 1;
-         firstitem = 0;
+         nkeep = 0;
       }
-      else
+
+      lastitem = kCACHESIZE - 1;
+      firstitem = nkeep;
+
+      /* must keep the last nkeep items since higher-level calls might 
+       * want to move backwards in cache up to nkeep items */
+      for (iitem = 0; iitem < nkeep; iitem++)
       {
-         /* may be fewer items than this, but this will handled in the loop below. */
-         if (newcache)
-         {
-            nkeep = 0;
-         }
-
-         lastitem = kCACHESIZE - 1;
-         firstitem = nkeep;
-
-         /* must keep the last nkeep items since higher-level calls might 
-          * want to move backwards in cache up to nkeep items */
-         for (iitem = 0; iitem < nkeep; iitem++)
-         {
-            gGridCache[iitem] = gGridCache[gGridNItems - nkeep + iitem];
-         }
+         gGridCache[iitem] = gGridCache[gGridNItems - nkeep + iitem];
       }
+
+      /* flush the rest of the cache */
+      memset(gGridCache + nkeep, 0, sizeof(IORBIT_Vector_t) * (kCACHESIZE - nkeep));
 
       for (iitem = firstitem; iitem <= lastitem; iitem++)
       {
-         if (!optfilter)
+         rec = drms_recordset_fetchnext(env, gCacheRS, &drmsstatus);
+         if (!rec)
          {
-            rec = gCacheRS->records[iitem];
-         }
-         else
-         {
-            rec = drms_recordset_fetchnext(env, gCacheRS, &drmsstatus);
-            if (!rec)
-            {
-               /* last time, read last record in entire set. */
-               break;
-            }
+            /* last time, read last record in entire set. */
+            break;
          }
 
          vec = &(gGridCache[iitem]);
@@ -439,14 +421,7 @@ static int RehydrateCache(DRMS_Env_t *env,
          vec->hciVZ = drms_getkey_double(rec, kVZHCI, NULL);
       }
 
-      if (!optfilter)
-      {
-         nitems = gCacheRS->n;
-      }
-      else
-      {
-         nitems = iitem + nkeep;
-      }
+      nitems = iitem - firstitem + nkeep;     
 
       if (nitems > 0)
       {
@@ -456,7 +431,7 @@ static int RehydrateCache(DRMS_Env_t *env,
       }
    }
 
-   return nitems;
+   return nitems - nkeep;
 }
 
 /* Determining the slot without having to go to psql, fetch records, and get it from a record 
@@ -494,96 +469,72 @@ static long long GetSlot(DRMS_Keyword_t *slotkey, double tgttime)
  */
 static IORBIT_Vector_t *Fetch(DRMS_Env_t *env, 
                               const char *srcseries,
-                              DRMS_Keyword_t *slotkey,
                               const char *optfilter,
                               double tgttime,
-                              int offset,
+                              int nkeep,
                               IORBIT_Slotpos_t pos)
 {
    IORBIT_Vector_t *vec = NULL;
-   long long currslot;
-   int direction;
+   int again;
 
-   currslot = GetSlot(slotkey, tgttime) + offset;
+   /* THIS IS TRICKY! It is possible to find a vector that is kLTE that tgttime, but
+    * it is not the immediately kLTE one. LookupInCache() could have selected the vector
+    * that had the largest obstime in the CACHED vectors, but in fact other recordset
+    * chunks had larger obstimes that were smaller than tgttime. */
+   again = 1;
 
-   if (IsPos(pos, kLTE))
+   while (again)
    {
-      direction = -1;
-   }
-   else
-   {
-      direction = 1;
-   }
+      vec = LookupInCache(tgttime, pos);
 
-   while ((vec = LookupInCache(tgttime, pos)) == NULL)
-   {
-      if (!optfilter)
+      if (vec)
       {
-         FlushCache();
-      }
-
-      if (RehydrateCache(env, srcseries, currslot, optfilter, offset < 0 ? -offset : 0) != 0)
-      {
-         vec = LookupInCache(tgttime, pos);
-      }
-      else if ((direction == -1 && currslot == gFirstslot) ||
-               (direction == 1 && currslot == gLastslot))
-      {
-         /* No more data - didn't find desired tgttime */
-         break;
+         /* Last item was LT tgttime */
+         if (!(gGridCurrPos == gGridNItems - 1 && (pos == kLT || pos == kLTE)))
+         {
+            again = 0;
+         }
       }
       else
       {
-         currslot += direction * kCACHESIZE;
+         again = 1;
+      }
 
-         if (direction == -1 && currslot < gFirstslot)
+      if (again)
+      {
+         /* nkeep should be sufficiently large to accommodate the code calling 
+          * Fetch() - it may want to call FetchPrevious(). */
+         if (RehydrateCache(env, srcseries, optfilter, nkeep) == 0)
          {
-            currslot = gFirstslot;
-         }
-         else if (direction == 1 && currslot > gLastslot)
-         {
-            currslot = gLastslot;
-         }
-
-         if ((direction == -1 && currslot < gFirstslot) ||
-             (direction == 1 && currslot > gLastslot))
-         {
-            /* no data available to satisfy request */
-            break;
+            /* No more data - either didn't find desired tgttime, or it was
+             * the very last item in the entire series. If the latter is true
+             * then vec will now contain that last item, which is the correct
+             * result. */
+            again = 0;
          }
       }
-   }   
+   }
 
    return vec;
 }
 
-static IORBIT_Vector_t *FetchPrevious(DRMS_Env_t *env, 
-                                      const char *srcseries,
-                                      DRMS_Keyword_t *slotkey,
-                                      const char *optfilter)
+static IORBIT_Vector_t *FetchPrevious()
 {
    IORBIT_Vector_t *vec = NULL;
 
-   /* Can't got backward in gridvec array if optfilter != NULL */
-   if (!optfilter || gGridCurrPos > 0)
+   /* Can't got backward in gridvec array */
+   if (gGridCurrPos > 0)
    {
-      if (gGridCurrPos > 0)
-      {
-         vec = &(gGridCache[--gGridCurrPos]);
-      }
-      else
-      {
-         vec = Fetch(env, srcseries, slotkey, optfilter, gGridCache[0].obstime, 0, kLT);
-      }
+      vec = &(gGridCache[--gGridCurrPos]);
    }
-
+     
    return vec;
 }
 
 static IORBIT_Vector_t *FetchNext(DRMS_Env_t *env, 
                                   const char *srcseries,
-                                  DRMS_Keyword_t *slotkey,
-                                  const char *optfilter)
+                                  const char *optfilter,
+                                  int nkeep)
 {
    IORBIT_Vector_t *vec = NULL;
   
@@ -594,7 +545,7 @@ static IORBIT_Vector_t *FetchNext(DRMS_Env_t *env,
    else
    {
       /* even if optfilter != NULL, it is okay to fetch forward in the gridvec array */
-      vec = Fetch(env, srcseries, slotkey, optfilter, gGridCache[gGridNItems - 1].obstime, 0, kGT);
+      vec = Fetch(env, srcseries, optfilter, gGridCache[gGridNItems - 1].obstime, nkeep, kGT);
    }
 
    return vec;
@@ -608,7 +559,6 @@ static IORBIT_Vector_t *FetchNext(DRMS_Env_t *env,
 
 static int GetGridVectors(DRMS_Env_t *env,
                           const char *srcseries,
-                          DRMS_Keyword_t *slotkey,
                           double *tgttimes,
                           int ntgts,
                           int nbelow,
@@ -624,7 +574,6 @@ static int GetGridVectors(DRMS_Env_t *env,
    int actpoints;
    int totpoints = 0;
    IORBIT_Vector_t *vec = NULL;
-   long long inslot;
    IORBIT_Slotpos_t slotpos;
    IORBIT_Vector_t *vecsbelow = NULL;
    IORBIT_Vector_t *vecsabove = NULL;
@@ -663,16 +612,22 @@ static int GetGridVectors(DRMS_Env_t *env,
 
       for (itgt = 0; itgt < ntgts; itgt++)
       {
-         inslot = GetSlot(slotkey, tgttimes[itgt]);
+         /* Cache. If the cache is already full, and tgttimes[itgt] is a miss, then 
+          * keep the last (nbelow + 4) cached vectors currently in the cache. Blow away
+          * the rest of the cache, and rehydrate with the next chunk of vectors.
+          * Keep these old vectors because the next while loop is going to walk backward in
+          * the cache trying to find nbelow vectors that are LTE the tgttimes[itgt] time.
+          * 4 is a buffer. Also, Fetch() and FetchNext() below could have caused 
+          * rehydration of a newer recordset chunk, causing this Fetch() to fail if 
+          * we didn't keep some of the previous chunk cached. */
+         vec = Fetch(env, srcseries, optfilter, tgttimes[itgt], nbelow + 4, posbelow);
 
-         /* Cache, starting with a slot nbelow + 4 slots before the inslot.
-          * Do this because we're walking backward in time in this for loop,
-          * and we should walk backward about nbelow slots (4 is a buffer). */
-         vec = Fetch(env, srcseries, slotkey, optfilter, tgttimes[itgt], -nbelow - 4, posbelow);
-           
          if (!vec)
          {
-            fprintf(stderr, "Required grid point, slot number %lld, not in '%s'.\n", inslot, srcseries);
+            fprintf(stderr, 
+                    "There is no grid vector smaller than %f in '%s'.\n", 
+                    tgttimes[itgt], 
+                    srcseries);
             err = 1;
             break;
          }
@@ -699,16 +654,19 @@ static int GetGridVectors(DRMS_Env_t *env,
             }
 
             /* need to fetch previous grid vector */
-            //vec = Fetch(env, srcseries, slotkey, optfilter, vec->obstime, 0, kLT);
-            vec = FetchPrevious(env, srcseries, slotkey, optfilter);
+            vec = FetchPrevious();
             if (!vec)
             {
-               fprintf(stderr, "Required grid point, slot number %lld, not in '%s'.\n", inslot, srcseries);
+               fprintf(stderr, 
+                       "Series '%s' missing a grid vector smaller than %f.\n", 
+                       srcseries,
+                       tgttimes[itgt]);
+
                err = 1;
                break;
             }
          }
-
+           
          if (err)
          {
             break;
@@ -755,11 +713,16 @@ static int GetGridVectors(DRMS_Env_t *env,
          /* get the nabove points greater than tgttimes[itgt] */
          actpoints = 0;
 
-         vec = Fetch(env, srcseries, slotkey, optfilter, tgttimes[itgt], 0, posabove);
+         /* Must call Fetch(), not FetchNext() since the global cache item pointer may not
+          * be at the grid vector immediately below tgttimes[itgt] */
+         vec = Fetch(env, srcseries, optfilter, tgttimes[itgt], nbelow + 4, posabove);
          
          if (!vec)
          {
-            fprintf(stderr, "Required grid point, slot number %lld, not in '%s'.\n", inslot, srcseries);
+            fprintf(stderr, 
+                    "There is no grid vector greater than %f in '%s'.\n", 
+                    tgttimes[itgt], 
+                    srcseries);
             err = 1;
             break;
          }
@@ -782,10 +745,13 @@ static int GetGridVectors(DRMS_Env_t *env,
 
             /* need to fetch next grid vector */
             //vec = Fetch(env, srcseries, slotkey, optfilter, vec->obstime, 0, kGT);
-            vec = FetchNext(env, srcseries, slotkey, optfilter);
+            vec = FetchNext(env, srcseries, optfilter, nbelow + 4);
             if (!vec)
             {
-               fprintf(stderr, "Required grid point, slot number %lld, not in '%s'.\n", inslot, srcseries);
+               fprintf(stderr, 
+                       "Series '%s' missing a grid vector smaller than %f.\n", 
+                       srcseries,
+                       tgttimes[itgt]);
                err = 1;
                break;
             }
@@ -1104,7 +1070,6 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
 
          if (GetGridVectors(env, 
                             srcseries, 
-                            slotkw, 
                             tgtsorted,
                             ntimes,
                             2, /* number of grid abscissae below first result abscissa */
