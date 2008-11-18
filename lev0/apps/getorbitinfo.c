@@ -7,17 +7,29 @@
 
 #define kORBSERIES "in"
 #define kINTERPALG "alg"
+#define kTGTTIMESARR "tgtarr"
 #define kTGTTIMES "tgt"
 #define kGRIDTIMES "grid"
 #define kTESTHCI "t"
+#define kTESTINTERP "i"
+
+#define kOBSDATE "OBS_DATE"
+#define kHCIX "X_HELIO"
+#define kHCIY "Y_HELIO"
+#define kHCIZ "Z_HELIO"
+#define kHCIVX "Vx_HELIO"
+#define kHCIVY "Vy_HELIO"
+#define kHCIVZ "Vz_HELIO"
 
 ModuleArgs_t module_args[] =
 {
   {ARG_STRING, kORBSERIES, "sdo.fds_orbit_vectors", "Series containing orbit position and velocity vectors; it testing, then contains record-set query."},
   {ARG_STRING, kINTERPALG, "linear", "Supported algorithm to use when interpolating between grid times."},
-  {ARG_DOUBLES, kTGTTIMES, "problem", "Array of internal times (doubles) for which orbit information is to be returned. "},
+  {ARG_DOUBLES, kTGTTIMESARR, "0.0", "Array of internal times (doubles) for which orbit information is to be returned. "},
+  {ARG_STRING, kTGTTIMES, "problem", "File containing array of internal times (doubles) for which orbit information is to be returned. "},
   {ARG_STRING, kGRIDTIMES, "unspecified", "Record-set query that specifies grid-vector internal times."},
   {ARG_FLAG, kTESTHCI, "", "Test MOC HCI values."},
+  {ARG_FLAG, kTESTINTERP, "", "Test interpolation routine."},
   {ARG_END}
 };
 
@@ -43,9 +55,11 @@ int DoIt(void)
    const char *gridtimes = NULL;
    int ntimes = 0;
    int doHCItest;
+   int testinterp;
 
    doHCItest = cmdparams_isflagset(&cmdparams, kTESTHCI);
    orbseries = cmdparams_get_str(&cmdparams, kORBSERIES, NULL);
+   testinterp = cmdparams_isflagset(&cmdparams, kTESTINTERP);
    
    if (!doHCItest)
    {
@@ -137,7 +151,7 @@ int DoIt(void)
       }
       else
       {
-         ntimes = cmdparams_get_dblarr(&cmdparams, kTGTTIMES, &tgttimes, NULL);
+         ntimes = cmdparams_get_dblarr(&cmdparams, kTGTTIMESARR, &tgttimes, NULL);
       }
 
       gridtimes = cmdparams_get_str(&cmdparams, kGRIDTIMES, NULL);
@@ -206,18 +220,83 @@ int DoIt(void)
 
             /* Now, let's print out interpolated heliocentric vectors for kicks */
             fprintf(stdout, "\n\n");
-            fprintf(stdout, "%-32s%-12s%-20s%-20s%-20s%-20s%-20s%-20s\n", 
-                    "obstime", "secs", "hciX", "hciY", "hciZ", "hciVX", "hciVY", "hciVZ");
+
+            if (!testinterp)
+            {
+               fprintf(stdout, "%-24s%-12s%-20s%-20s%-20s%-20s%-20s%-20s\n", 
+                       "obstime", "secs", "hciX-interp", "hciY-interp", "hciZ-interp", "hciVX-interp", "hciVY-interp", "hciVZ-interp");
+            }
+            else
+            {
+               fprintf(stdout, "%-24s%-12s%-20s%-20s%-20s%-20s%-20s%-20s%-20s%-20s%-20s%-14s%-14s%-14s\n", 
+                       "obstime", "secs", 
+                       "hciX-interp", "hciX-actual",
+                       "hciY-interp", "hciY-actual",
+                       "hciZ-interp", "hciZ-actual",
+                       "hciVX-interp", "hciVX-actual",
+                       "hciVY-interp", "hciVY-actual",
+                       "hciVZ-interp", "hciVZ-actual");
+            }
+
             list_llreset(info);
             while ((node = list_llnext(info)) != NULL)
             {
+               /* interpolated values */
                infoitem = (IORBIT_Info_t *)(node->data);
                sprint_time(timestr, infoitem->obstime, "UTC", 0);
 
-              
-               fprintf(stdout, "%-32s%-12.1f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f\n", 
-                       timestr, infoitem->obstime, infoitem->hciX, infoitem->hciY, infoitem->hciZ, 
-                       infoitem->hciVX, infoitem->hciVY, infoitem->hciVZ);
+               if (!testinterp)
+               {
+                  fprintf(stdout, "%-24s%-12.1f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f\n", 
+                          timestr, infoitem->obstime, infoitem->hciX, infoitem->hciY, infoitem->hciZ, 
+                          infoitem->hciVX, infoitem->hciVY, infoitem->hciVZ);
+               }
+               else
+               {
+                  /* actual values - this will only work if the tgttimes are whole seconds, and they 
+                   * are in the range of the grid vectors. If so, print out the actual values 
+                   * because the user is obviously testing this module. 
+                   * Use psql to find the actual value given timestr - not the most efficient way to do this
+                   * but this is just a test anyway.
+                   */
+                  char query[DRMS_MAXQUERYLEN];
+                  int drmsstatus = DRMS_SUCCESS;
+                  DRMS_RecordSet_t *rs = NULL;
+                  TIME obstime;
+                  double actual_hciX = 0;
+                  double actual_hciY = 0;
+                  double actual_hciZ = 0;
+                  double actual_hciVX = 0;
+                  double actual_hciVY = 0;
+                  double actual_hciVZ = 0;
+
+                  snprintf(query, sizeof(query), "%s[%s]", orbseries, timestr);
+
+                  rs = drms_open_records(drms_env, query, &drmsstatus);
+                  if (rs && rs->n == 1)
+                  {
+                     obstime = drms_getkey_time(rs->records[0], kOBSDATE, &drmsstatus);
+
+                     if (obstime == infoitem->obstime)
+                     {
+                        actual_hciX = drms_getkey_double(rs->records[0], kHCIX, &drmsstatus);
+                        actual_hciY = drms_getkey_double(rs->records[0], kHCIY, &drmsstatus);
+                        actual_hciZ = drms_getkey_double(rs->records[0], kHCIZ, &drmsstatus);
+                        actual_hciVX = drms_getkey_double(rs->records[0], kHCIVX, &drmsstatus);
+                        actual_hciVY = drms_getkey_double(rs->records[0], kHCIVY, &drmsstatus);
+                        actual_hciVZ = drms_getkey_double(rs->records[0], kHCIVZ, &drmsstatus);
+                     }
+                  }
+
+                  fprintf(stdout, "%-24s%-12.1f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-14.8f%-14.8f%-14.8f\n", 
+                          timestr, infoitem->obstime, 
+                          infoitem->hciX, actual_hciX, 
+                          infoitem->hciY, actual_hciY,
+                          infoitem->hciZ, actual_hciZ,
+                          infoitem->hciVX, actual_hciVX,
+                          infoitem->hciVY, actual_hciVY,
+                          infoitem->hciVZ, actual_hciVZ);
+               }
             }
          }
 
