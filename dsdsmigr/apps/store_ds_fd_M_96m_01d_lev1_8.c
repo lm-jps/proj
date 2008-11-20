@@ -7,7 +7,7 @@
  * 
  * Queries the mdi dsds to get the location of the given series numbers
  * and copies the dirs into the SUMS and makes the DRMS keywords according
- * to the su_ds.fd_M_96m_01d_lev1_8.jsd where:
+ * to the ds_mdi.fd_M_96m_01d_lev1_8.jsd where:
  *		Index:          series_num
  *
  */
@@ -56,7 +56,7 @@ void Mailit(char *str) {
   char mcmd[1096];
 
   printf("%s", str);
-  sprintf(mcmd, "echo \"%s\" | Mail -s \"store_ds_fd_V_01h_lev1_8\" jim,jeneen,thailand", str);
+  sprintf(mcmd, "echo \"%s\" | Mail -s \"store_ds_fd_V_01h_lev1_8\" jim,thailand", str);
   if(system(mcmd)) {
     fprintf(stderr, "Failed: %s\n", mcmd);
   }
@@ -284,7 +284,8 @@ if (! *path)
   Mailit(msgtxt);
   return(1);
   }
-sprintf(cmd, "cp -r %s %s", wd, path);
+sprintf(cmd, "cp -r %s %s; ln -s %s/fd_M_96m_01d.%06d /mag/fd_M_96m_01d.%06d", 
+		wd, path, path, i, i);
 status = system(cmd);
 if (status)
     {
