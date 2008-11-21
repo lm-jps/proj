@@ -284,8 +284,8 @@ if (! *path)
   Mailit(msgtxt);
   return(1);
   }
-sprintf(cmd, "cp -r %s %s; ln -s %s/fd_M_96m_01d.%06d /mag/fd_M_96m_01d.%06d", 
-		wd, path, path, i, i);
+sprintf(cmd, "cp -r %s %s; /bin/rm -f /mag/fd_M_96m_01d.%06d; ln -s %s/fd_M_96m_01d.%06d /mag/fd_M_96m_01d.%06d", 
+		wd, path, i, path, i, i);
 status = system(cmd);
 if (status)
     {
