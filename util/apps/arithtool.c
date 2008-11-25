@@ -81,7 +81,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, kSegList, kNotSpecified, "Comma-separated list of segments on which to operate."},
   {ARG_STRING, kOp, "", "The operation to perform."},
   {ARG_DOUBLE, kBzero, "0.0", "For integer output, the bzero to use."},
-  {ARG_DOUBLE, kBscale, "1.0", "For integer output, the bscale to use.", "[-10.0,10.0)"},
+  {ARG_DOUBLE, kBscale, "1.0", "For integer output, the bscale to use."},
   {ARG_NUME, kDatatype, "double", "Data type of in-memory data array.", "char,short,int,longlong,float,double,raw"},
   {ARG_END}
 };
