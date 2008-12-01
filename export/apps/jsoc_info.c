@@ -44,6 +44,8 @@ information will be displayed. Several special psuedo keyword names
 are accepted.  These are: **ALL** means show all keywords (see show_info -a);
 **NONE** means show no keywords; *recnum* means show the hidden keyword "recnum";
 *sunum* means show the hidden keyword "sunum";
+*online* means show the hidden keyword "online";
+*retain* means show retention date, i.e. date at which SUMS may remove the segment storage;
 *logdir* means show the path to the processing log directory; and *dir_mtime* instructs
 jsoc_info to show the last modify time of the record directory in SUMS.
 The results are presented in arrays named "name" and "value".
@@ -69,6 +71,7 @@ show_info
 #include <time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "printk.h"
 
 static char x2c (char *what)
   {
@@ -171,12 +174,37 @@ int drms_count_records(DRMS_Env_t *env, char *recordsetname, int *status)
   return(0);
   }
 
+SUM_t *my_sum=NULL;
+
+SUM_info_t *drms_get_suinfo(long long sunum)
+  {
+  SUM_info_t *sinfo;
+  int status;
+  if (my_sum && my_sum->sinfo->sunum == sunum)
+    return(my_sum->sinfo);
+  if (!my_sum)
+    {
+    if ((my_sum = SUM_open(NULL, NULL, printkerr)) == NULL)
+      {
+      printkerr("drms_open: Failed to connect to SUMS.\n");
+      return(NULL);
+      }
+    }
+  if (status = SUM_info(my_sum, sunum, printkerr))
+    {
+    printkerr("Fail on SUM_info, status=%d\n", status);
+    return(NULL);
+    }
+  sinfo = my_sum->sinfo;
+  return(sinfo);
+  }
+
 
 ModuleArgs_t module_args[] =
 { 
   {ARG_STRING, "op", "Not Specified", "<Operation>, values are: series_struct, rs_summary, or rs_list "},
   {ARG_STRING, "ds", "Not Specified", "<record_set query>"},
-  {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *logdir*, *dir_mtime*  "},
+  {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *online*, *retain*, *logdir*, *dir_mtime*  "},
   {ARG_STRING, "seg", "Not Specified", "<comma delimited segment list>, segnames or special values: **ALL**, **NONE** "},
   {ARG_FLAG, "h", "0", "help - show usage"},
   {ARG_FLAG, "R", "0", "Show record query"},
@@ -200,7 +228,7 @@ int nice_intro ()
 	"-R -> include record query.\n"
 	"op=<command> tell which ajax function to execute, values are: series_struct, rs_summary, or rs_list \n"
 	"ds=<recordset query> as <series>{[record specifier]} - required\n"
-	"key=<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *logdir*, *dir_mtime* \n"
+	"key=<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *online*, *retain*, *logdir*, *dir_mtime* \n"
 	"seg=<comma delimited segment list>, segnames or special values: **ALL**, **NONE** \n"
 	"QUERY_STRING=<cgi-bin params>, parameter string as delivered from cgi-bin call.\n"
 	);
@@ -520,6 +548,8 @@ if (status != JSON_OK) fprintf(stderr, "json_insert_pair_into_object, status=%d,
   printf("%s\n",json);	\
   free(json); \
   fflush(stdout);	\
+  if (my_sum) \
+    SUM_close(my_sum,printkerr); \
   return(1);	\
   }
 
@@ -769,6 +799,28 @@ int DoIt(void)
 	  sprintf(rawval,"%ld",rec->sunum);
 	  val = json_new_number(rawval);
 	  }
+        else if (strcmp(keys[ikey],"*online*") == 0)
+	  {
+	  SUM_info_t *sinfo = drms_get_suinfo(rec->sunum);
+          if (!sinfo)
+	    val = json_new_string("NA");
+	  else
+	    val = json_new_string(sinfo->online_status);
+	  }
+        else if (strcmp(keys[ikey],"*retain*") == 0)
+	  {
+	  SUM_info_t *sinfo = drms_get_suinfo(rec->sunum);
+          if (!sinfo)
+	    val = json_new_string("NA");
+	  else
+	    {
+            int y,m,d;
+	    char retain[20];
+            sscanf(sinfo->effective_date, "%4d%2d%2d", &y,&m,&d);
+            sprintf(retain, "%4d.%02d.%02d",y,m,d);
+	    val = json_new_string(retain);
+	    }
+	  }
         else if (strcmp(keys[ikey], "*dir_mtime*") == 0)
           { // get record dir last change date
 	  struct stat buf;
@@ -909,8 +961,12 @@ else
     printf("%s\n",final_json);
     free(final_json);
     fflush(stdout);
+    if (my_sum)
+      SUM_close(my_sum,printkerr);
     return(0);
     }
+  if (my_sum)
+    SUM_close(my_sum,printkerr);
   return(0);
   }
 
