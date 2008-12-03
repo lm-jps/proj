@@ -178,7 +178,6 @@ SUM_t *my_sum=NULL;
 
 SUM_info_t *drms_get_suinfo(long long sunum)
   {
-  SUM_info_t *sinfo;
   int status;
   if (my_sum && my_sum->sinfo->sunum == sunum)
     return(my_sum->sinfo);
@@ -195,8 +194,8 @@ SUM_info_t *drms_get_suinfo(long long sunum)
     printkerr("Fail on SUM_info, status=%d\n", status);
     return(NULL);
     }
-  sinfo = my_sum->sinfo;
-  return(sinfo);
+
+  return(my_sum->sinfo);
   }
 
 
