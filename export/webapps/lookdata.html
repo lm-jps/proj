@@ -355,6 +355,8 @@ function PickSeries(mode)
 	   insertOption("KeysSelect","*logdir*", "");
 	   insertOption("KeysSelect","*recnum*", "");
 	   insertOption("KeysSelect","*sunum*", "");
+	   insertOption("KeysSelect","*online*", "");
+	   insertOption("KeysSelect","*retain*", "");
 	   keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>unit</TH><TH>note</TH>"; 
 	   for (i=0; i<n; i++)
 	      {
@@ -663,7 +665,8 @@ function GetKeyValues()
         wantrecinfo = $("WantRecInfo").checked;
 	valuetable = "<TABLE border=1 id='InfoTable' ><TR>"
 	if (wantrecinfo)
-	  valuetable = valuetable +  "<TH>RecordName</TH><TH>Online</TH>"
+	  valuetable = valuetable +  "<TH>RecordName</TH>"
+	//   valuetable = valuetable +  "<TH>RecordName</TH><TH>Online</TH>"
 	for (ikey=0; ikey < nkeys; ++ikey)
            valuetable = valuetable + "<TH>" + data.keywords[ikey].name + "</TH>";
 	for (iseg=0; iseg < nsegs; ++iseg)
@@ -677,7 +680,8 @@ function GetKeyValues()
 	  {
 	  valuetable = valuetable + "<TR>";
 	  if (wantrecinfo)
-	    valuetable = valuetable +  "<TD>" + data.recinfo[irec].name + "</TD><TD>" + data.recinfo[irec].online +  "</TD>";
+	    valuetable = valuetable +  "<TD>" + data.recinfo[irec].name + "</TD>";
+	    // valuetable = valuetable +  "<TD>" + data.recinfo[irec].name + "</TD><TD>" + data.recinfo[irec].online +  "</TD>";
 	  for (ikey=0; ikey<nkeys; ikey++)
 	   {
 	   this_keyval =  data.keywords[ikey].values[irec];
@@ -1192,7 +1196,7 @@ RecordSet Query:&nbsp;
 
 <BR>
 <input type="checkbox" name="Get Record Query" id="WantRecInfo">
-Check to Get Record Query and online status and links if a segment selected.
+Check to Get Record Query (for online status use the *online* virtual keyword).
 &nbsp; &nbsp; &nbsp; &nbsp;
 <input type="checkbox" name="AllowBigQueries" id="AllowBigQueries">
 Check to Allow Huge Record Queries.
