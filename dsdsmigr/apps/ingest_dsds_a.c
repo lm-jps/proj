@@ -23,6 +23,17 @@ ModuleArgs_t module_args[] =
      {ARG_END}
 };
 
+// #include <time.h>
+TIME time_now()
+  {
+  TIME now;
+  TIME UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+  struct timespec tp;
+  clock_gettime(CLOCK_REALTIME, &tp);
+  now = (double)tp.tv_sec + (double)tp.tv_nsec/1.0e9;
+  return(now +  UNIX_epoch);
+  }
+  
 
 /* Name check code.  This code uses an external table to drive the mapping of
 dsds keywords into drms keywords.  It should contain a row for each keyword in
@@ -67,7 +78,7 @@ int keyNameCheck(char *name, char **fromname)
     FILE *flist;
     char drms_name[100], dsds_name[100], action_name[100];
     char line[1024];
-    int action;
+    // int action;
     NameListLookup_t *last;
 
     first_call = 0;
@@ -121,21 +132,6 @@ int keyNameCheck(char *name, char **fromname)
   return(ACT_NOT_FOUND);
   }
 
-void fprint_time(FILE *f, TIME t)
-{
-char buf[1024];
-sprint_time(buf,t,"UTC",0);
-fprintf(f,"%s",buf);
-}
-
-void sprint_time_ISO (char *tstring, TIME t)
-{
-sprint_time(tstring,t,"UTC",0);
-tstring[4] = tstring[7] = '-';
-tstring[10] = 'T';
-tstring[19] = '\0'; 
-}
-
 int DoIt(void) 
    {
    int status = DRMS_SUCCESS;
@@ -167,14 +163,13 @@ int DoIt(void)
       DRMS_Record_t *inRec, *outRec;
       DRMS_Keyword_t *outKey;
       DRMS_Segment_t *inSeg, *outSeg;
-      HIterator_t outKey_list, outSeg_list, outLink_list;
+      // HIterator_t outKey_list, outSeg_list, outLink_list;
+      HIterator_t outKey_list;
 //      DRMS_Link_t *outLink;
 
       /* create output series rec prototype */
       inRec = inRecSet->records[iRec];
       outRec = outRecSet->records[iRec];
-
-//fprintf(stderr,"starting record %d\n",iRec);
 
       hiter_new(&outKey_list, &outRec->keywords);
 //      hiter_new(&seg_list, &outRec->segments);
@@ -186,7 +181,6 @@ int DoIt(void)
 	{
 	char *wantKey, *keyName = outKey->info->name;
         int action = keyNameCheck(keyName, &wantKey);
-//fprintf(stderr,"rec=%d, %s %d\n",iRec,keyName,action);
         switch (action)
           {
 	  case ACT_NOP:
@@ -248,16 +242,15 @@ int DoIt(void)
 		mjd = date__obs - MJD_epoch; /* sign error corrected by tplarson 2008.05.29 */
 		mjd_day = floor(mjd / 86400.0);
 		mjd_time = mjd - 86400.0 * mjd_day;
-		now = (double)time(NULL);
-		now += UNIX_epoch;
+		now = (double)time(NULL) + UNIX_epoch;
 		drms_setkey_time(outRec, "T_REC", t_rec);
 		drms_setkey_time(outRec, "T_OBS", t_obs);
 		drms_setkey_double(outRec, "EXPTIME", exptime);
 		drms_setkey_double(outRec, "MJD", mjd_day);
 		drms_setkey_double(outRec, "TIME", mjd_time);
-		sprint_time_ISO(timebuf, date__obs);
+		sprint_time(timebuf, date__obs, "ISO", 0);
 		drms_setkey_string(outRec, "DATE__OBS", timebuf);
-		sprint_time_ISO(timebuf, now);
+		sprint_time(timebuf, now, "ISO", 0);
 		drms_setkey_string(outRec, "DATE", timebuf);
 		break;
 		}
@@ -289,18 +282,15 @@ int DoIt(void)
         }
 
       /* assume only one segment */
-//fprintf(stderr,"rec=%d, start data segment\n",iRec);
 	DataFile = drms_getkey_string(inRec,"DATAFILE",&status);
-		if (status)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
+	if (status)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
 	if (*DataFile)
 	  {
-//fprintf(stderr,"rec=%d, DATAFILE=%s\n",iRec,DataFile);
           inSeg = drms_segment_lookupnum(inRec, 0);
           outSeg = drms_segment_lookupnum(outRec, 0);
           if (inSeg && outSeg)
             {
             DRMS_Array_t *data;
-//if (iRec==0)
             data = drms_segment_read(inSeg, outSeg->info->type, &status);
             if (!data)
                   {
@@ -313,8 +303,15 @@ int DoIt(void)
           else
             DIE("Bad data segment lookup, in or out\n");
 	  }
-//fprintf(stderr,"rec=%d, finish data segment\n",iRec);
-
+        else
+	  { /* record is missing */
+ 	  int qualstat = 0;
+          int quality = drms_getkey_int(outRec, "QUALITY", &qualstat);
+	  if (!qualstat)
+	    drms_setkey_int(outRec, "QUALITY", 0X80000000 | quality); 
+	  if (drms_keyword_lookup(outRec, "DATAVALS", 0))
+	    drms_setkey_int(outRec, "DATAVALS", 0);
+	  }
 
       /* loop through all target links */
       //while ( (outLink=(DRMS_Keyword_t *)hiter_getnext(&link_list)) )

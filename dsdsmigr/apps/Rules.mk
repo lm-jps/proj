@@ -38,6 +38,8 @@ $(MODEXESUMS_$(d)) $(MODEXESUMS_SOCK_$(d)):	$(LIBSUMSAPI) $(LIBSUM)
 # $(LIBSUM).  Force make to find libmisc.a
 $(MODEXESUMS_$(d)) $(MODEXESUMS_SOCK_$(d)):	LL_TGT := $(LL_TGT) -Lbase/libs/misc -lmisc
 
+# $(ingest_dsds_a_$(d)):     LL_TGT := $(LL_TGT) -L/usr/lib -lrt
+
 #$(STORDSDS_$(d)) $(STORDSDS_$(d):%=%_sock): LL_TGT := $(STORDSDS_EXTRA_LIBS)
 #$(STORDSDS_$(d)) $(STORDSDS_$(d):%=%_sock): $(STORDSDS_EXTRA_LIBS)
 
