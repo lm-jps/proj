@@ -23,14 +23,14 @@ ModuleArgs_t module_args[] =
      {ARG_END}
 };
 
-// #include <time.h>
+// #include <sys/time.h>
 TIME time_now()
   {
   TIME now;
   TIME UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
-  struct timespec tp;
-  clock_gettime(CLOCK_REALTIME, &tp);
-  now = (double)tp.tv_sec + (double)tp.tv_nsec/1.0e9;
+  struct timeval tp;
+  gettimeofday(&tp, NULL);
+  now = (double)tp.tv_sec + (double)tp.tv_usec/1.0e6;
   return(now +  UNIX_epoch);
   }
   
