@@ -44,6 +44,7 @@ information will be displayed. Several special psuedo keyword names
 are accepted.  These are: **ALL** means show all keywords (see show_info -a);
 **NONE** means show no keywords; *recnum* means show the hidden keyword "recnum";
 *sunum* means show the hidden keyword "sunum";
+*size* means show the size of storage unit (bytes);
 *online* means show the hidden keyword "online";
 *retain* means show retention date, i.e. date at which SUMS may remove the segment storage;
 *logdir* means show the path to the processing log directory; and *dir_mtime* instructs
@@ -203,7 +204,7 @@ ModuleArgs_t module_args[] =
 { 
   {ARG_STRING, "op", "Not Specified", "<Operation>, values are: series_struct, rs_summary, or rs_list "},
   {ARG_STRING, "ds", "Not Specified", "<record_set query>"},
-  {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *online*, *retain*, *logdir*, *dir_mtime*  "},
+  {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *size*, *online*, *retain*, *logdir*, *dir_mtime*  "},
   {ARG_STRING, "seg", "Not Specified", "<comma delimited segment list>, segnames or special values: **ALL**, **NONE** "},
   {ARG_FLAG, "h", "0", "help - show usage"},
   {ARG_FLAG, "R", "0", "Show record query"},
@@ -227,7 +228,7 @@ int nice_intro ()
 	"-R -> include record query.\n"
 	"op=<command> tell which ajax function to execute, values are: series_struct, rs_summary, or rs_list \n"
 	"ds=<recordset query> as <series>{[record specifier]} - required\n"
-	"key=<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *online*, *retain*, *logdir*, *dir_mtime* \n"
+	"key=<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *size*, *online*, *retain*, *logdir*, *dir_mtime* \n"
 	"seg=<comma delimited segment list>, segnames or special values: **ALL**, **NONE** \n"
 	"QUERY_STRING=<cgi-bin params>, parameter string as delivered from cgi-bin call.\n"
 	);
@@ -798,6 +799,18 @@ int DoIt(void)
 	  sprintf(rawval,"%ld",rec->sunum);
 	  val = json_new_number(rawval);
 	  }
+        else if (strcmp(keys[ikey],"*size*") == 0)
+	  {
+          char size[40];
+	  SUM_info_t *sinfo = drms_get_suinfo(rec->sunum);
+          if (!sinfo)
+	    val = json_new_string("NA");
+	  else
+            {
+            sprintf(size,"%.0f", sinfo->bytes);
+	    val = json_new_string(size);
+            }
+	  }
         else if (strcmp(keys[ikey],"*online*") == 0)
 	  {
 	  SUM_info_t *sinfo = drms_get_suinfo(rec->sunum);
@@ -815,9 +828,14 @@ int DoIt(void)
 	    {
             int y,m,d;
 	    char retain[20];
-            sscanf(sinfo->effective_date, "%4d%2d%2d", &y,&m,&d);
-            sprintf(retain, "%4d.%02d.%02d",y,m,d);
-	    val = json_new_string(retain);
+            if (strcmp("N", sinfo->online_status) == 0)
+              val = json_new_string("N/A");
+            else
+              {
+              sscanf(sinfo->effective_date, "%4d%2d%2d", &y,&m,&d);
+              sprintf(retain, "%4d.%02d.%02d",y,m,d);
+	      val = json_new_string(retain);
+              }
 	    }
 	  }
         else if (strcmp(keys[ikey], "*dir_mtime*") == 0)
