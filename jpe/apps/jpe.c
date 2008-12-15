@@ -1026,6 +1026,9 @@ void get_cmd(int argc, char *argv[])
           dsdsin=1;				/* flg if any d=1 */
         deletekey(&work_list, "d");
       }
+      //NEW for jpe we must always query DRMS for input so force flags to 1
+      sptr->dsin = 1;
+      dsdsin=1;
 					   /*  removed 99.02.12 (see below)  */
 /*
       if(sp=getkey_str(work_list, "l")) {
@@ -1060,7 +1063,7 @@ void get_cmd(int argc, char *argv[])
         }
         if(carch == '0') {
           //sptr->archive = NULL;
-          sptr->archive = 't';			// force a=0 to t for jpe
+          sptr->archive = 't';		// force a=0 to t for jpe
         }
         else {
           sptr->archive = carch;		/* archive char a, t,p or n */
@@ -1538,8 +1541,14 @@ KEY *form_arg_data_in(KEY *xlist, SERVER *sptr, argument *arg, int seq)
   setkey_str(&xlist, ext, arg->key);	/* add name of arg */
   /* define {dbase} in case used in the env variable name template */
   strcpy(dbasekey, arg->key); strcat(dbasekey, "_dbase");
-  if(reqmegs && !sptr->firstserver)	/* input is fr prev output in dsds */
+  /* setup if input is from previous modules output */
+  if(reqmegs && !sptr->firstserver && !sptr->dsin) {
     setkey_str(&xlist, dbasekey, dsdswd);
+    sprintf(ext, "%s_rule", arg->key); 	/* e.g. in_rule */
+    setkey_str(&xlist, ext, "wd:{dbase}"); /* do in case parse list again */
+    sprintf(ext, "%s_%d_rule", arg->key, seq);
+    setkey_str(&xlist, ext, "wd:{dbase}"); /* override rule for SUMS compat */
+  }
   else if(getenv("dbase"))
     setkey_str(&xlist, dbasekey, getenv("dbase"));
   else
@@ -1734,9 +1743,32 @@ KEY *form_arg_data_out(SERVER *sptr, argument *arg)
   if(sptr->archive == 'a') {  //!!TBD ck use in jpe
     //NOTE: appendable output ds not supported in DRMS/SUMS.
     //See the original pe.c for how the ds_naming db table was used for this.
-    pemail("***Error: jpe does not allow appendable output dataseries\n");
-    printk("***Error: jpe does not allow appendable output dataseries\n");
-    abortit(1);
+    //pemail("***Error: jpe does not allow appendable output dataseries\n");
+    //printk("***Error: jpe does not allow appendable output dataseries\n");
+    //abortit(1);
+    //OK, going to try to support appendable output to /SUM0/PAS !!TEMP
+    for(i=0; i < innsets; i++) {          /* do for each dataset */
+      /* set this wd as the _dbase term in the keylist and remove the current */
+      /* evaluation and parse again to get the final output wd. */
+      setkey_str(&xlist, dbasekey, "/SUM0/PAS");
+          //!!!TEMP
+          //printf("\n***** The xlist before the deletekey() is:\n");
+          //keyiterate(printkey, xlist);
+      sprintf(ext, "%s_%d_wd", arg->key, i);
+      deletekey(&xlist, ext);             /* rem the current _0_wd */
+      if(parse=parse_list(&xlist, arg->key)) {/* expand ds name */
+        pemail("***Error %d in parse_list for %s\n", parse, sptr->name);
+        if(debugflg) {
+          printf("\n***** The xlist after the parse is:\n");
+          keyiterate(printkey, xlist);
+        }
+        abortit(1);
+      }
+    }
+          //!!!TEMP
+          //printf("\n***** The xlist after the parse is:\n");
+          //keyiterate(printkey, xlist);
+    return(xlist);
   }
 
   /* This is not an appendable ds so proceed with rule. */
@@ -1779,7 +1811,7 @@ KEY *form_arg_data_out(SERVER *sptr, argument *arg)
       jix = getkey_int(JPElist,  "JPE_out_nsets");
     }
 
-printf("\nout drmsname = %s\n", drmsname); //!!TEMP
+  //printf("\nout drmsname = %s\n", drmsname); //!!TEMP
 
   if(reqmegs) {
     if(firstalloc) {
@@ -1791,7 +1823,8 @@ printf("\nout drmsname = %s\n", drmsname); //!!TEMP
       }
   
       drms_record_directory(rs, path, 0);		//get wd
-      printk("path = %s\n", path);		//!!TEMP
+      //printk("path = %s\n", path);		//!!TEMP
+      strcpy(dsdswd, path);			//if next in is prev out
       sprintf(ext, "%s_%d_rs", arg->key, i);
       setkey_fileptr(&sptr->map_list, ext, (FILE *)rs);
       //sptr->rsarray[i] = rs;
@@ -2056,8 +2089,8 @@ void form_keylist(SERVER *sptr, HDATA *hnext)
       in_ds_rcp(dslist);
     }
     add_keys(dslist, &hnext->param_list);/* copy over all keys */
-//printf("\n*** The param_list after add_keys() is:\n");
-//keyiterate(printkey, hnext->param_list); //!!!TEMP
+    //printf("\n*** The param_list after add_keys() is:\n");
+    //keyiterate(printkey, hnext->param_list); //!!!TEMP
     freekeylist(&inlist); freekeylist(&dslist);
   }
   else if(inseq) {
@@ -2129,8 +2162,8 @@ void send_to_serv(SERVER *sptr, HDATA *hx, int doflg)
     pemail("***Error calling %s on %s\n",sptr->name,hx->host_name);
     abortit(1);
   }
-  /*msg("Sending to server:\n");*/
-  /*keyiterate(printkey, hx->param_list);*/
+  //printf("Sending to server:\n");  /* !!!TEMP */
+  //keyiterate(printkey, hx->param_list);
 }
 
 
@@ -2433,7 +2466,7 @@ void call_archive(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
       rsx = (DRMS_Record_t *)getkey_fileptr(stab->map_list, oname);
       //rsx = stab->rsarray[i];
       snum = getkey_int(alist, "series_sn");
-      printf("%%%% snum in call_archive() = %d\n", snum); //!!TEMP
+      //printf("%%%% snum in call_archive() = %d\n", snum); //!!TEMP
       status = drms_setkey_int(rsx, "snum", snum);
       if(status) {
         printk("ERROR: can't drms_setkey_int() for snum=%u\n", snum);
@@ -2451,7 +2484,7 @@ void call_archive(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
     stab->archive_complete = 1;		/* don't del wd at end */
   }
 
-printk("Call: drms_close_record()\n"); //!!TEMP
+  //printk("Call: drms_close_record()\n"); //!!TEMP
   if((status = drms_close_record(rsx, DRMS_INSERT_RECORD))) {
     printk("**ERROR: drms_close_record failed status=%d\n", status);
     abortit(1);
@@ -3067,7 +3100,7 @@ void setup(int argc, char *argv[])
   strcat(idstr, string);
   sprintf(mailname, PEMAILFILE, username, getpid());
   open_pemail(mailname, idstr);
-  pelog("%s", idstr);
+  printk("%s", idstr);
   pelog("#%s for %s on %s\n", logname, username, datestr);
   pelog("#listed in order of completion\n");
   pelog("#tid\tstatus\tcomplet\tarchive\tmodule\t\t\"out\"returned\tauxinfo\n");
