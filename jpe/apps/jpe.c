@@ -4,13 +4,15 @@
  *
  * This is the old pe.c from SOI MDI that is converted to run like the
  * original pe but with DRMS/SUMS interface instead of DSDS.
+ * The original is found in /CM/src/pipe/pe.c
  *
- * Here's the original opening banner from $STAGING/src/pipe/pe.c.
- * Note the following are deprecated in jpe:
+ * HERE are the new jpe.c notes:
+ * The following original pe options are deprecated in jpe:
  *  -d, -t, -L, db= , rcp= , pds=
  *
+ ***************************************************************************
+ * HERE are the original pe notes:
  * INPUTS:
- *!!!!OLD pe call:
  *Command line args of "[-v -d -t -L -A touch=# db=db_name
  *                      rcp=/dir pds=host_name]
  *                      map=map_file_name"
@@ -130,7 +132,7 @@ static DRMS_Record_t *rs;
 extern DRMS_Env_t *drms_env;
 extern KEY *call_drms_in(KEY *list, int dbflg);
 
-uint64_t uid;                       /* assigned by dsds_svc REQOPEN call */
+unsigned int uid;               /* for jpe, assigned to pid */
 unsigned int vcdu_24_cnt, vcdu_24_cnt_next;
 int wdkey_int;                  /* make a uni key name in form_arg_data_out()*/
 int verbose;
@@ -321,7 +323,7 @@ void sighandler(sig)
     }
     else {
       ccactive = 1;
-      setkey_uint64(&list, "dsds_uid", uid); /* give our OPEN uid */
+      setkey_uint(&list, "dsds_uid", uid); /* give our OPEN uid */
       setkey_int(&list, "ampex_tid", ampex_tid);
       setkey_str(&list, "USER", username);
       printf("^C signal received by pe\n");
@@ -1026,7 +1028,7 @@ void get_cmd(int argc, char *argv[])
           dsdsin=1;				/* flg if any d=1 */
         deletekey(&work_list, "d");
       }
-      //NEW for jpe we must always query DRMS for input so force flags to 1
+      //NEW for jpe we must always query DRMS for input so porce flags to 1
       sptr->dsin = 1;
       dsdsin=1;
 					   /*  removed 99.02.12 (see below)  */
@@ -1611,7 +1613,7 @@ KEY *dsds_arg_data_in(KEY *xlist)
   blist = newkeylist();
   /* now query dsds_svc for each dataset in the input keylist */
   /* the args are given by arg_data_in_0, arg_data_in_1, etc */
-  setkey_uint64(&xlist, "dsds_uid", uid);  /* give our OPEN uid */
+  setkey_uint(&xlist, "dsds_uid", uid);  /* give our OPEN uid */
   setkey_str(&xlist, "pds_host", pdshost); /* host for the /PDS set */
   /* send either "ampex_tid" or "lago_tid" keyword to dsds_svc */
   if(ampexflg)
@@ -2033,7 +2035,10 @@ void form_keylist(SERVER *sptr, HDATA *hnext)
 {
   KEY *xlist, *inlist, *dslist;
   argument *arg, *argsort[MAX_ARGS];
+  char ext[MAX_STR];
+  char *pname;
   int inseq, i, ax;
+  int inapp = 0;
 
   /* make sure we see any ARG_DATA_IN first */
   arg=sptr->arguments;
@@ -2056,6 +2061,14 @@ void form_keylist(SERVER *sptr, HDATA *hnext)
     switch(arg->kind) {
     case ARG_DATA_IN:
       inlist = (KEY *)form_arg_data_in(inlist, sptr, arg, inseq);
+      sprintf(ext, "%s_prog", arg->key);    /* e.g. in_prog */
+      pname = getkey_str(inlist, ext);  
+      //check if this is a  dsds appendable input series
+      if(!strcmp(pname, "mdi_eof_log") || !strcmp(pname, "mdi_eof_rec")
+         || !strcmp(pname, "mdi_log") || !strcmp(pname, "mdi_rec") ||
+         !strcmp(pname, "mdi_sim_rec") || !strcmp(pname, "soi_eof_rec")) {
+        inapp = 1;
+      }
       if(!inseq++) {				/* first input dc */
         /* NOTE: form_split() is vestigial. Just set effective_hosts */
         /*form_split(sptr, inlist, arg->key);	/* sets effective_hosts */
@@ -2073,7 +2086,7 @@ void form_keylist(SERVER *sptr, HDATA *hnext)
     }
     arg = argsort[++ax];
   }					/* end arg->kind != ARG_END */
-  if((inseq) && (sptr->dsin)) {	/* ARG_DATA_IN present & call dsds */
+  if((inseq) && (sptr->dsin) && (!inapp)) { //ARG_DATA_IN present & call dsds
     if(dbxflg) {			/* !!TEMP for debug */
       printf("\nThe list before the dsds_arg_data_in(inlist) call:\n");
       keyiterate(printkey, inlist);
@@ -2150,7 +2163,7 @@ void send_to_serv(SERVER *sptr, HDATA *hx, int doflg)
   if(!sptr->cphist)
     setkey_int(&hx->param_list, "nocphist", 1);  /* don't cp hist log */
   setkey_int(&hx->param_list, "dsds_tid", dsds_tid); /* always add dsds_tid */
-  setkey_uint64(&hx->param_list, "dsds_uid", uid); /* always add dsds_uid */
+  setkey_uint(&hx->param_list, "dsds_uid", uid); /* always add dsds_uid */
   setkey_str(&hx->param_list, "pe_mapfile", pe_map); /* add pe map name */
   pvm_initsend(PvmDataDefault); /* init the send buffer */
   pvm_pkint(&doflg, 1, 1);      /* pack the do flag */
@@ -2158,12 +2171,12 @@ void send_to_serv(SERVER *sptr, HDATA *hx, int doflg)
     pemail("***Err packing a pvm msg, type=%d name=%s\n",keybad->type,keybad->name);
     abortit(1);
   }
+  printf("Sending to server:\n");  /* !!!TEMP */
+  keyiterate(printkey, hx->param_list);
   if(pvm_send(hx->tid, sptr->msgid)) {/* send the msg to server */
     pemail("***Error calling %s on %s\n",sptr->name,hx->host_name);
     abortit(1);
   }
-  //printf("Sending to server:\n");  /* !!!TEMP */
-  //keyiterate(printkey, hx->param_list);
 }
 
 
@@ -2183,7 +2196,7 @@ int ds_names_file(KEY *list, argument *argu)
   char ext[MAX_STR], rdbline[1024], sysstr[1024];
   char *prog, *level, *series, *wd;
   double bytes;
-  uint64_t dsindex;
+  unsigned long dsindex;
   int nsets, levnum, prognum, seriesnum;
   int i = 0;
   char DSINFO[] ="arg\tprog\tprog#\tlevel\tlev#\tseries\tser#\tdsindex\tbytes\n----\t-----\t------\t------\t-----\t-------\t-----\t-------\t------\n";
@@ -2223,9 +2236,9 @@ int ds_names_file(KEY *list, argument *argu)
           seriesnum = -1;
         sprintf(ext, "%s_%d_ds_index", arg->key, i);
         if(findkey(list, ext))
-          dsindex = getkey_uint64(list, ext);
+          dsindex = getkey_ulong(list, ext);
         else
-          dsindex = (uint64_t)-1;
+          dsindex = (unsigned long)-1;
         sprintf(ext, "%s_%d_bytes", arg->key, i);
         if(findkey(list, ext))
           bytes = getkey_double(list, ext);
@@ -2418,7 +2431,7 @@ KEY *set_key_archive(char *basename, SERVER *stab, HDATA *hdata,  KEY *rlist,
   /*dsize = dsize + (dsize * 0.1);*/
   setkey_int(&alist, "lago_tid", lago_tid);
   setkey_double(&alist, "dsds_bytes", dsize);
-  setkey_uint64(&alist, "dsds_uid", uid);   /* give our OPEN uid */
+  setkey_uint(&alist, "dsds_uid", uid);   /* give our OPEN uid */
   setkey_str(&alist, "svc_name", stab->name);
   setkey_str(&alist, "svc_version", stab->version);
   setkey_str(&alist, "username", username);
@@ -2444,7 +2457,7 @@ void call_archive(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
   char *wd, *cptr;
   char oname[MAX_STR], ext[MAX_STR];
   int outnsets, i, snum;
-  uint64_t sunum;
+  unsigned long sunum;
   double dsize;
 
   archactive = 1;                       /* set flg for archive in progress */
@@ -2492,7 +2505,7 @@ void call_archive(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
   sprintf(oname, "%s_%d_bytes", arg->key, i);
   setkey_double(&hdata->param_list, oname, dsize); /* also add # bytes */
   sprintf(oname, "%s_%d_ds_index", arg->key, i);
-  setkey_uint64(&hdata->param_list, oname, sunum); // and ds_index
+  setkey_ulong(&hdata->param_list, oname, sunum); // and ds_index
 
 /* !!TEMP print the servers keylist */
 /*printf("In call_archive() print the servers keylist for %s is:\n",stab->name);
@@ -2565,7 +2578,7 @@ void call_archive_0(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
         /* update the servers keylist with the ds_index used (level# is 0)*/
         if(findkey(blist, "ds_index")) {
           sprintf(ext, "%s_ds_index", oname);
-          setkey_uint64(&hdata->param_list,ext,getkey_uint64(blist, "ds_index"));
+          setkey_ulong(&hdata->param_list,ext,getkey_ulong(blist, "ds_index"));
         }
         sprintf(ext, "%s_bytes", oname);
         setkey_double(&hdata->param_list, ext, dsize); /* also add # bytes */
@@ -3083,6 +3096,7 @@ void setup(int argc, char *argv[])
   wd_mk_list = newkeylist();	/* init the list of potential mkdir wd's */
   JPElist = newkeylist();	/* init the list for any archive group */
   tae_tid=pvm_parent();		/* get tid if tae spawned us */
+  uid = (uint)getpid();		/* use our pid for the old dsds_uid */
   pvm_serror(1);		/* enable auto error reporting */
   if(!(username = (char *)getenv("USER"))) username = "nouser";
   sprintf(logname, PELOGFILE, username, getpid());
