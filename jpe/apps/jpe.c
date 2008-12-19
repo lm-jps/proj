@@ -1885,7 +1885,7 @@ KEY *form_arg_data_out(SERVER *sptr, argument *arg)
         setkey_fileptr(&sptr->map_list, ext, (FILE *)rs);
         sprintf(ext, "%s_%d_wd", arg->key, i);	//e.g. out_0_wd
         setkey_str(&xlist, ext, path);
-        printk("%s path = %s\n", ext, path);		//!!TEMP
+        //printk("%s path = %s\n", ext, path);		//!!TEMP
         wd = path;
   sprintf(ext, "%s_%d_prog", arg->key, i);      //e.g. out_0_prog
   prog = getkey_str(xlist, ext);                //e.g mdi_eof
@@ -2171,8 +2171,8 @@ void send_to_serv(SERVER *sptr, HDATA *hx, int doflg)
     pemail("***Err packing a pvm msg, type=%d name=%s\n",keybad->type,keybad->name);
     abortit(1);
   }
-  printf("Sending to server:\n");  /* !!!TEMP */
-  keyiterate(printkey, hx->param_list);
+  //printf("Sending to server:\n");  /* !!!TEMP */
+  //keyiterate(printkey, hx->param_list);
   if(pvm_send(hx->tid, sptr->msgid)) {/* send the msg to server */
     pemail("***Error calling %s on %s\n",sptr->name,hx->host_name);
     abortit(1);
