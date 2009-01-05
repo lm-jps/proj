@@ -222,8 +222,8 @@ if ($yr90 < $yr)
     $pbegin = sprintf("%03d", $dofy90);
     $pend = 366;
     $pyr = $yr - 1;
-    $cbegin = 1;
-    $cend = $dofy;
+    $cbegin = "001";
+    $cend = sprintf("%03d", $dofy);
 }
 else
 {
