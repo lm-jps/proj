@@ -10,6 +10,8 @@
  * The following original pe options are deprecated in jpe:
  *  -d, -t, -L, db= , rcp= , pds=
  *
+ * See: /home/production/cvs/JSOC/proj/jpe/apps/note.jpe
+ *
  ***************************************************************************
  * HERE are the original pe notes:
  * INPUTS:
@@ -190,39 +192,6 @@ char *rcpdir;                   /* from rcp= on cmd line */
 char *t_first_arg;              /* set if modules has a T_FIRST arg */
 char *t_last_arg;               /* set if modules has a T_LAST arg */
 
-
-struct namesort {		// sorted file names in tlmdir 
-  char *name;
-};
-typedef struct namesort NAMESORT;
-
-// Setup global datestr[] like: 2008.07.14_08:29:31
-char *do_datestr() {
-  time_t tval;
-  struct tm *t_ptr;
-
-  tval = time(NULL);
-  t_ptr = localtime(&tval);
-  sprintf(datestr, "%d.%02d.%02d_%02d:%02d:%02d", 
-	  (t_ptr->tm_year+1900), (t_ptr->tm_mon+1),
-	  t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
-  return(datestr);
-}
-
-// Returns a time tag like  yyyy.mm.dd.hhmmss 
-char *gettimetag()
-{
-  struct timeval tvalr;
-  struct tm *t_ptr;
-
-  gettimeofday(&tvalr, NULL);
-  t_ptr = localtime((const time_t *)&tvalr);
-  sprintf(timetag, "%04d.%02d.%02d.%02d%02d%02d",
-        (t_ptr->tm_year+1900), (t_ptr->tm_mon+1), t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
-  return(timetag);
-}
-
-
 void BeginTimer(int n)
 {
   gettimeofday (&first[n], NULL);
@@ -238,7 +207,6 @@ float EndTimer(int n)
   return (float) (second[n].tv_sec-first[n].tv_sec) +
     (float) (second[n].tv_usec-first[n].tv_usec)/1000000.0;
 }
-
 
 /* Outputs the variable format message (re: printf) to the pe log file.
 */
