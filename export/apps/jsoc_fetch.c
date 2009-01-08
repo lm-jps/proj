@@ -9,6 +9,8 @@
 #include "drms.h"
 #include "drms_names.h"
 #include "json.h"
+#include "printk.h"
+
 
 #include <time.h>
 
@@ -84,6 +86,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "op", "Not Specified", "<Operation>"},
   {ARG_STRING, "ds", "Not Specified", "<record_set query>"},
   {ARG_STRING, "seg", "Not Specified", "<record_set segment list>"},
+  {ARG_STRING, "sunum", "Not Specified", "<sunum list for SU exports>"},
   {ARG_STRING, "requestid", "Not Specified", "JSOC export request identifier"},
   {ARG_STRING, "process", "Not Specified", "string containing program and arguments"},
   {ARG_STRING, "requestor", "Not Specified", "name of requestor"},
@@ -289,6 +292,36 @@ TIME timenow()
   return(now);
   }
 
+SUM_t *my_sum=NULL;
+
+SUM_info_t *drms_get_suinfo(long long sunum)
+  {
+  int status;
+  if (my_sum && my_sum->sinfo->sunum == sunum)
+    return(my_sum->sinfo);
+  if (!my_sum)
+    {
+    if ((my_sum = SUM_open(NULL, NULL, printkerr)) == NULL)
+      {
+      printkerr("drms_open: Failed to connect to SUMS.\n");
+      return(NULL);
+      }
+    }
+  if (status = SUM_info(my_sum, sunum, printkerr))
+    {
+    printkerr("Fail on SUM_info, status=%d\n", status);
+    return(NULL);
+    }
+
+  return(my_sum->sinfo);
+  }
+
+#ifdef NEVER
+// use at end of any section that exits Doit after using SUM_info
+  if (my_sum)
+    SUM_close(my_sum,printkerr);
+#endif
+
 #define JSONDIE(msg) {die(dojson,msg,"");}
 #define JSONDIE2(msg,info) {die(dojson,msg,"");}
 
@@ -317,6 +350,8 @@ if (DEBUG) fprintf(stderr,"%s%s\n",msg,info);
     printf("status=4\nerror=%s\n", message);
     }
   fflush(stdout);
+  if (my_sum)
+    SUM_close(my_sum,printkerr);
   return(1);
   }
 
@@ -355,7 +390,6 @@ fprintf(stderr,"path: %s\n",path);
   fflush(stdout);
   }
 
-
 /* Module main function. */
 int DoIt(void)
   {
@@ -374,7 +408,8 @@ int DoIt(void)
   char *protocol;
   char *filenamefmt;
   char *errorreply;
-  int size;
+  char *sunumlist;
+  long long size;
   TIME reqtime;
   TIME esttime;
   TIME exptime;
@@ -416,6 +451,7 @@ int DoIt(void)
   op = cmdparams_get_str (&cmdparams, "op", NULL);
   requestid = cmdparams_get_str (&cmdparams, "requestid", NULL);
   in = cmdparams_get_str (&cmdparams, "ds", NULL);
+  sunumlist = cmdparams_get_str (&cmdparams, "sunum", NULL);
   seglist = cmdparams_get_str (&cmdparams, "seg", NULL);
   process = cmdparams_get_str (&cmdparams, "process", NULL);
   format = cmdparams_get_str (&cmdparams, "format", NULL);
@@ -433,13 +469,187 @@ int DoIt(void)
   doxml = strcmp(format, "xml") == 0;
 
   export_series = EXPORT_SERIES;
+
+  /*  op == exp_su - export Storage Units */
+  if (strcmp(op,"exp_su") == 0)
+    {
+    char *this_sunum, *sunumlist, *sunumlistptr;
+    long long sunums[DRMS_MAXQUERYLEN/8];  // should be enough!
+    char *paths[DRMS_MAXQUERYLEN/8];
+    char *series[DRMS_MAXQUERYLEN/8];
+    long long sunum;
+    int count;
+    int status=0;
+    int all_online;
+
+    // Do survey of sunum list
+    size=0;
+    all_online = 1;
+    count = 0;
+    sunumlist = strdup(in);
+
+    while (this_sunum = strtok_r(sunumlist, ",", &sunumlistptr))
+      {
+      SUM_info_t *sinfo;
+      TIME expire;
+      sunum = atoll(this_sunum);
+      sunumlist = NULL;
+      sinfo = drms_get_suinfo(sunum);
+      if (!sinfo)
+        JSONDIE("Invalid sunum, SUM_info call failed");
+      size += sinfo->bytes;
+      if (strcmp(sinfo->online_status,"Y")==0)
+        {
+        int y,m,d,hr,mn;
+        char sutime[50];
+        sscanf(sinfo->effective_date,"%4d%2d%2d%2d%2d", &y,&m,&d,&hr,&mn);
+        sprintf(sutime, "%4d.%02d.%02d_%02d:%02d", y,m,d,hr,mn);
+        expire = (sscan_time(sutime) - now)/86400.0;
+        }
+      if (strcmp(sinfo->online_status,"N")==0 || expire < 3)
+        {  // need to stage or reset retention time
+        all_online = 0;
+        }
+      else
+        {
+        sunums[count] = sunum;
+        paths[count] = strdup(sinfo->online_loc);
+        series[count] = strdup(sinfo->owning_series);
+        }
+      count += 1;
+      }
+    if (count==0)
+      JSONDIE("There are no files in this RecordSet");
+
+    // Do quick export if possible
+    if (strcmp(method,"url_quick")==0 && strcmp(protocol,"as-is")==0  && all_online)
+      {
+      if (dojson)
+        {
+        int i;
+        char *json;
+        char *strval;
+        char numval[50];
+        json_t *jroot = json_new_object();
+        json_t *data;
+        data = json_new_array();
+        for (i=0; i < count; i++)
+          {
+          json_t *suobj = json_new_object();
+          char *jsonstr;
+          char numval[40];
+          sprintf(numval,"%lld",sunums[i]);
+          jsonstr = string_to_json(numval); // send as string in case long long fails
+          json_insert_pair_into_object(jroot, "sunum", json_new_string(jsonstr));
+          free(jsonstr);
+          jsonstr = string_to_json(series[i]);
+          json_insert_pair_into_object(suobj, "series", json_new_string(jsonstr));
+          free(jsonstr);
+          jsonstr = string_to_json(paths[i]);
+          json_insert_pair_into_object(suobj, "path", json_new_string(jsonstr));
+          free(jsonstr);
+          json_insert_child(data, suobj);
+          }
+        sprintf(numval, "%ld", count);
+        json_insert_pair_into_object(jroot, "count", json_new_number(numval));
+        sprintf(numval, "%lld", size);
+        json_insert_pair_into_object(jroot, "size", json_new_number(numval));
+        json_insert_pair_into_object(jroot, "dir", json_new_string(""));
+        json_insert_pair_into_object(jroot, "data", data);
+        json_insert_pair_into_object(jroot, "requestid", json_new_string(""));
+        strval = string_to_json(method);
+        json_insert_pair_into_object(jroot, "method", json_new_string(strval));
+        free(strval);
+        strval = string_to_json(protocol);
+        json_insert_pair_into_object(jroot, "protocol", json_new_string(strval));
+        free(strval);
+        json_insert_pair_into_object(jroot, "wait", json_new_number("0"));
+        json_insert_pair_into_object(jroot, "status", json_new_number("0"));
+        json_tree_to_string(jroot,&json);
+        printf("Content-type: application/json\n\n");
+        printf("%s\n",json);
+        fflush(stdout);
+        free(json);
+        }  
+      else
+        {
+        int i;
+        printf("Content-type: text/plain\n\n");
+        printf("# JSOC Quick Data Export of as-is files.\n");
+        printf("status=0\n");
+        printf("requestid=\"Not Specified\"\n");
+        printf("method=%s\n", method);
+        printf("protocol=%s\n", protocol);
+        printf("wait=0\n");
+        printf("count=%d\n", count);
+        printf("size=%lld\n", size);
+        printf("dir=/\n");
+        printf("# DATA\n");
+        for (i=0; i<count; i++)
+          printf("%lld\t%s\t%s\n",sunums[i],series[i],paths[i]);
+        }
+      if (my_sum)
+        SUM_close(my_sum,printkerr);
+      return(0);
+      }
+
+    // Must do full export processing
+
+    // Get RequestID
+    {
+    FILE *fp = popen("/home/phil/cvs/JSOC/bin/linux_ia32/GetJsocRequestID", "r");
+    if (fscanf(fp, "%s", new_requestid) != 1)
+      JSONDIE("Cant get new RequestID");
+    pclose(fp);
+    requestid = new_requestid;
+    }
+
+    now = timenow();
+
+    // Add Requestor info to jsoc.export_user series 
+    // Can not watch for new information since can not read this series.
+    //   start by looking up requestor 
+    if (strcmp(requestor, "Not Specified") != 0)
+      {
+#ifdef SHOULD_BE_HERE
+check for requestor to be valid remote DRMS site
+#else // for now
+      requestorid = 0;
+#endif
+      }
+    else
+      requestorid = 0;
+
+    // FORCE process to be su_export
+    process = "su_export";
+
+    // Create new record in export control series
+    // This will be copied into the cluster-side series on first use.
+    export_log = drms_create_record(drms_env, export_series, DRMS_PERMANENT, &status);
+    if (!export_log)
+      JSONDIE("Cant create new export control record");
+    drms_setkey_string(export_log, "RequestID", requestid);
+    drms_setkey_string(export_log, "DataSet", in);
+    drms_setkey_string(export_log, "Processing", process);
+    drms_setkey_string(export_log, "Protocol", protocol);
+    drms_setkey_string(export_log, "FilenameFmt", filenamefmt);
+    drms_setkey_string(export_log, "Method", method);
+    drms_setkey_string(export_log, "Format", format);
+    drms_setkey_time(export_log, "ReqTime", now);
+    drms_setkey_time(export_log, "EstTime", now+10); // Crude guess for now
+    drms_setkey_longlong(export_log, "Size", size);
+    drms_setkey_int(export_log, "Status", 2);
+    drms_setkey_int(export_log, "Requestor", requestorid);
+    drms_close_record(export_log, DRMS_INSERT_RECORD);
+    } // end of exp_su
   /*  op == exp_request  */
-  if (strcmp(op,"exp_request") == 0) 
+  else if (strcmp(op,"exp_request") == 0) 
     {
     int status=0;
     int segcount = 0;
     int irec;
     int all_online = 1;
+    long long prev_sunum = 0;
     char dsquery[DRMS_MAXQUERYLEN];
     DRMS_RecordSet_t *rs;
     export_series = EXPORT_SERIES_NEW;
@@ -463,17 +673,25 @@ int DoIt(void)
       {
       char recpath[DRMS_MAXPATHLEN];
       DRMS_Record_t *rec = rs->records[irec];
-      drms_record_directory(rec,recpath,0);
-      if (strncmp(recpath, "/SUM", 4) != 0)
+      SUM_info_t *sinfo = drms_get_suinfo(rec->sunum);
+      if (!sinfo)
+	JSONDIE2("Bad sunum in a record in RecordSet: ", dsquery);
+      if (strcmp(sinfo->online_status,"N") == 0)
           all_online = 0;
-      size += drms_record_size(rec);
-      segcount += drms_record_numsegments(rec);
+      if (rec->seriesinfo->unitsize == 1 || rec->sunum != prev_sunum)
+        {
+        size += sinfo->bytes;
+        segcount += drms_record_numsegments(rec);
+        }
+      prev_sunum = rec->sunum;
       }
+    if (my_sum)
+      SUM_close(my_sum,printkerr);
 
     // Do quick export if possible
-    if (strcmp(method,"url_quick")==0 && strcmp(protocol,"as-is")==0 && segcount == 0)
+    if (strcmp(method,"url_quick")==0 && (strcmp(protocol,"as-is")==0 || strcmp(protocol,"su")==0) && segcount == 0)
       JSONDIE("There are no files in this RecordSet");
-    if (strcmp(method,"url_quick")==0 && strcmp(protocol,"as-is")==0 && all_online)
+    if (strcmp(method,"url_quick")==0 && (strcmp(protocol,"as-is")==0 || strcmp(protocol,"su")==0) && all_online)
       {
       if (0 && segcount == 1) // If only one file then do immediate delivery of that file.
         {
@@ -576,7 +794,6 @@ int DoIt(void)
     export_log = drms_create_record(drms_env, export_series, DRMS_PERMANENT, &status);
     if (!export_log)
       JSONDIE("Cant create new export control record");
-
     drms_setkey_string(export_log, "RequestID", requestid);
     drms_setkey_string(export_log, "DataSet", dsquery);
     drms_setkey_string(export_log, "Processing", process);
@@ -593,6 +810,8 @@ int DoIt(void)
     }
 
   // Now report back to the requestor by dropping into the code for status request.
+  // This is entry point for status request and tail of work for exp_request and exp_su
+  // If data was as-is and online and url_quick the exit will have happened above.
 
   // op = exp_status
 
