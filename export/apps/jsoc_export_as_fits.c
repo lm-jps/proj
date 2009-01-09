@@ -28,7 +28,7 @@ typedef enum
 
 #define kNotSpecified    "NOT SPECIFIED"
 #define kArg_reqid       "reqid"
-#define kArg_version     "version"
+#define kArg_version     "expversion"
 #define kArg_method      "method"
 #define kArg_protocol    "protocol"
 #define kArg_rsquery     "rsquery"
