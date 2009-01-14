@@ -55,7 +55,7 @@ if (-e $FITSNAME) then
       echo "hostname				 >>&$QLOG"	>>$QCMD
       echo "echo -n 'run at '			 >>&$QLOG" 	>>$QCMD
       echo "date				 >>&$QLOG" 	>>$QCMD
-      echo "hmi_import_egse_lev0  in=$LEV0_PATH out=$TARGET dsds=$DSDSNAME $FLAGS  >>&$QLOG" >>$QCMD
+      echo "hmi_import_egse_lev0_sock  in=$LEV0_PATH out=$TARGET dsds=$DSDSNAME $FLAGS  >>&$QLOG" >>$QCMD
       echo "echo -n import done:		 >>&$QLOG" 	>>$QCMD
       echo "show_keys ds=hmi_ground.lev0[$FSN] key=FSN,T_OBS seg=file -p -q >>&$QLOG" >>$QCMD
       echo "rm  $TRIGGER			 >>&$QLOG" 	>>$QCMD
