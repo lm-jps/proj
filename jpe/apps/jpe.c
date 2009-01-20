@@ -2030,6 +2030,7 @@ void form_keylist(SERVER *sptr, HDATA *hnext)
     case ARG_DATA_IN:
       inlist = (KEY *)form_arg_data_in(inlist, sptr, arg, inseq);
       sprintf(ext, "%s_prog", arg->key);    /* e.g. in_prog */
+      //keyiterate(printkey, inlist); //!!TEMP
       pname = getkey_str(inlist, ext);  
       //check if this is a  dsds appendable input series
       if(!strcmp(pname, "mdi_eof_log") || !strcmp(pname, "mdi_eof_rec")
@@ -3099,10 +3100,6 @@ int DoIt()
   char *args[6];
   char callcmd[128];
 
-  cmdparams_get_argv(&cmdparams, &argv, &argc);
-  setup(argc, argv);
-  get_cmd(argc, argv);
-  spawn_pvm();
   if(setjmp(env) != 0) {	//longjmp() has been called. get out
     dereg();			//end session !!TBD need?
     kill_pvm();                   /* kill all servers on all hosts */
@@ -3113,6 +3110,10 @@ int DoIt()
     printk("PE Abnormal Completion\n");
     return(1);
   }
+  cmdparams_get_argv(&cmdparams, &argv, &argc);
+  setup(argc, argv);
+  get_cmd(argc, argv);
+  spawn_pvm();
   do_pipe();
   dereg();			//end session !!TBD need?
   kill_pvm();                   /* kill all servers on all hosts */
