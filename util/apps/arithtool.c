@@ -180,6 +180,7 @@ static int CreateDRMSPrimeKeyContainer(DRMS_Record_t *recTemplate, DRMSContainer
 				       void (*hconFree)(HContainer_t *hc))
 {
      int error = 0;
+     int drmsst = DRMS_SUCCESS;
 
      /* There is no HContainer_t of primary keys - make one. */
      
@@ -191,36 +192,42 @@ static int CreateDRMSPrimeKeyContainer(DRMS_Record_t *recTemplate, DRMSContainer
 	  if (conPrimeKeys->items != NULL)
 	  {
 	       hcon_init(conPrimeKeys->items, sizeof(DRMS_Keyword_t *), DRMS_MAXKEYNAMELEN, NULL, NULL);
-	       int iPrimeKeysMax = recTemplate->seriesinfo->pidx_num - 1;
 	       int iPrimeKeys = 0;
+               int nkeys = 0;
 	       
-	       while (iPrimeKeys <= iPrimeKeysMax)
+               char **keyarr = 
+                 drms_series_createpkeyarray(drms_env, recTemplate->seriesinfo->seriesname, &nkeys, &drmsst);
+
+	       while (iPrimeKeys < nkeys)
 	       {
-		    DRMS_Keyword_t *keyword = recTemplate->seriesinfo->pidx_keywords[iPrimeKeys];
+                  DRMS_Keyword_t *keyword = drms_keyword_lookup(recTemplate, keyarr[iPrimeKeys], 1);
+
 		    if (keyword != NULL)
 		    {
-			 DRMS_Keyword_t **newKeyword = 
-			   (DRMS_Keyword_t **)hcon_allocslot_lower(conPrimeKeys->items, 
-								   keyword->info->name);
+                       DRMS_Keyword_t **newKeyword = 
+                         (DRMS_Keyword_t **)hcon_allocslot_lower(conPrimeKeys->items, 
+                                                                 keyword->info->name);
 			 
-			 if (newKeyword != NULL)
-			 {
-			      *newKeyword = keyword;
-			 }
-			 else
-			 {
-			      error = 1;
-			      break;
-			 }
+                       if (newKeyword != NULL)
+                       {
+                          *newKeyword = keyword;
+                       }
+                       else
+                       {
+                          error = 1;
+                          break;
+                       }
 		    }
 		    else
 		    {
-			 error = 1;
-			 break;
+                       error = 1;
+                       break;
 		    }
 		    
 		    iPrimeKeys++;
 	       }
+
+               drms_series_destroypkeyarray(&keyarr, nkeys);
 	       
 	       /* Create iterator too. */
 	       conPrimeKeys->Free = hconFree;
@@ -5269,6 +5276,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 	  
 	  pOutData = malloc(sizeof(void *) * nSegs);
 	  outSegNames = (char **)malloc(sizeof(char *) * nSegs);
+          memset(outSegNames, 0, sizeof(char *) * nSegs);
 
 	  unsigned int iSeg = 0;
 	  while(pOutData != NULL && 
@@ -5300,159 +5308,163 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 		       actualtype = inSeg->info->type;
 		    }
 
-		    error = (status != DRMS_SUCCESS);
+                    if (status != DRMS_SUCCESS)
+                    {
+                       /* Error reading segment file - just skip and go to the next. */
+                       fprintf(stderr, "Error reading segment - skipping to the next segment.\n");
+                       continue;
+                       iSeg++;
+                    }
 		   
-		    if (!error)
-		    {
-			 /* Have inSeries seg data - do unary op. */
-			 int nElementsIn = drms_array_count(inSegArray);
-			 void *pInData = inSegArray->data;
-			 void *pOut = NULL;
+                    /* Have inSeries seg data - do unary op. */
+                    int nElementsIn = drms_array_count(inSegArray);
+                    void *pInData = inSegArray->data;
+                    void *pOut = NULL;
 
-			 insegBZERO[iSeg] = inSegArray->bzero;
-			 insegBSCALE[iSeg] = inSegArray->bscale;
+                    insegBZERO[iSeg] = inSegArray->bzero;
+                    insegBSCALE[iSeg] = inSegArray->bscale;
 
-			 switch (actualtype)
-			 {
-			    case DRMS_TYPE_CHAR:
-			      ((char **)(pOutData))[iSeg] = (char *)malloc(sizeof(char) * nElementsIn);
-			      pOut = (void *)(((char **)(pOutData))[iSeg]);
-			      break;
-			    case DRMS_TYPE_SHORT:
-			      ((short **)(pOutData))[iSeg] = (short *)malloc(sizeof(short) * nElementsIn);
-			      pOut = (void *)(((short **)(pOutData))[iSeg]);
-			      break;
-			    case DRMS_TYPE_INT:
-			      ((int **)(pOutData))[iSeg] = (int *)malloc(sizeof(int) * nElementsIn);
-			      pOut = (void *)(((int **)(pOutData))[iSeg]);
-			      break;
-			    case DRMS_TYPE_LONGLONG:
-			      ((long long **)(pOutData))[iSeg] = (long long *)malloc(sizeof(long long) * nElementsIn);
-			      pOut = (void *)(((long long **)(pOutData))[iSeg]);
-			      break;
-			    case DRMS_TYPE_FLOAT:
-			      ((float **)(pOutData))[iSeg] = (float *)malloc(sizeof(float) * nElementsIn);
-			      pOut = (void *)(((float **)(pOutData))[iSeg]);
-			      break;
-			    case DRMS_TYPE_DOUBLE:
-			      ((double **)(pOutData))[iSeg] = (double *)malloc(sizeof(double) * nElementsIn);
-			      pOut = (void *)(((double **)(pOutData))[iSeg]);
-			      break;
-			 }
+                    switch (actualtype)
+                    {
+                       case DRMS_TYPE_CHAR:
+                         ((char **)(pOutData))[iSeg] = (char *)malloc(sizeof(char) * nElementsIn);
+                         pOut = (void *)(((char **)(pOutData))[iSeg]);
+                         break;
+                       case DRMS_TYPE_SHORT:
+                         ((short **)(pOutData))[iSeg] = (short *)malloc(sizeof(short) * nElementsIn);
+                         pOut = (void *)(((short **)(pOutData))[iSeg]);
+                         break;
+                       case DRMS_TYPE_INT:
+                         ((int **)(pOutData))[iSeg] = (int *)malloc(sizeof(int) * nElementsIn);
+                         pOut = (void *)(((int **)(pOutData))[iSeg]);
+                         break;
+                       case DRMS_TYPE_LONGLONG:
+                         ((long long **)(pOutData))[iSeg] = (long long *)malloc(sizeof(long long) * nElementsIn);
+                         pOut = (void *)(((long long **)(pOutData))[iSeg]);
+                         break;
+                       case DRMS_TYPE_FLOAT:
+                         ((float **)(pOutData))[iSeg] = (float *)malloc(sizeof(float) * nElementsIn);
+                         pOut = (void *)(((float **)(pOutData))[iSeg]);
+                         break;
+                       case DRMS_TYPE_DOUBLE:
+                         ((double **)(pOutData))[iSeg] = (double *)malloc(sizeof(double) * nElementsIn);
+                         pOut = (void *)(((double **)(pOutData))[iSeg]);
+                         break;
+                    }
 
-			 outSegNames[iSeg] = strdup((*seg)->info->name);
+                    outSegNames[iSeg] = strdup((*seg)->info->name);
 
-			 if (pOut != NULL && outSegNames[iSeg] != NULL)
-			 {
-			    double mean = 0.0;
+                    if (pOut != NULL && outSegNames[iSeg] != NULL)
+                    {
+                       double mean = 0.0;
 
-			    /* calc mean, if op == submean */
-			    if (op == kArithOpSubmean)
-			    {
-			       int n = 0;			      
-			       int iData = 0;
+                       /* calc mean, if op == submean */
+                       if (op == kArithOpSubmean)
+                       {
+                          int n = 0;			      
+                          int iData = 0;
 			       
-			       switch (actualtype)
-			       {
-				  case DRMS_TYPE_CHAR:
-				    {
-				       char *pData = pInData;
-				       for (; iData < nElementsIn; iData++, pData++)
-				       {
-					  if (!drms_ismissing_char(*pData))
-					  {
-					     mean += (double)*pData;
-					     n += 1;
-					  }
-				       }
-				    }
-				    break;
-				  case DRMS_TYPE_SHORT:
-				    {
-				       short *pData = pInData;
-				       for (; iData < nElementsIn; iData++, pData++)
-				       {
-					  if (!drms_ismissing_short(*pData))
-					  {
-					     mean += (double)*pData;
-					     n += 1;
-					  }
-				       }
-				    }
-				    break;
-				  case DRMS_TYPE_INT:
-				    {
-				       int *pData = pInData;
-				       for (; iData < nElementsIn; iData++, pData++)
-				       {
-					  if (!drms_ismissing_int(*pData))
-					  {
-					     mean += (double)*pData;
-					     n += 1;
-					  }
-				       }
-				    }
-				    break;
-				  case DRMS_TYPE_LONGLONG:
-				    {
-				       long long *pData = pInData;
-				       for (; iData < nElementsIn; iData++, pData++)
-				       {
-					  if (!drms_ismissing_longlong(*pData))
-					  {
-					     mean += (double)*pData;
-					     n += 1;
-					  }
-				       }
-				    }
-				    break;
-				  case DRMS_TYPE_FLOAT:
-				    {
-				       float *pData = pInData;
-				       for (; iData < nElementsIn; iData++, pData++)
-				       {
-					  if (!drms_ismissing_float(*pData))
-					  {
-					     mean += (double)*pData;
-					     n += 1;
-					  }
-				       }
-				    }
-				    break;
-				  case DRMS_TYPE_DOUBLE:
-				    {
-				       double *pData = pInData;
-				       for (; iData < nElementsIn; iData++, pData++)
-				       {
-					  if (!drms_ismissing_double(*pData))
-					  {
-					     mean += (double)*pData;
-					     n += 1;
-					  }
-				       }
-				    }
-				    break;
-			       }
+                          switch (actualtype)
+                          {
+                             case DRMS_TYPE_CHAR:
+                               {
+                                  char *pData = pInData;
+                                  for (; iData < nElementsIn; iData++, pData++)
+                                  {
+                                     if (!drms_ismissing_char(*pData))
+                                     {
+                                        mean += (double)*pData;
+                                        n += 1;
+                                     }
+                                  }
+                               }
+                               break;
+                             case DRMS_TYPE_SHORT:
+                               {
+                                  short *pData = pInData;
+                                  for (; iData < nElementsIn; iData++, pData++)
+                                  {
+                                     if (!drms_ismissing_short(*pData))
+                                     {
+                                        mean += (double)*pData;
+                                        n += 1;
+                                     }
+                                  }
+                               }
+                               break;
+                             case DRMS_TYPE_INT:
+                               {
+                                  int *pData = pInData;
+                                  for (; iData < nElementsIn; iData++, pData++)
+                                  {
+                                     if (!drms_ismissing_int(*pData))
+                                     {
+                                        mean += (double)*pData;
+                                        n += 1;
+                                     }
+                                  }
+                               }
+                               break;
+                             case DRMS_TYPE_LONGLONG:
+                               {
+                                  long long *pData = pInData;
+                                  for (; iData < nElementsIn; iData++, pData++)
+                                  {
+                                     if (!drms_ismissing_longlong(*pData))
+                                     {
+                                        mean += (double)*pData;
+                                        n += 1;
+                                     }
+                                  }
+                               }
+                               break;
+                             case DRMS_TYPE_FLOAT:
+                               {
+                                  float *pData = pInData;
+                                  for (; iData < nElementsIn; iData++, pData++)
+                                  {
+                                     if (!drms_ismissing_float(*pData))
+                                     {
+                                        mean += (double)*pData;
+                                        n += 1;
+                                     }
+                                  }
+                               }
+                               break;
+                             case DRMS_TYPE_DOUBLE:
+                               {
+                                  double *pData = pInData;
+                                  for (; iData < nElementsIn; iData++, pData++)
+                                  {
+                                     if (!drms_ismissing_double(*pData))
+                                     {
+                                        mean += (double)*pData;
+                                        n += 1;
+                                     }
+                                  }
+                               }
+                               break;
+                          }
 			       
-			       if (n > 0)
-			       {
-				  mean /= n;
-			       }
-			    }
+                          if (n > 0)
+                          {
+                             mean /= n;
+                          }
+                       }
 			
-			    PerformOperation(op, 
-					     actualtype,
-					     pInData, 
-					     NULL, 
-					     nElementsIn, 
-					     pOut, 
-					     mean);
-			 }
-			 else
-			 {
-			      error = 1;
-			 }
-		    }
+                       PerformOperation(op, 
+                                        actualtype,
+                                        pInData, 
+                                        NULL, 
+                                        nElementsIn, 
+                                        pOut, 
+                                        mean);
+                    }
+                    else
+                    {
+                       error = 1;
+                    }
+		    
 
 		    drms_free_array(inSegArray);
 	       }
@@ -5511,16 +5523,25 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 		    {
 			 if (pOutData != NULL && outSegNames != NULL)
 			 {
-			    DRMS_Segment_t *inseg = drms_segment_lookup(inRec, outSegNames[index]);
-			    DRMS_Segment_t *outseg = drms_segment_lookup(rec, outSegNames[index]);
+			    DRMS_Segment_t *inseg = NULL;
+			    DRMS_Segment_t *outseg = NULL;
 
-                            if (nSegs == 1 && (inseg == NULL || outseg == NULL))
+                            if (outSegNames[index])
                             {
-                               /* Perhaps the two series have just one segment, but the names 
-                                * don't match - go ahead and use the one outseries segment 
-                                * to hold the results. */
-                               inseg = drms_segment_lookupnum(inRec, 0);
-                               outseg = drms_segment_lookupnum(rec, 0);
+                               /* If outSegNames[index] == NULL this means that there was 
+                                * a problem reading the source segment file, so we're 
+                                * skipping this segment. */
+                               inseg = drms_segment_lookup(inRec, outSegNames[index]);
+                               outseg = drms_segment_lookup(rec, outSegNames[index]);
+                            
+                               if (nSegs == 1 && (inseg == NULL || outseg == NULL))
+                               {
+                                  /* Perhaps the two series have just one segment, but the names 
+                                   * don't match - go ahead and use the one outseries segment 
+                                   * to hold the results. */
+                                  inseg = drms_segment_lookupnum(inRec, 0);
+                                  outseg = drms_segment_lookupnum(rec, 0);
+                               }
                             }
 
 			    if (inseg != NULL && outseg != NULL)
