@@ -184,7 +184,7 @@ KEY *call_drms_in(KEY *list, int dbflg)
       else ntmp = -1;
       sprintf(buf, "%s[%d]", buf, ntmp);
       sprintf(drmsname, "%s.%s", out_namespace, buf); 
-      printf("\ndrmsname = %s\n", drmsname); //!!TEMP
+      //printf("\ndrmsname = %s\n", drmsname); //!!TEMP
 
       if(findkey(list, ext))
         setkey_int(&alist, ext, getkey_int(list, ext));
