@@ -96,10 +96,15 @@
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define mailable_users_num 6    /* #of users below that will generate mail */
+
+//#define out_namespace "dsds"
+#define out_namespace "su_production"
+
 static char *mailable_users[] = {"jprod","daemon","tprod","production",
                                 "jeneen", "thailand"};
 #define mailees_num 1   /* #below that are sent the daemon & production mail */
-static char *mailees[] = {"prod2@solar2"};
+//static char *mailees[] = {"prod2@solar2"};
+static char *mailees[] = {"jim"};
 
 // List of default parameter values. 
 // NOTE: only used for cmdparams -H call. Normally use get_cmd()
@@ -774,12 +779,13 @@ void get_cmd(int argc, char *argv[])
 {
   int xargc, first, pfound, groupflg, groupid, gid, archgrp;
   int qon, i;
+  int nullarchflg = 0;
   char *toks[128];
   char *tokens1 = "*\t\n";
   char *tokens2 = " \t\n";
   char *tokens3 = "*\n";
   char *tokens4 = " \n";
-  char hostname[MAX_STR], logkill[MAX_STR];
+  char hostname[MAX_STR], logkill[MAX_STR], subname[MAX_STR];
   char *inname, *sp, *hname, *cptr;
   char *line, *line2, *token, *tokenchars, *tokencharsend;
   char carch;
@@ -983,6 +989,13 @@ void get_cmd(int argc, char *argv[])
     else if(sp=getkey_str(work_list, "p")) { 	/* line w/process spec */
       pfound=1;
       deletekey(&work_list, "p");		/* remove if from keylist */
+      //NEW for jpe. detect if MDI module that has been depricated and 
+      //substitute the JSOC module that runs in its place and set a=0
+      if(!strcmp(sp, "ingest_sci160k_log") || !strcmp(sp, "ingest_sci5k_log") || !strcmp(sp, "merge_sci160k_log")) {
+        sprintf(subname, "%s_jpe", sp);
+        sp = subname;
+        nullarchflg = 1;
+      }
       setstab(sp);				/* put name in server table */
       sptr->cphist = 1;				/* default cp hist log */
       sptr->groupid = groupid;			/* real group id or 0 */
@@ -996,7 +1009,7 @@ void get_cmd(int argc, char *argv[])
           dsdsin=1;				/* flg if any d=1 */
         deletekey(&work_list, "d");
       }
-      //NEW for jpe we must always query DRMS for input so porce flags to 1
+      //NEW for jpe we must always query DRMS for input so force flags to 1
       sptr->dsin = 1;
       dsdsin=1;
 					   /*  removed 99.02.12 (see below)  */
@@ -1043,7 +1056,8 @@ void get_cmd(int argc, char *argv[])
       }
       else {
         //sptr->archive = NULL;
-        sptr->archive = 't';			// force a=0 to t for jpe
+        if(nullarchflg) sptr->archive = NULL;
+        else sptr->archive = 't';		// force a=0 to t for jpe
       }
       if(sp=getkey_str(work_list, "s")) {	/* ck for split fsn-lsn flag */
         sptr->split=atoi(sp);
@@ -1776,7 +1790,7 @@ KEY *form_arg_data_out(SERVER *sptr, argument *arg)
     //sprintf(ext, "%s_%d_series_sn", arg->key, i);
     //ntmp = getkey_int(xlist, ext);
     //sprintf(buf, "%s[%d]", buf, ntmp);
-    sprintf(drmsname, "dsds.%s", buf);
+    sprintf(drmsname, "%s.%s", out_namespace, buf);
     if(findkey(JPElist, "JPE_out_nsets")) {
       jix = getkey_int(JPElist,  "JPE_out_nsets");
     }
@@ -2029,19 +2043,22 @@ void form_keylist(SERVER *sptr, HDATA *hnext)
     switch(arg->kind) {
     case ARG_DATA_IN:
       inlist = (KEY *)form_arg_data_in(inlist, sptr, arg, inseq);
-      sprintf(ext, "%s_prog", arg->key);    /* e.g. in_prog */
+      sprintf(ext, "%s_0_prog", arg->key);    /* e.g. in_0_prog */
+      //printf("This is inlist in form_keylist()\n"); //!!TEMP
       //keyiterate(printkey, inlist); //!!TEMP
-      pname = getkey_str(inlist, ext);  
-      //check if this is a  dsds appendable input series
-      if(!strcmp(pname, "mdi_eof_log") || !strcmp(pname, "mdi_eof_rec")
-         || !strcmp(pname, "mdi_log") || !strcmp(pname, "mdi_rec") ||
-         !strcmp(pname, "mdi_sim_rec") || !strcmp(pname, "soi_eof_rec")) {
-        inapp = 1;
-      }
-      if(!inseq++) {				/* first input dc */
-        /* NOTE: form_split() is vestigial. Just set effective_hosts */
-        /*form_split(sptr, inlist, arg->key);	/* sets effective_hosts */
-        /*effective_hosts = 1;*/
+      if(findkey(inlist, ext)) {
+        pname = getkey_str(inlist, ext);  
+        //check if this is a  dsds appendable input series
+        if(!strcmp(pname, "mdi_eof_log") || !strcmp(pname, "mdi_eof_rec")
+           || !strcmp(pname, "mdi_log") || !strcmp(pname, "mdi_rec") ||
+           !strcmp(pname, "mdi_sim_rec") || !strcmp(pname, "soi_eof_rec")) {
+          inapp = 1;
+        }
+        if(!inseq++) {				/* first input dc */
+          /* NOTE: form_split() is vestigial. Just set effective_hosts */
+          /*form_split(sptr, inlist, arg->key);	/* sets effective_hosts */
+          /*effective_hosts = 1;*/
+        }
       }
       add_keys(inlist, &hnext->param_list);/* copy over all keys */
       break;
@@ -2459,11 +2476,15 @@ void call_archive(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
   //printf("The archive flag is %d\n", status);
   sunum = rsx->sunum;
   rsx->seriesinfo->retention = stab->archive_day;
-  if(!stab->archive || stab->archive == 't') 	//don't archive if 0 or temp
-    rsx->seriesinfo->archive = 0;
+  if(!stab->archive || stab->archive == 't') { 	//don't archive if 0 or temp
+    //make non-archive and rm drms record when rm the sums storage unit
+    rsx->seriesinfo->archive = -1;
+  }
   else {
     rsx->seriesinfo->archive = 1;
     stab->archive_complete = 1;		/* don't del wd at end */
+    //if permanent ds, give it about 50 years to expire
+    if(stab->archive == 'p') rsx->seriesinfo->retention = 18250;
   }
 
   //printk("Call: drms_close_record()\n"); //!!TEMP
