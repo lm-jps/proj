@@ -903,7 +903,7 @@ int DoIt(void)
           drms_stage_records(recordset, 0, 0);
           record_set_staged = 1;
 	  }
-        drms_record_directory (rec, path, 0);
+        drms_record_directory (rec_seg_iseg->record, path, 0);
 //        if (!*path)
 //          JSONDIE("Can not retrieve record path, SUMS may be offline");
 if (!*path)
