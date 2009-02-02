@@ -139,7 +139,8 @@ KEY *call_drms_in(KEY *list, int dbflg)
   char wd[MAX_STR];
   double dbytes;
   ulong dsindex;
-  int i, loop, innsets, status, rstatus, tapeid;
+  int i, loop, innsets, status, rstatus, tapeid, touch;
+  int restoreenv = 0;
   int num_ds = 0;                       /* total # of ds queried */
   int ntmp;
 
@@ -188,8 +189,12 @@ KEY *call_drms_in(KEY *list, int dbflg)
 
       if(findkey(list, ext))
         setkey_int(&alist, ext, getkey_int(list, ext));
-      if(findkey(list, "touch"))
-        setkey_int(&alist, "touch", getkey_int(list, "touch"));
+      if(findkey(list, "touch")) {
+        touch = getkey_int(list, "touch");
+        setkey_int(&alist, "touch", touch);
+        restoreenv = drms_env->retention;
+        drms_env->retention = touch;
+      }
       if(findkey(list, "ampex_tid")) 
         setkey_int(&alist, "ampex_tid", getkey_int(list, "ampex_tid"));
 
@@ -231,6 +236,7 @@ KEY *call_drms_in(KEY *list, int dbflg)
     }
       num_ds++;
     }
+    if(restoreenv != 0) drms_env->retention = restoreenv;
   }
   return(alist);
 }
