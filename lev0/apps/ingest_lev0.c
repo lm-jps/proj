@@ -48,8 +48,7 @@
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
-//#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
-#define LEV0SERIESNAMEHMI "hmi.lev0e"
+#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
 #define TLMSERIESNAMEHMI "su_production.tlm_test"
 #define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
 #define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
@@ -84,7 +83,7 @@
 
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
-#define MAXFILES 8192		//max # of file can handle in tlmdir
+#define MAXFILES 16384		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
 //#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
 #define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
@@ -136,6 +135,7 @@ static DRMS_RecordSet_t *rset;
 static DRMS_Record_t *rs_old, *rsc;
 static DRMS_Segment_t *segmentc;
 static DRMS_Array_t *cArray, *oldArray;
+static TIME sdo_epoch;
 static char datestr[32];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 
@@ -247,11 +247,9 @@ int nice_intro ()
 static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
 {
 static int firstcall = 1;
-static TIME sdo_epoch;
 if (firstcall)
   {
   firstcall = 0;
-  sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   }
 /* XXX fix build 3/18/2008, arta */
 return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
@@ -315,6 +313,19 @@ int h0log(const char *fmt, ...)
     printf(string);
     fflush(stdout);
   }
+  va_end(args);
+  return(0);
+}
+
+int send_mail(char *fmt, ...)
+{
+  va_list args;
+  char string[1024], cmd[1024];
+
+  va_start(args, fmt);
+  vsprintf(string, fmt, args);
+  sprintf(cmd, "echo \"%s\" | Mail -s \"ingest_lev0 mail\" lev0_user", string);
+  system(cmd);
   va_end(args);
   return(0);
 }
@@ -398,6 +409,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   STAT stat;
   int status, n, k;
   uint32_t missvals;
+  long long cmdx;
   char tlmdsname[128];
 
   printk("*Closing image for fsn = %u\n", fsn);
@@ -416,6 +428,8 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   // CAMERA set by HMI_compute_exposure_times()
   if(hmiaiaflg) {		// except for AIA use telnum 
     drms_setkey_int(rs, "CAMERA", (img->telnum)+1);
+    cmdx = drms_getkey_longlong(rs, "AIMGSHCE", &status);
+    if (0 == cmdx) drms_setkey_int(rs, "AIMGTYP", 1);
   }
   drms_setkey_int(rs, "IMGAPID", img->apid);
   drms_setkey_int(rs, "CROPID", img->cropid);
@@ -589,9 +603,11 @@ int fsn_change_normal()
       Img->npackets = drms_getkey_int(rs, "NPACKETS", &rstatus);
       Img->nerrors = drms_getkey_int(rs, "NERRORS", &rstatus);
       Img->last_pix_err = drms_getkey_int(rs, "EOIERROR", &rstatus);
+
       TIME fpt = drms_getkey_double(rs, "IMGFPT", &rstatus);
-      TIME sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
       Img->first_packet_time = round(65536.0*(fpt - sdo_epoch));
+      if(Img->first_packet_time == 0) 
+        Img->first_packet_time = UINT64_MAX; //fix for stuck 1958 value
       snprintf(oldtlmdsnam, 128, "%s", drms_getkey_string(rs, "TLMDSNAM",&rstatus));
       cptr = strstr(oldtlmdsnam, "VC");
       if(cptr) 
@@ -729,9 +745,11 @@ int fsn_change_rexmit()
     ImgO->npackets = drms_getkey_int(rsc, "NPACKETS", &rstatus);
     ImgO->nerrors = drms_getkey_int(rsc, "NERRORS", &rstatus);
     ImgO->last_pix_err = drms_getkey_int(rsc, "EOIERROR", &rstatus);
+
     TIME fpt = drms_getkey_double(rsc, "IMGFPT", &rstatus);
-    TIME sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
     ImgO->first_packet_time = round(65536.0*(fpt - sdo_epoch));
+    if(ImgO->first_packet_time == 0) 
+      ImgO->first_packet_time = UINT64_MAX; //fix for stuck 1958 value
     snprintf(oldtlmdsnam, 128, "%s", drms_getkey_string(rsc, "TLMDSNAM",&rstatus));
     cptr = strstr(oldtlmdsnam, "VC");
     if(cptr) 
@@ -1294,6 +1312,7 @@ void setup()
   char envfile[100], s1[256],s2[256],s3[256], line[256];
   ThreadSigErr_t error = kThreadSigErr_Success;
 
+  sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   do_datestr();
   printk_set(h0log, h0log);	// set for printk calls 
   printk("%s\n", datestr);
@@ -1459,6 +1478,7 @@ int DoIt(void)
 
     if((stat(stopfile, &stbuf) == 0) || abortflg) {
       printk("Abort or Found file: %s. Terminate.\n", stopfile);
+      if(abortflg) send_mail("Abort for ingest_lev0 for %s\n", pchan);
       //now close any open image
       if(Image.initialized) {
         if(rs) {		//make sure have a created record
