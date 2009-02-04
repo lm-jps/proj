@@ -1,3 +1,355 @@
+/**
+\defgroup jpe jpe - Execute an old MDI pe map file under DRMS/SUMS
+@ingroup jpe
+
+\brief This is the old pe.c from SOI MDI that is converted to run like the
+ original pe but with DRMS/SUMS interface instead of DSDS.
+
+\par Synopsis:
+
+\code
+jpe [-v] [-h] [-A] [touch=#] map=map_file_name
+\endcode
+
+\par Flags:
+\c -v: verbose output<br>
+\c -h: print out help message<br>
+\c -A: access the tape_svc if need to retrieve data (the old Ampex flag)
+<br>
+\param
+touch= #of days to retain input datasets before deletable (note: input only)
+<br>
+map= map file with the pe directives
+<br>
+
+\par map file:
+<pre>
+#This is a text file that specifies a pipeline to be run by PE.
+#Notice that it operates on "keyword=value" pairs. In the case of flags, any
+#non-zero value is treated as true.
+#
+#Control Statements:
+#!	
+#	A shell escape command. Any setenv is intercepted and interpreted 
+#	locally for the PE environment. No metachars for a setenv. Note that
+#	a map file is not a shell script. Pe validates the entire map file and
+#	executes any shell escape commands before any servers are started.
+#DSDSOUT=n
+#	DSDS will be asked to allocate n megabytes for the output of this pipe.
+#	The output directory that DSDS assigns can be used in the name template
+#	env variable "prog:" by specifying {dbase}. Notice that if you do not 
+#	specify d=1 (see below) for a server, but did specify DSDSOUT then you 
+#	must set a default {dbase} so that the name template will also map the 
+#	input.
+#HOST=name	(OBSOLETE)
+#	The host name that all the servers are to run on. If the fsn-lsn split
+#	feature is reimplemented then multiple hosts can be given [,name,...].
+#	Also multiple copies of	the servers can then be run on the same host by 
+#	specifying the host name more than once.
+#NOWARN=1
+#	Omit pe warning messages arising from analysis of the map file. This 
+#	is used	by map building programs that use pe features that may result
+#	in a warning. A user building a map file should never use NOWARN.
+#START_GROUP=1
+#END_GROUP=1
+#	Any servers between a START_GROUP/END_GROUP pair will be started at the
+#	same time by pe. Normally a server does not start until the previous
+#	server has completed. Pe will check for any mismatched pairs.
+#START_ARCHIVE=1
+#END_ARCHIVE=1
+#	Any servers between a START_ARCHIVE/END_ARCHIVE pair will be archived
+#	only according to the archive flag of the last server of the group.
+#	This allows the same server (e.g. gather_info_svc) to be run more than
+#	once with the same output dirs with only one archive occuring according
+#	to the last run.  Pe will check for any mismatched pairs.
+#Line Tokens:
+#p=	The name of the server process to run.
+#d=	A non-zero indicates that this servers input will be obtained from DSDS.
+#       Otherwise a name template, found in the env variable of the name of the
+#       "prog:" in the ds name, will be used to determine the input directory.
+#a=	Determines the type of archiving for this server's output.
+#       This will be a nop unless DSDSOUT=n is specified. Examples:
+#	a=t5 Temporary dataset. Do not archive and do not mark delete pending
+#	     for 5 days.
+#	a=n5 Normal. Archive but do not mark delete pending for 5 day.
+#	a=p  Permanent. Archive but never mark delete pending.
+#	a=a  Appendable. The output dataseries will be appended to. The 
+#	     dataseries must be defined in the ds_naming table. The data is 
+#	     not archived and not deleted. No DSDSOUT=n is required as the 
+#	     storage is in seperate disk partitions assigned for append.
+#l=	The default is for pe to copy the history log file and the map file
+#	that was run, into the dataset output working dirs. This is 
+#	overridden by a log flag of l=0. This is used for data that is 
+#	appended to a dir outside of DSDS storage and you don't want
+#	the history log and map file to show up for every run.
+#	NOTE!! The l= is obsolete with the V3R0B0 release (29Apr98).
+#	It is replaced by COPY_HISTORY=no to override the default.
+#x=	The default action, if a module send back an abortflg and is not part 
+#	of a group (i.e. START_GROUP/END_GROUP), is to abort further execution 
+#	of the map file and to not archive the output wd of the module. 
+#	The x=1 will override this default abort action and case the map file 
+#	to continue and any output wd to be archived.
+#	NOTE!! The x= is obsolete with the V2R7B0 release (15Dec97).
+#	It is replaced by ABORT_ACTION=continue to override the default.
+#in=	The datacollection for the pipe's input data. This isn't necessarily 
+#	called "in", but whatever the server's input ds argument is called.
+#out=	The datacollection for the pipe's output data. This isn't necessarily 
+#	called "out", but whatever the server's output ds argument is called.
+#arg=	Optional argument name and value to override any default argument 
+#	values for a server.
+#history= The name of the history log output file. The default is
+#	/tmp/modulename_username_pvmtid.log.
+#errlog=  The name of the error log output file. The default is the
+#	history log file.
+#
+#Any control statement must be on a separate line.
+#Any non-control line must start with p= ,and must be a separate line.
+#Any p= line may optionally contain an a=[t,n,p][#].
+#Any p= line may optionally contain an d=1.
+#Any p= line may optionally contain an l=0 and an x=1.
+#Any p= line may optionally contain any argument value for the server.
+#Any line, except a "!" line, may be extended by ending it with " \".
+#The "\" line extention cannot be used between a "key=value" pair.
+#Any string argument may contain imbedded spaces by quoting the string, e.g.
+#name="my string". However no quoted string may contain the "*" character.
+#
+</pre>
+\par Examples:
+\b Example 1:
+\code
+#/tmp/map.mdical.nouser.140567 built by dohrsc
+!setenv mdi wd:{dbase}/{level}/{series}/{#%06d#series}
+!setenv mdi_rec wd:{dbase}/info/{prog}/{level}/{series};bn:{#%06d#series}
+DSDSOUT=850
+p=mdical d=1 a=t4 ABORT_ACTION=continue \
+  in=prog:mdi,level:lev0,series:4b4a2d00_01h[140567] \
+  out=prog:mdi,level:lev1,series:4b4a2d00_01h[140567]
+p=cpinfo ABORT_ACTION=continue COPY_HISTORY=no a=a compress=yes \
+  in=prog:mdi,level:lev1,series:4b4a2d00_01h[140567] \
+  out=prog:mdi_rec,level:lev1,series:4b4a2d00_01h[140567]
+p=gather_qual \
+  in=prog:mdi,level:lev1,series:4b4a2d00_01h[140567]
+p=mdical d=1 a=t4 ABORT_ACTION=continue \
+  in=prog:mdi,level:lev0,series:4a4a2d00_01h[140567] \
+  out=prog:mdi,level:lev1,series:4a4a2d00_01h[140567]
+p=cpinfo ABORT_ACTION=continue COPY_HISTORY=no a=a compress=yes \
+  in=prog:mdi,level:lev1,series:4a4a2d00_01h[140567] \
+  out=prog:mdi_rec,level:lev1,series:4a4a2d00_01h[140567]
+p=gather_qual \
+  in=prog:mdi,level:lev1,series:4a4a2d00_01h[140567]
+p=mdical d=1 a=t4 ABORT_ACTION=continue \
+  in=prog:mdi,level:lev0,series:40483d00_01h[140567] \
+  out=prog:mdi,level:lev1,series:40483d00_01h[140567]
+p=cpinfo ABORT_ACTION=continue COPY_HISTORY=no a=a compress=yes \
+  in=prog:mdi,level:lev1,series:40483d00_01h[140567] \
+  out=prog:mdi_rec,level:lev1,series:40483d00_01h[140567]
+p=gather_qual \
+  in=prog:mdi,level:lev1,series:40483d00_01h[140567]
+\endcode
+\b Example 2:
+\code
+#/tmp/pui/mapvwVpox01d_pavel_23184-23187
+!setenv mdi wd:{dbase}/{level}/{series}/{#%06d#series},bn:{series}.{#%04d#series}
+DSDSOUT=4500
+p=v2helio d=1 a=0 \
+   in=prog:mdi,level:lev1.5,series:vw_V_06h[4950] \
+   out=prog:mdi,level:lev2,series:V_heliomap_06h[4950] \
+   MAPMMAX=600 \
+   SINBDIVS=200 \
+   VCORLEV=1 \
+   LGSHIFT=1 \
+   DATASIGN=-1 \
+   MAPLGMIN=-89.0 \
+   MAPLGMAX=89.0 \
+   MAPBMAX=89.0 \
+   MAPRMAX=0.95 \
+   APODIZE=1 \
+   APINNER=0.83 \
+   APWIDTH=0.04
+
+p=v2helio d=1 a=0 \
+   in=prog:mdi,level:lev1.5,series:vw_V_06h[4951] \
+   out=prog:mdi,level:lev2,series:V_heliomap_06h[4951] \
+   MAPMMAX=600 \
+   SINBDIVS=200 \
+   VCORLEV=1 \
+   LGSHIFT=1 \
+   DATASIGN=-1 \
+   MAPLGMIN=-89.0 \
+   MAPLGMAX=89.0 \
+   MAPBMAX=89.0 \
+   MAPRMAX=0.95 \
+   APODIZE=1 \
+   APINNER=0.83 \
+   APWIDTH=0.04
+
+p=v2helio d=1 a=0 \
+   in=prog:mdi,level:lev1.5,series:vw_V_06h[4952] \
+   out=prog:mdi,level:lev2,series:V_heliomap_06h[4952] \
+   MAPMMAX=600 \
+   SINBDIVS=200 \
+   VCORLEV=1 \
+   LGSHIFT=1 \
+   DATASIGN=-1 \
+   MAPLGMIN=-89.0 \
+   MAPLGMAX=89.0 \
+   MAPBMAX=89.0 \
+   MAPRMAX=0.95 \
+   APODIZE=1 \
+   APINNER=0.83 \
+   APWIDTH=0.04
+p=helio2mlat d=0 a=0 \
+   in=prog:mdi,level:lev2,series:V_heliomap_06h[4950] \
+   out=prog:mdi,level:lev2,series:V_mlat_06h[4950],sel:[0-359] \
+   LMAX=300
+
+p=helio2mlat d=0 a=0 \
+   in=prog:mdi,level:lev2,series:V_heliomap_06h[4951] \
+   out=prog:mdi,level:lev2,series:V_mlat_06h[4951],sel:[0-359] \
+   LMAX=300
+
+p=helio2mlat d=0 a=0 \
+   in=prog:mdi,level:lev2,series:V_heliomap_06h[4952] \
+   out=prog:mdi,level:lev2,series:V_mlat_06h[4952],sel:[0-359] \
+   LMAX=300
+
+#p=helio2mlat d=0 a=0 \
+#   in=prog:mdi,level:lev2,series:V_heliomap_06h[23187] \
+#   out=prog:mdi,level:lev2,series:V_mlat_06h[23187],sel:[0-359] \
+#   LMAX=300
+
+p=qdotprod d=0 a=0 \
+   in=prog:mdi,level:lev2,series:V_mlat_06h[4950],sel:[0-359] \
+   out=prog:mdi,level:lev2,series:vw_V_pox_0-300_06h[4950] \
+   LMIN=0 \
+   LMAX=300
+
+p=qdotprod d=0 a=0 \
+   in=prog:mdi,level:lev2,series:V_mlat_06h[4951],sel:[0-359] \
+   out=prog:mdi,level:lev2,series:vw_V_pox_0-300_06h[4951] \
+   LMIN=0 \
+   LMAX=300
+
+p=qdotprod d=0 a=0 \
+   in=prog:mdi,level:lev2,series:V_mlat_06h[4952],sel:[0-359] \
+   out=prog:mdi,level:lev2,series:vw_V_pox_0-300_06h[4952] \
+   LMIN=0 \
+   LMAX=300
+
+#p=qdotprod d=0 a=0 \
+#   in=prog:mdi,level:lev2,series:V_mlat_06h[23187],sel:[0-359] \
+#   out=prog:mdi,level:lev2,series:vw_V_pox_0-300_06h[23187] \
+#   LMIN=0 \
+#   LMAX=300
+#
+
+p=retile d=0 a=n10 \
+   in=prog:mdi,level:lev2,series:vw_V_pox_0-300_06h[4950-4952] \
+   out=prog:mdi,level:sht,series:vw_V_pox_0-99_01d[5796]
+
+p=retile d=0 a=n10 \
+   in=prog:mdi,level:lev2,series:vw_V_pox_0-300_06h[4950-4952] \
+   out=prog:mdi,level:sht,series:vw_V_pox_100-199_01d[5796]
+
+p=retile d=0 a=n10 \
+   in=prog:mdi,level:lev2,series:vw_V_pox_0-300_06h[4950-4952] \
+   out=prog:mdi,level:sht,series:vw_V_pox_200-299_01d[5796]
+
+#p=retile d=0 a=n10 \
+#   in=prog:mdi,level:lev2,series:vw_V_pox_0-300_06h[23184-23187] \
+#   out=prog:mdi,level:sht,series:vw_V_pox_300-300_01d[5796]
+#
+\endcode
+
+\par NOTES:
+<pre>
+jpe is designed to run all the current SSSC map files, but with in
+and out data from DRMS/SUMS instead of DSDS. It will automatically
+convert SSSC dataset names to DRMS names, for example:
+
+</pre><B>
+prog:mdi,level:lev2,series:vw_V_pox_0-300_06h[4952]  
+</B><br>
+is converted to:
+<B><br>
+dsds.mdi__lev2__vw_V_pox_0__300_06h[4952]
+</B><pre>
+NOTE: There is a table in the jsoc DB named dsds.drms_names that has
+all the dsds to drms names, e.g.
+jsoc=> select drms from dsds.drms_names where      
+jsoc-> dsds='prog:mdi,level:lev1.5,series:fd_V_01h';
+            drms            
+----------------------------
+ dsds.mdi__lev1_5__fd_V_01h
+(1 row)
+
+I can't guarantee that all dsds names are in dsds.drms_names.
+
+The following pe runtime options are not applicable and have been
+eliminated from jpe:
+
+    -d is the debug mode where all servers are run under dbx
+    -L is local dsds_svc mode
+    -t is tae mode with peui
+    db= data base name (e.g. mdi_2)
+    rcp= gives the dir to rcp the input ds to before running a module. This is 
+         for machines for which the NFS of the /PDS partitions is too slow.
+    pds= gives the name of the machine to assign local /PDS storage from.
+
+Also the 'touch=keep' has been eliminated (I don't believe it was ever
+used in pe).
+
+The following map file features have been eliminated from jpe:
+
+    * No output to level#0. This was a debug tool for pe. There is no
+    level#0 in DRMS.
+
+    * In pe the output of one module could be the input for another module
+    in the map file. Pe just had a single allocated wd for the entire
+    map file, and the template in the map file could find any output ds.
+    However, with DRMS a query must be done for all the ARG_DATA_IN.
+
+    * Pe put explicit level#s in rdb files. They are all now -1.
+
+Jpe is currently just made for JSOC_MACHINE=linux_x86_64.
+It runs with all the SSSC MACHINE=linux4 32bit executables on the x86_64
+old cluster nodes.
+It will only run with the Stanford sunum's which are the low 32bits
+and fit in the ulong for the ds_index of the old code.
+
+Forces all jpe map files for d=0 to d=1. We must query DRMS for IN 
+because template doesn't map previous out to in like in pe world.
+
+It must have the JSOC soi lib via:
+
+setenv LD_LIBRARY_PATH /home/production/cvs/JSOC/_linux_x86_64/base/local/libs/soi
+
+Any machine that will run jpe must have:
+
+    /soidata/info -> /SUM0/PAS 
+
+for the appendable ds.
+At cutover, this needs to be rsynced with /PAS/D136007
+
+We need to plan the SSSC to JSOC cutover after the Ampex migration 
+is complete.
+
+I will look into how the pui and data exports will change from 
+SSSC to JSOC.
+
+TBD: Eliminate this call from various map files. Don't need to copy from
+/PDS to /SUMS anymore after fix all exports to be from /SUMS:
+</pre>
+\code
+p=script \
+   script=/home/jeneen/STAGING/script/sums_ingest.csh \
+   arg1=vw_V_06h \
+   arg2=23424-23427
+\endcode
+
+
+*/
+
 /*-----------------------------------------------------------------------------
  * /home/production/cvs/JSOC/proj/jpe/apps/jpe.c
  *-----------------------------------------------------------------------------
