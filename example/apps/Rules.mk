@@ -79,13 +79,13 @@ $(FMODEXE_$(d)):	LL_TGT := $(LL_TGT) $(FMATHLIBSL) -lfftw3f
 $(FMODEXE_GONG_$(d)):	$(LIBGONGING)
 $(FMODEXE_GONG_$(d)):	LL_TGT := $(LL_TGT) $(FMATHLIBSL) -lcfitsio
 
-# FDRMSMODOBJ is used at COMPILE-time, so can't go in make_basic.mk
-$(OBJF_$(d)):		$(FDRMSMODOBJ)
+# FDRMSMOD is used at COMPILE-time, so can't go in make_basic.mk
+$(OBJF_$(d)):		$(FDRMSMOD)
 $(GONGLIB_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 $(GONGLIB_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH)
 
-$(FMODEXE_$(d)):	FF_TGT := -module $(dir $(FDRMSMODOBJ))
-$(FMODEXE_GONG_$(d)):	FF_TGT := -module $(dir $(FDRMSMODOBJ))
+$(FMODEXE_$(d)):	FF_TGT := -module $(dir $(FDRMSMOD))
+$(FMODEXE_GONG_$(d)):	FF_TGT := -module $(dir $(FDRMSMOD))
 $(FMODEXE_GONG_$(d)):	$(GONGLIB_$(d))
 
 # Shortcuts
