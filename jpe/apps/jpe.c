@@ -17,8 +17,9 @@ jpe [-v] [-h] [-A] [touch=#] map=map_file_name
 \c -A: access the tape_svc if need to retrieve data (the old Ampex flag)
 <br>
 \param
-touch= #of days to retain input datasets before deletable (note: input only)
-<br>
+touch= #of days to retain input datasets before deletable.<br>
+       NOTE: input only, the output retention is determined by the a= in the map file.
+\param
 map= map file with the pe directives
 <br>
 
@@ -337,7 +338,8 @@ is complete.
 I will look into how the pui and data exports will change from 
 SSSC to JSOC.
 
-TBD: Eliminate this call from various map files. Don't need to copy from
+TBD: Eliminate this call from various map files. Or probably better,
+make the script a noop. Don't need to copy from
 /PDS to /SUMS anymore after fix all exports to be from /SUMS:
 </pre>
 \code
