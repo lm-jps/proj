@@ -22,7 +22,7 @@ The output structure is described at: http://jsoc.stanford.edu/jsocwiki/AjaxJsoc
 \par Synopsis:
 
 \code
-jsoc_info [-hRz] op=<command> ds=<record_set> [[key=<keylist>] [seg=<seglist>]
+jsoc_info [-hRz] op=<command> ds=<record_set> [[key=<keylist>] [seg=<seglist>] [link=<linklist>]
 or
 jsoc_info QUERY_STRING=<url equivalent of command-line args above>
 \endcode
@@ -59,6 +59,11 @@ be set to 1 if the record files are online, or 0 if off-line.
 The psuedo segment names **ALL** and **NONE** result in all or no segment information
 being returned.  Additional segment information, e.g. axis dimensions, is also provided
 via the key_array "dims".
+
+\param linklist
+Comma-separated list of link names.  For each link listed the links target
+record query is displayed.  The psuedo link name **ALL** results in all links to be
+displayed.  The default is the same as **NONE**.
 
 \sa
 show_info
@@ -205,6 +210,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "op", "Not Specified", "<Operation>, values are: series_struct, rs_summary, or rs_list "},
   {ARG_STRING, "ds", "Not Specified", "<record_set query>"},
   {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *size*, *online*, *retain*, *logdir*, *dir_mtime*  "},
+  {ARG_STRING, "link", "Not Specified", "<comma delimited linkname list>, links or special values: **ALL**, **NONE**"},
   {ARG_STRING, "seg", "Not Specified", "<comma delimited segment list>, segnames or special values: **ALL**, **NONE** "},
   {ARG_FLAG, "h", "0", "help - show usage"},
   {ARG_FLAG, "R", "0", "Show record query"},
@@ -560,8 +566,9 @@ int DoIt(void)
   char *in;
   char *keylist;
   char *seglist;
+  char *linklist;
   char *web_query;
-  int from_web, keys_listed, segs_listed;
+  int from_web, keys_listed, segs_listed, links_listed;
 
   if (nice_intro ()) return (0);
 
@@ -590,8 +597,10 @@ int DoIt(void)
   in = cmdparams_get_str (&cmdparams, "ds", NULL);
   keylist = strdup (cmdparams_get_str (&cmdparams, "key", NULL));
   seglist = strdup (cmdparams_get_str (&cmdparams, "seg", NULL));
+  linklist = strdup (cmdparams_get_str (&cmdparams, "link", NULL));
   keys_listed = strcmp (keylist, "Not Specified");
   segs_listed = strcmp (seglist, "Not Specified");
+  links_listed = strcmp (linklist, "Not Specified");
 
   /*  op == series_struct  */
   if (strcmp(op,"series_struct") == 0) 
@@ -659,12 +668,15 @@ int DoIt(void)
     DRMS_Record_t *rec;
     char *keys[1000];
     char *segs[1000];
+    char *links[1000];
     int ikey, nkeys = 0;
     int iseg, nsegs = 0;
+    int ilink, nlinks = 0;
     char count[100];
-    json_t *jroot, **keyvals = NULL, **segvals = NULL, **segdims = NULL, *recinfo;
+    json_t *jroot, **keyvals = NULL, **segvals = NULL, **segdims = NULL, **linkvals = NULL, *recinfo;
     json_t *json_keywords = json_new_array();
     json_t *json_segments = json_new_array();
+    json_t *json_links = json_new_array();
     char *json;
     char *final_json;
     int status=0;
@@ -764,6 +776,41 @@ int DoIt(void)
       segvals[iseg] = val;
       val = json_new_array();
       segdims[iseg] = val;
+      }
+
+    /* get list of links to print for each record */
+    nlinks = 0;
+    if (links_listed) 
+      { /* get specified list */
+      char *thislink;
+      CGI_unescape_url(linklist);
+      for (thislink=strtok(linklist, ","); thislink; thislink=strtok(NULL,","))
+	{
+	if (strcmp(thislink,"**NONE**")==0)
+	  {
+	  nlinks = 0;
+	  break;
+	  }
+	if (strcmp(thislink, "**ALL**")==0)
+          {
+          DRMS_Link_t *link;
+          HIterator_t hit;
+          hiter_new (&hit, &recordset->records[0]->links);
+          while ((link = (DRMS_Link_t *)hiter_getnext (&hit)))
+            links[nlinks++] = strdup (link->info->name);
+	  }
+  	else
+	  links[nlinks++] = strdup(thislink);
+	}
+      }
+    free (linklist);
+    /* place to put an array of linkvals per keyword */
+    if (nlinks)
+      linkvals = (json_t **)malloc(nlinks * sizeof(json_t *));
+    for (ilink=0; ilink<nlinks; ilink++)
+      {
+      json_t *val = json_new_array();
+      linkvals[ilink] = val;
       }
 
     /* loop over set of selected records */
@@ -934,6 +981,22 @@ else
         free(jsondims);
         }
 
+      /* now show desired links */
+      for (ilink=0; ilink<nlinks; ilink++) 
+        {
+        DRMS_Link_t *rec_link = hcon_lookup_lower (&rec->links, links[ilink]); 
+        DRMS_Record_t *linked_rec = drms_link_follow(rec, links[ilink], &status);
+        char linkquery[DRMS_MAXQUERYLEN];
+        if (rec_link->info->type == DYNAMIC_LINK)
+          drms_sprint_rec_query(linkquery, linked_rec);
+        else
+          sprintf(linkquery, "%s[:#%lld]", linked_rec->seriesinfo->seriesname, linked_rec->recnum);
+        drms_close_record(linked_rec, DRMS_FREE_RECORD);
+
+        json_t *thislinkval = linkvals[ilink]; 
+        json_insert_child(thislinkval, json_new_string(linkquery));
+        }
+
       /* finish record info for this record */
       if (wantRecInfo)
 	{
@@ -966,6 +1029,17 @@ else
         json_insert_child(json_segments, segobj);
         }
       json_insert_pair_into_object(jroot, "segments", json_segments);
+
+      for (ilink=0; ilink<nlinks; ilink++) 
+        {
+        json_t *linkname = json_new_string(links[ilink]); 
+        json_t *linkobj = json_new_object();
+        json_insert_pair_into_object(linkobj, "name", linkname);
+        json_insert_pair_into_object(linkobj, "values", linkvals[ilink]);
+        json_insert_child(json_links, linkobj);
+        }
+      json_insert_pair_into_object(jroot, "links", json_links);
+
       sprintf(count, "%d", nrecs);
       json_insert_pair_into_object(jroot, "count", json_new_number(count));
       json_insert_pair_into_object(jroot, "status", json_new_number("0"));
