@@ -116,6 +116,7 @@ function CleanSeriesPick()
   {
   $("KeyListPlace").innerHTML = "All Keywords";
   $("SegListPlace").innerHTML = "All Segments";
+  $("LinkListPlace").innerHTML = "";
   $("DisplayPlace").innerHTML = "";
   KeyList = "";
   SegList = "";
@@ -125,8 +126,11 @@ function CleanSeriesPick()
   RecordCount = 0;
   nkeysselected = 0;
   nsegsselected = 0;
+  nlinksselected = 0;
   askedCount = 0;
   $("WantRecInfo").checked = 1;
+  $("WantLinkInfo").checked = 0;
+  $("WantLinkDiv").style.display="none";
   $("AllowBigQueries").checked = 0;
   $("RecSetPlace").innerHTML = "";
   CleanKeysSelect();
@@ -141,6 +145,7 @@ function CleanKeysSelect()
     $("SegsSelect").remove(i-1);
   $("DisplayPlace").innerHTML = "";
   $("SegListPlace").innerHTML = "";
+  $("LinkListPlace").innerHTML = "";
   $("KeyListPlace").innerHTML = "";
   KeyList =  "";
   SegList =  "";
@@ -358,6 +363,7 @@ function PickSeries(mode)
 	   insertOption("KeysSelect","*size*", "");
 	   insertOption("KeysSelect","*online*", "");
 	   insertOption("KeysSelect","*retain*", "");
+	   insertOption("KeysSelect","*retain*", "");
 	   keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>unit</TH><TH>note</TH>"; 
 	   for (i=0; i<n; i++)
 	      {
@@ -392,8 +398,11 @@ function PickSeries(mode)
 	   links = "<table BORDER=1><TR><TD>link</TD><TD>target </TD><TD>kind</TD><TD>note</TD>";
 	   for (i=0; i<n; i++)
 	      links = links + "<TR><TD>" + data.links[i].name + "</TD><TD>" + data.links[i].target + "</TD><TD>" +
-		data.links[i].kind + "</TD><TD>" + data.links[i].note + "&nbsp;</TD>";
+		      data.links[i].kind + "</TD><TD>" + data.links[i].note + "&nbsp;</TD>";
 	   links = links + "</table><P>";
+           // If links present allow for showing them in listings
+           $("WantLinkInfo").checked = 0;
+           $("WantLinkDiv").style.display="block";
 	   }
 	// Place structure table on screen
         $("SSPlace").innerHTML =  keywords + "<BR>" + segments + "<BR>" + links;
@@ -600,7 +609,18 @@ function GetKeyValues()
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var getparameters = new Hash( {"ds" : $("RecordSet").value, "op" : "rs_list" });
   $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
-  if (nkeysselected < 1 && nsegsselected < 1)
+  // do the link checkbox work here since no section 5.5...
+  if ($("WantLinkInfo").checked)
+    {
+    nlinksselected = 1;
+    $("LinkListPlace").innerHTML = " ALL Links Chosen";
+    }
+  else
+    {
+    nlinksselected = 0;
+    $("LinkListPlace").innerHTML = "";
+    }
+  if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1)
     {
     $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<BR>Please fo back to steps 4 and 5."; 
     return;
@@ -613,6 +633,8 @@ function GetKeyValues()
     getparameters = getparameters.merge({"seg": SegList});
   else
     getparameters = getparameters.merge({"seg":"**NONE**"});
+  if (nlinksselected)
+    getparameters = getparameters.merge({"link":"**ALL**"});
   if ($("WantRecInfo").checked) getparameters = getparameters.merge({"R":1});
   if (RecordCount == 0 && askedCount == 0)
       GetRSCount();
@@ -661,6 +683,7 @@ function GetKeyValues()
 	var thissegdata = "";
 	nkeys = data.keywords.length;
 	nsegs = data.segments.length;
+	nlinks = data.links.length;
 	nrecs = data.count;
         $("DisplayPlace").innerHTML = "Status = " + data.status + ", Recordset Key Values for " + data.count + " records returned, preparing page ...";
         wantrecinfo = $("WantRecInfo").checked;
@@ -675,6 +698,8 @@ function GetKeyValues()
            valuetable = valuetable + "<TH>segment: " + data.segments[iseg].name + "</TH>";
            valuetable = valuetable + "<TH>seg_dims: " + data.segments[iseg].name + "</TH>";
            }
+	for (ilink=0; ilink < nlinks; ++ilink)
+           valuetable = valuetable + "<TH>" + "Link: " + data.links[ilink].name + "</TH>";
 	valuetable = valuetable + "</TR>";
 
 	for (irec=0; irec < nrecs; irec++)
@@ -694,6 +719,7 @@ function GetKeyValues()
 	       this_keyval = tmp;
 	       }
              }
+           if (this_keyval.length == 0) this_keyval = "&nbsp;";
            valuetable = valuetable + "<TD>" + this_keyval + "</TD>";
 	   }
 	  for (iseg=0; iseg<nsegs; iseg++)
@@ -705,9 +731,15 @@ function GetKeyValues()
 	      tmp = "<A HREF=http://jsoc.stanford.edu" + thissegdata + ">" + thissegdata + "</A>";
 	      thissegdata = tmp;
 	      }
-        $("DisplayPlace").innerHTML = "seg " + iseg + thissegdata + "done";
+           if (thissegdata.length == 0) thissegdata = "&nbsp;";
            valuetable = valuetable + "<TD>" + thissegdata + "</TD>";
            valuetable = valuetable + "<TD>" + thissegdims + "</TD>";
+	   }
+	  for (ilink=0; ilink<nlinks; ilink++)
+	   {
+	   this_linkval =  data.links[ilink].values[irec];
+           if (this_linkval.length == 0) this_linkval = "&nbsp;";
+           valuetable = valuetable + "<TD>" + this_linkval + "</TD>";
 	   }
 	  valuetable = valuetable + "</TR>";
 	  }
@@ -751,11 +783,11 @@ function ExportNop()
 function SetExportMethod()
   {
   $("ExportMethod").value = $("ExportMethod").value.toLowerCase();
-  if ($("ExportMethod").value == "url" || $("ExportMethod").value == "url_quick" || $("ExportMethod").value == "url_direct")
+  if ($("ExportMethod").value == "url" || $("ExportMethod").value == "url_quick")
     ExportMethodOK = 1;
   else
     {
-    alert("Please set Method to url, url_quick, or url_direct");
+    alert("Please set Method to url, or url_quick");
     ExportMethodOK = 0;
     }
   }
@@ -880,14 +912,12 @@ function GetExport()
     $("ExportButton").value = "Processing ...";
     $("ExportButton").style.backgroundColor = "#FFD8D8";
     var ExportRecordSetTmp = $("ExportRecordSet").innerHTML;
-// "method" : ($("ExportMethod").value == "url_direct" ? "url_quick" : $("ExportMethod").value),
-// "method" : $("ExportMethod").value,
     var exportparameters = new Hash( {"op" : "exp_request",
                  		     "ds" : ExportRecordSetTmp, 
                  		     "process" : $("ExportProcessing").value,
                  		     "requestor" : $("ExportRequestor").value,
                  		     "notify" : $("ExportNotify").value,
-                                     "method" : ($("ExportMethod").value == "url_direct" ? "url_quick" : $("ExportMethod").value),
+                                     "method" : $("ExportMethod").value,
 			 	     "format" : "json",
                  		     "protocol" : $("ExportProtocol").value });
     if (nsegsselected)
@@ -950,7 +980,7 @@ function GetExport()
         $("StatusRequestID").value = data.requestid;
         $("ExportLocation").innerHTML = "";
         }
-      else // status == 0 implies url_quick or url_direct format and all online as-is
+      else // status == 0 implies url_quick format and all online as-is
         {
         var valuetable = "";
         var count = data.count;
@@ -962,7 +992,7 @@ function GetExport()
         $("ExportStatus").innerHTML = "Data Ready, size=" + data.size;
         valuetable = CreateDataTable(data, valuetable);
         $("ExportLocation").innerHTML =  valuetable + "<BR>";
-        if ($("ExportMethod").value == "url_direct")
+        if ($("ExportMethod").value == "url_quick")
           {
 	  if (count > 1)
 	    {
@@ -1098,16 +1128,16 @@ function GetStatus()
 <!-- <br clear=all> -->
 <HR>
 </DIV> <!-- end DIV header -->
-<input id="SeriesDivButton" type="button" value="Hide Section" style="background-color:#FFD8D8" onClick="ToggleSectionDiv('SeriesDiv');" >
 <B>1. Find list of dataseries, and 2. Pick series to use</B>
+<input id="SeriesDivButton" type="button" value="Hide Section" style="background-color:#FFD8D8" onClick="ToggleSectionDiv('SeriesDiv');" >
 <DIV id="SeriesDiv">
 <TABLE style="width:98%">
 <TR>
 <TD  style="width:50%;vertical-align:top;">
 Enter a dataseries match pattern to search for seriesnames, or leave blank to select from all series.
-(A very bad idea now that we have more than 13000 seriesnames.)
+(A very bad idea now that we have more than 23,000 seriesnames.)
 A leading "NOT " means exclude names matching the subsequent pattern.
-The default filter excludes namespace dsds.
+The default filter excludes namespace "dsds."
 <P>
 <input id="SeriesFilter" type="text" name="filter" value="NOT ^dsds\." onChange="GetSeries();" >
 <BR>
@@ -1155,6 +1185,10 @@ Request may take a while if the recordset is large (more than a few thousand rec
 <input type="button" value="GetRecordCount"  style="background-color:#FFFF80" onClick="GetRSCount();" >
 Record Count:&nbsp;&nbsp;
 <span id="RSCount_Place" style="width:10em;background-color:#FFF8DC"></span>
+<BR>
+<DIV id="WantLinkDiv">
+<input type="checkbox" name="Show Links" id="WantLinkInfo"> Check to select all links
+</DIV>
 </TD>
 <TD rowspan=2 style="width:60%;vertical-align:top;">
 <H3>List of All Keywords and Segments</H3>
@@ -1184,8 +1218,8 @@ Select Segments for Detailed Lists
 </DIV> <!-- id="MySeriesDiv" -->
 <HR>
 
-<input id="FullInfoDivButton" type="button" value="Hide Section" style="background-color:#FFD8D8" onClick="ToggleSectionDiv('FullInfoDiv');" >
 <B>6. Get Keyword and Segment Values Here</B>
+<input id="FullInfoDivButton" type="button" value="Hide Section" style="background-color:#FFD8D8" onClick="ToggleSectionDiv('FullInfoDiv');" >
 <P>
 <DIV id="FullInfoDiv">
 RecordSet Query:&nbsp;
@@ -1194,6 +1228,8 @@ RecordSet Query:&nbsp;
 <span id="KeyListPlace" style="background-color:#FFF8DC;"></span>
 &nbsp; Segments to Fetch:&nbsp;
 <span id="SegListPlace" style="background-color:#FFF8DC;"></span>
+&nbsp;
+<span id="LinkListPlace" style="background-color:#FFF8DC;"></span>
 
 <BR>
 <input type="checkbox" name="Get Record Query" id="WantRecInfo">
@@ -1211,8 +1247,8 @@ Check to Allow Huge Record Queries.
 </DIV> <!-- /DIV FullInfoDiv -->
 <HR>
 
-<input id="ExportRequestDivButton" type="button" value="Show Section" style="background-color:#D8FFD8" onClick="ToggleSectionDiv('ExportRequestDiv');" >
 <B>7. Request Export of Desired Data and Get Status of Prior Requests</B>
+<input id="ExportRequestDivButton" type="button" value="Show Section" style="background-color:#D8FFD8" onClick="ToggleSectionDiv('ExportRequestDiv');" >
 <P>
 <DIV id="ExportRequestDiv">
 This section can be used to request an export of the RecordSet identified in Section 3 above.
@@ -1253,9 +1289,8 @@ access the data.
 <select id="ExportMethod" type="text" name="ExportMethod" style="width:15em" onChange="ExportNop();" >
   <option value="url_quick">url_quick
   <option value="url">url
-  <option value="url_direct">url_direct
 </select>
-</TD><TD>Choose method, url, url_quick, or url_direct for now.</TR>
+</TD><TD>Choose method, url_quick or url for now.</TR>
 <TR><TD>Requestor</TD><TD>
 <input id="ExportRequestor" type="text" name="ExportRequestor" value="" onChange="ExportNop();" >
 </TD><TD>Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</TR>
