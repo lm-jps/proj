@@ -2034,10 +2034,10 @@ KEY *form_arg_data_out(SERVER *sptr, argument *arg)
   FILE *fin;
   DRMS_Segment_t *segment;
   char path[DRMS_MAXPATHLEN] = {0};
-  char *wd, *pname, *lname, *sname, *stmp, *cptr;
+  char *wd, *pname, *lname, *sname, *stmp, *cptr, *cptr2;
   char dbasekey[MAX_STR], ext[MAX_STR], wdkey[MAX_STR], inname[MAX_STR];
-  char drmsname[MAX_STR], cmd[MAX_STR], buf[128];
-  int innsets, parse, levnum, i, ntmp, dstatus;
+  char drmsname[MAX_STR], cmd[MAX_STR], newmdirec[MAX_STR], buf[128];
+  int innsets, parse, levnum, i, ntmp, dstatus, ccnt;
 
   char *prog, *level, *series, *jdata;
   char jpedata[192];
@@ -2088,6 +2088,18 @@ KEY *form_arg_data_out(SERVER *sptr, argument *arg)
     for(i=0; i < innsets; i++) {          /* do for each dataset */
       /* set this wd as the _dbase term in the keylist and remove the current */
       /* evaluation and parse again to get the final output wd. */
+      //NOTE: some map files have mdi_rec hard coded w/o a {dbase} term
+      //find any of these and fix them. The need for this will go away
+      //when we eventually set /soidata/info -> /SUM0/PAS
+      cptr = getenv("mdi_rec");	
+      if(cptr2 = strstr(cptr, "/soidata/info")) { 
+        ccnt = (cptr2-cptr)+1;
+        snprintf(newmdirec, ccnt, "%s", cptr);
+        strcat(newmdirec, "{dbase}/info");
+        strcat(newmdirec, cptr2+13);
+        sprintf(ext, "%s_%d_rule", arg->key, i);
+        setkey_str(&xlist, ext, newmdirec);
+      }
       setkey_str(&xlist, dbasekey, "/SUM0/PAS");
           //!!!TEMP
           //printf("\n***** The xlist before the deletekey() is:\n");
