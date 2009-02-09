@@ -2140,6 +2140,7 @@ KEY *form_arg_data_out(SERVER *sptr, argument *arg)
     }
     sprintf(ext, "%s_%d_prog", arg->key, i);	//e.g. out_0_prog
     stmp = GETKEY_str(xlist, ext);
+    if(!strcmp(stmp, "gong+")) stmp = "gongplus";
     sprintf(drmsname, "%s__", stmp);
     sprintf(ext, "%s_%d_level", arg->key, i);	//e.g. out_0_level
     stmp = GETKEY_str(xlist, ext);
