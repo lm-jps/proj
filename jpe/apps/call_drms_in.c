@@ -9,6 +9,7 @@
 
 extern DRMS_Env_t *drms_env;
 extern void printkey (KEY *key);
+extern void abortit();
 extern int ampexflg;		// 1 = retrieve from tape
 
 //#define out_namespace "dsds"
@@ -131,15 +132,14 @@ KEY *call_drms_in(KEY *list, int dbflg)
   char drmsname[MAX_STR];
   char cmd[128], buf[128];
   char path[DRMS_MAXPATHLEN] = {0};
-  char *stmp, *cptr, *cptr2;
+  char *stmp, *cptr;
   DRMS_RecordSet_t *rset;
   DRMS_Record_t *rec;
   FILE *fin;
   char argname[MAX_STR], inname[MAX_STR], ext[MAX_STR];
-  char wd[MAX_STR];
   double dbytes;
   ulong dsindex;
-  int i, loop, innsets, status, rstatus, tapeid, touch;
+  int i, loop, innsets, rstatus, touch;
   int restoreenv = 0;
   int num_ds = 0;                       /* total # of ds queried */
   int ntmp;
@@ -185,7 +185,6 @@ KEY *call_drms_in(KEY *list, int dbflg)
       else ntmp = -1;
       sprintf(buf, "%s[%d]", buf, ntmp);
       sprintf(drmsname, "%s.%s", out_namespace, buf); 
-      //printf("\ndrmsname = %s\n", drmsname); //!!TEMP
 
       if(findkey(list, ext))
         setkey_int(&alist, ext, getkey_int(list, ext));
@@ -209,11 +208,10 @@ KEY *call_drms_in(KEY *list, int dbflg)
     sprintf(ext, "%s_wd", inname);
     if(!rset || rset->n == 0) {
       printk("No prev ds\n");  
-      //!!!TBD send back empty wd
-      setkey_str(&alist, ext, "");
+      setkey_str(&alist, ext, "");	//send back empty wd
     }
     else {
-      drms_stage_records(rset, 0, 1);	//Don't retrieve for now !!!TBD
+      drms_stage_records(rset, 1, 1);	//retrieve from tape if needed
       rec = rset->records[0];  /* !!TBD fix 0 when more than one */
       if(!ampexflg) {
         drms_record_directory (rec, path, 0);
@@ -221,13 +219,12 @@ KEY *call_drms_in(KEY *list, int dbflg)
         printk("Possible wait for drms retrieve from tape...\n");
         drms_record_directory (rec, path, 1);
       }
-      //printk("path = %s\n", path); //!!!TEMP
       setkey_str(&alist, ext, path);
       dbytes = du_dir(path);
       sprintf(ext, "%s_bytes", inname);
       setkey_double(&alist, ext, dbytes);
       if(rstatus = path2index(path, &dsindex)) {
-        //!!TBD
+        //doesn't return here. called abortit()
       }
       sprintf(ext, "%s_ds_index", inname);
       setkey_ulong(&alist, ext, dsindex);
