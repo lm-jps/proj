@@ -47,6 +47,7 @@ are accepted.  These are: **ALL** means show all keywords (see show_info -a);
 *size* means show the size of storage unit (bytes);
 *online* means show the hidden keyword "online";
 *retain* means show retention date, i.e. date at which SUMS may remove the segment storage;
+*archive* means show archive status, i.e. has or will SUMS write the storage unit to tape;
 *logdir* means show the path to the processing log directory; and *dir_mtime* instructs
 jsoc_info to show the last modify time of the record directory in SUMS.
 The results are presented in arrays named "name" and "value".
@@ -209,7 +210,7 @@ ModuleArgs_t module_args[] =
 { 
   {ARG_STRING, "op", "Not Specified", "<Operation>, values are: series_struct, rs_summary, or rs_list "},
   {ARG_STRING, "ds", "Not Specified", "<record_set query>"},
-  {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *size*, *online*, *retain*, *logdir*, *dir_mtime*  "},
+  {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *size*, *online*, *retain*, *archive*, *logdir*, *dir_mtime*  "},
   {ARG_STRING, "link", "Not Specified", "<comma delimited linkname list>, links or special values: **ALL**, **NONE**"},
   {ARG_STRING, "seg", "Not Specified", "<comma delimited segment list>, segnames or special values: **ALL**, **NONE** "},
   {ARG_FLAG, "h", "0", "help - show usage"},
@@ -234,7 +235,7 @@ int nice_intro ()
 	"-R -> include record query.\n"
 	"op=<command> tell which ajax function to execute, values are: series_struct, rs_summary, or rs_list \n"
 	"ds=<recordset query> as <series>{[record specifier]} - required\n"
-	"key=<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *size*, *online*, *retain*, *logdir*, *dir_mtime* \n"
+	"key=<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *size*, *online*, *retain*, *archive*, *logdir*, *dir_mtime* \n"
 	"seg=<comma delimited segment list>, segnames or special values: **ALL**, **NONE** \n"
 	"QUERY_STRING=<cgi-bin params>, parameter string as delivered from cgi-bin call.\n"
 	);
@@ -884,6 +885,14 @@ int DoIt(void)
 	      val = json_new_string(retain);
               }
 	    }
+	  }
+        else if (strcmp(keys[ikey],"*archive*") == 0)
+	  {
+	  SUM_info_t *sinfo = drms_get_suinfo(rec->sunum);
+          if (!sinfo)
+	    val = json_new_string("NA");
+	  else
+	    val = json_new_string(sinfo->archive_status);
 	  }
         else if (strcmp(keys[ikey], "*dir_mtime*") == 0)
           { // get record dir last change date
