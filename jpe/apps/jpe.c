@@ -478,6 +478,7 @@ char *module_name = "jpe";	// Module name presented to DRMS
 jmp_buf env;
 
 int resp_dsds(int dsdstid);
+int pemail(char *fmt, ...);
 double du_dir();
 
 FILE *pemailfp;		// fp for pe ouput mail in /tmp/pe.pid.mail */
@@ -843,7 +844,6 @@ void getpasswd()
 void open_pemail(char *filename, char *idstr)
 {
   int i;
-  char string[128];
 
   mailtrue = 0;         /* set if ever call pemail() */
   mailable = 0;         /* set if this user generates mail */
@@ -1139,7 +1139,7 @@ void get_cmd(int argc, char *argv[])
   char *tokens2 = " \t\n";
   char *tokens3 = "*\n";
   char *tokens4 = " \n";
-  char hostname[MAX_STR], logkill[MAX_STR], subname[MAX_STR];
+  char hostname[MAX_STR], subname[MAX_STR];
   char *inname, *sp, *hname, *cptr;
   char *line, *line2, *token, *tokenchars, *tokencharsend;
   char carch;
@@ -1458,7 +1458,7 @@ void get_cmd(int argc, char *argv[])
 void spawn_pvm()
 {
   struct hostinfo *hostp;
-  SERVER *sptr;
+  //SERVER *sptr;
   HDATA *hnext;
   int i, nhost, narch;
 
@@ -1547,7 +1547,7 @@ void arg_recv(SERVER *sptr, HDATA *hnext)
   argument *args;
   struct timeval tvalr;
   uint64_t tsr;
-  int bufid, i, j;
+  int bufid, j;
 
     pvm_initsend(PvmDataDefault);
     if(pvm_send(hnext->tid, MSGARGS)) {
@@ -1862,7 +1862,7 @@ KEY *form_arg_data_in(KEY *xlist, SERVER *sptr, argument *arg, int seq)
   //KEY *blist;
   char dbasekey[MAX_STR], inname[MAX_STR], ext[MAX_STR];
   char *wd;
-  int innsets, parse, respcnt, i;
+  int innsets, parse, i;
 
   if(!seq) add_keys(sptr->map_list, &xlist);
   if(!arg_available(xlist, arg->key, arg->kind))  {
@@ -1942,8 +1942,9 @@ KEY *form_arg_data_in(KEY *xlist, SERVER *sptr, argument *arg, int seq)
 KEY *dsds_arg_data_in(KEY *xlist) 
 {
   static KEY *blist;
-  char inname[MAX_STR], ext[MAX_STR];
-  char *wd, *argname, *svcname, *svcversion;
+  char inname[MAX_STR];
+  //char ext[MAX_STR];
+  char *svcname, *svcversion;
   int respcnt, status, i;
 
   blist = newkeylist();
@@ -2029,15 +2030,13 @@ KEY *dsds_arg_data_in(KEY *xlist)
 */
 KEY *form_arg_data_out(SERVER *sptr, argument *arg)
 {
-  KEY *xlist, *blist;
-  SERVER *sptr2;
+  KEY *xlist;
   FILE *fin;
-  DRMS_Segment_t *segment;
   char path[DRMS_MAXPATHLEN] = {0};
-  char *wd, *pname, *lname, *sname, *stmp, *cptr, *cptr2;
+  char *wd, *stmp, *cptr, *cptr2;
   char dbasekey[MAX_STR], ext[MAX_STR], wdkey[MAX_STR], inname[MAX_STR];
   char drmsname[MAX_STR], cmd[MAX_STR], newmdirec[MAX_STR], buf[128];
-  int innsets, parse, levnum, i, ntmp, dstatus, ccnt;
+  int innsets, parse, levnum, i, dstatus, ccnt;
 
   char *prog, *level, *series, *jdata;
   char jpedata[192];
@@ -2728,7 +2727,7 @@ KEY *set_key_archive(char *basename, SERVER *stab, HDATA *hdata,  KEY *rlist,
 			int status)
 {
   KEY *alist;
-  char *wd, *effective_date, *warnmsg;
+  char *wd, *warnmsg;
   char ext[MAX_STR];
   double dsize;
   /*int fsn, lsn, nofsnlsn;*/
@@ -2803,12 +2802,11 @@ KEY *set_key_archive(char *basename, SERVER *stab, HDATA *hdata,  KEY *rlist,
 */
 void call_archive(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
 {
-  KEY *alist, *blist;
-  DRMS_Segment_t *segment;
+  KEY *alist;
   DRMS_Record_t *rsx;
   argument *arg;
-  char *wd, *cptr;
-  char oname[MAX_STR], ext[MAX_STR];
+  char *wd;
+  char oname[MAX_STR];
   int outnsets, i, snum;
   unsigned long sunum;
   double dsize;
@@ -3281,14 +3279,13 @@ override\n"); */
 */
 void dereg()
 {
-  KEY *alist, *blist;
   SERVER *sptr;
   HDATA *hdata;
   DRMS_Record_t *rsx;
   argument *arg;
   char *wd, *cptr;
-  char oname[MAX_STR], mcmd[256];
-  double free_bytes, dsize;
+  char oname[MAX_STR];
+  double dsize;
   double mapstore = 0.0;		/* total storage for pe map run */
   int i, j, outnsets;
 
@@ -3484,10 +3481,6 @@ void setup(int argc, char *argv[])
 // Module main function. 
 int DoIt()
 {
-  pid_t pid;
-  char *args[6];
-  char callcmd[128];
-
   if(setjmp(env) != 0) {	//longjmp() has been called. get out
     dereg();			//end session !!TBD need?
     kill_pvm();                   /* kill all servers on all hosts */
