@@ -24,6 +24,7 @@ int path2index(char *path, ulong *dsindex) {
   cptr = strstr(pathx, "/D");	//find first /D
   if(!cptr) {
     printk("***Fatal Error: no /D in path %s\n", pathx);
+    printk("***Use the -A flag if need to bring data on-line\n");
     abortit(1);
   }
   //if there's a second /D then that is the orig one that we want
@@ -197,7 +198,7 @@ KEY *call_drms_in(KEY *list, int dbflg)
       if(findkey(list, "ampex_tid")) 
         setkey_int(&alist, "ampex_tid", getkey_int(list, "ampex_tid"));
 
-    //printf("\nThe keylist for call_drms_in() is:\n"); //!!TEMP
+    //printf("drmsname=%s\nThe keylist for call_drms_in():\n",drmsname);//!!TEMP
     //keyiterate(printkey, list);
 
     rset = drms_open_records(drms_env, drmsname, &rstatus);
@@ -216,7 +217,7 @@ KEY *call_drms_in(KEY *list, int dbflg)
       if(!ampexflg) {
         drms_record_directory (rec, path, 0);
       } else {
-        printk("Possible wait for drms retrieve from tape...\n");
+        //printk("Possible wait for drms retrieve from tape...\n");
         drms_record_directory (rec, path, 1);
       }
       setkey_str(&alist, ext, path);
@@ -229,7 +230,7 @@ KEY *call_drms_in(KEY *list, int dbflg)
       sprintf(ext, "%s_ds_index", inname);
       setkey_ulong(&alist, ext, dsindex);
       //printk("In call_drms_in() ext=%s dsindex=%u\n", ext, dsindex);
-      //keyiterate(printkey, alist);
+      //keyiterate(printkey, alist); //!!TEMP
     }
       num_ds++;
     }
