@@ -63,7 +63,7 @@
 //#include <sum_pe.h>
 #include "soi_args.h"
 #include "pe.h"
-#include "dsds.h"
+//#include "dsds.h"
 
 #define MAXLINE 96		/* max line size for passwd */
 #define MAXDSREQ 200		/* max ds in any one datacollection */
@@ -73,7 +73,7 @@
 extern void pepeqprog_1(struct svc_req *rqstp, SVCXPRT *transp);
 extern int pepeq_wait();
 extern int pepeq_poll();
-extern KEY *call_drms_in(KEY *list, int dbflg);
+extern KEY *call_drms_inq(KEY *list, int dbflg);
 void printkey();
 void deregdsds();
 int resp_dsds(int dsdstid);
@@ -472,7 +472,7 @@ void queryds()
   }
   printk("Querying for the input datasets...\n");
   nocontrolc = 1;                       /* no ^C during retrieve */
-  alist = (KEY *)call_drms_in(dslist, dbxflg);
+  alist = (KEY *)call_drms_inq(dslist, dbxflg);
   if(alist == NULL) {
     printk("Can't resolve/retrieve the input datasets with drms.\n");
     printk("(Usually no -A switch specified.)\n");
@@ -483,7 +483,7 @@ void queryds()
 
 
 //!!TEMP
-    //printk("\nThe alist from call_drms_in():\n");
+    //printk("\nThe alist from call_drms_inq():\n");
     //keyiterate(printkey, alist);
     printk("\n");
 //return; //!!TEMP
@@ -507,24 +507,6 @@ void queryds()
     freekeylist(&alist);
 }
 
-/* Deregister with dsds_svc. Called from main() or abortit().
-*/
-void deregdsds()
-{
-  KEY *list, *retlist;
-
-  list=newkeylist();                  /* create an empty list */
-  setkey_long(&list, "dsds_uid", uid);/* give our OPEN uid */
-  if((retlist = call_dsds(&list,REQCLOSE,dsds_tid,pe_tid,printk,debugflg)) == NULL) {
-    printk("Can't CLOSE with dsds_svc\n");
-    freekeylist(&list);
-    abortit();
-  }
-  printk("Deregistered with dsds_svc as uid=%ld\n", uid);
-  uid = 0;				/* indicate that we're closed */
-  freekeylist(&list); freekeylist(&retlist);
-  freekeylist(&dslist);
-}
 
 /* Initial setup stuff called when main if first entered.
 */
@@ -598,7 +580,6 @@ int DoIt()
     }
     linenum += ds_lines;
   }
-  //deregdsds();			/* end the session with dsds_svc */
   pvm_exit();
   //freekeylist(&dslist);
   if(sumhandle) 
