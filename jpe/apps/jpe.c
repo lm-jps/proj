@@ -436,7 +436,7 @@ p=script \
 #include <setjmp.h>
 #include "soi_args.h"
 #include "pe.h"
-#include "dsds.h"
+//#include "dsds.h"
 
 #define MONE (long)-1           /* needs to be long for IRIX64 compile */
 #define PEMAILFILE "/tmp/pe.%s.%d.mail"
