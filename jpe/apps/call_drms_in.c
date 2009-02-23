@@ -11,8 +11,6 @@ extern DRMS_Env_t *drms_env;
 extern void printkey (KEY *key);
 extern void abortit();
 extern int ampexflg;		// 1 = retrieve from tape
-extern int wdonly;		// 1 = only get the wd info
-extern SUM_t *sumhandle;
 
 static KEY *alist;
 
@@ -45,8 +43,6 @@ int path2index(char *path, ulong *dsindex) {
 
 
 /*
-* Uses extern ampexflg, wdonly, and sumhandle;
-*
 * Here an example of a keylist received here:
 * (the args are given by arg_data_in_0, arg_data_in_1, etc) 
 *
@@ -143,7 +139,6 @@ KEY *call_drms_in(KEY *list, int dbflg)
   char *stmp, *cptr;
   DRMS_RecordSet_t *rset;
   DRMS_Record_t *rec;
-  SUM_info_t *sinfo;
   FILE *fin;
   char argname[MAX_STR], inname[MAX_STR], ext[MAX_STR];
   double dbytes;
@@ -240,20 +235,6 @@ KEY *call_drms_in(KEY *list, int dbflg)
       dsindex = rec->sunum;
       sprintf(ext, "%s_ds_index", inname);
       setkey_ulong(&alist, ext, dsindex);
-      if(!wdonly) {		//need to get info from SUM_info()
-        if(SUM_info(sumhandle, dsindex, printk)) {
-          printk("Fail on SUM_info() for sunum=%u\n", dsindex);
-        }
-        else {
-          sinfo = sumhandle->sinfo;
-          sprintf(ext, "%s_creat_date", inname);
-          setkey_str(&alist, ext, sinfo->creat_date);
-          sprintf(ext, "%s_archive_status", inname);
-          setkey_str(&alist, ext, sinfo->archive_status);
-          sprintf(ext, "%s_bytes", inname);
-          setkey_double(&alist, ext, sinfo->bytes);
-        }
-      }
       //printk("In call_drms_in() ext=%s dsindex=%u\n", ext, dsindex);
       //keyiterate(printkey, alist); //!!TEMP
     }
