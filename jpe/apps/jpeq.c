@@ -47,19 +47,19 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <strings.h>
-#include <signal.h>
+//#include <signal.h>
 #include <soi_key.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <rpc/rpc.h>
-#include <rpc/pmap_clnt.h>
-#include <sys/socket.h>
+//#include <rpc/rpc.h>
+//#include <rpc/pmap_clnt.h>
+//#include <sys/socket.h>
 #include <unistd.h>     //for alarm(2) among other things...
 #include <printk.h>
 #include <pvm3.h>
 #include <setjmp.h>
-#include <soi_error.h>
+//#include <soi_error.h>
 //#include <sum_pe.h>
 #include "soi_args.h"
 #include "pe.h"
@@ -67,12 +67,13 @@
 
 #define MAXLINE 96		/* max line size for passwd */
 #define MAXDSREQ 200		/* max ds in any one datacollection */
-#define MAXFLINES 45		/* max lines in a -f file */
+#define MAXFLINES 100		/* max lines in a -f file */
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 
 extern void pepeqprog_1(struct svc_req *rqstp, SVCXPRT *transp);
 extern int pepeq_wait();
 extern int pepeq_poll();
+extern KEY *call_drms_in(KEY *list, int dbflg);
 void printkey();
 void deregdsds();
 int resp_dsds(int dsdstid);
@@ -114,6 +115,7 @@ FILE *dsfp;
 KEY *dslist;
 KEY *alist;
 CLIENT *clntsumpe;
+SUM_t *sumhandle = NULL;
 
 static struct timeval TIMEOUT = { 20, 0 };
 
@@ -552,6 +554,8 @@ int DoIt()
     //if (pemailfp) fclose(pemailfp);
     //mailit();
     //if (pelogfp) fclose(pelogfp);
+    if(sumhandle) 
+      SUM_close(sumhandle, printk);
     printk("jpeq Abnormal Completion\n");
     return(1);
   }
@@ -562,6 +566,12 @@ int DoIt()
   setup();				/* start pvm and init things */
   get_cmd(argc, argv);			/* check the calling sequence */
   spawn_pvm();				/* start the servers as needed */
+  if(!wdonly) {				//open sums so can call sum_info()
+    if((sumhandle = SUM_open(NULL, NULL, printk)) == 0) {
+      printk("Failed on SUM_open()\n");
+      longjmp(env, 2);      //get out of here
+    }
+  }
   while(1) {
     if(!fileflg) {
       queryds();
@@ -591,6 +601,8 @@ int DoIt()
   //deregdsds();			/* end the session with dsds_svc */
   pvm_exit();
   //freekeylist(&dslist);
+  if(sumhandle) 
+    SUM_close(sumhandle, printk);
   printk("jpeq Normal Completion\n");
   return(0);
 }
