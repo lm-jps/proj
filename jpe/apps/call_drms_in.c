@@ -11,10 +11,15 @@ extern DRMS_Env_t *drms_env;
 extern void printkey (KEY *key);
 extern void abortit();
 extern int ampexflg;		// 1 = retrieve from tape
+extern int wdonly;		// 1 = only get the wd info
+extern SUM_t *sumhandle;
+
+static KEY *alist;
 
 //#define out_namespace "dsds"
 #define out_namespace "su_production"
 
+/************************OLD*************************************************
 //Take the su dir and convert to the corresponding ds_index (i.e. sunum)
 int path2index(char *path, ulong *dsindex) {
   char pathx[DRMS_MAXPATHLEN];
@@ -23,9 +28,9 @@ int path2index(char *path, ulong *dsindex) {
   strcpy(pathx, path);
   cptr = strstr(pathx, "/D");	//find first /D
   if(!cptr) {
-    printk("***Fatal Error: no /D in path %s\n", pathx);
-    printk("***Use the -A flag if need to bring data on-line\n");
-    abortit(1);
+    printk("**Error: no /D in path %s\n", pathx);
+    printk("**Use the -A flag if need to bring data on-line\n");
+    return(1);
   }
   //if there's a second /D then that is the orig one that we want
   cptr2 = strstr(cptr+1, "/D");
@@ -36,9 +41,12 @@ int path2index(char *path, ulong *dsindex) {
   *dsindex = strtoul(cptr2, NULL, 0);
   return(0);
 }
+************************OLD*************************************************/
 
 
 /*
+* Uses extern ampexflg, wdonly, and sumhandle;
+*
 * Here an example of a keylist received here:
 * (the args are given by arg_data_in_0, arg_data_in_1, etc) 
 *
@@ -129,13 +137,13 @@ int path2index(char *path, ulong *dsindex) {
 
 KEY *call_drms_in(KEY *list, int dbflg) 
 {
-  static KEY *alist;
   char drmsname[MAX_STR];
   char cmd[128], buf[128];
   char path[DRMS_MAXPATHLEN] = {0};
   char *stmp, *cptr;
   DRMS_RecordSet_t *rset;
   DRMS_Record_t *rec;
+  SUM_info_t *sinfo;
   FILE *fin;
   char argname[MAX_STR], inname[MAX_STR], ext[MAX_STR];
   double dbytes;
@@ -208,27 +216,44 @@ KEY *call_drms_in(KEY *list, int dbflg)
     }
     sprintf(ext, "%s_wd", inname);
     if(!rset || rset->n == 0) {
-      printk("No prev ds\n");  
+      printk("No prev ds for %s\n", drmsname);  
       setkey_str(&alist, ext, "");	//send back empty wd
     }
     else {
-      drms_stage_records(rset, 1, 1);	//retrieve from tape if needed
+      if(rstatus = drms_stage_records(rset, 0, 1)) {
+        printk("Can't do drms_stage_records() for %s\n", drmsname);
+        return(NULL);         
+      }
       rec = rset->records[0];  /* !!TBD fix 0 when more than one */
       if(!ampexflg) {
-        drms_record_directory (rec, path, 0);
+        rstatus = drms_record_directory (rec, path, 0);
       } else {
-        //printk("Possible wait for drms retrieve from tape...\n");
-        drms_record_directory (rec, path, 1);
+        printk("Possible wait for drms retrieve from tape...\n");
+        rstatus = drms_record_directory (rec, path, 1);
       }
       setkey_str(&alist, ext, path);
+      sprintf(ext, "status_%d", num_ds);
+      setkey_int(&alist, ext, rstatus);
       dbytes = du_dir(path);
       sprintf(ext, "%s_bytes", inname);
       setkey_double(&alist, ext, dbytes);
-      if(rstatus = path2index(path, &dsindex)) {
-        //doesn't return here. called abortit()
-      }
+      dsindex = rec->sunum;
       sprintf(ext, "%s_ds_index", inname);
       setkey_ulong(&alist, ext, dsindex);
+      if(!wdonly) {		//need to get info from SUM_info()
+        if(SUM_info(sumhandle, dsindex, printk)) {
+          printk("Fail on SUM_info() for sunum=%u\n", dsindex);
+        }
+        else {
+          sinfo = sumhandle->sinfo;
+          sprintf(ext, "%s_creat_date", inname);
+          setkey_str(&alist, ext, sinfo->creat_date);
+          sprintf(ext, "%s_archive_status", inname);
+          setkey_str(&alist, ext, sinfo->archive_status);
+          sprintf(ext, "%s_bytes", inname);
+          setkey_double(&alist, ext, sinfo->bytes);
+        }
+      }
       //printk("In call_drms_in() ext=%s dsindex=%u\n", ext, dsindex);
       //keyiterate(printkey, alist); //!!TEMP
     }
