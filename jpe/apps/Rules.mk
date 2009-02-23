@@ -9,7 +9,7 @@ mainx_$(d)		:= $(addprefix $(d)/, mainx)
 jpe_$(d)		:= $(addprefix $(d)/, jpe)
 jpe_obj_$(d)		:= $(addprefix $(d)/, hdata.o start_pvmd.o call_dsds.o pack_key.o prod_host.o spawnds.o parse_arg.o names.o du_dir.o call_drms_in.o)
 jpeq_$(d)		:= $(addprefix $(d)/, jpeq)
-#jpeq_obj_$(d)		:= $(addprefix $(d)/, hdata.o start_pvmd.o call_dsds.o pack_key.o prod_host.o spawnds.o parse_arg.o names.o du_dir.o call_drms_in.o)
+jpeq_obj_$(d)		:= $(addprefix $(d)/, hdata.o start_pvmd.o call_dsds.o pack_key.o prod_host.o spawnds.o parse_arg.o names.o du_dir.o call_drms_inq.o)
 
 jpe2_$(d)		:= $(addprefix $(d)/, jpe2)
 jpe2_obj_$(d)		:= $(addprefix $(d)/, hdata.o start_pvmd.o call_dsds.o pack_key.o prod_host.o spawnds.o parse_arg.o names.o du_dir.o call_drms_in.o)
@@ -35,7 +35,7 @@ MODEXEDROBJ	:= $(MODEXEDROBJ) $(MODEXEDR_$(d):%=%.o)
 
 ALLEXE_$(d)	:= $(MODEXE_$(d)) $(MODEXEDR_$(d)) $(MODEXE_USEF_$(d)) $(SUMEXE_$(d)) $(CEXE_$(d))
 #OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(jpe_obj_$(d)) $(jpe2_obj_$(d)) $(jpeq_obj_$(d)
-OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(jpe_obj_$(d)) $(jpe2_obj_$(d))
+OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(jpe_obj_$(d)) $(jpeq_obj_$(d)) $(jpe2_obj_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.o.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
@@ -48,7 +48,7 @@ TGT_BIN	        := $(TGT_BIN) $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d))
 S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 $(jpe_$(d)):     $(jpe_obj_$(d))
-$(jpeq_$(d)):     $(jpe_obj_$(d))
+$(jpeq_$(d)):     $(jpeq_obj_$(d))
 $(jpe2_$(d)):     $(jpe2_obj_$(d))
 
 # Local rules
