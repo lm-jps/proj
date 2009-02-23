@@ -61,7 +61,7 @@
 #include <setjmp.h>
 //#include <soi_error.h>
 //#include <sum_pe.h>
-#include "soi_args.h"
+//#include "soi_args.h"
 #include "pe.h"
 //#include "dsds.h"
 

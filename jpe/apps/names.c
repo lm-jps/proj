@@ -75,7 +75,7 @@
 #include <ctype.h>
 #include "soi_key.h"
 #include "soi_names.h"
-#include "timeio.h"
+//#include "timeio.h"
 #include "soi_error.h"
 
 #define VERSION_NUM	(0.8)

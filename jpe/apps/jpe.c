@@ -434,7 +434,7 @@ p=script \
 #include <unistd.h>	//for alarm(2) among other things...
 #include <printk.h>
 #include <setjmp.h>
-#include "soi_args.h"
+//#include "soi_args.h"
 #include "pe.h"
 //#include "dsds.h"
 
