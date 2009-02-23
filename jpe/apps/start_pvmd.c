@@ -1,4 +1,4 @@
-static char rcsid[] = "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/jpe/apps/start_pvmd.c,v 1.1 2009/01/23 21:30:46 production Exp $";
+static char rcsid[] = "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/jpe/apps/start_pvmd.c,v 1.2 2009/02/23 22:12:09 production Exp $";
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -51,7 +51,7 @@ int start_pvm_now(char *hostname, int (*msg)())
 {
   FILE *fphost;
   struct stat stbuf;
-  int mytid, rint, napcnt, status;
+  int mytid, rint;
   char filename[MAXSTR], cmd[MAXSTR];
   char *staging, *machine, *user;
 
@@ -66,6 +66,7 @@ int start_pvm_now(char *hostname, int (*msg)())
      * scripts still running after an sssc_stop).
     */
 #ifdef __sgi
+    int napcnt;
     srand(getpid());			/* seed for rand() */
     rint = rand();			/* 0 to 65535 */
     napcnt = rint/4369;			/* a sginap count 0 to 15 */
@@ -194,9 +195,7 @@ int ck_cluster(char *hostname, char *user, int (*msg)())
 */
 int ck_pe_rpc_dsds(int (*msg)())
 {
-  KEY *alist, *blist;
   struct taskinfo *taskp;
-  char *dsdsdb;
   int i, ntask, perpctid;
 
   int mytid;
@@ -221,6 +220,7 @@ int ck_pe_rpc_dsds(int (*msg)())
   }
   /* pe_rpc is there. check the dsds_svc database */
   //For jpe, don't try to contact dsds_svc
+  //KEY *alist, *blist;
 //  alist=newkeylist();
 //  if((blist = (KEY *)call_dsds(&alist, REQDBNAME, perpctid, mytid, msg, 0)) == NULL) {
 //    (*msg)("Error requesting database name from dsds_svc:\n");
@@ -240,14 +240,17 @@ int ck_pe_rpc_dsds(int (*msg)())
 */
 
 /*
-$Id: start_pvmd.c,v 1.1 2009/01/23 21:30:46 production Exp $
+$Id: start_pvmd.c,v 1.2 2009/02/23 22:12:09 production Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/jpe/apps/start_pvmd.c,v $
 $Author: production $
 */
 /* $Log: start_pvmd.c,v $
- * Revision 1.1  2009/01/23 21:30:46  production
- * initial
+ * Revision 1.2  2009/02/23 22:12:09  production
+ * elim call_dsds()
  *
+/* Revision 1.1  2009/01/23 21:30:46  production
+/* initial
+/*
  * Revision 1.27  2006/03/27  22:49:42  jim
  * add mode 0644 to open()
  *
