@@ -134,7 +134,7 @@ ModuleArgs_t module_args[] = {
 
 CmdParams_t cmdparams;
 char **argv = NULL;
-char **argvx;
+char *pargv[12];		//copy argv[] strings due to free at end
 int argc = 0;
 char *module_name = "jpeq";      // Module name presented to DRMS
 jmp_buf env;
@@ -273,19 +273,19 @@ int get_ds_lines()
 /* Gets the command line and parses the dataset name into  the global
  * dslist keylist. Called before we register with dsds.
 */
-void get_cmd(int argc, char *argvx[])
+void get_cmd(int argc, char *argv[])
 {
   int c, getpasswd;
   char *envpasswd, *cptr;
   char hostname[MAX_STR];
 
   gethostname(hostname, MAX_STR);
-  while(--argc > 0 && (*++argvx)[0] == '-') {
-    while(c = *++argvx[0])
+  while(--argc > 0 && (*++argv)[0] == '-') {
+    while(c = *++argv[0])
       switch(c) {
       case 't':
-        if(*++argvx[0] != NULL) {	/* get # of days */
-          cptr = argvx[0];
+        if(*++argv[0] != NULL) {	/* get # of days */
+          cptr = argv[0];
           if(!strcmp(cptr, "keep")) {	/* it's a touch "keep" */
             touchflg = 9999999;		/* pass on the default keep value */
           }
@@ -294,11 +294,11 @@ void get_cmd(int argc, char *argvx[])
               printk("-t switch must say \"keep\" or give integer #of days\n");
               exit(1);
             }
-            touchflg = atoi(argvx[0]);
+            touchflg = atoi(argv[0]);
           }
         }
-        while(*++argvx[0] != NULL);
-        --argvx[0];
+        while(*++argv[0] != NULL);
+        --argv[0];
         break;
       case 'v':
         verbose=1;
@@ -324,7 +324,7 @@ void get_cmd(int argc, char *argvx[])
   if(argc != 1) usage();
   dslist = newkeylist();
   if(!fileflg) {			/* ds are on cmd line */
-    setkey_str(&dslist, "in", argvx[0]);
+    setkey_str(&dslist, "in", argv[0]);
     if (parse_list (&dslist, "in")) {
       printk("Error in parse_list() of dataset name\n");
       longjmp(env, 2);      //get out of here
@@ -339,8 +339,8 @@ void get_cmd(int argc, char *argvx[])
     /* open and get the first 100 lines */
     /* we can only do 100 lines at a time due to error in rpc lib when */
     /* we try to send too long a keylist through pe_rpc/pe_rpc_svc. (OLD peq) */
-    if(!(dsfp=fopen(argvx[0], "r"))) {
-      printk("Can't open the input file %s\n", argvx[0]);
+    if(!(dsfp=fopen(argv[0], "r"))) {
+      printk("Can't open the input file %s\n", argv[0]);
       longjmp(env, 2);      //get out of here
     }
   }
@@ -539,10 +539,11 @@ int DoIt()
 
 
   cmdparams_get_argv(&cmdparams, &argv, &argc);
-  argvx = argv;
-
+  for(c=0; c < argc; c++) {
+    pargv[c] = strdup(argv[c]);
+  }
   setup();				/* start pvm and init things */
-  get_cmd(argc, argvx);			/* check the calling sequence */
+  get_cmd(argc, pargv);			/* check the calling sequence */
   spawn_pvm();				/* start the servers as needed */
   if(!wdonly) {				//open sums so can call sum_info()
     if((sumhandle = SUM_open(NULL, NULL, printk)) == 0) {
