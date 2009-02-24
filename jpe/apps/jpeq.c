@@ -47,23 +47,14 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <strings.h>
-//#include <signal.h>
 #include <soi_key.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-//#include <rpc/rpc.h>
-//#include <rpc/pmap_clnt.h>
-//#include <sys/socket.h>
 #include <unistd.h>     //for alarm(2) among other things...
 #include <printk.h>
-#include <pvm3.h>
 #include <setjmp.h>
-//#include <soi_error.h>
-//#include <sum_pe.h>
-//#include "soi_args.h"
 #include "pe.h"
-//#include "dsds.h"
 
 #define MAXLINE 96		/* max line size for passwd */
 #define MAXDSREQ 200		/* max ds in any one datacollection */
@@ -94,8 +85,6 @@ int retrieveflg;		/* retrieve data from tape if not on-line */
 int ampexflg;			/* use ampex_svc instead of lago_svc */
 int nocontrolc;                 /* don't honor ^C if set */
 int fileflg;			/* take ds names from the given file */
-int debugflg;			/* run all pvm servers in the debug mode */
-				/* also do keyiterate. Don't use w/tae */ 
 int touchflg = -1;		/* #of days to retain ds before deletable */
 int ccactive = 0;		/* ^C already in progress */
 int dbxflg = 0;
@@ -152,12 +141,12 @@ char *datestring(void)
   return str+4;          /* isolate the mmm dd hh:mm:ss */
 }
 
-/* Got a fatal error sometime after registering with pvm. 
+/* Got a fatal error.
  * Degregister and close with dsds_svc as approriate. 
 */
 void abortit()
 {
-  if(abort_active) {		/* we're already aborting */
+  if(abort_active) {		/* we're already aborting !!TBD ck */
     printk("Abort an abort! dsds_svc may not have cleaned up\n");
     longjmp(env, 2);      //get out of here
   }
@@ -346,33 +335,6 @@ void get_cmd(int argc, char *argv[])
   }
 }
 
-/* Determine the pvm machine configuration and which tasks are running. 
- * Spawn the dsds_svc on the local machine or spawn the pe_rpc that will
- * bridge us to the master dsds_svc via the pe_rpc_svc.
-*/
-void spawn_pvm()
-{
-  struct hostinfo *hostp;
-  int info, nhost, narch, i;
-
-  /* get info on the present virtual machine configuration */
-  if((info=pvm_config(&nhost, &narch, &hostp))) {
-    printk("Can't get pvm configuration (%d). Pvm daemon(s) running?\n", info);
-    abortit();
-  }
-  for(i=0; i<nhost; i++) {
-    if(!strcmp(hostp[i].hi_name, thishost)) {
-      break;
-    }
-  }
-  if(i == nhost) {
-    printk("No pvm daemon running on %s\n", thishost);
-    abortit();
-  }
-
-  //if(spawn_pe_rpc(dbname, pe_tid, &dsds_tid, debugflg, printk))
-  //  abortit();
-}
 
 /*!!!!!!!!!!OBSOLETE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
 /* Take all keys on the given keylist that have a number in their name and
@@ -507,18 +469,12 @@ void queryds()
 */
 void setup()
 {
-  if((pe_tid=start_pvm(printk)) == 0) {
-    fprintf(stderr, "Can't start a pvm daemon!!\n");
-    exit(1);
-  }
   printk_set(printf, printf);
   if(!(username = (char *)getenv("USER"))) username = "nouser";
   if (signal(SIGINT, SIG_IGN) != SIG_IGN)
       signal(SIGINT, sighandler);
   if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
       signal(SIGTERM, sighandler);
-  /*tae_tid=pvm_parent();		/* get tid if tae spawned us */
-  pvm_serror(1);			/* enable auto error reporting */
   gethostname(thishost,MAX_STR);
 }
 
@@ -527,7 +483,6 @@ int DoIt()
   int c;
 
  if(setjmp(env) != 0) {        //longjmp() has been called. get out
-    pvm_exit();
     //if (pemailfp) fclose(pemailfp);
     //mailit();
     //if (pelogfp) fclose(pelogfp);
@@ -542,9 +497,8 @@ int DoIt()
   for(c=0; c < argc; c++) {
     pargv[c] = strdup(argv[c]);
   }
-  setup();				/* start pvm and init things */
+  setup();
   get_cmd(argc, pargv);			/* check the calling sequence */
-  spawn_pvm();				/* start the servers as needed */
   if(!wdonly) {				//open sums so can call sum_info()
     if((sumhandle = SUM_open(NULL, NULL, printk)) == 0) {
       printk("Failed on SUM_open()\n");
@@ -577,7 +531,6 @@ int DoIt()
     }
     linenum += ds_lines;
   }
-  pvm_exit();
   //freekeylist(&dslist);
   if(sumhandle) 
     SUM_close(sumhandle, printk);
