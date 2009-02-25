@@ -219,7 +219,7 @@ int DoIt()
       if(cptr) *cptr = NULL;
       cptr = strstr(buf, "__");
       if(!cptr) return(1);
-      cptr1 = strstr(cptr, "__"); //start of real series name
+      cptr1 = strstr(cptr+2, "__"); //start of real series name
       if(!cptr1) return(1);
       strcpy(a_series, cptr1+2);
     }
