@@ -164,10 +164,7 @@ int DoIt()
       if(cptr) *cptr = NULL;
 
   if(wildflg) {
-    //sprintf(logfile, "/tmp/snq_%s_%d.tmp", username, getpid());
     sprintf(qcmd, "select seriesname from %s.drms_series where seriesname like '%s.%s'", out_namespace, out_namespace, buf);
-    //sprintf(cmd, "echo \"%s\" | psql -h hmidb jsoc 1>%s 2>&1",qcmd,logfile); 
-    //system(cmd);
     sprintf(cmd, "echo \"%s\" | psql -h hmidb jsoc", qcmd); 
     fin = popen(cmd, "r");
     while(fgets(buf, sizeof buf, fin)) {
@@ -179,16 +176,16 @@ int DoIt()
       }
     }
     if(!found) return(0);
+    cptr = strstr(buf, "__");
+    if(!cptr) return(1);
+    cptr1 = strstr(cptr, "__"); //start of real series name
+    if(!cptr1) return(1);
+    strcpy(a_series, cptr1+2);
   }
   while(1) {
     for(next_sn = start_sn; next_sn <= end_sn; next_sn++) {
       if(wildflg) {
         sprintf(drmsname, "%s[%d]", buf, next_sn);
-        cptr = strstr(buf, "__");
-        if(!cptr) return(1);
-        cptr1 = strstr(cptr, "__"); //start of real series name
-        if(!cptr1) return(1);
-        strcpy(a_series, cptr1+2);
       }
       else sprintf(drmsname, "%s.%s[%d]", out_namespace, buf, next_sn);
       rset = drms_open_records(drms_env, drmsname, &rstatus);
@@ -220,6 +217,11 @@ int DoIt()
       }
       cptr = rindex(buf, '\n');
       if(cptr) *cptr = NULL;
+      cptr = strstr(buf, "__");
+      if(!cptr) return(1);
+      cptr1 = strstr(cptr, "__"); //start of real series name
+      if(!cptr1) return(1);
+      strcpy(a_series, cptr1+2);
     }
     else return(0);
   }
