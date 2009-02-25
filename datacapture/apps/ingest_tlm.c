@@ -51,6 +51,7 @@
 #define H0LOGFILE "/tmp/h0.%s.%d.log"
 #define DIRDDS "/egse/ssim2soc"
 #define IMAGEDIR "/tmp/jim"	/* dir to put the last IMAGEDIRCNT images */
+#define IMAGEDIRSMALL "/tmp/jim/small"
 #define IMAGEDIRCNT 100		/* # of images to save */
 #define SEC1970TO2004 1072828800 /* approx #of secs from 1970 to 2004 */
 #define PKTSZ 1788		/* size of VCDU pkt */
@@ -338,7 +339,7 @@ void now_do_alrm_sig()
   Image_t *image;
   Decompress_Stat_t *decomp_stat;
   int nx, i, status;
-  char imgfile[128], cmd[128];
+  char imgfile[128], cmd[128], bcmd[192];
 
   /* h0log("In now_do_alrm_sig()\n"); */ /* !!TEMP */
   nx = decompress_status_all(&decomp_stat);
@@ -358,10 +359,15 @@ void now_do_alrm_sig()
         if(status == SUCCESS) {
 	  h0log("*SUCCESS FLUSH of partial image fsn=%u\n", fsn);
           sprintf(imgfile, "%s/%s_%09u.%d.fits", 
-			IMAGEDIR, prependfits, fsn, imagedircnt++);
+			IMAGEDIR, prependfits, fsn, imagedircnt);
           if(decompress_writefitsimage(imgfile, image, 0)) {
             h0log("Error on output of %s\n", imgfile);
           }
+          else {
+            sprintf(bcmd, "/usr/local/bin/bin256 %s %s/%s_%09u.%d.fits", imgfile, IMAGEDIRSMALL, prependfits, fsn, imagedircnt);
+            system(bcmd);
+          }
+          imagedircnt++;
           decompress_free_images(image);
           /* only keep the last n images */
           if(imagedircnt > IMAGEDIRCNT) {
@@ -401,7 +407,7 @@ void now_do_term_sig()
   Image_t *image;
   Decompress_Stat_t *decomp_stat;
   int nx, i, status;
-  char imgfile[128], cmd[128];
+  char imgfile[128], cmd[128], bcmd[192];
 
   printk("\n***ingest_tlm received a termination signal\n");
   msg("\n***ingest_tlm received a termination signal\n");
@@ -419,10 +425,15 @@ void now_do_term_sig()
     status = decompress_flush_image(fsn, fid, &image);
     if(status == SUCCESS) {
       sprintf(imgfile, "%s/%s_%09u.%d.fits", 
-			IMAGEDIR,prependfits,fsn,imagedircnt++);
+			IMAGEDIR,prependfits,fsn,imagedircnt);
       if(decompress_writefitsimage(imgfile, image, 0)) {
         h0log("Error on output of %s\n", imgfile);
       }
+      else {
+        sprintf(bcmd, "/usr/local/bin/bin256 %s %s/%s_%09u.%d.fits", imgfile, IMAGEDIRSMALL, prependfits, fsn, imagedircnt);
+        system(bcmd);
+      }
+      imagedircnt++;
       decompress_free_images(image);
       /* only keep the last n images */
       if(imagedircnt >= IMAGEDIRCNT) {
@@ -551,7 +562,7 @@ int get_tlm(char *file)
   Image_t *images, *sav_images, *im, *partimg;
   CCSDS_Packet_t *hk_packets;
   unsigned char cbuf[PKTSZ];
-  char errtxt[128], imgfile[128], cmd[128];
+  char errtxt[128], imgfile[128], cmd[128], bcmd[192];
   long long gap_42_cnt;
   int status, rstatus, fpkt_cnt, i, j, sync_bad_cnt, nx;
   int imagecnt, appid, datval, eflg, first;
@@ -709,10 +720,15 @@ int get_tlm(char *file)
 		  h0log("*SUCCESS FLUSH of partial image fsn=%u\n", fsn);
                   imagecnt++;
                   sprintf(imgfile, "%s/%s_%09u.%d.fits",
-                        IMAGEDIR, prependfits, fsn, imagedircnt++);
+                        IMAGEDIR, prependfits, fsn, imagedircnt);
                   if(decompress_writefitsimage(imgfile, partimg, 0)) {
                     h0log("Error on output of %s\n", imgfile);
                   }
+                  else {
+                    sprintf(bcmd, "/usr/local/bin/bin256 %s %s/%s_%09u.%d.fits", imgfile, IMAGEDIRSMALL, prependfits, fsn, imagedircnt);
+                    system(bcmd);
+                  }
+                  imagedircnt++;
                   decompress_free_images(partimg);
                   /* only keep the last n images */
                   if(imagedircnt >= IMAGEDIRCNT) {
@@ -759,10 +775,15 @@ int get_tlm(char *file)
         tsum[2] += ftmp;
 ***********************************************************************/
         sprintf(imgfile, "%s/%s_%09u.%d.fits",
-			IMAGEDIR,prependfits,fsn,imagedircnt++);
+			IMAGEDIR,prependfits,fsn,imagedircnt);
         if(decompress_writefitsimage(imgfile, images, 0)) {
           h0log("Error on output of %s\n", imgfile);
         }
+        else {
+          sprintf(bcmd, "/usr/local/bin/bin256 %s %s/%s_%09u.%d.fits", imgfile, IMAGEDIRSMALL, prependfits, fsn, imagedircnt);
+          system(bcmd);
+        }
+        imagedircnt++;
         /* only keep the last n images */
         if(imagedircnt >= IMAGEDIRCNT) {
           sprintf(cmd, "/bin/rm -f %s/%s_*.%d.fits",
