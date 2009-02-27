@@ -176,7 +176,8 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                 const double *tgttimes, 
                                 int nitems, 
                                 const char *optfilter,
-                                LinkedList_t **info);
+                                int flush,
+                                IORBIT_Info_t **info);
 void iorbit_cleanup();
 
 

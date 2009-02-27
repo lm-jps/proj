@@ -46,7 +46,7 @@ typedef enum sdoorb_stat_enum sdoorb_stat_t;
 int DoIt(void)
 {
    sdoorb_stat_t status = kSDOORB_success;
-   LinkedList_t *info = NULL;
+   IORBIT_Info_t *info = NULL;
    IORBIT_Alg_t interpalg;
    char *orbseries = NULL;
    char *alg = NULL;
@@ -193,6 +193,7 @@ int DoIt(void)
                             tgttimes, 
                             ntimes, 
                             gridtimes,
+                            0,
                             &info) != kLIBASTRO_Success)
          {
             status = kSDOORB_failure;
@@ -203,17 +204,16 @@ int DoIt(void)
             ListNode_t *node = NULL;
             IORBIT_Info_t *infoitem = NULL;
             char timestr[128];
+            int iinfo;
 
             fprintf(stdout, "%-32s%-20s%-20s%-20s%-20s\n", 
                     "obstime", "dsun_obs", "obs_vr", "obs_vw", "obs_vn");
 
-            list_llreset(info);
-            while ((node = list_llnext(info)) != NULL)
+            for (iinfo = 0; iinfo < ntimes; iinfo++)
             {
-               infoitem = (IORBIT_Info_t *)(node->data);
+               infoitem = &(info[iinfo]);
                sprint_time(timestr, infoitem->obstime, "UTC", 0);
 
-              
                fprintf(stdout, "%-32s%-20.8f%-20.8f%-20.8f%-20.8f\n", 
                        timestr, infoitem->dsun_obs, infoitem->obs_vr, infoitem->obs_vw, infoitem->obs_vn);
             }
@@ -238,11 +238,10 @@ int DoIt(void)
                        "hciVZ-interp", "hciVZ-actual");
             }
 
-            list_llreset(info);
-            while ((node = list_llnext(info)) != NULL)
+            for (iinfo = 0; iinfo < ntimes; iinfo++)
             {
                /* interpolated values */
-               infoitem = (IORBIT_Info_t *)(node->data);
+               infoitem = &(info[iinfo]);
                sprint_time(timestr, infoitem->obstime, "UTC", 0);
 
                if (!testinterp)
@@ -302,11 +301,6 @@ int DoIt(void)
 
          iorbit_cleanup();
       }
-   }
-
-   if (info)
-   {
-      list_llfree(&info);
    }
 
    return status;

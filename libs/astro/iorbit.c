@@ -62,8 +62,6 @@ typedef struct IORBIT_Vector_struct IORBIT_Vector_t;
 
 static IORBIT_Vector_t *gGridCache = NULL;
 static DRMS_RecordSet_t *gCacheRS = NULL;
-static long long gFirstslot;
-static long long gLastslot;
 static int gGridNItems = 0;
 static int gGridCurrPos = -1;
 
@@ -81,6 +79,7 @@ static void get_earth_ephem(double jd, double pos[6])
    for (i=3;i<6;i++) pos[i]=pos[i]*au/86400;
 }
 
+/* function to compare times - used by SortTimes() */
 static int CmpTimes(const void *a, const void *b)
 {
    double *aa = (double *)a;
@@ -150,6 +149,7 @@ static int SortTimes(const double *unsorted, int nitems, double **sorted)
    return nret;
 }
 
+/* return the relationship of slottime to tgttime */
 static IORBIT_Slotpos_t GetSlotPos(double slottime, double tgttime)
 { 
    IORBIT_Slotpos_t slotpos;
@@ -327,7 +327,16 @@ static void FlushCache()
    CreateCache();
 }
 
-/* returns 1 if successfully caches NEW items */
+/*
+ * srcseries - datseries containing orbit-data information (like sdo.fds_orbit_vectors)
+ * optfilter - a record-set query that causes a subset of all orbit data to be used; if NULL
+ *    all orbit data used.
+ * nkeep - if the cache doesn't contain a suitable grid vector, the cache must be
+ *   rehydrated. nkeep is the number of existing cache items to retain when rehydrating.
+ *   So the old cache isn't completed blown away. This is done so that FetchNext()
+ *   and FetchPrevious() can find the next and previous items without causing a cache miss. 
+ *
+ * returns 1 if successfully caches NEW items */
 static int RehydrateCache(DRMS_Env_t *env,
                           const char *srcseries, 
                           const char *optfilter,
@@ -425,8 +434,6 @@ static int RehydrateCache(DRMS_Env_t *env,
 
       if (nitems > 0)
       {
-         gFirstslot = gGridCache[0].slot;
-         gLastslot = gGridCache[nitems - 1].slot;
          gGridNItems = nitems;
       }
    }
@@ -434,34 +441,18 @@ static int RehydrateCache(DRMS_Env_t *env,
    return nitems - nkeep;
 }
 
-/* Determining the slot without having to go to psql, fetch records, and get it from a record 
- * involves calling the DRMS function that knows how to calculate slot numbers.  There is
- * some complexity involved when calculating the slot, so use drms_keyword_slotval2indexval().
- */
-static long long GetSlot(DRMS_Keyword_t *slotkey, double tgttime)
-{
-#if 0
-   /* This worked previously - keep until sure about drms_keyword_slotval2indexval*/
-   long long slot1 = floor((tgttime - epoch + (step / 2.0)) / step);
-#endif
-
-   DRMS_Value_t valin;
-   DRMS_Value_t valout;
-
-   valin.type = DRMS_TYPE_TIME;
-   valin.value.time_val = tgttime;
-
-   if (drms_keyword_slotval2indexval(slotkey, &valin, &valout, NULL) != DRMS_SUCCESS)
-   {
-      fprintf(stderr, "Problem calculating the slot number from time '%f'.\n", tgttime);
-      valout.value.longlong_val = DRMS_MISSING_TIME;
-   }
-
-   return valout.value.longlong_val;
-}
-
-/* offset - specifies a number of vec-grid SLOTs below tgtime. The first vec-grid slot
- *          to be fetched is this slot.
+/*
+ * srcseries - datseries containing orbit-data information (like sdo.fds_orbit_vectors)
+ * optfilter - a record-set query that causes a subset of all orbit data to be used; if NULL
+ *    all orbit data used.
+ * tgttime - the interpolated time for which we'd like find a nearby grid vector
+ * nkeep - if the cache doesn't contain a suitable grid vector, the cache must be
+ *   rehydrated. nkeep is the number of existing cache items to retain when rehydrating.
+ *   So the old cache isn't completed blown away. This is done so that FetchNext()
+ *   and FetchPrevious() can find the next and previous items without causing a cache miss. 
+ * pos - this parameter indicates the relationship between the tgttime and the grid vector
+ *   obstime. If pos == kLT, then the Fetch() requiest looks for a grid vector with an
+ *   obstime that is LT the tgttime.
  *
  * Fetch() assumes that there will be a vec-grid very close to tgttime, which should be
  * true, unless a user is requesting a tgttime that lies outside the existing
@@ -477,10 +468,16 @@ static IORBIT_Vector_t *Fetch(DRMS_Env_t *env,
    IORBIT_Vector_t *vec = NULL;
    int again;
 
-   /* THIS IS TRICKY! It is possible to find a vector that is kLTE that tgttime, but
-    * it is not the immediately kLTE one. LookupInCache() could have selected the vector
+   /* THIS IS TRICKY! It is possible to find a vector that is kLTE than tgttime, but
+    * is not the immediately-kLTE one. LookupInCache() could have selected the vector
     * that had the largest obstime in the CACHED vectors, but in fact other recordset
-    * chunks had larger obstimes that were smaller than tgttime. */
+    * chunks had larger obstimes that were smaller than tgttime. 
+    * 
+    * The situation is asymmetrical.  If pos == kGT, we won't have vectors in the cache
+    * that are GT the tgttime while there exist recordset chunks that have vectors
+    * whose obstimes are less than the ones in the cache, but greater than the tgttime.
+    * This won't be the case because we make Fetch() calls in increases tgttime order.
+    */
    again = 1;
 
    while (again)
@@ -489,9 +486,15 @@ static IORBIT_Vector_t *Fetch(DRMS_Env_t *env,
 
       if (vec)
       {
-         /* Last item was LT tgttime */
          if (!(gGridCurrPos == gGridNItems - 1 && (pos == kLT || pos == kLTE)))
          {
+            /* We have a grid vector, from the cache, that is LT the target time.
+             * And grid vector does not have the largest obstime in the cache.
+             * If the latter were not true, and vec had the largest obstime of
+             * any vector in the cache, then this leaves open the possibility
+             * that there are recordset chunks that contain grid vectors whose
+             * obstimes are larger than vec's, but still LT the target time.
+             */
             again = 0;
          }
       }
@@ -503,10 +506,11 @@ static IORBIT_Vector_t *Fetch(DRMS_Env_t *env,
       if (again)
       {
          /* nkeep should be sufficiently large to accommodate the code calling 
-          * Fetch() - it may want to call FetchPrevious(). */
+          * Fetch(), which may call FetchNext() or  FetchPrevious(). */
          if (RehydrateCache(env, srcseries, optfilter, nkeep) == 0)
          {
-            /* No more data - either didn't find desired tgttime, or it was
+            /* No more data - either didn't find a grid vector with an obstime
+             * suitable for pos and tgttime, or it was
              * the very last item in the entire series. If the latter is true
              * then vec will now contain that last item, which is the correct
              * result. */
@@ -551,12 +555,15 @@ static IORBIT_Vector_t *FetchNext(DRMS_Env_t *env,
    return vec;
 }
 
-/* Returns the grid vectors needed in order to interpolate values for tgttimes.
+/* 
  * indices - For each tgttime, returns the index into gvectors of vector whose 
- * grid point is the largest point that is less than or equal to the tgttime.
+ * obstime is the largest time that is less than or equal to the tgttime.
  * 
+ * returns the grid vectors needed in order to interpolate values for tgttimes.
+ * posbelow indicates how many grid vectors below each tgttime are needed
+ * in order to interpolate to the tgttime. posabove indicates how many grid vectors
+ * above each tgttime are needed for the interpolation.
  */
-
 static int GetGridVectors(DRMS_Env_t *env,
                           const char *srcseries,
                           double *tgttimes,
@@ -575,21 +582,28 @@ static int GetGridVectors(DRMS_Env_t *env,
    int totpoints = 0;
    IORBIT_Vector_t *vec = NULL;
    IORBIT_Slotpos_t slotpos;
-   IORBIT_Vector_t *vecsbelow = NULL;
+
+   /* For each tgttime's interpolation, vecsbelow holds the grid vectors with obstimes
+    * LT the tgttime and vecsabove holds the grid vectors with obstimes GT the tgttime
+    *  necessary to do the interpolation*/
+   IORBIT_Vector_t *vecsbelow = NULL; 
    IORBIT_Vector_t *vecsabove = NULL;
    int itgt;
    int ibelow;
    int iabove;
    char lhashkey[128];
    char dhashkey[128];
+
+   /* key is the grid vector slot (one grid vector per series slot)
+    * and value is the index into gvectors. */
    HContainer_t *slottovecindex = NULL;
 
    if (gvectors)
    {
       /* The grid of FDS orbit vectors is NOT regular (because of leap seconds). Usually, 
        * the times are 60 seconds apart, but sometimes they are 61 seconds apart. So, you can't 
-       * assume that observation time of the data in a slotted key's slot is the time at the beginning
-       * of that slot.
+       * assume that observation time of the data in a slotted key's slot is the time 
+       * at the beginning of that slot.
        *
        * So, make the grid-time vector cache keyed by slot number. Then 
        * map the tgttime to a slot, and check the cache for that slot. If it exists, then 
@@ -599,7 +613,6 @@ static int GetGridVectors(DRMS_Env_t *env,
        * tgttime, then you have the closest value above the tgttime. In this manner, 
        * you can get as many grid values as needed above and below the tgttime.
        */
- 
       *gvectors = list_llcreate(sizeof(IORBIT_Vector_t));
       vecsbelow = (IORBIT_Vector_t *)malloc(sizeof(IORBIT_Vector_t) * nbelow);
       vecsabove = (IORBIT_Vector_t *)malloc(sizeof(IORBIT_Vector_t) * nabove);
@@ -612,8 +625,9 @@ static int GetGridVectors(DRMS_Env_t *env,
 
       for (itgt = 0; itgt < ntgts; itgt++)
       {
-         /* Cache. If the cache is already full, and tgttimes[itgt] is a miss, then 
-          * keep the last (nbelow + 4) cached vectors currently in the cache. Blow away
+         /* Cache. If the cache is already full, and tgttimes[itgt] is a miss
+          * (there is no grid vector in the cache whose obs time is less than tgttimes[itgt])
+          * then  keep the last (nbelow + 4) cached vectors currently in the cache. Blow away
           * the rest of the cache, and rehydrate with the next chunk of vectors.
           * Keep these old vectors because the next while loop is going to walk backward in
           * the cache trying to find nbelow vectors that are LTE the tgttimes[itgt] time.
@@ -638,8 +652,7 @@ static int GetGridVectors(DRMS_Env_t *env,
          {
             /* By definition, Fetch() returns the grid vector with an obstime that returns
              * true for IsPos(slotpos, posbelow).  It returns the vector with the largest
-             * obstime that satisfies this.
-             */
+             * obstime that satisfies this. */
             slotpos = GetSlotPos(vec->obstime, tgttimes[itgt]);
 
             if (IsPos(slotpos, posbelow))
@@ -674,7 +687,7 @@ static int GetGridVectors(DRMS_Env_t *env,
 
          /* vec now points to the vector that is nbelow points below the tgttime. Insert
           * that vector into list of vectors to be returned if it is not already there.
-          * Use the fact that the list of vectors must be monotonically increasing by
+          * Use the fact that the list of vectors must be monotonically according to
           * obstime.
           */
 
@@ -693,7 +706,8 @@ static int GetGridVectors(DRMS_Env_t *env,
             totpoints++;
          }
 
-         /* vecsbelow[nbelow - 1], the last vector in this array, is the vector that is immediately 
+         /* vecsbelow[nbelow - 1], the last vector in this array, is the vector that is 
+          * immediately 
           * smaller than tgttimes[itgt].  So, hcon_lookup(indices, tgttimes[itgt]) --> 
           * index into gvectors of vector that is immediately smaller than tgttimes[itgt]
           */ 
@@ -989,8 +1003,17 @@ int CalcSolarVelocities(IORBIT_Vector_t *vec, int nvecs, double **hr, double **h
 }
 
 /*
+ * srcseries - Datseries containing orbit-data information (like sdo.fds_orbit_vectors)
+ * alg - interpolation algorithm
  * tgttimes - array of times (doubles) for which information is desired.
  * nitems - number of times in tgttimes.
+ * optfilter - a record-set query that causes a subset of all orbit data to be used; if NULL
+ *    all orbit data used.
+ * flush - force a flush of the grid vector cache (XXX - if the caller wants a grid vector
+ *    whose obstime is smaller than any item's in the cache, then the cache needs to be
+ *    flushed)
+ * info - the resulting list of IORBIT_Info_t structs (each contains position and velocity data
+ *    for a given observation time.
  * 
  */
 LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env, 
@@ -999,7 +1022,8 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                 const double *tgttimes, 
                                 int nitems, 
                                 const char *optfilter,
-                                LinkedList_t **info)
+                                int flush, 
+                                IORBIT_Info_t **info)
 {
    LIBASTRO_Error_t err = kLIBASTRO_Success;
    int drmsstat = DRMS_SUCCESS;
@@ -1025,7 +1049,12 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       double *hvw = NULL;
       double *hvn = NULL;
 
-      IORBIT_Info_t retvec;
+      IORBIT_Info_t *retvec = NULL;
+
+      if (flush)
+      {
+         FlushCache();
+      }
 
       /* Ensure tgttimes are sorted in increasing value - missing values are removed */
       ntimes = SortTimes(tgttimes, nitems, &tgtsorted);
@@ -1045,7 +1074,7 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
 
       if (slotkw)
       {
-         *info = list_llcreate(sizeof(IORBIT_Info_t));
+         *info = calloc(nitems, sizeof(IORBIT_Info_t));
 
          /* Use array of time strings to check for presence of gci/hci data in 
           * grid cache - make some assumptions here 
@@ -1055,22 +1084,20 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
           *
           * Given these assumptions, the best way to refresh the cache is to 
           * go in chronological order, using cached values until a miss happens.
-          * Then at that point, the cache is no longer useful - so wipe it out, get all
-          * subsequent values from DRMS, and use those values to populate the cache.
+          * Then at that point, the cache is no longer useful - so wipe it out, get 
+          * another chunk of records from DRMS, and use those values to populate the cache.
           */
 
-
-         /* Get all grid vectors, in ascending order, such that the first grid vector's abscissa
-          * is the largest abscissa smaller than than the smallest result abscissa, 
-          * and the last grid vector's abscissa is the smallest abscisaa greater than 
-          * the largest result abscissa. 
-          *
-          *
+         /* Get all grid vectors (data from the source series - each vector of information
+          * is associated with an actual observation time.  The information is not
+          * interpolated), in ascending order, such that the first grid vector's abscissa
+          * (observation time) is the largest abscissa smaller than than the 
+          * smallest result abscissa (interpolated time), and the last grid vector's abscissa is 
+          * the smallest abscissa greater than the largest result abscissa. 
           */
-
          if (GetGridVectors(env, 
-                            srcseries, 
-                            tgtsorted,
+                            srcseries, /* series containing observed data */
+                            tgtsorted, /* times we want to interpolate to */
                             ntimes,
                             2, /* number of grid abscissae below first result abscissa */
                             kLTE,
@@ -1128,19 +1155,19 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                   /* loop through resulting vectors to create output */
                   for (ivec = 0; ivec < ntimes; ivec++)
                   {
-                     retvec.obstime = interp[ivec].obstime;
-                     retvec.hciX = interp[ivec].hciX;
-                     retvec.hciY = interp[ivec].hciY;
-                     retvec.hciZ = interp[ivec].hciZ;
-                     retvec.hciVX = interp[ivec].hciVX;
-                     retvec.hciVY = interp[ivec].hciVY;
-                     retvec.hciVZ = interp[ivec].hciVZ;
-                     retvec.dsun_obs = dsun_obs[ivec];
-                     retvec.obs_vr = hvr[ivec];
-                     retvec.obs_vw = hvw[ivec];
-                     retvec.obs_vn = hvn[ivec];
+                     retvec = &((*info)[ivec]);
 
-                     list_llinserttail(*info, &retvec);
+                     retvec->obstime = interp[ivec].obstime;
+                     retvec->hciX = interp[ivec].hciX;
+                     retvec->hciY = interp[ivec].hciY;
+                     retvec->hciZ = interp[ivec].hciZ;
+                     retvec->hciVX = interp[ivec].hciVX;
+                     retvec->hciVY = interp[ivec].hciVY;
+                     retvec->hciVZ = interp[ivec].hciVZ;
+                     retvec->dsun_obs = dsun_obs[ivec];
+                     retvec->obs_vr = hvr[ivec];
+                     retvec->obs_vw = hvw[ivec];
+                     retvec->obs_vn = hvn[ivec];
                   }
                }
             }
