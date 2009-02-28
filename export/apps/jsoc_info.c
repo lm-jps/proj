@@ -205,6 +205,34 @@ SUM_info_t *drms_get_suinfo(long long sunum)
   return(my_sum->sinfo);
   }
 
+int drms_ismissing_keyval(DRMS_Keyword_t *key)
+  {
+  XASSERT(key);
+  switch(key->info->type)
+    {
+    case DRMS_TYPE_CHAR:
+      return(drms_ismissing_char(key->value.char_val));
+    case DRMS_TYPE_SHORT:
+      return(drms_ismissing_short(key->value.short_val));
+    case DRMS_TYPE_INT:
+      return(drms_ismissing_int(key->value.int_val));
+    case DRMS_TYPE_LONGLONG:
+      return(drms_ismissing_longlong(key->value.longlong_val));
+    case DRMS_TYPE_FLOAT:
+      return(drms_ismissing_float(key->value.float_val));
+    case DRMS_TYPE_DOUBLE:
+      return(drms_ismissing_double(key->value.double_val));
+    case DRMS_TYPE_TIME:
+      return(drms_ismissing_time(key->value.time_val));
+    case DRMS_TYPE_STRING:
+      return(drms_ismissing_string(key->value.string_val));
+    default:
+      fprintf(stderr, "ERROR: Unhandled DRMS type %d\n",(int)key->info->type);
+      XASSERT(0);
+    }
+  return 0;
+  }
+
 
 ModuleArgs_t module_args[] =
 { 
@@ -515,7 +543,7 @@ void get_series_stats(DRMS_Record_t *rec, json_t *jroot)
     status = json_insert_pair_into_object(interval, "FirstRecord", json_new_string(jsonquery));
 if (status != JSON_OK) fprintf(stderr, "json_insert_pair_into_object, status=%d, text=%s\n",status,jsonquery);
     free(jsonquery);
-    sprintf(val,"%ld", rs->records[0]->recnum);
+    sprintf(val,"%lld", rs->records[0]->recnum);
     json_insert_pair_into_object(interval, "FirstRecnum", json_new_number(val));
     drms_free_records(rs);
   
@@ -528,13 +556,13 @@ if (status != JSON_OK) fprintf(stderr, "json_insert_pair_into_object, status=%d,
     jsonquery = string_to_json(recquery);
     json_insert_pair_into_object(interval, "LastRecord", json_new_string(jsonquery));
     free(jsonquery);
-    sprintf(val,"%ld", rs->records[0]->recnum);
+    sprintf(val,"%lld", rs->records[0]->recnum);
     json_insert_pair_into_object(interval, "LastRecnum", json_new_number(val));
     drms_free_records(rs);
  
     sprintf(query,"%s[:#$]", rec->seriesinfo->seriesname);
     rs = drms_open_records(rec->env, query, &status);
-    sprintf(val,"%d", rs->records[0]->recnum);
+    sprintf(val,"%lld", rs->records[0]->recnum);
     json_insert_pair_into_object(interval, "MaxRecnum", json_new_number(val));
     drms_free_records(rs);
     }
@@ -839,12 +867,12 @@ int DoIt(void)
 
         if (strcmp(keys[ikey],"*recnum*") == 0)
 	  {
-	  sprintf(rawval,"%ld",rec->recnum);
+	  sprintf(rawval,"%lld",rec->recnum);
 	  val = json_new_number(rawval);
 	  }
         else if (strcmp(keys[ikey],"*sunum*") == 0)
 	  {
-	  sprintf(rawval,"%ld",rec->sunum);
+	  sprintf(rawval,"%lld",rec->sunum);
 	  val = json_new_number(rawval);
 	  }
         else if (strcmp(keys[ikey],"*size*") == 0)
@@ -931,9 +959,14 @@ int DoIt(void)
             {
 	    JSONDIE("Keyword not in series");
             }
-	  drms_keyword_snprintfval(rec_key_ikey, rawval, sizeof(rawval));
-	  /* always report keyword values as strings */
-	  jsonval = string_to_json(rawval);
+          if (drms_ismissing_keyval(rec_key_ikey))
+            jsonval = string_to_json("MISSING");
+          else
+            {
+	    drms_keyword_snprintfval(rec_key_ikey, rawval, sizeof(rawval));
+	    /* always report keyword values as strings */
+	    jsonval = string_to_json(rawval);
+            }
 	  val = json_new_string(jsonval);
 	  free(jsonval);
 	  }
