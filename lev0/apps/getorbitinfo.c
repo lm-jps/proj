@@ -297,6 +297,12 @@ int DoIt(void)
                           infoitem->hciVZ, actual_hciVZ);
                }
             }
+
+            /* clean up info */
+            if (info)
+            {
+               free(info);
+            }
          }
 
          iorbit_cleanup();
