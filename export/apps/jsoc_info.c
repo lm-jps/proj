@@ -920,7 +920,12 @@ int DoIt(void)
           if (!sinfo)
 	    val = json_new_string("NA");
 	  else
-	    val = json_new_string(sinfo->archive_status);
+            {
+	    if(sinfo->pa_status == DAAP && sinfo->pa_substatus == DAADP)
+              val = json_new_string("Pending");
+            else
+	      val = json_new_string(sinfo->archive_status);
+            }
 	  }
         else if (strcmp(keys[ikey], "*dir_mtime*") == 0)
           { // get record dir last change date
