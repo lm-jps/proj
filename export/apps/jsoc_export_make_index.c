@@ -1,4 +1,4 @@
-#define DEBUG 1
+// #define DEBUG 1
 #define DEBUG 0
 
 /*
@@ -14,6 +14,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <strings.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
 
 // #include "json.h"
 

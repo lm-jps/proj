@@ -93,7 +93,7 @@ int nice_intro ()
   }
 
 // generate qsub script
-make_qsub_call(char *requestid, char *reqdir, int requestorid, const char *dbname, 
+void make_qsub_call(char *requestid, char *reqdir, int requestorid, const char *dbname, 
                const char *dbuser, const char *dbids)
   {
   FILE *fp;
@@ -367,9 +367,9 @@ int DoIt(void)
         // Force staging and get paths to export files with list in index.txt
         // Use special program for Storage Unit exports vs record sets.
         if (strcmp(process, "su_export")==0)
-          fprintf(fp, "jsoc_export_SU_as_is ds='%s' requestid=%s\n", dataset, requestid); 
+          fprintf(fp, "jsoc_export_SU_as_is_sock ds='%s' requestid=%s\n", dataset, requestid); 
         else
-          fprintf(fp, "jsoc_export_as_is ds='%s' requestid=%s filenamfmt=%s\n", dataset, requestid, filenamefmt); 
+          fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid=%s filenamfmt=%s\n", dataset, requestid, filenamefmt); 
         // convert index.txt list into index.json and index.html packing list files. 
         fprintf(fp, "jsoc_export_make_index\n");
         // set status=done and mark this version of the export record permanent
@@ -402,7 +402,7 @@ int DoIt(void)
         fprintf(fp, "echo $HOSTNAME\n");
 
         // Force staging and get paths to export files with list in index.txt
-        fprintf(fp, "jsoc_export_as_fits reqid=%s expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol=%s %s\n",
+        fprintf(fp, "jsoc_export_as_fits_sock reqid=%s expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol=%s %s\n",
           requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, dbids);
 
         // convert index.txt list into index.json and index.html packing list files. 
