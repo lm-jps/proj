@@ -44,6 +44,7 @@
 /*********NOTE: WTD: WRITE TO DRMS***********/ 
 #define SUCCESS_HK_NEED_TO_CTD            (0)
 #define SUCCESS_HK_NEED_TO_WTD_CTD        (1)
+#define SUCCESS_HK_SKIP_WTD_REC_EXISTS    (2)
 #define SUCCESS_SKIP_IMAGE                (4)
 #define SUCCESS_SKIP_PROCESSING_APID      (5)
 #define ERROR_NODATA                      (-13)
