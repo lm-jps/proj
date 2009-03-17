@@ -39,6 +39,26 @@
 #define OTHER_ID_TYPE           "SSIM"
 #define MAX_PACKET_ID_TYPE      100
 #define HK_MAX_TLM_NAME         200
+#define HK_LR_HMI_ISP           29
+#define HK_LR_HMI_SEQ           21
+#define HK_LR_HMI_OBT           18
+#define HK_LR_AIA_ISP           39
+#define HK_LR_AIA_SEQ           46
+#define HK_LR_AIA_OBT           50
+#define HK_LR_SDO_ASD           129
+#define HK_HSB_HMI_ISP_1        445
+#define HK_HSB_HMI_ISP_2        475
+#define HK_HSB_HMI_SEQ_1        451
+#define HK_HSB_HMI_SEQ_2        481
+#define HK_HSB_HMI_OBT_1        448
+#define HK_HSB_HMI_OBT_2        478
+#define HK_HSB_AIA_ISP_1        529
+#define HK_HSB_AIA_ISP_2        569
+#define HK_HSB_AIA_SEQ_1        536
+#define HK_HSB_AIA_SEQ_2        576
+#define HK_HSB_AIA_OBT_1        540
+#define HK_HSB_AIA_OBT_2        580
+
 
 /*************************typedef structures**********************************/
 /*****************************************************************************/
@@ -48,8 +68,8 @@
 /*****************************************************************************/
 typedef struct APID_Pointer_HK_Configs_struct    
 {
-  int apid;                              /*Make either hex or i
-					   decimal value*/
+  char apid_name[10]; /*#1:CC: added 12-15-2008*/
+  int apid;                          /*Make either hex or decimal value*/
   struct HK_Config_Files_struct *ptr_hk_configs;/*Pointer to HK 
 						  Configurations struct*/
   struct APID_Pointer_HK_Configs_struct *next;/* Link List's next node */
@@ -61,6 +81,7 @@ typedef struct APID_Pointer_HK_Configs_struct
 /*****************************************************************************/
 typedef struct HK_Config_Files_struct  
 {
+  char apid_name[10];/*#2:CC: added 12-15-2008*/ 
   int apid_number;
   char packet_id_type[MAX_PACKET_ID_TYPE];
   char file_version_number[MAX_CHAR_VERSION_NUMBER];/*Value for the apid-version<version-
@@ -122,6 +143,7 @@ typedef struct APID_HKPFD_Files_struct
 {
   char version_number[MAX_CHAR_VERSION_NUMBER];
   int apid; 
+  char apid_name[10]; 
   char directory_name[MAX_DIRECTORY_NAME];
   char filename[MAX_FILE_NAME];
   struct APID_HKPFD_Files_struct *next;
@@ -152,7 +174,7 @@ typedef  struct SHCIDS_Version_Number_struct
 }   SHCIDS_Version_Number;
 /*************************function prototypes*********************************/
 
-APID_HKPFD_Files* read_all_hk_config_files(int apid, char file_version_number[]);
+APID_HKPFD_Files* read_all_hk_config_files(int apid, char file_version_number[],char packet_version_number[]);
 
 void load_config_data( APID_HKPFD_Files* , APID_Pointer_HK_Configs* );
 int save_hdpf_new_formats(FILE* file_ptr,APID_Pointer_HK_Configs *ptr);
