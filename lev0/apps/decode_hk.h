@@ -24,6 +24,9 @@
 #define HK_DECODER_ERROR_CANNOT_LOAD_HK_VALUES     ERROR_HK_CANNOT_LOAD_HK_VALUES
 #define HK_DECODER_ERROR_CANNOT_LOAD_ENGR_VALUES   ERROR_HK_CANNOT_LOAD_ENGR_VALUES
 #define HK_DECODER_ERROR_UNKNOWN_ENV_VARIABLE      ERROR_HK_CANNOT_LOAD_ENGR_VALUES
+#define HK_LEV0_START_MERGED_PVNW     (1)
+#define HK_LEV0_START_MERGED_PVND   (194) 
+
 /***************************type definitions**********************************/
 /* Use to store a link list of pointers to the link list of HK Keywords Format*/
 typedef struct Pointers_HK_Keywords_Format_struct 
