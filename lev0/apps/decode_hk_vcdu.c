@@ -149,6 +149,12 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
     hkstart = vcdu + (w-buffer);
     w = decode_ccsds(w, &ccsds);
     
+#ifdef DEBUG_DECODE_HK_VCDU
+    printkerr("DEBUG Message at %s, line %d: Looping thru vcdu for packet."
+              "\n",__FILE__, __LINE__, ccsds.apid);
+#else
+#endif
+
     /* Branch depending on the APID. */
     switch(ccsds.apid)
     {  
@@ -194,7 +200,16 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
     case APID_HMI_IMSTAT_2:
     case APID_AIA_IMSTAT_1:
     case APID_AIA_IMSTAT_2:
+    case APID_HMI_SEQ_1:
+    case APID_HMI_SEQ_2:
+    case APID_AIA_SEQ_1:
+    case APID_AIA_SEQ_2:
 
+#ifdef DEBUG_DECODE_HK_VCDU
+    printkerr("DEBUG Message at %s, line %d: Processing hk packet for apid <%d>."
+              "\n",__FILE__, __LINE__, ccsds.apid);
+#else
+#endif
       /* This is an image status, or maybe sequencer or maybe obt packet. */
       decode_status = decode_hk_keywords(hkstart, ccsds.apid, &ccsds.keywords);
 
@@ -249,12 +264,8 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
     /*************************************/
     /*** Case of Writing Day File Only ***/
     /*************************************/
-    case APID_HMI_SEQ_1:
-    case APID_HMI_SEQ_2:
     case APID_HMI_OBT_1:
     case APID_HMI_OBT_2:
-    case APID_AIA_SEQ_1:
-    case APID_AIA_SEQ_2:
     case APID_AIA_OBT_1:
     case APID_AIA_OBT_2:
       if (hk_status == HK_SUCCESS_HKTIME   || 
@@ -348,6 +359,11 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
       {
         /* wrote successfully to drms -now free CCSDS_Packet_t nodes */
         lev0_status= SUCCESS_HK_NEED_TO_CTD; /* set to 0 */
+      }
+      else if (wd_status == SUCCESS_HK_SKIP_WTD_REC_EXISTS) 
+      {
+        /* found record in data series, so skip writing this record to drms again*/
+        lev0_status= SUCCESS_HK_SKIP_WTD_REC_EXISTS;
       }
       else if (wd_status == ERROR_HK_ENVIRONMENT_VARS_NOT_SET) 
       {
