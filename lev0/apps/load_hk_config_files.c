@@ -58,6 +58,17 @@
 #include "printk.h"
 #include "decode_hk.h"
 #include <dirent.h>
+#include "write_hk_to_drms.h"
+
+#define LOAD_HK_C
+#include "load_hk_config_files.h"
+#undef LOAD_HK_C
+
+/***************************** function prototypes ****************************/
+APID_HKPFD_Files * allocate_apid_hkpfd_files_nodes(int *ptrFirstTimeFlag);
+void load_gtcids_data( GTCIDS_Version_Number* top_ptr_gtcids_data,
+                       APID_Pointer_HK_Configs *top_apid_ptr_hk_configs);
+int check_for_sdo_apid(int apid);
 
 #define LOAD_HK_C
 #include "load_hk_config_files.h"
@@ -95,6 +106,7 @@ int load_all_apids_hk_configs(int apid, char version_number[], char pkt_date[])
   GTCIDS_Version_Number *top_ptr_gtcids_data;
   SHCIDS_Version_Number *top_ptr_shcids_data;
   int apid_array[MAX_APID_POINTERS];
+  char apidstr_array[MAX_APID_POINTERS][10];
   int number_of_apids, i;
   char file_version_number[50];
   char *ptr_fvn;
@@ -123,25 +135,36 @@ int load_all_apids_hk_configs(int apid, char version_number[], char pkt_date[])
   }
 
   /* load HK_Config_Files structures for each apid */
-  if ((top_apid_hkpfd_files = read_all_hk_config_files(apid, ptr_fvn)) == NULL)
+  if ((top_apid_hkpfd_files = read_all_hk_config_files(apid, ptr_fvn, version_number)) == NULL)
     return ERROR_HK_NOSUCHDIR;
 
   /* get list of unique apids to read and allocate space for*/
   number_of_apids = 0;
   memset(apid_array, 0, sizeof(apid_array));
+  for(i=0; i < MAX_APID_POINTERS; i++)
+  {
+    memset(apidstr_array[i],'\0', 10);
+  }
   for(hkpfd_files=top_apid_hkpfd_files; hkpfd_files; 
       hkpfd_files=hkpfd_files->next)
   {
     /* See if we already have this apid. */
     for (i=0; i<number_of_apids; i++)
     {
+
       if (apid_array[i] == hkpfd_files->apid)
+      {
+        /* apid is already there in array so skip setting */
         break;
+      }
     }
-    if (i >= number_of_apids) \
+    if (i >= number_of_apids)
     {
-      /* Nope this was a new one. Insert it in the list. */
+      /* Nope this was a new one. Insert apid number in the apid_array. */
       apid_array[i]= hkpfd_files->apid;
+
+      /* set apid string value in apidstr_array*/
+      strcpy(apidstr_array[i], hkpfd_files->apid_name);
       number_of_apids++;
     }
   }
@@ -160,24 +183,34 @@ int load_all_apids_hk_configs(int apid, char version_number[], char pkt_date[])
       apid_ptr_hk_configs->next = (APID_Pointer_HK_Configs *)malloc(sizeof(APID_Pointer_HK_Configs));
       apid_ptr_hk_configs = apid_ptr_hk_configs->next;      
     } 
+
+    /* set apid number and apid string in structure to use to lookup apids during decoding */
     apid_ptr_hk_configs->apid = apid_array[i];
+    strcpy(apid_ptr_hk_configs->apid_name, apidstr_array[i]);
+
+    /* set other values in node */
     apid_ptr_hk_configs->next= NULL;
     apid_ptr_hk_configs->ptr_hk_configs= (HK_Config_Files*)NULL;
   }             
+
   /* set moving pointer to top of list */
   apid_ptr_hk_configs = top_apid_ptr_hk_configs;
   for(i=0; i < number_of_apids; i++)  
   {
     load_config_data( top_apid_hkpfd_files, apid_ptr_hk_configs);
     apid_ptr_hk_configs = apid_ptr_hk_configs->next;
-  }  /*End for*/
+  } /*End for*/
+
   /* load file_version_number based on packet version number */
   load_gtcids_data(top_ptr_gtcids_data, top_apid_ptr_hk_configs);
+
   /* set global variable to use for decode_hk modules */
   global_apid_configs = top_apid_ptr_hk_configs;
+
   /* deallocate  top_apid_hkpfd_files link list */
   deallocate_apid_hkpfd_files_nodes(top_apid_hkpfd_files) ;
-/******PRINT RESULTS **********/
+
+/******PRINT RESULTS FOR DEBUGGING**********/
 /***
 for (apid_ptr_hk_configs=global_apid_configs; apid_ptr_hk_configs;
      apid_ptr_hk_configs=apid_ptr_hk_configs->next)
@@ -202,7 +235,9 @@ for (apid_ptr_hk_configs=global_apid_configs; apid_ptr_hk_configs;
    }
 }
 ***/
-/******END PRINT RESULTS*******/
+/******END PRINT RESULTS FOR DEBUGGING *******/
+
+  /* return status */
   return HK_SUCCESSFUL;  
 }/*End Module: load_all_apids_hk_configs */
 
@@ -214,7 +249,6 @@ for (apid_ptr_hk_configs=global_apid_configs; apid_ptr_hk_configs;
  * Description: This module uses filenames loaded in structure to open files
  *              and read data in HK_Config_Files structure. This includes 
  *              reading in apid and version # and all keyword values.
- * Status load_config_data(): Tested and Reviewed
  *****************************************************************************/
 void load_config_data(APID_HKPFD_Files *hkpfd_files,
 		      APID_Pointer_HK_Configs *hk_configs)  
@@ -248,15 +282,15 @@ void load_config_data(APID_HKPFD_Files *hkpfd_files,
  *              version<version#>.txt files and GTCIDS file. Assume all
  *              files will be in one directory called for now 
  *              .../HK-CONFIG-FILES.
- * Status load_filenames_from_directory(): Tested
  *****************************************************************************/
-APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[])
+APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[],char p_version_number[])
 {
   /*declarations */
   APID_HKPFD_Files *top, *p; 
   DIR *dir_p;
   char dirname[200];
   char *dn;
+  int curr_pvn_wn,curr_pvn_dn;
   struct dirent *dir_entry_p;
 
   /* intialize variables */
@@ -288,6 +322,7 @@ APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[])
       return NULL;
     }
   }
+
   /* Add file version number to directory path */
   strcpy( dirname, dn);
   strcat(dirname, f_version_number);
@@ -302,12 +337,16 @@ APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[])
              __FILE__,__LINE__,dirname, f_version_number);
     return NULL;
   }
-  /* read each entry until NULL.*/
+
+  /* read each hk config file entry until NULL.*/
   top = NULL;
   while( (dir_entry_p = readdir(dir_p)) != NULL ) 
   {
-    if( strncmp(dir_entry_p->d_name,"apid",4) )
+    if( !strncmp(dir_entry_p->d_name,"apid",4) || !strncmp(dir_entry_p->d_name,"HMI-",4) || !strncmp(dir_entry_p->d_name,"AIA-",4)  || !strncmp(dir_entry_p->d_name,"SDO-",4))
+      ;//this is valid file
+    else
       continue; /* not an APID config file - skip*/
+    
     if( top == NULL )   
       top = p = malloc(sizeof(APID_HKPFD_Files));
     else                
@@ -316,19 +355,109 @@ APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[])
       p = p->next;
     } 
     p->next = NULL;
+
     /* load dir and filename in structure link list */
     strcpy(p->filename, dir_entry_p->d_name);
     strcpy(p->directory_name, dirname);
-    /* parse filename to get apid and version number:changed 7-31-2008, %d to %s for p->version_number*/
-    sscanf(p->filename, "%*4s-%x-%*7s-%s",
-	   &p->apid, p->version_number); 
-    file_loaded_flag=1;
+
+  if (check_for_sdo_apid(apid))
+  {
+    /* for sdo 129 set pvn to merged case to pickup SDO-ASD-PVN-TO-JSVN file */
+    /* also to go into merged case logic below */
+    curr_pvn_wn= HK_LEV0_START_MERGED_PVNW;
+    curr_pvn_dn= HK_LEV0_START_MERGED_PVND;
   }
+  else
+  {
+    /* get number value of packet version number to check if greater or equal to merged data series threshold */
+    sscanf(p_version_number,"%3d.%3d",&curr_pvn_wn, &curr_pvn_dn);
+  }
+
+    /* check if reached packet version whole and decimal are greater or equal to merged threshold */
+    if(curr_pvn_wn  >=  HK_LEV0_START_MERGED_PVNW && curr_pvn_dn >= HK_LEV0_START_MERGED_PVND)
+    {
+      /* check if HMI-ISP HK filename or others */
+      if( !strncmp(dir_entry_p->d_name,"HMI-ISP",7) )
+      {
+        /* parse filenames like HMI-ISP-version-1.163 to set pkt-version-number an apid-name  */
+        sscanf(p->filename, "%*3s-%3s-%*7s-%s", p->apid_name, p->version_number); 
+        p->apid=445; //set to apid value used for HK configuration data from Stanford file
+      }
+      else if( !strncmp(dir_entry_p->d_name,"AIA-ISP",7) )
+      {
+        /* parse filenames like AIA-ISP-version-1.163 to set pkt-version-number an apid-name */
+        sscanf(p->filename, "%*3s-%3s-%*7s-%s", p->apid_name, p->version_number); 
+        p->apid=529; //set to apid value used for HK configuration data from Stanford file
+      }
+      else if( !strncmp(dir_entry_p->d_name,"HMI-SEQ",7) )
+      {
+        /* parse filenames like HMI-SEQ-version-1.163 to set pkt-version-number an apid-name*/
+        sscanf(p->filename, "%*3s-%3s-%*7s-%s", p->apid_name, p->version_number); 
+        p->apid=451; //set to apid value used for HK configuration data from Stanford file
+      }
+      else if( !strncmp(dir_entry_p->d_name,"AIA-SEQ",7) )
+      {
+        /* parse filenames like  AIA-SEQ-version-1.163 to set pkt-version-number an apid-name */
+        sscanf(p->filename, "%*3s-%3s-%*7s-%s", p->apid_name, p->version_number); 
+        p->apid=536; //set to apid value used for HK configuration data from Stanford file
+      }
+      else if( !strncmp(dir_entry_p->d_name,"HMI-OBT",7) )
+      {
+        /* parse filenames like HMI-OBT-version-1.163 to set pkt-version-number an apid-name*/
+        sscanf(p->filename, "%*3s-%3s-%*7s-%s", p->apid_name, p->version_number); 
+        p->apid=448; //set to apid value used for HK configuration data from Stanford file
+      }
+      else if( !strncmp(dir_entry_p->d_name,"AIA-OBT",7) )
+      {
+        /* parse filenames like  AIA-OBT-version-1.163 to set pkt-version-number an apid-name */
+        sscanf(p->filename, "%*3s-%3s-%*7s-%s", p->apid_name, p->version_number); 
+        p->apid=540; //set to apid value used for HK configuration data from Stanford file
+      }
+      else if( !strncmp(dir_entry_p->d_name,"SDO-ASD",7) )
+      {
+        /* parse filenames like  SDO-ASD-version-1.1 to set pkt-version-number an apid-name */
+        sscanf(p->filename, "%*3s-%3s-%*7s-%s", p->apid_name, p->version_number); 
+        p->apid=129; //set to apid value used for HK configuration data from Stanford file
+      }
+      else if( !strncmp(dir_entry_p->d_name,"AIA-",4) )
+      {
+        /* parse filenames like  AIA-244-version-1.163 to set pkt-version-number an apid-name */
+        sscanf(p->filename, "%*3s-%x-%*7s-%s", &p->apid, p->version_number);
+        sprintf(p->apid_name,"0x%03x", p->apid);
+      }
+      else if( !strncmp(dir_entry_p->d_name,"HMI-",4) )
+      {
+        /* parse filenames like  HMI-001-version-1.163 to set pkt-version-number an apid-name */
+        sscanf(p->filename, "%*3s-%x-%*7s-%s", &p->apid, p->version_number);
+        sprintf(p->apid_name,"0x%03x", p->apid);
+      }
+      else
+      {
+        /* parse older version filenames like apid-1BD-version-1.163 */
+        sscanf(p->filename, "%*4s-%x-%*7s-%s", &p->apid, p->version_number);
+        sprintf(p->apid_name,"0x%03x", p->apid);
+        printkerr("WARNING at %s, line %d: This is not a valid config file "
+	          "name < %s > for merged apid case. Updates HKPDF files with correct "
+                  "format of files(<HMI|AIA|SDO>-<APID-NAME>-version-<file version number>. "
+                  "This occurred for apid < %d >.\n",
+                  __FILE__,__LINE__, dir_entry_p->d_name, p->apid );
+      }
+    }
+    else
+    {
+      /* non-merged data series case- parse older version filenames like apid-1BD-version-1.163 */
+      sscanf(p->filename, "%*4s-%x-%*7s-%s", &p->apid, p->version_number);
+      sprintf(p->apid_name,"0x%03x", p->apid);
+    }
+    file_loaded_flag=1; /*set flag if found a file and loaded it in struct */
+  }/*end while */
+
   closedir(dir_p);
+
   /* check if at least one file loaded and exists in directory*/
   if ( !file_loaded_flag) 
   {
-    /*Carl-10-12-2007:Took out too many messages in log
+    /*Took out too many messages in log
     printkerr("Error at %s, line %d: Could not find config file(s) "
 	      "in directory < %s >. Check if file(s) exists for "
               "file version number <%s>, if don't exist, then "
@@ -438,50 +567,61 @@ int save_hdpf_new_formats(FILE* file_ptr,APID_Pointer_HK_Configs *p_apid_ptr_hk_
     }
     else if (!strncmp(line, "APID", 4))
     {
+      /* parse APID line in HK Config file */
       if( strstr(line, "HMI")  )
       {
-        sscanf( line,"%*s %x %d %s %s", 
-                &(ptr_config_node->apid_number), 
+        /* new-load apid_name in struct for pkt string name*/ 
+        sscanf( line,"%*s %s %d %s %s", 
+                ptr_config_node->apid_name, 
                 &(ptr_config_node->number_bytes_used), 
                 ptr_config_node->packet_id_type, 
                 ptr_config_node->date);
+
       }
       else if( strstr(line, "AIA") )
       {
-        sscanf( line,"%*s %x %d %s %s", 
-                &(ptr_config_node->apid_number), 
+        /* new-load apid_name in struct for pkt string name */ 
+        sscanf( line,"%*s %s %d %s %s", 
+                ptr_config_node->apid_name, 
                 &(ptr_config_node->number_bytes_used), 
                 ptr_config_node->packet_id_type, 
                 ptr_config_node->date);
       }
       else if( strstr(line, "SDO") )
       {
-        sscanf( line,"%*s %x %d %*s %s", 
-                &(ptr_config_node->apid_number), 
+        /* new-load apid_name in struct for pkt string name */ 
+        sscanf( line,"%*s %s %d %*s %s", 
+                ptr_config_node->apid_name, 
                 &(ptr_config_node->number_bytes_used), 
                 ptr_config_node->date);
-        /* set to default HMI */
+        /* set to SDO */
         strcpy(ptr_config_node->packet_id_type,"SDO");
+        sscanf( line,"%*s %x", &(ptr_config_node->apid_number)); 
       }
       else if( strstr(line, "SSIM") )
       {
-        sscanf( line,"%*s %x %d %*s %s", 
-                &(ptr_config_node->apid_number), 
+        /* new-load apid_name in struct for pkt string name */ 
+        sscanf( line,"%*s %5s %d %*s %s", 
+                ptr_config_node->apid_name, 
                 &(ptr_config_node->number_bytes_used), 
                 ptr_config_node->date);
         /* set to default HMI */
         strcpy(ptr_config_node->packet_id_type,"HMI");
       }
       else
-      {
+      { 
         /* Backward compatible case for apid-#-version-# created*
          * using older(before 6-30-2006) make_hpf.pl script     */ 
         sscanf( line,"%*s %x %d %s", 
                 &(ptr_config_node->apid_number), 
                 &(ptr_config_node->number_bytes_used), 
                 ptr_config_node->date);
+
         /* set to default HMI */
         strcpy(ptr_config_node->packet_id_type,"HMI");
+        printkerr("WARNING: Could not find line valid value in APID line in apid-#-version-# file. "
+                  "Got line:<%s> so default setting to instrument flag to HMI. Probably need to  "
+                  "update make_hkpdf.pl script or rerun to fix older HK files.\n", line);
       }
     }
     else
@@ -741,6 +881,10 @@ HK_Config_Files* check_packet_version_number( HK_Config_Files *ptr_to_configs,
 {
   while(ptr_to_configs != NULL )  
   {
+#ifdef DEBUG_LOAD_HK_CONFIG_FILE
+    printkerr("DEBUG:Message at %s, line %d: Packet Version Number looking for:<%s>\n", __FILE__, __LINE__,version_number);
+    printkerr("DEBUG:Message at %s, line %d: Packet Version Number found in config structure:<%s>\n", __FILE__, __LINE__,ptr_to_configs->parameter_version_number);
+#endif
     if(!strcmp(ptr_to_configs->parameter_version_number, version_number))
     {
       break; 
@@ -1129,8 +1273,7 @@ HK_Config_Files*  reread_all_files(APID_Pointer_HK_Configs *apid_ptr_configs,
   {
     ptr_fvn=find_fvn_from_shcids(ptr_shcids_data, pkt_date, apid);
 #ifdef DEBUG_LOAD_HK_CONFIG_FILE
-printkerr("DEBUG:Message at %s, line %d: Rereading config files and shcids file to find file version:<%s> apid:<%d>\n", __FILE__, __LINE__, ptr_fvn, apid);
-#else
+    printkerr("DEBUG:Message at %s, line %d: Rereading config files and shcids file to find file version:<%s> apid:<%d>\n", __FILE__, __LINE__, ptr_fvn, apid);
 #endif
   }
   else
@@ -1138,13 +1281,12 @@ printkerr("DEBUG:Message at %s, line %d: Rereading config files and shcids file 
     /* find file version number directory to read in files */
     ptr_fvn=find_file_version_number(ptr_gtcids_data, version_number);
 #ifdef DEBUG_LOAD_HK_CONFIG_FILE
-printkerr("DEBUG:Message at %s, line %d: Rereading config files and gtcids file to find file version:<%s> apid:<%d>\n", __FILE__, __LINE__,ptr_fvn, apid);
-#else
+    printkerr("DEBUG:Message at %s, line %d: Rereading config files and gtcids file to find file version:<%s> apid:<%d>\n", __FILE__, __LINE__,ptr_fvn, apid);
 #endif
   }
 
   /* load HK_Config_Files structures for each apid */
-  if ((top_hkpfd_files = read_all_hk_config_files(apid,ptr_fvn)) == NULL)
+  if ((top_hkpfd_files = read_all_hk_config_files(apid,ptr_fvn,version_number)) == NULL)
     return (HK_Config_Files*)NULL;
   /* check which apid node to add */
   for(hkpfd_files=top_hkpfd_files; hkpfd_files;
@@ -1153,7 +1295,8 @@ printkerr("DEBUG:Message at %s, line %d: Rereading config files and gtcids file 
     found_flag=0;
     for(p=global_apid_configs; p ; p=p->next)
     {
-      if ( p->apid == hkpfd_files->apid)
+      /* compare packet names- note:change from if ( p->apid == hkpfd_files->apid) to below*/
+      if (!strcmp(p->apid_name, hkpfd_files->apid_name))
       {
         found_flag=1;
         break;
@@ -1166,7 +1309,8 @@ printkerr("DEBUG:Message at %s, line %d: Rereading config files and gtcids file 
       prev_p->next = (APID_Pointer_HK_Configs *) malloc (sizeof (APID_Pointer_HK_Configs));
       prev_p->next->next= NULL;
       prev_p->next->ptr_hk_configs= (HK_Config_Files*) NULL;
-      prev_p->next->apid=hkpfd_files->apid;
+      /* copy in packet name. note:changed from this prev_p->next->apid=hkpfd_files->apid;to below*/
+      strcpy(prev_p->next->apid_name, hkpfd_files->apid_name);
     }
   }
   /*set moving pointer to top of list and load config data */
