@@ -5,7 +5,7 @@
  * Description: This file contains modules to decode housekeeping data.      *
  * (C) Stanford University, 2005                                             *
  *****************************************************************************/
-
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,7 +22,7 @@
 #include "hmi_compression.h"
 #include "decode_hk.h"
 #include "printk.h"
-
+#include "write_hk_to_drms.h"
 
 /***************************** extern global variables ***********************/
 extern APID_Pointer_HK_Configs *global_apid_configs;
@@ -41,6 +41,7 @@ double  get_packet_time(unsigned short *word_ptr);
 extern void sprint_time (char *at, TIME t, char *zone, int precision);
 extern int check_for_sdo_apid(int apid);
 extern char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[], int apid);
+extern char * make_strupr (char *in_string);
 
 
 /**********************housekeeping telemetry decode routines*****************/
@@ -63,6 +64,9 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
   char *ptr_fvn;
   char version_number[MAX_CHAR_VERSION_NUMBER]; 
   int status;
+  char apid_str[10];
+  int curr_pvn_wn, curr_pvn_dn; 
+  char pkt_name[10];
 
   /* init values */
   matching_config= (HK_Config_Files *)NULL;
@@ -74,11 +78,18 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
     /* get packet time to lookup sdo hk config version to use */
     (void)sprint_time (pkt_date, get_packet_time(word_ptr), "TAI", 0);
     strcat(version_number,"\0");
+    /* for sdo 129 set pvn to merged case to pickup SDO-ASD-PVN-TO-JSVN file */
+    /* also to go into merged case logic below */
+    curr_pvn_wn= HK_LEV0_START_MERGED_PVNW;
+    curr_pvn_dn= HK_LEV0_START_MERGED_PVND;
   }
   else
   {
     get_version_number(word_ptr, version_number); 
     strcat(pkt_date,"\0");
+
+    /* get number value of packet version number for comparison later */
+    sscanf(version_number,"%3d.%3d",&curr_pvn_wn, &curr_pvn_dn);
   }
 
   /* check if global pointer to configuration link list exists*/
@@ -87,16 +98,162 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
     load_all_apids_hk_configs(apid, version_number, pkt_date );
   }
 
+  /* check if packet version number is greater than or equal to merged flag values */
+  /* if so then use string names for setting apid_string value */
+  if(curr_pvn_wn  >=  HK_LEV0_START_MERGED_PVNW && curr_pvn_dn >= HK_LEV0_START_MERGED_PVND)
+  {
+
+  /* get number value of packet version number for comparison later */
+#ifdef DEBUG_DECODE_HK
+  printkerr("DEBUG:Message at %s, line %d: Doing Merge Data Series Name. PVN:<%d.%d> \n",
+                 __FILE__, __LINE__,curr_pvn_wn,curr_pvn_dn);
+#endif
+
+    /* doing merge data series case */
+    if (apid == HK_HSB_HMI_ISP_1 || apid == HK_HSB_HMI_ISP_2 || apid == HK_LR_HMI_ISP)
+    {
+      /* get number value of packet version number for comparison later */
+      /* lookup in define variable packet name to use */
+      strcpy(pkt_name, HK_HMI_PKT_NAME_ISP);
+      /* Turn string value to upper case */
+      strcpy(apid_str,make_strupr(pkt_name));
+    }
+    else if (apid == HK_HSB_AIA_ISP_1 || apid == HK_HSB_AIA_ISP_2 || apid == HK_LR_AIA_ISP)
+    {
+      strcpy(pkt_name, HK_AIA_PKT_NAME_ISP);
+      strcpy(apid_str,make_strupr(pkt_name));
+    }
+    else if (apid == HK_HSB_HMI_SEQ_1 || apid == HK_HSB_HMI_SEQ_2 || apid == HK_LR_HMI_SEQ )
+    {
+      strcpy(pkt_name, HK_HMI_PKT_NAME_SEQ);
+      strcpy(apid_str,make_strupr(pkt_name));
+    }
+    else if (apid == HK_HSB_AIA_SEQ_1 || apid == HK_HSB_AIA_SEQ_2 || apid == HK_LR_AIA_SEQ) 
+    {
+      strcpy(pkt_name, HK_AIA_PKT_NAME_SEQ);
+      strcpy(apid_str,make_strupr(pkt_name));
+    }
+    else if (apid == HK_HSB_HMI_OBT_1 || apid == HK_HSB_HMI_OBT_2 || apid == HK_LR_HMI_OBT )
+    {
+      strcpy(pkt_name, HK_HMI_PKT_NAME_OBT);
+      strcpy(apid_str,make_strupr(pkt_name));
+    }
+    else if (apid == HK_HSB_AIA_OBT_1 || apid == HK_HSB_AIA_OBT_2 || apid == HK_LR_AIA_OBT) 
+    {
+      strcpy(pkt_name, HK_AIA_PKT_NAME_OBT);
+      strcpy(apid_str,make_strupr(pkt_name));
+    }
+    else if (apid == HK_LR_SDO_ASD) 
+    {
+      strcpy(pkt_name, HK_SDO_PKT_NAME_ASD);
+      strcpy(apid_str,make_strupr(pkt_name));
+    }
+    else
+    {
+      /* if not SEQ or ISP with packet name then make name using */
+      /* apid number where  apid is made into string(i.e.,0x01D) */
+      sprintf(apid_str,"0x%03.3x",apid);
+    }
+  }
+  else
+  {
+    sprintf(apid_str,"0x%03.3x",apid);
+
+#ifdef DEBUG_DECODE_HK
+  printkerr("DEBUG:Message at %s, line %d: Doing NON-Merge Data Series Name. PVN:<%d.%d> \n",
+                 __FILE__, __LINE__,curr_pvn_wn,curr_pvn_dn);
+#endif
+
+  }
+
   /* get pointer to HK_Config_File structure based on apid # */
   apid_configs = global_apid_configs;
   while(apid_configs)   
   {
-    if (apid_configs->apid == apid)  
+    //if (!strcmp(apid_configs->apid_name, apid_str)) 
+    if ((strcmp(apid_str, "ISP") && apid == apid_configs->apid) && (strcmp( apid_str, "SEQ") && apid == apid_configs->apid) && (strcmp( apid_str, "ASD") && apid == apid_configs->apid) && (strcmp(apid_str, "OBT") && apid == apid_configs->apid)) 
     {
+      /* Found -if non-merge apid and packet version number */
+#ifdef DEBUG_DECODE_HK
+      printkerr("DEBUG:Message at %s, line %d: Found NON-Merge dec valued apid <%d> configuration data. \n",
+                 __FILE__, __LINE__, apid);
+#endif
+      break; /*Found pointer apid pointer correct HK_Config_File structures */
+    }
+    else if( (!strcmp( apid_str, "ISP")) && (apid_configs->apid == HK_HSB_HMI_ISP_1 ) && (apid == HK_HSB_HMI_ISP_1 || apid == HK_HSB_HMI_ISP_2 || apid == HK_LR_HMI_ISP)) 
+    {
+      /* Found -if merged apid and packet version number */
+      /* Logic: if to be looked up apid_str is ISP and if the apid number in apid_config node is primary apid(445) and */
+      /* if looked up apid is one of the known HMI ISP apid values then this is merge apid case */ 
+#ifdef DEBUG_DECODE_HK
+      printkerr("DEBUG:Message at %s, line %d: Found Merged HMI ISP dec valued apid <%d> configuration data. \n",
+                 __FILE__, __LINE__, apid);
+#endif
+      break; /*Found pointer apid pointer correct HK_Config_File structures */
+    }
+    else if( (!strcmp( apid_str, "SEQ")) && ( apid_configs->apid == HK_HSB_HMI_SEQ_1 ) && (apid == HK_HSB_HMI_SEQ_2 || apid == HK_HSB_HMI_SEQ_1 || apid == HK_LR_HMI_SEQ)) 
+    {
+      /* Found -if merge apid and packet version number */
+      /* Logic: if to be looked up apid_str is SEQ and if the apid number in apid_config node is primary apid(451) and */
+      /* if looked up apid is one of the known HMI SEQ apid values then this is merge apid case */ 
+#ifdef DEBUG_DECODE_HK
+      printkerr("DEBUG:Message at %s, line %d: Found Merged HMI SEQ dec valued apid <%d> configuration data. \n",
+                 __FILE__, __LINE__, apid);
+#endif
+      break; /*Found pointer apid pointer correct HK_Config_File structures */
+    }
+    else if( (!strcmp( apid_str, "OBT")) && (apid_configs->apid == HK_HSB_HMI_OBT_1 ) && (apid == HK_HSB_HMI_OBT_1 || apid == HK_HSB_HMI_OBT_2 || apid == HK_LR_HMI_OBT )) 
+    {
+      /* Found -if merge apid and packet version number */
+#ifdef DEBUG_DECODE_HK
+      printkerr("DEBUG:Message at %s, line %d: Found Merged HMI OBT dec valued apid <%d> configuration data. \n",
+                 __FILE__, __LINE__, apid);
+#endif
+      break; /*Found pointer apid pointer correct HK_Config_File structures */
+    }
+    else if( (!strcmp( apid_str, "ISP")) && (apid_configs->apid == HK_HSB_AIA_ISP_1 ) && (apid == HK_HSB_AIA_ISP_1 || apid == HK_HSB_AIA_ISP_2 || apid == HK_LR_AIA_ISP)) 
+    {
+      /* Found -if merge apid and packet version number */
+#ifdef DEBUG_DECODE_HK
+       printkerr("DEBUG:Message at %s, line %d: Found Merged AIA ISP dec valued apid <%d> configuration data. \n",
+                 __FILE__, __LINE__, apid);
+#endif
+      break; /*Found pointer apid pointer correct HK_Config_File structures */
+    }
+    else if( (!strcmp( apid_str, "SEQ")) && (apid_configs->apid == HK_HSB_AIA_SEQ_1 ) && (apid == HK_HSB_AIA_SEQ_1 || apid == HK_HSB_AIA_SEQ_2 || apid == HK_LR_AIA_SEQ )) 
+    {
+      /* Found -if merge apid and packet version number */
+#ifdef DEBUG_DECODE_HK
+      printkerr("DEBUG:Message at %s, line %d: Found Merged AIA SEQ dec valued apid <%d> configuration data. \n",
+                 __FILE__, __LINE__, apid);
+#endif
+      break; /*Found pointer apid pointer correct HK_Config_File structures */
+    }
+    else if( (!strcmp( apid_str, "OBT")) && (apid_configs->apid == HK_HSB_AIA_OBT_1 ) && (apid == HK_HSB_AIA_OBT_1 || apid == HK_HSB_AIA_OBT_2 || apid == HK_LR_AIA_OBT )) 
+    {
+      /* Found -if merge apid and packet version number */
+#ifdef DEBUG_DECODE_HK
+      printkerr("DEBUG:Message at %s, line %d: Found Merged AIA OBT dec valued apid <%d> configuration data. \n",
+                 __FILE__, __LINE__, apid);
+#endif
+      break; /*Found pointer apid pointer correct HK_Config_File structures */
+    }
+    else if( (!strcmp( apid_str, "ASD")) && (apid_configs->apid == HK_LR_SDO_ASD ) ) 
+    {
+      /* Found -if merge apid and packet version number */
+#ifdef DEBUG_DECODE_HK
+      printkerr("DEBUG:Message at %s, line %d: Found Merged SDO ASD dec valued apid <%d> configuration data. \n",
+                 __FILE__, __LINE__, apid);
+#endif
       break; /*Found pointer apid pointer correct HK_Config_File structures */
     }
     else
     {
+      /* Did not find- keep checking */
+#ifdef DEBUG_DECODE_HK
+      printkerr("DEBUG:Message at %s, line %d: Keep checking for dec valued apid <%d> configuration data. \n",
+                 __FILE__, __LINE__, apid);
+#endif
       apid_configs = apid_configs->next;
     }
   }
@@ -130,7 +287,9 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
 
   /* check if config data exists in-memory */
   //if(config_files->apid_number == 129)
-  if(check_for_sdo_apid(config_files->apid_number))
+//PROBLEM HERE-GET 10922 for apid_number???
+  //fix 2-3-2009-CCif(check_for_sdo_apid(config_files->apid_number))
+  if(check_for_sdo_apid(apid))
   {
     /* check the file version number based on packet time */
     ptr_fvn= find_fvn_from_shcids(global_shcids_vn, pkt_date,config_files->apid_number);
@@ -152,9 +311,8 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
       }
     }
 #ifdef DEBUG_DECODE_HK
-printkerr("DEBUG:Message at %s, line %d: Found sdo hk config for apid <%x> and file version number <%s>\n", 
+    printkerr("DEBUG:Message at %s, line %d: Found sdo hk config for apid <%x> and file version number <%s>\n", 
 __FILE__, __LINE__,apid, ptr_fvn);
-#else
 #endif
   }
   else 
@@ -180,20 +338,30 @@ __FILE__, __LINE__,apid, ptr_fvn);
         printkerr("WARNING at %s, line %d: Found config data for apid <%x> and packet version number <%s>\n",
                    __FILE__, __LINE__,apid, version_number);
       }
+      else
+      {
+        ;//Did not find after rereading files
+#ifdef DEBUG_DECODE_HK
+         printkerr("WARNING at %s, line %d: After reread did not find config data for apid <%x> and packet version number <%s>\n",
+                   __FILE__, __LINE__,apid, version_number);
+#endif
+      }
     }
+    else
+    {
+       ;// Found config
 #ifdef DEBUG_DECODE_HK
   printkerr("DEBUG:Message at %s, line %d: Found config data for apid <%x> and packet version number <%s>\n",
                  __FILE__, __LINE__,apid, version_number);
-#else
 #endif
+    }
   }
 
 
   if ( matching_config == NULL )
   {
     /* Still no matching config information. Return an error code. */
-    //Took out-Carl-10-12-2007:
-    ERRMSG("Could not find  packet version number even after re-reading hk config files.");
+    ERRMSG("Could not find  packet version number even after re-reading hk config files."); 
     return HK_DECODER_ERROR_CANNOT_FIND_VER_NUM; 
   }
   /* Load hk configs in HK_Keywords_Format structure  */
@@ -379,7 +547,8 @@ static int load_engr_values(HK_Keywords_Format *hk_keywords, HK_Keyword_t **kw_h
             else
             {
 
-              kwt->eng_value.double_val += hk_keywords->alg->coeff[i] * powl((double)hk_keywords->keyword_value, (double)i);
+              kwt->eng_value.double_val += (double)hk_keywords->alg->coeff[i] * (double)powl((double)hk_keywords->keyword_value, (double)i);
+              //kwt->eng_value.double_val += hk_keywords->alg->coeff[i] * powl((double)hk_keywords->keyword_value, (double)i); ADDED Update above to fix compile warning -but does it work with adp.
             }
           }
         }
@@ -761,6 +930,10 @@ HK_Keyword_t *copy_hk_keywords(HK_Keyword_t *head)
   return newhead;
 }
 
+/***************************************************************************** 
+ *  TRANSLATE INTEGER TO DOUBLE
+ *
+ *****************************************************************************/
 double translateint2double(int64_t ival)
 {
 #define HK_DPF_RADIX   2
@@ -772,11 +945,12 @@ double translateint2double(int64_t ival)
   int sign_bit;
   int64_t imatissa;
   int   iexp;
+  int   iexp_posinf;
+  int   iexp_neginf;
   double calexp=0.0;
   double cal_matissa=0.0;
   double sum=0.0;
   double d=0.0;
-  
 
   /* 1.set sign bit*/
   sign_bit=ival >> 63 & 0x00000000000001;
@@ -792,7 +966,21 @@ double translateint2double(int64_t ival)
        0th---1st------11th--12th--------------------------------------------------------52st
   */
   iexp=(ival >> 52) & 0x000007FF;
- 
+
+  /* 4.1.check for -inf and +inf-view documentation on this at http://en.wikipedia.org/wiki/Double_precision */
+  iexp_posinf=(ival >> 52) & 0x000007FF;
+  iexp_neginf=(ival >> 52) & 0x00000FFF;
+  if (iexp_posinf == 2047)
+  {
+    //printkerr("translateint2double:WARNING got +infinity exponent value:exp is %d\n",iexp_posinf);
+    //printkerr("translateint2double:CHECK:double value set correctly in DRMS\n");
+  }
+  else if (iexp_neginf == 4095)
+  {
+    //printkerr("translateint2double:WARNING got -infinity exponent value:exp is %d\n",iexp_neginf);
+    //printkerr("translateint2double:CHECK:double value set correctly in DRMS\n");
+  }
+
   /* 5. calculate exponent value to use in formula */
   calexp=(double)(iexp - bias);
 
@@ -839,6 +1027,8 @@ float translateint2float(int ival)
   int sign_bit;
   int imatissa;
   int   iexp;
+  int   iexp_posinf;
+  int   iexp_neginf;
   float calexp;
   float cal_matissa;
   float f;
@@ -860,6 +1050,22 @@ float translateint2float(int ival)
   */
   iexp=(ival >> 23) & 0x000000FF;
  
+  /* 4.1.check for -inf and +inf-view documentation on this at http://en.wikipedia.org/wiki/Floating_point */
+  iexp_posinf=(ival >> 23) & 0x0000007F;
+  iexp_neginf=(ival >> 23) & 0x000000FF;
+  if (iexp_posinf == 127)
+  {
+    ;
+    //printkerr("translateint2float:WARNING got +infinity exponent value:exp is %d ival:%d iexp:%d\n",iexp_posinf,ival,iexp);
+    //printkerr("translateint2float:CHECK:float value set correctly in DRMS\n");
+  }
+  else if (iexp_neginf == 255)
+  {
+    ;
+    //printkerr("translateint2float:WARNING got -infinity exponent value:exp is %d ival is %d\n",iexp_neginf,ival);
+    //printkerr("translateint2float:CHECK:float value set correctly in DRMS\n");
+  }
+
    /* 5. calculate exponent value to use in formula */
    calexp=(float)(iexp - bias);
 
