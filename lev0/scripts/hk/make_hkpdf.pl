@@ -15,8 +15,8 @@
 #  make_hkpdf.pl sort=4 apidlist="0x081"
 #  make_hkpdf.pl sort=4 apidlist="0x1BD 0x1DB"
 #  make_hkpdf.pl sort=4 apidlist="0x1BD 0x1DB 0x081"
-#  make_hkpdf.pl sort=4 apidlist="ALL_SDO"
-#  make_hkpdf.pl sort=4 apidlist="ALL_HK
+#  make_hkpdf.pl sort=4 apidlist="ALL_SDO" (Normally use)
+#  make_hkpdf.pl sort=4 apidlist="ALL_HK"  (Normally use)
 #  make_hkpdf.pl sort=4 apidlist="ALL"
 #Create Date:3/15/2008 
 #############################################################################
@@ -24,7 +24,7 @@
 #############################################################################
 #set environment variables and initialize variables.
 $hm=$ENV{'HOME'};
-$script_version=1.2;
+$script_version=1.3;
 
 # HK environment variable for processing STANFORD file
 $ENV{'HK_STHA_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/fromlmsal";
@@ -48,6 +48,9 @@ $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq";
 use constant NO_PROCESSING =>  0;
 use constant HK_PROCESSING =>  1;
 use constant SDO_PROCESSING => 2;
+use constant MERGED_SERIES_FILE_VERSION_NUMBER => 1.160;
+use constant MERGED_SERIES => 1;
+use constant NOT_MERGED_SERIES => 0;
 
 #display environment variables
 #print "--->make_hkpdf enviroment variables:\n";
@@ -182,7 +185,7 @@ sub get_all_lines($)
   }
 
   # open either STANFORD file or GODDARD file for processing
-  open(FILE, "$dn/$fn") || die "Can't Open $fn file: $!\n";
+  open(FILE, "$dn/$fn") || die "1-Can't Open $fn file: $!\n";
   while (<FILE>)
   {
     push(@all_lines, $_) ;
@@ -323,7 +326,6 @@ sub check_types_to_do($apid_arg)
 ###############################################################################
 sub get_apids_to_do
 {
-  #$arg=$ENV{'HK_APID_LIST'};
   $arg=$apid_arg;
   if ( $arg eq "ALL" || $arg eq "ALL_HK" || $arg eq "ALL_SDO")
   {
@@ -357,7 +359,7 @@ sub get_apids_to_do
 sub create_hkpdf_filenames($)
 {
   # local variables and initialized variables
-  my($i, $j, $processing_type);
+  my($i, $j, $processing_type, $tmpapid);
   @filenames=();
   $processing_type= $_[0];
 
@@ -369,7 +371,7 @@ sub create_hkpdf_filenames($)
     if ($file_line[1] eq "File" && $file_line[2] eq "RCS")
     {
       $version_number=$file_line[6];
-      #print "VERSION NUMBER is: $version_number \n";
+      print "VERSION NUMBER is: $version_number \n";
       last;
     }
     $i++;
@@ -388,9 +390,94 @@ sub create_hkpdf_filenames($)
     }
     else
     {
-      @apid_line_hex=split('x',$apid_line[1]);
-      push(@filenames, sprintf("apid-%3.3s-version-%s\n",  $apid_line_hex[1], $version_number));
-      $i++;
+      if(SDO_PROCESSING == $processing_type)
+      {
+         # if SDO type- create files like new way 
+        $a= hex $apid_line[1];
+        push(@filenames, sprintf("SDO-%3.3s-version-%s\n",  "ASD", $version_number));
+        $i++;
+      }
+      elsif(&check_for_merged_version($version_number)) #CC:Add block to handle merge series requirement
+      { #checks only for HK version numbers
+        #create name of filename for merged series requirements (HMI-ISP-version-1.163,AIA-ISP-version-1.163)
+        $a= hex $apid_line[1];
+        if (hex $apid_line[1] == 445 )
+        {
+          # push this filename to array. will use this config to do all hmi isps
+          $a= hex $apid_line[1];
+          push(@filenames, sprintf("HMI-%3.3s-version-%s\n",  "ISP", $version_number));
+        }
+        elsif ( hex $apid_line[1] == 529)
+        {
+          # push filename for this apid to array. will use this config to do all aia isps.
+          $a= hex $apid_line[1];
+          push(@filenames, sprintf("AIA-%3.3s-version-%s\n",  "ISP", $version_number));
+        }
+        elsif ( hex $apid_line[1] == 451)
+        {
+          # push these filename to array
+          $a= hex $apid_line[1];
+          push(@filenames, sprintf("HMI-%3.3s-version-%s\n",  "SEQ", $version_number));
+        }
+        elsif ( hex $apid_line[1] == 536)
+        {
+          # push these filename to array
+          $a= hex $apid_line[1];
+          push(@filenames, sprintf("AIA-%3.3s-version-%s\n",  "SEQ", $version_number));
+        }
+        elsif ( hex $apid_line[1] == 448)
+        {
+          # push these filename to array
+          $a= hex $apid_line[1];
+          push(@filenames, sprintf("HMI-%3.3s-version-%s\n",  "OBT", $version_number));
+        }
+        elsif ( hex $apid_line[1] == 129)
+        {
+          # push these filename to array
+          $a= hex $apid_line[1];
+          push(@filenames, sprintf("SDO-%3.3s-version-%s\n",  "ASD", $version_number));
+print "filenames is @filenames\n";
+        }
+        elsif ( hex $apid_line[1] == 540)
+        {
+          # push these filename to array
+          $a= hex $apid_line[1];
+          push(@filenames, sprintf("AIA-%3.3s-version-%s\n",  "OBT", $version_number));
+        }
+        elsif (hex $apid_line[1] == 569 || hex $apid_line[1] == 475 || hex $apid_line[1] == 39 ||  hex $apid_line[1] == 29 ||
+               hex $apid_line[1] == 481 || hex $apid_line[1] == 576 || hex $apid_line[1] == 21 ||  hex $apid_line[1] == 46 ||
+               hex $apid_line[1] == 478 || hex $apid_line[1] == 580 || hex $apid_line[1] == 18 ||  hex $apid_line[1] == 50)
+        {
+          # push null for these filenames to array since already did primary apid for isp, seq, etc.
+          $tmpapid= hex $apid_line[1];
+          push(@filenames, "");
+          print "make_hkpdf.pl:WARNING-Skipping creating HKPDF files for apid. Probably got ISP, SEQ or OBT apids that are duplicates of apid 0x1BD or 0x211, etc . apid is $tmpapid\n";
+        }
+        elsif((hex $apid_line[1] < 31  && hex $apid_line[1] > 0) || (hex $apid_line[1] >= 400 && hex $apid_line[1] < 500)) 
+        {
+          # do others hmi apids except isp and seq. using new file format using "HMI"  instead of "apid"
+          @apid_line_hex=split('x',$apid_line[1]);
+          push(@filenames, sprintf("HMI-%3.3s-version-%s\n",  $apid_line_hex[1], $version_number));
+        }
+        elsif((hex $apid_line[1] >= 31 && hex $apid_line[1] < 65 ) || (hex $apid_line[1] >= 500 && hex $apid_line[1] < 600)) 
+        {
+          # do others aia apids except isp and seq. using new file format using "AIA" instead of "apid"
+          @apid_line_hex=split('x',$apid_line[1]);
+          push(@filenames, sprintf("AIA-%3.3s-version-%s\n",  $apid_line_hex[1], $version_number));
+        }
+        else
+        {
+           $tmpapid=hex $apid_line[1];
+           print "make_hkpdf.pl:WARNING--Skipping creating HKPDF file for apid. Probably got sim apids or ADP apid. apid is $tmpapid\n";
+        }
+        $i++;
+      }
+      else
+      {
+        @apid_line_hex=split('x',$apid_line[1]);
+        push(@filenames, sprintf("apid-%3.3s-version-%s\n",  $apid_line_hex[1], $version_number));
+        $i++;
+      }
     }
     if ( $j eq $pkt_count)
     {
@@ -406,8 +493,9 @@ sub create_hkpdf_filenames($)
 sub create_hkpdf_files($)
 {
   # set local variables and initialize variables
-  my($i,$processing_type);
+  my($i,$processing_type, $files_did);
   $processing_type= $_[0];
+  $files_did=1;
 
   # Determine directory to put HKPDF files
   if($processing_type == SDO_PROCESSING)
@@ -445,6 +533,7 @@ sub create_hkpdf_files($)
   $i=0;
   while ($all_apids[$i])
   {
+    # filter out apids that are not HK or SDO-HK apids
     if($processing_type == HK_PROCESSING && hex $all_apids[$i] > 95 && hex $all_apids[$i] < 400)
     {
         $i++;
@@ -453,17 +542,23 @@ sub create_hkpdf_files($)
     {
         $i++;
     }
+    elsif($filenames[$i] eq "")  #CC:Added-case-1-28-2009
+    {   
+        $i++;#skip values not set because not needed.do apid 445 but not 475.
+    }
     else
     {
       # Create directory using environment variable, version number and filename
-      open(OUTFILE, ">$directory$version_number/$filenames[$i]") || die "Can't Open  $directory/$filenames[$i]: $!\n" ;
+      open(OUTFILE, ">$directory$version_number/$filenames[$i]") || die "2-Can't Open  $directory/$filenames[$i]: $!\n" ;
       &create_file_line($processing_type);
       &create_apid_line( $all_apids[$i]) ;
       &create_kwd_lines( $all_apids[$i]) ;
       &create_acon_lines() ;
       &create_dcon_lines() ;
       close( OUTFILE);
-      print "Finish file $i. APID is $all_apids[$i]\n";
+      #print "Finish file $i. APID is $all_apids[$i]\n";
+      print "Finish file where APID is $all_apids[$i]. Files did:$files_did\n";
+      $files_did++;
       $i++;
     }
   }
@@ -511,7 +606,7 @@ sub create_file_line($)
 ###############################################################################
 sub create_apid_line
 {
-  my $find_apid =shift ;
+  my $find_apid =shift ;#passed in apid array
   my($i, $p_line, $apidline);
   $i=0;
   while ( $all_pkt_lines[$i] )
@@ -529,7 +624,15 @@ sub create_apid_line
   }
   elsif ( hex $p_line[1] >= 400 && hex $p_line[1] <= 486)
   {
-    $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "HMI", $p_line[5], $p_line[6]); 
+    #fix APID lines APID value for apid 445,529,etc
+    if(hex $find_apid == 445 || hex $find_apid == 451 || hex $find_apid == 448)
+    {
+      $apidline=sprintf("%4.4s %3.3s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",&fix_apid_value(hex  $find_apid),$p_line[3], "HMI", $p_line[5], $p_line[6]); 
+    }
+    else
+    {
+      $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "HMI", $p_line[5], $p_line[6]); 
+    }
   }
   elsif ( hex $p_line[1] > 31 && hex $p_line[1] <= 63)
   {
@@ -537,7 +640,14 @@ sub create_apid_line
   }
   elsif ( hex $p_line[1] >= 500 && hex $p_line[1] <= 580)
   {
-    $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "AIA", $p_line[5], $p_line[6]); 
+    if(hex $find_apid == 529 || hex $find_apid == 536 || hex $find_apid == 540)
+    {
+      $apidline=sprintf("%4.4s %3.3s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID", &fix_apid_value(hex  $find_apid),$p_line[3], "AIA", $p_line[5], $p_line[6]); 
+    }
+    else
+    {
+      $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "AIA", $p_line[5], $p_line[6]); 
+    }
   }
   elsif ( hex $p_line[1] >= 2002 && hex $p_line[1] <= 2047)
   {
@@ -582,6 +692,7 @@ sub create_kwd_lines
         $j=0;
         while ($all_lines[$i])
         {
+          #look for keyword lines
           @line=split(',',$all_lines[$i] );
           if ( $line[0] eq "SRC" )
           {
@@ -592,9 +703,44 @@ sub create_kwd_lines
             {
               &get_conversion_flag ($line[1]);
               &get_keyword_value ($line[1]);
-              $kwdline[$j]=sprintf("%-3s %-8s  %-40s  %-3s  %-1s  %-2s  %-3s %-1s  %-8s","KWD",$kwd_value,$line[1],$line[4],$line[5],$line[6],$line[7],$conv_value,$line[10]); 
+              #handle merge series requirement
+              if(&check_for_merged_version($version_number) || hex $find_apid == 129)
+              {
+                #fix timecode and checksum values 
+                if(substr($line[1],8,8) eq "TIMECODE")
+                {
+                   if( hex $find_apid == 445 || hex $find_apid == 529 || hex $find_apid == 536 ||  hex $find_apid == 451 || hex $find_apid == 448  || hex $find_apid == 540  || hex $find_apid == 129)
+                   {
+                     $kwdline[$j]=sprintf("%-3s %-8s  %-40s  %-3s  %-1s  %-2s  %-3s %-1s  %-8s","KWD",&fix_timecode(hex $find_apid,$kwd_value,"SHORT"),&fix_timecode(hex $find_apid,$line[1],"LONG"),$line[4],$line[5],$line[6],$line[7],$conv_value,$line[10]); 
+                   }
+                   else
+                   {
+                     $kwdline[$j]=sprintf("%-3s %-8s  %-40s  %-3s  %-1s  %-2s  %-3s %-1s  %-8s","KWD",$kwd_value,$line[1],$line[4],$line[5],$line[6],$line[7],$conv_value,$line[10]); 
+                   }
+                    
+                }
+                elsif(substr($line[1],8,8) eq "CHECKSUM")
+                {
+                   if( hex $find_apid == 445 || hex $find_apid == 529 || hex $find_apid == 536 ||  hex $find_apid == 451 || hex $find_apid == 448 || hex $find_apid == 540)
+                   {
+                     $kwdline[$j]=sprintf("%-3s %-8s  %-40s  %-3s  %-1s  %-2s  %-3s %-1s  %-8s","KWD",&fix_checksum_keywords(hex $find_apid,$kwd_value,"SHORT"),&fix_checksum_keywords(hex $find_apid,$line[1],"LONG"),$line[4],$line[5],$line[6],$line[7],$conv_value,$line[10]); 
+                   }
+                   else
+                   {
+                     $kwdline[$j]=sprintf("%-3s %-8s  %-40s  %-3s  %-1s  %-2s  %-3s %-1s  %-8s","KWD",$kwd_value,$line[1],$line[4],$line[5],$line[6],$line[7],$conv_value,$line[10]); 
+                   }
+                }
+                else 
+                {
+                  $kwdline[$j]=sprintf("%-3s %-8s  %-40s  %-3s  %-1s  %-2s  %-3s %-1s  %-8s","KWD",$kwd_value,$line[1],$line[4],$line[5],$line[6],$line[7],$conv_value,$line[10]); 
+                }
+              }
+              else
+              {
+                $kwdline[$j]=sprintf("%-3s %-8s  %-40s  %-3s  %-1s  %-2s  %-3s %-1s  %-8s","KWD",$kwd_value,$line[1],$line[4],$line[5],$line[6],$line[7],$conv_value,$line[10]); 
+              }
               push(@apid_kwd_lines, $kwdline[$j]);
-#              print OUTFILE "$kwdline[$j++]";
+#             print OUTFILE "$kwdline[$j++]";
             }
           }
           else 
@@ -727,7 +873,7 @@ sub get_conversion_flag
     }
     if ( $i == $all_tlm_count - 1 )
     {
-#######print "make_hkpdf.pl:**Error: no conversion flag for $mnm in TLM lines, so will set value to <?> \n";
+      #print "make_hkpdf.pl:**Error: no conversion flag for $mnm in TLM lines, so will set value to <?> \n";
       $conv_value="?";
       last;
     }
@@ -739,7 +885,7 @@ sub get_conversion_flag
     @s_line=split(',',$all_tlm_e[$i] );
     if ( $s_line[1] eq "E_$mnm" )
     {
-#print "found E_\n";
+      #print "found E_\n";
       $conv_value= $s_line[5];
       $found_conv=1;
       last;
@@ -751,11 +897,10 @@ sub get_conversion_flag
     $i=0;
     while ($all_tlm_t[$i] )
     {
-      @s_line=split(',',$all_tlm_t[$i] );
-#print "s-line1 is $s_line[1] and T_mnm is T_$mnm \n";
+      @s_line=split(',',$all_tlm_t[$i] ); #print "s-line1 is $s_line[1] and T_mnm is T_$mnm \n";
       if ( $s_line[1] eq "T_$mnm" )
       {
-#print "found T_\n";
+        #print "found T_\n";
         $conv_value= $s_line[5];
         last;
       }
@@ -764,7 +909,7 @@ sub get_conversion_flag
   }
 }
 ###############################################################################
-# sub get_keyword_value: get keyword value for keyword lines. 
+# sub get_keyword_value: get short keyword value for keyword lines. 
 ###############################################################################
 sub get_keyword_value
 {
@@ -781,7 +926,7 @@ sub get_keyword_value
     }
     if ( $i == $all_fits_count - 1 )
     {
-######print "make_hkpdf.pl:**Error: no keyword value for $mnm in FITS lines-so will set value to <????> \n";
+      #print "make_hkpdf.pl:**Error: no keyword value for $mnm in FITS lines-so will set value to <????> \n";
       $kwd_value="????";
       last;
     }
@@ -907,7 +1052,7 @@ sub create_hkpdf_for_1AF
     $filename="apid-1AF-version-$version_number";
 
 #   Create directory name using environment variable, version number and filename
-    open(OUTFILE, ">$directory$version_number/$filename") || die "Can't Open  $directory/$filename: $!\n" ;
+    open(OUTFILE, ">$directory$version_number/$filename") || die "3-Can't Open  $directory/$filename: $!\n" ;
     print OUTFILE "$fileline";
     print OUTFILE "$apidline";
     print OUTFILE "$kwdline1";
@@ -1028,7 +1173,7 @@ sub set_apidfile_value($)
   {
     $apidfile_value=$s_arg[1];
     # open apidfile passed in as argument
-    open(FILEAPID, "$s_arg[1]") || die "Can't Open $s_arg[1] file: $!\n";
+    open(FILEAPID, "$s_arg[1]") || die "4-Can't Open $s_arg[1] file: $!\n";
     while (<FILEAPID>)
     {
       #read in apids 
@@ -1114,11 +1259,14 @@ sub show_help_info($)
   print "where sort-choice equal to 3 is sort by long telem name\n";
   print "where sort-choice equal to 4 is sort by byte and bit position\n";
   print "************************************\n";
-  print "** Note:Currently using option 4! **\n";
+  print "** Note:Currently using option sort=4 **\n";
   print "************************************\n";
   print "where apidfile is full path and filename containing list of apids to do\n";
   print "where apidlist contains list of apids to do(i.e.,0x1BD 0x081 ).\n";
   print "where apidlist contains keyword (i.e., ALL, ALL_HK, or ALL_SDO)on apids to do\n";
+  print "***************************************************************\n";
+  print "** Note:Currently use apidlist=ALL_HK or apidlist=ALL_SDO    **\n";
+  print "****************************************************************\n";
   if($help_arg eq "HELP")
   {
     print "(2) Environment variable HK_STHA_DIRECTORY\n";
@@ -1142,3 +1290,215 @@ sub show_help_info($)
   }
   exit;
 }
+
+###############################################################################
+# sub fix_timecode
+###############################################################################
+sub fix_timecode($,$,$)
+{
+  # pass arguments
+  my $apid= $_[0];
+  my $timecode= $_[1];
+  my $shortlongflag= $_[2];
+
+  # if 445 or 529 convert keyword strings
+  if ($apid == 445 ||  $apid == 529)
+  {
+    $packetname="ISP";
+    if($shortlongflag eq "LONG")
+    {
+      # change APID1BD_TIMECODE to APIDISP_TIMECODE
+      @s_timecode=split("_",$timecode );
+      $new_str= sprintf("%s%s_%s_%s", "APID", $packetname, $s_timecode[1],$s_timecode[2] );
+    }
+    else ##if else ($shortlongflag eq "SHORT")
+    {
+      # change HTCS1BD to HTCSISP or HTCSS1BD to HTCSSISP
+      if ($timecode eq "HTCS1BD" || $timecode eq "ATCS211" )
+      {
+        $new_str= sprintf("%s%s", substr($timecode,0,4), $packetname );
+      }
+      else
+      {
+        $new_str= sprintf("%s%s", substr($timecode,0,5), $packetname );
+      }
+    }
+  }
+  elsif ($apid == 451 ||  $apid == 536)
+  {
+    $packetname="SEQ";
+    if($shortlongflag eq "LONG")
+    {
+      @s_timecode=split("_",$timecode );
+      $new_str= sprintf("%s%s_%s_%s", "APID", $packetname, $s_timecode[1],$s_timecode[2] );
+    }
+    else ##if else ($shortlongflag eq "SHORT")
+    {
+      # change HTCS1C3 to HTCSSEQ or HTCSS1C3 to HTCSSSEQ
+      if ($timecode eq "HTCS1C3" || $timecode eq "ATCS02E")
+      {
+        $new_str= sprintf("%s%s", substr($timecode,0,4), $packetname );
+      }
+      else
+      {
+        $new_str= sprintf("%s%s", substr($timecode,0,5), $packetname );
+      }
+    }
+  }
+  elsif ($apid == 448 ||  $apid == 540)
+  {
+    $packetname="OBT";
+    if($shortlongflag eq "LONG")
+    {
+      @s_timecode=split("_",$timecode );
+      $new_str= sprintf("%s%s_%s_%s", "APID", $packetname, $s_timecode[1],$s_timecode[2] );
+    }
+    else ##if else ($shortlongflag eq "SHORT")
+    {
+      # change HTCS1C0 to HTCSOBT or HTCSS1C0 to HTCSSOBT
+      if ($timecode eq "HTCS1C0" || $timecode eq "ATCS1C0")
+      {
+        $new_str= sprintf("%s%s", substr($timecode,0,4), $packetname );
+      }
+      else
+      {
+        $new_str= sprintf("%s%s", substr($timecode,0,5), $packetname );
+      }
+    }
+  }
+  elsif ($apid == 129)
+  {
+    $packetname="ASD";
+    if($shortlongflag eq "LONG")
+    {
+      @s_timecode=split("_",$timecode );
+      $new_str= sprintf("%s%s_%s_%s", "APID", $packetname, $s_timecode[1],$s_timecode[2] );
+    }
+    else ##if else ($shortlongflag eq "SHORT")
+    {
+      # change OTCS081 to OTCSASD or OTCSS081 to OTCSSASD
+      if ($timecode eq "OTCS081")
+      {
+        $new_str= sprintf("%s%s", substr($timecode,0,4), $packetname );
+      }
+      else
+      {
+        $new_str= sprintf("%s%s", substr($timecode,0,5), $packetname );
+      }
+    }
+  }
+  return ($new_str);
+}
+
+
+###############################################################################
+# sub fix_checksum_keywords
+###############################################################################
+sub fix_checksum_keywords($,$,$)
+{
+  # pass arguments
+  my $apid= $_[0];
+  my $checksum_kw= $_[1];
+  my $shortlongflag= $_[2];
+
+  # local variables 
+  my $packetname;
+  my $s_cs_kw;
+  my $new_str;
+
+  # if 445 or 529 convert keyword strings
+  if ($apid == 445 ||  $apid == 529)
+  {
+    $packetname="ISP";
+    if($shortlongflag eq "LONG")
+    {
+      # change APID1BD_CHECKSUM to APIDISP_CHECKSUM
+      @s_cs_kw=split("_",$checksum_kw );
+      $new_str= sprintf("%s%s_%s", "APID", $packetname, $s_cs_kw[1] );
+    }
+    else ##if else ($shortlongflag eq "SHORT")
+    {
+      # change HCSUM1BD to HCSUMISP
+      $new_str= sprintf("%s%s", substr($checksum_kw,0,5), $packetname );
+    }
+  }
+  elsif ($apid == 451 ||  $apid == 536)
+  {
+    $packetname="SEQ";
+    if($shortlongflag eq "LONG")
+    {
+      @s_cs_kw=split("_",$checksum_kw );
+      $new_str= sprintf("%s%s_%s", "APID", $packetname, $s_cs_kw[1] );
+    }
+    else ##if else ($shortlongflag eq "SHORT")
+    {
+      $new_str= sprintf("%s%s", substr($checksum_kw,0,5), $packetname );
+    }
+  }
+  elsif ($apid == 448 ||  $apid == 540)
+  {
+    $packetname="OBT";
+    if($shortlongflag eq "LONG")
+    {
+      @s_cs_kw=split("_",$checksum_kw );
+      $new_str= sprintf("%s%s_%s", "APID", $packetname, $s_cs_kw[1] );
+    }
+    else ##if else ($shortlongflag eq "SHORT")
+    {
+      $new_str= sprintf("%s%s", substr($checksum_kw,0,5), $packetname );
+    }
+  }
+  else
+  {
+     print "WARNING: This argument passed is not correct. Should not be calling this function.\n";
+  }
+  return ($new_str);
+}
+
+###############################################################################
+# sub fix_apid_value
+###############################################################################
+sub fix_apid_value($,$)
+{
+  # pass arguments
+  my $apid= $_[0];
+  # local variables
+  my $new_apid_value;
+
+  # if 445 or 529 convert keyword strings
+  if ($apid == 445 ||  $apid == 529)
+  {
+    $new_apid_value="ISP";
+  }
+  elsif ($apid == 451 ||  $apid == 536)
+  {
+    $new_apid_value="SEQ";
+  }
+  elsif ($apid == 448 ||  $apid == 540)
+  {
+    $new_apid_value="OBT";
+  }
+  else
+  {
+    print "WARNING:This case should not call this function.\n";
+  }
+  return ($new_apid_value);
+}
+###############################################################################
+# sub check_for_merged_version
+###############################################################################
+sub check_for_merged_version($)
+{
+  # pass arguments
+  my $ver= $_[0];
+
+  if($ver >= MERGED_SERIES_FILE_VERSION_NUMBER)
+  {
+    return(MERGED_SERIES); #return(MERGE-FLAG)
+  }
+  else
+  {
+    return(NOT_MERGED_SERIES)
+  }
+}
+
