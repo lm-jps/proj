@@ -87,6 +87,7 @@ foreach $apid (@all_apids)
       push( @list, $file);
     }
   }#foreach file
+
   #Check if have jsd files for this apid
   $list_count=@list;
   if ($list_count == 0)
@@ -103,7 +104,7 @@ foreach $apid (@all_apids)
     $jsvn = 1;
 
     #get hash key from prelim jsd filename's packet version number
-    @s_fn= split /\_/, $apidfile;#ASSUME using this format hmi.0001_001032
+    @s_fn= split /\_/, $apidfile;#ASSUME using this format hmi.lev0_0001_001032
     if ($s_fn[1] eq "ground.lev0")
     {
       print "ERROR: jsoc_do_jsvn_map_file.pl:Sorry script is assuming jsd names are hmi or aia or sdo format but might be getting <name>_ground!\n";
@@ -139,7 +140,6 @@ foreach $apid (@all_apids)
     
       #get packet version number to use as hash key in hash table
       @s_fn= split /\_/, $comparefile;#assume hmi.0001_001032
- #if(hex $apid > 96 && hex $apid < 400) 
       if( $apid > 96 &&  $apid < 400) 
       {
         #for sdo apids, use start packet date range as hash value
@@ -316,7 +316,8 @@ sub show_help_info($)
   }
   if ($argpassed eq "HELP")
   {
-    print "***Note:Currently using option -g\n\n";
+    print "***Note:Currently using option -g. This option does many at once.This option filters out creating\n";
+    print "***map file for HK config packets(not sdo hk packets) that do not have a VER keyword.\n\n";
     print "More information on Environment variables\n"; 
     print "(2)Environment variable HK_APID_LIST_DAY_FILES\n"; 
     print "(2a)Used to list apid to process using argument -f\n";
@@ -347,35 +348,53 @@ sub show_help_info($)
 sub get_apid_to_do
 {
   # create list of files to process using apid values in file
-  my($fn);
-  if ($apid_list_flg eq "1")
+  my($fn,$found_dup_flg);
+  if ($apid_list_flg eq "1") # -f flag
   {
     #$dn=$ENV{'HK_CONFIG_DIRECTORY'};
+
     #$dn=".";#Currently, place in directory containing script.
     $fn=$ENV{'HK_APID_LIST_DAY_FILES'};
     open(FILE_APID_LIST, "$fn") || die "(1)Can't Open $fn file: $!\n";
     while (<FILE_APID_LIST>)
     {
+      #convert apid string decimal value to hex string for check_dup_merged_apid function
+      $hexstr= sprintf("%x", $_);
+      ($found_dup_flg)= &check_dup_merged_apid( $hexstr);        
+      if ($found_dup_flg)
+      { 
+        next;#skip doing
+      }
       push(@all_apids, $_) ;
     }
     close FILE_APID_LIST ;
   }
-  elsif ($apid_list_flg eq "2")
+  elsif ($apid_list_flg eq "2") # -g flag
   {
      &get_list_hkpdf_filename($ARGV[1],$ARGV[2]);
- 
   }
-  elsif ($apid_list_flg eq "3")
+  elsif ($apid_list_flg eq "3") # -a flag
   {
-    #push decimal character value in this format dddd.Example 0001
-    push(@all_apids, $ARGV[1]);
-    print "-->doing map file for apid  $ARGV[1]\n";
+    #convert apid string decimal value to hex string for check_dup_merged_apid function
+    $hexstr= sprintf("%x", $ARGV[1]);
+    #skip doing if duplicate of merged apid 445,529,etc
+    ($found_dup_flg)= &check_dup_merged_apid( $hexstr);        
+    if ($found_dup_flg)
+    { 
+      #skip doing
+      print "-->skipping doing map file for apid  $ARGV[1]\n";
+    }
+    else
+    {
+      #push decimal character value in this format dddd.Example 0001
+      push(@all_apids, $ARGV[1]);
+      print "-->doing map file for apid  $ARGV[1]\n";
+    }
   }
   else 
   {
     print "WARNING: jsoc_do_jsvn_map_file.pl: Not valid apid list flag value\n";
   }
-  #print "apids to do: @all_apids\n";
 }
 
 #############################################################################
@@ -384,7 +403,9 @@ sub get_apid_to_do
 sub get_list_hkpdf_filename($$)
 {
   # declare locals and set args
-  my($dn,$arg_fvn,$arg_processing_type);
+  my($dn,$arg_fvn,$arg_processing_type, $found_dup_flg);
+
+  # aguments passed
   $arg_fvn=$_[0]; #first argument passed file version number
   $arg_processing_type=$_[1];#second argument passed is process type flag
 
@@ -411,29 +432,137 @@ sub get_list_hkpdf_filename($$)
   # get list of apids to do
   (@apidslist)=&get_list_apids_to_do($arg_fvn,$arg_processing_type);
 
-  # parse apids values from filename to get valid list of apids
+  # parse apids values from filename to get valid list of apids 
   foreach $filename (@hkpdf_filenames)
   {
 
     # check apid is one we want to create jsd for.These are packets with VER_NUM keywords
     # this skips doing prelim and final jsd that are not in list
-    if(substr($filename,0,5) eq "apid-" )
+    if(substr($filename,0,5) eq "apid-")
     {
         # get current apid
         $currapid=substr($filename,5,3); 
 
         # check list of apid want to create JSDs for
-        ($foundflg)=&check_apid_list(@apidslist,$currapid);
+        ($foundflg)=&check_apid_list($currapid);
 
         # if apid not in list skip creating jsd
         if ($foundflg == 0)
         {
           next;#skip doing
         }
+
+        # check if not doing duplicate for merged data series
+        ($found_dup_flg)= &check_dup_merged_apid($currapid);        
+        if ($found_dup_flg)
+        { 
+          next;#skip doing
+        }
     }
-    if (( index  $filename, "apid-" ) != -1)
+    elsif( substr($filename,0,4) eq "AIA-" || substr($filename,0,4) eq "HMI-" || substr($filename,0,4) eq "SDO-")
+    {
+        # get current apid
+        if(substr($filename,0,7) eq "AIA-ISP")
+        {
+          $currapid="211"; 
+        }
+        elsif(substr($filename,0,7) eq "AIA-SEQ")
+        {
+          $currapid="218"; 
+        }
+        elsif(substr($filename,0,7) eq "HMI-ISP")
+        {
+          $currapid="1BD"; 
+        }
+        elsif(substr($filename,0,7) eq "HMI-SEQ")
+        {
+          $currapid="1C3"; 
+        }
+        elsif(substr($filename,0,7) eq "SDO-ASD")
+        {
+          $currapid="081"; 
+        }
+        else
+        {
+          $currapid=substr($filename,4,3); 
+        }
+
+
+        # check list of apid want to create JSDs for
+        ($foundflg)=&check_apid_list($currapid);
+
+        # if apid not in list skip creating jsd
+        if ($foundflg == 0)
+        {
+          next;#skip doing
+        }
+
+        # check if not doing duplicate for merged data series
+        ($found_dup_flg)= &check_dup_merged_apid($currapid);        
+        if ($found_dup_flg)
+        { 
+          next;#skip doing
+        }
+    }
+    else
+    {
+        next;
+    }
+
+    # passed check if duplicate merged apid and passed being in apids want to do so add to list of apids to do
+    if (( index  $filename, "apid-" ) != -1 )
     {
       push(@all_apids, sprintf("%0.4d", hex  substr($filename,5,3)) );
+    }
+    elsif (( index  $filename, "HMI-" ) != -1 )
+    {
+      if (substr($filename,0,7) eq "HMI-ISP")
+      {
+        push(@all_apids, "0445" );
+      }
+      elsif (substr($filename,0,7) eq "HMI-SEQ")
+      {
+        push(@all_apids, "0451" );
+      }
+      elsif (substr($filename,0,7) eq "HMI-OBT")
+      {
+        push(@all_apids, "0448" );
+      }
+      else
+      {
+        push(@all_apids, sprintf("%0.4d", hex  substr($filename,4,3)) );
+      }
+    }
+    elsif (( index  $filename, "AIA-" ) != -1 )
+    {
+      if (substr($filename,0,7) eq "AIA-ISP")
+      {
+        push(@all_apids, "0529" );
+      }
+      elsif (substr($filename,0,7) eq "AIA-SEQ")
+      {
+        push(@all_apids, "0536" );
+      }
+      elsif (substr($filename,0,7) eq "AIA-OBT")
+      {
+        push(@all_apids, "0540" );
+      }
+      else
+      {
+        push(@all_apids, sprintf("%0.4d", hex  substr($filename,4,3)) );
+      }
+
+    }
+    elsif (( index  $filename, "SDO-" ) != -1 )
+    {
+      if (substr($filename,0,7) eq "SDO-ASD")
+      {
+        push(@all_apids, "0129" );
+      }
+      else
+      {
+        push(@all_apids, sprintf("%0.4d", hex  substr($filename,4,3)) );
+      }
     }
   }
 }
@@ -460,14 +589,16 @@ sub get_list_init_jsds()
 sub create_file_header($)
 {
   #declare and set local variables
-  my ($string_apid,$hexapid);
+  my ($string_apid,$hexapid, $fn_prefix);
   $string_apid= $_[0];#passed argument in function
+  
 
   #Open Output file
   $directory=$ENV{'HK_JSVN_MAP_DIRECTORY'};
 
   #create outfile file name
-  $filename= sprintf("%4.4s-%s\n",  $apid, "JSVN-TO-PVN");
+  $fn_prefix = &get_filename_prefix($apid);
+  $filename= sprintf("%s-%s\n",  $fn_prefix, "JSVN-TO-PVN");
 
   #create file and start writing lines to hdr file
   open(OUTFILE, ">$directory/$filename") || die "(4)Can't Open  $directory/$filename: $!\n" ;
@@ -488,12 +619,59 @@ sub create_file_header($)
   
   # begin outputing lines for JSD
   $hexapid = sprintf("%s%03X", "0x",$string_apid);
+ $filename  =~ s/\n//g;
   print OUTFILE "##############################################################################################################################\n";
-  printf(OUTFILE  "# FILENAME:                  %s%s                                                                                #\n",
-  $strapid,"-JSVN-TO-PVN");
+  printf(OUTFILE  "# FILENAME:                  %s                                                                             #\n", $filename);
+
+  if($string_apid eq "0445")
+  {
+  print OUTFILE "# APID(decimal char. value): $string_apid, 475, 29                                                                                   #\n";
+  print OUTFILE "# APID(hex. value):          $hexapid, 0x1DB, 0x1D                                                                              #\n";
+  print OUTFILE "# PACKET DESCRIPTION:        HMI Image Status Packet                                                                         #\n";
+  }
+  elsif($string_apid eq "0529")
+  {
+  print OUTFILE "# APID(decimal char. value): $string_apid, 569, 39                                                                                   #\n";
+  print OUTFILE "# APID(hex. value):          $hexapid, 0x239, 0x27                                                                              #\n";
+  print OUTFILE "# PACKET DESCRIPTION:        AIA Image Status Packet                                                                         #\n";
+  }
+  elsif($string_apid eq "0451")
+  {
+  print OUTFILE "# APID(decimal char. value): $string_apid, 481, 21                                                                                   #\n";
+  print OUTFILE "# APID(hex. value):          $hexapid, 0x1E1, 0x15                                                                              #\n";
+  print OUTFILE "# PACKET DESCRIPTION:        HMI Sequencer Packet                                                                            #\n";
+  }
+  elsif($string_apid eq "0536")
+  {
+  print OUTFILE "# APID(decimal char. value): $string_apid, 576, 46                                                                                   #\n";
+  print OUTFILE "# APID(hex. value):          $hexapid, 0x240, 0x2E                                                                              #\n";
+  print OUTFILE "# PACKET DESCRIPTION:        AIA Sequencer Packet                                                                            #\n";
+  }
+  elsif($string_apid eq "0448")
+  {
+  print OUTFILE "# APID(decimal char. value): $string_apid, 478, 18                                                                                   #\n";
+  print OUTFILE "# APID(hex. value):          $hexapid, 0x1DE, 0x12                                                                              #\n";
+  print OUTFILE "# PACKET DESCRIPTION:        HMI OBT Packet                                                                                 #\n";
+  }
+  elsif($string_apid eq "0540")
+  {
+  print OUTFILE "# APID(decimal char. value): $string_apid, 580, 50                                                                                   #\n";
+  print OUTFILE "# APID(hex. value):          $hexapid, 0x244, 0x32                                                                              #\n";
+  print OUTFILE "# PACKET DESCRIPTION:        AIA OBT Packet                                                                                 #\n";
+  }
+  elsif ($string_apid eq "0129")
+  {
+  print OUTFILE "# APID(decimal char. value): $string_apid                                                                                            #\n";
+  print OUTFILE "# APID(hex. value):          $hexapid                                                                                           #\n";
+  print OUTFILE "# PACKET DESCRIPTION:        Ancillory Science Packet                                                                        #\n";
+  }
+  else
+  {
   print OUTFILE "# APID(decimal char. value): $string_apid                                                                                            #\n";
   print OUTFILE "# APID(hex. value):          $hexapid                                                                                           #\n";
   print OUTFILE "# PACKET DESCRIPTION:                                                                                                        #\n";
+  }
+
   if(hex $apid < 96 || hex $apid > 400)
   {
     print OUTFILE "# GTCIDS LOOKUP COLUMN:      $columnid                                                                                          #\n";
@@ -548,6 +726,7 @@ sub get_gtcids_lookup_column
   if($apid == 5 || $apid == 37 || $apid == 435 || $apid == 465 || $apid == 537 || $apid == 567)
   {
     $columnid ="KERNAL_ID";
+    print "WARNING:jsoc_do_jsvn_map_file.pl: using columnid KERNAL_ID in GROUND file for apid:$apid\n";
   }
   elsif($apid >= 1 && $apid <= 31 )
   {
@@ -645,16 +824,20 @@ sub get_gtcids_lines
   close(FILE);
   close(OUTFILE);
 }
+
 
+
 ###########################################
 #  check apid list to do                  #
 ###########################################
-sub check_apid_list (@$)
+sub check_apid_list ($)
 {
+  # apid passed.  Note apidslist is global variable
+  $capid = $_[0];
   $foundflg=0;
   foreach $a (@apidslist)
   {
-    if($currapid =~ m/$a/i)
+    if($capid =~ m/$a/i)
     {
       $foundflg=1;
       last;
@@ -662,39 +845,85 @@ sub check_apid_list (@$)
   }
  return ($foundflg);
 }
-###########################################
-#  get list of apids to do                #
-###########################################
+
+###############################################################################################################
+#  get list of apids to do : get list from HKPDF folder and filters out doing HKPDF files with no VER keyword #
+###############################################################################################################
 sub get_list_apids_to_do($$)
 {
+  # local variables
   my($argver,$argproctype,$files);
+  # arguments passed
   $argver=$_[0];
   $argproctype=$_[1];
 
   # misses VER_TEMPERATURE
   # $files=`cd /home1/carl/cvs/TBL_JSOC/lev0/hk_config_file/$file_version/; grep VER_NUM apid*`;
   # get all apids that have VER_NUM or VER_TEMPERATURE Keyword
-  if($argproctype eq "HK")
+  if($argproctype eq "HK" && $argver >= 1.160)
   {
-    $files=`cd $ENV{'HK_CONFIG_DIRECTORY'}/$argver/;  egrep '(VER_NUM|VER_TEMPERATURE)' apid*`;
+    # get hmi files with VER
+    $hmifiles =`cd $ENV{'HK_CONFIG_DIRECTORY'}/$argver/;  egrep '(VER_NUM|VER_TEMPERATURE)' HMI-*`;
+      
+    # remove HMI text regular expression
+    $hmifiles =~ s/(H.+?-)//g;
+     
+    # remove everything from after apid number to end of line regular expression
+    $hmifiles =~ s/(-.+?\n)/ /g;
+    
+    # fix for dealing with apid list -substitute ISP for hmi with 1BD and SEQ for hmi with 1E1
+    $hmifiles =~ s/ISP/1BD/g;
+    $hmifiles =~ s/SEQ/1C3/g;
+   
+    # get aia files with VER
+    $aiafiles =`cd $ENV{'HK_CONFIG_DIRECTORY'}/$argver/;  egrep '(VER_NUM|VER_TEMPERATURE)' AIA-*`;
+
+    # remove AIA text regular expression
+    $aiafiles =~ s/(AIA-)//g;
+
+    # remove everything from after apid number to end of line regular expression
+    $aiafiles =~ s/(-.+?\n)/ /g;
+
+    # fix for dealing with apid list -substitute ISP for hmi with 1BD and SEQ for hmi with 1E1
+    $aiafiles =~ s/ISP/211/g;
+    $aiafiles =~ s/SEQ/218/g;
+
+    #put both aia and hmi lists together
+    $files=sprintf("%s%s", $hmifiles,$aiafiles);
+
+  }
+  elsif($argproctype eq "HK" && $argver < 1.160)
+  {
+    $files=`cd $ENV{'HK_CONFIG_DIRECTORY'}/$argver/;  egrep '(VER_NUM|VER_TEMPERATURE)' apid* `;
+    # remove apid text regular expression
+    $files =~ s/(a.+?-)//g;
+    # remove everything from after apid number to end of line regular expression
+    $files =~ s/(-.+?\n)/ /g;
   }
   elsif ($argproctype eq "SDO")
   {
-    $files=`cd $ENV{'HK_SH_CONFIG_DIRECTORY'}/$argver/; grep -H "^APID" apid*`;
+    $sdofiles=`cd $ENV{'HK_SH_CONFIG_DIRECTORY'}/$argver/; grep -H "^APID" SDO*`;
+
+    # remove AIA text regular expression
+    $sdofiles =~ s/(SDO-)//g;
+
+    # remove everything from after apid number to end of line regular expression
+    $sdofiles =~ s/(-.+?\n)/ /g;
+
+    # fix for dealing with apid list -substitute ISP for hmi with 1BD and SEQ for hmi with 1E1
+    $sdofiles =~ s/ASD/081/g;
+
+    #put both aia and hmi lists together
+    $files=sprintf("%s", $sdofiles);
   }
   else
   {
     print "ERROR:jsoc_do_jsvn_map_file.pl: Could not understand processing type passed:$argproctype\n";
   }
 
-  # remove apid text regular expression
-  $files =~ s/(a.+?-)//g;
-
-  # remove everything from after apid number to end of line regular expression
-  $files =~ s/(-.+?\n)/ /g;
-
   # split apids into separate field in array
-  my @apidslist = split(/ /, $files);
+  #my @apidslist = split(/ /, $files);
+  @apidslist = split(/ /, $files);
 
   # return list of apids to do
   return ( @apidslist);
@@ -770,3 +999,92 @@ sub get_shcids_lines
   close(FILE);
   close(OUTFILE);
 }
+
+#############################################################################
+# subroutine get_filename_prefix:get new prefix name of map filenames       #
+#############################################################################
+sub get_filename_prefix($)
+{
+  my($apid_str,$apid);
+  $apid_str = $_[0];
+  
+  #convert to integer apid value
+  $apid= int $apid_str;
+
+  #check for merged apids,non-merged apids, or sdo apids and pass back map filename prefix
+  if ($apid == 445 )
+  {
+    return("HMI-ISP");
+  }
+  elsif ($apid == 529)
+  {
+    return("AIA-ISP");
+  }
+  elsif ($apid == 451)
+  {
+    return("HMI-SEQ");
+  }
+  elsif ($apid == 536)
+  {
+    return("AIA-SEQ");
+  }
+  elsif ($apid == 448)
+  {
+    return("HMI-OBT");
+  }
+  elsif ($apid == 540)
+  {
+    return("AIA-OBT");
+  }
+  elsif ($apid == 129)
+  {
+    return("SDO-ASD");
+  }
+  elsif (($apid < 31 && $apid > 0) || ($apid < 500 && $apid > 400))
+  {
+     return(sprintf("HMI-%03d",$apid));
+  }
+  elsif (($apid < 64 && $apid > 30) || ($apid < 600 && $apid > 500))
+  {
+     return(sprintf("AIA-%03d",$apid));
+  }
+  else
+  {
+     print "Got unexpected apid value : $apid\n";
+     return ("UNKNOWN");
+  }
+
+}
+#############################################################################
+# subroutine check_dup_merge_apid: check for duplicate of merged apid       #
+#############################################################################
+sub check_dup_merged_apid($)        
+{
+  my($apid_str,$apid);
+  $apid_str = $_[0];
+
+  #convert to integer apid value
+  $apid= hex $apid_str;
+
+  if ($apid == 475  || $apid == 29) #dup HMI ISPs
+  {
+    return(1);
+  }
+  elsif ($apid == 481  || $apid == 21) #dup HMI SEQs
+  {
+    return(1);
+  }
+  elsif ($apid == 569  || $apid == 39) #dup AIA ISPs
+  {
+    return(1);
+  }
+  elsif ($apid == 576  || $apid == 46) #dup AIA ISPs
+  {
+    return(1);
+  }
+  else
+  {
+    return(0);
+  }
+
+} 
