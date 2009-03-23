@@ -784,7 +784,7 @@ sub decode_keywords_for_dayfiles()
              {
 	       # load this there file in DRMS
                print LF "-->(13)Running script in mode for sending dayfiles to decode_dayfile exec to be decoded and written to DRMS with report file. \n";
-               $log1=`decode_dayfile -p in=$there > $script_dir/Report-$filename-$series`;
+               $log1=`decode_dayfile -p src=$source in=$there > $script_dir/Report-$filename-$series`;
 
                # gzip report
                $log2=`/bin/gzip -f $script_dir/Report-$filename-$series`;
@@ -803,7 +803,7 @@ sub decode_keywords_for_dayfiles()
              {
 	       # load this there file in DRMS
                print LF "-->(13)Running script in mode for sending dayfiles <$there> to decode_dayfile exec to be decoded and written to DRMS without creating report file\n";
-               $log1=`decode_dayfile in=$there`;
+               $log1=`decode_dayfile src=$source in=$there`;
 
                # add filename to did file list when successfully processed dayfile already
                print DFILE "$there\n";
