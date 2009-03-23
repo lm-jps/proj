@@ -852,7 +852,7 @@ sub check_apid_list ($)
 sub get_list_apids_to_do($$)
 {
   # local variables
-  my($argver,$argproctype,$files);
+  my($argver,$argproctype,$files, @s_fvn);
   # arguments passed
   $argver=$_[0];
   $argproctype=$_[1];
@@ -860,7 +860,8 @@ sub get_list_apids_to_do($$)
   # misses VER_TEMPERATURE
   # $files=`cd /home1/carl/cvs/TBL_JSOC/lev0/hk_config_file/$file_version/; grep VER_NUM apid*`;
   # get all apids that have VER_NUM or VER_TEMPERATURE Keyword
-  if($argproctype eq "HK" && $argver >= 1.160)
+  @s_fvn=split('\.', $argver );
+  if($argproctype eq "HK" &&  int $s_fvn[1] >= 160 &&  int $s_fvn[0] == 1)
   {
     # get hmi files with VER
     $hmifiles =`cd $ENV{'HK_CONFIG_DIRECTORY'}/$argver/;  egrep '(VER_NUM|VER_TEMPERATURE)' HMI-*`;
@@ -892,7 +893,7 @@ sub get_list_apids_to_do($$)
     $files=sprintf("%s%s", $hmifiles,$aiafiles);
 
   }
-  elsif($argproctype eq "HK" && $argver < 1.160)
+  elsif($argproctype eq "HK" &&  int $s_fvn[1] < 160 && int $s_fvn[0] == 1)
   {
     $files=`cd $ENV{'HK_CONFIG_DIRECTORY'}/$argver/;  egrep '(VER_NUM|VER_TEMPERATURE)' apid* `;
     # remove apid text regular expression
