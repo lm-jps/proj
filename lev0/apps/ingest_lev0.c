@@ -85,8 +85,8 @@
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 16384		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
-//#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
-#define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
+#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
+//#define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
 #define TESTAPPID 0x199		//appid of test pattern packet
 #define TESTVALUE 0xc0b		//first value in test pattern packet
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file

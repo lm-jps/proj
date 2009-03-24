@@ -6,6 +6,8 @@ d		:= $(dir)
 # Local variables
 test0_$(d)		:= $(addprefix $(d)/, test0)
 ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0 decode_dayfile)
+ingestlev1_$(d)		:= $(addprefix $(d)/, build_lev1)
+ingestlev1_mgr_$(d)	:= $(addprefix $(d)/, build_lev1_mgr)
 ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
 
@@ -13,7 +15,7 @@ xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
 #yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 
 #SUMEXE_$(d)	:= $(addprefix $(d)/, ingest_lev0)
-SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(test0_$(d))
+SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d))
 CEXE_$(d)       := $(addprefix $(d)/, fix_hmi_config_file_date)
 CEXE		:= $(CEXE) $(CEXE_$(d))
 MODEXESUMS	:= $(MODEXESUMS) $(SUMEXE_$(d)) $(PEEXE_$(d))
@@ -53,11 +55,16 @@ $(xingestlev0_$(d)):	$(ingestlev0_obj_$(d))
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng
+
+#$(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng -L/SGE/lib/lx24-amd64/ -ldrmaa -Wl,-rpath,/SGE/lib/lx24-amd64
+
 $(PEEXE_$(d)):		LL_TGT := -lecpg -lpq 
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)):	$(LIBASTRO)
 
 $(ingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
+$(ingestlev1_$(d)):	LL_TGT := $(LL_TGT)
+$(ingestlev1_mgr_$(d)):	LL_TGT := $(LL_TGT)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
