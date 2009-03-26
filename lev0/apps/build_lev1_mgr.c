@@ -2,18 +2,40 @@
  * cvs/JSOC/proj/lev1/apps/build_lev1_mgr.c
  *-----------------------------------------------------------------------------
  *
- * This is a module that runs with DRMS and continuously processes lev0
- * filtergrams to lev1 by doing a qsub to run an build_lev1 for each
- * of 12 (IMAGE_NUM_COMMIT) lev0 records to be processed.
+ * This is a module that runs with DRMS and processes lev0
+ * filtergrams to lev1 by running the build_lev1 module. 
+ *
+ *build_lev1_mgr
+ *	instru= hmi or aia
+ *	dsin= default hmi.lev0e or aia.lev0e
+ *	dsout= hmi.lev1e or aia.lev1e
+ *	brec= first lev0 record# to process
+ *	erec= last lev0 record# to process
+ *
+ * Runs build_lev1 processes to create lev1 datasets
+ * Has two modes:
+ * Stream Mode (one instance)
+ *	brec=0, erec=0 
+ *	- start at lev0 rec of highest lev1 FSN. Run forever.
+ *	- fork up to 8 (MAXCPULEV1) build_lev1 for every 
+ *	  12 (MAXRECLEV1) lev0 records. 
+ *	- when an build_lev1 completes, fork another for next 12 rec
+ *	- if no more lev0 records available, sleep and try again
+ *	- if 8 CPU not enough to keep up with lev0, go to 16, etc.
+ *
+ * Reprocessing Mode (any number of instances)
+ *	brec=1000, erec=2000 
+ *	- qsub up to 128 (MAXQSUBLEV1) build_lev1 for 12 records ea
+ *	- when a job completes qsub next 12 records until erec is reached
+ *	- when all jobs are done, build_lev1_mgr will exit
+ *
  */ 
 
-#include <jsoc_main.h>
+#include <jsoc.h>
 #include <cmdparams.h>
 #include <drms.h>
-#include <drms_names.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <strings.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -22,7 +44,6 @@
 #include <printk.h>
 #include <errno.h>
 #include <sys/wait.h>
-#include "imgdecode.h"
 
 
 //default in and out data series
@@ -36,19 +57,9 @@
 #define DONUMRECS 120		//!!TEMP #of lev0 records to do and then exit
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1_mgr.%s.log"
 #define NUMTIMERS 8		//number of seperate timers avail
-#define IMAGE_NUM_COMMIT 12	//!!TEMP number of lev0 images to do at a time
+#define MAXRECLEV1 12	//number of lev0 to lev1 images to do at a time
+#define MAXCPULEV1 8	//max number of forks to do at a time for stream mode
 #define NOTSPECIFIED "***NOTSPECIFIED***"
-
-int compare_rptr(const void *a, const void *b);
-
-/******************************************************
-extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int *Fsn);
-extern int write_hk_to_drms();
-extern void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg);
-extern int set_HMI_mech_values(DRMS_Record_t *rec);
-******************************************************/
-
-TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 
 // List of default parameter values. 
 ModuleArgs_t module_args[] = { 
@@ -64,40 +75,26 @@ ModuleArgs_t module_args[] = {
   {ARG_END}
 };
 
+ModuleArgs_t *gModArgs = module_args;
 CmdParams_t cmdparams;
 // Module name presented to DRMS. 
 char *module_name = "build_lev1_mgr";
 
 FILE *h1logfp;		// fp for h1 ouput log for this run 
 FILE *qsubfp;		// fp for qsub script
-static IMG Image0, Image1;
-static IMG *Img0 = &Image0;
-static IMG *Img1 = &Image1;
-//static CCSDS_Packet_t *Hk;
-static DRMS_Record_t *rs;
-static DRMS_Record_t *rs0, *rs1;
-static DRMS_Record_t *rptr;
-static DRMS_Segment_t *segment;
-static DRMS_Array_t *segArray;
-static DRMS_RecordSet_t *rset0, *rset1;
-static DRMS_Array_t *Array0;
 static TIME sdo_epoch;
 static char datestr[32];
 static char open_dsname[256];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 
-unsigned int fsnx = 0;
-
-short *rdat;
 int verbose;
 long long brec, erec;		//begin and end lev0 rec# to do
 int stream_mode = 0;		//0=qsub build_lev1, 1=fork it locally
 int hmiaiaflg = 0;		//0=hmi, 1=aia
 int imagecnt = 0;		// num of images since last commit 
-int restartflg = 0;		// set when ingest_lev0 is called for a restart
+int restartflg = 0;		// set when build_lev0 is called for a restart
 int abortflg = 0;
 int sigalrmflg = 0;             // set on signal so prog will know 
-int ignoresigalrmflg = 0;       // set after a close_image()
 char logname[128];
 char argdsin[128], argdsout[128], arglogfile[128], arginstru[80];
 char argbrec[80], argerec[80];
@@ -116,9 +113,9 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
-    printf ("Usage:\nbuild_lev1_mgr [-vhr] "
-	"instru=<hmi|aia> dsin=<lev0> dsout=<lev1> brec=<rec#> erec=<rec#>\n"
-	"                   [logfile=<file>]\n"
+    printf ("Usage: build_lev1_mgr [-vhr]\n"
+	"instru=<hmi|aia> dsin=<lev0> dsout=<lev1> brec=<rec#> erec=<rec#>"
+	"\n[logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
 	"  -r: restart. only used when we restart our selves periodically\n"
@@ -138,15 +135,17 @@ int nice_intro ()
   return (0);
 }
 
-static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
+/* Return pointer to "Wed Jun 30 21:49:08 1993\n" */
+char *get_datetime()
 {
-static int firstcall = 1;
-if (firstcall)
-  {
-  firstcall = 0;
-  }
-/* XXX fix build 3/18/2008, arta */
-return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
+  struct timeval tvalr;
+  struct tm *t_ptr;
+  static char datestr[32];
+
+  gettimeofday(&tvalr, NULL);
+  t_ptr = localtime((const time_t *)&tvalr.tv_sec);
+  sprintf(datestr, "%s", asctime(t_ptr));
+  return(datestr);
 }
 
 // Setup global datestr[] like: 2008.07.14_08:29:31
@@ -219,7 +218,7 @@ int send_mail(char *fmt, ...)
 
   va_start(args, fmt);
   vsprintf(string, fmt, args);
-  sprintf(cmd, "echo \"%s\" | Mail -s \"ingest_lev0 mail\" lev0_user", string);
+  sprintf(cmd, "echo \"%s\" | Mail -s \"build_lev1 mail\" lev0_user", string);
   system(cmd);
   va_end(args);
   return(0);
@@ -234,90 +233,119 @@ void abortit(int stat)
   exit(stat);
 }
 
-int forkstream(long long recn0)
+int forkstream(long long recn0, long long maxrecn0)
 {
   pid_t pid, wpid;
-  int stat_loc;
-  char *args[6];
-  char args1[128], args2[128], args3[128], args4[128], args5[128];
+  long long numofrecs, frec, lrec;
+  int stat_loc, i, j, k, l;
+  char *args[8], pcmd[128];
+  char args1[128], args2[128], args3[128], args4[128], args5[128], args6[128];
 
-  if((pid = fork()) < 0) {
-    printk("***Can't fork(). errno=%d\n", errno);
-    return(1);
-  }
-  else if(pid == 0) {                   /* this is the beloved child */
-    printk("execvp of build_lev1\n");
-    args[0] = "build_lev1";
-    sprintf(args1, "brec=%lu", recn0-3);	//!!TEMP recnum
-    args[1] = args1;
-    sprintf(args2, "erec=%lu", recn0);
-    args[2] = args2;
-    sprintf(args3, "instru=%s", instru);
-    args[3] = args3;
-    sprintf(args4, "logfile=%s/l1_%s.log", QSUBDIR, gettimetag());
-    args[4] = args4;
-    args[5] = NULL;
-    if(execvp(args[0], args) < 0) {
-      printk("***Can't execvp() build_lev1. errno=%d\n", errno);
-      exit(1);
+  numofrecs = (maxrecn0 - recn0) + 1;
+  //numofrecs = 192;		//!!TEMP force this for now
+
+  i = numofrecs/MAXRECLEV1;	//this many to fork
+  if(i == 0) return(0);
+  lrec = recn0-1;
+  for(j=i; j > 0; j = j - MAXCPULEV1) {
+    if(j < MAXCPULEV1) l = j;
+    else l = MAXCPULEV1;
+    for(k=0; k < l; k++) { //fork this many at a time
+      frec = lrec+1; lrec = (frec + MAXRECLEV1)-1;
+      //printf("!!TBD for j=%d brec=%d erec=%d\n", j, frec, lrec);
+      if((pid = fork()) < 0) {
+        printk("***Can't fork(). errno=%d\n", errno);
+        return(1);
+      }
+      else if(pid == 0) {                   /* this is the beloved child */
+        args[0] = "build_lev1";
+        sprintf(args1, "dsin=%s", dsin);
+        args[1] = args1;
+        sprintf(args2, "dsout=%s", dsout);
+        args[2] = args2;
+        sprintf(args3, "brec=%lu", frec);
+        args[3] = args3;
+        sprintf(args4, "erec=%lu", lrec);
+        args[4] = args4;
+        sprintf(args5, "instru=%s", instru);
+        args[5] = args5;
+        //sprintf(args6, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
+        sprintf(args6, "logfile=%s/l1s_%lu_%lu.log", QSUBDIR, frec, lrec);
+        args[6] = args6;
+        args[7] = NULL;
+        printk("execvp: %s %s %s %s %s %s %s\n", 
+		args[0],args[1],args[2],args[3],args[4],args[5],args[6]);
+        if(execvp(args[0], args) < 0) {
+          printk("***Can't execvp() build_lev1. errno=%d\n", errno);
+          exit(1);
+        }
+      }
+      printf("forked pid = %d\n", pid);
     }
+    wpid = -1;			//wait for any child
+    //wpid = pid;		//wait for this child
+    //wpid = 0;			//wait for child in the same process group
+    while(1) {
+      pid = waitpid(wpid, &stat_loc, 0);
+      if(pid == -1) {
+        if(errno == ECHILD) printf("!!No More Children\n");errno=0;
+        break;
+      }
+      else {
+        printf("returned pid = %d stat_loc = %d\n", pid, stat_loc);
+      }
+    }
+    //now update lev1_highest_lev0_recnum table with lrec
+    sprintf(pcmd, "echo \"update lev1_highest_lev0_recnum set lev0recnum=%lu, date='%s' where lev0series='%s'\" | psql -h hmidb jsoc", lrec, get_datetime(), dsin);
+    system(pcmd);
   }
-  printf("forked pid = %d\n", pid);
-  sleep(1);			//if don't do this the wait just returns
-  //wpid = -1;			//wait for any child
-  //wpid = pid;			//wait for this child
-  wpid = 0;			//wait for child in the same process group
-  //pid = wait(&stat_loc);
-  pid = waitpid(wpid, &stat_loc, 0);
-  printk("returned pid = %d stat_loc = %d\n", pid, stat_loc);
-  printf("returned pid = %d stat_loc = %d errno=%d\n", pid, stat_loc, errno);
-
-  pid = waitpid(wpid, &stat_loc, 0);	//!!TEMP do again
-  printk("returned pid = %d stat_loc = %d\n", pid, stat_loc);
-  printf("returned pid = %d stat_loc = %d errno=%d\n", pid, stat_loc, errno);
-
-  pid = waitpid(wpid, &stat_loc, 0);	//!!TEMP do again
-  printk("returned pid = %d stat_loc = %d\n", pid, stat_loc);
-  printf("returned pid = %d stat_loc = %d errno=%d\n", pid, stat_loc, errno);
-  if(errno == ECHILD) printf("!!No More Children\n");
-  perror("call from perror ");
-
-  return(0);
+  return(0); //!!TEMP
 }
 
 int do_ingest()
 {
-  DRMS_Record_t *irpt;
   FILE *fin;
   int rstatus, dstatus, ncnt, qcnt, i;
-  long long recnum0, recnum1;
+  long long recnum0, maxrecnum0, recnum1;
   uint64_t jid;
   char recrange[128], qlogname[128], qsubcmd[128], string[128];
   char astr[32], bstr[32], pcmd[128];
 
   ncnt = 0; qcnt = 0;
-  if(stream_mode) {		//start at lev0 rec# of highest lev1 FSN
-    sprintf(pcmd, "echo \"select max(recnum) from %s where fsn=(select max(fsn) from %s)\" | psql -h hmidb jsoc", dsin, dsout);
+  if(stream_mode) {		//start past last lev0 rec# processed 
+    sprintf(pcmd, "echo \"select lev0recnum from lev1_highest_lev0_recnum where lev0series='%s'\" | psql -h hmidb jsoc", dsin);
+    fin = popen(pcmd, "r");
+    while(fgets(string, sizeof string, fin)) {  //get psql return line
+      if(strstr(string, "lev0recnum")) continue;
+      if(strstr(string, "-----")) continue;
+      sscanf(string, "%lu", &recnum0);		//get lev0 rec# 
+      recnum0++;				//start at next rec#
+      break;
+    }
+    fclose(fin);
+    sprintf(pcmd, "echo \"select max(recnum) from %s\" | psql -h hmidb jsoc", dsin);
     fin = popen(pcmd, "r");
     while(fgets(string, sizeof string, fin)) {  //get psql return line
       if(strstr(string, "max")) continue;
       if(strstr(string, "-----")) continue;
-      sscanf(string, "%lu", &recnum0);		//get lev0 rec# 
+      sscanf(string, "%lu", &maxrecnum0);	//get max lev0 rec# 
       break;
     }
     fclose(fin);
-    printf("Stream Mode starting at lev0 recnum = %lu\n", recnum0);
-    forkstream(recnum0);
+    printf("Stream Mode starting at lev0 recnum = %lu maxrecnum = %lu\n", 
+		recnum0, maxrecnum0);
+    if(recnum0 > maxrecnum0) return(0);		//nothing to do. go wait
+    forkstream(recnum0, maxrecnum0);
     return(0);		//!!TEMP
     //!!TBD fix. put in a phoney brec for now
-    recnum0 = 1000;
+    //recnum0 = 1000;
   }
   else {			//reprocessing mode. use brec/erec
     recnum0 = brec;		//!!TEMP for now
   }
 //!!TBD below... Ignore stream_mode for now!!
   brec = recnum0;
-  erec = recnum0+(IMAGE_NUM_COMMIT-1);
+  erec = recnum0+(MAXRECLEV1-1);
   sprintf(recrange, ":#%lld-#%lld", brec, erec);
   sprintf(open_dsname, "%s[%s]", dsin, recrange);
   printk("open_dsname = %s\n", open_dsname);
@@ -330,7 +358,8 @@ int do_ingest()
     }
     fprintf(qsubfp, "#!/bin/csh\n");
     fprintf(qsubfp, "echo \"TMPDIR = $TMPDIR\"\n");
-    fprintf(qsubfp, "build_lev1 brec=%d erec=%d instru=%s logfile=%s/l1_%s_$JOB_ID.log\n", brec, erec, instru, QSUBDIR, gettimetag()); 
+    fprintf(qsubfp, "build_lev1 dsin=%s dsout=%s brec=%d erec=%d instru=%s logfile=%s/l1_%s_$JOB_ID.log\n", 
+		dsin, dsout, brec, erec, instru, QSUBDIR, gettimetag()); 
     fclose(qsubfp);
     sprintf(qsubcmd, "qsub -o %s -e %s -q j.q %s", 
 		QSUBDIR, QSUBDIR, qlogname);
@@ -344,11 +373,11 @@ int do_ingest()
     }
     fclose(fin);
     printf("\$JOB_ID = %u\n", jid);
-    ncnt = ncnt + IMAGE_NUM_COMMIT;
+    ncnt = ncnt + MAXRECLEV1;
     if(ncnt >= DONUMRECS) { break; }	//!!TEMP only do this many records
     recnum0++;
-    brec = brec + IMAGE_NUM_COMMIT;
-    erec = brec + (IMAGE_NUM_COMMIT-1);
+    brec = brec + MAXRECLEV1;
+    erec = brec + (MAXRECLEV1-1);
     sprintf(recrange, ":#%lld-#%lld", brec, erec);
     sprintf(open_dsname, "%s[%s]", dsin, recrange);
     printk("open_dsname = %s\n", open_dsname); //!!TEMP
@@ -357,15 +386,6 @@ int do_ingest()
   return(0);
 }
 
-int compare_rptr(const void *a, const void *b)
-{
-  DRMS_Record_t *x=(DRMS_Record_t *)a, *y=(DRMS_Record_t *)b;
-
-  if(x->recnum < y->recnum) return(-1);
-  if(x->recnum > y->recnum) return(1);
-  return(0);
-}
-
 // Initial setup stuff called when main is first entered.
 void setup()
 {
@@ -407,20 +427,19 @@ void setup()
     system(idstr);
   }
   umask(002);			// allow group write 
-  //Image.initialized = 0;	// init the two image structures 
-  //ImageOld.initialized = 0;
-  //Img = &Image;
-  //ImgO = &ImageOld;
-  //Img->initialized = 0;
-  //ImgO->initialized = 0;
 }
 
 // Module main function. 
-int DoIt(void)
+int main(int argc, char **argv)
 {
   int wflg = 1;
   char line[80];
 
+  if (cmdparams_parse(&cmdparams, argc, argv) == -1)
+  {
+     fprintf(stderr,"Error: Command line parsing failed. Aborting.\n");
+     return 1;
+  }
   if (nice_intro())
     return (0);
   if(!(username = (char *)getenv("USER"))) username = "nouser"; 
@@ -480,8 +499,8 @@ int DoIt(void)
     if(do_ingest()) {        // loop to get files from the lev0
       printk("**ERROR: Some drms error  for %s\n", open_dsname);
     }
-    //sleep(1);
-    wflg = 0;		//!!TBD
+    sleep(5);		//wait for more lev0 to appear
+    //wflg = 0;		//!!TBD
   }
   return(0);
 }
