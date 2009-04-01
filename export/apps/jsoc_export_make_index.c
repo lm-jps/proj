@@ -105,7 +105,7 @@ int main(int argc, char **argv)
     p = buf;
     switch (state)
       {
-      char *name, *val;
+      char *name, *val, *sustr;
       char *namestr, *valstr;
       case 0: // Initial read expect standard header line
 	if (strncmp(buf, "# JSOC ",7) != 0)
@@ -118,7 +118,10 @@ int main(int argc, char **argv)
       case 1:  // In header section, take name=val pairs.
 	if (strncmp(buf, "# DATA",6) == 0) // done with header ?
 	  {
-	  state = 2;
+          if (strncmp(buf, "# DATA SU", 9) == 0)
+            state = 3;
+          else
+	    state = 2;
 	  fprintf(index_html, "</TABLE><P><H2><B>Selected Data</B></H2><P><TABLE>\n");
 	  break;
 	  }
@@ -188,6 +191,47 @@ int main(int argc, char **argv)
 	// put name=value pair into index.html
 	fprintf(index_html, "<TR><TD>%s</TD<TD><A HREF=\"http://jsoc.stanford.edu/%s/%s\">%s</A></TD></TR>\n", name, dir, val, val);
 	break;
+      case 3: // Data section for Storage Units contains triples of sunum, seriesname, path
+        if (*p == '#' || !*p) // skip blank and comment lines
+          break;
+        sustr = buf;
+        while (isblank(*sustr)) // skip leading blanks
+          sustr++;
+        p = sustr;
+        while (*p && !isblank(*p)) // skip past sunum
+          p++;
+        if (*p)
+          *p++ = '\0'; // mark end of sunum
+        name = p;
+        while (isblank(*name)) // skip leading blanks
+          name++;
+        p = name;
+        while (*p && !isblank(*p)) // skip past seriesname
+          p++;
+        if (*p)
+          *p++ = '\0'; // mark end of seriesname
+        val = p;
+        while (isblank(*val)) // skip leading blanks
+          val++;
+        p = val + strlen(val);
+        p--;
+        while (isblank(*p) && p >= val) // omit trailing blanks
+          *p-- = '\0';
+        // put sunum, seriesname, and path into json
+        fileinfo = json_new_object();
+        namestr = string_to_json(sustr);
+        json_insert_pair_into_object(fileinfo, "sunum", json_new_string(sustr));
+        free(namestr);
+        namestr = string_to_json(name);
+        json_insert_pair_into_object(fileinfo, "series", json_new_string(namestr));
+        free(namestr);
+        valstr = string_to_json(val);
+        json_insert_pair_into_object(fileinfo, "path", json_new_string(valstr));
+        free(valstr);
+        json_insert_child(recinfo, fileinfo);
+        // put name=value pair into index.html
+        fprintf(index_html, "<TR><TD>%s</TD<TD>%s</TD><TD><A HREF=\"http://jsoc.stanford.edu/%s\">%s</A></TD></TR>\n", sustr, name, val, val);
+        break;
       default:
         fprintf(stderr, "Unsupported case '%d'.\n", state);
       }

@@ -177,7 +177,7 @@ int DoIt(void)
   fprintf(index_txt, "status=0\n");
   cwd = getcwd(NULL, 0);
   fprintf(index_txt,"dir=%s\n", ((strncmp("/auto", cwd,5) == 0) ? cwd+5 : cwd));
-  fprintf(index_txt, "# DATA\n");
+  fprintf(index_txt, "# DATA SU\n");
   rewind(index_data);
   while (fgets(buf, DRMS_MAXPATHLEN*2, index_data))
     fputs(buf, index_txt);
