@@ -210,12 +210,10 @@ int DoIt(void)
   TIME exptime;
   TIME now;
   double waittime;
-  int dojson=1, dotxt=0, dohtml=0, doxml=0;
   DRMS_RecordSet_t *exports, *exports_new_orig, *exports_new;
   DRMS_RecordSet_t *requestor_rs;
   DRMS_Record_t *export_rec, *export_log;
   char requestorquery[DRMS_MAXQUERYLEN];
-  char *export_series; 
   int status = 0;
 
   const char *dbname = NULL;
@@ -370,8 +368,10 @@ int DoIt(void)
           fprintf(fp, "jsoc_export_SU_as_is_sock ds='%s' requestid=%s\n", dataset, requestid); 
         else
           fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid=%s filenamfmt=%s\n", dataset, requestid, filenamefmt); 
+        fprintf(fp, "if ($status) exit $status\n");
         // convert index.txt list into index.json and index.html packing list files. 
         fprintf(fp, "jsoc_export_make_index\n");
+        fprintf(fp, "if ($status) exit $status\n");
         // set status=done and mark this version of the export record permanent
         fprintf(fp, "set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
   // make drms_run completion lock file
@@ -404,9 +404,11 @@ int DoIt(void)
         // Force staging and get paths to export files with list in index.txt
         fprintf(fp, "jsoc_export_as_fits_sock reqid=%s expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol=%s %s\n",
           requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, dbids);
+        fprintf(fp, "if ($status) exit $status\n");
 
         // convert index.txt list into index.json and index.html packing list files. 
         fprintf(fp, "jsoc_export_make_index\n");
+        fprintf(fp, "if ($status) exit $status\n");
 
         // set status=done and mark this version of the export record permanent
         fprintf(fp, "set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
