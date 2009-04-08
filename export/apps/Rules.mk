@@ -22,7 +22,7 @@ MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 
 EXE_$(d)        := $(MODEXE_$(d)) $(MODEXE_ONLY_$(d)) $(CEXE_$(d))
 OBJ_$(d)	:= $(EXE_$(d):%=%.o) 
-DEP_$(d)	:= $(OBJ_$(d):%=%.o.d)
+DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
 		   $(EXE_$(d)) \

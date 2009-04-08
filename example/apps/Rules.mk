@@ -51,7 +51,7 @@ OBJUSEF_$(d)	:= $(MODEXE_USEF_SOCK_$(d):%_sock=%.o)
 OBJF_$(d)	:= $(FMODEXE_$(d):%_sock=%.o) $(FMODEXE_GONG_$(d):%_sock=%.o)
 
 
-DEP_$(d)	:= $(OBJ_$(d):%=%.o.d) $(OBJF_$(d):%=%.o.d)
+DEP_$(d)	:= $(OBJ_$(d):%=%.d) $(OBJUSEF_$(d):%=%.d) $(OBJF_$(d):%=%.d)
 
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
