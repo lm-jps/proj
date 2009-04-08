@@ -55,8 +55,8 @@
 #define LEV1SERIESNAMEAIA "su_production.aia_lev1e"	//temp test case
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
-#define QSUBDIR "/scr21/production/qsub"
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1_mgr.%s.log"
+#define QSUBDIR "/scr21/production/qsub"
 #define NUMTIMERS 8		//number of seperate timers avail
 #define MAXRECLEV1 12	//number of lev0 to lev1 images to do at a time
 #define MAXCPULEV1 8	//max# of forks to do at a time for stream mode
@@ -86,7 +86,6 @@ char *module_name = "build_lev1_mgr";
 
 FILE *h1logfp;		// fp for h1 ouput log for this run 
 FILE *qsubfp;		// fp for qsub script
-static TIME sdo_epoch;
 static char datestr[32];
 static char open_dsname[256];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
@@ -509,14 +508,21 @@ int do_ingest()
 void sighandler(sig)
   int sig;
 {
+  char pcmd[128];
   if(sig == SIGTERM) {
     printf("*** %s build_lev1_mgr got SIGTERM. Exiting.\n", datestr);
     printk("*** %s build_lev1_mgr got SIGTERM. Exiting.\n", datestr);
+    sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
+                LEV1LOG_BASEDIR);
+    system(pcmd);
     exit(1);
   }
   if(sig == SIGINT) {
     printf("*** %s build_lev1_mgr got SIGINT. Exiting.\n", datestr);
     printk("*** %s build_lev1_mgr got SIGINT. Exiting.\n", datestr);
+    sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
+                LEV1LOG_BASEDIR);
+    system(pcmd);
     exit(1);
   }
   printk("*** %s build_lev1_mgr got an illegal signal %d, ignoring...\n",
@@ -534,7 +540,6 @@ void setup()
   char string[128], cwdbuf[128], idstr[256], lfile[128];
   int tpid;
 
-  sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   do_datestr();
   printk_set(h1log, h1log);	// set for printk calls 
   printk("%s\n", datestr);
@@ -574,8 +579,9 @@ void setup()
 // Module main function. 
 int main(int argc, char **argv)
 {
+  FILE *fin;
   int wflg = 1;
-  char line[80];
+  char line[128], pcmd[128];
 
   if (cmdparams_parse(&cmdparams, argc, argv) == -1)
   {
@@ -595,7 +601,24 @@ int main(int argc, char **argv)
   dsout = cmdparams_get_str(&cmdparams, "dsout", NULL);
   brec = cmdparams_get_int(&cmdparams, "brec", NULL);
   erec = cmdparams_get_int(&cmdparams, "erec", NULL);
-  if(brec == 0 && erec == 0) stream_mode = 1;
+  if(brec == 0 && erec == 0) {
+    //make sure there isn't a stream mode already running
+    sprintf(pcmd, "ls %s/build_lev1_mgr.stream.touch 2>/dev/null", 
+		LEV1LOG_BASEDIR);
+    fin = popen(pcmd, "r");
+    while(fgets(line, sizeof line, fin)) {  //get ps return line
+      printf("Error: build_lev1_mgr already running.");
+      printf(" If not so, do:\n");
+      printf("/bin/rm %s/build_lev1_mgr.stream.touch\n", LEV1LOG_BASEDIR);
+      fclose(fin);
+      return(0);
+    }
+    fclose(fin);
+    sprintf(pcmd, "touch %s/build_lev1_mgr.stream.touch 2>/dev/null",
+                LEV1LOG_BASEDIR);
+    system(pcmd);
+    stream_mode = 1;
+  }
   logfile = cmdparams_get_str(&cmdparams, "logfile", NULL);
   if (strcmp(dsin, NOTSPECIFIED) == 0) {
     if(hmiaiaflg == 0) dsin = LEV0SERIESNAMEHMI;
@@ -632,10 +655,10 @@ int main(int argc, char **argv)
   setup();
   while(wflg) {
     if(do_ingest()) {        // loop to get files from the lev0
-      printk("**ERROR: Some drms error  for %s\n", open_dsname);
+      printk("**ERROR: in do_ingest() for %s\n", open_dsname);
     }
     if(!stream_mode) return(0); //all done for reprocessing
-    sleep(5);		//wait for more lev0 to appear
+    sleep(10);		//wait for more lev0 to appear
     //wflg = 0;
   }
   return(0);
