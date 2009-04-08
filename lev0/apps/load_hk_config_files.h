@@ -180,9 +180,9 @@ void load_config_data( APID_HKPFD_Files* , APID_Pointer_HK_Configs* );
 int save_hdpf_new_formats(FILE* file_ptr,APID_Pointer_HK_Configs *ptr);
 int update_hdpf_new_formats(FILE* file_ptr, HK_Config_Files *ptr_config_node,
 			    HK_Config_Files *top_ptr_config_node); 
-int load_hdpf_keyword_lines(char keyword_lines[][], int i, HK_Config_Files *ptr_config_node);
-int load_hdpf_dsc_lines(char dsc_lines[][], int j, HK_Config_Files *ptr_config_node);  
-int load_hdpf_alg_lines(char alg_lines[][], int k, HK_Config_Files *ptr_config_node);
+int load_hdpf_keyword_lines(char keyword_lines[MAX_NUM_KW_LINES][MAXLINE_IN_FILE], int i, HK_Config_Files *ptr_config_node);
+int load_hdpf_dsc_lines(char dsc_lines[MAX_NUM_DCON_LINES][MAXLINE_DCON_IN_FILE], int j, HK_Config_Files *ptr_config_node);  
+int load_hdpf_alg_lines(char alg_lines[MAX_NUM_ACON_LINES][MAXLINE_ACON_IN_FILE], int k, HK_Config_Files *ptr_config_node);
 DSC_Conversion* create_hdpf_dsc_nodes(Keyword_Parameter *ptr_hk_keyword);
 Keyword_Parameter* create_hdpf_keyword_nodes(HK_Config_Files *ptr_hk_config_node,int number_of_lines);  
 GTCIDS_Version_Number * read_gtcids_hk_file();
