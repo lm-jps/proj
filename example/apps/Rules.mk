@@ -27,10 +27,14 @@ d		:= $(dir)
 MODEXE_$(d)	:= $(addprefix $(d)/, hello_world threadsigs threadalrm)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
-MODEXE_SOCK_$(d):= $(addsuffix _sock, $(addprefix $(d)/, hello_world scalesegments opendsdsrecs))
-FMATHMOD_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, demo_td08062007))
-MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d)) $(FMATHMOD_$(d))
+MODEXE_SOCK_$(d):= $(addsuffix _sock, $(addprefix $(d)/, hello_world opendsdsrecs))
+MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 
+# C module that uses a third-party Fortran library
+MODEXE_USEF_SOCK_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, demo_td08062007 scalesegments))
+MODEXE_USEF_SOCK	:= $(MODEXE_USEF_SOCK) $(MODEXE_USEF_SOCK_$(d))
+
+# F modules (DoIt() resides in .f file)
 ifeq ($(COMPILER), icc)
   FMODEXE_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, helloworld xinterp ringfit_ssw))
   FMODEXE_GONG_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, f_ingest_gong_mrv f_dup_gong_mrv))
@@ -38,9 +42,14 @@ ifeq ($(COMPILER), icc)
   FMODEXE	:= $(FMODEXE) $(FMODEXE_$(d)) $(FMODEXE_GONG_$(d))
 endif
 
-OBJFMATH_$(d)	:= $(FMATHMOD_$(d):%_sock=%.o)
-OBJ_$(d)	:= $(MODEXE_SOCK_$(d):%_sock=%.o) $(OBJFMATH_$(d))
+OBJ_$(d)	:= $(MODEXE_$(d):%=%.o) $(MODEXE_SOCK_$(d):%_sock=%.o) $(GONGLIB_$(d))
+
+# .o files that use the third-party Fortran libraries
+OBJUSEF_$(d)	:= $(MODEXE_USEF_SOCK_$(d):%_sock=%.o)
+
+# .o files that depend on fdrms.mod - the interface to the Fortran versions of DRMS
 OBJF_$(d)	:= $(FMODEXE_$(d):%_sock=%.o) $(FMODEXE_GONG_$(d):%_sock=%.o)
+
 
 DEP_$(d)	:= $(OBJ_$(d):%=%.o.d) $(OBJF_$(d):%=%.o.d)
 
@@ -48,7 +57,7 @@ CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
 		   $(OBJF_$(d)) \
 		   $(MODEXE_$(d)) \
-		   $(FMATHMOD_$(d)) \
+		   $(MODEXE_USEF_SOCK_$(d)) \
 		   $(MODEXE_SOCK_$(d))\
 		   $(FMODEXE_$(d) \
 		   $(FMODEXE_GONG_$(d)) \
@@ -58,34 +67,28 @@ TGT_BIN	        := $(TGT_BIN)
 
 EXAMPLES	:=  $(MODEXE_$(d)) \
 		    $(MODEXE_SOCK_$(d)) \
-		    $(FMATHMOD_$(d)) \
+		    $(MODEXE_USEF_SOCK_$(d)) \
 		    $(FMODEXE_$(d)) \
 		    $(FMODEXE_GONG_$(d))
 
-S_$(d)		:= $(notdir $(MODEXE_$(d))  $(MODEXE_SOCK_$(d)) $(FMATHMOD_$(d)) $(FMODEXE_$(d)) $(FMODEXE_GONG_$(d)))
+S_$(d)		:= $(notdir $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_SOCK_$(d)) $(FMODEXE_$(d)) $(FMODEXE_GONG_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(OBJF_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJF_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJF_$(d)):		CF_TGT := $(CF_TGT) $(FMATHLIBSH) -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJUSEF_$(d)):	$(SRCDIR)/$(d)/Rules.mk
+$(OBJUSEF_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH) -DCDIR="\"$(SRCDIR)/$(d)\""
 
-$(OBJFMATH_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH)
-$(FMATHMOD_$(d)):	LL_TGT := $(LL_TGT) $(FMATHLIBSL) -lfftw3f
-
-$(OBJF_$(d)):		CF_TGT := $(CF_TGT) $(FMATHLIBSH)
-$(FMODEXE_$(d)):	LL_TGT := $(LL_TGT) $(FMATHLIBSL) -lfftw3f
-
-$(FMODEXE_GONG_$(d)):	$(LIBGONGING)
-$(FMODEXE_GONG_$(d)):	LL_TGT := $(LL_TGT) $(FMATHLIBSL) -lcfitsio
-
-# FDRMSMOD is used at COMPILE-time, so can't go in make_basic.mk
-$(OBJF_$(d)):		$(FDRMSMOD)
+# Don't use the make variable FDRMSMODOBJ since you really don't know when it will be 
+# evaluated. Specify fdrms.o relative to root.
+$(OBJF_$(d)):		base/drms/libs/api/client/fdrms.o
 $(GONGLIB_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 $(GONGLIB_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH)
 
-$(FMODEXE_$(d)):	FF_TGT := -module $(dir $(FDRMSMOD))
-$(FMODEXE_GONG_$(d)):	FF_TGT := -module $(dir $(FDRMSMOD))
+$(FMODEXE_$(d)):	FF_TGT := -module base/drms/libs/api/client
+$(FMODEXE_GONG_$(d)):	FF_TGT := -module base/drms/libs/api/client
 $(FMODEXE_GONG_$(d)):	$(GONGLIB_$(d))
 
 # Shortcuts
