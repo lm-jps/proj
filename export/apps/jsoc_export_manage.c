@@ -128,7 +128,7 @@ void make_qsub_call(char *requestid, char *reqdir, int requestorid, const char *
   {
      fprintf(fp,   "setenv JSOC_DBUSER %s\n", dbuser);
   }
-  fprintf(fp, "drms_run %s/%s.drmsrun -V >>& /home/jsoc/exports/tmp/%s.runlog \n", reqdir, requestid, requestid);
+  fprintf(fp, "drms_run %s/%s.drmsrun >>& /home/jsoc/exports/tmp/%s.runlog \n", reqdir, requestid, requestid);
   fprintf(fp, "set DRMS_ERROR=$status\n");
 fprintf(fp, "set NewRecnum=`cat /home/jsoc/exports/tmp/%s.recnum` \n", requestid);
 fprintf(fp, "while (`show_info -q -r 'jsoc.export[%s]' %s` < $NewRecnum)\n", requestid, dbids);
