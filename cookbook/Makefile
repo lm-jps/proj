@@ -7,6 +7,8 @@ LIBD = -L$(DRMS)/lib/$(JPLAT)
 
 DLIBS = $(LIBD) -ldrms -lpq -lz -lpthread -lcfitsio -lm
 
+.SECONDEXPANSION:
+
 # simple modules, no extra libraries
 MODS =        smpl_00
 
