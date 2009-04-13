@@ -59,8 +59,11 @@
 #define QSUBDIR "/scr21/production/qsub"
 #define NUMTIMERS 8		//number of seperate timers avail
 #define MAXRECLEV1 12	//number of lev0 to lev1 images to do at a time
+			//NOTE: put same # in module_args[] numrec
 #define MAXCPULEV1 8	//max# of forks to do at a time for stream mode
-#define MAXQSUBLEV1 16	//max# of qsub to do at a time for reprocessing mode
+			//NOTE: put same # in module_args[] numcpu
+#define MAXQSUBLEV1 16  //max# of qsub to do at a time for reprocessing mode
+			//NOTE: put same # in module_args[] numqsub
 #define MAXJIDSTR MAXQSUBLEV1*16
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 
@@ -74,6 +77,9 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_INTS, "brec", "0", "first lev0 rec# to process"},
   {ARG_INTS, "erec", "0", "last lev0 rec# to process"},
+  {ARG_INTS, "numrec", "12", "number of lev0 to lev1 records at a time"},
+  {ARG_INTS, "numcpu", "8", "max# of forks to do at a time for stream mode"},
+  {ARG_INTS, "numqsub", "16", "max# of qsub to do at a time for reprocessing mode"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
   {ARG_END}
@@ -90,15 +96,17 @@ static char datestr[32];
 static char open_dsname[256];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 
+pid_t mypid;
 uint64_t jid;
 int verbose;
 long long brec, erec;		//begin and end lev0 rec# to do
+int numrec, numcpu, numqsub;
 int qcnt = 0;
 int stream_mode = 0;		//0=qsub build_lev1, 1=fork it locally
 int hmiaiaflg = 0;		//0=hmi, 1=aia
 char logname[128];
 char argdsin[128], argdsout[128], arglogfile[128], arginstru[80];
-char argbrec[80], argerec[80];
+char argbrec[80], argerec[80], argnumrec[80], argnumcpu[80], argnumqsub[80];
 char timetag[32];
 char *username;			// from getenv("USER") 
 char *logfile;			// optional log name passed in 
@@ -114,7 +122,7 @@ int nice_intro ()
     {
     printf ("Usage: build_lev1_mgr [-vh]\n"
 	"instru=<hmi|aia> dsin=<lev0> dsout=<lev1> brec=<rec#> erec=<rec#>"
-	"\n[logfile=<file>]\n"
+	"\nnumrec=<#> numcpu=<#> numqsub=<#> logfile=<file>\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
 	"instru= instrument. must be 'hmi' or 'aia'\n"
@@ -124,8 +132,12 @@ int nice_intro ()
 	"      default hmi=su_production.hmi_lev1e   aia=su_production.aia_lev1e\n"
 	"brec= first lev0 rec# to process. 0=Stream Mode if erec also 0\n"
 	"erec= last lev0 rec# to process. 0=Stream Mode if brec also 0\n"
+	"numrec= number of lev0 to lev1 records at a time. Default %d\n"
+	"numcpu= max# of forks to do at a time for stream mode. Default %d\n"
+	"numqsub= max# of qsub to do at a time for reprocessing mode. Default %d\n"
 	"logfile= optional log file name. If not given uses:\n"
-        "         /usr/local/logs/lev1/build_lev1_mgr.<time_stamp>.log\n");
+        "         /usr/local/logs/lev1/build_lev1_mgr.<time_stamp>.log\n",
+	MAXRECLEV1, MAXCPULEV1, MAXQSUBLEV1);
     return(1);
     }
   verbose = cmdparams_get_int (&cmdparams, "v", NULL);
@@ -250,14 +262,14 @@ int forkstream(long long recn0, long long maxrecn0)
   char args1[128], args2[128], args3[128], args4[128], args5[128], args6[128];
 
   numofrecs = (maxrecn0 - recn0) + 1;
-  numtofork = numofrecs/MAXRECLEV1;     //this many to fork 
+  numtofork = numofrecs/numrec;     //this many to fork 
   j = numtofork;
   if(j == 0) return(0);
   lrec = recn0-1;
-  if(j < MAXCPULEV1) l = j;		//fork less then the max at a time
-  else l = MAXCPULEV1;			//fork the max at a time
+  if(j < numcpu) l = j;		//fork less then the max at a time
+  else l = numcpu;			//fork the max at a time
   for(k=0; k < l; k++) { //fork this many to start 
-    frec = lrec+1; lrec = (frec + MAXRECLEV1)-1;
+    frec = lrec+1; lrec = (frec + numrec)-1;
     if((pid = fork()) < 0) {
       printk("***Can't fork(). errno=%d\n", errno);
       return(1);			//!!TBD decide what to do
@@ -307,15 +319,15 @@ int forkstream(long long recn0, long long maxrecn0)
       if(numtofork <= 0) break;
     }
     else {
-      for(k=0; k < MAXCPULEV1; k++) {   //make sure a good one replies and
+      for(k=0; k < numcpu; k++) {        //make sure a good one replies and
         if(fpid[k] == pid) { break; }	//don't have to worry about wraparound
       }
-      if(k == MAXCPULEV1) continue;	//extraneous pid get on first wait
+      if(k == numcpu) continue;	//extraneous pid get on first wait
       printf("returned pid = %d stat_loc = %d\n", pid, stat_loc);
       if(numtofork == 0) continue;	//find out no more children
     }
     //fork one more
-    frec = lrec+1; lrec = (frec + MAXRECLEV1)-1;
+    frec = lrec+1; lrec = (frec + numrec)-1;
     if((pid = fork()) < 0) {
       printk("***Can't fork(). errno=%d\n", errno);
       return(1);			//!!TBD decide what to do
@@ -350,7 +362,7 @@ int forkstream(long long recn0, long long maxrecn0)
   return(0);
 }
 
-//Start a qsub job.
+//Start a qsub job. Set the global jid.
 int qsubjob(long long rec1, long long rec2)
 {
   FILE *fin;
@@ -380,7 +392,7 @@ int qsubjob(long long rec1, long long rec2)
   while(fgets(string, sizeof string, fin)) {  //get qsub return line
     sscanf(string, "%s %s %d", astr, bstr, &jid); /* get job_id */
   }
-  fclose(fin);
+  pclose(fin);
   printf("\$JOB_ID = %u\n", jid);
   return(0);
 }
@@ -396,35 +408,42 @@ int qsubmode(long long frec, long long lrec)
   int jobdone=0;
 
   numofrecs = (lrec - frec) + 1;
-  numtoqsub = numofrecs/MAXRECLEV1;     //this many to qsub
-  if(numofrecs % MAXRECLEV1) numtoqsub++;
+  numtoqsub = numofrecs/numrec;     //this many to qsub
+  if(numofrecs % numrec) numtoqsub++;
   j = numtoqsub;			//0 implies one to qsub
   rlast = frec-1;
-  if(j < MAXQSUBLEV1) l = j;            //fork less then the max at a time
-  else l = MAXQSUBLEV1;                  //fork the max at a time
-  for(k=0; k < l; k++) { //fork this many to start 
-    rfirst = rlast+1; rlast = (rfirst + MAXRECLEV1)-1;
+  if(j < numqsub) l = j;            //qsub less then the max at a time
+  else l = numqsub;                  //qsub the max at a time
+  for(k=0; k < l; k++) { //qsub this many to start 
+    rfirst = rlast+1; rlast = (rfirst + numrec)-1;
     if(rlast > lrec) rlast = lrec;	//don't go past end
-    status = qsubjob(rfirst, rlast);	//schedule the qsub job
+    status = qsubjob(rfirst, rlast);	//schedule the qsub job. set jid
     --numtoqsub;
     qjid[k] = jid;
     if(k == 0) sprintf(jidstr, "%u", jid);
     else sprintf(jidstr, "%s,%u", jidstr, jid);
   }
-  printf("numtoqsub = %d\n", numtoqsub); //!!TEMP
-  sprintf(qsubcmd, "qstat -j %s 2>/dev/null | grep \"job_number:\"", jidstr);
-  sleep(5);
+  //printf("jidstr = %s\n", jidstr);	//!!TEMP
+  printf("numtoqsub left = %d\n", numtoqsub); //!!TEMP
+  //sprintf(qsubcmd, "qstat -j %s 2>/dev/null | grep \"job_number:\"", jidstr);
+  sprintf(qsubcmd, "qstat -u production | grep \"qsub_prod\"");
   while(1) {
-    //sprintf(qsubcmd, "qstat -u production | grep \"qsub_prod\"");
-    fin = popen(qsubcmd, "r");
+    //printf("\ncmd: %s\n", qsubcmd);	//!!TEMP
+    if(!(fin = popen(qsubcmd, "r"))) {
+      printf("!!!Fatal Error: can't do %s\n", qsubcmd);
+      return(1);	//!!TBD check
+    }
+    //sleep(12);
     found = 0; k = 0;
     while(fgets(string, sizeof string, fin)) {  //get qstat return line
-      sscanf(string, "%s %u", astr, &jid);	// get job_id 
-      printf("!!TEMP job id from qstat = %u\n", jid);
+      //sscanf(string, "%s %u", astr, &jid);	// get job_id 
+      sscanf(string, "%u", &jid);		// get job_id 
+      printf("job id from qstat = %u\n", jid);
       qstatjid[k++] = jid;
       found = 1;
     }
-    fclose(fin);
+    pclose(fin);
+
     //now see if any of the started jobs are done
     for(i=0; i < l; i++) {
       for(j=0; j < k; j++) {
@@ -440,10 +459,11 @@ int qsubmode(long long frec, long long lrec)
         }
         if(numtoqsub) {
           //start_new_qusb
-          rfirst = rlast+1; rlast = (rfirst + MAXRECLEV1)-1;
+          rfirst = rlast+1; rlast = (rfirst + numrec)-1;
           if(rlast > lrec) rlast = lrec;	//don't go past end
           status = qsubjob(rfirst, rlast);	//schedule the qsub job
           --numtoqsub;
+          found = 1;			//job to be found again
           qjid[i] = jid;
           //if(k == 0) sprintf(jidstr, "%u", jid);
           //else sprintf(jidstr, "%s,%u", jidstr, jid);
@@ -457,7 +477,7 @@ int qsubmode(long long frec, long long lrec)
     }
     printf("\n");
     if(!found) break;
-    sleep(2);
+    sleep(3);
   }
   printf("All jobs done = %d. numtoqsub = %d\n", jobdone, numtoqsub);
   return(0);
@@ -483,7 +503,7 @@ int do_ingest()
       recnum0++;				//start at next rec#
       break;
     }
-    fclose(fin);
+    pclose(fin);
     sprintf(pcmd, "echo \"select max(recnum) from %s\" | psql -h hmidb jsoc", dsin);
     fin = popen(pcmd, "r");
     while(fgets(string, sizeof string, fin)) {  //get psql return line
@@ -492,7 +512,7 @@ int do_ingest()
       sscanf(string, "%lu", &maxrecnum0);	//get max lev0 rec# 
       break;
     }
-    fclose(fin);
+    pclose(fin);
     printf("Stream Mode starting at lev0 recnum = %lu maxrecnum = %lu\n", 
 		recnum0, maxrecnum0);
     if(recnum0 > maxrecnum0) return(0);		//nothing to do. go wait
@@ -544,8 +564,9 @@ void setup()
   printk_set(h1log, h1log);	// set for printk calls 
   printk("%s\n", datestr);
   getcwd(cwdbuf, 126);
+  mypid = getpid();
   sprintf(idstr, "Cwd: %s\nCall: ", cwdbuf);
-  sprintf(string, "build_lev1_mgr started as pid=%d user=%s\n", getpid(), username);
+  sprintf(string, "build_lev1_mgr started as pid=%d user=%s\n", mypid, username);
   strcat(idstr, string);
   printk("%s", idstr);
   printf("%s", idstr);
@@ -554,9 +575,12 @@ void setup()
   sprintf(argdsout, "dsout=%s", dsout);
   sprintf(argbrec, "brec=%lu", brec);
   sprintf(argerec, "erec=%lu", erec);
+  sprintf(argnumrec, "numrec=%d", numrec);
+  sprintf(argnumcpu, "numcpu=%d", numcpu);
+  sprintf(argnumqsub, "numqsub=%d", numqsub);
   sprintf(arglogfile, "logfile=%s", logname);
-  printk("%s %s %s %s %s\n", arginstru, argdsin, argdsout, argbrec, argerec);
-  printf("%s %s %s %s %s\n", arginstru, argdsin, argdsout, argbrec, argerec);
+  printk("%s %s %s %s %s %s %s %s\n", arginstru, argdsin, argdsout, argbrec, argerec, argnumrec, argnumcpu, argnumqsub);
+  printf("%s %s %s %s %s %s %s %s\n", arginstru, argdsin, argdsout, argbrec, argerec, argnumrec, argnumcpu, argnumqsub);
   if (signal(SIGINT, SIG_IGN) != SIG_IGN)
       signal(SIGINT, sighandler);
   if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
@@ -601,6 +625,9 @@ int main(int argc, char **argv)
   dsout = cmdparams_get_str(&cmdparams, "dsout", NULL);
   brec = cmdparams_get_int(&cmdparams, "brec", NULL);
   erec = cmdparams_get_int(&cmdparams, "erec", NULL);
+  numrec = cmdparams_get_int(&cmdparams, "numrec", NULL);
+  numcpu = cmdparams_get_int(&cmdparams, "numcpu", NULL);
+  numqsub = cmdparams_get_int(&cmdparams, "numqsub", NULL);
   if(brec == 0 && erec == 0) {
     //make sure there isn't a stream mode already running
     sprintf(pcmd, "ls %s/build_lev1_mgr.stream.touch 2>/dev/null", 
@@ -610,10 +637,10 @@ int main(int argc, char **argv)
       printf("Error: build_lev1_mgr already running.");
       printf(" If not so, do:\n");
       printf("/bin/rm %s/build_lev1_mgr.stream.touch\n", LEV1LOG_BASEDIR);
-      fclose(fin);
+      pclose(fin);
       return(0);
     }
-    fclose(fin);
+    pclose(fin);
     sprintf(pcmd, "touch %s/build_lev1_mgr.stream.touch 2>/dev/null",
                 LEV1LOG_BASEDIR);
     system(pcmd);
