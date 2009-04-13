@@ -58,12 +58,12 @@
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1_mgr.%s.log"
 #define QSUBDIR "/scr21/production/qsub"
 #define NUMTIMERS 8		//number of seperate timers avail
-#define MAXRECLEV1 12	//number of lev0 to lev1 images to do at a time
-			//NOTE: put same # in module_args[] numrec
-#define MAXCPULEV1 8	//max# of forks to do at a time for stream mode
-			//NOTE: put same # in module_args[] numcpu
-#define MAXQSUBLEV1 16  //max# of qsub to do at a time for reprocessing mode
-			//NOTE: put same # in module_args[] numqsub
+#define MAXRECLEV1 128		//max# of lev0 to lev1 images can do at a time
+#define DEFAULTRECLEV1 "12"	//default # of lev0 to lev1 images at a time
+#define MAXCPULEV1 32		//max# of forks can do at a time for stream mode
+#define DEFAULTCPULEV1 "8"	//default# of forks can do at a time 
+#define MAXQSUBLEV1 64  //max# of qsub can do at a time for reprocessing mode
+#define DEFAULTQSUBLEV1 "16"
 #define MAXJIDSTR MAXQSUBLEV1*16
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 
@@ -77,9 +77,9 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_INTS, "brec", "0", "first lev0 rec# to process"},
   {ARG_INTS, "erec", "0", "last lev0 rec# to process"},
-  {ARG_INTS, "numrec", "12", "number of lev0 to lev1 records at a time"},
-  {ARG_INTS, "numcpu", "8", "max# of forks to do at a time for stream mode"},
-  {ARG_INTS, "numqsub", "16", "max# of qsub to do at a time for reprocessing mode"},
+  {ARG_INTS, "numrec", DEFAULTRECLEV1, "number of lev0 to lev1 records at a time"},
+  {ARG_INTS, "numcpu", DEFAULTCPULEV1, "max# of forks to do at a time for stream mode"},
+  {ARG_INTS, "numqsub", DEFAULTQSUBLEV1, "max# of qsub to do at a time for reprocessing mode"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
   {ARG_END}
@@ -132,12 +132,12 @@ int nice_intro ()
 	"      default hmi=su_production.hmi_lev1e   aia=su_production.aia_lev1e\n"
 	"brec= first lev0 rec# to process. 0=Stream Mode if erec also 0\n"
 	"erec= last lev0 rec# to process. 0=Stream Mode if brec also 0\n"
-	"numrec= number of lev0 to lev1 records at a time. Default %d\n"
-	"numcpu= max# of forks to do at a time for stream mode. Default %d\n"
-	"numqsub= max# of qsub to do at a time for reprocessing mode. Default %d\n"
+	"numrec= number of lev0 to lev1 records at a time. Default %s\n"
+	"numcpu= max# of forks to do at a time for stream mode. Default %s\n"
+	"numqsub= max# of qsub to do at a time for reprocessing mode. Default %s\n"
 	"logfile= optional log file name. If not given uses:\n"
         "         /usr/local/logs/lev1/build_lev1_mgr.<time_stamp>.log\n",
-	MAXRECLEV1, MAXCPULEV1, MAXQSUBLEV1);
+	DEFAULTRECLEV1, DEFAULTCPULEV1, DEFAULTQSUBLEV1);
     return(1);
     }
   verbose = cmdparams_get_int (&cmdparams, "v", NULL);
@@ -628,6 +628,18 @@ int main(int argc, char **argv)
   numrec = cmdparams_get_int(&cmdparams, "numrec", NULL);
   numcpu = cmdparams_get_int(&cmdparams, "numcpu", NULL);
   numqsub = cmdparams_get_int(&cmdparams, "numqsub", NULL);
+  if(numrec > MAXRECLEV1) {
+    printf("numrec exceeds max of %d\n", MAXRECLEV1);
+    return(0);
+  }
+  if(numcpu > MAXCPULEV1) {
+    printf("numcpu exceeds max of %d\n", MAXCPULEV1);
+    return(0);
+  }
+  if(numqsub > MAXQSUBLEV1) {
+    printf("numqsub exceeds max of %d\n", MAXQSUBLEV1);
+    return(0);
+  }
   if(brec == 0 && erec == 0) {
     //make sure there isn't a stream mode already running
     sprintf(pcmd, "ls %s/build_lev1_mgr.stream.touch 2>/dev/null", 
