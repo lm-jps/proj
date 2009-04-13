@@ -1,0 +1,19 @@
+This directory contains a "cookbook" collection of sample DRMS modules,
+along with a simplified make system that can be used to build comparable
+applications modules outside of the NetDRMS/JSOC distribution trees.
+
+
+Table of Contents
+
+	Directories
+CVS/		CVS repository information
+Makevars/	files containing system/architecture-specific make variable
+	definitions for use in a generic Makefile
+apps/		sample modules for building within the distribution tree
+
+	DRMS Modules
+smpl_00.c	does (almost) nothing at all
+
+	Other, Unknown
+Makefile	The generic Makefile
+ReadMe		(this file)
