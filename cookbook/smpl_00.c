@@ -44,6 +44,7 @@ int DoIt (void) {
   }
 
   printf ("%s\n", msg);
+				    /*  required status return to jsoc_main  */
   return 0;
 }
 
