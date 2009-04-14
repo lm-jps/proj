@@ -22,14 +22,11 @@ ASFLAGS =
 # cc - C compiler
 NCC = 		/usr/bin/cc
 GCC =		/usr/bin/gcc
-#GCC =		/opt/intel_cc_80/bin/icc -g
-#ICC =		/opt/intel_cc_80/bin/icc
 ICC =		/usr/local/bin/icc -mcmodel=medium
 CC =		$(ICC)
 CDEBUG =	-g
 CDEFINES =	-DBETA
-#CFLAGS =	-O3 -DPVM33 -D_FILE_OFFSET_BITS=64 -xW -D_GNU_SOURCE
-CFLAGS =	-O3 -std=c99 -DPVM33 -D_FILE_OFFSET_BITS=64 -xW -D_GNU_SOURCE
+CFLAGS =	-O3 -std=c99 -D_FILE_OFFSET_BITS=64 -xW -D_GNU_SOURCE
 #CFLAGS =	-std=c99 -xW -D_GNU_SOURCE
 CCFLAGS =       -c $(CFLAGS)
 CCGFLAGS =	-g -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE
@@ -42,7 +39,7 @@ CFILES =
 
 # f77 - FORTRAN
 FC =		/usr/bin/f77
-#FC =		/opt/intel_fc_80/bin/ifort
+#FC =		/usr/local/bin/ifort
 FFLAGS =	-O -c
 FLIBS =		-lCm -lftn -lF77 -lm -lU77 -lI77 -lblas -lisam -lm
 
