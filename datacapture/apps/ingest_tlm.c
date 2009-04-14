@@ -381,6 +381,7 @@ void now_do_alrm_sig()
         }
         else {
 	  h0log("Can't flush image for fsn = %u\n", fsn);
+          decompress_free_images(image);
         }
         remopenimg(&openimg_hdr, fsn);
       }
@@ -446,6 +447,7 @@ void now_do_term_sig()
     }
     else {
       h0log("Can't flush image for fsn = %u. Status=%d\n", fsn, status);
+      decompress_free_images(image);
     }
   }
   free(decomp_stat);
@@ -740,6 +742,7 @@ int get_tlm(char *file)
                 }
                 else {
 		  h0log("*FAILURE to flush prev fsn=%u\n", fsn);
+                  decompress_free_images(partimg);
                 }
                 remopenimg(&openimg_hdr, fsn); /* remove in case it's there */
             }
