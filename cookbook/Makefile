@@ -10,7 +10,7 @@ DLIBS = $(LIBD) -ldrms -lpq -lz -lpthread -lcfitsio -lm
 .SECONDEXPANSION:
 
 # simple modules, no extra libraries
-MODS =        smpl_00
+MODS =        smpl_00 smpl_01
 
 FPLS =	$(addprefix $(DEST)/, $(MODS))
 
@@ -18,7 +18,7 @@ all:	$(MODS)
 
 $(MODS):	$$@.o
 	$(LDCMD) -o $(DEST)/$@ $@.o $(DLIBS)
-	$(RM) $@.o
+#	$(RM) $@.o
 
 clean:
 	$(RM) *.o
@@ -26,5 +26,6 @@ clean:
 Clean:
 	$(RM) *.o
 	$(RM) $(FPLS)
+
 .c.o:
 	$(CC) $(CCFLAGS) $(@:.o=.c) $(INCL)
