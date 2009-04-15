@@ -11,7 +11,7 @@ d		:= $(dir)
 # _sock suffix) in MODEXE_SOCK. In the examples below, scalesegments, opendsdsrecs, 
 # and demo_td08062007 are socket-connect modules, but there are both direct- and 
 # socket-connect versions of hello_world.  Modules created from .f files are always
-# created as sockect-connect modules (and placed in the FMODEXE variable, ie., 
+# created as sockect-connect modules (and placed in the FMODEXE_SOCK variable, ie., 
 # helloworld, xinterp).  
 #
 # Socket-connect modules can share a single DRMS session, so they are ideal when
@@ -36,10 +36,10 @@ MODEXE_USEF_SOCK	:= $(MODEXE_USEF_SOCK) $(MODEXE_USEF_SOCK_$(d))
 
 # F modules (DoIt() resides in .f file)
 ifeq ($(COMPILER), icc)
-  FMODEXE_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, helloworld xinterp ringfit_ssw))
+  FMODEXE_SOCK_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, helloworld xinterp ringfit_ssw))
   FMODEXE_GONG_$(d)	:= $(addsuffix _sock, $(addprefix $(d)/, f_ingest_gong_mrv f_dup_gong_mrv))
   GONGLIB_$(d)	:= $(d)/ingest_gong_mrv_lib.o
-  FMODEXE	:= $(FMODEXE) $(FMODEXE_$(d)) $(FMODEXE_GONG_$(d))
+  FMODEXE_SOCK	:= $(FMODEXE_SOCK) $(FMODEXE_SOCK_$(d)) $(FMODEXE_GONG_$(d))
 endif
 
 OBJ_$(d)	:= $(MODEXE_$(d):%=%.o) $(MODEXE_SOCK_$(d):%_sock=%.o) $(GONGLIB_$(d))
@@ -48,7 +48,7 @@ OBJ_$(d)	:= $(MODEXE_$(d):%=%.o) $(MODEXE_SOCK_$(d):%_sock=%.o) $(GONGLIB_$(d))
 OBJUSEF_$(d)	:= $(MODEXE_USEF_SOCK_$(d):%_sock=%.o)
 
 # .o files that depend on fdrms.mod - the interface to the Fortran versions of DRMS
-OBJF_$(d)	:= $(FMODEXE_$(d):%_sock=%.o) $(FMODEXE_GONG_$(d):%_sock=%.o)
+OBJF_$(d)	:= $(FMODEXE_SOCK_$(d):%_sock=%.o) $(FMODEXE_GONG_$(d):%_sock=%.o)
 
 
 DEP_$(d)	:= $(OBJ_$(d):%=%.d) $(OBJUSEF_$(d):%=%.d) $(OBJF_$(d):%=%.d)
@@ -59,7 +59,7 @@ CLEAN		:= $(CLEAN) \
 		   $(MODEXE_$(d)) \
 		   $(MODEXE_USEF_SOCK_$(d)) \
 		   $(MODEXE_SOCK_$(d))\
-		   $(FMODEXE_$(d) \
+		   $(FMODEXE_SOCK_$(d) \
 		   $(FMODEXE_GONG_$(d)) \
 		   $(DEP_$(d))
 
@@ -68,10 +68,10 @@ TGT_BIN	        := $(TGT_BIN)
 EXAMPLES	:=  $(MODEXE_$(d)) \
 		    $(MODEXE_SOCK_$(d)) \
 		    $(MODEXE_USEF_SOCK_$(d)) \
-		    $(FMODEXE_$(d)) \
+		    $(FMODEXE_SOCK_$(d)) \
 		    $(FMODEXE_GONG_$(d))
 
-S_$(d)		:= $(notdir $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_SOCK_$(d)) $(FMODEXE_$(d)) $(FMODEXE_GONG_$(d)))
+S_$(d)		:= $(notdir $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_SOCK_$(d)) $(FMODEXE_SOCK_$(d)) $(FMODEXE_GONG_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
@@ -87,7 +87,7 @@ $(OBJF_$(d)):		base/drms/libs/api/client/fdrms.o
 $(GONGLIB_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 $(GONGLIB_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH)
 
-$(FMODEXE_$(d)):	FF_TGT := -module base/drms/libs/api/client
+$(FMODEXE_SOCK_$(d)):	FF_TGT := -module base/drms/libs/api/client
 $(FMODEXE_GONG_$(d)):	FF_TGT := -module base/drms/libs/api/client
 $(FMODEXE_GONG_$(d)):	$(GONGLIB_$(d))
 
