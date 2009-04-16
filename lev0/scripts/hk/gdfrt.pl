@@ -84,13 +84,19 @@ if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt: apid value is $av\n";}
 #(9)loop forever thru today and next days 
 while (1)
 {
-$|=1;
+  #flush print buffer
+  $|=1;
+
   #(10)get list of dates to do 
   &get_date_to_do();
  
-  #(11)go through day files in directory looking for all files for given apid and date range
+  ### LOG ###
   if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt:calling get-rt-file function with apid=$av date-range1=$date_r1 date-range2=$date_r2\n";}
+
+  #(11)go through day files in directory looking for all files for given apid and date range
   @list_rtfiles=&get_rt_files($date_r1, $date_r2, $av);
+
+  ### LOG ###
   if($dflg == 0) {print "-->Listing of rt file to do: <@list_rtfiles> based on date range <$date_r1> to <$date_r2>\n";}
   if($dflg == 1) {print LF "-->(3)Listing of rt file to do: <@list_rtfiles> based on date range <$date_r1> to <$date_r2>\n";}
   if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt:Listing of rt file to do: @list_rtfiles\n";}
@@ -99,7 +105,10 @@ $|=1;
   $f = pop(@list_rtfiles);
   if ($f eq "")
   {
-    print "GOT NO FILES TO PROCESS IN APID DIRECTORY FOR APID::$av::!!\n";
+    ### LOG ###
+    if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt:got no files to process for apid:$av . Sleep 1 minute and check again\n";}
+
+    # sleep 1 minute and go to top of while loop and check again
     sleep 60;
     next;
   }
@@ -504,7 +513,9 @@ sub read_n_packets($$$)
    $file=$_[0];
    $curr_date=$_[1];
    $psize=$_[2];#packet_size
-    if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: Called read_n_packets with arguments file:$file and todays date:$curr_date\n";}
+
+   ### LOG ###
+   if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: Called read_n_packets with arguments file:$file and todays date:$curr_date\n";}
 
    # set up delay to exiting loop when today's date changes 
    $wait_clock_trigger=10;
@@ -515,14 +526,10 @@ sub read_n_packets($$$)
 
    #get apid from filename
    $apid= hex substr($f,11,4);
-    if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet:apid used for display is $apid\n";}
 
-   #packet size
-   ##FOR SDO 129::::::$packet_size= 121 + 7;Utilize packet value in packet then add 7.
-   ##FOR HMI 29::::::::$packet_size= 129 + 7;##0x81 - Utilize packet value in packet then add 7.
-   #$psize= 136;
+   ### LOG ###
+   if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet:apid used for display is $apid\n";}
    if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet:packet size used for dd command is $psize\n";}
-
 
    # open dayfile to process to get current size of file
    open(DAYFILE, "$d/$f") || die "ERROR in gdfrt.pl:(5):Can't Open dayfile to read:$d/$f $!\n";
@@ -534,6 +541,8 @@ sub read_n_packets($$$)
    #pkt count
    $current_pkts_in_file= $size/$psize;
    $pkt_count= $current_pkts_in_file;
+
+   ### LOG ###
    if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet:packet count to be used in dd command is $pkt_count\n";}
    if($dflg == 0) {print LF "-->(5)Packet count to be used in dd command is $pkt_count\n";}
 
@@ -548,7 +557,7 @@ sub read_n_packets($$$)
 
    while ( 1 )
    {
-$|=1;
+      $|=1;#added to flush buffers of print.
       if ( $x < $max)
       {
         $wait_clock=0;
@@ -626,9 +635,9 @@ $|=1;
         if($dflg == 0) {printf("-->Completed executing  delete of  minute file <$f-$y-minute> at %s\n",get_current_time());}
         if($dflg == 1) {printf(LF  "-->(9)Completed executing  delete of minute file <$f-$y-minute> at %s\n",get_current_time());}
         if($dflg == 2) {printf("DEBUG:MESSAGE:read_n_packets:Completed executing  delete  of minute file <$f-$y-minute> at %s\n",get_current_time());}
+        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets:sleeping 60\n\n";}
 
         # sleep 1 minute and then repeat above
-        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets:sleeping 60\n\n";}
         sleep 60;
 
         #Reopen and get current file size 
@@ -636,10 +645,14 @@ $|=1;
         # reopen file and check size
         open(DAYFILE, "$d/$f") || die "ERROR in gdfdrms.pl:(6):Can't Open day file to read:$d/$f  $!\n";
         $size = (stat(DAYFILE))[7];
+
+        ### LOG ###
         if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet: File:$d/$f: has a file size :$size:\n";}
 
         # get total number of packets in file
         $total_pkts_in_file= $size/$psize;
+
+        ### LOG ###
         if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: After reopen, total packets in file: $total_pkts_in_file\n";}
 
         # Number of packets created minute files for so far is current_pkts_in_file amount just did and x amount did before
@@ -650,6 +663,8 @@ $|=1;
 
         # Update skip value to amount skipped last time with the amount did just now
         $skip= $pkt_count + $skip ; #watch pkt-count value and current-pkts-in-file are same most the time but not all the time.
+
+        ### LOG ###
         if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet: during next dd command will skip  $skip\n";}
 
         # calculate number of packet left to do now
@@ -661,16 +676,27 @@ $|=1;
       }# if (x < max) 
       else
       {
+        # get today date and time
         $td_date=get_todays_date();
-        if($dflg == 2) {print "DEBUG:MESSAGE:If today's date:$td_date > $curr_date than previous day, then break from loop.\n";}
+
+        # increment delay clock
         $wait_clock++;
 
+        ### LOG ###
+        if($dflg == 2) {print "DEBUG:MESSAGE:If today's date:$td_date > $curr_date than previous day, then break from loop.\n";}
+
+        # check if waited enough time and if its a new day
         if(($wait_clock >= $wait_clock_trigger) && ($td_date > $curr_date))
         {
+          ### LOG ###
           if($dflg == 0) {print  "-->Next day detected. Today date is now <$td_date> and previous day was <$curr_date>. Try getting new dayfile to process.\n";}
           if($dflg == 1) {print LF "-->(11)Next day detected. Today date is now <$td_date> and previous day was <$curr_date>. Try getting new dayfile to process.\n";}
           if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: Next day detected. Break from loop and reread new dayfile for next day.\n";}
+
+          # reset current date
           $curr_date=$td_date;
+
+          # break from this loop to check for dayfiles for next day
           last;
         }
 
@@ -686,10 +712,14 @@ $|=1;
         close (DAYFILE);
         open(DAYFILE, "$d/$f") || die "ERROR in gdfdrms.pl:(7):Can't Open dayfile to read file:$d/$f  $!\n";
         $size = (stat(DAYFILE))[7];
+
+        ### LOG ###
         if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet: File:$d/$f: has a file size :$size:\n";}
 
         # get total number of packets in file
         $total_pkts_in_file= $size/$psize;
+
+        ### LOG ###
         if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: After reopen, total packets in file: $total_pkts_in_file\n";}
 
         # Number of packets created minute files for so far is current_pkts_in_file amount just did and x amount did before
@@ -698,7 +728,7 @@ $|=1;
         # Reset max value in loop to total pkts in file
         $max=$total_pkts_in_file;
 
-        #$skip= $pkt_count + $skip ; 
+        ### LOG ###
         if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet: during next dd command will skip  $skip\n";}
 
         # calculate number of packet left to do now
