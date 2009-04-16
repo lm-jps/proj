@@ -159,51 +159,51 @@ ModuleArgs_t module_args[] =
    {ARG_STRING,  kSeriesOut, "", "Output data series."},
    {ARG_STRING,  kSegIn, kNOTSPECIFIED, ""},
    {ARG_STRING,  kSegOut, kNOTSPECIFIED, ""},
-   {ARG_FLOAT,   kMAPRMAX,  "0.95", "", ""},
-   {ARG_INT,     kMAPMMAX,  "1536", "", ""},	/* determines mapcols */
+   {ARG_FLOAT,   kMAPRMAX,  "0.95", ""},
+   {ARG_INT,     kMAPMMAX,  "1536", ""},	/* determines mapcols */
 						/* default value is 3*512 */
-   {ARG_FLOAT,   kMAPLGMAX, "72.0", "", ""},	/* degrees */    
-   {ARG_FLOAT,   kMAPLGMIN, "-72.0", "", ""},
-   {ARG_FLOAT,   kMAPBMAX,  "72.0", "", ""},  
-   {ARG_INT,     kSINBDIVS, "512", "", ""},	/* # of = increments in sinB */
+   {ARG_FLOAT,   kMAPLGMAX, "72.0", ""},	/* degrees */    
+   {ARG_FLOAT,   kMAPLGMIN, "-72.0", ""},
+   {ARG_FLOAT,   kMAPBMAX,  "72.0", ""},  
+   {ARG_INT,     kSINBDIVS, "512", ""},	/* # of = increments in sinB */
 						/* from sin(0) to sin(PI/2) */
-   {ARG_STRING,  kREF_T0,   "1987.01.03_17:31:12", "", ""},
-   {ARG_FLOAT,   kREF_L0,   "0.0", "", ""},
+   {ARG_STRING,  kREF_T0,   "1987.01.03_17:31:12", ""},
+   {ARG_FLOAT,   kREF_L0,   "0.0", ""},
 
-   {ARG_FLOAT,   kSOLAR_P,  "999.0", "", ""},	/* can't use D_MISSING here */
-   {ARG_FLOAT,   kPSIGN,    "1.0", "", ""},	/* Sign of P. For MWO data. */
-   {ARG_FLOAT,   kPERR,     "0.0", "", ""},	/* Fixed P-angle error. Maybe -0.22. */
-   {ARG_FLOAT,   kIERR,     "0.0", "", ""},	/* Error in Carrington inclination. Maybe -0.10. */
+   {ARG_FLOAT,   kSOLAR_P,  "999.0", ""},	/* can't use D_MISSING here */
+   {ARG_FLOAT,   kPSIGN,    "1.0", ""},	/* Sign of P. For MWO data. */
+   {ARG_FLOAT,   kPERR,     "0.0", ""},	/* Fixed P-angle error. Maybe -0.22. */
+   {ARG_FLOAT,   kIERR,     "0.0", ""},	/* Error in Carrington inclination. Maybe -0.10. */
 
-   {ARG_INT,     kINTERPO,  "1", "0", "1"},	/* 2 methods - see soi_fun.h */
-   {ARG_INT,     kAPODIZE,  "0", "", ""},	/* see soi_fun.h or apodize.c */
-   {ARG_FLOAT,   kAPINNER,  "0.90", "", ""},	/* start of apodization */
-   {ARG_FLOAT,   kAPWIDTH,  "0.05", "", ""},	/* width of apodization */
-   {ARG_INT,     kAPEL,     "0", "", ""},	/* do elliptical apodization */
+   {ARG_INT,     kINTERPO,  "1", "0"},	/* 2 methods - see soi_fun.h */
+   {ARG_INT,     kAPODIZE,  "0", ""},	/* see soi_fun.h or apodize.c */
+   {ARG_FLOAT,   kAPINNER,  "0.90", ""},	/* start of apodization */
+   {ARG_FLOAT,   kAPWIDTH,  "0.05", ""},	/* width of apodization */
+   {ARG_INT,     kAPEL,     "0", ""},	/* do elliptical apodization */
 						/* described by apx and apy */
-   {ARG_FLOAT,   kAPX,      "1.00", "", ""},	/* divide the x position by this before applying apodization */
-   {ARG_FLOAT,   kAPY,      "1.00", "", ""},	/* divide the y position by this before applying apodization */
-   {ARG_INT,     kLGSHIFT,  "0", "0", "2"}, 	/* 0=none; 1=fixed rate; 2=nearest Degree */
-   {ARG_INT,     kVCORLEV,  "2", "0", "2"}, 	/* 3 levels - see soi_fun.h*/
-   {ARG_INT,     kMCORLEV,  "0", "0", "1"}, 	/* 2 levels - see soi_fun.h*/
-   {ARG_INT,     kMOFFSET,  "0", "0", "1"}, 	/* 1=apply BFITZERO correction*/
-   {ARG_STRING,  kOUTTYPE,  "no scaling", "", ""},  /* bits in scaled output */
-   {ARG_FLOAT,   kOUTSCALE, "1.0", "", ""},    /* scale for output */
-   {ARG_FLOAT,   kOUTBIAS,  "0.0", "", ""},    /* bias for scaled output */
-   {ARG_INT,     kDISTORT,  "0", "0", "1000"}, /* 0 for none, 1 for FD, 2 for vw */
-   {ARG_FLOAT,   kCUBIC,    "7.06E-9", "", ""}, /* Cubic distortion in FD units */
-   {ARG_FLOAT,   kTILTALPHA,"2.59", "", ""}, /* TILT of CCD in degrees */
-   {ARG_FLOAT,   kTILTBETA, "56.0", "", ""}, /* Direction of TILT in degrees */
-   {ARG_FLOAT,   kTILTFEFF, "12972.629", "", ""}, /* Effective focal length */
-   {ARG_FLAG,    kCHECKO_FLAG,  "0", "-1", "1"},  /* Non 0 skips checko (SESW assumed) */
-   {ARG_FLAG,    kRMAX_FLAG,    "0", "-1", "1"},  /* Non 0 sets data outside RMAX MISSING */
-   {ARG_FLAG,    kDEBUGLOGFLAG, "0", "-1", "1"},  /* debug messages */
-   {ARG_INT,     kDATASIGN,  "0", "-1", "1"}, 	/* Non 0 forces datasigh to value*/
-   {ARG_INT,     kMAXMISSVALS, "0", "", "0"},  /* max. allowed MISSING pixels */
-   {ARG_INT,     kCarrStretch, "0", "0", ""},  /* 0 - don't correct for diff rot, 1 - correct */
-   {ARG_FLOAT,   DIFROT_A,   "13.562", "", ""}, /* A coefficient in diff rot adj (offset) */
-   {ARG_FLOAT,   DIFROT_B,   "-2.04", "", ""},  /* B coefficient (to sin(lat) ^ 2) */
-   {ARG_FLOAT,   DIFROT_C,   "-1.4875", "", ""},  /* c coefficient (to sin(lat) ^ 4) */
+   {ARG_FLOAT,   kAPX,      "1.00", ""},	/* divide the x position by this before applying apodization */
+   {ARG_FLOAT,   kAPY,      "1.00", ""},	/* divide the y position by this before applying apodization */
+   {ARG_INT,     kLGSHIFT,  "0", ""}, 	/* 0=none; 1=fixed rate; 2=nearest Degree */
+   {ARG_INT,     kVCORLEV,  "2", ""}, 	/* 3 levels - see soi_fun.h*/
+   {ARG_INT,     kMCORLEV,  "0", ""}, 	/* 2 levels - see soi_fun.h*/
+   {ARG_INT,     kMOFFSET,  "0", ""}, 	/* 1=apply BFITZERO correction*/
+   {ARG_STRING,  kOUTTYPE,  "no scaling", ""},  /* bits in scaled output */
+   {ARG_FLOAT,   kOUTSCALE, "1.0", ""},    /* scale for output */
+   {ARG_FLOAT,   kOUTBIAS,  "0.0", ""},    /* bias for scaled output */
+   {ARG_INT,     kDISTORT,  "0", ""}, /* 0 for none, 1 for FD, 2 for vw */
+   {ARG_FLOAT,   kCUBIC,    "7.06E-9", ""}, /* Cubic distortion in FD units */
+   {ARG_FLOAT,   kTILTALPHA,"2.59", ""}, /* TILT of CCD in degrees */
+   {ARG_FLOAT,   kTILTBETA, "56.0", ""}, /* Direction of TILT in degrees */
+   {ARG_FLOAT,   kTILTFEFF, "12972.629", ""}, /* Effective focal length */
+   {ARG_FLAG,    kCHECKO_FLAG,  "0", ""},  /* Non 0 skips checko (SESW assumed) */
+   {ARG_FLAG,    kRMAX_FLAG,    "0", ""},  /* Non 0 sets data outside RMAX MISSING */
+   {ARG_FLAG,    kDEBUGLOGFLAG, "0", ""},  /* debug messages */
+   {ARG_INT,     kDATASIGN,  "0", ""}, 	/* Non 0 forces datasigh to value*/
+   {ARG_INT,     kMAXMISSVALS, "0", ""},  /* max. allowed MISSING pixels */
+   {ARG_INT,     kCarrStretch, "0", ""},  /* 0 - don't correct for diff rot, 1 - correct */
+   {ARG_FLOAT,   DIFROT_A,   "13.562", ""}, /* A coefficient in diff rot adj (offset) */
+   {ARG_FLOAT,   DIFROT_B,   "-2.04", ""},  /* B coefficient (to sin(lat) ^ 2) */
+   {ARG_FLOAT,   DIFROT_C,   "-1.4875", ""},  /* c coefficient (to sin(lat) ^ 4) */
    {ARG_END,     "", "", "", ""}
 };
 
@@ -349,6 +349,8 @@ static void CreateBlankRecord(DRMS_Record_t *inrec, DRMS_Record_t *outrec, const
    drms_copykey(outrec, inrec, kI_DREC);
    drms_copykey(outrec, inrec, kT_REC);
    drms_copykey(outrec, inrec, kQUALITY);
+   drms_copykey(outrec, inrec, "series_num");
+   drms_copykey(outrec, inrec, "rn");
    drms_setkey_string(outrec, kT_OBS, tobsstr);
 }
 
@@ -445,6 +447,8 @@ int DoIt(void)
    perr = cmdparams_get_double(&cmdparams, kPERR, &status);
    ierr = cmdparams_get_double(&cmdparams, kIERR, &status);
 
+// change call to SetDistort
+/*
    SetDistort(&cmdparams, 
 	      kDISTORT, 
 	      kCUBIC,
@@ -452,6 +456,14 @@ int DoIt(void)
 	      kTILTBETA,
 	      kTILTFEFF,
 	      &distP);
+*/
+   int distsave = cmdparams_get_int(&cmdparams, kDISTORT, &status);
+   double cubsave = cmdparams_get_double(&cmdparams, kCUBIC, &status);
+   double tiltasave = cmdparams_get_double(&cmdparams, kTILTALPHA, &status);
+   double tiltbsave = cmdparams_get_double(&cmdparams, kTILTBETA, &status);
+   double tiltfsave = cmdparams_get_double(&cmdparams, kTILTFEFF, &status);
+
+   SetDistort(distsave, cubsave, tiltasave, tiltbsave, tiltfsave, &distP);
 
    trefstr = cmdparams_get_str(&cmdparams, kREF_T0, &status);
    PARAMETER_ERROR(status, status, NULL, kREF_T0)
@@ -534,6 +546,7 @@ int DoIt(void)
 	    {
 	       CreateBlankRecord(inrec, outrec, tobsstr);
 	       SkipErr(status, inrec, "unable to locate critical keyword %s", kT_OBS);
+	       drms_close_records(rs, DRMS_INSERT_RECORD);
 	       continue; /* go to next image */
 	    }
 
@@ -556,6 +569,7 @@ int DoIt(void)
 	    {
 	       CreateBlankRecord(inrec, outrec, tobsstr);
 	       SkipErr(status, inrec, "no data to process");
+	       drms_close_records(rs, DRMS_INSERT_RECORD);
 	       continue; /* go to next image */
 	    }
 
@@ -570,6 +584,7 @@ int DoIt(void)
 	       {
 		  CreateBlankRecord(inrec, outrec, tobsstr);
 		  SkipErr(0, inrec, "%d pixels MISSING, which is more than is allowed", missvals);
+		  drms_close_records(rs, DRMS_INSERT_RECORD);
 		  continue;
 	       }
 	    }
@@ -688,7 +703,14 @@ int DoIt(void)
 		  otherwise give up */
 	       if (xscale == yscale) 
 	       {
-		  rsun = rsun * xscale;
+//		  rsun = rsun * xscale;
+	       /* another change.  now vw or fd scale is specified using command line 
+	          option DISTORT.  inside obs2helio rsun is divided by xscale and yscale,
+	          so just set them to 1 and don't multiply by them here.  rsun is now 
+	          multiplied appropriately inside function Distort.
+	       */
+	          xscale=1.0;
+	          yscale=1.0;
 	       }
 	       else 
 	       {
@@ -736,7 +758,9 @@ int DoIt(void)
 
 	    if (status != DRMS_SUCCESS)
 	    {
+	       CreateBlankRecord(inrec, outrec, tobsstr);
 	       SkipErr(status, inrec, "unable to create output array");
+	       drms_close_records(rs, DRMS_INSERT_RECORD);
 	       continue;
 	    }
 
@@ -891,7 +915,9 @@ int DoIt(void)
 				   rRates,
 				   sizeof(rRates))) 
 	    {
+	       CreateBlankRecord(inrec, outrec, tobsstr);
 	       SkipErr(status, inrec, "Failure in obs2helio");
+	       drms_close_records(rs, DRMS_INSERT_RECORD);
 	       continue; /* go to next image */
 	    }
 
@@ -919,7 +945,9 @@ int DoIt(void)
 				 apx, 
 				 apy)) 
 	    { 
+	       CreateBlankRecord(inrec, outrec, tobsstr);
 	       SkipErr(status, inrec, "Failure in apodize");
+	       drms_close_records(rs, DRMS_INSERT_RECORD);
 	       continue; /* go to next image */
 	    }
 
