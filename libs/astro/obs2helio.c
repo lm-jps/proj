@@ -157,22 +157,20 @@ double Linintd(double *f, int nx, int ny, double x, double y)
 
 
 /**** SetDistortion - used by v2helio ****/
-int SetDistort(CmdParams_t *params, 
-	       char *distortP,
-	       char *cubicP,
-	       char *tiltaP,
-	       char *tiltbP,
-	       char *tiltfeffP,
-	       LIBASTRO_Dist_t *dOut)
+int SetDistort(int dist, 
+	       double cubic, 
+	       double alpha, 
+	       double beta, 
+	       double feff,
+ 	       LIBASTRO_Dist_t *dOut)
 {
    int error = 0;
 
    if (dOut != NULL)
    {
       int status = 0;
-      double beta;
 
-      dOut->disttype = cmdparams_get_int(params, distortP, &status);
+      dOut->disttype = dist;
 
       /* disttype == 0 is 'no distortion' and is not an error */
       if (dOut->disttype != 0)
@@ -198,12 +196,12 @@ int SetDistort(CmdParams_t *params,
 
 	 if (!error)
 	 {
-	    dOut->feff = cmdparams_get_double(params, tiltfeffP, &status);
-	    dOut->alpha = cmdparams_get_double(params, tiltaP, &status) * kRadsPerDegree;
-	    beta = cmdparams_get_double(params, tiltbP, &status) * kRadsPerDegree;
+	    dOut->feff = feff;
+	    dOut->alpha = alpha * kRadsPerDegree;
+	    beta *= kRadsPerDegree;
 	    dOut->cosbeta = cos(beta);
 	    dOut->sinbeta = sin(beta);
-	    dOut->cdist = cmdparams_get_double(params, cubicP, &status);
+	    dOut->cdist = cubic;
 
 	    if (status != CMDPARAMS_SUCCESS)
 	    {
@@ -221,6 +219,7 @@ int SetDistort(CmdParams_t *params,
 
    return error;
 }
+
 
 void Distort(double x, 
 	     double y, 
@@ -248,11 +247,11 @@ void Distort(double x,
       return;
    }
    /* Convert fo FD pixel scale*/
-   /*
-     rsun=rsun*distpars.scale;
-   */
+
+     rsun=rsun*distpars->scale;
+
    /* Don't do anyway since rsun already corrected. Don't get me started... */
-     
+   /* above comment no longer applies, rsun is now untouched in o2helio (v2helio) */  
      
    /* Shift zero point to nominal image center and convert to FD pixel scale */
      
