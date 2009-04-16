@@ -62,6 +62,7 @@ typedef struct LIBASTRO_RotRate_struct
 
 
 int ConvAndInterpFDS(DRMS_Env_t *drmsEnv, char *seriesName, char *dateRange);
+/*
 int SetDistort(CmdParams_t *params, 
 	       char *distortP,
 	       char *cubicP,
@@ -69,6 +70,9 @@ int SetDistort(CmdParams_t *params,
 	       char *tiltbP,
 	       char *tiltfeffP,
 	       LIBASTRO_Dist_t *dOut);
+*/
+int SetDistort(int dist, double cubic, double alpha, double beta, double feff, LIBASTRO_Dist_t *dOut);
+
 int Obs2helio(
 	       float	*V,		/* input velocity array				*/
 	       /* assumed declared V[ypixels][xpixels]		*/
