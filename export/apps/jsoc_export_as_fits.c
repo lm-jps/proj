@@ -121,27 +121,7 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
    drms_record_directory(recin, dir, 1); /* This fetches the input data from SUMS. */
 
    /* Must create query from series name and prime keyword values */
-   char buf[1028];
-   int nkeys = recin->seriesinfo->dbidx_num;
-   int snext = 0;
-   int ikey = 0;
-
-   snprintf(query, sizeof(query), "%s", recin->seriesinfo->seriesname);
-   snext = strlen(query);
-
-   for (ikey = 0; ikey < nkeys; ikey++)
-   {
-      /* Iterate through prime keys */
-      const char *pkeyname = recin->seriesinfo->dbidx_keywords[ikey]->info->name;
-      DRMS_Keyword_t *pkey = NULL;
-
-      if ((pkey = hcon_lookup_lower(&recin->keywords, pkeyname)) != NULL)
-      {
-         drms_keyword_snprintfval(pkey, buf, sizeof(buf));
-         snprintf(query + snext, sizeof(query) - snext, "[%s]", buf);
-         snext += strlen(buf) + 2;
-      }
-   }
+   drms_sprint_rec_query(query, recin);
 
    /* The input rs query can specify a subset of all the series' segments - 
     * this is encapsulated in recin. */
