@@ -443,6 +443,7 @@ int DoIt(void)
     int status=0;
     int all_online;
 
+    export_series = EXPORT_SERIES_NEW;
     // Do survey of sunum list
     size=0;
     all_online = 1;
