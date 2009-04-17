@@ -248,15 +248,28 @@ int DoIt(void)
 		drms_setkey_double(outRec, "EXPTIME", exptime);
 		drms_setkey_double(outRec, "MJD", mjd_day);
 		drms_setkey_double(outRec, "TIME", mjd_time);
-		sprint_time(timebuf, date__obs, "ISO", 0);
-		drms_setkey_string(outRec, "DATE__OBS", timebuf);
-		sprint_time(timebuf, now, "ISO", 0);
-		drms_setkey_string(outRec, "DATE", timebuf);
+                // allow either string or time types for DATE and DATE_OBS
+                if (drms_keyword_type(drms_keyword_lookup(outRec, "DATE__OBS", 1)) == DRMS_TYPE_STRING)
+                  {
+		  sprint_time(timebuf, date__obs, "ISO", 0);
+		  drms_setkey_string(outRec, "DATE__OBS", timebuf);
+                  }
+                else
+                  drms_setkey_time(outRec, "DATE__OBS", date__obs);
+                if (drms_keyword_type(drms_keyword_lookup(outRec, "DATE", 1)) == DRMS_TYPE_STRING)
+                  {
+		  sprint_time(timebuf, now, "ISO", 0);
+		  drms_setkey_string(outRec, "DATE", timebuf);
+		  }
+                else
+                  drms_setkey_time(outRec, "DATE", now);
+
 		break;
 		}
 	  case ACT_AU:
 		{
-#define AU_m (1.49597892e11)
+# define AU_m (149597870691.0)
+//#define AU_m (1.49597892e11) bad
 		double au;
 		au = drms_getkey_double(inRec, "OBS_DIST", &status);
 			if (status)fprintf(stderr,"*** ACT_AU drms_getkey_double OBS_DIST status=%d\n",status);
