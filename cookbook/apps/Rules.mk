@@ -4,7 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODULES_$(d)	:= donought
+MODULES_$(d)	:= 
 MODEXE_$(d)	:= $(addprefix $(d)/, $(MODULES_$(d)))
 MODEXE		:= $(MODEXE) $(MODEXE_$(d)) $(MODEXEDR_$(d))
 
