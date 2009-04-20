@@ -12,7 +12,13 @@ Makevars/	files containing system/architecture-specific make variable
 apps/		sample modules for building within the distribution tree
 
 	DRMS Modules
-smpl_00.c	does (almost) nothing at all
+smpl_00.c	does (almost) nothing at all - like hello_world
+smpl_01.c	echoes its arguments, of a wide variety of types
+smpl_02.c	prints a list of the data series known to DRMS - a simple
+	version of show_series
+smpl_03.c	prints the number of unique records in a selected data series
+	and the number of data segments per record - a simple version of
+	show_info
 
 	Other, Unknown
 Makefile	The generic Makefile
