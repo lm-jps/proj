@@ -23,3 +23,47 @@ smpl_03.c	prints the number of unique records in a selected data series
 	Other, Unknown
 Makefile	The generic Makefile
 ReadMe		(this file)
+
+********************************************************************************
+
+Recipe 0: How to write and build a minimal DRMS module
+
+The program smpl_00.c shows the minimum structure necessary for a C program
+that will be able to interact with the DRMS API to fetch and store date in
+the DRMS and SUMS. This module in fact does neither; but it nevertheless
+opens the required connection to the DRMS, and will fail if that is not
+possible for some reason, such as the database server being unavailable or
+the user lacking proper authorization to access it. It can therefore serve
+as a useful test for minimal connectivity to DRMS.
+
+The module can be built, like all modules in this directory, by typing
+
+      make smpl_00
+
+(alternatively, you can simply type make and all the modules in the target
+list MODS in Makefile will be compiled.) The Makefile is generic: it is
+designed to work on different hardware and operating system platforms by
+accessing an appropriate set of make variables definitions from the various
+files in the subdirectory makevars. To add a new module that does not require
+linking with any additional libraries beyond those required for DRMS, all you
+need to do (besides writing the module!) is to append its name (without the
+filename extension) to the list of MODS in the Makefile.
+
+Note that the Makefile requires the external definition of the environment
+variable JPLAT to the appropriate name for your build platform. If when you
+run the make you get a message like:
+
+Error: no appropriate Makevars; is $JPLAT defined? won't compile...
+
+Either you have not defined the system-appropriate environment variable,
+or there is no file Makevars_$JPLAT.mk in the Makevars directory. It should
+be straightforward to create an appropriate one by replicating one of the
+existing examples and substituting appropriate command paths.
+
+The Makefile also requires external definition of the environment variable
+$DRMS to be the root of your NetDRMS distribution as described in the
+installation instructions. If you get an error message like:
+
+error: could not open source file "jsoc_main.h"
+
+it is probably because you have not correctly set the DRMS environment variable.
