@@ -6,7 +6,7 @@
  *    return status behavior with use of the module verbose flags
  *
  *  Usage:
- *    smpl [-avVH]
+ *    smpl_00 [-avVH]
  *
  *  Bugs:
  *    The module is of no particular use, and exists merely for heuristic
