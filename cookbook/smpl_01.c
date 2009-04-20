@@ -6,7 +6,7 @@
  *    variety of argument types; also introduces time string functions
  *
  *  Usage:
- *    smpl [-avVH]
+ *    smpl_01 [-avVH]
  *
  *  Bugs:
  *    The module is of no particular use, and exists merely for heuristic
