@@ -360,6 +360,7 @@ static int RehydrateCache(DRMS_Env_t *env,
       int iitem = 0;
       char query[256];
       int drmsstatus;
+      DRMS_RecChunking_t cstat = kRecChunking_None;
       int firstitem;
       int lastitem;
 
@@ -396,7 +397,7 @@ static int RehydrateCache(DRMS_Env_t *env,
 
       for (iitem = firstitem; iitem <= lastitem; iitem++)
       {
-         rec = drms_recordset_fetchnext(env, gCacheRS, &drmsstatus);
+         rec = drms_recordset_fetchnext(env, gCacheRS, &drmsstatus, &cstat);
          if (!rec)
          {
             /* last time, read last record in entire set. */

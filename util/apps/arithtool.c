@@ -5253,6 +5253,9 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
      /* Open the inSeries. */
      DRMS_RecordSet_t *inRecSet = drms_open_recordset(drmsEnv, inSeriesQuery, &status);
      DRMS_Record_t *inRec = NULL;
+
+     DRMS_RecChunking_t cstat = kRecChunking_None;
+
      error = (status != DRMS_SUCCESS);
 
      if (!error)
@@ -5263,7 +5266,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
      double *insegBZERO = (double *)malloc(sizeof(double) * nSegs);
      double *insegBSCALE = (double *)malloc(sizeof(double) * nSegs);
 
-     while ((inRec = drms_recordset_fetchnext(drmsEnv, inRecSet, &status)) != NULL)
+     while ((inRec = drms_recordset_fetchnext(drmsEnv, inRecSet, &status, &cstat)) != NULL)
      {
 	  fprintf(stdout, "Processing record %lld\n", inRec->recnum);
 

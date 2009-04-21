@@ -409,6 +409,7 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
    DRMS_Record_t *rec = NULL;
    char *timestr = NULL;
    int status = DRMS_SUCCESS;
+   DRMS_RecChunking_t cstat = kRecChunking_None;
 
    if (!cache || !recout)
    {
@@ -456,9 +457,9 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
             /* must not call fetchnext() if previous call retrieved last rec in chunk, otherwise
              * fetchnext() will blow away chunk, but the *cache will still point to recs 
              * in the cache. */
-            while (!stop && (rec = drms_recordset_fetchnext(drmsEnv, rs, &status)) != NULL)
+            while (!stop && (rec = drms_recordset_fetchnext(drmsEnv, rs, &status, &cstat)) != NULL)
             {
-               if (status == DRMS_CHUNKS_NEWCHUNK)
+               if (cstat == kRecChunking_NewChunk)
                {
                   if (*cache)
                   {
@@ -470,7 +471,7 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
                   /* insert recordset */
                   hcon_insert(*cache, "bobmould", &rs);
                }
-               else if (status == DRMS_CHUNKS_LASTINCHUNK || status == DRMS_CHUNKS_LASTINRS)
+               else if (cstat == kRecChunking_LastInChunk || cstat == kRecChunking_LastInRS)
                {
                   /* this record was the last in chunk - stop caching */
                   stop = 1;
@@ -490,7 +491,7 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
                }
             }
 
-            if (status == DRMS_CHUNKS_NOMORERECS)
+            if (cstat == kRecChunking_NoMoreRecs)
             {
                morerecs = 0;
             }
