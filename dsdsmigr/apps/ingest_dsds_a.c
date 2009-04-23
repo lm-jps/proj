@@ -150,6 +150,7 @@ int DoIt(void)
       DIE_status("Input dataseries not found\n");
    if ((nRecs = inRecSet->n) == 0)
       DIE("No input records found\n");
+   printf("%d input records found\n", nRecs);
 
    outRecSet = drms_create_records(drms_env, nRecs, outRecQuery, DRMS_PERMANENT, &status);
    if (!outRecSet)
@@ -163,21 +164,16 @@ int DoIt(void)
       DRMS_Record_t *inRec, *outRec;
       DRMS_Keyword_t *outKey;
       DRMS_Segment_t *inSeg, *outSeg;
-      // HIterator_t outKey_list, outSeg_list, outLink_list;
-      HIterator_t outKey_list;
+      HIterator_t *outKey_last = NULL;
 //      DRMS_Link_t *outLink;
 
       /* create output series rec prototype */
       inRec = inRecSet->records[iRec];
       outRec = outRecSet->records[iRec];
 
-      hiter_new(&outKey_list, &outRec->keywords);
-//      hiter_new(&seg_list, &outRec->segments);
-//      hiter_new(&link_list, &outRec->links);
-
       /* loop through all target keywords */
-
-      while ( (outKey=(DRMS_Keyword_t *)hiter_getnext(&outKey_list)) )
+      outKey_last = NULL;
+      while (outKey = drms_record_nextkey(outRec, &outKey_last))
 	{
 	char *wantKey, *keyName = outKey->info->name;
         int action = keyNameCheck(keyName, &wantKey);
