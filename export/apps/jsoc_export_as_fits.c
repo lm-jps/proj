@@ -109,7 +109,6 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
 {
    int drmsstat = DRMS_SUCCESS;
    MymodError_t modstat = kMymodErr_Success;
-   HIterator_t *hit = NULL;
    DRMS_Segment_t *segin = NULL;
    unsigned long long tsize = 0;
    char dir[DRMS_MAXPATHLEN];
@@ -117,6 +116,7 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
    char fullfname[DRMS_MAXPATHLEN];
    char query[DRMS_MAXQUERYLEN];
    struct stat filestat;
+   HIterator_t *last = NULL;
 
    drms_record_directory(recin, dir, 1); /* This fetches the input data from SUMS. */
 
@@ -125,8 +125,8 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
 
    /* The input rs query can specify a subset of all the series' segments - 
     * this is encapsulated in recin. */
-   hit = hiter_create(&(recin->segments));
-   while ((segin = hiter_getnext(hit)) != NULL)
+
+   while ((segin = drms_record_nextseg(recin, &last)) != NULL)
    {
       if (exputl_mk_expfilename(segin, ffmt, fmtname) == kExpUtlStat_Success)
       {
@@ -157,7 +157,10 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
       }
    }
 
-   hiter_destroy(&hit);
+   if (last)
+   {
+      hiter_destroy(&last);
+   }
 
    if (status)
    {
@@ -313,7 +316,7 @@ static int MapexportRecord(DRMS_Record_t *recout,
                            MymodError_t *status)
 {
    MymodError_t err = kMymodErr_Success;
-   HIterator_t *hit = NULL;
+   HIterator_t *last = NULL;
    DRMS_Segment_t *segout = NULL;
    DRMS_Segment_t *segin = NULL;
    unsigned long long size = 0;
@@ -364,8 +367,7 @@ static int MapexportRecord(DRMS_Record_t *recout,
 
       /* The input rs query can specify a subset of all the series' segemnts - 
        * this is encapsulated in recin. */
-      hit = hiter_create(&(recin->segments));
-      while ((segin = hiter_getnext(hit)) != NULL)
+      while ((segin = drms_record_nextseg(recin, &last)) != NULL)
       {
 	 size = 0;
 	 err = CallExportToFile(segout, segin, classname, mapfile, ffmt, &size, fname);
@@ -389,7 +391,10 @@ static int MapexportRecord(DRMS_Record_t *recout,
 	 }
       }
 
-      hiter_destroy(&hit);
+      if (last)
+      {
+         hiter_destroy(&last);
+      }
    }
    else
    {
