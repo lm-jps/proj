@@ -180,7 +180,7 @@ struct server {
   KEY *map_list;		/* keylist from the map file for this serv */
   HDATA *hosts;			/* host dependent info */
 };
-typedef struct server SERVER;
+typedef struct server PSERVER; /* originally called SERVER before Rick used it*/
 
 /* prototypes */
 //extern PADATA *getpadata(PADATA *list, char *wd, long uid);
@@ -249,14 +249,17 @@ extern char *prod_host_second();
 #endif
 
 /*
-$Id: pe.h,v 1.1 2009/02/23 22:44:22 production Exp $
+$Id: pe.h,v 1.2 2009/04/24 21:51:59 production Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/jpe/apps/pe.h,v $
 $Author: production $
 */
 /* $Log: pe.h,v $
- * Revision 1.1  2009/02/23 22:44:22  production
- * initial
+ * Revision 1.2  2009/04/24 21:51:59  production
+ * change SERVER to PSERVER
  *
+/* Revision 1.1  2009/02/23 22:44:22  production
+/* initial
+/*
  * Revision 1.70  2008/08/20 19:53:18  jim
  * *** empty log message ***
  *
