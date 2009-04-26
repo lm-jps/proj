@@ -260,7 +260,10 @@ int DoIt(void)
     if (!exports_new_orig)
 	DIE("Can not open RecordSet");
     if (exports_new_orig->n < 1)  // No new exports to process.
+        {
+        drms_close_records(exports_new_orig, DRMS_FREE_RECORD);
         return(0);
+        }
     exports_new = drms_clone_records(exports_new_orig, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
     if (!exports_new)
 	DIE("Can not clone RecordSet");
