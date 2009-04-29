@@ -20,6 +20,8 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, kRecSetIn, kNOT_SPEC, "Input data series."},
      {ARG_STRING, kRecSetOut, kNOT_SPEC, "Output data series."},
      {ARG_STRING, kNameList, kNOT_SPEC, "Name conversion list."},
+     {ARG_FLAG, "M", "0", "SkipMissingFiles - no records if DATAFILE is blank."},
+     {ARG_FLAG, "v", "0", "verbose - more diagnostics"},
      {ARG_END}
 };
 
@@ -135,12 +137,16 @@ int keyNameCheck(char *name, char **fromname)
 int DoIt(void) 
    {
    int status = DRMS_SUCCESS;
+   int SkipMissingFiles;
+   int verbose;
    int nRecs, iRec;
    char *inRecQuery, *outRecQuery;
    DRMS_RecordSet_t *inRecSet, *outRecSet; 
 
    inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
    outRecQuery = cmdparams_get_str(&cmdparams, kRecSetOut, NULL);
+   SkipMissingFiles = cmdparams_get_int(&cmdparams, "M", NULL) != 0;
+   verbose = cmdparams_get_int(&cmdparams, "v", NULL) != 0;
 
    if (strcmp(inRecQuery, kNOT_SPEC) == 0 || strcmp(outRecQuery, kNOT_SPEC) == 0)
       DIE("Both the "kRecSetIn" and "kRecSetOut" dataseries must be specified.\n");
@@ -152,15 +158,10 @@ int DoIt(void)
       DIE("No input records found\n");
    printf("%d input records found\n", nRecs);
 
-   outRecSet = drms_create_records(drms_env, nRecs, outRecQuery, DRMS_PERMANENT, &status);
-   if (!outRecSet)
-      DIE_status("Output dataseries not found or can't create records\n");
-   if (outRecSet->n != nRecs)
-      DIE("Not enough output records created\n");
-
    for (iRec=0; iRec<nRecs; iRec++)
       {
       char *DataFile;
+      int Record_OK = 1;
       DRMS_Record_t *inRec, *outRec;
       DRMS_Keyword_t *outKey;
       DRMS_Segment_t *inSeg, *outSeg;
@@ -169,6 +170,10 @@ int DoIt(void)
 
       /* create output series rec prototype */
       inRec = inRecSet->records[iRec];
+      outRecSet = drms_create_records(drms_env, 1, outRecQuery, DRMS_PERMANENT, &status);
+      if (!outRecSet || outRecSet->n != 1)
+         DIE_status("Output dataseries not found or can't create records\n");
+
       outRec = outRecSet->records[iRec];
 
       /* loop through all target keywords */
@@ -187,7 +192,7 @@ int DoIt(void)
 		inValue = drms_getkey_p(inRec, wantKey, &status);
 		if (status == DRMS_ERROR_UNKNOWNKEYWORD)
 			break;
-			if (status)fprintf(stderr,"*** ACT_COPY drms_getkey_p %s status=%d\n",wantKey,status);
+			if (status && verbose)fprintf(stderr,"*** ACT_COPY drms_getkey_p %s status=%d\n",wantKey,status);
 		drms_setkey_p(outRec, keyName, &inValue);
 		if ((inValue.type == DRMS_TYPE_STRING) && inValue.value.string_val)
 		  free(inValue.value.string_val);
@@ -198,7 +203,7 @@ int DoIt(void)
 		{ /* on CROTA1 set CROTA1, CROTA2, SAT_ROT, INST_ROT */
 		double pangle, sat_rot;
 		pangle = drms_getkey_double(inRec, "SOLAR_P", &status);
-			if (status)fprintf(stderr,"*** ACT_COPY drms_getkey_double SOLAR_P status=%d\n",status);
+			if (status && verbose)fprintf(stderr,"*** ACT_COPY drms_getkey_double SOLAR_P status=%d\n",status);
 		sat_rot = -pangle;
 		drms_setkey_double(outRec, "CROTA1", sat_rot);
 		drms_setkey_double(outRec, "CROTA2", sat_rot);
@@ -210,9 +215,9 @@ int DoIt(void)
 		{ /* on CRPIX1 set CRPIX1, CRPIX2, CRVAL1, CRVAL2 */
 		double x0, y0;
 		x0 = drms_getkey_double(inRec, "X0", &status);
-			if (status)fprintf(stderr,"*** ACT_CENTER drms_getkey_double X0 status=%d\n",status);
+			if (status && verbose)fprintf(stderr,"*** ACT_CENTER drms_getkey_double X0 status=%d\n",status);
 		y0 = drms_getkey_double(inRec, "Y0", &status);
-			if (status)fprintf(stderr,"*** ACT_CENTER drms_getkey_double Y0 status=%d\n",status);
+			if (status && verbose)fprintf(stderr,"*** ACT_CENTER drms_getkey_double Y0 status=%d\n",status);
 		drms_setkey_double(outRec, "CRPIX1", x0+1.0);
 		drms_setkey_double(outRec, "CRPIX2", y0+1.0);
 		drms_setkey_double(outRec, "CRVAL1", 0.0);
@@ -228,12 +233,12 @@ int DoIt(void)
 		double t_step;
 		double exptime, mjd_day, mjd_time;
 		t_rec = drms_getkey_time(inRec, "T_REC", &status);
-			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_REC status=%d\n",status);
+			if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_REC status=%d\n",status);
 		t_step = drms_getkey_double(outRec, "T_REC_step", &status); /* note from outRec */
-			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_double T_REC_step status=%d\n",status);
+			if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_double T_REC_step status=%d\n",status);
 		exptime = t_step; /* note - for lev1.5 */
 		t_obs = drms_getkey_time(inRec, "T_OBS", &status);
-			if (status)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_OBS status=%d\n",status);
+			if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_OBS status=%d\n",status);
 		date__obs = t_obs - exptime/2.0;
 		mjd = date__obs - MJD_epoch; /* sign error corrected by tplarson 2008.05.29 */
 		mjd_day = floor(mjd / 86400.0);
@@ -268,7 +273,7 @@ int DoIt(void)
 //#define AU_m (1.49597892e11) bad
 		double au;
 		au = drms_getkey_double(inRec, "OBS_DIST", &status);
-			if (status)fprintf(stderr,"*** ACT_AU drms_getkey_double OBS_DIST status=%d\n",status);
+			if (status && verbose)fprintf(stderr,"*** ACT_AU drms_getkey_double OBS_DIST status=%d\n",status);
 		drms_setkey_double(outRec, "DSUN_OBS", au * AU_m);
 		break;
 		}
@@ -280,7 +285,7 @@ int DoIt(void)
                 inValue = drms_getkey_p(inRec, keyName, &status);
 		if (status == DRMS_ERROR_UNKNOWNKEYWORD)
 			break;
-			if (status)fprintf(stderr,"*** DEFAULT drms_getkey_p %s status=%d\n",keyName, status);
+			if (status && verbose)fprintf(stderr,"*** DEFAULT drms_getkey_p %s status=%d\n",keyName, status);
                 drms_setkey_p(outRec, keyName, &inValue);
 		if ((inValue.type == DRMS_TYPE_STRING) && inValue.value.string_val)
 		  free(inValue.value.string_val);
@@ -292,7 +297,7 @@ int DoIt(void)
 
       /* assume only one segment */
 	DataFile = drms_getkey_string(inRec,"DATAFILE",&status);
-	if (status)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
+	if (status && verbose)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
 	if (*DataFile)
 	  {
           inSeg = drms_segment_lookupnum(inRec, 0);
@@ -308,6 +313,7 @@ int DoIt(void)
                   }
             drms_segment_write(outSeg, data, 0);
             drms_free_array(data);
+            Record_OK = 1;
             }
           else
             DIE("Bad data segment lookup, in or out\n");
@@ -320,6 +326,13 @@ int DoIt(void)
 	    drms_setkey_int(outRec, "QUALITY", 0X80000000 | quality); 
 	  if (drms_keyword_lookup(outRec, "DATAVALS", 0))
 	    drms_setkey_int(outRec, "DATAVALS", 0);
+          if (SkipMissingFiles)
+             {
+             Record_OK = 0;
+             if (verbose) fprintf(stderr,"DSDS Record %d has no datafile, skip.\n", iRec);
+             }
+          else
+             Record_OK = 1;
 	  }
 
       /* loop through all target links */
@@ -327,10 +340,10 @@ int DoIt(void)
         //{
         ///* assume no links - do nothing here now. */
         //}
+      drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
       }
 
    drms_close_records(inRecSet,DRMS_FREE_RECORD);
-   drms_close_records(outRecSet,DRMS_INSERT_RECORD);
 
    return(DRMS_SUCCESS);
    }
