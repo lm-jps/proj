@@ -52,37 +52,6 @@ int nice_intro ()
   return (0);
   }
 
-void drms_sprint_rec_query(char *text, DRMS_Record_t *rec)
-  {
-  int iprime, nprime=0;
-  char **external_pkeys, *pkey;
-  DRMS_Keyword_t *rec_key;
-  if (!rec)
-    {
-    sprintf(text, "** No Record **");
-    return;
-    }
-  strcpy(text,rec->seriesinfo->seriesname);
-  external_pkeys =
-        drms_series_createpkeyarray(rec->env, rec->seriesinfo->seriesname, &nprime, NULL);
-  if (external_pkeys && nprime > 0)
-    {
-    for (iprime = 0; iprime < nprime; iprime++)
-      {
-      char val[1000];
-      pkey = external_pkeys[iprime];
-      rec_key = drms_keyword_lookup (rec, pkey, 1);
-      drms_keyword_snprintfval(rec_key, val, sizeof(val));
-      strcat(text, "[");
-      strcat(text, val);
-      strcat(text, "]");
-      }
-    }
-  else
-    sprintf(text, "[:#%lld]",rec->recnum);
-  return;
-  }
-
 // jsoc_export_make_filename - creates a filename from a template.  The filename
 // string should have enough room for a DRMS_MAX_PATHLEN string.
 // the default template is {seriesname}.{recnum:%ld}.{segment}.
