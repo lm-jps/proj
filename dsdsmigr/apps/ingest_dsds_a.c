@@ -174,7 +174,7 @@ int DoIt(void)
       if (!outRecSet || outRecSet->n != 1)
          DIE_status("Output dataseries not found or can't create records\n");
 
-      outRec = outRecSet->records[iRec];
+      outRec = outRecSet->records[0];
 
       /* loop through all target keywords */
       outKey_last = NULL;
@@ -305,12 +305,16 @@ int DoIt(void)
           if (inSeg && outSeg)
             {
             DRMS_Array_t *data;
-            data = drms_segment_read(inSeg, outSeg->info->type, &status);
+            /* read the data ad doubles so allow rescaling on output */
+            data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
             if (!data)
                   {
                   fprintf(stderr, "Bad data record %d\n",iRec);
                   DIE_status("giveup\n");
                   }
+            /* use the zero and offset values in the JSD for the new record segment */
+            data->bscale = outSeg->bscale;
+            data->bzero = outSeg->bzero;
             drms_segment_write(outSeg, data, 0);
             drms_free_array(data);
             Record_OK = 1;
@@ -329,7 +333,8 @@ int DoIt(void)
           if (SkipMissingFiles)
              {
              Record_OK = 0;
-             if (verbose) fprintf(stderr,"DSDS Record %d has no datafile, skip.\n", iRec);
+             if (verbose) 
+               fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, skip.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
              }
           else
              Record_OK = 1;
