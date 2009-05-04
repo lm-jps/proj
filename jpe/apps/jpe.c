@@ -483,7 +483,7 @@ double du_dir();
 
 FILE *pemailfp;		// fp for pe ouput mail in /tmp/pe.pid.mail */
 FILE *pelogfp;          /* fp for pe ouput log for this run */
-SERVER stab[MAX_SERV+1];// one for ea server type plus a term
+PSERVER stab[MAX_SERV+1];// one for ea server type plus a term
 KEY *wd_dup_list;               /* all output wd are checked for dups */
 KEY *wd_mk_list;                /* all output wd made are checked for dups */
 KEY *JPElist;			/* info for archive groups */
@@ -696,7 +696,7 @@ void sighandler(sig)
 */
 void who_died()
 {
-  SERVER *sptr;
+  PSERVER *sptr;
   HDATA *hnext;
   struct taskinfo *taskp;
   int i, j, ntasks;
@@ -1144,7 +1144,7 @@ void get_cmd(int argc, char *argv[])
   char *line, *line2, *token, *tokenchars, *tokencharsend;
   char carch;
   FILE *mapfp;
-  SERVER *sptr;
+  PSERVER *sptr;
   KEY *work_list;                       /* keylist from ea line in map file */
 
   CollectParams(&work_list, argc, argv);/* get calling sequence */
@@ -1458,7 +1458,7 @@ void get_cmd(int argc, char *argv[])
 void spawn_pvm()
 {
   struct hostinfo *hostp;
-  //SERVER *sptr;
+  //PSERVER *sptr;
   HDATA *hnext;
   int i, nhost, narch;
 
@@ -1513,7 +1513,7 @@ void spawn_pvm()
  * sent to servers. Also sends the verbose flag and any history and errlog
  * files specified in the pe map file.
 */
-void msgid_send(SERVER *sptr, HDATA *hnext)
+void msgid_send(PSERVER *sptr, HDATA *hnext)
 {
   KEY *alist, *keybad;
   char *log;
@@ -1542,7 +1542,7 @@ void msgid_send(SERVER *sptr, HDATA *hnext)
 
 /* Ask for and get the argument list from the given server.
 */
-void arg_recv(SERVER *sptr, HDATA *hnext)
+void arg_recv(PSERVER *sptr, HDATA *hnext)
 {
   argument *args;
   struct timeval tvalr;
@@ -1626,7 +1626,7 @@ int wd_dup_ck(KEY *list, char *wd)
  * Makes any output directories if output is in dsds storage.
  * Will abort if an arg list cannot be satisfied. 
 */
-void ck_arglist(SERVER *sptr, HDATA *hx)
+void ck_arglist(PSERVER *sptr, HDATA *hx)
 {
   DIR *dfd;
   double dblval;
@@ -1771,7 +1771,7 @@ void ck_arglist(SERVER *sptr, HDATA *hx)
  * related code that you'll see is only a partial implementation, mostly wrt
  * the input dataset. Must figure out what to do with it in process_resp().
 */
-void form_split(SERVER *sptr, KEY *xlist, char *key)
+void form_split(PSERVER *sptr, KEY *xlist, char *key)
 {
   HDATA *hnext;
   char keystr[MAX_STR];
@@ -1853,11 +1853,11 @@ void form_split(SERVER *sptr, KEY *xlist, char *key)
  * table for the given server (i.e. for each ARG_DATA_IN). 
  * Returns the parsed keylist, added to the input keylist. 
  *   xlist = input keylist to add this datacollection to
- *   sptr = SERVER table of this current server (i.e. module)
+ *   sptr = PSERVER table of this current server (i.e. module)
  *   arg = argument list for this server
  *   seq = 0 for the first input datacollection, then 1, 2, etc.
 */
-KEY *form_arg_data_in(KEY *xlist, SERVER *sptr, argument *arg, int seq)
+KEY *form_arg_data_in(KEY *xlist, PSERVER *sptr, argument *arg, int seq)
 {
   //KEY *blist;
   char dbasekey[MAX_STR], inname[MAX_STR], ext[MAX_STR];
@@ -2028,7 +2028,7 @@ KEY *dsds_arg_data_in(KEY *xlist)
  * table for the given server. Outputs the parsed keylist, in a new keylist, 
  * for the dataset. Sets the global vrbl wdkey_int.
 */
-KEY *form_arg_data_out(SERVER *sptr, argument *arg)
+KEY *form_arg_data_out(PSERVER *sptr, argument *arg)
 {
   KEY *xlist;
   FILE *fin;
@@ -2365,7 +2365,7 @@ void in_ds_rcp(KEY *list)
  * the fsn-lsn over a number of hosts (now obsolete). This sets the global 
  * variable effective_hosts (now always set to 1).
  * Finally calls ck_arglist() for each host that is to run the server.
- *   sptr = SERVER table of new server to run
+ *   sptr = PSERVER table of new server to run
  *
  * NEW 11/14/96: All the ARG_DATA_IN args are built into a single keylist
  * which is sent to dsds_svc to resolve the wd and bring online if needed.
@@ -2379,7 +2379,7 @@ void in_ds_rcp(KEY *list)
  * NEW Apr 11, 1997: Add the *hnext as an input arg and don't loop on it
  * anymore as the effective_hosts will always be 1.
 */
-void form_keylist(SERVER *sptr, HDATA *hnext)
+void form_keylist(PSERVER *sptr, HDATA *hnext)
 {
   KEY *xlist, *inlist, *dslist;
   argument *arg, *argsort[MAX_ARGS];
@@ -2484,7 +2484,7 @@ Called with the stab[] address of the server, the hosts entry in stab[],
 and the value of doflg.
 Will pack the message, set the host busy and send the msg to the server.
 */
-void send_to_serv(SERVER *sptr, HDATA *hx, int doflg)
+void send_to_serv(PSERVER *sptr, HDATA *hx, int doflg)
 {
   KEY *keybad;
   argument *arg;
@@ -2723,7 +2723,7 @@ int get_overview(char *wd, KEY **list)
  *          for each output dataset
  *  status= the status code returned by the completing server
 */
-KEY *set_key_archive(char *basename, SERVER *stab, HDATA *hdata,  KEY *rlist,
+KEY *set_key_archive(char *basename, PSERVER *stab, HDATA *hdata,  KEY *rlist,
 			int status)
 {
   KEY *alist;
@@ -2800,7 +2800,7 @@ KEY *set_key_archive(char *basename, SERVER *stab, HDATA *hdata,  KEY *rlist,
  *          for each output dataset
  *  status= the status code returned by the completing server
 */
-void call_archive(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
+void call_archive(PSERVER *stab, HDATA *hdata, KEY *rlist, int status)
 {
   KEY *alist;
   DRMS_Record_t *rsx;
@@ -2896,7 +2896,7 @@ void call_archive(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
  *          for each output dataset
  *  status= the status code returned by the completing server
 */
-void call_archive_0(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
+void call_archive_0(PSERVER *stab, HDATA *hdata, KEY *rlist, int status)
 {
   KEY *alist, *blist;
   argument *arg;
@@ -2958,7 +2958,7 @@ void call_archive_0(SERVER *stab, HDATA *hdata, KEY *rlist, int status)
  * New on Apr 11, 1997 is to spawn the servers here and send them the
  * message id that they will use and then get their arg list.
 */
-void kick_server(SERVER *sptr)
+void kick_server(PSERVER *sptr)
 {
   HDATA *hnext;
   int i;
@@ -3046,7 +3046,7 @@ int resp_any()
 */
 void process_resp(int ix)
 {
-  SERVER *stabp, *stabn;
+  PSERVER *stabp, *stabn;
   HDATA *hnext;
   KEY *list;
   argument *arg;
@@ -3279,7 +3279,7 @@ override\n"); */
 */
 void dereg()
 {
-  SERVER *sptr;
+  PSERVER *sptr;
   HDATA *hdata;
   DRMS_Record_t *rsx;
   argument *arg;
@@ -3386,7 +3386,7 @@ void dereg()
 */
 void do_pipe()
 {
-  SERVER *sptr;
+  PSERVER *sptr;
   int i, groupid;
   int sindex;
 

@@ -39,7 +39,7 @@ MODEXEDROBJ	:= $(MODEXEDROBJ) $(MODEXEDR_$(d):%=%.o)
 ALLEXE_$(d)	:= $(MODEXE_$(d)) $(MODEXEDR_$(d)) $(MODEXE_USEF_$(d)) $(SUMEXE_$(d)) $(CEXE_$(d))
 #OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(jpe_obj_$(d)) $(jpe2_obj_$(d)) $(jpeq_obj_$(d)
 OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(jpe_obj_$(d)) $(jpeq_obj_$(d)) $(jpe2_obj_$(d))
-DEP_$(d)	:= $(OBJ_$(d):%=%.d)
+DEP_$(d)	:= $(OBJ_$(d):%=%.o.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
 		   $(ALLEXE_$(d)) \
