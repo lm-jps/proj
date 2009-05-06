@@ -130,16 +130,17 @@ jmp_buf env;
 
 
 /* Return ptr to "mmm dd hh:mm:ss". */
-char *datestring(void)
-{
-  time_t t;
-  char *str;
-
-  t = time(NULL);
-  str = ctime(&t);
-  str[19] = 0;
-  return str+4;          /* isolate the mmm dd hh:mm:ss */
-}
+/*char *datestring(void)
+/*{
+/*  time_t t;
+/*  char *str;
+/*
+/*  t = time(NULL);
+/*  str = ctime(&t);
+/*  str[19] = 0;
+/*  return str+4;          /* isolate the mmm dd hh:mm:ss */
+/*}
+*/
 
 /* Got a fatal error.
  * Degregister and close with dsds_svc as approriate. 
