@@ -1,30 +1,34 @@
 /**
-   @defgroup hmi_to_fd_M hmi_to_fd_M reduce/increase resolution to that of MDI/HMI
+   @defgroup rebin2 rebin2 reduce/increase resolution to that of MDI/HMI
    @ingroup a_programs
 
    @brief Reduce (increase) the resolution of the input data to that of MDI (HMI) by factor of 2.
 
    @par Synopsis:
    @code
-   hmi_to_fd_M  in=input data out=output data resoln=reduce(0)/increase(1) factor=2*n mode=simple
+   rebin2  in=input data out=output data  factor=2*n mode=simple
+   where n is a multiple/fraction of 2.
    @endcode
 
-   This module takes a series of input data and changes its spatial
-   resolution by a factor as multiples of 2 as required and gives out
-   a set of output data. The method for avaraging (interpolation) can
-   be given as the input value "mode". The current version handles
-   a simple boxcar average.
+   This is a general purpose module that takes a series of input 
+   data and modifies its spatial resolution by a factor (multiples 
+   or fractions of 2) as required and gives out a set of output 
+   data. The method for avaraging (interpolation) can be specified 
+   through the input "mode". The current version handles a simple 
+   boxcar average.
 
-   Currently it doesn't have any flags.
+   Make sure you created the appropriate output series before running 
+   the program. For example, su_bala.rebin2up.jsd
 
    @par Flags:
    @c none
+   Currently it doesn't have any flags.
 
    @par GEN_FLAGS:
    Ubiquitous flags present in every module.
    @ref jsoc_main
 
-   @param in The input data series.
+   @param in  The input data series.
    @param out The output series.
 
    @par Exit_Status:
@@ -35,7 +39,7 @@
    produces images with the resolution of HMI, 4096 X 4096.
 
    @code
-   rebin2 in='mdi.fd_M_96m_lev18[2003.10.20/1d]' out='su_bala.fd_M_hmiTest' factor=4 mode='simple'
+   rebin2 in='mdi.fd_M_96m_lev18[2003.10.20/1d]' out='su_bala.rebin2up' factor=4 mode='simple'
    @endcode
 
    @par Example:
@@ -43,7 +47,7 @@
    1024 X 1024. Here the input is the HMI images and the output
    is the lower resolution HMI images.
    @code
-   rebin2 in='su_bala.fd_M_hmiTest[2003.10.20/1d]' out='su_bala.fd_M_mdi' factor=1/4 mode='simple'
+   rebin2 in='su_bala.rebin2up[2003.10.20/1d]' out='su_bala.rebin2down' factor=0.25 mode='simple'
    @endcode
 
    @bug
@@ -64,7 +68,7 @@ ModuleArgs_t module_args[] =
 {
      {ARG_STRING, "in", "NOT SPECIFIED",  "Input data series."},
      {ARG_STRING, "out", "NOT SPECIFIED",  "Output data series."},
-     {ARG_STRING, "nfactor", "NOTSPECIFIED", "Reduction factor."},
+     {ARG_FLOAT, "nfactor", "NOTSPECIFIED", "Reduction factor."},
      {ARG_STRING, "mode", "simple", "conversion type."},
      {ARG_END}
 };
@@ -78,24 +82,17 @@ int DoIt(void)
   char *inQuery = params_get_str(&cmdparams, "in");
   char *outQuery = params_get_str(&cmdparams, "out");
   char *mode = params_get_str(&cmdparams, "mode");
-  char *nfactor = params_get_str(&cmdparams, "nfactor");
-printf("nfactor: %s\n", nfactor);
-  char *denom = index(nfactor, '/');
-printf("denom: %s \n", denom);
-  if (denom)
+  float nfactor = params_get_float(&cmdparams, "nfactor");
+  if (nfactor < 1.0)
     {
-     denom++;
      resoln = 1;
-     factor = atoi(denom);
+     factor = (int) (1/nfactor);
     }
   else
     {
-     factor = atoi(nfactor);
      resoln = 0;
+     factor = (int) nfactor;
     }
-printf("denom: %s \n", denom);
-printf("factor %d \n", factor);
-printf("resolution %d \n", resoln);
 
   inRS = drms_open_records(drms_env, inQuery, &status);
   if (status || inRS->n == 0)
