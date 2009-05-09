@@ -200,12 +200,11 @@ int DoIt(void)
                 break;
                 }
 	  case ACT_ANGLE:
-		{ /* on CROTA1 set CROTA1, CROTA2, SAT_ROT, INST_ROT */
+		{ /* on CROTA2 set CROTA2, SAT_ROT, INST_ROT */
 		double pangle, sat_rot;
 		pangle = drms_getkey_double(inRec, "SOLAR_P", &status);
 			if (status && verbose)fprintf(stderr,"*** ACT_COPY drms_getkey_double SOLAR_P status=%d\n",status);
 		sat_rot = -pangle;
-		drms_setkey_double(outRec, "CROTA1", sat_rot);
 		drms_setkey_double(outRec, "CROTA2", sat_rot);
 		drms_setkey_double(outRec, "SAT_ROT", sat_rot);
 		drms_setkey_double(outRec, "INST_ROT", 0.0);
