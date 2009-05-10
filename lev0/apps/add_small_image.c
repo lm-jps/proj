@@ -284,56 +284,49 @@ int add_small_array(DRMS_Record_t *rec, DRMS_Array_t *big, int doScaleFits, int 
   drms_record_directory(rec, recdir, 1);
   bigNy = big->axis[0];
   bigNx = big->axis[1];
-  if (doScaleFits)
+  /* assume second segment, if it is present, is vardims FITS for small image */
+  if (doScaleFits && rec->segments.num_total > 1)
     {
+    DRMS_Segment_t *smallSeg;
     DRMS_Array_t *small;
+    DRMS_SegmentDimInfo_t smallDimInfo;
     int smallNx, smallNy;
     int smallDims[2];
     char smallFileName[DRMS_MAXSEGFILENAME];
-    //char smallPathName[DRMS_MAXPATHLEN];
 
     smallNy = bigNy/doScaleFits;
     smallNx = bigNx/doScaleFits;
     smallDims[0] = smallNy;
     smallDims[1] = smallNx;
     small = drms_array_create(DRMS_TYPE_FLOAT, 2, smallDims, NULL, &status);
+
     rebinArraySF(small, big);
     strcpy(smallFileName, bigSeg->info->name);
     strcat(smallFileName, "_sm.fits");
-    //strcpy(smallPathName, recdir);
-    //strcat(smallPathName, "/");
-    //strcat(smallPathName, smallFileName);
-    /* assume second segment, if it is present, is vardims FTIS for small image */
-    DRMS_Segment_t *smallSeg;
     smallSeg = drms_segment_lookupnum(rec, 1);
     strcpy(smallSeg->filename, smallFileName);
-
-    if (rec->segments.num_total > 1)
-    {
-       DRMS_SegmentDimInfo_t smallDimInfo;
-
-       smallDimInfo.naxis = 2;
-       smallDimInfo.axis[0] = smallDims[0];
-       smallDimInfo.axis[1] = smallDims[1];
-       drms_segment_setdims(smallSeg, &smallDimInfo);
-    }
+    smallDimInfo.naxis = 2;
+    smallDimInfo.axis[0] = smallDims[0];
+    smallDimInfo.axis[1] = smallDims[1];
+    drms_segment_setdims(smallSeg, &smallDimInfo);
     // For SDO CCD images of 14 bits use FITS shorts as unsigned and keep full range.
     small->bzero = -(4.0*8192.0);
     small->bscale = 4.0;
     small->israw = 0;
     drms_array_convert_inplace(DRMS_TYPE_SHORT, small->bzero, small->bscale, small);
+
     small->bzero = 8192.0;
     small->bscale = 0.25;
     small->israw = 1;
-
     drms_segment_writewithkeys(smallSeg, small, 0);
 
-    //drms_export_tofitsfile(small, &rec->keywords, NULL, smallPathName);
     drms_free_array(small);
     }
 
-  if (doScaleImage)
+  /* assume third segment, if exists, is for small image, generic segment */
+  if (doScaleImage && rec->segments.num_total > 2)
     {
+    DRMS_Segment_t *imageSeg;
     DRMS_Array_t *imageArray = NULL;
     char *imgData = NULL;
     int imageDims[2];
@@ -354,14 +347,9 @@ int add_small_array(DRMS_Record_t *rec, DRMS_Array_t *big, int doScaleFits, int 
     strcpy(imagePathName, recdir);
     strcat(imagePathName, "/");
     strcat(imagePathName, imageFileName);
-    if (rec->segments.num_total > 2)
-      { /* assume third segment, if exists, is for small image, generic segment */
-      DRMS_Segment_t *imageSeg;
-      imageSeg = drms_segment_lookupnum(rec, 2);
-      strcpy(imageSeg->filename, imageFileName);
-      }
+    imageSeg = drms_segment_lookupnum(rec, 2);
+    strcpy(imageSeg->filename, imageFileName);
     rebinArraySF(imageArray, big);
-    // imgData = (unsigned char *)set_scaling(imageArray, &min, &max, &nmissing, GREY, 1, bytepercolor, HISTEQ);
     imgData = (unsigned char *)set_scaling(imageArray, &min, &max, &nmissing, GREY, 1, bytepercolor, MINMAX99);
     drms_free_array(imageArray);
     if (!imgData)
