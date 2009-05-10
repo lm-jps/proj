@@ -224,7 +224,7 @@ int DoIt(void)
 		break;
 		}
 	  case ACT_TIME:
-		{ /* on T_OBS set T_OBS, DATE-OBS, EXPTIME, MJD, TIME */
+		{ /* on T_OBS set T_OBS, DATE-OBS, EXPTIME, CADENCE, TIME, MJD */
 		char timebuf[1024];
 		TIME MJD_epoch = -3727641600.000; /* 1858.11.17_00:00:00_UT  */
 		TIME UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
@@ -235,7 +235,8 @@ int DoIt(void)
 			if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_REC status=%d\n",status);
 		t_step = drms_getkey_double(outRec, "T_REC_step", &status); /* note from outRec */
 			if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_double T_REC_step status=%d\n",status);
-		exptime = t_step; /* note - for lev1.5 */
+		// exptime = t_step; /* note - for lev1.5 */
+                exptime = drms_getkey_double(inRec, "INTERVAL", &status);
 		t_obs = drms_getkey_time(inRec, "T_OBS", &status);
 			if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_OBS status=%d\n",status);
 		date__obs = t_obs - exptime/2.0;
@@ -246,6 +247,7 @@ int DoIt(void)
 		drms_setkey_time(outRec, "T_REC", t_rec);
 		drms_setkey_time(outRec, "T_OBS", t_obs);
 		drms_setkey_double(outRec, "EXPTIME", exptime);
+		drms_setkey_double(outRec, "CADENCE", t_step);
 		drms_setkey_double(outRec, "MJD", mjd_day);
 		drms_setkey_double(outRec, "TIME", mjd_time);
                 // allow either string or time types for DATE and DATE_OBS
