@@ -614,7 +614,7 @@ static int GetGridVectors(DRMS_Env_t *env,
        * tgttime, then you have the closest value above the tgttime. In this manner, 
        * you can get as many grid values as needed above and below the tgttime.
        */
-      *gvectors = list_llcreate(sizeof(IORBIT_Vector_t));
+      *gvectors = list_llcreate(sizeof(IORBIT_Vector_t), NULL);
       vecsbelow = (IORBIT_Vector_t *)malloc(sizeof(IORBIT_Vector_t) * nbelow);
       vecsabove = (IORBIT_Vector_t *)malloc(sizeof(IORBIT_Vector_t) * nabove);
       slottovecindex = hcon_create(sizeof(int), 128, NULL, NULL, NULL, NULL, 0);

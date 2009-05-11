@@ -5688,6 +5688,11 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 	  drms_close_records(inRecSet, DRMS_FREE_RECORD);
      }
 
+     if (pOutData)
+     {
+        free(pOutData);
+     }
+
      return error;
 }
 
@@ -6028,7 +6033,9 @@ int DoIt(void)
 		    
 		    if (!error)
 		    {
-			 CreateDRMSSegmentContainer(withRecTemplate, &withSeriesSegs, NULL);
+			 CreateDRMSSegmentContainer(withRecTemplate, 
+                                                    &withSeriesSegs, 
+                                                    NULL);
 		    }
 
 		    if (!error)
@@ -6045,6 +6052,7 @@ int DoIt(void)
 
 		    DestroyDRMSContainer(&withSeriesPrimeKeys);
 		    DestroyDRMSContainer(&withSeriesSegs);
+                    free(withSeriesSegs.items);
 	       }
 	       else if (!error)
 	       {
@@ -6172,6 +6180,7 @@ int DoIt(void)
 
 	       DestroyDRMSContainer(&inSeriesPrimeKeys);
 	       DestroyDRMSContainer(&inSeriesSegs);
+               free(inSeriesSegs.items);
 	       DestroyDRMSContainer(&segsToProc);
 	  } /* main code */
      } /* drms env exists */
