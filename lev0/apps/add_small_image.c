@@ -60,7 +60,7 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp,
   int idata, ndata, nmiss = 0;
   float *inData = in->data;
   ndata = in->axis[0] * in->axis[1];
-  out = (char *)malloc(ndata * bytepercolor * sizeof(char *));
+  out = (char *)malloc(ndata * bytepercolor * sizeof(char));
   int missingcolor = (bytepercolor == 1 ? 255 : 65535);
   int maxcolor = missingcolor - 1;
   if (!out)
