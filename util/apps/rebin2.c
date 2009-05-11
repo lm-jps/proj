@@ -1,6 +1,6 @@
 /**
    @defgroup rebin2 rebin2 reduce/increase resolution to that of MDI/HMI
-   @ingroup a_programs
+   @ingroup drms_util
 
    @brief Reduce (increase) the resolution of the input data to that of MDI (HMI) by factor of 2.
 
