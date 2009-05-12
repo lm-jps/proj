@@ -44,23 +44,19 @@ $hm=$ENV{'HOME'};
 $ENV{'MAILTO'}="";
 $exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/cvs/JSOC/bin/linux_x86_64";
 $script_dir=$ENV{'HK_SCRIPT_DIR'}="$hm/cvs/JSOC/proj/lev0/scripts/hk";
-$ENV{'HK_DF_RT_LOGFILE'}="$hm/cvs/JSOC/proj/lev0/scripts/hk/gdfrt-log-rtmon";
+$ENV{'HK_DF_RT_LOGFILE'}="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-rtmon";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$exec_dir";
 
 #(2) set choices for input dayfile directory
-# use for testing on Carl workspace on cl1n002
 # input dayfile directory location with subdirectories with apid names(0x081,0x029,etc).
-$ENV{'HK_DDF_RT_DIRECTORY'}="$hm/cvs/JSOC/proj/lev0/scripts/hk/data";
-#NOTE(1):Set Production Path probably somewhere on hmisdp-mon machine and comment out tmp location used for testing!
+$ENV{'HK_DDF_RT_DIRECTORY'}="/hmisdp-mon/log/packets";
 
 #(3) set choices for minute file directory
-# use for testing on Carl workspace on cl1n002
 # minute dayfile directory location - this is temp location- since all files are deleted  
-$minfiles=$ENV{'HK_DDF_MINUTE_FILE_DIRECTORY'}="$hm/cvs/JSOC/proj/lev0/scripts/hk/minute-files";
-#NOTE(2):Set Production Path probably to scratch and comment out temp location!
+$minfiles=$ENV{'HK_DDF_MINUTE_FILE_DIRECTORY'}="/scr21/production/hk_minute_dayfiles";
 
 #(4) set debug flag 
-$dflg=$ENV{'DF_GDFRT_DEBUG'}=1;#use 0 to display min debug, 1 to send log to file or use 2 to send max debug log to display
+$dflg=$ENV{'DF_GDFRT_DEBUG'}=2;#use 0 to display min debug, 1 to send log to file or use 2 to send max debug log to display
 
 #(5) check for any arguments passed in command
 &check_arguments();
@@ -69,7 +65,7 @@ $dflg=$ENV{'DF_GDFRT_DEBUG'}=1;#use 0 to display min debug, 1 to send log to fil
 $logfile=$ENV{'HK_DF_RT_LOGFILE'};
 if($logfile eq "")
 {
-   $logfile="$script_dir/log-gdfrt";#send log here when run at command line
+   $logfile="$script_dir/log-gdfrt";#send log here when logfile not set
 }
 
 #(7) open log file
@@ -77,8 +73,7 @@ open(LF,">>$logfile") || die "ERROR in gdfrt.pl:(0):Can't Open log file <$logfil
 print LF `date`;
 
 #(8) get list of apids to do 
-@avlist=&get_apid_to_do();
-$av= pop(@avlist);
+$av=&get_apid_to_do();
 if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt: apid value is $av\n";}
 
 #(9)loop forever thru today and next days 
@@ -88,22 +83,21 @@ while (1)
   $|=1;
 
   #(10)get list of dates to do 
-  &get_date_to_do();
+  $date_to_do=get_date_to_do();
  
   ### LOG ###
-  if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt:calling get-rt-file function with apid=$av date-range1=$date_r1 date-range2=$date_r2\n";}
+  if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt:calling get-rt-file function with apid=$av date=$date_to_do\n";}
 
   #(11)go through day files in directory looking for all files for given apid and date range
-  @list_rtfiles=&get_rt_files($date_r1, $date_r2, $av);
+  $rtfile=&get_rt_files( $date_to_do, $av);
 
   ### LOG ###
-  if($dflg == 0) {print "-->Listing of rt file to do: <@list_rtfiles> based on date range <$date_r1> to <$date_r2>\n";}
-  if($dflg == 1) {print LF "-->(3)Listing of rt file to do: <@list_rtfiles> based on date range <$date_r1> to <$date_r2>\n";}
-  if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt:Listing of rt file to do: @list_rtfiles\n";}
+  if($dflg == 0) {print "-->Listing of rt file to do: <$rtfile> based on date range <$date_r1> to <$date_r2>\n";}
+  if($dflg == 1) {print LF "-->(3)Listing of rt file to do: <$rtfile> based on date range <$date_r1> to <$date_r2>\n";}
+  if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt:Listing of rt file to do: $rtfile\n";}
 
   #(12) get dayfile to read packets and write to minute files
-  $f = pop(@list_rtfiles);
-  if ($f eq "")
+  if ($rtfile eq "")
   {
     ### LOG ###
     if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt:got no files to process for apid:$av . Sleep 1 minute and check again\n";}
@@ -120,7 +114,7 @@ while (1)
   $packet_size= &get_packet_size();
   
   #(16)read as many packets that are in dayfile and then read next new set of packets every 1 minute
-  &read_n_packets($f,$c_date, $packet_size);
+  &read_n_packets($rtfile,$c_date, $packet_size);
 
   #(17) continue while loop forever reading one dayfile at a time for each of the next days to come.
 }
@@ -135,11 +129,9 @@ close LF;
 #############################################################################
 sub check_arguments()
 {
+  my($temp);
   $help_flg= "0";
-  $apid_list_flg="0";
   $date_range_flg="0";
-  $view_flg="0";
-  $pkt_size_flg="0";
   
   if ($#ARGV < 0)
   {
@@ -153,14 +145,15 @@ sub check_arguments()
     }
     elsif (substr($ARGV[0],0,5) eq "apid=" )
     {
-      #use apid following -a to create map files 
-      #push decimal character value in this format dddd. Example: -a 0001
-      $apid_list_flg = "2";
+      #use apid following -a for apid
+      $temp= substr($ARGV[0],5);
+      if($dflg == 2) { print "DEBUG:MESSAGE:check_arguments:apid is $temp\n";}
 
+      # use packet size to determine slices of data to use for dd command later
       if (substr($ARGV[1],0,9) eq "pkt_size=")
       {
-        $pkt_size_flg=1;#set to trigger using arg 1 later
-        if($dflg == 2) { print "DEBUG:MESSAGE:check_arguments:pkt size is $pkt_size\n";}
+        $temp= substr($ARGV[1],9);
+        if($dflg == 2) { print "DEBUG:MESSAGE:check_arguments:pkt size is $temp\n";}
       }
       else
       {
@@ -215,47 +208,15 @@ sub show_help_info
 #############################################################################
 sub get_apid_to_do
 {
+  #my($apid);
   # create list of files to process using apid values in file
-  if ($apid_list_flg eq "1")
-  {
-
-    if ($view_flg eq "0")
-    {
-      $fn= substr($ARGV[0],9);
-    }
-    else
-    {
-      $fn= substr($ARGV[1],9);
-    }
-    open(FILE_APID_LIST, "$fn") || die "ERROR in gdfdrms.pl:(1):Can't Open: $fn file: $!. Need to create apidlist file.\n";
-    while (<FILE_APID_LIST>)
-    {
-      push(@all_apids, int $_) ;
-    }
-    close FILE_APID_LIST ;
-    print  LF "-->(1)Doing decimal formatted apid: @all_apids\n";
-  }
-  elsif ($apid_list_flg eq "2")
-  {
-    #push decimal character value in this format dddd.Example 0001
-    if ($view_flg eq "0")
-    {
-      push(@all_apids, substr($ARGV[0],5));
-    }
-    else
-    {
-      push(@all_apids, substr($ARGV[1],5));
-
-    }
-    print  LF "-->(1)Doing decimal formatted apids: @all_apids\n";
-  }
-  else 
-  {
-    print LF "WARNING: Not valid apid list flag value\n";
-  }
-   if($dflg == 2) {print "DEBUG:MESSAGE:all apids doing = @all_apids\n";}
-   return(@all_apids);
+  #push decimal character value in this format dddd.Example 0001
+  $apid= substr($ARGV[0],5);
+  print  LF "-->(1)Doing decimal formatted apids: $apid\n";
+  if($dflg == 2) {print "DEBUG:MESSAGE:get_apid_to_do:apid doing = $apid\n";}
+  return($apid);
 }
+
 
 
 
@@ -264,7 +225,7 @@ sub get_apid_to_do
 ##########################################################################
 sub get_todays_date()
 {
-  ($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = localtime();
+  ($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = gmtime();
   $year = 1900 + $yearOffset;
   $month= $monthOffset + 1;
   if($dflg == 2) {print  "DEBUG:MESSAGE:get_todays_date: year this $year month is $month day is $dayOfMonth\n";}
@@ -276,128 +237,46 @@ sub get_todays_date()
 
 
 #############################################################################
-# subroutine get_date_to_do: gets date range to do                          #
+# subroutine get_date_to_do: gets date to do                                #
 #############################################################################
 sub get_date_to_do()
 {
-  # initialize all_dates to null
-  @all_dates=();
-  # get start and end range of dates
-  if ($date_range_flg eq "1")
-  {
-    $date_r1= substr($ARGV[1],6,8);
-    $date_r2= substr($ARGV[2],4,8);
-    #create list of dates based on range
-    &get_date_list_to_do();
-  }
-  else
-  {
-     #do case with no entry for start and end time
-     #for this case can make do today
-     ($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = localtime();
-     $year = 1900 + $yearOffset;
-     $month= $monthOffset + 1;
-     if($dflg == 0) {print  "-->Today's Date is $month-$dayOfMonth-$year\n";}
-     if($dflg == 1) {print LF "-->(2)Today's Date is $month-$dayOfMonth-$year\n";}
-     if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt: year this $year month is $month day is $dayOfMonth\n";}
-     #create todays date format and push on list of dates to do
-     $new_date= sprintf("%4d.%02.2d.%02.2d", $year,$month,$dayOfMonth);
-     push(@all_dates, $new_date);
-     #set values to display in log
-     $date_r2=$date_r1=sprintf("%4d%02.2d%02.2d", $year,$month,$dayOfMonth);
-  }
-  if($dflg == 2) {print "DEBUG:MESSAGE:get_date_to_do: Date range 1 is $date_r1\n";}
-  if($dflg == 2) {print "DEBUG:MESSAGE:get_date_to_do: Date range 2 is $date_r2\n";}
+  my($new_date);
+  # initialize new_date to null
+  $new_date=();
+
+  # get UTC today
+  ($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = gmtime();
+
+  ### LOG ###
+  $year = 1900 + $yearOffset;
+  $month= $monthOffset + 1;
+  if($dflg == 0) {print  "-->Today's Date is $month-$dayOfMonth-$year\n";}
+  if($dflg == 1) {print LF "-->(2)Today's Date is $month-$dayOfMonth-$year\n";}
+  if($dflg == 2) {print "DEBUG:MESSAGE:gdfrt: year this $year month is $month day is $dayOfMonth\n";}
+
+  #create todays date format and set new_date
+  $new_date= sprintf("%4d%02.2d%02.2d", $year,$month,$dayOfMonth);
+
+  ### LOG ###
+  if($dflg == 2) {print "DEBUG:MESSAGE:get_date_to_do: Date is $new_date\n";}
+
+  return ($new_date);
 }
 
 
 
-#############################################
-# get date list to do                       #
-#############################################
-sub get_date_list_to_do()
-{
-  #parse values in date range
-  $start_yr= int substr($date_r1,0,4);
-  $start_mo= int substr($date_r1,4,2);
-  $start_day= int substr($date_r1,6,2);
-  $end_yr= int substr($date_r2,0,4);
-  $end_mo= int substr($date_r2,4,2);
-  $end_day= int substr($date_r2, 6,2);
-
-  #create list of dates  to do
-  if ($start_yr == $end_yr and  $start_mo == $end_mo and $start_day == $end_day)
-  {
-    #only need start day
-    $new_date= sprintf("%4d.%02.2d.%02.2d", $start_yr,$start_mo,$start_day);
-    push(@all_dates, $new_date);
-  }
-  elsif ($start_yr != $end_yr or $start_mo != $end_mo or  $start_day != $end_day )
-  { 
-    $loop_yr=$start_yr;
-    $loop_mo= $start_mo;
-    $loop_day=$start_day;
-    $loop_yr_mo_day=sprintf("%4d%02.2d%02.2d", $loop_yr,$loop_mo,$loop_day); #setup loop start date(i.e.,20080901)
-    $end_yr_mo_day=sprintf("%4d%02.2d%02.2d", $end_yr,$end_mo,$end_day);     #setup loop end date(i.e.,20081231)
-
-    # loop thru all dates requested thru arguments and add date to list of dates to check if file in drms dayfile data series
-    while ( $loop_yr_mo_day  <=  $end_yr_mo_day)
-    {
-      #check if month is last day-
-      #if so set day to one or 
-      #if end of year day then reset month and day  or
-      #if not above cases, just increment day by one
-      if(&check_lastday_in_month) 
-      {
-        #if end of month
-        if($dflg == 1) {print LF "-->Pushing this date: $loop_yr.$loop_mo.$loop_day\n"};
-        if($dflg == 2) {print  "DEBUG:MESSAGE:get_date_list_to_do:Pushing this date: $loop_yr.$loop_mo.$loop_day\n"};
-        $new_date= sprintf("%4d.%02.2d.%02.2d", $loop_yr,$loop_mo,$loop_day);
-        push(@all_dates, $new_date);
-        $loop_day=1;
-        $loop_mo++;
-      }
-      elsif ($loop_mo == 12 && $loop_day == 31)
-      {
-         #if end of year
-        if($dflg == 1) {print LF "-->Pushing this date: $loop_yr.$loop_mo.$loop_day\n"};
-        if($dflg == 2) {print  "DEBUG:MESSAGE:get_date_list_to_do:Pushing this date: $loop_yr.$loop_mo.$loop_day\n"};
-        $new_date= sprintf("%4d.%02.2d.%02.2d", $loop_yr,$loop_mo,$loop_day);
-        push(@all_dates, $new_date);
-        $loop_day=1; 
-        $loop_mo=1;
-        $loop_yr++;
-      }
-      else
-      {
-        #if not end of year or month then just increment day
-        if($dflgi == 1) {print LF "gdfrt.pl:Pushing this date: $loop_yr.$loop_mo.$loop_day\n"};
-        if($dflgi == 2) {print  "DEBUG:MESSAGE:get_date_list_to_do:Pushing this date: $loop_yr.$loop_mo.$loop_day\n"};
-        $new_date= sprintf("%4d.%02.2d.%02.2d", $loop_yr,$loop_mo,$loop_day);
-        push(@all_dates, $new_date);
-        $loop_day++;
-      }
-      #set up next loop date number
-      $loop_yr_mo_day=sprintf("%4d%02.2d%02.2d", $loop_yr,$loop_mo,$loop_day);
-    }
-    if($dflg == 1) {print LF "List of dates to process:\n @all_dates\n"};
-    if($dflg == 2) {print "DEBUG:MESSAGE:get_date_list_to_do:List of dates to process:\n @all_dates\n"};
-
-
-  }
-  else 
-  {
-    print LF "gdfdrms.pl:ERROR: Probably bad entry for dates\n";
-    print  "gdfdrms.pl:ERROR: Probably bad entry for dates\n";
-  }
-}
-
 ###############################################################################
 # subroutine get_list_from_drms: get list of filenames to decode keywords for #
 ###############################################################################
-sub check_lastday_in_month()
+sub check_lastday_in_month($$$)
 {
-     if( (($loop_mo == 4 || $loop_mo == 6 || $loop_mo == 9 || $loop_mo == 11 ) && $loop_day == 30) || (($loop_mo == 1 || $loop_mo == 3 || $loop_mo == 5 || $loop_mo == 7 || $loop_mo == 8|| $loop_mo == 10) && $loop_day == 31))
+     my($loop_yr, $loop_mo, $loop_day);
+     $loop_yr= $_[0];
+     $loop_mo= $_[1];
+     $loop_day= $_[2];
+
+     if( (($loop_mo == 4 || $loop_mo == 6 || $loop_mo == 9 || $loop_mo == 11 ) && $loop_day == 30) || (($loop_mo == 1 || $loop_mo == 3 || $loop_mo == 5 || $loop_mo == 7 || $loop_mo == 8|| $loop_mo == 10 || $loop_mo == 12) && $loop_day == 31))
      {
         return 1;
      }
@@ -420,18 +299,24 @@ sub check_lastday_in_month()
 ######################################################################################
 # subroutine get_rt_files(): get real time dayfiles and send back file               #
 ######################################################################################
-sub get_rt_files($$$)
+sub get_rt_files($$)
 {
   # setup my variables
-  my($dr1,$dr2, $dn_fn);
-  $dr1=$_[0];#date range 1
-  $dr2=$_[1];#date range 2
-  $apid_value=$_[2];#apid value
+  my($dr, $dn_fn, @apiddir_to_do_list, @dir_list, $apid_dir,$apid_file,@apid_filelist,$fullpathname,$file_in_date_range);
+  $dr=$_[0];#date 
+  $apid_value=$_[1];#apid value
 
-  #initialize list of file in date range to null
-  @file_list_in_date_range=();
+  #initialize file in date range to null
+  @apiddir_to_do_list=(); #added 5-1-2009
+  @dir_list=(); #added 5-1-2009
+  @apid_filelist=(); #added 5-1-2009
+  $apid_dir=""; #added 5-1-2009
+  $apid_file=""; #added 5-1-2009
+  $fullpathname=""; #added 5-1-2009
+  $dn_fn=""; #added 5-1-2009
+  $file_in_date_range="";#added 5-1-2009
 
-  if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files: Passed argument values:$dr1:$dr2:$apid_value:\n";}
+  if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files: Passed argument values:$dr:$apid_value:\n";}
 
   # get directory name to find apid directories 
   $dn = sprintf("%s",  $ENV{'HK_DDF_RT_DIRECTORY'});
@@ -441,10 +326,12 @@ sub get_rt_files($$$)
   # read in all directories  and put in list 
   @dir_list = readdir(DIR_RT); #get a list of directory contents
 
+  ### LOG ###
+  if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files: Looking at these directory for apid: $apid_value: Got directory:@dir_list:\n";}
+
   #check which apid directories to process
   foreach $dir  (@dir_list)
   {
-    if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files: Looking for directory for apid: $apid_value: Got directory:$dir:\n";}
     if( hex substr($dir,2,5) ne  $apid_value)
     {
        next;
@@ -468,40 +355,42 @@ sub get_rt_files($$$)
     #open directory looking for this apids dayfiles
     opendir(DIR_RT_APID, $dn_fn) || die "ERROR in gdfrt.pl:(4):Can't open apid directory <$dn_fn>:$!\n"; #open subdirectory
 
-   #read all files for apid directory
-   @apid_filelist = readdir(DIR_RT_APID); #get a list of directory contents
+    #read all files for apid directory
+    @apid_filelist = readdir(DIR_RT_APID); #get a list of directory contents
 
-   #loop thru each file looking for file with today's date
-   foreach $apid_file  (@apid_filelist)
-   {
-     # Filter out 20090327.0x0081x 20090320.0x0081x and . and .. files
-     if (substr($apid_file,15,1) eq "x" || $apid_file eq ".." | $apid_file eq ".")
-     {
-        next;
-     }#outer if
-     else
-     {
-         # check first 8 characters of date (20090320.0x0081) is within range
-         if (int substr($apid_file,0,8) >= int $dr1 && int substr($apid_file,0,8) <= int $dr2 )
-         {
-            if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files:Found dayfile with good date range and apid value :::$apid_file\n";}
-            $fullpathname = sprintf("%s/%s",$dn_fn, $apid_file);
-            push( @file_list_in_date_range, $fullpathname);
-            last;
-         }#inner if
-         else
-         {
-           ;#skip not in date range
-           if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files:skip no files found in date range\n";}
-         }#inner else
-     }#outer else
-   }# foreach file in apid directory
-  }
-   if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files:Returned this file for processing :@file_list_in_date_range\n";}
-  return (@file_list_in_date_range )
+    #loop thru each file looking for file with today's date
+    foreach $apid_file  (@apid_filelist)
+    {
+      # Filter out 20090327.0x0081x 20090320.0x0081x and . and .. files
+      if (substr($apid_file,15,1) eq "x" || $apid_file eq ".." || $apid_file eq ".")
+      { 
+         next;
+      }#outer if
+      else
+      {
+        # check first 8 characters of date (20090320.0x0081) is within range
+        if (int substr($apid_file,0,8) == int $dr )
+        {
+          if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files:Found dayfile with good date and apid value :$dr:$apid_file\n";}
+          $fullpathname = sprintf("%s/%s",$dn_fn, $apid_file);
+          $file_in_date_range= $fullpathname;
+          last;
+        }#inner if
+        else
+        {
+          ;#skip not in date range
+          #if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files:skip no files found in date range\n";}
+        }#inner else
+      }#outer else
+    }# inner foreach file in apid directory
+    last if(int substr($apid_file,0,8) == int $dr );#if found file break out of outer loop too
+  }# outer foreach
+  if($dflg == 2) {print "DEBUG:MESSAGE:get_rt_files:Returned this file for processing :$file_in_date_range\n";}
+  return ($file_in_date_range );
 }
 
 
+
 #####################################################################################################
 # subroutine read_n_packets(): read n number of packet per minute and send to decode dayfile execute#
 #####################################################################################################
@@ -512,7 +401,10 @@ sub read_n_packets($$$)
    # passed arguement
    $file=$_[0];
    $curr_date=$_[1];
-   $psize=$_[2];#packet_size
+   $psize=$_[2];#packet_size;
+
+   #local variable initialized
+   $finished_curr_df_flg=0;
 
    ### LOG ###
    if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: Called read_n_packets with arguments file:$file and todays date:$curr_date\n";}
@@ -550,14 +442,17 @@ sub read_n_packets($$$)
    $skip=0;
 
    # set up parameter to do if compare in while loop
+   # max is total number of packets in current file
    $max= $current_pkts_in_file;
+   # x is the number of packet did so far
    $x=0;
-   #use y to increment every minute if execute dd command
+   # use y to increment every minute if execute dd command
    $y=0; 
 
    while ( 1 )
    {
       $|=1;#added to flush buffers of print.
+      # check if time to process in packets in file
       if ( $x < $max)
       {
         $wait_clock=0;
@@ -566,9 +461,9 @@ sub read_n_packets($$$)
         $pkt_count = $current_pkts_in_file;
   
         ### LOG ###
-        if($dflg == 2) {printf( "DEBUG:MESSAGE:read_n_packets: Executing dd command at %s\n", get_current_time());}
-        if($dflg == 1) {printf( LF "-->(4)Executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s\n",get_current_time());}
         if($dflg == 0) {printf( "-->Executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s\n",get_current_time());}
+        if($dflg == 1) {printf( LF "-->(4)Executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s\n",get_current_time());}
+        if($dflg == 2) {printf( "DEBUG:MESSAGE:read_n_packets: Executing dd command at %s\n", get_current_time());}
 
         # Execute dd command to create minue files.
         $log=`dd if=$d/$f of=$minfiles/$f-$y-minute bs=$psize count=$pkt_count skip=$skip`;
@@ -587,9 +482,10 @@ sub read_n_packets($$$)
         }
         else
         {
-          if($dflg == 2) {printf("DEBUG:MESSAGE:read_n_packets: Complete executing dd command at %s\n",get_current_time());}
-          if($dflg == 1) {printf( LF "-->(5)Completed executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s\n",get_current_time());}
+          ### LOG ###
           if($dflg == 0) {printf("-->Completed executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s\n",get_current_time());}
+          if($dflg == 1) {printf( LF "-->(5)Completed executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s\n",get_current_time());}
+          if($dflg == 2) {printf("DEBUG:MESSAGE:read_n_packets: Complete executing dd command at %s\n",get_current_time());}
         }
 
 
@@ -642,7 +538,7 @@ sub read_n_packets($$$)
 
         #Reopen and get current file size 
         close (DAYFILE);
-        # reopen file and check size
+        # reopen file and get latest file size
         open(DAYFILE, "$d/$f") || die "ERROR in gdfdrms.pl:(6):Can't Open day file to read:$d/$f  $!\n";
         $size = (stat(DAYFILE))[7];
 
@@ -653,7 +549,7 @@ sub read_n_packets($$$)
         $total_pkts_in_file= $size/$psize;
 
         ### LOG ###
-        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: After reopen, total packets in file: $total_pkts_in_file\n";}
+        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: (if)After reopen, total packets in file: $total_pkts_in_file\n";}
 
         # Number of packets created minute files for so far is current_pkts_in_file amount just did and x amount did before
         $x=$current_pkts_in_file + $x ; #number of packets did incrementally so far
@@ -676,37 +572,58 @@ sub read_n_packets($$$)
       }# if (x < max) 
       else
       {
+        # when there is no new packets to do in current file, then sleep 1 minute or check for new days dayfile
         # get today date and time
         $td_date=get_todays_date();
 
-        # increment delay clock
-        $wait_clock++;
-
         ### LOG ###
-        if($dflg == 2) {print "DEBUG:MESSAGE:If today's date:$td_date > $curr_date than previous day, then break from loop.\n";}
+        if($dflg == 2) {print "DEBUG:MESSAGE:(else)If today's date:$td_date > $curr_date than previous day and next dayfile there and did old day processing one last time then break from loop.\n";}
 
-        # check if waited enough time and if its a new day
-        if(($wait_clock >= $wait_clock_trigger) && ($td_date > $curr_date))
+
+        # check if next days dayfile there do old dayfile one last time then start doing next days dayfile
+        if( $td_date > $curr_date && $finished_curr_df_flg == 0 && check_for_nextdays_df($td_date,$av))
+        {
+          #do current dayfile one last time
+          $finished_curr_df_flg= 1;
+          if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: Next day detected and next dayfile detected. Do current dayfile one last time.\n";}
+        }
+        elsif($td_date > $curr_date && $finished_curr_df_flg == 1 && check_for_nextdays_df($td_date,$av))
         {
           ### LOG ###
-          if($dflg == 0) {print  "-->Next day detected. Today date is now <$td_date> and previous day was <$curr_date>. Try getting new dayfile to process.\n";}
-          if($dflg == 1) {print LF "-->(11)Next day detected. Today date is now <$td_date> and previous day was <$curr_date>. Try getting new dayfile to process.\n";}
-          if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: Next day detected. Break from loop and reread new dayfile for next day.\n";}
+          if($dflg == 0) {print  "-->Next day detected and next days dayfile detected. Today date is now <$td_date> and previous day was <$curr_date>. Try getting new dayfile to process.\n\n";}
+          if($dflg == 1) {print LF "-->(11)Next day detected and next days dayfile detected. Today date is now <$td_date> and previous day was <$curr_date>. Try getting new dayfile to process.\n\n";}
+          if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: Next day detected and next days dayfile detected. Break from loop and reread new dayfile for next day.\n\n";}
+
+          #do next days dayfile 
+          $finished_curr_df_flg= 0;
 
           # reset current date
           $curr_date=$td_date;
 
           # break from this loop to check for dayfiles for next day
           last;
+           
         }
 
-        #### LOG ###
-        if($dflg == 0) {printf("-->No new packet in dayfile sleeping 1 minute and will check again for new packets in dayfile at %s\n",get_current_time());}
-        if($dflg == 1) {printf(LF  "-->(10)No new packet in dayfile sleeping 1 minute and will check again for new packets in dayfile at %s\n",get_current_time());}
-        if($dflg == 2) {printf("DEBUG:MESSAGE:read_n_packets:No new packets in dayfile, skip writing minute file, sleep 60 seconds and wait for more at %s\n",get_current_time());}
+        #if at end of day and at end of current day-check finish-current-dayfile-flag if need to not sleep and just do old dayfile one last time
+        if ($finished_curr_df_flg == 1)
+        {
+          #### LOG ###
+          if($dflg == 0) {printf("-->No new packet in dayfile, don't write to minute file, skip sleeping 1 minute and check old dayfile one last time for new packets at %s\n\n",get_current_time());}
+          if($dflg == 1) {printf(LF  "-->(10)No new packet in dayfile, don't write minute file, skip sleeping 1 minute and will check old dayfile one last last time for new packets at %s\n\n",get_current_time());}
+          if($dflg == 2) {printf("DEBUG:MESSAGE:read_n_packets:No new packets in dayfile, don't write minute file, skip sleep 1 minute and check old dayfile one last time for new packets at %s\n\n",get_current_time());}
 
-        # sleep 1 minute and then repeat above
-        sleep 60;
+        }
+        else
+        {
+          #### LOG ###
+          if($dflg == 0) {printf("-->No new packet in dayfile sleeping 1 minute and will check again for new packets in dayfile at %s\n\n",get_current_time());}
+          if($dflg == 1) {printf(LF  "-->(10)No new packet in dayfile sleeping 1 minute and will check again for new packets in dayfile at %s\n\n",get_current_time());}
+          if($dflg == 2) {printf("DEBUG:MESSAGE:read_n_packets:No new packets in dayfile, skip writing minute file, sleep 60 seconds and wait for more at %s\n\n",get_current_time());}
+
+          # sleep 1 minute and then repeat above
+          sleep 60;
+        }
 
         #Reopen file and get current file size
         close (DAYFILE);
@@ -714,13 +631,13 @@ sub read_n_packets($$$)
         $size = (stat(DAYFILE))[7];
 
         ### LOG ###
-        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet: File:$d/$f: has a file size :$size:\n";}
+        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet: (else)File:$d/$f: has a file size :$size:\n";}
 
         # get total number of packets in file
         $total_pkts_in_file= $size/$psize;
 
         ### LOG ###
-        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: After reopen, total packets in file: $total_pkts_in_file\n";}
+        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packets: (else)After reopen, total packets in file: $total_pkts_in_file\n";}
 
         # Number of packets created minute files for so far is current_pkts_in_file amount just did and x amount did before
         $x=$current_pkts_in_file + $x ; #number of packets did incrementally
@@ -729,7 +646,7 @@ sub read_n_packets($$$)
         $max=$total_pkts_in_file;
 
         ### LOG ###
-        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet: during next dd command will skip  $skip\n";}
+        if($dflg == 2) {print "DEBUG:MESSAGE:read_n_packet: (else)during next dd command will skip  $skip\n";}
 
         # calculate number of packet left to do now
         $current_pkts_in_file = $total_pkts_in_file - $x;
@@ -739,26 +656,14 @@ sub read_n_packets($$$)
    close (DAYFILE);
 }
 
+
 #####################################################################################################
 # subroutine get_packet_size(): gets packet size argument passed                                    #
 #####################################################################################################
 sub get_packet_size($)
 {
   my($p_size);
-
-  if (  $pkt_size_flg eq 1 )
-  {
-    $p_size= substr($ARGV[1],9);#get pkt size
-  }
-  elsif (  $pkt_size_flg eq 2 )
-  {
-    $p_size= substr($ARGV[3],9);#get pkt size
-  }
-  else
-  {
-    print "ERROR: Packet size flag not set. Missing packet size value\n";
-    print LF "ERROR: Packet size flag not set. Missing packet size value\n";
-  }
+  $p_size= substr($ARGV[1],9);#get pkt size
   return ($p_size);
 
 }
@@ -769,10 +674,37 @@ sub get_packet_size($)
 sub get_current_time()
 {
   my($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings, $year, $month, $new_date);
-  ($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = localtime();
+  #($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = localtime();
+  ($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = gmtime();
   $year = 1900 + $yearOffset;
   $month= $monthOffset + 1;
   #create todays date and time format 
   $new_date= sprintf("%4d.%02.2d.%02.2d_%02.2d:%02.2d:%02.2d",$year,$month,$dayOfMonth,$hour,$minute,$second);
   return ( $new_date);
+}
+##########################################################################
+# subroutine check_for_nextdays_df():check for next days dayfile         #
+##########################################################################
+sub check_for_nextdays_df($$)
+{
+  my($tdate,$apid,$f);
+  # passed arguement
+  $tdate=$_[0];#today's date using
+  $apid=$_[1];#application id
+
+  ### LOG ###
+  print "DEBUG:MESSAGE:check_for_nextdays_df:year-month-day passed is $tdate apid passed is $apid\n";
+
+  $f=&get_rt_files( $tdate, $apid);
+  if($f eq "")
+  {
+     print "DEBUG:MESSAGE:check_for_nextdays_df:no file found :<$f>\n";
+     return (0);
+  }
+  else
+  {
+     print "DEBUG:MESSAGE:check_for_nextdays_df:file found :<$f>\n";
+     return (1);
+  }
+      
 }
