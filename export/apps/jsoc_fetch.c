@@ -186,23 +186,22 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
   for (i=0; i < rs->n; i++)
     {
     DRMS_Segment_t *seg;
-    HIterator_t hit;
+    HIterator_t *hit = NULL;
     rec = rs->records[i];
     drms_sprint_rec_query(query, rec);
-    drms_record_directory(rec, recpath, online);
-    hiter_new (&hit, &rec->segments);
-    while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit)))
+    while (seg = drms_record_nextseg(rec, &hit))
       {
+      DRMS_Record_t *segrec;
       json_t *recobj = json_new_object();
       char *jsonstr;
+      segrec = seg->record;
       count += 1;
       strcpy(record, query);
       strcat(record, "{");
       strcat(record, seg->info->name);
       strcat(record, "}");
-      strncpy(segpath, recpath, DRMS_MAXPATHLEN);
-      strncat(segpath, "/", DRMS_MAXPATHLEN);
-      strncat(segpath, seg->filename, DRMS_MAXPATHLEN);
+      drms_record_directory(segrec, segpath, online); // just to insure SUM_get done
+      drms_segment_filename(seg, segpath);
       jsonstr = string_to_json(record);
       json_insert_pair_into_object(recobj, "record", json_new_string(jsonstr));
       free(jsonstr);
@@ -211,6 +210,7 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
       free(jsonstr);
       json_insert_child(data, recobj);
       }
+    free(hit);
     }
   if (jroot) // i.e. if dojson, else will be NULL for the dotxt case.
     {
@@ -283,8 +283,8 @@ SUM_info_t *drms_get_suinfo(long long sunum)
     SUM_close(my_sum,printkerr);
 #endif
 
-#define JSONDIE(msg) {die(dojson,msg,"");}
-#define JSONDIE2(msg,info) {die(dojson,msg,"");}
+#define JSONDIE(msg) {die(dojson,msg,"");return(1);}
+#define JSONDIE2(msg,info) {die(dojson,msg,info);return(1);}
 
 die(int dojson, char *msg, char *info)
   {
@@ -611,20 +611,24 @@ check for requestor to be valid remote DRMS site
     int segcount = 0;
     int irec;
     int all_online = 1;
-    long long prev_sunum = 0;
     char dsquery[DRMS_MAXQUERYLEN];
+    char *p;
     DRMS_RecordSet_t *rs;
     export_series = EXPORT_SERIES_NEW;
     size=0;
     strncpy(dsquery,in,DRMS_MAXQUERYLEN);
     if (index(dsquery,'[') == NULL)
       strcat(dsquery,"[]");
-    if (strcmp(seglist,"Not Specified") != 0 && strcmp(seglist,"**ALL**") != 0)
+    if (strcmp(seglist,"Not Specified") != 0)
       {
+      if (index(dsquery,'{') != NULL)
+        JSONDIE("Can not give segment list both in key and explicitly in recordset.");
       strncat(dsquery, "{", DRMS_MAXQUERYLEN);
       strncat(dsquery, seglist, DRMS_MAXQUERYLEN);
       strncat(dsquery, "}", DRMS_MAXQUERYLEN);
       }
+    if ((p=index(dsquery,'{')) != NULL && strncmp(p+1, "**ALL**", 7) == 0)
+      *p = '\0';
     rs = drms_open_records(drms_env, dsquery, &status);
     if (!rs)
 	JSONDIE2("Can not open RecordSet: ",dsquery);
@@ -633,19 +637,33 @@ check for requestor to be valid remote DRMS site
     all_online = 1;
     for (irec=0; irec < rs->n; irec++) 
       {
-      char recpath[DRMS_MAXPATHLEN];
+      // Must check each segment since some may be linked and offline.
       DRMS_Record_t *rec = rs->records[irec];
-      SUM_info_t *sinfo = drms_get_suinfo(rec->sunum);
-      if (!sinfo)
-	JSONDIE2("Bad sunum in a record in RecordSet: ", dsquery);
-      if (strcmp(sinfo->online_status,"N") == 0)
-          all_online = 0;
-      if (rec->seriesinfo->unitsize == 1 || rec->sunum != prev_sunum)
+      DRMS_Segment_t *seg;
+      HIterator_t *segp = NULL;
+      while (seg = drms_record_nextseg(rec, &segp))
         {
-        size += sinfo->bytes;
-        segcount += drms_record_numsegments(rec);
-        }
-      prev_sunum = rec->sunum;
+        DRMS_Record_t *segrec = seg->record;
+        SUM_info_t *sinfo = drms_get_suinfo(segrec->sunum);
+        if (!sinfo)
+	  JSONDIE2("Bad sunum in a record in RecordSet: ", dsquery);
+	if (strcmp(sinfo->online_status,"N") == 0)
+            all_online = 0;
+        else
+            {
+            struct stat buf;
+	    char path[DRMS_MAXPATHLEN];
+	    drms_record_directory(segrec, path, 0);
+
+            drms_segment_filename(seg, path);
+            if (stat(path, &buf) != 0)
+	      JSONDIE2("Bad path (stat failed) in a record in RecordSet: ", dsquery);
+            size += buf.st_size;
+            segcount += 1;
+            }
+         }
+      if (segp)
+        free(segp); 
       }
     if (my_sum)
       SUM_close(my_sum,printkerr);

@@ -318,7 +318,7 @@ static void list_series_info(DRMS_Record_t *rec, json_t *jroot)
   DRMS_Keyword_t *key;
   DRMS_Segment_t *seg;
   DRMS_Link_t *link;
-  HIterator_t hit;
+  HIterator_t *hit;
   char intstring[100];
   char *notework;
   json_t *indexarray, *primearray, *keyarray, *segarray, *linkarray;
@@ -372,8 +372,8 @@ static void list_series_info(DRMS_Record_t *rec, json_t *jroot)
 if (DEBUG) fprintf(stderr,"   starting all keywords\n");
   /* show all keywords */
   keyarray = json_new_array();
-  hiter_new (&hit, &rec->keywords);
-  while ((key = (DRMS_Keyword_t *)hiter_getnext (&hit)))
+  hit = NULL;
+  while (key = drms_record_nextkey(rec, &hit))
     {
     json_t *keyinfo = json_new_object();
     json_t *keytype;
@@ -392,14 +392,15 @@ if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
     free(notework);
     json_insert_child(keyarray, keyinfo);
     }
+  free(hit);
   json_insert_pair_into_object(jroot, "keywords", keyarray);
   
   /* show the segments */
   segarray = json_new_array();
   if (rec->segments.num_total)
     {
-    hiter_new (&hit, &rec->segments);
-    while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit)))
+    hit = NULL;
+    while (seg = drms_record_nextseg(rec, &hit))
       { /* segment name, units, protocol, dims, description */
       json_t *seginfo = json_new_object();
       int naxis = seg->info->naxis;
@@ -441,6 +442,7 @@ if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
       free(notework);
       json_insert_child(segarray, seginfo);
       }
+    free(hit);
     }
 //  else
 //    json_insert_child(segarray, json_new_null());
@@ -680,7 +682,6 @@ int DoIt(void)
     recordset = drms_open_records (drms_env, in, &status);
     if (!recordset) 
       JSONDIE(" jsoc_info: series not found.");
-  
     nrecs = recordset->n;
     if (nrecs == 0)
       {
@@ -710,10 +711,10 @@ int DoIt(void)
 	if (strcmp(thiskey, "**ALL**")==0)
           {
           DRMS_Keyword_t *key;
-          HIterator_t hit;
-          hiter_new (&hit, &recordset->records[0]->keywords);
-          while ((key = (DRMS_Keyword_t *)hiter_getnext (&hit)))
+          HIterator_t *prevkey = NULL;
+          while (key=drms_record_nextkey(recordset->records[0], &prevkey))
             keys[nkeys++] = strdup (key->info->name);
+          free(prevkey);
 	  }
   	else
 	  keys[nkeys++] = strdup(thiskey);
@@ -745,10 +746,10 @@ int DoIt(void)
 	if (strcmp(thisseg, "**ALL**")==0)
 	  {
           DRMS_Segment_t *seg;
-          HIterator_t hit;
-          hiter_new (&hit, &recordset->records[0]->segments);
-          while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit)))
+          HIterator_t *prevseg = NULL;
+          while (seg=drms_record_nextseg(recordset->records[0], &prevseg))
             segs[nsegs++] = strdup (seg->info->name);
+          free(prevseg);
 	  }
   	else
 	  segs[nsegs++] = strdup(thisseg);
@@ -923,9 +924,7 @@ int DoIt(void)
 	  {
           rec_key_ikey = drms_keyword_lookup (rec, keys[ikey], 1); 
           if (!rec_key_ikey)
-            {
 	    JSONDIE("Keyword not in series");
-            }
           if (drms_ismissing_keyval(rec_key_ikey))
             jsonval = string_to_json("MISSING");
           else
