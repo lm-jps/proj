@@ -516,7 +516,6 @@ sub read_n_packets($$$)
           if($dflg == 0) {print  "ERROR:Status failed when executing decode_dayfile. Exiting script gdfrt.pl.\nLOG returned:$log:\n";}
           if($dflg == 1) {print LF "ERROR:Status failed when executing decode_dayfile. Exiting script gdfrt.pl.\nLOG returned:$log:\n";}
           if($dflg == 2) {print  "ERROR:read_n_packets:Status failed when executing decode_dayfile.Exiting script gdfrt.pl.\nLOG returned:$log:\n";}
-          exit;
         }
 
         ### LOG ###
