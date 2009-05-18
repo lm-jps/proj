@@ -53,7 +53,7 @@ if ($ino eq "")
 {
   print "-->ERROR:Got error when did stat command. No file probably there\n";
   print "-->ERROR Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
-  sendEmail("$to_email_error", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=129\n");
+  sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=129\n");
   exit;
 }
 
