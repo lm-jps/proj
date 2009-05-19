@@ -51,7 +51,7 @@ print "-->FILE TO MONITOR IS::::<$dir_file_mon>\n";
 #check if got error
 if ($ino eq "")
 {
-  print "-->ERROR:Got error when did stat command. No file probably there\n";
+  print "-->ERROR:1:Got error when did stat command. No file probably there\n";
   print "-->ERROR Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
   sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=129\n");
   exit;
@@ -65,14 +65,16 @@ $already_triggered=0;
 while (1)
 {
   # sleep 5 minutes 
-  sleep 300;
   print "-->WAITING 5 MINUTES THEN WILL CHECK IF TODAYS DAYFILE SIZE CHANGED.\n";
+  sleep 300;
   #get file size 
   ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size, $atime,$mtime,$ctime,$blksize,$blocks) = stat($dir_file_mon);
   #check if got error
-  if ($? ne 0)
+  if ($ino eq "")
   {
-    print "ERROR: got error when did stat command\n";
+    print "-->ERROR:2:Got error when did stat command. No file probably there\n";
+    print "-->ERROR Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
+    sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=129\n");
     exit;
   }
   $curr_size=$size;
