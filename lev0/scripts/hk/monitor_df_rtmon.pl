@@ -53,7 +53,7 @@ if ($ino eq "")
 {
   print "-->ERROR:1:Got error when did stat command. No file probably there\n";
   print "-->ERROR Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
-  sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=129\n");
+  sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n");
   exit;
 }
 
@@ -74,14 +74,14 @@ while (1)
   {
     print "-->ERROR:2:Got error when did stat command. No file probably there\n";
     print "-->ERROR Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
-    sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=129\n");
+    sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n");
     exit;
   }
   $curr_size=$size;
   print "-->IF CURRENT-FILE-SIZE:$curr_size EQUAL PREV-FILE-SIZE:$prev_size  THEN TRIGGER EMAIL\n";
   if($prev_size == $curr_size && $already_triggered != 1)
   {
-     sendEmail("$to_email", "$from_email", "$subject_email","Warning Message:\n-->Dayfile <$dir_file_mon> is not getting updated for 5 minutes.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=129\n");
+    sendEmail("$to_email", "$from_email", "$subject_email","Warning Message:\n-->Dayfile <$dir_file_mon> is not getting updated for 5 minutes.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n");
      print "-->SEND WARNING EMAIL AFTER WAITING 5 MINUTES!\n";
      $already_triggered=1;
      exit;
