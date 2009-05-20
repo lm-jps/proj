@@ -37,11 +37,14 @@ typedef enum
 #define kArg_path        "path"
 #define kArg_clname      "kmclass"
 #define kArg_kmfile      "kmfile"
+#define kArg_cparms      "cparms"
 
 
 #define kDef_expSeries   "jsoc.exports"
 
 #define kPWD             "PWD"
+
+#define kNoCompression   "**NONE**"
 
 
 /* If rsquery is provided as a cmd-line argument, then jsoc_export does not 
@@ -59,18 +62,19 @@ typedef enum
  */
 ModuleArgs_t module_args[] =
 {
-     {ARG_STRING, kArg_version, "",  "jsoc export version."},
+     {ARG_STRING, kArg_version, "", "jsoc export version."},
      {ARG_STRING, kArg_reqid, "", 
         "Export series primary key value that identifies the output record."},
-     {ARG_STRING, kArg_method, "",  "jsoc export method (eg, url or ftp)."},
-     {ARG_STRING, kArg_protocol, "",  "file conversion method (eg, convert to fits)."},
+     {ARG_STRING, kArg_method, "", "jsoc export method (eg, url or ftp)."},
+     {ARG_STRING, kArg_protocol, "", "file conversion method (eg, convert to fits)."},
      {ARG_STRING, kArg_rsquery, kNotSpecified, 
         "Record-set query that specifies data to be exported."},
      {ARG_STRING, kArg_expSeries, kDef_expSeries, "Series to which exported data are saved."},
      {ARG_STRING, kArg_ffmt, kNotSpecified, "Export filename template."},
      {ARG_STRING, kArg_path, kNotSpecified, "Path to which fits files are output."},
-     {ARG_STRING, kArg_clname, kNotSpecified,  "Export key map class."},
-     {ARG_STRING, kArg_kmfile, kNotSpecified,  "Export key map file."},
+     {ARG_STRING, kArg_clname, kNotSpecified, "Export key map class."},
+     {ARG_STRING, kArg_kmfile, kNotSpecified, "Export key map file."},
+     {ARG_STRING, kArg_cparms, kNotSpecified, "FITS-stanford compression string used to compress exported image."},
      {ARG_END}
 };
 
@@ -105,6 +109,7 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
                                 const char *classname, 
                                 const char *mapfile,
                                 int *tcount, 
+                                const char **cparms,
                                 MymodError_t *status)
 {
    int drmsstat = DRMS_SUCCESS;
@@ -117,6 +122,8 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
    char query[DRMS_MAXQUERYLEN];
    struct stat filestat;
    HIterator_t *last = NULL;
+   int iseg;
+   int lastcparms;
 
    drms_record_directory(recin, dir, 1); /* This fetches the input data from SUMS. */
 
@@ -126,6 +133,8 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
    /* The input rs query can specify a subset of all the series' segments - 
     * this is encapsulated in recin. */
 
+   iseg = 0;
+   lastcparms = 0;
    while ((segin = drms_record_nextseg(recin, &last)) != NULL)
    {
       if (exputl_mk_expfilename(segin, ffmt, fmtname) == kExpUtlStat_Success)
@@ -138,7 +147,16 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
          break;
       }
 
-      drmsstat = drms_segment_mapexport_tofile(segin, classname, mapfile, fullfname);
+      if (!cparms || !cparms[iseg])
+      {
+         lastcparms = 1;
+      }
+
+      drmsstat = drms_segment_mapexport_tofile(segin, 
+                                               !lastcparms ? cparms[iseg] : NULL, 
+                                               classname, 
+                                               mapfile, 
+                                               fullfname);
       if (drmsstat != DRMS_SUCCESS || stat(fullfname, &filestat))
       {
          modstat = kMymodErr_ExportFailed;
@@ -155,6 +173,8 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
          tsize += filestat.st_size;
          WritePListRecord(kPL_content, pklist, query, fmtname);
       }
+
+      iseg++;
    }
 
    if (last)
@@ -179,6 +199,7 @@ static int MapexportToDir(DRMS_Env_t *env,
                           const char *mapfile,
                           int *tcount,
                           TIME *exptime,
+                          const char **cparms, 
                           MymodError_t *status)
 {
    int stat = DRMS_SUCCESS;
@@ -219,6 +240,7 @@ static int MapexportToDir(DRMS_Env_t *env,
                                           classname, 
                                           mapfile, 
                                           tcount, 
+                                          cparms, 
                                           &modstat);
          }
       }
@@ -252,7 +274,8 @@ static MymodError_t CallExportToFile(DRMS_Segment_t *segout,
                                      const char *mapfile,
                                      const char *ffmt,
                                      unsigned long long *szout,
-                                     char *filewritten)
+                                     char *filewritten,
+                                     const char *cparms)
 {
    int status = DRMS_SUCCESS;
    MymodError_t err = kMymodErr_Success;
@@ -274,7 +297,7 @@ static MymodError_t CallExportToFile(DRMS_Segment_t *segout,
             CHECKSNPRINTF(snprintf(segout->filename, DRMS_MAXSEGFILENAME, "%s", basename), DRMS_MAXSEGFILENAME);
             drms_segment_filename(segout, fileout);
 
-            status = drms_segment_mapexport_tofile(segin, clname, mapfile, fileout);
+            status = drms_segment_mapexport_tofile(segin, cparms, clname, mapfile, fileout);
             if (status != DRMS_SUCCESS)
             {
                err = kMymodErr_ExportFailed;
@@ -313,6 +336,7 @@ static int MapexportRecord(DRMS_Record_t *recout,
                            const char *ffmt, 
                            char **outpath,
                            FILE **pklist,
+                           const char **cparms, 
                            MymodError_t *status)
 {
    MymodError_t err = kMymodErr_Success;
@@ -322,6 +346,8 @@ static int MapexportRecord(DRMS_Record_t *recout,
    unsigned long long size = 0;
    unsigned long long tsize = 0;
    char dir[DRMS_MAXPATHLEN];
+   int iseg;
+   int lastcparms;
 
    segout = drms_segment_lookupnum(recout, 0);
 
@@ -367,10 +393,25 @@ static int MapexportRecord(DRMS_Record_t *recout,
 
       /* The input rs query can specify a subset of all the series' segemnts - 
        * this is encapsulated in recin. */
+      iseg = 0;
+      lastcparms = 0;
       while ((segin = drms_record_nextseg(recin, &last)) != NULL)
       {
 	 size = 0;
-	 err = CallExportToFile(segout, segin, classname, mapfile, ffmt, &size, fname);
+
+         if (!cparms || !cparms[iseg])
+         {
+            lastcparms = 1;
+         }
+
+	 err = CallExportToFile(segout, 
+                                segin, 
+                                classname, 
+                                mapfile, 
+                                ffmt, 
+                                &size, 
+                                fname, 
+                                !lastcparms ? cparms[iseg] : NULL);
 	 if (err != kMymodErr_Success)
 	 {
 	    fprintf(stderr, "Failure exporting segment '%s'.\n", segin->info->name);
@@ -389,6 +430,8 @@ static int MapexportRecord(DRMS_Record_t *recout,
                WritePListRecord(kPL_content, *pklist, query, fname);
             }
 	 }
+
+         iseg++;
       }
 
       if (last)
@@ -423,6 +466,7 @@ static int Mapexport(DRMS_Env_t *env,
                      char **outpath, 
                      TIME *exptime, 
                      FILE **pklist, 
+                     const char **cparms,
                      MymodError_t *status)
 {
    int stat;
@@ -502,6 +546,7 @@ static int Mapexport(DRMS_Env_t *env,
                                         ffmt, 
                                         outpath, 
                                         pklist, 
+                                        cparms, 
                                         &err);
 	    }
 	 }
@@ -643,6 +688,8 @@ int DoIt(void)
    const char *rsquery = NULL;
    const char *clname = NULL;
    const char *mapfile = NULL;
+   const char *cparmsarg = NULL;
+   const char **cparms = NULL;
 
    /* "packing list" header/metadata */
    char *md_version = NULL;
@@ -686,6 +733,50 @@ int DoIt(void)
          mapfile = NULL;
       }
 
+      cparmsarg = cmdparams_get_str(&cmdparams, kArg_cparms, &drmsstat);
+      if (strcmp(cparmsarg, kNotSpecified))
+      {
+         char *dup = strdup(cparmsarg);
+         char *pc = NULL;
+         char *pend = NULL;
+         int nstr;
+         int istr;
+         
+         /* count number of compression strings (one for each segment being exported) */
+         pc = dup;
+         nstr = 1;
+         while ((pc = strchr(pc, ',')) != NULL)
+         {
+            pc++;
+            ++nstr;
+         }
+
+         cparms = (const char **)malloc((nstr + 1) * sizeof(char *));
+         
+         pc = dup;
+         for (istr = 0; istr < nstr; istr++)
+         {
+            pend = strchr(pc, ',');
+            if (pend)
+            {
+               *pend = '\0';
+            }
+            cparms[istr] = (strcmp(pc, kNoCompression) == 0) ? strdup("") : strdup(pc);
+            if (pend)
+            {
+               pc = pend + 1;
+            }
+         }
+
+         /* Empty string to indicate end */
+         cparms[nstr] = NULL;
+
+         if (dup)
+         {
+            free(dup);
+         }
+      }
+
       md_version = strdup(version);
       md_reqid = strdup(reqid);
       md_method = strdup(method);
@@ -712,6 +803,7 @@ int DoIt(void)
                            &outpath, 
                            &exptime, 
                            &pklistTMP,
+                           cparms, 
                            &err);
 
          if (err != kMymodErr_Success)
@@ -770,6 +862,7 @@ int DoIt(void)
                                    mapfile, 
                                    &tcount, 
                                    &exptime, 
+                                   cparms, 
                                    &err);
          }
          else
@@ -936,5 +1029,17 @@ int DoIt(void)
       free(md_error);
    }
 
+   if (cparms)
+   {
+      int iseg = 0;
+      while (cparms[iseg])
+      {
+         free((void *)cparms[iseg]);
+         iseg++;
+      }
+
+      free(cparms);
+   }
+   
    return err;
 }
