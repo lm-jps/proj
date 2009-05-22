@@ -3,6 +3,151 @@
 #include "drms_storageunit.h"
 #include "exputil.h"
 
+/**
+@defgroup expfits jsoc_export_as_fits - Export internally stored data to a FITS file 
+@ingroup su_export
+
+@brief This module exports DRMS keywords and data segments into one or more FITS files. The resulting files are completely self-contained. DRMS keywords have been converted to FITS keywords. The caller can specify the compression parameters to use when creating the FITS file. 
+
+@par Synopsis:
+@code
+stand-alone mode:
+jsoc_export_as_fits rsquery=<recset query> reqid=<export request id> expversion=<version> 
+     method=<exp method> protocol=<output-file protocol> path=<output path&gt 
+     { ffmt=<filename format> } { kmclass=<keymap class> } { kmfile=<keymap file> } 
+     { cparms=<compression string list> }
+
+or
+
+export-series mode:
+jsoc_export_as_fits reqid=<export request id> expversion=<version> method=<exp method> 
+     protocol=<output-file protocol> { expseries=<exp series> } { kmclass=<keymap class> } 
+     { kmfile=<keymap file> } { cparms=<compression string list> }
+@endcode
+
+For each segment for each record specified by a record-set query, this module creates a FITS file. The FITS 
+file contains a copy of the image data that was contained in the original internal SUMS file. It also 
+contains FITS keywords derived via conversion from the original DRMS keywords. The conversion process
+is described in detail in ::drms_keyword_getmappedextname. Succinctly, if @a kmfile is provided, 
+the argument identifies a file which contains a keyword map which is used to map the DRMS keywords
+to FITS keywords. If @a kmfile is not provided, then if @a kmclass is provided, 
+this argument identifies a keyword-map class, which is a name that identifies a predefined 
+keyword map which is then used to map the DRMS keywords to FITS keywords. Otherwise, if the 
+DRMS keyword being converted has a description field that contains
+a string of the form [X{:Y}], then if X is a valid FITS keyword, it is used. Otherwise, if the 
+DRMS keyword name is a valid FITS keyword name, it is used. Otherwise, an algorithm is used to automatically
+generate a FITS keyword name.
+
+The name of the output file is determined from a filename format string. The format contains a series
+of substrings, each of which starts with '{', is followed by either "seriesname", "segment", "recnum",
+or "recnum:<format specifier>;", and ends with '}'. Each of these strings may appear
+as many times and in any order in the overall format string.
+Each of these strings serves as a placeholder that will be replaced by 
+an appropriate string value. For example, if the file being exported originates from a series named
+"su_arta.testfits", then "{seriesname}" will be evaluated to "su_arta.testfits". "{segment}"
+evaluates to the name of the segment being exported, and "{recnum}" evaluates to the 
+record number of the record being exported. The optional &lt;format specifier&gt; in 
+"{recnum:<format specifier>}" is the printf format specifier used to convert the record number into 
+a string (by default "%lld" is used if the format specifier is ommitted). As an example, to
+generate a filename like mdi.fd_M_96m_lev18.1111.data.fits, the format string 
+"{seriesname}.{recnum:%d}.{segment}" would suffice.
+
+This module provides two ways to export data. When run in "stand-alone" mode, the exported FITS
+files are written to a directory specified by the @a path argument, or to the working directory 
+if no @a path argument is present. To use this mode, the @a rsquery argument must be present. This
+query identifies the DRMS records and segments to be exported. Under this mode, the module does not assume 
+the existence of an export series (see "export-series" mode). It simply exports to a 
+specified directory. As such, the
+@a expseries argument is ignored if present. An optional @a ffmt argument contains the 
+filename format string. If this optional argument is not present, a default
+format string of "{seriesname}.{recnum:%lld}.{segment}" is assumed.
+
+When the module is run in "export-series" mode, 
+the record-set query that identifies records to export 
+originates from an "export series", not from the command-line. An export series is a 
+DRMS series established by an administrator. It is used to track exports, and in fact the 
+SUNUM values of this series' records point to directories where the exported FITS files 
+temporarily reside. A dbase query for the
+request ID (every export request is assigned a unique request ID) in the export series 
+returns a record which contains the
+record-set query and the output filename format string (at the very least, the keywords 
+rsquery - the record-set query - and ffmt - the filename format string - 
+must exist in the export series). This export-series record is cloned, and the 
+output files are written to the clone's SUDIR. 
+To use the export-series mode, the @a rsquery argument must NOT be present. The export series
+is identified by the @a expseries argument if it is present, otherwise it defaults to jsoc.export.
+Please see ???? for more information about the general export process. 
+
+@a cparms is a comma-separated list of strings. Each string is either 
+a CFITSIO compression string (please see tile-compression arguments in 
+http://jsoc.stanford.edu/jsocwiki/Jsd for more information 
+about this string), or the string "**NONE**". "**NONE**" indicates that the
+output file(s) should not be compressed. Each string in this list is relevant to 
+one of the segments being exported, the order of the strings matches the order of the 
+segments as determined by the original .jsd used to create the segment.
+
+This module writes, into the export directory, a "packing list" 
+which is a file that contains metadata about the export. This
+information includes the request ID of the export, the version of the export code, 
+the export method, and the export protocol. These data are passed into the module via the
+@a reqid, @a expversion, @a method, and @a protocol arguments, which are required regardless
+of the mode under which the module is run. The packing list also contains five other 
+metadata which are caculated/determined during the module run: a count of the total 
+number of files exports, the total size in bytes of the exported files, the time of
+export completion, the directory to which the files were exported (provided by the @a path
+argument to the module), and the status of the export (0 implies success). Finally, 
+the packing list contains a two-column table of output files. The first column
+is a record-set query, and the second column is a single exported file. The 
+record-set query uniquely identifies the output file.
+
+@par Flags:
+This module has no flags.
+
+@par GEN_FLAGS:
+Ubiquitous flags present in every module.
+@ref jsoc_main
+
+@param rsquery A DRMS record-set query that identifies a set of records and segments
+to export.
+@param reqid A string that uniquely identifies an export request. This string appears
+in the output packing list.
+@param expversion The version of the export code calling this module. This string appears
+in the output packing list.
+@param method The method of export, such as url or url_quick. This string appears
+in the output packing list.
+@param protocol The type of output file to produce. This must be FITS. This string appears
+in the output packing list.
+@param path The directory to which output files are to be written. If present, this string appears
+in the output packing list.
+@param ffmt The filename format string which defines the name of the output file(s).
+@param kmclass Identifies a keyword-map class, which is a name that identifies a predefined 
+keyword map which is then used to map the DRMS keywords to FITS keywords.
+@param kmfile  Identifies a file which contains a keyword map which is used to map the DRMS keywords
+to FITS keywords. 
+@param cparms A comma-separated list of strings. Each string is either 
+a CFITSIO compression string or the string "**NONE**".
+
+@par Exit_Status:
+@c 0 success<br>
+@c 1 cannot register definition file<br>
+@c 2 missing required argument<br>
+@c 3 invalid request ID<br>
+@c 4 invalid record-set query<br>
+@c 5 invalid filname format string<br>
+@c 6 failure to write export file<br>
+@c 7 cannot open packing list file<br>
+@c 8 failure writing packing list<br>
+@c 9 unsupported packing list element type
+
+@par Example:
+Running in the stand-alone mode:
+@code
+jsoc_export_as_fits reqid=JSOC_20090514_001 expversion=0.5 rsquery='su_phil.fd_M_daily[1996.07.4]' 
+     path=/tmp/jsocexptest ffmt='{seriesname}.{recnum:%d}.{segment}' method=url_quick 
+     protocol=FITS cparms="**NONE**"
+@endcode
+*/
+
 char *module_name = "export";
 
 typedef enum
@@ -40,7 +185,7 @@ typedef enum
 #define kArg_cparms      "cparms"
 
 
-#define kDef_expSeries   "jsoc.exports"
+#define kDef_expSeries   "jsoc.export"
 
 #define kPWD             "PWD"
 
@@ -784,7 +929,13 @@ int DoIt(void)
 
       if (strcmp(rsquery, kNotSpecified) == 0)
       {
-         /* Packing list items come from the export series. */
+         /* The record-set query that identifies records to export comes from 
+          * the export series, not from the command-line. A dbase query for the
+          * reqid in the export series returns a record which contains the
+          * record-set query. This export-series record is cloned, and the 
+          * output files are written to the clone's SUDIR. 
+          *
+          * The output filename format is obtained from the export series record */
          char *outpath = NULL;
 
          /* No record-set query provided - must use series to get rsquery */
