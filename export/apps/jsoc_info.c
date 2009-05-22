@@ -713,7 +713,12 @@ int DoIt(void)
           DRMS_Keyword_t *key;
           HIterator_t *prevkey = NULL;
           while (key=drms_record_nextkey(recordset->records[0], &prevkey))
-            keys[nkeys++] = strdup (key->info->name);
+          {
+             if (!drms_keyword_getimplicit(key))
+             {
+                keys[nkeys++] = strdup (key->info->name);
+             }
+          }
           free(prevkey);
 	  }
   	else
