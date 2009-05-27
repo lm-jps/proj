@@ -334,13 +334,15 @@ int send_mail(char *fmt, ...)
 void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn) 
 {
   char *hwltnset;
-  char *hseqerr;
+  char *hseqerr, *aistate;
   int status, hsqfgsn;
   uint32_t missvals, datav;
   uint32_t hcf1encd, hcf2encd, hps1encd, hps2encd, hps3encd; 
   uint32_t hwt1encd, hwt2encd, hwt3encd, hwt4encd;
   uint32_t hcf1pos, hcf2pos, hpl1pos, hpl2pos, hpl3pos, hwl1pos, hwl2pos;
   uint32_t hwl3pos, hwl4pos;
+  uint32_t aiawvlen, aifwen;
+  short aifiltyp;
   uint32_t quallev0 = 0;
 
   if(img->overflow) quallev0 = quallev0 | Q_OVFL;
@@ -351,10 +353,12 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   if(fsn != hsqfgsn) quallev0 = quallev0 | Q_NOISP;
   missvals = img->totalvals - img->datavals;
   if(missvals > 0) quallev0 = quallev0 | Q_MISS0;
-  datav = img->datavals;
+  datav = img->totalvals;
   if(missvals > (uint32_t)(datav * 0.01)) quallev0 = quallev0 | Q_MISS1;
   if(missvals > (uint32_t)(datav * 0.05)) quallev0 = quallev0 | Q_MISS2;
   if(missvals > (uint32_t)(datav * 0.25)) quallev0 = quallev0 | Q_MISS3;
+
+if(!hmiaiaflg) {		//HMI specific qual bits
   if(hseqerr = drms_getkey_string(rs, "HSEQERR", &status)) {
     if(strcmp(hseqerr, "SUCCESS")) quallev0 = quallev0 | Q_SEQERR;
     free(hseqerr);
@@ -399,6 +403,152 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   hwl4pos = drms_getkey_int(rs, "HWL4POS", &status);
   if(!((hwl4pos == hwt4encd) || (hwl4pos == (hwt4encd+1) % 240)))
     quallev0 = quallev0 | Q_HWT4ENCD;
+}
+else {				//AIA specific qual bits
+  if(aistate = drms_getkey_string(rs, "AISTATE", &status)) {
+    if(!strcmp(aistate, "OPEN")) quallev0 = quallev0 | AQ_ISSOPEN;
+    free(aistate);
+  }
+  aiawvlen = drms_getkey_int(rs, "AIAWVLEN", &status);
+  aifiltyp = drms_getkey_short(rs, "AIFILTYP", &status);
+  aifwen = drms_getkey_int(rs, "AIFWEN", &status);
+  switch(aiawvlen) {
+  case 9:			//9.4
+    if(aifiltyp == 0) {
+      if((aifwen != 269) && (aifwen != 270)) {
+        quallev0 = quallev0 | A94Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 11) && (aifwen != 12)) {
+        quallev0 = quallev0 | A94Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A94Mech_Err;
+      }
+    }
+    break;
+  case 1:			//13.1
+    if(aifiltyp == 0) {
+      if((aifwen != 269) && (aifwen != 270)) {
+        quallev0 = quallev0 | A131Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 11) && (aifwen != 12)) {
+        quallev0 = quallev0 | A131Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A131Mech_Err;
+      }
+    }
+    break;
+  case 7:			//17.1
+    if(aifiltyp == 0) {
+      if((aifwen != 203) && (aifwen != 204)) {
+        quallev0 = quallev0 | A171Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 11) && (aifwen != 12)) {
+        quallev0 = quallev0 | A171Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A171Mech_Err;
+      }
+    }
+    break;
+  case 3:			//19.3
+    if(aifiltyp == 0) {
+      if((aifwen != 269) && (aifwen != 270)) {
+        quallev0 = quallev0 | A193Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 11) && (aifwen != 12)) {
+        quallev0 = quallev0 | A193Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A193Mech_Err;
+      }
+    }
+    break;
+  case 2:			//21.1
+    if(aifiltyp == 0) {
+      if((aifwen != 203) && (aifwen != 204)) {
+        quallev0 = quallev0 | A211Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 137) && (aifwen != 138)) {
+        quallev0 = quallev0 | A211Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A211Mech_Err;
+      }
+    }
+    break;
+  case 8:			//30.4
+    if(aifiltyp == 0) {
+      if((aifwen != 203) && (aifwen != 204)) {
+        quallev0 = quallev0 | A304Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 137) && (aifwen != 138)) {
+        quallev0 = quallev0 | A304Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A304Mech_Err;
+      }
+    }
+    break;
+  case 0:			//33.5
+    if(aifiltyp == 0) {
+      if((aifwen != 203) && (aifwen != 204)) {
+        quallev0 = quallev0 | A335Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 137) && (aifwen != 138)) {
+        quallev0 = quallev0 | A335Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A335Mech_Err;
+      }
+    }
+    break;
+  case 4:			//160.0
+    if((aifwen != 269) && (aifwen != 270)) {
+      quallev0 = quallev0 | A160Mech_Err;
+    }
+    break;
+  case 5:			//170.0
+    if((aifwen != 137) && (aifwen != 138)) {
+      quallev0 = quallev0 | A170Mech_Err;
+    }
+    break;
+  case 6:			//450.0
+    if((aifwen != 74) && (aifwen != 75)) {
+      quallev0 = quallev0 | A450Mech_Err;
+    }
+    break;
+  }
+}
   drms_setkey_int(rs, "QUALLEV0", quallev0);
 }
 
