@@ -31,11 +31,22 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid);
 short create_low_range(HK_Keyword_t *kw_head, long int *low_range);
 short check_ds_cache_init(char *dsname); 
 short check_curr_map_file(char* pv_num, short* current_map_flag);
+int get_query_range(int range_type, HK_Keyword_t *kw, char *qr);
+int initialize_timecodes_cache(char* ds_name, HK_Keyword_t *kw, int apid);
+int check_hk_record_within_time_range( HK_Keyword_t *kw);
 /***********************   Extern Functions  *******************************/
 extern int  get_day_from_pkttime(double tc_sec);
 extern int  get_month_from_pkttime(double tc_sec);
 extern int  get_yr_from_pkttime(double tc_sec);
-extern int check_for_sdo_apid(int apid);
+extern int  check_for_sdo_apid(int apid);
+extern int  get_day_from_pkttime(double ptime);
+extern int  get_hour_from_pkttime(double ptime);
+extern int  get_month_from_pkttime(double ptime);
+extern int  get_yr_from_pkttime(double ptime);
+
+/***********************   global variable  *******************************/
+HK_DSN_RANGE_t *dsr_head=NULL;
+
 
 
 
@@ -70,6 +81,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
   int  status, env_status;
   int  rec_alreadycreated_flag;
   int ck_rec_status;
+  int ck_rwtr_status;
   static short haveNotChecked=1;
 
   /* CCSDS and keyword variables and structure to get 
@@ -95,7 +107,6 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 #ifdef DEBUG_WRITE_HK_TO_DRMS
       printkerr("DEBUG:Message at %s, line %d: Preparing to write to DRMS "
                 " for Level 0 Series.\n", __FILE__,__LINE__);
-#else
 #endif
   }
   else 
@@ -103,7 +114,6 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 #ifdef DEBUG_WRITE_HK_TO_DRMS
       printkerr("DEBUG:Message at %s, line %d: Preparing to write to DRMS "
                 " for Level 0 BY APID Series.\n", __FILE__,__LINE__);
-#else
 #endif
     /*setting for writing to DRMS Level 0 by APID data series*/
     rec_alreadycreated_flag=0; 
@@ -174,18 +184,49 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 #ifdef DEBUG_WRITE_HK_TO_DRMS
       printkerr("DEBUG:Message at %s, line %d: Writing to DRMS data"
                 " series <%s> for apid <%d>\n", __FILE__,__LINE__, query, ccsds->apid);
-#else
 #endif
 
-      /* need ds name(above), apid and kw structure(below)  to check if record exists */
+      /* check if record is within 12 hour range to remove processing of future dated packet data */
       /* get keyword structure */
       kw = ccsds->keywords;
-      
-      /* check if record exists based on timecode values */
-      ck_rec_status = check_hk_record_exists(query, kw, ccsds->apid);
 
-      /* if already exits skip writing record to DRMS data series */
-      if (ck_rec_status == 1)
+      ck_rwtr_status = check_hk_record_within_time_range(kw);
+      if (ck_rwtr_status == 1)
+      {
+        /* check if record exists based on timecode values */
+        /* need ds name(above), apid and kw structure(below)  to check if record exists */
+        kw = ccsds->keywords;
+        ck_rec_status = check_hk_record_exists(query, kw, ccsds->apid);
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+        printkerr("DEBUG:Message at %s, line %d: After check if record exists. "
+                  "Status:<%d> where 0 means write record and 1 means skip "
+                  "write of record.\n", __FILE__,__LINE__, ck_rec_status);
+#endif
+      }
+      else
+      {
+        /*set to not write record since not within time range.*/
+        ck_rec_status= 1; 
+      }  
+
+      /* if already exits or not within time range, skip writing record to DRMS data series */
+      if (ck_rwtr_status == 0)
+      {
+        ;/* skip setting */
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+        printkerr("DEBUG:Message at %s, line %d: Check if record within time range. "
+                " Status:<%d>, so skip writing record\n",
+                 __FILE__,__LINE__, ck_rwtr_status);
+#endif
+        /* set return status for ingest_lev0 to successful but skip writing since rec not within time range */
+        /* of current date and time + 12 hours. The idea is to not write data the has made up future dates  */
+        status=SUCCESS_HK_SKIP_WTD_REC_TIME_OOR;
+
+        /* go to next node or next vcdu packet */
+        ccsds= ccsds->next;
+        continue;
+      }
+      else if (ck_rec_status == 1)
       {
         ;/* skip setting */
 #ifdef DEBUG_WRITE_HK_TO_DRMS
@@ -205,9 +246,8 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
       {
 #ifdef DEBUG_WRITE_HK_TO_DRMS
         printkerr("DEBUG:Message at %s, line %d: Check if record exists. "
-                  " Status:<%d>, so writing record\n",
-                  __FILE__,__LINE__, ck_rec_status);
-#else
+                  "Status:<%d>, Check if record within range.Status:<%d> "
+                  "so writing record\n", __FILE__,__LINE__, ck_rec_status,ck_rwtr_status);
 #endif
       }
 
@@ -297,8 +337,8 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
     status = drms_setkey(rec, keyname, keytype, &key_anyval);
     /* free memory for string */
     free (key_anyval.string_val);
-
      
+
     /* set HK_SOURCE keyword */
     /* set drms type */
     keytype= DRMS_TYPE_STRING;
@@ -1596,48 +1636,15 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
   HK_Timecode_t *tc;  //current link list pointer
   HK_Timecode_t *ptc; //previous link list pointer
   HK_Timecode_t *tcn; //next link list pointer
-  char tc_sec[HK_LEV0_MAX_LONG_KW_NAME];
-  char tc_subsec[HK_LEV0_MAX_LONG_KW_NAME];
-  char strapid[HK_LEV0_MAX_PACKET_NAME];
-  char pkt_ver_num[HK_LEV0_MAX_PVN_STR];
-  char *pvn;
   int ck_status;
-  int curr_pvn_dn;
-  int curr_pvn_wn;
-  int drms_status;
   int found_status=0;
   int j;
-  int lr_status;
   long int sec_pkt, subsec_pkt;
   static int tc_last_index;
-  static long int tclr=0;
-  static HK_DSN_RANGE_t *dsr_head=NULL;
   int found_dsr_node=0;
   int ckinit=0;
+  int istatus=0;
 
-  /* drms record create variables */
-  DRMS_RecordSet_t *rs;
-  DRMS_Record_t *rec;
-
-  /* initialize variables */
-  pvn= pkt_ver_num;
-  rs=NULL;
-  rec=NULL;
-
-  /* get packet version number to use for TIMECODE keyword name */
-  if(check_for_sdo_apid(apid))
-  {
-    /* for sdo 129 set pvn to merged case to pickup SDO-ASD-PVN-TO-JSVN file */
-    /* also to go into merged case logic below */
-    curr_pvn_wn= HK_LEV0_START_MERGED_PVNW;
-    curr_pvn_dn= HK_LEV0_START_MERGED_PVND;
-  }
-  else
-  {
-    pvn=get_packet_version_number(kw);
-    sscanf(pvn,"%3d.%3d",&curr_pvn_wn, &curr_pvn_dn);
-  }
-   
   /* check if should initialize cache structure for this data series */
   ckinit= check_ds_cache_init(ds_name); 
 
@@ -1645,181 +1652,12 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
   /* if  should initialize then create cache structure for this data series */
   if(ckinit)
   {
-    /* set first time run timecode low range */
-    lr_status=create_low_range( kw, &tclr);
-    if( !lr_status)
+    istatus=initialize_timecodes_cache(ds_name, kw, apid);
+    if(istatus == 0)
     {
-      printkerr("Warning at %s, line %d: Could not set low range value in cache memory. "
-                "This is use to save in cache a limited amount of records in cache. "
-                "This cache is used to test if record already exists in data series. \n",
-                  __FILE__, __LINE__);
+      return (0);
     }
-
-    /* open records for drms series */
-    rs = drms_open_records(drms_env, ds_name, &drms_status);
-
-    /* open records for drms series */
-    /* if have null no record in series so return 0 or did not find any records in series so can write to series */
-    if (!rs) 
-    { 
-      /* Test this CASE: if no records there, break from if, create dsr node and timecode node,then return 0 */
-      printkerr("DEBUG:Message:TEST CASE- at %s, line %d: There are no records for series. "
-                "Therefore returning 0 for check if hk record exists. When return "
-                "zero then the records will get written to series. \n",
-                  __FILE__, __LINE__);
-      return(0); 
-    }
-
-    /* ds has records, so fill records in timecode link list and check new records in link list */
-    if(rs->n)
-    {
-
-      /* have  already existing records in data series so set timecount link list seconds and subsecs from each record */
-      /* if dsr head node exists */
-      if(dsr_head)
-      {
-        /* go to last node via pdsr */
-        for(dsr=dsr_head;dsr; pdsr=dsr,dsr=dsr->next);
-      }
-      else
-      {
-         /* if dsr_head does NOT exist, then assign dsr null value */
-         dsr=dsr_head;
-      }
-
-      /* get apid packet value(isp,seq or 481) based on apid -use to create TIMECODE keywords names later*/
-      if(curr_pvn_wn  >=  HK_LEV0_START_MERGED_PVNW && curr_pvn_dn >= HK_LEV0_START_MERGED_PVND)
-      {
-        /* doing setting of packet value name for merged TIMECODE names- ISP,SEQ,etc.*/
-        if(apid == HK_HSB_HMI_ISP_1 || apid == HK_HSB_HMI_ISP_2 || apid == HK_LR_HMI_ISP)
-        {
-          strcpy(strapid, HK_HMI_PKT_NAME_ISP);
-        }
-        else if(apid == HK_HSB_AIA_ISP_1 || apid == HK_HSB_AIA_ISP_2 || apid == HK_LR_AIA_ISP )
-        {
-          strcpy(strapid, HK_AIA_PKT_NAME_ISP);
-        }
-        else if(apid == HK_HSB_HMI_SEQ_1 || apid == HK_HSB_HMI_SEQ_2 || apid ==HK_LR_HMI_SEQ )
-        {
-          strcpy(strapid, HK_HMI_PKT_NAME_SEQ);
-        }
-        else if(apid == HK_HSB_AIA_SEQ_1 || apid == HK_HSB_AIA_SEQ_2 || apid == HK_LR_AIA_SEQ )
-        {
-          strcpy(strapid, HK_AIA_PKT_NAME_SEQ);
-        }
-        else if(apid == HK_HSB_HMI_OBT_1 || apid == HK_HSB_HMI_OBT_2 || apid ==HK_LR_HMI_OBT )
-        {
-          strcpy(strapid, HK_HMI_PKT_NAME_OBT);
-        }
-        else if(apid == HK_HSB_AIA_OBT_1 || apid == HK_HSB_AIA_OBT_2 || apid == HK_LR_AIA_OBT )
-        {
-          strcpy(strapid, HK_AIA_PKT_NAME_OBT);
-        }
-        else if(apid == HK_LR_SDO_ASD)
-        {
-          strcpy(strapid, HK_SDO_PKT_NAME_ASD);
-        }
-        else
-        {
-          /* for apid using hex number for timecode keywords like apid 129 and non-isp and non-seq apids */
-          sprintf(strapid,"%03.3x", apid);
-        }
-      }
-      else
-      {
-        /* doing setting of packet name based on non-merge TIMECODE hex names - 1BD,1DB,1E1,etc. */
-        sprintf(strapid,"%03.3x", apid);
-      }
-        
-      /* go thru each record in data series and get and set timecode sec and subsec values */
-      for(j=0; j < rs->n;j++)
-      {
-
-        /* if no head node create first head node -which was checked andn set above*/
-        if(!dsr)
-        {
-          /* create head node for data series name and range link list */
-          dsr= (HK_DSN_RANGE_t *)malloc(sizeof(HK_DSN_RANGE_t));
-
-          /* create head node for time code link list */
-          tc= (HK_Timecode_t *)malloc(sizeof(HK_Timecode_t));
-         
-          /* set dsr node value to allocated space for node */
-          if(!dsr_head) 
-          {
-            /* if dsr_head null then set dsr_head to newly created dsr node */
-            dsr_head=dsr;
-          }
-          else 
-          {
-            /* else dsr_head does exist, so use the last node in dsr link list to add this newly created node */
-            pdsr->next=dsr;
-          }
-
-          /* set values in dsr node, name, low range value, etc */
-          strcpy(dsr->dsname, ds_name);
-          dsr->next=NULL;
-          dsr->tcnode=tc;
-          dsr->timecode_lrsec=tclr;
-
-          /* read record and fill in value or cache value in link list in order to not go to db to get data again */
-          rec = rs->records[j];
-
-          /* get time code keyword strings to use to lookup value in rec */
-          sprintf(tc_sec, "%s%s_%s","APID",make_strupr(strapid),"TIMECODE_SECONDS");
-          sprintf(tc_subsec, "%s%s_%s","APID",make_strupr(strapid),"TIMECODE_SUBSECS");
-
-          /* get and set time code second and subsecond values */
-          tc->sec = drms_getkey_longlong(rec, tc_sec, &drms_status);
-          tc->subsec = drms_getkey_longlong(rec,tc_subsec , &drms_status);
-
-
-          /* set next timecode node */
-          tc->next = NULL;
-
-        }
-        else /* else add newly created timecode node to end of dsr link list */
-        {
-          /* create next node for time code link list */
-          tcn= (HK_Timecode_t *)malloc(sizeof(HK_Timecode_t));
-
-          /* assign next value to new node and reset tc pointer */
-          tc->next=tcn;
-          tc=tcn;
-
-          /* get next record and set values in timecode link list */
-          rec = rs->records[j];
-
-          /* get time code keyword strings */
-          sprintf(tc_sec, "%s%s_%s","APID",make_strupr(strapid),"TIMECODE_SECONDS");
-          sprintf(tc_subsec, "%s%s_%s","APID",make_strupr(strapid),"TIMECODE_SUBSECS");
-
-          /* get time code values */
-          tc->sec = drms_getkey_longlong(rec, tc_sec, &drms_status);
-          tc->subsec = drms_getkey_longlong(rec,tc_subsec , &drms_status);
-
-          /* set next value */
-          tc->next = NULL;
-        }
-      }/*for-loop -go thru each rec and get timecodes and set in cache link list*/
-
-      /* save reminder of last index */
-      tc_last_index= j;
-
-    } /* if-end of if record in data series are  > 0 */
-    /*else - don't have any records in data series to load in dsr cache link list */
-
-
-    /* close once for complete dayfile of packets */
-    drms_status = drms_close_records(rs, DRMS_FREE_RECORD);
-
-
-  } /* end of if(ckinit)- to check if should initialize cache with data series values */
-  /* Else should not initialize, because already initialized once, so don't do it again */
-
-
-
-
+  }
 
   /* get timecode seconds and subseconds in current packet */
   /* loop until get TIMECODE Seconds and Subseconds values */
@@ -1844,8 +1682,6 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
 
 
 
-
-
   /* check for cache link list dsr node for current packets dsname then check low range values in dsr node */
   for(dsr=dsr_head; dsr;dsr=dsr->next)
   {
@@ -1853,16 +1689,22 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
     if (!strcmp(dsr->dsname, ds_name))
     {
       /* found ds name in dsr cache link list-now check low range threshold for holding cache values is okay */
-      if ( dsr->timecode_lrsec <= sec_pkt)
+      if ( dsr->timecode_lrsec <= sec_pkt && dsr->timecode_hrsec >= sec_pkt )
       {
         /* if got timecode seconds value less than low range -then values in cache ok */
+        /* if got packet timecode seconds less than high range and greater than low range  -then values in cache ok */
         break;
       }
       else
       {
-        /* if current time code is not less than low range then need to reset low range and free link list in order reload below */
-        printkerr("DEBUG:Warning Message:check_hk_rec_exist:TEST CASE-watch does not occur offen-low range needs to be reset- and reload link list\n");
-        dsr->timecode_lrsec= sec_pkt - HK_SECONDS_PER_DAY;
+        /* if current time code is greater than low range or if current time code is greater than high range */
+        /* then free link list in order to reload cached values. this frees cache every two days */
+        printkerr("DEBUG:Warning Monitor Message:check_hk_rec_exist:Watch does "
+                  "not occur too often-low and high range of timecode cache needs "
+                  "to be reset. Clearing cache and reloading link list of timecodes. "
+                  "This should occur every two day per HK by APID series.\n");
+        dsr->timecode_lrsec= sec_pkt - (HK_SECONDS_PER_DAY);
+        dsr->timecode_hrsec= sec_pkt + ((HK_SECONDS_PER_DAY) * 2);
 
         /* free link */
         for(j=0,tc=dsr->tcnode;tc;j++)
@@ -1873,13 +1715,18 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
         }
         dsr->tcnode=NULL;
         tc_last_index=0;
+
         /* reload link list done below with new values */
+        dsr_head=NULL;
+        istatus=initialize_timecodes_cache(ds_name, kw, apid);
+        if(istatus == 0)
+        {
+            return (0);
+        }
         break;
-       } /* end-else curent timecode value not less the low range in dsr cache node */
+      } /* end-else curent timecode value not less the low range in dsr cache node */
     }/* end-if found match for current data series name in cache link list */
   }/*end-for loop - look for dsname node and check low range */
-
-
 
 
 
@@ -1936,8 +1783,6 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
 
 
 
-
-
   /* if did not find timecode then will add to drms-therefore add values to timecodes link list */
   if(!found_status)
   { 
@@ -1966,6 +1811,7 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
       /* set next (ndsr) node value */
       strcpy(dsrn->dsname, ds_name);
       dsrn->timecode_lrsec= sec_pkt - HK_SECONDS_PER_DAY;
+      dsrn->timecode_hrsec= sec_pkt + ((HK_SECONDS_PER_DAY) * 2);
       dsrn->next=NULL;
       dsrn->tcnode=NULL;
 
@@ -2056,6 +1902,36 @@ short create_low_range(HK_Keyword_t *kw_head, long int *lr)
       /*if found timecode seconds keyword then set found flag by returning 1 */
       /* create time string based on some hard coded parameters for now */
       *lr = tkw->eng_value.uint32_val - HK_SECONDS_PER_DAY;
+      return(1);
+    }
+    tkw= tkw->next;
+  }
+  /* if did not set return not found by returning 0 value */
+  return(0);
+}
+/************************************************************/
+/* NAME:CREATE CACHE HIGH RANGE                             */
+/* FUNCTION:   short create_high_range                      */
+/*                   (HK_Keyword_t *kw_head,int *hr)        */
+/* DESCRIPTION: Create high range for cached value for data */ 
+/*              series. Create high range by using current  */
+/*              timecode in seconds + (HK_SECONDS_PER_DAY*2)*/
+/*              Pass in current hk structure to find time   */
+/*              of last packet. Pass back high range value. */
+/************************************************************/
+short create_high_range(HK_Keyword_t *kw_head, long int *hr)
+{
+  HK_Keyword_t *tkw;
+  tkw=kw_head;
+
+  /* loop thru kw structure of keywords to find timecode seconds values */
+  while (tkw)
+  {
+    if(strstr(tkw->name,"TIMECODE_SECONDS"))
+    {
+      /*if found timecode seconds keyword then set found flag by returning 1 */
+      /* create time string based on some hard coded parameters for now */
+      *hr = tkw->eng_value.uint32_val + (HK_SECONDS_PER_DAY * 2);
       return(1);
     }
     tkw= tkw->next;
@@ -2158,4 +2034,432 @@ short check_curr_map_file(char* pv_str, short *curr_map_flag)
    *curr_map_flag = new_map_flag; 
     return(1);
   }
+}
+
+
+
+/************************************************************/
+/* NAME:GET QUERY RANGE TO USE TO CHECK RECORDS EXIST       */
+/* FUNCTION:   get_query_range()                            */
+/* DESCRIPTION: Get query range to use to do query of       */ 
+/*              of records to load into cache memory which  */
+/*              before loading to dataseries                */
+/************************************************************/
+int get_query_range(int range_type, HK_Keyword_t *kw, char qr[HK_MAX_SIZE_RANGE_TIME])
+{
+  int gpt_status;
+  TIME pkt_time;
+  TIME *ptime=&pkt_time;
+  TIME pkt_time1;
+  TIME *ptime1=&pkt_time1;
+  int yr,mr,dr;
+
+  /* get current packet time in current packet */
+  gpt_status = get_pkt_time_from_timecodes(kw, ptime);
+  if(!gpt_status)
+  {
+    printkerr("WARNING at %s, line %d: Could not find timecode inorder "
+              "to get packet time. gpt_status:<%d>.\n", __FILE__,__LINE__, gpt_status);
+  }
+  /* using current packet time create new low or high range */
+  if(range_type == HK_LOW_QUERY_RANGE)
+  {
+    *ptime1= *ptime - (HK_SECONDS_PER_DAY);
+  }
+  else if (range_type == HK_HIGH_QUERY_RANGE)
+  {
+    *ptime1= *ptime + (HK_SECONDS_PER_DAY * 2);
+  }
+  else
+  {
+    sprintf(qr, "0000.00.00_00:00:00.00_UTC");
+
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+      printkerr("DEBUG:Message at %s, line %d: Bad Query range "
+                " is <%s>.\n", __FILE__,__LINE__, qr);
+#endif
+
+    return (0);
+  }
+  dr=get_day_from_pkttime( *ptime1);
+  mr=get_month_from_pkttime(*ptime1);
+  yr=get_yr_from_pkttime(*ptime1);
+  sprintf(qr, "%04d.%02d.%02d_00:00:00.00_UTC",yr,mr,dr);
+
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+      printkerr("DEBUG:Message at %s, line %d: Query range "
+                " is <%s>.\n", __FILE__,__LINE__, qr);
+#endif
+
+  return (1); 
+}
+
+/*###################################################################
+#  initialize_timecodes_cache()                                   #
+###################################################################*/
+int initialize_timecodes_cache(char* ds_name, HK_Keyword_t *kw, int apid)
+{
+  /* variable definitions */
+  HK_DSN_RANGE_t *dsr;//current link list pointer
+  HK_DSN_RANGE_t *pdsr;//previous link list pointer
+  HK_Timecode_t *tc;  //current link list pointer
+  HK_Timecode_t *tcn; //next link list pointer
+  char pkt_ver_num[HK_LEV0_MAX_PVN_STR];
+  char tc_sec[HK_LEV0_MAX_LONG_KW_NAME];
+  char tc_subsec[HK_LEV0_MAX_LONG_KW_NAME];
+  char strapid[HK_LEV0_MAX_PACKET_NAME];
+  char nquery[HK_MAX_SIZE_QUERY];
+  char qr1[HK_MAX_SIZE_RANGE_TIME];
+  char qr2[HK_MAX_SIZE_RANGE_TIME];
+  char *pvn;
+  int curr_pvn_dn;
+  int curr_pvn_wn;
+  int drms_status;
+  int j;
+  int lr_status;
+  int hr_status;
+  int gqr1_status;
+  int gqr2_status;
+  static long int tclr=0;
+  static long int tchr=0;
+  /* drms record create variables */
+  DRMS_RecordSet_t *rs;
+  DRMS_Record_t *rec;
+
+  /* initialize variables */
+  rs=NULL;
+  rec=NULL;
+  pvn= pkt_ver_num;
+
+  /* get packet version number to use for TIMECODE keyword name */
+  if(check_for_sdo_apid(apid))
+  {
+    /* for sdo 129 set pvn to merged case to pickup SDO-ASD-PVN-TO-JSVN file */
+    /* also to go into merged case logic below */
+    curr_pvn_wn= HK_LEV0_START_MERGED_PVNW;
+    curr_pvn_dn= HK_LEV0_START_MERGED_PVND;
+  }
+  else
+  {
+    pvn=get_packet_version_number(kw);
+    sscanf(pvn,"%3d.%3d",&curr_pvn_wn, &curr_pvn_dn);
+  }
+
+  /* drms record create variables */
+  /* set first time run timecode low range */
+  lr_status=create_low_range( kw, &tclr);
+  hr_status=create_high_range( kw, &tchr);
+  if( !lr_status || !hr_status)
+  {
+    printkerr("Warning at %s, line %d: Could not set low and/or high range value in cache memory. "
+              "This is use to save in cache a limited amount of records in cache. "
+              "This cache is used to test if record already exists in data series. \n",
+              __FILE__, __LINE__);
+  }
+
+  /* setup query get narrow range of records in data series to avoid trucated query error */
+  /* use current packet time found in first packet to get low and high range for drms_open_records query */
+  /* set query range low current day - 1 day and set query range high to current day + 1 day */
+  gqr1_status=get_query_range(HK_LOW_QUERY_RANGE,kw,qr1);
+  gqr2_status=get_query_range(HK_HIGH_QUERY_RANGE,kw,qr2);
+  if(!gqr1_status || !gqr2_status)
+  {
+    printkerr("Warning at %s, line %d: Could not create query range successfully. "
+              "qr1:<%s> qr2:<%s>\n", __FILE__, __LINE__);
+  }
+  /* create full query statement */
+  sprintf(nquery,"%s[? PACKET_TIME < $(%s) AND PACKET_TIME >  $(%s) ?]",ds_name,qr2,qr1);
+
+  /* open records for drms series */
+  rs = drms_open_records(drms_env, nquery, &drms_status);
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+  if(!rs)
+  {
+    printkerr("DEBUG:Message at %s, line %d: Record query to "
+              "dataseries is <%s>. Return status of query:<%d> \n",
+              __FILE__,__LINE__, nquery, drms_status);
+  }
+  else
+  {
+    printkerr("DEBUG:Message at %s, line %d: Record query to "
+              "dataseries is <%s>. Return status of query:<%d> "
+              "Return count:<%d>\n", __FILE__,__LINE__, nquery, drms_status, rs->n);
+  }
+#endif
+
+  /* open records for drms series */
+  /* if have null no record in series so return 0 or did not find any records in series so can write to series */
+  if (!rs) 
+  { 
+    /* Test this CASE: if no records there, break from if, create dsr node and timecode node,then return 0 */
+    printkerr("DEBUG:Message:TEST CASE- at %s, line %d: There are no records for series. "
+              "Therefore returning 0 for check if hk record exists. When return "
+              "zero then the records will get written to series. \n", __FILE__, __LINE__);
+    printkerr("DEBUG:Message at %s, line %d: DRMS data series <%s>\n", __FILE__,__LINE__, ds_name);
+    return(0); 
+  }
+
+  /* ds has records, so fill records in timecode link list and check new records in link list */
+  if(rs->n)
+  {
+
+    /* have  already existing records in data series so set timecount link list seconds and subsecs from each record */
+    /* if dsr head node exists */
+    if(dsr_head)
+    {
+      /* go to last node via pdsr */
+      for(dsr=dsr_head;dsr; pdsr=dsr,dsr=dsr->next);
+    }
+    else
+    {
+       /* if dsr_head does NOT exist, then assign dsr null value */
+       dsr=dsr_head;
+    }
+
+    /* get apid packet value(isp,seq or 481) based on apid -use to create TIMECODE keywords names later*/
+    if(curr_pvn_wn  >=  HK_LEV0_START_MERGED_PVNW && curr_pvn_dn >= HK_LEV0_START_MERGED_PVND)
+    {
+      /* doing setting of packet value name for merged TIMECODE names- ISP,SEQ,etc.*/
+      if(apid == HK_HSB_HMI_ISP_1 || apid == HK_HSB_HMI_ISP_2 || apid == HK_LR_HMI_ISP)
+      {
+        strcpy(strapid, HK_HMI_PKT_NAME_ISP);
+      }
+      else if(apid == HK_HSB_AIA_ISP_1 || apid == HK_HSB_AIA_ISP_2 || apid == HK_LR_AIA_ISP )
+      {
+        strcpy(strapid, HK_AIA_PKT_NAME_ISP);
+      }
+      else if(apid == HK_HSB_HMI_SEQ_1 || apid == HK_HSB_HMI_SEQ_2 || apid ==HK_LR_HMI_SEQ )
+      {
+        strcpy(strapid, HK_HMI_PKT_NAME_SEQ);
+      }
+      else if(apid == HK_HSB_AIA_SEQ_1 || apid == HK_HSB_AIA_SEQ_2 || apid == HK_LR_AIA_SEQ )
+      {
+        strcpy(strapid, HK_AIA_PKT_NAME_SEQ);
+      }
+      else if(apid == HK_HSB_HMI_OBT_1 || apid == HK_HSB_HMI_OBT_2 || apid ==HK_LR_HMI_OBT )
+      {
+        strcpy(strapid, HK_HMI_PKT_NAME_OBT);
+      }
+      else if(apid == HK_HSB_AIA_OBT_1 || apid == HK_HSB_AIA_OBT_2 || apid == HK_LR_AIA_OBT )
+      {
+        strcpy(strapid, HK_AIA_PKT_NAME_OBT);
+      }
+      else if(apid == HK_LR_SDO_ASD)
+      {
+        strcpy(strapid, HK_SDO_PKT_NAME_ASD);
+      }
+      else
+      {
+        /* for apid using hex number for timecode keywords like apid 129 and non-isp and non-seq apids */
+        sprintf(strapid,"%03.3x", apid);
+      }
+    }
+    else
+    {
+      /* doing setting of packet name based on non-merge TIMECODE hex names - 1BD,1DB,1E1,etc. */
+      sprintf(strapid,"%03.3x", apid);
+    }
+        
+    /* go thru each record in data series and get and set timecode sec and subsec values */
+    for(j=0; j < rs->n;j++)
+    {
+
+      /* if no head node create first head node -which was checked andn set above*/
+      if(!dsr)
+      {
+        /* create head node for data series name and range link list */
+        dsr= (HK_DSN_RANGE_t *)malloc(sizeof(HK_DSN_RANGE_t));
+
+        /* create head node for time code link list */
+        tc= (HK_Timecode_t *)malloc(sizeof(HK_Timecode_t));
+       
+        /* set dsr node value to allocated space for node */
+        if(!dsr_head) 
+        {
+          /* if dsr_head null then set dsr_head to newly created dsr node */
+          dsr_head=dsr;
+        }
+        else 
+        {
+          /* else dsr_head does exist, so use the last node in dsr link list to add this newly created node */
+          pdsr->next=dsr;
+        }
+
+        /* set values in dsr node, name, low range value, etc */
+        strcpy(dsr->dsname, ds_name);
+        dsr->next=NULL;
+        dsr->tcnode=tc;
+        dsr->timecode_lrsec=tclr;
+        dsr->timecode_hrsec=tchr;
+
+        /* read record and fill in value or cache value in link list in order to not go to db to get data again */
+        rec = rs->records[j];
+
+        /* get time code keyword strings to use to lookup value in rec */
+        sprintf(tc_sec, "%s%s_%s","APID",make_strupr(strapid),"TIMECODE_SECONDS");
+        sprintf(tc_subsec, "%s%s_%s","APID",make_strupr(strapid),"TIMECODE_SUBSECS");
+
+        /* get and set time code second and subsecond values */
+        tc->sec = drms_getkey_longlong(rec, tc_sec, &drms_status);
+        tc->subsec = drms_getkey_longlong(rec,tc_subsec , &drms_status);
+
+        /* set next timecode node */
+        tc->next = NULL;
+
+      }
+      else /* else add newly created timecode node to end of dsr link list */
+      {
+        /* create next node for time code link list */
+        tcn= (HK_Timecode_t *)malloc(sizeof(HK_Timecode_t));
+
+        /* assign next value to new node and reset tc pointer */
+        tc->next=tcn;
+        tc=tcn;
+
+        /* get next record and set values in timecode link list */
+        rec = rs->records[j];
+
+        /* get time code keyword strings */
+        sprintf(tc_sec, "%s%s_%s","APID",make_strupr(strapid),"TIMECODE_SECONDS");
+        sprintf(tc_subsec, "%s%s_%s","APID",make_strupr(strapid),"TIMECODE_SUBSECS");
+
+        /* get time code values */
+        tc->sec = drms_getkey_longlong(rec, tc_sec, &drms_status);
+        tc->subsec = drms_getkey_longlong(rec,tc_subsec , &drms_status);
+
+        /* set next value */
+        tc->next = NULL;
+      }
+    }/*for-loop -go thru each rec and get timecodes and set in cache link list*/
+  } /* if-end of if record in data series are  > 0 */
+  /*else - don't have any records in data series to load in dsr cache link list */
+
+  /* close once for complete dayfile of packets */
+  drms_status = drms_close_records(rs, DRMS_FREE_RECORD);
+
+  return (1);
+
+} 
+
+/************************************************************/
+/* NAME:CHECK PACKET TIME RECORD IS WITH RANGE TO PROCESS   */
+/* FUNCTION:   check_hk_record_within_time_range()          */
+/* DESCRIPTION: Check PACKET_TIME of packet is within time  */
+/*              of current-time + 12 hours. If out of range */
+/*              then return 0 for do not process.           */
+/************************************************************/
+int check_hk_record_within_time_range( HK_Keyword_t *kw)
+{
+  TIME pkt_time;
+  TIME *ptime= &pkt_time;
+  HK_Keyword_t *tkw;  //kw link list pointer
+  int curr_packet_number;
+  int curr_time_range;
+  int curr_hr_range;
+  int y,m,d,h;
+  int gpt_status;
+  struct tm timestorage;
+  struct tm *time_ptr;
+  time_t tvalue;
+  time_ptr= &timestorage;
+
+  /* get year, month and hour for CURRENT packet */
+  tkw=kw;
+  gpt_status = get_pkt_time_from_timecodes(tkw, ptime);
+  if(!gpt_status)
+  {
+    printkerr("WARNING at %s, line %d: Could not find timecode inorder "
+              "to get packet time. gpt_status:<%d>.\n", __FILE__,__LINE__, gpt_status);
+  }
+  d=get_day_from_pkttime(*ptime);
+  h=get_hour_from_pkttime(*ptime);
+  m=get_month_from_pkttime(*ptime);
+  y=get_yr_from_pkttime(*ptime);
+
+  /* set up packet time found as a integer number  to compare later -yyyymmdd*/
+  curr_packet_number = (y * 10000) + (m * 100) + d ; 
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+  printkerr("DEBUG:Message at %s, line %d: Packet time is::: y:<%d>m:<%d>d:<%d>h<%d>.\n",__FILE__,__LINE__,y,m,d,h);
+#endif
+
+  /* get CURRENT TIME now in year,month, day and hour  */
+  tvalue = time(NULL);
+  time_ptr = gmtime(&tvalue);
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+  printkerr("DEBUG:Message at %s, line %d: Current time is:::y:<%d>m:<%d>d:<%d>h<%d>.\n", 
+            __FILE__,__LINE__, time_ptr->tm_year+1900,time_ptr->tm_mon+1,time_ptr->tm_mday,time_ptr->tm_hour);
+#endif
+
+  /*adjust by 12 hours the Current time and setup as a integer number,yyyymmdd, to compare later with packet time*/
+  if((time_ptr->tm_mon+1) == 12 &&  (time_ptr->tm_mday == 31) && (time_ptr->tm_hour >= 12))
+  {
+    /* adjust year,month,day if end of year range */
+    curr_time_range = (((time_ptr->tm_year+1900+1) * 10000) + ( 1 * 100) + 1);
+    curr_hr_range=time_ptr->tm_hour - 12;
+  }
+  else if( ( (time_ptr->tm_mon+1) == 1 || (time_ptr->tm_mon+1) == 3 ||  (time_ptr->tm_mon+1) == 5 ||  (time_ptr->tm_mon+1) == 7 ||  (time_ptr->tm_mon+1) == 8  ||  (time_ptr->tm_mon+1) == 10  ) && time_ptr->tm_mday == 31 && (time_ptr->tm_hour >= 12))
+  {
+    /* adjust month,day if end of month range */
+    curr_time_range = (((time_ptr->tm_year+1900) * 10000) + ((time_ptr->tm_mon+2) * 100) + 1);
+    curr_hr_range=time_ptr->tm_hour - 12;
+  }
+  else if( ( (time_ptr->tm_mon+1) == 4 || (time_ptr->tm_mon+1) == 6 ||  (time_ptr->tm_mon+1) == 5 ||  (time_ptr->tm_mon+1) == 9 ||  (time_ptr->tm_mon+1) == 11 ) && time_ptr->tm_mday == 30 && (time_ptr->tm_hour >= 12))
+  {
+    /* adjust month,day if end of month range */
+    curr_time_range = ((time_ptr->tm_year+1900) * 10000) + ((time_ptr->tm_mon+2) * 100) + 1;
+    curr_hr_range=time_ptr->tm_hour - 12;
+  }
+  else if( ( (time_ptr->tm_mon+1) == 2 && (time_ptr->tm_year+1900 == 2009) && time_ptr->tm_mday == 28) &&  (time_ptr->tm_hour >= 12))
+  {
+    /* adjust month,day if end of month range */
+    curr_time_range = ((time_ptr->tm_year+1900) * 10000) + ((time_ptr->tm_mon+2) * 100) + 1;
+    curr_hr_range=time_ptr->tm_hour - 12;
+  }
+  else if( ( (time_ptr->tm_mon+1) == 2 && (time_ptr->tm_year+1900 == 2010) && time_ptr->tm_mday == 29) &&  (time_ptr->tm_hour >= 12))
+  {
+    /* adjust month,day if end of month range */
+    curr_time_range = ((time_ptr->tm_year+1900) * 10000) + ((time_ptr->tm_mon+2) * 100) + 1;
+    curr_hr_range=time_ptr->tm_hour - 12;
+  }
+  else if((time_ptr->tm_hour >= 12))
+  {
+    /* adjust day if end of day range */
+    curr_time_range= ((time_ptr->tm_year+1900) * 10000) + ((time_ptr->tm_mon+1) * 100) + ( time_ptr->tm_mday + 1);
+    curr_hr_range=time_ptr->tm_hour - 12;
+  }
+  else if((time_ptr->tm_hour < 12))
+  {
+    /* adjust hour if same day range */
+    curr_time_range= ((time_ptr->tm_year+1900) * 10000) + ((time_ptr->tm_mon+1) * 100) + ( time_ptr->tm_mday);
+    curr_hr_range=time_ptr->tm_hour + 12;
+  }
+  else
+  {
+    printkerr("ERROR:check_hk_record_within_time_range:Bad else case in function\n");
+  }
+
+  /* compare packet time to current time range calculated above */
+  if ( curr_packet_number < curr_time_range)
+  {
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+     printkerr("DEBUG:MESSAGE:check_hk_record_within_range:Received packets --within-- range(yyyy.mm.dd_hh):%d.%02d.%02d_%02d\n", y,m,d,h);
+#endif
+     return (1);
+  }
+  else if ( curr_packet_number == curr_time_range && h < curr_hr_range)
+  {
+     /* check if same day for curent packet and current time range then check hour is with current hour range */
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+     printkerr("DEBUG:MESSAGE:check_hk_record_within_range:Received packets --within-- range(yyyy.mm.dd_hh):%d.%02d.%02d_%02d\n", y,m,d,h);
+#endif
+     return (1);
+  }
+  else
+  {
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+     printkerr("DEBUG:WARNING MESSAGE:check_hk_record_within_range:Received packets not within range(yyyy.mm.dd_hh):%d.%02d.%02d_%02d\n", y,m,d,h);
+#endif
+     return (0);
+  }
+ 
 }
