@@ -11,6 +11,7 @@
  *              the HMI-EGSE-SS telemetry simulator and DDS.                 *
  *****************************************************************************/
 /******************************defines****************************************/
+#define MAX_SIZE_PKT_DATE       100
 #define MAXLINE_IN_FILE         150
 #define MAX_NUM_KW_LINES        3000
 #define MAX_DATE_SIZE           15
