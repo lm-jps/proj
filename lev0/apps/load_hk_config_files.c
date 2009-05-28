@@ -80,8 +80,8 @@ void load_gtcids_data( GTCIDS_Version_Number* top_ptr_gtcids_data,
                        APID_Pointer_HK_Configs *top_apid_ptr_hk_configs);
 int check_for_sdo_apid(int apid);
 void deallocate_apid_hkpfd_files_nodes(APID_HKPFD_Files *top_ptr_apid_hkpfd_files_ptr) ;
-char * find_file_version_number(GTCIDS_Version_Number *top,char f_version_number[]);
-char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[],int apid);
+char * find_file_version_number(GTCIDS_Version_Number *top,char p_version_number[MAX_CHAR_VERSION_NUMBER]);
+char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[MAX_SIZE_PKT_DATE],int apid);
 /***************************** global variables ******************************/
 APID_Pointer_HK_Configs *global_apid_configs;
 GTCIDS_Version_Number *global_gtcids_vn;
@@ -96,7 +96,7 @@ SHCIDS_Version_Number *global_shcids_vn;
  * Description: This is the top level function to decode housekeeping keywords.
  * Status load_all_apids_hk_configs(): Tested
  *****************************************************************************/
-int load_all_apids_hk_configs(int apid, char version_number[], char pkt_date[])    
+int load_all_apids_hk_configs(int apid, char version_number[MAX_CHAR_VERSION_NUMBER], char pkt_date[MAX_SIZE_PKT_DATE])    
 {
   /*  declarations  */
   APID_Pointer_HK_Configs *apid_ptr_hk_configs;
@@ -108,7 +108,7 @@ int load_all_apids_hk_configs(int apid, char version_number[], char pkt_date[])
   int apid_array[MAX_APID_POINTERS];
   char apidstr_array[MAX_APID_POINTERS][10];
   int number_of_apids, i;
-  char file_version_number[50];
+  char file_version_number[MAX_CHAR_VERSION_NUMBER];
   char *ptr_fvn;
   //HK_Config_Files *hk_configs;  /* used to print results which is commented out*/
   // Keyword_Parameter *hk_keyword;/* used to print results which is commented out*/
@@ -283,7 +283,7 @@ void load_config_data(APID_HKPFD_Files *hkpfd_files,
  *              files will be in one directory called for now 
  *              .../HK-CONFIG-FILES.
  *****************************************************************************/
-APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[],char p_version_number[])
+APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[MAX_CHAR_VERSION_NUMBER],char p_version_number[MAX_CHAR_VERSION_NUMBER])
 {
   /*declarations */
   APID_HKPFD_Files *top, *p; 
@@ -303,7 +303,7 @@ APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[],cha
     dn = getenv("HK_SHCIDS_DIRECTORY");
     if(dn == NULL) 
     {
-      printkerr("Error at %s, line %d: Could not get directory environment\n"
+      printkerr("ERROR at %s, line %d: Could not get directory environment\n"
                 "variable:<HK_SHCIDS_DIRECTORY>. Set the env variable "
 	        "HK_SHCIDS_DIRECTORY to point to the config file directory.\n",
                 __FILE__,__LINE__,dn);
@@ -315,7 +315,7 @@ APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[],cha
     dn = getenv("HK_CONFIG_DIRECTORY");
     if(dn == NULL) 
     {
-      printkerr("Error at %s, line %d: Could not get directory environment\n"
+      printkerr("ERROR at %s, line %d: Could not get directory environment\n"
                 "variable:<HK_CONFIG_DIRECTORY>. Set the env variable "
 	        "HK_CONFIG_DIRECTORY to point to the config file directory.\n",
                 __FILE__,__LINE__,dn);
@@ -331,7 +331,7 @@ APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[],cha
   /* open directory */
   if ((dir_p = opendir(dirname)) == NULL)
   {
-    printkerr("Error at %s, line %d: Could not open directory <%s>. "
+    printkerr("ERROR at %s, line %d: Could not open directory <%s>. "
               "The directory with < %s > version number does not exist. "
               "Run make_hkpdf.pl script to create directory and config files.\n",
              __FILE__,__LINE__,dirname, f_version_number);
@@ -458,7 +458,7 @@ APID_HKPFD_Files* read_all_hk_config_files(int apid, char f_version_number[],cha
   if ( !file_loaded_flag) 
   {
     /*Took out too many messages in log
-    printkerr("Error at %s, line %d: Could not find config file(s) "
+    printkerr("ERROR at %s, line %d: Could not find config file(s) "
 	      "in directory < %s >. Check if file(s) exists for "
               "file version number <%s>, if don't exist, then "
               "run make_hkpdf.pl script to create config files.\n",
@@ -1060,7 +1060,7 @@ GTCIDS_Version_Number * read_gtcids_hk_file()
   file_ptr = fopen(hk_gtcids_directory_filename, "r");
   if(!file_ptr)
   {
-    printkerr("Error:Couldn't open Ground To Code IDS  file %s.\n",hk_gtcids_directory_filename);
+    printkerr("ERROR:Couldn't open Ground To Code IDS  file %s.\n",hk_gtcids_directory_filename);
     printkerr("Set the enviroment variables HK_CONFIG_DIRECTORY"
               " to point to config directory and HK_GTCIDS_FILE"
               " environment variable to point to the correct file name\n");
@@ -1241,7 +1241,7 @@ void deallocate_apid_hkpfd_files_nodes(APID_HKPFD_Files *ptr)
  * Status reread_all_files(): initial coding
  *****************************************************************************/
 HK_Config_Files*  reread_all_files(APID_Pointer_HK_Configs *apid_ptr_configs, 
-                                   char version_number[], char pkt_date[])
+                                   char version_number[MAX_CHAR_VERSION_NUMBER], char pkt_date[MAX_SIZE_PKT_DATE])
 {
   /*declarations*/
   APID_HKPFD_Files *hkpfd_files;
@@ -1352,7 +1352,7 @@ HK_Config_Files*  reread_all_files(APID_Pointer_HK_Configs *apid_ptr_configs,
  *             
  * Status find_file_version_number(): Coded and Tested
  *****************************************************************************/
-char * find_file_version_number(GTCIDS_Version_Number *top, char p_version_number[])
+char * find_file_version_number(GTCIDS_Version_Number *top, char p_version_number[MAX_CHAR_VERSION_NUMBER])
 {
   /*declarations*/
   GTCIDS_Version_Number  *tmp_ptr;
@@ -1399,7 +1399,7 @@ SHCIDS_Version_Number * read_shcids_hk_file()
   file_ptr = fopen(hk_shcids_directory_filename, "r");
   if(!file_ptr)
   {
-    printkerr("Error:Couldn't open SDO HK Code IDS file %s.\n",hk_shcids_directory_filename);
+    printkerr("ERROR:Couldn't open SDO HK Code IDS file %s.\n",hk_shcids_directory_filename);
     printkerr("Set the enviroment variables HK_SHCIDS_DIRECTORY"
               " to point to config directory and HK_SHCIDS_FILE"
               " environment variable to point to the correct file name\n");
@@ -1453,7 +1453,7 @@ SHCIDS_Version_Number * read_shcids_hk_file()
  *             
  * Status find_file_version_number(): Coded and unTested
  *****************************************************************************/
-char * find_fvn_from_shcids(SHCIDS_Version_Number *top, char p_date[], int apid)
+char * find_fvn_from_shcids(SHCIDS_Version_Number *top, char p_date[MAX_SIZE_PKT_DATE], int apid)
 {
   /*declarations*/
   SHCIDS_Version_Number  *tmp_ptr;
@@ -1505,7 +1505,7 @@ char * find_fvn_from_shcids(SHCIDS_Version_Number *top, char p_date[], int apid)
   {
     /* if did not find file version from SHCIDS file then set to zero */
     strcpy(saved_fvn,"BAD PKT DATE");
-    printkerr("Error at %s, line %d: Could not find date in shcids.txt file  "
+    printkerr("ERROR at %s, line %d: Could not find date in shcids.txt file  "
               "to look up file version to reference for config files. "
               "Problem Packet Date used was:<%s>. Probably bad data for timecodes\n",
                 __FILE__,__LINE__,new_str);
