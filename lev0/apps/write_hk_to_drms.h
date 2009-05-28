@@ -62,9 +62,15 @@
 #define HK_INIT_MERGE_MAP_FILE_FLAG (0)
 #define HK_MERGE_MAP_FILE_FLAG      (1)
 #define HK_NON_MERGE_MAP_FILE_FLAG  (2)
-             
-/* Structures */
 
+/* check hk record exits parameter */
+#define HK_HIGH_QUERY_RANGE         (1)
+#define HK_LOW_QUERY_RANGE          (0)
+#define HK_MAX_SIZE_RANGE_TIME     (50)
+#define HK_MAX_SIZE_QUERY         (200)
+
+
+/* Structures */
 
 /***************** Map Data struct *********************************/
 typedef struct Map_Data_struct 
@@ -96,6 +102,7 @@ typedef struct HK_dsn_range_inmemory
 {
   char dsname[HK_LEV0_MAX_DSNAME_STR];
   long int timecode_lrsec;
+  long int timecode_hrsec;
   struct HK_dsn_range_inmemory *next;
   HK_Timecode_t *tcnode;
 }HK_DSN_RANGE_t;
