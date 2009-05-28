@@ -40,7 +40,7 @@ double  get_packet_time(unsigned short *word_ptr);
 /*********** extern function prototypes **************/
 extern void sprint_time (char *at, TIME t, char *zone, int precision);
 extern int check_for_sdo_apid(int apid);
-extern char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[], int apid);
+extern char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[MAX_SIZE_PKT_DATE], int apid);
 extern char * make_strupr (char *in_string);
 
 
@@ -60,7 +60,7 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
   HK_Config_Files *config_files;
   HK_Config_Files *matching_config;
   HK_Keywords_Format *ptr_hk_keywords;
-  char pkt_date[200]; //ascii time
+  char pkt_date[MAX_SIZE_PKT_DATE]; //ascii time
   char *ptr_fvn;
   char version_number[MAX_CHAR_VERSION_NUMBER]; 
   int status;
@@ -300,10 +300,16 @@ int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_hea
       printkerr("WARNING at %s, line %d: For apid <%x> and file version number <%s> "
                  "-Cannot find config data to decode packet!!Rereading data files.\n",
                  __FILE__, __LINE__, apid, ptr_fvn, ptr_fvn);
-    
-      config_files = reread_all_files(apid_configs, version_number, pkt_date);
-      ptr_fvn= find_fvn_from_shcids(global_shcids_vn, pkt_date, config_files->apid_number);
-      matching_config = check_file_version_number(config_files, ptr_fvn);
+      if( !strcmp(ptr_fvn,"BAD PKT DATE"))   
+      {
+        printkerr("WARNING at %s, line %d: Skipping Rereading config file since have bad packet date<%s>\n", __FILE__, __LINE__,ptr_fvn);
+      }
+      else
+      {
+        config_files = reread_all_files(apid_configs, version_number, pkt_date);
+        ptr_fvn= find_fvn_from_shcids(global_shcids_vn, pkt_date, config_files->apid_number);
+        matching_config = check_file_version_number(config_files, ptr_fvn);
+      }
       if ( matching_config != NULL ) 
       {
         printkerr("WARNING at %s, line %d: Found sdo hk config data for apid <%x> and file version number <%s>\n",
@@ -361,7 +367,14 @@ __FILE__, __LINE__,apid, ptr_fvn);
   if ( matching_config == NULL )
   {
     /* Still no matching config information. Return an error code. */
-    ERRMSG("Could not find  packet version number even after re-reading hk config files."); 
+    if(check_for_sdo_apid(apid))
+    {
+      ERRMSG("Could not find packet date value because of bad packet date or could not find even after re-reading sdo hk config files."); 
+    }
+    else
+    {
+      ERRMSG("Could not find  packet version number even after re-reading hk config files."); 
+    }
     return HK_DECODER_ERROR_CANNOT_FIND_VER_NUM; 
   }
   /* Load hk configs in HK_Keywords_Format structure  */
