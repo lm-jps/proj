@@ -20,7 +20,7 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
 int write_packet_to_dayfile(HK_Dayfile_Data_t **df_head); 
 int filter_out_non_isps(CCSDS_Packet_t **ptr);
 int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt);
-int get_status( int lz_status[], int status_count);
+int get_status( int lz_status[100], int status_count);
  
 /*********** extern function prototypes **************/
 extern int free_dayfile_data( HK_Dayfile_Data_t **df_head); 
@@ -364,6 +364,12 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
       {
         /* found record in data series, so skip writing this record to drms again*/
         lev0_status= SUCCESS_HK_SKIP_WTD_REC_EXISTS;
+      }
+      else if (wd_status == SUCCESS_HK_SKIP_WTD_REC_TIME_OOR) 
+      {
+        /* found record not within time range of --not-- greater than 12 hrs */
+        /* of current date and time, so skip writing this record to drms again */
+        lev0_status= SUCCESS_HK_SKIP_WTD_REC_TIME_OOR;
       }
       else if (wd_status == ERROR_HK_ENVIRONMENT_VARS_NOT_SET) 
       {
