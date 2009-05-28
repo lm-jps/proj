@@ -59,7 +59,10 @@
    and keyword variable types. Decode dayfile code then writes keywords names and 
    values to a DRMS data series. DRMS data series is based on apid(i.e.,0445,0529), 
    project name(i.e.,hmi,aia, sdo,etc.), data type name(i.e., lev0), and jsoc 
-   version number(0001, 0002, etc.).
+   version number(0001, 0002, etc.). Decode dayfile will not load records that 
+   already exist in data series. Decode dayfile checks the packet time per packet 
+   is within a time range of less than current date and time plus 12 hours. 
+   Decode dayfile will not load data for packets that do not have HK configuration files.
 
    The src parameter is a mandatory argument which should be either moc, hsb, rtmon, or
    egsefm. This value is required to be set to correspond to the -in- parameter file's 
@@ -96,6 +99,8 @@
    @c -p: Prints report on each packets keyword name and value to standout out
    @par
 
+   @param src The source of dayfiles(required field).
+
    @param in The full directoy path and file name to the input dayfile(required field).
 
    @param out The data series name to write keyword names and values to(optional).
@@ -112,22 +117,27 @@
 
    @par Example of running without out parameter using as in parameter an ISP dayfile from MOC Product Server:
    @code
-   decode_dayfile in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt 
+   decode_dayfile src=moc in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt 
    @endcode
 
    @par Example of running with -p flag, without out parameter using as in parameter an ISP dayfile from MOC Product Server:
    @code
-   decode_dayfile -p in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt  > Report_ISP_0029_2008_275_01.hkt 
+   decode_dayfile -p src=moc in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt  > Report_ISP_0029_2008_275_01.hkt 
    @endcode
 
    @par Example of running with out parameter using as in parameter an ISP dayfile from MOC Product Server:
    @code
-   decode_dayfile in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt out=hmi.lev0_0029_0008
+   decode_dayfile src=moc in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt out=hmi.lev0_0029_0008
+   @endcode
+
+   @par Example of running with out parameter using as in parameter an ISP dayfile file from MOC Product Server and sending error logsto file:
+   @code
+   decode_dayfile src=moc in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt out=hmi.lev0_0029_0008 > ERROR_LOG
    @endcode
 
    @par Example of running with -p print flag with out parameter using as in parameter an ISP dayfile from MOC Product Server:
    @code
-   decode_dayfile -p in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt out=hmi.lev0_0029_0008 >  Report_ISP_0029_2008_275_01.hkt
+   decode_dayfile -p src=moc  in=/tmp21/production/lev0/hk_moc_dayfile/0029_2008_275_01.hkt out=hmi.lev0_0029_0008 >  Report_ISP_0029_2008_275_01.hkt
    @endcode
 
    @par Example of running help:
@@ -157,8 +167,8 @@
 #define HKDDF_MAX_PACKET_NAME    50
 #define HKDDF_MAX_LOOKUP_NAME    50
 #define HKDDF_ENVIRONMENT_VARS_NOT_SET  (-1)
-#define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
-/*carl local test version:#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
+/*#define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
+#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
 
 /******************** includes ******************************************/
 #include <stdio.h>
@@ -202,7 +212,7 @@ static void  save_packet_values2(unsigned char *read_in_buffer, char projname[][
 static void  saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out, char *src);
 static void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in, char projname[][], char *didn, char *src);
 static void  set_env_variables();
-static void  write_to_drms( int apid, char packet_version_number[], char file_version_number[],char *data_series, HK_Keyword_t *kw_head, char *in, char *src);
+static void  write_to_drms( int apid, char packet_version_number[MAX_CHAR_VERSION_NUMBER], char file_version_number[MAX_CHAR_VERSION_NUMBER],char *data_series, HK_Keyword_t *kw_head, char *in, char *src);
 static TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 static char *get_hk_src_keyword(int apid, char *in_file, char *src);
 static int get_date_in_filename(char *inf, char *src, int *year, int *month, int *day);
@@ -212,8 +222,8 @@ static void get_month_day(int year, int yearday, int *pmonth, int *pday);
 
 /********************* extern functions  *********************************/
 extern SHCIDS_Version_Number *global_shcids_vn;
-extern char * find_file_version_number(GTCIDS_Version_Number *top,char f_version_number[]);
-extern char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[],int apid);
+extern char * find_file_version_number(GTCIDS_Version_Number *top,char f_version_number[MAX_CHAR_VERSION_NUMBER]);
+extern char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[MAX_SIZE_PKT_DATE],int apid);
 extern double  get_packet_time(unsigned short *word_ptr);
 extern int DoIt(void);
 extern int nice_intro (void);
@@ -222,7 +232,7 @@ extern void sprint_time (char *at, TIME t, char *zone, int precision);
 extern char *get_data_packet_name(int apid ) ;
 extern char *get_lookup_filename(int apid);
 extern int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid);
-
+extern int check_hk_record_within_time_range( HK_Keyword_t *kw);
 
 /********************* extern globals  *********************************/
 extern GTCIDS_Version_Number *global_gtcids_vn;
@@ -432,15 +442,18 @@ int DoIt(void)
  * DESCRIPTION: Gets Packet time based on Time Codes. Set packet version *
  *              number or file version number and keywords.              *
  *************************************************************************/
-void write_to_drms(int apid, char pkt_ver_num[], char file_ver_num[], char *ds_name, HK_Keyword_t *kw_head, char *in, char *src)
+void write_to_drms(int apid, char pkt_ver_num[MAX_CHAR_VERSION_NUMBER], char file_ver_num[MAX_CHAR_VERSION_NUMBER], char *ds_name, HK_Keyword_t *kw_head, char *in, char *src)
 {
   /* variable definitions */
+  char at[200];
   char query[HKDDF_MAX_DSNAME_STR];
   int status;
   int ck_status;
+  int ck_rwtr_status;
   /* keyword variables and structure */
   HK_Keyword_t *kw;
   TIME pkt_time;
+  TIME pkt_timestamp;
   kw= kw_head;
 
   /* variable to set drms record */
@@ -463,9 +476,24 @@ void write_to_drms(int apid, char pkt_ver_num[], char file_ver_num[], char *ds_n
     return;
   }
 
-  /* check if record is exits in drms series */
+  /* check if record is within 12 hour range to remove processing of future dated packet data */
   kw=kw_head;
-  ck_status = check_hk_record_exists(ds_name, kw, apid);
+  ck_rwtr_status = check_hk_record_within_time_range(kw);
+  if (ck_rwtr_status == 1)
+  {
+    /* now check if record is exits in drms series */
+    kw=kw_head;
+    ck_status = check_hk_record_exists(ds_name, kw, apid);
+  }
+  else
+  {
+    (void)get_packet_time_for_df(kw, &pkt_timestamp);
+    (void)sprint_time (at,  pkt_timestamp, "UTC", 0);
+    strcat(at,"\0");
+    printkerr("WARNING:decode_dayfile: Skipping write of record to  <%s> data series. Packet time:<%s> Record not within time range.\n", ds_name, at);
+    return;
+  }
+
 
   /* if already exits skip writing record to DRMS data series */
   if (ck_status == 1)
@@ -834,7 +862,7 @@ void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
-  char pkt_date[200]; //ascii time
+  char pkt_date[MAX_SIZE_PKT_DATE]; //ascii time
 
   /* go thru each packet and print to standout and save to drms */
   for(k=0,factor=0,packet_length=0;  ; k++)
@@ -1240,7 +1268,7 @@ void  save_packet_values2(unsigned char *read_in_buffer, char projname[HKDDF_MAX
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
-  char pkt_date[200]; //ascii time
+  char pkt_date[MAX_SIZE_PKT_DATE]; //ascii time
 
   /* go thru each packet and save to DRMS */
   for(k=0,factor=0, packet_length=0;  ; k++)
@@ -1384,7 +1412,7 @@ void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in,
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
-  char pkt_date[200]; //ascii time
+  char pkt_date[MAX_SIZE_PKT_DATE]; //ascii time
 
   /* go thru each packet and print to standout and save to drms */
   for(k=0,factor=0, packet_length=0;  ; k++)
@@ -1649,7 +1677,7 @@ void save_packet_values1(unsigned char *read_in_buffer, char *out, char *in, cha
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
-  char pkt_date[200]; //ascii time
+  char pkt_date[MAX_SIZE_PKT_DATE]; //ascii time
   char *ptr_fvn;
 
   /* go thru each packet and save keywords to DRMS */
