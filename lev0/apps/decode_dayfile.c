@@ -167,8 +167,8 @@
 #define HKDDF_MAX_PACKET_NAME    50
 #define HKDDF_MAX_LOOKUP_NAME    50
 #define HKDDF_ENVIRONMENT_VARS_NOT_SET  (-1)
-/*#define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
-#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
+#define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
+/*#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
 
 /******************** includes ******************************************/
 #include <stdio.h>
