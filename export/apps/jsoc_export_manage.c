@@ -347,8 +347,9 @@ int DoIt(void)
       // in the script may clone as DRMS_TRANSIENT.
       // Remember all modules in this script mut be _sock modules.
 
-      if (strcmp(process, "no_op") == 0 ||
-            ((strcmp(process,"Not Specified")==0 || strcmp(process, "su_export") == 0) && strcmp(protocol,"as-is")==0))
+      if (  (strcmp(process, "no_op") == 0 ||
+             strcmp(process,"Not Specified")==0 ||
+             strcmp(process, "su_export") == 0) && strcmp(protocol,"as-is")==0)
         { // export of as-is records that need staging
         FILE *fp;
         char runscript[DRMS_MAXPATHLEN];
@@ -414,8 +415,7 @@ int DoIt(void)
         fprintf(fp, "echo $HOSTNAME\n");
 
         // Force staging and get paths to export files with list in index.txt
-        fprintf(fp, "jsoc_export_as_fits_sock reqid=%s expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' "
-		" method=%s protocol='%s' cparms='%s' %s\n",
+        fprintf(fp, "jsoc_export_as_fits_sock reqid=%s expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol='%s' cparms='%s' %s\n",
           requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, cparms,  dbids);
         fprintf(fp, "if ($status) exit $status\n");
 
