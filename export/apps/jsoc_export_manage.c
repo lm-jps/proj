@@ -384,11 +384,20 @@ int DoIt(void)
         fclose(fp);
         chmod(runscript, 0555);
         }
-      else if (strcmp(process, "fullres") == 0 && strcasecmp(protocol,"fits")==0)
+      else if (strcmp(process, "no_op") == 0 && strncasecmp(protocol,"fits",4)==0)
         {
-        // some other export processing request - e.g. get external FITS files
+        // No processing but export as full FITS files
         FILE *fp;
+        char *p, *cparms;
         char runscript[DRMS_MAXPATHLEN];
+        p = index(protocol, ',');
+        if (p)
+          {
+          *p = '\0';
+          cparms = p+1;
+          }
+        else
+          cparms = "";
         sprintf(runscript, "%s/%s.drmsrun", reqdir, requestid);
         fp = fopen(runscript, "w");
         fprintf(fp, "#! /bin/csh -f\n");
@@ -405,8 +414,9 @@ int DoIt(void)
         fprintf(fp, "echo $HOSTNAME\n");
 
         // Force staging and get paths to export files with list in index.txt
-        fprintf(fp, "jsoc_export_as_fits_sock reqid=%s expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol=%s %s\n",
-          requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, dbids);
+        fprintf(fp, "jsoc_export_as_fits_sock reqid=%s expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' "
+		" method=%s protocol='%s' cparms='%s' ffmt='%s' %s\n",
+          requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, cparms, filenamefmt, dbids);
         fprintf(fp, "if ($status) exit $status\n");
 
         // convert index.txt list into index.json and index.html packing list files. 
