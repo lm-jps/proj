@@ -515,6 +515,11 @@ fprintf(stderr, " using default value for %s\n", shortname);
     config_rs = drms_open_records(drms_env, config_ds, &status);
     if (status == 0)
       {
+      if (config_rs->n < 1)
+        {
+        fprintf(stderr, "Failed to get config record for fsn '%d'.\n", fsn);
+        DIE("Quitting now.");
+        }
       config_rec = config_rs->records[0];
       hiter_new(&config_key_hit, &config_rec->keywords);
       while( (config_key = (DRMS_Keyword_t *)hiter_getnext(&config_key_hit)) )
