@@ -28,7 +28,7 @@ $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
 ##$to_email="jsoc_ops\@sun.stanford.edu";
 $to_email="carl\@sun.stanford.edu,rock\@solarpost.stanford.edu";
 $subject_email="JSOC:WARNING:INGESTING REALTIME DAYFILE FOR APID $apid:Dayfile is not getting new packets";
-$subject_email_error="JSOC:ERROR:INGESTING REALTIME DAYFILE FOR APID $apid:Dayfile does not exist";
+$subject_email_error="JSOC:WARNING:INGESTING REALTIME DAYFILE FOR APID $apid:Dayfile does not exist";
 $to_email_error="carl\@sun.stanford.edu";
 
 #get today's date
@@ -51,8 +51,8 @@ print "-->FILE TO MONITOR IS::::<$dir_file_mon>\n";
 #check if got error
 if ($ino eq "")
 {
-  print "-->ERROR:1:Got error when did stat command. No file probably there\n";
-  print "-->ERROR Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
+  print "-->WARNING:1:Got error when did stat command. No file probably there\n";
+  print "-->WARNING Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
   sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n");
   exit;
 }
@@ -72,8 +72,8 @@ while (1)
   #check if got error
   if ($ino eq "")
   {
-    print "-->ERROR:2:Got error when did stat command. No file probably there\n";
-    print "-->ERROR Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
+    print "-->WARNING:2:Got error when did stat command. No file probably there\n";
+    print "-->WARNING Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
     sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n");
     exit;
   }
