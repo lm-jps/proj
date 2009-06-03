@@ -52,8 +52,34 @@
 #define kSVKey_idHELIO "id_HELIO"
 #define kSVKey_idGEO "id_GEO"
 
-#define gChunkSize 8192
+#define gChunkSize 16384
 #define gCacheKeySize 128
+
+#define kTOBSMaxLen 64
+#define kIDMaxLen 256
+
+struct VectorNode_struct 
+{
+  char tobs[kTOBSMaxLen];
+  double hcix;
+  double hciy;
+  double hciz;
+  double hcivx;
+  double hcivy;
+  double hcivz;
+  char hciID[kIDMaxLen];
+  double gcix;
+  double gciy;
+  double gciz;
+  double gcivx;
+  double gcivy;
+  double gcivz;
+  char gciID[kIDMaxLen];
+};
+
+typedef struct VectorNode_struct VectorNode_t;
+
+typedef HContainer_t VectorCache_t;
 
 ModuleArgs_t module_args[] =
 {
@@ -85,6 +111,179 @@ int nice_intro ()
 	  return(1);
      }
      return (0);
+}
+
+static VectorCache_t *CreateVectorCache()
+{
+   VectorCache_t *cache = NULL;
+
+   cache = hcon_create(sizeof(VectorNode_t), kTOBSMaxLen, NULL, NULL, NULL, NULL, 0);
+
+   return cache;
+}
+
+static void DestroyVectorCache(VectorCache_t **cache)
+{
+   if (cache)
+   {
+      if (*cache)
+      {
+         hcon_destroy((HContainer_t **)cache);
+      }
+   }
+}
+
+static void VCacheCache(VectorCache_t *cache,
+                        char *tobs,
+                        double *hcix,
+                        double *hciy,
+                        double *hciz,
+                        double *hcivx,
+                        double *hcivy,
+                        double *hcivz,
+                        char *hciID,
+                        double *gcix,
+                        double *gciy,
+                        double *gciz,
+                        double *gcivx,
+                        double *gcivy,
+                        double *gcivz,
+                        char *gciID)
+{
+   if (cache && tobs && *tobs)
+   {
+      VectorNode_t *node = (VectorNode_t *)hcon_allocslot_lower(cache, tobs);
+
+      snprintf(node->tobs, kTOBSMaxLen, "%s", tobs);
+
+      if (hcix)
+      {
+         node->hcix = *hcix;
+      }
+      else
+      {
+         node->hcix = DRMS_MISSING_DOUBLE;
+      }
+      if (hciy)
+      {
+         node->hciy = *hciy;
+      }
+      else
+      {
+         node->hciy = DRMS_MISSING_DOUBLE;
+      }
+      if (hciz)
+      {
+         node->hciz = *hciz;
+      }
+      else
+      {
+         node->hciz = DRMS_MISSING_DOUBLE;
+      }
+      if (hcivx)
+      {
+         node->hcivx = *hcivx;
+      }
+      else
+      {
+         node->hcivx = DRMS_MISSING_DOUBLE;
+      }
+      if (hcivy)
+      {
+         node->hcivy = *hcivy;
+      }
+      else
+      {
+         node->hcivy = DRMS_MISSING_DOUBLE;
+      }
+      if (hcivz)
+      {
+         node->hcivz = *hcivz;
+      }
+      else
+      {
+         node->hcivz = DRMS_MISSING_DOUBLE;
+      }
+
+      if (hciID && *hciID)
+      {
+         snprintf(node->hciID, kIDMaxLen, "%s", hciID);
+      }
+      else
+      {
+         snprintf(node->hciID, kIDMaxLen, "%s", "unknown");
+      }
+
+      if (gcix)
+      {
+         node->gcix = *gcix;
+      }
+      else
+      {
+         node->gcix = DRMS_MISSING_DOUBLE;
+      }
+      if (gciy)
+      {
+         node->gciy = *gciy;
+      }
+      else
+      {
+         node->gciy = DRMS_MISSING_DOUBLE;
+      }
+      if (gciz)
+      {
+         node->gciz = *gciz;
+      }
+      else
+      {
+         node->gciz = DRMS_MISSING_DOUBLE;
+      }
+      if (gcivx)
+      {
+         node->gcivx = *gcivx;
+      }
+      else
+      {
+         node->gcivx = DRMS_MISSING_DOUBLE;
+      }
+      if (gcivy)
+      {
+         node->gcivy = *gcivy;
+      }
+      else
+      {
+         node->gcivy = DRMS_MISSING_DOUBLE;
+      }
+      if (gcivz)
+      {
+         node->gcivz = *gcivz;
+      }
+      else
+      {
+         node->gcivz = DRMS_MISSING_DOUBLE;
+      }
+
+      if (gciID && *gciID)
+      {
+         snprintf(node->gciID, kIDMaxLen, "%s", gciID);
+      }
+      else
+      {
+         snprintf(node->gciID, kIDMaxLen, "%s", "unknown");
+      }
+   }
+}
+
+static VectorNode_t *VCacheLookup(VectorCache_t *cache, const char *tstr)
+{
+   VectorNode_t *node = NULL;
+
+   if (tstr && *tstr)
+   {
+      node = (VectorNode_t *)hcon_lookup_lower(cache, tstr);
+   }
+
+   return node;
 }
 
 static DRMS_Keyword_t *AddKey(DRMS_Record_t *prototype, 
@@ -675,11 +874,17 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
    int addedRecsHELIO = 0;
    int addedRecsGEO = 0;
+
+   HContainer_t *existRCache = NULL;
+   DRMS_Record_t *existRec = NULL;
+   VectorCache_t *helioOutVCache = NULL;
+   VectorCache_t *outVCache = NULL;
+
+   outVCache = CreateVectorCache();
+
 #if DEBUG
    int throttle = 0;
 #endif
-
-   char sbox[DRMS_MAXSERIESNAMELEN];
 
    /* Read heliocentric data from filePathHELIO one line at a time */
    FILE *datafp = NULL;
@@ -703,11 +908,17 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
       if (filePathGEO)
       {
-         /* Put these heliocentric data into temporary records in a sandbox series. */
-         snprintf(sbox, sizeof(sbox), "%s_sbox", outSeries);
-         CreateOutSeries(drmsEnv, sbox, &stat);
+         /* If we are ingesting both geo and helio data, then we need to 
+          * pair up the two into records (pair according to prime key 
+          * value). Put these heliocentric data into a cache. 
+          * and then when the geocentric data are available
+          * fetch from the cache and match them up. */
+         //snprintf(sbox, sizeof(sbox), "%s_sbox", outSeries);
+         //CreateOutSeries(drmsEnv, sbox, &stat);
+         helioOutVCache = CreateVectorCache();
       }
 
+      /* Parsing HELIO data. */
       while (!error && fgets(lineBuf, kSVLineMax, datafp) != NULL)
       {
 	 if (oneMore == -1)
@@ -729,148 +940,150 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 	    continue;
 	 }
 
-	 ParseSVRecFields(lineBuf, &obsDate, &xValHel, &yValHel, &zValHel, &vxValHel, &vyValHel, &vzValHel);
+	 ParseSVRecFields(lineBuf, 
+                          &obsDate, 
+                          &xValHel, 
+                          &yValHel, 
+                          &zValHel, 
+                          &vxValHel, 
+                          &vyValHel, 
+                          &vzValHel);
 
-	 DRMS_RecordSet_t *recSet = NULL;
-	 if (filePathGEO)
+         TIME od = sscan_time(obsDate);
+         char tbuf[128];
+         sprint_time(tbuf, od, "UTC", 0);
+
+	 if (helioOutVCache)
 	 {
-	    /* Since these are DRMS_TRANSIENT, they should never get saved between runs of 
-	     * this module. */
-	    recSet = drms_create_records(drms_env, 1, sbox, DRMS_TRANSIENT, &stat);
+            VCacheCache(helioOutVCache, 
+                        tbuf, 
+                        &xValHel, 
+                        &yValHel, 
+                        &zValHel, 
+                        &vxValHel, 
+                        &vyValHel, 
+                        &vzValHel,
+                        idHELIO,
+                        NULL,
+                        NULL,
+                        NULL,
+                        NULL,
+                        NULL,
+                        NULL,
+                        NULL);
 	 }
 	 else
 	 {
             /* Before creating a new output record, check to see if data have changed. There 
              * exist HELIO input data only. */
-            char query[DRMS_MAXQUERYLEN];
-            snprintf(query, sizeof(query), "%s[%s]", outSeries, obsDate);
-            DRMS_RecordSet_t *rssav = drms_open_records(drmsEnv, query, &stat);
-
-            if (rssav && rssav->n > 0)
+           
+            /* Use FetchCachedRecord() directly on the orbit-vector series -
+             * this avoids multiple requests to psql; must request times in
+             * ascending order to use FetchCachedRecord(). */
+            if (FetchCachedRecord(drmsEnv, outSeries, tbuf, &existRCache, &existRec))
             {
-               DRMS_Record_t *savrec = rssav->records[0];
-               double xValHelSav = drms_getkey_double(savrec, kSVKeyXHELIO, &stat);
-               double yValHelSav = drms_getkey_double(savrec, kSVKeyYHELIO, &stat);
-               double zValHelSav = drms_getkey_double(savrec, kSVKeyZHELIO, &stat);
-               double vxValHelSav = drms_getkey_double(savrec, kSVKeyVxHELIO, &stat);
-               double vyValHelSav = drms_getkey_double(savrec, kSVKeyVyHELIO, &stat);
-               double vzValHelSav = drms_getkey_double(savrec, kSVKeyVzHELIO, &stat);
+               double xValHelSav = drms_getkey_double(existRec, kSVKeyXHELIO, &stat);
+               double yValHelSav = drms_getkey_double(existRec, kSVKeyYHELIO, &stat);
+               double zValHelSav = drms_getkey_double(existRec, kSVKeyZHELIO, &stat);
+               double vxValHelSav = drms_getkey_double(existRec, kSVKeyVxHELIO, &stat);
+               double vyValHelSav = drms_getkey_double(existRec, kSVKeyVyHELIO, &stat);
+               double vzValHelSav = drms_getkey_double(existRec, kSVKeyVzHELIO, &stat);
+
+               char *idh = drms_getkey_string(existRec, kSVKey_idHELIO, &stat);
+               
+               double xValGeoSav = drms_getkey_double(existRec, kSVKeyXGEO, &stat);
+               double yValGeoSav = drms_getkey_double(existRec, kSVKeyYGEO, &stat);
+               double zValGeoSav = drms_getkey_double(existRec, kSVKeyZGEO, &stat);
+               double vxValGeoSav = drms_getkey_double(existRec, kSVKeyVxGEO, &stat);
+               double vyValGeoSav = drms_getkey_double(existRec, kSVKeyVyGEO, &stat);
+               double vzValGeoSav = drms_getkey_double(existRec, kSVKeyVzGEO, &stat);
+
+               char *id = drms_getkey_string(existRec, kSVKey_idGEO, &stat);
 
                if (IsDiff(xValHelSav, xValHel) || IsDiff(yValHelSav, yValHel) ||  
                    IsDiff(zValHelSav, zValHel) || IsDiff(vxValHelSav, vxValHel) ||
                    IsDiff(vyValHelSav, vyValHel) || IsDiff(vzValHelSav, vzValHel))
                {
-                  /* Difference in HELIO values exists */                  
-                   recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
+                  /* Difference in HELIO values exists - make record with new helio
+                   * values, but old geo values. */
+                  VCacheCache(outVCache, 
+                              tbuf,
+                              &xValHel,
+                              &yValHel,
+                              &zValHel,
+                              &vxValHel,
+                              &vyValHel,
+                              &vzValHel,
+                              idHELIO,
+                              &xValGeoSav,
+                              &yValGeoSav,
+                              &zValGeoSav,
+                              &vxValGeoSav,
+                              &vyValGeoSav,
+                              &vzValGeoSav,
+                              id);
+               }
 
-                   /* Need to copy GEO values over to new output record. 
-                    * HELIO values are set below. */
-                   DRMS_Record_t *outrec = recSet->records[0];
-                   drms_setkey_double(outrec, 
-                                      kSVKeyXGEO, 
-                                      drms_getkey_double(savrec, kSVKeyXGEO, &stat));
-                   drms_setkey_double(outrec, 
-                                      kSVKeyYGEO, 
-                                      drms_getkey_double(savrec, kSVKeyYGEO, &stat));
-                   drms_setkey_double(outrec, 
-                                      kSVKeyZGEO, 
-                                      drms_getkey_double(savrec, kSVKeyZGEO, &stat));
-                   drms_setkey_double(outrec, 
-                                      kSVKeyVxGEO, 
-                                      drms_getkey_double(savrec, kSVKeyVxGEO, &stat));
-                   drms_setkey_double(outrec, 
-                                      kSVKeyVyGEO, 
-                                      drms_getkey_double(savrec, kSVKeyVyGEO, &stat));
-                   drms_setkey_double(outrec, 
-                                      kSVKeyVzGEO, 
-                                      drms_getkey_double(savrec, kSVKeyVzGEO, &stat));
-			      
-                   char *id = drms_getkey_string(savrec, kSVKey_idGEO, &stat);
-                   if (id)
-                   {
-                      drms_setkey_string(outrec, kSVKey_idGEO, id);
-                      free(id);
-                   }
+               if (idh)
+               {
+                  free(idh);
+               }
+
+               if (id)
+               {
+                  free(id);
                }
             }
             else
             {
-               recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
+               /* No geo input file, and no previously existing record in outSeries - 
+                * add helio data. */
+               VCacheCache(outVCache, 
+                           tbuf,
+                           &xValHel,
+                           &yValHel,
+                           &zValHel,
+                           &vxValHel,
+                           &vyValHel,
+                           &vzValHel,
+                           idHELIO,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL);
             }
-
-            if (rssav)
-            {
-               drms_close_records(rssav, DRMS_FREE_RECORD);
-            }
 	 }
 
-	 if (recSet != NULL && error == 0)
-	 {
-	    DRMS_Record_t *outrec = recSet->records[0];
-	    int nPrime = outrec->seriesinfo->pidx_num;
-		    
-	    if (nPrime != 1)
-	    {
-	       error = 1;
-	       printf("The specified dataseries %s has the incorrect number of primary keys\n", 
-                      outSeries);
-	    }
-	    else
-	    {
-	       /* Add primary key */
-               TIME obstime = sscan_time(obsDate);
-               error = drms_setkey_time(outrec, kSVKeyPrimary, obstime);
-			      
-	       /* Add HELIO state vector keys */
-               error |= drms_setkey_double(outrec, kSVKeyXHELIO, xValHel);
-               error |= drms_setkey_double(outrec, kSVKeyYHELIO, yValHel);
-               error |= drms_setkey_double(outrec, kSVKeyZHELIO, zValHel);
-               error |= drms_setkey_double(outrec, kSVKeyVxHELIO, vxValHel);
-               error |= drms_setkey_double(outrec, kSVKeyVyHELIO, vyValHel);
-               error |= drms_setkey_double(outrec, kSVKeyVzHELIO, vzValHel);
-               error |= drms_setkey_string(outrec, kSVKey_idHELIO, idHELIO);
-	    }    
-	 }
-	 else
-	 {
-	    error = 1;
-	    printf("The specified output series %s does not exist\n", outSeries);
-	 }
-
-	 if (error == 0)
-	 {
-	    error = drms_close_records(recSet, DRMS_INSERT_RECORD);
-	    if (error == 0)
-	    {
-
-	       if (!filePathGEO)
-	       {
-		  addedRecsHELIO++;
-	       }
+         if (!filePathGEO)
+         {
+            addedRecsHELIO++;
+         }
 #if DEBUG
-	       throttle++;
+         throttle++;
 #endif
-	    }
-	 }
-	 else
-	 {
-	    error = drms_close_records(recSet, DRMS_FREE_RECORD);
-	    break;
-	 }
 
-         recSet = NULL;
 #if DEBUG
 	 /* Just to speed things up during debugging */
 	 if (throttle == 10)
 	 {
 	    break;
 	 }
-#endif       
+#endif
+
       } /* end while */
 
       fclose(datafp);
       datafp = NULL;
    }
+
+   /* Cannot use existing existRCache since it was populated from times 
+    * from the helio data file, and the geo data file may have different
+    * times. */
+   CloseCachedRecords(&existRCache);
+   existRec = NULL;
 
    /* Geocentric orbit files - save these data in the real series, along with the heliocentric
     * data from sbox series. */
@@ -891,12 +1104,7 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
    {
       char lineBuf[kSVLineMax];
       int oneMore = -1;
-      DRMS_Record_t *sboxrec = NULL;
-      DRMS_RecordSet_t *recSet = NULL;
       int helioexist;
-      HContainer_t *heliocache = NULL;
-      HContainer_t *orbitcache = NULL;
-      DRMS_Record_t *savrec = NULL;
 
       while (!error && fgets(lineBuf, kSVLineMax, datafp) != NULL)
       {
@@ -919,79 +1127,72 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 	    continue;
 	 }
 
-	 ParseSVRecFields(lineBuf, &obsDate, &xValGeo, &yValGeo, &zValGeo, &vxValGeo, &vyValGeo, &vzValGeo);
+	 ParseSVRecFields(lineBuf, 
+                          &obsDate, 
+                          &xValGeo, 
+                          &yValGeo, 
+                          &zValGeo, 
+                          &vxValGeo, 
+                          &vyValGeo, 
+                          &vzValGeo);
 
          /* Find corresponding heliocentric data, if they exist */
          helioexist = 0;
-         xValHel = D_NAN;
-         yValHel = D_NAN;
-         zValHel = D_NAN;
-         vxValHel = D_NAN;
-         vyValHel = D_NAN;
-         vzValHel = D_NAN;
          char *idHELIOtmp = NULL;
+         VectorNode_t *hrec = NULL;
 
          TIME od = sscan_time(obsDate);
          char tbuf[128];
          sprint_time(tbuf, od, "UTC", 0);
 
-#if CHECK_TIME
-         StartTimer(25);
-#endif
-         FetchCachedRecord(drmsEnv, sbox, tbuf, &heliocache, &sboxrec);
-
-#if CHECK_TIME
-         fprintf(stdout, "Time to request one record out of 50K: %f", StopTimer(25));
-#endif
-
-         /* Get heliocentric data */
-         if (sboxrec)
+         if (helioOutVCache)
          {
-            xValHel = drms_getkey_double(sboxrec, kSVKeyXHELIO, &stat);
-            yValHel = drms_getkey_double(sboxrec, kSVKeyYHELIO, &stat);
-            zValHel = drms_getkey_double(sboxrec, kSVKeyZHELIO, &stat);
-            vxValHel = drms_getkey_double(sboxrec, kSVKeyVxHELIO, &stat);
-            vyValHel = drms_getkey_double(sboxrec, kSVKeyVyHELIO, &stat);
-            vzValHel = drms_getkey_double(sboxrec, kSVKeyVzHELIO, &stat);
-            idHELIOtmp = drms_getkey_string(sboxrec, kSVKey_idHELIO, &stat);
+            hrec = VCacheLookup(helioOutVCache, tbuf);
+         }
+
+         /* Get heliocentric data, if they are also being ingested */
+         if (hrec)
+         {
+            xValHel = hrec->hcix;
+            yValHel = hrec->hciy;
+            zValHel = hrec->hciz;
+            vxValHel = hrec->hcivx;
+            vyValHel = hrec->hcivy;
+            vzValHel = hrec->hcivz;
+            idHELIOtmp = hrec->hciID;
             helioexist = 1;
          }
 
          /* Before creating a new output record, check to see if data have changed. 
           * There is GEO input, and there is HELIO input if helioexist == 1. */
-         char query[DRMS_MAXQUERYLEN];
-         snprintf(query, sizeof(query), "%s[%s]", outSeries, obsDate);
-
-#if CHECK_TIME
-         StartTimer(25);
-#endif
+ 
          // DRMS_RecordSet_t *rssav = drms_open_records(drmsEnv, query, &stat);
          /* Use new record-chunking way. */
          //DRMS_RecordSet_t *rssav = drms_open_recordset(drmsEnv, query, &stat);
-         FetchCachedRecord(drmsEnv, outSeries, tbuf, &orbitcache, &savrec);
+         //FetchCachedRecord(drmsEnv, outSeries, tbuf, &orbitcache, &savrec);
 
-#if CHECK_TIME
-         fprintf(stdout, "Time to request one record out of 150K: %f", StopTimer(25));
-#endif
-
-         if (savrec)
+         if (FetchCachedRecord(drmsEnv, outSeries, tbuf, &existRCache, &existRec))
          {
             int heliodiff = 0;
             int geodiff = 0;
 
-            double xValHelSav = drms_getkey_double(savrec, kSVKeyXHELIO, &stat);
-            double yValHelSav = drms_getkey_double(savrec, kSVKeyYHELIO, &stat);
-            double zValHelSav = drms_getkey_double(savrec, kSVKeyZHELIO, &stat);
-            double vxValHelSav = drms_getkey_double(savrec, kSVKeyVxHELIO, &stat);
-            double vyValHelSav = drms_getkey_double(savrec, kSVKeyVyHELIO, &stat);
-            double vzValHelSav = drms_getkey_double(savrec, kSVKeyVzHELIO, &stat);
+            double xValHelSav = drms_getkey_double(existRec, kSVKeyXHELIO, &stat);
+            double yValHelSav = drms_getkey_double(existRec, kSVKeyYHELIO, &stat);
+            double zValHelSav = drms_getkey_double(existRec, kSVKeyZHELIO, &stat);
+            double vxValHelSav = drms_getkey_double(existRec, kSVKeyVxHELIO, &stat);
+            double vyValHelSav = drms_getkey_double(existRec, kSVKeyVyHELIO, &stat);
+            double vzValHelSav = drms_getkey_double(existRec, kSVKeyVzHELIO, &stat);
+
+            char *id = drms_getkey_string(existRec, kSVKey_idHELIO, &stat);
             
-            double xValGeoSav = drms_getkey_double(savrec, kSVKeyXGEO, &stat);
-            double yValGeoSav = drms_getkey_double(savrec, kSVKeyYGEO, &stat);
-            double zValGeoSav = drms_getkey_double(savrec, kSVKeyZGEO, &stat);
-            double vxValGeoSav = drms_getkey_double(savrec, kSVKeyVxGEO, &stat);
-            double vyValGeoSav = drms_getkey_double(savrec, kSVKeyVyGEO, &stat);
-            double vzValGeoSav = drms_getkey_double(savrec, kSVKeyVzGEO, &stat);
+            double xValGeoSav = drms_getkey_double(existRec, kSVKeyXGEO, &stat);
+            double yValGeoSav = drms_getkey_double(existRec, kSVKeyYGEO, &stat);
+            double zValGeoSav = drms_getkey_double(existRec, kSVKeyZGEO, &stat);
+            double vxValGeoSav = drms_getkey_double(existRec, kSVKeyVxGEO, &stat);
+            double vyValGeoSav = drms_getkey_double(existRec, kSVKeyVyGEO, &stat);
+            double vzValGeoSav = drms_getkey_double(existRec, kSVKeyVzGEO, &stat);
+
+            char *idg = drms_getkey_string(existRec, kSVKey_idGEO, &stat);
 
             /* Some of these HELIO and GEO data could be missing. */
             geodiff = (IsDiff(xValGeoSav, xValGeo) || IsDiff(yValGeoSav, yValGeo) ||  
@@ -1000,128 +1201,142 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
             if (helioexist)
             {
+               /* compare existRec to content of filePathHELIO */
                heliodiff = (IsDiff(xValHelSav, xValHel) || IsDiff(yValHelSav, yValHel) ||  
                             IsDiff(zValHelSav, zValHel) || IsDiff(vxValHelSav, vxValHel) ||
                             IsDiff(vyValHelSav, vyValHel) || IsDiff(vzValHelSav, vzValHel));
             }
 
-            if (geodiff && (!helioexist || heliodiff))
+            if (geodiff)
             {
                /* Difference in values exists */
-
-               recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
-
-               if (!helioexist)
+               if (!helioexist || !heliodiff)
                {
-                  /* No input HELIO file. Need to copy old HELIO values over to new output record. 
-                   * GEO valus are set below. */
-                  DRMS_Record_t *outrec = recSet->records[0];
-                  drms_setkey_double(outrec, 
-                                     kSVKeyXHELIO, 
-                                     drms_getkey_double(savrec, kSVKeyXHELIO, &stat));
-                  drms_setkey_double(outrec, 
-                                     kSVKeyYHELIO, 
-                                     drms_getkey_double(savrec, kSVKeyYHELIO, &stat));
-                  drms_setkey_double(outrec, 
-                                     kSVKeyZHELIO, 
-                                     drms_getkey_double(savrec, kSVKeyZHELIO, &stat));
-                  drms_setkey_double(outrec, 
-                                     kSVKeyVxHELIO, 
-                                     drms_getkey_double(savrec, kSVKeyVxHELIO, &stat));
-                  drms_setkey_double(outrec, 
-                                     kSVKeyVyHELIO, 
-                                     drms_getkey_double(savrec, kSVKeyVyHELIO, &stat));
-                  drms_setkey_double(outrec, 
-                                     kSVKeyVzHELIO, 
-                                     drms_getkey_double(savrec, kSVKeyVzHELIO, &stat));
-			      
-                  char *id = drms_getkey_string(savrec, kSVKey_idHELIO, &stat);
-                  if (id)
-                  {
-                     drms_setkey_string(outrec, kSVKey_idHELIO, id);
-                     free(id);
-                  }
-               }                   
+                  /* Difference in one or more GEO values, and no HELIO input file */
+                  VCacheCache(outVCache, 
+                              tbuf,
+                              &xValHelSav,
+                              &yValHelSav,
+                              &zValHelSav,
+                              &vxValHelSav,
+                              &vyValHelSav,
+                              &vzValHelSav,
+                              id,
+                              &xValGeo,
+                              &yValGeo,
+                              &zValGeo,
+                              &vxValGeo,
+                              &vyValGeo,
+                              &vzValGeo,
+                              idGEO);
+               }
+               else
+               {
+                  /* There is a helio input file, and one or more values in that file 
+                   * differ from the values in outSeries. */
+                  VCacheCache(outVCache, 
+                              tbuf,
+                              &xValHel,
+                              &yValHel,
+                              &zValHel,
+                              &vxValHel,
+                              &vyValHel,
+                              &vzValHel,
+                              idHELIOtmp,
+                              &xValGeo,
+                              &yValGeo,
+                              &zValGeo,
+                              &vxValGeo,
+                              &vyValGeo,
+                              &vzValGeo,
+                              idGEO);
+               }              
+            }
+            else
+            {
+               /* The geo file's value are identical to the ones in outSeries - 
+                * save a record if the helio ones differ. */
+               if (helioexist && heliodiff)
+               {
+                  VCacheCache(outVCache, 
+                              tbuf,
+                              &xValHel,
+                              &yValHel,
+                              &zValHel,
+                              &vxValHel,
+                              &vyValHel,
+                              &vzValHel,
+                              idHELIOtmp,
+                              &xValGeoSav,
+                              &yValGeoSav,
+                              &zValGeoSav,
+                              &vxValGeoSav,
+                              &vyValGeoSav,
+                              &vzValGeoSav,
+                              idg);
+               }
+            }
+            
+            if (id)
+            {
+               free(id);
+            }
+
+            if (idg)
+            {
+               free(idg);
             }
          }
          else
          {
-            recSet = drms_create_records(drms_env, 1, outSeries, DRMS_PERMANENT, &stat);
-         }
-
-	 if (recSet != NULL && error == 0)
-	 {
-	    DRMS_Record_t *outrec = recSet->records[0];
-
-	    /* Set primary key */
-	    TIME obstime = sscan_time(obsDate);
-	    error = drms_setkey_time(outrec, kSVKeyPrimary, obstime);
-
-	    /* Add geocentric state vector keys */
-            error |= drms_setkey_double(outrec, kSVKeyXGEO, xValGeo);
-            error |= drms_setkey_double(outrec, kSVKeyYGEO, yValGeo);
-            error |= drms_setkey_double(outrec, kSVKeyZGEO, zValGeo);
-            error |= drms_setkey_double(outrec, kSVKeyVxGEO, vxValGeo);
-            error |= drms_setkey_double(outrec, kSVKeyVyGEO, vyValGeo);
-            error |= drms_setkey_double(outrec, kSVKeyVzGEO, vzValGeo);
-	    error |= drms_setkey_string(outrec, kSVKey_idGEO, idGEO);
-
+            /* No previously existing record in outSeries */
             if (helioexist)
             {
-               error |= drms_setkey_double(outrec, kSVKeyXHELIO, xValHel);
-               error |= drms_setkey_double(outrec, kSVKeyYHELIO, yValHel);
-               error |= drms_setkey_double(outrec, kSVKeyZHELIO, zValHel);
-               error |= drms_setkey_double(outrec, kSVKeyVxHELIO, vxValHel);
-               error |= drms_setkey_double(outrec, kSVKeyVyHELIO, vyValHel);
-               error |= drms_setkey_double(outrec, kSVKeyVzHELIO, vzValHel);
-
-               if (idHELIOtmp)
-               {
-                  error |= drms_setkey_string(outrec, kSVKey_idHELIO, idHELIOtmp);
-               }
-            }
-
-            if (error == 0)
-            {
-#if CHECK_TIME
-         StartTimer(25);
-#endif
-         error = (drms_close_records(recSet, DRMS_INSERT_RECORD) != DRMS_SUCCESS);
-
-#if CHECK_TIME
-         fprintf(stdout, "Time to commit one record out of 50K: %f", StopTimer(25));
-#endif
+               VCacheCache(outVCache, 
+                           tbuf,
+                           &xValHel,
+                           &yValHel,
+                           &zValHel,
+                           &vxValHel,
+                           &vyValHel,
+                           &vzValHel,
+                           idHELIOtmp,
+                           &xValGeo,
+                           &yValGeo,
+                           &zValGeo,
+                           &vxValGeo,
+                           &vyValGeo,
+                           &vzValGeo,
+                           idGEO);
             }
             else
             {
-               drms_close_records(recSet, DRMS_FREE_RECORD);
+               VCacheCache(outVCache, 
+                           tbuf,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           &xValGeo,
+                           &yValGeo,
+                           &zValGeo,
+                           &vxValGeo,
+                           &vyValGeo,
+                           &vzValGeo,
+                           idGEO);
             }
-
-            recSet = NULL;
-
-            if (!error)
-	    {
-	       addedRecsGEO++;
-	    }
-            
-            if (helioexist && !error)
-            {
-               addedRecsHELIO++;
-            }
-	 }
-
-         if (recSet != NULL)
-         {
-            drms_close_records(recSet, DRMS_FREE_RECORD);
-            recSet = NULL;
          }
 
-         if (idHELIOtmp)
+         addedRecsGEO++;
+
+         if (helioexist)
          {
-            free(idHELIOtmp);
-            idHELIOtmp = NULL;
+            addedRecsHELIO++;
          }
-	 
+
 #if DEBUG
 	 throttle--;
 	 if (throttle == 0)
@@ -1131,12 +1346,59 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 #endif        
       } /* while */
 
-      CloseCachedRecords(&heliocache);
-      CloseCachedRecords(&orbitcache);
-
       fclose(datafp);
       datafp = NULL;
    }
+
+   CloseCachedRecords(&existRCache);
+
+   /* Now, write all cached vectors into the output series. */
+   HIterator_t *cachehit = hiter_create((HContainer_t *)outVCache);
+   DRMS_RecordSet_t *rsout = drms_create_records(drmsEnv, 
+                                                 outVCache->num_total, 
+                                                 outSeries, 
+                                                 DRMS_PERMANENT, 
+                                                 &stat);
+   DRMS_Record_t *recout = NULL;
+   int irec = 0;
+   VectorNode_t *node = NULL;
+
+   if (rsout && rsout->n > 0)
+   {
+      while ((node = (VectorNode_t *)hiter_getnext(cachehit)) != NULL)
+      {
+         recout = rsout->records[irec];
+
+         drms_setkey_string(recout, kSVKeyPrimary, node->tobs);
+         drms_setkey_double(recout, kSVKeyXHELIO, node->hcix);
+         drms_setkey_double(recout, kSVKeyYHELIO, node->hciy);
+         drms_setkey_double(recout, kSVKeyZHELIO, node->hciz);
+         drms_setkey_double(recout, kSVKeyVxHELIO, node->hcivx);
+         drms_setkey_double(recout, kSVKeyVyHELIO, node->hcivy);
+         drms_setkey_double(recout, kSVKeyVzHELIO, node->hcivz);
+         drms_setkey_string(recout, kSVKey_idHELIO, node->hciID);
+
+         drms_setkey_double(recout, kSVKeyXGEO, node->gcix);
+         drms_setkey_double(recout, kSVKeyYGEO, node->gciy);
+         drms_setkey_double(recout, kSVKeyZGEO, node->gciz);
+         drms_setkey_double(recout, kSVKeyVxGEO, node->gcivx);
+         drms_setkey_double(recout, kSVKeyVyGEO, node->gcivy);
+         drms_setkey_double(recout, kSVKeyVzGEO, node->gcivz);
+         drms_setkey_string(recout, kSVKey_idGEO, node->gciID);
+
+         irec++;
+      }
+
+      error = (drms_close_records(rsout, DRMS_INSERT_RECORD) != DRMS_SUCCESS);
+   }
+   else
+   {
+      fprintf(stderr, "Failed to create records in series '%s'.\n", outSeries);
+      error = 1;
+   }
+
+   DestroyVectorCache(&outVCache);
+   DestroyVectorCache(&helioOutVCache);
 
    if (!error)
    {
@@ -1328,6 +1590,10 @@ int DoIt(void)
 			drms_close_records(rsHistory, DRMS_FREE_RECORD);
 			continue;			
 		     }
+                     else
+                     {
+                        drms_close_records(rsHistory, DRMS_FREE_RECORD);
+                     }
 		  }
 
 		  /* Skip if this record has been processed in this session */
