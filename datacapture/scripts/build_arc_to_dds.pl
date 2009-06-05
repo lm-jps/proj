@@ -59,6 +59,7 @@ sub labeldate {
   $mday2 = sprintf("%02d", $mday);
   $mon2 = sprintf("%02d", $mon+1);
   $year4 = sprintf("%04d", $year+1900);
+  $yday++;
   $currdate = $year4."_".$yday."_".$hour2."_".$min2;
   return($date);
 }
