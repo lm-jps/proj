@@ -92,7 +92,7 @@ extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsign
 extern int write_hk_to_drms();
 extern void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg);
 extern int set_HMI_mech_values(DRMS_Record_t *rec);
-TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
+static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 
 // List of default parameter values. 
 ModuleArgs_t module_args[] = { 
@@ -237,7 +237,7 @@ int nice_intro ()
   return (0);
 }
 
-static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
+TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
 {
 static int firstcall = 1;
 static TIME sdo_epoch;

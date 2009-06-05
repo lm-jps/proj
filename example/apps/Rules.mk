@@ -87,8 +87,13 @@ $(OBJF_$(d)):		base/drms/libs/api/client/fdrms.o
 $(GONGLIB_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 $(GONGLIB_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH)
 
+ifeq ($(FCOMPILER), ifort)
 $(FMODEXE_SOCK_$(d)):	FF_TGT := -module base/drms/libs/api/client
 $(FMODEXE_GONG_$(d)):	FF_TGT := -module base/drms/libs/api/client
+else
+$(FMODEXE_SOCK_$(d)):	FF_TGT := -I base/drms/libs/api/client
+$(FMODEXE_GONG_$(d)):	FF_TGT := -I base/drms/libs/api/client
+endif
 $(FMODEXE_GONG_$(d)):	$(GONGLIB_$(d))
 
 # Shortcuts

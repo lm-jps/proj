@@ -48,7 +48,7 @@ extern void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, in
 extern int set_HMI_mech_values(DRMS_Record_t *rec);
 ******************************************************/
 
-TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
+static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 
 // List of default parameter values. 
 ModuleArgs_t module_args[] = { 
@@ -137,7 +137,7 @@ int nice_intro ()
   return (0);
 }
 
-static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
+TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
 {
 static int firstcall = 1;
 if (firstcall)

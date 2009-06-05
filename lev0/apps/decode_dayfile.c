@@ -202,15 +202,15 @@ ModuleArgs_t   *ggModArgs=module_args;
 char* module_name = "decode_dayfile";
 
 /******************* function prototypes  *******************************/
-static char* get_ds_pjname(int apid, char proj_name[][]);
+static char* get_ds_pjname(int apid, char pjn[HKDDF_MAXNUM_PJNAMES][HKDDF_MAX_PJNAME]);
 static int   get_packet_time_for_df(HK_Keyword_t *hk, TIME *ptime);
 static int   load_ds_names(char *pn, char* didn, int apid, char *pvn);
 static char* lookup_dsn( int apid, char *pvn,char *fvn, int count);
 static void  print_packet_time(HK_Keyword_t *kwh);
 static void  save_packet_values1(unsigned char *read_in_buffer, char *out, char *in, char *src);
-static void  save_packet_values2(unsigned char *read_in_buffer, char projname[][], char *didn, char *in, char *src );
+static void  save_packet_values2(unsigned char *read_in_buffer, char projname[HKDDF_MAXNUM_PJNAMES][HKDDF_MAX_PJNAME],char *didn, char *in, char *src);
 static void  saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out, char *src);
-static void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in, char projname[][], char *didn, char *src);
+static void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in, char projname[HKDDF_MAXNUM_PJNAMES][HKDDF_MAX_PJNAME],char *didn, char *src);
 static void  set_env_variables();
 static void  write_to_drms( int apid, char packet_version_number[MAX_CHAR_VERSION_NUMBER], char file_version_number[MAX_CHAR_VERSION_NUMBER],char *data_series, HK_Keyword_t *kw_head, char *in, char *src);
 static TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
