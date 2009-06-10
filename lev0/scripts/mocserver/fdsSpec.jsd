@@ -4,9 +4,9 @@ Description:	"This series contains ingested, pre-launch and live FDS data files.
 Author:		"Art Amezcua"
 Owner:		"jsoc"
 Unitsize:	32
-#Archive:	1
-Archive:	0
-Retention:	14
+Archive:	1
+#Archive:	0
+Retention:	28
 Tapegroup:	1
 Index:		FDS_PRODUCT_COMP, OBS_DATE, DATA_FORMAT, FILE_VERSION
 
