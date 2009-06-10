@@ -14,12 +14,12 @@
 #define kTESTINTERP "i"
 
 #define kOBSDATE "OBS_DATE"
-#define kHCIX "X_HELIO"
-#define kHCIY "Y_HELIO"
-#define kHCIZ "Z_HELIO"
-#define kHCIVX "Vx_HELIO"
-#define kHCIVY "Vy_HELIO"
-#define kHCIVZ "Vz_HELIO"
+#define kHCIX "HCIEC_X"
+#define kHCIY "HCIEC_Y"
+#define kHCIZ "HCIEC_Z"
+#define kHCIVX "HCIEC_VX"
+#define kHCIVY "HCIEC_VY"
+#define kHCIVZ "HCIEC_VZ"
 
 ModuleArgs_t module_args[] =
 {
