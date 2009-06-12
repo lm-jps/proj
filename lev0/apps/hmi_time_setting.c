@@ -76,7 +76,8 @@ static float waveltab[10] = { 33.5, 13.1,
                               21.1, 19.3,
                               160.0, 170.0, 450.0, 17.1,
                                30.4, 9.4 };
-static char date_obs[100], datestr[100];
+static char date_obs[100]; 
+//static char datestr[100];
 TIME t_obs,MJD_epoch = -3727641600.000; /* 1858.11.17_00:00:00_UT  */
 double exptime, expsdev;
 
@@ -190,15 +191,18 @@ TIME date__obs = t_obs - exptime/2.0;
 TIME mjd = date__obs - MJD_epoch;
 double  mjd_day = floor(mjd / 86400.0);
 double  mjd_time = mjd - 86400.0 * mjd_day;
-sprint_time(datestr, CURRENT_SYSTEM_TIME, "ISO", 0);
-sprint_time(date_obs, date__obs, "ISO", 0);
+//sprint_time(datestr, CURRENT_SYSTEM_TIME, "ISO", 0);
+//sprint_time(date_obs, date__obs, "ISO", 0);
   
 drms_setkey_double(rec, "T_OBS", t_obs);
 drms_setkey_double(rec, "EXPTIME", exptime);
 drms_setkey_double(rec, "EXPSDEV", expsdev);
-drms_setkey_string(rec, "DATE__OBS", date_obs);
+//drms_setkey_string(rec, "DATE__OBS", date_obs);
+drms_setkey_double(rec, "DATE__OBS", date__obs);
 drms_setkey_double(rec, "MJD", mjd_day);
 drms_setkey_double(rec, "TIME", mjd_time);
-drms_setkey_string(rec, "DATE", datestr);
+//NOTE: DATE now set in close_image() in ingest_lev0.c
+//drms_setkey_string(rec, "DATE", datestr);
+//drms_setkey_double(rec, "DATE", CURRENT_SYSTEM_TIME);
 }
 
