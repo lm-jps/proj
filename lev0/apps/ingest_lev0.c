@@ -49,7 +49,8 @@
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
-#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
+//#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
+#define LEV0SERIESNAMEHMI "su_production.lev0f_test"
 #define TLMSERIESNAMEHMI "su_production.tlm_test"
 #define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
 #define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
@@ -489,21 +490,30 @@ else {				//AIA specific qual bits
   case 3:			//19.3
     if(aifiltyp == 0) {
       strcpy(wave_str, "193_THIN");
-      if(aiasen != 6) strcpy(wave_str, "MIX_THIN");
+      if(aiasen != 6) {
+        strcpy(wave_str, "MIX_THIN");
+        quallev0 = quallev0 | A193Mech_Err;
+      }
       if((aifwen != 269) && (aifwen != 270)) {
         quallev0 = quallev0 | A193Mech_Err;
       }
     }
     else if(aifiltyp == 1) {
       strcpy(wave_str, "193_THICK");
-      if(aiasen != 6) strcpy(wave_str, "MIX_THICK");
+      if(aiasen != 6) {
+        strcpy(wave_str, "MIX_THICK");
+        quallev0 = quallev0 | A193Mech_Err;
+      }
       if((aifwen != 11) && (aifwen != 12)) {
         quallev0 = quallev0 | A193Mech_Err;
       }
     }
     else if(aifiltyp == 2) {
       strcpy(wave_str, "193_OPEN");
-      if(aiasen != 6) strcpy(wave_str, "MIX_OPEN");
+      if(aiasen != 6) {
+        strcpy(wave_str, "MIX_OPEN");
+        quallev0 = quallev0 | A193Mech_Err;
+      }
       if((aifwen != 74) && (aifwen != 75)) {
         quallev0 = quallev0 | A193Mech_Err;
       }
@@ -512,21 +522,30 @@ else {				//AIA specific qual bits
   case 2:			//21.1
     if(aifiltyp == 0) {
       strcpy(wave_str, "211_THIN");
-      if(aiasen != 24) strcpy(wave_str, "MIX_THIN");
+      if(aiasen != 24) {
+        strcpy(wave_str, "MIX_THIN");
+        quallev0 = quallev0 | A211Mech_Err;
+      }
       if((aifwen != 203) && (aifwen != 204)) {
         quallev0 = quallev0 | A211Mech_Err;
       }
     }
     else if(aifiltyp == 1) {
       strcpy(wave_str, "211_THICK");
-      if(aiasen != 24) strcpy(wave_str, "MIX_THICK");
+      if(aiasen != 24) {
+        strcpy(wave_str, "MIX_THICK");
+        quallev0 = quallev0 | A211Mech_Err;
+      }
       if((aifwen != 137) && (aifwen != 138)) {
         quallev0 = quallev0 | A211Mech_Err;
       }
     }
     else if(aifiltyp == 2) {
       strcpy(wave_str, "211_OPEN");
-      if(aiasen != 24) strcpy(wave_str, "MIX_OPEN");
+      if(aiasen != 24) {
+        strcpy(wave_str, "MIX_OPEN");
+        quallev0 = quallev0 | A211Mech_Err;
+      }
       if((aifwen != 74) && (aifwen != 75)) {
         quallev0 = quallev0 | A211Mech_Err;
       }
@@ -593,8 +612,8 @@ else {				//AIA specific qual bits
   }
 }
   drms_setkey_int(rs, "QUALLEV0", quallev0);
-  //drms_setkey_int(rs, "QUALITY", quallev0);  //!!!TBD put QUALITY in jsd
-  percentd = (int)(img->datavals/img->totalvals) * 100;
+  drms_setkey_int(rs, "QUALITY", quallev0);
+  percentd = (int)((100 * img->datavals)/img->totalvals);
   drms_setkey_int(rs, "PERCENTD", percentd);
 }
 
@@ -616,10 +635,10 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     drms_setkey_short(rs, "DATAMIN", stat.min);
     drms_setkey_short(rs, "DATAMAX", stat.max);
     drms_setkey_short(rs, "DATAMEDN", stat.median);
-    drms_setkey_double(rs, "DATAMEAN", stat.mean);
-    drms_setkey_double(rs, "DATARMS", stat.rms);
-    drms_setkey_double(rs, "DATASKEW", stat.skew);
-    drms_setkey_double(rs, "DATAKURT", stat.kurt);
+    drms_setkey_float(rs, "DATAMEAN", stat.mean);
+    drms_setkey_float(rs, "DATARMS", stat.rms);
+    drms_setkey_float(rs, "DATASKEW", stat.skew);
+    drms_setkey_float(rs, "DATAKURT", stat.kurt);
   }
   // CAMERA set by HMI_compute_exposure_times()
   if(hmiaiaflg) {		// except for AIA use telnum 
@@ -660,6 +679,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   int ptss = img->first_packet_time & 0xffff;
   TIME fpt = SDO_to_DRMS_time(pts, ptss);
   drms_setkey_double(rs, "IMGFPT", fpt);
+  drms_setkey_double(rs, "DATE", CURRENT_SYSTEM_TIME);
   do_quallev0(rs, img, fsn);		//set the QUALLEV0 keyword
 
   status = drms_segment_write(seg, array, 0);
