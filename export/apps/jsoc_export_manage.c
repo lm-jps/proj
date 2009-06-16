@@ -441,8 +441,8 @@ fprintf(stderr,"cant do su_export of tar files yet\n");
         }
       else
         { // Unrecognized processing request
-  // fprintf(stderr,"XX jsoc_export_manage FAIL Do not know what to do, requestid=%s, process=%s, protocol=%s, method=%s\n",
-  //        requestid, process, protocol, method);
+fprintf(stderr,"XX jsoc_export_manage FAIL Do not know what to do, requestid=%s, process=%s, protocol=%s, method=%s\n",
+          requestid, process, protocol, method);
         drms_setkey_int(export_log, "Status", 4);
         drms_close_record(export_rec, DRMS_FREE_RECORD);
         continue;
