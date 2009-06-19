@@ -46,11 +46,12 @@ my $dflg=$ENV{'DF_MOVEDF_DEBUG'}="0";
 #set common email arguments
 $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
 $to_email="jsoc_ops\@sun.stanford.edu";
-$subject_email_no_files="JSOC:WARNING:Ingesting MOC dayfiles: status:no files loaded today";
-$subject_email_not_sure="JSOC:WARNING:Ingesting MOC dayfiles: status:not sure of status";
+$subject_email_no_files="JSOC:WARNING:Ingesting MOC dayfiles: status:No files loaded today";
+$subject_email_not_sure="JSOC:WARNING:Ingesting MOC dayfiles: status:Possible error ingesting dayfile.";
 
 #common setting for all environments
-$ENV{'SUMSERVER'}="d02.Stanford.EDU";
+#$ENV{'SUMSERVER'}="d02.Stanford.EDU";
+$ENV{'SUMSERVER'}="j1.Stanford.edu";
 $hm=$ENV{'HOME'};
 $ENV{'MAILTO'}="";
 $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
@@ -164,7 +165,8 @@ elsif (($hkt_filecount +   $xml_filecount) == 0)
 else
 {
   print LF "--->status:not sure of status but got delcount:$delcount hkt_filecount:$hkt_filecount xml_filecount:$xml_filecount\n";
-  sendEmail("carl\@sun.stanford.edu", "$from_email", "$subject_email_not_sure", "Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl> from cron job.\n");
+  print LF "--->Check if there is problem. The dayfiles to ingested into data series and delete from directory did not match the count of the dayfiles received.\n--->Possible problem ingesting dayfiles in series because of bad setting of SUMSERVER parameter.\n";
+  sendEmail("$to_email", "$from_email", "$subject_email_not_sure", "Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl> from cron job.\n-->Check if there is problem. The dayfiles to ingested into data series and delete from directory did not match the count of the dayfiles received.\n-->Possible problem ingesting dayfiles in series because of bad setting of SUMSERVER parameter.\n");
 }
 
 close DELFILE;
