@@ -32,7 +32,9 @@
   $ENV{'DF_INGEST_DAYFILE_DEBUG'}=0;
 
   #common setting for all environments
-  $ENV{'SUMSERVER'}="d02.Stanford.EDU";
+  #$ENV{'SUMSERVER'}="d02.Stanford.EDU";
+  $ENV{'SUMSERVER'}="j1.Stanford.edu";
+
   $hm=$ENV{'HOME'};
   $ENV{'MAILTO'}="";
   $exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
