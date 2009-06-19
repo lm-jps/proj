@@ -23,7 +23,7 @@
 $dflg=$ENV{'DF_GETDF_DEBUG'}=0;
 
 #common setting for all environments
-$ENV{'SUMSERVER'}="d02.Stanford.EDU";
+$ENV{'SUMSERVER'}="j1.Stanford.edu";
 $hm=$ENV{'HOME'};
 $ENV{'MAILTO'}="";
 $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
