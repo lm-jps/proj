@@ -4,6 +4,7 @@
 #Author(s): Carl                                                             #
 ##############################################################################
 # Name:        ingest_LM_dayfile.pl - Ingest LMSAL dayfiles                  #
+#              DEPRECATED: use ingest_dayfile.pl!!
 # Description: Used to ingest LMSAL formatted dayfiles to DRMS.              #
 #              The script can gather a list of dayfiles based on arguments   #
 #              used for script and then write those file to DRMS. There are  #
@@ -24,7 +25,7 @@
   #set environment variables
   $ENV{'DF_HSB_DAYFILE_DIRECTORY'};
   $ENV{'DF_INGEST_HSB_DEBUG'}="0";
-  $ENV{'SUMSERVER'}="d02.Stanford.EDU";
+  $ENV{'SUMSERVER'}="j1.Stanford.EDU";
 
   # set debug flag 1 to turn on and 0 to turn off
   $dflg=$ENV{'DF_INGEST_HSB_DEBUG'}="0";
