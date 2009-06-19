@@ -219,6 +219,7 @@ sub check_arguments()
 sub show_help_info
 {
   print "Help Listing\n";
+  print "(0)DEPRECATED SCRIPT!! Use ingest_dayfile.pl instead!! \n";
   print "(1)Ways to Execute Perl Script: \n";
   print "(1a)Ingest Day Files using apidfile option will ingest all files based on apids contained in file:\n
              ingest_LM_dayfile.pl apidlist=<filename containing APID List to do> dsnlist=<file with ds lookup list> src=<source of data>\n";
