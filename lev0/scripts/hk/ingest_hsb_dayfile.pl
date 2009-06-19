@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 ##############################################################################
 # Name:        ingest_hsb_dayfile.pl - Ingest hsb dayfiles                   #
+#              DEPRECATED SCRIPT!! USE ingest_dayfile.pl INSTEAD             #
 # Description: Used to ingest high spreed bus formatted dayfiles to DRMS.    #
 #              The script can gather a list of dayfiles based on arguments   #
 #              used for script and then write those file to DRMS. There are  #
@@ -25,7 +26,7 @@
   $ENV{'DF_INGEST_HSB_DEBUG'}="0";
 
   #common setting for all environments
-  $ENV{'SUMSERVER'}="d02.Stanford.EDU";
+  $ENV{'SUMSERVER'}="j1.Stanford.edu";
   $hm=$ENV{'HOME'};
   $ENV{'MAILTO'}="";
   $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
@@ -235,6 +236,7 @@ sub check_arguments()
 sub show_help_info
 {
   print "Help Listing\n";
+  print "(0)Deprecated script- use ingest_dayfile.pl \n";
   print "(1)Ways to Execute Perl Script: \n";
   print "(1a)Ingest Day Files using apidfile option will ingest all files based on apids contained in file:\n
              ingest_hsb_dayfile.pl apidlist=<filename containing APID List to do> dsnlist=<file with ds lookup list> src=<source of data>\n";
