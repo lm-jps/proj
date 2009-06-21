@@ -318,7 +318,7 @@ static void list_series_info(DRMS_Record_t *rec, json_t *jroot)
   DRMS_Keyword_t *key;
   DRMS_Segment_t *seg;
   DRMS_Link_t *link;
-  HIterator_t *hit;
+  HIterator_t hit;
   char intstring[100];
   char *notework;
   json_t *indexarray, *primearray, *keyarray, *segarray, *linkarray;
@@ -372,8 +372,8 @@ static void list_series_info(DRMS_Record_t *rec, json_t *jroot)
 if (DEBUG) fprintf(stderr,"   starting all keywords\n");
   /* show all keywords */
   keyarray = json_new_array();
-  hit = NULL;
-  while (key = drms_record_nextkey(rec, &hit))
+  hiter_new (&hit, &rec->keywords);
+  while ((key = (DRMS_Keyword_t *)hiter_getnext (&hit)))
     {
     json_t *keyinfo = json_new_object();
     json_t *keytype;
@@ -392,15 +392,15 @@ if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
     free(notework);
     json_insert_child(keyarray, keyinfo);
     }
-  free(hit);
   json_insert_pair_into_object(jroot, "keywords", keyarray);
+if (DEBUG) fprintf(stderr," done with keywords, start segments\n");
   
   /* show the segments */
   segarray = json_new_array();
   if (rec->segments.num_total)
     {
-    hit = NULL;
-    while (seg = drms_record_nextseg(rec, &hit))
+    hiter_new (&hit, &rec->segments);
+    while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit)))
       { /* segment name, units, protocol, dims, description */
       json_t *seginfo = json_new_object();
       int naxis = seg->info->naxis;
@@ -442,12 +442,12 @@ if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
       free(notework);
       json_insert_child(segarray, seginfo);
       }
-    free(hit);
     }
 //  else
 //    json_insert_child(segarray, json_new_null());
   json_insert_pair_into_object(jroot, "segments", segarray);
 
+if (DEBUG) fprintf(stderr," done with segments, start links\n");
   /* show the links */
   linkarray = json_new_array();
   if (rec->links.num_total)
@@ -455,6 +455,7 @@ if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
     hiter_new (&hit, &rec->links);
     while ((link = (DRMS_Link_t *)hiter_getnext (&hit)))
       {
+if (DEBUG) fprintf(stderr," link: %s\n",link->info->name);
       json_t *linkinfo = json_new_object();
       json_insert_pair_into_object(linkinfo, "name", json_new_string(link->info->name));
       json_insert_pair_into_object(linkinfo, "target", json_new_string(link->info->target_series));
@@ -485,6 +486,7 @@ void get_series_stats(DRMS_Record_t *rec, json_t *jroot)
   else
     sprintf(query,"%s[:#^]", rec->seriesinfo->seriesname);
   rs = drms_open_records(rec->env, query, &status);
+
   if (!rs || rs->n < 1)
     {
     json_insert_pair_into_object(interval, "FirstRecord", json_new_string("NA"));
@@ -711,15 +713,15 @@ int DoIt(void)
 	if (strcmp(thiskey, "**ALL**")==0)
           {
           DRMS_Keyword_t *key;
-          HIterator_t *prevkey = NULL;
-          while (key=drms_record_nextkey(recordset->records[0], &prevkey))
+          HIterator_t hit;
+          hiter_new (&hit, &recordset->records[0]->keywords);
+          while ((key = (DRMS_Keyword_t *)hiter_getnext (&hit)))
           {
              if (!drms_keyword_getimplicit(key))
              {
                 keys[nkeys++] = strdup (key->info->name);
              }
           }
-          free(prevkey);
 	  }
   	else
 	  keys[nkeys++] = strdup(thiskey);
@@ -751,10 +753,10 @@ int DoIt(void)
 	if (strcmp(thisseg, "**ALL**")==0)
 	  {
           DRMS_Segment_t *seg;
-          HIterator_t *prevseg = NULL;
-          while (seg=drms_record_nextseg(recordset->records[0], &prevseg))
+          HIterator_t hit;
+          hiter_new (&hit, &recordset->records[0]->segments);
+          while ((seg = (DRMS_Segment_t *)hiter_getnext (&hit)))
             segs[nsegs++] = strdup (seg->info->name);
-          free(prevseg);
 	  }
   	else
 	  segs[nsegs++] = strdup(thisseg);
@@ -929,8 +931,12 @@ int DoIt(void)
 	  {
           rec_key_ikey = drms_keyword_lookup (rec, keys[ikey], 1); 
           if (!rec_key_ikey)
-	    JSONDIE("Keyword not in series");
-          if (drms_ismissing_keyval(rec_key_ikey))
+	    {
+            fprintf(stderr,"jsoc_info error, keyword not in series: %s\n",keys[ikey]);
+	    // JSONDIE("Keyword not in series");
+            jsonval = string_to_json("Invalid KeyLink");
+            }
+          else if (drms_ismissing_keyval(rec_key_ikey))
             jsonval = string_to_json("MISSING");
           else
             {
