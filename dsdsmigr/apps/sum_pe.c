@@ -40,6 +40,7 @@ char *logdir, *db, *keyfile, *server;
 char datestr[32];
 char logname[MAX_STR];
 int pid;
+int dellog = 1;
 uint32_t rinfo;
 FILE *logfp;
 SVCXPRT *glb_transp;
@@ -222,7 +223,10 @@ int DoIt(void) {
       printk("Error status= %d from clnt_call to SUMPEACK = %d\n", sumpeback);
       status = 1;
     }
-
+  if(dellog) {
+    sprintf(cmd, "/bin/rm -f %s", logname);
+    system(cmd);
+  }
   return(0);
 }
 
@@ -301,6 +305,7 @@ KEY *getsumpe(KEY *params)
       printk("drms_open_records failed, in=%s, status=%d.\n", in, status);
       setkey_int(&retlist, "STATUS", 1); /* tell orig caller error */
       sprintf(errmsg, "Err: see on sum host: %s\n", logname);
+      dellog = 0;		//don't del the sum_pe log file
       setkey_str(&retlist, "ERRMSG", errmsg);
       return(retlist);  
     }
