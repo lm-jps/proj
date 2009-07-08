@@ -5,8 +5,10 @@ d		:= $(dir)
 
 # Local variables
 test0_$(d)		:= $(addprefix $(d)/, test0)
+wtest_$(d)		:= $(addprefix $(d)/, wtest)
 ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0 decode_dayfile)
 ingestlev1_$(d)		:= $(addprefix $(d)/, build_lev1)
+ingestlev1X_$(d)	:= $(addprefix $(d)/, build_lev1X)
 ingestlev1_mgr_$(d)	:= $(addprefix $(d)/, build_lev1_mgr)
 ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
@@ -15,7 +17,7 @@ xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
 #yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 
 #SUMEXE_$(d)	:= $(addprefix $(d)/, ingest_lev0)
-SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d))
+SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(ingestlev1X_$(d)) $(test0_$(d)) $(wtest_$(d))
 CEXE_$(d)       := $(addprefix $(d)/, fix_hmi_config_file_date)
 CEXE		:= $(CEXE) $(CEXE_$(d))
 MODEXESUMS	:= $(MODEXESUMS) $(SUMEXE_$(d)) $(PEEXE_$(d))
@@ -65,6 +67,8 @@ $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)):	$(LIBASTRO)
 $(ingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
 $(ingestlev1_$(d)):	LL_TGT := $(LL_TGT)
 $(ingestlev1_mgr_$(d)):	LL_TGT := $(LL_TGT)
+$(test0_$(d)):	LL_TGT := $(LL_TGT)
+$(wtest_$(d)):	LL_TGT := $(LL_TGT)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
