@@ -5,10 +5,11 @@
  *
  * This is a module that runs with DRMS and continuously processes lev0
  * filtergrams to lev1.
+ * It is scheduled by build_lev1_mgr either by qsub to the cluster
+ * or by fork to run on the local machine (stream mode to keep up w/lev0).
  */ 
-//!!!TBD - in development. put in calls to Keh-Cheng's code. have 2
-// instances run for hmi and aia, respectively.
-//No, we are going to qsub off a process for each set of 12 lev0 records.
+//!!!TBD - in development. put in calls to Keh-Cheng's code.
+
 
 #include <jsoc_main.h>
 #include <cmdparams.h>
@@ -24,6 +25,7 @@
 #include <unistd.h>	//for alarm(2) among other things...
 #include <printk.h>
 #include "imgdecode.h"
+#include "lev0lev1.h"
 
 
 //default in and out data series
@@ -31,6 +33,7 @@
 #define LEV0SERIESNAMEAIA "aia.lev0e"
 #define LEV1SERIESNAMEHMI "su_production.hmi_lev1e"	//temp test case
 #define LEV1SERIESNAMEAIA "su_production.aia_lev1e"	//temp test case
+#define DSFFNAME "su_richard.flatfield"		//temp test case
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
 #define DONUMRECS 120		//!!TEMP #of lev0 records to do and then exit
@@ -58,6 +61,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_INTS, "brec", "-1", "first lev0 rec# to process. -1=error must be given by build_lev1_mgr"},
   {ARG_INTS, "erec", "-1", "last lev0 rec# to process. -1=error must be given by build_lev1_mgr"},
+  {ARG_INTS, "quicklook", "1", "1=quick look, 0 = definitive mode"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
   {ARG_FLAG, "r", "0", "restart flag"},
@@ -72,17 +76,20 @@ FILE *h1logfp;		// fp for h1 ouput log for this run
 static IMG Image0, Image1;
 static IMG *Img0 = &Image0;
 static IMG *Img1 = &Image1;
+static LEV0LEV1 lev0lev1;
+static LEV0LEV1 *l0l1 = &lev0lev1;
 //static CCSDS_Packet_t *Hk;
 static DRMS_Record_t *rs;
-static DRMS_Record_t *rs0, *rs1;
+static DRMS_Record_t *rs0, *rs1, *rsff;
 static DRMS_Record_t *rptr;
 static DRMS_Segment_t *segment;
 static DRMS_Array_t *segArray;
-static DRMS_RecordSet_t *rset0, *rset1;
+static DRMS_RecordSet_t *rset0, *rset1, *rsetff;
 static DRMS_Array_t *Array0;
 static TIME sdo_epoch;
 static char datestr[32];
 static char open_dsname[256];
+static char path[DRMS_MAXPATHLEN];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 
 unsigned int fsnarray[IMAGE_NUM_COMMIT];
@@ -97,9 +104,10 @@ int restartflg = 0;		// set when ingest_lev0 is called for a restart
 int abortflg = 0;
 int sigalrmflg = 0;             // set on signal so prog will know 
 int ignoresigalrmflg = 0;       // set after a close_image()
+int quicklook;
 char logname[128];
 char argdsin[128], argdsout[128], arglogfile[128], arginstru[80];
-char argbrec[80], argerec[80];
+char argbrec[80], argerec[80], argquick[80];
 char timetag[32];
 char tlmseriesname[128];	// e.g. hmi.tlm
 char lev0seriesname[128];	// e.g. hmi.lev0
@@ -116,8 +124,8 @@ int nice_intro ()
   if (usage)
     {
     printf ("Usage:\nbuild_lev1 [-vhr] "
-	"instru=<hmi|aia> dsin=<lev0> dsout=<lev1> brec=<rec#> erec=<rec#>\n"
-	"                   [logfile=<file>]\n"
+	"instru=<hmi|aia> dsin=<lev0> dsout=<lev1> brec=<rec#>\n"
+	"                 erec=<rec#> quicklook=<0|1> [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
 	"  -r: restart. only used when we restart our selves periodically\n"
@@ -128,6 +136,7 @@ int nice_intro ()
 	"      default hmi=su_production.hmi_lev1e   aia=su_production.aia_lev1e\n"
 	"brec= first lev0 rec# to process. -1=error must be given by build_lev1_mgr\n"
 	"erec= last lev0 rec# to process. -1=error must be given by build_lev1_mgr\n"
+	"quicklook= 1 = quicklook mode, 0 = definitive mode\n"
 	"logfile= optional log file name. If not given uses:\n"
         "         /usr/local/logs/lev1/build_lev1.<time_stamp>.log\n");
     return(1);
@@ -236,11 +245,12 @@ void abortit(int stat)
 int do_ingest()
 {
   DRMS_Record_t *irpt;
-  int rstatus, dstatus, ncnt, i;
+  TIME t_obs0;
+  int rstatus, dstatus, ncnt, fcnt, i;
   long long recnum0, recnum1;
   char recrange[128];
 
-  ncnt = (erec - brec) + 1;
+  //ncnt = (erec - brec) + 1;
   sprintf(recrange, ":#%lld-#%lld", brec, erec);
   sprintf(open_dsname, "%s[%s]", dsin, recrange);
   printk("open_dsname = %s\n", open_dsname);
@@ -251,6 +261,7 @@ int do_ingest()
       return(1);		//!!TBD
       //abortit(1);          // !!!TBD
     }
+    ncnt = rset0->n;
       rptr = (DRMS_Record_t *)malloc(ncnt * sizeof(DRMS_Record_t));
       if(rptr == NULL) {
         printk("Can't malloc() for DRMS_Record_t sort\n");
@@ -264,7 +275,7 @@ int do_ingest()
       qsort(rptr, ncnt, sizeof(DRMS_Record_t), &compare_rptr);
 
       //this loop is for the benefit of the lev1view dispaly to show
-      //all 12 lev0 records opened
+      //max 12 lev0 records opened
       for(i=0; i < ncnt; i++) {
         rs0 = &rptr[i];
         recnum0 = rs0->recnum;
@@ -281,8 +292,9 @@ int do_ingest()
       //printf("rec# for %d = %lld fsn=%u\n", i, recnum0, fsnx); //!!!TEMP
       segment = drms_segment_lookupnum(rs0, 0);
       Array0 = drms_segment_read(segment, DRMS_TYPE_SHORT, &rstatus);
-      if(rstatus) {
-        printk("Can't do drms_segment_read() %s\n", open_dsname);
+      if(!Array0) {
+        printk("Can't do drms_segment_read() %s status=%d\n", 
+			open_dsname, rstatus);
         return(1);              // !!!!TBD ck
       }
       short *adata = (short *)Array0->data;
@@ -290,6 +302,7 @@ int do_ingest()
       drms_free_array(Array0); //must free from drms_segment_read()
 
       sprintf(open_dsname, "%s[%u]", dsout, fsnx);
+      //create the lev1 output record
       rs = drms_create_record(drms_env, dsout, DRMS_PERMANENT, &dstatus);
       if(dstatus) {
         printk("**ERROR: Can't create record for %s\n", open_dsname);
@@ -310,6 +323,35 @@ int do_ingest()
                                        segment->axis,
                                        rdat,
                                        &dstatus);
+
+      //Now figure out what flat field to use
+      t_obs0 = drms_getkey_time(rs0, "t_obs", &rstatus);
+      if(rstatus) {
+        printk("Can't do drms_getkey_time() for fsn %u\n", fsnx);
+        return(1);              // !!!!TBD ck
+      }
+      printk("t_obs for lev0 = %10.5f\n", t_obs0);	//!!TEMP
+      sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f ?]", 
+		DSFFNAME, t_obs0, t_obs0);
+      //printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
+      rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF 
+      if(!rsetff || (rsetff->n == 0) || rstatus) {
+        printk("Can't do drms_open_records(%s)\n", open_dsname);
+        return(1);		//!!TBD
+        //abortit(1);          // !!!TBD
+      }
+      fcnt = rsetff->n;
+      if(fcnt > 1) {
+        printk("More than one FF found for %s?\n", open_dsname);
+        //return(1);		//!!TBD
+      }
+      drms_record_directory(rsetff->records[0], path, 1);
+      if(!*path) {
+        printk("***ERROR: No path to segment for %s\n", open_dsname);
+        return(1);		//!!TBD
+      }
+      printf("path to FF = %s\n", path);	//!!TEMP
+
       //call_keh_cheng();	//!!TBD
 
       dstatus = drms_segment_write(segment, segArray, 0);
@@ -322,6 +364,7 @@ int do_ingest()
         return(1);
       }
       printk("*1 %u %u\n", recnum1, fsnx);
+      drms_close_records(rsetff, DRMS_FREE_RECORD);
     }
 
     drms_close_records(rset0, DRMS_FREE_RECORD);
@@ -361,9 +404,12 @@ void setup()
   sprintf(argdsout, "dsout=%s", dsout);
   sprintf(argbrec, "brec=%u", brec);
   sprintf(argerec, "erec=%u", erec);
+  sprintf(argquick, "quicklook=%d", quicklook);
   sprintf(arglogfile, "logfile=%s", logname);
-  printk("%s %s %s %s %s\n", arginstru, argdsin, argdsout, argbrec, argerec);
-  printf("%s %s %s %s %s\n", arginstru, argdsin, argdsout, argbrec, argerec);
+  printk("%s %s %s %s %s %s\n", 
+	arginstru, argdsin, argdsout, argbrec, argerec, argquick);
+  printf("%s %s %s %s %s %s\n", 
+	arginstru, argdsin, argdsout, argbrec, argerec, argquick);
   if(!restartflg) {
     //printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
     //		tlmseriesname, lev0seriesname);
@@ -406,6 +452,7 @@ int DoIt(void)
   dsout = cmdparams_get_str(&cmdparams, "dsout", NULL);
   brec = cmdparams_get_int(&cmdparams, "brec", NULL);
   erec = cmdparams_get_int(&cmdparams, "erec", NULL);
+  quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
   if(brec == -1 || erec == -1) {
     fprintf(stderr, "brec and/or erec must be given. -1 not allowed\n");
     return(0);
@@ -454,6 +501,7 @@ int DoIt(void)
   while(wflg) {
     if(do_ingest()) {        // loop to get files from the lev0
       printk("**ERROR: Some drms error  for %s\n", open_dsname);
+      printf("**ERROR: Some drms error  for %s\n", open_dsname);
     }
     //sleep(1);
     wflg = 0;

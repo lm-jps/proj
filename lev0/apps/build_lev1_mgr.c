@@ -14,7 +14,9 @@
  *
  * Runs build_lev1 processes to create lev1 datasets
  * Has two modes:
- * Stream Mode (one instance)
+ * Stream Mode (one instance):
+ *  This is the normal quick look mode that runs continuously and
+ *  keeps up with the lev0 records.
  *	brec=0, erec=0 
  *	- start at the previous highest lev0 record processed
  *	  This is keep in the DB table lev1_highest_lev0_recnum
@@ -24,7 +26,8 @@
  *	- if no more lev0 records available, sleep and try again
  *	- if 8 CPU not enough to keep up with lev0, go to 16, etc.
  *
- * Reprocessing Mode (any number of instances)
+ * Reprocessing Mode (any number of instances):
+ *  This is the definitive mode lev1 processing.
  *	brec=1000, erec=2000 
  *	- qsub up to 16 (MAXQSUBLEV1) build_lev1 for 12 records ea
  *	- when a job completes qsub next 12 records until erec is reached
@@ -102,6 +105,7 @@ int verbose;
 long long brec, erec;		//begin and end lev0 rec# to do
 int numrec, numcpu, numqsub;
 int qcnt = 0;
+//stream_mode is also quick look mode, i.e. brec=erec=0
 int stream_mode = 0;		//0=qsub build_lev1, 1=fork it locally
 int hmiaiaflg = 0;		//0=hmi, 1=aia
 char logname[128];
@@ -120,6 +124,7 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
+    printf ("Runs build_lev1 processes to create lev1 datasets.\n\n");
     printf ("Usage: build_lev1_mgr [-vh]\n"
 	"instru=<hmi|aia> dsin=<lev0> dsout=<lev1> brec=<rec#> erec=<rec#>"
 	"\nnumrec=<#> numcpu=<#> numqsub=<#> logfile=<file>\n"
@@ -138,6 +143,25 @@ int nice_intro ()
 	"logfile= optional log file name. If not given uses:\n"
         "         /usr/local/logs/lev1/build_lev1_mgr.<time_stamp>.log\n",
 	DEFAULTRECLEV1, DEFAULTCPULEV1, DEFAULTQSUBLEV1);
+     printf ("\n * Has two modes:\n"
+          " * Stream Mode (one instance):\n"
+          " *  This is the normal quick look mode that runs continuously and\n"
+          " *  keeps up with the lev0 records.\n"
+          " *	brec=0, erec=0\n"
+          " *	- start at the previous highest lev0 record processed\n"
+          " *	  This is keep in the DB table lev1_highest_lev0_recnum\n"
+          " *	- fork up to 8 (MAXCPULEV1) build_lev1 for every \n"
+          " *	  12 (MAXRECLEV1) lev0 records. \n"
+          " *	- when an build_lev1 completes, fork another for next 12 rec\n"
+          " *	- if no more lev0 records available, sleep and try again\n"
+          " *	- if 8 CPU not enough to keep up with lev0, go to 16, etc.\n"
+          " *\n"
+          " * Reprocessing Mode (any number of instances):\n"
+          " *  This is the definitive mode lev1 processing.\n"
+          " *	brec=1000, erec=2000 \n"
+          " *	- qsub up to 16 (MAXQSUBLEV1) build_lev1 for 12 records ea\n"
+          " *	- when a job completes qsub next 12 records until erec is reached\n"
+          " *	- when all jobs are done, build_lev1_mgr will exit\n\n");
     return(1);
     }
   verbose = cmdparams_get_int (&cmdparams, "v", NULL);
@@ -258,8 +282,9 @@ int forkstream(long long recn0, long long maxrecn0)
   pid_t pid, wpid, fpid[MAXCPULEV1];
   long long numofrecs, frec, lrec;
   int stat_loc, i, j, k, l, numtofork;
-  char *args[8], pcmd[128];
+  char *args[9], pcmd[128];
   char args1[128], args2[128], args3[128], args4[128], args5[128], args6[128];
+  char args7[128];
 
   numofrecs = (maxrecn0 - recn0) + 1;
   numtofork = numofrecs/numrec;     //this many to fork 
@@ -286,12 +311,14 @@ int forkstream(long long recn0, long long maxrecn0)
       args[4] = args4;
       sprintf(args5, "instru=%s", instru);
       args[5] = args5;
-      //sprintf(args6, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
-      sprintf(args6, "logfile=%s/l1s_%lu_%lu.log", QSUBDIR, frec, lrec);
+      sprintf(args6, "quicklook=%d", stream_mode);
       args[6] = args6;
-      args[7] = NULL;
-      printk("execvp: %s %s %s %s %s %s %s\n",
-              args[0],args[1],args[2],args[3],args[4],args[5],args[6]);
+      //sprintf(args7, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
+      sprintf(args7, "logfile=%s/l1s_%lu_%lu.log", QSUBDIR, frec, lrec);
+      args[7] = args7;
+      args[8] = NULL;
+      printk("execvp: %s %s %s %s %s %s %s %s\n",
+              args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7]);
       if(execvp(args[0], args) < 0) {
         printk("***Can't execvp() build_lev1. errno=%d\n", errno);
         exit(1);
@@ -344,12 +371,14 @@ int forkstream(long long recn0, long long maxrecn0)
       args[4] = args4;
       sprintf(args5, "instru=%s", instru);
       args[5] = args5;
-      //sprintf(args6, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
-      sprintf(args6, "logfile=%s/l1s_%lu_%lu.log", QSUBDIR, frec, lrec);
+      sprintf(args6, "quicklook=%d", stream_mode);
       args[6] = args6;
-      args[7] = NULL;
-      printk("execvp: %s %s %s %s %s %s %s\n",
-              args[0],args[1],args[2],args[3],args[4],args[5],args[6]);
+      //sprintf(args7, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
+      sprintf(args7, "logfile=%s/l1s_%lu_%lu.log", QSUBDIR, frec, lrec);
+      args[7] = args7;
+      args[8] = NULL;
+      printk("execvp: %s %s %s %s %s %s %s %s\n",
+              args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7]);
       if(execvp(args[0], args) < 0) {
         printk("***Can't execvp() build_lev1. errno=%d\n", errno);
         exit(1);
@@ -379,8 +408,8 @@ int qsubjob(long long rec1, long long rec2)
   }
   fprintf(qsubfp, "#!/bin/csh\n");
   fprintf(qsubfp, "echo \"TMPDIR = $TMPDIR\"\n");
-  fprintf(qsubfp, "build_lev1 dsin=%s dsout=%s brec=%d erec=%d instru=%s logfile=%s/l1q_b%d_e%d_$JOB_ID.log\n", 
-		dsin, dsout, rec1, rec2, instru, QSUBDIR, rec1, rec2); 
+  fprintf(qsubfp, "build_lev1 dsin=%s dsout=%s brec=%d erec=%d instru=%s quicklook=%d logfile=%s/l1q_b%d_e%d_$JOB_ID.log\n", 
+	dsin, dsout, rec1, rec2, instru, stream_mode, QSUBDIR, rec1, rec2); 
   fclose(qsubfp);
   sprintf(qsubcmd, "qsub -o %s -e %s -q j.q %s", 
 		QSUBDIR, QSUBDIR, qlogname);
@@ -656,7 +685,7 @@ int main(int argc, char **argv)
     sprintf(pcmd, "touch %s/build_lev1_mgr.stream.touch 2>/dev/null",
                 LEV1LOG_BASEDIR);
     system(pcmd);
-    stream_mode = 1;
+    stream_mode = 1;		//aka quick look mode
   }
   logfile = cmdparams_get_str(&cmdparams, "logfile", NULL);
   if (strcmp(dsin, NOTSPECIFIED) == 0) {
