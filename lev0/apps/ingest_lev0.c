@@ -50,9 +50,11 @@
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
 //#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
-#define LEV0SERIESNAMEHMI "su_production.lev0f_test"
+//#define LEV0SERIESNAMEHMI "su_production.lev0f_test"
+#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
 #define TLMSERIESNAMEHMI "su_production.tlm_test"
-#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
+//#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
+#define LEV0SERIESNAMEAIA "su_production.lev0f_aia"
 #define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
@@ -338,7 +340,8 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   char *hwltnset;
   char *hseqerr, *aistate;
   char wave_str[16];
-  int status, hsqfgsn, percentd;
+  int status, hsqfgsn, asqfsn;
+  float percentd;
   uint32_t missvals, datav;
   uint32_t hcf1encd, hcf2encd, hps1encd, hps2encd, hps3encd; 
   uint32_t hwt1encd, hwt2encd, hwt3encd, hwt4encd;
@@ -353,8 +356,6 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   if(img->headerr) quallev0 = quallev0 | Q_HDRERR;
   if(img->nerrors) quallev0 = quallev0 | Q_CMPERR;
   if(img->last_pix_err) quallev0 = quallev0 | Q_LPXERR;
-  hsqfgsn = drms_getkey_int(rs, "HSQFGSN", &status);
-  if(fsn != hsqfgsn) quallev0 = quallev0 | Q_NOISP;
   missvals = img->totalvals - img->datavals;
   if(missvals > 0) quallev0 = quallev0 | Q_MISS0;
   datav = img->totalvals;
@@ -371,6 +372,8 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
 //  }
 
 if(!hmiaiaflg) {		//HMI specific qual bits
+  hsqfgsn = drms_getkey_int(rs, "HSQFGSN", &status);
+  if(fsn != hsqfgsn) quallev0 = quallev0 | Q_NOISP;
   if(hseqerr = drms_getkey_string(rs, "HSEQERR", &status)) {
     if(strcmp(hseqerr, "SUCCESS")) quallev0 = quallev0 | Q_SEQERR;
     free(hseqerr);
@@ -381,11 +384,13 @@ if(!hmiaiaflg) {		//HMI specific qual bits
   }
   hcf1encd = drms_getkey_int(rs, "HCF1ENCD", &status);
   hcf1pos = drms_getkey_int(rs, "HCF1POS", &status);
-  if(!((hcf1encd == hcf1pos) || (hcf1encd == hcf1pos+1) || (hcf1encd == hcf1pos-1)))
+  //if(!((hcf1encd == hcf1pos) || (hcf1encd == hcf1pos+1) || (hcf1encd == hcf1pos-1)))
+  if(!((hcf1encd == hcf1pos) || (hcf1encd == hcf1pos-1)))
     quallev0 = quallev0 | Q_HCF1ENCD;
   hcf2encd = drms_getkey_int(rs, "HCF2ENCD", &status);
   hcf2pos = drms_getkey_int(rs, "HCF2POS", &status);
-  if(!((hcf2encd == hcf2pos) || (hcf2encd == hcf2pos+1) || (hcf2encd == hcf2pos-1)))
+  //if(!((hcf2encd == hcf2pos) || (hcf2encd == hcf2pos+1) || (hcf2encd == hcf2pos-1)))
+  if(!((hcf2encd == hcf2pos) || (hcf2encd == hcf2pos-1)))
     quallev0 = quallev0 | Q_HCF2ENCD;
   hps1encd = drms_getkey_int(rs, "HPS1ENCD", &status);
   hpl1pos = drms_getkey_int(rs, "HPL1POS", &status);
@@ -417,6 +422,8 @@ if(!hmiaiaflg) {		//HMI specific qual bits
     quallev0 = quallev0 | Q_HWT4ENCD;
 }
 else {				//AIA specific qual bits
+  asqfsn = drms_getkey_int(rs, "ASQFSN", &status);
+  if(fsn != asqfsn) quallev0 = quallev0 | Q_NOISP;
   if(aistate = drms_getkey_string(rs, "AISTATE", &status)) {
     if(!strcmp(aistate, "OPEN")) quallev0 = quallev0 | AQ_ISSOPEN;
     free(aistate);
@@ -429,53 +436,65 @@ else {				//AIA specific qual bits
   switch(aiawvlen) {
   case 9:			//9.4
     if(aifiltyp == 0) {
-      strcpy(wave_str, "94_THIN");
       if((aifwen != 269) && (aifwen != 270)) {
         quallev0 = quallev0 | A94Mech_Err;
       }
     }
     else if(aifiltyp == 1) {
-      strcpy(wave_str, "94_THICK");
       if((aifwen != 11) && (aifwen != 12)) {
         quallev0 = quallev0 | A94Mech_Err;
       }
     }
     else if(aifiltyp == 2) {
-      strcpy(wave_str, "94_OPEN");
       if((aifwen != 74) && (aifwen != 75)) {
         quallev0 = quallev0 | A94Mech_Err;
       }
+    }
+    //All the wave_str code can be compacted, but I'm keeping it 
+    //symetric with Rock's notes
+    if((aifwen == 269) || (aifwen == 270)) {
+      strcpy(wave_str, "94_THIN");
+    }
+    else if((aifwen == 11) || (aifwen == 12)) {
+      strcpy(wave_str, "94_THICK");
+    }
+    else if((aifwen == 74) || (aifwen == 75)) {
+      strcpy(wave_str, "94_OPEN");
     }
     break;
   case 1:			//13.1
     if(aifiltyp == 0) {
-      strcpy(wave_str, "131_THIN");
       if((aifwen != 269) && (aifwen != 270)) {
         quallev0 = quallev0 | A131Mech_Err;
       }
     }
     else if(aifiltyp == 1) {
-      strcpy(wave_str, "131_THICK");
       if((aifwen != 11) && (aifwen != 12)) {
         quallev0 = quallev0 | A131Mech_Err;
       }
     }
     else if(aifiltyp == 2) {
-      strcpy(wave_str, "131_OPEN");
       if((aifwen != 74) && (aifwen != 75)) {
         quallev0 = quallev0 | A131Mech_Err;
       }
     }
+    if((aifwen == 269) || (aifwen == 270)) {
+      strcpy(wave_str, "131_THIN");
+    }
+    else if((aifwen == 11) || (aifwen == 12)) {
+      strcpy(wave_str, "131_THICK");
+    }
+    else if((aifwen == 74) || (aifwen == 75)) {
+      strcpy(wave_str, "131_OPEN");
+    }
     break;
   case 7:			//17.1
     if(aifiltyp == 0) {
-      strcpy(wave_str, "171_THIN");
       if((aifwen != 203) && (aifwen != 204)) {
         quallev0 = quallev0 | A171Mech_Err;
       }
     }
     else if(aifiltyp == 1) {
-      strcpy(wave_str, "171_THICK");
       if((aifwen != 11) && (aifwen != 12)) {
         quallev0 = quallev0 | A171Mech_Err;
       }
@@ -486,12 +505,17 @@ else {				//AIA specific qual bits
         quallev0 = quallev0 | A171Mech_Err;
       }
     }
+    if((aifwen == 203) || (aifwen == 204)) {
+      strcpy(wave_str, "171_THIN");
+    }
+    else if((aifwen == 11) || (aifwen == 12)) {
+      strcpy(wave_str, "171_THICK");
+    }
     break;
+/* !!!TBD fix below like did above after resolve MIX_THIN stuff w/Rock */
   case 3:			//19.3
     if(aifiltyp == 0) {
-      strcpy(wave_str, "193_THIN");
       if(aiasen != 6) {
-        strcpy(wave_str, "MIX_THIN");
         quallev0 = quallev0 | A193Mech_Err;
       }
       if((aifwen != 269) && (aifwen != 270)) {
@@ -499,9 +523,7 @@ else {				//AIA specific qual bits
       }
     }
     else if(aifiltyp == 1) {
-      strcpy(wave_str, "193_THICK");
       if(aiasen != 6) {
-        strcpy(wave_str, "MIX_THICK");
         quallev0 = quallev0 | A193Mech_Err;
       }
       if((aifwen != 11) && (aifwen != 12)) {
@@ -509,21 +531,35 @@ else {				//AIA specific qual bits
       }
     }
     else if(aifiltyp == 2) {
-      strcpy(wave_str, "193_OPEN");
       if(aiasen != 6) {
-        strcpy(wave_str, "MIX_OPEN");
         quallev0 = quallev0 | A193Mech_Err;
       }
       if((aifwen != 74) && (aifwen != 75)) {
         quallev0 = quallev0 | A193Mech_Err;
+      }
+    }
+    if(aiasen == 6) {
+      if((aifwen == 269) || (aifwen == 270)) {
+        strcpy(wave_str, "193_THIN");
+      } else if((aifwen == 11) || (aifwen == 12)) {
+        strcpy(wave_str, "193_THICK");
+      } else if((aifwen == 74) || (aifwen == 75)) {
+        strcpy(wave_str, "193_OPEN");
+      }
+    }
+    else {
+      if((aifwen == 269) || (aifwen == 270)) {
+        strcpy(wave_str, "MIX_THIN");
+      } else if((aifwen == 11) || (aifwen == 12)) {
+        strcpy(wave_str, "MIX_THICK");
+      } else if((aifwen == 74) || (aifwen == 75)) {
+        strcpy(wave_str, "MIX_OPEN");
       }
     }
     break;
   case 2:			//21.1
     if(aifiltyp == 0) {
-      strcpy(wave_str, "211_THIN");
       if(aiasen != 24) {
-        strcpy(wave_str, "MIX_THIN");
         quallev0 = quallev0 | A211Mech_Err;
       }
       if((aifwen != 203) && (aifwen != 204)) {
@@ -531,9 +567,7 @@ else {				//AIA specific qual bits
       }
     }
     else if(aifiltyp == 1) {
-      strcpy(wave_str, "211_THICK");
       if(aiasen != 24) {
-        strcpy(wave_str, "MIX_THICK");
         quallev0 = quallev0 | A211Mech_Err;
       }
       if((aifwen != 137) && (aifwen != 138)) {
@@ -541,80 +575,105 @@ else {				//AIA specific qual bits
       }
     }
     else if(aifiltyp == 2) {
-      strcpy(wave_str, "211_OPEN");
       if(aiasen != 24) {
-        strcpy(wave_str, "MIX_OPEN");
         quallev0 = quallev0 | A211Mech_Err;
       }
       if((aifwen != 74) && (aifwen != 75)) {
         quallev0 = quallev0 | A211Mech_Err;
+      }
+    }
+    if(aiasen == 24) {
+      if((aifwen == 203) || (aifwen == 204)) {
+        strcpy(wave_str, "211_THIN");
+      } else if((aifwen == 137) || (aifwen == 138)) {
+        strcpy(wave_str, "211_THICK");
+      } else if((aifwen == 74) || (aifwen == 75)) {
+        strcpy(wave_str, "211_OPEN");
+      }
+    }
+    else {
+      if((aifwen == 203) || (aifwen == 204)) {
+        strcpy(wave_str, "MIX_THIN");
+      } else if((aifwen == 137) || (aifwen == 138)) {
+        strcpy(wave_str, "MIX_THICK");
+      } else if((aifwen == 74) || (aifwen == 75)) {
+        strcpy(wave_str, "MIX_OPEN");
       }
     }
     break;
   case 8:			//30.4
     if(aifiltyp == 0) {
-      strcpy(wave_str, "304_THIN");
       if((aifwen != 203) && (aifwen != 204)) {
         quallev0 = quallev0 | A304Mech_Err;
       }
     }
     else if(aifiltyp == 1) {
-      strcpy(wave_str, "304_THICK");
       if((aifwen != 137) && (aifwen != 138)) {
         quallev0 = quallev0 | A304Mech_Err;
       }
     }
     else if(aifiltyp == 2) {
-      strcpy(wave_str, "304_OPEN");
       if((aifwen != 74) && (aifwen != 75)) {
         quallev0 = quallev0 | A304Mech_Err;
       }
+    }
+    if((aifwen == 203) || (aifwen == 204)) {
+      strcpy(wave_str, "304_THIN");
+    } else if((aifwen == 137) || (aifwen == 138)) {
+      strcpy(wave_str, "304_THICK");
+    } else if((aifwen == 74) || (aifwen == 75)) {
+      strcpy(wave_str, "304_OPEN");
     }
     break;
   case 0:			//33.5
     if(aifiltyp == 0) {
-      strcpy(wave_str, "335_THIN");
       if((aifwen != 203) && (aifwen != 204)) {
         quallev0 = quallev0 | A335Mech_Err;
       }
     }
     else if(aifiltyp == 1) {
-      strcpy(wave_str, "335_THICK");
       if((aifwen != 137) && (aifwen != 138)) {
         quallev0 = quallev0 | A335Mech_Err;
       }
     }
     else if(aifiltyp == 2) {
-      strcpy(wave_str, "335_OPEN");
       if((aifwen != 74) && (aifwen != 75)) {
         quallev0 = quallev0 | A335Mech_Err;
       }
     }
+    if((aifwen == 203) || (aifwen == 204)) {
+      strcpy(wave_str, "335_THIN");
+    } else if((aifwen == 137) || (aifwen == 138)) {
+      strcpy(wave_str, "335_THICK");
+    } else if((aifwen == 74) || (aifwen == 75)) {
+      strcpy(wave_str, "335_OPEN");
+    }
     break;
   case 4:			//160.0
-    strcpy(wave_str, "1600");
     if((aifwen != 269) && (aifwen != 270)) {
       quallev0 = quallev0 | A160Mech_Err;
     }
+    else strcpy(wave_str, "1600");
     break;
   case 5:			//170.0
-    strcpy(wave_str, "1700");
     if((aifwen != 137) && (aifwen != 138)) {
       quallev0 = quallev0 | A170Mech_Err;
     }
+    else strcpy(wave_str, "1700");
     break;
   case 6:			//450.0
-    strcpy(wave_str, "4500");
     if((aifwen != 74) && (aifwen != 75)) {
       quallev0 = quallev0 | A450Mech_Err;
     }
+    else strcpy(wave_str, "4500");
     break;
   }
 }
-  drms_setkey_int(rs, "QUALLEV0", quallev0);
+  //drms_setkey_int(rs, "QUALLEV0", quallev0);	//don't use this anymore
   drms_setkey_int(rs, "QUALITY", quallev0);
-  percentd = (int)((100 * img->datavals)/img->totalvals);
-  drms_setkey_int(rs, "PERCENTD", percentd);
+  drms_setkey_string(rs, "WAVE_STR", wave_str);
+  percentd = (float)((100.0 * (float)img->datavals)/(float)img->totalvals);
+  drms_setkey_float(rs, "PERCENTD", percentd);
 }
 
 // Close out an image.
@@ -668,9 +727,9 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "DATAVALS", img->datavals);
   drms_setkey_int(rs, "NPACKETS", img->npackets);
   drms_setkey_int(rs, "NERRORS", img->nerrors);
-  drms_setkey_int(rs, "EOIERROR", img->last_pix_err);
-  drms_setkey_int(rs, "HEADRERR", img->headerr);
-  drms_setkey_int(rs, "OVERFLOW", img->overflow);
+  drms_setkey_short(rs, "EOIERROR", img->last_pix_err);
+  drms_setkey_short(rs, "HEADRERR", img->headerr);
+  drms_setkey_short(rs, "OVERFLOW", img->overflow);
   missvals = img->totalvals - img->datavals;
   drms_setkey_int(rs, "MISSVALS", missvals);
   snprintf(tlmdsname, 128, "%s[%s]", tlmseriesname, tlmnamekeyfirst);
