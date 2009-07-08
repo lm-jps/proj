@@ -105,8 +105,12 @@ if (flg) {	/* AIA */
   double offset = ( aimshobc + aimshcbc + aimshobe + aimshcbe +
                     aimshotc + aimshctc + aimshote + aimshcte )/8.0e6;
   if(aimgshce == 0) {			//use pkt time for t_obs
-    int axsec = HK_getkey_int(isp, "ATCS211");
-    int axssec = HK_getkey_int(isp, "ATCSS211");
+    int axsec = HK_getkey_int(isp, "ATCSISP");
+    int axssec = HK_getkey_int(isp, "ATCSSISP");
+    if((axsec == DRMS_MISSING_INT) || (axssec == DRMS_MISSING_INT)) {
+      axsec = HK_getkey_int(isp, "ATCS211");
+      axssec = HK_getkey_int(isp, "ATCSS211");
+    }
     if((axsec == DRMS_MISSING_INT) || (axssec == DRMS_MISSING_INT)) {
       axsec = HK_getkey_int(isp, "ATCS239");
       axssec = HK_getkey_int(isp, "ATCSS239");
@@ -161,8 +165,12 @@ if (flg) {	/* AIA */
   double offset = ( hshmiclb + hshmiopb + hshmiclm + hshmiopm + hshmiclt + hshmiopt )/6.0e6;
   
   if(hshiexp == 0) {			//use pkt time for t_obs
-    int hxsec = HK_getkey_int(isp, "HTCS1BD");
-    int hxssec = HK_getkey_int(isp, "HTCSS1BD");
+    int hxsec = HK_getkey_int(isp, "HTCSISP");
+    int hxssec = HK_getkey_int(isp, "HTCSSISP");
+    if((hxsec == DRMS_MISSING_INT) || (hxssec == DRMS_MISSING_INT)) {
+      hxsec = HK_getkey_int(isp, "HTCS1BD");
+      hxssec = HK_getkey_int(isp, "HTCSS1BD");
+    }
     if((hxsec == DRMS_MISSING_INT) || (hxssec == DRMS_MISSING_INT)) {
       hxsec = HK_getkey_int(isp, "HTCS1DB");
       hxssec = HK_getkey_int(isp, "HTCSS1DB");
@@ -196,7 +204,7 @@ double  mjd_time = mjd - 86400.0 * mjd_day;
   
 drms_setkey_double(rec, "T_OBS", t_obs);
 drms_setkey_double(rec, "EXPTIME", exptime);
-drms_setkey_double(rec, "EXPSDEV", expsdev);
+drms_setkey_float(rec, "EXPSDEV", expsdev);
 //drms_setkey_string(rec, "DATE__OBS", date_obs);
 drms_setkey_double(rec, "DATE__OBS", date__obs);
 drms_setkey_double(rec, "MJD", mjd_day);
