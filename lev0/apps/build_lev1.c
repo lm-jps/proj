@@ -1,15 +1,14 @@
 /*-----------------------------------------------------------------------------
- * cvs/JSOC/proj/lev1/apps/build_lev1.c
+ * cvs/JSOC/proj/lev1/apps/build_lev1X.c
  * NOTE: This originally came from JSOC/proj/lev0/apps/ingest_lev0.c
  *-----------------------------------------------------------------------------
  *
- * This is a module that runs with DRMS and continuously processes lev0
+ * This is a module that runs with DRMS and processes lev0
  * filtergrams to lev1.
  * It is scheduled by build_lev1_mgr either by qsub to the cluster
- * or by fork to run on the local machine (stream mode to keep up w/lev0).
+ * or by fork to run on the local machine.
  */ 
 //!!!TBD - in development. put in calls to Keh-Cheng's code.
-
 
 #include <jsoc_main.h>
 #include <cmdparams.h>
@@ -29,11 +28,13 @@
 
 
 //default in and out data series
-#define LEV0SERIESNAMEHMI "hmi.lev0e"
-#define LEV0SERIESNAMEAIA "aia.lev0e"
+//#define LEV0SERIESNAMEHMI "hmi.lev0e"
+//#define LEV0SERIESNAMEAIA "aia.lev0e"
+#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
+#define LEV0SERIESNAMEAIA "su_production.lev0f_aia"
 #define LEV1SERIESNAMEHMI "su_production.hmi_lev1e"	//temp test case
 #define LEV1SERIESNAMEAIA "su_production.aia_lev1e"	//temp test case
-#define DSFFNAME "su_richard.flatfield"		//temp test case
+#define DSFFNAME "su_richard.flatfield"			//temp test case
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
 #define DONUMRECS 120		//!!TEMP #of lev0 records to do and then exit
@@ -83,9 +84,13 @@ static DRMS_Record_t *rs;
 static DRMS_Record_t *rs0, *rs1, *rsff;
 static DRMS_Record_t *rptr;
 static DRMS_Segment_t *segment;
+static DRMS_Segment_t *darkseg;
+static DRMS_Segment_t *badseg;
 static DRMS_Array_t *segArray;
 static DRMS_RecordSet_t *rset0, *rset1, *rsetff;
 static DRMS_Array_t *Array0;
+static DRMS_Array_t *ArrayDark;
+static DRMS_Array_t *ArrayBad;
 static TIME sdo_epoch;
 static char datestr[32];
 static char open_dsname[256];
@@ -94,6 +99,7 @@ static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 
 unsigned int fsnarray[IMAGE_NUM_COMMIT];
 unsigned int fsnx = 0;
+short data1[MAXPIXELS];
 
 short *rdat;
 int verbose;
@@ -242,6 +248,42 @@ void abortit(int stat)
   exit(stat);
 }
 
+//!!TBD Keh-Cheng
+int rdout_mode_correct()
+{
+  return(0);
+}
+
+//!!TBD Art
+int orbit_calc()
+{
+  return(0);
+}
+
+//!!TBD Keh-Cheng
+int sc_pointing()
+{
+  return(0);
+}
+
+//!!TBD Now convert the lev0 to lev1 from the info given.
+int do_flat(LEV0LEV1 *info) 
+{
+   //!!TEMP
+   printf("rs0 = %lu\n", info->rs0);
+   printf("rs1 = %lu\n", info->rs1);
+   printf("rsff = %lu\n", info->rsff);
+   printf("adata0 = %lu\n", info->adata0);
+   printf("adata1 = %lu\n", info->adata1);
+   printf("adatadark = %lu\n", info->adatadark);
+   printf("adatabad = %lu\n", info->adatabad);
+   printf("recnum0 = %lu\n", info->recnum0);
+   printf("recnum1 = %lu\n", info->recnum1);
+   printf("fsn = %u\n", info->fsn);
+   printf("himgcfid = %d\n", info->himgcfid);
+   return(0);
+}
+
 int do_ingest()
 {
   DRMS_Record_t *irpt;
@@ -250,42 +292,41 @@ int do_ingest()
   long long recnum0, recnum1;
   char recrange[128];
 
-  //ncnt = (erec - brec) + 1;
   sprintf(recrange, ":#%lld-#%lld", brec, erec);
   sprintf(open_dsname, "%s[%s]", dsin, recrange);
   printk("open_dsname = %s\n", open_dsname);
   printk("#levnum recnum fsn\n");
+
     rset0 = drms_open_records(drms_env, open_dsname, &rstatus); //open lev0
     if(!rset0 || (rset0->n == 0) || rstatus) {
       printk("Can't do drms_open_records(%s)\n", open_dsname);
-      return(1);		//!!TBD
-      //abortit(1);          // !!!TBD
+      return(1);
     }
     ncnt = rset0->n;
-      rptr = (DRMS_Record_t *)malloc(ncnt * sizeof(DRMS_Record_t));
-      if(rptr == NULL) {
-        printk("Can't malloc() for DRMS_Record_t sort\n");
-        return(1);		//!!TBD
-      }
-      //make opened records sequencial in mem for sort
-      for(i=0; i < ncnt; i++) {
-        memcpy(&rptr[i], rset0->records[i], sizeof(DRMS_Record_t));
-      }
-      //Must sort to get in ascending record # order
-      qsort(rptr, ncnt, sizeof(DRMS_Record_t), &compare_rptr);
+    rptr = (DRMS_Record_t *)malloc(ncnt * sizeof(DRMS_Record_t));
+    if(rptr == NULL) {
+      printk("Can't malloc() for DRMS_Record_t sort\n");
+      return(1);
+    }
+    //make opened records sequencial in mem for sort
+    for(i=0; i < ncnt; i++) {
+      memcpy(&rptr[i], rset0->records[i], sizeof(DRMS_Record_t));
+    }
+    //Must sort to get in ascending record # order
+    qsort(rptr, ncnt, sizeof(DRMS_Record_t), &compare_rptr);
 
-      //this loop is for the benefit of the lev1view dispaly to show
-      //max 12 lev0 records opened
-      for(i=0; i < ncnt; i++) {
-        rs0 = &rptr[i];
-        recnum0 = rs0->recnum;
-        //must get fsn in case got record from last lev1 record
-        fsnx = drms_getkey_int(rs0, "FSN", &rstatus); 
-        fsnarray[i] = fsnx;
-        printk("*0 %u %u\n", recnum0, fsnx);
-      }
+    //this loop is for the benefit of the lev1view dispaly to show
+    //max 12 lev0 records opened
+    for(i=0; i < ncnt; i++) {
+      rs0 = &rptr[i];
+      recnum0 = rs0->recnum;
+      //must get fsn in case got record from last lev1 record
+      fsnx = drms_getkey_int(rs0, "FSN", &rstatus); 
+      fsnarray[i] = fsnx;
+      printk("*0 %u %u\n", recnum0, fsnx);
+    }
 
-    for(i=0; i < ncnt; i++) { 
+    for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
       fsnx = fsnarray[i]; 
@@ -295,11 +336,22 @@ int do_ingest()
       if(!Array0) {
         printk("Can't do drms_segment_read() %s status=%d\n", 
 			open_dsname, rstatus);
-        return(1);              // !!!!TBD ck
+        return(1);
       }
-      short *adata = (short *)Array0->data;
-      memcpy(Img0->dat, adata, 2*MAXPIXELS);
-      drms_free_array(Array0); //must free from drms_segment_read()
+      //short *adata = (short *)Array0->data;
+      //memcpy(Img0->dat, adata, 2*MAXPIXELS);
+      //drms_free_array(Array0); //must free from drms_segment_read()
+      l0l1->adata0 = (short *)Array0->data; //!!TBD free at end
+      l0l1->adata1 = (short *)&data1;
+      l0l1->rs0 = rs0;
+      l0l1->recnum0 = recnum0;
+      l0l1->fsn = fsnx;
+      l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);
+      if(rstatus) {
+        printk("Can't do drms_getkey_int(HIMGCFID) for fsn %u\n", fsnx);
+        return(1); 
+      }
+
 
       sprintf(open_dsname, "%s[%u]", dsout, fsnx);
       //create the lev1 output record
@@ -317,18 +369,17 @@ int do_ingest()
         printk("No drms_segment_lookup(rs, image) for %s\n", open_dsname);
         return(1);
       }
-      rdat = Img1->dat;
       segArray = drms_array_create(DRMS_TYPE_SHORT,
                                        segment->info->naxis,
                                        segment->axis,
-                                       rdat,
+                                       &data1,
                                        &dstatus);
 
       //Now figure out what flat field to use
       t_obs0 = drms_getkey_time(rs0, "t_obs", &rstatus);
       if(rstatus) {
         printk("Can't do drms_getkey_time() for fsn %u\n", fsnx);
-        return(1);              // !!!!TBD ck
+        return(1);
       }
       printk("t_obs for lev0 = %10.5f\n", t_obs0);	//!!TEMP
       sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f ?]", 
@@ -337,8 +388,7 @@ int do_ingest()
       rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF 
       if(!rsetff || (rsetff->n == 0) || rstatus) {
         printk("Can't do drms_open_records(%s)\n", open_dsname);
-        return(1);		//!!TBD
-        //abortit(1);          // !!!TBD
+        return(1);
       }
       fcnt = rsetff->n;
       if(fcnt > 1) {
@@ -348,26 +398,63 @@ int do_ingest()
       drms_record_directory(rsetff->records[0], path, 1);
       if(!*path) {
         printk("***ERROR: No path to segment for %s\n", open_dsname);
-        return(1);		//!!TBD
+        return(1);
       }
-      printf("path to FF = %s\n", path);	//!!TEMP
+      printf("\npath to FF = %s\n", path);	//!!TEMP
 
-      //call_keh_cheng();	//!!TBD
+      darkseg = drms_segment_lookup(rsetff->records[0], "DARK");
+      ArrayDark = drms_segment_read(darkseg, DRMS_TYPE_FLOAT, &rstatus);
+      if(!ArrayDark) {
+        printk("Can't do drms_segment_read() for DARK. status=%d\n", rstatus);
+        return(1);
+      }
+      l0l1->adatadark = (float *)ArrayDark->data; //!!TBD free at end
+
+      badseg = drms_segment_lookup(rsetff->records[0], "BAD_PIXEL");
+      ArrayBad = drms_segment_read(badseg, DRMS_TYPE_INT, &rstatus);
+      if(!ArrayBad) {
+        printk("Can't do drms_segment_read() for BAD_PIXEL. status=%d\n", 
+			rstatus);
+        return(1);
+      }
+      l0l1->adatabad = (int *)ArrayBad->data; //!!TBD free at end
+
+//!!TBD determine the calls to these functions and the right place 
+//to put them...
+      //rdout_mode_correct();	//!!TBD Keh-Cheng
+      //orbit_calc();		//!!TBD Art
+      //sc_pointing();		//!!TBD Keh-Cheng
+
+      l0l1->rs1 = rs;
+      l0l1->rsff = rsetff->records[0];
+      l0l1->recnum1 = rs->recnum;  
+
+      if(rstatus = do_flat(l0l1)) {
+        printk("***ERROR in do_flat() status=%d\n", rstatus);
+        return(1);		//!!TBD what to do?
+      }
 
       dstatus = drms_segment_write(segment, segArray, 0);
       if (dstatus) {
         printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
       }
       recnum1 = rs->recnum;
-      if((dstatus = drms_close_record(rs, DRMS_INSERT_RECORD))) {
+      if(dstatus = drms_close_record(rs, DRMS_INSERT_RECORD)) {
         printk("**ERROR: drms_close_record failed for %s\n", open_dsname);
         return(1);
       }
       printk("*1 %u %u\n", recnum1, fsnx);
+      if((dstatus = drms_close_record(rs0, DRMS_FREE_RECORD))) {
+        printk("**ERROR: drms_close_record failed for %s\n", open_dsname);
+        //return(1);
+      }
       drms_close_records(rsetff, DRMS_FREE_RECORD);
+      free(ArrayDark->data);
+      free(Array0->data);
+      free(ArrayBad->data);
     }
 
-    drms_close_records(rset0, DRMS_FREE_RECORD);
+  //drms_close_records(rset0, DRMS_FREE_RECORD); //now closed in for() loop
   return(0);
 }
 
@@ -436,7 +523,6 @@ void setup()
 // Module main function. 
 int DoIt(void)
 {
-  int wflg = 1;
   char line[80];
 
   if (nice_intro())
@@ -498,13 +584,11 @@ int DoIt(void)
       fprintf(stderr, "**Can't open the log file %s\n", logname);
   }
   setup();
-  while(wflg) {
-    if(do_ingest()) {        // loop to get files from the lev0
-      printk("**ERROR: Some drms error  for %s\n", open_dsname);
-      printf("**ERROR: Some drms error  for %s\n", open_dsname);
-    }
-    //sleep(1);
-    wflg = 0;
+  if(do_ingest()) {        // loop to get files from the lev0
+    printk("**ERROR: Some error after open of %s\n", open_dsname);
+    printf("**ERROR: Some error after open of %s\n", open_dsname);
+    printf("build_lev1 abort\n"); //!!TEMP
+    return(0);
   }
   printf("build_lev1 done\n"); //!!TEMP
   return(0);
