@@ -5640,7 +5640,9 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 		    
 		    if (!error)
 		    {
-			 drms_close_record(rec, DRMS_INSERT_RECORD);
+		      /* write DATE keyword */
+		      drms_keyword_setdate(rec);
+		      drms_close_record(rec, DRMS_INSERT_RECORD);
 		    }
 		    else
 		    {
