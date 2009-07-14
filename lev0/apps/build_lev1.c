@@ -84,11 +84,13 @@ static DRMS_Record_t *rs;
 static DRMS_Record_t *rs0, *rs1, *rsff;
 static DRMS_Record_t *rptr;
 static DRMS_Segment_t *segment;
+static DRMS_Segment_t *segmentff;
 static DRMS_Segment_t *darkseg;
 static DRMS_Segment_t *badseg;
 static DRMS_Array_t *segArray;
 static DRMS_RecordSet_t *rset0, *rset1, *rsetff;
 static DRMS_Array_t *Array0;
+static DRMS_Array_t *Arrayff;
 static DRMS_Array_t *ArrayDark;
 static DRMS_Array_t *ArrayBad;
 static TIME sdo_epoch;
@@ -275,6 +277,7 @@ int do_flat(LEV0LEV1 *info)
    printf("rsff = %lu\n", info->rsff);
    printf("adata0 = %lu\n", info->adata0);
    printf("adata1 = %lu\n", info->adata1);
+   printf("adataff = %lu\n", info->adataff);
    printf("adatadark = %lu\n", info->adatadark);
    printf("adatabad = %lu\n", info->adatabad);
    printf("recnum0 = %lu\n", info->recnum0);
@@ -395,14 +398,23 @@ int do_ingest()
         printk("More than one FF found for %s?\n", open_dsname);
         //return(1);		//!!TBD
       }
-      drms_record_directory(rsetff->records[0], path, 1);
+      rsff = rsetff->records[0];
+      drms_record_directory(rsff, path, 1);
       if(!*path) {
         printk("***ERROR: No path to segment for %s\n", open_dsname);
         return(1);
       }
       printf("\npath to FF = %s\n", path);	//!!TEMP
+      segmentff = drms_segment_lookup(rsff, "file");
+      Arrayff = drms_segment_read(segmentff, DRMS_TYPE_FLOAT, &rstatus);
+      if(!Arrayff) {
+        printk("Can't do drms_segment_read() for Flat Field status=%d\n", 
+			rstatus);
+        return(1);
+      }
+      l0l1->adataff = (float *)Arrayff->data; //!!TBD free at end
 
-      darkseg = drms_segment_lookup(rsetff->records[0], "DARK");
+      darkseg = drms_segment_lookup(rsff, "DARK");
       ArrayDark = drms_segment_read(darkseg, DRMS_TYPE_FLOAT, &rstatus);
       if(!ArrayDark) {
         printk("Can't do drms_segment_read() for DARK. status=%d\n", rstatus);
@@ -410,7 +422,7 @@ int do_ingest()
       }
       l0l1->adatadark = (float *)ArrayDark->data; //!!TBD free at end
 
-      badseg = drms_segment_lookup(rsetff->records[0], "BAD_PIXEL");
+      badseg = drms_segment_lookup(rsff, "BAD_PIXEL");
       ArrayBad = drms_segment_read(badseg, DRMS_TYPE_INT, &rstatus);
       if(!ArrayBad) {
         printk("Can't do drms_segment_read() for BAD_PIXEL. status=%d\n", 
@@ -420,13 +432,13 @@ int do_ingest()
       l0l1->adatabad = (int *)ArrayBad->data; //!!TBD free at end
 
 //!!TBD determine the calls to these functions and the right place 
-//to put them...
+//to put them...   Replaced by do_flat()??
       //rdout_mode_correct();	//!!TBD Keh-Cheng
       //orbit_calc();		//!!TBD Art
       //sc_pointing();		//!!TBD Keh-Cheng
 
       l0l1->rs1 = rs;
-      l0l1->rsff = rsetff->records[0];
+      l0l1->rsff = rsff;
       l0l1->recnum1 = rs->recnum;  
 
       if(rstatus = do_flat(l0l1)) {
@@ -450,6 +462,7 @@ int do_ingest()
       }
       drms_close_records(rsetff, DRMS_FREE_RECORD);
       free(ArrayDark->data);
+      free(Arrayff->data);
       free(Array0->data);
       free(ArrayBad->data);
     }
