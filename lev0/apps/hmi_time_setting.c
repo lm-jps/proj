@@ -98,6 +98,13 @@ if (flg) {	/* AIA */
   int aimshobe = HK_getkey_int(isp, "AIMSHOBE"); /* AIA_IMG_SH_OPEN_BOT_EDGE */
   int aimshotc = HK_getkey_int(isp, "AIMSHOTC"); /* AIA_IMG_SH_OPEN_TOP_CENTR*/
   int aimshote = HK_getkey_int(isp, "AIMSHOTE"); /* AIA_IMG_SH_OPEN_TOP_EDGE */
+  int aicfdl3 = HK_getkey_int(isp, "AICFDL3");
+  int aicfdl4 = HK_getkey_int(isp, "AICFDL4");
+  int nroll = 256*(int)((aimgshce + 273)/2000);
+  float int_time = ((float)(aicfdl4 - aicfdl3 + nroll)*1000)/128.0;
+  if((int)int_time < aimgshce) int_time = int_time + 2000;
+  drms_setkey_float(rec, "INT_TIME", int_time);
+
   double shebc = (aimshcbc - aimshobc)*4.0e-6;
   double shebe = (aimshcbe - aimshobe)*4.0e-6;
   double shetc = (aimshctc - aimshotc)*4.0e-6;
@@ -105,6 +112,7 @@ if (flg) {	/* AIA */
   double offset = ( aimshobc + aimshcbc + aimshobe + aimshcbe +
                     aimshotc + aimshctc + aimshote + aimshcte )/8.0e6;
   if(aimgshce == 0) {			//use pkt time for t_obs
+    drms_setkey_string(rec, "IMG_TYPE", "DARK");
     int axsec = HK_getkey_int(isp, "ATCSISP");
     int axssec = HK_getkey_int(isp, "ATCSSISP");
     if((axsec == DRMS_MISSING_INT) || (axssec == DRMS_MISSING_INT)) {
@@ -121,6 +129,7 @@ if (flg) {	/* AIA */
     }
   }
   else {
+    drms_setkey_string(rec, "IMG_TYPE", "LIGHT");
     t_obs = SDO_to_DRMS_time(aimgots, aimgotss) + offset;
   }
   exptime = (shebc + shebe + shetc + shete)/4.0;
@@ -165,6 +174,7 @@ if (flg) {	/* AIA */
   double offset = ( hshmiclb + hshmiopb + hshmiclm + hshmiopm + hshmiclt + hshmiopt )/6.0e6;
   
   if(hshiexp == 0) {			//use pkt time for t_obs
+    drms_setkey_string(rec, "IMG_TYPE", "DARK");
     int hxsec = HK_getkey_int(isp, "HTCSISP");
     int hxssec = HK_getkey_int(isp, "HTCSSISP");
     if((hxsec == DRMS_MISSING_INT) || (hxssec == DRMS_MISSING_INT)) {
@@ -181,6 +191,7 @@ if (flg) {	/* AIA */
     }
   }
   else {
+    drms_setkey_string(rec, "IMG_TYPE", "LIGHT");
     t_obs = SDO_to_DRMS_time(hobitsec,hobitss) + offset;
   }
   exptime = (sheb + shem + shet)/3.0;
