@@ -27,7 +27,7 @@
 ##get environment variables and initialize variables.
 $hm=$ENV{'HOME'};
 $scriptname="jsoc_make_jsd_file.pl";
-$cvsver="1.3";
+$cvsver="1.5";
 
 #PRODUCTION SETTINGS
 $ENV{'HK_CONFIG_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_config_file";
