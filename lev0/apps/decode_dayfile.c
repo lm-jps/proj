@@ -162,13 +162,15 @@
 #define HKDDF_MAX_PVN_STR        10
 #define HKDDF_MAX_HK_SRC_KW      100
 #define HKDDF_MAX_VERSION_LINES  1000
-#define HKDDF_START_MERGED_PVNW  1
-#define HKDDF_START_MERGED_PVND  194
+#define HKDDF_START_MERGED_PVNW  (1)
+#define HKDDF_START_MERGED_PVND  (194)
 #define HKDDF_MAX_PACKET_NAME    50
-#define HKDDF_MAX_LOOKUP_NAME    50
+#define HKDDF_MAX_LOOKUP_NAME    100
 #define HKDDF_ENVIRONMENT_VARS_NOT_SET  (-1)
+/*#define ENVFILE    "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
+/*#define ENVFILE    "/home/carl/cvs/myprod/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
 #define ENVFILE      "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"
-/*#define ENVFILE      "/home/carl/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
+#define HKDDF_READ_ARRAY_SIZE  (25000001)
 
 /******************** includes ******************************************/
 #include <stdio.h>
@@ -222,7 +224,7 @@ static void get_month_day(int year, int yearday, int *pmonth, int *pday);
 
 /********************* extern functions  *********************************/
 extern SHCIDS_Version_Number *global_shcids_vn;
-extern char * find_file_version_number(GTCIDS_Version_Number *top,char f_version_number[MAX_CHAR_VERSION_NUMBER]);
+extern char * find_file_version_number(GTCIDS_Version_Number *top,char f_version_number[MAX_CHAR_VERSION_NUMBER], int apid);
 extern char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[MAX_SIZE_PKT_DATE],int apid);
 extern double  get_packet_time(unsigned short *word_ptr);
 extern int DoIt(void);
@@ -299,8 +301,6 @@ int nice_intro (void)
  *************************************************************************/
 int DoIt(void)
 {
-/*#define HKDDF_READ_ARRAY_SIZE   6588020*/
-#define HKDDF_READ_ARRAY_SIZE  (25000001)
   /* variables */
   FILE *file_ptr;
   char *hk_df_fn;
@@ -389,6 +389,8 @@ int DoIt(void)
     {
       printkerr("ERROR at %s, line %d: Array for reading dayfile is too small. :"
                 "<%lu>\n", __FILE__,__LINE__, i + 1);
+      printkerr("Break up large dayfile using dd command. :   dd if<large-file> "
+                " of=<small-file-1> bs=<packet_size + 7> count=<i.e., 1000> skip=<0,1,etc>\n");
       return (0);
     }
   }
@@ -859,6 +861,7 @@ void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out
   int apid;
   int factor;
   int packet_length;
+  int pvnw,pvnd;
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
@@ -963,7 +966,7 @@ void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out
     else
     {
       /* get fvn for hk apids add 10-6-2008*/
-      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number); /*added 10-6-2008*/
+      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number,apid); /*added 10-6-2008*/
     }
 
     /* get data name by automatically creating JSVN value based on */
@@ -1072,7 +1075,18 @@ void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out
     write_to_drms( apid, packet_version_number, file_version_number, out, kw_head, in, src );
     /*now print packet time to report*/
     print_packet_time(kw_head);
-    print_hk_src_keyword(in,apid,src);
+
+    /* check if using merged packet version number- if is merged,do not print HK_SOURCE keyword since does not exist */
+    sscanf(packet_version_number,"%3d.%3d",&pvnw, &pvnd);
+    if(check_for_sdo_apid(apid))
+    {
+      print_hk_src_keyword(in,apid,src);
+    }
+    else if(pvnw  ==  HKDDF_START_MERGED_PVNW && pvnd >= HKDDF_START_MERGED_PVND)
+    {
+      print_hk_src_keyword(in,apid,src);
+    }
+    //else skip doing
 
   }/* loop throught next packet and do all packets in file*/
 }/*saveprint_packet_values1*/
@@ -1161,9 +1175,9 @@ int load_ds_names(char* pn, char* didn, int apid, char *pvn)
   }
   else
   { /* else if aia or hmi check packet version to decide lookup file format to use */
-    /* check if using merged lookup filename - used merged if pvn=1.197 then fvn=1.163 */
+    /* check if using merged lookup filename - used merged if for example the pvn=1.197 then fvn=1.163 */
     sscanf(pvn,"%3d.%3d",&pvnw, &pvnd);
-    if(pvnw  <=  HKDDF_START_MERGED_PVNW && pvnd <= HKDDF_START_MERGED_PVND)
+    if(pvnw  <=  HKDDF_START_MERGED_PVNW && pvnd < HKDDF_START_MERGED_PVND)
     {
       sprintf(filename,"%4.4d%s",apid,suffix_filename);
     }
@@ -1222,7 +1236,7 @@ int load_ds_names(char* pn, char* didn, int apid, char *pvn)
         else
         {
           /* check if using merged data series name - used merged if pvn >= 1.197 then fvn >= 1.163 */
-          if(pwn  <=  HKDDF_START_MERGED_PVNW && pdn <= HKDDF_START_MERGED_PVND)
+          if(pwn  <=  HKDDF_START_MERGED_PVNW && pdn < HKDDF_START_MERGED_PVND)
           {
             sprintf(jmap->dsn[k], "%s.%s_%04d_%s", pn, didn, apid, jmap->jvn[k]);
           }
@@ -1368,7 +1382,7 @@ void  save_packet_values2(unsigned char *read_in_buffer, char projname[HKDDF_MAX
     else
     {
       /* get fvn for hk apids add 10-2-2008*/
-      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number); /*added 10-2-2008*/
+      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number,apid); /*added 10-2-2008*/
     }
     strcpy(file_version_number,ptr_fvn);/*move to here -10-2-2008*/
 
@@ -1409,6 +1423,7 @@ void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in,
   int count;
   int factor;
   int packet_length;
+  int pvnw,pvnd;
   unsigned char hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKDDF_MAX_PKT_SIZE];
   unsigned short *word_ptr;
@@ -1510,7 +1525,7 @@ void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in,
     else
     {
       /* get fvn for hk apids */
-      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number);
+      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number,apid);
     }
     strcpy(file_version_number,ptr_fvn);
 
@@ -1620,7 +1635,18 @@ void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in,
     write_to_drms( apid, packet_version_number, file_version_number, data_seriesname, kw_head, in, src );
     /*now print packet time to report*/
     print_packet_time(kw_head);
-    print_hk_src_keyword(in,apid,src);
+
+    /* check if using merged packet version number- if is merged, do not print HK_SOURCE keyword since does not exist */
+    sscanf(packet_version_number,"%3d.%3d",&pvnw, &pvnd);
+    if(check_for_sdo_apid(apid))
+    {
+      print_hk_src_keyword(in,apid,src);
+    }
+    else if(pvnw  ==  HKDDF_START_MERGED_PVNW && pvnd >= HKDDF_START_MERGED_PVND)
+    {
+      print_hk_src_keyword(in,apid,src);
+    }
+    //else skip doing
     
   }/* loop throught next packet and do all packets in file*/
 } /*  saveprint_packet_values2 */
@@ -1773,7 +1799,7 @@ void save_packet_values1(unsigned char *read_in_buffer, char *out, char *in, cha
     else
     {
       /* get fvn for hk apids add 10-6-2008*/
-      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number); /*added 10-6-2008*/
+      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number,apid); /*added 10-6-2008*/
     }
     /* set file version number  */
     strcpy(file_version_number,ptr_fvn);
