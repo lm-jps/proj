@@ -24,7 +24,7 @@
 #############################################################################
 #set environment variables and initialize variables.
 $hm=$ENV{'HOME'};
-$script_version=1.3;
+$script_version=1.4;
 
 # HK environment variable for processing STANFORD file
 $ENV{'HK_STHA_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/fromlmsal";
@@ -42,15 +42,21 @@ $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
 
 #logfile
-$logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq";
+##$logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq";
+$logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq-testfixes";
 
 #setup contants
 use constant NO_PROCESSING =>  0;
 use constant HK_PROCESSING =>  1;
 use constant SDO_PROCESSING => 2;
-use constant MERGED_SERIES_FILE_VERSION_NUMBER => 1.160;
+use constant HMI_AIA_MERGED_SERIES_FVN_DN => 160;
+use constant HMI_AIA_MERGED_SERIES_FVN_WN => 1;
+use constant KERNAL_MERGED_SERIES_FVN_DN  => 161;
+use constant KERNAL_MERGED_SERIES_FVN_WN  => 1;
 use constant MERGED_SERIES => 1;
 use constant NOT_MERGED_SERIES => 0;
+use constant KERNAL_APID => 1;
+use constant NOT_KERNAL_APID => 0;
 
 #display environment variables
 #print "--->make_hkpdf enviroment variables:\n";
@@ -163,6 +169,7 @@ sub get_all_lines($)
   @all_tlm_t=();
   @all_alg_lines=();
   @all_dsc_lines=();
+  @column_table={};
   
   # determine directory and filename to use based on processing  either GODDARD file or STANFORD file
   my($processing_type);
@@ -184,7 +191,7 @@ sub get_all_lines($)
     exit;
   }
 
-  # open either STANFORD file or GODDARD file for processing
+# open either STANFORD file or GODDARD file for processing
   open(FILE, "$dn/$fn") || die "1-Can't Open $fn file: $!\n";
   while (<FILE>)
   {
@@ -204,6 +211,62 @@ sub get_all_lines($)
         push(@all_apids, $s_line[1]) ;
       }
       next;
+    }
+    if ( $s_line[0] eq "SRC")
+    {
+      # strip VER_NUM and KER_VER_NUM lines 
+      # set column_table to use later to set column id in get_column function
+      if((index $_, "KER_VER_NUM") != -1 ) 
+      {
+        @line=split(',',$_);
+        $tmpapid=$line[3];
+        $numapid= hex $tmpapid;
+        if(($numapid <= 31 && $numapid > 0) || ($numapid >= 400 && $numapid < 500))
+        { 
+           $column_table{$numapid}="HMIKER";
+        }
+        elsif(($numapid > 31 && $aid < 63) || ($numapid >= 500 && $numapid < 600))
+        {
+           $column_table{$numapid}="AIAKER";
+        }
+
+      }
+      elsif((index $_, "VER_NUM") != -1 ) 
+      {
+        @line=split(',',$_);
+        $tmpapid=$line[3];
+        $numapid= hex $tmpapid;
+        if(($numapid <= 31 && $numapid > 0) || ($numapid >= 400 && $numapid < 500))
+        {  
+          $column_table{$numapid}="HMI";
+        }
+        elsif(($numapid > 31 && $numapid < 63) || ($numapid >= 500 && $numapid < 600))
+        {
+           $column_table{$numapid}="AIA";
+        }
+        elsif($numapid >= 96 && $numapid < 400)
+        {
+           $column_table{$numapid}="SDO";
+        }
+        elsif($numapid >= 2002 && $numapid <= 2047)
+        {
+           $column_table{$numapid}="SSIM";
+        }
+        else 
+        {
+           $column_table{$numapid}="UNKN";
+        }
+      }
+    }
+    if ( $s_line[0] eq "FITS" )
+    {
+      push(@all_fits_lines, $_) ;
+      next;
+    }
+    if ( $s_line[0] eq "TLM" )
+    {
+      push(@all_tlm_lines, $_) ;
+
     }
     if ( $s_line[0] eq "FITS" )
     {
@@ -345,6 +408,14 @@ sub get_apids_to_do
     @arg_items=split(' ',$arg );
     while (@arg_items)
     {
+      #check size of variable typed in
+      $sv=length($arg_items[0]);
+      if($sv > 5) #new check added 6-23-2009:cc
+      {
+        print "ERROR:Retype in argument for hex apid value for $arg_items[0] using 5 characters! ";
+        print "Exiting script. Retry.\n";
+        exit;
+      }
       push(@all_apids,$arg_items[0] );
       shift @arg_items;
     }
@@ -371,7 +442,7 @@ sub create_hkpdf_filenames($)
     if ($file_line[1] eq "File" && $file_line[2] eq "RCS")
     {
       $version_number=$file_line[6];
-      print "VERSION NUMBER is: $version_number \n";
+      print "DOING VERSION NUMBER : $version_number \n";
       last;
     }
     $i++;
@@ -386,7 +457,7 @@ sub create_hkpdf_filenames($)
     @apid_line=split(',',$all_pkt_lines[$j] );
     if ( hex $apid_line[1] ne  hex $all_apids[$i] )
     {
-      $j++;
+      $j++; #if pkt line does not contain current apid doing go to next pkt line
     }
     else
     {
@@ -397,7 +468,7 @@ sub create_hkpdf_filenames($)
         push(@filenames, sprintf("SDO-%3.3s-version-%s\n",  "ASD", $version_number));
         $i++;
       }
-      elsif(&check_for_merged_version($version_number)) #CC:Add block to handle merge series requirement
+      elsif(&check_for_merged_version($version_number,hex $apid_line[1])) #CC:Add block to handle merge series requirement
       { #checks only for HK version numbers
         #create name of filename for merged series requirements (HMI-ISP-version-1.163,AIA-ISP-version-1.163)
         $a= hex $apid_line[1];
@@ -436,7 +507,6 @@ sub create_hkpdf_filenames($)
           # push these filename to array
           $a= hex $apid_line[1];
           push(@filenames, sprintf("SDO-%3.3s-version-%s\n",  "ASD", $version_number));
-print "filenames is @filenames\n";
         }
         elsif ( hex $apid_line[1] == 540)
         {
@@ -453,13 +523,13 @@ print "filenames is @filenames\n";
           push(@filenames, "");
           print "make_hkpdf.pl:WARNING-Skipping creating HKPDF files for apid. Probably got ISP, SEQ or OBT apids that are duplicates of apid 0x1BD or 0x211, etc . apid is $tmpapid\n";
         }
-        elsif((hex $apid_line[1] < 31  && hex $apid_line[1] > 0) || (hex $apid_line[1] >= 400 && hex $apid_line[1] < 500)) 
+        elsif((hex $apid_line[1] <= 31  && hex $apid_line[1] > 0) || (hex $apid_line[1] >= 400 && hex $apid_line[1] < 500)) 
         {
           # do others hmi apids except isp and seq. using new file format using "HMI"  instead of "apid"
           @apid_line_hex=split('x',$apid_line[1]);
           push(@filenames, sprintf("HMI-%3.3s-version-%s\n",  $apid_line_hex[1], $version_number));
         }
-        elsif((hex $apid_line[1] >= 31 && hex $apid_line[1] < 65 ) || (hex $apid_line[1] >= 500 && hex $apid_line[1] < 600)) 
+        elsif((hex $apid_line[1] > 31 && hex $apid_line[1] < 65 ) || (hex $apid_line[1] >= 500 && hex $apid_line[1] < 600)) 
         {
           # do others aia apids except isp and seq. using new file format using "AIA" instead of "apid"
           @apid_line_hex=split('x',$apid_line[1]);
@@ -471,9 +541,10 @@ print "filenames is @filenames\n";
            print "make_hkpdf.pl:WARNING--Skipping creating HKPDF file for apid. Probably got sim apids or ADP apid. apid is $tmpapid\n";
         }
         $i++;
-      }
+      }#end if merged case
       else
       {
+        # if not merged case use apid-#-version-# filename format
         @apid_line_hex=split('x',$apid_line[1]);
         push(@filenames, sprintf("apid-%3.3s-version-%s\n",  $apid_line_hex[1], $version_number));
         $i++;
@@ -482,10 +553,11 @@ print "filenames is @filenames\n";
     if ( $j eq $pkt_count)
     {
       push(@filenames, sprintf("not-used"));
-        $i++;
-        $j=0;
+      print "WARNING:Entered possible bad value for apid:$all_apids[$i].\n1-Redo execution of script without this apid if apid was incorrectly entered\n2-Remove not-used file from folder which got created.\n3-If good apid, try rerun with this \"apid only\" via make_hkpdf sort=4 apidlist=\"<hex apid value for one apid>\"\n";
+      $i++;
+      $j=0;
     }
-  }
+  }#while loop
 }
 ###############################################################################
 # sub create_hkpdf_files: create files for each apid to do.
@@ -607,7 +679,7 @@ sub create_file_line($)
 sub create_apid_line
 {
   my $find_apid =shift ;#passed in apid array
-  my($i, $p_line, $apidline);
+  my($i, $p_line, $apidline, $colid);
   $i=0;
   while ( $all_pkt_lines[$i] )
   {
@@ -618,50 +690,48 @@ sub create_apid_line
     }
     $i++;
   }
+  # get column id field to use
+  $colid=get_ground_column_value(hex $p_line[1]);
+  $len_colid=length($colid) + 1;
+  $variable_setting=sprintf("%s%d.%d%s","%",$len_colid,$len_colid,"s");
+
   if ( hex $p_line[1] >= 1 && hex $p_line[1] <= 31)
   {
-    $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "HMI", $p_line[5], $p_line[6]); 
+      $apidline=sprintf("%4.4s %5.5s %3.3s  $variable_setting \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], $colid, $p_line[5], $p_line[6]); 
   }
   elsif ( hex $p_line[1] >= 400 && hex $p_line[1] <= 486)
   {
-    #fix APID lines APID value for apid 445,529,etc
-    if(hex $find_apid == 445 || hex $find_apid == 451 || hex $find_apid == 448)
+    #fix APID lines APID value for apid 445,529,448 only if equal or greater than the merged name threshold
+    if((hex $find_apid == 445 || hex $find_apid == 451 || hex $find_apid == 448) && (check_for_merged_version($version_number,hex $find_apid) == MERGED_SERIES ))
     {
-      $apidline=sprintf("%4.4s %3.3s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",&fix_apid_value(hex  $find_apid),$p_line[3], "HMI", $p_line[5], $p_line[6]); 
+      $apidline=sprintf("%4.4s %3.3s %3.3s  $variable_setting  \"%-s\" %8.8s\n","APID",&fix_apid_value(hex  $find_apid),$p_line[3], $colid, $p_line[5], $p_line[6]); 
     }
     else
     {
-      $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "HMI", $p_line[5], $p_line[6]); 
+      $apidline=sprintf("%4.4s %5.5s %3.3s  $variable_setting  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], $colid, $p_line[5], $p_line[6]); 
     }
   }
   elsif ( hex $p_line[1] > 31 && hex $p_line[1] <= 63)
   {
-    $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "AIA", $p_line[5], $p_line[6]); 
+    $apidline=sprintf("%4.4s %5.5s %3.3s  $variable_setting  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], $colid, $p_line[5], $p_line[6]); 
   }
   elsif ( hex $p_line[1] >= 500 && hex $p_line[1] <= 580)
   {
-    if(hex $find_apid == 529 || hex $find_apid == 536 || hex $find_apid == 540)
+    #fix APID lines APID value for apid 529,536,540 only if equal to or greater than  merged name threshold
+    if((hex $find_apid == 529 || hex $find_apid == 536 || hex $find_apid == 540) && (check_for_merged_version($version_number,hex $find_apid) == MERGED_SERIES ))
     {
-      $apidline=sprintf("%4.4s %3.3s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID", &fix_apid_value(hex  $find_apid),$p_line[3], "AIA", $p_line[5], $p_line[6]); 
+      $apidline=sprintf("%4.4s %3.3s %3.3s  $variable_setting  \"%-s\" %8.8s\n","APID", &fix_apid_value(hex  $find_apid),$p_line[3], $colid, $p_line[5], $p_line[6]); 
     }
     else
     {
-      $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "AIA", $p_line[5], $p_line[6]); 
+      $apidline=sprintf("%4.4s %5.5s %3.3s  $variable_setting  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], $colid, $p_line[5], $p_line[6]); 
     }
-  }
-  elsif ( hex $p_line[1] >= 2002 && hex $p_line[1] <= 2047)
-  {
-    $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "SSIM", $p_line[5], $p_line[6]); 
-  }
-  elsif ( hex $p_line[1] >= 96 && hex $p_line[1] <= 399)
-  {
-    $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "SDO", $p_line[5], $p_line[6]); 
   }
   else
   {
-    $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], "UNKN", $p_line[5], $p_line[6]); 
+    # gets either SDO, SSIM or UNKN
+    $apidline=sprintf("%4.4s %5.5s %3.3s  %4.4s  \"%-s\" %8.8s\n","APID",$p_line[1],$p_line[3], $colid, $p_line[5], $p_line[6]); 
   }
-
 
   #$apidline=sprintf("%4.4s %5.5s  %3.3s  %8.8s\n","APID",$p_line[1],$p_line[3], $p_line[6]); 
   print OUTFILE "$apidline";
@@ -704,7 +774,7 @@ sub create_kwd_lines
               &get_conversion_flag ($line[1]);
               &get_keyword_value ($line[1]);
               #handle merge series requirement
-              if(&check_for_merged_version($version_number) || hex $find_apid == 129)
+              if(&check_for_merged_version($version_number, hex $find_apid ) || hex $find_apid == 129)
               {
                 #fix timecode and checksum values 
                 if(substr($line[1],8,8) eq "TIMECODE")
@@ -727,6 +797,7 @@ sub create_kwd_lines
                    }
                    else
                    {
+                     #if  merged version but not a timecode and checksum name then create kwd line using values in Stanford file. 
                      $kwdline[$j]=sprintf("%-3s %-8s  %-40s  %-3s  %-1s  %-2s  %-3s %-1s  %-8s","KWD",$kwd_value,$line[1],$line[4],$line[5],$line[6],$line[7],$conv_value,$line[10]); 
                    }
                 }
@@ -736,7 +807,7 @@ sub create_kwd_lines
                 }
               }
               else
-              {
+              { #if not merged version then do all kwd lines without fixes to timecode and checksum names
                 $kwdline[$j]=sprintf("%-3s %-8s  %-40s  %-3s  %-1s  %-2s  %-3s %-1s  %-8s","KWD",$kwd_value,$line[1],$line[4],$line[5],$line[6],$line[7],$conv_value,$line[10]); 
               }
               push(@apid_kwd_lines, $kwdline[$j]);
@@ -1258,35 +1329,42 @@ sub show_help_info($)
   print "where sort-choice equal to 2 is sort by byte position\n";
   print "where sort-choice equal to 3 is sort by long telem name\n";
   print "where sort-choice equal to 4 is sort by byte and bit position\n";
-  print "************************************\n";
+  print "****************************************\n";
   print "** Note:Currently using option sort=4 **\n";
-  print "************************************\n";
+  print "****************************************\n";
   print "where apidfile is full path and filename containing list of apids to do\n";
   print "where apidlist contains list of apids to do(i.e.,0x1BD 0x081 ).\n";
-  print "where apidlist contains keyword (i.e., ALL, ALL_HK, or ALL_SDO)on apids to do\n";
-  print "***************************************************************\n";
-  print "** Note:Currently use apidlist=ALL_HK or apidlist=ALL_SDO    **\n";
-  print "****************************************************************\n";
+  print "where apidlist contains keyword (i.e., \"ALL\", \"ALL_HK\", or \"ALL_SDO\")on apids to do\n";
+  print "**********************************************************************\n";
+  print "** Note:Currently using apidlist=\"ALL_HK\" or apidlist=\"ALL_SDO\"    **\n";
+  print "**********************************************************************\n";
   if($help_arg eq "HELP")
   {
-    print "(2) Environment variable HK_STHA_DIRECTORY\n";
+    print "(2)  Environment variable HK_STHA_DIRECTORY\n";
     print "(2a) Used to store location of STANFORD_TLM_HMI_AIA.txt file.\n";
-    print "(3) Environment variable HK_STHA_FILE\n";
+    print "(3)  Environment variable HK_STHA_FILE\n";
     print "(3a) Used to store filename of STANFORD_TLM_HMI_AIA.txt file to process.\n";
     print "(3b) This file is input data for this script\n";
-    print "(4) Environment variable HK_CONFIG_DIRECTORY\n";
+    print "(4)  Environment variable HK_CONFIG_DIRECTORY\n";
     print "(4a) Used to store location of hk config files for each apid\n";
     print "(4b) These files are the output for this script.\n";
     print "(4c) The filename format is apid-<apid#>-version-<version#>.\n";
-    print "(5) Environment variable HK_GTS_DIRECTORY\n";
+    print "(4d) Or filename format is HMI-<apid#|name>-version-<version#>.\n";
+    print "(4e) Or filename format is AIA-<apid#|name>-version-<version#>.\n";
+    print "(5)  Environment variable HK_GTS_DIRECTORY\n";
     print "(5a) Used to store location of GODDARD_TLM_SDO.txt file.\n";
-    print "(6) Environment variable HK_GTS_FILE\n";
+    print "(6)  Environment variable HK_GTS_FILE\n";
     print "(6a) Used to store filename of GODDARD_TLM_SDO.txt file to process.\n";
     print "(6b) This file is input data for this script\n";
-    print "(7) Environment variable HK_SH_CONFIG_DIRECTORY\n";
+    print "(7)  Environment variable HK_SH_CONFIG_DIRECTORY\n";
     print "(7a) Used to store location of sdo-hk config files for each apid\n";
     print "(7b) These files are the output for this script.\n";
     print "(7c) The filename format is apid-<apid#>-version-<version#>.\n";
+    print "(8)  Examples:\n";
+    print "(8a) make_hkpdf.pl sort=4 apidlist=\"0x032 0x1C0 0x1DE 0x21C 0x244\"\n";
+    print "(8b) make_hkpdf.pl sort=4 apidlist=\"ALL_HK\"\n";
+    print "(8c) make_hkpdf.pl sort=4 apidlist=\"0x032\"\n";
+    print "(8d) make_hkpdf.pl sort=4 apidlist=\"ALL\"\n";
   }
   exit;
 }
@@ -1487,18 +1565,119 @@ sub fix_apid_value($,$)
 ###############################################################################
 # sub check_for_merged_version
 ###############################################################################
-sub check_for_merged_version($)
+sub check_for_merged_version($,$)
 {
   # pass arguments
   my $ver= $_[0];
+  my $aid= $_[1];
 
-  if($ver >= MERGED_SERIES_FILE_VERSION_NUMBER)
+  #split file version number into whole number(WN) and decimal number(DN) for comparing below
+  if (length($ver) > 4)
   {
-    return(MERGED_SERIES); #return(MERGE-FLAG)
+    $format="%1.3f";
   }
   else
   {
-    return(NOT_MERGED_SERIES)
+    $format="%1.2f";
+  }
+  $str_ver= sprintf("$format",$ver);
+  #print "$str_ver\n";
+  @s_str_ver=split('\.', $str_ver);
+
+  # if apid packet is KERNAL type which is has KER_VER_NUM value in keywords then do this
+  # check using this constant if merge-series
+  if (check_for_kernal_apid($aid) == KERNAL_APID)
+  {
+    if( $s_str_ver[1] >= KERNAL_MERGED_SERIES_FVN_DN)
+    {
+      return(MERGED_SERIES); #return(MERGE-FLAG)
+    }
+    else
+    {
+      return(NOT_MERGED_SERIES)
+    }
+  }
+  else
+  {
+
+    # this apid packet is probably a HK HMI or HK AIA type so check using this merged constant value
+    if(  $s_str_ver[1] >= HMI_AIA_MERGED_SERIES_FVN_DN )
+    {
+      return(MERGED_SERIES); #return(MERGE-FLAG)
+    }
+    else
+    {
+      return(NOT_MERGED_SERIES)
+    }
   }
 }
+###############################################################################
+# sub check_for_kernal_apid
+###############################################################################
+sub check_for_kernal_apid($)
+{
+  # pass arguments
+  my $aid= $_[0];
 
+  if($aid == 5 || $aid == 18 || $aid == 37 || $aid == 50 ||
+     $aid == 448 || $aid == 478 || $aid == 540 || $aid == 580 )
+  {
+    return(KERNAL_APID); #return(MERGE-FLAG)
+  }
+  else
+  {
+    return(NOT_KERAL_APID)
+  }
+}
+###############################################################################
+# sub get_ground_column_value
+###############################################################################
+sub get_ground_column_value($)
+{
+  # pass arguments
+  my $aid= $_[0];
+  my $lookup_str=$column_table{$aid};
+
+  if($lookup_str eq "HMI" || $lookup_str eq "AIA")
+  {
+    #use table to filter out KER packets and set column_id to KER
+    return($lookup_str); 
+  }
+  elsif($lookup_str eq "AIAKER" || $lookup_str eq "HMIKER")
+  {
+    #use table to filter out KER packets and set column_id to KER
+    if(($aid <= 31 && $aid > 0) || ($aid >= 400 && $aid < 500))
+    {
+      return("HMIKER");
+    }
+    elsif(($aid > 31 && $aid < 63) || ($aid >= 500 && $aid < 600))
+    {
+      return("AIAKER");
+    }
+
+    return($lookup_str); 
+  }
+  else
+  {
+    if(($aid <= 31 && $aid > 0) || ($aid >= 400 && $aid < 500))
+    {
+      return("HMI");
+    }
+    elsif(($aid > 31 && $aid < 63) || ($aid >= 500 && $aid < 600))
+    {
+      return("AIA");
+    }
+    elsif($aid >= 96 && $aid < 400)
+    {
+      return("SDO");
+    }
+    elsif($aid >= 2002 && $aid <= 2047)
+    {
+      return("SSIM");
+    }
+    else 
+    {
+      return("UNKN");
+    }
+  }
+}
