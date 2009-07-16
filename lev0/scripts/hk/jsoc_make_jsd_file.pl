@@ -75,6 +75,7 @@ if($ffp == 1)
 # (4) loop thru all HKPDF file and create a Prelim or Final JSD files for each apid in HKPDF file
 # (4a)get list of apid to do
 (@apidslist)=&get_list_apids_to_do($ptf, $dncf, $file_version_number);
+print "@apidslist\n";
 
 # (4b)start loop thru each HKPDF file checking which apids to process
 foreach $file ( @fn_list)
@@ -98,6 +99,7 @@ foreach $file ( @fn_list)
     # if apid not in list skip creating jsd
     if ($foundflg == 0)
     {
+      print "Warning:skipping $currapid because not in list of packets-probably because no VER_NUM field in packet.\n";
       next;#skip doing
     }
   }
@@ -153,7 +155,9 @@ foreach $file ( @fn_list)
   }
 
 # (5) get all lines in HKPDF hk or sdo configuration files for this apid
+print "1--before get all lines:$dncf $file\n";
   ($apid_value)=&get_all_lines($dncf, $file);
+print "apid returned for get all lines:$apid_value\n";
 
 # (6) get packet version number or packet date based on file version number used for HK config files 
   if ($ptf == SDO_PROCESSING_TYPE)
@@ -353,6 +357,19 @@ sub get_packet_version_number($)
             last;
           }
         }
+        elsif( $sys_value eq "aiaker" || $sys_value eq "hmiker") 
+        {
+          #if hmi get ker from field 5
+          if ( $s_line[13] eq $fvnArg)
+          {
+            $pvn = $s_line[5];
+            $stha_ci_date = $s_line[0];
+            $stha_ci_time = $s_line[1];
+            $stha_gen_time = $s_line[15];
+            $foundfvn = 1;
+            last;
+          }
+        }
         elsif( $sys_value eq "ssim" ) 
         {
           if ( $s_line[13] eq $fvnArg)
@@ -367,7 +384,7 @@ sub get_packet_version_number($)
         }
         else
         {
-           print "Warning:jsoc_make_jsd_file.pl: $sys_value is not hmi,aia, or ssim. Check setting.\n";
+           print "Warning:jsoc_make_jsd_file.pl: $sys_value is not hmi, aia, sdo, ker or ssim. Check setting.\n";
            $foundfvn = 0;
         }
       }#big else
@@ -459,11 +476,11 @@ sub get_all_lines($$)
         {
            $apid = "0x218"; #dec value 536
         }
-        elsif ($apid eq "OBT" && $s_line[3] eq "HMI")
+        elsif ($apid eq "OBT" && $s_line[3] eq "HMIKER")
         {
            $apid = "0x1C0"; #dec value 448
         }
-        elsif ($apid eq "OBT" && $s_line[3] eq "AIA")
+        elsif ($apid eq "OBT" && $s_line[3] eq "AIAKER")
         {
            $apid = "0x21C"; #dec value 540
         }
@@ -528,7 +545,19 @@ sub create_jsd_file($$)
   }
 
   # use environment to set or use arguments(-n<namespace> -i<identifer> ) to set
-  $jsd_namespace = sprintf("%s%s", $sys_value,"");
+  if( $sys_value eq "hmi" || $sys_value eq "aia" ||  $sys_value eq "ssim" ||  $sys_value eq "sdo") 
+  {
+    $jsd_namespace = sprintf("%s%s", $sys_value,"");
+  }
+  elsif($sys_value eq "aiaker" || $sys_value eq "hmiker")
+  {
+    $jsd_namespace = sprintf("%3.3s%s",  $sys_value,"");
+  }
+  else
+  {
+    $jsd_namespace = sprintf("%s%s", $sys_value,"");
+  }
+
   $jsd_identifier = "lev0";
   $author="production";
   $owner="production";
@@ -548,6 +577,11 @@ sub create_jsd_file($$)
     $retention= "60";
   }
   elsif ( $sys_value eq "sdo")
+  {
+    $tapegroup= "0";
+    $retention= "60";
+  }
+  elsif ( $sys_value eq "aiaker" || $sys_value eq "hmiker")
   {
     $tapegroup= "0";
     $retention= "60";
@@ -628,6 +662,8 @@ sub create_jsd_file($$)
     elsif ($p_ptf == HK_PROCESSING_TYPE)
     {
       # create file name for preliminary jsd files used for creating jsn map files.
+print  substr($apid_value,2,4);
+print "\n";
       $jsd_fn= sprintf("%s.%s_%-04.4d_%-03.3d%-03.3d",$jsd_namespace,$jsd_identifier,hex  substr($apid_value,2,4), $pvn_wn,$pvn_dn);
     }
     # get directory to write jsd file
@@ -955,6 +991,7 @@ sub check_apid_list ($)
   # get arguments passed
   $capid = $_[0];
   @alist=@apidslist; #set alist to global array apidslist
+#print "alist is  @alist\n";
 
   $ff=0;
   foreach $item (@alist)
@@ -1038,8 +1075,17 @@ sub get_list_apids_to_do($$$)
       $aiafiles =~ s/SEQ/218/g;
       $aiafiles =~ s/OBT/21C/g;
 
+      #get oldfiles format for KER type files-this case occurs only for fvn 1.160 where formats are mixed.
+      $oldfiles=`cd $dn;  egrep '(VER_NUM|VER_TEMPERATURE)' apid*`;
+      # remove apid text regular expression
+      $oldfiles =~ s/(a.+?-)//g;
+      # remove everything from after apid number to end of line regular expression
+      $oldfiles =~ s/(-.+?\n)/ /g;
+      print "oldfiles forgot= $oldfiles\n";
+
       #put both aia and hmi lists together
-      $files=sprintf("%s%s", $hmifiles,$aiafiles);
+      $files=sprintf("%s%s%s", $hmifiles,$aiafiles, $oldfiles);
+      print "files = <$files>\n";
     }
     else
     {
