@@ -470,6 +470,10 @@ sub get_list_hkpdf_filename($$)
         {
           $currapid="218"; 
         }
+        elsif(substr($filename,0,7) eq "AIA-OBT")
+        {
+          $currapid="21C"; 
+        }
         elsif(substr($filename,0,7) eq "HMI-ISP")
         {
           $currapid="1BD"; 
@@ -477,6 +481,10 @@ sub get_list_hkpdf_filename($$)
         elsif(substr($filename,0,7) eq "HMI-SEQ")
         {
           $currapid="1C3"; 
+        }
+        elsif(substr($filename,0,7) eq "HMI-OBT")
+        {
+          $currapid="1C0"; 
         }
         elsif(substr($filename,0,7) eq "SDO-ASD")
         {
@@ -723,7 +731,7 @@ sub get_date
 #############################################################################
 sub get_gtcids_lookup_column
 {
-  if($apid == 5 || $apid == 37 || $apid == 435 || $apid == 465 || $apid == 537 || $apid == 567)
+  if($apid == 5 || $apid == 37 || $apid == 448 || $apid == 478 || $apid == 540 || $apid == 580 ||  $apid == 18 ||  $apid == 50 ||  $apid == 580 || $apid == 537  || $apid == 550 || $apid == 567 || $apid == 527 ||  $apid == 435 ||  $apid == 465)
   {
     $columnid ="KERNAL_ID";
     print "WARNING:jsoc_do_jsvn_map_file.pl: using columnid KERNAL_ID in GROUND file for apid:$apid\n";
@@ -1075,11 +1083,19 @@ sub check_dup_merged_apid($)
   {
     return(1);
   }
+  elsif ($apid == 478  || $apid == 18) #dup HMI OBT
+  {
+    return(1);
+  }
   elsif ($apid == 569  || $apid == 39) #dup AIA ISPs
   {
     return(1);
   }
   elsif ($apid == 576  || $apid == 46) #dup AIA ISPs
+  {
+    return(1);
+  }
+  elsif ($apid == 580  || $apid == 50) #dup AIA OBTs
   {
     return(1);
   }
