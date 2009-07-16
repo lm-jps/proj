@@ -35,14 +35,18 @@
 #define MAXLINE_DCON_IN_FILE    200
 #define MAX_VALUE_DSC           100
 #define MAX_NUMBER_COFFICIENTS  6
+#define HMIKER_ID_TYPE          "HMIKER"
+#define AIAKER_ID_TYPE          "AIAKER"
 #define HMI_ID_TYPE             "HMI"
 #define AIA_ID_TYPE             "AIA"
 #define OTHER_ID_TYPE           "SSIM"
 #define MAX_PACKET_ID_TYPE      100
 #define HK_MAX_TLM_NAME         200
+#define HK_LR_HMI_KER_TELEM     5
 #define HK_LR_HMI_ISP           29
 #define HK_LR_HMI_SEQ           21
 #define HK_LR_HMI_OBT           18
+#define HK_LR_AIA_KER_TELEM     37
 #define HK_LR_AIA_ISP           39
 #define HK_LR_AIA_SEQ           46
 #define HK_LR_AIA_OBT           50
@@ -59,6 +63,14 @@
 #define HK_HSB_AIA_SEQ_2        576
 #define HK_HSB_AIA_OBT_1        540
 #define HK_HSB_AIA_OBT_2        580
+#define HK_LR_HMI_LRANGE        1
+#define HK_LR_HMI_HRANGE        31
+#define HK_HSB_HMI_LRANGE       400
+#define HK_HSB_HMI_HRANGE       499
+#define HK_LR_AIA_LRANGE        32
+#define HK_LR_AIA_HRANGE        64
+#define HK_HSB_AIA_LRANGE       500
+#define HK_HSB_AIA_HRANGE       599
 
 
 /*************************typedef structures**********************************/
@@ -157,6 +169,7 @@ typedef  struct GTCIDS_Version_Number_struct
   char file_version_number[MAX_CHAR_VERSION_NUMBER];
   char hmi_id_version_number[MAX_CHAR_VERSION_NUMBER];
   char aia_id_version_number[MAX_CHAR_VERSION_NUMBER];/*Values in GTCIDS map file */
+  char ker_id_version_number[MAX_CHAR_VERSION_NUMBER];/*Values in GTCIDS map file */
   char change_date[MAX_SIZE_CHANGE_DATE];
   char change_time[MAX_SIZE_CHANGE_TIME];
   struct GTCIDS_Version_Number_struct  *next;
