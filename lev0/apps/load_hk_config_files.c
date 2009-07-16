@@ -80,7 +80,7 @@ void load_gtcids_data( GTCIDS_Version_Number* top_ptr_gtcids_data,
                        APID_Pointer_HK_Configs *top_apid_ptr_hk_configs);
 int check_for_sdo_apid(int apid);
 void deallocate_apid_hkpfd_files_nodes(APID_HKPFD_Files *top_ptr_apid_hkpfd_files_ptr) ;
-char * find_file_version_number(GTCIDS_Version_Number *top,char p_version_number[MAX_CHAR_VERSION_NUMBER]);
+char * find_file_version_number(GTCIDS_Version_Number *top,char p_version_number[MAX_CHAR_VERSION_NUMBER], int apid);
 char * find_fvn_from_shcids(SHCIDS_Version_Number *top,char pkt_date[MAX_SIZE_PKT_DATE],int apid);
 /***************************** global variables ******************************/
 APID_Pointer_HK_Configs *global_apid_configs;
@@ -131,7 +131,7 @@ int load_all_apids_hk_configs(int apid, char version_number[MAX_CHAR_VERSION_NUM
   else
   {
     /* Check for file version number in ground to code ids file */
-    ptr_fvn=find_file_version_number(top_ptr_gtcids_data, version_number);
+    ptr_fvn=find_file_version_number(top_ptr_gtcids_data, version_number, apid);
   }
 
   /* load HK_Config_Files structures for each apid */
@@ -568,7 +568,7 @@ int save_hdpf_new_formats(FILE* file_ptr,APID_Pointer_HK_Configs *p_apid_ptr_hk_
     else if (!strncmp(line, "APID", 4))
     {
       /* parse APID line in HK Config file */
-      if( strstr(line, "HMI")  )
+      if( strstr(line, "HMIKER")  )
       {
         /* new-load apid_name in struct for pkt string name*/ 
         sscanf( line,"%*s %s %d %s %s", 
@@ -576,7 +576,24 @@ int save_hdpf_new_formats(FILE* file_ptr,APID_Pointer_HK_Configs *p_apid_ptr_hk_
                 &(ptr_config_node->number_bytes_used), 
                 ptr_config_node->packet_id_type, 
                 ptr_config_node->date);
-
+      }
+      else if( strstr(line, "AIAKER")  )
+      {
+        /* new-load apid_name in struct for pkt string name*/ 
+        sscanf( line,"%*s %s %d %s %s", 
+                ptr_config_node->apid_name, 
+                &(ptr_config_node->number_bytes_used), 
+                ptr_config_node->packet_id_type, 
+                ptr_config_node->date);
+      }
+      else if( strstr(line, "HMI")  )
+      {
+        /* new-load apid_name in struct for pkt string name*/ 
+        sscanf( line,"%*s %s %d %s %s", 
+                ptr_config_node->apid_name, 
+                &(ptr_config_node->number_bytes_used), 
+                ptr_config_node->packet_id_type, 
+                ptr_config_node->date);
       }
       else if( strstr(line, "AIA") )
       {
@@ -1091,9 +1108,10 @@ GTCIDS_Version_Number * read_gtcids_hk_file()
       /*STANFORD_TLM_HMI_AIA values  are in 7th column*/
       /*Assume always above, otherwise more code required here*/
       sscanf( line,
-	      "%s %s |%*s | %*s | %s | %s | %*s | %s | %*s",
+	      "%s %s |%*s | %s | %s | %s | %*s | %s | %*s",
 	      ptr_gtcids_vn->change_date, 
 	      ptr_gtcids_vn->change_time, 
+	      ptr_gtcids_vn->ker_id_version_number,
 	      ptr_gtcids_vn->hmi_id_version_number,
 	      ptr_gtcids_vn->aia_id_version_number,
 	      ptr_gtcids_vn->file_version_number);
@@ -1152,6 +1170,16 @@ void load_gtcids_data( GTCIDS_Version_Number* top_ptr_gtcids_data,
           {
 	     strcpy(tmp_ptr_hk_configs->parameter_version_number,
 		 tmp_ptr_gtcids_data->aia_id_version_number);
+          }
+          else if(!strcmp(tmp_ptr_hk_configs->packet_id_type, AIAKER_ID_TYPE))
+          {
+	     strcpy(tmp_ptr_hk_configs->parameter_version_number,
+		 tmp_ptr_gtcids_data->ker_id_version_number);
+          }
+          else if(!strcmp(tmp_ptr_hk_configs->packet_id_type, HMIKER_ID_TYPE))
+          {
+	     strcpy(tmp_ptr_hk_configs->parameter_version_number,
+		 tmp_ptr_gtcids_data->ker_id_version_number);
           }
           else
           {  /*default set to HMI type */
@@ -1279,7 +1307,7 @@ HK_Config_Files*  reread_all_files(APID_Pointer_HK_Configs *apid_ptr_configs,
   else
   {
     /* find file version number directory to read in files */
-    ptr_fvn=find_file_version_number(ptr_gtcids_data, version_number);
+    ptr_fvn=find_file_version_number(ptr_gtcids_data, version_number, apid);
 #ifdef DEBUG_LOAD_HK_CONFIG_FILE
     printkerr("DEBUG:Message at %s, line %d: Rereading config files and gtcids file to find file version:<%s> apid:<%d>\n", __FILE__, __LINE__,ptr_fvn, apid);
 #endif
@@ -1352,16 +1380,34 @@ HK_Config_Files*  reread_all_files(APID_Pointer_HK_Configs *apid_ptr_configs,
  *             
  * Status find_file_version_number(): Coded and Tested
  *****************************************************************************/
-char * find_file_version_number(GTCIDS_Version_Number *top, char p_version_number[MAX_CHAR_VERSION_NUMBER])
+char * find_file_version_number(GTCIDS_Version_Number *top, char p_version_number[MAX_CHAR_VERSION_NUMBER],int aid)
 {
   /*declarations*/
   GTCIDS_Version_Number  *tmp_ptr;
 
   for(tmp_ptr=top;tmp_ptr;tmp_ptr=tmp_ptr->next)    
   {
-    if( !strcmp(tmp_ptr->hmi_id_version_number, p_version_number)) 
+    /* if aid is KERNAL type then lookup packet version number using KER_ID column in gtcids file */
+    if (aid == HK_HSB_HMI_OBT_1 || aid == HK_HSB_HMI_OBT_2 || aid == HK_HSB_AIA_OBT_1 || aid == HK_HSB_AIA_OBT_2 || aid == HK_LR_AIA_OBT || aid == HK_LR_HMI_OBT || aid == HK_LR_HMI_KER_TELEM  || aid == HK_LR_AIA_KER_TELEM)
     {
-      return tmp_ptr->file_version_number;
+      if( !strcmp(tmp_ptr->ker_id_version_number, p_version_number)) 
+      {
+        return tmp_ptr->file_version_number;
+      }
+    }
+    else if ((aid >= HK_HSB_HMI_LRANGE && aid <= HK_HSB_HMI_HRANGE )  || (aid >= HK_LR_HMI_LRANGE && aid <= HK_LR_HMI_HRANGE))
+    {
+      if( !strcmp(tmp_ptr->hmi_id_version_number, p_version_number)) 
+      {
+        return tmp_ptr->file_version_number;
+      }
+    }
+    else if ((aid >= HK_HSB_AIA_LRANGE && aid <= HK_HSB_AIA_HRANGE )  || (aid >= HK_LR_AIA_LRANGE && aid <= HK_LR_AIA_HRANGE))
+    {
+      if( !strcmp(tmp_ptr->aia_id_version_number, p_version_number)) 
+      {
+        return tmp_ptr->file_version_number;
+      }
     }
   } /* End-for  */
   return ("");
@@ -1451,7 +1497,7 @@ SHCIDS_Version_Number * read_shcids_hk_file()
  * Module Name: find_fvn_from_shcids()
  * Description: Gets  file version number based on packet time
  *             
- * Status find_file_version_number(): Coded and unTested
+ * Status find_fvn_from_shcids(): Coded and Tested
  *****************************************************************************/
 char * find_fvn_from_shcids(SHCIDS_Version_Number *top, char p_date[MAX_SIZE_PKT_DATE], int apid)
 {
