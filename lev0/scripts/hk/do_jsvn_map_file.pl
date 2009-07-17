@@ -34,14 +34,14 @@
   ##get environment variables and initialize variables.
   $hm=$ENV{'HOME'};
   $ENV{'HK_CONFIG_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_config_file";
-  $ENV{'HK_JSD_PRELIM_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_prelim_file";
-  $ENV{'HK_JSVN_MAP_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsn_map_file";
+  $ENV{'HK_JSD_PRELIM_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsd_prelim_file/prod";
+  $ENV{'HK_JSVN_MAP_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod";
   $ENV{'HK_GTCIDS_FILE'}="gtcids.txt";
   $ENV{'HK_APID_LIST_DAY_FILES'}="$hm/EGSE/script/hk_data/hk_apid_list_day_files";
 
   #common setting for all environments
   $ENV{'MAILTO'}="";
-  $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
+  $script_dir="$hm/cvs/myprod/JSOC/proj/lev0/scripts/hk";
   $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
 
   #get list of initial jsoc definition files to use
@@ -85,9 +85,10 @@
       @jsvn_name = "";
       $jsvn = 1;
       #get hash key from prelim jsd filename's packet version number
-      @s_fn= split /\_/, $apidfile;#assume hmi_ground.0001_001032
-      $d = substr($s_fn[3],3,3);
-      $w = substr($s_fn[3],2,1);
+      #@s_fn= split /\_/, $apidfile;#assume hmi_ground.0001_001032
+      @s_fn= split /\_/, $apidfile;#assume hmi.lev0_0001_001032
+      $d = substr($s_fn[2],3,3);
+      $w = substr($s_fn[2],2,1);
       $hashkey= sprintf("%s.%d",  $w, $d); #hash key is 1.32
       #set first hash key to 1.
       $jsvn_ht{$hashkey}=1;
@@ -98,8 +99,8 @@
         $comparefile=shift(@list);
         #get packet version number to use as hash key in hash table
         @s_fn= split /\_/, $comparefile;#assume hmi_ground.0001_001032
-        $d = substr($s_fn[3],3,3);
-        $w = substr($s_fn[3],2,1);
+        $d = substr($s_fn[2],3,3);
+        $w = substr($s_fn[2],2,1);
         $hashkey= sprintf("%s.%d",  $w, $d); #use 1.32 as hash key 
         # check if there is another file to compare with
         if ( $comparefile eq "" )
@@ -365,7 +366,8 @@ sub get_date
 #############################################################################
 sub get_gtcids_lookup_column
 {
-  if($apid == 5 || $apid == 37 || $apid == 435 || $apid == 465 || $apid == 537 || $apid == 567)
+  ##if($apid == 5 || $apid == 37 || $apid == 435 || $apid == 465 || $apid == 537 || $apid == 567)
+  if($apid == 5 || $apid == 37 || $apid == 50 || $apid == 18 || $apid == 540 || $apid == 580 || $apid == 448 || $apid == 478)
   {
     $columnid ="KERNAL_ID";
   }
@@ -441,6 +443,10 @@ sub get_gtcids_lines
       @s_pvn = split /\./,  $str_pvn;
       # start adding lines from file version 1.32
       if ( int $s_fvn[1] < 32)
+      {
+        next; #skip
+      }
+      elsif ( int $s_pvn[1] > 193)
       {
         next; #skip
       }
