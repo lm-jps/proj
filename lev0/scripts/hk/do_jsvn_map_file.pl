@@ -41,7 +41,7 @@
 
   #common setting for all environments
   $ENV{'MAILTO'}="";
-  $script_dir="$hm/cvs/myprod/JSOC/proj/lev0/scripts/hk";
+  $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
   $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
 
   #get list of initial jsoc definition files to use
