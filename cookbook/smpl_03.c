@@ -1,13 +1,14 @@
 /*
  *  smpl_03.c						$DRMS/proj/cookbook/
  *
- *  Prints the number of unique records in the selected data series, and
- *    the defined number of data segments per record for the series
- *  Illustrates features of the DRMS_Record struct, and concept of uniqueness
- *    for DRMS records
+ *  Prints a list of the series names known to DRMS, with record counts
+ *    for each
+ *  Illustrates the connection to the DRMS database and ways that SQL
+ *    queries can be directly run and the results analyzed at the lowest
+ *    level of the DRMS API
  *
  *  Usage:
- *    smpl_03 ds= ...
+ *    smpl_03 [nmax= ...]
  *
  *  Revision history is at end of file.
  */
@@ -19,43 +20,46 @@ char *version_id = "1.0";
 #include <regex.h>
 
 ModuleArgs_t module_args[] = {
-  {ARG_STRING,	"ds", "", "name of data series"},
+  {ARG_INT,	"nmax",	"100", "maximum number of series to be listed"},
   {ARG_END}
 };
 
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
-  DB_Text_Result_t *qres;
-  DRMS_Record_t *record;
-  regmatch_t pmatch[10];
+  DB_Text_Result_t *qres, *sqres;
   int series, seriesct;
-  int status = 0;
   char query[DRMS_MAXQUERYLEN];
 
-  char *ds = params_get_str (params, "ds");
+  int nmax = params_get_int (params, "nmax");
+  	/*  Query the database to get all series names from the master list  */
+  sprintf (query, "select seriesname from %s()", DRMS_MASTER_SERIES_TABLE);
+  if ((qres = drms_query_txt (drms_env->session, query)) == NULL) {
+    fprintf (stderr, "Cant find DRMS\n");
+    return 1;
+  }
+  seriesct = qres->num_rows;
+  printf ("%d series found", seriesct);
+  if (seriesct > nmax) {
+    seriesct = nmax;
+    printf (" (only the first %d will be listed)", seriesct);
+  }
+  printf ("\n");
 
-  record = drms_template_record (drms_env, ds, &status);
-  if (record && !status) {
-    if (record->seriesinfo->pidx_num) {
-      char qry[1024];
-      sprintf (query, "select %s from %s group by %s",
-	  (record->seriesinfo->pidx_keywords[0])->info->name, ds,
-	  (record->seriesinfo->pidx_keywords[0])->info->name);
-      for (int i=1; i<record->seriesinfo->pidx_num; i++) {
-	sprintf (qry, ", %s",
-	    (record->seriesinfo->pidx_keywords[i])->info->name);
-	strcat (query, qry);
-      }
-      if ((qres = drms_query_txt (drms_env->session, query))) {
-	printf ("%s contains %d unique records", ds, qres->num_rows);
-	db_free_text_result (qres);
-      }
-    } else printf ("%s: no records found", ds);
-    printf (", with %d data segment(s) per record\n", record->segments.num_total);
-    drms_free_record (record);
-  } else printf ("%s: no such series\n", ds);
+  for (series = 0; series < seriesct; series++) {
+    char *seriesname = qres->field[series][0];
+    printf ("%s\t", seriesname);
+    sprintf (query, "select count (recnum) from %s", seriesname);
+       /*  Query the database to get the record count from the series table  */
+			  /*  (every data series must have a "recnum" field) */
+    if (sqres = drms_query_txt (drms_env->session, query)) {
+      printf ("%s", sqres->field[0][0]);
+      db_free_text_result (sqres);
+    } else printf ("?");
+    printf ("\n");
+  }
 
-  return status;
+  db_free_text_result (qres);
+  return 0;
 }
 
 /*
