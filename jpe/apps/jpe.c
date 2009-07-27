@@ -2043,8 +2043,8 @@ KEY *form_arg_data_out(PSERVER *sptr, argument *arg)
   int seriesnum, jcnt, k;
   int jix = 0;
 
-  //printf("\n*****The sptr->map_list at the start of form_arg_data_out is:\n");
-  //keyiterate(printkey, sptr->map_list);
+  printf("\n*****The sptr->map_list at the start of form_arg_data_out is:\n");
+  keyiterate(printkey, sptr->map_list);
 
   xlist=newkeylist();
   add_keys(sptr->map_list, &xlist);
@@ -2090,14 +2090,15 @@ KEY *form_arg_data_out(PSERVER *sptr, argument *arg)
       //NOTE: some map files have mdi_rec hard coded w/o a {dbase} term
       //find any of these and fix them. The need for this will go away
       //when we eventually set /soidata/info -> /SUM0/PAS
-      cptr = getenv("mdi_rec");	
-      if(cptr2 = strstr(cptr, "/soidata/info")) { 
-        ccnt = (cptr2-cptr)+1;
-        snprintf(newmdirec, ccnt, "%s", cptr);
-        strcat(newmdirec, "{dbase}/info");
-        strcat(newmdirec, cptr2+13);
-        sprintf(ext, "%s_%d_rule", arg->key, i);
-        setkey_str(&xlist, ext, newmdirec);
+      if(cptr = getenv("mdi_rec")) {
+        if(cptr2 = strstr(cptr, "/soidata/info")) { 
+          ccnt = (cptr2-cptr)+1;
+          snprintf(newmdirec, ccnt, "%s", cptr);
+          strcat(newmdirec, "{dbase}/info");
+          strcat(newmdirec, cptr2+13);
+          sprintf(ext, "%s_%d_rule", arg->key, i);
+          setkey_str(&xlist, ext, newmdirec);
+        }
       }
       setkey_str(&xlist, dbasekey, "/SUM0/PAS");
           //!!!TEMP
