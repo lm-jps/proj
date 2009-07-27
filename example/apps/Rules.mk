@@ -50,8 +50,8 @@ OBJUSEF_$(d)	:= $(MODEXE_USEF_SOCK_$(d):%_sock=%.o)
 # .o files that depend on fdrms.mod - the interface to the Fortran versions of DRMS
 OBJF_$(d)	:= $(FMODEXE_SOCK_$(d):%_sock=%.o) $(FMODEXE_GONG_$(d):%_sock=%.o)
 
-
-DEP_$(d)	:= $(OBJ_$(d):%=%.d) $(OBJUSEF_$(d):%=%.d) $(OBJF_$(d):%=%.d)
+# Dependency generation via the compiler doesn't work for Fortran compilers, so skip $(OBJ_F$(d))
+DEP_$(d)	:= $(OBJ_$(d):%=%.d) $(OBJUSEF_$(d):%=%.d) 
 
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
