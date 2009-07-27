@@ -10,7 +10,7 @@ DLIBS = $(LIBD) -ldrms -lpq -lz -lpthread -lcfitsio -lm
 .SECONDEXPANSION:
 
 # simple modules, no extra libraries
-MODS =        smpl_00 smpl_01 smpl_02 smpl_03
+MODS =        smpl_00 smpl_01 smpl_02 smpl_03 smpl_04
 
 FPLS =	$(addprefix $(DEST)/, $(MODS))
 
