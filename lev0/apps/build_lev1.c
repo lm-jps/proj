@@ -268,6 +268,7 @@ int sc_pointing()
   return(0);
 }
 
+/********************************************************
 //!!TBD Now convert the lev0 to lev1 from the info given.
 int do_flat(LEV0LEV1 *info) 
 {
@@ -286,6 +287,8 @@ int do_flat(LEV0LEV1 *info)
    printf("himgcfid = %d\n", info->himgcfid);
    return(0);
 }
+********************************************************/
+#include "do_flat.c"
 
 int do_ingest()
 {
@@ -387,7 +390,7 @@ int do_ingest()
       printk("t_obs for lev0 = %10.5f\n", t_obs0);	//!!TEMP
       sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f ?]", 
 		DSFFNAME, t_obs0, t_obs0);
-      //printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
+      printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
       rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF 
       if(!rsetff || (rsetff->n == 0) || rstatus) {
         printk("Can't do drms_open_records(%s)\n", open_dsname);
@@ -405,7 +408,7 @@ int do_ingest()
         return(1);
       }
       printf("\npath to FF = %s\n", path);	//!!TEMP
-      segmentff = drms_segment_lookup(rsff, "file");
+      segmentff = drms_segment_lookup(rsff, "flatfield");
       Arrayff = drms_segment_read(segmentff, DRMS_TYPE_FLOAT, &rstatus);
       if(!Arrayff) {
         printk("Can't do drms_segment_read() for Flat Field status=%d\n", 
@@ -443,6 +446,7 @@ int do_ingest()
 
       if(rstatus = do_flat(l0l1)) {
         printk("***ERROR in do_flat() status=%d\n", rstatus);
+        printf("***ERROR in do_flat() status=%d\n", rstatus);
         return(1);		//!!TBD what to do?
       }
 
@@ -599,7 +603,7 @@ int DoIt(void)
   setup();
   if(do_ingest()) {        // loop to get files from the lev0
     printk("**ERROR: Some error after open of %s\n", open_dsname);
-    printf("**ERROR: Some error after open of %s\n", open_dsname);
+    //printf("**ERROR: Some error after open of %s\n", open_dsname);
     printf("build_lev1 abort\n"); //!!TEMP
     return(0);
   }
