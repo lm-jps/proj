@@ -9,26 +9,29 @@ Table of Contents
 CVS/		CVS repository information
 Makevars/	files containing system/architecture-specific make variable
 	definitions for use in a generic Makefile
-apps/		sample modules for building within the distribution tree
+
+	Regular Program
+smpl_00.c	does (almost) nothing at all - like hello_world, but exhibits
+	use of the command-line parsing used by JSOC module drivers
 
 	DRMS Modules
-smpl_00.c	does (almost) nothing at all - like hello_world
-smpl_01.c	echoes its arguments, of a wide variety of types
-smpl_02.c	prints a list of the data series known to DRMS - a simple
+smpl_01.c	same as smpl_00, but written as a module
+smpl_02.c	echoes its arguments, of a wide variety of types
+smpl_03.c	prints a list of the data series known to DRMS - a simple
 	version of show_series
-smpl_03.c	prints the number of unique records in a selected data series
+smpl_04.c	prints the number of unique records in a selected data series
 	and the number of data segments per record - a simple version of
 	show_info
 
-	Other, Unknown
+	Other
 Makefile	The generic Makefile
 ReadMe		(this file)
 
 ********************************************************************************
 
-Recipe 0: How to write and build a minimal DRMS module
+Recipe 1: How to write and build a minimal DRMS module
 
-The program smpl_00.c shows the minimum structure necessary for a C program
+The program smpl_01.c shows the minimum structure necessary for a C program
 that will be able to interact with the DRMS API to fetch and store date in
 the DRMS and SUMS. This module in fact does neither; but it nevertheless
 opens the required connection to the DRMS, and will fail if that is not
@@ -38,7 +41,7 @@ as a useful test for minimal connectivity to DRMS.
 
 The module can be built, like all modules in this directory, by typing
 
-      make smpl_00
+      make smpl_01
 
 (alternatively, you can simply type make and all the modules in the target
 list MODS in Makefile will be compiled.) The Makefile is generic: it is
