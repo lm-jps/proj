@@ -22,10 +22,17 @@ smpl_03.c	prints a list of the data series known to DRMS - a simple
 smpl_04.c	prints the number of unique records in a selected data series
 	and the number of data segments per record - a simple version of
 	show_info
+smpl_05.c	inserts data records from noaa_ar.dat into series created with
+	noaa_ar.jsd
 
 	Other
 Makefile	The generic Makefile
 ReadMe		(this file)
+noaa_ar.dat	A summary listing of data from daily NOAA Active Region reports
+	for regions with spots from 1996 onward; can be used as input for a
+	DRMS data series
+noaa_ar.jsd	A JSD file that can be used to build a (segmentless) DRMS data
+	series for the data from noaa_ar.dat
 
 ********************************************************************************
 
