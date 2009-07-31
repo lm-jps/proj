@@ -32,7 +32,8 @@
 #include <setjmp.h>
 #include "pe.h"
 
-#define out_namespace "su_production"
+#define out_namespace "dsds"
+//#define out_namespace "su_production"
 
 void printkey();
 int soi_errno = NO_ERROR;
@@ -120,7 +121,7 @@ void get_args(int argc, char *argv[])
 }
 
 /* Return ptr to "mmm dd hh:mm:ss". */
-char *datestring(void)
+char *kdatestring(void)
 {
   time_t t;
   char *str;
