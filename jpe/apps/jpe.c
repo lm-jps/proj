@@ -451,8 +451,8 @@ p=script \
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define mailable_users_num 6    /* #of users below that will generate mail */
 
-//#define out_namespace "dsds"
-#define out_namespace "su_production"
+#define out_namespace "dsds"
+//#define out_namespace "su_production"
 
 static char *mailable_users[] = {"jprod","daemon","tprod","production",
                                 "jeneen", "thailand"};
@@ -2043,8 +2043,8 @@ KEY *form_arg_data_out(PSERVER *sptr, argument *arg)
   int seriesnum, jcnt, k;
   int jix = 0;
 
-  printf("\n*****The sptr->map_list at the start of form_arg_data_out is:\n");
-  keyiterate(printkey, sptr->map_list);
+  //printf("\n*****The sptr->map_list at the start of form_arg_data_out is:\n");
+  //keyiterate(printkey, sptr->map_list);
 
   xlist=newkeylist();
   add_keys(sptr->map_list, &xlist);
@@ -3464,7 +3464,7 @@ void setup(int argc, char *argv[])
     strcat(idstr, string);
   }
   strcat(idstr, "\n");
-  sprintf(string, "pe started as tid=%x pid=%d user=%s\n", 
+  sprintf(string, "jpe started as tid=%x pid=%d user=%s\n", 
 			pe_tid, getpid(), username);
   strcat(idstr, string);
   sprintf(mailname, PEMAILFILE, username, getpid());
