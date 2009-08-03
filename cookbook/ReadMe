@@ -191,3 +191,57 @@ You will probably have to change the Seriesname from drms.NOAA_ar to
 something in a different namespace from drms; each user should have a
 personal namespace. Then you can run the module with the appropriate value
 for the "ds" argument.
+
+********************************************************************************
+
+Recipe 6: Modifying Records in a Data Series
+
+If you inspect the last few records in the data series just created, for
+example with
+	show_info -a ds= drms.noaa_ar n= -5
+you will discover that the penultimate record, that for the observation of
+AR 11024 on 2009.07.10, has a very strange and probably erroneous value
+for its latitude, -9 deg, when the latitude on the preceding and following
+days was -25 deg. This is the result of what was presumably a typographical
+error in the NOAA/USAF report for that day (SRS Number 191 Issued at 0030Z
+on 10 Jul 2009). Module smpl_06 is an example of one that could be used to
+correct or update the values of selected records in a data series. It shows
+how runtime parameters (and internally computed variables) can be used in
+place of record set specifiers to restrict the recordset, and how key values
+in selected records can be "changed".  In order to fix the relevant record,
+you could run either
+	smpl_06 date= 2009.07.10 ar= 11024 key= lat value= -25
+or
+	smpl_06 ds= "drms.noaa_ar[2009.07.10][11024]" key= lat value= -25
+and then reinspect the last few records. The record in question should have
+been updated with a new value for its latitude.  In reality, the DRMS API
+does not allow for actual value changes to records in the database, which is
+why the function drms_clone_record() is used in this update module. If you
+type
+	show_info -ar ds= "drms.noaa_ar[\!Region=11024\!]"
+you will see that there are really two entries in the database with the same
+values for the two prime keys Date=2009.07.10 and Region=11024. The one with
+the higher recnum is the only one that will show up in ordinary queries.
+
+********************************************************************************
+
+Recipe 7: Modifying Records in a Data Series
+
+The data series worked with in the previous two examples had no associated
+data segments, repositories for bulk data such as images or other data arrays.
+The JSD file images.jsd describes a series with the opposite structure. It
+contains no keywords at all in database (except for the hidden keywords like
+recnum, so that all records are unique). However, it does allow for a segment,
+which can be any 2-dimensional array of short ints (which can represent scaled
+floats), stored internally as Rice-compressed FITS binary tables.  As in the
+preparations for Recipe 5, run
+	create_series images.jsd
+You can then run smpl_07 to create records (one at a time) in this series.
+Each will have a data segment of specified size and shape, with the values
+filled randomly using a somewhat Byzantine procedure. You might want to fool
+around with different values of the parameters dist and seed.  In order to
+view the data segments, run for example
+	show_info -pq ds= drms.images"[]"
+and then run a viewer, e.g. ds9, on the fits files in the displayed SUMS
+directories.
+
