@@ -40,8 +40,8 @@ else {
 #set up for ssh w/o password
 #$cmd = "source /home/production/cvs/JSOC/proj/datacapture/scripts/ssh_rsync_prod.source";
 
-$sshfile = "/tmp/ssh-agent.env";	#made by ssh-agent setup procedure
-$sshfilesource = "/tmp/ssh-agent.env.source";
+$sshfile = "/var/tmp/ssh-agent.env";	#made by ssh-agent setup procedure
+$sshfilesource = "/var/tmp/ssh-agent.env.source";
 if(!-e $sshfile) {
   print "Error: Can't find $sshfile\n";
   print "See log: $logfile\n";
