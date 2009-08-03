@@ -57,8 +57,8 @@ int DoIt (void) {
     drms_setkey_time (record, "Date", obstime);
     drms_setkey_int (record, "Region", arnum);
     drms_setkey_int (record, "Lat", lathg);
-    drms_setkey_int (record, "Lon", lonhg);
-    drms_setkey_int (record, "CarrLon", loncm);
+    drms_setkey_int (record, "Lon", loncm);
+    drms_setkey_int (record, "CarrLon", lonhg);
     drms_setkey_int (record, "Area", area);
     drms_setkey_int (record, "Extent", extent);
     drms_setkey_int (record, "Count", count);
