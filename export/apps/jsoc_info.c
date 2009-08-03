@@ -631,13 +631,17 @@ int DoIt(void)
   /*  op == rs_summary  */
   if (strcmp(op,"rs_summary") == 0) 
     {
-    json_t *jroot;
+    json_t *jroot = json_new_object();
     char *json, *final_json;
     int count=0, status=0;
     char val[100];
-    jroot = json_new_object();
     /* get series count */
+    char *bracket = index(in, '{');
+    if (bracket)
+	*bracket = '\0';
     count = drms_count_records(drms_env, in, &status);
+    if (bracket)
+	*bracket = '{';
     if (status)
       JSONDIE("series not found");
     /* send the output json back to client */
