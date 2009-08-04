@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 /* GetJsocRequestID - returns the next serial number for JSOC export RequestID 
  *  
@@ -10,7 +11,7 @@
  * Format is <fixed part>_<date>_<sequence number>.
  */
 
-main()
+int main()
 {
 int RequestIDsn;
 int old_date, new_date;

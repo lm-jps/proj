@@ -65,6 +65,9 @@ static DRMS_RecordSet_t *gCacheRS = NULL;
 static int gGridNItems = 0;
 static int gGridCurrPos = -1;
 
+/* declare fortran function */
+void pleph_(double *, int *, int *, double pos[6]);
+
 /* Gets J2000.0 positions and velocities from cdf file.
    Units are km and km/s */
 static void get_earth_ephem(double jd, double pos[6])

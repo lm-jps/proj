@@ -86,6 +86,8 @@ $(OBJUSEF_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(OBJF_$(d)):		base/drms/libs/api/client/fdrms.o
 $(GONGLIB_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 $(GONGLIB_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH)
+$(GONGLIB_$(d)):	ICC_WARNTOERR :=
+
 
 ifeq ($(FCOMPILER), ifort)
 $(FMODEXE_SOCK_$(d)):	FF_TGT := -module base/drms/libs/api/client

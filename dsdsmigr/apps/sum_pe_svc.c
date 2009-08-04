@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <sum_rpc.h>
 #include <printk.h>
+#include <sys/wait.h>
 
 static char PGPORTDRMS[] = "5432";	//port for jsoc db
 

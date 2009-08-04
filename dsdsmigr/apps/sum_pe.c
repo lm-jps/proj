@@ -30,6 +30,7 @@ ModuleArgs_t module_args[] =
   {ARG_END}
 };
 
+int file2keylist(char *filename, KEY **list); /* must be declared */
 void logkey();
 KEY *getsumpe(KEY *params);
 struct timeval TIMEOUT = { 20, 0 };

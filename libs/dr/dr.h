@@ -314,5 +314,41 @@ typedef int (*_llistFn)(_llist *ll, void *obj);
 #define FITS_ERROR		(1600)
 #define FITS_NONCONFORMING	(1601)
 
+/* functions */
+DR *dr_get_fits(char *filename);
+char *dr_getkey_str(DR *dr, char *key);
+char *DR_getkey_str(DR *dr, char *key);
+double dr_getkey_double(DR *dr, char *key);
+int dr_getkey_int(DR *dr, char *key);
+TIME dr_getkey_time(DR *dr, char *key);
+TIME dr_getkey_time_interval(DR *dr, char *key);
+int dr_setkey_str(DR *dr, char *key, char *str);
+int dr_setkey_int(DR *dr, char *key, int val);
+int dr_setkey_double(DR *dr, char *key, double val);
+int dr_setkey_time(DR *dr, char *key, TIME time);
+int dr_setkey_time_interval(DR *dr, char *key, TIME time);
+char *dr_attrname (ATTRIBUTES *attr);
+void *dr_attrvalue (ATTRIBUTES *attr);
+char *dr_attrvalue_str (ATTRIBUTES *attr);
+ATTRIBUTES *dr_next_attr (ATTRIBUTES *attr);
+ATTRIBUTES *dr_search_attr (DR *dr, char *key);
+int dr_setkey_drmstype(DR *dr, char *name, DRMS_Keyword_t *key);
+int dr_write_fits_to_drms_segment(DR *dr, char *fitsname, DRMS_Record_t *rec, int segno);
+void dr_free (DR **drptr);
+DR *dr_read_fits (FILE *in, int *status);
+DR *dr_read_fits_header (FILE *in, int *status);
+long dr_data_length (DR *dr);
+int read_fits_head (DR *dr, FILE *fp);
+double dr_bscale (DR *dr);
+double dr_bzero (DR *dr);
+void *dr_data (DR *dr);
+int dr_datatype (DR *dr);
+int dr_numbytes (DR *dr);
+int dr_rank (DR *dr);
+int *dr_length (DR *dr);
+int dr_dim_n (DR *dr, int n);
+long dr_data_length (DR *dr);
+int dr_sizeof (int datatype);
+void *dr_malloc_fillvalue (int datatype);
 
 #endif /* _DR_H */
