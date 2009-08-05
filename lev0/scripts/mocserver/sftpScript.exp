@@ -50,9 +50,21 @@ proc GetSubdirs {listing retDirList retFileList} {
 
 	# extract directory name from listing
 	if {[regexp {^d.+\s+(\S+)\s*$} $lineToProc -> dirName]} {
-	    lappend retDirsL $dirName
+            if {[regexp {^\S+/(\S+)$} $dirName -> dirName2]} {
+                if {$dirName2 ne "." && $dirName2 ne ".."} {
+                    lappend retDirsL $dirName2
+                }
+            } elseif {$dirName ne "." && $dirName ne ".."} {
+                lappend retDirsL $dirName
+            }
 	} elseif {[regexp {^\-.+\s+(\S+)\s*$} $lineToProc -> fpath]} {
-	    lappend retFilesL $fpath
+            if {[regexp {^\S+/(\S+)$} $fpath -> fpath2]} {
+                if {$fpath2 ne "." && $fpath ne ".."} {
+                    lappend retFilesL $fpath2
+                }
+            } elseif {$fpath ne "." && $fpath ne ".."} {
+                lappend retFilesL $fpath
+            }
 	}
 
 	set stIdx [expr $endIdx + 2]
