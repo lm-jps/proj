@@ -2,6 +2,9 @@
 /*
  * ingest_from_fits [-j] [in=]<fitsfile> [map=<mapfile>] [ds=<series>]
  *   -j means print JSD for the fitsfile.
+ *   -c means create the series if ds= is given and 
+ *      a primekey is given and
+ *      if the series does not exist already.
  *  in= is optional, but the fitsfile name is required.
  *  ds= gives series name.  If present a new record will be added
  *      containing the fitsfile keywords and data.
@@ -59,6 +62,9 @@
  *  kind of fitsfile, then edit into a single JSD with multiple
  *  segments, create the series, then use fits_into_drms.
  *
+ *  If the -c flag is given and a series and primekey are specified and the series does not
+ *  already exist then JSD that is created will
+ *  be used to create a series.  It will also be printed if the -j flag is present.
  */  
 
 #include "jsoc_main.h"
@@ -72,7 +78,9 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, "in", "NOT_SPECIFIED",  "Input FITS file."},
      {ARG_STRING, "ds", "NOT_SPECIFIED",  "Target DRMS data series."},
      {ARG_STRING, "map", "NOT_SPECIFIED",  "Map file for newname from oldname."},
-     {ARG_FLAG, "j", "0",  "Print jsd and exit."},
+     {ARG_STRING, "primekey", "NOT_SPECIFIED",  "keyword name to use as a prime key in the JSD created"},
+     {ARG_FLAG, "c", "0",  "Use generated jsd to create a series. Requires both ds and primekey args."},
+     {ARG_FLAG, "j", "0",  "Print jsd."},
      {ARG_END}
 };
 
@@ -84,15 +92,21 @@ int DoIt(void)
   char *in = params_get_str(&cmdparams, "in");
   char *ds = params_get_str(&cmdparams, "ds");
   char *map = params_get_str(&cmdparams, "map");
-  int insertrec = strcmp(ds, "NOT_SPECIFIED") != 0;
-  int wantjsd = params_isflagset(&cmdparams, "j") || !insertrec;
+  char *primekey = params_get_str(&cmdparams, "primekey");
+  int printjsd = params_isflagset(&cmdparams, "j");
+  int wantcreate = params_isflagset(&cmdparams, "c");
+  int haveseriesname =  strcmp(ds, "NOT_SPECIFIED") != 0;
+  int haveprime =  strcmp(primekey, "NOT_SPECIFIED") != 0;
   int havemap = strcmp(map, "NOT_SPECIFIED") != 0;
+  int wantjsd = printjsd || wantcreate;
+  int insertrec = haveseriesname  && !printjsd;
   int status = DRMS_SUCCESS;
   DRMS_Array_t *data = NULL;
   DRMS_Keyword_t *key=NULL;
   HContainer_t *keywords = NULL;
   HIterator_t hit;
   int readraw = 1;
+  char jsd[MAXJSDLEN];
   char *newnames[MAXMAPLEN];
   char *oldnames[MAXMAPLEN];
   char *actions[MAXMAPLEN];
@@ -110,7 +124,7 @@ int DoIt(void)
 
   if (wantjsd)
     {
-    char jsd[MAXJSDLEN], *pjsd = jsd;
+    char *pjsd = jsd;
     char keyname[DRMS_MAXNAMELEN];
     char *dash;
     int bitpix, iaxis, naxis, dims[10];
@@ -118,15 +132,15 @@ int DoIt(void)
 
     // build jsd in internal string
     pjsd += sprintf(pjsd, "#=====General Series Information=====\n");
-    pjsd += sprintf(pjsd, "Seriesname:  <NAME HERE>\n");
+    pjsd += sprintf(pjsd, "Seriesname:  %s\n", (haveseriesname ? ds : "<NAME HERE>"));
     pjsd += sprintf(pjsd, "Author:      %s\n", getenv("USER"));
     pjsd += sprintf(pjsd, "Owner:       nobody_yet\n");
     pjsd += sprintf(pjsd, "Unitsize:    1\n");
     pjsd += sprintf(pjsd, "Archive:     0\n");
     pjsd += sprintf(pjsd, "Retention:   10\n");
     pjsd += sprintf(pjsd, "Tapegroup:   0\n");
-    pjsd += sprintf(pjsd, "PrimeKeys:   <PRIME KEYS HERE OR DELETE LINE>\n");
-    pjsd += sprintf(pjsd, "DBIndex:     <INDEX KEYS HERE OR DELETE LINE>\n");
+    pjsd += sprintf(pjsd, "PrimeKeys:   %s\n", (haveprime ? primekey : "<PRIME KEYS HERE OR DELETE LINE>"));
+    pjsd += sprintf(pjsd, "DBIndex:     %s\n", (haveprime ? primekey : "<PRIME KEYS HERE OR DELETE LINE>"));
     pjsd += sprintf(pjsd, "Description: \"From: %s\"\n", in);
   
     pjsd += sprintf(pjsd, "#===== Keywords\n");
@@ -246,19 +260,21 @@ int DoIt(void)
       (bitpix > 0 ? "compress Rice" : ""), bzero, bscale, in);
     pjsd += sprintf(pjsd, "#======= End JSD =======\n");
 
-    printf("%s\n", jsd);
-    // print keymap info
-    printf("#====== BEGIN KEYNAME MAP =======\n");
-    printf("# REMOVE the keyname map lines from the JSD\n");
-    printf("# place the keyname map into a file for later use\n");
-    printf("# mapfile has structure: drmsname fitsname action\n");
-    printf("# use \"copy\" for default action - without quotes\n");
-    for (imap=0; imap<nmap; imap++)
-        printf("%s\t%s\t%s\n", newnames[imap], oldnames[imap], actions[imap]);
-    printf("#======END KEYNAME MAP =======\n");
+    if (printjsd)
+      {
+      printf("%s\n", jsd);
+      // print keymap info
+      printf("#====== BEGIN KEYNAME MAP =======\n");
+      printf("# REMOVE the keyname map lines from the JSD\n");
+      printf("# place the keyname map into a file for later use\n");
+      printf("# mapfile has structure: drmsname fitsname action\n");
+      printf("# use \"copy\" for default action - without quotes\n");
+      for (imap=0; imap<nmap; imap++)
+          printf("%s\t%s\t%s\n", newnames[imap], oldnames[imap], actions[imap]);
+      printf("#======END KEYNAME MAP =======\n");
+      }
     }
 
-fprintf(stderr,"done with jsd part, do keymap part\n");
   // if keyname mapfile is given, append to or replace names in map list
   if (havemap)
     {
@@ -295,16 +311,35 @@ fprintf(stderr,"done with jsd part, do keymap part\n");
     fclose(mapfile);
     }
 
-fprintf(stderr, "keymap info, nmap=%d\n",nmap);
+  if (wantcreate)
+    {
+    DRMS_Record_t *template;
+    if (!haveseriesname || !haveprime)
+      DIE("Cant create series without ds and primekey args.\n");
+    if (drms_series_exists(drms_env , ds, &status))
+      DIE("Cant create existing series\n");
+    template = drms_parse_description(drms_env, jsd);
+    if (template==NULL)
+      DIE("Failed to parse\n");
+    if (drms_create_series(template, 0))
+      DIE("Failed to create series.\n");
+    drms_free_record_struct(template);
+    free(template);
+    fprintf(stderr,"Series %s created.\n", ds);
+    }
 
   if (insertrec)
     {
     char *newname;
     char *action;
-    DRMS_RecordSet_t *rs = drms_create_records(drms_env, 1, ds, DRMS_PERMANENT, &status);
-    DRMS_Record_t *rec = rs->records[0];
+    DRMS_RecordSet_t *rs;
+    DRMS_Record_t *rec;
+    if (!drms_series_exists(drms_env , ds, &status))
+      DIE("Series does not exist, cant insert record\n");
+    rs = drms_create_records(drms_env, 1, ds, DRMS_PERMANENT, &status);
     if (status)
       DIE("Could not create new records in series");
+    rec = rs->records[0];
     hiter_new (&hit, keywords);
     while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
       {
