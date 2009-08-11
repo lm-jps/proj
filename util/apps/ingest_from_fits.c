@@ -67,6 +67,126 @@
  *  be used to create a series.  It will also be printed if the -j flag is present.
  */  
 
+/**
+\defgroup ingest_from_fits ingest_from_fits
+@ingroup su_migration
+
+\par Synopsis:
+\code
+ingest_from_fits [-j] [-c] {in=}<fitsfile> [ds=<seriesname>] [primekey=<primekeys>] [map=<mapfile>]
+\endcode
+
+\details
+
+\b Ingest_from_fits provides tools to aid ingesting FITS files into DRMS.
+It can help by making a draft JSD, and optionally by creating a new series from that JSD, and/or
+ingesting a fitsfile into the specified series.
+
+\par Options:
+
+The program can make a JSD and exit, make and use a JSD to create a series, and/or
+ingest a fits file into a (possible new) series.
+
+\li \c -c: Create a new series using the <seriesname> given in the ds= argument.
+\li \c -j: Create a JSD from a given <fitsfile> and print it to stdout.
+\li \c {in=}<fitsfile> - Specifies the FITS file to be ingested and/or used to generate a JSD.
+\li \c [ds=<seriesname>] - specifies the target DRMS series to be used in the generated JSD and/or to create and/or to insert data into.
+\li \c [primekey=<primekeys>] - specifies one or more keywords to use as PrimeKey and DBindex in the JSD.
+\li \c [map=<mapfile>] - specifies an optional keyword mapfile to use while ingesting the fitsfile.
+
+\par Usage:
+
+In the base mode with only the -j flag and a fitsfile provided, ingest_from_fits will
+print a draft JSD file that can be captured and editted by the user.  The properly
+editted JSD file can then be used with \ref create_series to generate a new
+DRMS dataseries that is appropriate to use when ingesting fits files like the
+sample used.  To then actually ingest the fits file into the new series,
+call ingest_from_fits with the fitsfile and the seriesname passed in the ds= argument.
+
+The draft JSD file generated does not contain a seriesname nor PrimeKey or DBindex lists.
+However, if the primekey= argument is provided the given <primekeys> string will be
+put into both the PrimeKeys and DBindex fields in the JSD.  If the ds= argument is
+given, then the priovided <seriesname> will be put into the Seriesname field in the JSD.
+
+Thus if both the ds= and primekey= argument are given, a complete JSD is created.
+
+If the -c flag is given as well as the ds= and primekey= arguments, then a new
+series will be created with the given seriesname.  If it already exists an error
+message is printed and the program quits.
+
+\b NOTE the default JSD has no archiving and a retention time of 10 days.
+
+If the -j flag is NOT given but the ds= argument is given then the fitsfile will be ingested
+into that series.  If the -c flag is given then the new record will be the first record
+in the new series.
+
+If in the process of generating a JSD from the fitsfile, some illegal DRMS names are
+found among the FITS keywords, then one line will be printed for each such keyword
+with a substitute DRMS keyword, original FITS keyword, and an action of "copy".  This
+is the keyword mapping format also used by \ref ingest_dsds_a and can be captured from
+the ingest_from_fits stdout into a mapfile.  That mapfile, after possible editting,
+can be given to subsequent calls of ingest_from_fits to be used when ingesting fits files.
+The original FITS keyword will be placed into the JSD in the "note" section of the Keyword
+line.  Then upon export via e.g. \ref jsoc_export_as_fits the keyword will be mapped
+back into the original name.
+
+When a mappped keyword is encountered in the ingest process, an action is taken depending
+on the value of the "action" field in the mapfile.  In the present code, only the "copy"
+action is implemented but the place for the user to add special code for other user
+defined actions is marked in the code.  See \ref ingest_dsds_a for examples.
+The keyword list in an ingested fitsfile is inspected for illegal names even in the
+case where the -j flag is not given and data is simply ingested into a series.
+In this case the <mapfile> and any newly found bad keywords are merged with
+the mapfile taking precedence.
+
+\par Output:
+
+Stderr:  Some output may be generated in the internal call of \ref fitsrw_read which scans the
+<fitsfile> to make a list of keywords.  Multiple instances of a given keyword for instance will
+generate information lines.  Other diagnostics are also directed to stderr.
+
+Stdout: The normal output stream is reserved for the generated JSD information and self-generated
+<mapfile> entries if some of the keywords need to be mapped to DRMS compliant keyrord names.
+If the stdout is captured into a file to be used as a JSD, then the <mapfile> lines at the end
+should be extracted to a separate mapfile for later use.
+
+\par Examples:
+
+\b Example 1:
+To print a draft JSD file appropriate for ingesting e.g. a MDI magnetogram with the "coffee-cup sunspot":
+\code
+  ingest_from_fits -j /mag//fd_M_96m_01d.001994/fd_M_96m_01d.1994.0010.fits
+\endcode
+
+\b Example 2:
+To make the same JSD but with specified Seriesname and Primekeys then make a series manually:
+\code
+  ingest_from_fits -j /mag/fd_M_96m_01d.001994/fd_M_96m_01d.1994.0010.fits ds=su_phil.test primekey=T_REC >pt.jsd
+  create_series pt.jsd
+\endcode
+
+\b Example 3:
+To ingest several fits files into the series created in example 2:
+\code
+  cd /mag/fd_M_96m_01d.001994
+  foreach fitsfile ( *[0-9].fits )
+    ingest_from_fits ds=su_phil.test $fitsfile
+  end
+\endcode
+
+\b Example 4:
+To ingest a single fitsfile into a not-yet created series, all in one command:
+\code
+  ingest_from_fits -c /mag/fd_M_96m_01d.001994/fd_M_96m_01d.1994.0010.fits ds=su_phil.test primekey=T_REC
+\endcode
+
+\bug
+At present no checking is done for PSQL reserved keyword names or reserved DRMS names.
+Also the mapping of names with a hyphen are auto converted and the original fits keyword are lost.
+
+*/
+
+
 #include "jsoc_main.h"
 
 char *module_name = "ingest_from_fits";
