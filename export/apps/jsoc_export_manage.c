@@ -371,7 +371,7 @@ int DoIt(void)
         if (strcmp(process, "su_export")==0)
           fprintf(fp, "jsoc_export_SU_as_is_sock ds='%s' requestid=%s\n", dataset, requestid); 
         else
-          fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid=%s filenamefmt=%s\n", dataset, requestid, filenamefmt); 
+          fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid=%s filenamefmt='%s'\n", dataset, requestid, filenamefmt); 
         fprintf(fp, "if ($status) exit $status\n");
         // convert index.txt list into index.json and index.html packing list files. 
         fprintf(fp, "jsoc_export_make_index\n");
