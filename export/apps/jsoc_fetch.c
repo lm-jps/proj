@@ -618,7 +618,17 @@ check for requestor to be valid remote DRMS site
     size=0;
     strncpy(dsquery,in,DRMS_MAXQUERYLEN);
     if (index(dsquery,'[') == NULL)
-      strcat(dsquery,"[]");
+      {
+      char *cb = index(dsquery, '{');
+      if (cb)
+        {
+        char *cbin = index(in, '{');
+        strcpy(cb, "[]");
+        strcat(dsquery, cbin);
+        }
+      else
+        strcat(dsquery,"[]");
+      }
     if (strcmp(seglist,"Not Specified") != 0)
       {
       if (index(dsquery,'{') != NULL)
