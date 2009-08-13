@@ -181,8 +181,10 @@ To ingest a single fitsfile into a not-yet created series, all in one command:
 \endcode
 
 \bug
-At present no checking is done for PSQL reserved keyword names or reserved DRMS names.
-Also the mapping of names with a hyphen are auto converted and the original fits keyword are lost.
+The mapping of illegal names does not work since the original names are already changed.
+probably need to handle in a different way.  but will work for changes not done
+automatically.  Meanwhile to change a name out the autoconverted name into
+the fitsname column of the mapfile and the desired drms name in the first col.
 
 */
 
@@ -246,7 +248,8 @@ int DoIt(void)
     {
     char *pjsd = jsd;
     char keyname[DRMS_MAXNAMELEN];
-    char *dash;
+    char *colon;
+    char *note;
     int bitpix, iaxis, naxis, dims[10];
     double bzero, bscale;
 
@@ -269,6 +272,7 @@ int DoIt(void)
     while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
       {
       strcpy(keyname, key->info->name);
+fprintf(stderr,"key %s\n",keyname);
       // Special actions for FITS basic structure
       if (strcmp(keyname, "SIMPLE") == 0) continue;
       if (strcmp(keyname, "EXTEND") == 0) continue;
@@ -302,30 +306,23 @@ int DoIt(void)
         continue;
         }
 
-      // check for illegal DRMS names 
-      dash = index(keyname, '-');
-      if (dash)
+      colon = index(key->info->description, ':');
+      // check for lllegal or reserved DRMS names 
+      // In this case the FITS Keyword structure note section will contain the
+      // original FITS keyword.
+      if (*(key->info->description) == '[')
         {
-        char *c = key->info->name;
-        char *k = keyname;
-        if (nmap >= MAXMAPLEN)
-          DIE("Too many mapped keywords, increase MAXMAPLEN\n");
-        while (*c)
-          {
-          if (*c == '-')
-            {
-            *k++ = '_';
-            *k++ = '_';
-            c++;
-            }
-          else
-            *k++ = *c++;
-          }
-        while (k - keyname < 8)
-          *k++ = '_';
-        *k = '\0';
+        char *c;
+	char originalname[80];
+        strcpy(originalname, key->info->description+1);
+        c = index(originalname, ':');
+        if (c)
+          *c = '\0';
+        c = index(originalname, ']');
+        if (c)
+          *c = '\0';
         newnames[nmap] = strdup(keyname);
-        oldnames[nmap] = strdup(key->info->name);
+        oldnames[nmap] = strdup(originalname);
         actions[nmap] = strdup("copy");
         nmap++; 
         }
@@ -335,35 +332,32 @@ int DoIt(void)
       switch (key->info->type)
         {
         case DRMS_TYPE_CHAR:
+          if (colon) // probably type logical, leave as DRMS CHAR
+  	    pjsd += sprintf(pjsd, "char, variable, record, DRMS_MISSING_VALUE, \"%%d\", \"none\", ");
+          else
+  	    pjsd += sprintf(pjsd, "int, variable, record, DRMS_MISSING_VALUE, \"%%d\", \"none\", ");
+  	  break;
         case DRMS_TYPE_SHORT:
         case DRMS_TYPE_INT:
-  	pjsd += sprintf(pjsd, "int, variable, record, DRMS_MISSING_VALUE, \"%%d\","
-  	" \"none\", ");
-  	break;
+  	  pjsd += sprintf(pjsd, "int, variable, record, DRMS_MISSING_VALUE, \"%%d\", \"none\", ");
+  	  break;
         case DRMS_TYPE_LONGLONG:
-  	pjsd += sprintf(pjsd, "longlong, variable, record, DRMS_MISSING_VALUE, \"%%lld\","
-  	" \"none\", ");
-  	break;
+  	  pjsd += sprintf(pjsd, "longlong, variable, record, DRMS_MISSING_VALUE, \"%%lld\", \"none\", ");
+  	  break;
         case DRMS_TYPE_FLOAT:
         case DRMS_TYPE_DOUBLE:
-  	pjsd += sprintf(pjsd, "double, variable, record, DRMS_MISSING_VALUE, \"%%f\","
-  	" \"none\", ");
-  	break;
+  	  pjsd += sprintf(pjsd, "double, variable, record, DRMS_MISSING_VALUE, \"%%f\", \"none\", ");
+  	  break;
         case DRMS_TYPE_TIME:
-  	pjsd += sprintf(pjsd, "time, variable, record, DRMS_MISSING_VALUE, 0,"
-  	" \"UTC\", ");
-  	break;
+  	  pjsd += sprintf(pjsd, "time, variable, record, DRMS_MISSING_VALUE, 0, \"UTC\", ");
+  	  break;
         case DRMS_TYPE_STRING:
-  	pjsd += sprintf(pjsd, "string, variable, record, \"\", \"%%s\","
-  	" \"none\", ");
-  	break;
+  	  pjsd += sprintf(pjsd, "string, variable, record, \"\", \"%%s\", \"none\", ");
+  	  break;
         default:
-  	DIE("bad key type");
+  	  DIE("bad key type");
         }
-      if (dash)
-        pjsd += sprintf(pjsd, "\"[%s]\"\n", key->info->name);
-      else
-        pjsd += sprintf(pjsd, "\"\"\n");
+      pjsd += sprintf(pjsd, "\"%s\"\n", key->info->description);
       }
   
     pjsd += sprintf(pjsd, "#======= Segments =======\n");

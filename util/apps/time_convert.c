@@ -14,7 +14,7 @@
    @code
    time_convert -h
    time_convert s=<secondsJSOC> | sdo=<secondsSDO> | egse=<secondsEGSE> | time=<calenderTime> |
-                ord=<ordinalDate> [o=jsoc | o=sdo | o=egse | o=ord | o=cal] [zone=<zone>]
+                ord=<ordinalDate> [o=jsoc | o=sdo | o=egse | o=ord | o=cal] [zone=<zone>] [p=<precision>]
 
    @endcode
 
@@ -47,6 +47,8 @@
    @e JD refer to Modified Julian Date and Julian Date, and @e julday refers to a Julian 
    day number.
 
+   The precision of the seconds field is specified with the <tt>p</tt> parameter.  The default is 0.  Setting p=3 will produce output identical to the original version of time_convert.
+
    Alternatively, and with the appropriate command-line parameters, @ref time_convert 
    converts from any supported time representation to any other representation.
 
@@ -65,6 +67,8 @@
    supplying the appropriate @a zone=system argument. Refer to 
    <tt>JSOC TN 07-001</tt> (http://jsoc.stanford.edu/doc/timerep.html) for a 
    complete list of the supported "zones".
+
+   The default time format is with no fractions of seconds.  If o=jsoc is specified the seconds are provided to the nearest ms.
 
    @par Flags:
    @c -h: Show usage message.
@@ -144,6 +148,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "ord", "NOT SPECIFIED", "<Time as yyyy.ddd...>"},
   {ARG_STRING, "zone", "UTC", "<Time zone>"},
   {ARG_STRING, "o", "NOT SPECIFIED", "format of time output"},
+  {ARG_INT, "p", "0", "precision of seconds for time output"},
   {ARG_FLAG, "h", "0", "help message"},
   {ARG_END}
 };
@@ -176,8 +181,8 @@ char *TimeFormatStr[] =
    "Calendar"
 };
 
-static void PrintTime(TIME t, TimeFormat_t f);
-static TIME ZoneAdjustment(TIME t, char *zone);
+static void PrintTime(TIME t, TimeFormat_t f, int precision);
+static TIME ZoneAdjustment(TIME t, char *zone, int precision);
 
 int nice_intro ()
   {
@@ -186,14 +191,15 @@ int nice_intro ()
     {
     printf ("Usage:\ntime_convert -h\n"
 	"time_convert s=<secondsJSOC>|sdo=<secondsSDO>|egse=<secondsEGSE>|time=<calender time>|ord=<ordinal date> [o=jsoc | o=sdo | o=egse | o=ord | o=cal] [zone=<zone>]\n"
-        "<secondsJSOC> = JSOC seconds since 15 seconds before January 1, 1977 UTC \n"
+        "<secondsJSOC> = JSOC standard internal time, i.e. secs since 1997.01.01_TAI \n"
         "<secondsSDO> = seconds since January 1, 1958 TAI, i.e. SDO onboard time\n"
 	"<secondsEGSE> = seconds since APPROXIMATELY January 1, 2004 \n"
         "<calender time> = yyyy.mm.dd_hh:mm:ss<zone>\n"
 	"<ordinal date> = yyyy.ddd<zone>\n"
         "<zone> = time zone as UT, TAI, PST, etc. - default is UTC\n"
 	"h - show usage message\n"
-        "o - output time in format specified\n");
+        "o - output time in format specified\n"
+        "p - precision of seconds printed\n");
     return(1);
     }
   return (0);
@@ -208,6 +214,7 @@ char *s, *sdo, *time;
 char *ord; /* Users can now supply the time argument as an ordinal date ('day-of-year' format - ISO 8601): YYYY.DDD */
 char *egse = NULL;
 char *oArg = NULL;
+int precision = 0;
 
 TIME t;
 
@@ -228,6 +235,9 @@ sdo = cmdparams_get_str(&cmdparams, "sdo", NULL);
 time = cmdparams_get_str(&cmdparams, "time", NULL);
 ord = cmdparams_get_str(&cmdparams, "ord", NULL);
 egse = cmdparams_get_str(&cmdparams, "egse", NULL);
+
+/* Determine seconds precision */
+precision = cmdparams_get_int(&cmdparams, "p", NULL);
 
 int err = 0;
 
@@ -434,7 +444,7 @@ if (outputOverride != kTimeFormat_None)
 
 if (!err)
 {
-   PrintTime(timeToPrint, outputFormat);
+   PrintTime(timeToPrint, outputFormat, precision);
 }
 
 if (err)
@@ -449,12 +459,12 @@ else
 }
 
 /* t is time in TAI seconds since 1/1/1977, f is the format in which to print the time string */
-void PrintTime(TIME t, TimeFormat_t f)
+void PrintTime(TIME t, TimeFormat_t f, int precision)
 {
    if (f == kTimeFormat_Calendar)
    {
       char at[128];
-      sprint_time(at, t, cmdparams_get_str(&cmdparams, "zone", NULL), 3);
+      sprint_time(at, t, cmdparams_get_str(&cmdparams, "zone", NULL), precision);
       // broken for precision == 3, causes seg fault, fixed maybe
       // sprint_time(at, t, cmdparams_get_str(&cmdparams, "zone", NULL), 0);
       printf("%s\n", at);
@@ -462,12 +472,12 @@ void PrintTime(TIME t, TimeFormat_t f)
    else if (f == kTimeFormat_SDO)
    {
       /* no zone associated with sdo time, so zone parameter is ignored */
-      printf("%12.3f\n", t - sscan_time("1958.01.01_00:00:00_TAI"));
+      printf("%12.*f\n", precision, t - sscan_time("1958.01.01_00:00:00_TAI"));
    }
    else if (f == kTimeFormat_EGSE)
    {
       /* no zone associated with egse time, so zone parameter is ignored */
-      printf("%12.3f\n", t - SEC1970TO2004 - sscan_time("1970.01.01_00:00_UTC"));
+      printf("%12.*f\n", precision, t - SEC1970TO2004 - sscan_time("1970.01.01_00:00_UTC"));
    }
    else if (f == kTimeFormat_Ordinal)
    {
@@ -481,7 +491,7 @@ void PrintTime(TIME t, TimeFormat_t f)
       char *zone =  cmdparams_get_str(&cmdparams, "zone", NULL);
       
       /* First, get internal time for January 1 of the year we are going to output. */
-      sprint_time(at, t, zone, 3);
+      sprint_time(at, t, zone, precision);
       char *tz = strrchr(at, '_');
 
       if (tz)
@@ -502,8 +512,8 @@ void PrintTime(TIME t, TimeFormat_t f)
 
       /* Now, get zone adjustment for jan1 and t.  Subtract Adj(t) - Adj(jan1) from 
        * secsSinceJan1. */
-      TIME adjJan1 = ZoneAdjustment(jan1, zone);
-      TIME adjT = ZoneAdjustment(t, zone);
+      TIME adjJan1 = ZoneAdjustment(jan1, zone, precision);
+      TIME adjT = ZoneAdjustment(t, zone, precision);
       TIME ordTimeSecs = secsSinceJan1 - (adjT - adjJan1);
 
       /* Divide by TAI secs per day (86400). */
@@ -516,18 +526,18 @@ void PrintTime(TIME t, TimeFormat_t f)
    {
       if (f != kTimeFormat_Internal)
       {
-	 fprintf(stderr, "Invalid output format, defaulting to JSOC time.\n");
+         // format error
+         fprintf(stderr, "Invalid output format, defaulting to JSOC time.\n");
       }
-
-      printf("%12.3f\n", t);
+         printf("%0.*f\n", precision, t);
    }
 }
 
 /* <t> is the TAI-seconds equivalent of a time in the <zone> time zone. */
-TIME ZoneAdjustment(TIME t, char *zone)
+TIME ZoneAdjustment(TIME t, char *zone, int precision)
 {
    char timestr[128];
-   sprint_time(timestr, t, zone, 3);
+   sprint_time(timestr, t, zone, precision);
 
    char *tz = strrchr(timestr, '_');
    tz[1] = 'T';
