@@ -276,7 +276,6 @@ int DoIt(void)
     while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
       {
       strcpy(keyname, key->info->name);
-fprintf(stderr,"key %s\n",keyname);
       // Special actions for FITS basic structure
       if (strcmp(keyname, "SIMPLE") == 0) continue;
       if (strcmp(keyname, "EXTEND") == 0) continue;
