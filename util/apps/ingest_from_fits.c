@@ -121,8 +121,16 @@ into that series.  If the -c flag is given then the new record will be the first
 in the new series.
 
 If in the process of generating a JSD from the fitsfile, some illegal DRMS names are
-found among the FITS keywords, then one line will be printed for each such keyword
-with a substitute DRMS keyword, original FITS keyword, and an action of "copy".  This
+found among the FITS keywords, then two lines will be printed for each such keyword.
+The first line will be a comment with the original FITS name and the auto-generated
+substitute name.  Next a sample mapfile line will be provided which can be editted
+and included in a mapfile if desired.  This second line contains first the desired
+DRMS name, then the name to be found in the input file (this needs to be the auto-converted
+name), then an action.  The defualt action is "copy".
+If you do not want the auto-generated substitute keyword name, change the first column
+to the desired name AND change the matching line in the draft JSD to also have
+the desired name.
+This
 is the keyword mapping format also used by \ref ingest_dsds_a and can be captured from
 the ingest_from_fits stdout into a mapfile.  That mapfile, after possible editting,
 can be given to subsequent calls of ingest_from_fits to be used when ingesting fits files.
@@ -181,10 +189,6 @@ To ingest a single fitsfile into a not-yet created series, all in one command:
 \endcode
 
 \bug
-The mapping of illegal names does not work since the original names are already changed.
-probably need to handle in a different way.  but will work for changes not done
-automatically.  Meanwhile to change a name out the autoconverted name into
-the fitsname column of the mapfile and the desired drms name in the first col.
 
 */
 
@@ -379,12 +383,14 @@ fprintf(stderr,"key %s\n",keyname);
       printf("%s\n", jsd);
       // print keymap info
       printf("#====== BEGIN KEYNAME MAP =======\n");
-      printf("# REMOVE the keyname map lines from the JSD\n");
+      printf("# REMOVE these keyname map lines from the JSD\n");
       printf("# place the keyname map into a file for later use\n");
-      printf("# mapfile has structure: drmsname fitsname action\n");
+      printf("# mapfile has structure: wantedDRMSname namefromFITSfile action\n");
+      printf("# but the second column needs to be the auto-converted name to provoke substitution\n");
       printf("# use \"copy\" for default action - without quotes\n");
       for (imap=0; imap<nmap; imap++)
-          printf("%s\t%s\t%s\n", newnames[imap], oldnames[imap], actions[imap]);
+          printf("# FITS name %s is converted to %s on input.\n%s\t%s\t%s\n",
+            oldnames[imap], newnames[imap], newnames[imap], newnames[imap], actions[imap]);
       printf("#======END KEYNAME MAP =======\n");
       }
     }
@@ -444,7 +450,7 @@ fprintf(stderr,"key %s\n",keyname);
 
   if (insertrec)
     {
-    char *newname;
+    char *usename;
     char *action;
     DRMS_RecordSet_t *rs;
     DRMS_Record_t *rec;
@@ -458,24 +464,25 @@ fprintf(stderr,"key %s\n",keyname);
     while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
       {
       DRMS_Keyword_t *outkey;
-      newname = key->info->name;
+      usename = key->info->name;
       action = "copy";
       for (imap=0; imap<nmap; imap++)
-        if (strcmp(newname, oldnames[imap]) == 0)
+        if (strcmp(usename, oldnames[imap]) == 0)
           {
-          newname = newnames[imap];
+          usename = newnames[imap];
           action = actions[imap];
+          break;
           }
-      outkey = drms_keyword_lookup(rec, newname, 0);
+      outkey = drms_keyword_lookup(rec, usename, 0);
       if (outkey)
         {
         if (strcmp(action, "copy") == 0)
-          drms_setkey(rec, newname, key->info->type, &key->value);
+          drms_setkey(rec, usename, key->info->type, &key->value);
 //      else if ##### this is where you add new actions on keyword mapping
         else
           {
           fprintf(stderr, "old keyword %s has no action to make new key %s\n",
-            key->info->name, newname);
+            key->info->name, usename);
           DIE("no action found for keyword\n");
           }
         }
