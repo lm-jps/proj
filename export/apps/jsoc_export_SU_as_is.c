@@ -155,10 +155,16 @@ int DoIt(void)
       char recpath[DRMS_MAXPATHLEN];
       char *slash;
       DRMS_RecordSet_t *rs;
-      sprintf(query,"%s[? sunum=%lld ?]", sinfo->owning_series, sunum);
+      sprintf(query,"%s[! sunum=%lld !]", sinfo->owning_series, sunum);
       rs = drms_open_records(drms_env, query, &status);
       if (!rs || rs->n < 1)
-        DIE("Invalid sunum, drms_open_records call failed");
+      {
+         char mbuf[128];
+         snprintf(mbuf, 
+                  sizeof(mbuf), 
+                  "Invalid sunum, drms_open_records call failed: owning series - '%s', sunum - '%lld.\n", sinfo->owning_series, sunum);
+        DIE(mbuf);
+      }
       drms_record_directory(rs->records[0], recpath, 1);
       strcpy(supath, recpath);
       slash = rindex(supath, '/');
