@@ -283,10 +283,11 @@ SUM_info_t *drms_get_suinfo(long long sunum)
     SUM_close(my_sum,printkerr);
 #endif
 
-#define JSONDIE(msg) {die(dojson,msg,"");return(1);}
-#define JSONDIE2(msg,info) {die(dojson,msg,info);return(1);}
+#define JSONDIE(msg) {die(dojson,msg,"","4");return(1);}
+#define JSONDIE2(msg,info) {die(dojson,msg,info,"4");return(1);}
+#define JSONDIE3(msg,info) {die(dojson,msg,info,"6");return(1);}
 
-die(int dojson, char *msg, char *info)
+die(int dojson, char *msg, char *info, char *stat)
   {
   char *msgjson;
   char errval[10];
@@ -299,7 +300,7 @@ if (DEBUG) fprintf(stderr,"%s%s\n",msg,info);
   if (dojson)
     {
     msgjson = string_to_json(message);
-    json_insert_pair_into_object(jroot, "status", json_new_number("4"));
+    json_insert_pair_into_object(jroot, "status", json_new_number(stat));
     json_insert_pair_into_object(jroot, "error", json_new_string(msgjson));
     json_tree_to_string(jroot,&json);
     printf("Content-type: application/json\n\n");	
@@ -308,7 +309,7 @@ if (DEBUG) fprintf(stderr,"%s%s\n",msg,info);
   else
     {
     printf("Content-type: text/plain\n\n");
-    printf("status=4\nerror=%s\n", message);
+    printf("status=%s\nerror=%s\n", stat, message);
     }
   fflush(stdout);
   if (my_sum)
@@ -811,9 +812,9 @@ check for requestor to be valid remote DRMS site
   sprintf(status_query, "%s[%s]", export_series, requestid);
   exports = drms_open_records(drms_env, status_query, &status);
   if (!exports)
-    JSONDIE2("Cant locate export series: ", status_query);
+    JSONDIE3("Cant locate export series: ", status_query);
   if (exports->n < 1)
-    JSONDIE2("Cant locate export request: ", status_query);
+    JSONDIE3("Cant locate export request: ", status_query);
   export_log = exports->records[0];
 
   status     = drms_getkey_int(export_log, "Status", NULL);
