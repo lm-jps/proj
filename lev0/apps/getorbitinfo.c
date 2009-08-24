@@ -188,12 +188,12 @@ int DoIt(void)
       if (status == kSDOORB_success)
       {
          if (iorbit_getinfo(drms_env, 
-                            orbseries, 
+                            orbseries,
+                            gridtimes, 
                             interpalg, 
                             tgttimes, 
                             ntimes, 
-                            gridtimes,
-                            0,
+                            kIORBIT_CacheAction_DontCache,
                             &info) != kLIBASTRO_Success)
          {
             status = kSDOORB_failure;
@@ -201,7 +201,6 @@ int DoIt(void)
          else
          {
             /* This is a demonstration module - just print */
-            ListNode_t *node = NULL;
             IORBIT_Info_t *infoitem = NULL;
             char timestr[128];
             int iinfo;

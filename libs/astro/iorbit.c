@@ -60,10 +60,19 @@ struct IORBIT_Vector_struct
 
 typedef struct IORBIT_Vector_struct IORBIT_Vector_t;
 
+/* If not chunking, then gGridCache never gets updated during module run (it has all the values it 
+ * will ever have right from the beginning). 
+ */
+static int gCacheChunking = 1;
 static IORBIT_Vector_t *gGridCache = NULL;
 static DRMS_RecordSet_t *gCacheRS = NULL;
 static int gGridNItems = 0;
 static int gGridCurrPos = -1;
+
+/* for !gCacheChuunking case */
+const int gMinAbove = 16; /* min no. of vectors above max tgttime */
+const int gMinBelow = 16; /* min no. of vectors below min tgttime */
+
 
 /* declare fortran function */
 void pleph_(double *, int *, int *, double pos[6]);
@@ -339,41 +348,98 @@ static void FlushCache()
  *   So the old cache isn't completed blown away. This is done so that FetchNext()
  *   and FetchPrevious() can find the next and previous items without causing a cache miss. 
  *
- * returns 1 if successfully caches NEW items */
+ * returns number of items successfully cached */
 static int RehydrateCache(DRMS_Env_t *env,
                           const char *srcseries, 
                           const char *optfilter,
                           int nkeep)
 {
    int nitems = 0; 
-   int newcache = 0;
+   int ret = 0;
 
-   if (!gGridCache)
+   IORBIT_Vector_t *vec;
+   long long obsslot;
+   double obstime;
+   DRMS_Record_t *rec = NULL; /* record of orbit data from FDS */
+   int iitem = 0;
+   char query[256];
+   int drmsstatus;
+   DRMS_RecChunking_t cstat = kRecChunking_None;
+   int firstitem = 0;
+   int lastitem = 0;
+
+   snprintf(query, 
+            sizeof(query), 
+            "%s%s", 
+            srcseries, optfilter ? optfilter : "");
+
+   if (!gCacheChunking)
    {
-      gGridCache = CreateCache();
-      newcache = 1;
+      if (gCacheRS)
+      {
+         /* Cannot truly RE-hydrate if caching is turned off */
+         fprintf(stderr, "Cannot rehydrate cache if caching is turned off.\n");
+      }
+      else
+      {
+         /* OK to populate cache one time when caching is turned off */
+         gCacheRS = drms_open_records(env, query, &drmsstatus); 
+
+         if (gCacheRS && gCacheRS->n > 0)
+         {
+            gGridCache = (IORBIT_Vector_t *)malloc(sizeof(IORBIT_Vector_t) * gCacheRS->n);
+            firstitem = 0;
+            lastitem = gCacheRS->n;
+
+            for (iitem = firstitem; iitem < lastitem; iitem++)
+            {
+               rec = gCacheRS->records[iitem];
+               vec = &(gGridCache[iitem]);
+
+               obsslot = drms_getkey_longlong(rec, kOBSDATE_INDEX, NULL);
+               vec->slot = obsslot;
+
+               obstime = drms_getkey_double(rec, kOBSDATE, NULL);
+               vec->obstime = obstime;
+
+               /* These are in J2000.0, ecliptic coordinates 
+                *   -gcipos and gcivel are values relative to earth
+                *   -hcipos and hcivel are values relative to the sun
+                */
+               vec->gciX = drms_getkey_double(rec, kXGCI, NULL);
+               vec->gciY = drms_getkey_double(rec, kYGCI, NULL);
+               vec->gciZ = drms_getkey_double(rec, kZGCI, NULL);
+               vec->gciVX = drms_getkey_double(rec, kVXGCI, NULL);
+               vec->gciVY = drms_getkey_double(rec, kVYGCI, NULL);
+               vec->gciVZ = drms_getkey_double(rec, kVZGCI, NULL);
+
+               vec->hciX = drms_getkey_double(rec, kXHCI, NULL);
+               vec->hciY = drms_getkey_double(rec, kYHCI, NULL);
+               vec->hciZ = drms_getkey_double(rec, kZHCI, NULL);
+               vec->hciVX = drms_getkey_double(rec, kVXHCI, NULL);
+               vec->hciVY = drms_getkey_double(rec, kVYHCI, NULL);
+               vec->hciVZ = drms_getkey_double(rec, kVZHCI, NULL);
+            }
+         }
+      }
+
+      nitems = lastitem - firstitem;
+      gGridNItems = nitems;
+      ret = nitems;
    }
-
-   if (gGridCache)
+   else
    {
-      IORBIT_Vector_t *vec;
-      long long obsslot;
-      double obstime;
-      DRMS_Record_t *rec = NULL; /* record of orbit data from FDS */
-      int iitem = 0;
-      char query[256];
-      int drmsstatus;
-      DRMS_RecChunking_t cstat = kRecChunking_None;
-      int firstitem;
-      int lastitem;
+      /* gCacheChunking == 1 */
+      int newcache = 0;
+
+      if (!gGridCache)
+      {
+         gGridCache = CreateCache();
+         newcache = 1;
+      }
 
       if (!gCacheRS)
       {
-         snprintf(query, 
-                  sizeof(query), 
-                  "%s", 
-                  optfilter ? optfilter : srcseries);
-
          /* Use cursor to retrieve just a chunk */
          drms_recordset_setchunksize(kCACHESIZE);
          gCacheRS = drms_open_recordset(env, query, &drmsstatus);
@@ -434,15 +500,12 @@ static int RehydrateCache(DRMS_Env_t *env,
          vec->hciVZ = drms_getkey_double(rec, kVZHCI, NULL);
       }
 
-      nitems = iitem - firstitem + nkeep;     
-
-      if (nitems > 0)
-      {
-         gGridNItems = nitems;
-      }
+      nitems = iitem - firstitem + nkeep;
+      gGridNItems = nitems;
+      ret = nitems - nkeep;
    }
 
-   return nitems - nkeep;
+   return ret;
 }
 
 /*
@@ -501,6 +564,18 @@ static IORBIT_Vector_t *Fetch(DRMS_Env_t *env,
              */
             again = 0;
          }
+         else if (!gCacheChunking)
+         {
+            /* The vec selected is the one with the largest obs time in the cache.
+             * So it may be the case that the optfilter didn't correctly select
+             * a sufficient number of records with obstimes above the tgttime.
+             */
+            fprintf(stderr, 
+                    "WARNING: There might be an insufficient number of records in '%s%s' to span the range needed for interpolation.\n", 
+                    srcseries, 
+                    optfilter);
+            again = 0;
+         }
       }
       else
       {
@@ -557,6 +632,44 @@ static IORBIT_Vector_t *FetchNext(DRMS_Env_t *env,
    }
 
    return vec;
+}
+
+int CheckCache(int mintgt, int maxtgt)
+{
+   int ok = 1;
+
+   if (!gCacheChunking)
+   {
+      /* If not caching, ensure that there are a sufficient number of vectors above and 
+       * below tgttime */
+      int itime;
+      itime = gGridNItems - 1;
+
+      while (gGridNItems - 1 - itime < gMinAbove)
+      {
+         if (gGridCache[itime].obstime <= maxtgt)
+         {
+            ok = 0;
+            break;
+         }
+
+         itime--;
+      }
+
+      itime = 0;
+      while (itime < gMinBelow)
+      {
+         if (gGridCache[itime].obstime >= mintgt)
+         {
+            ok = 0;
+            break;
+         }
+
+         itime++;
+      }
+   }
+
+   return ok;
 }
 
 /* 
@@ -639,6 +752,16 @@ static int GetGridVectors(DRMS_Env_t *env,
           * rehydration of a newer recordset chunk, causing this Fetch() to fail if 
           * we didn't keep some of the previous chunk cached. */
          vec = Fetch(env, srcseries, optfilter, tgttimes[itgt], nbelow + 4, posbelow);
+
+         if (itgt == 0 && !gCacheChunking)
+         {
+            if (!CheckCache(tgttimes[0], tgttimes[ntgts - 1]))
+            {
+               fprintf(stderr, "Not enough data records in '%s%s' to perform interpolation.\n", srcseries, optfilter);
+               err = 1;
+               break;
+            }
+         }
 
          if (!vec)
          {
@@ -839,6 +962,7 @@ static int iorbit_interpolate(IORBIT_Alg_t alg,
       {
          case IORBIT_Alg_Linear:
            {
+              fprintf(stderr, "Unsupported interpolation algorithm '%d'.\n", (int)alg);
            }
            break;
          case IORBIT_Alg_Quadratic:
@@ -1021,27 +1145,22 @@ int CalcSolarVelocities(IORBIT_Vector_t *vec, int nvecs, double **hr, double **h
  * 
  */
 LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env, 
-                                const char *srcseries, 
+                                const char *srcseries,
+                                const char *optfilter, 
                                 IORBIT_Alg_t alg,
                                 const double *tgttimes, 
                                 int nitems, 
-                                const char *optfilter,
-                                int flush, 
+                                IORBIT_CacheAction_t ctype,
                                 IORBIT_Info_t **info)
 {
    LIBASTRO_Error_t err = kLIBASTRO_Success;
    int drmsstat = DRMS_SUCCESS;
 
-   if (info)
+   if (info && nitems > 0)
    {
       double *tgtsorted = NULL;
       int ntimes = 0;
      
-      char **pkarr = NULL;
-      int npkeys = 0;
-      DRMS_Record_t *template = NULL;
-      DRMS_Keyword_t *slotkw = NULL;
-
       LinkedList_t *listvecs = NULL;
       int *indices = NULL;
       HContainer_t *indexmap = NULL;
@@ -1055,132 +1174,161 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
 
       IORBIT_Info_t *retvec = NULL;
 
-      if (flush)
+      int nbelow = 0;
+      int nabove = 0;
+      char filter[DRMS_MAXQUERYLEN];
+
+     /* Ensure tgttimes are sorted in increasing value - missing values are removed */
+      ntimes = SortTimes(tgttimes, nitems, &tgtsorted);
+
+      gCacheChunking = 1;
+
+      if (ctype == kIORBIT_CacheAction_Flush)
       {
          FlushCache();
       }
-
-      /* Ensure tgttimes are sorted in increasing value - missing values are removed */
-      ntimes = SortTimes(tgttimes, nitems, &tgtsorted);
-
-      pkarr = drms_series_createpkeyarray(env, srcseries, &npkeys, &drmsstat);
-
-      /* There should be only one prime key in the source series */
-      XASSERT(pkarr && npkeys == 1);
-
-      if (pkarr)
+      else if (ctype == kIORBIT_CacheAction_DontCache)
       {
-         template = drms_template_record(env, srcseries, &drmsstat);
-         slotkw = drms_keyword_lookup(template, pkarr[0], 0);
+         gCacheChunking = 0;
+         if (optfilter != NULL)
+         {
+            fprintf(stderr, "WARNING: record-query filter '%s' is not applicable when caching is turned off and will not be used.\n", optfilter);
+         }
+         else
+         {
+            /* if !gCacheChunking, then must modify optfilter to restrict search to records that will likely 
+             * contain all target points, plus extra points on either end. */
+            double min = tgtsorted[0];
+            double max = tgtsorted[nitems - 1];
+            char mintime[128];
+            char maxtime[128];
+            sprint_time(mintime, min - 3600, "UTC", 0);
+            sprint_time(maxtime, max + 3600, "UTC", 0);
+
+            snprintf(filter, sizeof(filter), "[%s-%s]", mintime, maxtime);
+            optfilter = filter;
+         }
       }
 
-      drms_series_destroypkeyarray(&pkarr, npkeys);
-
-      if (slotkw)
+      switch (alg)
       {
-         *info = calloc(nitems, sizeof(IORBIT_Info_t));
-
-         /* Use array of time strings to check for presence of gci/hci data in 
-          * grid cache - make some assumptions here 
-          *   1. The caller will ask for times in order.
-          *   2. The user won't request the same target times under normal
-          *      circumstances.
-          *
-          * Given these assumptions, the best way to refresh the cache is to 
-          * go in chronological order, using cached values until a miss happens.
-          * Then at that point, the cache is no longer useful - so wipe it out, get 
-          * another chunk of records from DRMS, and use those values to populate the cache.
-          */
-
-         /* Get all grid vectors (data from the source series - each vector of information
-          * is associated with an actual observation time.  The information is not
-          * interpolated), in ascending order, such that the first grid vector's abscissa
-          * (observation time) is the largest abscissa smaller than than the 
-          * smallest result abscissa (interpolated time), and the last grid vector's abscissa is 
-          * the smallest abscissa greater than the largest result abscissa. 
-          */
-         if (GetGridVectors(env, 
-                            srcseries, /* series containing observed data */
-                            tgtsorted, /* times we want to interpolate to */
-                            ntimes,
-                            2, /* number of grid abscissae below first result abscissa */
-                            kLTE,
-                            1, /* number of grid abscissae above last result abscissa */
-                            kGT,
-                            &listvecs,
-                            NULL,
-                            &indexmap,
-                            optfilter))
+         case IORBIT_Alg_Linear:
          {
-            err = kLIBASTRO_InsufficientData;
+            fprintf(stderr, "Unsupported interpolation algorithm '%d'.\n", (int)alg);
+         }
+         break;
+         case IORBIT_Alg_Quadratic:
+         {
+            nbelow = 2;
+            nabove = 1;
+         }
+         break;
+         default:
+           fprintf(stderr, "Unsupported interpolation algorithm '%d'.\n", (int)alg);
+      }
+
+      *info = calloc(nitems, sizeof(IORBIT_Info_t));
+
+      /* Use array of time strings to check for presence of gci/hci data in 
+       * grid cache - make some assumptions here 
+       *   1. The caller will ask for times in order.
+       *   2. The user won't request the same target times under normal
+       *      circumstances.
+       *
+       * Given these assumptions, the best way to refresh the cache is to 
+       * go in chronological order, using cached values until a miss happens.
+       * Then at that point, the cache is no longer useful - so wipe it out, get 
+       * another chunk of records from DRMS, and use those values to populate the cache.
+       */
+
+      /* Get all grid vectors (data from the source series - each vector of information
+       * is associated with an actual observation time.  The information is not
+       * interpolated), in ascending order, such that the first grid vector's abscissa
+       * (observation time) is the largest abscissa smaller than than the 
+       * smallest result abscissa (interpolated time), and the last grid vector's abscissa is 
+       * the smallest abscissa greater than the largest result abscissa. 
+       */
+      if (GetGridVectors(env, 
+                         srcseries, /* series containing observed data */
+                         tgtsorted, /* times we want to interpolate to */
+                         ntimes,
+                         nbelow, /* number of grid abscissae below first result abscissa */
+                         kLTE,
+                         nabove, /* number of grid abscissae above last result abscissa */
+                         kGT,
+                         &listvecs,
+                         NULL,
+                         &indexmap,
+                         optfilter))
+      {
+         err = kLIBASTRO_InsufficientData;
+      }
+
+      if (!err && listvecs && indexmap)
+      {
+         int ivec;
+         ListNode_t *gv = NULL;
+         int *vindex = NULL;
+         char dhashkey[128];
+         int itgt;
+
+         /* Make an array out of the list of grid vectors */
+         vecs = malloc(sizeof(IORBIT_Vector_t) * listvecs->nitems);
+         list_llreset(listvecs);
+         ivec = 0;
+
+         while ((gv = list_llnext(listvecs)) != NULL)
+         {
+            vecs[ivec] = *((IORBIT_Vector_t *)(gv->data));
+            ivec++;
          }
 
-         if (!err && listvecs && indexmap)
+         /* Make an array of indices to gridvecs for tgttimes (the unsorted tgttimes) */
+         indices = (int *)malloc(sizeof(int) * ntimes);
+
+         for (itgt = 0; itgt < ntimes; itgt++)
          {
-            int ivec;
-            ListNode_t *gv = NULL;
-            int *vindex = NULL;
-            char dhashkey[128];
-            int itgt;
-
-            /* Make an array out of the list of grid vectors */
-            vecs = malloc(sizeof(IORBIT_Vector_t) * listvecs->nitems);
-            list_llreset(listvecs);
-            ivec = 0;
-
-            while ((gv = list_llnext(listvecs)) != NULL)
+            CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[itgt]);
+            vindex = ((int *)hcon_lookup(indexmap, dhashkey));
+            if (vindex)
             {
-               vecs[ivec] = *((IORBIT_Vector_t *)(gv->data));
-               ivec++;
+               indices[itgt] = *vindex;
             }
+         }
 
-            /* Make an array of indices to gridvecs for tgttimes (the unsorted tgttimes) */
-            indices = (int *)malloc(sizeof(int) * ntimes);
-
-            for (itgt = 0; itgt < ntimes; itgt++)
+         if (!iorbit_interpolate(alg,
+                                 vecs, /* grid vectors (contains both abscissa and ordinate values) */
+                                 tgttimes, /* result abscissae */
+                                 indices, 
+                                 ntimes,
+                                 &interp))
+         {
+            if (!CalcSolarVelocities(interp, ntimes, &dsun_obs, &hvr, &hvw, &hvn))
             {
-               CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[itgt]);
-               vindex = ((int *)hcon_lookup(indexmap, dhashkey));
-               if (vindex)
+               /* loop through resulting vectors to create output */
+               for (ivec = 0; ivec < ntimes; ivec++)
                {
-                  indices[itgt] = *vindex;
+                  retvec = &((*info)[ivec]);
+
+                  retvec->obstime = interp[ivec].obstime;
+                  retvec->hciX = interp[ivec].hciX;
+                  retvec->hciY = interp[ivec].hciY;
+                  retvec->hciZ = interp[ivec].hciZ;
+                  retvec->hciVX = interp[ivec].hciVX;
+                  retvec->hciVY = interp[ivec].hciVY;
+                  retvec->hciVZ = interp[ivec].hciVZ;
+                  retvec->dsun_obs = dsun_obs[ivec];
+                  retvec->obs_vr = hvr[ivec];
+                  retvec->obs_vw = hvw[ivec];
+                  retvec->obs_vn = hvn[ivec];
                }
             }
-
-            if (!iorbit_interpolate(alg,
-                                    vecs, /* grid vectors (contains both abscissa and ordinate values) */
-                                    tgttimes, /* result abscissae */
-                                    indices, 
-                                    ntimes,
-                                    &interp))
-            {
-               if (!CalcSolarVelocities(interp, ntimes, &dsun_obs, &hvr, &hvw, &hvn))
-               {
-                  /* loop through resulting vectors to create output */
-                  for (ivec = 0; ivec < ntimes; ivec++)
-                  {
-                     retvec = &((*info)[ivec]);
-
-                     retvec->obstime = interp[ivec].obstime;
-                     retvec->hciX = interp[ivec].hciX;
-                     retvec->hciY = interp[ivec].hciY;
-                     retvec->hciZ = interp[ivec].hciZ;
-                     retvec->hciVX = interp[ivec].hciVX;
-                     retvec->hciVY = interp[ivec].hciVY;
-                     retvec->hciVZ = interp[ivec].hciVZ;
-                     retvec->dsun_obs = dsun_obs[ivec];
-                     retvec->obs_vr = hvr[ivec];
-                     retvec->obs_vw = hvw[ivec];
-                     retvec->obs_vn = hvn[ivec];
-                  }
-               }
-            }
-            else
-            {
-               /* error performing interpolation */
-               fprintf(stderr, "Error performing interpolation.\n");
-               err = kLIBASTRO_Interpolation;
-            }
+         }
+         else
+         {
+            /* error performing interpolation */
+            fprintf(stderr, "Error performing interpolation.\n");
+            err = kLIBASTRO_Interpolation;
          }
       }
 

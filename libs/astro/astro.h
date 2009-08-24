@@ -152,6 +152,15 @@ enum IORBIT_Alg_enum
 
 typedef enum IORBIT_Alg_enum IORBIT_Alg_t;
 
+enum IORBIT_CacheAction_enum
+{
+   kIORBIT_CacheAction_None = 0,
+   kIORBIT_CacheAction_Flush,
+   kIORBIT_CacheAction_DontCache
+};
+
+typedef enum IORBIT_CacheAction_enum IORBIT_CacheAction_t;
+
 /* Structure to return information caller of iorbit_getinfo() */
 struct IORBIT_Info_struct
 {
@@ -176,11 +185,11 @@ typedef struct IORBIT_Info_struct IORBIT_Info_t;
 LIBASTRO_Error_t iorbit_test(DRMS_Env_t *env, const char *orbseries);
 LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env, 
                                 const char *srcseries, 
+                                const char *optfilter, 
                                 IORBIT_Alg_t alg,
                                 const double *tgttimes, 
                                 int nitems, 
-                                const char *optfilter,
-                                int flush,
+                                IORBIT_CacheAction_t ctype,
                                 IORBIT_Info_t **info);
 void iorbit_cleanup();
 
