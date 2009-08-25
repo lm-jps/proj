@@ -586,6 +586,14 @@ static IORBIT_Vector_t *Fetch(DRMS_Env_t *env,
       {
          /* nkeep should be sufficiently large to accommodate the code calling 
           * Fetch(), which may call FetchNext() or  FetchPrevious(). */
+         TIMER_t *tmr = NULL;
+
+         if (env->verbose)
+         {
+            /* time fetching records from disk */
+            tmr = CreateTimer();
+         }
+
          if (RehydrateCache(env, srcseries, optfilter, nkeep) == 0)
          {
             /* No more data - either didn't find a grid vector with an obstime
@@ -594,6 +602,12 @@ static IORBIT_Vector_t *Fetch(DRMS_Env_t *env,
              * then vec will now contain that last item, which is the correct
              * result. */
             again = 0;
+         }
+
+         if (env->verbose)
+         {
+            fprintf(stdout, "RehydrateCache() seconds elapsed: %f\n", GetElapsedTime(tmr));
+            DestroyTimer(&tmr);
          }
       }
    }
@@ -634,7 +648,7 @@ static IORBIT_Vector_t *FetchNext(DRMS_Env_t *env,
    return vec;
 }
 
-int CheckCache(int mintgt, int maxtgt)
+int CheckCache(double mintgt, double maxtgt)
 {
    int ok = 1;
 
@@ -1154,7 +1168,6 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                 IORBIT_Info_t **info)
 {
    LIBASTRO_Error_t err = kLIBASTRO_Success;
-   int drmsstat = DRMS_SUCCESS;
 
    if (info && nitems > 0)
    {
@@ -1177,6 +1190,8 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       int nbelow = 0;
       int nabove = 0;
       char filter[DRMS_MAXQUERYLEN];
+
+      TIMER_t *tmr = NULL;
 
      /* Ensure tgttimes are sorted in increasing value - missing values are removed */
       ntimes = SortTimes(tgttimes, nitems, &tgtsorted);
@@ -1248,6 +1263,13 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
        * smallest result abscissa (interpolated time), and the last grid vector's abscissa is 
        * the smallest abscissa greater than the largest result abscissa. 
        */
+
+      if (env->verbose)
+      {
+         /* time obtaining the grid vectors */
+         tmr = CreateTimer();
+      }
+
       if (GetGridVectors(env, 
                          srcseries, /* series containing observed data */
                          tgtsorted, /* times we want to interpolate to */
@@ -1262,6 +1284,12 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                          optfilter))
       {
          err = kLIBASTRO_InsufficientData;
+      }
+
+      if (env->verbose)
+      {
+         fprintf(stdout, "GetGridVectors() seconds elapsed: %f\n", GetElapsedTime(tmr));
+         DestroyTimer(&tmr);
       }
 
       if (!err && listvecs && indexmap)
@@ -1296,6 +1324,12 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
             }
          }
 
+         if (env->verbose)
+         {
+            /* time interpolation */
+            tmr = CreateTimer();
+         }
+
          if (!iorbit_interpolate(alg,
                                  vecs, /* grid vectors (contains both abscissa and ordinate values) */
                                  tgttimes, /* result abscissae */
@@ -1303,8 +1337,23 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                  ntimes,
                                  &interp))
          {
+            if (env->verbose)
+            {
+               fprintf(stdout, "iorbit_interpolate() seconds elapsed: %f\n", GetElapsedTime(tmr));
+               DestroyTimer(&tmr);
+               
+               /* time solar velocity calculation */
+               tmr = CreateTimer();
+            }
+
             if (!CalcSolarVelocities(interp, ntimes, &dsun_obs, &hvr, &hvw, &hvn))
             {
+               if (env->verbose)
+               {
+                  fprintf(stdout, "CalcSolarVelocities() seconds elapsed: %f\n", GetElapsedTime(tmr));
+                  DestroyTimer(&tmr);
+               }
+
                /* loop through resulting vectors to create output */
                for (ivec = 0; ivec < ntimes; ivec++)
                {

@@ -56,6 +56,7 @@ int DoIt(void)
    int ntimes = 0;
    int doHCItest;
    int testinterp;
+   TIMER_t *tmr = NULL;
 
    doHCItest = cmdparams_isflagset(&cmdparams, kTESTHCI);
    orbseries = cmdparams_get_str(&cmdparams, kORBSERIES, NULL);
@@ -77,6 +78,12 @@ int DoIt(void)
          char lineBuf[LINE_MAX];
          char *fullline = NULL;
          int stgt = 48;
+
+         if (drms_env->verbose)
+         {
+            /* time file read */
+            tmr = CreateTimer();
+         }
 
          filestr = tgttimesstr + 1;
 
@@ -148,6 +155,12 @@ int DoIt(void)
                }
             }
          }
+
+         if (drms_env->verbose)
+         {
+            fprintf(stdout, "file read seconds elapsed: %f\n", GetElapsedTime(tmr));
+            DestroyTimer(&tmr);
+         }
       }
       else
       {
@@ -187,6 +200,12 @@ int DoIt(void)
 
       if (status == kSDOORB_success)
       {
+         if (drms_env->verbose)
+         {
+            /* time solar velocity calculation */
+            tmr = CreateTimer();
+         }
+
          if (iorbit_getinfo(drms_env, 
                             orbseries,
                             gridtimes, 
@@ -200,6 +219,12 @@ int DoIt(void)
          }
          else
          {
+            if (drms_env->verbose)
+            {
+               fprintf(stdout, "iorbit_getinfo() seconds elapsed: %f\n", GetElapsedTime(tmr));
+               DestroyTimer(&tmr);
+            }
+
             /* This is a demonstration module - just print */
             IORBIT_Info_t *infoitem = NULL;
             char timestr[128];
