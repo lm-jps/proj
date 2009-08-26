@@ -2,10 +2,13 @@
  *  smpl_00.c						$DRMS/proj/cookbook/
  *
  *  An extremely simple program that does (almost) nothing at all.
- *    It illustrates the use of the 
+ *    It illustrates how a module is called from a driver program, in this
+ *    case a locally-provided main program rather than jsoc_main, and the
+ *    use of the command line parsing features in (and outside of) the
+ *    module.
  *
  *  Usage:
- *    smpl_00 [-avVH]
+ *    smpl_00 [print= ...]
  *
  *  Bugs:
  *    The program is of no particular use, and exists merely for heuristic
