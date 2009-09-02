@@ -18,7 +18,7 @@ xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
 
 #SUMEXE_$(d)	:= $(addprefix $(d)/, ingest_lev0)
 #SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(test0_$(d)) $(wtest_$(d))
-SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d))
+SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(ingestlev1X_$(d)) $(wtest_$(d))
 CEXE_$(d)       := $(addprefix $(d)/, fix_hmi_config_file_date)
 CEXE		:= $(CEXE) $(CEXE_$(d))
 MODEXESUMS	:= $(MODEXESUMS) $(SUMEXE_$(d)) $(PEEXE_$(d))
@@ -67,6 +67,7 @@ $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)):	$(LIBASTRO)
 
 $(ingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
 $(ingestlev1_$(d)):	LL_TGT := $(LL_TGT)
+$(ingestlev1X_$(d)):	LL_TGT := $(LL_TGT)
 $(ingestlev1_mgr_$(d)):	LL_TGT := $(LL_TGT)
 $(test0_$(d)):	LL_TGT := $(LL_TGT)
 $(wtest_$(d)):	LL_TGT := $(LL_TGT)
