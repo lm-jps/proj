@@ -171,6 +171,12 @@ struct IORBIT_Info_struct
   double hciVX;
   double hciVY;
   double hciVZ;
+  double gciX;
+  double gciY;
+  double gciZ;
+  double gciVX;
+  double gciVY;
+  double gciVZ;
   double dsun_obs;
   double obs_vr;
   double obs_vw;

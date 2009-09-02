@@ -1366,6 +1366,12 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                   retvec->hciVX = interp[ivec].hciVX;
                   retvec->hciVY = interp[ivec].hciVY;
                   retvec->hciVZ = interp[ivec].hciVZ;
+                  retvec->gciX = interp[ivec].gciX;
+                  retvec->gciY = interp[ivec].gciY;
+                  retvec->gciZ = interp[ivec].gciZ;
+                  retvec->gciVX = interp[ivec].gciVX;
+                  retvec->gciVY = interp[ivec].gciVY;
+                  retvec->gciVZ = interp[ivec].gciVZ;
                   retvec->dsun_obs = dsun_obs[ivec];
                   retvec->obs_vr = hvr[ivec];
                   retvec->obs_vw = hvw[ivec];
