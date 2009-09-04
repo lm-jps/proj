@@ -1,4 +1,4 @@
-ssh-agent_conf = /home/jsoc/.ssh-agent_dev
+ssh-agent_conf = /home/jsoc/.ssh-agent
 log = /home/jsoc/sdo_dev/lzp/lzp.log
 scrpath = /home/jsoc/cvs/Development/JSOC/scripts
 binpath = /home/jsoc/cvs/Development/JSOC/bin
