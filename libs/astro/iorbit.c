@@ -767,16 +767,6 @@ static int GetGridVectors(DRMS_Env_t *env,
           * we didn't keep some of the previous chunk cached. */
          vec = Fetch(env, srcseries, optfilter, tgttimes[itgt], nbelow + 4, posbelow);
 
-         if (itgt == 0 && !gCacheChunking)
-         {
-            if (!CheckCache(tgttimes[0], tgttimes[ntgts - 1]))
-            {
-               fprintf(stderr, "Not enough data records in '%s%s' to perform interpolation.\n", srcseries, optfilter);
-               err = 1;
-               break;
-            }
-         }
-
          if (!vec)
          {
             fprintf(stderr, 
@@ -785,6 +775,16 @@ static int GetGridVectors(DRMS_Env_t *env,
                     srcseries);
             err = 1;
             break;
+         }
+
+         if (itgt == 0 && !gCacheChunking)
+         {
+            if (!CheckCache(tgttimes[0], tgttimes[ntgts - 1]))
+            {
+               fprintf(stderr, "Not enough data records in '%s%s' to perform interpolation.\n", srcseries, optfilter);
+               err = 1;
+               break;
+            }
          }
 
          /* get the nbelow points less than tgttimes[itgt] (in reverse order of course) */
