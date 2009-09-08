@@ -1,19 +1,19 @@
 /*
- *  smpl_06.c						$DRMS/proj/cookbook/
+ *  smpl_07.c						$DRMS/proj/cookbook/
  *
  *  Populates a data series consisting of variable size images with random
- *    data in
+ *    data from a selected distribution function
  *  Illustrates features of the DRMS_Array and DRMS_Segment structs, and
  *    writing to DRMS record segments
  *
  *  Usage:
- *    smpl_06 [ds= cols= rows= ]
+ *    smpl_07 [ds= cols= rows= ]
  *
  *  Revision history is at end of file.
  */
 
 
-char *module_name = "CookbookRecipe:06";
+char *module_name = "CookbookRecipe:07";
 char *version_id = "1.0";
 
 #include <jsoc_main.h>

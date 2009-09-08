@@ -1,10 +1,11 @@
 /*
  *  smpl_06.c						$DRMS/proj/cookbook/
  *
- *  Populates a data series consisting of variable size images with random
- *    data in
- *  Illustrates features of the DRMS_Array and DRMS_Segment structs, and
- *    writing to DRMS record segments
+ *  Updates a record in the data series created in smpl_05 with new data
+ *
+ *  Illustrates features of the DRMS_Keyword struct, and "updating" of
+ *    records in DRMS via cloning and recnum; also illustrates processing
+ *    of multiple records via the DRMS_RecordSet struct
  *
  *  Usage:
  *    smpl_06 [ds= cols= rows= ]
