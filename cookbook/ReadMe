@@ -24,10 +24,16 @@ smpl_04.c	prints the number of unique records in a selected data series
 	show_info
 smpl_05.c	inserts data records from noaa_ar.dat into series created with
 	noaa_ar.jsd
+smpl_06.c	updates data records in series built with smpl_05 with new
+	keyword values
+smpl_07.c	inserts image data in record segments in a data series created
+	with images.jsd
 
 	Other
 Makefile	The generic Makefile
 ReadMe		(this file)
+images.jsd	A JSD file that can be used to build a (keywordless) DRMS data
+	series for storing data segments
 noaa_ar.dat	A summary listing of data from daily NOAA Active Region reports
 	for regions with spots from 1996 onward; can be used as input for a
 	DRMS data series
@@ -192,6 +198,15 @@ something in a different namespace from drms; each user should have a
 personal namespace. Then you can run the module with the appropriate value
 for the "ds" argument.
 
+Any time you want to remove this series (to try out different series
+modifications in the JSD for example), you can delete it by typing
+	delete_series drms.NOAA_ar
+(or whatever its series name is) and answering yes to the safeguard prompts.
+If you do not change the series name in the JSD, you can also force its
+deletion and recreation by typing
+	create_series -f noaa_ar.jsd
+If you give it a new series name of course it will not remove the old one.
+
 ********************************************************************************
 
 Recipe 6: Modifying Records in a Data Series
@@ -225,23 +240,44 @@ the higher recnum is the only one that will show up in ordinary queries.
 
 ********************************************************************************
 
-Recipe 7: Modifying Records in a Data Series
+Recipe 7: Creating Records with Data Segments
 
 The data series worked with in the previous two examples had no associated
 data segments, repositories for bulk data such as images or other data arrays.
 The JSD file images.jsd describes a series with the opposite structure. It
-contains no keywords at all in database (except for the hidden keywords like
-recnum, so that all records are unique). However, it does allow for a segment,
-which can be any 2-dimensional array of short ints (which can represent scaled
-floats), stored internally as Rice-compressed FITS binary tables.  As in the
-preparations for Recipe 5, run
+contains no keywords at all in the database (except for the hidden keywords
+like recnum, so that all records are unique). However, it does allow for a
+segment, which can be any 2-dimensional array of short ints (which can
+represent scaled floats), stored internally as Rice-compressed FITS binary
+tables.  As in the preparations for Recipe 5, run
 	create_series images.jsd
+
 You can then run smpl_07 to create records (one at a time) in this series.
 Each will have a data segment of specified size and shape, with the values
-filled randomly using a somewhat Byzantine procedure. You might want to fool
-around with different values of the parameters dist and seed.  In order to
-view the data segments, run for example
+filled randomly using a somewhat Byzantine procedure to create a semblance
+of large-scale structure. You might want to fool around with different values
+of the parameters dist and seed.  In order to view the data segments, run for
+example
 	show_info -pq ds= drms.images"[]"
 and then run a viewer, e.g. ds9, on the fits files in the displayed SUMS
 directories.
+
+Note a few interesting features of the JSD file you used to create this data
+series. First the Archive flag is a negative number. Normally the Archive flag
+is set to 1 if the data segments are to be archived to tape before they age
+off the SUMS disks (in 10 days in this case), 0 otherwise. However, if the
+data segments are allowed to disappear without having been archived to tape,
+the data records in the DRMS will still remain. Sometimes that is useful, but
+in this case, with a series that contains no ancillary data at all, that would
+be pointless. The value of -1 will force the DRMS to actually remove any records
+when their corresponding data segments age off the disk.
+
+Also, note that the module automatically created FITS files named v.fits
+with binary table row compression. That is because of the parameters specified
+for the series Segment "Data" in the JSD file. You might want to experiment
+with different values for the various fields in the Segment descriptor, "name",
+scope, "type", "naxis" (which would cause the module to fail if changed),
+"axis_n" (which must be specified if scope is variable rather than vardim and
+might cause the module to fail if inappropriate values of parameters are
+chosen, "protocol", the compression and scaling parameters.
 
