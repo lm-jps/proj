@@ -141,7 +141,7 @@ int DoIt(void)
     count += 1;
     
     susize = 0;
-    *onlinestat = '\0';
+    memset(onlinestat, 0, sizeof(onlinestat));
 
     sinfo = drms_get_suinfo(sunum);
     if (!sinfo)
@@ -197,6 +197,7 @@ int DoIt(void)
              else
              {
                 susize = (int)sinfo->bytes;
+                *onlinestat = 'Y';
              }
 
              strcpy(supath, recpath);
@@ -208,7 +209,11 @@ int DoIt(void)
           drms_close_records(rs, DRMS_FREE_RECORD);
        }
        else
-         strcpy(supath, sinfo->online_loc);
+       {
+          strcpy(supath, sinfo->online_loc);
+          susize = (int)sinfo->bytes;
+          *onlinestat = 'Y';
+       }
     }
 
     fprintf(index_data, "%lld\t%s\t%s\t%s\t%d\n", sunum, sinfo->owning_series, supath, onlinestat, susize);
