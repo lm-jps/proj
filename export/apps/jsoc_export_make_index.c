@@ -107,6 +107,10 @@ int main(int argc, char **argv)
       {
       char *name, *val, *sustr;
       char *namestr, *valstr;
+      char *sustatus = NULL;
+      char *susize = NULL;
+      char linkbuf[2048];
+
       case 0: // Initial read expect standard header line
 	if (strncmp(buf, "# JSOC ",7) != 0)
 	  {
@@ -191,7 +195,7 @@ int main(int argc, char **argv)
 	// put name=value pair into index.html
 	fprintf(index_html, "<TR><TD>%s</TD<TD><A HREF=\"http://jsoc.stanford.edu/%s/%s\">%s</A></TD></TR>\n", name, dir, val, val);
 	break;
-      case 3: // Data section for Storage Units contains triples of sunum, seriesname, path
+      case 3: // Data section for Storage Units contains triples of sunum, seriesname, path, online status, file size
         if (*p == '#' || !*p) // skip blank and comment lines
           break;
         sustr = buf;
@@ -213,10 +217,31 @@ int main(int argc, char **argv)
         val = p;
         while (isblank(*val)) // skip leading blanks
           val++;
-        p = val + strlen(val);
-        p--;
-        while (isblank(*p) && p >= val) // omit trailing blanks
-          *p-- = '\0';
+
+        p = val;
+        while (*p && !isblank(*p)) // skip past directory
+          p++;
+        if (*p)
+          *p++ = '\0'; // mark end of directory
+
+        sustatus = p;
+        while (isblank(*sustatus)) // skip leading blanks
+          sustatus++;
+        p = sustatus;
+        while (*p && !isblank(*p)) // skip past sustatus
+          p++;
+        if (*p)
+          *p++ = '\0'; // mark end of sustatus
+
+        susize = p;
+        while (isblank(*susize)) // skip leading blanks
+          susize++;
+        p = susize;
+        while (*p && !isblank(*p)) // skip past susize
+          p++;
+        if (*p)
+          *p++ = '\0'; // mark end of susize
+
         // put sunum, seriesname, and path into json
         fileinfo = json_new_object();
         namestr = string_to_json(sustr);
@@ -228,9 +253,33 @@ int main(int argc, char **argv)
         valstr = string_to_json(val);
         json_insert_pair_into_object(fileinfo, "path", json_new_string(valstr));
         free(valstr);
+
+        // online status
+        json_insert_pair_into_object(fileinfo, "sustatus", json_new_string(sustatus));
+
+        // SU size
+        json_insert_pair_into_object(fileinfo, "susize", json_new_string(susize));
+
         json_insert_child(recinfo, fileinfo);
+
+        if (strcasecmp(val, "NA") == 0)
+        {
+           snprintf(linkbuf, sizeof(linkbuf), "NA");
+        }
+        else
+        {
+           /* fill in with SU path */
+           snprintf(linkbuf, sizeof(linkbuf), "<A HREF=\"http://jsoc.stanford.edu/%s\">%s</A>", val, val);
+        }
+
         // put name=value pair into index.html
-        fprintf(index_html, "<TR><TD>%s</TD<TD>%s</TD><TD><A HREF=\"http://jsoc.stanford.edu/%s\">%s</A></TD></TR>\n", sustr, name, val, val);
+        fprintf(index_html, 
+                "<TR><TD>%s</TD<TD>%s</TD><TD>%s</TD><TD>%s</TD><TD>%s</TD></TR>\n", 
+                sustr, /* sunum */
+                name, /* owning series */
+                linkbuf, /* link or NA */
+                sustatus, /* SU status - Y, N, X, I */
+                susize /* SU size in bytes */ );
         break;
       default:
         fprintf(stderr, "Unsupported case '%d'.\n", state);
