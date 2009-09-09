@@ -372,16 +372,24 @@ int DoIt(void)
           fprintf(fp, "jsoc_export_SU_as_is_sock ds='%s' requestid=%s\n", dataset, requestid); 
         else
           fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid=%s filenamefmt='%s'\n", dataset, requestid, filenamefmt); 
-        fprintf(fp, "if ($status) exit $status\n");
+        fprintf(fp, "set RUNSTAT = $status\n");
         // convert index.txt list into index.json and index.html packing list files. 
-        fprintf(fp, "jsoc_export_make_index\n");
-        fprintf(fp, "if ($status) exit $status\n");
+        fprintf(fp, "if ($RUNSTAT == 0) then\n");
+        fprintf(fp, "  jsoc_export_make_index\n");
+        fprintf(fp, "  set RUNSTAT = $status\n");
+        fprintf(fp, "endif\n");
         // set status=done and mark this version of the export record permanent
-        fprintf(fp, "set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
-  // make drms_run completion lock file
-  fprintf(fp, "show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
+        fprintf(fp, "if ($RUNSTAT == 0) then\n");
+        fprintf(fp, "  set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
         // copy the drms_run log file
-        fprintf(fp, "cp /home/jsoc/exports/tmp/%s.runlog ./%s.runlog \n", requestid, requestid);
+        fprintf(fp, "  cp /home/jsoc/exports/tmp/%s.runlog ./%s.runlog \n", requestid, requestid);
+        // make drms_run completion lock file (always do this)
+        fprintf(fp, "  show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
+        fprintf(fp, "else\n");
+        // make drms_run completion lock file (always do this) - drms_server died, so don't use sock version here
+        fprintf(fp, "  show_info -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
+        fprintf(fp, "endif\n");
+        fprintf(fp, "exit $RUNSTAT\n");
         fclose(fp);
         chmod(runscript, 0555);
         }
