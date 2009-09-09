@@ -1,6 +1,3 @@
-#define DEBUG 1
-#define DEBUG 0
-
 /*
  *  jsoc_export_SU_as_is - Generates index.XXX files for SUMS storage unit export.
  *
@@ -108,6 +105,10 @@ int DoIt(void)
   char *cwd;
   TIME now = timenow();
 
+  char mbuf[128];
+  char onlinestat[128];
+  int susize;
+
   if (nice_intro ()) return (0);
 
   in = cmdparams_get_str (&cmdparams, "ds", NULL);
@@ -138,43 +139,79 @@ int DoIt(void)
     sunum = atoll(this_sunum);
     sunumlist = NULL;
     count += 1;
+    
+    susize = 0;
+    *onlinestat = '\0';
+
     sinfo = drms_get_suinfo(sunum);
     if (!sinfo)
-      DIE("Invalid sunum, SUM_info call failed");
-    if (strcmp(sinfo->online_status,"N")!=0)
-      {
-      int y,m,d,hr,mn;
-      char sutime[50];
-      sscanf(sinfo->effective_date,"%4d%2d%2d%2d%2d", &y,&m,&d,&hr,&mn);
-      sprintf(sutime, "%4d.%02d.%02d_%02d:%02d", y,m,d,hr,mn);
-      expire = (sscan_time(sutime) - now)/86400.0;
-      }
-    if (strcmp(sinfo->online_status,"N")==0 || expire < 3)
-      {  // need to stage or reset retention time
-      char query[DRMS_MAXQUERYLEN];
-      char recpath[DRMS_MAXPATHLEN];
-      char *slash;
-      DRMS_RecordSet_t *rs;
-      sprintf(query,"%s[! sunum=%lld !]", sinfo->owning_series, sunum);
-      rs = drms_open_records(drms_env, query, &status);
-      if (!rs || rs->n < 1)
-      {
-         char mbuf[128];
-         snprintf(mbuf, 
-                  sizeof(mbuf), 
-                  "Invalid sunum, drms_open_records call failed: owning series - '%s', sunum - '%lld.\n", sinfo->owning_series, sunum);
-        DIE(mbuf);
-      }
-      drms_record_directory(rs->records[0], recpath, 1);
-      strcpy(supath, recpath);
-      slash = rindex(supath, '/');
-      if (slash && strncmp(slash, "/S", 2) == 0)
-        slash[0] = '\0';
-      drms_close_records(rs, DRMS_FREE_RECORD);
-      }
+    {
+       snprintf(mbuf, 
+                sizeof(mbuf), 
+                "Invalid sunum, drms_open_records call failed: owning series - '%s', sunum - '%lld.\n", 
+                sinfo->owning_series, 
+                sunum);
+       fprintf(stderr, mbuf);
+       *onlinestat = 'X';
+    }
+    else if (strcmp(sinfo->online_status, "N") ==0 && strcmp(sinfo->archive_status, "N") == 0)
+    {
+       *onlinestat = 'X';
+    }
     else
-      strcpy(supath, sinfo->online_loc);
-    fprintf(index_data, "%lld\t%s\t%s\n",sunum,sinfo->owning_series,supath);
+    {
+       if (strcmp(sinfo->online_status,"N")!=0)
+       {
+          int y,m,d,hr,mn;
+          char sutime[50];
+          sscanf(sinfo->effective_date,"%4d%2d%2d%2d%2d", &y,&m,&d,&hr,&mn);
+          sprintf(sutime, "%4d.%02d.%02d_%02d:%02d", y,m,d,hr,mn);
+          expire = (sscan_time(sutime) - now)/86400.0;
+       }
+       if (strcmp(sinfo->online_status,"N")==0 || expire < 3)
+       {  // need to stage or reset retention time
+          char query[DRMS_MAXQUERYLEN];
+          char recpath[DRMS_MAXPATHLEN];
+          char *slash;
+          DRMS_RecordSet_t *rs;
+          sprintf(query,"%s[! sunum=%lld !]", sinfo->owning_series, sunum);
+          rs = drms_open_records(drms_env, query, &status);
+          if (!rs || rs->n < 1)
+          {
+             snprintf(mbuf, 
+                      sizeof(mbuf), 
+                      "Invalid sunum, drms_open_records call failed: owning series - '%s', sunum - '%lld.\n", 
+                      sinfo->owning_series, 
+                      sunum);
+             fprintf(stderr, mbuf);
+             *onlinestat = 'X';
+          }
+          else
+          {
+             drms_record_directory(rs->records[0], recpath, 1);
+
+             if (strlen(recpath) == 0)
+             {
+                *onlinestat = 'X';
+             }
+             else
+             {
+                susize = (int)sinfo->bytes;
+             }
+
+             strcpy(supath, recpath);
+             slash = rindex(supath, '/');
+             if (slash && strncmp(slash, "/S", 2) == 0)
+               slash[0] = '\0';
+          }
+
+          drms_close_records(rs, DRMS_FREE_RECORD);
+       }
+       else
+         strcpy(supath, sinfo->online_loc);
+    }
+
+    fprintf(index_data, "%lld\t%s\t%s\t%s\t%d\n", sunum, sinfo->owning_series, supath, onlinestat, susize);
     size += sinfo->bytes;
     }
 
