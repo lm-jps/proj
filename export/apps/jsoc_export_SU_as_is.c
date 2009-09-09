@@ -152,7 +152,7 @@ int DoIt(void)
                 sinfo->owning_series, 
                 sunum);
        fprintf(stderr, mbuf);
-       *onlinestat = 'X';
+       *onlinestat = 'I';
     }
     else if (strcmp(sinfo->online_status, "N") ==0 && strcmp(sinfo->archive_status, "N") == 0)
     {
@@ -184,7 +184,7 @@ int DoIt(void)
                       sinfo->owning_series, 
                       sunum);
              fprintf(stderr, mbuf);
-             *onlinestat = 'X';
+             *onlinestat = 'I';
           }
           else
           {
