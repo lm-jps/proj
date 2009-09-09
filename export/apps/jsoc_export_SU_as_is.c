@@ -108,6 +108,7 @@ int DoIt(void)
   char mbuf[128];
   char onlinestat[128];
   int susize;
+  char supath[DRMS_MAXPATHLEN];
 
   if (nice_intro ()) return (0);
 
@@ -135,13 +136,13 @@ int DoIt(void)
     {
     SUM_info_t *sinfo;
     TIME expire;
-    char supath[DRMS_MAXPATHLEN];
     sunum = atoll(this_sunum);
     sunumlist = NULL;
     count += 1;
     
     susize = 0;
     memset(onlinestat, 0, sizeof(onlinestat));
+    snprintf(supath, sizeof(supath), "NA");
 
     sinfo = drms_get_suinfo(sunum);
     if (!sinfo)
@@ -153,10 +154,6 @@ int DoIt(void)
                 sunum);
        fprintf(stderr, mbuf);
        *onlinestat = 'I';
-    }
-    else if (strcmp(sinfo->online_status, "N") ==0 && strcmp(sinfo->archive_status, "N") == 0)
-    {
-       *onlinestat = 'X';
     }
     else
     {
@@ -188,22 +185,29 @@ int DoIt(void)
           }
           else
           {
-             drms_record_directory(rs->records[0], recpath, 1);
-
-             if (strlen(recpath) == 0)
+             if (strcmp(sinfo->archive_status, "N") == 0)
              {
                 *onlinestat = 'X';
              }
              else
              {
-                susize = (int)sinfo->bytes;
-                *onlinestat = 'Y';
-             }
+                drms_record_directory(rs->records[0], recpath, 1);
 
-             strcpy(supath, recpath);
-             slash = rindex(supath, '/');
-             if (slash && strncmp(slash, "/S", 2) == 0)
-               slash[0] = '\0';
+                if (strlen(recpath) == 0)
+                {
+                   *onlinestat = 'X';
+                }
+                else
+                {
+                   susize = (int)sinfo->bytes;
+                   *onlinestat = 'Y';
+                }
+
+                strcpy(supath, recpath);
+                slash = rindex(supath, '/');
+                if (slash && strncmp(slash, "/S", 2) == 0)
+                  slash[0] = '\0';
+             }
           }
 
           drms_close_records(rs, DRMS_FREE_RECORD);
