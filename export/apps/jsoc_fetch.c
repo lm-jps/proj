@@ -1,4 +1,3 @@
-#define DEBUG 1
 #define DEBUG 0
 
 /*
@@ -432,13 +431,17 @@ int DoIt(void)
 
   export_series = EXPORT_SERIES;
 
+  long long sunums[DRMS_MAXQUERYLEN/8];  // should be enough!
+  char *paths[DRMS_MAXQUERYLEN/8];
+  char *series[DRMS_MAXQUERYLEN/8];
+  char *sustatus[DRMS_MAXQUERYLEN/8];
+  char *susize[DRMS_MAXQUERYLEN/8];
+  int expsucount;
+
   /*  op == exp_su - export Storage Units */
   if (strcmp(op,"exp_su") == 0)
     {
     char *this_sunum, *sunumlist, *sunumlistptr;
-    long long sunums[DRMS_MAXQUERYLEN/8];  // should be enough!
-    char *paths[DRMS_MAXQUERYLEN/8];
-    char *series[DRMS_MAXQUERYLEN/8];
     long long sunum;
     int count;
     int status=0;
@@ -451,36 +454,76 @@ int DoIt(void)
     count = 0;
     sunumlist = strdup(in);
 
+    char onlinestat[128];
+    int dirsize;
+    char supath[DRMS_MAXPATHLEN];
+    char yabuff[64];
+
     while (this_sunum = strtok_r(sunumlist, ",", &sunumlistptr))
       {
       SUM_info_t *sinfo;
       TIME expire;
+
+      dirsize = 0;
+      memset(onlinestat, 0, sizeof(onlinestat));
+      snprintf(supath, sizeof(supath), "NA");
+
       sunum = atoll(this_sunum);
       sunumlist = NULL;
       sinfo = drms_get_suinfo(sunum);
       if (!sinfo)
-        JSONDIE("Invalid sunum, SUM_info call failed");
-      size += sinfo->bytes;
-      if (strcmp(sinfo->online_status,"Y")==0)
-        {
-        int y,m,d,hr,mn;
-        char sutime[50];
-        sscanf(sinfo->effective_date,"%4d%2d%2d%2d%2d", &y,&m,&d,&hr,&mn);
-        sprintf(sutime, "%4d.%02d.%02d_%02d:%02d", y,m,d,hr,mn);
-        expire = (sscan_time(sutime) - now)/86400.0;
-        }
-      if (strcmp(sinfo->online_status,"N")==0 || expire < 3)
-        {  // need to stage or reset retention time
-        all_online = 0;
-        }
-      else
-        {
-        sunums[count] = sunum;
-        paths[count] = strdup(sinfo->online_loc);
-        series[count] = strdup(sinfo->owning_series);
-        }
-      count += 1;
+      {
+         *onlinestat = 'I';
+         sunums[count] = sunum;
+         paths[count] = strdup("NA");
+         series[count] = strdup("NA");
+         sustatus[count] = strdup(onlinestat);
+         susize[count] = strdup("0");
+         count++;
       }
+      else
+      {
+         size += sinfo->bytes;
+         dirsize = sinfo->bytes;
+
+         if (strcmp(sinfo->online_status,"Y")==0)
+         {
+            int y,m,d,hr,mn;
+            char sutime[50];
+            sscanf(sinfo->effective_date,"%4d%2d%2d%2d%2d", &y,&m,&d,&hr,&mn);
+            sprintf(sutime, "%4d.%02d.%02d_%02d:%02d", y,m,d,hr,mn);
+            expire = (sscan_time(sutime) - now)/86400.0;
+            snprintf(supath, sizeof(supath), "%s", sinfo->online_loc);
+            *onlinestat = 'Y';
+         }
+         if (strcmp(sinfo->online_status,"N")==0 || expire < 3)
+         {  // need to stage or reset retention time
+            all_online = 0;
+
+            if (strcmp(sinfo->archive_status, "N") == 0)
+            {
+               *onlinestat = 'X';
+               dirsize = 0;
+            }
+            else
+            {
+               *onlinestat = 'N';
+            }
+         }
+
+         sunums[count] = sunum;
+         paths[count] = strdup(supath);
+         series[count] = strdup(sinfo->owning_series);
+         sustatus[count] = strdup(onlinestat);
+         snprintf(yabuff, sizeof(yabuff), "%d", dirsize);
+         susize[count] = strdup(yabuff);
+
+         count += 1;
+      }
+      }
+
+    expsucount = count;
+
     if (count==0)
       JSONDIE("There are no files in this RecordSet");
 
@@ -511,6 +554,9 @@ int DoIt(void)
           jsonstr = string_to_json(paths[i]);
           json_insert_pair_into_object(suobj, "path", json_new_string(jsonstr));
           free(jsonstr);
+          json_insert_pair_into_object(suobj, "sustatus", json_new_string(sustatus[i]));
+          json_insert_pair_into_object(suobj, "susize", json_new_string(susize[i]));
+
           json_insert_child(data, suobj);
           }
         sprintf(numval, "%ld", count);
@@ -549,7 +595,7 @@ int DoIt(void)
         printf("dir=/\n");
         printf("# DATA\n");
         for (i=0; i<count; i++)
-          printf("%lld\t%s\t%s\n",sunums[i],series[i],paths[i]);
+          printf("%lld\t%s\t%s\t%s\t%s\n",sunums[i],series[i],paths[i], sustatus[i], susize[i]);
         }
       if (my_sum)
         SUM_close(my_sum,printkerr);
@@ -603,7 +649,7 @@ check for requestor to be valid remote DRMS site
     drms_setkey_longlong(export_log, "Size", size);
     drms_setkey_int(export_log, "Status", 2);
     drms_setkey_int(export_log, "Requestor", requestorid);
-    drms_close_record(export_log, DRMS_INSERT_RECORD);
+    drms_close_record(export_log, DRMS_INSERT_RECORD); 
     } // end of exp_su
   /*  op == exp_request  */
   else if (strcmp(op,"exp_request") == 0) 
@@ -874,6 +920,34 @@ check for requestor to be valid remote DRMS site
       if (dojson)
 	{
         jroot = json_new_object();
+        json_t *data = NULL;
+
+        if (strcmp(op, "exp_su") == 0)
+        {
+           int i;
+           data = json_new_array();
+           for (i = 0; i < expsucount; i++)
+           {
+              json_t *suobj = json_new_object();
+              char *jsonstr;
+              char numval[40];
+              sprintf(numval,"%lld",sunums[i]);
+              jsonstr = string_to_json(numval); // send as string in case long long fails
+              json_insert_pair_into_object(jroot, "sunum", json_new_string(jsonstr));
+              free(jsonstr);
+              jsonstr = string_to_json(series[i]);
+              json_insert_pair_into_object(suobj, "series", json_new_string(jsonstr));
+              free(jsonstr);
+              jsonstr = string_to_json(paths[i]);
+              json_insert_pair_into_object(suobj, "path", json_new_string(jsonstr));
+              free(jsonstr);
+              json_insert_pair_into_object(suobj, "sustatus", json_new_string(sustatus[i]));
+              json_insert_pair_into_object(suobj, "susize", json_new_string(susize[i]));
+
+              json_insert_child(data, suobj);
+           }
+        }
+
         sprintf(numval, "%d", status);
         json_insert_pair_into_object(jroot, "status", json_new_number(numval));
         strval = string_to_json(requestid);
@@ -889,6 +963,12 @@ check for requestor to be valid remote DRMS site
         json_insert_pair_into_object(jroot, "wait", json_new_number(numval));
         sprintf(numval, "%ld", size);
         json_insert_pair_into_object(jroot, "size", json_new_number(numval));
+
+        if (strcmp(op, "exp_su") == 0)
+        {
+           json_insert_pair_into_object(jroot, "data", data);
+        }
+
         if (errorreply)
           {
           strval = string_to_json(errorreply);
@@ -918,7 +998,18 @@ check for requestor to be valid remote DRMS site
         if (errorreply)
 	  printf("error=\"%s\"\n", errorreply);
 	if (status > 2)
+        {
 	  printf("contact=jsoc_help@jsoc.stanford.edu\n");
+        }
+        else if (strcmp(op, "exp_su") == 0)
+        {
+           int i;
+           printf("# DATA\n");
+           for (i = 0; i < expsucount; i++)
+           {
+              printf("%lld\t%s\t%s\t%s\t%s\n", sunums[i], series[i], paths[i], sustatus[i], susize[i]);
+           }
+        }
         }
       fflush(stdout);
       }
@@ -948,5 +1039,19 @@ check for requestor to be valid remote DRMS site
       fflush(stdout);
       }
     }
+
+  if (strcmp(op, "exp_su") == 0)
+  {
+     /* free everything */
+     int i;
+     for (i = 0; i < expsucount; i++)
+     {
+        free(series[i]);
+        free(paths[i]);
+        free(sustatus[i]);
+        free(susize[i]);
+     }
+  }
+
   return(0);
   }
