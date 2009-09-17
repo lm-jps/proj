@@ -53,9 +53,12 @@
 //#define LEV0SERIESNAMEHMI "su_production.lev0f_test"
 #define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
 #define TLMSERIESNAMEHMI "su_production.tlm_test"
+//#define TLMSERIESNAMEHMI "hmi.tlm_reingest"
+
 //#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
 #define LEV0SERIESNAMEAIA "su_production.lev0f_aia"
 #define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+//#define TLMSERIESNAMEAIA "aia.tlm_reingest"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
 //#define TLMSERIESNAMEHMI "hmi.tlm_60d"
@@ -962,6 +965,7 @@ int fsn_change_rexmit()
     return(1);		// !!!TBD 
   }
   if(!rset || (rset->n == 0) || rstatus) {
+startnew:
     printk("No prev ds\n");	// start a new image 
     ImgO->initialized = 0;
     ImgO->reopened = 0;
@@ -992,7 +996,9 @@ int fsn_change_rexmit()
     rsc = drms_clone_record(rs_old, DRMS_PERMANENT, DRMS_COPY_SEGMENTS, &rstatus);
     if(rstatus) {
       printk("Can't do drms_clone_record()\n");
-      return(1);		// !!!TBD ck 
+      printk("Assume this was a temp ds and the segments are now gone...\n");
+      goto startnew;
+      //return(1);		// !!!TBD ck 
     }
     drms_close_records(rset, DRMS_FREE_RECORD);
     rstatus = drms_setkey_int(rsc, "FSN", fsnx);
@@ -1555,6 +1561,8 @@ void do_ingest()
     printk("%s\n", cmd);
     if(status = system(cmd)) {
       printk("**ERROR: %d on: %s\n", status, cmd);
+      printk("**Continue after ERROR on mv of tlm file\n");
+      continue;
     }
     if((status = drms_close_record(rs_tlm, DRMS_INSERT_RECORD))) {
       printk("**ERROR: drms_close_record failed for %s\n", tlmseriesname);

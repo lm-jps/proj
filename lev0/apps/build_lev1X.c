@@ -399,6 +399,7 @@ int do_ingest()
       printk("t_obs for lev0 = %10.5f\n", t_obs0);	//!!TEMP
       tgttimes[0] = t_obs0;	//for now it's a one at a time loop
       //orbit_calc();		//!!TBD Art
+/*****************************************************************
          if (iorbit_getinfo(drms_env,
                             orbseries,
                             NULL,
@@ -415,6 +416,7 @@ int do_ingest()
          {
            printk("SUCCESS for iorbit_getinfo()\n");
          }
+*****************************************************************/
 
       int camera = drms_getkey_int(rs0, "CAMERA", &rstatus);
       if(rstatus) {
@@ -439,7 +441,7 @@ int do_ingest()
       drms_record_directory(rsff, path, 1);
       if(!*path) {
         printk("***ERROR: No path to segment for %s\n", open_dsname);
-      goto TEMPSKIP;	//!!!TEMP until have good flatfield
+        //goto TEMPSKIP;	//!!!TEMP until have good flatfield
         return(1);
       }
       printf("\npath to FF = %s\n", path);	//!!TEMP
@@ -501,11 +503,10 @@ TEMPSKIP:
         //return(1);
       }
       drms_close_records(rsetff, DRMS_FREE_RECORD);
-//!!!TEMP noop these free until have good FF
-//      free(ArrayDark->data);
-//      free(Arrayff->data);
+      free(ArrayDark->data);
+      free(Arrayff->data);
       free(Array0->data);
-//      free(ArrayBad->data);
+      free(ArrayBad->data);
     }
 
   //drms_close_records(rset0, DRMS_FREE_RECORD); //now closed in for() loop

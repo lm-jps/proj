@@ -260,8 +260,13 @@ int send_mail(char *fmt, ...)
 // Got a fatal error. 
 void abortit(int stat)
 {
+  char pcmd[128];
+
   printk("***Abort in progress ...\n");
   printk("**Exit build_lev1_mgr w/ status = %d\n", stat);
+  sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
+              LEV1LOG_BASEDIR);
+  system(pcmd);
   if (h1logfp) fclose(h1logfp);
   exit(stat);
 }
@@ -314,7 +319,7 @@ int forkstream(long long recn0, long long maxrecn0)
       sprintf(args6, "quicklook=%d", stream_mode);
       args[6] = args6;
       //sprintf(args7, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
-      sprintf(args7, "logfile=%s/l1s_%lu_%lu.log", QSUBDIR, frec, lrec);
+      sprintf(args7, "logfile=%s/l1s_%lu_%lu.log", LEV1LOG_BASEDIR, frec, lrec);
       args[7] = args7;
       args[8] = NULL;
       printk("execvp: %s %s %s %s %s %s %s %s\n",
@@ -374,7 +379,7 @@ int forkstream(long long recn0, long long maxrecn0)
       sprintf(args6, "quicklook=%d", stream_mode);
       args[6] = args6;
       //sprintf(args7, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
-      sprintf(args7, "logfile=%s/l1s_%lu_%lu.log", QSUBDIR, frec, lrec);
+      sprintf(args7, "logfile=%s/l1s_%lu_%lu.log", LEV1LOG_BASEDIR, frec, lrec);
       args[7] = args7;
       args[8] = NULL;
       printk("execvp: %s %s %s %s %s %s %s %s\n",
@@ -528,7 +533,12 @@ int do_ingest()
     while(fgets(string, sizeof string, fin)) {  //get psql return line
       if(strstr(string, "lev0recnum")) continue;
       if(strstr(string, "-----")) continue;
-      sscanf(string, "%lu", &recnum0);		//get lev0 rec# 
+      //get lev0 rec#
+      if((rstatus = sscanf(string, "%lu", &recnum0)) == 0) {
+        printf("Abort no lev0 entry in lev1_highest_lev0_recnum\n");
+        printk("Abort no lev0 entry in lev1_highest_lev0_recnum\n");
+        abortit(1); //no rec#
+      }
       recnum0++;				//start at next rec#
       break;
     }
@@ -729,6 +739,9 @@ int main(int argc, char **argv)
     sleep(10);		//wait for more lev0 to appear
     //wflg = 0;
   }
+  sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
+              LEV1LOG_BASEDIR);
+  system(pcmd);
   return(0);
 }
 

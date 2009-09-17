@@ -1,6 +1,5 @@
 /*-----------------------------------------------------------------------------
- * cvs/JSOC/proj/lev1/apps/build_lev1X.c
- * NOTE: This originally came from JSOC/proj/lev0/apps/ingest_lev0.c
+ * cvs/JSOC/proj/lev1/apps/build_lev1.c
  *-----------------------------------------------------------------------------
  *
  * This is a module that runs with DRMS and processes lev0
@@ -23,6 +22,7 @@
 #include <sys/stat.h>	//for umask(2)
 #include <unistd.h>	//for alarm(2) among other things...
 #include <printk.h>
+#include <astro.h>
 #include "imgdecode.h"
 #include "lev0lev1.h"
 
@@ -32,9 +32,11 @@
 //#define LEV0SERIESNAMEAIA "aia.lev0e"
 #define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
 #define LEV0SERIESNAMEAIA "su_production.lev0f_aia"
-#define LEV1SERIESNAMEHMI "su_production.hmi_lev1e"	//temp test case
+//#define LEV1SERIESNAMEHMI "su_production.hmi_lev1e"	//temp test case
+#define LEV1SERIESNAMEHMI "hmi.lev1"
 #define LEV1SERIESNAMEAIA "su_production.aia_lev1e"	//temp test case
 #define DSFFNAME "su_richard.flatfield"			//temp test case
+//#define DSFFNAME "su_production.hmi_flatfield"		//temp test case
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
 #define DONUMRECS 120		//!!TEMP #of lev0 records to do and then exit
@@ -98,10 +100,14 @@ static char datestr[32];
 static char open_dsname[256];
 static char path[DRMS_MAXPATHLEN];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
+static char *orbseries = "sdo.fds_orbit_vectors";
 
+IORBIT_Info_t *IOinfo = NULL;
+LIBASTRO_Error_t IOstatus;
 unsigned int fsnarray[IMAGE_NUM_COMMIT];
 unsigned int fsnx = 0;
 short data1[MAXPIXELS];
+double tgttimes[IMAGE_NUM_COMMIT];
 
 short *rdat;
 int verbose;
@@ -296,7 +302,7 @@ int do_ingest()
   TIME t_obs0;
   int rstatus, dstatus, ncnt, fcnt, i;
   long long recnum0, recnum1;
-  char recrange[128];
+  char recrange[128], lev0name[128];
 
   sprintf(recrange, ":#%lld-#%lld", brec, erec);
   sprintf(open_dsname, "%s[%s]", dsin, recrange);
@@ -336,6 +342,7 @@ int do_ingest()
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
       fsnx = fsnarray[i]; 
+      sprintf(lev0name, "%s[%u]", dsin, fsnx);
       //printf("rec# for %d = %lld fsn=%u\n", i, recnum0, fsnx); //!!!TEMP
       segment = drms_segment_lookupnum(rs0, 0);
       Array0 = drms_segment_read(segment, DRMS_TYPE_SHORT, &rstatus);
@@ -353,6 +360,10 @@ int do_ingest()
       l0l1->recnum0 = recnum0;
       l0l1->fsn = fsnx;
       l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);
+      //!!TEMP force a good himgcfid for our 'junk' data
+      if(l0l1->himgcfid < 0 || l0l1->himgcfid >= MAXHIMGCFGS) {
+        l0l1->himgcfid = 104;
+      }
       if(rstatus) {
         printk("Can't do drms_getkey_int(HIMGCFID) for fsn %u\n", fsnx);
         return(1); 
@@ -367,10 +378,13 @@ int do_ingest()
         return(1);
       }
       dstatus = drms_setkey_int(rs, "FSN", fsnx);
+      dstatus = drms_setkey_string(rs, "LEV0SERIES", lev0name);
+      /******* OLD from when there was a LEV0REC link
       if(dstatus = drms_setlink_static(rs, "LEV0REC", recnum0)) {
         printk("**ERROR on drms_setlink_static() for %s\n", open_dsname);
         return(1);
       }
+      ************************************************************/
       if(!(segment = drms_segment_lookup(rs, "image"))) {
         printk("No drms_segment_lookup(rs, image) for %s\n", open_dsname);
         return(1);
@@ -380,17 +394,95 @@ int do_ingest()
                                        segment->axis,
                                        &data1,
                                        &dstatus);
-
-      //Now figure out what flat field to use
+      //transer the lev0 keywords
+/**********************use drms_copykeys() instead**********************/
+      drms_setkey_string(rs, "TELESCOP", 
+		drms_getkey_string(rs0, "TELESCOP", &rstatus));
+      drms_setkey_string(rs, "INSTRUME", 
+		drms_getkey_string(rs0, "INSTRUME", &rstatus));
+      drms_setkey_int(rs, "CAMERA", 
+		drms_getkey_int(rs0, "CAMERA", &rstatus));
+      drms_setkey_time(rs, "DATE__OBS", 
+		drms_getkey_time(rs0, "DATE__OBS", &rstatus));
+      drms_setkey_string(rs, "IMG_TYPE", 
+		drms_getkey_string(rs0, "IMG_TYPE", &rstatus));
+      drms_setkey_double(rs, "EXPTIME", 
+		drms_getkey_double(rs0, "EXPTIME", &rstatus));
+      drms_setkey_float(rs, "EXPSDEV", 
+		drms_getkey_float(rs0, "EXPSDEV", &rstatus));
+      drms_setkey_float(rs, "WAVELNTH", 
+		drms_getkey_float(rs0, "WAVELNTH", &rstatus));
+      drms_setkey_string(rs, "WAVEUNIT", 
+		drms_getkey_string(rs0, "WAVEUNIT", &rstatus));
+      drms_setkey_int(rs, "FID", 
+		drms_getkey_int(rs0, "FID", &rstatus));
+      drms_setkey_string(rs, "ISPSNAME", 
+		drms_getkey_string(rs0, "ISPSNAME", &rstatus));
+      drms_setkey_time(rs, "ISPPKTIM", 
+		drms_getkey_time(rs0, "ISPPKTIM", &rstatus));
+/*************************************************************************/
+/***************This crashes********************************************
+      rstatus = drms_copykeys(rs, rs0, 0, kDRMS_KeyClass_Explicit);
+      if(rstatus != DRMS_SUCCESS) {
+        printk("Error %d in drms_copykeys() for fsn %u\n", fsnx);
+        return(1);
+      }
+**********************************************************************/
       t_obs0 = drms_getkey_time(rs0, "t_obs", &rstatus);
       if(rstatus) {
         printk("Can't do drms_getkey_time() for fsn %u\n", fsnx);
         return(1);
       }
+      drms_setkey_time(rs, "T_OBS", t_obs0);
+      drms_setkey_double(rs, "DATE", CURRENT_SYSTEM_TIME);
       printk("t_obs for lev0 = %10.5f\n", t_obs0);	//!!TEMP
-      sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f ?]", 
-		DSFFNAME, t_obs0, t_obs0);
-      printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
+      tgttimes[0] = t_obs0;	//for now it's a one at a time loop
+      //orbit_calc();		//!!TBD Art
+         if (IOstatus = iorbit_getinfo(drms_env,
+                            orbseries,
+                            NULL,
+                            IORBIT_Alg_Quadratic,
+                            tgttimes,
+                            1,
+                            kIORBIT_CacheAction_DontCache,
+                            &IOinfo) != kLIBASTRO_Success)
+         {
+           if(IOstatus == kLIBASTRO_InsufficientData) {
+             printk("***ERROR in iorbit_getinfo: kLIBASTRO_InsufficientData\n");
+           }
+           else { 
+            printk("***ERROR in iorbit_getinfo() status=%d\n", IOstatus);
+           }
+           return(1);
+         }
+         else
+         {
+           printk("SUCCESS for iorbit_getinfo()\n");
+           drms_setkey_float(rs, "HCIEC_X", (float)IOinfo->hciX);
+           drms_setkey_float(rs, "HCIEC_Y", (float)IOinfo->hciY);
+           drms_setkey_float(rs, "HCIEC_Z", (float)IOinfo->hciZ);
+           drms_setkey_float(rs, "GCIEC_X", (float)IOinfo->gciX);
+           drms_setkey_float(rs, "GCIEC_Y", (float)IOinfo->gciY);
+           drms_setkey_float(rs, "GCIEC_Z", (float)IOinfo->gciZ);
+           drms_setkey_float(rs, "DSUN_OBS", (float)IOinfo->dsun_obs);
+           drms_setkey_float(rs, "OBS_VR", (float)IOinfo->obs_vr);
+           drms_setkey_float(rs, "OBS_VW", (float)IOinfo->obs_vw);
+           drms_setkey_float(rs, "OBS_VN", (float)IOinfo->obs_vn);
+           drms_setkey_float(rs, "CRLN_OBS", (float)IOinfo->crln_obs);
+           drms_setkey_float(rs, "CRLT_OBS", (float)IOinfo->crlt_obs);
+           drms_setkey_int(rs, "CAR_ROT", (int)IOinfo->car_rot);
+         }
+
+      int camera = drms_getkey_int(rs0, "CAMERA", &rstatus);
+      if(rstatus) {
+        printk("Can't do drms_getkey_int() for fsn %u\n", fsnx);
+        return(1);
+      }
+      //Now figure out what flat field to use
+      //sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d and FLATFIELD_FINAL=1 ?]", 
+      sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d ?]", 
+		DSFFNAME, t_obs0, t_obs0, camera);
+      //printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
       rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF 
       if(!rsetff || (rsetff->n == 0) || rstatus) {
         printk("Can't do drms_open_records(%s)\n", open_dsname);
@@ -405,9 +497,10 @@ int do_ingest()
       drms_record_directory(rsff, path, 1);
       if(!*path) {
         printk("***ERROR: No path to segment for %s\n", open_dsname);
+        //goto TEMPSKIP;	//!!!TEMP until have good flatfield
         return(1);
       }
-      printf("\npath to FF = %s\n", path);	//!!TEMP
+      //printf("\npath to FF = %s\n", path);	//!!TEMP
       segmentff = drms_segment_lookup(rsff, "flatfield");
       Arrayff = drms_segment_read(segmentff, DRMS_TYPE_FLOAT, &rstatus);
       if(!Arrayff) {
@@ -437,7 +530,6 @@ int do_ingest()
 //!!TBD determine the calls to these functions and the right place 
 //to put them...   Replaced by do_flat()??
       //rdout_mode_correct();	//!!TBD Keh-Cheng
-      //orbit_calc();		//!!TBD Art
       //sc_pointing();		//!!TBD Keh-Cheng
 
       l0l1->rs1 = rs;
@@ -447,8 +539,10 @@ int do_ingest()
       if(rstatus = do_flat(l0l1)) {
         printk("***ERROR in do_flat() status=%d\n", rstatus);
         printf("***ERROR in do_flat() status=%d\n", rstatus);
-        return(1);		//!!TBD what to do?
+        //return(1);		//!!TBD what to do?
       }
+
+TEMPSKIP:
 
       dstatus = drms_segment_write(segment, segArray, 0);
       if (dstatus) {
@@ -602,12 +696,13 @@ int DoIt(void)
   }
   setup();
   if(do_ingest()) {        // loop to get files from the lev0
-    printk("**ERROR: Some error after open of %s\n", open_dsname);
+    //printk("**ERROR: Some error after open of %s\n", open_dsname);
     //printf("**ERROR: Some error after open of %s\n", open_dsname);
     printf("build_lev1 abort\n"); //!!TEMP
+    printf("See log: %s\n", logname);
     return(0);
   }
-  printf("build_lev1 done\n"); //!!TEMP
+  printf("build_lev1 done last fsn=%u\n", fsnx); //!!TEMP
   return(0);
 }
 

@@ -98,11 +98,12 @@ if (flg) {	/* AIA */
   int aimshobe = HK_getkey_int(isp, "AIMSHOBE"); /* AIA_IMG_SH_OPEN_BOT_EDGE */
   int aimshotc = HK_getkey_int(isp, "AIMSHOTC"); /* AIA_IMG_SH_OPEN_TOP_CENTR*/
   int aimshote = HK_getkey_int(isp, "AIMSHOTE"); /* AIA_IMG_SH_OPEN_TOP_EDGE */
-  int aicfdl3 = HK_getkey_int(isp, "AICFDL3");
-  int aicfdl4 = HK_getkey_int(isp, "AICFDL4");
+  int aicfgdl3 = HK_getkey_int(isp, "AICFGDL3");
+  int aicfgdl4 = HK_getkey_int(isp, "AICFGDL4");
   int nroll = 256*(int)((aimgshce + 273)/2000);
-  float int_time = ((float)(aicfdl4 - aicfdl3 + nroll)*1000)/128.0;
-  if((int)int_time < aimgshce) int_time = int_time + 2000;
+  float int_time = ((float)(aicfgdl4 - aicfgdl3 + nroll)*1000.0)/128.0;
+  if((int)int_time < aimgshce) int_time = int_time + 2000.0;
+  int_time = int_time/1000.0;		//make seconds
   drms_setkey_float(rec, "INT_TIME", int_time);
 
   double shebc = (aimshcbc - aimshobc)*4.0e-6;

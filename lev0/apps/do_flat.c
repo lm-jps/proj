@@ -3,6 +3,7 @@
 #define XXX_CANT_FIND_HIMGCFID -3
 
 #define HIMGCFGFILE "/home/production/img_cnfg_ids"
+#define XXX_INVALID_HIMGCFID -4 
 
 #define MAXHIMGCFGS 4096
 static int overscan_nrows[MAXHIMGCFGS];
@@ -61,6 +62,8 @@ int do_flat(LEV0LEV1 *info)
     short *out = info->adata1;
     short tmp;
 
+    if (info->himgcfid < 0 || info->himgcfid >= MAXHIMGCFGS)
+      return XXX_INVALID_HIMGCFID;
     if (!overscan_valid[info->himgcfid]) {
 	status = get_overscan_info(info->himgcfid);
 	if (status) return status;
@@ -90,7 +93,7 @@ int do_flat(LEV0LEV1 *info)
 	    if (BLANK == tmp)
 		out[IDX++] = BLANK;
 	    else {
-		out[IDX] = (tmp - ddat[IDX]) * fdat[IDX];
+		out[IDX] = (tmp - ddat[IDX]) / fdat[IDX];
 		++IDX;
 	    }
 	}
@@ -103,7 +106,7 @@ int do_flat(LEV0LEV1 *info)
 	    if (BLANK == tmp)
 		out[IDX++] = BLANK;
 	    else {
-		out[IDX] = (tmp - ddat[IDX]) * fdat[IDX];
+		out[IDX] = (tmp - ddat[IDX]) / fdat[IDX];
 		++IDX;
 	    }
 	}
@@ -116,7 +119,7 @@ int do_flat(LEV0LEV1 *info)
 	    if (BLANK == tmp)
 		out[IDX++] = BLANK;
 	    else {
-		out[IDX] = (tmp - ddat[IDX]) * fdat[IDX];
+		out[IDX] = (tmp - ddat[IDX]) / fdat[IDX];
 		++IDX;
 	    }
 	}
@@ -129,7 +132,7 @@ int do_flat(LEV0LEV1 *info)
 	    if (BLANK == tmp)
 		out[IDX++] = BLANK;
 	    else {
-		out[IDX] = (tmp - ddat[IDX]) * fdat[IDX];
+		out[IDX] = (tmp - ddat[IDX]) / fdat[IDX];
 		++IDX;
 	    }
 	}
