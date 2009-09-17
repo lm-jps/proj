@@ -77,8 +77,9 @@ while(1) {
     sleep 5;
     &ckingest;		#see if any ingest_lev0 are still running
     if(!$ifound) {
-      print "\nAll ingest_lev0 have been stopped. Exit\n\n";
-      exit(0);
+      #print "\nAll ingest_lev0 have been stopped. Exit\n\n";
+      #exit(0);
+      print "\nAll ingest_lev0 are already stopped. Restart...\n\n";
     }
   }
   $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stop"; #tell ingest to stop
