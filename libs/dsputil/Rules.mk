@@ -15,7 +15,15 @@ S_$(d)		:= $(notdir $(LIBDSPUTIL))
 
 # Local rules
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):	CF_TGT := $(FMATHLIBSH)
+
+ifeq ($(JSOC_MACHINE), linux_ia32)
+  FFTW_$(d) = /home/jsoc/lib/linux-ia32
+endif
+ifeq ($(JSOC_MACHINE), linux_x86_64)
+  FFTW_$(d) = /home/jsoc/lib/linux-x86_64
+endif
+
+$(OBJ_$(d)):	CF_TGT := -I/home/jsoc/include
 
 $(LIBDSPUTIL):	$(OBJ_$(d))
 		$(ARCHIVE)
