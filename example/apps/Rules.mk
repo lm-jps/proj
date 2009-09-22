@@ -77,15 +77,24 @@ S_$(d)		:= $(notdir $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_SOCK_$(d)) 
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(OBJF_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJF_$(d)):		CF_TGT := $(CF_TGT) $(FMATHLIBSH) -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJF_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(OBJUSEF_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(OBJUSEF_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH) -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJUSEF_$(d)):	CF_TGT := $(CF_TGT) -I/home/jsoc/include -DCDIR="\"$(SRCDIR)/$(d)\""
+
+ifeq ($(JSOC_MACHINE), linux_ia32)
+  FFTW_$(d) = /home/jsoc/lib/linux-ia32
+endif
+ifeq ($(JSOC_MACHINE), linux_x86_64)
+  FFTW_$(d) = /home/jsoc/lib/linux-x86_64
+endif
+
+$(MODEXE_USEF_SOCK_$(d)):	LL_TGT := $(LL_TGT) -L$(FFTW_$(d)) -lfftw3f
 
 # Don't use the make variable FDRMSMODOBJ since you really don't know when it will be 
 # evaluated. Specify fdrms.o relative to root.
 $(OBJF_$(d)):		base/drms/libs/api/client/fdrms.o
 $(GONGLIB_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(GONGLIB_$(d)):	CF_TGT := $(CF_TGT) $(FMATHLIBSH)
+$(GONGLIB_$(d)):	CF_TGT := $(CF_TGT) $(CFITSIOH)
 $(GONGLIB_$(d)):	ICC_WARNTOERR :=
 
 
