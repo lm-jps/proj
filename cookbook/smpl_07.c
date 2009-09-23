@@ -12,7 +12,6 @@
  *  Revision history is at end of file.
  */
 
-
 char *module_name = "CookbookRecipe:07";
 char *version_id = "1.0";
 
