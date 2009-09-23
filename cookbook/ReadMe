@@ -28,6 +28,8 @@ smpl_06.c	updates data records in series built with smpl_05 with new
 	keyword values
 smpl_07.c	inserts image data in record segments in a data series created
 	with images.jsd
+smpl_08.c	calculates and reports primary statistics of record segments
+	such as those generated with smpl_07
 
 	Other
 Makefile	The generic Makefile
@@ -52,7 +54,8 @@ parsing features. The message that the program prints when executed can be
 changed from the default, "done", by running the command:
 
 	smpl_00 print=something
-or	print= "Hello, world!"
+or
+	smpl_00 print= "Hello, world!"
 
 (White space after the '=' sign is optional; quotes are necessary if the
 argument string has embedded white space.)
@@ -60,10 +63,10 @@ argument string has embedded white space.)
 The program can be built, like all of the modules in this directory as well,
 by typing
 
-      make smpl_00
+	make smpl_00
 
 (alternatively, you can simply type make and all the modules in the target
-list MODS in Makefile will be compiled.) The Makefile is generic: it is
+list MODS in the Makefile will be compiled.) The Makefile is generic: it is
 designed to work on different hardware and operating system platforms by
 accessing an appropriate set of make variables definitions from the various
 files in the subdirectory makevars. To add a new module that does not require
@@ -75,17 +78,33 @@ Note that the Makefile requires the external definition of the environment
 variable JPLAT to the appropriate name for your build platform. If, when you
 run the make, you get a message like:
 
-Error: no appropriate Makevars; is $JPLAT defined? won't compile...
+	Error: no appropriate Makevars; is $JPLAT defined? won't compile...
 
 Either you have not defined the system-appropriate environment variable,
 or there is no file Makevars_$JPLAT.mk in the Makevars directory. It should
 be straightforward to create an appropriate one by replicating one of the
-existing examples and substituting appropriate command paths.
+existing examples and substituting appropriate command paths.  Likewise,
+if you get a message like:
+
+	Makefile:1: Makevars/Makevars_XXX.mk: No such file or directory
+	make: *** No rule to make target `Makevars/Makevars_XXX.mk'.  Stop.
+
+it means that you have defined the environment variable JPLAT (as XXX), but
+there is no corresponding Makevars_XXX.mk in the directory. Again, you can
+create the appropriate one by replicating one of the existing examples and
+substituting appropriate command paths.
+
+(Alternatively, if you will only be building and running on one platform
+ever, you could just add a platform definition line like:
+
+	JPLAT = linux_x86_64
+
+or whatever before the first line in the Makefile.)
 
 The architecture-dependent Makevars_*.mk files define absolute paths to
 essential commands, especially compilers. If you get messages like:
 
-make: /usr/local/bin/icc: Command not found
+	make: /usr/local/bin/icc: Command not found
 
 You must suitably redefine the relevant Make variables (e.g. CC or ICC in
 this example) in the file being included.
@@ -97,6 +116,8 @@ installation instructions. If you get an error message like:
 error: could not open source file "cmdparams.h"
 
 it is probably because you have not correctly set the DRMS environment variable.
+(Again, if you wish you could define DRMS in the Makefile rather than as an
+environment variable.)
 
 The Makefile assumes that all third-party libraries, in particular those for
 cfitsio and postgres that are essential for DRMS, reside in one of the default
@@ -279,5 +300,31 @@ with different values for the various fields in the Segment descriptor, "name",
 scope, "type", "naxis" (which would cause the module to fail if changed),
 "axis_n" (which must be specified if scope is variable rather than vardim and
 might cause the module to fail if inappropriate values of parameters are
-chosen, "protocol", the compression and scaling parameters.
+chosen, "protocol", the compression and scaling parameters. In order to
+conduct such experiments you must either create a new series with a different
+series name by specifying a different value for Seriesname in the JSD, or, if
+you wish to keep the series name, recreate the series afresh, since its
+essential structure is being changed. To do the latter, run:
+	delete_series drms.images
+(or whatever name you gave the series) and then
+	create_series images.jsd
+Alternatively, you can just run:
+	create_series -f images.jsd
+which will force deletion of the existing series if it has the same Seriesname.
 
+********************************************************************************
+
+Recipe 8: Analyzing Data in Record Data Segments
+
+Now that you have created a data series with records containing "real" data,
+you can begin to explore the functions that fetch data from SUMS segments into
+memory for processing.
+
+smpl_08.c is a simple program that calculates and prints the primary statistics
+(count, mean, standard deviation) of each segment (or a selected segment) of
+a selected data set. It takes as arguments the input data set specification and
+optionally a segment name as well. The default record set specified is the
+last record inserted into the data series by smpl_07. (If you gave that series
+a different name from drms.images you will either have to change the default
+value for the "ds" argument in smpl_08.c or provide the correct series name
+as the value of the argument ds when you run smpl_08.
