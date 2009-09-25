@@ -1,11 +1,10 @@
 #!/usr/bin/perl
-# NAME: MONITOR REAL TIME DATA FLOW TO DAYFILES
+# NAME: MONITOR DAYFILES FOR REAL TIME DATA FLOW TO DAYFILES - monitor_df_rtmon.pl
 # AUTHOR: carl
 # DESCRIPTION: Monitors if dayfile for today is getting updated and sends email if file not getting updated.
-# Also checks if file is there, if no file there it exits and prints error message to standard out.
-# If send one email notice already for no-file or no-new-data case, the script will not send another
-# email until the file is there or the new data comes to dayfile and then the new data flow stops.
-# So we reduce amount of emails being sent.
+# If sent one email notice already for no-dayfile or no-new-data-in-dayfile cases, the script 
+# will not send another email until the dayfile is there or until new data is going to dayfile
+# and new data flow stops. Using this logic we can reduce amount of emails being sent.
 # RUN EXAMPLE: monitor_df_rtmon.pl apid=129
 # LIMITATION: Must run on machine were dayfiles can be read(i.e.,n02) 
 # CREATED: 9/25/2009
