@@ -1,7 +1,14 @@
 #!/usr/bin/perl
-# monitors if dayfile for today is getting updated and sends email if file not getting updated.
-# also checks if file is there, if no file there it exits and prints error message to standard out.
-# Example execution: monitor_df_rtmon.pl apid=129
+# NAME: MONITOR REAL TIME DATA FLOW TO DAYFILES
+# AUTHOR: carl
+# DESCRIPTION: Monitors if dayfile for today is getting updated and sends email if file not getting updated.
+# Also checks if file is there, if no file there it exits and prints error message to standard out.
+# If send one email notice already for no-file or no-new-data case, the script will not send another
+# email until the file is there or the new data comes to dayfile and then the new data flow stops.
+# So we reduce amount of emails being sent.
+# RUN EXAMPLE: monitor_df_rtmon.pl apid=129
+# LIMITATION: Must run on machine were dayfiles can be read(i.e.,n02) 
+# CREATED: 9/25/2009
 
 #get apid argument
 if (substr($ARGV[0],0,5) eq "apid=" )
@@ -10,13 +17,13 @@ if (substr($ARGV[0],0,5) eq "apid=" )
   $apid= substr($ARGV[0],5);
   if ($apid eq "")
   {
-    print "USAGE: monitor_df_rtmon apid=129\n";
+    print "USAGE: monitor_df_rtmon.pl  apid=129\n";
     exit;
   }
 }
 else
 {
-  print "USAGE: monitor_df_rtmon apid=129\n";
+  print "USAGE: monitor_df_rtmon.pl apid=129\n";
   exit;
 }
 
@@ -27,6 +34,7 @@ $ENV{'MAILTO'}="";
 $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
 ##$to_email="jsoc_ops\@sun.stanford.edu";
 $to_email="carl\@sun.stanford.edu,rock\@solarpost.stanford.edu";
+#$to_email="carl\@sun.stanford.edu";
 $subject_email="JSOC:WARNING:INGESTING REALTIME DAYFILE FOR APID $apid:Dayfile is not getting new packets";
 $subject_email_error="JSOC:WARNING:INGESTING REALTIME DAYFILE FOR APID $apid:Dayfile does not exist";
 $to_email_error="carl\@sun.stanford.edu";
@@ -48,25 +56,28 @@ $dir_file_mon=sprintf("%s/%s", $directory, $file_to_monitor);
 print "-->FILE TO MONITOR IS::::<$dir_file_mon>\n";
 ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size, $atime,$mtime,$ctime,$blksize,$blocks) = stat($dir_file_mon);
  
+# set to 0 to send email notification of error once.
+$already_triggered=0;
+
 #check if got error
 if ($ino eq "")
 {
   print "-->WARNING:1:Got error when did stat command. No file probably there\n";
   print "-->WARNING Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
-  sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n");
-  exit;
+  sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script will continue running and resend another email notice if the data file is there and data starts flowing and then stops again.\n-->To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n-->To stop monitor run command(user=production):$script_dir/stop_monitor_df_rtmon.pl apid=$apid\n\n");
+  $already_triggered=1;  
 }
 
 #initial current and previous size
 $curr_size=$size;
 $prev_size=0;
-$already_triggered=0;
 
 while (1)
 {
   # sleep 5 minutes 
   print "-->WAITING 5 MINUTES THEN WILL CHECK IF TODAYS DAYFILE SIZE CHANGED.\n";
   sleep 300;
+  #sleep 15;
   #get file size 
   ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size, $atime,$mtime,$ctime,$blksize,$blocks) = stat($dir_file_mon);
   #check if got error
@@ -74,17 +85,26 @@ while (1)
   {
     print "-->WARNING:2:Got error when did stat command. No file probably there\n";
     print "-->WARNING Details: stat:dev:<$dev> ino;<$ino> nlink:<$nlink> uid:<$uid>\n";
-    sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n");
-    exit;
+    if ($already_triggered != 1)
+    {
+      sendEmail("$to_email", "$from_email", "$subject_email_error","Error Message:\n-->Dayfile <$dir_file_mon> is not probably there.\n-->This monitor script will continue running and resend another email notice if the data file is there and data starts flowing and stops again.\n-->To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n-->To stop monitor run command(user=production):$script_dir/stop_monitor_df_rtmon.pl apid=$apid\n");
+      $already_triggered=1;
+    }
   }
   $curr_size=$size;
   print "-->IF CURRENT-FILE-SIZE:$curr_size EQUAL PREV-FILE-SIZE:$prev_size  THEN TRIGGER EMAIL\n";
-  if($prev_size == $curr_size && $already_triggered != 1)
+  if($prev_size == $curr_size )
   {
-    sendEmail("$to_email", "$from_email", "$subject_email","Warning Message:\n-->Dayfile <$dir_file_mon> is not getting updated for 5 minutes.\n-->This monitor script is exiting. To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n");
-     print "-->SEND WARNING EMAIL AFTER WAITING 5 MINUTES!\n";
-     $already_triggered=1;
-     exit;
+    if ($already_triggered != 1)
+    {
+      sendEmail("$to_email", "$from_email", "$subject_email","Warning Message:\n-->Dayfile <$dir_file_mon> is not getting updated for 5 minutes.\n-->This monitor script will continue running and resend another email notice if the data starts flowing and stops again.\n-->To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n-->To stop monitor run command(user=production):$script_dir/stop_monitor_df_rtmon.pl apid=$apid\n");
+      print "-->SEND WARNING EMAIL AFTER WAITING 5 MINUTES!\n";
+      $already_triggered=1;
+    }
+  }
+  else
+  {
+     $already_triggered=0;
   }
   $prev_size=$curr_size;
 
