@@ -92,13 +92,13 @@ while (1)
     }
   }
   $curr_size=$size;
-  print "-->IF CURRENT-FILE-SIZE:$curr_size EQUAL PREV-FILE-SIZE:$prev_size  THEN TRIGGER EMAIL\n";
+  print "-->IF CURRENT-FILE-SIZE:$curr_size EQUAL PREV-FILE-SIZE:$prev_size AND HAVE NOT ALREADY SENT EMAIL THEN TRIGGER SEND OF EMAIL NOTICE\n";
   if($prev_size == $curr_size )
   {
     if ($already_triggered != 1)
     {
       sendEmail("$to_email", "$from_email", "$subject_email","Warning Message:\n-->Dayfile <$dir_file_mon> is not getting updated for 5 minutes.\n-->This monitor script will continue running and resend another email notice if the data starts flowing and stops again.\n-->To restart monitor enter command:  $script_dir/monitor_df_rtmon.pl apid=$apid\n-->To stop monitor run command(user=production):$script_dir/stop_monitor_df_rtmon.pl apid=$apid\n");
-      print "-->SEND WARNING EMAIL AFTER WAITING 5 MINUTES!\n";
+      print "-->SENDING WARNING EMAIL AFTER WAITING 5 MINUTES!\n";
       $already_triggered=1;
     }
   }
