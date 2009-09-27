@@ -2,8 +2,8 @@
 #define __DECOMPRESS_H
 
 #include "hmi_compression.h"
-#include "rice.h"
-#include "dwt_compress.h"
+//#include "rice.h"
+//#include "dwt_compress.h"
 
 #define ERRMSG(__msg__) printkerr("ERROR at %s, line %d: " #__msg__"\n",__FILE__,__LINE__);
 /*************** Function prototypes *******************/
