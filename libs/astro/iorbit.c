@@ -74,23 +74,6 @@ const int gMinAbove = 16; /* min no. of vectors above max tgttime */
 const int gMinBelow = 16; /* min no. of vectors below min tgttime */
 
 
-/* declare fortran function */
-void pleph_(double *, int *, int *, double pos[6]);
-
-/* Gets J2000.0 positions and velocities from cdf file.
-   Units are km and km/s */
-static void get_earth_ephem(double jd, double pos[6])
-{
-   long i;
-   int targ=3;
-   int ctr=11;
-   double au=0.1495978706910000e09;
-
-   pleph_(&jd,&targ,&ctr,pos);
-   for (i=0;i<3;i++) pos[i]=pos[i]*au;
-   for (i=3;i<6;i++) pos[i]=pos[i]*au/86400;
-}
-
 /* function to compare times - used by SortTimes() */
 static int CmpTimes(const void *a, const void *b)
 {
@@ -961,12 +944,14 @@ static int GetGridVectors(DRMS_Env_t *env,
 static int iorbit_interpolate(IORBIT_Alg_t alg, 
                               IORBIT_Vector_t *gridVecs, /* abcissae + ordinates */
                               const double *tgttimes,
-                              int *indices, 
+                              HContainer_t *indexmap,
                               int ntgtpts,
                               IORBIT_Vector_t **interp)
 {
    int err = 0;
    int ipt;
+   int vindex = 0;
+   char dhashkey[128];
 
    if (interp)
    {
@@ -993,12 +978,22 @@ static int iorbit_interpolate(IORBIT_Alg_t alg,
 
               for (ipt = 0; ipt < ntgtpts; ipt++)
               {
-                 ptlow = gridVecs[indices[ipt] - 1].obstime;
-                 ptmid = gridVecs[indices[ipt]].obstime;
-                 pthii = gridVecs[indices[ipt] + 1].obstime;
-                 veclow = &(gridVecs[indices[ipt] - 1]); 
-                 vecmid = &(gridVecs[indices[ipt]]); 
-                 vechii = &(gridVecs[indices[ipt] + 1]); 
+                 if (drms_ismissing_time(tgttimes[ipt]))
+                 {
+                    /* skip missing times */
+                    ((*interp)[ipt]).obstime = DRMS_MISSING_TIME;
+                    continue;
+                 }
+
+                 CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[ipt]);
+                 vindex = *((int *)hcon_lookup(indexmap, dhashkey));
+
+                 ptlow = gridVecs[vindex - 1].obstime;
+                 ptmid = gridVecs[vindex].obstime;
+                 pthii = gridVecs[vindex + 1].obstime;
+                 veclow = &(gridVecs[vindex - 1]); 
+                 vecmid = &(gridVecs[vindex]); 
+                 vechii = &(gridVecs[vindex + 1]); 
                  factorlow = (tgttimes[ipt] - ptmid) * (tgttimes[ipt] - pthii) / 
                    ((ptlow - ptmid) * (ptlow - pthii));
                  factormid = (tgttimes[ipt] - ptlow) * (tgttimes[ipt] - pthii) / 
@@ -1168,14 +1163,54 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                 IORBIT_Info_t **info)
 {
    LIBASTRO_Error_t err = kLIBASTRO_Success;
+   int ntimes = 0;
+   double *tgtsorted = NULL;
+   IORBIT_Info_t *retvec = NULL;
 
    if (info && nitems > 0)
    {
-      double *tgtsorted = NULL;
-      int ntimes = 0;
-     
+     *info = calloc(nitems, sizeof(IORBIT_Info_t));
+
+      /* Ensure tgttimes are sorted in increasing value - missing values are removed */
+      ntimes = SortTimes(tgttimes, nitems, &tgtsorted);  
+   }
+   else
+   {
+      err = kLIBASTRO_InvalidArgs;
+   }
+
+   if (err == kLIBASTRO_Success && ntimes <= 0)
+   {
+      /* All target times are missing, and there are nitems target times with missing values. */
+      int ivec;
+
+      for (ivec = 0; ivec < nitems; ivec++)
+      {
+         retvec = &((*info)[ivec]);
+
+         /* Fill in with missing values if target time was missing */
+         retvec->obstime = DRMS_MISSING_TIME;
+         retvec->hciX = DRMS_MISSING_DOUBLE;
+         retvec->hciY = DRMS_MISSING_DOUBLE;
+         retvec->hciZ = DRMS_MISSING_DOUBLE;
+         retvec->hciVX = DRMS_MISSING_DOUBLE;
+         retvec->hciVY = DRMS_MISSING_DOUBLE;
+         retvec->hciVZ = DRMS_MISSING_DOUBLE;
+         retvec->gciX = DRMS_MISSING_DOUBLE;
+         retvec->gciY = DRMS_MISSING_DOUBLE;
+         retvec->gciZ = DRMS_MISSING_DOUBLE;
+         retvec->gciVX = DRMS_MISSING_DOUBLE;
+         retvec->gciVY = DRMS_MISSING_DOUBLE;
+         retvec->gciVZ = DRMS_MISSING_DOUBLE;
+         retvec->dsun_obs = DRMS_MISSING_DOUBLE;
+         retvec->obs_vr = DRMS_MISSING_DOUBLE;
+         retvec->obs_vw = DRMS_MISSING_DOUBLE;
+         retvec->obs_vn = DRMS_MISSING_DOUBLE;
+      }
+   }
+   else if (err == kLIBASTRO_Success)
+   {
       LinkedList_t *listvecs = NULL;
-      int *indices = NULL;
       HContainer_t *indexmap = NULL;
       IORBIT_Vector_t *vecs = NULL;
       IORBIT_Vector_t *interp = NULL;
@@ -1185,16 +1220,11 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       double *hvw = NULL;
       double *hvn = NULL;
 
-      IORBIT_Info_t *retvec = NULL;
-
       int nbelow = 0;
       int nabove = 0;
       char filter[DRMS_MAXQUERYLEN];
 
       TIMER_t *tmr = NULL;
-
-     /* Ensure tgttimes are sorted in increasing value - missing values are removed */
-      ntimes = SortTimes(tgttimes, nitems, &tgtsorted);
 
       gCacheChunking = 1;
 
@@ -1214,7 +1244,7 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
             /* if !gCacheChunking, then must modify optfilter to restrict search to records that will likely 
              * contain all target points, plus extra points on either end. */
             double min = tgtsorted[0];
-            double max = tgtsorted[nitems - 1];
+            double max = tgtsorted[ntimes - 1];
             char mintime[128];
             char maxtime[128];
             sprint_time(mintime, min - 3600, "UTC", 0);
@@ -1241,8 +1271,6 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
          default:
            fprintf(stderr, "Unsupported interpolation algorithm '%d'.\n", (int)alg);
       }
-
-      *info = calloc(nitems, sizeof(IORBIT_Info_t));
 
       /* Use array of time strings to check for presence of gci/hci data in 
        * grid cache - make some assumptions here 
@@ -1280,7 +1308,10 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                          kGT,
                          &listvecs,
                          NULL,
-                         &indexmap,
+                         &indexmap, /* indices into listvecs; each target time is mapped to 
+                                     * an index into listvecs. The resulting vector is the 
+                                     * grid vector that has an obstime that is the largest
+                                     * time smaller than the target time. */
                          optfilter))
       {
          err = kLIBASTRO_InsufficientData;
@@ -1296,9 +1327,6 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       {
          int ivec;
          ListNode_t *gv = NULL;
-         int *vindex = NULL;
-         char dhashkey[128];
-         int itgt;
 
          /* Make an array out of the list of grid vectors */
          vecs = malloc(sizeof(IORBIT_Vector_t) * listvecs->nitems);
@@ -1311,19 +1339,6 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
             ivec++;
          }
 
-         /* Make an array of indices to gridvecs for tgttimes (the unsorted tgttimes) */
-         indices = (int *)malloc(sizeof(int) * ntimes);
-
-         for (itgt = 0; itgt < ntimes; itgt++)
-         {
-            CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[itgt]);
-            vindex = ((int *)hcon_lookup(indexmap, dhashkey));
-            if (vindex)
-            {
-               indices[itgt] = *vindex;
-            }
-         }
-
          if (env->verbose)
          {
             /* time interpolation */
@@ -1333,8 +1348,8 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
          if (!iorbit_interpolate(alg,
                                  vecs, /* grid vectors (contains both abscissa and ordinate values) */
                                  tgttimes, /* result abscissae */
-                                 indices, 
-                                 ntimes,
+                                 indexmap, 
+                                 nitems,
                                  &interp))
          {
             if (env->verbose)
@@ -1346,7 +1361,7 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                tmr = CreateTimer();
             }
 
-            if (!CalcSolarVelocities(interp, ntimes, &dsun_obs, &hvr, &hvw, &hvn))
+            if (!CalcSolarVelocities(interp, nitems, &dsun_obs, &hvr, &hvw, &hvn))
             {
                if (env->verbose)
                {
@@ -1355,27 +1370,51 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                }
 
                /* loop through resulting vectors to create output */
-               for (ivec = 0; ivec < ntimes; ivec++)
+               for (ivec = 0; ivec < nitems; ivec++)
                {
                   retvec = &((*info)[ivec]);
 
-                  retvec->obstime = interp[ivec].obstime;
-                  retvec->hciX = interp[ivec].hciX;
-                  retvec->hciY = interp[ivec].hciY;
-                  retvec->hciZ = interp[ivec].hciZ;
-                  retvec->hciVX = interp[ivec].hciVX;
-                  retvec->hciVY = interp[ivec].hciVY;
-                  retvec->hciVZ = interp[ivec].hciVZ;
-                  retvec->gciX = interp[ivec].gciX;
-                  retvec->gciY = interp[ivec].gciY;
-                  retvec->gciZ = interp[ivec].gciZ;
-                  retvec->gciVX = interp[ivec].gciVX;
-                  retvec->gciVY = interp[ivec].gciVY;
-                  retvec->gciVZ = interp[ivec].gciVZ;
-                  retvec->dsun_obs = dsun_obs[ivec];
-                  retvec->obs_vr = hvr[ivec];
-                  retvec->obs_vw = hvw[ivec];
-                  retvec->obs_vn = hvn[ivec];
+                  if (drms_ismissing_time(interp[ivec].obstime))
+                  {
+                     /* Fill in with missing values if target time was missing */
+                     retvec->obstime = DRMS_MISSING_TIME;
+                     retvec->hciX = DRMS_MISSING_DOUBLE;
+                     retvec->hciY = DRMS_MISSING_DOUBLE;
+                     retvec->hciZ = DRMS_MISSING_DOUBLE;
+                     retvec->hciVX = DRMS_MISSING_DOUBLE;
+                     retvec->hciVY = DRMS_MISSING_DOUBLE;
+                     retvec->hciVZ = DRMS_MISSING_DOUBLE;
+                     retvec->gciX = DRMS_MISSING_DOUBLE;
+                     retvec->gciY = DRMS_MISSING_DOUBLE;
+                     retvec->gciZ = DRMS_MISSING_DOUBLE;
+                     retvec->gciVX = DRMS_MISSING_DOUBLE;
+                     retvec->gciVY = DRMS_MISSING_DOUBLE;
+                     retvec->gciVZ = DRMS_MISSING_DOUBLE;
+                     retvec->dsun_obs = DRMS_MISSING_DOUBLE;
+                     retvec->obs_vr = DRMS_MISSING_DOUBLE;
+                     retvec->obs_vw = DRMS_MISSING_DOUBLE;
+                     retvec->obs_vn = DRMS_MISSING_DOUBLE;
+                  }
+                  else
+                  {
+                     retvec->obstime = interp[ivec].obstime;
+                     retvec->hciX = interp[ivec].hciX;
+                     retvec->hciY = interp[ivec].hciY;
+                     retvec->hciZ = interp[ivec].hciZ;
+                     retvec->hciVX = interp[ivec].hciVX;
+                     retvec->hciVY = interp[ivec].hciVY;
+                     retvec->hciVZ = interp[ivec].hciVZ;
+                     retvec->gciX = interp[ivec].gciX;
+                     retvec->gciY = interp[ivec].gciY;
+                     retvec->gciZ = interp[ivec].gciZ;
+                     retvec->gciVX = interp[ivec].gciVX;
+                     retvec->gciVY = interp[ivec].gciVY;
+                     retvec->gciVZ = interp[ivec].gciVZ;
+                     retvec->dsun_obs = dsun_obs[ivec];
+                     retvec->obs_vr = hvr[ivec];
+                     retvec->obs_vw = hvw[ivec];
+                     retvec->obs_vn = hvn[ivec];
+                  }
                }
             }
          }
@@ -1426,199 +1465,6 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       {
          hcon_destroy(&indexmap);
       }
-   }
-   else
-   {
-      err = kLIBASTRO_InvalidArgs;
-   }
-
-   return err;
-}
-
-LIBASTRO_Error_t iorbit_test(DRMS_Env_t *env, const char *rsquery)
-{
-   LIBASTRO_Error_t err = kLIBASTRO_Success;
-   int drmsstat = DRMS_SUCCESS;
-   char *query = strdup(rsquery);
-   DRMS_RecordSet_t *rset = drms_open_records(env, query, &drmsstat);
-
-   if (rset && rset->n > 0)
-   {
-      /* Get GCI values */
-      DRMS_Record_t *rec = NULL;
-      int irec;
-      TIME obsdate;
-      double **gcipos = malloc(sizeof(double *) * rset->n);
-      double **gcivel = malloc(sizeof(double *) * rset->n);
-      double **hcipos = malloc(sizeof(double *) * rset->n);
-      double **hcivel = malloc(sizeof(double *) * rset->n);
-
-      double pi=3.14159265358979e0;
-      double deg2rad=pi/180;
-      double gcitdt,jd,help[6];
-      double ex,ey,ez,evx,evy,evz; /* earth relative to sun */
-      double sx,sy,sz,svx,svy,svz; /* s/c relative to sun */
-
-      double coordrot = 0; /* angular diff between equatorial and ecliptic */
-      double ey2;
-      double ez2;
-      double evy2;
-      double evz2;
-
-      for (irec = 0; irec < rset->n; irec++)
-      {
-         rec = rset->records[irec];
-
-         gcipos[irec] = malloc(sizeof(double) * 3);
-         gcivel[irec] = malloc(sizeof(double) * 3);
-         hcipos[irec] = malloc(sizeof(double) * 3);
-         hcivel[irec] = malloc(sizeof(double) * 3);
-
-         obsdate = drms_getkey_time(rec, kOBSDATE, NULL);
-
-         gcipos[irec][0] = drms_getkey_double(rec, kXGCI, NULL);
-         gcipos[irec][1] = drms_getkey_double(rec, kYGCI, NULL);
-         gcipos[irec][2] = drms_getkey_double(rec, kZGCI, NULL);
-         gcivel[irec][0] = drms_getkey_double(rec, kVXGCI, NULL);
-         gcivel[irec][1] = drms_getkey_double(rec, kVYGCI, NULL);
-         gcivel[irec][2] = drms_getkey_double(rec, kVZGCI, NULL);
-
-         hcipos[irec][0] = drms_getkey_double(rec, kXHCI, NULL);
-         hcipos[irec][1] = drms_getkey_double(rec, kYHCI, NULL);
-         hcipos[irec][2] = drms_getkey_double(rec, kZHCI, NULL);
-         hcivel[irec][0] = drms_getkey_double(rec, kVXHCI, NULL);
-         hcivel[irec][1] = drms_getkey_double(rec, kVYHCI, NULL);
-         hcivel[irec][2] = drms_getkey_double(rec, kVZHCI, NULL);
-
-         gcitdt = obsdate + 32.184;
-         jd=gcitdt/86400+2443144.5;
-
-         get_earth_ephem(jd,help);
-         /* results for the earth are for the same time as for SOHO, not
-            after the appropriate time delay */
-         ex=help[0];
-         ey=help[1];
-         ez=help[2];
-         evx=help[3];
-         evy=help[4];
-         evz=help[5];
-
-         /* eXX and eXXX (not x vals though) are all equatorial coordinates -
-            convert to ecliptic coords. */
-         coordrot = atan(evz/evy) - 23.45 * deg2rad;
-         ey2 = ey * ey;
-         ez2 = ez * ez;
-         evy2 = evy * evy;
-         evz2 = evz * evz;
-
-         ey = sqrt(ey2 + ez2) * cos(coordrot);
-         ez = sqrt(ey2 + ez2) * sin(coordrot);
-         evy = sqrt(evy2 + evz2) * cos(coordrot);
-         evz = sqrt(evy2 + evz2) * sin(coordrot);
-
-         /* ecliptic coords */
-         sx=ex+gcipos[irec][0];
-         sy=ey+gcipos[irec][1];
-         sz=ez+gcipos[irec][2];
-         svx=evx+gcivel[irec][0];
-         svy=evy+gcivel[irec][1];
-         svz=evz+gcivel[irec][2];
-       
-
-#if DEBUG
-         fprintf(stdout, "%-15s%-15s%-15s%-15s%-15s%-15s\n", 
-                 "calc_evx", "eph_evx", "calc_evy", "eph_evy", "calc_evz", "eph_evz");
-         fprintf(stdout, "%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f\n", 
-                 hcivel[irec][0] - gcivel[irec][0], 
-                 evx, 
-                 hcivel[irec][1] - gcivel[irec][1],
-                 evy, 
-                 hcivel[irec][2] - gcivel[irec][2],
-                 evz);
-         fprintf(stdout, "\n");
-         fprintf(stdout, "%-20s%-20s%-20s%-20s%-20s%-20s\n", 
-                 "calc_ex", "eph_ex", "calc_ey", "eph_ey", "calc_ez", "eph_ez");
-         fprintf(stdout, "%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f\n", 
-                 hcipos[irec][0] - gcipos[irec][0], 
-                 ex, 
-                 hcipos[irec][1] - gcipos[irec][1],
-                 ey, 
-                 hcipos[irec][2] - gcipos[irec][2],
-                 ez);
-#endif
-
-         /* print out hci values (calculated and from MOC) */
-         fprintf(stdout, "Position of s/c relative to sun (J2000.0) == calc_XX - derived from gci, fds_XX - from FDS data products\n");
-         fprintf(stdout, "%-20s%-20s%-20s%-20s%-20s%-20s\n", 
-                 "calc_x", "fds_x", "calc_y", "fds_y", "calc_z", "fds_z");
-         fprintf(stdout, "%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f\n", 
-                 sx, hcipos[irec][0], hcipos[irec][1], sy, sz, hcipos[irec][2]);
-         
-         fprintf(stdout, "\n");
-
-         fprintf(stdout, "Velocity of s/c relative to sun (J2000.0) == calc_XX - derived from gci, fds_XX - from FDS data products\n");
-         fprintf(stdout, "%-20s%-20s%-20s%-20s%-20s%-20s\n", 
-                 "calc_vx", "fds_vx", "calc_vy", "fds_vy", "calc_vz", "fds_vz");
-         fprintf(stdout, "%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f\n", 
-                 svx, hcivel[irec][0], svy, hcivel[irec][1], svz, hcivel[irec][2]);
-      }
-
-      if (gcipos)
-      {
-         for (irec = 0; irec < rset->n; irec++)
-         {
-            if (gcipos[irec])
-            {
-               free(gcipos[irec]);
-            }
-         }
-
-         free(gcipos);
-      }
-      
-      if (gcivel)
-      {
-         for (irec = 0; irec < rset->n; irec++)
-         {
-            if (gcivel[irec])
-            {
-               free(gcivel[irec]);
-            }
-         }
-
-         free(gcivel);
-      }
-
-      if (hcipos)
-      {
-         for (irec = 0; irec < rset->n; irec++)
-         {
-            if (hcipos[irec])
-            {
-               free(hcipos[irec]);
-            }
-         }
-
-         free(hcipos);
-      }
-
-      if (hcivel)
-      {
-         for (irec = 0; irec < rset->n; irec++)
-         {
-            if (hcivel[irec])
-            {
-               free(hcivel[irec]);
-            }
-         }
-
-         free(hcivel);
-      }
-   }
-
-   if (query)
-   {
-      free(query);
    }
 
    return err;
