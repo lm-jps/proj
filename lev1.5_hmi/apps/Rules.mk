@@ -32,11 +32,11 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)) $(GSLEXE_$(d)))
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)): CF_TGT := $(CF_TGT) -I $(SRCDIR)/$(d)/../libs/interp
 #<<<<<<< Rules.mk
-$(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) -openmp -g -no-ipo
-$(GSLEXE_$(d)):      LF_TGT := $(LF_TGT) -openmp -g -no-ipo
+$(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) 
+$(GSLEXE_$(d)):      LF_TGT := $(LF_TGT) 
 $(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) $(GSLH)
 $(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d) -I $(SRCDIR)/$(d)/../libs/interp
-$(GSLEXE_$(d)):      LL_TGT := $(LL_TGT) $(GSLLIBS) -lsvml -lmkl_em64t -lguide -lpthread
+$(GSLEXE_$(d)):      LL_TGT := $(LL_TGT) $(GSLLIBS) -lmkl_em64t 
 
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBINTERP)
 $(GSLEXE_$(d)): $(LIBINTERP)
