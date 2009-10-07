@@ -1,6 +1,8 @@
 eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
     if 0;
 #
+#!!!NOTE: Under Development. With restart feature.
+#
 #/home/production/cvs/JSOC/proj/datacapture/scripts/socdc
 #
 #Perl/Tk gui.
@@ -50,6 +52,11 @@ $REPEAT = 60000;		#default milliseconds for update cycle
 $QAC_SIZE = 999;		#size of a qac file (!!!TBD)
 $FILETYPES = "filetypes.txt";
 $INSTANCE = 0;			#0=hmi, 1=aia
+$RESTARTFILE = "/usr/local/logs/soc/RESTARTNOW";
+$TRFILEHMI = "/usr/local/logs/soc/TlmReceivedRestart.hmi";
+$RXFILEHMI = "/usr/local/logs/soc/RexmitRestart.hmi";
+$TRFILEAIA = "/usr/local/logs/soc/TlmReceivedRestart.aia";
+$RXFILEAIA = "/usr/local/logs/soc/RexmitRestart.aia";
 $DIRPIPEFE = "/dds/socdc";	#pipeline front end dir to send data to
 #$FEHOST = "d00.stanford.edu";   #pipeline front end host name
 $FEHOST = "d01i";   #pipeline front end host name
@@ -69,17 +76,17 @@ $fitzmode = " ";
 @rexmitfiles = ();
 
 #Set up environment for hk decode to Carl's for now...
-$ENV{'HK_CONFIG_DIRECTORY'} = "/home/carl/EGSE/tables/hk_config_file/";
-$ENV{'HK_ZERO_FILL_FLAG'} = "0";
-$ENV{'HK_INITIAL_HEADER_APID'} = "431";
-$ENV{'HK_INITIAL_HEADER_PKT_VERSION'} = "1.67";
-$ENV{'HK_SIM_DIRECTORY'} = "/home/production/cvs/EGSE/tables/hk_sim_data/";
-$ENV{'HK_CONFIG_DIRECTORY'} = "/home/production/cvs/EGSE/tables/hk_config_file/";
-$ENV{'HK_GTCIDS_FILE'} = "gtcids.txt";
-$ENV{'HK_GTCIDS_DIRECTORY'} = "/home/production/cvs/EGSE/Lockheed_DB/GSE/";
-$ENV{'HK_STHA_FILENAME'} = "STANFORD_TLM_HMI_AIA.txt";
-$ENV{'HK_STHA_DIRECTORY'} = "/home/production/cvs/EGSE/Lockheed_DB/STANFORD/";
-$ENV{'HK_APID_LIST'} = "0x1BD 0x1DB";
+#$ENV{'HK_CONFIG_DIRECTORY'} = "/home/carl/EGSE/tables/hk_config_file/";
+#$ENV{'HK_ZERO_FILL_FLAG'} = "0";
+#$ENV{'HK_INITIAL_HEADER_APID'} = "431";
+#$ENV{'HK_INITIAL_HEADER_PKT_VERSION'} = "1.67";
+#$ENV{'HK_SIM_DIRECTORY'} = "/home/production/cvs/EGSE/tables/hk_sim_data/";
+#$ENV{'HK_CONFIG_DIRECTORY'} = "/home/production/cvs/EGSE/tables/hk_config_file/";
+#$ENV{'HK_GTCIDS_FILE'} = "gtcids.txt";
+#$ENV{'HK_GTCIDS_DIRECTORY'} = "/home/production/cvs/EGSE/Lockheed_DB/GSE/";
+#$ENV{'HK_STHA_FILENAME'} = "STANFORD_TLM_HMI_AIA.txt";
+#$ENV{'HK_STHA_DIRECTORY'} = "/home/production/cvs/EGSE/Lockheed_DB/STANFORD/";
+#$ENV{'HK_APID_LIST'} = "0x1BD 0x1DB";
 
 $SIG{INT} = 'Exit_sub';
 
@@ -94,10 +101,16 @@ while ($ARGV[0] =~ /^-/) {
   if (/^-z(.*)/) {
     $fitzmode = "-z";
   }
+  if (/^-r(.*)/) {
+    $RESTART = 1;
+    $hmiaiaflg = $ARGV[0];
+    sleep(1);		#wait for parent to exit
+  }
   else {
     &usage;
   }
 }
+
 $INTLM = $ARGV[0];
 $mw = MainWindow->new;
   my(@pl) = qw/-side top -anchor nw/;
@@ -217,6 +230,12 @@ while(<CF>) {
 }
 close(CF);
 
+if($RESTART) {
+  &Submit_b($hmiaiaflg);
+  MainLoop;
+}
+
+
   $rf0 = $mw->Frame()->pack(-expand => '1', -fill => 'both', -side => 'top');
   $rf0->Label(-text => "    Remove all files from the above dirs to start:", -padx=>16, -justify => 'left')->pack(-side => 'left');
   $dir_init = "no";			#default is no
@@ -295,6 +314,8 @@ sub Submit_b
     $bgcolor = "#ADD8E6";
     $GENTLM1 = $GENTLM1HMI;
     $GENTLM2 = $GENTLM2HMI;
+    $TRFILE = $TRFILEHMI;
+    $RXFILE = $RXFILEHMI;
   }
   else { 
     $tname = "aia";
@@ -303,6 +324,8 @@ sub Submit_b
     $bgcolor = "lightyellow";
     $GENTLM1 = $GENTLM1AIA;
     $GENTLM2 = $GENTLM2AIA;
+    $TRFILE = $TRFILEAIA;
+    $RXFILE = $RXFILEAIA;
   }
   $extva = "$tname"."_$vaname"."_$user"."_$ldate";
   $log1 = "/usr/local/logs/soc/soc_$extva.log";
@@ -315,6 +338,30 @@ sub Submit_b
   open(LOG, ">>$logfe") || die "Can't open $logfe: $!\n";
   select(LOG); $| = 1; select(STDOUT);	#make unbuffered
   print LOG "$ldate $logfe\n\n";
+
+  if($RESTART) {	#restore received and rexmit file info before restart
+    if(!open(TR, "<$TRFILE")) {
+      print LOG "Error: Can't open $TRFILE\n";
+    }
+    else {
+      while(<TR>) {
+        chomp();
+        $Hoftlmreceived{$_} = 1;
+      }
+      close(TR);
+    }
+    if(!open(TR, "<$RXFILE")) {
+      print LOG "Error: Can't open $RXFILE\n";
+    }
+    else {
+      while(<TR>) {
+        chomp();
+        push(@rexmitfiles, $_);
+      }
+      close(TR);
+    }
+  }
+
   &Update_Config();		#update config file from main window vars
   if($INSTANCE == 0) {
     $DIRDDS2SOC = $DIRDDS2SOC."/hmi";
@@ -755,6 +802,45 @@ sub Showmain_b
 #Scheduled by Submit_b().
 sub all_update 
 {
+  if(-e $RESTARTFILE) {
+    `/bin/rm $RESTARTFILE`;
+    #sleep and fork socdc -r $INSTANCE
+    if($restartpid = fork) {
+      #This is the parent. Exit now.
+      $ldate = &labeldate();
+      print "Restarting socdc  $ldate\n";
+      print LOG "Restarting socdc  $ldate\n";
+      #now save any tlm received and rexmit request info through the restart
+      if(!open(TR, ">$TRFILE")) {
+        print LOG "Error: Can't open $TRFILE\n";
+      }
+      else {
+        @x = keys %Hoftlmreceived;
+        while($tr = pop(@x)) {
+          print TR "$tr\n";
+        }
+        close(TR);
+      }
+      if(!open(TR, ">$RXFILE")) {
+        print LOG "Error: Can't open $RXFILE\n";
+      }
+      else {
+        while($tr = pop(@rexmitfiles)) {
+          print TR "$tr\n";
+        }
+        close(TR);
+      }
+      close(LOG);
+      &Exit_sub;
+    } elsif (defined $restartpid) {     # $restartpid is zero here if defined.
+      sleep(2);
+      exec "/home/production/cvs/JSOC/proj/datacapture/scripts/socdc -r $INSTANCE";
+    }  else {
+      #fork error
+      print "!!Abort: Can't fork: $!\n";
+      #&Exit_sub;
+    }
+  }
   if($dds_sim eq 'yes') {
     #&Sim_DDS();		#simulate the DDS sending file(s) to SOC
     &ls_update();       #show all the file in $DIRDDS2SOC
