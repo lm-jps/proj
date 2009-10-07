@@ -107,7 +107,9 @@ essential commands, especially compilers. If you get messages like:
 	make: /usr/local/bin/icc: Command not found
 
 You must suitably redefine the relevant Make variables (e.g. CC or ICC in
-this example) in the file being included.
+this example) in the file being included. If you have to change from icc
+to gcc, be sure to change the appropriate CFLAGS and LDFLAGS variables as
+well, removing the -xW option.
 
 The Makefile also requires external definition of the environment variable
 DRMS to be the root of your NetDRMS distribution as described in the
@@ -227,6 +229,13 @@ If you do not change the series name in the JSD, you can also force its
 deletion and recreation by typing
 	create_series -f noaa_ar.jsd
 If you give it a new series name of course it will not remove the old one.
+
+Once you have created the data series, you can run
+	smpl_05
+The default value for the ds parameter is drms.noaa_ar, so you will have to
+run the module with a different series name for the "ds" argument the series
+you created has a diffeent name. The default value for the "data" argument
+is noaa_ar.dat, a file included in the cookbook.
 
 ********************************************************************************
 
