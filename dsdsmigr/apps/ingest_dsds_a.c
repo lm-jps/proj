@@ -182,6 +182,8 @@ int DoIt(void)
 	{
 	char *wantKey, *keyName = outKey->info->name;
         int action = keyNameCheck(keyName, &wantKey);
+        if (!drms_keyword_inclass(outKey, kDRMS_KeyClass_Explicit))
+	    continue;  // skip implicit keywords.
         switch (action)
           {
 	  case ACT_NOP:
@@ -203,7 +205,7 @@ int DoIt(void)
 		{ /* on CROTA2 set CROTA2, SAT_ROT, INST_ROT */
 		double pangle, sat_rot;
 		pangle = drms_getkey_double(inRec, "SOLAR_P", &status);
-			if (status && verbose)fprintf(stderr,"*** ACT_COPY drms_getkey_double SOLAR_P status=%d\n",status);
+		if (status && verbose)fprintf(stderr,"*** ACT_ANGLE drms_getkey_double SOLAR_P status=%d, pangle=%f\n",status,pangle);
 		sat_rot = -pangle;
 		drms_setkey_double(outRec, "CROTA2", sat_rot);
 		drms_setkey_double(outRec, "SAT_ROT", sat_rot);
@@ -214,9 +216,9 @@ int DoIt(void)
 		{ /* on CRPIX1 set CRPIX1, CRPIX2, CRVAL1, CRVAL2 */
 		double x0, y0;
 		x0 = drms_getkey_double(inRec, "X0", &status);
-			if (status && verbose)fprintf(stderr,"*** ACT_CENTER drms_getkey_double X0 status=%d\n",status);
+		if (status && verbose)fprintf(stderr,"*** ACT_CENTER drms_getkey_double X0 status=%d, x0=%f\n",status,x0);
 		y0 = drms_getkey_double(inRec, "Y0", &status);
-			if (status && verbose)fprintf(stderr,"*** ACT_CENTER drms_getkey_double Y0 status=%d\n",status);
+		if (status && verbose)fprintf(stderr,"*** ACT_CENTER drms_getkey_double Y0 status=%d, y0=%f\n",status,y0);
 		drms_setkey_double(outRec, "CRPIX1", x0+1.0);
 		drms_setkey_double(outRec, "CRPIX2", y0+1.0);
 		drms_setkey_double(outRec, "CRVAL1", 0.0);
@@ -232,13 +234,14 @@ int DoIt(void)
 		double t_step;
 		double exptime, mjd_day, mjd_time;
 		t_rec = drms_getkey_time(inRec, "T_REC", &status);
-			if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_REC status=%d\n",status);
+		if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_REC status=%d, t_rec=%f\n",status,t_rec);
 		t_step = drms_getkey_double(outRec, "T_REC_step", &status); /* note from outRec */
-			if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_double T_REC_step status=%d\n",status);
+		if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_double T_REC_step status=%d, t_step=%f\n",status,t_step);
 		// exptime = t_step; /* note - for lev1.5 */
                 exptime = drms_getkey_double(inRec, "INTERVAL", &status);
 		t_obs = drms_getkey_time(inRec, "T_OBS", &status);
-			if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_OBS status=%d\n",status);
+		if (status && verbose)fprintf(stderr,"*** ACT_TIME drms_getkey_time T_OBS status=%d, t_obs=%f\n",status,t_obs);
+                if (status == DRMS_ERROR_UNKNOWNKEYWORD) // T_OBS is not present, skip this record.
 		date__obs = t_obs - exptime/2.0;
 		mjd = date__obs - MJD_epoch; /* sign error corrected by tplarson 2008.05.29 */
 		mjd_day = floor(mjd / 86400.0);
@@ -274,8 +277,9 @@ int DoIt(void)
 //#define AU_m (1.49597892e11) bad
 		double au;
 		au = drms_getkey_double(inRec, "OBS_DIST", &status);
-			if (status && verbose)fprintf(stderr,"*** ACT_AU drms_getkey_double OBS_DIST status=%d\n",status);
-		drms_setkey_double(outRec, "DSUN_OBS", au * AU_m);
+		if (status && verbose)fprintf(stderr,"*** ACT_AU drms_getkey_double OBS_DIST status=%d,au=%f\n",status,au);
+		if (status != DRMS_ERROR_UNKNOWNKEYWORD)
+		    drms_setkey_double(outRec, "DSUN_OBS", au * AU_m);
 		break;
 		}
           case ACT_NOT_FOUND:
@@ -283,10 +287,13 @@ int DoIt(void)
                 /* name not in table, just take same name from input series */
                 {
 		DRMS_Value_t inValue = {DRMS_TYPE_STRING, NULL};
+                DRMS_Keyword_t *outKey = drms_keyword_lookup(outRec, keyName, 0);
+                if (drms_keyword_isconstant(outKey))
+			break;
                 inValue = drms_getkey_p(inRec, keyName, &status);
 		if (status == DRMS_ERROR_UNKNOWNKEYWORD)
 			break;
-			if (status && verbose)fprintf(stderr,"*** DEFAULT drms_getkey_p %s status=%d\n",keyName, status);
+		if (status && verbose)fprintf(stderr,"*** DEFAULT drms_getkey_p %s status=%d\n",keyName, status);
                 drms_setkey_p(outRec, keyName, &inValue);
 		if ((inValue.type == DRMS_TYPE_STRING) && inValue.value.string_val)
 		  free(inValue.value.string_val);
@@ -299,7 +306,7 @@ int DoIt(void)
       /* assume only one segment */
 	DataFile = drms_getkey_string(inRec,"DATAFILE",&status);
 	if (status && verbose)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
-	if (*DataFile)
+	if (*DataFile && access(DataFile, R_OK | F_OK) == 0)
 	  {
           inSeg = drms_segment_lookupnum(inRec, 0);
           outSeg = drms_segment_lookupnum(outRec, 0);
@@ -335,7 +342,7 @@ int DoIt(void)
              {
              Record_OK = 0;
              if (verbose) 
-               fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, skip.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
+               fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
              }
           else
              Record_OK = 1;
