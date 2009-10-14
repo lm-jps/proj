@@ -381,7 +381,7 @@ int DoIt(void)
 
    ptr_read_in_buffer = (unsigned char *) malloc(sizeof(unsigned char) * HKDDF_READ_ARRAY_SIZE);
   /*read lines in file into buffer representing a packet*/
-  for(i=0; i < HKDDF_READ_ARRAY_SIZE;i++) ptr_read_in_buffer[i]=0; ;
+  for(i=0; i < HKDDF_READ_ARRAY_SIZE;i++) ptr_read_in_buffer[i]= '\0'; ;
   for(i = 0 ; fread(ptr_read_in_buffer + i,1,1,file_ptr) ; i++) 
   {  
     ;/* do nothing*/
@@ -394,7 +394,7 @@ int DoIt(void)
       return (0);
     }
   }
-  *(ptr_read_in_buffer + i)=NULL;
+  *(ptr_read_in_buffer + i)= '\0';
   fclose(file_ptr);
   if(print_flag && out_flag)
   {
@@ -480,6 +480,8 @@ void write_to_drms(int apid, char pkt_ver_num[MAX_CHAR_VERSION_NUMBER], char fil
 
   /* check if record is within 12 hour range to remove processing of future dated packet data */
   kw=kw_head;
+
+
   ck_rwtr_status = check_hk_record_within_time_range(kw);
   if (ck_rwtr_status == 1)
   {
@@ -495,7 +497,6 @@ void write_to_drms(int apid, char pkt_ver_num[MAX_CHAR_VERSION_NUMBER], char fil
     printkerr("WARNING:decode_dayfile: Skipping write of record to  <%s> data series. Packet time:<%s> Record not within time range.\n", ds_name, at);
     return;
   }
-
 
   /* if already exits skip writing record to DRMS data series */
   if (ck_status == 1)
@@ -878,7 +879,7 @@ void saveprint_packet_values1(unsigned char *read_in_buffer, char *in, char *out
     factor = k * (packet_length + 6 + 1 ) ;
 
     /* Check if at end of all pkts */
-    if (*(read_in_buffer+5+factor) == (int)NULL)
+    if (*(read_in_buffer+5+factor) == '\0')
     {
        /* printf for report information */
        printf("\n\n*****At end of file. Found %d packets in file.\n", k);
@@ -1294,7 +1295,7 @@ void  save_packet_values2(unsigned char *read_in_buffer, char projname[HKDDF_MAX
     factor = k * (packet_length + 6 + 1 ) ;
 
     /* Check if at end of all pkts */
-    if (*(read_in_buffer+5+factor) == (int)NULL)
+    if (*(read_in_buffer+5+factor) == '\0')
     {
        break;
     }
@@ -1439,7 +1440,7 @@ void  saveprint_packet_values2(unsigned char *read_in_buffer, char *in,
     factor = k * (packet_length + 6 + 1 ) ;
 
     /* Check if at end of all pkts */
-    if (*(read_in_buffer+5+factor) == (int)NULL)
+    if (*(read_in_buffer+5+factor) == '\0')
     {
        printf("\n\n*****At end of file. Found %d packets in file.\n", k);
        break;
@@ -1714,7 +1715,7 @@ void save_packet_values1(unsigned char *read_in_buffer, char *out, char *in, cha
     factor = k * (packet_length + 6 + 1 ) ;
 
     /* Check if at end of all pkts */
-    if (*(read_in_buffer+5+factor) == (int)NULL)
+    if (*(read_in_buffer+5+factor) == '\0')
     {
       break;
     }
