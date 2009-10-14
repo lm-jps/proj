@@ -4,6 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
+LIBHKLEV0		:= $(d)/libhklev0.a
 test0_$(d)		:= $(addprefix $(d)/, test0)
 # wtest_$(d)		:= $(addprefix $(d)/, wtest)
 ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0 decode_dayfile)
@@ -12,6 +13,7 @@ ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0 decode_dayfile)
 ingestlev1_mgr_$(d)	:= $(addprefix $(d)/, build_lev1_mgr)
 ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
+LIBHKLEV0_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o )
 
 #yingestlev0_$(d)	:= $(addprefix $(d)/, yingest_lev0 decode_dayfile)
 #yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
@@ -46,9 +48,11 @@ CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
 		   $(ALLEXE_$(d)) \
 		   $(MODEXE_SOCK_$(d))\
+		   $(LIBHKLEV0)\
 		   $(DEP_$(d))
 
 TGT_BIN	        := $(TGT_BIN) $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d)) 
+TGT_LIB		:= $(TGT_LIB) $(LIBHKLEV0)
 
 S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d)))
 
@@ -66,6 +70,9 @@ $(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE)
 $(PEEXE_$(d)):		LL_TGT := -lecpg -lpq 
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)):	$(LIBASTRO)
+$(LIBHKLEV0):		$(LIBHKLEV0_OBJ)
+			$(ARCHIVE)
+			$(SLLIB)
 
 $(ingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
 $(ingestlev1_$(d)):	LL_TGT := $(LL_TGT)
