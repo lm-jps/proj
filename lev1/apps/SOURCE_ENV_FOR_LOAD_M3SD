@@ -1,0 +1,4 @@
+setenv  HK_CONFIG_DIRECTORY                  /home/production/cvs/TBL_JSOC/lev0/hk_config_file/
+setenv  HK_GTCIDS_FILE                       gtcids.txt
+setenv  HK_SHCIDS_DIRECTORY                  /home/production/cvs/TBL_JSOC/lev0/sdo_hk_config_file/
+setenv  HK_SHCIDS_FILE                       shcids.txt
