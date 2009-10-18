@@ -306,9 +306,14 @@ int DoIt(void)
       /* assume only one segment */
 	DataFile = drms_getkey_string(inRec,"DATAFILE",&status);
 	if (status && verbose)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
-	if (*DataFile && access(DataFile, R_OK | F_OK) == 0)
+	char filepath[DRMS_MAXPATHLEN];
+	inSeg = drms_segment_lookupnum(inRec, 0);
+        if (inSeg)
+	  drms_segment_filename(inSeg, filepath);
+        else 
+          filepath[0] = '\0';
+	if (*DataFile && access(filepath, R_OK | F_OK) == 0)
 	  {
-          inSeg = drms_segment_lookupnum(inRec, 0);
           outSeg = drms_segment_lookupnum(outRec, 0);
           if (inSeg && outSeg)
             {
