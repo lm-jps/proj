@@ -85,7 +85,7 @@ static void put(short *dat, int TAP, int r, int c, int n, unsigned short *pix)
     int i;
 
     switch (TAP) {
-    case 0:	// 1-port: E,F,G,H
+    case 0:	// 4-port: E,F,G,H
 	if (r < 2048)
 	    memcpy(dat+4096*r+c, pix, 2*n);
 	else if (r < 4096)
