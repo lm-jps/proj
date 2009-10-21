@@ -87,6 +87,7 @@ typedef struct {
 } STAT;
 
 int imgdecode(unsigned short *impdu, IMG *img);
+int imgdecode_init_hack(IMG *img);
 int imgstat(IMG *img, STAT *stat);
 
 #endif
