@@ -4,6 +4,7 @@
 #include <endian.h>
 #include <string.h>
 #include <math.h>
+#include <drms_types.h>
 #include "imgdecode.h"
 
 #define MASK(n) 			((1u << (n)) - 1u)
@@ -20,8 +21,17 @@ int imgstat(IMG *img, STAT *stat)
     unsigned u;
     int i;
 
-    if (n == 0)
-	return -1;
+//img->datavals can be 0, i.e. no sci pkts came in for this image
+    if (n == 0) {
+        stat->min = DRMS_MISSING_SHORT;
+        stat->max = DRMS_MISSING_SHORT;
+        stat->median = DRMS_MISSING_SHORT;
+        stat->mean = DRMS_MISSING_DOUBLE;
+        stat->rms = DRMS_MISSING_DOUBLE;
+        stat->skew = DRMS_MISSING_DOUBLE;
+        stat->kurt = DRMS_MISSING_DOUBLE;
+	return 0;
+    }
 
     if (img->reopened) {
 	//
@@ -143,6 +153,23 @@ static void put(short *dat, int TAP, int r, int c, int n, unsigned short *pix)
     }
 }
 
+/////////////////////////////////
+int imgdecode_init_hack(IMG *img)
+/////////////////////////////////
+{
+    int i;
+
+    img->datavals = 0;
+    img->npackets = 0;
+    img->nerrors = 0;
+    img->last_pix_err = 0;
+    img->first_packet_time = UINT64_MAX;
+    for (i = 0; i < MAXPIXELS; ++i)
+	img->dat[i] = BLANK;
+    for (i = 0; i < MAXHIST; ++i)
+	img->hist[i] = 0;
+}
+
 //////////////////////////////////////////////
 int imgdecode(unsigned short *impdu, IMG *img)
 //////////////////////////////////////////////
@@ -228,6 +255,8 @@ int imgdecode(unsigned short *impdu, IMG *img)
 	img->R = (impdu[16] >> 8) & 0xf;
     }
 
+// The following has been moved to imgdecode_init_hack()
+//#if 0
     img->datavals = 0;
     img->npackets = 0;
     img->nerrors = 0;
@@ -239,6 +268,7 @@ int imgdecode(unsigned short *impdu, IMG *img)
 
     for (i = 0; i < MAXHIST; ++i)
 	img->hist[i] = 0;
+//#endif
 
     img->initialized = 1;
 
