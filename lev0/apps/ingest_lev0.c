@@ -51,7 +51,8 @@
 
 //#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
 //#define LEV0SERIESNAMEHMI "su_production.lev0f_test"
-#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
+//#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
+#define LEV0SERIESNAMEHMI "hmi.lev0f"
 #define TLMSERIESNAMEHMI "su_production.tlm_test"
 //#define TLMSERIESNAMEHMI "hmi.tlm_reingest"
 
@@ -92,7 +93,7 @@
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 16384		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
-#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
+#define IMAGE_NUM_COMMIT 17	//number of complete images until commit
 //#define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
 #define TESTAPPID 0x199		//appid of test pattern packet
 #define TESTVALUE 0xc0b		//first value in test pattern packet
@@ -756,6 +757,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
                         lev0seriesname, fsn);
   }
   img->initialized = 0;		//indicate image is ready for use again
+  //imgdecode_init_hack(img);
 }
 
 // Got a fatal error. 
@@ -786,7 +788,7 @@ unsigned short MDI_getshort (unsigned char *c)    //  machine independent
 //fsn_normal_new_image()
 int fsn_normal_new_image() 
 {
-  int dstatus;
+  int dstatus, i;
 
   // start a new image 
   Img->initialized = 0;
@@ -804,6 +806,20 @@ int fsn_normal_new_image()
     printk("No drms_segment_lookup(rs, image)\n");
     return(1);
   }
+  //must initialize Img in case no data pkt comes in for this image
+#if 0
+    Img->datavals = 0;
+    Img->npackets = 0;
+    Img->nerrors = 0;
+    Img->last_pix_err = 0;
+    Img->first_packet_time = UINT64_MAX;
+    for (i = 0; i < MAXPIXELS; ++i)
+        Img->dat[i] = BLANK;
+    for (i = 0; i < MAXHIST; ++i)
+        Img->hist[i] = 0;
+#endif
+    imgdecode_init_hack(Img);
+
   rdat = Img->dat;
   segArray = drms_array_create(DRMS_TYPE_SHORT,
                                        segment->info->naxis,
@@ -969,6 +985,7 @@ startnew:
     printk("No prev ds\n");	// start a new image 
     ImgO->initialized = 0;
     ImgO->reopened = 0;
+    imgdecode_init_hack(ImgO);
     sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
     rsc = drms_create_record(drms_env, lev0seriesname, DRMS_PERMANENT, &rstatus);
     if(rstatus) {
@@ -1647,8 +1664,8 @@ void setup()
   ImageOld.initialized = 0;
   Img = &Image;
   ImgO = &ImageOld;
-  Img->initialized = 0;
-  ImgO->initialized = 0;
+  imgdecode_init_hack(Img);
+  imgdecode_init_hack(ImgO);
 
   //set environment variables for hk code
   //create filename and path
