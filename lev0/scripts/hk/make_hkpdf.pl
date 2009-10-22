@@ -24,7 +24,7 @@
 #############################################################################
 #set environment variables and initialize variables.
 $hm=$ENV{'HOME'};
-$script_version=1.4;
+$script_version=1.5;
 
 # HK environment variable for processing STANFORD file
 $ENV{'HK_STHA_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/fromlmsal";
@@ -42,8 +42,7 @@ $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir";
 
 #logfile
-##$logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq";
-$logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq-testfixes";
+$logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-clmuq";
 
 #setup contants
 use constant NO_PROCESSING =>  0;
@@ -625,6 +624,16 @@ sub create_hkpdf_files($)
       &create_file_line($processing_type);
       &create_apid_line( $all_apids[$i]) ;
       &create_kwd_lines( $all_apids[$i]) ;
+      #check if bit position is within range- if not exit.
+      $cbp_status=check_bit_positions($processing_type,@apid_kwd_lines);#added check on 10-12-2009
+      if($cbp_status == -1)
+      {
+        close(OUTFILE);
+        $delfile="$directory$version_number/$filenames[$i]";
+        $delfile=~ s/\n//;
+        unlink($delfile) || die "After got error can't delete file <$delfile>: $!\n";
+        exit;
+      }
       &create_acon_lines() ;
       &create_dcon_lines() ;
       close( OUTFILE);
@@ -1365,6 +1374,8 @@ sub show_help_info($)
     print "(8b) make_hkpdf.pl sort=4 apidlist=\"ALL_HK\"\n";
     print "(8c) make_hkpdf.pl sort=4 apidlist=\"0x032\"\n";
     print "(8d) make_hkpdf.pl sort=4 apidlist=\"ALL\"\n";
+    print "(8e) make_hkpdf.pl sort=4 apidlist=\"ALL_SDO\"\n";
+
   }
   exit;
 }
@@ -1680,4 +1691,48 @@ sub get_ground_column_value($)
       return("UNKN");
     }
   }
+}
+###############################################################################
+# sub  check_bit_positions() 
+###############################################################################
+sub check_bit_positions($,@)
+{
+
+  # define local variables
+  my(@keywordlines,@s_keywordlines,$pt); 
+
+  # get variables passed: processing-type flag and array of keyword lines
+  ($pt, @keywordlines) = @_; 
+
+  # loop thru keyword lines and check if bit position is between 0-7 
+  # note:LMSAL Users Guide defines bit position should be 0-7.
+  $j=0;
+  while( $keywordlines[$j] )
+  {
+    # split line at spaces and get bit position value
+    @s_keywordlines=split(/ \s*/, $keywordlines[$j]);
+
+    # check bit position is in range 0-7
+    if ($s_keywordlines[4] > 7 || $s_keywordlines[4] < 0)
+    {
+      print "\nERROR: Found bit position in file not within range of 0-7 bits:<$s_keywordlines[4]>. ";
+      print "Keyword with incorrect bit position are long name:<$s_keywordlines[2]> and short name:<$s_keywordlines[1]>. ";
+      if($pt == SDO_PROCESSING)
+      {
+        print "Correct the keywords values in the input file<$ENV{'HK_GTS_DIRECTORY'}/$ENV{'HK_GTS_FILENAME'}> and then rerun. ";
+      }
+      elsif ($pt == HK_PROCESSING)
+      {
+        print "Correct the keywords values in the input file<$ENV{'HK_STHA_DIRECTORY'}/$ENV{'HK_STHA_FILENAME'} > and then rerun. ";
+      }
+      else
+      {
+        print "Correct the keywords values in the input file<Unknown> and then rerun. ";
+      }
+      print "Exiting make_hkpdf.pl script.\n";
+      return -1;
+    }
+    $j++;
+  }
+  return 1;
 }
