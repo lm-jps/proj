@@ -163,7 +163,7 @@ int main(int argc, char **argv)
 	free(namestr);
 	free(valstr);
 	// put name=value pair into index.html
-	fprintf(index_html, "<TR><TD><B>%s</B></TD<TD>%s</TD></TR>\n", name, val);
+	fprintf(index_html, "<TR><TD><B>%s</B></TD><TD>%s</TD></TR>\n", name, val);
 	break;
       case 2: // Data section contains pairs of record query and filenames
 	if (*p == '#' || !*p) // skip blank and comment lines
@@ -172,7 +172,10 @@ int main(int argc, char **argv)
 	while (isblank(*name)) // skip leading blanks
 	  name++;
         p = name;
-	while (*p && !isblank(*p)) // skip past query
+
+        /* record query might have spaces in it - can't use space as a delimiter;
+         * but it appears that jsoc_export_as_is separates the two fields with a \t */
+	while (*p && *p != '\t') // skip past query
 	  p++;
 	if (*p)
 	  *p++ = '\0'; // mark end of query
@@ -193,7 +196,7 @@ int main(int argc, char **argv)
 	free(valstr);
 	json_insert_child(recinfo, fileinfo);
 	// put name=value pair into index.html
-	fprintf(index_html, "<TR><TD>%s</TD<TD><A HREF=\"http://jsoc.stanford.edu/%s/%s\">%s</A></TD></TR>\n", name, dir, val, val);
+	fprintf(index_html, "<TR><TD>%s</TD><TD><A HREF=\"http://jsoc.stanford.edu/%s/%s\">%s</A></TD></TR>\n", name, dir, val, val);
 	break;
       case 3: // Data section for Storage Units contains triples of sunum, seriesname, path, online status, file size
         if (*p == '#' || !*p) // skip blank and comment lines
@@ -274,7 +277,7 @@ int main(int argc, char **argv)
 
         // put name=value pair into index.html
         fprintf(index_html, 
-                "<TR><TD>%s</TD<TD>%s</TD><TD>%s</TD><TD>%s</TD><TD>%s</TD></TR>\n", 
+                "<TR><TD>%s</TD><TD>%s</TD><TD>%s</TD><TD>%s</TD><TD>%s</TD></TR>\n", 
                 sustr, /* sunum */
                 name, /* owning series */
                 linkbuf, /* link or NA */
