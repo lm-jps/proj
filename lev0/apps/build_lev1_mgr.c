@@ -21,16 +21,16 @@
  *	- start at the previous highest lev0 record processed
  *	  This is keep in the DB table lev1_highest_lev0_recnum
  *	- fork up to 8 (MAXCPULEV1) build_lev1 for every 
- *	  12 (MAXRECLEV1) lev0 records. 
- *	- when an build_lev1 completes, fork another for next 12 rec
+ *	  17 (MAXRECLEV1) lev0 records. 
+ *	- when an build_lev1 completes, fork another for next 17 rec
  *	- if no more lev0 records available, sleep and try again
  *	- if 8 CPU not enough to keep up with lev0, go to 16, etc.
  *
  * Reprocessing Mode (any number of instances):
  *  This is the definitive mode lev1 processing.
  *	brec=1000, erec=2000 
- *	- qsub up to 16 (MAXQSUBLEV1) build_lev1 for 12 records ea
- *	- when a job completes qsub next 12 records until erec is reached
+ *	- qsub up to 16 (MAXQSUBLEV1) build_lev1 for 17 records ea
+ *	- when a job completes qsub next 17 records until erec is reached
  *	- when all jobs are done, build_lev1_mgr will exit
  *
  */ 
@@ -62,7 +62,7 @@
 #define QSUBDIR "/scr21/production/qsub"
 #define NUMTIMERS 8		//number of seperate timers avail
 #define MAXRECLEV1 128		//max# of lev0 to lev1 images can do at a time
-#define DEFAULTRECLEV1 "12"	//default # of lev0 to lev1 images at a time
+#define DEFAULTRECLEV1 "17"	//default # of lev0 to lev1 images at a time
 #define MAXCPULEV1 32		//max# of forks can do at a time for stream mode
 #define DEFAULTCPULEV1 "8"	//default# of forks can do at a time 
 #define MAXQSUBLEV1 64  //max# of qsub can do at a time for reprocessing mode
@@ -151,16 +151,16 @@ int nice_intro ()
           " *	- start at the previous highest lev0 record processed\n"
           " *	  This is keep in the DB table lev1_highest_lev0_recnum\n"
           " *	- fork up to 8 (MAXCPULEV1) build_lev1 for every \n"
-          " *	  12 (MAXRECLEV1) lev0 records. \n"
-          " *	- when an build_lev1 completes, fork another for next 12 rec\n"
+          " *	  17 (DEFAULTRECLEV1) lev0 records. \n"
+          " *	- when an build_lev1 completes, fork another for next 17 rec\n"
           " *	- if no more lev0 records available, sleep and try again\n"
           " *	- if 8 CPU not enough to keep up with lev0, go to 16, etc.\n"
           " *\n"
           " * Reprocessing Mode (any number of instances):\n"
           " *  This is the definitive mode lev1 processing.\n"
           " *	brec=1000, erec=2000 \n"
-          " *	- qsub up to 16 (MAXQSUBLEV1) build_lev1 for 12 records ea\n"
-          " *	- when a job completes qsub next 12 records until erec is reached\n"
+          " *	- qsub up to 16 (MAXQSUBLEV1) build_lev1 for 17 records ea\n"
+          " *	- when a job completes qsub next 17 records until erec is reached\n"
           " *	- when all jobs are done, build_lev1_mgr will exit\n\n");
     return(1);
     }
@@ -275,11 +275,11 @@ void abortit(int stat)
  * records as they show up in the DB.
  * Process the lev0 to lev1 from recn0 to maxrecn0. 
  * Returns when all children processes are done. 
- * Note: The processing is done in sets of 12 (MAXRECLEV1) lev0 records, 
+ * Note: The processing is done in sets of 17 (DEFAULTRECLEV1) lev0 records, 
  * so the maxrecn0 may not be reached, but it will
  * get done with the next set when more lev0 records come in. forkstream()
  * is run again and will automatically process new lev0 records in
- * sets of 12 as they are seen in the DB.
+ * sets of 17 as they are seen in the DB.
  * Returns non-0 on error.
 */
 int forkstream(long long recn0, long long maxrecn0)
