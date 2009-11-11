@@ -7,7 +7,7 @@
  * It is scheduled by build_lev1_mgr either by qsub to the cluster
  * or by fork to run on the local machine.
  */ 
-//!!!TBD - in development. put in calls to Keh-Cheng's code.
+//!!!TBD - in development.
 
 #include <jsoc_main.h>
 #include <cmdparams.h>
@@ -35,14 +35,14 @@
 //#define LEV1SERIESNAMEHMI "su_production.hmi_lev1e"	//temp test case
 #define LEV1SERIESNAMEHMI "hmi.lev1"
 #define LEV1SERIESNAMEAIA "su_production.aia_lev1e"	//temp test case
-#define DSFFNAME "su_richard.flatfield"			//temp test case
-//#define DSFFNAME "su_production.hmi_flatfield"		//temp test case
+//#define DSFFNAME "su_richard.flatfield"			//temp test case
+#define DSFFNAME "su_production.hmi_flatfield"		//temp test case
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
 #define DONUMRECS 120		//!!TEMP #of lev0 records to do and then exit
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1.%s.log"
 #define NUMTIMERS 8		//number of seperate timers avail
-#define IMAGE_NUM_COMMIT 12	//!!TEMP number of lev0 images to do at a time
+#define IMAGE_NUM_COMMIT 17	//!!TEMP number of lev0 images to do at a time
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 
 int compare_rptr(const void *a, const void *b);
@@ -83,7 +83,7 @@ static LEV0LEV1 lev0lev1;
 static LEV0LEV1 *l0l1 = &lev0lev1;
 //static CCSDS_Packet_t *Hk;
 static DRMS_Record_t *rs;
-static DRMS_Record_t *rs0, *rs1, *rsff;
+static DRMS_Record_t *rs0, *rs1, *rsff, *rsbad_pix;
 static DRMS_Record_t *rptr;
 static DRMS_Segment_t *segment;
 static DRMS_Segment_t *segmentff;
@@ -98,7 +98,8 @@ static DRMS_Array_t *ArrayBad;
 static TIME sdo_epoch;
 static char datestr[32];
 static char open_dsname[256];
-static char path[DRMS_MAXPATHLEN];
+static char path[DRMS_MAXPATHLEN], bad_pix_path[DRMS_MAXPATHLEN];
+static char rs1_path[DRMS_MAXPATHLEN];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 static char *orbseries = "sdo.fds_orbit_vectors";
 
@@ -106,10 +107,10 @@ IORBIT_Info_t *IOinfo = NULL;
 LIBASTRO_Error_t IOstatus;
 unsigned int fsnarray[IMAGE_NUM_COMMIT];
 unsigned int fsnx = 0;
-short data1[MAXPIXELS];
+//short data1[MAXPIXELS];
+int data1[MAXPIXELS];
 double tgttimes[IMAGE_NUM_COMMIT];
 
-short *rdat;
 int verbose;
 int brec, erec;
 int hmiaiaflg = 0;		//0=hmi, 1=aia
@@ -338,6 +339,7 @@ int do_ingest()
       printk("*0 %u %u\n", recnum0, fsnx);
     }
 
+printk("Looping for %d records...\n", ncnt); //!!!TEMP
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
@@ -355,15 +357,15 @@ int do_ingest()
       //memcpy(Img0->dat, adata, 2*MAXPIXELS);
       //drms_free_array(Array0); //must free from drms_segment_read()
       l0l1->adata0 = (short *)Array0->data; //!!TBD free at end
-      l0l1->adata1 = (short *)&data1;
+      l0l1->adata1 = (int *)&data1;
       l0l1->rs0 = rs0;
       l0l1->recnum0 = recnum0;
       l0l1->fsn = fsnx;
       l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);
       //!!TEMP force a good himgcfid for our 'junk' data
-      if(l0l1->himgcfid < 0 || l0l1->himgcfid >= MAXHIMGCFGS) {
-        l0l1->himgcfid = 104;
-      }
+      //if(l0l1->himgcfid < 0 || l0l1->himgcfid >= MAXHIMGCFGS) {
+      //  l0l1->himgcfid = 104;
+      //}
       if(rstatus) {
         printk("Can't do drms_getkey_int(HIMGCFID) for fsn %u\n", fsnx);
         return(1); 
@@ -377,6 +379,13 @@ int do_ingest()
         printk("**ERROR: Can't create record for %s\n", open_dsname);
         return(1);
       }
+      drms_record_directory(rs, rs1_path, 0);
+      if(!*rs1_path) {
+        printk("***ERROR: No path to segment for %s\n", open_dsname);
+        //goto TEMPSKIP;	//!!!TEMP until have good flatfield
+        return(1);
+      }
+      //printf("\npath to lev1 = %s\n", rs1_path);	//!!TEMP
       dstatus = drms_setkey_int(rs, "FSN", fsnx);
       dstatus = drms_setkey_string(rs, "LEV0SERIES", lev0name);
       /******* OLD from when there was a LEV0REC link
@@ -385,17 +394,17 @@ int do_ingest()
         return(1);
       }
       ************************************************************/
-      if(!(segment = drms_segment_lookup(rs, "image"))) {
-        printk("No drms_segment_lookup(rs, image) for %s\n", open_dsname);
+      if(!(segment = drms_segment_lookup(rs, "image_lev1"))) {
+        printk("No drms_segment_lookup(rs, image_lev1) for %s\n", open_dsname);
         return(1);
       }
-      segArray = drms_array_create(DRMS_TYPE_SHORT,
+      segArray = drms_array_create(DRMS_TYPE_INT,
                                        segment->info->naxis,
                                        segment->axis,
                                        &data1,
                                        &dstatus);
       //transer the lev0 keywords
-/**********************use drms_copykeys() instead**********************/
+/**********************use drms_copykeys() instead**********************
       drms_setkey_string(rs, "TELESCOP", 
 		drms_getkey_string(rs0, "TELESCOP", &rstatus));
       drms_setkey_string(rs, "INSTRUME", 
@@ -420,14 +429,12 @@ int do_ingest()
 		drms_getkey_string(rs0, "ISPSNAME", &rstatus));
       drms_setkey_time(rs, "ISPPKTIM", 
 		drms_getkey_time(rs0, "ISPPKTIM", &rstatus));
-/*************************************************************************/
-/***************This crashes********************************************
+*************************************************************************/
       rstatus = drms_copykeys(rs, rs0, 0, kDRMS_KeyClass_Explicit);
       if(rstatus != DRMS_SUCCESS) {
         printk("Error %d in drms_copykeys() for fsn %u\n", fsnx);
         return(1);
       }
-**********************************************************************/
       t_obs0 = drms_getkey_time(rs0, "t_obs", &rstatus);
       if(rstatus) {
         printk("Can't do drms_getkey_time() for fsn %u\n", fsnx);
@@ -457,17 +464,17 @@ int do_ingest()
          }
          else
          {
-           printk("SUCCESS for iorbit_getinfo()\n");
-           drms_setkey_float(rs, "HCIEC_X", (float)IOinfo->hciX);
-           drms_setkey_float(rs, "HCIEC_Y", (float)IOinfo->hciY);
-           drms_setkey_float(rs, "HCIEC_Z", (float)IOinfo->hciZ);
-           drms_setkey_float(rs, "GCIEC_X", (float)IOinfo->gciX);
-           drms_setkey_float(rs, "GCIEC_Y", (float)IOinfo->gciY);
-           drms_setkey_float(rs, "GCIEC_Z", (float)IOinfo->gciZ);
+           //printk("SUCCESS for iorbit_getinfo()\n");
+           drms_setkey_double(rs, "HCIEC_X", IOinfo->hciX);
+           drms_setkey_double(rs, "HCIEC_Y", IOinfo->hciY);
+           drms_setkey_double(rs, "HCIEC_Z", IOinfo->hciZ);
+           drms_setkey_double(rs, "GCIEC_X", IOinfo->gciX);
+           drms_setkey_double(rs, "GCIEC_Y", IOinfo->gciY);
+           drms_setkey_double(rs, "GCIEC_Z", IOinfo->gciZ);
            drms_setkey_float(rs, "DSUN_OBS", (float)IOinfo->dsun_obs);
-           drms_setkey_float(rs, "OBS_VR", (float)IOinfo->obs_vr);
-           drms_setkey_float(rs, "OBS_VW", (float)IOinfo->obs_vw);
-           drms_setkey_float(rs, "OBS_VN", (float)IOinfo->obs_vn);
+           drms_setkey_double(rs, "OBS_VR", IOinfo->obs_vr);
+           drms_setkey_double(rs, "OBS_VW", IOinfo->obs_vw);
+           drms_setkey_double(rs, "OBS_VN", IOinfo->obs_vn);
            drms_setkey_float(rs, "CRLN_OBS", (float)IOinfo->crln_obs);
            drms_setkey_float(rs, "CRLT_OBS", (float)IOinfo->crlt_obs);
            drms_setkey_int(rs, "CAR_ROT", (int)IOinfo->car_rot);
@@ -479,10 +486,23 @@ int do_ingest()
         return(1);
       }
       //Now figure out what flat field to use
+      //if(t_obs0 == -211087684832.00000) {
+      if(drms_ismissing_time(t_obs0)) {
+        printk("DRMS_MISSING_TIME for fsn=%u. Continue...\n", fsnx);
+        goto TEMPSKIP;
+      }
       //sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d and FLATFIELD_FINAL=1 ?]", 
-      sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d ?]", 
-		DSFFNAME, t_obs0, t_obs0, camera);
-      //printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
+      //sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d ?]", 
+      //	DSFFNAME, t_obs0, t_obs0, camera);
+      if(quicklook) {
+        sprintf(open_dsname, "%s[? t_start=(select max(t_start) from %s where t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d) and CAMERA=%d ?]",
+      		DSFFNAME, DSFFNAME, t_obs0, t_obs0, camera, camera);
+      }
+      else {
+        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d and flatfield_version=(select max(flatfield_version) from %s where t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d) ?]",
+      	DSFFNAME, t_obs0, t_obs0, camera, DSFFNAME, t_obs0, t_obs0, camera);
+      }
+      printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
       rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF 
       if(!rsetff || (rsetff->n == 0) || rstatus) {
         printk("Can't do drms_open_records(%s)\n", open_dsname);
@@ -491,9 +511,11 @@ int do_ingest()
       fcnt = rsetff->n;
       if(fcnt > 1) {
         printk("More than one FF found for %s?\n", open_dsname);
+        printk("Use last one of %d found\n", fcnt); //!!TEMP
         //return(1);		//!!TBD
       }
-      rsff = rsetff->records[0];
+      //rsff = rsetff->records[0];
+      rsff = rsetff->records[fcnt-1];
       drms_record_directory(rsff, path, 1);
       if(!*path) {
         printk("***ERROR: No path to segment for %s\n", open_dsname);
@@ -527,10 +549,22 @@ int do_ingest()
       }
       l0l1->adatabad = (int *)ArrayBad->data; //!!TBD free at end
 
-//!!TBD determine the calls to these functions and the right place 
-//to put them...   Replaced by do_flat()??
-      //rdout_mode_correct();	//!!TBD Keh-Cheng
-      //sc_pointing();		//!!TBD Keh-Cheng
+      rsbad_pix = drms_link_follow(rsff, "perm_bad_pixel", &rstatus);
+      if(rstatus) {
+        printk("Can't do drms_link_follow(rsff, \"perm_bad_pixel\"). status=%d\n", rstatus);
+        return(1);
+      }
+      drms_record_directory(rsbad_pix, bad_pix_path, 1);
+      if(!*bad_pix_path) {
+        printk("***ERROR: No path to segment for BAD_PIXEL\n");
+        return(1);
+      }
+      //printf("\npath to BAD_PIXEL = %s\n", bad_pix_path); //!!TEMP
+      //cp the bad pixel list to the lev1 output
+      char cmd[128];
+      sprintf(cmd, "cp %s/bad_pixel_list.fits %s", bad_pix_path, rs1_path);
+      printk("%s\n", cmd);
+      system(cmd);
 
       l0l1->rs1 = rs;
       l0l1->rsff = rsff;
@@ -541,6 +575,21 @@ int do_ingest()
         printf("***ERROR in do_flat() status=%d\n", rstatus);
         //return(1);		//!!TBD what to do?
       }
+      else {
+        drms_setkey_short(rs, "DATAMIN", (short)l0l1->datamin);
+        drms_setkey_short(rs, "DATAMAX", (short)l0l1->datamax);
+        drms_setkey_short(rs, "DATAMEDN", (short)l0l1->datamedn);
+        drms_setkey_float(rs, "DATAMEAN", l0l1->datamean);
+        drms_setkey_float(rs, "DATARMS", l0l1->data_rms);
+        drms_setkey_float(rs, "DATASKEW", l0l1->dataskew);
+        drms_setkey_float(rs, "DATAKURT", l0l1->datakurt);
+        drms_setkey_int(rs, "DATAVALS", l0l1->datavals);
+        drms_setkey_int(rs, "MISSVALS", l0l1->missvals);
+      }
+      drms_close_records(rsetff, DRMS_FREE_RECORD);
+      free(ArrayDark->data);
+      free(Arrayff->data);
+      free(ArrayBad->data);
 
 TEMPSKIP:
 
@@ -558,11 +607,7 @@ TEMPSKIP:
         printk("**ERROR: drms_close_record failed for %s\n", open_dsname);
         //return(1);
       }
-      drms_close_records(rsetff, DRMS_FREE_RECORD);
-      free(ArrayDark->data);
-      free(Arrayff->data);
       free(Array0->data);
-      free(ArrayBad->data);
     }
 
   //drms_close_records(rset0, DRMS_FREE_RECORD); //now closed in for() loop
