@@ -40,6 +40,7 @@
 #define kBzero "bzero"
 #define kBscale "bscale"
 #define kDatatype "dtype"
+#define kNoSegsFlag "n"
 #define kNotSpecified "NOT SPECIFIED"
 #define kMaxSegs 1024
 #define kMaxQuery 2048
@@ -83,6 +84,7 @@ ModuleArgs_t module_args[] =
   {ARG_DOUBLE, kBzero, "0.0", "For integer output, the bzero to use."},
   {ARG_DOUBLE, kBscale, "1.0", "For integer output, the bscale to use."},
   {ARG_NUME, kDatatype, "double", "Data type of in-memory data array.", "char,short,int,longlong,float,double,raw"},
+  {ARG_FLAG, kNoSegsFlag, NULL, "Don't create an output segmetn file - just copy keywords.", NULL},
   {ARG_END}
 };
 
@@ -5241,7 +5243,7 @@ int DoBinaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 		     DRMSContainer_t *segsToProc, 
 		     char *inSeriesQuery, int *slicelower, int *sliceupper,
-		     char *seriesOut, int *pout, double bzero, double bscale)
+		     char *seriesOut, int *pout, double bzero, double bscale, int nosegs)
 {
      int error = 0;
      int status = 0;
@@ -5255,6 +5257,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
      DRMS_Record_t *inRec = NULL;
 
      DRMS_RecChunking_t cstat = kRecChunking_None;
+     DRMS_Record_t *targetrec = NULL;
 
      error = (status != DRMS_SUCCESS);
 
@@ -5269,6 +5272,31 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
      while ((inRec = drms_recordset_fetchnext(drmsEnv, inRecSet, &status, &cstat)) != NULL)
      {
 	  fprintf(stdout, "Processing record %lld\n", inRec->recnum);
+
+          /* If not processing segments, then simply copy DRMS keywords. */
+          if (nosegs)
+          {
+             targetrec = drms_create_record(drmsEnv, 
+                                            seriesOut, 
+                                            DRMS_PERMANENT, 
+                                            &status);
+             error = (status != DRMS_SUCCESS);
+
+             if (!error)
+             {
+                drms_copykeys(targetrec, inRec, 0, kDRMS_KeyClass_Explicit);
+
+                /* write DATE keyword */
+                drms_keyword_setdate(targetrec);
+                drms_close_record(targetrec, DRMS_INSERT_RECORD);
+             }
+             else
+             {
+                drms_close_record(targetrec, DRMS_FREE_RECORD);
+             }
+
+             continue;
+          }
 
 	  hiter_rewind(&(segsToProc->iter));
 	  DRMS_Segment_t **seg = NULL;
@@ -5612,12 +5640,20 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 			       {
 				  if (dtype == DRMS_TYPE_RAW)
 				  {
+                                     /* We read the input array as RAW, which means the input data are scaled values
+                                      * with bzero and bscale as the scaling parameters. The output array will have
+                                      * been some manipulation of the input data, so the input's scaling parameters
+                                      * are still relevant. */
 				     segArray->bzero = insegBZERO[index];
 				     segArray->bscale = insegBSCALE[index];
 				     segArray->israw = 1;
 				  }
 				  else
 				  {
+                                     /* The input array data are in physical values (not RAW). If the output segment's
+                                      * data type is an int, then the inverse bzero/bscale conversion will be applied, 
+                                      * using the values of segArray->bzero and segArray->bscale. If the output segment's
+                                      * data type is a float, then segArray->bzero and segArray->bscale are ignored. */
 				     segArray->bzero = bzero;
 				     segArray->bscale = bscale;
 				     segArray->israw = 0;
@@ -5839,6 +5875,8 @@ int DoIt(void)
 	  {
 	     dtype = DRMS_TYPE_RAW;
 	  }
+
+          int nosegs = cmdparams_isflagset(&cmdparams, kNoSegsFlag);
 
 	  char actualOutputSeries[DRMS_MAXSERIESNAMELEN];
 	  /* xxx DO SCALILNG/OFFSET PARAMS LATER */
@@ -6165,17 +6203,22 @@ int DoIt(void)
 		    }
 		    else
 		    {
-			 error = DoUnaryOp(drms_env,
-					   op,
-					   dtype,
-					   &segsToProc, 
-					   recSetIn,
-                                           slicelower,
-                                           sliceupper,
-					   actualOutputSeries,
-                                           posout,
-					   bzerov,
-					   bscalev);
+                       /* XXX */
+                       /* If the caller didn't provide bzero/bscale on the cmd-line, then the output segment's
+                        * bzero/bscale values should be assumed. If the caller didn't provide dtype on the cmd-line,
+                        * the the output segment's dtype should be assumed. */
+                       error = DoUnaryOp(drms_env,
+                                         op,
+                                         dtype,
+                                         &segsToProc, 
+                                         recSetIn,
+                                         slicelower,
+                                         sliceupper,
+                                         actualOutputSeries,
+                                         posout,
+                                         bzerov,
+                                         bscalev,
+                                         nosegs);
 		    }
 
 	       } /* Do operation */
