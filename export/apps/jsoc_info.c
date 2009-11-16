@@ -375,6 +375,11 @@ if (DEBUG) fprintf(stderr,"   starting all keywords\n");
   hiter_new (&hit, &rec->keywords);
   while ((key = (DRMS_Keyword_t *)hiter_getnext (&hit)))
     {
+       if (drms_keyword_getimplicit(key))
+       {
+          continue;
+       }
+
     json_t *keyinfo = json_new_object();
     json_t *keytype;
 if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
@@ -673,6 +678,9 @@ int DoIt(void)
     int ilink, nlinks = 0;
     char count[100];
     json_t *jroot, **keyvals = NULL, **segvals = NULL, **segdims = NULL, **linkvals = NULL, *recinfo;
+    json_t **segcparms = NULL;
+    json_t **segbzeros = NULL;
+    json_t **segbscales = NULL;
     json_t *json_keywords = json_new_array();
     json_t *json_segments = json_new_array();
     json_t *json_links = json_new_array();
@@ -772,14 +780,23 @@ int DoIt(void)
       {
       segvals = (json_t **)malloc(nsegs * sizeof(json_t *));
       segdims = (json_t **)malloc(nsegs * sizeof(json_t *));
+      segcparms = (json_t **)malloc(nsegs * sizeof(json_t *));
+      segbzeros = (json_t **)malloc(nsegs * sizeof(json_t *));
+      segbscales = (json_t **)malloc(nsegs * sizeof(json_t *));
       }
     for (iseg=0; iseg<nsegs; iseg++)
-      {
-      json_t *val = json_new_array();
-      segvals[iseg] = val;
-      val = json_new_array();
-      segdims[iseg] = val;
-      }
+    {
+       json_t *val = json_new_array();
+       segvals[iseg] = val;
+       val = json_new_array();
+       segdims[iseg] = val;
+       val = json_new_array();
+       segcparms[iseg] = val;
+       val = json_new_array();
+       segbzeros[iseg] = val;
+       val = json_new_array();
+       segbscales[iseg] = val;
+    }
 
     /* get list of links to print for each record */
     nlinks = 0;
@@ -964,6 +981,9 @@ int DoIt(void)
         char path[DRMS_MAXPATHLEN];
         json_t *thissegval = segvals[iseg]; 
         json_t *thissegdim = segdims[iseg]; 
+        json_t *thissegcparms = segcparms[iseg];
+        json_t *thissegbzero = segbzeros[iseg];
+        json_t *thissegbscale = segbscales[iseg];
         int iaxis, naxis = rec_seg_iseg->info->naxis;
         char dims[100], dimval[20];
 
@@ -976,15 +996,16 @@ int DoIt(void)
         drms_record_directory (rec_seg_iseg->record, path, 0);
 //        if (!*path)
 //          JSONDIE("Can not retrieve record path, SUMS may be offline");
-if (!*path)
-  {
-  strcpy(path, "NoDataDirectory");
-  }
-else
-  {
-  	strncat(path, "/", DRMS_MAXPATHLEN);
-  	strncat(path, rec_seg_iseg->filename, DRMS_MAXPATHLEN);
-  }
+        if (!*path)
+        {
+           strcpy(path, "NoDataDirectory");
+        }
+        else
+        {
+           strncat(path, "/", DRMS_MAXPATHLEN);
+           strncat(path, rec_seg_iseg->filename, DRMS_MAXPATHLEN);
+        }
+
         jsonpath = string_to_json(path);
         json_insert_child(thissegval, json_new_string(jsonpath));
         free(jsonpath);
@@ -1002,6 +1023,49 @@ else
         jsondims = string_to_json(dims);
         json_insert_child(thissegdim, json_new_string(jsondims));
         free(jsondims);
+
+        /* Print bzero and bscale values (use format of those implicit keywords, which is %g) IFF 
+         * the segment protocol implies these values (protocols fits, fitsz, tas, etc.) */
+        char keybuf[DRMS_MAXKEYNAMELEN];
+        DRMS_Keyword_t *anckey = NULL;
+        char *jsonkeyval = NULL;
+
+        /* cparms */
+        if (strlen(rec_seg_iseg->cparms))
+        {
+           jsonkeyval = string_to_json(rec_seg_iseg->cparms);
+           json_insert_child(thissegcparms, json_new_string(jsonkeyval));
+           free(jsonkeyval);
+        }
+
+        /* bzero */
+        snprintf(keybuf, sizeof(keybuf), "%s_bzero", segs[iseg]);
+        anckey = drms_keyword_lookup(rec, keybuf, 1);
+
+        if (anckey)
+        {
+           drms_keyword_snprintfval(anckey, keybuf, sizeof(keybuf));
+
+           /* always report keyword values as strings */
+           jsonkeyval = string_to_json(keybuf);
+           json_insert_child(thissegbzero, json_new_string(jsonkeyval));
+           free(jsonkeyval);
+        }
+
+        /* bscale */
+        anckey = NULL;
+        snprintf(keybuf, sizeof(keybuf), "%s_bscale", segs[iseg]);
+        anckey = drms_keyword_lookup(rec, keybuf, 1);
+
+        if (anckey)
+        {
+           drms_keyword_snprintfval(anckey, keybuf, sizeof(keybuf));
+
+           /* always report keyword values as strings */
+           jsonkeyval = string_to_json(keybuf);
+           json_insert_child(thissegbscale, json_new_string(jsonkeyval));
+           free(jsonkeyval);
+        }
         }
 
       /* now show desired links */
@@ -1049,6 +1113,9 @@ else
         json_insert_pair_into_object(segobj, "name", segname);
         json_insert_pair_into_object(segobj, "values", segvals[iseg]);
         json_insert_pair_into_object(segobj, "dims", segdims[iseg]);
+        json_insert_pair_into_object(segobj, "cparms", segcparms[iseg]);
+        json_insert_pair_into_object(segobj, "bzeros", segbzeros[iseg]);
+        json_insert_pair_into_object(segobj, "bscales", segbscales[iseg]);
         json_insert_child(json_segments, segobj);
         }
       json_insert_pair_into_object(jroot, "segments", json_segments);
