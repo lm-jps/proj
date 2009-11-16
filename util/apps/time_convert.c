@@ -191,7 +191,7 @@ int nice_intro ()
     {
     printf ("Usage:\ntime_convert -h\n"
 	"time_convert s=<secondsJSOC>|sdo=<secondsSDO>|egse=<secondsEGSE>|time=<calender time>|ord=<ordinal date> [o=jsoc | o=sdo | o=egse | o=ord | o=cal] [zone=<zone>]\n"
-        "<secondsJSOC> = JSOC standard internal time, i.e. secs since 1997.01.01_TAI \n"
+        "<secondsJSOC> = JSOC standard internal time, i.e. secs since 1977.01.01_TAI \n"
         "<secondsSDO> = seconds since January 1, 1958 TAI, i.e. SDO onboard time\n"
 	"<secondsEGSE> = seconds since APPROXIMATELY January 1, 2004 \n"
         "<calender time> = yyyy.mm.dd_hh:mm:ss<zone>\n"
