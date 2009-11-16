@@ -72,10 +72,8 @@ static int nrollct(int cmdt, int clt)
 
 void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
 {
-static float waveltab[10] = { 33.5, 13.1,
-                              21.1, 19.3,
-                              160.0, 170.0, 450.0, 17.1,
-                               30.4, 9.4 };
+static int waveltab[10] = { 335, 131, 211, 193, 1600, 1700, 4500, 171, 304, 94 };
+
 static char date_obs[100]; 
 //static char datestr[100];
 TIME t_obs,MJD_epoch = -3727641600.000; /* 1858.11.17_00:00:00_UT  */
@@ -147,11 +145,10 @@ if (flg) {	/* AIA */
   int wavel = HK_getkey_int(isp, "AIAWVLEN");    /* AIA_IMG_WAVELENGTH */
   if (wavel == DRMS_MISSING_INT) wavel = HK_getkey_int(isp, "A856C");
   if (wavel != DRMS_MISSING_INT) {
-    if (wavel < 10) drms_setkey_float(rec, "WAVELNTH", waveltab[wavel]);
-    else drms_setkey_float(rec, "WAVELNTH", (float) wavel);
-    /* delete this line and above else line after testing */
-    /* if wavel > 9, WAVELNTH = DRMS_MISSING_FLOAT by default */
+    if (wavel < 10) drms_setkey_int(rec, "WAVELNTH", waveltab[wavel]);
+    else drms_setkey_int(rec, "WAVELNTH", DRMS_MISSING_INT);
   }
+
   int aecmode = HK_getkey_int(isp, "AECMODE");   /* AIA_IMG_AEC_MODE         */
   if (aecmode == DRMS_MISSING_INT) aecmode = HK_getkey_int(isp, "A8328");
   if (aecmode == DRMS_MISSING_INT) aecmode = HK_getkey_int(isp, "A8215-00");
