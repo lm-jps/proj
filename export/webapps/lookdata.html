@@ -876,21 +876,21 @@ function GetKeyValues()
 	      tmp = "<A HREF=http://jsoc.stanford.edu" + thissegdata + ">" + thissegdata + "</A>";
 	      thissegdata = tmp;
 	      }
-           if (thissegdata.length == 0) thissegdata = "&nbsp;";
+           if (thissegdata == null || thissegdata.length == 0) thissegdata = "&nbsp;";
 	   valuetable = valuetable + "<TD>" + thissegdata + "</TD>";
-	   if (thissegdims.length == 0) thissegdims = "&nbsp;";
+	   if (thissegdims == null || thissegdims.length == 0) thissegdims = "&nbsp;";
            valuetable = valuetable + "<TD>" + thissegdims + "</TD>";
-           if (thissegcparms.length == 0) thissegcparms = "&nbsp;";
-           valuetable = valuetable + "<TD>" + thissegcparms + "</TD>";
-           if (thissegbzero.length == 0) thissegbzero = "&nbsp;";
+           if (thissegcparms == null || thissegcparms.length == 0) thissegcparms = "&nbsp;";
+           valuetable = valuetable + "<TD>" + thissegcparms + "</TD>";       
+           if (thissegbzero == null || thissegbzero.length == 0) thissegbzero = "&nbsp;";
            valuetable = valuetable + "<TD>" + thissegbzero + "</TD>";
-           if (thissegbscale.length == 0) thissegbscale = "&nbsp;";
+           if (thissegbscale == null || thissegbscale.length == 0) thissegbscale = "&nbsp;";
            valuetable = valuetable + "<TD>" + thissegbscale + "</TD>";
 	   }
 	  for (ilink=0; ilink<nlinks; ilink++)
 	   {
 	   var this_linkval =  RecordData.links[ilink].values[irec];
-           if (this_linkval.length == 0) this_linkval = "&nbsp;";
+           if (this_linkval == null || this_linkval.length == 0) this_linkval = "&nbsp;";
            valuetable = valuetable + "<TD>" + this_linkval + "</TD>";
 	   }
 	  valuetable = valuetable + "</TR>";
