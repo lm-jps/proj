@@ -90,6 +90,14 @@ int nice_intro ()
   return (0);
   }
 
+// function to check web-provided arguments that will end up on command line
+int illegalArg(char *arg)
+  {
+  if (index(arg, ';'))
+     return(1);
+  return(0);
+  }
+
 char *json_text_to_string(char *in)
   {
   char *o, *new = (char *)malloc(strlen(in)+1);
@@ -213,7 +221,7 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
     }
   if (jroot) // i.e. if dojson, else will be NULL for the dotxt case.
     {
-    sprintf(numval, "%ld", count);
+    sprintf(numval, "%d", count);
     json_insert_pair_into_object(jroot, "count", json_new_number(numval));
     sprintf(numval, "%ld", size);
     json_insert_pair_into_object(jroot, "size", json_new_number(numval));
@@ -223,7 +231,7 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
   else
     {
     json_t *recobj = data->child;
-    printf("count=%ld\n", count);
+    printf("count=%d\n", count);
     printf("size=%ld\n", size);
     printf("dir=/\n");
     printf("# DATA\n");
@@ -403,6 +411,8 @@ int DoIt(void)
       if (!val)
 	 JSONDIE("Bad QUERY_STRING");
       *val++ = '\0';
+      if (illegalArg(val))
+         JSONDIE("Illegal text in arg");
       cmdparams_set(&cmdparams, key, val);
       }
     free(getstring);
@@ -422,7 +432,7 @@ int DoIt(void)
   requestor = cmdparams_get_str (&cmdparams, "requestor", NULL);
   notify = cmdparams_get_str (&cmdparams, "notify", NULL);
   shipto = cmdparams_get_str (&cmdparams, "shipto", NULL);
-  requestorid = cmdparams_get_str (&cmdparams, "requestorid", NULL);
+  requestorid = cmdparams_get_int (&cmdparams, "requestorid", NULL);
 
   dojson = strcmp(format, "json") == 0;
   dotxt = strcmp(format, "txt") == 0;
@@ -559,7 +569,7 @@ int DoIt(void)
 
           json_insert_child(data, suobj);
           }
-        sprintf(numval, "%ld", count);
+        sprintf(numval, "%d", count);
         json_insert_pair_into_object(jroot, "count", json_new_number(numval));
         sprintf(numval, "%lld", size);
         json_insert_pair_into_object(jroot, "size", json_new_number(numval));
@@ -742,7 +752,7 @@ check for requestor to be valid remote DRMS site
         json_t *jroot = json_new_object();
         count = quick_export_rs(jroot, rs, 0, size); // add count, size, and array data of names and paths
         json_insert_pair_into_object(jroot, "requestid", json_new_string(""));
-        free(strval);
+        // free(strval);
         strval = string_to_json(method);
         json_insert_pair_into_object(jroot, "method", json_new_string(strval));
         free(strval);
@@ -993,7 +1003,7 @@ check for requestor to be valid remote DRMS site
         printf("requestid=%s\n", requestid);
         printf("method=%s\n", method);
         printf("protocol=%s\n", protocol);
-        printf("wait=%d\n",waittime);
+        printf("wait=%f\n",waittime);
 	printf("size=%ld\n",size);
         if (errorreply)
 	  printf("error=\"%s\"\n", errorreply);
