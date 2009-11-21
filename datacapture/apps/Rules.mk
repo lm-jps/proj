@@ -24,9 +24,22 @@ TGT_BIN	        := $(TGT_BIN) $(EXE_$(d))
 
 S_$(d)		:= $(notdir $(EXE_$(d)))
 
+ifeq ($(HOST),dcs0.jsoc.Stanford.EDU)
+        ADD_TGT_$(d) := -DSUMDC -DDCS0
+endif
+ifeq ($(HOST),dcs1.jsoc.Stanford.EDU)
+        ADD_TGT_$(d) := -DSUMDC -DDCS1
+endif
+ifeq ($(HOST),dcs2.jsoc.Stanford.EDU)
+        ADD_TGT_$(d) := -DSUMDC -DDCS2
+endif
+ifeq ($(HOST),dcs3.jsoc.Stanford.EDU)
+        ADD_TGT_$(d) := -DSUMDC -DDCS3
+endif
+
 # Local rules
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJ_$(d)):	CF_TGT := $(CF_TGT) $(ADD_TGT_$(d)) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(OBJ_$(d)):	%.o:	%.c
 		$(LOCALCC)
 
