@@ -122,9 +122,11 @@ function CleanSeriesPick()
   askedCount = 0;
   $("WantRecInfo").checked = 1;
   $("WantLinkInfo").checked = 0;
+  $("WantFullSegInfo").checked = 0;
   $("WantLinkDiv").style.display="none";
   $("AllowBigQueries").checked = 0;
   $("RecSetPlace").innerHTML = "";
+  $("MakeLocalFileLinks").checked = 0;
   CleanKeysSelect();
   }
 
@@ -525,6 +527,7 @@ function PickSeries(mode)
 	   links = links + "</table><P>";
            // If links present allow for showing them in listings
            $("WantLinkInfo").checked = 0;
+           $("WantFullSegInfo").checked = 0;
            $("WantLinkDiv").style.display="block";
 	   }
 
@@ -826,6 +829,7 @@ function GetKeyValues()
 	var nsegs = RecordData.segments.length;
 	var nlinks = RecordData.links.length;
 	var nrecs = RecordData.count;
+	wantLocalLinks = $("MakeLocalFileLinks").checked;
         $("DisplayPlace").innerHTML = "Status = " + RecordData.status + ", Recordset Key Values for " + nrecs + " records returned, preparing page ...";
         wantrecinfo = $("WantRecInfo").checked;
 	valuetable = "<TABLE border=1 id='InfoTable' ><TR>"
@@ -837,64 +841,76 @@ function GetKeyValues()
            {
            valuetable = valuetable + "<TH>segment: " + RecordData.segments[iseg].name + "</TH>";
 	   valuetable = valuetable + "<TH>seg_dims: " + RecordData.segments[iseg].name + "</TH>";
-	   valuetable = valuetable + "<TH>seg_cparms: " + RecordData.segments[iseg].name + "</TH>";
-	   valuetable = valuetable + "<TH>seg_bzero: " + RecordData.segments[iseg].name + "</TH>";
-	   valuetable = valuetable + "<TH>seg_bscale: " + RecordData.segments[iseg].name + "</TH>";
-           }
-	for (var ilink=0; ilink < nlinks; ++ilink)
-           valuetable = valuetable + "<TH>" + "Link: " + RecordData.links[ilink].name + "</TH>";
-	valuetable = valuetable + "</TR>";
-
-	for (var irec=0; irec < nrecs; irec++)
-	  {
-	  valuetable = valuetable + "<TR>";
-	  if (wantrecinfo)
-	    valuetable = valuetable +  "<TD>" + RecordData.recinfo[irec].name + "</TD>";
-	  for (ikey=0; ikey<nkeys; ikey++)
-	   {
-	   var this_keyval =  RecordData.keywords[ikey].values[irec];
-	   if (RecordData.keywords[ikey].name == "*logdir*")
-	     {
-	     if (this_keyval.charAt(0) == '/')
+	   if ($("WantFullSegInfo").checked == 1)
 	       {
-	       tmp = "<A HREF=http://jsoc.stanford.edu" + this_keyval + ">" + this_keyval + "</A>";
-	       this_keyval = tmp;
-	       }
-             }
-           if (this_keyval.length == 0) this_keyval = "&nbsp;";
-           valuetable = valuetable + "<TD>" + this_keyval + "</TD>";
-	   }
-	  for (iseg=0; iseg<nsegs; iseg++)
-	   {
-	   var thissegdims = RecordData.segments[iseg].dims[irec];
-	   var thissegdata = RecordData.segments[iseg].values[irec];
-           var thissegcparms = RecordData.segments[iseg].cparms[irec];
-           var thissegbzero = RecordData.segments[iseg].bzeros[irec];
-           var thissegbscale = RecordData.segments[iseg].bscales[irec];
-           if (wantrecinfo && RecordData.recinfo[irec].online)
-	      {
-	      tmp = "<A HREF=http://jsoc.stanford.edu" + thissegdata + ">" + thissegdata + "</A>";
-	      thissegdata = tmp;
-	      }
-           if (thissegdata == null || thissegdata.length == 0) thissegdata = "&nbsp;";
-	   valuetable = valuetable + "<TD>" + thissegdata + "</TD>";
-	   if (thissegdims == null || thissegdims.length == 0) thissegdims = "&nbsp;";
-           valuetable = valuetable + "<TD>" + thissegdims + "</TD>";
-           if (thissegcparms == null || thissegcparms.length == 0) thissegcparms = "&nbsp;";
-           valuetable = valuetable + "<TD>" + thissegcparms + "</TD>";       
-           if (thissegbzero == null || thissegbzero.length == 0) thissegbzero = "&nbsp;";
-           valuetable = valuetable + "<TD>" + thissegbzero + "</TD>";
-           if (thissegbscale == null || thissegbscale.length == 0) thissegbscale = "&nbsp;";
-           valuetable = valuetable + "<TD>" + thissegbscale + "</TD>";
-	   }
-	  for (ilink=0; ilink<nlinks; ilink++)
-	   {
-	   var this_linkval =  RecordData.links[ilink].values[irec];
-           if (this_linkval == null || this_linkval.length == 0) this_linkval = "&nbsp;";
-           valuetable = valuetable + "<TD>" + this_linkval + "</TD>";
-	   }
+	       valuetable = valuetable + "<TH>seg_cparms: " + RecordData.segments[iseg].name + "</TH>";
+	       valuetable = valuetable + "<TH>seg_bzero: " + RecordData.segments[iseg].name + "</TH>";
+	       valuetable = valuetable + "<TH>seg_bscale: " + RecordData.segments[iseg].name + "</TH>";
+               }
+            }
+	  for (var ilink=0; ilink < nlinks; ++ilink)
+             valuetable = valuetable + "<TH>" + "Link: " + RecordData.links[ilink].name + "</TH>";
 	  valuetable = valuetable + "</TR>";
-	  }
+
+	  for (var irec=0; irec < nrecs; irec++)
+	    {
+	    valuetable = valuetable + "<TR>";
+	    if (wantrecinfo)
+	      valuetable = valuetable +  "<TD>" + RecordData.recinfo[irec].name + "</TD>";
+	    for (ikey=0; ikey<nkeys; ikey++)
+	     {
+	     var this_keyval =  RecordData.keywords[ikey].values[irec];
+	     if (RecordData.keywords[ikey].name == "*logdir*")
+	       {
+	       if (this_keyval.charAt(0) == '/')
+	         {
+	         tmp = "<A HREF=http://jsoc.stanford.edu" + this_keyval + ">" + this_keyval + "</A>";
+	         this_keyval = tmp;
+	         }
+               }
+             if (this_keyval.length == 0) this_keyval = "&nbsp;";
+                valuetable = valuetable + "<TD>" + this_keyval + "</TD>";
+	     }
+	    for (iseg=0; iseg<nsegs; iseg++)
+	      {
+	      var thissegdims = RecordData.segments[iseg].dims[irec];
+	      var thissegdata = RecordData.segments[iseg].values[irec];
+	      if ($("WantFullSegInfo").checked == 1)
+	         {
+                 var thissegcparms = RecordData.segments[iseg].cparms[irec];
+                 var thissegbzero = RecordData.segments[iseg].bzeros[irec];
+                 var thissegbscale = RecordData.segments[iseg].bscales[irec];
+	         }
+              if (wantrecinfo && RecordData.recinfo[irec].online)
+	        {
+	        if (wantLocalLinks)
+                   tmp = "<A HREF=file://" + thissegdata + ">" + thissegdata + "</A>";
+                else
+	           tmp = "<A HREF=http://jsoc.stanford.edu" + thissegdata + ">" + thissegdata + "</A>";
+	        thissegdata = tmp;
+	        }
+              if (thissegdata == null || thissegdata.length == 0) thissegdata = "&nbsp;";
+	        valuetable = valuetable + "<TD>" + thissegdata + "</TD>";
+	      if (thissegdims == null || thissegdims.length == 0) thissegdims = "&nbsp;";
+                valuetable = valuetable + "<TD>" + thissegdims + "</TD>";
+	      if ($("WantFullSegInfo").checked == 1)
+	        {
+                if (thissegcparms == null || thissegcparms.length == 0) thissegcparms = "&nbsp;";
+                    valuetable = valuetable + "<TD>" + thissegcparms + "</TD>";       
+                if (thissegbzero == null || thissegbzero.length == 0) thissegbzero = "&nbsp;";
+                    valuetable = valuetable + "<TD>" + thissegbzero + "</TD>";
+                if (thissegbscale == null || thissegbscale.length == 0) thissegbscale = "&nbsp;";
+                    valuetable = valuetable + "<TD>" + thissegbscale + "</TD>";
+	        }
+	      }
+	    for (ilink=0; ilink<nlinks; ilink++)
+	      {
+	      var this_linkval =  RecordData.links[ilink].values[irec];
+              if (this_linkval == null || this_linkval.length == 0) this_linkval = "&nbsp;";
+                valuetable = valuetable + "<TD>" + this_linkval + "</TD>";
+	      }
+	    valuetable = valuetable + "</TR>";
+	    }
 	valuetable = valuetable + "</TABLE>";
         $("DisplayPlace").innerHTML =  valuetable + "<BR>";
         }
@@ -1078,9 +1094,12 @@ RecordSet Query:&nbsp;
 <BR>
 <input type="checkbox" name="Get Record Query" id="WantRecInfo">
 Check to Get Record Query.
-&nbsp; &nbsp; &nbsp; &nbsp;
-<input type="checkbox" name="AllowBigQueries" id="AllowBigQueries">
-Check to Allow Huge Record Queries.
+&nbsp; &nbsp;
+<input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.
+&nbsp; &nbsp;
+<input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info 
+&nbsp; &nbsp;
+<input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).
 <BR>
 <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
 <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
