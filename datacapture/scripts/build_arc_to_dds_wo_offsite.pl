@@ -137,5 +137,6 @@ if(!($pgport = $ENV{'SUMPGPORT'})) {
   close(PARC);
   print "\nDone: Found $count tlm files for $instru\n";
   print "Results in $resultfile\n";
+  #`cp $resultfile /dds/soc2dds/save`; #!!TEMP save elsewhere
 $dbh->disconnect();
 
