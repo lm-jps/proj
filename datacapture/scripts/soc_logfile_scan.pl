@@ -6,12 +6,12 @@
 #and collect some statistics.
 #NOTE: this is not designed to work for all time. It is a quick hack.
 
-$YEARSCAN = "2008";	#look for this date stamp in log file
+$YEARSCAN = "2009.09";	#look for this date stamp in log file
 
 sub usage {
   print "Get info on a datacapture soc log file, e.g.\n";
   print "soc_aia_VC01_production_2008.05.30_09:34:34.log\n";
-  print "Usage: soc_logfile_scanpl in_file\n";
+  print "Usage: soc_logfile_scan.pl in_file\n";
   exit(1);
 }
 
