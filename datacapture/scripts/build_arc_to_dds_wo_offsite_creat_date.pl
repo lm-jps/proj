@@ -98,13 +98,15 @@ if($user ne "production") {
   exit;
 }
 $nodedcs = `hostname -s`;
-if ($nodedcs == "dcs0") {
+chomp($nodedcs);
+print "nodedcs = $nodedcs\n";
+if($nodedcs eq "dcs0") {
   $pgport = 5430;
 }
-elsif ($nodedcs == "dcs1")  {
+elsif ($nodedcs eq "dcs1")  {
   $pgport = 5431;
 }
-elsif ($nodedcs == "dcs2")  {
+elsif ($nodedcs eq "dcs2")  {
   $pgport = 5432;
 }
 
