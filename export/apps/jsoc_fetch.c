@@ -9,7 +9,7 @@
 #include "drms_names.h"
 #include "json.h"
 #include "printk.h"
-
+#include "qDecoder.h"
 
 #include <time.h>
 
@@ -359,25 +359,50 @@ fprintf(stderr,"path: %s\n",path);
   fflush(stdout);
   }
 
+/* For now, this processes JUST the arguments used by VSO - op, method, format, protocol, ds */
+#define kArgOp       "op"
+#define kArgMeth     "method"
+#define kArgFormat   "format"
+#define kArgProto    "protocol"
+#define kArgDS       "ds"
+
+static int SetPostArg(Q_ENTRY *req, const char *key)
+{
+   int err = 0;
+   char *value = NULL;
+ 
+   if (req)
+   {
+      value = (char *)qEntryGetStr(req, key);
+
+      if (value)
+      {
+         err = (NULL == cmdparams_set(&cmdparams, key, value));
+      }
+   }
+
+   return err;
+}
+
 /* Module main function. */
 int DoIt(void)
   {
 						/* Get command line arguments */
-  char *op;
-  char *in;
-  char *seglist;
-  char *requestid;
-  char *process;
-  char *requestor;
+  const char *op;
+  const char *in;
+  const char *seglist;
+  const char *requestid;
+  const char *process;
+  const char *requestor;
   long requestorid;
-  char *notify;
-  char *format;
-  char *shipto;
-  char *method;
-  char *protocol;
-  char *filenamefmt;
+  const char *notify;
+  const char *format;
+  const char *shipto;
+  const char *method;
+  const char *protocol;
+  const char *filenamefmt;
   char *errorreply;
-  char *sunumlist;
+  const char *sunumlist;
   long long size;
   TIME reqtime;
   TIME esttime;
@@ -401,22 +426,58 @@ int DoIt(void)
   from_web = strcmp (web_query, "Not Specified") != 0;
 
   if (from_web)
-    {
-    char *getstring, *ds, *p;
-    CGI_unescape_url(web_query);
-    getstring = strdup (web_query);
-    for (p=strtok(getstring,"&"); p; p=strtok(NULL, "&"))
-      {
-      char *key=p, *val=index(p,'=');
-      if (!val)
-	 JSONDIE("Bad QUERY_STRING");
-      *val++ = '\0';
-      if (illegalArg(val))
-         JSONDIE("Illegal text in arg");
-      cmdparams_set(&cmdparams, key, val);
-      }
-    free(getstring);
-    }
+  {
+     char *getstring, *p;
+     const char * rmeth = NULL;
+
+      /* Use qDecoder to parse HTTP POST requests. qDecoder actually handles 
+      * HTTP GET requests as well, so we don't really need a code branch here.
+      * But since the older GET code already works, I won't touch it. qDecoder 
+      * is a better solution though, as it is robust and well-tested. */
+
+     /* Differentiate between HTTP GET and POST. */
+
+     /* Use the REQUEST_METHOD environment variable as a indicator of 
+      * a POST request. */
+     rmeth = cmdparams_get_str(&cmdparams, "REQUEST_METHOD", NULL);
+
+     if (strcasecmp(rmeth, "post") == 0)
+     {
+        /* This is an HTTP POST request */
+        Q_ENTRY *req = NULL;
+
+        req = qCgiRequestParse(NULL);
+
+        if (req)
+        {
+           /* Accept only known key-value pairs - ignore the rest. */
+           SetPostArg(req, kArgOp);
+           SetPostArg(req, kArgMeth);
+           SetPostArg(req, kArgFormat);
+           SetPostArg(req, kArgProto);
+           SetPostArg(req, kArgDS);
+
+           qEntryFree(req); 
+        }
+     }
+     else
+     {
+        CGI_unescape_url(web_query);
+        getstring = strdup (web_query);
+        for (p=strtok(getstring,"&"); p; p=strtok(NULL, "&"))
+        {
+           char *key=p, *val=index(p,'=');
+           if (!val)
+             JSONDIE("Bad QUERY_STRING");
+           *val++ = '\0';
+           if (illegalArg(val))
+             JSONDIE("Illegal text in arg");
+           cmdparams_set(&cmdparams, key, val);
+        }
+        free(getstring);
+     }
+  }
+
   free(web_query);
 
   op = cmdparams_get_str (&cmdparams, "op", NULL);
