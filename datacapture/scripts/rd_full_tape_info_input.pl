@@ -69,9 +69,17 @@ if($user ne "production") {
   print "You must be user production to run\n";
   exit;
 }
-if(!($pgport = $ENV{'SUMPGPORT'})) {
-  print "You must have ENV SUMPGPORT set to the port number, e.g. 5430\n";
-  exit; 
+$nodedcs = `hostname -s`;
+chomp($nodedcs);
+print "nodedcs = $nodedcs\n";
+if($nodedcs eq "dcs0") {
+  $pgport = 5430;
+}
+elsif ($nodedcs eq "dcs1")  {
+  $pgport = 5431;
+}
+elsif ($nodedcs eq "dcs2")  {
+  $pgport = 5432;
 }
 
 #First connect to database
