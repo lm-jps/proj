@@ -97,10 +97,21 @@ if($user ne "production") {
   print "You must be user production to run\n";
   exit;
 }
-if(!($pgport = $ENV{'SUMPGPORT'})) {
-  print "You must have ENV SUMPGPORT set to the port number, e.g. 5430\n";
-  exit; 
+$nodedcs = `hostname -s`;
+if ($nodedcs == "dcs0") {
+  $pgport = 5430;
 }
+elsif ($nodedcs == "dcs1")  {
+  $pgport = 5431;
+}
+elsif ($nodedcs == "dcs2")  {
+  $pgport = 5432;
+}
+
+#if(!($pgport = $ENV{'SUMPGPORT'})) {
+#  print "You must have ENV SUMPGPORT set to the port number, e.g. 5430\n";
+#  exit; 
+#}
 
 #First connect to database
   $dbh = DBI->connect("dbi:Pg:dbname=$DB;host=$hostdb;port=$pgport", "$user", "$password");
