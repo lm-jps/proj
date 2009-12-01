@@ -3,7 +3,7 @@ setenv  HK_DDF_HKBYAPID_PROJECT_NAME_HMI      hmi
 setenv  HK_DDF_HKBYAPID_PROJECT_NAME_SDO      sdo
 setenv  HK_JSVNMAP_DIRECTORY                 /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod
 setenv  HK_DDF_HKBYAPID_DATA_ID_NAME         lev0
-setenv  HK_JSVNMAP_DIRECTORY                 /home/carl/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod
+setenv  HK_JSVNMAP_DIRECTORY                 /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod
 setenv  HK_PREFIX_JSVNMAP_FILENAME_HMI       HMI
 setenv  HK_PREFIX_JSVNMAP_FILENAME_AIA       AIA
 setenv  HK_PREFIX_JSVNMAP_FILENAME_SDO       SDO
