@@ -603,7 +603,7 @@ char *get_packet_version_number( HK_Keyword_t *kw)
 
   while (kw)
   {
-     if( strstr(kw->name, "VER_NUM"))
+     if( strstr(kw->name, "VER_NUM") || strstr(kw->name, "VER_TEMPERATURES")) //Fix 11-30-2009
      {
        sprintf(ptr_vn, "%03d.%03d", kw->eng_value.uint16_val >> 8  & 0x00FF, 
                kw->eng_value.uint16_val & 0x00FF );
@@ -1566,17 +1566,17 @@ char *get_lookup_filename(int apid )
         /* create default prefix using apid in name */
         if(apid <= HK_HSB_HIGHEST_HMI_APID && apid >= HK_HSB_LOWEST_HMI_APID  || (apid <= HK_LR_HIGHEST_HMI_APID  && apid >= HK_LR_LOWEST_HMI_APID))
         {
-          sprintf(lufn,"%s-%-02.2d",getenv("HK_PREFIX_JSVNMAP_FILENAME_HMI"),apid); 
+          sprintf(lufn,"%s-%-03.3d",getenv("HK_PREFIX_JSVNMAP_FILENAME_HMI"),apid); 
           strcat(lufn,"\0");
         }
         else if((apid <= HK_HSB_HIGHEST_AIA_APID && apid >= HK_HSB_LOWEST_AIA_APID) || (apid <= HK_LR_HIGHEST_AIA_APID && apid >= HK_LR_LOWEST_AIA_APID))
         {
-          sprintf(lufn,"%s-%-02.2d",getenv("HK_PREFIX_JSVNMAP_FILENAME_AIA"),apid); 
+          sprintf(lufn,"%s-%-03.3d",getenv("HK_PREFIX_JSVNMAP_FILENAME_AIA"),apid); 
           strcat(lufn,"\0");
         }
         else if((apid <= HK_LR_HIGHEST_SDO_APID) && (apid >= HK_LR_LOWEST_SDO_APID))
         {
-          sprintf(lufn,"%s-%-02.2d",getenv("HK_PREFIX_JSVNMAP_FILENAME_SDO"),apid); 
+          sprintf(lufn,"%s-%-03.3d",getenv("HK_PREFIX_JSVNMAP_FILENAME_SDO"),apid); 
           strcat(lufn,"\0");
         }
         else
