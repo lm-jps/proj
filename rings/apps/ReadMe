@@ -1,0 +1,28 @@
+Release code for ring-diagram analysis in the HMI pipeline
+
+If this directory is part of the CVS tree, the files in this directory have
+been mirrored from a specific version control system outside CVS and should
+not be modified without the consent of the author, Rick Bogart. Any changes
+introduced that are not synchronized with changes to the original control
+files are likely to be lost.
+
+Table of contents last updated 09.11.23
+
+	Directories
+
+	Scripts
+
+	Modules
+mtrack.c	map and track multiple regions from a time sequence of solar
+		images into a set of xyt data cubes
+pspec3.c	calculate 3-d power spectra of xyt data cubes
+rdfitc.c	fit 3-d region spectra (ring-diagrams) using method of
+		Basu and Antia
+rdvinv.c	OLA inversion of ring fits for velocity parameters as functions
+		of depth
+
+	Other Programs, Code
+
+	Other
+Makefile
+ReadMe			This file
