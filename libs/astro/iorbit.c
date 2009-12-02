@@ -210,6 +210,12 @@ static IORBIT_Vector_t *CreateCache()
 
 static void DestroyCache()
 {
+   if (gCacheRS)
+   {
+      drms_close_records(gCacheRS, DRMS_FREE_RECORD);
+      gCacheRS = NULL;
+   }
+
    if (gGridCache)
    {
       free(gGridCache);
@@ -309,17 +315,6 @@ static IORBIT_Vector_t *LookupInCache(double tgttime, IORBIT_Slotpos_t pos)
    }
 
    return val;
-}
-
-static void FlushCache()
-{
-   if (gCacheRS)
-   {
-      drms_close_records(gCacheRS, DRMS_FREE_RECORD);
-   }
-
-   DestroyCache();
-   CreateCache();
 }
 
 /*
@@ -631,6 +626,11 @@ static IORBIT_Vector_t *FetchNext(DRMS_Env_t *env,
    return vec;
 }
 
+/* If not caching grid vectors between calls to iorbit_getinfo(), then all needed vectors
+ * must be in gGridCache. The "needed" vectors include a buffer of gMinAbove and gMinBelow 
+ * above and below the min and max obstimes. In the top-level function, 1 hour above and
+ * below is added to the min and max obstimes, so if there are at least 16 observations
+ * within each hour, this function will succeed. */
 int CheckCache(double mintgt, double maxtgt)
 {
    int ok = 1;
@@ -1230,11 +1230,15 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
 
       if (ctype == kIORBIT_CacheAction_Flush)
       {
-         FlushCache();
+         DestroyCache();
       }
       else if (ctype == kIORBIT_CacheAction_DontCache)
       {
          gCacheChunking = 0;
+         DestroyCache(); /* The cache (which actually doesn't contain a chunk, but instead contains
+                          * all data within the time range specified by the filter) should have been 
+                          * flushed at the end of each call to iorbit_getinfo(). But, just in case
+                          * flush again. */
          if (optfilter != NULL)
          {
             fprintf(stderr, "WARNING: record-query filter '%s' is not applicable when caching is turned off and will not be used.\n", optfilter);
@@ -1465,6 +1469,11 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       {
          hcon_destroy(&indexmap);
       }
+   }
+
+   if (ctype == kIORBIT_CacheAction_DontCache)
+   {
+      DestroyCache();
    }
 
    return err;
