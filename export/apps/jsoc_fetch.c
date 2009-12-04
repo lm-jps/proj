@@ -54,6 +54,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "shipto", "Not Specified", "mail address of requestor"},
   {ARG_STRING, "protocol", "as-is", "exported file protocol"},
   {ARG_STRING, "filenamefmt", "{seriesname}.{recnum:%d}.{segment}", "exported file filename format"},
+  {ARG_STRING, "formatvar", "Not Specified", "return json in object format"},
   {ARG_STRING, "format", "json", "return content type"},
   {ARG_STRING, "method", "url", "return method"},
   {ARG_FLAG, "h", "0", "help - show usage"},
@@ -360,11 +361,12 @@ fprintf(stderr,"path: %s\n",path);
   }
 
 /* For now, this processes JUST the arguments used by VSO - op, method, format, protocol, ds */
-#define kArgOp       "op"
-#define kArgMeth     "method"
-#define kArgFormat   "format"
-#define kArgProto    "protocol"
-#define kArgDS       "ds"
+#define kArgOp        "op"
+#define kArgMeth      "method"
+#define kArgFormat    "format"
+#define kArgFormatvar "formatvar"
+#define kArgProto     "protocol"
+#define kArgDS        "ds"
 
 static int SetPostArg(Q_ENTRY *req, const char *key)
 {
@@ -377,7 +379,8 @@ static int SetPostArg(Q_ENTRY *req, const char *key)
 
       if (value)
       {
-         err = (NULL == cmdparams_set(&cmdparams, key, value));
+         cmdparams_set(&cmdparams, key, value);
+         err = (NULL == value);
       }
    }
 
@@ -397,6 +400,7 @@ int DoIt(void)
   long requestorid;
   const char *notify;
   const char *format;
+  const char *formatvar;
   const char *shipto;
   const char *method;
   const char *protocol;
@@ -411,7 +415,7 @@ int DoIt(void)
   double waittime;
   char *web_query;
   int from_web,status;
-  int dojson=1, dotxt=0, dohtml=0, doxml=0;
+  int dodataobj=1, dojson=1, dotxt=0, dohtml=0, doxml=0; //ISS added dodataobj
   DRMS_RecordSet_t *exports;
   DRMS_Record_t *export_log;
   char new_requestid[200];
@@ -454,6 +458,7 @@ int DoIt(void)
            SetPostArg(req, kArgOp);
            SetPostArg(req, kArgMeth);
            SetPostArg(req, kArgFormat);
+           SetPostArg(req, kArgFormatvar);
            SetPostArg(req, kArgProto);
            SetPostArg(req, kArgDS);
 
@@ -486,6 +491,7 @@ int DoIt(void)
   sunumlist = cmdparams_get_str (&cmdparams, "sunum", NULL);
   seglist = cmdparams_get_str (&cmdparams, "seg", NULL);
   process = cmdparams_get_str (&cmdparams, "process", NULL);
+  formatvar = cmdparams_get_str (&cmdparams, "formatvar", NULL);//ISS
   format = cmdparams_get_str (&cmdparams, "format", NULL);
   method = cmdparams_get_str (&cmdparams, "method", NULL);
   protocol = cmdparams_get_str (&cmdparams, "protocol", NULL);
@@ -495,6 +501,7 @@ int DoIt(void)
   shipto = cmdparams_get_str (&cmdparams, "shipto", NULL);
   requestorid = cmdparams_get_int (&cmdparams, "requestorid", NULL);
 
+  dodataobj = strcmp(formatvar, "dataobj") == 0; //ISS
   dojson = strcmp(format, "json") == 0;
   dotxt = strcmp(format, "txt") == 0;
   dohtml = strcmp(format, "html") == 0;
@@ -609,27 +616,51 @@ int DoIt(void)
         char numval[50];
         json_t *jroot = json_new_object();
         json_t *data;
-        data = json_new_array();
+        //ISS add dodataobj check
+        if (dodataobj) {
+          data = json_new_object();
+        } else {
+          data = json_new_array();
+        }
+
         for (i=0; i < count; i++)
           {
           json_t *suobj = json_new_object();
           char *jsonstr;
+          char *sunumstr = NULL;  //ISS
           char numval[40];
           sprintf(numval,"%lld",sunums[i]);
-          jsonstr = string_to_json(numval); // send as string in case long long fails
-          json_insert_pair_into_object(jroot, "sunum", json_new_string(jsonstr));
-          free(jsonstr);
+          sunumstr   = string_to_json(numval); // send as string in case long long fails
+
+          json_insert_pair_into_object(suobj, "sunum", json_new_string(sunumstr));
+
           jsonstr = string_to_json(series[i]);
           json_insert_pair_into_object(suobj, "series", json_new_string(jsonstr));
           free(jsonstr);
+
           jsonstr = string_to_json(paths[i]);
           json_insert_pair_into_object(suobj, "path", json_new_string(jsonstr));
           free(jsonstr);
+
           json_insert_pair_into_object(suobj, "sustatus", json_new_string(sustatus[i]));
           json_insert_pair_into_object(suobj, "susize", json_new_string(susize[i]));
 
-          json_insert_child(data, suobj);
+          //ISS add dodataobj check
+          if (dodataobj) {
+            json_t *suLabel = json_new_string(sunumstr);
+            json_insert_child(suLabel,suobj);
+            json_insert_child(data, suLabel);
+          } else {
+            json_insert_child(data, suobj);
           }
+
+          if (sunumstr)
+          {
+             free(sunumstr);
+          }
+
+          }
+
         sprintf(numval, "%d", count);
         json_insert_pair_into_object(jroot, "count", json_new_number(numval));
         sprintf(numval, "%lld", size);
