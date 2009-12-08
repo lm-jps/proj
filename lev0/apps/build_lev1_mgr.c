@@ -20,8 +20,8 @@
  *	brec=0, erec=0 
  *	- start at the previous highest lev0 record processed
  *	  This is keep in the DB table lev1_highest_lev0_recnum
- *	- fork up to 8 (MAXCPULEV1) build_lev1 for every 
- *	  17 (MAXRECLEV1) lev0 records. 
+ *	- fork from 8 to MAXCPULEV1 build_lev1 for every 
+ *	  17 (NUMRECLEV1) lev0 records. 
  *	- when an build_lev1 completes, fork another for next 17 rec
  *	- if no more lev0 records available, sleep and try again
  *	- if 8 CPU not enough to keep up with lev0, go to 16, etc.
@@ -49,7 +49,7 @@
 #include <printk.h>
 #include <errno.h>
 #include <sys/wait.h>
-
+#include "lev0lev1.h"	//defines NUMRECLEV1. Used by this and build_lev1.c
 
 //default in and out data series
 #define LEV0SERIESNAMEHMI "hmi.lev0e"
@@ -61,14 +61,15 @@
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1_mgr.%s.log"
 #define QSUBDIR "/scr21/production/qsub"
 #define NUMTIMERS 8		//number of seperate timers avail
-#define MAXRECLEV1 128		//max# of lev0 to lev1 images can do at a time
-#define DEFAULTRECLEV1 "17"	//default # of lev0 to lev1 images at a time
 #define MAXCPULEV1 32		//max# of forks can do at a time for stream mode
 #define DEFAULTCPULEV1 "8"	//default# of forks can do at a time 
 #define MAXQSUBLEV1 64  //max# of qsub can do at a time for reprocessing mode
 #define DEFAULTQSUBLEV1 "16"
 #define MAXJIDSTR MAXQSUBLEV1*16
 #define NOTSPECIFIED "***NOTSPECIFIED***"
+#define LOGTEST 1
+char args7sv[128];	//used when LOGTEST = 1
+
 
 int qsubjob(long long rec1, long long rec2);
 
@@ -80,7 +81,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_INTS, "brec", "0", "first lev0 rec# to process"},
   {ARG_INTS, "erec", "0", "last lev0 rec# to process"},
-  {ARG_INTS, "numrec", DEFAULTRECLEV1, "number of lev0 to lev1 records at a time"},
+  {ARG_INTS, "numrec", NUMRECLEV1S, "number of lev0 to lev1 records at a time"},
   {ARG_INTS, "numcpu", DEFAULTCPULEV1, "max# of forks to do at a time for stream mode"},
   {ARG_INTS, "numqsub", DEFAULTQSUBLEV1, "max# of qsub to do at a time for reprocessing mode"},
   {ARG_FLAG, "v", "0", "verbose flag"},
@@ -127,7 +128,7 @@ int nice_intro ()
     printf ("Runs build_lev1 processes to create lev1 datasets.\n\n");
     printf ("Usage: build_lev1_mgr [-vh]\n"
 	"instru=<hmi|aia> dsin=<lev0> dsout=<lev1> brec=<rec#> erec=<rec#>"
-	"\nnumrec=<#> numcpu=<#> numqsub=<#> logfile=<file>\n"
+	"\nnumcpu=<#> numqsub=<#> logfile=<file>\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
 	"instru= instrument. must be 'hmi' or 'aia'\n"
@@ -137,12 +138,11 @@ int nice_intro ()
 	"      default hmi=su_production.hmi_lev1e   aia=su_production.aia_lev1e\n"
 	"brec= first lev0 rec# to process. 0=Stream Mode if erec also 0\n"
 	"erec= last lev0 rec# to process. 0=Stream Mode if brec also 0\n"
-	"numrec= number of lev0 to lev1 records at a time. Default %s\n"
 	"numcpu= max# of forks to do at a time for stream mode. Default %s\n"
 	"numqsub= max# of qsub to do at a time for reprocessing mode. Default %s\n"
 	"logfile= optional log file name. If not given uses:\n"
         "         /usr/local/logs/lev1/build_lev1_mgr.<time_stamp>.log\n",
-	DEFAULTRECLEV1, DEFAULTCPULEV1, DEFAULTQSUBLEV1);
+	 DEFAULTCPULEV1, DEFAULTQSUBLEV1);
      printf ("\n * Has two modes:\n"
           " * Stream Mode (one instance):\n"
           " *  This is the normal quick look mode that runs continuously and\n"
@@ -151,7 +151,7 @@ int nice_intro ()
           " *	- start at the previous highest lev0 record processed\n"
           " *	  This is keep in the DB table lev1_highest_lev0_recnum\n"
           " *	- fork up to 8 (MAXCPULEV1) build_lev1 for every \n"
-          " *	  17 (DEFAULTRECLEV1) lev0 records. \n"
+          " *	  17 (NUMRECLEV1) lev0 records. \n"
           " *	- when an build_lev1 completes, fork another for next 17 rec\n"
           " *	- if no more lev0 records available, sleep and try again\n"
           " *	- if 8 CPU not enough to keep up with lev0, go to 16, etc.\n"
@@ -275,7 +275,7 @@ void abortit(int stat)
  * records as they show up in the DB.
  * Process the lev0 to lev1 from recn0 to maxrecn0. 
  * Returns when all children processes are done. 
- * Note: The processing is done in sets of 17 (DEFAULTRECLEV1) lev0 records, 
+ * Note: The processing is done in sets of 17 (NUMRECLEV1) lev0 records, 
  * so the maxrecn0 may not be reached, but it will
  * get done with the next set when more lev0 records come in. forkstream()
  * is run again and will automatically process new lev0 records in
@@ -298,6 +298,10 @@ int forkstream(long long recn0, long long maxrecn0)
   lrec = recn0-1;
   if(j < numcpu) l = j;		//fork less then the max at a time
   else l = numcpu;			//fork the max at a time
+  if(LOGTEST) {
+    sprintf(args7sv, "logfile=%s/build_lev1.%s.log", 
+		LEV1LOG_BASEDIR, gettimetag());
+  }
   for(k=0; k < l; k++) { //fork this many to start 
     frec = lrec+1; lrec = (frec + numrec)-1;
     if((pid = fork()) < 0) {
@@ -310,16 +314,22 @@ int forkstream(long long recn0, long long maxrecn0)
       args[1] = args1;
       sprintf(args2, "dsout=%s", dsout);
       args[2] = args2;
-      sprintf(args3, "brec=%lu", frec);
+      sprintf(args3, "brec=%lld", frec);
       args[3] = args3;
-      sprintf(args4, "erec=%lu", lrec);
+      sprintf(args4, "erec=%lld", lrec);
       args[4] = args4;
       sprintf(args5, "instru=%s", instru);
       args[5] = args5;
       sprintf(args6, "quicklook=%d", stream_mode);
       args[6] = args6;
       //sprintf(args7, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
-      sprintf(args7, "logfile=%s/l1s_%lu_%lu.log", LEV1LOG_BASEDIR, frec, lrec);
+      if(LOGTEST) {
+        sprintf(args7, "%s", args7sv);
+      }
+      else {
+        sprintf(args7, "logfile=%s/l1s_%lld_%lld.log", 
+		LEV1LOG_BASEDIR, frec, lrec);
+      }
       args[7] = args7;
       args[8] = NULL;
       printk("execvp: %s %s %s %s %s %s %s %s\n",
@@ -345,7 +355,7 @@ int forkstream(long long recn0, long long maxrecn0)
       //!!TBD assumes we catch up at some point and we know where we're at
       //now and can update the DB table. Check that this is ok.
       //now update lev1_highest_lev0_recnum table with lrec
-      sprintf(pcmd, "echo \"update lev1_highest_lev0_recnum set lev0recnum=%lu, date='%s' where lev0series='%s'\" | psql -h hmidb jsoc", lrec, get_datetime(), dsin);
+      sprintf(pcmd, "echo \"update lev1_highest_lev0_recnum set lev0recnum=%lld, date='%s' where lev0series='%s'\" | psql -h hmidb jsoc", lrec, get_datetime(), dsin);
       system(pcmd);
 
       if(numtofork <= 0) break;
@@ -370,16 +380,21 @@ int forkstream(long long recn0, long long maxrecn0)
       args[1] = args1;
       sprintf(args2, "dsout=%s", dsout);
       args[2] = args2;
-      sprintf(args3, "brec=%lu", frec);
+      sprintf(args3, "brec=%lld", frec);
       args[3] = args3;
-      sprintf(args4, "erec=%lu", lrec);
+      sprintf(args4, "erec=%lld", lrec);
       args[4] = args4;
       sprintf(args5, "instru=%s", instru);
       args[5] = args5;
       sprintf(args6, "quicklook=%d", stream_mode);
       args[6] = args6;
       //sprintf(args7, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
-      sprintf(args7, "logfile=%s/l1s_%lu_%lu.log", LEV1LOG_BASEDIR, frec, lrec);
+      if(LOGTEST) {
+        sprintf(args7, "%s", args7sv);	//use original log name
+      }
+      else {
+        sprintf(args7, "logfile=%s/l1s_%lld_%lld.log", LEV1LOG_BASEDIR, frec, lrec);
+      }
       args[7] = args7;
       args[8] = NULL;
       printk("execvp: %s %s %s %s %s %s %s %s\n",
@@ -413,7 +428,7 @@ int qsubjob(long long rec1, long long rec2)
   }
   fprintf(qsubfp, "#!/bin/csh\n");
   fprintf(qsubfp, "echo \"TMPDIR = $TMPDIR\"\n");
-  fprintf(qsubfp, "build_lev1 dsin=%s dsout=%s brec=%d erec=%d instru=%s quicklook=%d logfile=%s/l1q_b%d_e%d_$JOB_ID.log\n", 
+  fprintf(qsubfp, "build_lev1 dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
 	dsin, dsout, rec1, rec2, instru, stream_mode, QSUBDIR, rec1, rec2); 
   fclose(qsubfp);
   sprintf(qsubcmd, "qsub -o %s -e %s -q j.q %s", 
@@ -534,7 +549,7 @@ int do_ingest()
       if(strstr(string, "lev0recnum")) continue;
       if(strstr(string, "-----")) continue;
       //get lev0 rec#
-      if((rstatus = sscanf(string, "%lu", &recnum0)) == 0) {
+      if((rstatus = sscanf(string, "%lld", &recnum0)) == 0) {
         printf("Abort no lev0 entry in lev1_highest_lev0_recnum\n");
         printk("Abort no lev0 entry in lev1_highest_lev0_recnum\n");
         abortit(1); //no rec#
@@ -548,11 +563,11 @@ int do_ingest()
     while(fgets(string, sizeof string, fin)) {  //get psql return line
       if(strstr(string, "max")) continue;
       if(strstr(string, "-----")) continue;
-      sscanf(string, "%lu", &maxrecnum0);	//get max lev0 rec# 
+      sscanf(string, "%lld", &maxrecnum0);	//get max lev0 rec# 
       break;
     }
     pclose(fin);
-    printf("Stream Mode starting at lev0 recnum = %lu maxrecnum = %lu\n", 
+    printf("Stream Mode starting at lev0 recnum = %lld maxrecnum = %lld\n", 
 		recnum0, maxrecnum0);
     if(recnum0 > maxrecnum0) return(0);		//nothing to do. go wait
     rstatus = forkstream(recnum0, maxrecnum0);
@@ -612,8 +627,8 @@ void setup()
   sprintf(arginstru, "instru=%s", instru);
   sprintf(argdsin, "dsin=%s", dsin);
   sprintf(argdsout, "dsout=%s", dsout);
-  sprintf(argbrec, "brec=%lu", brec);
-  sprintf(argerec, "erec=%lu", erec);
+  sprintf(argbrec, "brec=%lld", brec);
+  sprintf(argerec, "erec=%lld", erec);
   sprintf(argnumrec, "numrec=%d", numrec);
   sprintf(argnumcpu, "numcpu=%d", numcpu);
   sprintf(argnumqsub, "numqsub=%d", numqsub);
@@ -667,10 +682,6 @@ int main(int argc, char **argv)
   numrec = cmdparams_get_int(&cmdparams, "numrec", NULL);
   numcpu = cmdparams_get_int(&cmdparams, "numcpu", NULL);
   numqsub = cmdparams_get_int(&cmdparams, "numqsub", NULL);
-  if(numrec > MAXRECLEV1) {
-    printf("numrec exceeds max of %d\n", MAXRECLEV1);
-    return(0);
-  }
   if(numcpu > MAXCPULEV1) {
     printf("numcpu exceeds max of %d\n", MAXCPULEV1);
     return(0);
