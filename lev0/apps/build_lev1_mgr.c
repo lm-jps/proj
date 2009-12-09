@@ -104,6 +104,8 @@ pid_t mypid;
 uint64_t jid;
 int verbose;
 long long brec, erec;		//begin and end lev0 rec# to do
+long long lastrecnum0_now = 0;	//last RT lev0 recnum seen
+long long lastrecnum0_prev = 0;	//prvious RT lev0 recnum seen
 int numrec, numcpu, numqsub;
 int qcnt = 0;
 //stream_mode is also quick look mode, i.e. brec=erec=0
@@ -572,6 +574,8 @@ int do_ingest(int force)
       if(strstr(string, "max")) continue;
       if(strstr(string, "-----")) continue;
       sscanf(string, "%lld", &maxrecnum0);	//get max lev0 rec# 
+      lastrecnum0_prev = lastrecnum0_now;
+      lastrecnum0_now = maxrecnum0;		//save to see if more come in
       break;
     }
     pclose(fin);
@@ -756,13 +760,16 @@ int main(int argc, char **argv)
     }
     if(!stream_mode) return(0); //all done for reprocessing
     sleep(10);		//wait for more lev0 to appear
-    if(loopcnt++ == 6) {  //force any left over lev0 records to lev1
-      printk("Timeout: force any left over lev0 to lev1\n");
-      if(do_ingest(1)) {        // process the last lev0 records
-        printk("**ERROR: in do_ingest() for %s\n", open_dsname);
+    if(lastrecnum0_now == lastrecnum0_prev) {  //no new lev0 in
+      if(loopcnt++ == 15) {  //force any left over lev0 records to lev1
+        printk("Timeout: force any left over lev0 to lev1\n");
+        if(do_ingest(1)) {        // process the last lev0 records
+          printk("**ERROR: in do_ingest() for %s\n", open_dsname);
+        }
+        loopcnt = 0;
       }
-      loopcnt = 0;
     }
+    else loopcnt = 0;
     //wflg = 0;
   }
   sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
