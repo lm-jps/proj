@@ -4,10 +4,10 @@
 //NOTE: the NUMRECLEV1S must be a string for module_args[] in 
 //build_lev1_mgr.c and NUMRECLEV1 a number in build_lev1.c
 //NUMRECLEV1S and NUMRECLEV1 must be the same number of images.
-#define NUMRECLEV1S "17"//# of lev0 to lev1 images to process at a time
+#define NUMRECLEV1S "12"//# of lev0 to lev1 images to process at a time
 			//Used by build_lev1_mgr.c and 
 			//build_lev1.c. Compile both if change
-#define NUMRECLEV1 17	//# of lev0 to lev1 images to process at a time
+#define NUMRECLEV1 12	//# of lev0 to lev1 images to process at a time
 
 //Used by build_lev1.c to pass info to do_flat().
 //All the data arrays are filled in except adata1,
