@@ -40,10 +40,10 @@
 #define DSFFNAME "su_production.hmi_flatfield"		//temp test case
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
-#define DONUMRECS 120		//!!TEMP #of lev0 records to do and then exit
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1.%s.log"
 #define NUMTIMERS 8		//number of seperate timers avail
 #define NOTSPECIFIED "***NOTSPECIFIED***"
+#define LOGTEST 1
 
 int compare_rptr(const void *a, const void *b);
 
@@ -112,8 +112,8 @@ unsigned int fsnx = 0;
 int data1[MAXPIXELS];
 double tgttimes[NUMRECLEV1];
 
+long long brec, erec;           //begin and end lev0 rec# to do
 int verbose;
-int brec, erec;
 int hmiaiaflg = 0;		//0=hmi, 1=aia
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when ingest_lev0 is called for a restart
@@ -279,7 +279,7 @@ int sc_pointing()
 #include "do_flat.c"
 #include "get_pointing_info.c"
 
-int do_ingest()
+int do_ingest(long long bbrec, long long eerec)
 {
   PTINFO *ptinfo = NULL;
   PTINFO ptdata;
@@ -290,7 +290,7 @@ int do_ingest()
   long long recnum0, recnum1, recnumff;
   char recrange[128], lev0name[128], flatrec[128];
 
-  sprintf(recrange, ":#%lld-#%lld", brec, erec);
+  sprintf(recrange, ":#%lld-#%lld", bbrec, eerec);
   sprintf(open_dsname, "%s[%s]", dsin, recrange);
   printk("open_dsname = %s\n", open_dsname);
   printk("#levnum recnum fsn\n");
@@ -483,7 +483,7 @@ int do_ingest()
       //rsff = rsetff->records[0];
       rsff = rsetff->records[fcnt-1];
       recnumff = rsff->recnum;
-      sprintf(flatrec, "%s[:#%lu]", DSFFNAME, recnumff);
+      sprintf(flatrec, "%s[:#%lld]", DSFFNAME, recnumff);
       if(dstatus = drms_setkey_string(rs, "FLAT_REC", flatrec )) {
         printk("**ERROR on drms_setkey_string() for %s\n", flatrec);
       }
@@ -617,14 +617,14 @@ void setup()
   sprintf(arginstru, "instru=%s", instru);
   sprintf(argdsin, "dsin=%s", dsin);
   sprintf(argdsout, "dsout=%s", dsout);
-  sprintf(argbrec, "brec=%u", brec);
-  sprintf(argerec, "erec=%u", erec);
+  sprintf(argbrec, "brec=%lld", brec);
+  sprintf(argerec, "erec=%lld", erec);
   sprintf(argquick, "quicklook=%d", quicklook);
   sprintf(arglogfile, "logfile=%s", logname);
-  printk("%s %s %s %s %s %s\n", 
-	arginstru, argdsin, argdsout, argbrec, argerec, argquick);
-  printf("%s %s %s %s %s %s\n", 
-	arginstru, argdsin, argdsout, argbrec, argerec, argquick);
+  printk("%s %s %s %s %s %s %s\n", 
+	arginstru, argdsin, argdsout, argbrec, argerec, argquick, arglogfile);
+  printf("%s %s %s %s %s %s %s\n", 
+	arginstru, argdsin, argdsout, argbrec, argerec, argquick, arglogfile);
   if(!restartflg) {
     //printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
     //		tlmseriesname, lev0seriesname);
@@ -651,6 +651,8 @@ void setup()
 // Module main function. 
 int DoIt(void)
 {
+  long long numofrecs, frec, lrec;
+  int numrec, numofchunks, i;
   char line[80];
 
   if (nice_intro())
@@ -669,6 +671,10 @@ int DoIt(void)
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
   if(brec == -1 || erec == -1) {
     fprintf(stderr, "brec and/or erec must be given. -1 not allowed\n");
+    return(0);
+  }
+  if(brec > erec) {
+    fprintf(stderr, "brec must be <= erec\n");
     return(0);
   }
   logfile = cmdparams_get_str(&cmdparams, "logfile", NULL);
@@ -702,7 +708,7 @@ int DoIt(void)
   else {
     sprintf(logname, "%s", logfile);
   }
-  if(restartflg) {
+  if(restartflg || LOGTEST) {
     //sleep(30);		//make sure old ingest_lev0 is done
     if((h1logfp=fopen(logname, "a")) == NULL)
       fprintf(stderr, "**Can't open for append the log file %s\n", logname);
@@ -712,12 +718,21 @@ int DoIt(void)
       fprintf(stderr, "**Can't open the log file %s\n", logname);
   }
   setup();
-  if(do_ingest()) {        // loop to get files from the lev0
-    //printk("**ERROR: Some error after open of %s\n", open_dsname);
-    //printf("**ERROR: Some error after open of %s\n", open_dsname);
-    printf("build_lev1 abort\n"); //!!TEMP
-    printf("See log: %s\n", logname);
-    return(0);
+  numofrecs = (erec - brec) + 1;
+  numrec = NUMRECLEV1;	   //# of records to do at a time
+  numofchunks = numofrecs/numrec;
+  if((numofrecs % numrec) != 0) numofchunks++; //extra loop for partial chunk
+  lrec = brec-1;
+  for(i = 0; i < numofchunks; i++) {
+    frec = lrec+1; lrec = (frec + numrec)-1;
+    if(lrec > erec) lrec=erec;
+    if(do_ingest(frec, lrec)) {  //do a chunk to get files from the lev0
+      //printk("**ERROR: Some error after open of %s\n", open_dsname);
+      //printf("**ERROR: Some error after open of %s\n", open_dsname);
+      printf("build_lev1 abort\n"); //!!TEMP
+      printf("See log: %s\n", logname);
+      return(0);
+    }
   }
   printf("build_lev1 done last fsn=%u\n", fsnx); //!!TEMP
   return(0);
