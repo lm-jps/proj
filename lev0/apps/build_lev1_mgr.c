@@ -109,6 +109,7 @@ int qcnt = 0;
 //stream_mode is also quick look mode, i.e. brec=erec=0
 int stream_mode = 0;		//0=qsub build_lev1, 1=fork it locally
 int hmiaiaflg = 0;		//0=hmi, 1=aia
+int loopcnt = 0;		//force last lev0 records to lev1
 char logname[128];
 char argdsin[128], argdsout[128], arglogfile[128], arginstru[80];
 char argbrec[80], argerec[80], argnumrec[80], argnumcpu[80], argnumqsub[80];
@@ -281,8 +282,9 @@ void abortit(int stat)
  * is run again and will automatically process new lev0 records in
  * sets of 17 as they are seen in the DB.
  * Returns non-0 on error.
+ * If force is set, then do any non-chunk size of lev0 records left.
 */
-int forkstream(long long recn0, long long maxrecn0)
+int forkstream(long long recn0, long long maxrecn0, int force)
 {
   pid_t pid, wpid, fpid[MAXCPULEV1];
   long long numofrecs, frec, lrec;
@@ -294,7 +296,10 @@ int forkstream(long long recn0, long long maxrecn0)
   numofrecs = (maxrecn0 - recn0) + 1;
   numtofork = numofrecs/numrec;     //this many to fork 
   j = numtofork;
-  if(j == 0) return(0);
+  if(j == 0) {
+   if(force) { j=numtofork=1; }
+   else return(0);
+  }
   lrec = recn0-1;
   if(j < numcpu) l = j;		//fork less then the max at a time
   else l = numcpu;			//fork the max at a time
@@ -303,7 +308,8 @@ int forkstream(long long recn0, long long maxrecn0)
 		LEV1LOG_BASEDIR, gettimetag());
   }
   for(k=0; k < l; k++) { //fork this many to start 
-    frec = lrec+1; lrec = (frec + numrec)-1;
+    if(force) { frec = lrec+1; lrec = (frec + numofrecs)-1; }
+    else { frec = lrec+1; lrec = (frec + numrec)-1; }
     if((pid = fork()) < 0) {
       printk("***Can't fork(). errno=%d\n", errno);
       return(1);			//!!TBD decide what to do
@@ -534,8 +540,10 @@ int qsubmode(long long frec, long long lrec)
 
 /* Create lev1 from lev0 records in either stream mode or 
  * reprocessing mode. Return non-0 on error.
+ * In stream mode force any non-chunk size of lev0 records at the
+ * end to lev1.
 */
-int do_ingest()
+int do_ingest(int force)
 {
   FILE *fin;
   int rstatus;
@@ -569,8 +577,8 @@ int do_ingest()
     pclose(fin);
     printf("Stream Mode starting at lev0 recnum = %lld maxrecnum = %lld\n", 
 		recnum0, maxrecnum0);
-    if(recnum0 > maxrecnum0) return(0);		//nothing to do. go wait
-    rstatus = forkstream(recnum0, maxrecnum0);
+    if(recnum0 > maxrecnum0) return(0);	//nothing to do. go wait
+    rstatus = forkstream(recnum0, maxrecnum0, force);
   }
   else {
     //reprocessing mode. use brec/erec and qsub build_lev1 programs
@@ -743,11 +751,18 @@ int main(int argc, char **argv)
     fprintf(stderr, "**Can't open the log file %s\n", logname);
   setup();
   while(wflg) {
-    if(do_ingest()) {        // loop to get files from the lev0
+    if(do_ingest(0)) {        // loop to get files from the lev0
       printk("**ERROR: in do_ingest() for %s\n", open_dsname);
     }
     if(!stream_mode) return(0); //all done for reprocessing
     sleep(10);		//wait for more lev0 to appear
+    if(loopcnt++ == 6) {  //force any left over lev0 records to lev1
+      printk("Timeout: force any left over lev0 to lev1\n");
+      if(do_ingest(1)) {        // process the last lev0 records
+        printk("**ERROR: in do_ingest() for %s\n", open_dsname);
+      }
+      loopcnt = 0;
+    }
     //wflg = 0;
   }
   sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
