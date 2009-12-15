@@ -223,16 +223,21 @@ static int ValidateSeries(DRMS_Env_t *drmsEnv,
 	 segNames = (char **)malloc(sizeof(char *) * nNames);
 	 
 	 /* Set output segment dimension info. */
-	 for (; status == DRMS_SUCCESS && idx < nNames; idx++)
-	 {
-	    DRMS_SegmentInfo_t *aSegInfo = hcon_lookupindex(segProtoI, idx);
-	    segNames[idx] = (char *)malloc(sizeof(char) * DRMS_MAXSEGNAMELEN);
+         HIterator_t hiter;
+         DRMS_SegmentInfo_t *aSegInfo = NULL;
+
+         idx = 0;
+         hiter_new_sort(&hiter, segProtoI, drms_segment_ranksort);
+         while (status == DRMS_SUCCESS && (aSegInfo = hiter_getnext(&hiter)) != NULL)
+         {
+            segNames[idx] = (char *)malloc(sizeof(char) * DRMS_MAXSEGNAMELEN);
 	    strncpy(segNames[idx], aSegInfo->name, DRMS_MAXSEGNAMELEN);
 	    segNames[idx][DRMS_MAXSEGNAMELEN - 1] = '\0';
 
 	    DRMS_Segment_t *segproto = drms_segment_lookup(prototype, segNames[idx]);
 	    status = drms_segment_setdims(segproto, &dims);
-	 }
+            idx++;
+         }
 
 	 snprintf(outSeriesName, size, seriesOutParam);
 	 if (drms_series_exists(drms_env, outSeriesName, &status))
@@ -359,8 +364,8 @@ int DoIt(void)
   double xmag, ymag;
   int length[3];
 
-  char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
-  char *seriesOut = cmdparams_get_str(&cmdparams, kSeriesOut, NULL);
+  const char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
+  const char *seriesOut = cmdparams_get_str(&cmdparams, kSeriesOut, NULL);
   int cols = cmdparams_get_int(&cmdparams, kCols, NULL);
   int rows = cmdparams_get_int(&cmdparams, kRows, NULL);
   LIBASTRO_Interpolation_t scheme = (LIBASTRO_Interpolation_t)(cmdparams_get_int(&cmdparams, 
