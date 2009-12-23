@@ -46,9 +46,9 @@ int DoIt(void)
    sdoorb_stat_t status = kSDOORB_success;
    IORBIT_Info_t *info = NULL;
    IORBIT_Alg_t interpalg;
-   char *orbseries = NULL;
-   char *alg = NULL;
-   char *tgttimesstr = NULL;
+   const char *orbseries = NULL;
+   const char *alg = NULL;
+   const char *tgttimesstr = NULL;
    double *tgttimes = NULL;
    const char *gridtimes = NULL;
    int ntimes = 0;
@@ -68,7 +68,7 @@ int DoIt(void)
       /* read in the tgttimes from a file */
       struct stat stBuf;
       FILE *atfile = NULL;
-      char *filestr = NULL;
+      const char *filestr = NULL;
       char lineBuf[LINE_MAX];
       char *fullline = NULL;
       int stgt = 48;

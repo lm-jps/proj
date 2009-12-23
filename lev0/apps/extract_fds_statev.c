@@ -115,10 +115,8 @@ int nice_intro ()
 
 static VectorCache_t *CreateVectorCache()
 {
-   VectorCache_t *cache = NULL;
-
-   cache = hcon_create(sizeof(VectorNode_t), kTOBSMaxLen, NULL, NULL, NULL, NULL, 0);
-
+   VectorCache_t *cache = (VectorCache_t *)malloc(sizeof(VectorCache_t));
+   hcon_init_ext((HContainer_t *)cache, 49999, sizeof(VectorNode_t), kTOBSMaxLen, NULL, NULL);
    return cache;
 }
 
@@ -152,8 +150,15 @@ static void VCacheCache(VectorCache_t *cache,
 {
    if (cache && tobs && *tobs)
    {
+#if DEBUG
+      /* the time to alloc WAS growing */
+      TIMER_t *timer = CreateTimer();
       VectorNode_t *node = (VectorNode_t *)hcon_allocslot_lower(cache, tobs);
-
+      fprintf(stdout, "alloc slot: %f seconds.\n", GetElapsedTime(timer));
+      DestroyTimer(&timer);
+#else
+      VectorNode_t *node = (VectorNode_t *)hcon_allocslot_lower(cache, tobs);
+#endif
       snprintf(node->tobs, kTOBSMaxLen, "%s", tobs);
 
       if (hcix)
@@ -885,6 +890,11 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
    outVCache = CreateVectorCache();
 
 #if DEBUG
+   Hash_Table_t hash;
+   hash_init(&hash, 49999, 0, (int (*)(const void *, const void *))strcmp, hash_universal_hash);
+#endif
+
+#if DEBUG
    int throttle = 0;
 #endif
 
@@ -921,6 +931,11 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
       }
 
       /* Parsing HELIO data. */
+#if DEBUG
+      TIMER_t *timer = CreateTimer();
+      int nitems = 0;
+#endif
+
       while (!error && fgets(lineBuf, kSVLineMax, datafp) != NULL)
       {
 	 if (oneMore == -1)
@@ -957,22 +972,42 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
 	 if (helioOutVCache)
 	 {
-            VCacheCache(helioOutVCache, 
-                        tbuf, 
-                        &xValHel, 
-                        &yValHel, 
-                        &zValHel, 
-                        &vxValHel, 
-                        &vyValHel, 
-                        &vzValHel,
-                        idHELIO,
-                        NULL,
-                        NULL,
-                        NULL,
-                        NULL,
-                        NULL,
-                        NULL,
-                        NULL);
+#if DEBUG
+            if (nitems < 10000)
+            {
+#endif 
+
+#if DEBUG
+               /* try just hashing, and don't worry about leaking the key */
+               char *buff = malloc(64);
+               snprintf(buff, 64, "test%d", nitems);
+               TIMER_t *timer10 = CreateTimer();
+               hash_insert(&hash, buff, (void *)(buff));
+               hash_lookup(&hash, buff);
+               fprintf(stdout, "hash insert + lookup %f seconds.\n", GetElapsedTime(timer10));
+               DestroyTimer(&timer10);
+#else
+               VCacheCache(helioOutVCache, 
+                           tbuf, 
+                           &xValHel, 
+                           &yValHel, 
+                           &zValHel, 
+                           &vxValHel, 
+                           &vyValHel, 
+                           &vzValHel,
+                           idHELIO,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL);
+#endif
+             
+#if DEBUG  
+            }
+#endif
 	 }
 	 else
 	 {
@@ -982,7 +1017,16 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
             /* Use FetchCachedRecord() directly on the orbit-vector series -
              * this avoids multiple requests to psql; must request times in
              * ascending order to use FetchCachedRecord(). */
-            if (FetchCachedRecord(drmsEnv, outSeries, tbuf, &existRCache, &existRec))
+
+            /* The first time this call is made, a db cursor is created. There is
+             * no need to fetch records older than the time string in tbuf (which
+             * corresponds to the time - double - in od), provided that tbuf
+             * is monotonically increasing in this loop. Provide a filter that 
+             * limits the number of DRMS records cached to speed things up. */
+            char filtered[DRMS_MAXQUERYLEN];
+            snprintf(filtered, sizeof(filtered), "%s[? %s >= $(%s) ?]", outSeries, kObsDateKey, tbuf);
+
+            if (FetchCachedRecord(drmsEnv, filtered, tbuf, &existRCache, &existRec))
             {
                double xValHelSav = drms_getkey_double(existRec, kSVKeyXHELIO, &stat);
                double yValHelSav = drms_getkey_double(existRec, kSVKeyYHELIO, &stat);
@@ -1063,6 +1107,11 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
          {
             addedRecsHELIO++;
          }
+
+#if DEBUG
+         nitems++;
+#endif
+
 #if DEBUG
          throttle++;
 #endif
@@ -1077,9 +1126,14 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 
       } /* end while */
 
+#if DEBUG
+      fprintf(stdout, "Helio ingest time: %f seconds.\n", GetElapsedTime(timer));
+      DestroyTimer(&timer);
+#endif
+
       fclose(datafp);
       datafp = NULL;
-   }
+   } /* end helio-file processing */
 
    /* Cannot use existing existRCache since it was populated from times 
     * from the helio data file, and the geo data file may have different
@@ -1107,6 +1161,10 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
       char lineBuf[kSVLineMax];
       int oneMore = -1;
       int helioexist;
+
+#if DEBUG
+      TIMER_t *timer = CreateTimer();
+#endif 
 
       while (!error && fgets(lineBuf, kSVLineMax, datafp) != NULL)
       {
@@ -1173,7 +1231,16 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
          //DRMS_RecordSet_t *rssav = drms_open_recordset(drmsEnv, query, &stat);
          //FetchCachedRecord(drmsEnv, outSeries, tbuf, &orbitcache, &savrec);
 
-         if (FetchCachedRecord(drmsEnv, outSeries, tbuf, &existRCache, &existRec))
+
+         /* The first time this call is made, a db cursor is created. There is
+          * no need to fetch records older than the time string in tbuf (which
+          * corresponds to the time - double - in od), provided that tbuf
+          * is monotonically increasing in this loop. Provide a filter that 
+          * limits the number of DRMS records cached to speed things up. */
+         char filtered[DRMS_MAXQUERYLEN];
+         snprintf(filtered, sizeof(filtered), "%s[? %s >= $(%s) ?]", outSeries, kObsDateKey, tbuf);
+
+         if (FetchCachedRecord(drmsEnv, filtered, tbuf, &existRCache, &existRec))
          {
             int heliodiff = 0;
             int geodiff = 0;
@@ -1348,9 +1415,14 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 #endif        
       } /* while */
 
+#if DEBUG
+      fprintf(stdout, "Geo ingest time: %f seconds.\n", GetElapsedTime(timer));
+      DestroyTimer(&timer);
+#endif
+
       fclose(datafp);
       datafp = NULL;
-   }
+   } /* end geo-file processing */
 
    CloseCachedRecords(&existRCache);
 
@@ -1442,10 +1514,10 @@ int DoIt(void)
       char serieshist[DRMS_MAXSERIESNAMELEN];
       char *fdsTRange = NULL;
 
-      char *ns = cmdparams_get_str(&cmdparams, "ns", NULL);
-      char *si = cmdparams_get_str(&cmdparams, "seriesIn", NULL);
-      char *so = cmdparams_get_str(&cmdparams, "seriesOut", NULL);
-      char *timeRange = cmdparams_get_str(&cmdparams, "timeRange", NULL);
+      const char *ns = cmdparams_get_str(&cmdparams, "ns", NULL);
+      const char *si = cmdparams_get_str(&cmdparams, "seriesIn", NULL);
+      const char *so = cmdparams_get_str(&cmdparams, "seriesOut", NULL);
+      const char *timeRange = cmdparams_get_str(&cmdparams, "timeRange", NULL);
 
       snprintf(seriesin, sizeof(seriesin), "%s.%s", ns, si);
       snprintf(seriesout, sizeof(seriesout), "%s.%s", ns, so);
