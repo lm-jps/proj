@@ -1,4 +1,4 @@
-#define DEBUG 1
+// #define DEBUG 1
 #define DEBUG 0
 
 /*
@@ -204,7 +204,7 @@ int DoIt(void)
   char *errorreply;
   char reqdir[DRMS_MAXPATHLEN];
   char command[DRMS_MAXPATHLEN];
-  int size;
+  long long size;
   TIME reqtime;
   TIME esttime;
   TIME exptime;
@@ -215,6 +215,9 @@ int DoIt(void)
   DRMS_Record_t *export_rec, *export_log;
   char requestorquery[DRMS_MAXQUERYLEN];
   int status = 0;
+  FILE *fp;
+  char runscript[DRMS_MAXPATHLEN];
+  char *dashp;
 
   const char *dbname = NULL;
   const char *dbuser = NULL;
@@ -250,7 +253,7 @@ int DoIt(void)
      pc += snprintf(dbids + pc, sizeof(dbids) - pc, "JSOC_DBUSER=%s ", dbuser);
   }
 
-  op = cmdparams_get_str (&cmdparams, "op", NULL);
+  op = (char *)cmdparams_get_str (&cmdparams, "op", NULL);
 
   /*  op == process  */
   if (strcmp(op,"process") == 0) 
@@ -284,7 +287,7 @@ int DoIt(void)
       format     = drms_getkey_string(export_log, "Format", NULL);
       reqtime    = drms_getkey_time(export_log, "ReqTime", NULL);
       esttime    = drms_getkey_time(export_log, "EstTime", NULL); // Crude guess for now
-      size       = drms_getkey_int(export_log, "Size", NULL);
+      size       = drms_getkey_longlong(export_log, "Size", NULL);
       requestorid = drms_getkey_int(export_log, "Requestor", NULL);
       printf("New Request #%d/%d: %s, Status=%d, Processing=%s, DataSet=%s, Protocol=%s, Method=%s\n",
 	irec, exports_new->n, requestid, status, process, dataset, protocol, method);
@@ -321,7 +324,7 @@ int DoIt(void)
       drms_setkey_string(export_rec, "Format", format);
       drms_setkey_time(export_rec, "ReqTime", now);
       drms_setkey_time(export_rec, "EstTime", now+10); // Crude guess for now
-      drms_setkey_longlong(export_rec, "Size", (long long)size);
+      drms_setkey_longlong(export_rec, "Size", size);
       drms_setkey_int(export_rec, "Requestor", requestorid);
   
       // check  security risk dataset spec or processing request
@@ -347,59 +350,33 @@ int DoIt(void)
       // in the script may clone as DRMS_TRANSIENT.
       // Remember all modules in this script mut be _sock modules.
 
-      if (  (strcmp(process, "no_op") == 0 ||
-             strcmp(process,"Not Specified")==0 ||
-             strcmp(process, "su_export") == 0) && strcmp(protocol,"as-is")==0)
-        { // export of as-is records that need staging
-        FILE *fp;
-        char runscript[DRMS_MAXPATHLEN];
-        sprintf(runscript, "%s/%s.drmsrun", reqdir, requestid);
-        fp = fopen(runscript, "w");
-        fprintf(fp, "#! /bin/csh -f\n");
-        fprintf(fp, "set echo\n");
-        // force clone with copy segment. 
-  //      fprintf(fp, "set_keys_sock -t -C ds='jsoc.export[%s]' Status=1\n", requestid);
-        fprintf(fp, "set_keys_sock    -C ds='jsoc.export[%s]' Status=1\n", requestid);
-        // Get new SU for the export record
-        fprintf(fp, "set REQDIR = `show_info_sock -q -p 'jsoc.export[%s]'`\n", requestid);
-        // cd to SU in export record
-        fprintf(fp, "cd $REQDIR\n");
-  fprintf(fp, "printenv > %s.env\n", requestid);
-  fprintf(fp, "echo $HOSTNAME\n");
-        // Force staging and get paths to export files with list in index.txt
-        // Use special program for Storage Unit exports vs record sets.
-        if (strcmp(process, "su_export")==0)
-          fprintf(fp, "jsoc_export_SU_as_is_sock ds='%s' requestid=%s\n", dataset, requestid); 
-        else
-          fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid=%s filenamefmt='%s'\n", dataset, requestid, filenamefmt); 
-        fprintf(fp, "set RUNSTAT = $status\n");
-        // convert index.txt list into index.json and index.html packing list files. 
-        fprintf(fp, "if ($RUNSTAT == 0) then\n");
-        fprintf(fp, "  jsoc_export_make_index\n");
-        fprintf(fp, "  set RUNSTAT = $status\n");
-        fprintf(fp, "endif\n");
-        // set status=done and mark this version of the export record permanent
-        fprintf(fp, "if ($RUNSTAT == 0) then\n");
-        fprintf(fp, "  set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
-        // copy the drms_run log file
-        fprintf(fp, "  cp /home/jsoc/exports/tmp/%s.runlog ./%s.runlog \n", requestid, requestid);
-        // make drms_run completion lock file (always do this)
-        fprintf(fp, "  show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
-        fprintf(fp, "else\n");
-        // make drms_run completion lock file (always do this) - drms_server died, so don't use sock version here
-        fprintf(fp, "  show_info -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
-        fprintf(fp, "endif\n");
-        fprintf(fp, "exit $RUNSTAT\n");
-        fclose(fp);
-        chmod(runscript, 0555);
+      // First, prepare initial part of script, same for all processing.
+      sprintf(runscript, "%s/%s.drmsrun", reqdir, requestid);
+      fp = fopen(runscript, "w");
+      fprintf(fp, "#! /bin/csh -f\n");
+      fprintf(fp, "set echo\n");
+      // force clone with copy segment. 
+      fprintf(fp, "set_keys_sock -C ds='jsoc.export[%s]' Status=1\n", requestid);
+      // Get new SU for the export record
+      fprintf(fp, "set REQDIR = `show_info_sock -q -p 'jsoc.export[%s]'`\n", requestid);
+      // cd to SU in export record
+      fprintf(fp, "cd $REQDIR\n");
+      // save some diagnostic info
+      fprintf(fp, "printenv > %s.env\n", requestid);
+      fprintf(fp, "echo $HOSTNAME\n");
+
+      // Now generate specific processing related commands
+      if (strcmp(process, "no_op") == 0 || strcmp(process,"Not Specified")==0) 
+        { // export of as-is records that need staging, get paths to export files with list in index.txt
+        fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid=%s filenamefmt='%s'\n", dataset, requestid, filenamefmt); 
+        }
+      else if (strcmp(process, "su_export") == 0 && strcmp(protocol,"as-is")==0)
+        { // Use special program for Storage Unit exports.
+        fprintf(fp, "jsoc_export_SU_as_is_sock ds='%s' requestid=%s\n", dataset, requestid); 
         }
       else if (strcmp(process, "no_op") == 0 && strncasecmp(protocol,"fits",4)==0)
-        {
-        // No processing but export as full FITS files
-        FILE *fp;
-        char *p, *cparms;
-        char runscript[DRMS_MAXPATHLEN];
-        p = index(protocol, ',');
+        { // No processing but export as full FITS files
+        char *cparms, *p = index(protocol, ',');
         if (p)
           {
           *p = '\0';
@@ -407,55 +384,50 @@ int DoIt(void)
           }
         else
           cparms = "";
-        sprintf(runscript, "%s/%s.drmsrun", reqdir, requestid);
-        fp = fopen(runscript, "w");
-        fprintf(fp, "#! /bin/csh -f\n");
-        fprintf(fp, "set echo\n");
-        fprintf(fp, "set_keys_sock -C ds='jsoc.export[%s]' Status=1\n", requestid);
-
-        // Get new SU for the export record
-        fprintf(fp, "set REQDIR = `show_info_sock -q -p 'jsoc.export[%s]'`\n", requestid);
-        //fprintf(fp, "echo \"REQDIR is $REQDIR (should be a dir before this parenthetical stuff)\"\n");
-
-        // cd to SU in export record
-        fprintf(fp, "cd $REQDIR\n");
-        fprintf(fp, "printenv > %s.env\n", requestid);
-        fprintf(fp, "echo $HOSTNAME\n");
-
-        // Force staging and get paths to export files with list in index.txt
         fprintf(fp, "jsoc_export_as_fits_sock reqid=%s expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol='%s' cparms='%s' %s\n",
           requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, cparms,  dbids);
-        fprintf(fp, "if ($status) exit $status\n");
-
-        // convert index.txt list into index.json and index.html packing list files. 
-        fprintf(fp, "jsoc_export_make_index\n");
-        fprintf(fp, "if ($status) exit $status\n");
-
-        // set status=done and mark this version of the export record permanent
-        fprintf(fp, "set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
-
-        // make drms_run completion lock file
-        fprintf(fp, "show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
-
-        // copy the drms_run log file
-        fprintf(fp, "cp /home/jsoc/exports/tmp/%s.runlog ./%s.runlog \n", requestid, requestid);
-        fclose(fp);
-        chmod(runscript, 0555);
-        }
-      else if (strcmp(process, "su_export") == 0 && strcasecmp(protocol, "tar") == 0)
-        {
-        // make script to tar storage units
-fprintf(stderr,"cant do su_export of tar files yet\n");
         }
       else
         { // Unrecognized processing request
-fprintf(stderr,"XX jsoc_export_manage FAIL Do not know what to do, requestid=%s, process=%s, protocol=%s, method=%s\n",
+        fprintf(stderr,"XX jsoc_export_manage FAIL Do not know what to do, requestid=%s, process=%s, protocol=%s, method=%s\n",
           requestid, process, protocol, method);
         drms_setkey_int(export_log, "Status", 4);
         drms_close_record(export_rec, DRMS_FREE_RECORD);
         continue;
         }
+
+      // Finally, add tail of script used for all processing types.
+      fprintf(fp, "set RUNSTAT = $status\n");
+      // convert index.txt list into index.json and index.html packing list files. 
+      fprintf(fp, "if ($RUNSTAT == 0) then\n");
+      fprintf(fp, "  jsoc_export_make_index\n");
+      fprintf(fp, "  set RUNSTAT = $status\n");
+      fprintf(fp, "endif\n");
+      // create tar file if '-tar' suffix on method
+      dashp = rindex(method, '-');
+      if (dashp && strcmp(dashp, "-tar") == 0)
+        {
+        fprintf(fp, "if ($RUNSTAT == 0) then\n");
+        fprintf(fp, "  tar cf %s.tar *\n", requestid);
+        fprintf(fp, "  set RUNSTAT = $status\n");
+        fprintf(fp, "endif\n");
+        }
+      // set status=done and mark this version of the export record permanent
+      fprintf(fp, "if ($RUNSTAT == 0) then\n");
+      fprintf(fp, "  set_keys_sock ds='jsoc.export[%s]' Status=0\n", requestid);
+      // copy the drms_run log file
+      fprintf(fp, "  cp /home/jsoc/exports/tmp/%s.runlog ./%s.runlog \n", requestid, requestid);
+      // make drms_run completion lock file (always do this)
+      fprintf(fp, "  show_info_sock -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
+      fprintf(fp, "else\n");
+      // make drms_run completion lock file (always do this) - drms_server died, so don't use sock version here
+      fprintf(fp, "  show_info -q -r 'jsoc.export[%s]' > /home/jsoc/exports/tmp/%s.recnum \n", requestid, requestid);
+      fprintf(fp, "endif\n");
+      fprintf(fp, "exit $RUNSTAT\n");
+      fclose(fp);
+      chmod(runscript, 0555);
   
+      // close the current (first) version of the record in jsoc.export
       drms_setkey_int(export_rec, "Status", 1);
       drms_close_record(export_rec, DRMS_INSERT_RECORD);
   
@@ -471,6 +443,7 @@ fprintf(stderr,"XX jsoc_export_manage FAIL Do not know what to do, requestid=%s,
       if (system(command))
         DIE("Submission of qsub command failed");
   
+      // Mark the record in jsoc.export_new as accepted for processing.
       drms_setkey_int(export_log, "Status", 1);
       printf("Request %s submitted\n",requestid);
       } // end looping on new export requests
