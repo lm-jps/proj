@@ -366,15 +366,7 @@ int DoIt(void)
       fprintf(fp, "echo $HOSTNAME\n");
 
       // Now generate specific processing related commands
-      if (strcmp(process, "no_op") == 0 || strcmp(process,"Not Specified")==0) 
-        { // export of as-is records that need staging, get paths to export files with list in index.txt
-        fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid=%s filenamefmt='%s'\n", dataset, requestid, filenamefmt); 
-        }
-      else if (strcmp(process, "su_export") == 0 && strcmp(protocol,"as-is")==0)
-        { // Use special program for Storage Unit exports.
-        fprintf(fp, "jsoc_export_SU_as_is_sock ds='%s' requestid=%s\n", dataset, requestid); 
-        }
-      else if (strcmp(process, "no_op") == 0 && strncasecmp(protocol,"fits",4)==0)
+      if (strcmp(process, "no_op") == 0 && strncasecmp(protocol,"fits",4)==0)
         { // No processing but export as full FITS files
         char *cparms, *p = index(protocol, ',');
         if (p)
@@ -384,8 +376,16 @@ int DoIt(void)
           }
         else
           cparms = "";
-        fprintf(fp, "jsoc_export_as_fits_sock reqid=%s expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' method=%s protocol='%s' cparms='%s' %s\n",
+        fprintf(fp, "jsoc_export_as_fits_sock reqid='%s' expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' method='%s' protocol='%s' cparms='%s' %s\n",
           requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, cparms,  dbids);
+        }
+      else if (strcmp(process, "no_op") == 0 || strcmp(process,"Not Specified")==0) 
+        { // export of as-is records that need staging, get paths to export files with list in index.txt
+        fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid='%s' method='%s' protocol='%s' filenamefmt='%s'\n", dataset, requestid, method, protocol, filenamefmt); 
+        }
+      else if (strcmp(process, "su_export") == 0 && strcmp(protocol,"as-is")==0)
+        { // Use special program for Storage Unit exports.
+        fprintf(fp, "jsoc_export_SU_as_is_sock ds='%s' requestid=%s\n", dataset, requestid); 
         }
       else
         { // Unrecognized processing request
@@ -408,7 +408,7 @@ int DoIt(void)
       if (dashp && strcmp(dashp, "-tar") == 0)
         {
         fprintf(fp, "if ($RUNSTAT == 0) then\n");
-        fprintf(fp, "  tar cf %s.tar *\n", requestid);
+        fprintf(fp, "  tar chf %s.tar *\n", requestid);
         fprintf(fp, "  set RUNSTAT = $status\n");
         fprintf(fp, "endif\n");
         }
