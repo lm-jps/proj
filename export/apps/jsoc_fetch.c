@@ -25,6 +25,7 @@
 #define kArgSeg		"seg"
 #define kArgProcess	"process"
 #define kArgFormat	"format"
+#define kArgFormatvar	"formatvar"
 #define kArgMethod	"method"
 #define kArgProtocol	"protocol"
 #define kArgFilenamefmt	"filenamefmt"
@@ -73,6 +74,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, kArgProtocol, "as-is", "exported file protocol"},
   {ARG_STRING, kArgFilenamefmt, "{seriesname}.{recnum:%d}.{segment}", "exported file filename format"},
   {ARG_STRING, kArgFormat, "json", "return content type"},
+  {ARG_STRING, kArgFormatvar, kNotSpecified, "return json in object format"},
   {ARG_STRING, kArgMethod, "url", "return method"},
   {ARG_STRING, kArgFile, kNotSpecified, "uploaded file contents"},
   {ARG_FLAG, "h", "0", "help - show usage"},
@@ -436,6 +438,7 @@ int DoIt(void)
   long requestorid;
   const char *notify;
   const char *format;
+  const char *formatvar;
   const char *shipto;
   const char *method;
   const char *protocol;
@@ -451,15 +454,13 @@ int DoIt(void)
   double waittime;
   char *web_query;
   int from_web,status;
-  int dojson=1, dotxt=0, dohtml=0, doxml=0;
+  int dodataobj=1, dojson=1, dotxt=0, dohtml=0, doxml=0;
   DRMS_RecordSet_t *exports;
   DRMS_Record_t *export_log;
   char new_requestid[200];
   char status_query[1000];
   char *export_series; 
   int is_POST = 0;
-
-  dojson=1; dotxt=0; dohtml=0; doxml=0;
 
   if (nice_intro ()) return (0);
 
@@ -515,6 +516,7 @@ int DoIt(void)
   seglist = cmdparams_get_str (&cmdparams, kArgSeg, NULL);
   process = cmdparams_get_str (&cmdparams, kArgProcess, NULL);
   format = cmdparams_get_str (&cmdparams, kArgFormat, NULL);
+  formatvar = cmdparams_get_str (&cmdparams, kArgFormatvar, NULL);
   method = cmdparams_get_str (&cmdparams, kArgMethod, NULL);
   protocol = cmdparams_get_str (&cmdparams, kArgProtocol, NULL);
   filenamefmt = cmdparams_get_str (&cmdparams, kArgFilenamefmt, NULL);
@@ -523,6 +525,7 @@ int DoIt(void)
   shipto = cmdparams_get_str (&cmdparams, kArgShipto, NULL);
   requestorid = cmdparams_get_int (&cmdparams, kArgRequestorid, NULL);
 
+  dodataobj = strcmp(formatvar, "dataobj") == 0;
   dojson = strcmp(format, "json") == 0;
   dotxt = strcmp(format, "txt") == 0;
   dohtml = strcmp(format, "html") == 0;
@@ -637,16 +640,20 @@ int DoIt(void)
         char numval[50];
         json_t *jroot = json_new_object();
         json_t *data;
-        data = json_new_array();
+        if (dodataobj)
+          data = json_new_object();
+        else
+          data = json_new_array();
+
         for (i=0; i < count; i++)
           {
           json_t *suobj = json_new_object();
           char *jsonstr;
           char numval[40];
+          char *sunumstr = NULL;
           sprintf(numval,"%lld",sunums[i]);
-          jsonstr = string_to_json(numval); // send as string in case long long fails
-          json_insert_pair_into_object(jroot, kArgSunum, json_new_string(jsonstr));
-          free(jsonstr);
+          sunumstr = string_to_json(numval); // send as string in case long long fails
+          json_insert_pair_into_object(jroot, "sunum", json_new_string(sunumstr));
           jsonstr = string_to_json(series[i]);
           json_insert_pair_into_object(suobj, "series", json_new_string(jsonstr));
           free(jsonstr);
@@ -655,9 +662,18 @@ int DoIt(void)
           free(jsonstr);
           json_insert_pair_into_object(suobj, "sustatus", json_new_string(sustatus[i]));
           json_insert_pair_into_object(suobj, "susize", json_new_string(susize[i]));
-
-          json_insert_child(data, suobj);
+          if (dodataobj)
+            {
+            json_t *suLabel = json_new_string(sunumstr);
+            json_insert_child(suLabel,suobj);
+            json_insert_child(data, suLabel);
+            }
+          else
+            json_insert_child(data, suobj);
+          if (sunumstr)
+            free(sunumstr);
           }
+        
         sprintf(numval, "%d", count);
         json_insert_pair_into_object(jroot, "count", json_new_number(numval));
         sprintf(numval, "%lld", size);
@@ -1106,10 +1122,6 @@ check for requestor to be valid remote DRMS site
             waittime = 999999;
             errorreply = "Request was completed but is now deleted, 7 day limit exceeded";
             break;
-    case 7:
-            errorreply = NULL;
-	    waittime = 0;
-            break;
     default:
       JSONDIE("Illegal status in export record");
     }
@@ -1215,7 +1227,7 @@ check for requestor to be valid remote DRMS site
           json_insert_pair_into_object(jroot, "error", json_new_string(strval));
           free(strval);
           }
-        if (status > 2 && status < 7)
+        if (status > 2 )
           {
           strval = string_to_json("jsoc_help@jsoc.stanford.edu");
           json_insert_pair_into_object(jroot, "contact", json_new_string(strval));
@@ -1240,7 +1252,7 @@ check for requestor to be valid remote DRMS site
 	printf("size=%lld\n",size);
         if (errorreply)
 	  printf("error=\"%s\"\n", errorreply);
-	if (status > 2 && status < 7)
+	if (status > 2)
           {
 	  printf("contact=jsoc_help@jsoc.stanford.edu\n");
           }
