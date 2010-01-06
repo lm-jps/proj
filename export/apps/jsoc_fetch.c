@@ -14,9 +14,39 @@
 #include <time.h>
 
 
-#define EXPORT_SERIES "jsoc.export"
-#define EXPORT_SERIES_NEW "jsoc.export_new"
-#define EXPORT_USER "jsoc.export_user"
+#define kExportSeries "jsoc.export"
+#define kExportSeriesNew "jsoc.export_new"
+#define kExportUser "jsoc.export_user"
+
+#define kArgOp		"op"
+#define kArgRequestid	"requestid"
+#define kArgDs		"ds"
+#define kArgSunum	"sunum"
+#define kArgSeg		"seg"
+#define kArgProcess	"process"
+#define kArgFormat	"format"
+#define kArgMethod	"method"
+#define kArgProtocol	"protocol"
+#define kArgFilenamefmt	"filenamefmt"
+#define kArgRequestor	"requestor"
+#define kArgNotify	"notify"
+#define kArgShipto	"shipto"
+#define kArgRequestorid	"requestorid"
+#define kArgFile	"file"
+
+#define kOpSeriesList	"series_list"	// show_series
+#define kOpSeriesStruct	"series_struct"	// jsoc_info, series structure, ike show_info -l -s
+#define kOpRsSummary	"rs_summary"	// jsoc_info, recordset summary, like show_info -c
+#define kOpRsList	"rs_list"	// jsoc_info, recordset list, like show_info key=... seg=... etc.
+#define kOpRsImage	"rs_image"	// not used yet
+#define kOpExpRequest	"exp_request"	// jsoc_fetch, initiate export request
+#define kOpExpRepeat	"exp_repeat"	// jsoc_fetch, initiate export repeat
+#define kOpExpStatus	"exp_status"	// jsoc_fetch, get status of pending export
+#define kOpExpSu	"exp_su"	// jsoc_fetch, export SUs  from list of sunums
+#define kOpExpKinds	"exp_kinds"	// not used yet
+#define kOpExpHistory	"exp_history"	// not used yet
+
+#define kNotSpecified	"Not Specified"
 
 int dojson, dotxt, dohtml, doxml;
 
@@ -29,36 +59,24 @@ static char x2c (char *what) {
   return (digit);
 }
 
-static void CGI_unescape_url (char *url) {
-  register int x, y;
-
-  for (x = 0, y = 0; url[y]; ++x, ++y) {
-    if ((url[x] = url[y]) == '%') {
-      url[x] = x2c (&url[y+1]);
-      y += 2;
-    }
-  }
-  url[x] = '\0';
-}
-
 ModuleArgs_t module_args[] =
 { 
-  {ARG_STRING, "op", "Not Specified", "<Operation>"},
-  {ARG_STRING, "ds", "Not Specified", "<record_set query>"},
-  {ARG_STRING, "seg", "Not Specified", "<record_set segment list>"},
-  {ARG_STRING, "sunum", "Not Specified", "<sunum list for SU exports>"},
-  {ARG_STRING, "requestid", "Not Specified", "JSOC export request identifier"},
-  {ARG_STRING, "process", "Not Specified", "string containing program and arguments"},
-  {ARG_STRING, "requestor", "Not Specified", "name of requestor"},
-  {ARG_STRING, "notify", "Not Specified", "email address of requestor"},
-  {ARG_STRING, "shipto", "Not Specified", "mail address of requestor"},
-  {ARG_STRING, "protocol", "as-is", "exported file protocol"},
-  {ARG_STRING, "filenamefmt", "{seriesname}.{recnum:%d}.{segment}", "exported file filename format"},
-  {ARG_STRING, "formatvar", "Not Specified", "return json in object format"},
-  {ARG_STRING, "format", "json", "return content type"},
-  {ARG_STRING, "method", "url", "return method"},
+  {ARG_STRING, kArgOp, kNotSpecified, "<Operation>"},
+  {ARG_STRING, kArgDs, kNotSpecified, "<record_set query>"},
+  {ARG_STRING, kArgSeg, kNotSpecified, "<record_set segment list>"},
+  {ARG_STRING, kArgSunum, kNotSpecified, "<sunum list for SU exports>"},
+  {ARG_STRING, kArgRequestid, kNotSpecified, "JSOC export request identifier"},
+  {ARG_STRING, kArgProcess, kNotSpecified, "string containing program and arguments"},
+  {ARG_STRING, kArgRequestor, kNotSpecified, "name of requestor"},
+  {ARG_STRING, kArgNotify, kNotSpecified, "email address of requestor"},
+  {ARG_STRING, kArgShipto, kNotSpecified, "mail address of requestor"},
+  {ARG_STRING, kArgProtocol, "as-is", "exported file protocol"},
+  {ARG_STRING, kArgFilenamefmt, "{seriesname}.{recnum:%d}.{segment}", "exported file filename format"},
+  {ARG_STRING, kArgFormat, "json", "return content type"},
+  {ARG_STRING, kArgMethod, "url", "return method"},
+  {ARG_STRING, kArgFile, kNotSpecified, "uploaded file contents"},
   {ARG_FLAG, "h", "0", "help - show usage"},
-  {ARG_STRING, "QUERY_STRING", "Not Specified", "AJAX query from the web"},
+  {ARG_STRING, "QUERY_STRING", kNotSpecified, "AJAX query from the web"},
   {ARG_END}
 };
 
@@ -89,14 +107,6 @@ int nice_intro ()
     return(1);
     }
   return (0);
-  }
-
-// function to check web-provided arguments that will end up on command line
-int illegalArg(char *arg)
-  {
-  if (index(arg, ';'))
-     return(1);
-  return(0);
   }
 
 char *json_text_to_string(char *in)
@@ -170,6 +180,7 @@ void drms_sprint_rec_query(char *text, DRMS_Record_t *rec)
  * so no directory file need be built.  The json structure will have 3 elements
  * added:
  *   size : size in bytes
+ *   rcount : number of records
  *   count : number of files
  *   data  : array of count objects containing
  *         record : record query with segment name suffix
@@ -186,12 +197,13 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
   char recpath[DRMS_MAXPATHLEN];
   char segpath[DRMS_MAXPATHLEN];
   int i;
-  int count;
+  int count = 0;
+  int rcount = rs->n;
   json_t *data;
   DRMS_Record_t *rec;
   data = json_new_array();
   count = 0;
-  for (i=0; i < rs->n; i++)
+  for (i=0; i < rcount; i++)
     {
     DRMS_Segment_t *seg;
     HIterator_t *hit = NULL;
@@ -222,9 +234,11 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
     }
   if (jroot) // i.e. if dojson, else will be NULL for the dotxt case.
     {
+    sprintf(numval, "%d", rcount);
+    json_insert_pair_into_object(jroot, "rcount", json_new_number(numval));
     sprintf(numval, "%d", count);
     json_insert_pair_into_object(jroot, "count", json_new_number(numval));
-    sprintf(numval, "%ld", size);
+    sprintf(numval, "%lld", size);
     json_insert_pair_into_object(jroot, "size", json_new_number(numval));
     json_insert_pair_into_object(jroot, "dir", json_new_string(""));
     json_insert_pair_into_object(jroot, "data", data);
@@ -232,8 +246,9 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
   else
     {
     json_t *recobj = data->child;
+    printf("rcount=%d\n", rcount);
     printf("count=%d\n", count);
-    printf("size=%ld\n", size);
+    printf("size=%lld\n", size);
     printf("dir=/\n");
     printf("# DATA\n");
     while (recobj)
@@ -295,7 +310,9 @@ SUM_info_t *drms_get_suinfo(long long sunum)
 #define JSONDIE2(msg,info) {die(dojson,msg,info,"4");return(1);}
 #define JSONDIE3(msg,info) {die(dojson,msg,info,"6");return(1);}
 
-die(int dojson, char *msg, char *info, char *stat)
+int fileupload = 0;
+
+int die(int dojson, char *msg, char *info, char *stat)
   {
   char *msgjson;
   char errval[10];
@@ -311,7 +328,10 @@ if (DEBUG) fprintf(stderr,"%s%s\n",msg,info);
     json_insert_pair_into_object(jroot, "status", json_new_number(stat));
     json_insert_pair_into_object(jroot, "error", json_new_string(msgjson));
     json_tree_to_string(jroot,&json);
-    printf("Content-type: application/json\n\n");	
+    if (fileupload)  // The returned json should be in the implied <body> tag for iframe requests.
+      printf("Content-type: text/html\n\n");
+    else
+      printf("Content-type: application/json\n\n");
     printf("%s\n",json);
     }
   else
@@ -325,7 +345,7 @@ if (DEBUG) fprintf(stderr,"%s%s\n",msg,info);
   return(1);
   }
 
-send_file(DRMS_Record_t *rec, int segno)
+int send_file(DRMS_Record_t *rec, int segno)
   {
   DRMS_Segment_t *seg = drms_segment_lookupnum(rec, 0);
   char path[DRMS_MAXPATHLEN];
@@ -358,34 +378,50 @@ fprintf(stderr,"path: %s\n",path);
     fputc(b, stdout);
   fclose(fp);
   fflush(stdout);
+  return(0);
   }
 
-/* For now, this processes JUST the arguments used by VSO - op, method, format, protocol, ds */
-#define kArgOp        "op"
-#define kArgMeth      "method"
-#define kArgFormat    "format"
-#define kArgFormatvar "formatvar"
-#define kArgProto     "protocol"
-#define kArgDS        "ds"
+// function to check web-provided arguments that will end up on command line
+int illegalArg(char *arg)
+  {
+  if (index(arg, ';'))
+     return(1);
+  return(0);
+  }
 
-static int SetPostArg(Q_ENTRY *req, const char *key)
-{
-   int err = 0;
-   char *value = NULL;
- 
-   if (req)
+static int SetWebArg(Q_ENTRY *req, const char *key)
    {
-      value = (char *)qEntryGetStr(req, key);
-
-      if (value)
+   char *value = NULL;
+   if (req)
       {
-         cmdparams_set(&cmdparams, key, value);
-         err = (NULL == value);
+      value = (char *)qEntryGetStr(req, key);
+      if (value)
+         {
+         if (illegalArg(value))
+            JSONDIE("Illegal text in arg");
+         if (!cmdparams_set(&cmdparams, key, value))
+	    JSONDIE("CommandLine Error");
+         }
       }
+   return(0);
    }
 
-   return err;
-}
+static int SetWebFileArg(Q_ENTRY *req, const char *key)
+   {
+   char *value = NULL;
+   int len;
+   char keyname[100], length[20];
+   SetWebArg(req, key);     // get contents of upload file
+   sprintf(keyname, "%s.length", key);
+   len = qEntryGetInt(req, keyname);
+   sprintf(length, "%d", len);
+   cmdparams_set(&cmdparams, keyname, length);
+   sprintf(keyname, "%s.filename", key);
+   SetWebArg(req, keyname);     // get name of upload file
+   sprintf(keyname, "%s.contenttype", key);
+   SetWebArg(req, keyname);     // get name of upload file
+   return(0);
+   }
 
 /* Module main function. */
 int DoIt(void)
@@ -400,7 +436,6 @@ int DoIt(void)
   long requestorid;
   const char *notify;
   const char *format;
-  const char *formatvar;
   const char *shipto;
   const char *method;
   const char *protocol;
@@ -408,6 +443,7 @@ int DoIt(void)
   char *errorreply;
   const char *sunumlist;
   long long size;
+  int rcount = 0;
   TIME reqtime;
   TIME esttime;
   TIME exptime;
@@ -415,99 +451,84 @@ int DoIt(void)
   double waittime;
   char *web_query;
   int from_web,status;
-  int dodataobj=1, dojson=1, dotxt=0, dohtml=0, doxml=0; //ISS added dodataobj
+  int dojson=1, dotxt=0, dohtml=0, doxml=0;
   DRMS_RecordSet_t *exports;
   DRMS_Record_t *export_log;
   char new_requestid[200];
   char status_query[1000];
   char *export_series; 
+  int is_POST = 0;
 
   dojson=1; dotxt=0; dohtml=0; doxml=0;
 
   if (nice_intro ()) return (0);
 
   web_query = strdup (cmdparams_get_str (&cmdparams, "QUERY_STRING", NULL));
-  from_web = strcmp (web_query, "Not Specified") != 0;
+  from_web = strcmp (web_query, kNotSpecified) != 0;
 
   if (from_web)
-  {
-     char *getstring, *p;
+     {
      const char * rmeth = NULL;
+     Q_ENTRY *req = NULL;
 
       /* Use qDecoder to parse HTTP POST requests. qDecoder actually handles 
-      * HTTP GET requests as well, so we don't really need a code branch here.
-      * But since the older GET code already works, I won't touch it. qDecoder 
-      * is a better solution though, as it is robust and well-tested. */
-
-     /* Differentiate between HTTP GET and POST. */
+       * HTTP GET requests as well.
+       * See http://www.qdecoder.org
+       */
 
      /* Use the REQUEST_METHOD environment variable as a indicator of 
       * a POST request. */
      rmeth = cmdparams_get_str(&cmdparams, "REQUEST_METHOD", NULL);
+     is_POST = strcasecmp(rmeth, "post") == 0;
 
-     if (strcasecmp(rmeth, "post") == 0)
-     {
-        /* This is an HTTP POST request */
-        Q_ENTRY *req = NULL;
-
-        req = qCgiRequestParse(NULL);
-
-        if (req)
+     req = qCgiRequestParseQueries(NULL, NULL);
+     if (req)
         {
-           /* Accept only known key-value pairs - ignore the rest. */
-           SetPostArg(req, kArgOp);
-           SetPostArg(req, kArgMeth);
-           SetPostArg(req, kArgFormat);
-           SetPostArg(req, kArgFormatvar);
-           SetPostArg(req, kArgProto);
-           SetPostArg(req, kArgDS);
+        /* Accept only known key-value pairs - ignore the rest. */
+	SetWebArg(req, kArgOp);
+	SetWebArg(req, kArgRequestid);
+	SetWebArg(req, kArgDs);
+	SetWebArg(req, kArgSunum);
+	SetWebArg(req, kArgSeg);
+	SetWebArg(req, kArgProcess);
+	SetWebArg(req, kArgFormat);
+	SetWebArg(req, kArgMethod);
+	SetWebArg(req, kArgProtocol);
+	SetWebArg(req, kArgFilenamefmt);
+	SetWebArg(req, kArgRequestor);
+	SetWebArg(req, kArgNotify);
+	SetWebArg(req, kArgShipto);
+	SetWebArg(req, kArgRequestorid);
+        if (strcmp(cmdparams_get_str (&cmdparams, kArgDs, NULL),"*file*") == 0);
+	  SetWebFileArg(req, kArgFile);
 
-           qEntryFree(req); 
+        qEntryFree(req); 
         }
      }
-     else
-     {
-        CGI_unescape_url(web_query);
-        getstring = strdup (web_query);
-        for (p=strtok(getstring,"&"); p; p=strtok(NULL, "&"))
-        {
-           char *key=p, *val=index(p,'=');
-           if (!val)
-             JSONDIE("Bad QUERY_STRING");
-           *val++ = '\0';
-           if (illegalArg(val))
-             JSONDIE("Illegal text in arg");
-           cmdparams_set(&cmdparams, key, val);
-        }
-        free(getstring);
-     }
-  }
-
   free(web_query);
+  // From here on, called as cgi-bin same as from command line
 
-  op = cmdparams_get_str (&cmdparams, "op", NULL);
-  requestid = cmdparams_get_str (&cmdparams, "requestid", NULL);
-  in = cmdparams_get_str (&cmdparams, "ds", NULL);
-  sunumlist = cmdparams_get_str (&cmdparams, "sunum", NULL);
-  seglist = cmdparams_get_str (&cmdparams, "seg", NULL);
-  process = cmdparams_get_str (&cmdparams, "process", NULL);
-  formatvar = cmdparams_get_str (&cmdparams, "formatvar", NULL);//ISS
-  format = cmdparams_get_str (&cmdparams, "format", NULL);
-  method = cmdparams_get_str (&cmdparams, "method", NULL);
-  protocol = cmdparams_get_str (&cmdparams, "protocol", NULL);
-  filenamefmt = cmdparams_get_str (&cmdparams, "filenamefmt", NULL);
-  requestor = cmdparams_get_str (&cmdparams, "requestor", NULL);
-  notify = cmdparams_get_str (&cmdparams, "notify", NULL);
-  shipto = cmdparams_get_str (&cmdparams, "shipto", NULL);
-  requestorid = cmdparams_get_int (&cmdparams, "requestorid", NULL);
+  op = cmdparams_get_str (&cmdparams, kArgOp, NULL);
+  requestid = cmdparams_get_str (&cmdparams, kArgRequestid, NULL);
+  in = cmdparams_get_str (&cmdparams, kArgDs, NULL);
+  sunumlist = cmdparams_get_str (&cmdparams, kArgSunum, NULL);
+  seglist = cmdparams_get_str (&cmdparams, kArgSeg, NULL);
+  process = cmdparams_get_str (&cmdparams, kArgProcess, NULL);
+  format = cmdparams_get_str (&cmdparams, kArgFormat, NULL);
+  method = cmdparams_get_str (&cmdparams, kArgMethod, NULL);
+  protocol = cmdparams_get_str (&cmdparams, kArgProtocol, NULL);
+  filenamefmt = cmdparams_get_str (&cmdparams, kArgFilenamefmt, NULL);
+  requestor = cmdparams_get_str (&cmdparams, kArgRequestor, NULL);
+  notify = cmdparams_get_str (&cmdparams, kArgNotify, NULL);
+  shipto = cmdparams_get_str (&cmdparams, kArgShipto, NULL);
+  requestorid = cmdparams_get_int (&cmdparams, kArgRequestorid, NULL);
 
-  dodataobj = strcmp(formatvar, "dataobj") == 0; //ISS
   dojson = strcmp(format, "json") == 0;
   dotxt = strcmp(format, "txt") == 0;
   dohtml = strcmp(format, "html") == 0;
   doxml = strcmp(format, "xml") == 0;
 
-  export_series = EXPORT_SERIES;
+  export_series = kExportSeries;
 
   long long sunums[DRMS_MAXQUERYLEN/8];  // should be enough!
   char *paths[DRMS_MAXQUERYLEN/8];
@@ -517,7 +538,7 @@ int DoIt(void)
   int expsucount;
 
   /*  op == exp_su - export Storage Units */
-  if (strcmp(op,"exp_su") == 0)
+  if (strcmp(op, kOpExpSu) == 0)
     {
     char *this_sunum, *sunumlist, *sunumlistptr;
     long long sunum;
@@ -525,7 +546,7 @@ int DoIt(void)
     int status=0;
     int all_online;
 
-    export_series = EXPORT_SERIES_NEW;
+    export_series = kExportSeriesNew;
     // Do survey of sunum list
     size=0;
     all_online = 1;
@@ -550,7 +571,7 @@ int DoIt(void)
       sunumlist = NULL;
       sinfo = drms_get_suinfo(sunum);
       if (!sinfo)
-      {
+         {
          *onlinestat = 'I';
          sunums[count] = sunum;
          paths[count] = strdup("NA");
@@ -558,14 +579,14 @@ int DoIt(void)
          sustatus[count] = strdup(onlinestat);
          susize[count] = strdup("0");
          count++;
-      }
+         }
       else
-      {
+         {
          size += sinfo->bytes;
          dirsize = sinfo->bytes;
 
          if (strcmp(sinfo->online_status,"Y")==0)
-         {
+            {
             int y,m,d,hr,mn;
             char sutime[50];
             sscanf(sinfo->effective_date,"%4d%2d%2d%2d%2d", &y,&m,&d,&hr,&mn);
@@ -573,21 +594,21 @@ int DoIt(void)
             expire = (sscan_time(sutime) - now)/86400.0;
             snprintf(supath, sizeof(supath), "%s", sinfo->online_loc);
             *onlinestat = 'Y';
-         }
+            }
          if (strcmp(sinfo->online_status,"N")==0 || expire < 3)
-         {  // need to stage or reset retention time
+            {  // need to stage or reset retention time
             all_online = 0;
 
             if (strcmp(sinfo->archive_status, "N") == 0)
-            {
+               {
                *onlinestat = 'X';
                dirsize = 0;
-            }
+               }
             else
-            {
+               {
                *onlinestat = 'N';
+               }
             }
-         }
 
          sunums[count] = sunum;
          paths[count] = strdup(supath);
@@ -597,7 +618,7 @@ int DoIt(void)
          susize[count] = strdup(yabuff);
 
          count += 1;
-      }
+         }
       }
 
     expsucount = count;
@@ -616,63 +637,39 @@ int DoIt(void)
         char numval[50];
         json_t *jroot = json_new_object();
         json_t *data;
-        //ISS add dodataobj check
-        if (dodataobj) {
-          data = json_new_object();
-        } else {
-          data = json_new_array();
-        }
-
+        data = json_new_array();
         for (i=0; i < count; i++)
           {
           json_t *suobj = json_new_object();
           char *jsonstr;
-          char *sunumstr = NULL;  //ISS
           char numval[40];
           sprintf(numval,"%lld",sunums[i]);
-          sunumstr   = string_to_json(numval); // send as string in case long long fails
-
-          json_insert_pair_into_object(suobj, "sunum", json_new_string(sunumstr));
-
+          jsonstr = string_to_json(numval); // send as string in case long long fails
+          json_insert_pair_into_object(jroot, kArgSunum, json_new_string(jsonstr));
+          free(jsonstr);
           jsonstr = string_to_json(series[i]);
           json_insert_pair_into_object(suobj, "series", json_new_string(jsonstr));
           free(jsonstr);
-
           jsonstr = string_to_json(paths[i]);
           json_insert_pair_into_object(suobj, "path", json_new_string(jsonstr));
           free(jsonstr);
-
           json_insert_pair_into_object(suobj, "sustatus", json_new_string(sustatus[i]));
           json_insert_pair_into_object(suobj, "susize", json_new_string(susize[i]));
 
-          //ISS add dodataobj check
-          if (dodataobj) {
-            json_t *suLabel = json_new_string(sunumstr);
-            json_insert_child(suLabel,suobj);
-            json_insert_child(data, suLabel);
-          } else {
-            json_insert_child(data, suobj);
+          json_insert_child(data, suobj);
           }
-
-          if (sunumstr)
-          {
-             free(sunumstr);
-          }
-
-          }
-
         sprintf(numval, "%d", count);
         json_insert_pair_into_object(jroot, "count", json_new_number(numval));
         sprintf(numval, "%lld", size);
         json_insert_pair_into_object(jroot, "size", json_new_number(numval));
         json_insert_pair_into_object(jroot, "dir", json_new_string(""));
         json_insert_pair_into_object(jroot, "data", data);
-        json_insert_pair_into_object(jroot, "requestid", json_new_string(""));
-        strval = string_to_json(method);
-        json_insert_pair_into_object(jroot, "method", json_new_string(strval));
+        json_insert_pair_into_object(jroot, kArgRequestid, json_new_string(""));
+        strval = string_to_json((char *)method);
+        json_insert_pair_into_object(jroot, kArgMethod, json_new_string(strval));
         free(strval);
-        strval = string_to_json(protocol);
-        json_insert_pair_into_object(jroot, "protocol", json_new_string(strval));
+        strval = string_to_json((char *)protocol);
+        json_insert_pair_into_object(jroot, kArgProtocol, json_new_string(strval));
         free(strval);
         json_insert_pair_into_object(jroot, "wait", json_new_number("0"));
         json_insert_pair_into_object(jroot, "status", json_new_number("0"));
@@ -688,7 +685,7 @@ int DoIt(void)
         printf("Content-type: text/plain\n\n");
         printf("# JSOC Quick Data Export of as-is files.\n");
         printf("status=0\n");
-        printf("requestid=\"Not Specified\"\n");
+        printf("requestid=\"%s\"\n", kNotSpecified);
         printf("method=%s\n", method);
         printf("protocol=%s\n", protocol);
         printf("wait=0\n");
@@ -720,7 +717,7 @@ int DoIt(void)
     // Add Requestor info to jsoc.export_user series 
     // Can not watch for new information since can not read this series.
     //   start by looking up requestor 
-    if (strcmp(requestor, "Not Specified") != 0)
+    if (strcmp(requestor, kNotSpecified) != 0)
       {
 #ifdef SHOULD_BE_HERE
 check for requestor to be valid remote DRMS site
@@ -753,8 +750,9 @@ check for requestor to be valid remote DRMS site
     drms_setkey_int(export_log, "Requestor", requestorid);
     drms_close_record(export_log, DRMS_INSERT_RECORD); 
     } // end of exp_su
+
   /*  op == exp_request  */
-  else if (strcmp(op,"exp_request") == 0) 
+  else if (strcmp(op,kOpExpRequest) == 0) 
     {
     int status=0;
     int segcount = 0;
@@ -762,39 +760,68 @@ check for requestor to be valid remote DRMS site
     int all_online = 1;
     char dsquery[DRMS_MAXQUERYLEN];
     char *p;
+    char *file, *filename;
+    int filesize;
     DRMS_RecordSet_t *rs;
-    export_series = EXPORT_SERIES_NEW;
+    export_series = kExportSeriesNew;
+
     size=0;
     strncpy(dsquery,in,DRMS_MAXQUERYLEN);
-    if (index(dsquery,'[') == NULL)
+    fileupload = strcmp(dsquery, "*file*") == 0;
+    if (fileupload)  // recordset passed as uploaded file
       {
-      char *cb = index(dsquery, '{');
-      if (cb)
-        {
-        char *cbin = index(in, '{');
-        strcpy(cb, "[]");
-        strcat(dsquery, cbin);
+      file = (char *)cmdparams_get_str (&cmdparams, kArgFile, NULL);
+      filesize = cmdparams_get_int (&cmdparams, kArgFile".length", NULL);
+      filename = (char *)cmdparams_get_str (&cmdparams, kArgFile".filename", NULL);
+      if (filesize >= DRMS_MAXQUERYLEN)
+        { //  must use file for all processing
+// XXXXXX need to deal with big files
         }
-      else
-        strcat(dsquery,"[]");
+      else // can treat as command line arg by changing newlines to commas
+        {
+        int i;
+        char c, *p = dsquery;
+        strcpy(dsquery, file);
+        for (i=0; (c = file[i]) && i<DRMS_MAXQUERYLEN; i++)
+          {
+          if (c == '\n')
+            *p++ = ',';
+          else if (c == '\r')
+            continue;
+          else
+            *p++ = c;
+          }
+        *p = '\0';
+        if (p > dsquery && *(p-1) == ',')
+          *(p-1) = '\0';
+        }
       }
-    if (strcmp(seglist,"Not Specified") != 0)
+    else // normal request, check for embedded segment list
       {
-      if (index(dsquery,'{') != NULL)
-        JSONDIE("Can not give segment list both in key and explicitly in recordset.");
-      strncat(dsquery, "{", DRMS_MAXQUERYLEN);
-      strncat(dsquery, seglist, DRMS_MAXQUERYLEN);
-      strncat(dsquery, "}", DRMS_MAXQUERYLEN);
+      if (index(dsquery,'[') == NULL)
+        {
+        char *cb = index(dsquery, '{');
+        if (cb)
+          {
+          char *cbin = index(in, '{');
+          strcpy(cb, "[]");
+          strcat(dsquery, cbin);
+          }
+        else
+          strcat(dsquery,"[]");
+        }
+      if ((p=index(dsquery,'{')) != NULL && strncmp(p+1, "**ALL**", 7) == 0)
+        *p = '\0';
       }
-    if ((p=index(dsquery,'{')) != NULL && strncmp(p+1, "**ALL**", 7) == 0)
-      *p = '\0';
+
     rs = drms_open_records(drms_env, dsquery, &status);
     if (!rs)
 	JSONDIE2("Can not open RecordSet: ",dsquery);
-
+    rcount = rs->n;
+  
     // Do survey of recordset
     all_online = 1;
-    for (irec=0; irec < rs->n; irec++) 
+    for (irec=0; irec < rcount; irec++) 
       {
       // Must check each segment since some may be linked and offline.
       DRMS_Record_t *rec = rs->records[irec];
@@ -805,36 +832,37 @@ check for requestor to be valid remote DRMS site
         DRMS_Record_t *segrec = seg->record;
         SUM_info_t *sinfo = drms_get_suinfo(segrec->sunum);
         if (!sinfo)
-	  JSONDIE2("Bad sunum in a record in RecordSet: ", dsquery);
-	if (strcmp(sinfo->online_status,"N") == 0)
-            all_online = 0;
+          JSONDIE2("Bad sunum in a record in RecordSet: ", dsquery);
+  	if (strcmp(sinfo->online_status,"N") == 0)
+          all_online = 0;
         else
-            {
-            struct stat buf;
-	    char path[DRMS_MAXPATHLEN];
-	    drms_record_directory(segrec, path, 0);
-
-            drms_segment_filename(seg, path);
-            if (stat(path, &buf) != 0)
-	      JSONDIE2("Bad path (stat failed) in a record in RecordSet: ", dsquery);
-            size += buf.st_size;
-            segcount += 1;
-            }
-         }
+          {
+          struct stat buf;
+  	  char path[DRMS_MAXPATHLEN];
+  	  drms_record_directory(segrec, path, 0);
+          drms_segment_filename(seg, path);
+          if (stat(path, &buf) != 0)
+  	    JSONDIE2("Bad path (stat failed) in a record in RecordSet: ", dsquery);
+          size += buf.st_size;
+          segcount += 1;
+          }
+        }
       if (segp)
         free(segp); 
       }
     if (my_sum)
       SUM_close(my_sum,printkerr);
+  
+    // Exit if no records found
+    if ((strcmp(method,"url_quick")==0 && (strcmp(protocol,"as-is")==0) || strcmp(protocol,"su")==0) && segcount == 0)
+      JSONDIE("There are no files in this RecordSet");
 
     // Do quick export if possible
-    if (strcmp(method,"url_quick")==0 && (strcmp(protocol,"as-is")==0 || strcmp(protocol,"su")==0) && segcount == 0)
-      JSONDIE("There are no files in this RecordSet");
-    if (strcmp(method,"url_quick")==0 && (strcmp(protocol,"as-is")==0 || strcmp(protocol,"su")==0) && all_online)
+    if ((strcmp(method,"url_quick")==0 && (strcmp(protocol,"as-is")==0) || strcmp(protocol,"su")==0) && all_online)
       {
       if (0 && segcount == 1) // If only one file then do immediate delivery of that file.
         {
-	send_file(rs->records[0], 0);
+        return(send_file(rs->records[0], 0));
         }
       else if (dojson)
         {
@@ -843,33 +871,36 @@ check for requestor to be valid remote DRMS site
         int count;
         json_t *jroot = json_new_object();
         count = quick_export_rs(jroot, rs, 0, size); // add count, size, and array data of names and paths
-        json_insert_pair_into_object(jroot, "requestid", json_new_string(""));
+        json_insert_pair_into_object(jroot, kArgRequestid, json_new_string(""));
         // free(strval);
-        strval = string_to_json(method);
-        json_insert_pair_into_object(jroot, "method", json_new_string(strval));
+        strval = string_to_json((char *)method);
+        json_insert_pair_into_object(jroot, kArgMethod, json_new_string(strval));
         free(strval);
-        strval = string_to_json(protocol);
-        json_insert_pair_into_object(jroot, "protocol", json_new_string(strval));
+        strval = string_to_json((char *)protocol);
+        json_insert_pair_into_object(jroot, kArgProtocol, json_new_string(strval));
         free(strval);
         json_insert_pair_into_object(jroot, "wait", json_new_number("0"));
         json_insert_pair_into_object(jroot, "status", json_new_number("0"));
         json_tree_to_string(jroot,&json);
-        printf("Content-type: application/json\n\n");
+        if (fileupload)  // The returned json should be in the implied <body> tag for iframe requests.
+           printf("Content-type: text/html\n\n");
+        else
+          printf("Content-type: application/json\n\n");
         printf("%s\n",json);
         fflush(stdout);
         free(json);
         }  
       else
-	{
-	printf("Content-type: text/plain\n\n");
-	printf("# JSOC Quick Data Export of as-is files.\n");
-	printf("status=0\n");
-	printf("requestid=\"Not Specified\"\n");
-	printf("method=%s\n", method);
-	printf("protocol=%s\n", protocol);
-	printf("wait=0\n");
+        {
+        printf("Content-type: text/plain\n\n");
+        printf("# JSOC Quick Data Export of as-is files.\n");
+  	printf("status=0\n");
+  	printf("requestid=\"%s\"\n", kNotSpecified);
+  	printf("method=%s\n", method);
+  	printf("protocol=%s\n", protocol);
+  	printf("wait=0\n");
         quick_export_rs(NULL, rs, 0, size); // add count, size, and array data of names and paths
-	}
+  	}
       return(0);
       }
 
@@ -889,13 +920,13 @@ check for requestor to be valid remote DRMS site
     // Add Requestor info to jsoc.export_user series 
     // Can not watch for new information since can not read this series.
     //   start by looking up requestor 
-    if (strcmp(requestor, "Not Specified") != 0)
+    if (strcmp(requestor, kNotSpecified) != 0)
       {
       DRMS_Record_t *requestor_rec;
 #ifdef IN_MY_DREAMS
       DRMS_RecordSet_t *requestor_rs;
       char requestorquery[2000];
-      sprintf(requestorquery, "%s[? Requestor = '%s' ?]", EXPORT_USER, requestor);
+      sprintf(requestorquery, "%s[? Requestor = '%s' ?]", kExportUser, requestor);
       requestor_rs = drms_open_records(drms_env, requestorquery, &status);
       if (!requestor_rs)
         JSONDIE("Cant find requestor info series");
@@ -903,7 +934,7 @@ check for requestor to be valid remote DRMS site
         { // First request for this user
         drms_close_records(requestor_rs, DRMS_FREE_RECORD);
 #endif
-        requestor_rec = drms_create_record(drms_env, EXPORT_USER, DRMS_PERMANENT, &status);
+        requestor_rec = drms_create_record(drms_env, kExportUser, DRMS_PERMANENT, &status);
         if (!requestor_rec)
           JSONDIE("Cant create new user info record");
         requestorid = requestor_rec->recnum;
@@ -946,15 +977,86 @@ check for requestor to be valid remote DRMS site
     drms_setkey_int(export_log, "Status", 2);
     drms_setkey_int(export_log, "Requestor", requestorid);
     drms_close_record(export_log, DRMS_INSERT_RECORD);
+    } // End of kOpExpRequest setup
+  /*  op == exp_repeat  */
+  else if (strcmp(op,kOpExpRepeat) == 0) 
+    {
+    DRMS_RecordSet_t *RsClone;
+    char logpath[DRMS_MAXPATHLEN];
+    now = timenow();
+
+    if (strcmp(requestid, kNotSpecified) == 0)
+      JSONDIE("RequestID must be provided");
+
+    // First check status in jsoc.export 
+    export_series = kExportSeries;
+    sprintf(status_query, "%s[%s]", export_series, requestid);
+    exports = drms_open_records(drms_env, status_query, &status);
+    if (!exports)
+      JSONDIE3("Cant locate export series: ", status_query);
+    if (exports->n < 1)
+      JSONDIE3("Cant locate export request: ", status_query);
+    status = drms_getkey_int(exports->records[0], "Status", NULL);
+    if (status != 0)
+      JSONDIE("Can't re-request a failed or incomplete prior request");
+    // if sunum and su exist, then just want the retention updated.  This will
+    // be accomplished by checking the record_directory.
+    if (drms_record_directory(export_log, logpath, 0) != DRMS_SUCCESS || *logpath == '\0')
+      {  // really is no SU so go ahead and resubmit the request
+      drms_close_records(exports, DRMS_FREE_RECORD);
+  
+      // new email provided, update with new requestorid
+      if (strcmp(notify, kNotSpecified) != 0)
+        {
+        DRMS_Record_t *requestor_rec;
+        requestor_rec = drms_create_record(drms_env, kExportUser, DRMS_PERMANENT, &status);
+        if (!requestor_rec)
+          JSONDIE("Cant create new user info record");
+        requestorid = requestor_rec->recnum;
+        drms_setkey_int(requestor_rec, "RequestorID", requestorid);
+        drms_setkey_string(requestor_rec, "Requestor", "NA");
+        drms_setkey_string(requestor_rec, "Notify", notify);
+        drms_setkey_string(requestor_rec, "ShipTo", "NA");
+        drms_setkey_time(requestor_rec, "FirstTime", now);
+        drms_setkey_time(requestor_rec, "UpdateTime", now);
+        drms_close_record(requestor_rec, DRMS_INSERT_RECORD);
+        }
+      else
+        requestorid = 0;
+
+      // Now switch to jsoc.export_new
+      export_series = kExportSeriesNew;
+      sprintf(status_query, "%s[%s]", export_series, requestid);
+      exports = drms_open_records(drms_env, status_query, &status);
+      if (!exports)
+        JSONDIE3("Cant locate export series: ", status_query);
+      if (exports->n < 1)
+        JSONDIE3("Cant locate export request: ", status_query);
+      RsClone = drms_clone_records(exports, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
+      if (!RsClone)
+        JSONDIE("Cant create new export control record");
+      export_log = RsClone->records[0];
+      drms_setkey_int(export_log, "Status", 2);
+      if (requestorid)
+        drms_setkey_int(export_log, "Requestor", requestorid);
+      drms_setkey_time(export_log, "ReqTime", now);
+      drms_close_records(RsClone, DRMS_INSERT_RECORD);
+      }
+    else // old export is still available, do not repeat, but treat as status request.
+      {
+      drms_close_records(exports, DRMS_FREE_RECORD);
+      }
+    // if repeating export then export_series is set to jsoc.export_new
+    // else if just touching retention then is it jsoc_export
     }
 
   // Now report back to the requestor by dropping into the code for status request.
   // This is entry point for status request and tail of work for exp_request and exp_su
   // If data was as-is and online and url_quick the exit will have happened above.
 
-  // op = exp_status
+  // op = exp_status, kOpExpStatus,  Implied here
 
-  if (strcmp(requestid, "Not Specified") == 0)
+  if (strcmp(requestid, kNotSpecified) == 0)
     JSONDIE("RequestID must be provided");
 
   sprintf(status_query, "%s[%s]", export_series, requestid);
@@ -1004,6 +1106,10 @@ check for requestor to be valid remote DRMS site
             waittime = 999999;
             errorreply = "Request was completed but is now deleted, 7 day limit exceeded";
             break;
+    case 7:
+            errorreply = NULL;
+	    waittime = 0;
+            break;
     default:
       JSONDIE("Illegal status in export record");
     }
@@ -1017,14 +1123,48 @@ check for requestor to be valid remote DRMS site
     json_t *jsonval;
     json_t *jroot=NULL;
 
-    if (status > 0)
+    if (status == 0)
+      {
+      // this what the user has been waiting for.  The export record segment dir should
+      // contain a file containing the json to be returned to the user.  The dir will be returned as well as the file.
+      char logpath[DRMS_MAXPATHLEN];
+      FILE *fp;
+      int c;
+      char *indexfile = (dojson ? "index.json" : "index.txt");
+      jroot = json_new_object();
+      if (drms_record_directory(export_log, logpath, 0) != DRMS_SUCCESS || *logpath == '\0')
+        {
+        status = 5;  // Assume storage unit expired.  XXXX better to do SUMinfo here to check
+        waittime = 999999;
+        errorreply = "Request was completed but is now deleted, 7 day limit exceeded";
+        }
+      else  
+        {
+        strncat(logpath, "/", DRMS_MAXPATHLEN);
+        strncat(logpath, indexfile, DRMS_MAXPATHLEN);
+        fp = fopen(logpath, "r");
+        if (!fp)
+          JSONDIE2("Export should be complete but return %s file not found", indexfile);
+  
+        if (dojson)
+          printf("Content-type: application/json\n\n");
+        else
+	  printf("Content-type: text/plain\n\n");
+        while ((c = fgetc(fp)) != EOF)
+          putchar(c);
+        fclose(fp);
+        fflush(stdout);
+        }
+      }
+
+    if (status > 0) // not complete or failure exit path
       {
       if (dojson)
 	{
         jroot = json_new_object();
         json_t *data = NULL;
 
-        if (strcmp(op, "exp_su") == 0)
+        if (strcmp(op, kOpExpSu) == 0)
         {
            int i;
            data = json_new_array();
@@ -1035,7 +1175,7 @@ check for requestor to be valid remote DRMS site
               char numval[40];
               sprintf(numval,"%lld",sunums[i]);
               jsonstr = string_to_json(numval); // send as string in case long long fails
-              json_insert_pair_into_object(jroot, "sunum", json_new_string(jsonstr));
+              json_insert_pair_into_object(jroot, kArgSunum, json_new_string(jsonstr));
               free(jsonstr);
               jsonstr = string_to_json(series[i]);
               json_insert_pair_into_object(suobj, "series", json_new_string(jsonstr));
@@ -1049,44 +1189,45 @@ check for requestor to be valid remote DRMS site
               json_insert_child(data, suobj);
            }
         }
-
+        // in all cases, return status and requestid
         sprintf(numval, "%d", status);
         json_insert_pair_into_object(jroot, "status", json_new_number(numval));
-        strval = string_to_json(requestid);
-        json_insert_pair_into_object(jroot, "requestid", json_new_string(strval));
+        strval = string_to_json((char *)requestid);
+        json_insert_pair_into_object(jroot, kArgRequestid, json_new_string(strval));
         free(strval);
-        strval = string_to_json(method);
-        json_insert_pair_into_object(jroot, "method", json_new_string(strval));
+        strval = string_to_json((char *)method);
+        json_insert_pair_into_object(jroot, kArgMethod, json_new_string(strval));
         free(strval);
-        strval = string_to_json(protocol);
-        json_insert_pair_into_object(jroot, "protocol", json_new_string(strval));
+        strval = string_to_json((char *)protocol);
+        json_insert_pair_into_object(jroot, kArgProtocol, json_new_string(strval));
         free(strval);
         sprintf(numval, "%1.0lf", waittime);
         json_insert_pair_into_object(jroot, "wait", json_new_number(numval));
-        sprintf(numval, "%ld", size);
+        sprintf(numval, "%d", rcount);
+        json_insert_pair_into_object(jroot, "rcount", json_new_number(numval));
+        sprintf(numval, "%lld", size);
         json_insert_pair_into_object(jroot, "size", json_new_number(numval));
-
-        if (strcmp(op, "exp_su") == 0)
-        {
+        if (strcmp(op, kOpExpSu) == 0)
            json_insert_pair_into_object(jroot, "data", data);
-        }
-
-        if (errorreply)
+        if (errorreply) 
           {
           strval = string_to_json(errorreply);
           json_insert_pair_into_object(jroot, "error", json_new_string(strval));
           free(strval);
           }
-        if (status > 2)
+        if (status > 2 && status < 7)
           {
           strval = string_to_json("jsoc_help@jsoc.stanford.edu");
           json_insert_pair_into_object(jroot, "contact", json_new_string(strval));
           free(strval);
           }
         json_tree_to_string(jroot,&json);
-        printf("Content-type: application/json\n\n");
-        printf("%s\n",json);
-        }
+        if (fileupload)  // The returned json should be in the implied <body> tag for iframe requests.
+  	  printf("Content-type: text/html\n\n");
+        else
+          printf("Content-type: application/json\n\n");
+	printf("%s\n",json);
+	}
       else
         {
 	printf("Content-type: text/plain\n\n");
@@ -1096,64 +1237,39 @@ check for requestor to be valid remote DRMS site
         printf("method=%s\n", method);
         printf("protocol=%s\n", protocol);
         printf("wait=%f\n",waittime);
-	printf("size=%ld\n",size);
+	printf("size=%lld\n",size);
         if (errorreply)
 	  printf("error=\"%s\"\n", errorreply);
-	if (status > 2)
-        {
+	if (status > 2 && status < 7)
+          {
 	  printf("contact=jsoc_help@jsoc.stanford.edu\n");
-        }
-        else if (strcmp(op, "exp_su") == 0)
-        {
+          }
+        else if (strcmp(op, kOpExpSu) == 0)
+          {
            int i;
            printf("# DATA\n");
            for (i = 0; i < expsucount; i++)
-           {
-              printf("%lld\t%s\t%s\t%s\t%s\n", sunums[i], series[i], paths[i], sustatus[i], susize[i]);
-           }
+             {
+             printf("%lld\t%s\t%s\t%s\t%s\n", sunums[i], series[i], paths[i], sustatus[i], susize[i]);
+             }
+          }
         }
-        }
-      fflush(stdout);
-      }
-    else  // (status == 0)
-      {
-      // this what the user has been waiting for.  The export record segment dir should
-      // contain a file containing the json to be returned to the user.  The dir will be returned as well as the file.
-      char logpath[DRMS_MAXPATHLEN];
-      FILE *fp;
-      int c;
-      char *indexfile = (dojson ? "index.json" : "index.txt");
-      jroot = json_new_object();
-      drms_record_directory(export_log, logpath, 0);
-      strncat(logpath, "/", DRMS_MAXPATHLEN);
-      strncat(logpath, indexfile, DRMS_MAXPATHLEN);
-      fp = fopen(logpath, "r");
-      if (!fp)
-        JSONDIE2("Export should be complete but return %s file not found", indexfile);
-
-      if (dojson)
-        printf("Content-type: application/json\n\n");
-      else
-	printf("Content-type: text/plain\n\n");
-      while ((c = fgetc(fp)) != EOF)
-        putchar(c);
-      fclose(fp);
       fflush(stdout);
       }
     }
 
-  if (strcmp(op, "exp_su") == 0)
-  {
+  if (strcmp(op, kOpExpSu) == 0)
+    {
      /* free everything */
      int i;
      for (i = 0; i < expsucount; i++)
-     {
+       {
         free(series[i]);
         free(paths[i]);
         free(sustatus[i]);
         free(susize[i]);
-     }
-  }
+       }
+    }
 
   return(0);
   }
