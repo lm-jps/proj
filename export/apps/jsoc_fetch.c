@@ -826,6 +826,14 @@ check for requestor to be valid remote DRMS site
         else
           strcat(dsquery,"[]");
         }
+      if (strcmp(seglist,kNotSpecified) != 0)
+        {
+        if (index(dsquery,'{') != NULL)
+          JSONDIE("Can not give segment list both in key and explicitly in recordset.");
+        strncat(dsquery, "{", DRMS_MAXQUERYLEN);
+        strncat(dsquery, seglist, DRMS_MAXQUERYLEN);
+        strncat(dsquery, "}", DRMS_MAXQUERYLEN);
+        }
       if ((p=index(dsquery,'{')) != NULL && strncmp(p+1, "**ALL**", 7) == 0)
         *p = '\0';
       }
