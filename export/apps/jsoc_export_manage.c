@@ -375,7 +375,7 @@ int DoIt(void)
           cparms = p+1;
           }
         else
-          cparms = "";
+          cparms = "**NONE**";
         fprintf(fp, "jsoc_export_as_fits_sock reqid='%s' expversion=%s rsquery='%s' path=$REQDIR ffmt='%s' method='%s' protocol='%s' cparms='%s' %s\n",
           requestid, PACKLIST_VER, dataset, filenamefmt, method, protocol, cparms,  dbids);
         }
