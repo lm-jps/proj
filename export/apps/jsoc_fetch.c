@@ -493,6 +493,7 @@ int DoIt(void)
 	SetWebArg(req, kArgSeg);
 	SetWebArg(req, kArgProcess);
 	SetWebArg(req, kArgFormat);
+	SetWebArg(req, kArgFormatvar);
 	SetWebArg(req, kArgMethod);
 	SetWebArg(req, kArgProtocol);
 	SetWebArg(req, kArgFilenamefmt);
@@ -653,7 +654,7 @@ int DoIt(void)
           char *sunumstr = NULL;
           sprintf(numval,"%lld",sunums[i]);
           sunumstr = string_to_json(numval); // send as string in case long long fails
-          json_insert_pair_into_object(jroot, "sunum", json_new_string(sunumstr));
+          json_insert_pair_into_object(suobj, "sunum", json_new_string(sunumstr));
           jsonstr = string_to_json(series[i]);
           json_insert_pair_into_object(suobj, "series", json_new_string(jsonstr));
           free(jsonstr);
