@@ -500,7 +500,7 @@ int DoIt(void)
 	SetWebArg(req, kArgNotify);
 	SetWebArg(req, kArgShipto);
 	SetWebArg(req, kArgRequestorid);
-        if (strcmp(cmdparams_get_str (&cmdparams, kArgDs, NULL),"*file*") == 0);
+        if (strncmp(cmdparams_get_str (&cmdparams, kArgDs, NULL),"*file*", 6) == 0);
 	  SetWebFileArg(req, kArgFile);
 
         qEntryFree(req); 
@@ -783,7 +783,7 @@ check for requestor to be valid remote DRMS site
 
     size=0;
     strncpy(dsquery,in,DRMS_MAXQUERYLEN);
-    fileupload = strcmp(dsquery, "*file*") == 0;
+    fileupload = strncmp(dsquery, "*file*", 6) == 0;
     if (fileupload)  // recordset passed as uploaded file
       {
       file = (char *)cmdparams_get_str (&cmdparams, kArgFile, NULL);
@@ -797,15 +797,28 @@ check for requestor to be valid remote DRMS site
         {
         int i;
         char c, *p = dsquery;
+        int newline = 1;
+        int discard = 0;
         strcpy(dsquery, file);
         for (i=0; (c = file[i]) && i<DRMS_MAXQUERYLEN; i++)
           {
-          if (c == '\n')
-            *p++ = ',';
-          else if (c == '\r')
+          if (newline && c == '#') // discard comment lines
+            discard = 1;
+          if (c == '\r')
             continue;
+          if (c == '\n')
+            {
+            if (!newline && !discard)
+              *p++ = ',';
+            newline = 1;
+            discard = 0;
+            }
           else
-            *p++ = c;
+            {
+            if (!discard)
+              *p++ = c;
+            newline = 0;
+            }
           }
         *p = '\0';
         if (p > dsquery && *(p-1) == ',')
