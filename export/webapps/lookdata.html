@@ -3,9 +3,48 @@
 <HEAD>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; CHARSET=iso-8859-1">
 <TITLE>JSOC Lookdata</TITLE>
-<SCRIPT TYPE="text/javascript" SRC="js/prototype-1.6.1_rc3.js"></SCRIPT>
+
+<!-- activewidgets fix box model in firefox/safari/opera -->
+<style type="text/css">
+        .aw-quirks * {
+                box-sizing: border-box;
+                -moz-box-sizing: border-box;
+                -webkit-box-sizing: border-box;
+        }
+
+        // body {font: 12px Tahoma}
+</style>
+
+<SCRIPT TYPE="text/javascript" SRC="js/prototype-1.6.1.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/cookies.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
+<SCRIPT TYPE="text/javascript" SRC="js/ActiveWidgets/runtime/lib/aw.js"></SCRIPT>
+<LINK HREF="js/ActiveWidgets/runtime/styles/system/aw.css" rel="stylesheet">
+<!-- add activewidgets image libraries -->
+<link href="js/ActiveWidgets/mini.css" rel="stylesheet"></link>
+
+<!-- activewidgets change default styles, set control size and position -->
+<style type="text/css">
+
+#LookdataTabs {width: 100%}
+#LookdataTabs-item-0 {font-size: medium}
+#LookdataTabs-item-1 {font-size: medium}
+#LookdataTabs-item-2 {font-size: medium}
+#LookdataTabs-item-3 {font-size: medium}
+#LookdataTabs-item-4 {font-size: medium}
+
+#ValueGrid { width: 400px}
+#ValueGrid .aw-grid-row {height: 24px; border-bottom: 1px solid #bbb}
+#ValueGrid .aw-alternate-even {background: #dde;}
+#ValueGrid .aw-alternate-odd {background: #ded;}
+#ValueGrid .aw-mouseover-row {background: #ddd;} 
+#ValueGrid .aw-rows-selected {background: #FFFFFF;}
+#ValueGrid .aw-column-0 {width: 50px; border-right: 1px dotted #bbb;}
+#ValueGrid .aw-grid-cell {font-family: "DejaVu Sans Mono",monospace; font-size: 12;}
+#ValueGrid .aw-grid-header {font-family: "DejaVu Sans Mono",monospace; font-size: 12;}
+
+</style>
+
 <link rel="stylesheet" type="text/css" href="css/prototip.css" ></link>
 
 <style type="text/css">
@@ -24,6 +63,7 @@
 #SeriesSelect { width:40em; }
 #KeysSelect { width:20em; }
 #SegsSelect { width:20em; }
+#LinksSelect { width:20em; }
 #SeriesFilter { width:20em; }
 #RecordSet { width:35em; font-size:100%; }
 #SeriesButton { width:15em; }
@@ -57,28 +97,97 @@ var nsegsselected = 0;
 var RecordCount = 0;
 var askedCount = 0;
 var KeyValsFetched = 0;
-var TipsEnabled;
+var TipsEnabled=1;
+var TabsEnabled=1;
 var TipsCreated = 0;
+var MaxRecs = 0;
 
 var GetSeriesObject;
 var GetValuesObject;
+var valuegrid;
+var gridmade = 0;
+var CWide;
+var CHeight;
 
+
+// ActiveWidgets Tab setup
+var tabnames = ["Series Select", "Series Content", "RecordSet Select", "Values Display", "Export Data"];
+var tabvalues = ["TabSeriesSelectDiv",  "TabSeriesStructDiv", "TabRecSetDiv", "TabDisplayDiv", "TabExportDiv"];
+var tabs = new AW.UI.Tabs;
+var tabseries = 0;
+var tabkeytable = 1;
+var tabrecset = 2;
+var tabdisplay = 3;
+var tabexport = 4;
+
+function definetabs()
+        {
+        tabs.setId("LookdataTabs");
+        tabs.setItemText(tabnames);
+        tabs.setItemValue(tabvalues); // store ids of content DIVs
+        tabs.setItemCount(5);
+        tabs.refresh();
+
+        tabs.setSelectedItems([tabseries]); // load the first page.
+        }
+
+tabs.onSelectedItemsChanged = function(selected)
+  {
+  if (!TabsEnabled) return;
+  var i, divs = $("JsocLookdata").childNodes;
+  for(i=0; i < divs.length; i++)
+    {
+    if (divs[i].style)
+      {
+      divs[i].style.display = "none"; // hide all elements
+      }
+    }
+
+  var index = selected[0];
+  var value = this.getItemValue(index);
+  // document.getElementById(value).style.display = "block"; // show selected
+  $(value).style.display = "block"; // show selected
+  }
+
+function ToggleTabs()
+  {
+  if (TabsEnabled)
+    {
+    var i, divs = $("JsocLookdata").childNodes;
+    for(i=0; i < divs.length; i++)
+      {
+      if (divs[i].style)
+        {
+        divs[i].style.display = "block"; // hide all elements
+        }
+      }
+    $("TabsOnOffButton").value = "Enable Tabs";
+    $("LookdataTabs").innerHTML = "";
+    TabsEnabled = 0;
+    }
+  else
+    {
+    $("TabsOnOffButton").value = "Disable Tabs";
+    TabsEnabled = 1;
+    definetabs();
+    }
+  }
 
 function InitPage()
   {
   $("SeriesFilter").value = "NOT ^dsds\\.";
   CleanSeriesSelect();
-  $("RequestID").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-  $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-  $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  // $("RequestID").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  // $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  // $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   $("QueryDivCheck").checked = 0;
   $("QueryDiv").style.display="none";
-  $("WhereClausesHelpDiv").style.display="none";
+  // $("WhereClausesHelpDiv").style.display="none";
   // AbortGetKeyValues(); ---- do not do this here!!
   // GetSeriesAbort(); ---- do not do this here!!
-  ClearStatus();
+  CleanSeriesSelect();
+  // ClearStatus();
   }
-
 
 function CleanSeriesSelect()
   {
@@ -91,6 +200,8 @@ function CleanSeriesSelect()
 
 function CleanSeriesInfo()
   {
+  MaxRecs = 0;
+  $("RecordLimit").value = "none";
   SeriesName = "";
   $("RecordSet").value = "";
   $("SeriesButton").disabled = false;
@@ -108,7 +219,7 @@ function CleanSeriesPick()
   {
   $("KeyListPlace").innerHTML = "All Keywords";
   $("SegListPlace").innerHTML = "All Segments";
-  $("LinkListPlace").innerHTML = "";
+  $("LinkListPlace").innerHTML = "All Links";
   $("DisplayPlace").innerHTML = "";
   KeyList = "";
   SegList = "";
@@ -121,9 +232,7 @@ function CleanSeriesPick()
   nlinksselected = 0;
   askedCount = 0;
   $("WantRecInfo").checked = 1;
-  $("WantLinkInfo").checked = 0;
   $("WantFullSegInfo").checked = 0;
-  $("WantLinkDiv").style.display="none";
   $("AllowBigQueries").checked = 0;
   $("RecSetPlace").innerHTML = "";
   $("MakeLocalFileLinks").checked = 0;
@@ -137,27 +246,34 @@ function CleanKeysSelect()
     $("KeysSelect").remove(i-1);
   for (var i=$("SegsSelect").length; i > 0; i--)
     $("SegsSelect").remove(i-1);
+  for (var i=$("LinksSelect").length; i > 0; i--)
+    $("LinksSelect").remove(i-1);
   $("DisplayPlace").innerHTML = "";
   $("SegListPlace").innerHTML = "";
   $("LinkListPlace").innerHTML = "";
   $("KeyListPlace").innerHTML = "";
   KeyList =  "";
   SegList =  "";
+  LinkList =  "";
+  gridmade = 0;
   CleanOnLoad();
   }
 
 function CleanOnLoad()
   {
+  definetabs();
+  Element.hide('systemWorking');
   $("AbortGetSeriesButton").hide();
   $("AbortKeyValsButton").hide();
   $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
   $("SeriesButton").style.backgroundColor = "#FFFF80";
-  $("SeriesDiv").style.display="block";
-  $("SeriesDivButton").style.backgroundColor = "FFD8D8";
-  $("FullInfoDiv").style.display="block";
+  // $("SeriesDiv").style.display="block";
+  // $("FullInfoDiv").style.display="block";
   // $("FullInfoDivButton").style.backgroundColor = "FFD8D8";
   CreateTips();
-  $("TipsOnOffButton").value = "Turn Help Off";
+  $("TipsOnOffButton").value = "Disable Help";
+  $("TabsOnOffButton").value = "Disable Tabs";
+  newwide();
   }
 
 function CreateTips()
@@ -200,50 +316,15 @@ function ToggleHelp()
   if (TipsEnabled)
     {
     HideTips();
-    $("TipsOnOffButton").value = "Turn Help On";
+    $("TipsOnOffButton").value = "Enable Help";
     TipsEnabled = 0;
     }
   else
     {
     CreateTips();
-    $("TipsOnOffButton").value = "Turn Help Off";
+    $("TipsOnOffButton").value = "Disable Help";
     TipsEnabled = 1;
     }
-  }
-
-// Hide and show DIVs on button click.
-// Arg is div id.
-// Button id should be div id with suffix of "Button"
-
-function ToggleSectionDiv(divname)
-{
-  var button = $(divname + "Button");
-  var div = $(divname);
-  if (div.style.display == "block")
-    {
-    button.style.backgroundColor = "D8FFD8";
-    button.value = "Show Section";
-    div.style.display="none";
-    }
-  else
-    {
-    button.style.backgroundColor = "FFD8D8";
-    button.value = "Hide Section";
-    div.style.display="block";
-    }
-  }
-
-// Hide and show DIVS on checkbox change.
-// Checkbox id should be div id with suffix of "ChecK"
-
-function CheckBoxChangeDiv(divname)
-  {
-  var chbox = $(divname + "Check");
-  var div = $(divname);
-  if (chbox.checked == 0)
-    div.style.display="none";
-  else
-    div.style.display="block";
   }
 
  function QueryDivCheckToggle()
@@ -377,7 +458,7 @@ function PickSeries(mode)
   $("Series_Name_Place").innerHTML = SeriesName;
   $("RecSetPlace").innerHTML = SeriesName;
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info_test',
     {
     method: 'get',
     parameters: {"ds" : SeriesName, "op" : "series_struct" },
@@ -401,31 +482,30 @@ function PickSeries(mode)
         $("Series_Info_Place").innerHTML = "Series Description: " + SeriesInfo.note;
 
         // Get list of prime keys and index keys and display info
+        // Get prime key special info from primekeys array, but
+        // get prime keyword type and units, defaults, from matching keywords array element
         var QueryBoxes = "<TABLE>";
-	nprimes = SeriesInfo.primekeys.length;
+	nprimes = SeriesInfo.primekeysinfo.length;
 	var primes = "No PrimeKeys";
-        if (nprimes == 1 && SeriesInfo.primekeys[0] == null)
+        if (nprimes == 1 && SeriesInfo.primekeysinfo[0] == null)
           nprimes = 0;
 	if (nprimes > 0)
 	  for (i=0; i<nprimes; i++)
             {
             if (i==0)
-	        primes = SeriesInfo.primekeys[0];
+	        primes = SeriesInfo.primekeysinfo[0].name;
             else
-	        primes = primes + ", " + SeriesInfo.primekeys[i];
-            var s, k;
+	        primes = primes + ", " + SeriesInfo.primekeysinfo[i].name;
+            var k;
             for (k=0; k<SeriesInfo.keywords.length; k++)
-               if (SeriesInfo.keywords[k].name === SeriesInfo.primekeys[i])
+               if (SeriesInfo.keywords[k].name === SeriesInfo.primekeysinfo[i].name)
                   break;
-            for (s=0; s<SeriesInfo.keywords.length; s++)
-               if (SeriesInfo.keywords[s].name === SeriesInfo.primekeys[i]+"_index")
-                  break;
-            var isslotted = s < SeriesInfo.keywords.length;
+            var isslotted = SeriesInfo.primekeysinfo[i].slotted;
             QueryBoxes = QueryBoxes + 
-                "<TR><TD>" + SeriesInfo.primekeys[i] + "</TD>" + 
+                "<TR><TD>" + SeriesInfo.primekeysinfo[i].name + "</TD>" + 
                 "<TD align='right'>" + "[&nbsp;&nbsp;<input id='Prime" + i +
                 "' type='text' value='' onChange='QueryBuild();' >&nbsp;&nbsp;]</TD>" +
-                "<TD> (" + SeriesInfo.keywords[k].type + (isslotted ? "-slotted" : "") + ")</TD>";
+                "<TD> (" + SeriesInfo.keywords[k].type + (isslotted ? "-slotted, " + SeriesInfo.primekeysinfo[i].step : "") + ")</TD>";
             if (SeriesInfo.keywords[k].type === "time")
                 QueryBoxes = QueryBoxes + "<TD> expects " + SeriesInfo.keywords[k].units + "</TD>";
             else
@@ -485,15 +565,17 @@ function PickSeries(mode)
 	   insertOption("KeysSelect","*online*", "");
 	   insertOption("KeysSelect","*retain*", "");
 	   insertOption("KeysSelect","*archive*", "");
-	   keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>unit</TH><TH>note</TH>"; 
+	   keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>scope</TH><TH>default</TH><TH>unit</TH><TH>note</TH>"; 
 	   for (i=0; i<n; i++)
 	      {
 	      insertOption("KeysSelect",SeriesInfo.keywords[i].name, "");
 	      keywords = keywords + "<TR><TD>" +
 		SeriesInfo.keywords[i].name + "</TD><TD>" +
 		SeriesInfo.keywords[i].type + "</TD><TD>" +
+		SeriesInfo.keywords[i].recscope + "</TD><TD>" +
+		SeriesInfo.keywords[i].defval + "&nbsp;</TD><TD>" +
 		SeriesInfo.keywords[i].units + "&nbsp;</TD><TD>" +
-		SeriesInfo.keywords[i].note + "&nbsp;</TD>";
+		SeriesInfo.keywords[i].note + "&nbsp;</TD></TR>";
 	      }
 	   keywords = keywords + "</table><P>";
 	   }
@@ -510,25 +592,26 @@ function PickSeries(mode)
 	      {
 	      insertOption("SegsSelect",SeriesInfo.segments[i].name, "");
 	      segments = segments + "<TR><TD>" + SeriesInfo.segments[i].name + "</TD><TD>" + SeriesInfo.segments[i].units + "&nbsp;</TD><TD>" +
-		SeriesInfo.segments[i].dims + "&nbsp;</TD><TD>" + SeriesInfo.segments[i].protocol + "</TD><TD>" + SeriesInfo.segments[i].note + "&nbsp;</TD>";
+		SeriesInfo.segments[i].dims + "&nbsp;</TD><TD>" + SeriesInfo.segments[i].protocol + "</TD><TD>" + SeriesInfo.segments[i].note + "&nbsp;</TD></TR>";
 	      }
 	   segments = segments + "</table><P>";
 	   }
 
-        // Add checkbox if there are links and link part of full table
+        // build and display link selection scroll box and segment part of full table
 	var links = "No links";
 	n = SeriesInfo.links.length;
 	if (n > 0)
 	   {
 	   links = "<table BORDER=1><TR><TD>link</TD><TD>target </TD><TD>kind</TD><TD>note</TD>";
+	   insertOption("LinksSelect","**NONE**", "");
+	   insertOption("LinksSelect","**ALL**", "");
 	   for (i=0; i<n; i++)
+	      {
 	      links = links + "<TR><TD>" + SeriesInfo.links[i].name + "</TD><TD>" + SeriesInfo.links[i].target + "</TD><TD>" +
-		      SeriesInfo.links[i].kind + "</TD><TD>" + SeriesInfo.links[i].note + "&nbsp;</TD>";
+		      SeriesInfo.links[i].kind + "</TD><TD>" + SeriesInfo.links[i].note + "&nbsp;</TD></TR>";
+	      insertOption("LinksSelect",SeriesInfo.links[i].name, "");
+              }
 	   links = links + "</table><P>";
-           // If links present allow for showing them in listings
-           $("WantLinkInfo").checked = 0;
-           $("WantFullSegInfo").checked = 0;
-           $("WantLinkDiv").style.display="block";
 	   }
 
 	// Place structure table on screen
@@ -550,11 +633,27 @@ function PickSeries(mode)
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  // Now jump to the RecordSet tab
+  tabs.setSelectedItems([tabrecset]); // load the first page.
   }
 
 // Section 3.0 support - Get record count
 // Uses jsoc_info op=rs_summary which may take a while but
 // also validates recordset query that will be used in section 6.
+
+function SetRSLimit()
+  {
+  if ($("RecordLimit").value === "none")
+    MaxRecs = 0;
+  else if (Number($("RecordLimit").value)) 
+    MaxRecs = Number($("RecordLimit").value);
+  else
+    {
+    $("RecordLimit").value = "none";
+    MaxRecs = 0;
+    }
+  GetRSCount();
+  }
 
 function GetRSCount()
   {
@@ -586,10 +685,10 @@ function GetRSCount()
   $("RSCount_Place").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   askedCount = 1;
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info_test',
     {
     method: 'get',
-    parameters: {"ds" : $("RecordSet").value, "op" : "rs_summary" },
+    parameters: {"ds" : $("RecordSet").value, "op" : "rs_summary", "n" : MaxRecs },
 
     onSuccess: function(transport, json)
       {
@@ -725,6 +824,51 @@ function PickSegs()
   $("SegListPlace").innerHTML = nsegsselected + " Segs Chosen:&nbsp;" + selsegs;
   }
 
+// Section 5++., Select links for fetching pathnames
+// Uses select list of link names made in section 5.5.
+// Places result in list to be used in section 6.
+
+function PickLinks()
+  {
+  var ilink = 0;
+  nlinksselected = 0;
+  var nlinks = $("LinksSelect").length;
+  var sellinks =  "";
+  $("LinkListPlace").innerHTML = "";
+  $("DisplayPlace").innerHTML = ""; 
+  // $("WantRecInfo").checked = 0;
+  LinkList =  "";
+  sellinks = "";
+  // check for **NONE**
+  if ($("LinksSelect")[0].selected)
+    {
+    nlinksselected = 0;
+    sellinks = "**NONE**";
+    LinkList = "**NONE**";
+    }
+  // check for **ALL**
+  else if ($("LinksSelect")[1].selected)
+    {
+    nlinksselected = nlinks - 2;
+    sellinks = "**ALL**";
+    LinkList = "**ALL**";
+    }
+  else
+   for (ilink=0; ilink < nlinks; ilink++)
+    if ($("LinksSelect")[ilink].selected)
+      {
+      if (nlinksselected)
+	{
+	sellinks = sellinks + ", ";
+        LinkList = LinkList + ",";
+	}
+      nlinksselected = nlinksselected + 1;
+      sellinks = sellinks +  $("LinksSelect")[ilink].text;
+      LinkList = LinkList +  $("LinksSelect")[ilink].text;
+      }
+  $("LinkListPlace").innerHTML = nlinksselected + " Links Chosen:&nbsp;" + sellinks;
+  }
+
 // Section 6.0 - Get record values for selected keywords and segments
 // Uses jsoc_info op=rs_list
 // Places result in table.
@@ -746,27 +890,30 @@ function AbortGetKeyValues()
     }
   }
 
+var griddata;
+var gridcolwidth;
+
+function setgriddata(i,val)
+  {
+  var thisval = (val != null && val.length > 0 ? val : "&nbsp");
+  griddata[i] = thisval;
+  gridcolwidth[i] = Math.max(gridcolwidth[i], thisval.length);
+  i++;
+  return i;
+  }
+
 function GetKeyValues()
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var getparameters = new Hash( {"ds" : $("RecordSet").value, "op" : "rs_list" });
   $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
-  // do the link checkbox work here since no section 5.5...
-  if ($("WantLinkInfo").checked)
-    {
-    nlinksselected = 1;
-    $("LinkListPlace").innerHTML = " ALL Links Chosen";
-    }
-  else
-    {
-    nlinksselected = 0;
-    $("LinkListPlace").innerHTML = "";
-    }
   if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
     {
     $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<BR>Please fo back to steps 4 and 5."; 
     return;
     }
+  if (MaxRecs != 0)
+    getparameters = getparameters.merge({"n": MaxRecs});
   if (nkeysselected)
     getparameters = getparameters.merge({"key": KeyList});
   else
@@ -776,7 +923,9 @@ function GetKeyValues()
   else
     getparameters = getparameters.merge({"seg":"**NONE**"});
   if (nlinksselected)
-    getparameters = getparameters.merge({"link":"**ALL**"});
+    getparameters = getparameters.merge({"link": LinkList});
+  else
+    getparameters = getparameters.merge({"link":"**NONE**"});
   if ($("WantRecInfo").checked) getparameters = getparameters.merge({"R":1});
   if (RecordCount == 0 && askedCount == 0)
       GetRSCount();
@@ -800,7 +949,7 @@ function GetKeyValues()
   $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
   $("FetchKeyValsButton").disabled = true;
   $("AbortKeyValsButton").show();
-  GetValuesObject = new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  GetValuesObject = new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info_test',
     {
     method: 'get',
     parameters: getparameters.toObject(),
@@ -811,7 +960,6 @@ function GetKeyValues()
       var response = transport.responseText || "no response text";
       var RecordData = response.evalJSON();
       // var RecordData = JSON.parse(response);
-      var valuetable = "";
       if (RecordData.status == 1)
         {
         $("DisplayPlace").innerHTML = RecordData.error;
@@ -819,105 +967,146 @@ function GetKeyValues()
         }
       else
         {
+        valuegrid = new AW.UI.Grid; 
+
+        valuegrid.setId("ValueGrid");
         $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
         $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
         $("FetchKeyValsButton").disabled = false;
         $("AbortKeyValsButton").hide();
         KeyValsFetched = 1;
+	wantLocalLinks = $("MakeLocalFileLinks").checked;
 	var thissegdata = "";
 	var nkeys = RecordData.keywords.length;
 	var nsegs = RecordData.segments.length;
 	var nlinks = RecordData.links.length;
 	var nrecs = RecordData.count;
-	wantLocalLinks = $("MakeLocalFileLinks").checked;
-        $("DisplayPlace").innerHTML = "Status = " + RecordData.status + ", Recordset Key Values for " + nrecs + " records returned, preparing page ...";
+        var gridcols = nkeys + 2*nsegs + nlinks;
         wantrecinfo = $("WantRecInfo").checked;
-	valuetable = "<TABLE border=1 id='InfoTable' ><TR>"
+	if (wantrecinfo) gridcols += 1;
+	if ($("WantFullSegInfo").checked == 1) gridcols += 3;
+        var gridrows = nrecs;
+        var irow, icol;
+
+        $("DisplayPlace").innerHTML = "Status = " + RecordData.status + ", Recordset Key Values for " + nrecs + " records returned, preparing page ...";
+
+        var gridcells = new Array(gridrows);
+
+        // Build header row
+        var gridhead = new Array(gridcols);
+        var ihead = 0
 	if (wantrecinfo)
-	  valuetable = valuetable +  "<TH>RecordName</TH>"
+           gridhead[ihead++] = "RecordName";
 	for (var ikey=0; ikey < nkeys; ++ikey)
-           valuetable = valuetable + "<TH>" + RecordData.keywords[ikey].name + "</TH>";
+           gridhead[ihead++] = RecordData.keywords[ikey].name;
 	for (var iseg=0; iseg < nsegs; ++iseg)
            {
-           valuetable = valuetable + "<TH>segment: " + RecordData.segments[iseg].name + "</TH>";
-	   valuetable = valuetable + "<TH>seg_dims: " + RecordData.segments[iseg].name + "</TH>";
+           gridhead[ihead++] = RecordData.segments[iseg].name;
+           gridhead[ihead++] = "seg_dims: " + RecordData.segments[iseg].name;
 	   if ($("WantFullSegInfo").checked == 1)
 	       {
-	       valuetable = valuetable + "<TH>seg_cparms: " + RecordData.segments[iseg].name + "</TH>";
-	       valuetable = valuetable + "<TH>seg_bzero: " + RecordData.segments[iseg].name + "</TH>";
-	       valuetable = valuetable + "<TH>seg_bscale: " + RecordData.segments[iseg].name + "</TH>";
+               gridhead[ihead++] = "seg_cparms: " + RecordData.segments[iseg].name;
+               gridhead[ihead++] = "seg_bzero: " + RecordData.segments[iseg].name;
+               gridhead[ihead++] = "seg_bscale: " + RecordData.segments[iseg].name;
                }
             }
 	  for (var ilink=0; ilink < nlinks; ++ilink)
-             valuetable = valuetable + "<TH>" + "Link: " + RecordData.links[ilink].name + "</TH>";
-	  valuetable = valuetable + "</TR>";
+            gridhead[ihead++] = "Link: " + RecordData.links[iseg].name;
+        gridcolwidth = new Array(gridcols);
+        for (icol=0; icol<gridcols; icol++)
+	  gridcolwidth[icol] = gridhead[icol].length;
 
+          // build data rows
 	  for (var irec=0; irec < nrecs; irec++)
 	    {
-	    valuetable = valuetable + "<TR>";
+            griddata = new Array(gridcols);
+            var idata = 0;
 	    if (wantrecinfo)
-	      valuetable = valuetable +  "<TD>" + RecordData.recinfo[irec].name + "</TD>";
+		idata = setgriddata(idata, RecordData.recinfo[irec].name);
 	    for (ikey=0; ikey<nkeys; ikey++)
-	     {
-	     var this_keyval =  RecordData.keywords[ikey].values[irec];
-	     if (RecordData.keywords[ikey].name == "*logdir*")
+	      {
+	      var this_keyval =  RecordData.keywords[ikey].values[irec];
+	      if (RecordData.keywords[ikey].name == "*logdir*")
+	        {
+	        if (this_keyval.charAt(0) == '/')
+	           {
+	           tmp = "<A HREF=http://jsoc.stanford.edu" + this_keyval + ">" + this_keyval + "</A>";
+	           this_keyval = tmp;
+	           }
+                 }
+               if (this_keyval.length == 0) this_keyval = " ";
+	       idata = setgriddata(idata, this_keyval);
+	       }
+	     for (iseg=0; iseg<nsegs; iseg++)
 	       {
-	       if (this_keyval.charAt(0) == '/')
-	         {
-	         tmp = "<A HREF=http://jsoc.stanford.edu" + this_keyval + ">" + this_keyval + "</A>";
-	         this_keyval = tmp;
-	         }
-               }
-             if (this_keyval.length == 0) this_keyval = "&nbsp;";
-                valuetable = valuetable + "<TD>" + this_keyval + "</TD>";
-	     }
-	    for (iseg=0; iseg<nsegs; iseg++)
-	      {
-	      var thissegdims = RecordData.segments[iseg].dims[irec];
-	      var thissegdata = RecordData.segments[iseg].values[irec];
-	      if ($("WantFullSegInfo").checked == 1)
-	         {
-                 var thissegcparms = RecordData.segments[iseg].cparms[irec];
-                 var thissegbzero = RecordData.segments[iseg].bzeros[irec];
-                 var thissegbscale = RecordData.segments[iseg].bscales[irec];
-	         }
-              if (wantrecinfo && RecordData.recinfo[irec].online)
-	        {
-	        if (wantLocalLinks)
-                   tmp = "<A HREF=file://" + thissegdata + ">" + thissegdata + "</A>";
-                else
-	           tmp = "<A HREF=http://jsoc.stanford.edu" + thissegdata + ">" + thissegdata + "</A>";
-	        thissegdata = tmp;
-	        }
-              if (thissegdata == null || thissegdata.length == 0) thissegdata = "&nbsp;";
-	        valuetable = valuetable + "<TD>" + thissegdata + "</TD>";
-	      if (thissegdims == null || thissegdims.length == 0) thissegdims = "&nbsp;";
-                valuetable = valuetable + "<TD>" + thissegdims + "</TD>";
-	      if ($("WantFullSegInfo").checked == 1)
-	        {
-                if (thissegcparms == null || thissegcparms.length == 0) thissegcparms = "&nbsp;";
-                    valuetable = valuetable + "<TD>" + thissegcparms + "</TD>";       
-                if (thissegbzero == null || thissegbzero.length == 0) thissegbzero = "&nbsp;";
-                    valuetable = valuetable + "<TD>" + thissegbzero + "</TD>";
-                if (thissegbscale == null || thissegbscale.length == 0) thissegbscale = "&nbsp;";
-                    valuetable = valuetable + "<TD>" + thissegbscale + "</TD>";
-	        }
-	      }
+	       thissegdata = RecordData.segments[iseg].values[irec];
+               if (RecordData.recinfo[irec].online)
+	          {
+                  var tmp;
+	          if (wantLocalLinks)
+                    tmp = "<A HREF=file://" + thissegdata + ">" + thissegdata + "</A>";
+                  else
+	            tmp = "<A HREF=http://jsoc.stanford.edu" + thissegdata + ">" + thissegdata + "</A>";
+	          thissegdata = tmp;
+	          }
+
+		griddata[idata] = thissegdata;
+		gridcolwidth[idata] = Math.max(gridcolwidth[idata], RecordData.segments[iseg].values[irec]);
+                idata++;
+	        idata = setgriddata(idata, RecordData.segments[iseg].dims[irec]);
+	        if ($("WantFullSegInfo").checked == 1)
+	          {
+	          idata = setgriddata(idata, RecordData.segments[iseg].cparms[irec]);
+	          idata = setgriddata(idata, RecordData.segments[iseg].bzeros[irec]);
+	          idata = setgriddata(idata, RecordData.segments[iseg].bscales[irec]);
+	          }
+	       }
 	    for (ilink=0; ilink<nlinks; ilink++)
-	      {
-	      var this_linkval =  RecordData.links[ilink].values[irec];
-              if (this_linkval == null || this_linkval.length == 0) this_linkval = "&nbsp;";
-                valuetable = valuetable + "<TD>" + this_linkval + "</TD>";
-	      }
-	    valuetable = valuetable + "</TR>";
+	      idata = setgriddata(idata, RecordData.links[iseg].values[irec]);
+	    gridcells[irec] = griddata;
+	    valuegrid.addRow(irec);
 	    }
-	valuetable = valuetable + "</TABLE>";
-        $("DisplayPlace").innerHTML =  valuetable + "<BR>";
+
+        valuegrid.setHeaderText(gridhead);
+        valuegrid.setCellData(gridcells);
+        valuegrid.setColumnCount(gridcols);
+        valuegrid.setRowCount(gridrows);
+	valuegrid.setSelectorVisible(true);
+	valuegrid.setSelectorWidth(28);
+	valuegrid.setSelectorText(function(i){return this.getRowPosition(i)+1});
+        
+        for (icol=0; icol<gridcols; icol++)
+{
+	  valuegrid.setColumnWidth(Math.round(8.5*gridcolwidth[icol]), icol);
+
+}
+//valuegrid.aw-grid-row.setStyle("height", "20px");
+//valuegrid.aw-grid-row.setStyle("border-bottom", "5px solid #00c");
+// $("valuegrid.aw-grid-row").setStyle({"height": "20px", "border-bottom": "5px solid #00c"});
+
+
+        $("DisplayPlace").innerHTML = valuegrid;
+	gridmade = 1;
+        newwide();
+        tabs.setSelectedItems([tabdisplay]); // show the display page.
         }
       },
     onFailure: function() { alert('Something went wrong...'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
+  }
+
+function newwide(thisevent)
+  {
+  if (gridmade)
+        {
+	CWidth = self.innerWidth;
+	CHeight = self.innerHeight;
+        valuegrid.setSize(CWidth - 35 ,CHeight - 310);
+        $("DisplayPlace").innerHTML = valuegrid;
+        }
+  $("SeriesInfoDiv").style.height = CHeight - 200;
+  return true;
   }
 
 function Export_Recordset()
@@ -935,194 +1124,195 @@ function Export_Recordset()
 
 </HEAD>
 
-<BODY BGCOLOR="#E0F0FF" onLoad="CleanOnLoad();" >
+<BODY BGCOLOR="#E0F0FF" onLoad="CleanOnLoad();" onresize="newwide(event);" > 
 
 <DIV ID="header">
-<IMG src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
-  style="vertical-align:middle;height:60" alt="JSOC logo">
-&nbsp;&nbsp;&nbsp;
-<B><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Explore Info and Export</big></B>
-&nbsp;&nbsp;&nbsp;
-&nbsp;&nbsp;&nbsp;
-<input type="button" value="reset page" onClick="InitPage();" >
-&nbsp;&nbsp;&nbsp;
-<input id="TipsOnOffButton" type="button" value="Turn Help Off" onClick="ToggleHelp();" >
-&nbsp;&nbsp;<span id="AjaxBusy">0</span> Requests Pending
-<span id='systemWorking'>, Loading...</span>
-<!-- <br clear=all> -->
-<HR>
+  <IMG src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
+    style="vertical-align:middle;height:60" alt="JSOC logo">
+  &nbsp;&nbsp;&nbsp;
+  <B><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Explore Info and Export</big></B>
+  &nbsp;&nbsp;&nbsp;
+  &nbsp;&nbsp;&nbsp;
+  <input type="button" value="Reset Page" onClick="InitPage();" >
+  &nbsp;&nbsp;
+  <input id="TabsOnOffButton" type="button" value="Disable Tabs" onClick="ToggleTabs();" >
+  &nbsp;&nbsp;
+  <input id="TipsOnOffButton" type="button" value="Disable Help" onClick="ToggleHelp();" >
+  &nbsp;&nbsp;<span id="AjaxBusy">0</span> Requests Pending
+  <span id='systemWorking'>, Loading...</span>
+  <!-- <HR> -->
+  <P>
 </DIV> <!-- end DIV header -->
-<B>1. Find list of dataseries, and 2. Pick series to use</B>
-<SPAN ID="PickSeriesHelp" class="tip">?</SPAN>
-<input id="SeriesDivButton" type="button" value="Hide Section" style="background-color:#FFD8D8" onClick="ToggleSectionDiv('SeriesDiv');" >
-<DIV id="SeriesDiv">
-<TABLE style="width:98%">
-<TR>
-<TD  style="width:50%;vertical-align:top;">
-Enter a dataseries match pattern to search for seriesnames, or leave blank to select from all series.
-(A very bad idea now that we have about 34,000 seriesnames.)
-A leading "NOT " means exclude names matching the subsequent pattern.
-The default filter excludes namespace "dsds."
-<P>
-<input id="SeriesFilter" type="text" name="filter" value="NOT ^dsds\." onChange="GetSeries();" >
-<BR>
-<input id="SeriesButton" type="button" value="Fetch seriesname list" style="background-color:#FFFF80" onClick="GetSeries();" > 
-<input id="AbortGetSeriesButton" type="button" value="Abort" style="background-color:#FFD0D0" onClick="GetSeriesAbort();" > 
-<br>
-<span id="SeriesCountPlace" style="background-color:#FFFFFF;width:2em"><I>TBD</I></span>
-Series match this selection filter.
-</TD>
-<TD  style="width:40%;vertical-align:top;">
-Select data series here.
-<BR>
-<select id="SeriesSelect" size=8 onclick="PickSeries(0)"> </select>
-</TD>
-<TD style="width:60%;vertical-align:top;">
-</TR>
-</TABLE>
-</DIV> <!-- /DIV SeriesDiv -->
-<HR>
-<DIV id="MySeriesDiv" >
-
-<TABLE style="width:98%">
-<TR><TD style="width:40%"></TD><TD style="width:60%;"></TD></TR>
-
-<TR>
-<TD rowspan=2 style="vertical-align:top;height:60pt">
-<B>Information about selected series</B><BR>
-Current Series is:
-<span id="Series_Name_Place" style="background-color:#FFFFFF"></span>
-<BR>
-<span id="SSKeysPlace" style="background-color:#FFFFFF;"></span>
-</TD>
-<TD style="vertical-align:top">
-&nbsp;<BR>
-<span id="Series_Info_Place" style="background-color:#FFFFFF"></span>
-</TD>
-</TR>
-
-<TR>
-<TD >
-<span id="FirstLastPlace" style="vertical-align:top;background-color:#FFFFFF"></span>
-</TD>
-</TR>
-</TABLE>
-
-<TABLE>
-<TR><TD style="width:25%"></TD><TD style="width:25%;"></TD><TD  style="width:50%"></TR>
-
-<TR>
-<TD colspan=2  style="vertical-align:top;">
-<H3>Select Records and Get Record Count</H3>
-Enter RecordSet Specification here for keyword listings and for export.
-<BR>
-<SPAN ID="QueryBuilderHelp" class="tip">?</SPAN>
-<input type="checkbox" name="" id="QueryDivCheck" onChange="QueryDivCheckToggle();">
-Check box  to show the QueryBuilder.
-<BR>
-Request may take a while if the recordset is large (more than a few thousand records).
-<P>
-<SPAN ID="RecordSetHelp" class="tip">?</SPAN>
-<input id="RecordSet" type="text" value="" onChange="GetRSCount();" > 
-<BR>
-</TD>
-
-<TD rowspan=4 style="vertical-align:top;">
-<H3>List of All Keywords and Segments</H3>
-<DIV id="SeriesInfoDiv"  style="background-color:#FFFFFF;border:solid;border-width:thin;height:360;overflow:scroll">
-<span id="SSPlace" style="background-color:#FFFFFF;"></span>
-</DIV>
-</TD>
-</TR>
-
-<TR>
-<TD colspan=2  style="vertical-align:top;">
-<DIV id="QueryDiv">
-<span id="QueryPlace" style="width:10em;background-color:#FFFFFF"></SPAN></span>
-</DIV>
-</TD>
-</TR>
-
-<TR>
-<TD colspan=2  style="vertical-align:top;">
-<input type="button" value="GetRecordCount"  style="background-color:#FFFF80" onClick="GetRSCount();" >
-Record Count:&nbsp;&nbsp;
-<span id="RSCount_Place" style="width:10em;background-color:#FFFFFF"></span>
-<BR>
-<DIV id="WantLinkDiv">
-<input type="checkbox" name="Show Links" id="WantLinkInfo"> Check to select all links
-</DIV>
-</TD>
-</TR>
-
-<TR>
-<TD >
-<H3>4. Select Keywords</H3>
-Select Keywords for Detailed Lists
-<BR>
-<form id="KeysSelectForm">
-<select id="KeysSelect" size=8 multiple=true onChange="PickKeys();" > </select>
-</form>
-</TD><TD>
-<H3>5. Select Segments</H3>
-Select Segments for Detailed Lists
-<BR>
-<form id="SegsSelectForm">
-<select id="SegsSelect" size=8 multiple=true onChange="PickSegs();"> </select>
-</form>
-</TD>
-</TR>
-</TABLE>
-</DIV> <!-- id="MySeriesDiv" -->
-<HR>
-
-<H3> Get Keyword and Segment Values Here</H3>
-<!--
-<input id="FullInfoDivButton" type="button" value="Hide Section" style="background-color:#FFD8D8" onClick="ToggleSectionDiv('FullInfoDiv');" >
-<BR>
--->
-<DIV id="FullInfoDiv">
-RecordSet Query:&nbsp;
-<span id="RecSetPlace" style="background-color:#FFFFFF;"></span>
-&nbsp; Keywords to Fetch:&nbsp;
-<span id="KeyListPlace" style="background-color:#FFFFFF;"></span>
-&nbsp; Segments to Fetch:&nbsp;
-<span id="SegListPlace" style="background-color:#FFFFFF;"></span>
-&nbsp;
-<span id="LinkListPlace" style="background-color:#FFFFFF;"></span>
-
-<BR>
-<input type="checkbox" name="Get Record Query" id="WantRecInfo">
-Check to Get Record Query.
-&nbsp; &nbsp;
-<input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.
-&nbsp; &nbsp;
-<input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info 
-&nbsp; &nbsp;
-<input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).
-<BR>
-<input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
-<input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
-<P>
-<DIV id="FullDisplayInfoDiv" style="background-color:#FFFFFF;border:solid;border-width:thin;height:190;width:98%;overflow:scroll">
-<span id="DisplayPlace" style="background-color:#FFFFFF;"></span>
-</DIV> <!-- /DIV FullDisplayInfoDiv -->
-</DIV> <!-- /DIV FullInfoDiv -->
-<HR>
-<DIV>
-RecordSet to export:
-<span id="ExportRecordSet" style="background-color:#FFFFFF;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
-<input id="ExportRequestButton" type="button" value="Export" onClick="Export_Recordset();" >
-Click to jump to new export page.
-<p>
-</DIV>
-<HR>
+<SPAN id="LookdataTabs"></SPAN>
+<DIV id="JsocLookdata" style="border: 1px solid #aaa;">
+<DIV id="TabSeriesSelectDiv" style="display:block">
+  <DIV id="SeriesDiv">
+    <TABLE style="width:98%">
+    <TR> <TD  style="width:50%;vertical-align:top;"></TD><TD style="width:50%;vertical-align:top;"></TD></TR>
+    <TR> <TD colspan==2>
+    <SPAN ID="PickSeriesHelp" class="tip">?</SPAN>
+    You may go directly to Step 3 on the RecordSet Select tab if you know which series you want.
+    </TD></TR>
+    <TR> <TD><B>1. Find list of dataseries</B></TD><TD><B>2. Pick series to use</B></TD></TR>
+    <TR>
+    <TD>
+    Enter a dataseries match pattern to search for seriesnames, or leave blank to select from all series.
+    (A very bad idea now that we have about 34,000 seriesnames.)
+    A leading "NOT " means exclude names matching the subsequent pattern.
+    The default filter excludes namespace "dsds."
+    <P>
+    <input id="SeriesFilter" type="text" name="filter" value="NOT ^dsds\." onChange="GetSeries();" >
+    <BR>
+    <input id="SeriesButton" type="button" value="Fetch seriesname list" style="background-color:#FFFF80" onClick="GetSeries();" > 
+    <input id="AbortGetSeriesButton" type="button" value="Abort" style="background-color:#FFD0D0" onClick="GetSeriesAbort();" > 
+    <br>
+    <span id="SeriesCountPlace" style="background-color:#FFFFFF;width:2em"><I>TBD</I></span>
+    Series match this selection filter.
+    </TD>
+    <TD>
+    Select data series here.
+    <BR>
+    <select id="SeriesSelect" size=8 onclick="PickSeries(0)"> </select>
+    </TD>
+    </TR>
+    </TABLE>
+  </DIV> <!-- /DIV SeriesDiv -->
+</DIV> <!-- /DIV TabSeriesSelectDiv -->
+<DIV id="TabRecSetDiv" style="display:block">
+  <DIV id="MySeriesDiv" >
+    <TABLE style="width:98%">
+      <TR><TD style="width:33%"></TD><TD style="width:33%;"></TD><TD style="width:33%;"></TD></TR>
+      <TR>
+        <TD rowspan=2 style="vertical-align:top;height:60pt">
+        <B>Information about selected series</B><BR>
+        Current Series is:
+        <span id="Series_Name_Place" style="background-color:#FFFFFF"></span>
+        <BR>
+        <span id="SSKeysPlace" style="background-color:#FFFFFF;"></span>
+        </TD>
+        <TD colspan=2 style="vertical-align:top">
+        &nbsp;<BR>
+        <span id="Series_Info_Place" style="background-color:#FFFFFF"></span>
+        </TD>
+      </TR>
+      <TR>
+        <TD colspan=2>
+        <span id="FirstLastPlace" style="vertical-align:top;background-color:#FFFFFF"></span>
+        </TD>
+      </TR>
+      <TR><TD style="width:33%"></TD><TD style="width:33%;"></TD><TD style="width:33%"></TR>
+      <TR>
+        <TD colspan=3  style="vertical-align:top;">
+        <B>3. Select Records and Get Record Count</B><BR>
+        Enter RecordSet Specification here for keyword listings and for export.
+        <BR>
+        <SPAN ID="QueryBuilderHelp" class="tip">?</SPAN>
+        <input type="checkbox" name="" id="QueryDivCheck" onChange="QueryDivCheckToggle();">
+        Check box  to show the QueryBuilder.
+        <BR>
+        Request may take a while if the recordset is large (more than a few thousand records).
+        <P>
+        <SPAN ID="RecordSetHelp" class="tip">?</SPAN>
+        <input id="RecordSet" type="text" value="" onChange="GetRSCount();" > 
+        <BR>
+        </TD>
+      </TR>
+      <TR>
+        <TD colspan=3  style="vertical-align:top;">
+        <DIV id="QueryDiv">
+          <span id="QueryPlace" style="width:10em;background-color:#FFFFFF;"></SPAN></span>
+        </DIV>
+        </TD>
+      </TR>
+      <TR>
+        <TD colspan=3>
+        &nbsp;&nbsp;
+        Record Limit &nbsp;
+        <input type="text" value="none" name="" id="RecordLimit" onChange="SetRSLimit();" >
+        &nbsp;  Optional, + for from start, - for from end.
+	</TD>
+      </TR>
+      <TR>
+        <TD colspan=2  style="vertical-align:top;">
+        <input type="button" value="GetRecordCount"  style="background-color:#FFFF80" onClick="GetRSCount();" >
+        Record Count:&nbsp;&nbsp;
+        <span id="RSCount_Place" style="width:10em;background-color:#FFFFFF"></span>
+        </TD><TD>
+	</TD>
+      </TR>
+      <TR>
+      <TD colspan=3>
+      Select Keywords, Segments, and Links for table of values.
+      </TD>
+      </TR>
+      <TR>
+        <TD >
+        <B>4. Select Keywords</B><BR>
+        <form id="KeysSelectForm">
+          <select id="KeysSelect" size=8 multiple="multiple" onChange="PickKeys();" > </select>
+        </form>
+        </TD><TD>
+        <B>5. Select Segments</B><BR>
+        <form id="SegsSelectForm">
+          <select id="SegsSelect" size=8 multiple="multiple" onChange="PickSegs();"> </select>
+        </form>
+        </TD>
+        <TD >
+        <B>6. Select Links</B><BR>
+        <form id="LinksSelectForm">
+          <select id="LinksSelect" size=8 multiple="multiple" onChange="PickLinks();" > </select>
+        </form>
+        </TD>
+      </TR>
+    </TABLE>
+    <input type="checkbox" name="Get Record Query" id="WantRecInfo"> Check to Get Record Query.  <BR>
+    <input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.  <BR>
+    <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info <BR>
+    <input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).  <BR>
+    <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
+    <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
+    <P>
+  </DIV> <!-- id="MySeriesDiv" -->
+</DIV> <!-- /DIV TabRecSetDiv -->
+<DIV id="TabSeriesStructDiv" style="display:block">
+  <DIV id="SeriesInfoDiv"  style="background-color:#FFFFFF;border:solid;border-width:thin;overflow:scroll;height:75%">
+  <H3>List of All Keywords, Links, and Segments</H3>
+    <span id="SSPlace" style="background-color:#FFFFFF;"></span>
+  </DIV>
+</DIV> <!-- /DIV TabSeriesStructDiv -->
+<DIV id="TabDisplayDiv" style="display:block">
+  <DIV id="FullInfoDiv">
+    <B>7. Get Keyword and Segment Values Here</B><BR>
+    <TABLE>
+    <TR><TD> RecordSet Query:</TD><TD> <span id="RecSetPlace" style="background-color:#FFFFFF;"></span></TD></TR>
+    <TR><TD> Keywords to Fetch:</TD><TD><span id="KeyListPlace" style="background-color:#FFFFFF;"></span></TD></TR>
+    <TR><TD> Segments to Fetch:</TD><TD><span id="SegListPlace" style="background-color:#FFFFFF;"></span></TD></TR>
+    <TR><TD> Links to Fetch:</TD><TD> <span id="LinkListPlace" style="background-color:#FFFFFF;"></span></TD></TR>
+    </TABLE>
+    <P>
+    <DIV id="FullDisplayInfoDiv" style="background-color:#FFFFFF ;width:98%;">
+      <span id="DisplayPlace" style="background-color:#FFFFFF;"></span>
+    </DIV> <!-- /DIV FullDisplayInfoDiv -->
+  </DIV> <!-- /DIV FullInfoDiv -->
+</DIV> <!-- /DIV TabDisplayDiv -->
+<DIV id="TabExportDiv" style="display:block">
+  <DIV> <!-- Section 7, Export link -->
+    <H3>Warning - record limit not implemented for export yet</H3>
+    <B>8. RecordSet to export:</B>
+    <span id="ExportRecordSet" style="background-color:#FFFFFF;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
+    <input id="ExportRequestButton" type="button" value="Export" onClick="Export_Recordset();" >
+    Click to jump to new export page.
+    <p>
+  </DIV> <!-- /DIV Section 7, Export link -->
+</DIV> <!-- /DIV TabExportDiv -->
+</DIV> <!-- /DIV Main including all tab divs -->
 <P style="height:1px">
 <DIV id="footer" style="vertical-align:bottom;text-align:center;">
-<I>Home pages for:</I>
-<A HREF = "http://jsoc.stanford.edu/"><B>SDO-JSOC</B></A>
-<B>|</B>
-<A HREF = "http://sha.stanford.edu/"><B>SHA</B></A>
+<HR>
+  <I>Home pages for:</I>
+  <A HREF = "http://jsoc.stanford.edu/"><B>SDO-JSOC</B></A>
+  <B>|</B>
+  <A HREF = "http://sha.stanford.edu/"><B>SHA</B></A>
 </DIV>
 </BODY>
 </HTML>
