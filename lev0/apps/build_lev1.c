@@ -43,7 +43,7 @@
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1.%s.log"
 #define NUMTIMERS 8		//number of seperate timers avail
 #define NOTSPECIFIED "***NOTSPECIFIED***"
-#define LOGTEST 1
+#define LOGTEST 0
 
 int compare_rptr(const void *a, const void *b);
 
@@ -278,15 +278,18 @@ int sc_pointing()
 
 #include "do_flat.c"
 #include "get_pointing_info.c"
+#include "get_image_location.c"
 
 int do_ingest(long long bbrec, long long eerec)
 {
   PTINFO *ptinfo = NULL;
   PTINFO ptdata;
+  Image_Location *p_imageloc;
+  Image_Location imageloc[NUMRECLEV1];
   TIME t_obs0;
   TIME tobs[NUMRECLEV1];
   float percentd;
-  int rstatus, dstatus, ncnt, fcnt, i, qualint, nobs, totvals;
+  int rstatus, dstatus, ncnt, fcnt, i, j, qualint, nobs, totvals;
   long long recnum0, recnum1, recnumff;
   char recrange[128], lev0name[128], flatrec[128];
 
@@ -325,11 +328,19 @@ int do_ingest(long long bbrec, long long eerec)
       //also set up call for get_pointing_info() and iorbit_getinfo()
       tobs[i] = drms_getkey_time(rs0, "t_obs", &rstatus);
       if(rstatus) {
-        printk("Can't do drms_getkey_time() for fsn %u\n", fsnx);
+        printk("Error on drms_getkey_time() fsn=%u. Use DRMS_MISSING_TIME\n", 
+		fsnx);
+       tobs[i] = DRMS_MISSING_TIME;
       }
     }
     if(rstatus = get_pointing_info(drms_env, tobs, ncnt, &ptinfo)) {
-      printk("**ERROR: get_pointing_info() status = %d\n", rstatus);
+      printk("**ERROR: get_pointing_info() status = %d  fsn tobs ASD:\n", 
+		rstatus);
+      for(j=0; j < ncnt; j++) {	 //!!TEMP debuf stuff
+        printk("%u %10.5f ", fsnarray[j], tobs[j]);
+        ptdata = ptinfo[j];
+        printk("%s\n", ptdata.asd_rec);
+      }
     }
     if ((IOstatus = iorbit_getinfo(drms_env,
                        orbseries,
@@ -352,6 +363,26 @@ int do_ingest(long long bbrec, long long eerec)
       printk("**ERROR: Can't create records for %s\n", dsout);
       return(1);
     }
+    //Now fill in info for call to Carl's get_image_location()
+    for(i=0; i < ncnt; i++) {
+      rs0 = &rptr[i];
+      imageloc[i].tobs = tobs[i];
+      imageloc[i].camera = drms_getkey_int(rs0, "CAMERA", &rstatus);
+      if(rstatus) {
+        printk("ERROR: in drms_getkey_int(CAMERA) fsn=%u\n", fsnarray[i]);
+      }
+      imageloc[i].wavelength = drms_getkey_int(rs0, "WAVELNTH", &rstatus);
+      if(rstatus) {
+        printk("ERROR: in drms_getkey_int(WAVELNTH) fsn=%u\n", fsnarray[i]);
+      }
+      snprintf(imageloc[i].telescope, 10, "%s", 
+		drms_getkey_string(rs0, "TELESCOP", &rstatus));
+      if(rstatus) {
+        printk("ERROR: in drms_getkey_string(TELESCOP) fsn=%u\n", fsnarray[i]);
+      }
+    }
+    p_imageloc = imageloc;
+//    rstatus = get_image_location(drms_env, ncnt, &p_imageloc);
 
 
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
@@ -446,6 +477,11 @@ int do_ingest(long long bbrec, long long eerec)
            drms_setkey_float(rs, "CRLT_OBS", (float)IOdata.crlt_obs);
            drms_setkey_int(rs, "CAR_ROT", (int)IOdata.car_rot);
       }
+      drms_setkey_float(rs, "X0_MP", imageloc[i].x);
+      drms_setkey_float(rs, "Y0_MP", imageloc[i].y);
+      drms_setkey_float(rs, "INST_ROT", imageloc[i].instrot);
+      drms_setkey_float(rs, "IMSCL_MP", imageloc[i].imscale);
+      drms_setkey_string(rs, "MPO_REC", imageloc[i].mpo_rec);
 
       int camera = drms_getkey_int(rs0, "CAMERA", &rstatus);
       if(rstatus) {
@@ -589,7 +625,9 @@ int compare_rptr(const void *a, const void *b)
   DRMS_Record_t *x=(DRMS_Record_t *)a, *y=(DRMS_Record_t *)b;
 
   t1 = drms_getkey_time(x, "t_obs", &rstatus); 
+  if(rstatus) t1 = DRMS_MISSING_TIME;	//treat error as missing t_obs
   t2 = drms_getkey_time(y, "t_obs", &rstatus); 
+  if(rstatus) t2 = DRMS_MISSING_TIME;
   if(t1 < t2) return(-1);
   if(t1 > t2) return(1);
   return(0);
