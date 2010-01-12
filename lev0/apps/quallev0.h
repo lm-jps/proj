@@ -15,10 +15,10 @@
 #define Q_NOISP 0x10	//no ISP
 
 //missvals is from Img struct totalvals-datavals
-#define Q_MISS0 0x100	//missvals > 0
-#define Q_MISS1 0x200	//missvals > 0.01*datavals
-#define Q_MISS2 0x400	//missvals > 0.05*datavals
-#define Q_MISS3 0x800	//missvals > 0.25*datavals
+#define Q_MISS0 0x100	//totalvals > 0
+#define Q_MISS1 0x200	//totalvals > 0.01*totalvals
+#define Q_MISS2 0x400	//totalvals > 0.05*totalvals
+#define Q_MISS3 0x800	//totalvals > 0.25*totalvals
 
 //HMI sepecific
 #define Q_SEQERR 0x10000	//sequencer error HSEQERR  != 'SUCCESS'
