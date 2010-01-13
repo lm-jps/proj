@@ -203,6 +203,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "key", "Not Specified", "<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *size*, *online*, *retain*, *archive*, *logdir*, *dir_mtime*  "},
   {ARG_STRING, "link", "Not Specified", "<comma delimited linkname list>, links or special values: **ALL**, **NONE**"},
   {ARG_STRING, "seg", "Not Specified", "<comma delimited segment list>, segnames or special values: **ALL**, **NONE** "},
+  {ARG_INT, "n", "0", "RecordSet Limit"},
   {ARG_FLAG, "h", "0", "help - show usage"},
   {ARG_FLAG, "R", "0", "Show record query"},
   {ARG_FLAG, "z", "0", "emit JSON output"},
@@ -218,13 +219,14 @@ int nice_intro ()
   if (usage)
     {
     printf ("Usage:\njsoc_info {-h} {-z} {-R} "
-	"op=<command> ds=<recordset query> {key=<keylist>} {seg=<segment_list>}\n"
+	"op=<command> ds=<recordset query> {n=<rslimit>} {key=<keylist>} {seg=<segment_list>}\n"
         "  details are:\n"
 	"-h -> print this message\n"
 	"-z -> emit json output, default at present.\n"
 	"-R -> include record query.\n"
 	"op=<command> tell which ajax function to execute, values are: series_struct, rs_summary, or rs_list \n"
 	"ds=<recordset query> as <series>{[record specifier]} - required\n"
+        "n=<rslimit> set optional record count limit, <0 from end, >0 from head\n"
 	"key=<comma delimited keyword list>, keywords or special values: **ALL**, **NONE**, *recnum*, *sunum*, *size*, *online*, *retain*, *archive*, *logdir*, *dir_mtime* \n"
 	"seg=<comma delimited segment list>, segnames or special values: **ALL**, **NONE** \n"
 	"QUERY_STRING=<cgi-bin params>, parameter string as delivered from cgi-bin call.\n"
@@ -322,6 +324,7 @@ static void list_series_info(DRMS_Record_t *rec, json_t *jroot)
   char intstring[100];
   char *notework;
   json_t *indexarray, *primearray, *keyarray, *segarray, *linkarray;
+  json_t *primeinfoarray;
   int npkeys;
 
   /* add description from seriesinfo */
@@ -339,23 +342,52 @@ static void list_series_info(DRMS_Record_t *rec, json_t *jroot)
   json_insert_pair_into_object(jroot, "tapegroup", json_new_number(intstring));
   
   /* show the prime index keywords */
-  primearray = json_new_array();
+  // both the original simple list and new array of objects are generated -- XXXXX REMOVE SOMEDAY                             
+  // for compatibility.  The older "primekeys" array may be removed in the future.  23Nov09 -- XXXXX REMOVE SOMEDAY           
+  // old lines marked with trailing XXXXX REMOVE SOMEDAY
+  primearray = json_new_array(); // XXXXX REMOVE SOMEDAY
+  primeinfoarray = json_new_array();
   npkeys = rec->seriesinfo->pidx_num;
   if (npkeys > 0)
     {
     int i;
+    json_t *primeinfo, *val;
+    char *jsonstr;
     for (i=0; i<npkeys; i++)
         {
-        DRMS_Keyword_t *pkey;
+        json_t *primeinfo = json_new_object();
+        DRMS_Keyword_t *pkey, *skey;
         pkey = rec->seriesinfo->pidx_keywords[i];
 	if (pkey->info->recscope > 1)
-            pkey = drms_keyword_slotfromindex(pkey);
-        json_insert_child(primearray, json_new_string(pkey->info->name));
+        {
+           char rawval[100];
+           skey = drms_keyword_slotfromindex(pkey);
+           json_insert_pair_into_object(primeinfo, "name", json_new_string(skey->info->name));
+           json_insert_pair_into_object(primeinfo, "slotted", json_new_number("1"));
+           drms_keyword_snprintfval(drms_keyword_stepfromvalkey(skey), rawval, sizeof(rawval));
+           jsonstr = string_to_json(rawval);
+           val = json_new_string(jsonstr);
+           free(jsonstr);
+           json_insert_pair_into_object(primeinfo, "step", val);
+           json_insert_child(primearray, json_new_string(skey->info->name)); // XXXXX REMOVE SOMEDAY                         
+
+        }
+        else
+        {
+           json_insert_pair_into_object(primeinfo, "name", json_new_string(pkey->info->name));
+           json_insert_pair_into_object(primeinfo, "slotted", json_new_number("0"));
+           json_insert_child(primearray, json_new_string(pkey->info->name)); // XXXXX REMOVE SOMEDAY                         
+        }
+        json_insert_child(primeinfoarray, primeinfo);            
         }
     }
   else
-    json_insert_child(primearray, json_new_null());
-  json_insert_pair_into_object(jroot, "primekeys", primearray);
+  {
+     json_insert_child(primearray, json_new_null()); // XXXXX REMOVE SOMEDAY                                                   
+     json_insert_child(primeinfoarray, json_new_null());
+  }
+  json_insert_pair_into_object(jroot, "primekeys", primearray); // XXXXX REMOVE SOMEDAY                                       
+  json_insert_pair_into_object(jroot, "primekeysinfo", primeinfoarray);
  
   /* show DB index keywords */
   indexarray = json_new_array();
@@ -375,13 +407,10 @@ if (DEBUG) fprintf(stderr,"   starting all keywords\n");
 
   while ((key = drms_record_nextkey(rec, &last)))
     {
-       if (drms_keyword_getimplicit(key))
-       {
-          continue;
-       }
-
     json_t *keyinfo = json_new_object();
     json_t *keytype;
+    json_t *defval, *recscope;
+    char rawval[100], *jsonstr;
 if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
     json_insert_pair_into_object(keyinfo, "name", json_new_string(key->info->name));
     if (key->info->islink)
@@ -389,6 +418,18 @@ if (DEBUG) fprintf(stderr,"   starting keyword %s\n",key->info->name);
     else
 	keytype = json_new_string(drms_type_names[key->info->type]);
     json_insert_pair_into_object(keyinfo, "type", keytype);
+    // scope                                                                                                                      
+    jsonstr = string_to_json((char *)drms_keyword_getrecscopestr(key, NULL));
+    recscope = json_new_string(jsonstr);
+    free(jsonstr);
+    json_insert_pair_into_object(keyinfo, "recscope", recscope);
+    // default                                                                                                                    
+    drms_keyword_snprintfval(key, rawval, sizeof(rawval));
+    jsonstr = string_to_json(rawval);
+    defval = json_new_string(jsonstr);
+    free(jsonstr);
+    json_insert_pair_into_object(keyinfo, "defval", defval);
+
     notework = string_to_json(key->info->unit);
     json_insert_pair_into_object(keyinfo, "units", json_new_string(notework));
     free(notework);
@@ -583,6 +624,7 @@ int DoIt(void)
   char *linklist;
   char *web_query;
   int from_web, keys_listed, segs_listed, links_listed;
+  int max_recs = 0;
 
   if (nice_intro ()) return (0);
 
@@ -612,6 +654,7 @@ int DoIt(void)
   keylist = strdup (cmdparams_get_str (&cmdparams, "key", NULL));
   seglist = strdup (cmdparams_get_str (&cmdparams, "seg", NULL));
   linklist = strdup (cmdparams_get_str (&cmdparams, "link", NULL));
+  max_recs = cmdparams_get_int (&cmdparams, "n", NULL);
   keys_listed = strcmp (keylist, "Not Specified");
   segs_listed = strcmp (seglist, "Not Specified");
   links_listed = strcmp (linklist, "Not Specified");
@@ -653,12 +696,20 @@ int DoIt(void)
     json_t *jroot = json_new_object();
     char *json, *final_json;
     int count=0, status=0;
+    int countlimit = abs(max_recs);
     char val[100];
     /* get series count */
     char *bracket = index(in, '{');
     if (bracket)
 	*bracket = '\0';
-    count = drms_count_records(drms_env, in, &status);
+    if (countlimit)
+      {
+      DRMS_RecordSet_t *recordset = drms_open_nrecords (drms_env, in, max_recs, &status);
+      count = recordset->n;
+      drms_close_records(recordset, DRMS_FREE_RECORD);
+      }
+    else
+      count = drms_count_records(drms_env, in, &status);
     if (bracket)
 	*bracket = '{';
     if (status)
@@ -683,7 +734,9 @@ int DoIt(void)
     {
     int wantRecInfo = cmdparams_get_int(&cmdparams, "R", NULL);
     DRMS_RecordSet_t *recordset;
-    DRMS_Record_t *rec;
+    DRMS_Record_t *rec, *template;
+    DRMS_RecChunking_t cstat = kRecChunking_None;
+    char seriesname[DRMS_MAXQUERYLEN];
     char *keys[1000];
     char *segs[1000];
     char *links[1000];
@@ -703,11 +756,25 @@ int DoIt(void)
     int status=0;
     int irec, nrecs;
     int record_set_staged = 0;
+    char *lbracket;
     jroot = json_new_object();
     recinfo = json_new_array();
 
-    /* Open record_set */
-    recordset = drms_open_records (drms_env, in, &status);
+
+    /* Get template record */
+    strcpy(seriesname, in);
+    lbracket = index(seriesname, '[');
+    if (lbracket) *lbracket = '\0';
+    template = drms_template_record(drms_env, seriesname, &status);
+    if (status)
+      JSONDIE(" jsoc_info: series not found.");
+
+    /* Open record_set(s) */
+    if (max_recs == 0)
+      recordset = drms_open_recordset (drms_env, in, &status);
+    else // max_recs specified via "n=" parameter.                                                                            
+      recordset = drms_open_nrecords (drms_env, in, max_recs, &status);
+
     if (!recordset) 
       JSONDIE(" jsoc_info: series not found.");
     nrecs = recordset->n;
@@ -869,7 +936,15 @@ int DoIt(void)
       char recquery[DRMS_MAXQUERYLEN];
       char *jsonquery;
       json_t *recobj = json_new_object();
-      rec = recordset->records[irec];  /* pointer to current record */
+
+      if (max_recs == 0)
+        rec = drms_recordset_fetchnext(drms_env, recordset, &status, &cstat);
+      else
+        {
+        rec = recordset->records[irec];  /* pointer to current record */
+        status = DRMS_SUCCESS;
+        }
+
       if (wantRecInfo)
 	{
         drms_sprint_rec_query(recquery,rec);
