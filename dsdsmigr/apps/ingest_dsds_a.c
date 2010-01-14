@@ -178,7 +178,7 @@ int DoIt(void)
 
       /* loop through all target keywords */
       outKey_last = NULL;
-      while (outKey = drms_record_nextkey(outRec, &outKey_last))
+      while (outKey = drms_record_nextkey(outRec, &outKey_last, 1))
 	{
 	char *wantKey, *keyName = outKey->info->name;
         int action = keyNameCheck(keyName, &wantKey);

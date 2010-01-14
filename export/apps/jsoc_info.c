@@ -405,7 +405,7 @@ if (DEBUG) fprintf(stderr,"   starting all keywords\n");
   /* show all keywords */
   keyarray = json_new_array();
 
-  while ((key = drms_record_nextkey(rec, &last)))
+  while ((key = drms_record_nextkey(rec, &last, 0)))
     {
     json_t *keyinfo = json_new_object();
     json_t *keytype;
@@ -450,7 +450,7 @@ if (DEBUG) fprintf(stderr," done with keywords, start segments\n");
           hiter_destroy(&last);
        }
 
-      while ((seg = drms_record_nextseg(rec, &last)))
+      while ((seg = drms_record_nextseg(rec, &last, 0)))
       { /* segment name, units, protocol, dims, description */
       json_t *seginfo = json_new_object();
       int naxis = seg->info->naxis;
@@ -808,7 +808,7 @@ int DoIt(void)
           DRMS_Keyword_t *key;
           HIterator_t *last = NULL;
 
-          while ((key = drms_record_nextkey(rec, last)))
+          while ((key = drms_record_nextkey(template, &last, 0)))
           {
              if (!drms_keyword_getimplicit(key))
              {
@@ -854,7 +854,7 @@ int DoIt(void)
           DRMS_Segment_t *seg;
           HIterator_t *last = NULL;
 
-          while ((seg = drms_record_nextseg(rec, &last)))
+          while ((seg = drms_record_nextseg(template, &last, 0)))
             segs[nsegs++] = strdup (seg->info->name);
 
           if (last)
@@ -908,7 +908,7 @@ int DoIt(void)
           DRMS_Link_t *link;
           HIterator_t *last = NULL;
 
-          while ((link = drms_record_nextlink(rec, &last)))
+          while ((link = drms_record_nextlink(template, &last)))
             links[nlinks++] = strdup (link->info->name);
 
           if (last)

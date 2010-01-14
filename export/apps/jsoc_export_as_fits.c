@@ -280,7 +280,7 @@ static int MapexportRecordToDir(DRMS_Record_t *recin,
 
    iseg = 0;
    lastcparms = 0;
-   while ((segin = drms_record_nextseg(recin, &last)) != NULL)
+   while ((segin = drms_record_nextseg(recin, &last, 1)) != NULL)
    {
       if (exputl_mk_expfilename(segin, ffmt, fmtname) == kExpUtlStat_Success)
       {
@@ -540,7 +540,7 @@ static int MapexportRecord(DRMS_Record_t *recout,
        * this is encapsulated in recin. */
       iseg = 0;
       lastcparms = 0;
-      while ((segin = drms_record_nextseg(recin, &last)) != NULL)
+      while ((segin = drms_record_nextseg(recin, &last, 1)) != NULL)
       {
 	 size = 0;
 

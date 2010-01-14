@@ -211,7 +211,7 @@ int quick_export_rs( json_t *jroot, DRMS_RecordSet_t *rs, int online,  long long
     HIterator_t *hit = NULL;
     rec = rs->records[i];
     drms_sprint_rec_query(query, rec);
-    while (seg = drms_record_nextseg(rec, &hit))
+    while (seg = drms_record_nextseg(rec, &hit, 1))
       {
       DRMS_Record_t *segrec;
       json_t *recobj = json_new_object();
@@ -865,7 +865,7 @@ check for requestor to be valid remote DRMS site
       DRMS_Record_t *rec = rs->records[irec];
       DRMS_Segment_t *seg;
       HIterator_t *segp = NULL;
-      while (seg = drms_record_nextseg(rec, &segp))
+      while (seg = drms_record_nextseg(rec, &segp, 1))
         {
         DRMS_Record_t *segrec = seg->record;
         SUM_info_t *sinfo = drms_get_suinfo(segrec->sunum);
