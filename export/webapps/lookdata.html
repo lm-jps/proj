@@ -1051,8 +1051,9 @@ function GetKeyValues()
 	          }
 
 		griddata[idata] = thissegdata;
-		gridcolwidth[idata] = Math.max(gridcolwidth[idata], RecordData.segments[iseg].values[irec]);
+		gridcolwidth[idata] = Math.max(gridcolwidth[idata], RecordData.segments[iseg].values[irec].length);
                 idata++;
+
 	        idata = setgriddata(idata, RecordData.segments[iseg].dims[irec]);
 	        if ($("WantFullSegInfo").checked == 1)
 	          {
