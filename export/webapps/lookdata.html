@@ -1011,7 +1011,7 @@ function GetKeyValues()
                }
             }
 	  for (var ilink=0; ilink < nlinks; ++ilink)
-            gridhead[ihead++] = "Link: " + RecordData.links[iseg].name;
+            gridhead[ihead++] = "Link: " + RecordData.links[ilink].name;
         gridcolwidth = new Array(gridcols);
         for (icol=0; icol<gridcols; icol++)
 	  gridcolwidth[icol] = gridhead[icol].length;
@@ -1062,7 +1062,7 @@ function GetKeyValues()
 	          }
 	       }
 	    for (ilink=0; ilink<nlinks; ilink++)
-	      idata = setgriddata(idata, RecordData.links[iseg].values[irec]);
+	      idata = setgriddata(idata, RecordData.links[ilink].values[irec]);
 	    gridcells[irec] = griddata;
 	    valuegrid.addRow(irec);
 	    }
