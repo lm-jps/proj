@@ -52,13 +52,29 @@
 //#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
 //#define LEV0SERIESNAMEHMI "su_production.lev0f_test"
 //#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
-#define LEV0SERIESNAMEHMI "hmi.lev0f"
-#define TLMSERIESNAMEHMI "su_production.tlm_test"
+////#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_test"
+//For test with DDS on Jan 19, 2010
+#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_JAN2010"
+//#define LEV0SERIESNAMEHMI "hmi.lev0f"
+////#define TLMSERIESNAMEHMI "su_production.tlm_test"
+//For test with DDS on Jan 19, 2010
+#define TLMSERIESNAMEHMI "su_production.tlm_hmi_JAN2010"
+
+#define LEV0SERIESNAMEHMIGND "hmi_ground.lev0_dds"
+#define TLMSERIESNAMEHMIGND "hmi_ground.tlm_dds"
 //#define TLMSERIESNAMEHMI "hmi.tlm_reingest"
 
 //#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
-#define LEV0SERIESNAMEAIA "su_production.lev0f_aia"
-#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+//#define LEV0SERIESNAMEAIA "su_production.lev0f_aia"
+////#define LEV0SERIESNAMEAIA "aia.lev0f"
+//For test with DDS on Jan 19, 2010
+#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_JAN2010"
+////#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+//For test with DDS on Jan 19, 2010
+#define TLMSERIESNAMEAIA "su_production.tlm_aia_JAN2010"
+
+#define LEV0SERIESNAMEAIAGND "aia_ground.lev0_dds"
+#define TLMSERIESNAMEAIAGND "aia_ground.tlm_dds"
 //#define TLMSERIESNAMEAIA "aia.tlm_reingest"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
@@ -100,6 +116,7 @@
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define ENVFILE "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
+#define ENVFILE_GND "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
 
 extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int *Fsn);
 extern int write_hk_to_drms();
@@ -116,6 +133,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
   {ARG_FLAG, "r", "0", "restart flag"},
+  {ARG_FLAG, "g", "0", "ground data flag"},
   {ARG_END}
 };
 
@@ -159,6 +177,7 @@ long long vcdu_seq_num_next;
 long long total_missing_im_pdu;
 unsigned int vcdu_24_cnt, vcdu_24_cnt_next;
 int verbose;
+int grounddata;
 int appid;
 int hmiaiaflg;			//0=hmi, 1=aia
 int whk_status;
@@ -240,6 +259,7 @@ int nice_intro ()
 	"vc=<virt chan> indir=</dir> [outdir=</dir>] [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
+        "  -g: output to hmi_ground/aia_ground\n"
 	"  -r: restart. only used when we restart our selves periodically\n"
 	"vc= primary virt channel to listen to e.g. VC02\n"
 	"indir= directory containing the files to ingest\n"
@@ -248,6 +268,7 @@ int nice_intro ()
     return(1);
     }
   verbose = cmdparams_get_int (&cmdparams, "v", NULL);
+  grounddata = cmdparams_get_int (&cmdparams, "g", NULL);
   restartflg = cmdparams_get_int (&cmdparams, "r", NULL);
   return (0);
 }
@@ -1618,7 +1639,10 @@ void setup()
   printk("%s\n", datestr);
   getcwd(cwdbuf, 126);
   sprintf(idstr, "Cwd: %s\nCall: ", cwdbuf);
-  sprintf(string, "ingest_lev0 started as pid=%d user=%s\n", getpid(), username);
+  if(grounddata)
+    sprintf(string, "ingest_lev0 -g started as pid=%d user=%s\n", getpid(), username);
+  else
+    sprintf(string, "ingest_lev0 started as pid=%d user=%s\n", getpid(), username);
   strcat(idstr, string);
   printk("*%s", idstr);
   if(restartflg) printk("-r ");
@@ -1648,12 +1672,24 @@ void setup()
     }
   }
   if(hmiaiaflg) {
-    sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIA);
-    sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIA);
+    if(grounddata) {
+      sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIAGND);
+      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIAGND);
+    }
+    else {
+      sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIA);
+      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIA);
+    }
   }
   else {
-    sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
-    sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMI);
+    if(grounddata) {
+      sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMIGND);
+      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMIGND);
+    }
+    else {
+      sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
+      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMI);
+    }
   }
   if(!restartflg) {
     printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
@@ -1669,7 +1705,8 @@ void setup()
 
   //set environment variables for hk code
   //create filename and path
-  strcpy(envfile, ENVFILE );
+  if(grounddata) strcpy(envfile, ENVFILE_GND );
+  else strcpy(envfile, ENVFILE );
   //fopen file
   if(!(fp=fopen(envfile, "r"))) {
       printk("***Can't open %s. Check setting is correct\n", envfile);
