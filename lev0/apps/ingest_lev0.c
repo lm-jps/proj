@@ -819,6 +819,10 @@ int fsn_normal_new_image()
   sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
   rs = drms_create_record(drms_env, lev0seriesname, DRMS_PERMANENT, &dstatus);
   if(dstatus) {
+    if(dstatus == DRMS_ERROR_SUMOPEN) {
+      printk("**ERROR: DRMS can't open w/SUMS. Aborting...\n");
+      abortit(4);
+    }
     printk("**ERROR: Can't create record for %s fsn=%u\n", lev0seriesname, fsnx);
     return(1);
   }
@@ -1010,6 +1014,10 @@ startnew:
     sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
     rsc = drms_create_record(drms_env, lev0seriesname, DRMS_PERMANENT, &rstatus);
     if(rstatus) {
+      if(rstatus == DRMS_ERROR_SUMOPEN) {
+        printk("**ERROR: DRMS can't open w/SUMS. Aborting...\n");
+        abortit(4);
+      }
       printk("Can't create record for %s fsn=%u\n", lev0seriesname, fsnx);
       return(1);                     // !!!TBD ck this 
     }
@@ -1563,7 +1571,11 @@ void do_ingest()
     rs_tlm = drms_create_record(drms_env, tlmseriesname, 
 				DRMS_PERMANENT, &status);
     if(status) {
-      printk("***Can't create record for %s\n", tlmseriesname);
+      if(status == DRMS_ERROR_SUMOPEN) {
+        printk("**ERROR: DRMS can't open w/SUMS. Aborting...\n");
+        abortit(4);
+      }
+      printk("***Can't create record for %s. Status=%d\n", tlmseriesname, status);
       continue;
     }
     if((status = drms_setkey_string(rs_tlm, "filename", tlmnamekey))) {
