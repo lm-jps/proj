@@ -28,6 +28,7 @@
 #define kFileVersionKey "FILE_VERSION"
 #define kFdsProductCompHELIO "ORBIT_HELIO"
 #define kFdsProductCompGEO "ORBIT_GEO"
+#define kNotSpecified "NOT SPECIFIED"
 
 #define kSVFileSegName "FILENAME"
 
@@ -48,6 +49,7 @@
 #define kSVKeyVxGEO "GCIEC_VX"
 #define kSVKeyVyGEO "GCIEC_VY"
 #define kSVKeyVzGEO "GCIEC_VZ"
+#define kSVKeyDATE "DATE"
 
 #define kSVKey_idHELIO "id_HELIO"
 #define kSVKey_idGEO "id_GEO"
@@ -85,8 +87,9 @@ ModuleArgs_t module_args[] =
 {
   {ARG_STRING, "ns", kDefaultNamespace, "working namespace (sdo, sdo_ground, sdo_dev)"},
   {ARG_STRING, "seriesIn", kDefaultSeriesIn, "name of series containing FDS data"},
-  {ARG_STRING, "timeRange", "NOT SPECIFIED", "DRMS time interval encompassing data file dates"},
+  {ARG_STRING, "timeRange", kNotSpecified, "DRMS time interval encompassing data file dates"},
   {ARG_STRING, "seriesOut", kDefaultSeriesOut, "name of series in which to save extracted data"},
+  {ARG_STRING, "owner", kNotSpecified, "name of database user who owns output series"},
   {ARG_FLAG, "c", "0", "create the series only"},
   {ARG_END}
 };
@@ -298,7 +301,9 @@ static DRMS_Keyword_t *AddKey(DRMS_Record_t *prototype,
 			      const char *unit,
 			      DRMS_RecScopeType_t scope,
 			      const char *desc,
-			      int isprime)
+			      int intprime,
+                              int extprime,
+                              int *rank)
 {
    DRMS_Keyword_t *tKey = NULL;
 
@@ -307,7 +312,9 @@ static DRMS_Keyword_t *AddKey(DRMS_Record_t *prototype,
    memset(tKey, 0, sizeof(DRMS_Keyword_t));
    XASSERT(tKey->info = malloc(sizeof(DRMS_KeywordInfo_t)));
    memset(tKey->info, 0, sizeof(DRMS_KeywordInfo_t));
-	    
+
+   /* XXX check for invalid input */
+
    if (tKey && tKey->info)
    {
       /* record */
@@ -323,7 +330,7 @@ static DRMS_Keyword_t *AddKey(DRMS_Record_t *prototype,
       snprintf(tKey->info->unit, DRMS_MAXUNITLEN, "%s", unit);
       tKey->info->recscope = scope;
 
-      if (isprime)
+      if (intprime)
       {
          drms_keyword_setintprime(tKey);
       }
@@ -332,18 +339,32 @@ static DRMS_Keyword_t *AddKey(DRMS_Record_t *prototype,
          drms_keyword_unsetintprime(tKey);
       }
 
+      if (extprime)
+      {
+         drms_keyword_setextprime(tKey);
+      }
+      else
+      {
+         drms_keyword_unsetextprime(tKey);
+      }
+
       snprintf(tKey->info->description, DRMS_MAXCOMMENTLEN, "%s", desc);
 
       /* default value - missing */
       drms_missing(type, &(tKey->value));
+
+      /* Set rank - both in rank field and in flags (so that it gets saved into dbase) */     
+      tKey->info->rank = (*rank)++;
+      tKey->info->kwflags |= (tKey->info->rank + 1) << 16;
    }
 
    return tKey;
 }
 
-static void CreateOutSeries(DRMS_Env_t *drmsEnv, char *outSeries, int *status)
+static void CreateOutSeries(DRMS_Env_t *drmsEnv, char *outSeries, const char *owner, int *status)
 {
    int stat = DRMS_SUCCESS;
+   int rank;
 
    if (!drms_series_exists(drmsEnv, outSeries, &stat))
    {
@@ -381,78 +402,81 @@ static void CreateOutSeries(DRMS_Env_t *drmsEnv, char *outSeries, int *status)
 		      (void (*)(const void *, const void *)) drms_copy_keyword_struct);
 
 	    /* series info */
-	    char *user = getenv("USER");
 	    snprintf(prototype->seriesinfo->seriesname,
 		     DRMS_MAXSERIESNAMELEN,
 		     "%s",
 		     outSeries);
 
-	    strcpy(prototype->seriesinfo->author, "unknown");
-	    strcpy(prototype->seriesinfo->owner, "unknown");
-
-	    if (user)
-	    {
-	       if (strlen(user) < DRMS_MAXCOMMENTLEN)
-	       {
-		  strcpy(prototype->seriesinfo->author, user);
-	       }
-		    
-	       if (strlen(user) < DRMS_MAXOWNERLEN)
-	       {
-		  strcpy(prototype->seriesinfo->owner, user);
-	       }
-	    }
-
+	    strcpy(prototype->seriesinfo->author, "Art Amezcua");
+	    
 	    /* discard "Owner", fill it with the dbuser */
 	    if (drmsEnv->session->db_direct) 
 	    {
 	       strcpy(prototype->seriesinfo->owner, drmsEnv->session->db_handle->dbuser);
 	    }
+            else
+            {
+               if (owner && strlen(owner) < DRMS_MAXCOMMENTLEN)
+               {
+                  strcpy(prototype->seriesinfo->owner, owner);
+               }
+               else
+               {
+                  strcpy(prototype->seriesinfo->owner, "unknown");
+               }
+            }
 
 	    prototype->seriesinfo->unitsize = 0;
-            prototype->seriesinfo->tapegroup = 1;
+	    prototype->seriesinfo->archive = 0;
+	    prototype->seriesinfo->retention = 0;
+            prototype->seriesinfo->tapegroup = 0;
 
 	    snprintf(prototype->seriesinfo->description,
 		     DRMS_MAXCOMMENTLEN,
 		     "%s",
-		     "Helio- and Geo-centric orbit position and velocity vectors.  Prime key is observation date.");
+		     "Helio- and geo-centric orbit position and velocity vectors.");
 
 	    /* slotted keyword isdrmsprime, but not really prime */
-	    akey = AddKey(prototype, DRMS_TYPE_TIME, kSVKeyPrimary, "0", "UTC", kRecScopeType_TS_EQ, "slotted observation date", 1);
+            rank = 0;
+	    akey = AddKey(prototype, DRMS_TYPE_TIME, kSVKeyPrimary, "0", "UTC", kRecScopeType_TS_EQ, "Date of prediction", 0, 1, &rank);
 
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "index");
-	    pkey = AddKey(prototype, kIndexKWType, keyname, kIndexKWFormat, "none", kRecScopeType_Index, "index for OBS_DATE", 1);
+	    pkey = AddKey(prototype, kIndexKWType, keyname, kIndexKWFormat, "none", kRecScopeType_Index, "Slotted-key index for OBS_DATE", 1, 0, &rank);
             drms_keyword_setimplicit(pkey);
 
 	    /* epoch */
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "epoch");
-	    akey = AddKey(prototype, DRMS_TYPE_TIME, keyname, "0", "UTC", kRecScopeType_Constant, "epoch for OBS_DATE", 0);
+	    akey = AddKey(prototype, DRMS_TYPE_TIME, keyname, "0", "UTC", kRecScopeType_Constant, "MDI epoch - adjusted by 30 seconds to center slots on minutes", 0, 0, &rank);
 	    akey->value.time_val = sscan_time("1993.01.01_00:00:30_UT");
 
 	    /* step */
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "step");
-	    akey = AddKey(prototype, DRMS_TYPE_STRING, keyname, "%s", "none", kRecScopeType_Constant, "time step for OBS_DATE", 0);
-	    copy_string(&(akey->value.string_val), "1m");
+	    akey = AddKey(prototype, DRMS_TYPE_TIME, keyname, "%f", "secs", kRecScopeType_Constant, "Slots are 60 seconds wide", 0, 0, &rank);
+            akey->value.time_val = 60.0;
 
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyXHELIO, "%f", "km", kRecScopeType_Variable, "X position", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyYHELIO, "%f", "km", kRecScopeType_Variable, "Y position", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyZHELIO, "%f", "km", kRecScopeType_Variable, "Z position", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVxHELIO, "%f", "km/sec", kRecScopeType_Variable, "velocity along X", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVyHELIO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Y", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVzHELIO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Z", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyXHELIO, "%f", "km", kRecScopeType_Variable, "X position", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyYHELIO, "%f", "km", kRecScopeType_Variable, "Y position", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyZHELIO, "%f", "km", kRecScopeType_Variable, "Z position", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVxHELIO, "%f", "km/sec", kRecScopeType_Variable, "Velocity in the X direction", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVyHELIO, "%f", "km/sec", kRecScopeType_Variable, "Velocity in the Y direction", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVzHELIO, "%f", "km/sec", kRecScopeType_Variable, "Velocity in the Z direction", 0, 0, &rank);
 
-	    akey = AddKey(prototype, DRMS_TYPE_STRING, kSVKey_idHELIO, "%s", "unique id", kRecScopeType_Variable, "sdo.fds prime key values to locate HELIO source", 0);
-	    copy_string(&(akey->value.string_val), "unknown");
+	    akey = AddKey(prototype, DRMS_TYPE_STRING, kSVKey_idHELIO, "%s", "NA", kRecScopeType_Variable, "Record query to identify source file containing heliocentric data", 0, 0, &rank);
+	    copy_string(&(akey->value.string_val), "Unknown");
 
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyXGEO, "%f", "km", kRecScopeType_Variable, "X position", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyYGEO, "%f", "km", kRecScopeType_Variable, "Y position", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyZGEO, "%f", "km", kRecScopeType_Variable, "Z position", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVxGEO, "%f", "km/sec", kRecScopeType_Variable, "velocity along X", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVyGEO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Y", 0);
-	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVzGEO, "%f", "km/sec", kRecScopeType_Variable, "velocity along Z", 0);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyXGEO, "%f", "km", kRecScopeType_Variable, "X position", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyYGEO, "%f", "km", kRecScopeType_Variable, "Y position", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyZGEO, "%f", "km", kRecScopeType_Variable, "Z position", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVxGEO, "%f", "km/sec", kRecScopeType_Variable, "Velocity in the X direction", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVyGEO, "%f", "km/sec", kRecScopeType_Variable, "Velocity in the Y direction", 0, 0, &rank);
+	    AddKey(prototype, DRMS_TYPE_DOUBLE, kSVKeyVzGEO, "%f", "km/sec", kRecScopeType_Variable, "Velocity in the Z direction", 0, 0, &rank);
 
-	    akey = AddKey(prototype, DRMS_TYPE_STRING, kSVKey_idGEO, "%s", "unique id", kRecScopeType_Variable, "sdo.fds prime key values to locate GEO source", 0);
-	    copy_string(&(akey->value.string_val), "unknown");
+	    akey = AddKey(prototype, DRMS_TYPE_STRING, kSVKey_idGEO, "%s", "NA", kRecScopeType_Variable, "Record query to identify source file containing geocentric data", 0, 0, &rank);
+	    copy_string(&(akey->value.string_val), "Unknown");
+
+            /* DATE keyword that indicates date of record creation. */
+            AddKey(prototype, DRMS_TYPE_TIME, kSVKeyDATE, "0", "ISO", kRecScopeType_Variable, "Date of orbit-data ingestion; ISO 86\
+01", 0, 0, &rank);
 
 	    prototype->seriesinfo->pidx_keywords[0] = pkey;
 	    prototype->seriesinfo->pidx_num = 1;
@@ -468,9 +492,10 @@ static void CreateOutSeries(DRMS_Env_t *drmsEnv, char *outSeries, int *status)
    }
 }
 
-static void CreateHistSeries(DRMS_Env_t *drmsEnv, char *histSeries, int *status)
+static void CreateHistSeries(DRMS_Env_t *drmsEnv, char *histSeries, const char *owner, int *status)
 {
    int stat = DRMS_SUCCESS;
+   int rank;
 
    if (!drms_series_exists(drmsEnv, histSeries, &stat))
    {
@@ -511,62 +536,61 @@ static void CreateHistSeries(DRMS_Env_t *drmsEnv, char *histSeries, int *status)
 		      (void (*)(const void *, const void *)) drms_copy_keyword_struct);
 
 	    /* series info */
-	    char *user = getenv("USER");
 	    snprintf(prototype->seriesinfo->seriesname,
 		     DRMS_MAXSERIESNAMELEN,
 		     "%s",
 		     histSeries);
 
-	    strcpy(prototype->seriesinfo->author, "unknown");
-	    strcpy(prototype->seriesinfo->owner, "unknown");
-
-	    if (user)
-	    {
-	       if (strlen(user) < DRMS_MAXCOMMENTLEN)
-	       {
-		  strcpy(prototype->seriesinfo->author, user);
-	       }
-		    
-	       if (strlen(user) < DRMS_MAXOWNERLEN)
-	       {
-		  strcpy(prototype->seriesinfo->owner, user);
-	       }
-	    }
-
+	    strcpy(prototype->seriesinfo->author, "Art Amezcua");
+	    
 	    /* discard "Owner", fill it with the dbuser */
 	    if (drmsEnv->session->db_direct) 
 	    {
 	       strcpy(prototype->seriesinfo->owner, drmsEnv->session->db_handle->dbuser);
 	    }
+            else
+            {
+               if (owner && strlen(owner) < DRMS_MAXCOMMENTLEN)
+               {
+                  strcpy(prototype->seriesinfo->owner, owner);
+               }
+               else
+               {
+                  strcpy(prototype->seriesinfo->owner, "unknown");
+               }
+            }
 
 	    prototype->seriesinfo->unitsize = 0;
-	    prototype->seriesinfo->tapegroup = 1;
+	    prototype->seriesinfo->archive = 0;
+	    prototype->seriesinfo->retention = 0;
+	    prototype->seriesinfo->tapegroup = 0;
 
 	    snprintf(prototype->seriesinfo->description,
 		     DRMS_MAXCOMMENTLEN,
 		     "%s",
-		     "Helio- and Geo-centric orbit position and velocity vectors ingestion history.");
+		     "Ingestion history of helio- and geo-centric orbit prediction data.");
 
 	    /* slotted keyword isdrmsprime, but not really prime */
-	    akey = AddKey(prototype, DRMS_TYPE_TIME, kObsDateKey, "0", "UTC", kRecScopeType_TS_EQ, "slotted observation date", 1);
+            rank = 0;
+	    akey = AddKey(prototype, DRMS_TYPE_TIME, kObsDateKey, "0", "UTC", kRecScopeType_TS_EQ, "Date embedded in orbit file name", 0, 1, &rank);
 
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "index");
-	    pkey1 = AddKey(prototype, kIndexKWType, keyname, kIndexKWFormat, "none", kRecScopeType_Index, "index for OBS_DATE", 1);
+	    pkey1 = AddKey(prototype, kIndexKWType, keyname, kIndexKWFormat, "none", kRecScopeType_Index, "Slotted-key index for OBS_DATE", 1, 0, &rank);
             drms_keyword_setimplicit(pkey1);
 
 	    /* epoch */
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "epoch");
-	    akey = AddKey(prototype, DRMS_TYPE_TIME, keyname, "0", "UTC", kRecScopeType_Constant, "epoch for OBS_DATE", 0);
+	    akey = AddKey(prototype, DRMS_TYPE_TIME, keyname, "0", "UTC", kRecScopeType_Constant, "MDI epoch - adjusted by 12 hours to center slots on days.", 0, 0, &rank);
 	    akey->value.time_val = sscan_time("1993.01.01_12:00:00_UT");
 
 	    /* step */
 	    snprintf(keyname, sizeof(keyname), "%s_%s", kSVKeyPrimary, "step");
-	    akey = AddKey(prototype, DRMS_TYPE_STRING, keyname, "%s", "none", kRecScopeType_Constant, "time step for OBS_DATE", 0);
-	    copy_string(&(akey->value.string_val), "1440m");
+            akey = AddKey(prototype, DRMS_TYPE_TIME, keyname, "%f", "day", kRecScopeType_Constant, "Slots are 1 day wide", 0, 0, &rank);
+            akey->value.time_val = 86400.0;
 
-            pkey2 = AddKey(prototype, DRMS_TYPE_STRING, kFdsProductCompKey, "%s", "none", kRecScopeType_Variable, "FDS data product component", 1);
-            pkey3 = AddKey(prototype, DRMS_TYPE_STRING, kFdsDataFormatKey, "%s", "none", kRecScopeType_Variable, "Format of data file contained in segment", 1);
-            pkey4 = AddKey(prototype, DRMS_TYPE_INT, kFileVersionKey, "%d", "none", kRecScopeType_Variable, "FDS data product", 1);
+            pkey2 = AddKey(prototype, DRMS_TYPE_STRING, kFdsProductCompKey, "%s", "none", kRecScopeType_Variable, "FDS data-product component", 1, 1, &rank);
+            pkey3 = AddKey(prototype, DRMS_TYPE_STRING, kFdsDataFormatKey, "%s", "none", kRecScopeType_Variable, "Format of data file contained in segment", 1, 1, &rank);
+            pkey4 = AddKey(prototype, DRMS_TYPE_INT, kFileVersionKey, "%d", "none", kRecScopeType_Variable, "FDS data product", 1, 1, &rank);
 
 	    prototype->seriesinfo->pidx_keywords[0] = pkey1;
 	    prototype->seriesinfo->pidx_keywords[1] = pkey2;
@@ -861,7 +885,8 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
 			       char *idHELIO,
 			       char *filePathGEO, 
 			       char *idGEO,
-			       char *outSeries)
+			       char *outSeries, 
+                               const char *owner)
 {
    int stat = DRMS_SUCCESS;
    int error = 0;
@@ -916,7 +941,7 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
       char lineBuf[kSVLineMax];
       int oneMore = -1;
 
-      CreateOutSeries(drmsEnv, outSeries, &stat);
+      CreateOutSeries(drmsEnv, outSeries, owner, &stat);
 
       if (filePathGEO)
       {
@@ -1518,6 +1543,12 @@ int DoIt(void)
       const char *si = cmdparams_get_str(&cmdparams, "seriesIn", NULL);
       const char *so = cmdparams_get_str(&cmdparams, "seriesOut", NULL);
       const char *timeRange = cmdparams_get_str(&cmdparams, "timeRange", NULL);
+      const char *owner = cmdparams_get_str(&cmdparams, "owner", NULL);
+
+      if (strcmp(owner, kNotSpecified) == 0)
+      {
+         owner = NULL;
+      }
 
       snprintf(seriesin, sizeof(seriesin), "%s.%s", ns, si);
       snprintf(seriesout, sizeof(seriesout), "%s.%s", ns, so);
@@ -1525,7 +1556,7 @@ int DoIt(void)
 
       if (cmdparams_isflagset(&cmdparams, "c"))
       {
-	 CreateOutSeries(drms_env, seriesout, &stat);
+	 CreateOutSeries(drms_env, seriesout, owner, &stat);
 	 return 0;
       }
 
@@ -1929,7 +1960,8 @@ int DoIt(void)
                                               idHELIO,
                                               filePathGEO,
                                               idGEO,
-                                              seriesout);
+                                              seriesout,
+                                              owner);
                }
             }
 	    
@@ -1941,7 +1973,11 @@ int DoIt(void)
               if (!history)
               {
                  /* Create history series. */
-                 CreateHistSeries(drms_env, serieshist, &stat);
+                 CreateHistSeries(drms_env, serieshist, owner, &stat);
+                 if (!stat)
+                 {
+                    history = 1;
+                 }
               }
               
               int nhist = 0;

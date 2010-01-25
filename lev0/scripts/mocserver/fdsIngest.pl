@@ -5,6 +5,11 @@
 # defined by 464-GS-ICD-0068.
 
 use Cwd;
+use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+
+use constant kDateKey => "DATE";
+use constant kUnixEpoch => -220924792; # seconds before JSOC epoch
+
 
 # DRMS series in which to place the data files; default is sdo.fds
 my($series) = "sdo.fds";
@@ -20,6 +25,7 @@ $primaryKey[1] = "FDS_PRODUCT_COMP";
 $primaryKey[2] = "OBS_DATE";
 $primaryKey[3] = "DATA_FORMAT";
 $primaryKey[4] = "FILE_VERSION";
+
 
 # other keys
 my(@otherKey);
@@ -370,34 +376,65 @@ sub CallSetKey
 	    exit($RET_TIMECONV);
 	}
 	
-	if (defined($convTime = <TIMECONV>))
+	if (!defined($convTime = <TIMECONV>))
 	{
-	    my($skCmd);
-	    my($jsocDate);
-	    
-	    chomp($convTime);
-	    $jsocDate = $convTime;
-	    
-	    $skCmd = "set_keys -c ds=$series $primaryKey[1]=$prodComp $primaryKey[2]=$jsocDate $primaryKey[3]=$fileFormat $primaryKey[4]=$fileVersion $otherKey[0]=$dataType $segmentName[0]=$filePath";
-	    print STDOUT "  Running $skCmd\n";
-	    if (system($skCmd) != 0)
-	    {
-		print STDERR "$LOGALL: Error calling set_keys: $?\n";
-		exit($RET_SETKEYS);
-	    }
+           print STDERR "$LOGALL: Problem running time_conv: $tcCmdLine\n";
+           exit($RET_TIMECONV);
+        }
 
-	    $numRecsAdded++;
-	    $numFilesAdded++;
-	    $err = VerifyFileCopy($series, $dataType, $prodComp, $jsocDate, $fileFormat, $fileVersion, $filePath);
+	close (TIMECONV);        
 
-	    # delete source file, if requested
-	    if (!$err && $removefiles eq "yes")
-	    {
-		unlink($filePath);
-	    }
-	}
+        my($skCmd);
+        my($jsocDate);
+        my($datekey) = kDateKey;
+        my($currtime);
+        my($currjsoctime);
+        my($currtimestr);
+        my($unixepoch);
+	    
+        chomp($convTime);
+        $jsocDate = $convTime;
+            
+        # Unfortunately, set_keys requires a time string and not a double value, which means 
+        # we have to call drms yet again
+        $currtime = gettimeofday();
+        $unixepoch = kUnixEpoch;
+        $currjsoctime = $currtime + $unixepoch;
+
+        $tcCmdLine = "time_convert s=$currjsoctime o=cal zone=UT |";
+
+        if (!open(TIMECONV, $tcCmdLine))
+        {
+           print STDERR "$LOGALL: Couldn't run time_conv: $tcCmdLine\n";
+           exit($RET_TIMECONV);
+        }
 	
-	close (TIMECONV);
+	if (!defined($currtimestr = <TIMECONV>))
+	{
+           print STDERR "$LOGALL: Problem running time_conv: $tcCmdLine\n";
+           exit($RET_TIMECONV);
+        }
+
+        chomp($currtimestr);
+
+        $skCmd = "set_keys -c ds=$series $primaryKey[1]=$prodComp $primaryKey[2]=$jsocDate $primaryKey[3]=$fileFormat $primaryKey[4]=$fileVersion $otherKey[0]=$dataType $segmentName[0]=$filePath $datekey=$currtimestr";
+        print STDOUT "  Running $skCmd\n";
+
+        if (system($skCmd) != 0)
+        {
+           print STDERR "$LOGALL: Error calling set_keys: $?\n";
+           exit($RET_SETKEYS);
+        }
+
+        $numRecsAdded++;
+        $numFilesAdded++;
+        $err = VerifyFileCopy($series, $dataType, $prodComp, $jsocDate, $fileFormat, $fileVersion, $filePath);
+
+        # delete source file, if requested
+        if (!$err && $removefiles eq "yes")
+        {
+           unlink($filePath);
+        }
     }
 }
 
