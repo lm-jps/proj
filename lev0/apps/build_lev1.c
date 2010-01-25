@@ -382,7 +382,7 @@ int do_ingest(long long bbrec, long long eerec)
       }
     }
     p_imageloc = imageloc;
-//    rstatus = get_image_location(drms_env, ncnt, &p_imageloc);
+    rstatus = get_image_location(drms_env, ncnt, &p_imageloc);
 
 
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
@@ -459,6 +459,7 @@ int do_ingest(long long bbrec, long long eerec)
           drms_setkey_string(rs, "ACS_SAFE", ptdata.acs_safe);
           drms_setkey_string(rs, "ACS_SAFE", ptdata.acs_safe);
           drms_setkey_string(rs, "ASD_REC", ptdata.asd_rec);
+          drms_setkey_string(rs, "ACS_CGT", ptdata.acs_cgt);
           //note: acs_cgt not yet in jsd
       }
       if(IOinfo) {
