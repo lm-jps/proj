@@ -3601,6 +3601,9 @@ static NameVal_t pre[] = {
         "atto",         1e-18,
         };
 
+#if 0
+already defined in libmisc.a
+
 char *mprefix(char *str, double *mult)
 {
 int i;
@@ -3619,7 +3622,7 @@ for (i=0; i < n_prefixes; ++i)
 *mult = 1.0;
 return(str);
 }
-
+#endif
 
 
 /*****************************************************************************/
@@ -3701,6 +3704,9 @@ static int lookup(char *n, nametable *t)
 	return(t->code);
 }
 
+#if 0
+already defined in libmisc.a
+
 TIME atoinc(char *str)
 {
 double num, mult;
@@ -3736,8 +3742,12 @@ default:
 	return(0);
 	}
 }
+#endif
 
 #define integral(x) ((x)==(long)(x))
+
+#if 0
+already defined in libmisc.a
 
 char *sprint_inc(char *str, TIME inc)
 {
@@ -3764,6 +3774,7 @@ TIME inc;
 {
 return(fprint_inc(stdout,inc));
 }
+#endif
 
 /*****************************************************************************/
 // from sds_key.c
