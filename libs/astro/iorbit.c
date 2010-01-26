@@ -17,6 +17,7 @@
 #define kVZHCI "HCIEC_VZ"
 #define kOBSDATE "OBS_DATE"
 #define kOBSDATE_INDEX "OBS_DATE_index"
+#define kMaxRecIdSize 128
 
 #define kCACHEKEYSIZE 64
 #define kCACHESIZE 128
@@ -27,6 +28,17 @@
 /* Ecliptic values */
 #define kALPHA (75.76 * kDEG2RAD)
 #define kDELTA (7.25 * kDEG2RAD)
+
+#define kRSUNREF 696000000.00
+
+/* For SDOCarringtonCoords() */
+#define TWO_PI  (2*kPI)
+#define C  (299792.458)                  // c in km/s
+#define CARR_DEGDAY   (14.1844000)       // Adopted degrees per day, includes precession
+#define T2000           (725760032.0)    // sscan_time("2000.01.01_00") J2000 base time
+#define TCARR           (-3881476800.0)  // sscan_time("1854.01.01_12:00_TAI")   Carr ref epcoh est.
+#define CARR_ROT_SYNODIC    (27.275311 * 86400.0) // estimate of synodic carrington rotation period
+#define DEGRAD  (180.0/kPI)
 
 enum IORBIT_Slotpos_enum
 {
@@ -73,6 +85,44 @@ static int gGridCurrPos = -1;
 const int gMinAbove = 16; /* min no. of vectors above max tgttime */
 const int gMinBelow = 16; /* min no. of vectors below min tgttime */
 
+
+// SDOCarringtonCoords takes time, distance to Sun, B0 in radians, and the heliocentric ecliptic longitude in radians.
+// t in TAI and obsdist in km.
+// It returns Carrington rotation, latitude, and longitude, as int for rotation and in degrees for angles.
+// It corrects for light travel time and has coefs that correct for aberration.
+// crot, L, B are Carrington rotation, longitude, and latitude of sub-observer point
+// The method has been tested for 2000 to 2010 with errors never more than 0.005 degrees compared to JPL tables.
+// BUT there may be long term drifts of up to 0.015 degrees per year depending on the input coordinate system
+// assumptions compared to the test series.
+void SDOCarringtonCoords(TIME t, double obsdist,  double b, double hci_long,  int *crot, double *L, double *B)
+{
+   double solrots;       // solar rotations by time t
+   double carr_rots;     // Rotations since Carrington Epoch
+   double l;             // longitude working var (rotations)
+   double tlight;        // Light travel time from Sun center to observer
+   double clest;         // estimate of carrington longitude
+   int rot;              // Carrington rotation number of sub-observer point
+
+   tlight = obsdist/C;
+   solrots = (CARR_DEGDAY * (t - tlight - TCARR)/86400 -0.125)/DEGRAD;
+   l = hci_long - solrots;
+   l = modf(l/TWO_PI, &carr_rots);  // carrington longitude in rotations with bias
+   if(l < 0) l += 1;
+
+   // Get rotation number, first from "guess" then adjust based on accurate longitude.
+   // guess is good to a few degrees.  2 rotations happened before the Carrington ref time
+   carr_rots = 3.0 + (t - tlight - TCARR)/CARR_ROT_SYNODIC;
+   rot = (int)carr_rots;
+   clest = (1 + rot - carr_rots);
+   if ((l - clest) > 0.5)
+     rot++;
+   if ((clest - l) > 0.5)
+     rot--;
+
+   *crot = rot;
+   *L = 360*l;
+   *B = b * DEGRAD;
+}
 
 /* function to compare times - used by SortTimes() */
 static int CmpTimes(const void *a, const void *b)
@@ -689,7 +739,8 @@ static int GetGridVectors(DRMS_Env_t *env,
                           LinkedList_t **gvectors,
                           int *ngvecs,
                           HContainer_t **indices,
-                          const char *optfilter)
+                          const char *optfilter,
+                          LinkedList_t **recids)
 {
    int err = 0;
    int actpoints;
@@ -711,6 +762,11 @@ static int GetGridVectors(DRMS_Env_t *env,
    /* key is the grid vector slot (one grid vector per series slot)
     * and value is the index into gvectors. */
    HContainer_t *slottovecindex = NULL;
+
+   if (recids)
+   {
+      *recids = list_llcreate(kMaxRecIdSize, NULL);
+   }
 
    if (gvectors)
    {
@@ -783,6 +839,16 @@ static int GetGridVectors(DRMS_Env_t *env,
             {
                vecsbelow[nbelow - actpoints - 1] = *vec;
                actpoints++;
+               if (recids &&*recids && actpoints == 1)
+               {
+                  /* This grid point was immediately below the target time. */
+                  char tbuf[48];
+                  char recid[kMaxRecIdSize];
+
+                  sprint_time(tbuf, vecsbelow[nbelow - 1].obstime, "UTC", 0);
+                  snprintf(recid, sizeof(recid), "%s[%s]", srcseries, tbuf);
+                  list_llinserttail(*recids, recid);
+               }
             }
 
             if (actpoints == nbelow)
@@ -1048,12 +1114,18 @@ static int iorbit_interpolate(IORBIT_Alg_t alg,
 }
 
 /* vec - array of interpolated vectors */
-int CalcSolarVelocities(IORBIT_Vector_t *vec, int nvecs, double **hr, double **hvr, double **hvw, double **hvn)
+/* hb, hl in radians */
+int CalcSolarVelocities(IORBIT_Vector_t *vec, 
+                        int nvecs,
+                        double **hr, 
+                        double **hvr, 
+                        double **hvw, 
+                        double **hvn, 
+                        double **hb, 
+                        double **hl)
 {
    int err = 0;
-   
-   double *hb = NULL; /* radians */
-   double *hl = NULL; /* radians */
+
    double shvx;
    double shvy;
    double shvz;
@@ -1085,8 +1157,8 @@ int CalcSolarVelocities(IORBIT_Vector_t *vec, int nvecs, double **hr, double **h
       *hvn = (double *)malloc(sizeof(double) * nvecs);
    }
 
-   hb = (double *)malloc(sizeof(double) * nvecs);
-   hl = (double *)malloc(sizeof(double) * nvecs);
+   *hb = (double *)malloc(sizeof(double) * nvecs);
+   *hl = (double *)malloc(sizeof(double) * nvecs);
 
    IORBIT_Vector_t *cvec = NULL;
    int ivec;
@@ -1094,15 +1166,15 @@ int CalcSolarVelocities(IORBIT_Vector_t *vec, int nvecs, double **hr, double **h
    {
       cvec = &(vec[ivec]);
 
-      /* solar radius */
+      /* distance to sun */
       (*hr)[ivec] = sqrt(cvec->hciX * cvec->hciX +
                          cvec->hciY * cvec->hciY +
                          cvec->hciZ * cvec->hciZ);
 
 
       /* beta and l0 angles */
-      hb[ivec] = asin((tzx * cvec->hciX + tzy * cvec->hciY + tzz * cvec->hciZ) / (*hr)[ivec]);
-      hl[ivec] = atan2((tyx * cvec->hciX + tyy * cvec->hciY + tyz * cvec->hciZ),  
+      (*hb)[ivec] = asin((tzx * cvec->hciX + tzy * cvec->hciY + tzz * cvec->hciZ) / (*hr)[ivec]);
+      (*hl)[ivec] = atan2((tyx * cvec->hciX + tyy * cvec->hciY + tyz * cvec->hciZ),  
                         (txx * cvec->hciX + txy * cvec->hciY + txz * cvec->hciZ));
 
       /* velocities transformed to solar-rotation-axis coordinates */
@@ -1112,28 +1184,18 @@ int CalcSolarVelocities(IORBIT_Vector_t *vec, int nvecs, double **hr, double **h
 
       if (hvr)
       {
-         (*hvr)[ivec] = cos(hb[ivec]) * (cos(hl[ivec]) * shvx + sin(hl[ivec]) * shvy) + sin(hb[ivec]) * shvz;
+         (*hvr)[ivec] = cos((*hb)[ivec]) * (cos((*hl)[ivec]) * shvx + sin((*hl)[ivec]) * shvy) + sin((*hb)[ivec]) * shvz;
       }
 
       if (hvw)
       {
-         (*hvw)[ivec] = -sin(hl[ivec]) * shvx + cos(hl[ivec]) * shvy;
+         (*hvw)[ivec] = -sin((*hl)[ivec]) * shvx + cos((*hl)[ivec]) * shvy;
       }
 
       if (hvn)
       {
-         (*hvn)[ivec] = -sin(hb[ivec]) * (cos(hl[ivec]) * shvx + sin(hl[ivec]) * shvy) + cos(hb[ivec]) * shvz;
+         (*hvn)[ivec] = -sin((*hb)[ivec]) * (cos((*hl)[ivec]) * shvx + sin((*hl)[ivec]) * shvy) + cos((*hb)[ivec]) * shvz;
       }
-   }
-
-   if (hb)
-   {
-      free(hb);
-   }
-
-   if (hl)
-   {
-      free(hl);
    }
 
    return err;
@@ -1188,7 +1250,7 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       {
          retvec = &((*info)[ivec]);
 
-         /* Fill in with missing values if target time was missing */
+         /* Initialize with missing values */
          retvec->obstime = DRMS_MISSING_TIME;
          retvec->hciX = DRMS_MISSING_DOUBLE;
          retvec->hciY = DRMS_MISSING_DOUBLE;
@@ -1203,17 +1265,24 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
          retvec->gciVY = DRMS_MISSING_DOUBLE;
          retvec->gciVZ = DRMS_MISSING_DOUBLE;
          retvec->dsun_obs = DRMS_MISSING_DOUBLE;
+         retvec->rsun_obs = DRMS_MISSING_DOUBLE;
          retvec->obs_vr = DRMS_MISSING_DOUBLE;
          retvec->obs_vw = DRMS_MISSING_DOUBLE;
          retvec->obs_vn = DRMS_MISSING_DOUBLE;
+         retvec->crln_obs = DRMS_MISSING_DOUBLE;
+         retvec->crlt_obs = DRMS_MISSING_DOUBLE;
+         retvec->car_rot = DRMS_MISSING_INT;
+         snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s", DRMS_MISSING_STRING);
       }
    }
    else if (err == kLIBASTRO_Success)
    {
       LinkedList_t *listvecs = NULL;
+      LinkedList_t *listrecids = NULL;
       HContainer_t *indexmap = NULL;
       IORBIT_Vector_t *vecs = NULL;
       IORBIT_Vector_t *interp = NULL;
+      char *recids = NULL;
 
       double *dsun_obs = NULL;
       double *hvr = NULL;
@@ -1316,7 +1385,8 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                      * an index into listvecs. The resulting vector is the 
                                      * grid vector that has an obstime that is the largest
                                      * time smaller than the target time. */
-                         optfilter))
+                         optfilter,
+                         &listrecids))
       {
          err = kLIBASTRO_InsufficientData;
       }
@@ -1330,17 +1400,26 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       if (!err && listvecs && indexmap)
       {
          int ivec;
-         ListNode_t *gv = NULL;
+         int irecid;
+         ListNode_t *ln = NULL;
 
          /* Make an array out of the list of grid vectors */
          vecs = malloc(sizeof(IORBIT_Vector_t) * listvecs->nitems);
          list_llreset(listvecs);
          ivec = 0;
 
-         while ((gv = list_llnext(listvecs)) != NULL)
+         while ((ln = list_llnext(listvecs)) != NULL)
          {
-            vecs[ivec] = *((IORBIT_Vector_t *)(gv->data));
-            ivec++;
+            vecs[ivec++] = *((IORBIT_Vector_t *)(ln->data));
+         }
+
+         recids = malloc(kMaxRecIdSize * listrecids->nitems);
+         list_llreset(listrecids);
+         irecid = 0;
+
+         while ((ln = list_llnext(listrecids)) != NULL)
+         {
+            snprintf(&recids[kMaxRecIdSize * irecid++], kMaxRecIdSize, "%s", (char *)(ln->data));
          }
 
          if (env->verbose)
@@ -1356,6 +1435,12 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                  nitems,
                                  &interp))
          {
+            double *hb = NULL;
+            double *hl = NULL;
+            int crot;
+            double l0;
+            double b0;
+
             if (env->verbose)
             {
                fprintf(stdout, "iorbit_interpolate() seconds elapsed: %f\n", GetElapsedTime(tmr));
@@ -1365,7 +1450,7 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                tmr = CreateTimer();
             }
 
-            if (!CalcSolarVelocities(interp, nitems, &dsun_obs, &hvr, &hvw, &hvn))
+            if (!CalcSolarVelocities(interp, nitems, &dsun_obs, &hvr, &hvw, &hvn, &hb, &hl))
             {
                if (env->verbose)
                {
@@ -1378,48 +1463,49 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                {
                   retvec = &((*info)[ivec]);
 
-                  if (drms_ismissing_time(interp[ivec].obstime))
-                  {
-                     /* Fill in with missing values if target time was missing */
-                     retvec->obstime = DRMS_MISSING_TIME;
-                     retvec->hciX = DRMS_MISSING_DOUBLE;
-                     retvec->hciY = DRMS_MISSING_DOUBLE;
-                     retvec->hciZ = DRMS_MISSING_DOUBLE;
-                     retvec->hciVX = DRMS_MISSING_DOUBLE;
-                     retvec->hciVY = DRMS_MISSING_DOUBLE;
-                     retvec->hciVZ = DRMS_MISSING_DOUBLE;
-                     retvec->gciX = DRMS_MISSING_DOUBLE;
-                     retvec->gciY = DRMS_MISSING_DOUBLE;
-                     retvec->gciZ = DRMS_MISSING_DOUBLE;
-                     retvec->gciVX = DRMS_MISSING_DOUBLE;
-                     retvec->gciVY = DRMS_MISSING_DOUBLE;
-                     retvec->gciVZ = DRMS_MISSING_DOUBLE;
-                     retvec->dsun_obs = DRMS_MISSING_DOUBLE;
-                     retvec->obs_vr = DRMS_MISSING_DOUBLE;
-                     retvec->obs_vw = DRMS_MISSING_DOUBLE;
-                     retvec->obs_vn = DRMS_MISSING_DOUBLE;
-                  }
-                  else
+                  /* Carrington coordinates */
+                  SDOCarringtonCoords(interp[ivec].obstime, dsun_obs[ivec], hb[ivec], hl[ivec], &crot, &l0, &b0);
+
+                  if (!drms_ismissing_time(interp[ivec].obstime))
                   {
                      retvec->obstime = interp[ivec].obstime;
-                     retvec->hciX = interp[ivec].hciX;
-                     retvec->hciY = interp[ivec].hciY;
-                     retvec->hciZ = interp[ivec].hciZ;
-                     retvec->hciVX = interp[ivec].hciVX;
-                     retvec->hciVY = interp[ivec].hciVY;
-                     retvec->hciVZ = interp[ivec].hciVZ;
-                     retvec->gciX = interp[ivec].gciX;
-                     retvec->gciY = interp[ivec].gciY;
-                     retvec->gciZ = interp[ivec].gciZ;
-                     retvec->gciVX = interp[ivec].gciVX;
-                     retvec->gciVY = interp[ivec].gciVY;
-                     retvec->gciVZ = interp[ivec].gciVZ;
-                     retvec->dsun_obs = dsun_obs[ivec];
-                     retvec->obs_vr = hvr[ivec];
-                     retvec->obs_vw = hvw[ivec];
-                     retvec->obs_vn = hvn[ivec];
+
+                     /* Return all positions and velocity scalars in m and m/s (input is km and km/s). */
+                     retvec->hciX = interp[ivec].hciX * 1000;
+                     retvec->hciY = interp[ivec].hciY * 1000;
+                     retvec->hciZ = interp[ivec].hciZ * 1000;
+                     retvec->hciVX = interp[ivec].hciVX * 1000;
+                     retvec->hciVY = interp[ivec].hciVY * 1000;
+                     retvec->hciVZ = interp[ivec].hciVZ * 1000;
+                     retvec->gciX = interp[ivec].gciX * 1000;
+                     retvec->gciY = interp[ivec].gciY * 1000;
+                     retvec->gciZ = interp[ivec].gciZ * 1000;
+                     retvec->gciVX = interp[ivec].gciVX * 1000;
+                     retvec->gciVY = interp[ivec].gciVY * 1000;
+                     retvec->gciVZ = interp[ivec].gciVZ * 1000;
+                     retvec->dsun_obs = dsun_obs[ivec] * 1000;
+                     retvec->obs_vr = hvr[ivec] * 1000;
+                     retvec->obs_vw = hvw[ivec] * 1000;
+                     retvec->obs_vn = hvn[ivec] * 1000;
+                     retvec->rsun_obs = (retvec->dsun_obs < 0.001 & retvec->dsun_obs > -0.001 ? DRMS_MISSING_DOUBLE : 
+                                         648000 * asin(kRSUNREF / retvec->dsun_obs) / kPI); 
+                     retvec->crln_obs = l0;
+                     retvec->crlt_obs = b0;
+                     retvec->car_rot = crot;
+                     /* ok to use ivec - there is one recid per vector */
+                     snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s", &recids[kMaxRecIdSize * ivec]);
                   }
                }
+            }
+
+            if (hb)
+            {
+               free(hb);
+            }
+
+            if (hl)
+            {
+               free(hl);
             }
          }
          else
@@ -1455,6 +1541,11 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
          free(vecs);
       }
 
+      if (recids)
+      {
+         free(recids);
+      }
+
       if (interp)
       {
          free(interp);
@@ -1463,6 +1554,11 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       if (listvecs)
       {
          list_llfree(&listvecs);
+      }
+
+      if (listrecids)
+      {
+         list_llfree(&listrecids);
       }
 
       if (indexmap)
@@ -1483,3 +1579,4 @@ void iorbit_cleanup()
 {
    DestroyCache();
 }
+

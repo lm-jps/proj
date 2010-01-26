@@ -7,6 +7,7 @@
 #include "cmdparams.h"
 
 #define kALLDATAMISSING         0
+#define kMaxRecQuery            128
 
 typedef enum 
 {
@@ -178,12 +179,14 @@ struct IORBIT_Info_struct
   double gciVY;
   double gciVZ;
   double dsun_obs;
+  double rsun_obs;
   double obs_vr;
   double obs_vw;
   double obs_vn;
   double crln_obs;
   double crlt_obs;
-  double car_rot;
+  int car_rot;
+  char orb_rec[kMaxRecQuery];
 };
 
 typedef struct IORBIT_Info_struct IORBIT_Info_t;

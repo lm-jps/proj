@@ -214,16 +214,17 @@ int DoIt(void)
          char timestr[128];
          int iinfo;
 
-         fprintf(stdout, "%-32s%-20s%-20s%-20s%-20s\n", 
-                 "obstime", "dsun_obs", "obs_vr", "obs_vw", "obs_vn");
+         fprintf(stdout, "%-32s%-20s%-15s%-15s%-15s%-12s%-12s%-12s%-10s%-32s\n", 
+                 "obstime", "dsun_obs", "obs_vr", "obs_vw", "obs_vn", "rsun_obs", "crln_obs", "crlt_obs", "car_rot", "orb_rec");
 
          for (iinfo = 0; iinfo < ntimes; iinfo++)
          {
             infoitem = &(info[iinfo]);
             sprint_time(timestr, infoitem->obstime, "UTC", 0);
 
-            fprintf(stdout, "%-32s%-20.8f%-20.8f%-20.8f%-20.8f\n", 
-                    timestr, infoitem->dsun_obs, infoitem->obs_vr, infoitem->obs_vw, infoitem->obs_vn);
+            fprintf(stdout, "%-32s%-20.3f%-15.3f%-15.3f%-15.3f%-12.3f%-12.3f%-12.3f%-10d%-32s\n", 
+                    timestr, infoitem->dsun_obs, infoitem->obs_vr, infoitem->obs_vw, infoitem->obs_vn, 
+                    infoitem->rsun_obs, infoitem->crln_obs, infoitem->crlt_obs, infoitem->car_rot, infoitem->orb_rec);
          }
 
          /* Now, let's print out interpolated heliocentric vectors for kicks */
@@ -231,12 +232,12 @@ int DoIt(void)
 
          if (!testinterp)
          {
-            fprintf(stdout, "%-24s%-12s%-20s%-20s%-20s%-20s%-20s%-20s\n", 
+            fprintf(stdout, "%-24s%-14s%-22s%-22s%-22s%-22s%-22s%-22s\n", 
                     "obstime", "secs", "hciX-interp", "hciY-interp", "hciZ-interp", "hciVX-interp", "hciVY-interp", "hciVZ-interp");
          }
          else
          {
-            fprintf(stdout, "%-24s%-12s%-20s%-20s%-20s%-20s%-20s%-20s%-20s%-20s%-20s%-14s%-14s%-14s\n", 
+            fprintf(stdout, "%-24s%-12s%-22s%-22s%-22s%-22s%-22s%-22s%-20s%-20s%-20s%-14s%-14s%-14s\n", 
                     "obstime", "secs", 
                     "hciX-interp", "hciX-actual",
                     "hciY-interp", "hciY-actual",
@@ -254,7 +255,7 @@ int DoIt(void)
 
             if (!testinterp)
             {
-               fprintf(stdout, "%-24s%-12.1f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f\n", 
+               fprintf(stdout, "%-24s%-14.1f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f%-22.4f\n", 
                        timestr, infoitem->obstime, infoitem->hciX, infoitem->hciY, infoitem->hciZ, 
                        infoitem->hciVX, infoitem->hciVY, infoitem->hciVZ);
             }
@@ -295,7 +296,7 @@ int DoIt(void)
                   }
                }
 
-               fprintf(stdout, "%-24s%-12.1f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-20.8f%-14.8f%-14.8f%-14.8f\n", 
+               fprintf(stdout, "%-24s%-12.1f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-22.8f%-14.8f%-14.8f%-14.8f\n", 
                        timestr, infoitem->obstime, 
                        infoitem->hciX, actual_hciX, 
                        infoitem->hciY, actual_hciY,
