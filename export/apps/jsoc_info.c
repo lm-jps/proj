@@ -938,7 +938,7 @@ int DoIt(void)
       json_t *recobj = json_new_object();
 
       if (max_recs == 0)
-        rec = drms_recordset_fetchnext(drms_env, recordset, &status, &cstat);
+        rec = drms_recordset_fetchnext(drms_env, recordset, &status, &cstat, NULL);
       else
         {
         rec = recordset->records[irec];  /* pointer to current record */
