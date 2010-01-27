@@ -5269,7 +5269,7 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
      double *insegBZERO = (double *)malloc(sizeof(double) * nSegs);
      double *insegBSCALE = (double *)malloc(sizeof(double) * nSegs);
 
-     while ((inRec = drms_recordset_fetchnext(drmsEnv, inRecSet, &status, &cstat)) != NULL)
+     while ((inRec = drms_recordset_fetchnext(drmsEnv, inRecSet, &status, &cstat, NULL)) != NULL)
      {
 	  fprintf(stdout, "Processing record %lld\n", inRec->recnum);
 
