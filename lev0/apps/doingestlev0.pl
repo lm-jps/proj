@@ -77,9 +77,17 @@ while(1) {
     sleep 5;
     &ckingest;		#see if any ingest_lev0 are still running
     if(!$ifound) {
-      #print "\nAll ingest_lev0 have been stopped. Exit\n\n";
-      #exit(0);
+      $ldate = &labeldate();
+      print "$ldate\n";
+      $stopfile = "/usr/local/logs/lev0/VC02_stop";
+      #if find a stop file, assume stop_lev0.pl was called and exit
+      if(-e $stopfile) {
+        print "\nAll ingest_lev0 have been stopped. Exit doingestlev0.pl\n\n";
+        exit(0);
+      }
       print "\nAll ingest_lev0 are already stopped. Restart...\n\n";
+      last;  #!!TEMP this didn't seem to work here ???
+      $i = 720;
     }
   }
   $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stop"; #tell ingest to stop
