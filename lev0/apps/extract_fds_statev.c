@@ -678,6 +678,8 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
       {
          /* Have to loop on ALL chunks if can't find time in cache */
          int morerecs = 1;
+         int newchunk;
+
          while (!prec && !error && morerecs)
          {
             /* either no cache, or cache, but miss - get more records, then try to find tbuf */
@@ -687,9 +689,10 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
             /* must not call fetchnext() if previous call retrieved last rec in chunk, otherwise
              * fetchnext() will blow away chunk, but the *cache will still point to recs 
              * in the cache. */
-            while (!stop && (rec = drms_recordset_fetchnext(drmsEnv, rs, &status, &cstat)) != NULL)
+            newchunk = 0;
+            while (!stop && (rec = drms_recordset_fetchnext(drmsEnv, rs, &status, &cstat, &newchunk)) != NULL)
             {
-               if (cstat == kRecChunking_NewChunk)
+               if (newchunk)
                {
                   if (*cache)
                   {
@@ -701,7 +704,8 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
                   /* insert recordset */
                   hcon_insert(*cache, "bobmould", &rs);
                }
-               else if (cstat == kRecChunking_LastInChunk || cstat == kRecChunking_LastInRS)
+               
+               if (cstat == kRecChunking_LastInChunk || cstat == kRecChunking_LastInRS)
                {
                   /* this record was the last in chunk - stop caching */
                   stop = 1;
