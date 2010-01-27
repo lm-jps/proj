@@ -67,7 +67,7 @@
 #define DEFAULTQSUBLEV1 "16"
 #define MAXJIDSTR MAXQSUBLEV1*16
 #define NOTSPECIFIED "***NOTSPECIFIED***"
-#define LOGTEST 1
+#define LOGTEST 0
 char args7sv[128];	//used when LOGTEST = 1
 
 
@@ -573,7 +573,12 @@ int do_ingest(int force)
     while(fgets(string, sizeof string, fin)) {  //get psql return line
       if(strstr(string, "max")) continue;
       if(strstr(string, "-----")) continue;
-      sscanf(string, "%lld", &maxrecnum0);	//get max lev0 rec# 
+      if(!strcmp(string, "    \n")) { //new series w/no recnum
+        printf("Abort no max lev0 recnum (new series?)\n");
+        printk("Abort no max lev0 recnum (new series?)\n");
+        abortit(1);
+      }
+      sscanf(string, "%lld", &maxrecnum0);
       lastrecnum0_prev = lastrecnum0_now;
       lastrecnum0_now = maxrecnum0;		//save to see if more come in
       break;
