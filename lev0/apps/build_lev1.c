@@ -612,10 +612,16 @@ TEMPSKIP:
       recnum1 = rs->recnum;
       printk("*1 %u %u\n", recnum1, fsnx);
       free(Array0->data);
+  
+     //!!TBD add here a call for get_limb_fit() from Richard. The call
+    // is TBD. It works on the lev1 image. It returns values for
+    // float rsun_lf, float x0_lf, float y0_lf
+
     }
 
   drms_close_records(rset0, DRMS_FREE_RECORD);   //close lev0 records
   drms_close_records(rset1, DRMS_INSERT_RECORD); //close lev1 records
+
   return(0);
 }
 
@@ -777,3 +783,31 @@ int DoIt(void)
   return(0);
 }
 
+//!!TEMP position of keywords set up for limb_figure code when it
+//goes in
+void tmp() {
+
+typedef struct {
+  float rsun_lf;
+//  double rsun_obs;
+//  float imscl_mp;
+  float x0_lf;
+  float y0_lf;
+//  float x0_mp;
+//  float y0_mp;
+//  float sat_y0;
+//  float sat_z0;
+//  float inst_rot;
+//  float sat_rot;
+} LIMB_SOMETHING;
+
+LIMB_SOMETHING limb;
+
+  if(limb->rsun_lf == DRMS_MISSING_FLOAT) {
+    drms_setkey_float(rs, "CDELT1", imageloc[i].imscale);
+    drms_setkey_float(rs, "CDELT2", imageloc[i].imscale);
+    drms_setkey_float(rs, "R_SUN", (float)RSUN_OBS/imageloc[i].imscale); //TBD get RSUN_OBS from iorbit
+  }
+
+  
+}
