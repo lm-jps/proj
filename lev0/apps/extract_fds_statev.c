@@ -1489,6 +1489,9 @@ static int ExtractStateVectors(DRMS_Env_t *drmsEnv,
          drms_setkey_double(recout, kSVKeyVzGEO, node->gcivz);
          drms_setkey_string(recout, kSVKey_idGEO, node->gciID);
 
+         /* Date of record creation. */
+         drms_keyword_setdate(recout);
+         
          irec++;
       }
 
