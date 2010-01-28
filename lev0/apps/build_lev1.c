@@ -783,6 +783,7 @@ int DoIt(void)
   return(0);
 }
 
+/*********************************************************************
 //!!TEMP position of keywords set up for limb_figure code when it
 //goes in
 void tmp() {
@@ -808,6 +809,5 @@ LIMB_SOMETHING limb;
     drms_setkey_float(rs, "CDELT2", imageloc[i].imscale);
     drms_setkey_float(rs, "R_SUN", (float)RSUN_OBS/imageloc[i].imscale); //TBD get RSUN_OBS from iorbit
   }
-
-  
 }
+***********************************************************************/
