@@ -1,10 +1,10 @@
 ssh-agent_conf = /home/jsoc/.ssh-agent
-log = /home/jsoc/sdo/fds/fds.log
+log = /home/jsoc/sdo_ground/fds/fds.log
 scrpath = /home/jsoc/cvs/Development/JSOC/scripts
 binpath = /home/jsoc/cvs/Development/JSOC/bin
-permdpath = /home/jsoc/sdo/fds
-dpath = /tmp21/jsoc/sdo/mocprods
-ns = sdo
+permdpath = /home/jsoc/sdo_ground/fds
+dpath = /tmp21/jsoc/sdo_ground/mocprods
+ns = sdo_ground
 fdsseries = fds
 orbvseries = fds_orbit_vectors
 dbuser = production
