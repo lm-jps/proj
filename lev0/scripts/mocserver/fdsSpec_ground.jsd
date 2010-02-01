@@ -1,25 +1,26 @@
-# *********************** Global information ************************
-Seriesname:	"sdo_ground.fds"
-Description:	"This series contains ingested, pre-launch FDS data files."
-Author:		"Art Amezcua"
-Owner:		"production"
-Unitsize:	150
-#Archive:	1
-Archive:	0
-Retention:	14
-Tapegroup:	1
-Index:		FDS_DATA_PRODUCT, FDS_PRODUCT_COMP, OBS_DATE, DATA_FORMAT, FILE_VERSION
+#=====General Series Information=====
+Seriesname:      	sdo_ground.fds
+Author:          	"Art Amezcua"
+Owner:           	production
+Unitsize:        	1
+Archive:         	1
+Retention:       	60
+Tapegroup:       	1
+PrimeKeys:       	OBS_DATE, FDS_PRODUCT_COMP, DATA_FORMAT, FILE_VERSION
+Description:     	"This series contains ingested, pre-launch FDS product files."
 
-# **************************** Keywords ******************************
-Keyword:	FDS_DATA_PRODUCT, string, variable, record, "None", %s, "None", "FDS data product"
-Keyword:	FDS_PRODUCT_COMP, string, variable, record, "None", %s, "None", "FDS data product component"
-Keyword:	OBS_DATE, time, ts_eq, record, DRMS_MISSING_VALUE, 0, UTC, "Date on which observation began"
-Keyword:	OBS_DATE_epoch, time, constant, record, 1993.01.01_00:00:00_UTC, 0, UTC, "ts_eq epoch"
-Keyword:	OBS_DATE_step, float, constant, record, 1.0, %f, day, "ts_eq step"
-Keyword:	OBS_DATE_unit, string, constant, record, days, %s, "none", "ts_eq unit"
-Keyword:	DATA_FORMAT, string, variable, record, "None", %s, "None", "Format of data file contained in segment"
-Keyword:	FILE_VERSION, int, variable, record, 0, %d, "None", "Version of the data file"
+#=====Links=====
 
+#=====Keywords=====
 
-# ************************** Data Segments ***************************
-Data:		FILENAME, variable, string, 1, 1, "none", generic, "Product file name."
+Keyword:OBS_DATE, time, ts_eq, record, DRMS_MISSING_VALUE, 0, UTC, "Date embedded in product file name"
+Keyword:OBS_DATE_epoch, time, constant, record, 1993.01.01_12:00:00_UTC, 0, UTC, "MDI epoch - adjusted by 12 hours to center slots on noon of each day"
+Keyword:OBS_DATE_step, time, constant, record, 1, %f, day, "Slots are 1 day wide"
+Keyword:FDS_DATA_PRODUCT, string, variable, record, Unidentified, %s, NA, "FDS data product"
+Keyword:FDS_PRODUCT_COMP, string, variable, record, Unidentified, %s, NA, "FDS data-product component"
+Keyword:DATA_FORMAT, string, variable, record, Unidentified, %s, NA, "Format of data file"
+Keyword:FILE_VERSION, int, variable, record, 0, %d, DRMS_MISSING_VALUE, "Version of data file"
+Keyword:DATE, time, variable, record, DRMS_MISSING_VALUE, 0, ISO, "Date of product-file ingestion; ISO 8601"
+
+#=====Segments=====
+Data: FILENAME, variable, string, 0, NA, generic, "Product file"
