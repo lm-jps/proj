@@ -78,6 +78,7 @@ static char date_obs[100];
 //static char datestr[100];
 TIME t_obs,MJD_epoch = -3727641600.000; /* 1858.11.17_00:00:00_UT  */
 double exptime, expsdev;
+float int_time;
 
 if (flg) {	/* AIA */
   char *aia_instru[] = { "AIA_1", "AIA_2", "AIA_3", "AIA_4" };
@@ -98,10 +99,19 @@ if (flg) {	/* AIA */
   int aimshote = HK_getkey_int(isp, "AIMSHOTE"); /* AIA_IMG_SH_OPEN_TOP_EDGE */
   int aicfgdl3 = HK_getkey_int(isp, "AICFGDL3");
   int aicfgdl4 = HK_getkey_int(isp, "AICFGDL4");
-  int nroll = 256*(int)((aimgshce + 273)/2000);
-  float int_time = ((float)(aicfgdl4 - aicfgdl3 + nroll)*1000.0)/128.0;
-  if((int)int_time < aimgshce) int_time = int_time + 2000.0;
-  int_time = int_time/1000.0;		//make seconds
+  int aiagp9   = HK_getkey_int(isp, "AIAGP9");
+  int aiagp10   = HK_getkey_int(isp, "AIAGP10");
+  
+  if ((aicfgdl3 == DRMS_MISSING_SHORT) || (aicfgdl4 == DRMS_MISSING_SHORT)) {
+    int_time = DRMS_MISSING_FLOAT; /* no info to calculate integration time */
+  } else if (aiagp9 && aiagp10) {  /* non wrapped cfg delays are available */
+    int_time = (float)(aiagp10 - aiagp9)/128.0; /* this value already seconds */
+  } else { /* have to use potentially wrapped around configuration delays */
+    int nroll = 256*(int)((aimgshce + 273)/2000);
+    int_time = ((float)(aicfgdl4 - aicfgdl3 + nroll)*1000.0)/128.0;
+    if((int)int_time < aimgshce) int_time = int_time + 2000.0;
+    int_time = int_time/1000.0;		//make seconds
+  }
   drms_setkey_float(rec, "INT_TIME", int_time);
 
   double shebc = (aimshcbc - aimshobc)*4.0e-6;
