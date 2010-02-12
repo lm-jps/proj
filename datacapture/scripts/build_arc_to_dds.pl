@@ -69,6 +69,7 @@ chomp($HOSTDB);
 $DB = "jsocdc";
 $ARC_ROOT_HMI = "/dds/soc2dds/hmi/arc/";
 $ARC_ROOT_AIA = "/dds/soc2dds/aia/arc/";
+$ARC_TOUCH_DIR = "/usr/local/logs/arc/";
 $hrsprev = 24;
 while ($ARGV[0] =~ /^-/) {
   $_ = shift;
@@ -145,3 +146,10 @@ elsif ($nodedcs eq "dcs2")  {
   print "Results in $resultfile\n";
 $dbh->disconnect();
 
+  if($hostdb eq "dcs1") {
+    $parctouch = $ARC_TOUCH_DIR."HMI_$currdate".".arc.touch";
+  }
+  else {
+    $parctouch = $ARC_TOUCH_DIR."AIA_$currdate".".arc.touch";
+  }
+  `touch $parctouch`;
