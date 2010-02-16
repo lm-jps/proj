@@ -133,6 +133,13 @@ char *instru;			// instument. hmi or aia
 char *dsin;			// lev0 input dataset
 char *dsout;			// lev1 output dataset
 
+//!!TEMP
+typedef struct {
+  float rsun_lf;
+  float x0_lf;
+  float y0_lf;
+} LIMB_SOMETHING;
+
 
 int nice_intro ()
 {
@@ -474,9 +481,11 @@ int do_ingest(long long bbrec, long long eerec)
            drms_setkey_double(rs, "OBS_VR", IOdata.obs_vr);
            drms_setkey_double(rs, "OBS_VW", IOdata.obs_vw);
            drms_setkey_double(rs, "OBS_VN", IOdata.obs_vn);
+           drms_setkey_double(rs, "RSUN_OBS", IOdata.rsun_obs);
            drms_setkey_float(rs, "CRLN_OBS", (float)IOdata.crln_obs);
            drms_setkey_float(rs, "CRLT_OBS", (float)IOdata.crlt_obs);
            drms_setkey_int(rs, "CAR_ROT", (int)IOdata.car_rot);
+           drms_setkey_string(rs, "ORB_REC", IOdata.orb_rec);
       }
       drms_setkey_float(rs, "X0_MP", imageloc[i].x);
       drms_setkey_float(rs, "Y0_MP", imageloc[i].y);
@@ -616,6 +625,34 @@ TEMPSKIP:
      //!!TBD add here a call for get_limb_fit() from Richard. The call
     // is TBD. It works on the lev1 image. It returns values for
     // float rsun_lf, float x0_lf, float y0_lf
+    // SEE code at end of this file. Ready to go.
+    //!!TEMP set to MISSING
+  LIMB_SOMETHING limb;
+  //Put in MISSING for now until have real get_limb_fit()
+  limb.x0_lf = DRMS_MISSING_FLOAT;
+  limb.y0_lf = DRMS_MISSING_FLOAT;
+  limb.rsun_lf = DRMS_MISSING_FLOAT;
+
+  if(drms_ismissing_float(limb.rsun_lf)) {
+    drms_setkey_float(rs, "CDELT1", imageloc[i].imscale);
+    drms_setkey_float(rs, "CDELT2", imageloc[i].imscale);
+    drms_setkey_float(rs, "R_SUN", (float)IOdata.rsun_obs/imageloc[i].imscale);
+  }
+  else {			//rsun_lf is not MISSING
+    drms_setkey_float(rs, "CDELT1", (float)IOdata.rsun_obs/limb.rsun_lf);
+    drms_setkey_float(rs, "CDELT2", (float)IOdata.rsun_obs/limb.rsun_lf);
+    drms_setkey_float(rs, "R_SUN", limb.rsun_lf);
+  }
+  if(!drms_ismissing_float(limb.x0_lf) && !drms_ismissing_float(limb.y0_lf)) {
+    drms_setkey_float(rs, "CRPIX1", limb.x0_lf + 1);
+    drms_setkey_float(rs, "CRPIX2", limb.y0_lf + 1);
+  }
+  else {
+    drms_setkey_float(rs, "CRPIX1", imageloc[i].x + (ptdata.sat_y0/imageloc[i].imscale) + 1);
+    drms_setkey_float(rs, "CRPIX2", imageloc[i].y + (ptdata.sat_z0/imageloc[i].imscale) + 1);
+  }
+  drms_setkey_float(rs, "CROTA2", imageloc[i].instrot + ptdata.sat_rot);
+  //END TEMP
 
     }
 
@@ -804,10 +841,30 @@ typedef struct {
 
 LIMB_SOMETHING limb;
 
-  if(limb->rsun_lf == DRMS_MISSING_FLOAT) {
+  //Put in MISSING for now until have real get_limb_fit()
+  limb.x0_lf = DRMS_MISSING_FLOAT);
+  limb.y0_lf = DRMS_MISSING_FLOAT);
+  limb.rsun_lf = DRMS_MISSING_FLOAT);
+
+  if(limb.rsun_lf == DRMS_MISSING_FLOAT) {
     drms_setkey_float(rs, "CDELT1", imageloc[i].imscale);
     drms_setkey_float(rs, "CDELT2", imageloc[i].imscale);
-    drms_setkey_float(rs, "R_SUN", (float)RSUN_OBS/imageloc[i].imscale); //TBD get RSUN_OBS from iorbit
+    drms_setkey_float(rs, "R_SUN", (float)IOdata.rsun_obs/imageloc[i].imscale);
   }
+  else {			//rsun_lf is not MISSING
+    drms_setkey_float(rs, "CDELT1", (float)IOdata.rsun_obs/limb.rsun_lf);
+    drms_setkey_float(rs, "CDELT2", (float)IOdata.rsun_obs/limb.rsun_lf);
+    drms_setkey_float(rs, "R_SUN", limb.rsun_lf);
+  }
+  if((limb.x0_lf != DRMS_MISSING_FLOAT) && (limb.y0_lf != DRMS_MISSING_FLOAT)) {
+    drms_setkey_float(rs, "CRPIX1", limb.x0_lf + 1);
+    drms_setkey_float(rs, "CRPIX2", limb.y0_lf + 1);
+  }
+  else {
+    drms_setkey_float(rs, "CRPIX1", imageloc[i].x + (ptdata.sat_y0/imageloc[i].imscale) + 1);
+    drms_setkey_float(rs, "CRPIX2", imageloc[i].y + (ptdata.sat_z0/imageloc[i].imscale) + 1);
+  }
+  drms_setkey_float(rs, "CROTA2", imageloc[i].instrot + ptdata.sat_rot);
+
 }
 ***********************************************************************/
