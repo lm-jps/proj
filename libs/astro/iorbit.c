@@ -94,7 +94,7 @@ const int gMinBelow = 16; /* min no. of vectors below min tgttime */
 // The method has been tested for 2000 to 2010 with errors never more than 0.005 degrees compared to JPL tables.
 // BUT there may be long term drifts of up to 0.015 degrees per year depending on the input coordinate system
 // assumptions compared to the test series.
-void SDOCarringtonCoords(TIME t, double obsdist,  double b, double hci_long,  int *crot, double *L, double *B)
+static void SDOCarringtonCoords(TIME t, double obsdist, double b, double hci_long, int *crot, double *L, double *B)
 {
    double solrots;       // solar rotations by time t
    double carr_rots;     // Rotations since Carrington Epoch
@@ -682,7 +682,7 @@ static IORBIT_Vector_t *FetchNext(DRMS_Env_t *env,
  * above and below the min and max obstimes. In the top-level function, 1 hour above and
  * below is added to the min and max obstimes, so if there are at least 16 observations
  * within each hour, this function will succeed. */
-int CheckCache(double mintgt, double maxtgt)
+static int CheckCache(double mintgt, double maxtgt)
 {
    int ok = 1;
 
@@ -1116,14 +1116,14 @@ static int iorbit_interpolate(IORBIT_Alg_t alg,
 
 /* vec - array of interpolated vectors */
 /* hb, hl in radians */
-int CalcSolarVelocities(IORBIT_Vector_t *vec, 
-                        int nvecs,
-                        double **hr, 
-                        double **hvr, 
-                        double **hvw, 
-                        double **hvn, 
-                        double **hb, 
-                        double **hl)
+static int CalcSolarVelocities(IORBIT_Vector_t *vec, 
+                               int nvecs,
+                               double **hr, 
+                               double **hvr, 
+                               double **hvw, 
+                               double **hvn, 
+                               double **hb, 
+                               double **hl)
 {
    int err = 0;
 
@@ -1200,6 +1200,11 @@ int CalcSolarVelocities(IORBIT_Vector_t *vec,
    }
 
    return err;
+}
+
+void iorbit_carrcoords(TIME t, double obsdist, double b, double hci_long, int *crot, double *L, double *B)
+{
+   SDOCarringtonCoords(t, obsdist, b, hci_long, crot, L, B);
 }
 
 /*

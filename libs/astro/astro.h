@@ -192,6 +192,7 @@ struct IORBIT_Info_struct
 typedef struct IORBIT_Info_struct IORBIT_Info_t;
 
 LIBASTRO_Error_t iorbit_test(DRMS_Env_t *env, const char *orbseries);
+void iorbit_carrcoords(TIME t, double obsdist, double b, double hci_long, int *crot, double *L, double *B);
 LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env, 
                                 const char *srcseries, 
                                 const char *optfilter, 
