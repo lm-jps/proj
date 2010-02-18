@@ -10,7 +10,9 @@
 #              up files based on apid and and dates. Set path to day files   #
 #              using environment variable DF_DAYFILE_DIRECTORY in this file. #
 #              Switch on  debug by using DF_INGEST_DAYFILE_DEBUG set to 1    #
-#              below.                                                        #
+#              below. Use hex apid value for arguments for ingest of hsb and #
+#              moc dayfiles and decimal apid values as arguments to ingest   #
+#              rtmon or egsefm dayfiles. This is currently how works.        #
 # Execution:   (1)The run options are shown in help listing:                 #
 #              ingest_dayfile -h                                             #
 # Limitation:  Setup required environment variables at top of file based on  #
@@ -101,7 +103,7 @@
    # for testing during development  #
    #$ENV{'DF_DAYFILE_DIRECTORY'}="/home3/carl/LMSAL-DAYFILES";
    #for production#
-   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_rtmon_dayfile";
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp02/production/lev0/hk_rtmon_dayfile";
  }
  if($dflg) {print "INPUT FILES AT: $ENV{'DF_DAYFILE_DIRECTORY'}\n"};
 
@@ -303,16 +305,17 @@ sub show_help_info
   print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_rtmon dsnlist=./df_apid_ds_list_for_rtmon src=rtmon\n\n";
   print "(1b)Ingest Day Files using apid option will ingest all files for given apid value:\n
         ingest_hsb_dayfile.pl apid=<apid-value in decimal format> dsnlist=<file with ds lookup list> src=<source of data>\n";
-  print "        Example: ingest_dayfile.pl apid=029  dsnlist=./df_apid_ds_list_for_moc src=moc\n";
-  print "        Example: ingest_dayfile.pl apid=445  dsnlist=./df_apid_ds_list_for_hsb src=hsb\n";
-  print "        Example: ingest_dayfile.pl apid=029  dsnlist=./df_apid_ds_list_for_egsefm src=egsefm\n";
-  print "        Example: ingest_dayfile.pl apid=129  dsnlist=./df_apid_ds_list_for_rtmon src=rtmon\n\n";
+  print "        Example: ingest_dayfile.pl apid=029  dsnlist=./df_apid_ds_list_for_moc src=moc (note use decimal apid value!)\n";
+  print "        Example: ingest_dayfile.pl apid=445  dsnlist=./df_apid_ds_list_for_hsb src=hsb (note use decimal apid value!)\n";
+  print "        Example: ingest_dayfile.pl apid=1d  dsnlist=./df_apid_ds_list_for_egsefm src=egsefm (note use hex apid value!)\n";
+  print "        Example: ingest_dayfile.pl apid=81  dsnlist=./df_apid_ds_list_for_rtmon src=rtmon (note use hex apid value!)\n\n";
   print "(1c)Ingest Day Files using date range with apidfile option:\n
         ingest_dayfile.pl apidlist=<file> start=<yyyymmdd> end=< yyyymmdd> dsnlist=<file with ds lookup list> src=<source of data>\n";
   print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc start=20080518 end=20080530 dsnlist=./df_apid_ds_list_for_moc src=moc\n\n";
   print "(1d)Ingest Day Files using date range with apid option:\n
         ingest_dayfile.pl apid=<apid in decimal>  start=<yyyymmdd> end=<yyyymmdd>  dsnlist=<file with ds lookup list> src=<source of data>\n";
-  print "        Example: ingest_dayfile.pl apid=445 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_egsefm src=egsefm\n\n";
+  print "        Example: ingest_dayfile.pl apid=445 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_hsb src=hsb\n\n";
+  print "        Example: ingest_dayfile.pl apid=81 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_rtmon src=rtmon\n\n";
   print "(1e)Get Help Information:\n
          ingest_hsb_dayfile.pl -h  or  ingest_hsb_dayfile.pl -help\n\n";
   print "(1f)View what going to save in data series by adding -v as first argument. This should work for 1a,1b,1c,and 1d cases.:\n
@@ -324,8 +327,10 @@ sub show_help_info
   print "(3a)Used to store location of input day files of this script.\n";
   print "(3b)Example setting for egsefm files: setenv DF_DAYFILE_DIRECTORY /tmp20/production/hmi_hk \n";
   print "(4) Requires setup of apid list in file when use \"apidlist\" option\n";
-  print "(4a)Enter values in file in decimal format(i.e.,0001,0015,0021,0445,0475).\n";
-  print "(4b)Example format and file of apid list is located in this current file: ./df_apid_list_day_file_hsb\n";
+  print "(4a)Enter values in file as decimal values(i.e.,0001,0015,0021,0445,0475) for hsb and moc dayfile formats.\n";
+  print "(4b)Example format and file of apid list in decimal is located in this current file: ./df_apid_list_day_file_hsb\n";
+  print "(4c))Enter values in file as hexcidecimal values(i.e.,0081,001d,0001, 01e) for rtmon and egsefm dayfile formats.\n";
+  print "(4d)Example format and file of apid list in hex is located in this current file: ./df_apid_list_day_file_rtmon\n";
   print "(5) Requires setup of data series name and apid list in file when use \"dsname\" argument.\n";
   print "(5a)Enter values in file in decimal format for APID value and this data series name(i.e.,0445  hmi_ground.hk_dayfile).\n";
   print "(5b)Example format and file of apid list is located in this current file: ./df_apid_ds_list_for_hsb\n";
@@ -336,6 +341,8 @@ sub show_help_info
   print "                       b)Works only on moc dayfile formats\(i.e., 0029_2007_150_02.hkt.\).\n";
   print "                       b)Works only on rtmon dayfile formats\(i.e., 20080925.0x0081,etc.\).\n";
   print "                       c)Enter arguments in specified order when running script.\n";
+  print "                       d)Enter decimal apid value arguments to ingest  hsb and moc dayfiles since filename uses decimal values.\n";
+  print "                       e)Enter hexidecimal apid value arguments to ingest rtmon and egsefm dayfiles since filename uses hex values.\n";
   exit;
 }
 #############################################################################
@@ -676,11 +683,16 @@ sub ingest_day_files()
       $xfile=sprintf("%s/%s.xml",$dir_init_df,$file);
       $arg6="xmlfile=$xfile";
     }
-    elsif ($source eq "egsefm" or $source eq "rtmon")
+    elsif ($source eq "egsefm" )
     {
       #$xfile=sprintf("%s/%sx",$dir_init_df,$file);
       #$arg6="xmlfile=$xfile";
       $arg6="";
+    }
+    elsif ( $source eq "rtmon")
+    {
+      $xfile=sprintf("%s/%sx",$dir_init_df,$file);
+      $arg6="xmlfile=$xfile";
     }
     if($dflg) {print LF "ingest_dayfiles:xmlfile arg: <$arg6>\n";}
 
