@@ -390,12 +390,16 @@ sub DownloadApplicableFiles
                   if ($disposition eq "notdownloaded" && $natt > kMaxAttempts)
                   {
                      print STDOUT "$LOGALL: Download of '$oneFile' failed previously - manually run download script.\n";
+                     next;
                   }
-
-                  next;
+                  elsif ($disposition ne "notdownloaded")
+                  {
+                     next;
+                  }
                }
                elsif ($disposition ne "notdownloaded")
                {
+                  # Only force the files to download that failed to download previously 
                   next;
                }
 	    }
