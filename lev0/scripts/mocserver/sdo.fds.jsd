@@ -7,7 +7,7 @@ Archive:         	1
 Retention:       	60
 Tapegroup:       	1
 PrimeKeys:       	OBS_DATE, FDS_PRODUCT_COMP, DATA_FORMAT, FILE_VERSION
-Description:     	"This series contains ingested, pre-launch FDS product files."
+Description:     	"This series contains ingested, post-launch FDS product files."
 
 #=====Links=====
 
