@@ -27,6 +27,7 @@
 use FileHandle;
 use IPC::Open2;
 use IPC::Open3;
+use constant kMaxAttempts => 4;
 
 use FindBin qw($Bin);
 
@@ -348,6 +349,8 @@ sub DownloadApplicableFiles
     my(@ret);
     my(@allFiles);   
     my($disposition);
+    my($natt);
+    my($status);
 
     # turn $fileSpec into actual files
     @allFiles = ProcessFileSpecs($recFlag, $remoteRoot, @dirsToDL); 
@@ -360,24 +363,41 @@ sub DownloadApplicableFiles
 
 	while ($oneFile = shift(@allFiles))
 	{
-	    if (defined($disposition = $STATMAP{$oneFile}))
+	    if (defined($status = $STATMAP{$oneFile}))
 	    {
-		# Can't download files that have been downloaded already.  Also
-		# don't download files that failed to download previously (these
-		# should be retrieved manually).
-		if (!$forceDL)
-		{
-		    if ($disposition eq "notdownloaded")
-		    {
-			print STDOUT "$LOGALL: Download of '$oneFile' failed previously - manually run download script.\n";
-		    }
+               if ($status =~ /notdownloaded\((\d+)\)/)
+               {
+                  $natt = $1;
+                  $disposition = "notdownloaded";
+               }
+               elsif ($status =~ /notdownloaded/)
+               {
+                  # In a previous version of the status file, there was no
+                  # natt field when the status was notdownloaded
+                  $natt = 1;
+                  $disposition = "notdownloaded";
+               }
+               else
+               {
+                  $disposition = $status; 
+               }
 
-		    next;
-		}
-		elsif ($disposition ne "notdownloaded")
-		{
-		    next;
-		}
+		# Can't download files that have been downloaded already.  Also
+		# don't download files that failed to download previously more than kMaxAttempts times 
+                # (these should be retrieved manually).
+               if (!$forceDL)
+               {
+                  if ($disposition eq "notdownloaded" && $natt > kMaxAttempts)
+                  {
+                     print STDOUT "$LOGALL: Download of '$oneFile' failed previously - manually run download script.\n";
+                  }
+
+                  next;
+               }
+               elsif ($disposition ne "notdownloaded")
+               {
+                  next;
+               }
 	    }
 
 	    # do the download
@@ -385,17 +405,18 @@ sub DownloadApplicableFiles
 	    
 	    if ($disposition eq "couldn't download")
 	    {
-		push(@ret, $oneFile);
-		push(@ret, "notdownloaded");
+               my($st) =  $natt + 1;
+               push(@ret, $oneFile);
+               push(@ret, "notdownloaded($st)");
 	    }
 	    elsif ($disposition eq "downloaded")
 	    {
-		push(@ret, $oneFile);
-		push(@ret, "downloaded");
+               push(@ret, $oneFile);
+               push(@ret, "downloaded");
 	    }
 	    else
 	    {
-		die "$LOGALL: Unknown download disposition $disposition.\n";
+               die "$LOGALL: Unknown download disposition $disposition.\n";
 	    }
 	}
     }
@@ -687,7 +708,7 @@ sub ReadStatusFile
 	    next;
 	}
 
-	if ($line =~ /(.+)\s+(\w+)/)
+	if ($line =~ /(.+)\s+(\S+)/)
 	{
 	    $STATMAP{$1} = $2;
 #	    print "Loading STATMAP: STATMAP{\"$1\"} = \"$2\"\n";
