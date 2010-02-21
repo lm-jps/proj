@@ -383,6 +383,13 @@ int DoIt(void)
         { // export of as-is records that need staging, get paths to export files with list in index.txt
         fprintf(fp, "jsoc_export_as_is_sock ds='%s' requestid='%s' method='%s' protocol='%s' filenamefmt='%s'\n", dataset, requestid, method, protocol, filenamefmt); 
         }
+      else if (strcmp(process, "hg_patch") == 0)
+        {
+        // Heliographic Patches tracked requested.  Delete the message below when implemented.
+        fprintf(stderr,"XX jsoc_export_manage FAIL NOT implemented yet, requestid=%s, process=%s, protocol=%s, method=%s\n",
+          requestid, process, protocol, method);
+        drms_setkey_int(export_log, "Status", 4);
+        }
       else if (strcmp(process, "su_export") == 0 && strcmp(protocol,"as-is")==0)
         { // Use special program for Storage Unit exports.
         fprintf(fp, "jsoc_export_SU_as_is_sock ds='%s' requestid=%s\n", dataset, requestid); 
