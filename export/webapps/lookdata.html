@@ -424,7 +424,7 @@ function GetSeries()
       $("AbortGetSeriesButton").hide();
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
-    onFailure: function() { alert('Something went wrong...'); },
+    onFailure: function() { alert('Something went wrong with series list query'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
@@ -629,7 +629,7 @@ function PickSeries(mode)
         }
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
-    onFailure: function() { alert('Something went wrong...'); },
+    onFailure: function() { alert('Something went wrong with series structure request'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
@@ -714,7 +714,7 @@ function GetRSCount()
         $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
         }
       },
-    onFailure: function() { alert('Something went wrong...'); },
+    onFailure: function() { alert('Something went wrong with series summary request'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
   }
@@ -1025,7 +1025,7 @@ function GetKeyValues()
 		idata = setgriddata(idata, RecordData.recinfo[irec].name);
 	    for (ikey=0; ikey<nkeys; ikey++)
 	      {
-	      var this_keyval =  RecordData.keywords[ikey].values[irec];
+	      var this_keyval =  RecordData.keywords[ikey].values[irec] + "";
 	      if (RecordData.keywords[ikey].name == "*logdir*")
 	        {
 	        if (this_keyval.charAt(0) == '/')
@@ -1092,7 +1092,7 @@ function GetKeyValues()
         tabs.setSelectedItems([tabdisplay]); // show the display page.
         }
       },
-    onFailure: function() { alert('Something went wrong...'); },
+    onFailure: function() { alert('Something went wrong with data values request'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
   }
