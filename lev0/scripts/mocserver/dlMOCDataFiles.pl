@@ -379,6 +379,7 @@ sub DownloadApplicableFiles
                }
                else
                {
+                  $natt = 0;
                   $disposition = $status; 
                }
 
@@ -392,8 +393,15 @@ sub DownloadApplicableFiles
                      print STDOUT "$LOGALL: Download of '$oneFile' failed previously - manually run download script.\n";
                      next;
                   }
-                  elsif ($disposition ne "notdownloaded")
+                  elsif ($disposition ne "notdownloaded" && $disposition ne "downloaded-redo")
                   {
+                     # If a user wants to force a download to happen again, s/he edits
+                     # the status field of the relevant entry. If s/he changes "downloaded" 
+                     # to "downloaded-redo" then this script will re-download the file, 
+                     # creating a new entry with a status appropriate for the state of
+                     # the second download. This will result in a status file with
+                     # an additional entry for the same file. This is acceptable - 
+                     # the latest entry will overwrite all previous entries.
                      next;
                   }
                }
