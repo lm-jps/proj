@@ -740,8 +740,7 @@ static int GetGridVectors(DRMS_Env_t *env,
                           LinkedList_t **gvectors,
                           int *ngvecs,
                           HContainer_t **indices,
-                          const char *optfilter,
-                          LinkedList_t **recids)
+                          const char *optfilter)
 {
    int err = 0;
    int actpoints;
@@ -763,11 +762,6 @@ static int GetGridVectors(DRMS_Env_t *env,
    /* key is the grid vector slot (one grid vector per series slot)
     * and value is the index into gvectors. */
    HContainer_t *slottovecindex = NULL;
-
-   if (recids)
-   {
-      *recids = list_llcreate(kMaxRecIdSize, NULL);
-   }
 
    if (gvectors)
    {
@@ -840,16 +834,6 @@ static int GetGridVectors(DRMS_Env_t *env,
             {
                vecsbelow[nbelow - actpoints - 1] = *vec;
                actpoints++;
-               if (recids &&*recids && actpoints == 1)
-               {
-                  /* This grid point was immediately below the target time. */
-                  char tbuf[48];
-                  char recid[kMaxRecIdSize];
-
-                  sprint_time(tbuf, vecsbelow[nbelow - 1].obstime, "UTC", 0);
-                  snprintf(recid, sizeof(recid), "%s[%s]", srcseries, tbuf);
-                  list_llinserttail(*recids, recid);
-               }
             }
 
             if (actpoints == nbelow)
@@ -1284,11 +1268,9 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
    else if (err == kLIBASTRO_Success)
    {
       LinkedList_t *listvecs = NULL;
-      LinkedList_t *listrecids = NULL;
       HContainer_t *indexmap = NULL;
       IORBIT_Vector_t *vecs = NULL;
       IORBIT_Vector_t *interp = NULL;
-      char *recids = NULL;
 
       double *dsun_obs = NULL;
       double *hvr = NULL;
@@ -1391,8 +1373,7 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                      * an index into listvecs. The resulting vector is the 
                                      * grid vector that has an obstime that is the largest
                                      * time smaller than the target time. */
-                         optfilter,
-                         &listrecids))
+                         optfilter))
       {
          err = kLIBASTRO_InsufficientData;
       }
@@ -1406,7 +1387,6 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       if (!err && listvecs && indexmap)
       {
          int ivec;
-         int irecid;
          ListNode_t *ln = NULL;
 
          /* Make an array out of the list of grid vectors */
@@ -1419,21 +1399,13 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
             vecs[ivec++] = *((IORBIT_Vector_t *)(ln->data));
          }
 
-         recids = malloc(kMaxRecIdSize * listrecids->nitems);
-         list_llreset(listrecids);
-         irecid = 0;
-
-         while ((ln = list_llnext(listrecids)) != NULL)
-         {
-            snprintf(&recids[kMaxRecIdSize * irecid++], kMaxRecIdSize, "%s", (char *)(ln->data));
-         }
-
          if (env->verbose)
          {
             /* time interpolation */
             tmr = CreateTimer();
          }
 
+         /* This operates on the original set of target times, unlike GetGridVectors. */
          if (!iorbit_interpolate(alg,
                                  vecs, /* grid vectors (contains both abscissa and ordinate values) */
                                  tgttimes, /* result abscissae */
@@ -1446,6 +1418,10 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
             int crot;
             double l0;
             double b0;
+            char dhashkey[128];
+            int *pvindex = NULL;
+            int vindex;
+            char tbuf[48];
 
             if (env->verbose)
             {
@@ -1498,8 +1474,24 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                      retvec->crln_obs = l0;
                      retvec->crlt_obs = b0;
                      retvec->car_rot = crot;
-                     /* ok to use ivec - there is one recid per vector */
-                     snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s", &recids[kMaxRecIdSize * ivec]);
+
+                     /* indexmap contains the indices into vecs array that such that hcon_lookup(indexmap, dhashkey), 
+                      * where dhashkey is the string equivalent of tgttimes[itgt], 
+                      * returns the index into vecs that yields the vector whose tobs is immediately smaller. */
+
+                     /* ok to use ivec - there is one tgttime per vector */
+                     CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[ivec]);
+
+                     if ((pvindex = (int *)hcon_lookup(indexmap, dhashkey)) != NULL)
+                     {
+                        vindex = *pvindex;
+                        sprint_time(tbuf, vecs[vindex].obstime, "UTC", 0);
+                        snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s[%s]", srcseries, tbuf);
+                     }
+                     else
+                     {
+                        fprintf(stderr, "Unable to locate expected target time '%s' in indexmap hash./n", dhashkey);
+                     }
                   }
                }
             }
@@ -1547,11 +1539,6 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
          free(vecs);
       }
 
-      if (recids)
-      {
-         free(recids);
-      }
-
       if (interp)
       {
          free(interp);
@@ -1560,11 +1547,6 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
       if (listvecs)
       {
          list_llfree(&listvecs);
-      }
-
-      if (listrecids)
-      {
-         list_llfree(&listrecids);
       }
 
       if (indexmap)
