@@ -78,16 +78,11 @@
   # set path to dayfiles using source -these vary based on where dayfiles are placed
  if ($source eq "hsb")
  {
-   # for testing during development #
-   #$ENV{'DF_DAYFILE_DIRECTORY'}="/home1/carl/cvs/JSOC/proj/lev0/apps/data/hk_hsb_dayfile";
-   #$ENV{'DF_DAYFILE_DIRECTORY'}="/surge/production/lev0/hk_hsb_dayfile";
    #for production#
    $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_hsb_dayfile";
  }
  elsif ($source eq "moc")
  {
-   # for testing during development #
-   #$ENV{'DF_DAYFILE_DIRECTORY'}="/home/carl/cvs/JSOC/proj/lev0/scripts/hk/SDO";
    #for production#
    $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_moc_dayfile";
  }
@@ -100,8 +95,6 @@
  }
  elsif ($source eq "rtmon")
  {
-   # for testing during development  #
-   #$ENV{'DF_DAYFILE_DIRECTORY'}="/home3/carl/LMSAL-DAYFILES";
    #for production#
    $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp02/production/lev0/hk_rtmon_dayfile";
  }
@@ -735,7 +728,19 @@ sub ingest_day_files()
          #add just filename to delete_file list
          if($filename ne "")
          {
-           open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+           if ( $source eq "rtmon")
+           {
+             open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
+           }
+           elsif ( $source eq "moc")
+           {
+             open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+           }
+           else
+           {
+             open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+
+           }
            print DELFILE "$filename\n";
            close DELFILE;
          }
@@ -749,7 +754,20 @@ sub ingest_day_files()
         #add just filename to delete_file list
         if($xmlfilename ne "")
         {
-          open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+           if ( $source eq "rtmon")
+           {
+             open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
+           }
+           elsif ( $source eq "moc")
+           {
+             open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+
+           }
+           else
+           {
+             open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+
+           }
           print DELFILE "$xmlfilename\n";
           close DELFILE;
         }
