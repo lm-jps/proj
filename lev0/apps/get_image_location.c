@@ -194,7 +194,8 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
         (tptr+i)->imscale=drms_getkey_float(rec, "A_171_IMSCALE", &status);
         sprintf((tptr+i)->mpo_rec,  "%s[:#%lld]", GMP_MASTER_POINTING_SERIES, rec->recnum);
       }
-      else if ( (tptr+i)->wavelength == 193)
+      //added after ok from jps to treat 193 and 195 identical
+      else if (((tptr+i)->wavelength == 193) || ((tptr+i)->wavelength == 195))
       {
         (tptr+i)->x=drms_getkey_float(rec, "A_193_X0", &status);
         (tptr+i)->y=drms_getkey_float(rec, "A_193_Y0", &status);
