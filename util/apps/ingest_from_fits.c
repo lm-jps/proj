@@ -244,7 +244,7 @@ int DoIt(void)
       DIE("No input data found");
     }
 
-  data = drms_fitsrw_read(in, readraw, &keywords, &status);
+  data = drms_fitsrw_read(drms_env, in, readraw, &keywords, &status);
   if (status || !keywords)
     DIE("No keywords found");
 
