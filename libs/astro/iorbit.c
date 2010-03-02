@@ -1469,7 +1469,7 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                      retvec->obs_vr = hvr[ivec] * 1000;
                      retvec->obs_vw = hvw[ivec] * 1000;
                      retvec->obs_vn = hvn[ivec] * 1000;
-                     retvec->rsun_obs = (retvec->dsun_obs < 0.001 & retvec->dsun_obs > -0.001 ? DRMS_MISSING_DOUBLE : 
+                     retvec->rsun_obs = (retvec->dsun_obs < 0.001 && retvec->dsun_obs > -0.001 ? DRMS_MISSING_DOUBLE : 
                                          648000 * asin(kRSUNREF / retvec->dsun_obs) / kPI); 
                      retvec->crln_obs = l0;
                      retvec->crlt_obs = b0;
