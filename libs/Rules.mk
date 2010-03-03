@@ -13,8 +13,6 @@ dir	:= $(d)/dsputil
 -include		$(SRCDIR)/$(dir)/Rules.mk
 dir	:= $(d)/gapfiller
 -include		$(SRCDIR)/$(dir)/Rules.mk
-dir	:= $(d)/json
--include		$(SRCDIR)/$(dir)/Rules.mk
 
 # Standard things
 d		:= $(dirstack_$(sp))
