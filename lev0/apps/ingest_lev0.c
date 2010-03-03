@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <strings.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/stat.h>	//for umask(2)
@@ -54,11 +55,13 @@
 //#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
 ////#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_test"
 //For test with DDS on Jan 19, 2010
-#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_JAN2010"
+//#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_JAN2010"
+#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_junk"
 //#define LEV0SERIESNAMEHMI "hmi.lev0f"
 ////#define TLMSERIESNAMEHMI "su_production.tlm_test"
 //For test with DDS on Jan 19, 2010
-#define TLMSERIESNAMEHMI "su_production.tlm_hmi_JAN2010"
+//#define TLMSERIESNAMEHMI "su_production.tlm_hmi_JAN2010"
+#define TLMSERIESNAMEHMI "su_production.tlm_hmi_junk"
 
 #define LEV0SERIESNAMEHMIGND "hmi_ground.lev0_dds"
 #define TLMSERIESNAMEHMIGND "hmi_ground.tlm_dds"
@@ -68,10 +71,12 @@
 //#define LEV0SERIESNAMEAIA "su_production.lev0f_aia"
 ////#define LEV0SERIESNAMEAIA "aia.lev0f"
 //For test with DDS on Jan 19, 2010
-#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_JAN2010"
+//#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_JAN2010"
+#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_junk"
 ////#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
 //For test with DDS on Jan 19, 2010
-#define TLMSERIESNAMEAIA "su_production.tlm_aia_JAN2010"
+//#define TLMSERIESNAMEAIA "su_production.tlm_aia_JAN2010"
+#define TLMSERIESNAMEAIA "su_production.tlm_aia_junk"
 
 #define LEV0SERIESNAMEAIAGND "aia_ground.lev0_dds"
 #define TLMSERIESNAMEAIAGND "aia_ground.tlm_dds"
@@ -163,6 +168,7 @@ static DRMS_Segment_t *segmentc;
 static DRMS_Array_t *cArray, *oldArray;
 static TIME sdo_epoch;
 static char datestr[32];
+static char bld_vers[16];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 
 unsigned int fsn = 0;
@@ -696,6 +702,7 @@ else {				//AIA specific qual bits
 }
   //drms_setkey_int(rs, "QUALLEV0", quallev0);	//don't use this anymore
   drms_setkey_int(rs, "QUALITY", quallev0);
+  drms_setkey_string(rs, "BLD_VERS", bld_vers); //build vers to every record
   drms_setkey_string(rs, "WAVE_STR", wave_str);
   percentd = (float)((100.0 * (float)img->datavals)/(float)img->totalvals);
   drms_setkey_float(rs, "PERCENTD", percentd);
@@ -1225,6 +1232,7 @@ int get_tlm(char *file, int rexmit, int higherver)
           if(datval != j) {
             printk("*Test data value=%0x, expected=%0x for IM_PDU Cntr=%lld\n", 
 		datval, j, vcdu_seq_num);
+            printk("*File = %s\n", file);
             eflg++;
             break;		// skip the rest of this packet 
           }
@@ -1461,7 +1469,7 @@ void do_ingest()
   DIR *dfd;
   NAMESORT *nameptr;
   struct dirent *dp;
-  int i, j, status;
+  int i, j, status, mvstat;
   int rexmit, higherversion;
   char path[DRMS_MAXPATHLEN];
   char name[128], line[128], tlmfile[128], tlmname[96];
@@ -1604,13 +1612,23 @@ void do_ingest()
     printk("*mv qac to %s\n", path);
     printk("%s\n", cmd);
     if(status = system(cmd)) {
-      printk("**ERROR: %d on: %s\n", status, cmd);
+      printk("**ERROR: %d errno=%d on: %s\n", status, errno, cmd);
+      if(WIFEXITED(status)) {
+        if(mvstat = WEXITSTATUS(status)) {  //status ret by mv
+          printk("**ERROR: mv exit status = %d\n", mvstat);
+        }
+      }
     }
     sprintf(cmd, "/bin/mv %s %s", tlmfile, path);
     printk("*mv tlm to %s\n", path);
     printk("%s\n", cmd);
     if(status = system(cmd)) {
-      printk("**ERROR: %d on: %s\n", status, cmd);
+      printk("**ERROR: %d errno=%d on: %s\n", status, errno, cmd);
+      if(WIFEXITED(status)) {
+        if(mvstat = WEXITSTATUS(status)) {  //status ret by mv
+          printk("**ERROR: mv exit status = %d\n", mvstat);
+        }
+      }
       printk("**Continue after ERROR on mv of tlm file\n");
       continue;
     }
@@ -1707,6 +1725,7 @@ void setup()
     printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
 		tlmseriesname, lev0seriesname);
   }
+  sprintf(bld_vers, "%s", jsoc_version);
   umask(002);			// allow group write 
   Image.initialized = 0;	// init the two image structures 
   ImageOld.initialized = 0;
