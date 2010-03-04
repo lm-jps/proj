@@ -189,7 +189,7 @@ int get_pointing_info(DRMS_Env_t *drms_env, TIME *tobs, int nobs, PTINFO **ptinf
 	    qrot(qq,z0,z);
 
 	    p[i].sat_rot = atan2(z[1],z[2])*180.0/M_PI;
-	    p[i].sat_y0 = asin(x[1])*3600.0*180.0/M_PI;
+	    p[i].sat_y0 = -asin(x[1])*3600.0*180.0/M_PI;
 	    p[i].sat_z0 = asin(x[2])*3600.0*180.0/M_PI;
 	}
     }
