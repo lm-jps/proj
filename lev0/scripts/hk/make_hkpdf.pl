@@ -24,7 +24,7 @@
 #############################################################################
 #set environment variables and initialize variables.
 $hm=$ENV{'HOME'};
-$script_version=1.5;
+$script_version=1.6;
 
 # HK environment variable for processing STANFORD file
 $ENV{'HK_STHA_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev0/fromlmsal";
@@ -563,6 +563,10 @@ sub create_hkpdf_filenames($)
 ###############################################################################
 sub create_hkpdf_files($)
 {
+
+  # initilize warning notification flag
+  $warning_flag=-1;
+
   # set local variables and initialize variables
   my($i,$processing_type, $files_did);
   $processing_type= $_[0];
@@ -638,7 +642,13 @@ sub create_hkpdf_files($)
       &create_dcon_lines() ;
       close( OUTFILE);
       #print "Finish file $i. APID is $all_apids[$i]\n";
-      print "Finish file where APID is $all_apids[$i]. Files did:$files_did\n";
+      print "Finished file where APID is $all_apids[$i]. Files did:$files_did\n";
+
+      #check if need to notify user to run patch01.pl script.
+      $warning_flag=check_patch01($version_number,$all_apids[$i]);
+      &patch_notice($warning_flag,$version_number,$all_apids[$i]);
+
+      #do next apid
       $files_did++;
       $i++;
     }
@@ -1735,4 +1745,89 @@ sub check_bit_positions($,@)
     $j++;
   }
   return 1;
+}
+
+
+###############################################################################
+# sub  check_bit_positions() 
+###############################################################################
+sub check_patch01($,$)
+{
+   my($fvn, $id);
+   $fvn=$_[0];
+   $id=$_[1];
+ #  print "fvn is <$fvn>\n";
+ #  print "id is <$id>\n";
+   @s_fvn=split('\.',$fvn);
+   $fvn_wn= $s_fvn[0];
+   $fvn_dn= $s_fvn[1];
+   #print "fvn_dn is $fvn_dn\n";
+   #print "fvn_wn is $fvn_wn\n";
+   # patch warning for only these apids
+   if ($id eq "0x02C" || $id eq "0x010")
+   {
+     if($s_fvn[0] == 1 && ($s_fvn[1] == 161 || $s_fvn[1] == 162 || $s_fvn[1] == 163 ))
+     { 
+       # if 1.161 to 1.163 then tell user to do patch
+       return (1);
+     }
+     elsif($s_fvn[0] == 1 && $s_fvn[1] < 160 )
+     { 
+        # if 1.159 or less- tell user nothing- do NOT need patch
+        return (0);
+     }
+     elsif($s_fvn[0] == 1 && $s_fvn[1] > 163 )
+     { 
+        # if greater then 1.163 file version then tell user may need to patch
+        return (2);
+     }
+     elsif($s_fvn[0] > 1  )
+     { 
+       # if 2.x then tell user may need to patch
+       return(3);
+     }
+   }
+   return(0);
+}
+
+###############################################################################
+# sub  displaynotice() 
+###############################################################################
+sub patch_notice($,$,$)
+{
+   my($msgnum,$vernum, $id);
+
+   # get arguments passed in
+   $msgnum=$_[0];
+   $vernum=$_[1];
+   $id=$_[2];
+
+   if ($msgnum == 0)
+   {
+     return;
+   }
+   elsif($msgnum == 1)
+   {
+      print "\*\*\*Important Notification\*\*\*\n";
+      print "-->For updates of HK configuration file with apid <$id> and file version <$vernum>, you need to run a patch 01 script.\n";
+      print "-->Here is process steps. Run script. Check into cvs hk config files shown in log of patch01.pl script. Do cvs update of files on production.\n";
+      print "-->This patch 01 fixes TRAC bug #261\n";
+      print "-->Example run of script: patch01.pl  or patch01.pl > LOG-PATCH01\n";
+   }
+   elsif($msgnum == 2 || $msgnum == 3 )
+   {
+      print "\*\*\*Important Notification\*\*\*\n";
+      print "-->For updates of HK configuration file versions <$vernum>, you \"MAY\" need to run a patch script.\n";
+      print "-->If the STANFORD file was not fixed to make unsigned variables for Analog conversion keywords for packet 0x10 and 0x1c.\n";
+      print "-->Then update patch01.pl to handle this new version number  <$vernum>.\n";
+      print "-->Here is process steps. If needed update patch01.pl script. Run script.";
+      print "Then check into cvs script and hk config files shown in log of patch01.pl script. Do cvs update of files on production.\n";
+      print "-->This patch 01 fixes TRAC bug #261\n";
+      print "-->Example run of script: patch01.pl  or patch01.pl > LOG-PATCH01\n";
+   }
+   else
+   {
+       print "WARNING: Probably could find  msgnum variable value. Check why the warning_flag was not set correctly in check_patch01().\n";
+   }
+
 }
