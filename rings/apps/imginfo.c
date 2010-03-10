@@ -53,7 +53,7 @@ typedef struct paramdef {
   double offset;
   double defval;
   unsigned int statusbit;
-  char name[16];
+  char name[32];
 } ParamDef;
 
 static double lookup (DRMS_Record_t *rec, ParamDef key, int *status) {
@@ -81,9 +81,9 @@ static char *lookup_str (DRMS_Record_t *rec, ParamDef key, int *status) {
 }
 
 static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
-    double *ctrx, double *ctry, double *apsd, double *pang,
-    double *ellipse_e, double *ellipse_pa, int *x_invrt, int *y_invrt,
-    int *need_ephem, int *MDI_correct) {
+    double *ctrx, double *ctry, double *apsd, const char *apsd_key,
+    double *pang, double *ellipse_e, double *ellipse_pa,
+    int *x_invrt, int *y_invrt, int *need_ephem) {
 /*
  *  Provides the following values from the DRMS record:
  *    xscl  scale in the image column direction (arc-sec/pixel)
@@ -103,10 +103,10 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
  *	to ?, in radians
  *    xinv  0 if image is direct, 1 if flipped by columns
  *    yinv  0 if image is direct, 1 if flipped by rows
- *  NO
+ *  NO!
  *  The following data types are supported: SOHO-MDI, GONG+, Mt. Wilson MOF,
  *    SOHO-EIT, TRACE, BBSO Ha
- *  NO
+ *  NO!
  *  If the data are not recognizably of one of these types, the function
  *    returns NO_DATA_DICT; if one or more required keywords are missing
  *    the function returns a status mask indicating which values could not
@@ -126,7 +126,7 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
   static double degrad = 180.0 / M_PI;
   double ella, ellb;
   int n, status;
-  static int need_units, scale_avail, xinv_type, yinv_type;
+  static int scale_avail, xinv_type, yinv_type;
   static int hdrtype = UNKNOWN, lasthdr = UNKNOWN - 1;
   char *strval;
 
@@ -186,7 +186,9 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
 	  else if (!strcmp (strval, "deg")) param[XSCL].scale = 1.0 / 3600.0;
 	  else if (!strcmp (strval, "mas")) param[XSCL].scale = 1000.0;
 	  else if (!strcmp (strval, "rad")) param[XSCL].scale = degrad * 3600.0;
+/*
 	  need_units = status & KEYSCOPE_VARIABLE;
+*/
 	}
 	if (strval) free (strval);
 	strval = lookup_str (img, param[YUNI], &status);
@@ -196,11 +198,16 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
 	  else if (!strcmp (strval, "deg")) param[YSCL].scale = 1.0 / 3600.0;
 	  else if (!strcmp (strval, "mas")) param[YSCL].scale = 1000.0;
 	  else if (!strcmp (strval, "rad")) param[YSCL].scale = degrad * 3600.0;
+/*
 	  need_units = status & KEYSCOPE_VARIABLE;
+*/
 	}
 	if (strval) free (strval);
    /*  the following are appropriate for MDI, but not strictly based on WCS  */
+/*
 	sprintf (param[RSUN].name, "R_SUN");
+*/
+	strncpy (param[RSUN].name, apsd_key, 31);
 	sprintf (param[APSD].name, "OBS_ASD");
 	sprintf (param[PANG].name, "CROTA2");
 	param[PANG].scale = raddeg;
@@ -236,9 +243,15 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
                                                       /*  Image orientation  */
   *x_invrt = xinv_type;
   *y_invrt = yinv_type;
-/*  
-  *MDI_correct = 0;
-*/
+
   return status;
 }
+
+/*
+ *  Revision History (all mods by Rick Bogart unless otherwise noted)
+ *
+ *  09.10.06		version that went into first release under proj/rings
+ *  09.12.03		fixed two icc11 compiler warnings; added keyword name
+ *		passing to solar_image_info for selected cases
+ */
 
