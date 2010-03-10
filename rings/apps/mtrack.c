@@ -1,5 +1,5 @@
 /*
- *  mtrack.c						~rick/hmi/rings/src
+ *  mtrack.c						~rick/src/mtrack
  *
  *  Responsible:  Rick Bogart				RBogart@spd.aas.org
  *
@@ -15,7 +15,7 @@
  *				(helioprojective geometry). It may be
  *				specified as either a data set query or
  *				just a data series name, in which case
- *				additional selection parmaeters are required
+ *				additional selection parameters are required
  *				The dataset is assumed to include in its
  *				ancillary data the parameters required for
  *				heliographic mapping, namely the observation
@@ -25,7 +25,7 @@
  *				segments)
  *      out     DataSer none            Output data series name
  *				The output series must have prime keys that
- *				can distinguish individual ouptu records by
+ *				can distinguish individual output records by
  *				LatHG, LonHG, and either MidTime or CarrTime
  *				(= CarrRot:CMLon)
  *      bckgn	string	-		If specified, pointer to image to be
@@ -91,7 +91,7 @@
  *		 0.1067  -0.484  -0.361		Snodgrass & Ulrich " (66-87)
  *      merid_v float   0.0		Meridional rate for tracking
  *				urad/sec, +ve northward
- *	bscale	float	1.0		Value scaling parameter for output
+ *	bscale	float	0.0		Value scaling parameter for output
  *	bzero	Float	0.0		value offset parameter for output
  *	trec_key string	T_REC		Keyname of time type prime keyword for
  *				input data series
@@ -105,6 +105,10 @@
  *				centre Carrington longitude of each input image
  *	clat_key string	CRLT_OBS	Keyname of float type record describing
  *				centre Carrington latitude of each input image
+ *	rsun_key string	R_SUN		Keyname of float type record describing
+ *				apparent solar semidiameter of each image
+ *      mai	 float*  NaN	MAI (Magnetic Activity Index) value to
+ *				set as keyword
  *
  *  Flags
  *	-c	track at Carrington rate (a0 = a2 = a4 = merid_v = 0)
@@ -122,12 +126,18 @@
  *	to replace.
  *
  *  Bugs:
+ *    There was a bug in NetDRMS 2.0b drms_segment_writeslice that can cause
+ *	the code to compress the wrong tile size, or even fail with a floating-
+ *	point exception, when the output segment has a vardim protocol. It
+ *	is not known if this bug is still present in 2.0
+ *    The code does not check that the output data segments match those of
+ *	the output series when the segment protocol is variable
  *    Checks for validity of tstart and tstop parameters are unreliable, due
  *	to bugs in DRMS treatment of scans of invalid strings for times
  *	(ticket #177)
+ *    The Log segment, if written, is only written to the first record, but
+ *	is overwritten for each output record!
  *    Should free log, map
- *    There appear to be bugs in cmdparams parse_array: see comments in v0.7
- *	for valgrind report
  *    Will not accept an input dataset specification of @*
  *    The image foreshortening corrections are appropriate for 1 AU, independent
  *	of DSUN_OBS
@@ -138,8 +148,8 @@
  *    The protocol of the Log segment, if present in the output series, is not
  *	verified to be generic
  *    There is no verification that numerous essential key data are actually
- *	in the input dataset, in particular trec_key, tobs_key, clon_key,
- *	clat_key, and crot_key.
+ *	in the input dataset, in particular trec_key, tobs_key, and
+ *	crot_key. (clon_key and clat_key are checked)
  *    Uses private local FITS code rather than cfitsio for reading in
  *	background image
  *    When a target time and length are given, the actual number of records
@@ -157,14 +167,16 @@
  *	necessitate a change in the position angle
  *
  *  Future Updates
- *    0.8 fix up keywords; add stubs for initial input oversampling
+ *    0.9 incorporate writing of output by slices to avoid memory limits;
+ *	reorganize code, adding functions and simplifying main module;
+ *	fix up keywords; add stubs for initial input oversampling
  *	(including array limits)
- *    0.9 reorganize code, adding functions and simplifying main module
  *    Add target cadence arg, modify length to be in units of target cadence
  *    Add option for tracking from interpolated set of target locations
  *    Add ability to track from remapped images, not just helioprojective
  *    Interpolate in time to target cadence
  *    Create new data series as needed
+ *    Check for MDI source input data and consistency of flag
  *
  *  Revision history is at end of file
  */
@@ -174,22 +186,17 @@
 						      /*  module identifier  */
 char *module_name = "mtrack";
 char *module_desc = "track multiple regions from solar image sequences";
-char *version_id = "0.8";
+char *version_id = "0.9";
 
-#define CARR_RATE       (2.8653291)
-#define RSUNMM		(696)
+#define CARR_RATE       (2.86532908457)
+#define RSUNM		(6.96e8)
+#define INTERP_NEAREST_NEIGHBOR	(1)
 
 ModuleArgs_t module_args[] = {
-/*
-  {ARG_STRING,	"in", "", input data series or dataset"}, 
-*/
-  {ARG_STRING,	"in", "mdi.fd_V_lev18", "input data series or dataset"}, 
+  {ARG_STRING,	"in", "", "input data series or dataset"}, 
   {ARG_STRING,	"segment", "Not Specified",
       "input data series segment; ignored if series only has one segment"}, 
-/*
   {ARG_STRING,	"out",	"", "output data series"}, 
-*/
-  {ARG_STRING,	"out",	"su_rsb.tstrack_gen", "output data series"}, 
   {ARG_STRING,	"bckgn", "Not Specified",
       "background image to be subtracted from input data"}, 
   {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
@@ -208,7 +215,7 @@ ModuleArgs_t module_args[] = {
   {ARG_NUME, "map", "Postel", "map projection",
       "carree, Cassini, Mercator, cyleqa, sineqa, gnomonic, Postel, stereographic, orthographic, Lambert"},
   {ARG_NUME, "interp", "cubiconv", "interpolation option",
-      "cubiconv"},
+      "cubiconv, nearest"},
   {ARG_FLOAT,	"scale", "Not specified", "map scale at center [deg/pxl]"},
   {ARG_INT,     "cols", "0", "columns in output map(s)"},
   {ARG_INT,     "rows", "0", "rows in output map(s)"},
@@ -219,15 +226,17 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT,	"a4", "-0.5037", "solar rotation parameter A4 [urad/sec]"},
   {ARG_FLOAT,	"merid_v", "0.0",
       "solar meridional velocity [urad/sec]; 0.0014368 * rate in m/s"},
-  {ARG_FLOAT,	"bscale", "1.0", "output scaling factor"},
+  {ARG_FLOAT,	"bscale", "0.0", "output scaling factor"},
   {ARG_FLOAT,	"bzero", "0.0", "output offset"},
   {ARG_STRING,	"trec_key", "T_REC", "keyname of (slotted) prime key"}, 
-  {ARG_STRING,	"tobs_key", "T_OBS", "keyname of image observation time"}, 
-  {ARG_STRING,	"tstp_key", "CADENCE",  "keyname of image observation time"}, 
-  {ARG_STRING,	"qual_key", "Quality",  "keyname of 32-bit image quality field"}, 
-  {ARG_STRING,	"clon_key", "CRLN_OBS", "keyname of image central longitude"}, 
-  {ARG_STRING,	"clat_key", "CRLT_OBS", "keyname of image central latitude"}, 
-  {ARG_STRING,	"crot_key", "CAR_ROT", "keyname of image Carrington rotation"}, 
+  {ARG_STRING,	"tobs_key", "T_OBS", "keyname for image observation time"}, 
+  {ARG_STRING,	"tstp_key", "CADENCE",  "keyname for image observation time"}, 
+  {ARG_STRING,	"qual_key", "Quality",  "keyname for 32-bit image quality field"}, 
+  {ARG_STRING,	"clon_key", "CRLN_OBS", "keyname for image central longitude"}, 
+  {ARG_STRING,	"clat_key", "CRLT_OBS", "keyname for image central latitude"}, 
+  {ARG_STRING,	"crot_key", "CAR_ROT", "keyname for image Carrington rotation"}, 
+  {ARG_STRING,	"rsun_key", "R_SUN", "keyname for apparent solar semi-diameter"}, 
+  {ARG_FLOATS,	"mai", "NaN", "(MDI) Magnetic Activity Indices"},
   {ARG_FLAG,	"c",	"", "track at Carrington rate"}, 
   {ARG_FLAG,	"n",	"", "turn off tracking"}, 
   {ARG_FLAG,	"o",	"",
@@ -243,19 +252,18 @@ ModuleArgs_t module_args[] = {
 };
 
 #include "keystuff.c"
+#include "earth_ephem.c"
 #include "soho_ephem.c"
 #include "fitstuff.c"
 #include "cartography.c"
 #include "imginfo.c"
 #include "mdistuff.c"
 
-char *prime_keylist[] = {"CarrTime", "LonHG", "LatHG", "Duration",
+char *prime_keylist[] = {"CarrRot", "CMLon", "LonHG", "LatHG", "Duration",
     "Width", "Height", "Source", "ZonalTrk", "MeridTrk", "MapProj", "MapScale"};
 
 static char *create_prime_key (DRMS_Record_t *rec) {
-  DRMS_Keyword_t *keywd;
   int pct = sizeof (prime_keylist) / sizeof (char *);
-  char *str;
 
   return create_primekey_from_keylist (rec, prime_keylist, pct);
 }
@@ -371,9 +379,18 @@ float ccint2 (float *f, int nx, int ny, double x, double y) {
       sum = sum + f[(iy1+i) * nx + ix1 + j] * uy[i] * ux[j];
   return (float)sum;
 }
+					  /*  nearest value "interpolation"  */
+float nearest_val (float *f, int cols, int rows, double x, double y) {
+  int col, row;
+  if (x < -0.5 || x >= (cols - 0.5) || y < -0.5 || y >= (rows - 0.5))
+    return FP_NAN;
+  col = x + 0.5;
+  row = y + 0.5;
+  return f[col + row * cols];
+}
 
 				/*  adapted from SOI functions/sds_interp.c  */
-float array_imaginterp (DRMS_Array_t *img, double x, double y) {
+float array_imaginterp (DRMS_Array_t *img, double x, double y, int schema) {
 /*
  *  Interpolate to an arbitrary grid location {x, y} from a DRMS Array
  *    containing a projected solar image.  The aim of this function is
@@ -406,7 +423,9 @@ float array_imaginterp (DRMS_Array_t *img, double x, double y) {
   mdim = (cols > rows) ? cols : rows;
   xs = 0.5 * (x + 1.0) * mdim - 0.5;
   ys = 0.5 * (y + 1.0) * mdim - 0.5;
-  return ccint2 (img->data, cols, rows, xs, ys);
+  if (schema == INTERP_NEAREST_NEIGHBOR)
+    return nearest_val (img->data, cols, rows, xs, ys);
+  else return ccint2 (img->data, cols, rows, xs, ys);
 }
 
 static int fsphere2img (double sin_lat, double cos_lat, double lon,
@@ -470,7 +489,7 @@ static void perform_mappings (DRMS_Array_t *img, float *maps, double *delta_rot,
     double latc, double lonc, double xc, double yc,
     double a0, double a2, double a4, double merid_v, double radius, double pa,
     double ellipse_e, double ellipse_pa, int x_invrt, int y_invrt,
-    int MDI_correct_distort) {
+    int interpolator, int MDI_correct_distort) {
 /*
  *  Perform the mappings from the target heliographic coordinate sets
  *    appropriate to each output cube into the image coordinates (as
@@ -527,7 +546,7 @@ static void perform_mappings (DRMS_Array_t *img, float *maps, double *delta_rot,
 	    mtrack_MDI_image_tip (&xx, &yy, 1, 1);
 	    mtrack_MDI_image_stretch (&xx, &yy, 1, 1);
 	  }
-	  interpval = array_imaginterp (img, xx, yy);
+	  interpval = array_imaginterp (img, xx, yy, interpolator);
 	  maps[n + mset] = (isnan (interpval)) ? missing_val : interpval;
 	}
 	mset += pixct;
@@ -548,7 +567,7 @@ static void perform_mappings (DRMS_Array_t *img, float *maps, double *delta_rot,
 	  cos_lat = map_coslat[n + mset];
 	  lon = maplon[n + mset] + delta_lon;
 	  cos_lat_lon = cos_lat * cos (lon - lonc);
-	  cos_cang   = sin_lat * sin_latc + cos_latc * cos_lat_lon;
+	  cos_cang  = sin_lat * sin_latc + cos_latc * cos_lat_lon;
 	  if (cos_cang < 0.0) {
 	    maps[n + mset] = missing_val;
 	    continue;
@@ -570,7 +589,7 @@ static void perform_mappings (DRMS_Array_t *img, float *maps, double *delta_rot,
 	    mtrack_MDI_image_tip (&xx, &yy, 1, 1);
 	    mtrack_MDI_image_stretch (&xx, &yy, 1, 1);
 	  }
-	  interpval = array_imaginterp (img, xx, yy);
+	  interpval = array_imaginterp (img, xx, yy, interpolator);
 	  maps[n + mset] = (isnan (interpval)) ? missing_val : interpval;
         }
 	mset += pixct;
@@ -607,11 +626,82 @@ static void perform_mappings (DRMS_Array_t *img, float *maps, double *delta_rot,
 	mtrack_MDI_image_tip (&xx, &yy, 1, 1);
 	mtrack_MDI_image_stretch (&xx, &yy, 1, 1);
       }
-      interpval = array_imaginterp (img, xx, yy);
+      interpval = array_imaginterp (img, xx, yy, interpolator);
       maps[n + mset] = (isnan (interpval)) ? missing_val : interpval;
     }
     mset += pixct;
   }
+}
+
+static int verify_keys (DRMS_Record_t *rec, const char *clon,
+    const char *clat, double *keyscale) {
+  DRMS_Keyword_t *keywd;
+  
+  keywd = drms_keyword_lookup (rec, clon, 1);
+  if (!keywd) {
+    fprintf (stderr,
+	"Error: Keyword \"%s\" for Carrington longitude of observer not found\n",
+	clon);
+    fprintf (stderr, "       Must supply an appropriate value for clon_key\n");
+    fprintf (stderr, "       (Carrington longitude of disc center in deg)\n");
+    return -1;
+  }
+  if (keywd->info->type == DRMS_TYPE_TIME ||
+      keywd->info->type == DRMS_TYPE_STRING ||
+      keywd->info->type == DRMS_TYPE_RAW) {
+    fprintf (stderr,
+	"Error: Keyword \"%s\" for observer Carrington longitude is of wrong type\n",
+	clon);
+    fprintf (stderr, "       Must supply an appropriate value for clon_key\n");
+    fprintf (stderr, "       (Carrington longitude of disc centre in deg)\n");
+    return -1;
+  }
+  if (strncasecmp (keywd->info->unit, "deg", 3)) {
+    fprintf (stderr,
+	"Warning: Keyword \"%s\" for observer Carrington longitude has unit of \"%s\"\n",
+	clon, keywd->info->unit);
+    fprintf (stderr, "         ignored, \"deg\" assumed\n");
+  }
+
+  keywd = drms_keyword_lookup (rec, clat, 1);
+  if (!keywd) {
+    fprintf (stderr,
+	"Error: Keyword \"%s\" for observer heliographic latitude not found\n",
+	clat);
+    fprintf (stderr, "       Must supply an appropriate value for clat_key\n");
+    fprintf (stderr, "       (heliographic latitude of disc centre in deg)\n");
+    return -1;
+  }
+  if (keywd->info->type == DRMS_TYPE_TIME ||
+      keywd->info->type == DRMS_TYPE_STRING ||
+      keywd->info->type == DRMS_TYPE_RAW) {
+    fprintf (stderr,
+	"Error: Keyword \"%s\" for observer heliographic latitude is of wrong type\n",
+	clat);
+    fprintf (stderr, "       Must supply an appropriate value for clat_key\n");
+    fprintf (stderr, "       (heliographic latitude of disc centre in deg)\n");
+    return -1;
+  }
+  if (strncasecmp (keywd->info->unit, "deg", 3)) {
+    fprintf (stderr,
+	"Warning: Keyword \"%s\" for observer heliographic latitude has unit of \"%s\"\n",
+	clat, keywd->info->unit);
+    fprintf (stderr, "         ignored, \"deg\" assumed\n");
+  }
+
+  return 0;
+}
+
+static int cleanup (int error, DRMS_RecordSet_t *ids, DRMS_RecordSet_t *ods,
+    DRMS_Array_t *data, DRMS_Array_t *map) {
+  if (data) drms_free_array (data);
+  if (map) drms_free_array (map);
+  if (ids) drms_close_records (ids, DRMS_FREE_RECORD);
+  if (ods) {
+    if (error) drms_close_records (ods, DRMS_FREE_RECORD);
+    else drms_close_records (ods, DRMS_INSERT_RECORD);
+  }
+  return error;
 }
 
 static void free_all (float *clat, float *clon, double *delta_rot, float *maps,
@@ -630,10 +720,11 @@ static void free_all (float *clat, float *clon, double *delta_rot, float *maps,
 
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
-  DRMS_RecordSet_t *ids, *ods;
+  DRMS_RecordSet_t *ids = NULL, *ods = NULL;
+  DRMS_Record_t **orecs;
   DRMS_Record_t *irec, *orec;
   DRMS_Segment_t *record_segment, *oseg, *logseg;
-  DRMS_Array_t *data_array, *map_array;
+  DRMS_Array_t *data_array = NULL, *map_array = NULL;
   DRMS_Keyword_t *keywd;
   fitsinfo_t *bckfits = NULL;
   FILE **log;
@@ -649,20 +740,21 @@ int DoIt (void) {
   double cos_phi, sin_phi;
   double img_xc, img_yc, img_xscl, img_yscl, img_radius, img_pa;
   double ellipse_e, ellipse_pa;
-  float **map;
+  double kscale;
   float *maps = NULL, *last = NULL;
-  float *data, *clat, *clon, *bck = NULL;
-  enum platloc {LOC_UNKNOWN, LOC_MWO, LOC_GONG_LE, LOC_GONG_UD, LOC_GONG_TD,
-    LOC_GONG_CT, LOC_GONG_TC, LOC_GONG_BB, LOC_GONG_ML, LOC_SOHO, LOC_SDO}
-    platform = LOC_UNKNOWN;
+  float *data, *clat, *clon, *mai, *bck = NULL, *zero;
+  enum platloc {LOC_UNKNOWN, LOC_MWO, LOC_GONG_MR, LOC_GONG_LE, LOC_GONG_UD,
+      LOC_GONG_TD, LOC_GONG_CT, LOC_GONG_TC, LOC_GONG_BB, LOC_GONG_ML, LOC_SOHO,
+      LOC_SDO} platform = LOC_UNKNOWN;
   long long nn;
+  unsigned int quality;
   int *reject_list;
-  int axes[3];
+  int axes[3], slice_start[3], slice_end[3];
   int recct, rgn, rgnct, segct, valid;
   int tmid_cr, cr_start, cr_stop;
   int cr_first, cr_last;
   int col, row, pixct, dxy, i, found, n, nr, or;
-  int no_merid_v, rejects, status, verbose_logs;
+  int blankvals, no_merid_v, rejects, status, verbose_logs, setmais;
   int x_invrt, y_invrt;
   int need_cadence, need_ephem, MDI_correct, MDI_correct_distort;
   unsigned char *offsun;
@@ -674,14 +766,16 @@ int DoIt (void) {
   double raddeg = M_PI / 180.0;
   double degrad = 1.0 / raddeg;
   int need_ephem_from_time = 0;
+  int need_crcl = 1;
   int check_platform = 0;
+  int scaling_override = 0;
   int segnum = 0;
   int extrapolate = 1;
   int found_first = 0, found_last = 0;
   char *mapname[] = {"PlateCarree", "Cassini-Soldner", "Mercator",
       "LambertCylindrical", "Sanson-Flamsteed", "gnomonic", "Postel",
       "stereographic", "orthographic", "LambertAzimuthal"};
-  char *interpname[] = {"Cubic Convolution"};
+  char *interpname[] = {"Cubic Convolution", "Nearest Neighbor"};
   char *wcscode[] = {"CAR", "CAS", "MER", "CEA", "GLS", "TAN", "ARC", "STG",
       "SIN", "ZEA"};
 						 /*  process command params  */
@@ -690,7 +784,10 @@ int DoIt (void) {
   char *bckgnfile = params_get_str (params, "bckgn");
   char *rejectfile = params_get_str (params, "reject");
   char *seg_name = params_get_str (params, "segment");
+/*
   unsigned int qmask = params_get_int (params, "qmask");
+*/
+  unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
   char *tmid_str = params_get_str (params, "tmid");
   TIME tstrt = params_get_time (params, "tstart");
   TIME tstop = params_get_time (params, "tstop");
@@ -698,6 +795,7 @@ int DoIt (void) {
   double tstep = params_get_double (params, "tstep");
   int latct = params_get_int (params, "lat_nvals");
   int lonct = params_get_int (params, "lon_nvals");
+  int maict = params_get_int (params, "mai_nvals");
   int proj = params_get_int (params, "map");
   int intrpopt = params_get_int (params, "interp");
   double map_scale = params_get_double (params, "scale");
@@ -718,6 +816,7 @@ int DoIt (void) {
   char *clon_key = params_get_str (params, "clon_key");
   char *clat_key = params_get_str (params, "clat_key");
   char *crot_key = params_get_str (params, "crot_key");
+  char *rsun_key = params_get_str (params, "rsun_key");
 
   int carr_track = params_isflagset (params, "c");
   int no_track = params_isflagset (params, "n");
@@ -739,6 +838,7 @@ return 0;
   verbose_logs = (dispose == DRMS_INSERT_RECORD) ? verbose : 0;
 	  /*  get lists of latitudes and longitudes defining region centers  */
   rgnct = (latct > lonct) ? latct : lonct;
+  setmais = (maict == rgnct);
   need_cadence = isnan (tstep);
   if (isnan (map_scale) || map_scale == 0.0) {
     fprintf (stderr,
@@ -798,19 +898,36 @@ return 0;
   for (n = 0; n < segct; n++) {
     record_segment = drms_segment_lookupnum (orec, n);
     if (record_segment->info->naxis != 3) continue;
+    if (record_segment->info->scope == DRMS_CONSTANT) continue;
+    if (record_segment->info->scope == DRMS_VARIABLE) {
+      if (record_segment->axis[0] != map_cols ||
+	  record_segment->axis[1] != map_rows ||
+	  record_segment->axis[2] != length) continue;
+    }
     if (!found) osegname = strdup (record_segment->info->name);
     found++;
   }
   if (found < 1) {
     fprintf (stderr,
-	"Error: no data segment of dimension 3 in output series %s\n", outser);
+	"Error: no data segment of dimension 3 and appropriate size in output series %s\n", outser);
     drms_close_records (ods, DRMS_FREE_RECORD);
     return 1;
   }
+  record_segment = drms_segment_lookup (orec, osegname);
   if (found > 1) {
     fprintf (stderr,
-	"Warning: multiple data segments of dimension 3 in output series %s\n", outser);
+	"Warning: multiple data segments of dimension 3 and appropriate size in output series %s\n", outser);
     fprintf (stderr, "       using \"%s\"\n", osegname);
+  }
+	    /*  use output series default segment scaling if not overridden  */
+  scaling_override = 0;
+  if (bscale == 0.0) {
+    bscale = record_segment->bscale;
+    scaling_override = 1;
+  }
+  if (isnan (bzero)) {
+    bzero = record_segment->bzero;
+    scaling_override = 1;
   }
 					  /*  check for segment named "Log"  */
   logseg = drms_segment_lookup (orec, "Log");
@@ -845,6 +962,11 @@ return 0;
     eoser = strchr (source, '[');
     if (eoser) *eoser = '\0';
     irec = ids->records[0];
+    status = verify_keys (irec, clon_key, clat_key, &kscale);
+    if (status) {
+      drms_close_records (ids, DRMS_FREE_RECORD);
+      return 1;
+    }
     if (need_cadence) {
 			 /*  output cadence not specified, use data cadence  */
       if ((keywd = drms_keyword_lookup (irec, tstp_key, 1))) {
@@ -893,6 +1015,11 @@ return 0;
       return 1;
     }
     irec = ids->records[0];
+    status = verify_keys (irec, clon_key, clat_key, &kscale);
+    if (status) {
+      drms_close_records (ids, DRMS_FREE_RECORD);
+      return 1;
+    }
     if ((keywd = drms_keyword_lookup (irec, tstp_key, 1))) {
 					     /*  cadence should be constant  */
       if (keywd->info->recscope != 1) {
@@ -924,6 +1051,30 @@ return 0;
 	    source);
       if (!strcmp (drms_getkey_string (irec, "TELESCOP", &status), "SOHO"))
 	platform = LOC_SOHO;
+      else if (!strcmp (drms_getkey_string (irec, "TELESCOP", &status), "NSO-GONG")) {
+	if ((keywd = drms_keyword_lookup (irec, "SITE", 1))) {
+	  if (!strcmp (drms_getkey_string (irec, "SITE", &status), "MR"))
+	    platform = LOC_GONG_MR;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "LE"))
+	    platform = LOC_GONG_LE;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "UD"))
+	    platform = LOC_GONG_UD;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "TD"))
+	    platform = LOC_GONG_TD;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "CT"))
+	    platform = LOC_GONG_CT;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "BB"))
+	    platform = LOC_GONG_BB;
+	  else if (!strcmp (drms_getkey_string (irec, "SITE", &status), "ML"))
+	    platform = LOC_GONG_ML;
+	  else {
+	    platform = LOC_GONG_MR;
+	  }
+	} else {
+          fprintf (stderr, "Warning: unspecified GONG site: MR assumed\n");
+	  platform = LOC_GONG_MR;
+	}
+      }
     }
     if (platform == LOC_UNKNOWN) {
       fprintf (stderr, "Warning: observing location unknown, assumed geocenter\n");
@@ -933,10 +1084,16 @@ return 0;
     if (strcmp (tmid_str, "Not Specified")) {
 /*  determine start and stop times from length (in units of tstep) and midtime
 				   (which can be CR:CL as well as date_time) */
-      if (sscanf (tmid_str, "%d:%lf", &tmid_cr, &tmid_cl) == 2) {
+       if (sscanf (tmid_str, "%d:%lf", &tmid_cr, &tmid_cl) == 2) {
 			  /*  tmid specified as CR:CL : need ephemeris info  */
-	if (platform == LOC_SOHO) {
-	  tmid = SOHO_meridian_crossing (tmid_cl, tmid_cr);
+	need_crcl = 0;
+	if (platform == LOC_SOHO ||
+	    (platform >= LOC_GONG_MR && platform <= LOC_GONG_ML) ||
+	    platform == LOC_UNKNOWN) {
+	  if (platform == LOC_SOHO)
+	    tmid = SOHO_meridian_crossing (tmid_cl, tmid_cr);
+	  else
+	    tmid = earth_meridian_crossing (tmid_cl, tmid_cr);
 	  sprint_time (ptbuf, tmid, "", 0);
 			  /*  adjust to phase of input, within data cadence  */
 	  tbase = drms_getkey_time (irec, trec_key, &status);
@@ -1049,8 +1206,10 @@ return 0;
     tobs = drms_getkey_time (ids->records[nr], tobs_key, &status);
     if (fabs (tobs - tmid) < cadence) {
       irec = ids->records[nr];
-      tmid_cl = drms_getkey_double (irec, clon_key, &status);
-      tmid_cr = drms_getkey_int (irec, crot_key, &status);
+      if (need_crcl) {
+        tmid_cl = drms_getkey_double (irec, clon_key, &status);
+        tmid_cr = drms_getkey_int (irec, crot_key, &status);
+      }
       found = 1;
       found_last = 1;
     }
@@ -1074,12 +1233,15 @@ return 0;
     }
   }
   if (!found) need_ephem_from_time = 1;
-
+/*
 printf ("recct = %d, length = %d\n", ids->n, length);
-
+*/
   axes[0] = map_cols;
   axes[1] = map_rows;
-  axes[2] = length;
+  axes[2] = 1;
+  slice_start[0] = slice_start[1] = 0;
+  slice_end[0] = axes[0] - 1;
+  slice_end[1] = axes[1] - 1;
 
   if (need_ephem_from_time) {
     double rsun, vr, vn, vw;
@@ -1138,6 +1300,7 @@ printf ("need ephem from time\n");
 					  /*  allocate map parameter arrays  */
   clat = (float *)malloc (rgnct * sizeof (float));
   clon = (float *)malloc (rgnct * sizeof (float));
+  mai = (float *)malloc (rgnct * sizeof (float));
   delta_rot = (double *)malloc (rgnct * sizeof (double));
   for (i = 0; i < latct; i++) {
     snprintf (key, 64, "lat_%d_value", i);
@@ -1149,22 +1312,31 @@ printf ("need ephem from time\n");
   }
   for (i = latct; i < rgnct; i++) clat[i] = clat[i-1];
   for (i = lonct; i < rgnct; i++) clon[i] = clon[i-1];
+  if (setmais) {
+    for (i = 0; i < latct; i++) {
+      snprintf (key, 64, "mai_%d_value", i);
+      mai[i] = params_get_float (params, key);
+    }
+  }
   for (rgn = 0; rgn < rgnct; rgn++) {
     double sin_lat = sin (clat[rgn]);
     sin_lat *= sin_lat;
     delta_rot[rgn] =  a0 + sin_lat * (a2 + a4 * sin_lat);
   }
   log = (FILE **)malloc (rgnct * sizeof (FILE *));
-		      /*  allocate mapping info arrays for all output cubes  */
+	/*  create output memory structures: data arrays and file pointers,
+					     one per region (output record)  */
+  orecs = (DRMS_Record_t **)malloc (rgnct * sizeof (DRMS_Record_t *));
   maps = (float *)malloc (pixct * rgnct * sizeof (float));
   last = (float *)malloc (pixct * rgnct * sizeof (float));
+		      /*  allocate mapping info arrays for all output cubes  */
   maplat = (double *)malloc (pixct * rgnct * sizeof (double));
   maplon = (double *)malloc (pixct * rgnct * sizeof (double));
   if (no_merid_v) {
     map_coslat = maplat;
-    map_sinlat = (double *) malloc (pixct * rgnct * sizeof (double));
+    map_sinlat = (double *)malloc (pixct * rgnct * sizeof (double));
   }
-  offsun = (unsigned char *) malloc (pixct * rgnct * sizeof (char));
+  offsun = (unsigned char *)malloc (pixct * rgnct * sizeof (char));
     /*  Calculate heliographic coordinates corresponding to map location(s)  */
   n = 0;
   for (rgn = 0; rgn < rgnct; rgn++) {
@@ -1184,6 +1356,11 @@ printf ("need ephem from time\n");
       }
     }
   }
+				    /*  this should not really be necessary  */
+  zero = (float *)calloc (pixct, sizeof (float));
+  map_array = drms_array_create (DRMS_TYPE_FLOAT, 3, axes, (void *)zero, &status);
+  map_array->bscale = bscale;
+  map_array->bzero = bzero;
 
   dxy = 0;
   if (strcmp (bckgnfile, "Not Specified")) {
@@ -1225,13 +1402,13 @@ printf ("need ephem from time\n");
     else fprintf (stderr,
 	"Warning: could not open rejection list %s; ignored\n", rejectfile);
   }
-	/*  create output memory structures: data arrays and file pointers,
-					     one per region (output record)  */
-  map = (float **)malloc (rgnct * sizeof (float *));
+
   found = 0;
   for (rgn = 0; rgn < rgnct; rgn++) {
-    map[rgn] = (float *)malloc (length * pixct * sizeof (float));
-    orec = drms_recordset_getrec (ods, rgn);
+/*
+    map[rgn] = (float *)malloc (pixct * sizeof (float));
+*/
+    orec = orecs[rgn] = drms_recordset_getrec (ods, rgn);
     if (!orec) {
       fprintf (stderr, "Error accessing record %d in series %s\n", rgn, outser);
       drms_close_records (ids, DRMS_FREE_RECORD);
@@ -1257,6 +1434,17 @@ printf ("need ephem from time\n");
 	return 1;
       }
     }
+		      /*  set segment axis lengths and scaling if necessary  */
+    oseg = drms_segment_lookup (orec, osegname);
+    if (oseg->info->scope == DRMS_VARDIM) {
+      oseg->axis[0] = map_cols;
+      oseg->axis[1] = map_rows;
+      oseg->axis[2] = length;
+    }
+    if (scaling_override) {
+      oseg->bscale = bscale;
+      oseg->bzero = bzero;
+    }
   }
 					     /*  loop through input records  */
   valid = 0;
@@ -1270,6 +1458,16 @@ printf ("need ephem from time\n");
     img_lat = drms_getkey_double (irec, clat_key, &status);
     if (time_is_invalid (tobs)) {
 							  /*  no data, skip  */
+      continue;
+    }
+    quality = drms_getkey_int (irec, qual_key, &status);
+    if ((quality & qmask) && !status) {
+						    /*  partial image, skip  */
+      continue;
+    }
+    blankvals = drms_getkey_int (irec, "MISSVALS", &status);
+    if (blankvals && !status) {
+						    /*  partial image, skip  */
       continue;
     }
 			 /*  check for record quality, reject as applicable  */
@@ -1298,9 +1496,13 @@ printf ("need ephem from time\n");
     }
 			   /*  get needed info from record keys for mapping  */
     status = solar_image_info (irec, &img_xscl, &img_yscl, &img_xc, &img_yc,
-	&img_radius, &img_pa, &ellipse_e, &ellipse_pa, &x_invrt, &y_invrt,
-	&need_ephem, &MDI_correct);
-    if (status) continue;
+	&img_radius, rsun_key, &img_pa, &ellipse_e, &ellipse_pa, &x_invrt,
+	&y_invrt, &need_ephem);
+    if (status) {
+      fprintf (stderr, "Error: one or more essential keywords or values missing; skipped\n");
+      fprintf (stderr, "solar_image_info() returned %08x\n", status);
+      continue;
+    }
     if (MDI_correct) {
       mtrack_MDI_correct_imgctr (&img_xc, &img_yc, img_radius);
       mtrack_MDI_correct_pa (&img_pa);
@@ -1334,7 +1536,8 @@ img_lat *= raddeg;
     perform_mappings (data_array, maps, delta_rot, rgnct, maplat,
 	maplon, map_coslat, map_sinlat, pixct, tobs - tmid, offsun,
 	img_lat, img_lon, img_xc, img_yc, a0, a2, a4, merid_v, img_radius,
-	img_pa, ellipse_e, ellipse_pa, x_invrt, y_invrt, MDI_correct_distort);
+	img_pa, ellipse_e, ellipse_pa, x_invrt, y_invrt, intrpopt,
+	MDI_correct_distort);
 /*
 printf ("%4d: %s %.4f %.5f %7.2f %7.2f %7.2f %7.2f\n", nr, tbuf, img_lon, img_lat,
 maps[0], maps[pixct - 1], maps[(rgnct-1)*pixct], maps[rgnct*pixct - 1]);
@@ -1358,8 +1561,21 @@ printf ("adding %d records before first of %d\n", add_before, recct);
       while (ttrgt < tobs) {
 	if (verbose) printf ("step %d extrapolated from image %s\n", or, tbuf);
 	for (rgn = 0; rgn < rgnct; rgn++) {
-	  memcpy (&map[rgn][or*pixct], &maps[rgn*pixct],
-	      pixct * sizeof (float));
+	  orec = orecs[rgn];
+	  oseg = drms_segment_lookup (orec, osegname);
+	  memcpy (map_array->data, &maps[rgn*pixct], pixct * sizeof (float));
+	  slice_start[2] = slice_end[2] = or;
+	  status = drms_segment_writeslice (oseg, map_array, slice_start,
+	      slice_end, 0);
+	  if (status) {
+	    fprintf (stderr, "Error writing data to record %d in series %s\n",
+		rgn, outser);
+	    fprintf (stderr, "      series may not have appropriate structure\n");
+	    drms_free_array (map_array);
+	    drms_close_records (ods, DRMS_FREE_RECORD);
+	    free_all (clat, clon, delta_rot, maps, last, maplat, maplon, map_sinlat, offsun);
+	    return 1;
+	  }
 	  if (verbose_logs) {
 	    fprintf (log[rgn], "step %d extrapolated from image %s\n", or,
 		tbuf);
@@ -1393,22 +1609,29 @@ printf ("adding %d records before first of %d\n", add_before, recct);
 	skip[n] = (isnan (last[n]) || isnan (maps[n]));
 	val[n] = missing_val;
       }
-/*
-      for (ct = 0; ct < fill_ct; ct++) {
-*/
       while (ttrgt < tobs) {
         f = (ttrgt - tlast) / (tobs - tlast);
-/*
-	f = (ct + 1.0) / (fill_ct + 1.0);
-*/
 	g = 1.0 - f;
   	for (n = 0; n < ntot; n++)
 	  if (!skip[n]) val[n] = g * last[n] + f * maps[n];
 	if (verbose) printf ("step %d interpolated from images %s and %s\n",
 	      or, ptbuf, tbuf);
 	for (rgn = 0; rgn < rgnct; rgn++) {
-	  memcpy (&map[rgn][or*pixct], &val[rgn*pixct],
-	      pixct * sizeof (float));
+	  orec = orecs[rgn];
+	  oseg = drms_segment_lookup (orec, osegname);
+	  memcpy (map_array->data, &val[rgn*pixct], pixct * sizeof (float));
+	  slice_start[2] = slice_end[2] = or;
+	  status = drms_segment_writeslice (oseg, map_array, slice_start,
+	      slice_end, 0);
+	  if (status) {
+	    fprintf (stderr, "Error writing data to record %d in series %s\n",
+		rgn, outser);
+	    fprintf (stderr, "      series may not have appropriate structure\n");
+	    drms_free_array (map_array);
+	    drms_close_records (ods, DRMS_FREE_RECORD);
+	    free_all (clat, clon, delta_rot, maps, last, maplat, maplon, map_sinlat, offsun);
+	    return 1;
+	  }
 	  if (verbose_logs) fprintf (log[rgn],
 	      "step %d interpolated from images %s and %s\n", or, ptbuf, tbuf);
 	}
@@ -1428,7 +1651,24 @@ printf ("adding %d records before first of %d\n", add_before, recct);
     if (ttrgt == tobs) {
       if (verbose) printf ("step %d mapped from image %s\n", or, tbuf);
       for (rgn = 0; rgn < rgnct; rgn++) {
+/*
 	memcpy (&map[rgn][nr*pixct], &maps[rgn*pixct], pixct * sizeof (float));
+*/
+	orec = orecs[rgn];
+	oseg = drms_segment_lookup (orec, osegname);
+	memcpy (map_array->data, &maps[rgn*pixct], pixct * sizeof (float));
+	slice_start[2] = slice_end[2] = or;
+	status = drms_segment_writeslice (oseg, map_array, slice_start,
+	    slice_end, 0);
+	if (status) {
+	  fprintf (stderr, "Error writing data to record %d in series %s\n",
+	      rgn, outser);
+	  fprintf (stderr, "      series may not have appropriate structure\n");
+	  drms_free_array (map_array);
+	  drms_close_records (ods, DRMS_FREE_RECORD);
+	  free_all (clat, clon, delta_rot, maps, last, maplat, maplon, map_sinlat, offsun);
+	  return 1;
+	}
 	if (verbose_logs)
           fprintf (log[rgn], "step %d mapped from image %s\n", or, tbuf);
       }
@@ -1438,6 +1678,7 @@ printf ("adding %d records before first of %d\n", add_before, recct);
     tlast = tobs;
     strcpy (ptbuf, tbuf);
     drms_free_array (data_array);
+    data_array = NULL;
     valid++;
   }
   drms_close_records (ids, DRMS_FREE_RECORD);
@@ -1446,13 +1687,27 @@ printf ("adding %d records before first of %d\n", add_before, recct);
     if (bck) free (bck);
   }
 					 /*  extend last image if necessary  */
-/*
-  while (fill_ct--) {
-*/
   while (ttrgt <= tstop && or < length) {
     if (verbose) printf ("step %d extrapolated from image %s\n", or, tbuf);
     for (rgn = 0; rgn < rgnct; rgn++) {
+/*
       memcpy (&map[rgn][or*pixct], &maps[rgn*pixct], pixct * sizeof (float));
+*/
+      orec = orecs[rgn];
+      oseg = drms_segment_lookup (orec, osegname);
+      memcpy (map_array->data, &maps[rgn*pixct], pixct * sizeof (float));
+      slice_start[2] = slice_end[2] = or;
+      status = drms_segment_writeslice (oseg, map_array, slice_start,
+	  slice_end, 0);
+      if (status) {
+	fprintf (stderr, "Error writing data to record %d in series %s\n",
+	    rgn, outser);
+	fprintf (stderr, "      series may not have appropriate structure\n");
+	drms_free_array (map_array);
+	drms_close_records (ods, DRMS_FREE_RECORD);
+	free_all (clat, clon, delta_rot, maps, last, maplat, maplon, map_sinlat, offsun);
+	return 1;
+      }
       if (verbose_logs)
 	  fprintf (log[rgn], "step %d extrapolated from image %s\n", or, tbuf);
     }
@@ -1461,93 +1716,86 @@ printf ("adding %d records before first of %d\n", add_before, recct);
   }
 
   coverage = (double)valid / (double)length;
-printf ("coverage = %f\n", coverage);
-  
 						      /*  write out records  */
   for (rgn = 0; rgn < rgnct; rgn++) {
-    orec = drms_recordset_getrec (ods, rgn);
-    if (!orec) {
-      fprintf (stderr, "Error accessing record %d in series %s\n",
-	  rgn, outser);
-      drms_close_records (ods, DRMS_FREE_RECORD);
-      free_all (clat, clon, delta_rot, maps, last, maplat, maplon, map_sinlat, offsun);
-      return 1;
-    }
-					   /*  write output record segments  */
-    oseg = drms_segment_lookup (orec, osegname);
-    map_array = drms_array_create (DRMS_TYPE_FLOAT, 3, axes, (void *)map[rgn],
-	&status);
-    map_array->bscale = bscale;
-    map_array->bzero = bzero;
-    status = drms_segment_write (oseg, map_array, 0);
-    if (status) {
-      fprintf (stderr, "Error writing data to record %d in series %s\n",
-	  rgn, outser);
-      fprintf (stderr, "      series may not have appropriate structure\n");
-      drms_free_array (map_array);
-      drms_close_records (ods, DRMS_FREE_RECORD);
-      free_all (clat, clon, delta_rot, maps, last, maplat, maplon, map_sinlat, offsun);
-      return 1;
-    }
 							 /*  set key values  */
-    status = 0;
-    if (check_and_set_key_str   (orec, "WCSNAME", "Carrington Heliographic/Time"))
-      status = 1;
-    if (check_and_set_key_int   (orec, "WCSAXES", 3)) status = 1;
+    int kstat = 0;
+    orec = orecs[rgn];
+    kstat += check_and_set_key_str   (orec, "WCSNAME", "Carrington Heliographic/Time");
+    kstat += check_and_set_key_int   (orec, "WCSAXES", 3);
     snprintf (key, 64, "CRLN-%s", wcscode[proj]);
-    if (check_and_set_key_str   (orec, "CTYPE1", key)) status = 1;
+    kstat += check_and_set_key_str   (orec, "CTYPE1", key);
     snprintf (key, 64, "CRLT-%s", wcscode[proj]);
-    if (check_and_set_key_str   (orec, "CTYPE2", key)) status = 1;
-    if (check_and_set_key_str   (orec, "CTYPE3", "TIME")) status = 1;
-    if (check_and_set_key_str   (orec, "CUNIT1", "deg")) status = 1;
-    if (check_and_set_key_str   (orec, "CUNIT2", "deg")) status = 1;
-    if (check_and_set_key_str   (orec, "CUNIT3", "s")) status = 1;
-    if (check_and_set_key_float (orec, "CRPIX1", 0.5 * map_cols + 0.5)) status = 1;
-    if (check_and_set_key_float (orec, "CRPIX2", 0.5 * map_rows + 0.5)) status = 1;
-    if (check_and_set_key_float (orec, "CRPIX3", 0.5 * length + 0.5)) status = 1;
-    if (check_and_set_key_float (orec, "CRVAL1", clon[rgn] * degrad)) status = 1;
-    if (check_and_set_key_float (orec, "CRVAL2", clat[rgn] * degrad)) status = 1;
-    if (check_and_set_key_double(orec, "CRVAL3", tmid)) status = 1;
-    if (check_and_set_key_float (orec, "CDELT1", map_scale)) status = 1;
-    if (check_and_set_key_float (orec, "CDELT2", map_scale)) status = 1;
-    if (check_and_set_key_float (orec, "CDELT3", cadence)) status = 1;
-    if (check_and_set_key_float (orec, "LonHG", clon[rgn] * degrad)) status = 1;
-    if (check_and_set_key_float (orec, "LatHG", clat[rgn] * degrad)) status = 1;
-    if (check_and_set_key_str   (orec, "MapProj", mapname[proj])) status = 1;
-    if (check_and_set_key_str   (orec, "Interp", interpname[intrpopt])) status = 1;
-    if (check_and_set_key_time  (orec, "MidTime", tmid)) status = 1;
+    kstat += check_and_set_key_str   (orec, "CTYPE2", key);
+    kstat += check_and_set_key_str   (orec, "CTYPE3", "TIME");
+    kstat += check_and_set_key_str   (orec, "CUNIT1", "deg");
+    kstat += check_and_set_key_str   (orec, "CUNIT2", "deg");
+    kstat += check_and_set_key_str   (orec, "CUNIT3", "s");
+    kstat += check_and_set_key_float (orec, "CRPIX1", 0.5 * map_cols + 0.5);
+    kstat += check_and_set_key_float (orec, "CRPIX2", 0.5 * map_rows + 0.5);
+    kstat += check_and_set_key_float (orec, "CRPIX3", 0.5 * length + 0.5);
+    kstat += check_and_set_key_float (orec, "CRVAL1", clon[rgn] * degrad);
+    kstat += check_and_set_key_float (orec, "CRVAL2", clat[rgn] * degrad);
+    kstat += check_and_set_key_double(orec, "CRVAL3", tmid);
+    kstat += check_and_set_key_float (orec, "CDELT1", map_scale);
+    kstat += check_and_set_key_float (orec, "CDELT2", map_scale);
+    kstat += check_and_set_key_float (orec, "CDELT3", tstep);
+    kstat += check_and_set_key_float (orec, "LonHG", clon[rgn] * degrad);
+    kstat += check_and_set_key_float (orec, "LatHG", clat[rgn] * degrad);
+    kstat += check_and_set_key_str   (orec, "MapProj", mapname[proj]);
+    kstat += check_and_set_key_str   (orec, "Interp", interpname[intrpopt]);
+    kstat += check_and_set_key_time  (orec, "MidTime", tmid);
     snprintf (ctime_str, 16, ctimefmt, tmid_cr, tmid_cl);
-    if (check_and_set_key_str   (orec, "CarrTime", ctime_str)) status = 1;
-    if (check_and_set_key_int   (orec, "CarrRot", tmid_cr)) status = 1;
-    if (check_and_set_key_float (orec, "CMLon", tmid_cl)) status = 1;
+    kstat += check_and_set_key_str   (orec, "CarrTime", ctime_str);
+    kstat += check_and_set_key_int   (orec, "CarrRot", tmid_cr);
+    kstat += check_and_set_key_float (orec, "CMLon", tmid_cl);
     carr_lon = (360.0 * tmid_cr) + 360.0 - tmid_cl;
-    if (check_and_set_key_double(orec, "CarrLon", carr_lon)) status = 1;
+    kstat += check_and_set_key_double(orec, "CarrLon", carr_lon);
     lon_cm = clon[rgn] * degrad - tmid_cl;
     while (lon_cm < -180.0) lon_cm += 360.0;
     while (lon_cm > 180.0) lon_cm -= 360.0;
-    if (check_and_set_key_float (orec, "LonCM", lon_cm)) status = 1;
-    if (check_and_set_key_time  (orec, "T_START", tstrt)) status = 1;
-    if (check_and_set_key_time  (orec, "T_STOP", tstop)) status = 1;
-    if (check_and_set_key_float (orec, "LonSpan", lon_span)) status = 1;
-    if (check_and_set_key_float (orec, "Coverage", coverage)) status = 1;
-    if (check_and_set_key_float (orec, "ZonalTrk",
-	delta_rot[rgn] * RSUNMM * cos (clat[rgn]))) status = 1;
-    if (check_and_set_key_float (orec, "MeridTrk", merid_v * RSUNMM)) status = 1;
-    if (check_and_set_key_str   (orec, "Module", module_ident)) status = 1;
-    if (check_and_set_key_str   (orec, "Source", source)) status = 1;
-    if (check_and_set_key_str   (orec, "Input", input)) status = 1;
+    kstat += check_and_set_key_float (orec, "LonCM", lon_cm);
+    kstat += check_and_set_key_time  (orec, "T_START", tstrt);
+    kstat += check_and_set_key_time  (orec, "T_STOP", tstop);
+    kstat += check_and_set_key_float (orec, "LonSpan", lon_span);
+    kstat += check_and_set_key_float (orec, "Coverage", coverage);
+    kstat += check_and_set_key_float (orec, "ZonalTrk", delta_rot[rgn] * 1.0e6);
+    kstat += check_and_set_key_float (orec, "ZonalVel",
+	(delta_rot[rgn] + CARR_RATE * 1.0e-6) * RSUNM * cos (clat[rgn]));
+    kstat += check_and_set_key_float (orec, "LonDrift",
+	delta_rot[rgn] * degrad * length * tstep);
+    kstat += check_and_set_key_float (orec, "MeridTrk", merid_v * 1.0e6);
+    kstat += check_and_set_key_float (orec, "MeridVel", merid_v * RSUNM);
+    kstat += check_and_set_key_float (orec, "LatDrift",
+	merid_v * degrad * length * tstep);
+    kstat += check_and_set_key_str   (orec, "Module", module_ident);
+    kstat += check_and_set_key_str   (orec, "Source", source);
+    kstat += check_and_set_key_str   (orec, "Input", input);
     if (strcmp (bckgnfile, "Not Specified"))
-      if (check_and_set_key_str (orec, "Backgrnd", bckgnfile)) status = 1;
+      kstat += check_and_set_key_str (orec, "Backgrnd", bckgnfile);
     if (strcmp (rejectfile, "Not Specified"))
-      if (check_and_set_key_str (orec, "RejectList", rejectfile)) status = 1;
-    if (check_and_set_key_float (orec, "MapScale", map_scale)) status = 1;
-    if (check_and_set_key_int   (orec, "Duration", length * data_cadence)) status = 1;
-    if (check_and_set_key_float (orec, "Width", map_cols * map_scale)) status = 1;
-    if (check_and_set_key_float (orec, "Height", map_rows * map_scale)) status = 1;
-    if (check_and_set_key_float (orec, "PosAng", map_pa / raddeg)) status = 1;
+      kstat += check_and_set_key_str (orec, "RejectList", rejectfile);
+    kstat += check_and_set_key_float (orec, "MapScale", map_scale);
+    kstat += check_and_set_key_float (orec, "Cadence", tstep);
+    kstat += check_and_set_key_float (orec, "Duration", length * tstep);
+    kstat += check_and_set_key_float (orec, "Width", map_cols * map_scale);
+    kstat += check_and_set_key_float (orec, "Height", map_rows * map_scale);
+    kstat += check_and_set_key_float (orec, "Size", sqrt (map_rows * map_cols) * map_scale);
+    kstat += check_and_set_key_float (orec, "PosAng", map_pa / raddeg);
+    kstat += check_and_set_key_float (orec, "RSunRef", 1.0e-6 * RSUNM);
+    if (setmais && isfinite (mai[rgn]))
+      kstat += check_and_set_key_float (orec, "MAI", mai[rgn]);
+    if (scaling_override) {
+      sprintf (key, "%s_bscale", osegname);
+      kstat += check_and_set_key_double(orec, key, bscale);
+      sprintf (key, "%s_bzero", osegname);
+      kstat += check_and_set_key_double(orec, key, bzero);
+    }
+    if (MDI_correct)
+      kstat += check_and_set_key_float (orec, "MDI_PA_Corr", MDI_IMG_SOHO_PA);
     if (pkeyval = create_prime_key (orec))
-      if (check_and_set_key_str (orec, "PrimeKeyString", pkeyval)) status = 1;
-    if (status) {
+      kstat += check_and_set_key_str (orec, "PrimeKeyString", pkeyval);
+    if (kstat) {
       fprintf (stderr, "Error writing key value(s) to record %d in series %s\n",
 	  rgn, outser);
       fprintf (stderr, "      series may not have appropriate structure\n");
@@ -1556,10 +1804,10 @@ printf ("coverage = %f\n", coverage);
       free_all (clat, clon, delta_rot, maps, last, maplat, maplon, map_sinlat, offsun);
       return 1;
     }
-    drms_free_array (map_array);
     if (verbose_logs) fclose (log[rgn]);
   }
   drms_close_records (ods, dispose);
+  drms_free_array (map_array);
   free_all (clat, clon, delta_rot, maps, last, maplat, maplon, map_sinlat, offsun);
   return 0;
 }
@@ -1581,15 +1829,37 @@ printf ("coverage = %f\n", coverage);
  *	fixed possible fastrack bug in calculation of f in interpolate_images()
  *    0.8	added keywords for output cadence, start/stop specification,
  *	interpolation option;
- *		extensive modifications to allow for time interpolation to
- *	different cadence from input, missing records and non-uniformly spaced
- *	records in input;
- *		removed restriction on output segment name;
- *		added correction for MDI image distortion and PA and image
- *	center (with -M flag), but not yet correction for plate scale if
- *	necessary;
- *		added processing of personal MDI image quality rejection lists
- *		added setting of optional PrimeKeyString
- *		adjust midtime to phase of input when specified as CR:CL
+ *	extensive modifications to allow for time interpolation to different
+ *		cadence from input, missing records and non-uniformly spaced
+ *		records in input;
+ *	removed restriction on output segment name;
+ *	added correction for MDI image distortion and PA and image center
+ *		(with -M flag), but not yet correction for plate scale if
+ *		necessary;
+ *	added processing of personal MDI image quality rejection lists
+ *	added setting of optional PrimeKeyString
+ *	adjust midtime to phase of input when specified as CR:CL
+ *    0.9	write output by slices, avoiding massive memory allocation
+ *	added code for nearest-value "interpolation" (untested)
+ *	added processing of optional OBS_ASD key in place of R_SUN if missing
+ *	changed defaults for output scaling to use output series defaults
+ *	change Duration key type from int to float
+ *	reject images with MISSVALS != 0 (if present)
+ *	fixed setting of ZonalTrk and MeridTrk keys, added corresponding Vel
+ *		keys and RSunRef; added MDI_PA_Corr key; fixed setting of
+ *		Duration and CDELT3 keys
+ *	adjusted Carrington rate (by 5 parts in 10^9)
+ *	fixed setting of scaling when overrides in effect; support vardim
+ *		output by setting segment axis
+ *	fixed a few icc11 compiler warnings
+ *	added argument rsun_key; verification of some essential keys
+ *	added recognition of GONG site data origins, support for JPL table-based
+ *		ephemerides, processing of quality keyword against qmask
+ *	added optional processing of MAI value(s) into keyword
+ *	changed constituent of primekeystring from CarrTime to CarrRot and
+ *		CMLon
+ *	added setting of Size keyword (geometric mean of Height and Width) and
+ *		Cadence (= CDELT3)
+ *  v 0.9 frozen 2010.02.08
  *
  */
