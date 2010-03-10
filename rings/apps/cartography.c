@@ -473,7 +473,6 @@ int sphere2plane (double lat, double lon, double latc, double lonc,
   static double last_latc = 0.0, cos_latc = 1.0, sin_latc = 0.0, yc_merc;
   double r, rm, cos_cang;
   double sin_lat, cos_lat, cos_lat_lon;
-  double cos_phi, sin_phi;
   int hemisphere;
 
   if (latc != last_latc) {
@@ -591,4 +590,5 @@ int sphere2plane (double lat, double lon, double latc, double lonc,
  *  09.07.02	R Bogart	copied to private location for inclusion in
  *	DRMS modules and standalone code; removed optimum_scale(), pow2scale(),
  *	name2proj(), proj2name()
+ *  09.12.02	R Bogart	fixed two icc11 compiler warnings
  */
