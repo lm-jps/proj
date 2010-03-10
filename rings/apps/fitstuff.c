@@ -31,6 +31,7 @@
  *    comments in header records are ignored
  *    *rsb_getfitskey_str() fails to compress paired quotes
  *
+ *  Revision history is at end of file
  */
 
 #include <stdio.h>
@@ -453,7 +454,6 @@ int rsb_copy_fits_data_slices_binned (fitsinfo_t *new, fitsinfo_t *old,
     int slice_size, long long start, int slice_count, int binwidth) {
   long long bytecount;
   int n;
-  double scale = 1.0 / (double)binwidth / (double)binwidth;
   int binned_slice = slice_size / binwidth / binwidth;
 
   fseek (old->fp, old->dataunit, SEEK_SET);
@@ -472,7 +472,6 @@ static void flip_byte_order (void *data, long long vlength, int dlength) {
   unsigned long long *d;
   unsigned int *i;
   unsigned short *s;
-  char *c;
   long long n;
 
   if (!data) return;
@@ -487,7 +486,7 @@ static void flip_byte_order (void *data, long long vlength, int dlength) {
       vlength *= 2;
     case (2):
       s = (unsigned short *)data;
-      for (n = 0; n < vlength; n++, s++) *s = (*s << 8) | (*s >> 8);
+      for (n = 0; n < vlength; n++, s++) *s = (unsigned short)(*s << 8) | (unsigned short)(*s >> 8);
   }
   return;
 }
@@ -626,7 +625,6 @@ int rsb_read_data_slice (fitsinfo_t *fits, void **data, int *offsets,
 int rsb_write_fits_data (fitsinfo_t *new, void *data) {
   long long bytecount, ntot, brem, status;
   int dsize, n, vlen;
-  unsigned char *block;
   char *ndat, *buf;
   int buflen = 16777216;
 
@@ -719,3 +717,10 @@ int rsb_write_fits (DRMS_Array_t *array, char *filename) {
   rsb_close_fits (fits);
   return 0;
 }
+
+/*
+ *  Revision History (all mods by Rick Bogart unless otherwise noted)
+ *
+ *  09.09.17		version that went into first release under proj/rings
+ *  09.12.02		fixed three icc11 compiler warnings
+ */
