@@ -13,6 +13,11 @@ static int overscan_colstr[MAXHIMGCFGS];
 static int overscan_valid[MAXHIMGCFGS];
 static int dvals[MAXHIMGCFGS];
 
+#define NBINS 1048576
+#define MINOUT -524288
+#define MAXOUT 524288
+static int hist[NBINS];
+
 ///////////////////////////////////
 int get_overscan_info(int himgcfid)
 {
@@ -65,7 +70,6 @@ int do_flat(LEV0LEV1 *info)
     double dtmp;
     double s=0.0, s2=0.0, s3=0.0, s4=0.0, ss;
     int npix, min, max, medn;
-    static int hist[32768];
 
     if (info->himgcfid < 0 || info->himgcfid >= MAXHIMGCFGS)
       return XXX_INVALID_HIMGCFID;
@@ -90,7 +94,7 @@ int do_flat(LEV0LEV1 *info)
 	c1 = c2 = 4096;
     nc /= 2;
 
-    memset(hist, 0, 4*32768);
+    memset(hist, 0, 4*NBINS);
 
     //
     // apply dark, flat correction quadrant by quadrant
@@ -102,12 +106,11 @@ int do_flat(LEV0LEV1 *info)
 	IDX = idx + 4096*nr + nc;
 	for (j=0; j<c1; ++j) {
 	    tmp = in[idx++];
-	    //if (DRMS_MISSING_INT == tmp)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_INT;
 	    else {
 		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
-		if (ftmp >=0 && ftmp < 32768) {
+		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
 		    ++hist[out[IDX]];
 		    ++npix;
@@ -122,12 +125,11 @@ int do_flat(LEV0LEV1 *info)
 	IDX = idx + 4096*nr - nc;
 	for (j=c2; j<4096; ++j) {
 	    tmp = in[idx++];
-	    //if (DRMS_MISSING_INT == tmp)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_INT;
 	    else {
 		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
-		if (ftmp >=0 && ftmp < 32768) {
+		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
 		    ++hist[out[IDX]];
 		    ++npix;
@@ -142,12 +144,11 @@ int do_flat(LEV0LEV1 *info)
 	IDX = idx - 4096*nr + nc;
 	for (j=0; j<c1; ++j) {
 	    tmp = in[idx++];
-	    //if (DRMS_MISSING_INT == tmp)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_INT;
 	    else {
 		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
-		if (ftmp >=0 && ftmp < 32768) {
+		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
 		    ++hist[out[IDX]];
 		    ++npix;
@@ -162,12 +163,11 @@ int do_flat(LEV0LEV1 *info)
 	IDX = idx - 4096*nr - nc;
 	for (j=c2; j<4096; ++j) {
 	    tmp = in[idx++];
-	    //if (DRMS_MISSING_INT == tmp)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_INT;
 	    else {
 		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
-		if (ftmp >=0 && ftmp < 32768) {
+		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
 		    ++hist[out[IDX]];
 		    ++npix;
@@ -206,27 +206,28 @@ int do_flat(LEV0LEV1 *info)
 	= info->datakurt = DRMS_MISSING_DOUBLE;
 
     min = 0;
-    max = 32767;
+    max = NBINS-1;
     if (npix) {
 	while (hist[min] == 0)
 	    ++min;
-	info->datamin = min;
+	info->datamin = min + MINOUT;
 
 	while (hist[max] == 0)
 	    --max;
-	info->datamax = max;
+	info->datamax = max + MINOUT;
 
 	medn = min;
 	i = hist[medn];
 	while (2*i < npix)
 	    i += hist[++medn];
-	info->datamedn = medn;
+	info->datamedn = medn + MINOUT;
 
 	for (i=min; i<=max; ++i) {
-	    s += (dtmp = i*hist[i]);
-	    s2 += (dtmp *= i);
-	    s3 += (dtmp *= i);
-	    s4 += (dtmp *= i);
+	    int ii = i + MINOUT;
+	    s += (dtmp = ii*hist[i]);
+	    s2 += (dtmp *= ii);
+	    s3 += (dtmp *= ii);
+	    s4 += (dtmp *= ii);
 	}
 	s /= npix;
 	info->datamean = s;
