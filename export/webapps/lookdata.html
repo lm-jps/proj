@@ -1275,7 +1275,7 @@ function Export_Recordset()
   Cookie.setData("state",0);
   if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
     $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-  ExportWindow=window.open("http://" + Host + "/ajax/exportdata.html?ds="+$("ExportRecordSet").innerHTML,
+  ExportWindow=window.open("http://" + location.host + "/ajax/exportdata.html?ds="+$("ExportRecordSet").innerHTML,
              "JSOC_Export");
   ExportWindow.window.focus();
   }
