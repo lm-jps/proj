@@ -475,7 +475,7 @@ function PickSeries(mode)
   $("Series_Name_Place").innerHTML = SeriesName;
   $("RecSetPlace").innerHTML = SeriesName;
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
-  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
     parameters: {"ds" : SeriesName, "op" : "series_struct" },
@@ -704,7 +704,7 @@ function GetRSCount()
   $("RSCount_Place").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   askedCount = 1;
-  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
     parameters: {"ds" : $("RecordSet").value, "op" : "rs_summary", "n" : MaxRecs },
@@ -1004,7 +1004,7 @@ function GetKeyValues()
   $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
   $("FetchKeyValsButton").disabled = true;
   $("AbortKeyValsButton").show();
-  GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
+  GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
     parameters: getparameters.toObject(),
