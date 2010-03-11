@@ -14,8 +14,8 @@ static int overscan_valid[MAXHIMGCFGS];
 static int dvals[MAXHIMGCFGS];
 
 #define NBINS 1048576
-#define MINOUT -524288
-#define MAXOUT 524288
+#define MINOUT -256
+#define MAXOUT 1048320
 static int hist[NBINS];
 
 ///////////////////////////////////
@@ -112,7 +112,7 @@ int do_flat(LEV0LEV1 *info)
 		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]];
+		    ++hist[out[IDX]-MINOUT];
 		    ++npix;
 		} else
 		    out[IDX] = DRMS_MISSING_INT;
@@ -131,7 +131,7 @@ int do_flat(LEV0LEV1 *info)
 		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]];
+		    ++hist[out[IDX]-MINOUT];
 		    ++npix;
 		} else
 		    out[IDX] = DRMS_MISSING_INT;
@@ -150,7 +150,7 @@ int do_flat(LEV0LEV1 *info)
 		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]];
+		    ++hist[out[IDX]-MINOUT];
 		    ++npix;
 		} else
 		    out[IDX] = DRMS_MISSING_INT;
@@ -169,7 +169,7 @@ int do_flat(LEV0LEV1 *info)
 		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]];
+		    ++hist[out[IDX]-MINOUT];
 		    ++npix;
 		} else
 		    out[IDX] = DRMS_MISSING_INT;
