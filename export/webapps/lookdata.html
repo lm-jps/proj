@@ -18,6 +18,7 @@
 <SCRIPT TYPE="text/javascript" SRC="js/prototype-1.6.1.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/cookies.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
+<SCRIPT TYPE="text/javascript" SRC="js/amCharts/swfobject.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/ActiveWidgets/runtime/lib/aw.js"></SCRIPT>
 <LINK HREF="js/ActiveWidgets/runtime/styles/system/aw.css" rel="stylesheet">
 <!-- add activewidgets image libraries -->
@@ -32,16 +33,20 @@
 #LookdataTabs-item-2 {font-size: medium}
 #LookdataTabs-item-3 {font-size: medium}
 #LookdataTabs-item-4 {font-size: medium}
+#LookdataTabs-item-5 {font-size: medium}
 
 #ValueGrid { width: 400px}
 #ValueGrid .aw-grid-row {height: 24px; border-bottom: 1px solid #bbb}
-#ValueGrid .aw-alternate-even {background: #dde;}
-#ValueGrid .aw-alternate-odd {background: #ded;}
-#ValueGrid .aw-mouseover-row {background: #ddd;} 
-#ValueGrid .aw-rows-selected {background: #FFFFFF;}
+#ValueGrid .aw-alternate-even {background: #fcf4fc;}
+#ValueGrid .aw-alternate-odd {background: #f8fcf8;}
+#ValueGrid .aw-mouseover-row {background: #f0f0f0;} 
+#ValueGrid .aw-rows-selected {background: #d3d3d3;}
+#ValueGrid .aw-cells-selected {background: #e3e3e3;}
+#ValueGrid .aw-cells-selected {color: #000000;}
 #ValueGrid .aw-column-0 {width: 50px; border-right: 1px dotted #bbb;}
 #ValueGrid .aw-grid-cell {font-family: "DejaVu Sans Mono",monospace; font-size: 12;}
 #ValueGrid .aw-grid-header {font-family: "DejaVu Sans Mono",monospace; font-size: 12;}
+#ValueGrid .aw-grid-header .aw-column-1 {font-weight: bold}
 
 </style>
 
@@ -62,6 +67,7 @@
 
 #SeriesSelect { width:40em; }
 #KeysSelect { width:20em; }
+#GraphKeysSelect { width:20em; }
 #SegsSelect { width:20em; }
 #LinksSelect { width:20em; }
 #SeriesFilter { width:20em; }
@@ -86,6 +92,7 @@ span.tip { background-color:yellow }
 
 // var SeriesList = "";
 // var SeriesInfo = "";
+var Host;
 var CurrentSeries = 0;
 var SeriesName = "";
 var SeriesKeySegInfo = "";
@@ -105,27 +112,32 @@ var MaxRecs = 0;
 var GetSeriesObject;
 var GetValuesObject;
 var valuegrid;
+var valuegridlabel;
 var gridmade = 0;
 var CWide;
 var CHeight;
+var amCharOK = 0;
+// var flashMovie = new Object();
+var flashMovie;
 
 
 // ActiveWidgets Tab setup
-var tabnames = ["Series Select", "Series Content", "RecordSet Select", "Values Display", "Export Data"];
-var tabvalues = ["TabSeriesSelectDiv",  "TabSeriesStructDiv", "TabRecSetDiv", "TabDisplayDiv", "TabExportDiv"];
+var tabnames = ["Series Select", "Series Content", "RecordSet Select", "Values Display", "Export Data", "Test"];
+var tabvalues = ["TabSeriesSelectDiv",  "TabSeriesStructDiv", "TabRecSetDiv", "TabDisplayDiv", "TabExportDiv", "TabPlotDiv"];
 var tabs = new AW.UI.Tabs;
 var tabseries = 0;
 var tabkeytable = 1;
 var tabrecset = 2;
 var tabdisplay = 3;
 var tabexport = 4;
+var tabplot = 5;
 
 function definetabs()
         {
         tabs.setId("LookdataTabs");
         tabs.setItemText(tabnames);
         tabs.setItemValue(tabvalues); // store ids of content DIVs
-        tabs.setItemCount(5);
+        tabs.setItemCount(6);
         tabs.refresh();
 
         tabs.setSelectedItems([tabseries]); // load the first page.
@@ -221,6 +233,7 @@ function CleanSeriesPick()
   $("SegListPlace").innerHTML = "All Segments";
   $("LinkListPlace").innerHTML = "All Links";
   $("DisplayPlace").innerHTML = "";
+  $("PlotPlace").innerHTML = "";
   KeyList = "";
   SegList = "";
   $("SSKeysPlace").innerHTML = "";
@@ -248,7 +261,10 @@ function CleanKeysSelect()
     $("SegsSelect").remove(i-1);
   for (var i=$("LinksSelect").length; i > 0; i--)
     $("LinksSelect").remove(i-1);
+  for (var i=$("GraphKeysSelect").length; i > 0; i--)
+    $("GraphKeysSelect").remove(i-1);
   $("DisplayPlace").innerHTML = "";
+  $("PlotPlace").innerHTML = "";
   $("SegListPlace").innerHTML = "";
   $("LinkListPlace").innerHTML = "";
   $("KeyListPlace").innerHTML = "";
@@ -261,6 +277,7 @@ function CleanKeysSelect()
 
 function CleanOnLoad()
   {
+  Host = location.host;
   definetabs();
   Element.hide('systemWorking');
   $("AbortGetSeriesButton").hide();
@@ -403,7 +420,7 @@ function GetSeries()
   $("SeriesButton").disabled = true;
   $("AbortGetSeriesButton").show();
   $("SeriesCountPlace").innerHTML = "<I>wait...</I>";
-  GetSeriesObject = new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/show_series',
+  GetSeriesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/show_series',
     {
     method: 'get',
     parameters: {"filter" : $("SeriesFilter").value },
@@ -424,7 +441,7 @@ function GetSeries()
       $("AbortGetSeriesButton").hide();
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
-    onFailure: function() { alert('Something went wrong with series list query'); },
+    onFailure: function() { alert('Something went wrong...'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
@@ -458,7 +475,7 @@ function PickSeries(mode)
   $("Series_Name_Place").innerHTML = SeriesName;
   $("RecSetPlace").innerHTML = SeriesName;
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
     {
     method: 'get',
     parameters: {"ds" : SeriesName, "op" : "series_struct" },
@@ -558,6 +575,9 @@ function PickSeries(mode)
 	   {
 	   insertOption("KeysSelect","**NONE**", "");
 	   insertOption("KeysSelect","**ALL**", "");
+	   for (i=0; i<n; i++)
+	      insertOption("KeysSelect",SeriesInfo.keywords[i].name, "");
+	   keywords = keywords + "</table><P>";
 	   insertOption("KeysSelect","*logdir*", "");
 	   insertOption("KeysSelect","*recnum*", "");
 	   insertOption("KeysSelect","*sunum*", "");
@@ -565,11 +585,11 @@ function PickSeries(mode)
 	   insertOption("KeysSelect","*online*", "");
 	   insertOption("KeysSelect","*retain*", "");
 	   insertOption("KeysSelect","*archive*", "");
+
 	   keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>scope</TH><TH>default</TH><TH>unit</TH><TH>note</TH>"; 
-	   for (i=0; i<n; i++)
-	      {
-	      insertOption("KeysSelect",SeriesInfo.keywords[i].name, "");
-	      keywords = keywords + "<TR><TD>" +
+           for (i=0; i<n; i++)
+              {
+              keywords = keywords + "<TR><TD>" + 
 		SeriesInfo.keywords[i].name + "</TD><TD>" +
 		SeriesInfo.keywords[i].type + "</TD><TD>" +
 		SeriesInfo.keywords[i].recscope + "</TD><TD>" +
@@ -577,7 +597,6 @@ function PickSeries(mode)
 		SeriesInfo.keywords[i].units + "&nbsp;</TD><TD>" +
 		SeriesInfo.keywords[i].note + "&nbsp;</TD></TR>";
 	      }
-	   keywords = keywords + "</table><P>";
 	   }
 
         // build and display segment selection scroll box and segment part of full table
@@ -685,7 +704,7 @@ function GetRSCount()
   $("RSCount_Place").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   askedCount = 1;
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
     {
     method: 'get',
     parameters: {"ds" : $("RecordSet").value, "op" : "rs_summary", "n" : MaxRecs },
@@ -746,6 +765,9 @@ function PickKeys()
   var selkeys =  "";
   $("KeyListPlace").innerHTML = "";
   $("DisplayPlace").innerHTML = "";
+  $("PlotPlace").innerHTML = "";
+  for (var i=$("GraphKeysSelect").length; i > 0; i--)
+    $("GraphKeysSelect").remove(i-1);
   // $("WantRecInfo").checked = 0;
   KeyList =  "";
   selkeys = "";
@@ -775,8 +797,39 @@ function PickKeys()
       nkeysselected = nkeysselected + 1;
       selkeys = selkeys + $("KeysSelect")[ikey].text;
       KeyList = KeyList + $("KeysSelect")[ikey].text;
+      if (ikey > 0)
+        insertOption("GraphKeysSelect",$("KeysSelect")[ikey].text, ikey);
       }
   $("KeyListPlace").innerHTML = nkeysselected + " Keys Chosen:&nbsp;" + selkeys;
+  }
+
+// Graph making code
+//
+// code to get the list of keywords to be graphed
+// this should be called only after the data is fetched for ValueTable
+//
+  // <form id="GraphSelectForm">
+  // <select id="GraphKeysSelect" size=8 multiple="multiple" onChange="GraphPickKeys();" > </select>
+
+function GraphPickKeys()
+  {
+  var igraphkey = 0;
+  var ngraphkeys = $("GraphKeysSelect").length;
+  var ikey = 0;
+  var nkeys = RecordData.keywords.length;
+  var graphKeysSelected = 0;
+  for (igraphkey=0; ikey < ngraphkeys; igraphkey++)
+    if ($("GraphKeysSelect")[igraphkey].selected)
+      {
+      // get column number and name for graph
+      for (ikey=0; ikey < nkeys; ikey++)
+        {
+        if ($("GraphKeysSelect")[igraphkey].text == RecordData.keywords[ikey].name)
+          { alert ("got graph key for col="+ikey+" name=" + RecordData.keywords[ikey].name);
+          graphAddCol(RecordData.keywords[ikey].name, ikey);
+          }
+        }
+      }
   }
 
 // Section 5., Select segments for fetching pathnames
@@ -902,6 +955,8 @@ function setgriddata(i,val)
   return i;
   }
 
+var RecordData;
+
 function GetKeyValues()
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
@@ -949,7 +1004,7 @@ function GetKeyValues()
   $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
   $("FetchKeyValsButton").disabled = true;
   $("AbortKeyValsButton").show();
-  GetValuesObject = new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
     {
     method: 'get',
     parameters: getparameters.toObject(),
@@ -958,7 +1013,7 @@ function GetKeyValues()
       {
       $("DisplayPlace").innerHTML = "Data received, processing ...";
       var response = transport.responseText || "no response text";
-      var RecordData = response.evalJSON();
+      RecordData = response.evalJSON();
       // var RecordData = JSON.parse(response);
       if (RecordData.status == 1)
         {
@@ -967,9 +1022,10 @@ function GetKeyValues()
         }
       else
         {
-        valuegrid = new AW.UI.Grid; 
-
+         //  valuegrid = new AW.UI.Grid; 
+        valuegrid = new AW.Grid.Extended; 
         valuegrid.setId("ValueGrid");
+
         $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
         $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
         $("FetchKeyValsButton").disabled = false;
@@ -982,9 +1038,10 @@ function GetKeyValues()
 	var nlinks = RecordData.links.length;
 	var nrecs = RecordData.count;
         var gridcols = nkeys + 2*nsegs + nlinks;
+        var segcols = new Array(nsegs);
         wantrecinfo = $("WantRecInfo").checked;
 	if (wantrecinfo) gridcols += 1;
-	if ($("WantFullSegInfo").checked == 1) gridcols += 3;
+	if ($("WantFullSegInfo").checked == 1) gridcols += 3*nsegs;
         var gridrows = nrecs;
         var irow, icol;
 
@@ -1001,6 +1058,7 @@ function GetKeyValues()
            gridhead[ihead++] = RecordData.keywords[ikey].name;
 	for (var iseg=0; iseg < nsegs; ++iseg)
            {
+           segcols[iseg] = ihead;
            gridhead[ihead++] = RecordData.segments[iseg].name;
            gridhead[ihead++] = "seg_dims: " + RecordData.segments[iseg].name;
 	   if ($("WantFullSegInfo").checked == 1)
@@ -1011,80 +1069,102 @@ function GetKeyValues()
                }
             }
 	  for (var ilink=0; ilink < nlinks; ++ilink)
-            gridhead[ihead++] = "Link: " + RecordData.links[ilink].name;
+            gridhead[ihead++] = "Link: " + RecordData.links[iseg].name;
         gridcolwidth = new Array(gridcols);
+
         for (icol=0; icol<gridcols; icol++)
 	  gridcolwidth[icol] = gridhead[icol].length;
 
           // build data rows
 	  for (var irec=0; irec < nrecs; irec++)
-	    {
-            griddata = new Array(gridcols);
-            var idata = 0;
-	    if (wantrecinfo)
+	     {
+             griddata = new Array(gridcols);
+             var idata = 0;
+	     if (wantrecinfo)
 		idata = setgriddata(idata, RecordData.recinfo[irec].name);
-	    for (ikey=0; ikey<nkeys; ikey++)
-	      {
-	      var this_keyval =  RecordData.keywords[ikey].values[irec] + "";
-	      if (RecordData.keywords[ikey].name == "*logdir*")
-	        {
-	        if (this_keyval.charAt(0) == '/')
-	           {
-	           tmp = "<A HREF=http://jsoc.stanford.edu" + this_keyval + ">" + this_keyval + "</A>";
-	           this_keyval = tmp;
-	           }
-                 }
+	     for (ikey=0; ikey<nkeys; ikey++)
+	       {
+	       var this_keyval =  RecordData.keywords[ikey].values[irec] + "";
                if (this_keyval.length == 0) this_keyval = " ";
 	       idata = setgriddata(idata, this_keyval);
 	       }
 	     for (iseg=0; iseg<nsegs; iseg++)
-	       {
-	       thissegdata = RecordData.segments[iseg].values[irec];
-               if (RecordData.recinfo[irec].online)
-	          {
-                  var tmp;
-	          if (wantLocalLinks)
-                    tmp = "<A HREF=file://" + thissegdata + ">" + thissegdata + "</A>";
-                  else
-	            tmp = "<A HREF=http://jsoc.stanford.edu" + thissegdata + ">" + thissegdata + "</A>";
-	          thissegdata = tmp;
-	          }
-
+	        {
+	        thissegdata = RecordData.segments[iseg].values[irec];
 		griddata[idata] = thissegdata;
 		gridcolwidth[idata] = Math.max(gridcolwidth[idata], RecordData.segments[iseg].values[irec].length);
                 idata++;
-
 	        idata = setgriddata(idata, RecordData.segments[iseg].dims[irec]);
 	        if ($("WantFullSegInfo").checked == 1)
-	          {
-	          idata = setgriddata(idata, RecordData.segments[iseg].cparms[irec]);
-	          idata = setgriddata(idata, RecordData.segments[iseg].bzeros[irec]);
-	          idata = setgriddata(idata, RecordData.segments[iseg].bscales[irec]);
-	          }
-	       }
-	    for (ilink=0; ilink<nlinks; ilink++)
-	      idata = setgriddata(idata, RecordData.links[ilink].values[irec]);
-	    gridcells[irec] = griddata;
-	    valuegrid.addRow(irec);
-	    }
+	           {
+	           idata = setgriddata(idata, RecordData.segments[iseg].cparms[irec]);
+	           idata = setgriddata(idata, RecordData.segments[iseg].bzeros[irec]);
+	           idata = setgriddata(idata, RecordData.segments[iseg].bscales[irec]);
+	           }
+	        }
+	     for (ilink=0; ilink<nlinks; ilink++)
+	        idata = setgriddata(idata, RecordData.links[iseg].values[irec]);
+	     gridcells[irec] = griddata;
+	     valuegrid.addRow(irec);
+	     }
 
+	// valuegridlabel = new AW.UI.Label;
+	// valuegridlabel.setId("myLabel");
+	// valuegridlabel.refresh();
+
+        valuegrid.setSelectionMode("single-cell"); // set selection mode to single row
+        valuegrid.setColumnCount(gridcols);
+        valuegrid.setFixedLeft(1);	// number of fixed columns on the left side
+        valuegrid.setRowCount(gridrows);
         valuegrid.setHeaderText(gridhead);
         valuegrid.setCellData(gridcells);
-        valuegrid.setColumnCount(gridcols);
-        valuegrid.setRowCount(gridrows);
-	valuegrid.setSelectorVisible(true);
-	valuegrid.setSelectorWidth(28);
-	valuegrid.setSelectorText(function(i){return this.getRowPosition(i)+1});
+        valuegrid.setVirtualMode(true);
+// valuegrid.getCellTemplate().setStyle('border-style','thin');
+valuegrid.getCellTemplate().setStyle('border-left-style','dotted');
+valuegrid.getCellTemplate().setStyle('border-left-width','1');
+	// valuegrid.setSelectorVisible(true);
+	// valuegrid.setSelectorWidth(28);
+	// valuegrid.setSelectorText(function(i){return this.getRowPosition(i)+1});
         
+        // fix data links
+        icol = 0;
+	if (wantrecinfo)
+           icol=1;
+	for (ikey=0; ikey<nkeys; ikey++)
+	   {
+	   if (RecordData.keywords[ikey].name == "*logdir*")
+	    for (var irec=0; irec < nrecs; irec++)
+	      {
+	      var this_keyval =  RecordData.keywords[ikey].values[irec];
+              valuegrid.setCellText(this_keyval, icol+ikey, irec);
+              valuegrid.setCellLink("http://jsoc.stanford.edu" + this_keyval, icol+ikey, irec);
+              valuegrid.setCellTemplate(new AW.Templates.Link, icol+ikey, irec);
+	      valuegrid.getCellTemplate(icol, irec).setAttribute("target","_blank");
+              }
+	   }
+	for (iseg=0; iseg<nsegs; iseg++)
+	  {
+          icol = segcols[iseg];
+	  for (var irec=0; irec < nrecs; irec++)
+            {
+	    thissegdata = RecordData.segments[iseg].values[irec];
+            if (RecordData.recinfo[irec].online)
+	       {
+               valuegrid.setCellText(thissegdata, icol, irec);
+	       if (wantLocalLinks)
+                 valuegrid.setCellLink("file://" + thissegdata, icol, irec);
+               else
+                 valuegrid.setCellLink("http://jsoc.stanford.edu" + thissegdata, icol, irec);
+               valuegrid.setCellTemplate(new AW.Templates.Link, icol, irec);
+	       valuegrid.getCellTemplate(icol, irec).setAttribute("target","_blank");
+	       }
+            }
+	  }
         for (icol=0; icol<gridcols; icol++)
-{
-	  valuegrid.setColumnWidth(Math.round(8.5*gridcolwidth[icol]), icol);
-
-}
-//valuegrid.aw-grid-row.setStyle("height", "20px");
-//valuegrid.aw-grid-row.setStyle("border-bottom", "5px solid #00c");
-// $("valuegrid.aw-grid-row").setStyle({"height": "20px", "border-bottom": "5px solid #00c"});
-
+           {
+	   valuegrid.setColumnWidth(Math.round(8.5*gridcolwidth[icol]), icol);
+           }
+	valuegrid.refresh();
 
         $("DisplayPlace").innerHTML = valuegrid;
 	gridmade = 1;
@@ -1092,7 +1172,7 @@ function GetKeyValues()
         tabs.setSelectedItems([tabdisplay]); // show the display page.
         }
       },
-    onFailure: function() { alert('Something went wrong with data values request'); },
+    onFailure: function() { alert('Something went wrong with series data request'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
   }
@@ -1110,13 +1190,92 @@ function newwide(thisevent)
   return true;
   }
 
+
+function amChartInited(chart_id)
+  {
+  flashMovie = document.getElementById(chart_id);
+  $("amChartDiv").style.display="block";
+  amChartOK = 1;
+  }
+  
+var graphcols = new Array();
+
+function graphAddCol(name, column)
+  {
+  var ncols = graphcols.length;
+  var colinfo = new Object();
+  colinfo["col"] = column;
+  colinfo["name"] = name;
+  graphcols[ncols] = colinfo;
+  }
+
+function GraphDelete()
+  {
+  graphcols = new Array();
+  for (igraphkey=0; ikey < ngraphkeys; igraphkey++)
+    $("GraphKeysSelect")[igraphkey].selected = 0;
+  GraphCreate();
+  }
+
+function GraphCreate()
+  {
+
+  var gcols = graphcols.length;
+  var datecol = $("DateColumn").value;
+  var ncols = RecordData.keywords.length;
+  var n=RecordData.count;
+  var csvdata = "";
+  for (i=0; i<n; i++)
+    {
+    var line = "";
+    var val, x, y;
+    if (datecol == -1)
+      x = i;
+    else
+      x = RecordData.keywords[datecol].values[i];
+    line = line + x;
+    for (icol=0; icol<gcols; icol++)
+      {
+      var pcol = graphcols[icol].col;
+      val = RecordData.keywords[pcol].values[i];
+      if (val === "MISSING")
+        y = 0.0;
+      else
+        y = val;
+      line = line + "," + y;
+      }
+    csvdata = csvdata + line + '\n';
+    }
+// alert("data ready" + csvdata);
+  <!-- amline script-->
+  var so = new SWFObject("js/amCharts/amline.swf", "jsocgraph", "900", "400", "8", "#FFFFFF");
+  so.addVariable("chart_id", "jsocgraph");
+  so.addVariable("path", "js/amCharts/");
+  so.addVariable("settings_file", encodeURIComponent("js/amCharts/jsocline_settings.xml"));
+  so.addVariable("preloader_color", "#999999");
+  var labl = "<settings><graphs>" ;
+  for (icol=0; icol<gcols; icol++)
+      {
+      var pcol = icol+1;
+      labl = labl + '<graph gid="'+pcol+'"><title>"'+graphcols[icol].name+'"</title><line_width>1</line_width>' +
+		 '<selected>0</selected></graph>' ;
+      }
+  labl = labl + "</graphs></settings>";
+  so.addVariable("additional_chart_settings", encodeURIComponent(labl));
+  so.addVariable("chart_data", encodeURIComponent(csvdata));
+  //  so.setData(csvdata);
+  so.write("flashcontent");
+so.rebuild();
+  <!-- end of amline script -->
+  }
+
 function Export_Recordset()
   {
   Cookie.init({name:"exportdata"});
   Cookie.setData("state",0);
   if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
     $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-  ExportWindow=window.open("http://jsoc.stanford.edu/ajax/exportdata.html?ds="+$("ExportRecordSet").innerHTML,
+  ExportWindow=window.open("http://" + Host + "/ajax/exportdata.html?ds="+$("ExportRecordSet").innerHTML,
              "JSOC_Export");
   ExportWindow.window.focus();
   }
@@ -1201,9 +1360,8 @@ function Export_Recordset()
         <span id="FirstLastPlace" style="vertical-align:top;background-color:#FFFFFF"></span>
         </TD>
       </TR>
-      <TR><TD style="width:33%"></TD><TD style="width:33%;"></TD><TD style="width:33%"></TR>
       <TR>
-        <TD colspan=3  style="vertical-align:top;">
+        <TD colspan=2  style="vertical-align:top;">
         <B>3. Select Records and Get Record Count</B><BR>
         Enter RecordSet Specification here for keyword listings and for export.
         <BR>
@@ -1216,49 +1374,37 @@ function Export_Recordset()
         <SPAN ID="RecordSetHelp" class="tip">?</SPAN>
         <input id="RecordSet" type="text" value="" onChange="GetRSCount();" > 
         <BR>
-        </TD>
-      </TR>
-      <TR>
-        <TD colspan=3  style="vertical-align:top;">
         <DIV id="QueryDiv">
           <span id="QueryPlace" style="width:10em;background-color:#FFFFFF;"></SPAN></span>
         </DIV>
-        </TD>
-      </TR>
-      <TR>
-        <TD colspan=3>
+        <P>
         &nbsp;&nbsp;
         Record Limit &nbsp;
         <input type="text" value="none" name="" id="RecordLimit" onChange="SetRSLimit();" >
         &nbsp;  Optional, + for from start, - for from end.
-	</TD>
-      </TR>
-      <TR>
-        <TD colspan=2  style="vertical-align:top;">
+        <P>
         <input type="button" value="GetRecordCount"  style="background-color:#FFFF80" onClick="GetRSCount();" >
         Record Count:&nbsp;&nbsp;
         <span id="RSCount_Place" style="width:10em;background-color:#FFFFFF"></span>
-        </TD><TD>
-	</TD>
-      </TR>
-      <TR>
-      <TD colspan=3>
-      Select Keywords, Segments, and Links for table of values.
-      </TD>
-      </TR>
-      <TR>
-        <TD >
+        <P>
+        <input type="checkbox" name="Get Record Query" id="WantRecInfo"> Check to Get Record Query.  <BR>
+        <input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.  <BR>
+        <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info <BR>
+        <input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).  <BR>
+        <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
+        <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
+        </TD>
+        <TD>
+        Select Keywords, Segments, and Links for table of values.
+        <BR>
         <B>4. Select Keywords</B><BR>
         <form id="KeysSelectForm">
           <select id="KeysSelect" size=8 multiple="multiple" onChange="PickKeys();" > </select>
         </form>
-        </TD><TD>
         <B>5. Select Segments</B><BR>
         <form id="SegsSelectForm">
           <select id="SegsSelect" size=8 multiple="multiple" onChange="PickSegs();"> </select>
         </form>
-        </TD>
-        <TD >
         <B>6. Select Links</B><BR>
         <form id="LinksSelectForm">
           <select id="LinksSelect" size=8 multiple="multiple" onChange="PickLinks();" > </select>
@@ -1266,13 +1412,6 @@ function Export_Recordset()
         </TD>
       </TR>
     </TABLE>
-    <input type="checkbox" name="Get Record Query" id="WantRecInfo"> Check to Get Record Query.  <BR>
-    <input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.  <BR>
-    <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info <BR>
-    <input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).  <BR>
-    <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
-    <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
-    <P>
   </DIV> <!-- id="MySeriesDiv" -->
 </DIV> <!-- /DIV TabRecSetDiv -->
 <DIV id="TabSeriesStructDiv" style="display:block">
@@ -1290,8 +1429,8 @@ function Export_Recordset()
     <TR><TD> Segments to Fetch:</TD><TD><span id="SegListPlace" style="background-color:#FFFFFF;"></span></TD></TR>
     <TR><TD> Links to Fetch:</TD><TD> <span id="LinkListPlace" style="background-color:#FFFFFF;"></span></TD></TR>
     </TABLE>
-    <P>
-    <DIV id="FullDisplayInfoDiv" style="background-color:#FFFFFF ;width:98%;">
+	    <P>
+	    <DIV id="FullDisplayInfoDiv" style="background-color:#FFFFFF ;width:98%;">
       <span id="DisplayPlace" style="background-color:#FFFFFF;"></span>
     </DIV> <!-- /DIV FullDisplayInfoDiv -->
   </DIV> <!-- /DIV FullInfoDiv -->
@@ -1306,6 +1445,28 @@ function Export_Recordset()
     <p>
   </DIV> <!-- /DIV Section 7, Export link -->
 </DIV> <!-- /DIV TabExportDiv -->
+<DIV id="TabPlotDiv">
+  <P>
+  Graph Selected Data
+  <P>
+  <B>4. Select Keywords</B><BR>
+  <form id="GraphSelectForm">
+    <select id="GraphKeysSelect" size=8 multiple="multiple" onChange="GraphPickKeys();" > </select>
+  </form>
+  <input type="text" value="-1" name="DateColumn" id="DateColumn" >Date Col 
+  <input type="text" value="none" name="PlotColumn" id="PlotColumn" > Column
+  <input type="button" value="Create Graph"  style="background-color:#FFFF80" onClick="GraphCreate();" >
+  <input type="button" value="Delete Graph"  style="background-color:#FFFF80" onClick="GraphDelete();" >
+  <DIV ID="amChartDiv" style="display:block">
+    <HR>
+    <span id="PlotPlace" style="background-color:#FFFFFF;"></span>
+    <div id="flashcontent">
+       <strong>No graph created yet</strong>
+       <P>
+       or if graph made but not showm you may need to upgrade your Flash Player.
+    </div>
+  </DIV> <!-- ChartReady -->
+</DVI> <!-- /DIV TabPlotDiv -->
 </DIV> <!-- /DIV Main including all tab divs -->
 <P style="height:1px">
 <DIV id="footer" style="vertical-align:bottom;text-align:center;">
