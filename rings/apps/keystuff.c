@@ -3,12 +3,15 @@
  *
  *  library of miscellaneous utility functions for dealing with DRMS record keys
  *
- *  check_and_setkey_TYPE()
- *  append_keyval_to_primekeyval()
- *  create_primekey_from_keylist()
- *  drms_wcs_timestep()
+ *  append_keyval_to_primekeyval ()
+ *  check_and_copy_key ()
+ *  check_and_setkey_TYPE ()
+ *  create_primekey_from_keylist ()
+ *  drms_wcs_timestep ()
+ *  propagate_keys ()
  *
  *  Bugs:
+ *    Commented out warnings of type mis-matches in check_and_copy_key
  *    There is evidently a bug in append_keyval_to_primekeyval() in keystuff.c,
  *	as the ingest_track module was generating a seg fault in
  *	drms_setkey_string() with values of the PrimeKeyString like
@@ -17,9 +20,40 @@
  *	buflen in append_keyval_to_primekeyval() from 128 to 256
  *    Many combinations of legitimate prefixes and unit strings for WCS time
  *	descriptions are not yet supported
+ *    Consistency of floating-point key values in check_and_setkey_XXX is
+ *	only guaranteed to within the recommended format precision; this is
+ *	by design
+ *    check_and_setkey unimplemented for keys of type char and long long
  *
  *  Revision history is at end of file
  */
+
+int check_and_set_key_short (DRMS_Record_t *new, const char *key, short val) {
+  DRMS_Keyword_t *keywd;
+  short vreq;
+  int status;
+
+  if (!(keywd = drms_keyword_lookup (new, key, 1))) return 0;
+  if (keywd->info->recscope != 1) {
+		       /*  it's not a constant, so don't worry, just set it  */
+    drms_setkey_short (new, key, val);
+    return 0;
+  }
+  vreq = drms_getkey_short (new, key, &status);
+  if (status) {
+    fprintf (stderr, "Error retrieving value for constant keyword %s\n", key);
+    return 1;
+  }
+  if (vreq != val) {
+    char format[256];
+    sprintf (format,
+	"Error:  parameter value %s for keyword %%s\n  differs from required value %s\n",
+	keywd->info->format, keywd->info->format);
+    fprintf (stderr, format, val, key, vreq);
+    return 1;
+  }
+  return 0;
+}
 
 int check_and_set_key_int (DRMS_Record_t *new, const char *key, int val) {
   DRMS_Keyword_t *keywd;
@@ -67,9 +101,6 @@ int check_and_set_key_float (DRMS_Record_t *new, const char *key, float val) {
   }
   sprintf (sreq, keywd->info->format, vreq);
   sprintf (sval, keywd->info->format, val);
-/*
-  if (vreq != val) {
-*/
   if (strcmp (sreq, sval)) {
     char format[256];
     sprintf (format,
@@ -167,19 +198,43 @@ int check_and_set_key_time (DRMS_Record_t *new, const char *key, TIME tval) {
 
 int check_and_copy_key (DRMS_Record_t *new, DRMS_Record_t *old,
     const char *key) {
-  DRMS_Keyword_t *oldkey, *newkey;
-  int status;
+  DRMS_Keyword_t *oldkey, *newkey, *pkey;
+  DRMS_Type_t *type;
+  DRMS_Type_Value_t *value;
+  int n, status;
 
   if (!(oldkey = drms_keyword_lookup (old, key, 1))) return 0;
-  if (!(newkey = drms_keyword_lookup (new, key, 1))) return 0;
+  if (newkey = drms_keyword_lookup (new, key, 0)) {
+							  /*  is it a link?  */
+    if (newkey->info->islink) {
+      int pkeyct = old->seriesinfo->pidx_num;
+      type = (DRMS_Type_t *)malloc (pkeyct * sizeof (DRMS_Type_t));
+      value = (DRMS_Type_Value_t *)malloc (pkeyct * sizeof (DRMS_Type_Value_t));
+      for (n = 0; n < pkeyct; n++) {
+        pkey = old->seriesinfo->pidx_keywords[n];
+	value[n] = drms_getkey (old, pkey->info->name, &type[n], NULL);
+      }
+	 /*  types and values refer to the prime keys specifying record old  */
+      drms_setlink_dynamic (new, newkey->info->linkname, type, value);
+      free (type);
+      free (value);
+      return 0;
+    }
+  } else return 0;
 		     /*  check that key types agree (this could be relaxed)  */
   if (oldkey->info->type != newkey->info->type) {
-    fprintf (stderr, "Error: type for keyword %s differs in input and output\n",
+/*
+    fprintf (stderr, "Warning: type for keyword %s differs in input and output\n",
 	key);
+*/
+    ;
+/*
     return 1;
+*/
   }
   if (newkey->info->recscope != 1) {
 		      /*  it's not a constant, so don't worry, just copy it  */
+	/*  but what if it is a link?  */
     drms_copykey (new, old, key);
     return 0;
   }
@@ -188,10 +243,10 @@ int check_and_copy_key (DRMS_Record_t *new, DRMS_Record_t *old,
     case DRMS_TYPE_CHAR:
       return check_and_set_key_char (new, key,
 	  drms_getkey_char (old, key, &status));
+*/
     case DRMS_TYPE_SHORT:
       return check_and_set_key_short (new, key,
 	  drms_getkey_short (old, key, &status));
-*/
     case DRMS_TYPE_INT:
       return check_and_set_key_int (new, key,
 	  drms_getkey_int (old, key, &status));
@@ -213,11 +268,11 @@ int check_and_copy_key (DRMS_Record_t *new, DRMS_Record_t *old,
       return check_and_set_key_str (new, key,
 	  drms_getkey_string (old, key, &status));
     default:
-      fprintf (stderr, "Error: Unknown type %d for keyword %s\n",
-	    newkey->info->type, key);
+      fprintf (stderr,
+	  "Error in check_and_copy_key(): Unknown type %s for keyword %s\n",
+	  drms_type2str (newkey->info->type), key);
       return 1;
   }
-  return 0;
 }
 /*
  *  Create a prime key string value by concatenating the sprinted values of a
@@ -289,7 +344,7 @@ int append_keyval_to_primekeyval (char **pkey, DRMS_Record_t *rec,
   }
   size += strlen (*buf);
   if (size >= curlen) {
-    curlen +- buflen;
+    curlen += buflen;
     *pkey = realloc (*pkey, curlen);
   }
   strncat (*pkey, *buf, strlen (*buf));
@@ -308,13 +363,110 @@ char *create_primekey_from_keylist (DRMS_Record_t *rec, char **keylist,
   return pkey;
 }
 
+int propagate_keys (DRMS_Record_t *to, DRMS_Record_t *from, char **keylist,
+    int keyct) {
+  int n, status = 0;
+  for (n = 0; n < keyct; n++)
+    status += check_and_copy_key (to, from, keylist[n]);
+  return status;
+}
+
+char *iau_units_parse_unit (char *unit, double *scale) {
+  char prefix = unit[0];
+
+  *scale = 1.0;
+  switch (prefix) {
+    case ('y'):
+      if (strcmp (unit, "yr")) {
+        *scale = 1.0e24;
+	return &unit[1];
+      } else return unit;
+    case ('z'): *scale = 1.0e21; return &unit[1];
+    case ('a'):
+      if (strlen (unit) == 1) return unit;
+      if (strcmp (unit, "arcmin") && strcmp (unit, "arcsec") &&
+	  strcmp (unit, "adu")) {
+	*scale = 1.0e18;
+	return &unit[1];
+      } else return unit;
+    case ('f'): *scale = 1.0e15; return &unit[1];
+    case ('p'):
+      if (strcmp (unit, "pc") && strcmp (unit, "ph") && strcmp (unit, "photon")
+	  && strcmp (unit, "pix") && strcmp (unit, "pixel") ) {
+	*scale = 1.0e12;
+	return &unit[1];
+      } else return unit;
+    case ('n'): *scale = 1.0e9; return &unit[1];
+    case ('u'): *scale = 1.0e6; return &unit[1];
+    case ('m'):
+      if (strlen (unit) == 1) return unit;
+      if (strcmp (unit, "mol") && strcmp (unit, "mas") && strcmp (unit, "min")
+	  && strcmp (unit, "mag")) {
+	*scale = 1.0e3;
+	return &unit[1];
+      } else return unit;
+    case ('c'):
+      if (strcmp (unit, "cd") && strcmp (unit, "count") && strcmp (unit, "ct")
+	  && strcmp (unit, "chan")) {
+	*scale = 1.0e2;
+	return &unit[1];
+      } else return unit;
+    case ('d'):
+      if (strlen (unit) == 1) return unit;
+      if (strcmp (unit, "deg")) {
+        *scale = 1.0e1;
+	return &unit[1];
+      } else return unit;
+    case ('h'):
+      if (strlen (unit) == 1) return unit;
+      else {
+	*scale = 1.0e-2;
+	return &unit[1];
+      }
+    case ('k'):
+      if (strcmp (unit, "kg") && strcmp (unit, "count") && strcmp (unit, "ct")
+	  && strcmp (unit, "chan")) {
+	*scale = 1.0e-3;
+	return &unit[1];
+      } else return unit;
+    case ('M'): *scale = 1.0e-6; return &unit[1];
+    case ('G'):
+      if (strlen (unit) == 1) return unit;
+      else {
+	*scale = 1.0e-9;
+	return &unit[1];
+      }
+    case ('T'):
+      if (strlen (unit) == 1) return unit;
+      else {
+	*scale = 1.0e-12;
+	return &unit[1];
+      }
+    case ('P'):
+      if (strcmp (unit, "PA")) {
+	*scale = 1.0e-15;
+	return &unit[1];
+      } else return unit;
+    case ('E'): *scale = 1.0e-18; return &unit[1];
+    case ('Z'): *scale = 1.0e-21; return &unit[1];
+    case ('Y'): *scale = 1.0e-24; return &unit[1];
+    default: return unit;
+  }
+}
+
+int drms_iau_units_scale (char *unit, double *scale) {
+  if (!(strcmp (unit, "rad"))) *scale = 1.0;
+  else return -1;
+  return 0;
+}
+
 int drms_wcs_timestep (DRMS_Record_t *rec, int axis, double *tstep) {
   double dval;
   int status;
   char *sval;
   char delta[9], unit[9];
 
-  *tstep = FP_NAN;
+  *tstep = 1.0 / 0.0;
   sprintf (delta, "CDELT%d", axis);
   sprintf (unit, "CUNIT%d", axis);
   dval = drms_getkey_double (rec, delta, &status);
@@ -521,4 +673,8 @@ int drms_wcs_timestep (DRMS_Record_t *rec, int axis, double *tstep) {
  *  09.11.06		added WCS parsing function
  *  09.11.09		modified check_and_set_key_* to only require matching
  *		to precision of keyword format for float, double, & time
+ *  09.12.02		fixed two icc11 compiler warnings and one error
+ *  10.01.07		added support in check_and_copy_key for keywords that
+ *		are dynamic links (in which case checking is irrelevant)
+ *  10.02.03		relaxed chec in chec_and_copy_key (too much)
  */
