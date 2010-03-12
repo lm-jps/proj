@@ -2,6 +2,7 @@
 
 #define PT_OUT_OF_MEMORY (-1)
 #define PT_DRMS_OPEN_FAILED (-2)
+#define PT_NO_VALID_TOBS (-3)
 
 typedef struct {
     float sat_y0;
@@ -100,7 +101,13 @@ int get_pointing_info(DRMS_Env_t *drms_env, TIME *tobs, int nobs, PTINFO **ptinf
 	p[i].acs_mode[0] = p[i].acs_cgt[0] = p[i].asd_rec[0] = 0;
     }
 
-    tstart = tobs[0] - 30.0;
+    for(i=0; i<nobs; i++) {	//find first good t_obs
+      if(!drms_ismissing_time(tobs[i])) break;
+    }
+    if(i == nobs) {		//no good t_obs found
+      return PT_NO_VALID_TOBS;
+    }
+    tstart = tobs[i] - 30.0;
     tend = tobs[nobs-1] + 30.0;
     sprintf(dsname, "%s[? PACKET_TIME > %.0f and PACKET_TIME < %.0f ?]", ASDSERIES, tstart, tend);
     rset = drms_open_records(drms_env, dsname, &status);
@@ -122,6 +129,7 @@ int get_pointing_info(DRMS_Env_t *drms_env, TIME *tobs, int nobs, PTINFO **ptinf
 	double z[3], z0[3] = {0.0,0.0,1.0};
 	double tmp;
 
+	if(drms_ismissing_time(tobs[i])) continue;
 	asd[i] = idx = find_closest(tasd, nrec, tobs[i]);
 
 	for (j=0; j<i; ++j)
