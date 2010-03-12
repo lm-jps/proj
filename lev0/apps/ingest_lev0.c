@@ -56,12 +56,12 @@
 ////#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_test"
 //For test with DDS on Jan 19, 2010
 //#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_JAN2010"
-#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_junk"
+//#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_junk"
 //#define LEV0SERIESNAMEHMI "hmi.lev0f"
 ////#define TLMSERIESNAMEHMI "su_production.tlm_test"
 //For test with DDS on Jan 19, 2010
 //#define TLMSERIESNAMEHMI "su_production.tlm_hmi_JAN2010"
-#define TLMSERIESNAMEHMI "su_production.tlm_hmi_junk"
+//#define TLMSERIESNAMEHMI "su_production.tlm_hmi_junk"
 
 #define LEV0SERIESNAMEHMIGND "hmi_ground.lev0_dds"
 #define TLMSERIESNAMEHMIGND "hmi_ground.tlm_dds"
@@ -72,11 +72,11 @@
 ////#define LEV0SERIESNAMEAIA "aia.lev0f"
 //For test with DDS on Jan 19, 2010
 //#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_JAN2010"
-#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_junk"
+//#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_junk"
 ////#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
 //For test with DDS on Jan 19, 2010
 //#define TLMSERIESNAMEAIA "su_production.tlm_aia_JAN2010"
-#define TLMSERIESNAMEAIA "su_production.tlm_aia_junk"
+//#define TLMSERIESNAMEAIA "su_production.tlm_aia_junk"
 
 #define LEV0SERIESNAMEAIAGND "aia_ground.lev0_dds"
 #define TLMSERIESNAMEAIAGND "aia_ground.tlm_dds"
@@ -88,11 +88,10 @@
 //#define TLMSERIESNAMEAIA "aia.tlm_60d"
 
 //When change to these data series below to save real data.
-//#define TLMSERIESNAMEHMI "hmi.tlm"
-//#define LEV0SERIESNAMEHMI "hmi.lev0"
-//#define LEV0SERIESNAMEAIA "aia.lev0"
-//#define LEV0SERIESNAMEAIA "aia.lev0a"
-//#define TLMSERIESNAMEAIA "aia.tlm"
+#define TLMSERIESNAMEHMI "hmi.tlm"
+#define LEV0SERIESNAMEHMI "hmi.lev0"
+#define LEV0SERIESNAMEAIA "aia.lev0"
+#define TLMSERIESNAMEAIA "aia.tlm"
 
 //#define LEV0SERIESNAMEAIA "aia.lev0d"
 //#define TLMSERIESNAMEAIA "aia.tlmd"
@@ -185,6 +184,7 @@ unsigned int vcdu_24_cnt, vcdu_24_cnt_next;
 int verbose;
 int grounddata;
 int appid;
+int testid1, testid2;
 int hmiaiaflg;			//0=hmi, 1=aia
 int whk_status;
 int total_tlm_vcdu;
@@ -1223,10 +1223,17 @@ int get_tlm(char *file, int rexmit, int higherver)
     // get the App ID. Low 11 bit of short at buf+18 
     appid = MDI_getshort(cbuf+18);
     appid = appid & 0x07ff;
-    if(appid == TESTAPPID) {	// appid of test pattern 
+    if(hmiaiaflg) {		//aia
+      testid1 = 509; testid2 = 519;
+    }
+    else {
+      testid1 = 409; testid2 = 419;
+    }
+    //if(appid == TESTAPPID) {	// appid of test pattern 
+    if((appid == testid1) || (appid == testid2)) {
       if(errmsgcnt++ < MAXERRMSGCNT) {
         printk("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
-			TESTAPPID, vcdu_seq_num);
+			appid, vcdu_seq_num);
         for(i=0, j=TESTVALUE; i < 877; i=i+2, j++) {
           datval = MDI_getshort(cbuf+32+i);	// next data value 
           if(datval != j) {
