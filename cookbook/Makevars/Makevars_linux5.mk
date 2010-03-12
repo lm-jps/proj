@@ -45,7 +45,7 @@ FLIBS =		-lCm -lftn -lF77 -lm -lU77 -lI77 -lblas -lisam -lm
 
 # ld - link editor
 LD =		/usr/bin/ld
-LDFLAGS =	-xW
+LDFLAGS =	-xW -openmp
 LDCMD =		$(CC) $(LDFLAGS)
 MALCHK = 
 LOADLIBES =
