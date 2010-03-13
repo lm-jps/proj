@@ -4,7 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODEXE_$(d)	:= $(addprefix $(d)/, arithtool rebin2 ingest_from_fits)
+MODEXE_$(d)	:= $(addprefix $(d)/, arithtool rebin2 ingest_from_fits hg_patch)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d)) 
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
