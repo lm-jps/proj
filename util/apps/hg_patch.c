@@ -124,7 +124,7 @@ that image...
 void HeliographicLocation(TIME t, int *crot, double *L, double *B);
 TIME HelioographicTime(int crot, double L);
 
-// #include "heliographic_coords.c"
+#include "/home/phil/jsoc/proj/libs/astro/heliographic_coords.c"
 
 char *module_name = "hg_patch";
 
