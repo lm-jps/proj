@@ -92,7 +92,7 @@ span.tip { background-color:yellow }
 
 // var SeriesList = "";
 // var SeriesInfo = "";
-var Host;
+var Host = location.host;
 var CurrentSeries = 0;
 var SeriesName = "";
 var SeriesKeySegInfo = "";
@@ -1103,7 +1103,7 @@ function GetKeyValues()
 	           }
 	        }
 	     for (ilink=0; ilink<nlinks; ilink++)
-	        idata = setgriddata(idata, RecordData.links[iseg].values[irec]);
+	        idata = setgriddata(idata, RecordData.links[ilink].values[irec]);
 	     gridcells[irec] = griddata;
 	     valuegrid.addRow(irec);
 	     }
@@ -1275,8 +1275,7 @@ function Export_Recordset()
   Cookie.setData("state",0);
   if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
     $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-  ExportWindow=window.open("http://" + location.host + "/ajax/exportdata.html?ds="+$("ExportRecordSet").innerHTML,
-             "JSOC_Export");
+  ExportWindow=window.open("http://" + Host + "/ajax/exportdata.html?ds="+$("ExportRecordSet").innerHTML, "JSOC_Export");
   ExportWindow.window.focus();
   }
 
