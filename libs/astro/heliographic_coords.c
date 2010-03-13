@@ -6,6 +6,7 @@
  */
 
 #include <math.h>
+#include <timeio.h>
 
 #define EPS 3.e-17
 #define OMEGA_0 (75.76)     // degrees, solar equator crosses ecliptic, pre 2007 value with no aberration correction
