@@ -203,6 +203,9 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                 IORBIT_Info_t **info);
 void iorbit_cleanup();
 
+void HeliographicLocation(TIME t, int *crot, double *L, double *B);
+TIME HeliographicTime(int crot, double L);
+
 
 #endif // _DRMS_LIBASTRO_H
 
