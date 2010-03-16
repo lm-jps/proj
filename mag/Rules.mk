@@ -7,6 +7,8 @@ d               := $(dir)
 # order NOT matter.
 dir     := $(d)/apps
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/pfss
+-include                $(SRCDIR)/$(dir)/Rules.mk
 
 # Standard things
 d               := $(dirstack_$(sp))
