@@ -5,8 +5,9 @@ d               := $(dir)
 
 # Subdirectories. Directory-specific rules are optional here. The
 # order NOT matter.
-dir     := $(d)/apps
--include                $(SRCDIR)/$(dir)/Rules.mk
+# mag team probably isn't going to use apps dir
+# dir     := $(d)/apps
+# -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/pfss
 -include                $(SRCDIR)/$(dir)/Rules.mk
 
