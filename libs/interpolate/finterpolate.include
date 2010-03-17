@@ -105,7 +105,9 @@ if ((i==4095) && (j==0)) {
         }
         image_out[i+nlead*j]=sum;
       } // if
-// Ought to do something here.
+      else {
+        image_out[i+nlead*j]=fillval;
+      }
     } // i=
   } //j=
 

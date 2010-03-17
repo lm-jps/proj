@@ -309,17 +309,18 @@ int free_finterpolate(
 }
 
 int winterpolate(
-struct fint_struct *pars,
-float *image_in,
-float *xin,
-float *yin,
-float *image_out,
-int nxin,
-int nyin,
-int nleadin,
-int nx,
-int ny,
-int nlead
+  struct fint_struct *pars,
+  float *image_in,
+  float *xin,
+  float *yin,
+  float *image_out,
+  int nxin,
+  int nyin,
+  int nleadin,
+  int nx,
+  int ny,
+  int nlead,
+  float fillval
 )
 
 {
@@ -359,7 +360,7 @@ private(ixins,iyins,fxins,fyins,ixin1s,iyin1s,fxin1s,fyin1s,xker) \
 private (i,j,xinp,yinp,ixin,iyin,ixin1,iyin1,fxin1,fyin1,fxin2,fyin2,imp) \
 private (xk1,xk2,yk1,yk2,sum,sum1,i1,j1,x,y,help) \
 shared (pars,nlead,nx,ny,xin,yin,nleadin,nxin,nyin,image_in,image_out,order) \
-shared (malign,order2,kersx,ixmax,iymax,xmax,ymax,shift0,edgemode,extrapolate)
+shared (malign,order2,kersx,ixmax,iymax,xmax,ymax,shift0,edgemode,extrapolate,fillval)
 { // Needed to define parallel region
     ixins=(float *)(MKL_malloc(nx*sizeof(int),malign));
     iyins=(float *)(MKL_malloc(nx*sizeof(int),malign));
@@ -732,7 +733,6 @@ shared(malign,xmin,xmax,ymin,ymax)
             image_out[i+nlead*j]=fillval;
           }
         }
-// Ought to do something here.
       } // i=
     } //j=
 
@@ -762,7 +762,7 @@ float fillval
 
   switch (pars->method) {
   case fint_wiener:
-    status=winterpolate(pars,image_in,xin,yin,image_out,nxin,nyin,nleadin,nx,ny,nlead);
+    status=winterpolate(pars,image_in,xin,yin,image_out,nxin,nyin,nleadin,nx,ny,nlead,fillval);
     break;
 
   case fint_linear:
