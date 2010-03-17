@@ -532,6 +532,7 @@ int fgap_fill(
   float cnorm1,ierror1;
   int nsample;
   struct work_struct work;
+  int nofill; // Number of pixels with maskfill=1 that could not be filled.
   //double t0;
   
   order=pars->order;
@@ -555,12 +556,14 @@ int fgap_fill(
 */
 
 nfill=0;
+nofill=0;
 #pragma omp parallel default(none) \
   private (im1,mask1,i,i0,i1,j,j0,j1,k,cnorm1,ierror1,ngood/*,t0*/)     \
 shared(pars,im,nx,ny,nlead,mask,cnorm,ierror) \
 shared(malign,order,order2) \
 private(work) shared(nsample) \
-reduction(+:nfill)
+reduction(+:nfill) \
+reduction(+:nofill)
 { // Needed to define parallel region
 
   im1=(double *)(MKL_malloc(order*order*sizeof(double),malign));
@@ -605,6 +608,7 @@ reduction(+:nfill)
         else { // Otherwise quietly leave unchanged, except set errors
           cnorm1=0.0f;
           ierror1=1.0f;
+          nofill=nofill+1;
         }
         nfill=nfill+1;
       } // end if mask==1
@@ -624,8 +628,12 @@ reduction(+:nfill)
   free_work(nsample,&work);
 //printf("done %d %lx %lx\n",omp_get_thread_num(),im1,mask1);
 } // End of parallel region
-  printf("nfill %d\n",nfill);
+  printf("nfill nofill %d %d\n",nfill,nofill);
 
-  
-  return 0; // Current no error conditions
+  if (nofill != 0) {
+    return 1; // Could not fill all pixels
+  }
+  else {
+    return 0; // All is good
+  }
 }
