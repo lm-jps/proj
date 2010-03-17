@@ -1,2 +1,0 @@
-##### ingest dayfile from RTMON server for production data series  #######
-0  17 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/savedf.pl rtmon   >/dev/null 2>&1
