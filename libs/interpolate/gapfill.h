@@ -1,3 +1,5 @@
+#include <omp.h>
+
 struct fill_hash_struct {
   int nbad; // Number of bad points for this entry
   int hash0; // Hash value before modulus operation
