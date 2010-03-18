@@ -150,6 +150,8 @@ int DoIt()
   SUM_t *sumhandle = NULL;
   SUM_info_t *sinfo;
 
+printf("here we are in DoIt()\n"); //!!TEMP
+
   cmdparams_get_argv(&cmdparams, &argv, &argc);
   for(c=0; c < argc; c++) {
     pargv[c] = strdup(argv[c]);

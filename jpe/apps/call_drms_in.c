@@ -14,8 +14,8 @@ extern int ampexflg;		// 1 = retrieve from tape
 
 static KEY *alist;
 
-//#define out_namespace "dsds"
-#define out_namespace "su_production"
+#define out_namespace "dsds"
+//#define out_namespace "su_production"
 
 /************************OLD*************************************************
 //Take the su dir and convert to the corresponding ds_index (i.e. sunum)

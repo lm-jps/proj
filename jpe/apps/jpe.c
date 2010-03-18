@@ -457,8 +457,8 @@ p=script \
 static char *mailable_users[] = {"jprod","daemon","tprod","production",
                                 "jeneen", "thailand"};
 #define mailees_num 1   /* #below that are sent the daemon & production mail */
-//static char *mailees[] = {"prod2@solar2"};
-static char *mailees[] = {"jim"};
+static char *mailees[] = {"prod3@sun"};
+//static char *mailees[] = {"jim,hao,jeneen"};
 
 // List of default parameter values. 
 // NOTE: only used for cmdparams -H call. Normally use get_cmd()

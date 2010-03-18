@@ -16,8 +16,8 @@ extern SUM_t *sumhandle;
 
 static KEY *alist;
 
-//#define out_namespace "dsds"
-#define out_namespace "su_production"
+#define out_namespace "dsds"
+//#define out_namespace "su_production"
 
 /************************OLD*************************************************
 //Take the su dir and convert to the corresponding ds_index (i.e. sunum)
@@ -168,7 +168,10 @@ KEY *call_drms_inq(KEY *list, int dbflg)
       setkey_str(&alist, ext, inname);		/* also make unique inname*/
       sprintf(ext, "%s_prog", inname);		//e.g. in_0_prog
       stmp = GETKEY_str(list, ext);
-      if(!strcmp(stmp, "")) continue;			//not a ds name
+      if(!strcmp(stmp, "")) {
+        printk("ERROR: you didn't give me a DSDS style name, i.e. prog:\n");
+        continue;				//not a ds name
+      }
       sprintf(drmsname, "%s__", stmp); 
 
 //      setkey_str(&alist, ext, GETKEY_str(list, ext));
