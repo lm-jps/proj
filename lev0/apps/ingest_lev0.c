@@ -1224,10 +1224,12 @@ int get_tlm(char *file, int rexmit, int higherver)
     appid = MDI_getshort(cbuf+18);
     appid = appid & 0x07ff;
     if(hmiaiaflg) {		//aia
-      testid1 = 509; testid2 = 519;
+      //testid1 = 509; testid2 = 519;
+      testid1 = 507; testid2 = 517;
     }
     else {
-      testid1 = 409; testid2 = 419;
+      //testid1 = 409; testid2 = 419;
+      testid1 = 407; testid2 = 417;
     }
     //if(appid == TESTAPPID) {	// appid of test pattern 
     if((appid == testid1) || (appid == testid2)) {
@@ -1346,7 +1348,8 @@ int get_tlm(char *file, int rexmit, int higherver)
       }
     }
     else {			// send the HK data to Carl 
-      //printk("$$$$$ appid for Carl =  0x%x %d\n", appid, appid); //!!TEMP
+      printk("$$$ appid assumed hk =  0x%x %d\n", appid, appid); //!!TEMP
+    continue;	//!!!TEMP for test on Mar 17, 2010
       decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk, &Fsn);
       switch (decode_status) {
         case SUCCESS_HK_NEED_TO_WTD_CTD:
