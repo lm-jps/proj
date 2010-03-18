@@ -1349,7 +1349,6 @@ int get_tlm(char *file, int rexmit, int higherver)
     }
     else {			// send the HK data to Carl 
       printk("$$$ appid assumed hk =  0x%x %d\n", appid, appid); //!!TEMP
-    continue;	//!!!TEMP for test on Mar 17, 2010
       decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk, &Fsn);
       switch (decode_status) {
         case SUCCESS_HK_NEED_TO_WTD_CTD:
