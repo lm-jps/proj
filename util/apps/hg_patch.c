@@ -120,14 +120,12 @@ that image...
 #include <time.h>
 #include <math.h>
 #include "jsoc_main.h"
-
-void HeliographicLocation(TIME t, int *crot, double *L, double *B);
-TIME HelioographicTime(int crot, double L);
-
 #include "astro.h"
 
-char *module_name = "hg_patch";
+// void HeliographicLocation(TIME t, int *crot, double *L, double *B);
+// TIME HeliographicTime(int crot, double L);
 
+char *module_name = "hg_patch";
 
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define	DIE(msg) {fprintf(stderr,"%s  Status=%d\n",msg, status); return(status?status:1);}

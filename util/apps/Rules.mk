@@ -13,6 +13,8 @@ MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 CEXE_$(d)	:= $(d)/time_convert
 CEXE		:= $(CEXE) $(CEXE_$(d))
 
+SRCOBJ_$(d)     := $(addprefix $(d)/src/, heliographic_coords.o)
+
 EXE_$(d)	:= $(MODEXE_$(d)) $(CEXE_$(d)) 
 OBJ_$(d)	:= $(EXE_$(d):%=%.o) 
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
@@ -20,7 +22,9 @@ CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
 		   $(EXE_$(d)) \
 		   $(MODEXE_SOCK_$(d)) \
-		   $(DEP_$(d))
+		   $(DEP_$(d)) \
+                   $(SRCOBJ_$(d))
+
 
 TGT_BIN	        := $(TGT_BIN) $(EXE_$(d)) $(MODEXE_SOCK_$(d)) 
 
