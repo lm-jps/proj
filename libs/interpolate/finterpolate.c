@@ -15,7 +15,7 @@
 #define fint_cubic_conv 3
 #define corfile1 DEFS_MKPATH("/data/acor1d_80x100_double.txt")
 
-double sinc(double x)
+static double sinc(double x)
 {
 if (fabs(x) < (1.e-10))
   return 1.;

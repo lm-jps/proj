@@ -20,7 +20,7 @@
 #define fresize_1d_fft 5
 #define fresize_2d_fft 6
 
-double sinc(double x)
+static double sinc(double x)
 {
 if (fabs(x) < (1.e-10))
   return 1.;
