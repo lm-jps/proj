@@ -206,6 +206,12 @@ struct fill_struct *pars
     }
   }
 */
+
+  for (i=0;i<pars->hashmod;i++) {
+    omp_destroy_lock(&(pars->locks[i]));
+    omp_destroy_lock(&(pars->complocks[i]));
+  }
+
   MKL_free(pars->a0);
   MKL_free(pars->a00);
   MKL_free(pars->a0t);
