@@ -27,8 +27,10 @@ TGT_BIN	        := $(TGT_BIN) $(EXE_$(d)) $(MODEXE_SOCK_$(d))
 S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d))) 
 
 # Local rules
-$(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
+$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/astro
+
+$(MODEXE_$(d)):	$(LIBASTRO)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
