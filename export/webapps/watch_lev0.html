@@ -309,7 +309,7 @@ function GetDCSInfo()
       diff = Math.round((nowms - dcslast)/60000);
       hrs = Math.floor(diff/60);
       mins = diff - 60*hrs;
-      $("DCS_info").innerHTML =  $("DCS_info").innerHTML + "<B>Last DCS Recieved HMI</B> file was " +  hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m ago,";
+      $("DCS_info").innerHTML =  $("DCS_info").innerHTML + "<B>Last DCS Received HMI</B> file was " +  hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m ago,";
       dcslast = data.aiamt * 1000;
       diff = Math.round((nowms - dcslast)/60000);
       hrs = Math.floor(diff/60);
@@ -1031,10 +1031,10 @@ Update each <input type="text" id="UpdateRate" style="width:30"  value="0" oncha
 </TABLE>
 </div>
 <div id="helpdcs">
-This section give information about the most recent file activity in the Data Capture System (DCS).
+This section gives information about the most recent file activity in the Data Capture System (DCS).
 Two checks are made. 
 <P>
-The first line contains, for each instrument, the currently most recent file in the directory used
+The first line contains, for each instrument, the most recent file in the directory used
 to send data from the DCS to the Pipeline system for level-0 processing.  The most common file name to see
 here is the most recent "dsf" file.  These are the hourly summary files sent by the DDS.  The filename contains
 the time as year, doy, hour, minute.  They come on the hour.  This is the same directory that will also contain
@@ -1070,7 +1070,7 @@ be alerted.
 </TR>
 <TR> <TD colspan=7><hr></TD> </TR>
 <TR>
-<TD> <input type="text" name="HmiTlmSeriesTxt" id="HmiTlmSeriesTxt" value="hmi.tlme" onchange="GetStatus();"> </TD>
+<TD> <input type="text" name="HmiTlmSeriesTxt" id="HmiTlmSeriesTxt" value="hmi.tlm" onchange="GetStatus();"> </TD>
 <TD>&nbsp;</TD>
 <TD>filename</TD>
 <TD><span id="HMI_tlm"     value="&nbsp;" style="background-color:#FFFFFF"></span></TD>
@@ -1088,7 +1088,7 @@ be alerted.
 <TD>&nbsp;</TD>
 </TR>
 <TR>
-<TD> <input type="text" name="HmiLev0SeriesTxt" id="HmiLev0SeriesTxt" value="hmi.lev0e" onchange="GetStatus();"> </TD>
+<TD> <input type="text" name="HmiLev0SeriesTxt" id="HmiLev0SeriesTxt" value="hmi.lev0" onchange="GetStatus();"> </TD>
 <TD><span id="HMI_lev0_FSN" value="&nbsp;" style="background-color:#FFFFFF"></span></TD>
 <TD>DATE</TD>
 <TD><span id="HMI_lev0_DATE"     value="&nbsp;" style="background-color:#FFFFFF"></span></TD>
@@ -1107,7 +1107,7 @@ be alerted.
 </TR>
 <TR> <TD colspan=7><hr></TD> </TR>
 <TR>
-<TD> <input type="text" name="AiaTlmSeriesTxt" id="AiaTlmSeriesTxt" value="aia.tlme" onchange="GetStatus();"> </TD>
+<TD> <input type="text" name="AiaTlmSeriesTxt" id="AiaTlmSeriesTxt" value="aia.tlm" onchange="GetStatus();"> </TD>
 <TD>&nbsp;</TD>
 <TD>filename</TD>
 <TD><span id="AIA_tlm"     value="&nbsp;" style="background-color:#FFFFFF"></span></TD>
@@ -1125,7 +1125,7 @@ be alerted.
 <TD>&nbsp;</TD>
 </TR>
 <TR>
-<TD> <input type="text" name="AiaLev0SeriesTxt" id="AiaLev0SeriesTxt" value="aia.lev0e" onchange="GetStatus();"> </TD>
+<TD> <input type="text" name="AiaLev0SeriesTxt" id="AiaLev0SeriesTxt" value="aia.lev0" onchange="GetStatus();"> </TD>
 <TD><span id="AIA_lev0_FSN"       value="&nbsp;" style="background-color:#FFFFFF"></span></TD>
 <TD>DATE</TD>
 <TD><span id="AIA_lev0_DATE"      value="&nbsp;" style="background-color:#FFFFFF"></span></TD>
