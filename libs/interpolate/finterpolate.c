@@ -362,8 +362,8 @@ private (xk1,xk2,yk1,yk2,sum,sum1,i1,j1,x,y,help) \
 shared (pars,nlead,nx,ny,xin,yin,nleadin,nxin,nyin,image_in,image_out,order) \
 shared (malign,order2,kersx,ixmax,iymax,xmax,ymax,shift0,edgemode,extrapolate,fillval)
 { // Needed to define parallel region
-    ixins=(float *)(MKL_malloc(nx*sizeof(int),malign));
-    iyins=(float *)(MKL_malloc(nx*sizeof(int),malign));
+    ixins=(float *)(MKL_malloc(nx*sizeof(float),malign));
+    iyins=(float *)(MKL_malloc(nx*sizeof(float),malign));
     fxins=(float *)(MKL_malloc(nx*sizeof(float),malign));
     fyins=(float *)(MKL_malloc(nx*sizeof(float),malign));
     ixin1s=(float *)(MKL_malloc(nx*sizeof(float),malign));
@@ -548,8 +548,8 @@ shared(image_in,xin,yin,image_out,extrapolate,fillval) \
 shared(nx,ny,nlead,nxin,nyin,nleadin) \
 shared(malign,xmin,xmax,ymin,ymax)
   { // Needed to define parallel region
-    ixins=(float *)(MKL_malloc(nx*sizeof(int),malign));
-    iyins=(float *)(MKL_malloc(nx*sizeof(int),malign));
+    ixins=(float *)(MKL_malloc(nx*sizeof(float),malign));
+    iyins=(float *)(MKL_malloc(nx*sizeof(float),malign));
 
 #pragma omp for
     for (j=0; j<ny; j++) {
@@ -654,8 +654,8 @@ shared(image_in,xin,yin,image_out) \
 shared(nxin,nyin,nleadin,nx,ny,nlead,extrapolate,fillval) \
 shared(malign,xmin,xmax,ymin,ymax)
   { // Needed to define parallel region
-    ixins=(float *)(MKL_malloc(nx*sizeof(int),malign));
-    iyins=(float *)(MKL_malloc(nx*sizeof(int),malign));
+    ixins=(float *)(MKL_malloc(nx*sizeof(float),malign));
+    iyins=(float *)(MKL_malloc(nx*sizeof(float),malign));
 
 #pragma omp for 
     for (j=0; j<ny; j++) {
