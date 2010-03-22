@@ -904,6 +904,7 @@ int fsn_change_normal()
       Img->telnum = drms_getkey_int(rs, "CAMERA", &rstatus);
       Img->telnum--;
       Img->cropid = drms_getkey_int(rs, "CROPID", &rstatus);
+      Img->fid = drms_getkey_int(rs, "FID", &rstatus); //!!NEW 22Mar2010
       Img->luid = drms_getkey_int(rs, "LUTID", &rstatus);
       if(rstatus) {
         Img->luid = 0;	//!!!TEMP try this
@@ -1058,6 +1059,7 @@ startnew:
     ImgO->telnum = drms_getkey_int(rsc, "CAMERA", &rstatus);
     ImgO->telnum--;
     ImgO->cropid = drms_getkey_int(rsc, "CROPID", &rstatus);
+    ImgO->fid = drms_getkey_int(rsc, "FID", &rstatus); //!!NEW 22Mar2010
     ImgO->luid = drms_getkey_int(rsc, "LUTID", &rstatus);
     ImgO->tap = drms_getkey_int(rsc, "TAPCODE", &rstatus);
     compid = drms_getkey_int(rsc, "COMPID", &rstatus);
@@ -1348,7 +1350,7 @@ int get_tlm(char *file, int rexmit, int higherver)
       }
     }
     else {			// send the HK data to Carl 
-      printk("$$$ appid assumed hk =  0x%x %d\n", appid, appid); //!!TEMP
+      //printk("$$$ appid assumed hk =  0x%x %d\n", appid, appid); //!!TEMP
       decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk, &Fsn);
       switch (decode_status) {
         case SUCCESS_HK_NEED_TO_WTD_CTD:
