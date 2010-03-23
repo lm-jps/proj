@@ -1703,8 +1703,8 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
                   "not occur too often-low and high range of timecode cache needs "
                   "to be reset. Clearing cache and reloading link list of timecodes. "
                   "This should occur every two day per HK by APID series.\n");
-        dsr->timecode_lrsec= sec_pkt - (HK_SECONDS_PER_DAY);
-        dsr->timecode_hrsec= sec_pkt + ((HK_SECONDS_PER_DAY) * 2);
+        dsr->timecode_lrsec= sec_pkt - HK_SECONDS_RANGE;
+        dsr->timecode_hrsec= sec_pkt + HK_SECONDS_RANGE;
 
         /* free link */
         for(j=0,tc=dsr->tcnode;tc;j++)
@@ -1810,8 +1810,8 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
 
       /* set next (ndsr) node value */
       strcpy(dsrn->dsname, ds_name);
-      dsrn->timecode_lrsec= sec_pkt - HK_SECONDS_PER_DAY;
-      dsrn->timecode_hrsec= sec_pkt + ((HK_SECONDS_PER_DAY) * 2);
+      dsrn->timecode_lrsec= sec_pkt - HK_SECONDS_RANGE;
+      dsrn->timecode_hrsec= sec_pkt + HK_SECONDS_RANGE;
       dsrn->next=NULL;
       dsrn->tcnode=NULL;
 
@@ -1885,7 +1885,7 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
 /*                   (HK_Keyword_t *kw_head,int *lr)        */
 /* DESCRIPTION: Create low range for cached value for data  */ 
 /*              series. Create low range by using current   */
-/*              timecode in seconds - HK_SECONDS_PER_DAY.   */
+/*              timecode in seconds - HK_SECONDS_RANGE.     */
 /*              Pass in current hk structure to find time   */
 /*              of first packet. Pass back low range value. */
 /************************************************************/
@@ -1901,7 +1901,7 @@ short create_low_range(HK_Keyword_t *kw_head, long int *lr)
     {
       /*if found timecode seconds keyword then set found flag by returning 1 */
       /* create time string based on some hard coded parameters for now */
-      *lr = tkw->eng_value.uint32_val - HK_SECONDS_PER_DAY;
+      *lr = tkw->eng_value.uint32_val - HK_SECONDS_RANGE;
       return(1);
     }
     tkw= tkw->next;
@@ -1915,7 +1915,7 @@ short create_low_range(HK_Keyword_t *kw_head, long int *lr)
 /*                   (HK_Keyword_t *kw_head,int *hr)        */
 /* DESCRIPTION: Create high range for cached value for data */ 
 /*              series. Create high range by using current  */
-/*              timecode in seconds + (HK_SECONDS_PER_DAY*2)*/
+/*              timecode in seconds + (HK_SECONDS_RANGE)*/
 /*              Pass in current hk structure to find time   */
 /*              of last packet. Pass back high range value. */
 /************************************************************/
@@ -1931,7 +1931,7 @@ short create_high_range(HK_Keyword_t *kw_head, long int *hr)
     {
       /*if found timecode seconds keyword then set found flag by returning 1 */
       /* create time string based on some hard coded parameters for now */
-      *hr = tkw->eng_value.uint32_val + (HK_SECONDS_PER_DAY * 2);
+      *hr = tkw->eng_value.uint32_val + (HK_SECONDS_RANGE);
       return(1);
     }
     tkw= tkw->next;
@@ -2064,11 +2064,11 @@ int get_query_range(int range_type, HK_Keyword_t *kw, char qr[HK_MAX_SIZE_RANGE_
   /* using current packet time create new low or high range */
   if(range_type == HK_LOW_QUERY_RANGE)
   {
-    *ptime1= *ptime - (HK_SECONDS_PER_DAY);
+    *ptime1= *ptime - (HK_SECONDS_RANGE);
   }
   else if (range_type == HK_HIGH_QUERY_RANGE)
   {
-    *ptime1= *ptime + (HK_SECONDS_PER_DAY * 2);
+    *ptime1= *ptime + (HK_SECONDS_RANGE);
   }
   else
   {
@@ -2191,11 +2191,12 @@ int initialize_timecodes_cache(char* ds_name, HK_Keyword_t *kw, int apid)
   /* if have null no record in series so return 0 or did not find any records in series so can write to series */
   if (!rs) 
   { 
-    /* Test this CASE: if no records there, break from if, create dsr node and timecode node,then return 0 */
-    printkerr("DEBUG:Message:TEST CASE- at %s, line %d: There are no records for series. "
+    /* if no records there, break from if, create dsr node and timecode node,then return 0 but got 0 records maybe because hit query limit */
+    printkerr("Warning at %s, line %d: There are no records for series. "
               "Therefore returning 0 for check if hk record exists. When return "
               "zero then the records will get written to series. \n", __FILE__, __LINE__);
-    printkerr("DEBUG:Message at %s, line %d: DRMS data series <%s>\n", __FILE__,__LINE__, ds_name);
+    printkerr("Warning at %s, line %d: DRMS data series <%s> returned status<%d>.Query could be too big and reached limit.\n", 
+              __FILE__,__LINE__, ds_name,drms_status);
     return(0); 
   }
 
