@@ -3,11 +3,12 @@
 <HEAD>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; CHARSET=iso-8859-1">
 <TITLE>JSOC Watch Lev0</TITLE>
-<!-- < base HREF="http://jsoc.stanford.edu/" > -->
+<!-- < base HREF='http://' + Host + '/' > -->
 <SCRIPT TYPE="text/javascript" SRC="prototype-1.6.0.2.js"></SCRIPT>
  
 <script type="text/javascript">
 
+var Host;
 var MonitorOn = 1;
 var DetailsOn = 0;
 var DisplayOn = 0;
@@ -36,6 +37,7 @@ function InitPage()
   {
   var now = new Date();
   var nowms = now.getTime();
+  Host = location.host;
   HelpOnOff();
   ThisWindowTime = Math.round(nowms/1000);
   WaitCount = 0;
@@ -289,7 +291,7 @@ function TimeSinceJSOC(t)
 
 function GetDCSInfo()
   {
-  new Ajax.Request('http://jsoc.stanford.edu/~jsoc/dcs_times.json',
+  new Ajax.Request('http://' + Host + '/~jsoc/dcs_times.json',
     {
     method: 'get',
     onSuccess: function(transport, json)
@@ -325,10 +327,10 @@ function GetDCSInfo()
 
 function GetTlmStatus()
   {
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
-    parameters: {"ds":$("HmiTlmSeriesTxt").value + "[:#$]," + $("AiaTlmSeriesTxt").value + "[:#$]", "op":"rs_list", "key":"filename,*dir_mtime*" },
+    parameters: {"ds":$("HmiTlmSeriesTxt").value + "[:#$]," + $("AiaTlmSeriesTxt").value + "[:#$]", "op":"rs_list", "key":"filename,*dirmtime*" },
     onSuccess: function(transport, json)
       {
       var response = transport.responseText || "no response text";
@@ -361,7 +363,7 @@ function GetTlmStatus()
 function GetLev0Status()
   {
   $("ErrorMessagePlace").innerHTML = "";
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
     parameters: {"ds":$("HmiLev0SeriesTxt").value + "[:#$]," + $("AiaLev0SeriesTxt").value + "[:#$]",
@@ -491,7 +493,7 @@ function GetDetailsTable()
   var F_FSN = $("DetailsFSN").value - 0;
   var L_FSN = (F_FSN - 0) + ($("DetailsCount").value - 1);
   $("DetailsQuery").innerHTML = "Getting new data for " + DetailsSeries + "[" + F_FSN + "-" + L_FSN + "]";
-  DetailsReq = new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  DetailsReq = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
     parameters: {"ds":DetailsSeries + "[" + F_FSN + "-" + L_FSN + "]",
@@ -559,7 +561,7 @@ function GetImagesTable()
   var F_FSN = $("ImagesFSN").value - 0;
   var L_FSN = (F_FSN - 0) + ($("ImagesCount").value - 1);
   $("ImagesQuery").innerHTML = "Images for " + ImagesSeries + "[" + F_FSN + "-" + L_FSN + "]";
-  ImagesReq = new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  ImagesReq = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
     parameters: {"ds":ImagesSeries + "[" + F_FSN + "-" + L_FSN + "]",
@@ -716,7 +718,7 @@ function GetFsnRangeForDisplay()
     }
 
   $("DisplayQuery").innerHTML = "Images for " + DisplaySeries + "[" + F_FSN + "-" + L_FSN + "]";
-  DisplayReq = new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  DisplayReq = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
     parameters: {"ds":DisplaySeries + "[" + F_FSN + "-" + L_FSN + "]",
