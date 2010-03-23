@@ -475,7 +475,7 @@ function PickSeries(mode)
   $("Series_Name_Place").innerHTML = SeriesName;
   $("RecSetPlace").innerHTML = SeriesName;
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
-  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
     {
     method: 'get',
     parameters: {"ds" : SeriesName, "op" : "series_struct" },
@@ -578,6 +578,8 @@ function PickSeries(mode)
 	   for (i=0; i<n; i++)
 	      insertOption("KeysSelect",SeriesInfo.keywords[i].name, "");
 	   keywords = keywords + "</table><P>";
+	   insertOption("KeysSelect","*recdir*", "");
+	   insertOption("KeysSelect","*dirmtime*", "");
 	   insertOption("KeysSelect","*logdir*", "");
 	   insertOption("KeysSelect","*recnum*", "");
 	   insertOption("KeysSelect","*sunum*", "");
@@ -704,7 +706,7 @@ function GetRSCount()
   $("RSCount_Place").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   askedCount = 1;
-  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
     {
     method: 'get',
     parameters: {"ds" : $("RecordSet").value, "op" : "rs_summary", "n" : MaxRecs },
@@ -1004,7 +1006,7 @@ function GetKeyValues()
   $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
   $("FetchKeyValsButton").disabled = true;
   $("AbortKeyValsButton").show();
-  GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
+  GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
     {
     method: 'get',
     parameters: getparameters.toObject(),
@@ -1069,7 +1071,7 @@ function GetKeyValues()
                }
             }
 	  for (var ilink=0; ilink < nlinks; ++ilink)
-            gridhead[ihead++] = "Link: " + RecordData.links[iseg].name;
+            gridhead[ihead++] = "Link: " + RecordData.links[ilink].name;
         gridcolwidth = new Array(gridcols);
 
         for (icol=0; icol<gridcols; icol++)
@@ -1186,7 +1188,7 @@ function newwide(thisevent)
         valuegrid.setSize(CWidth - 35 ,CHeight - 310);
         $("DisplayPlace").innerHTML = valuegrid;
         }
-  $("SeriesInfoDiv").style.height = CHeight - 200;
+  $("SeriesInfoDiv").style.height = (1*CHeight - 200);
   return true;
   }
 
@@ -1275,7 +1277,8 @@ function Export_Recordset()
   Cookie.setData("state",0);
   if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
     $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-  ExportWindow=window.open("http://" + Host + "/ajax/exportdata.html?ds="+$("ExportRecordSet").innerHTML, "JSOC_Export");
+  ExportWindow=window.open("http://" + Host + "/ajax/exportdata.html?ds="+$("ExportRecordSet").innerHTML,
+             "JSOC_Export");
   ExportWindow.window.focus();
   }
 
@@ -1287,7 +1290,7 @@ function Export_Recordset()
 
 <DIV ID="header">
   <IMG src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
-    style="vertical-align:middle;height:60" alt="JSOC logo">
+    style="vertical-align:middle;height:60px" alt="JSOC logo">
   &nbsp;&nbsp;&nbsp;
   <B><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Explore Info and Export</big></B>
   &nbsp;&nbsp;&nbsp;
@@ -1342,7 +1345,7 @@ function Export_Recordset()
     <TABLE style="width:98%">
       <TR><TD style="width:33%"></TD><TD style="width:33%;"></TD><TD style="width:33%;"></TD></TR>
       <TR>
-        <TD rowspan=2 style="vertical-align:top;height:60pt">
+        <TD rowspan=2 style="vertical-align:top;height:60px">
         <B>Information about selected series</B><BR>
         Current Series is:
         <span id="Series_Name_Place" style="background-color:#FFFFFF"></span>
