@@ -24,9 +24,14 @@
 #include <unistd.h>	//for alarm(2) among other things...
 #include <printk.h>
 #include <astro.h>
+#include <fresize.h>
+#include <gapfill.h>
+//#include </home/jsoc/include/fftw3.h> 
+#include "fftw3.h" 
 #include "imgdecode.h"
 #include "lev0lev1.h"
 #include "quallev1.h"
+#include "limb_fit.h"
 #include "get_pointing_info.c"
 
 //default in and out data series
@@ -100,8 +105,8 @@ static char dsffname[128];
 static char path[DRMS_MAXPATHLEN], bad_pix_path[DRMS_MAXPATHLEN];
 static char rs1_path[DRMS_MAXPATHLEN];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
-//static char *orbseries = "sdo.fds_orbit_vectors";
-static char *orbseries = "sdo_ground.fds_orbit_vectors";
+static char *orbseries = "sdo.fds_orbit_vectors";
+//static char *orbseries = "sdo_ground.fds_orbit_vectors";
 
 static int prelimbfit = 0;  //!!TEMP 1= force debug code until get limb_fit()
 
@@ -356,14 +361,15 @@ int sc_pointing()
 
 #include "do_flat.c"
 #include "get_image_location.c"
+#include "limb_fit_function.c"
 
 //!!TEMP limb_fit() stub until get real function from Richard
-int limb_fit(DRMS_Record_t *record, int *image_in, int nx, int ny, double *rsun_lf, double *x0_lf, double *y0_lf, int method) {
-  *x0_lf = DRMS_MISSING_DOUBLE;
-  *y0_lf = DRMS_MISSING_DOUBLE;
-  *rsun_lf = DRMS_MISSING_DOUBLE;
-  return(0);
-}
+//int limb_fit(DRMS_Record_t *record, int *image_in, int nx, int ny, double *rsun_lf, double *x0_lf, double *y0_lf, int method) {
+//  *x0_lf = DRMS_MISSING_DOUBLE;
+//  *y0_lf = DRMS_MISSING_DOUBLE;
+//  *rsun_lf = DRMS_MISSING_DOUBLE;
+//  return(0);
+//}
 
 
 int do_ingest(long long bbrec, long long eerec)
@@ -678,8 +684,9 @@ int do_ingest(long long bbrec, long long eerec)
       l0l1->adatabad = (int *)ArrayBad->data; //free at end
       //!!NEW 3/9/10
       //if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel_list"))) {
-      if(!(badoutpixseg = drms_segment_lookup(rs, "BAD_PIXEL"))) {
-        printk("No drms_segment_lookup(rs, BAD_PIXEL) for lev1\n");
+      //if(!(badoutpixseg = drms_segment_lookup(rs, "BAD_PIXEL"))) {
+      if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel"))) {
+        printk("No drms_segment_lookup(rs, bad_pixel) for lev1\n");
         return(1);
       }
       dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
@@ -719,9 +726,9 @@ int do_ingest(long long bbrec, long long eerec)
         //return(1);		//!!TBD what to do?
       }
       else {
-        drms_setkey_short(rs, "DATAMIN", (short)l0l1->datamin);
-        drms_setkey_short(rs, "DATAMAX", (short)l0l1->datamax);
-        drms_setkey_short(rs, "DATAMEDN", (short)l0l1->datamedn);
+        drms_setkey_int(rs, "DATAMIN", l0l1->datamin);
+        drms_setkey_int(rs, "DATAMAX", l0l1->datamax);
+        drms_setkey_int(rs, "DATAMEDN", l0l1->datamedn);
         drms_setkey_float(rs, "DATAMEAN", l0l1->datamean);
         drms_setkey_float(rs, "DATARMS", l0l1->data_rms);
         drms_setkey_float(rs, "DATASKEW", l0l1->dataskew);
@@ -793,12 +800,19 @@ if(prelimbfit) {
   //END TEMP
 } 		//end prelimbfit code
 else {
-  dstatus = limb_fit(rs, l0l1->adata1, 4096, 4096, &rsun_lf, &x0_lf, &y0_lf, 0);
+  dstatus = limb_fit(rs, l0l1->adata1, &rsun_lf, &x0_lf, &y0_lf, 4096, 4096, 0);
   if(dstatus) {
     printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
     noimage[i] = 1;
   }
   else {
+    //!!TEMP for debug
+    //printk("rsun_lf = %f\n", rsun_lf);
+    //printk("x0_lf = %f\n", x0_lf);
+    //printk("y0_lf = %f\n", y0_lf);
+    drms_setkey_float(rs, "RSUN_LF", rsun_lf);
+    drms_setkey_float(rs, "X0_LF", x0_lf);
+    drms_setkey_float(rs, "Y0_LF", y0_lf);
     if(drms_ismissing_double(rsun_lf)) {
       drms_setkey_float(rs, "CDELT1", imageloc[i].imscale);
       drms_setkey_float(rs, "CDELT2", imageloc[i].imscale);
