@@ -19,9 +19,10 @@
 ##############################################################################
 # set environment variable
 $hm=$ENV{'HOME'};
-$exec_dir="$hm/cvs/JSOC/proj/lev1/apps";
+###$exec_dir="$hm/cvs/JSOC/proj/lev1/apps";
+$exec_dir="$hm/cvs/JSOC/_linux_x86_64/proj/lev1/apps";
 
-
+#set place to retrieve default data from
 $mp_sn=$ENV{'HK_SET_MP_MASTER_POINTING_SERIES'}="sdo.master_pointing";
 ###JIM'S VERSION::$mp_sn=$ENV{'HK_SET_MP_MASTER_POINTING_SERIES'}="su_carl.master_pointing";
 ##Test VERSION::$mp_sn=$ENV{'HK_SET_MP_MASTER_POINTING_SERIES'}="su_carl.test99_master_pointing";
@@ -463,7 +464,8 @@ print "*       ---wavelength values are for 094,131,171,193,211,304,335,1600,170
 print "*   Step(4)Write values entered to image location file.                                                    *\n";
 print "*   Step(5)Optional choice to run load_mp executable using this new image location file.                   *\n";
 print "*       ---select y(yes) to run load_mp ilf=<image loc file>.                                              *\n";
-print "*       ---select n(no) or hit return to not run load_mp executable.                                       *\n";
+print "*       ---select n(no) or hit return to not run load_mp executable and run at command line later after    *\n";
+print "*       ---checking values in image location file are correct.                                             *\n";
 print "*       ---set the master series value to use in SOURCE_LOAD_MP file.                                      *\n";
 print "*  Limitations and Help:                                                                                   *\n";
 print "*  (1)To exit script immediately use : cntl-c                                                              *\n";
