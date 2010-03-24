@@ -68,7 +68,7 @@ int do_flat(LEV0LEV1 *info)
     short tmp;
     float ftmp;
     double dtmp;
-    double s=0.0, s2=0.0, s3=0.0, s4=0.0, ss;
+    double s, s2, s3, s4, ss;
     int npix, min, max, medn;
 
     if (info->himgcfid < 0 || info->himgcfid >= MAXHIMGCFGS)
@@ -84,7 +84,6 @@ int do_flat(LEV0LEV1 *info)
 	r2 = r1 + nr;
     } else
 	r1 = r2 = 4096;
-    nr /= 2;
 
     nc = overscan_ncols[info->himgcfid];
     if (nc) {
@@ -92,15 +91,53 @@ int do_flat(LEV0LEV1 *info)
 	c2 = c1 + nc;
     } else
 	c1 = c2 = 4096;
-    nc /= 2;
 
-    memset(hist, 0, 4*NBINS);
+    //
+    // do overscan statistics
+    //
+    info->oscnmean = info->oscnrms = DRMS_MISSING_DOUBLE;
+    npix = 0;
+    s = s2 = 0.0;
+
+    if (nr) {
+	idx = 4096*r1;
+	for (i=0; i<4096*nr; ++i) {
+	    dtmp = in[idx++];
+	    s += dtmp;
+	    s2 += dtmp*dtmp;
+	}
+	npix += 4096*nr;
+    }
+
+    if (nc) {
+	for (i=0; i<r1; ++i)
+	    for (j=c1; j<c2; ++j) {
+		dtmp = in[4096*i+j];
+		s += dtmp;
+		s2 += dtmp*dtmp;
+	    }
+	for (i=r2; i<4096; ++i)
+	    for (j=c1; j<c2; ++j) {
+		dtmp = in[4096*i+j];
+		s += dtmp;
+		s2 += dtmp*dtmp;
+	    }
+	npix += (4096-nr)*nc;
+    }
+
+    if (npix) {
+	info->oscnmean = s/npix;
+	info->oscnrms = sqrt((s2-s*s/npix) / (npix-1));
+    }
 
     //
     // apply dark, flat correction quadrant by quadrant
     // and squeeze out the overscan rows and columns
     //
+    memset(hist, 0, 4*NBINS);
     npix = 0;
+    nr /= 2;
+    nc /= 2;
     for (i=0; i<r1; ++i) {
 	idx = 4096*i;
 	IDX = idx + 4096*nr + nc;
@@ -222,6 +259,7 @@ int do_flat(LEV0LEV1 *info)
 	    i += hist[++medn];
 	info->datamedn = medn + MINOUT;
 
+	s = s2 = s3 = s4 = 0.0;
 	for (i=min; i<=max; ++i) {
 	    int ii = i + MINOUT;
 	    s += (dtmp = ii*hist[i]);
