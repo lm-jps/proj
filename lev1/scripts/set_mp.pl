@@ -385,9 +385,9 @@ sub print_image_loc_file(%)
   # print keyword and value to file
   #display and print results to image_location.txt file
   # open image location file 
-  $image_loc_file="./image_location_test.txt";
+  $image_loc_file="./sdo_image_location.txt";
   open(OUTFILE, ">$image_loc_file") || die "(6)Can't Open $ifn file: $!\n";
-  printf( OUTFILE "# Filename : sdo_image_location_test.txt\n");
+  printf( OUTFILE "# Filename : sdo_image_location.txt\n");
   $d=`date`;
   $d=~s/\n//;
   printf( OUTFILE "# Date : %s\n", $d);
