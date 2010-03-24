@@ -32,6 +32,8 @@ typedef struct {
   double data_rms;
   double dataskew;
   double datakurt;
+  double oscnmean;
+  double oscnrms;
   int datavals;
   int missvals;
 } LEV0LEV1;
