@@ -290,10 +290,10 @@ ___DECODE_START___:
 	fscanf(fp, "%u", &u);
 	if (u != img->luid)
 	    return IMGDECODE_LOOKUP_ID_MISMATCH;
-	lut[img->luid] = (unsigned short *) malloc(MAXHIST*2);
+	lut[img->luid] = (unsigned short *) malloc(16384*2);
 	if (!lut[img->luid])
 	    return IMGDECODE_OUT_OF_MEMORY;
-	for (i=0; i<MAXHIST; ++i)
+	for (i=0; i<16384; ++i)
 	    if (1 != fscanf(fp, "%hu", lut[img->luid] + i)) {
 		fclose(fp);
 		free(lut[img->luid]);

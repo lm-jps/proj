@@ -12,7 +12,7 @@
 #endif
 
 #define MAXPIXELS			16777216	// 4096*4096
-#define MAXHIST				16384		// 14-bit
+#define MAXHIST				32768
 
 #ifndef TABLE_DIR
 #define TABLE_DIR 			"/home/production/cvs/EGSE/tables"
