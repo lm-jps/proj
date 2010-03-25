@@ -2,9 +2,10 @@
 /* NOTE1:Jim:Jim's code needs to free Image_Location after calling get_location_information. */
 /* NOTE2:Jim:Example main file used to test at:/home3/carl/cvs/JSOC/proj/lev1/apps/gif_main.c*/
 /******************** defines ***********************************************/
-/* use by Jim's productions-> #define GMP_MASTER_POINTING_SERIES  "su_carl.master_pointing" */
+/* use by Jim's pre-productions test-> #define GMP_MASTER_POINTING_SERIES  "su_carl.master_pointing" */
 /* use by Carl to test ->#define GMP_MASTER_POINTING_SERIES  "su_carl.test99_master_pointing"*/
-#define GMP_MASTER_POINTING_SERIES  "su_carl.master_pointing"
+/* use for production after launch ->#define GMP_MASTER_POINTING_SERIES  "sdo._master_pointing"*/
+#define GMP_MASTER_POINTING_SERIES  "sdo.master_pointing"
 #define GMP_DRMS_OPEN_FAILED           1
 #define GMP_MAX_DSNAME_STR           100
 #define GMP_MAX_KEYWORD_NAME_STR     100
@@ -102,7 +103,8 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
      /* return error PT_DRMS_OPEN_FAILED if cannot open */
      printkerr("ERROR at %s, line %d: Failed to open  master pointing series:<%s>. "
                "Check envirionment  GMP_MASTER_POINTING_SERIES variable is set "
-               "correctly.\n",__FILE__,__LINE__,dsname);
+               "correctly. Or check time range in master pointing series is available.\n",
+               __FILE__,__LINE__, dsname);
      return (GMP_DRMS_OPEN_FAILED);
   }
   nrec= rset->n; 
