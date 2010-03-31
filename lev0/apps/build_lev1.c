@@ -363,15 +363,6 @@ int sc_pointing()
 #include "get_image_location.c"
 #include "limb_fit_function.c"
 
-//!!TEMP limb_fit() stub until get real function from Richard
-//int limb_fit(DRMS_Record_t *record, int *image_in, int nx, int ny, double *rsun_lf, double *x0_lf, double *y0_lf, int method) {
-//  *x0_lf = DRMS_MISSING_DOUBLE;
-//  *y0_lf = DRMS_MISSING_DOUBLE;
-//  *rsun_lf = DRMS_MISSING_DOUBLE;
-//  return(0);
-//}
-
-
 int do_ingest(long long bbrec, long long eerec)
 {
   Image_Location *p_imageloc;
@@ -590,6 +581,7 @@ int do_ingest(long long bbrec, long long eerec)
       drms_setkey_float(rs, "X0_MP", imageloc[i].x);
       drms_setkey_float(rs, "Y0_MP", imageloc[i].y);
       drms_setkey_float(rs, "INST_ROT", imageloc[i].instrot);
+      //drms_setkey_float(rs, "INST_ROT", 180.0); //force this for now
       drms_setkey_float(rs, "IMSCL_MP", imageloc[i].imscale);
       drms_setkey_string(rs, "MPO_REC", imageloc[i].mpo_rec);
 
@@ -683,10 +675,12 @@ int do_ingest(long long bbrec, long long eerec)
       }
       l0l1->adatabad = (int *)ArrayBad->data; //free at end
       //!!NEW 3/9/10
-      //if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel_list"))) {
-      //if(!(badoutpixseg = drms_segment_lookup(rs, "BAD_PIXEL"))) {
-      if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel"))) {
-        printk("No drms_segment_lookup(rs, bad_pixel) for lev1\n");
+      /************************************
+      if(!(badoutpixseg = drms_segment_lookup(rs, "BAD_PIXEL"))) BRACKET
+      if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel"))) BRACKET
+      ***************************************/
+      if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel_list"))) {
+        printk("No drms_segment_lookup(rs, bad_pixel_list) for lev1\n");
         return(1);
       }
       dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
@@ -695,26 +689,6 @@ int do_ingest(long long bbrec, long long eerec)
         //noimage[i] = 1;
         return(1);
       }
-
-/**************** elim old way of copying bad pixel list *********************
-      rsbad_pix = drms_link_follow(rsff, "perm_bad_pixel", &rstatus);
-      if(rstatus) {
-        printk("Can't do drms_link_follow(rsff, \"perm_bad_pixel\"). status=%d\n", rstatus);
-        return(1);
-      }
-      drms_record_directory(rsbad_pix, bad_pix_path, 1);
-      if(!*bad_pix_path) {
-        printk("***ERROR: No path to segment for BAD_PIXEL\n");
-        return(1);
-      }
-      //printf("\npath to BAD_PIXEL = %s\n", bad_pix_path); //!!TEMP
-      //cp the bad pixel list to the lev1 output
-      char cmd[128];
-      sprintf(cmd, "cp %s/bad_pixel_list.fits %s", bad_pix_path, rs1_path);
-      printk("%s\n", cmd);
-      system(cmd);
-*****************************************************************/
-
       l0l1->rs1 = rs;
       l0l1->rsff = rsff;
       l0l1->recnum1 = rs->recnum;  
@@ -726,6 +700,8 @@ int do_ingest(long long bbrec, long long eerec)
         //return(1);		//!!TBD what to do?
       }
       else {
+        drms_setkey_float(rs, "OSCNMEAN", l0l1->oscnmean);
+        drms_setkey_float(rs, "OSCNRMS", l0l1->oscnrms);
         drms_setkey_int(rs, "DATAMIN", l0l1->datamin);
         drms_setkey_int(rs, "DATAMAX", l0l1->datamax);
         drms_setkey_int(rs, "DATAMEDN", l0l1->datamedn);
@@ -800,19 +776,18 @@ if(prelimbfit) {
   //END TEMP
 } 		//end prelimbfit code
 else {
+  x0_lf = DRMS_MISSING_DOUBLE;
+  y0_lf = DRMS_MISSING_DOUBLE;
+  rsun_lf = DRMS_MISSING_DOUBLE;
+
   dstatus = limb_fit(rs, l0l1->adata1, &rsun_lf, &x0_lf, &y0_lf, 4096, 4096, 0);
   if(dstatus) {
     printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
     noimage[i] = 1;
   }
-  else {
-    //!!TEMP for debug
-    //printk("rsun_lf = %f\n", rsun_lf);
-    //printk("x0_lf = %f\n", x0_lf);
-    //printk("y0_lf = %f\n", y0_lf);
-    drms_setkey_float(rs, "RSUN_LF", rsun_lf);
-    drms_setkey_float(rs, "X0_LF", x0_lf);
-    drms_setkey_float(rs, "Y0_LF", y0_lf);
+    drms_setkey_float(rs, "RSUN_LF", (float)rsun_lf);
+    drms_setkey_float(rs, "X0_LF", (float)x0_lf);
+    drms_setkey_float(rs, "Y0_LF", (float)y0_lf);
     if(drms_ismissing_double(rsun_lf)) {
       drms_setkey_float(rs, "CDELT1", imageloc[i].imscale);
       drms_setkey_float(rs, "CDELT2", imageloc[i].imscale);
@@ -832,16 +807,14 @@ else {
       drms_setkey_float(rs, "CRPIX2", imageloc[i].y + (ptdata.sat_z0/imageloc[i].imscale) + 1);
     }
     drms_setkey_float(rs, "CROTA2", imageloc[i].instrot + ptdata.sat_rot);
-  }
 }
 
   do_quallev1(rs0, rs, i, fsnx);
 
-  }
+  }				//END do for all the sorted lev0 records
 
   drms_close_records(rset0, DRMS_FREE_RECORD);   //close lev0 records
   drms_close_records(rset1, DRMS_INSERT_RECORD); //close lev1 records
-
   return(0);
 }
 
@@ -1003,51 +976,3 @@ int DoIt(void)
   return(0);
 }
 
-/*********************************************************************
-//!!TEMP position of keywords set up for limb_figure code when it
-//goes in
-void tmp() {
-
-typedef struct {
-  float rsun_lf;
-//  double rsun_obs;
-//  float imscl_mp;
-  float x0_lf;
-  float y0_lf;
-//  float x0_mp;
-//  float y0_mp;
-//  float sat_y0;
-//  float sat_z0;
-//  float inst_rot;
-//  float sat_rot;
-} LIMB_SOMETHING;
-
-LIMB_SOMETHING limb;
-
-  //Put in MISSING for now until have real get_limb_fit()
-  limb.x0_lf = DRMS_MISSING_FLOAT);
-  limb.y0_lf = DRMS_MISSING_FLOAT);
-  limb.rsun_lf = DRMS_MISSING_FLOAT);
-
-  if(limb.rsun_lf == DRMS_MISSING_FLOAT) {
-    drms_setkey_float(rs, "CDELT1", imageloc[i].imscale);
-    drms_setkey_float(rs, "CDELT2", imageloc[i].imscale);
-    drms_setkey_float(rs, "R_SUN", (float)IOdata.rsun_obs/imageloc[i].imscale);
-  }
-  else {			//rsun_lf is not MISSING
-    drms_setkey_float(rs, "CDELT1", (float)IOdata.rsun_obs/limb.rsun_lf);
-    drms_setkey_float(rs, "CDELT2", (float)IOdata.rsun_obs/limb.rsun_lf);
-    drms_setkey_float(rs, "R_SUN", limb.rsun_lf);
-  }
-  if((limb.x0_lf != DRMS_MISSING_FLOAT) && (limb.y0_lf != DRMS_MISSING_FLOAT)) {
-    drms_setkey_float(rs, "CRPIX1", limb.x0_lf + 1);
-    drms_setkey_float(rs, "CRPIX2", limb.y0_lf + 1);
-  }
-  else {
-    drms_setkey_float(rs, "CRPIX1", imageloc[i].x + (ptdata.sat_y0/imageloc[i].imscale) + 1);
-    drms_setkey_float(rs, "CRPIX2", imageloc[i].y + (ptdata.sat_z0/imageloc[i].imscale) + 1);
-  }
-  drms_setkey_float(rs, "CROTA2", imageloc[i].instrot + ptdata.sat_rot);
-
-}
-***********************************************************************/
