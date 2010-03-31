@@ -43,7 +43,7 @@ const float gapfill_regular=0.0025;
 const int gapfill_order2=gapfill_order/2;
 
 const int min_imcnf=80;
-const int max_imcnf=124;
+const int max_imcnf=200;
 
 char *X0_MP_key="X0_MP";
 char *Y0_MP_key="Y0_MP";
