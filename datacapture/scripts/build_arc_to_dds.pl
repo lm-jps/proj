@@ -144,6 +144,7 @@ elsif ($nodedcs eq "dcs2")  {
   close(PARC);
   print "\nDone: Found $count tlm files for $instru\n";
   print "Results in $resultfile\n";
+  `cp $resultfile $ARC_TOUCH_DIR`;	#save in /usr/local/logs/arc
 $dbh->disconnect();
 
   if($hostdb eq "dcs1") {
