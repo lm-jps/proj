@@ -64,10 +64,17 @@ function InitPage()
   $("PickAIA_img").checked = true;
   $("PickHMI_disp").checked = false;
   $("PickAIA_disp").checked = true;
-  $("DisplayAuto").checked = true;
-  $("DisplayMan").checked = false;
+  $("DisplayAuto").checked = false;
+  $("DisplayMan").checked = true;
   $("DisplaySim").checked = false;
   $("DCS_info").innerHTML = "No DCS Info Requested Yet";
+  if (Host == 'jsoc.stanford.edu')
+    {
+    alert(Host + " does not have lev0 access, please use jsoc2.stanford.edu");
+    $("JSOC2DIV").style.display="block";
+    }
+  else
+    $("JSOC2DIV").style.display="none";
   EnableMonitor();
   EnableDetails();
   EnableImages();
@@ -498,7 +505,7 @@ function GetDetailsTable()
     method: 'get',
     parameters: {"ds":DetailsSeries + "[" + F_FSN + "-" + L_FSN + "]",
 		 "op":"rs_list",
-		 "key":"FSN,T_OBS,DATE,CAMERA,MISSVALS,NERRORS,DATAMIN,DATAMAX,DATAMEAN,DATARMS,*recnum*",
+		 "key":"FSN,T_OBS,DATE,CAMERA,WAVELNTH,EXPTIME,MISSVALS,NERRORS,DATAMIN,DATAMAX,DATAMEAN,DATARMS,*recnum*",
 		 "seg":"image" },
     onSuccess: function(transport, json)
       {
@@ -512,7 +519,7 @@ function GetDetailsTable()
         {
 	DetailsText = "<table border=1 cellPadding=2 cellSpacing=5 ><tr>" + 
 		"<th>FSN</th>" + "<th>T_OBS</th>" + "<th>DATE</th>" +
-		"<th>CAM</th>" + "<th>MISSVALS</th>" + "<th>NERRORS</th>" + "<th>MIN</th>" +
+		"<th>CAM</th>" + "<th>WAVE</th>" + "<th>EXPTIME</th>" + "<th>MISSVALS</th>" + "<th>NERRORS</th>" + "<th>MIN</th>" +
 		"<th>MAX</th>" + "<th>MEAN</th>" + "<th>RMS</th>" +
 		"<th>recnum</th>" + "<th>Link</th>" + "<th>Small</th>" +
 		"<th>.png</th>" + "</tr>";
@@ -723,7 +730,7 @@ function GetFsnRangeForDisplay()
     method: 'get',
     parameters: {"ds":DisplaySeries + "[" + F_FSN + "-" + L_FSN + "]",
                  "op":"rs_list",
-                 "key":"FSN,MISSVALS,CAMERA",
+                 "key":"FSN,MISSVALS,CAMERA,WAVELNTH",
                  "seg":"image" },
     onSuccess: function(transport, json)
       {
@@ -742,7 +749,7 @@ function GetFsnRangeForDisplay()
             {
             var FSN = data.keywords[0].values[rec];
             var NMISS = data.keywords[1].values[rec];
-            var camera = data.keywords[2].values[rec];
+            var camera = data.keywords[2].values[rec] + ", " + data.keywords[3].values[rec];
             var path = data.segments[0].values[rec];
             var pathim = path.replace(/.fits/,".png");
             addToCache(FSN,NMISS,camera,pathim);
@@ -779,7 +786,7 @@ function UpdateDisplayTable()
   var thisimage;
   var newWide, newHeight;
 
-  var blankimage = new Array(4);
+  var blankimage = new Array(5);
   blankimage[0] = 0;
   blankimage[1] = 0;
   blankimage[2] = 0;
@@ -829,7 +836,7 @@ function UpdateDisplayTable()
       if (thisimage==null)
         {
         thistable[row][col] = blankimage;
-        thistable[row][col][0] = FSN;
+        thistable[row][col][0] = "TBD";
         }
       else
         thistable[row][col] = thisimage;
@@ -838,6 +845,7 @@ function UpdateDisplayTable()
 
   if (DisplayMade < 2)
     {
+    var cam;
     DisplayText = "<table id='DT' border=0 cellPadding=1 cellSpacing=0 >";
     for (row=0; row<rows; row++)
       {
@@ -857,26 +865,30 @@ function UpdateDisplayTable()
         FSN = thistable[row][col][0];
         nmiss = thistable[row][col][1];
         camera = thistable[row][col][2];
+        if (camera.length > 0)
+           cam = camera.substr(0,1);
+        else
+          cam = 0;
         if ($("PickHMI_disp").checked == false)
           {
           if (FSN == F_FSN)
             color = "BGCOLOR='lightgrey'";
-          else if (camera == 1)
+          else if (cam == 1)
             color = "BGCOLOR='lightblue'";
-          else if (camera == 2)
+          else if (cam == 2)
             color = "BGCOLOR='pink'";
-          else if (camera == 3)
+          else if (cam == 3)
             color = "BGCOLOR='lightgreen'";
-          else if (camera == 4)
+          else if (cam == 4)
             color = "BGCOLOR='#ffff80'";
           else
             color = "BGCOLOR='white'";
           }
         else
           {
-          if (camera == 1)
+          if (cam == 1)
             color = (FSN==L_FSN ? "BGCOLOR='#0080FF'" : "BGCOLOR='#00d0f0'");
-          else if (camera == 2)
+          else if (cam == 2)
             color = (FSN==L_FSN ? "BGCOLOR='#FF4010'" : "BGCOLOR='#FFB080'");
           else
             color = "BGCOLOR='white'";
@@ -913,6 +925,10 @@ function UpdateDisplayTable()
           FSN = thistable[row][col][0];
           nmiss = thistable[row][col][1];
           camera = thistable[row][col][2];
+          if (camera.length > 0)
+             cam = camera.substr(0,1);
+          else
+            cam = 0;
           var cellIdTx = "ctxt_"+col+"_"+row;
           var CellTxtTxt = "FSN="+FSN+"<br>CAM="+camera+"<br>Nmiss="+nmiss;
           DisplayWindow.document.getElementById(cellIdTx).innerHTML = CellTxtTxt;
@@ -920,22 +936,22 @@ function UpdateDisplayTable()
             {
             if (FSN == F_FSN)
               bgcolor = "lightgrey";
-            else if (camera == 1)
+            else if (cam == 1)
               bgcolor = "lightblue";
-            else if (camera == 2)
+            else if (cam == 2)
               bgcolor = "pink";
-            else if (camera == 3)
+            else if (cam == 3)
               bgcolor = "lightgreen";
-            else if (camera == 4)
+            else if (cam == 4)
               bgcolor = "#ffff80";
             else
               bgcolor = "white";
             }
           else
             {
-            if (camera == 1)
+            if (cam == 1)
               bgcolor = (FSN==L_FSN ? "#0080FF" : "#00d0f0");
-            else if (camera == 2)
+            else if (cam == 2)
               bgcolor = (FSN==L_FSN ? "#FF4020" : "#FFB080");
             else
               bgcolor = "white";
@@ -1023,6 +1039,14 @@ Update each <input type="text" id="UpdateRate" style="width:30"  value="0" oncha
 </TABLE>
 <HR>
 </DIV> <!-- end DIV header -->
+<DIV id="JSOC2DIV">
+<P>
+<B>
+Please use jsoc2.stanford.edu for watch_lev0
+</B>
+<P>
+<HR>
+</DIV>
 
 <DIV id="StatusDiv">
 <P>
@@ -1090,7 +1114,7 @@ be alerted.
 <TD>&nbsp;</TD>
 </TR>
 <TR>
-<TD> <input type="text" name="HmiLev0SeriesTxt" id="HmiLev0SeriesTxt" value="hmi.lev0" onchange="GetStatus();"> </TD>
+<TD> <input type="text" name="HmiLev0SeriesTxt" id="HmiLev0SeriesTxt" value="hmi.lev0a" onchange="GetStatus();"> </TD>
 <TD><span id="HMI_lev0_FSN" value="&nbsp;" style="background-color:#FFFFFF"></span></TD>
 <TD>DATE</TD>
 <TD><span id="HMI_lev0_DATE"     value="&nbsp;" style="background-color:#FFFFFF"></span></TD>
@@ -1285,7 +1309,7 @@ Last FSN = &nbsp;<input type="text" id="DisplayMaxFSN" name="DisplayMaxFSN" valu
 <BR> &nbsp; <BR>
 Sim LSN = &nbsp;<input type="text" id="DisplaySimSN" name="DisplaySimSN" value="0" onChange="GetFsnRangeForDisplay()" >
 </TD><TD>
-Rows =&nbsp;<input type="text" id="DisplayRows" name="DisplayRows" value="6" onChange="UpdateDisplayTable()">
+Rows =&nbsp;<input type="text" id="DisplayRows" name="DisplayRows" value="5" onChange="UpdateDisplayTable()">
 <BR> &nbsp; <BR>
 Cols =&nbsp;<input type="text" id="DisplayCols" name="DisplayCols" value="8" onChange="UpdateDisplayTable()">
 </TD></TR>
