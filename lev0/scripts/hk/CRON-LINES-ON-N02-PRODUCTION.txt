@@ -1,2 +1,5 @@
-##### ingest dayfile from RTMON server for production data series  #######
-0  17 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/savedf.pl rtmon   >/dev/null 2>&1
+########## ingest dayfile from MOC PRODUCTION server moc files for production data series ############
+0  22 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/dsdf.pl moc    >/dev/null 2>&1
+##########     ingest dayfile from RTMON server rtmon files for production data series    ############
+0  18 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/dsdf.pl rtmon  >/dev/null 2>&1
+
