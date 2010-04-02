@@ -485,6 +485,10 @@ int do_ingest(long long bbrec, long long eerec)
       recnum0 = rs0->recnum;
       fsnx = fsnarray[i]; 
       sprintf(lev0name, "%s[%u]", dsin, fsnx);
+      if(drms_getkey_int(rs0, "QUALITY", 0) < 0) {
+        printk("Bad QUALITY for %s, no lev1 made\n", lev0name);
+        continue;
+      }
       //printf("rec# for %d = %lld fsn=%u\n", i, recnum0, fsnx); //!!!TEMP
       segment = drms_segment_lookupnum(rs0, 0);
       Array0 = drms_segment_read(segment, DRMS_TYPE_SHORT, &rstatus);
@@ -780,7 +784,7 @@ else {
   y0_lf = DRMS_MISSING_DOUBLE;
   rsun_lf = DRMS_MISSING_DOUBLE;
 
-  dstatus = limb_fit(rs, l0l1->adata1, &rsun_lf, &x0_lf, &y0_lf, 4096, 4096, 0);
+  dstatus = limb_fit(rs, l0l1->adata1, &rsun_lf, &x0_lf, &y0_lf, 4096, 4096, 1);
   if(dstatus) {
     printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
     noimage[i] = 1;
