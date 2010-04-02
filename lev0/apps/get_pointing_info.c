@@ -21,14 +21,12 @@ static int find_closest(TIME *t, int n, TIME tt)
     TIME d, dmin = DBL_MAX;
     int i, idx = -1;
 
-    if (!_DRMS_IS_T_MISSING(tt))
-	for (i=0; i<n; ++i) {
-	    if (_DRMS_IS_T_MISSING(t[i])) continue;
-	    d = fabs(tt - t[i]);
-	    if (d < dmin) {
-		dmin = d; idx = i;
-	    }
+    for (i=0; i<n; ++i) {
+	d = fabs(tt - t[i]);
+	if (d < dmin) {
+	    dmin = d; idx = i;
 	}
+    }
 
     return idx;
 }
@@ -102,7 +100,7 @@ int get_pointing_info(DRMS_Env_t *drms_env, TIME *tobs, int nobs, PTINFO **ptinf
     }
 
     for(i=0; i<nobs; i++) {	//find first good t_obs
-      if(!drms_ismissing_time(tobs[i])) break;
+      if(tobs[i] > 0) break;
     }
     if(i == nobs) {		//no good t_obs found
       return PT_NO_VALID_TOBS;
