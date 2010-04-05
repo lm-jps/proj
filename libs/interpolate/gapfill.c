@@ -613,14 +613,14 @@ reduction(+:nofill)
         } 
         else { // Otherwise quietly leave unchanged, except set errors
           cnorm1=0.0f;
-          ierror1=10.0f;
+          ierror1=2.0f;
           nofill=nofill+1;
         }
         nfill=nfill+1;
       } // end if mask==1
       if (mask[j*nlead+i]==masknofill) { // Don't fill.
         cnorm1=0.0f;
-        ierror1=10.0f;
+        ierror1=2.0f;
       }
       cnorm[j*nlead+i]=cnorm1;
       ierror[j*nlead+i]=ierror1;
