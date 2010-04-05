@@ -89,7 +89,7 @@
 
 //When change to these data series below to save real data.
 #define TLMSERIESNAMEHMI "hmi.tlm"
-#define LEV0SERIESNAMEHMI "hmi.lev0"
+#define LEV0SERIESNAMEHMI "hmi.lev0a"
 #define LEV0SERIESNAMEAIA "aia.lev0"
 #define TLMSERIESNAMEAIA "aia.tlm"
 
