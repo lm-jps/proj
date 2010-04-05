@@ -59,7 +59,7 @@
 
 /* other parameters */
 #define HK_SECONDS_PER_DAY        86400
-#define HK_SECONDS_RANGE          43200
+#define HK_SECONDS_RANGE          21600
 #define HK_INIT_MERGE_MAP_FILE_FLAG (0)
 #define HK_MERGE_MAP_FILE_FLAG      (1)
 #define HK_NON_MERGE_MAP_FILE_FLAG  (2)

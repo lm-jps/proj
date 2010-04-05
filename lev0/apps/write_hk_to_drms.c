@@ -1699,10 +1699,12 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
       {
         /* if current time code is greater than low range or if current time code is greater than high range */
         /* then free link list in order to reload cached values. this frees cache every two days */
-        printkerr("DEBUG:Warning Monitor Message:check_hk_rec_exist:Watch does "
-                  "not occur too often-low and high range of timecode cache needs "
-                  "to be reset. Clearing cache and reloading link list of timecodes. "
-                  "This should occur every two day per HK by APID series.\n");
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+        printkerr("Warning Monitor Message:check_hk_rec_exist:Watch this does "
+                  "not occur too often. The low and high range of timecode cache needs "
+                  "to be reset and reloaded.This warning message should occur only four "
+                  "times every 24 hours per HK by APID series.\n");
+#endif
         dsr->timecode_lrsec= sec_pkt - HK_SECONDS_RANGE;
         dsr->timecode_hrsec= sec_pkt + HK_SECONDS_RANGE;
 
@@ -2195,8 +2197,11 @@ int initialize_timecodes_cache(char* ds_name, HK_Keyword_t *kw, int apid)
     printkerr("Warning at %s, line %d: There are no records for series. "
               "Therefore returning 0 for check if hk record exists. When return "
               "zero then the records will get written to series. \n", __FILE__, __LINE__);
-    printkerr("Warning at %s, line %d: DRMS data series <%s> returned status<%d>.Query could be too big and reached limit.\n", 
-              __FILE__,__LINE__, ds_name,drms_status);
+    /* if get query 10001 this is drms query trucated therefore size of query too large so adjust time range */
+    /* This could be because series was just created and has no records */
+    printkerr("Warning at %s, line %d: DRMS data series <%s> returned status<%d>.Query "
+              "could be too big and reached limit. The query was <%s>\n", 
+              __FILE__,__LINE__, ds_name, drms_status, nquery);
     return(0); 
   }
 
