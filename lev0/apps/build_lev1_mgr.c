@@ -579,6 +579,8 @@ int do_ingest(int force)
         abortit(1);
       }
       sscanf(string, "%lld", &maxrecnum0);
+      //maxrecnum0 = maxrecnum0 - 25;	//allow time for commit of lev0 
+      maxrecnum0 = maxrecnum0 - 40;	//allow (more) time for commit of lev0 
       lastrecnum0_prev = lastrecnum0_now;
       lastrecnum0_now = maxrecnum0;		//save to see if more come in
       break;
@@ -764,7 +766,7 @@ int main(int argc, char **argv)
       printk("**ERROR: in do_ingest() for %s\n", open_dsname);
     }
     if(!stream_mode) return(0); //all done for reprocessing
-    sleep(10);		//wait for more lev0 to appear
+    sleep(30);		//wait for more lev0 to appear
     if(lastrecnum0_now == lastrecnum0_prev) {  //no new lev0 in
       if(loopcnt++ == 15) {  //force any left over lev0 records to lev1
         printk("Timeout: force any left over lev0 to lev1\n");
