@@ -62,12 +62,8 @@
  *            after malloc/calloc-ings all wrapper-arrays (and just before the inverson process)
  *      (4) modified positions and contents of printf().
  *      (5) modified how the argument at the command line will be taken into.
- *      (6) added one line #define TESTRUN flag to enable giving dummy/fake T_REC, to distinguish test from real.
  *
  * ------------------------------------------------------------------------------------------------------ */
-
-/* must be always zero, unless for test runs : Setting 1 gives (1) fake T_REC (2) gives fake series name as default, and (3) invokes verbose mode */
-#define TESTRUN  0
 
 /* To speed up, only some rectangle regions or a limited-width column be processed. Set 0 to disable */
 #define QUICKRUN 0
@@ -101,12 +97,9 @@ extern void wave_init_ (double *, double *, int *);
 #define IMGCTR (cols*(rows/2) + cols/2)
 
 ModuleArgs_t module_args[] = {
-  {ARG_STRING,  "in", "su_couvidat.hmiStokes[2007.10.14_23:50:00_TAI]", "input series"}, /*This is the input data in the form of 24 fits file segnments */
-#if TESTRUN == 1
-  {ARG_STRING,  "out", "su_keiji.vmagf", "output series"},
-#else
+/*This is the input data in the form of 24 fits file segnments */
+  {ARG_STRING,  "in", "su_couvidat.hmiStokes[2007.10.14_23:50:00_TAI]", "input series"},
   {ARG_STRING,  "out", "hao_rce.KD4096_Mar26", "output series"},
-#endif
   {ARG_INT,  "npix", "0", "number of pixels per segment (default: all/segs)"},
   {ARG_INT,  "num_iter", "30", "number of iterations(default: 30)"},
   {ARG_INT,  "num_lambda", "49", "number of ??(default: 33)"},
@@ -115,35 +108,24 @@ ModuleArgs_t module_args[] = {
   {ARG_DOUBLE,  "svd_tolerance", "1.0e-32", "svd tolerance (default: 1.0e-32)"},
   {ARG_DOUBLE,  "chi2_stop", "1.0e-6", "chisq-stop (default: 1.0e-6)"},
   {ARG_DOUBLE,  "Polarization_threshold", "1.0e-2", "polarization threshold (default: 0.01)"},
-#if 0
-  {ARG_DOUBLE,  "Intensity_Threshold", "0.8", "Intensity threshold (default: 0.8)"},
-#else
-  {ARG_DOUBLE,  "Intensity_Threshold", "1e2", "Intensity threshold (default: 0.8)"},
-#endif
   {ARG_DOUBLE,  "Percentage_Jump", "10.0", "Percentage Jump (default: 10%)"},
   {ARG_DOUBLE,  "Lambda_Min", "-648.0", "Intensity threshold (default: -432)"},
   {ARG_DOUBLE,  "Lambda_0", "6173.3433", "Wavelength(default:6173.3433 Angstrom )"},
   {ARG_DOUBLE,  "Lambda_B", "0.044475775", "FWHM?? (default: 0.044475775)"},
   {ARG_DOUBLE,  "Delta_Lambda", "27.0", "Delta Lambda(default: 27.0)"},
-#if 0
-  {ARG_DOUBLE,  "Noise_LEVEL", "5.0e3", "Intensity threshold (default: 3.0e-3)"},
-#else
-  {ARG_DOUBLE,  "Noise_LEVEL", "5.0e1", "Intensity threshold (default: 3.0e-3)"},
-#endif
-#if 0
-  {ARG_DOUBLE,  "Continuum", "0.0", "Intensity threshold (default: 0)"},
-#else
-  {ARG_INT,     "Continuum", "0", "Intensity threshold (default: 0)"},
-#endif
   {ARG_DOUBLE,  "Lyotfwhm", "424.0", "Lyot filter FWHM (default: 424.0)"},
   {ARG_DOUBLE,  "Wnarrow", "172.0", "W narrow (default: 172.0)"},
   {ARG_DOUBLE,  "Wspacing", "69.0", "W narrow (default: 69.0)"},
-#if TESTRUN == 1
-  {ARG_FLAG, "v",   "v", "run verbose"}, // run always verbose
-  {ARG_FLAG, "d",   "d", "turn damping off"},
-#else
   {ARG_FLAG, "v",    "", "run verbose"},
   {ARG_FLAG, "d",    "", "turn damping off"},
+#if 0
+  {ARG_DOUBLE,  "Intensity_Threshold", "0.8", "Intensity threshold (default: 0.8)"},
+  {ARG_DOUBLE,  "Noise_LEVEL", "5.0e3", "Intensity threshold (default: 3.0e-3)"},
+  {ARG_DOUBLE,  "Continuum", "0.0", "Intensity threshold (default: 0)"},
+#else
+  {ARG_DOUBLE,  "Intensity_Threshold", "1e2", "Intensity threshold (default: 0.8)"},
+  {ARG_DOUBLE,  "Noise_LEVEL", "5.0e1", "Intensity threshold (default: 3.0e-3)"},
+  {ARG_INT,     "Continuum", "0", "Intensity threshold (default: 0)"},
 #endif
   {}
 };
@@ -157,7 +139,7 @@ int DoIt (void)
   DRMS_Segment_t *seg;
   DRMS_Array_t *stokes_array, *invrt_array,*err_array;
 
-/* get values from argument, as constant */
+/* get values at commandline argument, as constant */
   const int    npixc              = params_get_int(params, "npix");
   const int    NUM_ITERATIONSc    = params_get_int(params, "num_iter");
   const int    NUM_LAMBDAc        = params_get_int(params, "num_lambda");
@@ -251,15 +233,14 @@ int DoIt (void)
   int status;
 /* MPI variables */
   MPI_Status mpistat;
-  int mpitag;
-  int mpi_rank, mpi_size;
-  int istart, iend;
+  int mpi_tag, mpi_rank, mpi_size;
   int myrank, nprocs, numpix;
+  int istart, iend;
   int *istartall, *iendall;
   void para_range(int,int,int,int *,int *);
 
-/* Initialize Clock */
-  time (&startime);
+/* time at the start */
+  time(&startime);
 
 /* Initalizing MPI */
   MPI_Status mpi_stat;
@@ -318,29 +299,59 @@ int DoIt (void)
     }
     data = data0;
     printf("Imgpix= %d\n",imgpix);
-/* Map of invalid values (NaN or all-zero) */
+
+/* Calculate "square" of solar radius in float pixel */
+    float crpixx, crpixy;
+    float cdeltx, cdelty;
+    float rsun_ref, dsun_obs;
+    float sunarc;
+    crpixx   = drms_getkey_float(inRec,"CRPIX1",&status);   // center of the solar disk
+    crpixy   = drms_getkey_float(inRec,"CRPIX2",&status);
+    cdeltx   = drms_getkey_float(inRec,"CDELT1",&status);   // arcsec per pixel
+    cdelty   = drms_getkey_float(inRec,"CDELT2",&status);
+    rsun_ref = drms_getkey_float(inRec,"RSUN_REF",&status); // solar radius in m
+    dsun_obs = drms_getkey_float(inRec,"DSUN_OBS",&status); // distance from Sun to SDO in m
+    sunarc = atan2(rsun_ref,dsun_obs)             // arc-tangent in radian
+           / 3.14159265358979e0 * 180.0 * 3600.0; // radian to arc-second
+    printf("solar radius is %f in arcsec \n",sunarc);
+    float fdummy;
+    fdummy = sunarc / (cdeltx + cdelty) * 2.0;
+    printf("solar radius is %f in CCD pix.\n",fdummy);
+    if (isnan(sunarc)){sunarc = (cols + rows) * (cols + rows);}else{sunarc = sunarc * sunarc;} // make it squared
+/* Map of invalid values (NaN or all-zero) , or off-disk */
     for (n = 0; n < imgpix; n++)
     {
       nan_map[n] = 0; // because nan_map was calloc-ed, this is not needed.
       double sumsqr;  // better be of double precision, maybe...
       sumsqr = 0.0;
       for (m = 0; m < nvar; m++){sumsqr = sumsqr + data[n + m*imgpix] * data[n + m*imgpix];}
-      if (sumsqr < 1.0e-2){nan_map[n] = 1;} // turn on flag to-be-skipped if all data is (almost) zero
-      if (isnan(sumsqr))  {nan_map[n] = 1;} // turn on flag to-be-skipped if data contain NaN. ... must be added a lot here
+      if (sumsqr < 1.0e-2){nan_map[n] = 1;} //     turn on flag to-be-skipped for having all-zero value
+      if (isnan(sumsqr))  {nan_map[n] = 1;} //     turn on flag to-be-skipped for containing NaN
+      float fpixdist, fxpix, fypix;
+      int   ix, iy;
+      ix = n % cols;
+      iy = n / cols;
+      fxpix = ((float)(ix) -(crpixx - 1.0)) * cdeltx;
+      fypix = ((float)(iy) -(crpixy - 1.0)) * cdelty;
+      fpixdist = fxpix * fxpix + fypix * fypix; // must be square
+      if (fpixdist > sunarc) {nan_map[n] = 2;}  // turn on flag to-be-skipped for being out-of-disk
     }
     printf("data is read\n");
-/* now counting how many non-NaN */
-    int nonnan, numnan;
+/* counting how many on-disk non-NaN pixel */
+    int nonnan, numnan, nofdsk;
     nonnan = 0;
     numnan = 0;
+    nofdsk = 0;
     for (n = 0; n < imgpix; n++)
     {
       if (nan_map[n] == 0) nonnan = nonnan + 1;
       if (nan_map[n] == 1) numnan = numnan + 1;
+      if (nan_map[n] == 2) nofdsk = nofdsk + 1;
     }
-    printf(" Num of pixel total                          : %8d \n", imgpix);
-    printf(" Num of pixel to be processed                : %8d \n", nonnan);
+    printf(" Num of pixel total (4k x 4k or 16 x 2^10)   : %8d \n", imgpix);
+    printf(" Num of pixel out-of-disk                    : %8d \n", nofdsk);
     printf(" Num of pixel skipped due to all-zero or NaN : %8d \n", numnan);
+    printf(" Num of pixel to be processed                : %8d \n", nonnan);
 
 /* make equi-area (non-NaN) list */
     int irank;
@@ -388,37 +399,6 @@ int DoIt (void)
   MPI_Barrier(MPI_COMM_WORLD);
 
 /* at this moment, the PE(s) other than the primary do not know the value of imgpix etc.*/
-#if 0
-  if (mpi_rank == 0)
-  {
-    int mpi_trgt;
-    int ibufsend[4];
-    ibufsend[0]=imgpix;
-    ibufsend[1]=nvar;
-    ibufsend[2]=cols;
-    ibufsend[3]=rows;
-    if (mpi_size > 1)
-    {
-      for (mpi_trgt=1; mpi_trgt < mpi_size; mpi_trgt++)
-      {
-        mpitag = 1000 + mpi_trgt; // unique tag number
-        MPI_Send(ibufsend, 4, MPI_INT, mpi_trgt, mpitag, MPI_COMM_WORLD);
-      }
-    }
-  }
-  else
-  {
-    int mpi_from = 0;
-    int ibufrecv[4];
-    mpitag = 1000 + mpi_rank;  // must have counterpart one at MPI_Send's argument.
-    MPI_Recv(ibufrecv, 4, MPI_INT, mpi_from, mpitag, MPI_COMM_WORLD, &mpistat);
-    imgpix = ibufrecv[0];
-    nvar   = ibufrecv[1];
-    cols   = ibufrecv[2];
-    rows   = ibufrecv[3];
-  }
-  MPI_Barrier(MPI_COMM_WORLD);
-#else
   int ibuff[4];
   ibuff[0]=imgpix;
   ibuff[1]=nvar;
@@ -429,45 +409,11 @@ int DoIt (void)
   nvar   = ibuff[1];
   cols   = ibuff[2];
   rows   = ibuff[3];
-#endif
-
 /* sending the istart-iend list */
-#if 0
-  if (mpi_rank == 0)
-  {
-    int ibufsize;
-    int *ibufsend;
-    int mpi_trgt;
-    ibufsize = 2 * mpi_size;
-    ibufsend = (int *)malloc(sizeof(int) * ibufsize);
-    for (i=0; i<mpi_size;i++){ibufsend[i*2] = istartall[i];ibufsend[i*2+1]=iendall[i];}
-    if (mpi_size > 1)
-    {
-      for (mpi_trgt=1; mpi_trgt < mpi_size; mpi_trgt++)
-      {
-        mpitag = 1600 + mpi_trgt;
-        MPI_Send(ibufsend, ibufsize, MPI_INT, mpi_trgt, mpitag, MPI_COMM_WORLD);
-      }
-    }
-  }
-  else
-  {
-    int mpi_from = 0;
-    int ibufsize;
-    int *ibufrecv;
-    ibufsize = 2 * mpi_size;
-    ibufrecv = (int *)malloc(sizeof(int) * ibufsize);
-    mpitag = 1600 + mpi_rank;
-    MPI_Recv(ibufrecv, ibufsize, MPI_INT, mpi_from, mpitag, MPI_COMM_WORLD, &mpistat);
-    for (i=0; i<mpi_size;i++){istartall[i]=ibufrecv[i*2];iendall[i]=ibufrecv[i*2+1];}
-  }
-  MPI_Barrier(MPI_COMM_WORLD);
-#else
-/* broadcast by MPI_Bcast ... from primary to all */
   MPI_Bcast(istartall,mpi_size,MPI_INT,0,MPI_COMM_WORLD);
   MPI_Bcast(iendall,  mpi_size,MPI_INT,0,MPI_COMM_WORLD);
+
   MPI_Barrier(MPI_COMM_WORLD);
-#endif
 
 /* large array ONLY at the primary */
   if (mpi_rank == 0)
@@ -512,7 +458,7 @@ int DoIt (void)
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-/* now send partial input data to all PE */
+/* send partial input data to all PE */
   if (mpi_rank == 0)
   {
 /* first, the primary makes copy for its own part */
@@ -532,21 +478,21 @@ int DoIt (void)
       int irank;
       for(irank = 1; irank < mpi_size; irank++)
       {
-        int mpi_trgt;
+        int mpi_dest;
         int ibufsize;
         float *fbufsend;
-        mpi_trgt = irank;
+        mpi_dest = irank;
 #if EQUIAREA == 1
-        istart=istartall[mpi_trgt];
-        iend=iendall[mpi_trgt];
+        istart=istartall[mpi_dest];
+        iend=iendall[mpi_dest];
 #else
-        para_range(mpi_trgt,nprocs,numpix,&istart,&iend);
+        para_range(mpi_dest,nprocs,numpix,&istart,&iend);
 #endif
         ibufsize = (iend-istart+1) * nvar;
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
         for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){fbufsend[(n-istart)*nvar+m] = data[n + m*imgpix];}}
-        mpitag = 1400 + irank;
-        MPI_Send(fbufsend, ibufsize, MPI_REAL, mpi_trgt, mpitag, MPI_COMM_WORLD);
+        mpi_tag = 1400 + irank;
+        MPI_Send(fbufsend, ibufsize, MPI_REAL, mpi_dest, mpi_tag, MPI_COMM_WORLD);
         free(fbufsend);
       }
     }
@@ -564,15 +510,15 @@ int DoIt (void)
 #endif
     ibufsize = (iend-istart+1) * nvar;
     fbufrecv = (float*)malloc(sizeof(float) * ibufsize);
-    mpitag = 1400 + mpi_rank;
-    MPI_Recv(fbufrecv, ibufsize, MPI_REAL, mpi_from, mpitag, MPI_COMM_WORLD, &mpistat);
+    mpi_tag = 1400 + mpi_rank;
+    MPI_Recv(fbufrecv, ibufsize, MPI_REAL, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
     for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){dataLocal[(n-istart)*nvar+m] = fbufrecv[(n-istart)*nvar+m];}}
     free(fbufrecv);
   }
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) printf("input data had propagated to all PE.\n");
 
-/* now send partial non-NAN mask-map from primary PE to the others */
+/* send partial non-NAN mask-map from primary PE to the others */
   if (mpi_rank == 0)
   {
 /* first, the primary makes copy for its own part */
@@ -592,21 +538,21 @@ int DoIt (void)
       int irank;
       for(irank = 1; irank < mpi_size; irank++)
       {
-        int mpi_trgt;
+        int mpi_dest;
         int ibufsize;
         int *ibufsend;
-        mpi_trgt = irank;
+        mpi_dest = irank;
 #if EQUIAREA == 1
-        istart=istartall[mpi_trgt];
-        iend=iendall[mpi_trgt];
+        istart=istartall[mpi_dest];
+        iend=iendall[mpi_dest];
 #else
-        para_range(mpi_trgt,nprocs,numpix,&istart,&iend);
+        para_range(mpi_dest,nprocs,numpix,&istart,&iend);
 #endif
         ibufsize = (iend-istart+1) * 1;
         ibufsend= (int*)malloc(sizeof(int) * ibufsize);
         for (n = istart ; n < iend+1 ; n++){ibufsend[n-istart] = nan_map[n];}
-        mpitag = 1500 + irank;
-        MPI_Send(ibufsend, ibufsize, MPI_INTEGER, mpi_trgt, mpitag, MPI_COMM_WORLD);
+        mpi_tag = 1500 + irank;
+        MPI_Send(ibufsend, ibufsize, MPI_INTEGER, mpi_dest, mpi_tag, MPI_COMM_WORLD);
         free(ibufsend);
       }
     }
@@ -624,8 +570,8 @@ int DoIt (void)
 #endif
     ibufsize = (iend-istart+1) * 1;
     ibufrecv = (int*)malloc(sizeof(int) * ibufsize);
-    mpitag = 1500 + mpi_rank;
-    MPI_Recv(ibufrecv, ibufsize, MPI_INTEGER, mpi_from, mpitag, MPI_COMM_WORLD, &mpistat);
+    mpi_tag = 1500 + mpi_rank;
+    MPI_Recv(ibufrecv, ibufsize, MPI_INTEGER, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
     for (n = istart ; n < iend+1 ; n++){nan_mapLocal[n-istart] = ibufrecv[n-istart];}
     free(ibufrecv);
   }
@@ -700,7 +646,7 @@ int DoIt (void)
   if (verbose){printf("Hello, this is %2d th PE : inversion done for %9d pixels. \n", mpi_rank, pixdone);}
   MPI_Barrier(MPI_COMM_WORLD);
 
-/* now output data are gathered to primary from each PE in charge of pixels from istart to iend */
+/* output data are gathered to primary from each PE in charge of pixels from istart to iend */
   if (mpi_rank == 0)
   {
 /* first, copy the portion the primary itself did */
@@ -740,8 +686,8 @@ int DoIt (void)
         double *dbufrecv;
         dbufrecv = (double*)malloc(sizeof (double) * ibufsize);
         mpi_from = irecv;
-        mpitag = 1200 + irecv;
-        MPI_Recv(dbufrecv, ibufsize, MPI_DOUBLE, mpi_from, mpitag, MPI_COMM_WORLD, &mpistat);
+        mpi_tag = 1200 + irecv;
+        MPI_Recv(dbufrecv, ibufsize, MPI_DOUBLE, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
         for (n = istart ; n < iend+1 ; n++)
         {
           for (j=0; j<paramct; j++){FinalRes[(n*paramct)+j]=dbufrecv[(n-istart)*(paramct+Err_ct)        +j];}
@@ -755,7 +701,7 @@ int DoIt (void)
   else
   {
     int isend;
-    int mpi_trgt = 0;
+    int mpi_dest = 0;
     nprocs = mpi_size;
     numpix = imgpix;
     isend = mpi_rank;
@@ -774,13 +720,13 @@ int DoIt (void)
       for (j=0; j<paramct; j++){dbufsend[(n-istart)*(paramct+Err_ct)        +j]=FinalResLocal[(n-istart)*paramct+j];}
       for (k=0; k<Err_ct;  k++){dbufsend[(n-istart)*(paramct+Err_ct)+paramct+k]=FinalErrLocal[(n-istart)*Err_ct +k];}
     }
-    mpitag = 1200 + mpi_rank;
-    MPI_Send(dbufsend, ibufsize, MPI_DOUBLE, mpi_trgt, mpitag, MPI_COMM_WORLD);
+    mpi_tag = 1200 + mpi_rank;
+    MPI_Send(dbufsend, ibufsize, MPI_DOUBLE, mpi_dest, mpi_tag, MPI_COMM_WORLD);
     free(dbufsend);
   }
   MPI_Barrier(MPI_COMM_WORLD); // silly..but always safe
 
-/* PE 0 takes care of pixels none of PE took care of */
+/* PE 0 takes care of pixels none of PE had taken care of */
   if (mpi_rank == 0)
   {
     if (istartall[0] > 0)
@@ -815,21 +761,7 @@ int DoIt (void)
     if (!outRec) {fprintf (stderr, "Error creating record in series %s; abandoned\n",outser);return 1;}
 
 /* succeed a lot of info. from the input data series */
-    drms_copykey(outRec, inRec, "CENTER_X");
-    drms_copykey(outRec, inRec, "CENTER_Y");
-    drms_copykey(outRec, inRec, "SOLAR_B0");
-    drms_copykey(outRec, inRec, "SOLAR_P0");
-    drms_copykey(outRec, inRec, "R_SUN");
-    drms_copykey(outRec, inRec, "TELESCOP");
-    drms_copykey(outRec, inRec, "INSTRUME");
-    drms_copykey(outRec, inRec, "WAVELENG");
-#if TESTRUN == 1
-    drms_setkey_string(outRec, "T_REC", "2000.02.02_02:02:02_TAI"); // enforce T_REC dummy ones
-    drms_setkey_string(outRec, "T_OBS", "2000.02.02_02:02:02_TAI");
-#else
-    drms_copykey(outRec, inRec, "T_REC");
-    drms_copykey(outRec, inRec, "T_OBS");
-#endif
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_All);
 
     char trectmp2[26];
     TIME trectmp1 = drms_getkey_time(outRec,"T_REC",&status);
@@ -898,7 +830,8 @@ int DoIt (void)
     drms_close_record (outRec, DRMS_INSERT_RECORD);
     drms_close_records (records, DRMS_FREE_RECORD);
 
-    time (&endtime);
+/* how long it took */
+    time(&endtime);
     printf ("%ld sec for %d profiles\n", endtime - startime, imgpix);
     printf ("%.2f profiles per second\n", (float)(npix*mpi_size) / (0.01 + (float)(endtime - startime)));
 
