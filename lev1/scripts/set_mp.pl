@@ -17,12 +17,21 @@
 ##############################################################################
 # main function                                                              #    
 ##############################################################################
-# set environment variable
+# set up common environment variables
 $hm=$ENV{'HOME'};
-###$exec_dir="$hm/cvs/JSOC/proj/lev1/apps";
+
+# update version of script in cvs when change this script.
+# This get written to instruction file.
+$script_version="1.4"; #version in cvs
+
+# image location directory path and base filename
+$img_loc_directory="$hm/cvs/TBL_JSOC/lev1/image_location_file/prod/";
+$img_loc_filename="sdo_image_location";
+
+# directory where can find load_mp executable
 $exec_dir="$hm/cvs/JSOC/_linux_x86_64/proj/lev1/apps";
 
-#set place to retrieve default data from
+# set place to retrieve default data from
 $mp_sn=$ENV{'HK_SET_MP_MASTER_POINTING_SERIES'}="sdo.master_pointing";
 ###JIM'S VERSION::$mp_sn=$ENV{'HK_SET_MP_MASTER_POINTING_SERIES'}="su_carl.master_pointing";
 ##Test VERSION::$mp_sn=$ENV{'HK_SET_MP_MASTER_POINTING_SERIES'}="su_carl.test99_master_pointing";
@@ -379,25 +388,42 @@ sub set_values(@)
 #################################
 sub print_image_loc_file(%)
 {
-  my($ht_values);
-  %ht_values= %_;
+  my(%ht_values);
+  %ht_values=@_;##NOTE use @_ to pick up hash table values!!
+
+  # get HK_VALS date for filename
+  while(($key,$value) = each (%ht_values))
+  {
+    if( $key eq "T_HKVALS")
+    {
+      $hkval_date=get_hkval_datestamp($value);
+      last;
+    }
+  }
+  # create full path to filename
+  $sil_dn= $img_loc_directory; #global values set at top
+  $sil_fn= $img_loc_filename;  #global value set at top of script
+  $sil_suffix=".txt";
+  $image_loc_file = sprintf("%s%s_%s%s", $sil_dn, $sil_fn,$hkval_date,$sil_suffix);
 
   # print keyword and value to file
   #display and print results to image_location.txt file
   # open image location file 
-  $image_loc_file="./sdo_image_location.txt";
   open(OUTFILE, ">$image_loc_file") || die "(6)Can't Open $ifn file: $!\n";
-  printf( OUTFILE "# Filename : sdo_image_location.txt\n");
+  printf( OUTFILE "# Filename : $image_loc_file\n");
+  printf( OUTFILE "# Description : Image location file for load_mp executable to update master pointing drms series.\n");
   $d=`date`;
   $d=~s/\n//;
   printf( OUTFILE "# Date : %s\n", $d);
+  printf( OUTFILE "# Script Version : %s\n", $script_version);
 
   # print Times
-  while(($key,$value) = each (%kw_val_ht))
+  %ht_values=@_;#reset to beginning of hashlist
+  while(($key,$value) = each (%ht_values))
   {
     if( $key eq "T_START" || $key eq "T_STOP" || $key eq "T_HKVALS")
     {
-      printf( OUTFILE "%-3.3s %-20.20s %-25.25s %-7.7s\n","KWD",$key,$kw_val_ht{$key},"time");
+      printf( OUTFILE "%-3.3s %-20.20s %-25.25s %-7.7s\n","KWD",$key,$ht_values{$key},"time");
     }
   }
 
@@ -405,18 +431,20 @@ sub print_image_loc_file(%)
   printf( OUTFILE "%-3.3s %-20.20s %-25.25s %-7.7s\n","KWD","VERSION","0","int");
 
   # print hmi values
-  while(($key,$value) = each (%kw_val_ht))
+  %ht_values=@_;#reset to beginning of hashlist
+  while(($key,$value) = each (%ht_values))
   {
     if( substr($key,0,6) eq "H_CAM1")
     {
-      printf( OUTFILE "%-3.3s %-20.20s %-25.25s %-7.7s\n","KWD",$key,$kw_val_ht{$key},"float");
+      printf( OUTFILE "%-3.3s %-20.20s %-25.25s %-7.7s\n","KWD",$key,$ht_values{$key},"float");
     }
   }
-  while(($key,$value) = each (%kw_val_ht))
+  %ht_values=@_;#reset to beginning of hashlist
+  while(($key,$value) = each (%ht_values))
   {
     if( substr($key,0,6) eq "H_CAM2")
     {
-      printf( OUTFILE "%-3.3s %-20.20s %-25.25s %-7.7s\n","KWD",$key,$kw_val_ht{$key},"float");
+      printf( OUTFILE "%-3.3s %-20.20s %-25.25s %-7.7s\n","KWD",$key,$ht_values{$key},"float");
     }
   }
 
@@ -424,11 +452,12 @@ sub print_image_loc_file(%)
   @wavelist= ("A_094","A_131","A_171","A_193","A_211","A_304","A_335","A_1600","A_1700","A_4500");
   foreach $wave (@wavelist)
   {
-    while(($key,$value) = each (%kw_val_ht))
+    %ht_values=@_;#reset to beginning of hashlist
+    while(($key,$value) = each (%ht_values))
     {
       if(substr($key,0,5) eq $wave || substr($key,0,6) eq $wave)
       {
-        printf( OUTFILE "%-3.3s %-20.20s %-25.25s %-7.7s\n","KWD",$key,$kw_val_ht{$key},"float");
+        printf( OUTFILE "%-3.3s %-20.20s %-25.25s %-7.7s\n","KWD",$key,$ht_values{$key},"float");
       }
     }
   }
@@ -476,4 +505,14 @@ print "*  (4)Set the master seriesname to load data in SOURCE_LOAD_MP file. This
 print "*     Item (4) and (3) should have same series name.                                                       *\n";
 print "*  (5)May want to add entry field in future for master pointing series name                                *\n";
 print "************************************************************************************************************\n\n\n";
+}
+##########################################################################
+# subroutine get_todays_date() get HKVALS time                           #
+##########################################################################
+sub get_hkval_datestamp($)
+{
+  #parse yyyymmdd from T_HKVALS 2010-03-24T22:00:00Z
+  $passed_time=$_[0];
+  $passed_time =~ /(\d\d\d\d)\-(\d\d)\-(\d\d)T/;
+  return("$1$2$3");
 }
