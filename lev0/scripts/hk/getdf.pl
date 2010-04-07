@@ -86,7 +86,7 @@ if  ($src eq "hsb")
   close LF;
 
   #call ingest_dayfile.pl script 
-  $log=`/usr/bin/perl  $script_dir/ingest_dayfile.pl  apidlist=$script_dir/df_apid_list_day_file_hsb start=$startdate end=$enddate dsnlist=$script_dir/df_apid_ds_list_for_hsb src=hsb`;
+  $log=`/usr/bin/perl  $script_dir/ingest_dayfile.pl  apidlist=$script_dir/df_apid_list_day_file_hsb start=$startdate end=$enddate dsnlist=$script_dir/df_apid_ds_list_for_hsb src=hsb merged=0`;
 
   #reopen log
   open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
