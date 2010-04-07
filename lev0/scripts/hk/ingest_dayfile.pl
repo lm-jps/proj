@@ -30,13 +30,10 @@
 ##############################################################################
 # main program                                                               #
 ##############################################################################
+
   #set environment variables specific for this script
-  $ENV{'DF_INGEST_DAYFILE_DEBUG'}=0;
-
   #common setting for all environments
-  #$ENV{'SUMSERVER'}="d02.Stanford.EDU";
   $ENV{'SUMSERVER'}="j1.Stanford.edu";
-
   $hm=$ENV{'HOME'};
   $ENV{'MAILTO'}="";
   $exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
@@ -44,7 +41,7 @@
   $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
   # set debug flag 1 to turn on and 0 to turn off
-  $dflg=$ENV{'DF_INGEST_DAYFILE_DEBUG'};
+  $dflg=$ENV{'DF_INGEST_DAYFILE_DEBUG'}=0;
 
   #check for any arguments passed in command
   &check_arguments();
@@ -73,6 +70,7 @@
   }
   # open log file
   open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
+  print LF "-->Start ingest of dayfile at ";
   print LF `date`;
 
   # set path to dayfiles using source -these vary based on where dayfiles are placed
@@ -115,10 +113,12 @@
 
   #get lookup table of data series names that go with each APID
   &get_dsn_list();
+
   #ingest files in list as day files
   &ingest_day_files();
  
   #close logfile
+  print LF "-->Completed ingest of dayfile at ";
   print LF `date`;
   close LF;
 
@@ -193,6 +193,25 @@ sub check_arguments()
          print  "WARNING: Did not use src argument. Exiting script\n";
          exit;
       }
+      if ( substr($ARGV[3],0,7) eq "merged=") 
+      {
+        $merged=substr($ARGV[3],7,2);
+        if($merged != 1 && $merged != 0 &&  $merged != -1)
+        {
+          print "Warning merged value argument not correct:<$merged>. Should be 0, 1, or -1.Rerun.\n";
+          exit;
+        }
+        elsif($merged eq "")
+        {
+          print "Warning merged value argument not correct:<$merged>. Should be 0, 1 or -1.Rerun.\n";
+          exit;
+        }
+      }
+      else
+      {
+        print  "WARNING: Did not use merged argument. Exiting script\n";
+        exit;
+      }
     }
     else
     {
@@ -220,6 +239,27 @@ sub check_arguments()
          print  "WARNING: Did not use src argument. Exiting script\n";
          exit;
       }
+
+      if ( substr($ARGV[4],0,7) eq "merged=") 
+      {
+        $merged=substr($ARGV[4],7,2);
+        if($merged != 1 && $merged != 0 &&  $merged != -1)
+        {
+          print "Warning merged value argument not correct:<$merged>. Should be 0, 1, or -1. Rerun.\n";
+          exit;
+        }
+        elsif($merged eq "")
+        {
+          print "Warning merged value argument not correct:<$merged>. Should be 0, 1 or -1. Rerun.\n";
+          exit;
+        }
+      }
+      else
+      {
+        print  "WARNING: Did not use merged argument. Exiting script\n";
+        exit;
+      }
+
     }
     else
     {
@@ -241,19 +281,54 @@ sub check_arguments()
        }
        else
        {
-         print  "WARNING: Did not use src argument. Exiting script\n";
+         print  "WARNING: Did not use src argument. Exiting script. do: ingest_dayfile.pl -h\n";
          exit;
        }
+
+       if ( substr($ARGV[5],0,7) eq "merged=") 
+       {
+         $merged=substr($ARGV[5],7,2);
+         if($merged != 1 && $merged != 0 &&  $merged != -1)
+         {
+           print "Warning merged value argument not correct:<$merged>. Should be 0, 1, or -1.Rerun.\n";
+           exit;
+         }
+         elsif($merged eq "")
+         {
+           print "Warning merged value argument not correct:<$merged>. Should be 0, 1 or -1. Rerun\n";
+           exit;
+         }
+       }
+       else
+       {
+         print  "WARNING: Did not use merged argument. Exiting script. do: ingest_dayfile.pl -h\n";
+         exit;
+       }
+
+    }
+    elsif ( substr($ARGV[3],0,7) eq "merged=") 
+    {
+          $merged=substr($ARGV[3],7,2);
+          if($merged != 1 && $merged != 0 &&  $merged != -1)
+          {
+             print "Warning merged value argument not correct:<$merged>. Should be 0, 1, or -1. Rerun.\n";
+             exit;
+          }
+          elsif($merged eq "")
+          {
+             print "Warning merged value argument not correct:<$merged>. Should be 0, 1 or -1. Rerun.\n";
+             exit;
+          }
     }
     else
     {
-       print  "Warning argument 3 is not correct: $ARGV[3]\n";
+       print  "--Warning argument 3 is not correct: $ARGV[3]\n";
        print  "This is the data series name list. \n";
        print  "Existing. Enter correct value. \n";
        exit;
     }
   }
-  elsif ($#ARGV >= 4 && $view_flg eq "1")
+  elsif ($#ARGV >= 5 && $view_flg eq "1")
   {
     if ( substr($ARGV[4],0,8) eq "dsnlist=") 
     {
@@ -265,13 +340,33 @@ sub check_arguments()
        }
        else
        {
-         print  "WARNING: Did not use src argument. Exiting script\n";
+         print  "WARNING: Did not use src argument. Exiting script. do: ingest_dayfile.pl -h\n";
+         exit;
+       }
+       if ( substr($ARGV[6],0,7) eq "merged=") 
+       {
+         $merged=substr($ARGV[6],7,2);
+         print "merged is $merged\n";
+         if($merged != 1 && $merged != 0 &&  $merged != -1)
+         {
+           print "Warning merged value argument not correct:<$merged>. Should be 0, 1, or -1. Rerun.\n";
+           exit;
+         }
+         elsif($merged eq "")
+         {
+           print "Warning merged value argument not correct:<$merged>. Should be 0, 1 or -1. Rerun.\n";
+           exit;
+         }
+       }
+       else
+       {
+         print  "WARNING: Did not use merged argument. Exiting script. do: ingest_dayfile.pl -h\n";
          exit;
        }
     }
     else
     {
-       print  "Warning argument 3 is not correct: $ARGV[3]\n";
+       print  "-Warning argument 3 is not correct: $ARGV[3]\n";
        print  "This is the data series name list. \n";
        print  "Existing. Enter correct value. \n";
        exit;
@@ -291,29 +386,29 @@ sub show_help_info
   print "Help Listing\n";
   print "(1)Ways to Execute Perl Script: \n";
   print "(1a)Ingest Day Files using apidfile option will ingest all files based on apids contained in file:\n
-        ingest_dayfile.pl apidlist=<filename containing APID List to do> dsnlist=<file with ds lookup list> src=<source of data>\n";
-  print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_hsb dsnlist=./df_apid_ds_list_for_hsb src=hsb\n";
-  print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc dsnlist=./df_apid_ds_list_for_moc src=moc\n";
-  print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_egsefm dsnlist=./df_apid_ds_list_for_src src=egsefm\n";
-  print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_rtmon dsnlist=./df_apid_ds_list_for_rtmon src=rtmon\n\n";
+  ingest_dayfile.pl apidlist=<filename containing APID List to do> dsnlist=<file with ds lookup list> src=<source of data> merged=<merged value\n";
+  print "  Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_hsb dsnlist=./df_apid_ds_list_for_hsb src=hsb merged=0(note use decimal apid value!)\n";
+  print "  Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc dsnlist=./df_apid_ds_list_for_moc src=moc merged=0(note use decimal apid value!)\n";
+  print "  Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_egsefm dsnlist=./df_apid_ds_list_for_src src=egsefm merged=0(note use hex apid value!)\n";
+  print "  Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_rtmon dsnlist=./df_apid_ds_list_for_rtmon src=rtmon merged=0(note use hex apid value!)\n\n";
   print "(1b)Ingest Day Files using apid option will ingest all files for given apid value:\n
-        ingest_hsb_dayfile.pl apid=<apid-value in decimal format> dsnlist=<file with ds lookup list> src=<source of data>\n";
-  print "        Example: ingest_dayfile.pl apid=029  dsnlist=./df_apid_ds_list_for_moc src=moc (note use decimal apid value!)\n";
-  print "        Example: ingest_dayfile.pl apid=445  dsnlist=./df_apid_ds_list_for_hsb src=hsb (note use decimal apid value!)\n";
-  print "        Example: ingest_dayfile.pl apid=1d  dsnlist=./df_apid_ds_list_for_egsefm src=egsefm (note use hex apid value!)\n";
-  print "        Example: ingest_dayfile.pl apid=81  dsnlist=./df_apid_ds_list_for_rtmon src=rtmon (note use hex apid value!)\n\n";
+  ingest_hsb_dayfile.pl apid=<apid-value in decimal format> dsnlist=<file with ds lookup list> src=<source of data> merged=<merged value>\n";
+  print "  Example: ingest_dayfile.pl apid=029  dsnlist=./df_apid_ds_list_for_moc src=moc merged=0(note use decimal apid value!)\n";
+  print "  Example: ingest_dayfile.pl apid=445  dsnlist=./df_apid_ds_list_for_hsb src=hsb merged=0(note use decimal apid value!)\n";
+  print "  Example: ingest_dayfile.pl apid=1d  dsnlist=./df_apid_ds_list_for_egsefm src=egsefm merged=0(note use hex apid value!)\n";
+  print "  Example: ingest_dayfile.pl apid=81  dsnlist=./df_apid_ds_list_for_rtmon src=rtmon merged=0(note use hex apid value!)\n\n";
   print "(1c)Ingest Day Files using date range with apidfile option:\n
-        ingest_dayfile.pl apidlist=<file> start=<yyyymmdd> end=< yyyymmdd> dsnlist=<file with ds lookup list> src=<source of data>\n";
-  print "        Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc start=20080518 end=20080530 dsnlist=./df_apid_ds_list_for_moc src=moc\n\n";
+   ingest_dayfile.pl apidlist=<file> start=<yyyymmdd> end=< yyyymmdd> dsnlist=<file with ds lookup list> src=<source of data> merged=<merged value>\n";
+  print "   Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc start=20080518 end=20080530 dsnlist=./df_apid_ds_list_for_moc src=moc merged=0\n\n";
   print "(1d)Ingest Day Files using date range with apid option:\n
-        ingest_dayfile.pl apid=<apid in decimal>  start=<yyyymmdd> end=<yyyymmdd>  dsnlist=<file with ds lookup list> src=<source of data>\n";
-  print "        Example: ingest_dayfile.pl apid=445 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_hsb src=hsb\n\n";
-  print "        Example: ingest_dayfile.pl apid=81 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_rtmon src=rtmon\n\n";
+  ingest_dayfile.pl apid=<apid in decimal>  start=<yyyymmdd> end=<yyyymmdd>  dsnlist=<file with ds lookup list> src=<source of data> merged=<merged value>\n";
+  print "  Example: ingest_dayfile.pl apid=445 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_hsb src=hsb merged=0\n\n";
+  print "  Example: ingest_dayfile.pl apid=81 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_rtmon src=rtmon merged=0\n\n";
   print "(1e)Get Help Information:\n
-         ingest_hsb_dayfile.pl -h  or  ingest_hsb_dayfile.pl -help\n\n";
+   ingest_hsb_dayfile.pl -h  or  ingest_hsb_dayfile.pl -help\n\n";
   print "(1f)View what going to save in data series by adding -v as first argument. This should work for 1a,1b,1c,and 1d cases.:\n
-        ingest_dayfile.pl -v apidlist=<file> start=<yyyymmdd> end=< yyyymmdd> dsnlist=<file with ds lookup list> src=<source of data>\n";
-  print "        Example: ingest_dayfile.pl -v apidlist=./df_apid_list_day_file_hsb start=20070216 end=20070218 dsnlist=./df_apid_ds_list_for_hsb src=hsb\n\n";
+  ingest_dayfile.pl -v apidlist=<file> start=<yyyymmdd> end=< yyyymmdd> dsnlist=<file with ds lookup list> src=<source of data> merged=<merged value>\n";
+  print "  Example: ingest_dayfile.pl -v apidlist=./df_apid_list_day_file_hsb start=20070216 end=20070218 dsnlist=./df_apid_ds_list_for_hsb src=hsb merged=0\n\n";
   print "*Note:Currently using option (1a) in movedf.pl and getdf.pl scripts that are run as cron jobs on production.\n" ;
   print "(2) Requires setup of HK By APID JSD file and create series before running scripti\(i.e., hmi.lev0_0445_0022, or sdo.lev0_0129_0022,etc.\).\n";
   print "(3) Requires setup of environment variable for where the dayfile are located. The variable used is DF_DAYFILE_DIRECTORY\n";
@@ -330,7 +425,8 @@ sub show_help_info
   print "(5c)Create a file for different types of data to save files in correct series names.\n";
   print "(5d)For example, create df_apid_ds_list_hsb to save hsb dayfiles packets in series names that are for hmi.hk_dayfile and aia.hk_dayfile data series.View example files in cvs.\n";
   print "(5e)Other Examples files:df_apid_ds_list_rtmon, df_apid_ds_list_egsefm, df_apid_ds_list_moc, etc.\n";
-  print "(6)****Limitation****: a)Works only on hsb dayfile formats\(i.e., hsb_0445_2007_11_08_16_52_11_00.hkt, etc.\).\n";
+  print "(6) Set merged value to 0, 1, or -1. Where 0 is when dayfile is loaded, 1 is when dayfile has been decoded, and -1 is when failed to decode.\n";
+  print "(7)****Limitation****: a)Works only on hsb dayfile formats\(i.e., hsb_0445_2007_11_08_16_52_11_00.hkt, etc.\).\n";
   print "                       b)Works only on moc dayfile formats\(i.e., 0029_2007_150_02.hkt.\).\n";
   print "                       b)Works only on rtmon dayfile formats\(i.e., 20080925.0x0081,etc.\).\n";
   print "                       c)Enter arguments in specified order when running script.\n";
@@ -552,13 +648,14 @@ sub get_dsn_list()
       $fn= substr($ARGV[2],8);
     }
   }
+  if($dflg) {print "get_dsn_list:Using file to lookup series:$fn\n"};
   open(FILE_DSN_LIST, "$fn") || die "Can't Open-3: $fn file: $!\n";
   while (<FILE_DSN_LIST>)
   {
     push(@all_dsn_list, $_) ;
   }
   close FILE_DSN_LIST;
-if($dflg) {print "get_dsn_list:Using data series names for each APID: \n @all_dsn_list\n"};
+  if($dflg) {print "get_dsn_list:Using data series names for each APID:\n @all_dsn_list \n"};
 }
 #############################################################################
 # subroutine get_series_name(): get data series name by looking up apid     #
@@ -689,8 +786,16 @@ sub ingest_day_files()
     }
     if($dflg) {print LF "ingest_dayfiles:xmlfile arg: <$arg6>\n";}
 
+    #merged value setting for only source=moc
+    $arg7="";
+    if   ($source eq "moc" || $source eq "rtmon")
+    {
+      $arg7="MERGED=$merged";
+    }
+    
+
     # check command line to load dayfiles in DRMS day file data series
-    @args=("$command","$arg1 ","$arg2 ","$arg3 ","$arg4 " ,"$arg5", "$arg6");
+    @args=("$command","$arg1 ","$arg2 ","$arg3 ","$arg4 " ,"$arg5", "$arg6", "$arg7");
     print LF "-->Load dayfile command: <@args>\n";
 
 
@@ -706,7 +811,7 @@ sub ingest_day_files()
 
       # check if files loaded, if are add to file for deleting.
       # create command line
-      $ckcommand="show_keys";
+      $ckcommand="show_info";
       @checkargs=("$ckcommand","$arg1\[$time_skdate\]\[$aid\]\[$source\]","-p seg=file,xmlfile \| grep -v file");
       if($dflg) {print LF "ingest_dayfiles:check arguments are <@checkargs>\n";}
       # execute check for files loaded in drms
@@ -734,7 +839,7 @@ sub ingest_day_files()
            }
            elsif ( $source eq "moc")
            {
-             open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+             open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
            }
            else
            {
@@ -760,7 +865,7 @@ sub ingest_day_files()
            }
            elsif ( $source eq "moc")
            {
-             open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+             open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
 
            }
            else
