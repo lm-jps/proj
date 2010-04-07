@@ -788,7 +788,7 @@ sub ingest_day_files()
 
     #merged value setting for only source=moc
     $arg7="";
-    if   ($source eq "moc" || $source eq "rtmon")
+    if   ($source eq "moc" || $source eq "rtmon" | $source eq "hsb") ##update for hsb files!
     {
       $arg7="MERGED=$merged";
     }
