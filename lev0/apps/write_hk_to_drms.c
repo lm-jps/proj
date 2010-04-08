@@ -2054,7 +2054,7 @@ int get_query_range(int range_type, HK_Keyword_t *kw, char qr[HK_MAX_SIZE_RANGE_
   TIME *ptime=&pkt_time;
   TIME pkt_time1;
   TIME *ptime1=&pkt_time1;
-  int yr,mr,dr;
+  int yr,mr,dr,hr;
 
   /* get current packet time in current packet */
   gpt_status = get_pkt_time_from_timecodes(kw, ptime);
@@ -2083,10 +2083,11 @@ int get_query_range(int range_type, HK_Keyword_t *kw, char qr[HK_MAX_SIZE_RANGE_
 
     return (0);
   }
+  hr=get_hour_from_pkttime(*ptime1);
   dr=get_day_from_pkttime( *ptime1);
   mr=get_month_from_pkttime(*ptime1);
   yr=get_yr_from_pkttime(*ptime1);
-  sprintf(qr, "%04d.%02d.%02d_00:00:00.00_UTC",yr,mr,dr);
+  sprintf(qr, "%04d.%02d.%02d_%02d:00:00.00_UTC",yr,mr,dr,hr);
 
 #ifdef DEBUG_WRITE_HK_TO_DRMS
       printkerr("DEBUG:Message at %s, line %d: Query range "
