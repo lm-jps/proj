@@ -3,7 +3,7 @@
  *  vfisv.c                                        ~rick/hmi/vecb/src/v09
  * 3/25/10  this is Keiji's less memory usage version with my edits for keywords * and k=0.
  * 3/23/10 THIS IS a copy of REBECCA's /v13  except with vfisv_mpi
- * this is the mpi version  vfisv.c version 10. It should have the keywords correct AND 11 err files.
+ * this is the mpi version  vfisv.c version 10. It should have the keywords correct AND 12 err files.
  * This directory contains Rebeccas new/improved Invert code with the "scaling  factor"??
  *  C DRMS module version of Juan Borrero's driver program dmrs.f90
  *    version v2.0 modified to handle input file(s) from the DRMS containing
@@ -68,9 +68,11 @@
 /* To speed up, only some rectangle regions or a limited-width column be processed. Set 0 to disable */
 #define QUICKRUN 0
 
-/* Non-NAN pixel will be evenly assigned to each parallel PE. Recommend 1. */
+/* Only non-NAN or physically meaningful pixel will be evenly assigned to each PE. Recommend 1. */
 #define EQUIAREA 1
 
+/* 1 if the inversion array differ from those by April 5 */
+#define NEWARRAY 1
 
 /* Phil's macro */
 #define DIE(msg) {fflush(stdout);fprintf(stderr,"%s, status=%d\n",msg,status); return(status);}
@@ -98,8 +100,13 @@ extern void wave_init_ (double *, double *, int *);
 
 ModuleArgs_t module_args[] = {
 /*This is the input data in the form of 24 fits file segnments */
-  {ARG_STRING,  "in", "su_couvidat.hmiStokes[2007.10.14_23:50:00_TAI]", "input series"},
+#if 0
+  {ARG_STRING,  "in",  "su_couvidat.hmiStokes[2007.10.14_23:50:00_TAI]", "input series"},
   {ARG_STRING,  "out", "hao_rce.KD4096_Mar26", "output series"},
+#else
+  {ARG_STRING,  "in", "su_couvidat.HMISeriesLev1pa90[2010.03.27_06:00:00_TAI]", "input series"},  /*This is the input data in the form of 24 fits file segnments */
+  {ARG_STRING,  "out", "hao_rce.juanma5", "output series"},
+#endif
   {ARG_INT,  "npix", "0", "number of pixels per segment (default: all/segs)"},
   {ARG_INT,  "num_iter", "30", "number of iterations(default: 30)"},
   {ARG_INT,  "num_lambda", "49", "number of ??(default: 33)"},
@@ -119,12 +126,12 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG, "v",    "", "run verbose"},
   {ARG_FLAG, "d",    "", "turn damping off"},
 #if 0
-  {ARG_DOUBLE,  "Intensity_Threshold", "0.8", "Intensity threshold (default: 0.8)"},
+  {ARG_DOUBLE,  "Intensity_Threshold", "1e2", "Intensity threshold (default: 0.8)"},
   {ARG_DOUBLE,  "Noise_LEVEL", "5.0e3", "Intensity threshold (default: 3.0e-3)"},
   {ARG_DOUBLE,  "Continuum", "0.0", "Intensity threshold (default: 0)"},
 #else
-  {ARG_DOUBLE,  "Intensity_Threshold", "1e2", "Intensity threshold (default: 0.8)"},
-  {ARG_DOUBLE,  "Noise_LEVEL", "5.0e1", "Intensity threshold (default: 3.0e-3)"},
+  {ARG_DOUBLE,  "Intensity_Threshold", "5e2", "Intensity threshold (default: 0.8)"},
+  {ARG_DOUBLE,  "Noise_LEVEL", "0.8e1", "Intensity threshold (default: 3.0e-3)"},
   {ARG_INT,     "Continuum", "0", "Intensity threshold (default: 0)"},
 #endif
   {}
@@ -196,24 +203,37 @@ int DoIt (void)
 
 /* important variables for inversions */
 
-  int list_free_params[10]={1,1,1,1,1,1,1,1,1,1};
+  int list_free_params[10]={1,1,1,0,1,1,1,1,1,0};
 #if 0
-  double guess[10]= {15.0,90.0,45.0,0.05,40.0,50.0,0.0,0.4*1e6,0.6*1e6,1.0};
+  double guess[10]= {15.0,90.0,45.0,0.5,40.0,50.0,0.0,0.4*1e6,0.6*1e6,1.0};
 #else
-  double guess[10]= {15.0,90.0,45.0,0.05,40.0,50.0,0.0,0.4*6e3,0.6*6e3,1.0};
+  double guess[10]= {15.0,90.0,45.0,0.5,40.0,50.0,0.0,0.4*6e3,0.6*6e3,1.0};
 #endif
 
 /* inversion-related variables used by wrapper */
-  char *Resname[] = {"eta_0", "inclination", "azimuth", "damping", "dop_width", "field", "vlos_mag", "src_continuum",
-                     "src_grad", "alpha_mag","field_err","inclination_err","azimuth_err", "vlos_err", "alpha_err",
+#if NEWARRAY == 1
+  char *Resname[] = {"eta_0", "inclination", "azimuth", "damping", "dop_width", "field",
+                     "vlos_mag", "src_continuum", "src_grad", "alpha_mag","chisq",
+		     "field_err","inclination_err","azimuth_err", "vlos_err", "alpha_err",
+		     "field_inclination_err","field_az_err","inclin_azimuth_err", "field_alpha_err", 
+		     "inclination_alpha_err", "azimuth_alpha_err"};
+#else
+  char *Resname[] = {"eta_0", "inclination", "azimuth", "damping", "dop_width", "field",
+                     "vlos_mag", "src_continuum", "src_grad", "alpha_mag",
+		     "field_err","inclination_err","azimuth_err", "vlos_err", "alpha_err",
                      "field_inclination_err","field_az_err","inclin_azimuth_err", "field_alpha_err",
 		     "inclination_alpha_err", "azimuth_alpha_err"};
+#endif
   char segname[16];
   char *spname[] = {"I", "Q", "U", "V"};
   int spct = (sizeof (spname) / sizeof (char *));
   int wlct = 6;
   int paramct = 10;
+#if NEWARRAY == 1
+  int Err_ct=12;
+#else
   int Err_ct=11;
+#endif
 
 /* working array etc. used by wrapper */
   double *FinalRes,*FinalErr;
@@ -309,15 +329,21 @@ int DoIt (void)
     crpixy   = drms_getkey_float(inRec,"CRPIX2",&status);
     cdeltx   = drms_getkey_float(inRec,"CDELT1",&status);   // arcsec per pixel
     cdelty   = drms_getkey_float(inRec,"CDELT2",&status);
-    rsun_ref = drms_getkey_float(inRec,"RSUN_REF",&status); // solar radius in m
-    dsun_obs = drms_getkey_float(inRec,"DSUN_OBS",&status); // distance from Sun to SDO in m
-    sunarc = atan2(rsun_ref,dsun_obs)             // arc-tangent in radian
+    rsun_ref = drms_getkey_float(inRec,"RSUN_REF",&status); // solar radius in meter
+    dsun_obs = drms_getkey_float(inRec,"DSUN_OBS",&status); // distance from Sun to SDO in meter
+    sunarc = asin(rsun_ref/dsun_obs)              // arc-sin in radian
            / 3.14159265358979e0 * 180.0 * 3600.0; // radian to arc-second
     printf("solar radius is %f in arcsec \n",sunarc);
     float fdummy;
     fdummy = sunarc / (cdeltx + cdelty) * 2.0;
     printf("solar radius is %f in CCD pix.\n",fdummy);
-    if (isnan(sunarc)){sunarc = (cols + rows) * (cols + rows);}else{sunarc = sunarc * sunarc;} // make it squared
+    if ((isnan(sunarc)) ||((isnan(crpixx)) || isnan(crpixy))) // in case something had gone wrong
+    {
+      sunarc = (float)(cols+rows) * 0.5;
+      crpixx = (float)cols * 0.5 + 0.5;
+      crpixy = (float)rows * 0.5 + 0.5;
+    }
+    sunarc = sunarc*sunarc;  // make it square
 /* Map of invalid values (NaN or all-zero) , or off-disk */
     for (n = 0; n < imgpix; n++)
     {
@@ -400,7 +426,7 @@ int DoIt (void)
 
 /* at this moment, the PE(s) other than the primary do not know the value of imgpix etc.*/
   int ibuff[4];
-  ibuff[0]=imgpix;
+  ibuff[0]=imgpix;  // packing
   ibuff[1]=nvar;
   ibuff[2]=cols;
   ibuff[3]=rows;
@@ -409,7 +435,7 @@ int DoIt (void)
   nvar   = ibuff[1];
   cols   = ibuff[2];
   rows   = ibuff[3];
-/* sending the istart-iend list */
+/* sending the istart-iend list array */
   MPI_Bcast(istartall,mpi_size,MPI_INT,0,MPI_COMM_WORLD);
   MPI_Bcast(iendall,  mpi_size,MPI_INT,0,MPI_COMM_WORLD);
 
@@ -455,10 +481,9 @@ int DoIt (void)
   scat= (double *)malloc (sizeof (double) * nvar);
   err = (double *)calloc (Err_ct,sizeof (double));
 
-
   MPI_Barrier(MPI_COMM_WORLD);
 
-/* send partial input data to all PE */
+/* send partial input data to each PE */
   if (mpi_rank == 0)
   {
 /* first, the primary makes copy for its own part */
@@ -514,7 +539,8 @@ int DoIt (void)
     MPI_Recv(fbufrecv, ibufsize, MPI_REAL, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
     for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){dataLocal[(n-istart)*nvar+m] = fbufrecv[(n-istart)*nvar+m];}}
     free(fbufrecv);
-  }
+  } // end-if mpi_rank is 0, or not.
+
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) printf("input data had propagated to all PE.\n");
 
@@ -532,7 +558,7 @@ int DoIt (void)
     para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
     for (n = istart ; n < iend+1 ; n++){nan_mapLocal[n-istart] = nan_map[n];}
-/* then send the partials to each PEs */
+/* then send the partial to each PE */
     if (mpi_size > 1)
     {
       int irank;
@@ -559,6 +585,7 @@ int DoIt (void)
   }
   else
   {
+/* non-primary PEs wait until served */
     int mpi_from = 0;
     int ibufsize;
     int *ibufrecv;
@@ -574,7 +601,7 @@ int DoIt (void)
     MPI_Recv(ibufrecv, ibufsize, MPI_INTEGER, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
     for (n = istart ; n < iend+1 ; n++){nan_mapLocal[n-istart] = ibufrecv[n-istart];}
     free(ibufrecv);
-  }
+  } // end-if mpi_rank is 0, or not.
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) printf("mask  data had propagated to all PE.\n");
@@ -587,6 +614,11 @@ int DoIt (void)
   wave_init_ (&LAMBDA_MIN,&DELTA_LAMBDA,&NUM_LAMBDA);
   if (verbose){printf("done wave_init for mpi_rank %d\n", mpi_rank );}
   filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&CONTINUUM,&LYOTFWHM,&WNARROW,&WSPACING);
+  
+  /* JM Borrero & RC Elliot Apr 7, 2010 */
+  /* filt_init should be replaced for a routine, written by Sebastien
+     that will read from the DMRS the phases, contrasts, etcetera: ONLY READ */
+
   if (verbose){printf("done filt_init for mpi_rank %d\n",mpi_rank);}
   inv_init_(&NUM_ITERATIONS,&SVD_TOLERANCE,&CHI2_STOP,&POLARIZATION_THRESHOLD,&INTENSITY_THRESHOLD,&PERCENTAGE_JUMP);
   if (verbose){printf("done inv_init\n");}
@@ -594,14 +626,16 @@ int DoIt (void)
   if (verbose){printf("done list_free_params for mpi_rank %d\n", mpi_rank);}
   svd_init_();
   if (verbose){printf("done svd_init\n");}
-  if  (list_free_params[4] == 0.0) voigt_init_();
+/* By RCE & Borrero */
+/* Changed index of list_free_params to 3 (instead of 4) to refer to Damping*/
+  if  (list_free_params[3] == 0.0) voigt_init_();
   for (n=0; n< nvar; n++) scat[n]=0;
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) printf("\n----------- inversion initializations done ------------ \n");
 
 /* at last, do inversion in parallel */
-  if (mpi_rank == 0) printf("now doing inversion in parallel.\n");
+  if (mpi_rank == 0) printf("\n----------- finally, do inversion in parallel --------- \n");
 
   myrank = mpi_rank;
   nprocs = mpi_size;
@@ -620,11 +654,32 @@ int DoIt (void)
     {
 #if QUICKRUN == 1
 //     if ((n % rows > 2298) && (n % rows < 2400)) // intentionally off-center
-     if ((n % rows > 1997) && (n % rows < 2098)) // central 100-pixel width column
+     if ((n % rows > 1250) && (n % rows < 1650)) // central 100-pixel width column
      {
 #endif
+
       for(m = 0; m < nvar; m++){obs[m]=dataLocal[(n-istart)*nvar+m];}
+
+      /* JM Borrero & RC Eliiot Apr 7, 2010 */
+      /* Right before calling invert_ there should be a call to
+	 another of Sebastien's program to calculate the filter profiles
+	 for the particular pixel "n". The output filters should be in the
+	 form: double (Num_lambda_filter,num_lambda). Note that we want the
+	 filters evaluated at the following wavelenghts:
+	 FOR K=1,Num_Lambda DO WAVELENGTH[K] = Lambda_Min + K*Delta_Lambda/1000 [Units are Angstroms]
+	 Lambda_Min, Delta_Lambda, Num_lambda_filter & num_lambda are all defined above */
+      /* Note: I would avoid sending this program the full 512*512 matrixes (can slow down teh code)
+	 but rather the 4 neighboring points to perform the bilinear interpolation */
+
+
       invert_ (obs, scat, guess, res, err);                                  // do inversion
+
+      /* JM Borrero & RC Elliot Apr 7, 2010 */
+      /* invert_ should be called in a new way:
+	 invert_ (obs,scat,guess,filter,res,err)
+	 where filter should be a 2D double array with
+	 dimensions (Num_lambda_filter,num_lambda) eg (6,49) */
+
       for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]=res[j];} // copy results to the local-small array(s)
       for (k=0; k<Err_ct;  k++){FinalErrLocal[(n-istart)*Err_ct +k]=err[k];}
 #if QUICKRUN == 1
@@ -723,10 +778,10 @@ int DoIt (void)
     mpi_tag = 1200 + mpi_rank;
     MPI_Send(dbufsend, ibufsize, MPI_DOUBLE, mpi_dest, mpi_tag, MPI_COMM_WORLD);
     free(dbufsend);
-  }
+  } // end-if mpi_rank is 0, or not.
   MPI_Barrier(MPI_COMM_WORLD); // silly..but always safe
 
-/* PE 0 takes care of pixels none of PE had taken care of */
+/* the primary PE takes care of pixels none of PE had taken care of */
   if (mpi_rank == 0)
   {
     if (istartall[0] > 0)
@@ -745,7 +800,7 @@ int DoIt (void)
         for (k=0; k<Err_ct ; k++){FinalErr[(n*Err_ct) +k]=NAN;}
       }
     }
-  }
+  } // end-if mpi_rank is 0.
 
   MPI_Barrier(MPI_COMM_WORLD); // silly..but always safe
   free(FinalResLocal);         // liberate....
@@ -760,15 +815,36 @@ int DoIt (void)
     outRec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
     if (!outRec) {fprintf (stderr, "Error creating record in series %s; abandoned\n",outser);return 1;}
 
-/* succeed a lot of info. from the input data series */
+/* succeed a lot of info. from the input data record */
+#if 0
     drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_All);
+#else
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit); // Phil's solution !
+//    fprintf(stderr,"T_REC_step=%f\n",drms_getkey_double(outRec,"T_REC_step",0));
+#endif
+#if 0
+    drms_copykey(outRec, inRec, "CENTER_X"); // itemized
+    drms_copykey(outRec, inRec, "CENTER_Y");
+    drms_copykey(outRec, inRec, "SOLAR_B0");
+    drms_copykey(outRec, inRec, "SOLAR_P0");
+    drms_copykey(outRec, inRec, "R_SUN");
+    drms_copykey(outRec, inRec, "TELESCOP");
+    drms_copykey(outRec, inRec, "INSTRUME");
+    drms_copykey(outRec, inRec, "WAVELENG");
+    drms_copykey(outRec, inRec, "T_REC");
+    drms_copykey(outRec, inRec, "T_OBS");
+#endif
+#if 0
+    drms_setkey_string(outRec, "T_REC", "2000.02.02_02:02:02_TAI"); // enforce T_REC dummy ones
+    drms_setkey_string(outRec, "T_OBS", "2000.02.02_02:02:02_TAI"); //    also T_OBS
+#endif
 
     char trectmp2[26];
     TIME trectmp1 = drms_getkey_time(outRec,"T_REC",&status);
     sprint_time(trectmp2,trectmp1,"TAI",0);
     printf("created record %s[%s] \n",outser,trectmp2);
 
-/* output array wll be split to individual array for each j-th parameter */
+/* output array will be split to individual array for each j-th parameter */
     for (j = 0; j < paramct; j++)
     {
       float *dat1;
@@ -836,7 +912,7 @@ int DoIt (void)
     printf ("%.2f profiles per second\n", (float)(npix*mpi_size) / (0.01 + (float)(endtime - startime)));
 
     printf("good bye !\n");
-  } // end-if mpi_rank is 0 nor not.
+  } // end-if mpi_rank is 0.
 
   MPI_Barrier(MPI_COMM_WORLD);
 
