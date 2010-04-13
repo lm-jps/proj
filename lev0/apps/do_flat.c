@@ -4,6 +4,7 @@
 #define XXX_CORRUPT_HIMGCFGFILE -2
 #define XXX_CANT_FIND_HIMGCFID -3
 #define XXX_INVALID_HIMGCFID -4 
+#define XXX_INVALID_EXPTIME -5
 
 #define MAXHIMGCFGS 4096
 static int overscan_nrows[MAXHIMGCFGS];
@@ -64,12 +65,18 @@ int do_flat(LEV0LEV1 *info)
     float *flat = info->adataff;
     float *dark = info->adatadark;
     short *in = info->adata0;
-    int *out = info->adata1;
+    float *out = info->adata1;
     short tmp;
+    int itmp;
     float ftmp;
     double dtmp;
+    double exptime;
     double s, s2, s3, s4, ss;
     int npix, min, max, medn;
+
+    exptime = drms_getkey_double(rs0, "EXPTIME", &status);
+    if (status || !isfinite(exptime) || exptime <= 0.0)
+	return XXX_INVALID_EXPTIME;
 
     if (info->himgcfid < 0 || info->himgcfid >= MAXHIMGCFGS)
       return XXX_INVALID_HIMGCFID;
@@ -144,15 +151,16 @@ int do_flat(LEV0LEV1 *info)
 	for (j=0; j<c1; ++j) {
 	    tmp = in[idx++];
 	    if (DRMS_MISSING_SHORT == tmp)
-		out[IDX++] = DRMS_MISSING_INT;
+		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
+		ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
+		    itmp = roundf(ftmp);
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]-MINOUT];
+		    ++hist[itmp-MINOUT];
 		    ++npix;
 		} else
-		    out[IDX] = DRMS_MISSING_INT;
+		    out[IDX] = DRMS_MISSING_FLOAT;
 		++IDX;
 	    }
 	}
@@ -163,15 +171,16 @@ int do_flat(LEV0LEV1 *info)
 	for (j=c2; j<4096; ++j) {
 	    tmp = in[idx++];
 	    if (DRMS_MISSING_SHORT == tmp)
-		out[IDX++] = DRMS_MISSING_INT;
+		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
+		ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
+		    itmp = roundf(ftmp);
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]-MINOUT];
+		    ++hist[itmp-MINOUT];
 		    ++npix;
 		} else
-		    out[IDX] = DRMS_MISSING_INT;
+		    out[IDX] = DRMS_MISSING_FLOAT;
 		++IDX;
 	    }
 	}
@@ -182,15 +191,16 @@ int do_flat(LEV0LEV1 *info)
 	for (j=0; j<c1; ++j) {
 	    tmp = in[idx++];
 	    if (DRMS_MISSING_SHORT == tmp)
-		out[IDX++] = DRMS_MISSING_INT;
+		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
+		ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
+		    itmp = roundf(ftmp);
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]-MINOUT];
+		    ++hist[itmp-MINOUT];
 		    ++npix;
 		} else
-		    out[IDX] = DRMS_MISSING_INT;
+		    out[IDX] = DRMS_MISSING_FLOAT;
 		++IDX;
 	    }
 	}
@@ -201,15 +211,16 @@ int do_flat(LEV0LEV1 *info)
 	for (j=c2; j<4096; ++j) {
 	    tmp = in[idx++];
 	    if (DRMS_MISSING_SHORT == tmp)
-		out[IDX++] = DRMS_MISSING_INT;
+		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = roundf((tmp - dark[IDX]) / flat[IDX]);
+		ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
+		    itmp = roundf(ftmp);
 		    out[IDX] = ftmp;
-		    ++hist[out[IDX]-MINOUT];
+		    ++hist[itmp-MINOUT];
 		    ++npix;
 		} else
-		    out[IDX] = DRMS_MISSING_INT;
+		    out[IDX] = DRMS_MISSING_FLOAT;
 		++IDX;
 	    }
 	}
