@@ -31,9 +31,11 @@ $cvsver="1.0"; ##version needs to change as updates script##
 #USER SETTING to send jsd files to user directory 
 #turn off production by commenting out, turn on what is need below
 #su_carl setting for test creating instruction file.
-$ENV{'HK_CM3SD_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev1/hk_jsd_file/su_carl";
+#$ENV{'HK_CM3SD_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev1/hk_jsd_file/su_carl";
 #su_rock setting for test creating instruction file.
 #$ENV{'HK_CM3SD_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev1/hk_jsd_file/su_rock";
+#production setting for test creating instruction file.
+$ENV{'HK_CM3SD_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev1/hk_jsd_file/prod";
 
 #local variables for main program
 my($ins_filename,$templatefn,$seriesname,$author,$owner,$description,$interval,@kw,@all_m3sd_keywords);
