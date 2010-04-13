@@ -178,7 +178,6 @@ for (imask=0;imask<nmasks;imask++) {
       if (smask==0) { // All are there
         for (isample=0;isample<nsample;isample++) sum=sum+coeffs[isample]*images[isample][ix];
       }
-//    else if (smask != (nmasks-1)) { // Some, but not all, are missing.
       else { // Some are missing.
 // Could keep wgood and index instead
         cp=coeffs+nsample*smask;
@@ -296,9 +295,9 @@ int taverage(
                    // Set to actual file used if method > 0.
   int avmethod, // averaging method
   int order, // Interpolation order
-  double cadence, // Cadence to interpolate to
-  int hwidth, // In units of cadence. Total width is 2*hwidth+1
-  double par1 // In units of cadence.
+  double tspace, // Spacing of times to interpolate to
+  int hwidth, // In units of tspace. Total width is 2*hwidth+1
+  double par1 // In units of tspace.
 )
 {
   const unsigned char maskgood=0; // Value of good entries in masks
@@ -316,7 +315,8 @@ int taverage(
   char uplo[] = "U";
   int ione = 1;
   float *coeff;
-  int nmasks,smask,imask,imask1,ngood;
+  int nmasks,imask,imask1,ngood;
+  int smask;
   int *wgood;
   int *smasks;
   float *coeffs,*cp;
@@ -366,8 +366,9 @@ int taverage(
 
 int width,*ix1,*ixi,*ihelp,iwidth,iorder;
 double *tw,*tx1,*txi,*thelp,*weights,wsum;
-int imin,imin1,minuse,maxuse;
+int imin,imin1,minuse,maxuse,nmiss;
 double tmin;
+float psum;
 
 // Now find times to do averaging over and interpolate to.
   width=2*hwidth+1;
@@ -376,7 +377,7 @@ double tmin;
   wsum=0.0;
   for (i=0;i<width;i++) {
     dt=i-hwidth+0.0;
-    tw[i]=tint+cadence*dt;
+    tw[i]=tint+tspace*dt;
     switch (avmethod) {
     case tavg_boxcar:
       weights[i]=1.0;
@@ -517,7 +518,7 @@ printf("%d",iwidth);
 for (iorder=0;iorder<order;iorder++) printf(" %f",coeffs[iwidth*order*nmasks+iorder]);
 printf("\n");
 */
-  } // for isample
+  } // for iwidth
   t1=dsecnd()-t1;
 
   t2=dsecnd();
@@ -532,34 +533,48 @@ printf("\n");
       coeff0[isample]=coeff0[isample]+coeffs[iwidth*order*nmasks+iorder]*weights[iwidth];
     }
   }
-  //for (isample=0;isample<nsample;isample++) printf(" %f",coeff0[isample]); printf("\n");
 
 // Now do actual interpolation
 // Inner loop over time
   for (j=0;j<ny;j++) {
     for (i=0;i<nx;i++) {
       ix=i+nlead*j; // Index into array
-// First encode mask in single integer
-      smask=0;
+      nmiss=0;
       for (isample=nsample-1;isample>=0;isample--) {
-        if (masks[isample][ix]!=maskgood) smask=smask+1;
+        if (masks[isample][ix]!=maskgood) nmiss=nmiss+1;
       }
       sum=0.0f;
-      if (smask==0) { // All are there
+      if (nmiss==0) { // All are there
         for (isample=0;isample<nsample;isample++) sum=sum+coeff0[isample]*images[isample][ix];
       }
-/*
       else { // Some are missing.
-// Could keep wgood and index instead
-        cp=coeffs+nsample*smask;
-        for (isample=0;isample<nsample;isample++) {
-// This if statement is costly but needed to avoid accessing NaNs
-          if (masks[isample][ix]==maskgood) {
-            sum=sum+cp[isample]*images[isample][ix];
+// For the time being resort to brute force calculation.
+        for (iwidth=0;iwidth<width;iwidth++) {
+// First encode mask in single integer
+          smask=0;
+          for (iorder=order-1;iorder>=0;iorder--) { // Must go backwards because of mask definition.
+            isample=ix1[iwidth*order+iorder];
+            if (masks[isample][ix]!=maskgood) smask=2*smask+1; else smask=2*smask;
           }
-        }
-      } // if (smask)
-*/
+          cp=coeffs+order*smask+iwidth*order*nmasks;
+          psum=0.0f; // Partial sum
+          if (smask==0) { // All are there for this target time
+            for (iorder=0;iorder<order;iorder++) {
+              isample=ix1[iwidth*order+iorder];
+              psum=psum+cp[iorder]*images[isample][ix];
+            }
+          }
+          else { // Some are missing.
+            for (iorder=0;iorder<order;iorder++) {
+              isample=ix1[iwidth*order+iorder];
+              if (masks[isample][ix]==maskgood) {
+                psum=psum+cp[iorder]*images[isample][ix];
+              }
+            }
+          } // if (smask)
+          sum=sum+psum*weights[iwidth];
+        } // for iwidth
+      } // if (nmiss)
       image_out[ix]=sum;
     } // for i
   } // for j
