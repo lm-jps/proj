@@ -6,7 +6,7 @@
 #              (2)Run cm3sd_jsd_file.pl to make jsd file                     #
 #              (3)Create jsd series by  using create_series command          #
 # Execution:   (1)To run :                                                   #
-#              cm3sd_jsd_file.pl inf=<durectory to instruction file>         #
+#              cm3sd_jsd_file.pl inf=<directory to instruction file>         #
 #              (2)For help: cm3sd_jsd_file.pl  -h                            #
 # Example:     cm3sd_jsd_file.pl inf=./apid19_temp_instruct_file             #
 # Environment Variable: Set HK_CM3SD_JSD_DIRECTORY variable were want        #
@@ -26,12 +26,12 @@ $scriptname="cm3sd_jsd_file.pl";
 $cvsver="1.0"; ##version needs to change as updates script##
 
 #PRODUCTION SETTINGS to send jsd files to production directory
-$ENV{'HK_CM3SD_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev1/hk_jsd_file/prod";
+#$ENV{'HK_CM3SD_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev1/hk_jsd_file/prod";
 
 #USER SETTING to send jsd files to user directory 
 #turn off production by commenting out, turn on what is need below
 #su_carl setting for test creating instruction file.
-#$ENV{'HK_CM3SD_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev1/hk_jsd_file/su_carl";
+$ENV{'HK_CM3SD_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev1/hk_jsd_file/su_carl";
 #su_rock setting for test creating instruction file.
 #$ENV{'HK_CM3SD_JSD_DIRECTORY'}="$hm/cvs/TBL_JSOC/lev1/hk_jsd_file/su_rock";
 
@@ -282,38 +282,38 @@ sub read_instruction_file($)
       {
         push(@all_kwd_lines, $_) ;
       }
-      elsif ( substr($s_line[0],0,12) eq "templatename" || substr($s_line[0],0,12) eq "TemplateName")
+      elsif ( substr($s_line[0],0,12) eq "templatename" || substr($s_line[0],0,12) eq "TemplateName" || substr($s_line[0],0,12) eq "Templatename")
       {
         $tplname=$_ ;
       }
-      elsif ( substr($s_line[0],0,10) eq "seriesname" || substr($s_line[0],0,10) eq "SeriesName")
+      elsif ( substr($s_line[0],0,10) eq "seriesname" || substr($s_line[0],0,10) eq "SeriesName" || substr($s_line[0],0,10) eq "Seriesname")
       {
         $ser_name=$_ ;
-        $ser_name=~ s/([a-z]*:)//g; #remove up to : using regular expression
+        $ser_name=~ s/([a-zA-Z]*:)//g; #remove up to : using regular expression
         $ser_name =~ s/\n//g; #remove cr -regular exp
       }
       elsif ( substr($s_line[0],0,11) eq "description" || substr($s_line[0],0,11) eq "Description")
       {
         $desc=$_ ;
-        $desc=~ s/([a-z]*:)//g;   #remove up to : using regular expression
+        $desc=~ s/([a-zA-Z]*:)//g;   #remove up to : using regular expression
         $desc =~ s/\n//g; #remove cr -regular exp
       }
       elsif ( substr($s_line[0],0,6) eq "author" || substr($s_line[0],0,6) eq "Author")
       {
         $auth=$_ ;
-        $auth=~ s/([a-z]*:)//g;   #remove text up to : using regular expression
+        $auth=~ s/([a-zA-Z]*:)//g;   #remove text up to : using regular expression
         $auth =~ s/\n//g; #remove cr -regular exp
       }
       elsif ( substr($s_line[0],0,5) eq "owner" || substr($s_line[0],0,5) eq "Owner")
       {
         $own=$_ ;
-        $own=~ s/([a-z]*:)//g;    #remove up text to : using regular expression
+        $own=~ s/([a-zA-Z]*:)//g;    #remove up text to : using regular expression
         $own =~ s/\n//g; #remove cr -regular exp
       }
       elsif ( substr($s_line[0],0,8) eq "interval" || substr($s_line[0],0,8) eq "Interval")
       {
         $ivalue=$_ ;
-        $ivalue=~ s/([a-z]*:)//g; #remove text up to : using regular expression
+        $ivalue=~ s/([a-zA-Z]*:)//g; #remove text up to : using regular expression
         $ivalue =~ s/\n//g; #remove cr -regular exp
       }
       else
