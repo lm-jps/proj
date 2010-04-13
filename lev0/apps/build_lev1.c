@@ -51,6 +51,7 @@
 #define NUMTIMERS 8		//number of seperate timers avail
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define LOGTEST 0
+#define CAL_HCFTID 17		//image is cal mode 
 
 int compare_rptr(const void *a, const void *b);
 static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
@@ -746,7 +747,7 @@ TEMPSKIP:
       printk("*1 %u %u\n", recnum1, fsnx);
       free(Array0->data);
  
-if(prelimbfit) { 
+if(prelimbfit) { 	//this goes away when Richard releases limb_fit()
      //!!TBD add here a call for get_limb_fit() from Richard. The call
     // is TBD. It works on the lev1 image. It returns values for
     // float rsun_lf, float x0_lf, float y0_lf
@@ -779,15 +780,35 @@ if(prelimbfit) {
   drms_setkey_float(rs, "CROTA2", imageloc[i].instrot + ptdata.sat_rot);
   //END TEMP
 } 		//end prelimbfit code
-else {
+else {		//this is used when Richard has released limb_fit()
   x0_lf = DRMS_MISSING_DOUBLE;
   y0_lf = DRMS_MISSING_DOUBLE;
   rsun_lf = DRMS_MISSING_DOUBLE;
-
-  dstatus = limb_fit(rs, l0l1->adata1, &rsun_lf, &x0_lf, &y0_lf, 4096, 4096, 1);
-  if(dstatus) {
-    printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
-    noimage[i] = 1;
+  //Don't send calmode or darks to limb_fit()
+  //calmode: HCFTID=17
+  //dark: HSHIEXP=0 and HCAMID=0 or 1
+  int skiplimb = 0;
+  int hcftid = drms_getkey_int(rs, "HCFTID", &rstatus);
+  if(hcftid == CAL_HCFTID) {	//don't call limb_fit()
+    printk("Cal mode image fsn=%u\n", fsnx);
+    skiplimb = 1;
+  }
+  else {
+    int hshiexp = drms_getkey_int(rs, "HSHIEXP", &rstatus);
+    if(hshiexp == 0) {
+      int hcamid = drms_getkey_int(rs, "HCAMID", &rstatus);
+      if(hcamid == 0 || hcamid == 1) {
+        printk("Dark image fsn=%u\n", fsnx);
+        skiplimb = 1;
+      }
+    }
+  }
+  if(!skiplimb) {
+    dstatus = limb_fit(rs,l0l1->adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,1);
+    if(dstatus) {
+      printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
+      noimage[i] = 1;
+    }
   }
     drms_setkey_float(rs, "RSUN_LF", (float)rsun_lf);
     drms_setkey_float(rs, "X0_LF", (float)x0_lf);
