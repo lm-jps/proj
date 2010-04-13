@@ -113,7 +113,7 @@
 #define PKTSZ 1788		//size of VCDU pkt
 #define MAXFILES 16384		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
-#define IMAGE_NUM_COMMIT 17	//number of complete images until commit
+#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
 //#define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
 #define TESTAPPID 0x199		//appid of test pattern packet
 #define TESTVALUE 0xc0b		//first value in test pattern packet
@@ -190,6 +190,7 @@ int whk_status;
 int total_tlm_vcdu;
 int total_missing_vcdu;
 int errmsgcnt, fileimgcnt;
+int cntsleeps = 0;
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when ingest_lev0 is called for a restart
 int abortflg = 0;
@@ -197,6 +198,7 @@ int sigalrmflg = 0;             // set on signal so prog will know
 int ignoresigalrmflg = 0;       // set after a close_image()
 int firstfound = 0;		// set if see any file after startup
 int ALRMSEC = 60;               // must get 2 in a row for no image timeout
+int sleep_interval = 2;		// #of sec to sleep after do_ingest() calls
 char logname[128];
 char argvc[32], argindir[96], arglogfile[96], argoutdir[96];
 char timetag[32];
@@ -359,7 +361,7 @@ int send_mail(char *fmt, ...)
 
   va_start(args, fmt);
   vsprintf(string, fmt, args);
-  sprintf(cmd, "echo \"%s\" | Mail -s \"ingest_lev0 mail\" lev0_user", string);
+  sprintf(cmd, "echo \"%s\" | Mail -s \"ingest_lev0 mail\" jsoc_ops", string);
   system(cmd);
   va_end(args);
   return(0);
@@ -1507,6 +1509,7 @@ void do_ingest()
         printf("***Fatal error. Too many (%d) files in %s\n", MAXFILES, tlmdir);
         abortit(3);
       }
+      cntsleeps = 0;		//we saw a file
     }
   }
   closedir(dfd);
@@ -1877,7 +1880,12 @@ int DoIt(void)
       wflg = 0; //leave DoIt()
       continue;
     }
-    sleep(2);
+    sleep(sleep_interval);	//normally 2 sec
+    cntsleeps++;		//#of 2sec sleeps w/o any files in do_ingest()
+    if(cntsleeps > 150) {	// >300sec w/o any files
+      send_mail("No files seen for ingest_lev0 for %s for 300sec\n", pchan);
+      cntsleeps = 0;
+    }
   }
   /*************!!TBD noop this out for now
   td_destroyalarm(&talarm);
