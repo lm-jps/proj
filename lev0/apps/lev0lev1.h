@@ -17,7 +17,7 @@ typedef struct {
   DRMS_Record_t *rs1;	//drms lev1 record
   DRMS_Record_t *rsff;	//drms flat field record
   short *adata0;	//lev0 segment array data
-  int *adata1;		//lev1 segment array data
+  float *adata1;	//lev1 segment array data
   float *adataff;	//flat field array data
   float *adatadark;	//bias dark array data
   int *adatabad;	//bad pixel array data
