@@ -249,6 +249,12 @@ function CleanSeriesPick()
   $("AllowBigQueries").checked = 0;
   $("RecSetPlace").innerHTML = "";
   $("MakeLocalFileLinks").checked = 0;
+  $("UseShowInfo").checked = 0;
+  $("SIFi").value = "0";
+  $("SIFn").value = "0";
+  $("SIFkey").value = '';
+  $("SIFseg").value = '';
+  $("SIFK").value = "0";
   CleanKeysSelect();
   }
 
@@ -291,6 +297,18 @@ function CleanOnLoad()
   $("TipsOnOffButton").value = "Disable Help";
   $("TabsOnOffButton").value = "Disable Tabs";
   newwide();
+  if (Host == 'jsoc.stanford.edu')
+    {
+    // alert(Host + " does not have full access, please use jsoc2.stanford.edu");
+    $("JSOC2DIV").style.display="block";
+    $("SeriesSelectMessage").innerHTML = 'Enter a dataseries match pattern to search for seriesnames, ' +
+        ' or leave blank to select from all series.  A leading "NOT " means exclude names matching the subsequent pattern.';
+    $("SeriesFilter").value = "";
+    }
+  else
+    {
+    $("JSOC2DIV").style.display="none";
+    }
   }
 
 function CreateTips()
@@ -962,6 +980,11 @@ var RecordData;
 function GetKeyValues()
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  if ($("UseShowInfo").checked)
+    {
+    GetShowInfo();
+    return;
+    }
   var getparameters = new Hash( {"ds" : $("RecordSet").value, "op" : "rs_list" });
   $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
   if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
@@ -1179,6 +1202,61 @@ valuegrid.getCellTemplate().setStyle('border-left-width','1');
     });
   }
 
+function GetShowInfo()
+  {
+  // The UseShowInfo box is checked, so do a show_info request with the results in a new page
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
+  if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
+    {
+    $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<BR>Please fo back to steps 4 and 5."; 
+    return;
+    }
+
+  $("SIFds").value = $("RecordSet").value;
+  if ($("WantRecInfo").checked) $("SIFi").value = "1";
+  if (MaxRecs != 0) $("SIFn").value = MaxRecs;
+  if (nkeysselected) $("SIFkey").value = KeyList;
+  if (nsegsselected) $("SIFseg").value = SegList;
+  if (nlinksselected) $("SIFK").value = "1";
+
+  if (RecordCount == 0 && askedCount == 0)
+      GetRSCount();
+  // if (RecordCount < 0)
+    // {
+      // $("DisplayPlace").innerHTML = "RecordSet count underway (step 3), please wait for it to complete before retrying";
+      // return;
+    // }
+  if (RecordCount == 0)
+    {
+    $("DisplayPlace").innerHTML = "There are no records in the chosen RecordSet";
+    return;
+    }
+  if (RecordCount > 10000 && !$("AllowBigQueries").checked)
+    {
+    $("DisplayPlace").innerHTML = "Requested Recordset is too large for this function, " + RecordCount + 
+	" records.<BR>Please go back to step 3 and choose a smaller recordset.";
+    return;
+    }
+  $("FetchKeyValsButton").value = "Processing ...";
+  $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
+  $("FetchKeyValsButton").disabled = true;
+  $("AbortKeyValsButton").show();
+// XXXXXXXXXXXXXXXXXX ACK - this of course does not work, FORM wants args in its own structures.
+// if cant use priototype to specifty target, then need to make a hidden div to hold
+// the args.
+// YES, will do it that way.
+// urlencode the param list and concatenate to next line into showargs
+   $("ShowInfoForm").action = 'http://' + Host + '/cgi-bin/ajax/show_info';
+   $("ShowInfoForm").submit();
+
+  $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
+  $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
+  $("FetchKeyValsButton").disabled = false;
+  $("AbortKeyValsButton").hide();
+  $("DisplayPlace").innerHTML = "Key values will be returned in a new window.";
+  }
+
 function newwide(thisevent)
   {
   if (gridmade)
@@ -1305,6 +1383,14 @@ function Export_Recordset()
   <!-- <HR> -->
   <P>
 </DIV> <!-- end DIV header -->
+<DIV id="JSOC2DIV">
+<P>
+<B>
+jsoc.stanford.edu gives access to export series only, use jsoc2 for full access
+</B>
+<P>
+<HR>
+</DIV>
 <SPAN id="LookdataTabs"></SPAN>
 <DIV id="JsocLookdata" style="border: 1px solid #aaa;">
 <DIV id="TabSeriesSelectDiv" style="display:block">
@@ -1318,10 +1404,12 @@ function Export_Recordset()
     <TR> <TD><B>1. Find list of dataseries</B></TD><TD><B>2. Pick series to use</B></TD></TR>
     <TR>
     <TD>
+    <SPAN id="SeriesSelectMessage">
     Enter a dataseries match pattern to search for seriesnames, or leave blank to select from all series.
-    (A very bad idea now that we have about 34,000 seriesnames.)
+    (A very bad idea now that we have about 45,000 seriesnames.)
     A leading "NOT " means exclude names matching the subsequent pattern.
     The default filter excludes namespace "dsds."
+    </SPAN>
     <P>
     <input id="SeriesFilter" type="text" name="filter" value="NOT ^dsds\." onChange="GetSeries();" >
     <BR>
@@ -1393,6 +1481,7 @@ function Export_Recordset()
         <input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.  <BR>
         <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info <BR>
         <input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).  <BR>
+        <input type="checkbox" name="UseShowInfo" id="UseShowInfo"> Prepare value table in 'show_info' format in new window. (No *psuedo* keywords yet please) <BR>
         <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
         <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
         </TD>
@@ -1416,6 +1505,21 @@ function Export_Recordset()
     </TABLE>
   </DIV> <!-- id="MySeriesDiv" -->
 </DIV> <!-- /DIV TabRecSetDiv -->
+<DIV id='ShowInfoFormDiv' style="display:none">
+<form id='ShowInfoForm' name='ShowInfoForm'
+  action=''
+  target="_blank"
+  method='get'>
+  <input type='hidden' id='SIFds' name='ds'  value='' >
+  <input type='hidden' id='SIFkey' name='key'  value='' >
+  <input type='hidden' id='SIFseg' name='seg'  value='' >
+  <input type='hidden' id='SIFt' name='t'  value='1' >
+  <input type='hidden' id='SIFi' name='i'  value='0' >
+  <input type='hidden' id='SIFK' name='K'  value='0' >
+  <input type='hidden' id='SIFn' name='n'  value='0' >
+</form>
+</DIV>
+
 <DIV id="TabSeriesStructDiv" style="display:block">
   <DIV id="SeriesInfoDiv"  style="background-color:#FFFFFF;border:solid;border-width:thin;overflow:scroll;height:75%">
   <H3>List of All Keywords, Links, and Segments</H3>
