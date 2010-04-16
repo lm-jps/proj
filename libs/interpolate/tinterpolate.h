@@ -35,8 +35,8 @@ int taverage(
                    // Set to actual file used if method > 0.
   int avmethod, // averaging method
   int order, // Interpolation order
-  double cadence, // Cadence to interpolate to
-  int hwidth, // In units of cadence. Total width is 2*hwidth+1
-  double par1 // In units of cadence.
+  double tspace, // Spacing of times to interpolate to
+  int hwidth, // In units of tspace. Total width is 2*hwidth+1
+  double par1 // In units of tspace.
 );
 
