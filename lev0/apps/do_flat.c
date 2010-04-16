@@ -233,15 +233,15 @@ int do_flat(LEV0LEV1 *info)
     // fill in blanks around the borders
     //
     if (nr) {
-	for (i=0; i<4096*nr; ++i) out[i] = DRMS_MISSING_INT;
-	for (i=4096*(4096-nr); i<MAXPIXELS; ++i) out[i] = DRMS_MISSING_INT;
+	for (i=0; i<4096*nr; ++i) out[i] = DRMS_MISSING_FLOAT;
+	for (i=4096*(4096-nr); i<MAXPIXELS; ++i) out[i] = DRMS_MISSING_FLOAT;
     }
     if (nc) {
 	for (i=0; i<4096; ++i) {
 	    for (j=0; j<nc; ++j)
-		out[i*4096+j] = DRMS_MISSING_INT;
+		out[i*4096+j] = DRMS_MISSING_FLOAT;
 	    for (j=4096-nc; j<4096; ++j)
-		out[i*4096+j] = DRMS_MISSING_INT;
+		out[i*4096+j] = DRMS_MISSING_FLOAT;
 	}
     }
 
@@ -249,7 +249,6 @@ int do_flat(LEV0LEV1 *info)
     // do statistics
     //
     info->datamin = info->datamax = info->datamedn = DRMS_MISSING_INT;
-    //info->datavals = info->missvals = DRMS_MISSING_INT;
     info->datamean = info->data_rms = info->dataskew 
 	= info->datakurt = DRMS_MISSING_DOUBLE;
 
