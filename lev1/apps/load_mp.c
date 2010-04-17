@@ -125,7 +125,7 @@
 #define HKLMP_NO_IMAGE_LOC_FILE        100
 /*#define ENVFILE  "/home/production/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_M3SD" */
 /*#define ENVFILE    "/home3/carl/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_M3SD"*/
-#define ENVFILE    "/home3/carl/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_MP"
+#define ENVFILE    "/home/production/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_MP"
 
 /******************** includes ******************************************/
 #include <stdio.h>
