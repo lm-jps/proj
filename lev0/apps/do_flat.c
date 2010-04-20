@@ -107,13 +107,19 @@ int do_flat(LEV0LEV1 *info)
     s = s2 = 0.0;
 
     if (nr) {
-	idx = 4096*r1;
-	for (i=0; i<4096*nr; ++i) {
-	    dtmp = in[idx++];
-	    s += dtmp;
-	    s2 += dtmp*dtmp;
+	for (i=r1; i<r2; ++i) {
+	    for (j=0; j<c1; ++j) {
+		dtmp = in[4096*i+j];
+		s += dtmp;
+		s2 += dtmp*dtmp;
+	    }
+	    for (j=c2; j<4096; ++j) {
+		dtmp = in[4096*i+j];
+		s += dtmp;
+		s2 += dtmp*dtmp;
+	    }
 	}
-	npix += 4096*nr;
+	npix += (4096-nc)*nr;
     }
 
     if (nc) {
