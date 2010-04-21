@@ -1,5 +1,3 @@
-#ifndef __LIMBFIT_H
-#define __LIMBFIT_H
 struct mempointer
 {
   double *xrp;
@@ -10,7 +8,6 @@ struct mempointer
 
   double *avgphi;
 
-  float *im;
   double *imhp;
   double *imhp_full;
   double *imro;
@@ -26,10 +23,10 @@ struct mempointer
 
 const int cent_err=20;
 
-  const double high=1.02;
-  const double low=0.98;
+  const double high=1.03;
+  const double low=0.97;
 
-  const double limit_var=20.0;
+  const double limit_var=50.0;
   const double limit_cc=20.0;
 
   const int lim=8;
@@ -43,7 +40,7 @@ const float gapfill_regular=0.0025;
 const int gapfill_order2=gapfill_order/2;
 
 const int min_imcnf=80;
-const int max_imcnf=200;
+const int max_imcnf=1024;
 
 char *X0_MP_key="X0_MP";
 char *Y0_MP_key="Y0_MP";
@@ -58,6 +55,4 @@ int light_val2=3;
 
 const double percent_good=0.75;
 
-int limb_fit(DRMS_Record_t *record, int *image_in, double *rsun_lf, double *x0_lf, double *y0_lf, int nx, int ny, int method);
-
-#endif
+int limb_fit(DRMS_Record_t *record, float *image_in, double *rsun_lf, double *x0_lf, double *y0_lf, int nx, int ny, int method);
