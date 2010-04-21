@@ -117,7 +117,8 @@ LIBASTRO_Error_t IOstatus;
 unsigned int fsnarray[NUMRECLEV1];
 unsigned int fsnx = 0;
 //short data1[MAXPIXELS];
-int data1[MAXPIXELS];
+//int data1[MAXPIXELS];
+float data1[MAXPIXELS];
 double tgttimes[NUMRECLEV1];
 
 long long brec, erec;           //begin and end lev0 rec# to do
@@ -366,6 +367,7 @@ int sc_pointing()
 
 int do_ingest(long long bbrec, long long eerec)
 {
+  //FILE *fwt;
   Image_Location *p_imageloc;
   Image_Location imageloc[NUMRECLEV1];
   TIME t_obs0;
@@ -373,9 +375,11 @@ int do_ingest(long long bbrec, long long eerec)
   float percentd;
   double rsun_lf, x0_lf, y0_lf;
   int rstatus, dstatus, ncnt, fcnt, i, j, qualint, nobs;
+  int hshiexp, hcamid, skipflat;
   uint32_t missvals, totvals;
   long long recnum0, recnum1, recnumff;
   char recrange[128], lev0name[128], flatrec[128];
+  //char tmpname[80];
 
   sprintf(recrange, ":#%lld-#%lld", bbrec, eerec);
   sprintf(open_dsname, "%s[%s]", dsin, recrange);
@@ -500,7 +504,7 @@ int do_ingest(long long bbrec, long long eerec)
         //continue;
       }
       l0l1->adata0 = (short *)Array0->data; //free at end
-      l0l1->adata1 = (int *)&data1;
+      l0l1->adata1 = &data1;
       l0l1->rs0 = rs0;
       l0l1->recnum0 = recnum0;
       l0l1->fsn = fsnx;
@@ -536,7 +540,14 @@ int do_ingest(long long bbrec, long long eerec)
         printk("No drms_segment_lookup(rs, image_lev1) for %s\n", open_dsname);
         return(1);
       }
+      /***********************************************************
       segArray = drms_array_create(DRMS_TYPE_INT,
+                                       segment->info->naxis,
+                                       segment->axis,
+                                       &data1,
+                                       &dstatus);
+      ***********************************************************/
+      segArray = drms_array_create(DRMS_TYPE_FLOAT,
                                        segment->info->naxis,
                                        segment->axis,
                                        &data1,
@@ -697,7 +708,15 @@ int do_ingest(long long bbrec, long long eerec)
       l0l1->rs1 = rs;
       l0l1->rsff = rsff;
       l0l1->recnum1 = rs->recnum;  
-
+      hshiexp = drms_getkey_int(rs, "HSHIEXP", &rstatus);
+      hcamid = drms_getkey_int(rs, "HCAMID", &rstatus);
+      skipflat = 0;
+      if(hshiexp == 0) {
+        if(hcamid == 0 || hcamid == 1) {
+          skipflat = 1;
+        }
+      }
+    if(!skipflat) {
       if(rstatus = do_flat(l0l1)) {
         printk("***ERROR in do_flat() status=%d\n", rstatus);
         printf("***ERROR in do_flat() status=%d\n", rstatus);
@@ -705,6 +724,11 @@ int do_ingest(long long bbrec, long long eerec)
         //return(1);		//!!TBD what to do?
       }
       else {
+        //sprintf(tmpname, "/tmp/data_lev1.%u", fsnx);
+        //fwt = fopen(tmpname, "w");
+        //int wsize = 4096 * 4096;
+        //fwrite(l0l1->adata1, sizeof(float), wsize, fwt);
+        //fclose(fwt);
         drms_setkey_float(rs, "OSCNMEAN", l0l1->oscnmean);
         drms_setkey_float(rs, "OSCNRMS", l0l1->oscnrms);
         drms_setkey_int(rs, "DATAMIN", l0l1->datamin);
@@ -731,6 +755,7 @@ int do_ingest(long long bbrec, long long eerec)
         if(l0l1->datavals == 0) 
            missflg[i] = missflg[i] | Q_MISSALL; //high bit, no data
       }
+    }
       drms_close_records(rsetff, DRMS_FREE_RECORD);
       free(ArrayDark->data);
       free(Arrayff->data);
@@ -738,6 +763,9 @@ int do_ingest(long long bbrec, long long eerec)
 
 TEMPSKIP:
 
+      segArray->type = DRMS_TYPE_FLOAT;
+      segArray->bscale = 1.0; 
+      segArray->bzero = 0.0; 
       dstatus = drms_segment_write(segment, segArray, 0);
       if (dstatus) {
         printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
@@ -794,9 +822,7 @@ else {		//this is used when Richard has released limb_fit()
     skiplimb = 1;
   }
   else {
-    int hshiexp = drms_getkey_int(rs, "HSHIEXP", &rstatus);
     if(hshiexp == 0) {
-      int hcamid = drms_getkey_int(rs, "HCAMID", &rstatus);
       if(hcamid == 0 || hcamid == 1) {
         printk("Dark image fsn=%u\n", fsnx);
         skiplimb = 1;
@@ -828,8 +854,11 @@ else {		//this is used when Richard has released limb_fit()
       drms_setkey_float(rs, "CRPIX2", (float)y0_lf + 1);
     }
     else {
-      drms_setkey_float(rs, "CRPIX1", imageloc[i].x + (ptdata.sat_y0/imageloc[i].imscale) + 1);
-      drms_setkey_float(rs, "CRPIX2", imageloc[i].y + (ptdata.sat_z0/imageloc[i].imscale) + 1);
+      //drms_setkey_float(rs, "CRPIX1", imageloc[i].x + (ptdata.sat_y0/imageloc[i].imscale) + 1);
+      //drms_setkey_float(rs, "CRPIX2", imageloc[i].y + (ptdata.sat_z0/imageloc[i].imscale) + 1);
+      //!!TEMP fix for sci mode only. need update for inertial mode
+      drms_setkey_float(rs, "CRPIX1", imageloc[i].x + 1);
+      drms_setkey_float(rs, "CRPIX2", imageloc[i].y + 1);
     }
     drms_setkey_float(rs, "CROTA2", imageloc[i].instrot + ptdata.sat_rot);
 }
