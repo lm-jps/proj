@@ -1,5 +1,4 @@
-
-int limb_fit(DRMS_Record_t *record, int *image_in, double *rsun_lf, double *x0_lf, double *y0_lf, int nx, int ny, int method)
+int limb_fit(DRMS_Record_t *record, float *image_in, double *rsun_lf, double *x0_lf, double *y0_lf, int nx, int ny, int method)
 {
 
 void cross_corr(int nx, int ny, double *a, double *b);
@@ -49,7 +48,7 @@ void free_mem(struct mempointer *memory);
       {
 	config_id=new_config_id;
 
-	//printf("new image config\n");
+	printf("new image config\n");
 	maskfile=fopen("/home/jsoc/hmi/tables/cropmask.105", "rb"); //use the same crop table for now
     if (maskfile==NULL){fputs("mask file not found", stderr); status_res=2; return status;}
     bytes_read=fread(mask,sizeof(unsigned char),nx*ny,maskfile);
@@ -116,6 +115,7 @@ void free_mem(struct mempointer *memory);
   if (status1 == 0 && status2 == 0 && !isnan(image_scl) && image_scl > 0.0 && !isnan(rsun_obs) && rsun_obs > 0.0){rad=(double)rsun_obs/image_scl;} else {status_res=2; return status_res;}
   *rsun_lf=(double)(rad);
 
+ 
 
   if (nx != ny){printf("Limb finder does not work for non-square images\n"); status_res=2; return status_res;}
 
@@ -146,7 +146,7 @@ void free_mem(struct mempointer *memory);
 
   double *avgphi=(double *)(calloc(nr, sizeof(double)));
 
-  float *im=(float *)(malloc(nx*nx*sizeof(float)));
+ 
   double *imhp=(double *)(calloc(nxx*nyy, sizeof(double)));
   double *imhp_full=(double *)(calloc(nx*nx, sizeof(double)));
   double *imro=(double *)(calloc(nxx*nyy, sizeof(double)));
@@ -163,7 +163,6 @@ void free_mem(struct mempointer *memory);
   memory.rc=rc;
   memory.phic=phic;
   memory.avgphi=avgphi;
-  memory.im=im;
   memory.imhp=imhp;
   memory.imhp_full=imhp_full;
   memory.imro=imro;
@@ -188,11 +187,11 @@ void free_mem(struct mempointer *memory);
   for (j=0; j<nx; ++j) 
       for (i=0; i<nx; ++i)
 	{
-	  if (image_in[j*nx+i] == nanval){mask_p[j*nx+i]=2; im[j*nx+i]=NAN;} else {mask_p[j*nx+i]=0; im[j*nx+i]=(float)image_in[j*nx+i];}
+	  if (isnan(image_in[j*nx+i])){mask_p[j*nx+i]=2;} else {mask_p[j*nx+i]=0;}
 	  dx=sqrt(pow((double)i-cx,2)+pow((double)j-cy,2));
 	  if (dx > (rad-(marg_lo+2)) && dx < (rad+(marg_up+2)) && mask[j*nx+i] == 1)
 	    {
-	      if (image_in[j*nx+i] == nanval){mask_p[j*nx+i]=1; ++rcount;}
+	      if (isnan(image_in[j*nx+i])){mask_p[j*nx+i]=1; ++rcount;}
 	    }
 	}
 
@@ -204,7 +203,7 @@ void free_mem(struct mempointer *memory);
       if (rcount > 0)
    	{
 	  printf("gapfilling: pixels to fill: %d\n", rcount);	;
-	  if (status_gap == 0){fgap_fill(&fills,im,nx,nx,nx,mask_p,cnorm,ierror);} else {status_res=2; free_mem(&memory); return status_res;}
+	  if (status_gap == 0){fgap_fill(&fills,image_in,nx,nx,nx,mask_p,cnorm,ierror);} else {status_res=2; free_mem(&memory); return status_res;}
 	  printf("----------\n");
 	}
 
@@ -212,8 +211,8 @@ void free_mem(struct mempointer *memory);
 
 
 
-      fresize(&fresizes,im, image, nx,nx,nx,nxx,nyy,nxx,0,0,NAN);   //rebin image
-      fresize(&fresizes_full,im, image_full, nx,nx,nx,nx,nx,nx,0,0,NAN);
+      fresize(&fresizes,image_in, image, nx,nx,nx,nxx,nyy,nxx,0,0,NAN);   //rebin image
+      fresize(&fresizes_full,image_in, image_full, nx,nx,nx,nx,nx,nx,0,0,NAN);
      
   
      
@@ -247,7 +246,7 @@ void free_mem(struct mempointer *memory);
 	 double fmax=0.0, favg=0.0, denom;
 	 double xfra, yfra;
 
-	
+
 	
  
 
@@ -255,7 +254,7 @@ void free_mem(struct mempointer *memory);
 
 
 
-#pragma omp parallel for reduction(+:favg) private(i,j) // !!check
+
       for (j=0; j<nyy; ++j)
 	for (i=0; i<nxx; ++i)
 	  {
@@ -394,6 +393,8 @@ void free_mem(struct mempointer *memory);
 	    }
 	
 	}
+
+	 //
          
       // fit each distance seperately
       if (method == 0)
@@ -421,13 +422,11 @@ void free_mem(struct mempointer *memory);
 	  long double det=akl[0][0]*(akl[1][1]*akl[2][2]-akl[2][1]*akl[1][2]) - akl[1][0]*(akl[2][2]*akl[0][1]-akl[2][1]*akl[0][2]) + akl[2][0]*(akl[1][2]*akl[0][1]-akl[1][1]*akl[0][2]);
 	  long double invmat[3][3];
 	  invmat[0][0]=(akl[2][2]*akl[1][1]-akl[2][1]*akl[1][2])/det;
-	      invmat[1][0]=-(akl[2][2]*akl[0][1]-akl[2][1]*akl[0][2])/det; invmat[0][1]=invmat[1][0];
-	      invmat[2][0]=(akl[1][2]*akl[0][1]-akl[1][1]*akl[0][2])/det;  invmat[0][2]=invmat[2][0];
-	      invmat[1][1]=(akl[2][2]*akl[0][0]-akl[2][0]*akl[0][2])/det;
-	      invmat[2][1]=-(akl[1][2]*akl[0][0]-akl[1][0]*akl[0][2])/det; invmat[1][2]=invmat[2][1];
-	      invmat[2][2]=(akl[1][1]*akl[0][0]-akl[1][0]*akl[0][1])/det;
-
-
+	  invmat[1][0]=-(akl[2][2]*akl[0][1]-akl[2][1]*akl[0][2])/det; invmat[0][1]=invmat[1][0];
+	  invmat[2][0]=(akl[1][2]*akl[0][1]-akl[1][1]*akl[0][2])/det;  invmat[0][2]=invmat[2][0];
+	  invmat[1][1]=(akl[2][2]*akl[0][0]-akl[2][0]*akl[0][2])/det;
+	  invmat[2][1]=-(akl[1][2]*akl[0][0]-akl[1][0]*akl[0][2])/det; invmat[1][2]=invmat[2][1];
+	  invmat[2][2]=(akl[1][1]*akl[0][0]-akl[1][0]*akl[0][1])/det;
     
 
 	      for (k=0; k<=2; ++k) cof[k]=0.0;
@@ -462,7 +461,6 @@ void free_mem(struct mempointer *memory);
 
 void free_mem(struct mempointer *memory)
 {
-  free(memory->im);
   free(memory->imhp);
   free(memory->imhp_full);
   free(memory->imro);
