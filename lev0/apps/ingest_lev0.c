@@ -191,6 +191,7 @@ int total_tlm_vcdu;
 int total_missing_vcdu;
 int errmsgcnt, fileimgcnt;
 int cntsleeps = 0;
+int paused = 0;
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when ingest_lev0 is called for a restart
 int abortflg = 0;
@@ -1881,10 +1882,18 @@ int DoIt(void)
       continue;
     }
     sleep(sleep_interval);	//normally 2 sec
+    if(cntsleeps == 0) {	//file was seen
+      if(paused) {		//send resume data flow msg
+        paused = 0;
+        send_mail("tlm files seen again for ingest_lev0 for %s\n", pchan);
+      }
+    }
     cntsleeps++;		//#of 2sec sleeps w/o any files in do_ingest()
-    if(cntsleeps > 150) {	// >300sec w/o any files
-      send_mail("No files seen for ingest_lev0 for %s for 300sec\n", pchan);
-      cntsleeps = 0;
+    if(cntsleeps > 300) {	// >600sec w/o any files
+      if(!paused) {
+        send_mail("No files seen for ingest_lev0 for %s for 600sec\n", pchan);
+        paused = 1;
+      }
     }
   }
   /*************!!TBD noop this out for now
