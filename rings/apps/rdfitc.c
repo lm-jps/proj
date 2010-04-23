@@ -18,7 +18,7 @@
  *	of freq, wid
  *
  *  Planned development:
- *    0.9 parametrize test criteria for bad fits
+ *    1.0 parametrize test criteria for bad fits
  *    Use drms_keyword_lookup()
  *    Remove unnecessary defined constants, predefined size declarations
  *    Add parameters for fitting coefficients
@@ -32,18 +32,18 @@
 						      /*  module identifier  */
 char *module_name = "ringfit_bba";
 char *module_desc = "ring fitting using method of Basu and Antia";
-char *version_id = "0.9";
+char *version_id = "1.0";
 
 ModuleArgs_t module_args[] = {
-  {ARG_DATASET,	"in", "mdi.rdVpspec_dp", "input dataset"}, 
-  {ARG_STRING, "guessfile", "/home/rick/rings/fit/sb_ringfit/freq.guess",
+  {ARG_DATASET,	"in", "", "input dataset"}, 
+  {ARG_STRING, "guessfile", "",
       "name of file containing initial frequency guesses"},
   {ARG_STRING, "out", "fit.out",
       "name of output data series (or file) containing fit coefficients"},
   {ARG_INT, "nmin", "0", "lowest radial order to fit"},
-  {ARG_INT, "nmax", "8", "highest radial order to fit"},
-  {ARG_INT, "lmin", "100", "lowest degree to fit"},
-  {ARG_INT, "lmax", "1400", "highest degree to fit"},
+  {ARG_INT, "nmax", "10", "highest radial order to fit"},
+  {ARG_INT, "lmin", "80", "lowest degree to fit"},
+  {ARG_INT, "lmax", "3000", "highest degree to fit"},
   {ARG_INT, "fmin", "900", "lowest frequency to fit [uHz]"},
   {ARG_INT, "fmax", "7000", "highest frequency index to fit"},
   {ARG_INT, "bfgsct", "125", "number of iterations for bfgs"},
@@ -56,6 +56,13 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG, "2", "0", "calculate second derivatives explicitly"},      
   {}
 };
+       /*  list of keywords to propagate (if possible) from input to output  */
+char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
+    "MidTime", "Duration", "Cadence", "LonSpan",
+    "T_START", "T_STOP", "Coverage", "Size", "Width", "Height",
+    "ZonalTrk", "ZonalVel", "MeridTrk", "MeridVel",
+    "MapScale", "MapProj", "Map_PA", "RSunRef", "PosAng", "MAI",
+    "Apode_f", "Apode_k_min", "Apode_k_max", "APODIZNG", "APOD_MIN", "APOD_MAX"};
 
 #include <unistd.h>
 #include <math.h>
@@ -203,6 +210,7 @@ static void fcn1 (int n, double *x, double *f, double *g,
   *fm = 0.0;
   for (i = 0; i < n; i++) g[i] = 0.0;
 				     /*  limit values of fitting parameters  */
+/*
   if (x[0] > 100.0) x[0] = 100.0;
   if (x[0] < 1.0) x[0] = 1.0;
   if (x[5] > 100.0) x[5] = 100.0;
@@ -210,6 +218,7 @@ static void fcn1 (int n, double *x, double *f, double *g,
   if (x[6] > 100.0) x[6] = 100.0;
   if (x[6] < 1.0) x[6] = 1.0;
   if (x[6] < 20.0 && x[5] < 20.0) x[6] = 20.0;
+*/
   if (x[7] > 1000.0) x[7] = 1000.0;
   if (x[7] < -1000.0) x[7] = -1000.0;
   if (x[8] > 8.0e4) x[8] = 8.0e4;
@@ -909,8 +918,8 @@ static int get_scaling_values (DRMS_Record_t *rec, double *dnu, double *dkx,
   rsun = drms_getkey_double (rec, "RSunRef", &status);
   if (status || isnan (rsun)) {
     rsun = RSUNMM;
-    fprintf (stderr, "Warning: no valid value for RSunRef: ");
-    fprintf (stderr, "using %f", rsun);
+    fprintf (stderr, "Warning: no valid value for RSunRef; ");
+    fprintf (stderr, "using %f\n", rsun);
   }
   *dkx *= rsun;
   *dky *= rsun;
@@ -960,11 +969,12 @@ int DoIt (void) {
   int npx, npxmax, status, total_clock;
   int rgn, rgnct, segct, isegnum, osegnum, logsegnum, drms_output, dispose;
   char logfile[DRMS_MAXPATHLEN], outfile[DRMS_MAXPATHLEN];
+  char source[DRMS_MAXQUERYLEN], recid[DRMS_MAXQUERYLEN];
   char line[1024], module_ident[64];
 
   double scale[] = {1.0, 1.0, VSCALE, VSCALE, 1.0,
       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0e-4};
-  double rscale  = 0.5 / RSUN_MM / M_PI;
+  double rscale  = 1.0 / RSUN_MM;
   int npar = 13;
   char *hdrstr[] = {
     "          A0", "           c", "          Ux", "          Uy",
@@ -993,9 +1003,9 @@ int DoIt (void) {
   double ux_guess = params_get_double (params, "ux") / VSCALE;
   double uy_guess = params_get_double (params, "uy") / VSCALE;
 
-  char *inds = params_get_str (params, "in");
-  char *guessfile =  params_get_str (params, "guessfile");
-  char *outser =  params_get_str (params, "out");
+  char *inds = strdup (params_get_str (params, "in"));
+  char *guessfile =  strdup (params_get_str (params, "guessfile"));
+  char *outser =  strdup (params_get_str (params, "out"));
 
   int verbose = params_isflagset (params, "v");
   int extra_reporting = params_isflagset (params, "x");
@@ -1051,6 +1061,11 @@ int DoIt (void) {
 		     /*  code originally written to process single spectrum 
 		      processing of multiple regions should be parallelized  */
   rgnct = ids->n;
+  if (rgnct < 1) {
+    fprintf (stderr, "Error: no records found in requested dataset:\n");
+    fprintf (stderr, "  %s\n", inds);
+    return 0;
+  }
   irec = ids->records[0];
   segct = irec->segments.num_total;
   if (segct != 1) {
@@ -1101,7 +1116,7 @@ int DoIt (void) {
 	drms_close_records (ids, DRMS_FREE_RECORD);
 	return 1;
       }
-      fprintf (stderr, "         writing to segment %s.\n", oseg->info->name);
+      fprintf (stderr, "         writing to segment %s\n", oseg->info->name);
     }
     logsegnum = -1;
     oseg = drms_segment_lookup (orec, "Log");
@@ -1127,13 +1142,13 @@ int DoIt (void) {
   for (rgn = 0; rgn < rgnct; rgn++) {
     time_elapsed (0, &total_clock);
     irec = ids->records[rgn];
+    drms_sprint_rec_query (source, irec);
     iseg = drms_segment_lookupnum (irec, isegnum);
     pspec = drms_segment_read (iseg, DRMS_TYPE_FLOAT, &status);
     if (status) {
-      fprintf (stderr,
-	  "Error, could not read data segment from input record %d\n", rgn);
-      drms_close_records (ids, DRMS_FREE_RECORD);
-      return 1;
+      fprintf (stderr, "Warning: could not read segment %d\n", isegnum);
+      fprintf (stderr, "       in %s; skipped\n", source);
+      continue;
     }
     if (drms_output) {
       char *suffix;
@@ -1153,6 +1168,10 @@ int DoIt (void) {
       }
     } else runlog = stderr;
     unit22 = fopen (outfile, "w");
+    if (!unit22) {
+      fprintf (stderr, "Error: could not open output file %s\n", outfile);
+      return 1;
+    }
 
     nkx = pspec->axis[0];
     nky = pspec->axis[1];
@@ -1199,12 +1218,11 @@ int DoIt (void) {
 */
     spec = (float *)pspec->data;
     dval = drms_getkey_double (irec, "LOG_BASE", &status);
-    if (!status && !isnan (dval)) {
+    if (!status && isfinite (dval)) {
       double scaled_log_base = dval / exp (1.0);
       int ntot = nkx * nky * nnu;
       for (n = 0; n < ntot; n++) spec[n] = (float)exp (scaled_log_base * spec[n]);
     }
-
     nt = nnu;
 /*
     dkx = 2.0 * M_PI / (dlon * nkx);
@@ -1224,6 +1242,7 @@ int DoIt (void) {
       fprintf (unit22, "%s%s", hdrstr[n], hdrstr2[n]);
       if (calc_seconds) fprintf (unit22, "            ");
     }
+    fprintf (unit22, " qual");
     fprintf (unit22, "  l_guess bfgs           f          fm");
     for (n = 0; n < 2; n++) {
       fprintf (unit22, "%s%s", hdrstr[n], hdrstr2[n]);
@@ -1302,7 +1321,7 @@ int DoIt (void) {
       }
       if (verbose) {
 	printf ("%8.3f", f0);
-	for (j = 0; j < 9; j++) printf ("%11.4e", rk0[fp + nnu*j]);
+	for (j = nmin; j <= nmax; j++) printf ("%11.4e", rk0[fp + nnu*j]);
 	printf ("\n");
       }
     }
@@ -1358,7 +1377,15 @@ int DoIt (void) {
               rkl[fp0 + row] / dkx + nx2, rku[fp0 + row] / dkx + nx2,
 	      nx2 - rkl[fp0 + row] / dkx, nx2 - rku[fp0 + row] / dkx);
 	}
-	if ((kx > (nkx-3)) || (k0 < lmin) || (k0 > lmax)) continue;
+	if (kx > (nkx - 3)) {
+	  if (verbose) printf ("kx = %d > %d; skipped\n", kx, nkx - 3);
+	  continue;
+	}
+	if ((k0 < lmin) || (k0 > lmax)) {
+	  if (verbose) printf ("k0 = %d outside [%d, %d]; skipped\n", k0,
+	      lmin, lmax);
+	  continue;
+	}
 	if (freq[n + nct*(k0-1)] > 0.0)
           p = (freq[n + nct*k0] - freq[n + nct*(k0-1)]) * k0 /
 	      freq[n + nct*(k0-1)];
@@ -1396,7 +1423,12 @@ int DoIt (void) {
 	  }
 	}
 
-	if ((npx < 20) || (powmax <= 0.0)) continue;
+	if ((npx < 20) || (powmax <= 0.0)) {
+	  if (verbose)
+	    printf ("npx = %d < 20 || powmax = %.1f <= 0.0; skipped\n", npx,
+		powmax);
+	  continue;
+	}
 						    /*  The initial guesses  */
 /*  Parameter correspondences (notation of Basu et al. ApJ 512, 458 and
  *    Basu & Antia, Solar Phys 192, 469):
@@ -1432,7 +1464,7 @@ int DoIt (void) {
 	  par[5] = log (powmax) + 3 * log (rk0[fp0 + row]) - 5.0;
 	  par[6] = par[5] + log (rk0[fp0 + row]);
 	} else {
-	  for (jj = 1; jj <= npar; jj++) par[jj-1] = par0[jj-1];
+	  for (jj = 0; jj < npar; jj++) par[jj] = par0[jj];
 	  back = par[6] - log (rki);
 	  if (back < par[5]) back = par[5];
 	  par[5] = back;
@@ -1527,6 +1559,10 @@ int DoIt (void) {
 	    if (calc_seconds) fprintf (unit22, "%12.4e",
 	        sqrt (scale[i] * scale[i] * fabs (hs[i + npar*i])));
 	  }
+/*
+   Actual quality flag needs to go here
+*/
+	  fprintf (unit22, "%5i", -1);
 	  fprintf (unit22, " %8.3f %4d%12.4e%12.4e", rki, bfgs_status, f, fm);
 	  for (i=0; i<2; i++) {
 	    fprintf (unit22, "%12.4e%12.4e", par[i] * scale[i],
@@ -1595,77 +1631,46 @@ int DoIt (void) {
 
     if (drms_output) {
       int kstat = 0;
+      int keyct = sizeof (propagate) / sizeof (char *);
       char *key_str;
       double key_dbl;
       int key_int, crcl_known = 1;
       TIME key_tim;
-
-      key_str = drms_getkey_string (irec, "PrimeKeyString", &status);
-      if (!status)
-	if (check_and_set_key_str (orec, "PrimeKeyString", key_str)) kstat = 1;
-      key_int = drms_getkey_double (irec, "CarrRot", &status);
-      if (status) crcl_known = 0;
-      else
-	if (check_and_set_key_int (orec, "CarrRot", key_int)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "CMLon", &status);
-      if (status) crcl_known = 0;
-      else
-	if (check_and_set_key_float (orec, "CMLon", key_dbl)) kstat = 1;
+				    /*  copy designated keywords from input  */
+      kstat += propagate_keys (orec, irec, propagate, keyct);
+	     /*  if necessary, construct CarrTime from CR:CL, or vice-versa  */
       key_str = drms_getkey_string (irec, "CarrTime", &status);
-      if (status && crcl_known) {
-	char CarrTime[9];
-	snprintf (CarrTime, 9, "%d:%03.0f", key_int, key_dbl);
-	if (check_and_set_key_str (orec, "CarrTime", CarrTime)) kstat = 1;
-      } else
-	if (check_and_set_key_str (orec, "CarrTime", key_str)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "LonHG", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "LonHG", key_dbl)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "LatHG", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "LatHG", key_dbl)) kstat = 1;
-      key_tim = drms_getkey_time (irec, "MidTime", &status);
-      if (!status)
-	if (check_and_set_key_time (orec, "MidTime", key_tim)) kstat = 1;
-      key_dbl = drms_getkey_float (irec, "Duration", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "Duration", key_dbl)) kstat = 1;
-      key_str = drms_getkey_string (irec, "MapProj", &status);
-      if (!status)
-	if (check_and_set_key_str (orec, "MapProj", key_str)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "MapScale", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "MapScale", key_dbl)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "PosAng", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "PosAng", key_dbl)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "Width", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "Width", key_dbl)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "Height", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "Height", key_dbl)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "ZonalTrk", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "ZonalTrk", key_dbl)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "ZonalVel", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "ZonalVel", key_dbl)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "MeridTrk", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "MeridTrk", key_dbl)) kstat = 1;
-      key_dbl = drms_getkey_double (irec, "MeridVel", &status);
-      if (!status)
-	if (check_and_set_key_float (orec, "MeridVel", key_dbl)) kstat = 1;
-      if (check_and_set_key_str (orec, "Module", module_ident)) kstat = 1;
-      if (check_and_set_key_str (orec, "Source", inds)) kstat = 1;
+      if (status) {
+        key_int = drms_getkey_int (irec, "CarrRot", &status);
+	if (status) crcl_known = 0;
+	else {
+	  key_dbl = drms_getkey_double (irec, "CMLon", &status);
+	  if (status) crcl_known = 0;
+	}
+	if (crcl_known) {
+	  char CarrTime[9];
+	  snprintf (CarrTime, 9, "%d:%03.0f", key_int, key_dbl);
+	  kstat += check_and_set_key_str (orec, "CarrTime", CarrTime);
+	}
+      } else {
+	key_int = drms_getkey_int (irec, "CarrRot", &status);
+	if (status) {
+	  sscanf (key_str, "%d:%lf", &key_int, &key_dbl);
+	  kstat += check_and_set_key_int (orec, "CarrRot", key_int);
+	  kstat += check_and_set_key_double (orec, "CMLon", key_dbl);
+	}
+      }
+
+      kstat += check_and_set_key_str (orec, "Module", module_ident);
+      kstat += check_and_set_key_str (orec, "Source", source);
+      kstat += check_and_set_key_time (orec, "Created", CURRENT_SYSTEM_TIME);
+      kstat += check_and_set_key_str   (orec, "BLD_VERS", jsoc_version);
       if (kstat) {
-	fprintf (stderr, "Error writing key value(s) to record %d in series %s\n",
-	  rgn, outser);
+	drms_sprint_rec_query (recid, orec);
+	fprintf (stderr, "Error writing key values(s) to record %s\n", recid);
 	fprintf (stderr, "      series may not have appropriate structure\n");
-	drms_close_records (ids, DRMS_FREE_RECORD);
      	drms_close_record (orec, DRMS_FREE_RECORD);
-        return 1;
+        continue;
       }
       gethostname (line, 1024);
       fprintf (runlog, "Total wall clock time = %d sec on %s\n", total_clock, line);
@@ -1691,5 +1696,20 @@ int DoIt (void) {
  *			WCS keywords for frequency scaling, and to no longer
  *			use propagated mapping keys from tracking
  *	09.11.16		corrected rscale
- *	    
+ *    1.0  09.12.09		added numerous keywords to propagation list
+ *      10.01.07		removed constraints on values of A0, B1, and
+ *      		B2, so that fits are insensitive to power spectrum
+ *	      		normalization
+ *	10.02.01		fixed treatment of params_get_str()    
+ *				fixed setting of Source key and diagnostics and
+ *			error recovery for multiple region processing
+ *	10.02.21		minor stderr format mods; added Created key
+ *	10.03.05		added BLD_VERS key
+ *	10.04.22		corrected rscale (again! maybe it's right this
+ *			time); changed defaults for nmax, lmin, and lmax to be
+ *			more appropriate for HMI data; added quality flag column
+ *			to output; removed default values for input dataset and
+ *			guessfile; added three more apodization keywords to
+ *			propagation list
+ *  v 1.0 frozen 2010.04.23
  */	
