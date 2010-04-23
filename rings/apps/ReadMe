@@ -6,7 +6,7 @@ not be modified without the consent of the author, Rick Bogart. Any changes
 introduced that are not synchronized with changes to the original control
 files are likely to be lost.
 
-Table of contents last updated 10.03.10
+Table of contents last updated 10.04.23
 
 	Directories
 
@@ -23,6 +23,8 @@ rdfitc.c	fit 3-d region spectra (ring-diagrams) using method of
 rdfitf.c	fit 3-d region spectra (ring-diagrams) using method of Haber
 		N.B. There is currently no rule to make this module, nor
 		supporting code; it is included for reference only
+rdsinv.c	asymptotic inversion of ring fits for thermal structure
+		parameters as functions of depth
 rdvinv.c	OLA inversion of ring fits for velocity parameters as functions
 		of depth
 
@@ -30,12 +32,13 @@ rdvinv.c	OLA inversion of ring fits for velocity parameters as functions
 cartography.c	used in mtrack
 earth_ephem.c	used in mtrack
 fitstuff.c	used in mtrack
+hlh2.f		used in rdsinv
 imginfo.c	used in mtrack
 jpleph.c	used in mtrack via earth_ephem.c
-keystuff.c	used in mtrack, pspec3, rdfitc, rdfitf, rdvinv
+keystuff.c	used in mtrack, pspec3, rdfitc, rdfitf, rdsinv, rdvinv
 mdistuff.c	used in mtrack
 ola_xy.f	used in rdvinv
-rdutil.c	used in rdvinv
+rdutil.c	used in rdsinv, rdvinv
 soho_ephem.c	used in mtrack
 solephem.c	used in mtrack via soho_ephem.c
 
