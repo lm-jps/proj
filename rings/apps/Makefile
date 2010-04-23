@@ -15,7 +15,7 @@ DEST = ../bin/$(JPLAT)
 
 PROG =	gentargs
 
-MODS =	mtrack pspec3 rdfitc
+MODS =	mtrack pspec3 rdfitc rdsinv rdvinv
 
 FPLS =	$(addprefix $(DEST)/, $(MODS)) $(addprefix $(DEST)/, $(PROG)) \
 	$(addprefix $(DEST)/, rdvinv)
