@@ -81,8 +81,8 @@ static char *lookup_str (DRMS_Record_t *rec, ParamDef key, int *status) {
 }
 
 static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
-    double *ctrx, double *ctry, double *apsd, const char *apsd_key,
-    double *pang, double *ellipse_e, double *ellipse_pa,
+    double *ctrx, double *ctry, double *apsd, const char *rsun_key,
+    const char *apsd_key, double *pang, double *ellipse_e, double *ellipse_pa,
     int *x_invrt, int *y_invrt, int *need_ephem) {
 /*
  *  Provides the following values from the DRMS record:
@@ -206,8 +206,10 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
    /*  the following are appropriate for MDI, but not strictly based on WCS  */
 /*
 	sprintf (param[RSUN].name, "R_SUN");
+	sprintf (param[APSD].name, "OBS_ASD");
 */
-	strncpy (param[RSUN].name, apsd_key, 31);
+	strncpy (param[RSUN].name, rsun_key, 31);
+	strncpy (param[APSD].name, apsd_key, 31);
 	sprintf (param[APSD].name, "OBS_ASD");
 	sprintf (param[PANG].name, "CROTA2");
 	param[PANG].scale = raddeg;
@@ -224,10 +226,15 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
     *xscl = lookup (img, param[XSCL], &status);
     *yscl = lookup (img, param[YSCL], &status);
     if (status & NO_SEMIDIAMETER) {
+      status &= ~NO_SEMIDIAMETER;
       *apsd = lookup (img, param[APSD], &status);
-      if (!(status & (NO_XSCALE | NO_YSCALE))) {
-	*apsd /= (*xscl <= *yscl) ? *xscl : *yscl;
-	status &= ~NO_SEMIDIAMETER;
+      if (status & NO_SEMIDIAMETER) {
+        *need_ephem = 1;
+      } else {
+	if (!(status & (NO_XSCALE | NO_YSCALE))) {
+	  *apsd /= (*xscl <= *yscl) ? *xscl : *yscl;
+	  status &= ~NO_SEMIDIAMETER;
+	}
       }
     }
   }
@@ -253,5 +260,7 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
  *  09.10.06		version that went into first release under proj/rings
  *  09.12.03		fixed two icc11 compiler warnings; added keyword name
  *		passing to solar_image_info for selected cases
+ *  10.04.01		fixed up processing for semidiameter when apsd_key
+ *		is missing
  */
 
