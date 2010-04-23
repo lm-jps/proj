@@ -79,8 +79,8 @@
  *	in the current working directory (in read_guess_v3.f90)
  *    Most or all of the internally written information when the verbose flag
  *	is set should be written to the Log
- *    An RSunRef value is set as a constant in hmifits; it would be better to
- *	use the keyword value associated with the input spectrum if available
+ *->   An RSunRef value is set as a constant in hmifits; it would be better to
+ *->	use the keyword value associated with the input spectrum if available
  *    The default values of kstart and kstop refer to the nunmber of kbins, and
  *	need to be adjusted for different sizes of tiles; they should be
  *	calculated not read in as parameters (or from a file as formerly)
@@ -111,7 +111,6 @@
  *	npar		number of parameters to be fit
  *	ux, uy		initial guess values for Ux & Uy parameters
  *	inds [*]	input data record descriptor or data file name
- *	outfile	[*]	name of the output data series or file
  *      guessfile [*]	name of the file containing guess frequencies,
  *		amplitudes, widths, and background parameters
  *	unwrapped_pspec	float* of unwrapped power spectrum (returned)
@@ -223,12 +222,17 @@ ModuleArgs_t module_args[] = {
 
 extern void ringanalysis_ (float *powr, int *nkx, int *nky, int *nnu, 
     int *ntht, int *nthts, int *nk, float *crpix1, float *crpix2, int *smooth,
-    double *dk, double *dnu, float *lnbase, int *nmin, int *nmax, int *npar,
-    double *ux, double *uy, char *outfile, int *strln1,
+    double *dk, double *dnu, float *lnbase, int *nmin, int *nmax, 
+    int *npar, int *ntot, double *ux_guess, double *uy_guess, float *ux_fit, 
+    float *d_ux, float *uy_fit, float *d_uy, float *amp, float *d_amp, float *bg, 
+    float *d_bg, float *fwhm, float *d_fwhm, float *nu, float *d_nu,
+    float *delnu, int *nval, float *kval, int *kbin, 
     char *guessfile, int *strln2, int *kbstrt, int *kbend, int *nrdg,
-    char *header, int *hdrlen, float *unwrapped_pspec, float *filter,
-    float *filtered_pspec, int *verbose, int *mdata, int *mfilt, 
-    double *doptions, int *ioptions, int *iflg, int *status);
+    float *min_func, int *n_iter, int *fit_chk, float *chi, float *kmin,  
+    float *kmax, int *modecount, int *good, float *unwrapped_pspec, 
+    float *filter, float *filtered_pspec, 
+    int *verbose, int *mdata, int *mfilt, double *doptions, int *ioptions, 
+    int *iflg, int *status);
 
        /*  list of keywords to propagate (if possible) from input to output  */
 char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
@@ -239,31 +243,37 @@ char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
     "APODIZNG", "APOD_MIN", "APOD_MAX"};
 
 #include "keystuff.c"
-
+#define RSUN_MM (696.0)
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *ids;
   DRMS_Record_t *irec, *orec;
   DRMS_Segment_t *iseg, *oseg;
-  DRMS_Array_t *pspec, *array;
+  DRMS_Array_t *pspec, *array; 
+  FILE *unit24, *runlog;
   float *filtered_pspec;
   double doptions[4]; 
   double dk, dnu;
   float *spec;
   float *unwrapped_pspec, *filter;
+  float *ux_fit, *d_ux, *uy_fit, *d_uy;
+  float *amp, *d_amp, *bg, *d_bg, *fwhm, *d_fwhm;
+  float *nu, *d_nu, *delnu, *chi, *min_func, *kval;
   float lnbase, crpix1, crpix2;
-  int *kbstrt, *kbend;
+  float rsun, kmin, kmax, lmin, lmax, ell;
+  int *nval, *n_iter, *fit_chk, *good;
+  int *kbstrt, *kbend, *kbin;
   int ioptions[5];
-  int hdrlen, strln_out, strln_guess;
+  int strln_guess, modecount;
   int rgn, rgnct, segct, drms_output, dispose;
   int isegnum, osegnum, logsegnum, filtsegnum;
   int unwrapsegnum, filtpowsegnum;
-  int n, nkx, nky, nnu, nk;
+  int n, nkx, nky, nnu, nk, ntot;
   int nrdg;
   int status;
   char logfile[DRMS_MAXPATHLEN], outfile[DRMS_MAXPATHLEN];
   char recid[DRMS_MAXQUERYLEN];
-  char header[8192], line[256], module_ident[64], key[64];
+  char module_ident[64], key[64];
 
   char *inds = strdup (params_get_str (params, "in"));
   char *outser =  strdup (params_get_str (params, "out"));
@@ -461,6 +471,13 @@ int DoIt (void) {
     lnbase = drms_getkey_float (irec, "LOG_BASE", &status);
     crpix1 = drms_getkey_float (irec, "CRPIX1", &status);
     crpix2 = drms_getkey_float (irec, "CRPIX2", &status);
+    rsun = drms_getkey_float (irec, "RSunRef", &status);
+    if (status || isnan (rsun)) {   /* from rdfitc */
+      rsun = RSUN_MM;
+      fprintf (stderr, "Warning: no valid value for RSunRef; ");
+      fprintf (stderr, "using %f\n", rsun);
+    }
+
     segct = irec->segments.num_total;
     if (segct != 1) {
       for (n = 0; n < segct; n++) {
@@ -468,6 +485,7 @@ int DoIt (void) {
 	if (iseg->info->naxis == 3) break;
 	isegnum = n;
       }
+      printf("number of segments %d\n",segct);
       if (n >= segct) {
 	fprintf (stderr, "found no segmemt of rank 3 in input dataset\n");
 	drms_close_records (ids, DRMS_FREE_RECORD);
@@ -477,7 +495,8 @@ int DoIt (void) {
       isegnum = 0;
       iseg = drms_segment_lookupnum (irec, isegnum);
     }
-    if (!iseg) {
+    if (!iseg) {fprintf (stderr, "read keys\n");
+
       fprintf (stderr, "Error, could not open data segment\n");
       drms_close_records (ids, DRMS_FREE_RECORD);
       return 1;
@@ -489,16 +508,43 @@ int DoIt (void) {
       drms_close_records (ids, DRMS_FREE_RECORD);
       return 1;
     }
-				     /*  these are now being used as of v07.c */
     nkx = pspec->axis[0];
     nky = pspec->axis[1];
     nnu = pspec->axis[2];
     spec = (float *)pspec->data;
     nk = nkx/2;
+    ntot = nmax - nmin + 1;
+
+    /*  CHECK THIS RICK! */
+   /*  This next section allocates the arrays that will be passed back by
+        the ringanalysis routine for writing out to drms   */
+
 
     unwrapped_pspec = (float *)malloc (ntht * nk * nnu * sizeof (float));
     filter = (float *)malloc (nthts * nk * sizeof (float));
     filtered_pspec = (float *)malloc (nthts * nk * nnu * sizeof (float));
+    ux_fit = (float *)malloc (nk * ntot * sizeof (float));
+    d_ux = (float *)malloc (nk * ntot * sizeof (float));
+    uy_fit = (float *)malloc (nk * ntot * sizeof (float));
+    d_uy = (float *)malloc (nk * ntot * sizeof (float));
+    amp = (float *)malloc (nk * ntot * sizeof (float));
+    d_amp = (float *)malloc (nk * ntot * sizeof (float));
+    bg = (float *)malloc (nk * ntot * sizeof (float));
+    d_bg = (float *)malloc (nk * ntot * sizeof (float));
+    fwhm = (float *)malloc (nk * ntot * sizeof (float));
+    d_fwhm = (float *)malloc (nk * ntot * sizeof (float));
+    nu = (float *)malloc (nk * ntot * sizeof (float));
+    d_nu = (float *)malloc (nk * ntot * sizeof (float));
+    delnu = (float *)malloc (nk * ntot * sizeof (float));
+    nval = (int *)malloc (nk * ntot * sizeof (int));
+    kval = (float *)malloc (nk * ntot * sizeof (float));
+    kbin = (int *)malloc (nk * ntot * sizeof (int));
+    good = (int *)malloc (nk * ntot * sizeof (int));
+    min_func = (float *)malloc (nk * ntot * sizeof (float));
+    n_iter = (int *)malloc (nk * ntot * sizeof (int));
+    fit_chk = (int *)malloc (nk * ntot * sizeof (int));
+    chi = (float *)malloc (nk * ntot * sizeof (float));
+
 
     if (drms_output) {
       int kstat = 0;
@@ -558,27 +604,25 @@ int DoIt (void) {
       }
 					    /*  end shared code with rdfitc  */
     }
-    sprintf (header, "# input record = %s\n", recid);
-    if (drms_output) {
-      drms_sprint_rec_query (recid, orec);
-      sprintf (line, "# output record = %s\n", recid);
-    } else sprintf (line, "# output file = %s\n", outfile);
-    strcat (header, line);
-    sprintf (line, "# program used = %s\n", module_ident);
-    strcat (header, line);
-    sprintf (line, "# guess file used = %s", guessfile);
-    strcat (header, line);
-    hdrlen = strlen (header) + 1;
-    strln_out = strlen (outfile) + 1;
+				     /*  these are now being used as of v07.c */
+    unit24 = fopen (outfile, "w");
+    if (!unit24) {
+      fprintf (stderr, "Error: could not open file %s for output\n", outfile);
+      drms_close_records (ids, DRMS_FREE_RECORD);
+      return 1;
+    }
+/*    strln_out = strlen (outfile) + 1;  */    
     strln_guess = strlen (guessfile) + 1;
 
     status = 0;
     ringanalysis_ (spec, &nkx, &nky, &nnu, &ntht, &nthts, &nk, &crpix1, &crpix2, 
-        &smooth, &dk, &dnu, &lnbase, &nmin, &nmax, &npar, &ux_guess, &uy_guess,
-	outfile, &strln_out, guessfile, &strln_guess,
-	kbstrt, kbend, &nrdg, header, &hdrlen,
-	unwrapped_pspec, filter, filtered_pspec,
-	&Verbose, &mdata, &mfilt, doptions, ioptions, &iflg, &status);
+        &smooth, &dk, &dnu, &lnbase, &nmin, &nmax, &npar, &ntot, &ux_guess,
+        &uy_guess, ux_fit, d_ux, uy_fit, d_uy, amp, d_amp, bg, d_bg, fwhm,
+        d_fwhm, nu, d_nu, delnu, nval, kval, kbin, guessfile, &strln_guess, 
+        kbstrt, kbend, &nrdg, min_func, n_iter, fit_chk, chi, &kmin, &kmax, 
+        &modecount, good, unwrapped_pspec, filter, filtered_pspec, &Verbose, 
+        &mdata, &mfilt, doptions, ioptions, &iflg, &status);
+
     drms_free_array (pspec);
     if (status) {
       if (status < 10)
@@ -597,7 +641,53 @@ int DoIt (void) {
       if (drms_output) drms_close_record (orec, DRMS_FREE_RECORD);
       continue;
     }
-    if (drms_output) {
+     lmin = kmin * rsun;
+     lmax = kmax * rsun;
+     
+ /*   writing header and arrays to drms (opened unit24 above) */
+
+ /* write out header */
+
+      fprintf (unit24, "# input record = %s\n", recid);
+      if (drms_output) {
+
+        drms_sprint_rec_query (recid, orec);  
+        fprintf (unit24, "# output record = %s\n", recid);
+
+      } else fprintf (unit24, "# output file = %s\n", outfile);
+      fprintf (unit24, "# program used = %s\n", module_ident);
+      fprintf (unit24, "# guess file used = %s\n", guessfile);
+      fprintf (unit24, "# fit of %s\n", inds);
+      fprintf (unit24, "# %s version %s\n", module_name, version_id);
+      fprintf (unit24, "# guess file used = %s\n", guessfile);
+/*      fprintf (unit24, "# multiplication factor used = %12.4e \n", emult); */
+      fprintf (unit24, "# nmin =  %2d        nmax = %2d \n", nmin, nmax);
+      fprintf (unit24, "# lmin =  %8.4f    lmax = %8.4f   kmin = %f8.4   kmax = %f8.4 \n", lmin, lmax, kmin, kmax);
+      fprintf (unit24, "# delta_nu = %13.4e   delta_k = %13.4e \n", dnu, dk);
+      fprintf (unit24, "# number of modes fit = %d\n", modecount);
+      fprintf (unit24, "#n     l        k       nu        d_nu ");
+      fprintf (unit24, "        ux         d_ux         uy         d_uy        amp");
+      fprintf (unit24, "        d_amp         bg         d_bg        fwhm");
+      fprintf (unit24, "       d_fwhm      delnu        d_nu    k_bin  nfe");
+      fprintf (unit24, "   min_func      rdchi   fit\n");
+
+ /* write out fits */
+  for (n = 0; n <  ntot*nk; n++) {  
+   if (good[n] == 1) {
+    ell = kval[n] * rsun;
+    fprintf (unit24, "%2d %8.3f %8.5f", nval[n], ell, kval[n]);
+    fprintf (unit24, "%9.3f%12.4e", nu[n], d_nu[n]);
+    fprintf (unit24, "%12.4e%12.4e", ux_fit[n], d_ux[n]); 
+    fprintf (unit24, "%12.4e%12.4e", uy_fit[n], d_uy[n]); 
+    fprintf (unit24, "%12.4e%12.4e", amp[n], d_amp[n]); 
+    fprintf (unit24, "%12.4e%12.4e", bg[n], d_bg[n]); 
+    fprintf (unit24, "%12.4e%12.4e", fwhm[n], d_fwhm[n]); 
+    fprintf (unit24, "%12.4e%12.4e", delnu[n], d_nu[n]); 
+    fprintf (unit24, "%5d%6d%12.4e", kbin[n], n_iter[n], min_func[n]);
+    fprintf (unit24, "%12.3e  %d\n", chi[n], fit_chk[n]);
+                       }
+             }
+    fclose(unit24);
       if (write_filter) {
         int axes[2];
 	axes[0] = nthts;
@@ -610,6 +700,7 @@ int DoIt (void) {
 	    "Error: couldn't create output array for unwrapped power spectrum\n");
 	  return 1;
 	}
+printf ("writing filter array to seg num %d\n", filtsegnum);
 	if (drms_segment_write (oseg, array, 0)) {
 	  fprintf (stderr, "Error writing data to record in series %s\n",
 	      outser);
@@ -618,6 +709,7 @@ int DoIt (void) {
 	  return 1;
 	}
 	drms_free_array (array);
+printf ("succeeded\n");
       }
       if (write_unwrap_pow) {
         int axes[3];
@@ -625,13 +717,16 @@ int DoIt (void) {
 	axes[1] = nk;
 	axes[2] = nnu;
         oseg = drms_segment_lookupnum (orec, unwrapsegnum);
+printf ("writing unwrapped power to seg num %d\n", unwrapsegnum);
 	array = drms_array_create (DRMS_TYPE_FLOAT, 3, axes, unwrapped_pspec,
 	    &status);
+printf ("array created\n");
 	if (status) {
 	  fprintf (stderr,
 	    "Error: couldn't create output array for unwrapped power spectrum\n");
 	  return 1;
 	}
+printf ("calling drms_segment_write()\n");
 	if (drms_segment_write (oseg, array, 0)) {
 	  fprintf (stderr, "Error writing data to record in series %s\n",
 	      outser);
@@ -640,6 +735,7 @@ int DoIt (void) {
 	  return 1;
 	}
 	drms_free_array (array);
+printf ("succeeded\n");
       }
       if (write_filt_pow) {
         int axes[3];
@@ -647,6 +743,7 @@ int DoIt (void) {
 	axes[1] = nk;
 	axes[2] = nnu;
         oseg = drms_segment_lookupnum (orec, filtpowsegnum);
+printf ("writing filtered unwrapped power to seg num %d\n", filtpowsegnum);
 	array = drms_array_create (DRMS_TYPE_FLOAT, 3, axes, filtered_pspec,
 	    &status);
 	if (status) {
@@ -662,7 +759,9 @@ int DoIt (void) {
 	  return 1;
 	}
 	drms_free_array (array);
+printf ("succeeded\n");
       }
+    if (drms_output) { 
       drms_close_record (orec, dispose);
     } else {
       if (write_filt_pow || write_unwrap_pow || write_filter) {
@@ -699,4 +798,6 @@ int DoIt (void) {
  *	input (and output if in DRMS) identifiers in fit file refer to records,
  *		not filenames
  *	write specific input record id to Source key
+ *  10.03.10     revised by DAH to pass arrays back to c program for output to
+ *               drms
  */
