@@ -1,4 +1,4 @@
-#! $Id: in_air_cal3.p,v 1.2 2007/11/30 22:16:20 arta Exp $
+#! $Id: in_air_cal3.p,v 1.3 2010/04/25 17:56:49 production Exp $
 #! $Name:  $
 #! Description: In-air calibration polarization tuning table
 # Lasted updated by:  J. Drake
@@ -114,11 +114,6 @@
 108      45   237    33    	# pcu long polarization table
 109       5   197    73    	# pcu long polarization table
 110     205   157   113    	# pcu long polarization table
-111   40   40   40 # Motor exercise
-112   80   80   80 # Motor exercise
-113  120  120  120 # Motor exercise
-114  160  160  160 # Motor exercise
-115  200  200  200 # Motor exercise
 120   62   89   33 # ModA1
 121   62   89   15 # ModA1
 122   47   89   45 # ModA1
@@ -323,3 +318,13 @@
 347   97  129   80 # ModC7 # From Juan 071030
 348   82  129   50 # ModC7 # From Juan 071030
 349   82  129   80 # ModC7 # From Juan 071030
+400   27   21   68 # 100324 version
+401   27   21   50 # 100324 version
+402   12   21   80 # 100324 version
+403   12   21   98 # 100324 version
+404   27   21   74 # 100324 version
+405   27   21   44 # 100324 version
+406   12   21   74 # 100324 version
+407   12   21   44 # 100324 version
+408   27   21   59 # 100324 version
+409   27   21   89 # 100324 version
