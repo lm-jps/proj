@@ -109,36 +109,50 @@ int do_flat(LEV0LEV1 *info)
     if (nr) {
 	for (i=r1; i<r2; ++i) {
 	    for (j=0; j<c1; ++j) {
-		dtmp = in[4096*i+j];
+		tmp = in[4096*i+j];
+		if (tmp == DRMS_MISSING_SHORT) 
+		    continue;
+		dtmp = tmp;
 		s += dtmp;
 		s2 += dtmp*dtmp;
+		++npix;
 	    }
 	    for (j=c2; j<4096; ++j) {
-		dtmp = in[4096*i+j];
+		tmp = in[4096*i+j];
+		if (tmp == DRMS_MISSING_SHORT) 
+		    continue;
+		dtmp = tmp;
 		s += dtmp;
 		s2 += dtmp*dtmp;
+		++npix;
 	    }
 	}
-	npix += (4096-nc)*nr;
     }
 
     if (nc) {
 	for (i=0; i<r1; ++i)
 	    for (j=c1; j<c2; ++j) {
-		dtmp = in[4096*i+j];
+		tmp = in[4096*i+j];
+		if (tmp == DRMS_MISSING_SHORT) 
+		    continue;
+		dtmp = tmp;
 		s += dtmp;
 		s2 += dtmp*dtmp;
+		++npix;
 	    }
 	for (i=r2; i<4096; ++i)
 	    for (j=c1; j<c2; ++j) {
-		dtmp = in[4096*i+j];
+		tmp = in[4096*i+j];
+		if (tmp == DRMS_MISSING_SHORT)
+		    continue;
+		dtmp = tmp;
 		s += dtmp;
 		s2 += dtmp*dtmp;
+		++npix;
 	    }
-	npix += (4096-nr)*nc;
     }
 
-    if (npix) {
+    if (npix > 1) {
 	info->oscnmean = s/npix;
 	info->oscnrms = sqrt((s2-s*s/npix) / (npix-1));
     }
