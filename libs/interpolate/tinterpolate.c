@@ -296,8 +296,9 @@ int taverage(
   int avmethod, // averaging method
   int order, // Interpolation order
   double tspace, // Spacing of times to interpolate to
-  int hwidth, // In units of tspace. Total width is 2*hwidth+1
-  double par1 // In units of tspace.
+  int hwidth, // Window width in units of tspace. Total width is 2*hwidth+1
+  double par1, // In units of tspace. Meaning depends on avmethod.
+  double par2 // In units of tspace. Meaning depends on avmethod.
 )
 {
   const unsigned char maskgood=0; // Value of good entries in masks
@@ -306,7 +307,7 @@ int taverage(
   //double dta=1.0; // Time between samples of input autocorrelation
   int i,j,k,isample;
   FILE *fileptr;
-  double ti,dt,dtx;
+  double ti,dt,dtx,dta;
   double *acor; // Input autocorrelation
   double *a0,*a,*rh0,*coeffd;
   double *a1b,bta1b,*a1r,bta1r,c;
@@ -377,26 +378,50 @@ float psum;
   wsum=0.0;
   for (i=0;i<width;i++) {
     dt=i-hwidth+0.0;
+    dta=fabs(dt);
     tw[i]=tint+tspace*dt;
     switch (avmethod) {
     case tavg_boxcar:
-      weights[i]=1.0;
+      if (dta <= par1) {
+        weights[i]=1.0; 
+      }
+      else {
+        weights[i]=0.0;
+      }
       break;
     case tavg_cosine:
-      weights[i]=0.5*(1+cos(M_PI*dt/hwidth));
+      if (dta <= (par1-par2)) {
+        weights[i]=1.0;
+      }
+      else if (dta >= (par1+par2)) {
+        weights[i]=0.0;
+      }
+      else {
+        dtx=(dta-par1)/par2;
+        weights[i]=0.5*(1-sin(M_PI*dtx/2));
+      }
       break;
     case tavg_fourth:
-      weights[i]=1-dt/hwidth*dt/hwidth;
-      weights[i]=weights[i]*weights[i];
+      if (dta <= (par1-par2)) {
+        weights[i]=1.0;
+      }
+      else if (dta >= (par1+par2)) {
+        weights[i]=0.0;
+      }
+      else {
+        dtx=(dta-par1)/par2;
+        weights[i]=0.5+(-0.75+0.25*dtx*dtx)*dtx;
+      }
       break;
     case tavg_hathaway:
-      weights[i]=(exp(dt*dt/(2*hwidth*hwidth))-exp(par1*par1/(2*hwidth*hwidth)))*(1+(par1*par1-dt*dt)/(2*hwidth*hwidth));
+      weights[i]=(exp(dt*dt/(2*par1*par1))-exp(par2*par2/(2*par1*par1)))*(1+(par2*par2-dt*dt)/(2*par1*par1));
     default:
       printf("Unimplemented method in taverage\n");
       return 1;
     }
+    printf("%d %f %f %f\n",i,dt,dta,weights[i]);
     wsum=wsum+weights[i];
-  }
+  } // for i
 // Normalize weigths
   for (i=0;i<width;i++) weights[i]=weights[i]/wsum;
   //for (i=0;i<width;i++) printf("%f\n",weights[i]);
@@ -533,6 +558,7 @@ printf("\n");
       coeff0[isample]=coeff0[isample]+coeffs[iwidth*order*nmasks+iorder]*weights[iwidth];
     }
   }
+for (isample=0;isample<nsample;isample++) printf("%d %f %f\n",isample,tsample[isample],coeff0[isample]);
 
 // Now do actual interpolation
 // Inner loop over time
