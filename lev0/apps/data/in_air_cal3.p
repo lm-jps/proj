@@ -1,4 +1,4 @@
-#! $Id: in_air_cal3.p,v 1.3 2010/04/25 17:56:49 production Exp $
+#! $Id: in_air_cal3.p,v 1.4 2010/04/28 19:57:13 production Exp $
 #! $Name:  $
 #! Description: In-air calibration polarization tuning table
 # Lasted updated by:  J. Drake
@@ -114,6 +114,11 @@
 108      45   237    33    	# pcu long polarization table
 109       5   197    73    	# pcu long polarization table
 110     205   157   113    	# pcu long polarization table
+111   40   40   40 # Motor exercise
+112   80   80   80 # Motor exercise
+113  120  120  120 # Motor exercise
+114  160  160  160 # Motor exercise
+115  200  200  200 # Motor exercise
 120   62   89   33 # ModA1
 121   62   89   15 # ModA1
 122   47   89   45 # ModA1
@@ -328,3 +333,23 @@
 407   12   21   44 # 100324 version
 408   27   21   59 # 100324 version
 409   27   21   89 # 100324 version
+410   75   53   34 # 20100422 version. Mod A optimized
+411   75   53   52 # 20100422 version. Mod A optimized
+412   60   53   82 # 20100422 version. Mod A optimized
+413   60   53   64 # 20100422 version. Mod A optimized
+414   75   53   28 # 20100422 version. Mod A optimized
+415   75   53   58 # 20100422 version. Mod A optimized
+416   60   53   88 # 20100422 version. Mod A optimized
+417   60   53   58 # 20100422 version. Mod A optimized
+418   69   53   43 # 20100422 version. Mod A optimized
+419   69   53   73 # 20100422 version. Mod A optimized
+420   45   53   52 # 20100422 version. Mod X optimized
+421   75   53   52 # 20100422 version. Mod X optimized
+422   90   53   64 # 20100422 version. Mod X optimized
+423   60   53   64 # 20100422 version. Mod X optimized
+424   75   53   28 # 20100422 version. Mod X optimized
+425   75   53   58 # 20100422 version. Mod X optimized
+426   60   53   88 # 20100422 version. Mod X optimized
+427   60   53   58 # 20100422 version. Mod X optimized
+428   69   53   43 # 20100422 version. Mod X optimized
+429   69   53   73 # 20100422 version. Mod X optimized
