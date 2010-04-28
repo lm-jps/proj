@@ -697,6 +697,8 @@ int load_hdpf_keyword_lines(char keyword_lines[MAX_NUM_KW_LINES][MAXLINE_IN_FILE
 	   &(keyword_node->bit_length),
 	   keyword_node->type,
 	   &keyword_node->conv_type);
+    strcat(keyword_node->telemetry_mnemonic_name,"\0");/*fix ticket #278*/
+    strcat(keyword_node->keyword_name,"\0");/* fix ticket #278 */
     keyword_node->dsc_ptr = (DSC_Conversion *)NULL;
     keyword_node->alg_ptr = (ALG_Conversion *)NULL;
   }
@@ -735,6 +737,7 @@ int load_hdpf_dsc_lines(char dsc_lines[MAX_NUM_DCON_LINES][MAXLINE_DCON_IN_FILE 
       {
         sscanf ( dsc_lines[i], "%*s  %s  %*d  %*d  %*d  %*d  %*d  %*d", tlm_name);
         strcat( tlm_name, "");
+        strcat( tlm_name, "\0");/* fix ticket #278 */
         if( !strcmp( kw->telemetry_mnemonic_name, tlm_name))
         {
           /* create dsc node memory */
