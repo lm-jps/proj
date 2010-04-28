@@ -83,125 +83,138 @@ int get_pointing_info(DRMS_Env_t *drms_env, TIME *tobs, int nobs, PTINFO **ptinf
     PTINFO *p;
     DRMS_RecordSet_t *rset;
     TIME tstart, tend, t, *tasd;
-    int *asd;
+    int *asdidx;
     char dsname[256];
-    int status, nrec, i, j;
+    int status, nrec, i, j, k, l;
 
-    asd = (int *) malloc(nobs*sizeof(int));
+    asdidx = (int *) malloc(nobs*sizeof(int));
     p = *ptinfo = (PTINFO *) malloc(nobs*sizeof(PTINFO));
-    if (!p) 
-	return PT_OUT_OF_MEMORY;
+    if (!p) return PT_OUT_OF_MEMORY;
 
     for (i=0; i<nobs; ++i) {
-	asd[i] = -1;
+	asdidx[i] = -1;
 	p[i].sat_y0 = p[i].sat_z0 = p[i].sat_rot = DRMS_MISSING_FLOAT;
 	p[i].acs_eclp[0] = p[i].acs_sunp[0] = p[i].acs_safe[0] = 0;
 	p[i].acs_mode[0] = p[i].acs_cgt[0] = p[i].asd_rec[0] = 0;
     }
 
-    for(i=0; i<nobs; i++) {	//find first good t_obs
-      if(tobs[i] > 0) break;
+    for (k=0; k<nobs; ++k) {	// find first good t_obs
+	if (tobs[k] > 0) break;
     }
-    if(i == nobs) {		//no good t_obs found
-      return PT_NO_VALID_TOBS;
+    if (k == nobs) {		// no good t_obs found
+	free(asdidx);
+	free(p);
+	return PT_NO_VALID_TOBS;
     }
-    tstart = tobs[i] - 30.0;
-    tend = tobs[nobs-1] + 30.0;
-    sprintf(dsname, "%s[? PACKET_TIME > %.0f and PACKET_TIME < %.0f ?]", ASDSERIES, tstart, tend);
-    rset = drms_open_records(drms_env, dsname, &status);
-    if (!rset || !rset->n || status) return PT_DRMS_OPEN_FAILED;
-    nrec = rset->n;
 
-    tasd = (TIME *) malloc(nrec*sizeof(TIME));
-    if (!tasd) return PT_OUT_OF_MEMORY;
-    for (i=0; i<nrec; ++i)
-	tasd[i] = drms_getkey_time(rset->records[i], "PACKET_TIME", &status);
-
-    // find which ASD packet to use based on closest match between tobs and tasd
-    for (i=0; i<nobs; ++i) {
-	int done = 0;
-	int idx;
-	char *str;
-	double qbcs[4], qsn[4], qq[4];
-	double x[3], x0[3] = {1.0,0.0,0.0};
-	double z[3], z0[3] = {0.0,0.0,1.0};
-	double tmp;
-
-	if(drms_ismissing_time(tobs[i])) continue;
-	asd[i] = idx = find_closest(tasd, nrec, tobs[i]);
-
-	for (j=0; j<i; ++j)
-	    if (asd[i] == asd[j]) {	// have used this packet before
-		memcpy(&p[i], &p[j], sizeof(PTINFO));
-		done = 1;
+    // do in chunks spanning no more than 600s in T_OBS
+    // to reduce the number of records returned from db
+    do {
+	for (i=k+1; i<nobs; ++i)
+	    if ((tobs[i]-tobs[k]) > 600.0)
 		break;
-	    }
-	if (!done) {
-	    if (asd[i] < 0)		// no match for whatever reason; give up
-		continue;
-
-	    str = drms_getkey_string(rset->records[idx], "ACS_AN_FLAG_CSS_ECLIPSE", &status);
-	    if (str) {
-		strncpy(p[i].acs_eclp, str, 16);
-		free(str);
-	    }
-	    str = drms_getkey_string(rset->records[idx], "ACS_AN_FLAG_ACE_INSAFEHOLD", &status);
-	    if (str) {
-		strncpy(p[i].acs_safe, str, 16);
-		free(str);
-	    }
-	    str = drms_getkey_string(rset->records[idx], "ACS_AN_FLAG_DSS_SUNPRES", &status);
-	    if (str) {
-		strncpy(p[i].acs_sunp, str, 16);
-		free(str);
-	    }
-	    str = drms_getkey_string(rset->records[idx], "ACS_AN_NUM_CGT", &status);
-	    if (str) {
-		strncpy(p[i].acs_cgt, str, 16);
-		free(str);
-	    }
-	    str = drms_getkey_string(rset->records[idx], "ACS_AN_ACS_MODE", &status);
-	    if (str) {
-		strncpy(p[i].acs_mode, str, 16);
-		free(str);
-	    }
-	    snprintf(p[i].asd_rec, 64, "%s[:#%lld]", ASDSERIES, rset->records[idx]->recnum);
-
-	    status = 0;
-	    qbcs[0] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOBCSF_EST_S", &status);
-	    qbcs[1] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOBCSF_EST_X", &status);
-	    qbcs[2] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOBCSF_EST_Y", &status);
-	    qbcs[3] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOBCSF_EST_Z", &status);
-	    qsn[0] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOSNRF_S", &status);
-	    qsn[1] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOSNRF_X", &status);
-	    qsn[2] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOSNRF_Y", &status);
-	    qsn[3] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOSNRF_Z", &status);
-	    if (status) continue;
-
-	    tmp = qnorm(qbcs);
-	    if (tmp > 1.001 || tmp < 0.999) continue;
-	    tmp = qnorm(qsn);
-	    if (tmp > 1.001 || tmp < 0.999) continue;
-
-	    qinv(qsn);
-	    qmul(qsn, qbcs, qq);
-	    
-	    // x0: sun-pointing vector in SNR frame
-	    // x:  sun-pointing vector in BCS frame
-	    qrot(qq, x0, x);
-
-	    // z0: solar north in SNR frame
-	    // z:  solar north in BCS frame
-	    qrot(qq,z0,z);
-
-	    p[i].sat_rot = atan2(z[1],z[2])*180.0/M_PI;
-	    p[i].sat_y0 = -asin(x[1])*3600.0*180.0/M_PI;
-	    p[i].sat_z0 = asin(x[2])*3600.0*180.0/M_PI;
+	l = i-1;
+	tstart = tobs[k] - 30.0;
+	tend = tobs[l] + 30.0;
+	sprintf(dsname, "%s[? PACKET_TIME > %.0f and PACKET_TIME < %.0f ?]", ASDSERIES, tstart, tend);
+	rset = drms_open_records(drms_env, dsname, &status);
+	if (!rset || !rset->n || status) {
+	    free(asdidx);
+	    free(p);
+	    if (rset) drms_close_records(rset, DRMS_FREE_RECORD);
+	    return PT_DRMS_OPEN_FAILED;
 	}
-    }
+	nrec = rset->n;
+	tasd = (TIME *) malloc(nrec*sizeof(TIME));
+	if (!tasd) return PT_OUT_OF_MEMORY;
+	for (i=0; i<nrec; ++i)
+	    tasd[i] = drms_getkey_time(rset->records[i], "PACKET_TIME", &status);
 
-    drms_close_records(rset, DRMS_FREE_RECORD);
-    free(tasd);
-    free(asd);
+	// find which ASD packet to use based on closest match between tobs and tasd
+	for (i=k; i<=l; ++i) {
+	    int done = 0;
+	    int idx;
+	    char *str;
+	    double qbcs[4], qsn[4], qq[4];
+	    double x[3], x0[3] = {1.0,0.0,0.0};
+	    double z[3], z0[3] = {0.0,0.0,1.0};
+	    double tmp;
+
+	    if (drms_ismissing_time(tobs[i])) continue;
+	    asdidx[i] = idx = find_closest(tasd, nrec, tobs[i]);
+	    if (idx < 0) continue;	// no match for whatever reason; give up
+
+	    for (j=i-1; j>=0; --j)
+		if (asdidx[i] == asdidx[j]) {	// have used this ASD packet before
+		    memcpy(&p[i], &p[j], sizeof(PTINFO));
+		    done = 1;
+		    break;
+		}
+	    if (!done) {			// a new ASD packet has been picked
+		str = drms_getkey_string(rset->records[idx], "ACS_AN_FLAG_CSS_ECLIPSE", &status);
+		if (str) {
+		    strncpy(p[i].acs_eclp, str, 16);
+		    free(str);
+		}
+		str = drms_getkey_string(rset->records[idx], "ACS_AN_FLAG_ACE_INSAFEHOLD", &status);
+		if (str) {
+		    strncpy(p[i].acs_safe, str, 16);
+		    free(str);
+		}
+		str = drms_getkey_string(rset->records[idx], "ACS_AN_FLAG_DSS_SUNPRES", &status);
+		if (str) {
+		    strncpy(p[i].acs_sunp, str, 16);
+		    free(str);
+		}
+		str = drms_getkey_string(rset->records[idx], "ACS_AN_NUM_CGT", &status);
+		if (str) {
+		    strncpy(p[i].acs_cgt, str, 16);
+		    free(str);
+		}
+		str = drms_getkey_string(rset->records[idx], "ACS_AN_ACS_MODE", &status);
+		if (str) {
+		    strncpy(p[i].acs_mode, str, 16);
+		    free(str);
+		}
+		snprintf(p[i].asd_rec, 64, "%s[:#%lld]", ASDSERIES, rset->records[idx]->recnum);
+
+		status = 0;
+		qbcs[0] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOBCSF_EST_S", &status);
+		qbcs[1] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOBCSF_EST_X", &status);
+		qbcs[2] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOBCSF_EST_Y", &status);
+		qbcs[3] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOBCSF_EST_Z", &status);
+		qsn[0] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOSNRF_S", &status);
+		qsn[1] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOSNRF_X", &status);
+		qsn[2] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOSNRF_Y", &status);
+		qsn[3] = drms_getkey_float(rset->records[idx], "ACS_AN_QUAT_GCIFTOSNRF_Z", &status);
+		if (status) continue;
+
+		tmp = qnorm(qbcs);
+		if (tmp > 1.001 || tmp < 0.999) continue;
+		tmp = qnorm(qsn);
+		if (tmp > 1.001 || tmp < 0.999) continue;
+
+		qinv(qsn);
+		qmul(qsn, qbcs, qq);
+		
+		// x0: sun-pointing vector in SNR frame
+		// x:  sun-pointing vector in BCS frame
+		qrot(qq, x0, x);
+
+		// z0: solar north in SNR frame
+		// z:  solar north in BCS frame
+		qrot(qq,z0,z);
+
+		p[i].sat_rot = atan2(z[1],z[2])*180.0/M_PI;
+		p[i].sat_y0 = -asin(x[1])*3600.0*180.0/M_PI;
+		p[i].sat_z0 = asin(x[2])*3600.0*180.0/M_PI;
+	    }
+	}
+	drms_close_records(rset, DRMS_FREE_RECORD);
+	free(tasd);
+	k = l+1;
+    } while (k < nobs);
+
+    free(asdidx);
     return 0;
 }
