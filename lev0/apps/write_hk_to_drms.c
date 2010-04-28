@@ -1112,7 +1112,7 @@ int get_pkt_time_from_timecodes(HK_Keyword_t *hk,  TIME *ptime)
                                                                                                 
   if (!SEC_FOUND_FLAG)
   {
-    printkerr("Error at %s, line %d: Did not find TIMECODE_SECONDS value for "
+    printkerr("ERROR at %s, line %d: Did not find TIMECODE_SECONDS value for "
               "calculating the PACKET_TIME keyword and index. Returning error "
               "status.\n",__FILE__,__LINE__);
     return 0;
@@ -1121,8 +1121,8 @@ int get_pkt_time_from_timecodes(HK_Keyword_t *hk,  TIME *ptime)
   {
     if (!SUBSEC_FOUND_FLAG)
     {
-      printkerr("Error at %s, line %d: Did not find TIMECODE_SUBSECS value for"
-                "calculating the PACKET_TIME keyword and index. Returning error"
+      printkerr("ERROR at %s, line %d: Did not find TIMECODE_SUBSECS value for "
+                "calculating the PACKET_TIME keyword and index. Returning error "
                 "status, but setting time using seconds only.\n",__FILE__,__LINE__);
       *ptime =SDO_to_DRMS_time(sec, 0);
       return 0;
@@ -1253,7 +1253,7 @@ char *get_hk_source(CCSDS_Packet_t *ccsds_ptr, TIME *pt)
   }
   else
   {
-    printkerr("Warning at %s, line %d: APID is not in range of ",
+    printkerr("Warning at %s, line %d: APID is not in range of "
               "HMI, AIA, or SDO. APID: <%d>\n",
                __FILE__, __LINE__, apid);
   }
@@ -1581,7 +1581,7 @@ char *get_lookup_filename(int apid )
         }
         else
         {
-          printkerr("Warning at %s, line %d: APID is not in range of ",
+          printkerr("Warning at %s, line %d: APID is not in range of "
                     "HMI, AIA, or SDO. APID: <%d>\n",
                     __FILE__, __LINE__, apid);
           strcpy(lufn,"\0");
@@ -1640,6 +1640,7 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
   int found_status=0;
   int j;
   long int sec_pkt, subsec_pkt;
+  long int trigger_lr, trigger_hr;
   static int tc_last_index;
   int found_dsr_node=0;
   int ckinit=0;
@@ -1688,8 +1689,12 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
      /* check for matching data series names */
     if (!strcmp(dsr->dsname, ds_name))
     {
+
       /* found ds name in dsr cache link list-now check low range threshold for holding cache values is okay */
-      if ( dsr->timecode_lrsec <= sec_pkt && dsr->timecode_hrsec >= sec_pkt )
+      /* check if want to force free of cache, then query  and reload of timecodes with new range of timecodes */
+      trigger_lr=dsr->timecode_lrsec + 3600; //Trigger reload an hour later for low range
+      trigger_hr=dsr->timecode_hrsec - 3600; //Trigger reload an hour early for high range
+      if ( (trigger_lr <= sec_pkt) && (trigger_hr >= sec_pkt) )
       {
         /* if got timecode seconds value less than low range -then values in cache ok */
         /* if got packet timecode seconds less than high range and greater than low range  -then values in cache ok */
@@ -1702,11 +1707,13 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
 #ifdef DEBUG_WRITE_HK_TO_DRMS
         printkerr("Warning Monitor Message:check_hk_rec_exist:Watch this does "
                   "not occur too often. The low and high range of timecode cache needs "
-                  "to be reset and reloaded.This warning message should occur only four "
+                  "to be reset and reloaded.This warning message should occur only about four "
                   "times every 24 hours per HK by APID series.\n");
 #endif
-        dsr->timecode_lrsec= sec_pkt - HK_SECONDS_RANGE;
-        dsr->timecode_hrsec= sec_pkt + HK_SECONDS_RANGE;
+        /* reset range of actual query of timecodes to database -we currently doing 12 hour period*/
+        /* HK_SECONDS_RANGE was changed to 6 hrs to fix bug on retrieving too large amount of data*/
+        dsr->timecode_lrsec= sec_pkt - (HK_SECONDS_RANGE);
+        dsr->timecode_hrsec= sec_pkt + (HK_SECONDS_RANGE);
 
         /* free link */
         for(j=0,tc=dsr->tcnode;tc;j++)
@@ -1716,10 +1723,13 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
           free(ptc);
         }
         dsr->tcnode=NULL;
+       printkerr("DEBUG:MESSAGE: Freed <%d>  TIMECODE nodes in cache for <%s> before reloading cache TIMECODE values\n", j,ds_name);
+#ifdef DEBUG_WRITE_HK_TO_DRMS
+       printkerr("DEBUG:MESSAGE: Freed <%d>  TIMECODE nodes in cache for <%s> before reloading cache TIMECODE values\n", j,ds_name);
+#endif
         tc_last_index=0;
-
         /* reload link list done below with new values */
-        dsr_head=NULL;
+        //dsr_head=NULL;Took out since might cause memory leaks
         istatus=initialize_timecodes_cache(ds_name, kw, apid);
         if(istatus == 0)
         {
@@ -1750,7 +1760,6 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
         /* check if found match for seconds value */
         if( sec_pkt == tc->sec)
         { 
-
           /* found second, check if found subseconds */
           if( subsec_pkt == tc->subsec)
           {
@@ -1838,6 +1847,7 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
     {
       /* if found dsr node set tc using dsr */
       tc=dsr->tcnode;
+      dsrn=dsr;/* fix for ticket #278*/
     }
 
     /* check if head tc node there, if not there create head tc node */
@@ -1867,7 +1877,7 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
        tc->subsec = subsec_pkt;
        tc->next = NULL;
        ptc->next=tc; /*link nodes in list */
-       tc_last_index++;
+       tc_last_index++;//use to count nodes created to compare with freed
     }/*end-else malloc timecode node and add to end of timecode link list */
   }
   else
@@ -2175,6 +2185,14 @@ int initialize_timecodes_cache(char* ds_name, HK_Keyword_t *kw, int apid)
 
   /* open records for drms series */
   rs = drms_open_records(drms_env, nquery, &drms_status);
+  if(drms_status) 
+  {
+    printkerr("ERROR at %s, line %d: Can't open records using drms_open_records for drms query <%s>  "
+              "This series may not exist. Please create series and rerun\n",
+                __FILE__,__LINE__, nquery);
+    return(0);
+  }
+
 #ifdef DEBUG_WRITE_HK_TO_DRMS
   if(!rs)
   {
@@ -2215,7 +2233,17 @@ int initialize_timecodes_cache(char* ds_name, HK_Keyword_t *kw, int apid)
     if(dsr_head)
     {
       /* go to last node via pdsr */
-      for(dsr=dsr_head;dsr; pdsr=dsr,dsr=dsr->next);
+      for(dsr=dsr_head;dsr; pdsr=dsr,dsr=dsr->next)
+      {
+         /* new code to fix TRAC ticket 278*/
+         /* check if HK_DSN_RANGE_t node exists */
+         if(!strcmp(dsr->dsname, ds_name))
+         {
+            /*found HK_DSN_RANGE_t node with series name */
+            tc=dsr->tcnode; /*set tc to null since dsr->node is set to null during free of node above*/
+            break;
+         }
+      }/*end for loop threw HK_DSN_RANGE_t nodes */
     }
     else
     {
@@ -2319,8 +2347,20 @@ int initialize_timecodes_cache(char* ds_name, HK_Keyword_t *kw, int apid)
         /* create next node for time code link list */
         tcn= (HK_Timecode_t *)malloc(sizeof(HK_Timecode_t));
 
-        /* assign next value to new node and reset tc pointer */
-        tc->next=tcn;
+        /* new code for fix of TRAC ticket 278 */
+        /* check if HK_Timecode_t node is null-if is set top node else link last node to newly created node*/
+        if(dsr->tcnode == NULL)
+        {
+           /* set top node for HK_Timecode_t nodes */
+           dsr->tcnode=tcn;
+        }
+        else
+        {
+          /* assign next value to new node and reset tc pointer */
+          tc->next=tcn;
+        }
+        /* end of new code for fix of TRAC ticket 278 */
+        /* set tc to node going to add timecode values to */
         tc=tcn;
 
         /* get next record and set values in timecode link list */
