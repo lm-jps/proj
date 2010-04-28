@@ -446,6 +446,7 @@ static int load_engr_values(HK_Keywords_Format *hk_keywords, HK_Keyword_t **kw_h
     /* load keyword name */ 
     strcpy(kwt->fitsname, hk_keywords->keyword_name); 
     strcpy(kwt->name, hk_keywords->telemetry_mnemonic_name); 
+    strcat(kwt->name,"\0"); /*fix ticket #278 */
 
     /* load raw value */
     kwt->raw_value = hk_keywords->keyword_value;
