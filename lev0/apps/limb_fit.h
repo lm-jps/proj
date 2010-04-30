@@ -29,7 +29,7 @@ const int cent_err=20;
   const double limit_var=50.0;
   const double limit_cc=20.0;
 
-  const int lim=8;
+const int lim=10;
   const int parsize=2*lim+1;
 
 //gapfill constants
