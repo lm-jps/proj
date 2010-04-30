@@ -9,6 +9,8 @@ void free_mem(struct mempointer *memory);
  int status_res, status_gap;
   int status,status1,status2;
 
+  //initialization
+  int i, j;
 
 
 
@@ -19,7 +21,7 @@ void free_mem(struct mempointer *memory);
   static struct fill_struct fills;
 
   static int config_id=0;
-  static unsigned char *mask=NULL;
+  static unsigned char mask[4096*4096];
 
   if (first_call)
     {
@@ -27,9 +29,7 @@ void free_mem(struct mempointer *memory);
       init_fresize_boxcar(&fresizes,2,4);
       init_fresize_boxcar(&fresizes_full,2,1);
 
-      mask=(unsigned char *)(malloc(nx*ny*sizeof(unsigned char)));
-
-      
+      //mask=(unsigned char *)(malloc(nx*ny*sizeof(unsigned char)));
     
       status_gap=init_fill(gapfill_method, gapfill_regular, gapfill_order,gapfill_order2,gapfill_order2,&fills, NULL);
 
@@ -41,17 +41,26 @@ void free_mem(struct mempointer *memory);
   new_config_id=drms_getkey_int(record, "HIMGCFID", &status);
 
   FILE *maskfile;
-
+ 
   if (status == DRMS_SUCCESS && new_config_id >= min_imcnf && new_config_id <=max_imcnf)
     {
     if (config_id != new_config_id)
       {
+
+	unsigned char *mk;
+	mk=(unsigned char *)(malloc(sizeof(unsigned char)));
+
 	config_id=new_config_id;
 
 	printf("new image config\n");
 	maskfile=fopen("/home/jsoc/hmi/tables/cropmask.105", "rb"); //use the same crop table for now
     if (maskfile==NULL){fputs("mask file not found", stderr); status_res=2; return status;}
-    bytes_read=fread(mask,sizeof(unsigned char),nx*ny,maskfile);
+    for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) 
+      {
+	bytes_read=fread(mk,sizeof(unsigned char),1,maskfile);
+	mask[j*nx+i]=mk[0];
+      }
+
     fclose(maskfile);
       }
     }
@@ -85,8 +94,6 @@ void free_mem(struct mempointer *memory);
 
 
 
-  //initialization
-  int i, j;
 
   int rcount=0;  //counter for missing points
 
@@ -184,7 +191,7 @@ void free_mem(struct mempointer *memory);
  
   rcount=0;
 #pragma omp parallel  for reduction(+:rcount) private(i,j,dx)    
-  for (j=0; j<nx; ++j) 
+  for (j=0; j<ny; ++j) 
       for (i=0; i<nx; ++i)
 	{
 	  if (isnan(image_in[j*nx+i])){mask_p[j*nx+i]=2;} else {mask_p[j*nx+i]=0;}
@@ -253,8 +260,6 @@ void free_mem(struct mempointer *memory);
       cross_corr(nxx,nyy, imhp, imro);
 
 
-
-
       for (j=0; j<nyy; ++j)
 	for (i=0; i<nxx; ++i)
 	  {
@@ -290,7 +295,7 @@ void free_mem(struct mempointer *memory);
       //////////////////////////////////////////////////////////
 
 #pragma omp parallel for  private(i,j,dx)
-         for (j=0; j<nx; ++j) 
+         for (j=0; j<ny; ++j) 
             for (i=0; i<nx; ++i)
 	      {
 		dx=sqrt(pow((double)i-cx,2)+pow((double)j-cy,2));
@@ -312,7 +317,7 @@ void free_mem(struct mempointer *memory);
       for (i=0; i<nr; ++i)rc[i]=((high-low)*(double)i/(double)(nr-1)+low)*rad;
       for (j=0; j<nphi; ++j) phic[j]=(double)j/(double)nphi*2.0f*(double)M_PI;
 
-      #pragma omp parallel for private(i,j)
+#pragma omp parallel for private(i,j)
       for (j=0; j<nphi; ++j)
 	for (i=0; i<nr; ++i)
 	  {
@@ -324,6 +329,7 @@ void free_mem(struct mempointer *memory);
 
       int xl,xu,yl,yu;
       double rx, ry;
+      double wg[2*lim+1];
 
 #pragma omp parallel for private(i,j,xl,yl,xu,yu,rx,ry)
       for (j=0; j<nphi; ++j)
@@ -344,7 +350,9 @@ void free_mem(struct mempointer *memory);
    
       fmax=0.0; max=0;
    
-     
+      for (i=0; i<(2*lim+1); ++i){wg[i]=1.0-pow(sin(M_PI/(float)(2*lim)*(float)i+M_PI/2.0),4);}
+
+  
       if (method == 1)
 	{
       for (i=0; i<nr; ++i) for (j=0; j<nphi; ++j) avgphi[i]=avgphi[i]+imrphi[j*nr+i]/(double)nphi;
@@ -357,14 +365,14 @@ void free_mem(struct mempointer *memory);
 
       for (i=0; i<nr; ++i) if (avgphi[i] > fmax){fmax=avgphi[i]; max=i;}
 
-
+   
       
-      if ((max-lim) >= 0 && (max+lim) < nr) for (i=(max-lim); i<=(max+lim); ++i){parab[i-max+lim]=avgphi[i]; ispar=is_parab(parab, parsize, lim);} else ispar=1;
+      if ((max-lim) >= 0 && (max+lim) < nr) for (i=(max-lim+1); i<=(max+lim-1); ++i){parab[i-max+lim]=avgphi[i]; ispar=is_parab(parab, parsize, lim);} else ispar=1;
 
 	  if (ispar == 0 )
 	    {
-	      for (k=0; k<=2; ++k) for (l=0; l<=2; ++l) for (i=(max-lim); i<=(max+lim); ++i) akl[k][l]=akl[k][l]+pow((long double)rc[i], k+l);
-	      for (k=0; k<=2; ++k) for (i=(max-lim); i<=(max+lim); ++i) bl[k]=bl[k]+pow((long double)rc[i], k)*(long double)avgphi[i];
+	      for (k=0; k<=2; ++k) for (l=0; l<=2; ++l) for (i=(max-lim); i<=(max+lim); ++i) akl[k][l]=akl[k][l]+wg[i-(max-lim)]*pow((long double)rc[i], k+l);
+	      for (k=0; k<=2; ++k) for (i=(max-lim); i<=(max+lim); ++i) bl[k]=bl[k]+wg[i-(max-lim)]*pow((long double)rc[i], k)*(long double)avgphi[i];
 
       
       //invert akl
@@ -414,8 +422,8 @@ void free_mem(struct mempointer *memory);
 
       if (ispar == 0)
 	{
-	  for (k=0; k<=2; ++k) for (l=0; l<=2; ++l) for (i=(max-lim); i<=(max+lim); ++i) akl[k][l]=akl[k][l]+pow((long double)rc[i], k+l);
-	  for (k=0; k<=2; ++k) for (i=(max-lim); i<=(max+lim); ++i) bl[k]=bl[k]+pow((long double)rc[i], k)*(long double)avgphi[i];
+	  for (k=0; k<=2; ++k) for (l=0; l<=2; ++l) for (i=(max-lim); i<=(max+lim); ++i) akl[k][l]=akl[k][l]+wg[i-(max-lim)]*pow((long double)rc[i], k+l);
+	  for (k=0; k<=2; ++k) for (i=(max-lim); i<=(max+lim); ++i) bl[k]=bl[k]+wg[i-(max-lim)]*pow((long double)rc[i], k)*(long double)avgphi[i];
 
       
       //invert akl
