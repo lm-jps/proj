@@ -1723,7 +1723,6 @@ int check_hk_record_exists(char* ds_name, HK_Keyword_t *kw, int apid)
           free(ptc);
         }
         dsr->tcnode=NULL;
-       printkerr("DEBUG:MESSAGE: Freed <%d>  TIMECODE nodes in cache for <%s> before reloading cache TIMECODE values\n", j,ds_name);
 #ifdef DEBUG_WRITE_HK_TO_DRMS
        printkerr("DEBUG:MESSAGE: Freed <%d>  TIMECODE nodes in cache for <%s> before reloading cache TIMECODE values\n", j,ds_name);
 #endif
