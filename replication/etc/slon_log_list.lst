@@ -20,6 +20,5 @@
 ############################################################
 
 
-transactions earlier than XID | cd /b/devtest/JSOC/base/drms/replication/manageslony/slon_email_alert && ./slon_email_alert /b/devtest/JSOC/proj/replication/etc/repserver.cfg | true      | 1
-Cannot write to archive file | cd /b/devtest/JSOC/base/drms/replication/manageslony/ && ./sl_restart_slon_daemons.sh | false | 0
-
+transactions earlier than XID | $kRepDir/manageslony/slon_email_alert $kServerCfg | true      | 1
+Cannot write to archive file |  $kRepDir/manageslony/sl_restart_slon_daemons.sh $kServerCfg | false | 0
