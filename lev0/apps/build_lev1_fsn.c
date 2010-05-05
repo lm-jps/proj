@@ -75,7 +75,7 @@ ModuleArgs_t module_args[] = {
 
 CmdParams_t cmdparams;
 // Module name presented to DRMS. 
-char *module_name = "build_lev1";
+char *module_name = "build_lev1_fsn";
 
 FILE *h1logfp;		// fp for h1 ouput log for this run 
 //static IMG Image0, Image1;
@@ -130,7 +130,7 @@ unsigned int bfsn, efsn;	//begin and end fsn to do
 int verbose;
 int hmiaiaflg = 0;		//0=hmi, 1=aia
 int imagecnt = 0;		// num of images since last commit 
-int restartflg = 0;		// set when build_lev1 is called for a restart
+int restartflg = 0;	// set when build_lev1_fsn is called for a restart
 int abortflg = 0;
 int sigalrmflg = 0;             // set on signal so prog will know 
 int ignoresigalrmflg = 0;       // set after a close_image()
@@ -239,7 +239,7 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
-    printf ("Usage:\nbuild_lev1 [-vhr] "
+    printf ("Usage:\nbuild_lev1_fsn [-vhr] "
 	"instru=<hmi|aia> dsin=<lev0> dsout=<lev1> bfsn=<fsn#>\n"
 	"                 efsn=<fsn#> quicklook=<0|1> [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
@@ -250,11 +250,11 @@ int nice_intro ()
 	"      default hmi=hmi.lev0e   aia=aia.lev0e\n"
 	"dsout= data set name of lev1 output\n"
 	"      default hmi=su_production.hmi_lev1e   aia=su_production.aia_lev1e\n"
-	"bfsn= first lev0 fsn to process. -1=error must be given by build_lev1_mgr_fsn\n"
-	"efsn= last lev0 fsn to process. -1=error must be given by build_lev1_mgr_fsn\n"
+	"bfsn= first lev0 fsn to process. 0=error, must be given by build_lev1_mgr_fsn\n"
+	"efsn= last lev0 fsn to process. 0=error, must be given by build_lev1_mgr_fsn\n"
 	"quicklook= 1 = quicklook mode, 0 = definitive mode\n"
 	"logfile= optional log file name. If not given uses:\n"
-        "         /usr/local/logs/lev1/build_lev1.<time_stamp>.log\n");
+        "         /usr/local/logs/lev1/build_lev1_fsn.<time_stamp>.log\n");
     return(1);
     }
   verbose = cmdparams_get_int (&cmdparams, "v", NULL);
@@ -343,7 +343,7 @@ int send_mail(char *fmt, ...)
 
   va_start(args, fmt);
   vsprintf(string, fmt, args);
-  sprintf(cmd, "echo \"%s\" | Mail -s \"build_lev1 mail\" lev0_user", string);
+  sprintf(cmd, "echo \"%s\" | Mail -s \"build_lev1_fsn mail\" lev0_user", string);
   system(cmd);
   va_end(args);
   return(0);
@@ -353,7 +353,7 @@ int send_mail(char *fmt, ...)
 void abortit(int stat)
 {
   printk("***Abort in progress ...\n");
-  printk("**Exit build_lev1 w/ status = %d\n", stat);
+  printk("**Exit build_lev1_fsn w/ status = %d\n", stat);
   if (h1logfp) fclose(h1logfp);
   exit(stat);
 }
@@ -974,7 +974,7 @@ void setup()
   printk("%s\n", datestr);
   getcwd(cwdbuf, 126);
   sprintf(idstr, "Cwd: %s\nCall: ", cwdbuf);
-  sprintf(string, "build_lev1 started as pid=%d ppid=%d user=%s\n", 
+  sprintf(string, "build_lev1_fsn started as pid=%d ppid=%d user=%s\n", 
 		getpid(), getppid(), username);
   strcat(idstr, string);
   printk("%s", idstr);
@@ -1001,7 +1001,7 @@ void setup()
   while(fgets(string, sizeof string, fin)) {  //get ps line
     if(!(strstr(string, "perl"))) continue;
     sscanf(string, "%s %d", idstr, &tpid); /* get user name & process id */
-    sprintf(lfile, "%s/build_lev1_restart_%d.touch", LEV1LOG_BASEDIR, tpid);
+    sprintf(lfile, "%s/build_lev1_restart_fsn_%d.touch", LEV1LOG_BASEDIR, tpid);
     sprintf(idstr, "/bin/touch %s", lfile);
     printk("%s\n", idstr);
     system(idstr);
