@@ -36,7 +36,8 @@ int taverage(
   int avmethod, // averaging method
   int order, // Interpolation order
   double tspace, // Spacing of times to interpolate to
-  int hwidth, // In units of tspace. Total width is 2*hwidth+1
-  double par1 // In units of tspace.
+  int hwidth, // Window width in units of tspace. Total width is 2*hwidth+1
+  double par1, // In units of tspace. Meaning depends on avmethod.
+  double par2 // In units of tspace. Meaning depends on avmethod.
 );
 
