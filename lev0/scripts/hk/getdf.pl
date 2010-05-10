@@ -31,8 +31,10 @@ $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
 #set common email arguments
-$from_email="carl\@sun.stanford.edu";
-$to_email="carl\@sun.stanford.edu";
+$from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
+$to_email="jsoc_ops\@sun.stanford.edu";
+#$from_email="carl\@sun.stanford.edu";
+#$to_email="carl\@sun.stanford.edu";
 $subject_email="JSOC:WARNING:Ingesting HSB dayfiles: status:no files loaded today";
 
 # check arguments
