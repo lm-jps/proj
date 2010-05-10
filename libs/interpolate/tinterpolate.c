@@ -51,6 +51,9 @@ int tinterpolate(
   unsigned char *mp;
   //int ib, nblock;
   char *filename;
+  double sum;
+  double *xc,*b,*rhc,*bta1b1,*help;
+  int iconst,jconst;
 
   if ((nsample < 1) || (nsample > 20)) {
 // Code breaks at 31 or 32 due to the use of summed masks
@@ -95,8 +98,13 @@ int tinterpolate(
   rh0=(double *)(MKL_malloc(nsample*sizeof(double),malign));
   coeffd=(double *)(MKL_malloc(nsample*sizeof(double),malign));
   coeff=(float *)(MKL_malloc(nsample*sizeof(float),malign));
-  a1b=(double *)(MKL_malloc(nsample*sizeof(double),malign));
+  a1b=(double *)(MKL_malloc(nconst*nsample*sizeof(double),malign));
   a1r=(double *)(MKL_malloc(nsample*sizeof(double),malign));
+  xc=(double *)(MKL_malloc(nsample*sizeof(double),malign));
+  b=(double *)(MKL_malloc(nconst*nsample*sizeof(double),malign));
+  rhc=(double *)(MKL_malloc(nconst*sizeof(double),malign));
+  help=(double *)(MKL_malloc(nconst*sizeof(double),malign));
+  bta1b1=(double *)(MKL_malloc(nconst*nconst*sizeof(double),malign));
 
 // nmasks=2^nsample
   nmasks=1;
@@ -141,10 +149,11 @@ for (imask=0;imask<nmasks;imask++) {
         coeffd[i]=rh0[wgood[i]];
       }
       dpotrf(uplo,&ngood,a,&ngood,&info); // Cholesky decomposition
-      if (nconst==0) {
+      switch (nconst) {
+      case 0:
         dpotrs(uplo,&ngood,&ione,a,&ngood,coeffd,&ngood,&info);
-      }
-      else {
+        break;
+      case 1:
         for (i=0;i<ngood;i++) a1b[i]=1.;
         dpotrs(uplo,&ngood,&ione,a,&ngood,a1b,&ngood,&info);
         bta1b=0.;
@@ -155,8 +164,61 @@ for (imask=0;imask<nmasks;imask++) {
         for (i=0;i<ngood;i++) bta1r=bta1r+a1r[i];
         c=(bta1r-1.)/bta1b;
         for (i=0;i<ngood;i++) coeffd[i]=a1r[i]-c*a1b[i];
-      } // nconst
+        break;
+      default:
+// Set up array of delta times
+        for (i=0;i<ngood;i++) {
+          xc[i]=tsample[wgood[i]]-tint;
+        }
+// Set up constraint matrix
+// First row is 1
+        for (i=0;i<ngood;i++) b[i]=1.;
+        for (i=0;i<ngood;i++) a1b[i]=1.;
+        rhc[0]=1.0; // Constraint is 1
+// Other rows are delta times ^ polynomial order
+        for (iconst=1;iconst<nconst;iconst++) {
+          for (i=0;i<ngood;i++) {
+            b[iconst*ngood+i]=a1b[(iconst-1)*ngood+i]*xc[i];
+            a1b[iconst*ngood+i]=a1b[(iconst-1)*ngood+i]*xc[i];
+          }
+          rhc[iconst]=0.0;
+        }
+// Solve system for constraint matrix 
+        dpotrs(uplo,&ngood,&nconst,a,&ngood,a1b,&ngood,&info);
+// bta1b is a matrix now, so use different variable;
+        for (iconst=0;iconst<nconst;iconst++) {
+          for (jconst=0;jconst<nconst;jconst++) {
+            sum=0.0;
+            for (i=0;i<ngood;i++) {
+              sum=sum+b[iconst*ngood+i]*a1b[jconst*ngood+i];
+            }
+            bta1b1[iconst*nconst+jconst]=sum;
+          }
+        }
+        dpotrf(uplo,&nconst,bta1b1,&nconst,&info); // Cholesky decomposition
+        for (iconst=0;iconst<nconst;iconst++) {
+          sum=0.0;
+          for (i=0;i<ngood;i++) sum=sum+a1b[iconst*ngood+i]*rh0[wgood[i]];
+          help[iconst]=sum-rhc[iconst];
+        }
+        dpotrs(uplo,&nconst,&ione,bta1b1,&nconst,help,&nconst,&info);
+        for (i=0;i<ngood;i++) a1r[i]=rh0[wgood[i]];
+        dpotrs(uplo,&ngood,&ione,a,&ngood,a1r,&ngood,&info);
+        for (i=0;i<ngood;i++) {
+          sum=0.0;
+          for (iconst=0;iconst<nconst;iconst++) {
+            sum=sum+help[iconst]*a1b[iconst*ngood+i];
+          }
+          coeffd[i]=a1r[i]-sum;
+        }
+        break;
+      } // switch (nconst)
       for (i=0;i<ngood;i++) cp[wgood[i]]=(float)coeffd[i];
+/*
+sum=0.0;
+for (i=0;i<ngood;i++) sum=sum+coeffd[i]*tsample[wgood[i]];
+printf("%d %d %f %f %f\n",imask,ngood,tint,sum,sum-tint);
+*/
     } // if ngood
   } // for imask
   t1=dsecnd()-t1;
@@ -305,12 +367,12 @@ int taverage(
   int malign=32;
   int ncor=5000;
   //double dta=1.0; // Time between samples of input autocorrelation
-  int i,j,k,isample;
+  int i,j,k,isample,iconst,jconst;
   FILE *fileptr;
   double ti,dt,dtx,dta;
   double *acor; // Input autocorrelation
   double *a0,*a,*rh0,*coeffd;
-  double *a1b,bta1b,*a1r,bta1r,c;
+  double *b,*a1b,bta1b,*a1r,bta1r,c,*rhc,*xc,*bta1b1,*help;
   int idt;
   int info;
   char uplo[] = "U";
@@ -415,6 +477,7 @@ float psum;
       break;
     case tavg_hathaway:
       weights[i]=(exp(dt*dt/(2*par1*par1))-exp(par2*par2/(2*par1*par1)))*(1+(par2*par2-dt*dt)/(2*par1*par1));
+      break;
     default:
       printf("Unimplemented method in taverage\n");
       return 1;
@@ -470,8 +533,13 @@ float psum;
   rh0=(double *)(MKL_malloc(nsample*sizeof(double),malign));
   coeffd=(double *)(MKL_malloc(nsample*sizeof(double),malign));
   coeff=(float *)(MKL_malloc(nsample*sizeof(float),malign));
-  a1b=(double *)(MKL_malloc(nsample*sizeof(double),malign));
-  a1r=(double *)(MKL_malloc(nsample*sizeof(double),malign));
+  b=(double *)(MKL_malloc(nconst*nsample*sizeof(double),malign));
+  a1b=(double *)(MKL_malloc(nconst*nsample*sizeof(double),malign));
+  help=(double *)(MKL_malloc(nconst*sizeof(double),malign));
+  rhc=(double *)(MKL_malloc(nconst*nsample*sizeof(double),malign));
+  bta1b1=(double *)(MKL_malloc(nconst*nconst*sizeof(double),malign));
+  xc=(double *)(MKL_malloc(nsample*sizeof(double),malign));
+  a1r=(double *)(MKL_malloc(nconst*nsample*sizeof(double),malign));
 
   nmasks=1;
   for (i=0;i<order;i++) nmasks=2*nmasks;
@@ -520,10 +588,11 @@ float psum;
           coeffd[i]=rh0[wgood[i]];
         }
         dpotrf(uplo,&ngood,a,&ngood,&info); // Cholesky decomposition
-        if (nconst==0) {
+        switch (nconst) {
+        case 0:
           dpotrs(uplo,&ngood,&ione,a,&ngood,coeffd,&ngood,&info);
-        }
-        else {
+          break;
+        case 1:
           for (i=0;i<ngood;i++) a1b[i]=1.;
           dpotrs(uplo,&ngood,&ione,a,&ngood,a1b,&ngood,&info);
           bta1b=0.;
@@ -534,8 +603,61 @@ float psum;
           for (i=0;i<ngood;i++) bta1r=bta1r+a1r[i];
           c=(bta1r-1.)/bta1b;
           for (i=0;i<ngood;i++) coeffd[i]=a1r[i]-c*a1b[i];
-        } // nconst
+          break;
+        default:
+// Set up array of delta times
+          for (i=0;i<ngood;i++) {
+            xc[i]=tx1[iwidth*order+wgood[i]]-tw[iwidth];
+          }
+// Set up constraint matrix
+// First row is 1
+          for (i=0;i<ngood;i++) b[i]=1.;
+          for (i=0;i<ngood;i++) a1b[i]=1.;
+          rhc[0]=1.0; // Constraint is 1
+// Other rows are delta times ^ polynomial order
+          for (iconst=1;iconst<nconst;iconst++) {
+            for (i=0;i<ngood;i++) {
+              b[iconst*ngood+i]=a1b[(iconst-1)*ngood+i]*xc[i];
+              a1b[iconst*ngood+i]=a1b[(iconst-1)*ngood+i]*xc[i];
+            }
+            rhc[iconst]=0.0;
+          }
+// Solve system for constraint matrix 
+          dpotrs(uplo,&ngood,&nconst,a,&ngood,a1b,&ngood,&info);
+// bta1b is a matrix now, so use different variable;
+          for (iconst=0;iconst<nconst;iconst++) {
+            for (jconst=0;jconst<nconst;jconst++) {
+              sum=0.0;
+              for (i=0;i<ngood;i++) {
+                sum=sum+b[iconst*ngood+i]*a1b[jconst*ngood+i];
+              }
+              bta1b1[iconst*nconst+jconst]=sum;
+            }
+          }
+          dpotrf(uplo,&nconst,bta1b1,&nconst,&info); // Cholesky decomposition
+          for (iconst=0;iconst<nconst;iconst++) {
+            sum=0.0;
+            for (i=0;i<ngood;i++) sum=sum+a1b[iconst*ngood+i]*rh0[wgood[i]];
+            help[iconst]=sum-rhc[iconst];
+          }
+          dpotrs(uplo,&nconst,&ione,bta1b1,&nconst,help,&nconst,&info);
+          for (i=0;i<ngood;i++) a1r[i]=rh0[wgood[i]];
+          dpotrs(uplo,&ngood,&ione,a,&ngood,a1r,&ngood,&info);
+          for (i=0;i<ngood;i++) {
+            sum=0.0;
+            for (iconst=0;iconst<nconst;iconst++) {
+              sum=sum+help[iconst]*a1b[iconst*ngood+i];
+            }
+            coeffd[i]=a1r[i]-sum;
+          }
+          break;
+        } // switch
         for (i=0;i<ngood;i++) cp[wgood[i]]=(float)coeffd[i];
+/*
+sum=0.0;
+for (i=0;i<ngood;i++) sum=sum+coeffd[i]*tx1[iwidth*order+wgood[i]];
+printf("%d %d %f %f\n",imask,ngood,sum,tw[iwidth]-sum);
+*/
       } // if ngood
     } // for imask
 /*
@@ -553,12 +675,22 @@ printf("\n");
   coeff0=(float *)(MKL_malloc(nsample*sizeof(float),malign));
   for (isample=0;isample<nsample;isample++) coeff0[isample]=0.0f;
   for (iwidth=0;iwidth<width;iwidth++) {
+    sum=0.0;
+    txi=tx1+iwidth*order; // Times for this target
     for (iorder=0;iorder<order;iorder++) {
+      sum=sum+txi[iorder]*coeffs[iwidth*order*nmasks+iorder];
       isample=ix1[iwidth*order+iorder];
       coeff0[isample]=coeff0[isample]+coeffs[iwidth*order*nmasks+iorder]*weights[iwidth];
     }
+    printf("%d %f %f %f\n",iwidth,tw[iwidth],sum,sum-tw[iwidth]);
   }
-for (isample=0;isample<nsample;isample++) printf("%d %f %f\n",isample,tsample[isample],coeff0[isample]);
+
+  sum=0.0;
+  for (isample=0;isample<nsample;isample++) {
+    printf("%d %f %f\n",isample,tsample[isample],coeff0[isample]);
+    sum=sum+tsample[isample]*coeff0[isample];
+  }
+  printf("%f\n",sum);
 
 // Now do actual interpolation
 // Inner loop over time
