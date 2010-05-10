@@ -77,7 +77,7 @@ elsif ($source eq "rtmon")
   $pup_dir=$ENV{'DF_PICKUP_RTMON_FILES'}="/hmisdp-mon/log/packets";
 
   # Process setup (3)
-  $doff_dir=$ENV{'DF_DROPOFF_RTMON_FILES'}="/tmp02/production/lev0/hk_rtmon_dayfile";
+  $doff_dir=$ENV{'DF_DROPOFF_RTMON_FILES'}="/tmp21/production/lev0/hk_rtmon_dayfile";
 
   #set common email arguments(4)
   $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
