@@ -63,8 +63,8 @@ elsif ($src eq "rtmon")
 }
 
 # set up where to put backup logs written monthly 
-#$logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
-$logs_dir="$hm/cvs/myprod/JSOC/proj/lev0/scripts/hk/logs";
+$logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
+#$logs_dir="$hm/cvs/myprod/JSOC/proj/lev0/scripts/hk/logs";
 
 # open log file and append
 open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
