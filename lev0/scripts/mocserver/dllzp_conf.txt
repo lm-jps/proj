@@ -7,4 +7,4 @@ dpath = /tmp21/jsoc/sdo/mocprods
 ns = sdo
 dbuser = production
 dbname = jsoc
-notify = arta@sun.stanford.edu jennifer@sun.stanford.edu rock@sun.stanford.edu carl@sun.stanford.edu
+notify = arta@sun.stanford.edu rock@sun.stanford.edu carl@sun.stanford.edu
