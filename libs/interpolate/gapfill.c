@@ -202,7 +202,7 @@ struct fill_struct *pars
   for (i=0;i<pars->hashmod;i++) {
     ptr=(pars->hashtable[i]);
     while (ptr != NULL) {
-      printf("%d %d %d\n",i,ptr->nbad,ptr->nhit);
+      printf("# %d %d %d\n",i,ptr->nbad,ptr->nhit);
       ptr=ptr->next;
     }
   }
@@ -273,6 +273,7 @@ int find_entry(
         }
       }
       if (ident != 0) { // Success
+#pragma omp atomic
         ptr->nhit++;
         found=1;
         *ptr_out=ptr;
