@@ -198,6 +198,7 @@ struct fill_struct *pars
   for (i=0;i<pars->hashmod;i++) {
     printf("%d %d\n",i,pars->hashcount[i]);
   }
+*/
   for (i=0;i<pars->hashmod;i++) {
     ptr=(pars->hashtable[i]);
     while (ptr != NULL) {
@@ -205,7 +206,6 @@ struct fill_struct *pars
       ptr=ptr->next;
     }
   }
-*/
 
   for (i=0;i<pars->hashmod;i++) {
     omp_destroy_lock(&(pars->locks[i]));
