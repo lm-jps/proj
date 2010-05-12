@@ -1,4 +1,1 @@
-##### ingest dayfile from MOC for production data series  #######
-0  22 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/movedf.pl >/dev/null 2>&1
-##### ingest dayfile from HSB for production data series  #######
-0  21 * * 0-6 /usr/bin/perl /home/production/cvs/JSOC/proj/lev0/scripts/hk/getdf.pl hsb >/dev/null 2>&1
+### move cron jobs to j0 for TRAC Ticket #276 
