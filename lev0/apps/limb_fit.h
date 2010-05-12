@@ -9,10 +9,8 @@ struct mempointer
   double *avgphi;
 
   double *imhp;
-  double *imhp_full;
   double *imro;
   float *image;
-  float *image_full;
   double *parab;
   unsigned char *mask_p;
   float *cnorm;
@@ -29,7 +27,7 @@ const int cent_err=20;
   const double limit_var=50.0;
   const double limit_cc=20.0;
 
-const int lim=10;
+const int lim=8;
   const int parsize=2*lim+1;
 
 //gapfill constants
@@ -55,4 +53,15 @@ int light_val2=3;
 
 const double percent_good=0.75;
 
+
+//for cosmic ray finder
+  const int malign=32;
+  const float fwhm=3.0; //full width half maximum for gaussian filter 
+  const float sigmamin=0;  //lower limit for standard deviation
+  const float sigmamax=7000.0;  //upper limit for standard deviation
+
+const int cent_frac=8; //center portion of image that is used to calculate std of image
+const float limit=7.5;
+
 int limb_fit(DRMS_Record_t *record, float *image_in, double *rsun_lf, double *x0_lf, double *y0_lf, int nx, int ny, int method);
+int cosmic_rays(DRMS_Record_t *record, float *image_int, int *badpix, int nbad, const float limit, int *cosmic, int *n_cosmic, int nx, int ny);

@@ -1,3 +1,7 @@
+//Return codes:
+//2: center fit and radius fit failed
+//1: only radius fit failed
+//0: success 
 int limb_fit(DRMS_Record_t *record, float *image_in, double *rsun_lf, double *x0_lf, double *y0_lf, int nx, int ny, int method)
 {
 
@@ -12,28 +16,16 @@ void free_mem(struct mempointer *memory);
   //initialization
   int i, j;
 
+  
+  struct fresize_struct fresizes;
 
-
-  static int first_call=1;
-  static struct fresize_struct fresizes;
-  static struct fresize_struct fresizes_full;
-
-  static struct fill_struct fills;
+  struct fill_struct fills;
 
   static int config_id=0;
   static unsigned char mask[4096*4096];
 
-  if (first_call)
-    {
-      first_call=0;
-      init_fresize_boxcar(&fresizes,2,4);
-      init_fresize_boxcar(&fresizes_full,2,1);
 
-      //mask=(unsigned char *)(malloc(nx*ny*sizeof(unsigned char)));
-    
-      status_gap=init_fill(gapfill_method, gapfill_regular, gapfill_order,gapfill_order2,gapfill_order2,&fills, NULL);
-
-    }
+ 
 
 
   size_t bytes_read;
@@ -155,10 +147,8 @@ void free_mem(struct mempointer *memory);
 
  
   double *imhp=(double *)(calloc(nxx*nyy, sizeof(double)));
-  double *imhp_full=(double *)(calloc(nx*nx, sizeof(double)));
   double *imro=(double *)(calloc(nxx*nyy, sizeof(double)));
   float *image=(float *)(malloc(nxx*nyy*sizeof(float)));
-  float *image_full=(float *)(malloc(nx*nx*sizeof(float)));
   double *parab=(double *)(malloc(parsize*sizeof(double)));
   unsigned char *mask_p=(unsigned char *)(malloc(nx*nx*sizeof(unsigned char)));
   float *cnorm=(float *)(malloc(nx*nx*sizeof(float)));
@@ -171,10 +161,8 @@ void free_mem(struct mempointer *memory);
   memory.phic=phic;
   memory.avgphi=avgphi;
   memory.imhp=imhp;
-  memory.imhp_full=imhp_full;
   memory.imro=imro;
   memory.image=image;
-  memory.image_full=image_full;
   memory.parab=parab;
   memory.mask_p=mask_p;
   memory.cnorm=cnorm;
@@ -209,20 +197,20 @@ void free_mem(struct mempointer *memory);
 
       if (rcount > 0)
    	{
-	  printf("gapfilling: pixels to fill: %d\n", rcount);	;
+	  printf("gapfilling: pixels to fill: %d\n", rcount);	
+	  status_gap=init_fill(gapfill_method, gapfill_regular, gapfill_order,gapfill_order2,gapfill_order2,&fills, NULL);
 	  if (status_gap == 0){fgap_fill(&fills,image_in,nx,nx,nx,mask_p,cnorm,ierror);} else {status_res=2; free_mem(&memory); return status_res;}
-	  printf("----------\n");
+	  free_fill(&fills);
 	}
 
 
 
-
+      init_fresize_boxcar(&fresizes,2,4);
 
       fresize(&fresizes,image_in, image, nx,nx,nx,nxx,nyy,nxx,0,0,NAN);   //rebin image
-      fresize(&fresizes_full,image_in, image_full, nx,nx,nx,nx,nx,nx,0,0,NAN);
-     
-  
-     
+   
+      free_fresize(&fresizes);
+       
        
 
 #pragma omp parallel for private(i,j,dx)
@@ -243,7 +231,6 @@ void free_mem(struct mempointer *memory);
 	      }
 
 		 
-	
 
 
       //calculate center
@@ -294,22 +281,7 @@ void free_mem(struct mempointer *memory);
    
       //////////////////////////////////////////////////////////
 
-#pragma omp parallel for  private(i,j,dx)
-         for (j=0; j<ny; ++j) 
-            for (i=0; i<nx; ++i)
-	      {
-		dx=sqrt(pow((double)i-cx,2)+pow((double)j-cy,2));
-		if (dx > (rad-marg_lo) && dx < (rad+marg_up))
-		  {
-		    if (!isnan(image_full[j*nx+i-4]) && !isnan(image_full[j*nx+i+4]) && !isnan(image_full[(j+4)*nx+i]) && !isnan(image_full[(j-4)*nx+i]))
-		    {
-		      imhp_full[j*nx+i]=sqrt(pow((double)image_full[j*nx+i-4]-(double)image_full[j*nx+i+4],2)+pow((double)image_full[(j+4)*nx+i]-(double)image_full[(j-4)*nx+i],2));
-		    }
-		  }
-	      }
-
-   
-    //remap for radius determination
+      //remap for radius determination
    
 
    
@@ -321,9 +293,11 @@ void free_mem(struct mempointer *memory);
       for (j=0; j<nphi; ++j)
 	for (i=0; i<nr; ++i)
 	  {
-	    xrp[j*nr+i]=rc[i]*cos(phic[j])+(*x0_lf);
-	    yrp[j*nr+i]=rc[i]*sin(phic[j])+(*y0_lf);
+	    xrp[j*nr+i]=rc[i]/4.0*cos(phic[j])+(*x0_lf)/4.0-0.5;
+	    yrp[j*nr+i]=rc[i]/4.0*sin(phic[j])+(*y0_lf)/4.0-0.5;
 	  }
+
+   
 
       //remap
 
@@ -344,10 +318,11 @@ void free_mem(struct mempointer *memory);
 	    rx=(double)xu-(xrp[j*nr+i]);
 	    ry=(double)yu-(yrp[j*nr+i]);
 
-	    if (xl >= 0 && xu < nx && yl >= 0 && yu < nx)
-	    imrphi[j*nr+i]=rx*ry*imhp_full[yl*nx+xl]+(1.0-rx)*ry*imhp_full[yl*nx+xu]+rx*(1.0-ry)*imhp_full[yu*nx+xl]+(1.0-rx)*(1.0-ry)*imhp_full[yu*nx+xu];
+	    if (xl >= 0 && xu < nxx && yl >= 0 && yu < nyy)
+	    imrphi[j*nr+i]=rx*ry*imhp[yl*nxx+xl]+(1.0-rx)*ry*imhp[yl*nxx+xu]+rx*(1.0-ry)*imhp[yu*nxx+xl]+(1.0-rx)*(1.0-ry)*imhp[yu*nxx+xu];
 	  }
    
+ 	
       fmax=0.0; max=0;
    
       for (i=0; i<(2*lim+1); ++i){wg[i]=1.0-pow(sin(M_PI/(float)(2*lim)*(float)i+M_PI/2.0),4);}
@@ -368,6 +343,7 @@ void free_mem(struct mempointer *memory);
    
       
       if ((max-lim) >= 0 && (max+lim) < nr) for (i=(max-lim+1); i<=(max+lim-1); ++i){parab[i-max+lim]=avgphi[i]; ispar=is_parab(parab, parsize, lim);} else ispar=1;
+     
 
 	  if (ispar == 0 )
 	    {
@@ -470,12 +446,10 @@ void free_mem(struct mempointer *memory);
 void free_mem(struct mempointer *memory)
 {
   free(memory->imhp);
-  free(memory->imhp_full);
   free(memory->imro);
   free(memory->mask_p);
   free(memory->image);
-  free(memory->image_full);
-
+ 
   free(memory->avgphi);
   free(memory->xrp);
   free(memory->yrp);
@@ -533,7 +507,7 @@ void cross_corr(int nx, int ny, double *imhp, double *imro)
     double scale=1./((double)(nx*ny));
 
 
-    #pragma omp parallel for private(i,j)
+#pragma omp parallel for private(i,j)
       for (j=0; j<ny; ++j)
 	for (i=0; i<nx; ++i)
 	  {
@@ -556,7 +530,7 @@ void cross_corr(int nx, int ny, double *imhp, double *imro)
 
      //fft(a)*conj(fft(b))
 
-      #pragma omp parallel for private(i,j)
+#pragma omp parallel for private(i,j)
        for (i = 0; i < nx; ++i){
 	 for (j = 0; j < ny/2+1; ++j){
  	 ac[i][j]=ac[i][j]*conj(bc[i][j])*scale*scale;
@@ -570,12 +544,12 @@ void cross_corr(int nx, int ny, double *imhp, double *imro)
 
      //  rearrange
 
-     #pragma omp parallel for private(i,j)
-for (i = 0; i < ny; ++i){
-     for (j = 0; j < nx; ++j)
+#pragma omp parallel for private(i,j)
+     for (i = 0; i < ny; ++i){
+       for (j = 0; j < nx; ++j){
    	    imro[j*nx+i]=b[(i+nx/2) % nx][(j+ny/2) % ny];
 	  }
-     
+     }
   
 
   }
