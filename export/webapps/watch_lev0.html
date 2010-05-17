@@ -438,7 +438,7 @@ function GetLev0Status()
 
 	$("AIA_lev0_FSN").innerHTML = data.keywords[3].values[1];
 	$("AIA_lev0_T_OBS").innerHTML = data.keywords[0].values[1];
-	$("AIA_lev0_T_OBS_LAG").innerHTML = TimeSinceJSOC(data.keywords[0].values[1]);
+	$("AIA_lev0_T_OBS_LAG").innerHTML = TimeSinceISO(data.keywords[0].values[1]);
 	$("AIA_lev0_DATE").innerHTML =  data.keywords[1].values[1];
 	$("AIA_lev0_DATE_LAG").innerHTML = TimeSinceISO(data.keywords[1].values[1]);
         if ($("AIA_Alert").value > 0 && DATE_Lag >= $("AIA_Alert").value)

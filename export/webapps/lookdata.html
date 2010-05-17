@@ -252,6 +252,9 @@ function CleanSeriesPick()
   $("UseShowInfo").checked = 0;
   $("SIFi").value = "0";
   $("SIFn").value = "0";
+  $("SIFa").value = "0";
+  $("SIFA").value = "0";
+  $("SIFP").value = "0";
   $("SIFkey").value = '';
   $("SIFseg").value = '';
   $("SIFK").value = "0";
@@ -492,6 +495,9 @@ function PickSeries(mode)
     }
   $("Series_Name_Place").innerHTML = SeriesName;
   $("RecSetPlace").innerHTML = SeriesName;
+  // Get link to release notes
+  ProjectName = SeriesName.match(/[a-zA-Z_]*/);
+  $("ReleaseNotes").innerHTML = "<A HREF='http://jsoc.stanford.edu/doc/data/" + ProjectName + "/' target='_blank'>for " + ProjectName + "</A>";
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_test',
     {
@@ -514,7 +520,7 @@ function PickSeries(mode)
         {
         var i;
         // Get series descriptive note and display
-        $("Series_Info_Place").innerHTML = "Series Description: " + SeriesInfo.note;
+        $("Series_Info_Place").innerHTML = SeriesInfo.note;
 
         // Get list of prime keys and index keys and display info
         // Get prime key special info from primekeys array, but
@@ -1213,11 +1219,35 @@ function GetShowInfo()
     return;
     }
 
+  $("SIFi").value = "0";
+  $("SIFn").value = "0";
+  $("SIFa").value = "0";
+  $("SIFA").value = "0";
+  $("SIFP").value = "0";
+  $("SIFkey").value = '';
+  $("SIFseg").value = '';
+  $("SIFK").value = "0";
   $("SIFds").value = $("RecordSet").value;
+
   if ($("WantRecInfo").checked) $("SIFi").value = "1";
   if (MaxRecs != 0) $("SIFn").value = MaxRecs;
-  if (nkeysselected) $("SIFkey").value = KeyList;
-  if (nsegsselected) $("SIFseg").value = SegList;
+  if ($("RecordSet").value.indexOf("[") == -1 && MaxRecs == 0)
+    {
+    alert("Please set Record Limit or provide RecordSet query");
+    return;
+    }
+  if ($("KeysSelect")[1].selected)
+      $("SIFa").value = 1;
+  else if (nkeysselected) 
+      $("SIFkey").value = KeyList;
+  if (nsegsselected)
+    {
+    if ($("SegsSelect")[1].selected)
+      $("SIFA").value = 1;
+    else
+      $("SIFseg").value = SegList;
+    $("SIFP").value = 1;
+    }
   if (nlinksselected) $("SIFK").value = "1";
 
   if (RecordCount == 0 && askedCount == 0)
@@ -1243,7 +1273,7 @@ function GetShowInfo()
   $("FetchKeyValsButton").disabled = true;
   $("AbortKeyValsButton").show();
 // XXXXXXXXXXXXXXXXXX ACK - this of course does not work, FORM wants args in its own structures.
-// if cant use priototype to specifty target, then need to make a hidden div to hold
+// if cant use prototype to specifty target, then need to make a hidden div to hold
 // the args.
 // YES, will do it that way.
 // urlencode the param list and concatenate to next line into showargs
@@ -1386,7 +1416,7 @@ function Export_Recordset()
 <DIV id="JSOC2DIV">
 <P>
 <B>
-jsoc.stanford.edu gives access to export series only, use jsoc2 for full access
+jsoc.stanford.edu gives access to export series only, use jsoc2 for access to internal series
 </B>
 <P>
 <HR>
@@ -1435,14 +1465,16 @@ jsoc.stanford.edu gives access to export series only, use jsoc2 for full access
       <TR>
         <TD rowspan=2 style="vertical-align:top;height:60px">
         <B>Information about selected series</B><BR>
-        Current Series is:
+        <B>Current Series is:</B>
         <span id="Series_Name_Place" style="background-color:#FFFFFF"></span>
         <BR>
         <span id="SSKeysPlace" style="background-color:#FFFFFF;"></span>
         </TD>
         <TD colspan=2 style="vertical-align:top">
-        &nbsp;<BR>
+        <B>Series Description</B> &nbsp;
         <span id="Series_Info_Place" style="background-color:#FFFFFF"></span>
+        <BR>
+        <B>Release Notes <span id="ReleaseNotes"></span></B>
         </TD>
       </TR>
       <TR>
@@ -1481,7 +1513,7 @@ jsoc.stanford.edu gives access to export series only, use jsoc2 for full access
         <input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.  <BR>
         <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info <BR>
         <input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).  <BR>
-        <input type="checkbox" name="UseShowInfo" id="UseShowInfo"> Prepare value table in 'show_info' format in new window. (No *psuedo* keywords yet please) <BR>
+        <input type="checkbox" name="UseShowInfo" id="UseShowInfo"> Prepare value table in 'show_info' format in new window. (No *psuedo* keywords yet please) Segments fail <BR>
         <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
         <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
         </TD>
@@ -1489,7 +1521,7 @@ jsoc.stanford.edu gives access to export series only, use jsoc2 for full access
         Select Keywords, Segments, and Links for table of values.
         <BR>
         <B>4. Select Keywords</B><BR>
-        <form id="KeysSelectForm">
+        <form id="KeysSelectForm" >
           <select id="KeysSelect" size=8 multiple="multiple" onChange="PickKeys();" > </select>
         </form>
         <B>5. Select Segments</B><BR>
@@ -1517,6 +1549,9 @@ jsoc.stanford.edu gives access to export series only, use jsoc2 for full access
   <input type='hidden' id='SIFi' name='i'  value='0' >
   <input type='hidden' id='SIFK' name='K'  value='0' >
   <input type='hidden' id='SIFn' name='n'  value='0' >
+  <input type='hidden' id='SIFa' name='a'  value='0' >
+  <input type='hidden' id='SIFA' name='A'  value='0' >
+  <input type='hidden' id='SIFP' name='P'  value='0' >
 </form>
 </DIV>
 
