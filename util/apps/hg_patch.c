@@ -27,7 +27,7 @@
    cadence=<step time> \
    car_rot=<Carrington Rotation> \
    t_ref=<ref_time> \
-   loc_type=<location units> \
+   locunits=<location units> \
    x=<ew location> \
    y=<ns location> \
    boxunits= <patch spec units> \
@@ -42,9 +42,14 @@
    The position may be specified in arcsec or Stonyhurst coordinates.
    If the car_rot parameter is specified, the Carrington location method is used.
    If the t_ref parameter is present, location is specified by a method given in <locunits>.
-   The location is given in the "x" and "y" arguments.
-   locunits can be "arcsec" or "stony".  The size of the patch can be expressed in pixels, arcsec, or degrees.
-   The units of the patch spec are given in "boxunits".
+   The location is given in the "x" and "y" arguments where the units of x and y are determined by locunits.
+   The choices for locunits are: "arcsec", "pixels", "stony", "carrlong".
+   For "stony" (Stonyhurst) x is the CM distance in degrees, for "carrlong" x is Carrington longitude.
+   The y value is in degrees for either "stony" or "carrlong".
+   locunits can be "arcsec" or "stony". 
+
+   The size of the patch, given in the width and height parameters can be expressed in "pixels", "arcsec", or "degrees"
+   as determined by the "boxunits" parameter.
 
    If the logfile is present, a RecordSet query will be written to it for each image created  containing a query
    that will returnthat image.
@@ -92,7 +97,7 @@
    when the region is just appearing at the E-limb to t_stop.
 
    @code
-   hg_patch in='mdi.fd_M_96m_lev18' out='su_bala.extractreg' car_rot=2009 crln=295 crlt=5 width=30 height=20
+   hg_patch in='mdi.fd_M_96m_lev18' out='su_bala.extractreg' locunits=carrlong boxunits=pixels car_rot=2009 x=295 y=5 width=30 height=20
 
    @endcode
 
@@ -104,12 +109,6 @@
 
    @bug
    No doubt some bugs.
-
-Fails when SOHO upside down
-needs more prime keys in output series
-fails for CR mode, too high by maybe factor of two.
-in CR mode, box dims not centered.  need to find image at disk center - or at least calc for
-that image...
 
 
 */
@@ -140,7 +139,6 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "log", "NOTSPECIFIED", "output log file of records made"},
     {ARG_STRING, "requestid", "NOTSPECIFIED", "RequestID if hg_patch call originated in an export request."},
     {ARG_INT, "car_rot", "-1", "Carrington Rotation when the region crosses CM"},
-    {ARG_INT, "skip", "1", "Increment of records to use, skip count+1"},
     {ARG_FLOAT, "width", "0", "width of box in degrees of longitude"},
     {ARG_FLOAT, "height", "0", "height of box in degrees of latitude when it corsses CM"},
     {ARG_STRING, "boxunits", "pixels", "units of patch, 'pixels', 'arcsecs', or 'degrees'"},
@@ -225,7 +223,6 @@ int DoIt(void)
   double width = params_get_double(params, "width");
   double height = params_get_double(params, "height");
   int car_rot = params_get_int(params, "car_rot");
-  int skiprec = params_get_int(params, "skip");
   double x = params_get_double(params, "x");
   double y = params_get_double(params, "y");
   const char *boxunits = params_get_str(params, "boxunits");
@@ -257,17 +254,19 @@ int DoIt(void)
   else loctype = BOXBAD;
 
 fprintf(stderr,"starting boxtype=%d, loctype=%d\n",boxtype,loctype);
-  if (car_rot > 0 && t_ref == tNotSpecified)
+  if (loctype == LOCCARR)
     {
-    loctype = LOCCARR;
+    if (car_rot < 0) DIE("Carrington rotation number must be provided for locunits=carrlong");
     do_reftime = 0;
     }
-  else if (car_rot <= 0 && t_ref != tNotSpecified)
+  else 
+    {
+    if (t_ref < 0) DIE("t_ref must be provided for locunits!=carrlong");
     do_reftime = 1;
-  else if (loctype==LOCBAD)
+    }
+
+  if (loctype==LOCBAD)
     DIE2("Location units not detected, locunits", locunits)
-  else
-    DIE("Must provide either car_rot or t_ref, but not both.")
   if (boxtype==BOXBAD)
     DIE2("patch dimensions not understood,", boxunits);
 
@@ -485,7 +484,7 @@ fprintf(stderr,"finally ready to open %s\n",in);
 fprintf(stderr,"open %s got %d records\n",in,nrecs);
 
   // extract patches from each record
-  for (irec = 0; irec < nrecs; irec += skiprec)
+  for (irec = 0; irec < nrecs; irec ++)
     {
 fprintf(stderr,"irec=%d of %d\n",irec, nrecs);
     inRec = inRS->records[irec];
