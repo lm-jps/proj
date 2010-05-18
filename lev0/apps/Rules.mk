@@ -37,8 +37,10 @@ MODEXESUMS	:= $(MODEXESUMS) $(SUMEXE_$(d)) $(PEEXE_$(d))
 MODEXE_$(d)	:= $(addprefix $(d)/, convert_fds extract_fds_statev)
 MODEXEDR_$(d)	:= $(addprefix $(d)/, hmi_import_egse_lev0 aia_import_egse_lev0)
 #MODEXE_USEF_$(d)	:= $(addprefix $(d)/, getorbitinfo build_lev1X build_lev1)
-MODEXE_USEF_$(d)	:= $(addprefix $(d)/, getorbitinfo build_lev1X)
-MODEXE_USEF 	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
+MODEXE_USEF_$(d)	:= $(addprefix $(d)/, getorbitinfo)
+TESTEXE_USEF_$(d)	:= $(addprefix $(d)/, build_lev1X)
+MODEXE_USEF 	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d))
+
 MODEXEDR	:= $(MODEXEDR) $(MODEXEDR_$(d))
 MODEXE		:= $(MODEXE) $(SUMEXE_$(d)) $(MODEXE_$(d)) $(MODEXEDR_$(d)) $(PEEXE_$(d))
 
@@ -50,11 +52,12 @@ MODEXEDROBJ	:= $(MODEXEDROBJ) $(MODEXEDR_$(d):%=%.o)
 
 ALLEXE_$(d)	:= $(MODEXE_$(d)) $(MODEXEDR_$(d)) $(MODEXE_USEF_$(d)) $(SUMEXE_$(d)) $(CEXE_$(d))
 #OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) 
-OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(ingestlev0_obj_$(d))
+OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(TESTEXE_USEF_$(d):%=%.o) $(ingestlev0_obj_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
 		   $(ALLEXE_$(d)) \
+		   $(TESTEXE_USEF_$(d)) \
 		   $(MODEXE_SOCK_$(d))\
 		   $(LIBHKLEV0)\
 		   $(DEP_$(d))
@@ -62,7 +65,7 @@ CLEAN		:= $(CLEAN) \
 TGT_BIN	        := $(TGT_BIN) $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d)) 
 TGT_LIB		:= $(TGT_LIB) $(LIBHKLEV0)
 
-S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d)))
+S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(TESTEXE_USEF_$(d)) $(MODEXE_SOCK_$(d)))
 
 $(ingestlev0_$(d)):	$(ingestlev0_obj_$(d))
 $(xingestlev0_$(d)):	$(xingestlev0_obj_$(d))
@@ -96,10 +99,10 @@ $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/.
 
 ifeq ($(COMPILER), icc)
    ifeq ($(JSOC_MACHINE), linux_x86_64)
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MKL)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MKL)
    endif
 endif
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)):	$(LIBASTRO) $(LIBINTERP)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)):	$(LIBASTRO) $(LIBINTERP)
 $(LIBHKLEV0):		$(LIBHKLEV0_OBJ)
 			$(ARCHIVE)
 			$(SLLIB)
