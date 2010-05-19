@@ -1,0 +1,21 @@
+Statistics functions, core routines from Keh-Cheng Chu.
+DRMS utility functions added to add statistics using standard
+keyword names to a record associated with a segment that has an associated array.
+
+The fstats/fstats2 and dstats/dstats2 pairs differ only in the way
+the median is computed.  In the fstats,dstats cases the data array
+is sorted and the value at midpoint is returned as the median.
+In fthe dstats/dstats2 cases a historgram of 64K values is computed
+and the median is estimated by the bin where the cumlative number of
+values is half the total.
+
+fstats operates on float arrays, dstats on doubles.
+
+In both cases the calcs are done as doubles.
+
+Return values mean:
+#define OK 0
+#define OUT_OF_MEMORY -1
+#define TOO_FEW_GOOD_POINTS -2
+
+
