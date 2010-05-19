@@ -32,9 +32,9 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/astro
+$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/stats
 
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBASTRO)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBASTRO) $(LIBSTATS)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
