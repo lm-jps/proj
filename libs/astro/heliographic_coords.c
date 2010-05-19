@@ -62,6 +62,7 @@ void HeliographicLocation(TIME t, int *crot, double *L, double *B)
     t1950 = sscan_time("JD_2433282.423459"); // B1950.0=1949.12.31_22:09:15_UTC
     t2000 = sscan_time("2000.01.01_00:00_UTC"); // J2000 ref time
     }
+  if (isnan(t) || t < 0) return;
   tc19 = (t - t1900)/(SID*36525.0);
   tc20 = (t - t2000)/(SID*36525.0);
   tc1950 = (t - t1950)/(SID*36525.0);
