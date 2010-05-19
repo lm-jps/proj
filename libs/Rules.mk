@@ -5,6 +5,8 @@ d		:= $(dir)
 
 # Subdirectories. Directory-specific rules are optional here. The
 # order NOT matter.
+dir	:= $(d)/stats
+-include		$(SRCDIR)/$(dir)/Rules.mk
 dir	:= $(d)/astro
 -include		$(SRCDIR)/$(dir)/Rules.mk
 dir	:= $(d)/dr
