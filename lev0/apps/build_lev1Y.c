@@ -867,7 +867,8 @@ TEMPSKIP:
     }
   }
   if(!skiplimb && !hmiaiaflg) {		//only call for HMI
-    dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,1);
+    //dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,1);
+    dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,0);
     if(dstatus) {
       printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
       noimage[i] = 1;
