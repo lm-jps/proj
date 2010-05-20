@@ -1,7 +1,3 @@
-//Return codes:
-//2: center fit and radius fit failed
-//1: only radius fit failed
-//0: success 
 int limb_fit(DRMS_Record_t *record, float *image_in, double *rsun_lf, double *x0_lf, double *y0_lf, int nx, int ny, int method)
 {
 
@@ -24,6 +20,11 @@ void free_mem(struct mempointer *memory);
   static int config_id=0;
   static unsigned char mask[4096*4096];
 
+  //set fail values
+
+  *x0_lf=NAN;
+  *y0_lf=NAN;
+  *rsun_lf=NAN;
 
  
 
@@ -46,13 +47,13 @@ void free_mem(struct mempointer *memory);
 
 	printf("new image config\n");
 	maskfile=fopen("/home/jsoc/hmi/tables/cropmask.105", "rb"); //use the same crop table for now
-    if (maskfile==NULL){fputs("mask file not found", stderr); status_res=2; return status;}
+	if (maskfile==NULL){fputs("mask file not found", stderr); status_res=2; free(mk); return status;}
     for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) 
       {
 	bytes_read=fread(mk,sizeof(unsigned char),1,maskfile);
 	mask[j*nx+i]=mk[0];
       }
-
+    free(mk);
     fclose(maskfile);
       }
     }
@@ -92,7 +93,7 @@ void free_mem(struct mempointer *memory);
   double dx, ds;
 
   int ispar;
-  int camid, focid;
+  int camid, focid, missvals;
   double cx, cy, rad;
   double image_scl;
   double rsun_obs;
@@ -100,29 +101,43 @@ void free_mem(struct mempointer *memory);
 
   cx=drms_getkey_float(record,X0_MP_key,&status);
   if (status != 0 || isnan(cx)){status_res=2; return status_res;}
-  *x0_lf=(double)cx;
+  
 
   cy=drms_getkey_float(record,Y0_MP_key,&status);
   if (status != 0 || isnan(cx)){status_res=2; return status_res;}
-  *y0_lf=(double)cy;
+  
 
   rsun_obs=drms_getkey_double(record,RSUN_OBS_key,&status1);
   image_scl=drms_getkey_float(record,IMSCL_MP_key,&status2);
 
-
-
-  if (status1 == 0 && status2 == 0 && !isnan(image_scl) && image_scl > 0.0 && !isnan(rsun_obs) && rsun_obs > 0.0){rad=(double)rsun_obs/image_scl;} else {status_res=2; return status_res;}
-  *rsun_lf=(double)(rad);
-
- 
-
-  if (nx != ny){printf("Limb finder does not work for non-square images\n"); status_res=2; return status_res;}
-
   camid=drms_getkey_int(record,HCAMID_key,&status);
   focid=drms_getkey_int(record,HCFTID_key,&status);
+  missvals=drms_getkey_int(record,MISSVAL_key,&status);
+
+  //debug information
+  long long recnum;
+  double date;
+  int fsn=drms_getkey_int(record, "FSN", &status);
+  recnum=record->recnum;
+  printf("----limb_finder------\n");
+  printf("FSN %d\n", fsn);
+  printf("MISSVALS: %d\n", missvals);
+  printf("Record number %ld\n", recnum);
+  date=drms_getkey_time(record, "DATE", &status);
+  char datestr[256];
+      sprint_ut(datestr, date);
+  printf("date %s\n", datestr);
+
   if ((camid != light_val1 && camid != light_val2) || focid < 1 || focid > 16){printf("not an obs image\n"); status_res=2; return status_res;}
+  if (missvals > nx/4*ny){printf("not enough data\n"); status_res=2; return status_res;}
 
 
+  if (status1 == 0 && status2 == 0 && !isnan(image_scl) && image_scl > 0.0 && !isnan(rsun_obs) && rsun_obs > 0.0){rad=(double)rsun_obs/image_scl*rad_corr_fac+foc_corr*((double)focid-11.0);} else {status_res=2; printf("keyword issues 2 \n"); return status_res;}
+ 
+
+  if (nx != ny){printf("Limb finder does not work for non-square images\n");  status_res=2; return status_res;}
+
+ 
 
   int nr=(int)(rad*(high-low)/2.0)*2+1; //odd number of points
   int nphi=nx/2;
@@ -143,16 +158,22 @@ void free_mem(struct mempointer *memory);
   rc=(double *)(malloc(nr*sizeof(double)));
   phic=(double *)(malloc(nphi*sizeof(double)));
 
-  double *avgphi=(double *)(calloc(nr, sizeof(double)));
+  double *avgphi, *imhp, *imro, *parab;
+  float *image, *cnorm, *ierror;
+  unsigned char *mask_p;
+
+  avgphi=(double *)(calloc(nr, sizeof(double)));
 
  
-  double *imhp=(double *)(calloc(nxx*nyy, sizeof(double)));
-  double *imro=(double *)(calloc(nxx*nyy, sizeof(double)));
-  float *image=(float *)(malloc(nxx*nyy*sizeof(float)));
-  double *parab=(double *)(malloc(parsize*sizeof(double)));
-  unsigned char *mask_p=(unsigned char *)(malloc(nx*nx*sizeof(unsigned char)));
-  float *cnorm=(float *)(malloc(nx*nx*sizeof(float)));
-  float *ierror=(float *)(malloc(nx*nx*sizeof(float)));
+  imhp=(double *)(calloc(nxx*nyy, sizeof(double)));
+  imro=(double *)(calloc(nxx*nyy, sizeof(double)));
+  image=(float *)(malloc(nxx*nyy*sizeof(float)));
+  parab=(double *)(malloc(parsize*sizeof(double)));
+  mask_p=(unsigned char *)(malloc(nx*nx*sizeof(unsigned char)));
+  cnorm=(float *)(malloc(nx*nx*sizeof(float)));
+  ierror=(float *)(malloc(nx*nx*sizeof(float)));
+
+  if (imhp == NULL || imro == NULL || image == 0 || parab == NULL || mask_p == NULL || cnorm == NULL || ierror ==NULL){printf("can not allocate memory\n");} //debug
 
   memory.xrp=xrp;
   memory.yrp=yrp;
@@ -168,11 +189,7 @@ void free_mem(struct mempointer *memory);
   memory.cnorm=cnorm;
   memory.ierror=ierror;
 
-  int imgid;
-
-  imgid=drms_getkey_int(record,"HIMGCFID",&status);
  
-  rad=rsun_obs/image_scl;
   double rad0=rad/(double)binx;
   double cx0=cx/(double)binx;
   double cy0=cy/(double)biny;
@@ -190,7 +207,7 @@ void free_mem(struct mempointer *memory);
 	    }
 	}
 
- 
+  printf("missing points in limb figure %d \n", rcount); //debug
 
 
   //fill image if there are missing points
@@ -199,18 +216,18 @@ void free_mem(struct mempointer *memory);
    	{
 	  printf("gapfilling: pixels to fill: %d\n", rcount);	
 	  status_gap=init_fill(gapfill_method, gapfill_regular, gapfill_order,gapfill_order2,gapfill_order2,&fills, NULL);
-	  if (status_gap == 0){fgap_fill(&fills,image_in,nx,nx,nx,mask_p,cnorm,ierror);} else {status_res=2; free_mem(&memory); return status_res;}
-	  free_fill(&fills);
+	  if (status_gap == 0){fgap_fill(&fills,image_in,nx,nx,nx,mask_p,cnorm,ierror); free_fill(&fills);} else {status_res=2; printf("gapfill not successful 2 \n"); free_fill(&fills); free_mem(&memory); return status_res;}
 	}
 
 
 
       init_fresize_boxcar(&fresizes,2,4);
 
-      fresize(&fresizes,image_in, image, nx,nx,nx,nxx,nyy,nxx,0,0,NAN);   //rebin image
+      status=fresize(&fresizes,image_in, image, nx,nx,nx,nxx,nyy,nxx,0,0,NAN);   //rebin image
    
       free_fresize(&fresizes);
        
+      if (status != 0){printf("resize not successful\n");}
        
 
 #pragma omp parallel for private(i,j,dx)
@@ -276,7 +293,7 @@ void free_mem(struct mempointer *memory);
       *y0_lf=(double)cy0*(double)biny;
 	}
       else
-	{status_res=2; free_mem(&memory); return status_res;}
+	{status_res=2; printf("can not find cc max 2 \n"); free_mem(&memory); return status_res;}
 	 
    
       //////////////////////////////////////////////////////////
@@ -293,8 +310,8 @@ void free_mem(struct mempointer *memory);
       for (j=0; j<nphi; ++j)
 	for (i=0; i<nr; ++i)
 	  {
-	    xrp[j*nr+i]=rc[i]/4.0*cos(phic[j])+(*x0_lf)/4.0-0.5;
-	    yrp[j*nr+i]=rc[i]/4.0*sin(phic[j])+(*y0_lf)/4.0-0.5;
+	    xrp[j*nr+i]=rc[i]/4.0*cos(phic[j])+(*x0_lf)/4.0;
+	    yrp[j*nr+i]=rc[i]/4.0*sin(phic[j])+(*y0_lf)/4.0;
 	  }
 
    
@@ -319,7 +336,10 @@ void free_mem(struct mempointer *memory);
 	    ry=(double)yu-(yrp[j*nr+i]);
 
 	    if (xl >= 0 && xu < nxx && yl >= 0 && yu < nyy)
+	      {
 	    imrphi[j*nr+i]=rx*ry*imhp[yl*nxx+xl]+(1.0-rx)*ry*imhp[yl*nxx+xu]+rx*(1.0-ry)*imhp[yu*nxx+xl]+(1.0-rx)*(1.0-ry)*imhp[yu*nxx+xu];
+	      }
+
 	  }
    
  	
@@ -372,8 +392,8 @@ void free_mem(struct mempointer *memory);
 	    }
 	  else
 	    {
-	  *rsun_lf=rad;
-	  status_res=1;
+	      printf("Limb deriv not parabolic\n");
+	      status_res=1;
 	    }
 	
 	}
@@ -424,7 +444,7 @@ void free_mem(struct mempointer *memory);
 	    }
       }
 
-	
+
      double rad_ipv=0.0;
      double rad_count=0.0;
      for (i=0; i<nphi; ++i)
@@ -432,12 +452,18 @@ void free_mem(struct mempointer *memory);
 	 if (!isnan(rad_ipa[i])) if (fabs(rad_ipa[i]-rad) < limit_var){rad_ipv+=rad_ipa[i]; rad_count=rad_count+1.0;}
        }
 
-     if (rad_count/(double)nphi > percent_good){*rsun_lf=(double)(rad_ipv/rad_count); status_res=0;} else {status_res=1; *rsun_lf=(double)rad;}
+     printf("rad %lf %f\n", (double)(rad_ipv/rad_count), rad);
+     printf("good points %lf\n",rad_count/(double)nphi); 
+
+     if (rad_count/(double)nphi > percent_good){*rsun_lf=(double)(rad_ipv/rad_count); status_res=0;} else {status_res=1; printf("too large azimuthal variation\n");}
 
      free(rad_ipa);
  	}
-     
-       free_mem(&memory);
+
+      printf("found center %lf %lf %d\n", *x0_lf, *y0_lf, status_res); //debug
+      printf("----------------limb finder done---------------\n");
+      if (status_res == 1){*x0_lf=NAN; *y0_lf=NAN;}
+      free_mem(&memory);
 
    return status_res;
 
@@ -459,6 +485,7 @@ void free_mem(struct mempointer *memory)
   free(memory->parab);
   free(memory->cnorm);
   free(memory->ierror);
+
 
   return;
 }
