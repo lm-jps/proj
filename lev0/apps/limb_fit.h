@@ -21,10 +21,12 @@ struct mempointer
 
 const int cent_err=20;
 
+const double rad_corr_fac=1.00130;
+const double foc_corr=-1.08490;
   const double high=1.03;
   const double low=0.97;
 
-  const double limit_var=50.0;
+  const double limit_var=1.8;
   const double limit_cc=20.0;
 
 const int lim=8;
@@ -47,6 +49,7 @@ char *IMSCL_MP_key="IMSCL_MP";
 
 char *HCAMID_key="HCAMID";
 char *HCFTID_key="HCFTID";
+char *MISSVAL_key="MISSVALS";
 
 int light_val1=2;
 int light_val2=3;
