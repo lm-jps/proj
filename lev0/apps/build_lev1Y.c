@@ -432,6 +432,12 @@ int do_ingest(long long bbrec, long long eerec)
     //this loop is for the benefit of the lev1view display to show
     //info on all lev0 records opened
     for(i=0; i < ncnt; i++) {
+      flatmiss[i] = 0;		//init quality flags
+      orbmiss[i] = 0;
+      asdmiss[i] = 0;
+      mpdmiss[i] = 0;
+      noimage[i] = 0;
+      missflg[i] = 0;
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
       //must get fsn in case got record from last lev1 record
@@ -453,8 +459,9 @@ int do_ingest(long long bbrec, long long eerec)
         printk("%u %10.5f ", fsnarray[j], tobs[j]);
         ptdata = ptinfo[j];
         printk("%s\n", ptdata.asd_rec);
+        asdmiss[j] = 1;		//set for QUALITY for ea image
       }
-      return(1);		//!!No,press on
+      //return(1);		//!!No,press on
     }
     if ((IOstatus = iorbit_getinfo(drms_env,
                        orbseries,
@@ -471,12 +478,18 @@ int do_ingest(long long bbrec, long long eerec)
       else { 
        printk("***ERROR in iorbit_getinfo() status=%d\n", IOstatus);
       }
-      return(1);
+      for(j=0; j < ncnt; j++) {	 //set qual bits
+        orbmiss[j] = 1;
+      }
+      //return(1);
     }
     rset1 = drms_create_records(drms_env, ncnt, dsout, DRMS_PERMANENT,&dstatus);
     if(dstatus) {
       printk("**ERROR: Can't create records for %s\n", dsout);
-      return(1);
+      for(j=0; j < ncnt; j++) {	 //set qual bits
+        noimage[j] = 1;
+      }
+      //return(1);
     }
     //Now fill in info for call to Carl's get_image_location()
     for(i=0; i < ncnt; i++) {
@@ -500,23 +513,20 @@ int do_ingest(long long bbrec, long long eerec)
     rstatus = get_image_location(drms_env, ncnt, &p_imageloc);
     if(rstatus) {		//error
       printk("ERROR: get_image_location() returns status=%d\n", rstatus);
-      return(1);
+      for(j=0; j < ncnt; j++) {	 //set qual bits
+        mpdmiss[i] = 0;
+      }
+      //return(1);
     }
 
-
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
-      flatmiss[i] = 0;
-      orbmiss[i] = 0;
-      asdmiss[i] = 0;
-      mpdmiss[i] = 0;
-      noimage[i] = 0;
-      missflg[i] = 0;
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
       fsnx = fsnarray[i]; 
       sprintf(lev0name, "%s[%u]", dsin, fsnx);
       if(drms_getkey_int(rs0, "QUALITY", 0) < 0) {
         printk("Bad QUALITY for %s, no lev1 made\n", lev0name);
+        noimage[i] = 1;
         continue;
       }
       segment = drms_segment_lookupnum(rs0, 0);
@@ -524,8 +534,9 @@ int do_ingest(long long bbrec, long long eerec)
       if(!Array0) {
         printk("Can't do drms_segment_read() %s status=%d\n", 
 			lev0name, rstatus);
-        return(1);	//return until we learn
-        //continue;
+        noimage[i] = 1;
+        //return(1);	//return until we learn
+        continue;
       }
       l0l1->adata0 = (short *)Array0->data; //free at end
       l0l1->rs0 = rs0;
@@ -553,14 +564,16 @@ int do_ingest(long long bbrec, long long eerec)
       drms_record_directory(rs, rs1_path, 0);
       if(!*rs1_path) {
         printk("***ERROR: No path to segment for %s\n", open_dsname);
-        return(1);
+        noimage[i] = 1;
+        continue;
       }
       //printf("\npath to lev1 = %s\n", rs1_path);	//!!TEMP
       dstatus = drms_setkey_int(rs, "FSN", fsnx);
       dstatus = drms_setkey_string(rs, "LEV0SERIES", lev0name);
       if(!(segment = drms_segment_lookup(rs, "image_lev1"))) {
         printk("No drms_segment_lookup(rs, image_lev1) for %s\n", open_dsname);
-        return(1);
+        noimage[i] = 1;
+        continue;
       }
       if(hmiaiaflg) {
         segArray = drms_array_create(DRMS_TYPE_INT,
@@ -580,7 +593,8 @@ int do_ingest(long long bbrec, long long eerec)
       rstatus = drms_copykeys(rs, rs0, 0, kDRMS_KeyClass_Explicit);
       if(rstatus != DRMS_SUCCESS) {
         printk("Error %d in drms_copykeys() for fsn %u\n", fsnx);
-        return(1);
+        //return(1);
+        continue;
       }
       qualint = drms_getkey_int(rs0, "QUALITY", &rstatus);
       drms_setkey_int(rs, "QUALLEV0", qualint);
@@ -628,7 +642,9 @@ int do_ingest(long long bbrec, long long eerec)
       int camera = drms_getkey_int(rs0, "CAMERA", &rstatus);
       if(rstatus) {
         printk("Can't do drms_getkey_int() for fsn %u\n", fsnx);
-        return(1);
+        noimage[i] = 1;
+        goto TEMPSKIP;
+        //return(1);
       }
       //Now figure out what flat field to use
       if(drms_ismissing_time(tobs[i])) {
