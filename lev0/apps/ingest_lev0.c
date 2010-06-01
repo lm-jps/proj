@@ -170,6 +170,7 @@ static char datestr[32];
 static char bld_vers[16];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 
+int INVALtime;
 unsigned int fsn = 0;
 unsigned int fsnx = 0;
 unsigned int fsn_prev = 0;
@@ -396,6 +397,7 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   if(missvals > (uint32_t)(datav * 0.01)) quallev0 = quallev0 | Q_MISS1;
   if(missvals > (uint32_t)(datav * 0.05)) quallev0 = quallev0 | Q_MISS2;
   if(missvals > (uint32_t)(datav * 0.25)) quallev0 = quallev0 | Q_MISS3;
+  if(missvals == datav) quallev0 = quallev0 | Q_MISSI;
   if(img->datavals == 0) quallev0 = quallev0 | Q_MISSALL; //high bit, no data
 
 //  if(missvals != 0) {
@@ -406,8 +408,10 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
 //  }
 
 if(!hmiaiaflg) {		//HMI specific qual bits
+  if(fsn == 469769216) quallev0 = quallev0 | Q_CORRUPT; //corrupt image
+  if(INVALtime) quallev0 = quallev0 | Q_INVALTIME; //HOBITSEC=0
   hsqfgsn = drms_getkey_int(rs, "HSQFGSN", &status);
-  if(fsn != hsqfgsn) quallev0 = quallev0 | Q_NOISP;
+  if(status || (fsn != hsqfgsn)) quallev0 = quallev0 | Q_NOISP;
   if(hseqerr = drms_getkey_string(rs, "HSEQERR", &status)) {
     if(strcmp(hseqerr, "SUCCESS")) quallev0 = quallev0 | Q_SEQERR;
     free(hseqerr);
@@ -1874,8 +1878,10 @@ int DoIt(void)
       //No need to commit here. the exit will do it
       //printk("restart: drms_server_end_transaction()\n"); 
       //drms_server_end_transaction(drms_env, 0 , 0); //commit
-      sprintf(callcmd, "/bin/rm -f %s", stopfile);
-      system(callcmd);
+      //NEW 1Jun2010: leave the stopfile. 
+      //Must use doingestlev0_HMI(AIA).pl to start ingest_lev0
+      //sprintf(callcmd, "/bin/rm -f %s", stopfile);
+      //system(callcmd);
       sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exit", pchan);
       system(callcmd);		//let the world know we're gone
       wflg = 0; //leave DoIt()
