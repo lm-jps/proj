@@ -239,6 +239,7 @@ extern int check_hk_record_within_time_range( HK_Keyword_t *kw);
 /********************* extern globals  *********************************/
 extern GTCIDS_Version_Number *global_gtcids_vn;
 extern GTCIDS_Version_Number *global_gtcids_vn;
+int INVALtime;/*added to help compile on production*/
 
 /********************* structures   *************************************/
 /*structure used to save values from JSVN-TO-PVN map files */
