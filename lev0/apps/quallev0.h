@@ -13,12 +13,15 @@
 
 //image status packet is missing if FSN != HSQFGSN
 #define Q_NOISP 0x10	//no ISP
+#define Q_MISSI 0x20	//missing image
+#define Q_CORRUPT 0x40	//corrupt image (FSN=469769216 0x1c001c00)
+#define Q_INVALTIME 0x80//HOBITSEC = 0 (T_OBS = 1958.01.01_00:00:00_UTC)
 
 //missvals is from Img struct totalvals-datavals
-#define Q_MISS0 0x100	//totalvals > 0
-#define Q_MISS1 0x200	//totalvals > 0.01*totalvals
-#define Q_MISS2 0x400	//totalvals > 0.05*totalvals
-#define Q_MISS3 0x800	//totalvals > 0.25*totalvals
+#define Q_MISS0 0x100	//missvals > 0
+#define Q_MISS1 0x200	//missvals > 0.01*totalvals
+#define Q_MISS2 0x400	//missvals > 0.05*totalvals
+#define Q_MISS3 0x800	//missvals > 0.25*totalvals
 
 //HMI sepecific
 #define Q_SEQERR 0x10000	//sequencer error HSEQERR  != 'SUCCESS'
