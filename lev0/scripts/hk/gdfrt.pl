@@ -32,6 +32,9 @@
 #              -For src=rtmon for HMI ISP dayfile: 200804019.0x01d           #
 #              -For src=rtmon for AIA ISP dayfile: 200804019.0x027           #
 #              -For src=rtmon for SDO ASD dayfile: 200804019.0x081           #
+#              Make sure to get pkt_size value correct or this script will   #
+#              fail to pass minute files of data correctly to decode_dayfile #
+#              and cause missing records in HK By APID data series           #
 # Author:      Carl                                                          #
 # Date:        Created April, 7, 2009                                        #
 ##############################################################################
@@ -53,21 +56,26 @@ $uid =~ s/\n//g; #regular exp rm cr
 # set up where to put backup logs written monthly 
 $logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
 
-#(2) set choices for input dayfile directory
+#(2)set common email arguments
+$from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
+$to_email="jsoc_ops\@sun.stanford.edu";
+$subject_email_failed_decode_dayfile="JSOC:ERROR:HK Level 0 Real Time Processing failed to decode minute dayfiles.";
+
+#(3) set choices for input dayfile directory
 # input dayfile directory location with subdirectories with apid names(0x081,0x029,etc).
 $ENV{'HK_DDF_RT_DIRECTORY'}="/hmisdp-mon/log/packets";
 
-#(3) set choices for minute file directory
+#(4) set choices for minute file directory
 # minute dayfile directory location - this is temp location- since all files are deleted  
 $minfiles=$ENV{'HK_DDF_MINUTE_FILE_DIRECTORY'}="/tmp22/production/lev0/hk_minute_dayfiles";
 
-#(4) set debug flag 
+#(5) set debug flag 
 $dflg=$ENV{'DF_GDFRT_DEBUG'}=2;#use 0 to display min debug to standard out, 1 to send log to file or use 2 to send max debug log to display
 
-#(5) check for any arguments passed in command
+#(6) check for any arguments passed in command
 &check_arguments();
 
-#(6) setup log file -use logfile setting set in hmi_dfd.pl,aia_dfd.pl, sdo_dfd.pl or use setting below
+#(7) setup log file 
 $apid= substr($ARGV[0],5);#get apid for log file
 $logfile=`echo $ENV{'HK_DF_RT_LOGFILE'}$apid`;
 $dir_logfile=`echo $script_dir/$ENV{'HK_DF_RT_LOGFILE'}$apid`;
@@ -77,34 +85,34 @@ $dir_logfile =~ s/\n//g; #regular exp rm cr
 if($dir_logfile eq "")
 {
    #use default name
-   $logfile="$script_dir/log-gdfrt";#send log here when logfile not set
+   $logfile="$script_dir/log-gdfrt-default";#send log here when logfile not set
 }
 
-#(7) open log file
+#(8) open log file
 open(LF,">>$dir_logfile") || die  "ERROR in gdfrt.pl:(0):Can't Open log file <$dir_logfile>: $!\n; exit;";
 if($dflg == 1) {print LF `date`;}
 
-#(8)check if need to restart
-check_if_need_to_restart($script_dir,"gdfrt.pl",$ARGV[0],$ARGV[1], $user,$uid);
+#(9)check if need to restart
+&check_if_need_to_restart($script_dir,"gdfrt.pl",$ARGV[0],$ARGV[1], $user,$uid);
 
-#(9) get list of apids to do 
+#(10) get list of apids to do 
 $av=&get_apid_to_do();
 if($dflg == 2) {print LF "DEBUG:MESSAGE:gdfrt: apid value is $av\n";}
 
 
-#(10)loop forever thru today and next days 
+#(11)loop forever thru today and next days 
 while (1)
 {
-  #(11) check if need to move log to logs directory every month when the 1st-UTC is detected. gzip backup log too.
+  #(12) check if need to move log to logs directory every month when the 1st-UTC is detected. gzip backup log too.
   &check_log($logs_dir,$logfile, $script_dir);
 
-  #(12)get list of dates to do 
+  #(14)get list of dates to do 
   $date_to_do=get_date_to_do();
  
   ### LOG ###
   if($dflg == 2) {print LF "DEBUG:MESSAGE:gdfrt:calling get-rt-file function with apid=$av date=$date_to_do\n";}
 
-  #(14)go through day files in directory looking for all files for given apid and date range
+  #(15)go through day files in directory looking for all files for given apid and date range
   $rtfile=&get_rt_files( $date_to_do, $av);
 
   ### LOG ###
@@ -112,7 +120,7 @@ while (1)
   if($dflg == 1) {print LF "-->(3)Listing of rt file to do: <$rtfile> based on date  <$date_to_do>.\n";}
   if($dflg == 2) {print LF "DEBUG:MESSAGE:gdfrt:Listing of rt file to do: $rtfile\n";}
 
-  #(15) get dayfile to read packets and write to minute files
+  #(16) get dayfile to read packets and write to minute files
   if ($rtfile eq "")
   {
     ### LOG ###
@@ -123,23 +131,24 @@ while (1)
     next;
   }
 
-  #(16) get today date to handle reading next day's dayfile
+  #(17) get today date to handle reading next day's dayfile
   $c_date=&get_todays_date();
 
-  #(17)get packet size which is done by just getting argument passed for pkt_size=<value>
+  #(18)get packet size which is done by just getting argument passed for pkt_size=<value>
   $packet_size= &get_packet_size();
   
-  #(18)read as many packets that are in dayfile and then read next new set of packets every 1 minute for rest of day
+  #(19)read as many packets that are in dayfile and then read next new set of packets every 1 minute for rest of day
   &read_n_packets($rtfile,$c_date, $packet_size);
 
-  #(19) continue while loop forever reading one dayfile at a time for each of the next days to come.
+  #(20) continue while loop forever reading one dayfile at a time for each of the next days to come.
 }
  
-#(20)close logfile
+#(21)close logfile
 print LF `date`;
 close LF;
 
 
+
 #############################################################################
 # subroutine check arguments and set flags                                  #
 #############################################################################
@@ -195,6 +204,7 @@ sub check_arguments()
 }
 
 
+
 #############################################################################
 # subroutine show_help_info: show help information                          #
 #############################################################################
@@ -210,11 +220,12 @@ sub show_help_info
   print "         gdfrt.pl -h  or  gdfrt.pl -help\n\n";
   print "(2) Requires that hk level0  data series(i.e.sdo.lev0_asd_0003,hmi.lev0_isp_0021,etc.) be already created.\n";
   print "(3) Required that the environment variable are setup correctly at top of script(HK_DDF_RT_DIRECTORY, etc).\n";
-  print "(4)****Limitation****:\n";
-  print "(4a)Works only on rtmon dayfile formats only(20090407.0x081)\n";
-  print "(4b)Enter arguments in specified order when running script is required.\n";
-  print "(4c)It is required that a correct setup for decode_dayfile execution is done since this scripts uses decode_dayfile.\n";
-  print "(4d)It is required that a correct value be use for packet size argument. Get packet size in data file or hk config\n";
+  print "(4) Required that the packet_size argument be correct value for apids packet.\n";
+  print "(5)****Limitation****:\n";
+  print "(5a)Works only on rtmon dayfile formats only(20090407.0x081)\n";
+  print "(5b)Enter arguments in specified order when running script is required.\n";
+  print "(5c)It is required that a correct setup for decode_dayfile execution is done since this scripts uses decode_dayfile.\n";
+  print "(5d)It is required that a correct value be use for packet size argument. Get packet size in data file or hk config\n";
   print "    file then add 7 to get value to use(for sdo asd packet, 121 + 7 = 128).\n\n\n";
   exit;
 }
@@ -224,7 +235,6 @@ sub show_help_info
 #############################################################################
 sub get_apid_to_do
 {
-  #my($apid);
   # create list of files to process using apid values in file
   #push decimal character value in this format dddd.Example 0001
   $apid= substr($ARGV[0],5);
@@ -315,7 +325,7 @@ sub check_lastday_in_month($$$)
 ######################################################################################
 # subroutine get_rt_files(): get real time dayfiles and send back file               #
 ######################################################################################
-sub get_rt_files($$)
+sub get_rt_files($,$)
 {
   # setup my variables
   my($dr, $dn_fn, @apiddir_to_do_list, @dir_list, $apid_dir,$apid_file,@apid_filelist,$fullpathname,$file_in_date_range);
@@ -405,8 +415,8 @@ sub get_rt_files($$)
   return ($file_in_date_range );
 }
 
-
 
+
 #####################################################################################################
 # subroutine read_n_packets(): read n number of packet per minute and send to decode dayfile execute#
 #####################################################################################################
@@ -421,9 +431,11 @@ sub read_n_packets($,$,$)
 
    #local variable initialized
    $finished_curr_df_flg=0;
+   my $lasted_trigger_mail=0; #inital start up value to at least trigger email at start up if needed
+   my $trigger_timer=60;#minutes value, trigger every hour
 
    ### LOG ###
-   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packets: Called read_n_packets with arguments file:$file and todays date:$curr_date\n";}
+   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packets:Called read_n_packets with arguments file:$file and todays date:$curr_date\n";}
 
    # set up delay to exiting loop when today's date changes 
    $wait_clock_trigger=10;
@@ -436,15 +448,15 @@ sub read_n_packets($,$,$)
    $apid= hex substr($f,11,4);
 
    ### LOG ###
-   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet:apid used for display is $apid\n";}
-   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet:packet size used for dd command is $psize\n";}
+   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet:Apid used for display is $apid\n";}
+   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet:Packet size used for dd command is $psize\n";}
 
    # open dayfile to process to get current size of file
    open(DAYFILE, "$d/$f") || die "ERROR in gdfrt.pl:(5):Can't Open dayfile to read:$d/$f $!\n";
 
    #get file size
    $size = (stat(DAYFILE))[7];
-   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet: File:$d/$f: has a file size :$size:\n";}
+   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet:File:$d/$f: has a file size :$size:\n";}
 
    #pkt count
    $current_pkts_in_file= $size/$psize;
@@ -452,7 +464,7 @@ sub read_n_packets($,$,$)
 
    ### LOG ###
    if($dflg == 1) {print LF "-->(5)Packet count to be used in dd command is $pkt_count\n";}
-   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet:packet count to be used in dd command is $pkt_count\n";}
+   if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet:Packet count to be used in dd command is $pkt_count\n";}
 
    #skip initialize to 0
    $skip=0;
@@ -478,7 +490,7 @@ sub read_n_packets($,$,$)
         ### LOG ###
         if($dflg == 0) {printf( "-->Executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s UTC\n",get_current_time());}
         if($dflg == 1) {printf( LF "-->(4)Executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s UTC\n",get_current_time());}
-        if($dflg == 2) {printf( LF "DEBUG:MESSAGE:read_n_packets: Executing dd command at %s UTC\n", get_current_time());}
+        if($dflg == 2) {printf( LF "DEBUG:MESSAGE:read_n_packets:Executing dd command at %s UTC\n", get_current_time());}
 
         # Execute dd command to create minue files.
         $log=`dd if=$d/$f of=$minfiles/$f-$y-minute bs=$psize count=$pkt_count skip=$skip`;
@@ -500,7 +512,7 @@ sub read_n_packets($,$,$)
           ### LOG ###
           if($dflg == 0) {printf("-->Completed executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s UTC\n",get_current_time());}
           if($dflg == 1) {printf( LF "-->(5)Completed executing dd command writing <$pkt_count> packets to <$f-$y-minute> file at %s UTC\n",get_current_time());}
-          if($dflg == 2) {printf(LF "DEBUG:MESSAGE:read_n_packets: Complete executing dd command at %s UTC\n",get_current_time());}
+          if($dflg == 2) {printf(LF "DEBUG:MESSAGE:read_n_packets:Complete executing dd command at %s UTC\n",get_current_time());}
         }
 
 
@@ -522,15 +534,23 @@ sub read_n_packets($,$,$)
         $log =~ m/(ERROR)/ ; #regular exp - look for field
         if($log eq "" )
         {
+          $failed_processing_flag=0;#set to 0 if had no errors
           if($dflg == 0) {printf("-->Completed executing decode_dayfile with status PASSED at %s UTC\n",get_current_time());}
           if($dflg == 1) {printf(LF "-->(7)Completed executing decode_dayfile with status PASSED at %s UTC\n",get_current_time());}
           if($dflg == 2) {printf(LF "DEBUG:MESSAGE:read_n_packets:Completed executing decode_dayfile with status PASSED at %s UTC\n",get_current_time());}
         }
         else
         {
-          if($dflg == 0) {print  "ERROR:Status failed when executing decode_dayfile. Exiting script gdfrt.pl.\nLOG returned:$log:\n";}
-          if($dflg == 1) {print LF "ERROR:Status failed when executing decode_dayfile. Exiting script gdfrt.pl.\nLOG returned:$log:\n";}
-          if($dflg == 2) {print LF "ERROR:read_n_packets:Status failed when executing decode_dayfile.Exiting script gdfrt.pl.\nLOG returned:$log:\n";}
+          $failed_processing_flag=1;#set to 1 if had errors returned from decode_dayfile
+          if($dflg == 0) {print  "ERROR:Status FAILED when executing decode_dayfile.DRMS may be down.\nLOG returned:\n$log:\n";}
+          if($dflg == 1) {print LF "ERROR:Status FAILED when executing decode_dayfile.DRMS may be down\nLOG returned:\n$log:\n";}
+          if($dflg == 2) {print LF "ERROR:read_n_packets:Status FAILED when executing decode_dayfile. DRMS Database may be down.\n";}
+          if($dflg == 2) {print LF "LOG returned:$log:\n";}
+          if(trigger_send_email($lasted_trigger_mail,$trigger_timer))
+          {
+            sendEmail("$to_email", "$from_email", "$subject_email_failed_decode_dayfile","ERROR Message:\n-->Failed to decode dayfiles into keywords and write keywords to hk data series for apid <$apid>.\n-->Cause could be that DRMS is down or the drms series does not exist.\n-->When DRMS comes back up, this script will start to process dayfile were last processed data successfully.\n-->Minute Day File not decoded is:<$minfiles/$f-$y-minute>\n-->Next Email Alert will be sent in 1 hour if problem persists.\n-->Here is log from decode_dayfile executable showing error messages:\n$log");
+            $lasted_trigger_mail=time();#set to time in seconds to use in trigger_send_email function to test if 60 minutes passed
+          }
         }
 
         ### LOG ###
@@ -552,30 +572,42 @@ sub read_n_packets($,$,$)
 
         #Reopen and get current file size 
         close (DAYFILE);
+
         # reopen file and get latest file size
         open(DAYFILE, "$d/$f") || die "ERROR in gdfdrms.pl:(6):Can't Open day file to read:$d/$f  $!\n";
         $size = (stat(DAYFILE))[7];
 
         ### LOG ###
-        if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet: File:$d/$f: has a file size :$size:\n";}
+        if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet:File:$d/$f: has a file size :$size:\n";}
 
         # get total number of packets in file
         $total_pkts_in_file= $size/$psize;
 
         ### LOG ###
-        if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packets: (if)After reopen, total packets in file: $total_pkts_in_file\n";}
+        if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packets:(if)After reopen, total packets in file: $total_pkts_in_file\n";}
 
-        # Number of packets created minute files for so far is current_pkts_in_file amount just did and x amount did before
-        $x=$current_pkts_in_file + $x ; #number of packets did incrementally so far
+        # Total Number of packets processed from  minute files so far are the  current_pkts_in_file amount just did and x amount did before
+        if($failed_processing_flag == 0)
+        {
+          # Total Number of packets processed from  minute files so far are the  current_pkts_in_file amount just did and x amount did before
+          $x=$current_pkts_in_file + $x ; #number of packets did incrementally so far
+
+          # Update skip value to amount skipped last time with the amount did just now
+          $skip= $pkt_count + $skip ; #watch pkt-count value and current-pkts-in-file are same most the time but not all the time.
+        }
+        else
+        {
+          #if decode_dayfile failed processing minute of dayfile data then skip incrementing x and skip values
+	  if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packets:Since decode_dayfile failed. Will retry number of packets failed to do.\n";}
+
+	  if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packets:Preparing to rerun with decode_dayfile when is working starting at packet $x.\n";}
+        }
  
         # Reset max value in loop to total pkts in file
         $max=$total_pkts_in_file;
 
-        # Update skip value to amount skipped last time with the amount did just now
-        $skip= $pkt_count + $skip ; #watch pkt-count value and current-pkts-in-file are same most the time but not all the time.
-
         ### LOG ###
-        if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet: during next dd command will skip  $skip\n";}
+        if($dflg == 2) {print LF "DEBUG:MESSAGE:read_n_packet:Next dd command will skip  $skip\n";}
 
         # calculate number of packet left to do now
         $current_pkts_in_file = $total_pkts_in_file - $x;
@@ -873,4 +905,44 @@ sub check_log($,$,$)
    if($dflg == 2) {print LF "DEBUG:MESSAGE:check_log: Day is not the first or trigger day, so no need to copy log.\n"};
   }
   return;
+}
+#####################
+# sendEmail         #
+#####################
+# Simple Email Function
+# ($to, $from, $subject, $message)
+sub sendEmail
+{
+my ($to, $from, $subject, $message) = @_;
+my $sendmail = '/usr/lib/sendmail';
+open(MAIL, "|$sendmail -oi -t");
+print MAIL "From: $from\n";
+print MAIL "To: $to\n";
+print MAIL "Subject: $subject\n\n";
+print MAIL "$message\n";
+close(MAIL);
+}
+
+######################
+# trigger send Email #
+######################
+sub trigger_send_email($,$)
+{
+  my $last_mail = $_[0];
+  my $trigger_minutes = $_[1];
+  my $trigger_secs;
+  my $current_time;
+
+  my $trigger_secs = $trigger_minutes * 60;#get minutes into seconds
+  my $current_time=time();
+  if (($last_mail + $trigger_secs) > $current_time)
+  {
+     #don't send email
+     return 0;
+  }
+  else
+  {
+     #send email
+     return 1;
+  }
 }
