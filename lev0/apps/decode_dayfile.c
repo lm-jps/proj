@@ -166,6 +166,8 @@
 #define HKDDF_START_MERGED_PVND  (194)
 #define HKDDF_MAX_PACKET_NAME    50
 #define HKDDF_MAX_LOOKUP_NAME    100
+#define HKDDF_MAX_SRC_ARG        10
+#define HKDDF_MAX_IN_OUT_ARG     200
 #define HKDDF_ENVIRONMENT_VARS_NOT_SET  (-1)
 /*#define ENVFILE    "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
 /*#define ENVFILE    "/home/carl/cvs/myprod/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DAYFILE_DECODE"*/
@@ -312,6 +314,10 @@ int DoIt(void)
   int out_flag;
   unsigned char *ptr_read_in_buffer;
   unsigned long int i;
+  int print_flag;
+  char src[HKDDF_MAX_SRC_ARG];
+  char in[HKDDF_MAX_IN_OUT_ARG];
+  char out[HKDDF_MAX_IN_OUT_ARG];
 
   /* set environment variables */
   set_env_variables();
@@ -327,10 +333,14 @@ int DoIt(void)
   out_flag=0;
 
   /* Get command line arguments */
-  int print_flag =cmdparams_get_int (&cmdparams, "p", NULL) != 0;
-  char *src = cmdparams_get_str (&cmdparams, "src", NULL);
-  char *in = cmdparams_get_str (&cmdparams, "in", NULL);
-  char *out = cmdparams_get_str (&cmdparams, "out", NULL);
+  const int c_print_flag =cmdparams_get_int (&cmdparams, "p", NULL) != 0;
+  const char *c_src = cmdparams_get_str (&cmdparams, "src", NULL);
+  const char *c_in = cmdparams_get_str (&cmdparams, "in", NULL);
+  const char *c_out = cmdparams_get_str (&cmdparams, "out", NULL);
+  print_flag = c_print_flag;
+  strcpy(src ,c_src);
+  strcpy(in,c_in);
+  strcpy(out,c_out);
 
   /* check arguments used */
   if (nice_intro ()) return (0);
@@ -519,7 +529,7 @@ void write_to_drms(int apid, char pkt_ver_num[MAX_CHAR_VERSION_NUMBER], char fil
     if (status)
     {
       printkerr("ERROR at %s, line %d: Cannot create record using this data"
-                " series name:<%s>.Existing program.\n",__FILE__,__LINE__, query);
+                " series name:<%s>.Exiting write to drms.\n",__FILE__,__LINE__, query);
       return;
     }
     else
