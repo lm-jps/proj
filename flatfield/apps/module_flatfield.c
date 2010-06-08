@@ -17,6 +17,7 @@ char *module_name  = "module_flatfield";    //name of the module
 #define kDSCosmic      "cosmic_rays" //name of the cosmic ray series
 #define cadence_front_name "cadence_front"  //name of cadence for front camera
 #define cadence_side_name "cadence_side"  //name of cadence for side camera
+#define fid_name "fid" //name of fid argument
 
 
                                         //arguments of the module
@@ -63,7 +64,9 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
                      struct rotpar rot_new, 
                      struct rotpar rot_cur);
 
-
+int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera,
+			TIME tobs_link[2], int focus,int fid, int fsns,
+			struct rotpar rot_new);
 /*-------------------------------------------------------------*/
 /*                                                             */
 /*   DoIt is the entry point of the module                     */
@@ -80,6 +83,9 @@ int DoIt(void)
   int cosmic_flag=cmdparams_get_int(&cmdparams, kDSCosmic, NULL);
   int cadence_front=cmdparams_get_int(&cmdparams, cadence_front_name, NULL);
   int cadence_side=cmdparams_get_int(&cmdparams, cadence_side_name, NULL);
+  int fid=cmdparams_get_int(&cmdparams, fid_name, NULL);
+
+  if (fid < minfid || fid > maxfid){printf("Not an observable FID\n"); exit(EXIT_FAILURE);}
 
   int  status= DRMS_SUCCESS; 
   int status0=DRMS_SUCCESS;
@@ -103,7 +109,7 @@ int DoIt(void)
   double deltat[2]={(double)cadence_side, (double)cadence_front};
 
   TIME t_0;
-  int focus,camid;
+  int focus,camid,fsns;
   TIME   interntime;
   int axisbad[1];
 
@@ -123,7 +129,7 @@ int DoIt(void)
 
  
   double *sigma=(double *)(malloc(nx*ny*sizeof(double)));
-
+  float *limw=(float *)(malloc(nx*ny*sizeof(float)));
 
 
   //DRMS_arrays for output arrays
@@ -137,7 +143,7 @@ int DoIt(void)
   float *flatfield_front, *offpoint_front;
   float *flatfield_side, *offpoint_side;
   short *bad_front, *bad_side;
-  short *badpix;
+  short *badpix, *badpix_t;
   double *flati;
   double *flatc;
 
@@ -147,6 +153,7 @@ int DoIt(void)
   flatfield_side=(float *)(malloc(nx*ny*sizeof(float)));
   bad_front=(short *)(malloc(nx*ny*sizeof(short)));
   bad_side=(short *)(malloc(nx*ny*sizeof(short)));
+  badpix_t=(short *)(malloc(nx*ny*sizeof(short)));
   flati=(double *)(malloc(nx*ny*sizeof(double)));
   flatc=(double *)(malloc(nx*ny*sizeof(double)));
 
@@ -171,7 +178,14 @@ int DoIt(void)
 
   int last, current, next, holder;
   int index_last, index_current, index_next;
-  float rad;
+  float rad, wlr, rr;
+  float *a1,*a2, *w1,*w2,*cmc;
+
+  a1=(float *)(malloc(nx*ny*sizeof(float)));
+  a2=(float *)(malloc(nx*ny*sizeof(float)));
+  w1=(float *)(malloc(nx*ny*sizeof(float)));
+  w2=(float *)(malloc(nx*ny*sizeof(float)));
+  cmc=(float *)(malloc(nx*ny*sizeof(float)));
   //struct list *curr, *head;
   //struct list **list_pointer;
 
@@ -186,8 +200,9 @@ int DoIt(void)
   //cosmic ray
   //double *subarray;
   
-  float arrimg[nx][ny][3];
-  unsigned char cosmicarr[nx][ny];
+  float arrimg[3][ny][nx];
+  int *cosmicarr;
+  cosmicarr=(int *)(malloc(nx*ny*sizeof(int)));
 
   //subarray=(double *)(malloc(nx*ny*sizeof(double)));
   //for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) subarray[jjj*nx+iii]=0.0;
@@ -253,13 +268,16 @@ int DoIt(void)
 
  
       data     = drms_open_records(drms_env,(char *)inRecQuery,&stat);
+      if (data == NULL || stat != 0 || data->n == 0){printf("can not open records\n"); exit(EXIT_FAILURE);}
+
   int nRecs=data->n;
+  printf("number of records %d\n", nRecs);
+
   int nfr_front, nfr_side;
+
 
   DRMS_Record_t *rec0[nRecs];
  
- 
-
   //array for keyvalues
   int keyvalue_cam[nRecs];
   int keyvalue_wl[nRecs];
@@ -279,6 +297,7 @@ int DoIt(void)
   float keyvalue_b0[nRecs];
   float keyvalue_X0[nRecs];
   float keyvalue_Y0[nRecs];
+  float keyvalue_vrad[nRecs];
 
   int present[nRecs];        //indices
   int present_forward[nRecs];
@@ -286,7 +305,14 @@ int DoIt(void)
   int index[nRecs];
   int statarr[nRecs];
 
- 
+
+
+ double *sigmacoef;
+
+ sigmacoef=(double *)(malloc(5*sizeof(double)));
+ sigmacoef[0]=constsigma[(fid-10000)/10]*8.0; sigmacoef[1]=0.0; sigmacoef[2]=0.0; sigmacoef[3]=0.0; sigmacoef[4]=0.0;
+
+
   
   //list_pointer=(struct list **)(malloc(nRecs*sizeof(struct list *)));
 
@@ -301,7 +327,7 @@ int DoIt(void)
 
       nfr_front=0;
       nfr_side=0;
-      for (k=0; k<nRecs; ++k) 
+      for (k=0; k<nRecs; ++k)
 	{
 	  cosmic_ray_check[k]=-1;
 	  rec0[k]=data->records[k];
@@ -312,11 +338,13 @@ int DoIt(void)
 	}
 
       t_0 = drms_getkey_time(rec0[nRecs-1],keytobs,&status);
+      fsns=drms_getkey_int(rec0[nRecs-1],keyfsn,&status);
       focus = drms_getkey_int(rec0[nRecs-1],keyfocus,&status);
 
          
      
-      
+      printf("get flatfields from database\n");
+
       get_flatfields(2, t_0, focus,  flatfield_front, 
 		     offpoint_front,  bad_front, recnum_front, tobs_link_front, &rot_cur_front);  //get front camera flatfield
 
@@ -385,9 +413,13 @@ int DoIt(void)
 	if (status !=0 || keyvalue_fid[k] < minfid || keyvalue_fid[k] > maxfid || isnan(keyvalue_fid[k])) statarr[k]=statarr[k]+64;
 
 	keyvalue_iss[k]=drms_getkey_string(rec0[k],isskey,&status);
-	if (status !=0 || strcmp(keyvalue_iss[k], "CLOSED") != 0) statarr[k]=statarr[k]+64;
+	if (status !=0 || strcmp(keyvalue_iss[k], "CLOSED") != 0) statarr[k]=statarr[k]+128;
 
-	printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d \t %f \t %f \t %f \t %f \t %f \t %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_dsun_obs[k], keyvalue_p0[k], keyvalue_b0[k], keyvalue_X0[k], keyvalue_Y0[k], statarr[k]);
+	keyvalue_vrad[k]=drms_getkey_float(rec0[k], lev1_vr, &status);
+	if (keyvalue_vrad[k] < vrad_min || keyvalue_vrad[k] > vrad_max) statarr[k]=statarr[k]+256;
+
+
+	//	printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d \t %f \t %f \t %f \t %f \t %f \t %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_dsun_obs[k], keyvalue_p0[k], keyvalue_b0[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
 
       }
   
@@ -432,12 +464,12 @@ int DoIt(void)
 	P_ANG=P_ANG/dcount;
 	B_ANG=B_ANG/dcount;
 	dist=dist/dcount;
-
+	// !! all parameters modified to account for image rotation
        *(param+0)=(double)R_SUN;  //R_SUN in pixel
-       *(param+1)=(double)XX0;    //center x in pixel
-       *(param+2)=(double)YY0;    //center y in pixel
-       *(param+3)=(double)P_ANG;  //P-angle in rad
-       *(param+4)=(double)B_ANG;  //B-angle in rad
+       *(param+1)=(double)(4095.0-XX0);    //center x in pixel
+       *(param+2)=(double)(4095.0-YY0);    //center y in pixel
+       *(param+3)=(double)P_ANG+M_PI;  //P-angle in rad // !! rot img
+       *(param+4)=(double)(-B_ANG);  //B-angle in rad
        *(param+5)=(double)dist;   //distance in AU
       } 
       else
@@ -453,7 +485,7 @@ int DoIt(void)
           
    
 
-      //*********limb darkening calculatio ****************************
+      //*********limb darkening calculation ****************************
       limb_darkening((double)R_SUN, (double)XX0, (double)YY0, b_coef, b_order, limb_dark);
 
  
@@ -481,13 +513,14 @@ int DoIt(void)
 
 	count_flatfields=0;
 
+	for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)badpix_t[jjj*nx+iii]=badpix[(4095-jjj)*nx+(4095-iii)];
 
 	//**************************************************************************************
         //loop over different types of filtergrams                                            // 
 	//**************************************************************************************
 
 
-	for (ki=0; ki<nfid; ++ki){
+
   
 
 
@@ -500,8 +533,8 @@ int DoIt(void)
 	  //count filtergrams, and number of valid pairs
 	  count_filtergram=0; 
    
-	  for (k=0; k<nRecs; ++k) if (statarr[k] == 0 && keyvalue_fid[k] == fid_list[ki] && keyvalue_cam[k] == camid){present[k]=1; index[count_filtergram]=k; ++count_filtergram;}  //loop over all filtergrams: search for valid filtergrams with fid number ki, camera cam
-	  //printf("%d %d\n", ki, count_filtergram);
+	  for (k=0; k<nRecs; ++k) if (statarr[k] == 0 && keyvalue_fid[k] == fid && keyvalue_cam[k] == camid){present[k]=1; index[count_filtergram]=k; ++count_filtergram;}  //loop over all filtergrams: search for valid filtergrams with fid, camera cam
+	 
  
 
 	//check each forward and backward pair of images for identity
@@ -511,7 +544,7 @@ int DoIt(void)
 	  if (count_filtergram >=3){  //if at least 3 filtergrams of this type
 
 	  
-	  printf("filtergram with FID  %d: %d\n", fid_list[ki], count_filtergram);
+	  printf("filtergram with FID  %d: %d\n", fid, count_filtergram);
 	for (c=1; c<count_filtergram; ++c){
 
 
@@ -541,7 +574,7 @@ int DoIt(void)
 
 	  //do cosmic ray detection for each filtergram
 
-	sigmacoef=sigma_fid[ki];
+
 	limb_darkening((double)R_SUN, (double)XX0, (double)YY0, sigmacoef, 5, sigma);
 
 
@@ -567,28 +600,30 @@ int DoIt(void)
 	      present_backward[index_last]=0;
 	      present_forward[index_last]=0;
 	      present[index_last]=0;
-	      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[iii][jjj][last]=NAN; // !! find proper solution
+	      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[last][jjj][iii]=NAN; // !! find proper solution
 	    }
 	  else
 	    {
 	     
 	      //   printf("filtergram with FSN %d read\n",keyvalue_fsn[index_last]);
 	      arrinL0 = arrin0->data;
-              for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) if (isnan(arrinL0[jjj*nx+iii])) arrinL0[jjj*nx+iii]=0.0;
+	      //       for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) if (isnan(arrinL0[jjj*nx+iii])) arrinL0[jjj*nx+iii]=0.0;
 
 	      if (cosmic_flag)
-		for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[iii][jjj][last]=(float)(arrinL0[jjj*nx+iii]/exp(flatc[jjj*nx+iii])/sigma[jjj*nx+iii]); 
+		for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[last][jjj][iii]=(float)arrinL0[jjj*nx+iii]; 
 
 	      k=index[0];
-	     
+
+	    
+	      
 	
 	      if (present_forward[k] != 0){
 
 	      #pragma omp parallel for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
 		  for (iii=0; iii<nx; ++iii){
-		    if (arrinL0[jjj*nx+iii] > 0.0){rhsm[jjj*nx+iii]=rhsm[jjj*nx+iii]+log(arrinL0[jjj*nx+iii]);    //add up frames (flatfielded with offpoint flatfield and limb darkening removed
-		    count_m[jjj*nx+iii]=count_m[jjj*nx+iii]+1;}
+		    if (!isnan(arrinL0[jjj*nx+iii]) && arrinL0[jjj*nx+iii] > 0.0){rhsm[(4095-jjj)*nx+(4095-iii)]=rhsm[(4095-jjj)*nx+(4095-iii)]+log(arrinL0[jjj*nx+iii]); //!! rotate _image   //add up frames (flatfielded with offpoint flatfield and limb darkening removed
+		      count_m[(4095-jjj)*nx+(4095-iii)]=count_m[(4095-jjj)*nx+(4095-iii)]+1;}
 		  }
 		}
 	
@@ -617,10 +652,10 @@ int DoIt(void)
 	     
 	      //printf("filtergram with FSN %d read\n",keyvalue_fsn[index_current]);
 	      arrinL0 = arrin0->data;
-              for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) if (isnan(arrinL0[jjj*nx+iii])) arrinL0[jjj*nx+iii]=0.0;
+	      //          for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) if (isnan(arrinL0[jjj*nx+iii])) arrinL0[jjj*nx+iii]=0.0;
 
 	      if (cosmic_flag)
-		for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[iii][jjj][current]=(float)arrinL0[jjj*nx+iii]/exp(flatc[jjj*nx+iii])/sigma[jjj*nx+iii];
+		for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[current][jjj][iii]=(float)arrinL0[jjj*nx+iii];
 
 	      k=index[1];
 	      printf("fsn %d %d\n", k, keyvalue_fsn[k]);
@@ -630,8 +665,8 @@ int DoIt(void)
 		#pragma omp parallel for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
 		  for (iii=0; iii<nx; ++iii){
-		    if (arrinL0[jjj*nx+iii] > 0.0){rhsp[jjj*nx+iii]=rhsp[jjj*nx+iii]+log(arrinL0[jjj*nx+iii]);  //add up frames (flatfielded with offpoint flatfield and limb darkening removed
-		      count_p[jjj*nx+iii]=count_p[jjj*nx+iii]+1;}
+		    if (!isnan(arrinL0[jjj*nx+iii]) && arrinL0[jjj*nx+iii] > 0.0){rhsp[(4095-jjj)*nx+(4095-iii)]=rhsp[(4095-jjj)*nx+(4095-iii)]+log(arrinL0[jjj*nx+iii]); // !! rot img //add up frames (flatfielded with offpoint flatfield and limb darkening removed
+		      count_p[(4095-jjj)*nx+(4095-iii)]=count_p[(4095-jjj)*nx+(4095-iii)]+1;}
 		  }
 		}
 	      }
@@ -641,8 +676,8 @@ int DoIt(void)
 		#pragma omp parallel for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
 		  for (iii=0; iii<nx; ++iii){
-		    if (arrinL0[jjj*nx+iii] > 0.0){rhsm[jjj*nx+iii]=rhsm[jjj*nx+iii]+log(arrinL0[jjj*nx+iii]);    //add up frames (flatfielded with offpoint flatfield and limb darkening removed
-		    count_m[jjj*nx+iii]=count_m[jjj*nx+iii]+1;}
+		    if (!isnan(arrinL0[jjj*nx+iii]) && arrinL0[jjj*nx+iii] > 0.0){rhsm[(4095-jjj)*nx+(4095-iii)]=rhsm[(4095-jjj)*nx+(4095-iii)]+log(arrinL0[jjj*nx+iii]); // !! rot img   //add up frames (flatfielded with offpoint flatfield and limb darkening removed
+		      count_m[(4095-jjj)*nx+(4095-iii)]=count_m[(4095-jjj)*nx+(4095-iii)]+1;}
 		  }
 		}
 
@@ -651,7 +686,20 @@ int DoIt(void)
 	    }
 
 
-	 
+#pragma omp parallel for private(jjj,iii,rr)	   
+	      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
+		{
+				  
+		  rr=sqrt(pow((float)iii-XX0,2)+pow((float)jjj-YY0,2))/R_SUN;
+		  a1[jjj*nx+iii]=coef0[0]+coef0[1]*rr+coef0[2]*rr*rr;
+		  a2[jjj*nx+iii]=coef1[0]+coef1[1]*rr+coef1[2]*rr*rr;
+		  w1[jjj*nx+iii]=coef2[0]+coef2[1]*rr;
+		  w2[jjj*nx+iii]=coef3[0]+coef3[1]*rr;
+		  cmc[jjj*nx+iii]=coef4[0]+coef4[1]*rr+coef4[2]*rr*rr;
+
+		}
+
+	   	   	 
 
 	  //**********************************************************************************
 	  //loop over filtergrams of the same type
@@ -661,11 +709,13 @@ int DoIt(void)
 
 
 	  double avg=0.0;
+	  printtime();
+
 	  for (kkk=2; kkk<count_filtergram; ++kkk){
 	  
-	    if (cosmic_flag || ccount>cthreshold)
+	    if (cosmic_flag || ccount >= cthreshold)
 	      {
-	    for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)cosmicarr[iii][jjj]=0;
+	  
 	   
 	    k=index[kkk];
 	    km1=index[kkk-1];
@@ -691,78 +741,63 @@ int DoIt(void)
 	     
 	      //   printf("filtergram with FSN %d read\n",keyvalue_fsn[k]);
 	      arrinL0 = arrin0->data;
-              for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) if (isnan(arrinL0[jjj*nx+iii])) arrinL0[jjj*nx+iii]=0.0;
+
+	      //#pragma omp parallel for private(jjj,iii)
+		//            for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) if (isnan(arrinL0[jjj*nx+iii])) arrinL0[jjj*nx+iii]=0.0;
 	               
 	    
 
 	  if (cosmic_flag)
 	    {
-	   	   
-	      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[iii][jjj][next]=(float)arrinL0[jjj*nx+iii]/exp(flatc[jjj*nx+iii])/sigma[jjj*nx+iii];
-	   
 
-	       
 	      index_last=index[kkk-2];
 	      index_current=index[kkk-1];
 	      index_next=index[kkk];
-
-	     
 	      count=0;
+
+
+	 #pragma omp parallel 
+	      {    
+#pragma omp for private(jjj,iii,wlr)	   
+	      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
+		{
+		  arrimg[next][jjj][iii]=(float)arrinL0[jjj*nx+iii];
+				 
+		  wlr=((float)keyvalue_wl[km1]-505.)/2.0*69e-3-keyvalue_vrad[km1]/3e8*6173.4-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))/keyvalue_rsun[km1]*cpa.rotcoef0*698.0/3e8*6173.4;
+		  limw[jjj*nx+iii]=a1[jjj*nx+iii]*exp(-pow(wlr-0.162,2)/2.0/w1[jjj*nx+iii]/w1[jjj*nx+iii])+a2[jjj*nx+iii]*exp(-pow(wlr-0.275,2)/2.0/w2[jjj*nx+iii]/w2[jjj*nx+iii])+coef4[0]+cmc[jjj*nx+iii];
+		}
+
+	   	     
+	    
 	  //head= NULL;
+#pragma omp for private(iii,jjj,rad)
 	  for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
 	    {
 	      rad=sqrt(pow((float)iii-XX0,2)+pow((float)jjj-YY0,2))/R_SUN;
 	      if (rad < rad_cosmic_ray)
 		{
-	      if ((arrimg[iii][jjj][current]-arrimg[iii][jjj][last]) > factor && (arrimg[iii][jjj][current]-arrimg[iii][jjj][next]) > factor){
+		  if (fabs(arrimg[current][jjj][iii]-arrimg[last][jjj][iii]) > (factor*limw[jjj*nx+iii]) && fabs(arrimg[current][jjj][iii]-arrimg[next][jjj][iii]) > (factor*limw[jjj*nx+iii])){
 	     
 		if ((tmind[index_current]-tmind[index_last]) < time_limit && (tmind[index_next]-tmind[index_current]) < time_limit){
 		  if (badpix[jjj*nx+iii]){
-		    if (arrimg[iii][jjj][last] !=0.0f && arrimg[iii][jjj][current] != 0.0f && arrimg[iii][jjj][next] !=0.0f){
+		    if (!isnan(arrimg[last][jjj][iii]) && !isnan(arrimg[current][jjj][iii]) && !isnan(arrimg[next][jjj][iii])){
+                     #pragma omp critical(detect) 
+		      {
+		    cosmicarr[count]=jjj*nx+iii;
 		    ++count; //count number of cosmic rays (using first differences)
-		    cosmicarr[iii][jjj]=1;
-		    //curr=(struct list *)malloc(sizeof(struct list));
-		    //curr->val=jjj*nx+iii;
-		    //curr->next=head;
-		    //head=curr;
+		      }
 		    }
 		  }
 		}
 	      }
 		}
 	    }
+	      }
 	  printf("fsn count %d %d\n", keyvalue_fsn[km1], count);
 	  cosmic_ray_check[index_current]=count;
-
-
-	  //list_pointer[index_current]=head;
+	    
+	      
 	  
-
-	  //	  if (count > 0){
-	  //	badindex=(int *)(malloc((count+1)*sizeof(int)));
-	  //	badindex[0]=count;
-	  //}
-	  //else{
-	  //	badindex=(int *)(malloc(sizeof(int)));
-	  //	badindex[0]=0;
-	  //}
-
-	  //printf("number of cosmic rays %d %d\n", k, count);
-
-	  //if (count > 0){
-	  //  count=0;
-	  //  for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii){
-	  //    if ((arrimg[iii][jjj][current]-arrimg[iii][jjj][last]) > factor && (arrimg[iii][jjj][next  arrimg[iii][jjj][current]) > factor)
-	  //	if ((tmind[index_current]-tmind[index_last]) <= time_limit){
-	  //	  badindex[count+1]=jjj*nx+iii;
-	  //	  ++count;
-	  //	}
-	  //  }
-	  // }
-
-	      //printf("time %d %d %d %ld\n", k, index_next, index_current, tmind[index_next]-tmind[index_current]);
-	 	     
-	  //  badindex_arr[index_current]=badindex; //set pointer to bad pixel array
 
 	  /////////////////////////////////////////////////////////
 	  //write out cosmic ray series
@@ -773,27 +808,29 @@ int DoIt(void)
 	    status=drms_setkey_int(recout, keyfsn, keyvalue_fsn[km1]);
 	    status=drms_setkey_time(recout, keytobs, time_fl[km1]);
 	    status=drms_setkey_int(recout, keycount, count);
+	    status=drms_setkey_int(recout, fidkey, fid);
+	    status=drms_setkey_int(recout, keycamera, cam+1);
+
 
 	    drms_keyword_setdate(recout);
 	    
-	    if (keyvalue_cam[k] == cam_id_side) status=drms_setkey_string(recout, keyinstrument, camera_str_front);
-            if (keyvalue_cam[k] == cam_id_front) status=drms_setkey_string(recout, keyinstrument, camera_str_side);
+	    if (keyvalue_cam[km1] == cam_id_side) status=drms_setkey_string(recout, keyinstrument, camera_str_front);
+            if (keyvalue_cam[km1] == cam_id_front) status=drms_setkey_string(recout, keyinstrument, camera_str_side);
 	    
 	    segout = drms_segment_lookup(recout, segmentname_cosmic);
 	    
 	    axisbad[0]=count;
             arrout=drms_array_create(type_int,1,axisbad,NULL,&status);
 	    cosmic_ray_data=arrout->data;
-	    int ncount=0;
-	 
+	  	 
 	    //curr=list_pointer[k];
 	    //while(curr){
 	    //  cosmic_ray_data[ncount]=curr->val;
 	    //  curr=curr->next;
 	    //  ++ncount;
 	    //}
-	    for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) if (cosmicarr[iii][jjj] == 1) {cosmic_ray_data[ncount]=jjj*nx+iii; ++ncount;}
-	    printf("%d\n", ncount);
+
+	    for (i=0; i<count; ++i) cosmic_ray_data[i]=cosmicarr[i];
 	    status=drms_segment_write(segout, arrout, 0);
 	    drms_close_records(dataout, DRMS_INSERT_RECORD);
 	    drms_free_array(arrout);
@@ -822,31 +859,33 @@ int DoIt(void)
 
 		//	printf("begin loop\n");
 	
-	
-	      if (present_backward[k] != 0){
-	printf("backward %d\n", k);
+#pragma omp parallel
+	{
+	  if (present_backward[k] != 0){
+	    printf("backward %d\n", k);
 
-
-#pragma omp parallel for private(jjj,iii)
+#pragma omp for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
 		  for (iii=0; iii<nx; ++iii){
-		    if (arrinL0[jjj*nx+iii] > 0.0){rhsp[jjj*nx+iii]=rhsp[jjj*nx+iii]+log(arrinL0[jjj*nx+iii]);  //add up frames (flatfielded with offpoint flatfield and limb darkening removed
-		      count_p[jjj*nx+iii]=count_p[jjj*nx+iii]+1;}
+		    if (!isnan(arrinL0[jjj*nx+iii]) && arrinL0[jjj*nx+iii] > 0.0){rhsp[(4095-jjj)*nx+(4095-iii)]=rhsp[(4095-jjj)*nx+(4095-iii)]+log(arrinL0[jjj*nx+iii]);  // !! rot image //add up frames (flatfielded with offpoint flatfield and limb darkening removed
+		      count_p[(4095-jjj)*nx+(4095-iii)]=count_p[(4095-jjj)*nx+(4095-iii)]+1;}
 		  }
 		}
-	      }
+	  }
+	
 	      if (present_forward[k] != 0){
 	printf("forward %d\n", k);
-		#pragma omp parallel for private(jjj,iii)
+		#pragma omp for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
 		  for (iii=0; iii<nx; ++iii){
-		    if (arrinL0[jjj*nx+iii] > 0.0){rhsm[jjj*nx+iii]=rhsm[jjj*nx+iii]+log(arrinL0[jjj*nx+iii]);    //add up frames (flatfielded with offpoint flatfield and limb darkening removed
-		    count_m[jjj*nx+iii]=count_m[jjj*nx+iii]+1;}
+		    if (!isnan(arrinL0[jjj*nx+iii]) && arrinL0[jjj*nx+iii] > 0.0){rhsm[(4095-jjj)*nx+(4095-iii)]=rhsm[(4095-jjj)*nx+(4095-iii)]+log(arrinL0[jjj*nx+iii]);   //!! rot img  //add up frames (flatfielded with offpoint flatfield and limb darkening removed
+		      count_m[(4095-jjj)*nx+(4095-iii)]=count_m[(4095-jjj)*nx+(4095-iii)]+1;}
 		  }
 		}
 	      }
+	}
 
-	   
+	      
       	      
 	      }
 
@@ -854,15 +893,16 @@ int DoIt(void)
 	    }
 	      }
 	  }//end loop over filtergrams of same type
-	  
-	 
 
- 
+	  printtime();	  
+	  printf("loop done\n");
+
+ #pragma omp parallel for private(jjj,iii)
 	  for (jjj=0; jjj<ny; ++jjj){
 	    for (iii=0; iii<nx; ++iii){
 	       
-	      if (count_p[jjj*nx+iii] > 0) rhsp[jjj*nx+iii]=(rhsp[jjj*nx+iii]/(double)count_p[jjj*nx+iii]-flatc[jjj*nx+iii]); 
-	      if (count_m[jjj*nx+iii] > 0) rhsm[jjj*nx+iii]=(rhsm[jjj*nx+iii]/(double)count_m[jjj*nx+iii]-flatc[jjj*nx+iii]); 
+	      if (count_p[jjj*nx+iii] > 0) rhsp[jjj*nx+iii]=(rhsp[jjj*nx+iii]/(double)count_p[jjj*nx+iii]-flatc[(4095-jjj)*nx+(4095-iii)]); 
+	      if (count_m[jjj*nx+iii] > 0) rhsm[jjj*nx+iii]=(rhsm[jjj*nx+iii]/(double)count_m[jjj*nx+iii]-flatc[(4095-jjj)*nx+(4095-iii)]); 
 	    }
 	  }
 
@@ -871,7 +911,7 @@ int DoIt(void)
       //do flatfield calculations                                          /
       //*******************************************************************/
 
-	  if (ccount > cthreshold){
+	  if (ccount >= cthreshold){
 
   
       for (j=0; j<ny; ++j)  for (i=0; i<nx; ++i) flati[j*nx+i]=0.0;
@@ -879,7 +919,7 @@ int DoIt(void)
       rotpairs[cam]=rotpairs[cam]+ccount;
       cpa.norm=normconst;
 
-      status=flatfield(rhsp, rhsm, badpix, ccount, flati, param, cpa, deltat[cam]);
+      status=flatfield(rhsp, rhsm, badpix_t, ccount, flati, param, cpa, deltat[cam]);
   
 
       if (status ==0)
@@ -896,7 +936,7 @@ int DoIt(void)
 	 
 	  }
 
-	}  // end ki loop (different filtergrams);
+	
 	printf("count flatfields %d \n", count_flatfields);
   
 
@@ -939,8 +979,8 @@ int DoIt(void)
 
   // highpass flatfields
     
-      highpass(nx, ny, fwhm, flat_front); //
-      highpass(nx, ny, fwhm, flat_side);  // 
+      //     highpass(nx, ny, fwhm, flat_front); //   !!remove high pass for test
+      //     highpass(nx, ny, fwhm, flat_side);  // 
     
   
 
@@ -997,6 +1037,7 @@ int DoIt(void)
     }
 
 
+
     rot_new_front.rotbad=bad_pix_front;
     rot_new_front.rotpairs=rotpairs[1];
     rot_new_front.rotcadence=(float)deltat[1];
@@ -1014,12 +1055,27 @@ int DoIt(void)
     //**************************************************************************************
     printf("update_stat %d %d\n", update_stat[0], update_stat[1]);
 
-    if (update_stat[1] == 0 || update_stat[1] == 1) write_flatfields(arr_flat_front, arrout_new_front, 2, recnum_front,
-								     tobs_link_front, focus, rot_new_front, rot_cur_front);
+    //    if (update_stat[1] == 0 || update_stat[1] == 1) write_flatfields(arr_flat_front, arrout_new_front, 2, recnum_front,
+    //								     tobs_link_front, focus, rot_new_front, rot_cur_front);
 
-  if (update_stat[0] == 0 || update_stat[0] == 1) write_flatfields(arr_flat_side, arrout_new_side, 1, recnum_side,
-								   tobs_link_side, focus, rot_new_side, rot_cur_side);
+  // if (update_stat[0] == 0 || update_stat[0] == 1) write_flatfields(arr_flat_side, arrout_new_side, 1, recnum_side,
+    //								   tobs_link_side, focus, rot_new_side, rot_cur_side);
 
+
+    //write out full flatfield for test //!!
+for (j=0; j<ny; ++j){
+      for (i=0; i<nx; ++i){
+	flatfield_front_new[j*nx+i]=flat_front[4095-i][4095-j];
+	flatfield_side_new[j*nx+i]=flat_side[4095-i][4095-j];
+      }
+ }
+
+
+
+
+ if (update_stat[1] == 0 || update_stat[1] == 1) write_flatfield_fid(arrout_new_front, 2, tobs_link_front, focus, fid, fsns, rot_new_front); //!! writeout unconditional
+
+ if (update_stat[0] == 0 || update_stat[0] == 1) write_flatfield_fid(arrout_new_side, 1, tobs_link_side, focus, fid, fsns, rot_new_side);   // !!writeout unconditional
 
     //*************************************************************************************
     //write out records of cosmic ray hits
@@ -1038,7 +1094,7 @@ int DoIt(void)
 	   
 	    
 	    //write out cosmic ray list
-  //    dataout = drms_create_records(drms_env,1,filename_cosmic,DRMS_PERMANENT,&stat);
+  //    dataout = drms_create_records(drms_env,1,filename_cosmicRMS_PERMANENT,&stat);
   //    recout = dataout->records[0];
   //    status=drms_setkey_int(recout, keyfsn, keyvalue_fsn[k]);
   //    status=drms_setkey_time(recout, keytobs, time_fl[k]);
@@ -1099,6 +1155,13 @@ int DoIt(void)
       drms_close_records(data,DRMS_FREE_RECORD);       
     }
 
+  free(a1);
+  free(a2);
+  free(w1);
+  free(w2);
+  free(cmc);
+  free(cosmicarr);
+  free(sigmacoef);
 	  free(offpoint_front);
 	  free(offpoint_side);
 	  free(bad_front);
@@ -1113,6 +1176,7 @@ int DoIt(void)
 	  free(count_m);
 	  free(limb_dark);
 	  free(sigma);
+	  free(limw);
 
 
   printtime();  
