@@ -68,7 +68,9 @@ $(ALL_$(d)) : LL_TGT :=  $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) $(FMATHLIBS) $(SVML
 $(S_$(d)):	%:	$(d)/%
 
 # Standard things
--include	$(DEP_$(d))
+ifneq ($(DEP_$(d)),)
+  -include	$(DEP_$(d))
+endif
 
 d		:= $(dirstack_$(sp))
 sp		:= $(basename $(sp))
