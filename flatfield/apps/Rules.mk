@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/,  mymod module_flatfield_main module_flatfield_256 module_flatfield)
+MODEXE_$(d)	:= $(addprefix $(d)/,  mymod module_flatfield_combine module_flatfield write_flatfield write_offpoint write_badpix write_dark)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -24,14 +24,14 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I $(SRCDIR)/$(d)/../libs/flatfieldlib
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -g -I $(SRCDIR)/$(d)/../libs/flatfieldlib 
 
 # NOTE: Add dependent libraries with the -I compiler flag, and make the module depend
 #   on that library
 # $(OBJ_$(d)):				CF_TGT := -I$(SRCDIR)/$(d)/../../libs/somelib
 # $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBSOMELIB)
 
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) $(FMATHLIBSL)  -lfftw3 -openmp 
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) $(FMATHLIBSL)  -lfftw3 -openmp -g
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBFLATFIELD)
 
 # Shortcuts
