@@ -17,8 +17,7 @@ S_$(d)		:= $(notdir $(LIBSTATS))
 
 # Local rules
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):    CF_TGT := $(CF_TGT)
-$(OBJ_$(d)):    LL_TGT := $(LL_TGT) 
+
 $(LIBSTATS):	$(OBJ_$(d))
 		$(ARCHIVE)
 		$(SLLIB)
