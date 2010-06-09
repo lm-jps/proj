@@ -64,6 +64,7 @@ int do_flat(LEV0LEV1 *info)
     int i,j,idx,IDX;
     int nr,nc,r1,r2,c1,c2;
     int status;
+    int is_dark = info->darkflag;
     float *flat = info->adataff;
     float *dark = info->adatadark;
     short *in = info->adata0;
@@ -175,7 +176,8 @@ int do_flat(LEV0LEV1 *info)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
+		//ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
+		ftmp = is_dark ? tmp : (tmp - dark[IDX]) / (exptime * flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    itmp = roundf(ftmp);
 		    out[IDX] = ftmp;
@@ -195,7 +197,8 @@ int do_flat(LEV0LEV1 *info)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
+		//ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
+		ftmp = is_dark ? tmp : (tmp - dark[IDX]) / (exptime * flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    itmp = roundf(ftmp);
 		    out[IDX] = ftmp;
@@ -215,7 +218,8 @@ int do_flat(LEV0LEV1 *info)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
+		//ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
+		ftmp = is_dark ? tmp : (tmp - dark[IDX]) / (exptime * flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    itmp = roundf(ftmp);
 		    out[IDX] = ftmp;
@@ -235,7 +239,8 @@ int do_flat(LEV0LEV1 *info)
 	    if (DRMS_MISSING_SHORT == tmp)
 		out[IDX++] = DRMS_MISSING_FLOAT;
 	    else {
-		ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
+		//ftmp = (tmp - dark[IDX]) / (exptime * flat[IDX]);
+		ftmp = is_dark ? tmp : (tmp - dark[IDX]) / (exptime * flat[IDX]);
 		if (ftmp >= MINOUT && ftmp < MAXOUT) {
 		    itmp = roundf(ftmp);
 		    out[IDX] = ftmp;
