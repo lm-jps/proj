@@ -407,15 +407,16 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
 //    quallev0 = quallev0 | qmiss;
 //  }
 
+if(fsn == 469769216) quallev0 = quallev0 | Q_CORRUPT; //corrupt image
 if(!hmiaiaflg) {		//HMI specific qual bits
-  if(fsn == 469769216) quallev0 = quallev0 | Q_CORRUPT; //corrupt image
   if(INVALtime) quallev0 = quallev0 | Q_INVALTIME; //HOBITSEC=0
   hsqfgsn = drms_getkey_int(rs, "HSQFGSN", &status);
   if(status || (fsn != hsqfgsn)) quallev0 = quallev0 | Q_NOISP;
-  if(hseqerr = drms_getkey_string(rs, "HSEQERR", &status)) {
-    if(strcmp(hseqerr, "SUCCESS")) quallev0 = quallev0 | Q_SEQERR;
-    free(hseqerr);
-  }
+  //Removed per Rock's email Re: lev0 quality updates 9Jun2010 10:22
+  //if(hseqerr = drms_getkey_string(rs, "HSEQERR", &status)) {
+  //  if(strcmp(hseqerr, "SUCCESS")) quallev0 = quallev0 | Q_SEQERR;
+  //  free(hseqerr);
+  //}
   if(hwltnset = drms_getkey_string(rs, "HWLTNSET", &status)) {
     if(!strcmp(hwltnset, "OPEN")) quallev0 = quallev0 | Q_ISSOPEN;
     free(hwltnset);
