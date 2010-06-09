@@ -33,7 +33,7 @@
 #include "lev0lev1.h"
 #include "quallev1.h"
 #include "limb_fit.h"
-//#include "cosmic_ray.h"
+#include "cosmic_ray.h"
 #include "get_pointing_info.c"
 
 //default in and out data series
@@ -127,6 +127,7 @@ unsigned int fsnx = 0;
 //int data1[MAXPIXELS];
 float data1[MAXPIXELS];		//floats for HMI
 int data1A[MAXPIXELS];		//ints for AIA
+int array_cosmic[16777216];	//4096x4096
 double tgttimes[NUMRECLEV1];
 
 long long brec, erec, bfsn, efsn; //begin and end lev0 rec/fsn. must be same data type
@@ -386,7 +387,7 @@ int orbit_calc()
 #include "do_flat.c"
 #include "get_image_location.c"
 #include "limb_fit_function.c"
-//#include "cosmic_ray.c"
+#include "cosmic_ray.c"
 
 //Called with the range to do. The args are either rec#s or fsn#s accord to modeflg
 int do_ingest(long long bbrec, long long eerec)
@@ -399,7 +400,7 @@ int do_ingest(long long bbrec, long long eerec)
   float percentd;
   double rsun_lf, x0_lf, y0_lf;
   int rstatus, dstatus, ncnt, fcnt, i, j, qualint, nobs;
-  int hshiexp, hcamid, skipflat;
+  int hshiexp, hcamid, nbad, n_cosmic;
   uint32_t missvals, totvals;
   long long recnum0, recnum1, recnumff;
   char recrange[128], lev0name[128], flatrec[128];
@@ -724,6 +725,7 @@ int do_ingest(long long bbrec, long long eerec)
 
       badseg = drms_segment_lookup(rsff, "BAD_PIXEL");
       ArrayBad = drms_segment_read(badseg, DRMS_TYPE_INT, &rstatus);
+      nbad = drms_array_size(ArrayBad)/sizeof(int);
       if(!ArrayBad) {
         printk("Can't do drms_DARKsegment_read() for BAD_PIXEL. status=%d\n", 
 			rstatus);
@@ -747,24 +749,26 @@ int do_ingest(long long bbrec, long long eerec)
           return(1);
         }
       }
+      //move the segment write to after cosmic_rays() updates it
+      /**************************************************************
       dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
       if (dstatus) {
         printk("ERROR: drms_segment_write error=%d for lev1 bad_pixel_list\n");
         //noimage[i] = 1;
         return(1);
       }
+      **************************************************************/
       l0l1->rs1 = rs;
       l0l1->rsff = rsff;
       l0l1->recnum1 = rs->recnum;  
+      l0l1->darkflag = 0;
       hshiexp = drms_getkey_int(rs, "HSHIEXP", &rstatus);
       hcamid = drms_getkey_int(rs, "HCAMID", &rstatus);
-      skipflat = 0;
       if(hshiexp == 0) {
         if(hcamid == 0 || hcamid == 1) {
-          skipflat = 1;
+          l0l1->darkflag = 1;
         }
       }
-    if(!skipflat) {
       if(hmiaiaflg) {
         if(rstatus = do_flat_aia(l0l1)) {
           printk("***ERROR in do_flat() status=%d\n", rstatus);
@@ -840,6 +844,19 @@ for(i=0; i<3; i++) { printf("%d\t%d\t%d\n", spikelocs[i], oldvalues[i],
             drms_free_array(ArraySpike);
         } else { printf("spikes segment not found\n"); }
        }
+/**************************!!!TEMP*****************************************
+      dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
+				array_cosmic, &n_cosmic, 4096, 4096);
+      if(dstatus) {
+        printk("ERROR: cosmic_rays() error=%d\n", dstatus);
+        noimage[i] = 1;
+      }
+***********************************************************************/
+      dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
+      if (dstatus) {
+        printk("ERROR: drms_segment_write error=%d for lev1 bad_pixel_list\n",
+		dstatus);
+        noimage[i] = 1;
       }
 FLATERR:
       drms_close_records(rsetff, DRMS_FREE_RECORD);
