@@ -28,6 +28,7 @@ typedef struct {
   long long recnum1;	//lev1 record DRMS record number
   unsigned int fsn;	//fsn of lev0 record
   int himgcfid;		//HMI_SEQ_ID_IMAGE_CNFG
+  int darkflag;		//1=dark image
   int datamin;
   int datamax;
   int datamedn;
