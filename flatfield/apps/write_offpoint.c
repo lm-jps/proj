@@ -24,6 +24,7 @@ ModuleArgs_t module_args[] =
   {ARG_INT, "focus",  "0"},              //focus position (1-16) for HMI
   {ARG_TIME, "t_obs"},                   //T_OBS
   {ARG_INTS, "fsn_list_offpoint", "-1,-1"},       //comma separated list of FSNs
+  {ARG_INTS, "fsn_list_pzt", "-1,-1"}, 
   {ARG_INT, "nx", "4096"},                  //x dim of image 
   {ARG_INT, "ny", "4096"},                   //y dim of image
   {ARG_END}
@@ -134,6 +135,11 @@ if (inst_hmi)
      int *fsn_list_offset;
      fsn_list_offset=(int *)(malloc(sizeof(int)*1024));
      int noffset=cmdparams_get_intarr(&cmdparams, "fsn_list_offpoint", &fsn_list_offset, &status);
+
+     int *fsn_list_pzt;
+     fsn_list_pzt=(int *)(malloc(sizeof(int)*1024));
+     int npzt=cmdparams_get_intarr(&cmdparams, "fsn_list_pzt", &fsn_list_pzt, &status);
+
    
      int fsn_first=fsn_list_offset[0];
      int fsn_last=fsn_list_offset[noffset-1];
@@ -146,10 +152,22 @@ if (inst_hmi)
      for (k=0; k<noffset; ++k)
 	{ 
 	  char ffnumb[12]={""};
-	  sprintf(ffnumb, "%12d", fsn_list_offset[k]);
+	  sprintf(ffnumb, "%d", fsn_list_offset[k]);
 	  strcat(fsn_string, ffnumb);
 	  if (k<(noffset-1)) strcat(fsn_string, ",");
  	}
+
+     if (fsn_list_pzt[0] != -1)
+       {
+	 strcat(fsn_string, ";PZT_FSN:");
+	 for (k=0; k<npzt; ++k)
+	   {
+	  char ffnumb[12]={""};
+	  sprintf(ffnumb, "%d", fsn_list_pzt[k]);
+	  strcat(fsn_string, ffnumb);
+	  if (k<(npzt-1)) strcat(fsn_string, ",");
+	   }
+       }
  
 
 
