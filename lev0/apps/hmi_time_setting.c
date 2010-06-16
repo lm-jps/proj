@@ -16,6 +16,8 @@
 #include "packets.h"
 #include "printk.h"
 
+extern int INVALtime;
+
 static int HK_getkey_int(HK_Keyword_t *isp, char *key)
 {
 while (isp)
@@ -37,7 +39,7 @@ if (firstcall)
   sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   }
 /* XXX fix build 3/18/2008, arta */
-return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
+return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss & 0xFFFF))/65536.0);
 }
 
 static void sprint_time_ISO (char *tstring, TIME t)
@@ -84,6 +86,8 @@ if (flg) {	/* AIA */
   char *aia_instru[] = { "AIA_1", "AIA_2", "AIA_3", "AIA_4" };
   int aimgshce = HK_getkey_int(isp, "AIMGSHCE"); /* AIA_IMG_SH_CMDED_EXPOSURE */
   int aimgots  = HK_getkey_int(isp, "AIMGOTS");  /* AIA_IMG_OBT_TIME_SH_SEC  */
+  if((aimgots == 0) && (aimgshce != 0)) INVALtime = 1;//used by do_quallev0()
+  else INVALtime = 0;
   int aimgotss = HK_getkey_int(isp, "AIMGOTSS"); /* AIA_IMG_OBT_TIME_SH_SS   */
   int aimshcbc = HK_getkey_int(isp, "AIMSHCBC"); /* AIA_IMG_SH_CLOSE_BOT_CENTR*/
   aimshcbc += 0x1000000*nrollct(aimgshce, aimshcbc);
@@ -142,6 +146,7 @@ if (flg) {	/* AIA */
     t_obs = SDO_to_DRMS_time(aimgots, aimgotss) + offset;
   }
   exptime = (shebc + shebe + shetc + shete)/4.0;
+  if (aimgshce < 73) exptime = exptime*7.0/20.0; //from jps 2Jun2010
   expsdev = sqrt((shebc*shebc + shebe*shebe + shetc*shetc +
                  shete*shete)/4.0 - exptime*exptime);
   int asqhdr = HK_getkey_int(isp, "ASQHDR");
@@ -169,6 +174,8 @@ if (flg) {	/* AIA */
 } else {	/* HMI */
   int hshiexp = HK_getkey_int(isp, "HSHIEXP"); /* HMI_FSW_IMG_CMDED_EXPOSURE */
   int hobitsec = HK_getkey_int(isp, "HOBITSEC"); /* HMI_OBT_IMG_TIME_SHM_SEC */
+  if((hobitsec == 0) && (hshiexp != 0)) INVALtime = 1;//used by do_quallev0()
+  else INVALtime = 0;
   int hobitss  = HK_getkey_int(isp, "HOBITSS");  /* HMI_OBT_IMG_TIME_SHM_SS  */
   int hshmiclb = HK_getkey_int(isp, "HSHMICLB"); /* HMI_SHM_IMG_CLOSE_BOTTOM */
   int hshmiclm = HK_getkey_int(isp, "HSHMICLM"); /* HMI_SHM_IMG_CLOSE_MIDDLE */
