@@ -51,7 +51,7 @@ void derotation(double, double, double, double, double, double, double [2][nx][n
 
 void limb_darkening(double radius, double cent_x, double cent_y, double *b, int order, double *limb_dark);
 int flatfield(double *rhsp, double *rhsm,short *badpix, int pairs, double *gout, double *param, struct code_param, double deltat);
-
+void apod_circ(float rad, float nb, float offx, float offy, float *vd);
 
 int get_flatfields(int camera, TIME t_0, int focus,
                    float *flatfield, float *offpoint, 
@@ -60,12 +60,12 @@ int get_flatfields(int camera, TIME t_0, int focus,
 
 
 int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
-                     long long recnum[6], TIME tobs_link[2], int focus,
+                     long long recnum[6], TIME tobs_link[2], TIME t_0, int focus,
                      struct rotpar rot_new, 
                      struct rotpar rot_cur);
 
 int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera,
-			TIME tobs_link[2], int focus,int fid, int fsns,
+			TIME tobs_link[2], TIME t_0, int focus,int fid, int fsns,
 			struct rotpar rot_new);
 /*-------------------------------------------------------------*/
 /*                                                             */
@@ -110,6 +110,7 @@ int DoIt(void)
 
   TIME t_0;
   int focus,camid,fsns;
+  char *flatkey1, *flatkey2, *flatkey[2];
   TIME   interntime;
   int axisbad[1];
 
@@ -133,7 +134,7 @@ int DoIt(void)
 
 
   //DRMS_arrays for output arrays
-  DRMS_Array_t *arr_flat_front, *arr_flat_side;
+  //DRMS_Array_t *arr_flat_front, *arr_flat_side;
   DRMS_Array_t *arrout_new_front, *arrout_new_side;
   DRMS_Array_t *arrout;
 
@@ -146,6 +147,7 @@ int DoIt(void)
   short *badpix, *badpix_t;
   double *flati;
   double *flatc;
+  float *apod;
 
   offpoint_front=(float *)(malloc(nx*ny*sizeof(float)));
   offpoint_side=(float *)(malloc(nx*ny*sizeof(float)));
@@ -156,6 +158,7 @@ int DoIt(void)
   badpix_t=(short *)(malloc(nx*ny*sizeof(short)));
   flati=(double *)(malloc(nx*ny*sizeof(double)));
   flatc=(double *)(malloc(nx*ny*sizeof(double)));
+  apod=(float *)(malloc(nx*ny*sizeof(float)));
 
   float *flatfield_front_new, *flatfield_side_new;
   float *fflat_front, *fflat_side;
@@ -224,15 +227,15 @@ int DoIt(void)
   /*CHECK WHETHER THE FLATFIELD OUTPUT SERIES EXIST                                                                    */
   /***********************************************************************************************************/
     
-       drms_series_exists(drms_env, filename_flatfield, &status);
+       drms_series_exists(drms_env, filename_flatfield_fid, &status);
       if (status == DRMS_ERROR_UNKNOWNSERIES)
 	{
-	  printf("Output series %s doesn't exist\n",filename_flatfield);       //if the output series does not exit
+	  printf("Output series %s doesn't exist\n",filename_flatfield_fid);       //if the output series does not exit
 	  exit(EXIT_FAILURE);                                        //we exit the program
 	} 
       if (status == DRMS_SUCCESS)
 	{
-	  printf("Output series %s exists.\n",filename_flatfield);
+	  printf("Output series %s exists.\n",filename_flatfield_fid);
 	}
 
   //***********************************************************************************************************/
@@ -286,6 +289,7 @@ int DoIt(void)
   long tmind[nRecs+1];
   int keyvalue_fid[nRecs];
   char *keyvalue_iss[nRecs];
+  char *keyvalue_flatnumb[nRecs];
   int keyvalue_fsn[nRecs];
   double time_fl[nRecs];
   int cosmic_ray_check[nRecs];
@@ -332,16 +336,22 @@ int DoIt(void)
 	  cosmic_ray_check[k]=-1;
 	  rec0[k]=data->records[k];
 	  keyvalue_cam[k]=drms_getkey_int(rec0[k],keycam,&status);
+	  printf("%d %d\n", k, keyvalue_cam[k]);
 	  if (keyvalue_cam[k] == cam_id_side) ++nfr_side;
 	  if (keyvalue_cam[k] == cam_id_front) ++nfr_front;
 	 
 	}
 
+     
+
       t_0 = drms_getkey_time(rec0[nRecs-1],keytobs,&status);
       fsns=drms_getkey_int(rec0[nRecs-1],keyfsn,&status);
       focus = drms_getkey_int(rec0[nRecs-1],keyfocus,&status);
-
-         
+      flatkey1=drms_getkey_string(rec0[nRecs-1],flatnkey,&status);
+      flatkey2=drms_getkey_string(rec0[nRecs-2],flatnkey,&status);
+       
+      if (keyvalue_cam[nRecs-1] == cam_id_side && keyvalue_cam[nRecs-2] == cam_id_front){flatkey[0]=flatkey1; flatkey[1]=flatkey2;}
+      if (keyvalue_cam[nRecs-1] == cam_id_front && keyvalue_cam[nRecs-2] == cam_id_side){flatkey[0]=flatkey2; flatkey[1]=flatkey1;}
      
       printf("get flatfields from database\n");
 
@@ -358,8 +368,7 @@ int DoIt(void)
 		     offpoint_side,  bad_side, recnum_side, tobs_link_side, &rot_cur_side);  //get side camera flatfield
 
       printf("version ff %d\n", rot_cur_side.flatfield_version);
-     
-      
+      printf("flatfield side 2999 3034 %f\n", flatfield_side[3034*4096+2999]);      
       //********************************************************************************************************************************/
     
  
@@ -378,6 +387,7 @@ int DoIt(void)
       printtime();
 
       for (k=0; k<nRecs; ++k){
+	printf("k %d\n", k);
         keyvalue_time=drms_getkey(rec0[k], keytobs, &type_time, &status);       //read "T_OBS" of filtergram
         time_fl[k] = keyvalue_time.time_val;
         tmind[k]=(long)time_fl[k]-(long)interntime;                           //tmind: time since first filtergram (in s) 
@@ -392,10 +402,10 @@ int DoIt(void)
 	statarr[k]=0;
 
 	keyvalue_rsun[k]=drms_getkey_float(rec0[k], lev1_r_sun,&status); // /drms_getkey_float(rec0[k], lev1_imsc,&status0);
-	if (keyvalue_rsun[k] < rsun_min || keyvalue_rsun[k] > rsun_max ||  isnan(keyvalue_rsun[k]))statarr[k]=statarr[k]+1; //!! check for status, status0
+	if (keyvalue_rsun[k] < rsun_min || keyvalue_rsun[k] > rsun_max ||  isnan(keyvalue_rsun[k]))statarr[k]=statarr[k]+32; //!! check for status, status0
 
 	keyvalue_dsun_obs[k]=drms_getkey_double(rec0[k], lev1_dist ,&status);
-	if (status !=0 || keyvalue_dsun_obs[k] < dsun_obs_min || keyvalue_dsun_obs[k] > dsun_obs_max || isnan(keyvalue_dsun_obs[k])) statarr[k]=statarr[k]+2;
+	if (status !=0 || keyvalue_dsun_obs[k] < dsun_obs_min || keyvalue_dsun_obs[k] > dsun_obs_max || isnan(keyvalue_dsun_obs[k])) statarr[k]=statarr[k]+16;
 
 	keyvalue_p0[k]=drms_getkey_float(rec0[k], lev1_p0, &status); 
 	if (status !=0 || keyvalue_p0[k] < p0_min || keyvalue_p0[k] > p0_max || isnan(keyvalue_p0[k])) statarr[k]=statarr[k]+4;
@@ -404,22 +414,25 @@ int DoIt(void)
 	if (status !=0 || keyvalue_b0[k] < b0_min || keyvalue_b0[k] > b0_max ||  isnan(keyvalue_b0[k])) statarr[k]=statarr[k]+8;
 
 	keyvalue_X0[k]=drms_getkey_float(rec0[k], lev1_x0, &status);
-	if (status !=0  || keyvalue_X0[k] < X0_min || keyvalue_X0[k] > X0_max || isnan(keyvalue_X0[k])) statarr[k]=statarr[k]+16;
+	if (status !=0  || keyvalue_X0[k] < X0_min || keyvalue_X0[k] > X0_max || isnan(keyvalue_X0[k])) statarr[k]=statarr[k]+64;
 
 	keyvalue_Y0[k]=drms_getkey_float(rec0[k], lev1_y0,&status);
-	if (status !=0 || keyvalue_Y0[k] < Y0_min || keyvalue_Y0[k] > Y0_max || isnan(keyvalue_Y0[k])) statarr[k]=statarr[k]+32;
+	if (status !=0 || keyvalue_Y0[k] < Y0_min || keyvalue_Y0[k] > Y0_max || isnan(keyvalue_Y0[k])) statarr[k]=statarr[k]+128;
 
 	keyvalue_fid[k]=drms_getkey_int(rec0[k],fidkey,&status);
-	if (status !=0 || keyvalue_fid[k] < minfid || keyvalue_fid[k] > maxfid || isnan(keyvalue_fid[k])) statarr[k]=statarr[k]+64;
+	if (status !=0 || keyvalue_fid[k] < minfid || keyvalue_fid[k] > maxfid || isnan(keyvalue_fid[k])) statarr[k]=statarr[k]+256;
 
 	keyvalue_iss[k]=drms_getkey_string(rec0[k],isskey,&status);
-	if (status !=0 || strcmp(keyvalue_iss[k], "CLOSED") != 0) statarr[k]=statarr[k]+128;
+	if (status !=0 || strcmp(keyvalue_iss[k], "CLOSED") != 0) statarr[k]=statarr[k]+1;
+	printf("keyvalue cam %d\n", keyvalue_cam[k]);
+	keyvalue_flatnumb[k]=drms_getkey_string(rec0[k],flatnkey,&status);
+	if (status !=0 || strcmp(keyvalue_flatnumb[k], flatkey[keyvalue_cam[k]-2]) != 0) statarr[k]=statarr[k]+2; //!! find proper solution
 
 	keyvalue_vrad[k]=drms_getkey_float(rec0[k], lev1_vr, &status);
-	if (keyvalue_vrad[k] < vrad_min || keyvalue_vrad[k] > vrad_max) statarr[k]=statarr[k]+256;
+	if (keyvalue_vrad[k] < vrad_min || keyvalue_vrad[k] > vrad_max) statarr[k]=statarr[k]+512;
 
 
-	//	printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d \t %f \t %f \t %f \t %f \t %f \t %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_dsun_obs[k], keyvalue_p0[k], keyvalue_b0[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
+	printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d \t %f \t %f \t %f \t %f \t %f \t %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_dsun_obs[k], keyvalue_p0[k], keyvalue_b0[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
 
       }
   
@@ -469,7 +482,7 @@ int DoIt(void)
        *(param+1)=(double)(4095.0-XX0);    //center x in pixel
        *(param+2)=(double)(4095.0-YY0);    //center y in pixel
        *(param+3)=(double)P_ANG+M_PI;  //P-angle in rad // !! rot img
-       *(param+4)=(double)(-B_ANG);  //B-angle in rad
+       *(param+4)=(double)(B_ANG);  //B-angle in rad
        *(param+5)=(double)dist;   //distance in AU
       } 
       else
@@ -528,12 +541,12 @@ int DoIt(void)
 
 	
 	for (i=0; i<nRecs; ++i){present_backward[i]=0; present_forward[i]=0;}
-	for (i=0; i<nRecs; ++i){present[i]=0; index[i]=-1; statarr[k]=0;}
+	for (i=0; i<nRecs; ++i){present[i]=0; index[i]=-1;}
 
 	  //count filtergrams, and number of valid pairs
 	  count_filtergram=0; 
    
-	  for (k=0; k<nRecs; ++k) if (statarr[k] == 0 && keyvalue_fid[k] == fid && keyvalue_cam[k] == camid){present[k]=1; index[count_filtergram]=k; ++count_filtergram;}  //loop over all filtergrams: search for valid filtergrams with fid, camera cam
+	  for (k=0; k<nRecs; ++k) if (statarr[k] < 32 && keyvalue_fid[k] == fid && keyvalue_cam[k] == camid){present[k]=1; index[count_filtergram]=k; ++count_filtergram;}  //loop over all filtergrams: search for valid filtergrams with fid, camera cam
 	 
  
 
@@ -549,7 +562,7 @@ int DoIt(void)
 
 
 	  present_backward[index[c]]=present[index[c]];
-	  if (keyvalue_wl[index[c]] != keyvalue_wl[index[c-1]] || keyvalue_pl[index[c]] != keyvalue_pl[index[c-1]] || (tmind[index[c]]-tmind[index[c-1]]) != (long)deltat[cam] || fabs(keyvalue_p0[index[c]]- keyvalue_p0[index[c-1]]) > 0.2 || sqrt(pow(keyvalue_X0[index[c]]-keyvalue_X0[index[c-1]],2)+pow(keyvalue_Y0[index[c]]-keyvalue_Y0[index[c-1]],2)) > limit_centerdiff || fabs(keyvalue_rsun[index[c]]-keyvalue_rsun[index[c-1]]) > limit_rsundiff){present_backward[index[c]]=0;}
+	  if (statarr[index[c]] != 0 || statarr[index[c-1]] != 0 || keyvalue_wl[index[c]] != keyvalue_wl[index[c-1]] || keyvalue_pl[index[c]] != keyvalue_pl[index[c-1]] || (tmind[index[c]]-tmind[index[c-1]]) != (long)deltat[cam] || fabs(keyvalue_p0[index[c]]- keyvalue_p0[index[c-1]]) > 0.2 || sqrt(pow(keyvalue_X0[index[c]]-keyvalue_X0[index[c-1]],2)+pow(keyvalue_Y0[index[c]]-keyvalue_Y0[index[c-1]],2)) > limit_centerdiff || fabs(keyvalue_rsun[index[c]]-keyvalue_rsun[index[c-1]]) > limit_rsundiff){present_backward[index[c]]=0;}
 	  //  printf("%d %d %ld %f %f\n", keyvalue_wl[index[c]]-keyvalue_wl[index[c-1]],keyvalue_pl[index[c]]- keyvalue_pl[index[c-1]], (tmind[index[c]]-tmind[index[c-1]]), fabs(keyvalue_p0[index[c]]- keyvalue_p0[index[c-1]]), fabs(keyvalue_rsun[index[c]]-keyvalue_rsun[index[c-1]]));
 	}
 
@@ -558,7 +571,7 @@ int DoIt(void)
 	ccount=count_filtergram-1; //number of pairs (forward or backward)
 	for (c=0; c<count_filtergram-1; ++c){
 	  present_forward[index[c]]=present[index[c]];
-	  if (keyvalue_wl[index[c]] != keyvalue_wl[index[c+1]] || keyvalue_pl[index[c]] != keyvalue_pl[index[c+1]] || (tmind[index[c+1]]-tmind[index[c]]) != (long)deltat[cam] || fabs(keyvalue_p0[index[c+1]]- keyvalue_p0[index[c]]) > 0.2 || sqrt(pow(keyvalue_X0[index[c]]-keyvalue_X0[index[c+1]],2)+pow(keyvalue_Y0[index[c]]-keyvalue_Y0[index[c+1]],2)) > limit_centerdiff || fabs(keyvalue_rsun[index[c]]-keyvalue_rsun[index[c+1]]) > limit_rsundiff){present_forward[index[c]]=0; --ccount;}
+	  if (statarr[index[c]] != 0 || statarr[index[c+1]] != 0 || keyvalue_wl[index[c]] != keyvalue_wl[index[c+1]] || keyvalue_pl[index[c]] != keyvalue_pl[index[c+1]] || (tmind[index[c+1]]-tmind[index[c]]) != (long)deltat[cam] || fabs(keyvalue_p0[index[c+1]]- keyvalue_p0[index[c]]) > 0.2 || sqrt(pow(keyvalue_X0[index[c]]-keyvalue_X0[index[c+1]],2)+pow(keyvalue_Y0[index[c]]-keyvalue_Y0[index[c+1]],2)) > limit_centerdiff || fabs(keyvalue_rsun[index[c]]-keyvalue_rsun[index[c+1]]) > limit_rsundiff){present_forward[index[c]]=0; --ccount;}
 	}
 
 	printf("number of filtergrams, valid pairs of frames %d \t %d \n", count_filtergram, ccount);
@@ -672,7 +685,7 @@ int DoIt(void)
 	      }
 
 	      if (present_forward[k] != 0){
-	printf("forward %d\n", k);
+
 		#pragma omp parallel for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
 		  for (iii=0; iii<nx; ++iii){
@@ -691,11 +704,11 @@ int DoIt(void)
 		{
 				  
 		  rr=sqrt(pow((float)iii-XX0,2)+pow((float)jjj-YY0,2))/R_SUN;
-		  a1[jjj*nx+iii]=coef0[0]+coef0[1]*rr+coef0[2]*rr*rr;
-		  a2[jjj*nx+iii]=coef1[0]+coef1[1]*rr+coef1[2]*rr*rr;
-		  w1[jjj*nx+iii]=coef2[0]+coef2[1]*rr;
-		  w2[jjj*nx+iii]=coef3[0]+coef3[1]*rr;
-		  cmc[jjj*nx+iii]=coef4[0]+coef4[1]*rr+coef4[2]*rr*rr;
+		  a1[jjj*nx+iii]=coef0[cam][0]+coef0[cam][1]*rr+coef0[cam][2]*rr*rr;
+		  a2[jjj*nx+iii]=coef1[cam][0]+coef1[cam][1]*rr+coef1[cam][2]*rr*rr;
+		  w1[jjj*nx+iii]=coef2[cam][0]+coef2[cam][1]*rr;
+		  w2[jjj*nx+iii]=coef3[cam][0]+coef3[cam][1]*rr;
+		  cmc[jjj*nx+iii]=coef4[cam][0]+coef4[cam][1]*rr+coef4[cam][2]*rr*rr;
 
 		}
 
@@ -764,7 +777,7 @@ int DoIt(void)
 		  arrimg[next][jjj][iii]=(float)arrinL0[jjj*nx+iii];
 				 
 		  wlr=((float)keyvalue_wl[km1]-505.)/2.0*69e-3-keyvalue_vrad[km1]/3e8*6173.4-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))/keyvalue_rsun[km1]*cpa.rotcoef0*698.0/3e8*6173.4;
-		  limw[jjj*nx+iii]=a1[jjj*nx+iii]*exp(-pow(wlr-0.162,2)/2.0/w1[jjj*nx+iii]/w1[jjj*nx+iii])+a2[jjj*nx+iii]*exp(-pow(wlr-0.275,2)/2.0/w2[jjj*nx+iii]/w2[jjj*nx+iii])+coef4[0]+cmc[jjj*nx+iii];
+		  limw[jjj*nx+iii]=a1[jjj*nx+iii]*exp(-pow(wlr-0.162,2)/2.0/w1[jjj*nx+iii]/w1[jjj*nx+iii])+a2[jjj*nx+iii]*exp(-pow(wlr-0.275,2)/2.0/w2[jjj*nx+iii]/w2[jjj*nx+iii])+cmc[jjj*nx+iii];
 		}
 
 	   	     
@@ -776,7 +789,7 @@ int DoIt(void)
 	      rad=sqrt(pow((float)iii-XX0,2)+pow((float)jjj-YY0,2))/R_SUN;
 	      if (rad < rad_cosmic_ray)
 		{
-		  if (fabs(arrimg[current][jjj][iii]-arrimg[last][jjj][iii]) > (factor*limw[jjj*nx+iii]) && fabs(arrimg[current][jjj][iii]-arrimg[next][jjj][iii]) > (factor*limw[jjj*nx+iii])){
+		  if (fabs(arrimg[current][jjj][iii]-arrimg[last][jjj][iii]) > (factor[cam]*limw[jjj*nx+iii]) && fabs(arrimg[current][jjj][iii]-arrimg[next][jjj][iii]) > (factor[cam]*limw[jjj*nx+iii])){
 	     
 		if ((tmind[index_current]-tmind[index_last]) < time_limit && (tmind[index_next]-tmind[index_current]) < time_limit){
 		  if (badpix[jjj*nx+iii]){
@@ -862,7 +875,7 @@ int DoIt(void)
 #pragma omp parallel
 	{
 	  if (present_backward[k] != 0){
-	    printf("backward %d\n", k);
+
 
 #pragma omp for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
@@ -874,7 +887,7 @@ int DoIt(void)
 	  }
 	
 	      if (present_forward[k] != 0){
-	printf("forward %d\n", k);
+
 		#pragma omp for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
 		  for (iii=0; iii<nx; ++iii){
@@ -897,6 +910,7 @@ int DoIt(void)
 	  printtime();	  
 	  printf("loop done\n");
 
+
  #pragma omp parallel for private(jjj,iii)
 	  for (jjj=0; jjj<ny; ++jjj){
 	    for (iii=0; iii<nx; ++iii){
@@ -906,7 +920,8 @@ int DoIt(void)
 	    }
 	  }
 
-	 
+
+
       //*******************************************************************/
       //do flatfield calculations                                          /
       //*******************************************************************/
@@ -979,8 +994,8 @@ int DoIt(void)
 
   // highpass flatfields
     
-      //     highpass(nx, ny, fwhm, flat_front); //   !!remove high pass for test
-      //     highpass(nx, ny, fwhm, flat_side);  // 
+           highpass(nx, ny, fwhm, flat_front); //   
+           highpass(nx, ny, fwhm, flat_side);  // 
     
   
 
@@ -990,51 +1005,62 @@ int DoIt(void)
       //********************************************************************
 
  
-      arr_flat_front=drms_array_create(type_float,2,axisout,NULL,&status);
-      arr_flat_side=drms_array_create(type_float,2,axisout,NULL,&status);
+	   //  arr_flat_front=drms_array_create(type_float,2,axisout,NULL,&status);
+	   //  arr_flat_side=drms_array_create(type_float,2,axisout,NULL,&status);
 
  
       arrout_new_front  = drms_array_create(type_float,2,axisout,NULL,&status);
       arrout_new_side  = drms_array_create(type_float,2,axisout,NULL,&status);
 
     
-      fflat_front=arr_flat_front->data;
-      fflat_side=arr_flat_side->data;
+      //  fflat_front=arr_flat_front->data;
+      //  fflat_side=arr_flat_side->data;
 
       flatfield_front_new=arrout_new_front->data;
       flatfield_side_new=arrout_new_side->data;
 
 
-    for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) fflat_front[j*nx+i]=flatfield_front[j*nx+i];
-    for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)   fflat_side[j*nx+i]=flatfield_side[j*nx+i];
+      //  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) fflat_front[j*nx+i]=flatfield_front[j*nx+i];
+      //  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)   fflat_side[j*nx+i]=flatfield_side[j*nx+i];
 
-    bad_pix_front=0;
-    bad_pix_side=0;
+      //update existing flatfield
+       bad_pix_front=0;
+       bad_pix_side=0;
 
-    for (j=0; j<ny; ++j){
+      //for (j=0; j<ny; ++j){
+      //for (i=0; i<nx; ++i){
+
+      //if (flat_front[i][j] < threshold_lower|| flat_front[i][j] > threshold_upper)  
+      // {++bad_pix_front; 
+      //	 flatfield_front_new[j*nx+i]=flatfield_front[j*nx+i]*(1.0f+(float)flat_front[i][j]); update_stat[1]=0;
+      // }
+      //else
+      // {
+      //	 flatfield_front_new[j*nx+i]=flatfield_front[j*nx+i];
+      //}
+
+      //if (flat_side[i][j] < threshold_lower || flat_side[i][j] > threshold_upper)   
+      // {
+      //	 ++bad_pix_side; 
+      //	 flatfield_side_new[j*nx+i]=flatfield_side[j*nx+i]*(1.0f+(float)flat_side[i][j]); update_stat[0]=0;
+      //  }
+      //else 
+      // {
+      //	 flatfield_side_new[j*nx+i]=flatfield_side[j*nx+i];
+      // }
+      //
+      //     }
+      //
+
+     
+       apod_circ(R_SUN*cpa.croprad*0.95, R_SUN*cpa.croprad*0.04, XX0-nx/2, YY0-ny/2, apod);
+      //rotate and copy flatfield
+for (j=0; j<ny; ++j){
       for (i=0; i<nx; ++i){
-
-      if (flat_front[i][j] < threshold_lower|| flat_front[i][j] > threshold_upper)  
-       {++bad_pix_front; 
-	 flatfield_front_new[j*nx+i]=flatfield_front[j*nx+i]*(1.0f+(float)flat_front[i][j]); update_stat[1]=0;
-       }
-     else
-       {
-	 flatfield_front_new[j*nx+i]=flatfield_front[j*nx+i];
-       }
-
-     if (flat_side[i][j] < threshold_lower || flat_side[i][j] > threshold_upper)   
-       {
-	 ++bad_pix_side; 
-	 flatfield_side_new[j*nx+i]=flatfield_side[j*nx+i]*(1.0f+(float)flat_side[i][j]); update_stat[0]=0;
-       }
-     else 
-       {
-	 flatfield_side_new[j*nx+i]=flatfield_side[j*nx+i];
-       }
-
+	flatfield_front_new[j*nx+i]=flat_front[4095-i][4095-j]*apod[j*nx+i];
+	flatfield_side_new[j*nx+i]=flat_side[4095-i][4095-j]*apod[j*nx+i];
       }
-    }
+ }
 
 
 
@@ -1053,29 +1079,21 @@ int DoIt(void)
     //**************************************************************************************
     //write out flatfields (original with new T_STOP + updated
     //**************************************************************************************
-    printf("update_stat %d %d\n", update_stat[0], update_stat[1]);
+  
 
     //    if (update_stat[1] == 0 || update_stat[1] == 1) write_flatfields(arr_flat_front, arrout_new_front, 2, recnum_front,
     //								     tobs_link_front, focus, rot_new_front, rot_cur_front);
 
-  // if (update_stat[0] == 0 || update_stat[0] == 1) write_flatfields(arr_flat_side, arrout_new_side, 1, recnum_side,
+    //    if (update_stat[0] == 0 || update_stat[0] == 1) write_flatfields(arr_flat_side, arrout_new_side, 1, recnum_side,
     //								   tobs_link_side, focus, rot_new_side, rot_cur_side);
 
 
-    //write out full flatfield for test //!!
-for (j=0; j<ny; ++j){
-      for (i=0; i<nx; ++i){
-	flatfield_front_new[j*nx+i]=flat_front[4095-i][4095-j];
-	flatfield_side_new[j*nx+i]=flat_side[4095-i][4095-j];
-      }
- }
 
+    printf("update_stat %d %d\n", update_stat[0], update_stat[1]);
 
+    if (update_stat[1] == 0 || update_stat[1] == 1) write_flatfield_fid(arrout_new_front, 2, tobs_link_front, t_0, focus, fid, fsns, rot_new_front); 
 
-
- if (update_stat[1] == 0 || update_stat[1] == 1) write_flatfield_fid(arrout_new_front, 2, tobs_link_front, focus, fid, fsns, rot_new_front); //!! writeout unconditional
-
- if (update_stat[0] == 0 || update_stat[0] == 1) write_flatfield_fid(arrout_new_side, 1, tobs_link_side, focus, fid, fsns, rot_new_side);   // !!writeout unconditional
+    if (update_stat[0] == 0 || update_stat[0] == 1) write_flatfield_fid(arrout_new_side, 1, tobs_link_side, t_0, focus, fid, fsns, rot_new_side);   
 
     //*************************************************************************************
     //write out records of cosmic ray hits
@@ -1133,8 +1151,8 @@ for (j=0; j<ny; ++j){
 
     //******************************************************************
 
-	  drms_free_array(arr_flat_front);
-	  drms_free_array(arr_flat_side);
+    // drms_free_array(arr_flat_front);
+    //	  drms_free_array(arr_flat_side);
 	  drms_free_array(arrout_new_front);
 	  drms_free_array(arrout_new_side);
 	  
@@ -1162,6 +1180,7 @@ for (j=0; j<ny; ++j){
   free(cmc);
   free(cosmicarr);
   free(sigmacoef);
+  free(apod);
 	  free(offpoint_front);
 	  free(offpoint_side);
 	  free(bad_front);
