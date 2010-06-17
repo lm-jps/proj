@@ -39,7 +39,7 @@ if (firstcall)
   sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   }
 /* XXX fix build 3/18/2008, arta */
-return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss & 0xFFFF))/65536.0);
+return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss & 0xFFFF)/65536.0);
 }
 
 static void sprint_time_ISO (char *tstring, TIME t)
