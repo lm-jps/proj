@@ -6,7 +6,8 @@
  * filtergrams to lev1.
  * It is scheduled by build_lev1_mgr either by qsub to the cluster
  * or by fork to run on the local machine. It is called with 
- * 17 (NUMRECLEV1 defined in lev0lev1.h) lev0 images at a time.
+ * 12 (NUMRECLEV1 defined in lev0lev1.h) lev0 images at a time.
+ * See the -h nice_intro() for details of the calling options.
  */ 
 //!!!TBD - in development.
 
@@ -32,6 +33,7 @@
 #include "lev0lev1.h"
 #include "quallev1.h"
 #include "limb_fit.h"
+#include "cosmic_ray.h"
 #include "get_pointing_info.c"
 
 //default in and out data series
@@ -59,11 +61,14 @@ static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 // List of default parameter values. 
 ModuleArgs_t module_args[] = { 
   {ARG_STRING, "instru", NOTSPECIFIED, "instrument. either hmi or aia"},
+  {ARG_STRING, "mode", NOTSPECIFIED, "either recnum or fsn"},
   {ARG_STRING, "dsin", NOTSPECIFIED, "dataset of lev0 filtergrams"},
   {ARG_STRING, "dsout", NOTSPECIFIED, "dataset of lev1 output"},
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
-  {ARG_INTS, "brec", "-1", "first lev0 rec# to process. -1=error must be given by build_lev1_mgr"},
-  {ARG_INTS, "erec", "-1", "last lev0 rec# to process. -1=error must be given by build_lev1_mgr"},
+  {ARG_INTS, "brec", "0", "first lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
+  {ARG_INTS, "erec", "0", "last lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
+  {ARG_INTS, "bfsn", "0", "first lev0 fsn# to process. 0=error must be given by build_lev1_mgr"},
+  {ARG_INTS, "efsn", "0", "last lev0 fsn# to process. 0=error must be given by build_lev1_mgr"},
   {ARG_INTS, "quicklook", "1", "1=quick look, 0 = definitive mode"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
@@ -90,12 +95,14 @@ static DRMS_Segment_t *segmentff;
 static DRMS_Segment_t *darkseg;
 static DRMS_Segment_t *badseg;
 static DRMS_Segment_t *badoutpixseg;
+static DRMS_Segment_t *spikeseg;
 static DRMS_Array_t *segArray;
 static DRMS_RecordSet_t *rset0, *rset1, *rsetff;
 static DRMS_Array_t *Array0;
 static DRMS_Array_t *Arrayff;
 static DRMS_Array_t *ArrayDark;
 static DRMS_Array_t *ArrayBad;
+static DRMS_Array_t *ArraySpike;
 static TIME sdo_epoch;
 static PTINFO *ptinfo = NULL;
 static PTINFO ptdata;
@@ -109,7 +116,7 @@ static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 static char *orbseries = "sdo.fds_orbit_vectors";
 //static char *orbseries = "sdo_ground.fds_orbit_vectors";
 
-static int prelimbfit = 0;  //!!TEMP 1= force debug code until get limb_fit()
+static int nspikes, *oldvalues, *spikelocs, *newvalues;
 
 IORBIT_Info_t *IOinfo = NULL;
 IORBIT_Info_t IOdata;
@@ -118,12 +125,16 @@ unsigned int fsnarray[NUMRECLEV1];
 unsigned int fsnx = 0;
 //short data1[MAXPIXELS];
 //int data1[MAXPIXELS];
-float data1[MAXPIXELS];
+float data1[MAXPIXELS];		//floats for HMI
+int data1A[MAXPIXELS];		//ints for AIA
+//int array_cosmic[16777216];	//4096x4096
 double tgttimes[NUMRECLEV1];
 
-long long brec, erec;           //begin and end lev0 rec# to do
+long long brec, erec, bfsn, efsn; //begin and end lev0 rec/fsn. must be same data type
+long long bnumx, enumx;		  //has either the brec/erec of bfsn/efsn pair accord to mode
 int verbose;
 int hmiaiaflg = 0;		//0=hmi, 1=aia
+int modeflg = 0;		//0=fsn, 1=recnum
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when build_lev1 is called for a restart
 int abortflg = 0;
@@ -140,13 +151,14 @@ int missflg[NUMRECLEV1];
 
 char logname[128];
 char argdsin[128], argdsout[128], arglogfile[128], arginstru[80];
-char argbrec[80], argerec[80], argquick[80];
+char argbx[80], argex[80], argquick[80], argmode[80];
 char timetag[32];
 char tlmseriesname[128];	// e.g. hmi.tlm
 char lev0seriesname[128];	// e.g. hmi.lev0
 char *username;			// from getenv("USER") 
 char *logfile;			// optional log name passed in 
 char *instru;			// instument. hmi or aia 
+char *mode;			// given mode. recnum or fsn
 char *dsin;			// lev0 input dataset
 char *dsout;			// lev1 output dataset
 
@@ -158,6 +170,16 @@ typedef struct {
 } LIMB_SOMETHING;
 
 
+
+int get_nspikes() { return nspikes; }
+int *get_spikelocs() { return spikelocs; }
+int *get_oldvalues() { return oldvalues; }
+int *get_newvalues() { return newvalues; }
+void set_nspikes(int new_nspikes) { nspikes = new_nspikes; }
+void set_spikelocs(int *new_spikelocs) { spikelocs = new_spikelocs; }
+void set_oldvalues(int *new_oldvalues) { oldvalues = new_oldvalues; }
+void set_newvalues(int *new_newvalues) { newvalues = new_newvalues; }
+
 //Set the QUALITY keyword for lev1
 void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int fsn)
 {
@@ -225,18 +247,24 @@ int nice_intro ()
   if (usage)
     {
     printf ("Usage:\nbuild_lev1 [-vhr] "
-	"instru=<hmi|aia> dsin=<lev0> dsout=<lev1> brec=<rec#>\n"
-	"                 erec=<rec#> quicklook=<0|1> [logfile=<file>]\n"
+	"mode=<recnum|fsn> instru=<hmi|aia> dsin=<lev0> dsout=<lev1>\n"
+	"brec=<rec#>|bfsn=<fsn#> erec=<rec#>|efsn=<fsn#>\n"
+	"quicklook=<0|1> [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
 	"  -r: restart. only used when we restart our selves periodically\n"
+        "mode= recnum: brec and erec have the record # range to process \n"
+        "      fsn: bfsn and efsn have the fsn # range to process\n"
+        "      For safety, the mode and arg name used must be consistent\n"
 	"instru= instrument. must be 'hmi' or 'aia'\n"
 	"dsin= data set name of lev0 input\n"
 	"      default hmi=hmi.lev0e   aia=aia.lev0e\n"
 	"dsout= data set name of lev1 output\n"
 	"      default hmi=su_production.hmi_lev1e   aia=su_production.aia_lev1e\n"
-	"brec= first lev0 rec# to process. -1=error must be given by build_lev1_mgr\n"
-	"erec= last lev0 rec# to process. -1=error must be given by build_lev1_mgr\n"
+	"brec= first lev0 rec# to process. 0=error must be given by build_lev1_mgr\n"
+	"erec= last lev0 rec# to process. 0=error must be given by build_lev1_mgr\n"
+	"bfsn= first fsn# to process. 0=error must be given by build_lev1_mgr\n"
+	"efsn= last fsn# to process. 0=error must be given by build_lev1_mgr\n"
 	"quicklook= 1 = quicklook mode, 0 = definitive mode\n"
 	"logfile= optional log file name. If not given uses:\n"
         "         /usr/local/logs/lev1/build_lev1.<time_stamp>.log\n");
@@ -255,7 +283,7 @@ if (firstcall)
   firstcall = 0;
   }
 /* XXX fix build 3/18/2008, arta */
-return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
+return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss & 0xFFFF)/65536.0);
 }
 
 // Setup global datestr[] like: 2008.07.14_08:29:31
@@ -355,16 +383,13 @@ int orbit_calc()
   return(0);
 }
 
-//!!TBD Keh-Cheng
-int sc_pointing()
-{
-  return(0);
-}
-
+//#include "aia_despike.c"
 #include "do_flat.c"
 #include "get_image_location.c"
 #include "limb_fit_function.c"
+#include "cosmic_ray.c"
 
+//Called with the range to do. The args are either rec#s or fsn#s accord to modeflg
 int do_ingest(long long bbrec, long long eerec)
 {
   //FILE *fwt;
@@ -375,13 +400,14 @@ int do_ingest(long long bbrec, long long eerec)
   float percentd;
   double rsun_lf, x0_lf, y0_lf;
   int rstatus, dstatus, ncnt, fcnt, i, j, qualint, nobs;
-  int hshiexp, hcamid, skipflat;
+  int hshiexp, hcamid, nbad, n_cosmic;
   uint32_t missvals, totvals;
   long long recnum0, recnum1, recnumff;
   char recrange[128], lev0name[128], flatrec[128];
   //char tmpname[80];
 
-  sprintf(recrange, ":#%lld-#%lld", bbrec, eerec);
+  if(modeflg) sprintf(recrange, ":#%lld-#%lld", bbrec, eerec);
+  else sprintf(recrange, "%lld-%lld", bbrec, eerec);
   sprintf(open_dsname, "%s[%s]", dsin, recrange);
   printk("open_dsname = %s\n", open_dsname);
   printk("#levnum recnum fsn\n");
@@ -407,6 +433,12 @@ int do_ingest(long long bbrec, long long eerec)
     //this loop is for the benefit of the lev1view display to show
     //info on all lev0 records opened
     for(i=0; i < ncnt; i++) {
+      flatmiss[i] = 0;		//init quality flags
+      orbmiss[i] = 0;
+      asdmiss[i] = 0;
+      mpdmiss[i] = 0;
+      noimage[i] = 0;
+      missflg[i] = 0;
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
       //must get fsn in case got record from last lev1 record
@@ -428,8 +460,9 @@ int do_ingest(long long bbrec, long long eerec)
         printk("%u %10.5f ", fsnarray[j], tobs[j]);
         ptdata = ptinfo[j];
         printk("%s\n", ptdata.asd_rec);
+        asdmiss[j] = 1;		//set for QUALITY for ea image
       }
-      return(1);		//!!No,press on
+      //return(1);		//!!No,press on
     }
     if ((IOstatus = iorbit_getinfo(drms_env,
                        orbseries,
@@ -446,12 +479,18 @@ int do_ingest(long long bbrec, long long eerec)
       else { 
        printk("***ERROR in iorbit_getinfo() status=%d\n", IOstatus);
       }
-      return(1);
+      for(j=0; j < ncnt; j++) {	 //set qual bits
+        orbmiss[j] = 1;
+      }
+      //return(1);
     }
     rset1 = drms_create_records(drms_env, ncnt, dsout, DRMS_PERMANENT,&dstatus);
     if(dstatus) {
       printk("**ERROR: Can't create records for %s\n", dsout);
-      return(1);
+      for(j=0; j < ncnt; j++) {	 //set qual bits
+        noimage[j] = 1;
+      }
+      //return(1);
     }
     //Now fill in info for call to Carl's get_image_location()
     for(i=0; i < ncnt; i++) {
@@ -475,49 +514,44 @@ int do_ingest(long long bbrec, long long eerec)
     rstatus = get_image_location(drms_env, ncnt, &p_imageloc);
     if(rstatus) {		//error
       printk("ERROR: get_image_location() returns status=%d\n", rstatus);
-      return(1);
+      for(j=0; j < ncnt; j++) {	 //set qual bits
+        mpdmiss[i] = 0;
+      }
+      //return(1);
     }
 
-
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
-      flatmiss[i] = 0;
-      orbmiss[i] = 0;
-      asdmiss[i] = 0;
-      mpdmiss[i] = 0;
-      noimage[i] = 0;
-      missflg[i] = 0;
       rs0 = &rptr[i];
       recnum0 = rs0->recnum;
       fsnx = fsnarray[i]; 
       sprintf(lev0name, "%s[%u]", dsin, fsnx);
       if(drms_getkey_int(rs0, "QUALITY", 0) < 0) {
         printk("Bad QUALITY for %s, no lev1 made\n", lev0name);
+        noimage[i] = 1;
         continue;
       }
-      //printf("rec# for %d = %lld fsn=%u\n", i, recnum0, fsnx); //!!!TEMP
       segment = drms_segment_lookupnum(rs0, 0);
       Array0 = drms_segment_read(segment, DRMS_TYPE_SHORT, &rstatus);
       if(!Array0) {
         printk("Can't do drms_segment_read() %s status=%d\n", 
 			lev0name, rstatus);
-        return(1);	//return until we learn
-        //continue;
+        noimage[i] = 1;
+        //return(1);	//return until we learn
+        continue;
       }
       l0l1->adata0 = (short *)Array0->data; //free at end
-      l0l1->adata1 = &data1;
       l0l1->rs0 = rs0;
       l0l1->recnum0 = recnum0;
       l0l1->fsn = fsnx;
       if(hmiaiaflg) {			//aia
+        l0l1->dat1.adata1A = &data1A;
         //l0l1->himgcfid = drms_getkey_int(rs0, "AIFDBID", &rstatus);
 	l0l1->himgcfid = 90;	//!!TEMP force uncropped, no overscan
       }
-      else 
+      else {
+        l0l1->dat1.adata1 = &data1;
         l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);
-      //!!TEMP force a good himgcfid for our 'junk' data
-      //if(l0l1->himgcfid < 0 || l0l1->himgcfid >= MAXHIMGCFGS) {
-      //  l0l1->himgcfid = 104;
-      //}
+      }
       if(rstatus) {
         printk("Can't do drms_getkey_int(HIMGCFID) for fsn %u\n", fsnx);
         //!!TEMP continue on for testing of AIA lev1
@@ -531,32 +565,37 @@ int do_ingest(long long bbrec, long long eerec)
       drms_record_directory(rs, rs1_path, 0);
       if(!*rs1_path) {
         printk("***ERROR: No path to segment for %s\n", open_dsname);
-        return(1);
+        noimage[i] = 1;
+        continue;
       }
       //printf("\npath to lev1 = %s\n", rs1_path);	//!!TEMP
       dstatus = drms_setkey_int(rs, "FSN", fsnx);
       dstatus = drms_setkey_string(rs, "LEV0SERIES", lev0name);
       if(!(segment = drms_segment_lookup(rs, "image_lev1"))) {
         printk("No drms_segment_lookup(rs, image_lev1) for %s\n", open_dsname);
-        return(1);
+        noimage[i] = 1;
+        continue;
       }
-      /***********************************************************
-      segArray = drms_array_create(DRMS_TYPE_INT,
+      if(hmiaiaflg) {
+        segArray = drms_array_create(DRMS_TYPE_INT,
+                                       segment->info->naxis,
+                                       segment->axis,
+                                       &data1A,
+                                       &dstatus);
+      }
+      else {
+        segArray = drms_array_create(DRMS_TYPE_FLOAT,
                                        segment->info->naxis,
                                        segment->axis,
                                        &data1,
                                        &dstatus);
-      ***********************************************************/
-      segArray = drms_array_create(DRMS_TYPE_FLOAT,
-                                       segment->info->naxis,
-                                       segment->axis,
-                                       &data1,
-                                       &dstatus);
+      }
       //transer the lev0 keywords
       rstatus = drms_copykeys(rs, rs0, 0, kDRMS_KeyClass_Explicit);
       if(rstatus != DRMS_SUCCESS) {
         printk("Error %d in drms_copykeys() for fsn %u\n", fsnx);
-        return(1);
+        //return(1);
+        continue;
       }
       qualint = drms_getkey_int(rs0, "QUALITY", &rstatus);
       drms_setkey_int(rs, "QUALLEV0", qualint);
@@ -584,7 +623,8 @@ int do_ingest(long long bbrec, long long eerec)
            drms_setkey_double(rs, "GCIEC_X", IOdata.gciX);
            drms_setkey_double(rs, "GCIEC_Y", IOdata.gciY);
            drms_setkey_double(rs, "GCIEC_Z", IOdata.gciZ);
-           drms_setkey_float(rs, "DSUN_OBS", (float)IOdata.dsun_obs);
+           //drms_setkey_float(rs, "DSUN_OBS", (float)IOdata.dsun_obs);
+           drms_setkey_double(rs, "DSUN_OBS", IOdata.dsun_obs);
            drms_setkey_double(rs, "OBS_VR", IOdata.obs_vr);
            drms_setkey_double(rs, "OBS_VW", IOdata.obs_vw);
            drms_setkey_double(rs, "OBS_VN", IOdata.obs_vn);
@@ -604,7 +644,9 @@ int do_ingest(long long bbrec, long long eerec)
       int camera = drms_getkey_int(rs0, "CAMERA", &rstatus);
       if(rstatus) {
         printk("Can't do drms_getkey_int() for fsn %u\n", fsnx);
-        return(1);
+        noimage[i] = 1;
+        goto TEMPSKIP;
+        //return(1);
       }
       //Now figure out what flat field to use
       if(drms_ismissing_time(tobs[i])) {
@@ -684,6 +726,7 @@ int do_ingest(long long bbrec, long long eerec)
 
       badseg = drms_segment_lookup(rsff, "BAD_PIXEL");
       ArrayBad = drms_segment_read(badseg, DRMS_TYPE_INT, &rstatus);
+      nbad = drms_array_size(ArrayBad)/sizeof(int);
       if(!ArrayBad) {
         printk("Can't do drms_DARKsegment_read() for BAD_PIXEL. status=%d\n", 
 			rstatus);
@@ -695,35 +738,54 @@ int do_ingest(long long bbrec, long long eerec)
       if(!(badoutpixseg = drms_segment_lookup(rs, "BAD_PIXEL"))) BRACKET
       if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel"))) BRACKET
       ***************************************/
-      if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel_list"))) {
-        printk("No drms_segment_lookup(rs, bad_pixel_list) for lev1\n");
-        return(1);
+      if(!hmiaiaflg) {		//HMI. !!TBD make the aia & hmi jsd agree
+        if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel_list"))) {
+          printk("No drms_segment_lookup(rs, bad_pixel_list) for lev1\n");
+          return(1);
+        }
       }
+      else {
+        if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel"))) {
+          printk("No drms_segment_lookup(rs, bad_pixel) for lev1\n");
+          return(1);
+        }
+      }
+      //move the segment write to after cosmic_rays() updates it
+      /**************************************************************
       dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
       if (dstatus) {
         printk("ERROR: drms_segment_write error=%d for lev1 bad_pixel_list\n");
         //noimage[i] = 1;
         return(1);
       }
+      **************************************************************/
       l0l1->rs1 = rs;
       l0l1->rsff = rsff;
       l0l1->recnum1 = rs->recnum;  
+      l0l1->darkflag = 0;
       hshiexp = drms_getkey_int(rs, "HSHIEXP", &rstatus);
       hcamid = drms_getkey_int(rs, "HCAMID", &rstatus);
-      skipflat = 0;
-      if(hshiexp == 0) {
-        if(hcamid == 0 || hcamid == 1) {
-          skipflat = 1;
+      if(hmiaiaflg) {
+        int aimgshce = drms_getkey_int(rs, "AIMGSHCE", &rstatus);
+        if(aimgshce == 0) l0l1->darkflag = 1;
+        if(rstatus = do_flat_aia(l0l1)) {
+          printk("***ERROR in do_flat() status=%d\n", rstatus);
+          printf("***ERROR in do_flat() status=%d\n", rstatus);
+          flatmiss[i] = 1; noimage[i] = 1;
+          //return(1);		//!!TBD what to do?
+          goto FLATERR;
         }
       }
-    if(!skipflat) {
-      if(rstatus = do_flat(l0l1)) {
-        printk("***ERROR in do_flat() status=%d\n", rstatus);
-        printf("***ERROR in do_flat() status=%d\n", rstatus);
-        flatmiss[i] = 1; noimage[i] = 1;
-        //return(1);		//!!TBD what to do?
-      }
       else {
+        if(hshiexp == 0) l0l1->darkflag = 1;
+        if(rstatus = do_flat(l0l1)) {
+          printk("***ERROR in do_flat() status=%d\n", rstatus);
+          printf("***ERROR in do_flat() status=%d\n", rstatus);
+          flatmiss[i] = 1; noimage[i] = 1;
+          //return(1);		//!!TBD what to do?
+          goto FLATERR;
+        }
+      } 
         //sprintf(tmpname, "/tmp/data_lev1.%u", fsnx);
         //fwt = fopen(tmpname, "w");
         //int wsize = 4096 * 4096;
@@ -754,18 +816,66 @@ int do_ingest(long long bbrec, long long eerec)
            missflg[i] = missflg[i] | Q_1_MISS3;
         if(l0l1->datavals == 0) 
            missflg[i] = missflg[i] | Q_MISSALL; //high bit, no data
+        if(hmiaiaflg) {
+          //if (spikeseg = drms_segment_lookup(rs,"SPIKES") ) BRACKET 
+          if (spikeseg = drms_segment_lookup(rs,"spikes") ) {
+            int *spikedata, status, axes[2], nbytes;
+            nbytes = nspikes*sizeof(int);
+/*
+printk("nspikes\tspikelocs\toldvalues\tnewvalues in main\n");
+printk("%d\t%x\t%x\t%x\n", nspikes, spikelocs, oldvalues, newvalues);
+for(i=0; i<3; i++) { printk("%d\t%d\t%d\n", spikelocs[i], oldvalues[i],
+                     newvalues[i]); }
+printf("nspikes\tspikelocs\toldvalues\tnewvalues in main\n");
+printf("%d\t%x\t%x\t%x\n", nspikes, spikelocs, oldvalues, newvalues);
+for(i=0; i<3; i++) { printf("%d\t%d\t%d\n", spikelocs[i], oldvalues[i],
+                     newvalues[i]); }
+*/
+            axes[0] = nspikes;
+            axes[1] = 3;
+            spikedata = (int *) malloc (3*nspikes*sizeof(int));
+            ArraySpike = drms_array_create(DRMS_TYPE_INT, 2, axes,
+                       (void *) spikedata, &status);
+            memcpy((void *)spikedata, (void *)spikelocs, nbytes);
+            memcpy((void *)(spikedata+nspikes), (void *)oldvalues, nbytes);
+            memcpy((void *)(spikedata+2*nspikes), (void *)newvalues, nbytes);
+            status = drms_segment_write(spikeseg, ArraySpike, 0);
+            drms_free_array(ArraySpike);
+        } else { printf("spikes segment not found\n"); }
+       }
+/**************************!!!TEMP*****************************************/
+      //printf("for i < nbad print badpix[i]\n");
+      //int ii;
+      //int *pp;
+      //pp = (int *)ArrayBad->data; 
+      //for(ii=0; ii < nbad; ii++) { printf("%d ", *pp++); }
+      //printf("\n");
+      int *array_cosmic = (int *)malloc(16777216 * sizeof(int));
+      dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
+				array_cosmic, &n_cosmic, 4096, 4096);
+      if(dstatus) {
+        printk("ERROR: cosmic_rays() error=%d\n", dstatus);
+        noimage[i] = 1;
       }
-    }
+/***********************************************************************/
+      dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
+      if (dstatus) {
+        printk("ERROR: drms_segment_write error=%d for lev1 bad_pixel_list\n",
+		dstatus);
+        noimage[i] = 1;
+      }
+FLATERR:
       drms_close_records(rsetff, DRMS_FREE_RECORD);
       free(ArrayDark->data);
       free(Arrayff->data);
       free(ArrayBad->data);
 
 TEMPSKIP:
-
-      segArray->type = DRMS_TYPE_FLOAT;
-      segArray->bscale = 1.0; 
-      segArray->bzero = 0.0; 
+      if(!hmiaiaflg) {
+        segArray->type = DRMS_TYPE_FLOAT;
+        segArray->bscale = 1.0; 
+        segArray->bzero = 0.0; 
+      }
       dstatus = drms_segment_write(segment, segArray, 0);
       if (dstatus) {
         printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
@@ -775,40 +885,6 @@ TEMPSKIP:
       printk("*1 %u %u\n", recnum1, fsnx);
       free(Array0->data);
  
-if(prelimbfit) { 	//this goes away when Richard releases limb_fit()
-     //!!TBD add here a call for get_limb_fit() from Richard. The call
-    // is TBD. It works on the lev1 image. It returns values for
-    // float rsun_lf, float x0_lf, float y0_lf
-    // SEE code at end of this file. Ready to go.
-    //!!TEMP set to MISSING
-  LIMB_SOMETHING limb;
-  //Put in MISSING for now until have real get_limb_fit()
-  limb.x0_lf = DRMS_MISSING_FLOAT;
-  limb.y0_lf = DRMS_MISSING_FLOAT;
-  limb.rsun_lf = DRMS_MISSING_FLOAT;
-
-  if(drms_ismissing_float(limb.rsun_lf)) {
-    drms_setkey_float(rs, "CDELT1", imageloc[i].imscale);
-    drms_setkey_float(rs, "CDELT2", imageloc[i].imscale);
-    drms_setkey_float(rs, "R_SUN", (float)IOdata.rsun_obs/imageloc[i].imscale);
-  }
-  else {			//rsun_lf is not MISSING
-    drms_setkey_float(rs, "CDELT1", (float)IOdata.rsun_obs/limb.rsun_lf);
-    drms_setkey_float(rs, "CDELT2", (float)IOdata.rsun_obs/limb.rsun_lf);
-    drms_setkey_float(rs, "R_SUN", limb.rsun_lf);
-  }
-  if(!drms_ismissing_float(limb.x0_lf) && !drms_ismissing_float(limb.y0_lf)) {
-    drms_setkey_float(rs, "CRPIX1", limb.x0_lf + 1);
-    drms_setkey_float(rs, "CRPIX2", limb.y0_lf + 1);
-  }
-  else {
-    drms_setkey_float(rs, "CRPIX1", imageloc[i].x + (ptdata.sat_y0/imageloc[i].imscale) + 1);
-    drms_setkey_float(rs, "CRPIX2", imageloc[i].y + (ptdata.sat_z0/imageloc[i].imscale) + 1);
-  }
-  drms_setkey_float(rs, "CROTA2", imageloc[i].instrot + ptdata.sat_rot);
-  //END TEMP
-} 		//end prelimbfit code
-else {		//this is used when Richard has released limb_fit()
   x0_lf = DRMS_MISSING_DOUBLE;
   y0_lf = DRMS_MISSING_DOUBLE;
   rsun_lf = DRMS_MISSING_DOUBLE;
@@ -829,11 +905,23 @@ else {		//this is used when Richard has released limb_fit()
       }
     }
   }
-  if(!skiplimb) {
-    dstatus = limb_fit(rs,l0l1->adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,1);
+  if(!skiplimb && !hmiaiaflg) {		//only call for HMI
+    //dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,1);
+    dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,0);
     if(dstatus) {
       printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
       noimage[i] = 1;
+    }
+    else { //!!!TEMP for tesing here. TBD-what to do if do_flat() failed
+/**************************!!!TEMP*****************************************
+      int *array_cosmic = (int *)malloc(16777216 * sizeof(int));
+      dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
+				array_cosmic, &n_cosmic, 4096, 4096);
+      if(dstatus) {
+        printk("ERROR: cosmic_rays() error=%d\n", dstatus);
+        noimage[i] = 1;
+      }
+**************************!!!TEMP*****************************************/
     }
   }
     drms_setkey_float(rs, "RSUN_LF", (float)rsun_lf);
@@ -861,7 +949,57 @@ else {		//this is used when Richard has released limb_fit()
       drms_setkey_float(rs, "CRPIX2", imageloc[i].y + 1);
     }
     drms_setkey_float(rs, "CROTA2", imageloc[i].instrot + ptdata.sat_rot);
-}
+
+/* FIXME Remove entire following if block when WCS KW are correct for AIA */
+  if(hmiaiaflg) {                       //aia
+    int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
+    drms_setkey_float(rs, "CDELT1", 0.609);
+    drms_setkey_float(rs, "CDELT2", 0.609);
+    switch (wl) {
+     case 94:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+     case 131:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+     case 171:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+     case 193:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+     case 211:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+     case 304:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+     case 335:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+     case 1600:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+     case 1700:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+     case 4500:
+        drms_setkey_float(rs, "CRPIX1", 2048.5);
+        drms_setkey_float(rs, "CRPIX2", 2048.5);
+        break;
+    }
+    drms_setkey_float(rs, "CRVAL1", 0.0);
+    drms_setkey_float(rs, "CRVAL2", 0.0);
+  }
 
   do_quallev1(rs0, rs, i, fsnx);
 
@@ -906,17 +1044,24 @@ void setup()
   printk("%s", idstr);
   printf("%s", idstr);
   if(restartflg) printk("-r ");
+  sprintf(argmode, "mode=%s", mode);
   sprintf(arginstru, "instru=%s", instru);
   sprintf(argdsin, "dsin=%s", dsin);
   sprintf(argdsout, "dsout=%s", dsout);
-  sprintf(argbrec, "brec=%lld", brec);
-  sprintf(argerec, "erec=%lld", erec);
+  if(modeflg) {
+    sprintf(argbx, "brec=%lld", brec);
+    sprintf(argex, "erec=%lld", erec);
+  }
+  else {
+    sprintf(argbx, "bfsn=%lld", bfsn);
+    sprintf(argex, "efsn=%lld", efsn);
+  }
   sprintf(argquick, "quicklook=%d", quicklook);
   sprintf(arglogfile, "logfile=%s", logname);
-  printk("%s %s %s %s %s %s %s\n", 
-	arginstru, argdsin, argdsout, argbrec, argerec, argquick, arglogfile);
-  printf("%s %s %s %s %s %s %s\n", 
-	arginstru, argdsin, argdsout, argbrec, argerec, argquick, arglogfile);
+  printk("%s %s %s %s %s %s %s %s\n", 
+	argmode, arginstru, argdsin, argdsout, argbx, argex, argquick, arglogfile);
+  printf("%s %s %s %s %s %s %s %s\n", 
+	argmode, arginstru, argdsin, argdsout, argbx, argex, argquick, arglogfile);
   if(!restartflg) {
     //printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
     //		tlmseriesname, lev0seriesname);
@@ -956,19 +1101,43 @@ int DoIt(void)
     printf("Error: instru= must be given as 'hmi' or 'aia'\n");
     return(0);
   }
+  mode = cmdparams_get_str(&cmdparams, "mode", NULL);
+  if(strcmp(mode, "recnum") && strcmp(mode, "fsn")) {
+    printf("Error: mode= must be given as 'recnum' or 'fsn'\n");
+    return(0);
+  }
   if(!strcmp(instru, "aia")) hmiaiaflg = 1;
+  if(!strcmp(mode, "recnum")) modeflg = 1;
   dsin = cmdparams_get_str(&cmdparams, "dsin", NULL);
   dsout = cmdparams_get_str(&cmdparams, "dsout", NULL);
   brec = cmdparams_get_int(&cmdparams, "brec", NULL);
   erec = cmdparams_get_int(&cmdparams, "erec", NULL);
+  bfsn = cmdparams_get_int(&cmdparams, "bfsn", NULL);
+  efsn = cmdparams_get_int(&cmdparams, "efsn", NULL);
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
-  if(brec == -1 || erec == -1) {
-    fprintf(stderr, "brec and/or erec must be given. -1 not allowed\n");
-    return(0);
+  if(modeflg) {		//recnum mode
+    if(brec == 0 || erec == 0) {
+      fprintf(stderr, "brec and erec must be given for recnum mode. 0 not allowed\n");
+      return(0);
+    }
+    if(brec > erec) {
+      fprintf(stderr, "brec must be <= erec\n");
+      return(0);
+    }
+    bnumx = brec;
+    enumx = erec;
   }
-  if(brec > erec) {
-    fprintf(stderr, "brec must be <= erec\n");
-    return(0);
+  else {		//fsn mode
+    if(bfsn == 0 || efsn == 0) {
+      fprintf(stderr, "bfsn and efsn must be given for fsn mode. 0 not allowed\n");
+      return(0);
+    }
+    if(bfsn > efsn) {
+      fprintf(stderr, "bfsn must be <= efsn\n");
+      return(0);
+    }
+    bnumx = bfsn;
+    enumx = efsn;
   }
   logfile = cmdparams_get_str(&cmdparams, "logfile", NULL);
   if (strcmp(dsin, NOTSPECIFIED) == 0) {
@@ -1012,21 +1181,21 @@ int DoIt(void)
       fprintf(stderr, "**Can't open the log file %s\n", logname);
   }
   setup();
-  numofrecs = (erec - brec) + 1;
+  numofrecs = (enumx - bnumx) + 1;
   numrec = NUMRECLEV1;	   //# of records to do at a time
   numofchunks = numofrecs/numrec;
   if((numofrecs % numrec) != 0) numofchunks++; //extra loop for partial chunk
-  lrec = brec-1;
+  lrec = bnumx-1;
   for(i = 0; i < numofchunks; i++) {
     frec = lrec+1; lrec = (frec + numrec)-1;
-    if(lrec > erec) lrec=erec;
+    if(lrec > enumx) lrec=enumx;
     if(do_ingest(frec, lrec)) {  //do a chunk to get files from the lev0
       printf("build_lev1 abort\nSee log: %s\n", logname); 
       send_mail("build_lev1 abort\nSee log: %s\n", logname); 
       return(0);
     }
   }
-  printf("build_lev1 done last fsn=%u\n", fsnx); //!!TEMP
+  printf("build_lev1 done last fsn=%u\n", fsnx); 
   return(0);
 }
 
