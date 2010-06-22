@@ -711,7 +711,8 @@ void setup()
   printk("%s", idstr);
   printf("%s", idstr);
   sprintf(stopfile, "/usr/local/logs/lev1/build_mgr_stop");
-  sprintf(string, "/bin/rm -f %s", stopfile);   //remove any stop file
+  if(stream_mode)
+    sprintf(string, "/bin/rm -f %s", stopfile);   //remove any stop file
   system(string);
   sprintf(argmode, "mode=%s", mode);
   sprintf(arginstru, "instru=%s", instru);
