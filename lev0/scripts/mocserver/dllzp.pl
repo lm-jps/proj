@@ -38,6 +38,8 @@ my($kNAMESPACE) = "ns";
 my($kDBUSER) = "dbuser";
 my($kDBNAME) = "dbname";
 my($kNOTLIST) = "notify";
+my($kTIMEWINB) = "timewinb";
+my($kTIMEWINE) = "timewine";
 
 my($kSPECPREFIX) = "filespec:";
 my($kFILESUFFIX) = "[0-9][0-9][0-9]_[0-9][0-9]\\.hkt\\S*";
@@ -62,6 +64,8 @@ my($namespace);
 my($dbuser);
 my($dbname);
 my($notlist);
+my($timewinb);
+my($timewine);
 
 my($cmd);
 
@@ -77,6 +81,7 @@ my($dofy);   # current day of year
 my($yr90);   # year 90 days ago
 my($dofy90); # day of year 90 days ago
 my($pyr);    # previous year
+my($msg);    # holds messages to print to log file
 
 my($logcontent) = "";
 
@@ -131,7 +136,7 @@ if (!defined($cfgfile) && defined($branch))
 
 if (!(-f $cfgfile))
 {
-    printf STDERR "Cannot read configuration file.";
+    print STDERR "Cannot read configuration file.";
     exit(1);
 }
 
@@ -148,6 +153,10 @@ while($line = <CFGFILE>)
     elsif ($line =~ /$kLOGFILE\s*=\s*(\S+)\s*/)
     {
 	$logfile = $1;
+        if (-e $logfile)
+        {
+           unlink $logfile;
+        }
     }
     elsif ($line =~ /$kSCRIPTPATH\s*=\s*(\S+)\s*/)
     {
@@ -181,6 +190,14 @@ while($line = <CFGFILE>)
     {
 	$notlist = $1;
     }
+    elsif ($line =~ /$kTIMEWINB\s*=\s*(.+)/)
+    {
+       $timewinb = $1;
+    }
+    elsif ($line =~ /$kTIMEWINE\s*=\s*(.+)/)
+    {
+       $timewine = $1;
+    }
 }
 
 close(CFGFILE);
@@ -210,6 +227,59 @@ my(@timearr);
 my(@threemosago);
 @timearr = localtime(); # today
 @threemosago = localtime(time - 90 * 86400); # 90 days ago
+
+# Read file containing date (GMT mday, mon, year) of files last downloaded
+my($mday);   # 1..31
+my($mon);    # 0..11
+my($year);   # year - 1900
+my($lastdl); # seconds since epoch
+
+
+if (open(LASTDATE, "<$permdataPath/datefile.txt"))
+{
+   $mday = <LASTDATE>;
+   chomp($mday);
+   $mon = <LASTDATE>;
+   chomp($mon);
+   $year = <LASTDATE>;
+   chomp($year);
+   close(LASTDATE);
+}
+else
+{
+   # No date file - this is an error. You can't make a dummy with a very old date because
+   # this will cause the check for missing files at the end of this script to fail if
+   # in fact there are no files to download (they've already been downloaded). So before the
+   # first time you run this script, create a file with a date that is 1 day before the next
+   # set of files you expect to download.
+   $msg = "Missing required date file '$permdataPath/datefile.txt'.\n";
+   DumpLog($logfile, $msg);
+   exit(1);
+}
+
+# The date of the files last downloaded
+$lastdl = timegm(0, 0, 0, $mday, $mon, $year);
+
+# Don't run if today's files have already been downloaded.
+# The new files for day $lastdl + 1d arrive between $timewinb and $timewine hours 
+# after $lastdl + 1d. The 1 day and the $timewinb are approximate, and
+# could be off by a leapsecond, but we don't need to worry about that 
+# kind of precision.
+
+if (!$force)
+{
+   # Don't check for files not being ready if the user is calling with force. The user
+   # might be (and most likely is) trying to fetch older files.
+   # ARTXXXXXXXX
+   #if (time() + 100000 - $lastdl < ($timewinb + 24) * 60 * 60)
+   if (time() - $lastdl < ($timewinb + 24) * 60 * 60)
+   {
+      # Too soon to run
+      $msg = "Not time to check for new files yet, exiting.\n";
+      DumpLog($logfile, $msg);
+      exit(0);
+   }
+}
 
 $yr = $timearr[5] + 1900;
 $dofy = $timearr[7] + 1; 
@@ -317,9 +387,7 @@ if (-e $sshagentConf)
     }
 
     # Dump log
-    open(LOGFILE, ">$logfile") || die "Couldn't write to logfile '$logfile'\n";
-    print LOGFILE $logcontent;
-    close(LOGFILE);
+    DumpLog($logfile, $logcontent);
 
     if (!$err)
     {
@@ -331,18 +399,160 @@ else
     $logcontent = $logcontent . "couldn't find ssh-agent (no $sshagentConf).\n";
 
     # Dump log
-    open(LOGFILE, ">$logfile") || die "Couldn't write to logfile '$logfile'\n";
-    print LOGFILE $logcontent;
-    close(LOGFILE);
+    DumpLog($logfile, $logcontent);
 
     system("$cmd 1>>$logfile 2>&1");
 }
 
 if (!$err)
 {
-    # Make these group writeable so that production can delete them 
-    $cmd = "chmod -R g+w $dataPath";
-    system("$cmd 1>>$logfile 2>&1");
+   my($filesdownloaded) = 0;
+   my($dlyear);
+   my($dlday);
+   my($lyear);
+   my($lday);
+   my($filesmissing) = 0;
+
+   # Make these group writeable so that production can delete them 
+   $cmd = "chmod -R g+w $dataPath";
+   system("$cmd 1>>$logfile 2>&1");
+
+   # Check for any errors
+
+   # Get date of most recent file downloaded (if any were downloaded at all)
+
+   # See if any files were downloaded - dlMOCDataFiles.pl will leave some bread crumbs in the log.
+   open(LOGFILE, "<$logfile") || die "Couldn't open logfile '$logfile' for reading.\n";
+
+   $dlyear = -1;
+   $dlday = -1;
+
+   while (defined($line = <LOGFILE>))
+   {
+      chomp($line);
+      if ($line =~ /Executing\sscp.+_(\d\d\d\d)_(\d\d\d)/)
+      {
+         $filesdownloaded = 1;
+         $lyear = $1;
+         $lday = $2;
+
+         if ($lyear > $dlyear || ($lyear == $dlyear && $lday > $dlday))
+         {
+            $dlyear = $lyear;
+            $dlday = $lday;
+         }
+      }
+   }
+
+   close(LOGFILE);
+
+   if ($filesdownloaded)
+   {
+      # Convert to DD\nMM\nYYYY - I don't know how to easily do this, except by using
+      # time_convert (which will properly handle leap days/secs).
+      my($tcCmdLine) = "time_convert ord=${dlyear}\.${dlday}_UTC o=cal zone=UTC |";
+      my($timestr);
+      my($newlastdl);
+
+      if (!open(TIMECONV, $tcCmdLine))
+      {
+         $msg = "$LOGALL: Couldn't run time_conv: $tcCmdLine\n";
+         DumpLog($logfile, $msg);
+         exit(1);
+      }
+	
+      if (!defined($timestr = <TIMECONV>))
+      {
+         $msg = "$LOGALL: Problem running time_conv: $tcCmdLine\n";
+         DumpLog($logfile, $msg);
+         close TIMECONV;
+         exit(1);
+      }
+
+      if ($timestr =~ /\d\d\d\d\.(\d\d)\.(\d\d)/)
+      {
+         $mday = $2;
+         $mon = $1 - 1;
+         $year = $dlyear - 1900;
+      }
+      else
+      {
+         $msg = "LOGALL: Invalid time string returned by '$tcCmdLine'.\n";
+         DumpLog($logfile, $msg);
+         exit(1);
+      }
+
+      # Update the datefile (if the date of files downloaded is newer than the date of the files last
+      # downloaded).
+      $newlastdl = timegm(0, 0, 0, $mday, $mon, $year);
+      if ($newlastdl > $lastdl)
+      {
+         open(LASTDATE, ">$permdataPath/datefile.txt") || die "Couldn't open datefile '$permdataPath/datefile.txt' for writing.\n";
+         print LASTDATE "$mday\n";
+         print LASTDATE "$mon\n";
+         print LASTDATE "$year\n";
+         close(LASTDATE);
+
+         # Update the date of last downloaded files.
+         $lastdl = $newlastdl;
+      }
+
+      # Call Carl's ingestion script
+      print "Calling Carl's ingestion script (test - his script is stubbed out).\n"
+   }
+
+   # Check to see if we got all files we should have gotten (should never be more than 60
+   # hours after we have downloaded the last set of files)
+
+   # The files for day X are guaranteed to be 
+   # present by 12 UTC on day X + 1.  If it is past 12 UTC on day X + 1 (this script
+   # should be run at 12:15 UTC on day X + 1 to check for this)
+   # and the files for day X have not been downloaded, then print a failure message.
+   if (time() - $lastdl > ($timewine + 24) * 60 * 60)
+   {
+      $filesmissing = 1;
+   }
+   
+   if ($filesmissing)
+   {
+      # Get ordinal date for for first day after date of last download of files.
+      my($realyr) = $year + 1900;
+      my($realmo) = $mon + 1;
+      my($realdy) = $mday + 1; # Add 1 day to $lastdl (ok if this is 32)
+      my($tcCmdLine) = "time_convert time=${realyr}\.${realmo}\.${realdy}_UTC o=ord zone=UTC |";
+      my($timestr);
+      my($nextday);
+
+      if (!open(TIMECONV, $tcCmdLine))
+      {
+         $msg = "$LOGALL: Couldn't run time_conv: $tcCmdLine\n";
+         DumpLog($logfile, $msg);
+         exit(1);
+      }
+	
+      if (!defined($timestr = <TIMECONV>))
+      {
+         $msg = "$LOGALL: Problem running time_conv: $tcCmdLine\n";
+         DumpLog($logfile, $msg);
+         close TIMECONV;
+         exit(1);
+      }
+
+      if ($timestr =~ /(\d\d\d\d)\.(\d\d\d)/)
+      {
+         $nextday = "$1_$2";
+      }
+      else
+      {
+         $msg = "LOGALL: Invalid time string returned by '$tcCmdLine'.\n";
+         DumpLog($logfile, $msg);
+         exit(1);
+      }
+
+      $msg = "LOGALL: ***FAILURE TO DOWNLOAD FILES FOR DAY ${nextday}***\n";
+      DumpLog($logfile, $msg);
+      exit(1);
+   }
 }
 
 # Notify people who care if an error has occurred
@@ -352,4 +562,22 @@ system($cmd);
 sub PrintUsage
 {
     print "\tdllzp.pl {-b <branch> | -c <config file>} [-f]\n"
+}
+
+sub DumpLog
+{
+   my($logfile) = $_[0];
+   my($content) = \$_[1];
+
+   if (open(LOGFILE, ">>$logfile"))
+   {
+      print LOGFILE $$content;
+      $$content = "";
+      close(LOGFILE);
+   }
+   else
+   {
+      print STDERR "Couldn't write to logfile '$logfile'\n";
+      exit(1);
+   }
 }

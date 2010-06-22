@@ -8,3 +8,5 @@ ns = sdo
 dbuser = production
 dbname = jsoc
 notify = arta@sun.stanford.edu rock@sun.stanford.edu carl@sun.stanford.edu thailand@stanford.edu
+timewinb = 30
+timewine = 36
