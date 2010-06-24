@@ -51,7 +51,8 @@ $source=check_agruments($ARGV[0]);
 
 # set Common Environment Variables
 $ENV{'SUMSERVER'}="j1.Stanford.edu";
-$hm=$ENV{'HOME'};
+#$hm=$ENV{'HOME'};
+$hm="/home/production";
 $exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/cvs/JSOC/bin/linux_x86_64";
 $ENV{'MAILTO'}="";
 
@@ -104,7 +105,8 @@ $dflg=$ENV{'SAVE_DF_DEBUG'}=0;
 
 # common setting for all environments(6)
 $ENV{'SUMSERVER'}="j1.Stanford.edu";
-$hm=$ENV{'HOME'};
+#$hm=$ENV{'HOME'};
+$hm="/home/production";
 $ENV{'MAILTO'}="";
 $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
 $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
