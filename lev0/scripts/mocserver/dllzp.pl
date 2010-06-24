@@ -456,14 +456,14 @@ if (!$err)
 
       if (!open(TIMECONV, $tcCmdLine))
       {
-         $msg = "$LOGALL: Couldn't run time_conv: $tcCmdLine\n";
+         $msg = "LOGALL: Couldn't run time_conv: $tcCmdLine\n";
          DumpLog($logfile, $msg);
          exit(1);
       }
 	
       if (!defined($timestr = <TIMECONV>))
       {
-         $msg = "$LOGALL: Problem running time_conv: $tcCmdLine\n";
+         $msg = "LOGALL: Problem running time_conv: $tcCmdLine\n";
          DumpLog($logfile, $msg);
          close TIMECONV;
          exit(1);
@@ -498,7 +498,10 @@ if (!$err)
       }
 
       # Call Carl's ingestion script
-      print "Calling Carl's ingestion script (test - his script is stubbed out).\n"
+      $msg = "Calling dsdf.pl (ingestion script):\n";
+      DumpLog($logfile, $msg);
+      $cmd = "/usr/bin/perl $scriptpath/../proj/lev0/scripts/hk/dsdf.pl moc";
+      system("$cmd 1>>$logfile 2>&1");
    }
 
    # Check to see if we got all files we should have gotten (should never be more than 60
@@ -525,14 +528,14 @@ if (!$err)
 
       if (!open(TIMECONV, $tcCmdLine))
       {
-         $msg = "$LOGALL: Couldn't run time_conv: $tcCmdLine\n";
+         $msg = "LOGALL: Couldn't run time_conv: $tcCmdLine\n";
          DumpLog($logfile, $msg);
          exit(1);
       }
 	
       if (!defined($timestr = <TIMECONV>))
       {
-         $msg = "$LOGALL: Problem running time_conv: $tcCmdLine\n";
+         $msg = "LOGALL: Problem running time_conv: $tcCmdLine\n";
          DumpLog($logfile, $msg);
          close TIMECONV;
          exit(1);
