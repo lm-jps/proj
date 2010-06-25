@@ -85,6 +85,8 @@ my($msg);    # holds messages to print to log file
 
 my($logcontent) = "";
 
+$branch = $kLIVE; # default to live environment
+
 if ($argc == 0)
 {
     die "Invalid argument list.\n";
@@ -119,24 +121,21 @@ else
     }
 }
 
-if (!defined($cfgfile) && defined($branch))
+if (!defined($cfgfile))
 {
     if ($branch eq $kLIVE)
     {
-        $branch = "";
+       $cfgfile = "$Bin/${kCFGPREFIX}.txt";
     }
     else
     {
-        $branch = "_" . $branch;
-    }
-
-    # Use defalt configuration file
-    $cfgfile = "$Bin/${kCFGPREFIX}${branch}.txt";
+        $cfgfile = "$Bin/${kCFGPREFIX}_${branch}.txt";
+    }   
 }
 
 if (!(-f $cfgfile))
 {
-    print STDERR "Cannot read configuration file.";
+    print STDERR "Cannot read configuration file '$cfgfile'\n.";
     exit(1);
 }
 
@@ -497,11 +496,14 @@ if (!$err)
          $lastdl = $newlastdl;
       }
 
-      # Call Carl's ingestion script
-      $msg = "Calling dsdf.pl (ingestion script):\n";
-      DumpLog($logfile, $msg);
-      $cmd = "/usr/bin/perl $scriptPath/../proj/lev0/scripts/hk/dsdf.pl moc";
-      system("$cmd 1>>$logfile 2>&1");
+      # Call Carl's ingestion script - only if running within the 'live' environment
+      if ($branch eq $kLIVE)
+      {
+         $msg = "Calling dsdf.pl (ingestion script):\n";
+         DumpLog($logfile, $msg);
+         $cmd = "/usr/bin/perl $scriptPath/../proj/lev0/scripts/hk/dsdf.pl moc";
+         system("$cmd 1>>$logfile 2>&1");
+      }
    }
 
    # Check to see if we got all files we should have gotten (should never be more than 60
