@@ -500,7 +500,7 @@ if (!$err)
       # Call Carl's ingestion script
       $msg = "Calling dsdf.pl (ingestion script):\n";
       DumpLog($logfile, $msg);
-      $cmd = "/usr/bin/perl $scriptpath/../proj/lev0/scripts/hk/dsdf.pl moc";
+      $cmd = "/usr/bin/perl $scriptPath/../proj/lev0/scripts/hk/dsdf.pl moc";
       system("$cmd 1>>$logfile 2>&1");
    }
 
