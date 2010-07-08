@@ -46,7 +46,8 @@
 #define LEV1SERIESNAMEAIA "su_production.aia_lev1e"	//temp test case
 //#define DSFFNAME "su_richard.flatfield"		//temp test case
 #define DSFFNAMEHMI "su_production.hmi_flatfield"	//temp test case
-#define DSFFNAMEAIA "su_production.aia_flatfield"	//temp test case
+//#define DSFFNAMEAIA "su_production.aia_flatfield"	//temp test case
+#define DSFFNAMEAIA "aia_test.flatfield"	//temp test case
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1.%s.log"
@@ -64,6 +65,8 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "mode", NOTSPECIFIED, "either recnum or fsn"},
   {ARG_STRING, "dsin", NOTSPECIFIED, "dataset of lev0 filtergrams"},
   {ARG_STRING, "dsout", NOTSPECIFIED, "dataset of lev1 output"},
+  {ARG_STRING, "dsff", NOTSPECIFIED, "dataset of darks flats bads"},
+  {ARG_STRING, "dsaiabad", NOTSPECIFIED, "dataset of AIA bad pixels"},
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
   {ARG_INTS, "brec", "0", "first lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
   {ARG_INTS, "erec", "0", "last lev0 rec# to process. 0=error must be given by build_lev1_mgr"},
@@ -88,7 +91,7 @@ static LEV0LEV1 lev0lev1;
 static LEV0LEV1 *l0l1 = &lev0lev1;
 //static CCSDS_Packet_t *Hk;
 static DRMS_Record_t *rs;
-static DRMS_Record_t *rs0, *rs1, *rsff, *rsbad_pix;
+static DRMS_Record_t *rs0, *rs1, *rsff, *rsbad_pix, *rec_bad_aia;
 static DRMS_Record_t *rptr;
 static DRMS_Segment_t *segment;
 static DRMS_Segment_t *segmentff;
@@ -97,7 +100,7 @@ static DRMS_Segment_t *badseg;
 static DRMS_Segment_t *badoutpixseg;
 static DRMS_Segment_t *spikeseg;
 static DRMS_Array_t *segArray;
-static DRMS_RecordSet_t *rset0, *rset1, *rsetff;
+static DRMS_RecordSet_t *rset0, *rset1, *rsetff, *rsbad_aia;
 static DRMS_Array_t *Array0;
 static DRMS_Array_t *Arrayff;
 static DRMS_Array_t *ArrayDark;
@@ -110,13 +113,16 @@ static char bld_vers[16];
 static char datestr[32];
 static char open_dsname[256];
 static char dsffname[128];
+static char open_aiabad_dsname[256];
 static char path[DRMS_MAXPATHLEN], bad_pix_path[DRMS_MAXPATHLEN];
+static char bad_aia_path[DRMS_MAXPATHLEN];
 static char rs1_path[DRMS_MAXPATHLEN];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 static char *orbseries = "sdo.fds_orbit_vectors";
 //static char *orbseries = "sdo_ground.fds_orbit_vectors";
 
-static int nspikes, *oldvalues, *spikelocs, *newvalues;
+static int nspikes, respike, *oldvalues, *spikelocs, *newvalues;
+double aiascale = 1.0;
 
 IORBIT_Info_t *IOinfo = NULL;
 IORBIT_Info_t IOdata;
@@ -126,8 +132,9 @@ unsigned int fsnx = 0;
 //short data1[MAXPIXELS];
 //int data1[MAXPIXELS];
 float data1[MAXPIXELS];		//floats for HMI
+float ftmp;
 int data1A[MAXPIXELS];		//ints for AIA
-//int array_cosmic[16777216];	//4096x4096
+int array_cosmic[16777216];	//4096x4096
 double tgttimes[NUMRECLEV1];
 
 long long brec, erec, bfsn, efsn; //begin and end lev0 rec/fsn. must be same data type
@@ -161,6 +168,8 @@ char *instru;			// instument. hmi or aia
 char *mode;			// given mode. recnum or fsn
 char *dsin;			// lev0 input dataset
 char *dsout;			// lev1 output dataset
+char *dsff;                     // flat field dataset
+char *dsaiabad;                 // AIA bad pixel dataset (kludge around bad ff)
 
 //!!TEMP
 typedef struct {
@@ -172,6 +181,7 @@ typedef struct {
 
 
 int get_nspikes() { return nspikes; }
+int get_respike(void) { return respike; }
 int *get_spikelocs() { return spikelocs; }
 int *get_oldvalues() { return oldvalues; }
 int *get_newvalues() { return newvalues; }
@@ -261,6 +271,10 @@ int nice_intro ()
 	"      default hmi=hmi.lev0e   aia=aia.lev0e\n"
 	"dsout= data set name of lev1 output\n"
 	"      default hmi=su_production.hmi_lev1e   aia=su_production.aia_lev1e\n"
+	"dsff= data set name of AIA flat field series\n"
+        "      default aia_test.flatfield\n"
+        "dsaiabad= AIA bad pixel series, default is to use BPL from dsff,\n"
+               "but bugs need to be fixed\n"
 	"brec= first lev0 rec# to process. 0=error must be given by build_lev1_mgr\n"
 	"erec= last lev0 rec# to process. 0=error must be given by build_lev1_mgr\n"
 	"bfsn= first fsn# to process. 0=error must be given by build_lev1_mgr\n"
@@ -417,6 +431,7 @@ int do_ingest(long long bbrec, long long eerec)
       printk("Can't do drms_open_records(%s)\n", open_dsname);
       return(1);
     }
+    drms_stage_records(rset0, 1, 0);
     ncnt = rset0->n;
     rptr = (DRMS_Record_t *)malloc(ncnt * sizeof(DRMS_Record_t));
     if(rptr == NULL) {
@@ -724,7 +739,21 @@ int do_ingest(long long bbrec, long long eerec)
       }
       l0l1->adatadark = (float *)ArrayDark->data; //free at end
 
-      badseg = drms_segment_lookup(rsff, "BAD_PIXEL");
+      if (strcmp(dsaiabad, NOTSPECIFIED)) {
+        char *wavstr = drms_getkey_string(rs0, "WAVE_STR", &rstatus);
+        sprintf(open_aiabad_dsname, "%s[%s][]", dsaiabad, wavstr);
+        rsbad_aia = drms_open_records(drms_env, open_aiabad_dsname, &rstatus);
+        if(!rsbad_aia || rsbad_aia->n == 0 || rstatus)
+        printk("drms_open_records for rsbad_aia failed\n");
+        fcnt = rsbad_aia->n;
+        if(fcnt > 1) {
+          printk("More than one bpl found for %s?\n", open_aiabad_dsname);
+        }
+        rec_bad_aia = rsbad_aia->records[fcnt-1];
+        badseg = drms_segment_lookup(rec_bad_aia, "bad_pixel_list");
+      } else {
+        badseg = drms_segment_lookup(rsff, "BAD_PIXEL");
+      }
       ArrayBad = drms_segment_read(badseg, DRMS_TYPE_INT, &rstatus);
       nbad = drms_array_size(ArrayBad)/sizeof(int);
       if(!ArrayBad) {
@@ -816,21 +845,10 @@ int do_ingest(long long bbrec, long long eerec)
            missflg[i] = missflg[i] | Q_1_MISS3;
         if(l0l1->datavals == 0) 
            missflg[i] = missflg[i] | Q_MISSALL; //high bit, no data
-        if(hmiaiaflg) {
-          //if (spikeseg = drms_segment_lookup(rs,"SPIKES") ) BRACKET 
+        if(hmiaiaflg && nspikes) {
           if (spikeseg = drms_segment_lookup(rs,"spikes") ) {
             int *spikedata, status, axes[2], nbytes;
             nbytes = nspikes*sizeof(int);
-/*
-printk("nspikes\tspikelocs\toldvalues\tnewvalues in main\n");
-printk("%d\t%x\t%x\t%x\n", nspikes, spikelocs, oldvalues, newvalues);
-for(i=0; i<3; i++) { printk("%d\t%d\t%d\n", spikelocs[i], oldvalues[i],
-                     newvalues[i]); }
-printf("nspikes\tspikelocs\toldvalues\tnewvalues in main\n");
-printf("%d\t%x\t%x\t%x\n", nspikes, spikelocs, oldvalues, newvalues);
-for(i=0; i<3; i++) { printf("%d\t%d\t%d\n", spikelocs[i], oldvalues[i],
-                     newvalues[i]); }
-*/
             axes[0] = nspikes;
             axes[1] = 3;
             spikedata = (int *) malloc (3*nspikes*sizeof(int));
@@ -841,23 +859,20 @@ for(i=0; i<3; i++) { printf("%d\t%d\t%d\n", spikelocs[i], oldvalues[i],
             memcpy((void *)(spikedata+2*nspikes), (void *)newvalues, nbytes);
             status = drms_segment_write(spikeseg, ArraySpike, 0);
             drms_free_array(ArraySpike);
-        } else { printf("spikes segment not found\n"); }
-       }
-/**************************!!!TEMP*****************************************/
-      //printf("for i < nbad print badpix[i]\n");
-      //int ii;
-      //int *pp;
-      //pp = (int *)ArrayBad->data; 
-      //for(ii=0; ii < nbad; ii++) { printf("%d ", *pp++); }
-      //printf("\n");
-      int *array_cosmic = (int *)malloc(16777216 * sizeof(int));
+          } // else { printf("spikes segment not found\n"); }
+        }
+      /***This will be the real cosmic_rays call *********************/
+      StartTimer(1);	//!!TEMP
       dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
 				array_cosmic, &n_cosmic, 4096, 4096);
+      ftmp = StopTimer(1);
+      printf( "\nTime sec for cosmic_rays() = %f\n\n", ftmp );
       if(dstatus) {
         printk("ERROR: cosmic_rays() error=%d\n", dstatus);
         noimage[i] = 1;
       }
-/***********************************************************************/
+      else { printf("n_cosmic = %d for fsn = %u\n", n_cosmic, fsnx); } //!!TEMP
+
       dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
       if (dstatus) {
         printk("ERROR: drms_segment_write error=%d for lev1 bad_pixel_list\n",
@@ -912,17 +927,6 @@ TEMPSKIP:
       printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
       noimage[i] = 1;
     }
-    else { //!!!TEMP for tesing here. TBD-what to do if do_flat() failed
-/**************************!!!TEMP*****************************************
-      int *array_cosmic = (int *)malloc(16777216 * sizeof(int));
-      dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
-				array_cosmic, &n_cosmic, 4096, 4096);
-      if(dstatus) {
-        printk("ERROR: cosmic_rays() error=%d\n", dstatus);
-        noimage[i] = 1;
-      }
-**************************!!!TEMP*****************************************/
-    }
   }
     drms_setkey_float(rs, "RSUN_LF", (float)rsun_lf);
     drms_setkey_float(rs, "X0_LF", (float)x0_lf);
@@ -953,6 +957,7 @@ TEMPSKIP:
 /* FIXME Remove entire following if block when WCS KW are correct for AIA */
   if(hmiaiaflg) {                       //aia
     int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
+/*
     drms_setkey_float(rs, "CDELT1", 0.609);
     drms_setkey_float(rs, "CDELT2", 0.609);
     switch (wl) {
@@ -999,6 +1004,7 @@ TEMPSKIP:
     }
     drms_setkey_float(rs, "CRVAL1", 0.0);
     drms_setkey_float(rs, "CRVAL2", 0.0);
+*/
   }
 
   do_quallev1(rs0, rs, i, fsnx);
@@ -1110,6 +1116,8 @@ int DoIt(void)
   if(!strcmp(mode, "recnum")) modeflg = 1;
   dsin = cmdparams_get_str(&cmdparams, "dsin", NULL);
   dsout = cmdparams_get_str(&cmdparams, "dsout", NULL);
+  dsff = cmdparams_get_str(&cmdparams, "dsff", NULL);
+  dsaiabad = cmdparams_get_str(&cmdparams, "dsaiabad", NULL);
   brec = cmdparams_get_int(&cmdparams, "brec", NULL);
   erec = cmdparams_get_int(&cmdparams, "erec", NULL);
   bfsn = cmdparams_get_int(&cmdparams, "bfsn", NULL);
@@ -1149,7 +1157,8 @@ int DoIt(void)
     else dsout = LEV1SERIESNAMEAIA;
   }
   if(hmiaiaflg) {
-    sprintf(dsffname, "%s", DSFFNAMEAIA);
+    if (strcmp(dsff, NOTSPECIFIED)) sprintf(dsffname, "%s", dsff);
+    else sprintf(dsffname, "%s", DSFFNAMEAIA);
     if(strstr(dsin, "hmi") || strstr(dsout, "hmi")) {
       printf("Warning: You said instru=aia but have 'hmi' in ds name?\n");
       printf("Do you want to abort this [y/n]? ");
@@ -1198,4 +1207,3 @@ int DoIt(void)
   printf("build_lev1 done last fsn=%u\n", fsnx); 
   return(0);
 }
-
