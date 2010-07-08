@@ -62,9 +62,10 @@
 #define LEV0SERIESNAMEAIA "aia.lev0e"
 #define LEV1SERIESNAMEHMI "su_production.hmi_lev1e"	//temp test case
 #define LEV1SERIESNAMEAIA "su_production.aia_lev1e"	//temp test case
+#define DSAIABAD "lm_jps.aia_bad_blobs"			//dsaiabad= arg value to build_lev1 for aia
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
-#define H1LOGFILE "/usr/local/logs/lev1/build_lev1_mgrY.%s.log" //!!!TBD change back to build_lev1_mgr
+#define H1LOGFILE "/usr/local/logs/lev1/build_lev1_mgr.%s.log" 
 #define QSUBDIR "/scr21/production/qsub/tmp"
 #define NUMTIMERS 8		//number of seperate timers avail
 #define MAXCPULEV1 32		//max# of forks can do at a time for stream mode
@@ -100,7 +101,7 @@ ModuleArgs_t module_args[] = {
 ModuleArgs_t *gModArgs = module_args;
 CmdParams_t cmdparams;
 // Module name presented to DRMS. 
-char *module_name = "build_lev1_mgrY";	//!!!TBD change back to build_lev1_mgr
+char *module_name = "build_lev1_mgr";
 
 FILE *h1logfp;		// fp for h1 ouput log for this run 
 FILE *qsubfp;		// fp for qsub script
@@ -309,9 +310,9 @@ int forkstream(long long recn0, long long maxrecn0, int force)
   pid_t pid, wpid, fpid[MAXCPULEV1];
   long long numofrecs, frec, lrec;
   int stat_loc, i, j, k, l, numtofork;
-  char *args[10], pcmd[128];
+  char *args[11], pcmd[128];
   char args1[128], args2[128], args3[128], args4[128], args5[128], args6[128];
-  char args7[128], args8[128];
+  char args7[128], args8[128], args9[128];
 
   numofrecs = (maxrecn0 - recn0) + 1;
   numtofork = numofrecs/numrec;     //this many to fork 
@@ -335,7 +336,7 @@ int forkstream(long long recn0, long long maxrecn0, int force)
       return(1);			//!!TBD decide what to do
     }
     else if(pid == 0) {                   //this is the beloved child
-      args[0] = "build_lev1";		  //!!!TEMP make build_lev1 when done testing!!!
+      args[0] = "build_lev1";
       sprintf(args1, "mode=%s", mode);
       args[1] = args1;
       sprintf(args2, "dsin=%s", dsin);
@@ -367,9 +368,18 @@ int forkstream(long long recn0, long long maxrecn0, int force)
 		LEV1LOG_BASEDIR, frec, lrec);
       }
       args[8] = args8;
-      args[9] = NULL;
-      printk("execvp: %s %s %s %s %s %s %s %s %s\n",
+      if(hmiaiaflg) {			//aia has an extra arg to build_lev1
+        sprintf(args9, "dsaiabad=%s", DSAIABAD);
+        args[9] = args9;
+        args[10] = NULL;
+        printk("execvp: %s %s %s %s %s %s %s %s %s %s\n",
+              args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9]);
+      }
+      else {
+        args[9] = NULL;
+        printk("execvp: %s %s %s %s %s %s %s %s %s\n",
               args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8]);
+      }
       if(execvp(args[0], args) < 0) {
         printk("***Can't execvp() build_lev1. errno=%d\n", errno);
         exit(1);
@@ -417,7 +427,7 @@ int forkstream(long long recn0, long long maxrecn0, int force)
       return(1);			//!!TBD decide what to do
     }
     else if(pid == 0) {                   //this is the beloved child
-      args[0] = "build_lev1";		  //!!!TBD restore to build_lev1
+      args[0] = "build_lev1";
       sprintf(args1, "mode=%s", mode);
       args[1] = args1;
       sprintf(args2, "dsin=%s", dsin);
@@ -447,9 +457,18 @@ int forkstream(long long recn0, long long maxrecn0, int force)
         sprintf(args8, "logfile=%s/l1s_%lld_%lld.log", LEV1LOG_BASEDIR, frec, lrec);
       }
       args[8] = args8;
-      args[9] = NULL;
-      printk("execvp: %s %s %s %s %s %s %s %s %s\n",
+      if(hmiaiaflg) {			//aia has an extra arg to build_lev1
+        sprintf(args9, "dsaiabad=%s", DSAIABAD);
+        args[9] = args9;
+        args[10] = NULL;
+        printk("execvp: %s %s %s %s %s %s %s %s %s %s\n",
+              args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9]);
+      }
+      else {
+        args[9] = NULL;
+        printk("execvp: %s %s %s %s %s %s %s %s %s\n",
               args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8]);
+      }
       if(execvp(args[0], args) < 0) {
         printk("***Can't execvp() build_lev1. errno=%d\n", errno);
         exit(1);
@@ -484,21 +503,45 @@ int qsubjob(long long rec1, long long rec2)
 
 /* !!!TEMP force quicklook mode for now. Difference is in how build_lev1 queries for the flatfield ******
   if(modeflg) {		//recnum mode
-    fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+    if(hmiaiaflg) {	//aia has an extra arg to build_lev1
+      fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+	mode, dsin, dsout, rec1, rec2, instru, stream_mode, DSAIABAD, QSUBDIR, rec1, rec2); 
+    }
+    else {
+      fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
 	mode, dsin, dsout, rec1, rec2, instru, stream_mode, QSUBDIR, rec1, rec2); 
+    }
   }
   else {		//fsn mode
-    fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+    if(hmiaiaflg) {	//aia has an extra arg to build_lev1
+      fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+	mode, dsin, dsout, rec1, rec2, instru, stream_mode, DSAIABAD, QSUBDIR, rec1, rec2); 
+    }
+    else {
+      fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
 	mode, dsin, dsout, rec1, rec2, instru, stream_mode, QSUBDIR, rec1, rec2); 
+    }
   }
 **************************************************************************************************/
   if(modeflg) {		//recnum mode
-    fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=1 logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+    if(hmiaiaflg) {     //aia has an extra arg to build_lev1
+      fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=1 dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+	mode, dsin, dsout, rec1, rec2, instru, DSAIABAD, QSUBDIR, rec1, rec2); 
+    }
+    else {
+      fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=1 logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
 	mode, dsin, dsout, rec1, rec2, instru, QSUBDIR, rec1, rec2); 
+    }
   }
   else {		//fsn mode
-    fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=1 logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+    if(hmiaiaflg) {     //aia has an extra arg to build_lev1
+      fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=1 dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+	mode, dsin, dsout, rec1, rec2, instru, DSAIABAD, QSUBDIR, rec1, rec2); 
+    }
+    else {
+      fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=1 logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
 	mode, dsin, dsout, rec1, rec2, instru, QSUBDIR, rec1, rec2); 
+    }
   }
   fclose(qsubfp);
   sprintf(qsubcmd, "qsub -o %s -e %s -q j.q %s", 
