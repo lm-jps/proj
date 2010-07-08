@@ -34,7 +34,6 @@
   #set environment variables specific for this script
   #common setting for all environments
   $ENV{'SUMSERVER'}="j1.Stanford.edu";
-  #$hm=$ENV{'HOME'};
   $hm="/home/production";
   $ENV{'MAILTO'}="";
   $exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
@@ -72,7 +71,7 @@
   # open log file
   open(LF,">>$logfile") || die "Can't Open $logfile: $!\n";
   print LF "-->Start ingest of dayfile at ";
-  print LF `date`;
+  print LF `date -u`;
 
   # set path to dayfiles using source -these vary based on where dayfiles are placed
  if ($source eq "hsb")
@@ -120,7 +119,7 @@
  
   #close logfile
   print LF "-->Completed ingest of dayfile at ";
-  print LF `date`;
+  print LF `date -u`;
   close LF;
 
 #############################################################################
