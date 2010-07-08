@@ -1,10 +1,12 @@
 #!/usr/bin/perl
 ##############################################################################
-# Name:        dsdf.pl  - Decode dayfile then save dayfile                   #
+# Name:        dsdf.pl  - Decode and Save Day Files                          #
 # Description: Get dayfiles from moc server dropoff directory or rtmon       #
 #              directory. Move files over to /tmp21/production/lev0/.        #
 #              Then if dayfiles apid is in list of apids to decode then      #
-#              execute decode_dayfile on dayfile. If successful decode, then #
+#              execute decode_dayfile on dayfile. Then if dayfile apid is in #
+#              list to process min,max,mean and standard deviation keywords  #
+#              then execute load_m3sd on dayfile. If successful decode, then #
 #              execute ingest_dayfile.pl with merged value equal to 1. If    #
 #              not on list to decode, then execute ingest_dayfile.pl with    #
 #              merged value equal to 0. If on decode list but failed to      #
@@ -35,52 +37,76 @@
 #                   value of the dropoff directory in this script($doff_dir).#
 #                (6)Setup file with apids to decode(dsdf_apid_list_decode_moc#
 #                   or dsdf_apid_list_decode_rtmon).                         #
-#                (7)Run dsdf.pl with source value so that script knows which #
+#                (7)Setup file with apids to process min,max,mean, and       #
+#                   standard deviation values for(dsdf_apid_list_m3sd_moc    #
+#                   or dsdf_apid_list_m3sd_rtmon).                           #
+#                (8)Run dsdf.pl with source value so that script knows which #
 #                   place to pickup and dropoff dayfiles, which file to use  #
-#                   for the decode list of apids, how to parse differently   #
-#                   formatted files and were to put log information.         #
-# Limitation:   The move-and-ingest-dayfiles or copy-and-ingest-dayfiles     #
-#               process works for dayfiles from the sdo moc product server   #
-#               or rtmon server only. This script is not used currently to   #
-#               move and  call ingest_dayfiles.pl for the HSB dayfiles.      #
+#                   for the decode and m3sd list of apids, how to parse      #
+#                   differently formatted files and were to put log          #
+#                   information.                                             #
+# Limitation:    (1)The move-and-ingest-dayfiles or copy-and-ingest-dayfiles #
+#                   process works for dayfiles from the sdo moc product      #
+#                   server or rtmon server only. This script is not used     #
+#                   currently to move and  call ingest_dayfiles.pl for the   #
+#                   HSB dayfiles.                                            #
+#                (2)Setup in script is for production environment.           #
+#                (3)Setup parameters at top of script in main of script      #
 ##############################################################################
+
 #
-# Process setup (1):
+# (1)check input argument
 # check argument passed
 $source=check_agruments($ARGV[0]);
 
-# set Common Environment Variables
+# (2)setup common  variables
 $ENV{'SUMSERVER'}="j1.Stanford.edu";
-#$hm=$ENV{'HOME'};
 $hm="/home/production";
 $exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/cvs/JSOC/bin/linux_x86_64";
 $ENV{'MAILTO'}="";
+$script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
+$script_lev1_dir="$hm/cvs/JSOC/proj/lev1/scripts";
+$ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$script_lev1_dir:$ENV{'DF_EXEC_PATH'}";
 
+# (3)setup instruction filename for each apid to use when running load_m3sd
+$inst_apid_17="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/hmi.leg_status.txt";
+$inst_apid_19="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/hmi_thermal_300s_template.txt";
+$inst_apid_21="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/hmi.iss_status.txt";
+$inst_apid_38="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/aia.iss_3_4_status.txt";
+$inst_apid_40="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/aia.iss_1_2_status.txt";
+
+# (4)setup pickup and dropoff directories and email variables based on source value
 if ($source eq "moc")
 {
-  # Process setup (2):
+  # moc pickup directory setup:
   $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp21/jsoc/sdo/mocprods/lzp";
 
-  # Process setup (3)
+  # moc dropoff directory setup:
   $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0/hk_moc_dayfile";
 
-  #set common email arguments(4)
+  # moc common email arguments
   $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
   $to_email="jsoc_ops\@sun.stanford.edu";
   $subject_email_no_files="JSOC:WARNING:Ingesting MOC dayfiles: status:No files loaded today";
   $subject_email_not_sure="JSOC:WARNING:Ingesting MOC dayfiles: status:Possible error ingesting dayfile.";
   $subject_email_no_decode="JSOC:ERROR:Decoding MOC dayfiles into housekeeping data series.";
+  $subject_email_no_m3sd="JSOC:ERROR:M3SD Processing of MOC dayfiles into housekeeping data series.";
+  $subject_email_no_decode_m3sd="JSOC:ERROR:Decoding and M3SD Processing of MOC dayfiles into housekeeping data series.";
   $subject_email_not_equal_count="JSOC:ERROR:Ingesting MOC dayfiles: Did not ingest dayfiles because some hkt files don't have corresponding xml files";
+  $subject_email_warn_m3sd="JSOC:WARNING:M3SD Processing of all five MOC dayfiles into housekeeping data series was NOT done.";
+  $subject_email_warn_decode="JSOC:WARNING:Decode Dayfile Processing of MOC dayfiles into asd housekeeping data series was NOT done.";
+  $subject_email_warn_m3sd_decode="JSOC:WARNING:M3SD Processing and Decode Dayfile Processing of all MOC dayfiles NOT done.";
+
 }
 elsif ($source eq "rtmon")
 {
-  # Process setup (2):
+  # rtmon pickup directory:
   $pup_dir=$ENV{'DF_PICKUP_RTMON_FILES'}="/hmisdp-mon/log/packets";
 
-  # Process setup (3)
+  # rtmon dropoff directory setup 
   $doff_dir=$ENV{'DF_DROPOFF_RTMON_FILES'}="/tmp21/production/lev0/hk_rtmon_dayfile";
 
-  #set common email arguments(4)
+  # rtmon common email variables
   $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
   $to_email="jsoc_ops\@sun.stanford.edu";
   $subject_email_no_files="JSOC:WARNING:Ingesting RTMON dayfiles: status:No files loaded today";
@@ -100,19 +126,20 @@ else
   exit;
 }
 
-# debug flag (5) 0=minimum log message 1=debug mode or max log messages
+# (5)debug flag where 0=minimum log message 1=debug mode or max log messages
 $dflg=$ENV{'SAVE_DF_DEBUG'}=0;
 
-# common setting for all environments(6)
-$ENV{'SUMSERVER'}="j1.Stanford.edu";
-#$hm=$ENV{'HOME'};
-$hm="/home/production";
-$ENV{'MAILTO'}="";
-$ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
-$script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
-$ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
-# pick up dayfiles and xml files there(7)
+# (6)local variables for capturing processing errors
+# failed list of dayfiles processed using do_decode_dayfile()
+my @failed_to_decode_list=();#initialize to empty, this is global variable
+# failed list of dayfiles processed using do_m3sd_dayfile()
+my @failed_to_m3sd_list=();#initialize to empty, this is global variable
+# reference to lists of error so can pass in functions and set
+my $ref_failed_to_decode_list = \@failed_to_decode_list; #ref setup
+my $ref_failed_to_m3sd_list = \@failed_to_m3sd_list;
+
+# (7)pick up dayfiles and xml files from the pickup directory
 if ($source eq "moc")
 {
   #for production use - gather day and xml files there starting at june 1, 2008 to 2029
@@ -163,12 +190,12 @@ else
   $logfile="log-df-default";
 }
 
-# (9)set up where to put backup logs written monthly 
+# (9)set up where to put backup logs written monthly
 $logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
 
 # (10)open log file
 open(LF,">>$script_dir/$logfile") || die "Can't Open $script_dir/$logfile: $!\n";
-print LF `/bin/date`;
+print LF `/bin/date -u`;
 print LF "--->Starting script dsdf.pl\n";
 # send message to users running script at command line so they know something is working
 print "...running dsdf.pl script\n...please wait to finish\n...view status on run by doing: tail -f $script_dir\/$logfile\n";
@@ -217,44 +244,38 @@ $hkt_filecount=@list_hkt_files;
 $xml_filecount=@list_xml_files;    
 print LF "--->hkt file count is:$hkt_filecount xml file count is:$xml_filecount\n";
 
-# (13)check if files are there and chmod on files
+# (14)check if files are there and if needed chmod on files
 if($hkt_filecount > 0 or $xml_filecount > 0)
 {
   #$log=`chmod 777 $doff_dir/*`;
   print LF "--->skip chmod to 777 for df and xml files in :<$doff_dir>\n";
 }
-####changed 3-23:close LF;#because ingest_dayfile.pl is writing to log now. after complete reopen log below
 
 
-# (14)get apidlist_to_decode_moc
-@apid_decode_list = get_apid_decode_list($source);
-if($dflg == 1) {print LF "--->DEBUG:MESSAGE:dsdf.pl:main:apid to decode::@apid_decode_list\n";}
-
-# (15)check if dayfile there before calling ingest_dayfile.pl script
-@failed_ddf=();
+# (15)check if dayfiles and xml files are there before starting processing
 if($hkt_filecount > 0 or $xml_filecount > 0)
 {
   #ingest all dayfiles and xml files
   # for production
   if ($source eq "moc")
   {
-    #do decode dayfile and ingest dayfile for moc dayfiles
+    # (16.1)do decode dayfile and ingest dayfile for moc dayfiles
     $lu_map_file="df_apid_ds_list_for_moc";
-    @failed_ddf=do_process_dayfile($doff_dir, $lu_map_file, $source, @apid_decode_list);
+    ($success_decode_count,$success_m3sd_count)=do_process_dayfile($doff_dir, $lu_map_file, $source, $ref_failed_to_decode_list, $ref_failed_to_m3sd_list );
   }
   elsif ($source eq "rtmon")
   {
-    #do decode dayfile and ingest dayfile for rtmon dayfiles
+    # (16.2)do decode dayfile and ingest dayfile for rtmon dayfiles
     $lu_map_file="df_apid_ds_list_for_rtmon";
-    @failed_ddf=do_process_dayfile($doff_dir, $lu_map_file, $source, @apid_decode_list);
+     ($success_decode_count,$success_m3sd_count)=do_process_dayfile($doff_dir, $lu_map_file, $source, $ref_failed_to_decode_list, $ref_failed_to_m3sd_list);
   }
 }
 
-# (16)reopen log
+# (17)reopen log
 open(LF,">>$script_dir/$logfile") || die "Can't Open $script_dir/$logfile: $!\n";
 print LF "--->Processed df and xml files to data series. Log results:$log\n";
 
-# (16)Check if there and then delete all dayfiles that where ingested in dayfile data series 
+# (18)Check if there and then delete all dayfiles that where ingested in dayfile data series 
 #     note:These files gets loaded with files by ingest_dayfile.pl, if ingest was successful.
 if ($source eq "moc")
 {
@@ -269,7 +290,7 @@ else
   print LF "ERROR: unknown source value when trying to open DF_DELETE_FILES_LIST!\n";
 }
 
-@all_del_file_lines=();#changed from "" to ()
+@all_del_file_lines=();
 $delcount=0;
 while (<DELFILE>)
 {
@@ -281,15 +302,14 @@ while (<DELFILE>)
    $delcount++;
 }#while
 
-#(17)Check status of run and send emails if have possible errors
+# (19)Check status of run and send emails if have possible errors
 if($hkt_filecount > 0 or $xml_filecount > 0)
 {
   print LF "--->Deleting df and xml files that where successfully processed into data series\n";
 }
 print LF "--->Deleted <$delcount> xml and hkt files\n";
 
-#check if number of file got equal number loaded and deleted
-##if ($delcount == ($hkt_filecount +   $xml_filecount) and $delcount != 0)
+# (20)check if number of file got equal number loaded and deleted
 if ($delcount == ($hkt_filecount +   $xml_filecount ) and $delcount != 0)
 {
   print LF "--->status:successfully got all day files loaded into DRMS\n";
@@ -318,7 +338,7 @@ else
 
 close DELFILE;
 
-#(18)set MF file to blank work was completed
+# (21)set DELFILE file to blank since work was completed
 if ($source eq "moc")
 {
 open(DELFILE, ">$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
@@ -329,34 +349,82 @@ open(DELFILE, ">$script_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $s
 }
 
 
-#(19)close log and delete list files
+# (22)close log and delete list files
 close DELFILE;
 
-#(20) check status on decode of dayfile keywords and send separate email if get decode failure
+# (23)check status on decode of dayfile keywords and send separate email if get decode failure
 # get number of files failed to decode
-$failed_ddf_count= @failed_ddf;
+$failed_ddf_count= @$ref_failed_to_decode_list;
+$failed_m3sd_count= @$ref_failed_to_m3sd_list;
 
-# check if failed to decode dayfile using decode_dayfile executable
-if($failed_ddf_count == 0)
+# (23)check if failed to decode dayfile or/and load m3sd using decode_dayfile and load_m3sd executables
+if($failed_ddf_count == 0 and $failed_m3sd_count == 0)
 {
-  print  LF "--->status:successfully decoded all required dayfiles. Failed count <$failed_ddf_count>\n";
+  print  LF "--->status:successfully decoded dayfiles with no errors. Failed count <$failed_ddf_count>\n";
+  print  LF "--->status:successfully loaded m3sd for dayfiles with no errors. Failed count <$failed_m3sd_count>\n";
+}
+elsif($failed_ddf_count == 0 and $failed_m3sd_count > 0)
+{
+  print  LF "--->status:successfully decoded dayfiles with no errors. Failed count <$failed_ddf_count>\n";
+  print  LF "--->status:error:failed to load m3sd for all required dayfiles. Number of files failed to decode is <$failed_m3sd_count>\n";
+  sendEmail("$to_email", "$from_email", "$subject_email_no_m3sd","Error Message:\n-->Failed to load m3sd data into keywords into hk data series.\n-->Number of dayfiles the could not be processed for m3sd data  was <$failed_m3sd_count>.\n-->Day Files not processed are:<@$ref_failed_to_m3sd_list>");
+}
+elsif($failed_ddf_count > 0 and $failed_m3sd_count == 0)
+{
+  print  LF "--->status:successfully loaded m3sd for dayfiles with no errors. Failed count <$failed_m3sd_count>\n";
+  print  LF "--->status:error:failed to decode for all required dayfiles. Number of files failed to decode is <$failed_ddf_count>\n";
+  sendEmail("$to_email", "$from_email", "$subject_email_no_decode","Error Message:\n-->Failed to decode dayfiles into keywords into hk data series.\n-->Number of dayfiles the could not be decoded was <$failed_ddf_count>.\n-->Day Files not decoded are:<@$ref_failed_to_decode_list>");
 }
 else
 {
   print  LF "--->status:error:failed to decode all required dayfiles. Number of files failed to decode is <$failed_ddf_count>\n";
-  sendEmail("$to_email", "$from_email", "$subject_email_no_decode","Error Message:\n-->Failed to decode dayfiles into keywords into hk data series.\n-->Number of dayfiles the could not be decoded was <$failed_ddf_count>.\n-->Day Files not decoded are:<@failed_ddf>");
+  print  LF "--->status:error:failed to load m3sd for all required dayfiles. Number of files failed to decode is <$failed_m3sd_count>\n";
+  sendEmail("$to_email", "$from_email", "$subject_email_no_decode_m3sd","Error Message #1:\n-->Failed to decode dayfiles into keywords into hk data series.\n-->Number of dayfiles the could not be decoded was <$failed_ddf_count>.\n-->Day Files not decoded are:<@$ref_failed_to_decode_list>\nError Message #2:\n-->Failed process dayfiles into min,max,mean and standard deviation(m3sd) keywords into hk data series.\n-->Number of dayfiles the could not process m3sd keywords was <$failed_m3sd_count>.\n-->Day Files not decoded are:<@$ref_failed_to_m3sd_list>\n");
 }
 
-#(21)close log 
+# (24)check if processed all five files dayfiles using load_m3sd and check if processed 1 file using decode_dayfile.
+
+if($source eq "moc")
+{
+  #setup expected count of files to process and then check if processed successfully
+  $expected_count_m3sd=5; #later can automate better by getting count via file
+  $expected_count_decode=1; #later can automate better by getting count via file
+
+  # check count not expected and check did not send other emails above already
+  if (($success_m3sd_count ne $expected_count_m3sd) and ($failed_m3sd_count == 0) and ($success_decode_count ne $expected_count_decode) and ($failed_ddf_count == 0))
+  {
+     sendEmail("$to_email", "$from_email", "$subject_email_warn_m3sd_decode","Warning Message(1):\n-->Did not process the expected  <$expected_count_m3sd> dayfiles using load_m3sd executable.\n-->Only processed <$success_m3sd_count> dayfile(s)\n-->Check if the dayfiles for apid 17, 19,21,38, and 40 have been retrieved and ingested in < hmi | aia >.hk_dayfile series .\n-->If dayfiles exist, get dayfiles and rerun with load_m3sd executable.\n\nWarning Message(2):\n-->Did not process the expected  <$expected_count_decode> dayfiles using decode_dayfile executable.\n-->Note sdo.lev0_asd_0004 was not updated today.\n-->Only processed <$success_decode_count> dayfile(s).\n-->Check if the dayfiles for apid 129 has been retrieved and ingested in sdo.hk_dayfile series .\n-->If dayfile exists, get dayfiles and rerun with decode_dayfile executable.");
+    print LF "--->status:WARNING:did not process expected <$expected_count_m3sd> dayfiles using load_m3sd executable.\n";
+    print LF "--->status:WARNING:did not process expected <$expected_count_decode> dayfiles using decode_dayfile executable. sdo.lev0_asd_0004 was not updated today.\n";
+  } 
+  elsif (($success_m3sd_count ne $expected_count_m3sd) and ($failed_m3sd_count == 0))
+  {
+     sendEmail("$to_email", "$from_email", "$subject_email_warn_m3sd","Warning Message:\n-->Did not process the expected  <$expected_count_m3sd> dayfiles using load_m3sd executable.\n-->Only processed <$success_m3sd_count> dayfile(s)\n-->Check if the dayfiles for apid 17, 19,21,38, and 40 have been retrieved and ingested in < hmi | aia >.hk_dayfile series .\n-->If dayfiles exist, get dayfiles and rerun with load_m3sd executable.");
+    print LF "--->status:WARNING:did not process expected <$expected_count_m3sd> dayfiles using load_m3sd executable.\n";
+  }
+  # check count not expected and check did not send other emails above already
+  elsif (($success_decode_count ne $expected_count_decode) and ($failed_ddf_count == 0))
+  {
+     sendEmail("$to_email", "$from_email", "$subject_email_warn_decode","Warning Message:\n-->Did not process the expected  <$expected_count_decode> dayfile(s) using decode_dayfile executable.\n-->Note sdo.lev0_asd_0004 was not updated today.\n-->Only processed <$success_decode_count> dayfile(s).\n-->Check if the dayfiles for apid 129 has been retrieved and ingested in sdo.hk_dayfile series .\n-->If dayfile exists, get dayfiles and rerun with decode_dayfile executable.");
+    print LF "--->status:WARNING:did not process expected <$expected_count_decode> dayfiles using decode_dayfile executable. sdo.lev0_asd_0004 was not updated today.\n";
+  }
+  
+}#end if source is moc
+#elsif ($source eq "rtmon") #no check required here yet
+
+# (25)close log 
 print LF "--->Exiting script dsdf.pl\n";
-print LF `date`;
+print LF `date -u`;
 close LF;
 
-#(22) move log to logs directory every month
+# (26) check if need to move log to logs directory. this is done every month
 &check_log();
 
-# display message to users running script at command line
+# (27)display message to users running script at command line instead of as cronjob
 print "...completed running dsdf.pl.\n";
+# End of main
+
+
 
 ##########################################
 # check_log: used to create monthly logs #
@@ -411,6 +479,8 @@ print MAIL "$message\n";
 close(MAIL);
 }
 
+
+
 ##############################################################################
 # check_arguments()                                                          #
 ##############################################################################
@@ -421,7 +491,17 @@ sub check_agruments($)
   #check arguments
   if ("-h" eq substr($src,0,2) )
   {
-     print "Usage: perl dsdf.pl  <dayfiles from moc or rtmon directory on filesystem >\nwhere can be  moc or rtmon.\n->Note currently script handles rtmon or moc as source values.\n->Note that the setup for pickup and dropoff directories is for production user to run on n02.\n->Note that you can read header of script for more help information.\n->Note create list of apids to decode using files dsdf_apid_list_decode_rtmon and/or dsdf_apid_list_decode_moc.\n->Note create mapping file to identify series to write dayfiles to using df_apid_ds_list_for_rtmon or df_apid_ds_list_for_moc files.\n->Note that this routine uses decode_dayfile executable and ingest_dayfile.pl script therefore for more information view help information on these routines by using -h flag\n";
+     print "Usage: perl dsdf.pl  <dayfiles from moc or rtmon directory on filesystem >\nwhere can be  moc or rtmon.\n->Note currently script handles rtmon or moc as source values.\n->Note that the setup for pickup and dropoff directories is for production user to run on j0.\n->Note that you can read header of script for more help information.\n->Note create list of apids to decode using files dsdf_apid_list_decode_rtmon(not implemented yet) and/or dsdf_apid_list_decode_moc.\n->Note create mapping file to identify series to write dayfiles to using df_apid_ds_list_for_rtmon or df_apid_ds_list_for_moc files.\n->Note that this routine uses decode_dayfile executable and ingest_dayfile.pl script therefore for more information view help information on these routines by using -h flag\n->Note create list of apids to run load_m3sd executable on using file dsdf_apid_list_m3sd_moc.\n";
+     print "Limitations:\n";
+     print "(1) Only used to process and save dayfile(s) with source equal to moc or rtmon.\n";
+     print "(2) Only implemented to do decode_dayfile and load_m3sd on MOC dayfiles.\n";
+     print "(3) Only setup to run on production-at-j0.\n";
+     print "(4) Only setup for load_m3sd to use instruction files on production and for apid 17, 19, 21, 38, and 40 .\n";
+     print "(5) Only setup to check processing status is done on files for one file for decode_dayfile and five files for load_m3sd\n";
+     print "(6) To run in another environment check and redo variable setting in steps(1)-(9) settings\n";
+ 
+
+
      exit;
   }
   elsif("moc" eq substr($src,0,3) or  "rtmon" eq substr($src,0,5))
@@ -453,6 +533,7 @@ sub get_current_time_rtmon()
   return ( $new_date);
 }
 
+
 
 #########################################################################
 # subroutine create_apid_searchlist()                                   #
@@ -481,6 +562,7 @@ sub  create_apid_searchlist($,$)
   close FILE_APID_LIST ;
   return ( $apids);
 }
+
 #########################################################################
 #@apid_decode_list = get_apid_decode_list();
 #########################################################################
@@ -508,17 +590,53 @@ sub get_apid_decode_list($)
 
   return(@dlist);
 }
+
+
+
+#########################################################################
+#@apid_m3sd_list = get_apid_m3sd_list();
+#########################################################################
+sub get_apid_m3sd_list($)
+{
+  my $input=$_[0];
+  my @mlist=();
+  my $fn_moc="$script_dir/dsdf_apid_list_m3sd_moc";
+  my $fn_rtmoc="$script_dir/dsdf_apid_list_m3sd_rtmon";
+  my $fn_hsb="$script_dir/dsdf_apid_list_m3sd_hsb";
+
+  # current only use moc option for src value
+  if($input eq "moc")
+  {
+    open(FILE_MEAN_APID_LIST, "$fn_moc") || die "Can't Open: <$fn_moc> file: $!\n";
+    while (<FILE_MEAN_APID_LIST>)
+    {
+        push(@mlist, $_); 
+    }
+    close(FILE_MEAN_LIST);
+  }
+  else
+  {
+    if($dflg == 1) {print LF "--->DEBUG:MESSAGE:get_apid_mean_list:got not valid value <$input>. Exiting.\n";}
+  }
+  if($dflg == 1) {print LF "--->DEBUG:MESSAGE:get_apid_mean_list:returning decode list:@mlist\n";}
+
+  return(@mlist);
+}
+
+
 #########################################################################
 #%decode_status_hk = do_process_dayfile(@apid_decode_list);
 #########################################################################
-sub do_process_dayfile($,$,$,@)
+sub do_process_dayfile($,$,$,$,$)
 {
   #local variables
-  my(@filelist,$file,$lu,$decode_apid,$src,$arg1,$arg2,$arg3,$arg4,$arg5,$arg6,@failed_to_decode_list);
-  @failed_to_decode_list=();
+  my $found_decode_apid, $found_m3sd_apid;
+  my(@filelist,$file,$lu,$decode_apid,$src,$arg1,$arg2,$arg3,$arg4,$arg5,$arg6);
+  $successful_m3sd_files_processed=0;
+  $successful_decode_files_processed=0;
 
   #passed arguments dropoff directory for dayfiles, source and decode apid list 
-  my ($indir,$lu,$src,$alist,@dlist)=@_;
+  my ($indir,$lu,$src,$ref_failed_decode_list,$ref_failed_m3sd_list)=@_;
 
   #get dayfiles in doff_dir
   #open dir and read all files there
@@ -557,83 +675,24 @@ sub do_process_dayfile($,$,$,@)
       next;
     }
    
+    # call do_decode_dayfile to process dayfiles for decode-list of apids
     # set found flag to 0 meaning meaning set merged flag to 0 because apid not on decode list
     $found_decode_apid=0;
-
-    # check if file is on list to decode
-    foreach $decode_apid  (@dlist)
+    $found_decode_apid=do_decode_dayfile($indir,$lu,$src,$file,$ref_failed_decode_list);
+    if($found_decode_apid eq 1)
     {
-       $decode_apid =~ s/\n//;
-       if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_process_dayfile:4:check if have match for <$decode_apid> value for file<$file>\n";}
+      $successful_decode_files_processed++;
+    }
+    if ($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_process_dayfile:3.1:got MERGE value <$found_decode_apid>\n";}
 
-      # if file is on list to decode then decode
-      if(substr($file,0,4) eq  $decode_apid )
-      {
-        #pick out files in @dlist for apids to decode
-        #got one to decode
-        if ($dflg == 1)
-        {
-          print LF "-->DEBUG:MESSAGE:do_process_dayfile:5:FOUND apid to process:<$decode_apid>\n";
-          print LF "-->DEBUG:MESSAGE:do_process_dayfile:6:FOUND file to process <$file>\n";
-        }
-
-        # Execute decode dayfile on day file
-        # decode and write to drms only - create NO report!
-        # LOG #
-        if ($dflg == 1)
-        {
-          print LF "-->DEBUG:MESSAGE:do_process_dayfile:7:exec command <$exec_dir/decode_dayfile>\n";
-          print LF "-->DEBUG:MESSAGE:do_process_dayfile:8:source:<$src>\n";
-          print LF "-->DEBUG:MESSAGE:do_process_dayfile:9:in file is <$indir/$file>\n";
-        }
-        printf(LF "-->Start running decode_dayfile for src=<%s> and dayfile=<%s> at %s\n",$src,$file,get_current_time());
-
-        # decode dayfile
-        $log=`$exec_dir/decode_dayfile  src=$src in=$indir/$file   2>&1`; 
-
-        # check status returned when executing decode_dayfile
-        $log =~ /(ERROR)/g ; #regular exp - look for field
-        if( $1 eq "ERROR" )
-        {
-             # if decode_dayfile exec failed set merged=-1 for ingest_dayfile.pl
-             print LF "ERROR:Status failed when executing decode_dayfile. Exiting script dsdf.pl.\nLOG returned:$log:\n";
-             # set found flag to -1 meaning set merged flag to -1 because on decode list but unsuccessfully decoded dayfile
-             $found_decode_apid = -1;
-
-             # push on list dayfiles failed to decode 
-             push(@failed_to_decode_list,$file); 
-
-        }#end if file on list of files to decode
-        else
-        {
-          #check for warning
-          $log =~ /(WARNING|Warning)/g;
-          if ($1 eq "WARNING" or $1 eq "Warning")
-          {
-            # Log #
-            printf(LF "-->Completed executing decode_dayfile with status PASSED at %s\n-->But got warning messages:<%s>\n",get_current_time(),$log);
-            # set found flag to 1 meaning set merged flag to 1 because on decode list and successfully decoded dayfile
-            $found_decode_apid = 1;
-          }
-          else
-          {
-            # Log #
-            printf(LF "-->Completed executing decode_dayfile with status PASSED at %s\n",get_current_time());
-
-            # set found flag to 1 meaning set merged flag to 1 because on decode list and successfully decoded dayfile
-             $found_decode_apid = 1;
-          }
-
-        }#end of else decode_dayfile failed
-
-        # LOG #
-        if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_process_dayfile:14:file is <$file>\n\n";}
-
-        #found file's apid on decode-list and processed using decode_dayfile so exit for foreach thru decode list and get next file to do
-        last;
-
-      }#if in list to decode
-    }#foreach file check if should run decode_dayfile on file
+    # call do_m3sd_dayfile to process dayfiles for m3sd-list of apids
+    $found_m3sd_apid=1;#not used to set merged flag, since decode_dayfile results are used only
+    $found_decode_m3sd=do_m3sd_dayfile($indir,$lu,$src,$file, $ref_failed_m3sd_list);
+    if($found_decode_m3sd eq 1)
+    {
+      $successful_m3sd_files_processed++;
+    }
+    if ($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_process_dayfile:3.2:got ret value when ran load_m3sd <$found_m3sd_apid>\n"};
 
     # ingest dayfile with merged value based on found_decode_apid flag
     if ($found_decode_apid == 0)
@@ -656,8 +715,11 @@ sub do_process_dayfile($,$,$,@)
  
   # close directory
   closedir (DIR_INFILE);
-  return (@failed_to_decode_list);
+  return ($successful_decode_files_processed,$successful_m3sd_files_processed);
 }
+
+
+
 ##########################################################################
 # subroutine get_current_time()                                          #
 ##########################################################################
@@ -669,7 +731,7 @@ sub get_current_time()
   $year = 1900 + $yearOffset;
   $month= $monthOffset + 1;
   #create todays date and time format 
-  $new_date= sprintf("%4d.%02.2d.%02.2d_%02.2d:%02.2d:%02.2d",$year,$month,$dayOfMonth,$hour,$minute,$second);
+  $new_date= sprintf("%4d.%02.2d.%02.2d_%02.2d:%02.2d:%02.2d UTC",$year,$month,$dayOfMonth,$hour,$minute,$second);
   return ( $new_date);
 }
 
@@ -737,6 +799,8 @@ sub do_ingest_dayfile($,$,$,$)
 
 }
 
+
+
 #############################################################################
 # subroutine get_df_date                                                    #
 #############################################################################
@@ -781,5 +845,264 @@ sub get_df_date($,$)
 
   #return value yyyy.mm.dd
   return ($date_for_dayfile);
+
+}
+
+
+
+#############################################################################
+# subroutine do_decode_dayfile -call decode_dayfile executable              #
+#############################################################################
+sub do_decode_dayfile($,$,$,$,$)
+{
+
+  # set input arguments
+  my($indir,$lu,$src,$file,$ref_failed_list)=@_;
+
+  # local variable
+  my @decode_list;
+  my $found_decode_apid;
+
+  # set found flag to 0 meaning meaning set merged flag to 0 because apid not on decode list
+  $found_decode_apid=0;
+
+  # get apidlist_to_decode_moc or apidlist_to_decode_rtmon based on $source value
+  @decode_list = get_apid_decode_list($source);
+  if($dflg == 1) {print LF "--->DEBUG:MESSAGE:dsdf.pl:main:apid to decode::@decode_list\n";}
+
+  # check if file is on list to decode
+  foreach $decode_apid  (@decode_list)
+  {
+    $decode_apid =~ s/\n//;
+    if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_process_dayfile:4:check if have match for <$decode_apid> value for file<$file>\n";}
+
+    # if file is on list to decode then decode
+    if(substr($file,0,4) eq  $decode_apid )
+    {
+      #pick out files in @dlist for apids to decode
+      #got one to decode
+      if ($dflg == 1)
+      {
+        print LF "-->DEBUG:MESSAGE:do_process_dayfile:5:FOUND apid to process:<$decode_apid>\n";
+        print LF "-->DEBUG:MESSAGE:do_process_dayfile:6:FOUND file to process <$file>\n";
+      }
+
+      # Execute decode dayfile on day file
+      # decode and write to drms only - create NO report!
+      # LOG #
+      if ($dflg == 1)
+      {
+        print LF "-->DEBUG:MESSAGE:do_process_dayfile:7:exec command <$exec_dir/decode_dayfile>\n";
+        print LF "-->DEBUG:MESSAGE:do_process_dayfile:8:source:<$src>\n";
+        print LF "-->DEBUG:MESSAGE:do_process_dayfile:9:in file is <$indir/$file>\n";
+      }
+      printf(LF "-->Start running decode_dayfile for src=<%s> and dayfile=<%s> at %s\n",$src,$file,get_current_time());
+
+      # decode dayfile
+      $log=`$exec_dir/decode_dayfile  src=$src in=$indir/$file   2>&1`; 
+
+      # check status returned when executing decode_dayfile
+      $log =~ /(ERROR)/g ; #regular exp - look for field
+      if( $1 eq "ERROR" )
+      {
+        # if decode_dayfile exec failed set merged=-1 for ingest_dayfile.pl
+        print LF "ERROR:Status failed when executing decode_dayfile. Exiting script dsdf.pl.\nLOG returned:$log:\n";
+        # set found flag to -1 meaning set merged flag to -1 because on decode list but unsuccessfully decoded dayfile
+        $found_decode_apid = -1;
+
+        # push on list dayfiles failed to decode 
+        push(@$ref_failed_list,$file); 
+
+      }#end if error found in log results of decode_dayfile
+      else
+      {
+        #check for warning
+        $log =~ /(WARNING|Warning)/g;
+        if ($1 eq "WARNING" or $1 eq "Warning")
+        {
+          # Log #
+          printf(LF "-->Completed executing decode_dayfile with status PASSED at %s\n-->But got warning messages:<%s>\n",get_current_time(),$log);
+          # set found flag to 1 meaning set merged flag to 1 because on decode list and successfully decoded dayfile
+          $found_decode_apid = 1;
+        }
+        else
+        {
+          # Log #
+          printf(LF "-->Completed executing decode_dayfile with status PASSED at %s\n",get_current_time());
+
+          # set found flag to 1 meaning set merged flag to 1 because on decode list and successfully decoded dayfile
+          $found_decode_apid = 1;
+        }
+
+      }#end of else decode_dayfile had no errors in log results
+
+      # LOG #
+      if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_process_dayfile:14:file is <$file>\n\n";}
+
+      #found file's apid on decode-list and processed using decode_dayfile so exit for foreach thru decode list and get next file to do
+      last;
+
+    }#if in list to decode
+  }#foreach file check if should run decode_dayfile on file
+
+  # Return MERGE value setting to use to ingest dayfile
+  return($found_decode_apid);
+
+}# end do_decode_dayfile function
+
+
+
+#############################################################################
+# subroutine do_m3sd_dayfile -call load_m3sd executable                     #
+#############################################################################
+sub do_m3sd_dayfile($,$,$,$,$)
+{
+
+  # set input arguments
+  my($indir,$lu,$src,$file,$ref_failed_list)=@_;
+
+  # local variable
+  my @m3sd_list;
+  my $found_m3sd_apid;
+
+  # set found flag to 0 meaning meaning set merged flag to 0 because apid not on m3sd list
+  $found_m3sd_apid=0;
+
+  # get apidlist_to_m3sd_moc or apidlist_to_m3sd_rtmon based on $source value
+  @m3sd_list = get_apid_m3sd_list($src);
+  if($dflg == 1) {print LF "--->DEBUG:MESSAGE:do_m3sd_dayfile:apid to do load_m3sd processing::@m3sd_list\n";}
+
+  # check if file is on list to decode
+  foreach $m3sd_apid  (@m3sd_list)
+  {
+    $m3sd_apid =~ s/\n//;
+    if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:4:check if have match for <$m3sd_apid> value for file<$file>\n";}
+
+    # if file is on list to decode then decode
+    if(substr($file,2,2) eq  $m3sd_apid )
+    {
+      #pick out files in @m3sd_list for apids to process using load_m3sd
+      #got one to decode
+      if ($dflg == 1)
+      {
+        print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:5:FOUND apid to process:<$m3sd_apid>\n";
+        print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:6:FOUND file to process <$file>\n";
+      }
+
+      # get instruction file based on apid
+      $instruct_file=get_instruction_file( $m3sd_apid);
+      if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:-:Check FOUND instruction file to process <$instruct_file>\n"};
+      if ($instruct_file eq "")
+      {
+         print LF "-->ERROR:do_m3sd_dayfile:-: Could not find instruction file to process <$instruct_file>. Skipping processing of file<$file>\n";
+         push(@$ref_failed_list,$file); 
+         $found_m3sd_apid = -1;
+         last;
+      }
+
+      # Execute decode dayfile on day file
+      # decode and write to drms only - create NO report!
+      # LOG #
+      if ($dflg == 1)
+      {
+        print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:7:exec command <$exec_dir/load_m3sd>\n";
+        print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:8:source:<$src>\n";
+        print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:9:in file is <$indir/$file>\n";
+      }
+      printf(LF "-->Start running load_m3sd for src=<%s> and dayfile=<%s> at %s\n",$src,$file,get_current_time());
+
+      # decode dayfile
+      $log=`$exec_dir/load_m3sd  in=$indir/$file isf=$instruct_file   2>&1`; 
+
+      # check status returned when executing decode_dayfile
+      $log =~ /(ERROR)/g ; #regular exp - look for field
+      if( $1 eq "ERROR" )
+      {
+        # if decode_dayfile exec failed set merged=-1 for ingest_dayfile.pl
+        print LF "ERROR:Status failed when executing load_m3sd. Exiting script dsdf.pl.\nLOG returned:$log:\n";
+        # set found flag to -1 meaning set merged flag to -1 because on decode list but unsuccessfully decoded dayfile
+        $found_m3sd_apid = -1;
+
+        # push on list dayfiles failed to process using load_m3sd
+        #push(@failed_to_m3sd_list,$file); 
+        push(@$ref_failed_list,$file); 
+
+      }#end if error found in log results of decode_dayfile
+      else
+      {
+        #check for warning
+        $log =~ /(WARNING|Warning)/g;
+        if ($1 eq "WARNING" or $1 eq "Warning")
+        {
+          # Log #
+          printf(LF "-->Completed executing load_m3sd with status PASSED at %s\n-->But got warning messages:<%s>\n",get_current_time(),$log);
+          # set found flag to 1 meaning set merged flag to 1 because on decode list and successfully decoded dayfile
+          $found_m3sd_apid = 1;
+        }
+        else #got no errors or warning- passed
+        { 
+          # Log #
+          printf(LF "-->Completed executing load_m3sd with status PASSED at %s\n",get_current_time());
+
+          # set found flag to 1 meaning set merged flag to 1 because on decode list and successfully decoded dayfile
+          $found_m3sd_apid = 1;
+        }
+
+      }#end of else load_m3sd had no errors in log results
+
+      # LOG #
+      if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:14:file is <$file>\n\n";}
+
+      #found file's apid on m3sd-list and processed using load_m3sd so exit for foreach thru decode list and get next file to do
+      last;
+
+    }#if in list to decode
+  }#foreach file check if should run load_m3sd on file
+
+  # Return MERGE value setting to use to ingest dayfile
+  return($found_m3sd_apid);
+
+}
+
+
+
+
+#############################################################################
+# subroutine get_instruction_file -gets file for 17,19,21,38,40 only!       #
+#############################################################################
+sub get_instruction_file($)
+{
+  my $inst;
+  $inst="";
+  my $apid=$_[0];
+  
+  if($apid == 17)
+  {
+    $inst=$inst_apid_17;
+  }
+  elsif($apid == 19)
+  {
+    $inst=$inst_apid_19;
+  }
+  elsif($apid == 21)
+  {
+    $inst=$inst_apid_21;
+  }
+  elsif($apid == 38)
+  {
+    $inst=$inst_apid_38;
+  }
+  elsif($apid == 40)
+  {
+    $inst=$inst_apid_40;
+  }
+  else
+  {
+     print LF "-->ERROR:do_m3sd_dayfile:Cannot find instruction file for this apid <$m3sd_apid>. ";
+     print LF "Add to script code for instruction file for this apid <$m3sd_apid>\n";
+     #return empty string
+  }
+
+  return ($inst);
 
 }
