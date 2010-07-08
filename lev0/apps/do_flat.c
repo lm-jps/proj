@@ -467,38 +467,36 @@ int do_flat_aia(LEV0LEV1 *info)
 	}
     }
 
-  if(hmiaiaflg) {                       //aia
-    int *oldvalues, *spikelocs, *newvalues, *toprow, *botrow, *tmprow;
-    int aia_status, i, level = 7, niter = 3, nbads, nspikes;
-    float frac = 0.5;
+  {
+    int *oldvalues, *spikelocs, *newvalues;
+    int aia_status, i, level = 7, niter = 3, nbads, nspikes, respike, rstatus;
+    float frac = 0.8;
+    int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
 
-    /* flip image */
-    botrow = l0l1->dat1.adata1A;
-    toprow = botrow + 4095*4096;
-    tmprow = (int *) malloc(sizeof(int)*4096);
-    for (i = 0; i < 2048; i++) {
-      memcpy(tmprow, toprow, 16384);
-      memcpy(toprow, botrow, 16384);
-      memcpy(botrow, tmprow, 16384);
-      botrow += 4096;
-      toprow -= 4096;
+    switch (wl) {
+      case 1600:
+      case 1700:
+      case 4500:
+        respike = 1;
+        break;
+       default:
+       respike = 0;
+       break;
     }
-    free(tmprow);
-
+    if (respike) niter = 0; else niter = 3;
     nbads = ArrayBad->axis[0];
-nbads = 0; /* FIXME remove this line when have "blob format" bad pixel files */
-    aia_status = aia_despike(l0l1->dat1.adata1A, NULL, 4096, 4096, frac, level,
-                 niter, &(l0l1->adatabad), nbads, &nspikes, &oldvalues,
+    aia_status = aia_despike(info->dat1.adata1A, NULL, 4096, 4096, frac, level,
+                 niter, info->adatabad, nbads, &nspikes, &oldvalues,
                  &spikelocs, &newvalues);
     set_nspikes(nspikes);
     set_spikelocs(spikelocs);
     set_oldvalues(oldvalues);
     set_newvalues(newvalues);
-  } else {
-  //dstatus = cosmic_rays(rs, l0l1->dat1.adata1A, l0l1->adatabad, !!TBD, 6.0, !!TBD);
-  }
-
-
+    for (i=0; i<4096*4096; i++) {
+      if (out[i] < 0 && out[i] != DRMS_MISSING_INT) out[i] = 0;
+      if (out[i] > 32767) out[i] = 32767;
+    }
+  } 
     //
     // do statistics
     //
@@ -547,6 +545,43 @@ nbads = 0; /* FIXME remove this line when have "blob format" bad pixel files */
 		    (dtmp*dtmp) - 3;
 	    }
 	}
+
+        {                       //aia
+            int n=0, sum=0, dp[8];
+            dp[0] =  1; dp[1] = 10; dp[2] = 25; dp[3] = 75;
+            dp[4] = 90; dp[5] = 95; dp[6] = 98; dp[7] = 99;
+            for (i=min; n<8; ++i) {
+                sum += hist[i];
+                if (sum > dp[n]*npix/100) switch (n) {
+                    case 0:
+                        drms_setkey_float(rs, "DATAP01", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*npix/100) n++;
+                    case 1:
+                        drms_setkey_float(rs, "DATAP10", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*npix/100) n++;
+                    case 2:
+                        drms_setkey_float(rs, "DATAP25", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*npix/100) n++;
+                    case 3:
+                        drms_setkey_float(rs, "DATAP75", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*npix/100) n++;
+                    case 4:
+                        drms_setkey_float(rs, "DATAP90", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*npix/100) n++;
+                    case 5:
+                        drms_setkey_float(rs, "DATAP95", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*npix/100) n++;
+                    case 6:
+                        drms_setkey_float(rs, "DATAP98", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*npix/100) n++;
+                    case 7:
+                        drms_setkey_float(rs, "DATAP99", 1.0 + i + MINOUT);
+                        n++;
+                        break;
+                }
+                if (i>max) n++;
+            }
+        }
     }
 
     return 0;
