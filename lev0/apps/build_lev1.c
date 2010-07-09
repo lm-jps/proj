@@ -158,7 +158,7 @@ int missflg[NUMRECLEV1];
 
 char logname[128];
 char argdsin[128], argdsout[128], arglogfile[128], arginstru[80];
-char argbx[80], argex[80], argquick[80], argmode[80];
+char argbx[80], argex[80], argquick[80], argmode[80], argdsaiabad[80];
 char timetag[32];
 char tlmseriesname[128];	// e.g. hmi.tlm
 char lev0seriesname[128];	// e.g. hmi.lev0
@@ -1064,10 +1064,10 @@ void setup()
   }
   sprintf(argquick, "quicklook=%d", quicklook);
   sprintf(arglogfile, "logfile=%s", logname);
-  printk("%s %s %s %s %s %s %s %s\n", 
-	argmode, arginstru, argdsin, argdsout, argbx, argex, argquick, arglogfile);
-  printf("%s %s %s %s %s %s %s %s\n", 
-	argmode, arginstru, argdsin, argdsout, argbx, argex, argquick, arglogfile);
+  printk("%s %s %s %s %s %s %s %s %s\n", 
+	argmode, arginstru, argdsin, argdsout, argbx, argex, argquick, arglogfile, argdsaiabad);
+  printf("%s %s %s %s %s %s %s %s %s\n", 
+	argmode, arginstru, argdsin, argdsout, argbx, argex, argquick, arglogfile, argdsaiabad);
   if(!restartflg) {
     //printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
     //		tlmseriesname, lev0seriesname);
@@ -1118,6 +1118,8 @@ int DoIt(void)
   dsout = cmdparams_get_str(&cmdparams, "dsout", NULL);
   dsff = cmdparams_get_str(&cmdparams, "dsff", NULL);
   dsaiabad = cmdparams_get_str(&cmdparams, "dsaiabad", NULL);
+  if (strcmp(dsaiabad, NOTSPECIFIED)) sprintf(argdsaiabad, "dsaiabad=%s", dsaiabad);
+  else sprintf(argdsaiabad, " ");
   brec = cmdparams_get_int(&cmdparams, "brec", NULL);
   erec = cmdparams_get_int(&cmdparams, "erec", NULL);
   bfsn = cmdparams_get_int(&cmdparams, "bfsn", NULL);
