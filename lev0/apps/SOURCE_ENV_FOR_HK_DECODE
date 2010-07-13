@@ -1,7 +1,7 @@
 ### Environment Variable Used To Run Lev0 HK Decode Code --Made to run on Production-fix for local workspace
 setenv HK_CONFIG_DIRECTORY               /home/production/cvs/TBL_JSOC/lev0/hk_config_file/
 setenv HK_JSVNMAP_DIRECTORY              /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod
-setenv HK_DF_HSB_DIRECTORY               /tmp21/production/lev0/hk_hsb_dayfile
+setenv HK_DF_HSB_DIRECTORY               /tmp22/production/lev0/hk_hsb_dayfile
 setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
 setenv HK_PREFIX_JSVNMAP_FILENAME_HMI    HMI
 setenv HK_PREFIX_JSVNMAP_FILENAME_AIA    AIA
