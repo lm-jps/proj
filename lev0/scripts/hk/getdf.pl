@@ -45,7 +45,7 @@ $subject_email="JSOC:WARNING:Ingesting HSB dayfiles: status:no files loaded toda
 # set subject mail arguments based on either HSB or RTMON args
 if ($src eq "hsb")
 {
-  $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/tmp21/production/lev0/hk_hsb_dayfile";
+  $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/tmp22/production/lev0/hk_hsb_dayfile";
   $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-hsb";
   $subject_email="JSOC:WARNING:Ingesting HSB dayfiles: status:no files loaded today";
 }
@@ -59,7 +59,7 @@ elsif ($src eq "egsefm")
 }
 elsif ($src eq "rtmon")
 {
-  $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/tmp21/production/lev0/hk_rtmon_dayfile";
+  $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/tmp22/production/lev0/hk_rtmon_dayfile";
   $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-rtmon";
   $subject_email="JSOC:WARNING:Ingesting RTMON dayfiles: status:no files loaded today";
 }
