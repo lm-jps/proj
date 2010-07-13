@@ -2,7 +2,7 @@
 ##############################################################################
 # Name:        dsdf.pl  - Decode and Save Day Files                          #
 # Description: Get dayfiles from moc server dropoff directory or rtmon       #
-#              directory. Move files over to /tmp21/production/lev0/.        #
+#              directory. Move files over to /tmp22/production/lev0/.        #
 #              Then if dayfiles apid is in list of apids to decode then      #
 #              execute decode_dayfile on dayfile. Then if dayfile apid is in #
 #              list to process min,max,mean and standard deviation keywords  #
@@ -79,10 +79,10 @@ $inst_apid_40="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/aia.iss_1_2_status.tx
 if ($source eq "moc")
 {
   # moc pickup directory setup:
-  $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp21/jsoc/sdo/mocprods/lzp";
+  $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp22/jsoc/sdo/mocprods/lzp";
 
   # moc dropoff directory setup:
-  $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp21/production/lev0/hk_moc_dayfile";
+  $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp22/production/lev0/hk_moc_dayfile";
 
   # moc common email arguments
   $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
@@ -104,7 +104,7 @@ elsif ($source eq "rtmon")
   $pup_dir=$ENV{'DF_PICKUP_RTMON_FILES'}="/hmisdp-mon/log/packets";
 
   # rtmon dropoff directory setup 
-  $doff_dir=$ENV{'DF_DROPOFF_RTMON_FILES'}="/tmp21/production/lev0/hk_rtmon_dayfile";
+  $doff_dir=$ENV{'DF_DROPOFF_RTMON_FILES'}="/tmp22/production/lev0/hk_rtmon_dayfile";
 
   # rtmon common email variables
   $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
@@ -200,7 +200,7 @@ print LF "--->Starting script dsdf.pl\n";
 # send message to users running script at command line so they know something is working
 print "...running dsdf.pl script\n...please wait to finish\n...view status on run by doing: tail -f $script_dir\/$logfile\n";
 
-# (11)"move" files over to /tmp21/production/lev0/hk_moc_dayfile for moc
+# (11)"move" files over to /tmp22/production/lev0/hk_moc_dayfile for moc
 # or "copy" files to /tmp02/production/lev0/hk_rtmon_dayfile for rtmon
 if ($source eq "moc")
 {

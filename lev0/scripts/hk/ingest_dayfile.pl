@@ -82,7 +82,7 @@
  elsif ($source eq "moc")
  {
    #for production#
-   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_moc_dayfile";
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp22/production/lev0/hk_moc_dayfile";
  }
  elsif ($source eq "egsefm")
  {
@@ -94,7 +94,7 @@
  elsif ($source eq "rtmon")
  {
    #for production#
-   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_rtmon_dayfile";
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp22/production/lev0/hk_rtmon_dayfile";
  }
  if($dflg) {print "INPUT FILES AT: $ENV{'DF_DAYFILE_DIRECTORY'}\n"};
 
