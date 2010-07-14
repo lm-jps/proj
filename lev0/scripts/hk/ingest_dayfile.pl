@@ -77,7 +77,7 @@
  if ($source eq "hsb")
  {
    #for production#
-   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp21/production/lev0/hk_hsb_dayfile";
+   $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp22/production/lev0/hk_hsb_dayfile";
  }
  elsif ($source eq "moc")
  {
