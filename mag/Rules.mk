@@ -10,6 +10,10 @@ d               := $(dir)
 # -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/pfss
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/ambig
+-include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/ident
+-include                $(SRCDIR)/$(dir)/Rules.mk
 
 # Standard things
 d               := $(dirstack_$(sp))
