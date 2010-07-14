@@ -14,6 +14,8 @@ dir     := $(d)/ambig
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/ident
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/patch
+-include                $(SRCDIR)/$(dir)/Rules.mk
 
 # Standard things
 d               := $(dirstack_$(sp))
