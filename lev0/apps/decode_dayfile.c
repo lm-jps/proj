@@ -1,3 +1,4 @@
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_dayfile.c,v 1.23 2010/07/20 16:57:40 carl Exp $"
 /*############################################################################
 # Name:        decode_dayfile.c - Decode Dayfiles                            #
 # Description: Decode dayfile decodes hk packet by sending hk packets to     #
