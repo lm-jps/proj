@@ -1,3 +1,4 @@
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk.c,v 1.11 2010/07/20 20:57:02 carl Exp $" 
 /*****************************************************************************
  * Filename: decode_hk.c                                                     *
  * Author: Carl                                                              *
@@ -5,7 +6,6 @@
  * Description: This file contains modules to decode housekeeping data.      *
  * (C) Stanford University, 2005                                             *
  *****************************************************************************/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
