@@ -1,3 +1,4 @@
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/load_hk_config_files.c,v 1.8 2010/07/20 20:58:24 carl Exp $"
 /*****************************************************************************
  * Filename: load_hk_config_files.c                                          *
  * Author: Carl Cimilluca                                                    *
@@ -41,6 +42,7 @@
  * Revision History:                                                         *
  *****************************************************************************/
 
+
 
 #include <stdio.h>
 #include <stdlib.h>
