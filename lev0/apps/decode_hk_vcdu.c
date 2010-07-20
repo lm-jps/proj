@@ -1,3 +1,12 @@
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk_vcdu.c,v 1.10 2010/07/20 21:15:23 carl Exp $"
+/*****************************************************************************
+ * Filename: decode_hk_vcdu.c                                                *
+ * Author: Carl                                                              *
+ * Create Date: February, 2, 2008                                            *
+ * Description: This file contains modules to process housekeeping packets   *
+ *              from high speed bus.                                         *
+ * (C) Stanford University, 2008                                             *
+ ****************************************************************************/
 #include <stdio.h>
 #include <assert.h>
 #include "decode_hk.h"
