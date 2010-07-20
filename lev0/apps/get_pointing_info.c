@@ -144,7 +144,7 @@ int get_pointing_info(DRMS_Env_t *drms_env, TIME *tobs, int nobs, PTINFO **ptinf
 	    asdidx[i] = idx = find_closest(tasd, nrec, tobs[i]);
 	    if (idx < 0) continue;	// no match for whatever reason; give up
 
-	    for (j=i-1; j>=0; --j)
+	    for (j=i-1; j>=k; --j)
 		if (asdidx[i] == asdidx[j]) {	// have used this ASD packet before
 		    memcpy(&p[i], &p[j], sizeof(PTINFO));
 		    done = 1;
