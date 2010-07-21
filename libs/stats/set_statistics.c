@@ -8,16 +8,26 @@
 
  // set_statistics must be called after any use of drms_copykeys.
 
+ // The return value is 0 for OK and the return value
+ // from fstats or dstats or fstats2 or dstats2 whichever was called by
+ // set_statistics depending on mode and the data type.
+
+ // The set_statistics function will compute AND populate keywords for:
+ //   DATAMEAN, DATAMIN, DATAMAX, DATAMEDN, DATARMS, DATASKEW, DATAKURT,
+ //   DATAVALS and MISSVALS if they are present.
+
+ // If the keyword scope is per segment, then the appropriate segment specific
+ // keywords will be set.
+
 int set_statistics(DRMS_Segment_t *seg, DRMS_Array_t *data, int mode)
   {
   int status;
   DRMS_Record_t *rec;
-  int i, n, nok, ntot, segnum, nsegs;
-  float *fdata;
-  double *ddata;
+  int i, n, nok, segnum, nsegs;
   double min, max, medn, mean, sig, skew, kurt;
-  char name[DRMS_MAXNAMELEN];
   char segstr[10];
+  DRMS_Keyword_t *thiskey;
+
 
   if (!seg || !data) return(DRMS_ERROR_INVALIDDATA);
   rec = seg->record;
@@ -26,7 +36,7 @@ int set_statistics(DRMS_Segment_t *seg, DRMS_Array_t *data, int mode)
   segnum = seg->info->segnum;
 
   if (nsegs>1)
-    sprintf(segstr, "[%d]", segnum);
+    sprintf(segstr, "_%03d", segnum);
   else
     segstr[0] = '\0';
 
@@ -43,23 +53,29 @@ int set_statistics(DRMS_Segment_t *seg, DRMS_Array_t *data, int mode)
   else if (data->type == DRMS_TYPE_DOUBLE)
     {
     if (mode)
-      status = fstats2(n, (float *)data->data, &min, &max, &medn, &mean, &sig, &skew, &kurt, &nok);
+      status = dstats2(n, (double *)data->data, &min, &max, &medn, &mean, &sig, &skew, &kurt, &nok);
     else
-      status = fstats(n, (float *)data->data, &min, &max, &medn, &mean, &sig, &skew, &kurt, &nok);
+      status = dstats(n, (double *)data->data, &min, &max, &medn, &mean, &sig, &skew, &kurt, &nok);
     }
-  if (status) return(status);
+  else return(-1);
 
-#define SETKEY(str,val) {				\
-  DRMS_Keyword_t *thiskey = drms_keyword_lookup(rec, str, 0); 		\
-  if (thiskey) 						\
+  if (status)
+    return(status);
+
+#define SETKEY(str,val) 				\
+  {							\
+  if (thiskey = drms_keyword_lookup(rec, str, 0))	\
+    drms_setkey_double(rec, str, val);  		\
+  else							\
     {							\
-    strcpy(name, str); 					\
-    if (thiskey->info->kwflags == kKeywordFlag_PerSegment) 	\
-      strcat(name, segstr); 				\
-    drms_setkey_double(rec, name, val); 		\
-    } 							\
+    char name[DRMS_MAXNAMELEN];				\
+    strcpy(name, str);	 				\
+    strcat(name, segstr); 				\
+    if ((thiskey = drms_keyword_lookup(rec, name, 0)) && ((thiskey->info->kwflags & 1) == kKeywordFlag_PerSegment))      \
+        drms_setkey_double(rec, name, val); 		\
+    }                                                 \
   }
- 
+
   SETKEY("DATAMEAN", mean);
   SETKEY("DATAMIN", min);
   SETKEY("DATAMAX", max);
@@ -67,11 +83,7 @@ int set_statistics(DRMS_Segment_t *seg, DRMS_Array_t *data, int mode)
   SETKEY("DATARMS", sig);
   SETKEY("DATASKEW", skew);
   SETKEY("DATAKURT", kurt);
-  if (drms_keyword_lookup(rec, "DATAVALS", 1))
-    ntot = drms_getkey_int(rec, "DATAVALS", 0) + (n - nok);
-  else
-    ntot = n;
-  SETKEY("MISSVALS", (double)(ntot-nok));
-  SETKEY("DATAVALS", (double)(nok));
+  SETKEY("DATAVALS", (double)nok);
+  SETKEY("MISSVALS", (double)(n - nok));
   return(0);
   }
