@@ -1,3 +1,5 @@
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/fstats.c,v 1.2 2010/07/21 00:47:35 phil Exp $"
+
 //CODE FROM KEH-CHENG, SLIGHTLY MODIFIED BY SEBASTIEN
 
 #include <stdlib.h>
