@@ -20,7 +20,7 @@ DLIBS = $(LIBD) -ldrms -lpq -lcfitsio -lz -lpthread -lm -lg2c -lgsl -lgslcblas
 FC = f77
 F90F = -c
 
-OBJ =	lfwrp.o limbfit.o limb.o expmax.o expfit.o
+OBJ =	lfwrp.o do_one_limbfit.o limbfit.o limb.o expmax.o expfit.o
 
 
 # DRMS module with FORTRAN routine
@@ -38,7 +38,7 @@ clean:
 	rm $(MODULE)
 
 .c.o:
-	$(CC) $(CCFLAGS) $(@:.o=.c) $(INCL) -DHMI
+	$(CC) $(CCFLAGS) $(@:.o=.c) $(INCL) 
 
 .f.o:
 	$(FC) $(F90F) $(@:.o=.f)
@@ -47,13 +47,16 @@ limb.o: limb.f
 	$(FC) $(F90F) limb.f
 
 expfit.o: expfit.c
-	$(CC) $(CCFLAGS) expfit.c $(INCL)  -DHMI
+	$(CC) $(CCFLAGS) expfit.c $(INCL) 
 
 expmax.o: expmax.c
-	$(CC) $(CCFLAGS) expmax.c $(INCL)  -DHMI
+	$(CC) $(CCFLAGS) expmax.c $(INCL)  
 
 limbfit.o: limbfit.c expmax.o expfit.o
-	$(CC) $(CCFLAGS) limbfit.c $(INCL)  -DHMI
+	$(CC) $(CCFLAGS) limbfit.c $(INCL)  
 
-lfwrp.o: lfwrp.c limbfit.o expmax.o expfit.o limb.o
-	$(CC) $(CCFLAGS) lfwrp.c $(INCL)  -DHMI
+do_one_limbfit.o: do_one_limbfit.c
+	$(CC) $(CCFLAGS) do_one_limbfit.c $(INCL) 
+
+lfwrp.o: lfwrp.c do_one_limbfit.o limbfit.o expmax.o expfit.o limb.o
+	$(CC) $(CCFLAGS) lfwrp.c $(INCL) 

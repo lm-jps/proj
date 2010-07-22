@@ -5,7 +5,7 @@ d			:= $(dir)
 
 # Local variables
 MODEXE_USEF_$(d)	:= $(addprefix $(d)/, lfwrp)
-SUPPOBJ_$(d)		:= $(addprefix $(d)/, limbfit limb expmax expfit)
+SUPPOBJ_$(d)		:= $(addprefix $(d)/, limbfit do_one_limbfit limb expmax expfit)
 
 MODEXE_USEF 		:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 MODEXE_USEF_SOCK_$(d)	:= $(MODEXE_USEF_$(d):%=%_sock)
@@ -24,7 +24,7 @@ S_$(d)			:= $(notdir $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/include -DHMI
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/include 
 
 $(MODEXE_USEF_$(d)):		LL_TGT := $(LL_TGT) -L/home/jsoc/linux_x86_64/ -lgsl -lgslcblas
 $(MODEXE_USEF_SOCK_$(d)):	LL_TGT := $(LL_TGT) -L/home/jsoc/linux_x86_64/ -lgsl -lgslcblas
