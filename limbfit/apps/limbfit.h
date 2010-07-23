@@ -23,7 +23,7 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V0.2r2" 
+#define CODE_VERSION 	"V1.2r0" 
 #define CODE_DATE 		"Wed Jul 21 09:32:15 PDT 2010" 
 
 //#define dsin	"hmi.lev1c_nrt[]"
@@ -32,6 +32,7 @@
 #define TMP_DIR	"~/TMP/"
 
 #define LOGMSG1	"LIMBFIT"
+#define NUMRECLEV1 12
 
 #define ERR_USAGE 							-1
 #define ERR_MALLOC_FAILED 					-11
@@ -94,38 +95,21 @@ typedef struct {		// output files content
 		
 	// result data
 	float*		fits_ldfs_data; 	// main data
-	float*		fits_fulldfs; 		// extension #6
-	float*		fits_alpha_beta;   	// extension #1
-//	double*		fits_params;   		// extension #2
-	double*		fits_as;   			// extension #1
-	double*		fits_es;   			// extension #2
-	double*		fits_r;    			// extension #3
-	float*		fits_ab_dataa;		// extension #4
-	float*		fits_ab_datab;		// extension #4
-	double*		fits_ip;    		// extension #5
+	float*		fits_fulldfs; 		// extension #2
+	float*		fits_alpha_beta1;   	// extension #0
+	float*		fits_alpha_beta2;   	// extension #0
+	double*		fits_params1;   		// extension #1
+	double*		fits_params2;   		// extension #1
 
 	// info to describe extension dimensions
 	long		fits_ldfs_naxis1;		//	ldf_nrow
 	long		fits_ldfs_naxis2;		//	ldf_ncol
-//	long		fits_fldfs_naxis1;		// 	fldf_nrow
-//	long 		fits_fldfs_naxis2;		//	fldf_ncol
-//	long 		fits_alpha_beta_naxis1;	//	alpha_beta_nrow
-//	long		fits_alpha_beta_naxis2;	//	alpha_beta_ncol
-//	long 		fits_params_naxis1;		//	params_nrow
-//	long		fits_params_naxis2;		//	params_ncol
-	long 		fits_as_nrows;		//	aeris_nrow
-	long		fits_as_tfields;	//	aes_ncol
-	long 		fits_es_nrows;		//	aeris_nrow
-	long		fits_es_tfields;	//	aes_ncol
-	long 		fits_r_nrows;		//	aeris_nrow
-	long		fits_r_tfields;		//	1
-	long 		fits_ab_nrows;		//	ab_nrow
-	long		fits_ab_tfields;	//	ab_ncol
-	long 		fits_ip_nrows;		//	aeris_nrow
-	long		fits_ip_tfields;	//	1
-	long		fits_fldfs_nrows;	//	fulldf_nrow
-	long		fits_fldfs_tfields;	// 	for fits_fullldfs
-
+	long		fits_fldfs_nrows;		// 	fldf_nrow
+	long 		fits_fldfs_tfields;		//	fldf_ncol
+	long 		fits_ab_nrows;			//	alpha_beta_nrow
+	long		fits_ab_tfields;		//	alpha_beta_ncol
+	long 		fits_params_nrows;		//	params_nrow
+	long		fits_params_tfields;	//	params_ncol
 
 	// processing parameters to save
 	int			ann_wd;
@@ -143,10 +127,22 @@ typedef struct {		// output files content
 
 } LIMBFIT_OUTPUT;
 
+//Initialization of the structure to pass to the limbfit routine
+static LIMBFIT_INPUT limbfit_vars ;
+static LIMBFIT_INPUT *lfv = &limbfit_vars;
+static LIMBFIT_OUTPUT limbfit_res ;
+static LIMBFIT_OUTPUT *lfr = &limbfit_res;
+
+static DRMS_Array_t *img;
+static DRMS_Array_t *data_array;
+
+
+
 int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6], long N, int debug, FILE *fd);
 double fin_min(double A[6], double m, int range, int debug, FILE *fd);
 int limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,int debug);
 void limb_(float *anls, long *jk, float *cmx, float *cmy, float *r, int *nitr, int *ncut, int *nang, 
 			int *nprf, float* rprf, float* lprf, int *nreg, float *rsi, float *rso, float *dx, float *dy, 
 			int *jreg, int *jang, int *jprf, float* alph, float* beta, int *ifail, float* b0, int *centyp); 
-int do_one_limbfit(LIMBFIT_INPUT *info,DRMS_Record_t *record_in,int debug);
+int process_n_records(char * open_dsname, char *dsout, FILE *opf, int debug);
+int do_one_limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,DRMS_Record_t *record_in,DRMS_Record_t *record_out,int debug);

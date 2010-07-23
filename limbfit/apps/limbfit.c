@@ -6,7 +6,7 @@
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V0.2r02" 
+	#define CODE_VERSION 	"V1.2r0" 
 	#define CODE_DATE 		"Wed Jul 21 09:32:15 PDT 2010" 
 */
 
@@ -15,7 +15,6 @@
 int limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,int debug)
 {
 if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit\n",LOGMSG1);
-	printf("4\n");
 
 /************************************************************************
 					INIT VARS coming from build_lev1.c
@@ -236,7 +235,6 @@ v = (float *) malloc(sizeof(float) * S);
 	{
 		fprintf(info->opf,"%s DEBUG_INFO in limfit jk = %ld\n",LOGMSG1, jk);
 	}
-		printf("%s DEBUG_INFO in limfit jk = %ld\n",LOGMSG1, jk);
 	if (jk >= S) return ERR_SIZE_ANN_TOO_BIG;
 
 /************************************************************************/
@@ -357,31 +355,40 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		float h;
 			
 		// for saving them in FITS file
-		// for saving them in FITS file
-		float *save_ldf, *save_alpha, *save_beta, *save_fulldf; //,*save_beta1,*save_beta2;
-		double *save_as, *save_es, *save_radius, *save_ip;
-		long aeris_nrow=nang+1, aes_ncol=6;
+		float *save_ldf, *save_alpha_beta1, *save_alpha_beta2, *save_fulldf; 
+		double *save_params1, *save_params2;
+		long nb_p_as=6, nb_p_es=6, nb_p_radius=1, nb_p_ip=1; 
+		long params_nrow=nang+1, params_ncol=nb_p_as+nb_p_es+nb_p_radius+nb_p_ip;
 		long ldf_nrow=nang+2, ldf_ncol=nprf;  //ii -nbr of ldfs, jj -nbr of points for each ldf
 		long ab_nrow=nreg, ab_ncol=2;
-		long fulldf_nrow=nang+2, fulldf_ncol=nprf ;
+		long fulldf_nrow=nang+2, fulldf_ncol=nprf;
 
-	    save_as  	= (double *) malloc((aeris_nrow*aes_ncol)*sizeof(double));  
-			if(!save_as) return ERR_MALLOC_FAILED;
-	    save_es  	= (double *) malloc((aeris_nrow*aes_ncol)*sizeof(double));
-			if(!save_es) return ERR_MALLOC_FAILED;
-	    save_radius = (double *) malloc(aeris_nrow*sizeof(double));
-			if(!save_radius) return ERR_MALLOC_FAILED;
-	    save_ip		= (double *) malloc(aeris_nrow*sizeof(double));
-			if(!save_ip) return ERR_MALLOC_FAILED;
 	    save_ldf 	= (float *) malloc((ldf_nrow*ldf_ncol)*sizeof(float));
 			if(!save_ldf) return ERR_MALLOC_FAILED;
-	    save_alpha  = (float *) malloc((ab_nrow)*sizeof(float));
-			if(!save_alpha) return ERR_MALLOC_FAILED;
-	    save_beta   = (float *) malloc((ab_nrow)*sizeof(float));
-			if(!save_beta) return ERR_MALLOC_FAILED;
+	    save_alpha_beta1  = (float *) malloc((ab_nrow*ab_ncol)*sizeof(float));
+			if(!save_alpha_beta1) return ERR_MALLOC_FAILED;
+	    save_alpha_beta2 = (float *) malloc((ab_nrow*ab_ncol)*sizeof(float));
+			if(!save_alpha_beta2) return ERR_MALLOC_FAILED;
+	    save_params1 = (double *) malloc((params_nrow*params_ncol)*sizeof(double));  
+			if(!save_params1) return ERR_MALLOC_FAILED;
+	    save_params2 = (double *) malloc((params_nrow*params_ncol)*sizeof(double));  
+			if(!save_params2) return ERR_MALLOC_FAILED;
 		//for later use
 	    save_fulldf 	= (float *) malloc((fulldf_nrow*fulldf_ncol)*sizeof(float));
 			if(!save_fulldf) return ERR_MALLOC_FAILED;
+/*
+printf("ici %p\n",save_ldf);
+printf("ici %p\n",save_params1);
+printf("ici %p\n",save_params2);
+printf("ici %p\n",save_alpha_beta1);
+printf("ici %p\n",save_alpha_beta2);
+printf("ici %p\n",save_fulldf);
+*/
+			
+		long zero_as=0;
+		long zero_es=params_nrow*nb_p_as;
+		long zero_r =params_nrow*(nb_p_as+nb_p_es);
+		long zero_ip=params_nrow*(nb_p_as+nb_p_es+nb_p_radius);
 			
 		for (cont=0; cont<=nang; cont++)
 		{	 
@@ -501,18 +508,23 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 				{	
 					fprintf(info->opf,"%s DEBUG_INFO in limfit Inflection point too close to annulus data border\n",LOGMSG1);
 				}
-				for (c=0;c<aes_ncol;c++) erro[c]=0.;
+				for (c=0;c<nb_p_as;c++) erro[c]=0.;
 				radius=ip;
-				save_ip[cont]=0.;
+				save_params1[cont*params_ncol+nb_p_as+nb_p_es+nb_p_radius]=0.;
+				save_params2[zero_ip+cont]=0.;
 			}
 			// save them
-			for (c=0;c<aes_ncol;c++)
+			for (c=0;c<nb_p_as;c++)
 			{
-				save_as[c*aeris_nrow+cont]=A[c];
-				save_es[c*aeris_nrow+cont]=erro[c];
+				save_params1[cont*params_ncol+c]=A[c];
+				save_params1[cont*params_ncol+nb_p_as+c]=erro[c];
+				save_params2[zero_as+params_nrow*c+cont]=A[c];
+				save_params2[zero_es+params_nrow*c+cont]=erro[c];
 			}
-			save_radius[cont]=radius;
-			save_ip[cont]=ip1;
+			save_params1[cont*params_ncol+nb_p_as+nb_p_es]=radius;
+			save_params1[cont*params_ncol+nb_p_as+nb_p_es+nb_p_radius]=ip1;
+			save_params2[zero_r+cont]=radius;
+			save_params2[zero_ip+cont]=ip1;
 		} // endfor-cont
 		if (debug)
 		{	
@@ -549,14 +561,24 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		float *p_alph=&alph[0];
 		float *pl_alph=&alph[ab_nrow-1];
 		float *p_beta=&b0[0]; // sum of beta, beta1, beta2
-		float *p_save_alpha=&save_alpha[0];
-		float *p_save_beta=&save_beta[0];
+
+		float *p_save_alpha_beta=&save_alpha_beta1[0];
 		while (p_alph <= pl_alph)
 		{
-			*(p_save_alpha++)=*(p_alph++);
-			*(p_save_beta++)=*(p_beta++);
+			*(p_save_alpha_beta++)=*(p_alph++);
+			*(p_save_alpha_beta++)=*(p_beta++);
 		}
 
+		//do the same with save_alpha_beta2
+		//on se deplace sur l'origine en ++ et sur la destination en +rows
+		p_alph=&alph[0];
+		pl_alph=&alph[ab_nrow-1];
+		p_beta=&b0[0];
+		float *pl_beta=&b0[ab_nrow-1]; 
+		p_save_alpha_beta=&save_alpha_beta2[0];
+		while (p_alph <= pl_alph) *(p_save_alpha_beta++)=*(p_alph++);
+		while (p_beta <= pl_beta) *(p_save_alpha_beta++)=*(p_beta++);
+		 
 		// Update Returned Structure when process succeeded                    
 		results->cenx=cmx;
 		results->ceny=cmy;
@@ -564,21 +586,15 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		results->cmean=cmean;
 //		results->max_limb=sav_max;
 		results->error=0;		
-		results->numext=6;		
+		results->numext=3;		
 		results->fits_ldfs_naxis1=ldf_ncol;	
 		results->fits_ldfs_naxis2=ldf_nrow;
-		results->fits_as_nrows=aeris_nrow;
-		results->fits_as_tfields=aes_ncol;
-		results->fits_es_nrows=aeris_nrow;
-		results->fits_es_tfields=aes_ncol;
-		results->fits_r_nrows=aeris_nrow;
-		results->fits_r_tfields=1;
-		results->fits_ab_nrows=ab_nrow;
-		results->fits_ab_tfields=ab_ncol;
-		results->fits_ip_nrows=aeris_nrow;
-		results->fits_ip_tfields=1;
-		results->fits_fldfs_nrows=fulldf_nrow;
 		results->fits_fldfs_tfields=fulldf_ncol;
+		results->fits_fldfs_nrows=fulldf_nrow;
+		results->fits_ab_tfields=ab_ncol;
+		results->fits_ab_nrows=ab_nrow;
+		results->fits_params_tfields=params_ncol;
+		results->fits_params_nrows=params_nrow;
 		results->ann_wd=w;
 		results->mxszannv=S;
 		results->nb_ldf=nang;
@@ -598,14 +614,19 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 			results->quality=5; 
 		results->fits_ldfs_data=save_ldf; 
 		results->fits_fulldfs=save_fulldf; 
-//		results->fits_params=save_params; 
-//		results->fits_alpha_beta=save_alpha_beta; 
-		results->fits_as=save_as; 
-		results->fits_es=save_es; 
-		results->fits_r=save_radius; 
-		results->fits_ip=save_ip; 
-		results->fits_ab_dataa=save_alpha; 
-		results->fits_ab_datab=save_beta; 
+		results->fits_params1=save_params1; 
+		results->fits_params2=save_params2; 
+		results->fits_alpha_beta1=save_alpha_beta1; 
+		results->fits_alpha_beta2=save_alpha_beta2; 
+/*
+printf("ici %p\n",results->fits_ldfs_data);
+printf("ici %p\n",results->fits_params1);
+printf("ici %p\n",results->fits_params2);
+printf("ici %p\n",results->fits_alpha_beta1);
+printf("ici %p\n",results->fits_alpha_beta2);
+printf("ici %p\n",results->fits_fulldfs);
+*/
+
 
 		free(D);
 		free(LDF);
