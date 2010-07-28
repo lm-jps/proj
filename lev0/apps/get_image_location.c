@@ -5,7 +5,8 @@
 /* use by Jim's pre-productions test-> #define GMP_MASTER_POINTING_SERIES  "su_carl.master_pointing" */
 /* use by Carl to test ->#define GMP_MASTER_POINTING_SERIES  "su_carl.test99_master_pointing"*/
 /* use for production after launch ->#define GMP_MASTER_POINTING_SERIES  "sdo._master_pointing"*/
-#define GMP_MASTER_POINTING_SERIES  "sdo.master_pointing"
+//#define GMP_MASTER_POINTING_SERIES  "sdo.master_pointing"
+#define GMP_MASTER_POINTING_SERIES  "su_carl.test_master_pointing"
 #define GMP_DRMS_OPEN_FAILED           1
 #define GMP_MAX_DSNAME_STR           100
 #define GMP_MAX_KEYWORD_NAME_STR     100
@@ -41,6 +42,8 @@ typedef struct Image_Location_struct {
    float y;
    float instrot;
    float imscale;
+   float yinrtb;              //value in mp is SC_Y_INRT_BIAS;
+   float zinrtb;              // value in mp is SC_Z_INRT_BIAS;
    // MPO_REC,  "Master Pointing series record pointer" 
    char mpo_rec[GMP_MAX_MPO_REC_SIZE];
 
@@ -94,7 +97,7 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
 
   /* create query statement */
   sprintf(nquery,"%s[? T_START < %.0f AND T_STOP > %.0f ?]",dsname,tend_range,tstart_range);
-  //printf("get_location_information:<%s>\n",nquery);
+  printf("test:get_location_information:<%s>\n",nquery);
 
   /* open records with query */
   rset = drms_open_records(drms_env, nquery, &status);
@@ -134,11 +137,31 @@ int get_image_location(DRMS_Env_t *drms_env, int ncnt, Image_Location **ptr_imag
       (tptr+i)->y= DRMS_MISSING_FLOAT;
       (tptr+i)->instrot=DRMS_MISSING_FLOAT;
       (tptr+i)->imscale=DRMS_MISSING_FLOAT;
+      (tptr+i)->zinrtb=DRMS_MISSING_FLOAT;
+      (tptr+i)->yinrtb=DRMS_MISSING_FLOAT;
       continue;
     }
 
     /* get record found where found tobs value is between T_START and T_STOP values in mp */
     rec=rset->records[idx];
+
+    /* set spacecraft z inrt and y inrt bias value */
+    (tptr+i)->zinrtb =drms_getkey_float(rec, "SC_Z_INRT_BIAS", &status);
+    if(status == -10006) 
+    {
+      (tptr+i)->zinrtb=DRMS_MISSING_FLOAT;
+      printkerr("WARNING at %s, line %d: Setting zinrtb failed because of error code DRMS_ERROR_UNKNOWNKEYWORD. "
+                "Status returned from drms_getkey_float was %d\n",  __FILE__,__LINE__, status);
+    }
+    
+    (tptr+i)->yinrtb=drms_getkey_float(rec, "SC_Y_INRT_BIAS", &status);
+    if(status == -10006) 
+    {
+      (tptr+i)->yinrtb=DRMS_MISSING_FLOAT;
+      printkerr("WARNING at %s, line %d: Setting yinrtb failed because of error code DRMS_ERROR_UNKNOWNKEYWORD. "
+                "Status returned from drms_getkey_float was %d\n",__FILE__,__LINE__, status);
+    }
+
 
     /* load parameters in structure using values from this mp record */
     if(!strcmp((tptr+i)->telescope, "SDO/HMI"))
