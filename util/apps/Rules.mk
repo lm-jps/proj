@@ -4,7 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODEXE_$(d)	:= $(addprefix $(d)/, arithtool rebin2 ingest_from_fits hg_patch)
+MODEXE_$(d)	:= $(addprefix $(d)/, arithtool rebin2 ingest_from_fits hg_patch render_image)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d)) 
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -33,6 +33,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 # Local rules
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/stats
+$(MODEXE):      LL_TGT := $(LL_TGT) -lpng
 
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBASTRO) $(LIBSTATS)
 
