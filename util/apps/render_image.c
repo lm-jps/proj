@@ -3,7 +3,7 @@
  */
 
 /**
-   @defgroup render_image render_image
+   @defgroup render_image render_image  Make .png or .ppm image from a segment image file in a series.
    @ingroup su_util
 
    @brief Make .png or .ppm image from a segment image file in a series.
@@ -96,8 +96,12 @@
      scale=1,4,16 \
      out='| ppmlabel -color black -size {%0.75:5} -x 15 -y {%98} -text "SDO/HMI Quick-Look Magnetogram: {ID}" | pnmtojpeg -quality=95'
    @endcode
+
+  @bug
+  Does not make 16-bit colors correctly, or I can not get ppm tools with correct flags...
+
 */
-/* @{ */
+
 #include "mypng.h"
 #include "jsoc_main.h"
 
