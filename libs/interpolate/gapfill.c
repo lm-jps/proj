@@ -112,7 +112,7 @@ int init_fill(
   for (i=0;i<nx*nx;i++) fscanf(fileptr,"%lf",acor+i);
   fclose(fileptr);
   t0=dsecnd()-t0;
-  printf("x0 %f\n",t0);
+//printf("x0 %f\n",t0);
 
   regul=pnoise*pnoise;
   inoise=1;
@@ -180,7 +180,7 @@ int init_fill(
   pars->ndiff=0;
 
   t1=dsecnd()-t1;
-  printf("x1 %f\n",t1);
+//printf("x1 %f\n",t1);
 
   return 0;
 }
@@ -192,13 +192,14 @@ struct fill_struct *pars
   int i;
   struct fill_hash_struct *ptr,*oldptr;
   
+/*
   printf("Hashmod: %d\n",pars->hashmod);
   printf("Ndiff: %d\n",pars->ndiff);
-/*
   for (i=0;i<pars->hashmod;i++) {
     printf("%d %d\n",i,pars->hashcount[i]);
   }
 */
+/*
   for (i=0;i<pars->hashmod;i++) {
     ptr=(pars->hashtable[i]);
     while (ptr != NULL) {
@@ -206,6 +207,7 @@ struct fill_struct *pars
       ptr=ptr->next;
     }
   }
+*/
 
   for (i=0;i<pars->hashmod;i++) {
     omp_destroy_lock(&(pars->locks[i]));
@@ -635,7 +637,7 @@ reduction(+:nofill)
   free_work(nsample,&work);
 //printf("done %d %lx %lx\n",omp_get_thread_num(),im1,mask1);
 } // End of parallel region
-  printf("nfill nofill %d %d\n",nfill,nofill);
+//printf("nfill nofill %d %d\n",nfill,nofill);
 
   if (nofill != 0) {
     return 1; // Could not fill all pixels
