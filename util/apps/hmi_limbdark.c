@@ -111,6 +111,7 @@ int DoIt(void)
   int do_normalize = cmdparams_isflagset(&cmdparams, "n");
   const char *inQuery = params_get_str(&cmdparams, "in");
   const char *outSeries = params_get_str(&cmdparams, "out");
+  char *p;
   int status = 0;
   ObsInfo_t *ObsLoc;
   // static double LDCoef[] = {0.5568, 0.4104, 0.2782, 0.1108, 0.0170 };
@@ -124,7 +125,7 @@ int DoIt(void)
     DIE("Must have input series");;
   if (strcmp(outSeries, "NOT SPECIFIED") == 0)
     DIE("Must have output series");;
-
+  
   printf("FitLimbDark\n");
   if (restoreLD) noLD = 1;
   if (noLD)
@@ -216,7 +217,7 @@ int DoIt(void)
           }
        else
           {
-          outArray->bzero = 0.0;
+          outArray->bzero = 32768.0;
           outArray->bscale=1.0;
           drms_setkey_double(outRec, "NORMALIZE", 1.0);
           }
