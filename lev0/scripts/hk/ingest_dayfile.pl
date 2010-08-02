@@ -20,6 +20,7 @@
 #              format. Here are example input day file based on source of    #
 #              dayfiles:                                                     #
 #                   hsb_0445_2008_04_15_10_41_00.hkt: <hsb>                  #
+#                   hsb_0445_2008_04_15_10_41_00.hkt: <hsb_r>                #
 #                   0022_2008_050_02.hkt            : <moc>                  #
 #                   200805030_0x01d.hkt             : <egsefm>               #
 #                   200805030_0x01d.hkt             : <rtmon>                #
@@ -47,7 +48,7 @@
   &check_arguments();
 
   # set log file based on sdo, moc, or egsefm
-  if ($source eq "hsb")
+  if ($source eq "hsb" or $source eq "hsb_r")
   {
     $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-hsb";
   }
@@ -65,7 +66,7 @@
   }
   else
   {
-    print "exiting-no source file used!\n";
+    print "ERROR:Exiting script because used incorrect source value! Use either hsb,hsb_r,rtmon or moc.\n";
     exit;
   }
   # open log file
@@ -74,7 +75,7 @@
   print LF `date -u`;
 
   # set path to dayfiles using source -these vary based on where dayfiles are placed
- if ($source eq "hsb")
+ if ($source eq "hsb" or $source eq "hsb_r")
  {
    #for production#
    $ENV{'DF_DAYFILE_DIRECTORY'}="/tmp22/production/lev0/hk_hsb_dayfile";
@@ -388,6 +389,8 @@ sub show_help_info
   print "(1a)Ingest Day Files using apidfile option will ingest all files based on apids contained in file:\n
   ingest_dayfile.pl apidlist=<filename containing APID List to do> dsnlist=<file with ds lookup list> src=<source of data> merged=<merged value\n";
   print "  Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_hsb dsnlist=./df_apid_ds_list_for_hsb src=hsb merged=0(note use decimal apid value!)\n";
+  print "  Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_hsb dsnlist=./df_apid_ds_list_for_hsb src=hsb_r merged=0\n";
+  print "           (note use decimal apid value and use hsb_r for reprocess dayfiles only)\n";
   print "  Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_moc dsnlist=./df_apid_ds_list_for_moc src=moc merged=0(note use decimal apid value!)\n";
   print "  Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_egsefm dsnlist=./df_apid_ds_list_for_src src=egsefm merged=0(note use hex apid value!)\n";
   print "  Example: ingest_dayfile.pl apidlist=./df_apid_list_day_file_rtmon dsnlist=./df_apid_ds_list_for_rtmon src=rtmon merged=0(note use hex apid value!)\n\n";
@@ -395,6 +398,8 @@ sub show_help_info
   ingest_hsb_dayfile.pl apid=<apid-value in decimal format> dsnlist=<file with ds lookup list> src=<source of data> merged=<merged value>\n";
   print "  Example: ingest_dayfile.pl apid=029  dsnlist=./df_apid_ds_list_for_moc src=moc merged=0(note use decimal apid value!)\n";
   print "  Example: ingest_dayfile.pl apid=445  dsnlist=./df_apid_ds_list_for_hsb src=hsb merged=0(note use decimal apid value!)\n";
+  print "  Example: ingest_dayfile.pl apid=445  dsnlist=./df_apid_ds_list_for_hsb_r src=hsb merged=0\n";
+  print "           (note use decimal apid value and use hsb_r for reprocess dayfiles only)\n";
   print "  Example: ingest_dayfile.pl apid=1d  dsnlist=./df_apid_ds_list_for_egsefm src=egsefm merged=0(note use hex apid value!)\n";
   print "  Example: ingest_dayfile.pl apid=81  dsnlist=./df_apid_ds_list_for_rtmon src=rtmon merged=0(note use hex apid value!)\n\n";
   print "(1c)Ingest Day Files using date range with apidfile option:\n
@@ -403,6 +408,7 @@ sub show_help_info
   print "(1d)Ingest Day Files using date range with apid option:\n
   ingest_dayfile.pl apid=<apid in decimal>  start=<yyyymmdd> end=<yyyymmdd>  dsnlist=<file with ds lookup list> src=<source of data> merged=<merged value>\n";
   print "  Example: ingest_dayfile.pl apid=445 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_hsb src=hsb merged=0\n\n";
+  print "  Example: ingest_dayfile.pl apid=445 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_hsb_r src=hsb merged=0\n\n";
   print "  Example: ingest_dayfile.pl apid=81 start=20070216  end=20070218 dsnlist=./df_apid_ds_list_for_rtmon src=rtmon merged=0\n\n";
   print "(1e)Get Help Information:\n
    ingest_hsb_dayfile.pl -h  or  ingest_hsb_dayfile.pl -help\n\n";
@@ -415,7 +421,7 @@ sub show_help_info
   print "(3a)Used to store location of input day files of this script.\n";
   print "(3b)Example setting for egsefm files: setenv DF_DAYFILE_DIRECTORY /tmp20/production/hmi_hk \n";
   print "(4) Requires setup of apid list in file when use \"apidlist\" option\n";
-  print "(4a)Enter values in file as decimal values(i.e.,0001,0015,0021,0445,0475) for hsb and moc dayfile formats.\n";
+  print "(4a)Enter values in file as decimal values(i.e.,0001,0015,0021,0445,0475) for hsb,hsb_r,rtmon and moc dayfile formats.\n";
   print "(4b)Example format and file of apid list in decimal is located in this current file: ./df_apid_list_day_file_hsb\n";
   print "(4c))Enter values in file as hexcidecimal values(i.e.,0081,001d,0001, 01e) for rtmon and egsefm dayfile formats.\n";
   print "(4d)Example format and file of apid list in hex is located in this current file: ./df_apid_list_day_file_rtmon\n";
@@ -540,7 +546,7 @@ sub get_list_to_ingest()
       }
 
       #compare apid value in list with files
-      if ($source eq "hsb")
+      if ($source eq "hsb" or $source eq "hsb_r")
       {
         $find_str= sprintf("hsb_%04s", $strapid);
       }
@@ -579,7 +585,7 @@ sub get_list_to_ingest()
           {
             # check if file is within date range 
             # first get date from filename
-            if ($source eq "hsb")
+            if ($source eq "hsb" or $source eq "hsb_r")
             {
               $filedate= substr($file,9,10);
               $filedate =~ s/_//g;
@@ -687,7 +693,7 @@ sub ingest_day_files()
     $command="$exec_dir/set_keys -c ";
 
     # get series name
-    if ($source eq "hsb")
+    if ($source eq "hsb" or  $source eq "hsb_r")
     {
       $fapid = substr($file, 4,4);
     }
@@ -710,7 +716,7 @@ sub ingest_day_files()
     $arg1=sprintf("%s%s","ds=", $dsn);
 
     # get date value
-    if ($source eq "hsb")
+    if ($source eq "hsb" or $source eq "hsb_r")
     {
       $year=substr($file,9,4);
       $month=substr($file,14,2);
@@ -739,7 +745,7 @@ sub ingest_day_files()
     $arg2="DATE=$time_skdate";
 
     #get apid and set APID value to run in set_key command
-    if ($source eq "hsb")
+    if ($source eq "hsb" or $source eq "hsb_r")
     {
       $aid=substr($file,4,4);
     }
@@ -762,7 +768,7 @@ sub ingest_day_files()
     if($dflg) {print LF  "ingest_dayfiles:dayfile arg:<$arg5>\n";}
 
     #get xml file name
-    if ($source eq "hsb")
+    if ($source eq "hsb" or $source eq "hsb_r")
     {
       #$xfile=sprintf("%s/%s.xml",$dir_init_df,$file);
       #$arg6="xmlfile=$xfile";
@@ -788,7 +794,7 @@ sub ingest_day_files()
 
     #merged value setting for only source=moc
     $arg7="";
-    if   ($source eq "moc" || $source eq "rtmon" | $source eq "hsb") ##update for hsb files!
+    if   ($source eq "moc" || $source eq "rtmon" || $source eq "hsb" || $source eq "hsb_r") ##update for hsb files!
     {
       $arg7="MERGED=$merged";
     }
