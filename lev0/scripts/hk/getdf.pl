@@ -77,7 +77,7 @@ print LF "--->Processing day files at directory:$doff_dir\n";
 if  ($src eq "hsb")
 {
   # get today's dayfile and avoid picking up next days dayfile
-  ($today_date)=get_today_date(); 
+  ($today_date)=get_today_date(); #since process at 9PM Nightly use PDT
   $enddate=$startdate=$today_date;
 
   #log status to logfile
@@ -288,7 +288,7 @@ sub check_for_old_dayfiles($)
   my $item;
  
   # get today's date
-  ($today_date)=get_today_date(); 
+  ($today_date)=get_today_date_utc(); 
 
   # open directory with dayfiles
   opendir(DIR_DOFF, $drop_off_dir) || die "getdf.pl:7:Can't open directory:$drop_off_dir: $!\n"; #open subdirectory
@@ -341,21 +341,30 @@ sub check_for_old_dayfiles($)
   {
     print LF "--->there are old dayfiles in directory\n";
     # get file list ready to put in email
-    sendEmail("$to_email", "$from_email", "$subject_email_old_df", "Warning Message:\n-->When checked the HSB Directory found  one issue requiring action.\n\n-->ISSUE Found:\n(1)Old Dayfile(s) were found and need to be loaded in dayfile series\n\n-->ACTIONS TO DO:\n(1)Run ingest_dayfile.pl with src=hsb_r to load these old dayfiles. Then confirm loaded in hk_dayfile series and then delete each dayfile(s).\n\n-->List of <$count_old_dayfiles_found> Old Dayfile(s) are:@pl_old_dayfiles_found\n\n");
+    sendEmail("$to_email", "$from_email", "$subject_email_old_df", "Warning Message:\n-->When checked the HSB Directory found  one issue requiring action.\n\n-->ISSUE Found:\n(1)Old Dayfile(s) were found and need to be loaded in dayfile series.\n\n-->ACTIONS To Do:\n(1)Run ingest_dayfile.pl with src=hsb_r to load these old dayfiles. Then confirm loaded in hk_dayfile series and then delete each dayfile(s).\n\n-->List of <$count_old_dayfiles_found> Old Dayfile(s) are:@pl_old_dayfiles_found\n\n");
   }
   elsif ( $count_old_dayfiles_found == 0 && $count_gt_date_dayfiles_found > 0)
   {
     print LF "--->there are old dayfiles in directory\n";
-    sendEmail("$to_email", "$from_email", "$subject_email_gt_currentdate", "Warning Message:\n-->When checked the HSB Directory found one issue requiring action.\n\n-->ISSUE Found:\n(1)Found dayfile(s) greater than current date and these probably should be removed.\n\n-->ACTIONS TO DO:\n(1)The greater than date dayfile(s) should probably be removed using rm.\n\n-->List of <$count_gt_date_dayfiles_found>> Greater than Date Dayfiles are:@pl_gt_date_dayfiles_found\n");
+    sendEmail("$to_email", "$from_email", "$subject_email_gt_currentdate", "Warning Message:\n-->When checked the HSB Directory found one issue requiring action.\n\n-->ISSUE Found:\n(1)Found dayfile(s) greater than current date and these probably should be removed.\n\n-->ACTIONS To Do:\n(1)The greater than current date dayfile(s) should probably be removed using rm.\n\n-->List of <$count_gt_date_dayfiles_found>> Greater than Current Date Dayfiles are:@pl_gt_date_dayfiles_found\n");
   }
   elsif ( $count_old_dayfiles_found > 0 && $count_gt_date_dayfiles_found > 0)
   {
     print LF "--->there are old dayfiles in directory\n";
-    sendEmail("$to_email", "$from_email", "$subject_email_olddf_gtcd", "Warning Message:\n-->When checked the HSB Directory found two issues requiring action.\n\n-->ISSUES Found:\n(1)Old Dayfiles were found and need to be loaded in dayfile series\n(2)Found dayfile(s) greater than current date and these probably should be removed.\n\n-->ACTIONS TO DO:\n(1)Run ingest_dayfile.pl with src=hsb_r to load these old dayfiles. Then confirm loaded in hk_dayfile series and then delete each dayfile.\n(2)The greater than date dayfile(s) should probably be removed using rm.\n\n-->List of <$count_old_dayfiles_found> Old Dayfiles are:@pl_old_dayfiles_found\n\n-->List of <$count_gt_date_dayfiles_found> Greater than Date Dayfiles are:@pl_gt_date_dayfiles_found\n");
+    sendEmail("$to_email", "$from_email", "$subject_email_olddf_gtcd", "Warning Message:\n-->When checked the HSB Directory found two issues requiring action.\n\n-->ISSUES Found:\n(1)Old Dayfiles were found and need to be loaded in dayfile series\n(2)Found dayfile(s) greater than current date and these probably should be removed.\n\n-->ACTIONS To Do:\n(1)Run ingest_dayfile.pl with src=hsb_r to load these old dayfiles. Then confirm loaded in hk_dayfile series and then delete each dayfile.\n(2)The greater than current date dayfile(s) should probably be removed using rm.\n\n-->List of <$count_old_dayfiles_found> Old Dayfiles are:@pl_old_dayfiles_found\n\n-->List of <$count_gt_date_dayfiles_found> Greater than Current Date Dayfiles are:@pl_gt_date_dayfiles_found\n");
 
   }
   else
   {
     print LF "--->no old dayfiles in directory\n";
   }
+}
+##########################
+# get_today_date_utc     #
+##########################
+sub get_today_date_utc
+{
+  ($second, $minute, $hour, $dayOfMonth, $month, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = gmtime();
+  $year = 1900 + $yearOffset;
+  return(sprintf("%-04.4d%-02.2d%-02.2d",$year,$month+1,$dayOfMonth));
 }
