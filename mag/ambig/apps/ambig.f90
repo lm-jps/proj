@@ -303,7 +303,8 @@ write(*,*) 'phi,theta',phi,theta
 
 write(*,*) 'returning'
 
-  deallocate(bt, dBzdz, dBpzdz)
+  deallocate(bt, dBzdz)
+  if (geometry .eq. 1) deallocate(dBpzdz, Bpix, Bpiy)
 !  deallocate(mask)
 
 end subroutine ambig
