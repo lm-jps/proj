@@ -9,7 +9,6 @@
  * 12 (NUMRECLEV1 defined in lev0lev1.h) lev0 images at a time.
  * See the -h nice_intro() for details of the calling options.
  */ 
-//!!!TBD - in development.
 
 #include <jsoc_main.h>
 #include <cmdparams.h>
@@ -121,7 +120,7 @@ static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 static char *orbseries = "sdo.fds_orbit_vectors";
 //static char *orbseries = "sdo_ground.fds_orbit_vectors";
 
-static int nspikes, respike, *oldvalues, *spikelocs, *newvalues;
+static int nspikes, respike, fid, *oldvalues, *spikelocs, *newvalues;
 double aiascale = 1.0;
 
 IORBIT_Info_t *IOinfo = NULL;
@@ -413,8 +412,9 @@ int do_ingest(long long bbrec, long long eerec)
   TIME tobs[NUMRECLEV1];
   float percentd;
   double rsun_lf, x0_lf, y0_lf;
-  int rstatus, dstatus, ncnt, fcnt, i, j, qualint, nobs;
+  int rstatus, dstatus, ncnt, fcnt, i, j, k, qualint, nobs;
   int hshiexp, hcamid, nbad, n_cosmic;
+  int *spikedata, status, axes[2], nbytes;
   uint32_t missvals, totvals;
   long long recnum0, recnum1, recnumff;
   char recrange[128], lev0name[128], flatrec[128];
@@ -614,6 +614,7 @@ int do_ingest(long long bbrec, long long eerec)
       }
       qualint = drms_getkey_int(rs0, "QUALITY", &rstatus);
       drms_setkey_int(rs, "QUALLEV0", qualint);
+      fid = drms_getkey_int(rs0, "FID", &rstatus);
 
       drms_setkey_time(rs, "T_OBS", tobs[i]);
       printk("t_obs for lev0 = %10.5f\n", tobs[i]);  //!!TEMP
@@ -690,7 +691,7 @@ int do_ingest(long long bbrec, long long eerec)
       		dsffname, dsffname, tobs[i], tobs[i], wavstr, wavstr);
       }
       else {
-        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and WAVE_STR=%s and flatfield_version=(select max(flatfield_version) from %s where t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s') ?]",
+        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s' and flatfield_version=(select max(flatfield_version) from %s where t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s') ?]",
       	dsffname, tobs[i], tobs[i], wavstr, dsffname, tobs[i], tobs[i], wavstr);
       }
     }
@@ -757,7 +758,7 @@ int do_ingest(long long bbrec, long long eerec)
       ArrayBad = drms_segment_read(badseg, DRMS_TYPE_INT, &rstatus);
       nbad = drms_array_size(ArrayBad)/sizeof(int);
       if(!ArrayBad) {
-        printk("Can't do drms_DARKsegment_read() for BAD_PIXEL. status=%d\n", 
+        printk("Can't do drms_segment_read() for BAD_PIXEL. status=%d\n", 
 			rstatus);
         return(1);
       }
@@ -847,7 +848,6 @@ int do_ingest(long long bbrec, long long eerec)
            missflg[i] = missflg[i] | Q_MISSALL; //high bit, no data
         if(hmiaiaflg && nspikes) {
           if (spikeseg = drms_segment_lookup(rs,"spikes") ) {
-            int *spikedata, status, axes[2], nbytes;
             nbytes = nspikes*sizeof(int);
             axes[0] = nspikes;
             axes[1] = 3;
@@ -861,23 +861,34 @@ int do_ingest(long long bbrec, long long eerec)
             drms_free_array(ArraySpike);
           } // else { printf("spikes segment not found\n"); }
         }
-      /***This will be the real cosmic_rays call *********************/
-      StartTimer(1);	//!!TEMP
-      dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
+      if(!hmiaiaflg) {			//only call for hmi
+        //StartTimer(1);	//!!TEMP
+        dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
 				array_cosmic, &n_cosmic, 4096, 4096);
-      ftmp = StopTimer(1);
-      printf( "\nTime sec for cosmic_rays() = %f\n\n", ftmp );
-      if(dstatus) {
-        printk("ERROR: cosmic_rays() error=%d\n", dstatus);
-        noimage[i] = 1;
-      }
-      else { printf("n_cosmic = %d for fsn = %u\n", n_cosmic, fsnx); } //!!TEMP
-
-      dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
-      if (dstatus) {
-        printk("ERROR: drms_segment_write error=%d for lev1 bad_pixel_list\n",
-		dstatus);
-        noimage[i] = 1;
+        //ftmp = StopTimer(1);
+        //printf( "\nTime sec for cosmic_rays() = %f\n\n", ftmp );
+        if(dstatus) {
+          printk("ERROR: cosmic_rays() error=%d\n", dstatus);
+          noimage[i] = 1;
+        }
+        if(nbad != n_cosmic) {	//pretend the bad pix list is like spike
+          nbytes = n_cosmic*sizeof(int);
+          axes[0] = n_cosmic;
+          spikedata = (int *)malloc(nbytes);
+          ArraySpike = drms_array_create(DRMS_TYPE_INT, 1, axes,
+                       (void *)spikedata, &status);
+          memcpy((void *)spikedata, (void *)array_cosmic, nbytes);
+          status = drms_segment_write(badoutpixseg, ArraySpike, 0);
+          drms_free_array(ArraySpike);
+        }
+        else {
+          dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
+        }
+        if (dstatus) {
+          printk("ERROR: drms_segment_write error=%d for lev1 bad_pixel_list\n",
+			 dstatus);
+          noimage[i] = 1;
+        }
       }
 FLATERR:
       drms_close_records(rsetff, DRMS_FREE_RECORD);
@@ -1104,7 +1115,8 @@ int DoIt(void)
   if(!(username = (char *)getenv("USER"))) username = "nouser"; 
   instru = cmdparams_get_str(&cmdparams, "instru", NULL);
   if(strcmp(instru, "hmi") && strcmp(instru, "aia")) {
-    printf("Error: instru= must be given as 'hmi' or 'aia'\n");
+    printf("Error: instru=%s must be given as 'hmi' or 'aia'\n", instru);
+    printk("Error: instru=%s must be given as 'hmi' or 'aia'\n", instru);
     return(0);
   }
   mode = cmdparams_get_str(&cmdparams, "mode", NULL);
