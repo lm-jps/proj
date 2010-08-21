@@ -1,0 +1,170 @@
+#!/bin/csh -f
+# script to run multiple instances of trackings plus analyses in the
+#    ring-diagram synoptic series for a set of given time centers
+# The invoked scripts should be run every 5 deg of Carrington rotation,
+#   i.e. about 9 hours for the 5-deg series, every 15 deg (27 hours) for
+#   the 15-deg series, and 30 deg (54 hours) for the 30-deg series
+#
+# The script does not check for the pre-existence of the averaged data for
+#   background subtraction. This is bad because the first time a missing
+#   average is encountered, all three instances of the rdday script will
+#   create it, resulting in unnecessary extra processing and records
+
+@ TEST = 1	# set to 0 for production in namespace hmi
+
+if ($#argv < 2) then
+  echo "usage: $0 Carrington_rot Lon_start [Lon_stop] [spacing]"
+  echo "       $0 default spacing = 540 min"
+  exit
+endif
+
+@ CROT = $1
+@ CL0 = $2
+@ CL1 = $CL0
+@ SLEEP = 540
+if ($#argv > 2) then
+  @ CL1 = $3
+  if ($#argv > 3) @ SLEEP = $4
+endif
+
+@ SLEEP *= 60
+
+# set SCRIPT = rdday
+
+# parameters (for coverage)
+set QMASK = 0x80004000
+@ MMISS = 10000
+@ MINCV = 700
+
+# modules and programs
+set COVER = rdcover
+
+# base naming convention for I/O series, logs, and scripts
+if ($TEST) then
+  set NMSP = hmi_test
+  set SCRDIR = ~rick/hmi/rings/scripts
+  set SCRIPT = $SCRDIR/rdday
+  set AVG120 = $SCRDIR/avg120
+else
+  set NMSP = hmi
+  set SCRIPT = rdday
+  set AVG120 = avg120
+endif
+set PLID = hmirdVsyn
+
+# input/output series
+set BCKG = $NMSP.V_avg120
+set ISER = $NMSP.V_45s
+
+# auxiliary files
+set TEMP = /tmp23/`whoami`
+if (!(-d $TEMP)) set TEMP = /tmp
+set TMPB = $TEMP/$PLID
+if (!(-d $TMPB)) mkdir $TMPB
+set TLIST = $TMPB/rd_inf.$$
+
+#  check that required scripts and programs are in path or rooted
+foreach CMD ($SCRIPT $AVG120 $COVER)
+  which $CMD > /dev/null
+  if ($status) then
+    if (!(-x $CMD)) then
+      echo Error: command $CMD not in path\; script will fail
+      exit
+    endif
+  endif
+end
+
+@ CLON = $CL0
+while ($CLON >= $CL1)
+# check for background average, create if necessary
+  @ CR60 = $CROT
+  if ($CLON > 330) then
+    @ CL60 = 360
+  else if ($CLON > 270) then
+    @ CL60 = 300
+  else if ($CLON > 210) then
+    @ CL60 = 240
+  else if ($CLON > 150) then
+    @ CL60 = 180
+  else if ($CLON > 90) then
+    @ CL60 = 120
+  else if ($CLON > 30) then
+    @ CL60 = 60
+  else
+    @ CR60++
+    @ CL60 = 360
+  endif
+  set BCK = $BCKG"[$CR60][$CL60]"
+  @ BCKCT = `show_info -c ds= "$BCK" | awk '{print $1}'`
+  if ($BCKCT < 1) then
+    echo "Data average record $BCK does not exist"
+    qsub -q j.q -sync y $AVG120 -v $CR60 $CL60
+    if ($status) echo "Warning: data averaging failed; no background subtraction"
+  endif
+
+  @ RUNNING = 0
+  set CARTIM = $CROT\:`printf %03d $CLON`
+# check for coverage, skip if too low
+  @ LNGTH = 768
+  $COVER ds= $ISER tmid= $CARTIM length= $LNGTH \
+      max_miss= $MMISS qmask= $QMASK > $TLIST
+  @ LINES = `wc -l $TLIST |  awk '{print $1}'`
+  if ($LINES < 2) then
+    @ CVG = 0
+  else
+    set ECVG = `head -2 $TLIST | tail -1 | awk '{print $4}'`
+    @ CVG = `echo $ECVG | awk -F. '{print $1}'`
+    @ CVG *= 1000
+    set CVGFRAC = `echo $ECVG | awk -F. '{print $2}'`
+    @ CVG += `fnum $CVGFRAC %d`
+  endif
+  rm $TLIST
+  if ($CVG > $MINCV) then
+    @ RUNNING++
+    qsub -q j.q $SCRIPT 5 $CROT $CLON
+  endif
+  if ($CLON % 15 == 0) then
+# check for coverage, skip if too low
+    @ LNGTH = 2304
+    $COVER ds= $ISER tmid= $CARTIM length= $LNGTH \
+	max_miss= $MMISS qmask= $QMASK > $TLIST
+    @ LINES = `wc -l $TLIST |  awk '{print $1}'`
+    if ($LINES < 2) then
+      @ CVG = 0
+    else
+      set ECVG = `head -2 $TLIST | tail -1 | awk '{print $4}'`
+      @ CVG = `echo $ECVG | awk -F. '{print $1}'`
+      @ CVG *= 1000
+      set CVGFRAC = `echo $ECVG | awk -F. '{print $2}'`
+      @ CVG += `fnum $CVGFRAC %d`
+    endif
+    rm $TLIST
+    if ($CVG > $MINCV) then
+      @ RUNNING++
+      qsub -q j.q $SCRIPT 15 $CROT $CLON
+    endif
+  endif
+  if ($CLON % 30 == 0) then
+# check for coverage, skip if too low
+    @ LNGTH = 4608
+    $COVER ds= $ISER tmid= $CARTIM length= $LNGTH \
+	max_miss= $MMISS qmask= $QMASK > $TLIST
+    @ LINES = `wc -l $TLIST |  awk '{print $1}'`
+    if ($LINES < 2) then
+      @ CVG = 0
+    else
+      set ECVG = `head -2 $TLIST | tail -1 | awk '{print $4}'`
+      @ CVG = `echo $ECVG | awk -F. '{print $1}'`
+      @ CVG *= 1000
+      set CVGFRAC = `echo $ECVG | awk -F. '{print $2}'`
+      @ CVG += `fnum $CVGFRAC %d`
+    endif
+    rm $TLIST
+    if ($CVG > $MINCV) then
+      @ RUNNING++
+      qsub -q j.q $SCRIPT 30 $CROT $CLON
+    endif
+  endif
+  @ CLON -= 5
+  if ($CLON >= $CL1 && $RUNNING) sleep $SLEEP
+end
