@@ -125,11 +125,10 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
   static double raddeg =  M_PI / 180.0;
   static double degrad = 180.0 / M_PI;
   double ella, ellb;
-  int n, status;
+  int n, status = 0;
   static int scale_avail, xinv_type, yinv_type;
   static int hdrtype = UNKNOWN, lasthdr = UNKNOWN - 1;
   char *strval;
-
 /*
  *  Set up the appropriate dictionary for interpretation of keywords
  */
@@ -262,5 +261,6 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
  *		passing to solar_image_info for selected cases
  *  10.04.01		fixed up processing for semidiameter when apsd_key
  *		is missing
+ *  10.08.19		make sure status is initialized to 0
  */
 
