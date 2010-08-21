@@ -43,6 +43,8 @@
  *    When writing output to a file, rather than a drms record set, only one
  *	set of files can be specified; if the input contains more than one
  *	data record, each inversion will overwrite the last.
+ *    There is no verification that the requested output segments have the
+ *	correct protocol; probably doesn't matter anyway
  *
  *  Revision history is at end of file
  ******************************************************************/
@@ -54,6 +56,7 @@
 #include <jsoc_main.h>
 #include "keystuff.c"
 #include "rdutil.c"
+#include "ola_xy.c"
 
 /* prototypes */
 extern void ola_(double *, int *, double *, double *, double *,
@@ -63,11 +66,13 @@ extern void ola_(double *, int *, double *, double *, double *,
       int, int, int, int, int);
 
 char *module_name = "rdvinv";
-char *version_id = "0.6";
+char *version_id = "0.7";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "in", "", "Input data series or recordset"},
-  {ARG_STRING, "seg", "fit.out", "data segment name"},
+  {ARG_STRING, "seg", "fit.out", "Input data segment name"},
+  {ARG_STRING, "uxseg", "Ux", "Output data segment name for Ux inversions"},
+  {ARG_STRING, "uyseg", "Uy", "Output data segment name for Uy inversions"},
   {ARG_INT,    "cr", "Not Specified", "Carrington rotation for all regions"},
   {ARG_FLOAT,  "clon", "Not Specified", "Carrington longitude of CM for all regions"},
   {ARG_FLOAT,  "lon", "Not Specified", "Carrington longitude of all regions"},
@@ -212,22 +217,21 @@ int DoIt(void)	{
   int nrec, rec_i;
   DRMS_RecordSet_t *recordSet = NULL;
   DRMS_Record_t *irec, *orec;
-  DRMS_Segment_t *segment;
+  DRMS_Segment_t *segment, *oseg;
   FILE *fpt;
   double latc, lonc, loncCar;
   float fval;
   int ival;
+  int n;
   char odir[DRMS_MAXPATHLEN], filename[DRMS_MAXPATHLEN+5];
   char buffer[1024], outfilex[DRMS_MAXPATHLEN], outfiley[DRMS_MAXPATHLEN];
+  char outdir[DRMS_MAXPATHLEN], outdirx[DRMS_MAXPATHLEN],
+      outdiry[DRMS_MAXPATHLEN];
   char *carstr;
   char rec_query[DRMS_MAXQUERYLEN], source[DRMS_MAXQUERYLEN];
   char module_ident[64];
 
-  double *data_ptr;
-  double *l, *f, *ef, *ux, *eux, *uy, *euy;
-  int *open_record;
-  int *n, *mask, npts, i, j;
-  int lends, filename_set;
+  int twosegs = 0;
 
   char *in = strdup (params_get_str (params, "in"));
   int cr = params_get_int (params, "cr");
@@ -235,6 +239,8 @@ int DoIt(void)	{
   float lat = params_get_float (params, "lat");
   float lon = params_get_float (params, "lon");
   char *seg = strdup (params_get_str  (params, "seg"));
+  char *uxseg = strdup (params_get_str  (params, "uxseg"));
+  char *uyseg = strdup (params_get_str  (params, "uyseg"));
   char *kernel = strdup (params_get_str (params, "kernel"));
   char *out = strdup (params_get_str (params, "out"));
   char *ave = strdup (params_get_str (params, "ave"));
@@ -447,11 +453,50 @@ int DoIt(void)	{
       if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
       return 1;
     }
+			   /*  search for separate output segments ux and uy  */
+    if (drms_segment_lookup (orec, uxseg) && drms_segment_lookup (orec, uyseg))
+      twosegs = 1;
+    else {
+			       /*  search for 1st generic segment and use it  */
+      int segct = drms_record_numsegments (orec);
+      if (segct < 1) {
+	fprintf (stderr,
+	    "Error: no data segment in output series %s\n", out);
+	if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
+	drms_close_record (orec, DRMS_FREE_RECORD);
+	return 1;
+      }
+      for (n = 0; n < segct; n++) {
+	oseg = drms_segment_lookupnum (orec, n);
+	if (oseg->info->protocol != DRMS_GENERIC) continue;
+   	break;
+      }
+      if (n == segct) {
+	fprintf (stderr,
+	    "Error: no generic data segment in output series %s\n", out);
+	if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
+	drms_close_record (orec, DRMS_FREE_RECORD);
+	return 1;
+      }
+      fprintf (stderr, "         writing to segment %s\n", oseg->info->name);
+    }
+  }
+  if (twosegs) {
+    sprintf (outdirx, "%s/%s", odir, uxseg);
+    sprintf (outdiry, "%s/%s", odir, uyseg);
+    mkdir (outdirx, 01755);
+    mkdir (outdiry, 01755);
+  } else {
+    if (drms_output) {
+      sprintf (outdir, "%s/%s", odir, oseg->info->name);
+      mkdir (outdir, 01755);
+    } else strcpy (outdir, out);
   }
   for (rec_i=0; rec_i<nrec; rec_i++) {
     if (verbose) printf ("  Processing record %i\n", rec_i);
     if (drms_input) {
       irec = recordSet->records[rec_i];
+		    /*  should use call to drms_record_directory() instead  */
       if (irec->sunum != -1LL && irec->su == NULL) {
 	irec->su = drms_getunit (irec->env, irec->seriesinfo->seriesname,
 	    irec->sunum, 1, &status);
@@ -475,10 +520,17 @@ int DoIt(void)	{
       strcpy (source, in);
       latc = lonc = 0.0;
     }
-    sprintf (outfilex, "%s/%s.Ux", odir,
-	printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
-    sprintf (outfiley, "%s/%s.Uy", odir,
-	printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+    if (twosegs) {
+      sprintf (outfilex, "%s/%s/%s.Ux", odir, uxseg, 
+	  printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+      sprintf (outfiley, "%s/%s/%s.Uy", odir, uyseg,
+	  printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+    } else {
+      sprintf (outfilex, "%s/%s.Ux", outdir, 
+	  printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+      sprintf (outfiley, "%s/%s.Uy", outdir,
+	  printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+    }
     status = process_record (filename, drms_output, outfilex, outfiley,
 	kernel, ave, coef, qave, qcoef, verbose, ob, oe, num, rb, re, amu);
     if (status && drms_output)	{
@@ -518,4 +570,8 @@ int DoIt(void)	{
  *	2010.03.10	Fixed setting of keys for run parameters; put in trap
  *		for empty input data sets and widened clon match range
  *  v 0.6 frozen 2010.04.23
+ *    0.7		Output data files are now written into per segment
+ *		subdirectories; added option for naming individual segments
+ *		(if there are two)
+ *  v 0.7 frozen 2010.08.19
  */
