@@ -1,0 +1,26 @@
+Release scripts for ring-diagram analysis in the HMI pipeline
+
+If this directory is part of the CVS tree, the files in this directory have
+been mirrored from a specific version control system outside CVS and should
+not be modified without the consent of the author, Rick Bogart. Any changes
+introduced that are not synchronized with changes to the original control
+files are likely to be lost.
+
+Table of contents last updated 10.08.19
+
+	Directories
+CVS/		version control information
+
+	Scripts
+avg120*		10.08	create 120-deg (9-day) averages of HMI observables
+rdday*		10.08	run  a single instance of trackings plus analyses in
+	the synoptic pipeline for a given tileset and time center
+= rdday_cfit*		"_psp, "_qfit, "_inv, and _cfit restart the processing
+= rdday_inv*		at the point of power spectra, inversions, or fitting
+= rdday_psp*		by quick or comprehensive methods
+= rdday_qfit*		
+rdtarget*	10.07	prototype for target pipeline
+runrdsyn*	10.08	run rdday for selected time range in parallel
+
+	Other
+ReadMe			This file
