@@ -11,8 +11,16 @@
  *    pspec3 [-lvx] in= pspec= ...
  *
  *  Arguments: (type		default         description)
- *    in	DataSet		-		Input dataset
- *    pspec	DataSeries	-		Output dataseries
+ *	in	DataSet none            Input dataset
+ *			A series of records containing 3-d data cubes as one
+ *			of their segments. It is assumed that all records in
+ *			the dataset are from the same dataseries, or at least
+ *			share a common segment structure
+ *      segment string	-		Name of the input data segment (only
+ *			required if the input series has multiple 3-dimensional
+ *			segments)
+ *	pspec	DataSeries	-		Output data series;  must
+ *			contain at least one 3-dimensional segment
  *    mask_in	Float		0.9375		Inner apodization radius
  *    mask_ex	Float		1.0		Outer apodization radius
  *    apodize	Float		0.96875		Temporal apodization edge
@@ -25,7 +33,12 @@
  *	-x	use double-precision calculation
  *
  *  Bugs:
- *    Requires that the input data segment be named V
+ *    For large input data cubes (~1 Gpxl) the results may be garbage,
+ *	for larger ones (~2 Gpxl) the input may fail altogether. The exact
+ *	causes of these problems and consequently the exact limits of
+ *	validity are not known, but the code has been verified to work with
+ *	"normal" input spectra (Dopplergrams as compressed scaled shorts)
+ *	of up to 800 Mpxl.
  *    No checking that input data series corresponds with link in output
  *	series
  *    The value of CDELT3 in the input set overrides the value of Cadence
@@ -48,16 +61,20 @@
 
 char *module_name = "pspec3";
 char *module_desc = "3-d power spectrum";
-char *version_id = "0.8";
+char *version_id = "1.0";
 
 ModuleArgs_t module_args[] = {
-  {ARG_DATASET, "in", "", "Input data record"},
+  {ARG_DATASET, "in", "", "Input data set"},
+  {ARG_STRING,	"segment", "Not Specified",
+      "input data series segment; ignored if series only has one 3-d segment"}, 
   {ARG_DATASERIES, "pspec", "", "Ouput data series"},
   {ARG_FLOAT, "mask_in", "0.9375", "inner radial apodization edge", "[0.0,)"},
   {ARG_FLOAT, "mask_ex", "1.0", "outer radial apodization edge", "[0.0,)"},
   {ARG_FLOAT,	"apodize", "0.96875", "temporal apodization edge",
 	"[0.0,1.0]"},
   {ARG_INT,	"fbin", "0", "output frequency fbins (0-> none)"},
+  {ARG_STRING, "copy",  "+",
+      "comma separated list of keys to propagate forward"},
   {ARG_FLAG,	"l",	"",
 	"output direct power spectrum rather than scaled log"},
   {ARG_FLAG,    "n", "0", "do not save output record (diagnostics only)"},      
@@ -68,8 +85,8 @@ ModuleArgs_t module_args[] = {
        /*  list of keywords to propagate (if possible) from input to output  */
 char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
     "MidTime", "Duration", "LonSpan", "T_START", "T_STOP", "Coverage",
-    "Cadence", "ZonalTrk", "ZonalVel", "MeridTrk", "MeridVel", "MapScale",
-    "Size", "MapProj", "Map_PA", "PosAng", "RSunRef", "MAI"};
+    "ZonalTrk", "ZonalVel", "MeridTrk", "MeridVel", "MapScale", "MAI", "Ident",
+    "Width", "Height", "Size", "MapProj", "Map_PA", "PosAng", "RSunRef"};
 
 #include "keystuff.c"
 
@@ -83,6 +100,130 @@ static int cleanup (int error, DRMS_RecordSet_t *irecs, DRMS_Record_t *orec,
     else drms_close_record (orec, dispose);
   }
   return error;
+}
+
+int read_from_big_cube (DRMS_Segment_t *seg, int dp_calc, void *rdata,
+    double *avg, double *var, double apode_edge, double *apodization,
+    int xcols) {
+  DRMS_Array_t *tmp;
+  DRMS_Type_t type;
+  void *data;
+  double *wdata;
+  double dval, dataavg, datavar, weight;
+  float *xdata;
+  float fval;
+  long long n;
+  int *start, *stop;
+  int m, col, cols, row, rows, area, plane, planes, rank, size;
+  int status;
+
+  if (dp_calc) {
+    size = sizeof (double);
+    type = DRMS_TYPE_DOUBLE;
+    wdata = (double *)rdata;
+  } else {
+    size = sizeof (float);
+    type = DRMS_TYPE_FLOAT;
+    xdata = (float *)rdata;
+  }
+  dataavg = datavar = 0.0;
+
+  rank = seg->info->naxis;
+  cols = seg->axis[0];
+  rows = seg->axis[1];
+  planes = seg->axis[rank-1];
+  start = (int *)malloc (rank * sizeof (int));
+  stop = (int *)malloc (rank * sizeof (int));
+  area = 1;
+  for (n = 0; n < rank-1; n++) {
+    start[n] = 0;
+    stop[n] = seg->axis[n] - 1;
+    area *= seg->axis[n];
+  }
+  size *= area;
+  n = 0;
+  for (plane = 0; plane < planes; plane++) {
+    m = 0;
+    start[rank-1] = stop[rank-1] = plane;
+    tmp = drms_segment_readslice (seg, type, start, stop, &status);
+    if (status) {
+      fprintf (stderr, "Error reading data plane %d\n", plane);
+      return 1;
+    }
+    data = tmp->data;
+    if (apode_edge < 1.0) {
+      double t = (2.0 * plane) / (planes - 1.0);
+      if (t > 1.0) t = 2.0 - t;
+      t = 1.0 - t;
+      if (t > apode_edge) {
+	t = (t - apode_edge) / (1.0 - apode_edge);
+	t *= t;
+	weight = (1.0 - t);
+	weight *= weight;
+      } else weight = 1.0;
+    } else weight = 1.0;
+    if (dp_calc) {
+      for (row = 0; row < rows; row++) {
+	for (col = 0; col < cols; col++) {
+	  dval = ((double *)data)[m];
+	  if (isnan (dval)) dval = 0.0;
+	  dval *= weight * apodization[m++];
+	  dataavg += dval;
+	  datavar += dval * dval;
+	  wdata[n++] = dval;
+        }
+	n += xcols - cols;
+      }
+    } else {
+      for (row = 0; row < rows; row++) {
+	for (col = 0; col < cols; col++) {
+	  fval = ((float *)data)[m];
+	  if (isnan (fval)) fval = 0.0;
+	  fval *= weight * apodization[m++];
+	  dataavg += fval;
+	  datavar += fval * fval;
+	  xdata[n++] = fval;
+        }
+	n += xcols - cols;
+      }
+    }
+    drms_free_array (tmp);
+  }
+  return 0;
+}
+
+DRMS_Array_t *read_big_cube (DRMS_Segment_t *seg, DRMS_Type_t type, int *status) {
+  DRMS_Array_t *arr, *tmp;
+  int *start, *stop;
+  int n, plane, pln, plen, rank, size;
+  void *data;
+
+  size = drms_sizeof (type);
+  rank = seg->info->naxis;
+  plen = seg->axis[rank-1];
+  arr = drms_array_create (type, rank, seg->axis, NULL, status);
+  if (*status) return NULL;
+
+  start = (int *)malloc (rank * sizeof (int));
+  stop = (int *)malloc (rank * sizeof (int));
+  plane = 1;
+  for (n = 0; n < rank-1; n++) {
+    start[n] = 0;
+    stop[n] = seg->axis[n] - 1;
+    plane *= seg->axis[n];
+  }
+  size *= plane;
+  data = arr->data;
+  for (pln = 0; pln < plen; pln++) {
+    start[rank-1] = stop[rank-1] = pln;
+    tmp = drms_segment_readslice (seg, type, start, stop, status);
+    if (*status) return NULL;
+    memcpy (data, tmp->data, size);
+    drms_free_array (tmp);
+    (char *)data += size;
+  }
+  if (*status) return NULL;
+  return arr;
 }
 
 int DoIt (void) {
@@ -100,13 +241,16 @@ int DoIt (void) {
   double bzero, bscale, scale_range;
   float *data, *xdata;
   float ftrb, ftib, fval, vmin, vmax;
+  long long cube, ntot, l, m, n;
   int axes[3];
   int rank, col, cols, row, rows, plane, planes, area;
   int hcols, hrows, hplanes, opln, xcols, cols_even, rows_even;
-  int rgn, rgnct, segs;
-  int bin, is, js, l, m, n, ntot;
-  int kstat, status;
-  char *input;
+  int rgn, rgnct, segs, isegnum, osegnum, found;
+  int bin, is, js;
+  int key_n, kstat, propct, status;
+  int bigcube;
+  char **copykeylist;
+  char *inser;
   char module_ident[64];
   char pathname[2*DRMS_MAXPATHLEN+1];
   char source[DRMS_MAXQUERYLEN], recid[DRMS_MAXQUERYLEN];
@@ -114,12 +258,14 @@ int DoIt (void) {
 
   int keyct = sizeof (propagate) / sizeof (char *);
 
-  char *inds = params_get_str (params, "in");
-  char *out_series = params_get_str (params, "pspec");
+  char *inds = strdup (params_get_str (params, "in"));
+  char *out_series = strdup (params_get_str (params, "pspec"));
   double apode_edge = params_get_double (params, "apodize");
   double edge_inner = params_get_double (params, "mask_in");
   double edge_outer = params_get_double (params, "mask_ex");
   int fbins = params_get_int (params, "fbin");
+  char *seg_name = strdup (params_get_str (params, "segment"));
+  char *propagate_req = strdup (params_get_str (params, "copy"));
   int log_out = params_isflagset (params, "l") ? 0 : 1;
   int dp_calc = params_isflagset (params, "x");
   int verbose = params_isflagset (params, "v");
@@ -137,6 +283,56 @@ int DoIt (void) {
     if (no_save)
       printf ("(diagnostic run only, no records will be written to DRMS)\n");
   }
+						/*  check the output series */
+  orec = drms_create_record (drms_env, out_series, DRMS_TRANSIENT, &status);
+  if (status) {
+    fprintf (stderr,
+	"Error: drms_create_record returned %d for data series:\n", status);
+    fprintf (stderr, "       %s\n", out_series);
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
+  }
+  if ((segs = orec->segments.num_total) < 1) {
+    fprintf (stderr, "Error: no data segments in output data series:\n");
+    fprintf (stderr, "  %s\n", out_series);
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
+  }
+  found = 0;
+  for (n = 0; n < segs; n++) {
+    oseg = drms_segment_lookupnum (orec, n);
+    if (oseg->info->naxis != 3) continue;
+    if (!found) osegnum = n;
+    found++;
+  }
+  if (!found) {
+    fprintf (stderr, "Error: no segment of rank 3 in output data series:\n");
+    fprintf (stderr, "  %s\n", out_series);
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
+  }
+  oseg = drms_segment_lookupnum (orec, osegnum);
+  if (found > 1) {
+    fprintf (stderr,
+	"Warning: multiple segments of rank 3 in output data series:\n");
+    fprintf (stderr, "  %s\n", out_series);
+    fprintf (stderr, "  using %s\n", oseg->info->name);
+  }
+  switch (oseg->info->type) {
+    case DRMS_TYPE_CHAR:
+      scale_range = 250.0;
+      break;
+    case DRMS_TYPE_SHORT:
+      scale_range = 65000.0;
+      break;
+    case DRMS_TYPE_INT:
+      scale_range = 4.2e9;
+      break;
+    case DRMS_TYPE_LONGLONG:
+      scale_range = 1.8e19;
+      break;
+    default:
+      scale_range = 1.0;
+  }
+  drms_close_record (orec, DRMS_FREE_RECORD);
+							   /*  check input  */
   irecs = drms_open_records (drms_env, inds, &status);
   if (status) {
     fprintf (stderr, "Error (%s): drms_open_records() returned %d for dataset:\n",
@@ -150,13 +346,64 @@ int DoIt (void) {
     fprintf (stderr, "No records found in input data set %s\n", inds);
     return cleanup (1, irecs, orec, orig, pspec, dispose);
   }
-  input = strdup (inds);
+  irec = irecs->records[0];
+  inser = strdup (inds);
+  if ((segs = drms_record_numsegments (irec)) < 1) {
+    fprintf (stderr, "Error: no data segments in input data series:\n");
+    fprintf (stderr, "  %s\n", inser);
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
+  }
+  found = 0;
+  for (n = 0; n < segs; n++) {
+    iseg = drms_segment_lookupnum (irec, n);
+    if (iseg->info->naxis != 3) continue;
+    if (!found) isegnum = n;
+    found++;
+  }
+  if (!found) {
+    fprintf (stderr, "Error: no segment of rank 3 in input data series:\n");
+    fprintf (stderr, "  %s\n", inser);
+    return cleanup (1, irecs, orec, orig, pspec, dispose);
+  }
+  if (found > 1) {
+    if (strcmp (seg_name, "Not Specified")) {
+      iseg = drms_segment_lookup (irec, seg_name);
+      if (!iseg) {
+   	fprintf (stderr,
+	    "Warning: requested segment %s not found in input data series:\n",
+	    seg_name);
+	fprintf (stderr, "  %s\n", inser);
+	iseg = drms_segment_lookupnum (irec, isegnum);
+   	fprintf (stderr, "  using segement %s\n", iseg->info->name);
+      } else if (iseg->info->naxis != 3) {
+   	fprintf (stderr,
+	    "Warning: requested segment %s in input data series:\n", seg_name);
+	fprintf (stderr, "  %s is not 3-dimensional", inser);
+	iseg = drms_segment_lookupnum (irec, isegnum);
+   	fprintf (stderr, " using segment %s\n", iseg->info->name);
+      } else isegnum = iseg->info->segnum;
+    } else {
+      fprintf (stderr,
+	  "Warning: multiple segments of rank 3 in input data series:\n");
+      fprintf (stderr, "  %s\n", inser);
+      fprintf (stderr, "  using %s\n", iseg->info->name);
+    }
+  }
+  propct = construct_stringlist (propagate_req, ',', &copykeylist);
+  if (verbose) {
+    printf ("propagating %d key(s):\n", propct);
+    for (key_n = 0; key_n < propct; key_n++) printf ("  %s\n",
+	copykeylist[key_n]);
+    printf ("\nprocessing %d record(s) in series %s:\n", rgnct, inser);
+  }
+
+						       /*  process records  */
   for (rgn = 0; rgn < rgnct; rgn++) {
     irec = irecs->records[rgn];
     drms_sprint_rec_query (source, irec);
 
-    if (!(iseg = drms_segment_lookup (irec, "V"))) {
-      fprintf (stderr, "Warning: could not find segment \"V\"\n");
+    if (!(iseg = drms_segment_lookupnum (irec, isegnum))) {
+      fprintf (stderr, "Warning: could not find segment \"V\" or \"Vtrack\"\n");
       fprintf (stderr, "       in %s; skipped\n", source);
       continue;
     }
@@ -188,6 +435,7 @@ int DoIt (void) {
     rows = iseg->axis[1];
     planes = iseg->axis[2];
     area = cols * rows;
+    cube = planes * area;
     xcols = 2 * ((cols + 2) / 2);
     hcols = cols / 2;
     hrows = rows / 2;
@@ -217,7 +465,7 @@ int DoIt (void) {
 	}
       }
     }
-					   /*  Initialize FFT working space  */
+					  /*  Initialize FFT working space  */
     if (dp_calc) {
       wdata = (double *)malloc (planes * rows * xcols * sizeof (double));
       plan = fftw_plan_dft_r2c_3d (planes, rows, cols, wdata,
@@ -227,58 +475,75 @@ int DoIt (void) {
       fplan = fftwf_plan_dft_r2c_3d (planes, rows, cols, xdata,
 	  (fftwf_complex *)xdata, FFTW_ESTIMATE);
     }
-				    /*  add the argument values to header  */
-    orig = drms_segment_read (iseg, DRMS_TYPE_FLOAT, &status);
-    if (status) {
-      fprintf (stderr, "Error on drms_segment_read in\n");
-      fprintf (stderr, "      %s\n", source);
-      return cleanup (1, irecs, orec, orig, pspec, dispose);
-    }
-    l = m = n = 0;
-    dataavg = datavar = 0.0;
-    data = (float *)orig->data;
+				     /*  add the argument values to header  */
     if (planes < 2) apode_edge = 2.0;
-
-    for (plane = 0; plane < planes; plane++) {
-      if (apode_edge < 1.0) {
-	t = (2.0 * plane) / (planes - 1.0);
-	if (t > 1.0) t = 2.0 - t;
-	t = 1.0 - t;
-	if (t > apode_edge) {
-	  t = (t - apode_edge) / (1.0 - apode_edge);
-	  t *= t;
-	  weight = (1.0 - t);
-	  weight *= weight;
+    bigcube = 0;
+    if (cube > 838860800) {
+      fprintf (stderr,
+          "Warning: call to drms_segment_read()  may fail for %lld values\n",
+	  cube);
+      fprintf (stderr, "         or results may be garbage\n");
+      bigcube = 1;
+/*
+      orig = read_big_cube (iseg, DRMS_TYPE_FLOAT, &status);
+*/
+      if (dp_calc)
+        read_from_big_cube (iseg, dp_calc, wdata, &dataavg, &datavar,
+	    apode_edge, apodization, xcols);
+      else
+        read_from_big_cube (iseg, dp_calc, xdata, &dataavg, &datavar,
+	    apode_edge, apodization, xcols);
+    } else {
+      orig = drms_segment_read (iseg, DRMS_TYPE_FLOAT, &status);
+      if (status) {
+	fprintf (stderr, "Error on drms_segment_read in\n");
+	fprintf (stderr, "      %s\n", source);
+	return cleanup (1, irecs, orec, orig, pspec, dispose);
+      }
+      l = m = n = 0;
+      dataavg = datavar = 0.0;
+      data = (float *)orig->data;
+      for (plane = 0; plane < planes; plane++) {
+	if (apode_edge < 1.0) {
+	  t = (2.0 * plane) / (planes - 1.0);
+	  if (t > 1.0) t = 2.0 - t;
+	  t = 1.0 - t;
+	  if (t > apode_edge) {
+	    t = (t - apode_edge) / (1.0 - apode_edge);
+	    t *= t;
+	    weight = (1.0 - t);
+	    weight *= weight;
+	  } else weight = 1.0;
 	} else weight = 1.0;
-      } else weight = 1.0;
-      if (dp_calc) {
-	for (row = 0; row < rows; row++) {
-	  for (col = 0; col < cols; col++) {
+	if (dp_calc) {
+	  for (row = 0; row < rows; row++) {
+	    for (col = 0; col < cols; col++) {
 	      dval = data[m++];
 	      if (isnan (dval)) dval = 0.0;
 	      dval *= weight * apodization[l++];
 	      dataavg += dval;
 	      datavar += dval * dval;
 	      wdata[n++] = dval;
-          }
-	  n += xcols - cols;
-	}
-      } else {
-	for (row = 0; row < rows; row++) {
-	  for (col = 0; col < cols; col++) {
+            }
+	    n += xcols - cols;
+	  }
+	} else {
+	  for (row = 0; row < rows; row++) {
+	    for (col = 0; col < cols; col++) {
 	      fval = data[m++];
 	      if (isnan (fval)) fval = 0.0;
 	      fval *= weight * apodization[l++];
 	      dataavg += fval;
 	      datavar += fval * fval;
 	      xdata[n++] = fval;
-          }
-	  n += xcols - cols;
+            }
+	    n += xcols - cols;
+	  }
 	}
+	l = 0;
       }
-      l = 0;
+      drms_free_array (orig);
     }
-    drms_free_array (orig);
 						  /*  necessary for cleanup  */
     orig = NULL;
     dataavg /= m;
@@ -297,7 +562,14 @@ int DoIt (void) {
     data = (float *)malloc (ntot * sizeof (float));
 				    /*  copy designated keywords from input  */
     kstat = 0;
+    for (key_n = 0; key_n < propct; key_n++) {
+      if (strcmp (copykeylist[key_n], "+"))
+        kstat += check_and_copy_key (orec, irec, copykeylist[key_n]);
+      else kstat += propagate_keys (orec, irec, propagate, keyct);
+    }
+/*
     kstat = propagate_keys (orec, irec, propagate, keyct);
+*/
     dval = drms_getkey_double (irec, "CDELT3", &status);
     if (!status) kstat += check_and_set_key_float (orec, "Cadence", dval);
 						       /*  and set new ones  */
@@ -313,9 +585,11 @@ int DoIt (void) {
     kstat += check_and_set_key_str (orec, "CTYPE1", "WAVE-NUM");
     kstat += check_and_set_key_str (orec, "CTYPE2", "WAVE-NUM");
     kstat += check_and_set_key_str (orec, "CTYPE3", "FREQ-ANG");
-    kstat += check_and_set_key_float (orec, "apode_k_min", edge_inner);
-    kstat += check_and_set_key_float (orec, "apode_k_max", edge_outer);
-    kstat += check_and_set_key_float (orec, "apode_f", apode_edge);
+    kstat += check_and_set_key_float (orec, "Apode_k_min", edge_inner);
+    kstat += check_and_set_key_float (orec, "APOD_MIN", edge_inner);
+    kstat += check_and_set_key_float (orec, "Apode_k_max", edge_outer);
+    kstat += check_and_set_key_float (orec, "APOD_MAX", edge_outer);
+    kstat += check_and_set_key_float (orec, "Apode_f", apode_edge);
     if (kstat) {
       fprintf (stderr, "Error writing key value(s) to record in series %s:\n",
 	  out_series);
@@ -375,8 +649,7 @@ int DoIt (void) {
 	    for (bin = 0; bin < fbins; bin++) {
 		m = (plane + bin) * xcols * rows + js * xcols + 2 * is;
 		if (is >= hcols) {
-		  m = 2 * (cols - is);    kstat += propagate_keys (orec, irec, propagate, keyct);
-
+		  m = 2 * (cols - is);
 		  if (js != 0) m += (rows - js) * xcols;
 		  if ((plane + bin) != 0)
 		    m += (planes - plane - bin) * xcols * rows;
@@ -433,6 +706,7 @@ int DoIt (void) {
 	  data[cols * hrows + hcols], dataavg);
       printf ("  S(P) = %11.4e (cf. apodized data var. = %11.4e)\n", powrint, datavar);
     }
+/*
     if ((segs = orec->segments.num_total) < 1) {
       fprintf (stderr, "Error: no data segments in output data series:\n");
       fprintf (stderr, "  %s\n", out_series);
@@ -460,7 +734,8 @@ int DoIt (void) {
       default:
 	scale_range = 1.0;
     }
-
+*/
+    oseg = drms_segment_lookupnum (orec, osegnum);
     if (verbose) printf ("  values range from %.3e to %.3e\n", vmin, vmax);
     if (log_out) {
       double target_min = vmax / exp (scale_range);
@@ -482,9 +757,11 @@ int DoIt (void) {
   
     kstat += check_and_set_key_float (orec, "DataMin", vmin);
     kstat += check_and_set_key_float (orec, "DataMax", vmax);
-    kstat += check_and_set_key_str (orec, "Module", module_ident);
-    kstat += check_and_set_key_str (orec, "Source", source);
-    kstat += check_and_set_key_str (orec, "Input", input);
+    kstat += check_and_set_key_str   (orec, "Module", module_ident);
+    kstat += check_and_set_key_str   (orec, "BLD_VERS", jsoc_version);
+    kstat += check_and_set_key_str   (orec, "Source", source);
+    kstat += check_and_set_key_str   (orec, "Input", inser);
+    kstat += check_and_set_key_time  (orec, "Created", CURRENT_SYSTEM_TIME);
     if (kstat) {
       fprintf (stderr, "Error writing key value(s) to record in series %s\n",
 	  out_series);
@@ -501,6 +778,12 @@ int DoIt (void) {
     }
     pspec->bscale = bscale;
     pspec->bzero = bzero;
+    if (bigcube) {
+      fprintf (stderr,
+	  "Warning: call to drms_segment_write()  may fail for %lld values\n",
+	  ntot);
+      fprintf (stderr, "         or results may be garbage\n");
+    }
     status = drms_segment_write (oseg, pspec, 0);
     if (status) {
       drms_sprint_rec_query (recid, orec);
@@ -550,5 +833,21 @@ int DoIt (void) {
  *		added looping over multiple input and output records
  *		added no_save option for diagnostics
  *  v 0.8 frozen 2010.01.18
+ *  v 0.9:	fixed use of params_get_str
+ *		added setting of several keys: bld_vers, created
+ *		added setting of keys APOD_MIN, APOD_MAX
+ *		added Width & Height to and removed Cadence from default
+ *	propagation list
+ *		added optional segment argument and removed restriction on
+ *	its name
+ *		added warning about large input cubes
+ *  v 0.9 frozen 2010.04.23
+ *  v 1.0	Added code for reading and apodizing large cubes by slices;
+ *	however, there is still a problem with the memory required for the
+ *	output array at the same time the complex array is in place
+ *		Removed an extraneous keyword propagation
+ *		Added Ident to list of default propagated keywords; added option
+ *	for providing alternate or additional list of keywords for propagation
+ *  v 1.0 frozen 2010.08.19
  *
  */
