@@ -15,16 +15,16 @@ DEST = ../bin/$(JPLAT)
 
 PROG =	gentargs
 
-MODS =	datavg maicalc mtrack pspec3 rdcover rdfitc rdsinv
+MODS =	datavg maicalc mtrack pspec3 rdcover rdfitc
 
 FOBJ =	cart_to_polar.o fourier_filter.o ring_pass.o polyval.o \
 	multfactor.o func1.o first_deriv_1.o second_deriv.o \
 	dogleg3.o hmifits.o ringanalysis.o ccint2.o fourierlibn32.o 
 
 FPLS =	$(addprefix $(DEST)/, $(MODS)) $(addprefix $(DEST)/, $(PROG)) \
-	$(addprefix $(DEST)/, rdvinv)
+	$(addprefix $(DEST)/, rdvinv) $(addprefix $(DEST)/, rdsinv)
 
-all:	$(MODS) $(PROG) rdfitf rdvinv
+all:	$(MODS) $(PROG) rdfitf
 
 FC = ifort11
 F90F = -c -O3
@@ -39,16 +39,21 @@ $(MODS):	$$@.o
 	$(LDCMD) -o $(DEST)/$@ $? $(DLIBS)
 	$(RM) $@.o
 
+rdfitf:		$$@.o $(FOBJ)
+	$(FC)  -nofor-main -openmp -o $(DEST)/$@ $? $(FOBJ) $(DLIBS) -lmkl_em64t
+	$(RM) $?
+
+rdsinv:		$$@.o h1h2.o
+	$(FC) -nofor_main -openmp -o $(DEST)/$@ $? $(DLIBS) -lmkl_em64t
+	$(RM) $?
+
 rdvinv:		$$@.o ola_xy.o
 	$(FC) -nofor_main -openmp -o $(DEST)/$@ $? $(DLIBS) -lmkl_em64t
 	$(RM) $?
 
-rdfitf:		$$@.o $(FOBJ)
-	$(FC) -o $(DEST)/$@ $? $(FOBJ) $(DLIBS)
-	$(RM) $?
-
 clean:
 	$(RM)  *.o
+	$(RM)  *.mod
 	$(RM) $(FPLS)
 
 cart_to_polar.o:
