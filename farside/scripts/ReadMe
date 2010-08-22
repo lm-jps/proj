@@ -1,0 +1,20 @@
+Release scripts for farside analysis in the HMI pipeline
+
+If this directory is part of the CVS tree, the files in this directory have
+been mirrored from a specific version control system outside CVS and should
+not be modified without the consent of the author, Rick Bogart. Any changes
+introduced that are not synchronized with changes to the original control
+files are likely to be lost.
+
+Table of contents last updated 10.08.22
+
+	Directories
+CVS/		version control information
+
+	Scripts
+fsbin*		update GONG rebinned image stream to current series
+		hmi_test.fsVbinned
+
+
+	Other
+ReadMe		This file
