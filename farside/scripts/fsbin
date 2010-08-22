@@ -1,0 +1,199 @@
+#!/bin/csh -f
+# script to run one day of binnings of HMI Dopplergrams into a 200*200 grid
+#   for GONG farside processing
+# This script is written to be run as a cron job under UID rick
+#   and should be run daily
+
+@ TEST = 1	# set to 0 for production in namespace hmi
+
+# base naming convention for I/O series and logs
+if ($TEST) then
+  set NMSP = hmi_test
+else
+  set NMSP = hmi
+endif
+
+set TYPE = $NMSP.fsbin
+
+# input and output series
+#set ISER = $NMSP.V_45s_nrt
+set ISER = $NMSP.V_45s
+#set OSER = $NMSP.fsVbinned_nrt
+#set OSER = hmi_test.fsVbinned_nrt
+set OSER = hmi_test.fsVbinned
+
+# auxiliary files
+set HOSTNAME = `hostname`
+set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set PROCID = $HOSTID\_$$
+set TEMP = /tmp23/`whoami`
+if (!(-d $TEMP)) mkdir $TEMP
+if (!(-d $TEMP)) set TEMP = /tmp
+set QRES = $TEMP/qres
+if (!(-d $QRES)) mkdir $QRES
+set MSGS = $TEMP/msgs
+set NOTE = ~rick/rings/notify
+set MMSG = $MSGS/msg.$PROCID
+
+set JPLAT = linux_x86_64
+setenv SGE_ROOT /SGE
+set path = ($path ~rick/bin/$JPLAT ~rick/jsoc/bin/$JPLAT $SGE_ROOT/bin/lx24-amd64)
+setenv KMP_BLOCKTIME 10
+
+set REBIN = "drms_rebin offset= -OBS_VR"
+
+set SCRIPT = runfsbin
+
+# set up logging, notification
+set SUBJ = "HMI farside binning for GONG pipeline"
+
+if ($#argv > 0) then
+  @ YYMMDD0 = $1
+  if ($YYMMDD0 < 500000) @ YYMMDD0 += 20000000
+  if ($YYMMDD0 < 1000000) @ YYMMDD0 += 19000000
+  @ YYMMDD1 = $YYMMDD0
+  if ($#argv > 1) then
+    @ YYMMDD1 = $2
+    if ($YYMMDD1 < 500000) @ YYMMDD1 += 20000000
+    if ($YYMMDD1 < 1000000) @ YYMMDD1 += 19000000
+  endif
+else
+  @ LASTREC = `show_info -qr ds= $OSER'[#$]'`
+  if (!($LASTREC)) then
+    echo Series $OSER is unpopulated, need to initialize with command
+    echo "usage: $0 YYMMDD [YYMMDD]"
+    exit
+  endif
+  set LASTDT = `show_info -q ds= $OSER'[$]' key= T_REC`
+  @ YR = `echo $LASTDT | awk -F. '{print $1}'`
+  if ($YR % 4) then
+    set MOLEN = (31 28 31 30 31 30 31 31 30 31 30 31)
+  else
+    set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
+  endif
+  @ MO = `echo $LASTDT | awk -F. '{print $2}'`
+  @ DA = `echo $LASTDT | awk -F_ '{print $1}' | awk -F. '{print $3}'`
+  set TIME = `echo $LASTDT | awk -F_ '{print $2}'`
+  if ($TIME == "23:59:15") then
+    @ DA++
+    if ($DA > $MOLEN[$MO]) then
+      @ DA = 1
+      @ MO++
+      if ($MO > 12) then
+	@ MO = 1
+	@ YR++
+	if ($YR % 4) then
+	  set MOLEN = (31 28 31 30 31 30 31 31 30 31 30 31)
+	else
+	  set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
+	endif
+      endif
+    endif
+  endif
+  @ YYMMDD0 = $YR`printf %02d%02d $MO $DA`
+  @ YYMMDD1 = $YYMMDD0
+  @ YYMMDD = $YYMMDD0
+  @ YR = $YYMMDD / 10000
+  if ($YR % 4) then
+    set MOLEN = (31 28 31 30 31 30 31 31 30 31 30 31)
+  else
+    set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
+  endif
+  @ MO = ($YYMMDD % 10000) / 100
+  @ DA = $YYMMDD % 100
+  set DATE = $YR.`printf %02d.%02d $MO $DA`
+  @ DCT = `show_info -c ds= $ISER"[$DATE""_00:00_TAI/1d]" | awk '{print $1}'`
+  while ($DCT >= 1920)
+    @ YYMMDD1 = $YYMMDD
+    @ DA++
+    if ($DA > $MOLEN[$MO]) then
+      @ DA = 1
+      @ MO++
+      if ($MO > 12) then
+	@ MO = 1
+	@ YR++
+	if ($YR % 4) then
+	  set MOLEN = (31 28 31 30 31 30 31 31 30 31 30 31)
+	else
+	  set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
+	endif
+      endif
+    endif
+    set DATE = $YR.`printf %02d.%02d $MO $DA`
+    @ DCT = `show_info -c ds= $ISER"[$DATE""_00:00_TAI/1d]" | awk '{print $1}'`
+    @ YYMMDD = $YR`printf %02d%02d $MO $DA`
+  end
+endif
+if ($YYMMDD0 != $YYMMDD1) then
+  echo processing data for $YYMMDD0 - $YYMMDD1 > $MMSG
+else
+  echo processing data for $YYMMDD0 > $MMSG
+endif
+
+@ YYMMDD = $YYMMDD0
+@ YR = $YYMMDD / 10000
+if ($YR % 4) then
+  set MOLEN = (31 28 31 30 31 30 31 31 30 31 30 31)
+else
+  set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
+endif
+
+while ($YYMMDD <= $YYMMDD1)
+  @ YR = $YYMMDD / 10000
+  @ MO = ($YYMMDD % 10000) / 100
+  @ DA = $YYMMDD % 100
+  set DATE = $YR.`printf %02d.%02d $MO $DA`
+
+  @ HR = 0
+  set STRTS
+  while ($HR < 24)
+    set STRTS = ($STRTS $DATE\_$HR\:00:00_TAI)
+    @ HR += 3
+  end
+  if ($YYMMDD == $YYMMDD1) then
+    @ HR = 0
+    set STRTS
+    while ($HR < 24)
+      set HTIME = $DATE\_$HR\:00_TAI
+      @ DICT = `show_info -c ds= $ISER"[$HTIME/3h]" | awk '{print $1}'`
+      @ DOCT = `show_info -c ds= $OSER"[$HTIME/3h]" | awk '{print $1}'`
+      if ($DOCT < $DICT) then
+	set STRTS = ($STRTS $HTIME)
+      endif
+      @ HR += 3
+    end
+  endif
+  @ JOBCT = $#STRTS
+  echo "#\!/bin/csh -f" > $SCRIPT
+  echo 'set STRTS =  ('"$STRTS"')' >> $SCRIPT
+  echo 'set START = $STRTS[$SGE_TASK_ID]' >> $SCRIPT
+  echo "$REBIN \" >> $SCRIPT
+  echo "  out= $OSER bin= 20 start= 48 stop= -49 \" >> $SCRIPT
+  echo '  in= '$ISER'"[$START/3h]" \' >> $SCRIPT
+  echo '  copy= "QUALITY,CRLN_OBS,CRLT_OBS,CAR_ROT,OBS_VR,OBS_VN,OBS_VW,DSUN_OBS,RSUN_OBS,+"' >> $SCRIPT
+  if ($JOBCT) then
+    qsub -sync yes -t 1-$JOBCT -q j.q -e $QRES -o $QRES $SCRIPT >>& $MMSG
+  endif
+
+  @ DA++
+  if ($DA > $MOLEN[$MO]) then
+    @ DA = 1
+    @ MO++
+    if ($MO > 12) then
+      @ MO = 1
+      @ YR++
+      if ($YR % 4) then
+	set MOLEN = (31 28 31 30 31 30 31 31 30 31 30 31)
+      else
+	set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
+      endif
+    endif
+  endif
+  @ YYMMDD = $YR`printf %02d%02d $MO $DA`
+end
+
+set NOTIFY = `grep ^$TYPE $NOTE | awk '{print $2}'`
+if ($#NOTIFY) then
+  echo $SUBJ > $MSGS/subj.$PROCID
+  echo "$NOTIFY" > $MSGS/list.$PROCID
+endif
