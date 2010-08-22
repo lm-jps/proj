@@ -6,6 +6,7 @@
  *  append_keyval_to_primekeyval ()
  *  check_and_copy_key ()
  *  check_and_setkey_TYPE ()
+ *  copy_prime_keys ()
  *  create_primekey_from_keylist ()
  *  drms_wcs_timestep ()
  *  propagate_keys ()
@@ -220,7 +221,9 @@ int check_and_copy_key (DRMS_Record_t *new, DRMS_Record_t *old,
       free (value);
       return 0;
     }
-  } else return 0;
+  } else {
+    return 0;
+  }
 		     /*  check that key types agree (this could be relaxed)  */
   if (oldkey->info->type != newkey->info->type) {
 /*
@@ -274,14 +277,81 @@ int check_and_copy_key (DRMS_Record_t *new, DRMS_Record_t *old,
       return 1;
   }
 }
+
 /*
- *  Create a prime key string value by concatenating the sprinted values of a
- *    selected list of keys in a DRMS record
- *  The values are ordered as in the key list, and separated by '|' characters;
- *    '|' characters in strings are converted to "\|"
- *  All keywords in the list must be present in the record, otherwise a NULL
- *    string is returned
+ *  Parse a token separated list of character strings into an array of
+ *    character strings and return the number of such strings, plus the
+ *    array itself in the argument list
+ *
+ *  Bugs:
+ *    There is no way of including the token in the parsed strings
  */
+int construct_stringlist (const char *request, char token, char ***stringlist) {
+  int keyct = 1;
+  int m, n;
+  char *req, *req0 = strdup (request);
+  char c;
+					 /*  count the number of separators  */
+  req = req0;
+  while (c = *req) {
+    if (c == token) {
+      *req = '\0';
+      keyct++;
+    }
+    req++;
+  }
+  *stringlist = (char **)malloc (keyct * sizeof (char **));
+  req = req0;
+  for (n = 0; n < keyct; n++) {
+    (*stringlist)[n] = strdup (req);
+    req += strlen (req) + 1;
+  }
+  for (n = 0; n < keyct; n++) {
+    char *subs = (*stringlist)[n];
+					     /*  remove leading white space  */
+    while (isspace (c = *subs)) subs++;
+    (*stringlist)[n] = subs;
+					    /*  remove trailing white space  */
+    if (strlen (subs)) {
+      subs += strlen (subs) - 1;
+      while (isspace (c = *subs)) {
+	*subs = '\0';
+	subs--;
+      }
+    }
+  }
+					 /*  remove empty strings from list  */
+  for (n = 0; n < keyct; n++) {
+    if (!strlen ((*stringlist)[n])) {
+      for (m = n; m < keyct - 1; m++)
+        (*stringlist)[m] = (*stringlist)[m + 1];
+      keyct--;
+    }
+  }
+  free (req0);
+  return keyct;
+}
+
+int copy_prime_keys (DRMS_Record_t *new, DRMS_Record_t *old) {
+/*
+ *  Copy the prime keys of new from old if possible
+ *    For slotted prime keys, it is copy the key value rather than its index
+ */
+  DRMS_Keyword_t *pkey;
+  int n, kstat = 0;
+  char *key, *pkeyindex;
+  int pkeyct = new->seriesinfo->pidx_num;
+
+  for (n = 0; n < pkeyct; n++) {
+    pkey = new->seriesinfo->pidx_keywords[n];
+    key = strdup (pkey->info->name);
+    
+    if (pkeyindex = strstr (key, "_index")) *pkeyindex = '\0';
+    if (!drms_keyword_lookup (old, key, 1)) continue;
+    kstat += check_and_copy_key (new, old, key);
+  }
+  return kstat;
+}
 
 void string_insert_escape_char (char **str, const char esc) {
   int i, n, ct = 0, len;
@@ -676,5 +746,7 @@ int drms_wcs_timestep (DRMS_Record_t *rec, int axis, double *tstep) {
  *  09.12.02		fixed two icc11 compiler warnings and one error
  *  10.01.07		added support in check_and_copy_key for keywords that
  *		are dynamic links (in which case checking is irrelevant)
- *  10.02.03		relaxed chec in chec_and_copy_key (too much)
+ *  10.02.03		relaxed check in check_and_copy_key (too much)
+ *  10.04.24		added copy_prime_keys()
+ *  10.06.11		added construct_stringlist() (orig in drms_rebin)
  */
