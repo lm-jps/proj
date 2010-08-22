@@ -31,12 +31,13 @@
  *
  *  Bugs:
  *    Recalculation of target arrays for vardim input has not been tested
- *    Does not check quality of input records, causing errors when it tries to
- *	open files for missing data
  *    Only one input segment and one output segment can be processed; there
  *	is currently no way of dealing with the situation when there are
  *	multiple possible candidate segments and the input segments must
  *	be specified in the input dataset specfiers
+ *    The option for removal of full orbital velocity is only a stub, and
+ *	unimplemented; the option for removal of radial velocity is superfluous,
+ *	as it is the same as specifying offset= -OBS_VR
  *    Has not been tested with arrays of rank > 3
  *    There may be some inconsistency about use of long long's for indexing in
  *	possibly large arrays
@@ -47,80 +48,103 @@
 #include "keystuff.c"
 
 char *module_name = "drms_rebin";
-char *version_id = "0.8";
+char *version_id = "0.9";
 char *module_desc = "rectangular region binning";
 
 ModuleArgs_t module_args[] = {
-  {ARG_STRING, "in",   "mdi.fd_V_lev18[:#$]", "input data set"},
-//  {ARG_STRING, "in",    "mdi.fd_V_lev18[2008.01.01_00:40]", "input data set"},
-  {ARG_STRING, "out",   "su_rsb.tstrebin", "output data series"},
+  {ARG_STRING, "in",    "", "input data set"},
+  {ARG_STRING, "out",   "", "output data series"},
   {ARG_STRING, "seg",   "Not Specified", "output data segment"},
   {ARG_INTS,   "bin",   "{1}", "array of per-axis bin widths"},
   {ARG_INTS,   "start", "{0}", "array of input axis starting pixels"},
   {ARG_INTS,   "stop",  "{-1}", "array of input axis ending pixels"},
   {ARG_STRING, "copy",  "+",
       "comma separated list of keys to propagate forward"},
+  {ARG_STRING, "scale",  "Not Specified", "scaling value (number or keyword)"},
+  {ARG_STRING, "offset",  "Not Specified", "offset value (number or keyword)"},
+  {ARG_INT,    "qmask", "0x80000000", "quality bit mask for image rejection"},
+  {ARG_STRING, "qual_key", "Quality", "keyname for 32-bit input image quality field"}, 
   {ARG_FLAG,   "n", "", "do not save output (for testing)"},
+  {ARG_FLAG,   "o", "",
+      "remove orbital velocity from signal (radial component only)"},
+  {ARG_FLAG,   "O", "", "remove orbital velocity from signal"},
   {ARG_FLAG,   "v", "", "run in verbose mode"},
   {ARG_END}
 };
 		 /*  list of keywords to propagate by default (if possible)
 						       from input to output  */
-char *propagate[] = {"T_REC", "T_OBS"};
+char *propagate[] = {"T_REC", "T_OBS", "DATE__OBS", "TELESCOP", "INSTRUME"};
 
 			/*  the following belong in external utility files  */
-/*
- *  Parse a token separated list of character strings into an array of
- *    character strings and return the number of such strings, plus the
- *    array itself in the argument list
- *
- *  Bugs:
- *    There is no way of including the token in the parsed strings
- */
-int construct_stringlist (const char *request, char token, char ***stringlist) {
-  int keyct = 1;
-  int m, n;
-  char *req, *req0 = strdup (request);
-  char c;
-					/*  count the number of separators  */
-  req = req0;
-  while (c = *req) {
-    if (c == token) {
-      *req = '\0';
-      keyct++;
+			   /*  parse a string of the form [*|/][+|-]keyname  */
+char *parse_as_arith_key (const char *str, int *mult, int *add) {
+  char *parsed = strdup (str);
+  *mult = *add = 1;
+  if (parsed[0] == '*') parsed++;
+  else if (parsed[0] == '/') {
+    *mult = -1;
+    parsed++;
+  }
+  if (parsed[0] == '+') parsed++;
+  else if (parsed[0] == '-') {
+    *add = -1;
+    parsed++;
+  }
+  return parsed;
+}
+
+int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *v, long long ntot) {
+  double *vavg = (double *)v->data;
+
+  double vmin, vmax, norm, norm2, scale, sig, var;
+  double sumv1, sum2, sum3, sum4;
+  long long n;
+  int sumv0;
+  int valmin = ntot, valmax = 0;
+  int kstat = 0;
+
+  vmin = HUGE;
+  vmax = -HUGE;
+  sumv1 = 0.0;
+  sumv0 = 0;
+  for (n = 0; n < ntot; n++) {
+    if (vavg[n] < vmin) vmin = vavg[n];
+    if (vavg[n] > vmax) vmax = vavg[n];
+    if (isfinite (vavg[n])) {
+      sumv0++;
+      sumv1 += vavg[n];
     }
-    req++;
   }
-  *stringlist = (char **)malloc (keyct * sizeof (char **));
-  req = req0;
-  for (n = 0; n < keyct; n++) {
-    (*stringlist)[n] = strdup (req);
-    req += strlen (req) + 1;
-  }
-  for (n = 0; n < keyct; n++) {
-    char *subs = (*stringlist)[n];
-					     /*  remove leading white space  */
-    while (isspace (c = *subs)) subs++;
-    (*stringlist)[n] = subs;
-					    /*  remove trailing white space  */
-    if (strlen (subs)) {
-      subs += strlen (subs) - 1;
-      while (isspace (c = *subs)) {
-	*subs = '\0';
-	subs--;
+  
+  kstat += check_and_set_key_double (rec, "DataMin", vmin);
+  kstat += check_and_set_key_double (rec, "DataMax", vmax);
+
+  if (sumv0) {
+    scale = 1.0 / sumv0;
+    sumv1 *= scale;
+    sum2 = sum3 = sum4 = 0.0;
+    kstat += check_and_set_key_double (rec, "DataMean", sumv1);
+    for (n = 0; n < ntot; n++) {
+      if (isfinite (vavg[n])) {
+        norm = vavg[n] - sumv1;
+	norm2 = norm * norm;
+	sum2 += norm2;
+	sum3 += norm * norm2;
+	sum4 += norm2 * norm2;
       }
     }
-  }
-					 /*  remove empty strings from list  */
-  for (n = 0; n < keyct; n++) {
-    if (!strlen ((*stringlist)[n])) {
-      for (m = n; m < keyct - 1; m++)
-        (*stringlist)[m] = (*stringlist)[m + 1];
-      keyct--;
+    kstat += check_and_set_key_double (rec, "DataRMS", sqrt (sum2 / sumv0));
+    if (sumv0 > 1) {
+      var = sum2 / (sumv0 - 1);
+      sig = sqrt (var);
+      kstat += check_and_set_key_double (rec, "DataSkew",
+	  scale * sum3 / (var * sig));
+      kstat += check_and_set_key_double (rec, "DataKurt",
+	  scale * sum4 / (var * var) - 3.0);
     }
   }
-  free (req0);
-  return keyct;
+
+  return kstat;
 }
 
 							/*  main module body  */
@@ -136,8 +160,10 @@ int DoIt (void) {
   HIterator_t *lastseg;
   double *vdat, *vbin;
   double crpix, cdelt;
+  double scale, bias, vr, vw, vn;
   long long *nssub, *ntsub;
   long long nn, ntdat, ntbin;
+  unsigned int qual_inp, qual_out;
   int **loc;
   int *np;
   int *in_axes, *out_axes;
@@ -145,10 +171,12 @@ int DoIt (void) {
   int axis, npmax;
   int m, n, key_n, rec_n, rec_ct, seg_n, iseg_ct, oseg_ct, valid_ct;
   int isegnum, osegnum, rank, axis_check;
+  int bias_mult, bias_sign, scale_mult, scale_sign;
   int kstat, status = 0;
   int keyct = sizeof (propagate) / sizeof (char *);
+  char *key_scale, *key_bias;
   char source[DRMS_MAXQUERYLEN];
-  char key[256];
+  char key[256], valuestr[256];
 
   double missing_val = 0.0 / 0.0;
 
@@ -159,7 +187,13 @@ int DoIt (void) {
   int strtvals = params_get_int (params, "start_nvals");
   int stopvals = params_get_int (params, "stop_nvals");
   char *propagate_req = strdup (params_get_str (params, "copy"));
+  unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
+  char *qual_key = strdup (params_get_str (params, "qual_key"));
   int no_save = params_isflagset (params, "n");
+  int add_orbital_vr = params_isflagset (params, "o");
+  int add_orbital_full = params_isflagset (params, "O");
+  int scale_values = strcmp (params_get_str (params, "scale"), "Not Specified");
+  int bias_values = strcmp (params_get_str (params, "offset"), "Not Specified");
   int verbose = params_isflagset (params, "v");
   int dispose = (no_save) ? DRMS_FREE_RECORD : DRMS_INSERT_RECORD;
 
@@ -201,9 +235,6 @@ int DoIt (void) {
 					   as part of record set specifier  */
 		/*  must add another argument (0?) to call in next release  */
   while (iseg = drms_record_nextseg (irec, &lastseg, 1)) {
-/*
-printf ("\t%-10s\t%d\n", iseg->info->name, iseg->info->segnum);
-*/
     if (iseg->info->protocol == DRMS_PROTOCOL_INVALID ||
 	iseg->info->protocol == DRMS_GENERIC) continue;
     if (!valid_ct) isegnum = iseg->info->segnum;
@@ -227,6 +258,63 @@ printf ("\t%-10s\t%d\n", iseg->info->name, iseg->info->segnum);
   }
   iseg = drms_segment_lookupnum (irec, isegnum);
   rank = iseg->info->naxis;
+ 				       /*  check input data series keywords  */
+  if (scale_values) {
+    char *endptr;
+    scale = strtod (params_get_str (params, "scale"), &endptr);
+    if (strlen (endptr)) {
+      key_scale = parse_as_arith_key (params_get_str (params, "scale"),
+	  &scale_mult, &scale_sign);
+      if (!drms_keyword_lookup (irec, key_scale, 1)) {
+        fprintf (stderr, "Warning: required keyword %s not found\n", key_scale);
+        fprintf (stderr, "         no scaling applied\n");
+	scale_values = 0;
+      }
+    } else scale_mult = scale_sign = 0;
+  }
+  if (bias_values) {
+    char *endptr;
+    bias = strtod (params_get_str (params, "offset"), &endptr);
+    if (strlen (endptr)) {
+      key_bias = parse_as_arith_key (params_get_str (params, "offset"),
+	  &bias_mult, &bias_sign);
+      if (!drms_keyword_lookup (irec, key_bias, 1)) {
+        fprintf (stderr, "Warning: required keyword %s not found\n", key_bias);
+        fprintf (stderr, "         no offset applied\n");
+	bias_values = 0;
+      }
+    } else bias_mult = bias_sign = 0;
+  }
+
+  if (add_orbital_vr || add_orbital_full) {
+    if (!drms_keyword_lookup (irec, "OBS_VR", 1)) {
+      fprintf (stderr, "Warning: required keyword %s not found\n", "OBS_VR");
+      fprintf (stderr, "         no correction applied for observer velocity\n");
+      add_orbital_vr = add_orbital_full = 0;
+    }
+    if (add_orbital_full) {
+      add_orbital_vr = 0;
+      if (!drms_keyword_lookup (irec, "OBS_VW", 1)) {
+        fprintf (stderr, "Warning: required keyword %s not found\n", "OBS_VW");
+        fprintf (stderr, "         no correction applied for observer velocity\n");
+        add_orbital_full = 0;
+      }
+      if (!drms_keyword_lookup (irec, "OBS_VW", 1)) {
+        fprintf (stderr, "Warning: required keyword %s not found\n", "OBS_VN");
+        fprintf (stderr, "         no correction applied for observer velocity\n");
+        add_orbital_full = 0;
+      }
+      if (rank != 2) {
+	fprintf (stderr, "Warning: input data not image type\n");
+	fprintf (stderr,
+	    "         full correction of orbital velocity not supported\n");
+        add_orbital_full = 0;
+      }
+      fprintf (stderr,
+	  "Warning: full correction of orbital velocity not implemented\n");
+      add_orbital_full = 0;
+    }
+  }
  					/*  check output data series struct  */
   oseg_ct = drms_record_numsegments (orec);
   if (strcmp (out_segname, "Not Specified")) {
@@ -373,11 +461,11 @@ printf ("\t%-10s\t%d\n", iseg->info->name, iseg->info->segnum);
     int trgpix;
     int intarget = 1;
     int srcpix = (nn % in_axes[0]);
-    if (srcpix < strt[0] || srcpix >= stop[0]) intarget = 0;
+    if (srcpix < strt[0] || srcpix > stop[0]) intarget = 0;
     trgpix = (srcpix - strt[0]) / bin[0];
     for (m = 1; m < rank; m++) {
       srcpix = (nn / nssub[m]) % in_axes[m];
-      if (srcpix < strt[m] || srcpix >= stop[m]) {
+      if (srcpix < strt[m] || srcpix > stop[m]) {
 	intarget = 0;
 	break;
       }
@@ -407,16 +495,43 @@ printf ("\t%-10s\t%d\n", iseg->info->name, iseg->info->segnum);
 
   if (axis_check) {
     fprintf (stderr,
-	"Error: either input or output segment has protocol vardim\n");
-    fprintf (stderr, "       not currently supported\n");
+	"Warning: either input or output segment has protocol vardim\n");
+    fprintf (stderr,
+	"         not currently supported; results may be garbage!\n");
+/*
     return 1;
+*/
   }
 
   for (rec_n = 0; rec_n < rec_ct; rec_n++) {
     if (verbose) printf ("record %d:\n", rec_n);
     irec = drs->records[rec_n];
     drms_sprint_rec_query (source, irec);
+    orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
     if (verbose) printf ("  processing record %d: %s\n", rec_n, source);
+    kstat = 0;
+		/*  copy in values for new record's prime keys if possible
+			   (they may be recopied or even overwritten later)  */
+    kstat += copy_prime_keys (orec, irec);
+    for (key_n = 0; key_n < propct; key_n++) {
+      if (strcmp (copykeylist[key_n], "+"))
+        kstat += check_and_copy_key (orec, irec, copykeylist[key_n]);
+      else kstat += propagate_keys (orec, irec, propagate, keyct);
+    }
+    kstat += check_and_set_key_time (orec, "Date", CURRENT_SYSTEM_TIME);
+    kstat += check_and_set_key_time (orec, "Created", CURRENT_SYSTEM_TIME);
+    kstat += check_and_set_key_str (orec, "Module", module_ident);
+    kstat += check_and_set_key_str (orec, "Input", inds);
+    kstat += check_and_set_key_str (orec, "Source", source);
+    kstat += check_and_set_key_str (orec, "BLD_VERS", jsoc_version);
+			/*  check quality flag for presence of data segment  */
+    qual_inp = drms_getkey_int (irec, qual_key, &status);
+    if ((qual_inp & qmask) && !status) {
+      kstat += check_and_set_key_int (orec, "Quality", 0x80000000);
+      drms_close_record (orec, dispose);
+      continue;
+    }
+    qual_out = 0x00000000;
     iseg = drms_segment_lookupnum (irec, isegnum);
     if (!iseg) {
       fprintf (stderr, "Warning: could not find segment # %d\n", isegnum);
@@ -432,7 +547,6 @@ printf ("\t%-10s\t%d\n", iseg->info->name, iseg->info->segnum);
       continue;
     }
     vdat = (double *)orig_array->data;
-    orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
     oseg = drms_segment_lookupnum (orec, osegnum);
     if (iseg->info->scope == DRMS_VARDIM) {
 	       /*  input series has variable dimensions; have they changed?  */
@@ -521,6 +635,31 @@ printf ("\t%-10s\t%d\n", iseg->info->name, iseg->info->segnum);
     bind_array->bscale = orig_array->bscale;
     bind_array->bzero = orig_array->bzero;
 */
+    if (bias_values) {
+      if (bias_mult) {
+        bias = drms_getkey_double (irec, key_bias, &status);
+	if (bias_mult < 0) bias = 1.0 / bias;
+	bias *= bias_sign;
+      }
+      for (nn = 0; nn < ntdat; nn++) if (isfinite (bias)) vdat[nn] += bias;
+    }
+    if (scale_values) {
+      if (scale_mult) {
+        scale = drms_getkey_double (irec, key_scale, &status);
+	if (scale_mult < 0) scale = 1.0 / scale;
+	scale *= scale_sign;
+      }
+      for (nn = 0; nn < ntdat; nn++) if (isfinite (scale)) vdat[nn] *= scale;
+    }
+    if (add_orbital_vr) {
+      vr = drms_getkey_double (irec, "OBS_VR", &status);
+      for (nn = 0; nn < ntdat; nn++) if (isfinite (vr)) vdat[nn] -= vr;
+    }
+    if (add_orbital_full) {
+      vr = drms_getkey_double (irec, "OBS_VR", &status);
+      vw = drms_getkey_double (irec, "OBS_VW", &status);
+      vn = drms_getkey_double (irec, "OBS_VN", &status);
+    }
     for (nn = 0; nn < ntbin; nn++) {
       vbin[nn] = 0;
       for (m = 0; m < np[nn]; m++) {
@@ -533,16 +672,16 @@ printf ("\t%-10s\t%d\n", iseg->info->name, iseg->info->segnum);
     drms_free_array (orig_array);
     
     drms_segment_write (oseg, bind_array, 0);
-    kstat = 0;
-    for (key_n = 0; key_n < propct; key_n++) {
-      if (strcmp (copykeylist[key_n], "+"))
-        kstat += check_and_copy_key (orec, irec, copykeylist[key_n]);
-      else kstat += propagate_keys (orec, irec, propagate, keyct);
+    kstat += check_and_set_key_int (orec, "Quality", qual_out);
+							 /*  parameter keys  */
+    for (n = 0; n < rank; n++) {
+      sprintf (key, "binwdth_%d", n);
+      kstat += check_and_set_key_int (orec, key, bin[n]);
+      sprintf (key, "startpx_%d", n);
+      kstat += check_and_set_key_int (orec, key, strt[n]);
+      sprintf (key, "stoppx_%d", n);
+      kstat += check_and_set_key_int (orec, key, stop[n]);
     }
-    kstat += check_and_set_key_time (orec, "Date", CURRENT_SYSTEM_TIME);
-    kstat += check_and_set_key_time (orec, "Created", CURRENT_SYSTEM_TIME);
-    kstat += check_and_set_key_str (orec, "Module", module_ident);
-    kstat += check_and_set_key_str (orec, "Source", source);
 							/*  adjust WCS keys  */
     for (n = 0; n < rank; n++) {
       sprintf (key, "CTYPE%d", n + 1);
@@ -562,7 +701,45 @@ printf ("\t%-10s\t%d\n", iseg->info->name, iseg->info->segnum);
         cdelt *= bin[n];
 	kstat += check_and_set_key_double (orec, key, cdelt);
       }
+      sprintf (key, "CROTA%d", n + 1);
+      kstat += check_and_copy_key (orec, irec, key);
     }
+    if (bias_values) {
+      if (bias_mult) {
+	if (bias_mult < 0) {
+	  if (bias_sign < 0) snprintf (valuestr, 256, "1/(-%s)", key_bias);
+	  else snprintf (valuestr, 256, "1/%s", key_scale);
+	} else {
+	  if (bias_sign < 0) snprintf (valuestr, 256, "-%s", key_bias);
+	  else snprintf (valuestr, 256, "%s", key_bias);
+	}
+      } else snprintf (valuestr, 256, "%g", bias);
+      kstat += check_and_set_key_str (orec, "OffsetBy", valuestr);
+      if (verbose) {
+        printf ("  offset by ");
+	if (bias_mult) printf ("%s = ", valuestr);
+	printf ("%g\n", bias);
+      }
+    }
+    if (scale_values) {
+      if (scale_mult) {
+	if (scale_mult < 0) {
+	  if (scale_sign < 0) snprintf (valuestr, 256, "1/(-%s)", key_scale);
+	  else snprintf (valuestr, 256, "1/%s", key_scale);
+	} else {
+	  if (scale_sign < 0) snprintf (valuestr, 256, "-%s", key_scale);
+	  else snprintf (valuestr, 256, "%s", key_scale);
+	}
+      } else snprintf (valuestr, 256, "%g", scale);
+      kstat += check_and_set_key_str (orec, "ScaledBy", valuestr);
+      if (verbose) {
+        printf ("  scaled by ");
+	if (scale_mult) printf ("%s = ", valuestr);
+	printf ("%g\n", scale);
+      }
+    }
+							/*  statistics keys  */
+    kstat += set_stats_keys (orec, bind_array, ntbin);
     drms_close_record (orec, dispose);
   }
   drms_close_records (drs, DRMS_FREE_RECORD);
@@ -580,4 +757,19 @@ printf ("\t%-10s\t%d\n", iseg->info->name, iseg->info->segnum);
  *  v 0.8	Modified call to drms_record_nextseg for DRMS 2.0
  *		Changed indexing to quad long where appropriate
  *		Added recalculation of target arrays for vardim input
+ *  v 0.8 frozen 2010.03.08
+ *  v 0.9	Put in hack to accept vardim segments on input, but not
+ *	actually deal with them
+ *		Added CROTAn, DATE__OBS, TELESCOP and INSTRUME to default
+ *	propagated keywords
+ *		Added copying of output's prime keys, setting of Input key
+ *		Fixed bug that was preventing last entry of slowest-index
+ *	from being properly filled
+ *		Added options for removal of orbital velocity (2nd-order only
+ *	a stub) and scaling and/or offset by fixed numerical value or keyword
+ *	value, and setting of appropriate keywords; added (unconditional)
+ *	setting of statistics keywords; added checking and setting of quality
+ *	flags
+ *		Moved construct_stringlist() function to keystuff
+ *  v 0.9 frozen 2010.08.20
  */
