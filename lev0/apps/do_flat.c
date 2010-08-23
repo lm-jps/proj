@@ -306,7 +306,7 @@ int do_flat(LEV0LEV1 *info)
 
 	s = s2 = s3 = s4 = 0.0;
 	for (i=min; i<=max; ++i) {
-	    int ii = i + MINOUT;
+	    double ii = i + MINOUT;
 	    s += (dtmp = ii*hist[i]);
 	    s2 += (dtmp *= ii);
 	    s3 += (dtmp *= ii);

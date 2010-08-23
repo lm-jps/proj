@@ -64,10 +64,11 @@ int imgstat(IMG *img, STAT *stat)
 	i += h[++stat->median];
 
     for (i = stat->min; i <= stat->max; ++i) {
-	s += (t = i*h[i]);
-	s2 += (t *= i);
-	s3 += (t *= i);
-	s4 += (t *= i);
+	double x = i;
+	s += (t = x*h[i]);
+	s2 += (t *= x);
+	s3 += (t *= x);
+	s4 += (t *= x);
     }
 
     s /= n; 
