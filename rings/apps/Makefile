@@ -77,6 +77,9 @@ hmifits.o:
 multfactor.o:
 	$(FC) $(F90F) -o $(@) $(@:.o=.f90)
 
+ola_xy.o:
+	$(FC) $(FFLAGS) $(@:.o=.f)
+
 polyval.o:
 	$(FC) $(F90F) -o $(@) $(@:.o=.f90)
 
