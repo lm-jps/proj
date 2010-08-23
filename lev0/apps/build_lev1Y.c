@@ -127,7 +127,7 @@ unsigned int fsnx = 0;
 //int data1[MAXPIXELS];
 float data1[MAXPIXELS];		//floats for HMI
 int data1A[MAXPIXELS];		//ints for AIA
-int array_cosmic[16777216];	//4096x4096
+//int array_cosmic[16777216];	//4096x4096
 double tgttimes[NUMRECLEV1];
 
 long long brec, erec, bfsn, efsn; //begin and end lev0 rec/fsn. must be same data type
@@ -623,7 +623,8 @@ int do_ingest(long long bbrec, long long eerec)
            drms_setkey_double(rs, "GCIEC_X", IOdata.gciX);
            drms_setkey_double(rs, "GCIEC_Y", IOdata.gciY);
            drms_setkey_double(rs, "GCIEC_Z", IOdata.gciZ);
-           drms_setkey_float(rs, "DSUN_OBS", (float)IOdata.dsun_obs);
+           //drms_setkey_float(rs, "DSUN_OBS", (float)IOdata.dsun_obs);
+           drms_setkey_double(rs, "DSUN_OBS", IOdata.dsun_obs);
            drms_setkey_double(rs, "OBS_VR", IOdata.obs_vr);
            drms_setkey_double(rs, "OBS_VW", IOdata.obs_vw);
            drms_setkey_double(rs, "OBS_VN", IOdata.obs_vn);
@@ -764,12 +765,9 @@ int do_ingest(long long bbrec, long long eerec)
       l0l1->darkflag = 0;
       hshiexp = drms_getkey_int(rs, "HSHIEXP", &rstatus);
       hcamid = drms_getkey_int(rs, "HCAMID", &rstatus);
-      if(hshiexp == 0) {
-        if(hcamid == 0 || hcamid == 1) {
-          l0l1->darkflag = 1;
-        }
-      }
       if(hmiaiaflg) {
+        int aimgshce = drms_getkey_int(rs, "AIMGSHCE", &rstatus);
+        if(aimgshce == 0) l0l1->darkflag = 1;
         if(rstatus = do_flat_aia(l0l1)) {
           printk("***ERROR in do_flat() status=%d\n", rstatus);
           printf("***ERROR in do_flat() status=%d\n", rstatus);
@@ -779,6 +777,7 @@ int do_ingest(long long bbrec, long long eerec)
         }
       }
       else {
+        if(hshiexp == 0) l0l1->darkflag = 1;
         if(rstatus = do_flat(l0l1)) {
           printk("***ERROR in do_flat() status=%d\n", rstatus);
           printf("***ERROR in do_flat() status=%d\n", rstatus);
@@ -845,6 +844,13 @@ for(i=0; i<3; i++) { printf("%d\t%d\t%d\n", spikelocs[i], oldvalues[i],
         } else { printf("spikes segment not found\n"); }
        }
 /**************************!!!TEMP*****************************************
+      printf("for i < nbad print badpix[i]\n");
+      int ii;
+      int *pp;
+      pp = (int *)ArrayBad->data; 
+      for(ii=0; ii < nbad; ii++) { printf("%d ", *pp++); }
+      printf("\n");
+      int *array_cosmic = (int *)malloc(16777216 * sizeof(int));
       dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
 				array_cosmic, &n_cosmic, 4096, 4096);
       if(dstatus) {
@@ -905,6 +911,17 @@ TEMPSKIP:
     if(dstatus) {
       printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
       noimage[i] = 1;
+    }
+    else { //!!!TEMP for tesing here. TBD-what to do if do_flat() failed
+/**************************!!!TEMP*****************************************
+      int *array_cosmic = (int *)malloc(16777216 * sizeof(int));
+      dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
+				array_cosmic, &n_cosmic, 4096, 4096);
+      if(dstatus) {
+        printk("ERROR: cosmic_rays() error=%d\n", dstatus);
+        noimage[i] = 1;
+      }
+**************************!!!TEMP*****************************************/
     }
   }
     drms_setkey_float(rs, "RSUN_LF", (float)rsun_lf);

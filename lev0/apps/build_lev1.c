@@ -401,6 +401,7 @@ int orbit_calc()
 #include "get_image_location.c"
 #include "limb_fit_function.c"
 #include "cosmic_ray.c"
+#include "heightformation.c"
 
 //Called with the range to do. The args are either rec#s or fsn#s accord to modeflg
 int do_ingest(long long bbrec, long long eerec)
@@ -411,6 +412,7 @@ int do_ingest(long long bbrec, long long eerec)
   TIME t_obs0;
   TIME tobs[NUMRECLEV1];
   float percentd;
+  float cdelt1, rsun, crpix1, crpix2, crota2;
   double rsun_lf, x0_lf, y0_lf;
   int rstatus, dstatus, ncnt, fcnt, i, j, k, qualint, nobs;
   int hshiexp, hcamid, nbad, n_cosmic;
@@ -938,10 +940,11 @@ TEMPSKIP:
       printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
       noimage[i] = 1;
     }
-  }
     drms_setkey_float(rs, "RSUN_LF", (float)rsun_lf);
     drms_setkey_float(rs, "X0_LF", (float)x0_lf);
     drms_setkey_float(rs, "Y0_LF", (float)y0_lf);
+  }
+    //aia will have missing values. (took RSUN_LF kw out of aia.lev1)
     if(drms_ismissing_double(rsun_lf)) {
       drms_setkey_float(rs, "CDELT1", imageloc[i].imscale);
       drms_setkey_float(rs, "CDELT2", imageloc[i].imscale);
@@ -963,60 +966,29 @@ TEMPSKIP:
       drms_setkey_float(rs, "CRPIX1", imageloc[i].x + 1);
       drms_setkey_float(rs, "CRPIX2", imageloc[i].y + 1);
     }
-    drms_setkey_float(rs, "CROTA2", imageloc[i].instrot + ptdata.sat_rot);
+    crota2 = imageloc[i].instrot + ptdata.sat_rot;
+    drms_setkey_float(rs, "CROTA2", crota2);
 
-/* FIXME Remove entire following if block when WCS KW are correct for AIA */
-  if(hmiaiaflg) {                       //aia
-    int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
-/*
-    drms_setkey_float(rs, "CDELT1", 0.609);
-    drms_setkey_float(rs, "CDELT2", 0.609);
-    switch (wl) {
-     case 94:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
-     case 131:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
-     case 171:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
-     case 193:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
-     case 211:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
-     case 304:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
-     case 335:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
-     case 1600:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
-     case 1700:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
-     case 4500:
-        drms_setkey_float(rs, "CRPIX1", 2048.5);
-        drms_setkey_float(rs, "CRPIX2", 2048.5);
-        break;
+/**********************NOOP for now*******************************************
+    if(!hmiaiaflg && !dstatus) {	//only do for hmi and good limb fit
+      //Now call Sebastien's heightformation() fuction (email 08/09/10 17:50)
+      if(!quicklook) {		//don't call for lev1_nrt
+        if(!(dstatus = heightformation(fid, IOdata.obs_vr, &cdelt1, &rsun, &crpix1, &crpix2, -crota2))) {		//!!TEMP ck about the -crota2
+          drms_setkey_float(rs, "CDELT1", cdelt1);
+          drms_setkey_float(rs, "R_SUN", rsun);
+          drms_setkey_float(rs, "CRPIX1", crpix1);
+          drms_setkey_float(rs, "CRPIX2", crpix2);
+        }
+        else {
+          printk("ERROR: heightformation() returned error for FID=%d\n", fid);
+        }
+      }
     }
-    drms_setkey_float(rs, "CRVAL1", 0.0);
-    drms_setkey_float(rs, "CRVAL2", 0.0);
-*/
-  }
+**********************NOOP for now*******************************************/
+
+  //if(hmiaiaflg) {                       //aia
+  //  int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
+  //}
 
   do_quallev1(rs0, rs, i, fsnx);
 
@@ -1137,6 +1109,7 @@ int DoIt(void)
   bfsn = cmdparams_get_int(&cmdparams, "bfsn", NULL);
   efsn = cmdparams_get_int(&cmdparams, "efsn", NULL);
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
+  //quicklook = 1; //!!TEMP for test
   if(modeflg) {		//recnum mode
     if(brec == 0 || erec == 0) {
       fprintf(stderr, "brec and erec must be given for recnum mode. 0 not allowed\n");
