@@ -56,31 +56,52 @@
  *				of tracking interval for example)
  *	grid	enum	discross	choice of output
  *				recognized values are "discross", "rdsyn05",
- *				"rdsyn15", "rdsyn30", "timed", "mdidp", "mdisp"
- *				(and possibly others).
+ *				"rdsyn15", "rdsyn30", "timed", "mdidp", "mdisp",
+ *				"rd+30" (and possibly others).
  *		discross:	default mode, print values for trackings of
  *				appropriate latitude targets for disc passages
  *		rdsyn05		HMI ring-diagrams synoptic set of 5-deg tiles
- *				(2748 or ?, varying with B0)
+ *				(2748 or 2727, varying with B0)
  *		rdsyn15		HMI ring-diagrams synoptic set of 15-deg tiles
- *				(284 or ?, varying with B0)
+ *				(284 or 281, varying with B0)
  *		rdsyn30		HMI ring-diagrams synoptic set of 15-deg tiles
- *				(67 or 69, varying with B0)
- *		timed		HMI time-distance synoptic set of 25 tiles
+ *				(69, varying with B0)
+ *		timed20		HMI time-distance synoptic set of 25 tiles at
+ *				20 deg spacings
+ *		timed24		HMI time-distance synoptic set of 25 tiles at
+ *				24 deg spacings
  *		mdidp		MDI "extended dense-pack" set of 195 tiles
  *		mdisp		MDI "structure-pack" set of 39 tiles
+ *		rdcm05		central meridian strip from rdsyn05
+ *				(64 or 65, varying with B0)
+ *		rdcm15		central meridian strip from rdsyn15
+ *				(20 or 19, varying with B0)
+ *		rdcm30		central meridian strip from rdsyn30 (9)
+ *		rdeq05		equatorial strip from rdsyn05 (63)
+ *		rdeq15		equatorial strip from rdsyn15 (19)
+ *		rdeq30		equatorial strip from rdsyn30 (9)
+ *		rd+05		central meridian plus equator from rdsyn05
+ *				(127 or 126, varying with B0)
+ *		rd+15		central meridian plus equator from rdsyn15
+ *				(38 or 37, varying with B0)
+ *		rd+30		central meridian plus equator from rdsyn30 (17)
+ *		rdx05		- not implemented -
+ *		rdx15		- not implemented -
+ *		rdx30		"X" pattern from rdsyn30 (lat = +/- lonCM) (17)
  *
  *  Flags
  *	M		use SOHO ephemeris for B0 calculation or conversion of
  *		time in calendar-clock format to Carrington time
+ *	c		report longitudes relative to CM rather than HG
  *	v		run in verbose mode (with commentary to stderr)
  *	
  *
  *  Bugs:
+ *    The 60-deg latitude list for 30-deg high B0 discross appears incomplete
+ *    The "Stonyhurst" option of printing longitudes relative to CM is only
+ *	implemented for the rd+30 grid
  *    A number of the options have not been implemented at all
- *    The ring-diagrams synoptic sets have not bene implemented for times of
- *	|B0| < 3.625
- *    There may be problems parsing regular calendar-clock time string
+ *    There may be problems parsing regular calendar-clock time strings
  *
  *  Revision history is at end of file.
  */
@@ -91,15 +112,16 @@
 #include "soho_ephem.c"
 						      /*  module identifier  */
 char *module_name = "track_target_list";
-char *version_id = "0.9";
+char *version_id = "1.0";
 
 ModuleArgs_t module_args[] = {
   {ARG_TIME,   "time",  "now-120deg", "midpoint of desired tracking interval"},
   {ARG_NUME, "grid", "discross", "target grid",
-      "discross, rdsyn05, rdsyn15, rdsyn30, timed, mdidp, mdisp, rd+05, rd+15, rd+30, rdx05, rdx15, rdx30 rdcm05, rdcm15, rdcm30, rdeq05, rdeq15, rdeq30"},
+      "discross, rdsyn05, rdsyn15, rdsyn30, timed20, timed24, mdidp, mdisp, rd+05, rd+15, rd+30, rdx05, rdx15, rdx30, rdcm05, rdcm15, rdcm30, rdeq05, rdeq15, rdeq30"},
   {ARG_INTS,	"ar", "{}",
       "target active regions for ring diagrams structure grid"},
   {ARG_FLAG,   "M", "", "midtime Carrington longitude appropriate for MDI"}, 
+  {ARG_FLAG,   "c", "", "report longitudes relative to CM rather than HG"}, 
   {ARG_FLAG,   "v", "", "run verbose (with commentary to stderr)"}, 
   {}
 };
@@ -287,16 +309,17 @@ int dense_pack_list (double clon) {
   return 0;
 }
 
-int timed_grid_list (double clon) {
+int timed_grid_list (double clon, float step) {
   float lat, lon, loncm;
+  float edge = 2.0 * step;
 
-  for (lat = -40.0; lat <= 40.0; lat += 20.0) {
-    for (loncm = -40.0; loncm <= 40.0; loncm += 20.0)
+  for (lat = -edge; lat <= edge; lat += step) {
+    for (loncm = -edge; loncm <= edge; loncm += step)
       printf (" %+05.1f", lat);
   }
   printf ("\n");
-  for (lat = -40.0; lat <= 40.0; lat += 20.0) {
-    for (loncm = -40.0; loncm <= 40.0; loncm += 20.0) {
+  for (lat = -edge; lat <= edge; lat += step) {
+    for (loncm = -edge; loncm <= edge; loncm += step) {
       lon = clon + loncm;
       while (lon < 0.0) lon += 360.0;
       while (lon >= 360.0) lon -= 360.0;
@@ -374,6 +397,100 @@ int hmi30_pack_list (double clon, double b0) {
   }
   printf ("\n");
 
+  return 0;
+}
+
+int hmi30_cm_list () {
+  float lat;
+
+  for (lat = -60.0; lat <= 60.0; lat += 15.0) printf (" %+05.1f", lat);
+  printf ("\n");
+  return 0;
+}
+
+int hmi30_eq_list (double clon, int stony) {
+  float lon, loncm;
+
+  if (stony) {
+    for (loncm = -60.0; loncm <= 60.0; loncm += 15.0) printf (" %+05.1f", loncm);
+  } else {
+    for (loncm = -60.0; loncm <= 60.0; loncm += 15.0) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+  return 0;
+}
+
+int hmi30_stgrg_list (double clon, int stony) {
+  float lat, lon, loncm;
+
+  for (lat = -60.0; lat < 0.0; lat += 15.0) printf (" %+05.1f", lat);
+  lat = 0.0;
+  for (loncm = -60.0; loncm <= 60.0; loncm += 15.0) printf (" %+05.1f", lat);
+  for (lat = 15.0; lat <= 60.0; lat += 15.0) printf (" %+05.1f", lat);
+  printf ("\n");
+
+  if (stony) {
+    for (lat = -60.0; lat < 0.0; lat += 15.0) printf (" %+05.1f", 0.0);
+    for (loncm = -60.0; loncm <= 60.0; loncm += 15.0) printf (" %+05.1f", loncm);
+    for (lat = 15.0; lat <= 60.0; lat += 15.0) printf (" %+05.1f", 0.0);
+  } else {
+    for (lat = -60.0; lat < 0.0; lat += 15.0) printf (" %05.1f", clon);
+    for (loncm = -60.0; loncm <= 60.0; loncm += 15.0) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    for (lat = 15.0; lat <= 60.0; lat += 15.0) printf (" %05.1f", clon);
+  }
+  printf ("\n");
+  return 0;
+}
+
+int hmi30_stand_list (double clon, int stony) {
+  float lat, lon, loncm;
+
+  for (lat = -60.0; lat < 0.0; lat += 15.0) printf (" %+05.1f %+05.1f", lat, lat);
+  lat = 0.0;
+  printf (" %+05.1f", lat);
+  for (lat = 15.0; lat <= 60.0; lat += 15.0) printf (" %+05.1f %+05.1f", lat, lat);
+  printf ("\n");
+
+  if (stony) {
+    for (loncm = -60.0; loncm < 0.0; loncm += 15.0) printf (" %+05.1f %+05.1f",
+	loncm, -loncm);
+    printf (" %+05.1f", 0.0);
+    for (loncm = 15; loncm <= 60.0; loncm += 15.0) printf (" %+05.1f %+05.1f",
+	loncm, -loncm);
+  } else {
+    for (loncm = -60.0; loncm < 0.0; loncm += 15.0) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+      lon = clon - loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    printf (" %05.1f", clon);
+    for (loncm = 15; loncm <= 60.0; loncm += 15.0) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+      lon = clon - loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
   return 0;
 }
 
@@ -685,13 +802,204 @@ int hmi15_pack_list (double clon, double b0) {
     printf (" %05.1f", clon);
     printf ("\n");
   } else {
-fprintf (stderr ,
-    "Error: timed full-disc target list for 15-deg tiles not implemented\n");
-fprintf (stderr ,
-    "       for |b0| = %f < 3.625\n", b0);
-return 1;
+    lat = -67.5;
+    lim = 40.0;
+    for (loncm = -lim; loncm <= lim; loncm += 20.0)
+      printf (" %+05.1f", lat);
+    lat = -60.0;
+    lim = 60.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0)
+      printf (" %+05.1f", lat);
+    lat = -52.5;
+    lim = 62.5;
+    for (loncm = -lim; loncm <= lim; loncm += 12.5)
+      printf (" %+05.1f", lat);
+    lim = 70.0;
+    for (lat = -45.0; lat <= -37.5; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 10.0)
+        printf (" %+05.1f", lat);
+    }
+    lim = 67.5;
+    for (lat = -30.0; lat <= 0.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 7.5)
+        printf (" %+05.1f", lat);
+    }
+    printf ("\n");
+
+    lat = -67.5;
+    lim = 40.0;
+    for (loncm = -lim; loncm <= lim; loncm += 20.0) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    lat = -60.0;
+    lim = 60.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    lat = -52.5;
+    lim = 62.5;
+    for (loncm = -lim; loncm <= lim; loncm += 12.5) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    lim = 70.0;
+    for (lat = -45.0; lat <= -37.5; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 10.0) {
+	lon = clon + loncm;
+	while (lon < 0.0) lon += 360.0;
+	while (lon >= 360.0) lon -= 360.0;
+	printf (" %05.1f", lon);
+      }
+    }
+    lim = 67.5;
+    for (lat = -30.0; lat <= 0.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 7.5) {
+	lon = clon + loncm;
+	while (lon < 0.0) lon += 360.0;
+	while (lon >= 360.0) lon -= 360.0;
+	printf (" %05.1f", lon);
+      }
+    }
+    printf ("\n");
+
+    lim = 67.5;
+    for (lat = 7.5; lat <= 30.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 7.5)
+        printf (" %+05.1f", lat);
+    }
+    lim = 70.0;
+    for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 10.0)
+        printf (" %+05.1f", lat);
+    }
+    lat = 52.5;
+    lim = 62.5;
+    for (loncm = -lim; loncm <= lim; loncm += 12.5)
+      printf (" %+05.1f", lat);
+    lat = 60.0;
+    lim = 60.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0)
+      printf (" %+05.1f", lat);
+    lat = 67.5;
+    lim = 40.0;
+    for (loncm = -lim; loncm <= lim; loncm += 20.0)
+      printf (" %+05.1f", lat);
+    printf ("\n");
+
+    lim = 67.5;
+    for (lat = 7.5; lat <= 30.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 7.5) {
+	lon = clon + loncm;
+	while (lon < 0.0) lon += 360.0;
+	while (lon >= 360.0) lon -= 360.0;
+	printf (" %05.1f", lon);
+      }
+    }
+    lim = 70.0;
+    for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 10.0) {
+	lon = clon + loncm;
+	while (lon < 0.0) lon += 360.0;
+	while (lon >= 360.0) lon -= 360.0;
+	printf (" %05.1f", lon);
+      }
+    }
+    lat = 52.5;
+    lim = 62.5;
+    for (loncm = -lim; loncm <= lim; loncm += 12.5) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    lat = 60.0;
+    lim = 60.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    lat = 67.5;
+    lim = 40.0;
+    for (loncm = -lim; loncm <= lim; loncm += 20.0) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    printf ("\n");
   }
 
+  return 0;
+}
+
+int hmi15_cm_list (double b0) {
+  float lat, latmin, latmax;
+
+  latmin = -67.5;
+  latmax = 67.5;
+  if (b0 < -3.625) latmin = -75.0;
+  if (b0 > 3.625) latmax = 75.0;
+  for (lat = latmin; lat <= latmax; lat += 7.5) printf (" %+05.1f", lat);
+  printf ("\n");
+  return 0;
+}
+
+int hmi15_eq_list (double clon, int stony) {
+  float lon, loncm;
+
+  if (stony) {
+    for (loncm = -67.5; loncm <= 67.5; loncm += 7.5) printf (" %+05.1f", loncm);
+  } else {
+    for (loncm = -67.5; loncm <= 67.5; loncm += 7.5) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+  return 0;
+}
+
+int hmi15_stgrg_list (double clon, double b0, int stony) {
+  float lat, latmin, latmax, lon, loncm;
+
+  latmin = -67.5;
+  latmax = 67.5;
+  if (b0 < -3.625) latmin = -75.0;
+  if (b0 > 3.625) latmax = 75.0;
+
+  for (lat = latmin; lat < 0.0; lat += 7.5) printf (" %+05.1f", lat);
+  lat = 0.0;
+  for (loncm = -67.5; loncm <= 67.5; loncm += 7.5) printf (" %+05.1f", lat);
+  for (lat = 7.5; lat <= latmax; lat += 7.5) printf (" %+05.1f", lat);
+  printf ("\n");
+
+  if (stony) {
+    for (lat = latmin; lat < 0.0; lat += 7.5) printf (" %+05.1f", 0.0);
+    for (loncm = -67.5; loncm <= 67.5; loncm += 7.5) printf (" %+05.1f", loncm);
+    for (lat = 7.5; lat <= latmax; lat += 7.5) printf (" %+05.1f", 0.0);
+  } else {
+    for (lat = latmin; lat < 0.0; lat += 7.5) printf (" %05.1f", clon);
+    for (loncm = -67.5; loncm <= 67.5; loncm += 7.5) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    for (lat = 7.5; lat <= latmax; lat += 7.5) printf (" %05.1f", clon);
+  }
+  printf ("\n");
   return 0;
 }
 
@@ -776,11 +1084,33 @@ int hmi5_pack_list (double clon, double b0) {
       limit[nlat] = 70.0;
     limit[X25_85N] = 50.0;
   } else {
-fprintf (stderr ,
-      "Error: timed full-disc target list for 5-deg tiles not implemented\n");
-fprintf (stderr ,
-    "       for |b0| = %f < 3.625\n", b0);
-return 1;
+    for (nlat = X25_85S; nlat <= X25_825S; nlat++)
+      limit[nlat] = -1;
+    limit[X25_80S] = limit[X25_80N] = 0.0;
+    limit[X25_775S] = limit[X25_775N] = 30.0;
+    limit[X25_75S] = limit[X25_75N] = 40.0;
+    limit[X25_725S] = limit[X25_725N] = 45.0;
+    for (nlat = X25_70S; nlat <= X25_675S; nlat++)
+      limit[nlat] = 52.5;
+    limit[X25_65S] = limit[X25_65N] = 60.0;
+    for (nlat = X25_625S; nlat <= X25_525S; nlat++)
+      limit[nlat] = 65.0;
+    for (nlat = X25_50S; nlat <= X25_425S; nlat++)
+      limit[nlat] = 70.0;
+    for (nlat = X25_40S; nlat <= X25_275S; nlat++)
+      limit[nlat] = 75.0;
+    for (nlat = X25_25S; nlat <= X25_25N; nlat++)
+      limit[nlat] = 77.5;
+    for (nlat = X25_275N; nlat <= X25_40N; nlat++)
+      limit[nlat] = 75.0;
+    for (nlat = X25_425N; nlat <= X25_50N; nlat++)
+      limit[nlat] = 70.0;
+    for (nlat = X25_525N; nlat <= X25_625N; nlat++)
+      limit[nlat] = 65.0;
+    for (nlat = X25_675N; nlat <= X25_70N; nlat++)
+      limit[nlat] = 52.5;
+    for (nlat = X25_825N; nlat <= X25_85N; nlat++)
+      limit[nlat] = -1;
   }
 
   if (b0 > 3.625) {
@@ -1075,6 +1405,83 @@ return 1;
   return 0;
 }
 
+int hmi5_cm_list (double b0) {
+  float lat, latmin, latmax;
+
+  latmin = -67.5;
+  latmax = 67.5;
+  if (b0 < -3.625) {
+    latmin = -85.0;
+    latmax = 72.5;
+  } else if (b0 > 3.625) {
+    latmin = -72.5;
+    latmax = 85.0;
+  } else {
+    latmin = -80.0;
+    latmax = 80.0;
+  }
+  for (lat = latmin; lat <= latmax; lat += 2.5) printf (" %+05.1f", lat);
+  printf ("\n");
+  return 0;
+}
+
+int hmi5_eq_list (double clon, int stony) {
+  float lon, loncm;
+
+  if (stony) {
+    for (loncm = -77.5; loncm <= 77.5; loncm += 2.5) printf (" %+05.1f", loncm);
+  } else {
+    for (loncm = -77.5; loncm <= 77.5; loncm += 2.5) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+  return 0;
+}
+
+int hmi5_stgrg_list (double clon, double b0, int stony) {
+  float lat, latmin, latmax, lon, loncm;
+
+  latmin = -67.5;
+  latmax = 67.5;
+  if (b0 < -3.625) {
+    latmin = -85.0;
+    latmax = 72.5;
+  } else if (b0 > 3.625) {
+    latmin = -72.5;
+    latmax = 85.0;
+  } else {
+    latmin = -80.0;
+    latmax = 80.0;
+  }
+
+  for (lat = latmin; lat < 0.0; lat += 2.5) printf (" %+05.1f", lat);
+  lat = 0.0;
+  for (loncm = -77.5; loncm <= 77.5; loncm += 2.5) printf (" %+05.1f", lat);
+  for (lat = 2.5; lat <= latmax; lat += 2.5) printf (" %+05.1f", lat);
+  printf ("\n");
+
+  if (stony) {
+    for (lat = latmin; lat < 0.0; lat += 2.5) printf (" %+05.1f", 0.0);
+    for (loncm = -77.5; loncm <= 77.5; loncm += 2.5) printf (" %+05.1f", loncm);
+    for (lat = 2.5; lat <= latmax; lat += 2.5) printf (" %+05.1f", 0.0);
+  } else {
+    for (lat = latmin; lat < 0.0; lat += 2.5) printf (" %05.1f", clon);
+    for (loncm = -77.5; loncm <= 77.5; loncm += 2.5) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+    for (lat = 2.5; lat <= latmax; lat += 2.5) printf (" %05.1f", clon);
+  }
+  printf ("\n");
+  return 0;
+}
+
 void hmi_transit_list (int size, float *lat, int *trlat, int latct, float clon,
     int lonspan, int ct) {
   float lonmax, lonmin;
@@ -1105,8 +1512,9 @@ int main (int argc, char **argv) {
   int cr, latct, lonspc, lonstp, n, nmin, nmax;
   int dosp25 = 0, dosp75 = 0, dosp150  = 0;
   char tbuf[64];
-  enum grid_choice {DISCROSS, RD_SYN05, RD_SYN15, RD_SYN30, TD_SYN, MDI_DP,
-      MDI_SP, RD_PLUS05, RD_PLUS15, RD_PLUS30, RD_X05, RD_X15, RD_X30,
+  enum grid_choice {DISCROSS, RD_SYN05, RD_SYN15, RD_SYN30, TD_SYN20, TD_SYN24,
+      MDI_DP, MDI_SP, RD_PLUS05, RD_PLUS15, RD_PLUS30, RD_X05, RD_X15, RD_X30,
+      RD_CM05, RD_CM15, RD_CM30, RD_EQ05, RD_EQ15, RD_EQ30,
       TARGETS, LAST_CHOICE};
   int trackct = 0, track5ct = 0, track16ct = 0, track32ct = 0;
 
@@ -1126,6 +1534,7 @@ int main (int argc, char **argv) {
   TIME tmid = params_get_time (params, "time");
   int target_grid = params_get_int (params, "grid");
   int formdi = cmdparams_isflagset (params, "M");
+  int stony = cmdparams_isflagset (params, "c");
   int verbose = cmdparams_isflagset (params, "v");
   char *tstr = strdup (params_get_str (params, "time"));
 
@@ -1134,10 +1543,24 @@ int main (int argc, char **argv) {
   int do_hmi30_pack = target_grid == RD_SYN30;
   int do_hmi15_pack = target_grid == RD_SYN15;
   int do_hmi5_pack = target_grid == RD_SYN05;
-  int do_timed_grid = target_grid == TD_SYN;
+  int do_timed_grid20 = target_grid == TD_SYN20;
+  int do_timed_grid24 = target_grid == TD_SYN24;
+  int do_cm30 = target_grid == RD_CM30;
+  int do_cm15 = target_grid == RD_CM15;
+  int do_cm05 = target_grid == RD_CM05;
+  int do_eq30 = target_grid == RD_EQ30;
+  int do_eq15 = target_grid == RD_EQ15;
+  int do_eq05 = target_grid == RD_EQ05;
+  int do_stgrg30 = target_grid == RD_PLUS30;
+  int do_stgrg15 = target_grid == RD_PLUS15;
+  int do_stgrg05 = target_grid == RD_PLUS05;
+  int do_stand30 = target_grid == RD_X30;
+  int do_stand15 = target_grid == RD_X15;
+  int do_stand05 = target_grid == RD_X05;
 
-  lonstp = (do_dense_pack || do_struc_pack || do_hmi15_pack) ? 150 :
-      (do_hmi30_pack) ? 300 : (do_timed_grid) ? 1 : 25;
+  lonstp = (do_dense_pack || do_struc_pack || do_hmi15_pack|| do_cm15 || do_eq15) ? 150 :
+      (do_hmi30_pack|| do_eq30 || do_cm30) ? 300 : \
+      (do_timed_grid20 || do_timed_grid24) ? 1 : 25;
 					   /*  parse the target time string  */
   if (sscanf (tstr, "%d:%lf", &cr, &cl) != 2) {
 				      /* requested time not in format CR:CL  */
@@ -1211,7 +1634,22 @@ int main (int argc, char **argv) {
   if (do_hmi30_pack) return hmi30_pack_list (cl, b0);
   if (do_hmi15_pack) return hmi15_pack_list (cl, b0);
   if (do_hmi5_pack) return hmi5_pack_list (cl, b0);
-  if (do_timed_grid) return timed_grid_list (cl);
+  if (do_timed_grid20) return timed_grid_list (cl, 20.0);
+  if (do_timed_grid24) return timed_grid_list (cl, 24.0);
+  if (do_cm30) return hmi30_cm_list ();
+  if (do_cm15) return hmi15_cm_list (b0);
+  if (do_cm05) return hmi5_cm_list (b0);
+  if (do_eq30) return hmi30_eq_list (cl, stony);
+  if (do_eq15) return hmi15_eq_list (cl, stony);
+  if (do_eq05) return hmi5_eq_list (cl, stony);
+  if (do_stgrg30) return hmi30_stgrg_list (cl, stony);
+  if (do_stgrg15) return hmi15_stgrg_list (cl, b0, stony);
+  if (do_stgrg05) return hmi5_stgrg_list (cl, b0, stony);
+  if (do_stand30) return hmi30_stand_list (cl, stony);
+  if (do_stand15 || do_stand05) {
+    fprintf (stderr, "Error: selected grid option is unimplemented\n");
+    return 1;
+  }
 
   if (verbose) {
     fprintf (stderr, "target time adjusted to %d:%05.1f ", cr, cl);
@@ -1532,4 +1970,19 @@ for (n = L25_825S; n <= L25_825N; n++) printf ("%5.1f: %d\n", lat25[n], trlat25[
  *		than flags; added several options for future expansion (crosses,
  *		strips)
  *  v 0.9 frozen 2010.04.23
+ *  v 1.0
+ *	10.05.12	Implemented low B0 targets for daily HMI 5-deg and
+ *		15-deg tilesets, CM strips, EQ strip for 30-deg tileset
+ *	10.05.17	Fixed bug in 15-deg tileset for |lat| 52.5 strips
+ *		implemented other EQ strips, + cross for 30
+ *	10.05.22	Fixed CM strip for 5-deg tiles
+ *	10.05.29	Fixed error in high-lat lon lists for 15-deg grid at
+ *		"equinox"
+ *	10.07.01	Changed timed option to timed20, added timed24 option
+ *	10.07.20	Added -c option for reporting of longitudes relative
+ *		to central meridian (for rd+30 only so far)
+ *	10.08.10	Implemented + cross for 5 and 15-deg tiles and x cross
+ *		for 30-deg tiles (all with -c option); made -c option available
+ *		for equatorial strips
+ *  v 1.0 frozen 2010.08.23
  */
