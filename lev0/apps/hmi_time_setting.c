@@ -202,6 +202,7 @@ if (flg) {	/* AIA */
     }
     if((hxsec != DRMS_MISSING_INT) && (hxssec != DRMS_MISSING_INT)) {
       hxssec = hxssec >> 16;
+      hxsec = hxsec + 1;		//add to dark 26July2010
       t_obs = SDO_to_DRMS_time(hxsec, hxssec);
     }
   }

@@ -45,7 +45,7 @@ void free_mem(struct mempointer *memory);
 
 	config_id=new_config_id;
 
-	printf("new image config\n");
+
 	maskfile=fopen("/home/jsoc/hmi/tables/cropmask.105", "rb"); //use the same crop table for now
 	if (maskfile==NULL){fputs("mask file not found", stderr); status_res=2; free(mk); return status;}
     for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) 
@@ -118,21 +118,14 @@ void free_mem(struct mempointer *memory);
   long long recnum;
   double date;
   int fsn=drms_getkey_int(record, "FSN", &status);
-  recnum=record->recnum;
-  printf("----limb_finder------\n");
-  printf("FSN %d\n", fsn);
-  printf("MISSVALS: %d\n", missvals);
-  printf("Record number %ld\n", recnum);
-  date=drms_getkey_time(record, "DATE", &status);
-  char datestr[256];
-      sprint_ut(datestr, date);
-  printf("date %s\n", datestr);
-
-  if ((camid != light_val1 && camid != light_val2) || focid < 1 || focid > 16){printf("not an obs image\n"); status_res=2; return status_res;}
-  if (missvals > nx/4*ny){printf("not enough data\n"); status_res=2; return status_res;}
 
 
-  if (status1 == 0 && status2 == 0 && !isnan(image_scl) && image_scl > 0.0 && !isnan(rsun_obs) && rsun_obs > 0.0){rad=(double)rsun_obs/image_scl*rad_corr_fac+foc_corr*((double)focid-11.0);} else {status_res=2; printf("keyword issues 2 \n"); return status_res;}
+
+  if ((camid != light_val1 && camid != light_val2) || focid < 1 || focid > 16){status_res=2; return status_res;}
+  if (missvals > nx/4*ny){status_res=2; return status_res;}
+
+
+  if (status1 == 0 && status2 == 0 && !isnan(image_scl) && image_scl > 0.0 && !isnan(rsun_obs) && rsun_obs > 0.0){rad=(double)rsun_obs/image_scl*rad_corr_fac+foc_corr*((double)focid-11.0);} else {status_res=2; return status_res;}
  
 
   if (nx != ny){printf("Limb finder does not work for non-square images\n");  status_res=2; return status_res;}
@@ -140,12 +133,8 @@ void free_mem(struct mempointer *memory);
  
 
   int nr=(int)(rad*(high-low)/2.0)*2+1; //odd number of points
-  int nphi=nx/2;
+  int nphi=(int)(rad/4.0*2.0*M_PI);
 
-  int marg_up=(int)((high-1.0)*rad+cent_err);
-  int marg_lo=(int)(-(low-1.0)*rad+cent_err); // make wider margin. Important if initial center estimate is off!!
-  int marg_up0=marg_up/binx-1;
-  int marg_lo0=marg_lo/binx-1;
  
   //       
   struct mempointer memory;
@@ -193,6 +182,12 @@ void free_mem(struct mempointer *memory);
   double rad0=rad/(double)binx;
   double cx0=cx/(double)binx;
   double cy0=cy/(double)biny;
+
+  double cxn=(double)nx/2.0-0.5;
+  double cyn=(double)ny/2.0-0.5;
+
+  double radmax=(double)nx/2.0;
+  double radmin=(double)nx/2.0*0.85;
  
   rcount=0;
 #pragma omp parallel  for reduction(+:rcount) private(i,j,dx)    
@@ -200,21 +195,20 @@ void free_mem(struct mempointer *memory);
       for (i=0; i<nx; ++i)
 	{
 	  if (isnan(image_in[j*nx+i])){mask_p[j*nx+i]=2;} else {mask_p[j*nx+i]=0;}
-	  dx=sqrt(pow((double)i-cx,2)+pow((double)j-cy,2));
-	  if (dx > (rad-(marg_lo+2)) && dx < (rad+(marg_up+2)) && mask[j*nx+i] == 1)
+	  dx=sqrt(pow((double)i-cxn,2)+pow((double)j-cyn,2));
+	  if (dx > radmin && dx < radmax && mask[j*nx+i] == 1)
 	    {
 	      if (isnan(image_in[j*nx+i])){mask_p[j*nx+i]=1; ++rcount;}
 	    }
 	}
 
-  printf("missing points in limb figure %d \n", rcount); //debug
-
+ 
 
   //fill image if there are missing points
 
       if (rcount > 0)
    	{
-	  printf("gapfilling: pixels to fill: %d\n", rcount);	
+	 
 	  status_gap=init_fill(gapfill_method, gapfill_regular, gapfill_order,gapfill_order2,gapfill_order2,&fills, NULL);
 	  if (status_gap == 0){fgap_fill(&fills,image_in,nx,nx,nx,mask_p,cnorm,ierror); free_fill(&fills);} else {status_res=2; printf("gapfill not successful 2 \n"); free_fill(&fills); free_mem(&memory); return status_res;}
 	}
@@ -234,8 +228,8 @@ void free_mem(struct mempointer *memory);
          for (j=1; j<(nyy-1); ++j) 
             for (i=1; i<(nxx-1); ++i)
 	      {
-	 	  dx=sqrt(pow((double)i-cx0,2)+pow((double)j-cy0,2));
-		  if (dx > (rad0-marg_lo0) && dx < (rad0+marg_up0))
+	 	  dx=sqrt(pow((double)i-cxn/binx,2)+pow((double)j-cyn/biny,2));
+		  if (dx > radmin/binx && dx < radmax/binx)
 		    {
 		      if(!isnan(image[j*nxx+i-1]) && !isnan(image[j*nxx+i+1]) && !isnan(image[(j+1)*nxx+i]) && !isnan(image[(j-1)*nxx+i]))
 			{
@@ -293,7 +287,7 @@ void free_mem(struct mempointer *memory);
       *y0_lf=(double)cy0*(double)biny;
 	}
       else
-	{status_res=2; printf("can not find cc max 2 \n"); free_mem(&memory); return status_res;}
+	{status_res=2; free_mem(&memory); return status_res;}
 	 
    
       //////////////////////////////////////////////////////////
@@ -392,14 +386,13 @@ void free_mem(struct mempointer *memory);
 	    }
 	  else
 	    {
-	      printf("Limb deriv not parabolic\n");
 	      status_res=1;
 	    }
 	
 	}
 
 	 //
-         
+      //printf("nphi %d\n", nphi);
       // fit each distance seperately
       if (method == 0)
 	{
@@ -437,13 +430,14 @@ void free_mem(struct mempointer *memory);
 	      for (k=0; k<=2; ++k) for (l=0; l<=2; ++l) cof[l]=cof[l]+invmat[k][l]*bl[k];
 	      rad_ipa[j]=(double)(-cof[1]/cof[2]/2.0);
       
-	    }
+	    } 
 	  else
 	    {
 	      rad_ipa[j]=NAN;
 	    }
       }
 
+          
 
      double rad_ipv=0.0;
      double rad_count=0.0;
@@ -452,16 +446,13 @@ void free_mem(struct mempointer *memory);
 	 if (!isnan(rad_ipa[i])) if (fabs(rad_ipa[i]-rad) < limit_var){rad_ipv+=rad_ipa[i]; rad_count=rad_count+1.0;}
        }
 
-     printf("rad %lf %f\n", (double)(rad_ipv/rad_count), rad);
-     printf("good points %lf\n",rad_count/(double)nphi); 
-
-     if (rad_count/(double)nphi > percent_good){*rsun_lf=(double)(rad_ipv/rad_count); status_res=0;} else {status_res=1; printf("too large azimuthal variation\n");}
+    
+     if (rad_count/(double)nphi > percent_good){*rsun_lf=(double)(rad_ipv/rad_count); status_res=0;} else {status_res=1;}
 
      free(rad_ipa);
  	}
 
-      printf("found center %lf %lf %d\n", *x0_lf, *y0_lf, status_res); //debug
-      printf("----------------limb finder done---------------\n");
+          
       if (status_res == 1){*x0_lf=NAN; *y0_lf=NAN;}
       free_mem(&memory);
 

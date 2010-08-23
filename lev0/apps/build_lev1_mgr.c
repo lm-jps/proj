@@ -65,7 +65,7 @@
 #define DSAIABAD "lm_jps.aia_bad_blobs"			//dsaiabad= arg value to build_lev1 for aia
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
-#define H1LOGFILE "/usr/local/logs/lev1/build_lev1_mgr.%s.log" 
+#define H1LOGFILE "/usr/local/logs/lev1/build_lev1_mgr_%s.%s.log" 
 #define QSUBDIR "/scr21/production/qsub/tmp"
 #define NUMTIMERS 8		//number of seperate timers avail
 #define MAXCPULEV1 32		//max# of forks can do at a time for stream mode
@@ -82,7 +82,7 @@ int qsubjob(long long rec1, long long rec2);
 
 // List of default parameter values. 
 ModuleArgs_t module_args[] = { 
-  {ARG_STRING, "instru", NOTSPECIFIED, "instrument. either hmi or aia"},
+  {ARG_STRING, "instru", "hmi", "instrument. either hmi or aia"},
   {ARG_STRING, "dsin", NOTSPECIFIED, "dataset of lev0 filtergrams"},
   {ARG_STRING, "dsout", NOTSPECIFIED, "dataset of lev1 output"},
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
@@ -90,6 +90,7 @@ ModuleArgs_t module_args[] = {
   {ARG_INTS, "erec", "-1", "last lev0 rec# to process"},
   {ARG_INTS, "bfsn", "-1", "first lev0 fsn to process"},
   {ARG_INTS, "efsn", "-1", "last lev0 fsn to process"},
+  {ARG_INTS, "quicklook", "0", "1=quick look, 0 = definitive mode"},
   {ARG_INTS, "numrec", NUMRECLEV1S, "number of lev0 to lev1 records at a time"},
   {ARG_INTS, "numcpu", DEFAULTCPULEV1, "max# of forks to do at a time for stream mode"},
   {ARG_INTS, "numqsub", DEFAULTQSUBLEV1, "max# of qsub to do at a time for reprocessing mode"},
@@ -120,11 +121,13 @@ int numrec, numcpu, numqsub;
 int qcnt = 0;
 //stream_mode is also quick look mode, i.e. brec=erec=0
 int stream_mode = 0;		//0=qsub build_lev1, 1=fork it locally
+int quicklook = 0;		//can force this flg to be passed to build_lev1
 int hmiaiaflg = 0;		//0=hmi, 1=aia
 int modeflg = 0;		//0=fsn, 1=recnum
 int loopcnt = 0;		//force last lev0 records to lev1
 int abortnow = 0;
-char stopfile[80];              // e.g. /usr/local/logs/lev1/build_mgr_stop
+char stopfile[80];              // e.g. /usr/local/logs/lev1/build_mgr_stop_hmi
+char hmiaianame[16];		// "hmi" or "aia"
 char logname[128];
 char argdsin[128], argdsout[128], arglogfile[128], arginstru[80], argmode[80];
 char argbx[80], argex[80], argnumrec[80], argnumcpu[80], argnumqsub[80];
@@ -286,8 +289,8 @@ void abortit(int stat)
 
   printk("***Abort in progress ...\n");
   printk("**Exit build_lev1_mgr w/ status = %d\n", stat);
-  sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
-              LEV1LOG_BASEDIR);
+  sprintf(pcmd, "/bin/rm %s/build_lev1_mgr_%s.stream.touch 2>/dev/null",
+              LEV1LOG_BASEDIR, hmiaianame);
   system(pcmd);
   if (h1logfp) fclose(h1logfp);
   exit(stat);
@@ -357,15 +360,15 @@ int forkstream(long long recn0, long long maxrecn0, int force)
       }
       sprintf(args6, "instru=%s", instru);
       args[6] = args6;
-      sprintf(args7, "quicklook=%d", stream_mode);
+      sprintf(args7, "quicklook=%d", quicklook);
       args[7] = args7;
       //sprintf(args8, "logfile=%s/l1_%s_%d.log", QSUBDIR, gettimetag(), k);
       if(LOGTEST) {
         sprintf(args8, "%s", args8sv);
       }
       else {
-        sprintf(args8, "logfile=%s/l1s_%lld_%lld.log", 
-		LEV1LOG_BASEDIR, frec, lrec);
+        sprintf(args8, "logfile=%s/l1s_%lld_%lld_%s.log", 
+		LEV1LOG_BASEDIR, frec, lrec, hmiaianame);
       }
       args[8] = args8;
       if(hmiaiaflg) {			//aia has an extra arg to build_lev1
@@ -404,6 +407,10 @@ int forkstream(long long recn0, long long maxrecn0, int force)
       sprintf(pcmd, "echo \"update lev1_highest_lev0_recnum set lev0recnum=%lld, date='%s' where lev0series='%s'\" | psql -h hmidb jsoc", lrec, get_datetime(), dsin);
       printf("%s\n", pcmd); //!!TEMP echo
       system(pcmd); 
+      if(stat(stopfile, &stbuf) == 0) {
+        printf("Stop file %s seen.\nWait until all children are done and exit...\n", stopfile);
+        abortnow = 1;			//don't wait for any more lev 0records
+      }
       if(numtofork <= 0) break;
     }
     else {
@@ -448,13 +455,14 @@ int forkstream(long long recn0, long long maxrecn0, int force)
       }
       sprintf(args6, "instru=%s", instru);
       args[6] = args6;
-      sprintf(args7, "quicklook=%d", stream_mode);
+      sprintf(args7, "quicklook=%d", quicklook);
       args[7] = args7;
       if(LOGTEST) {
         sprintf(args8, "%s", args8sv);	//use original log name
       }
       else {
-        sprintf(args8, "logfile=%s/l1s_%lld_%lld.log", LEV1LOG_BASEDIR, frec, lrec);
+        sprintf(args8, "logfile=%s/l1s_%lld_%lld_%s.log", 
+			LEV1LOG_BASEDIR, frec, lrec, hmiaianame);
       }
       args[8] = args8;
       if(hmiaiaflg) {			//aia has an extra arg to build_lev1
@@ -493,36 +501,37 @@ int qsubjob(long long rec1, long long rec2)
   else sprintf(recrange, "%lld-%lld", rec1, rec2);
   sprintf(open_dsname, "%s[%s]", dsin, recrange);
   printk("open_dsname = %s\n", open_dsname); //!!TEMP
-  sprintf(qlogname, "%s/qsub_prod_%d_%d.csh", QSUBDIR, mypid, qcnt++);
+  //sprintf(qlogname, "%s/qsub_prod_%d_%d.csh", QSUBDIR, mypid, qcnt++);
+  sprintf(qlogname, "%s/p_%d_%d.csh", QSUBDIR, mypid, qcnt++);
   if((qsubfp=fopen(qlogname, "w")) == NULL) {
     fprintf(stderr, "**Can't open the qsub log file %s\n", qlogname);
     return(1);		//!!TBD
   }
   fprintf(qsubfp, "#!/bin/csh\n");
+  fprintf(qsubfp, "limit vm 1000M\n");
   fprintf(qsubfp, "echo \"TMPDIR = $TMPDIR\"\n");
 
-/* !!!TEMP force quicklook mode for now. Difference is in how build_lev1 queries for the flatfield ******
   if(modeflg) {		//recnum mode
     if(hmiaiaflg) {	//aia has an extra arg to build_lev1
       fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-	mode, dsin, dsout, rec1, rec2, instru, stream_mode, DSAIABAD, QSUBDIR, rec1, rec2); 
+	mode, dsin, dsout, rec1, rec2, instru, quicklook, DSAIABAD, QSUBDIR, rec1, rec2); 
     }
     else {
       fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-	mode, dsin, dsout, rec1, rec2, instru, stream_mode, QSUBDIR, rec1, rec2); 
+	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
     }
   }
   else {		//fsn mode
     if(hmiaiaflg) {	//aia has an extra arg to build_lev1
       fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-	mode, dsin, dsout, rec1, rec2, instru, stream_mode, DSAIABAD, QSUBDIR, rec1, rec2); 
+	mode, dsin, dsout, rec1, rec2, instru, quicklook, DSAIABAD, QSUBDIR, rec1, rec2); 
     }
     else {
       fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-	mode, dsin, dsout, rec1, rec2, instru, stream_mode, QSUBDIR, rec1, rec2); 
+	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
     }
   }
-**************************************************************************************************/
+/********************Elim force of stream mode*******************************
   if(modeflg) {		//recnum mode
     if(hmiaiaflg) {     //aia has an extra arg to build_lev1
       fprintf(qsubfp, "build_lev1 mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=1 dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
@@ -543,19 +552,22 @@ int qsubjob(long long rec1, long long rec2)
 	mode, dsin, dsout, rec1, rec2, instru, QSUBDIR, rec1, rec2); 
     }
   }
+****************************************************************************/
   fclose(qsubfp);
   sprintf(qsubcmd, "qsub -o %s -e %s -q j.q %s", 
 		QSUBDIR, QSUBDIR, qlogname);
   //sprintf(qsubcmd, "qsub -q j.q %s", qlogname);
   printf("%s\n", qsubcmd);
   printk("%s\n", qsubcmd);
+/********!!TEMP noop out*********************************************/
   sprintf(qsubcmd, "%s | grep \"Your job\"", qsubcmd);
   fin = popen(qsubcmd, "r");
   while(fgets(string, sizeof string, fin)) {  //get qsub return line
-    sscanf(string, "%s %s %d", astr, bstr, &jid); /* get job_id */
+    sscanf(string, "%s %s %d", astr, bstr, &jid); // get job_id
   }
   pclose(fin);
   printf("\$JOB_ID = %u\n", jid);
+/********!!TEMP end noop out*********************************************/
   return(0);
 }
  
@@ -588,7 +600,9 @@ int qsubmode(long long frec, long long lrec)
   //printf("jidstr = %s\n", jidstr);	//!!TEMP
   printf("numtoqsub left = %d\n", numtoqsub); //!!TEMP
   //sprintf(qsubcmd, "qstat -j %s 2>/dev/null | grep \"job_number:\"", jidstr);
-  sprintf(qsubcmd, "qstat -u production | grep \"qsub_prod_%d\"", mypid);
+  //sprintf(qsubcmd, "qstat -u production | grep \"qsub_prod_%d\"", mypid);
+  //the grep string is from qlogname set in qsubjob()
+  sprintf(qsubcmd, "qstat -u production | grep \"p_%d_\"", mypid);
   while(1) {
     //printf("\ncmd: %s\n", qsubcmd);	//!!TEMP
     if(!(fin = popen(qsubcmd, "r"))) {
@@ -715,16 +729,16 @@ void sighandler(sig)
   if(sig == SIGTERM) {
     printf("*** %s build_lev1_mgr got SIGTERM. Exiting.\n", datestr);
     printk("*** %s build_lev1_mgr got SIGTERM. Exiting.\n", datestr);
-    sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
-                LEV1LOG_BASEDIR);
+    sprintf(pcmd, "/bin/rm %s/build_lev1_mgr_%s.stream.touch 2>/dev/null",
+                LEV1LOG_BASEDIR, hmiaianame);
     system(pcmd);
     exit(1);
   }
   if(sig == SIGINT) {
     printf("*** %s build_lev1_mgr got SIGINT. Exiting.\n", datestr);
     printk("*** %s build_lev1_mgr got SIGINT. Exiting.\n", datestr);
-    sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
-                LEV1LOG_BASEDIR);
+    sprintf(pcmd, "/bin/rm %s/build_lev1_mgr_%s.stream.touch 2>/dev/null",
+                LEV1LOG_BASEDIR, hmiaianame);
     system(pcmd);
     exit(1);
   }
@@ -753,7 +767,12 @@ void setup()
   strcat(idstr, string);
   printk("%s", idstr);
   printf("%s", idstr);
-  sprintf(stopfile, "/usr/local/logs/lev1/build_mgr_stop");
+  if(hmiaiaflg) {
+    sprintf(stopfile, "/usr/local/logs/lev1/build_mgr_stop_aia");
+  }
+  else {
+    sprintf(stopfile, "/usr/local/logs/lev1/build_mgr_stop_hmi");
+  }
   if(stream_mode)
     sprintf(string, "/bin/rm -f %s", stopfile);   //remove any stop file
   system(string);
@@ -811,10 +830,15 @@ int main(int argc, char **argv)
   if(!(username = (char *)getenv("USER"))) username = "nouser"; 
   instru = cmdparams_get_str(&cmdparams, "instru", NULL);
   if(strcmp(instru, "hmi") && strcmp(instru, "aia")) {
+    printf("instru= %s\n", instru);	 //!!TEMP
     printf("Error: instru= must be given as 'hmi' or 'aia'\n");
     return(0);
   }
-  if(!strcmp(instru, "aia")) hmiaiaflg = 1;
+  if(!strcmp(instru, "aia")) {
+    hmiaiaflg = 1;
+    sprintf(hmiaianame, "aia");
+  }
+  else sprintf(hmiaianame, "hmi");
   mode = cmdparams_get_str(&cmdparams, "mode", NULL);
   if(strcmp(mode, "recnum") && strcmp(mode, "fsn")) {
     printf("Error: mode= must be given as 'recnum' or 'fsn'\n");
@@ -827,6 +851,7 @@ int main(int argc, char **argv)
   erec = cmdparams_get_int(&cmdparams, "erec", NULL);
   bfsn = cmdparams_get_int(&cmdparams, "bfsn", NULL);
   efsn = cmdparams_get_int(&cmdparams, "efsn", NULL);
+  quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
   numrec = cmdparams_get_int(&cmdparams, "numrec", NULL);
   numcpu = cmdparams_get_int(&cmdparams, "numcpu", NULL);
   numqsub = cmdparams_get_int(&cmdparams, "numqsub", NULL);
@@ -850,21 +875,23 @@ int main(int argc, char **argv)
     }
     if(brec == 0 && erec == 0) {
       //make sure there isn't a stream mode already running
-      sprintf(pcmd, "ls %s/build_lev1_mgr.stream.touch 2>/dev/null", 
-  		LEV1LOG_BASEDIR);
+      sprintf(pcmd, "ls %s/build_lev1_mgr_%s.stream.touch 2>/dev/null", 
+  		LEV1LOG_BASEDIR, hmiaianame);
       fin = popen(pcmd, "r");
       while(fgets(line, sizeof line, fin)) {  //get ps return line
         printf("Error: build_lev1_mgr already running.");
         printf(" If not so, do:\n");
-        printf("/bin/rm %s/build_lev1_mgr.stream.touch\n", LEV1LOG_BASEDIR);
+        printf("/bin/rm %s/build_lev1_mgr_%s.stream.touch\n", 
+		LEV1LOG_BASEDIR, hmiaianame);
         pclose(fin);
         return(0);
       }
       pclose(fin);
-      sprintf(pcmd, "touch %s/build_lev1_mgr.stream.touch 2>/dev/null",
-                  LEV1LOG_BASEDIR);
+      sprintf(pcmd, "touch %s/build_lev1_mgr_%s.stream.touch 2>/dev/null",
+                  LEV1LOG_BASEDIR, hmiaianame);
       system(pcmd);
       stream_mode = 1;		//aka quick look mode
+      quicklook = 1;		//and force quicklook to 1
     }
   }
   else {			//fsn mode
@@ -907,7 +934,7 @@ int main(int argc, char **argv)
     }
   }
   if (strcmp(logfile, NOTSPECIFIED) == 0) {
-    sprintf(logname, H1LOGFILE, gettimetag());
+    sprintf(logname, H1LOGFILE, hmiaianame, gettimetag());
   }
   else {
     sprintf(logname, "%s", logfile);
@@ -934,8 +961,8 @@ int main(int argc, char **argv)
     else loopcnt = 0;
     //wflg = 0;
   }
-  sprintf(pcmd, "/bin/rm %s/build_lev1_mgr.stream.touch 2>/dev/null",
-              LEV1LOG_BASEDIR);
+  sprintf(pcmd, "/bin/rm %s/build_lev1_mgr_%s.stream.touch 2>/dev/null",
+              LEV1LOG_BASEDIR, hmiaianame);
   system(pcmd);
   return(0);
 }

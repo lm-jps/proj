@@ -30,12 +30,14 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <strings.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/stat.h>	//for umask(2)
 #include <dirent.h>
 #include <unistd.h>	//for alarm(2) among other things...
 #include <printk.h>
+#include <math.h>
 #include "packets.h"
 #include "imgdecode.h"
 #include "decode_hk_vcdu.h"
@@ -48,10 +50,37 @@
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
 
-#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
-#define TLMSERIESNAMEHMI "su_production.tlm_test"
-#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
-#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+//#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
+//#define LEV0SERIESNAMEHMI "su_production.lev0f_test"
+//#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
+////#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_test"
+//For test with DDS on Jan 19, 2010
+//#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_JAN2010"
+//#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_junk"
+//#define LEV0SERIESNAMEHMI "hmi.lev0f"
+////#define TLMSERIESNAMEHMI "su_production.tlm_test"
+//For test with DDS on Jan 19, 2010
+//#define TLMSERIESNAMEHMI "su_production.tlm_hmi_JAN2010"
+//#define TLMSERIESNAMEHMI "su_production.tlm_hmi_junk"
+
+#define LEV0SERIESNAMEHMIGND "hmi_ground.lev0_dds"
+#define TLMSERIESNAMEHMIGND "hmi_ground.tlm_dds"
+//#define TLMSERIESNAMEHMI "hmi.tlm_reingest"
+
+//#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
+//#define LEV0SERIESNAMEAIA "su_production.lev0f_aia"
+////#define LEV0SERIESNAMEAIA "aia.lev0f"
+//For test with DDS on Jan 19, 2010
+//#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_JAN2010"
+//#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_junk"
+////#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+//For test with DDS on Jan 19, 2010
+//#define TLMSERIESNAMEAIA "su_production.tlm_aia_JAN2010"
+//#define TLMSERIESNAMEAIA "su_production.tlm_aia_junk"
+
+#define LEV0SERIESNAMEAIAGND "aia_ground.lev0_dds"
+#define TLMSERIESNAMEAIAGND "aia_ground.tlm_dds"
+//#define TLMSERIESNAMEAIA "aia.tlm_reingest"
 
 //#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
 //#define TLMSERIESNAMEHMI "hmi.tlm_60d"
@@ -60,15 +89,21 @@
 
 //When change to these data series below to save real data.
 //#define TLMSERIESNAMEHMI "hmi.tlm"
-//#define LEV0SERIESNAMEHMI "hmi.lev0"
-//#define LEV0SERIESNAMEAIA "aia.lev0"
-//#define LEV0SERIESNAMEAIA "aia.lev0a"
-//#define TLMSERIESNAMEAIA "aia.tlm"
+#define TLMSERIESNAMEHMI "su_production.tlm"
+//#define LEV0SERIESNAMEHMI "hmi.lev0a"
+#define LEV0SERIESNAMEHMI "su_production.lev0a"
+#define LEV0SERIESNAMEAIA "aia.lev0"
+#define TLMSERIESNAMEAIA "aia.tlm"
 
 //#define LEV0SERIESNAMEAIA "aia.lev0d"
 //#define TLMSERIESNAMEAIA "aia.tlmd"
 //#define LEV0SERIESNAMEHMI "hmi.lev0d"
 //#define TLMSERIESNAMEHMI "hmi.tlmd"
+
+//#define LEV0SERIESNAMEAIA "aia.lev0e"
+//#define TLMSERIESNAMEAIA "aia.tlme"
+//#define LEV0SERIESNAMEHMI "hmi.lev0e"
+//#define TLMSERIESNAMEHMI "hmi.tlme"
 
 //Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
 //setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
@@ -76,17 +111,18 @@
 //setenv HK_JSVNMAP_DIRECTORY              /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod
 
 
-#define H0LOGFILE "/usr/local/logs/lev0/xingest_lev0.%s.%s.%s.log"
+#define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
-#define MAXFILES 8192		//max # of file can handle in tlmdir
+#define MAXFILES 16384		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
-//#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
-#define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
+#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
+//#define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
 #define TESTAPPID 0x199		//appid of test pattern packet
 #define TESTVALUE 0xc0b		//first value in test pattern packet
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define ENVFILE "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
+#define ENVFILE_GND "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
 
 extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int *Fsn);
 extern int write_hk_to_drms();
@@ -103,12 +139,13 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
   {ARG_FLAG, "r", "0", "restart flag"},
+  {ARG_FLAG, "g", "0", "ground data flag"},
   {ARG_END}
 };
 
 CmdParams_t cmdparams;
 // Module name presented to DRMS. 
-char *module_name = "xingest_lev0";
+char *module_name = "ingest_lev0";
 
 typedef enum
 {
@@ -130,9 +167,12 @@ static DRMS_RecordSet_t *rset;
 static DRMS_Record_t *rs_old, *rsc;
 static DRMS_Segment_t *segmentc;
 static DRMS_Array_t *cArray, *oldArray;
+static TIME sdo_epoch;
 static char datestr[32];
+static char bld_vers[16];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 
+int INVALtime;
 unsigned int fsn = 0;
 unsigned int fsnx = 0;
 unsigned int fsn_prev = 0;
@@ -145,18 +185,24 @@ long long vcdu_seq_num_next;
 long long total_missing_im_pdu;
 unsigned int vcdu_24_cnt, vcdu_24_cnt_next;
 int verbose;
+int grounddata;
 int appid;
+int testid1, testid2;
 int hmiaiaflg;			//0=hmi, 1=aia
 int whk_status;
 int total_tlm_vcdu;
 int total_missing_vcdu;
 int errmsgcnt, fileimgcnt;
+int cntsleeps = 0;
+int paused = 0;
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when ingest_lev0 is called for a restart
+int abortflg = 0;
 int sigalrmflg = 0;             // set on signal so prog will know 
 int ignoresigalrmflg = 0;       // set after a close_image()
 int firstfound = 0;		// set if see any file after startup
 int ALRMSEC = 60;               // must get 2 in a row for no image timeout
+int sleep_interval = 2;		// #of sec to sleep after do_ingest() calls
 char logname[128];
 char argvc[32], argindir[96], arglogfile[96], argoutdir[96];
 char timetag[32];
@@ -221,10 +267,11 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
-    printf ("Usage:\nxingest_lev0 [-vh] "
+    printf ("Usage:\ningest_lev0 [-vh] "
 	"vc=<virt chan> indir=</dir> [outdir=</dir>] [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
+        "  -g: output to hmi_ground/aia_ground\n"
 	"  -r: restart. only used when we restart our selves periodically\n"
 	"vc= primary virt channel to listen to e.g. VC02\n"
 	"indir= directory containing the files to ingest\n"
@@ -233,6 +280,7 @@ int nice_intro ()
     return(1);
     }
   verbose = cmdparams_get_int (&cmdparams, "v", NULL);
+  grounddata = cmdparams_get_int (&cmdparams, "g", NULL);
   restartflg = cmdparams_get_int (&cmdparams, "r", NULL);
   return (0);
 }
@@ -240,11 +288,9 @@ int nice_intro ()
 TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss)
 {
 static int firstcall = 1;
-static TIME sdo_epoch;
 if (firstcall)
   {
   firstcall = 0;
-  sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   }
 /* XXX fix build 3/18/2008, arta */
 return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
@@ -312,46 +358,84 @@ int h0log(const char *fmt, ...)
   return(0);
 }
 
+int send_mail(char *fmt, ...)
+{
+  va_list args;
+  char string[1024], cmd[1024];
+
+  va_start(args, fmt);
+  vsprintf(string, fmt, args);
+  sprintf(cmd, "echo \"%s\" | Mail -s \"ingest_lev0 mail\" jsoc_ops", string);
+  system(cmd);
+  va_end(args);
+  return(0);
+}
+
 //Set the QUALLEV0 keyword
 void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn) 
 {
-  char *hwltnset;
-  char *hseqerr;
-  int status, hsqfgsn;
+  char *hwltnset, *cdark;
+  char *hseqerr, *aistate;
+  char wave_str[16];
+  int status, hsqfgsn, asqfsn;
+  float percentd;
   uint32_t missvals, datav;
   uint32_t hcf1encd, hcf2encd, hps1encd, hps2encd, hps3encd; 
   uint32_t hwt1encd, hwt2encd, hwt3encd, hwt4encd;
   uint32_t hcf1pos, hcf2pos, hpl1pos, hpl2pos, hpl3pos, hwl1pos, hwl2pos;
   uint32_t hwl3pos, hwl4pos;
+  uint32_t aiawvlen, aifwen, aiasen;
+  short aifiltyp;
   uint32_t quallev0 = 0;
+  uint32_t qmiss = 0;
 
   if(img->overflow) quallev0 = quallev0 | Q_OVFL;
   if(img->headerr) quallev0 = quallev0 | Q_HDRERR;
   if(img->nerrors) quallev0 = quallev0 | Q_CMPERR;
   if(img->last_pix_err) quallev0 = quallev0 | Q_LPXERR;
-  hsqfgsn = drms_getkey_int(rs, "HSQFGSN", &status);
-  if(fsn != hsqfgsn) quallev0 = quallev0 | Q_NOISP;
   missvals = img->totalvals - img->datavals;
   if(missvals > 0) quallev0 = quallev0 | Q_MISS0;
-  datav = img->datavals;
+  datav = img->totalvals;
   if(missvals > (uint32_t)(datav * 0.01)) quallev0 = quallev0 | Q_MISS1;
   if(missvals > (uint32_t)(datav * 0.05)) quallev0 = quallev0 | Q_MISS2;
   if(missvals > (uint32_t)(datav * 0.25)) quallev0 = quallev0 | Q_MISS3;
-  if(hseqerr = drms_getkey_string(rs, "HSEQERR", &status)) {
-    if(strcmp(hseqerr, "SUCCESS")) quallev0 = quallev0 | Q_SEQERR;
-    free(hseqerr);
-  }
+  if(missvals == datav) quallev0 = quallev0 | Q_MISSI;
+  if(img->datavals == 0) quallev0 = quallev0 | Q_MISSALL; //high bit, no data
+
+//  if(missvals != 0) {
+//    qmiss = (uint32_t)(0.84 * log(missvals/img->totalvals)) + 15;
+//    qmiss = qmiss & 0x0f;		//need this?
+//    qmiss = qmiss * 256;		//bits 8-11
+//    quallev0 = quallev0 | qmiss;
+//  }
+
+if(fsn == 469769216) quallev0 = quallev0 | Q_CORRUPT; //corrupt image
+if(INVALtime) quallev0 = quallev0 | Q_INVALTIME; 
+if(cdark = drms_getkey_string(rs, "IMG_TYPE", &status)) {
+  if(!strcmp(cdark, "DARK")) quallev0 = quallev0 | Q_DARK;
+  free(cdark);
+}
+if(!hmiaiaflg) {		//HMI specific qual bits
+  hsqfgsn = drms_getkey_int(rs, "HSQFGSN", &status);
+  if(status || (fsn != hsqfgsn)) quallev0 = quallev0 | Q_NOISP;
+  //Removed per Rock's email Re: lev0 quality updates 9Jun2010 10:22
+  //if(hseqerr = drms_getkey_string(rs, "HSEQERR", &status)) {
+  //  if(strcmp(hseqerr, "SUCCESS")) quallev0 = quallev0 | Q_SEQERR;
+  //  free(hseqerr);
+  //}
   if(hwltnset = drms_getkey_string(rs, "HWLTNSET", &status)) {
     if(!strcmp(hwltnset, "OPEN")) quallev0 = quallev0 | Q_ISSOPEN;
     free(hwltnset);
   }
   hcf1encd = drms_getkey_int(rs, "HCF1ENCD", &status);
   hcf1pos = drms_getkey_int(rs, "HCF1POS", &status);
-  if(!((hcf1encd == hcf1pos) || (hcf1encd == hcf1pos+1) || (hcf1encd == hcf1pos-1)))
+  //if(!((hcf1encd == hcf1pos) || (hcf1encd == hcf1pos+1) || (hcf1encd == hcf1pos-1)))
+  if(!((hcf1encd == hcf1pos) || (hcf1encd == hcf1pos-1)))
     quallev0 = quallev0 | Q_HCF1ENCD;
   hcf2encd = drms_getkey_int(rs, "HCF2ENCD", &status);
   hcf2pos = drms_getkey_int(rs, "HCF2POS", &status);
-  if(!((hcf2encd == hcf2pos) || (hcf2encd == hcf2pos+1) || (hcf2encd == hcf2pos-1)))
+  //if(!((hcf2encd == hcf2pos) || (hcf2encd == hcf2pos+1) || (hcf2encd == hcf2pos-1)))
+  if(!((hcf2encd == hcf2pos) || (hcf2encd == hcf2pos-1)))
     quallev0 = quallev0 | Q_HCF2ENCD;
   hps1encd = drms_getkey_int(rs, "HPS1ENCD", &status);
   hpl1pos = drms_getkey_int(rs, "HPL1POS", &status);
@@ -381,7 +465,262 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   hwl4pos = drms_getkey_int(rs, "HWL4POS", &status);
   if(!((hwl4pos == hwt4encd) || (hwl4pos == (hwt4encd+1) % 240)))
     quallev0 = quallev0 | Q_HWT4ENCD;
-  drms_setkey_int(rs, "QUALLEV0", quallev0);
+}
+else {				//AIA specific qual bits
+  asqfsn = drms_getkey_int(rs, "ASQFSN", &status);
+  if(fsn != asqfsn) quallev0 = quallev0 | Q_NOISP;
+  if(aistate = drms_getkey_string(rs, "AISTATE", &status)) {
+    if(!strcmp(aistate, "OPEN")) quallev0 = quallev0 | AQ_ISSOPEN;
+    free(aistate);
+  }
+  strcpy(wave_str, "UNKNOWN");
+  aiawvlen = drms_getkey_int(rs, "AIAWVLEN", &status);
+  aifiltyp = drms_getkey_short(rs, "AIFILTYP", &status);
+  aifwen = drms_getkey_int(rs, "AIFWEN", &status);
+  aiasen = drms_getkey_int(rs, "AIASEN", &status);
+  switch(aiawvlen) {
+  case 9:			//9.4
+    if(aifiltyp == 0) {
+      if((aifwen != 269) && (aifwen != 270)) {
+        quallev0 = quallev0 | A94Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 11) && (aifwen != 12)) {
+        quallev0 = quallev0 | A94Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A94Mech_Err;
+      }
+    }
+    //All the wave_str code can be compacted, but I'm keeping it 
+    //symetric with Rock's notes
+    if((aifwen == 269) || (aifwen == 270)) {
+      strcpy(wave_str, "94_THIN");
+    }
+    else if((aifwen == 11) || (aifwen == 12)) {
+      strcpy(wave_str, "94_THICK");
+    }
+    else if((aifwen == 74) || (aifwen == 75)) {
+      strcpy(wave_str, "94_OPEN");
+    }
+    break;
+  case 1:			//13.1
+    if(aifiltyp == 0) {
+      if((aifwen != 269) && (aifwen != 270)) {
+        quallev0 = quallev0 | A131Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 11) && (aifwen != 12)) {
+        quallev0 = quallev0 | A131Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A131Mech_Err;
+      }
+    }
+    if((aifwen == 269) || (aifwen == 270)) {
+      strcpy(wave_str, "131_THIN");
+    }
+    else if((aifwen == 11) || (aifwen == 12)) {
+      strcpy(wave_str, "131_THICK");
+    }
+    else if((aifwen == 74) || (aifwen == 75)) {
+      strcpy(wave_str, "131_OPEN");
+    }
+    break;
+  case 7:			//17.1
+    if(aifiltyp == 0) {
+      if((aifwen != 203) && (aifwen != 204)) {
+        quallev0 = quallev0 | A171Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 11) && (aifwen != 12)) {
+        quallev0 = quallev0 | A171Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      //NOTE: no 171_OPEN
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A171Mech_Err;
+      }
+    }
+    if((aifwen == 203) || (aifwen == 204)) {
+      strcpy(wave_str, "171_THIN");
+    }
+    else if((aifwen == 11) || (aifwen == 12)) {
+      strcpy(wave_str, "171_THICK");
+    }
+    break;
+/* !!!TBD fix below like did above after resolve MIX_THIN stuff w/Rock */
+  case 3:			//19.3
+    if(aifiltyp == 0) {
+      if(aiasen != 6) {
+        quallev0 = quallev0 | A193Mech_Err;
+      }
+      if((aifwen != 269) && (aifwen != 270)) {
+        quallev0 = quallev0 | A193Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if(aiasen != 6) {
+        quallev0 = quallev0 | A193Mech_Err;
+      }
+      if((aifwen != 11) && (aifwen != 12)) {
+        quallev0 = quallev0 | A193Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if(aiasen != 6) {
+        quallev0 = quallev0 | A193Mech_Err;
+      }
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A193Mech_Err;
+      }
+    }
+    if(aiasen == 6) {
+      if((aifwen == 269) || (aifwen == 270)) {
+        strcpy(wave_str, "193_THIN");
+      } else if((aifwen == 11) || (aifwen == 12)) {
+        strcpy(wave_str, "193_THICK");
+      } else if((aifwen == 74) || (aifwen == 75)) {
+        strcpy(wave_str, "193_OPEN");
+      }
+    }
+    else {
+      if((aifwen == 269) || (aifwen == 270)) {
+        strcpy(wave_str, "MIX_THIN");
+      } else if((aifwen == 11) || (aifwen == 12)) {
+        strcpy(wave_str, "MIX_THICK");
+      } else if((aifwen == 74) || (aifwen == 75)) {
+        strcpy(wave_str, "MIX_OPEN");
+      }
+    }
+    break;
+  case 2:			//21.1
+    if(aifiltyp == 0) {
+      if(aiasen != 24) {
+        quallev0 = quallev0 | A211Mech_Err;
+      }
+      if((aifwen != 203) && (aifwen != 204)) {
+        quallev0 = quallev0 | A211Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if(aiasen != 24) {
+        quallev0 = quallev0 | A211Mech_Err;
+      }
+      if((aifwen != 137) && (aifwen != 138)) {
+        quallev0 = quallev0 | A211Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if(aiasen != 24) {
+        quallev0 = quallev0 | A211Mech_Err;
+      }
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A211Mech_Err;
+      }
+    }
+    if(aiasen == 24) {
+      if((aifwen == 203) || (aifwen == 204)) {
+        strcpy(wave_str, "211_THIN");
+      } else if((aifwen == 137) || (aifwen == 138)) {
+        strcpy(wave_str, "211_THICK");
+      } else if((aifwen == 74) || (aifwen == 75)) {
+        strcpy(wave_str, "211_OPEN");
+      }
+    }
+    else {
+      if((aifwen == 203) || (aifwen == 204)) {
+        strcpy(wave_str, "MIX_THIN");
+      } else if((aifwen == 137) || (aifwen == 138)) {
+        strcpy(wave_str, "MIX_THICK");
+      } else if((aifwen == 74) || (aifwen == 75)) {
+        strcpy(wave_str, "MIX_OPEN");
+      }
+    }
+    break;
+  case 8:			//30.4
+    if(aifiltyp == 0) {
+      if((aifwen != 203) && (aifwen != 204)) {
+        quallev0 = quallev0 | A304Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 137) && (aifwen != 138)) {
+        quallev0 = quallev0 | A304Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A304Mech_Err;
+      }
+    }
+    if((aifwen == 203) || (aifwen == 204)) {
+      strcpy(wave_str, "304_THIN");
+    } else if((aifwen == 137) || (aifwen == 138)) {
+      strcpy(wave_str, "304_THICK");
+    } else if((aifwen == 74) || (aifwen == 75)) {
+      strcpy(wave_str, "304_OPEN");
+    }
+    break;
+  case 0:			//33.5
+    if(aifiltyp == 0) {
+      if((aifwen != 203) && (aifwen != 204)) {
+        quallev0 = quallev0 | A335Mech_Err;
+      }
+    }
+    else if(aifiltyp == 1) {
+      if((aifwen != 137) && (aifwen != 138)) {
+        quallev0 = quallev0 | A335Mech_Err;
+      }
+    }
+    else if(aifiltyp == 2) {
+      if((aifwen != 74) && (aifwen != 75)) {
+        quallev0 = quallev0 | A335Mech_Err;
+      }
+    }
+    if((aifwen == 203) || (aifwen == 204)) {
+      strcpy(wave_str, "335_THIN");
+    } else if((aifwen == 137) || (aifwen == 138)) {
+      strcpy(wave_str, "335_THICK");
+    } else if((aifwen == 74) || (aifwen == 75)) {
+      strcpy(wave_str, "335_OPEN");
+    }
+    break;
+  case 4:			//160.0
+    if((aifwen != 269) && (aifwen != 270)) {
+      quallev0 = quallev0 | A160Mech_Err;
+    }
+    else strcpy(wave_str, "1600");
+    break;
+  case 5:			//170.0
+    if((aifwen != 137) && (aifwen != 138)) {
+      quallev0 = quallev0 | A170Mech_Err;
+    }
+    else strcpy(wave_str, "1700");
+    break;
+  case 6:			//450.0
+    if((aifwen != 74) && (aifwen != 75)) {
+      quallev0 = quallev0 | A450Mech_Err;
+    }
+    else strcpy(wave_str, "4500");
+    break;
+  }
+  if(!strcmp(wave_str, "UNKNOWN")) quallev0 = quallev0 | AQ_INVAL_WL;
+}
+  //drms_setkey_int(rs, "QUALLEV0", quallev0);	//don't use this anymore
+  drms_setkey_int(rs, "QUALITY", quallev0);
+  drms_setkey_string(rs, "BLD_VERS", bld_vers); //build vers to every record
+  drms_setkey_string(rs, "WAVE_STR", wave_str);
+  percentd = (float)((100.0 * (float)img->datavals)/(float)img->totalvals);
+  drms_setkey_float(rs, "PERCENTD", percentd);
 }
 
 // Close out an image.
@@ -391,6 +730,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   STAT stat;
   int status, n, k;
   uint32_t missvals;
+  long long cmdx;
   char tlmdsname[128];
 
   printk("*Closing image for fsn = %u\n", fsn);
@@ -401,14 +741,16 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     drms_setkey_short(rs, "DATAMIN", stat.min);
     drms_setkey_short(rs, "DATAMAX", stat.max);
     drms_setkey_short(rs, "DATAMEDN", stat.median);
-    drms_setkey_double(rs, "DATAMEAN", stat.mean);
-    drms_setkey_double(rs, "DATARMS", stat.rms);
-    drms_setkey_double(rs, "DATASKEW", stat.skew);
-    drms_setkey_double(rs, "DATAKURT", stat.kurt);
+    drms_setkey_float(rs, "DATAMEAN", stat.mean);
+    drms_setkey_float(rs, "DATARMS", stat.rms);
+    drms_setkey_float(rs, "DATASKEW", stat.skew);
+    drms_setkey_float(rs, "DATAKURT", stat.kurt);
   }
   // CAMERA set by HMI_compute_exposure_times()
   if(hmiaiaflg) {		// except for AIA use telnum 
     drms_setkey_int(rs, "CAMERA", (img->telnum)+1);
+    cmdx = drms_getkey_longlong(rs, "AIMGSHCE", &status);
+    if (0 == cmdx) drms_setkey_int(rs, "AIMGTYP", 1);
   }
   drms_setkey_int(rs, "IMGAPID", img->apid);
   drms_setkey_int(rs, "CROPID", img->cropid);
@@ -432,17 +774,18 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_int(rs, "DATAVALS", img->datavals);
   drms_setkey_int(rs, "NPACKETS", img->npackets);
   drms_setkey_int(rs, "NERRORS", img->nerrors);
-  drms_setkey_int(rs, "EOIERROR", img->last_pix_err);
-  drms_setkey_int(rs, "HEADRERR", img->headerr);
-  drms_setkey_int(rs, "OVERFLOW", img->overflow);
+  drms_setkey_short(rs, "EOIERROR", img->last_pix_err);
+  drms_setkey_short(rs, "HEADRERR", img->headerr);
+  drms_setkey_short(rs, "OVERFLOW", img->overflow);
   missvals = img->totalvals - img->datavals;
   drms_setkey_int(rs, "MISSVALS", missvals);
   snprintf(tlmdsname, 128, "%s[%s]", tlmseriesname, tlmnamekeyfirst);
   drms_setkey_string(rs, "TLMDSNAM", tlmdsname);
-  int pts = img->first_packet_time >> 16;
+  unsigned int pts = img->first_packet_time >> 16;
   int ptss = img->first_packet_time & 0xffff;
   TIME fpt = SDO_to_DRMS_time(pts, ptss);
   drms_setkey_double(rs, "IMGFPT", fpt);
+  drms_setkey_double(rs, "DATE", CURRENT_SYSTEM_TIME);
   do_quallev0(rs, img, fsn);		//set the QUALLEV0 keyword
 
   status = drms_segment_write(seg, array, 0);
@@ -457,13 +800,14 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
                         lev0seriesname, fsn);
   }
   img->initialized = 0;		//indicate image is ready for use again
+  //imgdecode_init_hack(img);
 }
 
 // Got a fatal error. 
 void abortit(int stat)
 {
   printk("***Abort in progress ...\n");
-  printk("**Exit xingest_lev0 w/ status = %d\n", stat);
+  printk("**Exit ingest_lev0 w/ status = %d\n", stat);
   if (h0logfp) fclose(h0logfp);
   exit(stat);
 }
@@ -487,7 +831,7 @@ unsigned short MDI_getshort (unsigned char *c)    //  machine independent
 //fsn_normal_new_image()
 int fsn_normal_new_image() 
 {
-  int dstatus;
+  int dstatus, i;
 
   // start a new image 
   Img->initialized = 0;
@@ -497,6 +841,10 @@ int fsn_normal_new_image()
   sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
   rs = drms_create_record(drms_env, lev0seriesname, DRMS_PERMANENT, &dstatus);
   if(dstatus) {
+    if(dstatus == DRMS_ERROR_SUMOPEN) {
+      printk("**ERROR: DRMS can't open w/SUMS. Aborting...\n");
+      abortit(4);
+    }
     printk("**ERROR: Can't create record for %s fsn=%u\n", lev0seriesname, fsnx);
     return(1);
   }
@@ -505,6 +853,20 @@ int fsn_normal_new_image()
     printk("No drms_segment_lookup(rs, image)\n");
     return(1);
   }
+  //must initialize Img in case no data pkt comes in for this image
+#if 0
+    Img->datavals = 0;
+    Img->npackets = 0;
+    Img->nerrors = 0;
+    Img->last_pix_err = 0;
+    Img->first_packet_time = UINT64_MAX;
+    for (i = 0; i < MAXPIXELS; ++i)
+        Img->dat[i] = BLANK;
+    for (i = 0; i < MAXHIST; ++i)
+        Img->hist[i] = 0;
+#endif
+    imgdecode_init_hack(Img);
+
   rdat = Img->dat;
   segArray = drms_array_create(DRMS_TYPE_SHORT,
                                        segment->info->naxis,
@@ -535,7 +897,7 @@ int fsn_change_normal()
     rset = drms_open_records(drms_env, reopen_dsname, &rstatus);
     if(rstatus) {
       printk("Can't do drms_open_records(%s)\n", reopen_dsname);
-      //return(1);          // !!!TBD
+      return(1);          // !!!TBD
     }
     if(!rset || (rset->n == 0) || rstatus) {
       printk("No prev ds\n");     // start a new image
@@ -557,6 +919,7 @@ int fsn_change_normal()
       Img->telnum = drms_getkey_int(rs, "CAMERA", &rstatus);
       Img->telnum--;
       Img->cropid = drms_getkey_int(rs, "CROPID", &rstatus);
+      Img->fid = drms_getkey_int(rs, "FID", &rstatus); //!!NEW 22Mar2010
       Img->luid = drms_getkey_int(rs, "LUTID", &rstatus);
       if(rstatus) {
         Img->luid = 0;	//!!!TEMP try this
@@ -582,6 +945,11 @@ int fsn_change_normal()
       Img->npackets = drms_getkey_int(rs, "NPACKETS", &rstatus);
       Img->nerrors = drms_getkey_int(rs, "NERRORS", &rstatus);
       Img->last_pix_err = drms_getkey_int(rs, "EOIERROR", &rstatus);
+
+      TIME fpt = drms_getkey_double(rs, "IMGFPT", &rstatus);
+      Img->first_packet_time = round(65536.0*(fpt - sdo_epoch));
+      if(Img->first_packet_time == 0) 
+        Img->first_packet_time = UINT64_MAX; //fix for stuck 1958 value
       snprintf(oldtlmdsnam, 128, "%s", drms_getkey_string(rs, "TLMDSNAM",&rstatus));
       cptr = strstr(oldtlmdsnam, "VC");
       if(cptr) 
@@ -658,15 +1026,21 @@ int fsn_change_rexmit()
   rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
   if(rstatus) {
     printk("Can't do drms_open_records(%s)\n", rexmit_dsname);
-    //return(1);		// !!!TBD 
+    return(1);		// !!!TBD 
   }
   if(!rset || (rset->n == 0) || rstatus) {
+startnew:
     printk("No prev ds\n");	// start a new image 
     ImgO->initialized = 0;
     ImgO->reopened = 0;
+    imgdecode_init_hack(ImgO);
     sprintf(tlmnamekeyfirst, "%s", tlmnamekey);	//save for TLMDSNAM
     rsc = drms_create_record(drms_env, lev0seriesname, DRMS_PERMANENT, &rstatus);
     if(rstatus) {
+      if(rstatus == DRMS_ERROR_SUMOPEN) {
+        printk("**ERROR: DRMS can't open w/SUMS. Aborting...\n");
+        abortit(4);
+      }
       printk("Can't create record for %s fsn=%u\n", lev0seriesname, fsnx);
       return(1);                     // !!!TBD ck this 
     }
@@ -691,13 +1065,16 @@ int fsn_change_rexmit()
     rsc = drms_clone_record(rs_old, DRMS_PERMANENT, DRMS_COPY_SEGMENTS, &rstatus);
     if(rstatus) {
       printk("Can't do drms_clone_record()\n");
-      return(1);		// !!!TBD ck 
+      printk("Assume this was a temp ds and the segments are now gone...\n");
+      goto startnew;
+      //return(1);		// !!!TBD ck 
     }
     drms_close_records(rset, DRMS_FREE_RECORD);
     rstatus = drms_setkey_int(rsc, "FSN", fsnx);
     ImgO->telnum = drms_getkey_int(rsc, "CAMERA", &rstatus);
     ImgO->telnum--;
     ImgO->cropid = drms_getkey_int(rsc, "CROPID", &rstatus);
+    ImgO->fid = drms_getkey_int(rsc, "FID", &rstatus); //!!NEW 22Mar2010
     ImgO->luid = drms_getkey_int(rsc, "LUTID", &rstatus);
     ImgO->tap = drms_getkey_int(rsc, "TAPCODE", &rstatus);
     compid = drms_getkey_int(rsc, "COMPID", &rstatus);
@@ -719,6 +1096,11 @@ int fsn_change_rexmit()
     ImgO->npackets = drms_getkey_int(rsc, "NPACKETS", &rstatus);
     ImgO->nerrors = drms_getkey_int(rsc, "NERRORS", &rstatus);
     ImgO->last_pix_err = drms_getkey_int(rsc, "EOIERROR", &rstatus);
+
+    TIME fpt = drms_getkey_double(rsc, "IMGFPT", &rstatus);
+    ImgO->first_packet_time = round(65536.0*(fpt - sdo_epoch));
+    if(ImgO->first_packet_time == 0) 
+      ImgO->first_packet_time = UINT64_MAX; //fix for stuck 1958 value
     snprintf(oldtlmdsnam, 128, "%s", drms_getkey_string(rsc, "TLMDSNAM",&rstatus));
     cptr = strstr(oldtlmdsnam, "VC");
     if(cptr) 
@@ -771,8 +1153,14 @@ int get_tlm(char *file, int rexmit, int higherver)
   firstflg = 1; 
   if(rexmit || higherver) {
     if(Img->initialized) {		// close normal mode image
-      if(rs) 
+      if(rs) {
         close_image(rs, segment, segArray, Img, fsn_prev);
+        printk("drms_server_end_transaction()\n");
+        drms_server_end_transaction(drms_env, 0 , 0);
+        printk("drms_server_begin_transaction()\n");
+        drms_server_begin_transaction(drms_env); //start another cycle
+        imagecnt = 0;
+      }
       else
         printk("**ERROR: Null record ptr for an opened image fsn=%u\n",fsn_prev);
     }
@@ -852,15 +1240,25 @@ int get_tlm(char *file, int rexmit, int higherver)
     // get the App ID. Low 11 bit of short at buf+18 
     appid = MDI_getshort(cbuf+18);
     appid = appid & 0x07ff;
-    if(appid == TESTAPPID) {	// appid of test pattern 
+    if(hmiaiaflg) {		//aia
+      //testid1 = 509; testid2 = 519;
+      testid1 = 507; testid2 = 517;
+    }
+    else {
+      //testid1 = 409; testid2 = 419;
+      testid1 = 407; testid2 = 417;
+    }
+    //if(appid == TESTAPPID) {	// appid of test pattern 
+    if((appid == testid1) || (appid == testid2)) {
       if(errmsgcnt++ < MAXERRMSGCNT) {
         printk("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
-			TESTAPPID, vcdu_seq_num);
+			appid, vcdu_seq_num);
         for(i=0, j=TESTVALUE; i < 877; i=i+2, j++) {
           datval = MDI_getshort(cbuf+32+i);	// next data value 
           if(datval != j) {
             printk("*Test data value=%0x, expected=%0x for IM_PDU Cntr=%lld\n", 
 		datval, j, vcdu_seq_num);
+            printk("*File = %s\n", file);
             eflg++;
             break;		// skip the rest of this packet 
           }
@@ -882,14 +1280,19 @@ int get_tlm(char *file, int rexmit, int higherver)
       if(rexmit || higherver) {
         if(fsnx != fsn_prev) {          // the fsn has changed
           if(fsn_change_rexmit()) {	//handle old & new images
-            continue;			//get next vcdu
+            printk("***FATAL ERROR in fsn_change_rexmit()\n");
+            return(1);
           }
+        }
+        else {				//prev could be hk w/diff apid
+          ImgC->apid = appid;
         }
       }
       else {			// continuing normal stream
         if(fsnx != fsn_prev) {          // the fsn has changed 
           if(fsn_change_normal()) {	//handle old & new images
-            continue;			//get next vcdu
+            printk("***FATAL ERROR in fsn_change_normal()\n");
+            return(1);
           }
         }
       }
@@ -962,7 +1365,7 @@ int get_tlm(char *file, int rexmit, int higherver)
       }
     }
     else {			// send the HK data to Carl 
-      //printk("$$$$$ appid for Carl =  0x%x %d\n", appid, appid); //!!TEMP
+      //printk("$$$ appid assumed hk =  0x%x %d\n", appid, appid); //!!TEMP
       decode_status = decode_next_hk_vcdu((unsigned short *)(cbuf+10), &Hk, &Fsn);
       switch (decode_status) {
         case SUCCESS_HK_NEED_TO_WTD_CTD:
@@ -971,7 +1374,8 @@ int get_tlm(char *file, int rexmit, int higherver)
           if(rexmit || higherver) {
             if(fsnx != fsn_prev) {          // the fsn has changed
               if(fsn_change_rexmit()) {	//handle old & new images
-                continue;			//get next vcdu
+                printk("***FATAL ERROR in fsn_change_rexmit()\n");
+                return(1);
               }
             }
             //calculate and setkey some values from the keywords returned
@@ -986,7 +1390,8 @@ int get_tlm(char *file, int rexmit, int higherver)
           else {					//normal stream
             if(fsnx != fsn_prev) {          // the fsn has changed 
               if(fsn_change_normal()) {	//handle old & new images
-                continue;			//get next vcdu
+                printk("***FATAL ERROR in fsn_change_normal()\n");
+                return(1);
               }
             }
             //calculate and setkey some values from the keywords returned
@@ -1037,7 +1442,11 @@ int get_tlm(char *file, int rexmit, int higherver)
   if(rexmit || higherver) {	// close the opened record 
     if(rsc) {			// make sure have created record
       close_image(rsc, segmentc, oldArray, ImgO, fsnx);
-      imagecnt++;
+      printk("drms_server_end_transaction()\n");  //commit at end of file
+      drms_server_end_transaction(drms_env, 0 , 0);
+      printk("drms_server_begin_transaction()\n\n");
+      drms_server_begin_transaction(drms_env); //start another cycle
+      imagecnt = 0;
       fileimgcnt++;
       //fsn_prev = fsn_pre_rexmit; // restore orig for next normal .tlm file
       fsn_prev = 0;		//need for restart of normal mode
@@ -1047,6 +1456,20 @@ int get_tlm(char *file, int rexmit, int higherver)
   ftmp = EndTimer(1);
   printk("**Processed %s\n**with %d images and %d VCDUs in %f sec\n\n",
 	file, fileimgcnt, fpkt_cnt, ftmp);
+
+  //now commit to DB in case another file doesn't come in
+/***************************TEMP***********************************
+NOTE: Can't do this unless close current image and then set fsn=0
+      so that the next tlm file will start by opening the image again.
+      I don't think that we want this. Instead find a way to get the ^C
+      instead of DRMS, and then do a close and commit.
+  printk("drms_server_end_transaction()\n");
+  drms_server_end_transaction(drms_env, 0 , 0);
+  printk("drms_server_begin_transaction()\n\n");
+  drms_server_begin_transaction(drms_env); //start another cycle
+  imagecnt = 0;
+***************************TEMP***********************************/
+
   if(fpkt_cnt != total_tlm_vcdu) {
     printk("**WARNING: Found #vcdu=%d; expected=%d\n", fpkt_cnt, total_tlm_vcdu);
   }
@@ -1072,11 +1495,11 @@ void do_ingest()
   DIR *dfd;
   NAMESORT *nameptr;
   struct dirent *dp;
-  int i, j, status;
+  int i, j, status, mvstat;
   int rexmit, higherversion;
   char path[DRMS_MAXPATHLEN];
   char name[128], line[128], tlmfile[128], tlmname[96];
-  char cmd[128], xxname[128], vername[16];
+  char cmd[256], xxname[128], vername[16];
   char *token, *filename;
 
   if((dfd=opendir(tlmdir)) == NULL) {
@@ -1099,6 +1522,7 @@ void do_ingest()
         printf("***Fatal error. Too many (%d) files in %s\n", MAXFILES, tlmdir);
         abortit(3);
       }
+      cntsleeps = 0;		//we saw a file
     }
   }
   closedir(dfd);
@@ -1106,19 +1530,21 @@ void do_ingest()
 
   for(j=0; j < i; j++) {
     //printk("####QSORT FILES: %s\n", nameptr[j].name); // !!TEMP 
-    // NOTE: the dsf files stay in the indir for now 
+    // NOTE: the dsf files is moved to indir/dsf e.g. (/dds/soc2pipe/aia/dsf)
     // Currently the cron job pipefe_rm does this:
     // `/bin/mv $dsfname /dds/socdc/hmi/dsf`
-    /*******************
-    if(strstr(nameptr[j].name, ".dsf")) {
-      sprintf(cmd, "/bin/mv %s/%s %s", tlmdir, nameptr[j].name, outdir);
-      printk("*mv dsf file to %s\n", outdir);
-      printk("%s\n", cmd);
-      if(system(cmd)) {
-        printk("***Error on: %s\n", cmd);
+    //Only do for V01/VC02. VC04/VC05 won't mv the .dsf
+    if(!strcmp(pchan, "VC01") || !strcmp(pchan, "VC02")) { 
+      if(strstr(nameptr[j].name, ".dsf")) {
+        //sprintf(cmd, "/bin/mv %s/%s %s", tlmdir, nameptr[j].name, outdir);
+        sprintf(cmd, "/bin/mv -f %s/%s %s/dsf/",tlmdir,nameptr[j].name,tlmdir);
+        printk("*mv dsf file to %s/dsf/\n", tlmdir);
+        printk("%s\n", cmd);
+        if(system(cmd)) {
+          printk("***Error on: %s\n", cmd);
+        }
       }
     }
-    ********************/
     if(!strstr(nameptr[j].name, ".qac")) {	// can be .qac or .qacx 
       free(nameptr[j].name);
       continue;
@@ -1134,7 +1560,7 @@ void do_ingest()
       free(nameptr[j].name);
       continue;
     }
-    // NOTE: the qac file is already verified by the caller of xingest_lev0 
+    // NOTE: the qac file is already verified by the caller of ingest_lev0 
     while(fgets(line, 256, fp)) {	// get qac file lines 
       if(line[0] == '#' || line[0] == '\n') continue;
       if(strstr(line, "TLM_FILE_NAME=")) {
@@ -1180,7 +1606,11 @@ void do_ingest()
     rs_tlm = drms_create_record(drms_env, tlmseriesname, 
 				DRMS_PERMANENT, &status);
     if(status) {
-      printk("***Can't create record for %s\n", tlmseriesname);
+      if(status == DRMS_ERROR_SUMOPEN) {
+        printk("**ERROR: DRMS can't open w/SUMS. Aborting...\n");
+        abortit(4);
+      }
+      printk("***Can't create record for %s. Status=%d\n", tlmseriesname, status);
       continue;
     }
     if((status = drms_setkey_string(rs_tlm, "filename", tlmnamekey))) {
@@ -1209,13 +1639,25 @@ void do_ingest()
     printk("*mv qac to %s\n", path);
     printk("%s\n", cmd);
     if(status = system(cmd)) {
-      printk("**ERROR: %d on: %s\n", status, cmd);
+      printk("**ERROR: %d errno=%d on: %s\n", status, errno, cmd);
+      if(WIFEXITED(status)) {
+        if(mvstat = WEXITSTATUS(status)) {  //status ret by mv
+          printk("**ERROR: mv exit status = %d\n", mvstat);
+        }
+      }
     }
     sprintf(cmd, "/bin/mv %s %s", tlmfile, path);
     printk("*mv tlm to %s\n", path);
     printk("%s\n", cmd);
     if(status = system(cmd)) {
-      printk("**ERROR: %d on: %s\n", status, cmd);
+      printk("**ERROR: %d errno=%d on: %s\n", status, errno, cmd);
+      if(WIFEXITED(status)) {
+        if(mvstat = WEXITSTATUS(status)) {  //status ret by mv
+          printk("**ERROR: mv exit status = %d\n", mvstat);
+        }
+      }
+      printk("**Continue after ERROR on mv of tlm file\n");
+      continue;
     }
     if((status = drms_close_record(rs_tlm, DRMS_INSERT_RECORD))) {
       printk("**ERROR: drms_close_record failed for %s\n", tlmseriesname);
@@ -1231,8 +1673,10 @@ void do_ingest()
     firstfound = 1;			//a file has been seen
     if(get_tlm(xxname, rexmit, higherversion)) { // lev0 extraction of image 
       printk("***Error in lev0 extraction for %s\n", xxname);
+      printk("***Going to abort\n");
+      abortflg = 1;
     }
-    if(stat(stopfile, &stbuf) == 0) { break; } //signal to stop
+    if((stat(stopfile, &stbuf) == 0) || abortflg) { break; } //signal to stop
   }
   free(nameptr);
 }
@@ -1246,12 +1690,16 @@ void setup()
   char envfile[100], s1[256],s2[256],s3[256], line[256];
   ThreadSigErr_t error = kThreadSigErr_Success;
 
+  sdo_epoch = sscan_time("1958.01.01_00:00:00_TAI");
   do_datestr();
   printk_set(h0log, h0log);	// set for printk calls 
   printk("%s\n", datestr);
   getcwd(cwdbuf, 126);
   sprintf(idstr, "Cwd: %s\nCall: ", cwdbuf);
-  sprintf(string, "xingest_lev0 started as pid=%d user=%s\n", getpid(), username);
+  if(grounddata)
+    sprintf(string, "ingest_lev0 -g started as pid=%d user=%s\n", getpid(), username);
+  else
+    sprintf(string, "ingest_lev0 started as pid=%d user=%s\n", getpid(), username);
   strcat(idstr, string);
   printk("*%s", idstr);
   if(restartflg) printk("-r ");
@@ -1281,24 +1729,42 @@ void setup()
     }
   }
   if(hmiaiaflg) {
-    sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIA);
-    sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIA);
+    if(grounddata) {
+      sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIAGND);
+      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIAGND);
+    }
+    else {
+      sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIA);
+      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIA);
+    }
   }
   else {
-    sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
-    sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMI);
+    if(grounddata) {
+      sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMIGND);
+      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMIGND);
+    }
+    else {
+      sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
+      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMI);
+    }
   }
+  if(!restartflg) {
+    printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
+		tlmseriesname, lev0seriesname);
+  }
+  sprintf(bld_vers, "%s", jsoc_version);
   umask(002);			// allow group write 
   Image.initialized = 0;	// init the two image structures 
   ImageOld.initialized = 0;
   Img = &Image;
   ImgO = &ImageOld;
-  Img->initialized = 0;
-  ImgO->initialized = 0;
+  imgdecode_init_hack(Img);
+  imgdecode_init_hack(ImgO);
 
   //set environment variables for hk code
   //create filename and path
-  strcpy(envfile, ENVFILE );
+  if(grounddata) strcpy(envfile, ENVFILE_GND );
+  else strcpy(envfile, ENVFILE );
   //fopen file
   if(!(fp=fopen(envfile, "r"))) {
       printk("***Can't open %s. Check setting is correct\n", envfile);
@@ -1337,7 +1803,7 @@ int DoIt(void)
   pid_t pid;
   int wflg = 1;
   char *args[6];
-  char callcmd[128];
+  char callcmd[256];
 
   if (nice_intro())
     return (0);
@@ -1405,8 +1871,9 @@ int DoIt(void)
     }
 *****************************************************************************/
 
-    if(stat(stopfile, &stbuf) == 0) {
-      printk("Found file: %s. Terminate.\n", stopfile);
+    if((stat(stopfile, &stbuf) == 0) || abortflg) {
+      printk("Abort or Found file: %s. Terminate.\n", stopfile);
+      if(abortflg) send_mail("Abort for ingest_lev0 for %s\n", pchan);
       //now close any open image
       if(Image.initialized) {
         if(rs) {		//make sure have a created record
@@ -1419,14 +1886,29 @@ int DoIt(void)
       //No need to commit here. the exit will do it
       //printk("restart: drms_server_end_transaction()\n"); 
       //drms_server_end_transaction(drms_env, 0 , 0); //commit
-      sprintf(callcmd, "/bin/rm -f %s", stopfile);
-      system(callcmd);
+      //NEW 1Jun2010: leave the stopfile. 
+      //Must use doingestlev0_HMI(AIA).pl to start ingest_lev0
+      //sprintf(callcmd, "/bin/rm -f %s", stopfile);
+      //system(callcmd);
       sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exit", pchan);
       system(callcmd);		//let the world know we're gone
       wflg = 0; //leave DoIt()
       continue;
     }
-    sleep(2);
+    sleep(sleep_interval);	//normally 2 sec
+    if(cntsleeps == 0) {	//file was seen
+      if(paused) {		//send resume data flow msg
+        paused = 0;
+        send_mail("tlm files seen again for ingest_lev0 for %s\n", pchan);
+      }
+    }
+    cntsleeps++;		//#of 2sec sleeps w/o any files in do_ingest()
+    if(cntsleeps > 300) {	// >600sec w/o any files
+      if(!paused) {
+        send_mail("No files seen for ingest_lev0 for %s for 600sec\n", pchan);
+        paused = 1;
+      }
+    }
   }
   /*************!!TBD noop this out for now
   td_destroyalarm(&talarm);

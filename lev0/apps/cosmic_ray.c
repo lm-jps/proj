@@ -95,7 +95,7 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
 
   //detect everything that stick out more than limit*sigma
   if (count > nump/2) sigma=sqrt(sum/(float)(count)); else sigma=NAN;
-  printf("sigma %f\n", sigma);
+  ///printf("sigma %f\n", sigma);
   //********************************************************************************************************
 
   //check for outliers

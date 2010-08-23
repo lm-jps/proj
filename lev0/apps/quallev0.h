@@ -22,9 +22,9 @@
 #define Q_MISS1 0x200	//missvals > 0.01*totalvals
 #define Q_MISS2 0x400	//missvals > 0.05*totalvals
 #define Q_MISS3 0x800	//missvals > 0.25*totalvals
-
 //HMI sepecific
-#define Q_SEQERR 0x10000	//sequencer error HSEQERR  != 'SUCCESS'
+#define Q_DARK  0x10000 //dark image (bit 16)
+//#define Q_SEQERR 0x10000	//sequencer error HSEQERR  != 'SUCCESS'
 #define Q_ISSOPEN 0x20000	//ISS loop open HWLTNSET = 'OPEN'
 #define Q_HCF1ENCD 0x40000	//Focus/Cal Motor 1 Error
 				//HCF1ENCD ne HCF1POS +/- 1
@@ -106,6 +106,8 @@
 			  // AIFWEN != 138
 #define A450Mech_Err 0x8000000	//AIAWVLEN == 4500 && AIFWEN !=  74 && 
 			  // AIFWEN !=  75
+
+#define AQ_INVAL_WL 0x10000000 //invalid wavelength WAVE_STR == "UNKNOWN"
 
 //AIA Mechanism position definitions from Paul Boerner
 //WAVELEN FILTER_TYPE     FW_ENCODER      AS_ENCODER"

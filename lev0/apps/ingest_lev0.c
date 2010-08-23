@@ -372,7 +372,7 @@ int send_mail(char *fmt, ...)
 //Set the QUALLEV0 keyword
 void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn) 
 {
-  char *hwltnset;
+  char *hwltnset, *cdark;
   char *hseqerr, *aistate;
   char wave_str[16];
   int status, hsqfgsn, asqfsn;
@@ -408,8 +408,12 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
 //  }
 
 if(fsn == 469769216) quallev0 = quallev0 | Q_CORRUPT; //corrupt image
+if(INVALtime) quallev0 = quallev0 | Q_INVALTIME; 
+if(cdark = drms_getkey_string(rs, "IMG_TYPE", &status)) {
+  if(!strcmp(cdark, "DARK")) quallev0 = quallev0 | Q_DARK;
+  free(cdark);
+}
 if(!hmiaiaflg) {		//HMI specific qual bits
-  if(INVALtime) quallev0 = quallev0 | Q_INVALTIME; //HOBITSEC=0
   hsqfgsn = drms_getkey_int(rs, "HSQFGSN", &status);
   if(status || (fsn != hsqfgsn)) quallev0 = quallev0 | Q_NOISP;
   //Removed per Rock's email Re: lev0 quality updates 9Jun2010 10:22
@@ -707,6 +711,7 @@ else {				//AIA specific qual bits
     else strcpy(wave_str, "4500");
     break;
   }
+  if(!strcmp(wave_str, "UNKNOWN")) quallev0 = quallev0 | AQ_INVAL_WL;
 }
   //drms_setkey_int(rs, "QUALLEV0", quallev0);	//don't use this anymore
   drms_setkey_int(rs, "QUALITY", quallev0);

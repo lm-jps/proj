@@ -339,7 +339,7 @@ int forkstream(long long recn0, long long maxrecn0, int force)
         sprintf(args7, "%s", args7sv);
       }
       else {
-        sprintf(args7, "logfile=%s/l1s_%lld_%lld.log", 
+        sprintf(args7, "logfile=%s/l1s_%u_%u.log", 
 		LEV1LOG_BASEDIR, frec, lrec);
       }
       args[7] = args7;
@@ -556,6 +556,7 @@ int do_ingest(int force)
   long long recnum0, maxrecnum0;
   char string[128], pcmd[128];
 
+  //!!NOTE: stream mode has been depricated
   if(stream_mode) {		//start past last lev0 rec# processed 
     sprintf(pcmd, "echo \"select lev0recnum from lev1_highest_lev0_recnum where lev0series='%s'\" | psql -h hmidb jsoc", dsin);
     fin = popen(pcmd, "r");

@@ -19,7 +19,6 @@ struct mempointer
 
 #define nanval -2147483648
 
-const int cent_err=20;
 
 const double rad_corr_fac=1.00130;
 const double foc_corr=-1.08490;
@@ -57,14 +56,6 @@ int light_val2=3;
 const double percent_good=0.75;
 
 
-//for cosmic ray finder
-  const int malign=32;
-  const float fwhm=3.0; //full width half maximum for gaussian filter 
-  const float sigmamin=0;  //lower limit for standard deviation
-  const float sigmamax=7000.0;  //upper limit for standard deviation
-
-const int cent_frac=8; //center portion of image that is used to calculate std of image
-const float limit=7.5;
 
 int limb_fit(DRMS_Record_t *record, float *image_in, double *rsun_lf, double *x0_lf, double *y0_lf, int nx, int ny, int method);
-int cosmic_rays(DRMS_Record_t *record, float *image_int, int *badpix, int nbad, const float limit, int *cosmic, int *n_cosmic, int nx, int ny);
+
