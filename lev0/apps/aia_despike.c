@@ -95,6 +95,22 @@ int aia_despike(            /* despike function, modified heavily for AIA */
      if (countdown <= 0) break;
    }
  }
+
+ /* flip image */
+ {
+    int i, *toprow, *botrow, *tmprow;
+    botrow = array;
+    toprow = botrow + 4095*4096;
+    tmprow = (int *) malloc(sizeof(int)*4096);
+    for (i = 0; i < 2048; i++) {
+      memcpy(tmprow, toprow, 16384);
+      memcpy(toprow, botrow, 16384);
+      memcpy(botrow, tmprow, 16384);
+      botrow += 4096;
+      toprow -= 4096;
+    }
+    free(tmprow);
+ }
  /* if no mask, we actually make one full of 1's, partly for testing */
  eroded = malloc(nx*ny*sizeof(unsigned char));
  if (!eroded) { printf("malloc error in local mask copy\n");  return 1; }
