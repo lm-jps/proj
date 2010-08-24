@@ -6,21 +6,23 @@
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V1.2r0" 
-	#define CODE_DATE 		"Wed Jul 21 09:32:15 PDT 2010" 
+	#define CODE_VERSION 	"V1.4r0" 
+	#define CODE_DATE 		"Tue Aug 24 10:19:25 HST 2010" 
 */
 
 #include "limbfit.h"
 
-int limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,int debug)
+int limbfit(LIMBFIT_INPUT *APP,LIMBFIT_OUTPUT *results,FILE *opf,int debug)
 {
-if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit\n",LOGMSG1);
+static char *log_msg_code="limbfit";
+char log_msg[120];
+
+if (debug) lf_logmsg("DEBUG", "APP", 0, 0, "", log_msg_code, opf);
 
 /************************************************************************
 					INIT VARS coming from build_lev1.c
 ************************************************************************/	
-	float *data=info->data;
-//	printf("hmi selected\n");
+	float *data=APP->data;
 //	float MIN_VALUE=BAD_PIXEL_VALUE;
 //	float MAX_VALUE=(float)fabs(BAD_PIXEL_VALUE);
 
@@ -38,8 +40,8 @@ int 	r_size	 = NUM_FITPNTS;
 int		grange	 = GUESS_RANGE;
 float 	dx		 = INC_X;
 float 	dy		 = INC_Y;
-int		naxis_row= info->img_sz0;
-int		naxis_col= info->img_sz1;
+int		naxis_row= APP->img_sz0;
+int		naxis_col= APP->img_sz1;
 int		iter	 = NB_ITER;
 int		skipc	 = SKIPGC;
 //float 	flag	 = BAD_PIXEL_VALUE; 
@@ -60,18 +62,14 @@ int ng = naxis_row/16;//4;
 int nb_lines=3;
 float *Dx, *xx;
 float *line;
-line = (float *) malloc(sizeof(float)*(nb_lines*ng));
-
+float sav_max=0.;
 	
 if (skipc == 1) 
 {
 	/* Initial guess estimate of center position from Richard's code*/
-		cmx=(float)info->ix;
-		cmy=(float)info->iy;
-		r=(float)info->ir;
-//?		guess_cx=cmx;
-//?		guess_cy=cmy;
-//?		guess_r=r;
+		cmx=(float)APP->ix;
+		cmy=(float)APP->iy;
+		r=(float)APP->ir;
 }
 else
 {
@@ -79,112 +77,105 @@ else
 		   Find the guess for the center position and radius                 
 		***********************************************************************/
 		int nb_iters=3;
+
+		line = (float *) malloc(sizeof(float)*(nb_lines*ng));
+		if(!line) return ERR_MALLOC_FAILED;
+	
+		for (i=0;i<naxis_row*naxis_col;i++)
+			if (data[i] <0.0)
+				data[i] =0.0;
+	
+		Dx = (float *) malloc(sizeof(float)*(nb_lines*ng));
+			if(!Dx) return ERR_MALLOC_FAILED;
+		xx = (float *) malloc(sizeof(float)*(nb_lines*ng));
+			if(!xx) return ERR_MALLOC_FAILED;
 		
+		int k, kk, dh, vv; 
+		float x1, x2, x3, y1, y2, y3, ma, mb, mx[nb_lines], maximo;
 		
-			if(!line) return ERR_MALLOC_FAILED;
-		
-			for (i=0;i<naxis_row*naxis_col;i++)
-				if (data[i] <0.0)
-					data[i] =0.0;
-		
-			Dx = (float *) malloc(sizeof(float)*(nb_lines*ng));
-				if(!Dx) return ERR_MALLOC_FAILED;
-			xx = (float *) malloc(sizeof(float)*(nb_lines*ng));
-				if(!xx) return ERR_MALLOC_FAILED;
+		for(jj = 0; jj < nb_iters ; jj++) 
+		{		
+			for(ii = 0; ii < ng ; ii++)
+			{
+				xx[ii] = (float)ii;
+				line[ii] = 0;
+				if (data[ii*naxis_col+cy] > 0) line[ii] = data[ii*naxis_col+cy];
+			}
+	
+			for(ii = naxis_row-1; ii > naxis_row-ng-1 ; ii--) 
+			{
+				vv=abs(ii-naxis_row+1);
+				xx[ng+vv] = (float)ii;
+				line[ng+vv] = 0;
+				if (data[ii*naxis_col+cy] > 0) line[ng+vv] = data[ii*naxis_col+cy];
+			 }
 			
-			int k, kk, dh, vv; 
-			float x1, x2, x3, y1, y2, y3, ma, mb, sav_max=0., mx[nb_lines], maximo;
-			
-			for(jj = 0; jj < nb_iters ; jj++) 
-			{		
-				for(ii = 0; ii < ng ; ii++)
-				{
-					xx[ii] = (float)ii;
-					line[ii] = 0;
-					if (data[ii*naxis_col+cy] > 0) line[ii] = data[ii*naxis_col+cy];
-				}
-		
-				for(ii = naxis_row-1; ii > naxis_row-ng-1 ; ii--) 
-				{
-					vv=abs(ii-naxis_row+1);
-					xx[ng+vv] = (float)ii;
-					line[ng+vv] = 0;
-					if (data[ii*naxis_col+cy] > 0) line[ng+vv] = data[ii*naxis_col+cy];
-				 }
+			for(ii = 0; ii < ng ; ii++) 
+			{
+				xx[(2*ng)+ii] =  (float)ii;
+				line[(2*ng)+ii] = 0;
+				if (data[cx*naxis_col+ii] > 0) line[(2*ng)+ii] = data[cx*naxis_col+ii];
+			}
+			dh = 1;
+			for(k = 0; k < nb_lines ; k++) 
+			{
+				kk=k*ng;
+				 /* Calculate the Derivative */ 
+				Dx[kk]		=(float)(-3*line[kk+4]+16*line[kk+3]-36*line[kk+2]+48*line[kk+1]-25*line[kk])/(12*dh);
+				Dx[kk+1]	=(float)(line[kk+4]-6*line[kk+3]+18*line[kk+2]-10*line[kk+1]-3*line[kk])/(12*dh);
+				for (i=2; i< ng-2; i++) 
+					Dx[kk+i]=(float)(line[kk+i-2]-8*line[kk+i-1]+8*line[kk+i+1]-line[kk+i+2])/(12*dh);
+				Dx[kk+ng-2] =(float)(-line[kk+ng-5] +6*line[kk+ng-4]-18*line[kk+ng-3]+10*line[kk+ng-2]+3*line[kk+ng-1])/(12*dh);
+				Dx[kk+ng-1] =(float)(3*line[kk+ng-5]-16*line[kk+ng-4]+36*line[kk+ng-3]-48*line[kk+ng-2]+25*line[kk+ng-1])/(12*dh);
 				
+				/* square the result */
 				for(ii = 0; ii < ng ; ii++) 
-				{
-					xx[(2*ng)+ii] =  (float)ii;
-					line[(2*ng)+ii] = 0;
-					if (data[cx*naxis_col+ii] > 0) line[(2*ng)+ii] = data[cx*naxis_col+ii];
-				}
-				dh = 1;
-				for(k = 0; k < nb_lines ; k++) 
-				{
-					kk=k*ng;
-					 /* Calculate the Derivative */ 
-					Dx[kk]		=(float)(-3*line[kk+4]+16*line[kk+3]-36*line[kk+2]+48*line[kk+1]-25*line[kk])/(12*dh);
-					Dx[kk+1]	=(float)(line[kk+4]-6*line[kk+3]+18*line[kk+2]-10*line[kk+1]-3*line[kk])/(12*dh);
-					for (i=2; i< ng-2; i++) 
-						Dx[kk+i]=(float)(line[kk+i-2]-8*line[kk+i-1]+8*line[kk+i+1]-line[kk+i+2])/(12*dh);
-					Dx[kk+ng-2] =(float)(-line[kk+ng-5] +6*line[kk+ng-4]-18*line[kk+ng-3]+10*line[kk+ng-2]+3*line[kk+ng-1])/(12*dh);
-					Dx[kk+ng-1] =(float)(3*line[kk+ng-5]-16*line[kk+ng-4]+36*line[kk+ng-3]-48*line[kk+ng-2]+25*line[kk+ng-1])/(12*dh);
-					
-					/* square the result */
-					for(ii = 0; ii < ng ; ii++) 
-						Dx[kk+ii]=Dx[kk+ii]*Dx[kk+ii];
-		
-					for(ii = 0; ii < ng ; ii++) 
-						if (line[kk+ii] < 0.0001)   // IS: because a float cannot be compared to 0
-							Dx[kk+ii]=0; 
-		
-					 /* smooth */
-					for(ii = 1; ii < ng-1 ; ii++) 
-						Dx[kk+ii]=(Dx[kk+ii-1]+Dx[kk+ii]+Dx[kk+ii+1])/3;
-					
-					 /* find the maximum */
-					mx[k]=0.;					
-					maximo=-1.;
-					for(ii = 1; ii < ng-1 ; ii++) {
-						if (Dx[kk+ii] > maximo) {
-							maximo=Dx[kk+ii];
-							mx[k]=xx[kk+ii];
-						}
+					Dx[kk+ii]=Dx[kk+ii]*Dx[kk+ii];
+	
+				for(ii = 0; ii < ng ; ii++) 
+					if (line[kk+ii] < 0.0001)   // IS: because a float cannot be compared to 0
+						Dx[kk+ii]=0; 
+	
+				 /* smooth */
+				for(ii = 1; ii < ng-1 ; ii++) 
+					Dx[kk+ii]=(Dx[kk+ii-1]+Dx[kk+ii]+Dx[kk+ii+1])/3;
+				
+				 /* find the maximum */
+				mx[k]=0.;					
+				maximo=-1.;
+				for(ii = 1; ii < ng-1 ; ii++) {
+					if (Dx[kk+ii] > maximo) {
+						maximo=Dx[kk+ii];
+						mx[k]=xx[kk+ii];
 					}
-				//fprintf(info->opf,"\n -jj %ld k %d ii %ld kk %d mx[k] %d\n",jj,k,ii,kk,mx[k]);
-				} // endfor k
+				}
+			} // endfor k
+	
+			/* find the geometric center */
+			
+			y1 = (float)mx[0];
+			x1 = (float)cy;
+			y3 = (float)mx[1];
+			x3 = (float)cy;
+			y2 = (float)cx;
+			x2 = (float)mx[2];
+
+			if (mx[0] > sav_max) sav_max=mx[0];
+			if (mx[1] > sav_max) sav_max=mx[1];
+			if (mx[2] > sav_max) sav_max=mx[2];
+			
+			ma=(y2-y1)/((x2-x1)*1);
+			mb=(y3-y2)/((x3-x2)*1);
+			
+			cx=(int) ((ma*mb*(y1-y3)+mb*(x1+x2)-ma*(x2+x3))/(2*(mb-ma)));
+			cy=(int) (-(cx-(x1+x2)/2.)/ma+(y1+y2)/2.);
+			r=(float)sqrt((x1-cx)*(x1-cx)+(y1-cy)*(y1-cy));		
+		} // endfor jj
 		
-				/* find the geometric center */
-				
-				y1 = (float)mx[0];
-				x1 = (float)cy;
-				y3 = (float)mx[1];
-				x3 = (float)cy;
-				y2 = (float)cx;
-				x2 = (float)mx[2];
-				//fprintf(info->opf,"ici : %f %f %f %f %f %f\n",y1,x1,y3,x3,y2,x2);
-				// for tuning purpose only
-				if (mx[0] > sav_max) sav_max=mx[0];
-				if (mx[1] > sav_max) sav_max=mx[1];
-				if (mx[2] > sav_max) sav_max=mx[2];
-				
-				ma=(y2-y1)/((x2-x1)*1);
-				mb=(y3-y2)/((x3-x2)*1);
-				//fprintf(info->opf,"ici2 : %f %f \n",ma,mb);
-				
-				cx=(int) ((ma*mb*(y1-y3)+mb*(x1+x2)-ma*(x2+x3))/(2*(mb-ma)));
-				cy=(int) (-(cx-(x1+x2)/2.)/ma+(y1+y2)/2.);
-				r=(float)sqrt((x1-cx)*(x1-cx)+(y1-cy)*(y1-cy));		
-				//fprintf(info->opf,"ici3 : %i %i %f \n",cx,cy,r);
-			} // endfor jj
-		
-//?		guess_cx=(float)cx;
-//?		guess_cy=(float)cy;
-//?		guess_r=r;
-		
-		if (debug)
+		if (debug) 
 		{
-			fprintf(info->opf,"%s DEBUG_INFO in limfit Guess : cx = %6i, cy = %6i, r = %6.2f\n",LOGMSG1, cx, cy, r);
+			sprintf(log_msg," Guess : cx = %6i, cy = %6i, r = %6.2f", cx, cy, r);
+			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 		}
 	
 	/************************************************************************/
@@ -233,7 +224,8 @@ v = (float *) malloc(sizeof(float) * S);
 	
 	if (debug)
 	{
-		fprintf(info->opf,"%s DEBUG_INFO in limfit jk = %ld\n",LOGMSG1, jk);
+		sprintf(log_msg," jk = %ld", jk);
+		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 	}
 	if (jk >= S) return ERR_SIZE_ANN_TOO_BIG;
 
@@ -270,29 +262,42 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 	for (ii=0; ii <nreg; ii++) beta[ii]=0.;
 
 	// fortran call:
-	if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit entering limb_-----------\n",LOGMSG1);
+	if (debug) lf_logmsg("DEBUG", "APP", 0, 0, "entering limb", log_msg_code, opf);
+
 	int centyp;
 	//#1
 	if (skipc == 1) centyp=1; else centyp=0;
 	limb_(&anls[0],&jk, &cmx, &cmy, &r, &nitr, &ncut, &nang, &nprf, &rprf[0], &lprf[0], &nreg, &rsi, &rso, 
 		&dx, &dy, &jreg, &jang, &jprf, &alph[0], &b0[0], &ifail, &beta[0], &centyp); 
 		//&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta[0], &ifail, &b0[0], &centyp); 
-	if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit exiting limb--------%d---\n",LOGMSG1,ifail);
+	if (debug)
+	{
+		sprintf(log_msg,"exiting limb: %d", ifail);
+		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+	}
 	centyp=1;
 	if (iter > 1 && ifail == 0)
 	{	
-		if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit re-entering-----------\n",LOGMSG1);
+		if (debug) lf_logmsg("DEBUG", "APP", 0, 0, "re-entering", log_msg_code, opf);
 		//#2
 		limb_(&anls[0],&jk, &cmx, &cmy, &r, &nitr, &ncut, &nang, &nprf, &rprf[0], &lprf[0], &nreg, &rsi, &rso, 
 			&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta1[0], &ifail, &b0[0], &centyp); 
-		if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit exiting limb_2nd time--------%d---\n",LOGMSG1,ifail);
+		if (debug)
+		{
+			sprintf(log_msg," exiting limb_2nd time: %d", ifail);
+			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+		}
 		for (ii=0; ii<nreg; ii++) b0[ii]=b0[ii]+beta1[ii];// <<< TO CONVERT THIS WITH POINTERS
 		//#3
 		if(iter > 2 && ifail ==0)
 		{	
 			limb_(&anls[0],&jk, &cmx, &cmy, &r, &nitr, &ncut, &nang, &nprf, &rprf[0], &lprf[0], &nreg, &rsi, &rso, 
 				&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta2[0], &ifail, &b0[0], &centyp); 
-			if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit exiting limb_3rd time--------%d---\n",LOGMSG1,ifail);
+			if (debug) 
+			{
+				sprintf(log_msg,"exiting limb_3rd time: %d", ifail);
+				lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+			}
 			for (ii=0; ii<nreg; ii++) b0[ii]=b0[ii]+beta2[ii];// <<< TO CONVERT THIS WITH POINTERS
 			if ((iter > 3) && (ifail ==0))
 			{	
@@ -300,7 +305,11 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 				for (ii=0; ii<nreg; ii++) b0[ii]=beta[ii]+beta1[ii];// <<< TO CONVERT THIS WITH POINTERS
 				limb_(&anls[0],&jk, &cmx, &cmy, &r, &nitr, &ncut, &nang, &nprf, &rprf[0], &lprf[0], &nreg, &rsi, &rso, 
 					&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta3[0], &ifail, &b0[0], &centyp); 
-				if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit exiting limb_4th time--------%d---\n",LOGMSG1,ifail);
+				if (debug)
+				{
+					sprintf(log_msg,"exiting limb_4th time: %d", ifail);
+					lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+				}
 				for (ii=0; ii <nreg; ii++) b0[ii]=b0[ii]+beta3[ii];// <<< TO CONVERT THIS WITH POINTERS
 			}
 		} //ici faire qqch si ifail >0 sauver ldf,a,b de la version d'avant...
@@ -308,9 +317,12 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 
 	if (debug)
 	{
-		fprintf(info->opf,"%s DEBUG_INFO in limfit ifail = %6d\n",LOGMSG1, ifail);
-		fprintf(info->opf,"%s DEBUG_INFO in limfit nitr = %6d\n",LOGMSG1, nitr);
-		fprintf(info->opf,"%s DEBUG_INFO in limfit cx = %6.2f, cy = %6.2f\n",LOGMSG1, cmx, cmy);
+		sprintf(log_msg," ifail = %6d", ifail);
+		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+		sprintf(log_msg," nitr = %6d", nitr);
+		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+		sprintf(log_msg," cx = %6.2f, cy = %6.2f", cmx, cmy);
+		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 	}
 	
 	if(ifail == 0) // || ifail == 7) 
@@ -335,7 +347,8 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		cmean=ctot/nbp;
 		if (debug)
 		{
-			fprintf(info->opf,"%s DEBUG_INFO in limfit cmean = %6.4f (ctot= %6.4f , nbp=%ld)\n",LOGMSG1, cmean,ctot,nbp); //comparer avec idl
+			sprintf(log_msg," cmean = %6.4f (ctot= %6.4f , nbp=%ld)", cmean,ctot,nbp);
+			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 		}
 
 		/************************************************************************/
@@ -351,7 +364,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		double radius = {0.0};
 		double A[6] = { 0., 0., 0., 0., 0., 0. };
 		double erro[6] = { 0., 0., 0., 0., 0., 0. };
-		int cont, c, ret;
+		int cont, c, ret_gsl;
 		float h;
 			
 		// for saving them in FITS file
@@ -376,14 +389,6 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		//for later use
 	    save_fulldf 	= (float *) malloc((fulldf_nrow*fulldf_ncol)*sizeof(float));
 			if(!save_fulldf) return ERR_MALLOC_FAILED;
-/*
-printf("ici %p\n",save_ldf);
-printf("ici %p\n",save_params1);
-printf("ici %p\n",save_params2);
-printf("ici %p\n",save_alpha_beta1);
-printf("ici %p\n",save_alpha_beta2);
-printf("ici %p\n",save_fulldf);
-*/
 			
 		long zero_as=0;
 		long zero_es=params_nrow*nb_p_as;
@@ -392,13 +397,13 @@ printf("ici %p\n",save_fulldf);
 			
 		for (cont=0; cont<=nang; cont++)
 		{	 
+			ret_gsl=0;
 			 ip1=0.;
 			 /* dx */
 			 h=(float)rprf[1]-rprf[0];
 			
 			 /* Take the last (mean) LDF from lprf vector */
 			 for(ii = 0; ii < nprf ; ii++) 
-			 	//LDF[ii]=lprf[(cont*(nang+1))+ii];
 			 	LDF[ii]=lprf[(nprf*cont)+ii];
 
 			 /* Calculate the Derivative */
@@ -435,7 +440,10 @@ printf("ici %p\n",save_fulldf);
 			if (debug)
 			{
 				if (cont==nang)
-					fprintf(info->opf,"%s DEBUG_INFO in limfit Inflection Point 1: %ld %d %8.5f %8.5f\n",LOGMSG1, jj, nprf, rprf[jj], ip);
+				{
+					sprintf(log_msg," Inflection Point 1: %ld %d %8.5f %8.5f", jj, nprf, rprf[jj], ip);
+					lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+				}
 			}
 			ip1=ip;
 			/* FIT A GAUSSIAN PLUS QUADRATIC FUNCTION */
@@ -473,11 +481,15 @@ printf("ici %p\n",save_fulldf);
 					   sigma[jj] = 1.;
 			 	}
 				A[4]= der[N-1]-der[0];
-				if (debug==2) fprintf(info->opf,"%s DEBUG_INFO in limfit #: %d\n",LOGMSG1,cont);
-				ret=gaussfit(der, px, sigma, A, erro, N, debug,info->opf);
-				if (ret < 0)
+				//if (debug==2) fprintf(opf,"%s DEBUG_INFO in limbfit: #: %d\n",LOGMSG1,cont);
+				ret_gsl=gaussfit(der, px, sigma, A, erro, N, debug,opf);
+				if (ret_gsl < 0)
 				{
-					if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit in error #1 %d err:%d\n",LOGMSG1,cont,ret);
+					if (cont==nang)
+					{
+						sprintf(log_msg," gaussfit failed for the averaged LDF %d err:%d", cont,ret_gsl);
+						lf_logmsg("ERROR", "APP", 0, ret_gsl, log_msg, log_msg_code, opf);
+					}
 					for (c=0;c<6;c++) 
 					{	
 						A[c]=0.;
@@ -489,10 +501,15 @@ printf("ici %p\n",save_fulldf);
 				{			
 				 	/* FIND THE MAXIMUM OF THE GAUSSIAN PLUS QUADRATIC FUNCTION */
 				 	radius = A[1]; /* Initial Guess */
-				 	radius = fin_min(A, radius, grange, debug,info->opf);
+				 	radius = fin_min(A, radius, grange, debug,opf);
 					if (radius < 0)
 					{
-						if (debug) fprintf(info->opf,"%s DEBUG_INFO in limfit in error #2 %d\n",LOGMSG1,cont);
+						ret_gsl=(int)radius;
+						if (cont==nang)
+						{
+							sprintf(log_msg," fin_min failed for the averaged LDF %d err:%d", cont, ret_gsl);
+							lf_logmsg("ERROR", "APP", 0, ret_gsl, log_msg, log_msg_code, opf);
+						}
 						for (c=0;c<6;c++) 
 						{	
 							A[c]=0.;
@@ -504,15 +521,23 @@ printf("ici %p\n",save_fulldf);
 			} 
 			else 
 			{ 
-				if (debug)
-				{	
-					fprintf(info->opf,"%s DEBUG_INFO in limfit Inflection point too close to annulus data border\n",LOGMSG1);
-				}
+				sprintf(log_msg," Inflection point too close to annulus data border %d", cont);
+				lf_logmsg("WARNING", "APP", 0, 0, log_msg, log_msg_code, opf);
 				for (c=0;c<nb_p_as;c++) erro[c]=0.;
 				radius=ip;
 				save_params1[cont*params_ncol+nb_p_as+nb_p_es+nb_p_radius]=0.;
 				save_params2[zero_ip+cont]=0.;
 			}
+
+
+			if (debug)
+			{	
+				sprintf(log_msg,"  (2)ret_gsl<0 = %2d", ret_gsl);
+				lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+	 		}     	
+
+
+			// IS: NOT SURE THIS IS AT THE RIGHT PLACE!!! just above before the "else"
 			// save them
 			for (c=0;c<nb_p_as;c++)
 			{
@@ -528,9 +553,12 @@ printf("ici %p\n",save_fulldf);
 		} // endfor-cont
 		if (debug)
 		{	
-			fprintf(info->opf,"%s DEBUG_INFO in limfit Inflection Point 2: %8.5f %8.5f %8.5f\n",LOGMSG1, A[1], erro[1], radius);
-			fprintf(info->opf,"%s DEBUG_INFO in limfit -----: %8.5f %8.5f %8.5f %8.5f %8.5f %8.5f\n ",LOGMSG1,A[0],A[1],A[2],A[3],A[4],A[5]);
-			fprintf(info->opf,"%s DEBUG_INFO in limfit -----: %8.5f %8.5f %8.5f %8.5f %8.5f %8.5f\n ",LOGMSG1,erro[0],erro[1],erro[2],erro[3],erro[4],erro[5]);
+			sprintf(log_msg," Inflection Point 2: %8.5f %8.5f %8.5f", A[1], erro[1], radius);
+			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+			sprintf(log_msg," -----: %8.5f %8.5f %8.5f %8.5f %8.5f %8.5f", A[0],A[1],A[2],A[3],A[4],A[5]);
+			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+			sprintf(log_msg," -----: %8.5f %8.5f %8.5f %8.5f %8.5f %8.5f", erro[0],erro[1],erro[2],erro[3],erro[4],erro[5]);
+			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 		}
 
 	//**********************************************************************
@@ -569,8 +597,6 @@ printf("ici %p\n",save_fulldf);
 			*(p_save_alpha_beta++)=*(p_beta++);
 		}
 
-		//do the same with save_alpha_beta2
-		//on se deplace sur l'origine en ++ et sur la destination en +rows
 		p_alph=&alph[0];
 		pl_alph=&alph[ab_nrow-1];
 		p_beta=&b0[0];
@@ -584,8 +610,7 @@ printf("ici %p\n",save_fulldf);
 		results->ceny=cmy;
 		results->radius=radius;
 		results->cmean=cmean;
-//		results->max_limb=sav_max;
-		results->error=0;		
+		results->max_limb=sav_max;
 		results->numext=3;		
 		results->fits_ldfs_naxis1=ldf_ncol;	
 		results->fits_ldfs_naxis2=ldf_nrow;
@@ -607,39 +632,41 @@ printf("ici %p\n",save_fulldf);
 		results->nfitpnts=r_size;
 		results->nb_iter=iter;
 		results->skipgc=skipc;
-
+		results->error1=ifail;		
+		results->error2=ret_gsl;		
 		if (ifail == 0) 
 			results->quality=9; 
-		else //IS to be tuned but in function of what?
+		if (cont>=nang && ret_gsl<0)
+		{
 			results->quality=5; 
+			ret_code=ERR_LIMBFIT_FIT_FAILED;
+			if (debug)
+			{	
+				sprintf(log_msg,"  ret_gsl<0 = %2d", ret_gsl);
+				lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
+	 		}     	
+		}
 		results->fits_ldfs_data=save_ldf; 
 		results->fits_fulldfs=save_fulldf; 
 		results->fits_params1=save_params1; 
 		results->fits_params2=save_params2; 
 		results->fits_alpha_beta1=save_alpha_beta1; 
 		results->fits_alpha_beta2=save_alpha_beta2; 
-/*
-printf("ici %p\n",results->fits_ldfs_data);
-printf("ici %p\n",results->fits_params1);
-printf("ici %p\n",results->fits_params2);
-printf("ici %p\n",results->fits_alpha_beta1);
-printf("ici %p\n",results->fits_alpha_beta2);
-printf("ici %p\n",results->fits_fulldfs);
-*/
-
 
 		free(D);
 		free(LDF);
-	} 
+	} // end limb OK
 	else 
 	{
 		if (debug)
 		{	
-			fprintf(info->opf,"%s DEBUG_INFO in limfit limb.f routine returned ifail = %2d\n",LOGMSG1, ifail);
+			sprintf(log_msg," limb.f routine returned ifail = %2d", ifail);
+			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
  		}     	
 		// Update Returned Structure when process failed                    
 		results->numext=0;		
-		results->error=ifail;
+		results->error1=ifail;
+		results->error2=-1;
 		results->quality=0;
       	ret_code=ERR_LIMBFIT_FAILED;
 		results->ann_wd=w;
@@ -655,22 +682,9 @@ printf("ici %p\n",results->fits_fulldfs);
 		results->nb_iter=iter;
 		results->max_limb=0;
 		results->cmean=0;
-	}
-
-	// Write common keywords
-	time_t t = time(NULL);
-	char tdate[50];
-    struct tm *timeptr;
-	//  Fri Feb 12 16:13:59 2010 -> '2009.10.26_04:00:30_TAI'   
-	timeptr=gmtime(&t);
-	sprintf(tdate,"%4d.%d.%d_%d:%d:%2d_TAI\0",
-		1900+timeptr->tm_year,timeptr->tm_mon,	timeptr->tm_mday,
-		timeptr->tm_hour,timeptr->tm_min,timeptr->tm_sec);
-	strcpy(results->proc_date,tdate);
-	strcpy(results->code_name,CODE_NAME);
-	strcpy(results->code_version,CODE_VERSION);		
-
-	// IS: do not free 'data' et others passed from or to the structure !
+	} // end limb failed
+	
+	// IS: do not free those passed from or to the structure !
 	free(x);
 	free(y);
 	free(v); 
@@ -692,8 +706,12 @@ printf("ici %p\n",results->fits_fulldfs);
 	
 	if (debug)
 	{	
-		fprintf(info->opf,"%s DEBUG_INFO in limfit >>>>end of limbfit with: %d\n",LOGMSG1,ret_code);
+		sprintf(log_msg," >>>>end of limbfit with: %d", ret_code);
+		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 	}
+	
+	sprintf(log_msg," end: RC: %d - limb:%d - fit:%d - quality: %d", ret_code, results->error1, results->error2, results->quality);
+	lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
 	
 return(ret_code);
 
@@ -701,7 +719,7 @@ return(ret_code);
 
 
 /*--------------------------------------------------------------------------*/
-int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6], long N, int debug, FILE *fd)
+int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6], long N, int debug, FILE *opf)
 /* Calculate a Least SqrareGaussian + Quadratic fit              */
 /*      Uses the GNU Scientific Library                          */
 /* Marcelo Emilio (c) v 1.0 Jan 2009                             */
@@ -723,7 +741,9 @@ int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6],
 /* erro --> Chi-square of A                                      */
 
 {
+	static char *log_msg_code="gaussfit";
 	int ret_code=0;
+	char log_msg[120];
 	
 	const gsl_multifit_fdfsolver_type *T;
 	gsl_multifit_fdfsolver *s;
@@ -772,7 +792,14 @@ int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6],
 		if (!status)	
 			status = gsl_multifit_test_delta (s->dx, s->x, 1e-6, 1e-2);  		/* IS: change epsrel (last arg of gsl_multifit_test_delta) after the SDO Launch */ 
 		else 
-			fprintf (fd,"%s ERROR in limfit iter: %u, status: %d (%s)\n",LOGMSG1,iter,status,gsl_strerror (status));
+		{
+			ret_code=ERR_GSL_GAUSSFIT_SET_FAILED;	
+			if (debug) 
+			{
+				sprintf(log_msg," iter: %u, status: %d (%s)", iter,status,gsl_strerror (status));
+				lf_logmsg("WARNING", "APP", ret_code, status, log_msg, log_msg_code, opf);			
+			}
+		}
 	}
 	while (status == GSL_CONTINUE && iter < 500);
 			
@@ -795,14 +822,19 @@ int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6],
 	}
 	else
 	{
-		fprintf (fd,"%s ERROR in limfit (gsl_multifit_fdfsolver_iterate) failed, (iter=%u) gsl_errno=%d\n",LOGMSG1,iter,status); ///to change to a debug printf
 		ret_code=ERR_GSL_GAUSSFIT_FDFSOLVER_FAILED;			
+		if (debug)
+		{
+			sprintf(log_msg," (gsl_multifit_fdfsolver_iterate) failed, (iter=%u) gsl_errno=%d", iter,status);
+			lf_logmsg("ERROR", "APP", ret_code, status, log_msg, log_msg_code, opf);
+		}
 	}
 
 	
 	if (debug==2)
 	{																		
-		fprintf (fd,"%s DEBUG_INFO in limfit Nonlinear LSQ fitting status = %s (%d)\n",LOGMSG1, gsl_strerror (status),status); 
+		sprintf(log_msg," Nonlinear LSQ fitting status = %s (%d)", gsl_strerror (status),status);
+		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 	}
 	gsl_multifit_fdfsolver_free (s);
 	gsl_matrix_free (covar);
@@ -813,7 +845,7 @@ int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6],
 
 /*--------------------------------------------------------------------------*/
 
-double fin_min(double A[6], double m, int range, int debug, FILE *fd)
+double fin_min(double A[6], double m, int range, int debug, FILE *opf)
 /* Calculate the maximum of the quadratic + gaussian function    */
 /*                 using Brent algorithm                         */
 /* Marcelo Emilio (c) v 1.0 Jan 2009                             */
@@ -827,8 +859,11 @@ double fin_min(double A[6], double m, int range, int debug, FILE *fd)
 /*           #include <gsl/gsl_math.h>                           */
 /*           #include <gsl/gsl_min.h>                            */
 {
+	static char *log_msg_code="fin_min";
 	int status;
 	gsl_set_error_handler_off();
+	int ret_code=0;
+	char log_msg[120];
 	
 	 int iter = 0, max_iter = 1000;
 	 const gsl_min_fminimizer_type *T;
@@ -850,12 +885,21 @@ double fin_min(double A[6], double m, int range, int debug, FILE *fd)
 	  status=gsl_min_fminimizer_set (s, &F, m, a, b);     
 	  if (status)
 	  {
-			if (status == GSL_EINVAL) {
-				fprintf (fd,"%s INFO in limfit (gsl_min_fminimizer_set) doesn't find a minimum, m=%f\n",LOGMSG1, m );
-			} else {
-				fprintf (fd,"%s ERROR in limfit (gsl_min_fminimizer_set) failed, gsl_errno=%d\n",LOGMSG1,status);
+			if (status == GSL_EINVAL) 
+			{
+				if (debug)
+				{
+					sprintf(log_msg," (gsl_min_fminimizer_set) doesn't find a minimum, m=%f", m);
+					lf_logmsg("DEBUG", "APP", 0, status, log_msg, log_msg_code, opf);
+				}
+			} 
+			else 
+			{
+				sprintf(log_msg," (gsl_min_fminimizer_set) failed, gsl_errno=%d", status);
+				ret_code=ERR_GSL_FINMIN_SET_FAILED;
+				lf_logmsg("ERROR", "APP", ret_code, status, log_msg, log_msg_code, opf);			
 			}
-			return ERR_GSL_FIN_MIN_SET_FAILED;
+			return ret_code;
 	  }
 	  
 	  do
@@ -873,17 +917,31 @@ double fin_min(double A[6], double m, int range, int debug, FILE *fd)
 	  
 	  if (status)		// regarder lequel plantait et verifier si on a autre chose que GSL_EINVAL comme erreur
 		{				// ajouter debug pour les messages apres
-			if (status == GSL_EINVAL) {
-				fprintf (fd,"%s ERROR in limfit invalid argument, n=%8.5f\n",LOGMSG1, a);
-			} else {
-				fprintf (fd,"%s ERROR in limfit failed, gsl_errno=%d\n",LOGMSG1,status);
+			if (status == GSL_EINVAL) 
+			{
+				ret_code=ERR_GSL_FINMIN_PRO_FAILED;
+				if (debug)
+				{
+					sprintf(log_msg," invalid argument, n=%8.5f", a);
+					lf_logmsg("ERROR", "APP", ret_code, status, log_msg, log_msg_code, opf);			
+				}
+			} 
+			else 
+			{			
+				ret_code=ERR_GSL_FINMIN_PRO_FAILED;
+				if (debug)
+				{
+					sprintf(log_msg," failed, gsl_errno=%d", status);
+					lf_logmsg("ERROR", "APP", ret_code, status, log_msg, log_msg_code, opf);			
+				}
 			}
-			return ERR_GSL_FIN_MIN_PRO_FAILED; //IS a arranger! et a recuperer dans le main
+			return ret_code; 
 		}
 	  
 	  if (debug==2)
 	  {
-			fprintf (fd,"%s DEBUG_INFO in limfit a:%8.5f b:%8.5f m:%8.5f iter=%d, b-a:%f\n",LOGMSG1,a,b,m,iter,b-a)     ;
+			sprintf(log_msg," a:%8.5f b:%8.5f m:%8.5f iter=%d, b-a:%f", a,b,m,iter,b-a);
+			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 	  }
 
 
