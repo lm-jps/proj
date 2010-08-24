@@ -16,7 +16,7 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
 
 
       float stdd=fwhm/2.0/sqrt(2.0*log(2.0)); 
-      int nwd=(int)(fwhm*2.0);  //kernel size
+      int nwd=(int)(fwhm*kernel_size);  //kernel size
       init_fresize_gaussian(&fresizes,stdd,nwd,1);
       if (fresize == NULL){printf("can not initialize fresize\n"); exit(EXIT_FAILURE);}
 
@@ -95,7 +95,7 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
 
   //detect everything that stick out more than limit*sigma
   if (count > nump/2) sigma=sqrt(sum/(float)(count)); else sigma=NAN;
-  ///printf("sigma %f\n", sigma);
+  printf("sigma %f\n", sigma);
   //********************************************************************************************************
 
   //check for outliers
