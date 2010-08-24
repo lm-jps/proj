@@ -531,7 +531,7 @@ int do_flat_aia(LEV0LEV1 *info)
 	info->datamedn = medn + MINOUT;
 
 	for (i=min; i<=max; ++i) {
-	    int ii = i + MINOUT;
+	    double ii = i + MINOUT;
 	    s += (dtmp = ii*hist[i]);
 	    s2 += (dtmp *= ii);
 	    s3 += (dtmp *= ii);
