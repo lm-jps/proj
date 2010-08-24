@@ -14,7 +14,7 @@ ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0 decode_dayfile)
 ingestlev1_mgr_$(d)	:= $(addprefix $(d)/, build_lev1_mgr)
 ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 xingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
-yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_test.o hmi_time_setting_test.o set_HMI_mech_values.o)
+#yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_test.o hmi_time_setting_test.o set_HMI_mech_values.o)
 #xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0 decode_dayfile)
 xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0 decode_dayfile)
 #yingestlev0_$(d)	:= $(addprefix $(d)/, yingest_lev0)
@@ -22,8 +22,8 @@ LIBHKLEV0_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files.o decode_h
 
 printtime_$(d)		:= $(addprefix $(d)/, printtime)
 
-yingestlev0_$(d)	:= $(addprefix $(d)/, yingest_lev0 decode_dayfile)
-yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
+#yingestlev0_$(d)	:= $(addprefix $(d)/, yingest_lev0 decode_dayfile)
+#yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 
 #SUMEXE_$(d)	:= $(addprefix $(d)/, ingest_lev0)
 #SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(test0_$(d)) $(wtest_$(d))
@@ -68,7 +68,7 @@ S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(TESTEXE_USEF_$(d)) $(MODEXE_SOCK_$(d)))
 
 $(ingestlev0_$(d)):	$(ingestlev0_obj_$(d))
 $(xingestlev0_$(d)):	$(xingestlev0_obj_$(d))
-$(yingestlev0_$(d)):	$(yingestlev0_obj_$(d))
+#$(yingestlev0_$(d)):	$(yingestlev0_obj_$(d))
 
 ifeq ($(JSOC_MACHINE), linux_ia32)
   FFTW_$(d) = /home/jsoc/lib/linux-ia32
@@ -108,7 +108,7 @@ $(LIBHKLEV0):		$(LIBHKLEV0_OBJ)
 
 $(ingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
 $(xingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
-$(yingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
+#$(yingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
 $(ingestlev1_$(d)):	LL_TGT := $(LL_TGT)
 $(ingestlev1X_$(d)):	LL_TGT := $(LL_TGT)
 $(ingestlev1_mgr_$(d)):	LL_TGT := $(LL_TGT)
