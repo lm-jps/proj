@@ -29,9 +29,15 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
     
   int i, j;
   int count;
+
   float *imhp;
   imhp=(float *)(malloc(nx*ny*sizeof(float)));
   if (imhp == NULL){printf("can not allocate memory\n"); exit(EXIT_FAILURE);}
+
+  float *img;
+  img=(float *)(malloc(nx*ny*sizeof(float)));
+  if (img == NULL){printf("can not allocate memory\n"); exit(EXIT_FAILURE);}
+
   float sigma;
   float sum;
   float sig, r, factor;
@@ -62,19 +68,23 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
   if ((camid != light_val1 && camid != light_val2) || focid < 1 || focid > 16){stat_pos=1; factor=2.0;} else factor=1;
 
 
+  //copy image
+  #pragma omp parallel for private(i,j)
+  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) img[j*nx+i]=image[j*nx+i];
 
+  for (i=0; i<nbad; ++i)if (badpix[i] < 0 || badpix[i] >=  16777216){printf("invalid pixel coordinate\n"); exit(EXIT_FAILURE);}
+  for (i=0; i<nbad; ++i){img[badpix[i]]=NAN; cosmic[i]=badpix[i];} // set bad pixels to NAN
  
+  
  
- 
-  for (i=0; i<nbad; ++i)if (badpix[i] < 0 || badpix[i] >  16777216){printf("invalid pixel coordinate\n"); exit(EXIT_FAILURE);}
-  for (i=0; i<nbad; ++i){image[badpix[i]]=NAN; cosmic[i]=badpix[i];} // set bad pixels to NAN
 
 
-   fresize(&fresizes,image, imhp, nx,ny,nx,nx,ny,nx,0,0,NAN);   //convolve with gaussian
+   fresize(&fresizes,img, imhp, nx,ny,nx,nx,ny,nx,0,0,NAN);   //convolve with gaussian
+
 
 
   #pragma omp parallel for private(i,j)
-  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) imhp[j*nx+i]=image[j*nx+i]-imhp[j*nx+i]; //highpass filter
+  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) imhp[j*nx+i]=img[j*nx+i]-imhp[j*nx+i]; //highpass filter
 
   //get stddev at center
   //*******************************************************************************************************
@@ -137,6 +147,7 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
 	
   free_fresize(&fresizes);
   free(imhp);
+  free(img);
 
 
 
