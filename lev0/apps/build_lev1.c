@@ -943,6 +943,10 @@ TEMPSKIP:
     drms_setkey_float(rs, "RSUN_LF", (float)rsun_lf);
     drms_setkey_float(rs, "X0_LF", (float)x0_lf);
     drms_setkey_float(rs, "Y0_LF", (float)y0_lf);
+    crpix1 = (float)x0_lf + 1;  //set these up for correction by heightformation()
+    crpix2 = (float)y0_lf + 1;
+    cdelt1 = (float)IOdata.rsun_obs/rsun_lf;
+    rsun = (float)rsun_lf;
   }
     //aia will have missing values. (took RSUN_LF kw out of aia.lev1)
     if(drms_ismissing_double(rsun_lf)) {
