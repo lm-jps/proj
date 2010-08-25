@@ -7,7 +7,7 @@
 
 	#define CODE_NAME 		"limbfit"
 	#define CODE_VERSION 	"V1.4r0" 
-	#define CODE_DATE 		"Tue Aug 24 10:19:25 HST 2010" 
+	#define CODE_DATE 		"Tue Aug 24 17:46:37 PDT 2010" 
 */
 
 #include "limbfit.h"
@@ -528,15 +528,6 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 				save_params1[cont*params_ncol+nb_p_as+nb_p_es+nb_p_radius]=0.;
 				save_params2[zero_ip+cont]=0.;
 			}
-
-
-			if (debug)
-			{	
-				sprintf(log_msg,"  (2)ret_gsl<0 = %2d", ret_gsl);
-				lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
-	 		}     	
-
-
 			// IS: NOT SURE THIS IS AT THE RIGHT PLACE!!! just above before the "else"
 			// save them
 			for (c=0;c<nb_p_as;c++)

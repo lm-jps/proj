@@ -10,7 +10,7 @@
 	
 	#define CODE_NAME 		"limbfit"
 	#define CODE_VERSION 	"V1.4r0" 
-	#define CODE_DATE 		"Tue Aug 24 10:19:25 HST 2010" 
+	#define CODE_DATE 		"Tue Aug 24 17:46:37 PDT 2010" 
 */
 
 #include "limbfit.h"
@@ -20,6 +20,8 @@ char *module_name = "lfwrp";
 ModuleArgs_t module_args[] = {
   {ARG_STRING, 	"dsin", "hmi.lev1c_nrt[]", "input data set"},
   {ARG_STRING, 	"dsout", "su_scholl.limbfit", "output data set"},
+  {ARG_STRING, 	"logdir", "./", "logs directory"},
+  {ARG_STRING, 	"tmpdir", "./", "tmp directory"},
   {ARG_INTS, 	"bfsn", "0", "first lev1 fsn# to process"},
   {ARG_INTS, 	"efsn", "0", "last  lev1 fsn# to process."},
   {ARG_INT, 	"debug", "0", "debug level (default: 0)"},
@@ -50,7 +52,7 @@ void lf_logmsg(char * type1, char * type2, int return_code, int status, char *me
 		fprintf(opf,"%s/%20s: %s %5s %5s msg: '%s' return code: %d exit: %d\n",LOGMSG1, code_name, sdate,type1,type2, message, return_code,status);
 }
 
-void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out,DRMS_Array_t *data_array,FILE *opf)
+void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out,DRMS_Array_t *data_array) //,FILE *opf)
 {
 	drms_free_array (data_array);
 	drms_close_record (record_out, DRMS_FREE_RECORD);
@@ -62,7 +64,7 @@ void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out,DRMS_Arra
 // Get N records, decide or not to process them
 //************************************************************************
 
-int process_n_records(char * open_dsname, char *dsout, FILE *opf, int debug, int *status)    
+int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int debug, int *status)    
 {
 	static char *log_msg_code="process_n_records";
 	char log_msg[120];
@@ -119,7 +121,7 @@ int process_n_records(char * open_dsname, char *dsout, FILE *opf, int debug, int
 		fsn = drms_getkey_int(record_in, "FSN", &rstatus);       
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(FSN)", log_msg_code, opf);			
-			write_mini_output(fsn,PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			return(0);   
 		}
@@ -129,21 +131,21 @@ int process_n_records(char * open_dsname, char *dsout, FILE *opf, int debug, int
 		hwltnset = drms_getkey_string(record_in, "HWLTNSET", &rstatus);
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(HWLTNSET)", log_msg_code, opf);			
-			write_mini_output(fsn,PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			return(0);   
 		}
 		missvals = drms_getkey_int(record_in, "MISSVALS", &rstatus);
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_int(MISSVALS)", log_msg_code, opf);			
-			write_mini_output(fsn,PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			return(0);   
 		}
 		imgtype = drms_getkey_string(record_in, "IMG_TYPE", &rstatus);
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(IMG_TYPE)", log_msg_code, opf);			
-			write_mini_output(fsn,PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			return(ERR_DRMS_READ_MISSING_KW);   
 		}
@@ -154,7 +156,7 @@ int process_n_records(char * open_dsname, char *dsout, FILE *opf, int debug, int
 
    		if ((strncmp(hwltnset,"CLOSE",5)==0) && (missvals==0) && (strncmp(imgtype,"LIGHT",5)==0)) 
 		{
-			if (do_one_limbfit(fsn,record_in,record_out,opf,debug,&rstatus))
+			if (do_one_limbfit(fsn,record_in,record_out,tmp_dir,opf,debug,&rstatus))
 			{
 				if (rstatus < 0 && rstatus > -300)
 				{
@@ -171,7 +173,7 @@ int process_n_records(char * open_dsname, char *dsout, FILE *opf, int debug, int
 			if (strncmp(hwltnset,"CLOSE",5)!=0) sprintf(errcode,"%s",PROCSTAT_NO_LF_OPENLOOP); 
 				else if (missvals!=0) sprintf(errcode,"%s",PROCSTAT_NO_LF_MISSVALS);
 					else if (strncmp(imgtype,"LIGHT",5)!=0) sprintf(errcode,"%s",PROCSTAT_NO_LF_DARKIMG);
-			write_mini_output(fsn,errcode,record_in,record_out,opf,debug);
+			write_mini_output(errcode,record_in,record_out,opf,debug);
 		}
 	}
 	drms_close_records(drs_out, DRMS_INSERT_RECORD);
@@ -196,6 +198,8 @@ int DoIt(void)
 	int  debug = params_get_int (params, "debug");
 	char* dsin = params_get_str (params, "dsin");
 	char* dsout = params_get_str (params, "dsout");
+	char* log_dir = params_get_str (params, "logdir");
+	char* tmp_dir = params_get_str (params, "tmpdir");
 	long long bfsn = params_get_int (params, "bfsn");
 	long long efsn = params_get_int (params, "efsn");
 
@@ -225,8 +229,7 @@ int DoIt(void)
 	get_sdate(sdate);
 
 	FILE *opf;
-//	sprintf(flogname, "%slog_%s_%d_%d.log", LOG_DIR,td,bfsn,efsn);
-	sprintf(flogname, "./limbfit_%s_%lld_%lld.log",sdate,bfsn,efsn);
+	sprintf(flogname, "%slimbfit_%s_%lld_%lld.log",log_dir,sdate,bfsn,efsn);
     if((opf=fopen(flogname, "w")) == NULL)
     {
 		fprintf(stderr, "**Can't open the log file %s\n", flogname);
@@ -254,7 +257,7 @@ int DoIt(void)
 		sprintf(open_dsname, "%s[%s]", dsin, recrange);	
 		sprintf(log_msg,"open %s", open_dsname);
 		lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
-		if(process_n_records(open_dsname, dsout, opf, debug, &result)) 
+		if(process_n_records(open_dsname, dsout, tmp_dir,opf, debug, &result)) 
 		{  //do a chunk to get files from the lev0
 			if (result < 0 && result > -300)
 			{

@@ -1,4 +1,4 @@
-/* I.Scholl "Tue Aug 24 10:19:25 HST 2010" 
+/* I.Scholl "Tue Aug 24 17:46:37 PDT 2010" 
 */
 
 #include <string.h>
@@ -25,13 +25,13 @@
 
 #define CODE_NAME 		"limbfit"
 #define CODE_VERSION 	"V1.4r0" 
-#define CODE_DATE 		"Tue Aug 24 10:19:25 HST 2010" 
+#define CODE_DATE 		"Tue Aug 24 17:46:37 PDT 2010" 
 #define LOGMSG1			"LIMBFIT"
 
 //#define dsin	"hmi.lev1c_nrt[]"
 //#define dsout	"su_scholl.limbfit"
-#define LOG_DIR	"~/LOGS/"
-#define TMP_DIR	"~/TMP/"
+//#define LOG_DIR	"~/LOGS/"
+//#define TMP_DIR	"~/TMP/"
 
 #define NUMRECLEV1 12
 
@@ -156,7 +156,7 @@ typedef struct {		// output files content
 void get_sdate(char *sdate);
 void lf_logmsg(char * type1, char * type2, int return_code, int status, char *message, char *code_name, FILE *opf);
 void lf_logmsg4fitsio(char *log_msg,char *log_msg_code,char *kw,unsigned int fsn,int status, FILE *opf);
-void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out, DRMS_Array_t *data_array, FILE *opf);
+void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out, DRMS_Array_t *data_array); //, FILE *opf);
 int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, fitsfile *outfptr, FILE *opf, int debug, int *status);
 
 int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6], long N, int debug, FILE *fd);
@@ -165,6 +165,6 @@ int limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,FILE *opf,int debug);
 void limb_(float *anls, long *jk, float *cmx, float *cmy, float *r, int *nitr, int *ncut, int *nang, 
 			int *nprf, float* rprf, float* lprf, int *nreg, float *rsi, float *rso, float *dx, float *dy, 
 			int *jreg, int *jang, int *jprf, float* alph, float* beta, int *ifail, float* b0, int *centyp); 
-int process_n_records(char * open_dsname, char *dsout, FILE *opf, int debug, int *status);
-int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int debug, int *status);
-int	write_mini_output(unsigned int fsn, char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int debug);
+int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int debug, int *status);
+int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, char *tmp_dir, FILE *opf, int debug, int *status);
+int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int debug);
