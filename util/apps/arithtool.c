@@ -264,6 +264,7 @@ static void DestroyDRMSContainer(DRMSContainer_t *pCon)
 	  }
 
 	  pCon->items = NULL;
+          hiter_free(&(pCon->iter));
      }
 }
 
@@ -5548,6 +5549,8 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 			 }
 		    }
 
+                    hiter_free(&hit);
+
 		    /* Write segments, and then clean up arrays holding data and seg names. */
 		    unsigned int index = 0;
 		    for (; index < nSegs; index++)
@@ -5709,6 +5712,11 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 	       free(outSegNames);
 	  }
 
+          if (pOutData)
+          {
+             free(pOutData);
+             pOutData = NULL;
+          }
      } /* foreach (record) */
 
      if (insegBZERO)
@@ -5848,12 +5856,15 @@ int DoIt(void)
              if (slicelower[0] == -1 || sliceupper[0] == -1)
              {
                 slicedim = 0;
+                free(slicelower);
                 slicelower = NULL;
+                free(sliceupper);
                 sliceupper = NULL;
              }
              
              if (posout[0] == -1)
              {
+                free(posout);
                 posout = NULL;
              }
           }
@@ -6224,10 +6235,27 @@ int DoIt(void)
 	       } /* Do operation */
 
 	       DestroyDRMSContainer(&inSeriesPrimeKeys);
+               DestroyDRMSContainer(&outSeriesPrimeKeys);
 	       DestroyDRMSContainer(&inSeriesSegs);
+	       DestroyDRMSContainer(&outSeriesSegs);
                free(inSeriesSegs.items);
 	       DestroyDRMSContainer(&segsToProc);
 	  } /* main code */
+
+          if (slicelower)
+          {
+             free(slicelower);
+          }
+
+          if (sliceupper)
+          {
+             free(sliceupper);
+          }
+
+          if (posout)
+          {
+             free(posout);
+          }
      } /* drms env exists */
      
      return error;
