@@ -4,7 +4,7 @@ dirstack_$(sp)  := $(d)
 d               := $(dir)
 
 # Subdirectories. Directory-specific rules are optional here. The
-# order NOT matter.
+# order does not matter.
 dir     := $(d)/apps
 -include                $(SRCDIR)/$(dir)/Rules.mk
 
