@@ -104,6 +104,7 @@ int get_pointing_info(DRMS_Env_t *drms_env, TIME *tobs, int nobs, PTINFO **ptinf
     if (k == nobs) {		// no good t_obs found
 	free(asdidx);
 	free(p);
+	*ptinfo = 0;
 	return PT_NO_VALID_TOBS;
     }
 
@@ -121,6 +122,7 @@ int get_pointing_info(DRMS_Env_t *drms_env, TIME *tobs, int nobs, PTINFO **ptinf
 	if (!rset || !rset->n || status) {
 	    free(asdidx);
 	    free(p);
+	    *ptinfo = 0;
 	    if (rset) drms_close_records(rset, DRMS_FREE_RECORD);
 	    return PT_DRMS_OPEN_FAILED;
 	}
