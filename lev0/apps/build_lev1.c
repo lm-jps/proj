@@ -973,22 +973,18 @@ TEMPSKIP:
     crota2 = imageloc[i].instrot + ptdata.sat_rot;
     drms_setkey_float(rs, "CROTA2", crota2);
 
-/**********************NOOP for now*******************************************
     if(!hmiaiaflg && !dstatus) {	//only do for hmi and good limb fit
       //Now call Sebastien's heightformation() fuction (email 08/09/10 17:50)
-      if(!quicklook) {		//don't call for lev1_nrt
-        if(!(dstatus = heightformation(fid, IOdata.obs_vr, &cdelt1, &rsun, &crpix1, &crpix2, -crota2))) {		//!!TEMP ck about the -crota2
-          drms_setkey_float(rs, "CDELT1", cdelt1);
-          drms_setkey_float(rs, "R_SUN", rsun);
-          drms_setkey_float(rs, "CRPIX1", crpix1);
-          drms_setkey_float(rs, "CRPIX2", crpix2);
-        }
-        else {
-          printk("ERROR: heightformation() returned error for FID=%d\n", fid);
-        }
+      if(!(dstatus = heightformation(fid, IOdata.obs_vr, &cdelt1, &rsun, &crpix1, &crpix2, -crota2))) {
+        drms_setkey_float(rs, "CDELT1", cdelt1);
+        drms_setkey_float(rs, "R_SUN", rsun);
+        drms_setkey_float(rs, "CRPIX1", crpix1);
+        drms_setkey_float(rs, "CRPIX2", crpix2);
+      }
+      else {
+        printk("ERROR: heightformation() returned error for FID=%d\n", fid);
       }
     }
-**********************NOOP for now*******************************************/
 
   //if(hmiaiaflg) {                       //aia
   //  int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
