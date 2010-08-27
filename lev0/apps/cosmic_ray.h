@@ -18,5 +18,5 @@
   const float kernel_size=4.0;
 
 const int cent_frac=8; //center portion of image that is used to calculate std of image
-const float limit=9.5; //detection limit (limit * sigma)
+const float limit=10.5; //detection limit (limit * sigma)
 const float maxval=119815.0; //90 % of max value
