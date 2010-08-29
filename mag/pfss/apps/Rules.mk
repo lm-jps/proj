@@ -55,7 +55,7 @@ SVML_$(d)       :=
 GUIDE_$(d)      :=
 
 ifeq ($(COMPILER), icc)
-  SVML_$(d)     := -lsvml
+  SVML_$(d)     := 
   GUIDE_$(d)    := -lguide
 endif
 

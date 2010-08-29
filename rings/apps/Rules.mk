@@ -9,7 +9,10 @@ RDVINV_$(d)	:=
 ifeq ($(JSOC_MACHINE), linux_x86_64)
 RDVINV_$(d)	:= $(addprefix $(d)/, rdvinv)
 endif
-MODEXE_$(d)	:= $(addprefix $(d)/, mtrack pspec3 rdfitc) 
+
+ifeq ($(COMPILER), icc)
+  MODEXE_$(d)	:= $(addprefix $(d)/, mtrack pspec3 rdfitc) 
+endif
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)

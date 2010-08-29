@@ -37,7 +37,20 @@ MODEXESUMS	:= $(MODEXESUMS) $(SUMEXE_$(d)) $(PEEXE_$(d))
 
 MODEXE_$(d)	:= $(addprefix $(d)/, convert_fds extract_fds_statev)
 MODEXEDR_$(d)	:= $(addprefix $(d)/, hmi_import_egse_lev0 aia_import_egse_lev0)
-MODEXE_USEF_$(d)	:= $(addprefix $(d)/, getorbitinfo build_lev1X build_lev1Y build_lev1 build_lev1_fsn)
+
+# Exclude certain apps from the ia32 build.
+ifeq ($(JSOC_MACHINE), linux_ia32)
+  BUILDLEV1_$(d)		:= 
+endif
+
+# Remove from ia32 and gcc builds (since they don't build on ia32 and with gcc)
+ifeq ($(JSOC_MACHINE), linux_x86_64)
+  ifeq ($(COMPILER), icc)
+    BUILDLEV1_$(d)		:=  build_lev1X build_lev1Y build_lev1 build_lev1_fsn
+  endif
+endif
+
+MODEXE_USEF_$(d)	:= $(addprefix $(d)/, getorbitinfo $(BUILDLEV1_$(d)))
 MODEXE_USEF 	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 MODEXEDR	:= $(MODEXEDR) $(MODEXEDR_$(d))

@@ -27,6 +27,8 @@
 #define DEGRAD  (180.0/PI)
 #define SID     (86400.0)
 
+static double ecanom(double e, double manom);
+
 // HeliographicLocation(TIME t, int *crot, double *L, double *B);
 // time t in TAI.
 // It returns Carrington rotation, latitude, and longitude, as int for rotation and in degrees for angles.
@@ -45,7 +47,7 @@ void HeliographicLocation(TIME t, int *crot, double *L, double *B)
   static TIME t1900 = 0.0;
   static TIME t1950 = 0;
   static TIME t2000 = 0;
-  double ecanom(double e, double manom);
+
   double tc19, tc1950, tc20, e, eps, perigee, lo, g, ge, v, se_long;
   double r, Omega, se_long_Omega, xs, xc, sinB, sunB0, hci_long;
   double solrots;       // solar rotations by time t
@@ -165,7 +167,7 @@ TIME HeliographicTime(int crot, double L)
  * thoroughly tested.
  */
 
-static double ecanom(double e, double manom)
+double ecanom(double e, double manom)
   {
   double ecm_new, ecm_old;
   ecm_old = manom + e*sin(manom);    /* first approximation */

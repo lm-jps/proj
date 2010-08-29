@@ -55,13 +55,13 @@ SVML_$(d)       :=
 GUIDE_$(d)      :=
 
 ifeq ($(COMPILER), icc)
-  SVML_$(d)     := -lsvml
+  SVML_$(d)     := 
   GUIDE_$(d)    := -lguide
 endif
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
 $(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS)
-$(ALL_$(d)) : LL_TGT :=  $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) $(FMATHLIBS) $(SVML_$(d)) $(MKL) $(GUIDE_$(d))
+$(ALL_$(d)) : LL_TGT :=  $(LL_TGT) $(GSLLIBS) $(FMATHLIBS) $(SVML_$(d)) $(MKL) $(GUIDE_$(d))
 
 # Shortcuts
 .PHONY:	$(S_$(d))
