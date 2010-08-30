@@ -191,7 +191,7 @@ int DoIt(void)
   int i, ii, status = DRMS_SUCCESS, nrecs; 
   int  irec;
   double center_x, center_y, crpix1, crpix2, x0, y0; 
-  double rsun_ref, dsun_obs, rsun, rsunpix;
+  double rsun_ref, dsun_obs, rsun, rsun_rad, rsunpix;
   double crln_obs, crlt_obs;
   double crln_obs_rad, crlt_obs_rad;
   double crln_rad, crlt_rad;
@@ -206,11 +206,13 @@ int DoIt(void)
   double crln, crlt;
   char outseries[DRMS_MAXNAMELEN];
   char inseries[DRMS_MAXNAMELEN];
+  char inQuery[DRMS_MAXQUERYLEN];
   char in[DRMS_MAXQUERYLEN];
 
   const char *ingiven = params_get_str(params, "in");
   char *inparam;
   char *lbracket;
+  char *moreQuery = NULL;
   const char *outparam = params_get_str(params, "out");
   const char *logfile = params_get_str(params, "log");
   const char *requestid = params_get_str(params, "requestid");
@@ -285,8 +287,9 @@ fprintf(stderr,"starting boxtype=%d, loctype=%d\n",boxtype,loctype);
     int n = lbracket - inparam;
     strncpy(inseries, inparam, n);
     inseries[n] = '\0';
-    if (strcmp(lbracket, "[$]") == 0) // Special case, discard the explicit last-record spec to allow exports via jsoc_fetch.
+    if (strncmp(lbracket, "[$]", 3) == 0) // Special case, discard the explicit last-record spec to allow exports via jsoc_fetch.
       {
+      moreQuery = lbracket + 3;
       *lbracket = '\0';
       lbracket = NULL;
       }
@@ -297,12 +300,24 @@ fprintf(stderr,"starting boxtype=%d, loctype=%d\n",boxtype,loctype);
   if (do_reftime) // Arc-sec specification, get ref image information
     { // the image for ref_time is supposed to be present in the series.
     char t_ref_text[100];
-    sprint_at(t_ref_text, t_ref);
-    sprintf(in, "%s[%s][? %s ?]", inseries, t_ref_text, where);
+    sprint_at(t_ref_text, t_ref-3600);
+    sprintf(in, "%s[%s/2h]", inseries, t_ref_text);
 fprintf(stderr,"ready to open %s\n",in);
     inRS = drms_open_records(drms_env, in, &status); if (status || inRS->n == 0) DIE2("No input data found for t_ref",in);
 fprintf(stderr,"done with  open %s\n",in);
-    inRec = inRS->records[0];;
+    int irec, nrecs = inRS->n;
+    TIME tdiff = 10000;
+    for (irec=0; irec<nrecs; irec++) // find record close to t_ref
+      {
+      TIME newdiff;
+      inRec = inRS->records[irec];
+      if (drms_getkey_int(inRec,"QUALITY",NULL) < 0)
+        continue;
+      if ((newdiff=(fabs(drms_getkey_time(inRec,"T_OBS",NULL) - t_ref))) > tdiff)
+        break;
+      tdiff = newdiff;
+      }
+    inRec = inRS->records[irec];
     this_car_rot = drms_getkey_int(inRec, "CAR_ROT", &status); TEST_PARAM("CAR_ROT");
     crlt_obs = drms_getkey_double(inRec, "CRLT_OBS", &status); TEST_PARAM("CRLT_OBS");
     crln_obs = drms_getkey_double(inRec, "CRLN_OBS", &status); TEST_PARAM("CRLN_OBS");
@@ -326,7 +341,8 @@ fprintf(stderr,"done with  open %s\n",in);
     rsun_ref = drms_getkey_double(inRec, "RSUN_REF", &status);
       if (status) rsun_ref = 6.96e8;
     dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &status); TEST_PARAM("DSUN_OBS");
-    rsun = asin(rsun_ref/dsun_obs)*Rad2arcsec; 
+    rsun_rad = asin(rsun_ref/dsun_obs); 
+    rsun = rsun_rad*Rad2arcsec; 
     cdelt = drms_getkey_double(inRec, "CDELT1", &status); TEST_PARAM("CDELT1");
 fprintf(stderr,"cdelt=%f, dsun_obs=%f, rsun=%f\n",cdelt,dsun_obs,rsun);
     rsunpix = rsun/cdelt;
@@ -346,7 +362,8 @@ fprintf(stderr,"cdelt=%f, dsun_obs=%f, rsun=%f\n",cdelt,dsun_obs,rsun);
       inAxis[0] = inSeg->axis[0];
       inAxis[1] = inSeg->axis[1];
 fprintf(stderr,"calling img2sphere, center_x=%g, center_y=%f, rsunpix=%f\n", center_x, center_y, rsunpix);
-      if(img2sphere (center_x/rsunpix, center_y/rsunpix, rsunpix, crlt_obs_rad, crln_obs_rad, pa_rad,
+      // if(img2sphere (center_x/rsunpix, center_y/rsunpix, rsunpix, crlt_obs_rad, crln_obs_rad, pa_rad,
+      if(img2sphere (center_x/rsunpix, center_y/rsunpix, rsun_rad, crlt_obs_rad, crln_obs_rad, pa_rad,
         NULL, &crlt_rad, &crln_rad, NULL, NULL, NULL, NULL, NULL) < 0)
           DIE("Starting location is off the solar disk.");
       crln = crln_rad * Rad2Deg;
@@ -467,7 +484,7 @@ if (status) DIE("problem getting t_step");
     strncpy(inseries, inparam, DRMS_MAXNAMELEN);
     sprint_at(t_start_text, t_start);
     sprint_at(t_stop_text, t_stop);
-    sprintf(in, "%s[%s-%s%s][? %s ?]", inseries, t_start_text, t_stop_text, cadence_text, where);
+    sprintf(in, "%s[%s-%s%s]%s[? %s ?]", inseries, t_start_text, t_stop_text, cadence_text, (moreQuery ? moreQuery : ""), where);
     }
 fprintf(stderr,"Input recordset Query = %s\n",in);
 
@@ -672,11 +689,10 @@ fprintf(stderr,"box outside image\n");
 /*
  *               writing the extracted region data file
 */
-fprintf(stderr,"ready to create records\n");
     outRS = drms_create_records(drms_env, 1, outseries, DRMS_PERMANENT, &status);
     if (status) DIE("Cant make outout record");
-fprintf(stderr,"did create records, status = %d\n",status);
     outRec = outRS->records[0];
+    drms_copykeys(outRec, inRec, 1, kDRMS_KeyClass_Explicit);
     outSeg = drms_segment_lookupnum(outRec, 0);
     outArray->bzero = outSeg->bzero;
     outArray->bscale = outSeg->bscale;
@@ -686,6 +702,9 @@ fprintf(stderr,"did create records, status = %d\n",status);
     status = drms_segment_write(outSeg, outArray, 0);
     if (status) DIE("problem writing file");
     drms_free_array(outArray);
+    drms_sprint_rec_query(inQuery, inRec);
+    drms_setkey_string(outRec, "SOURCE", inQuery);
+    drms_setkey_time(outRec, "T_REC", trec);
     drms_setkey_double(outRec, "CRPIX1", crpix1);
     drms_setkey_double(outRec, "CRPIX2", crpix2);
     drms_setkey_double(outRec, "CRVAL1", 0.0);
@@ -709,18 +728,18 @@ fprintf(stderr,"did create records, status = %d\n",status);
     drms_setkey_time(outRec, "HGTSTOP", t_stop);
     drms_setkey_time(outRec, "DATE", time(0) + UNIX_EPOCH);
     drms_setkey_string(outRec, "HGQUERY", in);
-    drms_copykey(outRec, inRec, "EXPTIME");
-    drms_copykey(outRec, inRec, "QUALITY");
-    drms_copykey(outRec, inRec, "DSUN_OBS");
-    drms_copykey(outRec, inRec, "CRLN_OBS");
-    drms_copykey(outRec, inRec, "CRLT_OBS");
-    drms_copykey(outRec, inRec, "OBS_VR");
-    drms_copykey(outRec, inRec, "OBS_VW");
-    drms_copykey(outRec, inRec, "OBS_VN");
-    drms_copykey(outRec, inRec, "CAR_ROT");
-    drms_copykey(outRec, inRec, "T_OBS");
-    drms_copykey(outRec, inRec, "DATE__OBS");
-    drms_setkey_time(outRec, "T_REC", trec);
+    // drms_copykey(outRec, inRec, "EXPTIME");
+    // drms_copykey(outRec, inRec, "QUALITY");
+    // drms_copykey(outRec, inRec, "DSUN_OBS");
+    // drms_copykey(outRec, inRec, "CRLN_OBS");
+    // drms_copykey(outRec, inRec, "CRLT_OBS");
+    // drms_copykey(outRec, inRec, "OBS_VR");
+    // drms_copykey(outRec, inRec, "OBS_VW");
+    // drms_copykey(outRec, inRec, "OBS_VN");
+    // drms_copykey(outRec, inRec, "CAR_ROT");
+    // drms_copykey(outRec, inRec, "T_OBS");
+    // drms_copykey(outRec, inRec, "DATE__OBS");
+    // drms_copykey(outRec, inRec, "WAVELNTH");
 
     if (log)
       {
