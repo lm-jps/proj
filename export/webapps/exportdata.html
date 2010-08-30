@@ -8,6 +8,9 @@
 <SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
 <link rel="stylesheet" type="text/css" href="css/prototip.css" ></link>
 
+<!-- Add functions for export processing options, section 1 of 7 -->
+<SCRIPT TYPE="text/javascript" SRC="exportdata.d/HgPatch.js"></SCRIPT>
+
 <HEAD>
 
 <style type="text/css">
@@ -23,8 +26,18 @@ span.tip { background-color:yellow }
 <script type="text/javascript">
 
 // Global variables and initialize page locations
+ 
+// Set CGI-BIN targets
 
+// var SHOW_SERIES = "show_series_test";
+// var JSOC_INFO = "jsoc_info_test";
+// var JSOC_FETCH = "jsoc_fetch_test";
 
+var SHOW_SERIES = "show_series";
+var JSOC_INFO = "jsoc_info";
+var JSOC_FETCH = "jsoc_fetch";
+
+var Host = location.host;
 var SeriesName;
 var RequestID;
 var RecordSet;
@@ -46,11 +59,16 @@ var state;
 var uploadOndoneAction = 0;
 var ExportProcessingArgs = "";
 
+// Processing options code section 2 of 7
+// Processing specific control variables
+var HgPatchActive = 0;
+// End of processing options section
+
 function initVars()
   {
+  Host = location.host;
   SeriesName = "";
   RequestID = "";
-  RecordSet = "";
   RecordCount = 0;
   ExportRecordSetOK = 0;
   ExportFromFileList = 0;
@@ -79,7 +97,9 @@ function initVars()
     $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("ExportRecordSet").value = "";
     $("ExportProtocol").value = "as-is";
+    $("ExportProtocolHidden").value = "as-is";
     $("ExportCompress").value = "compress Rice";
+    $("ExportProcessingHidden").value = "no_op";
     $("ExportMethod").value = "url_quick";
     $("ExportFilenameFmt").value = "{seriesname}.{recnum:%lld}.{segment}";
     $("ExportButton").value = "Submit Export Request";
@@ -88,13 +108,6 @@ function initVars()
     $("RecordSetRow").style.display="table-row";
     $("RecordCountRow").style.display="table-row";
     $("ProcessRow").style.display="none";
-    $("ProcessHgPatchCr").style.display="none";
-    $("ProcessHgPatchAs").style.display="none";
-    $("HgCarrot").style.backgroundColor = "#D88080"; $("HgCarrot").value = "NotSpecified";
-    $("HgCRLN").style.backgroundColor = "#D88080"; $("HgCRLN").value = "NotSpecified";
-    $("HgCRLT").style.backgroundColor = "#D88080"; $("HgCRLT").value = "NotSpecified";
-    $("HgWide").style.backgroundColor = "#D88080"; $("HgWide").value = "NotSpecified";
-    $("HgHigh").style.backgroundColor = "#D88080"; $("HgHigh").value = "NotSpecified";
     $("ProtocolRow").style.display="none";
     $("CompressRow").style.display="none";
     $("FilenameFmtRow").style.display="none";
@@ -106,6 +119,13 @@ function initVars()
     $("ReRequestID").value = "";
     $("ReExportDiv").style.display = "none";
     $("TarFileLocationRow").style.display = "none";
+    $("KeywordFileLocationRow").style.display = "none";
+
+    // Processing options code section 3 of 7
+    // Init/clear display options
+    HgPatchInit();
+    // End of processing options section
+
     }
   FileUploadCleanup();
   }
@@ -180,8 +200,9 @@ function CreateTips()
     new Tip("RecordSetHelp","RecordSet to be exported. May be imported on call and/or may be entered directly here.",tipstyle);
     new Tip("RecordCountHelp","RecordSet record count.  Update this to repeat export with new method, email, etc.",tipstyle);
     new Tip("ProcessingHelp","Processing to be done to the data prior to export.  Select from drop-down list for details.",tipstyle);
-    new Tip("HgPatchCrHelp","Extract patch in heliographic coordinates, trac across the disk, provide Carrington location and size of patch in degrees.",tipstyle);
-    new Tip("HgPatchAsHelp","Extract a tracked patch specified in arc-sec.  Input data must be a time series with time in first prime key.",tipstyle);
+    // Processing options section 4 of 7
+    new Tip("HgPatchHelp","Extract patch in heliographic coordinates, trac across the disk, provide Carrington location and size of patch in degrees or ref time and location.",tipstyle);
+    // End of processing options help
     new Tip("ProtocolHelp",'Data storage protocol for data files to be fetched.  ' +
         '"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
         '"As-is" leaves the data as it is used inside the JSOC DRMS routines, with the header metadata stored in the database ' +
@@ -195,6 +216,10 @@ function CreateTips()
         'Advice: use **NONE** to ensure uncompressed.  See lookdata.html for the "cparms_sg###" keyword for the default.',tipstyle);
     new Tip("MethodHelp",'Handshake method to be used in the process of doing the export and to fetch the data files. ' +
         '"url-quick" is the fastest but can only be used if the data is online and will be exported "as-is". ' +
+        '"url-direct" is has the constraints of url_quick with the limit of one file per request but it will ' +
+	'automatically do the postprocessing specified in the "protocol" instruction. For "url_direct" the file ' +
+	'is returned directly to your browser rather than returning to the export page.  If you have the ' +
+	'set to load some fits reader program when the mime-ype "fits" is encountered you will see the image promptly. ' +
         '"url" will result in a temporary directory being created and the URL to that directory be returned to you after ' +
         'a handshake process using the RequestID provided. ' +
         '"ftp" is like "url" but the returned links will be to an ftp directory. ' +
@@ -204,7 +229,9 @@ function CreateTips()
         'The filename format is a template used to construct a filename for each segment of each record requested.  ' +
         'The template consists of literal characters and substitution tokens enclosed in "{}".  ' +
         'The special words: seriesname, recnum, and segment are replaced with the series_name, the record number, ' +
-        'or the segment name.Any keyword in the record may also be used.  ' +
+        'or the segment name.  The element {#} will generate an increasing number, ' +
+        'with optional layout e.g. default is {#:%05d}. ' +
+        'Any keyword in the record may also be used.  ' +
         'It is wise to include enough of the "prime-keys" to make a unique filename.  ' +
         'The default format template is "{seriesname}.{recnum:%lld}.{segment}" will make unique filenames but prime keys ' +
         'instead of "recnum" may give more useful filenames.',tipstyle);
@@ -284,6 +311,8 @@ function MakeFileUploadRequest()
   if (CheckExportParams() == 0)
     return;
   uploadOndoneAction = 1;
+// XXXX fix compression here
+  $("FileUploadFormID").action = 'http://' + Host + '/cgi-bin/ajax/' + JSOC_FETCH;
   $("FileUploadFormID").submit();
   }
 
@@ -304,12 +333,30 @@ function FinishFileUpload()
   uploadOndoneAction = 0;
   }
 
+function GetSeriesList(filter)
+  {
+  var SeriesList;
+  var GetSeriesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + SHOW_SERIES,
+    {
+    method: 'get',
+    parameters: {"filter" : filter },
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no series";
+      SeriesList = response.evalJSON();
+      },
+    onFailure: function() { alert('Something went wrong...'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+  return(SeriesList);
+  }
+
 function GetRSCount()
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCountPlace").innerHTML = "Getting count - wait...";
   RecordCount = -1;
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_info',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
     parameters: {"ds" : RecordSet, "op" : "rs_summary" },
@@ -340,11 +387,6 @@ function GetRSCount()
     });
   }
 
-function ExportOpenWin(expURL)
-  {
-  window.open(expURL,"JSOC_Examine_Export");
-  }
-
 var expURL;
 function CreateDataTable(data, valuetable)
   {
@@ -358,14 +400,18 @@ function CreateDataTable(data, valuetable)
     valuetable = valuetable + "<TR>";
     valuetable = valuetable +  "<TD>" + (ifile + 1) + "</TD>";
     valuetable = valuetable +  "<TD>" + data.data[ifile].record + "</TD>";
-
     thisfile = data.data[ifile].filename;
-    expURL = "http://jsoc.stanford.edu" + data.dir + "/" + thisfile;
-    // tmp = "<input id=\"ExportFile"+ifile+"\" type=\"text\" value=\""+"http://jsoc.stanford.edu" + data.dir + "/" + thisfile+"\" onClick=\"ExportOpenWin(expURL);\" >";
-     tmp = "<A href='" + expURL + "' target='_blank'>" + thisfile + "</A>";
-
-    valuetable = valuetable +  "<TD>" + tmp + "</TD>";
-    valuetable = valuetable + "</TR>";
+    if (data.method.indexOf("tar") > 0)
+      valuetable = valuetable +  "<TD>" + thisfile + "</TD></TR>";
+    else
+      {
+      if (data.method.indexOf("ftp") >= 0)
+        expURL = "ftp://pail.stanford.edu/export" + data.dir + "/" + thisfile;
+      else
+        expURL = "http://jsoc.stanford.edu" + data.dir + "/" + thisfile;
+      tmp = "<A href='" + expURL + "' target='_blank'>" + thisfile + "</A>";
+      valuetable = valuetable +  "<TD>" + tmp + "</TD></TR>";
+      }
     }
   valuetable = valuetable + "</TABLE>";
   return valuetable;
@@ -384,13 +430,15 @@ function ExportNewRS()
 function SetExportMethod()
   {
   $("ExportMethod").value = $("ExportMethod").value.toLowerCase();
-  if ($("ExportMethod").value == "url_quick")
+  if ($("ExportMethod").value == "url_quick" || $("ExportMethod").value == "url_direct")
     {
     ExportMethodOK = 1;
     $("ProcessRow").style.display="none";
-    $("ProcessHgPatchCr").style.display="none";
-    $("ProcessHgPatchAs").style.display="none";
-    $("ProtocolRow").style.display="none";
+    $("ProcessHgPatch").style.display="none";
+    if ($("ExportMethod").value == "url_direct")
+        $("ProtocolRow").style.display="table-row";
+    else
+        $("ProtocolRow").style.display="none";
     $("FilenameFmtRow").style.display="none";
     $("CompressRow").style.display="none";
     $("RequestorRow").style.display="none";
@@ -404,8 +452,7 @@ function SetExportMethod()
     {
     ExportMethodOK = 1;
     $("ProcessRow").style.display="table-row";
-    $("ProcessHgPatchCr").style.display="none";
-    $("ProcessHgPatchAs").style.display="none";
+    $("ProcessHgPatch").style.display="none";
     $("ProtocolRow").style.display="table-row";
     $("FilenameFmtRow").style.display="table-row";
     $("RequestorRow").style.display="table-row";
@@ -416,7 +463,7 @@ function SetExportMethod()
     }
   else
     {
-    alert("Please set Method to url_quick, url, or ftp");
+    alert("Please set Method to url_quick, url_direct,  url, or ftp");
     ExportMethodOK = 0;
     }
   }
@@ -438,147 +485,22 @@ function SetProcessing()
   ExportProcessingArgs = "no_op";
   var isok = 0;
   if ($("ExportProcessing").value == "no_op")
+    { // Add reset code for export options here, section 5 of 7
+    if (HgPatchActive)
+      HgPatchInit();
     isok = 1;
-  else if ($("ExportProcessing").value == "hg_patch_CR")
-    {
-    $("ProcessHgPatchCr").style.display="table-row";
-    if (CheckHgPatchCr())
-      isok = 1;
     }
-  else if ($("ExportProcessing").value == "hg_patch_AS")
+  else if ($("ExportProcessing").value == "hg_patch") // Export option block for HgPatch, section 6 of 7
     {
-    $("ProcessHgPatchAs").style.display="table-row";
-    if (CheckHgPatchAs())
+    HgPatchActive = 1;
+    CheckHgRecordset();
+    $("ProcessHgPatch").style.display="table-row";
+    if (CheckHgPatch())
       isok = 1;
     }
   if (isok)
     ExportProcessingOK = 1;
-  }
-
-// Processing details for Patch in Carrington Coords
-function CheckHgPatchCr()
-  {
-  var isok = 0;
-  ExportProcessingArgs = "hg_patch,";
-  if ($("HgCarrot").value == "NotSpecified")
-    {
-    $("HgCarrot").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgCarrot").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "car_rot=" + $("HgCarrot").value + ",";
-    isok += 1;
-    }
-  if ($("HgCRLN").value == "NotSpecified")
-    {
-    $("HgCRLN").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgCRLN").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "crln=" + $("HgCRLN").value + ",";
-    isok += 1;
-    }
-  if ($("HgCRLT").value == "NotSpecified")
-    {
-    $("HgCRLT").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgCRLT").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "crlt=" + $("HgCRLT").value + ",";
-    isok += 1;
-    }
-  if ($("HgWide").value == "NotSpecified")
-    {
-    $("HgWide").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgWide").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "width=" + $("HgWide").value + ",";
-    isok += 1;
-    }
-  if ($("HgHigh").value == "NotSpecified")
-    {
-    $("HgHigh").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgHigh").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "height=" + $("HgHigh").value;
-    isok += 1;
-    }
-  return (isok > 0);
-  }
-
-// Processing details for Patch in Arc-Sec Coords
-function CheckHgPatchAs()
-  {
-  var isok = 0;
-  ExportProcessingArgs = "hg_patch,";
-  if ($("HgTRef").value == "NotSpecified")
-    {
-    $("HgTRef").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgTRef").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "t_ref=" + $("HgTRef").value + ",";
-    isok += 1;
-    }
-  if ($("HgASX").value == "NotSpecified")
-    {
-    $("HgASX").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgASX").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "asx=" + $("HgASX").value + ",";
-    isok += 1;
-    }
-  if ($("HgASY").value == "NotSpecified")
-    {
-    $("HgASY").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgASY").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "asy=" + $("HgASY").value + ",";
-    isok += 1;
-    }
-  if ($("HgAsWide").value == "NotSpecified")
-    {
-    $("HgAsWide").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgAsWide").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "aswide=" + $("HgAsWide").value + ",";
-    isok += 1;
-    }
-  if ($("HgAsHigh").value == "NotSpecified")
-    {
-    $("HgAsHigh").style.backgroundColor="#D88080";
-    isok = 0;
-    }
-  else
-    {
-    $("HgAsHigh").style.backgroundColor="#FFFFFF";
-    ExportProcessingArgs = ExportProcessingArgs + "ashigh=" + $("HgAsHigh").value;
-    isok += 1;
-    }
-  return (isok > 0);
+  $("ExportProcessingHidden").value = ExportProcessingArgs;
   }
 
 function SetExportProtocol()
@@ -589,11 +511,13 @@ function SetExportProtocol()
     if (tmp == "FITS")
       {
       $("ExportProtocol").value = "FITS";
+      $("ExportProtocolHidden").value = "FITS";
       ExportProtocolOK = 2;
       $("CompressRow").style.display="table-row";
       }
     else
       {
+      $("ExportProtocolHidden").value = "as-is";
       ExportProtocolOK = 1;
       $("CompressRow").style.display="none";
       }
@@ -602,13 +526,17 @@ function SetExportProtocol()
     {
     ExportProtocolOK = 0;
     alert('Export Protocol - must be "as-is" or "FITS"'); 
+    $("ExportProtocolHidden").value = "";
     $("ExportProtocol").value = "";
     }
   }
 
 function SetExportCompress()
   {
-  // No checking for now
+  var protocolparam = $("ExportProtocol").value;
+  if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
+      protocolparam = protocolparam  + "," + $("ExportCompress").value;
+  $("ExportProtocolHidden").value = protocolparam;
   ExportCompressOK = 1;
   }
 
@@ -687,8 +615,9 @@ function CheckExportParams()
     }
   if ($("ExportProtocol").value == "FITS" || $("ExportProtocol").value == "as-is")
     {
+    SetExportCompress();
     }
-  else
+  if (0)
     {
     SetExportUser();
     if (ExportUserOK == 0)
@@ -756,7 +685,7 @@ function GetExport()
     return;
     }
 
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_FETCH,
     {
     method: 'post',
     parameters: exportparameters.toObject(),
@@ -797,7 +726,7 @@ function GetReExport()
 			 	    "format" : "json",
                  		    "notify" : $("ReExportNotify").value });
 
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_FETCH,
     {
     method: 'post',
     parameters: exportparameters.toObject(),
@@ -865,7 +794,9 @@ function ProcessExportResponse(response)
     $("ExportButton").style.backgroundColor = "#D8D8D8";
     RequestID = data.requestid;
     $("RequestIdPlace").innerHTML = data.requestid;
-    $("ExportStatus").innerHTML = "Needs Intervention, size=" + data.size + ", contact: " + data.contact;
+    $("ExportStatus").innerHTML = "Needs Intervention, size=" + data.size + "MB, <BR>" +
+      data.count + " records found, " +
+      data.error + ", contact: " + data.contact;
     $("ExportLocation").innerHTML = "";
     }
   else if (data.status == 1 || data.status == 2)
@@ -877,7 +808,7 @@ function ProcessExportResponse(response)
     ExportReadyOK = 1;
     $("ExportButton").value = "Request Export Status";
     $("ExportButton").style.backgroundColor = "#D8D8D8";
-    $("ExportStatus").innerHTML = "Processing, size=" + data.size + ", estimate " + data.wait + " seconds remaining";
+    $("ExportStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
     RequestID = data.requestid;
     $("RequestIdPlace").innerHTML = data.requestid;
     $("StatusRequestID").value = data.requestid;
@@ -900,7 +831,7 @@ function ProcessExportResponse(response)
     RequestID = data.requestid;
     if (RequestID.length == 0) RequestID = "N.A.";
     $("RequestIdPlace").innerHTML = RequestID;
-    $("ExportStatus").innerHTML = "Data Ready, size=" + data.size;
+    $("ExportStatus").innerHTML = "Data Ready, size=" + data.size + "MB";
     valuetable = CreateDataTable(data, valuetable);
     $("ExportLocation").innerHTML =  valuetable + "<BR>";
     $("FileUploadInfo").innerHTML = "File upload done, " + data.rcount + " records requested.";
@@ -957,7 +888,7 @@ function GetStatus()
   $("StatusOther").innerHTML = "";
   $("StatusButtonMsg").innerHTML = "Processing status request ...";
   $("StatusButton").value = "Processing ...";
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch',
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_FETCH,
     {
     method: 'get',
     parameters: {"op" : "exp_status", "requestid" : $("StatusRequestID").value }, 
@@ -1005,11 +936,12 @@ function GetStatus()
         $("StatusButtonMsg").innerHTML = "Export Too Large";
         $("StatusButton").value = "FAILURE ...";
         $("StatusButton").style.backgroundColor = "#D8D8D8";
-        $("StatusStatus").innerHTML = "Needs Intervention, size=" + data.size + ", contact: " + data.contact;
+        $("StatusStatus").innerHTML = "Needs Intervention, size=" + data.size + "MB, contact: " + data.contact;
         $("RequestIdPlace").innerHTML = data.requestid;
         $("StatusValue").innerHTML = "Requested RecordSet returned error status=3";
         $("StatusOther").innerHTML = $("StatusRequestID").value +
            "<BR>The requested RecordSet is too large for chosen export method." +
+           "<BR>" + data.count + " records found, " + data.error +
            "<BR>Please contact the JSOC for help." ;
         $("ReExportDiv").style.display = "none";
         }
@@ -1021,7 +953,7 @@ function GetStatus()
           $("StatusButtonMsg").innerHTML = "Export request waiting for processing";
         $("StatusButton").value = "Submit Status Request";
         $("StatusButton").style.backgroundColor = "#D8D8D8";
-        $("StatusStatus").innerHTML = "Processing, size=" + data.size + ", estimate " + data.wait + " seconds remaining";
+        $("StatusStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
         $("RequestIdPlace").innerHTML = data.requestid;
         $("ReExportDiv").style.display = "none";
         }
@@ -1031,7 +963,7 @@ function GetStatus()
         $("StatusButtonMsg").innerHTML = "Please only click once for status request.";
         $("StatusButton").value = "Submit Status Request";
         $("StatusButton").style.backgroundColor = "#D8D8D8";
-        $("StatusStatus").innerHTML = "Data Ready, size=" + data.size;
+        $("StatusStatus").innerHTML = "Data Ready, size=" + data.size + "MB";
         $("RequestIdPlace").innerHTML = data.requestid;
         var StatusLoc;
 	if (data.method.indexOf("ftp") >= 0)
@@ -1041,12 +973,20 @@ function GetStatus()
         $("StatusLocation").innerHTML = "<A HREF='" + StatusLoc + "' target='_blank'>" + StatusLoc + "</A>";
         if (data.method.indexOf("-tar") > 0)
           {
-          var tarloc =  StatusLoc + data.requestid + ".tar";
-          $("TarFileLocation").innerHTML = "<A HREF='" + tarloc + "'>" + tarloc + "</A>";
+          $("TarFileLocation").innerHTML = "<A HREF='" + data.tarfile + "'>" + data.tarfile + "</A>";
           $("TarFileLocationRow").style.display = "table-row";
           }
+        else
+          $("TarFileLocationRow").style.display = "none";
+        if (data.protocol.indexOf("as-is") >= 0)
+          {
+          $("KeywordFileLocation").innerHTML = "<A HREF='" + data.keywords + "' target='_blank'>" + data.keywords + "</A>";
+          $("KeywordFileLocationRow").style.display = "table-row";
+          }
+        else
+          $("KeywordFileLocationRow").style.display = "none";
 
-        $("ExportStatus").innerHTML = "Data Ready, size=" + data.size;
+        $("ExportStatus").innerHTML = "Data Ready, size=" + data.size + "MB";
         valuetable = CreateDataTable(data, valuetable);
         $("StatusDataLocation").innerHTML =  valuetable + "<BR>";
         $("StatusValue").innerHTML = "Success";
@@ -1091,7 +1031,7 @@ function GetStatus()
 <DIV id="ExportRequestDiv">
 <B>JSOC Data Export Request Generation</B>
 <p>
-If the Method is changed from "url_quick" you will have additional options to specify.
+If the Method is changed from "url_quick" or "url_direct" you will have additional options to specify.
 <p>
 If you enter an email address you will be notified when the data is ready.
 <p>
@@ -1100,11 +1040,13 @@ to access the data when it is ready.  If you do not provide an email address you
 access the data.
 
 <form id='FileUploadFormID' name='FileUploadForm'
-  action='http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_fetch'
+  action=''
   target="FileUploadFrame"
   enctype='multipart/form-data' method='post'>
 
 <input type='hidden' id='ExportOpID' name='op'  value='exp_request' >
+<input type='hidden' id="ExportProtocolHidden" name='protocol' value='as-is' >
+<input type='hidden' id="ExportProcessingHidden" name='process' value='no_op' >
 
   <TABLE>
     <TR>
@@ -1128,6 +1070,7 @@ access the data.
       <TD>Method</TD>
       <TD><SPAN ID="MethodHelp" class="tip">?</SPAN></TD>
       <TD><select id="ExportMethod" type="text" name="method" style="width:15em" onChange="SetExportMethod();" >
+        <option value="url_direct">url_direct
         <option value="url_quick">url_quick
         <option value="url">url
         <option value="ftp">ftp
@@ -1147,51 +1090,23 @@ access the data.
     <TR ID="ProcessRow">
       <TD>Processing</TD>
       <TD><SPAN ID="ProcessingHelp" class="tip">?</SPAN></TD>
-      <TD><select id="ExportProcessing" type="text" name="exportprocessing" style="width:15em" onChange="SetProcessing();" >
+      <TD><select id="ExportProcessing" type="text" name="processraw" style="width:15em" onChange="SetProcessing();" >
         <option value="no_op">none
-        <option value="hg_patch_CR">hg_patch(Carrington)
-        <option value="hg_patch_AS">hg_patch(Arc-Sec)
+        <option value="hg_patch">hg_patch
         </select> </TD>
-      <TD>Set Pre-export processing info, Trials of tracked patches available.</TD>
+      <TD>Set Pre-export processing info, Trials of tracked patches available for hmi_test.XX_45s only.</TD>
     </TR>
 
-    <TR ID="ProcessHgPatchCr">
-  
-      <TD>HG_Patch</TD>
-      <TD><SPAN ID="HgPatchCrHelp" class="tip">?</SPAN></TD>
-      <TD>
-        <UL>
-        <LI><input id="HgCarrot" type="text" name="HgCarrot" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatchCr();">&nbsp;CAR_ROT
-        <LI><input id="HgCRLN" type="text" name="HgCRLN" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatchCr();">&nbsp;CR_LN
-        <LI><input id="HgCRLT" type="text" name="HgCRLT" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatchCr();">&nbsp;CR_LT
-        <LI><input id="HgWide" type="text" name="HgWide" style="width:6em;background-color:#D88080" value="NotSpecified"  onChange="CheckHgPatchCr();">&nbsp;Width(degrees)
-        <LI><input id="HgHigh" type="text" name="HgHigh" style="width:6em;background-color:#D88080" value="NotSpecified"  onChange="CheckHgPatchCr();">&nbsp;Height(degrees)
-        </UL>
-      </TD>
-      <TD>Specify patch</TD>
-    </TR>
-  
-    <TR ID="ProcessHgPatchAs">
-  
-      <TD>HG_Patch</TD>
-      <TD><SPAN ID="HgPatchAsHelp" class="tip">?</SPAN></TD>
-      <TD>
-        <UL>
-        <LI><input id="HgTRef" type="text" name="HgTRef" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatchAs();">&nbsp;T_REF
-        <LI><input id="HgASX" type="text" name="HgASX" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatchAs();">&nbsp;EW(arcsec)
-        <LI><input id="HgASY" type="text" name="HgASY" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatchAs();">&nbsp;NS(arcsec)
-        <LI><input id="HgAsWide" type="text" name="HgAsWide" style="width:6em;background-color:#D88080" value="NotSpecified"  onChange="CheckHgPatchAs();">&nbsp;Width(arcsec)
-        <LI><input id="HgAsHigh" type="text" name="HgAsHigh" style="width:6em;background-color:#D88080" value="NotSpecified"  onChange="CheckHgPatchAs();">&nbsp;Height(arcsec)
-        </UL>
-      </TD>
-      <TD>Specify patch</TD>
-    </TR>
+    <!-- Processing selection detail rows go here. section 7 of 7 -->
+    <!--#include virtual="exportdata.d/HgPatch.html" -->
   
     <TR ID="ProtocolRow">
       <TD>Protocol</TD>
       <TD><SPAN ID="ProtocolHelp" class="tip">?</SPAN></TD>
-      <TD><select id="ExportProtocol" name="protocol" style="width:15em"  onChange="SetExportProtocol();">
-        <option value="as-is">as-is <option value="FITS">FITS </select> </TD>
+      <TD><select id="ExportProtocol" name="rawprotocol" style="width:15em"  onChange="SetExportProtocol();">
+            <option value="as-is">as-is
+            <option value="FITS">FITS 
+          </select> </TD>
       <TD>Choose protocol, "FITS" or "as-is".</TD>
     </TR>
   
@@ -1251,17 +1166,16 @@ access the data.
 </form>
 
 <DIV ID=iframeHideDiv style="display:none;">
-  <iframe id="FileUploadFrame" onload="uploadDone();" name="FileUploadFrame" src="" style="height=0px;width=0px;border:0px solid #fff;"></iframe>
+  <iframe id="FileUploadFrame" onload="uploadDone();" name="FileUploadFrame" src="" style="height:0px;width:0px;border:0px solid #fff;"></iframe>
 </DIV>
 
-<HR>
 
 <DIV ID=SubmitResponseDiv>
 <TABLE>
   <TR>
     <TD>RequestID</TD>
     <TD colspan=2><span id="RequestIdPlace" style="background-color:#FFF8DC;">&nbsp;</span></TD>
-    <TD>This is the ID tag for your export request.</TD>
+    <TD>This is the ID tag for your export request.  Use the Status Request button below to retrieve the links to the data.</TD>
   </TR>
 
   <TR>
@@ -1276,8 +1190,8 @@ access the data.
 
 </TABLE>
 </DIV>
-<DIV ExportDataDiv>
 <HR>
+<DIV ExportDataDiv>
 <TABLE>
   <TR>
     <TD style="width:10em" >RequestID</TD>
@@ -1301,7 +1215,7 @@ access the data.
 
   <TR>
     <TD>Status</TD>
-    <TD colspan=2> <span id="StatusStatus" style="background-color:#FFF8DC;"> </span ></TD>
+    <TD colspan=2> <span id="StatusStatus" :tyle="background-color:#FFF8DC;"> </span ></TD>
   </TR>
 
   <TR>
@@ -1312,6 +1226,11 @@ access the data.
   <TR ID="TarFileLocationRow" style="display:none;">
     <TD>Tar File Location</TD>
     <TD colspan=3><span id="TarFileLocation"  style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></TD>
+  </TR>
+
+  <TR ID="KeywordFileLocationRow" style="display:none;">
+    <TD>Keyword File Location</TD>
+    <TD colspan=3><span id="KeywordFileLocation"  style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></TD>
   </TR>
 
   <TR>
