@@ -1,0 +1,46 @@
+<TR ID="ProcessHgPatch">
+
+  <TD>HG_Patch</TD> 
+
+  <TD><SPAN ID="HgPatchHelp" class="tip">?</SPAN></TD> 
+
+  <TD> 
+    <UL style="padding:12px;"> 
+      <LI><input id="HgTStart" type="text" name="HgTStart" style="width:6em;background-color:#FFFFFF" value="NotSpecified" onChange="CheckHgPatch();">&nbsp;T_START 
+      <LI><input id="HgTStop" type="text" name="HgTStop" style="width:6em;background-color:#FFFFFF" value="NotSpecified" onChange="CheckHgPatch();">&nbsp;T_STOP 
+      <LI><input id="HgTDelta" type="text" name="HgTDelta" style="width:6em;background-color:#FFFFFF" value="NotSpecified" onChange="CheckHgPatch();">&nbsp;CADENCE 
+      <LI><SELECT ID="HgLocType" type="text" name="HgLocType" style="width:6em;background-color:#FFFFFF" value="stony" onChange="CheckHgPatch();">
+         <OPTION value="stony">Stonyhurst degrees 
+         <OPTION value="arcsec">arcsec from center 
+         <OPTION value="pixels">pixels from (1,1) 
+         <OPTION value="carrlong">Carrington LatLon 
+         </SELECT>&nbsp;LocUnits</LI> 
+      <LI id="HgTRefLi"><input id="HgTRef" type="text" name="HgTRef" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatch();">&nbsp;T_REF 
+      <LI id="HgCarrLi"><input id="HgCarrot" type="text" name="HgCarrot" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatch();">&nbsp;CAR_ROT 
+      <LI><input id="HgX" type="text" name="HgX" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatch();">&nbsp;X 
+      <LI><input id="HgY" type="text" name="HgY" style="width:6em;background-color:#D88080" value="NotSpecified" onChange="CheckHgPatch();">&nbsp;Y 
+      <LI><SELECT id="HgBoxType" type="text" name="HgBoxType" style="width:6em;background-color:#FFFFFF" value="pixels" onChange="CheckHgPatch();">
+         <OPTION value="pixels">pixels 
+         <OPTION value="degrees">degrees 
+         <OPTION value="arcsec">arcsec 
+         </SELECT> &nbsp;BoxUnits</LI>
+      <LI><input id="HgWide" type="text" name="HgWide" style="width:6em;background-color:#D88080" value="NotSpecified"  onChange="CheckHgPatch();">&nbsp;Width 
+      <LI><input id="HgHigh" type="text" name="HgHigh" style="width:6em;background-color:#D88080" value="NotSpecified"  onChange="CheckHgPatch();">&nbsp;Height 
+    </UL> 
+  </TD> 
+
+  <TD>
+  Specify patch to extract and track.  The default is to track the patch from East limb to West limb. 
+  T_START and/or T_STOP can limit the tracking as can a recodrset specification. 
+  If only the seriesname is given, the query will be made for the last record only, [$], to prevent the export tools from doing a full check on the series. 
+  In this special case, the final record of the series will not actually be used unless it is in the bounds of T_START and T_STOP and is a time with the patch on the disk.
+  <BR> 
+  The patch icenter locationa(x,y) can be specified in Carrington Rot, Lat, and Longitude or with a reference time and location in arcsec,
+  or degrees from CM and equator or in pixels from the lower left of the image (1,1) before any implied rotation or center offset. 
+  One of T_REF or CAR_ROT is required to locate the patch in time. 
+  Width and Height are used to specify the size of the box.
+  The units of width and height must be specified and can be pixels, arcsec, or degrees. 
+  The pixel size is computed from these box sizes when they are at disk center.
+  </TD> 
+
+</TR>
