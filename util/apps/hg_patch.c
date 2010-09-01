@@ -350,8 +350,8 @@ fprintf(stderr,"cdelt=%f, dsun_obs=%f, rsun=%f\n",cdelt,dsun_obs,rsun);
       { /* box ref location is in arcsec - find Carrington equivalent */
       if (loctype==LOCARCSEC)
         {
-        center_x = PIX_X(x,y) - 1;
-        center_y = PIX_Y(x,y) - 1;
+        center_x = PIX_X(x,y) - 1 - x0;
+        center_y = PIX_Y(x,y) - 1 - y0;
         }
       else
         {
