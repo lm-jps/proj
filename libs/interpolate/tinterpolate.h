@@ -41,3 +41,5 @@ int taverage(
   double par2 // In units of tspace. Meaning depends on avmethod.
 );
 
+char *tinterpolate_version(); // Returns CVS version of tinterpolate.c
+

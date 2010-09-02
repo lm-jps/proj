@@ -754,4 +754,9 @@ printf("\n");
   return 0;
 }
 
+char *tinterpolate_version() // Returns CVS version of tinterpolate.c
+{
+  return strdup("$Id: tinterpolate.c,v 1.6 2010/09/02 18:21:52 schou Exp $");
+}
+
 
