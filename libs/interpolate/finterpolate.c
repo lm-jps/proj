@@ -782,3 +782,9 @@ return status;
 
 }
 
+char *finterpolate_version() // Returns CVS version of finterpolate.c
+{
+  return strdup("$Id: finterpolate.c,v 1.5 2010/09/02 18:29:49 schou Exp $");
+}
+
+

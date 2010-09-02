@@ -646,3 +646,10 @@ reduction(+:nofill)
     return 0; // All is good
   }
 }
+
+char *gapfill_version() // Returns CVS version of gapfill.c
+{
+  return strdup("$Id: gapfill.c,v 1.9 2010/09/02 18:29:49 schou Exp $");
+}
+
+
