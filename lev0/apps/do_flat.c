@@ -78,7 +78,7 @@ int do_flat(LEV0LEV1 *info)
     int npix, min, max, medn;
 
     exptime = drms_getkey_double(rs0, "EXPTIME", &status);
-    if (status || !isfinite(exptime) || exptime <= 0.0)
+    if (!is_dark && (status || !isfinite(exptime) || exptime <= 0.0))
 	return XXX_INVALID_EXPTIME;
 
     if (info->himgcfid < 0 || info->himgcfid >= MAXHIMGCFGS)
@@ -538,7 +538,7 @@ int do_flat_aia(LEV0LEV1 *info)
 	info->datamedn = medn + MINOUT;
 
 	for (i=min; i<=max; ++i) {
-	    int ii = i + MINOUT;
+	    double ii = i + MINOUT;
 	    s += (dtmp = ii*hist[i]);
 	    s2 += (dtmp *= ii);
 	    s3 += (dtmp *= ii);
