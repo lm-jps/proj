@@ -16,54 +16,65 @@
                 {scale=<image_size_ratio>} {-c} {-w} {-x}
    @endcode
 
-     {ARG_STRING, "in", "NOT SPECIFIED",  "Input data series."},
-     {ARG_STRING, "out", "NOT SPECIFIED",  "Output data series or full path of directory or pipe via ppm program."},
-     {ARG_STRING, "outname", "NOT SPECIFIED",  "Output quantity name for filenames"},
-     {ARG_STRING, "scaling", "MINMAX", "Color table type, minmax, minmax99, minmaxgiven, histeq, ..."},
-     {ARG_STRING, "pallette", "GREY", "Color table, GREY or filename"},
-     {ARG_STRING, "type", "png", "Image protocol, png, ppm, ..."},
-     {ARG_STRING, "outid", "#", "output identifier, #=record counter, time=time as yyyymmdd_hhmmss"},
-     {ARG_FLOAT, "min", "DRMS_MISSING_FLOAT", "Min value for scaling"},
-     {ARG_FLOAT, "max", "DRMS_MISSING_FLOAT", "Max value for scaling"},
-     {ARG_INTS, "scale", "1", "Reduction factors"},
-     {ARG_FLAG, "c", "0", "Crop flag, causes crop to RSUN_OBS"},
-     {ARG_FLAG, "w", "0", "use white for missing pixels, instead of black"},
-     {ARG_FLAG, "x", "0", "High-quality flag, sets bytespercolor to 2 instead of 1"},
-     {ARG_END}
-
-
+   @code
+     in=Input data series.
+     out=Output data series or full path of directory or pipe via ppm program.
+     outname=Output quantity name for filenames.
+     scaling=Color table type, minmax, minmax99, minmaxgiven, histeq, ...,, default=MINMAX
+     pallette=Color table, GREY or filename, default=GREY
+     type=Image protocol, png, ppm, ..., default=png
+     outid=output identifier, #=record counter, time=time as yyyymmdd_hhmmss, default=#
+     min=Min value for scaling, default nan
+     max=Max value for scaling, default nan
+     scale"Reduction factor list, default 1.
+     -c Crop flag, causes crop to RSUN_OBS
+     -w use white for missing pixels, instead of black
+     -x High-quality flag, sets bytespercolor to 2 instead of 1,
+  @endcode
 
    @par
    Render_image can make one or many images per record in the input recordset.  It will make one image for each value
-   of @scale where the values are given as a comma delimited list of divisors for the dimensions of the input image array.
-   The image file will be written to a filename created from @outid_@outname_@type where @outid is either "time" or "#",
-   @outname is any literal string, and @type is "png" or "ppm" or if @out specifies a pipe, then @type may be any file type
+   of scale where the values are given as a comma delimited list of divisors for the dimensions of the input image array.
+   The image file will be written to a filename created from outid_outname_type where outid is either "time" or "#",
+   outname is any literal string, and type is "png" or "ppm" or if out specifies a pipe, then type may be any file type
    that is supported as the output of a pipeline which accepts a PPM file.
    @par
-   The file location is spcified with the @out parameter.  The @target may be a seriesname in which case the image will
-   be written into a record directory of that series.  If the @target seriesname is the same as the series specified in @in, then
+   The file location is spcified with the out parameter.  The target may be a seriesname in which case the image will
+   be written into a record directory of that series.  If the target seriesname is the same as the series specified in in, then
    each input record will be cloned.  The image will be written into a segment named "image".
    @par
-   If the @target location begins with a "/" or "./" then the $target will be used as the path for a directory into which
-   the image file will be written.  If the @target location beginw with a "|" character, then the @target string will be used
-   as a pipe into which a .ppm file will be written.  the pipe string will have " > <filename>" appended to it.
+   If the target location begins with a "/" or "./" then the $target will be used as the path for a directory into which
+   the image file will be written.  If the target location beginw with a "|" character, then the target string will be used
+   as a pipe into which a .ppm file will be written.  The pipe string will have " > <filename>" appended to it.
+   In the case of a pipe, the string given in the 'out' parameter will be scanned
+   for replacement tokens delimited by '{...}'.  Inside the '{}' pair the following
+   replacement instructions are available:
+  @code
+   The word 'ID' is replaced by the filename ID as built from outid.
+   The word '%' is replaced by that percent of the width of the image rounded
+       to the nearest pixel.  If the floating point number after the '%' is itself
+       followed by a ':' and an integer, then that integer will be used as the
+       smallest number for the replacement token.  So, for instance '{%1.2:5}'
+       with the image width of 256 pixels will be processed as: 1.2% of 256 is 3.072
+       which rounds to 3 which is smaller than 5 so the result will be 5.
+  @endcode
    @par
-   The image @filename is generated from the @outid, @outname, and @type parameters.  If @outid is the string "time" then
+   The image filename is generated from the outid, outname, and type parameters.  If outid is the string "time" then
    the time of the image "T_REC" parameter will be used with the "." and ":" and "_<zone>" componenets deleted.  I.e.
-   the time will be in the form "yyyymmdd_hhmmss".  If @outid is a literal "#" then the "%04d" layout will be used to generate
+   the time will be in the form "yyyymmdd_hhmmss".  If outid is a literal "#" then the "%04d" layout will be used to generate
    the image sequence number within the run of the program (i.e. the record number within the current recordset).  the
-   @type parameter must be "png" or "ppm" unless the @out parameter specifies a ppm pipeline in which case @type should
+   type parameter must be "png" or "ppm" unless the out parameter specifies a ppm pipeline in which case type should
    be the suffix for the file type geenrated by the pipe.
    @par
-   The scaling of image values to color table indices is controlled by the @scaling parameter.  @scaling must be one of
-   MINMAX, MAXMIN, MINMAXGIVEN, MINMAX99, MAXMIN99, HISTEQ at present.  The default is MINMAX.  If the @scaling is
-   MINMAX and both @min and @max parameters are given, then the MINMAXGIVEN scaling will be used.  MINMAX99 and
+   The scaling of image values to color table indices is controlled by the scaling parameter.  scaling must be one of
+   MINMAX, MAXMIN, MINMAXGIVEN, MINMAX99, MAXMIN99, HISTEQ at present.  The default is MINMAX.  If the scaling is
+   MINMAX and both min and max parameters are given, then the MINMAXGIVEN scaling will be used.  MINMAX99 and
    MAXMIN99 mean to eliminate the top and bottom 0.5% of the histogram of the values before computing a linear scaling.
    MAXMIN and MAXMIN99 result in a reversed scaling with the max value mapped to the first color in the table and the
-   min value mapped to the max color in the table.  String case is ignored for the @scaling parameter.
+   min value mapped to the max color in the table.  String case is ignored for the scaling parameter.
    @par
-   The color table is specified by the @pallette parameter.  The table may be a built in table, at persent the only
-   build-in is "grey".  ("grey", "gray", "GREY", "GRAY" are all allowed).  If not a build-in table name the @pallette
+   The color table is specified by the pallette parameter.  The table may be a built in table, at persent the only
+   build-in is "grey".  ("grey", "gray", "GREY", "GRAY" are all allowed).  If not a build-in table name the pallette
    parameter is expected to be a file path to a table of .sao or .lut types.  These table formats are described in the
    ds9(1) documentation.
    @par
