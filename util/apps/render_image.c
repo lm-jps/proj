@@ -12,7 +12,8 @@
    @code
    render_image --help
    render_iamge in=<RecordSet> out=<target> | {outname=<ident_for_filename>}  {scaling=<scaletype>}
-                {pallette=<color_table>}  {type=<image_protocol>} {outid=<filename_code>} {min=<scale_min>} {max=<scale_max>}
+                {pallette=<color_table>}  {type=<image_protocol>} {outid=<filename_code>}
+                {tkey=<time_keyword>} {min=<scale_min>} {max=<scale_max>}
                 {scale=<image_size_ratio>} {-c} {-w} {-x}
    @endcode
 
@@ -23,6 +24,7 @@
      scaling=Color table type, minmax, minmax99, minmaxgiven, histeq, ...,, default=MINMAX
      pallette=Color table, GREY or filename, default=GREY
      type=Image protocol, png, ppm, ..., default=png
+     tkey=keyword name for time, default T_REC
      outid=output identifier, #=record counter, time=time as yyyymmdd_hhmmss, default=#
      min=Min value for scaling, default nan
      max=Max value for scaling, default nan
@@ -60,7 +62,7 @@
   @endcode
    @par
    The image filename is generated from the outid, outname, and type parameters.  If outid is the string "time" then
-   the time of the image "T_REC" parameter will be used with the "." and ":" and "_<zone>" componenets deleted.  I.e.
+   the time of the image as specified by the tkey (defaults to T_REC) will be used with the "." and ":" and "_<zone>" componenets deleted.  I.e.
    the time will be in the form "yyyymmdd_hhmmss".  If outid is a literal "#" then the "%04d" layout will be used to generate
    the image sequence number within the run of the program (i.e. the record number within the current recordset).  the
    type parameter must be "png" or "ppm" unless the out parameter specifies a ppm pipeline in which case type should
@@ -142,6 +144,7 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, "pallette", "GREY", "Color table, GREY or filename"},
      {ARG_STRING, "type", "png", "Image protocol, png, ppm, ..."},
      {ARG_STRING, "outid", "#", "output identifier, #=record counter, time=time as yyyymmdd_hhmmss"},
+     {ARG_STRING, "tkey", "T_REC", "Time keyword name used if outid==time, defaults to T_REC"},
      {ARG_FLOAT, "min", "DRMS_MISSING_FLOAT", "Min value for scaling"},
      {ARG_FLOAT, "max", "DRMS_MISSING_FLOAT", "Max value for scaling"},
      {ARG_INTS, "scale", "1", "Reduction factors"},
@@ -182,13 +185,17 @@ struct ObsInfo_struct
 typedef struct ObsInfo_struct ObsInfo_t;
 
 void rebinArraySF(DRMS_Array_t *out, DRMS_Array_t *in);
+
 int add_png(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *pallette, int colors, int bytespercolor, double *minp, double *maxp);
+
 int add_ppm(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *pallette, int colors, int bytespercolor, double *minp, double *maxp);
-int make_png(char *imgPath, unsigned char *data, int height, 
-    int width, char *pallette, int bytepercolor, int colors);
-char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, 
-    int *nmissp, char *pallette, int colors, int bytepercolor, int scaling, int usewhite);
+
+int make_png(char *imgPath, unsigned char *data, int height, int width, char *pallette, int bytepercolor, int colors);
+
+char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp, char *pallette, int colors, int bytepercolor, int scaling, int usewhite);
+
 int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, int crop);
+
 ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus);
 
 #define PNG 1
@@ -207,27 +214,18 @@ int DoIt(void)
  
   char *inQuery = (char *)params_get_str(&cmdparams, "in");
   char *outQuery = (char *)params_get_str(&cmdparams, "out");
-// if pipe then do ppm image and assume pipe takes ppm and produces image on stdout.
-// In the case of a pipe, the string given in the 'out' parameter will be scanned
-// for replacement tokens delimited by '{...}'.  Inside the '{}' pair the following
-// replacement instructions are available:
-//   The word 'ID' is replaced by the filename ID as built from outid.
-//   The word '%' is replaced by that percent of the width of the image rounded
-//       to the nearest pixel.  If the floating point number after the '%' is itself
-//       followed by a ':' and an integer, then that integer will be used as the
-//       smallest number for the replacement token.  So, for instance '{%1.2:5}'
-//       with the image width of 256 pixels will be processed as: 1.2% of 256 is 3.072
-//        which rounds to 3 which is smaller than 5 so the result will be 5.
   char *outName = (char *)params_get_str(&cmdparams, "outname");
   char *outid = (char *)params_get_str(&cmdparams, "outid");
+  char *tkey = (char *)params_get_str(&cmdparams, "tkey");
   char *pallette = (char *)params_get_str(&cmdparams, "pallette");
   int bytespercolor = (params_isflagset(&cmdparams, "x") ? 2 : 1);
   int missingwhite = params_isflagset(&cmdparams, "w");
   int crop = params_isflagset(&cmdparams, "c");
   char *type = (char *)params_get_str(&cmdparams, "type");
   char *scaling = (char *)params_get_str(&cmdparams, "scaling");
-  double min = params_get_double(&cmdparams, "min");
-  double max = params_get_double(&cmdparams, "max");
+  double called_min = params_get_double(&cmdparams, "min");
+  double called_max = params_get_double(&cmdparams, "max");
+  double min, max;
   int *scales = NULL;
   int iscale, nscales;
   int colors;
@@ -262,7 +260,7 @@ int DoIt(void)
   else if (strcasecmp(scaling, "minmaxgiven") == 0) scaletype = MINMAXGIVEN;
   else  scaletype = 0;
 
-  if (isnan(min) || isnan(max))
+  if (isnan(called_min) || isnan(called_max))
     {
     if (scaletype == MINMAXGIVEN)
       DIE("min and max must be specified for type MINMAXGIVEN\n");
@@ -276,6 +274,7 @@ int DoIt(void)
   inRS = drms_open_records(drms_env, inQuery, &status);
   if (status || inRS->n == 0)
        DIE("No input data found");
+  drms_stage_records(inRS, 1, 1);
   nrecs = inRS->n;
 
   if (!outQuery[0])
@@ -302,35 +301,35 @@ int DoIt(void)
     DRMS_Array_t *srcArray;
     DRMS_Segment_t *srcSeg;
     ObsInfo_t *ObsLoc;
+// fprintf(stderr,"begin record %d\n",irec);
  
     char imageID[100];
     inRec = inRS->records[irec];
     quality = drms_getkey_int(inRec, "QUALITY", NULL);
     if (quality < 0)
       {
-      srcSeg = NULL;
-      srcArray = NULL;
-      status = 1;
       fprintf(stderr,"Quality bad for rec %d\n", irec);
-      if (srcNx > 0 && srcNy > 0)
-        {
-        int i, n = srcNx*srcNy;
-        float *data;
-        int dims[] = {srcNx,srcNy};
-        srcArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, NULL, &status);
-        data = (float *)srcArray->data;
-        for (i=0; i<n; i++) data[i] = DRMS_MISSING_FLOAT;
-        }
-      else
-        continue;
+      continue;
+      // srcSeg = NULL;
+      // srcArray = NULL;
+      // status = 1;
+      // if (srcNx > 0 && srcNy > 0)
+        // {
+        // int i, n = srcNx*srcNy;
+        // float *data;
+        // int dims[] = {srcNx,srcNy};
+        // srcArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, NULL, &status);
+        // data = (float *)srcArray->data;
+        // for (i=0; i<n; i++) data[i] = DRMS_MISSING_FLOAT;
+        // }
+      // else
+        // continue;
       }
     else
       {
       srcSeg = drms_segment_lookupnum(inRec, 0);
       srcArray = drms_segment_read(srcSeg, DRMS_TYPE_FLOAT, &status);
-      ObsLoc = GetObsInfo(srcSeg, NULL, &status);
-      upNcenter(srcArray, ObsLoc, crop);
-      if (status)
+      if (!srcArray || status)
         {
          fprintf(stderr," No data file found rec %d, status=%d\n", irec,status);
          if (srcArray)
@@ -340,21 +339,34 @@ int DoIt(void)
            }
          continue;
         }
+      ObsLoc = GetObsInfo(srcSeg, NULL, &status);
+      upNcenter(srcArray, ObsLoc, crop);
       srcNx = srcArray->axis[0];
       srcNy = srcArray->axis[1];
       }
     if (strcmp(outid,"#") == 0)
       sprintf(imageID, "%04d", irec);
-    else if (strcmp(outid,"time") == 0)
+    else if (strcasecmp(outid,"time") == 0)
       {
+      int timestatus;
       char timebuf[100];
       static int t[] = {0,1,2,3,5,6,8,9,10,11,12,14,15,17,18};
       int i;
-      TIME now = drms_getkey_time(inRec, "T_REC", NULL);
+      TIME now = drms_getkey_time(inRec, tkey, &timestatus);
+      if (timestatus)
+        {
+        fprintf(stderr,"Time key given in 'tkey' param, %s, is not found in the input series.\n",tkey);
+        return(timestatus);
+        }
       sprint_time(timebuf, now, "TAI", 0);
       for (i=0; i<15; i++)
         imageID[i] = timebuf[t[i]];
       imageID[i] = '\0';
+      }
+    else
+      {
+      fprintf(stderr, "Invalid outid param: %s\n", outid);
+      return(1);
       }
     for (iscale=0; iscale<nscales; iscale++)
       {
@@ -364,6 +376,8 @@ int DoIt(void)
       int imageDims[2];
       int tmparray = 0;
       char imageFileName[DRMS_MAXSEGFILENAME];
+      min = called_min;
+      max = called_max;
       imageDims[0] = srcNx/scale;
       imageDims[1] = srcNy/scale;
 // fprintf(stderr,"scale=%d, imageNy=%d, imageNx=%d\n", scale, imageDims[1], imageDims[0]);
@@ -684,12 +698,13 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
     int grey = strcmp(pallette, "GREY") == 0;
     static unsigned short *table = NULL;
     static unsigned short *greytable = NULL;
-    unsigned short *colortable = NULL;
+    static unsigned short *colortable = NULL;
     char *out;
     out = (char *)malloc(ndata * colors * bytepercolor * sizeof(char));
     int maxcolor = (bytepercolor == 1 ? 254 : 65534);
     int missingcolor = (usewhite ? maxcolor + 1 : 0);
 
+// fprintf(stderr,"set_scaling called, scaling=%d, pallette=%s, min=%f, max=%f",scaling,pallette,*minp,*maxp);
 // fprintf(stderr,"\n   missingcolor %d maxcolor %d \n", missingcolor, maxcolor);
     if (!out)
         return(NULL);
@@ -713,13 +728,12 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
         table = init_color_table(pallette, colors, bytepercolor);
       colortable = table;
       }
-// fprintf(stderr,"set_scaling called:  scaling %d min=%f, max=%f\n", scaling,*minp,*maxp);
 
     switch(scaling)
       {
-        case MINMAX:
-        case MAXMIN:
-        case MINMAXGIVEN:
+      case MINMAX:
+      case MAXMIN:
+      case MINMAXGIVEN:
           {
            double min;
            double max;
@@ -734,58 +748,68 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
              {
              if (isnan(*minp) || isnan(*maxp))
                {
-               double min = 1.0e20;
-               double max = -min;
+               int n=0;
+               min = 1.0e20;
+               max = -min;
                for (idata=0; idata<ndata; idata++)
                  {
                    float val = inData[idata];
                    if (!isnan(val))
                      {
-                       if (val > max) 
-                            max = val;
-                       if (val < min) 
-                            min = val;
+                     n++;
+                     if (val > max) max = val;
+                     if (val < min) min = val;
                      }
                  }
+               if (n==0)
+                 {
+                 fprintf(stderr,"set_scaling, min or max is missing and no data values found.\n");
+                 return(NULL);
+                 }
+// fprintf(stderr,"set_scaling, found new min,max for %d points\n",n);
                }
              if (isnan(*minp)) *minp = min;
              if (isnan(*maxp)) *maxp = max;
              min = *minp;
              max = *maxp;
              }
+// fprintf(stderr,"set_scaling, now min=%f, max=%f\n",min,max);
            for (idata=0; idata<ndata; idata++)
              {
-              float val = inData[idata];
-              int newval;
-              if (!isnan(val))
+             float val = inData[idata];
+             int newval;
+             if (!isnan(val))
                 {
-                if (val < min) val = min;
-                if (val > max) val = max;
-                newval = maxcolor*(val-min)/(max-min) + 0.5;
+                if (val <= min) val = min;
+                if (val >= max) val = max;
+                if (val == min || min == max)
+                  newval = 0;
+                else
+                  newval = maxcolor*(val-min)/(max-min) + 0.5;
                 if (scaling == MAXMIN)
                    newval = maxcolor - newval;
                 if (newval >= maxcolor) newval = maxcolor;
                 if (newval < 1) newval = 1;
                 }
-              else
+             else
                 {
                   newval = missingcolor;
                   nmiss += 1;
                 }
-              for (color=0; color<colors; color++)
+             for (color=0; color<colors; color++)
                 {
                 if (bytepercolor == 1)
                    *((unsigned char *)out + colors*idata + color) = colortable[newval*colors + color];
                 else
                    *((unsigned short *)out + colors*idata + color) = colortable[newval*colors + color];
                 }
-          }
+             }
         *maxp = max;
         *minp = min;
         *nmissp = nmiss;
-// fprintf(stderr,"   min %f max %f nmissp %d ndata %d\n", *minp, *maxp, nmiss, ndata);
+ fprintf(stderr,"   min %f max %f nmissp %d ndata %d\n", *minp, *maxp, nmiss, ndata);
         break;
-      }
+        }
 
     case HISTEQ:
       {
