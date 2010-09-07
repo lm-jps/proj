@@ -78,7 +78,7 @@ int do_flat(LEV0LEV1 *info)
     int npix, min, max, medn;
 
     exptime = drms_getkey_double(rs0, "EXPTIME", &status);
-    if (!is_dark && (status || !isfinite(exptime) || exptime <= 0.0))
+    if (status || !isfinite(exptime) || exptime <= 0.0)
 	return XXX_INVALID_EXPTIME;
 
     if (info->himgcfid < 0 || info->himgcfid >= MAXHIMGCFGS)
@@ -477,7 +477,7 @@ int do_flat_aia(LEV0LEV1 *info)
 
   {
     int *oldvalues, *spikelocs, *newvalues;
-    int aia_status, i, level = 7, niter = 3, nbads, nspikes=0, respike, rstatus;
+    int aia_status, i, level = 7, niter = 3, nbads, nspikes, respike, rstatus;
     float frac = 0.8;
     int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
 
@@ -491,10 +491,6 @@ int do_flat_aia(LEV0LEV1 *info)
        respike = 0;
        break;
     }
-    for (i=0; i<4096*4096; i++) {
-      if (out[i] < 0 && out[i] != DRMS_MISSING_INT) out[i] = 0;
-      if (out[i] > 32767) out[i] = 32767;
-    }
     if (respike) niter = 0; else niter = 3;
     nbads = ArrayBad->axis[0];
     aia_status = aia_despike(info->dat1.adata1A, NULL, 4096, 4096, frac, level,
@@ -504,17 +500,14 @@ int do_flat_aia(LEV0LEV1 *info)
     set_spikelocs(spikelocs);
     set_oldvalues(oldvalues);
     set_newvalues(newvalues);
-    drms_setkey_int(rs, "NSPIKES", nspikes);
+    for (i=0; i<4096*4096; i++) {
+      if (out[i] < 0 && out[i] != DRMS_MISSING_INT) out[i] = 0;
+      if (out[i] > 32767) out[i] = 32767;
+    }
   } 
     //
     // do statistics
     //
-    npix = 0; memset(hist, 0, 4*NBINS);
-    for (i=0; i<4096*4096; i++) {
-      if(out[i] != DRMS_MISSING_INT) { ++hist[out[i]-MINOUT]; ++npix; }
-    }
-    info->datavals = npix;
-    info->missvals = dvals[info->himgcfid] - npix;
     info->datamin = info->datamax = info->datamedn = DRMS_MISSING_INT;
     //info->datavals = info->missvals = DRMS_MISSING_INT;
     info->datamean = info->data_rms = info->dataskew 

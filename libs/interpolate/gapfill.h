@@ -55,6 +55,3 @@ int fgap_fill(
   float *cnorm, // White noise magnification
   float *ierror // Estimated interpolation error
 );
-
-char *gapfill_version(); // Returns CVS version of gapfill.c
-

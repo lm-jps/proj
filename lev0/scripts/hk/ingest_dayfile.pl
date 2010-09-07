@@ -686,14 +686,9 @@ sub get_series_name()
 #############################################################################
 sub ingest_day_files()
 {
-  my($directory, $filename,$fullpathfn);
   $file=""; $xfile="";
-  $saved_count=0;
-  $skipped_count=0;
   foreach $file (@list)
   {
-
-
     #get command
     $command="$exec_dir/set_keys -c ";
 
@@ -742,12 +737,12 @@ sub ingest_day_files()
       $skdate=sprintf("%s.%s.%s",$year,$month,$day); 
     }
 
-    #OBS_DATE=2008.05.29_00:00:00.000_UTC
+    #DATE=2008.05.29_00:00:00.000_TAI
     # fix string format to DATE in time variable
-    $time_skdate=sprintf("%10.10s_00:00:00_UTC",$skdate);
+    $time_skdate=sprintf("%10.10s_00:00:00_TAI",$skdate);
 
     # set argument DATE to run in set_key command
-    $arg2="OBS_DATE=$time_skdate";
+    $arg2="DATE=$time_skdate";
 
     #get apid and set APID value to run in set_key command
     if ($source eq "hsb" or $source eq "hsb_r")
@@ -775,7 +770,8 @@ sub ingest_day_files()
     #get xml file name
     if ($source eq "hsb" or $source eq "hsb_r")
     {
-      $xfile="";
+      #$xfile=sprintf("%s/%s.xml",$dir_init_df,$file);
+      #$arg6="xmlfile=$xfile";
       $arg6="";
     }
     elsif  ($source eq "moc")
@@ -785,7 +781,8 @@ sub ingest_day_files()
     }
     elsif ($source eq "egsefm" )
     {
-      $xfile="";
+      #$xfile=sprintf("%s/%sx",$dir_init_df,$file);
+      #$arg6="xmlfile=$xfile";
       $arg6="";
     }
     elsif ( $source eq "rtmon")
@@ -802,55 +799,11 @@ sub ingest_day_files()
       $arg7="MERGED=$merged";
     }
     
-    #processed date
-    $processed_date=get_current_time();
-    $arg8="DATE=$processed_date";
-
-
-    #check file size and skip saving if dayfile is zero
-    $fullpathfn= sprintf("%s/%s", $dir_init_df, $file);
-    my($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size, $atime,$mtime,$ctime,$blksize,$blocks) = stat($fullpathfn);
-    if ( $size == 0)
-    {
-       #print message to log
-       print LF "-->Skipped saving day file<$fullpathfn> and xml file<$xfile> if xml file exists because got dayfile size=<$size>\n";
-
-       #keep count of skipped pairs of xml/dayfiles
-       $skipped_count++;
-
-       #add just filename to delete_file list
-       if ( $source eq "rtmon")
-       {
-         open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST_RTMON") || die "(7)Can't Open $script_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
-       }
-       elsif ( $source eq "moc")
-       {
-         open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(7)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
-       }
-       else #assumed hsb case
-       {
-         open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST") || die "(7)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
-       }
-       print DELFILE "$file\n";
-       if($xfile ne "")
-       { 
-         ($directory, $filename) = $xfile=~ m/(.*\/)(.*)$/;
-         print DELFILE "$filename\n";
-       }
-       close DELFILE;
-
-       #get next file on list
-       next;
-    }
-    else
-    {
-       if ($dflg) {print LF "Processed file<$fullpathfn> since got file size=<$size>\n";}
-       $saved_count++;
-    }
 
     # check command line to load dayfiles in DRMS day file data series
-    @args=("$command","$arg1 ","$arg2 ","$arg3 ","$arg4 " ,"$arg5", "$arg6", "$arg7", "$arg8");
+    @args=("$command","$arg1 ","$arg2 ","$arg3 ","$arg4 " ,"$arg5", "$arg6", "$arg7");
     print LF "-->Load dayfile command: <@args>\n";
+
 
     if ($view_flg eq "1")
     {
@@ -859,10 +812,10 @@ sub ingest_day_files()
     else
     {
 
-      # save dayfile and xml file(for src values moc,rtmon,egsefm) 
+      # load dayfile 
       system(" @args ") == 0 or die "system(\"  @args\")\nFailure cause:Need to create data series. Check if exists:describe_series $dsn\nFailed:$?" ; 
 
-      # check if files saved, if are, add to file for deleting.
+      # check if files loaded, if are add to file for deleting.
       # create command line
       $ckcommand="show_info";
       @checkargs=("$ckcommand","$arg1\[$time_skdate\]\[$aid\]\[$source\]","-p seg=file,xmlfile \| grep -v file");
@@ -876,13 +829,12 @@ sub ingest_day_files()
       @s_ret_values = split ' ', $check_ret_values;
       if($dflg) {print LF "ingest_dayfiles:first is <$s_ret_values[0]>\n"};
       if($dflg) {print LF "ingest_dayfiles:second is <$s_ret_values[1]>\n"};
-
       # check if files exist
       if ( -e $s_ret_values[0])
       {
          if($dflg) {print LF "ingest_dayfiles:file exists:$s_ret_values[0]\n";}
          #parse just filename
-         ($directory, $filename) = $s_ret_values[0]=~ m/(.*\/)(.*)$/;
+         my($directory, $filename) = $s_ret_values[0]=~ m/(.*\/)(.*)$/;
          if($dflg) {print LF "ingest_dayfiles:filename is <$filename>\n";}
          #add just filename to delete_file list
          if($filename ne "")
@@ -895,7 +847,7 @@ sub ingest_day_files()
            {
              open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
            }
-           else #assumed hsb case
+           else
            {
              open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
 
@@ -908,7 +860,7 @@ sub ingest_day_files()
       {
         if($dflg) {print LF "ingest_dayfiles:file exists:$s_ret_values[1]\n";}
         #parse just filename
-        ($directory, $xmlfilename) = $s_ret_values[1]=~ m/(.*\/)(.*)$/;
+        my($directory, $xmlfilename) = $s_ret_values[1]=~ m/(.*\/)(.*)$/;
         if($dflg) {print LF "ingest_dayfiles:xmlfilename is <$xmlfilename>\n";}
         #add just filename to delete_file list
         if($xmlfilename ne "")
@@ -939,10 +891,6 @@ sub ingest_day_files()
 
     }
   }
-  # show counts of saved and skipped if dflg is 1
-  if($dflg) {print LF "-->Skipped saving dayfiles total = $skipped_count\n";}
-  if($dflg) {print LF "-->Saved dayfile total = $saved_count\n";}
-
   if ($view_flg eq "1")
   {
       print LF "ingest_dayfile:skipping executing load of dayfiles above and viewing data to be loaded in data series only\n";
@@ -989,18 +937,4 @@ sub get_df_date($$)
   #return value yyyy.mm.dd
   return ($date_for_dayfile);
 
-}
-##########################################################################
-# subroutine get_current_time()                                          #
-##########################################################################
-sub get_current_time()
-{
-  my($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings, $year, $month, $new_date);
-  #my($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = localtime();
-  ($second, $minute, $hour, $dayOfMonth, $monthOffset, $yearOffset, $dayOfWeek, $dayOfYear, $daylightSavings) = gmtime();
-  $year = 1900 + $yearOffset;
-  $month= $monthOffset + 1;
-  #create todays date and time format 
-  $new_date= sprintf("%4d-%02.2d-%02.2dT%02.2d:%02.2d:%02.2dZ",$year,$month,$dayOfMonth,$hour,$minute,$second);
-  return ( $new_date);
 }

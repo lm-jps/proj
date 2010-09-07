@@ -68,6 +68,3 @@ int finterpolate(
   float fillval // Value to use if outside area
 );
 
-char *finterpolate_version(); // Returns CVS version of finterpolate.c
-
-

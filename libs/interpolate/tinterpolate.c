@@ -23,9 +23,8 @@ int tinterpolate(
   int ny, // Number of points in dimension not adjacent in memory
   int nlead, // Leading dimension of arrays. nlead>=nx
   int method, // Interpolation method
-  char **filenamep, // Pointer to name of file to read covariance from.
+  char **filenamep // Pointer to name of file to read covariance from.
                    // Set to actual file used if method > 0.
-  float fillval // Value to use if all points are missing
 )
 {
   const unsigned char maskgood=0; // Value of good entries in masks
@@ -130,7 +129,7 @@ int tinterpolate(
 // For the time being calculate weights for all possible masks
 // Could be done implicitly if nsample becomes large
 // For 4096x4096 images interpolation dominates to around nsample=20
-  for (imask=0;imask<nmasks;imask++) {
+for (imask=0;imask<nmasks;imask++) {
     cp=coeffs+nsample*imask;
     imask1=imask;
     ngood=0;
@@ -282,11 +281,7 @@ printf("%d %d %f %f %f\n",imask,ngood,tint,sum,sum-tint);
       } // for i
     } // for isample
     ip=image_out+nlead*j;
-    for (i=0;i<nx;i++) 
-      if (smasks[i] != (nmasks-1)) // At least one point present
-        ip[i]=sums[i];
-      else // No points present
-        ip[i]=fillval;
+    for (i=0;i<nx;i++) ip[i]=sums[i];
 //  memcpy(ip,sums,nx*sizeof(float));
   } // for j
   MKL_free(smasks);
@@ -757,11 +752,6 @@ printf("\n");
   MKL_free(wgood);
   free (filename);
   return 0;
-}
-
-char *tinterpolate_version() // Returns CVS version of tinterpolate.c
-{
-  return strdup("$Id: tinterpolate.c,v 1.7 2010/09/03 00:35:45 schou Exp $");
 }
 
 
