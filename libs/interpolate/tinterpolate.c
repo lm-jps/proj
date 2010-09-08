@@ -25,7 +25,7 @@ int tinterpolate(
   int method, // Interpolation method
   char **filenamep, // Pointer to name of file to read covariance from.
                    // Set to actual file used if method > 0.
-  float fillval // Value to use if all points are missing
+  float fillval // Value to use if not enough points present
 )
 {
   const unsigned char maskgood=0; // Value of good entries in masks
@@ -45,7 +45,7 @@ int tinterpolate(
   float *coeff;
   int nmasks/*,smask*/,imask,imask1,ngood;
   int *wgood;
-  int *smasks;
+  int *smasks,*ngoods;
   float *coeffs,*cp;
   float *sums,*ip;
   double t0,t1,t2;
@@ -258,16 +258,20 @@ printf("%d %d %f %f %f\n",imask,ngood,tint,sum,sum-tint);
 
 // Alternate version with inner loop over x
   smasks=(int *)(MKL_malloc(nx*sizeof(int),malign));
+  ngoods=(int *)(MKL_malloc(nx*sizeof(int),malign));
   sums=(float *)(MKL_malloc(nx*sizeof(float),malign));
   for (j=0;j<ny;j++) {
     for (i=0;i<nx;i++) smasks[i]=0;
+    for (i=0;i<nx;i++) ngoods[i]=0;
     for (isample=nsample-1;isample>=0;isample--) {
       mp=masks[isample]+nlead*j;
       for (i=0;i<nx;i++) {
         if (mp[i]!=maskgood)
           smasks[i]=2*smasks[i]+1;
-        else
+        else {
           smasks[i]=2*smasks[i];
+          ngoods[i]=ngoods[i]+1;
+        }
       }
     }
     for (i=0;i<nx;i++) sums[i]=0.0f;
@@ -283,13 +287,14 @@ printf("%d %d %f %f %f\n",imask,ngood,tint,sum,sum-tint);
     } // for isample
     ip=image_out+nlead*j;
     for (i=0;i<nx;i++) 
-      if (smasks[i] != (nmasks-1)) // At least one point present
+      if (ngoods[i] >= nconst) // Enough points to do interpolation
         ip[i]=sums[i];
       else // No points present
         ip[i]=fillval;
 //  memcpy(ip,sums,nx*sizeof(float));
   } // for j
   MKL_free(smasks);
+  MKL_free(ngoods);
   MKL_free(sums);
 
 /*
@@ -365,7 +370,8 @@ int taverage(
   double tspace, // Spacing of times to interpolate to
   int hwidth, // Window width in units of tspace. Total width is 2*hwidth+1
   double par1, // In units of tspace. Meaning depends on avmethod.
-  double par2 // In units of tspace. Meaning depends on avmethod.
+  double par2, // In units of tspace. Meaning depends on avmethod.
+  float fillval // Value to use if not enough points present
 )
 {
   const unsigned char maskgood=0; // Value of good entries in masks
@@ -394,6 +400,7 @@ int taverage(
   int ix;
   //int ib, nblock;
   char *filename;
+  int ibad;
 
   if ((order < 1) || (order > 20)) {
 // Code breaks at 31 or 32 due to the use of summed masks
@@ -703,10 +710,11 @@ printf("\n");
     for (i=0;i<nx;i++) {
       ix=i+nlead*j; // Index into array
       nmiss=0;
-      for (isample=nsample-1;isample>=0;isample--) {
+      for (isample=0;isample<nsample;isample++) {
         if (masks[isample][ix]!=maskgood) nmiss=nmiss+1;
       }
       sum=0.0f;
+      ibad=0;
       if (nmiss==0) { // All are there
         for (isample=0;isample<nsample;isample++) sum=sum+coeff0[isample]*images[isample][ix];
       }
@@ -715,10 +723,17 @@ printf("\n");
         for (iwidth=0;iwidth<width;iwidth++) {
 // First encode mask in single integer
           smask=0;
+          ngood=0;
           for (iorder=order-1;iorder>=0;iorder--) { // Must go backwards because of mask definition.
             isample=ix1[iwidth*order+iorder];
-            if (masks[isample][ix]!=maskgood) smask=2*smask+1; else smask=2*smask;
+            if (masks[isample][ix]!=maskgood)
+              smask=2*smask+1;
+            else {
+              smask=2*smask;
+              ngood=ngood+1;
+            }
           }
+          if (ngood < nconst) ibad=1; // Got a bad point!
           cp=coeffs+order*smask+iwidth*order*nmasks;
           psum=0.0f; // Partial sum
           if (smask==0) { // All are there for this target time
@@ -738,7 +753,12 @@ printf("\n");
           sum=sum+psum*weights[iwidth];
         } // for iwidth
       } // if (nmiss)
-      image_out[ix]=sum;
+      if (ibad == 0) {
+        image_out[ix]=sum;
+      }
+      else {
+        image_out[ix]=fillval; // Use fillval if not enough points
+      }
     } // for i
   } // for j
 
@@ -761,7 +781,7 @@ printf("\n");
 
 char *tinterpolate_version() // Returns CVS version of tinterpolate.c
 {
-  return strdup("$Id: tinterpolate.c,v 1.7 2010/09/03 00:35:45 schou Exp $");
+  return strdup("$Id: tinterpolate.c,v 1.8 2010/09/08 00:04:45 schou Exp $");
 }
 
 
