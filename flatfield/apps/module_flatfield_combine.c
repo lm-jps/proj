@@ -21,7 +21,7 @@ ModuleArgs_t module_args[] =
      {ARG_END}
 };
 
-
+void highpass(int, int, double, double[nx][ny]);
 int get_flatfields(int camera, TIME t_0, int focus,
                    float *flatfield, float *offpoint, 
                    short *bad, long long recnum[6], TIME tobs_link[2],
@@ -29,7 +29,7 @@ int get_flatfields(int camera, TIME t_0, int focus,
 
 
 int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
-                     long long recnum[6], TIME tobs_link[2], int focus,
+                     long long recnum[6], TIME tobs_link[2], TIME t_0, int focus,
                      struct rotpar rot_new, 
                      struct rotpar rot_cur);
 
@@ -70,37 +70,44 @@ int DoIt(void)
 
 
   float *flatfield_new;
-  float *flatx, *flaty, *ff, *ff_new, *fx, *fy;
+  float *ff, *ff_new;
 
   long long recnum[6];
   TIME tobs_link[2];
 
   struct rotpar rot_cur, rot_new;
 
+  double ffield[nx][ny];
 
   flatfield=(float *)(malloc(nx*ny*sizeof(float)));
   flatfield_new=(float *)(malloc(nx*ny*sizeof(float)));
   offpoint=(float *)(malloc(nx*ny*sizeof(float)));
   bad=(short *)(malloc(nx*ny*sizeof(short)));
-  flatx=(float *)(calloc(nx*ny,sizeof(float)));
-  flaty=(float *)(calloc(nx*ny,sizeof(float)));
-  fx=(float *)(malloc(nx*ny*sizeof(float)));
-  fy=(float *)(malloc(nx*ny*sizeof(float)));
-  flat=(float *)(malloc(nx*ny*sizeof(float)));
+  
+  flat=(float *)(calloc(nx*ny, sizeof(float)));
+
+
+  //set parallelization parameters
+      int nthreads=1; 
+      nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
+      omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
+      printf("Number of threads run in parallel = %d \n",nthreads);
+
+
 
   /***********************************************************************************************************/
   /*CHECK WHETHER THE FLATFIELD OUTPUT SERIES EXIST                                                                    */
   /***********************************************************************************************************/
     
-       drms_series_exists(drms_env, filename_flatfield, &status);
+       drms_series_exists(drms_env, filename_flatfield_out, &status);
       if (status == DRMS_ERROR_UNKNOWNSERIES)
 	{
-	  printf("Output series %s doesn't exist\n",filename_flatfield);       //if the output series does not exit
+	  printf("Output series %s doesn't exist\n",filename_flatfield_out);       //if the output series does not exit
 	  exit(EXIT_FAILURE);                                        //we exit the program
 	} 
       if (status == DRMS_SUCCESS)
 	{
-	  printf("Output series %s exists.\n",filename_flatfield);
+	  printf("Output series %s exists.\n",filename_flatfield_out);
 	}
 
 
@@ -121,7 +128,7 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
   DRMS_Array_t *arrin0[nRecs];
   short wave[nRecs];
   short pol[nRecs];
-  short index[nRecs];
+
   int npairs[nRecs];
 
 
@@ -134,18 +141,22 @@ for (k=0; k<nRecs; ++k)
     arrin0[k]= drms_segment_read(segin, type_float, &status);
     flatfield_fid[k] = arrin0[k]->data;
     wave[k]=((keyvalue_fid[k]-10000)/10-5)/2;
-    pol[k]=(keyvalue_fid[k] % 10)-8;
-    index[k]=wave[k]*2+pol[k];
-
+    pol[k]=(keyvalue_fid[k] % 10);
+ 
     npairs[k]= drms_getkey_int(rec0[k],keynpairs,&status);
     npairstot=npairstot+npairs[k];
-    printf("%d %d %d %d %d\n", k, index[k], keyvalue_fid[k], pol[k], wave[k]);
+    printf("%d %d %d %d\n", k,  keyvalue_fid[k], pol[k], wave[k]);
+    if (wave[k] < 0 || wave[k] > 5){printf("not a tabulated wavelength\n"); exit(EXIT_FAILURE);}
+
   }
+
+ 
 
  t_0=drms_getkey_time(rec0[nRecs-1],keytstart,&status);
  focus = drms_getkey_int(rec0[nRecs-1],keyfocusflat,&status);
  camera= drms_getkey_int(rec0[nRecs-1],keycamera,&status);
  cadence=drms_getkey_float(rec0[nRecs-1],keycadence,&status);
+
 
  printf("%lf %d %d %f\n", t_0, focus, camera, cadence);
 
@@ -157,11 +168,15 @@ for (k=0; k<nRecs; ++k)
   {
     ff=flatfield_fid[k];
 
+    for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) ffield[i][j]=(double)ff[j*nx+i];
+
+    printf("FWHM %lf\n", fwhm);
+    highpass(nx, ny, fwhm, ffield);
+
     for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
       {
-    flatx[j*nx+i]=flatx[j*nx+i]+cof_combx[index[k]]*ff[j*nx+i];
-    flaty[j*nx+i]=flaty[j*nx+i]+cof_comby[index[k]]*ff[j*nx+i];
-    flat[j*nx+i]=flatfield[j*nx+i]/offpoint[j*nx+i];
+	if (camera == 2) flat[j*nx+i]=flat[j*nx+i]=cof[wave[k]]*(float)ffield[i][j]/(float)nRecs*6.0;
+	if (camera == 1) flat[j*nx+i]=flat[j*nx+i]=cofs[wave[k]]*(float)ffield[i][j]/(float)nRecs*6.0;
       }
   }
 
@@ -169,55 +184,46 @@ for (k=0; k<nRecs; ++k)
 
   FILE *fileptr;                                                                                                                          
          
-   for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
-  {
-    fx[j*nx+i]=1.0;
-    if(i > 0)
-      {
-	if (flatx[j*nx+i] != 1.0 && flatx[j*nx+i-1] != 1.0)
-	  {
-	    h2=flatx[j*nx+i]-flatx[j*nx+i-1];
-	  }
-	else
-	  {
-	    h2=0.0;
-	  }
-	    fx[j*nx+i-1]=flat[j*nx+i-1]+h2;
-      }
-  }
-  
- 
-
-for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
-  {
-    fy[j*nx+i]=1.0;
-    if (j>0){
-    if (flaty[j*nx+i] != 1.0 && flaty[(j-1)*nx+i] != 1.0)
-      {
-	h1=flaty[j*nx+i]-flaty[(j-1)*nx+i];
-      }
-    else
-      {
-	h1=0.0;
-      }
-	fy[(j-1)*nx+i]=flat[(j-1)*nx+i]+h1;
-      
-    }
-  }
 
  int count=0;
-for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
-  {
-    flatfield_new[j*nx+i]=0.5*(fx[j*nx+i]+fy[j*nx+i])*offpoint[j*nx+i];
-   if (flatfield_new[j*nx+i] != flatfield[j*nx+i]) ++count;
-  }
+
+ if (update_flag == 2)
+   {
+     for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
+       {
+	 flatfield_new[j*nx+i]=(1.0+flat[j*nx+i])*offpoint[j*nx+i];
+	 if (flat[j*nx+i] != 0.0) ++count;
+       }
+   }
+
+ if (update_flag == 1)
+   {
+     for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
+       if (flat[j*nx+i] < threshold_lower|| flat[j*nx+i] > threshold_upper)
+	 {
+	   ++count;
+	   flatfield_new[j*nx+i]=(1.0f+flat[j*nx+i])*offpoint[j*nx+i];
+	 }
+       else
+	 {
+	   flatfield_new[j*nx+i]=offpoint[j*nx+i];
+	 }
+   }
+
+ if (update_flag == 0)
+   {
+     for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
+       flatfield_new[j*nx+i]=offpoint[j*nx+i];
+   }
 
 
 
-   fileptr = fopen ("/tmp20/richard/interpol/dd.bin", "w");                                             
-	   fwrite((char*)(fy),sizeof(float),nx*ny,fileptr);
-	   fclose(fileptr);
-
+ if (debug)
+   {
+ fileptr = fopen ("/tmp20/richard/interpol/dd.bin", "w");                                            ;
+ fwrite((char*)(flat),sizeof(float),nx*ny,fileptr);
+ fclose(fileptr);
+   }
 
  arr_flat=drms_array_create(type_float,2,axisout,NULL,&status);
  arr_flat_new=drms_array_create(type_float,2,axisout,NULL,&status);
@@ -232,7 +238,7 @@ rot_new.rotbad=count;
 rot_new.rotpairs=npairstot;
 rot_new.rotcadence=cadence;
 
- write_flatfields(arr_flat, arr_flat_new, camera, recnum, tobs_link, focus, rot_new, rot_cur);
+ write_flatfields(arr_flat, arr_flat_new, camera, recnum, tobs_link, t_0, focus, rot_new, rot_cur);
 
 }
  else
@@ -247,10 +253,8 @@ rot_new.rotcadence=cadence;
  free(flatfield_new);
  free(offpoint);
  free(bad);
- free(flatx);
- free(flaty);
- free(fx);
- free(fy);
+
+
 
  printf("COMLETED!\n");
  return 0;

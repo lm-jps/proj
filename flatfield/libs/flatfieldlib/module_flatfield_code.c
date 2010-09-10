@@ -103,19 +103,19 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 
 	rotf=(double *)(malloc(nx*ny*2*sizeof(double)));
 
-	derotation(R_SUN, XX0, YY0, dist,  P_ANG, B_ANG, rot_coef, 2, rotf); // !!
+	derotation(R_SUN, XX0, YY0, dist,  P_ANG, B_ANG, rot_coef, 2, rotf); 
 
   //debug !!
 	//     printf("write debug\n");
-	//      FILE *fileptr;                                                                                                                          
-	//      double *aaa;                                                                                                                            
+	//	      FILE *fileptr;                                                                                                                          
+	//	      double *aaa;                                                                                                                            
 	//     aaa=(double *)(malloc(nx*sizeof(double)));                                                                                              
-	//      fileptr = fopen ("/tmp20/richard/interpol/dd.bin", "w");                                                                                    
-	//      for (j=0; j<ny; ++j){ for (i=0;i<nx;i++){aaa[i]=rotf[j*nx+i];} fwrite ((char*)(aaa),sizeof(double),nx,fileptr);} 
-	   //       for (j=0; j<ny; ++j){ for (i=0;i<nx;i++){aaa[i]=rotf[j*nx+i+nx*ny];} fwrite ((char*)(aaa),sizeof(double),nx,fileptr);} 
-                 
+	//     fileptr = fopen ("/tmp20/richard/interpol/dd.bin", "w");                                                                                    
+	//	      for (j=0; j<ny; ++j){ for (i=0;i<nx;i++){aaa[i]=rotf[j*nx+i];} fwrite ((char*)(aaa),sizeof(double),nx,fileptr);} 
+	//          for (j=0; j<ny; ++j){ for (i=0;i<nx;i++){aaa[i]=rotf[j*nx+i+nx*ny];} fwrite ((char*)(aaa),sizeof(double),nx,fileptr);} 
+	//          
 	//       fclose(fileptr);                                                                                                                            
-	//  	free(aaa);
+	//	  	free(aaa);
 
 	//void derotation(double radius, double cent_x, double cent_y, double dist, double p0, double b0, double *rot_coef, int order2_rot_coef, double *shift, int nx, int ny){
     	double rota[nx][ny][2];
@@ -145,9 +145,7 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 	if (xq > 0){ax1=XX0-sqrt(xq); ax2=XX0+sqrt(xq);  crop[j][0]=(ax1 > 0 ? ax1:0); crop[j][1]=(ax2 < nx ? ax2:nx-1);} else {crop[j][0]=XX0; crop[j][1]=XX0-1;}
       }
 
-      //********************************************************************************************
-
-
+    
  
         const long dcount=4*(nx-1)*ny;
         const long drow=nx*ny;
@@ -180,7 +178,7 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 	    dirx=(l*2-1)*sign(rota[i][j][0]);
 
 	    if (!((i == xmax && dirx == 1) || (i == xmin && dirx == -1) || (j == ymax && diry == 1) || (j == ymin && diry == -1))){
-	      if (badpix[j*nx+i] && badpix[j*nx+i+dirx] && badpix[(j+diry)*nx+i] && badpix[(j+diry)*nx+i+dirx]){
+	      //	      if (badpix[j*nx+i] && badpix[j*nx+i+dirx] && badpix[(j+diry)*nx+i] && badpix[(j+diry)*nx+i+dirx]){
 	       
 	
 		aa_val[count]=-1.0+(1.0-fabs(rota[i][j][0]))*(1.0-fabs(rota[i][j][1]));
@@ -235,7 +233,7 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 		colarra[4*((j+diry)*nx+i+dirx)+3]=count;
 		colarrb[4*((i+dirx)*ny+j+diry)+3]=count;
 		count=count+1;
-	      }
+		// }
 	     }
 	  }
 	}
@@ -265,7 +263,7 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 	        diry=(2*l-1)*sign(rota[i][j][1]);
 	        dirx=(2*l-1)*sign(rota[i][j][0]);
 		if (!((i == xmax && dirx == 1) || (i == xmin && dirx == -1) || (j == ymax && diry == 1) || (j == ymin && diry == -1))){
-		  if (badpix[j*nx+i] && badpix[j*nx+i+dirx] && badpix[(j+diry)*nx+i] && badpix[(j+diry)*nx+i+dirx]){
+		  //	  if (badpix[j*nx+i] && badpix[j*nx+i+dirx] && badpix[(j+diry)*nx+i] && badpix[(j+diry)*nx+i+dirx]){
 
 		    gam0=(1.0-fabs(rota[i][j][0]))*(1.0-fabs(rota[i][j][1]));
 		    gam1=fabs(rota[i][j][0])*(1.0-fabs(rota[i][j][1]));
@@ -288,7 +286,7 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 			                 -rhsp[j*nx+i];
 		      break;
 		    }
-		  }
+		    // }
 		}
 	      }
 	  }
@@ -322,17 +320,6 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 
 
    
-
-	//	for (i=0; i<5*nx*ny; ++i) ata_vala[i]=(double)pairs*ata_vala[i];
-
-	//	for (i=0; i<5*nx*ny; ++i) ata_valb[i]=(double)pairs*ata_valb[i];
-	// !! test (see scaling by ccount in module_flatfield)
-
-	///////////////////
-
-
-
-     
 
 
 
