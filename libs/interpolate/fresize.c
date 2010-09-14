@@ -1475,3 +1475,26 @@ return status;
 
 }
 
+int init_fresize_user(
+  struct fresize_struct *pars,
+  int hwidth, // Half width of kernel. Full is 2*hwidth+1.
+  int nsub, // Distance between sampled points
+  float *user_ker // User specified kernel to convolve with.
+                  // Must be of size (2*hwidth+1) x (2*hwidth+1).
+                  // Kernel need not be and will not be normalized.
+)
+{
+  const int malign=32;
+  int fwidth;
+  int i,j;
+
+  pars->method=fresize_2d;
+  pars->nsub=nsub;
+  pars->hwidth=hwidth;
+  fwidth=2*hwidth+1;
+  pars->ker=(float *)(MKL_malloc(fwidth*fwidth*sizeof(float),malign));
+  memcpy(pars->ker,user_ker,sizeof(float)*fwidth*fwidth);
+
+  return 0;
+}
+
