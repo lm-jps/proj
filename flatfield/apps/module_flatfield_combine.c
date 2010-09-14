@@ -12,12 +12,15 @@
 char *module_name  = "module_flatfield_combine";    //name of the module
 
 #define kRecSetIn      "input_series" //name of the series containing the input filtergrams
+#define datumn  "datum"
+#define cameran "camera"
 #define fsnname      "fsn"
 
 
 ModuleArgs_t module_args[] =        
 {
      {ARG_STRING, kRecSetIn, "",  "Input data series."},
+     {ARG_STRING, datumn, "", "Datum string"},
      {ARG_END}
 };
 
@@ -39,7 +42,9 @@ int DoIt(void)
 #include "module_flatfield_const.h"
 
   const char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL); //cmdparams is defined in jsoc_main.h
- 
+  const char *datum =  cmdparams_get_str(&cmdparams, datumn, NULL);
+  int cameraint = cmdparams_get_int(&cmdparams, cameran, NULL);
+
   int  status= DRMS_SUCCESS, stat=DRMS_SUCCESS;
 
   DRMS_Segment_t *segin = NULL;
@@ -111,7 +116,18 @@ int DoIt(void)
 	}
 
 
-      data     = drms_open_records(drms_env,(char *)inRecQuery,&stat);
+      char query[256]="";
+      strcat(query, inRecQuery);
+      strcat(query, "[");
+      char cami[1]={""};
+      sprintf(cami, "%d", cameraint);
+      strcat(query, cami);
+      strcat(query, "][");
+      strcat(query, datum);
+      strcat(query, "]");
+
+      printf("%s\n", query);
+      data     = drms_open_records(drms_env,query,&stat);
 
  if (data == NULL){printf("can not open records\n"); exit(EXIT_FAILURE);}
 
@@ -150,9 +166,13 @@ for (k=0; k<nRecs; ++k)
 
   }
 
- 
+ char timefirst[256]="";
+ strcat(timefirst, datum);
+ strcat(timefirst, "_00:00:00.00_TAI");
 
- t_0=drms_getkey_time(rec0[nRecs-1],keytstart,&status);
+ TIME t_0=sscan_time(timefirst)+24.0*60.0*60.0; 
+
+ //t_0=drms_getkey_time(rec0[nRecs-1],keytstart,&status);
  focus = drms_getkey_int(rec0[nRecs-1],keyfocusflat,&status);
  camera= drms_getkey_int(rec0[nRecs-1],keycamera,&status);
  cadence=drms_getkey_float(rec0[nRecs-1],keycadence,&status);
@@ -160,8 +180,9 @@ for (k=0; k<nRecs; ++k)
 
  printf("%lf %d %d %f\n", t_0, focus, camera, cadence);
 
+ int fvers; 
  get_flatfields(camera, t_0, focus,  flatfield, 
-		     offpoint,  bad, recnum, tobs_link, &rot_cur);  //get front camera flatfield
+		offpoint,  bad, recnum, tobs_link, &rot_cur);  //get front camera flatfield
 
 
 for (k=0; k<nRecs; ++k)
@@ -170,7 +191,7 @@ for (k=0; k<nRecs; ++k)
 
     for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) ffield[i][j]=(double)ff[j*nx+i];
 
-    printf("FWHM %lf\n", fwhm);
+    
     highpass(nx, ny, fwhm, ffield);
 
     for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)

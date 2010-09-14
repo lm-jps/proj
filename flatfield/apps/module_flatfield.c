@@ -19,8 +19,10 @@ char *module_name  = "module_flatfield";    //name of the module
 #define cadence_name "cadence"  //cadence in sec
 #define fid_name "fid" //name of fid argument
 #define cam_name "camera" // 0 side, 1 front
-#define fsnf_name "fsn_first"
-#define fsnl_name "fsn_last"
+//#define fsnf_name "fsn_first"
+//#define fsnl_name "fsn_last"
+#define datumn  "datum"
+
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))                                        
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
@@ -33,8 +35,9 @@ ModuleArgs_t module_args[] =
      {ARG_INT, cadence_name, 0, "Cadence in sec"},
      {ARG_INT, fid_name, 0, "FID"},
      {ARG_INT, cam_name, 0, "Camera"},
-     {ARG_INT, fsnf_name, 0, "First FSN"},
-     {ARG_INT, fsnl_name, 0, "last FSN"},
+     //{ARG_INT, fsnf_name, 0, "First FSN"},
+     //{ARG_INT, fsnl_name, 0, "last FSN"},
+     {ARG_STRING, datumn, 0, "datum"},
      {ARG_END}
 };
 
@@ -65,7 +68,7 @@ void apod_circ(float rad, float nb, float offx, float offy, float *vd);
 
 int get_flatfields(int camera, TIME t_0, int focus,
                    float *flatfield, float *offpoint, 
-                   short *bad, long long recnum[6], TIME tobs_link[2],
+                   short *bad, long long recnum[6], TIME tobs_link[2]
 		   struct rotpar *rot_cur);
 
 
@@ -96,8 +99,11 @@ int DoIt(void)
 
   int fid=cmdparams_get_int(&cmdparams, fid_name, NULL);
   int cam=cmdparams_get_int(&cmdparams, cam_name, NULL)-1;
-  int fsn_first=cmdparams_get_int(&cmdparams, fsnf_name, NULL);
-  int fsn_last=cmdparams_get_int(&cmdparams, fsnl_name, NULL);
+  //int fsn_first=cmdparams_get_int(&cmdparams, fsnf_name, NULL);
+  //int fsn_last=cmdparams_get_int(&cmdparams, fsnl_name, NULL);
+
+  const char *datum=cmdparams_get_str(&cmdparams, datumn, NULL);
+ 
 
   if (fid < minfid || fid > maxfid){printf("Not an observable FID\n"); exit(EXIT_FAILURE);}
 
@@ -289,45 +295,87 @@ int DoIt(void)
   //**************************************************************************************************************/
   //read records
   //**************************************************************************************************************/
-      char query[256]="";
-      strcat(query, inRecQuery);
-      strcat(query, "[][");
-      char fsnf[10]={""};
-      sprintf(fsnf, "%d", fsn_first);
-      strcat(query, fsnf);
-      strcat(query, "-");
-      char fsnl[10]={""};
-      sprintf(fsnl, "%d", fsn_last);
-      strcat(query, fsnl);
-      strcat(query, "][?FID=");
-      char ffnumb[2]={""};
-      sprintf(ffnumb, "%5.5d", fid);
-      strcat(query, ffnumb);
-      strcat(query, "?][?CAMERA=");
-      char fnumb[2]={""};
-      sprintf(fnumb, "%1.1d", cam+1);
-      strcat(query, fnumb);
-      strcat(query, "?]");
+            
+ char timefirst[256]="";
+ strcat(timefirst, datum);
+ strcat(timefirst, "_00:00:00.00_TAI");
 
-      printf("query string: %s\n", query);
+ char timelast[256]="";
+ strcat(timelast, datum);
+ strcat(timelast, "_23:59:59.99_TAI");
 
-      //query for last filtergram
-      char query_last[256]={""};
-      strcat(query_last, inRecQuery);
-      strcat(query_last, "[][");
-      char fsnll[10]={""};
-      sprintf(fsnll, "%d", fsn_last-1);
-      strcat(query_last, fsnll);
-      strcat(query_last, "-");
-      strcat(query_last, fsnl);
-      strcat(query_last, "][?CAMERA=");
-      strcat(query_last, fnumb);
-      strcat(query_last, "?]");
+ TIME tfirst=sscan_time(timefirst)-deltat;
+ TIME tlast=sscan_time(timelast)+2*deltat;
 
-      printf("query last %s", query_last);
+ char datefirst[256]="";
+ sprint_ut(datefirst, tfirst);
+
+ char datelast[256]="";
+ sprint_ut(datelast, tlast);
+
+
+ char query0[256]="";
+ strcat(query0, inRecQuery);
+ strcat(query0, "[");
+ strcat(query0, datefirst);
+ strcat(query0, "-");
+ strcat(query0, datelast);
+ strcat(query0, "][?FID=");
+ char ffnumb[2]={""};
+ sprintf(ffnumb, "%5.5d", fid);
+ strcat(query0, ffnumb);
+ strcat(query0, "?][?CAMERA=");
+ char fnumb[2]={""};
+ sprintf(fnumb, "%1.1d", cam+1);
+ strcat(query0, fnumb);
+ strcat(query0, "?]");
+
+  printf("query string: %s\n", query0);
 
  
-      data     = drms_open_records(drms_env,query,&stat);
+
+
+
+
+  //    char query[256]="";
+  //    strcat(query, inRecQuery);
+  //    strcat(query, "[][");
+  //     char fsnf[10]={""};
+  //     sprintf(fsnf, "%d", fsn_first);
+  //     strcat(query, fsnf);
+  //    strcat(query, "-");
+  //    char fsnl[10]={""};
+  //    sprintf(fsnl, "%d", fsn_last);
+  //     strcat(query, fsnl);
+  //    strcat(query, "][?FID=");
+  //    char ffnumb[2]={""};
+  //   sprintf(ffnumb, "%5.5d", fid);
+  //    strcat(query, ffnumb);
+  //    strcat(query, "?][?CAMERA=");
+  //    char fnumb[2]={""};
+  //   sprintf(fnumb, "%1.1d", cam+1);
+  //   strcat(query, fnumb);
+  //    strcat(query, "?]");
+
+  //     printf("query string: %s\n", query);
+
+      //query for last filtergram
+  //    char query_last[256]={""};
+  //     strcat(query_last, inRecQuery);
+  //    strcat(query_last, "[][");
+  //    char fsnll[10]={""};
+  //    sprintf(fsnll, "%d", fsn_last-1);
+  //    strcat(query_last, fsnll);
+  //    strcat(query_last, "-");
+  //     strcat(query_last, fsnl);
+  //    strcat(query_last, "][?CAMERA=");
+  //    strcat(query_last, fnumb);
+  //    strcat(query_last, "?]");
+
+  //   printf("query last %s", query_last);
+
+ 
+      data     = drms_open_records(drms_env,query0,&stat);
       if (data == NULL || stat != 0 || data->n == 0){printf("can not open records\n"); exit(EXIT_FAILURE);}
 
       drms_stage_records(data, 0, 1); //added follwoing the recommendation of Phil
@@ -379,13 +427,13 @@ int DoIt(void)
   
   //list_pointer=(struct list **)(malloc(nRecs*sizeof(struct list *)));
 
- data_last     = drms_open_records(drms_env,query_last,&stat);
- if (data_last == NULL || stat != 0 || data_last->n == 0){printf("could not find record with FSN %d\n", fsn_last); exit(EXIT_FAILURE);}
+ // data_last     = drms_open_records(drms_env,query_last,&stat);
+ // if (data_last == NULL || stat != 0 || data_last->n == 0){printf("could not find record with FSN %d\n", fsn_last); exit(EXIT_FAILURE);}
 
- t_0 = drms_getkey_time(data_last->records[0],keytobs,&status);
- fsns=drms_getkey_int(data_last->records[0],keyfsn,&status);
- focus = drms_getkey_int(data_last->records[0],keyfocus,&status);
- flatkey=drms_getkey_string(data_last->records[0],flatnkey,&status);
+ t_0 = drms_getkey_time(data->records[nRecs/2],keytobs,&status);
+  fsns=drms_getkey_int(data->records[nRecs/2],keyfsn,&status);
+  focus = drms_getkey_int(data->records[nRecs/2],keyfocus,&status);
+  flatkey=drms_getkey_string(data->records[nRecs/2],flatnkey,&status);
 
  printf("flatkey %s\n", flatkey);
        
@@ -409,12 +457,12 @@ int DoIt(void)
 	}
 
      
-
+      int fvers;
           
       printf("get flatfields from database\n");
 
 get_flatfields(cam+1, t_0, focus,  flat_yest, 
-		     flat_off,  badpix, recnum, tobs_link, &rot_cur);  //get f
+	       flat_off,  badpix, recnum, tobs_link, &rot_cur);  //get f
 
 
 
@@ -598,7 +646,7 @@ get_flatfields(cam+1, t_0, focus,  flat_yest,
 	  //count filtergrams, and number of valid pairs
 	  count_filtergram=0; 
    
-	  for (k=0; k<nRecs; ++k) if (statarr[k] == 0){present[k]=1; index[count_filtergram]=k; ++count_filtergram;}  //loop over all filtergrams: search for valid filtergrams with fid, camera cam
+	  for (k=0; k<nRecs; ++k) if (statarr[k] < 4){present[k]=1; index[count_filtergram]=k; ++count_filtergram;}  //loop over all filtergrams: search for valid filtergrams with fid, camera cam
 	  printf("number of filtergrams %d\n", count_filtergram);
  	  dataout = drms_create_records(drms_env,count_filtergram-2,filename_cosmic,DRMS_PERMANENT,&stat); //create ALL cosmic_ray records
 

@@ -27,13 +27,13 @@ int get_flatfields(int camera, TIME t_0, int focus,
    DRMS_Array_t *arr_flat;
    float *arr_data;
 
-   int i,j;
-
-
-   int version,fvers,maxversion;
+   int i,j, k;
+  
+   int version=0;
+   int fvers,maxversion;
    int cam_id;
 
-   TIME t_start, t_stop; 
+   TIME t_start, t_stop_new; 
    //TIME t_obs_offpoint, t_obs_dark, t_obs_bad;
  
    long long recnum_off,recnum_dark,recnum_bad;
@@ -63,8 +63,8 @@ int get_flatfields(int camera, TIME t_0, int focus,
    //const char *linkbad = "perm_bad_pixel";
 
    
-     char *camstr_side="[1][";
-     char *camstr_front="[2][";
+     char *camstr_side="[1]";
+     char *camstr_front="[2]";
 
      char *camstr;
    if (camera == 1){camstr=camstr_side;}
@@ -87,10 +87,10 @@ int get_flatfields(int camera, TIME t_0, int focus,
    strcat(query,filename_flatfield);
    strcat(query,camstr);
    // strcat(query,"[2]["); //look for most recent flatfield
-   strcat(query,t_orig_str);
-   strcat(query,"-");
-   strcat(query,t0_str);
-   strcat(query,"]");
+   //strcat(query,t_orig_str);
+   //strcat(query,"-");
+   //strcat(query,t0_str);
+   //strcat(query,"]");
    //char ffnumb[2]={""};
    //sprintf(ffnumb, "%2.2d", focus);
    //strcat(query, ffnumb);
@@ -112,20 +112,35 @@ int get_flatfields(int camera, TIME t_0, int focus,
       if (status == DRMS_SUCCESS && ff != NULL)
 	{
 	  int nRec=ff->n;
+	  double tm1[nRec];
+	  double tm2[nRec];
 
 	  if (nRec > 0){
-	  record_flat = ff->records[nRec-1];
 
+	    int index=nRec-1;
+	    for (k=0; k<nRec; ++k)
+	      {
+		tm1[k]=drms_getkey_time(ff->records[k], keytstart,&status);
+		tm2[k]=drms_getkey_time(ff->records[k], keytstop,&status);
+
+		if (t_0 > tm1[k] && t_0 < tm2[k])
+		  {
+		    index=k;
+		    version=drms_getkey_int(ff->records[k],keyversion,&status);
+		  }
+	      }
+
+
+	  record_flat = ff->records[index];
+
+	  printf("record num %ld", record_flat->recnum);
 	  //get max flatfield version
-	  maxversion=0;
-	  for (i=0; i<nRec; ++i){fvers=drms_getkey_int(ff->records[i], keyversion,&status); if (fvers > maxversion) maxversion=fvers;}
-	  printf("maxversion %d %d\n", maxversion, nRec);
+	  //maxversion=0;
+	  fvers=drms_getkey_int(record_flat, keyversion,&status); //if (fvers > maxversion) maxversion=fvers;}
+	  //printf("maxversion %d %d\n", maxversion, nRec);
 
 	  segin    = drms_segment_lookup(record_flat, segmentname);
-	  printf("%ld\n", segin); //debug
 	  arr_flat = drms_segment_read(segin, segin->info->type, &status);
-
-	  printf("%ld\n", arr_flat); //debug
 
 	  type=segin->info->type; // read type of flatfield
 
@@ -135,11 +150,21 @@ int get_flatfields(int camera, TIME t_0, int focus,
 	  printf("flatfield read\n"); 
 	  cam_id = drms_getkey_int(record_flat,keycamera,&status);  //read keywords
 	  t_start = drms_getkey_time(record_flat,keytstart,&status);
-	  t_stop = drms_getkey_time(record_flat,keytstop,&status);
+
 	  rot_cur->rotbad=drms_getkey_int(record_flat,keynewpix,&status);
 	  rot_cur->rotpairs=drms_getkey_int(record_flat,keynpairs,&status);
 	  rot_cur->rotcadence=drms_getkey_float(record_flat,keycadence,&status);
-      
+
+	  if (t_0 < tm2[nRec-1] && version > 0)
+	    {
+	      t_stop_new=tm2[index];
+	    }
+	  else
+	    {
+	      t_stop_new = 0.0;
+	    }
+
+
        //  t_obs_offpoint= drms_getkey_time(record_flat,keylink1,&status);
        //  t_obs_dark=drms_getkey_time(record_flat,keylink2,&status);
        //  t_obs_bad=drms_getkey_time(record_flat,keylink3,&status);
@@ -158,17 +183,13 @@ int get_flatfields(int camera, TIME t_0, int focus,
        recnum_bad=reclink_bad->recnum;
 
        //check most recent final flatfield for version number 
-       version=drms_getkey_int(record_flat,keyversion,&status);
+       
        printf("raw version %d\n", version);
 
-       if (version > 0)
-	 {
-	   rot_cur->flatfield_version=version;
-	 }
-       else 
-	 {
-	   rot_cur->flatfield_version=maxversion;
-	 }
+     
+       rot_cur->flatfield_version=version;
+	
+     
 	  	       
        printf("version after %d \n", rot_cur->flatfield_version);
 
@@ -342,7 +363,7 @@ int get_flatfields(int camera, TIME t_0, int focus,
 
 
  tobs_link[0]=t_start;
- tobs_link[1]= t_stop;
+ tobs_link[1]= t_stop_new;
 
  //tobs_link[4]= t_obs_offpoint_front;
  //tobs_link[5]= t_obs_offpoint_side; 
@@ -371,6 +392,9 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
     
 #include "module_flatfield_const.h" // !!changed to test  
   TIME t_start=tobs_link[0];
+  TIME t_stop_new=tobs_link[1];
+
+  if (t_stop_new == 0.0) t_stop_new=t_0+365.0*24.0*60.0*60.0;
 
   //TIME t_obs_offpoint_front=tobs_link[4];
   // TIME t_obs_offpoint_side=tobs_link[5];
@@ -417,9 +441,9 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
    int status, stat;
 
  
-   const int FLAG_PRELIMINARY=0;
-   const int FLAG_FINAL=1;
-
+   //const int FLAG_PRELIMINARY=0;
+   //const int FLAG_FINAL=1;
+   int flatvers, flatvers_back, flatvers_forward;
 
  /////////////////////////////////////////////////////////////////////////////////
  ///write flatfield with new T_STOP /////////////////////////////////////////////
@@ -427,7 +451,11 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
 
    // dataout=drms_clone_records(ff_last, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &stat);
    
- 
+
+   flatvers=rot_cur.flatfield_version;
+   if (flatvers == 0){flatvers_back=1; flatvers_forward=0;}
+   if (flatvers > 0){flatvers_back=flatvers; flatvers_forward=flatvers+1;}
+
    dataout = drms_create_records(drms_env,1,filename_flatfield_out,DRMS_PERMANENT,&stat);
    
   if (stat != DRMS_SUCCESS)
@@ -449,7 +477,7 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
 
 	      status=drms_setkey_int(recout, keyfocusflat, focus);
 	      status=drms_setkey_time(recout, keytstop, t_0); 
-	      status=drms_setkey_int(recout, keyversion, rot_cur.flatfield_version);
+	      status=drms_setkey_int(recout, keyversion, flatvers_back);
 
    //write flatfield version
 	      status = drms_setkey_string(recout, keyinstrument, camera_str);
@@ -485,7 +513,13 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
 	      	  
 	       }
 
-	         segout = drms_segment_lookup(recout, segmentname);
+	
+     
+		  segout = drms_segment_lookup(recout, segmentname);
+
+		  //arr_flat->bzero=segout->bzero;  //for file compression
+		  //arr_flat->bscale=segout->bscale;
+		  //arr_flat->israw=0;
 	   
 	         status=drms_segment_write(segout, arr_flat, 0);        //write the file containing the data
 	      
@@ -526,8 +560,8 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
 	      status=drms_setkey_int(recout, keycamera, cam_id);
 
 	      status=drms_setkey_int(recout, keyfocusflat, focus);
-	      status=drms_setkey_time(recout, keytstop, t_0+365.0*24.0*60.0*60.0); //update T_STOP=T_START+365 days
-	      status=drms_setkey_int(recout, keyversion, FLAG_PRELIMINARY);    //update FLAT_FINAL
+	      status=drms_setkey_time(recout, keytstop, t_stop_new); 
+	      status=drms_setkey_int(recout, keyversion, flatvers_forward);    //update FLAT_FINAL
 	      drms_setkey_string(recout, keyinstrument, camera_str);
 
 	      status=drms_setkey_int(recout, keynewpix, rot_new.rotbad);
@@ -560,6 +594,11 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
 
 
 	      segout = drms_segment_lookup(recout, segmentname);
+
+	      //arr_flat->bzero=segout->bzero;  //for file compression
+	      //arr_flat->bscale=segout->bscale;
+	      //arr_flat->israw=0;
+
 	      drms_segment_write(segout, arrout_new, 0);        //write the file containing the data
 	      printf("done\n");
 	    }
@@ -626,6 +665,7 @@ int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera,
 	     
 	      recout = dataout_new->records[0];
 
+	      status=drms_setkey_time(recout, "DAY", t_0-12.0*60.0*60.0);
 	      status = drms_setkey_time(recout, keytstart, t_0);
 	      status=drms_setkey_int(recout, keycamera, cam_id);
 	      status=drms_setkey_int(recout, fidkey, fid);
@@ -645,6 +685,11 @@ int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera,
 
 
 	      segout = drms_segment_lookup(recout, segmentname);
+
+              arrout_new->bzero=segout->bzero;  //for file compression
+	      arrout_new->bscale=segout->bscale;
+	      arrout_new->israw=0;
+	   
 	      drms_segment_write(segout, arrout_new, 0);        //write the file containing the data
 	      printf("done\n");
 	    }
