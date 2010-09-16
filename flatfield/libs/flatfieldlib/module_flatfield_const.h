@@ -191,7 +191,7 @@ char *filename_flatfield="hmi.flatfield";
 //char *filename_flatfield="su_richard.hmi_flatfield";
 
 char *filename_flatfield_out="hmi.flatfield"; //for checked in version
-char *filename_flatfield_fid="su_richard.flatfield_fid_a";
+char *filename_flatfield_fid="su_production.flatfield_fid_a";
 char *filename_cosmic="hmi.cosmic_rays";
 
 
