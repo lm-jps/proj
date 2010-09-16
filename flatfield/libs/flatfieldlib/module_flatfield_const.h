@@ -190,14 +190,14 @@ char *filename_flatfield="hmi.flatfield";
 //char *filename_badpix="su_richard.bad_pixel_list";
 //char *filename_flatfield="su_richard.hmi_flatfield";
 
-//char *filename_flatfield_out="hmi.flatfield"; //for checked in version
-//char *filename_flatfield_fid="su_richard.flatfield_fid_a";
-//char *filename_cosmic="hmi.cosmic_rays";
-
-
-char *filename_flatfield_out="su_richard.hmi_flatfield_b"; 
+char *filename_flatfield_out="hmi.flatfield"; //for checked in version
 char *filename_flatfield_fid="su_richard.flatfield_fid_a";
-char *filename_cosmic="su_richard.cosmic_rays_c";
+char *filename_cosmic="hmi.cosmic_rays";
+
+
+//char *filename_flatfield_out="su_richard.hmi_flatfield_b"; 
+//char *filename_flatfield_fid="su_richard.flatfield_fid_a";
+//char *filename_cosmic="su_richard.cosmic_rays_c";
   
 
 
