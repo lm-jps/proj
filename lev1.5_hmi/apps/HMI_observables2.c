@@ -58,7 +58,7 @@
 
 #undef I                              //I is the complex number (0,1) in complex.h. We un-define it to avoid confusion with the loop iterative variable i
 
-char *module_name= "HMI_observables"; //name of the module
+char *module_name= "HMI_observables2"; //name of the module
 
 #define kRecSetIn      "begin"        //beginning time for which an output is wanted. MANDATORY PARAMETER.
 #define kRecSetIn2     "end"          //end time for which an output is wanted. MANDATORY PARAMETER.
@@ -927,7 +927,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.2 2010/09/16 20:48:56 couvidat Exp $");
+  return strdup("$Id: HMI_observables2.c,v 1.1 2010/09/16 20:49:18 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1021,7 +1021,7 @@ int DoIt(void)
 
   char *inRecQuery         = cmdparams_get_str(&cmdparams, kRecSetIn,      NULL);      //beginning time
   char *inRecQuery2        = cmdparams_get_str(&cmdparams, kRecSetIn2,     NULL);      //end time
-  char *inLev              = cmdparams_get_str(&cmdparams, kTypeSetIn,     NULL);      //level of inout series
+  char *inLev              = cmdparams_get_str(&cmdparams, kTypeSetIn,     NULL);      //level of input series
   char *outLev             = cmdparams_get_str(&cmdparams, kTypeSetOut,    NULL);      //level of output series
   int   WavelengthID       = cmdparams_get_int(&cmdparams,WaveLengthIn ,   NULL);      //wavelength of the target filtergram
   int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,     NULL);      //Quick look data or no? yes=1, no=0

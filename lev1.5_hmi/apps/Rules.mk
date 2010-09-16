@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-GSLEXE_$(d)	:= $(addprefix $(d)/, HMI_observables)
+GSLEXE_$(d)	:= $(addprefix $(d)/, HMI_observables lookup phasemaps HMIfilters Leka HMI_IQUV_averaging smoothing HMI_Simulate_Doppler phasemaps_old HMI_observables2 HMI_IQUV_averaging2 phasemaps2 phasemaps_test phasemaps_FeI phasemaps_test_doublegaussian phasemaps_test_voigt HMI_observables_arta)
 GSLOBJ_$(d)	:= $(GSLEXE_$(d):%=%.o) 
 
 MODEXE_$(d)	:= $(addprefix $(d)/,) 
@@ -30,25 +30,16 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)) $(GSLEXE_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)): CF_TGT := $(CF_TGT) -I $(SRCDIR)/$(d)/../libs/interp
-#<<<<<<< Rules.mk
-$(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) 
-$(GSLEXE_$(d)):      LF_TGT := $(LF_TGT) 
+$(OBJ_$(d)):           CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../libs/lev15 -I/home/jsoc/include/ -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate
+$(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) -openmp -g -no-ipo
+$(GSLEXE_$(d)):        LF_TGT := $(LF_TGT) -openmp -g -no-ipo 
 $(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) $(GSLH)
-$(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d) -I $(SRCDIR)/$(d)/../libs/interp
-$(GSLEXE_$(d)):      LL_TGT := $(LL_TGT) $(GSLLIBS) -lmkl_em64t 
+$(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d) -I$(SRCDIR)/$(d)/../libs/lev15 -I/home/jsoc/include/ -I$(SRCDIR)/$(d)/../../libs/interpolate
+$(GSLEXE_$(d)):        LL_TGT := $(LL_TGT) $(GSLLIBS) -lsvml -lguide -lpthread -lgsl
+$(GSLEXE_$(d)):        LL_TGT := $(LL_TGT) $(GSLLIBS) -L$(FFTW_LIBS) -l$(FFTW3_LIB) -L/home/jsoc/lib/linux-x86_64 -lfftw3 -L$(JSOCROOT)/_linux_x86_64/proj/libs/interpolate -linterp  -static-intel -lmkl_em64t
 
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBINTERP)
-$(GSLEXE_$(d)): $(LIBINTERP)
-
-#=======
-#$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
-#>>>>>>> 1.4
-
-# NOTE: Add dependent libraries with the -I compiler flag, and make the module depend
-#   on that library
-# $(OBJ_$(d)):				CF_TGT := -I$(SRCDIR)/$(d)/../../libs/somelib
-# $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBSOMELIB)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBLEV15) $(LIBINTERP)
+$(GSLEXE_$(d)): $(LIBLEV15)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
