@@ -44,13 +44,13 @@ double b_coef[6]={0.34,1.37,-2.04,2.70,-1.94,0.559};   // Neckel and Labs (MDI w
 
 //define fids
 
-int kiconst;
+//int kiconst;
 const int minfid=10000;
 const int maxfid=10199;
 const int nfid=(maxfid-minfid+1);      // number of FIDs 
 
-int fid_list[nfid];
-for (kiconst=minfid; kiconst<=maxfid; ++kiconst) fid_list[kiconst-minfid]=kiconst; //define FIDs
+//int fid_list[nfid];
+//for (kiconst=minfid; kiconst<=maxfid; ++kiconst) fid_list[kiconst-minfid]=kiconst; //define FIDs
 
 //cosmic ray detection
 
@@ -190,14 +190,14 @@ char *filename_flatfield="hmi.flatfield";
 //char *filename_badpix="su_richard.bad_pixel_list";
 //char *filename_flatfield="su_richard.hmi_flatfield";
 
-char *filename_flatfield_out="hmi.flatfield"; //for checked in version
-char *filename_flatfield_fid="su_richard.flatfield_fid_a";
-char *filename_cosmic="hmi.cosmic_rays";
-
-
-//char *filename_flatfield_out="su_richard.hmi_flatfield_b"; 
+//char *filename_flatfield_out="hmi.flatfield"; //for checked in version
 //char *filename_flatfield_fid="su_richard.flatfield_fid_a";
-//char *filename_cosmic="su_richard.cosmic_rays_c";
+//char *filename_cosmic="hmi.cosmic_rays";
+
+
+char *filename_flatfield_out="su_richard.hmi_flatfield_b"; 
+char *filename_flatfield_fid="su_richard.flatfield_fid_a";
+char *filename_cosmic="su_richard.cosmic_rays_c";
   
 
 
