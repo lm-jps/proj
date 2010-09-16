@@ -1,4 +1,4 @@
-#! $Id: std.w,v 1.1 2010/02/15 22:24:03 couvidat Exp $
+#! $Id: std.w,v 1.2 2010/09/16 20:28:28 couvidat Exp $
 #! $Name:  $
 #! Description: Standard Wavelength tuning table
 #  File created by:  J. Drake
@@ -442,3 +442,23 @@
 477   58   99    0   42  # cotune_744572 (20071024, air, 30C)
 478   61   93    0   90  # cotune_744572 (20071024, air, 30C)
 479   64   87    0   78  # cotune_744572 (20071024, air, 30C)
+500    6   58    0   82  # Cotune_100324 (on orbit)
+501    9   52    0   70  # Cotune_100324 (on orbit)
+502   12   46    0   58  # Cotune_100324 (on orbit)
+503   15   40    0  106  # Cotune_100324 (on orbit)
+504   18   34    0   94  # Cotune_100324 (on orbit)
+505   21   28    0   82  # Cotune_100324 (on orbit)
+506   24   82    0   70  # Cotune_100324 (on orbit)
+507   27   76    0   58  # Cotune_100324 (on orbit)
+508   30   70    0  106  # Cotune_100324 (on orbit)
+509   33   64    0   94  # Cotune_100324 (on orbit)
+510   36   58    0   82  # Cotune_100324 (on orbit)
+511   39   52    0   70  # Cotune_100324 (on orbit)
+512   42   46    0   58  # Cotune_100324 (on orbit)
+513   45   40    0  106  # Cotune_100324 (on orbit)
+514   48   34    0   94  # Cotune_100324 (on orbit)
+515   51   28    0   82  # Cotune_100324 (on orbit)
+516   54   82    0   70  # Cotune_100324 (on orbit)
+517   57   76    0   58  # Cotune_100324 (on orbit)
+518   60   70    0  106  # Cotune_100324 (on orbit)
+519   63   64    0   94  # Cotune_100324 (on orbit)

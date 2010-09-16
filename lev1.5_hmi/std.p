@@ -1,4 +1,4 @@
-#! $Id: std.p,v 1.1 2010/02/15 22:24:25 couvidat Exp $
+#! $Id: std.p,v 1.2 2010/09/16 20:28:18 couvidat Exp $
 #! $Name:  $
 #! Description: In-air calibration polarization tuning table
 # Lasted updated by:  J. Drake
@@ -308,3 +308,43 @@
 337   62   61   54 # ModC6
 338   62   91   24 # ModC6
 339   62   91   54 # ModC6
+340   84  129   74 # ModA7 # From Juan 071030
+341   84  129   44 # ModA7 # From Juan 071030
+342   95  129   86 # ModA7 # From Juan 071030
+343   95  129   56 # ModA7 # From Juan 071030
+344   97  129   35 # ModC7 # From Juan 071030
+345   97  129    5 # ModC7 # From Juan 071030
+346   97  129   50 # ModC7 # From Juan 071030
+347   97  129   80 # ModC7 # From Juan 071030
+348   82  129   50 # ModC7 # From Juan 071030
+349   82  129   80 # ModC7 # From Juan 071030
+400   27   21   68 # 100324 version
+401   27   21   50 # 100324 version
+402   12   21   80 # 100324 version
+403   12   21   98 # 100324 version
+404   27   21   74 # 100324 version
+405   27   21   44 # 100324 version
+406   12   21   74 # 100324 version
+407   12   21   44 # 100324 version
+408   27   21   59 # 100324 version
+409   27   21   89 # 100324 version
+410   75   53   34 # 20100422 version. Mod A optimized
+411   75   53   52 # 20100422 version. Mod A optimized
+412   60   53   82 # 20100422 version. Mod A optimized
+413   60   53   64 # 20100422 version. Mod A optimized
+414   75   53   28 # 20100422 version. Mod A optimized
+415   75   53   58 # 20100422 version. Mod A optimized
+416   60   53   88 # 20100422 version. Mod A optimized
+417   60   53   58 # 20100422 version. Mod A optimized
+418   69   53   43 # 20100422 version. Mod A optimized
+419   69   53   73 # 20100422 version. Mod A optimized
+420   45   53   52 # 20100422 version. Mod X optimized
+421   75   53   52 # 20100422 version. Mod X optimized
+422   90   53   64 # 20100422 version. Mod X optimized
+423   60   53   64 # 20100422 version. Mod X optimized
+424   75   53   28 # 20100422 version. Mod X optimized
+425   75   53   58 # 20100422 version. Mod X optimized
+426   60   53   88 # 20100422 version. Mod X optimized
+427   60   53   58 # 20100422 version. Mod X optimized
+428   69   53   43 # 20100422 version. Mod X optimized
+429   69   53   73 # 20100422 version. Mod X optimized
