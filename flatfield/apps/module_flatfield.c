@@ -19,8 +19,8 @@ char *module_name  = "module_flatfield";    //name of the module
 #define cadence_name "cadence"  //cadence in sec
 #define fid_name "fid" //name of fid argument
 #define cam_name "camera" // 0 side, 1 front
-//#define fsnf_name "fsn_first"
-//#define fsnl_name "fsn_last"
+#define fsnf_name "fsn_first"
+#define fsnl_name "fsn_last"
 #define datumn  "datum"
 
 
@@ -30,14 +30,14 @@ char *module_name  = "module_flatfield";    //name of the module
 ModuleArgs_t module_args[] =        
 {
      {ARG_STRING, kRecSetIn, "",  "Input data series."},
-     {ARG_INT, kDSCosmic, 0, "Cosmic rays flag"},
-     {ARG_INT, kDSFlatfield, 0, "Flatfield flag"},
-     {ARG_INT, cadence_name, 0, "Cadence in sec"},
-     {ARG_INT, fid_name, 0, "FID"},
-     {ARG_INT, cam_name, 0, "Camera"},
-     //{ARG_INT, fsnf_name, 0, "First FSN"},
-     //{ARG_INT, fsnl_name, 0, "last FSN"},
-     {ARG_STRING, datumn, 0, "datum"},
+     {ARG_INT, kDSCosmic, "0", "Cosmic rays flag"},
+     {ARG_INT, kDSFlatfield, "0", "Flatfield flag"},
+     {ARG_INT, cadence_name, "0", "Cadence in sec"},
+     {ARG_INT, fid_name, "0", "FID"},
+     {ARG_INT, cam_name, "0", "Camera"},
+     {ARG_INT, fsnf_name, "0"},
+     {ARG_INT, fsnl_name, "0"},
+     {ARG_STRING, datumn},
      {ARG_END}
 };
 
@@ -68,7 +68,7 @@ void apod_circ(float rad, float nb, float offx, float offy, float *vd);
 
 int get_flatfields(int camera, TIME t_0, int focus,
                    float *flatfield, float *offpoint, 
-                   short *bad, long long recnum[6], TIME tobs_link[2]
+                   short *bad, long long recnum[6], TIME tobs_link[2],
 		   struct rotpar *rot_cur);
 
 
@@ -99,8 +99,8 @@ int DoIt(void)
 
   int fid=cmdparams_get_int(&cmdparams, fid_name, NULL);
   int cam=cmdparams_get_int(&cmdparams, cam_name, NULL)-1;
-  //int fsn_first=cmdparams_get_int(&cmdparams, fsnf_name, NULL);
-  //int fsn_last=cmdparams_get_int(&cmdparams, fsnl_name, NULL);
+  int fsn_first=cmdparams_get_int(&cmdparams, fsnf_name, NULL);
+  int fsn_last=cmdparams_get_int(&cmdparams, fsnl_name, NULL);
 
   const char *datum=cmdparams_get_str(&cmdparams, datumn, NULL);
  
@@ -315,6 +315,10 @@ int DoIt(void)
 
 
  char query0[256]="";
+
+if (fsn_first == 0 && fsn_last == 0)
+  {
+
  strcat(query0, inRecQuery);
  strcat(query0, "[");
  strcat(query0, datefirst);
@@ -332,32 +336,35 @@ int DoIt(void)
 
   printf("query string: %s\n", query0);
 
- 
+  }
 
 
 
+  if (fsn_first != 0 && fsn_last != 0)
+    {
 
-  //    char query[256]="";
-  //    strcat(query, inRecQuery);
-  //    strcat(query, "[][");
-  //     char fsnf[10]={""};
-  //     sprintf(fsnf, "%d", fsn_first);
-  //     strcat(query, fsnf);
-  //    strcat(query, "-");
-  //    char fsnl[10]={""};
-  //    sprintf(fsnl, "%d", fsn_last);
-  //     strcat(query, fsnl);
-  //    strcat(query, "][?FID=");
-  //    char ffnumb[2]={""};
-  //   sprintf(ffnumb, "%5.5d", fid);
-  //    strcat(query, ffnumb);
-  //    strcat(query, "?][?CAMERA=");
-  //    char fnumb[2]={""};
-  //   sprintf(fnumb, "%1.1d", cam+1);
-  //   strcat(query, fnumb);
-  //    strcat(query, "?]");
+      strcat(query0, inRecQuery);
+      strcat(query0, "[][");
+       char fsnf[10]={""};
+       sprintf(fsnf, "%d", fsn_first);
+       strcat(query0, fsnf);
+      strcat(query0, "-");
+      char fsnl[10]={""};
+      sprintf(fsnl, "%d", fsn_last);
+       strcat(query0, fsnl);
+      strcat(query0, "][?FID=");
+      char ffnumb[2]={""};
+     sprintf(ffnumb, "%5.5d", fid);
+      strcat(query0, ffnumb);
+      strcat(query0, "?][?CAMERA=");
+      char fnumb[2]={""};
+     sprintf(fnumb, "%1.1d", cam+1);
+     strcat(query0, fnumb);
+      strcat(query0, "?]");
+      printf("query string: %s\n", query0);  
+    }
 
-  //     printf("query string: %s\n", query);
+  
 
       //query for last filtergram
   //    char query_last[256]={""};
@@ -469,13 +476,7 @@ get_flatfields(cam+1, t_0, focus,  flat_yest,
 
     //********************************
 
-      printf("version ff %d %f\n", rot_cur.flatfield_version,rot_cur.rotcadence);
-   
-      
-
-
-      //********************************************************************************************************************************/
-    
+       
  
    
      
@@ -534,7 +535,7 @@ get_flatfields(cam+1, t_0, focus,  flat_yest,
 	if (keyvalue_vrad[k] < vrad_min || keyvalue_vrad[k] > vrad_max) statarr[k]=statarr[k]+512;
 
 
-		printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d  \t %f \t %f \t  %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
+	//		printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d  \t %f \t %f \t  %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
 
       }
   
@@ -593,7 +594,7 @@ get_flatfields(cam+1, t_0, focus,  flat_yest,
 	  exit(EXIT_FAILURE);
 	}
 	
-            printf("%lf \t %lf \t %lf \t %lf \t %lf \t %lf \n", R_SUN, XX0, YY0, P_ANG, B_ANG, dist);
+      // printf("%lf \t %lf \t %lf \t %lf \t %lf \t %lf \n", R_SUN, XX0, YY0, P_ANG, B_ANG, dist);
       //********************************
 
       int rotpairs=0;
@@ -871,8 +872,7 @@ printf("read second filtergram\n");
 	      index_current=index[kkk-1];
 	      index_next=index[kkk];
 	      count=0;
-
-
+	 
 	 #pragma omp parallel 
 	      {    
 #pragma omp for private(jjj,iii,wlr)	   
@@ -881,7 +881,7 @@ printf("read second filtergram\n");
 		  arrimg[next][jjj][iii]=(float)arrinL0[jjj*nx+iii];
 		 if (rr[jjj*nx+iii] < rad_cosmic_ray)		 
 		   {
-		  wlr=((float)keyvalue_wl[km1]-505.)/2.0*lambda_sep-keyvalue_vrad[km1]/v_c*lambda0-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))*cos(keyvalue_b0[km1]/180.0*M_PI)/keyvalue_rsun[km1]*cpa.rotcoef0*radsun_mm/v_c*lambda0;
+		     wlr=((float)keyvalue_wl[km1]-505.)/2.0*lambda_sep-keyvalue_vrad[km1]/v_c*lambda0-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))*cos(keyvalue_b0[km1]/180.0*M_PI)/keyvalue_rsun[km1]*cpa.rotcoef0*radsun_mm/v_c*lambda0;
 		  limw[jjj*nx+iii]=a1[jjj*nx+iii]*exp(-(wlr-coef3[cam][0])*(wlr-coef3[cam][0])/2.0/w1[jjj*nx+iii]/w1[jjj*nx+iii])+a2[jjj*nx+iii]*exp(-(wlr-coef3[cam][1])*(wlr-coef3[cam][1])/2.0/w2[jjj*nx+iii]/w2[jjj*nx+iii])+cmc[jjj*nx+iii];
 		   }
 		}
