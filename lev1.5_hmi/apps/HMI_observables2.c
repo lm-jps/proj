@@ -55,6 +55,7 @@
 #include "polcal.h"                   //from Jesper's codes
 #include "HMIparam.h"                 //header with basic HMI parameters and definitions
 #include "fstats.h"                   //header for the statistics function of Keh-Cheng
+#include "drms_defs.h"
 
 #undef I                              //I is the complex number (0,1) in complex.h. We un-define it to avoid confusion with the loop iterative variable i
 
@@ -265,9 +266,17 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 
   //The three following files have been checked into CVS. I should put the files in /home/cvsuser/cvsroot/JSOC/proj/lev1.5_hmi/
   //Each time one of the original files is modified, it needs to be checked in CVS again
-  char filename[]  = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/Sequences3.txt"; //file containing information about the different observable sequences
-  char filename2[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.w";         //file containing the HCM positions for the wavelength selection
-  char filename3[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.p";         //file containing the HCM positions for the polarization selection
+  //char filename[]  = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/Sequences3.txt"; //file containing information about the different observable sequences
+  //char filename2[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.w";         //file containing the HCM positions for the wavelength selection
+  //char filename3[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.p";         //file containing the HCM positions for the polarization selection
+
+  char *filename=NULL;
+  char *filename2=NULL;
+  char *filename3=NULL;
+
+  filename=strdup(DEFS_MKPATH("/../Sequences3.txt"));
+  filename2=strdup(DEFS_MKPATH("/../std.w"));
+  filename3=strdup(DEFS_MKPATH("/../std.p"));
 
   char line[256];
   int  PL_Index[MaxNumFiltergrams],WL_Index[MaxNumFiltergrams];
@@ -286,6 +295,9 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   if(sequencefile == NULL)
     {
       printf("The file %s does not exist or cannot be read\n",filename);
+      free(filename);
+      free(filename2);
+      free(filename3);
       return 1;
       //exit(EXIT_FAILURE);
     }
@@ -451,6 +463,9 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
       if(WavelengthIndex[i] == -1)
 	{
 	  printf("Error: WavelengthIndex[i]=-1 \n");
+	  free(filename);
+	  free(filename2);
+	  free(filename3);
 	  return 1;
 	  //exit(EXIT_FAILURE);
 	}
@@ -463,6 +478,9 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   if(sequencefile == NULL)
     {
       printf("The file %s does not exist or cannot be read\n",filename2);
+      free(filename);
+      free(filename2);
+      free(filename3);
       return 1;
       //exit(EXIT_FAILURE);
     }
@@ -488,6 +506,9 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   if(sequencefile == NULL)
     {
       printf("The file %s does not exist or cannot be read\n",filename3);
+      free(filename);
+      free(filename2);
+      free(filename3);
       return 1;
       //exit(EXIT_FAILURE);
     }
@@ -514,6 +535,9 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
       framelistSize=0; //problem occured
     }
 
+  free(filename);
+  free(filename2);
+  free(filename3);
   return framelistSize;
 }
 
@@ -927,7 +951,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables2.c,v 1.1 2010/09/16 20:49:18 couvidat Exp $");
+  return strdup("$Id: HMI_observables2.c,v 1.2 2010/09/17 00:03:55 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -999,8 +1023,11 @@ int DoIt(void)
   CODEVERSION2=interpol_version();
   char *CODEVERSION3=NULL;
   CODEVERSION3=polcal_version();                                                       //version of the polarization calibration code
-  char DISTCOEFPATH[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to tables containing distortion coefficients
-  char ROTCOEFPATH[] ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to file containing rotation coefficients
+  //char DISTCOEFPATH[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";         //path to tables containing distortion coefficients
+  //char ROTCOEFPATH[] ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";         //path to file containing rotation coefficients
+  char *DISTCOEFPATH=NULL;                                                             //path to tables containing distortion coefficients
+  char *ROTCOEFPATH =NULL;                                                             //path to file containing rotation coefficients
+
   char HISTORY[]="based on hmi.lev1c_nrt series";                                      //history of the data
   char COMMENT[]="De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.4; correction for cosmic-ray hits; correction of R_SUN and CRPIX1 for limb finder artifacts using Jesper's prescription"; //comment about what the observables code is doing
   struct init_files initfiles;
@@ -1008,10 +1035,20 @@ int DoIt(void)
   //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist2.bin";
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist_v3-d6_256_128_f09_c0_front_lim_v1.bin";
   //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist_v3-d6_256_128_f09_c1_side_lim_v1.bin";
-  char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_front_o6_100624.txt";
-  char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_side_o6_100624.txt";
+ 
+  char *DISTCOEFFILEF=NULL;
+  char *DISTCOEFFILES=NULL;
+  char *ROTCOEFFILE=NULL;
+  DISTCOEFFILEF=strdup(DEFS_MKPATH("/../libs/lev15/distmodel_front_o6_100624.txt"));
+  DISTCOEFFILES=strdup(DEFS_MKPATH("/../libs/lev15/distmodel_side_o6_100624.txt"));
+  ROTCOEFFILE  =strdup(DEFS_MKPATH("/../libs/lev15/rotcoef_file.txt"));
+  DISTCOEFPATH =strdup(DEFS_MKPATH("/../libs/lev15/"));
+  ROTCOEFPATH  =strdup(DEFS_MKPATH("/../libs/lev15/"));
 
-  char ROTCOEFFILE[]  ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt";
+  /*char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_front_o6_100624.txt";
+  char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_side_o6_100624.txt";
+  char ROTCOEFFILE[]  ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt";*/
+
   initfiles.dist_file_front=DISTCOEFFILEF;
   initfiles.dist_file_side =DISTCOEFFILES;
   initfiles.diffrot_coef   =ROTCOEFFILE;
@@ -5270,6 +5307,11 @@ int DoIt(void)
   free(CODEVERSION1);
   free(CODEVERSION2);
   free(CODEVERSION3);
+  free(DISTCOEFFILEF);
+  free(DISTCOEFFILES);
+  free(ROTCOEFFILE);
+  free(DISTCOEFPATH);
+  free(ROTCOEFPATH);
 
 
   status=0;

@@ -34,7 +34,7 @@ $(OBJ_$(d)):           CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../libs/lev15 -I/hom
 $(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) -openmp -g -no-ipo
 $(GSLEXE_$(d)):        LF_TGT := $(LF_TGT) -openmp -g -no-ipo 
 $(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) $(GSLH)
-$(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d) -I$(SRCDIR)/$(d)/../libs/lev15 -I/home/jsoc/include/ -I$(SRCDIR)/$(d)/../../libs/interpolate
+$(GSLOBJ_$(d)):        CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d) -I$(SRCDIR)/$(d)/../libs/lev15 -I/home/jsoc/include/ -I$(SRCDIR)/$(d)/../../libs/interpolate -DCDIR="\"$(SRCDIR)/$(d)\""
 $(GSLEXE_$(d)):        LL_TGT := $(LL_TGT) $(GSLLIBS) -lsvml -lguide -lpthread -lgsl
 $(GSLEXE_$(d)):        LL_TGT := $(LL_TGT) $(GSLLIBS) -L$(FFTW_LIBS) -l$(FFTW3_LIB) -L/home/jsoc/lib/linux-x86_64 -lfftw3 -L$(JSOCROOT)/_linux_x86_64/proj/libs/interpolate -linterp  -static-intel -lmkl_em64t
 
