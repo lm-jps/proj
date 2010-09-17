@@ -20,6 +20,7 @@ $(PROJOBJDIR):
 	+@[ -d $@/myproj/libs/interp ] || mkdir -p $@/myproj/libs/interp
 	+@[ -d $@/globalhs/apps/ ] || mkdir -p $@/globalhs/apps
 	+@[ -d $@/lev1.5_hmi/libs/lev15 ] || mkdir -p $@/lev1.5_hmi/libs/lev15
+	+@[ -d $@/lev1.5_hmi/apps ] || mkdir -p $@/lev1.5_hmi/apps
 	+@[ -d $@/flatfield/apps ] || mkdir -p $@/flatfield/apps
 	+@[ -d $@/flatfield/libs/flatfieldlib ] || mkdir -p $@/flatfield/libs/flatfieldlib
 	+@[ -d $@/globalhs/apps/src/ ] || mkdir -p $@/globalhs/apps/src
