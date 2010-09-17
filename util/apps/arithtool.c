@@ -256,16 +256,22 @@ static void CreateDRMSSegmentContainer(DRMS_Record_t *recTemplate, DRMSContainer
 
 static void DestroyDRMSContainer(DRMSContainer_t *pCon)
 {
-     if (pCon != NULL)
-     {
-	  if (pCon->Free != NULL && pCon->items != NULL)
-	  {
-	       (*(pCon->Free))(pCon->items);
-	  }
+   int wasinit = (pCon->items != NULL);
 
-	  pCon->items = NULL;
-          hiter_free(&(pCon->iter));
-     }
+   if (pCon != NULL)
+   {
+      if (pCon->Free != NULL && pCon->items != NULL)
+      {
+         (*(pCon->Free))(pCon->items);
+      }
+
+      pCon->items = NULL;
+
+      if (wasinit)
+      {
+         hiter_free(&(pCon->iter));
+      }
+   }
 }
 
 static void ReleaseHContainer(HContainer_t *hcon)
@@ -5833,7 +5839,7 @@ int DoIt(void)
 	  char inSeriesName[DRMS_MAXSERIESNAMELEN];
 	  char withSeriesName[DRMS_MAXSERIESNAMELEN];
 
-	  char *recSetIn = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
+	  const char *recSetIn = cmdparams_get_str(&cmdparams, kRecSetIn, NULL);
           int *slicelower = NULL;
           int *sliceupper = NULL;
           int *posout = NULL;
@@ -5869,15 +5875,15 @@ int DoIt(void)
              }
           }
 
-	  char *withRecSet = cmdparams_get_str(&cmdparams, kWithRecSet, NULL);
-	  char *seriesOut = cmdparams_get_str(&cmdparams, 
+	  const char *withRecSet = cmdparams_get_str(&cmdparams, kWithRecSet, NULL);
+	  const char *seriesOut = cmdparams_get_str(&cmdparams, 
 					      kSeriesOut, 
 					      NULL); /* actual param string
 						      * could be 'NOT SPECIFIED' */
           int pfile = 0; /* is the input series a plain file? */
 
-	  char *segList = cmdparams_get_str(&cmdparams, kSegList, NULL);
-	  char *opStr = cmdparams_get_str(&cmdparams, kOp, NULL);
+	  const char *segList = cmdparams_get_str(&cmdparams, kSegList, NULL);
+	  const char *opStr = cmdparams_get_str(&cmdparams, kOp, NULL);
 
 	  double bzerov = cmdparams_get_double(&cmdparams, kBzero, NULL);
 	  double bscalev = cmdparams_get_double(&cmdparams, kBscale, NULL);
@@ -6029,6 +6035,7 @@ int DoIt(void)
                segsToProc.items = NULL;
                outSeriesPrimeKeys.items = NULL;
                outSeriesSegs.items = NULL;
+               outSeriesSegs.Free = NULL;
 	       
 	       if (!error)
 	       {
