@@ -8,8 +8,8 @@
 #define Q_NOORB  0x02	//orbit data not available or error
 #define Q_NOASD  0x04	//ancillary sci data not available or error
 #define Q_NOMPD  0x08	//master pointing data not available or error
+#define Q_NOLIMB 0x10	//limb fit error
 
-//#bit 4
 //#bit 5
 //#bit 6
 //#bit 7
