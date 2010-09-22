@@ -122,7 +122,9 @@ static struct timeval first[NUMTIMERS], second[NUMTIMERS];
 static char *orbseries = "sdo.fds_orbit_vectors";
 //static char *orbseries = "sdo_ground.fds_orbit_vectors";
 
-static int nspikes, respike, fid, *oldvalues, *spikelocs, *newvalues;
+static int nspikes, respike, fid, aiftsid, *oldvalues, *spikelocs, *newvalues;
+static int hcftid, aiagp6;
+static short aifcps;
 double aiascale = 1.0;
 
 IORBIT_Info_t *IOinfo = NULL;
@@ -235,9 +237,16 @@ void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int f
   }
   if(hmiaiaflg) {		  //aia
     pchar = drms_getkey_string(rs0, "AISTATE", &rstatus);
+    if(aiftsid >= 0xc000) quallev1 = quallev1 | Q_CAL_IMG;
+    if((aifcps <= -20) ||(aifcps >=100)) quallev1 = quallev1 | Q_AIA_FOOR;
+    if(aiagp6 != 0) quallev1 = quallev1 | Q_AIA_REGF;
   }
-  else {
+  else {			  //hmi
     pchar = drms_getkey_string(rs0, "HWLTNSET", &rstatus);
+    if((fid >= 1) && (fid <=9999)) {
+      quallev1 = quallev1 | Q_CAL_IMG;		//cal image
+    } 
+    if(hcftid == CAL_HCFTID) quallev1 = quallev1 | Q_CALM_IMG; //hmi cal mode
   }
   if(rstatus) {
     printk("ERROR: in drms_getkey_string(HWLTNSET or AISTATE) fsn=%u\n", fsn);
@@ -247,8 +256,6 @@ void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int f
       quallev1 = quallev1 | Q_LOOP_OPEN;
     }
   }
-
-  //!!TBD bit 12,13,14,15,16,17,18
 
   if(quicklook) {
     quallev1 = quallev1 | Q_NRT;
@@ -575,6 +582,9 @@ int do_ingest(long long bbrec, long long eerec)
         l0l1->dat1.adata1A = &data1A;
         //l0l1->himgcfid = drms_getkey_int(rs0, "AIFDBID", &rstatus);
 	l0l1->himgcfid = 90;	//!!TEMP force uncropped, no overscan
+        aiftsid = drms_getkey_int(rs0, "AIFTSID", &rstatus);
+        aifcps = drms_getkey_short(rs0, "AIFCPS", &rstatus);
+        aiagp6 = drms_getkey_int(rs0, "AIAGP6", &rstatus);
       }
       else {
         l0l1->dat1.adata1 = &data1;
@@ -940,7 +950,7 @@ TEMPSKIP:
   //calmode: HCFTID=17
   //dark: HSHIEXP=0 and HCAMID=0 or 1
   int skiplimb = 0;
-  int hcftid = drms_getkey_int(rs, "HCFTID", &rstatus);
+  hcftid = drms_getkey_int(rs, "HCFTID", &rstatus);
   if(hcftid == CAL_HCFTID) {	//don't call limb_fit()
     printk("Cal mode image fsn=%u\n", fsnx);
     skiplimb = 1;
@@ -1081,8 +1091,14 @@ TEMPSKIP:
     drms_setkey_float(rs, "CDELT1", cdelt1);
     drms_setkey_float(rs, "CDELT2", cdelt1);
     //below missing - SC_Y/Z_INRT_BIAS/IMSCL_MP + 1
-    crpix1 = imageloc[i].x - (ptdata.sat_y0 - imageloc[i].yinrtb)/imageloc[i].imscale + 1;
-    crpix2 = imageloc[i].y - (ptdata.sat_z0 - imageloc[i].zinrtb)/imageloc[i].imscale + 1;
+    if(hmiaiaflg) {	//aia
+      crpix1 = imageloc[i].x + (ptdata.sat_y0 - imageloc[i].yinrtb)/imageloc[i].imscale + 1;
+      crpix2 = imageloc[i].y + (ptdata.sat_z0 - imageloc[i].zinrtb)/imageloc[i].imscale + 1;
+    }
+    else {		//hmi
+      crpix1 = imageloc[i].x - (ptdata.sat_y0 - imageloc[i].yinrtb)/imageloc[i].imscale + 1;
+      crpix2 = imageloc[i].y - (ptdata.sat_z0 - imageloc[i].zinrtb)/imageloc[i].imscale + 1;
+    }
     drms_setkey_float(rs, "CRPIX1", crpix1);
     drms_setkey_float(rs, "CRPIX2", crpix2);
     crota2 = imageloc[i].instrot + ptdata.sat_rot;
@@ -1126,13 +1142,13 @@ TEMPSKIP:
 WCSEND:
     if(!hmiaiaflg && !lstatus) {	//only do for hmi and good limb fit
       //Now call Sebastien's heightformation() fuction (email 08/09/10 17:50)
-      //printf("Calling heightformation()\n");
-      if(!(dstatus = heightformation(fid, IOdata.obs_vr, &cdelt1, &rsun, &crpix1, &crpix2, -crota2))) {
+      //21Sep2010 change -crota2 to crota2 and HFCORRVR to 2
+      if(!(dstatus = heightformation(fid, IOdata.obs_vr, &cdelt1, &rsun, &crpix1, &crpix2, crota2))) {
         drms_setkey_float(rs, "CDELT1", cdelt1);
         drms_setkey_float(rs, "R_SUN", rsun);
         drms_setkey_float(rs, "CRPIX1", crpix1);
         drms_setkey_float(rs, "CRPIX2", crpix2);
-        drms_setkey_int(rs, "HFCORRVR", 1);
+        drms_setkey_int(rs, "HFCORRVR", 2);
       }
       else {
         drms_setkey_int(rs, "HFCORRVR", 0);
