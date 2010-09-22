@@ -5,7 +5,7 @@ d			:= $(dir)
 
 # Local variables
 MODEXE_USEF_$(d)	:= $(addprefix $(d)/, lfwrp)
-SUPPOBJ_$(d)		:= $(addprefix $(d)/, limbfit do_one_limbfit limb expmax expfit)
+SUPPOBJ_$(d)		:= $(addprefix $(d)/, limbfit do_one_limbfit limb expmax expfit nrutil indexx sort)
 
 MODEXE_USEF 		:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 MODEXE_USEF_SOCK_$(d)	:= $(MODEXE_USEF_$(d):%=%_sock)

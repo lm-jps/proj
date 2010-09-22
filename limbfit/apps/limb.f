@@ -465,14 +465,15 @@ c Determine quantities per angular bin for alpha, beta calculation
 	   theta=atan2((y-cmy),(x-cmx))
 	   if(theta.lt.0.0) theta=theta+tpi
 	   ind=int(theta/dreg+1.0)
-c	correct radius bin
-	   r = r - b0(ind)
-c	end correction
+c		IS Tue Sep 21 14:54:47 PDT 2010: switched the 2 following paragraphs
 	   if(ind.gt.nreg)then
 		 ind=nang
 c	     ifail=6
 c	     return
 	   endif
+c	correct radius bin
+	   r = r - b0(ind)
+c	end correction
 	   D0=chebev(rminp,rmaxp,c,nc,R,ifail)
 	   if(ifail.eq.11) then
 	   	ifail=0
@@ -519,7 +520,7 @@ c for this unnatural phenomenon.
 	   endif
 	   alph(i)=(DB-DBB*DC)/DAA-1.0
 130	enddo
-c	print*,cmx,cmy
+c	print*,cmx,cmy	
 	return
 	end	
 	

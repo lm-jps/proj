@@ -1,18 +1,20 @@
 /* 
 	I.Scholl 
 
-		from Solar Astrometry Program (solarSDO.c)
-				Marcelo Emilio - Jan 2010 
+		limbfit(): adapted from Solar Astrometry Program (solarSDO.c)
+									Marcelo Emilio - Jan 2010 
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V1.4r0" 
-	#define CODE_DATE 		"Tue Aug 24 17:46:37 PDT 2010" 
+	#define CODE_VERSION 	"V1.7r0" 
+	#define CODE_DATE 		"Thu Sep 16 13:40:31 PDT 2010" 
 */
 
 #include "limbfit.h"
 
-int limbfit(LIMBFIT_INPUT *APP,LIMBFIT_OUTPUT *results,FILE *opf,int debug)
+#define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))
+
+int limbfit(LIMBFIT_INPUT *input,LIMBFIT_OUTPUT *results,FILE *opf,int debug)
 {
 static char *log_msg_code="limbfit";
 char log_msg[120];
@@ -22,7 +24,7 @@ if (debug) lf_logmsg("DEBUG", "APP", 0, 0, "", log_msg_code, opf);
 /************************************************************************
 					INIT VARS coming from build_lev1.c
 ************************************************************************/	
-	float *data=APP->data;
+	float *data=input->data;
 //	float MIN_VALUE=BAD_PIXEL_VALUE;
 //	float MAX_VALUE=(float)fabs(BAD_PIXEL_VALUE);
 
@@ -40,8 +42,8 @@ int 	r_size	 = NUM_FITPNTS;
 int		grange	 = GUESS_RANGE;
 float 	dx		 = INC_X;
 float 	dy		 = INC_Y;
-int		naxis_row= APP->img_sz0;
-int		naxis_col= APP->img_sz1;
+int		naxis_row= input->img_sz0;
+int		naxis_col= input->img_sz1;
 int		iter	 = NB_ITER;
 int		skipc	 = SKIPGC;
 //float 	flag	 = BAD_PIXEL_VALUE; 
@@ -49,8 +51,8 @@ int		skipc	 = SKIPGC;
 /************************************************************************/
 /*                        set parameters                               */
 /************************************************************************/
-
-long 	ii, jj, jk, i,j; 
+long npixels=naxis_row*naxis_col;
+long ii, jj, jk, i,j; 
 float cmx, cmy,r;//, guess_cx, guess_cy, guess_r;
 int nitr, ncut, ifail;
 int jreg, jang, jprf;
@@ -67,9 +69,9 @@ float sav_max=0.;
 if (skipc == 1) 
 {
 	/* Initial guess estimate of center position from Richard's code*/
-		cmx=(float)APP->ix;
-		cmy=(float)APP->iy;
-		r=(float)APP->ir;
+		cmx=(float)input->ix;
+		cmy=(float)input->iy;
+		r=(float)input->ir;
 }
 else
 {
@@ -79,17 +81,31 @@ else
 		int nb_iters=3;
 
 		line = (float *) malloc(sizeof(float)*(nb_lines*ng));
-		if(!line) return ERR_MALLOC_FAILED;
+		if(!line) 
+		{
+			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (line)", log_msg_code, opf);
+			return ERR_MALLOC_FAILED;
+		}
+
 	
-		for (i=0;i<naxis_row*naxis_col;i++)
+		for (i=0;i<npixels;i++)
 			if (data[i] <0.0)
 				data[i] =0.0;
 	
 		Dx = (float *) malloc(sizeof(float)*(nb_lines*ng));
-			if(!Dx) return ERR_MALLOC_FAILED;
+			if(!Dx) 
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (Dx)", log_msg_code, opf);
+				return ERR_MALLOC_FAILED;
+			}
+
 		xx = (float *) malloc(sizeof(float)*(nb_lines*ng));
-			if(!xx) return ERR_MALLOC_FAILED;
-		
+			if(!xx) 
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (xx)", log_msg_code, opf);
+				return ERR_MALLOC_FAILED;
+			}
+
 		int k, kk, dh, vv; 
 		float x1, x2, x3, y1, y2, y3, ma, mb, mx[nb_lines], maximo;
 		
@@ -196,11 +212,24 @@ jprf = nprf;
 float d, *x, *y, *v;
 
 x = (float *) malloc(sizeof(float) * S);
-	if(!x) return ERR_MALLOC_FAILED;
+	if(!x) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (x)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 y = (float *) malloc(sizeof(float) * S);
-	if(!y)return ERR_MALLOC_FAILED;
+	if(!y)
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (y)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
+
 v = (float *) malloc(sizeof(float) * S);
-	if(!v) return ERR_MALLOC_FAILED;
+	if(!v) 	
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (v)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 
 	/* Select Points */
 	jk=-1;
@@ -235,23 +264,60 @@ v = (float *) malloc(sizeof(float) * S);
 float *anls, *rprf, *lprf, *alph, *beta, *b0, *beta1, *beta2, *beta3;
 int nbc=3;
 anls = (float *) malloc(sizeof(float)*(nbc*jk));
-	if(!anls) return ERR_MALLOC_FAILED;
+	if(!anls) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (anls)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 rprf = (float *) malloc(sizeof(float)*(nprf));
-	if(!rprf) return ERR_MALLOC_FAILED;
+	if(!rprf) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (rprf)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 lprf = (float *) malloc(sizeof(float)*((nang+1)*nprf));
-	if(!lprf) return ERR_MALLOC_FAILED;
+	if(!lprf) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (lprf)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 alph = (float *) malloc(sizeof(float)*(nreg));
-	if(!alph) return ERR_MALLOC_FAILED;
+	if(!alph) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (alph)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 beta = (float *) malloc(sizeof(float)*(nreg));
-	if(!beta) return ERR_MALLOC_FAILED;
+	if(!beta) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (xbeta)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 beta1 = (float *) malloc(sizeof(float)*(nreg));
-	if(!beta1) return ERR_MALLOC_FAILED;
+	if(!beta1) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (beta1)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 beta2 = (float *) malloc(sizeof(float)*(nreg));
-	if(!beta2) return ERR_MALLOC_FAILED;
+	if(!beta2)
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (beta2)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 beta3 = (float *) malloc(sizeof(float)*(nreg));
-	if(!beta3) return ERR_MALLOC_FAILED;
+	if(!beta3) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (beta3)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
 b0 = (float *) malloc(sizeof(float)*(nreg));
-	if(!b0) return ERR_MALLOC_FAILED;
+	if(!b0) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (b0)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
+
 
 	for (ii = 0; ii < jk; ii++) 
 	{
@@ -356,9 +422,18 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		/************************************************************************/
 		float *LDF, *D;
 		LDF = (float *) malloc(sizeof(float)*(nprf));
-			if(!LDF) return ERR_MALLOC_FAILED;
+			if(!LDF) 
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (LDF)", log_msg_code, opf);
+				return ERR_MALLOC_FAILED;
+			}
+
 		D = (float *) malloc(sizeof(float)*(nprf));
-			if(!D) return ERR_MALLOC_FAILED;
+			if(!D)	
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (D)", log_msg_code, opf);
+				return ERR_MALLOC_FAILED;
+			}
 
 		double ip, ip1, maxim; 
 		double radius = {0.0};
@@ -368,27 +443,31 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		float h;
 			
 		// for saving them in FITS file
-		float *save_ldf, *save_alpha_beta1, *save_alpha_beta2, *save_fulldf; 
-		double *save_params1, *save_params2;
+		float *save_ldf, *save_alpha_beta; 
+		double *save_params;
 		long nb_p_as=6, nb_p_es=6, nb_p_radius=1, nb_p_ip=1; 
 		long params_nrow=nang+1, params_ncol=nb_p_as+nb_p_es+nb_p_radius+nb_p_ip;
 		long ldf_nrow=nang+2, ldf_ncol=nprf;  //ii -nbr of ldfs, jj -nbr of points for each ldf
 		long ab_nrow=nreg, ab_ncol=2;
-		long fulldf_nrow=nang+2, fulldf_ncol=nprf;
 
 	    save_ldf 	= (float *) malloc((ldf_nrow*ldf_ncol)*sizeof(float));
-			if(!save_ldf) return ERR_MALLOC_FAILED;
-	    save_alpha_beta1  = (float *) malloc((ab_nrow*ab_ncol)*sizeof(float));
-			if(!save_alpha_beta1) return ERR_MALLOC_FAILED;
-	    save_alpha_beta2 = (float *) malloc((ab_nrow*ab_ncol)*sizeof(float));
-			if(!save_alpha_beta2) return ERR_MALLOC_FAILED;
-	    save_params1 = (double *) malloc((params_nrow*params_ncol)*sizeof(double));  
-			if(!save_params1) return ERR_MALLOC_FAILED;
-	    save_params2 = (double *) malloc((params_nrow*params_ncol)*sizeof(double));  
-			if(!save_params2) return ERR_MALLOC_FAILED;
-		//for later use
-	    save_fulldf 	= (float *) malloc((fulldf_nrow*fulldf_ncol)*sizeof(float));
-			if(!save_fulldf) return ERR_MALLOC_FAILED;
+			if(!save_ldf) 
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_ldf)", log_msg_code, opf);
+				return ERR_MALLOC_FAILED;
+			}
+	    save_alpha_beta = (float *) malloc((ab_nrow*ab_ncol)*sizeof(float));
+			if(!save_alpha_beta) 
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_alpha_beta)", log_msg_code, opf);
+				return ERR_MALLOC_FAILED;
+			}		
+	    save_params = (double *) malloc((params_nrow*params_ncol)*sizeof(double));  
+			if(!save_params) 
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_params)", log_msg_code, opf);
+				return ERR_MALLOC_FAILED;
+			}			
 			
 		long zero_as=0;
 		long zero_es=params_nrow*nb_p_as;
@@ -525,22 +604,17 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 				lf_logmsg("WARNING", "APP", 0, 0, log_msg, log_msg_code, opf);
 				for (c=0;c<nb_p_as;c++) erro[c]=0.;
 				radius=ip;
-				save_params1[cont*params_ncol+nb_p_as+nb_p_es+nb_p_radius]=0.;
-				save_params2[zero_ip+cont]=0.;
+				save_params[zero_ip+cont]=0.;
 			}
 			// IS: NOT SURE THIS IS AT THE RIGHT PLACE!!! just above before the "else"
 			// save them
 			for (c=0;c<nb_p_as;c++)
 			{
-				save_params1[cont*params_ncol+c]=A[c];
-				save_params1[cont*params_ncol+nb_p_as+c]=erro[c];
-				save_params2[zero_as+params_nrow*c+cont]=A[c];
-				save_params2[zero_es+params_nrow*c+cont]=erro[c];
+				save_params[zero_as+params_nrow*c+cont]=A[c];
+				save_params[zero_es+params_nrow*c+cont]=erro[c];
 			}
-			save_params1[cont*params_ncol+nb_p_as+nb_p_es]=radius;
-			save_params1[cont*params_ncol+nb_p_as+nb_p_es+nb_p_radius]=ip1;
-			save_params2[zero_r+cont]=radius;
-			save_params2[zero_ip+cont]=ip1;
+			save_params[zero_r+cont]=radius;
+			save_params[zero_ip+cont]=ip1;
 		} // endfor-cont
 		if (debug)
 		{	
@@ -556,14 +630,39 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 	//						Save LDFs & AB data in a FITS file                      
 	//**********************************************************************
 	
-	// full LDF ------------------------->to be checked: order R/C....
-		float *p_sfldf=&save_fulldf[0];
-		float *pl_sfldf=&save_fulldf[(fulldf_nrow*fulldf_ncol)-1];
-		//right now just initialize it, later move its values
-		while (p_sfldf <= pl_sfldf)
-			*(p_sfldf++)=0;
-	
-	// LDF 				// lprf & rprf come from limbfit.f			
+		// full LDF
+
+		int fulldf_nrows, fulldf_ncols=2;
+		int bins1, bins2;
+		int retcode=0;
+		float *save_full_ldf;
+
+		if (ret_gsl<0 || cmx < 0.01 || cmy < 0.01 || radius < 0.01)
+		{
+			fulldf_nrows=1;
+			bins1=0;
+			save_full_ldf  = (float *) malloc((2)*sizeof(float));
+				if(!save_full_ldf) 
+				{
+					lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_full_ldf)", log_msg_code, opf);
+					return ERR_MALLOC_FAILED;
+				}			
+
+			save_full_ldf[0]=0;
+			save_full_ldf[1]=0;
+		}
+		else
+		{
+			retcode=mk_fldfs(cmx, cmy, radius, naxis_row, naxis_col, npixels, data, &save_full_ldf, &bins1, &bins2, opf);
+			if (retcode == ERR_MALLOC_FAILED)
+				return ERR_MALLOC_FAILED;
+			else
+				if (retcode == ERR_NR_STACK_TOO_SMALL)
+					ret_code=ERR_LIMBFIT_FLDF_FAILED;		
+			fulldf_nrows=bins2;
+		}
+		
+		// LDF 				// lprf & rprf come from limbfit.f			
 		float *p_sldf=&save_ldf[0];
 		float *pl_sldf=&save_ldf[(ldf_nrow*ldf_ncol)-1];
 		float *p_rprf=&rprf[0];
@@ -576,23 +675,12 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		while (p_sldf <= pl_sldf)
 			*(p_sldf++)=*(p_lprf++);
 
-	// AB 
+		// AB 
 		float *p_alph=&alph[0];
 		float *pl_alph=&alph[ab_nrow-1];
-		float *p_beta=&b0[0]; // sum of beta, beta1, beta2
-
-		float *p_save_alpha_beta=&save_alpha_beta1[0];
-		while (p_alph <= pl_alph)
-		{
-			*(p_save_alpha_beta++)=*(p_alph++);
-			*(p_save_alpha_beta++)=*(p_beta++);
-		}
-
-		p_alph=&alph[0];
-		pl_alph=&alph[ab_nrow-1];
-		p_beta=&b0[0];
+		float *p_beta=&b0[0];
 		float *pl_beta=&b0[ab_nrow-1]; 
-		p_save_alpha_beta=&save_alpha_beta2[0];
+		float *p_save_alpha_beta=&save_alpha_beta[0];
 		while (p_alph <= pl_alph) *(p_save_alpha_beta++)=*(p_alph++);
 		while (p_beta <= pl_beta) *(p_save_alpha_beta++)=*(p_beta++);
 		 
@@ -605,12 +693,13 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		results->numext=3;		
 		results->fits_ldfs_naxis1=ldf_ncol;	
 		results->fits_ldfs_naxis2=ldf_nrow;
-		results->fits_fldfs_tfields=fulldf_ncol;
-		results->fits_fldfs_nrows=fulldf_nrow;
+		results->fits_fldfs_tfields=fulldf_ncols;
+		results->fits_fldfs_nrows=fulldf_nrows;
 		results->fits_ab_tfields=ab_ncol;
 		results->fits_ab_nrows=ab_nrow;
 		results->fits_params_tfields=params_ncol;
 		results->fits_params_nrows=params_nrow;
+		results->nb_fbins=bins1;
 		results->ann_wd=w;
 		results->mxszannv=S;
 		results->nb_ldf=nang;
@@ -627,9 +716,10 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		results->error2=ret_gsl;		
 		if (ifail == 0) 
 			results->quality=9; 
-		if (cont>=nang && ret_gsl<0)
+		//? if (cont>=nang && ret_gsl<0)
+		if (ret_gsl<0)
 		{
-			results->quality=5; 
+			results->quality=1; 
 			ret_code=ERR_LIMBFIT_FIT_FAILED;
 			if (debug)
 			{	
@@ -638,11 +728,9 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 	 		}     	
 		}
 		results->fits_ldfs_data=save_ldf; 
-		results->fits_fulldfs=save_fulldf; 
-		results->fits_params1=save_params1; 
-		results->fits_params2=save_params2; 
-		results->fits_alpha_beta1=save_alpha_beta1; 
-		results->fits_alpha_beta2=save_alpha_beta2; 
+		results->fits_params=save_params; 
+		results->fits_alpha_beta=save_alpha_beta; 
+		results->fits_fulldfs=save_full_ldf;
 
 		free(D);
 		free(LDF);
@@ -673,8 +761,8 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		results->nb_iter=iter;
 		results->max_limb=0;
 		results->cmean=0;
+		results->nb_fbins=0;
 	} // end limb failed
-	
 	// IS: do not free those passed from or to the structure !
 	free(x);
 	free(y);
@@ -703,7 +791,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 	
 	sprintf(log_msg," end: RC: %d - limb:%d - fit:%d - quality: %d", ret_code, results->error1, results->error2, results->quality);
 	lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
-	
+
 return(ret_code);
 
 } /* end of main */
@@ -878,6 +966,7 @@ double fin_min(double A[6], double m, int range, int debug, FILE *opf)
 	  {
 			if (status == GSL_EINVAL) 
 			{
+				ret_code=ERR_GSL_FINMIN_NOMIN_FAILED;
 				if (debug)
 				{
 					sprintf(log_msg," (gsl_min_fminimizer_set) doesn't find a minimum, m=%f", m);
@@ -886,9 +975,12 @@ double fin_min(double A[6], double m, int range, int debug, FILE *opf)
 			} 
 			else 
 			{
-				sprintf(log_msg," (gsl_min_fminimizer_set) failed, gsl_errno=%d", status);
 				ret_code=ERR_GSL_FINMIN_SET_FAILED;
-				lf_logmsg("ERROR", "APP", ret_code, status, log_msg, log_msg_code, opf);			
+				if (debug)
+				{
+					sprintf(log_msg," (gsl_min_fminimizer_set) failed, gsl_errno=%d", status);
+					lf_logmsg("ERROR", "APP", ret_code, status, log_msg, log_msg_code, opf);			
+				}
 			}
 			return ret_code;
 	  }
@@ -940,4 +1032,195 @@ double fin_min(double A[6], double m, int range, int debug, FILE *opf)
 		 
 	  return m;
 
+}
+//---------------------------------------------------------------------------------------------------------------------
+// Make full ldfs
+//---------------------------------------------------------------------------------------------------------------------
+float median(float * tmed, int siz)
+{
+	int m=siz%2;
+	int s=siz/2;
+	return m==0?(tmed[s-1]+tmed[s])/2:(tmed[s]);
+}
+
+int mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col, long npixels, 
+					float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf)
+{
+static char *log_msg_code="mk_fldfs";
+
+	int status=0;
+	int retcode=0;
+	int fulldf_nrows, fulldf_ncols=2;
+	// compute  radius array
+	float *data2 = (float *) malloc(sizeof(float) * npixels);
+		if(!data2) 
+		{
+			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (data2)", log_msg_code, opf);
+			return ERR_MALLOC_FAILED;
+		}
+
+	unsigned long ti,tx,ty;
+	float tdx,tdy;
+	unsigned long cnt=0;
+	for (tx=0;tx<naxis_col;tx++)
+	{
+		for (ty=0;ty<naxis_row;ty++)
+		{
+			ti=naxis_col*ty+tx;
+			if (data[ti]>-2147483648.)
+			{	
+				tdx=(float)fabs(tx-cmx);
+				tdy=(float)fabs(ty-cmy);
+				data2[ti]=(float)sqrt(tdx*tdx + tdy*tdy);
+				cnt++;
+			} else data2[ti]=900000.;	
+		}
+	}
+
+	// index them
+	unsigned long *indx;
+	indx=lvector(1,npixels,&status); 
+		if (status<0) 
+		{
+			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed", "lvector(indx)", opf);
+			return ERR_MALLOC_FAILED;
+		}
+	retcode=indexx(npixels,data2,indx);	
+		if (retcode<0) 
+		{
+			lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "indexx", opf);
+			return ERR_NR_STACK_TOO_SMALL;
+		}
+	// make bins        	
+	int rc=4; // size in pixels of DeltaR of the last bin before the limb: 2*the distorsion
+	float v1=(float)(1.-(rc/radius));
+	float v2=1/(1-(v1*v1));
+	int bins=(int)v2-1;		
+	unsigned int st=(unsigned int)(M_PI*radius*radius);
+	int sb=st/bins;
+	int ns=round(sb);
+	int sr=st%bins;
+	if (sr==0) *bins1=bins; else *bins1=bins+1;
+	int mbins=bins+5; // to get what is over the limb: +1 = residual, then +4 outside
+	fulldf_nrows=mbins;
+	*bins2=mbins;
+	// compute them	
+	float *ttmed1, *ttmed2;
+	// printf("pixels %ld cnt: %lu BINS: %d, MBINS: %d rs: %f st=%u, sb=%d, sr=%d, ns=%d \n",npixels,cnt,bins,mbins,radius,st,sb,sr,ns);
+
+	ttmed1=vector(1,ns,&status); 
+		if (status<0) 
+		{
+			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed", "vector(ttmed1)", opf);
+			return ERR_MALLOC_FAILED;
+		}
+	ttmed2=vector(1,ns,&status); 
+		if (status<0) 
+		{
+			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed", "vector(ttmed2)", opf);
+			return ERR_MALLOC_FAILED;
+		}
+	float *t_med_int 	= (float *) malloc((mbins)*sizeof(float));
+		if(!t_med_int) 
+		{
+			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (t_med_int)", log_msg_code, opf);
+			return ERR_MALLOC_FAILED;
+		}
+	float *t_med  		= (float *) malloc((mbins)*sizeof(float));
+		if(!t_med) 
+		{
+			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (t_med)", log_msg_code, opf);
+			return ERR_MALLOC_FAILED;
+		}
+	int tk,next_i=0;
+	for(tk=0;tk<mbins;tk++)
+	{
+		if (tk<bins || tk>bins)
+		{
+			for(ti=0;ti<ns;ti++) 
+			{        		
+				ttmed1[ti]=data[indx[next_i+ti]];
+				ttmed2[ti]=data2[indx[next_i+ti]];
+			}
+			retcode=sort(ns,ttmed1);
+				if (retcode<0) 
+				{
+					lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "sort(1)", opf);
+					return ERR_NR_STACK_TOO_SMALL;
+				}
+			retcode=sort(ns,ttmed2);
+				if (retcode<0) 
+				{
+					lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "sort(2)", opf);
+					return ERR_NR_STACK_TOO_SMALL;
+				}
+			t_med_int[tk]=median(ttmed1,ns);
+			t_med[tk]=median(ttmed2,ns);
+			next_i=(tk+1)*ns;
+		} 
+		else if (tk == bins && sr != 0)
+		{
+			for(ti=0;ti<sr;ti++) 
+			{        		
+				ttmed1[ti]=data[indx[next_i+ti]];
+				ttmed2[ti]=data2[indx[next_i+ti]];
+			}
+			retcode=sort(sr,ttmed1);
+				if (retcode<0) 
+				{
+					lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "sort(3)", opf);
+					return ERR_NR_STACK_TOO_SMALL;
+				}
+			retcode=sort(sr,ttmed2);
+				if (retcode<0) 
+				{
+					lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "sort(4)", opf);
+					return ERR_NR_STACK_TOO_SMALL;
+				}
+			t_med_int[tk]=median(ttmed1,sr);
+			t_med[tk]=median(ttmed2,sr);
+			next_i=next_i+sr;
+		}
+	}
+/*
+printf("pixels %ld cnt: %lu BINS: %d, MBINS: %d rs: %f st=%u, sb=%d, sr=%d, ns=%d \n",npixels,cnt,bins,mbins,radius,st,sb,sr,ns);
+long last=next_i;
+long last_1=last-1;        
+for (ti=(mbins-3);ti<mbins;ti++) printf("ti=%lu int=%f r=%f\n",ti,t_med_int[ti],t_med[ti]);
+printf("last: %f last-1:%f\n",data2[indx[last]],data2[indx[last_1]]);
+ti=(bins)*sb;
+printf("ti=%lu \n",ti);
+while (data2[indx[ti]] <= radius) ti++;
+int tj=ti-1;
+int tjj=ti+1;
+tk=ti/sb;
+printf("ti=%lu %f ti-1: %f ti+1: %f (in bins:%d)\n",ti,data2[indx[ti]] ,data2[indx[tj]],data2[indx[tjj]],tk );
+*/
+
+	// combine the 2 arrays = > pas necessaire pour l'integration dans le vrai fits	
+	*save_full_ldf  = (float *) malloc((fulldf_nrows*fulldf_ncols)*sizeof(float));
+		if(!save_full_ldf) 
+		{
+			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_full_ldf)", log_msg_code, opf);
+			return ERR_MALLOC_FAILED;
+		}
+
+
+	float *p_full1=&t_med_int[0];
+	float *pl_full1=&t_med_int[fulldf_nrows-1];
+	float *p_full2=&t_med[0];
+	float *pl_full2=&t_med[fulldf_nrows-1]; 
+	float *p_save_full_ldf=save_full_ldf[0]; //&save_full_ldf2[0];
+	while (p_full1 <= pl_full1) *(p_save_full_ldf++)=*(p_full1++);
+	while (p_full2 <= pl_full2) *(p_save_full_ldf++)=*(p_full2++);	
+	
+	// free
+	free(data2);
+	free(t_med_int);
+	free(t_med);
+	// plus all others...  vectors...
+	free_lvector(indx,1,npixels);
+	free_vector(ttmed1,1,ns);
+	free_vector(ttmed2,1,ns);
+return 0;
 }

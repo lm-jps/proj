@@ -1,4 +1,4 @@
-/* I.Scholl "Tue Aug 24 17:46:37 PDT 2010" 
+/* I.Scholl "Thu Sep 16 13:40:31 PDT 2010" 
 */
 
 #include <string.h>
@@ -16,7 +16,9 @@
 #include <gsl/gsl_errno.h> 
 #include <gsl/gsl_min.h>    
 #include <time.h>
+
 #include "fitsio.h"
+#include "nrutil.h"
 
 #include <jsoc_main.h>
 
@@ -24,8 +26,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V1.4r0" 
-#define CODE_DATE 		"Tue Aug 24 17:46:37 PDT 2010" 
+#define CODE_VERSION 	"V1.7r0" 
+#define CODE_DATE 		"Thu Sep 16 13:40:31 PDT 2010" 
 #define LOGMSG1			"LIMBFIT"
 
 //#define dsin	"hmi.lev1c_nrt[]"
@@ -55,39 +57,43 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define ERR_DRMS_WRITE_KW 					-300
 #define ERR_DRMS_READ_MISSING_DATA 			-301
 #define ERR_DRMS_READ_MISSING_KW 			-302
-#define ERR_DRMS_READ_MISSING_XYR 			-303
+#define ERR_DRMS_READ_MISSING_XYR_LF		-303
 #define ERR_FITSIO		 					-350
 #define ERR_FITSIO2		 					-351 // for mini FITS on error
+#define ERR_NR_STACK_TOO_SMALL 				-352
 
 //LIMBFIT FAILED -> write errors
 #define ERR_LIMBFIT_FAILED 					-501
 #define ERR_LIMBFIT_FIT_FAILED 				-502
+#define ERR_LIMBFIT_FLDF_FAILED				-503
 #define ERR_DISK_OUTSIDE_IMAGE 				-511
 #define ERR_SIZE_ANN_TOO_BIG 				-512
 #define ERR_GSL_FINMIN_SET_FAILED 			-541
-#define ERR_GSL_FINMIN_PRO_FAILED 			-542
+#define ERR_GSL_FINMIN_NOMIN_FAILED			-542
+#define ERR_GSL_FINMIN_PRO_FAILED 			-543
 #define ERR_GSL_GAUSSFIT_SET_FAILED 		-551
 #define ERR_GSL_GAUSSFIT_FDFSOLVER_FAILED 	-552
 
 //----------------------------- Processing status codes per record
-#define PROCSTAT_OK					"OK"
-#define PROCSTAT_NOK				"NOK"
-#define PROCSTAT_NO_LF_FAILED		"LF_FAILED"
-#define PROCSTAT_NO_LF_MISSVALS 	"NO_LF_MISSVALS"
-#define PROCSTAT_NO_LF_DARKIMG 		"NO_LF_DARKIMG"
-#define PROCSTAT_NO_LF_OPENLOOP 	"NO_LF_OPENLOOP"
-#define PROCSTAT_NO_LF_DB_READ_PB 	"NO_LF_DB_READ_PB"
-#define PROCSTAT_NO_LF_DB_WRITE_PB 	"NO_LF_DB_WRITE_PB"
+#define PROCSTAT_OK						"OK"
+#define PROCSTAT_NOK					"NOK"
+#define PROCSTAT_NO_LF_FAILED			"LF_FAILED"
+#define PROCSTAT_NO_LF_MISSVALS 		"NO_LF_MISSVALS"
+#define PROCSTAT_NO_LF_DARKIMG 			"NO_LF_DARKIMG"
+#define PROCSTAT_NO_LF_OPENLOOP 		"NO_LF_OPENLOOP"
+#define PROCSTAT_NO_LF_DB_READ_PB 		"NO_LF_DB_READ_PB"
+#define PROCSTAT_NO_LF_XYR_LF_MISSING 	"NO_LF_XYR_LF_MISSING"
+#define PROCSTAT_NO_LF_DB_WRITE_PB 		"NO_LF_DB_WRITE_PB"
 #define PROCSTAT_NO_LF_FITS_WRITE_PB 	"NO_LF_FITS_WRITE_PB"
 
 //---------------------------------- LIMBFIT PARAMETERS
 #define ANNULUS_WIDTH 200					// -1
 #define MAX_SIZE_ANN_VARS 4000000			// -2  ! must be the same value than JPT in fortran code !
-#define NUM_LDF 180							// -3   //a verifier
+#define NUM_LDF 180							// -3 
 #define NUM_RADIAL_BINS 64					// -4 	
 #define NUM_AB_BINS 180						// -5
-#define LO_LIMIT 24.0						// -6  ! the sum of these 2 must be equal to ANNULUS_WIDTH 
-#define UP_LIMIT 24.0						// -7
+#define LO_LIMIT 32.0						// -6  ! the sum of these 2 must be equal to ANNULUS_WIDTH 
+#define UP_LIMIT 32.0						// -7
 #define INC_X -4.0							// -8
 #define INC_Y -4.0							// -9
 #define NUM_FITPNTS 16						// -10	//  2*NUM_FITPNTS<NUM_RADIAL_BINS
@@ -120,12 +126,10 @@ typedef struct {		// output files content
 	int			error2;
 		
 	// result data
-	float*		fits_ldfs_data; 	// main data
-	float*		fits_fulldfs; 		// extension #2
-	float*		fits_alpha_beta1;   	// extension #0
-	float*		fits_alpha_beta2;   	// extension #0
-	double*		fits_params1;   		// extension #1
-	double*		fits_params2;   		// extension #1
+	float*		fits_ldfs_data; 		// main table / segment
+	float*		fits_fulldfs; 			// extension #2
+	float*		fits_alpha_beta;  	 	// extension #0
+	double*		fits_params;   			// extension #1
 
 	// info to describe extension dimensions
 	long		fits_ldfs_naxis1;		//	ldf_nrow
@@ -150,6 +154,7 @@ typedef struct {		// output files content
 	int			nfitpnts;
 	int			nb_iter;
 	int			skipgc;
+	int 		nb_fbins;
 
 } LIMBFIT_OUTPUT;
 
@@ -157,8 +162,8 @@ void get_sdate(char *sdate);
 void lf_logmsg(char * type1, char * type2, int return_code, int status, char *message, char *code_name, FILE *opf);
 void lf_logmsg4fitsio(char *log_msg,char *log_msg_code,char *kw,unsigned int fsn,int status, FILE *opf);
 void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out, DRMS_Array_t *data_array); //, FILE *opf);
-int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, fitsfile *outfptr, FILE *opf, int debug, int *status);
-
+int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, fitsfile *outfptr, FILE *opf, int debug, int tbf, LIMBFIT_OUTPUT *lfr, int *status);
+float median(float * tmed, int siz);
 int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6], long N, int debug, FILE *fd);
 double fin_min(double A[6], double m, int range, int debug, FILE *fd);
 int limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,FILE *opf,int debug);
@@ -167,4 +172,7 @@ void limb_(float *anls, long *jk, float *cmx, float *cmy, float *r, int *nitr, i
 			int *jreg, int *jang, int *jprf, float* alph, float* beta, int *ifail, float* b0, int *centyp); 
 int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int debug, int *status);
 int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, char *tmp_dir, FILE *opf, int debug, int *status);
-int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int debug);
+int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int tbf, LIMBFIT_OUTPUT *lfr, int debug);
+int mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col, long npixels, float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf);
+int sort(unsigned long n, float *arr);
+int indexx(unsigned long n, float *arr, unsigned long *indx);

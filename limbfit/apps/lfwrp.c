@@ -9,8 +9,8 @@
 			
 	
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V1.4r0" 
-	#define CODE_DATE 		"Tue Aug 24 17:46:37 PDT 2010" 
+	#define CODE_VERSION 	"V1.7r0" 
+	#define CODE_DATE 		"Thu Sep 16 13:40:31 PDT 2010" 
 */
 
 #include "limbfit.h"
@@ -68,7 +68,7 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
 {
 	static char *log_msg_code="process_n_records";
 	char log_msg[120];
-	sprintf(log_msg,"doing process for %s",open_dsname);
+	sprintf(log_msg,"doing process for %s -> %s",open_dsname,dsout);
 	lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, opf);			
 	static char errcode[20]=PROCSTAT_NOK;
 
@@ -121,7 +121,7 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
 		fsn = drms_getkey_int(record_in, "FSN", &rstatus);       
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(FSN)", log_msg_code, opf);			
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,NULL,debug);
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			return(0);   
 		}
@@ -131,28 +131,29 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
 		hwltnset = drms_getkey_string(record_in, "HWLTNSET", &rstatus);
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(HWLTNSET)", log_msg_code, opf);			
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,NULL,debug);
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			return(0);   
 		}
 		missvals = drms_getkey_int(record_in, "MISSVALS", &rstatus);
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_int(MISSVALS)", log_msg_code, opf);			
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,NULL,debug);
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			return(0);   
 		}
 		imgtype = drms_getkey_string(record_in, "IMG_TYPE", &rstatus);
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(IMG_TYPE)", log_msg_code, opf);			
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,debug); 
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,NULL,debug);
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			return(ERR_DRMS_READ_MISSING_KW);   
 		}
 
 		sprintf(log_msg," Selection: %s %d %s", hwltnset,missvals,imgtype);
 		lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);			
-		if (debug) printf("selection: %s %d %s\n",hwltnset,missvals,imgtype);
+		//if (debug) 
+		printf("selection: #%u %s %d %s\n",fsn,hwltnset,missvals,imgtype);
 
    		if ((strncmp(hwltnset,"CLOSE",5)==0) && (missvals==0) && (strncmp(imgtype,"LIGHT",5)==0)) 
 		{
@@ -173,7 +174,7 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
 			if (strncmp(hwltnset,"CLOSE",5)!=0) sprintf(errcode,"%s",PROCSTAT_NO_LF_OPENLOOP); 
 				else if (missvals!=0) sprintf(errcode,"%s",PROCSTAT_NO_LF_MISSVALS);
 					else if (strncmp(imgtype,"LIGHT",5)!=0) sprintf(errcode,"%s",PROCSTAT_NO_LF_DARKIMG);
-			write_mini_output(errcode,record_in,record_out,opf,debug);
+			write_mini_output(errcode,record_in,record_out,opf,0,NULL,debug);
 		}
 	}
 	drms_close_records(drs_out, DRMS_INSERT_RECORD);
@@ -268,12 +269,13 @@ int DoIt(void)
 				return(0);
 			}
 		}
+		sprintf(log_msg,"close %s", open_dsname);
+		lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
 		drms_server_end_transaction(drms_env,0,0);
 		drms_server_begin_transaction(drms_env);
 	}
-	fclose(opf);
-	
 	lf_logmsg("INFO", "APP", 0, 0, "End... ", log_msg_code, opf);
+	fclose(opf);
 
 return(0);
 } //end doit()
