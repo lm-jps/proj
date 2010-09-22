@@ -27,7 +27,11 @@
 #define Q_IMG_TYPE 0x10000	//Dark image
 #define Q_LOOP_OPEN 0x20000	//HWLTNSET == "OPEN" or AISTATE == "OPEN"
 #				//ISS Loop Open
-//#18    Calibration Image	//TBD - based on FID range. See Rock
+//#18    Calibration Image	//based on FID range. See Rock
+#define Q_CAL_IMG 0x40000	//Calibration image
+#define Q_CALM_IMG 0x80000	//HMI cal mode image
+#define Q_AIA_FOOR 0x100000	//AIA focus out of range
+#define Q_AIA_REGF 0x200000	//AIA register flag
 
 #define Q_NRT	  0x40000000	//near real time mode (formerly quicklook)
 #define Q_MISSALL 0x80000000    //Image not available. high bit
