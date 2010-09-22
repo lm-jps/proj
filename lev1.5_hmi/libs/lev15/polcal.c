@@ -7,6 +7,7 @@
 #include <mkl_service.h>
 #include <mkl_lapack.h>
 #include <mkl_vml_functions.h>
+#include <omp.h>
 #include "polcal.h"
 #include "fresize.h"
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
@@ -523,6 +524,9 @@ int polcal(
     cx0[ix]=1.0-cx1[ix];
   }
 
+#pragma omp parallel for default(none) \
+private(ix,iy,iz,yi,iy0,cy0,cy1,iz00,iz01,iz10,iz11,c00,c01,c10,c11,ipol,sum,iframe,demod_out) \
+shared(nlead,output,nx,ny,yzero,yscale,nin,ix0,cx0,cx1,nframe,polout,demod_in,pscale,fiq,fiu,fiv,mode,input)
   for (iy=0;iy<ny;iy++) {
     yi=yzero+iy*yscale;
     iy0=minval(maxval(0,floor(yi)),(nin-2));
@@ -564,6 +568,9 @@ int polcal(
     helpu=(float *)MKL_malloc(ny*nlead*sizeof(float),malign);
     fresize(&psf_q,output[0],helpq,nx,ny,nlead,nx,ny,nlead,0,0,0.0f);
     fresize(&psf_u,output[0],helpu,nx,ny,nlead,nx,ny,nlead,0,0,0.0f);
+#pragma omp parallel for default(none) \
+private(ix,iy,iz) \
+shared(nlead,output,helpq,helpu,nx,ny)
     for (iy=0;iy<ny;iy++) {
       for (ix=0;ix<nx;ix++) {
         iz=nlead*iy+ix;
@@ -595,6 +602,6 @@ int polcal(
 
 char *polcal_version() // Returns CVS version of polcal.c
 {
-  return strdup("$Id: polcal.c,v 1.1 2010/09/16 20:47:13 couvidat Exp $ 20100913a");
+  return strdup("$Id: polcal.c,v 1.2 2010/09/22 18:38:37 schou Exp $ 20100914");
 }
 
