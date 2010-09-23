@@ -257,14 +257,22 @@ int polcal(
   double pscale;
   const float tscale=0.0f; // Scale factor to multiply on window temp diff.
   float fiq,fiu,fiv; // Leaks from I to Q, U and V
-  int minps2,maxps2,psfcor;
+  int minps2,maxps2;
+  int leakcor; // 0 to do nothing. 1 for constant correction. 2 for 4th order in r^2
+  int psfcor; // 0 to do nothing. 1 do spatially constant correction.
   struct fresize_struct psf_q;
   struct fresize_struct psf_u;
   float *helpq,*helpu;
+  float xx,yy,yy2,rr2x,*xx2s;
+  float fiq0,fiq1,fiq2,fiq3,fiq4;
+  float fiu0,fiu1,fiu2,fiu3,fiu4;
+  float fiv0,fiv1,fiv2,fiv3,fiv4;
+  float int0,int1,int2,int3,int4,int5;
 
 // Arrays to get rid of I->Q,U leakage.
 // New from averages of 0503, 0603, 0703, 0803, 0818, 8019 and 0903, 2010
-// Old from averages of 100419 and 100416
+// Values of cqa and cua psf_cor_100922.pro and psf_comb_100922.pro
+
   const float kerq_new[5][5] = 
 {{0.0025447795,0.0014029023,-0.0068429443,-0.0036107973,0.0030788508},
 {-0.0021226902,0.0024857402,-0.00038104460,0.0033163148,-0.00041170042},
@@ -279,6 +287,7 @@ int polcal(
 {0.0031915392,-0.0020511113,-0.00015412126,-0.0033419297,-0.0048845723},
 {-8.3558650e-05,-0.0034679275,0.0010754580,0.0022082227,-0.0010739051}};
 
+// Old from averages of 100419 and 100416
   const float kerq_old[5][5] =
 {{0.0037206091,-0.0019643126,-0.016193939,-0.0076218857,0.0043843131},
 {0.00049905806,0.0040439727,-0.017494203,0.0024333910,0.0030044689},
@@ -298,6 +307,7 @@ int polcal(
 // Set up instrumental polarization correction.
 // Probably is actually something else.
 // Only correct for mode==1 (IQUV).
+  leakcor=0;
   psfcor=0;
   fiq=0.0f;
   fiu=0.0f;
@@ -309,6 +319,8 @@ int polcal(
     maxps2=maxval(maxps2,ps2[i]);
   }
   if ((minps2 == 91) && (maxps2 == 91)) { // Old settings
+// Stick to simple correction here.
+    leakcor=1;
     fiq= 2.15e-4;
     fiu= 1.10e-4;
     fiv= 0.00e-4;
@@ -316,10 +328,33 @@ int polcal(
     init_fresize_user(&psf_q,2,1,(float *)kerq_old); // Cast to get rid of idiotic compiler warning
     init_fresize_user(&psf_u,2,1,(float *)keru_old);
   }
-  if ((minps2 == 53) && (maxps2 == 53)) { // new settings
+  if ((minps2 == 53) && (maxps2 == 53)) { // New settings
+/* Constant correction. No longer used.
+    leakcor=1;
     fiq=-0.10e-4;
     fiu=-1.30e-4;
     fiv= 0.00e-4;
+*/
+    leakcor=2;
+// Coefficients from fit_rdep_100922a
+    fiq0=   2.0411683e-06;
+    fiq1=   0.00012040193;
+    fiq2=   0.00026537064;
+    fiq3=  -0.00059574417;
+    fiq4=  -0.0026085394;
+
+    fiu0=  -0.00011803840;
+    fiu1=   0.00011883301;
+    fiu2=   0.00023335908;
+    fiu3=  -0.0011413839;
+    fiu4=  -0.0034897879;
+
+    fiv0=   4.2255156e-06;
+    fiv1=   1.7374540e-05;
+    fiv2=   1.3426406e-05;
+    fiv3=   0.00012586214;
+    fiv4=   0.00045829690;
+
     psfcor=1;
     init_fresize_user(&psf_q,2,1,(float *)kerq_new);
     init_fresize_user(&psf_u,2,1,(float *)keru_new);
@@ -555,15 +590,64 @@ shared(nlead,output,nx,ny,yzero,yscale,nin,ix0,cx0,cx1,nframe,polout,demod_in,ps
         }
         output[ipol][iz]=pscale*sum;
       } // ipol
+/* Moved to loop below
       if (mode == 1) {
         output[1][iz]=output[1][iz]-fiq*output[0][iz];
         output[2][iz]=output[2][iz]-fiu*output[0][iz];
         output[3][iz]=output[3][iz]-fiv*output[0][iz];
       }
+*/
     } // ix
   } // iy
 
-  if ((mode == 1) && (psfcor !=0)) {
+  if ((mode == 1) && (leakcor == 1)) { // Do simple correction for leak.
+#pragma omp parallel for default(none) \
+private(ix,iy,iz) \
+shared(nlead,output,helpq,helpu,nx,ny,fiq,fiu,fiv)
+    for (iy=0;iy<ny;iy++) {
+      for (ix=0;ix<nx;ix++) {
+        iz=nlead*iy+ix;
+        output[1][iz]=output[1][iz]-fiq*output[0][iz];
+        output[2][iz]=output[2][iz]-fiu*output[0][iz];
+        output[3][iz]=output[3][iz]-fiv*output[0][iz];
+      } // ix
+    } // iy
+  }
+
+  if ((mode == 1) && (leakcor == 2)) { // Leak is given by 4th order in r^2.
+    xx2s=(float *)MKL_malloc(nx*sizeof(float),malign); // Array to hold x values.
+    for (ix=0;ix<nx;ix++) {
+      xx=(ix-nx/2+0.5f)/(nx/2);
+      xx2s[ix]=xx*xx;
+    }
+#pragma omp parallel for default(none) \
+private(ix,iy,iz,yy,yy2,rr2x) \
+shared(int0,int1,int2,int3,int4) \
+shared(fiq0,fiq1,fiq2,fiq3,fiq4) \
+shared(fiu0,fiu1,fiu2,fiu3,fiu4) \
+shared(fiv0,fiv1,fiv2,fiv3,fiv4) \
+shared(nlead,output,helpq,helpu,nx,ny,fiq,fiu,fiv,xx2s)
+    for (iy=0;iy<ny;iy++) {
+      yy=(iy-ny/2+0.5f)/(ny/2);
+      yy2=yy*yy;
+      for (ix=0;ix<nx;ix++) {
+        iz=nlead*iy+ix;
+        rr2x=xx2s[ix]+yy2-0.5f; // Subtract 0.5 to limit coefficients.
+// Make intensities times power of radius.
+        int0=output[0][iz];
+        int1=rr2x*int0;
+        int2=rr2x*int1;
+        int3=rr2x*int2;
+        int4=rr2x*int3;
+        output[1][iz]=output[1][iz]-fiq0*int0-fiq1*int1-fiq2*int2-fiq3*int3-fiq4*int4;
+        output[2][iz]=output[2][iz]-fiu0*int0-fiu1*int1-fiu2*int2-fiu3*int3-fiu4*int4;
+        output[3][iz]=output[3][iz]-fiv0*int0-fiv1*int1-fiv2*int2-fiv3*int3-fiv4*int4;
+      } // ix
+    } // iy
+    MKL_free(xx2s);
+  }
+
+  if ((mode == 1) && (psfcor == 1)) {
     helpq=(float *)MKL_malloc(ny*nlead*sizeof(float),malign);
     helpu=(float *)MKL_malloc(ny*nlead*sizeof(float),malign);
     fresize(&psf_q,output[0],helpq,nx,ny,nlead,nx,ny,nlead,0,0,0.0f);
@@ -602,6 +686,6 @@ shared(nlead,output,helpq,helpu,nx,ny)
 
 char *polcal_version() // Returns CVS version of polcal.c
 {
-  return strdup("$Id: polcal.c,v 1.2 2010/09/22 18:38:37 schou Exp $ 20100914");
+  return strdup("$Id: polcal.c,v 1.3 2010/09/23 01:32:03 schou Exp $");
 }
 
