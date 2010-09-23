@@ -273,6 +273,7 @@ int polcal(
 // New from averages of 0503, 0603, 0703, 0803, 0818, 8019 and 0903, 2010
 // Values of cqa and cua psf_cor_100922.pro and psf_comb_100922.pro
 
+/* Older version
   const float kerq_new[5][5] = 
 {{0.0025447795,0.0014029023,-0.0068429443,-0.0036107973,0.0030788508},
 {-0.0021226902,0.0024857402,-0.00038104460,0.0033163148,-0.00041170042},
@@ -286,6 +287,25 @@ int polcal(
 {0.00068532645,-0.0033599591,0.018978875,-0.0026890615,0.0019440106},
 {0.0031915392,-0.0020511113,-0.00015412126,-0.0033419297,-0.0048845723},
 {-8.3558650e-05,-0.0034679275,0.0010754580,0.0022082227,-0.0010739051}};
+
+*/
+// Same data but now with version forcing total(kernel)=0
+// Using psf_cor_100923 and psf_comb_100923. cqa and cua.
+
+  const float kerq_new[5][5] =
+{{0.0025540328,0.0014054127,-0.0068338746,-0.0036082337,0.0030879086},
+{-0.0021203885,0.0024757898,-0.00038367994,0.0033062588,-0.00040921161},
+{-0.0072601518,-0.0025927805,0.026828298,0.0042583267,-0.0095492689},
+{-0.0018917886,0.0010262981,-0.0091327691,0.0010989052,-0.0036920641},
+{0.0015600444,0.00071167337,-0.0033762701,0.0011738308,0.0013651198}};
+
+  const float keru_new[5][5] =
+{{-0.00049870912,0.0027657090,0.0021755355,-0.0048088858,-0.0017044651},
+{-0.0037942851,-0.0036754557,-0.00044049794,-0.0025652278,0.0055248008},
+{0.00069222959,-0.0033606194,0.018997891,-0.0026897083,0.0019509337},
+{0.0031935224,-0.0020587455,-0.00015615637,-0.0033495235,-0.0048827137},
+{-7.6658680e-05,-0.0034658817,0.0010824736,0.0022102219,-0.0010668119}};
+
 
 // Old from averages of 100419 and 100416
   const float kerq_old[5][5] =
@@ -302,7 +322,7 @@ int polcal(
 {0.0029176405,-0.013011020,-0.0013825372,0.0083993347,-0.0044858224},
 {0.00094548694,-0.0086396909,-0.00012516038,0.0078249956,-0.0012269566}};
 
-
+// New averages not made.
 
 // Set up instrumental polarization correction.
 // Probably is actually something else.
@@ -349,11 +369,13 @@ int polcal(
     fiu3=  -0.0011413839;
     fiu4=  -0.0034897879;
 
+// Note that V is currently not corrected!
     fiv0=   4.2255156e-06;
     fiv1=   1.7374540e-05;
     fiv2=   1.3426406e-05;
     fiv3=   0.00012586214;
     fiv4=   0.00045829690;
+    fiv0=sqrt(-1.0); // Just in case someone tries doing V by accident
 
     psfcor=1;
     init_fresize_user(&psf_q,2,1,(float *)kerq_new);
@@ -641,7 +663,8 @@ shared(nlead,output,helpq,helpu,nx,ny,fiq,fiu,fiv,xx2s)
         int4=rr2x*int3;
         output[1][iz]=output[1][iz]-fiq0*int0-fiq1*int1-fiq2*int2-fiq3*int3-fiq4*int4;
         output[2][iz]=output[2][iz]-fiu0*int0-fiu1*int1-fiu2*int2-fiu3*int3-fiu4*int4;
-        output[3][iz]=output[3][iz]-fiv0*int0-fiv1*int1-fiv2*int2-fiv3*int3-fiv4*int4;
+// For now don't do V
+//      output[3][iz]=output[3][iz]-fiv0*int0-fiv1*int1-fiv2*int2-fiv3*int3-fiv4*int4;
       } // ix
     } // iy
     MKL_free(xx2s);
@@ -686,6 +709,6 @@ shared(nlead,output,helpq,helpu,nx,ny)
 
 char *polcal_version() // Returns CVS version of polcal.c
 {
-  return strdup("$Id: polcal.c,v 1.3 2010/09/23 01:32:03 schou Exp $");
+  return strdup("$Id: polcal.c,v 1.4 2010/09/23 20:57:27 schou Exp $");
 }
 
