@@ -46,7 +46,8 @@ endif
 # Remove from ia32 and gcc builds (since they don't build on ia32 and with gcc)
 ifeq ($(JSOC_MACHINE), linux_x86_64)
   ifeq ($(COMPILER), icc)
-    BUILDLEV1_$(d)		:=  build_lev1 build_lev1_fsn
+#    BUILDLEV1_$(d)		:=  build_lev1X build_lev1Y build_lev1 build_lev1_fsn
+    BUILDLEV1_$(d)		:= build_lev1_aia build_lev1_hmi
   endif
 endif
 
