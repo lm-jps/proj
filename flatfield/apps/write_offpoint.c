@@ -25,6 +25,7 @@ ModuleArgs_t module_args[] =
   {ARG_TIME, "t_obs"},                   //T_OBS
   {ARG_INTS, "fsn_list_offpoint", "-1,-1"},       //comma separated list of FSNs
   {ARG_INTS, "fsn_list_pzt", "-1,-1"}, 
+  {ARG_INT, "pztflag", "1"},                  //pzt flat
   {ARG_INT, "nx", "4096"},                  //x dim of image 
   {ARG_INT, "ny", "4096"},                   //y dim of image
   {ARG_END}
@@ -106,6 +107,9 @@ if (vvd == 0){printf("nonexisting wavelength id\n"); exit(EXIT_FAILURE);} else {
 
   int foc_id;
   if (inst_hmi)foc_id=cmdparams_get_int(&cmdparams, "focus", &status);
+
+  int pztflag;
+  if (inst_hmi)pztflag=cmdparams_get_int(&cmdparams, "pztflag", &status);
 
   int cam_id;
   cam_id=cmdparams_get_int(&cmdparams, "camera", &status);
@@ -282,6 +286,7 @@ if (inst_hmi)
 	      status += drms_setkey_time(recout, primekey2, t_offpoint);
 	      if (inst_hmi) status += drms_setkey_int(recout, primekey1, cam_id);
 	      if (inst_hmi) status += drms_setkey_int(recout, primekey3, foc_id);
+	      if (inst_hmi) status += drms_setkey_int(recout, "PZTFLAG", pztflag);
 
 	      if (inst_aia) status += drms_setkey_string(recout, key1aia, wavelength);
 	     
