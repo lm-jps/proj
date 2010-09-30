@@ -42,6 +42,11 @@ struct parameterDoppler {             //structure to provide some parameters def
   double dvtest;
   float MISSINGDATA;
   float MISSINGRESULT;
+  double coeff0;
+  double coeff1;
+  double coeff2;
+  double coeff3;
+  int QuickLook;
 };
 
 
@@ -64,6 +69,7 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
   float MISSINGDATA;
   float MISSINGRESULT;
   int  i,j,iii;                                                       //loop variables
+  int QUICKLOOK;
   float ExtraCrop = 50.;//we crop the data at Rsun+ExtraCrop in pixels
 
   double magnetic = 1.0/(2.0*4.67E-5*0.000061733433*2.5*299792458.0); //Lande factor=2.5 for Fe I line
@@ -73,6 +79,7 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
   double minimumCoeffs[2]={0.41922611,0.24190794};        //minimum intensity, assuming the continuum is at 1 (result from a Gaussian fit in the range [-0.055,0.055] Angstroms)
   double FWHMCoeffs[2]={151.34559,-58.521771};            //FWHM of the solar line in Angstrom (result from a Gaussian fit in the range [-0.055,0.055] Angstroms)
   double FWHM,minimum,angulardistance,minimumR,minimumL;
+  double coeff[4];                                        //coefficients of the polynomial correction
 
   FSR[0]=DopplerParameters.FSRNB;
   FSR[1]=DopplerParameters.FSRWB;
@@ -88,6 +95,12 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
   dvtest=DopplerParameters.dvtest;
   MISSINGDATA=DopplerParameters.MISSINGDATA;
   MISSINGRESULT=DopplerParameters.MISSINGRESULT;
+  coeff[0]=DopplerParameters.coeff0;
+  coeff[1]=DopplerParameters.coeff1;
+  coeff[2]=DopplerParameters.coeff2;
+  coeff[3]=DopplerParameters.coeff3;
+  QUICKLOOK=DopplerParameters.QuickLook;
+
   double vtest[ntest];                                                //internally calculations are done in double precision
   float poly[ntest],poly2[ntest];                                     //for the spatial interpolation of the look-up tables (THE TABLES ARE ASSUMED TO BE OF TYPE FLOAT)
 
@@ -285,7 +298,7 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
   /***********************************************************************************************************/
 
 
-#pragma omp parallel default(none) reduction(+:MISSVALS2,SATVALS2) shared(step,arrLev1p,cosi,sini,cos2i,sin2i,pv1,pv2,index_lo,index_hi,vtest,period,dtune,dv,I0g,B0g,Idg,lam0g,rawlam0g,widthg,magnetic,axist,ratio,lookupt,nRows,nColumns,MISSINGDATA,MISSINGRESULT,Kfourier,Rsun,X0,Y0,ntest,tune,N,cost,minimumCoeffs,FWHMCoeffs,offset,ExtraCrop,cdelt1,TargetTime) private(tempvec,iii,L,R,f1LCPc,f1RCPc,f1LCPs,f1RCPs,vLCP,vRCP,f2LCPc,f2RCPc,f2LCPs,f2RCPs,temp,tempbis,temp2,temp2bis,temp3,temp3bis,meanL,meanR,v2LCP,v2RCP,x0,y0,x1,y1,RR1,RR2,i,loc1,loc2,loc3,loc4,xa,xb,ya,yb,indexL,indexR,indexL2,indexR2,poly,poly2,row,column,distance,j,minlookupt1,maxlookupt1,minlookupt2,maxlookupt2,FWHM,minimum,angulardistance,minimumR,minimumL,correction,a0,a1,a2,a3,a4)
+#pragma omp parallel default(none) reduction(+:MISSVALS2,SATVALS2) shared(step,arrLev1p,cosi,sini,cos2i,sin2i,pv1,pv2,index_lo,index_hi,vtest,period,dtune,dv,I0g,B0g,Idg,lam0g,rawlam0g,widthg,magnetic,axist,ratio,lookupt,nRows,nColumns,MISSINGDATA,MISSINGRESULT,Kfourier,Rsun,X0,Y0,ntest,tune,N,cost,minimumCoeffs,FWHMCoeffs,offset,ExtraCrop,cdelt1,TargetTime,QUICKLOOK,coeff) private(tempvec,iii,L,R,f1LCPc,f1RCPc,f1LCPs,f1RCPs,vLCP,vRCP,f2LCPc,f2RCPc,f2LCPs,f2RCPs,temp,tempbis,temp2,temp2bis,temp3,temp3bis,meanL,meanR,v2LCP,v2RCP,x0,y0,x1,y1,RR1,RR2,i,loc1,loc2,loc3,loc4,xa,xb,ya,yb,indexL,indexR,indexL2,indexR2,poly,poly2,row,column,distance,j,minlookupt1,maxlookupt1,minlookupt2,maxlookupt2,FWHM,minimum,angulardistance,minimumR,minimumL,correction,a0,a1,a2,a3,a4)
  {
 
 #pragma omp for
@@ -580,20 +593,32 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
 
 		      //CORRECTION OF DOPPLER VELOCITY USING 3th-ORDER POLYNOMIAL FIT OF DATAMEDN-OBS_VR AS A FUNCTION OF DATAMEDN, AND OF ORDER 3 AS A FUNCTION OF TIME, FOR CALIBRATION NUMBER 11,
 		      //FOR EXCLUSIVE USE WITH LOOKUP TABLE FSN_REC=4875802 OF 2010.05.06_17:24:55_TAI
-		      a0= 2.64020347158473e+06-7.27688397303985e-03 *TargetTime  +6.67317235565747e-12*TargetTime*TargetTime    -2.03569322602522e-21*TargetTime*TargetTime*TargetTime;
+		      /*a0= 2.64020347158473e+06-7.27688397303985e-03 *TargetTime  +6.67317235565747e-12*TargetTime*TargetTime    -2.03569322602522e-21*TargetTime*TargetTime*TargetTime;
 		      a1= 9.11624927549143e+03     -2.58756688458379e-05*TargetTime  +2.44813299402635e-14*TargetTime*TargetTime    -7.72051926398669e-24*TargetTime*TargetTime*TargetTime;
 		      a2= 1.54511810557473     -4.37364794268721e-09*TargetTime  +4.12654116717364e-18*TargetTime*TargetTime    -1.29774420683466e-27*TargetTime*TargetTime*TargetTime;
 		      a3= -1.06133437236275e-03 +3.01513184952562e-12*TargetTime  -2.85515025959781e-21*TargetTime*TargetTime    +9.01198337961537e-31*TargetTime*TargetTime*TargetTime;
 		      correction=a0+a1*vLCP+a2*vLCP*vLCP+a3*vLCP*vLCP*vLCP;
-		      //vLCP-=(float)correction;
+		      vLCP-=(float)correction;
 		      correction=a0+a1*vRCP+a2*vRCP*vRCP+a3*vRCP*vRCP*vRCP;
-		      //vRCP-=(float)correction;
+		      vRCP-=(float)correction;*/
 
 		      //CORRECTION SUGGESTED BY CHARLIE LINDSEY FOR CALIBRATION 11, WITH LOOKUP TABLE FSN_REC=4875802, AND FOR APRIL 10-11, 2010 ONLY (17:45 to 17:45)
+		      //vLCP=100.0+1.11912*(vLCP-100.0)-416.927*log((7000.0+vLCP-100.0)/(7000.0-vLCP+100.0));
+		      //vRCP=100.0+1.11912*(vRCP-100.0)-416.927*log((7000.0+vRCP-100.0)/(7000.0-vRCP+100.0));
+
 		      //vLCP=31.2+1.13056*(vLCP-31.2)-421.19*log((7000.0+vLCP-31.2)/(7000.0-vLCP+31.2));
 		      //vRCP=31.2+1.13056*(vRCP-31.2)-421.19*log((7000.0+vRCP-31.2)/(7000.0-vRCP+31.2));
 
 
+		      //CORRECTION USING THE POLYNOMIAL COEFFICIENTS FROM hmi.coefficients[]
+		      //if(!QUICKLOOK)
+		      //{
+		      correction=coeff[0]+coeff[1]*vLCP+coeff[2]*vLCP*vLCP+coeff[3]*vLCP*vLCP*vLCP;
+		      vLCP-=(float)correction;
+		      correction=coeff[0]+coeff[1]*vRCP+coeff[2]*vRCP*vRCP+coeff[3]*vRCP*vRCP*vRCP;
+		      vRCP-=(float)correction;
+		      //} 
+		      
 		      //We compute the Doppler velocity
 		      //lam0g[iii]  = (float)((vLCP+vRCP+v2LCP+v2RCP)/4.);//simple average. Need weights? REMINDER: SIGN CONVENTION: v<0 FOR MOTION TOWARD THE OBSERVER (BLUESHIFT)
 		      lam0g[iii]  = (float)((vLCP+vRCP)/2.);

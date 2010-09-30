@@ -67,6 +67,9 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define NpolIn         "npol"         //number of polarizations in observable framelist
 #define FramelistSizeIn "size"        //size of the framelist
 #define SeriesIn       "lev1"         //series name for the lev1 filtergrams
+#define QuickLookIn    "quicklook"    //quicklook data (yes=1,no=0)? 0 BY DEFAULT
+
+#define Q_ACS_ECLP 0x2000 //eclipse keyword for the lev1 data
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
@@ -104,6 +107,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define QUAL_NOGAPFILL               (0x1000)               //the code could not properly gap-fill all the lev 1 filtergrams
 #define QUAL_LIMBFITISSUE            (0x800)                //some lev1 records were discarded because R_SUN, and/or CRPIX1/CRPIX2 were missing or too different from the median value of the other lev 1 records (too much jitter for instance)
 #define QUAL_NOCOSMICRAY             (0x400)                //some cosmic-ray hit lists could not be read for the level 1 filtergrams
+#define QUAL_ECLIPSE                 (0x300)                //at least one lev1 record was taken during an eclipse
 
 
 //DRMS FAILURE (AN OBSERVABLE COULD, A PRIORI, BE CREATED, BUT THERE WAS A MOMENTARY FAILURE OF THE DRMS)
@@ -125,6 +129,7 @@ ModuleArgs_t module_args[] =
      {ARG_INT,    NpolIn,"4", "Number of polarizations in framelist"},
      {ARG_INT,    FramelistSizeIn,"36", "size of framelist"},
      {ARG_STRING, SeriesIn, "hmi.lev1",  "Name of the lev1 series"},
+     {ARG_INT   , QuickLookIn, "0"    ,  "Quicklook data? No=0; Yes=1"},
      {ARG_END}
 };
 
@@ -248,9 +253,18 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 
   //The three following files have been checked into CVS. I should put the files in /home/cvsuser/cvsroot/JSOC/proj/lev1.5_hmi/
   //Each time one of the original files is modified, it needs to be checked in CVS again
-  char filename[]  = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/Sequences3.txt"; //file containing information about the different observable sequences
-  char filename2[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.w";         //file containing the HCM positions for the wavelength selection
-  char filename3[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.p";         //file containing the HCM positions for the polarization selection
+  //char filename[]  = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/Sequences3.txt"; //file containing information about the different observable sequences
+  //char filename2[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.w";         //file containing the HCM positions for the wavelength selection
+  //char filename3[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.p";         //file containing the HCM positions for the polarization selection
+
+  char *filename=NULL;
+  char *filename2=NULL;
+  char *filename3=NULL;
+
+  filename=strdup(DEFS_MKPATH("/../Sequences3.txt"));
+  filename2=strdup(DEFS_MKPATH("/../std.w"));
+  filename3=strdup(DEFS_MKPATH("/../std.p"));
+
 
   char line[256];
   int  PL_Index[MaxNumFiltergrams],WL_Index[MaxNumFiltergrams];
@@ -269,6 +283,12 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   if(sequencefile == NULL)
     {
       printf("The file %s does not exist or cannot be read\n",filename);
+      free(filename);
+      free(filename2);
+      free(filename3);
+      filename=NULL;
+      filename2=NULL;
+      filename3=NULL;
       return 1;//exit(EXIT_FAILURE);
     }
 
@@ -417,6 +437,12 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
       if(WavelengthIndex[i] == -1)
 	{
 	  printf("Error: WavelengthIndex[i]=-1 \n");
+	  free(filename);
+	  free(filename2);
+	  free(filename3);
+	  filename=NULL;
+	  filename2=NULL;
+	  filename3=NULL;
 	  return 1;//exit(EXIT_FAILURE);
 	}
     }
@@ -431,6 +457,12 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   if(sequencefile == NULL)
     {
       printf("The file %s does not exist or cannot be read\n",filename2);
+      free(filename);
+      free(filename2);
+      free(filename3);
+      filename=NULL;
+      filename2=NULL;
+      filename3=NULL;
       return 1;//exit(EXIT_FAILURE);
     }
 
@@ -455,6 +487,12 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   if(sequencefile == NULL)
     {
       printf("The file %s does not exist or cannot be read\n",filename3);
+      free(filename);
+      free(filename2);
+      free(filename3);
+      filename=NULL;
+      filename2=NULL;
+      filename3=NULL;
       return 1;//exit(EXIT_FAILURE);
     }
 
@@ -479,6 +517,13 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
     {
       framelistSize=0; //problem occured
     }
+
+  free(filename);
+  free(filename2);
+  free(filename3);
+  filename=NULL;
+  filename2=NULL;
+  filename3=NULL;
 
   return framelistSize;
 }
@@ -820,7 +865,15 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
   free(config);
   free(kx);
   free(filename_table);
-  
+  id=NULL;
+  nrows=NULL;
+  ncols=NULL;
+  rowstr=NULL;
+  colstr=NULL;
+  config=NULL;
+  kx=NULL;
+  filename_table=NULL;
+
   return status;
 }
 
@@ -828,7 +881,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.1 2010/09/16 21:41:15 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.2 2010/09/30 21:09:51 couvidat Exp $");
 }
 
 
@@ -865,19 +918,33 @@ int DoIt(void)
   CODEVERSION2=interpol_version();
   char *CODEVERSION3=NULL;
   CODEVERSION3=polcal_version();                                                       //version of the polarization calibration code
-  char DISTCOEFPATH[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to tables containing distortion coefficients
-  char ROTCOEFPATH[] ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to file containing rotation coefficients
-  char HISTORY[]="based on hmi.lev1c_nrt series";                                      //history of the data
-  char COMMENT[]="De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.55; correction for cosmic-ray hits; correction of R_SUN and CRPIX1 for limb finder artifacts using Jesper's prescription"; //comment about what the observables code is doing
+  //char DISTCOEFPATH[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to tables containing distortion coefficients
+  //char ROTCOEFPATH[] ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to file containing rotation coefficients
+  char *DISTCOEFPATH=NULL;                                                             //path to tables containing distortion coefficients
+  char *ROTCOEFPATH =NULL;                                                             //path to file containing rotation coefficients
+
+
+  char HISTORY[MaxNString];                                                            //history of the data
+  char COMMENT[]="De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.55; correction for cosmic-ray hits"; //comment about what the observables code is doing
   struct init_files initfiles;
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
   //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist2.bin";
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist_v3-d6_256_128_f09_c0_front_lim_v1.bin";
   //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist_v3-d6_256_128_f09_c1_side_lim_v1.bin";
-  char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_front_o6_100624.txt";
-  char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_side_o6_100624.txt";
+  //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_front_o6_100624.txt";
+  //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_side_o6_100624.txt";
 
-  char ROTCOEFFILE[]  ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt";
+  char *DISTCOEFFILEF=NULL;
+  char *DISTCOEFFILES=NULL;
+  char *ROTCOEFFILE=NULL;
+  DISTCOEFFILEF=strdup(DEFS_MKPATH("/../libs/lev15/distmodel_front_o6_100624.txt"));
+  DISTCOEFFILES=strdup(DEFS_MKPATH("/../libs/lev15/distmodel_side_o6_100624.txt"));
+  ROTCOEFFILE  =strdup(DEFS_MKPATH("/../libs/lev15/rotcoef_file.txt"));
+  DISTCOEFPATH =strdup(DEFS_MKPATH("/../libs/lev15/"));
+  ROTCOEFPATH  =strdup(DEFS_MKPATH("/../libs/lev15/"));
+
+
+  //char ROTCOEFFILE[]  ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt";
   initfiles.dist_file_front=DISTCOEFFILEF;
   initfiles.dist_file_side=DISTCOEFFILES;
   initfiles.diffrot_coef=ROTCOEFFILE;
@@ -893,12 +960,20 @@ int DoIt(void)
   int   Npolin             = cmdparams_get_int(&cmdparams,NpolIn,         NULL);      //number of polarizations in the framelist
   int   Framelistsizein    = cmdparams_get_int(&cmdparams,FramelistSizeIn,NULL);      //size of framelist
   char *inLev1Series       = cmdparams_get_str(&cmdparams,SeriesIn,       NULL);      //name of the lev1 series
-
+  int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,    NULL);      //Quick look data or no? yes=1, no=0
 
   if(CamId == 0) CamId = LIGHT_SIDE;
   else           CamId = LIGHT_FRONT;
 
-  printf("COMMAND LINE PARAMETERS= %s %s %d %d %f %d\n",inRecQuery,inRecQuery2,WavelengthID,CamId,DataCadence,Npolin);
+  if(QuickLook != 0 && QuickLook != 1)                                                 //check that the command line parameter for the quicklook data is valid (must be either 0 or 1)
+    {
+      printf("The parameter quicklook must be either 0 or 1\n");
+      return 1;
+      //exit(EXIT_FAILURE);
+    }
+
+
+  printf("COMMAND LINE PARAMETERS= %s %s %d %d %f %d %d\n",inRecQuery,inRecQuery2,WavelengthID,CamId,DataCadence,Npolin,QuickLook);
 
 
   // Main Parameters                                                                                                    
@@ -936,7 +1011,7 @@ int DoIt(void)
   DRMS_RecordSet_t *recLev1p = NULL;                                 //record for the level 1p data (output data)
   DRMS_RecordSet_t *rectemp  = NULL;     
 
-  char  CosmicRaySeries[MaxNString]= "su_richard.cosmic_rays_b";     //name of the series containing the cosmic-ray hits
+  char  CosmicRaySeries[MaxNString]= "hmi.cosmic_rays";     //name of the series containing the cosmic-ray hits
   char  HMISeries[MaxNString];
   char  timeBegin[MaxNString] ="2000.12.25_00:00:00";
   char  timeEnd[MaxNString]   ="2000.12.25_00:00:00";
@@ -1029,6 +1104,8 @@ int DoIt(void)
   int  *CAMAVG=NULL;
   int   wl=0;
   int   row,column;
+  int  *QUALITYin=NULL;
+  int  *QUALITYLEV1=NULL;
 
   float *image=NULL;                                                 //for gapfilling code
   float **images=NULL;                                               //for temporal interpolation function
@@ -1151,6 +1228,7 @@ int DoIt(void)
   char *ierror            = NULL;                                    //for gapfilling code
   char **ierrors          = NULL;                                    //for temporal interpolation function
   char *SOURCES           = "SOURCE";
+  char *QUALLEV1S         = "QUALLEV1";
 
   DRMS_Array_t **Segments=NULL;                                      //pointer to pointers to structures that will contain the segments of the level 1 filtergrams
   DRMS_Array_t **Ierror=NULL;                                        //for gapfilling code
@@ -1281,9 +1359,16 @@ int DoIt(void)
   //initialization of Level 1p (I,Q,U, and V) data series names
   //*************************************************************************************
 
-  if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi_test.S4_720s");
-  else strcpy(HMISeriesLev1p,"hmi_test.S2_360s");
-
+   if(QuickLook == 1)                                                //Quick-look data
+     { 
+       if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
+       else strcpy(HMISeriesLev1p,"hmi_test.S2_360s_nrt");
+     }
+   else                                                               //Definitive Data
+     {
+       if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi_test.S5_720s");
+       else strcpy(HMISeriesLev1p,"hmi_test.S2_360s");
+     }
 
   //the requested time range [timeBegin,timeEnd] must be increased to take into account
   //the fact that the temporal interpolation scheme requires data points before and after
@@ -1544,6 +1629,12 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to NBADPERM\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
+      QUALITYin = (int *)malloc(nRecs1*sizeof(int)); 
+      if(QUALITYin == NULL)
+	{
+	  printf("Error: memory could not be allocated to QUALITYin\n");
+	  return 1;//exit(EXIT_FAILURE);
+	}
       
       //reading some keyword values for all the open records (PUT MISSINGKEYWORD OR MISSINGKEYWORDINT IF THE KEYWORD IS MISSING) and
       //create an array IndexFiltergram with the record index of all the filtergrams with the wavelength WavelengthID
@@ -1645,6 +1736,7 @@ int DoIt(void)
 	  HWLTNSET[i]   = drms_getkey_string(recLev1->records[i] ,HWLTNSETS      ,&statusA[30]);
 	  NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[31]);
 	  if(statusA[31] != DRMS_SUCCESS) NBADPERM[i]=-1;
+	  QUALITYin[i]  = drms_getkey_int(recLev1->records[i] ,QUALITYS          ,&statusA[32]);
 	  
 	  //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	  /*if(statusA[9] == DRMS_SUCCESS && statusA[16] == DRMS_SUCCESS && statusA[14] == DRMS_SUCCESS && statusA[22] == DRMS_SUCCESS && statusA[21] == DRMS_SUCCESS)
@@ -1802,6 +1894,13 @@ int DoIt(void)
       return 1;//exit(EXIT_FAILURE);
     }
   for(i=0;i<nTime;i++) QUALITY[i]=0; //set the quality keyword to 0
+  QUALITYLEV1 =(int *)malloc(nTime*sizeof(int));
+  if(QUALITYLEV1 == NULL)
+    {
+      printf("Error: memory could not be allocated to QUALITYLEV1\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
+  for(i=0;i<nTime;i++) QUALITYLEV1[i]=0; //set the quality keyword to 0
   X0AVG     =(float *)malloc(nTime*sizeof(float));
   if(X0AVG == NULL)
     {
@@ -2387,7 +2486,8 @@ int DoIt(void)
 	      TargetCFINDEX   = CFINDEX[temp];
 	      strcpy(TargetISS,HWLTNSET[temp]);
 	      if(!strcmp(TargetISS,"OPEN")) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET;
-			
+	      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
+	
 	      framelistSize   = framelistInfo(TargetHFLID,TargetHPLTID,TargetHWLTID,WavelengthID,PHWPLPOS,WavelengthIndex,WavelengthLocation,&PolarizationType,CamId,&combine,&npol,MaxNumFiltergrams,&CadenceRead,CameraValues,FIDValues);
 	      if(framelistSize == 1) return 1;
 
@@ -2896,7 +2996,9 @@ int DoIt(void)
 		  free(X0ARR);
 		  free(Y0ARR);
 		  free(RSUNARR);
-
+		  X0ARR=NULL;
+		  Y0ARR=NULL;
+		  RSUNARR=NULL;
 
 		}//end if(it2 == 0 && it == 0)
 
@@ -3020,10 +3122,22 @@ int DoIt(void)
 						  printf("Error: unable to create a mask for the gap filling function\n");
 						  return 1;//exit(EXIT_FAILURE);
 						}
-					      if(BadPixels != NULL) drms_free_array(BadPixels);
-					      if(CosmicRays != NULL) drms_free_array(CosmicRays);
-					      if(rectemp != NULL) drms_close_records(rectemp,DRMS_FREE_RECORD);
-						      
+					      if(BadPixels != NULL)
+						{
+						  drms_free_array(BadPixels);
+						  BadPixels=NULL;
+						}
+					      if(CosmicRays != NULL)
+						{
+						  drms_free_array(CosmicRays);
+						  CosmicRays=NULL;
+						}
+					      if(rectemp != NULL)
+						{
+						  drms_close_records(rectemp,DRMS_FREE_RECORD);
+						  rectemp=NULL;
+						}
+    
 					      image  = arrin[i]->data;
 					      ierror = arrerrors[i]->data;
 					      //printf("Calling gapfilling code for FSN %d \n",FSN[temp]);
@@ -3148,6 +3262,7 @@ int DoIt(void)
 		      if(HCAMID[temp] == LIGHT_FRONT) KeyInterp[ii].camera=0; //WARNING: the convention of Richard's subroutine is that 0=front camera, 1=side camera
 		      else KeyInterp[ii].camera=1;
 		      if(!strcmp(HWLTNSET[temp],"OPEN")) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET;
+		      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
 		      KeyInterp[ii].rsun=RSUNAVG[timeindex];//RSUN[temp]; WARNING: DIFFERENTIAL RESIZING TURNED OFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		      KeyInterp[ii].xx0=X0[temp];
 		      KeyInterp[ii].yy0=Y0[temp];
@@ -3163,6 +3278,8 @@ int DoIt(void)
 		      else strcat(source[timeindex],"#");
 		      strcat(source[timeindex],recnums);
 		      
+		      QUALITYLEV1[timeindex] = QUALITYLEV1[timeindex] | QUALITYin[temp]; //logical OR on the bits of the QUALITY keyword of the lev 1 data
+
 		      ii+=1;
 		    } //ii should be equal to ActualTempIntNum
 		        
@@ -3317,6 +3434,8 @@ int DoIt(void)
 
 	  //propagate keywords from level 1 data to level 1p	  
 	  statusA[8] = drms_setkey_int(recLev1p->records[timeindex],QUALITYS,QUALITY[timeindex]); //Quality word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
+	  statusA[44]= drms_setkey_int(recLev1p->records[timeindex],QUALLEV1S,QUALITYLEV1[timeindex]); //Quality lev1 word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
+
 	  if(it == 0)
 	    { 
 	      //TargetTime,sprint_time(timeBegin2,TargetTime,"TAI",0);
@@ -3386,7 +3505,7 @@ int DoIt(void)
 	      statusA[43]= drms_setkey_int(recLev1p->records[timeindex],HCAMIDS,CamId); 
 
 	      TotalStatus=0;
-	      for(i=0;i<44;++i) 
+	      for(i=0;i<45;++i) 
 	      if(TotalStatus != 0)
 		{
 		  printf("WARNING: could not set some of the keywords modified by the temporal interpolation subroutine for the level 1p data at target time %s\n",timeBegin2);
@@ -3582,6 +3701,7 @@ if(nIndexFiltergram != 0)
 	for(i=0;i<nRecs1;++i) free(HWLTNSET[i]);
 	free(HWLTNSET);
 	free(NBADPERM);
+	free(QUALITYin);
       }
     
     for(i=0;i<nTime;++i) free(source[i]);
@@ -3615,6 +3735,7 @@ if(nIndexFiltergram != 0)
     free(RSUNint);
     free(CARROTint);
     free(QUALITY);
+    free(QUALITYLEV1);
     for(i=0;i<nWavelengths*npolout;i++)
       {
 	free(DATAMINS[i]);
@@ -3658,6 +3779,11 @@ if(nIndexFiltergram != 0)
   free(CODEVERSION1);
   free(CODEVERSION2);
   free(CODEVERSION3);
+  free(DISTCOEFFILEF);
+  free(DISTCOEFFILES);
+  free(ROTCOEFFILE);
+  free(DISTCOEFPATH);
+  free(ROTCOEFPATH);
 
   printf("END PROGRAM\n");
 

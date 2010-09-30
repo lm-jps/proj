@@ -4,7 +4,6 @@
 /*                                                                                                                                        */
 /* Authors:                                                                                                                               */
 /* S. COUVIDAT, J. SCHOU, AND R. WACHTER                                                                                                  */
-/* Version 1.0 November 19, 2009                                                                                                          */                                       
 /*                                                                                                                                        */
 /* FILTER/WAVELENGTH NAMES:                                                                                                               */
 /*--------------------------------                                                                                                        */
@@ -35,6 +34,8 @@
 /*                        filtergrams (LEVEL 1d SERIES HAVE TWO PRIME KEYS: T_REC AND FID)                                                */
 /* LEVEL 1p FILTERGRAMS = Polarization calibrated data IQUV                                                                               */
 /*                                                                                                                                        */
+/* NB: T_REC is Earth time, i.e. time at 1 AU                                                                                             */
+/* T_OBS is the time on SDO, i.e. T_OBS=T_REC+(DSUN_OBS-1AU)/c                                                                            */
 /* POTENTIAL ISSUE: THE CAMERAS ARE IDENTIFIED USING HCAMID                                                                               */
 /*----------------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -54,7 +55,8 @@
 
 char *module_name    = "HMI_IQUV_averaging2"; //name of the module
 
-#define kRecSetIn      "times"        //time range for which an output is wanted. MANDATORY PARAMETER.
+#define kRecSetIn      "begin"        //beginning time for which an output is wanted. MANDATORY PARAMETER.
+#define kRecSetIn2     "end"          //end time for which an output is wanted. MANDATORY PARAMETER.
                                       //the output will be UNIFORM IN EARTH TIME, NOT SDO TIME
 #define WaveLengthIn   "wavelength"   //filtergram name Ii starting the framelist (i ranges from 0 to 5). MANDATORY PARAMETER.
 #define CamIDIn        "camid"        //front camera (camid=1) or side camera (camid=0)?
@@ -64,6 +66,10 @@ char *module_name    = "HMI_IQUV_averaging2"; //name of the module
 #define DataCadenceIn  "cadence"      //cadence (45, 90, or 135 seconds)   
 #define NpolIn         "npol"         //number of polarizations in observable framelist
 #define FramelistSizeIn "size"        //size of the framelist
+#define SeriesIn       "lev1"         //series name for the lev1 filtergrams
+#define QuickLookIn    "quicklook"    //quicklook data (yes=1,no=0)? 0 BY DEFAULT
+
+#define Q_ACS_ECLP 0x2000 //eclipse keyword for the lev1 data
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
@@ -101,6 +107,7 @@ char *module_name    = "HMI_IQUV_averaging2"; //name of the module
 #define QUAL_NOGAPFILL               (0x1000)               //the code could not properly gap-fill all the lev 1 filtergrams
 #define QUAL_LIMBFITISSUE            (0x800)                //some lev1 records were discarded because R_SUN, and/or CRPIX1/CRPIX2 were missing or too different from the median value of the other lev 1 records (too much jitter for instance)
 #define QUAL_NOCOSMICRAY             (0x400)                //some cosmic-ray hit lists could not be read for the level 1 filtergrams
+#define QUAL_ECLIPSE                 (0x300)                //at least one lev1 record was taken during an eclipse
 
 
 //DRMS FAILURE (AN OBSERVABLE COULD, A PRIORI, BE CREATED, BUT THERE WAS A MOMENTARY FAILURE OF THE DRMS)
@@ -114,12 +121,15 @@ char *module_name    = "HMI_IQUV_averaging2"; //name of the module
                                      //arguments of the module
 ModuleArgs_t module_args[] =        
 {
-     {ARG_STRING, kRecSetIn, ""       ,  "Time range (UT times) for which an output is wanted, in the format [2008.12.25_00:00:00-2008.12.25_01:00:00]"},
+     {ARG_STRING, kRecSetIn, ""       ,  "beginning time for which an output is wanted"},
+     {ARG_STRING, kRecSetIn2, ""      ,  "end time for which an output is wanted"},
      {ARG_INT   , WaveLengthIn,"3"    ,  "Index of the wavelength starting the framelist. FROM 0 TO 5"},
      {ARG_INT   , CamIDIn    , "0"    ,  "Front (1) or side (0) camera?"},
      {ARG_DOUBLE, DataCadenceIn,"135.0"  ,"Cadence: 45, 90, or 135"},
      {ARG_INT,    NpolIn,"4", "Number of polarizations in framelist"},
      {ARG_INT,    FramelistSizeIn,"36", "size of framelist"},
+     {ARG_STRING, SeriesIn, "hmi.lev1",  "Name of the lev1 series"},
+     {ARG_INT   , QuickLookIn, "0"    ,  "Quicklook data? No=0; Yes=1"},
      {ARG_END}
 };
 
@@ -172,10 +182,10 @@ int WhichWavelength(int FID)
 {
   int result;
   int temp;
-  if(FID < 100000) temp = FID/10-1000; //temp is now the filter index
+  if(FID < 100000) temp=(FID/10) % 20;//temp = FID/10-1000; //temp is now the filter index
   else
     {
-      temp = (FID-100000)/10-1000; //temp is now the filter index
+      temp = ((FID-100000)/10) % 20;//(FID-100000)/10-1000; //temp is now the filter index
     }
   switch (temp)
     {
@@ -243,9 +253,18 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 
   //The three following files have been checked into CVS. I should put the files in /home/cvsuser/cvsroot/JSOC/proj/lev1.5_hmi/
   //Each time one of the original files is modified, it needs to be checked in CVS again
-  char filename[]  = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/Sequences3.txt"; //file containing information about the different observable sequences
-  char filename2[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.w";         //file containing the HCM positions for the wavelength selection
-  char filename3[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.p";         //file containing the HCM positions for the polarization selection
+  //char filename[]  = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/Sequences3.txt"; //file containing information about the different observable sequences
+  //char filename2[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.w";         //file containing the HCM positions for the wavelength selection
+  //char filename3[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.p";         //file containing the HCM positions for the polarization selection
+
+  char *filename=NULL;
+  char *filename2=NULL;
+  char *filename3=NULL;
+
+  filename=strdup(DEFS_MKPATH("/../Sequences3.txt"));
+  filename2=strdup(DEFS_MKPATH("/../std.w"));
+  filename3=strdup(DEFS_MKPATH("/../std.p"));
+
 
   char line[256];
   int  PL_Index[MaxNumFiltergrams],WL_Index[MaxNumFiltergrams];
@@ -264,6 +283,12 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   if(sequencefile == NULL)
     {
       printf("The file %s does not exist or cannot be read\n",filename);
+      free(filename);
+      free(filename2);
+      free(filename3);
+      filename=NULL;
+      filename2=NULL;
+      filename3=NULL;
       return 1;//exit(EXIT_FAILURE);
     }
 
@@ -379,7 +404,7 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 
   for(i=0;i<framelistSize;++i)
     {
-      WLINDEX=FID[i]/10-1000;
+      WLINDEX=(FID[i]/10) % 20;//FID[i]/10-1000;
       WL_Index[i]=WLINDEX+baseindexW;
       PLINDEX=FID[i]%10;
       PL_Index[i]=PLINDEX+baseindexP;
@@ -412,6 +437,12 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
       if(WavelengthIndex[i] == -1)
 	{
 	  printf("Error: WavelengthIndex[i]=-1 \n");
+	  free(filename);
+	  free(filename2);
+	  free(filename3);
+	  filename=NULL;
+	  filename2=NULL;
+	  filename3=NULL;
 	  return 1;//exit(EXIT_FAILURE);
 	}
     }
@@ -426,6 +457,12 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   if(sequencefile == NULL)
     {
       printf("The file %s does not exist or cannot be read\n",filename2);
+      free(filename);
+      free(filename2);
+      free(filename3);
+      filename=NULL;
+      filename2=NULL;
+      filename3=NULL;
       return 1;//exit(EXIT_FAILURE);
     }
 
@@ -450,6 +487,12 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   if(sequencefile == NULL)
     {
       printf("The file %s does not exist or cannot be read\n",filename3);
+      free(filename);
+      free(filename2);
+      free(filename3);
+      filename=NULL;
+      filename2=NULL;
+      filename3=NULL;
       return 1;//exit(EXIT_FAILURE);
     }
 
@@ -475,6 +518,13 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
       framelistSize=0; //problem occured
     }
 
+  free(filename);
+  free(filename2);
+  free(filename3);
+  filename=NULL;
+  filename2=NULL;
+  filename3=NULL;
+
   return framelistSize;
 }
 
@@ -489,7 +539,7 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 /*                                                                                                                  */
 /*------------------------------------------------------------------------------------------------------------------*/
 
-int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, int HIMGCFID, float *image, DRMS_Array_t  *CosmicRays)
+int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, int HIMGCFID, float *image, DRMS_Array_t  *CosmicRays, int nbadperm)
 {
 
   int status=2;
@@ -511,6 +561,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
       cosmicraylist=CosmicRays->data;
       ncosmic=CosmicRays->axis[0];
     } 
+  else ncosmic = -1;
 
   int x_orig,y_orig,x_dir,y_dir;
   int skip, take, skip_x, skip_y;
@@ -783,7 +834,8 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 	}
 
 
-      //NEED TO FILL THE BAD PIXELS INSIDE THE CROP TABLE
+      //NEED TO FILL THE BAD PIXELS INSIDE THE CROP TABLE (FROM THE BAD PIXEL LIST)
+      if(ncosmic != -1 && nbadperm != -1) nBadPixels = nbadperm;//the cosmic-ray hit list is not missing and NBADPERM is a valid keyword
       if(nBadPixels > 0)
 	{     
 	  for (k=0;k<nBadPixels;++k)
@@ -792,7 +844,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 	    }
 	}
 
-     //NEED TO CORRECT THE COSMIC-RAY HITS INSIDE THE CROP TABLE
+     //NEED TO CORRECT THE COSMIC-RAY HITS INSIDE THE CROP TABLE (FROM THE COSMIC RAY HIT LIST)
       if(ncosmic > 0)
 	{     
 	  for (k=0;k<ncosmic;++k)
@@ -813,10 +865,24 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
   free(config);
   free(kx);
   free(filename_table);
-  
+  id=NULL;
+  nrows=NULL;
+  ncols=NULL;
+  rowstr=NULL;
+  colstr=NULL;
+  config=NULL;
+  kx=NULL;
+  filename_table=NULL;
+
   return status;
 }
 
+//FUNCTION TO RETURN THE VERSION NUMBER OF THE IQUV AVERAGING CODE
+
+char *iquv_version() // Returns CVS version of IQUV averaging
+{
+  return strdup("$Id: HMI_IQUV_averaging2.c,v 1.2 2010/09/30 21:10:02 couvidat Exp $");
+}
 
 
 
@@ -838,19 +904,47 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 int DoIt(void)
 {
 
+#define MaxNString 256                                               //maximum length of strings in character number
+  int errbufstat    =setvbuf(stderr, NULL, _IONBF, BUFSIZ);           //for debugging purpose when running on the cluster
+  int outbufstat    =setvbuf(stdout, NULL, _IONBF, BUFSIZ);
+
+
   //THE FOLLOWING VARIABLES SHOULD BE SET AUTOMATICALLY BY OTHER PROGRAMS. FOR NOW SOME ARE SET MANUALLY
-  char CODEVERSION[]="VER1.0.5";                                                       //version of the IQUV averaging code
+  char *CODEVERSION =NULL;                                                             //version of the IQUV averaging code
+  CODEVERSION=iquv_version();
   char *CODEVERSION1=NULL;                                                             //version of the gapfilling code
+  CODEVERSION1=interpol_version();
   char *CODEVERSION2=NULL;                                                             //version of the temporal interpolation code
-  char CODEVERSION3[]="VER1.0";                                                        //version of the polarization calibration code
-  char DISTCOEFPATH[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to tables containing distortion coefficients
-  char ROTCOEFPATH[] ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to file containing rotation coefficients
-  char HISTORY[]="based on hmi.lev1c_nrt series";                                      //history of the data
-  char COMMENT[]="De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.55; correction for cosmic-ray hits; correction of R_SUN and CRPIX1 for limb finder artifacts using Jesper's prescription"; //comment about what the observables code is doing
+  CODEVERSION2=interpol_version();
+  char *CODEVERSION3=NULL;
+  CODEVERSION3=polcal_version();                                                       //version of the polarization calibration code
+  //char DISTCOEFPATH[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to tables containing distortion coefficients
+  //char ROTCOEFPATH[] ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/";           //path to file containing rotation coefficients
+  char *DISTCOEFPATH=NULL;                                                             //path to tables containing distortion coefficients
+  char *ROTCOEFPATH =NULL;                                                             //path to file containing rotation coefficients
+
+
+  char HISTORY[MaxNString];                                                            //history of the data
+  char COMMENT[]="De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.55; correction for cosmic-ray hits"; //comment about what the observables code is doing
   struct init_files initfiles;
-  char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
-  char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist2.bin";
-  char ROTCOEFFILE[]  ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt";
+  //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
+  //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist2.bin";
+  //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist_v3-d6_256_128_f09_c0_front_lim_v1.bin";
+  //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist_v3-d6_256_128_f09_c1_side_lim_v1.bin";
+  //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_front_o6_100624.txt";
+  //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/distmodel_side_o6_100624.txt";
+
+  char *DISTCOEFFILEF=NULL;
+  char *DISTCOEFFILES=NULL;
+  char *ROTCOEFFILE=NULL;
+  DISTCOEFFILEF=strdup(DEFS_MKPATH("/../libs/lev15/distmodel_front_o6_100624.txt"));
+  DISTCOEFFILES=strdup(DEFS_MKPATH("/../libs/lev15/distmodel_side_o6_100624.txt"));
+  ROTCOEFFILE  =strdup(DEFS_MKPATH("/../libs/lev15/rotcoef_file.txt"));
+  DISTCOEFPATH =strdup(DEFS_MKPATH("/../libs/lev15/"));
+  ROTCOEFPATH  =strdup(DEFS_MKPATH("/../libs/lev15/"));
+
+
+  //char ROTCOEFFILE[]  ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt";
   initfiles.dist_file_front=DISTCOEFFILEF;
   initfiles.dist_file_side=DISTCOEFFILES;
   initfiles.diffrot_coef=ROTCOEFFILE;
@@ -858,25 +952,33 @@ int DoIt(void)
   //Reading the command line parameters
   //*****************************************************************************************************************
 
-  char *inRecQuery         = cmdparams_get_str(&cmdparams, kRecSetIn,     NULL);      //time range
+  char *inRecQuery         = cmdparams_get_str(&cmdparams, kRecSetIn,     NULL);      //beginning time
+  char *inRecQuery2        = cmdparams_get_str(&cmdparams, kRecSetIn2,    NULL);      //end time
   int   WavelengthID       = cmdparams_get_int(&cmdparams,WaveLengthIn ,  NULL);      //wavelength of the target filtergram
   int   CamId              = cmdparams_get_int(&cmdparams,CamIDIn,        NULL);      //front (1) or side (0) camera?
-  TIME  DataCadence        = cmdparams_get_double(&cmdparams,DataCadenceIn, NULL);    //cadence of the observable sequence (45, 48, 90, 96, or 135 seconds)
+  TIME  DataCadence        = cmdparams_get_double(&cmdparams,DataCadenceIn,NULL);     //cadence of the observable sequence (45, 48, 90, 96, or 135 seconds)
   int   Npolin             = cmdparams_get_int(&cmdparams,NpolIn,         NULL);      //number of polarizations in the framelist
   int   Framelistsizein    = cmdparams_get_int(&cmdparams,FramelistSizeIn,NULL);      //size of framelist
-
+  char *inLev1Series       = cmdparams_get_str(&cmdparams,SeriesIn,       NULL);      //name of the lev1 series
+  int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,    NULL);      //Quick look data or no? yes=1, no=0
 
   if(CamId == 0) CamId = LIGHT_SIDE;
   else           CamId = LIGHT_FRONT;
 
-  printf("COMMAND LINE PARAMETERS= %s %d %d %f %d\n",inRecQuery,WavelengthID,CamId,DataCadence,Npolin);
+  if(QuickLook != 0 && QuickLook != 1)                                                 //check that the command line parameter for the quicklook data is valid (must be either 0 or 1)
+    {
+      printf("The parameter quicklook must be either 0 or 1\n");
+      return 1;
+      //exit(EXIT_FAILURE);
+    }
+
+
+  printf("COMMAND LINE PARAMETERS= %s %s %d %d %f %d %d\n",inRecQuery,inRecQuery2,WavelengthID,CamId,DataCadence,Npolin,QuickLook);
 
 
   // Main Parameters                                                                                                    
   //*****************************************************************************************************************
-
-#define MaxNString 256                                               //maximum length of strings in character number
-  TIME  AverageTime=720.;                                            //averaging time for the I,Q,U,V in seconds (normally 12 minutes), MUST BE EQUAL TO TREC_STEP OF THE LEVEL 1p SERIES              
+  TIME  AverageTime=720.;//360.;                                     //averaging time for the I,Q,U,V in seconds (normally 12 minutes), MUST BE EQUAL TO TREC_STEP OF THE LEVEL 1p SERIES              
   int   NumWavelengths=6;                                            //maximum number of possible values for the input WaveLengthID parameter
   int   MaxNumFiltergrams=72;                                        //maximum number of filtergrams in an observable sequence
   int   TempIntNum;                                                  //number of points requested for temporal interpolation (WARNING: MUST BE AN EVEN NUMBER ONLY!!!!!)
@@ -884,6 +986,8 @@ int DoIt(void)
   const int   nRecmax     = 23040;                                   //maximum number of level 1 records that can be opened at once by the program (roughly 1 day of filtergrams: 23040=86400/3.75)
   char  HMISeriesLev1[MaxNString];                                   //name of the level 1 data series 
   char  HMISeriesLev1p[MaxNString];                                  //name of the level 1p data series FOR I+Q+U+V
+  char  HMISeriesLev10[MaxNString];  
+
   TIME  CadenceRead;                                                 //cadence of observable sequences according to the info we have on the framelist. Must match DataCadence.
   int   nWavelengths;                                                //number of wavelengths in the framelist (5 or 6)
   
@@ -907,7 +1011,7 @@ int DoIt(void)
   DRMS_RecordSet_t *recLev1p = NULL;                                 //record for the level 1p data (output data)
   DRMS_RecordSet_t *rectemp  = NULL;     
 
-  char  CosmicRaySeries[MaxNString]= "su_richard.cosmic_rays_b";     //name of the series containing the cosmic-ray hits
+  char  CosmicRaySeries[MaxNString]= "hmi.cosmic_rays";     //name of the series containing the cosmic-ray hits
   char  HMISeries[MaxNString];
   char  timeBegin[MaxNString] ="2000.12.25_00:00:00";
   char  timeEnd[MaxNString]   ="2000.12.25_00:00:00";
@@ -921,13 +1025,15 @@ int DoIt(void)
   char  **HWLTNSET=NULL;
   char  TargetISS[]="CLOSED";
   char  FSNtemps[]="00000000000000";
+  char  **source;
+  char  recnums[MaxNString];
 
   TIME  MaxSearchDistanceL,MaxSearchDistanceR;
 
-  TIME  TREC_EPOCH = sscan_time("1977.01.01_00:00:00_TAI");          //Base epoch for T_REC keyword (MDI EPOCH). Center of slot 0 for level 1p data series. MUST BE THE SAME AS IN JSD FILE
-  TIME  TREC_EPOCH0= sscan_time("1977.01.01_00:00:00_TAI"); 
-  //TIME  TREC_EPOCH = sscan_time("1993.01.01_00:00:00_TAI");          //Base epoch for T_REC keyword (MDI EPOCH). Center of slot 0 for level 1p data series. MUST BE THE SAME AS IN JSD FILE
-  //TIME  TREC_EPOCH0= sscan_time("1993.01.01_00:00:00_TAI"); 
+  //TIME  TREC_EPOCH = sscan_time("1977.01.01_00:00:00_TAI");          //Base epoch for T_REC keyword (MDI EPOCH). Center of slot 0 for level 1p data series. MUST BE THE SAME AS IN JSD FILE
+  //TIME  TREC_EPOCH0= sscan_time("1977.01.01_00:00:00_TAI"); 
+  TIME  TREC_EPOCH = sscan_time("1993.01.01_00:00:00_TAI");            //Base epoch for T_REC keyword (MDI EPOCH). Center of slot 0 for level 1p data series. MUST BE THE SAME AS IN JSD FILE
+  TIME  TREC_EPOCH0= sscan_time("1993.01.01_00:00:00_TAI"); 
 
   TIME  TREC_STEP = AverageTime;
   TIME  temptime=0.0, temptime2=0.0;
@@ -987,6 +1093,7 @@ int DoIt(void)
   int   camera;
   int  *CARROTint=NULL;
   int  *CARROT=NULL;
+  int  *NBADPERM=NULL;
   int   fidfilt;
   int   TargetHWLTID;
   int   TargetHPLTID;
@@ -996,6 +1103,9 @@ int DoIt(void)
   int   CameraValues[MaxNumFiltergrams];
   int  *CAMAVG=NULL;
   int   wl=0;
+  int   row,column;
+  int  *QUALITYin=NULL;
+  int  *QUALITYLEV1=NULL;
 
   float *image=NULL;                                                 //for gapfilling code
   float **images=NULL;                                               //for temporal interpolation function
@@ -1004,7 +1114,7 @@ int DoIt(void)
   float *RSUN=NULL;                                                  //Radius of the Sun's image in pixels
   float *CROTA2=NULL;                                                //negative of solar P angle
   float *CRLTOBS=NULL;                                               //solar B angle
-  float *DSUNOBS=NULL;                                               //Distance from Sun's center to SDO in meters
+  double *DSUNOBS=NULL;                                               //Distance from Sun's center to SDO in meters
   float *X0=NULL;                                                    //x-axis location of solar disk center in pixels 
   float *Y0=NULL;                                                    //y-axis location of solar disk center in pixels 
   float *X0AVG=NULL,*Y0AVG=NULL,*RSUNAVG=NULL;                       //average/median values of some keywords
@@ -1012,12 +1122,13 @@ int DoIt(void)
   float *X0RMS=NULL,*Y0RMS=NULL,*RSUNRMS=NULL;
   float TSEL;                                                        //polarization selector temperature (in degree Celsius)
   float TFRONT;                                                      //front window temperature (in degree Celsius)
-  float *OBSVRint=NULL,*OBSVWint=NULL,*OBSVNint=NULL,*CRLNOBSint=NULL,*CRLTOBSint=NULL,*DSUNOBSint=NULL,*CROTA2int=NULL,*RSUNint=NULL,ctime1,ctime2;
+  float *CRLNOBSint=NULL,*CRLTOBSint=NULL,*CROTA2int=NULL,*RSUNint=NULL,ctime1,ctime2;
+  double *OBSVRint=NULL,*OBSVWint=NULL,*OBSVNint=NULL,*DSUNOBSint=NULL;
   float X0AVGT,Y0AVGT;
   float cdelt1;
-  float *OBSVR=NULL;
-  float *OBSVW=NULL;
-  float *OBSVN=NULL;
+  double *OBSVR=NULL;
+  double *OBSVW=NULL;
+  double *OBSVN=NULL;
   float *CRLNOBS=NULL;
   //float *HGLNOBS=NULL;
   float *CDELT1=NULL;                                                //image scale in the x direction (in arcseconds)
@@ -1025,6 +1136,7 @@ int DoIt(void)
   float diffXfs= 6.14124;                                            //difference between CRPIX1 of front and side cameras in pixels (!!! WARNING !!!! SHOULD NOT BE A CONSTANT: VARIES WITH ORBITAL VELOCITY)
   float diffYfs=-4.28992;                                            //difference between CRPIX2 of front and side cameras in pixels (!!! WARNING !!!! SHOULD NOT BE A CONSTANT: VARIES WITH ORBITAL VELOCITY)
   float correction,correction2;
+  float distance;
 
   //KEYWORD FROM INPUT LEVEL 1 DATA
   char *FSNS              = "FSN";                                    //Filtergram Sequence Number
@@ -1064,6 +1176,7 @@ int DoIt(void)
   char *HPLTIDS           = "HPLTID";
   char *WavelengthIDS     = "WAVELNID";
   char *HWLTNSETS         = "HWLTNSET";
+  char *NBADPERMS         = "NBADPERM";
 
   //KEYWORDS FOR OUTPUT LEVEL 1p
   char *TRECS             = "T_REC";                                   //"nominal" slot time and time at which the level 1 data are temporally interpolated
@@ -1088,6 +1201,13 @@ int DoIt(void)
   char **DATARMSS         = NULL;
   char **DATASKEWS        = NULL;
   char **DATAKURTS        = NULL;
+  char **DATAMINS2        = NULL;
+  char **DATAMAXS2        = NULL;
+  char **DATAMEDNS2       = NULL;
+  char **DATAMEANS2       = NULL; 
+  char **DATARMSS2        = NULL;
+  char **DATASKEWS2       = NULL;
+  char **DATAKURTS2       = NULL;
   char *TSELS             = "TSEL";
   char *TFRONTS           = "TFRONT";
   char *TINTNUMS          = "TINTNUM";
@@ -1107,6 +1227,8 @@ int DoIt(void)
   char  query[]           = "000";
   char *ierror            = NULL;                                    //for gapfilling code
   char **ierrors          = NULL;                                    //for temporal interpolation function
+  char *SOURCES           = "SOURCE";
+  char *QUALLEV1S         = "QUALLEV1";
 
   DRMS_Array_t **Segments=NULL;                                      //pointer to pointers to structures that will contain the segments of the level 1 filtergrams
   DRMS_Array_t **Ierror=NULL;                                        //for gapfilling code
@@ -1137,6 +1259,9 @@ int DoIt(void)
 
   char Lev1pSegName[24][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2","V2","I3","Q3","U3","V3","I4","Q4","U4","V4","I5","Q5","U5","V5"};   //names of the segments of the level 1 p records
 
+  DRMS_Record_t *rec = NULL;
+
+
   //Parallelization
   /******************************************************************************************************************/
 
@@ -1150,11 +1275,11 @@ int DoIt(void)
   /******************************************************************************************************************/
 
   //check that the requested time string is in the correct format ([2008.12.25_00:00:00-2008.12.25_01:00:00])
-  if(inRecQuery[0] != '[' || inRecQuery[40] != ']' || inRecQuery[20] != '-' || inRecQuery[5] != '.' || inRecQuery[8] != '.' || inRecQuery[25] != '.' || inRecQuery[28] != '.' || inRecQuery[11] != '_' || inRecQuery[31] != '_' || inRecQuery[14] != ':' || inRecQuery[17] != ':' || inRecQuery[34] != ':' || inRecQuery[37] != ':')
+  /*if(inRecQuery[0] != '[' || inRecQuery[40] != ']' || inRecQuery[20] != '-' || inRecQuery[5] != '.' || inRecQuery[8] != '.' || inRecQuery[25] != '.' || inRecQuery[28] != '.' || inRecQuery[11] != '_' || inRecQuery[31] != '_' || inRecQuery[14] != ':' || inRecQuery[17] != ':' || inRecQuery[34] != ':' || inRecQuery[37] != ':')
     {
       printf("The input parameter times does not have the correct format [2008.12.25_00:00:00-2008.12.25_01:00:00]\n");
       return 1;//exit(EXIT_FAILURE);
-    }
+      }*/
 
   //check that the command line parameter for the target filtergram is valid (must be in the range [0,5] for I0, I1, I2, I3, I4, or I5)
   if(WavelengthID > NumWavelengths-1 || WavelengthID < 0)
@@ -1174,7 +1299,7 @@ int DoIt(void)
   //converting the string containing the requested times into the DRMS TIME type data
   /******************************************************************************************************************/
 
-  for(i=0;i<19;++i)
+  /*for(i=0;i<19;++i)
     {
       timeBegin[i]=inRecQuery[i+1];
       timeEnd[i]  =inRecQuery[i+21];
@@ -1185,7 +1310,13 @@ int DoIt(void)
   printf("ENDING TIME: %s\n",timeEnd);
 
   TimeBegin=sscan_time(timeBegin);                                    //number of seconds elapsed since a given date timeBegin is in TAI format
-  TimeEnd  =sscan_time(timeEnd);   
+  TimeEnd  =sscan_time(timeEnd);   */
+
+  printf("BEGINNING TIME: %s\n",inRecQuery);
+  printf("ENDING TIME: %s\n",inRecQuery2);
+  TimeBegin=sscan_time(inRecQuery);  //number of seconds elapsed since a given date;
+  TimeEnd  =sscan_time(inRecQuery2);   
+
 
   temptime = (TIME)floor((TimeBegin-TREC_EPOCH+TREC_STEP/2.0)/TREC_STEP)*TREC_STEP+TREC_EPOCH;  //WE LOCATE THE SLOT TIME CLOSEST TO THE BEGINNING TIME REQUIRED BY THE USER
   if(temptime < TimeBegin) temptime += TREC_STEP;
@@ -1209,8 +1340,8 @@ int DoIt(void)
       printf("Error: could not initialize the gapfilling, derotation, and temporal interpolation routines\n");
       return 1;//exit(EXIT_FAILURE);
     }      
-  CODEVERSION1=const_param.code_version;
-  CODEVERSION2=CODEVERSION1; //same version number actually because they are both in interpol_code.c
+  //CODEVERSION1=const_param.code_version;
+  //CODEVERSION2=CODEVERSION1; //same version number actually because they are both in interpol_code.c
   status = init_polcal(&pars,method);
   if(status != 0)
     {
@@ -1221,15 +1352,23 @@ int DoIt(void)
 
   //initialization of Level 1 data series names
   //*************************************************************************************
-
-  strcpy(HMISeriesLev1,"hmi.lev1c_nrt");
-
+  strcpy(HMISeriesLev1,inLev1Series);
+  //strcpy(HMISeriesLev1,"hmi.lev1c_nrt");
+  strcpy(HMISeriesLev10,HMISeriesLev1);
 
   //initialization of Level 1p (I,Q,U, and V) data series names
   //*************************************************************************************
 
-  strcpy(HMISeriesLev1p,"hmi_test.S2_720s");
-
+   if(QuickLook == 1)                                                //Quick-look data
+     { 
+       if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
+       else strcpy(HMISeriesLev1p,"hmi_test.S2_360s_nrt");
+     }
+   else                                                               //Definitive Data
+     {
+       if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi_test.S5_720s");
+       else strcpy(HMISeriesLev1p,"hmi_test.S2_360s");
+     }
 
   //the requested time range [timeBegin,timeEnd] must be increased to take into account
   //the fact that the temporal interpolation scheme requires data points before and after
@@ -1355,7 +1494,7 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to CRLTOBS\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      DSUNOBS    = (float *)malloc(nRecs1*sizeof(float));      //Distance from Sun's center to SDO in meters
+      DSUNOBS    = (double *)malloc(nRecs1*sizeof(double));      //Distance from Sun's center to SDO in meters
       if(DSUNOBS == NULL)
 	{
 	  printf("Error: memory could not be allocated to DSUNOBS\n");
@@ -1430,19 +1569,19 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to CDELT1\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      OBSVR = (float *)malloc(nRecs1*sizeof(float)); 
+      OBSVR = (double *)malloc(nRecs1*sizeof(double)); 
       if(OBSVR == NULL)
 	{
 	  printf("Error: memory could not be allocated to OBSVR\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      OBSVW = (float *)malloc(nRecs1*sizeof(float)); 
+      OBSVW = (double *)malloc(nRecs1*sizeof(double)); 
       if(OBSVW == NULL)
 	{
 	  printf("Error: memory could not be allocated to OBSVW\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      OBSVN = (float *)malloc(nRecs1*sizeof(float)); 
+      OBSVN = (double *)malloc(nRecs1*sizeof(double)); 
       if(OBSVN == NULL)
 	{
 	  printf("Error: memory could not be allocated to OBSVN\n");
@@ -1482,6 +1621,18 @@ int DoIt(void)
       if(HWLTNSET == NULL)
 	{
 	  printf("Error: memory could not be allocated to HWLTNSET\n");
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      NBADPERM = (int *)malloc(nRecs1*sizeof(int)); 
+      if(NBADPERM == NULL)
+	{
+	  printf("Error: memory could not be allocated to NBADPERM\n");
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      QUALITYin = (int *)malloc(nRecs1*sizeof(int)); 
+      if(QUALITYin == NULL)
+	{
+	  printf("Error: memory could not be allocated to QUALITYin\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
       
@@ -1551,17 +1702,17 @@ int DoIt(void)
 	  else statusA[17] = 1;
 	  CRLTOBS[i]    = (float)drms_getkey_double(recLev1->records[i],CRLTOBSS,&statusA[18]);
 	  if(isnan(CRLTOBS[i])) statusA[18] = 1;
-	  DSUNOBS[i]    = (float)drms_getkey_double(recLev1->records[i],DSUNOBSS,&statusA[19]);
+	  DSUNOBS[i]    = drms_getkey_double(recLev1->records[i],DSUNOBSS,&statusA[19]);
 	  if(isnan(DSUNOBS[i])) statusA[19] = 1;
 	  HIMGCFID[i]   = drms_getkey_int(recLev1->records[i] ,HIMGCFIDS        ,&statusA[20]);
 	  if(isnan(HIMGCFID[i])) statusA[20] = 1;
 	  CDELT1[i]     = (float)drms_getkey_double(recLev1->records[i] ,CDELT1S,&statusA[21]);
 	  if(isnan(CDELT1[i])) statusA[21] = 1;
-	  OBSVR[i]      = (float)drms_getkey_double(recLev1->records[i] ,OBSVRS ,&statusA[22]);
+	  OBSVR[i]      = drms_getkey_double(recLev1->records[i] ,OBSVRS ,&statusA[22]);
 	  if(isnan(OBSVR[i])) statusA[22] = 1;
-	  OBSVW[i]      = (float)drms_getkey_double(recLev1->records[i] ,OBSVWS ,&statusA[23]);
+	  OBSVW[i]      = drms_getkey_double(recLev1->records[i] ,OBSVWS ,&statusA[23]);
 	  if(isnan(OBSVW[i])) statusA[23] = 1;
-	  OBSVN[i]      = (float)drms_getkey_double(recLev1->records[i] ,OBSVNS ,&statusA[24]);
+	  OBSVN[i]      = drms_getkey_double(recLev1->records[i] ,OBSVNS ,&statusA[24]);
 	  if(isnan(OBSVN[i])) statusA[24] = 1;
 	  CARROT[i]     = drms_getkey_int(recLev1->records[i] ,CARROTS          ,&statusA[25]);
 	  SegmentRead[i]= 0;                                                                  //initialization: segment not in memory
@@ -1583,22 +1734,23 @@ int DoIt(void)
 	      return 1;//exit(EXIT_FAILURE);
 	    }
 	  HWLTNSET[i]   = drms_getkey_string(recLev1->records[i] ,HWLTNSETS      ,&statusA[30]);
+	  NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[31]);
+	  if(statusA[31] != DRMS_SUCCESS) NBADPERM[i]=-1;
+	  QUALITYin[i]  = drms_getkey_int(recLev1->records[i] ,QUALITYS          ,&statusA[32]);
 	  
-       	  	  
-
 	  //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
-	  if(statusA[9] == DRMS_SUCCESS && statusA[16] == DRMS_SUCCESS && statusA[14] == DRMS_SUCCESS && statusA[22] == DRMS_SUCCESS && statusA[21] == DRMS_SUCCESS)
+	  /*if(statusA[9] == DRMS_SUCCESS && statusA[16] == DRMS_SUCCESS && statusA[14] == DRMS_SUCCESS && statusA[22] == DRMS_SUCCESS && statusA[21] == DRMS_SUCCESS)
 	    {
 	      if(FID[i] < 100000) wl = FID[i]/10-1000; //temp is now the filter index
 	      else wl = (FID[i]-100000)/10-1000; //temp is now the filter index
-	      correction=0.445*exp(-((float)wl-10.-OBSVR[i]/(0.690/6173.*3.e8/20.)-0.25)*((float)wl-10.-OBSVR[i]/(0.690/6173.*3.e8/20.)-0.25)/7.1);
-	      correction2=0.39*(-2.0*((float)wl-10.-OBSVR[i]/(0.690/6173.*3.e8/20.)-0.35)/6.15)*exp(-((float)wl-10.-OBSVR[i]/(0.690/6173.*3.e8/20.)-0.35)*((float)wl-10.-OBSVR[i]/(0.690/6173.*3.e8/20.)-0.35)/6.15);
+	      correction=0.445*exp(-((float)wl-10.-(float)OBSVR[i]/(0.690/6173.*3.e8/20.)-0.25)*((float)wl-10.-(float)OBSVR[i]/(0.690/6173.*3.e8/20.)-0.25)/7.1);
+	      correction2=0.39*(-2.0*((float)wl-10.-(float)OBSVR[i]/(0.690/6173.*3.e8/20.)-0.35)/6.15)*exp(-((float)wl-10.-(float)OBSVR[i]/(0.690/6173.*3.e8/20.)-0.35)*((float)wl-10.-(float)OBSVR[i]/(0.690/6173.*3.e8/20.)-0.35)/6.15);
 	      
 	      //printf("%f %f %f %f %f\n",RSUN[i],RSUN[i]-correction,(float)wl-10.-OBSVR[i]/(0.690/6173.*3.e8/20.),X0[i],X0[i]-correction2);
 	      CDELT1[i] = CDELT1[i]*RSUN[i]/(RSUN[i]-correction);
 	      RSUN[i]=RSUN[i]-correction;
 	      X0[i]=X0[i]-correction2;
-	    }		  
+	      }*/		  
 	  
 	  //Now we test whether any keyword is missing and we act accordingly
 	  TotalStatus=0;
@@ -1654,7 +1806,7 @@ int DoIt(void)
       if(nIndexFiltergram == 0) //no filtergram was found with the target wavelength in the opened records
 	{
 	  printf("Error: no filtergram was found with the wavelength %d in the requested level 1 records %s\n",WavelengthID,HMISeriesLev1);
-	  return 1;//exit(EXIT_FAILURE);
+	  //return 1;//exit(EXIT_FAILURE);
 	}	  
       
     }
@@ -1742,6 +1894,13 @@ int DoIt(void)
       return 1;//exit(EXIT_FAILURE);
     }
   for(i=0;i<nTime;i++) QUALITY[i]=0; //set the quality keyword to 0
+  QUALITYLEV1 =(int *)malloc(nTime*sizeof(int));
+  if(QUALITYLEV1 == NULL)
+    {
+      printf("Error: memory could not be allocated to QUALITYLEV1\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
+  for(i=0;i<nTime;i++) QUALITYLEV1[i]=0; //set the quality keyword to 0
   X0AVG     =(float *)malloc(nTime*sizeof(float));
   if(X0AVG == NULL)
     {
@@ -1784,19 +1943,19 @@ int DoIt(void)
       printf("Error: memory could not be allocated to RSUNRMS\n");
       return 1;//exit(EXIT_FAILURE);
     }
-  OBSVRint  =(float *)malloc(nTime*sizeof(float));
+  OBSVRint  =(double *)malloc(nTime*sizeof(double));
   if(OBSVRint == NULL)
     {
       printf("Error: memory could not be allocated to OBSVRint\n");
       return 1;//exit(EXIT_FAILURE);
     }
-  OBSVWint  =(float *)malloc(nTime*sizeof(float));
+  OBSVWint  =(double *)malloc(nTime*sizeof(double));
   if(OBSVWint == NULL)
     {
       printf("Error: memory could not be allocated to OBSVWint\n");
       return 1;//exit(EXIT_FAILURE);
     }
-  OBSVNint  =(float *)malloc(nTime*sizeof(float));
+  OBSVNint  =(double *)malloc(nTime*sizeof(double));
   if(OBSVNint == NULL)
     {
       printf("Error: memory could not be allocated to OBSVNint\n");
@@ -1820,7 +1979,7 @@ int DoIt(void)
       printf("Error: memory could not be allocated to CRLTOBSint\n");
       return 1;//exit(EXIT_FAILURE);
     }
-  DSUNOBSint  =(float *)malloc(nTime*sizeof(float));
+  DSUNOBSint  =(double *)malloc(nTime*sizeof(double));
   if(DSUNOBSint == NULL)
     {
       printf("Error: memory could not be allocated to DSUNOBSint\n");
@@ -1843,6 +2002,23 @@ int DoIt(void)
     {
       printf("Error: memory could not be allocated to CARROTint\n");
       return 1;//exit(EXIT_FAILURE);
+    }
+  source  =(char **)malloc(nTime*sizeof(char *));
+  if(source == NULL)
+    {
+      printf("Error: memory could not be allocated to source\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
+  for(i=0;i<nTime;++i)
+    {
+      source[i] = (char *)malloc(12000*sizeof(char));                       //WARNING: MAKE SURE 12000 IS ENOUGH....
+      if(source[i] == NULL)
+	{
+	  printf("Error: memory could not be allocated to source[%d]\n",i);
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      strcpy(source[i],HMISeriesLev10);                                     //INITIALIZE THE SOURCE KEYWORD
+      strcat(source[i],"[:");
     }
 
   //create array for the names of the 
@@ -1906,6 +2082,48 @@ int DoIt(void)
       printf("Error: memory could not be allocated to DATAKURTS\n");
       return 1;//exit(EXIT_FAILURE);
     }
+  DATAMINS2 =(char **)malloc(nWavelengths*npolout*sizeof(char *));
+  if(DATAMINS2 == NULL)
+    {
+      printf("Error: memory could not be allocated to DATAMINS2\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
+  DATAMAXS2 =(char **)malloc(nWavelengths*npolout*sizeof(char *));
+  if(DATAMAXS2 == NULL)
+    {
+      printf("Error: memory could not be allocated to DATAMAXS2\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
+  DATAMEDNS2 =(char **)malloc(nWavelengths*npolout*sizeof(char *));
+  if(DATAMEDNS2 == NULL)
+    {
+      printf("Error: memory could not be allocated to DATAMEDNS2\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
+  DATAMEANS2 =(char **)malloc(nWavelengths*npolout*sizeof(char *));
+  if(DATAMEANS2 == NULL)
+    {
+      printf("Error: memory could not be allocated to DATAMEANS2\n");
+      return 1;//exit(EXIT_FAILURE);
+    } 
+  DATARMSS2 =(char **)malloc(nWavelengths*npolout*sizeof(char *));
+  if(DATARMSS2 == NULL)
+    {
+      printf("Error: memory could not be allocated to DATARMSS2\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
+  DATASKEWS2 =(char **)malloc(nWavelengths*npolout*sizeof(char *));
+  if(DATASKEWS2 == NULL)
+    {
+      printf("Error: memory could not be allocated to DATASKEWS2\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
+  DATAKURTS2 =(char **)malloc(nWavelengths*npolout*sizeof(char *));
+  if(DATAKURTS2 == NULL)
+    {
+      printf("Error: memory could not be allocated to DATAKURTS2\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
 
   for(i=0;i<nWavelengths*npolout;i++)
     {
@@ -1948,7 +2166,7 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to DATAMEANS[%d]\n",i);
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      strcpy(DATAMEANS[i],"DATAMEAN[");
+      strcpy(DATAMEANS[i],"DATAMEA2[");
       sprintf(query,"%d",i);
       strcat(DATAMEANS[i],query);
       strcat(DATAMEANS[i],"]");
@@ -1959,7 +2177,7 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to DATAMINS[%d]\n",i);
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      strcpy(DATAMINS[i],"DATAMIN[");
+      strcpy(DATAMINS[i],"DATAMIN2[");
       sprintf(query,"%d",i);
       strcat(DATAMINS[i],query);
       strcat(DATAMINS[i],"]");
@@ -1970,7 +2188,7 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to DATAMAXS[%d]\n",i);
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      strcpy(DATAMAXS[i],"DATAMAX[");
+      strcpy(DATAMAXS[i],"DATAMAX2[");
       sprintf(query,"%d",i);
       strcat(DATAMAXS[i],query);
       strcat(DATAMAXS[i],"]");
@@ -1982,7 +2200,7 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to DATAMEDNS[%d]\n",i);
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      strcpy(DATAMEDNS[i],"DATAMEDN[");
+      strcpy(DATAMEDNS[i],"DATAMED2[");
       sprintf(query,"%d",i);
       strcat(DATAMEDNS[i],query);
       strcat(DATAMEDNS[i],"]");
@@ -1993,7 +2211,7 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to DATARMSS[%d]\n",i);
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      strcpy(DATARMSS[i],"DATARMS[");
+      strcpy(DATARMSS[i],"DATARMS2[");
       sprintf(query,"%d",i);
       strcat(DATARMSS[i],query);
       strcat(DATARMSS[i],"]");
@@ -2004,7 +2222,7 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to DATASKEWS[%d]\n",i);
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      strcpy(DATASKEWS[i],"DATASKEW[");
+      strcpy(DATASKEWS[i],"DATASKE2[");
       sprintf(query,"%d",i);
       strcat(DATASKEWS[i],query);
       strcat(DATASKEWS[i],"]");
@@ -2015,10 +2233,89 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to DATAKURTS[%d]\n",i);
 	  return 1;//exit(EXIT_FAILURE);
 	}
-      strcpy(DATAKURTS[i],"DATAKURT[");
+      strcpy(DATAKURTS[i],"DATAKUR2[");
       sprintf(query,"%d",i);
       strcat(DATAKURTS[i],query);
       strcat(DATAKURTS[i],"]");
+
+
+      DATAMINS2[i] = (char *)malloc(12*sizeof(char));
+      if(DATAMINS2[i] == NULL)
+	{
+	  printf("Error: memory could not be allocated to DATAMINS2[%d]\n",i);
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      strcpy(DATAMINS2[i],"DATAMIN[");
+      sprintf(query,"%d",i);
+      strcat(DATAMINS2[i],query);
+      strcat(DATAMINS2[i],"]");
+
+      DATAMAXS2[i] = (char *)malloc(12*sizeof(char));
+      if(DATAMAXS2[i] == NULL)
+	{
+	  printf("Error: memory could not be allocated to DATAMAXS2[%d]\n",i);
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      strcpy(DATAMAXS2[i],"DATAMAX[");
+      sprintf(query,"%d",i);
+      strcat(DATAMAXS2[i],query);
+      strcat(DATAMAXS2[i],"]");
+
+      DATAMEANS2[i] = (char *)malloc(12*sizeof(char));
+      if(DATAMEANS2[i] == NULL)
+	{
+	  printf("Error: memory could not be allocated to DATAMEANS2[%d]\n",i);
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      strcpy(DATAMEANS2[i],"DATAMEAN[");
+      sprintf(query,"%d",i);
+      strcat(DATAMEANS2[i],query);
+      strcat(DATAMEANS2[i],"]");
+
+      DATAMEDNS2[i] = (char *)malloc(12*sizeof(char));
+      if(DATAMEDNS2[i] == NULL)
+	{
+	  printf("Error: memory could not be allocated to DATAMEDNS2[%d]\n",i);
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      strcpy(DATAMEDNS2[i],"DATAMEDN[");
+      sprintf(query,"%d",i);
+      strcat(DATAMEDNS2[i],query);
+      strcat(DATAMEDNS2[i],"]");
+
+      DATARMSS2[i] = (char *)malloc(12*sizeof(char));
+      if(DATARMSS2[i] == NULL)
+	{
+	  printf("Error: memory could not be allocated to DATARMSS2[%d]\n",i);
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      strcpy(DATARMSS2[i],"DATARMS[");
+      sprintf(query,"%d",i);
+      strcat(DATARMSS2[i],query);
+      strcat(DATARMSS2[i],"]");
+
+      DATASKEWS2[i] = (char *)malloc(12*sizeof(char));
+      if(DATASKEWS2[i] == NULL)
+	{
+	  printf("Error: memory could not be allocated to DATASKEWS2[%d]\n",i);
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      strcpy(DATASKEWS2[i],"DATASKEW[");
+      sprintf(query,"%d",i);
+      strcat(DATASKEWS2[i],query);
+      strcat(DATASKEWS2[i],"]");
+
+      DATAKURTS2[i] = (char *)malloc(12*sizeof(char));
+      if(DATAKURTS2[i] == NULL)
+	{
+	  printf("Error: memory could not be allocated to DATAKURTS2[%d]\n",i);
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      strcpy(DATAKURTS2[i],"DATAKURT[");
+      sprintf(query,"%d",i);
+      strcat(DATAKURTS2[i],query);
+      strcat(DATAKURTS2[i],"]");
+
     }
 
 
@@ -2110,6 +2407,15 @@ int DoIt(void)
 	{
 	  
 	  sprint_time(timeBegin2,TargetTime,"TAI",0);                   //convert the time TargetTime from TIME format to a string with TAI type
+
+	  if(nIndexFiltergram == 0)
+	    {
+	      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_TARGETFILTERGRAMMISSING;
+	      CreateEmptyRecord = 1;
+	      goto  NextTargetTime;
+	    }
+
+
 	  //creating the arrays that will contain the temporally averaged filtergrams (level 1d data)
 	  arrLev1d = (DRMS_Array_t **)malloc(Npolin*sizeof(DRMS_Array_t *));
 	  if(arrLev1d == NULL)
@@ -2128,6 +2434,7 @@ int DoIt(void)
 		}
 	    }
 	  
+
 	  /********************************************************************************************************/
 	  /*                                                                                                      */
 	  /*                                                                                                      */
@@ -2179,7 +2486,8 @@ int DoIt(void)
 	      TargetCFINDEX   = CFINDEX[temp];
 	      strcpy(TargetISS,HWLTNSET[temp]);
 	      if(!strcmp(TargetISS,"OPEN")) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET;
-			
+	      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
+	
 	      framelistSize   = framelistInfo(TargetHFLID,TargetHPLTID,TargetHWLTID,WavelengthID,PHWPLPOS,WavelengthIndex,WavelengthLocation,&PolarizationType,CamId,&combine,&npol,MaxNumFiltergrams,&CadenceRead,CameraValues,FIDValues);
 	      if(framelistSize == 1) return 1;
 
@@ -2577,21 +2885,38 @@ int DoIt(void)
 		      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOINTERPOLATEDKEYWORDS;
 		      CreateEmptyRecord=1; goto NextTargetTime;
 		    }
-	  
+
+
+		  if(i != j)
+		    {
+		      DSUNOBSint[timeindex]=(DSUNOBS[j]-DSUNOBS[i])/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+DSUNOBS[i];
+		      DSUNOBSint[timeindex]=DSUNOBSint[timeindex]/(double)AstroUnit;   //do_interpolate() expects distance in AU (AstroUnit should be equal to keyword DSUN_REF of level 1 data)
+		    }
+		  else
+		    {
+		      DSUNOBSint[timeindex]=DSUNOBS[i];
+		      DSUNOBSint[timeindex]=DSUNOBSint[timeindex]/(double)AstroUnit;
+		    }
+		  
+		  //we estimate T_OBS (the observation time ON SDO, while T_REC is Earth time, i.e. time at 1 AU)
+		  tobs = TargetTime+(DSUNOBSint[timeindex]-1.0)/2.00398880422056639358e-03; //observation time, which is equal to the slot time for level 1.5 data corrected for the SDO distance from 1 AU, the speed of light is given in AU/s
+		  
+		  //we use T_OBS and not T_REC to interpolate all the other quantities
+		    
 		  if(i != j)
 		    {
 		      printf("FSNs used for interpolation of OBS_VR, OBS_VW, OBS_VN, CRLN_OBS, CROTA2, and CAR_ROT: %d %d\n",FSN[j],FSN[i]);
-		      //RSUNint[timeindex]   =(RSUN[j]-RSUN[i])/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+RSUN[i];
-		      DSUNOBSint[timeindex]=(DSUNOBS[j]-DSUNOBS[i])/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+DSUNOBS[i];
-		      DSUNOBSint[timeindex]=DSUNOBSint[timeindex]/AstroUnit;   //do_interpolate() expects distance in AU (AstroUnit should be equal to keyword DSUN_REF of level 1 data)
-		      CRLTOBSint[timeindex]=(CRLTOBS[j]-CRLTOBS[i])/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+CRLTOBS[i];
-		      CROTA2int[timeindex] =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+CROTA2[i];
-		      OBSVRint[timeindex]  =(OBSVR[j]-OBSVR[i])/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+OBSVR[i];
-		      OBSVWint[timeindex]  =(OBSVW[j]-OBSVW[i])/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+OBSVW[i];
-		      OBSVNint[timeindex]  =(OBSVN[j]-OBSVN[i])/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+OBSVN[i];
+		      //RSUNint[timeindex]   =(RSUN[j]-RSUN[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+RSUN[i];
+		      DSUNOBSint[timeindex]=(DSUNOBS[j]-DSUNOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+DSUNOBS[i];
+		      DSUNOBSint[timeindex]=DSUNOBSint[timeindex]/(double)AstroUnit;   //do_interpolate() expects distance in AU (AstroUnit should be equal to keyword DSUN_REF of level 1 data)
+		      CRLTOBSint[timeindex]=(CRLTOBS[j]-CRLTOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CRLTOBS[i];
+		      CROTA2int[timeindex] =(CROTA2[j]-CROTA2[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+CROTA2[i];
+		      OBSVRint[timeindex]  =(OBSVR[j]-OBSVR[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVR[i];
+		      OBSVWint[timeindex]  =(OBSVW[j]-OBSVW[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVW[i];
+		      OBSVNint[timeindex]  =(OBSVN[j]-OBSVN[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+OBSVN[i];
 		      ctime1    =-CRLNOBS[i];
 		      ctime2    =360.0*(float)(CARROT[j]-CARROT[i])-CRLNOBS[j];
-		      CRLNOBSint[timeindex]=(ctime2-ctime1)/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+ctime1;
+		      CRLNOBSint[timeindex]=(ctime2-ctime1)/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+ctime1;
 		      if(CARROT[j] > CARROT[i])
 			{
 			  if(CRLNOBSint[timeindex] > 0.0)
@@ -2610,14 +2935,14 @@ int DoIt(void)
 			  CRLNOBSint[timeindex] = -CRLNOBSint[timeindex];
 			  CARROTint[timeindex]  = CARROT[i];
 			}
-		      //HGLNOBSint[timeindex]=(HGLNOBS[j]-HGLNOBS[i])/(internTOBS[j]-internTOBS[i])*(TargetTime-internTOBS[i])+HGLNOBS[i];  
+		      //HGLNOBSint[timeindex]=(HGLNOBS[j]-HGLNOBS[i])/(internTOBS[j]-internTOBS[i])*(tobs-internTOBS[i])+HGLNOBS[i];  
 		    }
 		  else
 		    {
 		      printf("FSN used for interpolation of OBS_VR, OBS_VW, OBS_VN, CRLN_OBS, CROTA2, and CAR_ROT: %d\n",FSN[i]);
 		      //RSUNint[timeindex]   =RSUN[i];
 		      DSUNOBSint[timeindex]=DSUNOBS[i];
-		      DSUNOBSint[timeindex]=DSUNOBSint[timeindex]/AstroUnit;
+		      DSUNOBSint[timeindex]=DSUNOBSint[timeindex]/(double)AstroUnit;
 		      CRLTOBSint[timeindex]=CRLTOBS[i];
 		      CROTA2int[timeindex] =CROTA2[i];
 		      OBSVRint[timeindex]  =OBSVR[i];
@@ -2671,7 +2996,9 @@ int DoIt(void)
 		  free(X0ARR);
 		  free(Y0ARR);
 		  free(RSUNARR);
-
+		  X0ARR=NULL;
+		  Y0ARR=NULL;
+		  RSUNARR=NULL;
 
 		}//end if(it2 == 0 && it == 0)
 
@@ -2789,22 +3116,35 @@ int DoIt(void)
 						}
 					      					      
 					      image  = Segments[temp]->data;
-					      status = MaskCreation(Mask,axisin[0],axisin[1],BadPixels,HIMGCFID[temp],image,CosmicRays); //first create the mask of missing pixels
+					      status = MaskCreation(Mask,axisin[0],axisin[1],BadPixels,HIMGCFID[temp],image,CosmicRays,NBADPERM[temp]); //first create the mask of missing pixels
 					      if(status != 0)
 						{
 						  printf("Error: unable to create a mask for the gap filling function\n");
 						  return 1;//exit(EXIT_FAILURE);
 						}
-					      if(BadPixels != NULL) drms_free_array(BadPixels);
-					      if(CosmicRays != NULL) drms_free_array(CosmicRays);
-					      if(rectemp != NULL) drms_close_records(rectemp,DRMS_FREE_RECORD);
-						      
+					      if(BadPixels != NULL)
+						{
+						  drms_free_array(BadPixels);
+						  BadPixels=NULL;
+						}
+					      if(CosmicRays != NULL)
+						{
+						  drms_free_array(CosmicRays);
+						  CosmicRays=NULL;
+						}
+					      if(rectemp != NULL)
+						{
+						  drms_close_records(rectemp,DRMS_FREE_RECORD);
+						  rectemp=NULL;
+						}
+    
 					      image  = arrin[i]->data;
 					      ierror = arrerrors[i]->data;
 					      //printf("Calling gapfilling code for FSN %d \n",FSN[temp]);
-					      
+					      //printf("RICHARD !!!!! %d\n",Mask[40970]);
 					      status =do_gapfill(image,Mask,&const_param,ierror,axisin[0],axisin[1]); //then call the gapfilling function
-					      
+					      //printf("RICHARD !!!!! %d\n",ierror[40970]);
+
 					      if(status != 0)                               //gapfilling failed
 						{
 						  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOGAPFILL;
@@ -2922,14 +3262,24 @@ int DoIt(void)
 		      if(HCAMID[temp] == LIGHT_FRONT) KeyInterp[ii].camera=0; //WARNING: the convention of Richard's subroutine is that 0=front camera, 1=side camera
 		      else KeyInterp[ii].camera=1;
 		      if(!strcmp(HWLTNSET[temp],"OPEN")) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET;
+		      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
 		      KeyInterp[ii].rsun=RSUNAVG[timeindex];//RSUN[temp]; WARNING: DIFFERENTIAL RESIZING TURNED OFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		      KeyInterp[ii].xx0=X0[temp];
 		      KeyInterp[ii].yy0=Y0[temp];
-		      KeyInterp[ii].dist=DSUNOBS[temp]/AstroUnit; //Richard's code expect distance in AU (CHECK VALUE OF 1 AU)
+		      KeyInterp[ii].dist=(float)(DSUNOBS[temp]/(double)AstroUnit); //Richard's code expect distance in AU (CHECK VALUE OF 1 AU)
 		      KeyInterp[ii].b0=CRLTOBS[temp]/180.*M_PI;   //angles in radians
 		      KeyInterp[ii].p0=CROTA2[temp]/180.*M_PI;    //angles in radians
 		      KeyInterp[ii].time=internTOBS[temp];
 		      KeyInterp[ii].focus=CFINDEX[temp];
+
+		      rec=recLev1->records[temp];
+		      sprintf(recnums,"%ld",rec->recnum);
+		      if(it != 0 || it2 != 0 || ii != 0) strcat(source[timeindex],",#");
+		      else strcat(source[timeindex],"#");
+		      strcat(source[timeindex],recnums);
+		      
+		      QUALITYLEV1[timeindex] = QUALITYLEV1[timeindex] | QUALITYin[temp]; //logical OR on the bits of the QUALITY keyword of the lev 1 data
+
 		      ii+=1;
 		    } //ii should be equal to ActualTempIntNum
 		        
@@ -2938,10 +3288,11 @@ int DoIt(void)
 		  KeyInterpOut.rsun=RSUNint[timeindex];
 		  KeyInterpOut.xx0=X0AVG[timeindex];
 		  KeyInterpOut.yy0=Y0AVG[timeindex];
-		  KeyInterpOut.dist=DSUNOBSint[timeindex];
+		  KeyInterpOut.dist=(float)DSUNOBSint[timeindex];
 		  KeyInterpOut.b0=CRLTOBSint[timeindex]/180.*M_PI;
 		  KeyInterpOut.p0=CROTA2int[timeindex]/180.*M_PI;
-		  KeyInterpOut.time=TargetTime; //TIME AT WHICH THE TEMPORAL INTERPOLATION IS PERFORMED (NOT THE SLOTTED TIME)
+		  tobs = TargetTime+(DSUNOBSint[timeindex]-1.0)/2.00398880422056639358e-03;        //observation time, which is equal to the slot time for level 1.5 data corrected for the SDO distance from 1 AU, the speed of light is given in AU/s
+		  KeyInterpOut.time=tobs; //TIME AT WHICH THE TEMPORAL INTERPOLATION IS PERFORMED (NOT THE SLOTTED TIME)
 		  KeyInterpOut.focus=TargetCFINDEX;
 
 		  //calling Richard's code: temporal interpolation, de-rotation, un-distortion
@@ -2963,7 +3314,14 @@ int DoIt(void)
 		  if(ActualTempIntNum >= ThresholdPol)
 		    {
 		      printf("KEYWORDS OUT: %f %f %f %f %f %f %f %d\n",KeyInterpOut.rsun,KeyInterpOut.xx0,KeyInterpOut.yy0,KeyInterpOut.dist,KeyInterpOut.b0,KeyInterpOut.p0,KeyInterpOut.time,KeyInterpOut.focus);
+
+		      //printf("JESPER !!! %f %d\n",imagesi[0][40970],ierrors[0][40970]);
 		      status=do_interpolate(imagesi,ierrors,arrLev1d[it2]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],AverageTime);
+		      //float *richard;
+		      //richard=arrLev1d[it2]->data;
+		      //printf("JESPER !!! %f\n",richard[40970]);
+		      //exit(EXIT_FAILURE);
+
 		      printf("End temporal interpolation\n");
 		    }
 		  else
@@ -3039,10 +3397,11 @@ int DoIt(void)
 	  KeyInterpOut.rsun=RSUNint[timeindex];
 	  KeyInterpOut.xx0=X0AVG[timeindex];
 	  KeyInterpOut.yy0=Y0AVG[timeindex];
-	  KeyInterpOut.dist=DSUNOBSint[timeindex];
+	  KeyInterpOut.dist=(float)DSUNOBSint[timeindex];
 	  KeyInterpOut.b0=CRLTOBSint[timeindex]/180.*M_PI;
 	  KeyInterpOut.p0=CROTA2int[timeindex]/180.*M_PI;
-	  KeyInterpOut.time=TargetTime;
+	  tobs=TargetTime+(DSUNOBSint[timeindex]-1.0)/2.00398880422056639358e-03;        //observation time, which is equal to the slot time for level 1.5 data corrected for the SDO distance from 1 AU, the speed of light is given in AU/s
+	  KeyInterpOut.time=tobs;//TargetTime;
 
 	  //set temperatures
 	  //open series containing average-temperature data
@@ -3075,6 +3434,8 @@ int DoIt(void)
 
 	  //propagate keywords from level 1 data to level 1p	  
 	  statusA[8] = drms_setkey_int(recLev1p->records[timeindex],QUALITYS,QUALITY[timeindex]); //Quality word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
+	  statusA[44]= drms_setkey_int(recLev1p->records[timeindex],QUALLEV1S,QUALITYLEV1[timeindex]); //Quality lev1 word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
+
 	  if(it == 0)
 	    { 
 	      //TargetTime,sprint_time(timeBegin2,TargetTime,"TAI",0);
@@ -3090,9 +3451,9 @@ int DoIt(void)
 	      if(combine == 0 && CamId  == LIGHT_FRONT) camera=2; //front camera
 
 	      //cdelt1 = COMES FROM  RSUNint AND DSUNOBSint FOR CONSISTENCY
-	      cdelt1=1.0/RSUNint[timeindex]*asin(solar_radius/(DSUNOBSint[timeindex]*AstroUnit))*180.*60.*60./M_PI;
+	      cdelt1=1.0/RSUNint[timeindex]*asin(solar_radius/(DSUNOBSint[timeindex]*(double)AstroUnit))*180.*60.*60./M_PI;
 	      statusA[0] = drms_setkey_time(recLev1p->records[timeindex],TRECS,TargetTime);         //TREC is the slot time (1st prime key)
-	      statusA[1] = drms_setkey_time(recLev1p->records[timeindex],TOBSS,TargetTime);         //TOBS is the observation time
+	      statusA[1] = drms_setkey_time(recLev1p->records[timeindex],TOBSS,tobs);         //TOBS is the observation time
 	      statusA[2] = drms_setkey_int(recLev1p->records[timeindex],CAMERAS,camera);            //second prime key
 	      statusA[3] = drms_setkey_string(recLev1p->records[timeindex],HISTORYS,HISTORY);            //processing history of data
 	      statusA[4] = drms_setkey_string(recLev1p->records[timeindex],COMMENTS,COMMENT);
@@ -3100,7 +3461,7 @@ int DoIt(void)
 	      statusA[6] = drms_setkey_int(recLev1p->records[timeindex],HFLIDS,TargetHFLID);        //HFLID         
 	      statusA[7] = drms_setkey_int(recLev1p->records[timeindex],HCFTIDS,TargetCFINDEX);     //HCFTID
 	      //statusA[8] = drms_setkey_int(recLev1p->records[timeindex],QUALITYS,QUALITY[timeindex]); //Quality word
-	      statusA[9] = drms_setkey_float(recLev1p->records[timeindex],DSUNOBSS,KeyInterpOut.dist*AstroUnit); //DSUN_OBS
+	      statusA[9] = drms_setkey_double(recLev1p->records[timeindex],DSUNOBSS,DSUNOBSint[timeindex]*(double)AstroUnit); //DSUN_OBS
 	      statusA[10]= drms_setkey_float(recLev1p->records[timeindex],CRLTOBSS,KeyInterpOut.b0*180./M_PI);//CRLT_OBS
 	      statusA[11]= drms_setkey_float(recLev1p->records[timeindex],CROTA2S,-KeyInterpOut.p0*180./M_PI);//BECAUSE WE DID CROTA2=-CROTA2
 	      statusA[12]= drms_setkey_float(recLev1p->records[timeindex],CDELT1S,cdelt1);          //CDELT1
@@ -3109,9 +3470,9 @@ int DoIt(void)
 	      statusA[15]= drms_setkey_float(recLev1p->records[timeindex],CRPIX2S,KeyInterpOut.yy0+1.);
 	      sprintf(jsocverss,"%d",jsoc_vers_num);
 	      statusA[16]= drms_setkey_string(recLev1p->records[timeindex],BLDVERSS,jsocverss);
-	      statusA[17]= drms_setkey_float(recLev1p->records[timeindex],OBSVRS,OBSVRint[timeindex]);
-	      statusA[18]= drms_setkey_float(recLev1p->records[timeindex],OBSVWS,OBSVWint[timeindex]);
-	      statusA[19]= drms_setkey_float(recLev1p->records[timeindex],OBSVNS,OBSVNint[timeindex]);
+	      statusA[17]= drms_setkey_double(recLev1p->records[timeindex],OBSVRS,OBSVRint[timeindex]);
+	      statusA[18]= drms_setkey_double(recLev1p->records[timeindex],OBSVWS,OBSVWint[timeindex]);
+	      statusA[19]= drms_setkey_double(recLev1p->records[timeindex],OBSVNS,OBSVNint[timeindex]);
 	      //statusA[20]= drms_setkey_float(recLev1p->records[timeindex],HGLNOBSS,HGLNOBSint[timeindex]);
 	      statusA[20]=0;
 	      statusA[21]= drms_setkey_float(recLev1p->records[timeindex],CRLNOBSS,CRLNOBSint[timeindex]);
@@ -3130,7 +3491,7 @@ int DoIt(void)
 	      statusA[34]= drms_setkey_int(recLev1p->records[timeindex]   ,POLCALMS,method);      
 	      statusA[35]= drms_setkey_string(recLev1p->records[timeindex],CODEVER3S,CODEVERSION3);
 	      statusA[36]= drms_setkey_float(recLev1p->records[timeindex],RSUNOBSS,asin(solar_radius/(KeyInterpOut.dist*AstroUnit))*180.*60.*60./M_PI);
-	      sprint_time(DATEOBS,TargetTime-DataCadence/2.0,"UTC",1);
+	      sprint_time(DATEOBS,tobs-DataCadence/2.0,"UTC",1);
 	      statusA[37]= drms_setkey_string(recLev1p->records[timeindex],DATEOBSS,DATEOBS); 
 	      sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);
 	      statusA[38]= drms_setkey_string(recLev1p->records[timeindex],DATES,DATEOBS); 
@@ -3143,14 +3504,17 @@ int DoIt(void)
 	      statusA[42]= drms_setkey_string(recLev1p->records[timeindex],INSTRUMES,DATEOBS); 
 	      statusA[43]= drms_setkey_int(recLev1p->records[timeindex],HCAMIDS,CamId); 
 
-
 	      TotalStatus=0;
-	      for(i=0;i<44;++i) 
+	      for(i=0;i<45;++i) 
 	      if(TotalStatus != 0)
 		{
 		  printf("WARNING: could not set some of the keywords modified by the temporal interpolation subroutine for the level 1p data at target time %s\n",timeBegin2);
 		}
 	    }
+
+	  //SET THE SOURCE KEYWORD
+	  if(it != nWavelengths-1) statusA[44]= drms_setkey_string(recLev1p->records[timeindex],SOURCES,source[timeindex]); 
+	  else statusA[44]= drms_setkey_string(recLev1p->records[timeindex],SOURCES,strcat(source[timeindex],"]")); 
 	  
 	  printf("Peopling imagesout arrays\n");
 	  for(i=0;i<npolout;++i) imagesout[i]=arrLev1p[i]->data;
@@ -3190,6 +3554,30 @@ int DoIt(void)
 	      statusA[7]= drms_setkey_int(recLev1p->records[timeindex],TOTVALSS[it*npolout+i],axisout[0]*axisout[1]);
 	      statusA[8]= drms_setkey_int(recLev1p->records[timeindex],DATAVALSS[it*npolout+i],ngood);
 	      statusA[9]= drms_setkey_int(recLev1p->records[timeindex],MISSVALSS[it*npolout+i],axisout[0]*axisout[1]-ngood);
+	     
+	      image=arrLev1p[i]->data;
+	      for(ii=0;ii<axisout[0]*axisout[1];++ii)
+		{
+		  row   =ii / axisout[0];
+		  column=ii % axisout[0];
+		  distance = sqrt(((float)row-Y0AVG[timeindex])*((float)row-Y0AVG[timeindex])+((float)column-X0AVG[timeindex])*((float)column-X0AVG[timeindex])); //distance in pixels
+		  if(distance > 0.99*RSUNint[timeindex]) image[ii]=NAN;
+		}
+	      
+	      status=fstats(axisout[0]*axisout[1],imagesout[i],&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
+	      if(status != 0)
+		{
+		  printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
+		}
+	      statusA[0]= drms_setkey_float(recLev1p->records[timeindex],DATAMINS2[it*npolout+i],(float)minimum); 
+	      statusA[1]= drms_setkey_float(recLev1p->records[timeindex],DATAMAXS2[it*npolout+i],(float)maximum); 
+	      statusA[2]= drms_setkey_float(recLev1p->records[timeindex],DATAMEDNS2[it*npolout+i],(float)median); 
+	      statusA[3]= drms_setkey_float(recLev1p->records[timeindex],DATAMEANS2[it*npolout+i],(float)mean);   
+	      statusA[4]= drms_setkey_float(recLev1p->records[timeindex],DATARMSS2[it*npolout+i],(float)sigma); 
+	      statusA[5]= drms_setkey_float(recLev1p->records[timeindex],DATASKEWS2[it*npolout+i],(float)skewness);
+	      statusA[6]= drms_setkey_float(recLev1p->records[timeindex],DATAKURTS2[it*npolout+i],(float)kurtosis);
+
+
 	      TotalStatus=0;
 	      for(ii=0;ii<10;++ii) TotalStatus+=statusA[ii];
 	      if(TotalStatus != 0)
@@ -3202,8 +3590,7 @@ int DoIt(void)
 	    }	      
 	  
 	NextTargetTime:
-	  
-	  
+	  	  
 	  /****************************************************************************************************************************/
 	  /*                                                                                                                          */
 	  /*                                                                                                                          */
@@ -3213,25 +3600,27 @@ int DoIt(void)
 	  /****************************************************************************************************************************/
 	  
 	  printf("FREEING RECORD\n");
-	  
-	  printf("free arrLev1d\n");
-	  for(i=0;i<npol;++i)
+	  if(nIndexFiltergram != 0)
 	    {
-	      drms_free_array(arrLev1d[i]);
-	      arrLev1d[i]=NULL;
-	    }
-	  free(arrLev1d);
-	  arrLev1d=NULL;
-	  
-	  if(arrLev1p != NULL)
-	    {
-	      for(i=0;i<npolout;++i) if(arrLev1p[i] != NULL)
+	      printf("free arrLev1d\n");
+	      for(i=0;i<npol;++i)
 		{
-		drms_free_array(arrLev1p[i]);
-		arrLev1p[i]=NULL;
+		  drms_free_array(arrLev1d[i]);
+		  arrLev1d[i]=NULL;
+		}
+	      free(arrLev1d);
+	      arrLev1d=NULL;
+	      
+	      if(arrLev1p != NULL)
+		{
+		  for(i=0;i<npolout;++i) if(arrLev1p[i] != NULL)
+		    {
+		      drms_free_array(arrLev1p[i]);
+		      arrLev1p[i]=NULL;
+		    }
 		}
 	    }
-
+	  
 	  if(CreateEmptyRecord)
 	    {
 	      printf("Warning: creating/updating empty lev1p record\n");
@@ -3239,7 +3628,7 @@ int DoIt(void)
 	      if(CamId  == LIGHT_SIDE)  camera=1; //side camera
 	      if(CamId  == LIGHT_FRONT) camera=2; //front camera
 	      statusA[0] = drms_setkey_time(recLev1p->records[timeindex],TRECS,TargetTime);         //TREC is the slot time (1st prime key)
-	      statusA[1] = drms_setkey_time(recLev1p->records[timeindex],TOBSS,TargetTime);         //TOBS is the observation time
+	      //statusA[1] = drms_setkey_time(recLev1p->records[timeindex],TOBSS,TargetTime);         //TOBS is the observation time
 	      statusA[2] = drms_setkey_int(recLev1p->records[timeindex],CAMERAS,camera);            //second prime key
 	      statusA[3] = drms_setkey_int(recLev1p->records[timeindex],QUALITYS,QUALITY[timeindex]);
 	      sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);
@@ -3261,9 +3650,6 @@ int DoIt(void)
 
   printf("END LOOP OVER WAVELENGTHS\n");
 
-  free(FramelistArray);
-  FramelistArray=NULL;
-
   printf("INSERT LEVEL 1p RECORDS IN DRMS\n");
       if(recLev1p != NULL && recLev1p->n != 0)
 	{
@@ -3271,101 +3657,134 @@ int DoIt(void)
 	  recLev1p=NULL;
 	}
   
-  
-  if(recLev1->n > 0)
-    {
-      status=drms_close_records(recLev1,DRMS_FREE_RECORD);  
-      recLev1=NULL;
-      free(internTOBS);
-      free(HWL1POS); 
-      free(HWL2POS);
-      free(HWL3POS);
-      free(HWL4POS);
-      free(HPL1POS); 
-      free(HPL2POS);
-      free(HPL3POS);
-      free(HWLTID);
-      free(HPLTID);
-      free(FID);
-      free(HFLID);
-      free(HCAMID);
-      free(RSUN);
-      free(CROTA2);
-      free(CRLTOBS);
-      free(DSUNOBS);
-      free(X0);
-      free(Y0);
-      free(SegmentRead);
-      free(KeywordMissing);
-      free(Segments);
-      free(Badkeyword);
-      free(Ierror);  
-      free(IndexFiltergram);
-      free(FSN);
-      free(CFINDEX);
-      free(HIMGCFID);
-      for(i=0;i<nRecs1;++i) free(IMGTYPE[i]);
-      free(IMGTYPE);
-      free(CDELT1);
-      for(i=0;i<nRecs1;++i) free(HWLTNSET[i]);
-      free(HWLTNSET);
-   }
+if(nIndexFiltergram != 0) 
+  {
 
-  free(images);
-  free(imagesout);
-  free(ps1);
-  free(ps2);
-  free(ps3);  
-  free(imagesi);
-  free(ierrors);
-  images=NULL;
-  ierrors=NULL;
-  free(KeyInterp);
-  KeyInterp=NULL;
-  free(X0AVG);
-  free(Y0AVG);
-  free(CAMAVG);
-  free(RSUNAVG);
-  free(X0RMS);
-  free(Y0RMS);
-  free(RSUNRMS);
-  free(OBSVRint);
-  free(OBSVWint);
-  free(OBSVNint);
-  free(CRLNOBSint);
-  free(CRLTOBSint);
-  //free(HGLNOBSint);
-  free(DSUNOBSint);
-  free(CROTA2int);
-  free(RSUNint);
-  free(CARROTint);
-  free(QUALITY);
-  for(i=0;i<nWavelengths*npolout;i++)
-    {
-      free(DATAMINS[i]);
-      free(DATAMAXS[i]);
-      free(DATAMEDNS[i]);
-      free(DATAMEANS[i]);
-      free(DATARMSS[i]);
-      free(DATASKEWS[i]);
-      free(TOTVALSS[i]);
-      free(MISSVALSS[i]);
-      free(DATAVALSS[i]);
-    }
-  free(DATAMINS);
-  free(DATAMAXS);
-  free(DATAMEDNS);
-  free(DATAMEANS);
-  free(DATARMSS);
-  free(DATASKEWS);
-  free(TOTVALSS);
-  free(MISSVALSS);
-  free(DATAVALSS);
+    free(FramelistArray);
+    FramelistArray=NULL;
+    
+    if(recLev1->n > 0)
+      {
+	status=drms_close_records(recLev1,DRMS_FREE_RECORD);  
+	recLev1=NULL;
+	free(internTOBS);
+	free(HWL1POS); 
+	free(HWL2POS);
+	free(HWL3POS);
+	free(HWL4POS);
+	free(HPL1POS); 
+	free(HPL2POS);
+	free(HPL3POS);
+	free(HWLTID);
+	free(HPLTID);
+	free(FID);
+	free(HFLID);
+	free(HCAMID);
+	free(RSUN);
+	free(CROTA2);
+	free(CRLTOBS);
+	free(DSUNOBS);
+	free(X0);
+	free(Y0);
+	free(SegmentRead);
+	free(KeywordMissing);
+	free(Segments);
+	free(Badkeyword);
+	free(Ierror);  
+	free(IndexFiltergram);
+	free(FSN);
+	free(CFINDEX);
+	free(HIMGCFID);
+	for(i=0;i<nRecs1;++i) free(IMGTYPE[i]);
+	free(IMGTYPE);
+	free(CDELT1);
+	for(i=0;i<nRecs1;++i) free(HWLTNSET[i]);
+	free(HWLTNSET);
+	free(NBADPERM);
+	free(QUALITYin);
+      }
+    
+    for(i=0;i<nTime;++i) free(source[i]);
+    free(source);
+    free(images);
+    free(imagesout);
+    free(ps1);
+    free(ps2);
+    free(ps3);  
+    free(imagesi);
+    free(ierrors);
+    images=NULL;
+    ierrors=NULL;
+    free(KeyInterp);
+    KeyInterp=NULL;
+    free(X0AVG);
+    free(Y0AVG);
+    free(CAMAVG);
+    free(RSUNAVG);
+    free(X0RMS);
+    free(Y0RMS);
+    free(RSUNRMS);
+    free(OBSVRint);
+    free(OBSVWint);
+    free(OBSVNint);
+    free(CRLNOBSint);
+    free(CRLTOBSint);
+    //free(HGLNOBSint);
+    free(DSUNOBSint);
+    free(CROTA2int);
+    free(RSUNint);
+    free(CARROTint);
+    free(QUALITY);
+    free(QUALITYLEV1);
+    for(i=0;i<nWavelengths*npolout;i++)
+      {
+	free(DATAMINS[i]);
+	free(DATAMAXS[i]);
+	free(DATAMEDNS[i]);
+	free(DATAMEANS[i]);
+	free(DATARMSS[i]);
+	free(DATASKEWS[i]);
+	free(DATAMINS2[i]);
+	free(DATAMAXS2[i]);
+	free(DATAMEDNS2[i]);
+	free(DATAMEANS2[i]);
+	free(DATARMSS2[i]);
+	free(DATASKEWS2[i]);
+	free(TOTVALSS[i]);
+	free(MISSVALSS[i]);
+	free(DATAVALSS[i]);
+      }
+    free(DATAMINS);
+    free(DATAMAXS);
+    free(DATAMEDNS);
+    free(DATAMEANS);
+    free(DATARMSS);
+    free(DATASKEWS);
+    free(DATAMINS2);
+    free(DATAMAXS2);
+    free(DATAMEDNS2);
+    free(DATAMEANS2);
+    free(DATARMSS2);
+    free(DATASKEWS2);
+    free(TOTVALSS);
+    free(MISSVALSS);
+    free(DATAVALSS);
+    
+    free_interpol(&const_param);
+    status = free_polcal(&pars);
+    free(Mask);
+  }    
 
-  free_interpol(&const_param);
-  status = free_polcal(&pars);
-  free(Mask);
-  
+  free(CODEVERSION);
+  free(CODEVERSION1);
+  free(CODEVERSION2);
+  free(CODEVERSION3);
+  free(DISTCOEFFILEF);
+  free(DISTCOEFFILES);
+  free(ROTCOEFFILE);
+  free(DISTCOEFPATH);
+  free(ROTCOEFPATH);
+
   printf("END PROGRAM\n");
 
   status=0;
