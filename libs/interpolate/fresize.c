@@ -1082,6 +1082,7 @@ int f1d_fft(
 
   MKL_free(iwork);
   MKL_free(owork);
+  MKL_free(work);
 
   return 0;
 }
