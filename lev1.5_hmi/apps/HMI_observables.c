@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.3 2010/09/30 21:09:23 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.4 2010/10/01 18:27:42 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1164,13 +1164,13 @@ int DoIt(void)
   char  jsocverss[MaxNString];
   char  **HWLTNSET=NULL;
   char  TargetISS[]="CLOSED";
-  char  source[1200];
+  char  source[3000];
   char  recnums[MaxNString];
 
   int  *keyL=NULL;
   int   TestLevIn[3], TestLevOut[15];
   int   i,temp,temp2,TotalIn,TotalOut,observables,k,ii,iii,j;
-  int   status = DRMS_SUCCESS, statusA[51], TotalStatus, CreateEmptyRecord=0;
+  int   status = DRMS_SUCCESS, status2 = DRMS_SUCCESS, statusA[51], TotalStatus, CreateEmptyRecord=0;
   int   PolarizationType=-1;                                         //1, 2, or 3. Parameter for polcal
   int   nRecs1,nRecs1d,nRecs1p,nRecs15;                              //number of "records" for the different types of data
   int   ActualTempIntNum;                                            //actual number of filtergrams used for temporal interpolation (if some are missing or corrupted, ActualTempIntNum < TempIntNum)
@@ -1291,6 +1291,7 @@ int DoIt(void)
   float *temparr1=NULL,*temparr2=NULL,*temparr3=NULL,*temparr4=NULL,*LCP=NULL,*RCP=NULL;
   float distance;
   float obsvr;
+  float X0LF=0.0,Y0LF=0.0;
 
   //KEYWORD FROM INPUT LEVEL 1 DATA
   char *FSNS              = "FSN";                                    //Filtergram Sequence Number
@@ -1312,6 +1313,8 @@ int DoIt(void)
   char *DSUNOBSS          = "DSUN_OBS";                               //Distance from SDO to Sun center (in meters)			                     
   char *CRPIX1S           = "CRPIX1";				      //center of solar disk in x direction in pixels START AT 1 (COLUMN)
   char *CRPIX2S           = "CRPIX2";			       	      //center of solar disk in y direction in pixels START AT 1 (ROW)
+  char *X0LFS             = "X0_LF";
+  char *Y0LFS             = "Y0_LF";
   char *HCAMIDS           = "HCAMID";                                 //PREVIOUSLY HMI_SEQ_ID_EXP_PATH
   char *HCFTIDS           = "HCFTID";                                 //focus block (PREVIOUSLY HMI_SEQ_ID_FOCUS)
   char *CDELT1S           = "CDELT1";                                 //image scale in x direction. WE ASSUME CDELT1=CDELT2
@@ -1690,11 +1693,11 @@ int DoIt(void)
 	}
       if(DataCadence == 720.0)
 	{						             
-	  strcpy(HMISeriesLev15a,"hmi_test.V_720s"  );              
-	  strcpy(HMISeriesLev15b,"hmi_test.M_720s" );              
-	  strcpy(HMISeriesLev15c,"hmi_test.Ld_720s" );              
-	  strcpy(HMISeriesLev15d,"hmi_test.Lw_720s" );              
-	  strcpy(HMISeriesLev15e,"hmi_test.Ic_720s" );
+	  strcpy(HMISeriesLev15a,"hmi.V_720s"  );              
+	  strcpy(HMISeriesLev15b,"hmi.M_720s" );              
+	  strcpy(HMISeriesLev15c,"hmi.Ld_720s" );              
+	  strcpy(HMISeriesLev15d,"hmi.Lw_720s" );              
+	  strcpy(HMISeriesLev15e,"hmi.Ic_720s" );
 	}
     }
 
@@ -2070,6 +2073,7 @@ int DoIt(void)
 		  return 1;//exit(EXIT_FAILURE);
 		}
 	      IMGTYPE[i]    = drms_getkey_string(recLev1->records[i],IMGTYPES       ,&statusA[13]);
+
 	      X0[i]         = (float)drms_getkey_double(recLev1->records[i],CRPIX1S, &statusA[14]);
 	      if(statusA[14] == DRMS_SUCCESS && !isnan(X0[i])) X0[i]=X0[i]-1.0;                   //BECAUSE CRPIX1 STARTS AT 1
 	      else statusA[14] = 1;
@@ -2077,6 +2081,17 @@ int DoIt(void)
 	      Y0[i]         = (float)drms_getkey_double(recLev1->records[i],CRPIX2S,&statusA[15]);
 	      if(statusA[15] == DRMS_SUCCESS && !isnan(Y0[i])) Y0[i]=Y0[i]-1.0;                   //BECAUSE CRPIX2 STARTS AT 1
 	      else statusA[15] = 1;
+
+	      X0LF = (float)drms_getkey_double(recLev1->records[i],X0LFS, &status);
+	      Y0LF = (float)drms_getkey_double(recLev1->records[i],Y0LFS, &status2);
+	      if(status != DRMS_SUCCESS || status2 != DRMS_SUCCESS || isnan(X0LF) || isnan(Y0LF))
+		{
+		  statusA[14]=1;
+		  statusA[15]=1;
+		  X0[i]=sqrt(-1);
+		  Y0[i]=sqrt(-1);
+		}
+
 	      //if(isnan(Y0[i])) statusA[15] = 0;//we can still use the filtergram even if CRPIX2 is crap (this filtergram will just be discarded later if needed)
 	      RSUN[i]       = (float)drms_getkey_double(recLev1->records[i],RSUNS   ,&statusA[16]);
 	      //if(isnan(RSUN[i])) statusA[16]=0;//we can still use the filtergram even if R_SUN is crap (this filtergram will just be discarded later if needed)
@@ -3442,6 +3457,7 @@ int DoIt(void)
 					      ierror = arrerrors[i]->data;
 					      
 					      t0=dsecnd();
+					      printf("STARTING GAPFILL\n");
 					      status =do_gapfill(image,Mask,&const_param,ierror,axisin[0],axisin[1]); //then call the gapfilling function
 					      t1=dsecnd();
 					      printf("TIME ELAPSED TO GAPFILL: %f\n",t1-t0);
@@ -3931,6 +3947,7 @@ int DoIt(void)
 		{
 		  printf("Error: cannot read the keyword %s\n",SOURCES);
 		}
+	      else printf("source= %s\n",source);
 
 
 	      Segments1p=0;//segments for level 1p data not read

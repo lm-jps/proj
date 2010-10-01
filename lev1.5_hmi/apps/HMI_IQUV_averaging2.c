@@ -881,7 +881,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging2.c,v 1.2 2010/09/30 21:10:02 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging2.c,v 1.3 2010/10/01 18:28:18 couvidat Exp $");
 }
 
 
@@ -1066,7 +1066,7 @@ int DoIt(void)
   int   framelistSize=Framelistsizein;                               //size of the sequence (in filtergram number) for level 1 data
   int   PolarizationType;                                            //1, 2, or 3. Parameter for polcal
   int   i,temp,temp2,k,ii,iii,it,it2,timeindex,j;
-  int   status = DRMS_SUCCESS, statusA[54], TotalStatus;
+  int   status = DRMS_SUCCESS, status2 = DRMS_SUCCESS, statusA[54], TotalStatus;
   int  *HWL1POS=NULL;                                                //Commanded wavelengths of each level 1 filtergram
   int  *HWL2POS=NULL;				                     
   int  *HWL3POS=NULL;				                     
@@ -1137,6 +1137,7 @@ int DoIt(void)
   float diffYfs=-4.28992;                                            //difference between CRPIX2 of front and side cameras in pixels (!!! WARNING !!!! SHOULD NOT BE A CONSTANT: VARIES WITH ORBITAL VELOCITY)
   float correction,correction2;
   float distance;
+  float X0LF=0.0,Y0LF=0.0;
 
   //KEYWORD FROM INPUT LEVEL 1 DATA
   char *FSNS              = "FSN";                                    //Filtergram Sequence Number
@@ -1177,6 +1178,8 @@ int DoIt(void)
   char *WavelengthIDS     = "WAVELNID";
   char *HWLTNSETS         = "HWLTNSET";
   char *NBADPERMS         = "NBADPERM";
+  char *X0LFS             = "X0_LF";
+  char *Y0LFS             = "Y0_LF";
 
   //KEYWORDS FOR OUTPUT LEVEL 1p
   char *TRECS             = "T_REC";                                   //"nominal" slot time and time at which the level 1 data are temporally interpolated
@@ -1366,7 +1369,7 @@ int DoIt(void)
      }
    else                                                               //Definitive Data
      {
-       if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi_test.S5_720s");
+       if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s");
        else strcpy(HMISeriesLev1p,"hmi_test.S2_360s");
      }
 
@@ -1688,6 +1691,19 @@ int DoIt(void)
 	  Y0[i]         = (float)drms_getkey_double(recLev1->records[i],CRPIX2S,&statusA[15]);
 	  if(statusA[15] == DRMS_SUCCESS && !isnan(Y0[i])) Y0[i]=Y0[i]-1.0;                   //BECAUSE CRPIX2 STARTS AT 1
 	  else statusA[15] = 1;
+
+
+	  X0LF = (float)drms_getkey_double(recLev1->records[i],X0LFS, &status);
+	  Y0LF = (float)drms_getkey_double(recLev1->records[i],Y0LFS, &status2);
+	  if(status != DRMS_SUCCESS || status2 != DRMS_SUCCESS || isnan(X0LF) || isnan(Y0LF))
+	    {
+	      statusA[14]=1;
+	      statusA[15]=1;
+	      X0[i]=sqrt(-1);
+	      Y0[i]=sqrt(-1);
+	    }
+
+
 	  RSUN[i]       = (float)drms_getkey_double(recLev1->records[i],RSUNS   ,&statusA[16]);
 	  if(isnan(RSUN[i])) statusA[16]=1;
 	  CROTA2[i]     = (float)drms_getkey_double(recLev1->records[i],CROTA2S ,&statusA[17]);
