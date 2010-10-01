@@ -115,6 +115,10 @@
    @endcode
 
   @bug
+  Using the MAG scaling with a list of scale sizes, any instance of scale=1 must appear last in the list.  This is because the values of the
+  image data are replaced in the original array in the scale=1 case.  This will affect any scaling type that modifies the values of the data.
+
+  @bug
   Does not make 16-bit colors correctly, or I can not get ppm tools with correct flags...
 
 */
