@@ -74,6 +74,7 @@ $inst_apid_19="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/hmi_thermal_300s_temp
 $inst_apid_21="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/hmi.iss_status.txt";
 $inst_apid_38="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/aia.iss_3_4_status.txt";
 $inst_apid_40="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/aia.iss_1_2_status.txt";
+$inst_apid_44="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/aia_thermal_300s_template.txt";
 
 # (4)setup pickup and dropoff directories and email variables based on source value
 if ($source eq "moc")
@@ -978,7 +979,7 @@ sub do_m3sd_dayfile($,$,$,$,$)
     $m3sd_apid =~ s/\n//;
     if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:4:check if have match for <$m3sd_apid> value for file<$file>\n";}
 
-    # if file is on list to decode then decode
+    # if file is on list to m3sd then do m3sd processing
     if(substr($file,2,2) eq  $m3sd_apid )
     {
       #pick out files in @m3sd_list for apids to process using load_m3sd
@@ -1095,6 +1096,10 @@ sub get_instruction_file($)
   elsif($apid == 40)
   {
     $inst=$inst_apid_40;
+  }
+  elsif($apid == 44)
+  {
+    $inst=$inst_apid_44;
   }
   else
   {
