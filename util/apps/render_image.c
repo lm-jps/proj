@@ -69,11 +69,15 @@
    be the suffix for the file type geenrated by the pipe.
    @par
    The scaling of image values to color table indices is controlled by the scaling parameter.  scaling must be one of
-   MINMAX, MAXMIN, MINMAXGIVEN, MINMAX99, MAXMIN99, HISTEQ at present.  The default is MINMAX.  If the scaling is
+   MINMAX, MAXMIN, MINMAXGIVEN, MINMAX99, MAXMIN99, HISTEQ, MAG at present.  The default is MINMAX.  If the scaling is
    MINMAX and both min and max parameters are given, then the MINMAXGIVEN scaling will be used.  MINMAX99 and
    MAXMIN99 mean to eliminate the top and bottom 0.5% of the histogram of the values before computing a linear scaling.
    MAXMIN and MAXMIN99 result in a reversed scaling with the max value mapped to the first color in the table and the
    min value mapped to the max color in the table.  String case is ignored for the scaling parameter.
+   @par
+   The MAG scaling uses a scaling of 400*M/pow((abs(M)+bias),0.75)  bias=30, from user provided min and max (defaulting to +-1500).
+   This scaling emphasizes low absolute field strength but still shows detail up to a max of 3000 gauss.  The default
+   of 1500 clips umbral fields with the tradeoff of more contrast for plage and network fields.
    @par
    The color table is specified by the pallette parameter.  The table may be a built in table, at persent the only
    build-in is "grey".  ("grey", "gray", "GREY", "GRAY" are all allowed).  If not a build-in table name the pallette
@@ -132,6 +136,8 @@
 #define MINMAX99  4
 #define MAXMIN99  5
 #define MINMAXGIVEN  6
+#define MAG 7
+#define MAGMINMAXGIVEN 8
 
 char *module_name = "render_image";
 
@@ -147,6 +153,7 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, "tkey", "T_REC", "Time keyword name used if outid==time, defaults to T_REC"},
      {ARG_FLOAT, "min", "DRMS_MISSING_FLOAT", "Min value for scaling"},
      {ARG_FLOAT, "max", "DRMS_MISSING_FLOAT", "Max value for scaling"},
+     {ARG_FLOAT, "bias", "30.0", "Max value for mag scaling"},
      {ARG_INTS, "scale", "1", "Reduction factors"},
      {ARG_FLAG, "c", "0", "Crop flag, causes crop to RSUN_OBS"},
      {ARG_FLAG, "w", "0", "use white for missing pixels, instead of black"},
@@ -258,6 +265,7 @@ int DoIt(void)
   else if (strcasecmp(scaling, "maxmin99") == 0) scaletype = MAXMIN99;
   else if (strcasecmp(scaling, "histeq") == 0) scaletype = HISTEQ;
   else if (strcasecmp(scaling, "minmaxgiven") == 0) scaletype = MINMAXGIVEN;
+  else if (strncasecmp(scaling, "mag", 3) == 0) scaletype = MAG;
   else  scaletype = 0;
 
   if (isnan(called_min) || isnan(called_max))
@@ -269,6 +277,8 @@ int DoIt(void)
     {
     if (scaletype == MINMAX)
       scaletype = MINMAXGIVEN;
+    else if (scaletype == MAG)
+      scaletype = MAGMINMAXGIVEN;
     }
 
   inRS = drms_open_records(drms_env, inQuery, &status);
@@ -370,6 +380,8 @@ int DoIt(void)
       }
     for (iscale=0; iscale<nscales; iscale++)
       {
+      int dimxy;
+      char dimxytxt[50];
       DRMS_Array_t *imageArray = NULL;
       char imgPath[DRMS_MAXPATHLEN];
       int scale = scales[iscale];
@@ -380,6 +392,8 @@ int DoIt(void)
       max = called_max;
       imageDims[0] = srcNx/scale;
       imageDims[1] = srcNy/scale;
+      dimxy = imageDims[0];
+      sprintf(dimxytxt,"%d",dimxy);
 // fprintf(stderr,"scale=%d, imageNy=%d, imageNx=%d\n", scale, imageDims[1], imageDims[0]);
 
       if (scale != 1)
@@ -394,12 +408,13 @@ int DoIt(void)
         tmparray = 0;
         }
 
-      sprintf(imageFileName, "%s_%s_%s.%s", imageID, outName, (scale == 1 ? "4k" :
-                                                  (scale == 2 ? "2k" :
-                                                  (scale == 4 ? "1k" :
-                                                  (scale == 8 ? "512" :
-                                                  (scale == 16 ? "256" :
-                                                  (scale == 32 ? "128" : "unk")))))), type);
+      sprintf(imageFileName, "%s%s%s_%s.%s", imageID, (strcmp(outid,"#")==0 ? "." : "_"), outName,
+                                                  (dimxy == 4096 ? "4k" :
+                                                  (dimxy == 2048 ? "2k" :
+                                                  (dimxy == 1024 ? "1k" :
+                                                  (dimxy == 512 ? "512" :
+                                                  (dimxy == 256 ? "256" :
+                                                  (dimxy == 128 ? "128" : dimxytxt)))))), type);
       
       if (fileonly)
         {
@@ -731,6 +746,21 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
 
     switch(scaling)
       {
+      case MAG:
+      case MAGMINMAXGIVEN:
+          {
+          float bias = params_get_double(&cmdparams, "bias");
+          for (idata=0; idata<ndata; idata++)
+             {
+             float val = inData[idata];
+             if (!isnan(val))
+                // inData[idata] = val/sqrt(fabs(val)+bias);
+                inData[idata] = 400.0*val/pow((fabs(val)+bias), 0.75);
+             }
+          if (isnan(*minp)) *minp = -1500.0;
+          if (isnan(*maxp)) *maxp = -*minp;
+          // no break;
+          }
       case MINMAX:
       case MAXMIN:
       case MINMAXGIVEN:
@@ -739,7 +769,7 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
            double max;
            if (bytepercolor != 1 && bytepercolor != 2)
                 {fprintf(stderr,"wrong bytes per color\n"); return(NULL);}
-           if (scaling == MINMAXGIVEN)
+           if (scaling == MINMAXGIVEN || scaling == MAG || scaling == MAGMINMAXGIVEN)
              {
              min = *minp;
              max = *maxp;
@@ -807,7 +837,7 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
         *maxp = max;
         *minp = min;
         *nmissp = nmiss;
- fprintf(stderr,"   min %f max %f nmissp %d ndata %d\n", *minp, *maxp, nmiss, ndata);
+fprintf(stderr,"   min %f max %f nmissp %d ndata %d\n", *minp, *maxp, nmiss, ndata);
         break;
         }
 
@@ -866,7 +896,7 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
     case MINMAX99:
     case MAXMIN99:
       {
-// fprintf(stderr,"DOING set_scaling case MAXMIN99 \n");
+fprintf(stderr,"DOING set_scaling case MAXMIN99 \n");
           int ihist, nhist=65536;
           int *hist = (int *)malloc(nhist * sizeof(int));
           int icolor, ncolor = (bytepercolor == 1 ? 255 : 65535);
@@ -874,12 +904,12 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
           unsigned int newval;
           double newmin, newmax;
           char *outa;
-// fprintf(stderr," CALLING set_scaling case MINMAX %d \n", MINMAX);
+fprintf(stderr," CALLING set_scaling case MINMAX %d \n", MINMAX);
 	*minp = 0;
 	*maxp = 0;
         outa = set_scaling(in, minp, maxp, nmissp, "GREY", 1, 2, MINMAX, 0);
 
-// fprintf(stderr,"CONTINUING: set_scaling, case MAXMIN99  %f %f \n", *minp, *maxp);
+fprintf(stderr,"CONTINUING: set_scaling, case MAXMIN99  %f %f \n", *minp, *maxp);
 
           for (ihist=0; ihist<nhist; ihist++)
              hist[ihist] = 0;
@@ -889,7 +919,7 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
             }
 
         want = ndata/600;
-// fprintf(stderr,"ndata %d want %d nhist %d \n", ndata, want, nhist);
+fprintf(stderr,"ndata %d want %d nhist %d \n", ndata, want, nhist);
         total = 0;
         for (ihist=0; ihist<nhist; total += hist[ihist++])
           if (total >= want)
@@ -901,14 +931,14 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
          if (total >= want)
             break;
         newmax = *minp + ((double)ihist/(double)nhist) * (*maxp - *minp);
-// fprintf(stderr,"ihist %d newmax=%f newmin=%f \n", ihist, newmax, newmin);
+fprintf(stderr,"ihist %d newmax=%f newmin=%f \n", ihist, newmax, newmin);
         if (newmax <= newmin)
           {
           newmax = *maxp;
           newmin = *minp;
           }
 
-// fprintf(stderr,"newmax %f minp %f \n", newmax, *minp);
+fprintf(stderr,"newmax %f minp %f \n", newmax, *minp);
         for (idata=0; idata<ndata; idata++)
           {
           float val = inData[idata];
