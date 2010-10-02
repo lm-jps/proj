@@ -5,7 +5,7 @@
  * Declarations for calling `roi_stats_mag' a.k.a. `rsm' as a C library.
  *
  * Made by intermediate binary `roi_stats_mag.out' on:
- * 	Wed Jun 23 10:36:52 2010
+ * 	Thu Sep 30 18:43:58 2010
  *
  * Code for include-generation driver `../Gen-include.c' last modified on:
  * 	Mon Jun  7 15:11:28 2010
@@ -16,7 +16,7 @@
 /*
  * roi_stats_mag: accumulate statistics on regions
  * 
- *  [s,names]=roi_stats_mag(x,y,mag,center,beta)
+ *  [s,names]=roi_stats_mag(x,y,mag,geom,mode)
  *  * A set of per-region statistics is gathered based on regions
  *  encoded in the image inputs x (containing region tags, 1..Nr, or
  *  0 for no tag) and y (containing region indicators, 0/1).  The
@@ -48,6 +48,8 @@
  *    17: arfwtlat,lon = flux-weighted center of active pixels
  *    19: arfwtpos_lat,lon = flux-weighted center of positive flux
  *    21: arfwtneg_lat,lon = flux-weighted center of negative flux
+ *    23: daysgone = #days until bounding box vanishes from front of disk
+ *    24: daysback = #days until bounding box first reappears on front
  *  These definitions are in a machine-readable include file,
  *  roi_stats_mag_def.h
  *  * The solar disk is at location given by center, observed at tip
@@ -60,8 +62,8 @@
  *    int  x(m,n);
  *    int  y(m,n);
  *    real mag(m,n);
- *    real center(3);  -- [center_x center_y r_sun]
- *    real beta;
+ *    real center(5);  -- [x0 y0 r_sun b p]
+ *    string mode;
  * 
  *  Outputs:
  *    real s(nr,ns)
@@ -69,7 +71,7 @@
  * 
  *  See Also:
  * 
- *  turmon june 2010
+ *  turmon june 2010, sep 2010
  * 
  * 
  */
@@ -90,8 +92,8 @@ mexfn_lib_t main_roi_stats_mag;
 #define MXT_rsm_ARG_x	0
 #define MXT_rsm_ARG_y	1
 #define MXT_rsm_ARG_mag	2
-#define MXT_rsm_ARG_center	3
-#define MXT_rsm_ARG_beta	4
+#define MXT_rsm_ARG_geom	3
+#define MXT_rsm_ARG_mode	4
 
 // output argument numbers
 #define MXT_rsm_ARG_s	0
