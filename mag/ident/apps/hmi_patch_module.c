@@ -410,6 +410,7 @@ int DoIt(void)
   // loop over full-disk activity masks
   for (ds = 0; ds < Nds; ds++) {
     printf("begin record %d of %d\n", ds+1, Nds);
+    fflush(stdout);
     // mark the time
     wt1 = getwalltime();
     ct1 = getcputime(&ut1, &st1);
@@ -420,6 +421,7 @@ int DoIt(void)
     // summary
     sprint_time(time_buf, t_rec, "TAI", 0);
     printf("\tprocessing image taken at %s\n", time_buf);
+    fflush(stdout);
 
     // Ephemeris courtesy of Phil's macros above
     // No error checking for now
@@ -447,7 +449,7 @@ int DoIt(void)
     }
     dsun_obs = drms_getkey_double(xRec, "DSUN_OBS", &status);
     if (status) {
-      WARN("could not get DSUN_OBS from mgram");
+      WARN("could not get DSUN_OBS from mask");
       continue;
     }
     rSun = asin(rsun_ref / dsun_obs) * RAD2ARCSEC / cdelt;
@@ -513,10 +515,11 @@ int DoIt(void)
 	     ((double *) xArray->data)[M/2+N/2*M]);
 
     // call the function
-    printf("patch_module: hmi_patch calling mexfunction.\n");
+    printf("patch_module: hmi_patch calling mexfunction.\n");fflush(stdout);
     msg = main_hmi_patch(nlhs, plhs, nrhs, prhs);
     if (msg == NULL) {
       printf("patch_module: hmi_patch returned OK from mexfunction.\n");
+      fflush(stdout);
     } else {
       /* error within called function */
       printf("main loop: returned via error from mexfunction.\n");
@@ -539,7 +542,7 @@ int DoIt(void)
 
     // extract patches from bitmap
     bmps = calloc(numPatch, sizeof(*bmps)); // pointers to per-patch bitmaps
-    if (verbflag) {
+    if (0 && verbflag) {
       // can load directly into ds9 as a check
       printf("# Region file format: DS9 version 3.0\n");
       for (p = 0; p < numPatch; p++)
@@ -551,6 +554,7 @@ int DoIt(void)
     }
     // args: bitmap-list, mask, mask sizes, bounding boxes, number of boxes
     printf("patch_module: extracting %d maps.\n", numPatch);
+    fflush(stdout);
     status = patch_extract_bitmaps(bmps, 
 				   mxGetPr(prhs[MXT_Hpat_ARG_y]),   // mask
 				   mxGetPr(plhs[MXT_Hpat_ARG_yrgn]),// region tag
@@ -559,6 +563,7 @@ int DoIt(void)
       DIE("failed (bad calloc during patch extraction)");
     }
     printf("patch_module: maps extracted.\n");
+    fflush(stdout);
 
     // write patches 
     // (create multiple output records for one input record)
@@ -617,31 +622,12 @@ int DoIt(void)
       drms_setkey_float(yRec,  "CRPIX1", (yHI[p]+yLO[p])/2);
       drms_setkey_float(yRec,  "CRPIX2", (xHI[p]+xLO[p])/2);
       // probably should be set as a link
-      // updated by xudong jun 29 2010: set as link
-//      drms_setkey_float(yRec,  "CDELT1", (float) cdelt);
-//      drms_setkey_float(yRec,  "CDELT2", (float) cdelt);
-      // updated by xudong jun 29 2010: added crvaln, patch center to disk center (arcsec)
-      drms_setkey_float(yRec,  "CRVAL1", WX(((yHI[p]+yLO[p])/2),((xHI[p]+xLO[p])/2)));
-      drms_setkey_float(yRec,  "CRVAL2", WY(((yHI[p]+yLO[p])/2),((xHI[p]+xLO[p])/2)));
+      drms_setkey_float(yRec,  "CDELT1", (float) cdelt);
+      drms_setkey_float(yRec,  "CDELT2", (float) cdelt);
 
       // Flags
       drms_setkey_int(yRec, "PATCHNUM", numPatch);
       drms_setkey_int(yRec, "MASK", 64+p+1);
-
-      // date and build version
-      // updated by xudong jun 29 2010
-      drms_setkey_string(yRec, "BLD_VERS", jsoc_version);
-      drms_setkey_time(yRec, "DATE", CURRENT_SYSTEM_TIME);
-
-      // stats
-      // updated by xudong jun 29 2010
-      int missval = 0, totalval = pDims[0] * pDims[1];
-      for (int ii = 0; ii < totalval; ii++) {
-          if (isnan(bmps[p][ii])) missval++;
-      }
-      drms_setkey_int(yRec, "TOTVALS", totalval);
-      drms_setkey_int(yRec, "DATAVALS", totalval - missval);
-      drms_setkey_int(yRec, "MISSVALS", missval);
             
       // Insert all patch statistics
       for (sn = 0; sn < RS_num_stats; sn++) {
@@ -707,7 +693,7 @@ int DoIt(void)
       wt = getwalltime();
       ct = getcputime(&ut, &st);
       printf("record %d time used: %.3f s wall, %.3f s cpu\n", 
-	     ds+1, (wt - wt1)*1e-3, (ct - ct1)*1e-3);
+	     ds+1, (wt - wt1)*1e-3, (ct - ct1)*1e-3);fflush(stdout);
     }
     printf("record %d done\n", ds+1); fflush(stdout);
   } 
