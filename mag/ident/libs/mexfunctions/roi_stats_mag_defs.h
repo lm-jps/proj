@@ -35,6 +35,8 @@ typedef enum {
   RS_arfwtposlon, 
   RS_arfwtneglat, // flux-weighted center of negative flux
   RS_arfwtneglon,
+  RS_daysgone,    // #days until bounding box vanishes from disk front
+  RS_daysback,    // #days until bounding box first reappears on front
   RS_num_stats,   // number of statistics
   RS_MAX = INT_MAX  // ensure it's as big as an int
   } rs_stat_index_t;
@@ -65,6 +67,8 @@ static const char *RS_index2name[] = {
   "arfwtposlon",
   "arfwtneglat",
   "arfwtneglon",
+  "daysgone",
+  "daysback",
   NULL,
   NULL,
 };
@@ -75,32 +79,34 @@ static const char *RS_index2name[] = {
 
 static const char *RS_index2keyname[] = {
   // region size
-  "iNPIX",     // RS_rgnnum
-  "fSIZE",     // RS_rgnsize
-  "fAREA",     // RS_rgnarea    
+  "iNPIX",       // RS_rgnnum
+  "fSIZE",       // RS_rgnsize
+  "fAREA",       // RS_rgnarea    
   // ar size
-  "iNACR",     // RS_arnum
-  "fSIZE_ACR", // RS_arsize     
-  "fAREA_ACR", // RS_ararea     
+  "iNACR",       // RS_arnum
+  "fSIZE_ACR",   // RS_arsize     
+  "fAREA_ACR",   // RS_ararea     
   // ar extent
-  NULL,       // RS_arlat      
-  NULL,       // RS_arlon	 
-  NULL,       // RS_arminlat   
-  NULL,       // RS_arminlon	 
-  NULL,       // RS_armaxlat   
-  NULL,       // RS_armaxlon	 
+  NULL,          // RS_arlat      
+  NULL,          // RS_arlon	 
+  NULL,          // RS_arminlat   
+  NULL,          // RS_arminlon	 
+  NULL,          // RS_armaxlat   
+  NULL,          // RS_armaxlon	 
   // flux
-  "fBTOT",      // RS_rgnbtot    
-  "fBNET",      // RS_rgnbnet    
-  "fBPOS_TOT",  // RS_rgnbpos    
-  "fBNEG_TOT",  // RS_rgnbneg    
+  "fBTOT",       // RS_rgnbtot    
+  "fBNET",       // RS_rgnbnet    
+  "fBPOS_TOT",   // RS_rgnbpos    
+  "fBNEG_TOT",   // RS_rgnbneg    
   // flux-weighted extent
-  "fFWTLAT",    // RS_arfwtlat   
-  "fFWTLON",    // RS_arfwtlon 	 
+  "fFWTLAT",     // RS_arfwtlat   
+  "fFWTLON",     // RS_arfwtlon 	 
   "fFWTPOS_LAT", // RS_arfwtposlat
   "fFWTPOS_LON", // RS_arfwtposlon
   "fFWTNEG_LAT", // RS_arfwtneglat
   "fFWTNEG_LON", // RS_arfwtneglon
+  NULL,          // RS_daysgone
+  NULL,          // RS_daysback
   // end
 };
 

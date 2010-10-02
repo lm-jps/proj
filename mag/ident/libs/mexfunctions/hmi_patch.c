@@ -8,9 +8,12 @@
 
 %hmi_patch	driver for HMI patch finding
 % 
-% [bb,s,yrgn]=hmi_patch(y,mag,ctr,p0,beta,active,ker,kwt,tau)
+% [bb,s,yrgn,crit]=hmi_patch(y,mag,ctr,p0,beta,active,ker,kwt,tau)
 % * Find active-region patches in a mask image y, returning them as 
 % a list of bounding boxes bb, and a re-encoded mask image yrgn.
+% Optionally returns the smoothed mask via crit.
+% * If mag is given as [], the statistics s are not computed and
+% the return value is empty.
 % * The parameter active tells what parts of y are considered
 % to be within-active-region: (y == active) identifies the active
 % stuff to be combined into patches.
@@ -22,7 +25,7 @@
 % 
 % Inputs:
 %   real y(m,n)
-%   real mag(m,n)
+%   real mag(m,n) or (0,0)
 %   real ctr(3)
 %   real p0
 %   real beta
@@ -33,12 +36,13 @@
 % 
 % Outputs:
 %   int bb(nr,4)
-%   real stats(nr,22)
+%   real stats(nr,22) or (0,0)
 %   real yrgn(m,n)
+%   opt real crit(m,n)
 % 
 % See Also:  smoothsphere region_bb concomponent roi_stats_mag
 
-% turmon oct 2009, june 2010
+% turmon oct 2009, june 2010, sep 2010
 
 ****************************************************************/
 
@@ -46,7 +50,7 @@
 #define NARGIN_MIN	9	   /* min number of inputs */
 #define NARGIN_MAX	9	   /* max number of inputs */
 #define NARGOUT_MIN	2	   /* min number of output args */
-#define NARGOUT_MAX	3	   /* max number of output args */
+#define NARGOUT_MAX	4	   /* max number of output args */
 
 #define ARG_y      0
 #define ARG_mag    1
@@ -61,6 +65,7 @@
 #define ARG_bb     0
 #define ARG_stats  1
 #define ARG_yrgn   2
+#define ARG_crit   3
 
 #define PROGNAME hmi_patch
 static const char *progname = "hmi_patch";
@@ -89,7 +94,8 @@ static const char *in_names[NARGIN_MAX] = {
 static const char *out_names[NARGOUT_MAX] = {
   "bb", 
   "stats",
-  "yrgn"};
+  "yrgn",
+  "crit"};
 
 // short form of PROGNAME for #include identifiers
 #define SHORTNAME Hpat
@@ -178,6 +184,7 @@ mexFunction(
   // general declarations
   int M, N;         // size of y
   int Nr;           // number of regions
+  int do_stats;     // compute patch statistics?
   char errstr[256];
   char *msg;
 
@@ -207,6 +214,7 @@ mexFunction(
    */
   M = mxGetM(prhs[ARG_y]);
   N = mxGetN(prhs[ARG_y]);
+  do_stats = (mxGetNumberOfElements(prhs[ARG_mag]) > 0);
 
   // Find a 0/1 function indicating AR presence
   // Conceptually:
@@ -249,7 +257,8 @@ mexFunction(
 		       mxGetPr(plhs_ssp[MXT_ssp_ARG_y]), M*N, 
 		       mxGetScalar(prhs[ARG_tau]));
   // free arrays that we allocate and no longer need
-  mxDestroyArray((mxArray *) plhs_ssp[MXT_ssp_ARG_y]);
+  if (nlhs <= ARG_crit)
+    mxDestroyArray((mxArray *) plhs_ssp[MXT_ssp_ARG_y]);
 
   // Find connected components of thresholded mask
   //   y = concomponent(x,nbr)
@@ -281,27 +290,48 @@ mexFunction(
   // (could also be above, if we wanted to remove tiny patches)
   // TBD
 
-  // Find per-patch summary statistics
-  //   s = roi_stats_mag(x,y,mag,center,beta)
-  // second output arg unused
-  prhs_rsm[MXT_rsm_ARG_x     ] = plhs_ccp[MXT_ccp_ARG_y]; // 1..Nr
-  prhs_rsm[MXT_rsm_ARG_y     ] = prhs_ssp[MXT_ssp_ARG_x]; // 0/1
-  prhs_rsm[MXT_rsm_ARG_mag   ] = prhs[ARG_mag];
-  prhs_rsm[MXT_rsm_ARG_center] = prhs[ARG_ctr];
-  prhs_rsm[MXT_rsm_ARG_beta  ] = prhs[ARG_beta];
-  msg = main_roi_stats_mag(MXT_rsm_NARGOUT_USE, plhs_rsm, 
-			   MXT_rsm_NARGIN_USE,  prhs_rsm);
-  if (msg)
-    mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
-			   "%s: Trouble in roi_stats_mag (%s)",
-			   progname, msg), errstr));
-  // free arrays that we allocate and no longer need
+  // Optionally find per-patch summary statistics
+  if (do_stats) {
+    //   s = roi_stats_mag(x,y,mag,geom,mode)
+    // (second output arg unused)
+    double *geom, *ctr;  // convenience
+
+    prhs_rsm[MXT_rsm_ARG_x     ] = plhs_ccp[MXT_ccp_ARG_y]; // 1..Nr
+    prhs_rsm[MXT_rsm_ARG_y     ] = prhs_ssp[MXT_ssp_ARG_x]; // 0/1
+    prhs_rsm[MXT_rsm_ARG_mag   ] = prhs[ARG_mag];
+    prhs_rsm[MXT_rsm_ARG_geom  ] = mxCreateDoubleMatrix(1, 5, mxREAL);
+    prhs_rsm[MXT_rsm_ARG_mode  ] = mxCreateString("sesw");
+    // set up geom
+    geom = mxGetPr(prhs_rsm[MXT_rsm_ARG_geom]);
+    ctr  = mxGetPr(prhs[ARG_ctr]);
+    geom[0] = ctr[0];  // x0
+    geom[1] = ctr[1];  // y0
+    geom[2] = ctr[2];  // rsun
+    geom[3] = mxGetScalar(prhs[ARG_beta]);
+    geom[4] = mxGetScalar(prhs[ARG_p0]);
+
+    msg = main_roi_stats_mag(MXT_rsm_NARGOUT_USE, plhs_rsm, 
+			     MXT_rsm_NARGIN_USE,  prhs_rsm);
+    if (msg)
+      mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
+			     "%s: Trouble in roi_stats_mag (%s)",
+			     progname, msg), errstr));
+    // free arrays allocated in this block
+    mxFree(prhs_rsm[MXT_rsm_ARG_geom]);
+    mxFree(prhs_rsm[MXT_rsm_ARG_mode]);
+  } else {
+    //  s = []
+    plhs_rsm[MXT_rsm_ARG_s] = mxCreateDoubleMatrix(0, 0, mxREAL);
+  }
+  // in any case, free arrays that we allocate and no longer need
   mxDestroyArray((mxArray *) prhs_ssp[MXT_ssp_ARG_x]);
 
   // set up output args
   plhs[ARG_bb   ] = plhs_rbb[MXT_rbb_ARG_bb]; // bounding boxes
   plhs[ARG_stats] = plhs_rsm[MXT_rsm_ARG_s];  // statistics
   plhs[ARG_yrgn ] = plhs_ccp[MXT_ccp_ARG_y];  // mask with rgn #s
+  if (nlhs > ARG_crit)
+    plhs[ARG_crit] = plhs_ssp[MXT_ssp_ARG_y]; // smoothed mask
 }
 
 
