@@ -10,14 +10,16 @@
  * essentialy can track the RoI over disk passage.
  */
 
-// Author:  Y. Liu, Apr 7 2010
-// Adated:  X. Sun, Apr 8 2010, for patches with tracking functionality
+// Author:  Y. Liu, Apr 07 2010
+// Adated:  X. Sun, Apr 08 2010, for patches with tracking functionality
 // Modified:
 //          X. Sun, Jun 30 2010, added prototypes for oversampling/rebin
+//			X. Sun, Sep 03 2010, implemented Jesper's resize code, registration needs check
 
 // mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a[2010.03.29_12:00:00_TAI][2]" "out=su_xudong.test_mercator_vec" "LONWIDTH=15.0" "LATWIDTH=9.0"
-// mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a[2010.03.29_12:12:00_TAI/1h][2]" "out=su_xudong.test_mercator_vec" "LONWIDTH=15.0" "LATWIDTH=9.0" "ref=[2010.03.29_12:12:00_TAI][2]"
-
+// mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a[2010.03.29_12:12:00_TAI/1h][2]" "out=su_xudong.test_mercator_vec" "LONWIDTH=15.0" "LATWIDTH=9.0" "ref=su_xudong.test_patch_vec_a[2010.03.29_12:12:00_TAI][2]"
+// mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a_5[2010.03.29_12:00:00_TAI][2]" "out=su_xudong.test_mercator_vec_5" "LONWIDTH=15.0" "LATWIDTH=9.0" "NBIN=3" "GAUSSIAN=1"
+// mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a_5[2010.07.01_12:00:00_TAI/60h]" "out=su_xudong.test_mercator_vec_5" "NBIN=3" "GAUSSIAN=1" "LONWIDTH=8.4" "LATWIDTH=4.68" "ref=su_xudong.test_patch_vec_a_5[2010.07.02_00:00:00_TAI][4]"
 
 
 #include <stdio.h>
@@ -33,6 +35,13 @@
 #include "interpolate.c"
 #include "img2helioVector.c"
 #include "errorprop.c"
+
+#include <mkl_blas.h>
+#include <mkl_service.h>
+#include <mkl_lapack.h>
+#include <mkl_vml_functions.h>
+#include <omp.h>
+#include "fresize.h"
 
 #define PI              (M_PI)
 #define RADSINDEG       (PI/180)
@@ -57,8 +66,46 @@
 #define WY(pix_x,pix_y) (((pix_y-crpix2)*cosa + (pix_x-crpix1)*sina)*cdelt+crvaly)
 
 
-/* ========================================================================================================== */
+/* ################## Wrapper for Jesper's code ################## */
 
+void frebin (float *image_in, float *image_out, int nx, int ny, int nbin, int gauss)
+{
+  struct fresize_struct fresizes;
+  int nxout, nyout;
+  int nlead = nx;
+  
+  nxout = nx / nbin; nyout = ny / nbin;
+  if (gauss)
+    init_fresize_gaussian(&fresizes, (nbin / 2) * 2, (nbin / 2) * 2, nbin);
+  else
+    init_fresize_bin(&fresizes, nbin);
+  fresize(&fresizes, image_in, image_out, nx, ny, nlead, nxout, nyout, nxout, (nbin / 2) * 2, (nbin / 2) * 2, DRMS_MISSING_FLOAT);
+}
+
+
+/* ############# Place holder ################# */
+
+void frebin_x(float *img_in, float *img_out, int nx, int ny)
+{
+    for (int ii = 0; ii < nx * ny; ii++) {
+        img_out[ii] = img_in[ii];
+    }
+}
+
+
+/* ############# Nearest neighbour interpolation ############### */
+
+float nearest (float *f, int nx, int ny, double x, double y) {
+  if (x <= -0.5 || y <= -0.5 || x > nx - 0.5 || y > ny - 0.5)
+    return DRMS_MISSING_FLOAT;
+  int ilow = floor (x);
+  int jlow = floor (y);
+  int i = ((x - ilow) > 0.5) ? ilow + 1 : ilow;
+  int j = ((y - jlow) > 0.5) ? jlow + 1 : jlow;
+  return f[j * nx + i];
+}
+
+/* ========================================================================================================== */
 
 
 char *module_name = "mappingvector_img2plane_x";
@@ -71,13 +118,15 @@ ModuleArgs_t module_args[] =
    {ARG_STRING, "PROJECTION", "MERCATOR", ""},
    {ARG_FLOAT, 	"XUNITMAP", "0.03", "X resolution in mapped image"}, 	// pixel resolution in the mapping image, in degree.
    {ARG_FLOAT, 	"YUNITMAP", "0.03", "Y resolution in mapped image"}, 	// correspond to a resolution of 0.5 arc-sec/pixel.
-   {ARG_FLOAT, 	"SAMPLE", "1", "Ratio of over-sampling"}, 				// the ratio of pixel sampling rate and final resolution, oversampling for anti-aliasing
+   {ARG_INT, 	"NBIN", "1", "Rate used for over-sampling"},
+   {ARG_INT,	"GAUSSIAN", "0", "Use 0 for simple binning, 1 for Gaussian"},
    {ARG_FLOAT, 	"LONWIDTH", "0.", "X demension"}, 						// dimension, in degree
    {ARG_FLOAT, 	"LATWIDTH", "0.", "Y demension"},
    {ARG_FLOAT, 	"REFLON", "370.", "Reference lon for alignment"},		// reference lon/lat of patch center
    {ARG_FLOAT, 	"REFLAT", "100.", "Reference lat for alignment"},
    {ARG_INT, 	"COVAR", "0", ""},
    {ARG_FLAG, 	"e", "0", ""}, 											// set this flag to compute errors.
+   {ARG_INT,	"nnb", "0", "using nearest neighbor for interpol"},
    {ARG_END}
 };
 
@@ -103,8 +152,9 @@ int DoIt(void)
     
     char *inQuery, *outQuery, *refQuery;
     char *mapping;
-    int projection, covar, doerror;
-    float xunitMap, yunitMap, sample;
+    int projection, covar, doerror, gauss, nnb;
+    int nbin;
+    float xunitMap, yunitMap, xunitMap0, yunitMap0;
     float LonWidth, LatWidth;
     float ref_lon, ref_lat;
     
@@ -130,13 +180,13 @@ int DoIt(void)
     
     int llx, lly, bmx, bmy;		// lower left coordinate and dimension of bitmap
     
-    float *bxHel, *byHel, *bzHel;		// remapped, oversampled
-    float *bxHel0, *byHel0, *bzHel0;	// remapped, final
+    float *bxHel, *byHel, *bzHel;		// remapped, final
+    float *bxHel0, *byHel0, *bzHel0;	// remapped, oversampled
     float *bx, *by, *bz;		// full disk
     char *ambig;		// bitmap from disambiguation
     float *bTotal, *bIncl, *bAzim, *bFill;		// full disk
-    float *errBx, *errBy, *errBz;		// remapped, oversampled
-    float *errBx0, *errBy0, *errBz0;		// remapped, final
+    float *errBx, *errBy, *errBz;		// remapped, final
+    float *errBx0, *errBy0, *errBz0;		// remapped, oversampled
     float *errbT, *errbAz, *errbIn, *errbF;
     float *errbTbI, *errbTbA, *errbTbF, *errbAbI, *errbAbF, *errbIbF;
     float *zeroArray;
@@ -153,8 +203,12 @@ int DoIt(void)
 
     xunitMap = cmdparams_get_float(&cmdparams, "XUNITMAP", &status);
     yunitMap = cmdparams_get_float(&cmdparams, "YUNITMAP", &status);
-    sample = cmdparams_get_float(&cmdparams, "SAMPLE", &status);   
-    if (sample < 1.) sample = 1.;	// Sampling rate
+    nbin = abs(cmdparams_get_int(&cmdparams, "NBIN", &status));		// odd required
+    if (nbin % 2 != 1) {
+        nbin++;
+        printf("nbin changed to %d\n", nbin); fflush(stdout);
+    }
+    xunitMap0 = xunitMap / nbin; yunitMap0 = yunitMap / nbin;
 
     LonWidth = cmdparams_get_float(&cmdparams, "LONWIDTH", &status);
     LatWidth = cmdparams_get_float(&cmdparams, "LATWIDTH", &status);
@@ -163,7 +217,8 @@ int DoIt(void)
 
     covar = cmdparams_get_int(&cmdparams, "COVAR", &status);
     doerror = (cmdparams_isflagset(&cmdparams, "e") != 0);
-
+    gauss = cmdparams_get_int(&cmdparams, "GAUSSIAN", &status);
+    nnb = cmdparams_get_int(&cmdparams, "nnb", &status);
     
     /* Set projection method */
     
@@ -343,23 +398,24 @@ int DoIt(void)
         }
         
         if (LonWidth > 1.E-5) {
-            xMap0 = rint (LonWidth / xunitMap);
-            xMap = rint (LonWidth / xunitMap * sample);
+            xMap = rint (LonWidth / xunitMap);
+            xMap0 = xMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
         } else {
             if (!useOrigWidth) DIE("no x width available\n");
-            xMap0 = rint (maplon_size);
-            xMap = rint (maplon_size * sample);
+            xMap = rint (maplon_size);
+            xMap0 = xMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
         }
         
         if (LatWidth > 1.E-5) {
-            yMap0 = rint (LatWidth / yunitMap);
-            yMap = rint (LatWidth / yunitMap * sample);
+            yMap = rint (LatWidth / yunitMap);
+            yMap0 = yMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
         } else {
             if (!useOrigWidth) DIE("no y width available\n");
-            yMap0 = rint (maplat_size);
-            yMap = rint (maplat_size * sample);
+            yMap = rint (maplat_size);
+            yMap0 = yMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
         }
         
+        printf("xMap0=%d, yMap0=%d\n", xMap0, yMap0);
         printf("xMap=%d, yMap=%d\n", xMap, yMap);
         
         /* Align, using reference record, or reference lat/lon */
@@ -383,15 +439,15 @@ int DoIt(void)
         by = (float *) malloc(xDim * yDim * sizeof(float));
         bz = (float *) malloc(xDim * yDim * sizeof(float));
 
-        bxHel = (float *) malloc(xMap * yMap * sizeof(float));
-        byHel = (float *) malloc(xMap * yMap * sizeof(float));
-        bzHel = (float *) malloc(xMap * yMap * sizeof(float));
+        bxHel0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
+        byHel0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
+        bzHel0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
 
         if (doerror) 
         {
-        errBx = (float *) malloc(xMap * yMap * sizeof(float));
-        errBy = (float *) malloc(xMap * yMap * sizeof(float));
-        errBz = (float *) malloc(xMap * yMap * sizeof(float));
+        errBx0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
+        errBy0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
+        errBz0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
         }
 
         /* Read in segments */
@@ -546,15 +602,15 @@ int DoIt(void)
         /* Start interpolation */
         
         jy = 0; yOff = 0; iData = 0;
-        for (jy = 0; jy < yMap; jy++)
+        for (jy = 0; jy < yMap0; jy++)
         {
             ix = 0;
-            yOff = jy * xMap;
-            for (ix = 0; ix < xMap; ix++)
+            yOff = jy * xMap0;
+            for (ix = 0; ix < xMap0; ix++)
             {
                 iData = yOff + ix;
-                x = (ix + 0.5 - xMap/2.) * xunitMap;
-                y = (jy + 0.5 - yMap/2.) * yunitMap;
+                x = (ix + 0.5 - xMap0/2.) * xunitMap0;
+                y = (jy + 0.5 - yMap0/2.) * yunitMap0;
 
                 /* map grid [x, y] corresponds to the point [lon, lat] in the heliographic coordinates. 
                  * the [x, y] are in radians with respect of the center of the map [xcMap, ycMap].
@@ -564,14 +620,14 @@ int DoIt(void)
 
                 if (plane2sphere (x * RADSINDEG, y * RADSINDEG, maplatc, maplonc, 
                                   &lat, &lon, projection)) {
-                    bxHel[iData] = DRMS_MISSING_FLOAT;
-                    byHel[iData] = DRMS_MISSING_FLOAT;
-                    bzHel[iData] = DRMS_MISSING_FLOAT;
+                    bxHel0[iData] = DRMS_MISSING_FLOAT;
+                    byHel0[iData] = DRMS_MISSING_FLOAT;
+                    bzHel0[iData] = DRMS_MISSING_FLOAT;
                     if (doerror) 
                     {
-                    errBx[iData] = bxSigma2;
-                    errBy[iData] = bySigma2;
-                    errBz[iData] = bzSigma2;
+                    errBx0[iData] = bxSigma2;
+                    errBy0[iData] = bySigma2;
+                    errBz0[iData] = bzSigma2;
                     }
                     continue;
                 }
@@ -582,14 +638,14 @@ int DoIt(void)
 
                 if (sphere2img (lat, lon, latc, lonc, &xi, &zeta, xCenter/rSun, yCenter/rSun, 1.0,
                                 pa, 1., 0., 0., 0.)) {
-                    bxHel[iData] = DRMS_MISSING_FLOAT;
-                    byHel[iData] = DRMS_MISSING_FLOAT;
-                    bzHel[iData] = DRMS_MISSING_FLOAT;
+                    bxHel0[iData] = DRMS_MISSING_FLOAT;
+                    byHel0[iData] = DRMS_MISSING_FLOAT;
+                    bzHel0[iData] = DRMS_MISSING_FLOAT;
                     if (doerror)
                     {
-                    errBx[iData] = bxSigma2;
-                    errBy[iData] = bySigma2;
-                    errBz[iData] = bzSigma2;
+                    errBx0[iData] = bxSigma2;
+                    errBy0[iData] = bySigma2;
+                    errBz0[iData] = bzSigma2;
                     }
                     continue;
                 }
@@ -598,10 +654,16 @@ int DoIt(void)
 
                 /* Interpolation is carried out here. The method is the cubic convolution. */
 
+                if (!nnb) {
                 bx_tmp = ccint2 (bx, xDim, yDim, xi, zeta);
                 by_tmp = ccint2 (by, xDim, yDim, xi, zeta);
                 bz_tmp = ccint2 (bz, xDim, yDim, xi, zeta);
-                
+                } else {
+                bx_tmp = nearest (bx, xDim, yDim, xi, zeta);
+                by_tmp = nearest (by, xDim, yDim, xi, zeta);
+                bz_tmp = nearest (bz, xDim, yDim, xi, zeta);
+                }
+
                 /* Projection */
                 
                 bx_helio = 0; by_helio = 0; bz_helio = 0;
@@ -610,9 +672,9 @@ int DoIt(void)
                                  &bx_helio, &by_helio, &bz_helio,
                                  lon, lat, lonc, latc, pa);
 
-                bxHel[iData] = bx_helio;
-                byHel[iData] = by_helio;
-                bzHel[iData] = bz_helio;
+                bxHel0[iData] = bx_helio;
+                byHel0[iData] = by_helio;
+                bzHel0[iData] = bz_helio;
                 
                 /* If an estimate of the error is needed, call the subroutine errorprop.c.
                  * The image location is xi (x-axis) and zeta (y-axis).
@@ -625,21 +687,21 @@ int DoIt(void)
                                    lon, lat, lonc, latc, pa, xDim, yDim, xi, zeta, 
                                    &bxSigma2, &bySigma2, &bzSigma2)) 
                     {
-                    errBx[iData] = DRMS_MISSING_FLOAT;
-                    errBy[iData] = DRMS_MISSING_FLOAT;
-                    errBz[iData] = DRMS_MISSING_FLOAT;
+                    errBx0[iData] = DRMS_MISSING_FLOAT;
+                    errBy0[iData] = DRMS_MISSING_FLOAT;
+                    errBz0[iData] = DRMS_MISSING_FLOAT;
                     continue;
                     }
                     if (!(bxSigma2 >= 0.0 || bySigma2 >= 0.0 || bzSigma2 >= 0.0))    
                     {
-                    errBx[iData] = DRMS_MISSING_FLOAT;
-                    errBy[iData] = DRMS_MISSING_FLOAT;
-                    errBz[iData] = DRMS_MISSING_FLOAT;
+                    errBx0[iData] = DRMS_MISSING_FLOAT;
+                    errBy0[iData] = DRMS_MISSING_FLOAT;
+                    errBz0[iData] = DRMS_MISSING_FLOAT;
                     continue;
                     } 
-                    errBx[iData] = sqrt(bxSigma2);
-                    errBy[iData] = sqrt(bySigma2);
-                    errBz[iData] = sqrt(bzSigma2);
+                    errBx0[iData] = sqrt(bxSigma2);
+                    errBy0[iData] = sqrt(bySigma2);
+                    errBz0[iData] = sqrt(bzSigma2);
                 }
 
             }	// ix
@@ -647,55 +709,52 @@ int DoIt(void)
         
         /* Rebinning */
         
-        bxHel0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
-        byHel0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
-        bzHel0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
+        bxHel = (float *) malloc(xMap * yMap * sizeof(float));
+        byHel = (float *) malloc(xMap * yMap * sizeof(float));
+        bzHel = (float *) malloc(xMap * yMap * sizeof(float));
         if (doerror) 
         {
-        errBx0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
-        errBy0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
-        errBz0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
+        errBx = (float *) malloc(xMap * yMap * sizeof(float));
+        errBy = (float *) malloc(xMap * yMap * sizeof(float));
+        errBz = (float *) malloc(xMap * yMap * sizeof(float));
         }
         
         // Wrapper for Jesper's code
-        /*
-        frebin(bxHel, xMap, yMap, bxHel0, xMap0, yMap0);
-        frebin(byHel, xMap, yMap, byHel0, xMap0, yMap0);
-        frebin(bzHel, xMap, yMap, bzHel0, xMap0, yMap0);
+
+        frebin(bxHel0, bxHel, xMap0, yMap0, nbin, gauss);
+        frebin(byHel0, byHel, xMap0, yMap0, nbin, gauss);
+        frebin(bzHel0, bzHel, xMap0, yMap0, nbin, gauss);
         if (doerror)
         {
-        frebin(errBx, xMap, yMap, errBx0, xMap0, yMap0);
-        frebin(errBy, xMap, yMap, errBy0, xMap0, yMap0);
-        frebin(errBz, xMap, yMap, errBz0, xMap0, yMap0);
+        frebin(errBx0, errBx, xMap0, yMap0, nbin, gauss);
+        frebin(errBy0, errBy, xMap0, yMap0, nbin, gauss);
+        frebin(errBz0, errBz, xMap0, yMap0, nbin, gauss);
         }
-        */
-        
+
         // This is for now
-        for (int ii = 0; ii < xMap0 * yMap0; ii++) {
-            bxHel0[ii] = bxHel[ii];
-            byHel0[ii] = byHel[ii];
-            bzHel0[ii] = bzHel[ii];
-        }
+/*        
+        frebin_x(bxHel0, bxHel, xMap0, yMap0);
+        frebin_x(byHel0, byHel, xMap0, yMap0);
+        frebin_x(bzHel0, bzHel, xMap0, yMap0);
         if (doerror)
         {
-        for (int ii = 0; ii < xMap0 * yMap0; ii++) {
-            errBx0[ii] = errBx[ii];
-            errBy0[ii] = errBy[ii];
-            errBz0[ii] = errBz[ii];
+        frebin_x(errBx0, errBx, xMap0, yMap0);
+        frebin_x(errBy0, errBy, xMap0, yMap0);
+        frebin_x(errBz0, errBz, xMap0, yMap0);
         }
-        }
+*/
 
         /* Stats */
 
       
         /* Output */
 
-        outDims[0] = xMap0; outDims[1] = yMap0;
+        outDims[0] = xMap; outDims[1] = yMap;
         outRec = outRS->records[irec];     
         
         // write Bx as the first segment
         outSeg = drms_segment_lookup(outRec, "Bx");
-        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, bxHel0, &status);
+        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, bxHel, &status);
         outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
         outArray->parent_segment = outSeg;
         status = drms_segment_write(outSeg, outArray, 0);
@@ -705,7 +764,7 @@ int DoIt(void)
 
         // write By as the second segment
         outSeg = drms_segment_lookup(outRec, "By");
-        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, byHel0, &status);
+        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, byHel, &status);
         outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
         outArray->parent_segment = outSeg;
         status = drms_segment_write(outSeg, outArray, 0);
@@ -715,7 +774,7 @@ int DoIt(void)
 
         // write Bz as the third segment
         outSeg = drms_segment_lookup(outRec, "Bz");
-        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, bzHel0, &status);
+        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, bzHel, &status);
         outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
         outArray->parent_segment = outSeg;
         status = drms_segment_write(outSeg, outArray, 0);
@@ -727,7 +786,7 @@ int DoIt(void)
         {
         // write errBx as the fourth segment
         outSeg = drms_segment_lookup(outRec, "errBx");
-        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, errBx0, &status);
+        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, errBx, &status);
         outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
         outArray->parent_segment = outSeg;
         status = drms_segment_write(outSeg, outArray, 0);
@@ -737,7 +796,7 @@ int DoIt(void)
 
         // write errBy as the fourth segment
         outSeg = drms_segment_lookup(outRec, "errBy");
-        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, errBy0, &status);
+        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, errBy, &status);
         outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
         outArray->parent_segment = outSeg;
         status = drms_segment_write(outSeg, outArray, 0);
@@ -747,7 +806,7 @@ int DoIt(void)
 
         // write errBz as the fourth segment
         outSeg = drms_segment_lookup(outRec, "errBz");
-        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, errBz0, &status);
+        outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, errBz, &status);
         outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
         outArray->parent_segment = outSeg;
         status = drms_segment_write(outSeg, outArray, 0);
@@ -762,12 +821,13 @@ int DoIt(void)
         drms_free_array(inArray_bTotal); drms_free_array(inArray_bAzim);
         drms_free_array(inArray_bIncl); drms_free_array(inArray_bFill);
         free(bx); free(by); free(bz);
-        free(bxHel); free(byHel); free(bzHel);
+        free(bxHel0); free(byHel0); free(bzHel0);
+//free(bxHel); free(byHel); free(bzHel);
                 
         if (doerror) {
             drms_free_array(inArray_errbT); drms_free_array(inArray_errbAz);
             drms_free_array(inArray_errbIn); drms_free_array(inArray_errbF);
-            free(errBx); free(errBy); free(errBz);
+            free(errBx0); free(errBy0); free(errBz0);
             if (!covar) {
                 free(zeroArray);
             } else {
@@ -795,6 +855,13 @@ int DoIt(void)
         drms_setkey_string(outRec, "CUNIT1", "degree");
         drms_setkey_string(outRec, "CUNIT2", "degree");
         drms_setkey_string(outRec, "PROJECT", mapping);
+        // added Sep 13 2010
+        drms_setkey_float(outRec, "OCRPIX1", pcx);
+        drms_setkey_float(outRec, "OCRPIX2", pcy);
+        drms_setkey_float(outRec, "OHWIDTH1", x_halfwidth);
+        drms_setkey_float(outRec, "OHWIDTH2", y_halfwidth);
+        drms_setkey_float(outRec, "OCRVAL1", drms_getkey_float(inRec, "CRVAL1", &status));
+        drms_setkey_float(outRec, "OCRVAL2", drms_getkey_float(inRec, "CRVAL2", &status));
         
         /* Link */
         
