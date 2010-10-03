@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.4 2010/10/01 18:27:42 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.5 2010/10/03 14:11:57 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1252,13 +1252,14 @@ int DoIt(void)
   DRMS_RecordSet_t *lookup   = NULL;                                 //record for the look-up tables for the MDI-like algorithm
   DRMS_RecordSet_t *rectemp  = NULL;                                 //record for the temperatures
   DRMS_RecordSet_t *recpoly  = NULL;                                 //record for polynomial coefficients
+  DRMS_RecordSet_t *recpoly2 = NULL; 
 
   DRMS_Array_t *arrayL0=NULL;
   DRMS_Array_t *arrayL1=NULL;
   DRMS_Array_t *arrayL2=NULL;
 
   double diftime=0.0;
-  double coeff[4];                                                   //polynomial coefficients for the correction of the Doppler velocity returned by the MDI-like algorithm
+  double coeff[4],coeff2[4];                                         //polynomial coefficients for the correction of the Doppler velocity returned by the MDI-like algorithm
   double *count=NULL;
 
   float *RSUN=NULL;                                                  //Radius of the Sun's image in pixels
@@ -1735,7 +1736,7 @@ int DoIt(void)
       if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa90");
       if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa135");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150");
-      if( DataCadence == 720.0) strcpy(HMISeriesLev1pa,"hmi_test.S2_720s");
+      if( DataCadence == 720.0) strcpy(HMISeriesLev1pa,"hmi.S_720s");
     }
 
 
@@ -4777,45 +4778,72 @@ int DoIt(void)
 	      return 1;//exit(EXIT_FAILURE);
 	    }
 	  
-	  temptime = 1000000000.0;
-	  temp = 0;
 	  
 	  if(QuickLook != 1)
 	    {
+	      temptime = 1000000000.0;
+	      temp = 0;
+	      temp2= 0;
+
 	      for(i=0;i<n1;++i)
 		{
-		  count[i] = fabs(timeL[i]-TargetTime); //absolute value of the difference between the T_REC of the coefficient records and the TargetTime
+		  count[i] = fabs(timeL[i]-TargetTime);
 		  FSNDIFF  = FSNL[i]-FSNLOOKUP; 
-		  if(count[i] < temptime && FSNDIFF == 0) //The same look-up table must have been used for the coefficients AND the observables (FOR DEFINITIVE OBSERVABLES)
+		  if(count[i] < temptime && FSNDIFF == 0 && timeL[i]<TargetTime) //The same look-up table must have been used for the coefficients AND the observables (FOR DEFINITIVE OBSERVABLES)
 		    {
 		      temptime=count[i];
-		      temp=i; //temp will contain the index at which the T_REC value of the look-up table is closest to the TargetTime
+		      temp=i;
 		    }
 		}
-	      if(temptime > 43200.0) //the polynomial record must be at most 12 hours away from the target time (FOR DEFINITIVE OBSERVABLES)
+	      if(temptime > 86400.0)
 		{
-		  printf("Error: could not find a look-up table with the correct keywords and within 12 hours of the target time to produce level 1.5 data\n");
+		  printf("Error: could not find polynomial coefficients with the correct keywords and within 12 hours of the target time to produce level 1.5 data\n");
 		  QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
 		  CreateEmptyRecord=1; goto NextTargetTime;
 		}
+
+	      temptime = 1000000000.0;
+
+	      for(i=0;i<n1;++i)
+		{
+		  count[i] = fabs(timeL[i]-TargetTime);
+		  FSNDIFF  = FSNL[i]-FSNLOOKUP; 
+		  if(count[i] < temptime && FSNDIFF == 0 && timeL[i]>=TargetTime) //The same look-up table must have been used for the coefficients AND the observables (FOR DEFINITIVE OBSERVABLES)
+		    {
+		      temptime=count[i];
+		      temp2=i;
+		    }
+		}
+	      if(temptime > 86400.0)
+		{
+		  printf("Error: could not find polynomial coefficients with the correct keywords and within 12 hours of the target time to produce level 1.5 data\n");
+		  QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		  CreateEmptyRecord=1; goto NextTargetTime;
+		}
+
 	    }//end if(QuickLook != 1)
 	  else
 	    {
+
+	      temptime = 1000000000.0;
+	      temp = 0;
+	      
 	      for(i=0;i<n1;++i)
 		{
-		  count[i] = fabs(timeL[i]-TargetTime); //absolute value of the difference between the T_REC of the coefficient records and the TargetTime
+		  count[i] = fabs(timeL[i]-TargetTime);
 		  if(count[i] < temptime)
 		    {
 		      temptime=count[i];
 		      temp=i; //temp will contain the index at which the T_REC value of the look-up table is closest to the TargetTime
 		    }
 		}
+	      temp2=temp;
 	    }
 
-	  printf("Index of the retrieved polynomial record %d %d\n",temp,n1);
+	  printf("Indeces of the retrieved polynomial record %d %d %d\n",temp,temp2,n1);
 	  printf("Keyword values of the retrieved polynomial record: %d\n",FSNL[temp]-FSNLOOKUP);
 	  
-	  //WE BUILD THE QUERY FOR THE POLYNOMIAL COEFFICIENTS
+	  //WE BUILD THE FIRST QUERY FOR THE POLYNOMIAL COEFFICIENTS
 	  sprint_time(query,timeL[temp],"TAI",1);
 	  strcpy(HMICoeffs,HMISeriesCoeffs); 
 	  strcat(HMICoeffs,"[");
@@ -4863,6 +4891,72 @@ int DoIt(void)
 	      CreateEmptyRecord=1; goto NextTargetTime;
 	    }
 	  
+
+	  if(QuickLook != 1)
+	    {
+	      //WE BUILD THE SECOND QUERY FOR THE POLYNOMIAL COEFFICIENTS
+	      sprint_time(query,timeL[temp2],"TAI",1);
+	      strcpy(HMICoeffs,HMISeriesCoeffs); 
+	      strcat(HMICoeffs,"[");
+	      strcat(HMICoeffs,query);
+	      strcat(HMICoeffs,"]");
+	      
+	      printf("QUERY= %s\n",HMICoeffs);
+	      
+	      recpoly2  = drms_open_records(drms_env,HMICoeffs,&status); 
+	      if (status == DRMS_SUCCESS && recpoly2 != NULL && recpoly2->n != 0)
+		{
+		  coeff2[0]=drms_getkey_double(recpoly2->records[0],COEFF0S,&status);
+		  if(status != DRMS_SUCCESS)
+		    {
+		      printf("Error: could not read a polynomial coefficient\n");
+		      QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		      CreateEmptyRecord=1; goto NextTargetTime;
+		    }
+		  coeff2[1]=drms_getkey_double(recpoly2->records[0],COEFF1S,&status);
+		  if(status != DRMS_SUCCESS)
+		    {
+		      printf("Error: could not read a polynomial coefficient\n");
+		      QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		      CreateEmptyRecord=1; goto NextTargetTime;
+		    }
+		  coeff2[2]=drms_getkey_double(recpoly2->records[0],COEFF2S,&status);
+		  if(status != DRMS_SUCCESS)
+		    {
+		      printf("Error: could not read a polynomial coefficient\n");
+		      QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		      CreateEmptyRecord=1; goto NextTargetTime;
+		    }
+		  coeff2[3]=drms_getkey_double(recpoly2->records[0],COEFF3S,&status);
+		  if(status != DRMS_SUCCESS)
+		    {
+		      printf("Error: could not read a polynomial coefficient\n");
+		      QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		      CreateEmptyRecord=1; goto NextTargetTime;
+		    }
+		}
+	      else
+		{
+		  printf("Error: can't open the polynomial coefficients series.\n");
+		  QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		  CreateEmptyRecord=1; goto NextTargetTime;
+		}
+	    }
+	  else recpoly2 = NULL;
+
+ 
+	  printf("Polynomial coefficient values: %e %e %e %e\n",coeff[0],coeff[1],coeff[2],coeff[3]);
+
+	  if(QuickLook != 1)
+	    {
+	      printf("Polynomial coefficient values: %e %e %e %e\n",coeff2[0],coeff2[1],coeff2[2],coeff2[3]);
+	      coeff[0]=(TargetTime-timeL[temp])*(coeff2[0]-coeff[0])/(timeL[temp2]-timeL[temp])+coeff[0];
+	      coeff[1]=(TargetTime-timeL[temp])*(coeff2[1]-coeff[1])/(timeL[temp2]-timeL[temp])+coeff[1];
+	      coeff[2]=(TargetTime-timeL[temp])*(coeff2[2]-coeff[2])/(timeL[temp2]-timeL[temp])+coeff[2];
+	      coeff[3]=(TargetTime-timeL[temp])*(coeff2[3]-coeff[3])/(timeL[temp2]-timeL[temp])+coeff[3];
+	    }
+
+
 	  drms_free_array(arrayL0);
 	  arrayL0=NULL;
 	  drms_free_array(arrayL1);
@@ -4871,8 +4965,7 @@ int DoIt(void)
 	  arrayL2=NULL;
 	  free(count);
 	  count=NULL;
-	  
-	  printf("Polynomial coefficient values: %e %e %e %e\n",coeff[0],coeff[1],coeff[2],coeff[3]);
+
 	  strcpy(HISTORY,"Polynomial Coefficients used for Doppler velocity correction: ");
 	  sprintf(query,"%e",coeff[0]);
 	  strcat(HISTORY,query);
@@ -5446,6 +5539,8 @@ int DoIt(void)
 	  lookup = NULL;
 	  if(recpoly != NULL) status=drms_close_records(recpoly,DRMS_FREE_RECORD);
 	  recpoly= NULL;
+	  if(recpoly2 != NULL) status=drms_close_records(recpoly2,DRMS_FREE_RECORD);
+	  recpoly2= NULL;
 	  if(arrayL0 != NULL)
 	    {
 	      drms_free_array(arrayL0);
