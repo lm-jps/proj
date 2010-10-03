@@ -615,6 +615,11 @@ int DoIt(void)
       // Essential prime keys
       drms_copykey(yRec, xRec, "T_REC");
       drms_setkey_int(yRec, "PNUM", p+1); // number from 1
+		
+	  // date and build version
+	  // updated by xudong oct 3 2010
+	  drms_setkey_string(yRec, "BLD_VERS", jsoc_version);
+	  drms_setkey_time(yRec, "DATE", CURRENT_SYSTEM_TIME);
         
       // Geometry
       drms_setkey_int(  yRec, "HWIDTH1", (pDims[0]-1)/2);
