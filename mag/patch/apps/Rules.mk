@@ -4,8 +4,12 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
+
+# Common utilities
+EXTRADEPS_$(d)		:= $(addprefix $(d)/, fresize.o)
+
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, mappingvector_img2plane_x patch_los2vec)
+MODEXE_$(d)	:= $(addprefix $(d)/, mappingvector_img2plane_x patch_los2vec fulldiskvec_img2helio mappingfield_img2plane_x)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -37,6 +41,8 @@ $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
+$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I/home/jsoc/include -I$(SRCDIR)/$(d) -openmp
+
 MKL     := -lmkl
 
 ifeq ($(COMPILER), icc)
@@ -55,13 +61,15 @@ SVML_$(d)       :=
 GUIDE_$(d)      :=
 
 ifeq ($(COMPILER), icc)
-  SVML_$(d)     := 
+  SVML_$(d)     := -lsvml
   GUIDE_$(d)    := -lguide
 endif
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
+$(ALL_$(d)) : $(EXTRADEPS_$(d))
 $(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS)
-$(ALL_$(d)) : LL_TGT :=  $(LL_TGT) $(GSLLIBS) $(FMATHLIBS) $(SVML_$(d)) $(MKL) $(GUIDE_$(d))
+$(ALL_$(d)) : LF_TGT := $(LF_TGT) -openmp $(MKL)
+$(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) $(FMATHLIBS) $(SVML_$(d)) $(MKL) $(GUIDE_$(d))
 
 # Shortcuts
 .PHONY:	$(S_$(d))
