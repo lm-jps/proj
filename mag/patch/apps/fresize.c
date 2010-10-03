@@ -294,15 +294,7 @@ int fsample(
 
 
 
-#pragma omp parallel default(none) \
-
-private(i,j) \
-
-shared(image_in,image_out,imp,fillval) \
-
-shared(imin,imax,jmin,jmax) \
-
-shared(nxin,nyin,nleadin,nxout,nyout,nleadout,nsub)
+#pragma omp parallel default(none) private(i,j) shared(image_in,image_out,imp,fillval) shared(imin,imax,jmin,jmax) shared(nxin,nyin,nleadin,nxout,nyout,nleadout,nsub)
 
   { // Needed to define parallel region
 
@@ -444,15 +436,7 @@ int fbin(
 
 
 
-#pragma omp parallel default(none) \
-
-private(i,j,i1,j1,impi,sum) \
-
-shared(image_in,image_out,imp,fillval) \
-
-shared(imin,imax,jmin,jmax) \
-
-shared(nxin,nyin,nleadin,nxout,nyout,nleadout,nsub)
+#pragma omp parallel default(none) private(i,j,i1,j1,impi,sum) shared(image_in,image_out,imp,fillval) shared(imin,imax,jmin,jmax) shared(nxin,nyin,nleadin,nxout,nyout,nleadout,nsub)
 
   { // Needed to define parallel region
 
@@ -662,21 +646,11 @@ n1=(imax-imin+1); // Size of matrix for sgemv
 
 n2=2*hwidth+1; // Size of matrix for sgemv
 
-t1=dsecnd();
+//t1=dsecnd();
 
  
 
-#pragma omp parallel default(none) \
-
-private(i,j,i1,j1,inpi,inpj,sum) \
-
-shared(image_in,image_out,fillval) \
-
-shared(imin,imax,jmin,jmax,hwidth,kerx,kery,work,xoffl,yoffl) \
-
-shared(normal,transpose,n1,n2,nchunk) \
-
-shared(nxin,nyin,nleadin,nxout,nyout,nleadout,nsub)
+#pragma omp parallel default(none) private(i,j,i1,j1,inpi,inpj,sum) shared(image_in,image_out,fillval) shared(imin,imax,jmin,jmax,hwidth,kerx,kery,work,xoffl,yoffl) shared(normal,transpose,n1,n2,nchunk) shared(nxin,nyin,nleadin,nxout,nyout,nleadout,nsub)
 
   { // Needed to define parallel region
 
