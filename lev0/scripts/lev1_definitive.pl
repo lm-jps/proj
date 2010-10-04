@@ -5,15 +5,17 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #ordinal date in UTC (YYYY.DDD_UTC). For example for July 12, 2010
 #the day of year is 193 and to determine if the lev1 definitive can
 #be run for this day, call:
-#     lev1_definitive.pl [-x] hmi,aia 2010.193_UTC
+#     lev1_definitive.pl [-x][-o] hmi,aia 2010.193_UTC
 #
 #These requirements must be met:
 #
 #1. For the current UTC day# (1-366), there must be a file like so:
 #/dds/soc2pipe/hmi,aia/xday/Xmit_All.198
+#Optionally, the -o[verride] flag can be given for older data before
+#the Xmit_All.ddd was implemented.
 #
-#2. Do a query for the day of interest like so (note TAI):
-#sdo.hk_dayfile[2010.07.14_00:00:00_TAI][129][moc]
+#2. Do a query for the day of interest like so:
+#sdo.hk_dayfile[2010.07.14_00:00:00_UTC][129][moc]
 #where MERGED=1.
 #If this exists, then the sdo.lev0_asd_0004 for this day is complete,
 #and ok to use for the definitive lev1.
@@ -37,7 +39,8 @@ $XmitFlgDirHMI = "/dds/soc2pipe/hmi";
 $XmitFlgDirAIA = "/dds/soc2pipe/aia";
 $NoGoFileHMI = "/home/production/cvs/JSOC/proj/lev0/data/NoDefLev1HMI";
 $NoGoFileAIA = "/home/production/cvs/JSOC/proj/lev0/data/NoDefLev1AIA";
-$DSFFNAMEHMI = "su_production.hmi_flatfield";
+#$DSFFNAMEHMI = "su_production.hmi_flatfield";
+$DSFFNAMEHMI = "hmi.flatfield";
 $DSFFNAMEAIA = "aia_test.flatfield";
 $DSINAIA = "aia.lev0";
 #$DSOUTAIA = "aia.lev1e_nrt";	#!!TEMP
@@ -48,16 +51,18 @@ $DSINHMI = "hmi.lev0a";
 $DSOUTHMI = "hmi.lev1";
 #$QSUBDIR = "/scr21/production/qsub/tmp";
 $EXECUTE = 0;
+$OVERRIDE = 0;
+$| = 1;
 
-#!!!TEMP n02 in array - TAKE OUT!!!
-@allowhost = ("cl1n001", "cl1n002", "cl1n003", "n02"); #hosts w/dcs[0,1] mounts
+@allowhost = ("cl1n001", "cl1n002", "cl1n003"); #hosts w/dcs[0,1] mounts
 @wavestr = ("131_OPEN", "131_THICK", "131_THIN", "1600", "1700", "171_THICK", "171_THIN", "193_OPEN", "193_THICK", "193_THIN", "211_OPEN", "211_THICK", "211_THIN", "304_OPEN", "304_THICK", "304_THIN", "335_OPEN", "335_THICK", "335_THIN", "4500", "94_OPEN", "94_THICK", "94_THIN");
 
 
 sub usage {
   print "Determine if the lev1 definitive can be made for a given ordinal date.\n";
-  print "Usage: lev1_definitive.pl [-x] hmi,aia 2010.193_UTC\n";
+  print "Usage: lev1_definitive.pl [-x][-o] hmi,aia 2010.193_UTC\n";
   print " where -x = execute the build_lev1_mgr to make data for this day\n";
+  print "       -o = overried the check for Xmit_All.ddd (used for older data)\n";
   exit(0);
 }
 
@@ -71,6 +76,9 @@ while ($ARGV[0] =~ /^-/) {
   $_ = shift;
   if (/^-x(.*)/) {
     $EXECUTE = 1;
+  }
+  if (/^-o(.*)/) {
+    $OVERRIDE = 1;
   }
 }
 
@@ -118,20 +126,25 @@ if(-e $xmitfile) {
 else {
   $OKfile = 0;
   print "**NG for lev1: $xmitfile does not exist\n";
+  if($OVERRIDE) {
+    print "*OK override flag set for $xmitfile\n";
+    $OKfile = 1;
+  }
 }
 
 $taidate = `time_convert s=$sec zone=TAI`;
 #print "TAI date = $taidate\n";
 $pos = index($taidate, '_');
 $querypart = substr($taidate, 0, $pos+1);
-$qtime = $querypart."00:00:00_TAI";
+#$qtime = $querypart."00:00:00_TAI"; #originally TAI in the DB
+$qtime = $querypart."00:00:00_UTC";
 #print "query time = $qtime\n";
 #print "!!TEMP force query time to 2010.07.15_00:00:00_TAI\n";
 #$qtime = "2010.07.15_00:00:00_TAI";
 $qsec = `time_convert time=$qtime`;
 chomp($qsec);
 #print "$qsec\n";
-$cmd = "echo \"select sunum from sdo.hk_dayfile where date=$qsec and merged=1\" | psql -h hmidb jsoc";
+$cmd = "echo \"select sunum from sdo.hk_dayfile where obs_date=$qsec and merged=1\" | psql -h hmidb jsoc";
 @select = `$cmd`;
 #print "select is:\n@select";
 shift(@select); shift(@select);  #elim hdr info
@@ -264,7 +277,7 @@ else { $OKnogofile = 1; }
 
 if($OKfile && $OKhkdayfile && $OKfdsorbit && $OKnogofile && $OKff && $OKmp && $OKtemp) {
   print "*OK to process definitive lev1 for $orddate\n";
-  print "    Building command now...\n";
+  print "    Building command now (may take a minute)...\n";
   if($hmiaiaflg) {
     $cmd = "show_info key=fsn '$DSINAIA\[? t_obs >= \$($fulldate) and  t_obs < \$($nextdate) ?]'";
   }
@@ -277,7 +290,24 @@ if($OKfile && $OKhkdayfile && $OKfdsorbit && $OKnogofile && $OKff && $OKmp && $O
   $firstfsn = shift(@fsn);
   $lastfsn = pop(@fsn);
   chomp($firstfsn); chomp($lastfsn);
-  #print "first = $firstfsn  last = $lastfsn\n";
+  #$slog = "/tmp/levdef_$utcdate.log";
+  #$cmd1 = "$cmd 1> $slog 2>&1";
+  #print "$cmd1\n"; #!!TEMP
+  #system($cmd1);
+  #if(!open(LOGSTAT, $slog)) {
+  #  print "Can't open $slog: $!\n";
+  #  exit;
+  #}
+  #<LOGSTAT>;		#skip first line
+  #$_ = <LOGSTAT>;
+  #chomp();
+  #$firstfsn = $_;
+  #while(<LOGSTAT>) {
+  #  $lastfsn = $_;
+  #}
+  #close(LOGSTAT);
+  #chomp($lastfsn);
+  #print "first = $firstfsn  last = $lastfsn\n";  #!!TEMP
   if($hmiaiaflg) {
     $cmd = "time build_lev1_mgr mode=fsn instru=aia dsin=$DSINAIA dsout=$DSOUTAIA bfsn=$firstfsn efsn=$lastfsn logfile=/usr/local/logs/lev1/build_lev1_mgr_aia.$utcdate.log";
   }
@@ -292,6 +322,7 @@ if($OKfile && $OKhkdayfile && $OKfdsorbit && $OKnogofile && $OKff && $OKmp && $O
 else {
   print "**NG can't process definitive lev1 for $orddate\n";
 }
+print "**END: lev1_definitive.pl\n";  #used by lev1_def_gui to know end
 
 #Initialize $todayUTCdayofyr when first start
 sub inittoday {
