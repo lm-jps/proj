@@ -388,19 +388,19 @@ else
 if($source eq "moc")
 {
   #setup expected count of files to process and then check if processed successfully
-  $expected_count_m3sd=5; #later can automate better by getting count via file
+  $expected_count_m3sd=6; #later can automate better by getting count via file
   $expected_count_decode=1; #later can automate better by getting count via file
 
   # check count not expected and check did not send other emails above already
   if (($success_m3sd_count ne $expected_count_m3sd) and ($failed_m3sd_count == 0) and ($success_decode_count ne $expected_count_decode) and ($failed_ddf_count == 0))
   {
-     sendEmail("$to_email", "$from_email", "$subject_email_warn_m3sd_decode","Warning Message(1):\n-->Did not process the expected  <$expected_count_m3sd> dayfiles using load_m3sd executable.\n-->Only processed <$success_m3sd_count> dayfile(s)\n-->Check if the dayfiles for apid 17, 19,21,38, and 40 have been retrieved and ingested in < hmi | aia >.hk_dayfile series .\n-->If dayfiles exist, get dayfiles and rerun with load_m3sd executable.\n\nWarning Message(2):\n-->Did not process the expected  <$expected_count_decode> dayfiles using decode_dayfile executable.\n-->Note sdo.lev0_asd_0004 was not updated today.\n-->Only processed <$success_decode_count> dayfile(s).\n-->Check if the dayfiles for apid 129 has been retrieved and ingested in sdo.hk_dayfile series .\n-->If dayfile exists, get dayfiles and rerun with decode_dayfile executable.");
+     sendEmail("$to_email", "$from_email", "$subject_email_warn_m3sd_decode","Warning Message(1):\n-->Did not process the expected  <$expected_count_m3sd> dayfiles using load_m3sd executable.\n-->Only processed <$success_m3sd_count> dayfile(s)\n-->Check if the dayfiles for apid 17, 19, 21, 38, 40 and 44 have been retrieved and ingested in < hmi | aia >.hk_dayfile series .\n-->If dayfiles exist, get dayfiles and rerun with load_m3sd executable.\n\nWarning Message(2):\n-->Did not process the expected  <$expected_count_decode> dayfiles using decode_dayfile executable.\n-->Note sdo.lev0_asd_0004 was not updated today.\n-->Only processed <$success_decode_count> dayfile(s).\n-->Check if the dayfiles for apid 129 has been retrieved and ingested in sdo.hk_dayfile series .\n-->If dayfile exists, get dayfiles and rerun with decode_dayfile executable.");
     print LF "--->status:WARNING:did not process expected <$expected_count_m3sd> dayfiles using load_m3sd executable.\n";
     print LF "--->status:WARNING:did not process expected <$expected_count_decode> dayfiles using decode_dayfile executable. sdo.lev0_asd_0004 was not updated today.\n";
   } 
   elsif (($success_m3sd_count ne $expected_count_m3sd) and ($failed_m3sd_count == 0))
   {
-     sendEmail("$to_email", "$from_email", "$subject_email_warn_m3sd","Warning Message:\n-->Did not process the expected  <$expected_count_m3sd> dayfiles using load_m3sd executable.\n-->Only processed <$success_m3sd_count> dayfile(s)\n-->Check if the dayfiles for apid 17, 19,21,38, and 40 have been retrieved and ingested in < hmi | aia >.hk_dayfile series .\n-->If dayfiles exist, get dayfiles and rerun with load_m3sd executable.");
+     sendEmail("$to_email", "$from_email", "$subject_email_warn_m3sd","Warning Message:\n-->Did not process the expected  <$expected_count_m3sd> dayfiles using load_m3sd executable.\n-->Only processed <$success_m3sd_count> dayfile(s)\n-->Check if the dayfiles for apid 17, 19, 21, 38, 40 and 44 have been retrieved and ingested in < hmi | aia >.hk_dayfile series .\n-->If dayfiles exist, get dayfiles and rerun with load_m3sd executable.");
     print LF "--->status:WARNING:did not process expected <$expected_count_m3sd> dayfiles using load_m3sd executable.\n";
   }
   # check count not expected and check did not send other emails above already
@@ -497,7 +497,7 @@ sub check_agruments($)
      print "(1) Only used to process and save dayfile(s) with source equal to moc or rtmon.\n";
      print "(2) Only implemented to do decode_dayfile and load_m3sd on MOC dayfiles.\n";
      print "(3) Only setup to run on production-at-j0.\n";
-     print "(4) Only setup for load_m3sd to use instruction files on production and for apid 17, 19, 21, 38, and 40 .\n";
+     print "(4) Only setup for load_m3sd to use instruction files on production and for apid 17, 19, 21, 38, 40 and 44 .\n";
      print "(5) Only setup to check processing status is done on files for one file for decode_dayfile and five files for load_m3sd\n";
      print "(6) To run in another environment check and redo variable setting in steps(1)-(9) settings\n";
  
@@ -1069,7 +1069,7 @@ sub do_m3sd_dayfile($,$,$,$,$)
 
 
 #############################################################################
-# subroutine get_instruction_file -gets file for 17,19,21,38,40 only!       #
+# subroutine get_instruction_file -gets file for 17,19,21,38,40 and 44 only!#
 #############################################################################
 sub get_instruction_file($)
 {
