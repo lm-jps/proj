@@ -111,7 +111,7 @@
 
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
-#define MAXFILES 16384		//max # of file can handle in tlmdir
+#define MAXFILES 65535		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
 #define IMAGE_NUM_COMMIT 12	//number of complete images until commit
 //#define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
@@ -1185,7 +1185,8 @@ int get_tlm(char *file, int rexmit, int higherver)
       eflg++;
       if(sync_bad_cnt++ > 4) {
         printk("**Too many out of sync packets.\n");
-        return(1);
+        //return(1);
+        return(0);		//changed on 01Oct2010
       }
       printk("  Will attempt to press on...\n");
       zero_pn = 0;
