@@ -212,8 +212,16 @@ int do_flat(LEV0LEV1 *info)
 		    out[IDX] = ftmp;
 		    ++hist[itmp-MINOUT];
 		    ++npix;
-		} else
-		    out[IDX] = DRMS_MISSING_FLOAT;
+		} else if (ftmp < 0) {
+		    out[IDX] = MINOUT;
+		    ++hist[0];
+		    ++npix;
+		} else if (ftmp > 0) {
+		    out[IDX] = MAXOUT;
+		    ++hist[NBINS-1];
+		    ++npix;
+		}
+
 		++IDX;
 	    }
 	}
@@ -233,8 +241,16 @@ int do_flat(LEV0LEV1 *info)
 		    out[IDX] = ftmp;
 		    ++hist[itmp-MINOUT];
 		    ++npix;
-		} else
-		    out[IDX] = DRMS_MISSING_FLOAT;
+		} else if (ftmp < 0) {
+		    out[IDX] = MINOUT;
+		    ++hist[0];
+		    ++npix;
+		} else if (ftmp > 0) {
+		    out[IDX] = MAXOUT;
+		    ++hist[NBINS-1];
+		    ++npix;
+		}
+
 		++IDX;
 	    }
 	}
@@ -254,8 +270,16 @@ int do_flat(LEV0LEV1 *info)
 		    out[IDX] = ftmp;
 		    ++hist[itmp-MINOUT];
 		    ++npix;
-		} else
-		    out[IDX] = DRMS_MISSING_FLOAT;
+		} else if (ftmp < 0) {
+		    out[IDX] = MINOUT;
+		    ++hist[0];
+		    ++npix;
+		} else if (ftmp > 0) {
+		    out[IDX] = MAXOUT;
+		    ++hist[NBINS-1];
+		    ++npix;
+		}
+
 		++IDX;
 	    }
 	}
