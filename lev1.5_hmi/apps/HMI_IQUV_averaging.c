@@ -881,7 +881,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.3 2010/10/01 18:28:10 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.4 2010/10/04 19:04:05 couvidat Exp $");
 }
 
 
@@ -1365,12 +1365,12 @@ int DoIt(void)
    if(QuickLook == 1)                                                //Quick-look data
      { 
        if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
-       else strcpy(HMISeriesLev1p,"hmi_test.S2_360s_nrt");
+       else strcpy(HMISeriesLev1p,"hmi.S_360s_nrt");
      }
    else                                                               //Definitive Data
      {
        if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s");
-       else strcpy(HMISeriesLev1p,"hmi_test.S2_360s");
+       else strcpy(HMISeriesLev1p,"hmi.S_360s");
      }
 
   //the requested time range [timeBegin,timeEnd] must be increased to take into account
@@ -3420,33 +3420,44 @@ int DoIt(void)
 	  KeyInterpOut.time=tobs;//TargetTime;
 
 	  //set temperatures
-	  //open series containing average-temperature data
-	  strcpy(HMISeriesTemp,HMISeriesTemperature);
-	  strcat(HMISeriesTemp,"[");                                   
-	  strcat(HMISeriesTemp,timeBegin2);
-	  strcat(HMISeriesTemp,"]");
-	  rectemp=NULL;
-	  rectemp = drms_open_records(drms_env,HMISeriesTemp,&status);
-	  printf("TEMPERATURE QUERY = %s\n",HMISeriesTemp);
-	  if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0) TSEL=drms_getkey_float(rectemp->records[0],TS08,&status);
-	  else status = 1;
-	  if(status != DRMS_SUCCESS || isnan(TSEL))
+	  if(QuickLook == 1)
 	    {
-	      printf("Error: the temperature keyword %s could not be read\n",TS08);
-	      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOTEMP;
-	      TSEL=20.;
+	      TSEL=20.;  //polarization selector temperature//WARNING: NEED TO MODIFY TS08
+	      TFRONT=20.;//front window temperature //WARNING: NEED TO MODIFY (TS01+TS02)/2
 	    }
-	  statusA[1]=1;
-	  if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0) TFRONT=(drms_getkey_float(rectemp->records[0],TS01,&statusA[0])+drms_getkey_float(rectemp->records[0],TS02,&statusA[1]))/2.0;
-	  if(statusA[0] != DRMS_SUCCESS || statusA[1] != DRMS_SUCCESS || isnan(TFRONT))
+	  else
 	    {
-	      printf("Error: temperature keyword %s and/or %s could not be read\n",TS01,TS02);
-	      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOTEMP;
-	      TFRONT=20.;
+	      //open series containing average-temperature data
+	      strcpy(HMISeriesTemp,HMISeriesTemperature);
+	      strcat(HMISeriesTemp,"[");                                   
+	      strcat(HMISeriesTemp,timeBegin2);
+	      strcat(HMISeriesTemp,"]");
+	      rectemp=NULL;
+	      rectemp = drms_open_records(drms_env,HMISeriesTemp,&status);
+	      printf("TEMPERATURE QUERY = %s\n",HMISeriesTemp);
+	      if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0) TSEL=drms_getkey_float(rectemp->records[0],TS08,&status);
+	      else status = 1;
+	      if(status != DRMS_SUCCESS || isnan(TSEL))
+		{
+		  printf("Error: the temperature keyword %s could not be read\n",TS08);
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOTEMP;
+		  TSEL=20.;
+		}
+	      statusA[1]=1;
+	      if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0) TFRONT=(drms_getkey_float(rectemp->records[0],TS01,&statusA[0])+drms_getkey_float(rectemp->records[0],TS02,&statusA[1]))/2.0;
+	      if(statusA[0] != DRMS_SUCCESS || statusA[1] != DRMS_SUCCESS || isnan(TFRONT))
+		{
+		  printf("Error: temperature keyword %s and/or %s could not be read\n",TS01,TS02);
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOTEMP;
+		  TFRONT=20.;
+		}
+	      printf("TEMPERATURES = %f %f\n",TSEL,TFRONT);
+	      if(rectemp != NULL)
+		{ 
+		  drms_close_records(rectemp,DRMS_FREE_RECORD);
+		  rectemp=NULL;
+		}
 	    }
-	  printf("TEMPERATURES = %f %f\n",TSEL,TFRONT);
-	  drms_close_records(rectemp,DRMS_FREE_RECORD);
-
 
 	  //propagate keywords from level 1 data to level 1p	  
 	  statusA[8] = drms_setkey_int(recLev1p->records[timeindex],QUALITYS,QUALITY[timeindex]); //Quality word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)

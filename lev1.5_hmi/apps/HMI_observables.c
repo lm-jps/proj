@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.5 2010/10/03 14:11:57 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.6 2010/10/04 19:03:53 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -4310,7 +4310,11 @@ int DoIt(void)
 		TFRONT=20.;
 		}
 	      printf("TEMPERATURES = %f %f\n",TSEL,TFRONT);
-	      drms_close_records(rectemp,DRMS_FREE_RECORD);
+	      if(rectemp != NULL)
+		{ 
+		  drms_close_records(rectemp,DRMS_FREE_RECORD);
+		  rectemp=NULL;
+		}
 	    }	  
 	  
 	  printf("WAVELENGTH ORDER = ");
