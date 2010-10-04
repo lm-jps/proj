@@ -510,9 +510,24 @@ int do_flat_aia(LEV0LEV1 *info)
     // do statistics
     //
     npix = 0; memset(hist, 0, 4*NBINS);
+    /*******Original Code
     for (i=0; i<4096*4096; i++) {
       if(out[i] != DRMS_MISSING_INT) { ++hist[out[i]-MINOUT]; ++npix; }
     }
+    *******************/
+    //
+    // do statistics
+    //
+    npix = 0; memset(hist, 0, 4*NBINS);
+    for (i=0; i<4096*4096; i++) {
+      if(out[i] != DRMS_MISSING_INT) { 
+        if (out[i] < 0) out[i] = 0;
+        if (out[i] > 16383) out[i] = 16383;
+        ++hist[out[i]-MINOUT]; 
+        ++npix; 
+      }
+    }
+
     info->datavals = npix;
     info->missvals = dvals[info->himgcfid] - npix;
     info->datamin = info->datamax = info->datamedn = DRMS_MISSING_INT;
