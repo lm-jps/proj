@@ -44,9 +44,11 @@
 #define LEV1SERIESNAMEHMI "hmi.lev1"
 #define LEV1SERIESNAMEAIA "su_production.aia_lev1e"	//temp test case
 //#define DSFFNAME "su_richard.flatfield"		//temp test case
-#define DSFFNAMEHMI "su_production.hmi_flatfield"	//temp test case
+//#define DSFFNAMEHMI "su_production.hmi_flatfield"	//temp test case
+#define DSFFNAMEHMI "hmi.flatfield"
 //#define DSFFNAMEAIA "su_production.aia_flatfield"	//temp test case
-#define DSFFNAMEAIA "aia_test.flatfield"	//temp test case
+//#define DSFFNAMEAIA "aia_test.flatfield"	//temp test case
+#define DSFFNAMEAIA "aia.flatfield"
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1.%s.log"
@@ -247,7 +249,7 @@ void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int f
     quallev1 = quallev1 | Q_NRT;
   }
   drms_setkey_int(rs1, "QUALITY", quallev1);
-  drms_setkey_string(rs, "BLD_VERS", bld_vers); //build vers to every record
+  drms_setkey_string(rs1, "BLD_VERS", bld_vers); //build vers to every record
 }
 
 int nice_intro ()
