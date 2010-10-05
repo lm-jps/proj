@@ -8,7 +8,7 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #
 sub usage {
   print "Run daily to get a good flatfield using the hmi.lev1_nrt.\n";
-  print "Usage: module_flatfield_daily.pl hmi.lev1_nrt 2010.05.06\n";
+  print "Usage: module_flatfield_daily_qsub.pl hmi.lev1_nrt 2010.05.06\n";
   print " args:  input ds name\n";
   print "        date for the FF\n";
   exit(0);
@@ -19,7 +19,7 @@ $IN2 = "hmi.lev1c_nrt";
 $QDIR = "/scr21/production/qsub/flat"; #dir for qsub scripts
 
 $date = &get_date;
-print "Start module_flatfield_daily.pl on $date\n\n";
+print "Start module_flatfield_daily_qsub.pl on $date\n\n";
 if($#ARGV != 1) { &usage; }
 $inds = $ARGV[0];
 $datum = $ARGV[1];
