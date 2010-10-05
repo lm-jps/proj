@@ -17,6 +17,7 @@ struct mempointer
   unsigned char *mask_p;
   float *cnorm;
   float *ierror;
+  float *imcp;
 };
 
 #define nanval -2147483648

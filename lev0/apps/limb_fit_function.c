@@ -148,7 +148,7 @@ void free_mem(struct mempointer *memory);
   phic=(double *)(malloc(nphi*sizeof(double)));
 
   double *avgphi, *imhp, *imro, *parab;
-  float *image, *cnorm, *ierror;
+  float *image, *cnorm, *ierror, *imcp;
   unsigned char *mask_p;
 
   avgphi=(double *)(calloc(nr, sizeof(double)));
@@ -161,6 +161,7 @@ void free_mem(struct mempointer *memory);
   mask_p=(unsigned char *)(malloc(nx*nx*sizeof(unsigned char)));
   cnorm=(float *)(malloc(nx*nx*sizeof(float)));
   ierror=(float *)(malloc(nx*nx*sizeof(float)));
+  imcp=(float *)(malloc(nx*nx*sizeof(float)));
 
   if (imhp == NULL || imro == NULL || image == 0 || parab == NULL || mask_p == NULL || cnorm == NULL || ierror ==NULL){printf("can not allocate memory\n");} //debug
 
@@ -177,7 +178,7 @@ void free_mem(struct mempointer *memory);
   memory.mask_p=mask_p;
   memory.cnorm=cnorm;
   memory.ierror=ierror;
-
+  memory.imcp=imcp;
  
   double rad0=rad/(double)binx;
   double cx0=cx/(double)binx;
@@ -194,6 +195,7 @@ void free_mem(struct mempointer *memory);
   for (j=0; j<ny; ++j) 
       for (i=0; i<nx; ++i)
 	{
+	  imcp[j*nx+i]=image_in[j*nx+i];
 	  if (isnan(image_in[j*nx+i])){mask_p[j*nx+i]=2;} else {mask_p[j*nx+i]=0;}
 	  dx=sqrt(pow((double)i-cxn,2)+pow((double)j-cyn,2));
 	  if (dx > radmin && dx < radmax && mask[j*nx+i] == 1)
@@ -210,14 +212,14 @@ void free_mem(struct mempointer *memory);
    	{
 	 
 	  status_gap=init_fill(gapfill_method, gapfill_regular, gapfill_order,gapfill_order2,gapfill_order2,&fills, NULL);
-	  if (status_gap == 0){fgap_fill(&fills,image_in,nx,nx,nx,mask_p,cnorm,ierror); free_fill(&fills);} else {status_res=2; printf("gapfill not successful 2 \n"); free_fill(&fills); free_mem(&memory); return status_res;}
+	  if (status_gap == 0){fgap_fill(&fills,imcp,nx,nx,nx,mask_p,cnorm,ierror); free_fill(&fills);} else {status_res=2; printf("gapfill not successful 2 \n"); free_fill(&fills); free_mem(&memory); return status_res;}
 	}
 
 
 
       init_fresize_boxcar(&fresizes,2,4);
 
-      status=fresize(&fresizes,image_in, image, nx,nx,nx,nxx,nyy,nxx,0,0,NAN);   //rebin image
+      status=fresize(&fresizes,imcp, image, nx,nx,nx,nxx,nyy,nxx,0,0,NAN);   //rebin image
    
       free_fresize(&fresizes);
        
@@ -476,6 +478,7 @@ void free_mem(struct mempointer *memory)
   free(memory->parab);
   free(memory->cnorm);
   free(memory->ierror);
+  free(memory->imcp);
 
 
   return;
