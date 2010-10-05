@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.6 2010/10/04 19:03:53 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.7 2010/10/05 15:05:13 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -3948,7 +3948,7 @@ int DoIt(void)
 		{
 		  printf("Error: cannot read the keyword %s\n",SOURCES);
 		}
-	      else printf("source= %s\n",source);
+	      //else printf("source= %s\n",source);
 
 
 	      Segments1p=0;//segments for level 1p data not read
