@@ -57,7 +57,7 @@ struct parameterDoppler {             //structure to provide some parameters def
 /*-----------------------------------------------------------------------------------------*/
 
 
-int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSize,DRMS_Array_t *Lookuptable,float Rsun,float X0,float Y0,struct parameterDoppler DopplerParameters,int *MISSVALS,int *SATVALS,float cdelt1,TIME TargetTime)
+int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSize,DRMS_Array_t *Lookuptable,float Rsun,float X0,float Y0,struct parameterDoppler DopplerParameters,int MISSVALS[5],int *SATVALS,float cdelt1,TIME TargetTime)
 {
 
   double FSR[7];
@@ -289,8 +289,13 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
   ratio = nRows/axist[2];
   float minlookupt1=0.0,maxlookupt1=0.0,minlookupt2=0.0,maxlookupt2=0.0;
   
-  int MISSVALS2=0; //the number of missing values (NaN)
-  int SATVALS2 =0; //number of staurated values
+  int MISSVALS20=0; //the number of missing values (NaN) for Dopplergrams
+  int MISSVALS21=0; //the number of missing values (NaN) for magnetograms
+  int MISSVALS22=0; //the number of missing values (NaN) for linedepth
+  int MISSVALS23=0; //the number of missing values (NaN) for linewidth
+  int MISSVALS24=0; //the number of missing values (NaN) for continuum intensity
+
+  int SATVALS2 =0; //number of saturated values
   float offset=((float)ratio-1.0)/2.0; //because the phase maps were rebinned using rebin() which means that pixel 0 is actually (ratio-1)/2 on the initial grid
 
   /***********************************************************************************************************/
@@ -298,7 +303,7 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
   /***********************************************************************************************************/
 
 
-#pragma omp parallel default(none) reduction(+:MISSVALS2,SATVALS2) shared(step,arrLev1p,cosi,sini,cos2i,sin2i,pv1,pv2,index_lo,index_hi,vtest,period,dtune,dv,I0g,B0g,Idg,lam0g,rawlam0g,widthg,magnetic,axist,ratio,lookupt,nRows,nColumns,MISSINGDATA,MISSINGRESULT,Kfourier,Rsun,X0,Y0,ntest,tune,N,cost,minimumCoeffs,FWHMCoeffs,offset,ExtraCrop,cdelt1,TargetTime,QUICKLOOK,coeff) private(tempvec,iii,L,R,f1LCPc,f1RCPc,f1LCPs,f1RCPs,vLCP,vRCP,f2LCPc,f2RCPc,f2LCPs,f2RCPs,temp,tempbis,temp2,temp2bis,temp3,temp3bis,meanL,meanR,v2LCP,v2RCP,x0,y0,x1,y1,RR1,RR2,i,loc1,loc2,loc3,loc4,xa,xb,ya,yb,indexL,indexR,indexL2,indexR2,poly,poly2,row,column,distance,j,minlookupt1,maxlookupt1,minlookupt2,maxlookupt2,FWHM,minimum,angulardistance,minimumR,minimumL,correction,a0,a1,a2,a3,a4)
+#pragma omp parallel default(none) reduction(+:MISSVALS20,MISSVALS21,MISSVALS22,MISSVALS23,MISSVALS24,SATVALS2) shared(step,arrLev1p,cosi,sini,cos2i,sin2i,pv1,pv2,index_lo,index_hi,vtest,period,dtune,dv,I0g,B0g,Idg,lam0g,rawlam0g,widthg,magnetic,axist,ratio,lookupt,nRows,nColumns,MISSINGDATA,MISSINGRESULT,Kfourier,Rsun,X0,Y0,ntest,tune,N,cost,minimumCoeffs,FWHMCoeffs,offset,ExtraCrop,cdelt1,TargetTime,QUICKLOOK,coeff) private(tempvec,iii,L,R,f1LCPc,f1RCPc,f1LCPs,f1RCPs,vLCP,vRCP,f2LCPc,f2RCPc,f2LCPs,f2RCPs,temp,tempbis,temp2,temp2bis,temp3,temp3bis,meanL,meanR,v2LCP,v2RCP,x0,y0,x1,y1,RR1,RR2,i,loc1,loc2,loc3,loc4,xa,xb,ya,yb,indexL,indexR,indexL2,indexR2,poly,poly2,row,column,distance,j,minlookupt1,maxlookupt1,minlookupt2,maxlookupt2,FWHM,minimum,angulardistance,minimumR,minimumL,correction,a0,a1,a2,a3,a4)
  {
 
 #pragma omp for
@@ -369,7 +374,11 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
 
 		  if(isnan(f1LCPc) || isnan(f1RCPc) || isnan(f1LCPs) || isnan(f1RCPs))
 		    {
-		      MISSVALS2+=1;
+		      MISSVALS20 +=1;
+		      MISSVALS21 +=1;
+		      MISSVALS22 +=1;
+		      MISSVALS23 +=1;
+		      MISSVALS24 +=1;
 		      lam0g[iii]  = MISSINGRESULT;
 		      B0g[iii]    = MISSINGRESULT;
 		      widthg[iii] = MISSINGRESULT;
@@ -606,8 +615,8 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
 		      //vLCP=100.0+1.11912*(vLCP-100.0)-416.927*log((7000.0+vLCP-100.0)/(7000.0-vLCP+100.0));
 		      //vRCP=100.0+1.11912*(vRCP-100.0)-416.927*log((7000.0+vRCP-100.0)/(7000.0-vRCP+100.0));
 
-		      //vLCP=31.2+1.13056*(vLCP-31.2)-421.19*log((7000.0+vLCP-31.2)/(7000.0-vLCP+31.2));
-		      //vRCP=31.2+1.13056*(vRCP-31.2)-421.19*log((7000.0+vRCP-31.2)/(7000.0-vRCP+31.2));
+		      //vLCP=31.2+1.13056*(vLCP-100.0)-421.19*log((7000.0+vLCP-100.0)/(7000.0-vLCP+100.0));
+		      //vRCP=31.2+1.13056*(vRCP-100.0)-421.19*log((7000.0+vRCP-100.0)/(7000.0-vRCP+100.0));
 
 
 		      //CORRECTION USING THE POLYNOMIAL COEFFICIENTS FROM hmi.coefficients[]
@@ -622,15 +631,19 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
 		      //We compute the Doppler velocity
 		      //lam0g[iii]  = (float)((vLCP+vRCP+v2LCP+v2RCP)/4.);//simple average. Need weights? REMINDER: SIGN CONVENTION: v<0 FOR MOTION TOWARD THE OBSERVER (BLUESHIFT)
 		      lam0g[iii]  = (float)((vLCP+vRCP)/2.);
+		      if(isnan(lam0g[iii])) MISSVALS20 += 1;
+
 
 		      //We compute the l.o.s. magnetic field
 		      //B0g[iii]    = (float)((vLCP-vRCP+v2LCP-v2RCP)/2.0*magnetic);
 		      B0g[iii]    = (float)((vLCP-vRCP)*magnetic);
+		      if(isnan(B0g[iii])) MISSVALS21 += 1;
 
 		      //We compute the linewidth (in Angstroms)
 		      temp        = period/M_PI*sqrt(1.0/6.0*log((f1LCPc*f1LCPc+f1LCPs*f1LCPs)/(f2LCPc*f2LCPc+f2LCPs*f2LCPs)));
 		      tempbis     = period/M_PI*sqrt(1.0/6.0*log((f1RCPc*f1RCPc+f1RCPs*f1RCPs)/(f2RCPc*f2RCPc+f2RCPs*f2RCPs)));
 		      widthg[iii] = (float)((temp+tempbis)*sqrt(log(2.0)))*1000.; //we want the FWHM not the sigma of the Gaussian, in milliAngstoms	      
+		      if(isnan(widthg[iii])) MISSVALS23 += 1;
 		      
 		      //We compute the linedepth
 		      //temp2       = period/2.0*sqrt(f1LCPc*f1LCPc+f1LCPs*f1LCPs)/sqrt(M_PI)/temp*exp(M_PI*M_PI*temp*temp/period/period);
@@ -643,7 +656,8 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
 		      temp2       = period/2.0*sqrt(f1LCPc*f1LCPc+f1LCPs*f1LCPs)/sqrt(M_PI)/FWHM*exp(M_PI*M_PI*FWHM*FWHM/period/period);  //to not use the second Fourier coefficient
 		      temp2bis    = period/2.0*sqrt(f1RCPc*f1RCPc+f1RCPs*f1RCPs)/sqrt(M_PI)/FWHM*exp(M_PI*M_PI*FWHM*FWHM/period/period);
 		      Idg[iii]    = (float)((temp2+temp2bis)/2.0);
-		      
+		      if(isnan(Idg[iii])) MISSVALS22 += 1;
+
 		      //We compute the continuum intensity
 		      //temp3       = (vLCP+v2LCP)/2.0/dv;
 		      //temp3bis    = (vRCP+v2RCP)/2.0/dv;
@@ -686,7 +700,8 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
 			}
 		      
 		      I0g[iii]    = (float)((meanL+meanR)/2.0);
-		      
+		      if(isnan(I0g[iii])) MISSVALS24 += 1;
+
 		      // }		  
 		  
 		}//if (distance <= Rsun)
@@ -713,7 +728,11 @@ int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSiz
 
       //fclose(fp);
 
-      *MISSVALS=MISSVALS2;
+      MISSVALS[0]=MISSVALS20;
+      MISSVALS[1]=MISSVALS21;
+      MISSVALS[2]=MISSVALS22;
+      MISSVALS[3]=MISSVALS23;
+      MISSVALS[4]=MISSVALS24;
       *SATVALS=SATVALS2;
       return error;
       

@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.7 2010/10/05 15:05:13 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.8 2010/10/05 21:07:12 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1231,7 +1231,7 @@ int DoIt(void)
   int CARROTint;
   int camera,fidfilt;
   int ngood;
-  int MISSVALS=0;
+  int MISSVALS[5];
   int SATVALS=0;
   int WavelengthID2;
   int QUALITY=0;
@@ -1614,7 +1614,7 @@ int DoIt(void)
       if(DataCadence == 22.5)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d22Q");
       if(DataCadence == 45.0)  strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d45Q");
       if(DataCadence == 90.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d90Q");
-      if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d135Q");
+      if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d135Q");
       if(DataCadence == 75.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d75Q");
       if(DataCadence == 150.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d150Q");
     }
@@ -1623,7 +1623,7 @@ int DoIt(void)
       if(DataCadence == 22.5)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d22");
       if(DataCadence == 45.0)  strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d45");
       if(DataCadence == 90.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d90");
-      if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d135");
+      if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d135");
       if(DataCadence == 75.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d75");
       if(DataCadence == 150.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d150");
     }
@@ -1726,7 +1726,7 @@ int DoIt(void)
     {
       if( DataCadence == 45.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa45Q");
       if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa90Q");
-      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa135Q");
+      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135Q");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150Q");
       if( DataCadence == 720.0) strcpy(HMISeriesLev1pa,"hmi.S_720s_nrt");
     }
@@ -1734,7 +1734,7 @@ int DoIt(void)
     {
       if( DataCadence == 45.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa45");
       if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa90");
-      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa135");
+      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150");
       if( DataCadence == 720.0) strcpy(HMISeriesLev1pa,"hmi.S_720s");
     }
@@ -5113,8 +5113,8 @@ int DoIt(void)
 
 	  t0=dsecnd();
 
-	  Dopplergram(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,&MISSVALS,&SATVALS,cdelt1,TargetTime); //ASSUMES arrLev1p ARE IN THE ORDER I0 LCP, I0 RCP, I1 LCP, I1 RCP, I2 LCP, I2 RCP, I3 LCP, I3 RCP, I4 LCP, I4 RCP, AND I5 LCP, I5 RCP
-	  //else Dopplergram2(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,&MISSVALS,&SATVALS,cdelt1); //uses bi-cubic interpolation
+	  Dopplergram(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,MISSVALS,&SATVALS,cdelt1,TargetTime); //ASSUMES arrLev1p ARE IN THE ORDER I0 LCP, I0 RCP, I1 LCP, I1 RCP, I2 LCP, I2 RCP, I3 LCP, I3 RCP, I4 LCP, I4 RCP, AND I5 LCP, I5 RCP
+	  //else Dopplergram2(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,MISSVALS,&SATVALS,cdelt1); //uses bi-cubic interpolation
 	  t1=dsecnd();
 	  printf("TIME ELAPSED IN DOPPLERGRAM(): %f\n",t1-t0);
 
@@ -5192,10 +5192,10 @@ int DoIt(void)
 	    }
 
 	  //statusA[0]=   drms_setkey_int(recLev15a->records[0],TOTVALSS,axisout[0]*axisout[1]);
-	  statusA[0]=   drms_setkey_int(recLev15a->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15a->records[0],TOTVALSS,ngood+MISSVALS[0]);
 	  statusA[1]=   drms_setkey_int(recLev15a->records[0],DATAVALSS,ngood);
 	  //statusA[2]=   drms_setkey_int(recLev15a->records[0],MISSVALSS,axisout[0]*axisout[1]-ngood);
-	  statusA[2]=   drms_setkey_int(recLev15a->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15a->records[0],MISSVALSS,MISSVALS[0]);
 	  statusA[3]= drms_setkey_float(recLev15a->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15a->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15a->records[0],DATAMEDNS,(float)median);
@@ -5229,9 +5229,9 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
-	  statusA[0]=   drms_setkey_int(recLev15b->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15b->records[0],TOTVALSS,ngood+MISSVALS[1]);
 	  statusA[1]=   drms_setkey_int(recLev15b->records[0],DATAVALSS,ngood);
-	  statusA[2]=   drms_setkey_int(recLev15b->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15b->records[0],MISSVALSS,MISSVALS[1]);
 	  statusA[3]= drms_setkey_float(recLev15b->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15b->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15b->records[0],DATAMEDNS,(float)median);
@@ -5265,9 +5265,9 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
-	  statusA[0]=   drms_setkey_int(recLev15c->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15c->records[0],TOTVALSS,ngood+MISSVALS[2]);
 	  statusA[1]=   drms_setkey_int(recLev15c->records[0],DATAVALSS,ngood);
-	  statusA[2]=   drms_setkey_int(recLev15c->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15c->records[0],MISSVALSS,MISSVALS[2]);
 	  statusA[3]= drms_setkey_float(recLev15c->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15c->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15c->records[0],DATAMEDNS,(float)median);
@@ -5302,9 +5302,9 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
-	  statusA[0]=   drms_setkey_int(recLev15d->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15d->records[0],TOTVALSS,ngood+MISSVALS[3]);
 	  statusA[1]=   drms_setkey_int(recLev15d->records[0],DATAVALSS,ngood);
-	  statusA[2]=   drms_setkey_int(recLev15d->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15d->records[0],MISSVALSS,MISSVALS[3]);
 	  statusA[3]= drms_setkey_float(recLev15d->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15d->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15d->records[0],DATAMEDNS,(float)median);
@@ -5338,9 +5338,9 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
-	  statusA[0]=   drms_setkey_int(recLev15e->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15e->records[0],TOTVALSS,ngood+MISSVALS[4]);
 	  statusA[1]=   drms_setkey_int(recLev15e->records[0],DATAVALSS,ngood);
-	  statusA[2]=   drms_setkey_int(recLev15e->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15e->records[0],MISSVALSS,MISSVALS[4]);
 	  statusA[3]= drms_setkey_float(recLev15e->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15e->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15e->records[0],DATAMEDNS,(float)median);

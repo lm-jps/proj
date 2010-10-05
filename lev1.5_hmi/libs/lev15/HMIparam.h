@@ -103,6 +103,11 @@ struct parameterDoppler {                       //structure to provide some para
   double dvtest;
   float MISSINGDATA;
   float MISSINGRESULT;
+  double coeff0;
+  double coeff1;
+  double coeff2;
+  double coeff3;
+  int QuickLook;
 };
 
 
@@ -144,6 +149,6 @@ float lineprofile0[69] ={1.00000,1.000040,1.000240,1.000480,1.000860,1.001110,1.
 
 //prototype of function(s)
 
-int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSize,DRMS_Array_t *Lookuptable,float Rsun,float X0,float Y0,struct parameterDoppler DopplerParameters,int *MISSVALS,int *SATVALS, float cdelt1, TIME TargetTime);
+int Dopplergram(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSize,DRMS_Array_t *Lookuptable,float Rsun,float X0,float Y0,struct parameterDoppler DopplerParameters,int MISSVALS[5],int *SATVALS, float cdelt1, TIME TargetTime);
 
 int Dopplergram2(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSize,DRMS_Array_t *Lookuptable,float Rsun,float X0,float Y0,struct parameterDoppler DopplerParameters,int *MISSVALS,int *SATVALS, float cdelt1);
