@@ -12,7 +12,7 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
   struct fresize_struct fresizes;
 
 
-  //float coef[5];
+  float coef[5];
 
 
       float stdd=fwhm/2.0/sqrt(2.0*log(2.0)); 
@@ -20,11 +20,11 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
       init_fresize_gaussian(&fresizes,stdd,nwd,1);
       if (fresize == NULL){printf("can not initialize fresize\n"); exit(EXIT_FAILURE);}
 
-      //coef[0]=1.00000;
-      //coef[1]=0.0;
-      //coef[2]=0.0;
-      //coef[3]=0.0;
-      //coef[4]=0.0;
+      coef[0]=1.00000;
+      coef[1]=0.0;
+      coef[2]=0.0;
+      coef[3]=0.0;
+      coef[4]=0.0;
 
     
   int i, j;
@@ -38,10 +38,9 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
   img=(float *)(malloc(nx*ny*sizeof(float)));
   if (img == NULL){printf("can not allocate memory\n"); exit(EXIT_FAILURE);}
 
-  float sigma;
-  float sum;
-  //float sig;
-  float r, factor;
+  float sigma, avint;
+  float sum, inty;
+  float sig, r, factor;
   float x0, y0, rad;
   float rsun_obs, image_scl;
   int nump=nx/cent_frac*ny/cent_frac;
@@ -90,22 +89,24 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
   //get stddev at center
   //*******************************************************************************************************
   sum=0.0;
+  inty=0.0;
   count=0;
 
 
 
-#pragma omp parallel for reduction(+:sum,count) private(i,j)  
+#pragma omp parallel for reduction(+:sum,inty,count) private(i,j)  
   for (j=ny*(cent_frac-1)/cent_frac/2; j<ny*(cent_frac+1)/cent_frac/2; ++j) for (i=nx*(cent_frac-1)/cent_frac/2; i<nx*(cent_frac+1)/cent_frac/2; ++i)
     {
       if (!isnan(imhp[j*nx+i]))
 	{
 	  sum += imhp[j*nx+i]*imhp[j*nx+i];
+	  inty += image[j*nx+i];
 	  ++count;
 	}
     }
 
   //detect everything that stick out more than limit*sigma
-  if (count > nump/2) sigma=sqrt(sum/(float)(count)); else sigma=NAN;
+  if (count > nump/2){sigma=sqrt(sum/(float)(count)); avint=inty/(float)count;} else sigma=NAN;
  
   //********************************************************************************************************
 
@@ -114,7 +115,7 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
   count=nbad;
  
  
-  if (!isnan(sigma) && sigma > sigmamin && sigma < sigmamax)
+  if (!isnan(sigma) && sigma > sigmamin && sigma < sigmamax && avint > avmin && avint < avmax)
     {
 #pragma omp parallel for private(i,j,r)
       for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
@@ -122,10 +123,10 @@ int cosmic_rays(DRMS_Record_t *record, float *image, int *badpix, int nbad, int 
 
 	  if (!isnan(imhp[j*nx+i]))
 	    {
-	      if (stat_pos == 0) r=sqrt(((float)j-y0)*((float)j-y0)+((float)i-x0)*((float)i-x0))/rad; else r=0.0;
+	      if (stat_pos == 0) r=sqrt(pow((float)j-y0,2)+pow((float)i-x0,2))/rad; else r=0.0;
 	      if (r< 0.98){
-		//sig=(coef[0]+coef[1]*r+coef[2]*pow(r,2)+coef[3]*pow(r,3)+coef[4]*pow(r,4))*sigma;
-		if (imhp[j*nx+i] > limit*factor*sigma || image[j*nx+i] > maxval)
+		sig=(coef[0]+coef[1]*r+coef[2]*pow(r,2)+coef[3]*pow(r,3)+coef[4]*pow(r,4))*sigma;
+		if (imhp[j*nx+i] > limit*factor*sig || image[j*nx+i] > maxval)
 		{
                   #pragma omp critical(detect)
 		  cosmic[count]=j*nx+i;

@@ -13,8 +13,10 @@
 
   const int malign=32;
   const float fwhm=1.0; //full width half maximum for gaussian filter 
-  const float sigmamin=0.0;  //lower limit for standard deviation
-  const float sigmamax=700.0;  //upper limit for standard deviation
+  const float sigmamin=30.0;  //lower limit for standard deviation
+  const float sigmamax=300.0;  //upper limit for standard deviation
+  const float avmin=10000.0;  //lower limit for average at center
+  const float avmax=70000.0; //upper limit for average at center
   const float kernel_size=4.0;
 
 const int cent_frac=8; //center portion of image that is used to calculate std of image
