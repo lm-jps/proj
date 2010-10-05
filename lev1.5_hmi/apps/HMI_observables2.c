@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables2.c,v 1.4 2010/10/01 18:27:51 couvidat Exp $");
+  return strdup("$Id: HMI_observables2.c,v 1.5 2010/10/05 21:39:00 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1231,7 +1231,7 @@ int DoIt(void)
   int CARROTint;
   int camera,fidfilt;
   int ngood;
-  int MISSVALS=0;
+  int MISSVALS[5];
   int SATVALS=0;
   int WavelengthID2;
   int QUALITY=0;
@@ -1252,13 +1252,14 @@ int DoIt(void)
   DRMS_RecordSet_t *lookup   = NULL;                                 //record for the look-up tables for the MDI-like algorithm
   DRMS_RecordSet_t *rectemp  = NULL;                                 //record for the temperatures
   DRMS_RecordSet_t *recpoly  = NULL;                                 //record for polynomial coefficients
+  DRMS_RecordSet_t *recpoly2 = NULL; 
 
   DRMS_Array_t *arrayL0=NULL;
   DRMS_Array_t *arrayL1=NULL;
   DRMS_Array_t *arrayL2=NULL;
 
   double diftime=0.0;
-  double coeff[4];                                                   //polynomial coefficients for the correction of the Doppler velocity returned by the MDI-like algorithm
+  double coeff[4],coeff2[4];                                         //polynomial coefficients for the correction of the Doppler velocity returned by the MDI-like algorithm
   double *count=NULL;
 
   float *RSUN=NULL;                                                  //Radius of the Sun's image in pixels
@@ -1613,7 +1614,7 @@ int DoIt(void)
       if(DataCadence == 22.5)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d22Q");
       if(DataCadence == 45.0)  strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d45Q");
       if(DataCadence == 90.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d90Q");
-      if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d135Q");
+      if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d135Q");
       if(DataCadence == 75.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d75Q");
       if(DataCadence == 150.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d150Q");
     }
@@ -1622,7 +1623,7 @@ int DoIt(void)
       if(DataCadence == 22.5)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d22");
       if(DataCadence == 45.0)  strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d45");
       if(DataCadence == 90.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d90");
-      if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d135");
+      if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d135");
       if(DataCadence == 75.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d75");
       if(DataCadence == 150.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d150");
     }
@@ -1725,7 +1726,7 @@ int DoIt(void)
     {
       if( DataCadence == 45.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa45Q");
       if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa90Q");
-      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa135Q");
+      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135Q");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150Q");
       if( DataCadence == 720.0) strcpy(HMISeriesLev1pa,"hmi.S_720s_nrt");
     }
@@ -1733,9 +1734,9 @@ int DoIt(void)
     {
       if( DataCadence == 45.0)  strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa45");
       if( DataCadence == 90.0)  strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa90");
-      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa135");
+      if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150");
-      if( DataCadence == 720.0) strcpy(HMISeriesLev1pa,"hmi_test.S2_720s");
+      if( DataCadence == 720.0) strcpy(HMISeriesLev1pa,"hmi.S_720s");
     }
 
 
@@ -3947,7 +3948,7 @@ int DoIt(void)
 		{
 		  printf("Error: cannot read the keyword %s\n",SOURCES);
 		}
-	      else printf("source= %s\n",source);
+	      //else printf("source= %s\n",source);
 
 
 	      Segments1p=0;//segments for level 1p data not read
@@ -4309,7 +4310,11 @@ int DoIt(void)
 		TFRONT=20.;
 		}
 	      printf("TEMPERATURES = %f %f\n",TSEL,TFRONT);
-	      drms_close_records(rectemp,DRMS_FREE_RECORD);
+	      if(rectemp != NULL)
+		{ 
+		  drms_close_records(rectemp,DRMS_FREE_RECORD);
+		  rectemp=NULL;
+		}
 	    }	  
 	  
 	  printf("WAVELENGTH ORDER = ");
@@ -4777,45 +4782,72 @@ int DoIt(void)
 	      return 1;//exit(EXIT_FAILURE);
 	    }
 	  
-	  temptime = 1000000000.0;
-	  temp = 0;
 	  
 	  if(QuickLook != 1)
 	    {
+	      temptime = 1000000000.0;
+	      temp = 0;
+	      temp2= 0;
+
 	      for(i=0;i<n1;++i)
 		{
-		  count[i] = fabs(timeL[i]-TargetTime); //absolute value of the difference between the T_REC of the coefficient records and the TargetTime
+		  count[i] = fabs(timeL[i]-TargetTime);
 		  FSNDIFF  = FSNL[i]-FSNLOOKUP; 
-		  if(count[i] < temptime && FSNDIFF == 0) //The same look-up table must have been used for the coefficients AND the observables (FOR DEFINITIVE OBSERVABLES)
+		  if(count[i] < temptime && FSNDIFF == 0 && timeL[i]<TargetTime) //The same look-up table must have been used for the coefficients AND the observables (FOR DEFINITIVE OBSERVABLES)
 		    {
 		      temptime=count[i];
-		      temp=i; //temp will contain the index at which the T_REC value of the look-up table is closest to the TargetTime
+		      temp=i;
 		    }
 		}
-	      if(temptime > 43200.0) //the polynomial record must be at most 12 hours away from the target time (FOR DEFINITIVE OBSERVABLES)
+	      if(temptime > 86400.0)
 		{
-		  printf("Error: could not find a look-up table with the correct keywords and within 12 hours of the target time to produce level 1.5 data\n");
+		  printf("Error: could not find polynomial coefficients with the correct keywords and within 12 hours of the target time to produce level 1.5 data\n");
 		  QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
 		  CreateEmptyRecord=1; goto NextTargetTime;
 		}
+
+	      temptime = 1000000000.0;
+
+	      for(i=0;i<n1;++i)
+		{
+		  count[i] = fabs(timeL[i]-TargetTime);
+		  FSNDIFF  = FSNL[i]-FSNLOOKUP; 
+		  if(count[i] < temptime && FSNDIFF == 0 && timeL[i]>=TargetTime) //The same look-up table must have been used for the coefficients AND the observables (FOR DEFINITIVE OBSERVABLES)
+		    {
+		      temptime=count[i];
+		      temp2=i;
+		    }
+		}
+	      if(temptime > 86400.0)
+		{
+		  printf("Error: could not find polynomial coefficients with the correct keywords and within 12 hours of the target time to produce level 1.5 data\n");
+		  QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		  CreateEmptyRecord=1; goto NextTargetTime;
+		}
+
 	    }//end if(QuickLook != 1)
 	  else
 	    {
+
+	      temptime = 1000000000.0;
+	      temp = 0;
+	      
 	      for(i=0;i<n1;++i)
 		{
-		  count[i] = fabs(timeL[i]-TargetTime); //absolute value of the difference between the T_REC of the coefficient records and the TargetTime
+		  count[i] = fabs(timeL[i]-TargetTime);
 		  if(count[i] < temptime)
 		    {
 		      temptime=count[i];
 		      temp=i; //temp will contain the index at which the T_REC value of the look-up table is closest to the TargetTime
 		    }
 		}
+	      temp2=temp;
 	    }
 
-	  printf("Index of the retrieved polynomial record %d %d\n",temp,n1);
+	  printf("Indeces of the retrieved polynomial record %d %d %d\n",temp,temp2,n1);
 	  printf("Keyword values of the retrieved polynomial record: %d\n",FSNL[temp]-FSNLOOKUP);
 	  
-	  //WE BUILD THE QUERY FOR THE POLYNOMIAL COEFFICIENTS
+	  //WE BUILD THE FIRST QUERY FOR THE POLYNOMIAL COEFFICIENTS
 	  sprint_time(query,timeL[temp],"TAI",1);
 	  strcpy(HMICoeffs,HMISeriesCoeffs); 
 	  strcat(HMICoeffs,"[");
@@ -4863,6 +4895,72 @@ int DoIt(void)
 	      CreateEmptyRecord=1; goto NextTargetTime;
 	    }
 	  
+
+	  if(QuickLook != 1)
+	    {
+	      //WE BUILD THE SECOND QUERY FOR THE POLYNOMIAL COEFFICIENTS
+	      sprint_time(query,timeL[temp2],"TAI",1);
+	      strcpy(HMICoeffs,HMISeriesCoeffs); 
+	      strcat(HMICoeffs,"[");
+	      strcat(HMICoeffs,query);
+	      strcat(HMICoeffs,"]");
+	      
+	      printf("QUERY= %s\n",HMICoeffs);
+	      
+	      recpoly2  = drms_open_records(drms_env,HMICoeffs,&status); 
+	      if (status == DRMS_SUCCESS && recpoly2 != NULL && recpoly2->n != 0)
+		{
+		  coeff2[0]=drms_getkey_double(recpoly2->records[0],COEFF0S,&status);
+		  if(status != DRMS_SUCCESS)
+		    {
+		      printf("Error: could not read a polynomial coefficient\n");
+		      QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		      CreateEmptyRecord=1; goto NextTargetTime;
+		    }
+		  coeff2[1]=drms_getkey_double(recpoly2->records[0],COEFF1S,&status);
+		  if(status != DRMS_SUCCESS)
+		    {
+		      printf("Error: could not read a polynomial coefficient\n");
+		      QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		      CreateEmptyRecord=1; goto NextTargetTime;
+		    }
+		  coeff2[2]=drms_getkey_double(recpoly2->records[0],COEFF2S,&status);
+		  if(status != DRMS_SUCCESS)
+		    {
+		      printf("Error: could not read a polynomial coefficient\n");
+		      QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		      CreateEmptyRecord=1; goto NextTargetTime;
+		    }
+		  coeff2[3]=drms_getkey_double(recpoly2->records[0],COEFF3S,&status);
+		  if(status != DRMS_SUCCESS)
+		    {
+		      printf("Error: could not read a polynomial coefficient\n");
+		      QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		      CreateEmptyRecord=1; goto NextTargetTime;
+		    }
+		}
+	      else
+		{
+		  printf("Error: can't open the polynomial coefficients series.\n");
+		  QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
+		  CreateEmptyRecord=1; goto NextTargetTime;
+		}
+	    }
+	  else recpoly2 = NULL;
+
+ 
+	  printf("Polynomial coefficient values: %e %e %e %e\n",coeff[0],coeff[1],coeff[2],coeff[3]);
+
+	  if(QuickLook != 1)
+	    {
+	      printf("Polynomial coefficient values: %e %e %e %e\n",coeff2[0],coeff2[1],coeff2[2],coeff2[3]);
+	      coeff[0]=(TargetTime-timeL[temp])*(coeff2[0]-coeff[0])/(timeL[temp2]-timeL[temp])+coeff[0];
+	      coeff[1]=(TargetTime-timeL[temp])*(coeff2[1]-coeff[1])/(timeL[temp2]-timeL[temp])+coeff[1];
+	      coeff[2]=(TargetTime-timeL[temp])*(coeff2[2]-coeff[2])/(timeL[temp2]-timeL[temp])+coeff[2];
+	      coeff[3]=(TargetTime-timeL[temp])*(coeff2[3]-coeff[3])/(timeL[temp2]-timeL[temp])+coeff[3];
+	    }
+
+
 	  drms_free_array(arrayL0);
 	  arrayL0=NULL;
 	  drms_free_array(arrayL1);
@@ -4871,8 +4969,7 @@ int DoIt(void)
 	  arrayL2=NULL;
 	  free(count);
 	  count=NULL;
-	  
-	  printf("Polynomial coefficient values: %e %e %e %e\n",coeff[0],coeff[1],coeff[2],coeff[3]);
+
 	  strcpy(HISTORY,"Polynomial Coefficients used for Doppler velocity correction: ");
 	  sprintf(query,"%e",coeff[0]);
 	  strcat(HISTORY,query);
@@ -5016,8 +5113,8 @@ int DoIt(void)
 
 	  t0=dsecnd();
 
-	  Dopplergram(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,&MISSVALS,&SATVALS,cdelt1,TargetTime); //ASSUMES arrLev1p ARE IN THE ORDER I0 LCP, I0 RCP, I1 LCP, I1 RCP, I2 LCP, I2 RCP, I3 LCP, I3 RCP, I4 LCP, I4 RCP, AND I5 LCP, I5 RCP
-	  //else Dopplergram2(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,&MISSVALS,&SATVALS,cdelt1); //uses bi-cubic interpolation
+	  Dopplergram(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,MISSVALS,&SATVALS,cdelt1,TargetTime); //ASSUMES arrLev1p ARE IN THE ORDER I0 LCP, I0 RCP, I1 LCP, I1 RCP, I2 LCP, I2 RCP, I3 LCP, I3 RCP, I4 LCP, I4 RCP, AND I5 LCP, I5 RCP
+	  //else Dopplergram2(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,MISSVALS,&SATVALS,cdelt1); //uses bi-cubic interpolation
 	  t1=dsecnd();
 	  printf("TIME ELAPSED IN DOPPLERGRAM(): %f\n",t1-t0);
 
@@ -5095,10 +5192,10 @@ int DoIt(void)
 	    }
 
 	  //statusA[0]=   drms_setkey_int(recLev15a->records[0],TOTVALSS,axisout[0]*axisout[1]);
-	  statusA[0]=   drms_setkey_int(recLev15a->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15a->records[0],TOTVALSS,ngood+MISSVALS[0]);
 	  statusA[1]=   drms_setkey_int(recLev15a->records[0],DATAVALSS,ngood);
 	  //statusA[2]=   drms_setkey_int(recLev15a->records[0],MISSVALSS,axisout[0]*axisout[1]-ngood);
-	  statusA[2]=   drms_setkey_int(recLev15a->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15a->records[0],MISSVALSS,MISSVALS[0]);
 	  statusA[3]= drms_setkey_float(recLev15a->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15a->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15a->records[0],DATAMEDNS,(float)median);
@@ -5132,9 +5229,9 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
-	  statusA[0]=   drms_setkey_int(recLev15b->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15b->records[0],TOTVALSS,ngood+MISSVALS[1]);
 	  statusA[1]=   drms_setkey_int(recLev15b->records[0],DATAVALSS,ngood);
-	  statusA[2]=   drms_setkey_int(recLev15b->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15b->records[0],MISSVALSS,MISSVALS[1]);
 	  statusA[3]= drms_setkey_float(recLev15b->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15b->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15b->records[0],DATAMEDNS,(float)median);
@@ -5168,9 +5265,9 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
-	  statusA[0]=   drms_setkey_int(recLev15c->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15c->records[0],TOTVALSS,ngood+MISSVALS[2]);
 	  statusA[1]=   drms_setkey_int(recLev15c->records[0],DATAVALSS,ngood);
-	  statusA[2]=   drms_setkey_int(recLev15c->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15c->records[0],MISSVALSS,MISSVALS[2]);
 	  statusA[3]= drms_setkey_float(recLev15c->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15c->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15c->records[0],DATAMEDNS,(float)median);
@@ -5205,9 +5302,9 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
-	  statusA[0]=   drms_setkey_int(recLev15d->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15d->records[0],TOTVALSS,ngood+MISSVALS[3]);
 	  statusA[1]=   drms_setkey_int(recLev15d->records[0],DATAVALSS,ngood);
-	  statusA[2]=   drms_setkey_int(recLev15d->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15d->records[0],MISSVALSS,MISSVALS[3]);
 	  statusA[3]= drms_setkey_float(recLev15d->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15d->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15d->records[0],DATAMEDNS,(float)median);
@@ -5241,9 +5338,9 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
-	  statusA[0]=   drms_setkey_int(recLev15e->records[0],TOTVALSS,ngood+MISSVALS);
+	  statusA[0]=   drms_setkey_int(recLev15e->records[0],TOTVALSS,ngood+MISSVALS[4]);
 	  statusA[1]=   drms_setkey_int(recLev15e->records[0],DATAVALSS,ngood);
-	  statusA[2]=   drms_setkey_int(recLev15e->records[0],MISSVALSS,MISSVALS);
+	  statusA[2]=   drms_setkey_int(recLev15e->records[0],MISSVALSS,MISSVALS[4]);
 	  statusA[3]= drms_setkey_float(recLev15e->records[0],DATAMINS,(float)minimum);
 	  statusA[4]= drms_setkey_float(recLev15e->records[0],DATAMAXS,(float)maximum);
 	  statusA[5]= drms_setkey_float(recLev15e->records[0],DATAMEDNS,(float)median);
@@ -5446,6 +5543,8 @@ int DoIt(void)
 	  lookup = NULL;
 	  if(recpoly != NULL) status=drms_close_records(recpoly,DRMS_FREE_RECORD);
 	  recpoly= NULL;
+	  if(recpoly2 != NULL) status=drms_close_records(recpoly2,DRMS_FREE_RECORD);
+	  recpoly2= NULL;
 	  if(arrayL0 != NULL)
 	    {
 	      drms_free_array(arrayL0);
