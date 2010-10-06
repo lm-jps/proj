@@ -881,7 +881,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging2.c,v 1.3 2010/10/01 18:28:18 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging2.c,v 1.4 2010/10/06 22:52:14 couvidat Exp $");
 }
 
 
@@ -1365,12 +1365,12 @@ int DoIt(void)
    if(QuickLook == 1)                                                //Quick-look data
      { 
        if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
-       else strcpy(HMISeriesLev1p,"hmi_test.S2_360s_nrt");
+       else strcpy(HMISeriesLev1p,"hmi.S_360s_nrt");
      }
    else                                                               //Definitive Data
      {
        if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s");
-       else strcpy(HMISeriesLev1p,"hmi_test.S2_360s");
+       else strcpy(HMISeriesLev1p,"hmi.S_360s");
      }
 
   //the requested time range [timeBegin,timeEnd] must be increased to take into account
@@ -2143,7 +2143,7 @@ int DoIt(void)
 
   for(i=0;i<nWavelengths*npolout;i++)
     {
-      TOTVALSS[i] = (char *)malloc(12*sizeof(char));
+      TOTVALSS[i] = (char *)malloc(13*sizeof(char));
       if(TOTVALSS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to TOTVALSS[%d]\n",i);
@@ -2154,7 +2154,7 @@ int DoIt(void)
       strcat(TOTVALSS[i],query);
       strcat(TOTVALSS[i],"]");
 
-      MISSVALSS[i] = (char *)malloc(12*sizeof(char));
+      MISSVALSS[i] = (char *)malloc(13*sizeof(char));
       if(MISSVALSS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to MISSVALSS[%d]\n",i);
@@ -2165,7 +2165,7 @@ int DoIt(void)
       strcat(MISSVALSS[i],query);
       strcat(MISSVALSS[i],"]");
 
-      DATAVALSS[i] = (char *)malloc(12*sizeof(char));
+      DATAVALSS[i] = (char *)malloc(13*sizeof(char));
       if(DATAVALSS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAVALSS[%d]\n",i);
@@ -2176,7 +2176,7 @@ int DoIt(void)
       strcat(DATAVALSS[i],query);
       strcat(DATAVALSS[i],"]");
 
-      DATAMEANS[i] = (char *)malloc(12*sizeof(char));
+      DATAMEANS[i] = (char *)malloc(13*sizeof(char));
       if(DATAMEANS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAMEANS[%d]\n",i);
@@ -2187,7 +2187,7 @@ int DoIt(void)
       strcat(DATAMEANS[i],query);
       strcat(DATAMEANS[i],"]");
 
-      DATAMINS[i] = (char *)malloc(12*sizeof(char));
+      DATAMINS[i] = (char *)malloc(13*sizeof(char));
       if(DATAMINS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAMINS[%d]\n",i);
@@ -2198,7 +2198,7 @@ int DoIt(void)
       strcat(DATAMINS[i],query);
       strcat(DATAMINS[i],"]");
 
-      DATAMAXS[i] = (char *)malloc(12*sizeof(char));
+      DATAMAXS[i] = (char *)malloc(13*sizeof(char));
       if(DATAMAXS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAMAXS[%d]\n",i);
@@ -2210,7 +2210,7 @@ int DoIt(void)
       strcat(DATAMAXS[i],"]");
 
 
-      DATAMEDNS[i] = (char *)malloc(12*sizeof(char));
+      DATAMEDNS[i] = (char *)malloc(13*sizeof(char));
       if(DATAMEDNS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAMEDNS[%d]\n",i);
@@ -2221,7 +2221,7 @@ int DoIt(void)
       strcat(DATAMEDNS[i],query);
       strcat(DATAMEDNS[i],"]");
 
-      DATARMSS[i] = (char *)malloc(12*sizeof(char));
+      DATARMSS[i] = (char *)malloc(13*sizeof(char));
       if(DATARMSS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATARMSS[%d]\n",i);
@@ -2232,7 +2232,7 @@ int DoIt(void)
       strcat(DATARMSS[i],query);
       strcat(DATARMSS[i],"]");
 
-      DATASKEWS[i] = (char *)malloc(12*sizeof(char));
+      DATASKEWS[i] = (char *)malloc(13*sizeof(char));
       if(DATASKEWS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATASKEWS[%d]\n",i);
@@ -2243,7 +2243,7 @@ int DoIt(void)
       strcat(DATASKEWS[i],query);
       strcat(DATASKEWS[i],"]");
 
-      DATAKURTS[i] = (char *)malloc(12*sizeof(char));
+      DATAKURTS[i] = (char *)malloc(13*sizeof(char));
       if(DATAKURTS[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAKURTS[%d]\n",i);
@@ -2255,7 +2255,7 @@ int DoIt(void)
       strcat(DATAKURTS[i],"]");
 
 
-      DATAMINS2[i] = (char *)malloc(12*sizeof(char));
+      DATAMINS2[i] = (char *)malloc(13*sizeof(char));
       if(DATAMINS2[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAMINS2[%d]\n",i);
@@ -2266,7 +2266,7 @@ int DoIt(void)
       strcat(DATAMINS2[i],query);
       strcat(DATAMINS2[i],"]");
 
-      DATAMAXS2[i] = (char *)malloc(12*sizeof(char));
+      DATAMAXS2[i] = (char *)malloc(13*sizeof(char));
       if(DATAMAXS2[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAMAXS2[%d]\n",i);
@@ -2277,7 +2277,7 @@ int DoIt(void)
       strcat(DATAMAXS2[i],query);
       strcat(DATAMAXS2[i],"]");
 
-      DATAMEANS2[i] = (char *)malloc(12*sizeof(char));
+      DATAMEANS2[i] = (char *)malloc(13*sizeof(char));
       if(DATAMEANS2[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAMEANS2[%d]\n",i);
@@ -2288,7 +2288,7 @@ int DoIt(void)
       strcat(DATAMEANS2[i],query);
       strcat(DATAMEANS2[i],"]");
 
-      DATAMEDNS2[i] = (char *)malloc(12*sizeof(char));
+      DATAMEDNS2[i] = (char *)malloc(13*sizeof(char));
       if(DATAMEDNS2[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAMEDNS2[%d]\n",i);
@@ -2299,7 +2299,7 @@ int DoIt(void)
       strcat(DATAMEDNS2[i],query);
       strcat(DATAMEDNS2[i],"]");
 
-      DATARMSS2[i] = (char *)malloc(12*sizeof(char));
+      DATARMSS2[i] = (char *)malloc(13*sizeof(char));
       if(DATARMSS2[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATARMSS2[%d]\n",i);
@@ -2310,7 +2310,7 @@ int DoIt(void)
       strcat(DATARMSS2[i],query);
       strcat(DATARMSS2[i],"]");
 
-      DATASKEWS2[i] = (char *)malloc(12*sizeof(char));
+      DATASKEWS2[i] = (char *)malloc(13*sizeof(char));
       if(DATASKEWS2[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATASKEWS2[%d]\n",i);
@@ -2321,7 +2321,7 @@ int DoIt(void)
       strcat(DATASKEWS2[i],query);
       strcat(DATASKEWS2[i],"]");
 
-      DATAKURTS2[i] = (char *)malloc(12*sizeof(char));
+      DATAKURTS2[i] = (char *)malloc(13*sizeof(char));
       if(DATAKURTS2[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to DATAKURTS2[%d]\n",i);
@@ -3420,33 +3420,44 @@ int DoIt(void)
 	  KeyInterpOut.time=tobs;//TargetTime;
 
 	  //set temperatures
-	  //open series containing average-temperature data
-	  strcpy(HMISeriesTemp,HMISeriesTemperature);
-	  strcat(HMISeriesTemp,"[");                                   
-	  strcat(HMISeriesTemp,timeBegin2);
-	  strcat(HMISeriesTemp,"]");
-	  rectemp=NULL;
-	  rectemp = drms_open_records(drms_env,HMISeriesTemp,&status);
-	  printf("TEMPERATURE QUERY = %s\n",HMISeriesTemp);
-	  if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0) TSEL=drms_getkey_float(rectemp->records[0],TS08,&status);
-	  else status = 1;
-	  if(status != DRMS_SUCCESS || isnan(TSEL))
+	  if(QuickLook == 1)
 	    {
-	      printf("Error: the temperature keyword %s could not be read\n",TS08);
-	      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOTEMP;
-	      TSEL=20.;
+	      TSEL=20.;  //polarization selector temperature//WARNING: NEED TO MODIFY TS08
+	      TFRONT=20.;//front window temperature //WARNING: NEED TO MODIFY (TS01+TS02)/2
 	    }
-	  statusA[1]=1;
-	  if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0) TFRONT=(drms_getkey_float(rectemp->records[0],TS01,&statusA[0])+drms_getkey_float(rectemp->records[0],TS02,&statusA[1]))/2.0;
-	  if(statusA[0] != DRMS_SUCCESS || statusA[1] != DRMS_SUCCESS || isnan(TFRONT))
+	  else
 	    {
-	      printf("Error: temperature keyword %s and/or %s could not be read\n",TS01,TS02);
-	      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOTEMP;
-	      TFRONT=20.;
+	      //open series containing average-temperature data
+	      strcpy(HMISeriesTemp,HMISeriesTemperature);
+	      strcat(HMISeriesTemp,"[");                                   
+	      strcat(HMISeriesTemp,timeBegin2);
+	      strcat(HMISeriesTemp,"]");
+	      rectemp=NULL;
+	      rectemp = drms_open_records(drms_env,HMISeriesTemp,&status);
+	      printf("TEMPERATURE QUERY = %s\n",HMISeriesTemp);
+	      if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0) TSEL=drms_getkey_float(rectemp->records[0],TS08,&status);
+	      else status = 1;
+	      if(status != DRMS_SUCCESS || isnan(TSEL))
+		{
+		  printf("Error: the temperature keyword %s could not be read\n",TS08);
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOTEMP;
+		  TSEL=20.;
+		}
+	      statusA[1]=1;
+	      if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0) TFRONT=(drms_getkey_float(rectemp->records[0],TS01,&statusA[0])+drms_getkey_float(rectemp->records[0],TS02,&statusA[1]))/2.0;
+	      if(statusA[0] != DRMS_SUCCESS || statusA[1] != DRMS_SUCCESS || isnan(TFRONT))
+		{
+		  printf("Error: temperature keyword %s and/or %s could not be read\n",TS01,TS02);
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOTEMP;
+		  TFRONT=20.;
+		}
+	      printf("TEMPERATURES = %f %f\n",TSEL,TFRONT);
+	      if(rectemp != NULL)
+		{ 
+		  drms_close_records(rectemp,DRMS_FREE_RECORD);
+		  rectemp=NULL;
+		}
 	    }
-	  printf("TEMPERATURES = %f %f\n",TSEL,TFRONT);
-	  drms_close_records(rectemp,DRMS_FREE_RECORD);
-
 
 	  //propagate keywords from level 1 data to level 1p	  
 	  statusA[8] = drms_setkey_int(recLev1p->records[timeindex],QUALITYS,QUALITY[timeindex]); //Quality word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
@@ -3554,7 +3565,6 @@ int DoIt(void)
 	      arrLev1p[i]->israw=0;
 	      drms_segment_write(segout,arrLev1p[i],0);        //write the file containing the data (WE ASSUME THAT imagesout ARE IN THE ORDER I,Q,U,V AND LCP followed by RCP)		  
 	      //call Keh-Cheng's functions for the statistics (NB: this function avoids NANs, but other than that calculates the different quantities on the ENTIRE image)
-	      //NB: THE STATISTICS KEYWORDS ARE SET FOR THE FIRST IMAGE ONLY !!!!
 	      status=fstats(axisout[0]*axisout[1],imagesout[i],&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
 	      if(status != 0)
 		{

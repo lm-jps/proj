@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.8 2010/10/05 21:07:12 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.9 2010/10/06 22:51:06 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1395,6 +1395,24 @@ int DoIt(void)
   char **ierrors          = NULL;                                    //for temporal interpolation function
   char *RAWMEDNS          = "RAWMEDN";
   char *QUALLEV1S         = "QUALLEV1";
+  char TOTVALSSS[80][13]   ;
+  char DATAVALSSS[80][13]   ;
+  char MISSVALSSS[80][13]   ;
+  char DATAMINSS[80][13]   ;
+  char DATAMAXSS[80][13]   ;
+  char DATAMEDNSS[80][13]   ;
+  char DATAMEANSS[80][13]   ; 
+  char DATARMSSS[80][13]   ;
+  char DATASKEWSS[80][13]   ;
+  char DATAKURTSS[80][13]   ;
+  char DATAMINS2S[80][13]   ;
+  char DATAMAXS2S[80][13]   ;
+  char DATAMEDNS2S[80][13]   ;
+  char DATAMEANS2S[80][13]   ; 
+  char DATARMSS2S[80][13]   ;
+  char DATASKEWS2S[80][13]   ;
+  char DATAKURTS2S[80][13]   ;
+  char query[MaxNString]="QUERY";
 
   double minimum,maximum,median,mean,sigma,skewness,kurtosis;        //for Keh-Cheng's statistics functions
 
@@ -4360,7 +4378,6 @@ int DoIt(void)
 	      	
 	      if(Lev1pWanted) //if required, write the segment on file
 		{
-
 		  t0=dsecnd();
 		  for(i=0;i<npolout;++i)
 		    {		      
@@ -4381,7 +4398,7 @@ int DoIt(void)
 	  //SET THE KEYWORD FOR THE LEVEL 1p RECORD	  
 	  //**************************************************************************
 	  drms_copykeys(recLev1p->records[0],recLev1d->records[0],0, kDRMS_KeyClass_Explicit); //we copy all the keywords from the 1st level 1d record to this level 1p record
- 
+
 	  //we add the keywords not present in lev1d data but present in lev1p data
 	  statusA[0] = drms_setkey_float(recLev1p->records[0] ,TFRONTS,TFRONT);
 	  statusA[1] = drms_setkey_float(recLev1p->records[0] ,TSELS,TSEL);
@@ -4400,18 +4417,186 @@ int DoIt(void)
 	      statusA[4] = drms_setkey_float(recLev1p->records[0],RSUNOBSS,ctime1);
 	    }
 	  sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);
-	  statusA[5]= drms_setkey_string(recLev1p->records[0],DATES,DATEOBS); 
+	  statusA[5]= drms_setkey_string(recLev1p->records[0],DATES,DATEOBS);
+	  strcat(source,"]");
+ 	  statusA[6]= drms_setkey_string(recLev1p->records[0],SOURCES,source); 
+ 	  statusA[7]= drms_setkey_int(recLev1p->records[0],QUALLEV1S,QUALITYLEV1); 
 
-	      
 	  TotalStatus=0;
-	  for(i=0;i<6;++i) TotalStatus+=statusA[i];
+	  for(i=0;i<8;++i) TotalStatus+=statusA[i];
 	  if(TotalStatus != 0)
 	    {
-	      for(i=0;i<6;++i) printf(" %d ",statusA[i]);
+	      for(i=0;i<8;++i) printf(" %d ",statusA[i]);
 	      printf("\n");
 	      printf("WARNING: could not set some of the keywords for the level 1p data at target time %s\n",timeBegin2);
 	    }
+	  
 
+
+	  //SET THE STATISTICS KEYWORDS IF OUTPUT IS LEV1P
+	  if(Lev1pWanted) //if required, calculate the statistics on lev1p images
+	    {
+
+	      //read some keywords
+	      X0AVG = (float)drms_getkey_double(recLev1d->records[0],CRPIX1S,&status);
+	      if(status != DRMS_SUCCESS || isnan(X0AVG))
+		{
+		  printf("Error: %s keyword cannot be read on level 1d data at target time %s\n",CRPIX1S,timeBegin2);
+		}
+	      X0AVG=X0AVG-1; //BECAUSE CRPIX1 STARTS AT 1, NOT 0
+	      printf("X0AVG= %f\n",X0AVG);
+	      
+	      Y0AVG = (float)drms_getkey_double(recLev1d->records[0],CRPIX2S,&status);
+	      if(status != DRMS_SUCCESS || isnan(Y0AVG))
+		{
+		  printf("Error: %s keyword cannot be read on level 1d data at target time %s\n",CRPIX2S,timeBegin2);
+		}
+	      Y0AVG=Y0AVG-1; //BECAUSE CRPIX2 STARTS AT 1, NOT 0
+	      printf("Y0AVG= %f\n",Y0AVG);
+
+
+	      for(k=0;k<nRecs1p;++k) //loop over the groups of level 1p data segments (1 group = LCP+RCP or I+Q+U+V). So, nRecs1p should be the number of different wavelengths (5, 6, or 10)
+		{
+		  for(i=0;i<npolout;++i)
+		    {
+		      strcpy(TOTVALSSS[k*npolout+i],"TOTVALS[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(TOTVALSSS[k*npolout+i],query);
+		      strcat(TOTVALSSS[k*npolout+i],"]");
+
+		      strcpy(MISSVALSSS[k*npolout+i],"MISSVALS[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(MISSVALSSS[k*npolout+i],query);
+		      strcat(MISSVALSSS[k*npolout+i],"]");
+
+		      strcpy(DATAVALSSS[k*npolout+i],"DATAVALS[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAVALSSS[k*npolout+i],query);
+		      strcat(DATAVALSSS[k*npolout+i],"]");
+
+		      strcpy(DATAMEANSS[k*npolout+i],"DATAMEA2[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAMEANSS[k*npolout+i],query);
+		      strcat(DATAMEANSS[k*npolout+i],"]");
+
+		      strcpy(DATAMINSS[k*npolout+i],"DATAMIN2[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAMINSS[k*npolout+i],query);
+		      strcat(DATAMINSS[k*npolout+i],"]");
+
+		      strcpy(DATAMAXSS[k*npolout+i],"DATAMAX2[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAMAXSS[k*npolout+i],query);
+		      strcat(DATAMAXSS[k*npolout+i],"]");
+
+		      strcpy(DATAMEDNSS[k*npolout+i],"DATAMED2[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAMEDNSS[k*npolout+i],query);
+		      strcat(DATAMEDNSS[k*npolout+i],"]");
+      
+		      strcpy(DATARMSSS[k*npolout+i],"DATARMS2[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATARMSSS[k*npolout+i],query);
+		      strcat(DATARMSSS[k*npolout+i],"]");
+
+		      strcpy(DATASKEWSS[k*npolout+i],"DATASKE2[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATASKEWSS[k*npolout+i],query);
+		      strcat(DATASKEWSS[k*npolout+i],"]");
+
+		      strcpy(DATAKURTSS[k*npolout+i],"DATAKUR2[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAKURTSS[k*npolout+i],query);
+		      strcat(DATAKURTSS[k*npolout+i],"]");
+
+		      strcpy(DATAMINS2S[k*npolout+i],"DATAMIN[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAMINS2S[k*npolout+i],query);
+		      strcat(DATAMINS2S[k*npolout+i],"]");
+
+		      strcpy(DATAMAXS2S[k*npolout+i],"DATAMAX[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAMAXS2S[k*npolout+i],query);
+		      strcat(DATAMAXS2S[k*npolout+i],"]");
+
+		      strcpy(DATAMEANS2S[k*npolout+i],"DATAMEAN[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAMEANS2S[k*npolout+i],query);
+		      strcat(DATAMEANS2S[k*npolout+i],"]");
+
+		      strcpy(DATAMEDNS2S[k*npolout+i],"DATAMEDN[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAMEDNS2S[k*npolout+i],query);
+		      strcat(DATAMEDNS2S[k*npolout+i],"]");
+
+		      strcpy(DATARMSS2S[k*npolout+i],"DATARMS[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATARMSS2S[k*npolout+i],query);
+		      strcat(DATARMSS2S[k*npolout+i],"]");
+
+		      strcpy(DATASKEWS2S[k*npolout+i],"DATASKEW[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATASKEWS2S[k*npolout+i],query);
+		      strcat(DATASKEWS2S[k*npolout+i],"]");
+
+		      strcpy(DATAKURTS2S[k*npolout+i],"DATAKURT[");
+		      sprintf(query,"%d",k*npolout+i);
+		      strcat(DATAKURTS2S[k*npolout+i],query);
+		      strcat(DATAKURTS2S[k*npolout+i],"]");
+		      
+	 	      image=(float *)arrLev1p[k*npolout+i]->data; //WE ERASE PART OF THE DATA SEGMENT, BUT IT'S OK CAUSE IT'S NOT USED ANYMORE
+		      //call Keh-Cheng's functions for the statistics (NB: this function avoids NANs, but other than that calculates the different quantities on the ENTIRE image)
+		      status=fstats(axisout[0]*axisout[1],image,&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
+		      if(status != 0)
+			{
+			  printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
+			}
+		      statusA[6]= drms_setkey_float(recLev1p->records[0],DATAMINSS[k*npolout+i],(float)minimum); 
+		      statusA[7]= drms_setkey_float(recLev1p->records[0],DATAMAXSS[k*npolout+i],(float)maximum); 
+		      statusA[8]= drms_setkey_float(recLev1p->records[0],DATAMEDNSS[k*npolout+i],(float)median); 
+		      statusA[9]= drms_setkey_float(recLev1p->records[0],DATAMEANSS[k*npolout+i],(float)mean);   
+		      statusA[10]= drms_setkey_float(recLev1p->records[0],DATARMSSS[k*npolout+i],(float)sigma); 
+		      statusA[11]= drms_setkey_float(recLev1p->records[0],DATASKEWSS[k*npolout+i],(float)skewness);
+		      statusA[12]= drms_setkey_float(recLev1p->records[0],DATAKURTSS[k*npolout+i],(float)kurtosis);
+		      statusA[13]= drms_setkey_int(recLev1p->records[0],TOTVALSSS[k*npolout+i],axisout[0]*axisout[1]);
+		      statusA[14]= drms_setkey_int(recLev1p->records[0],DATAVALSSS[k*npolout+i],ngood);
+		      statusA[15]= drms_setkey_int(recLev1p->records[0],MISSVALSSS[k*npolout+i],axisout[0]*axisout[1]-ngood);
+		      
+
+		      for(ii=0;ii<axisout[0]*axisout[1];++ii)
+			{
+			  row   =ii / axisout[0];
+			  column=ii % axisout[0];
+			  distance = sqrt(((float)row-Y0AVG)*((float)row-Y0AVG)+((float)column-X0AVG)*((float)column-X0AVG)); //distance in pixels
+			  if(distance > 0.99*RSUNint) image[ii]=NAN;
+			}
+		      
+		      status=fstats(axisout[0]*axisout[1],image,&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
+		      if(status != 0)
+			{
+			  printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
+			}
+		      statusA[16]= drms_setkey_float(recLev1p->records[0],DATAMINS2S[k*npolout+i],(float)minimum); 
+		      statusA[17]= drms_setkey_float(recLev1p->records[0],DATAMAXS2S[k*npolout+i],(float)maximum); 
+		      statusA[18]= drms_setkey_float(recLev1p->records[0],DATAMEDNS2S[k*npolout+i],(float)median); 
+		      statusA[19]= drms_setkey_float(recLev1p->records[0],DATAMEANS2S[k*npolout+i],(float)mean);   
+		      statusA[20]= drms_setkey_float(recLev1p->records[0],DATARMSS2S[k*npolout+i],(float)sigma); 
+		      statusA[21]= drms_setkey_float(recLev1p->records[0],DATASKEWS2S[k*npolout+i],(float)skewness);
+		      statusA[22]= drms_setkey_float(recLev1p->records[0],DATAKURTS2S[k*npolout+i],(float)kurtosis);
+		    
+		      TotalStatus=0;
+		      for(ii=6;ii<23;++ii) TotalStatus+=statusA[ii];
+		      if(TotalStatus != 0)
+			{
+			  for(ii=6;ii<23;++ii) printf(" %d ",statusA[ii]);
+			  printf("\n");
+			  printf("WARNING: could not set some of the keywords for the level 1p data at target time %s\n",timeBegin2);
+			}
+		      
+		    }	      
+		}
+	    }//end if(Lev1pWanted)
+	  
 	  Segments1p=1; //data segments for level 1p data are in memory  
 	  
 	}//end of producing level 1p data
@@ -4596,7 +4781,6 @@ int DoIt(void)
 	  int unique=0;
 	  int n0,n1;
 
-	  char query[MaxNString]="QUERY";
 	  int NBC,WBC,E1C,POLC,NC,CAMERAUSED,FSNLOOKUP;
 
 	  arrayL0 = drms_record_getvector(drms_env,HMISeriesLookup, keylist, typeLO, unique, &status);
@@ -5154,9 +5338,6 @@ int DoIt(void)
 	  drms_segment_write(segout,arrLev15[4], 0);  
 	  t1=dsecnd();
 	  printf("TIME ELAPSED TO WRITE THE LEVEL 1.5 SEGMENTS: %f\n",t1-t0);
-
-	  if (TestLevIn[2] !=1) strcat(source,"]"); //CLOSING THE SOURCE KEYWORD IF INPUT IS NOT THE IQUV LEV 1P FROM THE 12-MIN IQUV CODE
-
 
 	  //CALCULATE MEDIAN VELOCITY OVER 99% OF SOLAR RADIUS FOR UNCORRECTED (RAW) DOPPLERGRAM
 
