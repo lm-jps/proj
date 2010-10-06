@@ -8,18 +8,18 @@
  * Written by:		Xudong Sun (xudongs@stanford.edu)
  *
  * External function:
- *			ambig.f
+ *			ambig.f90
  *
- * Version:		v1.0		Jan 25 2009
+ * Version:		v1.0		Jan 25 2010
+ *				v2.0		Oct 05 2010
  *
  * Issues:
- *			v1.0
  *
  *
  * Example:
  * limit s u
  * test_ambig "in=su_keiji.vmagf_2d_720s_3_fltprf[2010.03.29_12:00:00_TAI]" "out=su_xudong.test_vmagf_a" "mask=su_xudong.test_armask_720s" "geometry=2"
- * test_ambig "in=su_xudong.test_patch_vec[2010.03.29_12:00:00_TAI][2]" "out=su_xudong.test_patch_vec_a" "geometry=1"
+ * test_ambig "in=su_xudong.patch_vec_S5[2010.07.02_12:00:00_TAI]" "out=su_xudong.patch_vec_a_S5" "geometry=1"
  */
 
 
@@ -57,12 +57,12 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "out", NULL,  "Output data series."},
     {ARG_STRING, "mask", " ", "Bitmap series name, as AR mask, for full disk"},
     {ARG_INT, "VERB", "1", "Level of verbosity: 0=errors/warnings; 1=all messages"},
-    {ARG_INT, "geometry", "1", "1 for patch; 2 for full disk."},
+    {ARG_INT, "geometry", "1", "1 for planar; 2 for spherical."},
     {ARG_INT, "npad", "200", "Pixel number to pad with zeros for potential field."},
     {ARG_INT, "nap", "10", "Pixel number to apodize for potential field."},
     {ARG_INT, "ntx", "20", "Tile number in x (lon) direction for pf on a sphere."},
     {ARG_INT, "nty", "20", "Tile number in y (lat) direction for pf on a sphere."},
-    {ARG_FLOAT, "bthresh", "3.e2", "Threshold field strength."},
+    {ARG_FLOAT, "bthresh", "2.0e2", "Threshold field strength."},
     {ARG_INT, "seed", "1", "Input random number seed (seed>0)."},
     {ARG_INT, "neq", "10", "Num of reconfigurations attempted at each temperature setting."},
     {ARG_FLOAT, "lambda", "1.", "Weighting factor between div. and vert. current density."},
@@ -225,7 +225,7 @@ int DoIt(void)
         rsun_ref = drms_getkey_double(inRec, "RSUN_REF", &status);
         if (status) rsun_ref = 6.96e8;
         dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &status);
-   	    radius = asin(rsun_ref / dsun_obs) * Rad2arcsec / cdelt;
+   	radius = asin(rsun_ref / dsun_obs) * Rad2arcsec / cdelt;
 
         if (geometry == 1) {
             crvalx = drms_getkey_float(inRec, "IMCRVAL1", &status);	// center of solar disc in arcsec
@@ -486,7 +486,6 @@ printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
                &radius,
                &nap, &bthresh);
         /* Flag pixels for which the azimuth angle needs to be changed */
-        // Updated by xudong jun 30: Bx[i] > 0 instead of By[i] < 0
         for (i = 0; i < nxny; i++) {
             ambig_flag[i] = (Bx[i] > 0.) ? 1 : 0;
         }
@@ -497,7 +496,6 @@ printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
             if (isnan(probBa[i])) nancount++;
         }
 
- 
         /* Output segment */
         outArray_flag = drms_array_create(DRMS_TYPE_CHAR, 2, outDims, ambig_flag, &status);
         if (status) DIE("Error creating flag array");

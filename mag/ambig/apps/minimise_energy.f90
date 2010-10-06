@@ -13,8 +13,10 @@ subroutine minimise_energy(CalcE,CalcDE_reconfig)
    use sizes
    use anneal
    use bounds
+   use energy_arrays
    use ran_pix
    use ranseed
+   use spherical_deriv_coefficients
    use verbose
 
    implicit none
@@ -37,11 +39,10 @@ subroutine minimise_energy(CalcE,CalcDE_reconfig)
 !
 ! Initialisations
 !
-   allocate(tvar(nx,ny))
+   allocate(tvar(nx,ny),DivB(nx,ny),Jz(nx,ny))
    allocate(ivec(((nx/jump)+1)*((ny/jump)+1)),jvec(((nx/jump)+1)*((ny/jump)+1)))
 
    call CalcE(E)
-write(*,*) 'initial energy',E
 
    nxny=dnx*dny
    nxnynz=nxny
@@ -165,7 +166,11 @@ write(*,*) 'initial energy',E
       if ((nsucc.eq.0).or.(t.lt.tstop).or.(nconv.ge.nconv_min)) idone=1
    enddo
 
-   deallocate(tvar, ivec, jvec)
+   deallocate(tvar,DivB,Jz,ivec,jvec)
+   if(allocated(ddt1)) deallocate(ddt1)
+   if(allocated(ddt3)) deallocate(ddt3)
+   if(allocated(ddp)) deallocate(ddp)
+   if(allocated(ddr)) deallocate(ddr)
 
 end subroutine minimise_energy
 !***********************************************************************************************************************************

@@ -18,7 +18,9 @@ subroutine get_ran_pix
    integer :: i,j,ii,jj,ntries,get_pix,nxg,nyg
    real :: ran3
    integer,dimension(:),allocatable :: ivec1,jvec1
-
+!
+! Allocate memory for temporary arrays.
+!
    allocate(ivec1((nx/jump)+1),jvec1((ny/jump)+1))
 
    if ((nxjump.eq.1).and.(nyjump.eq.1)) then
@@ -94,6 +96,10 @@ subroutine get_ran_pix
          enddo
       enddo
    endif
+!
+! Deallocate memory for temporary arrays.
+!
+   deallocate(ivec1,jvec1)
 
 end subroutine get_ran_pix
 !***********************************************************************************************************************************

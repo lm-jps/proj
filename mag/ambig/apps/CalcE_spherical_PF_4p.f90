@@ -26,12 +26,6 @@ subroutine CalcE_spherical_PF_4p(E)
    integer :: i,j
    real :: E
 
-!
-! Allocate memory for energy arrays
-!
-   if(.not.allocated(DivB)) allocate(DivB(nx,ny))
-   if(.not.allocated(Jz)) allocate(Jz(nx,ny))
-
    E=0.
    do i=nxa,(nxb-1)
       do j=nya,(nyb-1)

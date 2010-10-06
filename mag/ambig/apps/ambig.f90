@@ -157,29 +157,6 @@ real,dimension(nx_p,ny_p) :: ba
       mask(nxb,j)=0
    enddo
 
-! write out input field/uncertainty
-
-!open(4,file='/tmp11/graham/field.dat')
-!do j=1,ny
-!   write(4,*) (Bx(i,j),i=1,nx)
-!enddo
-!do j=1,ny
-!   write(4,*) (By(i,j),i=1,nx)
-!enddo
-!do j=1,ny
-!   write(4,*) (Bz(i,j),i=1,nx)
-!enddo
-!do j=1,ny
-!   write(4,*) (dBt(i,j),i=1,nx)
-!enddo
-
-! write out mask (bitmap)
-
-!open(3,file='/tmp11/graham/mask.dat')
-!do j=1,ny
-!   write(3,*) (mask(i,j),i=1,nx)
-!enddo
-
 !======================================================================!
 
    select case (geometry)
@@ -219,16 +196,13 @@ write(*,*) 'phi,theta',phi,theta
             enddo
          enddo
          if(iverb.eq.1) write(*,*) 'potential field done'
-!do j=1,ny
-!   write(4,*) (dBzdz(i,j),i=1,nx)
-!enddo
 
 ! --> Perform acute angle to potential field ambiguity resolution on
 ! --> pixels below a given threshold.
 !
 !         call pacute(bthresh)
 !         if(iverb.eq.1) write(*,*) 'acute angle ambiguity resolution done'
-          deallocate(Bpix,Bpiy)
+          deallocate(dBpzdz,Bpix,Bpiy)
 !
 ! --> Global minimization of "energy" to resolve ambiguity.
 !
@@ -241,6 +215,25 @@ write(*,*) 'phi,theta',phi,theta
          call nacute5(bthresh)
          if(iverb.eq.1) write(*,*) 'smoothing done'
 !
+! --> Temporary rough estimate of uncertainty in ambiguity resolution:
+! --> 0.0 for pixels which were not disambiguated (outside mask)
+! --> 0.5 for pixels which had acute angle method applied
+! --> 0.9 for pixels which were above threshold and annealed
+!
+         do i=1,nx
+            do j=1,ny
+               if(mask(i,j).eq.0) then
+                  probBa(i,j)=0.0
+               else
+                  if(bt(i,j).gt.bthresh) then
+                     probBa(i,j)=0.9
+                  else
+                     probBa(i,j)=0.5
+                  endif
+               endif
+            enddo
+         enddo
+!
 ! geometry=2: the divergence and vertical current density are
 ! calculated in spherical coordinates
 !
@@ -252,13 +245,10 @@ write(*,*) 'phi,theta',phi,theta
 ! --> Calculate potential field (and derivatives) using tiling.
          call tile(ntx,nty,nap)
          if(iverb.eq.1) write(*,*) 'tiling done'
-!do j=1,ny
-!   write(4,*) (dBzdz(i,j),i=1,nx)
-!enddo
 
 ! --> Update mask to exclude pixels for which no potential field was calculated.
          do i=1,nx
-            do j=1,nx
+            do j=1,ny
                mask(i,j)=mask(i,j)*tmask(i,j)
             enddo
          enddo
@@ -273,6 +263,10 @@ write(*,*) 'phi,theta',phi,theta
 !
          !call nacute6(bthresh)
          !if(iverb.eq.1) write(*,*) 'smoothing done'
+
+! --> Deallocate memory for spherical coordinates.
+
+         deallocate(t,p,sint,cost,sinp,cosp)
 !
 ! geometry=other: error
 !
@@ -283,10 +277,6 @@ write(*,*) 'phi,theta',phi,theta
 
    end select
 
-! write azimuth to text file for testing purposes
-
-!   open(5,file='/tmp11/graham/azimuth.dat')
-
 ! --> Recompute azimuth from ambiguity-resolved Cartesian components, 
 ! --> unless transverse field is zero, in which case use original angle.
 
@@ -296,15 +286,7 @@ write(*,*) 'phi,theta',phi,theta
       enddo
    enddo
 
-! --> Write out updated azimuth angle.
-!   do j=1,ny
-!      write(5,*) (ba(i,j),i=1,nx)
-!   enddo
-
-write(*,*) 'returning'
-
-  deallocate(bt, dBzdz)
-  if (geometry .eq. 1) deallocate(dBpzdz, Bpix, Bpiy)
+   deallocate(bt,dBzdz)
 !  deallocate(mask)
 
 end subroutine ambig
