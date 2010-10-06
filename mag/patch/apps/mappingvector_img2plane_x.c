@@ -71,7 +71,7 @@
 void frebin (float *image_in, float *image_out, int nx, int ny, int nbin, int gauss)
 {
   struct fresize_struct fresizes;
-  int nxout, nyout;
+  int nxout, nyout, xoff, yoff;
   int nlead = nx;
   
   nxout = nx / nbin; nyout = ny / nbin;
@@ -79,7 +79,9 @@ void frebin (float *image_in, float *image_out, int nx, int ny, int nbin, int ga
     init_fresize_gaussian(&fresizes, (nbin / 2) * 2, (nbin / 2) * 2, nbin);
   else
     init_fresize_bin(&fresizes, nbin);
-  fresize(&fresizes, image_in, image_out, nx, ny, nlead, nxout, nyout, nxout, (nbin / 2) * 2, (nbin / 2) * 2, DRMS_MISSING_FLOAT);
+  xoff = nbin / 2 + nbin / 2;
+  yoff = nbin / 2 + nbin / 2;
+  fresize(&fresizes, image_in, image_out, nx, ny, nlead, nxout, nyout, nxout, xoff, yoff, DRMS_MISSING_FLOAT);
 }
 
 
