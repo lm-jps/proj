@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables2.c,v 1.6 2010/10/06 22:51:18 couvidat Exp $");
+  return strdup("$Id: HMI_observables2.c,v 1.7 2010/10/07 05:36:42 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -5372,6 +5372,14 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
+	  image=arrLev15[0]->data;
+	  for(i=0;i<axisout[0]*axisout[1];i++) if (image[i] > (32767.*arrLev15[0]->bscale+arrLev15[0]->bzero) || image[i] < (-32768.*arrLev15[0]->bscale+arrLev15[0]->bzero))
+	    {
+	      MISSVALS[0]+=1; //because drms_segment_write() sets these values to NaN
+	      ngood -= 1;
+	    }
+
+
 	  //statusA[0]=   drms_setkey_int(recLev15a->records[0],TOTVALSS,axisout[0]*axisout[1]);
 	  statusA[0]=   drms_setkey_int(recLev15a->records[0],TOTVALSS,ngood+MISSVALS[0]);
 	  statusA[1]=   drms_setkey_int(recLev15a->records[0],DATAVALSS,ngood);
@@ -5410,6 +5418,14 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
+	  image=arrLev15[1]->data;
+	  for(i=0;i<axisout[0]*axisout[1];i++) if (image[i] > (2147483647.*arrLev15[1]->bscale+arrLev15[1]->bzero) || image[i] < (-2147483648.*arrLev15[1]->bscale+arrLev15[1]->bzero))
+	    {
+	      MISSVALS[1]+=1;
+	      ngood -= 1;
+	    }
+
+
 	  statusA[0]=   drms_setkey_int(recLev15b->records[0],TOTVALSS,ngood+MISSVALS[1]);
 	  statusA[1]=   drms_setkey_int(recLev15b->records[0],DATAVALSS,ngood);
 	  statusA[2]=   drms_setkey_int(recLev15b->records[0],MISSVALSS,MISSVALS[1]);
@@ -5445,6 +5461,14 @@ int DoIt(void)
 	    {
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
+
+	  image=arrLev15[2]->data;
+	  for(i=0;i<axisout[0]*axisout[1];i++) if (image[i] > (32767.*arrLev15[2]->bscale+arrLev15[2]->bzero) || image[i] < (-32768.*arrLev15[2]->bscale+arrLev15[2]->bzero))
+	    {
+	      MISSVALS[2]+=1;
+	      ngood -= 1;
+	    }
+
 
 	  statusA[0]=   drms_setkey_int(recLev15c->records[0],TOTVALSS,ngood+MISSVALS[2]);
 	  statusA[1]=   drms_setkey_int(recLev15c->records[0],DATAVALSS,ngood);
@@ -5483,6 +5507,15 @@ int DoIt(void)
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
 
+
+	  image=arrLev15[3]->data;
+	  for(i=0;i<axisout[0]*axisout[1];i++) if (image[i] > (32767.*arrLev15[3]->bscale+arrLev15[3]->bzero) || image[i] < (-32768.*arrLev15[3]->bscale+arrLev15[3]->bzero))
+	    {
+	      MISSVALS[3]+=1;
+	      ngood -= 1;
+	    }
+
+
 	  statusA[0]=   drms_setkey_int(recLev15d->records[0],TOTVALSS,ngood+MISSVALS[3]);
 	  statusA[1]=   drms_setkey_int(recLev15d->records[0],DATAVALSS,ngood);
 	  statusA[2]=   drms_setkey_int(recLev15d->records[0],MISSVALSS,MISSVALS[3]);
@@ -5518,6 +5551,14 @@ int DoIt(void)
 	    {
 	      printf("Error: the statistics function did not run properly at target time %s\n",timeBegin2);
 	    }
+
+	  image=arrLev15[4]->data;
+	  for(i=0;i<axisout[0]*axisout[1];i++) if (image[i] > (32767.*arrLev15[4]->bscale+arrLev15[4]->bzero) || image[i] < (-32768.*arrLev15[4]->bscale+arrLev15[4]->bzero))
+	    {
+	      MISSVALS[4]+=1;
+	      ngood -= 1;
+	    }
+
 
 	  statusA[0]=   drms_setkey_int(recLev15e->records[0],TOTVALSS,ngood+MISSVALS[4]);
 	  statusA[1]=   drms_setkey_int(recLev15e->records[0],DATAVALSS,ngood);
