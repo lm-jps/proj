@@ -18,12 +18,15 @@
  *
  * Version:
  *		v1.0		Apr 15 2010
+ *		v1.1		Oct 06 2010
  *
  * Notes:
  *		v1.0
  *		1. Adapted from test_patch_v
  *		2. There needs to be one vector mag record in the time slot specified
  *		by the LoS patch query. Otherwise the code stops.
+ *		v1.1
+ *		Added a optional buffer
  *
  * Example:
  *		patch_los2vec "plos=su_xudong.test_patch_720s[2010.03.29_12:00:00_TAI][2]" "vmag=su_keiji.vmagf_2d_720s_3_fltprf" "pvec=su_xudong.test_patch_vec"
@@ -84,6 +87,7 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "plos", NULL, "Input LoS patches."},
     {ARG_STRING, "vmag", NULL, "Input vector magnetograms."},
     {ARG_STRING, "pvec", NULL, "Output vector patches."},
+    {ARG_INT, "buff", "0", "Buffer around the identified patch, as needed."},
     {ARG_INT, "VERB", "1", "Level of verbosity: 0=errors/warnings; 1=all messages"},
     {ARG_END}
 };
@@ -101,7 +105,7 @@ int DoIt(void)
     DRMS_Link_t *srcLink;
     char *plosBitmap, *pvecBitmap;
 
-    int i, verbflag, outDims[2];
+    int i, j, verbflag, outDims[2], buff;
     int n0, n1, mapsz;
     int pnum;
     TIME t_rec, dt;
@@ -120,6 +124,8 @@ int DoIt(void)
     vmag = (char *)params_get_str(&cmdparams, "vmag");
     pvecQuery = (char *)params_get_str(&cmdparams, "pvec");
     verbflag = params_get_int(&cmdparams, "VERB");
+    buff = params_get_int(&cmdparams, "buff");
+
 
     /* Open LoS patch input */
     plosRS = drms_open_records(drms_env, plosQuery, &status);
@@ -164,11 +170,13 @@ int DoIt(void)
         mapsz = n0 * n1;
         
         /* Output array */
-        outDims[0] = n0; outDims[1] = n1;
+        outDims[0] = n0 + 2 * buff; outDims[1] = n1 + 2 * buff;
 	    pvecArray = drms_array_create(DRMS_TYPE_CHAR, 2, outDims, NULL, &status);
         pvecBitmap = (char *)pvecArray->data;
-        for (i = 0; i < mapsz; i++) {
-            pvecBitmap[i] = plosBitmap[i];
+        for (i = 0; i < n0; i++) {
+        for (j = 0; j < n1; j++) {
+            pvecBitmap[(j + buff) * outDims[0] + i + buff] = plosBitmap[j * n0 + i];
+        }
         }
         
         /* Output record */
@@ -209,8 +217,10 @@ int DoIt(void)
         drms_copykey(pvecRec, vmagRec, "T_REC");
         drms_copykey(pvecRec, plosRec, "PNUM");
         // Geometry
-        drms_copykey(pvecRec, plosRec, "HWIDTH1");
-        drms_copykey(pvecRec, plosRec, "HWIDTH2");
+//        drms_copykey(pvecRec, plosRec, "HWIDTH1" + buff);
+//        drms_copykey(pvecRec, plosRec, "HWIDTH2" + buff);
+        drms_setkey_int(pvecRec, "HWIDTH1", drms_getkey_int(plosRec, "HWIDTH1", &status) + buff);
+        drms_setkey_int(pvecRec, "HWIDTH2", drms_getkey_int(plosRec, "HWIDTH2", &status) + buff);
         drms_copykey(pvecRec, plosRec, "CRPIX1");
         drms_copykey(pvecRec, plosRec, "CRPIX2");
         drms_copykey(pvecRec, vmagRec, "CDELT1");
