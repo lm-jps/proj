@@ -1,0 +1,53 @@
+#======================== Global Series Information =========================
+SeriesName:  "su_production.flatfield_rel"
+Description: "correted HMI flat field" 
+Author:      "Richard Wachter	"
+Owner:       "production"
+Unitsize:    1
+Archive:     0
+Retention:   100
+Tapegroup:   0
+DBIndex:     CAMERA,T_START,HMI_SEQ_ID_FOCUS,T_STOP
+PrimeKeys:   CAMERA,T_START,HMI_SEQ_ID_FOCUS
+#======================= Keywords Series Information ========================
+# First word of comment is shortname for FITS files
+# Keyword: name,			type,	kind,		scope,	default,format,	units,	shortname then comment
+# Keywords from import to drms processing program
+# Prime keys
+
+KEYWORD: TELESCOP,					string, 	constant,	record,		"SDO/HMI", 		%s,	none,    "[TELESCOP]SDO/HMI"
+KEYWORD: INSTRUME,					string,		variable,	record,		"DRMS_MISSING_VALUE",	%s,     none,	 "[INSTRUME]HMI_SIDE1 or HMI_FRONT2"
+Keyword: CAMERA,					int, 		variable,	record,		DRMS_MISSING_VALUE,			%01d,	none,  	 "[CAMERAID]Camera ID"
+Keyword: T_START,					time,   	variable,       record, 	DRMS_MISSING_VALUE, 		2, 	TAI,	 "[T_START]Flatfield is valid from T_START ..."
+Keyword: HMI_SEQ_ID_FOCUS,	        		int,		variable,	record,		0,			%2d,	none,	 "[FOCUS_ID]Focus ID"
+
+Keyword:ORIGIN,    					string,		constant, 	record,		"SDO/JSOC-SDP",		"%s",   "none", "ORIGIN Location where file made"
+Keyword: T_STOP,					time,	        variable,       record,  	DRMS_MISSING_VALUE, 		2, 	TAI, 	"[T_STOP]... to T_STOP"
+KEYWORD: FLATFIELD_VERSION,               	        int,   	        variable,       record, 	DRMS_MISSING_VALUE,   	%2d,   none,   "[FLAT_VER]Flatfield version number: >0: Flatfield final version, 0:Flatfield preliminay"   
+Keyword: DATE,						time, 		variable,  	record,	 	DRMS_MISSING_VALUE,	0,      ISO, 	"[DATE]Date_time of processing; ISO 8601"
+#keywords specific for monitoring algorithm
+
+Keyword: ROTF_FLATFIELD,	        		int,		variable,	record,		0,			%8d,	none,	"[ROTF_BAD]Number of pixels corrected in the rotational flatfield" 
+Keyword: ROTF_N_PAIRS,					int,		variable,	record, 	0,			%4d,   none,   "[ROTF_PAR]Number of image pairs used for the rotational flatfield"
+Keyword: ROTF_CADENCE,					float,  	variable,	record, 	0.0,			%3.1f,  "sec",  "[ROTF_CAD]Cadence used for rotational flatfield"
+
+
+
+
+Link: OFFPOINT_FLAT, su_richard.offpoint_flatfield, static, "Link to the offpoint flatfield"
+Keyword: T_OBS_OFFPOINT, link, OFFPOINT_FLAT, T_OBS, "[T_OBS_OF]T_OBS of corresponding  offpoint flatfield"
+Data: OFFPOINT_FLAT, link, OFFPOINT_FLAT, offpoint_flatfield, 2, 4096, 4096, "offpoint flatfield"
+
+Link: DARK, su_richard.dark, static, "Link to the most current dark"
+Keyword: T_OBS_DARK, link, DARK, T_OBS, "[T_OBS_DK]T_OBS of dark / bias"
+Data: DARK, link, DARK, dark, 2, 4096, 4096, "bias /dark"
+
+Link: BAD_PIXEL, su_richard.bad_pixel_list, static, "Link to the most current bad pixel array"
+Keyword: T_OBS_BADPIX, link, BAD_PIXEL, T_OBS, "[T_OBS_BD]T_OBS of bad pixel list"
+Data: BAD_PIXEL, link, BAD_PIXEL, bad_pixel_list, 0, "bad pixel array"
+
+
+Data:flatfield,variable,float,2,4096,4096,"none",fits,"", 0, 1, "HMI flatfield"
+
+
+#==============================================================================
