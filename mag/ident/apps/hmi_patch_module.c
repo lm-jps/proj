@@ -2,8 +2,12 @@
  * This jsoc module is in development to generate patches
  * from active region bitmaps
  *
- * turmon: created modeled on hmi_segment, additions
- * incorporated from xudong sun march 2010
+ * Current (10/2010) usage:
+ * hmi_patch_module 
+ *      x='su_turmon.armask2[2010.07.03_12:48:00_TAI/1h]' 
+ *      bb=su_turmon.test_Mpatchv2_720s
+ *
+ * Written by Michael Turmon, JPL, March-October 2010
  *
  */
 
@@ -281,21 +285,20 @@ patch_extract_bitmaps(HARP_region_t **yps, double *Mask, double *Rgn,
       break; // failure
     for (x = 0; x < xsiz; x++)
       for (y = 0; y < ysiz; y++) {
-	// FIXME: this region encoding can be improved
+	// inputs to region encoding
 	R1 = Rgn [(y0+y)*M + (x0+x)];
 	M1 = Mask[(y0+y)*M + (x0+x)];
-	// This is a bit unwieldy
+	// Encoding: set HARP equal to mask, and set bit fields:
+	//   in_current_harp: bit for 64 is on
+	//   in_other_harp:   but for 32 is on
+	// Plus, ensure that off-disk is always exactly 0
+	L1 = (HARP_region_t) M1;
 	if (R1 == (p+1))
-	  // note, > 128 does not fit in a char
-	  L1 = (HARP_region_t) (64 + p + 1); // map region #p to 64+p
+	  L1 += 64; // R1 is in current HARP
 	else if (R1 > 0)
-	  L1 = 3; // other regions (HARPs) -> 3
-	else if (M1 == 2)
-	  L1 = 2; // other ARs pixels (not HARP) -> 2
-	else if (M1 == 1)
-	  L1 = 1; // on-disk, but not AR/HARP at all
-	else
-	  L1 = 0; // off-disk
+	  L1 += 32; // R1 is in another HARP
+	if (M1 == 0)
+	  L1 = 0;   // but, zero (offdisk) always wins
         // plug it in
 	p1[y*xsiz+x] = L1;
       }
@@ -375,20 +378,16 @@ int DoIt(void)
   // verbosity level
   verbflag = params_get_int(&cmdparams, "VERB");
 
-  // set up fixed arguments via mxt_param... calls
+  // set up fixed-size arguments via mxt_param... calls
   // other parameters are allocated here, but set up from KWs
-  prhs[MXT_Hpat_ARG_ctr]   = mxCreateDoubleMatrix(1, 3, mxREAL); // from KWs
-  prhs[MXT_Hpat_ARG_p0]    = mxCreateDoubleMatrix(1, 1, mxREAL); // from KWs
-  prhs[MXT_Hpat_ARG_beta]  = mxCreateDoubleMatrix(1, 1, mxREAL); // from KWs
+  prhs[MXT_Hpat_ARG_geom]  = mxCreateDoubleMatrix(1, 5, mxREAL); // from KWs
   prhs[MXT_Hpat_ARG_active]= mxt_param_to_scalar(params, kParActive);
   prhs[MXT_Hpat_ARG_ker]   = mxt_param_to_matrix(params, kParKer, 1, -1);
   prhs[MXT_Hpat_ARG_kwt]   = mxt_param_to_matrix(params, kParKwt, 1, -1);
   prhs[MXT_Hpat_ARG_tau]   = mxt_param_to_scalar(params, kParTau);
 
   // check args
-  if (!prhs[MXT_Hpat_ARG_ctr]    || 
-      !prhs[MXT_Hpat_ARG_p0]     || 
-      !prhs[MXT_Hpat_ARG_beta]   || 
+  if (!prhs[MXT_Hpat_ARG_geom]   || 
       !prhs[MXT_Hpat_ARG_active] || 
       !prhs[MXT_Hpat_ARG_ker]    || 
       !prhs[MXT_Hpat_ARG_kwt]    || 
@@ -496,18 +495,16 @@ int DoIt(void)
     mag_tmp = mxGetPr(prhs[MXT_Hpat_ARG_mag]); // hold data segment
     mxSetPr(prhs[MXT_Hpat_ARG_mag], (double *) magArray->data);
 
-    // set up varying arguments: center
-    //   center was allocated outside the loop
+    // set up varying arguments: geom = x0 y0 rsun beta p0
+    //   space was allocated outside the loop
     // mexfunction coordinates are one-based (origin at (1,1)), so add 1.
-    // mexfunction ctr[1] direction varies fastest, ctr[0] direction
-    // varies slowest, so flip around.
-    mxGetPr(prhs[MXT_Hpat_ARG_ctr])[0] = y0+1;
-    mxGetPr(prhs[MXT_Hpat_ARG_ctr])[1] = x0+1;
-    mxGetPr(prhs[MXT_Hpat_ARG_ctr])[2] = rSun;
- 
-    // p-angle and beta, also allocated outside the loop
-    mxGetPr(prhs[MXT_Hpat_ARG_p0  ])[0] = p0;
-    mxGetPr(prhs[MXT_Hpat_ARG_beta])[0] = beta;
+    // mexfunction now (10/2010) is set up for untransposed input geometry,
+    // so no need to flip x0 and y0.
+    mxGetPr(prhs[MXT_Hpat_ARG_geom])[0] = x0+1;
+    mxGetPr(prhs[MXT_Hpat_ARG_geom])[1] = y0+1;
+    mxGetPr(prhs[MXT_Hpat_ARG_geom])[2] = rSun;
+    mxGetPr(prhs[MXT_Hpat_ARG_geom])[3] = beta;
+    mxGetPr(prhs[MXT_Hpat_ARG_geom])[4] = p0;
 
     // print a sample value
     if (verbflag)
@@ -598,6 +595,14 @@ int DoIt(void)
       ySeg->axis[1] = yArray->axis[1];
 
       yArray->parent_segment = ySeg;
+		
+	  // some stats
+	  // updated by xudong oct 13 2010
+	  int missval = 0, totalval = yArray->axis[0] * yArray->axis[1];
+	  char *yData = (char *)yArray->data;
+	  for (int ii = 0; ii < totalval; ii++) {
+	    if (isnan(yData[ii])) missval++;
+	  }
     
       // get mask to insert link
       // FIXME: there must be a better way
@@ -615,16 +620,22 @@ int DoIt(void)
       // Essential prime keys
       drms_copykey(yRec, xRec, "T_REC");
       drms_setkey_int(yRec, "PNUM", p+1); // number from 1
-		
+	
 	  // date and build version
 	  // updated by xudong oct 3 2010
 	  drms_setkey_string(yRec, "BLD_VERS", jsoc_version);
 	  drms_setkey_time(yRec, "DATE", CURRENT_SYSTEM_TIME);
+		
+      // stats
+	  // updated by xudong jun 29 2010
+	  drms_setkey_int(yRec, "TOTVALS", totalval);
+	  drms_setkey_int(yRec, "DATAVALS", totalval - missval);
+	  drms_setkey_int(yRec, "MISSVALS", missval);
         
       // Geometry
       drms_setkey_int(  yRec, "HWIDTH1", (pDims[0]-1)/2);
       drms_setkey_int(  yRec, "HWIDTH2", (pDims[1]-1)/2);
-      drms_setkey_float(yRec,  "CRPIX1", (yHI[p]+yLO[p])/2);
+	  drms_setkey_float(yRec,  "CRPIX1", (yHI[p]+yLO[p])/2);
       drms_setkey_float(yRec,  "CRPIX2", (xHI[p]+xLO[p])/2);
       // probably should be set as a link
       drms_setkey_float(yRec,  "CDELT1", (float) cdelt);
@@ -632,7 +643,7 @@ int DoIt(void)
 
       // Flags
       drms_setkey_int(yRec, "PATCHNUM", numPatch);
-      drms_setkey_int(yRec, "MASK", 64+p+1);
+      drms_setkey_int(yRec, "MASK", 64);
             
       // Insert all patch statistics
       for (sn = 0; sn < RS_num_stats; sn++) {
@@ -714,9 +725,7 @@ int DoIt(void)
   }
 
   // free the unchanging arguments
-  mxDestroyArray(prhs[MXT_Hpat_ARG_ctr]);
-  mxDestroyArray(prhs[MXT_Hpat_ARG_p0]);
-  mxDestroyArray(prhs[MXT_Hpat_ARG_beta]);
+  mxDestroyArray(prhs[MXT_Hpat_ARG_geom]);
   mxDestroyArray(prhs[MXT_Hpat_ARG_active]);
   mxDestroyArray(prhs[MXT_Hpat_ARG_ker]);
   mxDestroyArray(prhs[MXT_Hpat_ARG_kwt]);

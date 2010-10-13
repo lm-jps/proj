@@ -10,11 +10,10 @@
 
 %smoothsphere: smooth a projected sphere with a kernel
 % 
-% [y,s]=smoothsphere(x,center,p0,k,kparam,kwt,bws)
-% * Given a solar image of location given by center, and
-% p-angle p0, smooth it using the radially-symmetric kernel 
-% listed in k.
-* * Off-disk values are indicated by NaN in the output.
+% [y,s]=smoothsphere(x,geom,k,kparam,kwt,bws)
+% * Given a solar image of location given by geom, smooth it 
+% using the radially-symmetric kernel `k'.
+% * Off-disk values are indicated by NaN in the output.
 % * The kernel used is dependent only on the weighted distance 
 % between two positions, say P1 and P2, in three-dimensional 
 % coordinates, normalized to live on the unit sphere:
@@ -49,22 +48,25 @@
 % the blocking is given as a table that depends on z (in [0,1]).
 % A row in the table of (z,bw) means: above the value z, use
 % a blocking of bw (>1).  For z=0 to bws(1,1), no blocking is used.
-% The default means to use single pixels below 0.4, 2x2 blocks
-% above 0.4, and 4x4 above 0.6.  For typical MDI images, this is
-% 16%, 20%, and 64% of on-disk pixels, respectively.  Supply
-% bws=[] to treat all pixels singly (turn off blocking).
+% * For example, the small-image default means to use single pixels 
+% below 0.4, 2x2 blocks above 0.4, and 4x4 above 0.6.  For typical 
+% MDI images, this is 16%, 20%, and 64% of on-disk pixels, respectively.
+% Using block sizes that do not pack together is legal, but causes 
+% inefficiency due to poor fits between abutting blocks; diagnose
+% bad packing with the p output.
+% * Supply bws=[] to treat all pixels singly (turn off blocking).
 % * The optional output s is the z-coordinate (in [0,R]).
 % The optional p output is the block (patch) number of each
 % pixel.
 % 
 % Inputs:
 %   real x[m,n];
-%   real center[3];  -- [center_x center_y r_sun]
-%   real p0;         -- p-angle (degrees)
+%   real geom[5];  -- [x0 y0 rsun b0 p0]
 %   real k[p];
 %   real kparam[2];  -- [top window]
 %   opt real kwt = [1 1 1];
-%   opt real bws[bwnum,2] = [0.4 2;0.6 4];
+%   opt real bws[bwnum,2] = [0.4 2;0.6 4];         -- m <  2048
+%                         = [0.3 2;0.5 4; 0.7 8];  -- m >= 2048
 % 
 % Outputs:
 %   real y[m,n];
@@ -76,22 +78,57 @@
 % implemented as a mex file
 
 ****************************************************************/
-/* Updated by -mex2pymex.py-ver1- on Wed Sep 23 16:55:53 2009 */
+
+/****************************************************************
+ Notes October 2010:
+
+ * Pixel ordering.  I have started using a "mode" input that can be 
+ given as SESW for HMI and SENE for the old, transposed-MDI image
+ ordering.  See roi_stats_mag for how this works.  Doing this allows
+ this one code to be easily used for both cases.  It is implemented by adding
+ a stride parameter for both x and y to the underlying computational routines.
+ The stride, and the x/y loop boundaries, are switched depending on "mode".
+ For now, it's easier to just leave it alone; the user has to monkey with
+ x0 and y0 to get the right behavior.
+
+ * Beta.  I pass in beta-angle, but I don't use it.  I should.  Computational
+ burden, as well as lack of technical clarity on what to do, has been the 
+ issue.  Technical clarity can come from the following observation.
+ Consider two points, P1 (the center point of the convolution) and P2 (the 
+ point where the kernel is evaluated).  Now, the distance id a function of:
+   D = P1 - P2 (in 3d coordinates, x, y, and z)
+ In this framework it is hard to account for beta, while still performing the 
+ right weighting according to kwt.  One way out is to realize there are two
+ angles (distances along the sphere) that are important: longitudinal and
+ latitudinal.  You can always talk about the offset of P2 from P1 in terms
+ of a delta-lat and a delta-lon.  The kwt penalty should have two terms in 
+ this case, the penalty for a given delta-lat and that for a given delta-lon.
+ One way to find delta-lat and delta-lon is to inner-product the difference D
+ with an along-track unit vector and a cross-track unit vector.  (These are 
+ per-pixel triplets, found once at P1 and used for all P2.)  This would 
+ correspond to a chord or arc length.  Another, very related, way is to 
+ explicitly find the two angles (not making the small-angle assumption).  
+ One detail here is, for objects near the pole, delta-lon could be very 
+ large even though the actual distance is still small.  This could lead 
+ to instability, where a difference of just a pixel in P2 causes a large 
+ delta-lon.  This would be less of a problem if using a chord length or 
+ arc length, because they don't have the polar instability.
+
+****************************************************************/
 
 /* constants and globals used for error checking */
 
-#define NARGIN_MIN	5	   /* min number of inputs */
-#define NARGIN_MAX	7	   /* max number of inputs */
+#define NARGIN_MIN	4	   /* min number of inputs */
+#define NARGIN_MAX	6	   /* max number of inputs */
 #define NARGOUT_MIN	0	   /* min number of outputs */
 #define NARGOUT_MAX	3	   /* max number of outputs */
 
 #define ARG_X      0
-#define ARG_CEN    1
-#define ARG_P0     2
-#define ARG_K      3
-#define ARG_KParam 4
-#define ARG_KWt    5
-#define ARG_BWs    6
+#define ARG_GEOM   1
+#define ARG_K      2
+#define ARG_KParam 3
+#define ARG_KWt    4
+#define ARG_BWs    5
 
 #define ARG_Y      0
 #define ARG_S      1
@@ -101,16 +138,14 @@ static const char *progname = "smoothsphere";
 #define PROGNAME smoothsphere
 static const char *in_specs[NARGIN_MAX] = {
   "RM",
-  "RV(3)",
-  "RS",
+  "RV(5)",
   "RV",
   "RV(2)",
   "RV(0)|RV(3)",
   "RM"};
 static const char *in_names[NARGIN_MAX] = {
   "x",
-  "center",
-  "p0",
+  "geom",
   "k",
   "kparam",
   "kwt",
@@ -125,8 +160,10 @@ static const char *out_names[NARGOUT_MAX] = {
 #define KWt_count 3
 #define Default_KWt_count 3
 static double Default_KWt[Default_KWt_count] = { 1.0, 1.0, 1.0 };
-#define Default_BWs_count 4
-static double Default_BWs[Default_BWs_count] = { 0.4, 0.6, 2.0, 4.0 };
+#define Default_BWs_count_small 4
+static double Default_BWs_small[Default_BWs_count_small] = { 0.4, 0.6, 2.0, 4.0 };
+#define Default_BWs_count_large 6
+static double Default_BWs_large[Default_BWs_count_large] = { 0.3, 0.5, 0.7, 2.0, 4.0, 8.0 };
 
 /********************************************************************************
  *
@@ -354,8 +391,13 @@ block_create(blocknum_t *blocks, double *s, double *a,
  */
 static
 int
-block_stats(blockstat_t *stats, blocknum_t *blocks, double *z, double *a, 
-	    int m, int n, blocknum_t btot)
+block_stats(blockstat_t *stats, 
+	    blocknum_t *blocks, 
+	    double *z,             // z-coord
+	    double *a,             // the image to be convolved
+	    int m, 
+	    int n, 
+	    blocknum_t btot)
 {
   int x1, y1;
   blocknum_t bn = Block_First;
@@ -530,6 +572,21 @@ smooth_swath(int *xlo_out, int *xhi_out,
  * the sphere boundary (z = sqrt(1-x^2-y^2)).  The limb pixels carry
  * information about more area, so they will influence other pixels 
  * proportionally more strongly.  We just need to quantify the effect.
+ *
+ * Before we go on to do that, a word about the (1/z) factor, which is
+ * the area of a pixel.  As we go closer to the limb, z goes (slowly)
+ * to zero, and 1/z, which approximates the area, goes (slowly) to 
+ * infinity.  Especially for high-pixel-density images, this will 
+ * make the integral blow up.  The area ~= 1/z approximation thus
+ * breaks down there.  One way out is to say that a pixel with a center
+ * precisely at the limb (z=0) may as well be regarded as having area
+ * equal to that of its maximally-on-disk part, which is half a pixel 
+ * farther onto the disk.  Drawing the right triangle, we see that the 
+ * z of a point 0.5 pixel from the limb is sqrt(R) (where the max z, at
+ * disc center, is R).  To tame the normalization factor, we take 
+ * sqrt(R) as the lowest allowed z for the area computation.  This
+ * typically does not arise in practice -- even for HMI, at 3 pixels in,
+ * z = sqrt(6*R) ~ 100, the min-z = sqrt(R) ~ 44.
  * 
  * It's natural to compute the convolution as a discrete approximation 
  * to a continuous convolution:
@@ -681,6 +738,7 @@ smooth(int m,          // image size
   const double sin_a = sin(p0); // sin(alpha)
   const double nan = mxt_getnand(); // cache nan
   const double Kstep = (Klen-1)/Ktop;  // map [0,Ktop] -> [0,K-1]
+  const double min_Zwt = sqrt(R); // sanity bound on area-weighting, see above
   blocknum_t blockNum, bn;
   blocknum_t *blocks;
   blockstat_t *stats;
@@ -727,7 +785,7 @@ smooth(int m,          // image size
     return SMOOTH_INTERNAL; // logic error in code
   // don't need these any more
   free(taus); free(bws); taus = NULL; bws = NULL;
-  printf("Using %d blocks\n", blockNum);
+  // printf("Using %d blocks\n", blockNum);
   // compute aggregate block statistics
   stats = calloc(blockNum+1, sizeof(*stats));
   if (!stats) return SMOOTH_NOMEM;
@@ -750,8 +808,8 @@ smooth(int m,          // image size
 	contribution = a[x1*m+y1];
       } else {
 	// look up coordinates and function value via per-block statistics
-	p1x = stats[bn].x;
-	p1y = stats[bn].y;
+	p1x = stats[bn].x;  // un-centered
+	p1y = stats[bn].y;  // un-centered
 	p1z = stats[bn].z;
 	contribution = stats[bn].f;
 	stats[bn].f = 0; // indicate it has been put in the integral
@@ -760,10 +818,12 @@ smooth(int m,          // image size
 	continue; // happens when the block has been included once already
       /* establish loop boundaries */
       smooth_swath(&xlo, &xhi, &ylo, &yhi, p1x, p1y,
-		     xcen, ycen, R, cos_a, sin_a, Kwt, Kswath, m, n);
+		   xcen, ycen, R, cos_a, sin_a, Kwt, Kswath, m, n);
       //printf("(%.1f,%.1f) loop [%d,%d]x[%d,%d]\n", p1x, p1y, xlo, xhi, ylo, yhi); 
+      // scale factor is the target of the convolution divided by an
+      // area-based weight; the lowest weight allowed is min_Zwt
+      scale = contribution / (((p1z < min_Zwt) ? min_Zwt : p1z) * R);
       /* loop over kernel */
-      scale = contribution / (p1z * R);
       for (x2 = xlo, x2_m = xlo*m; x2 <= xhi; x2++, x2_m += m) {
 	// optimizations for xx_term, x2_m help a little (~5%): Apr 2010
 	xx_term = (p1x - x2)*(p1x - x2)*wt_xx;
@@ -848,11 +908,12 @@ mexFunction(int nlhs,
   m = (int) mxGetM(prhs[ARG_X]);  /* m = y */
   n = (int) mxGetN(prhs[ARG_X]);  /* n = x */
   /* get disk params */
-  xcen = mxGetPr(prhs[ARG_CEN])[0] - 1; // arg #1 = x0 (convert to C origin)
-  ycen = mxGetPr(prhs[ARG_CEN])[1] - 1; // arg #2 = y0 (convert to C origin)
-  rsun = mxGetPr(prhs[ARG_CEN])[2];     // arg #3 = radius
-  p0   = mxGetPr(prhs[ARG_P0 ])[0];     // p-angle
-  p0  *= M_PI/180.0;                    // to radians
+  xcen = mxGetPr(prhs[ARG_GEOM])[0] - 1; // arg #1 = x0 (convert to C origin)
+  ycen = mxGetPr(prhs[ARG_GEOM])[1] - 1; // arg #2 = y0 (convert to C origin)
+  rsun = mxGetPr(prhs[ARG_GEOM])[2];     // arg #3 = radius
+                                         // (do not use beta angle now)
+  p0   = mxGetPr(prhs[ARG_GEOM])[4];     // p-angle
+  p0  *= M_PI/180.0;                     // to radians
   // kernel params
   Ktop   = mxGetPr(prhs[ARG_KParam])[0];
   KswathR= mxGetPr(prhs[ARG_KParam])[1];
@@ -881,8 +942,15 @@ mexFunction(int nlhs,
 			     "%s: bws LUT should have 2 columns",
 			     progname), errstr));
   } else {
-    bws = Default_BWs; // just a list of numbers
-    bwlen = Default_BWs_count/2; // two columns
+    if (m < 2048) {
+      // "small" image case
+      bws   = Default_BWs_small;          // just a list of numbers
+      bwlen = Default_BWs_count_small/2;  // always 2 columns
+    } else {
+      // "large" image case
+      bws   = Default_BWs_large;          // just a list of numbers
+      bwlen = Default_BWs_count_large/2;  // always 2 columns
+    }
   }
   if ((msg = block_lut_validate(bws, bwlen)) != NULL)
     mexErrMsgTxt((snprintf(errstr, sizeof(errstr),

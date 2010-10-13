@@ -2,11 +2,18 @@
  * Module name: hmi_segment_module.c
  * This jsoc module is in development to generate masks from LOS B and intensity
  *
- * Usage:
+ * Current (10/2010) usage:
+ * hmi_segment_module 
+ *      xm='hmi_test.M_720s[2010.07.03_12:48:00_TAI/1h]' 
+ *      xp='hmi_test.Ic_720s[2010.07.03_12:48:00_TAI/1h]' 
+ *      alpha='0,-4' beta=0.4 y=su_turmon.armask2
+ *
+ *
+ * Old (6/2010) usage:
  * hmi_segment_module 
  *   "xm=su_couvidat.HMISeriesLev15245[2010.03.25_00:53:15_TAI]" 
  *   "xp=su_couvidat.HMISeriesLev15545[2010.03.25_00:53:15_TAI]" 
- *   beta=0.7 alpha="[0,-4]" T="[1,1,0.9,1]" y=su_turmon.armask2
+ *   beta=0.4 alpha="[0,-4]" T="[1,1,0.9,0]" y=su_turmon.armask2
  *
  *
  *  adapted from code by Yang Liu (10/2009)
@@ -405,14 +412,14 @@ int DoIt(void)
 
     // Link array to segment
     yArray->parent_segment = ySeg;
-
-    // some stats
-    // updated by xudong jun 29 2010
-    int missval = 0, totalval = yArray->axis[0] * yArray->axis[1];
-    char *yData = (char *)yArray->data;
-    for (int ii = 0; ii < totalval; ii++) {
-          if (isnan(yData[ii])) missval++;
-    }
+	  
+	// some stats
+	// updated by xudong oct 13 2010
+	int missval = 0, totalval = yArray->axis[0] * yArray->axis[1];
+	char *yData = (char *)yArray->data;
+	for (int ii = 0; ii < totalval; ii++) {
+      if (isnan(yData[ii])) missval++;
+	}
 
     printf("segment_module: segment_write\n");
     status = drms_segment_write(ySeg, yArray, 0);
@@ -442,18 +449,17 @@ int DoIt(void)
             
     // Essential prime key: T_REC
     drms_copykey(yRec, xmRec, "T_REC");
-
-    // date and build version
-    // updated by xudong jun 29 2010
-    drms_setkey_string(yRec, "BLD_VERS", jsoc_version);
-    drms_setkey_time(yRec, "DATE", CURRENT_SYSTEM_TIME);
-
-    // stats
-    // updated by xudong jun 29 2010
-    drms_setkey_int(yRec, "TOTVALS", totalval);
-    drms_setkey_int(yRec, "DATAVALS", totalval - missval);
-    drms_setkey_int(yRec, "MISSVALS", missval);
-
+	  
+	// date and build version
+	// updated by xudong oct 13 2010
+	drms_setkey_string(yRec, "BLD_VERS", jsoc_version);
+	drms_setkey_time(yRec, "DATE", CURRENT_SYSTEM_TIME);
+	  
+	// stats
+	// updated by xudong oct 13 2010
+	drms_setkey_int(yRec, "TOTVALS", totalval);
+	drms_setkey_int(yRec, "DATAVALS", totalval - missval);
+	drms_setkey_int(yRec, "MISSVALS", missval);
 
     // lets me see when the record was actually updated
     time(&now);

@@ -5,7 +5,7 @@
  * Declarations for calling `roi_stats_mag' a.k.a. `rsm' as a C library.
  *
  * Made by intermediate binary `roi_stats_mag.out' on:
- * 	Thu Sep 30 18:43:58 2010
+ * 	Thu Oct  7 22:16:04 2010
  *
  * Code for include-generation driver `../Gen-include.c' last modified on:
  * 	Mon Jun  7 15:11:28 2010
@@ -62,7 +62,7 @@
  *    int  x(m,n);
  *    int  y(m,n);
  *    real mag(m,n);
- *    real center(5);  -- [x0 y0 r_sun b p]
+ *    real geom(5);  -- [x0 y0 r_sun b p]
  *    string mode;
  * 
  *  Outputs:

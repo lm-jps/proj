@@ -5,7 +5,7 @@
  * Declarations for calling `hmi_segment' a.k.a. `Hseg' as a C library.
  *
  * Made by intermediate binary `hmi_segment.out' on:
- * 	Mon Jun 21 22:28:00 2010
+ * 	Mon Oct 11 16:21:54 2010
  *
  * Code for include-generation driver `../Gen-include.c' last modified on:
  * 	Mon Jun  7 15:11:28 2010
@@ -16,13 +16,14 @@
 /*
  * hmi_segment	driver for HMI segmentation
  * 
- *  y=hmi_segment(xm,xp,iter,T,beta,alpha,ctr,rho,mode,m1,...)
+ *  y=hmi_segment(xm,xp,iter,T,beta,alpha,ctr,rho,m1,...)
  *  * Integrated routine for deriving HMI segmentations.  Uses
- *  models (m1,m2,...), plus a magnetogram-photogram pair,
+ *  models (m1,m2,...), plus a magnetogram-photogram pair (xm,xp),
  *  to deduce an integer labeling.  Besides images and models,
  *  it also requires some disk parameters and labeling smoothness
  *  parameters.
- *  * The defaults for iter and T are inherited from mrf_segment_wts.
+ *  * The defaults for iter and T are inherited from mrf_segment_wts,
+ *  and should be looked up there.
  * 
  *  Inputs:
  *    real xm(m,n)
@@ -33,7 +34,6 @@
  *    real alpha[K] or [0] = [];
  *    real ctr(3) or ctr(4) or ctr(5);
  *    real rho;
- *    string mode
  *    real m1(l,k1)
  *    ...
  *    real mR(l,kR)
@@ -42,7 +42,7 @@
  *    int y(m,n)
  *    opt real post
  * 
- *  See Also:  makemrfdiscwts, mrf_segment_wts4, mixNprobNd
+ *  See Also:  makemrfdiscwts, mrf_segment_wts, mixNprobNd, clean_edge_label
  * 
  *  turmon oct 2009, june 2010
  * 

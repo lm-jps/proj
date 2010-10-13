@@ -3,8 +3,10 @@
  *
  * This list was a starting point determined by Michael Turmon, 
  * Todd Hoeksema, Xudong Sun, and others, in May 2010.
+ * Updated October 2010.
  *
- * intended to be included from various source files, so, 
+ * Intended to be included from various source files, so,
+ * we use include guards to prevent double inclusion.
  */
 
 #include <limits.h>  // for INT_MAX
@@ -12,32 +14,50 @@
 #ifndef ROI_STATS_MAG_DEFS_H
 #define ROI_STATS_MAG_DEFS_H 1
 
+/*
+ * RS_rgn_* are whole-region accumulators (all over the ROI)
+ * RS_ar_*  are ar-only accumulators
+ * the convention is to precede lat and lon with `_'
+ */
+
 typedef enum {
-  RS_rgnnum = 0,  // # pixels tagged (all may not be active)
-  RS_rgnsize,     // projected (flat) area in microhemispheres (0..1e6)
-  RS_rgnarea,     // un-projected (solid-angle) area in microhemispheres (0..1e6)
-  RS_arnum,       // # active pixels
-  RS_arsize,      // projected (flat) active area in microhemispheres (0..1e6)
-  RS_ararea,      // unprojected (solid-angle) active area in microhemis (0..1e6)
-  RS_arlat,       // average location, weighted by un-projected area
-  RS_arlon,
-  RS_arminlat,    // lower corner of (lat,lon) bounding box
-  RS_arminlon,
-  RS_armaxlat,    // upper corner of (lat,lon) bounding box
-  RS_armaxlon,
-  RS_rgnbtot,     // sum of absolute LoS flux within the identified region
-  RS_rgnbnet,     // net LoS flux within the identified region
-  RS_rgnbpos,     // absolute value of total positive LoS flux
-  RS_rgnbneg,     // absolute value of total negative LoS flux
-  RS_arfwtlat,    // flux-weighted center of active pixels
-  RS_arfwtlon, 
-  RS_arfwtposlat, // flux-weighted center of positive flux
-  RS_arfwtposlon, 
-  RS_arfwtneglat, // flux-weighted center of negative flux
-  RS_arfwtneglon,
-  RS_daysgone,    // #days until bounding box vanishes from disk front
-  RS_daysback,    // #days until bounding box first reappears on front
-  RS_num_stats,   // number of statistics
+  // size
+  RS_rgn_num = 0,   // # pixels tagged (all may not be active)
+  RS_rgn_size,      // projected (flat) area in microhemispheres (0..1e6)
+  RS_rgn_area,      // un-projected (solid-angle) area in microhemispheres (0..1e6)
+  // extent
+  RS_rgn_min_lat,   // lower corner of (lat,lon) bounding box for region
+  RS_rgn_min_lon,
+  RS_rgn_max_lat,   // upper corner of (lat,lon) bounding box for region
+  RS_rgn_max_lon,
+  // return time
+  RS_rgn_daysgone,  // #days until ROI bounding box vanishes from disk front
+  RS_rgn_daysback,  // #days until ROI bounding box first reappears on front
+  // flux
+  RS_rgn_btot,      // sum of absolute LoS flux within the identified region
+  RS_rgn_bnet,      // net LoS flux within the identified region
+  RS_rgn_bpos,      // absolute value of total positive ROI LoS flux
+  RS_rgn_bneg,      // absolute value of total negative ROI LoS flux
+  // size
+  RS_ar_num,        // # active pixels
+  RS_ar_size,       // projected (flat) active area in microhemispheres (0..1e6)
+  RS_ar_area,       // unprojected (solid-angle) active area in microhemis (0..1e6)
+  // flux
+  RS_ar_btot,       // sum of absolute LoS flux within the active region
+  RS_ar_bnet,       // net LoS flux within the active region
+  RS_ar_bpos,       // absolute value of total positive AR LoS flux
+  RS_ar_bneg,       // absolute value of total negative AR LoS flux
+  // mean location
+  RS_ar_area_lat,   // area-weighted center of active pixels (norm: RS_ar_area)
+  RS_ar_area_lon,
+  RS_ar_fwt_lat,    // flux-weighted center of active pixels (norm: RS_ar_btot)
+  RS_ar_fwt_lon, 
+  RS_ar_fwtpos_lat, // flux-weighted center of positive AR flux (norm: RS_ar_bpos)
+  RS_ar_fwtpos_lon,
+  RS_ar_fwtneg_lat, // flux-weighted center of negative AR flux (norm: RS_ar_bneg)
+  RS_ar_fwtneg_lon,
+  // bookkeeping
+  RS_num_stats,     // number of statistics
   RS_MAX = INT_MAX  // ensure it's as big as an int
   } rs_stat_index_t;
 
@@ -45,30 +65,42 @@ typedef enum {
 // sed -e 's/RS_/\"/' -e 's/,.*/\",/'
 
 static const char *RS_index2name[] = {
-  "rgnnum",
-  "rgnsize",
-  "rgnarea",
-  "arnum",
-  "arsize",
-  "ararea",
-  "arlat",
-  "arlon",
-  "arminlat",
-  "arminlon",
-  "armaxlat",
-  "armaxlon",
-  "rgnbtot",
-  "rgnbnet",
-  "rgnbpos",
-  "rgnbneg",
-  "arfwtlat",
-  "arfwtlon",
-  "arfwtposlat",
-  "arfwtposlon",
-  "arfwtneglat",
-  "arfwtneglon",
-  "daysgone",
-  "daysback",
+  // size
+  "rgn_num",
+  "rgn_size",
+  "rgn_area",
+  // extent
+  "rgn_min_lat",
+  "rgn_min_lon",
+  "rgn_max_lat",
+  "rgn_max_lon",
+  // return time
+  "rgn_daysgone",
+  "rgn_daysback",
+  // flux
+  "rgn_btot",
+  "rgn_bnet",
+  "rgn_bpos",
+  "rgn_bneg",
+  // size
+  "ar_num",
+  "ar_size",
+  "ar_area",
+  // flux
+  "ar_btot",
+  "ar_bnet",
+  "ar_bpos",
+  "ar_bneg",
+  // mean location
+  "ar_area_lat",
+  "ar_area_lon",
+  "ar_fwt_lat",
+  "ar_fwt_lon",
+  "ar_fwtpos_lat",
+  "ar_fwtpos_lon",
+  "ar_fwtneg_lat",
+  "ar_fwtneg_lon",
+  // bookkeeping
   NULL,
   NULL,
 };
@@ -78,35 +110,41 @@ static const char *RS_index2name[] = {
 // first char gives type of HMI keyword
 
 static const char *RS_index2keyname[] = {
-  // region size
-  "iNPIX",       // RS_rgnnum
-  "fSIZE",       // RS_rgnsize
-  "fAREA",       // RS_rgnarea    
-  // ar size
-  "iNACR",       // RS_arnum
-  "fSIZE_ACR",   // RS_arsize     
-  "fAREA_ACR",   // RS_ararea     
-  // ar extent
-  NULL,          // RS_arlat      
-  NULL,          // RS_arlon	 
-  NULL,          // RS_arminlat   
-  NULL,          // RS_arminlon	 
-  NULL,          // RS_armaxlat   
-  NULL,          // RS_armaxlon	 
+  // size
+  "iNPIX",        // RS_rgn_num
+  "fSIZE",        // RS_rgn_size
+  "fAREA",        // RS_rgn_area    
+  // extent
+  "fMIN_LAT",     // RS_rgn_min_lat   
+  "fMIN_LON",     // RS_rgn_min_lon	 
+  "fMAX_LAT",     // RS_rgn_max_lat   
+  "fMAX_LON",     // RS_rgn_max_lon	 
+  // return time
+  NULL,           // RS_rgn_daysgone
+  NULL,           // RS_rgn_daysback
   // flux
-  "fBTOT",       // RS_rgnbtot    
-  "fBNET",       // RS_rgnbnet    
-  "fBPOS_TOT",   // RS_rgnbpos    
-  "fBNEG_TOT",   // RS_rgnbneg    
-  // flux-weighted extent
-  "fFWTLAT",     // RS_arfwtlat   
-  "fFWTLON",     // RS_arfwtlon 	 
-  "fFWTPOS_LAT", // RS_arfwtposlat
-  "fFWTPOS_LON", // RS_arfwtposlon
-  "fFWTNEG_LAT", // RS_arfwtneglat
-  "fFWTNEG_LON", // RS_arfwtneglon
-  NULL,          // RS_daysgone
-  NULL,          // RS_daysback
+  "fBTOT",        // RS_rgn_btot    
+  "fBNET",        // RS_rgn_bnet    
+  "fBPOS_TOT",    // RS_rgn_bpos    
+  "fBNEG_TOT",    // RS_rgn_bneg    
+  // size
+  "iNACR",        // RS_ar_num
+  "fSIZE_ACR",    // RS_ar_size     
+  "fAREA_ACR",    // RS_ar_area     
+  // flux
+  NULL,           // RS_ar_btot    
+  NULL,           // RS_ar_bnet    
+  NULL,           // RS_ar_bpos    
+  NULL,           // RS_ar_bneg    
+  // mean location
+  NULL,           // RS_ar_area_lat
+  NULL,           // RS_ar_area_lon	 
+  "fFWT_LAT",     // RS_ar_fwt_lat   
+  "fFWT_LON",     // RS_ar_fwt_lon 	 
+  "fFWTPOS_LAT",  // RS_ar_fwtpos_lat
+  "fFWTPOS_LON",  // RS_ar_fwtpos_lon
+  "fFWTNEG_LAT",  // RS_ar_fwtneg_lat
+  "fFWTNEG_LON",  // RS_ar_fwtneg_lon
   // end
 };
 

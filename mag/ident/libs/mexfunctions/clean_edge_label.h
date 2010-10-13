@@ -4,9 +4,12 @@
  *
  * Declarations for calling `clean_edge_label' a.k.a. `cel' as a C library.
  *
- * Made by intermediate binary clean_edge_label.out on Mon May  3 17:24:17 2010
+ * Made by intermediate binary `clean_edge_label.out' on:
+ * 	Mon Oct 11 16:18:18 2010
  *
- * Source file ../Gen-include.c last modified on Mon May  3 17:04:13 2010
+ * Code for include-generation driver `../Gen-include.c' last modified on:
+ * 	Mon Jun  7 15:11:28 2010
+ *
  */
 
 // Original documentation block
@@ -15,21 +18,23 @@
  * 
  *  [res,nclean]=clean_edge_label(img,center,delta,mode);
  *  * Remove possibly-tainted labels at edge of disk by examining an
- *  annulus of width delta.
+ *  annulus of width delta.  Also, sets all off-disk values to the
+ *  value of the (1,1) pixel of img.
  *  * Two modes are supported.  If mode < 0, cleaning is done
- *  by propagating the value just inside the annulus  outward.
- *  If mode >= 0, the values in the annulus are simply set to mode.
- *  * The number of pixels actually altered is in nclean.
- *  * Primary disk parameters (x-center, y-center, radius) are in center().
+ *  by propagating the value just inside the annulus outward.
+ *  Otherwise, the values in the annulus are simply set to mode.
+ *  * The number of on-disk pixels altered is in nclean.
+ *  * Primary disk parameters (x-center, y-center, radius) are in center.
  *  The sun is the disk defined by these three numbers.
- *  * If delta = 0, img is propagated to res without further ado;
- *  in this case the center parameter need not be correct.
+ *  * If delta = 0, img is propagated to res without further ado.
+ *  (The off-disk clearing is not done either.)
+ *  In this case, the center parameter need not be correct.
  * 
  *  Inputs:
  *    real img(m,n);
  *    real center(3);
  *    real delta;
- *    int mode;
+ *    double mode;
  * 
  *  Outputs:
  *    real res(m,n);
@@ -40,6 +45,9 @@
  * 
  * 
  */
+
+#ifndef _mexfn_clean_edge_label_h_
+#define _mexfn_clean_edge_label_h_
 
 // function entry point
 mexfn_lib_t main_clean_edge_label;
@@ -60,5 +68,7 @@ mexfn_lib_t main_clean_edge_label;
 #define MXT_cel_ARG_res	0
 #define MXT_cel_ARG_nclean	1
 
+
+#endif // _mexfn_clean_edge_label_h_
 
 // (file ends)

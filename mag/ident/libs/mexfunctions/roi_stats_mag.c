@@ -57,7 +57,7 @@
 %   int  x(m,n);
 %   int  y(m,n);
 %   real mag(m,n);
-%   real center(5);  -- [x0 y0 r_sun b p]
+%   real geom(5);  -- [x0 y0 r_sun b p]
 %   string mode;
 % 
 % Outputs:
@@ -199,19 +199,28 @@ stat_compute(double *roi,   // input roi image
   // most stuff starts at zero, so do it all now
   bzero(&(s[0][0]), ((size_t)RS_num_stats)*Nr*sizeof(s[0][0]));
   for (r = 0; r < Nr; r++) {
-    // 0: rgnnum, rgnsize, rgnarea
-    // 0: arnum,  arsize,  ararea     
-    // 0: arlat,  arlon
-    // set greater than +2pi: arminlat, arminlon
-    s[RS_arminlat][r] = s[RS_arminlon][r] =  10;
-    // set lower than -2pi: armaxlat, armaxlon
-    s[RS_armaxlat][r] = s[RS_armaxlon][r] = -10;
-    // 0: rgnbtot, rgnbnet, rgnbpos, rgnbneg,    
-    // 0: arfwtlat,    arfwtlon
-    // 0: arfwtposlat, arfwtposlon
-    // 0: arfwtneglat, arfwtneglon
-    // -1: daysgone, daysback ("don't know")
-    s[RS_daysgone][r] = s[RS_daysback][r] = -1;
+    /* (first, rgn stuff) */
+    // size
+    // 0: rgn_num, rgn_size, rgn_area
+    // extent
+    // set greater than +2pi: rgn_minlat, rgn_minlon
+    // set lower than -2pi: rgn_maxlat, rgn_maxlon
+    s[RS_rgn_min_lat][r] = s[RS_rgn_min_lon][r] =  10;
+    s[RS_rgn_max_lat][r] = s[RS_rgn_max_lon][r] = -10;
+    // return time
+    // 0: daysgone, daysback (they are not accumulators)
+    // flux
+    // 0: rgn_btot, rgn_bnet, rgn_bpos, rgn_bneg,    
+    /* (next, ar stuff) */
+    // size
+    // 0: ar_num,  ar_size,  ar_area     
+    // flux
+    // 0: ar_btot, ar_bnet, ar_bpos, ar_bneg,    
+    // mean location
+    // 0: ar_area_lat,  ar_area_lon
+    // 0: ar_fwt_lat,    ar_fwt_lon
+    // 0: ar_fwtpos_lat, ar_fwtpos_lon
+    // 0: ar_fwtneg_lat, ar_fwtneg_lon
   }
 
   /* 
@@ -252,57 +261,66 @@ stat_compute(double *roi,   // input roi image
       /*
        * Update all the accumulators 
        * (listed in order)
+       * RS_rgn_* are whole-region accumulators (all over the ROI)
+       * RS_ar_*  are ar-only accumulators
        */
-      // whole-region accumulators
-      s[RS_rgnnum ][r]++;               // count pixels
-      s[RS_rgnsize][r]++;               // count projected area
-      s[RS_rgnarea][r] += area1;        // unprojected area, proportional to 1/z
-      // ar-only accumulators: add up when this ROI pixel is also active
+      // basic sizes
+      s[RS_rgn_num ][r]++;               // count pixels
+      s[RS_rgn_size][r]++;               // count projected area
+      s[RS_rgn_area][r] += area1;        // unprojected area, proportional to 1/z
+      // lat/lon bounding box, whole-region
+      if (lat < s[RS_rgn_min_lat][r]) s[RS_rgn_min_lat][r] = lat;
+      if (lat > s[RS_rgn_max_lat][r]) s[RS_rgn_max_lat][r] = lat;
+      if (lon < s[RS_rgn_min_lon][r]) s[RS_rgn_min_lon][r] = lon;
+      if (lon > s[RS_rgn_max_lon][r]) s[RS_rgn_max_lon][r] = lon;
+      // (return time is not found by accumulation)
+      // line-of-sight flux, whole-region
+      s[RS_rgn_btot][r] += magM1;
+      s[RS_rgn_bnet][r] += mag1;
+      s[RS_rgn_bpos][r] += (mag1 > 0) ? magM1 : 0.0;
+      s[RS_rgn_bneg][r] += (mag1 < 0) ? magM1 : 0.0;
       if (ActiveLabel(ar[offset])) {
-	s[RS_arnum ][r]++;              // count pixels
-	s[RS_arsize][r]++;              // count projected area
-	s[RS_ararea][r] += area1;       // unprojected area, proportional to 1/z
+	// basic sizes
+	s[RS_ar_num ][r]++;              // count pixels
+	s[RS_ar_size][r]++;              // count projected area
+	s[RS_ar_area][r] += area1;       // unprojected area, proportional to 1/z
+	// line-of-sight flux, ar-only
+	s[RS_ar_btot][r] += magM1;
+	s[RS_ar_bnet][r] += mag1;
+	s[RS_ar_bpos][r] += (mag1 > 0) ? magM1 : 0.0;
+	s[RS_ar_bneg][r] += (mag1 < 0) ? magM1 : 0.0;
+	// ar-only area-weighted lat/lon
+	s[RS_ar_area_lat][r] += lat * area1;
+	s[RS_ar_area_lon][r] += lon * area1;
+	// flux-weighted lat/lon
+	s[RS_ar_fwt_lat][r] += lat * magM1;
+	s[RS_ar_fwt_lon][r] += lon * magM1;
+	// flux-weighted centers of + and - flux
+	s[RS_ar_fwtpos_lat][r] += (mag1 > 0) ? lat*magM1 : 0.0;
+	s[RS_ar_fwtpos_lon][r] += (mag1 > 0) ? lon*magM1 : 0.0;
+	s[RS_ar_fwtneg_lat][r] += (mag1 < 0) ? lat*magM1 : 0.0;
+	s[RS_ar_fwtneg_lon][r] += (mag1 < 0) ? lon*magM1 : 0.0;
       }
-      // area-weighted lat/lon
-      s[RS_arlat][r] += lat * area1;
-      s[RS_arlon][r] += lon * area1;
-      // lat/lon bounding box
-      if (lat < s[RS_arminlat][r]) s[RS_arminlat][r] = lat;
-      if (lat > s[RS_armaxlat][r]) s[RS_armaxlat][r] = lat;
-      if (lon < s[RS_arminlon][r]) s[RS_arminlon][r] = lon;
-      if (lon > s[RS_armaxlon][r]) s[RS_armaxlon][r] = lon;
-      // line-of-sight flux
-      s[RS_rgnbtot][r] += magM1;
-      s[RS_rgnbnet][r] += mag1;
-      s[RS_rgnbpos][r] += (mag1 > 0) ? magM1 : 0.0;
-      s[RS_rgnbneg][r] += (mag1 < 0) ? magM1 : 0.0;
-      // flux-weighted lat/lon
-      s[RS_arfwtlat][r] += lat * magM1;
-      s[RS_arfwtlon][r] += lon * magM1;
-      // flux-weighted centers of + and - flux
-      s[RS_arfwtposlat][r] += (mag1 > 0) ? lat*magM1 : 0.0;
-      s[RS_arfwtposlon][r] += (mag1 > 0) ? lon*magM1 : 0.0;
-      s[RS_arfwtneglat][r] += (mag1 < 0) ? lat*magM1 : 0.0;
-      s[RS_arfwtneglon][r] += (mag1 < 0) ? lon*magM1 : 0.0;
     } /* for (x,y) */
 
   /* 
    * STEP 2: normalize and do unit conversions on s array 
    */
-  // 2a: convert accumulated sums into averages, in order of definition
+  // 2a: convert accumulated sums for mean locations into averages
+  //     in order of definition
   for (r = 0; r < Nr; r++) {
     // average location, weighted by un-projected area
-    s[RS_arlat][r] /= s[RS_ararea][r];  // the sum of the weights 1/z
-    s[RS_arlon][r] /= s[RS_ararea][r];
+    s[RS_ar_area_lat  ][r] /= s[RS_ar_area][r];  // the sum of the weights 1/z
+    s[RS_ar_area_lon  ][r] /= s[RS_ar_area][r];
     // flux-weighted center of active pixels
-    s[RS_arfwtlat   ][r] /= s[RS_rgnbtot][r];
-    s[RS_arfwtlon   ][r] /= s[RS_rgnbtot][r];
+    s[RS_ar_fwt_lat   ][r] /= s[RS_ar_btot][r];
+    s[RS_ar_fwt_lon   ][r] /= s[RS_ar_btot][r];
     // flux-weighted center of positive flux
-    s[RS_arfwtposlat][r] /= s[RS_rgnbpos][r];
-    s[RS_arfwtposlon][r] /= s[RS_rgnbpos][r];
+    s[RS_ar_fwtpos_lat][r] /= s[RS_ar_bpos][r];
+    s[RS_ar_fwtpos_lon][r] /= s[RS_ar_bpos][r];
     // flux-weighted center of negative flux
-    s[RS_arfwtneglat][r] /= s[RS_rgnbneg][r];
-    s[RS_arfwtneglon][r] /= s[RS_rgnbneg][r];
+    s[RS_ar_fwtneg_lat][r] /= s[RS_ar_bneg][r];
+    s[RS_ar_fwtneg_lon][r] /= s[RS_ar_bneg][r];
   }
   // 2b: compute (daysgone, daysback) from lat-lon info.  
   /* Note, the visible disk is characterized by: 
@@ -312,12 +330,20 @@ stat_compute(double *roi,   // input roi image
    * satisfies this. The above condition is independent of P.
    */
   for (r = 0; r < Nr; r++) {
+    double ar_lat; // the latitude to use for the AR, in radians
+
+    if (s[RS_ar_num][r] > 0)
+      // use the flux-weighted AR-pixel lat, still in radians
+      ar_lat = s[RS_ar_fwt_lat][r]; 
+    else
+      // fall back to the midpoint of the lat of the region
+      ar_lat = (s[RS_rgn_min_lat][r] + s[RS_rgn_max_lat][r]) * 0.5;
     // find threshold for longitude (using average lat, still in radians)
-    tau = (sinB/cosB) * tan(s[RS_arlat][r]);
+    tau = (sinB/cosB) * tan(ar_lat);
     if (fabs(tau) >= 1) continue;  // beta, lat: all rotations visible!
     tau = acos(tau);     /* in the range 0..pi */
     // find angular velocity at our latitude (still in radians)
-    temp = sin(s[RS_arlat][r]);      // sin of average latitude
+    temp = sin(ar_lat);              // sin of average latitude
     temp *= temp;                    // temp = sin(lat)^2
     temp =    ROTATE_CONST_K0 + 
       temp * (ROTATE_CONST_K1 + 
@@ -326,8 +352,8 @@ stat_compute(double *roi,   // input roi image
     // translate temp, an angular rate in radians/day, into a time in days
     // minlon: used for last passage behind limb
     // maxlon: used for first reappearance
-    s[RS_daysgone][r] = (tau - s[RS_arminlon][r])/temp;  
-    s[RS_daysback][r] = ((2*M_PI - tau) - s[RS_armaxlon][r])/temp; 
+    s[RS_rgn_daysgone][r] = (tau -            s[RS_rgn_min_lon][r])/temp;  
+    s[RS_rgn_daysback][r] = ((2*M_PI - tau) - s[RS_rgn_max_lon][r])/temp; 
   }
   // 2c: unit conversions, in order of definition
   for (r = 0; r < Nr; r++) {
@@ -336,27 +362,38 @@ stat_compute(double *roi,   // input roi image
     const double area2uhemi = 1e6/(2*M_PI*R*R); // 1 hemi integrates to 2piR^2
     
     // area/sizes to microhemispheres
-    // no conversion: RS_rgnnum, RS_arnum
-    s[RS_rgnsize][r] *= size2uhemi;
-    s[RS_rgnarea][r] *= area2uhemi;
-    s[RS_arsize ][r] *= size2uhemi;
-    s[RS_ararea ][r] *= area2uhemi;
+    // no conversion: RS_rgn_num
+    s[RS_rgn_size][r] *= size2uhemi;
+    s[RS_rgn_area][r] *= area2uhemi;
     // angles to degrees
-    s[RS_arlat   ][r] *= rad2deg;  s[RS_arlon   ][r] *= rad2deg;
-    s[RS_arminlat][r] *= rad2deg;  s[RS_arminlon][r] *= rad2deg;
-    s[RS_armaxlat][r] *= rad2deg;  s[RS_armaxlon][r] *= rad2deg;
-    // no conversion: rgnbtot, rgnbnet, rgnbpos, rgnbneg
+    s[RS_rgn_min_lat][r] *= rad2deg;  
+    s[RS_rgn_min_lon][r] *= rad2deg;
+    s[RS_rgn_max_lat][r] *= rad2deg;  
+    s[RS_rgn_max_lon][r] *= rad2deg;
+    // no conversion: daysgone, daysback
+    // no conversion: fluxes
+    // no conversion: RS_ar_num
+    s[RS_ar_size][r] *= size2uhemi;
+    s[RS_ar_area][r] *= area2uhemi;
+    // no conversion: fluxes
     // angles to degrees
-    s[RS_arfwtlat   ][r] *= rad2deg;  s[RS_arfwtlon   ][r] *= rad2deg;
-    s[RS_arfwtposlat][r] *= rad2deg;  s[RS_arfwtposlon][r] *= rad2deg;
-    s[RS_arfwtneglat][r] *= rad2deg;  s[RS_arfwtneglon][r] *= rad2deg;
+    s[RS_ar_area_lat  ][r] *= rad2deg;  
+    s[RS_ar_area_lon  ][r] *= rad2deg;
+    s[RS_ar_fwt_lat   ][r] *= rad2deg;  
+    s[RS_ar_fwt_lon   ][r] *= rad2deg;
+    s[RS_ar_fwtpos_lat][r] *= rad2deg;  
+    s[RS_ar_fwtpos_lon][r] *= rad2deg;
+    s[RS_ar_fwtneg_lat][r] *= rad2deg;  
+    s[RS_ar_fwtneg_lon][r] *= rad2deg;
   }
-  // 2d: plug in NaNs for empty regions
+  // 2d: ensure NaNs for empty regions
+  //     (probably redundant)
   for (r = 0; r < Nr; r++) {
-    if (s[RS_arnum][r] == 0) {
-      s[RS_arlat   ][r] = s[RS_arlon   ][r] = nan;
-      s[RS_arminlat][r] = s[RS_arminlon][r] = nan;
-      s[RS_armaxlat][r] = s[RS_armaxlon][r] = nan;
+    if (s[RS_ar_num][r] == 0) {
+      s[RS_ar_area_lat  ][r] = s[RS_ar_area_lon  ][r] = nan;
+      s[RS_ar_fwt_lat   ][r] = s[RS_ar_fwt_lon   ][r] = nan;
+      s[RS_ar_fwtpos_lat][r] = s[RS_ar_fwtpos_lon][r] = nan;
+      s[RS_ar_fwtneg_lat][r] = s[RS_ar_fwtneg_lon][r] = nan;
     }
   }
 }
