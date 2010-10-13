@@ -9,20 +9,29 @@
 
 
 
-int get_flatfields(int camera, TIME t_0, int focus, 
+int get_flatfields(char *query, TIME t_0, int camera, int focus, 
                    float *flatfield, float *offpoint, 
                    short *bad, long long recnum[6], TIME tobs_link[2],
 		   struct rotpar *rot_cur)
 
 {
   printf("get_flatfield\n");
-#include "module_flatfield_const.h" // !!changed to test       
+#include "module_flatfield_const.h" 
 
   DRMS_Segment_t *segin  = NULL;
     
-  DRMS_RecordSet_t *ff;
+  DRMS_RecordSet_t *ff, *badrecs;
    DRMS_Record_t *record_flat;
    DRMS_Record_t *reclink_off, *reclink_dark, *reclink_bad;
+
+
+ DRMS_Record_t *record_bad;
+ DRMS_Array_t *arr_bad;
+ TIME t_obs2_bad;
+ long long recnum2_bad;
+       
+ int *bad_data;
+
 
    DRMS_Array_t *arr_flat;
    float *arr_data;
@@ -46,62 +55,29 @@ int get_flatfields(int camera, TIME t_0, int focus,
    DRMS_Type_t type=DRMS_TYPE_FLOAT;
 
  
-   //const char *key1 = "T_STOP";
-   //const char *key2 = "HMI_SEQ_ID_FOCUS";
-   //const char *key3 = "FLATFIELD_VERSION";
-
-   //const char *key4 = "ROTF_FLATFIELD";
-   //const char *key5 = "ROTF_N_PAIRS";
-   //const char *key6 = "ROTF_CADENCE";
-
-   //const char *keylink1 = "T_OBS_OFFPOINT";
-   //const char *keylink2 = "T_OBS_DARK";
-   //const char *keylink3 = "T_OBS_BADPIX"; 
-
-   //const char *linkoff = "offpoint_flatfield";
-   //const char *linkdark = "bias_dark";
-   //const char *linkbad = "perm_bad_pixel";
+ 
 
    
-     char *camstr_side="[1]";
-     char *camstr_front="[2]";
+   //    char *camstr_side="[1]";
+   //    char *camstr_front="[2]";
 
-     char *camstr;
-   if (camera == 1){camstr=camstr_side;}
-   if (camera == 2){camstr=camstr_front;}
+   //   char *camstr;
+   //  if (camera == 1){camstr=camstr_side;}
+   //  if (camera == 2){camstr=camstr_front;}
 
 
   for (i=0; i<nx; ++i) for (j=0; j<ny; ++j) bad[j*nx+i]=1;  //initialize bad pixel array
  
-  char t_orig_str[256];
-  sprint_ut(t_orig_str, 0.0);
+  //  char t_orig_str[256];
+  //  sprint_ut(t_orig_str, 0.0);
   
   
 
   
-    char t0_str[256];
-    sprint_ut(t0_str, t_0-5.0);
-
-      {
-   char query[256]={""};
-   strcat(query,filename_flatfield);
-   strcat(query,camstr);
-   // strcat(query,"[2]["); //look for most recent flatfield
-   //strcat(query,t_orig_str);
-   //strcat(query,"-");
-   //strcat(query,t0_str);
-   //strcat(query,"]");
-   //char ffnumb[2]={""};
-   //sprintf(ffnumb, "%2.2d", focus);
-   //strcat(query, ffnumb);
-   //strcat(query, "]");
-   printf("query string %s\n", query);
-      
 
    ff = drms_open_records(drms_env,query,&status);
-      }
-
  
+   
       //*******************************************************************
       //query for most recent flatfield
       //*******************************************************************     
@@ -109,31 +85,19 @@ int get_flatfields(int camera, TIME t_0, int focus,
 
 
       char date_string[256];
-      if (status == DRMS_SUCCESS && ff != NULL)
+      if (status == DRMS_SUCCESS && ff != NULL && ff->n != 0)
 	{
-	  int nRec=ff->n;
-	  double tm1[nRec];
-	  double tm2[nRec];
 
-	  if (nRec > 0){
+	  record_flat=ff->records[0];
+	  double tm1;
+	  double tm2;
 
-	    int index=nRec-1;
-	    for (k=0; k<nRec; ++k)
-	      {
-		tm1[k]=drms_getkey_time(ff->records[k], keytstart,&status);
-		tm2[k]=drms_getkey_time(ff->records[k], keytstop,&status);
-
-		if (t_0 > tm1[k] && t_0 < tm2[k])
-		  {
-		    index=k;
-		    version=drms_getkey_int(ff->records[k],keyversion,&status);
-		  }
-	      }
-
-
-	  record_flat = ff->records[index];
-
-	  printf("record num %ld", record_flat->recnum);
+	  tm1=drms_getkey_time(record_flat, keytstart,&status);
+	  tm2=drms_getkey_time(record_flat, keytstop,&status);
+	
+	  version=drms_getkey_int(record_flat,keyversion,&status);
+	
+	  printf("record num %ld\n", record_flat->recnum);
 	  //get max flatfield version
 	  //maxversion=0;
 	  fvers=drms_getkey_int(record_flat, keyversion,&status); //if (fvers > maxversion) maxversion=fvers;}
@@ -147,7 +111,7 @@ int get_flatfields(int camera, TIME t_0, int focus,
 	  arr_data=arr_flat->data;
 	
 	  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flatfield[j*nx+i]=arr_data[j*nx+i];   //read data
-	  printf("flatfield read\n"); 
+	  printf("flatfield %s read\n", query); 
 	  cam_id = drms_getkey_int(record_flat,keycamera,&status);  //read keywords
 	  t_start = drms_getkey_time(record_flat,keytstart,&status);
 
@@ -155,9 +119,9 @@ int get_flatfields(int camera, TIME t_0, int focus,
 	  rot_cur->rotpairs=drms_getkey_int(record_flat,keynpairs,&status);
 	  rot_cur->rotcadence=drms_getkey_float(record_flat,keycadence,&status);
 
-	  if (t_0 < tm2[nRec-1] && version > 0)
+	  if (t_0 < tm2 && version > 0)
 	    {
-	      t_stop_new=tm2[index];
+	      t_stop_new=tm2;
 	    }
 	  else
 	    {
@@ -165,13 +129,10 @@ int get_flatfields(int camera, TIME t_0, int focus,
 	    }
 
 
-       //  t_obs_offpoint= drms_getkey_time(record_flat,keylink1,&status);
-       //  t_obs_dark=drms_getkey_time(record_flat,keylink2,&status);
-       //  t_obs_bad=drms_getkey_time(record_flat,keylink3,&status);
-  
-       reclink_off=drms_link_follow(record_flat, linkoff, &status);
-       if (reclink_off == NULL){printf("can not follow link to offpoint flatfield\n"); exit(EXIT_FAILURE);}
-       recnum_off=reclink_off->recnum;
+    
+	    reclink_off=drms_link_follow(record_flat, linkoff, &status); 
+	    if (reclink_off == NULL){printf("can not follow link to offpoint flatfield\n"); exit(EXIT_FAILURE);} 
+	     recnum_off=reclink_off->recnum;
 
        reclink_dark=drms_link_follow(record_flat, linkdark, &status);
        if (reclink_dark == NULL){printf("can not follow link to dark image\n"); exit(EXIT_FAILURE);}
@@ -184,31 +145,15 @@ int get_flatfields(int camera, TIME t_0, int focus,
 
        //check most recent final flatfield for version number 
        
-       printf("raw version %d\n", version);
-
-     
+         
        rot_cur->flatfield_version=version;
-	
-     
-	  	       
-       printf("version after %d \n", rot_cur->flatfield_version);
-
+		  	       
+    
        sprint_ut(date_string, t_start);
-       printf("Most recent flatfield read. T_START: %s\n", date_string);
+       printf("Flatfield record %s read. T_START: %s\n", query, date_string);
 
-	  }
-	  else
-	    {
-	  printf("Most recent flatfield not found\n");
-	  exit(EXIT_FAILURE);
-	    }
-	}
-      else 
-	{
-	  
-	  printf("Most recent flatfield not found\n");
-	  exit(EXIT_FAILURE);
-	}
+
+
   
 
 
@@ -221,36 +166,12 @@ int get_flatfields(int camera, TIME t_0, int focus,
   
    
    //////////////////////////////////////////////////
-   // query for latest offpoint flatfield////////////
-   //////////////////////////////////////////////////
+   // follow link to latest offpoint flatfield //////
+   /////////////////////////////////////////////////
 
 
-   //   {
-   //  char query_offpoint[256]={""}; 
    
-   // strcat(query_offpoint,filename_offpoint);
-   // strcat(query_offpoint,camstr);
-   //strcat(query_offpoint,"[2][");
-   // strcat(query_offpoint,t_orig_str);
-   // strcat(query_offpoint, "-");
-   //strcat(query_offpoint,t0_str);
-   //strcat(query_offpoint,"]");
-   //char ffnumb[2]={""};
-   //sprintf(ffnumb, "%2.2d", focus);
-   //strcat(query_offpoint, ffnumb);
-   //strcat(query_offpoint, "]");
-
-   //  printf("query offp %s\n", query_offpoint);
-   
-
-   //ff_offpoint = drms_open_records(drms_env,query_offpoint,&status);
-   // }
-
-
-
-
-
-   record_offpoint=reclink_off;
+   record_offpoint=reclink_off; 
    recnum2_off=record_offpoint->recnum;
 
    segin    = drms_segment_lookup(record_offpoint, "offpoint_flatfield");
@@ -262,30 +183,19 @@ int get_flatfields(int camera, TIME t_0, int focus,
    t_obs2_offpoint=drms_getkey_time(record_offpoint,keytobs,&status);
 
    sprint_ut(date_string, t_obs2_offpoint);
-   printf("Most recent offpoint flatfield read. T_OBS: %s %f\n", date_string, offpoint[2048*4096+2048]);
+ 
 
 
 
- //query for latest dark
 
 
+
+   ////////////////////////////////////////////////
+   // follow link to latest dark             //////
+   ///////////////////////////////////////////////
 
  DRMS_Record_t *record_dark;
  TIME  t_obs2_dark;
-
- // {
- //  char query_dark[256]={""}; 
- //   strcat(query_dark,filename_dark);
- //   strcat(query_dark,camstr);
- //   strcat(query_dark,t_orig_str);
- //   strcat(query_dark, "-");
- //   strcat(query_dark,t0_str);
- //   strcat(query_dark,"]");
-   
- //   ff_dark = drms_open_records(drms_env,query_dark,&status);
- 
- //}
-
 
 
     record_dark=reclink_dark;
@@ -294,39 +204,19 @@ int get_flatfields(int camera, TIME t_0, int focus,
   t_obs2_dark=drms_getkey_time(record_dark,keytobs,&status);
 
   sprint_ut(date_string, t_obs2_dark);
-  printf("Most recent dark read. T_OBS: %s \n", date_string);
+  printf("Linked dark read. T_OBS: %s \n", date_string);
 
      
 
 
-//read for latest bad pixel list
 
 
- DRMS_Record_t *record_bad;
- DRMS_Array_t *arr_bad;
- TIME t_obs2_bad;
- long long recnum2_bad;
-
- 
- 
- // char query_bad[256]={""}; 
- // strcat(query_bad,filename_badpix); 
- //   strcat(query_bad,camstr);
- //   strcat(query_bad,t_orig_str);
- //   strcat(query_bad, "-");
- //   strcat(query_bad,t0_str);
- //   strcat(query_bad,"]");
- //   printf("query bad %s\n", query_bad);
-
-   // ff_bad = drms_open_records(drms_env,query_bad,&status);
- 
-
+   ////////////////////////////////////////////////
+   // follow link to latest bad pixel list  //////
+   ///////////////////////////////////////////////
 
 
        
-       int *bad_data;
-
-       //record_bad = ff_bad->records[nRec-1];
        record_bad=reclink_bad;
        recnum2_bad=record_bad->recnum;
 
@@ -339,13 +229,12 @@ int get_flatfields(int camera, TIME t_0, int focus,
        t_obs2_bad=drms_getkey_time(record_bad,keytobs,&status);
 
        sprint_ut(date_string, t_obs2_bad);
-       printf("Most recent bad pixel list read. T_OBS: %s\n", date_string);
+       printf("Linked bad pixel list read. T_OBS: %s\n", date_string);
 
-
-
-
-
- 
+       if (nelem > 0)
+	 {
+	   for (i=0; i<nelem; ++i) bad[bad_data[i]]=0;
+	 }
 
 
  recnum[0]=recnum_off;
@@ -356,58 +245,85 @@ int get_flatfields(int camera, TIME t_0, int focus,
  recnum[5]=recnum2_bad;
  
 
-
-
-
-
-
-
  tobs_link[0]=t_start;
  tobs_link[1]= t_stop_new;
 
- //tobs_link[4]= t_obs_offpoint_front;
- //tobs_link[5]= t_obs_offpoint_side; 
- //tobs_link[6]=t_obs_dark_front;
- //tobs_link[7]= t_obs_dark_side;
- //tobs_link[8]= t_obs_bad_front;
- //tobs_link[9]= t_obs_bad_side;
- //tobs_link[10]= t_obs2_offpoint_front;
- //tobs_link[11]= t_obs2_offpoint_side;
- //tobs_link[12]= t_obs2_dark_front;
- //tobs_link[13]= t_obs2_dark_side;
- //tobs_link[14]= t_obs2_bad_front;
- //tobs_link[15]= t_obs2_bad_side;
-
- 
  return 0;
+
+ 	}
+	  else
+	    {
+	      printf("Flatfield %s not found\n", query);
+	      for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flatfield[j*nx+i]=1.0;
+	      for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) offpoint[j*nx+i]=1.0;
+
+	      rot_cur->rotbad=0;
+	      rot_cur->rotpairs=0;
+	      rot_cur->rotcadence=0.0;
+
+
+	      //get latest bad data 
+	      int *bad_data;
+	      //built query string for bad pixel record
+	      char query_bad[256]={""};
+	      strcat(query_bad,seriesname_badpix);
+	      strcat(query_bad,"[");
+	      char ffnumb[1]={""};
+	      sprintf(ffnumb, "%1.1d", camera);
+	      strcat(query_bad, ffnumb);
+	      strcat(query_bad, "]");
+
+	      badrecs=drms_open_records(drms_env,query_bad,&status);
+	      int nRec=badrecs->n;
+	      if (nRec > 0)
+		{
+	      record_bad=badrecs->records[nRec-1];
+	      recnum2_bad=record_bad->recnum;
+
+	      segin    = drms_segment_lookup(record_bad, segmentname_badpix);
+	      arr_bad= drms_segment_read(segin, segin->info->type, &status);
+	      int nelem=arr_bad->axis[0];
+	      bad_data=arr_bad->data;
+         
+     	
+	      t_obs2_bad=drms_getkey_time(record_bad,keytobs,&status);
+	      sprint_ut(date_string, t_obs2_bad);
+
+	      if (nelem > 0)
+		{
+		  for (i=0; i<nelem; ++i) bad[bad_data[i]]=0;
+		}
+
+	      focus=0;
+
+	      printf("Most recent bad pixel list read. T_OBS: %s\n", date_string);
+		}
+	      else 
+		{
+		  printf("can not find any bad pixel array for camera\n");
+		  exit(EXIT_FAILURE);
+		}
+	  
+	      return 1; //failure notice
+	    }
+ 
+ 
      
 
       }
 
-int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
+int write_flatfields(char *filename_flatfield, DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
                      long long recnum[6], TIME tobs_link[2], TIME t_0, int focus,
                      struct rotpar rot_new, 
                      struct rotpar rot_cur)
 {    
     
-#include "module_flatfield_const.h" // !!changed to test  
+#include "module_flatfield_const.h" 
   TIME t_start=tobs_link[0];
   TIME t_stop_new=tobs_link[1];
 
   if (t_stop_new == 0.0) t_stop_new=t_0+365.0*24.0*60.0*60.0;
 
-  //TIME t_obs_offpoint_front=tobs_link[4];
-  // TIME t_obs_offpoint_side=tobs_link[5];
-  // TIME  t_obs_dark_front=tobs_link[6];
-  // TIME  t_obs_dark_side=tobs_link[7];
-  //TIME t_obs_bad_front=tobs_link[8];
-  //TIME t_obs_bad_side=tobs_link[9];
-  //TIME t_obs2_offpoint_front=tobs_link[10];
-  //TIME t_obs2_offpoint_side=tobs_link[11];
-  //TIME  t_obs2_dark_front=tobs_link[12];
-  //TIME  t_obs2_dark_side=tobs_link[13];
-  //TIME t_obs2_bad_front=tobs_link[14];
-  //TIME t_obs2_bad_side=tobs_link[15];
 
   long long recnum_off=recnum[0];
   long long recnum_dark=recnum[1];
@@ -428,21 +344,13 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
    if (camera == 1){ cam_id=1; camera_str=camera_str_side;}
    if (camera == 2){ cam_id=2; camera_str=camera_str_front;}
 
-   //const char *key1 = "T_STOP";
-   //const char *key2 = "HMI_SEQ_ID_FOCUS";
-   //const char *key3 = "FLATFIELD_VERSION";
-
-   //const char *key4 = "ROTF_FLATFIELD";
-   //const char *key5 = "ROTF_N_PAIRS";
-   //const char *key6 = "ROTF_CADENCE";
 
  
 
    int status, stat;
 
  
-   //const int FLAG_PRELIMINARY=0;
-   //const int FLAG_FINAL=1;
+
    int flatvers, flatvers_back, flatvers_forward;
 
  /////////////////////////////////////////////////////////////////////////////////
@@ -456,17 +364,17 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
    if (flatvers == 0){flatvers_back=1; flatvers_forward=0;}
    if (flatvers > 0){flatvers_back=flatvers; flatvers_forward=flatvers+1;}
 
-   dataout = drms_create_records(drms_env,1,filename_flatfield_out,DRMS_PERMANENT,&stat);
+   dataout = drms_create_records(drms_env,1,filename_flatfield,DRMS_PERMANENT,&stat);
    
   if (stat != DRMS_SUCCESS)
 	    {
-	      printf("Could not create a record for the series %s\n",filename_flatfield_out);
+	      printf("Could not create a record for the series %s\n",filename_flatfield);
 	      exit(EXIT_FAILURE);
 	    }
 	  if (stat == DRMS_SUCCESS)
 	    {	  
 	      printf("Overwrite current flatfield with definite T_STOP\n");
-	      printf("Writing a record on the DRMS for the series %s\n",filename_flatfield_out);
+	      printf("Writing a record on the DRMS for the series %s\n",filename_flatfield);
 
 	      //front camera
 	     
@@ -542,12 +450,12 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
 	 
 	 
     
- dataout_new = drms_create_records(drms_env,1,filename_flatfield_out,DRMS_PERMANENT,&stat);
+ dataout_new = drms_create_records(drms_env,1,filename_flatfield,DRMS_PERMANENT,&stat);
 
 
  if (stat != DRMS_SUCCESS)
 	    {
-	      printf("Could not create a record for the series %s\n",filename_flatfield_out);
+	      printf("Could not create a record for the series %s\n",filename_flatfield);
 	      exit(EXIT_FAILURE);
 	    }
 	  if (stat == DRMS_SUCCESS)
@@ -615,14 +523,14 @@ int write_flatfields(DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camer
 
 
     
-int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera,
-			TIME tobs_link[2], TIME t_0, int focus,int fid, int fsns,
+int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera, long long recnum_off, char *query_flat,
+			TIME tobs_link[2], TIME t_0, int focus,int fid, 
 			struct rotpar rot_new)
 {    
     
 #include "module_flatfield_const.h"  
-  TIME t_start=tobs_link[0];
- 
+  //  TIME t_start=tobs_link[0];
+  //  TIME t_stop=tobs_link[1];
 
 
    DRMS_Segment_t *segout = NULL;
@@ -665,20 +573,23 @@ int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera,
 	     
 	      recout = dataout_new->records[0];
 
-	      status=drms_setkey_time(recout, "DAY", t_0-12.0*60.0*60.0);
-	      status = drms_setkey_time(recout, keytstart, t_0);
+	      status=drms_setkey_time(recout, keyday, t_0);
+	      //	      status = drms_setkey_time(recout, keytstart, t_start);
 	      status=drms_setkey_int(recout, keycamera, cam_id);
 	      status=drms_setkey_int(recout, fidkey, fid);
-	      status=drms_setkey_int(recout, fsnskey, fsns);
+	      //status=drms_setkey_int(recout, fsnskey, fsns);
 
 	      status=drms_setkey_int(recout, keyfocusflat, focus);
-	      status=drms_setkey_time(recout, keytstop, t_0+365.0*24.0*60.0*60.0); //update T_STOP=T_START+365 days
-	      status=drms_setkey_int(recout, keyversion, FLAG_PRELIMINARY);    //update FLAT_FINAL
+	      //	      status=drms_setkey_time(recout, keytstop, t_stop); 
+	      //status=drms_setkey_int(recout, keyversion, FLAG_PRELIMINARY);    //update FLAT_FINAL
 	      drms_setkey_string(recout, keyinstrument, camera_str);
 
-	      status=drms_setkey_int(recout, keynewpix, rot_new.rotbad);
+	      //status=drms_setkey_int(recout, keynewpix, rot_new.rotbad);
 	      status=drms_setkey_int(recout, keynpairs, rot_new.rotpairs);
 	      status=drms_setkey_float(recout, keycadence, rot_new.rotcadence);
+	      status=drms_setkey_int(recout, recnumkey, (int)recnum_off);
+	      status=drms_setkey_string(recout, querykey, query_flat);
+	      
 
 	      drms_keyword_setdate(recout);
             
@@ -686,9 +597,9 @@ int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera,
 
 	      segout = drms_segment_lookup(recout, segmentname);
 
-              arrout_new->bzero=segout->bzero;  //for file compression
-	      arrout_new->bscale=segout->bscale;
-	      arrout_new->israw=0;
+              //arrout_new->bzero=segout->bzero;  //for file compression
+	      //arrout_new->bscale=segout->bscale;
+	      //arrout_new->israw=0;
 	   
 	      drms_segment_write(segout, arrout_new, 0);        //write the file containing the data
 	      printf("done\n");

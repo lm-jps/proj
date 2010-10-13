@@ -1,21 +1,18 @@
 
 
-const int cam_id_front=3, cam_id_side=2; // !! check if HCAMID of CAMERA
-const double fwhm=1.0;                   // fwhm for highpass filter
-const int cthreshold=300; // minimum number of pairs of frames (minimum is 3) // !!debug
+const int cam_id_front=3, cam_id_side=2; // 
+const double fwhm[2]={1.0, 1.0};                   // fwhm for highpass filter 
+const int cthreshold=300; // minimum number of pairs of frames (minimum is 3) 
 const float threshold_lower=-10000.0;  //threshold for lower limit; //!!correction turned off 
 const float threshold_upper=10000.0; //threshold for upper limit; // !! correction turned off
 
-const int update_flag=0; //0: no update, 1: single pixel update, 2:full update
+const int update_flag=0; //0: no update, 1: single pixel update, 2:full update // 
 
-const int debug=0; //write out debug information
+const int debug=0; //write out debug information 
 
 struct code_param cpa;
-cpa.convergence=(double)1e-4;                //convergence threshold
-cpa.maxiter=200;                       //maximum iterations
-cpa.omega=1.2;                         //overrelaxation parameter
 
-cpa.croprad=0.98;   //crop radius 
+cpa.croprad=0.99;   //crop radius !changed from 0.98 09.30.2010 
 //cpa.rotcoef0= 2.913-0.1991;            //differential rotation coefficients (Komm Howard Harvey)
 //cpa.rotcoef1=-0.405;
 //cpa.rotcoef2=-0.422;
@@ -23,7 +20,10 @@ cpa.rotcoef0= 2.0*M_PI*1e-3*(452.- 31.7);         //differential rotation coeffi
 cpa.rotcoef1= -2.0*M_PI*1e-3*49.0;
 cpa.rotcoef2= -2.0*M_PI*1e-3*84.0;
 
-const double normconst=0.01/600.;                   //regularization parameter
+const double omegaconst[2]={1.7, 1.2};                         //overrelaxation parameter // 
+const double normconst[2]={0.03/600., 0.01/600.};           //regularization parameter
+const int maxiterconst[2]={300,200}; 
+const double convconst[2]={1e-4, 1e-4};
 //other possible differential rotation models
  
  //omeg=2.0*M_PI*1.0e-9*(452.0- 49.0*pow(slat, 2) -84.0*pow(slat, 4) - 31.7)*time; // differential rotation rate [in rad/s]
@@ -35,6 +35,7 @@ const double normconst=0.01/600.;                   //regularization parameter
 
 const int b_order=5;
 double b_coef[6]={0.34,1.37,-2.04,2.70,-1.94,0.559};   // Neckel and Labs (MDI wavelength), not good for extreme limb;
+//double b_coef[6]={1.0,0.0,0.0,0.0,0.0,0.0};  // !! no limb darkening for test
 //b_coef[0]=0.34; 
 //b_coef[1]=1.37;
 //b_coef[2]=-2.04;
@@ -78,8 +79,9 @@ const float rsun_max=1940.0;
       const float vrad_min=-5000.0;
       const float vrad_max=5000.0;
 
-      const float limit_centerdiff=0.2;
-      const float limit_rsundiff=0.5;
+      const float limit_centerdiff[2]={0.1, 0.05};
+const float limit_centerdiff_cosmic=1.0;
+      const float limit_rsundiff=0.1;
 /////
 
 
@@ -88,7 +90,7 @@ const float rsun_max=1940.0;
   //************************************************************************
 
 //define sigma (here:constant for each fid)
-double constsigma[20]={281., 281., 281., 281., 281., 281.923,281.923,272.457,272.457, 257.217,257.217,270.393,270.393,381.843, 381.843,338.651, 338.651, 339., 339., 339.};
+//double constsigma[20]={281., 281., 281., 281., 281., 281.923,281.923,272.457,272.457, 257.217,257.217,270.393,270.393,381.843, 381.843,338.651, 338.651, 339., 339., 339.};
 float rad_cosmic_ray=0.98;
 long time_limit=200;
 
@@ -118,8 +120,8 @@ float cof_combx[12]={0.145544,0.00812206, 0.233276, 0.121743, 0.190385,0.105851,
 float cof_comby[12]={0.283009, 0.0545081, 0.235930, 0.0957727, 0.245011, 0.0815215, 0.124488, 0.0380576, 0.0556949, -0.0611975, -0.0492513, -0.103545};
 
 //float cof[12]={0.221509, 0.0860711, 0.104523, 0.266129, 0.102323, 0.214389, 0.0943454, 0.0700577, -0.0544245, 0.0114523, -0.00285751, -0.113516};
-float cof[6]={0.300682 ,    0.370525,     0.316930 ,    0.164742,   -0.0441823 ,   -0.108697};
-float cofs[6]={1.22201 ,    0.362697 ,    0.359817 ,   -0.142182 ,   -0.433347 ,   -0.368998};
+float cof[2][6]={{1.22201 ,    0.362697 ,    0.359817 ,   -0.142182 ,   -0.433347 ,   -0.368998}, {0.300682 ,    0.370525,     0.316930 ,    0.164742,   -0.0441823 ,   -0.108697}};
+
 
 const float factor[2]={6.2, 6.2}; 
 const int limit_cosmic=10000;
@@ -144,7 +146,10 @@ const int limit_cosmic=10000;
    const char *isskey="HWLTNSET";
    const char *flatnkey="FLAT_REC";
    const char *keyversion = "FLATFIELD_VERSION";
-   const char* fsnskey="FSN_START";
+   const char *fsnskey="FSN_START";
+   const char *keyday="DAY";
+   const char *recnumkey="RECNUMOFF";
+   const char *querykey="FLATQ";
 
    const char *keynewpix = "ROTF_FLATFIELD";
    const char *keynpairs = "ROTF_N_PAIRS";
@@ -181,24 +186,23 @@ const char *lev1_x0="X0_LF";
 const char *lev1_y0="Y0_LF";
 const char *lev1_vr="OBS_VR";
   //series names
-char *filename_offpoint="hmi.offpoint_flatfield"; // 
-char *filename_dark="hmi.dark";
-char *filename_badpix="hmi.bad_pixel_list";
-char *filename_flatfield="hmi.flatfield";
-//char *filename_offpoint="su_richard.offpoint_flatfield"; //  su_richard for test
-//char *filename_dark="su_richard.dark";
-//char *filename_badpix="su_richard.bad_pixel_list";
-//char *filename_flatfield="su_richard.hmi_flatfield";
 
-char *filename_flatfield_out="hmi.flatfield"; //for checked in version
-char *filename_flatfield_fid="su_production.flatfield_fid_a";
-char *filename_cosmic="hmi.cosmic_rays";
+//char *seriesname_badpix="su_richard.bad_pixel_list";
+char *seriesname_badpix="hmi.bad_pixel_list";  //for checked in version
 
 
-//char *filename_flatfield_out="su_richard.hmi_flatfield_b"; 
-//char *filename_flatfield_fid="su_richard.flatfield_fid_a";
-//char *filename_cosmic="su_richard.cosmic_rays_c";
-  
+//char *filename_flatfield_out="su_richard.flatfield";  //output of module_flatfield_combine
+char *filename_flatfield_nochange="hmi.flatfield"; //for checked in version
+
+
+//char *filename_flatfield_rel="su_richard.flatfield_rel";  //output of module_flatfield_combine
+char *filename_flatfield_rel="su_production.flatfield_rel"; //for checked in version
+
+//char *filename_flatfield_fid="su_richard.flatfield_fid_b"; //output of module_flatfield // input to module_flatfield_combine
+char *filename_flatfield_fid="su_production.flatfield_fid"; //for checked in version
+
+//char *filename_cosmic="su_richard.cosmic_rays_c"; //output of module_flatfield
+char *filename_cosmic="hmi.cosmic_rays"; //for checked in version  
 
 
 

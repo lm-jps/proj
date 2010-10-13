@@ -27,7 +27,7 @@ void mat_mult(double[nx], double[nx], double[nx], double[nx], double[nx], int);
 void printtime();
 void highpass(int, int, double, double[nx][ny]);
 void derotation(double, double, double, double, double, double, double *, int, double *);
-
+void derotation_test(double time, double radius, double cent_x, double cent_y, double p0, double b0, double *rotf);
 
 
 
@@ -36,6 +36,7 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
                double deltat)
 {
 
+  int debug=0; // !! debug
  
   double convergence=cpa.convergence;
   int maxiter=cpa.maxiter;
@@ -103,24 +104,14 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 
 	rotf=(double *)(malloc(nx*ny*2*sizeof(double)));
 
-	derotation(R_SUN, XX0, YY0, dist,  P_ANG, B_ANG, rot_coef, 2, rotf); 
-
-  //debug !!
-	//     printf("write debug\n");
-	//	      FILE *fileptr;                                                                                                                          
-	//	      double *aaa;                                                                                                                            
-	//     aaa=(double *)(malloc(nx*sizeof(double)));                                                                                              
-	//     fileptr = fopen ("/tmp20/richard/interpol/dd.bin", "w");                                                                                    
-	//	      for (j=0; j<ny; ++j){ for (i=0;i<nx;i++){aaa[i]=rotf[j*nx+i];} fwrite ((char*)(aaa),sizeof(double),nx,fileptr);} 
-	//          for (j=0; j<ny; ++j){ for (i=0;i<nx;i++){aaa[i]=rotf[j*nx+i+nx*ny];} fwrite ((char*)(aaa),sizeof(double),nx,fileptr);} 
-	//          
-	//       fclose(fileptr);                                                                                                                            
-	//	  	free(aaa);
-
+	//derotation(R_SUN, XX0, YY0, dist,  P_ANG, B_ANG, rot_coef, 2, rotf); 
+	printf("rotpat param %lf %lf %lf %lf %lf %lf\n", deltat, R_SUN, XX0, YY0, P_ANG, B_ANG);
+	derotation_test(deltat, R_SUN, XX0, YY0, P_ANG, B_ANG, rotf);
+ 
 	//void derotation(double radius, double cent_x, double cent_y, double dist, double p0, double b0, double *rot_coef, int order2_rot_coef, double *shift, int nx, int ny){
     	double rota[nx][ny][2];
-	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rota[i][j][0]=rotf[j*nx+i]*deltat;
-	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rota[i][j][1]=rotf[nx*ny+j*nx+i]*deltat;
+	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rota[i][j][0]=rotf[j*nx+i]; //*deltat; !!
+	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rota[i][j][1]=rotf[nx*ny+j*nx+i]; //*deltat; !!rotf contains deltat
 
 
 
@@ -312,6 +303,20 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 	} /// end l-loop
 
 
+ //debug !!
+	if (debug)
+	  {
+	     printf("write debug\n");
+		      FILE *fileptr;                                                                                                                          
+		      double *aaa;                                                                                                                            
+	     aaa=(double *)(malloc(nx*sizeof(double)));                                                                                              
+	     fileptr = fopen ("/tmp20/richard/interpol/ddcode.bin", "w");                                                                                    
+		      for (j=0; j<ny; ++j){ for (i=0;i<nx;i++){aaa[i]=rhsm[j*nx+i];} fwrite ((char*)(aaa),sizeof(double),nx,fileptr);} 
+	          	          
+	       fclose(fileptr);                                                                                                                            
+		  	free(aaa);
+
+	  }
 
 
 
@@ -717,6 +722,79 @@ void printtime()
 }
 
 
+ void derotation_test(double time, double radius, double cent_x, double cent_y, double p0, double b0, double *rotf)
+{
+    
+
+  int i,j; //loop variables
+
+
+   
+    double svecp[2];
+    int datum_int;
+
+    double xy[2], inr;
+    double xyp[3], xym[3], xys[2], norm;
+
+    double slat, slat2, omeg;
+
+    for (i=0; i<nx; ++i){
+       for (j=0; j<ny; ++j){
+
+	
+	 xy[0]=((double)i+0.5-cent_x)/radius;
+	 xy[1]=((double)j+0.5-cent_y)/radius;
+
+         inr=sqrt(xy[0]*xy[0]+xy[1]*xy[1]);
+
+	  if (inr <= 1.0)
+	    {
+	      // p-angle rotation
+	      xyp[0]=cos(p0)*xy[0]+sin(p0)*xy[1];
+	      xyp[1]=-sin(p0)*xy[0]+cos(p0)*xy[1];
+	      // project onto sphere 
+	      xym[0]=sqrt(1.0-(xyp[0]*xyp[0]+xyp[1]*xyp[1]));
+              xym[1]=xyp[0];
+	      xym[2]=xyp[1];
+	      
+              slat=sin(b0)*xym[0]+cos(b0)*xym[2];
+              slat2=slat*slat;
+	      omeg=2*M_PI*1e-9*(452. - 49.0*slat2 -84.0*slat2*slat2 - 31.7);
+
+              svecp[0]=omeg*(xym[0]*cos(b0)-xym[2]*sin(b0))*time*radius;
+              svecp[1]=omeg*xym[1]*sin(b0)*time*radius;
+
+	    }
+
+  
+													     
+	   else
+	    {
+              xyp[0]=cos(p0)*xy[0]+sin(p0)*xy[1];
+	      xyp[1]=-sin(p0)*xy[0]+cos(p0)*xy[1];
+
+	      norm=sqrt(xyp[0]*xyp[0]+xyp[1]*xyp[1]);
+	      xys[0]=xys[0]/norm;
+              xys[1]= xys[1]/norm;
+	      
+              slat=cos(b0)*xys[1];
+              slat2=slat*slat;
+              omeg=2*M_PI*1e-9*(452. - 49.0*slat2 -84.0*slat2*slat2 - 31.7);
+	      
+              svecp[0]=-omeg*xys[1]*time*radius*sin(b0);
+              svecp[1]=omeg*xys[0]*time*radius*sin(b0);
+
+	    }
+
+
+	  rotf[j*nx+i]=cos(p0)*svecp[0]-sin(p0)*svecp[1];
+	  rotf[nx*ny+j*nx+i]=sin(p0)*svecp[1]+cos(p0)*svecp[1];
+      }
+    }
+
+
+  
+}
 
 
 
@@ -836,8 +914,9 @@ void highpass(int M, int N, double fwhm, double a[nx][ny])
      // Gaussian
      for (j = 0; j < N; ++j){
           for (i = 0; i < M; ++i) {
+	    //b[i][j] = exp(-(((double)i-(double)M/2.0)*((double)i-(double)M/2.0)+((double)j-(double)N/2.0)*((double)j-(double)N/2.0))/2.0/sigma/sigma)/2.0/M_PI/sigma*sigma;
 	    b[i][j] = exp(-(pow((double)i-(double)M/2.0,2)+pow((double)j-(double)N/2.0,2))/2.0/pow(sigma,2))/2.0/M_PI/pow(sigma,2);
-          }
+            }
      }
      
      //fft(gaussian)
@@ -905,4 +984,4 @@ void limb_darkening(double radius, double cent_x, double cent_y, double *b, int 
 
 
 
-//module_test input_series='hmi_ground.lev0[706315-706554]' flatfield='su_richard.flatfield'
+

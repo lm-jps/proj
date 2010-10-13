@@ -26,6 +26,17 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -g -I $(SRCDIR)/$(d)/../libs/flatfieldlib 
 
+# added 10/10
+$(OBJ_$(d)):				CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(FFTW_INCS) -g
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) $(FMATHLIBSL) -openmp -L$(FFTW_LIBS) -l$(FFTW3_LIB) $(MKL) 
+
+
+
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBINTERP)
+#added 10.10
+
+
 # NOTE: Add dependent libraries with the -I compiler flag, and make the module depend
 #   on that library
 # $(OBJ_$(d)):				CF_TGT := -I$(SRCDIR)/$(d)/../../libs/somelib
