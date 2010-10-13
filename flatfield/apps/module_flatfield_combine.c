@@ -200,8 +200,7 @@ for (k=0; k<nRecs; ++k)
 
 
 char *qstr_refflat=keyvalue_query[0];
- if (cameraint ==1) qstr_refflat="su_richard.flatfield[:#168]"; // !! debug
- if (cameraint ==2) qstr_refflat="su_richard.flatfield[:#169]"; // !! debug
+
 
 for (k=0; k<nRecs; ++k)
   {
