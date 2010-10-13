@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.11 2010/10/12 21:19:44 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.12 2010/10/13 20:40:00 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -2670,17 +2670,23 @@ int DoIt(void)
 		      if(status != DRMS_SUCCESS || CosmicRays == NULL)
 			{
 			  printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
-			  return 1;//exit(EXIT_FAILURE);
-			  //QUALITY = QUALITY | QUAL_NOCOSMICRAY;
-			  //CosmicRays = NULL;
+			  if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+			  else
+			    {
+			      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+			      CosmicRays = NULL;
+			    }
 			}
 		    }
 		  else
 		    {
 		      printf("Unable to open the series %s for FSN %d\n",HMISeriesTemp,FSN[temp]);
-		      return 1;//exit(EXIT_FAILURE);
-		      //QUALITY = QUALITY | QUAL_NOCOSMICRAY;
-		      //CosmicRays = NULL;
+		      if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+		      else
+			{
+			  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+			  CosmicRays = NULL;
+			}
 		    }
 
 		  printf("CREATING MASK FOR GAP-FILLING OF TARGET FILTERGAM\n");
@@ -3440,17 +3446,23 @@ int DoIt(void)
 						  if(status != DRMS_SUCCESS || CosmicRays == NULL)
 						    {
 						      printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
-						      return 1;
-						      //QUALITY = QUALITY | QUAL_NOCOSMICRAY;
-						      //CosmicRays = NULL;
+						      if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+						      else
+							{
+							  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+							  CosmicRays = NULL;
+							}
 						    }
 						}
 					      else
 						{
 						  printf("Unable to open the series %s for FSN %d\n",HMISeriesTemp,FSN[temp]);
-						  return 1;
-						  //QUALITY = QUALITY | QUAL_NOCOSMICRAY;
-						  //CosmicRays = NULL;
+						  if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+						  else
+						    {
+						      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+						      CosmicRays = NULL;
+						    }
 						}
 					      
 					      image  = Segments[temp]->data;
