@@ -71,7 +71,7 @@ int DoIt(void)
   float h1,h2;
 
 
-  float *flatfield, *offpoint, *flat, *ffhp;
+  float *flatfield, *offpoint, *flat, *ffhp, *flathp;
   short *bad;
 
 
@@ -93,6 +93,7 @@ int DoIt(void)
   
   flat=(float *)(calloc(nx*ny, sizeof(float)));
   ffhp=(float *)(malloc(nx*ny*sizeof(float)));
+  flathp=(float *)(malloc(nx*ny*sizeof(float)));
 
 
   //set parallelization parameters
@@ -236,7 +237,7 @@ const float kernel_size=4.0;
 
 fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);   
 
- for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) ffhp[j*nx+i]=flat[j*nx+i]-ffhp[j*nx+i];
+ for (j=10; j<(ny-10); ++j) for (i=10; i<(nx-10); ++i) flathp[j*nx+i]=flat[j*nx+i]-ffhp[j*nx+i];
 
  // highpass(nx, ny, fwhm[cameraint-1], ffield);
 
@@ -244,7 +245,7 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
  printf("sum %f\n", sum);
 
  if (sum != 1.0)
- for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) ffhp[j*nx+i]=ffhp[j*nx+i]/sum;
+ for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flathp[j*nx+i]=flathp[j*nx+i]/sum;
 
  drms_close_records(data,DRMS_FREE_RECORD);
 
@@ -259,8 +260,8 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
        {
 	 if (bad[j*nx+i])
 	   {
-	     flatfield_new[j*nx+i]=(1.0+ffhp[j*nx+i])*offpoint[j*nx+i];
-	     if (ffhp[j*nx+i] != 0.0) ++count;
+	     flatfield_new[j*nx+i]=(1.0+flathp[j*nx+i])*offpoint[j*nx+i];
+	     if (flathp[j*nx+i] != 0.0) ++count;
 	   }
 	 else 
 	   {
@@ -275,7 +276,7 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
        if (bad[j*nx+i] && (flat[j*nx+i] < threshold_lower|| flat[j*nx+i] > threshold_upper))
 	 {
 	   ++count;
-	   flatfield_new[j*nx+i]=(1.0f+ffhp[j*nx+i])*offpoint[j*nx+i];
+	   flatfield_new[j*nx+i]=(1.0f+flathp[j*nx+i])*offpoint[j*nx+i];
 	 }
        else
 	 {
@@ -303,7 +304,7 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
 
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)ff[j*nx+i]=flatfield[j*nx+i];
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)ff_new[j*nx+i]=flatfield_new[j*nx+i];
- for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) if (bad[j*nx+i]) ff_rel[j*nx+i]=(1.0+ffhp[j*nx+i])*offpoint[j*nx+i]; else ff_rel[j*nx+i]=offpoint[j*nx+i];
+ for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) if (bad[j*nx+i]) ff_rel[j*nx+i]=(1.0+flathp[j*nx+i])*offpoint[j*nx+i]; else ff_rel[j*nx+i]=offpoint[j*nx+i];
 
 rot_new.rotbad=count;
 rot_new.rotpairs=npairstot;
@@ -329,7 +330,7 @@ rot_new.rotcadence=cadence;
  free(offpoint);
  free(bad);
  free(flat);
-
+ free(flathp);
  free(ffhp);
  free_fresize(&fresizes);
 
