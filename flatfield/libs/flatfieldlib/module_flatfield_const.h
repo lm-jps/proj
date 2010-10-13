@@ -192,7 +192,7 @@ char *seriesname_badpix="hmi.bad_pixel_list";  //for checked in version
 
 
 //char *filename_flatfield_out="su_richard.flatfield";  //output of module_flatfield_combine
-char *filename_flatfield_nochange="hmi.flatfield"; //for checked in version
+char *filename_flatfield_out="hmi.flatfield"; //for checked in version
 
 
 //char *filename_flatfield_rel="su_richard.flatfield_rel";  //output of module_flatfield_combine
