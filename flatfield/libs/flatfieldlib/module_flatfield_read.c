@@ -20,7 +20,7 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
 
   DRMS_Segment_t *segin  = NULL;
     
-  DRMS_RecordSet_t *ff, *badrecs;
+  DRMS_RecordSet_t *ff, *ff_series, *badrecs;
    DRMS_Record_t *record_flat;
    DRMS_Record_t *reclink_off, *reclink_dark, *reclink_bad;
 
@@ -31,14 +31,18 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
  long long recnum2_bad;
        
  int *bad_data;
-
+ int nRec;
 
    DRMS_Array_t *arr_flat;
    float *arr_data;
 
    int i,j, k;
-  
-   int version=0;
+
+      double tm1[4096];
+    double tm2[4096];
+    int version[4096];
+
+   
    int fvers,maxversion;
    int cam_id;
 
@@ -58,20 +62,53 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
  
 
    
-   //    char *camstr_side="[1]";
-   //    char *camstr_front="[2]";
+       char *camstr_side="[1]";
+       char *camstr_front="[2]";
 
-   //   char *camstr;
-   //  if (camera == 1){camstr=camstr_side;}
-   //  if (camera == 2){camstr=camstr_front;}
+      char *camstr;
+     if (camera == 1){camstr=camstr_side;}
+     if (camera == 2){camstr=camstr_front;}
 
 
   for (i=0; i<nx; ++i) for (j=0; j<ny; ++j) bad[j*nx+i]=1;  //initialize bad pixel array
  
-  //  char t_orig_str[256];
-  //  sprint_ut(t_orig_str, 0.0);
+    char t_orig_str[256]="";
+    sprint_ut(t_orig_str, 0.0);
   
-  
+    char t0_str[256]="";
+    sprint_ut(t0_str, t_0-1.0);
+
+  char query_series[256]="";
+  strcat(query_series, filename_flatfield_series);
+  strcat(query_series, camstr);
+  strcat(query_series, "[");
+  strcat(query_series, t_orig_str);
+  strcat(query_series, "-");
+  strcat(query_series, t0_str);
+  strcat(query_series, "]");
+
+  printf("query series %s\n", query_series);
+
+  ff_series=drms_open_records(drms_env,query_series,&status);
+
+  if (status == DRMS_SUCCESS && ff_series != NULL && ff_series->n != 0)
+    {
+    nRec=ff_series->n;
+
+    for (k=0; k<nRec; ++k)
+    {
+    record_flat=ff_series->records[k];
+    tm1[k]=drms_getkey_time(record_flat, keytstart,&status);
+    tm2[k]=drms_getkey_time(record_flat, keytstop,&status);
+    version[k]=drms_getkey_int(record_flat,keyversion,&status);
+    }
+    }
+     else
+      {
+	printf("no flatfield series found\n");
+	exit(EXIT_FAILURE);
+      }
+
 
   
 
@@ -89,13 +126,11 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
 	{
 
 	  record_flat=ff->records[0];
-	  double tm1;
-	  double tm2;
-
-	  tm1=drms_getkey_time(record_flat, keytstart,&status);
-	  tm2=drms_getkey_time(record_flat, keytstop,&status);
+	 
+	  //tm1=drms_getkey_time(record_flat, keytstart,&status);
+	  //tm2=drms_getkey_time(record_flat, keytstop,&status);
 	
-	  version=drms_getkey_int(record_flat,keyversion,&status);
+	  //  version=drms_getkey_int(record_flat,keyversion,&status);
 	
 	  printf("record num %ld\n", record_flat->recnum);
 	  //get max flatfield version
@@ -119,9 +154,9 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
 	  rot_cur->rotpairs=drms_getkey_int(record_flat,keynpairs,&status);
 	  rot_cur->rotcadence=drms_getkey_float(record_flat,keycadence,&status);
 
-	  if (t_0 < tm2 && version > 0)
+	  if (t_0 < tm2[nRec-1] && version[nRec-1] > 0)
 	    {
-	      t_stop_new=tm2;
+	      t_stop_new=tm2[nRec-1];
 	    }
 	  else
 	    {
@@ -146,7 +181,7 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
        //check most recent final flatfield for version number 
        
          
-       rot_cur->flatfield_version=version;
+       rot_cur->flatfield_version=version[nRec-1];
 		  	       
     
        sprint_ut(date_string, t_start);

@@ -245,6 +245,7 @@ int DoIt(void)
   //parameters to identify records
   TIME tobs_link[2];
   long long recnum[6];
+  long long recnum_ref[6];
   struct rotpar rot_cur;
   struct rotpar rot_new;
 
@@ -664,7 +665,7 @@ if (fsn_first == 0 && fsn_last == 0)
 	//get reference flatfield
 	 query_flat_relative =keyvalue_flatnumb[nRecs-1];
 
-	 status_flatfield_relative=get_flatfields(query_flat_relative, t_0, cam+1, focus,  app_flat, flat_relative,  badpix, recnum, tobs_link, &rot_cur);
+	 status_flatfield_relative=get_flatfields(query_flat_relative, t_0, cam+1, focus,  app_flat, flat_relative,  badpix, recnum_ref, tobs_link, &rot_cur);
 
     
 	 
@@ -1246,7 +1247,7 @@ for (j=0; j<ny; ++j){
 
     printf("query flat %s\n", query_flat);
     printf("recnum %ld\n", recnum[0]);
-    if (update_stat == 0) write_flatfield_fid(arrout_new, cam+1, recnum[0], query_flat_relative, tobs_link, t_0, focus, fid, rot_new); 
+    if (update_stat == 0) write_flatfield_fid(arrout_new, cam+1, recnum_ref[0], query_flat_relative, tobs_link, t_0, focus, fid, rot_new); 
 
 
 
