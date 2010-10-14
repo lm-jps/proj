@@ -881,7 +881,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.7 2010/10/13 20:40:09 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.8 2010/10/14 19:53:32 couvidat Exp $");
 }
 
 
@@ -1106,6 +1106,7 @@ int DoIt(void)
   int   row,column;
   int  *QUALITYin=NULL;
   int  *QUALITYLEV1=NULL;
+  int   COSMICCOUNT=0;
 
   float *image=NULL;                                                 //for gapfilling code
   float **images=NULL;                                               //for temporal interpolation function
@@ -1180,6 +1181,7 @@ int DoIt(void)
   char *NBADPERMS         = "NBADPERM";
   char *X0LFS             = "X0_LF";
   char *Y0LFS             = "Y0_LF";
+  char *COUNTS            = "COUNT";
 
   //KEYWORDS FOR OUTPUT LEVEL 1p
   char *TRECS             = "T_REC";                                   //"nominal" slot time and time at which the level 1 data are temporally interpolated
@@ -3110,12 +3112,13 @@ int DoIt(void)
 					      strcat(HMISeriesTemp,FSNtemps);
 					      strcat(HMISeriesTemp,"]");
 					      rectemp=NULL;
+
 					      rectemp=drms_open_records(drms_env,HMISeriesTemp,&statusA[0]);
-					      
 					      if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0)
 						{
 						  segin = drms_segment_lookupnum(rectemp->records[0],0);
 						  CosmicRays = NULL;
+						
 						  CosmicRays = drms_segment_read(segin,segin->info->type,&status);
 						  if(status != DRMS_SUCCESS || CosmicRays == NULL)
 						    {
@@ -3128,6 +3131,10 @@ int DoIt(void)
 							}
 						      return 1;
 						    }
+
+						  COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
+						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
+
 						}
 					      else
 						{

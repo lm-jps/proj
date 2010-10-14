@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.12 2010/10/13 20:40:00 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.13 2010/10/14 19:49:53 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1240,6 +1240,7 @@ int DoIt(void)
   int row,column;
   int *FSNL=NULL;
   int *QUALITYin=NULL;
+  int COSMICCOUNT=0;
 
   DRMS_RecordSet_t *recLev1  = NULL;                                 //records for the level 1 data
   DRMS_RecordSet_t *recLev1d = NULL;                                 //records for the level 1d data
@@ -1342,6 +1343,7 @@ int DoIt(void)
   char *COEFF1S           = "COEFF1";
   char *COEFF2S           = "COEFF2";
   char *COEFF3S           = "COEFF3";
+  char *COUNTS            = "COUNT";
 
   //KEYWORDS FOR OUTPUT LEVEL 1d, 1p, AND 1.5 DATA
   char *TRECS             = "T_REC";                                   //"nominal" slot time and time at which the level 1 data are temporally interpolated
@@ -2660,8 +2662,8 @@ int DoIt(void)
 		  strcat(HMISeriesTemp,FSNtemps);
 		  strcat(HMISeriesTemp,"]");
 		  rectemp=NULL;
-		  rectemp=drms_open_records(drms_env,HMISeriesTemp,&statusA[0]);
 
+		  rectemp=drms_open_records(drms_env,HMISeriesTemp,&statusA[0]);
 		  if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0)
 		    {
 		      segin = drms_segment_lookupnum(rectemp->records[0],0);
@@ -2677,6 +2679,8 @@ int DoIt(void)
 			      CosmicRays = NULL;
 			    }
 			}
+		      COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
+		      if(status != DRMS_SUCCESS || COSMICCOUNT == -1) QUALITY = QUALITY | QUAL_NOCOSMICRAY;
 		    }
 		  else
 		    {
@@ -3436,12 +3440,13 @@ int DoIt(void)
 					      strcat(HMISeriesTemp,FSNtemps);
 					      strcat(HMISeriesTemp,"]");
 					      rectemp=NULL;
+
 					      rectemp=drms_open_records(drms_env,HMISeriesTemp,&statusA[0]);
-					      
 					      if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0)
 						{
 						  segin = drms_segment_lookupnum(rectemp->records[0],0);
 						  CosmicRays = NULL;
+
 						  CosmicRays = drms_segment_read(segin,segin->info->type,&status);
 						  if(status != DRMS_SUCCESS || CosmicRays == NULL)
 						    {
@@ -3453,6 +3458,8 @@ int DoIt(void)
 							  CosmicRays = NULL;
 							}
 						    }
+						  COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
+						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1) QUALITY = QUALITY | QUAL_NOCOSMICRAY;
 						}
 					      else
 						{
