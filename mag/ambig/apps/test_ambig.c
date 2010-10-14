@@ -300,8 +300,8 @@ printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
                 printf("no mask used\n");
             } else {
                 maskRec = maskRS->records[0];
-                maskSeg = drms_segment_lookup(maskRec, "bitmap");
-                mask_id = 1;
+                maskSeg = drms_segment_lookup(maskRec, "mask");		// updated oct 13 2010
+                mask_id = 2;
                 printf("%s, %s\n", trec_str, maskSeries);
                 printf("#%d: t_inrec = %lf; t_mask = %lf\n", 
                        irec, t_rec, drms_getkey_time(maskRec, "T_REC", &status));
@@ -402,7 +402,7 @@ printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
             // Create bitmap
             bitmap = (int *)calloc(nxny, sizeof(int));
             for (i = 0; i < nxny; i++) {
-               bitmap[i] = (mask[i] == mask_id) ? 1 : 0;
+               bitmap[i] = (mask[i] >= mask_id) ? 1 : 0;		// updated frpm '==' to '>=' on oct 13 2010
             }
             drms_free_array(maskArray);
         } else {
