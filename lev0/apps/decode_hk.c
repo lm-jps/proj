@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk.c,v 1.11 2010/07/20 20:57:02 carl Exp $" 
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk.c,v 1.12 2010/10/15 18:12:03 carl Exp $" 
 /*****************************************************************************
  * Filename: decode_hk.c                                                     *
  * Author: Carl                                                              *
@@ -722,6 +722,7 @@ static int load_hk_values(unsigned short *word_ptr, HK_Keywords_Format *ptr_hk_k
   HK_Keywords_Format *top_hk_keywords;
   unsigned int *w;
   unsigned char *byte_ptr;
+  unsigned int signbit;
   unsigned int keep_bits; /* 32 bits */
   //unsigned int low_word, high_word;
   uint32_t low_word, high_word;
@@ -746,6 +747,17 @@ static int load_hk_values(unsigned short *word_ptr, HK_Keywords_Format *ptr_hk_k
       keep_bits = (unsigned int) (pow( 2, ptr_hk_keywords->bit_length) - 1) ;
       /* adjust based on bit length  and bit position */
       ptr_hk_keywords->keyword_value = (unsigned  char)(( *w >> (8 - (ptr_hk_keywords->start_bit + ptr_hk_keywords->bit_length))) & keep_bits);
+      /* fix for ticket 112 -If IS1 value is negative value then add extented bits to handle IS1 signed value */
+      if(!strcmp(ptr_hk_keywords->type, "SB"))
+      {
+        /* get high bit value */
+        signbit = (unsigned int) (pow( 2, (ptr_hk_keywords->bit_length - 1))) ;
+        /* check for negative sign in high bit then if true, then do sign extention  */
+        if (signbit &  ptr_hk_keywords->keyword_value)
+        {
+          ptr_hk_keywords->keyword_value= ptr_hk_keywords->keyword_value | (0xFFFFFFFF ^ keep_bits);
+        }
+      }
     } 
     else if( (!strcmp(ptr_hk_keywords->type, "IS1") || !strcmp(ptr_hk_keywords->type, "IU1")) && ptr_hk_keywords->bit_length <= 16) 
     {
@@ -761,6 +773,17 @@ static int load_hk_values(unsigned short *word_ptr, HK_Keywords_Format *ptr_hk_k
       ptr_hk_keywords->keyword_value |= (unsigned  short int) (( (*w ) << 8 ) & 0xFF00 );
       /* adjust based on bit length  and bit position */
       ptr_hk_keywords->keyword_value =  (unsigned int) (( ptr_hk_keywords->keyword_value >> (16 - (ptr_hk_keywords->start_bit + ptr_hk_keywords->bit_length))) &  keep_bits);
+      /* fix for ticket 112 -If IS1 value is negative value then add extented bits to handle IS1 signed value */
+      if(!strcmp(ptr_hk_keywords->type, "IS1"))
+      {
+        /* get high bit value */
+        signbit = (unsigned int) (pow( 2, (ptr_hk_keywords->bit_length - 1))) ;
+        /* check for negative sign in high bit then do sign extention  */
+        if (signbit &  ptr_hk_keywords->keyword_value)
+        {
+          ptr_hk_keywords->keyword_value= ptr_hk_keywords->keyword_value | (0xFFFFFFFF ^ keep_bits);
+        }
+      }
     }
     else if (!strcmp(ptr_hk_keywords->type, "UL1") || !strcmp(ptr_hk_keywords->type, "IL1")) 
     {  
@@ -780,6 +803,17 @@ static int load_hk_values(unsigned short *word_ptr, HK_Keywords_Format *ptr_hk_k
       ptr_hk_keywords->keyword_value |=	(unsigned int) ( (*w) << 8 & 0x00FF0000);
       /* adjust for bit length */
       ptr_hk_keywords->keyword_value =  (ptr_hk_keywords->keyword_value >> (32 - (ptr_hk_keywords->start_bit + ptr_hk_keywords->bit_length ))) & keep_bits ; 
+      /* fix for ticket 112 -If IL1 value is negative value then add extented bits to handle IL1 signed value */
+      if(!strcmp(ptr_hk_keywords->type, "IL1"))
+      {
+        /* get high bit value */
+        signbit = (unsigned int) (pow( 2, (ptr_hk_keywords->bit_length - 1))) ;
+        /* check for negative sign in high bit then do sign extention  */
+        if (signbit &  ptr_hk_keywords->keyword_value)
+        {
+          ptr_hk_keywords->keyword_value= ptr_hk_keywords->keyword_value | (0xFFFFFFFF ^ keep_bits);
+        }
+      }
     }                 
     else if (!strcmp(ptr_hk_keywords->type, "SFP")) 
     {  
@@ -833,16 +867,12 @@ static int load_hk_values(unsigned short *word_ptr, HK_Keywords_Format *ptr_hk_k
       //1st try-dfp_int |= (uint64_t)(((uint64_t)high_word << 32) & (0xFFFFFFFF00000000));
       dfp_int |= (uint64_t)(((uint64_t)low_word << 32) & (0xFFFFFFFF00000000));
       ptr_hk_keywords->keyword_value = (uint64_t)dfp_int; 
-
-      /* skip-adjust for bit length */
-     // ptr_hk_keywords->keyword_value =  (ptr_hk_keywords->keyword_value >> (32 - (ptr_hk_keywords->start_bit + ptr_hk_keywords->bit_length ))) & keep_bits ; 
-
     }
     else  
     {
       printkerr("ERROR at %s, line %d: Did not find this bit length for keyword %s\n",
                  __FILE__, __LINE__, ptr_hk_keywords->keyword_name );
-      //return ERROR_HK_INVALID_BITFIELD_LENGTH;
+      //return ERROR_HK_INVALID_BITFIELD_LENGTH; 
     }
   ptr_hk_keywords = ptr_hk_keywords->next;           
   } 
