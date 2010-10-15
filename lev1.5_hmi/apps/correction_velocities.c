@@ -1,6 +1,9 @@
 /*-------------------------------------------------------------------------------------------------------*/
 /* ANSI 99 C CODE TO CALCULATE THE POLYNOMIAL COEFFICIENTS TO CORRECT THE DOPPLER VELOCITIES RETURNED    */
 /* BY THE MDI-LIKE ALGORITHM                                                                             */
+/*                                                                                                       */
+/* NB: TAKES INTO ACCOUNT ECLIPSE FLAG AND CROTA2 VALUE                                                  */
+/* AUTHOR: S. COUVIDAT                                                                                   */
 /*-------------------------------------------------------------------------------------------------------*/
 //call: correction_velocities begin=2010.9.30_6:45_TAI end=2010.10.1_6:45_TAI levin=hmi.V_45s_nrt levout=hmi.coefficients
 
@@ -103,11 +106,13 @@ int DoIt(void) {
   char *COEFF2S  = "COEFF2";
   char *COEFF3S  = "COEFF3";
   char *NDATAS   = "NDATA";
+  char *CROTA2S  = "CROTA2";
 
   double *RAWMEDN=NULL;
   double *OBSVR=NULL;
   double *A=NULL,*coeffd=NULL;
   double temp=0.0;
+  float *CROTA2=NULL;
 
   int *QUALITY=NULL;
   int *CALFSN=NULL;
@@ -163,7 +168,12 @@ int DoIt(void) {
       printf("Error: memory could not be allocated to CALFSN\n");
       return 1;//exit(EXIT_FAILURE);
     }
-
+  CROTA2 = (float *)malloc(nRecs1*sizeof(float)); 
+  if(CROTA2 == NULL)
+    {
+      printf("Error: memory could not be allocated to CROTA2\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
 
 
   nsample=nRecs1;
@@ -178,9 +188,9 @@ int DoIt(void) {
       RAWMEDN[j]= RAWMEDN[j]-OBSVR[j]; //we want to fit the difference RAWMEDN-OBSVR as a function of OBSVR
       OBSVR[j]  = temp/6500.;          //to make the polynomial fit better
       CALFSN[j] = drms_getkey_int(recLev1->records[i],CALFSNS,&status);
+      CROTA2[j] = drms_getkey_float(recLev1->records[i],CROTA2S,&status);
 
-      //|| (QUALITY[j] & QUAL_ECLIPSE) == QUAL_ECLIPSE)
-      if(isnan(RAWMEDN[j]) || isnan(OBSVR[j]) || (QUALITY[j] & QUAL_ISSTARGET) == QUAL_ISSTARGET || fabs(RAWMEDN[j]-OBSVR[j]) > 1000.) 
+      if(isnan(RAWMEDN[j]) || isnan(OBSVR[j]) || (QUALITY[j] & QUAL_ISSTARGET) == QUAL_ISSTARGET || fabs(RAWMEDN[j]-OBSVR[j]) > 1000. || (QUALITY[j] & QUAL_ECLIPSE) == QUAL_ECLIPSE || fabs(CROTA2[j]-180.) > 5.0) 
 	{
 	  j-=1;
 	  nsample-=1;
@@ -329,6 +339,7 @@ int DoIt(void) {
   free(OBSVR);
   free(QUALITY);
   free(CALFSN);
+  free(CROTA2);
 
   return error;
   
