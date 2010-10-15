@@ -61,8 +61,8 @@ SVML_$(d)       :=
 GUIDE_$(d)      :=
 
 ifeq ($(COMPILER), icc)
-  SVML_$(d)     := -lsvml
-  GUIDE_$(d)    := -lguide
+  SVML_$(d)     := #-lsvml
+  GUIDE_$(d)    := #-lguide
 endif
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
