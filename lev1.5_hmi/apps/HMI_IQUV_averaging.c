@@ -107,7 +107,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define QUAL_NOGAPFILL               (0x1000)               //the code could not properly gap-fill all the lev 1 filtergrams
 #define QUAL_LIMBFITISSUE            (0x800)                //some lev1 records were discarded because R_SUN, and/or CRPIX1/CRPIX2 were missing or too different from the median value of the other lev 1 records (too much jitter for instance)
 #define QUAL_NOCOSMICRAY             (0x400)                //some cosmic-ray hit lists could not be read for the level 1 filtergrams
-#define QUAL_ECLIPSE                 (0x300)                //at least one lev1 record was taken during an eclipse
+#define QUAL_ECLIPSE                 (0x200)                //at least one lev1 record was taken during an eclipse
 
 
 //DRMS FAILURE (AN OBSERVABLE COULD, A PRIORI, BE CREATED, BUT THERE WAS A MOMENTARY FAILURE OF THE DRMS)
@@ -881,7 +881,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.8 2010/10/14 19:53:32 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.9 2010/10/20 23:22:29 couvidat Exp $");
 }
 
 
