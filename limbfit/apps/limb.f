@@ -40,7 +40,7 @@ c   8) b0 is the "preshift" add this to the output beta to get the net
 c	*) centyp to specify if cmx/cmy are guess center(=0) or to be used as center(=1)
 	Subroutine limb(anls,npts,cmx,cmy,rguess, nitr,ncut,nang,nprf,rprf,
      &                  lprf,nreg, rsi, rso, dx, dy, jreg, jang, jprf, 
-     &                   alph,beta,ifail,b0, centyp)
+     &                   alph,beta,ifail,b0, centyp, ahi)
 	
 c      parameter(jpt=40000,jreg=4096,jb=50,jc=50,jang=129,jprf=160)
        parameter(jpt=4000000,jb=200,jc=200)
@@ -69,7 +69,7 @@ c      parameter(jpt=40000,jreg=4096,jb=50,jc=50,jang=129,jprf=160)
 	dreg=tpi/float(nreg)	! angular bin size for alpha & beta 
 	dang=tpi/float(nang)	! angular bin size for profiles
 	alo=0.0		! lower limit for acceptable data
-	ahi=70000.0	! upper limit ...
+c	ahi=70000.0	! upper limit ...
 	flag=-2147483648.0	! flag bad pixels
 c	rsi=18.0		! rmean-rsi lower limit to use in center-finder
 c	rso=18.0		! rmean+rso upper limit ...
@@ -89,7 +89,6 @@ c	clmt=0.0000001	! coefficient convergence criteria for center-finder
 	nc=16		! order of the Chebyschev polynomial (jc=50)
 	rem=20.0		! number of std.dev. to cut data in the Chebyschev fit
 	lmt=20		! limit on # of cuts of rem*sigma; loop counter "cut"
-
 c Initialize stuff; find the min & max radii
 	ifail=0
 	svx=cmx

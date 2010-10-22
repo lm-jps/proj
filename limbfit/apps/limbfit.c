@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V1.7r0" 
-	#define CODE_DATE 		"Thu Sep 16 13:40:31 PDT 2010" 
+	#define CODE_VERSION 	"V1.8r0" 
+	#define CODE_DATE 		"Mon Oct 11 14:52:17 PDT 2010" 
 */
 
 #include "limbfit.h"
@@ -46,7 +46,16 @@ int		naxis_row= input->img_sz0;
 int		naxis_col= input->img_sz1;
 int		iter	 = NB_ITER;
 int		skipc	 = SKIPGC;
+float	lahi	 = AHI;
 //float 	flag	 = BAD_PIXEL_VALUE; 
+
+if (input->spe==1)
+{
+	iter=NB_ITER2;
+	lahi=AHI2;
+	rsi=LO_LIMIT2;
+	rso=UP_LIMIT2;
+}
 	
 /************************************************************************/
 /*                        set parameters                               */
@@ -334,8 +343,8 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 	//#1
 	if (skipc == 1) centyp=1; else centyp=0;
 	limb_(&anls[0],&jk, &cmx, &cmy, &r, &nitr, &ncut, &nang, &nprf, &rprf[0], &lprf[0], &nreg, &rsi, &rso, 
-		&dx, &dy, &jreg, &jang, &jprf, &alph[0], &b0[0], &ifail, &beta[0], &centyp); 
-		//&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta[0], &ifail, &b0[0], &centyp); 
+		&dx, &dy, &jreg, &jang, &jprf, &alph[0], &b0[0], &ifail, &beta[0], &centyp, &lahi); 
+		//&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta[0], &ifail, &b0[0], &centyp);
 	if (debug)
 	{
 		sprintf(log_msg,"exiting limb: %d", ifail);
@@ -347,18 +356,19 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		if (debug) lf_logmsg("DEBUG", "APP", 0, 0, "re-entering", log_msg_code, opf);
 		//#2
 		limb_(&anls[0],&jk, &cmx, &cmy, &r, &nitr, &ncut, &nang, &nprf, &rprf[0], &lprf[0], &nreg, &rsi, &rso, 
-			&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta1[0], &ifail, &b0[0], &centyp); 
+			&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta1[0], &ifail, &b0[0], &centyp, &lahi); 
 		if (debug)
 		{
 			sprintf(log_msg," exiting limb_2nd time: %d", ifail);
 			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 		}
+
 		for (ii=0; ii<nreg; ii++) b0[ii]=b0[ii]+beta1[ii];// <<< TO CONVERT THIS WITH POINTERS
 		//#3
 		if(iter > 2 && ifail ==0)
 		{	
 			limb_(&anls[0],&jk, &cmx, &cmy, &r, &nitr, &ncut, &nang, &nprf, &rprf[0], &lprf[0], &nreg, &rsi, &rso, 
-				&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta2[0], &ifail, &b0[0], &centyp); 
+				&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta2[0], &ifail, &b0[0], &centyp, &lahi); 
 			if (debug) 
 			{
 				sprintf(log_msg,"exiting limb_3rd time: %d", ifail);
@@ -370,7 +380,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 				//#4
 				for (ii=0; ii<nreg; ii++) b0[ii]=beta[ii]+beta1[ii];// <<< TO CONVERT THIS WITH POINTERS
 				limb_(&anls[0],&jk, &cmx, &cmy, &r, &nitr, &ncut, &nang, &nprf, &rprf[0], &lprf[0], &nreg, &rsi, &rso, 
-					&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta3[0], &ifail, &b0[0], &centyp); 
+					&dx, &dy, &jreg, &jang, &jprf, &alph[0], &beta3[0], &ifail, &b0[0], &centyp, &lahi); 
 				if (debug)
 				{
 					sprintf(log_msg,"exiting limb_4th time: %d", ifail);
@@ -712,6 +722,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		results->nfitpnts=r_size;
 		results->nb_iter=iter;
 		results->skipgc=skipc;
+		results->ahi=lahi;
 		results->error1=ifail;		
 		results->error2=ret_gsl;		
 		if (ifail == 0) 
@@ -759,6 +770,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		results->inc_y=dy;
 		results->nfitpnts=r_size;
 		results->nb_iter=iter;
+		results->ahi=lahi;
 		results->max_limb=0;
 		results->cmean=0;
 		results->nb_fbins=0;

@@ -1,4 +1,4 @@
-/* I.Scholl "Thu Sep 16 13:40:31 PDT 2010" 
+/* I.Scholl "Mon Oct 11 14:52:17 PDT 2010" 
 */
 
 #include <string.h>
@@ -26,9 +26,10 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V1.7r0" 
-#define CODE_DATE 		"Thu Sep 16 13:40:31 PDT 2010" 
+#define CODE_VERSION 	"V1.8r0" 
+#define CODE_DATE 		"Mon Oct 11 14:52:17 PDT 2010" 
 #define LOGMSG1			"LIMBFIT"
+#define	JSD_NAME		"su_scholl.hmi_lf.jsd"
 
 //#define dsin	"hmi.lev1c_nrt[]"
 //#define dsout	"su_scholl.limbfit"
@@ -52,6 +53,7 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define ERR_SPECIAL							-100
 #define ERR_DRMS_WRITE 						-200
 #define ERR_DRMS_READ 						-201
+#define WAR_DRMS_NORECORD 					201
 
 //GENERAL FAILURES -> write errors
 #define ERR_DRMS_WRITE_KW 					-300
@@ -87,26 +89,35 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define PROCSTAT_NO_LF_FITS_WRITE_PB 	"NO_LF_FITS_WRITE_PB"
 
 //---------------------------------- LIMBFIT PARAMETERS
-#define ANNULUS_WIDTH 200					// -1
-#define MAX_SIZE_ANN_VARS 4000000			// -2  ! must be the same value than JPT in fortran code !
-#define NUM_LDF 180							// -3 
-#define NUM_RADIAL_BINS 64					// -4 	
-#define NUM_AB_BINS 180						// -5
-#define LO_LIMIT 32.0						// -6  ! the sum of these 2 must be equal to ANNULUS_WIDTH 
-#define UP_LIMIT 32.0						// -7
-#define INC_X -4.0							// -8
-#define INC_Y -4.0							// -9
-#define NUM_FITPNTS 16						// -10	//  2*NUM_FITPNTS<NUM_RADIAL_BINS
-#define GUESS_RANGE 8						// -11
-#define NB_ITER 4							// -12
+#define ANNULUS_WIDTH 200					// 
+#define MAX_SIZE_ANN_VARS 4000000			// ! must be the same value than JPT in fortran code !
+#define NUM_LDF 180							// 
+#define NUM_RADIAL_BINS 64					// 
+#define NUM_AB_BINS 180						// 
+#define LO_LIMIT 32.0						// ! the sum of these 2 must be equal to ANNULUS_WIDTH 
+#define UP_LIMIT 32.0						// 
+#define INC_X -4.0							// 
+#define INC_Y -4.0							// 
+#define NUM_FITPNTS 16						// 2*NUM_FITPNTS<NUM_RADIAL_BINS
+#define GUESS_RANGE 8						//
+#define NB_ITER 4							//
 #define BAD_PIXEL_VALUE -2147483648.0
 #define	SKIPGC 1							// skip the guess estimation, use X0/YO_LF
+#define	AHI 70000.0							// 
+
+// alternate parameters for low LDF threshold - needed for roll analysis
+#define	AHI2 	  30000.0
+#define LO_LIMIT2 24.0	
+#define UP_LIMIT2 24.0
+#define NB_ITER2  1
+
 //------------------------------------------------------
 
 typedef struct {
 	float			*data;			// image to analyze
 	int				img_sz0;
 	int				img_sz1;
+	int				spe;
 	double			ix;
 	double			iy;
 	double			ir;
@@ -153,9 +164,16 @@ typedef struct {		// output files content
 	double		inc_y;
 	int			nfitpnts;
 	int			nb_iter;
+	double		ahi;
 	int			skipgc;
 	int 		nb_fbins;
-
+	
+	// extra for error management
+	char*		dsin;
+	char*		comment;
+	char*		code_date;
+	char*		code_version;
+	char*		code_name;
 } LIMBFIT_OUTPUT;
 
 void get_sdate(char *sdate);
@@ -169,9 +187,9 @@ double fin_min(double A[6], double m, int range, int debug, FILE *fd);
 int limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,FILE *opf,int debug);
 void limb_(float *anls, long *jk, float *cmx, float *cmy, float *r, int *nitr, int *ncut, int *nang, 
 			int *nprf, float* rprf, float* lprf, int *nreg, float *rsi, float *rso, float *dx, float *dy, 
-			int *jreg, int *jang, int *jprf, float* alph, float* beta, int *ifail, float* b0, int *centyp); 
-int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int debug, int *status);
-int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, char *tmp_dir, FILE *opf, int debug, int *status);
+			int *jreg, int *jang, int *jprf, float* alph, float* beta, int *ifail, float* b0, int *centyp, int *lahi); 
+int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int spe, char *dsin, char *comment, int debug, int *status);
+int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, char *tmp_dir, FILE *opf, int spe, char *dsin, char *comment, int debug, int *status);
 int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int tbf, LIMBFIT_OUTPUT *lfr, int debug);
 int mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col, long npixels, float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf);
 int sort(unsigned long n, float *arr);
