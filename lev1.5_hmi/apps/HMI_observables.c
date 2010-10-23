@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.13 2010/10/14 19:49:53 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.14 2010/10/23 19:24:35 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -2668,29 +2668,32 @@ int DoIt(void)
 		    {
 		      segin = drms_segment_lookupnum(rectemp->records[0],0);
 		      CosmicRays = NULL;
+
 		      CosmicRays = drms_segment_read(segin,segin->info->type,&status);
 		      if(status != DRMS_SUCCESS || CosmicRays == NULL)
 			{
 			  printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
-			  if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
-			  else
-			    {
+			  //if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+			  //else
+			  //  {
 			      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
 			      CosmicRays = NULL;
-			    }
+			      //  }
 			}
+
 		      COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
 		      if(status != DRMS_SUCCESS || COSMICCOUNT == -1) QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+
 		    }
 		  else
 		    {
 		      printf("Unable to open the series %s for FSN %d\n",HMISeriesTemp,FSN[temp]);
-		      if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
-		      else
-			{
+		      //if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+		      //else
+		      //{
 			  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
 			  CosmicRays = NULL;
-			}
+			  //}
 		    }
 
 		  printf("CREATING MASK FOR GAP-FILLING OF TARGET FILTERGAM\n");
@@ -3451,25 +3454,27 @@ int DoIt(void)
 						  if(status != DRMS_SUCCESS || CosmicRays == NULL)
 						    {
 						      printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
-						      if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
-						      else
-							{
+						      //if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+						      //else
+						      //	{
 							  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
 							  CosmicRays = NULL;
-							}
+							  //	}
 						    }
+
 						  COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
 						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1) QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+
 						}
 					      else
 						{
 						  printf("Unable to open the series %s for FSN %d\n",HMISeriesTemp,FSN[temp]);
-						  if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
-						  else
-						    {
+						  //if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+						  //else
+						  //{
 						      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
 						      CosmicRays = NULL;
-						    }
+						      //}
 						}
 					      
 					      image  = Segments[temp]->data;
