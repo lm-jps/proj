@@ -512,7 +512,7 @@ if (fsn_first == 0 && fsn_last == 0)
 	keyvalue_vrad[k]=drms_getkey_float(rec0[k], lev1_vr, &status);
 	if (keyvalue_vrad[k] < vrad_min || keyvalue_vrad[k] > vrad_max) statarr[k]=statarr[k]+512;
 
-	//printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d  \t %f \t %f \t  %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
+	if (keyvalue_fsn[k] == 11986751) printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d  \t %f \t %f \t  %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
 
       }
   
@@ -901,7 +901,7 @@ printf("read second filtergram\n");
 	      present_backward[k]=0;
 		}
 	      	    
-	      if (status_flatfield != 0) statarr[k]=statarr[k]+2;
+	     
 
 
 	      index_last=index[kkk-2];
@@ -961,7 +961,7 @@ printf("read second filtergram\n");
 	      }
 		}
 
-	  printf("fsn count %d %d\n", keyvalue_fsn[km1], count);
+		printf("fsn count %d %d %d %d\n", keyvalue_fsn[km1], count, statarr[km1], status_flatfield);
 	  cosmic_ray_check[index_current]=count;
 	    
 	

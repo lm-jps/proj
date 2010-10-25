@@ -21,7 +21,7 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
   DRMS_Segment_t *segin  = NULL;
     
   DRMS_RecordSet_t *ff, *ff_series, *badrecs;
-   DRMS_Record_t *record_flat;
+  DRMS_Record_t *record_flat, *record_flat_series;
    DRMS_Record_t *reclink_off, *reclink_dark, *reclink_bad;
 
 
@@ -76,7 +76,7 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
     sprint_ut(t_orig_str, 0.0);
   
     char t0_str[256]="";
-    sprint_ut(t0_str, t_0-1.0);
+    sprint_ut(t0_str, t_0);
 
   char query_series[256]="";
   strcat(query_series, filename_flatfield_series);
@@ -97,10 +97,10 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
 
     for (k=0; k<nRec; ++k)
     {
-    record_flat=ff_series->records[k];
-    tm1[k]=drms_getkey_time(record_flat, keytstart,&status);
-    tm2[k]=drms_getkey_time(record_flat, keytstop,&status);
-    version[k]=drms_getkey_int(record_flat,keyversion,&status);
+    record_flat_series=ff_series->records[k];
+    tm1[k]=drms_getkey_time(record_flat_series, keytstart,&status);
+    tm2[k]=drms_getkey_time(record_flat_series, keytstop,&status);
+    version[k]=drms_getkey_int(record_flat_series,keyversion,&status);
     }
     }
      else
@@ -148,20 +148,40 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
 	  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flatfield[j*nx+i]=arr_data[j*nx+i];   //read data
 	  printf("flatfield %s read\n", query); 
 	  cam_id = drms_getkey_int(record_flat,keycamera,&status);  //read keywords
-	  t_start = drms_getkey_time(record_flat,keytstart,&status);
+	  //t_start = drms_getkey_time(record_flat,keytstart,&status);
 
 	  rot_cur->rotbad=drms_getkey_int(record_flat,keynewpix,&status);
 	  rot_cur->rotpairs=drms_getkey_int(record_flat,keynpairs,&status);
 	  rot_cur->rotcadence=drms_getkey_float(record_flat,keycadence,&status);
 
-	  if (t_0 < tm2[nRec-1] && version[nRec-1] > 0)
-	    {
-	      t_stop_new=tm2[nRec-1];
-	    }
-	  else
-	    {
-	      t_stop_new = 0.0;
-	    }
+	  
+	    
+	      for (k=0; k< nRec; ++k) 
+		{
+		  if (tm1[k] <= t_0)
+		    {
+		    if (tm2[k] > t_0)
+		      {
+		    
+		      if (version[k] > 0)
+			{
+			  t_stop_new=tm2[k];
+			  t_start=tm1[k];
+			  rot_cur->flatfield_version=version[k];
+			}
+		      else 
+			{
+			  t_stop_new=0.0;
+			  t_start=tm1[k];
+			  rot_cur->flatfield_version=0;
+
+			}
+		      }
+
+		    }
+		  
+		}	    
+	 
 
 
     
@@ -181,7 +201,7 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
        //check most recent final flatfield for version number 
        
          
-       rot_cur->flatfield_version=version[nRec-1];
+    
 		  	       
     
        sprint_ut(date_string, t_start);
@@ -271,7 +291,7 @@ int get_flatfields(char *query, TIME t_0, int camera, int focus,
 	   for (i=0; i<nelem; ++i) bad[bad_data[i]]=0;
 	 }
 
-
+      
  recnum[0]=recnum_off;
  recnum[1]=recnum_dark;
  recnum[2]=recnum_bad;
