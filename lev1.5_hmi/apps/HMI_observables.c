@@ -980,7 +980,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.14 2010/10/23 19:24:35 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.15 2010/10/26 21:43:29 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -3993,6 +3993,11 @@ int DoIt(void)
 	      if(status != DRMS_SUCCESS)
 		{
 		  printf("Error: cannot read the keyword %s\n",SOURCES);
+		}
+	      QUALITY = drms_getkey_int(recLev1p->records[0],QUALITYS,&status);
+	      if(status != DRMS_SUCCESS)
+		{
+		  printf("Error: cannot read the keyword %s\n",QUALITYS);
 		}
 	      //else printf("source= %s\n",source);
 
