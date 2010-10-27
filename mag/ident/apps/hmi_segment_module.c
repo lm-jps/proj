@@ -268,10 +268,14 @@ int DoIt(void)
     DIE("pgram series length does not match mgram series length");
 
   // open labelings
+  // NOTES: Disabled on Oct 27 by Xudong Sun
+  // Creating records one per time
+  /*
   yRD = drms_create_records(drms_env, Nds, (char *) yRecQuery, DRMS_PERMANENT, &status);
   if (status)
     DIE("Output recordset for labelings could not be created");
-
+  */
+	
   // loop over a series of (mgram,pgram) pairs
   for (ds = 0; ds < Nds; ds++) {
     printf("begin record %d of %d\n", ds+1, Nds);
@@ -281,7 +285,10 @@ int DoIt(void)
 
     xmRec = xmRD->records[ds];
     xpRec = xpRD->records[ds];
-    yRec  =  yRD->records[ds];
+	  
+	// NOTES: Disabled on Oct 27 by Xudong Sun
+	// Creating records one per time, moved to below
+    // yRec  =  yRD->records[ds];
 
     t_rec = drms_getkey_time(xmRec, "T_REC", &status);
     if (status || drms_getkey_time(xpRec, "T_REC", &status) != t_rec) {
@@ -359,6 +366,14 @@ int DoIt(void)
       continue;
     }
 
+	// Moved here by X. Sun Oct 27
+	// Input segments exist!
+	yRec = drms_create_record(drms_env, (char *) yRecQuery, DRMS_PERMANENT, &status);
+	if (status) {
+	  WARN("Output recordset for labelings could not be created");
+	  continue;
+	}
+	
     // set up varying arguments to function: xm, xp, ctr
     if ((prhs[MXT_Hseg_ARG_xm] = mxCreateDoubleMatrix(M, N, mxREAL)) == NULL)
       DIE("failed calloc for mgram"); // make this fatal
@@ -464,6 +479,9 @@ int DoIt(void)
     // lets me see when the record was actually updated
     time(&now);
     drms_setkey_string(yRec, "RUNTIME1", asctime(localtime(&now)));
+	  
+	// Oct 27
+    drms_close_record(yRec, DRMS_INSERT_RECORD);
 
     // Timing info
     if (verbflag) {
@@ -479,9 +497,14 @@ int DoIt(void)
   printf("segment_module: close record (pgram)\n");
   // note: when pgram == mgram, this segfaults
   drms_close_records(xpRD, DRMS_FREE_RECORD);
+	
+  // Moved into the loop Oct 27 X. Sun
+  // Insert one by one
+  /*
   printf("segment_module: close record (y)\n");
   drms_close_records(yRD, DRMS_INSERT_RECORD);
-
+  */
+	
   // free the unchanging arguments
   printf("segment_module: final destroy arrays\n");
   mxDestroyArray(prhs[MXT_Hseg_ARG_iter]);
