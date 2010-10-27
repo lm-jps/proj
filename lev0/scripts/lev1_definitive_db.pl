@@ -161,16 +161,21 @@ if($orddate2) {
 }
 
 $fulldate = `time_convert s=$sec zone=UTC`;
+$fulldateTAI = `time_convert s=$sec zone=TAI`;
 $nextsec = $sec + 86400;
 $nextdate = `time_convert s=$nextsec zone=UTC`;
 chomp($fulldate);
+chomp($fulldateTAI);
 chomp($nextdate);
 print "Run on $utcdate which is day of year $todayUTCdayofyr\n"; 
 print "for lev1 on ordinal date starting at $orddate1 ($fulldate)\n";
+#print "fulldate = $fulldate  fulldateTAI = $fulldateTAI\n";
 
 for(; $sec <= $sec2; $sec = $sec + 86400) {
 
 $fulldate = `time_convert s=$sec zone=UTC`;
+$fulldateTAI = `time_convert s=$sec zone=TAI`;
+chomp($fulldateTAI);
 chomp($fulldate);
 $orddate = `time_convert s=$sec o=ord`;
 chomp($orddate);
@@ -247,7 +252,7 @@ $OKff = 1;
 if(!$hmiaiaflg) {		#ck for hmi flat field
   #Now see if flat field has flatfield_version >= 1
   for($i=1; $i < 3; $i++) {
-    $query = sprintf("%s[? t_start <= \$(%s) and t_stop > \$(%s) and CAMERA=%d and flatfield_version=(select max(flatfield_version) from %s where t_start <= \$(%s) and t_stop > \$(%s) and CAMERA=%d) ?]", $DSFFNAMEHMI, $fulldate, $fulldate, $i, $DSFFNAMEHMI, $fulldate, $fulldate, $i);
+    $query = sprintf("%s[? t_start <= \$(%s) and t_stop > \$(%s) and CAMERA=%d and flatfield_version >= 1 ?]", $DSFFNAMEHMI, $fulldate, $fulldate, $i);
     #print "hmi query= $query\n"; #!!TEMP
     #print "Must put single quote around the above\n";
     $cmd = "show_info key=date,flatfield_version '$query'";
@@ -274,7 +279,7 @@ if(!$hmiaiaflg) {		#ck for hmi flat field
 }
 else {				#ck for aia flat field
   while($wave = shift(@wavestr)) {
-    $query = sprintf("%s[? t_start <= $sec and t_stop > $sec and WAVE_STR='%s' and flatfield_version=(select max(flatfield_version) from %s where t_start <= $sec and t_stop > $sec and WAVE_STR='%s') ?]", $DSFFNAMEAIA, $wave, $DSFFNAMEAIA, $wave);
+    $query = sprintf("%s[? t_start <= $sec and t_stop > $sec and WAVE_STR='%s' and flatfield_version >= 1 ?]", $DSFFNAMEAIA, $wave);
     #print "\naia query= $query\n";
     #print "Must put double quote around the above\n";
     $cmd = "show_info key=date,flatfield_version \"$query\"";
@@ -375,7 +380,7 @@ $sth = $dbh->prepare($sql);
       if(defined $sth) {
         $sth->finish;
       }
-      $sql = "insert into hmi.lev1_probe (recnum, ORD_DATE,CREATE_DATE,ReXmit,ASD,FDS,FF,MP,TEMP,GOFLG,EXECUTED) values ($recnum, '$orddate', '$utcdate', $OKfile, $OKhkdayfile, $OKfdsorbit, $OKff, $OKmp, $OKtemp, $OKnogofile, 0)";
+      $sql = "insert into hmi.lev1_probe (recnum, ORD_DATE,CREATE_DATE,ReXmit,ASD,FDS,FF,MP,TEMP,GOFLG,EXECUTED,EXECUTED_PART,LAST_LEV1_FSN) values ($recnum, '$orddate', '$utcdate', $OKfile, $OKhkdayfile, $OKfdsorbit, $OKff, $OKmp, $OKtemp, $OKnogofile, 0, 0, 0)";
       $sth = $dbh->prepare($sql);
       if ( !defined $sth ) {
         print "Cannot prepare statement: $DBI::errstr\n";
@@ -385,7 +390,7 @@ $sth = $dbh->prepare($sql);
       $sth->execute;
     }
     else {
-      $sql = "update hmi.lev1_probe set CREATE_DATE='$utcdate', ReXmit=$OKfile, ASD=$OKhkdayfile, FDS=$OKfdsorbit, FF=$OKff, MP=$OKmp, TEMP=$OKtemp, GOFLG=$OKnogofile, EXECUTED=0 where ord_date='$orddate'";
+      $sql = "update hmi.lev1_probe set CREATE_DATE='$utcdate', ReXmit=$OKfile, ASD=$OKhkdayfile, FDS=$OKfdsorbit, FF=$OKff, MP=$OKmp, TEMP=$OKtemp, GOFLG=$OKnogofile where ord_date='$orddate'";
       #print "!!!TEMP\n$sql\n";
       $sth = $dbh->prepare($sql);
       if ( !defined $sth ) {
@@ -399,7 +404,7 @@ $sth = $dbh->prepare($sql);
 }
 
 $dbh->disconnect();
-print "**END: lev1_definitive.pl\n";  #used by lev1_def_gui to know end
+print "**END: lev1_definitive_db.pl\n";  #used by lev1_def_gui to know end
 
 #Initialize $todayUTCdayofyr when first start
 sub inittoday {

@@ -180,7 +180,7 @@ $OKff = 1;
 if(!$hmiaiaflg) {		#ck for hmi flat field
   #Now see if flat field has flatfield_version >= 1
   for($i=1; $i < 3; $i++) {
-    $query = sprintf("%s[? t_start <= \$(%s) and t_stop > \$(%s) and CAMERA=%d and flatfield_version=(select max(flatfield_version) from %s where t_start <= \$(%s) and t_stop > \$(%s) and CAMERA=%d) ?]", $DSFFNAMEHMI, $fulldate, $fulldate, $i, $DSFFNAMEHMI, $fulldate, $fulldate, $i);
+    $query = sprintf("%s[? t_start <= \$(%s) and t_stop > \$(%s) and CAMERA=%d and flatfield_version >= 1 ?]", $DSFFNAMEHMI, $fulldate, $fulldate, $i);
     #print "hmi query= $query\n"; #!!TEMP
     #print "Must put single quote around the above\n";
     $cmd = "show_info key=date,flatfield_version '$query'";
@@ -207,7 +207,7 @@ if(!$hmiaiaflg) {		#ck for hmi flat field
 }
 else {				#ck for aia flat field
   while($wave = shift(@wavestr)) {
-    $query = sprintf("%s[? t_start <= $sec and t_stop > $sec and WAVE_STR='%s' and flatfield_version=(select max(flatfield_version) from %s where t_start <= $sec and t_stop > $sec and WAVE_STR='%s') ?]", $DSFFNAMEAIA, $wave, $DSFFNAMEAIA, $wave);
+    $query = sprintf("%s[? t_start <= $sec and t_stop > $sec and WAVE_STR='%s' and flatfield_version >= 1 ?]", $DSFFNAMEAIA, $wave);
     #print "\naia query= $query\n";
     #print "Must put double quote around the above\n";
     $cmd = "show_info key=date,flatfield_version \"$query\"";
