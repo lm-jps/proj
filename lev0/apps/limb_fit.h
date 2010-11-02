@@ -17,7 +17,6 @@ struct mempointer
   unsigned char *mask_p;
   float *cnorm;
   float *ierror;
-  float *imcp;
 };
 
 #define nanval -2147483648
@@ -28,7 +27,7 @@ const double foc_corr=-1.08490;
   const double low=0.97;
 
   const double limit_var=1.8;
-  const double limit_cc=20.0;
+  const double limit_cc=15.0;
 
 // work-around for compiler problem below
 #define kLimbFit_lim 8
