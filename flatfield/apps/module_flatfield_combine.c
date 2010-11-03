@@ -26,16 +26,26 @@ ModuleArgs_t module_args[] =
 };
 
 //void highpass(int, int, double, double[nx][ny]);
-int get_flatfields(char *query_flat, TIME t_0, int camera, int focus,
-                   float *flatfield, float *offpoint, 
-                   short *bad, long long recnum[6], TIME tobs_link[2],
-		   struct rotpar *rot_cur);
+//int get_flatfields(char *query_flat, TIME t_0, int camera, int focus,
+//                   float *flatfield, float *offpoint, 
+//                   short *bad, long long recnum[6], TIME tobs_link[2],
+//		   struct rotpar *rot_cur);
 
 
 int write_flatfields(char *filename_flatfield_out, DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
-                     long long recnum[6], TIME tobs_link[2], TIME t_0, int focus,
+                     long long recnum[6], TIME tobs_link[2], TIME t_0, int focus, int focusclone, 
                      struct rotpar rot_new, 
                      struct rotpar rot_cur);
+
+
+int retrieve_offpoint(char *query, int camera, float *offpoint, long long *recnum);
+
+int get_latest_record(TIME t_0, int camera, const char *fname, const char *segname, float *offpoint, long long *recnum, int *focus);
+
+int get_latest_bad(TIME t_0, int camera, const char *fname, const char *segname, short *bad, long long *recnum);
+
+int read_flatfield_series(TIME t_0, int camera, float *flatfield, int *focus, TIME tobs_link[2], long long recnum[6], 
+			  struct rotpar *rot_cur);
 
 int DoIt(void)
 {
@@ -63,7 +73,7 @@ int DoIt(void)
   int axisout[2]={nx,ny};
 
   TIME t_0;
-  int focus, camera;
+  int focus, focusclone, camera;
   float cadence;
   int npairstot=0;
 
@@ -73,12 +83,13 @@ int DoIt(void)
 
   float *flatfield, *offpoint, *flat, *ffhp, *flathp;
   short *bad;
-
+  float *dark;
 
   float *flatfield_new;
   float *ff, *ff_new, *ff_rel;
 
   long long recnum[6];
+  long long recnum_offpoint, recnum_dark, recnum_badpix;
   TIME tobs_link[2];
 
   struct rotpar rot_cur, rot_new, rot_rel;
@@ -90,7 +101,8 @@ int DoIt(void)
   flatfield_new=(float *)(malloc(nx*ny*sizeof(float)));
   offpoint=(float *)(malloc(nx*ny*sizeof(float)));
   bad=(short *)(malloc(nx*ny*sizeof(short)));
-  
+  dark=(float *)(malloc(nx*ny*sizeof(float)));
+
   flat=(float *)(calloc(nx*ny, sizeof(float)));
   ffhp=(float *)(malloc(nx*ny*sizeof(float)));
   flathp=(float *)(malloc(nx*ny*sizeof(float)));
@@ -153,6 +165,7 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
   DRMS_Array_t *arrin0[nRecs];
   short wave[nRecs];
   short pol[nRecs];
+ 
 
   int npairs[nRecs];
 
@@ -163,24 +176,34 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
 for (k=0; k<nRecs; ++k)
   {
     rec0[k]=data->records[k];
-    keyvalue_fid[k] = drms_getkey_int(rec0[k],fidkey,&status);
-    keyvalue_recnum[k]=drms_getkey_int(rec0[k], recnumkey,&status);
+
+    npairs[k]= drms_getkey_int(rec0[k],keynpairs,&status);
     keyvalue_query[k]=drms_getkey_string(rec0[k], querykey,&status);
+
     segin    = drms_segment_lookupnum(rec0[k], 0);
     arrin0[k]= drms_segment_read(segin, type_float, &status);
     flatfield_fid[k] = arrin0[k]->data;
-    wave[k]=((keyvalue_fid[k]-10000)/10-5)/2;
-    pol[k]=(keyvalue_fid[k] % 10);
- 
-    npairs[k]= drms_getkey_int(rec0[k],keynpairs,&status);
-    npairstot=npairstot+npairs[k];
-    printf("%d %d %d %d %d\n", k,  keyvalue_fid[k], pol[k], wave[k], keyvalue_recnum[k]);
-    if (wave[k] < 0 || wave[k] > 5){printf("not a tabulated wavelength\n"); exit(EXIT_FAILURE);}
 
-    nwav[wave[k]]=nwav[wave[k]]+1.0;
+    keyvalue_fid[k] = drms_getkey_int(rec0[k],fidkey,&status);
+    wave[k]=((keyvalue_fid[k]-10000)/10-5)/2;
+    pol[k]=(keyvalue_fid[k] % 10);    
+    
+    keyvalue_recnum[k]=drms_getkey_int(rec0[k], recnumkey,&status);
+
+if (npairs[k] > 0)
+      {    
+    
+    
+       npairstot=npairstot+npairs[k];
+       printf("%d %d %d %d %d\n", k,  keyvalue_fid[k], pol[k], wave[k], keyvalue_recnum[k]);
+       if (wave[k] < 0 || wave[k] > 5){printf("not a tabulated wavelength\n"); exit(EXIT_FAILURE);}
+
+       nwav[wave[k]]=nwav[wave[k]]+1.0;
+      }
   }
 
  
+
 
  char timefirst[256]="";
  strcat(timefirst, datum);
@@ -194,9 +217,9 @@ for (k=0; k<nRecs; ++k)
  cadence=drms_getkey_float(rec0[nRecs-1],keycadence,&status);
 
 
- printf("%lf %d %d %f\n", t_0, focus, camera, cadence);
 
- int fvers; 
+
+ int fvers, foc; //foc: not used.  
  float sum=0.0;
 
 
@@ -205,28 +228,48 @@ char *qstr_refflat=keyvalue_query[0];
 
 for (k=0; k<nRecs; ++k)
   {
-    ff=flatfield_fid[k];
-    
-   
 
-    if (nwav[wave[k]] > 0.0 && keyvalue_recnum[k] == keyvalue_recnum[0])
+    if (nwav[wave[k]] > 0.0 && keyvalue_recnum[k] == keyvalue_recnum[0] && npairs[k] > 0)
       {
+	ff=flatfield_fid[k];
 	sum=sum+cof[cameraint-1][wave[k]]/nwav[wave[k]];
-	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flat[j*nx+i]=flat[j*nx+i]+cof[cameraint-1][wave[k]]*(float)ff[j*nx+i]/nwav[wave[k]];
+	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flat[j*nx+i]=flat[j*nx+i]+cof[cameraint-1][wave[k]]*(float)(ff[j*nx+i]-1.0)/nwav[wave[k]];
       }
 	  
   }
 
  printf("query flat %s\n", qstr_refflat);
- get_flatfields(qstr_refflat, t_0, cameraint, focus,  flatfield, 
-		offpoint,  bad, recnum, tobs_link, &rot_cur);        
 
-   printf("recnum %ld\n", recnum[0]);
+
+ retrieve_offpoint(qstr_refflat, cameraint, offpoint, &recnum_offpoint); //retrieve offpoint used as reference, which is the offpoint closest to t_0 at the time of porcessing. 
+
+ get_latest_record(t_0, cameraint, filename_dark, segmentname_dark, dark, &recnum_dark, &foc);   //retrieve latest dark for linking  
+
+ get_latest_bad(t_0, cameraint, filename_badpix, segmentname_badpix, bad, &recnum_badpix); //retrieve bad for links 
+
+ read_flatfield_series(t_0, cameraint, flatfield, &focusclone, tobs_link, recnum, &rot_cur);  //read flatfield series and provide parameters for T_STOP,FLATFIELD_VERSION for new record. 
+
+ //recnum[0..2]: recnum of links for clone records
+
+ recnum[3]=recnum_offpoint; //reference offpoint flatfield 
+ recnum[4]=recnum_dark; //reference dark
+ recnum[5]=recnum_badpix; //reference_badpix
+
+
+
+ // get_flatfields(qstr_refflat, t_0, cameraint, focus,  flatfield, 
+ //	offpoint,  bad, recnum, tobs_link, &rot_cur);        
+
+   
+
+
+
+
 
 
 
    //for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) if (bad[j*nx+i]) ffield[j][i]=(double)flat[j*nx+i]; else ffield[j][i]=1.0;
-   for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) if (bad[j*nx+i] == 0) flat[j*nx+i]=1.0;
+   for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) if (bad[j*nx+i] == 0) flat[j*nx+i]=0.0;
 
  //highpass
 
@@ -242,9 +285,8 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
  // highpass(nx, ny, fwhm[cameraint-1], ffield);
 
 
- printf("sum %f\n", sum);
 
- if (sum != 1.0)
+ if (sum != 0.0)
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flathp[j*nx+i]=flathp[j*nx+i]/sum;
 
  drms_close_records(data,DRMS_FREE_RECORD);
@@ -291,7 +333,7 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
        flatfield_new[j*nx+i]=offpoint[j*nx+i];
    }
 
-
+ 
 
 
  arr_flat=drms_array_create(type_float,2,axisout,NULL,&status);
@@ -306,16 +348,16 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)ff_new[j*nx+i]=flatfield_new[j*nx+i];
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) if (bad[j*nx+i]) ff_rel[j*nx+i]=(1.0+flathp[j*nx+i])*offpoint[j*nx+i]; else ff_rel[j*nx+i]=offpoint[j*nx+i];
 
-rot_new.rotbad=count;
+rot_new.rotbad=0;
 rot_new.rotpairs=npairstot;
 rot_new.rotcadence=cadence;
 
- rot_rel.rotbad=0;
+ rot_rel.rotbad=count;
  rot_rel.rotpairs=npairstot;
  rot_rel.rotcadence=cadence;
 
- write_flatfields(filename_flatfield_out, arr_flat, arr_flat_new, camera, recnum, tobs_link, t_0, focus, rot_new, rot_cur);
- write_flatfields(filename_flatfield_rel, arr_flat, arr_flat_rel, camera, recnum, tobs_link, t_0, focus, rot_rel, rot_cur);
+ write_flatfields(filename_flatfield_out, arr_flat, arr_flat_new, camera, recnum, tobs_link, t_0, focus, focusclone, rot_new, rot_cur);
+ write_flatfields(filename_flatfield_rel, arr_flat, arr_flat_rel, camera, recnum, tobs_link, t_0, focus, focusclone, rot_rel, rot_cur);
   }
  else
  
@@ -329,6 +371,7 @@ rot_new.rotcadence=cadence;
  free(flatfield_new);
  free(offpoint);
  free(bad);
+ free(dark);
  free(flat);
  free(flathp);
  free(ffhp);

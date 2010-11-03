@@ -66,19 +66,24 @@ void limb_darkening(double radius, double cent_x, double cent_y, double *b, int 
 int flatfield(double *rhsp, double *rhsm,short *badpix, int pairs, double *gout, double *param, struct code_param, double deltat);
 void apod_circ(float rad, float nb, float offx, float offy, float *vd);
 
-int get_flatfields(char *query_flat, TIME t_0, int camera, int focus,
-                   float *flatfield, float *offpoint, 
-                   short *bad, long long recnum[6], TIME tobs_link[2],
-		   struct rotpar *rot_cur);
+//int get_flatfields(char *query_flat, TIME t_0, int camera, int focus,
+//                   float *flatfield, float *offpoint, 
+//                   short *bad, long long recnum[6], TIME tobs_link[2],
+//		   struct rotpar *rot_cur);
 
+int get_flat(char *query, int camera, float *flatfield, float *offpoint, 
+	     short *bad);
 
-int write_flatfields(char *filename_flatfield_out, DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
-                     long long recnum[6], TIME tobs_link[2], TIME t_0, int focus,
-                     struct rotpar rot_new, 
-                     struct rotpar rot_cur);
+//int get_offpoint(TIME t_0, int camera, float *offpoint, long long *recnum);
+int get_latest_record(TIME t_0, int camera, const char *fname, const char *segname, float *offpoint, long long *recnum, int *focus);
 
-int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera, long long recnum_off, char *query_flat, 
-			TIME tobs_link[2], TIME t_0, int focus,int fid,
+//int write_flatfields(char *filename_flatfield_out, DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
+//                     long long recnum[6], TIME tobs_link[2], TIME t_0, int focus,
+//                     struct rotpar rot_new, 
+//                     struct rotpar rot_cur);
+
+int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera, long long recnum_offpoint, 
+		        TIME t_0, int focus,int fid,
 			struct rotpar rot_new);
 /*-------------------------------------------------------------*/
 /*                                                             */
@@ -132,7 +137,7 @@ int DoIt(void)
   double deltat=(double)cadence;
   printf("cadence %lf seconds\n", deltat);
 
-  TIME t_0;
+  TIME t_0, t_stamp;
   int focus,camid,fsns;
   
   TIME   interntime;
@@ -170,7 +175,7 @@ int DoIt(void)
   short *bad;
   short *badpix;
   double *flati;
-  double *flatc;
+ 
   float *apod;
 
   float *flat_off, *flat_relative;
@@ -181,7 +186,7 @@ int DoIt(void)
   flat_relative=(float *)(malloc(nx*ny*sizeof(float)));
   badpix=(short *)(malloc(nx*ny*sizeof(short)));
   flati=(double *)(malloc(nx*ny*sizeof(double)));
-  flatc=(double *)(malloc(nx*ny*sizeof(double)));
+ 
   apod=(float *)(malloc(nx*ny*sizeof(float)));
 
   float *flatfield_new;
@@ -244,8 +249,9 @@ int DoIt(void)
   
   //parameters to identify records
   TIME tobs_link[2];
-  long long recnum[6];
-  long long recnum_ref[6];
+  //long long recnum[6];
+  //long long recnum_ref[6];
+  long long recnum_offpoint;
   struct rotpar rot_cur;
   struct rotpar rot_new;
 
@@ -422,10 +428,15 @@ if (fsn_first == 0 && fsn_last == 0)
 
   
  
- t_0 = drms_getkey_time(data->records[nRecs/2],keytobs,&status);
+  t_0 = drms_getkey_time(data->records[nRecs/2],keytobs,&status);
   fsns=drms_getkey_int(data->records[nRecs/2],keyfsn,&status);
   focus = drms_getkey_int(data->records[nRecs/2],keyfocus,&status);
   
+  char tmstr[256]="";
+  strcat(tmstr, datum);
+  strcat(tmstr, "_00:00:00.00_TAI");
+
+  t_stamp=sscan_time(tmstr)+24.0*60.0*60.0; 
 
  
        
@@ -663,11 +674,25 @@ if (fsn_first == 0 && fsn_last == 0)
 
 
 	//get reference flatfield
-	 query_flat_relative =keyvalue_flatnumb[nRecs-1];
+	//query_flat_relative =keyvalue_flatnumb[nRecs-1];
 
-	 status_flatfield_relative=get_flatfields(query_flat_relative, t_0, cam+1, focus,  app_flat, flat_relative,  badpix, recnum_ref, tobs_link, &rot_cur);
+	 //status_flatfield_relative=get_flatfields(query_flat_relative, t_0, cam+1, focus,  app_flat, flat_relative,  badpix, recnum_ref, tobs_link, &rot_cur);
+	 //status_flatfield=get_flat(query_flat_relative, cam+1, app_flat, flat_relative,  badpix);
 
-    
+	status_flatfield_relative=get_latest_record(t_stamp, cam+1, filename_offpoint, segmentname_offpoint, flat_relative, &recnum_offpoint, &focus);
+
+
+
+
+	 if (status_flatfield_relative == 0)
+	   {
+	     printf("Relative flatfield read: record number:%ld\n", recnum_offpoint);
+	   }
+	 else 
+	   {
+	     printf("WARNING: Could not read relative flatfield");
+	   }
+
 	 
 	  //read in first filtergram
 	printf("read first filtergram\n");
@@ -698,10 +723,12 @@ if (fsn_first == 0 && fsn_last == 0)
 	      printf("%d %d read flatfield\n", k, keyvalue_fsn[k]);
 	      query_flat =keyvalue_flatnumb[index_last];
 
-	      status_flatfield=get_flatfields(query_flat, t_0, cam+1, focus,  app_flat, flat_off,  badpix, recnum, tobs_link, &rot_cur);
+	      //status_flatfield=get_flatfields(query_flat, t_0, cam+1, focus,  app_flat, flat_off,  badpix, recnum, tobs_link, &rot_cur);
+		      status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
 
+	
 	      if (status_flatfield ==0)
-		    printf("Flatfield read \n recnum offpoint %ld\n", recnum[0]);
+		printf("Flatfield %s read\n", query_flat);
 		  else
 		    printf("Failure reading flatfield / Use unity flatfield\n");
 
@@ -762,12 +789,14 @@ printf("read second filtergram\n");
 	      if (strcmp(query_flat, query_flat_ref) != 0)
 		{
 		 
-		  printf("%d %d read new flatfield !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", k, keyvalue_fsn[k]);
+		  printf("%d %d read new flatfield\n", k, keyvalue_fsn[k]);
 
-		  status_flatfield=get_flatfields(query_flat, t_0, cam+1, focus,  app_flat, flat_off,  badpix, recnum, tobs_link, &rot_cur);
-		  
+		  //status_flatfield=get_flatfields(query_flat, t_0, cam+1, focus,  app_flat, flat_off,  badpix, recnum, tobs_link, &rot_cur);
+		  status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
+		 
+
 		  if (status_flatfield ==0)
-		    printf("Flatfield read \n recnum offpoint %ld\n", recnum[0]);
+		    printf("Flatfield %s read\n", query_flat);
 		  else
 		    printf("Failure reading flatfield / Use unity flatfield\n");
 
@@ -876,13 +905,14 @@ printf("read second filtergram\n");
 	      query_flat =keyvalue_flatnumb[k];
 	      if (strcmp(query_flat, query_flat_ref) != 0)
 		{
-		  printf("%d %d read new flatfield !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", k, keyvalue_fsn[k]);
+		  printf("%d %d read new flatfield\n", k, keyvalue_fsn[k]);
 
-		  status_flatfield=get_flatfields(query_flat, t_0, cam+1, focus,  app_flat, flat_off,  badpix, recnum, tobs_link, &rot_cur);
+		  //status_flatfield=get_flatfields(query_flat, t_0, cam+1, focus,  app_flat, flat_off,  badpix, recnum, tobs_link, &rot_cur);
+		  status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
 
 		  if (status_flatfield ==0)
 		    {
-		    printf("Flatfield read \n recnum offpoint %ld\n", recnum[0]);
+		    printf("Flatfield %s read\n", query_flat);
 		    }
 		  else
 		    {
@@ -961,7 +991,7 @@ printf("read second filtergram\n");
 	      }
 		}
 
-		printf("fsn count %d %d %d %d\n", keyvalue_fsn[km1], count, statarr[km1], status_flatfield);
+		printf("fsn count %d %d\n", keyvalue_fsn[km1], count);
 	  cosmic_ray_check[index_current]=count;
 	    
 	
@@ -1107,15 +1137,15 @@ printf("read second filtergram\n");
    
 	  limb_darkening((double)R_SUN, (double)XX0, (double)YY0, b_coef, b_order, limb_dark);
 
-	  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flatc[j*nx+i]=log(limb_dark[j*nx+i]);
+	 
 
 
  #pragma omp parallel for private(jjj,iii)
 	  for (jjj=0; jjj<ny; ++jjj){
 	    for (iii=0; iii<nx; ++iii){
 	       
-	      if (count_p[jjj*nx+iii] > 0) rhsp[jjj*nx+iii]=(rhsp[jjj*nx+iii]/(double)count_p[jjj*nx+iii]-flatc[jjj*nx+iii]); 
-	      if (count_m[jjj*nx+iii] > 0) rhsm[jjj*nx+iii]=(rhsm[jjj*nx+iii]/(double)count_m[jjj*nx+iii]-flatc[jjj*nx+iii]); 
+	      if (count_p[jjj*nx+iii] > 0) rhsp[jjj*nx+iii]=(rhsp[jjj*nx+iii]/(double)count_p[jjj*nx+iii]-log(limb_dark[jjj*nx+iii])); 
+	      if (count_m[jjj*nx+iii] > 0) rhsm[jjj*nx+iii]=(rhsm[jjj*nx+iii]/(double)count_m[jjj*nx+iii]-log(limb_dark[jjj*nx+iii])); 
 	    }
 	  }
 
@@ -1224,10 +1254,9 @@ for (j=0; j<ny; ++j){
 
 
 
-    rot_new.rotbad=bad_pix;
-    rot_new.rotpairs=rotpairs;
-    rot_new.rotcadence=(float)deltat;
-    rot_new.flatfield_version=rot_cur.flatfield_version;
+ if (update_stat == 0)rot_new.rotpairs=rotpairs; else rot_new.rotpairs=0;
+ rot_new.rotcadence=(float)deltat;
+    //rot_new.flatfield_version=rot_cur.flatfield_version;
 
 
     //**************************************************************************************
@@ -1235,19 +1264,12 @@ for (j=0; j<ny; ++j){
     //**************************************************************************************
   
 
-    //    if (update_stat == 0 || update_stat == 1) write_flatfields(arr_flat, arrout_new, 2, recnum,
-    //								     tobs_link, focus, rot_new, rot_cur);
-
-    //    if (update_stat[0] == 0 || update_stat[0] == 1) write_flatfields(arr_flat_side, arrout_new_side, 1, recnum_side,
-    //								   tobs_link_side, focus, rot_new_side, rot_cur_side);
-
-
-
+   
     printf("update_stat %d\n", update_stat);
 
     printf("query flat %s\n", query_flat);
-    printf("recnum %ld\n", recnum[0]);
-    if (update_stat == 0) write_flatfield_fid(arrout_new, cam+1, recnum_ref[0], query_flat_relative, tobs_link, t_0, focus, fid, rot_new); 
+  
+    write_flatfield_fid(arrout_new, cam+1, recnum_offpoint, t_0, focus, fid, rot_new); 
 
 
 
@@ -1285,7 +1307,7 @@ for (j=0; j<ny; ++j){
 	  free(badpix);
 	  free(app_flat);
 	  free(flati);
-	  free(flatc);
+
 	  free(rhsp);
 	  free(rhsm);
 	  free(count_p);

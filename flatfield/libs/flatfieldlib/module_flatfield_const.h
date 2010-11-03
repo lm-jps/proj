@@ -1,12 +1,12 @@
 
 
 const int cam_id_front=3, cam_id_side=2; // 
-const double fwhm[2]={1.0, 1.0};                   // fwhm for highpass filter 
+const double fwhm[2]={1.0, 1.0};                   // fwhm for highpass filter  
 const int cthreshold=300; // minimum number of pairs of frames (minimum is 3) 
 const float threshold_lower=-10000.0;  //threshold for lower limit; //!!correction turned off 
 const float threshold_upper=10000.0; //threshold for upper limit; // !! correction turned off
 
-const int update_flag=0; //0: no update, 1: single pixel update, 2:full update // 
+const int update_flag=2; //0: no update, 1: single pixel update, 2:full update // 
 
 const int debug=0; //write out debug information 
 
@@ -35,7 +35,7 @@ const double convconst[2]={1e-4, 1e-4};
 
 const int b_order=5;
 double b_coef[6]={0.34,1.37,-2.04,2.70,-1.94,0.559};   // Neckel and Labs (MDI wavelength), not good for extreme limb;
-//double b_coef[6]={1.0,0.0,0.0,0.0,0.0,0.0};  // !! no limb darkening for test
+
 //b_coef[0]=0.34; 
 //b_coef[1]=1.37;
 //b_coef[2]=-2.04;
@@ -119,9 +119,9 @@ const float radsun_mm=695.5;
 float cof_combx[12]={0.145544,0.00812206, 0.233276, 0.121743, 0.190385,0.105851, 0.135802,0.0402982, 0.0571681,-0.0916504,0.0853409,-0.0318835};
 float cof_comby[12]={0.283009, 0.0545081, 0.235930, 0.0957727, 0.245011, 0.0815215, 0.124488, 0.0380576, 0.0556949, -0.0611975, -0.0492513, -0.103545};
 
-//float cof[12]={0.221509, 0.0860711, 0.104523, 0.266129, 0.102323, 0.214389, 0.0943454, 0.0700577, -0.0544245, 0.0114523, -0.00285751, -0.113516};
-float cof[2][6]={{1.22201 ,    0.362697 ,    0.359817 ,   -0.142182 ,   -0.433347 ,   -0.368998}, {0.300682 ,    0.370525,     0.316930 ,    0.164742,   -0.0441823 ,   -0.108697}};
 
+//float cof[2][6]={{1.22201 ,    0.362697 ,    0.359817 ,   -0.142182 ,   -0.433347 ,   -0.368998}, {0.300682 ,    0.370525,     0.316930 ,    0.164742,   -0.0441823 ,   -0.108697}}; 
+float cof[2][6]={{0.187514, 0.542523, 0.284918, 0.143162,-0.136262,-0.0218554}, {0.311833, 0.400153, 0.205032,0.0928222,-0.00851838, -0.00132237}}; //for filter fwhm = 1.0
 
 const float factor[2]={6.2, 6.2}; 
 const int limit_cosmic=10000;
@@ -167,7 +167,9 @@ const int limit_cosmic=10000;
    const char *linkbad = "BAD_PIXEL";
 
    const char *segmentname="flatfield";
+   const char *segmentname_offpoint="offpoint_flatfield";
    const char *segmentname_badpix="bad_pixel_list";
+   const char *segmentname_dark="dark";
    const char *segmentname_cosmic="cosmic_ray_hits";
    const char *segmentname_val="level";
    const char *segmentname_sig="significance";
@@ -187,13 +189,17 @@ const char *lev1_y0="Y0_LF";
 const char *lev1_vr="OBS_VR";
   //series names
 
-//char *seriesname_badpix="su_richard.bad_pixel_list";
-char *seriesname_badpix="hmi.bad_pixel_list";  //for checked in version
+
+
 
 
 //char *filename_flatfield_out="su_richard.flatfield";  //output of module_flatfield_combine
 char *filename_flatfield_out="hmi.flatfield"; //for checked in version
 char *filename_flatfield_series="hmi.flatfield";
+
+char *filename_badpix="hmi.bad_pixel_list";
+char *filename_offpoint="hmi.offpoint_flatfield";
+char *filename_dark="hmi.dark";
 
 //char *filename_flatfield_rel="su_richard.flatfield_rel";  //output of module_flatfield_combine
 char *filename_flatfield_rel="su_production.flatfield_rel"; //for checked in version
