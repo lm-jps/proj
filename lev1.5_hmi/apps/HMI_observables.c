@@ -5,7 +5,6 @@
 
 /**
 \defgroup HMI_observables HMI_observables - derive line-of-sight observables
-@ingroup lev1.5
 
 \par Synopsis
 \code
@@ -1050,7 +1049,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.17 2010/11/04 22:48:32 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.18 2010/11/04 22:54:17 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/

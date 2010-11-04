@@ -5,7 +5,6 @@
 
 /**
 \defgroup HMI_IQUV_averaging HMI_IQUV_averaging - derive Stokes vector I,Q,U, and V observables
-@ingroup lev1.5
 
 \par Synopsis
 \code
@@ -947,7 +946,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.10 2010/11/04 22:48:42 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.11 2010/11/04 22:54:27 couvidat Exp $");
 }
 
 
