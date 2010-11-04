@@ -5,7 +5,6 @@
 
 /**
 \defgroup HMI_observables HMI_observables - derive line-of-sight observables
-@defgroup HMI HMI_observables
 @ingroup lev1.5
 
 \par Synopsis
@@ -17,7 +16,7 @@ HMI_observables begin= end= levin= levout= wavelength= quicklook= camid= cadence
 
 HMI_observables creates line-of-sight observables (WARNING: the output series names are built-in and the program should not be run without editing and recompiling except for production).
 The code main outputs are level 1.5 DRMS records: line-of-sight Dopplergrams, magnetograms, Fe I line width, Fe I line depth, and solar continuum intensity.
-The code produces these records for all the slotted times in the timespan provided by the user.
+The code produces these records for all the slotted times in the time interval provided by the user.
 HMI_observables can produce definitive or quick-look (near-real time, nrt) observables.
 
 Depending on the values of the command-line arguments, the outputs of HMI_observables are put in different DRMS series.
@@ -44,7 +43,7 @@ Under normal operations, if "_720s" observables have been produced, other DRMS m
 \li \c lev1="series" where series is a string and is the name of the DRMS series holding the level 1 records to be used by the observables code. For normal observables processing either of these two series should be used: hmi.lev1_nrt for the quicklook/nrt level 1 records, and hmi.lev1 for the definitive level 1 records.
 The value by default is hmi.lev1 (to be consistent with the default value of quicklook=0).
 
-\par Example
+\par Examples
 
 \b Example 1:
 
@@ -66,8 +65,6 @@ To calculate definitive line-of-sight observables from the 12-min averaged IQUV 
 \code
 HMI_observables begin="2010.10.1_0:0:0_TAI" end="2010.10.1_2:45:00_TAI" levin="lev1p" levout="lev15" wavelength=3 quicklook=0 camid=0 cadence=720.0 lev1="hmi.lev1"
 \endcode
-
-\bug
 
 */
 
@@ -1053,7 +1050,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.16 2010/11/04 20:33:00 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.17 2010/11/04 22:48:32 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/

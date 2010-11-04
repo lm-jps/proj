@@ -1,3 +1,69 @@
+/*
+ * HMI_IQUV_averaging - derive IQUV observables from the HMI level 1 records
+ *
+ */
+
+/**
+\defgroup HMI_IQUV_averaging HMI_IQUV_averaging - derive Stokes vector I,Q,U, and V observables
+@ingroup lev1.5
+
+\par Synopsis
+\code
+HMI_IQUV_averaging begin= end= wavelength= quicklook= camid= cadence= lev1= npol= size=
+\endcode
+
+\details
+
+HMI_IQUV_averaging creates 12-min averaged Stokes vector I,Q,U, and V observables (WARNING: the output series names are built-in and the program should not be run without editing and recompiling except for production).
+The code outputs are level 1.5 DRMS records: Stokes vector I, Q, U, and V.
+The code produces these records for all the slotted times in the time interval provided by the user.
+HMI_IQUV_averaging can produce definitive or quick-look (near-real time, nrt) observables.
+
+Depending on the values of the command-line arguments, the outputs of HMI_observables are put in different DRMS series.
+For IQUV observables obtained from definitive level 1 records and from a standard observable sequence with a 135s cadence, the output DRMS series is hmi.S_720s.
+For IQUV observables obtained from quicklook/nrt level 1 records, the series is hmi.S_720s_nrt.
+
+Under normal operations, other DRMS modules (HMI_observables, hmi_segment_module and hmi_patch_module) using the output of HMI_IQUV_averaging are run immediately after completion of HMI_IQUV_averaging: for production these two modules should always be called after.
+
+\par Options
+
+\par Mandatory arguments:
+
+\li \c begin="time" where time is a string. This is the beginning time of the timespan for which observables are to be computed. Time is in JSOC (sprint_ut) format YYYY.MM.DD_hh:mm:ss{.sss}_TAI (HMI_IQUV_averaging uses the TAI time standard internally, therefore it is easier to also provide beginning and ending times in TAI).  
+\li \c end="time" where time is a string. This is the ending time of the timespan for which observables are to be computed. Time is in JSOC (sprint_ut) format YYYY.MM.DD_hh:mm:ss{.sss}_TAI (HMI_IQUV_averaging uses the TAI time standard internally, therefore it is easier to also provide beginning and ending times in TAI).
+
+\par Optional arguments:
+
+\li \c wavelength=number where number is an integer and is the filter index of the target wavelength. For an observables sequence with 6 wavelengths, with corresponding filter indices ranging from I0 to I5 (for filters nominally centered at +172 mA to -172 mA from the Fe I line central wavelength at rest), the first wavelength of the sequence is I3. Therefore, it is best to set wavelength to 3 (the value by default). This wavelength is used by HMI_IQUV_averaging as the reference one, for identifying the sequence run, for deciding how to group the level 1 filtergrams for the temporal averaging, and so on... 
+\li \c quicklook=number where number is an integer equal to either 0 (for the production of definitive observables) or 1 (for the production of quicklook/nrt observables). The value by default is 0.
+\li \c camid=number where number is an integer equal to either 0 (to use input filtergrams taken by the side camera) or 1 (to use input filtergrams taken by the front camera). Currently, the IQUV observable sequence is taken on the side camera only, and therefore camid should be set to 0 (the value by default). The value of camid might be irrelevant for certain observables sequences that require combining both cameras (sequences currently not used). 
+\li \c cadence=number where number is a float and is the cadence of the observable sequence in seconds. Currently, it should be set to 135 seconds for the IQUV observables (135.0 is the value by default).
+\li \c lev1="series" where series is a string and is the name of the DRMS series holding the level 1 records to be used by the observables code. For normal observables processing either of these two series should be used: hmi.lev1_nrt for the quicklook/nrt level 1 records, and hmi.lev1 for the definitive level 1 records.
+The value by default is hmi.lev1 (to be consistent with the default value of quicklook=0).
+\li \c npol=number where number is an integer and is the number of polarizations taken by the observables sequence. With the sequence currently run, npol should be set to 6 (the value by default).
+\li \c size=number where number is an integer and is the number of frames in the observables sequence. With the sequence currently run, size should be set to 36 (the value by default)
+
+\par Examples
+
+\b Example 1:
+
+To calculate definitive 12-min IQUV observables for the time range 2010.10.1_0:0:0_TAI to 2010.10.1_2:45:00_TAI:
+\code
+HMI_IQUV_averaging begin="2010.10.1_0:0:0_TAI" end="2010.10.1_2:45:00_TAI" wavelength=3 quicklook=0 camid=0 cadence=720.0 lev1="hmi.lev1" npol=6 size=36
+\endcode
+
+\b Example 2:
+
+To calculate quicklook/nrt 12-min IQUV observables for the time range 2010.10.1_0:0:0_TAI to 2010.10.1_2:45:00_TAI:
+\code
+HMI_IQUV_averaging begin="2010.10.1_0:0:0_TAI" end="2010.10.1_2:45:00_TAI" wavelength=3 quicklook=1 camid=0 cadence=720.0 lev1="hmi.lev1_nrt" npol=6 size=36
+\endcode
+
+
+
+
+*/
+
 /*----------------------------------------------------------------------------------------------------------------------------------------*/
 /*                                                                                                                                        */
 /* IQUV-AVERAGING MODULE FOR THE HMI PIPELINE OF STANFORD UNIVERSITY                                                                      */
@@ -881,7 +947,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.9 2010/10/20 23:22:29 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.10 2010/11/04 22:48:42 couvidat Exp $");
 }
 
 
