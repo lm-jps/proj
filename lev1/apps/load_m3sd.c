@@ -1,3 +1,4 @@
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.3 2010/11/04 22:47:13 carl Exp $"
 /*############################################################################
 # Name:        load_m3sd.c - load mean max min and sd in series              #
 # Description: Load Minimum, Maximum, Mean and Standard Deviation keyword    #
