@@ -1,3 +1,76 @@
+/*
+ * HMI_observables - derive line-of-sight observables from the HMI level 1 records
+ *
+ */
+
+/**
+\defgroup HMI_observables HMI_observables - derive line-of-sight observables
+@defgroup HMI HMI_observables
+@ingroup lev1.5
+
+\par Synopsis
+\code
+HMI_observables begin= end= levin= levout= wavelength= quicklook= camid= cadence= lev1=
+\endcode
+
+\details
+
+HMI_observables creates line-of-sight observables (WARNING: the output series names are built-in and the program should not be run without editing and recompiling except for production).
+The code main outputs are level 1.5 DRMS records: line-of-sight Dopplergrams, magnetograms, Fe I line width, Fe I line depth, and solar continuum intensity.
+The code produces these records for all the slotted times in the timespan provided by the user.
+HMI_observables can produce definitive or quick-look (near-real time, nrt) observables.
+
+Depending on the values of the command-line arguments, the outputs of HMI_observables are put in different DRMS series.
+For line-of-sight observables obtained from definitive level 1 records and from a standard observable sequence with a 45s cadence, the output DRMS series are: hmi.V_45s (Dopplergram), hmi.M_45s (magnetogram), hmi.Ic_45s (continuum intensity), hmi.Lw_45s (linewidth), and hmi.Ld_45s (linedepth). For quicklook/nrt observables, the output series are: hmi.V_45s_nrt, hmi.M_45s_nrt, hmi.Ic_45s_nrt, hmi.Lw_45s_nrt, and hmi.Ld_45s_nrt. Another standard set of products is obtained from the 12-minute averaged IQUV records computed by HMI_IQUV_averaging (levin must be set to "lev1p", camid must be set to 0, and cadence must be set to 720.0 for the HMI_observables code to run on such data). The output of HMI_observables is put in: hmi.V_720s, hmi.M_720s, hmi.Ic_720s, hmi.Lw_720s, and hmi.Ld_720s (if quicklook=0), or in hmi.V_720s_nrt, hmi.M_720s_nrt, hmi.Ic_720s_nrt, hmi.Lw_720s_nrt, and hmi.Ld_720s_nrt (if quicklook=1).
+
+The "_720s" observables are obtained from the I+V and I-V data segments of the 12-min averaged IQUV records, while the "_45s" observables are obtained from the level 1 records.
+Under normal operations, if "_720s" observables have been produced, other DRMS modules (hmi_segment_module and hmi_patch_module) using these 12-min observables are run: for production these two modules should always be called after HMI_observables.
+
+\par Options
+
+\par Mandatory arguments:
+
+\li \c begin="time" where time is a string. This is the beginning time of the timespan for which observables are to be computed. Time is in JSOC (sprint_ut) format YYYY.MM.DD_hh:mm:ss{.sss}_TAI (HMI_observables uses the TAI time standard internally, therefore it is easier to also provide beginning and ending times in TAI).  
+\li \c end="time" where time is a string. This is the ending time of the timespan for which observables are to be computed. Time is in JSOC (sprint_ut) format YYYY.MM.DD_hh:mm:ss{.sss}_TAI (HMI_observables uses the TAI time standard internally, therefore it is easier to also provide beginning and ending times in TAI).
+
+\par Optional arguments:
+
+\li \c levin="level" where level is a string describing the level of the input data. Level should always be lev1.0 (the value by default) for normal observables processing, except when the code is run in debugging mode, where the input level can be either lev1d or lev1p. Lev1d and lev1p are intermediate data levels that are used internally by the observables code but have not been officially defined in JSOC documents. Lev1d refers to a level 1 filtergram that has been gapfilled (to correct for, among others, bad CCD pixels and cosmic-ray hits), de-rotated, un-distorted, and interpolated in time at a given slotted target time. Lev1p refers to a lev1d filtergram that has been calibrated in polarization.
+\li \c levout="level" where level is a string describing the level of the output data. Level should always be lev1.5 (the value by default) for normal processing, except when the code is run in debugging mode, where the output level can be either lev1d or lev1p. Lev1d and lev1p are intermediate data levels that are used internally by the observables code but have not been officially defined in JSOC documents. Lev1d refers to a level 1 filtergram that has been gapfilled (to correct for, among others, bad CCD pixels and cosmic-ray hits), de-rotated, un-distorted, and interpolated in time at a given slotted target time. Lev1p refers to a lev1d filtergram that has been calibrated in polarization.
+\li \c wavelength=number where number is an integer and is the filter index of the target wavelength. For an observables sequence with 6 wavelengths, with corresponding filter indices ranging from I0 to I5 (for filters nominally centered at +172 mA to -172 mA from the Fe I line central wavelength at rest), the first wavelength of the sequence is I3. Therefore, it is best to set wavelength to 3 (the value by default). This wavelength is used by HMI_observables as the reference one, for identifying the sequence run, for deciding how to group the level 1 filtergrams for the temporal interpolation, and so on... 
+\li \c quicklook=number where number is an integer equal to either 0 (for the production of definitive observables) or 1 (for the production of quicklook/nrt observables). The value by default is 0.
+\li \c camid=number where number is an integer equal to either 0 (to use input filtergrams taken by the side camera) or 1 (to use input filtergrams taken by the front camera). Currently, the line-of-sight observable sequence is taken on the front camera only, and therefore camid should be set to 1 (the value by default). The value of camid might be irrelevant for certain observables sequences that require combining both cameras (sequences currently not used). Camid is also used by HMI_observables to decide which look-up tables to apply if the observables are obtained by the MDI-like algorithm, in case two tables are available for the same prime key (one table for the front camera, one for the side camera).
+\li \c cadence=number where number is a float and is the cadence of the observable sequence in seconds. Currently, it should be set to 45 seconds for the line-of-sight observables (45.0 is the value by default).
+\li \c lev1="series" where series is a string and is the name of the DRMS series holding the level 1 records to be used by the observables code. For normal observables processing either of these two series should be used: hmi.lev1_nrt for the quicklook/nrt level 1 records, and hmi.lev1 for the definitive level 1 records.
+The value by default is hmi.lev1 (to be consistent with the default value of quicklook=0).
+
+\par Example
+
+\b Example 1:
+
+To calculate definitive standard 45s-cadence line-of-sight observables for the time range 2010.10.1_0:0:0_TAI to 2010.10.1_2:45:00_TAI:
+\code
+HMI_observables begin="2010.10.1_0:0:0_TAI" end="2010.10.1_2:45:00_TAI" levin="lev1" levout="lev15" wavelength=3 quicklook=0 camid=1 cadence=45.0 lev1="hmi.lev1"
+\endcode
+
+\b Example 2
+
+To calculate nrt/quick-look standard 45s-cadence line-of-sight observables for the time range 2010.10.1_0:0:0_TAI to 2010.10.1_2:45:00_TAI:
+\code
+HMI_observables begin="2010.10.1_0:0:0_TAI" end="2010.10.1_2:45:00_TAI" levin="lev1" levout="lev15" wavelength=3 quicklook=1 camid=1 cadence=45.0 lev1="hmi.lev1_nrt"
+\endcode
+
+\b Example 3:
+
+To calculate definitive line-of-sight observables from the 12-min averaged IQUV data (series hmi.S_720s), for the time range 2010.10.1_0:0:0_TAI to 2010.10.1_2:45:00_TAI:
+\code
+HMI_observables begin="2010.10.1_0:0:0_TAI" end="2010.10.1_2:45:00_TAI" levin="lev1p" levout="lev15" wavelength=3 quicklook=0 camid=0 cadence=720.0 lev1="hmi.lev1"
+\endcode
+
+\bug
+
+*/
+
 /*----------------------------------------------------------------------------------------------------------------------------------------*/
 /*                                                                                                                                        */
 /* OBSERVABLES MODULE FOR THE HMI PIPELINE OF STANFORD UNIVERSITY                                                                         */
@@ -980,7 +1053,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.15 2010/10/26 21:43:29 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.16 2010/11/04 20:33:00 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -5018,7 +5091,7 @@ int DoIt(void)
 		}
 	      if(temptime > 86400.0)
 		{
-		  printf("Error: could not find polynomial coefficients with the correct keywords and within 12 hours of the target time to produce level 1.5 data\n");
+		  printf("Error: could not find polynomial coefficients with the correct keywords and within 24 hours of the target time to produce level 1.5 data\n");
 		  QUALITY = QUALITY | QUAL_NOCOEFFPRECORD;
 		  CreateEmptyRecord=1; goto NextTargetTime;
 		}
