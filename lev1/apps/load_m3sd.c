@@ -54,6 +54,10 @@
    data series in DRMS. An example on running this script is as follows: 
    cm3sd_jsd_file.pl isf=/home/carl/cvs/TBL_JSOC/lev1/instruction_file/su_carl/hmitest1200_thermal_template.txt
 
+   A new update was added to read the previous day's dayfile and read the next day's dayfile(if exists)
+   from the hk_dayfile series and get packet data values to correctly create the current dayfile processing 
+   of the previous day's last record and the current day's last record.
+
 
    The in parameter is a mandatory argument which should contain the directory and 
    filename of the input dayfile. Currently only one dayfile is allowed for the in 
@@ -111,8 +115,14 @@
 #define HKLMS_PACKET_TIME_STR          100
 #define HKLMS_READ_ARRAY_SIZE          (25000001)
 #define HKLMS_SHORT_KEYWORD_NAME_SIZE  100
+#define HKLMS_NEXT_DAYFILE             1
+#define HKLMS_PREVIOUS_DAYFILE         0
+#define HKLMS_FOUND_DAYFILE            1
+#define HKLMS_NOT_FOUND_DAYFILE        0
+#define HKLMS_QUERY_STRING_SIZE        500
+#define HKLMS_APID_SIZE                5
+/*turn off debug::#define DEBUG_LM3S                     1*/
 /*#define ENVFILE  "/home/production/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_M3SD" */
-/*#define ENVFILE    "/home3/carl/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_M3SD"*/
 #define ENVFILE  "/home/production/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_M3SD"
 
 /******************** includes ******************************************/
@@ -228,14 +238,15 @@ float get_mean_value(HK_KW_Data_Values_t *ptr);
 float get_stdev_value(HK_KW_Data_Values_t *ptr);
 void  write_m3sd_to_drms(HK_Keyword_M3SD_Data_t *top_m3sd_data_ptr, Instruction_File_Data_t *ifp);
 int   get_number_points(HK_KW_Data_Values_t *ptr);
-Instruction_File_Data_t * read_isf_data(char *inf);
+Instruction_File_Data_t * read_isf_data( const char *inf);
 void  get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *ifp);
 void check_status_drms_set(int status, char *kwn);
 int get_day_from_pkttime(double p_time);
 int get_month_from_pkttime(double p_time);
 int get_yr_from_pkttime(double p_time);
 void my_usage (void);
-
+void add_dayfile_data(char *dayfile, TIME start_pkt_time,HK_KW_Data_t *topkwdataptr,int interval);
+int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag, char *dayfile_name);
 /********************* extern functions  *********************************/
 extern int  get_hour_from_pkttime(double p_time);
 extern SHCIDS_Version_Number *global_shcids_vn;
@@ -312,7 +323,7 @@ int DoIt(void)
   /* variables */
   FILE *file_ptr;
   Instruction_File_Data_t *instr_file_ptr;
-  Instruction_File_Data_t * read_isf_data(char *inf);
+  Instruction_File_Data_t * read_isf_data(const char *inf);
   char *hk_df_fn;
   char  hk_directory_filename[HKLMS_MAX_FILE_NAME];
   unsigned char *ptr_read_in_buffer;
@@ -325,8 +336,8 @@ int DoIt(void)
   hk_df_fn= hk_directory_filename;
 
   /* Get command line arguments */
-  char *in = cmdparams_get_str (&cmdparams, "in", NULL);
-  char *isf = cmdparams_get_str (&cmdparams, "isf", NULL);
+  const char *in = cmdparams_get_str (&cmdparams, "in", NULL);
+  const char *isf = cmdparams_get_str (&cmdparams, "isf", NULL);
 
   /* check arguments used */
   if (nice_intro ()) return (0);
@@ -406,10 +417,16 @@ int DoIt(void)
   /* close dayfile */
   fclose(file_ptr);
 
+
   /* get keyword values from dayfile for keywords outlined in instruction file,calculate m3sd, write m3sd to drms */
   (void)get_keyword_values(ptr_read_in_buffer, instr_file_ptr);
+
+  /* free data from in dayfile */
+  free(ptr_read_in_buffer);
+
+  /* return */
   return 0;  
-}
+}/*DoIt*/
 
 
 /*************************************************/
@@ -501,23 +518,22 @@ void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *
   TIME next_pkt_time;
   TIME start,end;
   TIME *st_ptr, *ed_ptr;
+  char dir_filename_dayfile[HKLMS_MAX_FILE_NAME];
   char file_version_number[HKLMS_MAX_PVN_SIZE];
   char packet_version_number[HKLMS_MAX_PVN_SIZE];
   char pkt_date[MAX_SIZE_PKT_DATE]; //ascii time
   char *ptr_fvn;
   int apid;
+  int df_status=0;
   int factor;
   int interval_count; 
   int interval;
   int i,j,k,y,s;
   int packet_length;
+  static int did_previous_day_flag=0;
   unsigned char hk_pkt_buffer[HKLMS_MAX_PKT_SIZE];
   unsigned short s_hk_pkt_buffer[HKLMS_MAX_PKT_SIZE];
   unsigned short *word_ptr;
-#ifdef DEBUG_LM3S
-  char at[HKLMS_PACKET_TIME_STR];
-  char atn[HKLMS_PACKET_TIME_STR];
-#endif
 
   /* initialize variables */
   top_m3sd_data_ptr=NULL;
@@ -525,6 +541,11 @@ void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *
   interval_count=0; 
   st_ptr= &start;
   ed_ptr= &end;
+  /* initialize variables */
+#ifdef DEBUG_LM3S
+  char at[HKLMS_PACKET_TIME_STR];
+  char atn[HKLMS_PACKET_TIME_STR];
+#endif
 
   /* get interval of time to use in seconds -where 600s = 10minutes */
   interval=ifp->interval;
@@ -541,8 +562,25 @@ void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *
     /* Check if at end of all pkts */
     if (*(read_in_buffer+5+factor) == '\0')
     {
-      /* at end of all packets but need to process last interval */
+#ifdef DEBUG_LM3S
+      printf("get_keyword_values:PROCESSING NEXT DAY'S DATA\n");
+      printf("get_keyword_values:interval case4:\n");
+#endif
 
+      /* at last set of packets so add in other packets for next day's dayfile if exist*/
+      /* get next day's dayfile directory and filename */
+      df_status=get_dayfile_to_process(top_kw_data_ptr,apid,HKLMS_NEXT_DAYFILE,dir_filename_dayfile);
+      if(df_status)
+      {
+#ifdef DEBUG_LM3S
+        printf("get_keyword_values:Return from  get_dayfile_to_process:%s\n",dir_filename_dayfile);
+#endif
+        /* process next day's dayfiles previous day's last packet and load values with current dayfiles values */ 
+        (void)add_dayfile_data(dir_filename_dayfile, top_kw_data_ptr->start_pkt_time, top_kw_data_ptr,interval);
+      }
+      //else skip processing next day's dayfile data
+
+      /* at end of all packets but need to process last interval */
       /* At end of block of interval values, calculate m3sd values based on interval block & save in m3sd structures*/
       if( !top_m3sd_data_ptr)
       {
@@ -699,6 +737,31 @@ void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *
     }
     else if (pkt_time >  next_pkt_time) 
     {
+      /* Case 2: At end of processing an interval*/
+      /* check if did get first packets and did read of previous dayfile to process complete set of packets */
+      if(!did_previous_day_flag) 
+      {
+#ifdef DEBUG_LM3S
+        printf("get_keyword_values:DOING PREVIOUS DAY'S DATA PROCESSING\n");
+#endif
+        /* set flag to do once for processing whole day of data */
+        did_previous_day_flag=1;
+
+        /* at first set of packets so add in other packets for previous day's dayfile if exist*/
+        /* get previous day's dayfile directory and filename */
+        df_status=get_dayfile_to_process(top_kw_data_ptr,apid,HKLMS_PREVIOUS_DAYFILE,dir_filename_dayfile);
+
+        /* if dayfiles exist - get data for last record */
+        if(df_status)
+        {
+#ifdef DEBUG_LM3S 
+          printf("get_keyword_values:Return from  get_dayfile_to_process:%s\n",dir_filename_dayfile);
+#endif
+          /* process previous day's dayfiles last record packets and load values with current dayfiles values */ 
+          (void)add_dayfile_data(dir_filename_dayfile, top_kw_data_ptr->start_pkt_time, top_kw_data_ptr,interval);
+        }
+        //else skip processing previous day's dayfile data
+      }/*end of else -doing previous days last packet adjustment*/
 
 #ifdef DEBUG_LM3S
       printf("get_keyword_values:interval case2:k packet:%d  pkt_time is %-12.12f & %-s\n",k,pkt_time,at);
@@ -792,7 +855,7 @@ void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *
 /*******************************************************************/
 /* read_isf_data: reads data in instruction file or template file. */
 /*******************************************************************/
-Instruction_File_Data_t * read_isf_data(char *inf)
+Instruction_File_Data_t * read_isf_data(const char *inf)
 {
     void remove_blanks( char string[HKLMS_SHORT_KEYWORD_NAME_SIZE], char *new_str);
     Instruction_File_Data_t *ptr_isf;
@@ -1420,19 +1483,26 @@ float get_max_value(HK_KW_Data_Values_t *ptr_data_values)
 /******************/
 float get_mean_value(HK_KW_Data_Values_t *ptr_data_values)
 {
+  double double_mean_value=0.0;
   float mean_value=0.0;
   float count=0.0;
+
   for(; ptr_data_values; ptr_data_values=ptr_data_values->next)
   {
-      mean_value += (float)ptr_data_values->eng_value.double_val;
+      double_mean_value += ptr_data_values->eng_value.double_val;
       count++;
 #ifdef DEBUG_LM3S
       printf("get_mean_value(): HK_KW_Data_Values->eng.value. is %f\n",ptr_data_values->eng_value.double_val);
 #endif
   }
+  /* set double value used for doing calculation to returned float value */
+  mean_value= (float)double_mean_value;
+
 #ifdef DEBUG_LM3S
   printf("get_mean_value(): MEAN->eng.value. is %f\n",mean_value/count);
 #endif
+
+  /* return float value */
   return(mean_value/count);
 }
 
@@ -1441,46 +1511,53 @@ float get_mean_value(HK_KW_Data_Values_t *ptr_data_values)
 /**************************/
 float get_stdev_value(HK_KW_Data_Values_t *top_ptr_data_values)
 {
-  float sum_value=0.0;
-  float sum_sq_value=0.0;
-  float numpts=0.0;
-  int int_numpts=0;
-  float mean_value=0.0;
-  float mean_sq_value=0.0;
-  float cal_value=0.0;
   HK_KW_Data_Values_t *ptr_data_values;
+  double d_cal_value=0.0;
+  double d_mean_sq_value=0.0;
+  double d_mean_value=0.0;
+  double d_sum_sq_value=0.0;
+  double d_stdev_value=0.0;
+  double d_sum_value=0.0;
   float stdev_value=0.0;
+  float  numpts=0.0;
+  int    int_numpts=0;
 
   /* get mean */
   for(ptr_data_values=top_ptr_data_values, numpts=0.0; ptr_data_values; ptr_data_values=ptr_data_values->next)
   {
-      sum_sq_value += (float)(powf((float)ptr_data_values->eng_value.double_val, 2.0 ));
-      sum_value    += (float)ptr_data_values->eng_value.double_val;
+      d_sum_sq_value += powf(ptr_data_values->eng_value.double_val, 2.0 );
+      d_sum_value    += ptr_data_values->eng_value.double_val;
       numpts++;
       int_numpts++;
   }
   /* get mean of values */
-  mean_value=sum_value/numpts;
+  d_mean_value= d_sum_value/numpts;
 
   /* get mean to power of 2 squared */
-  mean_sq_value = (float)(powf(mean_value, 2.0 ));
+  d_mean_sq_value = powf(d_mean_value, 2.0 );
 
   /* get standard deviation value */
-  cal_value= (((float)(sum_sq_value/(numpts - 1.0)) ) - ((float)((numpts/(numpts - 1.0)) * mean_sq_value)));
-  if (cal_value < 0.0 || int_numpts == 1)
+  d_cal_value= (((d_sum_sq_value/(numpts - 1.0)) ) - (((numpts/(numpts - 1.0)) * d_mean_sq_value)));
+  if (d_cal_value < 0.0 || int_numpts == 1)
   {
-    stdev_value=0.0;
+    d_stdev_value=0.0;
   }
   else
   {
-    stdev_value = sqrtf( (float)cal_value );
+    d_stdev_value = sqrtf( d_cal_value );
   }
 
+  /* set double value used in calculation to float value returned */
+  stdev_value=(float)d_stdev_value;
+
 #ifdef DEBUG_LM3S
-  printf("get_stdev_value(): STANDARD-DEV->eng.value. is %15.15f\n",stdev_value);
+  printf("get_stdev_value(): double:STANDARD-DEV->eng.value. is %15.15f\n",stdev_value);
+  printf("get_stdev_value(): float:STANDARD-DEV->eng.value. is %15.15f\n",d_stdev_value);
 #endif
   return(stdev_value);
 }
+
+
 
 /**********************/
 /* WRTIE M3SD TO DRMS */
@@ -1628,6 +1705,8 @@ void write_m3sd_to_drms(HK_Keyword_M3SD_Data_t *top_m3sd_data_ptr, Instruction_F
 
 }
 
+
+
 /**********************************************/
 /*  CHECK STATUS DRMS SET                     */
 /**********************************************/
@@ -1641,6 +1720,7 @@ void check_status_drms_set(int status, char *kwn)
   }
   return;
 }
+
 /**********************************************/
 /*  Get Next Packet Time                      */
 /**********************************************/
@@ -1683,4 +1763,350 @@ void get_next_pkt_time(TIME p_time, int intval , TIME *start, TIME *end)
   *start= start_pt_time;
   *end=end_pt_time;
 }
+
+
+
+/**********************************************/
+/*  add_dayfile_data                          */
+/**********************************************/
+void add_dayfile_data(char *dayfile, TIME start_pkt_time,HK_KW_Data_t *topkwdataptr,int interval)
+{
+  /* local variables */
+  CCSDS_Packet_t ccsds;
+  FILE *file_ptr;
+  HK_Keyword_t *kw_head,*kw;
+  TIME pkt_time;
+  TIME next_pkt_time;
+  char file_version_number[HKLMS_MAX_PVN_SIZE];
+  char packet_version_number[HKLMS_MAX_PVN_SIZE];
+  char pkt_date[MAX_SIZE_PKT_DATE]; //ascii time
+  char *ptr_fvn;
+  int apid;
+  int factor;
+  int i,j,k,y,s;
+  int packet_length;
+  unsigned char hk_pkt_buffer[HKLMS_MAX_PKT_SIZE];
+  unsigned short s_hk_pkt_buffer[HKLMS_MAX_PKT_SIZE];
+  unsigned short *word_ptr;
+  unsigned char *pointer_read_in_buffer;
+  unsigned long int x;
+
+#ifdef DEBUG_LM3S
+  char at[HKLMS_PACKET_TIME_STR];
+  char atn[HKLMS_PACKET_TIME_STR];
+
+  /* print argument passed */
+  printf("add_dayfile_data: argument passed: dayfile:%s:\n",dayfile);
+  printf("add_dayfile_data: argument passed: start_pkt_time:%f:\n",start_pkt_time);
+  printf("add_dayfile_data: argument passed: interval in seconds is :%d:\n",interval);
+#endif
+
+  /* get  in filename and open hk dayfile*/
+  file_ptr=fopen(dayfile,"r");
+  if (!file_ptr)
+  {
+    printkerr("ERROR at %s, line %d: Please check filename and directory is correct. "
+              " Could not get -in- directory and filename: "
+              "<%s>. Example format for -in- file: in=/home/rock/20080909.0x013. Exiting execution.\n", 
+              __FILE__,__LINE__, dayfile);
+    return;//return 0
+  }
+
+  /* malloc memory for holding data in file in memory */
+   pointer_read_in_buffer = (unsigned char *) malloc(sizeof(unsigned char) * HKLMS_READ_ARRAY_SIZE);
+ 
+  /*read lines in file into buffer representing packet data in file*/
+  for(x=0; x < HKLMS_READ_ARRAY_SIZE;x++) pointer_read_in_buffer[x]=0; ;
+  for(x = 0 ; fread(pointer_read_in_buffer + x,1,1,file_ptr) ; x++) 
+  {  
+    ;/* do nothing*/
+    if( x == HKLMS_READ_ARRAY_SIZE - 1)
+    {
+      printkerr("ERROR at %s, line %d: Array for reading dayfile is too small. :"
+                "<%lu>\n", __FILE__,__LINE__, x + 1);
+      printkerr("Break up large dayfile using dd command. :   dd if<large-file> "
+                " of=<small-file-1> bs=<packet_size + 7> count=<i.e., 1000> skip=<0,1,etc>\n");
+      return;//return 0
+    }
+  }
+  /* set last value in buffer to null */
+  *(pointer_read_in_buffer + x) = '\0';
+
+  /* close dayfile */
+  fclose(file_ptr);
+
+  /* go thru each packet and save keywords to DRMS */
+  for(k=0,factor=0,packet_length=0;  ; k++)
+  {
+    /* set pointer to beginning of packets in buffer using factor parameter */
+    factor = k * (packet_length + 6 + 1 ) ;
+
+    /* Check if at end of all pkts */
+    if (*(pointer_read_in_buffer+5+factor) == '\0')
+    {
+      /* at end of all packets */
+      break; /*ADDED*/
+    }
+
+    /* get packet lenght */
+    packet_length=  *(pointer_read_in_buffer+5+factor);
+
+    /* get apid */
+    /* set 0th to 7th bits */
+    apid =  (unsigned  short int)( (*(pointer_read_in_buffer+1+factor)) & 0x00FF );
+    /* set 8th to 15th bits */
+    apid |= (unsigned  short int)( (*(pointer_read_in_buffer+0+factor) << 8) & 0xFF00 );
+    apid &= 0x07FF;
+
+    /* get packet version number */
+    /* if sdo-hk type apid,packet version number not used,else get packet version number for hmi or aia hk packets */
+    if(check_for_sdo_apid(apid))
+    {
+       sprintf(packet_version_number,"%s","not applicable");
+    }
+    else
+    {
+      /*check if packet version is 0.0 -skip-print warning*/
+      if (( *(pointer_read_in_buffer+14+factor) == 0) && (*(pointer_read_in_buffer+15+factor) == 0))
+      {
+        printkerr("Warning at %s, line %d: Getting 0.0 for packet version number."
+                  "in packet data. Skip processing this packet, don't load to "
+                  "DRMS and get next packet", __FILE__,__LINE__);
+        continue;
+      }
+      /* check for version number set to zero and print warning messages. */
+      if ( *(pointer_read_in_buffer+14+factor) == 0 && *(pointer_read_in_buffer+15+factor))
+      {
+        printkerr("Warning at %s, line %d: Getting 0 for whole number(i.e.,0.1) for "
+                  "packet version number in packet data. Skip processing this packet,"
+                  "don't load to DRMS and get next packet", __FILE__,__LINE__);
+        continue;
+      }
+      /* if passed two tests above, then set packet version number */
+      sprintf(packet_version_number,"%03d.%03d",*(pointer_read_in_buffer+14+factor), *(pointer_read_in_buffer+15+factor));
+      strcat(packet_version_number,"\0");
+    }
+
+    /* Extract hk packets - initialize array with zeros */
+    for(i=0; i < HKLMS_MAX_PKT_SIZE;i++) hk_pkt_buffer[i]=0x00;
+    /* set buffer to values in packet and set packet version number to value
+    /* in packet or some default value */
+    for (i =0 + factor, j=0 ; i <  packet_length + 6 + 1 + factor; i++)
+    {
+        /* set values in array */
+        hk_pkt_buffer[j++]= *(pointer_read_in_buffer+i);
+    } /* end for loop setting values for one extracted packet in buffer */
+
+
+    /* put in format for decode_hk to read by adjusting values  */
+    /* in buffer from unsigned char to unsigned short           */
+    for (i=0, y=0 ; i < packet_length + 6 + 1   ; i += 2, y++)
+    {
+      s_hk_pkt_buffer[y] = (unsigned short)(hk_pkt_buffer[i + 1] << 8  & 0xFF00 );
+      s_hk_pkt_buffer[y] = (unsigned short)((hk_pkt_buffer[i] & 0x00FF) + s_hk_pkt_buffer[y]) ;
+    }
+    /* send hk_pkt_buffer to decoder function */
+    word_ptr = s_hk_pkt_buffer;
+
+    s = decode_hk_keywords(word_ptr, apid,  &ccsds.keywords);
+    if (s) 
+    {
+      printkerr("ERROR at %s, line %d: decode_hk_keyword function returned"
+                " error status number <%d>\n\n", __FILE__,__LINE__, s);
+      printf("ERROR at %s, line %d: decode_hk_keyword function returned error status number <%d>\n\n", __FILE__,__LINE__, s);
+      continue;
+    }
+
+    kw_head= ccsds.keywords;
+
+    /*find file version if apid is sdo hk type */
+    if(check_for_sdo_apid(apid))
+    {
+      /* after load of shcids file during call to decode_hk_keywords -
+         get packet time to lookup sdo hk config file version to use */
+      (void)sprint_time (pkt_date, get_packet_time(word_ptr), "TAI", 0);
+      /* get file version number for ADP apid */
+      ptr_fvn=find_fvn_from_shcids(global_shcids_vn, pkt_date, apid);
+    }
+    else
+    {
+      /* get fvn for hk apids */
+      ptr_fvn=find_file_version_number(global_gtcids_vn, packet_version_number,apid); 
+    }
+    /* set file version number  */
+    strcpy(file_version_number,ptr_fvn);
+
+    /*************************/
+    /* check for packet time */
+    /*************************/
+    /* set kw ptr to top of kw link list */
+    kw=kw_head;
+
+    /* get packet time of kw packet */ 
+    (void)get_packet_time_for_df(kw, &pkt_time);
+
+#ifdef DEBUG_LM3S
+    (void)sprint_time (at,  pkt_time, "UTC", 0);
+    strcat(at,"\0");
+    (void)sprint_time (atn, next_pkt_time, "UTC", 0);
+    strcat(atn,"\0");
+#endif
+
+    /*add keyword packet data for only last interval of previous day */
+    if(pkt_time >= start_pkt_time && pkt_time < (start_pkt_time+interval) ) 
+    {
+      
+#ifdef DEBUG_LM3S
+      /* actual packet times adding data for */
+      printf("add_dayfile_data:GET PACKET TIME:PACKET_TIME:%s:\n",at);
+      printf("add_dayfile_data:pkt_time:%f:\n",pkt_time);
+     (void)sprint_time (at,  start_pkt_time, "UTC", 0);
+      strcat(at,"\0");
+      printf("add_dayfile_data:start_pkt_time%f:%s:\n",start_pkt_time, at);
+#endif
+
+      /* save kw values to HK_KW_Data_Values for all kw's in Instruction_File_keyword_t struct*/
+      /* save keyword data values to HK_Data_Values_t nodes- i.e.,pkt time,value,value type,etc */
+      (void)save_kw_data_values(topkwdataptr, pkt_time, kw );
+    }
+    //else skip adding this packet data to HK_Data_Values_t nodes
+  }/*go thru each packet and save values for packet times within the range*/
+/* return */
+return;
+}/* end of add_dayfile_data() */
+
+
+
+/**********************************************/
+/*  get_dayfile_to_process                    */
+/**********************************************/
+int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag, char *dayfile)
+{
+  /* local variable */
+  DRMS_RecordSet_t *rs;
+  DRMS_Record_t *rec;
+  DRMS_Segment_t *record_segment;    
+  char dayfile_pkttime_str[HKLMS_PACKET_TIME_STR];
+  char dir_filename_dayfile[HKLMS_MAX_FILE_NAME];
+  char nquery[HKLMS_QUERY_STRING_SIZE];
+  char strapid[HKLMS_APID_SIZE];
+  int drms_status;
+  int i;
+
+#ifdef DEBUG_LM3S
+  printf("get_dayfile_to_process:apid:%d is used to create query to lookup dayfile.\n",apid);
+#endif
+
+  /* initial filename array to null */
+  for(i=0;i < HKLMS_MAX_FILE_NAME; *(dayfile+i) ='\0', i++);
+
+  /* convert apid int to string */
+  sprintf(strapid,"%3.3d", apid);
+
+  /* create start day string */
+  if (prev_next_flag == HKLMS_NEXT_DAYFILE)
+  { /* do next day's dayfile */
+    sprintf(dayfile_pkttime_str,"%4.4d.%02.2d.%02.2d_00:00:00_UTC",  get_yr_from_pkttime(kwdataptr->start_pkt_time),
+            get_month_from_pkttime(kwdataptr->start_pkt_time), get_day_from_pkttime(kwdataptr->start_pkt_time) + HKLMS_NEXT_DAYFILE);
+  }
+  else
+  { /* do previous day's dayfile where start pkt time is for previous day for first pkt */
+    sprintf(dayfile_pkttime_str,"%4.4d.%02.2d.%02.2d_00:00:00_UTC",  get_yr_from_pkttime(kwdataptr->start_pkt_time),
+            get_month_from_pkttime(kwdataptr->start_pkt_time), get_day_from_pkttime(kwdataptr->start_pkt_time));
+  }
+  strcat(dayfile_pkttime_str,"\0");
+#ifdef DEBUG_LM3S
+  printf("get_dayfile_to_process:dayfile_pkttime_str is <%s>. This used to lookup previous or next day's dayfile\n",dayfile_pkttime_str);
+#endif
+
+   /* create full query statement -assume always source=moc and check apid for hmi or aia series */
+   if (apid < 32) 
+   {
+     /*HMI dayfile series */
+     sprintf(nquery,"%s[%s][%s][%s]","hmi.hk_dayfile",dayfile_pkttime_str,strapid,"moc");
+   }
+   else if (apid <= 64 && apid > 31)
+   {
+     /*AIA dayfile series */
+      sprintf(nquery,"%s[%s][%s][%s]","aia.hk_dayfile",dayfile_pkttime_str,strapid,"moc");
+   }
+   else if (apid == 129)
+   {
+     /*SDO dayfile series */
+      sprintf(nquery,"%s[%s][%s][%s]","sdo.hk_dayfile",dayfile_pkttime_str,strapid,"moc");
+   }
+   else
+   {
+     printkerr("ERROR at %s, line %d: When creating query to get previous or next "
+               "day's dayfile. Did not find apid to be either hmi,aia or sdo. "
+               "apid is <%d> \n", __FILE__,__LINE__, apid);
+     /* set reference array to null and return status=HKLMS_NOT_FOUND_DAYFILE */
+     strcpy(dayfile,"");
+     return(HKLMS_NOT_FOUND_DAYFILE); /*found dayfile */
+   }
+#ifdef DEBUG_LM3S
+   printf("get_dayfile_to_process:Query created to locate previous day of next day dayfile in drms is <%s>\n", nquery);
+#endif
+
+   /* open dayfile series to look for dayfile */
+   rs = drms_open_records(drms_env, nquery, &drms_status);
+
+   /* if there are no records found or there is drms error skip adding this next day's dayfile day to data value node */
+   if(rs->n < 1 || drms_status < 0)
+   {
+     /* since could not find dayfile - then set filename to null and return status 0 for no file exists */
+#ifdef DEBUG_LM3S
+     printf("get_dayfile_to_process:Record query for dataseries is <%s>. Return status of query:<%d>.  Did not find previous or next day's dayfile.\n", nquery, drms_status);
+#endif
+     /* set reference array to null and return status=HKLMS_NOT_FOUND_DAYFILE */
+     strcpy(dayfile,"");
+     return(HKLMS_NOT_FOUND_DAYFILE);
+   }
+
+   /* set record to first record in array */
+   rec=rs->records[0];
+
+   /* lookup segment or dayfile */
+   record_segment = drms_segment_lookup (rec, "FILE");
+
+   /* check if dayfile exists or found in <aia|hmi|sdo>.hk_dayfile series */
+   if (!record_segment) 
+   {
+     /* hey this is not a error if dayfile is not there so did warning */
+     printkerr("WARNING at %s, line %d: Record query to "
+               "dataseries is <%s> for generic file segment. DID not locate "
+               "segment name <FILE> when did drms_segment_lookup function.\n",
+                __FILE__,__LINE__, nquery);
+     /* set reference array to null and return status=HKLMS_NOT_FOUND_DAYFILE */
+     strcpy(dayfile,"");
+     return(HKLMS_NOT_FOUND_DAYFILE);
+   }
+
+   /* lookup absolute path to dayfile */
+   (void)drms_segment_filename(record_segment,dir_filename_dayfile);	
+
+#ifdef DEBUG_LM3S
+   printf("get_dayfile_to_process:absolute filename %s\n", dir_filename_dayfile);
+#endif
+
+   /* copy to reference array and return to calling function with status=HKLMS_FOUND_DAYFILE */
+   strcpy(dayfile, dir_filename_dayfile);
+   strcat(dayfile,"\0");
+
+   /* free drms open of records */
+   drms_status = drms_close_records(rs, DRMS_FREE_RECORD);
+
+   /* print to standard out the processing of previous and next day's dayfile */
+   if (prev_next_flag == HKLMS_NEXT_DAYFILE)
+   {
+     printf(". . . reading dayfile <%s> to process data for next day's dayfile.\n",dayfile) ;
+   }
+   else if (prev_next_flag == HKLMS_PREVIOUS_DAYFILE)
+   {
+     printf(". . . reading dayfile <%s> to process data for previous day's dayfile.\n",dayfile) ;
+   }
+
+   /* return status successful where dayfile-name set in dayfile variable*/
+   return(HKLMS_FOUND_DAYFILE); /*found dayfile */
+}/* end of get_dayfile_to_process() */
 
