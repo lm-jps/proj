@@ -6,7 +6,7 @@ const int cthreshold=300; // minimum number of pairs of frames (minimum is 3)
 const float threshold_lower=-10000.0;  //threshold for lower limit; //!!correction turned off 
 const float threshold_upper=10000.0; //threshold for upper limit; // !! correction turned off
 
-const int update_flag=2; //0: no update, 1: single pixel update, 2:full update // 
+const int update_flag=0; //0: no update, 1: single pixel update, 2:full update // 
 
 const int debug=0; //write out debug information 
 
@@ -187,14 +187,15 @@ const char *lev1_b0="CRLT_OBS";
 const char *lev1_x0="X0_LF";
 const char *lev1_y0="Y0_LF";
 const char *lev1_vr="OBS_VR";
+
+
+
+
   //series names
-
-
-
-
 
 //char *filename_flatfield_out="su_richard.flatfield";  //output of module_flatfield_combine
 char *filename_flatfield_out="hmi.flatfield"; //for checked in version
+
 char *filename_flatfield_series="hmi.flatfield";
 
 char *filename_badpix="hmi.bad_pixel_list";

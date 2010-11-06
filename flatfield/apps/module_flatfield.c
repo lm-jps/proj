@@ -709,6 +709,7 @@ if (fsn_first == 0 && fsn_last == 0)
 	  if (status != DRMS_SUCCESS)
 	    {
 	      printf("Error: there is a problem with the filtergram number %d \n", k); //if there is a problem with the filtergram
+	      --ccount;
 	      present_backward[index_last]=0;
 	      present_forward[index_last]=0;
 	      present[index_last]=0;
@@ -723,8 +724,8 @@ if (fsn_first == 0 && fsn_last == 0)
 	      printf("%d %d read flatfield\n", k, keyvalue_fsn[k]);
 	      query_flat =keyvalue_flatnumb[index_last];
 
-	      //status_flatfield=get_flatfields(query_flat, t_0, cam+1, focus,  app_flat, flat_off,  badpix, recnum, tobs_link, &rot_cur);
-		      status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
+	   
+	      status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
 
 	
 	      if (status_flatfield ==0)
@@ -734,6 +735,7 @@ if (fsn_first == 0 && fsn_last == 0)
 
 	      if (status_flatfield != 0)
 		{
+		  --ccount;
 		  statarr[0]=statarr[0]+2;
 		  present_forward[0]=0;
 		  present_backward[0]=0;
@@ -774,6 +776,7 @@ printf("read second filtergram\n");
 	  if (status != DRMS_SUCCESS)
 	    {
 	      printf("Error: there is a problem with the filtergram number %d \n", k); //if there is a problem with the filtergram
+	      --ccount;
 	      present_backward[index_current]=0;
 	      present_forward[index_current]=0;
 	      present[index_current]=0;
@@ -791,13 +794,15 @@ printf("read second filtergram\n");
 		 
 		  printf("%d %d read new flatfield\n", k, keyvalue_fsn[k]);
 
-		  //status_flatfield=get_flatfields(query_flat, t_0, cam+1, focus,  app_flat, flat_off,  badpix, recnum, tobs_link, &rot_cur);
+		
 		  status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
 		 
 
 		  if (status_flatfield ==0)
+		  
 		    printf("Flatfield %s read\n", query_flat);
 		  else
+		 
 		    printf("Failure reading flatfield / Use unity flatfield\n");
 
 		  query_flat_ref=query_flat;
@@ -809,7 +814,8 @@ printf("read second filtergram\n");
 	    
 	      
 	      if (status_flatfield != 0)
-		    { 
+		    {
+		      --ccount;
 		      statarr[1]=statarr[1]+2;
 		      present_forward[1]=0;
 		      present_backward[1]=0;
@@ -892,6 +898,7 @@ printf("read second filtergram\n");
 	    if (status != DRMS_SUCCESS || arrin0 == NULL)
 	    {
 	      printf("Error: there is a problem with the filtergram number %d \n", k); //if there is a problem with the filtergram
+	      --ccount;
 	      present_backward[k]=0;
 	      present_forward[k]=0;
 	      present[k]=0;
@@ -907,7 +914,7 @@ printf("read second filtergram\n");
 		{
 		  printf("%d %d read new flatfield\n", k, keyvalue_fsn[k]);
 
-		  //status_flatfield=get_flatfields(query_flat, t_0, cam+1, focus,  app_flat, flat_off,  badpix, recnum, tobs_link, &rot_cur);
+		 
 		  status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
 
 		  if (status_flatfield ==0)
@@ -926,9 +933,10 @@ printf("read second filtergram\n");
 
 	      if (status_flatfield != 0)
 		{
-	      statarr[k]=statarr[k]+2;
-	      present_forward[k]=0;
-	      present_backward[k]=0;
+		  --ccount;
+		  statarr[k]=statarr[k]+2;
+		  present_forward[k]=0;
+		  present_backward[k]=0;
 		}
 	      	    
 	     
@@ -1070,7 +1078,7 @@ printf("read second filtergram\n");
 		
 #pragma omp parallel
 	{
-	  //if (present_backward[km1] != 0 && kkk > 2){
+	 
 	  if (present_backward[km1] != 0){
 #pragma omp for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
@@ -1081,7 +1089,7 @@ printf("read second filtergram\n");
 		}
 	  }
 	
-	  //if (present_forward[km1] != 0 && kkk < (count_filtergram-1)){
+	 
 	  if (present_forward[km1] != 0){
 		#pragma omp for private(jjj,iii)
 		for (jjj=0; jjj<ny; ++jjj){
@@ -1120,10 +1128,11 @@ printf("read second filtergram\n");
 	  		for (jjj=0; jjj<ny; ++jjj){
 	  		  for (iii=0; iii<nx; ++iii){
 	  		    if (!isnan(arrimg[current][jjj][iii]) && arrimg[current][jjj][iii] > 0.0){rhsp[jjj*nx+iii]=rhsp[jjj*nx+iii]+log((double)arrimg[current][jjj][iii]);  // //add up last frame to backward (no cosmic ray check!)
-	  	      count_p[jjj*nx+iii]=count_p[jjj*nx+iii]+1;}
-	  	  }
-	  	}
-	    }
+			      count_p[jjj*nx+iii]=count_p[jjj*nx+iii]+1;
+			    }
+			  }
+			}
+		  }
 	  	}
 
 

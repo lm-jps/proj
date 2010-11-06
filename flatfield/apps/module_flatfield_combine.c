@@ -312,6 +312,8 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
        }
    }
 
+
+
  if (update_flag == 1)
    {
      for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
@@ -327,8 +329,8 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
    }
 
  if (update_flag == 0)
-   printf("update flag 0\n");
    {
+   
      for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)
        flatfield_new[j*nx+i]=offpoint[j*nx+i];
    }
@@ -344,17 +346,19 @@ fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0);
  ff=arr_flat->data;
  ff_rel=arr_flat_rel->data;
 
+ int count_rel=0;
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)ff[j*nx+i]=flatfield[j*nx+i];
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)ff_new[j*nx+i]=flatfield_new[j*nx+i];
- for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) if (bad[j*nx+i]) ff_rel[j*nx+i]=(1.0+flathp[j*nx+i])*offpoint[j*nx+i]; else ff_rel[j*nx+i]=offpoint[j*nx+i];
+ for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) if (bad[j*nx+i]){ff_rel[j*nx+i]=(1.0+flathp[j*nx+i])*offpoint[j*nx+i]; ++count_rel;} else ff_rel[j*nx+i]=offpoint[j*nx+i];
 
-rot_new.rotbad=0;
+rot_new.rotbad=count;
 rot_new.rotpairs=npairstot;
 rot_new.rotcadence=cadence;
 
- rot_rel.rotbad=count;
+ rot_rel.rotbad=count_rel;
  rot_rel.rotpairs=npairstot;
  rot_rel.rotcadence=cadence;
+
 
  write_flatfields(filename_flatfield_out, arr_flat, arr_flat_new, camera, recnum, tobs_link, t_0, focus, focusclone, rot_new, rot_cur);
  write_flatfields(filename_flatfield_rel, arr_flat, arr_flat_rel, camera, recnum, tobs_link, t_0, focus, focusclone, rot_rel, rot_cur);
