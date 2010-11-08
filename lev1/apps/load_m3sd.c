@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.3 2010/11/04 22:47:13 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.4 2010/11/08 22:44:47 carl Exp $"
 /*############################################################################
 # Name:        load_m3sd.c - load mean max min and sd in series              #
 # Description: Load Minimum, Maximum, Mean and Standard Deviation keyword    #
@@ -1636,6 +1636,16 @@ void write_m3sd_to_drms(HK_Keyword_M3SD_Data_t *top_m3sd_data_ptr, Instruction_F
     status = drms_setkey(rec, keyname, keytype, &key_anyval);
     /* check status */
     check_status_drms_set(status, keyname);
+
+    /* set drms type and long telemetry name  */
+    keytype= DRMS_TYPE_TIME;
+    strcpy(keyname, "DATE");
+    /* set packet time */
+    key_anyval.time_val= CURRENT_SYSTEM_TIME;
+    /* set record */
+    status = drms_setkey(rec, keyname, keytype, &key_anyval);
+    /* check status */
+    //check_status_drms_set(status, keyname);
     
     /* set numpts keyword*/
     /* set drms type and long telemetry name  */
