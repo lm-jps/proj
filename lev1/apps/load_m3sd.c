@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.4 2010/11/08 22:44:47 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.5 2010/11/08 23:54:49 carl Exp $"
 /*############################################################################
 # Name:        load_m3sd.c - load mean max min and sd in series              #
 # Description: Load Minimum, Maximum, Mean and Standard Deviation keyword    #
@@ -1232,7 +1232,6 @@ void save_kw_data_values(HK_KW_Data_t *top_kw_data, TIME pkt_time, HK_Keyword_t 
           ptr_kw_data_values->eng_value.double_val=0.00;
           printkerr("WARNING at %s, line %d: Type '%d' not handled. Probably String or Time keywords used. This is not allowed.\n",
                      __FILE__, __LINE__, ptr_kw_data_values->eng_type);
-          printf("WARNING at %s, line %d: Type '%d' not handled.\n", __FILE__, __LINE__, ptr_kw_data_values->eng_type);
         }
 
 #ifdef DEBUG_LM3S
@@ -1526,7 +1525,7 @@ float get_stdev_value(HK_KW_Data_Values_t *top_ptr_data_values)
   /* get mean */
   for(ptr_data_values=top_ptr_data_values, numpts=0.0; ptr_data_values; ptr_data_values=ptr_data_values->next)
   {
-      d_sum_sq_value += powf(ptr_data_values->eng_value.double_val, 2.0 );
+      d_sum_sq_value += pow(ptr_data_values->eng_value.double_val, 2.0 );
       d_sum_value    += ptr_data_values->eng_value.double_val;
       numpts++;
       int_numpts++;
@@ -1535,7 +1534,7 @@ float get_stdev_value(HK_KW_Data_Values_t *top_ptr_data_values)
   d_mean_value= d_sum_value/numpts;
 
   /* get mean to power of 2 squared */
-  d_mean_sq_value = powf(d_mean_value, 2.0 );
+  d_mean_sq_value = pow(d_mean_value, 2.0 );
 
   /* get standard deviation value */
   d_cal_value= (((d_sum_sq_value/(numpts - 1.0)) ) - (((numpts/(numpts - 1.0)) * d_mean_sq_value)));
@@ -1545,7 +1544,7 @@ float get_stdev_value(HK_KW_Data_Values_t *top_ptr_data_values)
   }
   else
   {
-    d_stdev_value = sqrtf( d_cal_value );
+    d_stdev_value = sqrt( d_cal_value );
   }
 
   /* set double value used in calculation to float value returned */
