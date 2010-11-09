@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.6 2010/11/09 00:00:04 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.7 2010/11/09 21:31:49 carl Exp $"
 /*############################################################################
 # Name:        load_m3sd.c - load mean max min and sd in series              #
 # Description: Load Minimum, Maximum, Mean and Standard Deviation keyword    #
@@ -240,14 +240,14 @@ float get_stdev_value(HK_KW_Data_Values_t *ptr);
 void  write_m3sd_to_drms(HK_Keyword_M3SD_Data_t *top_m3sd_data_ptr, Instruction_File_Data_t *ifp);
 int   get_number_points(HK_KW_Data_Values_t *ptr);
 Instruction_File_Data_t * read_isf_data( const char *inf);
-void  get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *ifp);
+void  get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *ifp, char *src);
 void check_status_drms_set(int status, char *kwn);
 int get_day_from_pkttime(double p_time);
 int get_month_from_pkttime(double p_time);
 int get_yr_from_pkttime(double p_time);
 void my_usage (void);
 void add_dayfile_data(char *dayfile, TIME start_pkt_time,HK_KW_Data_t *topkwdataptr,int interval);
-int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag, char *dayfile_name);
+int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag, char *dayfile_name, char *src);
 /********************* extern functions  *********************************/
 extern int  get_hour_from_pkttime(double p_time);
 extern SHCIDS_Version_Number *global_shcids_vn;
@@ -280,10 +280,12 @@ void my_usage (void)
 {
   
   printf ("Usage:\nload_m3sd  [-h] "
+    "src=< rtmon | moc > "
     "in=<day filename> "
     "isf=<instruction file>  \n"
     "  details are:\n"
     "  -h: help - show this message then exit(optional field)\n"
+    "  src=<source on dayfile> -use to check either moc or rtmon next day's or previous day's dayfile(required field)\n"
     "  in=<day file name> -use full path to day file(required field)\n"
     "  isf=<instruction file name> -use full path to instruction file(required field)\n"
     "  Need data series already created for this to program to load keywords in data series.\n"
@@ -327,6 +329,7 @@ int DoIt(void)
   Instruction_File_Data_t * read_isf_data(const char *inf);
   char *hk_df_fn;
   char  hk_directory_filename[HKLMS_MAX_FILE_NAME];
+  char source[20];
   unsigned char *ptr_read_in_buffer;
   unsigned long int i;
 
@@ -339,6 +342,7 @@ int DoIt(void)
   /* Get command line arguments */
   const char *in = cmdparams_get_str (&cmdparams, "in", NULL);
   const char *isf = cmdparams_get_str (&cmdparams, "isf", NULL);
+  const char *src = cmdparams_get_str (&cmdparams, "src", NULL);
 
   /* check arguments used */
   if (nice_intro ()) return (0);
@@ -365,6 +369,37 @@ int DoIt(void)
     my_usage();
     return (0);
   }
+
+  if (src  == NULL) 
+  {
+    /* printkerr("ERROR at %s, line %d: Note need to enter source value "
+              "using src=<rtmon | moc>. The current src values enter was <%s>.\n",
+               __FILE__,__LINE__, src);
+    my_usage();
+    return (0);
+    */
+    /* use as default setting src=moc */
+    strcpy(source, "moc");
+    strcat(source,"\0");
+  }
+  else if (!strcmp(src,"rtmon"))
+  {
+    strcpy(source, src);
+    strcat(source,"\0");
+  } 
+  else if (!strcmp(src,"moc"))
+  {
+    strcpy(source, src);
+    strcat(source,"\0");
+  } 
+  else   
+  {
+    printf("ERROR: at Note need to enter source value using src=<rtmon | moc>. The current src values enter was <%s>.\n", src);
+    my_usage();
+    return (0);
+  }
+
+  
 
  /*PRINT RESULTS FOR INSTRUCTION FILES DATA STRUCTURE */
 #ifdef DEBUG_LM3S
@@ -420,7 +455,7 @@ int DoIt(void)
 
 
   /* get keyword values from dayfile for keywords outlined in instruction file,calculate m3sd, write m3sd to drms */
-  (void)get_keyword_values(ptr_read_in_buffer, instr_file_ptr);
+  (void)get_keyword_values(ptr_read_in_buffer, instr_file_ptr, source);
 
   /* free data from in dayfile */
   free(ptr_read_in_buffer);
@@ -509,7 +544,7 @@ return(sdo_epoch + (TIME)sdo_s + (TIME)(sdo_ss)/65536.0);
 /****************************************************/
 /* Get Keyword Values                               */
 /****************************************************/
-void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *ifp)
+void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *ifp, char *src)
 { 
   CCSDS_Packet_t ccsds;
   HK_Keyword_M3SD_Data_t *top_m3sd_data_ptr;
@@ -570,7 +605,7 @@ void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *
 
       /* at last set of packets so add in other packets for next day's dayfile if exist*/
       /* get next day's dayfile directory and filename */
-      df_status=get_dayfile_to_process(top_kw_data_ptr,apid,HKLMS_NEXT_DAYFILE,dir_filename_dayfile);
+      df_status=get_dayfile_to_process(top_kw_data_ptr,apid,HKLMS_NEXT_DAYFILE,dir_filename_dayfile, src);
       if(df_status)
       {
 #ifdef DEBUG_LM3S
@@ -750,7 +785,7 @@ void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *
 
         /* at first set of packets so add in other packets for previous day's dayfile if exist*/
         /* get previous day's dayfile directory and filename */
-        df_status=get_dayfile_to_process(top_kw_data_ptr,apid,HKLMS_PREVIOUS_DAYFILE,dir_filename_dayfile);
+        df_status=get_dayfile_to_process(top_kw_data_ptr,apid,HKLMS_PREVIOUS_DAYFILE,dir_filename_dayfile,src);
 
         /* if dayfiles exist - get data for last record */
         if(df_status)
@@ -1990,7 +2025,7 @@ return;
 /**********************************************/
 /*  get_dayfile_to_process                    */
 /**********************************************/
-int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag, char *dayfile)
+int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag, char *dayfile, char *src)
 {
   /* local variable */
   DRMS_RecordSet_t *rs;
@@ -2005,6 +2040,7 @@ int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag,
 
 #ifdef DEBUG_LM3S
   printf("get_dayfile_to_process:apid:%d is used to create query to lookup dayfile.\n",apid);
+  printf("get_dayfile_to_process:src:%s is used to create query to lookup dayfile.\n",src);
 #endif
 
   /* initial filename array to null */
@@ -2033,23 +2069,23 @@ int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag,
    if (apid < 32) 
    {
      /*HMI dayfile series */
-     sprintf(nquery,"%s[%s][%s][%s]","hmi.hk_dayfile",dayfile_pkttime_str,strapid,"moc");
+     sprintf(nquery,"%s[%s][%s][%s]","hmi.hk_dayfile",dayfile_pkttime_str,strapid,src);
    }
    else if (apid <= 64 && apid > 31)
    {
      /*AIA dayfile series */
-      sprintf(nquery,"%s[%s][%s][%s]","aia.hk_dayfile",dayfile_pkttime_str,strapid,"moc");
+      sprintf(nquery,"%s[%s][%s][%s]","aia.hk_dayfile",dayfile_pkttime_str,strapid,src);
    }
    else if (apid == 129)
    {
      /*SDO dayfile series */
-      sprintf(nquery,"%s[%s][%s][%s]","sdo.hk_dayfile",dayfile_pkttime_str,strapid,"moc");
+      sprintf(nquery,"%s[%s][%s][%s]","sdo.hk_dayfile",dayfile_pkttime_str,strapid,src);
    }
    else
    {
      printkerr("ERROR at %s, line %d: When creating query to get previous or next "
                "day's dayfile. Did not find apid to be either hmi,aia or sdo. "
-               "apid is <%d> \n", __FILE__,__LINE__, apid);
+               "apid is <%d> src is <%s> \n", __FILE__,__LINE__, apid,src);
      /* set reference array to null and return status=HKLMS_NOT_FOUND_DAYFILE */
      strcpy(dayfile,"");
      return(HKLMS_NOT_FOUND_DAYFILE); /*found dayfile */
