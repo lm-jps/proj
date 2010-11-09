@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.7 2010/11/09 21:31:49 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.8 2010/11/09 23:13:52 carl Exp $"
 /*############################################################################
 # Name:        load_m3sd.c - load mean max min and sd in series              #
 # Description: Load Minimum, Maximum, Mean and Standard Deviation keyword    #
@@ -775,7 +775,7 @@ void get_keyword_values(unsigned char *read_in_buffer, Instruction_File_Data_t *
     {
       /* Case 2: At end of processing an interval*/
       /* check if did get first packets and did read of previous dayfile to process complete set of packets */
-      if(!did_previous_day_flag) 
+      if(!did_previous_day_flag ) 
       {
 #ifdef DEBUG_LM3S
         printf("get_keyword_values:DOING PREVIOUS DAY'S DATA PROCESSING\n");
@@ -2046,6 +2046,13 @@ int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag,
   /* initial filename array to null */
   for(i=0;i < HKLMS_MAX_FILE_NAME; *(dayfile+i) ='\0', i++);
 
+  /* if rtmon cannot use this algorithm below */
+  if (!strcmp(src, "rtmon"))
+  {
+    strcpy(dayfile,"");
+    return(HKLMS_NOT_FOUND_DAYFILE);
+  }
+
   /* convert apid int to string */
   sprintf(strapid,"%3.3d", apid);
 
@@ -2058,7 +2065,7 @@ int get_dayfile_to_process(HK_KW_Data_t *kwdataptr, int apid,int prev_next_flag,
   else
   { /* do previous day's dayfile where start pkt time is for previous day for first pkt */
     sprintf(dayfile_pkttime_str,"%4.4d.%02.2d.%02.2d_00:00:00_UTC",  get_yr_from_pkttime(kwdataptr->start_pkt_time),
-            get_month_from_pkttime(kwdataptr->start_pkt_time), get_day_from_pkttime(kwdataptr->start_pkt_time));
+            get_month_from_pkttime(kwdataptr->start_pkt_time), get_day_from_pkttime(kwdataptr->start_pkt_time) );
   }
   strcat(dayfile_pkttime_str,"\0");
 #ifdef DEBUG_LM3S
