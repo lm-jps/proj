@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.5 2010/11/08 23:54:49 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.6 2010/11/09 00:00:04 carl Exp $"
 /*############################################################################
 # Name:        load_m3sd.c - load mean max min and sd in series              #
 # Description: Load Minimum, Maximum, Mean and Standard Deviation keyword    #
@@ -1786,7 +1786,6 @@ void add_dayfile_data(char *dayfile, TIME start_pkt_time,HK_KW_Data_t *topkwdata
   FILE *file_ptr;
   HK_Keyword_t *kw_head,*kw;
   TIME pkt_time;
-  TIME next_pkt_time;
   char file_version_number[HKLMS_MAX_PVN_SIZE];
   char packet_version_number[HKLMS_MAX_PVN_SIZE];
   char pkt_date[MAX_SIZE_PKT_DATE]; //ascii time
@@ -1804,6 +1803,7 @@ void add_dayfile_data(char *dayfile, TIME start_pkt_time,HK_KW_Data_t *topkwdata
 #ifdef DEBUG_LM3S
   char at[HKLMS_PACKET_TIME_STR];
   char atn[HKLMS_PACKET_TIME_STR];
+  TIME next_pkt_time;
 
   /* print argument passed */
   printf("add_dayfile_data: argument passed: dayfile:%s:\n",dayfile);
