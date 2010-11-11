@@ -1049,7 +1049,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.18 2010/11/04 22:54:17 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.19 2010/11/11 21:49:33 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1127,7 +1127,7 @@ int DoIt(void)
   char *ROTCOEFPATH =NULL;                                                             //path to file containing rotation coefficients
 
   char HISTORY[MaxNString];                                                            //history of the data
-  char COMMENT[]="De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.4; correction for cosmic-ray hits"; //comment about what the observables code is doing
+  char COMMENT[]="De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.5; correction for cosmic-ray hits"; //comment about what the observables code is doing
   struct init_files initfiles;
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
   //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist2.bin";
@@ -1357,7 +1357,7 @@ int DoIt(void)
   double OBSVRint,OBSVWint,OBSVNint,DSUNOBSint;
   float cdelt1;
   float *X0ARR=NULL, *Y0ARR=NULL, *RSUNARR=NULL;
-  float RSUNerr=0.4;                                                  //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
+  float RSUNerr=0.5;                                                  //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
   float correction,correction2;
   float *temparr1=NULL,*temparr2=NULL,*temparr3=NULL,*temparr4=NULL,*LCP=NULL,*RCP=NULL;
   float distance;
