@@ -656,12 +656,12 @@ int do_ingest(long long bbrec, long long eerec)
       }
       if(IOinfo) {
         IOdata = IOinfo[i];
-           drms_setkey_double(rs, "HCIEC_X", IOdata.hciX);
-           drms_setkey_double(rs, "HCIEC_Y", IOdata.hciY);
-           drms_setkey_double(rs, "HCIEC_Z", IOdata.hciZ);
-           drms_setkey_double(rs, "GCIEC_X", IOdata.gciX);
-           drms_setkey_double(rs, "GCIEC_Y", IOdata.gciY);
-           drms_setkey_double(rs, "GCIEC_Z", IOdata.gciZ);
+           drms_setkey_double(rs, "HAEX_OBS", IOdata.hciX);
+           drms_setkey_double(rs, "HAEY_OBS", IOdata.hciY);
+           drms_setkey_double(rs, "HAEZ_OBS", IOdata.hciZ);
+           drms_setkey_double(rs, "GAEX_OBS", IOdata.gciX);
+           drms_setkey_double(rs, "GAEY_OBS", IOdata.gciY);
+           drms_setkey_double(rs, "GAEZ_OBS", IOdata.gciZ);
            //drms_setkey_float(rs, "DSUN_OBS", (float)IOdata.dsun_obs);
            drms_setkey_double(rs, "DSUN_OBS", IOdata.dsun_obs);
            drms_setkey_double(rs, "OBS_VR", IOdata.obs_vr);
@@ -701,8 +701,8 @@ int do_ingest(long long bbrec, long long eerec)
       		dsffname, dsffname, tobs[i], tobs[i], camera, camera);
       }
       else {
-        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d and flatfield_version=(select max(flatfield_version) from %s where t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d) ?]",
-      	dsffname, tobs[i], tobs[i], camera, dsffname, tobs[i], tobs[i], camera);
+        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d and flatfield_version >= 1 ?]",
+      	dsffname, tobs[i], tobs[i], camera);
       }
     }
     else {			//AIA
@@ -716,8 +716,8 @@ int do_ingest(long long bbrec, long long eerec)
       		dsffname, dsffname, tobs[i], tobs[i], wavstr, wavstr);
       }
       else {
-        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s' and flatfield_version=(select max(flatfield_version) from %s where t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s') ?]",
-      	dsffname, tobs[i], tobs[i], wavstr, dsffname, tobs[i], tobs[i], wavstr);
+        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s' and flatfield_version >= 1 ?]",
+      	dsffname, tobs[i], tobs[i], wavstr);
       }
     }
       //printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
@@ -1145,6 +1145,7 @@ WCSEND:
       //21Sep2010 change -crota2 to crota2 and HFCORRVR to 2
       if(!(dstatus = heightformation(fid, IOdata.obs_vr, &cdelt1, &rsun, &crpix1, &crpix2, crota2))) {
         drms_setkey_float(rs, "CDELT1", cdelt1);
+        drms_setkey_float(rs, "CDELT2", cdelt1);
         drms_setkey_float(rs, "R_SUN", rsun);
         drms_setkey_float(rs, "CRPIX1", crpix1);
         drms_setkey_float(rs, "CRPIX2", crpix2);
