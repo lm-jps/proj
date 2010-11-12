@@ -946,7 +946,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.12 2010/11/11 21:49:46 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.13 2010/11/12 21:39:02 couvidat Exp $");
 }
 
 
@@ -1170,6 +1170,7 @@ int DoIt(void)
   int   wl=0;
   int   row,column;
   int  *QUALITYin=NULL;
+  int  *QUALITYlev1=NULL;
   int  *QUALITYLEV1=NULL;
   int   COSMICCOUNT=0;
 
@@ -1705,6 +1706,13 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to QUALITYin\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
+      QUALITYlev1 = (int *)malloc(nRecs1*sizeof(int)); 
+      if(QUALITYlev1 == NULL)
+	{
+	  printf("Error: memory could not be allocated to QUALITYlev1\n");
+	  return 1;//exit(EXIT_FAILURE);
+	}
+      for(i=0;i<nRecs1;++i) QUALITYlev1[i]=0;
       
       //reading some keyword values for all the open records (PUT MISSINGKEYWORD OR MISSINGKEYWORDINT IF THE KEYWORD IS MISSING) and
       //create an array IndexFiltergram with the record index of all the filtergrams with the wavelength WavelengthID
@@ -3192,13 +3200,18 @@ int DoIt(void)
 						      else
 							{
 							  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
+							  QUALITYlev1[temp]  = QUALITYlev1[temp]  | QUAL_NOCOSMICRAY;
 							  CosmicRays = NULL;
 							}
 						      return 1;
 						    }
 
 						  COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
-						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
+						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1)
+						    {
+						      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
+						      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
+						    }
 
 						}
 					      else
@@ -3208,6 +3221,7 @@ int DoIt(void)
 						  else
 						    {
 						      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
+						      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
 						      CosmicRays = NULL;
 						    }
 						}
@@ -3245,6 +3259,7 @@ int DoIt(void)
 					      if(status != 0)                               //gapfilling failed
 						{
 						  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOGAPFILL;
+						  QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOGAPFILL;
 						  printf("Error: gapfilling code did not work on a level 1 filtergram at target time %s\n",timeBegin2);
 						}
 					    }
@@ -3376,6 +3391,7 @@ int DoIt(void)
 		      strcat(source[timeindex],recnums);
 		      
 		      QUALITYLEV1[timeindex] = QUALITYLEV1[timeindex] | QUALITYin[temp]; //logical OR on the bits of the QUALITY keyword of the lev 1 data
+		      QUALITY[timeindex]     = QUALITY[timeindex]     | QUALITYlev1[temp]; //we test the QUALITYlev1 keyword of the lev1 used, to make sure bad gapfill or cosmic-ray hit removals are propagated
 
 		      ii+=1;
 		    } //ii should be equal to ActualTempIntNum
@@ -3843,6 +3859,7 @@ if(nIndexFiltergram != 0)
     free(CARROTint);
     free(QUALITY);
     free(QUALITYLEV1);
+    free(QUALITYlev1);
     for(i=0;i<nWavelengths*npolout;i++)
       {
 	free(DATAMINS[i]);

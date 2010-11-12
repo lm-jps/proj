@@ -1049,7 +1049,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.19 2010/11/11 21:49:33 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.20 2010/11/12 21:38:52 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1309,6 +1309,7 @@ int DoIt(void)
   int row,column;
   int *FSNL=NULL;
   int *QUALITYin=NULL;
+  int *QUALITYlev1=NULL;
   int COSMICCOUNT=0;
 
   DRMS_RecordSet_t *recLev1  = NULL;                                 //records for the level 1 data
@@ -2100,6 +2101,13 @@ int DoIt(void)
 	      printf("Error: memory could not be allocated to NBADPERM\n");
 	      return 1;//exit(EXIT_FAILURE);
 	    }
+	  QUALITYlev1 = (int *)malloc(nRecs1*sizeof(int)); 
+ 	  if(QUALITYlev1 == NULL)
+	    {
+	      printf("Error: memory could not be allocated to QUALITYlev1\n");
+	      return 1;//exit(EXIT_FAILURE);
+	    }
+	  for(i=0;i<nRecs1;++i) QUALITYlev1[i]=0;
 	  QUALITYin = (int *)malloc(nRecs1*sizeof(int)); 
  	  if(QUALITYin == NULL)
 	    {
@@ -2746,13 +2754,17 @@ int DoIt(void)
 			  //else
 			  //  {
 			      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+			      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
 			      CosmicRays = NULL;
 			      //  }
 			}
 
 		      COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
-		      if(status != DRMS_SUCCESS || COSMICCOUNT == -1) QUALITY = QUALITY | QUAL_NOCOSMICRAY;
-
+		      if(status != DRMS_SUCCESS || COSMICCOUNT == -1)
+			{
+			  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+			  QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
+			}
 		    }
 		  else
 		    {
@@ -2761,6 +2773,7 @@ int DoIt(void)
 		      //else
 		      //{
 			  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+			  QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
 			  CosmicRays = NULL;
 			  //}
 		    }
@@ -2818,6 +2831,7 @@ int DoIt(void)
 			    {
 			      printf("Error: gapfilling code did not work on the level 1 filtergram FSN = %d at target time %s\n",FSN[temp],timeBegin2);
 			      QUALITY = QUALITY | QUAL_NOGAPFILL;
+			      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOGAPFILL;
 			    }
 			  SegmentRead[temp]=1;
 			}
@@ -3527,13 +3541,17 @@ int DoIt(void)
 						      //else
 						      //	{
 							  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+							  QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
 							  CosmicRays = NULL;
 							  //	}
 						    }
 
 						  COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
-						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1) QUALITY = QUALITY | QUAL_NOCOSMICRAY;
-
+						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1)
+						    {
+						      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+						      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
+						    }
 						}
 					      else
 						{
@@ -3542,6 +3560,7 @@ int DoIt(void)
 						  //else
 						  //{
 						      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+						      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
 						      CosmicRays = NULL;
 						      //}
 						}
@@ -3581,6 +3600,7 @@ int DoIt(void)
 						{
 						  printf("Error: gapfilling code did not work on level 1 filtergram FSN = %d at target time %s\n",FSN[temp],timeBegin2);
 						  QUALITY = QUALITY | QUAL_NOGAPFILL;
+						  QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOGAPFILL;
 						}
 					    }
 					}
@@ -3732,6 +3752,7 @@ int DoIt(void)
 		      strcat(source,recnums);
 
 		      QUALITYLEV1 = QUALITYLEV1 | QUALITYin[temp]; //logical OR on the bits of the QUALITY keyword of the lev 1 data
+		      QUALITY     = QUALITY     | QUALITYlev1[temp]; //we test the QUALITYlev1 keyword of the lev1 used, to make sure bad gapfill or cosmic-ray hit removals are propagated
 
 		      ii+=1;
 		    } //ii should be equal to ActualTempIntNum
@@ -6061,6 +6082,7 @@ int DoIt(void)
 	  free(HWLTNSET);
 	  free(NBADPERM);
 	  free(QUALITYin);
+	  free(QUALITYlev1);
 	}
     }
 
