@@ -197,6 +197,7 @@ int get_flat(char *query, int camera, float *flatfield, float *offpoint,
 
   ff = drms_open_records(drms_env,query,&status);
 
+  status=1;
 if (status == DRMS_SUCCESS && ff != NULL && ff->n != 0)
 	{
 
@@ -204,6 +205,11 @@ if (status == DRMS_SUCCESS && ff != NULL && ff->n != 0)
 	  segin    = drms_segment_lookup(record_flat, segmentname);
 	  arr_flat = drms_segment_read(segin, segin->info->type, &status);
 	  arr_data=arr_flat->data;
+	}
+
+
+ if (status ==0)
+   {
 
 	  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flatfield[j*nx+i]=arr_data[j*nx+i];
 
