@@ -184,7 +184,7 @@ int get_flat(char *query, int camera, float *flatfield, float *offpoint,
   DRMS_RecordSet_t *ff, *badrecs;
   DRMS_Record_t *record_flat;
   DRMS_Record_t *reclink_off, *reclink_dark, *reclink_bad;
-  int status;
+  int status, status_dat;
   DRMS_Segment_t *segin  = NULL;
   DRMS_Array_t *arr_flat;
   DRMS_Array_t *arr_offpoint, *arr_bad;
@@ -196,19 +196,19 @@ int get_flat(char *query, int camera, float *flatfield, float *offpoint,
   for (i=0; i<nx; ++i) for (j=0; j<ny; ++j) bad[j*nx+i]=1;  //initialize bad pixel array
 
   ff = drms_open_records(drms_env,query,&status);
+  status_dat=1;
 
-  status=1;
 if (status == DRMS_SUCCESS && ff != NULL && ff->n != 0)
 	{
 
 	  record_flat=ff->records[0];
 	  segin    = drms_segment_lookup(record_flat, segmentname);
-	  arr_flat = drms_segment_read(segin, segin->info->type, &status);
+	  arr_flat = drms_segment_read(segin, segin->info->type, &status_dat);
 	  arr_data=arr_flat->data;
 	}
 
-
- if (status ==0)
+ 
+ if (status_dat ==0)
    {
 
 	  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flatfield[j*nx+i]=arr_data[j*nx+i];
@@ -255,7 +255,7 @@ if (status == DRMS_SUCCESS && ff != NULL && ff->n != 0)
 	    }
 
 	  return 0;
-	}
+   }
 else
   {
 	      printf("Flatfield %s not found\n", query);
