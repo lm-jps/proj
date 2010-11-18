@@ -315,6 +315,8 @@ int DoIt(void)
  strcat(timelast, datum);
  strcat(timelast, "_23:59:59.99_TAI");
 
+ int pad;
+ pad=(int)(time_limit/filtergram_cadence+1.0);
  TIME tfirst=sscan_time(timefirst)-deltat;
  TIME tlast=sscan_time(timelast)+2*deltat;
 
@@ -357,11 +359,11 @@ if (fsn_first == 0 && fsn_last == 0)
       strcat(query0, inRecQuery);
       strcat(query0, "[][");
        char fsnf[10]={""};
-       sprintf(fsnf, "%d", fsn_first);
+       sprintf(fsnf, "%d", fsn_first-pad);
        strcat(query0, fsnf);
       strcat(query0, "-");
       char fsnl[10]={""};
-      sprintf(fsnl, "%d", fsn_last);
+      sprintf(fsnl, "%d", fsn_last+pad);
        strcat(query0, fsnl);
       strcat(query0, "][?FID=");
       char ffnumb[2]={""};
@@ -660,7 +662,7 @@ if (fsn_first == 0 && fsn_last == 0)
 	  present_forward[c]=present[c];
 	  if (statarr[c] != 0 || statarr[c+1] != 0 || keyvalue_wl[c] != keyvalue_wl[c+1] || keyvalue_pl[c] != keyvalue_pl[c+1] || (tmind[c+1]-tmind[c]) != (long)deltat || fabs(keyvalue_p0[c+1]- keyvalue_p0[c]) > 0.2 || sqrt(pow(keyvalue_X0[c]-keyvalue_X0[c+1],2)+pow(keyvalue_Y0[c]-keyvalue_Y0[c+1],2)) > limit_centerdiff[cam] || fabs(keyvalue_rsun[c]-keyvalue_rsun[c+1]) > limit_rsundiff){present_forward[c]=0; --ccount;}
 
-	  if (sqrt(pow(keyvalue_X0[c]-keyvalue_X0[c+1],2)+pow(keyvalue_Y0[c]-keyvalue_Y0[c+1],2)) > limit_centerdiff_cosmic || fabs(keyvalue_X0[c]-XX0) > 20.0 || fabs(keyvalue_Y0[c]-YY0) > 20.0) statarr[c]=statarr[c]+128;
+	  if (sqrt(pow(keyvalue_X0[c]-keyvalue_X0[c+1],2)+pow(keyvalue_Y0[c]-keyvalue_Y0[c+1],2)) > limit_centerdiff_cosmic || fabs(keyvalue_X0[c]-XX0) > limit_offpoint || fabs(keyvalue_Y0[c]-YY0) > limit_offpoint) statarr[c]=statarr[c]+128;
 	}
 
 	printf("number of filtergrams, valid pairs of frames %d \t %d \n", count_filtergram, ccount);

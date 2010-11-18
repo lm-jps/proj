@@ -92,8 +92,9 @@ const float limit_centerdiff_cosmic=1.0;
 //define sigma (here:constant for each fid)
 //double constsigma[20]={281., 281., 281., 281., 281., 281.923,281.923,272.457,272.457, 257.217,257.217,270.393,270.393,381.843, 381.843,338.651, 338.651, 339., 339., 339.};
 float rad_cosmic_ray=0.98;
-long time_limit=200;
-
+long time_limit=200; //time distance in sec for filtergrams with same FID to be used in cosmic ray detection
+float limit_offpoint=20.0; //limit for offpoint of individual filtergram from average offpoint
+float filtergram_cadence=1.8; //minimum filtergram cadence in sec
 
 //constants for cosmic ray detection as a function of effective wavelength
 
