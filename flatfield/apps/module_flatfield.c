@@ -36,7 +36,7 @@ ModuleArgs_t module_args[] =
      {ARG_INT, fid_name, "0", "FID"},
      {ARG_INT, cam_name, "0", "Camera"},
      {ARG_INT, fsnf_name, "0"},
-     {ARG_INT, fsnl_name, "0"},
+     {ARG_INT, fsnl_name, "2147483647"},
      {ARG_STRING, datumn},
      {ARG_END}
 };
@@ -140,7 +140,7 @@ int DoIt(void)
   TIME t_0, t_stamp;
   int focus,camid,fsns;
   
-  TIME   interntime;
+  TIME   interntime=sscan_time("2010.03.18_22:12:17.77_UTC");
   int axisbad[1];
 
 
@@ -317,20 +317,24 @@ int DoIt(void)
 
  int pad;
  pad=(int)(time_limit/filtergram_cadence+1.0);
- TIME tfirst=sscan_time(timefirst)-deltat;
- TIME tlast=sscan_time(timelast)+2*deltat;
 
- char datefirst[256]="";
- sprint_ut(datefirst, tfirst);
 
- char datelast[256]="";
- sprint_ut(datelast, tlast);
-
+ TIME tfirst, tlast;
 
  char query0[256]="";
 
-if (fsn_first == 0 && fsn_last == 0)
+if (fsn_first == 0 || fsn_last == 2147483647)
   {
+
+    tfirst=sscan_time(timefirst);
+    tlast=sscan_time(timelast);
+
+    char datefirst[256]="";
+    sprint_ut(datefirst, tfirst-time_limit);
+
+    char datelast[256]="";
+    sprint_ut(datelast, tlast+time_limit);
+
 
  strcat(query0, inRecQuery);
  strcat(query0, "[");
@@ -353,8 +357,11 @@ if (fsn_first == 0 && fsn_last == 0)
 
 
 
-  if (fsn_first != 0 && fsn_last != 0)
+  if (fsn_first != 0 && fsn_last != 2147483647)
     {
+
+      tfirst=0;
+      tlast=3881520000.0;
 
       strcat(query0, inRecQuery);
       strcat(query0, "[][");
@@ -490,7 +497,10 @@ if (fsn_first == 0 && fsn_last == 0)
       for (k=0; k<nRecs; ++k){
         keyvalue_time=drms_getkey(rec0[k], keytobs, &type_time, &status);       //read "T_OBS" of filtergram
         time_fl[k] = keyvalue_time.time_val;
-        tmind[k]=(long)time_fl[k]-(long)interntime;                           //tmind: time since first filtergram (in s) 
+        tmind[k]=(long)time_fl[k]-(long)interntime;
+	
+      
+                     //tmind: time since first filtergram (in s) 
 
 	keyvalue_fsn[k]=drms_getkey_int(rec0[k], keyfsn, &status);
 
@@ -529,7 +539,7 @@ if (fsn_first == 0 && fsn_last == 0)
 	keyvalue_vrad[k]=drms_getkey_float(rec0[k], lev1_vr, &status);
 	if (keyvalue_vrad[k] < vrad_min || keyvalue_vrad[k] > vrad_max) statarr[k]=statarr[k]+512;
 
-	if (keyvalue_fsn[k] == 11986751) printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d  \t %f \t %f \t  %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
+        //printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d  \t %f \t %f \t  %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
 
       }
   
@@ -548,7 +558,7 @@ if (fsn_first == 0 && fsn_last == 0)
 
       float dcount=0.0;
       for (k=0; k<nRecs; ++k){
-	//	printf("rsun %f %f %f %f %f %lf %d %d\n", keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_p0[k], keyvalue_b0[k], keyvalue_dsun_obs[k], statarr[k], keyvalue_fid[k]);
+	//printf("rsun %f %f %f %f %f %lf %d %d\n", keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_p0[k], keyvalue_b0[k], keyvalue_dsun_obs[k], statarr[k], keyvalue_fid[k]);
 	if (statarr[k] == 0){
 
 	R_SUN=R_SUN+keyvalue_rsun[k];
@@ -1025,7 +1035,7 @@ if (fsn_first == 0 && fsn_last == 0)
 	  //write out cosmic ray series
 	  /////////////////////////////////////////////////////////
 
-	  if (cosmic_flag && present[km1])
+	  if (cosmic_flag && present[km1] && keyvalue_fsn[km1] >= fsn_first && keyvalue_fsn[km1] <= fsn_last && time_fl[km1] >= tfirst && time_fl[km1] <= tlast)
 	    {
 	  int cosfind, limit_flag;
 	  if (count == -1) cosfind=0; else if (count < limit_cosmic){cosfind=count; limit_flag=0;} else {cosfind=limit_cosmic; limit_flag=1;}
