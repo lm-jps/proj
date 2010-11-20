@@ -946,7 +946,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.13 2010/11/12 21:39:02 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.14 2010/11/20 00:59:40 couvidat Exp $");
 }
 
 
@@ -3196,14 +3196,13 @@ int DoIt(void)
 						  if(status != DRMS_SUCCESS || CosmicRays == NULL)
 						    {
 						      printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
-						      if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
-						      else
-							{
+						      //if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+						      //else
+						      //{
 							  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
 							  QUALITYlev1[temp]  = QUALITYlev1[temp]  | QUAL_NOCOSMICRAY;
 							  CosmicRays = NULL;
-							}
-						      return 1;
+							  //}
 						    }
 
 						  COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
@@ -3217,13 +3216,13 @@ int DoIt(void)
 					      else
 						{
 						  printf("Unable to open the series %s for FSN %d\n",HMISeriesTemp,FSN[temp]);
-						  if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
-						  else
-						    {
+						  //if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
+						  //else
+						  //{
 						      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
 						      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
 						      CosmicRays = NULL;
-						    }
+						      //}
 						}
 					      					      
 					      image  = Segments[temp]->data;
