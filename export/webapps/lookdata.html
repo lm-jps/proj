@@ -92,13 +92,21 @@ span.tip { background-color:yellow }
 
 // Set CGI-BIN targets
 
-// var SHOW_SERIES = "show_series_test"
-// var JSOC_INFO = "jsoc_info_test"
-// var SHOW_INFO = "show_info_test"
+// var SHOW_SERIES = "show_series_test";
+// var JSOC_INFO = "jsoc_info_test";
+// var SHOW_INFO = "show_info_test";
+// var EXPORTDATA = "exportdata2";
 
-var SHOW_SERIES = "show_series"
-var JSOC_INFO = "jsoc_info"
-var SHOW_INFO = "show_info"
+var SHOW_SERIES = "show_series";
+var JSOC_INFO = "jsoc_info";
+var SHOW_INFO = "show_info";
+var EXPORTDATA = "exportdata";
+
+// Protect page from accidental BACK button
+window.onbeforeunload = function ()
+   {
+   return "Did you really mean to leave lookdata? Use CANCEL to stay here";
+   }
 
 // var SeriesList = "";
 // var SeriesInfo = "";
@@ -788,6 +796,7 @@ function GetRSCount()
 	RecordCount = SummaryData.count;
 	$("RSCount_Place").innerHTML = SummaryData.count;
 	}
+      $("ExportRecordSetLimit").innerHTML = RecordLimit.value;
       $("ExportRecordSet").innerHTML = $("RecordSet").value;
       if (nsegsselected > 0)
         $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
@@ -1035,6 +1044,7 @@ function GetKeyValues()
   if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
     {
     $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<BR>Please fo back to steps 4 and 5."; 
+    tabs.setSelectedItems([tabdisplay]); // show the display page.
     return;
     }
   if (MaxRecs != 0)
@@ -1056,18 +1066,22 @@ function GetKeyValues()
       GetRSCount();
   if (RecordCount < 0)
     {
+// XXXXXX change this to a while, change message, do sleep 2 sec.
       $("DisplayPlace").innerHTML = "RecordSet count underway (step 3), please wait for it to complete before retrying";
+    tabs.setSelectedItems([tabdisplay]); // show the display page.
       return;
     }
   if (RecordCount == 0)
     {
     $("DisplayPlace").innerHTML = "There are no records in the chosen RecordSet";
+    tabs.setSelectedItems([tabdisplay]); // show the display page.
     return;
     }
   if (RecordCount > 10000 && !$("AllowBigQueries").checked)
     {
     $("DisplayPlace").innerHTML = "Requested Recordset is too large for this function, " + RecordCount + 
 	" records.<BR>Please go back to step 3 and choose a smaller recordset.";
+    tabs.setSelectedItems([tabdisplay]); // show the display page.
     return;
     }
   $("FetchKeyValsButton").value = "Processing ...";
@@ -1082,6 +1096,7 @@ function GetKeyValues()
     onSuccess: function(transport, json)
       {
       $("DisplayPlace").innerHTML = "Data received, processing ...";
+      tabs.setSelectedItems([tabdisplay]); // show the display page.
       var response = transport.responseText || "no response text";
       RecordData = response.evalJSON();
       // var RecordData = JSON.parse(response);
@@ -1252,6 +1267,7 @@ function GetShowInfo()
   // The UseShowInfo box is checked, so do a show_info request with the results in a new page
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
+  tabs.setSelectedItems([tabdisplay]); // show the display page.
   if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
     {
     $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<BR>Please fo back to steps 4 and 5."; 
@@ -1299,12 +1315,14 @@ function GetShowInfo()
   if (RecordCount == 0)
     {
     $("DisplayPlace").innerHTML = "There are no records in the chosen RecordSet";
+    tabs.setSelectedItems([tabdisplay]); // show the display page.
     return;
     }
   if (RecordCount > 10000 && !$("AllowBigQueries").checked)
     {
     $("DisplayPlace").innerHTML = "Requested Recordset is too large for this function, " + RecordCount + 
 	" records.<BR>Please go back to step 3 and choose a smaller recordset.";
+    tabs.setSelectedItems([tabdisplay]); // show the display page.
     return;
     }
   $("FetchKeyValsButton").value = "Processing ...";
@@ -1324,6 +1342,7 @@ function GetShowInfo()
   $("FetchKeyValsButton").disabled = false;
   $("AbortKeyValsButton").hide();
   $("DisplayPlace").innerHTML = "Key values will be returned in a new window.";
+  tabs.setSelectedItems([tabdisplay]); // show the display page.
   }
 
 function newwide(thisevent)
@@ -1420,12 +1439,14 @@ so.rebuild();
 
 function Export_Recordset()
   {
-  Cookie.init({name:"exportdata"});
+  Cookie.init({name:EXPORTDATA});
   Cookie.setData("state",0);
   if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
     $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-  ExportWindow=window.open("http://" + Host + "/ajax/exportdata.html?ds="+$("ExportRecordSet").innerHTML,
-             "JSOC_Export");
+  $("ExportRecordSetLimit").innerHTML = RecordLimit.value;
+  var exportargs="ds="+$("ExportRecordSet").innerHTML  + "&limit=" + RecordLimit.value
+  Cookie.setData("search",encodeURIComponent(exportargs));
+  ExportWindow=window.open("http://" + Host + "/ajax/" + EXPORTDATA + ".html?" + encodeURIComponent(exportargs), "JSOC_Export");
   ExportWindow.window.focus();
   }
 
@@ -1433,7 +1454,8 @@ function StartExportRequest()
   {
   if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
     $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-  $("ExportRequestFrame").src = "http://" + Host + "/ajax/exportdata.html?ds="+$("ExportRecordSet");
+    $("ExportRecordSetLimit").innerHTML = RecordLimit.value;
+  $("ExportRequestFrame").src = "http://" + Host + "/ajax/" + EXPORTDATA + ".html?ds="+$("ExportRecordSet").innerHTML  + "&limit=" + RecordLimit.value;
   }
 
 function ExportRequestStarted()
@@ -1639,9 +1661,11 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
 </DIV> <!-- /DIV TabDisplayDiv -->
 <DIV id="TabExportDiv" style="display:block">
   <DIV> <!-- Section 7, Export link -->
-    <H3>Warning - record limit not implemented for export yet</H3>
+    <H3>Warning - record limit not fully tested for export yet, should work except for hg_patch processing during export</H3>
     <B>8. RecordSet to export:</B>
     <span id="ExportRecordSet" style="background-color:#FFFFFF;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
+    <B> Record Limit:</B>
+    <span id="ExportRecordSetLimit" style="background-color:#FFFFFF;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
     <input id="ExportRequestButton" type="button" value="Export" onClick="Export_Recordset();" > 
     <!-- <input id="ExportRequestButton" type="button" value="Export" onClick="StartExportRequest();" > -->
     Click to jump to new export page.
