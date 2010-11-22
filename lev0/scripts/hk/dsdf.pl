@@ -49,7 +49,7 @@
 #                   process works for dayfiles from the sdo moc product      #
 #                   server or rtmon server only. This script is not used     #
 #                   currently to move and  call ingest_dayfiles.pl for the   #
-#                   HSB dayfiles.                                            #
+#                   HSB dayfiles. But can be enhanced to do hsb dayfiles.    #
 #                (2)Setup in script is for production environment.           #
 #                (3)Setup parameters at top of script in main of script      #
 ##############################################################################
@@ -82,7 +82,7 @@ if ($source eq "moc")
   # moc pickup directory setup:
   $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp22/jsoc/sdo/mocprods/lzp";
 
-  # moc dropoff directory setup:
+  # moc dropoff directory setup
   $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp22/production/lev0/hk_moc_dayfile";
 
   # moc common email arguments
@@ -94,7 +94,7 @@ if ($source eq "moc")
   $subject_email_no_m3sd="JSOC:ERROR:M3SD Processing of MOC dayfiles into housekeeping data series.";
   $subject_email_no_decode_m3sd="JSOC:ERROR:Decoding and M3SD Processing of MOC dayfiles into housekeeping data series.";
   $subject_email_not_equal_count="JSOC:ERROR:Ingesting MOC dayfiles: Did not ingest dayfiles because some hkt files don't have corresponding xml files";
-  $subject_email_warn_m3sd="JSOC:WARNING:M3SD Processing of all five MOC dayfiles into housekeeping data series was NOT done.";
+  $subject_email_warn_m3sd="JSOC:WARNING:M3SD Processing of all six MOC dayfiles into housekeeping data series was NOT done.";
   $subject_email_warn_decode="JSOC:WARNING:Decode Dayfile Processing of MOC dayfiles into asd housekeeping data series was NOT done.";
   $subject_email_warn_m3sd_decode="JSOC:WARNING:M3SD Processing and Decode Dayfile Processing of all MOC dayfiles NOT done.";
 
@@ -114,6 +114,9 @@ elsif ($source eq "rtmon")
   $subject_email_not_sure="JSOC:WARNING:Ingesting RTMON dayfiles: status:Possible error ingesting dayfile.";
   $subject_email_no_decode="JSOC:ERROR:Decoding RTMON dayfiles into housekeeping data series.";
   $subject_email_not_equal_count="JSOC:ERROR:Ingesting RTMON dayfiles: Did not ingest dayfiles since some hkt files don't have corresponding xml files.";
+  $subject_email_warn_m3sd="JSOC:WARNING:M3SD Processing of six RTMOC dayfiles into housekeeping data series was NOT done.";
+  $subject_email_warn_decode="JSOC:WARNING:Decode Dayfile Processing of RTMON dayfiles into asd housekeeping data series was NOT done.";
+  $subject_email_warn_m3sd_decode="JSOC:WARNING:M3SD Processing and Decode Dayfile Processing of all RTMON dayfiles NOT done.";
 }
 elsif ( $source == "hsb" ) 
 {
@@ -123,8 +126,8 @@ elsif ( $source == "hsb" )
 }
 else 
 {
-  print "ERROR: unknown source value. Exting script dsdf.pl!\n";
-  exit;
+   print "ERROR: unknown source value. Exting script dsdf.pl!\n";
+   exit;
 }
 
 # (5)debug flag where 0=minimum log message 1=debug mode or max log messages
@@ -383,8 +386,7 @@ else
   sendEmail("$to_email", "$from_email", "$subject_email_no_decode_m3sd","Error Message #1:\n-->Failed to decode dayfiles into keywords into hk data series.\n-->Number of dayfiles the could not be decoded was <$failed_ddf_count>.\n-->Day Files not decoded are:<@$ref_failed_to_decode_list>\nError Message #2:\n-->Failed process dayfiles into min,max,mean and standard deviation(m3sd) keywords into hk data series.\n-->Number of dayfiles the could not process m3sd keywords was <$failed_m3sd_count>.\n-->Day Files not decoded are:<@$ref_failed_to_m3sd_list>\n");
 }
 
-# (24)check if processed all five files dayfiles using load_m3sd and check if processed 1 file using decode_dayfile.
-
+# (24)check if processed all six files dayfiles using load_m3sd and check if processed 1 file using decode_dayfile.
 if($source eq "moc")
 {
   #setup expected count of files to process and then check if processed successfully
@@ -411,7 +413,31 @@ if($source eq "moc")
   }
   
 }#end if source is moc
-#elsif ($source eq "rtmon") #no check required here yet
+elsif ($source eq "rtmon") 
+{
+  #setup expected count of files to process and then check if processed successfully
+  $expected_count_m3sd=1; #later can automate better by getting count via file
+  $expected_count_decode=0; #later can automate better by getting count via file
+
+  # check count not expected and check did not send other emails above already
+  if (($success_m3sd_count ne $expected_count_m3sd) and ($failed_m3sd_count == 0) and ($success_decode_count ne $expected_count_decode) and ($failed_ddf_count == 0))
+  {
+     sendEmail("$to_email", "$from_email", "$subject_email_warn_m3sd_decode","Warning Message(1):\n-->Did not process the expected  <$expected_count_m3sd> dayfiles using load_m3sd executable.\n-->Only processed <$success_m3sd_count> dayfile(s)\n-->Check if the dayfiles for apid 17, 19, 21, 38, 40 and 44 have been retrieved and ingested in < hmi | aia >.hk_dayfile series .\n-->If dayfiles exist, get dayfiles and rerun with load_m3sd executable.\n\nWarning Message(2):\n-->Did not process the expected  <$expected_count_decode> dayfiles using decode_dayfile executable.\n-->Note sdo.lev0_asd_0004 was not updated today.\n-->Only processed <$success_decode_count> dayfile(s).\n-->Check if the dayfiles for apid 129 has been retrieved and ingested in sdo.hk_dayfile series .\n-->If dayfile exists, get dayfiles and rerun with decode_dayfile executable.");
+    print LF "--->status:WARNING:did not process expected <$expected_count_m3sd> dayfiles using load_m3sd executable.\n";
+    print LF "--->status:WARNING:did not process expected <$expected_count_decode> dayfiles using decode_dayfile executable. sdo.lev0_asd_0004 was not updated today.\n";
+  } 
+  elsif (($success_m3sd_count ne $expected_count_m3sd) and ($failed_m3sd_count == 0))
+  {
+     sendEmail("$to_email", "$from_email", "$subject_email_warn_m3sd","Warning Message:\n-->Did not process the expected  <$expected_count_m3sd> dayfiles using load_m3sd executable.\n-->Only processed <$success_m3sd_count> dayfile(s)\n-->Check if the dayfiles for apid 17, 19, 21, 38, 40 and 44 have been retrieved and ingested in < hmi | aia >.hk_dayfile series .\n-->If dayfiles exist, get dayfiles and rerun with load_m3sd executable.");
+    print LF "--->status:WARNING:did not process expected <$expected_count_m3sd> dayfiles using load_m3sd executable.\n";
+  }
+  # check count not expected and check did not send other emails above already
+  elsif (($success_decode_count ne $expected_count_decode) and ($failed_ddf_count == 0))
+  {
+     sendEmail("$to_email", "$from_email", "$subject_email_warn_decode","Warning Message:\n-->Did not process the expected  <$expected_count_decode> dayfile(s) using decode_dayfile executable.\n-->Note sdo.lev0_asd_0004 was not updated today.\n-->Only processed <$success_decode_count> dayfile(s).\n-->Check if the dayfiles for apid 129 has been retrieved and ingested in sdo.hk_dayfile series .\n-->If dayfile exists, get dayfiles and rerun with decode_dayfile executable.");
+    print LF "--->status:WARNING:did not process expected <$expected_count_decode> dayfiles using decode_dayfile executable. sdo.lev0_asd_0004 was not updated today.\n";
+  }
+}
 
 # (25)close log 
 print LF "--->Exiting script dsdf.pl\n";
@@ -496,13 +522,15 @@ sub check_agruments($)
      print "Limitations:\n";
      print "(1) Only used to process and save dayfile(s) with source equal to moc or rtmon.\n";
      print "(2) Only implemented to do decode_dayfile and load_m3sd on MOC dayfiles.\n";
-     print "(3) Only setup to run on production-at-j0.\n";
-     print "(4) Only setup for load_m3sd to use instruction files on production and for apid 17, 19, 21, 38, 40 and 44 .\n";
-     print "(5) Only setup to check processing status is done on files for one file for decode_dayfile and five files for load_m3sd\n";
-     print "(6) To run in another environment check and redo variable setting in steps(1)-(9) settings\n";
- 
+     print "(3) Only implemented to do decode_dayfile and load_m3sd on RTMON dayfiles.\n";
+     print "(4) Only setup to run on production-at-j0.\n";
+     print "(5) Only setup for load_m3sd to use instruction files on production and for apid 17, 19, 21, 38, 40 and 44 .\n";
+     print "(6) Only setup to check processing status is done on files for one MOC day file for decode_dayfile and six MOC day files for load_m3sd\n";
+     print "(7) Only setup to check processing status is done on files for zero RTMON day files for decode_dayfile and six RTMON day files for load_m3sd\n";
+     print "(8) Need to update expected variable setting when add apid to do processing decode_dayfile and load_m3sd to config files(dsdf_apid_list_m3sd_moc, df_apid_ds_list_for_rtmon, etc).\n";
+     print "(9) To run in another environment check and redo variable setting in steps(1)-(9) settings\n";
 
-
+     #exist
      exit;
   }
   elsif("moc" eq substr($src,0,3) or  "rtmon" eq substr($src,0,5))
@@ -512,7 +540,7 @@ sub check_agruments($)
   else
   {
      print "ERROR: Entered incorrect source name for data series. Use moc or rtmon only!\n";
-     print "Usage: perl dsdf.pl  <dayfile source from moc or rtmon directory on filesystem >\nwhere source is either: moc or rtmon.\nNote currently script handles rtmon or moc as source values but can be updated for src=hsb.\n";
+     print "Usage: perl dsdf.pl  <dayfile source from moc or rtmon directory on filesystem >\nwhere source is either: moc or rtmon.\nNote currently script handles rtmon or moc as source dayfile values but script can be updated for handling src=hsb.\n";
      exit;
   }
   return ($src);
@@ -602,13 +630,22 @@ sub get_apid_m3sd_list($)
   my $input=$_[0];
   my @mlist=();
   my $fn_moc="$script_dir/dsdf_apid_list_m3sd_moc";
-  my $fn_rtmoc="$script_dir/dsdf_apid_list_m3sd_rtmon";
+  my $fn_rtmon="$script_dir/dsdf_apid_list_m3sd_rtmon";
   my $fn_hsb="$script_dir/dsdf_apid_list_m3sd_hsb";
 
   # current only use moc option for src value
   if($input eq "moc")
   {
     open(FILE_MEAN_APID_LIST, "$fn_moc") || die "Can't Open: <$fn_moc> file: $!\n";
+    while (<FILE_MEAN_APID_LIST>)
+    {
+        push(@mlist, $_); 
+    }
+    close(FILE_MEAN_LIST);
+  }
+  elsif($input eq "rtmon")
+  {
+    open(FILE_MEAN_APID_LIST, "$fn_rtmon") || die "Can't Open: <$fn_rtmon> file: $!\n";
     while (<FILE_MEAN_APID_LIST>)
     {
         push(@mlist, $_); 
@@ -624,6 +661,7 @@ sub get_apid_m3sd_list($)
   return(@mlist);
 }
 
+
 
 #########################################################################
 #%decode_status_hk = do_process_dayfile(@apid_decode_list);
@@ -980,7 +1018,7 @@ sub do_m3sd_dayfile($,$,$,$,$)
     if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:4:check if have match for <$m3sd_apid> value for file<$file>\n";}
 
     # if file is on list to m3sd then do m3sd processing
-    if(substr($file,2,2) eq  $m3sd_apid )
+    if((substr($file,2,2) eq  $m3sd_apid && $src eq "moc") or (substr($file,11,4) eq  $m3sd_apid && $src eq "rtmon"))
     {
       #pick out files in @m3sd_list for apids to process using load_m3sd
       #got one to decode
@@ -988,10 +1026,11 @@ sub do_m3sd_dayfile($,$,$,$,$)
       {
         print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:5:FOUND apid to process:<$m3sd_apid>\n";
         print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:6:FOUND file to process <$file>\n";
+        print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:7:FOUND src <$src>\n";
       }
 
       # get instruction file based on apid
-      $instruct_file=get_instruction_file( $m3sd_apid);
+      $instruct_file=get_instruction_file( $src,$m3sd_apid);
       if($dflg == 1) {print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:-:Check FOUND instruction file to process <$instruct_file>\n"};
       if ($instruct_file eq "")
       {
@@ -1010,10 +1049,12 @@ sub do_m3sd_dayfile($,$,$,$,$)
         print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:8:source:<$src>\n";
         print LF "-->DEBUG:MESSAGE:do_m3sd_dayfile:9:in file is <$indir/$file>\n";
       }
-      printf(LF "-->Start running load_m3sd for src=<%s> and dayfile=<%s> at %s\n",$src,$file,get_current_time());
+      printf(LF "-->Start running load_m3sd for src=<%s> and dayfile=<%s> and instuction file=<%s> at %s\n",$src,$file,$instruct_file, get_current_time());
 
       # decode dayfile
-      $log=`$exec_dir/load_m3sd  in=$indir/$file isf=$instruct_file   2>&1`; 
+      $log=`$exec_dir/load_m3sd  src=$src in=$indir/$file isf=$instruct_file  2>&1`; 
+      $log =~ s/\n// ; #regular exp - look for field
+      print LF "-->Results of running load_m3sd:<$log>\n";
 
       # check status returned when executing decode_dayfile
       $log =~ /(ERROR)/g ; #regular exp - look for field
@@ -1071,33 +1112,37 @@ sub do_m3sd_dayfile($,$,$,$,$)
 #############################################################################
 # subroutine get_instruction_file -gets file for 17,19,21,38,40 and 44 only!#
 #############################################################################
-sub get_instruction_file($)
+sub get_instruction_file($,$)
 {
+  #local variables
   my $inst;
   $inst="";
-  my $apid=$_[0];
+  #arguments passed in function
+  my $src=$_[0];
+  my $apid=$_[1];
   
-  if($apid == 17)
+  #set instruction files for moc and rtmon dayfiles only
+  if(($apid == 17 and $src eq "moc") or (hex $apid == 0x11 and $src eq "rtmon"))
   {
     $inst=$inst_apid_17;
   }
-  elsif($apid == 19)
+  elsif(($apid == 19 and $src eq "moc") or (hex $apid == 0x13 and $src eq "rtmon"))
   {
     $inst=$inst_apid_19;
   }
-  elsif($apid == 21)
+  elsif(($apid == 21 and $src eq "moc") or (hex $apid == 0x15 and $src eq "rtmon"))
   {
-    $inst=$inst_apid_21;
+  $inst=$inst_apid_21;
   }
-  elsif($apid == 38)
+  elsif(($apid == 38 and $src eq "moc") or (hex $apid == 0x26 and $src eq "rtmon"))
   {
     $inst=$inst_apid_38;
   }
-  elsif($apid == 40)
+  elsif(($apid == 40 and $src eq "moc") or (hex $apid == 0x28 and $src eq "rtmon"))
   {
-    $inst=$inst_apid_40;
+      $inst=$inst_apid_40;
   }
-  elsif($apid == 44)
+  elsif(($apid == 44 and $src eq "moc") or (hex $apid == 0x2c and $src eq "rtmon"))
   {
     $inst=$inst_apid_44;
   }
