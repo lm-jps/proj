@@ -1,13 +1,17 @@
 #!/bin/csh -f
 # script to run tracking and ring-diagram analyses on HMI Dopplergrams
 
-@ TEST = 1	# set to 0 for production in namespace hmi
+@ TEST = 0	# set to 1 for production in namespace hmi_test
+if ("$1" =~ '-test') then
+  @ TEST = 1
+  shift
+endif
 
 if ($#argv < 1) then
-  echo "usage: $0 AR [CR:CL LAT QLON-1 [QLON-2]]"
+  echo "usage: $0 [-test] AR [CR:CL LAT QLON-1 [QLON-2]]"
   exit
 endif
-@ AR = $1
+@ AR = `echo $1 | sed  -e "s/^0*//"`
 
 # modules and programs
 set LSMAI = maicalc
@@ -35,19 +39,22 @@ set PSPEC = "$PSPEC -v"
 # base naming convention for I/O series and logs
 if ($TEST) then
   set NMSP = hmi_test
-  set BCKG = $NMSP.V_avg120
-#  set BCKG = su_rsb.hmi_V_avg120
+  set OBS = V2
+  set MOBS = M2
 else
   set NMSP = hmi
-  set BCKG = $NMSP.V_avg120
+  set OBS = V
+  set MOBS = M
 endif
-set BASE = rdV
+set BASE = rd$OBS
 set SUFX = _targ
 
 # input series
-set ISER = $NMSP.V_45s
+set ISER = $NMSP.$OBS\_45s
 set NOAA = su_rsb.NOAA_ActiveRegions
-set MSER = mdi.fd_M_96m_lev18
+set MSER = $NMSP.$MOBS\_45s
+# set MSER = mdi.fd_M_96m_lev18
+set BCKG = $NMSP.$OBS\_avg120
 set GUESS = yale_cb.guess_table"[1]"
 set GUESSDIR = `show_info -pq ds= "$GUESS"`
 set GUESSNAM = `/bin/ls $GUESSDIR | awk '{print $1}'`
@@ -84,9 +91,9 @@ if ($#argv > 1) then
   set CRCL = $2
   set LON = `echo $CRCL | awk -F: '{print $2}'`
   set LAT = $3
-  @ QLNE = $4
+  @ QLNE = `echo $4 | sed  -e "s/^0*//"`
   @ QLNW = $QLNE
-  if ($#argv > 4) @ QLNW = $5
+  if ($#argv > 4) @ QLNW = `echo $5 | sed  -e "s/^0*//"`
 else
   @ NAR = 1
   while ($NAR <= $#ARID)
@@ -113,7 +120,7 @@ else
 endif
 @ CROT = `echo $CRCL | awk -F: '{print $1}'`
 
-@ LONC = `echo $LON | awk -F. '{print $1}'`
+@ LONC = `echo $LON | awk -F. '{print $1}' | sed  -e "s/^0*//"`
 set FR = `echo $LON | awk -F. '{print $2}'`
 
 goto SKIPMAI
