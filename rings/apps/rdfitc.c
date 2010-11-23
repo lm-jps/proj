@@ -4,21 +4,21 @@
  *  Responsible:  Rick Bogart                   	RBogart@spd.aas.org
  *     
  *  "Ring" fitting based on the code developed and used by Sarbani Basu
- *    and H. M. Antia for fitting 3-d solar acoustic power spectra; tbased
+ *    and H. M. Antia for fitting 3-d solar acoustic power spectra; based
  *    on SOI module ringfit_v0.86
  *
  *  Main program begins around line 800
  *
  *  Bugs:
  *    Timing is not re-zeroed for each I/O record pair processed
- *    default values of lmin and lmax are appropriate for MDI full-disc
- *	resolution and areas of size 15 deg
+ *    default values of lmin and lmax are appropriate for HMI resolution
+ *	and areas of size 15 deg
  *    non-default value of nmax seems to force premature termination; in
  *	particular, nmax <= 3 causes crash due to going beyond array bounds
  *	of freq, wid
  *
  *  Planned development:
- *    1.0 parametrize test criteria for bad fits
+ *    parametrize test criteria for bad fits
  *    Use drms_keyword_lookup()
  *    Remove unnecessary defined constants, predefined size declarations
  *    Add parameters for fitting coefficients
@@ -32,7 +32,7 @@
 						      /*  module identifier  */
 char *module_name = "ringfit_bba";
 char *module_desc = "ring fitting using method of Basu and Antia";
-char *version_id = "1.0";
+char *version_id = "1.1";
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET,	"in", "", "input dataset"}, 
@@ -45,11 +45,17 @@ ModuleArgs_t module_args[] = {
   {ARG_INT, "lmin", "80", "lowest degree to fit"},
   {ARG_INT, "lmax", "3000", "highest degree to fit"},
   {ARG_INT, "fmin", "900", "lowest frequency to fit [uHz]"},
-  {ARG_INT, "fmax", "7000", "highest frequency index to fit"},
+  {ARG_INT, "fmax", "5500", "highest frequency index to fit"},
   {ARG_INT, "bfgsct", "125", "number of iterations for bfgs"},
   {ARG_INT, "linminct", "15", "number of iterations for linmin"},
   {ARG_FLOAT, "ux", "0.0", "initial guess for zonal flow speed [m/s]"},
   {ARG_FLOAT, "uy", "0.0", "initial guess for merridional flow speed [m/s]"},
+  {ARG_FLOAT, "A1", "fit", "fixed value for amplitude term A1 in place of fit"},
+  {ARG_FLOAT, "S", "fit", "fixed value for asymmetry term in place of fit"},
+  {ARG_FLOAT, "A1_guess", "0.0", "initial guess for amplitude term A1"},
+  {ARG_FLOAT, "S_guess", "-200.0", "initial guess for asymmetry term S"},
+  {ARG_STRING, "copy",  "+",
+      "comma separated list of keys to propagate forward"},
   {ARG_FLAG, "n", "0", "no fitting (diagnostics only)"},      
   {ARG_FLAG, "v", "0", "verbose output"},      
   {ARG_FLAG, "x", "0", "extra reporting of number of iterations"},      
@@ -61,7 +67,7 @@ char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
     "MidTime", "Duration", "Cadence", "LonSpan",
     "T_START", "T_STOP", "Coverage", "Size", "Width", "Height",
     "ZonalTrk", "ZonalVel", "MeridTrk", "MeridVel",
-    "MapScale", "MapProj", "Map_PA", "RSunRef", "PosAng", "MAI",
+    "MapScale", "MapProj", "Map_PA", "RSunRef", "PosAng", "MAI", "Ident",
     "Apode_f", "Apode_k_min", "Apode_k_max", "APODIZNG", "APOD_MIN", "APOD_MAX"};
 
 #include <unistd.h>
@@ -859,7 +865,7 @@ static int get_scaling_values (DRMS_Record_t *rec, double *dnu, double *dkx,
   } else {
     fprintf (stderr, "Warning: no WCSTYPE; k_x/k_y/omega assumed\n");
   }
-/*  should really be able to parse CUNIT and convert accordingly; for now..  */
+ /*  should really be able to parse CUNIT and convert accordingly; for now..  */
   key_str = drms_getkey_string (rec, "CUNIT1", &status);
   if (key_str) {
     if (strcasecmp (key_str, "Mm-1")) {
@@ -968,13 +974,16 @@ int DoIt (void) {
   int fit_ct, cvg_ct, cvg_minf, cvg_maxf;
   int npx, npxmax, status, total_clock;
   int rgn, rgnct, segct, isegnum, osegnum, logsegnum, drms_output, dispose;
+  int propct;
+  char **copykeylist;
   char logfile[DRMS_MAXPATHLEN], outfile[DRMS_MAXPATHLEN];
   char source[DRMS_MAXQUERYLEN], recid[DRMS_MAXQUERYLEN];
-  char line[1024], module_ident[64];
+  char line[1024], module_ident[64], key[64];
 
   double scale[] = {1.0, 1.0, VSCALE, VSCALE, 1.0,
       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0e-4};
   double rscale  = 1.0 / RSUN_MM;
+  float dofit[13];
   int npar = 13;
   char *hdrstr[] = {
     "          A0", "           c", "          Ux", "          Uy",
@@ -989,48 +998,77 @@ int DoIt (void) {
 
   int nmin = params_get_int (params, "nmin");
   int nmax = params_get_int (params, "nmax");
-				     /*  should actually be nmax - nmin + 1  */
+				      /*  should actually be nmax - nmin + 1  */
   int nct = nmax + 2;
   int lmin = params_get_int (params, "lmin");
   int lmax = params_get_int (params, "lmax");
-				     /*  should actually be lmax - lmin + 1  */
+				      /*  should actually be lmax - lmin + 1  */
   int lct = lmax + 1;
   int fmin = params_get_int (params, "fmin");
   int fmax = params_get_int (params, "fmax");
   int bfgs_nit = params_get_int (params, "bfgsct");
   int linmin_nit = params_get_int (params, "linminct");
 
+  double A1_val = params_get_double (params, "A1");
+  double B1_val = params_get_double (params, "B1");
+  double B2_val = params_get_double (params, "B2");
+  double asym_val = params_get_double (params, "S");
+
   double ux_guess = params_get_double (params, "ux") / VSCALE;
   double uy_guess = params_get_double (params, "uy") / VSCALE;
+  double A1_guess = params_get_double (params, "A1_guess");
+  double asym_guess = params_get_double (params, "S_guess");
 
   char *inds = strdup (params_get_str (params, "in"));
   char *guessfile =  strdup (params_get_str (params, "guessfile"));
   char *outser =  strdup (params_get_str (params, "out"));
+  char *propagate_req = strdup (params_get_str (params, "copy"));
 
   int verbose = params_isflagset (params, "v");
   int extra_reporting = params_isflagset (params, "x");
   int calc_seconds = params_isflagset (params, "2");
   int no_fits = params_isflagset (params, "n");
  
-  double p = 0.0;			      /*  uninitialized in original  */
+  double p = 0.0;			       /*  uninitialized in original  */
 
 /*
   time_elapsed (0, &total_clock);
 */
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
+  if (verbose) printf ("%s:\n", module_ident);
+  propct = construct_stringlist (propagate_req, ',', &copykeylist);
   if ((unit11 = fopen (guessfile, "r")) == NULL) {
     fprintf (stderr, "Error: unable to read frequency guess table \"%s\"\n",
 	guessfile);
     return 1;
   }
+				/*  optionally eliminate parameters from fit  */
+  for (n = 0; n < npar; n++) dofit[n] = 1.0;
+/*
+  if (isfinite (B1_val)) dofit[5] = 0.0;
+  if (isfinite (B2_val)) dofit[6] = 0.0;
+*/
+  if (isfinite (A1_val)) {
+    dofit[7] = 0.0;
+    A1_guess = A1_val;
+  }
+/*
+  if (isfinite (A2_val)) dofit[8] = 0.0;
+  if (isfinite (A3_val)) dofit[9] = 0.0;
+*/
+  if (isfinite (asym_val)) {
+    dofit[12] = 0.0;
+    asym_guess = asym_val;
+  }
+
   d2 = (double *)malloc (npar * npar * sizeof (double));
   h = (double *)malloc (npar * npar * sizeof (double));
   hs = (double *)malloc (npar * npar * sizeof (double));
   freq = (double *)calloc (nct * lct, sizeof (double));
   wid = (double *)calloc (nct * lct, sizeof (double));
-		 /*  Read in the initial guess for frequency and line-width  */
+		  /*  Read in the initial guess for frequency and line-width  */
   i = j = 0;
-	 /*  Read frequencies and widths from table into [nmax*lmax] arrays  */
+	  /*  Read frequencies and widths from table into [nmax*lmax] arrays  */
   while ((c = fgetc (unit11)) != EOF) {
     if (c == '\n') {
       line[j] = '\0';
@@ -1219,7 +1257,7 @@ int DoIt (void) {
     spec = (float *)pspec->data;
     dval = drms_getkey_double (irec, "LOG_BASE", &status);
     if (!status && isfinite (dval)) {
-      double scaled_log_base = dval / exp (1.0);
+      double scaled_log_base = log (dval);
       int ntot = nkx * nky * nnu;
       for (n = 0; n < ntot; n++) spec[n] = (float)exp (scaled_log_base * spec[n]);
     }
@@ -1444,6 +1482,7 @@ int DoIt (void) {
 	  par[1] = f0 / exp (pk * log (rk0[fp0 + row]));
 	  par[2] = ux_guess;
           par[3] = uy_guess;
+	  par[7] = A1_guess;
 /*
  * change to NaN?
  */
@@ -1454,13 +1493,13 @@ int DoIt (void) {
 /*
 	par[6] = par[1] * pow (rk0 / rkp, pk);
 */
-	  par[7] = par[10] = par[11] = 0.0;
+	  par[10] = par[11] = 0.0;
 	  par[8] = 10.0 * (rki - 200.0);
 	  if (par[8] < 0.0) par[8] = 0.0;
 	  par[9] = 6.0 * (rki - 300.0);
 	  if (par[9] < 0.0) par[9] = 0.0;
 				      /*  par[12] = 0 implies symmetric fit  */
-	  par[12] = -200.0;
+	  par[12] = asym_guess;
 	  par[5] = log (powmax) + 3 * log (rk0[fp0 + row]) - 5.0;
 	  par[6] = par[5] + log (rk0[fp0 + row]);
 	} else {
@@ -1478,7 +1517,7 @@ int DoIt (void) {
 
 	for (i = 0; i < npar; i++) {
 	  for (j = 0; j < npar; j++) h[j + npar*i] = 0.0;
-	  h[i + npar*i] = 1.0;
+	  h[i + npar*i] = dofit[i];
 	}
 	if (verbose)
           printf ("%d %f %f %f %f\n", npx, par[1], par[4], par[5], par[6]);
@@ -1559,10 +1598,9 @@ int DoIt (void) {
 	    if (calc_seconds) fprintf (unit22, "%12.4e",
 	        sqrt (scale[i] * scale[i] * fabs (hs[i + npar*i])));
 	  }
-/*
-   Actual quality flag needs to go here
-*/
+						   /*  set fit quality flag  */
 	  fprintf (unit22, "%5i", -1);
+
 	  fprintf (unit22, " %8.3f %4d%12.4e%12.4e", rki, bfgs_status, f, fm);
 	  for (i=0; i<2; i++) {
 	    fprintf (unit22, "%12.4e%12.4e", par[i] * scale[i],
@@ -1570,6 +1608,7 @@ int DoIt (void) {
 	    if (calc_seconds) fprintf (unit22, "%12.4e",
 	        sqrt (scale[i] * scale[i] * fabs (hs[i + npar*i])));
 	  }
+	  par[10] = pk1;
 	  for (i=4; i<npar; i++) {
 	    fprintf (unit22, "%12.4e%12.4e", par[i] * scale[i],
 		sqrt (scale[i] * scale[i] * fabs (h[i + npar*i])));
@@ -1618,9 +1657,21 @@ int DoIt (void) {
       fprintf (runlog, "End iteration n = %d; time = %s\n", n,
           time_elapsed (0, &total_clock));
       fprintf (runlog, "  %d converged", cvg_ct);
-      if (cvg_ct > 1)
-	fprintf (runlog, ", first @ %.0f, last @ %.0f", cvg_minf * dnu, cvg_maxf * dnu);
-      else if (cvg_ct) fprintf (runlog, ", @ %.0f", cvg_minf * dnu);
+      if (drms_output) {
+	sprintf (key, "n_%d_fits", n);
+	drms_setkey_int (orec, key, cvg_ct);
+      }
+      if (cvg_ct) {
+	if (drms_output) {
+	  sprintf (key, "n_%d_fmin", n);
+	  drms_setkey_float (orec, key, cvg_minf * dnu);
+	  sprintf (key, "n_%d_fmax", n);
+	  drms_setkey_float (orec, key, cvg_maxf * dnu);
+	}
+	if (cvg_ct > 1)
+	  fprintf (runlog, ", first @ %.0f, last @ %.0f", cvg_minf * dnu, cvg_maxf * dnu);
+	else fprintf (runlog, ", @ %.0f", cvg_minf * dnu);
+      }
       fprintf (runlog, "\n");
       fprintf (runlog,
           "  rejected: %d (ux); %d (bfgs); %d (k); %d (fm); %d (sn); %d (l); %d (total)\n",
@@ -1634,10 +1685,14 @@ int DoIt (void) {
       int keyct = sizeof (propagate) / sizeof (char *);
       char *key_str;
       double key_dbl;
-      int key_int, crcl_known = 1;
+      int key_n, key_int, crcl_known = 1;
       TIME key_tim;
 				    /*  copy designated keywords from input  */
-      kstat += propagate_keys (orec, irec, propagate, keyct);
+      for (key_n = 0; key_n < propct; key_n++) {
+	if (strcmp (copykeylist[key_n], "+"))
+	  kstat += check_and_copy_key (orec, irec, copykeylist[key_n]);
+	else kstat += propagate_keys (orec, irec, propagate, keyct);
+      }
 	     /*  if necessary, construct CarrTime from CR:CL, or vice-versa  */
       key_str = drms_getkey_string (irec, "CarrTime", &status);
       if (status) {
@@ -1664,7 +1719,10 @@ int DoIt (void) {
       kstat += check_and_set_key_str (orec, "Module", module_ident);
       kstat += check_and_set_key_str (orec, "Source", source);
       kstat += check_and_set_key_time (orec, "Created", CURRENT_SYSTEM_TIME);
-      kstat += check_and_set_key_str   (orec, "BLD_VERS", jsoc_version);
+      kstat += check_and_set_key_str (orec, "BLD_VERS", jsoc_version);
+      kstat += check_and_set_key_float (orec, "ux_guess", ux_guess);
+      kstat += check_and_set_key_float (orec, "uy_guess", uy_guess);
+      kstat += check_and_set_key_float (orec, "asym_guess", asym_guess);
       if (kstat) {
 	drms_sprint_rec_query (recid, orec);
 	fprintf (stderr, "Error writing key values(s) to record %s\n", recid);
@@ -1712,4 +1770,19 @@ int DoIt (void) {
  *			guessfile; added three more apodization keywords to
  *			propagation list
  *  v 1.0 frozen 2010.04.23
+ *	10.06.12		Added setting of n_x_fits, n_x_fmin, n_x_fmax;
+ *			keywords; added Ident to list of default propagated
+ *			keywords; added option for copying values of different
+ *			or additional keywords from input
+ *	10.09.14		fixed bug in log base calculation affecting
+ *			unnatural logs
+ *				Added parameter for asymmetry term initial
+ *			guess (including turning off fit); added setting of
+ *			keywords for parameters
+ *	10.11.01		Added parameter for asymmetry term (to turn
+ *			off fit; just specifying initial guess does not do it)
+ *			Also added parameters for turning off fit and initial
+ *			guess for A1
+ *	10.11.16		Fixed reporting value of parameter p; changed
+ *			default fmax from 7000 to 5500
  */	
