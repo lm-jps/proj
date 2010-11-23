@@ -48,6 +48,11 @@
  *    The MidTime value is geoecentric for midpoint Carrington longitude
  *    The correction for observer velocity only takes account of the radial
  *	component, and is only appropriate for Doppler data
+ *    For log-base data, the LOG_BASE keyword is propagated to the output
+ *	record, but it really only applies to the mean and variance; it should
+ *	be a per-segment keyword
+ *    The check on nominal roll angle assumes that the keyword is CROTA2, and
+ *	that the units are degrees
  *
  *  Revision history is at the end of the file.
  *
@@ -62,7 +67,7 @@
 #define	DO_SQUARE	(2)
 
 char *module_name = "data average";
-char *version_id = "0.7";
+char *version_id = "0.8";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"in", "", "input data series or dataset"}, 
@@ -71,6 +76,8 @@ ModuleArgs_t module_args[] = {
       "midpoint of averaging interval (in Carrington longitude)"}, 
   {ARG_FLOAT,	"length", "Not Specified",
       "length of averaging interval (in degrees of Carrington rotation)"}, 
+  {ARG_FLOAT,	"pa", "180.0", "centre of acceptable roll angles"}, 
+  {ARG_FLOAT,	"dpa", "1.0", "maximum deviation of acceptable roll angles"}, 
   {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
   {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
   {ARG_STRING,  "copy",  "+", "comma separated list of keys to propagate"},
@@ -259,7 +266,9 @@ int DoIt (void) {
   double crpix1, crpix2, cdelt1, cdelt2, crota2;
   double crpix1_rec, crpix2_rec, cdelt1_rec, cdelt2_rec, crota2_rec;
 */
+  double log_base;
   float clstrt, clmid, clstop;
+  float pa_rec, dpa;
   long long ntot, img_size;
   unsigned int quality;
   int *inaxis, *vval, *reject_list;
@@ -267,6 +276,7 @@ int DoIt (void) {
   int crstrt, crmid, crstop;
   int checkseg;
   int kstat, status;
+  int log_status;
   int n, naxis, wcsaxes;
   int propct, meanct, add_defaults;
   char **copykeylist, **meankeylist;
@@ -275,7 +285,7 @@ int DoIt (void) {
   char module_ident[64], tbuf[64];
 
   double fp_nan = 0.0 / 0.0;
-  int badqual = 0, blacklist = 0, rejects = 0;
+  int badqual = 0, blacklist = 0, badpa = 0, rejects = 0;
   int propkeyct = sizeof (propagate) / sizeof (char *);
   int meankeyct = sizeof (average) / sizeof (char *);
 
@@ -283,6 +293,8 @@ int DoIt (void) {
   char *out_series = strdup (params_get_str (params, "out"));
   char *tmid_str = strdup (params_get_str (params, "tmid"));
   float intrvl = params_get_float (params, "length");
+  float pa_nom = params_get_float (params, "pa");
+  float dpa_max = params_get_float (params, "dpa");
   unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
   char *rejectfile = strdup (params_get_str (params, "reject"));
   char *propagate_req = strdup (params_get_str (params, "copy"));
@@ -293,10 +305,11 @@ int DoIt (void) {
   int remove_obsvel = params_isflagset (params, "o");
   int verbose = params_isflagset (params, "v");
   int dispose = (no_save) ? DRMS_FREE_RECORD : DRMS_INSERT_RECORD;
+  int check_pa = (dpa_max < 180.0);
 
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s:\n", module_ident);
-						   /*  create output record  */
+						    /*  create output record  */
   if (no_save) {
     orec = drms_create_record (drms_env, out_series, DRMS_TRANSIENT, &status);
     if (status) {
@@ -334,9 +347,9 @@ int DoIt (void) {
   maxct += vseg->bzero;
   maxct /= vseg->bscale;
 
-					    /*  process input specification  */
+					     /*  process input specification  */
   if (key_params_from_dspec (inset)) {
-				   /*  input specified as specific data set  */
+				    /*  input specified as specific data set  */
     if (!(ids = drms_open_records (drms_env, inset, &status))) {
       fprintf (stderr, "Error: (%s) unable to open input data set %s\n",
         module_ident, inset);
@@ -359,10 +372,10 @@ int DoIt (void) {
     crmid = -1;
   } else {
 				/*  only the input data series is named,
-				   get record specifications from arguments  */
+				    get record specifications from arguments  */
     source = strdup (inset);
     if (sscanf (tmid_str, "%d:%f", &crmid, &clmid) == 2) {
-						/*  tmid specified as CR:CL  */
+						 /*  tmid specified as CR:CL  */
       if (isnan (clmid)) {
  	fprintf (stderr,
 	    "Error: target Carrington longitude = %f\n", clmid);
@@ -424,7 +437,7 @@ return 0;
   }
   if (verbose) printf ("processing %d input records\n", recct);
   propct = construct_stringlist (propagate_req, ',', &copykeylist);
-					      /*  replace '+' with defaults  */
+					       /*  replace '+' with defaults  */
   if (propkeyct) {
     add_defaults = 0;
     for (n = 0; n < propct; n++) {
@@ -448,7 +461,7 @@ return 0;
   }
 
   meanct = construct_stringlist (average_req, ',', &meankeylist);
-					      /*  replace '+' with defaults  */
+					       /*  replace '+' with defaults  */
   if (meankeyct) {
     add_defaults = 0;
     for (n = 0; n < meanct; n++) {
@@ -474,7 +487,7 @@ return 0;
   avgvalv = (double *)calloc (meanct, sizeof (double));
 
   irec = ids->records[0];
-						/*  establish input segment  */
+						 /*  establish input segment  */
   segct = drms_record_numsegments (irec);
   segnum = 0;
   if (segct > 1) {
@@ -485,7 +498,7 @@ return 0;
   }
   iseg = drms_segment_lookupnum (irec, segnum);
   naxis = iseg->info->naxis;
-		  /*  will dimensions of input segments have to be checked?  */
+		   /*  will dimensions of input segments have to be checked?  */
   checkseg = 0;
   if (iseg->info->scope == DRMS_VARDIM) {
     if (verbose) printf ("Warning: input segment sizes may vary\n");
@@ -497,7 +510,7 @@ return 0;
     ntot *= iseg->axis[n];
     if (checkseg) inaxis[n] = iseg->axis[n];
   }
-					    /*  check for required keywords  */
+					     /*  check for required keywords  */
   if (remove_obsvel) {
     keywd = drms_keyword_lookup (irec, "OBS_VR", 1);
     if (!keywd) {
@@ -506,7 +519,7 @@ return 0;
       remove_obsvel = 0;
     }
   }
-					  /*  set up WCS keys for averaging  */
+					   /*  set up WCS keys for averaging  */
   wcsaxes = drms_getkey_int (irec, "WCSAXES", &status);
   if (status) wcsaxes = naxis;
   crpix = (double *)calloc (wcsaxes, sizeof (double));
@@ -517,7 +530,7 @@ return 0;
   crvalv = (double *)calloc (wcsaxes, sizeof (double));
   cdeltv = (double *)calloc (wcsaxes, sizeof (double));
   crotav = (double *)calloc (wcsaxes, sizeof (double));
-                      /*  create new data maps for each of three statistics  */
+                       /*  create new data maps for each of three statistics  */
   vval = (int *)calloc (ntot, sizeof (int));
   vavg = (double *)calloc (ntot, sizeof (double));
   vvar = (double *)calloc (ntot, sizeof (double));
@@ -545,7 +558,7 @@ return 0;
     fprintf (stderr,
         "BSCALE adjusted from %g to %g\n", vseg->bscale, bscale);
   }
-	/*  write out some keys to make sure they're okay before proceeding  */
+	 /*  write out some keys to make sure they're okay before proceeding  */
   kstat = 0;
   kstat += check_and_set_key_int   (orec, "CarrRot", crmid);
   kstat += check_and_set_key_float (orec, "CMLon", clmid);
@@ -557,7 +570,7 @@ return 0;
   kstat += check_and_set_key_time  (orec, "Created", CURRENT_SYSTEM_TIME);
   kstat += check_and_set_key_float (orec, "Interval", intrvl);
   kstat += propagate_keys (orec, irec, copykeylist, propct);
-					      /*  propagate WCS string keys  */
+					       /*  propagate WCS string keys  */
   for (n = 0; n < wcsaxes; n++) {
     sprintf (keyname, "CTYPE%d", n + 1);
     keystr = drms_getkey_string (irec, keyname, &status);
@@ -571,7 +584,7 @@ return 0;
     fprintf (stderr, "      output series may not have appropriate structure\n");
     if (!no_save) return 1;
   }
-		 /*  support special hack of reading of rejection list file  */
+		  /*  support special hack of reading of rejection list file  */
   rejects = 0;
   if (strcmp (rejectfile, "Not Specified")) {
     FILE *rejectfp = fopen (rejectfile, "r");
@@ -579,10 +592,10 @@ return 0;
     else fprintf (stderr,
 	"Warning: could not open rejection list %s; ignored\n", rejectfile);
   }
-					 /*  initialize keys to be averaged  */
+					  /*  initialize keys to be averaged  */
   tobs = tobsv = 0;
   imgct = 0;
-					     /*  loop through input records  */
+					      /*  loop through input records  */
   for (rec = 0; rec < recct; rec++) {
     irec = ids->records[rec];
     if (verbose) {
@@ -594,7 +607,7 @@ return 0;
 	printf ("%s (%d): ", tbuf, rec);
       }
     }
-			 /*  check for record quality, reject as applicable  */
+			  /*  check for record quality, reject as applicable  */
     quality = drms_getkey_int (irec, qual_key, &status);
     if ((quality & qmask) && !status) {
       badqual++;
@@ -602,7 +615,7 @@ return 0;
       continue;
     }
     if (rejects) {
-				     /*  check against special rection list  */
+				      /*  check against special rection list  */
       int idrec = drms_getkey_int (irec, "T_REC_index", &status);
       int match = 0;
       if (status) {
@@ -623,7 +636,27 @@ return 0;
         continue;
       }
     }
-					        /*  check segment structure  */
+			      /*  check for non-nominal image rotation angle  */
+    if (check_pa) {
+      pa_rec = drms_getkey_float (irec, "CROTA2", &status);
+      if (status && check_pa) {
+	fprintf (stderr, "Warning: \"CROTA2\" keyword not found\n");
+	fprintf (stderr, "         no limits on rotation angle\n");
+	check_pa = 0;
+	dpa_max = 360.0;
+      }
+      if (isfinite (pa_rec)) {
+	dpa = fabs (pa_rec - pa_nom);
+	while (dpa > 180.0) dpa -= 360.0;
+	while (dpa < 0.0) dpa += 360.0;
+	if (dpa > dpa_max) {
+	  badpa++;
+	  if (verbose) printf ("skipped (rotated)\n");
+	  continue;
+	}
+      }
+    }
+					         /*  check segment structure  */
     iseg = drms_segment_lookupnum (irec, segnum);
     if (checkseg) {
       int okay = 1;
@@ -638,7 +671,7 @@ return 0;
         continue;
       }
     }
-    						  /*  read input data image  */
+    						   /*  read input data image  */
     data_array = drms_segment_read (iseg, DRMS_TYPE_DOUBLE, &status);
     if (status) {
       if (data_array) drms_free_array (data_array);
@@ -671,7 +704,14 @@ return 0;
     vavg = (double *)mean->data;
     vvar = (double *)powr->data;
     vobs = (remove_obsvel) ? drms_getkey_double (irec, "OBS_VR", &status) : 0.0;
-						    /*  process valid data  */
+				      /*  exponentiate logarithm as necessary  */
+    log_base = drms_getkey_double (irec, "LOG_BASE", &status);
+    if (!status && isfinite (log_base)) {
+      log_base = log (log_base);
+      for (n = 0; n < ntot; n++) v[n] = exp (log_base * v[n]);
+      log_status = 1;
+    } else log_status = 0;
+						       /*  process valid data  */
     n = ntot;
     while (n--) {
       if (isfinite (*v)) {
@@ -690,7 +730,7 @@ return 0;
       vvar++;
     }
     drms_free_array (data_array);
-					     /*  get WCS keys for averaging  */
+					       /*  get WCS keys for averaging  */
     for (n = 0; n < wcsaxes; n++) {
       sprintf (keyname, "CRPIX%d", n + 1);
       crpix_rec = drms_getkey_double (irec, keyname, &status);
@@ -717,7 +757,7 @@ return 0;
 	crotav[n] += crota_rec * crota_rec;
       }
     }
-				       /*  get requested keys for averaging  */
+				        /*  get requested keys for averaging  */
     for (n = 0; n < meanct; n++) {
       avg_rec = drms_getkey_double (irec, meankeylist[n], &status);
       if (!status && isfinite (avg_rec)) {
@@ -738,19 +778,26 @@ return 0;
       vvar[n] -= vavg[n] * vavg[n];
     } else vavg[n] = vvar[n] = fp_nan;
   }
+  if (log_status) {
+    double scale = 1.0 / log_base;
+    for (n = 0; n < ntot; n++) {
+      vavg[n] = scale * log (vavg[n]);
+      vvar[n] = scale * log (vvar[n]);
+    }
+  }
   if (drms_segment_write (vseg, vcts, 0))
     fprintf (stderr, "Warning: unable to write to count segment\n");
   if (drms_segment_write (mseg, mean, 0))
     fprintf (stderr, "Warning: unable to write to mean segment\n");
   if (drms_segment_write (pseg, powr, 0))
     fprintf (stderr, "Warning: unable to write to variance segment\n");
-						     /*  set remaining keys  */
+						      /*  set remaining keys  */
   kstat = 0;
   kstat += check_and_set_key_int  (orec, "DataRecs", imgct);
   kstat += check_and_set_key_int  (orec, "MissRecs", recct - imgct);
-							/*  statistics keys  */
+							 /*  statistics keys  */
   kstat += set_stats_keys (orec, vcts, mean, powr, ntot);
-						      /*  averaged WCS keys  */
+						       /*  averaged WCS keys  */
   if (imgct) {
     tobs /= imgct;
     kstat += check_and_set_key_time  (orec, tobs_key, tobs);
@@ -788,7 +835,7 @@ return 0;
       sprintf (keyname, "D_CROTA%d", n + 1);
       kstat += check_and_set_key_double (orec, keyname, sqrt (crotav[n]));
     }
-						    /*  other averaged keys  */
+						     /*  other averaged keys  */
     for (n = 0; n < meanct; n++) {
       avgval[n] /= imgct;
       kstat += check_and_set_key_double  (orec,  meankeylist[n], avgval[n]);
@@ -797,13 +844,17 @@ return 0;
       sprintf (keyname, "D_%s", meankeylist[n]);
       kstat += check_and_set_key_double (orec, keyname, sqrt (avgvalv[n]));
     }
+    if (log_status) {
+      sprintf (keyname, "LOG_BASE");
+      kstat += check_and_set_key_double (orec, "LOG_BASE", exp (log_base));
+    }
   }
   if (kstat) {
     fprintf (stderr, "Error writing key value(s) to %s\n", out_series);
     fprintf (stderr, "      output series may not have appropriate structure\n");
     if (!no_save) return 1;
   }
-  							       /*  clean up  */
+  							        /*  clean up  */
   drms_close_records (ids, DRMS_FREE_RECORD);
   if (verbose) {
     printf ("record %s[:#%lld] ", out_series, orec->recnum);
@@ -818,6 +869,9 @@ return 0;
 	  badqual, qmask);
     if (blacklist)
       printf ("    %d input records rejected from rejection list\n", blacklist);
+    if (badpa)
+      printf ("    %d input records rejected for roll difference exceeding %.2f\n",
+	  badpa, dpa_max);
   }
   return 0;
 }
@@ -857,5 +911,10 @@ return 0;
  *		  averaged keywords to include defaults if requested
  *		Implemented averaging of requested keywords
  *  v 0.7 frozen 10.08.19
+ *  v 0.8
+ *	10.09.13	S Chakraborty added code to support log-base data
+ *	10.11.16	added test for acceptable roll-angles, with defaults
+ *		appropriate to HMI
+ *  v 0.8 frozen 10.11.16
  *
  */
