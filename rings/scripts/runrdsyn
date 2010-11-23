@@ -10,26 +10,28 @@
 #   average is encountered, all three instances of the rdday script will
 #   create it, resulting in unnecessary extra processing and records
 
-@ TEST = 1	# set to 0 for production in namespace hmi
+@ TEST = 0	# set to 1 for production in namespace hmi_test
+if ("$1" =~ '-test') then
+  @ TEST = 1
+  shift
+endif
 
 if ($#argv < 2) then
-  echo "usage: $0 Carrington_rot Lon_start [Lon_stop] [spacing]"
-  echo "       $0 default spacing = 540 min"
+  echo "usage: $0 [-test] Carrington_rot Lon_start [Lon_stop] [spacing]"
+  echo "       default spacing = 540 min"
   exit
 endif
 
 @ CROT = $1
-@ CL0 = $2
+@ CL0 = `echo $2 | sed  -e "s/^0*//"`
 @ CL1 = $CL0
 @ SLEEP = 540
 if ($#argv > 2) then
-  @ CL1 = $3
-  if ($#argv > 3) @ SLEEP = $4
+  @ CL1 = `echo $3 | sed  -e "s/^0*//"`
+  if ($#argv > 3) @ SLEEP = `echo $4 | sed  -e "s/^0*//"`
 endif
 
 @ SLEEP *= 60
-
-# set SCRIPT = rdday
 
 # parameters (for coverage)
 set QMASK = 0x80004000
@@ -45,16 +47,20 @@ if ($TEST) then
   set SCRDIR = ~rick/hmi/rings/scripts
   set SCRIPT = $SCRDIR/rdday
   set AVG120 = $SCRDIR/avg120
+  set ARG = -test
+  set OBS = V2
 else
   set NMSP = hmi
   set SCRIPT = rdday
   set AVG120 = avg120
+  set ARG
+  set OBS = V
 endif
 set PLID = hmirdVsyn
 
 # input/output series
-set BCKG = $NMSP.V_avg120
-set ISER = $NMSP.V_45s
+set BCKG = $NMSP.$OBS\_avg120
+set ISER = $NMSP.$OBS\_45s
 
 # auxiliary files
 set TEMP = /tmp23/`whoami`
@@ -71,6 +77,15 @@ foreach CMD ($SCRIPT $AVG120 $COVER)
       echo Error: command $CMD not in path\; script will fail
       exit
     endif
+  endif
+end
+
+#  check that input and product series exist
+foreach SER ($ISER $BCKG)
+  show_info -j ds= $SER >& /dev/null
+  if ($status) then
+    echo Error: series $SER does not exist\; script will fail
+    exit
   endif
 end
 
@@ -98,7 +113,7 @@ while ($CLON >= $CL1)
   @ BCKCT = `show_info -c ds= "$BCK" | awk '{print $1}'`
   if ($BCKCT < 1) then
     echo "Data average record $BCK does not exist"
-    qsub -q j.q -sync y $AVG120 -v $CR60 $CL60
+    qsub -q j.q -sync y $AVG120 $ARG -v $CR60 $CL60
     if ($status) echo "Warning: data averaging failed; no background subtraction"
   endif
 
@@ -115,13 +130,12 @@ while ($CLON >= $CL1)
     set ECVG = `head -2 $TLIST | tail -1 | awk '{print $4}'`
     @ CVG = `echo $ECVG | awk -F. '{print $1}'`
     @ CVG *= 1000
-    set CVGFRAC = `echo $ECVG | awk -F. '{print $2}'`
-    @ CVG += `fnum $CVGFRAC %d`
+    @ CVG += `echo $ECVG | awk -F. '{print $2}' | sed  -e "s/^0*//"`
   endif
   rm $TLIST
   if ($CVG > $MINCV) then
     @ RUNNING++
-    qsub -q j.q $SCRIPT 5 $CROT $CLON
+    qsub -q j.q $SCRIPT $ARG 5 $CROT $CLON
   endif
   if ($CLON % 15 == 0) then
 # check for coverage, skip if too low
@@ -135,13 +149,12 @@ while ($CLON >= $CL1)
       set ECVG = `head -2 $TLIST | tail -1 | awk '{print $4}'`
       @ CVG = `echo $ECVG | awk -F. '{print $1}'`
       @ CVG *= 1000
-      set CVGFRAC = `echo $ECVG | awk -F. '{print $2}'`
-      @ CVG += `fnum $CVGFRAC %d`
+      @ CVG += `echo $ECVG | awk -F. '{print $2}' | sed  -e "s/^0*//"`
     endif
     rm $TLIST
     if ($CVG > $MINCV) then
       @ RUNNING++
-      qsub -q j.q $SCRIPT 15 $CROT $CLON
+      qsub -q j.q $SCRIPT $ARG 15 $CROT $CLON
     endif
   endif
   if ($CLON % 30 == 0) then
@@ -156,13 +169,12 @@ while ($CLON >= $CL1)
       set ECVG = `head -2 $TLIST | tail -1 | awk '{print $4}'`
       @ CVG = `echo $ECVG | awk -F. '{print $1}'`
       @ CVG *= 1000
-      set CVGFRAC = `echo $ECVG | awk -F. '{print $2}'`
-      @ CVG += `fnum $CVGFRAC %d`
+      @ CVG += `echo $ECVG | awk -F. '{print $2}' | sed  -e "s/^0*//"`
     endif
     rm $TLIST
     if ($CVG > $MINCV) then
       @ RUNNING++
-      qsub -q j.q $SCRIPT 30 $CROT $CLON
+      qsub -q j.q $SCRIPT $ARG 30 $CROT $CLON
     endif
   endif
   @ CLON -= 5
