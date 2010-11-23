@@ -42,7 +42,7 @@
 #define NO_OBSERVER_LAT	(0x0002)
 #define NO_OBSERVER_LON	(0x0004)
 
-#define KEYSCOPE_VARIABLE	(0x80000000);
+#define KEYSCOPE_VARIABLE	(0x80000000)
 
 /*
  *  process image info (attitude, plate scale, distortion)
@@ -140,7 +140,7 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
       sprintf (param[n].name, "No Keyword");
       param[n].scale = 1.0;
       param[n].offset = 0.0;
-      param[n].defval = FP_NAN;
+      param[n].defval = NAN;
       param[n].statusbit = 0;
     }
     param[RSUN].statusbit = NO_SEMIDIAMETER;
@@ -156,10 +156,7 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
     param[LATC].statusbit = NO_HELIO_LATC;
     param[LONC].statusbit = NO_HELIO_LONC;
     param[PANG].statusbit = NO_HELIO_PA;
-    param[ESMA].defval = 1.0;
-    param[ESMI].defval = 1.0;
-    param[ESMA].defval = FP_NAN;
-    param[ESMI].defval = FP_NAN;
+    param[EECC].defval = 0.0;
     param[EANG].defval = 0.0;
     param[XASP].defval = 1.0;
     param[YASP].defval = 1.0;
@@ -262,5 +259,8 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
  *  10.04.01		fixed up processing for semidiameter when apsd_key
  *		is missing
  *  10.08.19		make sure status is initialized to 0
+ *  10.09.03		fixed initialization of default values for ellipse
+ *		elements
+ *  10.10.05		fixed define of keyscoe_variable (removed ;)
  */
 
