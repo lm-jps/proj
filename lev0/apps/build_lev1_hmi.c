@@ -696,14 +696,19 @@ int do_ingest(long long bbrec, long long eerec)
         goto TEMPSKIP;
       }
     if(!hmiaiaflg) {		//HMI
-      if(quicklook) {
-        sprintf(open_dsname, "%s[? t_start=(select max(t_start) from %s where t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d) and CAMERA=%d ?]",
-      		dsffname, dsffname, tobs[i], tobs[i], camera, camera);
-      }
-      else {
-        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d and flatfield_version >= 1 ?]",
-      	dsffname, tobs[i], tobs[i], camera);
-      }
+      /***OLD - Now just get the pzt flat. the flatfield_version is typically = 0
+//      if(quicklook) {
+//        sprintf(open_dsname, "%s[? t_start=(select max(t_start) from %s where t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d) and CAMERA=%d ?]",
+//      		dsffname, dsffname, tobs[i], tobs[i], camera, camera);
+//      }
+//      else {
+//        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d and flatfield_version >= 1 ?]",
+//      	dsffname, tobs[i], tobs[i], camera);
+//      }
+      *****END OLD*******************************************************/
+      sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d ?]", 
+        dsffname, tobs[i], tobs[i], camera);
+
     }
     else {			//AIA
       char *wavstr = drms_getkey_string(rs0, "WAVE_STR", &rstatus);
@@ -711,14 +716,19 @@ int do_ingest(long long bbrec, long long eerec)
         printk("Can't do drms_getkey_string() for WAVE_STR\n");
         return(1);
       }
-      if(quicklook) {
-        sprintf(open_dsname, "%s[? t_start=(select max(t_start) from %s where t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s') and WAVE_STR='%s' ?]",
-      		dsffname, dsffname, tobs[i], tobs[i], wavstr, wavstr);
-      }
-      else {
-        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s' and flatfield_version >= 1 ?]",
-      	dsffname, tobs[i], tobs[i], wavstr);
-      }
+      /***OLD - Now just get the pzt flat. The flatfield_version is typically = 0
+//      if(quicklook) {
+//        sprintf(open_dsname, "%s[? t_start=(select max(t_start) from %s where t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s') and WAVE_STR='%s' ?]",
+//      		dsffname, dsffname, tobs[i], tobs[i], wavstr, wavstr);
+//      }
+//      else {
+//        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s' and flatfield_version >= 1 ?]",
+//      	dsffname, tobs[i], tobs[i], wavstr);
+//      }
+      *****END OLD**************************************************************/
+        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and WAVE_STR=%s ?]",
+        dsffname, tobs[i], tobs[i], wavstr);
+
     }
       //printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
       rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF 
