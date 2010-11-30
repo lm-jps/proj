@@ -15,12 +15,12 @@
 // Modified:
 //          X. Sun, Jun 30 2010, added prototypes for oversampling/rebin
 //			X. Sun, Sep 03 2010, implemented Jesper's resize code, registration needs check
+//			X. Sun, Nov 16, 2010, added vlos_mag segment
 
 // mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a[2010.03.29_12:00:00_TAI][2]" "out=su_xudong.test_mercator_vec" "LONWIDTH=15.0" "LATWIDTH=9.0"
 // mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a[2010.03.29_12:12:00_TAI/1h][2]" "out=su_xudong.test_mercator_vec" "LONWIDTH=15.0" "LATWIDTH=9.0" "ref=su_xudong.test_patch_vec_a[2010.03.29_12:12:00_TAI][2]"
 // mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a_5[2010.03.29_12:00:00_TAI][2]" "out=su_xudong.test_mercator_vec_5" "LONWIDTH=15.0" "LATWIDTH=9.0" "NBIN=3" "GAUSSIAN=1"
 // mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a_5[2010.07.01_12:00:00_TAI/60h]" "out=su_xudong.test_mercator_vec_5" "NBIN=3" "GAUSSIAN=1" "LONWIDTH=8.4" "LATWIDTH=4.68" "ref=su_xudong.test_patch_vec_a_5[2010.07.02_00:00:00_TAI][4]"
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -127,7 +127,8 @@ ModuleArgs_t module_args[] =
    {ARG_FLOAT, 	"REFLON", "370.", "Reference lon for alignment"},		// reference lon/lat of patch center
    {ARG_FLOAT, 	"REFLAT", "100.", "Reference lat for alignment"},
    {ARG_INT, 	"COVAR", "0", ""},
-   {ARG_FLAG, 	"e", "0", ""}, 											// set this flag to compute errors.
+   {ARG_FLAG, 	"e", "0", "Set for error estimation"},					// set this flag to compute errors.
+   {ARG_FLAG,   "v", "0", "Set to include vlos_mag"},
    {ARG_INT,	"nnb", "0", "using nearest neighbor for interpol"},
    {ARG_END}
 };
@@ -142,7 +143,7 @@ int DoIt(void)
     DRMS_Record_t *inRec, *outRec, *refRec = NULL;
     
     DRMS_Segment_t *inSeg;
-    DRMS_Array_t *inArray_ambig;
+    DRMS_Array_t *inArray_ambig, *inArray_vlos;
     DRMS_Array_t *inArray_bTotal, *inArray_bAzim, *inArray_bIncl, *inArray_bFill;
     DRMS_Array_t *inArray_errbT, *inArray_errbAz, *inArray_errbIn, *inArray_errbF;
     DRMS_Array_t *inArray_bTbI, *inArray_bTbA, *inArray_bTbF, *inArray_bAbI, *inArray_bAbF, *inArray_bIbF;
@@ -154,7 +155,7 @@ int DoIt(void)
     
     char *inQuery, *outQuery, *refQuery;
     char *mapping;
-    int projection, covar, doerror, gauss, nnb;
+    int projection, covar, doerror, gauss, nnb, dovlos;
     int nbin;
     float xunitMap, yunitMap, xunitMap0, yunitMap0;
     float LonWidth, LatWidth;
@@ -171,7 +172,7 @@ int DoIt(void)
     double maplatc, maplonc, maplatl, maplonl, maplatr, maplonr;
     double x, y, lon, lat, coslat, sinlat;
     double mu, rho, sig, chi, xi, zeta;
-    double bx_tmp, by_tmp, bz_tmp;
+    double bx_tmp, by_tmp, bz_tmp, vlos_tmp;
     double bx_helio, by_helio, bz_helio;
     double asd;
     float xcoor, ycoor, xcen, ycen, x_halfwidth, y_halfwidth;
@@ -185,6 +186,8 @@ int DoIt(void)
     float *bxHel, *byHel, *bzHel;		// remapped, final
     float *bxHel0, *byHel0, *bzHel0;	// remapped, oversampled
     float *bx, *by, *bz;		// full disk
+	float *vlos_mag;			// full disk
+	float *vlos0, *vlos;				// los patch
     char *ambig;		// bitmap from disambiguation
     float *bTotal, *bIncl, *bAzim, *bFill;		// full disk
     float *errBx, *errBy, *errBz;		// remapped, final
@@ -219,6 +222,7 @@ int DoIt(void)
 
     covar = cmdparams_get_int(&cmdparams, "COVAR", &status);
     doerror = (cmdparams_isflagset(&cmdparams, "e") != 0);
+	dovlos = (cmdparams_isflagset(&cmdparams, "v") != 0);
     gauss = cmdparams_get_int(&cmdparams, "GAUSSIAN", &status);
     nnb = cmdparams_get_int(&cmdparams, "nnb", &status);
     
@@ -451,6 +455,11 @@ int DoIt(void)
         errBy0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
         errBz0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
         }
+		
+		if (dovlos)
+		{
+		vlos0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
+		}
 
         /* Read in segments */
 
@@ -489,7 +498,15 @@ int DoIt(void)
         if (status)
           DIE("problem reading file");
         bFill = (float *)inArray_bFill->data;
-
+		
+		if (dovlos) {
+		  inSeg = drms_segment_lookup(inRec, "vlos_mag");
+		  inArray_vlos = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+		  if (status)
+			DIE("problem reading file");
+		  vlos_mag = (float *)inArray_vlos->data;
+		}
+		
         if (doerror)
         {
         inSeg = drms_segment_lookup(inRec, "field_err");
@@ -625,6 +642,10 @@ int DoIt(void)
                     bxHel0[iData] = DRMS_MISSING_FLOAT;
                     byHel0[iData] = DRMS_MISSING_FLOAT;
                     bzHel0[iData] = DRMS_MISSING_FLOAT;
+					if (dovlos)
+					{
+					vlos0[iData] = DRMS_MISSING_FLOAT;
+					}
                     if (doerror) 
                     {
                     errBx0[iData] = bxSigma2;
@@ -643,6 +664,10 @@ int DoIt(void)
                     bxHel0[iData] = DRMS_MISSING_FLOAT;
                     byHel0[iData] = DRMS_MISSING_FLOAT;
                     bzHel0[iData] = DRMS_MISSING_FLOAT;
+					if (dovlos)
+					{
+					vlos0[iData] = DRMS_MISSING_FLOAT;
+					}
                     if (doerror)
                     {
                     errBx0[iData] = bxSigma2;
@@ -660,10 +685,14 @@ int DoIt(void)
                 bx_tmp = ccint2 (bx, xDim, yDim, xi, zeta);
                 by_tmp = ccint2 (by, xDim, yDim, xi, zeta);
                 bz_tmp = ccint2 (bz, xDim, yDim, xi, zeta);
+				if (dovlos)
+					vlos_tmp = ccint2 (vlos_mag, xDim, yDim, xi, zeta);			// this is for now, probably need treatment on vlos_mag
                 } else {
                 bx_tmp = nearest (bx, xDim, yDim, xi, zeta);
                 by_tmp = nearest (by, xDim, yDim, xi, zeta);
                 bz_tmp = nearest (bz, xDim, yDim, xi, zeta);
+				if (dovlos)
+					vlos_tmp = nearest (vlos_mag, xDim, yDim, xi, zeta);		// this is for now, probably need treatment on vlos_mag
                 }
 
                 /* Projection */
@@ -677,6 +706,10 @@ int DoIt(void)
                 bxHel0[iData] = bx_helio;
                 byHel0[iData] = by_helio;
                 bzHel0[iData] = bz_helio;
+				
+				if (dovlos)
+					vlos0[iData] = vlos_tmp;		// as scaler
+				
                 
                 /* If an estimate of the error is needed, call the subroutine errorprop.c.
                  * The image location is xi (x-axis) and zeta (y-axis).
@@ -720,6 +753,8 @@ int DoIt(void)
         errBy = (float *) malloc(xMap * yMap * sizeof(float));
         errBz = (float *) malloc(xMap * yMap * sizeof(float));
         }
+		if (dovlos)
+			vlos = (float *) malloc(xMap * yMap * sizeof(float));
         
         // Wrapper for Jesper's code
 
@@ -732,6 +767,8 @@ int DoIt(void)
         frebin(errBy0, errBy, xMap0, yMap0, nbin, gauss);
         frebin(errBz0, errBz, xMap0, yMap0, nbin, gauss);
         }
+		if (dovlos)
+			frebin(vlos0, vlos, xMap0, yMap0, nbin, gauss);
 
         // This is for now
 /*        
@@ -783,6 +820,18 @@ int DoIt(void)
         if (status)
           DIE("problem writing file");
         drms_free_array(outArray);
+		
+		if (dovlos)
+		{
+		outSeg = drms_segment_lookup(outRec, "vlos_mag");
+		outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, vlos, &status);
+		outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
+		outArray->parent_segment = outSeg;
+		status = drms_segment_write(outSeg, outArray, 0);
+		if (status)
+			DIE("problem writing file");
+		drms_free_array(outArray);
+		}
         
         if (doerror)
         {
@@ -825,6 +874,11 @@ int DoIt(void)
         free(bx); free(by); free(bz);
         free(bxHel0); free(byHel0); free(bzHel0);
 //free(bxHel); free(byHel); free(bzHel);
+		
+		if (dovlos) {
+			drms_free_array(inArray_vlos);
+			free(vlos0);
+		}
                 
         if (doerror) {
             drms_free_array(inArray_errbT); drms_free_array(inArray_errbAz);
