@@ -416,7 +416,7 @@ if($source eq "moc")
 elsif ($source eq "rtmon") 
 {
   #setup expected count of files to process and then check if processed successfully
-  $expected_count_m3sd=5; #later can automate better by getting count via file
+  $expected_count_m3sd=6; #later can automate better by getting count via file
   $expected_count_decode=0; #later can automate better by getting count via file
 
   # check count not expected and check did not send other emails above already
