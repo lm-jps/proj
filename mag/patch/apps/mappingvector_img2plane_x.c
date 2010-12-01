@@ -114,22 +114,22 @@ char *module_name = "mappingvector_img2plane_x";
 
 ModuleArgs_t module_args[] =
 {
-   {ARG_STRING, "in", NULL, "Input data records."},
-   {ARG_STRING, "out", NULL, "Output data series."},
-   {ARG_STRING, "ref", "norec", "Reference record for alignment"},
-   {ARG_STRING, "PROJECTION", "MERCATOR", ""},
-   {ARG_FLOAT, 	"XUNITMAP", "0.03", "X resolution in mapped image"}, 	// pixel resolution in the mapping image, in degree.
-   {ARG_FLOAT, 	"YUNITMAP", "0.03", "Y resolution in mapped image"}, 	// correspond to a resolution of 0.5 arc-sec/pixel.
-   {ARG_INT, 	"NBIN", "1", "Rate used for over-sampling"},
-   {ARG_INT,	"GAUSSIAN", "0", "Use 0 for simple binning, 1 for Gaussian"},
-   {ARG_FLOAT, 	"LONWIDTH", "0.", "X demension"}, 						// dimension, in degree
-   {ARG_FLOAT, 	"LATWIDTH", "0.", "Y demension"},
-   {ARG_FLOAT, 	"REFLON", "370.", "Reference lon for alignment"},		// reference lon/lat of patch center
-   {ARG_FLOAT, 	"REFLAT", "100.", "Reference lat for alignment"},
-   {ARG_INT, 	"COVAR", "0", ""},
-   {ARG_FLAG, 	"e", "0", "Set for error estimation"},					// set this flag to compute errors.
-   {ARG_FLAG,   "v", "0", "Set to include vlos_mag"},
-   {ARG_INT,	"nnb", "0", "using nearest neighbor for interpol"},
+   {ARG_STRING, "in", NULL, "Input disambiguated vector patches/HARPS."},
+   {ARG_STRING, "out", NULL, "Output data series holding the remapped/projected patches."},
+   {ARG_STRING, "ref", "norec", "Reference record for alignment."},
+   {ARG_STRING, "PROJECTION", "MERCATOR", "Projetion method used."},
+   {ARG_FLOAT, 	"XUNITMAP", "0.03", "X resolution in remapped image, in degree"}, 	// pixel resolution in the mapping image, in degree.
+   {ARG_FLOAT, 	"YUNITMAP", "0.03", "Y resolution in remapped image, in degree"}, 	// correspond to a resolution of 0.5 arc-sec/pixel.
+   {ARG_INT, 	"NBIN", "3", "Oversampling rate, for anti-aliasing. Needs to be odd. Image is oversampled NBIN times at desired resolution before binned down."},
+   {ARG_INT,	"GAUSSIAN", "1", "Method used for binning oversampled image. 0 for simple binning, 1 for Gaussian"},
+   {ARG_FLOAT, 	"LONWIDTH", "0.", "X dimension for output image, in degrees. Leave 0 for default size determined by original image."},		// dimension, in degree
+   {ARG_FLOAT, 	"LATWIDTH", "0.", "Y dimension for output image, in degrees. Leave 0 for default size determined by original image."},
+   {ARG_FLOAT, 	"REFLON", "999.", "Reference longitude for remapped image center. For tracking/aligning with Carrington rate. Leave 370 for no aligning."},
+   {ARG_FLOAT, 	"REFLAT", "999.", "Reference latitude for remapped image center. For tracking/aligning with Carrington rate. Leave 370 for no aligning."},
+   {ARG_INT, 	"COVAR", "0", "Set this flag 1 for using covariances in error estimation."},
+   {ARG_INT, 	"e", "0", "Set this 1 for computing estimated uncertainty from variances/covariances from inversion."},
+   {ARG_INT,   "v", "0", "Set this 1 vlos_mag as one of the output segment."},
+   {ARG_INT,	"nnb", "0", "Set 1 to use nearest neighbor for interpolation. Cubic convolution by default."},
    {ARG_END}
 };
 
@@ -221,8 +221,8 @@ int DoIt(void)
     ref_lat = cmdparams_get_float(&cmdparams, "REFLAT", &status);
 
     covar = cmdparams_get_int(&cmdparams, "COVAR", &status);
-    doerror = (cmdparams_isflagset(&cmdparams, "e") != 0);
-	dovlos = (cmdparams_isflagset(&cmdparams, "v") != 0);
+    doerror = cmdparams_get_int(&cmdparams, "e", &status);
+	dovlos = cmdparams_get_int(&cmdparams, "v", &status);
     gauss = cmdparams_get_int(&cmdparams, "GAUSSIAN", &status);
     nnb = cmdparams_get_int(&cmdparams, "nnb", &status);
     
@@ -918,6 +918,17 @@ int DoIt(void)
         drms_setkey_float(outRec, "OHWIDTH2", y_halfwidth);
         drms_setkey_float(outRec, "OCRVAL1", drms_getkey_float(inRec, "CRVAL1", &status));
         drms_setkey_float(outRec, "OCRVAL2", drms_getkey_float(inRec, "CRVAL2", &status));
+        // added Nov 30
+        drms_setkey_float(outRec, "XUNITMAP", xunitMap);
+        drms_setkey_float(outRec, "YUNITMAP", yunitMap);
+        drms_setkey_float(outRec, "LONWIDTH", LonWidth);
+        drms_setkey_float(outRec, "LATWIDTH", LatWidth);
+        drms_setkey_float(outRec, "REFLON", ref_lon);
+        drms_setkey_float(outRec, "REFLAT", ref_lat);
+        drms_setkey_int(outRec, "NBIN", nbin);
+        drms_setkey_int(outRec, "GAUSSIAN", gauss);
+        drms_setkey_int(outRec, "COVAR", covar);
+        drms_setkey_int(outRec, "NNB", nnb);
         
         /* Link */
         
