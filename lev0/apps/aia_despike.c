@@ -12,6 +12,10 @@
 // 			all refs for standalone (or add func systime) */
  /* 3/17/2010 - interface change to I*4, also work on locations to remove duplicates (some
   pixels are despiked twice when iterated) and do not use output array, modify the input array */
+ /* 9/29/2010 - some mods to remove negative values from the data */
+ /* 11/20/10 - now want to keep neg values, so remove those mods and make sure
+    we don't get too many extra spikes by adjusting absmin (from 1 to 4), we
+    already had a test to avoid despiking neg pixels from 9/29/2010 mods */
  /*---------------------------------------------------------------------------*/
 int aia_despike(
      int *array, unsigned char *mask, int nx, int ny, float frac, int level, int niter, /* void **outarray, */
@@ -54,7 +58,7 @@ int aia_despike(            /* despike function, modified heavily for AIA */
  {
  int	iq, result_sym, n, m, sum, nc;
  int	lognb2, jj, jc;
- float	absmin = 1.0;
+ float	absmin = 4.0;
  int	nxc, nyc, offset, *lastiterendaddr;
  int	save_niter, ntotal, npix, nslocal, ndups, itercount;
  float	fsum, cfrac, tq, fdif;
@@ -119,10 +123,15 @@ int aia_despike(            /* despike function, modified heavily for AIA */
  these for despike decisions and we must not modify them. This is done by  zeroing
  the mask for the corresponding points before erosion */
  p = array;
+ /* 9/29/2010 - also catch any other negative values while we are looping and zero them */
  if (mask == 0) {
    int	nq = nx * ny;
    while (nq--) {
-     if (*p++ == 0x80000000) *mp++ = 0; else *mp++ = 1;
+     /* 9/29/2010 - change here to remove negative values (convert to 0) */
+     /* 11/20/10 - try leaving the negative values in */
+     //if (*p == 0x80000000) { *mp++ = 0; } else  { *mp++ = 1;  if (*p < 0) *p = 0; }
+     if (*p == 0x80000000) { *mp++ = 0; } else  { *mp++ = 1; }
+     p++;
    }
    /* mask gets set to "eroded" further down */
  } else {
@@ -130,7 +139,11 @@ int aia_despike(            /* despike function, modified heavily for AIA */
    int	nq = nx * ny;
    mp = mask;
    while (nq--) {
-     if (*p++ == 0x80000000) *mp++ = 0;
+     /* 9/29/2010 - change here to remove negative values (convert to 0) */
+     /* 11/20/10 - try leaving the negative values in */
+     //if (*p == 0x80000000) { *mp++ = 0; } else  { if (*p < 0) *p = 0; }
+     if (*p == 0x80000000) { *mp++ = 0; }
+     p++;
    }
    eroded2 = malloc(nx*ny*sizeof(unsigned char));
    if (!eroded2) { printf("malloc error in local mask copy\n");  return 1; }
@@ -146,7 +159,8 @@ int aia_despike(            /* despike function, modified heavily for AIA */
  cfrac = 1.0/(1.0 + frac);	/* 3/2/2010 changed from 1.0 - frac which had less range */
  nc = ntotal = nslocal = 0;
  niter = ABS(niter);
- if (niter > 20) { printf("DESPIKE - error, excessive # of iterations = %d\n",
+ /* 4/7/2010 - add a check for niter < 0 to avoid runaways */
+ if (niter > 20 || niter < 0) { printf("DESPIKE - error, excessive # of iterations = %d\n",
  	niter);  return 1; }
 
  /* add internal iteration 10/8/98 */
@@ -160,6 +174,7 @@ int aia_despike(            /* despike function, modified heavily for AIA */
  npix = 0;
  itercount = 0;
  spikestarts[itercount] = spikebufadd;
+ /* note that niter = 0 should not do any despike */
  while (niter--) {
    ptr = array + 2*nx;
    /* and the mask */
@@ -180,7 +195,8 @@ int aia_despike(            /* despike function, modified heavily for AIA */
       npix++;
       /* watch out for 0's, lots in test images */
       /* 3/22/2010 - mask check finally added for each position */
-      if ( *p  && *mp ) {
+      /* 9/29/2010 - avoid processing negative values as well as zeroes */
+      if ( (*p > 0)  && *mp ) {
 	/* add the 8 around this point */
 	tq = (cfrac * (float) *p);
 	sum = *p1 + *(p1+1) + *(p1+2) + *p2 + *(p2+2) + *p3 + *(p3+1) + *(p3+2);
@@ -251,7 +267,7 @@ int aia_despike(            /* despike function, modified heavily for AIA */
      /* check the range spikebufadd to lastiterendaddr against lastiterendaddr+1 to sptradd-1,
      the idea here is to check if any of our new spikes have the same location from a previous
      iteration, this isn't a n*m operation because each set is monotonic, note however that
-     we have to scan each ierartion set separately (which is annoying) */
+     we have to scan each iteration set separately (which is annoying) */
      int *jprevstart[20];
      spikestarts[itercount] = spikeends[itercount-1] + 1;
      for (previter=0; previter<itercount; previter++) { jprevstart[previter] = spikestarts[previter]; }
