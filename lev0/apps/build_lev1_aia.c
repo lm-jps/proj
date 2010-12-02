@@ -92,7 +92,7 @@ static LEV0LEV1 lev0lev1;
 static LEV0LEV1 *l0l1 = &lev0lev1;
 //static CCSDS_Packet_t *Hk;
 static DRMS_Record_t *rs;
-static DRMS_Record_t *rs0, *rs1, *rsff, *rsbad_pix, *rec_bad_aia;
+static DRMS_Record_t *rs0, *rs1, *rsff, *rsbad_pix, *rec_bad_aia, *rt, *rresp;
 static DRMS_Record_t *rptr;
 static DRMS_Segment_t *segment;
 static DRMS_Segment_t *segmentff;
@@ -101,7 +101,8 @@ static DRMS_Segment_t *badseg;
 static DRMS_Segment_t *badoutpixseg;
 static DRMS_Segment_t *spikeseg;
 static DRMS_Array_t *segArray;
-static DRMS_RecordSet_t *rset0, *rset1, *rsetff, *rsbad_aia;
+static DRMS_RecordSet_t *rset0, *rset1, *rsetff, *rsbad_aia, *rs_t=NULL,
+                        *rs_resp=NULL;
 static DRMS_Array_t *Array0;
 static DRMS_Array_t *Arrayff;
 static DRMS_Array_t *ArrayDark;
@@ -442,6 +443,7 @@ int do_ingest(long long bbrec, long long eerec)
   printk("open_dsname = %s\n", open_dsname);
   printk("#levnum recnum fsn\n");
 
+    if(hmiaiaflg) t_obs0 = 0;
     rset0 = drms_open_records(drms_env, open_dsname, &rstatus); //open lev0
     if(!rset0 || (rset0->n == 0) || rstatus) {
       printk("Can't do drms_open_records(%s)\n", open_dsname);
@@ -654,6 +656,7 @@ int do_ingest(long long bbrec, long long eerec)
           drms_setkey_string(rs, "ASD_REC", ptdata.asd_rec);
           drms_setkey_string(rs, "ACS_CGT", ptdata.acs_cgt);
       }
+printk("Setting HAEX_OBS, etc.\n");
       if(IOinfo) {
         IOdata = IOinfo[i];
            drms_setkey_double(rs, "HAEX_OBS", IOdata.hciX);
@@ -689,6 +692,134 @@ int do_ingest(long long bbrec, long long eerec)
         goto TEMPSKIP;
         //return(1);
       }
+printk("Trying to set T_REC.\n");
+      if ( 0 == drms_setkey_time(rs, "T_REC", tobs[i])) {
+printk("T_REC set .\n");
+        int status, allstat = 0;
+        double tr_step;
+        long long tr_index;
+        TIME t_rec, tr_epoch;
+        tr_index = drms_getkey_longlong(rs, "T_REC_index", &status);
+        allstat += status;
+        tr_step =  drms_getkey_double(rs, "T_REC_step", &status);
+        allstat += status;
+        tr_epoch = drms_getkey_time(rs, "T_REC_epoch", &status);
+        allstat += status;
+        if (0 == allstat) {
+          t_rec = tr_epoch + tr_index*tr_step;
+          drms_setkey_time(rs, "T_REC", t_rec);
+        }
+      }
+
+printk("Trying to set temperatures.\n");
+      if(hmiaiaflg && !quicklook) {
+printk("Setting temperatures.\n");
+        float tempccd, tempgt, tempsmir, tempfpad;
+        if(fabs(tobs[i] - t_obs0) > 300.0) {
+          char *dstemp = "aia.temperature_summary_300s";
+          char *selstr = "select max(t_start) from ";
+          char *whrstr = "where t_start <= ";
+          int nr;
+          if(rs_t) {
+            drms_close_records(rs_t, DRMS_FREE_RECORD);
+            rs_t = NULL;
+          }
+          sprintf(open_dsname, "%s[? t_start=(%s %s %s %f) ?]",
+                  dstemp, selstr, dstemp, whrstr, tobs[i]);
+          printf(" %s\n", open_dsname);
+          rt = NULL;
+          rs_t = drms_open_records(drms_env, open_dsname, &rstatus);
+          if(rstatus) printk("Can not open temperature series.\n");
+          else {
+            nr = rs_t->n;
+            if(nr != 1) printk("%d records != 1.\n", nr);
+            rt = rs_t->records[0];
+          }
+          t_obs0 = tobs[i];
+        }
+        if (rt) {
+          switch (camera) {
+            int st;
+            case 1:
+              tempccd  = drms_getkey_float(rt, "TC01_T1_CCD1_MEAN", &st);
+              tempgt   = drms_getkey_float(rt, "T08_G1_1_MEAN", &st);
+              tempsmir = drms_getkey_float(rt, "T02_T1_SMIR_MEAN", &st);
+              tempfpad = drms_getkey_float(rt, "T01_T1_FADP_MEAN", &st);
+              break;
+            case 2:
+              tempccd  = drms_getkey_float(rt, "TC03_T2_CCD1_MEAN", &st);
+              tempgt   = drms_getkey_float(rt, "T21_G2_1_MEAN", &st);
+              tempsmir = drms_getkey_float(rt, "T15_T2_SMIR_MEAN", &st);
+              tempfpad = drms_getkey_float(rt, "T14_T2_FADP_MEAN", &st);
+              break;
+            case 3:
+              tempccd  = drms_getkey_float(rt, "TC05_T3_CCD1_MEAN", &st);
+              tempgt   = drms_getkey_float(rt, "T34_G3_1_MEAN", &st);
+              tempsmir = drms_getkey_float(rt, "T28_T3_SMIR_MEAN", &st);
+              tempfpad = drms_getkey_float(rt, "T27_T3_FADP_MEAN", &st);
+              break;
+            case 4:
+              tempccd  = drms_getkey_float(rt, "TC07_T4_CCD1_MEAN", &st);
+              tempgt   = drms_getkey_float(rt, "T47_G4_1_MEAN", &st);
+              tempsmir = drms_getkey_float(rt, "T41_T4_SMIR_MEAN", &st);
+              tempfpad = drms_getkey_float(rt, "T40_T4_FADP_MEAN", &st);
+              break;
+          }
+          drms_setkey_float(rs, "TEMPCCD", tempccd);
+          drms_setkey_float(rs, "TEMPGT", tempgt);
+          drms_setkey_float(rs, "TEMPCEB", tempgt);
+          drms_setkey_float(rs, "TEMPSMIR", tempsmir);
+          drms_setkey_float(rs, "TEMPFPAD", tempfpad);
+          drms_setkey_float(rs, "TEMPPMIR", tempfpad);
+        }
+      }
+      if(hmiaiaflg) {
+printk("Setting response kw.\n");
+        int nr, st, ver_num;
+        float dt, eperdn, dnperpht, eff_area, eff_wl, factor, p1, p2, p3;
+        TIME t_start;
+        char *dsresp = "aia.response";
+        char *selstr = "select max(t_start) from ";
+        char *whrstr = "where t_start <= ";
+        char *wavstr = drms_getkey_string(rs0, "WAVE_STR", &rstatus);
+        if(rs_resp) {
+printk("Closing response series: %s\n", open_dsname);
+//          drms_close_records(rs_resp, DRMS_FREE_RECORD);
+printk("Closed response series\n");
+          rs_resp = NULL;
+        }
+        sprintf(open_dsname, "%s[][%s][? t_start=(%s %s %s %f) ?]",
+                dsresp, wavstr, selstr, dsresp, whrstr, tobs[i]);
+        rresp = NULL;
+printk("Opening response series: %s\n", open_dsname);
+        rs_resp = drms_open_records(drms_env, open_dsname, &rstatus);
+        if(rstatus) printk("Can not open aia.response series.\n");
+        else {
+          nr = rs_resp->n;
+          rresp = rs_resp->records[0];
+        }
+        if(rresp) {
+          eperdn = drms_getkey_float(rresp, "EPERDN", &st);
+          drms_setkey_float(rs, "DN_GAIN", eperdn);
+          dnperpht = drms_getkey_float(rresp, "DNPERPHT", &st);
+          drms_setkey_float(rs, "DNPERPHT", dnperpht);
+          eff_wl = drms_getkey_float(rresp, "EFF_WVLN", &st);
+          drms_setkey_float(rs, "EFF_WVLN", eff_wl);
+          p1 = drms_getkey_float(rresp, "EFFA_P1", &st);
+          p2 = drms_getkey_float(rresp, "EFFA_P2", &st);
+          p3 = drms_getkey_float(rresp, "EFFA_P3", &st);
+          t_start = drms_getkey_float(rresp, "T_START", &st);
+          dt = (float) (tobs[i] - t_start)/86400.0;
+          factor = ((p3*dt + p2)*dt + p1)*dt + 1.0;
+          eff_area = drms_getkey_float(rresp, "EFF_AREA", &st);
+          eff_area = eff_area*factor;
+          drms_setkey_float(rs, "EFF_AREA", eff_area);
+          ver_num = drms_getkey_int(rresp, "VER_NUM", &st);
+          drms_setkey_int(rs, "DN_GN_V", ver_num);
+          drms_setkey_int(rs, "EFF_AR_V", ver_num);
+        }
+      }
+
       //Now figure out what flat field to use
       if(drms_ismissing_time(tobs[i])) {
         printk("DRMS_MISSING_TIME for fsn=%u. Continue...\n", fsnx);
@@ -716,7 +847,7 @@ int do_ingest(long long bbrec, long long eerec)
       		dsffname, dsffname, tobs[i], tobs[i], wavstr, wavstr);
       }
       else {
-        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s' and flatfield_version >= 1 ?]",
+        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and WAVE_STR='%s' ?]",
       	dsffname, tobs[i], tobs[i], wavstr);
       }
     }
@@ -821,6 +952,8 @@ int do_ingest(long long bbrec, long long eerec)
       hshiexp = drms_getkey_int(rs, "HSHIEXP", &rstatus);
       hcamid = drms_getkey_int(rs, "HCAMID", &rstatus);
       if(hmiaiaflg) {
+        float sumdc=0.0;
+        int idc, numdc=0;
         int aimgshce = drms_getkey_int(rs, "AIMGSHCE", &rstatus);
         if(aimgshce == 0) l0l1->darkflag = 1;
         if(rstatus = do_flat_aia(l0l1)) {
@@ -830,6 +963,17 @@ int do_ingest(long long bbrec, long long eerec)
           //return(1);		//!!TBD what to do?
           goto FLATERR;
         }
+        for (idc=2047; idc<4096*4096; idc+=4096) {
+          if (data1A[idc] != DRMS_MISSING_INT) {
+            sumdc = sumdc + data1A[idc];
+            numdc++;
+          }
+          if (data1A[idc+1] != DRMS_MISSING_INT) {
+            sumdc = sumdc + data1A[idc+1];
+            numdc++;
+          }
+        }
+        if (numdc) drms_setkey_float(rs, "DATACENT", sumdc/numdc);
       }
       else {
         if(hshiexp == 0) l0l1->darkflag = 1;
@@ -933,15 +1077,15 @@ TEMPSKIP:
         segArray->type = DRMS_TYPE_FLOAT;
         segArray->bscale = 1.0; 
         segArray->bzero = 0.0; 
+        dstatus = drms_segment_write(segment, segArray, 0);
+        if (dstatus) {
+          printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
+          noimage[i] = 1;
+        }
+        recnum1 = rs->recnum;
+        printk("*1 %u %u\n", recnum1, fsnx);
+        free(Array0->data);
       }
-      dstatus = drms_segment_write(segment, segArray, 0);
-      if (dstatus) {
-        printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
-        noimage[i] = 1;
-      }
-      recnum1 = rs->recnum;
-      printk("*1 %u %u\n", recnum1, fsnx);
-      free(Array0->data);
  
   x0_lf = DRMS_MISSING_DOUBLE;
   y0_lf = DRMS_MISSING_DOUBLE;
@@ -1164,7 +1308,19 @@ WCSEND:
   do_quallev1(rs0, rs, i, fsnx);
   //ftmp = StopTimer(2); //!!!TEMP
   //printf( "\nTime sec in inside loop for fsn=%u : %f\n\n", fsnx, ftmp );
-
+    if(hmiaiaflg) {
+      dstatus = drms_segment_writewithkeys(segment, segArray, 0);
+      if (dstatus) {
+        printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
+        noimage[i] = 1;
+      }
+      recnum1 = rs->recnum;
+      printk("*1 %u %u\n", recnum1, fsnx);
+      free(Array0->data);
+//      if (rs_t) drms_close_records(rs_t, DRMS_FREE_RECORD);
+      if (rs_resp) drms_close_records(rs_resp, DRMS_FREE_RECORD);
+      rs_resp = NULL;
+    }
   }				//END do for all the sorted lev0 records
 
   drms_close_records(rset0, DRMS_FREE_RECORD);   //close lev0 records
