@@ -516,7 +516,7 @@ int do_flat_aia(LEV0LEV1 *info)
        break;
     }
     for (i=0; i<4096*4096; i++) {
-      if (out[i] < 0 && out[i] != DRMS_MISSING_INT) out[i] = 0;
+//    if (out[i] < MINOUT && out[i] != DRMS_MISSING_INT) out[i] = MINOUT;
       if (out[i] > 32767) out[i] = 32767;
     }
     if (respike) niter = 0; else niter = 3;
@@ -545,7 +545,7 @@ int do_flat_aia(LEV0LEV1 *info)
     npix = 0; memset(hist, 0, 4*NBINS);
     for (i=0; i<4096*4096; i++) {
       if(out[i] != DRMS_MISSING_INT) { 
-        if (out[i] < 0) out[i] = 0;
+        if (out[i] < MINOUT) out[i] = MINOUT;
         if (out[i] > 16383) out[i] = 16383;
         ++hist[out[i]-MINOUT]; 
         ++npix; 
@@ -601,10 +601,10 @@ int do_flat_aia(LEV0LEV1 *info)
 	}
 
         {                       //aia
-            int n=0, sum=0, dp[8];
+            int n=0, nsatpix=0, sum=0, dp[8];
             dp[0] =  1; dp[1] = 10; dp[2] = 25; dp[3] = 75;
             dp[4] = 90; dp[5] = 95; dp[6] = 98; dp[7] = 99;
-            for (i=min; n<8; ++i) {
+            for (i=min; i<=max; ++i) {
                 sum += hist[i];
                 if (sum > dp[n]*npix/100) switch (n) {
                     case 0:
@@ -634,7 +634,9 @@ int do_flat_aia(LEV0LEV1 *info)
                         break;
                 }
                 if (i>max) n++;
+                if (i > (15000 - MINOUT)) nsatpix += hist[i];
             }
+            drms_setkey_int(rs, "NSATPIX", nsatpix);
         }
     }
 
