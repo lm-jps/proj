@@ -1608,13 +1608,17 @@ int DoIt (void) {
 	    if (calc_seconds) fprintf (unit22, "%12.4e",
 	        sqrt (scale[i] * scale[i] * fabs (hs[i + npar*i])));
 	  }
+	  dval = par[10];
 	  par[10] = pk1;
+	  h[10 + 10 *npar] *= 1.0e-8;
 	  for (i=4; i<npar; i++) {
 	    fprintf (unit22, "%12.4e%12.4e", par[i] * scale[i],
 		sqrt (scale[i] * scale[i] * fabs (h[i + npar*i])));
 	    if (calc_seconds) fprintf (unit22, "%12.4e",
 	        sqrt (scale[i] * scale[i] * fabs (hs[i + npar*i])));
 	  }
+	  h[10 + 10 *npar] *= 1.0e8;
+	  par[10] = dval;
 /*
 	  fprintf (unit22, "%2d%10.3f%9.3f%9.3f%5d", n, f0, rki, rl0,
 		bfgs_status);
@@ -1785,4 +1789,6 @@ int DoIt (void) {
  *			guess for A1
  *	10.11.16		Fixed reporting value of parameter p; changed
  *			default fmax from 7000 to 5500
+ *	10.11.30		Additional fix to take care of maintaining p
+ *			parameter value
  */	
