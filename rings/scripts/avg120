@@ -30,12 +30,11 @@ end
 set DATAVG = "$DATAVG -v"
 
 # base naming convention for I/O series and logs
+set INMSP = hmi
 if ($TEST) then
-  set NMSP = hmi_test
-  set OBSV = 2
+  set ONMSP = hmi_test
 else
-  set NMSP = hmi
-  set OBSV
+  set ONMSP = $INMSP
 endif
 set SUFX = avg120
 
@@ -49,32 +48,32 @@ if ($#argv > 2) then
   switch ($1)
     case "-v":
       set TYP = vel
-      set IN = $NMSP.V$OBSV\_45s
+      set IN = $INMSP.V\_45s
       set OBS = V
-      set RJCT = $RDIR.V$OBSV\
+      set RJCT = $RDIR.V
       set FLAG = -o
       breaksw
     case "-i":
       set TYP = int
-      set IN = $NMSP.Ic$OBSV\_45s
+      set IN = $INMSP.Ic\_45s
       set OBS = C
       set RJCT = "Not Specified"
       breaksw
     case "-z":
       set TYP = mag
-      set IN = $NMSP.M$OBSV\_45s
+      set IN = $INMSP.M\_45s
       set OBS = M
       set RJCT = "Not Specified"
       breaksw
     case "-w":
       set TYP = lwd
-      set IN = $NMSP.Lw$OBSV\_45s
+      set IN = $INMSP.Lw\_45s
       set OBS = LW
       set RJCT = "Not Specified"
       breaksw
     case "-d":
       set TYP = ldp
-      set IN = $NMSP.Ld$OBSV\_45s
+      set IN = $INMSP.Ld\_45s
       set OBS = LD
       set RJCT = "Not Specified"
       breaksw
@@ -83,15 +82,15 @@ if ($#argv > 2) then
       echo "  where TYP = [v|i|z|w|d]"
       exit
   endsw
-  set OUT = $NMSP.$OBS\_$SUFX
+  set OUT = $ONMSP.$OBS\_$SUFX
 else
   @ CROT = `decimalize $1`
   @ CLON = `decimalize $2`
   set TYP = vel
-  set IN = $NMSP.V$OBSV\_45s
+  set IN = $INMSP.V\_45s
   set OBS = V
-  set OUT = $NMSP.V$OBSV\_avg120
-  set RJCT = $RDIR.V$OBSV\
+  set OUT = $ONMSP.V\_avg120
+  set RJCT = $RDIR.V
   set FLAG = -o
 endif
 set CARTIM = $CROT\:`printf %03d $CLON`
@@ -109,10 +108,10 @@ set SCRT = /scr21/`whoami`
 if (!(-d $SCRT)) set SCRT = /tmp
 set SCRB = $SCRT/$SUFX
 if (!(-d $SCRB)) mkdir $SCRB
-set LOGF = $SCRB/runlog$OBS$OBSV
+set LOGF = $SCRB/runlog$OBS
 set TEMP = /tmp23/`whoami`
 if (!(-d $TEMP)) set TEMP = /tmp
-set TMPB = $TEMP/$OBS$OBSV$SUFX
+set TMPB = $TEMP/$OBS$SUFX
 if (!(-d $TMPB)) mkdir $TMPB
 set MSGS = $TEMP/msgs
 if (!(-d $MSGS)) mkdir $MSGS
@@ -145,6 +144,7 @@ if ($status) then
   echo $SUBJ >> $LOGF
   echo "  run log is on $RLOG"  >> $MMSG
 else
+  set NOW = `date +%Y.%m.%d_%T`
   @ FINIS = `date +%s`
   @ ELAPS = $FINIS - $BEGUN
   @ ELAPS += 30
