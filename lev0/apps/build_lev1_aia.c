@@ -656,7 +656,6 @@ int do_ingest(long long bbrec, long long eerec)
           drms_setkey_string(rs, "ASD_REC", ptdata.asd_rec);
           drms_setkey_string(rs, "ACS_CGT", ptdata.acs_cgt);
       }
-printk("Setting HAEX_OBS, etc.\n");
       if(IOinfo) {
         IOdata = IOinfo[i];
            drms_setkey_double(rs, "HAEX_OBS", IOdata.hciX);
@@ -692,9 +691,7 @@ printk("Setting HAEX_OBS, etc.\n");
         goto TEMPSKIP;
         //return(1);
       }
-printk("Trying to set T_REC.\n");
       if ( 0 == drms_setkey_time(rs, "T_REC", tobs[i])) {
-printk("T_REC set .\n");
         int status, allstat = 0;
         double tr_step;
         long long tr_index;
@@ -711,9 +708,7 @@ printk("T_REC set .\n");
         }
       }
 
-printk("Trying to set temperatures.\n");
       if(hmiaiaflg && !quicklook) {
-printk("Setting temperatures.\n");
         float tempccd, tempgt, tempsmir, tempfpad;
         if(fabs(tobs[i] - t_obs0) > 300.0) {
           char *dstemp = "aia.temperature_summary_300s";
@@ -774,7 +769,6 @@ printk("Setting temperatures.\n");
         }
       }
       if(hmiaiaflg) {
-printk("Setting response kw.\n");
         int nr, st, ver_num;
         float dt, eperdn, dnperpht, eff_area, eff_wl, factor, p1, p2, p3;
         TIME t_start;
@@ -783,15 +777,12 @@ printk("Setting response kw.\n");
         char *whrstr = "where t_start <= ";
         char *wavstr = drms_getkey_string(rs0, "WAVE_STR", &rstatus);
         if(rs_resp) {
-printk("Closing response series: %s\n", open_dsname);
 //          drms_close_records(rs_resp, DRMS_FREE_RECORD);
-printk("Closed response series\n");
           rs_resp = NULL;
         }
         sprintf(open_dsname, "%s[][%s][? t_start=(%s %s %s %f) ?]",
                 dsresp, wavstr, selstr, dsresp, whrstr, tobs[i]);
         rresp = NULL;
-printk("Opening response series: %s\n", open_dsname);
         rs_resp = drms_open_records(drms_env, open_dsname, &rstatus);
         if(rstatus) printk("Can not open aia.response series.\n");
         else {
