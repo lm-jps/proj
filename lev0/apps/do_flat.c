@@ -396,6 +396,8 @@ int do_flat_aia(LEV0LEV1 *info)
 	c1 = c2 = 4096;
     nc /= 2;
 
+    info->oscnmean = info->oscnrms = DRMS_MISSING_DOUBLE;
+
     memset(hist, 0, 4*NBINS);
 
     //
