@@ -36,13 +36,13 @@ endif
 
 dir     := $(d)/mag
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir	:= $(d)/maps_avgs
+-include		$(SRCDIR)/$(dir)/Rules.mk
 dir	:= $(d)/myproj
 -include		$(SRCDIR)/$(dir)/Rules.mk
 dir	:= $(d)/util
 -include		$(SRCDIR)/$(dir)/Rules.mk
 dir	:= $(d)/globalhs
--include		$(SRCDIR)/$(dir)/Rules.mk
-dir	:= $(d)/lev1.5_hmi
 -include		$(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/rings
 -include                $(SRCDIR)/$(dir)/Rules.mk
