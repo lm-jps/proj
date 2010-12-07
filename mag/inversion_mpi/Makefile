@@ -24,7 +24,7 @@ MPFC =	/home/jsoc/mpich2/bin/mpif90
 
 OBJ =	cons_param.o line_param.o filt_param.o inv_param.o line_param.o \
 	svd_param.o filt_init.o free_init.o inv_init.o line_init.o svd_init.o \
-	voigt_init.o wave_init.o voigt_data.o voigt_taylor.o free_memory.o \
+	voigt_init.o wave_init.o voigt_data.o voigt_taylor.o free_memory.o ran_mod.o \
 	inv_utils.o voigt.o svdcmp.o svbksb.o forward.o invert.o wfa_guess.o
 
 # DRMS module with FORTRAN routines and MPI
@@ -73,11 +73,15 @@ inv_param.o: inv_param.f90 cons_param.o
 	$(FC) $(F90F) inv_param.f90
 
 inv_utils.o: inv_utils.f90 cons_param.o filt_param.o \
-	svd_param.o inv_param.o line_param.o svdcmp.o svbksb.o
+	svd_param.o inv_param.o line_param.o svdcmp.o svbksb.o \
+	ran_mod.o
 	$(FC) $(F90F) inv_utils.f90
 
 wfa_guess.o: wfa_guess.f90 cons_param.o filt_param.o inv_param.o
 	$(FC) $(F90F) wfa_guess.f90
+
+ran_mod.o: ran_mod.f90 cons_param.o
+	$(FC) $(F90F) ran_mod.f90
 
 invert.o: invert.f90 forward.o line_param.o cons_param.o filt_param.o \
 	inv_utils.o svd_param.o inv_param.o svdcmp.o svbksb.o wfa_guess.o
@@ -101,8 +105,8 @@ svd_init.o: svd_init.f90 svd_param.o inv_param.o cons_param.o
 svd_param.o: svd_param.f90
 	$(FC) $(F90F) svd_param.f90
 
-#voigt.o: voigt.f
-#	$(FC) $(F90F) voigt.f
+voigt.o: voigt.f
+	$(FC) $(F90F) voigt.f
 
 voigt_data.o: voigt_data.f90 cons_param.o
 	$(FC) $(F90F) voigt_data.f90

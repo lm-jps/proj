@@ -1,4 +1,4 @@
-      subroutine svdcmp(sa,m,n,mp,np,sw,sv)
+      subroutine svdcmp(sa,m,n,mp,np,sw,sv, conv_flag)
    
       use cons_param
       implicit real(dp) (a-h,o-z)
@@ -6,7 +6,7 @@
       real(dp) sa(mp,np),sw(np),sv(np,np)
       Real(dp), Dimension (:,:), Allocatable :: a, v
       Real(dp), Dimension (:), Allocatable :: W, rv1
-      Integer :: Status, m ,n, mp, np
+      Integer :: Status, m ,n, mp, np, conv_flag
       
       Allocate (a(n,n), Stat=Status)
       If (Status .gt. 0) then
@@ -379,8 +379,11 @@
           endif
 
           if (its.eq.30) then
-             print*,'no convergence after 30 iterations'
-             pause
+             print*, 'no convergence after 30 iterations'
+	     print*, "k = ", k
+!             pause
+	     conv_flag = 1
+	     go to 4
           end if
 
           x=w(l)
@@ -494,6 +497,28 @@
         end do
         sw(i)=w(i)
       end do
+
+4    if (conv_flag.ne.0) print*, "GO TO 4. Conv_flag NE 0)"
+
+if (conv_flag.ne.0) then
+!print*, "a = ", a
+!print*, "v = ", v
+!print*, "W = ", W
+!print*, "rv1 = ", rv1
+sa(:,:) = 0.
+sv(:,:) = 0.
+sw(:) = 0.
+a(:,:) = 0.
+v(:,:) = 0.
+W(:) = 0.
+rv1(:) = 0.
+    print*, "CONV_FLAG = ", conv_flag
+!    print*, "sa = ", sa
+!    print*, "sv = ", sv
+!    print*, "sw = ", sw
+!    print*, "m, n, mp, np = ", m, n, mp, np
+endif
+
 
       Deallocate(a,v,W,rv1)
       

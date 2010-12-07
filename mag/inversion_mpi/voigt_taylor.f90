@@ -13,6 +13,7 @@ SUBROUTINE VOIGT_TAYLOR(DAM,FREC,PHI,PSI)
   REAL(DP)                     :: U, DAM, COEF1, COEF2, COEF3, COEF4, COEF5, COEF6, DELTAU
   INTEGER                      :: I, HERE
   !
+
   DO I=1,NUMW
      U=FREC(I)
      IF (U.LT.0) U=ABS(U)

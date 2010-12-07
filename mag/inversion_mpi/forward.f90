@@ -4,17 +4,26 @@ MODULE FORWARD
   ! Jan 10, 2007
   ! HAO-NCAR for HMI-Stanford
   !
+  ! By RCE: Added FILTERS as a parameter passed to SYNTHESIS
+  ! Defined FILTERS in SYNTHESIS
+  ! Changed all the FILTER (Juanma's filter profiles) instances 
+  ! by FILTERS (Sebastien's filter profiles). Filters is now defined
+  ! as a matrix of [NUMW, NBINS] elements. We've exchanged the 
+  ! indices with respect to the C-wrapper definition because C and Fortran
+  ! read the elements in different order.
+
 CONTAINS
   !!
   !! SUBROUTINE SYNTHESIS
   !!
-  SUBROUTINE SYNTHESIS(MODEL,SCAT,DERIVATIVE,SYN,DSYN)
+  SUBROUTINE SYNTHESIS(MODEL,SCAT,DERIVATIVE,SYN,DSYN, FILTERS)
     USE FILT_PARAM
     USE LINE_PARAM
     USE CONS_PARAM
     IMPLICIT NONE
     REAL(DP), INTENT(IN),  DIMENSION(10)          :: MODEL
     REAL(DP), INTENT(IN),  DIMENSION(NBINS,4)     :: SCAT
+    REAL(DP), INTENT(IN),  DIMENSION(NUMW, NBINS)  :: FILTERS
     LOGICAL,  INTENT(IN)                          :: DERIVATIVE
     REAL(DP), INTENT(OUT),  DIMENSION(NBINS,4)    :: SYN
     REAL(DP), INTENT(OUT),  DIMENSION(10,NBINS,4) :: DSYN
@@ -84,7 +93,7 @@ CONTAINS
     !-----------------------------------------------------------------------------
     DO K=1,4
        DO J=1,NBINS
-          SYN_MAG(J,K)=SUM(FILTER(:,J)*STOKES_MAG(:,K))     
+          SYN_MAG(J,K)=SUM(FILTERS(:,J)*STOKES_MAG(:,K))     
        ENDDO
     ENDDO
     !---------------------------------------------------------
@@ -204,7 +213,7 @@ CONTAINS
        DO M=1,9
           DO K=1,4
              DO J=1,NBINS
-                DSYN_MAG(M,J,K)=SUM(FILTER(:,J)*DSTOKES_MAG(M,:,K))     
+                DSYN_MAG(M,J,K)=SUM(FILTERS(:,J)*DSTOKES_MAG(M,:,K))     
              ENDDO
           ENDDO
        ENDDO
@@ -225,6 +234,7 @@ CONTAINS
     USE CONS_PARAM
     USE LINE_PARAM
     USE INV_PARAM
+    USE VOIGT_DATA
     IMPLICIT NONE
     !----------------------------------------------------------
     REAL(DP), INTENT(IN), DIMENSION(10)     :: MODEL
