@@ -1049,7 +1049,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.20 2010/11/12 21:38:52 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.21 2010/12/10 21:47:24 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -4948,11 +4948,11 @@ int DoIt(void)
 	  for(i=0;i<n1;++i)
 	    {
 	      count[i] = fabs(timeL[i]-TargetTime); //absolute value of the difference between the T_REC of the look-up tables and the TargetTime
-	      NBC = keyL[     i]-HCMNBT; 
-	      WBC = keyL[  n1+i]-HCMPOLT;
-	      POLC= keyL[2*n1+i]-HCMWBT;
-	      E1C = keyL[3*n1+i]-HCME1T;
-	      NC  = keyL[4*n1+i]-framelistSize/npol;
+	      NBC = abs(keyL[     i]-HCMNBT); 
+	      POLC= abs(keyL[  n1+i]-HCMPOLT);
+	      WBC = abs(keyL[2*n1+i]-HCMWBT);
+	      E1C = abs(keyL[3*n1+i]-HCME1T);
+	      NC  = abs(keyL[4*n1+i]-framelistSize/npol);
 	      CAMERAUSED = keyL[5*n1+i]-CamId; //we will take only the look-up tables produced from data taken on the same camera as CamId
 	      if(count[i] < temptime && NBC+WBC+POLC+E1C+NC+CAMERAUSED == 0)
 		{
