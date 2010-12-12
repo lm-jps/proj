@@ -30,10 +30,10 @@ $host = `hostname -s`;
 chomp($host);
 print "host = $host\n";
 #cl1n001 is a linux_x86_64
-if($host ne "cl1n001") {
-  print "Error: This must be run on cl1n001\n";
-  exit;
-}
+#if($host ne "cl1n001") {
+#  print "Error: This must be run on cl1n001\n";
+#  exit;
+#}
 $ENV{'JSOC_MACHINE'} = "linux_x86_64";
 $JSOC_MACHINE = "linux_x86_64";
 $ENV{'PATH'} = "/home/production/cvs/JSOC/bin/$JSOC_MACHINE:/home/production/cvs/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
