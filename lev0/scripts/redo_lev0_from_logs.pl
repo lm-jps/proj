@@ -30,7 +30,7 @@ $IDTBL = $ARGV[0];
 #chomp($passwd);
 #ReadMode('normal');
 #print "\n";
-#if($passwd ne "hmi4sdo") {
+#if($passwd ne <passwd>) {
 #  print "Invalid passwd\n";
 #  exit(1);
 #}
