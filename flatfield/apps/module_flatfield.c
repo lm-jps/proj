@@ -66,10 +66,6 @@ void limb_darkening(double radius, double cent_x, double cent_y, double *b, int 
 int flatfield(double *rhsp, double *rhsm,short *badpix, int pairs, double *gout, double *param, struct code_param, double deltat);
 void apod_circ(float rad, float nb, float offx, float offy, float *vd);
 
-//int get_flatfields(char *query_flat, TIME t_0, int camera, int focus,
-//                   float *flatfield, float *offpoint, 
-//                   short *bad, long long recnum[6], TIME tobs_link[2],
-//		   struct rotpar *rot_cur);
 
 int get_flat(char *query, int camera, float *flatfield, float *offpoint, 
 	     short *bad);
@@ -77,10 +73,7 @@ int get_flat(char *query, int camera, float *flatfield, float *offpoint,
 //int get_offpoint(TIME t_0, int camera, float *offpoint, long long *recnum);
 int get_latest_record(TIME t_0, int camera, const char *fname, const char *segname, float *offpoint, long long *recnum, int *focus);
 
-//int write_flatfields(char *filename_flatfield_out, DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
-//                     long long recnum[6], TIME tobs_link[2], TIME t_0, int focus,
-//                     struct rotpar rot_new, 
-//                     struct rotpar rot_cur);
+
 
 int write_flatfield_fid(DRMS_Array_t *arrout_new, int camera, long long recnum_offpoint, 
 		        TIME t_0, int focus,int fid,
@@ -147,7 +140,6 @@ int DoIt(void)
   int i,j,k,km1,c,ki,iii,jjj,kkk;                                                   //loop variables
 
 
-
  
  //********************************************************************************************************************************/
   //Constants to be set: will maybe be input parameters 
@@ -205,7 +197,7 @@ int DoIt(void)
   double *limb_dark;
   int *count_p, *count_m;
 
-  int count, ccount, count_filtergram, bad_pix; // counters 
+  int count, ccount,ccount1,ccount2, count_filtergram, bad_pix; // counters 
   int count_flatfields;
 
   int last, current, next, holder;
@@ -241,6 +233,7 @@ int DoIt(void)
   cosmicval=(float *)(malloc(nx*ny*sizeof(float)));
   float *cosmicsig;
   cosmicsig=(float *)(malloc(nx*ny*sizeof(float)));
+  float diff_forward, diff_backward;
 
 
 
@@ -412,7 +405,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
   int keyvalue_flatr[nRecs];
   int keyvalue_fsn[nRecs];
   double time_fl[nRecs];
-  int cosmic_ray_check[nRecs];
+  //int cosmic_ray_check[nRecs];
 
   //arrays for Lev 1 solar parameters   
   float keyvalue_rsun[nRecs];
@@ -432,13 +425,8 @@ if (fsn_first == 0 || fsn_last == 2147483647)
   int statarr[nRecs];
 
   char *query_flat, *query_flat_ref, *query_flat_relative;
-
-  //double *sigmacoef;
-
-  //sigmacoef=(double *)(malloc(5*sizeof(double)));
-  //sigmacoef[0]=constsigma[(fid-10000)/10]*8.0; sigmacoef[1]=0.0; sigmacoef[2]=0.0; sigmacoef[3]=0.0; sigmacoef[4]=0.0;
-
-
+  char flat_default[256]={"none"};
+ 
   
  
   t_0 = drms_getkey_time(data->records[nRecs/2],keytobs,&status);
@@ -465,7 +453,6 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       for (k=0; k<nRecs; ++k)
 	{
 	  statarr[k]=0;
-	  cosmic_ray_check[k]=-1;
 	  rec0[k]=data->records[k];
 	  keyvalue_cam[k]=drms_getkey_int(rec0[k],keycam,&status);
 	  if (status != 0 || (keyvalue_cam[k] != cam_id_front && keyvalue_cam[k] != cam_id_side)) statarr[k]=statarr[k]+1024;
@@ -539,7 +526,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	keyvalue_vrad[k]=drms_getkey_float(rec0[k], lev1_vr, &status);
 	if (keyvalue_vrad[k] < vrad_min || keyvalue_vrad[k] > vrad_max) statarr[k]=statarr[k]+512;
 
-        //printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d  \t %f \t %f \t  %f %f %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k]);
+   
 
       }
   
@@ -622,17 +609,17 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 
 
-		if (cam ==0)camid=cam_id_side;
-		if (cam ==1)camid=cam_id_front;
+      if (cam ==0)camid=cam_id_side;
+      if (cam ==1)camid=cam_id_front;
 
 
 
-	count_flatfields=0;
+      count_flatfields=0;
 
 	
 
 
-	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i){rhsm[j*nx+i]=0.0; rhsp[j*nx+i]=0.0; count_p[j*nx+i]=0; count_m[j*nx+i]=0; flati[j*nx+i]=0.0;}
+      for (j=0; j<ny; ++j) for (i=0; i<nx; ++i){rhsm[j*nx+i]=0.0; rhsp[j*nx+i]=0.0; count_p[j*nx+i]=0; count_m[j*nx+i]=0; flati[j*nx+i]=0.0; cmarr[j*nx+i]=1;}
 
 	
 	for (i=0; i<nRecs; ++i){present_backward[i]=0; present_forward[i]=0; present[i]=0;}
@@ -643,7 +630,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
    
 	  for (k=0; k<nRecs; ++k){present[k]=1; index[k]=k;}  //loop over all filtergrams: search for valid filtergrams
 	  printf("number of filtergrams %d\n", nRecs);
- 	  dataout = drms_create_records(drms_env,nRecs-2,filename_cosmic,DRMS_PERMANENT,&stat); //create ALL cosmic_ray records
+ 	  dataout = drms_create_records(drms_env,nRecs,filename_cosmic,DRMS_PERMANENT,&stat); //create ALL cosmic_ray records
 
 	//check each forward and backward pair of images for identity
 	//check for wavelength, polarization,  P-angle, center, and solar radius identity, and for time difference being nominal cadence
@@ -678,16 +665,11 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	printf("number of filtergrams, valid pairs of frames %d \t %d \n", count_filtergram, ccount);
 
 
-	//	for (kkk=0; kkk<count_filtergram-2; ++kkk){k=index[kkk]; printf("%d %d %d %d %ld %d %d %d %f %ld\n",kkk,k,keyvalue_fid[k],keyvalue_cam[k],tmind[k]-tmind[0],present[k],present_backward[k],present_forward[k],sqrt(pow(keyvalue_X0[index[kkk]]-keyvalue_X0[index[kkk+1]],2)+pow(keyvalue_Y0[index[kkk]]-keyvalue_Y0[index[kkk+1]],2)), (tmind[index[kkk+1]]-tmind[index[kkk]])); if ((tmind[index[kkk+1]]-tmind[index[kkk]]) != 135.0) ++counter_aaa;}
 
-      //combine flatfield correction and limb-darkening
+	//	for (k=0; k < count_filtergram; ++k) printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d  \t %f \t %f \t  %f %f %d %d %d %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k], present[k], present_forward[k], present_backward[k]);
 
 
-	//get reference flatfield
-	//query_flat_relative =keyvalue_flatnumb[nRecs-1];
-
-	 //status_flatfield_relative=get_flatfields(query_flat_relative, t_0, cam+1, focus,  app_flat, flat_relative,  badpix, recnum_ref, tobs_link, &rot_cur);
-	 //status_flatfield=get_flat(query_flat_relative, cam+1, app_flat, flat_relative,  badpix);
+	///read relative flatfield
 
 	status_flatfield_relative=get_latest_record(t_stamp, cam+1, filename_offpoint, segmentname_offpoint, flat_relative, &recnum_offpoint, &focus);
 
@@ -703,172 +685,15 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	     printf("WARNING: Could not read relative flatfield");
 	   }
 
-	 
-	  //read in first filtergram
-	printf("read first filtergram\n");
+	 ///////////////////
 
+
+	 
       
 
-	  last=0; current=1; next=2;
-	  index_last=0; index_current=1;
-	  k=0;
-	  
-	  segin    = drms_segment_lookupnum(rec0[index_last], 0);
-	  arrin0= drms_segment_read(segin, type_double, &status);
-
-	  if (status != DRMS_SUCCESS)
-	    {
-	      printf("Error: there is a problem with the filtergram number %d \n", k); //if there is a problem with the filtergram
-	      --ccount;
-	      present_backward[index_last]=0;
-	      present_forward[index_last]=0;
-	      present[index_last]=0;
-	      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[last][jjj][iii]=NAN; //
-	    }
-	  else
-	    {
-	     
-	      printf("filtergram with FSN %d read\n",keyvalue_fsn[index_last]);
-	      arrinL0 = arrin0->data;
-	      
-	      printf("%d %d read flatfield\n", k, keyvalue_fsn[k]);
-	      query_flat =keyvalue_flatnumb[index_last];
-
-	   
-	      status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
-	      flatfound=status_flatfield;
-	
-	      if (status_flatfield ==0)
-		{
-		  printf("Flatfield %s read\n", query_flat);
-	
-		}
-		  else
-		    {
-		    printf("Failure reading flatfield / Use unity flatfield\n");
-	
-		    }
-
-	      if (status_flatfield != 0)
-		{
-		  --ccount;
-		  statarr[0]=statarr[0]+2;
-		  present_forward[0]=0;
-		  present_backward[0]=0;
-		}
-
-	      keyvalue_flatr[0]=flatfound;
-	      query_flat_ref=query_flat;
-	      
-	      if (flatfound == 0) for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[last][jjj][iii]=(float)arrinL0[jjj*nx+iii]*app_flat[jjj*nx+iii]/flat_relative[jjj*nx+iii]; 
-	      if (flatfound != 0) for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[last][jjj][iii]=(float)arrinL0[jjj*nx+iii]; 
-
-	     	      
-	
-	      if (present_forward[k] != 0){
-		
-#pragma omp parallel for private(jjj,iii)
-	        	for (jjj=0; jjj<ny; ++jjj){
-	          for (iii=0; iii<nx; ++iii){
-		    if (!isnan(arrinL0[jjj*nx+iii]) && arrinL0[jjj*nx+iii] > 0.0){rhsm[jjj*nx+iii]=rhsm[jjj*nx+iii]+log((double)arrimg[last][jjj][iii]); //add up first frame for forward
-	            count_m[jjj*nx+iii]=count_m[jjj*nx+iii]+1;}
-	      	  }
-	      	}
-		      }
-
-	      drms_free_array(arrin0);
-	    }
-
-	  
-	
-//read in second filtergram
-	  printf("read second filtergram\n");
-	  k=1;
-
-	  segin    = drms_segment_lookupnum(rec0[index_current], 0);
-	  arrin0= drms_segment_read(segin, type_double, &status);
-
-	  
-	  if (status != DRMS_SUCCESS)
-	    {
-	      printf("Error: there is a problem with the filtergram number %d \n", k); //if there is a problem with the filtergram
-	      --ccount;
-	      present_backward[index_current]=0;
-	      present_forward[index_current]=0;
-	      present[index_current]=0;
-	    }
-	  else
-	    {
-	      
-	     
-	      printf("filtergram with FSN %d read\n",keyvalue_fsn[index_current]);
-	      arrinL0 = arrin0->data;
-
-	      query_flat =keyvalue_flatnumb[index_current];
-	      if (strcmp(query_flat, query_flat_ref) != 0)
-		{
-		 
-		  printf("%d %d read new flatfield\n", k, keyvalue_fsn[k]);
-
-		
-		  status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
-		  flatfound=status_flatfield;
-
-		  if (status_flatfield ==0)
-		    printf("Flatfield %s read\n", query_flat);
-		  else
-		    printf("Failure reading flatfield / Use unity flatfield\n");
 
 
-	
-		  query_flat_ref=query_flat;
-		 
-		}
-
-
-	      keyvalue_flatr[1]=flatfound;	
-	    
-	      
-	      if (status_flatfield != 0)
-		    {
-		      --ccount;
-		      statarr[1]=statarr[1]+2;
-		      present_forward[1]=0;
-		      present_backward[1]=0;
-		    }
-
-	
-	      if (flatfound == 0)for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[current][jjj][iii]=(float)arrinL0[jjj*nx+iii]*app_flat[jjj*nx+iii]/flat_relative[jjj*nx+iii];
-	      if (flatfound != 0)for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii) arrimg[current][jjj][iii]=(float)arrinL0[jjj*nx+iii];
-	    
-	   	      
-	      //printf("fsn %d %d\n", k, keyvalue_fsn[k]);
-
-	      //	       if (present_backward[k] != 0){
-
-	      //#pragma omp parallel for private(jjj,iii)
-	      //		 for (jjj=0; jjj<ny; ++jjj){
-	      //	      	  for (iii=0; iii<nx; ++iii){
-	      //	      	    if (!isnan(arrinL0[jjj*nx+iii]) && arrinL0[jjj*nx+iii] > 0.0){rhsp[jjj*nx+iii]=rhsp[jjj*nx+iii]+log(arrinL0[jjj*nx+iii]); //  //add up frames (flatfielded with offpoint flatfield and limb darkening removed
-	      //	            count_p[jjj*nx+iii]=count_p[jjj*nx+iii]+1;}
-	      //		    }
-	      //		  }
-	      //		 }
-
-	      //	      if (present_forward[k] != 0){
-
-	      //	      	#pragma omp parallel for private(jjj,iii)
-	      //			for (jjj=0; jjj<ny; ++jjj){
-	      //			  for (iii=0; iii<nx; ++iii){
-	      //	          if (!isnan(arrinL0[jjj*nx+iii]) && arrinL0[jjj*nx+iii] > 0.0){rhsm[jjj*nx+iii]=rhsm[jjj*nx+iii]+log(arrinL0[jjj*nx+iii]); //add up frames (flatfielded with offpoint flatfield and limb darkening removed
-		    //	            count_m[jjj*nx+iii]=count_m[jjj*nx+iii]+1;}
-	      //   }
-	      // 	}
-
-	      //  }
-      	      drms_free_array(arrin0);
-	    }
-
+	 //calculate limit parameters for cosmic ray detection
 
 #pragma omp parallel for private(jjj,iii)	   
 	      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
@@ -891,140 +716,191 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 	  printf("cosmic ray detection\n");
 
-
+	  ccount1=0;
+	  ccount2=0;
+	  last=2; current=0; next=1;
 	  double avg=0.0;
+	  query_flat_ref=flat_default;
 	  printtime();
 
-	  for (kkk=2; kkk<count_filtergram; ++kkk){
+
+
+	  for (kkk=0; kkk<(count_filtergram+1); ++kkk){ // loop starts at 0
 	  
 	    if (cosmic_flag || ccount >= cthreshold)
 	      {
-	  
-	   
-	    k=kkk;
-	    km1=kkk-1;
 
-	    printf("fsn %d %d\n", k, keyvalue_fsn[k]);
+		km1=kkk-1;
+
+		//read in filtergram
+		if (kkk < count_filtergram)
+		  {
+		    printf("fsn %d %d\n", kkk, keyvalue_fsn[kkk]);
 	 
-	    segin    = drms_segment_lookupnum(rec0[k], 0);
-	    arrin0= drms_segment_read(segin, type_double, &status);
+		    segin    = drms_segment_lookupnum(rec0[kkk], 0);
+		    arrin0= drms_segment_read(segin, type_double, &status);
 	    
 
 	  
-	    if (status != DRMS_SUCCESS || arrin0 == NULL)
-	    {
-	      printf("Error: there is a problem with the filtergram number %d \n", k); //if there is a problem with the filtergram
-	      --ccount;
-	      present_backward[k]=0;
-	      present_forward[k]=0;
-	      present[k]=0;
-	    }
-	  else
-	    {
-	     
-	      printf("filtergram with FSN %d read\n",keyvalue_fsn[k]);
-	      arrinL0 = arrin0->data;
+		    if (status != DRMS_SUCCESS || arrin0 == NULL)
+		      {
+	    
+			printf("Error: there is a problem with the filtergram number %d \n", kkk); //if there is a problem with the filtergram
+			--ccount;
 
-	      query_flat =keyvalue_flatnumb[k];
-	      if (strcmp(query_flat, query_flat_ref) != 0)
-		{
-		  printf("%d %d read new flatfield\n", k, keyvalue_fsn[k]);
+			present_backward[kkk]=0;
+			if (kkk < (count_filtergram-1)) present_backward[kkk+1]=0;
+
+			present_forward[kkk]=0;
+			if (kkk > 0 ) present_forward[kkk-1]=0;
+
+			present[kkk]=0;
+			for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)   arrimg[next][jjj][iii]=NAN;
+			flatfound=1;
+		      }
+		    else
+
+		      {
+	     
+			printf("filtergram with FSN %d read\n",keyvalue_fsn[kkk]);
+			arrinL0 = arrin0->data;
+
+			query_flat =keyvalue_flatnumb[kkk];
+			if (strcmp(query_flat, query_flat_ref) != 0)
+			  {
+			    printf("%d %d read new flatfield\n", k, keyvalue_fsn[kkk]);
 
 		 
-		  status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
-		  flatfound=status_flatfield;
+			    status_flatfield=get_flat(query_flat, cam+1, app_flat, flat_off,  badpix);
+			    flatfound=status_flatfield;
 
-		  if (status_flatfield ==0)
-		    {
-		    printf("Flatfield %s read\n", query_flat);
-		    }
-		  else
-		    {
-		      printf("Failure reading flatfield / Use unity flatfield\n");
-		    }
+			    if (status_flatfield ==0)
+			      {
+				printf("Flatfield %s read\n", query_flat);
+			      }
+			    else
+
+			      {
+				printf("Failure reading flatfield / Use unity flatfield\n");
+			      }
 		 
 
 
-		  query_flat_ref=query_flat;
-		}
+			    query_flat_ref=query_flat;
+			  }
 
-	      if (status_flatfield != 0)
-		{
-		  --ccount;
-		  statarr[k]=statarr[k]+2;
-		  present_forward[k]=0;
-		  present_backward[k]=0;
-		}
+			if (status_flatfield != 0)
+			  {
+			    --ccount;
+			    statarr[kkk]=statarr[kkk]+2;
+
+			    present_forward[kkk]=0;
+			    if (kkk > 0 ) present_forward[kkk-1]=0;
+
+			    present_backward[kkk]=0;
+			    if (kkk < (count_filtergram-1)) present_backward[kkk+1]=0;
+			    printf("no flatfield for filtergram %d\n", kkk);
+			  }
 	
 	     
-	      if (flatfound == 0) for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)   arrimg[next][jjj][iii]=(float)arrinL0[jjj*nx+iii]*app_flat[jjj*nx+iii]/flat_relative[jjj*nx+iii];      	    
-	      if (flatfound != 0) for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)   arrimg[next][jjj][iii]=(float)arrinL0[jjj*nx+iii];
+			if (flatfound == 0) for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)   arrimg[next][jjj][iii]=(float)arrinL0[jjj*nx+iii]*app_flat[jjj*nx+iii]/flat_relative[jjj*nx+iii];      	    
+			if (flatfound != 0) for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)   arrimg[next][jjj][iii]=(float)arrinL0[jjj*nx+iii];
 
-	      keyvalue_flatr[k]=flatfound;
+			keyvalue_flatr[kkk]=flatfound;
+		      }
+		    drms_free_array(arrin0);
+		  }
 
-	      index_last=kkk-2;
-	      index_current=kkk-1;
-	      index_next=kkk;
 
-	      flatrec_index=keyvalue_flatr[index_last]+keyvalue_flatr[index_current]+keyvalue_flatr[index_next]; //==0 if all three flatfields could be retrieved, ==3 if none has been retrieved
-	      count=-1;
+	    
+		count=-1;
 
-	   
-	      if (statarr[index_current] < 4 && statarr[index_last] < 4 && statarr[index_next] < 4 && (tmind[index_current]-tmind[index_last]) < time_limit && (tmind[index_next]-tmind[index_current]) < time_limit && (flatrec_index == 0 || flatrec_index == 3))
-		{
-		count=0;
+		//cosmic ray detection
+		if (kkk >= 2 && kkk < count_filtergram)
+		  {
+		    index_last=kkk-2;
+		    index_current=kkk-1;
+		    index_next=kkk;
+
+		    if (statarr[index_current] < 4)
+		      {		
+
+			flatrec_index=keyvalue_flatr[index_last]+keyvalue_flatr[index_current]+keyvalue_flatr[index_next]; //==0 if all three flatfields could be retrieved, ==3 if none has been retrieved
+
+			count=0;
 	
+			if (statarr[index_last] < 4 && statarr[index_next] < 4 && (tmind[index_current]-tmind[index_last]) < time_limit && (tmind[index_next]-tmind[index_current]) < time_limit && (flatrec_index == 0 || flatrec_index == 3))
+			  {
 	 #pragma omp parallel 
-	      {    
+			    {
 #pragma omp for private(jjj,iii,wlr)	   
-		for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
-		{
+			      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
+				{
 	
-		 if (rr[jjj*nx+iii] < rad_cosmic_ray)		 
-		   {
-		     wlr=((float)keyvalue_wl[km1]-505.)/2.0*lambda_sep-keyvalue_vrad[km1]/v_c*lambda0-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))*cos(keyvalue_b0[km1]/180.0*M_PI)/keyvalue_rsun[km1]*cpa.rotcoef0*radsun_mm/v_c*lambda0;
-		  limw[jjj*nx+iii]=a1[jjj*nx+iii]*exp(-(wlr-coef3[cam][0])*(wlr-coef3[cam][0])/2.0/w1[jjj*nx+iii]/w1[jjj*nx+iii])+a2[jjj*nx+iii]*exp(-(wlr-coef3[cam][1])*(wlr-coef3[cam][1])/2.0/w2[jjj*nx+iii]/w2[jjj*nx+iii])+cmc[jjj*nx+iii];
-		   }
-		}
+				  if (rr[jjj*nx+iii] < rad_cosmic_ray)
+				    {
+				      wlr=((float)keyvalue_wl[km1]-505.)/2.0*lambda_sep-keyvalue_vrad[km1]/v_c*lambda0-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))*cos(keyvalue_b0[km1]/180.0*M_PI)/keyvalue_rsun[km1]*cpa.rotcoef0*radsun_mm/v_c*lambda0;
+				      limw[jjj*nx+iii]=a1[jjj*nx+iii]*exp(-(wlr-coef3[cam][0])*(wlr-coef3[cam][0])/2.0/w1[jjj*nx+iii]/w1[jjj*nx+iii])+a2[jjj*nx+iii]*exp(-(wlr-coef3[cam][1])*(wlr-coef3[cam][1])/2.0/w2[jjj*nx+iii]/w2[jjj*nx+iii])+cmc[jjj*nx+iii];
+				    }
+				}
 
 
 	
 		    
 	  //head= NULL;
-#pragma omp for private(iii,jjj)
-	  for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
-	    {
-	      cmarr[jjj*nx+iii]=1;
+#pragma omp for private(iii,jjj,diff_forward,diff_backward)
+			      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
+				{
+				  cmarr[jjj*nx+iii]=1;
 	   
-	      if (rr[jjj*nx+iii] < rad_cosmic_ray)
-		{
-		  if (fabs(arrimg[current][jjj][iii]-arrimg[last][jjj][iii]) > (factor[cam]*limw[jjj*nx+iii]) && fabs(arrimg[current][jjj][iii]-arrimg[next][jjj][iii]) > (factor[cam]*limw[jjj*nx+iii])){
-	     
-		    
-		    if (badpix[jjj*nx+iii]){
-		    if (!isnan(arrimg[last][jjj][iii]) && !isnan(arrimg[current][jjj][iii]) && !isnan(arrimg[next][jjj][iii])){
-        #pragma omp critical(detect) 
-		      {
-		     cosmicarr[count]=jjj*nx+iii;
-		     cosmicval[count]=minval(fabs(arrimg[current][jjj][iii]-arrimg[last][jjj][iii]), fabs(arrimg[current][jjj][iii]-arrimg[next][jjj][iii]));
-		     cosmicsig[count]=cosmicval[count]/limw[jjj*nx+iii];
+				  if (rr[jjj*nx+iii] < rad_cosmic_ray)
+				    {
+				      diff_backward=arrimg[current][jjj][iii]-arrimg[last][jjj][iii];
+				      diff_forward=arrimg[current][jjj][iii]-arrimg[next][jjj][iii];
 
-		     ++count; //count number of cosmic rays (using first differences)
+				      if (fabs(diff_forward) > (factor[cam]*limw[jjj*nx+iii]) && fabs(diff_backward) > (factor[cam]*limw[jjj*nx+iii])){
+	     		    
+					if (badpix[jjj*nx+iii]){
+					  if (!isnan(arrimg[last][jjj][iii]) && !isnan(arrimg[current][jjj][iii]) && !isnan(arrimg[next][jjj][iii])){
+#pragma omp critical(detect)
+					    {
+					      cosmicarr[count]=jjj*nx+iii;
+					      if (diff_forward > 0.0 && diff_backward > 0.0)
+						{
+						  cosmicval[count]=minval(diff_forward, diff_backward);
+						  cosmicsig[count]=cosmicval[count]/limw[jjj*nx+iii];
+						  ++count; //count number of cosmic rays (using first differences)
+						  cmarr[jjj*nx+iii]=0;
+						}
+					      if (diff_forward < 0.0 && diff_backward < 0.0)
+						{
+						  cosmicval[count]=maxval(diff_forward, diff_backward);
+						  cosmicsig[count]=cosmicval[count]/limw[jjj*nx+iii];
+						  ++count; //count number of cosmic rays (using first differences)
+						  cmarr[jjj*nx+iii]=0;
+						}
 
-		     cmarr[jjj*nx+iii]=0;
-		      }
-		    }
-		    }
+					      
+
+					      
+
+					      
+					    }
+					  }
+					}
 		    
-		  }
-		}
-	    }
+				      }
+				    }
+				}
 		   
-	      }
-		}
-
-	      printf("fsn count %d %d %d\n", keyvalue_fsn[km1], count, statarr[km1]);
-	  cosmic_ray_check[index_current]=count;
+			    }
+			  }
+		      }
+	
+		  }
+	    
+	      
+	      //cosmic_ray_check[index_current]=count;
 	    
 	
 
@@ -1035,57 +911,62 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	  //write out cosmic ray series
 	  /////////////////////////////////////////////////////////
 
-	  if (cosmic_flag && present[km1] && keyvalue_fsn[km1] >= fsn_first && keyvalue_fsn[km1] <= fsn_last && time_fl[km1] >= tfirst && time_fl[km1] <= tlast)
-	    {
-	  int cosfind, limit_flag;
-	  if (count == -1) cosfind=0; else if (count < limit_cosmic){cosfind=count; limit_flag=0;} else {cosfind=limit_cosmic; limit_flag=1;}
+		if (cosmic_flag && kkk >= 1){
+		  if (present[km1] && keyvalue_fsn[km1] >= fsn_first && keyvalue_fsn[km1] <= fsn_last && time_fl[km1] >= tfirst && time_fl[km1] <= tlast)
+		    {
+		      printf("fsn count %d %d\n", keyvalue_fsn[km1], count);
+
+		      int cosfind, limit_flag;
+		      if (count == -1) cosfind=0; else if (count < limit_cosmic){cosfind=count; limit_flag=0;} else {cosfind=limit_cosmic; limit_flag=1;}
 
 
-	    recout = dataout->records[kkk-2];
-	    status=drms_setkey_int(recout, keyfsn, keyvalue_fsn[km1]);
-	    status=drms_setkey_time(recout, keytobs, time_fl[km1]);
-	    status=drms_setkey_int(recout, keycount, count);
-	    status=drms_setkey_int(recout, fidkey, fid);
-	    status=drms_setkey_int(recout, keycamera, cam+1);
-	    status=drms_setkey_int(recout, keyexmax, limit_flag);
-	    status=drms_setkey_float(recout, keylimit, factor[cam]);
+			recout = dataout->records[kkk-1];
 
-	    drms_keyword_setdate(recout);
+			status=drms_setkey_int(recout, keyfsn, keyvalue_fsn[km1]);
+			status=drms_setkey_time(recout, keytobs, time_fl[km1]);
+			status=drms_setkey_int(recout, keycount, count);
+			status=drms_setkey_int(recout, fidkey, fid);
+			status=drms_setkey_int(recout, keycamera, cam+1);
+			status=drms_setkey_int(recout, keyexmax, limit_flag);
+			status=drms_setkey_float(recout, keylimit, factor[cam]);
+	
+			drms_keyword_setdate(recout);
 	    
-	    if (keyvalue_cam[km1] == cam_id_front) status=drms_setkey_string(recout, keyinstrument, camera_str_front);
-            if (keyvalue_cam[km1] == cam_id_side) status=drms_setkey_string(recout, keyinstrument, camera_str_side);
+			if (keyvalue_cam[km1] == cam_id_front) status=drms_setkey_string(recout, keyinstrument, camera_str_front);
+			if (keyvalue_cam[km1] == cam_id_side) status=drms_setkey_string(recout, keyinstrument, camera_str_side);
 	    
-	    segout = drms_segment_lookup(recout, segmentname_cosmic);
-	    segout_val=drms_segment_lookup(recout, segmentname_val);
-	    segout_sig=drms_segment_lookup(recout, segmentname_sig);
+			segout = drms_segment_lookup(recout, segmentname_cosmic);
+			segout_val=drms_segment_lookup(recout, segmentname_val);
+			segout_sig=drms_segment_lookup(recout, segmentname_sig);
 	    
 	 
 
-	    axisbad[0]=cosfind;
-            arrout=drms_array_create(type_int,1,axisbad,NULL,&status);
-	    cosmic_ray_data=arrout->data;
+			axisbad[0]=cosfind;
+			arrout=drms_array_create(type_int,1,axisbad,NULL,&status);
+			cosmic_ray_data=arrout->data;
 	  	 
-	    arrout_val=drms_array_create(type_float,1,axisbad,NULL,&status);
-	    val_data=arrout_val->data;
+			arrout_val=drms_array_create(type_float,1,axisbad,NULL,&status);
+			val_data=arrout_val->data;
 
-	    arrout_sig=drms_array_create(type_float,1,axisbad,NULL,&status);
-	    sig_data=arrout_sig->data;
+			arrout_sig=drms_array_create(type_float,1,axisbad,NULL,&status);
+			sig_data=arrout_sig->data;
 
 
-	    for (i=0; i<cosfind; ++i){cosmic_ray_data[i]=cosmicarr[i]; val_data[i]=cosmicval[i]; sig_data[i]=cosmicsig[i];}
+			for (i=0; i<cosfind; ++i){cosmic_ray_data[i]=cosmicarr[i]; val_data[i]=cosmicval[i]; sig_data[i]=cosmicsig[i];}
 
-	    status=drms_segment_write(segout, arrout, 0);
-	    status=drms_segment_write(segout_val, arrout_val, 0);
-	    status=drms_segment_write(segout_sig, arrout_sig, 0);
+			status=drms_segment_write(segout, arrout, 0);
+			status=drms_segment_write(segout_val, arrout_val, 0);
+			status=drms_segment_write(segout_sig, arrout_sig, 0);
 	   
-	    drms_free_array(arrout);
-	    drms_free_array(arrout_val);
-	    drms_free_array(arrout_sig);
+			drms_free_array(arrout);
+			drms_free_array(arrout_val);
+			drms_free_array(arrout_sig);
+		    }
+		}
+
 	    
-	    }
 	    
-	    
-	    
+
 	  
 
 
@@ -1095,69 +976,63 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	  //permanent bad pixel calculation
 	  //*************************************************************************************************
 
-	  
-	      if (ccount >= cthreshold){
-		update_stat=1;
-
 		
+
+		if (ccount >= cthreshold && kkk >= 1){
+		  update_stat=1;
+
+		  if (present_backward[km1] != 0) ++ccount1;
+		  if (present_forward[km1] != 0) ++ccount2;
+
 #pragma omp parallel
-	{
+		  {
 	 
-	  if (present_backward[km1] != 0){
+		    if (present_backward[km1] != 0){
+		    
 #pragma omp for private(jjj,iii)
-		for (jjj=0; jjj<ny; ++jjj){
-		  for (iii=0; iii<nx; ++iii){
-		    if (!isnan(arrimg[current][jjj][iii]) && arrimg[current][jjj][iii] > 0.0 && cmarr[jjj*nx+iii]){rhsp[jjj*nx+iii]=rhsp[jjj*nx+iii]+log((double)arrimg[current][jjj][iii]);  // //add up frames for backward
-		      count_p[jjj*nx+iii]=count_p[jjj*nx+iii]+1;}
-		  }
-		}
-	  }
+		      for (jjj=0; jjj<ny; ++jjj){
+			for (iii=0; iii<nx; ++iii){
+			  //if (!isnan(arrimg[current][jjj][iii]) && arrimg[current][jjj][iii] > 0.0 && cmarr[jjj*nx+iii]){rhsp[jjj*nx+iii]=rhsp[jjj*nx+iii]+log((double)arrimg[current][jjj][iii]);  // //add up frames for backward
+			  if (!isnan(arrimg[current][jjj][iii]) && arrimg[current][jjj][iii] > 0.0){rhsp[jjj*nx+iii]=rhsp[jjj*nx+iii]+log((double)arrimg[current][jjj][iii]); //!!disable cosmic ray control
+			    count_p[jjj*nx+iii]=count_p[jjj*nx+iii]+1;}
+			}
+		      }
+		    }
 	
 	 
-	  if (present_forward[km1] != 0){
+		    if (present_forward[km1] != 0){
+		    
 		#pragma omp for private(jjj,iii)
-		for (jjj=0; jjj<ny; ++jjj){
-		  for (iii=0; iii<nx; ++iii){
-		    if (!isnan(arrimg[current][jjj][iii]) && arrimg[current][jjj][iii] > 0.0 && cmarr[jjj*nx+iii]){rhsm[jjj*nx+iii]=rhsm[jjj*nx+iii]+log((double)arrimg[current][jjj][iii]);   // //add up frames for forward
-		      count_m[jjj*nx+iii]=count_m[jjj*nx+iii]+1;}
+		      for (jjj=0; jjj<ny; ++jjj){
+			for (iii=0; iii<nx; ++iii){
+			  //if (!isnan(arrimg[current][jjj][iii]) && arrimg[current][jjj][iii] > 0.0 && cmarr[jjj*nx+iii]){rhsm[jjj*nx+iii]=rhsm[jjj*nx+iii]+log((double)arrimg[current][jjj][iii]);   // //add up frames for forward
+			  if (!isnan(arrimg[current][jjj][iii]) && arrimg[current][jjj][iii] > 0.0){rhsm[jjj*nx+iii]=rhsm[jjj*nx+iii]+log((double)arrimg[current][jjj][iii]); //!!disable cosmic ray control
+			    count_m[jjj*nx+iii]=count_m[jjj*nx+iii]+1;}
+			}
+		      }
+		    }
 		  }
-		}
-	      }
-	}
 
 	      
       	      
+		}
+
+
+	    
+	    
 	      }
 
-	      drms_free_array(arrin0);
-	    }
-	      }
-
-
+	 
+	    //exchange indices
 	    holder=next;
 	    next=last;
 	    last=current;
 	    current=holder;
+	 
 
 
 	  }//end loop over filtergrams of same type
-
-
-	  km1=index[kkk-1];  //last filtergram 
-	  #pragma omp parallel
-	  	{
-	  	  if (present_backward[km1] != 0){
-
-	  #pragma omp for private(jjj,iii)
-	  		for (jjj=0; jjj<ny; ++jjj){
-	  		  for (iii=0; iii<nx; ++iii){
-	  		    if (!isnan(arrimg[current][jjj][iii]) && arrimg[current][jjj][iii] > 0.0){rhsp[jjj*nx+iii]=rhsp[jjj*nx+iii]+log((double)arrimg[current][jjj][iii]);  // //add up last frame to backward (no cosmic ray check!)
-			      count_p[jjj*nx+iii]=count_p[jjj*nx+iii]+1;
-			    }
-			  }
-			}
-		  }
-	  	}
+	  
 
 
 
@@ -1182,15 +1057,17 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	    }
 	  }
 
-
+ 
 	  if (debug)  //
 	{
          printf("write debug\n");
+	 printf("count_filtergram %d\n", count_filtergram);
            FILE *fileptr;                                                                                                                          
-           float *aaa;                                                                                                                            
-           aaa=(float *)(malloc(nx*sizeof(float)));                                                                                              
+           int *aaa;                                                                                                                            
+           aaa=(int *)(malloc(count_filtergram*sizeof(int)));                                                                                              
            fileptr = fopen ("/tmp20/richard/interpol/dd.bin", "w");                                                                                    
-	   for (j=0; j<ny; ++j){ for (i=0;i<nx;i++){aaa[i]=rhsm[j*nx+i];} fwrite ((char*)(aaa),sizeof(float),nx,fileptr);}
+	   // for (i=0;i<count_filtergram;i++){aaa[i]=farr[i];} fwrite ((char*)(aaa),sizeof(int),count_filtergram,fileptr);
+	   //  for (i=0;i<count_filtergram;i++){aaa[i]=barr[i];} fwrite ((char*)(aaa),sizeof(int),count_filtergram,fileptr);
            fclose(fileptr);                                                                                                                            
       	free(aaa);
 	}
@@ -1200,12 +1077,14 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       //do flatfield calculations                                          /
       //*******************************************************************/
 
-	  if (ccount >= cthreshold){
+	  printf("forward / backwards pairs %d %d \n", ccount1, ccount2);
+ 
+	  if (ccount1>= cthreshold){
 
   
       for (j=0; j<ny; ++j)  for (i=0; i<nx; ++i) flati[j*nx+i]=0.0;
  
-      rotpairs=ccount;
+      rotpairs=ccount1;
 
       cpa.norm=normconst[cam];
       cpa.omega=omegaconst[cam];
