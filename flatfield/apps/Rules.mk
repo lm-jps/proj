@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/,  module_flatfield_combine module_flatfield write_flatfield write_offpoint write_badpix write_dark)
+MODEXE_$(d)	:= $(addprefix $(d)/,  module_flatfield_combine module_flatfield write_flatfield write_offpoint write_badpix write_dark cosmic_ray_post)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
