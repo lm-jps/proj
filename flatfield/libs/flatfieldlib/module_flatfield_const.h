@@ -8,7 +8,7 @@ const float threshold_upper=10000.0; //threshold for upper limit; // !! correcti
 
 const int update_flag=0; //0: no update, 1: single pixel update, 2:full update // 
 
-const int debug=0; //write out debug information 
+const int debug=0; //write out debug information  
 
 struct code_param cpa;
 
@@ -211,6 +211,8 @@ char *filename_flatfield_fid="su_production.flatfield_fid"; //for checked in ver
 
 //char *filename_cosmic="su_richard.cosmic_rays_c"; //output of module_flatfield
 char *filename_cosmic="hmi.cosmic_rays"; //for checked in version  
+
+char *filename_cosmic2_out="su_richard.cosmic_rays";
 
 
 
