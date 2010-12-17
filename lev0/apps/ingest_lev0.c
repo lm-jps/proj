@@ -391,6 +391,7 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   if(img->headerr) quallev0 = quallev0 | Q_HDRERR;
   if(img->nerrors) quallev0 = quallev0 | Q_CMPERR;
   if(img->last_pix_err) quallev0 = quallev0 | Q_LPXERR;
+  if(img->reopened) quallev0 = quallev0 | Q_REOPENED;
   missvals = img->totalvals - img->datavals;
   if(missvals > 0) quallev0 = quallev0 | Q_MISS0;
   datav = img->totalvals;
