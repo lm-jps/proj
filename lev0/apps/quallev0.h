@@ -45,6 +45,7 @@
 #define Q_HWT4ENCD 0x4000000	//Wavelength Motor 4 Error
 				//HWT4ENCD ne HWL4POS +/- 1 %240
 
+#define Q_REOPENED 0x40000000	// image reopened during reconstruction; NPACKETS value may be incorrect
 #define Q_MISSALL 0x80000000	//data is completely missing. high bit
 
 //Fits keyword and Image Status Packet (ISP) keyword translation:
