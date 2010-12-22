@@ -4,7 +4,7 @@
  */
 
 /**
-\defgroup module_flatfield module_flatfield - derive line-of-sight observables
+\defgroup module_flatfield module_flatfield - calculate cosmic ray series and rotational flatfields
 
 \par Synopsis
 \code

@@ -1,3 +1,41 @@
+/*
+ * module_flatfield_combine - Combines the flatfields for different FIDs and updates the flatfield series
+ *
+ */
+
+/**
+\defgroup module_flatfield_combine module_flatfield_combine - update flatfield series
+
+\par Synopsis
+\code
+module_flatfield_combine input_series= camera= datum=
+\endcode
+
+\details
+
+module_flatfield_combine combines the per-FID-flatfields computed by module_flatfield, and updates the flatfield series hmi.flatfield. 
+The update will get a time stamp corresponding to the end of the TAI-day datum. datum argument of module_flatfield and module_flatfield_combine must be identical
+
+
+
+\par Options
+
+\par Mandatory arguments:
+
+\li \c input_series="string" where string is the series name of the intermediate flatfield (su_production.flatfield_fid)
+\li \c camera=cam,  side camera: cam=1, front camera: cam=2
+\li \c datum="date" date="yyyy.mm.dd" TAI-day for which the intermediate flatfields have been calculated. End of TAI-day datum is T_START of updated flatfield
+
+\par Examples
+
+\b Example 1:
+
+\code
+module_flatfield_combine input_series="su_production.flatfield_fid" camera=2 datum="2010.10.09"
+\endcode
+
+*/
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,7 +98,7 @@ int DoIt(void)
 
   DRMS_Segment_t *segin = NULL;
 
-
+  
   DRMS_Type_t type_time = DRMS_TYPE_TIME;
   DRMS_Type_t type_int = DRMS_TYPE_INT;
   DRMS_Type_t type_float = DRMS_TYPE_FLOAT;
