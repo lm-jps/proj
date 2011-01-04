@@ -100,7 +100,7 @@ int DoIt(void)
 
   DRMS_Type_Value_t  keyvalue_time;
 
-  int ct, ctr;
+  int ct,ct_prev,ct_next,ctr;
   float *sig, *lev;
   int *hits;
 
@@ -275,7 +275,6 @@ printf("begin test loop\n");
 
  for (k=1; k<(nRecs-1); ++k)
    {
-   
 
      if (count[k] > 0)
        {
@@ -285,6 +284,8 @@ printf("begin test loop\n");
 	 lev=level[k];
 
 	 ct=minval(count[k], 10000);
+	 ct_prev=minval(count[k-1], 10000);
+	 ct_next=minval(count[k+1], 10000);
   
 
        ctr=0;
@@ -293,8 +294,8 @@ printf("begin test loop\n");
 	   {
 	    
 	     	 ++counter;
-	     elem_prev=is_element(hits[c], cosmic_rays[k-1], count[k-1]);
-	     elem_next=is_element(hits[c], cosmic_rays[k+1], count[k+1]);
+	     elem_prev=is_element(hits[c], cosmic_rays[k-1], ct_prev);
+	     elem_next=is_element(hits[c], cosmic_rays[k+1], ct_next);
 
 	     if (elem_prev == 0 && elem_next == 0)
 	       {
@@ -326,16 +327,25 @@ printf("begin test loop\n");
 
      status=drms_setkey_int(recout, keyfsn, keyvalue_fsn[k]);
      status=drms_setkey_time(recout, keytobs, time_fl[k]);
-     status=drms_setkey_int(recout, keycount, new_count[k]);
+     
      status=drms_setkey_int(recout, fidkey, keyvalue_fid[k]);
      status=drms_setkey_int(recout, keycamera, keyvalue_cam[k]);
      status=drms_setkey_int(recout, keyexmax, keyvalue_flag[k]);
      status=drms_setkey_float(recout, keylimit, keyvalue_factor[k]);
 	
      drms_keyword_setdate(recout);
-	    
-     if (keyvalue_cam[k] == cam_id_front) status=drms_setkey_string(recout, keyinstrument, camera_str_front);
-     if (keyvalue_cam[k] == cam_id_side) status=drms_setkey_string(recout, keyinstrument, camera_str_side);
+
+     if (count[k] >= 0)
+       {
+	status=drms_setkey_int(recout, keycount, new_count[k]);
+       }
+     else
+       {
+	 status=drms_setkey_int(recout, keycount, -1);
+       }
+
+     if (keyvalue_cam[k] == 2) status=drms_setkey_string(recout, keyinstrument, camera_str_front);
+     if (keyvalue_cam[k] == 1) status=drms_setkey_string(recout, keyinstrument, camera_str_side);
 	    
      segout = drms_segment_lookup(recout, segmentname_cosmic);
      segout_val=drms_segment_lookup(recout, segmentname_val);
