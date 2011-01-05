@@ -16,7 +16,7 @@ ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_confi
 xingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 #yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_test.o hmi_time_setting_test.o set_HMI_mech_values.o)
 #xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0 decode_dayfile)
-xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0 decode_dayfile)
+xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
 #yingestlev0_$(d)	:= $(addprefix $(d)/, yingest_lev0)
 LIBHKLEV0_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o )
 
