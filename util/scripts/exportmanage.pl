@@ -171,7 +171,7 @@ print LOG "Started by $ENV{'USER'} at $datenow on machine $ENV{'HOST'} using $db
 while (1)
 {
     print LOG `$binpath/$manage JSOC_DBHOST="$dbhost"`;
-    print "running $binpath/$manage JSOC_DBHOST=\"$dbhost\"\n";
+#    print "running $binpath/$manage JSOC_DBHOST=\"$dbhost\"\n";
     if (-e $runningflag) 
     {
         sleep(2);
