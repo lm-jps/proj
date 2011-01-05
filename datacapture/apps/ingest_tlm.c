@@ -56,10 +56,11 @@
 #define SEC1970TO2004 1072828800 /* approx #of secs from 1970 to 2004 */
 #define PKTSZ 1788		/* size of VCDU pkt */
 #define DEFAULTDB "jsocdc"	/* the default db to connect to */
-#define MAXFILES 512		/* max # of file can handle in tlmdir */
+//#define MAXFILES 512		/* max # of file can handle in tlmdir */
+#define MAXFILES 8192		/* max # of file can handle in tlmdir */
 #define NUMTIMERS 10		/* number of seperate timers avail */
 #define TESTAPPID 0x199		/* appid of test pattern packet */
-#define TESTVALUE 0             /* first value in test pattern packet */
+#define TESTVALUE 0xc0b             /* first value in test pattern packet */
   	                                 /* previous used 0xc0b */
 FILE *h0logfp;                  /* fp for h0 ouput log for this run */
 
@@ -660,10 +661,10 @@ int get_tlm(char *file)
     appid = appid & 0x07ff;
     if(appid == TESTAPPID) {	/* appid of test pattern */
 
-  	       continue;                 /* !!TEMP just go to next pkt */
+  	       /*continue;                 /* !!TEMP just go to next pkt */
 
-      /*h0log("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
-			TESTAPPID, vcdu_seq_num);*/
+      h0log("*Test ApID of %0x found for IM_PDU Cntr = %lld\n", 
+			TESTAPPID, vcdu_seq_num);
       for(i=0, j=TESTVALUE; i < 877; i=i+2, j++) {
         datval = MDI_getshort(cbuf+32+i);	/* next data value */
         if(datval != j) {
