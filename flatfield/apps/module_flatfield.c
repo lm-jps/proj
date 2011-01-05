@@ -1,58 +1,4 @@
-/*
- * module_flatfield - detects cosmic ray hits and calculates rotational flatfield
- *
- */
 
-/**
-\defgroup module_flatfield module_flatfield - calculate cosmic ray series and rotational flatfields
-
-\par Synopsis
-\code
-module_flatfield input_series= flatfield= cosmic_rays= cadence= camera= fid= datum= fsn_first= fsn_last=
-\endcode
-
-\details
-
-module_flatfield computes a rotational flatfield and writes cosmic ray records for all filtergrams with single FID. In general, module_flatfield processes all level1 filtergrams of a given FID and camera for the TAI-day given in the argument "datum".
-module_flatfield writes out the per-FID flatfields to an intermediate series (su_production.flatfield_fid). In order to get a flatfield update, the sister-module module_flatfield_combine has to be run after all the module_flatfield runs for a given day 
-have terminated. 
-
-
-\par Options
-
-\par Mandatory arguments:
-
-\li \c input_series="string" where string is the series name of the lev1 series the filtergrams are taken from (hmi.lev1 or hmi.lev1_nrt).
-\li \c camera=cam,  side camera: cam=1, front camera: cam=2
-\li \c fid=FID, FID is the Filtergram ID in the observable framelist
-\li \c cadence=sec, cadence in seconds for filtergrams of given camera and FID (example : 135 for side cam, 45 for front camera)
-\li \c datum="date" date="yyyy.mm.dd" TAI-day for which the lev1 frames are processed
-\par Optional arguments:
-
-\li \c flatfield=flag,  flag=0: don't calculate flatfield, flag > 0: calculate flatfield (default: calculate flatfield)
-\li \c cosmic_rays=flag flag=0: don't detect cosmic rays, flag > 0: detect cosmic rays (default: detect cosmic rays)
-\li \c  fsn_first=FSN if set, overrides datum for lev1 query. FSN: first FSN for which cosmic ray record is desired, and which is used for flatfield calculation. Note that the argument "datum" must still be given, corresponding to the TAI date of the filtergram in th emiddle of the range
-\li \c  fsn_last=FSN must be given together with fsn_first. FSN: last FSN for which cosmic ray record is desired,  and which is used for flatfield calculation.
-
-
-\par Examples
-
-\b Example 1:
-
-To calculate cosmic ray records and flatfields for the TAI-day Oct 9th, 2010., FID=10159, front camera
-\code
-module_flatfield input_series="hmi.lev1_nrt" fid=10159 camera=2 cadence=45 datum="2010.10.09" cosmic_rays=1 flatfield=1 
-\endcode
-
-\b Example 2
-
-To patch the cosmic ray series because filtergrams were missing in the nrt-series:
-\code
-module_flatfield input_series="hmi.lev1" fid=10159 camera=2 cadence=45 datum="2010.10.09" cosmic_rays=1 flatfield=0 fsn_first=12037011 fsn_last=12037947
-\endcode
-
-
-*/
 
 
 #include <stdio.h>
@@ -84,8 +30,8 @@ char *module_name  = "module_flatfield";    //name of the module
 ModuleArgs_t module_args[] =        
 {
      {ARG_STRING, kRecSetIn, "",  "Input data series."},
-     {ARG_INT, kDSCosmic, "1", "Cosmic rays flag"},
-     {ARG_INT, kDSFlatfield, "1", "Flatfield flag"},
+     {ARG_INT, kDSCosmic, "0", "Cosmic rays flag"},
+     {ARG_INT, kDSFlatfield, "0", "Flatfield flag"},
      {ARG_INT, cadence_name, "0", "Cadence in sec"},
      {ARG_INT, fid_name, "0", "FID"},
      {ARG_INT, cam_name, "0", "Camera"},
@@ -158,11 +104,6 @@ int DoIt(void)
  
 
   if (fid < minfid || fid > maxfid){printf("Not an observable FID\n"); exit(EXIT_FAILURE);}
-  if (cam != 0 && cam !=1){printf("Not a valid camera ID\n"); exit(EXIT_FAILURE);}
-  if (cadence < 1 || cadence > 200){printf("Invalid cadence\n"); exit(EXIT_FAILURE);}
-  if ((fsn_first != 0 && fsn_last == 2147483647) || (fsn_first == 0 && fsn_last != 2147483647)){printf("fsn_first and fsn_last need can not be omitted seperately\n"); exit(EXIT_FAILURE);}
-  if (cosmic_flag < 0 || flatfield_flag <0){printf("invalid flags\n"); exit(EXIT_FAILURE);}
-
 
   int  status, status1, status2; 
   int status0=DRMS_SUCCESS;
@@ -358,16 +299,7 @@ int DoIt(void)
   //**************************************************************************************************************/
   //read records
   //**************************************************************************************************************/
- char tmstr[256]="";
- strcat(tmstr, datum);
- strcat(tmstr, "_00:00:00.00_TAI");
-
- t_stamp=sscan_time(tmstr)+24.0*60.0*60.0;;
-
- 
- if (t_stamp <  1041465600.0 || t_stamp > 1672617600.0){printf("not a valid datum\n"); exit(EXIT_FAILURE);}
-    
-        
+            
  char timefirst[256]="";
  strcat(timefirst, datum);
  strcat(timefirst, "_00:00:00.00_TAI");
@@ -384,7 +316,7 @@ int DoIt(void)
 
  char query0[256]="";
 
-if (fsn_first == 0 && fsn_last == 2147483647)
+if (fsn_first == 0 || fsn_last == 2147483647)
   {
 
     tfirst=sscan_time(timefirst);
@@ -501,7 +433,15 @@ if (fsn_first == 0 && fsn_last == 2147483647)
   fsns=drms_getkey_int(data->records[nRecs/2],keyfsn,&status);
   focus = drms_getkey_int(data->records[nRecs/2],keyfocus,&status);
   
+  char tmstr[256]="";
+  strcat(tmstr, datum);
+  strcat(tmstr, "_00:00:00.00_TAI");
+
+  t_stamp=sscan_time(tmstr)+24.0*60.0*60.0; 
+
  
+       
+
 
   int update_stat=2;   // 2: not enough data // 1: no update required // 0: flatfield updated 
     
@@ -899,7 +839,7 @@ if (fsn_first == 0 && fsn_last == 2147483647)
 	
 				  if (rr[jjj*nx+iii] < rad_cosmic_ray)
 				    {
-				      wlr=((float)keyvalue_wl[km1]-505.)/2.0*lambda_sep-keyvalue_vrad[km1]/v_c*lambda0-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))*cos(keyvalue_b0[km1]/180.0*M_PI)/keyvalue_rsun[km1]*cpa.rotcoef0*radsun_mm/v_c*lambda0;
+				      wlr=((float)(keyvalue_wl[km1] % 100)-5.0)/2.0*lambda_sep-keyvalue_vrad[km1]/v_c*lambda0-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))*cos(keyvalue_b0[km1]/180.0*M_PI)/keyvalue_rsun[km1]*cpa.rotcoef0*radsun_mm/v_c*lambda0;
 				      limw[jjj*nx+iii]=a1[jjj*nx+iii]*exp(-(wlr-coef3[cam][0])*(wlr-coef3[cam][0])/2.0/w1[jjj*nx+iii]/w1[jjj*nx+iii])+a2[jjj*nx+iii]*exp(-(wlr-coef3[cam][1])*(wlr-coef3[cam][1])/2.0/w2[jjj*nx+iii]/w2[jjj*nx+iii])+cmc[jjj*nx+iii];
 				    }
 				}
