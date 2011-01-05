@@ -14,6 +14,18 @@
 #  rm keep_running_test
 #  exportmanage.pl -jsoctest &
 
+# To test the entire export workflow:
+#  1. Run export manage like so:
+#     ssh jsoc@j0
+#     cd /home/jsoc/exports
+#     /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root <ROOT> -dbuser <DBUSER> -dbhost <DBHOST> -manager <MANAGER> -runflag <RFLAG>
+#        where <ROOT> is the CVS code tree root containing <MANAGER>
+#        and <DBUSER> is the PG user who the manager connects as (defaults to "production")
+#        and <DBHOST> is the host of the database server (defaults to "hmidb"). For internal exports, should be "hmidb", for exports from public db, should be "hmidb2"
+#        and <MANAGER> is the name of the manager programs (defaults to "jsoc_export_manage")
+#        and <RFLAG> is the file flag that keeps this script running in a loop (defaults to keep_running in cdir)
+#  2. Point a browser at http://jsoc.stanford.edu/ajax/exportdatatest.html and export something.
+
 my($kINTERNALFLAG) = "/home/jsoc/exports/keep_running";
 my($kWEBFLAG) = "/home/jsoc/exports/keep_running_web";
 my($kTESTFLAG) = "/home/jsoc/exports/keep_running_test";
@@ -45,11 +57,11 @@ my($kJSOCTEST_MANAGE) = "jsoc_export_manage_test";
 $runningflag = $kINTERNALFLAG;
 my($arg);
 my($root);
-my($dbhost);
-my($dbname);
-my($dbuser);
+my($dbhost) = "hmidb";
+my($dbname) = "jsoc";
+my($dbuser) = "production";
 my($binpath);
-my($manage);
+my($manage) = "jsoc_export_manage";
 my($logfile);
 
 while ($arg = shift(@ARGV))
@@ -57,20 +69,29 @@ while ($arg = shift(@ARGV))
     if ($arg eq "-root")
     {
         $root = shift(@ARGV);
+        $binpath = "$root/bin";
     }
-    if ($arg eq "-dbhost")
+    elsif ($arg eq "-dbhost")
     {
         $dbhost = shift(@ARGV);
     }
-    if ($arg eq "-dbuser")
+    elsif ($arg eq "-dbuser")
     {
         $dbuser = shift(@ARGV);
     }
-    if ($arg eq "-dbname")
+    elsif ($arg eq "-dbname")
     {
         $dbname = shift(@ARGV);
     }
-    if ($arg eq "-jsocdev")
+    elsif ($arg eq "-manager")
+    {
+        $manage = shift(@ARGV);
+    }
+    elsif ($arg eq "-runflag")
+    {
+        $runningflag = shift(@ARGV);
+    }
+    elsif ($arg eq "-jsocdev")
     {
         $root = $kJSOCDEV_ROOT;
         $binpath = "$root/bin";
@@ -80,7 +101,7 @@ while ($arg = shift(@ARGV))
         $manage = $kJSOCDEV_MANAGE;
         $runningflag = $kINTERNALFLAG;
     }
-    if ($arg eq "-jsocpro")
+    elsif ($arg eq "-jsocpro")
     {
         $root = $kJSOCPRO_ROOT;
         $binpath = "$root/bin";
@@ -90,7 +111,7 @@ while ($arg = shift(@ARGV))
         $manage = $kJSOCPRO_MANAGE;
         $runningflag = $kINTERNALFLAG;
     }
-    if ($arg eq "-jsocweb")
+    elsif ($arg eq "-jsocweb")
     {
         $root = $kJSOCWEB_ROOT;
         $binpath = "$root/bin";
@@ -100,7 +121,7 @@ while ($arg = shift(@ARGV))
         $manage = $kJSOCWEB_MANAGE;
         $runningflag = $kWEBFLAG;
     }
-    if ($arg eq "-jsoctest")
+    elsif ($arg eq "-jsoctest")
     {
         $root = $kJSOCTEST_ROOT;
         $binpath = "$root/bin";
@@ -150,6 +171,7 @@ print LOG "Started by $ENV{'USER'} at $datenow on machine $ENV{'HOST'} using $db
 while (1)
 {
     print LOG `$binpath/$manage JSOC_DBHOST="$dbhost"`;
+    print "running $binpath/$manage JSOC_DBHOST=\"$dbhost\"\n";
     if (-e $runningflag) 
     {
         sleep(2);
