@@ -831,7 +831,8 @@ function GetExport()
                                       "method" : $("ExportMethod").value,
                                       "filenamefmt" : $("ExportFilenameFmt").value,
 			 	      "format" : "json",
-                 		      "protocol" : protocolparam });
+                 		      "protocol" : protocolparam,
+                                      "t" : 1} );
 // alert(Object.inspect(exportparameters));
     // if (nsegsselected) exportparameters = exportparameters.merge({"seg": SegList});
     }
