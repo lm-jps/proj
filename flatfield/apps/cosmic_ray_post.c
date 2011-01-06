@@ -53,15 +53,19 @@ char *module_name  = "module_flatfield_combine";    //name of the module
 #define datumn  "datum"
 #define cameran "camera"
 #define fsnname      "fsn"
+#define fsnf_name "fsn_first"
+#define fsnl_name "fsn_last"
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))                  
 
 ModuleArgs_t module_args[] =        
 {
      {ARG_STRING, kRecSetIn, "",  "Input data series."},
-     {ARG_STRING, datumn, "", "Datum string"},
-     {ARG_INT, "hour", 0, "Hour"},
+     {ARG_STRING, datumn, "dd", "Datum string"},
+     {ARG_INT, "hour", "0", "Hour"},
      {ARG_INT, cameran, 0, "Camera"},
+     {ARG_INT, fsnf_name, "0"},
+     {ARG_INT, fsnl_name, "2147483647"},
      {ARG_END}
 };
 
@@ -80,6 +84,8 @@ int DoIt(void)
  
  int cameraint = cmdparams_get_int(&cmdparams, cameran, NULL);
  int hour= cmdparams_get_int(&cmdparams, "hour", NULL);
+ int fsn_first=cmdparams_get_int(&cmdparams, fsnf_name, NULL);
+ int fsn_last=cmdparams_get_int(&cmdparams, fsnl_name, NULL);
 
   int  status= DRMS_SUCCESS, stat=DRMS_SUCCESS;
 
@@ -142,7 +148,15 @@ int DoIt(void)
       strcat(timefirst, fnumb);
       strcat(timefirst, ":00:00.00_TAI");
  
+ 
+
+      char query0[256]="";
       TIME tfirst, tlast;
+
+
+ if (fsn_first == 0 || fsn_last == 2147483647)
+   {
+
  char timelast[256]="";
  strcat(timelast, datum);
  strcat(timelast, "_");
@@ -150,16 +164,17 @@ int DoIt(void)
  strcat(timelast, ffnumb);
  strcat(timelast, ":59:59.99_TAI");
 
- tfirst=sscan_time(timefirst);
- tlast=sscan_time(timelast);
 
- char datefirst[256]="";
- sprint_ut(datefirst, tfirst-5.0);
+     tfirst=sscan_time(timefirst);
+     tlast=sscan_time(timelast);
+
+     char datefirst[256]="";
+     sprint_ut(datefirst, tfirst-5.0);
 
  char datelast[256]="";
  sprint_ut(datelast, tlast+5.0);
 
-char query0[256]="";
+
  strcat(query0, inRecQuery);
  strcat(query0, "[");
  strcat(query0, datefirst);
@@ -172,7 +187,35 @@ char query0[256]="";
 
   printf("query string: %s\n", query0);
     
-  printf("%s\n", query0);
+  }
+
+
+  if (fsn_first != 0 && fsn_last != 2147483647)
+    {
+
+      tfirst=0;
+      tlast=3881520000.0;
+
+      strcat(query0, inRecQuery);
+      strcat(query0, "[][");
+       char fsnf[10]={""};
+       sprintf(fsnf, "%d", fsn_first-2);
+       strcat(query0, fsnf);
+      strcat(query0, "-");
+      char fsnl[10]={""};
+      sprintf(fsnl, "%d", fsn_last+2);
+       strcat(query0, fsnl);
+       strcat(query0, "][?CAMERA=");
+      char fnumb[2]={""};
+     sprintf(fnumb, "%1.1d", cameraint);
+     strcat(query0, fnumb);
+      strcat(query0, "?]");
+      printf("query string: %s\n", query0);  
+    }
+
+  
+
+ 
   data     = drms_open_records(drms_env,query0,&stat);
 
  if (data == NULL){printf("can not open records\n"); exit(EXIT_FAILURE);}
@@ -212,15 +255,15 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
   float *sig_new;
 
   int counter=0;
-  int falsecounter=0;
+  int falsecounter=0, goodcounter=0;
 
-  cosmic_new=(int *)(malloc(10000*sizeof(int)));
-  val_new=(float *)(malloc(10000*sizeof(float)));
-  sig_new=(float *)(malloc(10000*sizeof(float)));
+  cosmic_new=(int *)(malloc(limit_cosmic*sizeof(int)));
+  val_new=(float *)(malloc(limit_cosmic*sizeof(float)));
+  sig_new=(float *)(malloc(limit_cosmic*sizeof(float)));
 
   printtime();
   printf("create_records ...");
-  dataout = drms_create_records(drms_env,nRecs-2,filename_cosmic2_out,DRMS_PERMANENT,&stat);
+  dataout = drms_create_records(drms_env,nRecs,filename_cosmic2_out,DRMS_PERMANENT,&stat);
   printf("done\n");
   printtime();
 
@@ -273,57 +316,69 @@ printf("begin data  reading loop\n");
  printtime();
 printf("begin test loop\n");
 
- for (k=1; k<(nRecs-1); ++k)
+ for (k=0; k<nRecs; ++k)
    {
-
-     if (count[k] > 0)
+     if (time_fl[k] >= tfirst && time_fl[k] <= tlast  && keyvalue_fsn[k] >= fsn_first && keyvalue_fsn[k] <= fsn_last)
        {
 
 	 hits=cosmic_rays[k];
 	 sig=significance[k];
 	 lev=level[k];
 
-	 ct=minval(count[k], 10000);
-	 ct_prev=minval(count[k-1], 10000);
-	 ct_next=minval(count[k+1], 10000);
+	 ct=minval(count[k], limit_cosmic);
+
+	 if (count[k] > 0 && k >=1 && k < (nRecs-1)) //at least one count, not first or last record -> do weeding
+	   {
+	     
+	     ct_prev=minval(count[k-1], limit_cosmic);
+	     ct_next=minval(count[k+1], limit_cosmic);
   
 
-       ctr=0;
+	     ctr=0;
+
+	     for (c=0; c<ct; ++c)
+	       {
+	    
+	     	 ++counter;
+		 elem_prev=is_element(hits[c], cosmic_rays[k-1], ct_prev);
+		 elem_next=is_element(hits[c], cosmic_rays[k+1], ct_next);
+
+		 if (elem_prev == 0 && elem_next == 0)
+		   {
+		     cosmic_new[ctr]=hits[c];
+		     val_new[ctr]=lev[c];
+		     sig_new[ctr]=sig[c];
+		     ++ctr;
+		     ++goodcounter;
+		   }
+		 else
+		   {
+		     ++falsecounter;
+		   }
+	       }
+	    	       
+	     new_count[k]=ctr;
+	   }
+	 else  //else, just copy
+       {
+	 ctr=count[k];
 
 	 for (c=0; c<ct; ++c)
 	   {
-	    
-	     	 ++counter;
-	     elem_prev=is_element(hits[c], cosmic_rays[k-1], ct_prev);
-	     elem_next=is_element(hits[c], cosmic_rays[k+1], ct_next);
-
-	     if (elem_prev == 0 && elem_next == 0)
-	       {
-		 cosmic_new[ctr]=hits[c];
-		 val_new[ctr]=lev[c];
-		 sig_new[ctr]=sig[c];
-		 ++ctr;
-		 ++falsecounter;
-	       }
-	     
-	       
-	     
-	       
-
+	    		
+	     cosmic_new[ctr]=hits[c];
+	     val_new[ctr]=lev[c];
+	     sig_new[ctr]=sig[c];                                  
 	    
 	   }
+	       
 	 new_count[k]=ctr;
        }
-     else
-       {
-	 new_count[k]=0;
-       }
 
 
-     if (time_fl[k] >= tfirst && time_fl[k] <= tlast)
-       {
+     
 
-     recout = dataout->records[k-1];
+     recout = dataout->records[k];
 
      status=drms_setkey_int(recout, keyfsn, keyvalue_fsn[k]);
      status=drms_setkey_time(recout, keytobs, time_fl[k]);
@@ -335,15 +390,8 @@ printf("begin test loop\n");
 	
      drms_keyword_setdate(recout);
 
-     if (count[k] >= 0)
-       {
-	status=drms_setkey_int(recout, keycount, new_count[k]);
-       }
-     else
-       {
-	 status=drms_setkey_int(recout, keycount, -1);
-       }
-
+     status=drms_setkey_int(recout, keycount, new_count[k]);
+    
      if (keyvalue_cam[k] == 2) status=drms_setkey_string(recout, keyinstrument, camera_str_front);
      if (keyvalue_cam[k] == 1) status=drms_setkey_string(recout, keyinstrument, camera_str_side);
 	    
@@ -352,7 +400,8 @@ printf("begin test loop\n");
      segout_sig=drms_segment_lookup(recout, segmentname_sig);
 	    
 	 
-
+     if (new_count[k] >= 0) //write out data segments
+       {
      axisbad[0]=new_count[k];
      arrout=drms_array_create(type_int,1,axisbad,NULL,&status);
      cosmic_ray_data=arrout->data;
@@ -373,6 +422,7 @@ printf("begin test loop\n");
        drms_free_array(arrout);
        drms_free_array(arrout_val);
        drms_free_array(arrout_sig);
+       }
        }
     
    }
@@ -395,7 +445,7 @@ printf("begin test loop\n");
  free(val_new);
 
 
- printf("correctly identified cosmic rays %d %d %f\n", falsecounter, counter, (float)falsecounter/(float)counter);
+ printf("correctly identified cosmic rays %d out of %d %f\n", goodcounter, (goodcounter+falsecounter), (float)goodcounter/(float)(falsecounter+goodcounter));
  
   }
  else 

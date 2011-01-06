@@ -106,11 +106,18 @@ float filtergram_cadence=1.8; //minimum filtergram cadence in sec
 //float coef4[2][3]={{1585.98+200.0, -21.0609, -1044.63},{1577.13, 163.140, -1170.68}};
 
 //set derived from standard deviation of derivative of time series
-float coef0[2][3]={{1395.02, -491.606, -606.292}, {1012.51, -374.209, -442.236}};
-float coef1[2][3]={{2519.27, -298.148, -2029.38}, {1370.68, -249.615, -982.241}};
-float coef2[2][3]={{0.0216513, 0.00287712, 0.0198303}, {0.0282894, -0.00629716, 0.0302188}};
+//float coef0[2][3]={{1395.02, -491.606, -606.292}, {1012.51, -374.209, -442.236}};
+//float coef1[2][3]={{2519.27, -298.148, -2029.38}, {1370.68, -249.615, -982.241}};
+//float coef2[2][3]={{0.0216513, 0.00287712, 0.0198303}, {0.0282894, -0.00629716, 0.0302188}};
+//float coef3[2][2]={{0.17, 0.27}, {0.17, 0.27}};
+//float coef4[2][3]={{2332.02, -0.489186,  -1549.49}, {1028.30,   75.0354, -662.894}};
+
+float coef0[2][3]={{1151.30, -130.552, -704.380},{916.720,     -291.264  ,   -436.917}};
+float coef1[2][3]={{2517.30, -339.439, -1943.22},{1369.02 ,    -424.949,     -808.191}};
+float coef2[2][3]={{0.0262323, -0.00716024, 0.0240938},{0.0302306, -0.0134902, 0.0346718}};
 float coef3[2][2]={{0.17, 0.27}, {0.17, 0.27}};
-float coef4[2][3]={{2332.02, -0.489186,  -1549.49}, {1028.30,   75.0354, -662.894}};
+float coef4[2][3]={{2255.87, 117.511, -1541.76},{1034.88,  95.1960, -659.753}};
+
 
 const float lambda0=6173.3433;
 const float lambda_sep=68.8e-3;
@@ -125,7 +132,7 @@ float cof_comby[12]={0.283009, 0.0545081, 0.235930, 0.0957727, 0.245011, 0.08152
 float cof[2][6]={{0.187514, 0.542523, 0.284918, 0.143162,-0.136262,-0.0218554}, {0.311833, 0.400153, 0.205032,0.0928222,-0.00851838, -0.00132237}}; //for filter fwhm = 1.0
 
 const float factor[2]={6.2, 6.2}; 
-const int limit_cosmic=10000;
+const int limit_cosmic=100000;
   
 
  
@@ -210,9 +217,10 @@ char *filename_flatfield_rel="su_production.flatfield_rel"; //for checked in ver
 char *filename_flatfield_fid="su_production.flatfield_fid"; //for checked in version
 
 //char *filename_cosmic="su_richard.cosmic_rays_c"; //output of module_flatfield
-char *filename_cosmic="hmi.cosmic_rays"; //for checked in version  
+char *filename_cosmic="su_production.cosmic_rays"; //for checked in version  
 
-char *filename_cosmic2_out="su_richard.cosmic_rays";
 
+//char *filename_cosmic2_out="su_richard.cosmic_rays";
+char *filename_cosmic2_out="hmi.cosmic_rays";
 
 
