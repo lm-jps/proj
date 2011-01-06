@@ -61,8 +61,8 @@ char *module_name  = "module_flatfield_combine";    //name of the module
 ModuleArgs_t module_args[] =        
 {
      {ARG_STRING, kRecSetIn, "",  "Input data series."},
-     {ARG_STRING, datumn, "dd", "Datum string"},
-     {ARG_INT, "hour", "0", "Hour"},
+     {ARG_STRING, datumn, "yyyy.mm.dd", "Datum string"},
+     {ARG_INT, "hour", "00", "Hour"},
      {ARG_INT, cameran, 0, "Camera"},
      {ARG_INT, fsnf_name, "0"},
      {ARG_INT, fsnl_name, "2147483647"},
@@ -153,7 +153,7 @@ int DoIt(void)
       char query0[256]="";
       TIME tfirst, tlast;
 
-
+      printf("fsnfs %d %d\n", fsn_first, fsn_last);
  if (fsn_first == 0 || fsn_last == 2147483647)
    {
 
@@ -185,7 +185,7 @@ int DoIt(void)
  strcat(query0, fnumb);
  strcat(query0, "?]");
 
-  printf("query string: %s\n", query0);
+  printf("query string time: %s\n", query0);
     
   }
 
@@ -210,7 +210,7 @@ int DoIt(void)
      sprintf(fnumb, "%1.1d", cameraint);
      strcat(query0, fnumb);
       strcat(query0, "?]");
-      printf("query string: %s\n", query0);  
+      printf("query string fsn: %s\n", query0);  
     }
 
   
