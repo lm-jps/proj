@@ -32,15 +32,24 @@ span.tip { background-color:yellow }
 // var SHOW_SERIES = "show_series_test";
 // var JSOC_INFO = "jsoc_info_test";
 // var JSOC_FETCH = "jsoc_fetch_test";
+// var EXPORTDATA = "exportdata2";
 
 var SHOW_SERIES = "show_series";
 var JSOC_INFO = "jsoc_info";
 var JSOC_FETCH = "jsoc_fetch";
+var EXPORTDATA = "exportdata";
+
+// Protect page from accidental BACK button
+window.onbeforeunload = function () 
+   {
+   return "Did you really mean to leave exportdata? Use CANCEL to stay here";
+   }
 
 var Host = location.host;
 var SeriesName;
 var RequestID;
 var RecordSet;
+var RecordLimit;
 var RecordCount;
 var ExportRecordSetOK;
 var ExportFromFileList;
@@ -55,13 +64,24 @@ var ExportReadyOK;
 var TipsEnabled;
 var TipsCreated = 0;
 var args;
-var state;
+var state=0;
 var uploadOndoneAction = 0;
 var ExportProcessingArgs = "";
+var SeriesInfo;
 
 // Processing options code section 2 of 7
 // Processing specific control variables
 var HgPatchActive = 0;
+var HgSeriesList;
+var HgSeriesSelected = 0;
+
+NotifyProcessingCode()
+  {
+  // called when Recordset is changed.
+  // Set flags to alert processing or method options here.
+  HgSeriesSelected = 0;
+  }
+
 // End of processing options section
 
 function initVars()
@@ -70,6 +90,7 @@ function initVars()
   SeriesName = "";
   RequestID = "";
   RecordCount = 0;
+  RecordLimit = 0;
   ExportRecordSetOK = 0;
   ExportFromFileList = 0;
   ExportProtocolOK = 0;
@@ -135,17 +156,28 @@ function getargs()
   state = Cookie.getData("state");
   if (state == 1)
     {
-    args = Cookie.data["search"].toQueryParams();
+    var exportargs = Cookie.data["search"];
+    exportargs = decodeURIComponent(exportargs);
+    exportargs = exportargs.substr(1);
+    exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
+    args = exportargs.toQueryParams();
+    args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
     }
   else if (state > 1)
     {
     args = new Object;
     args.ds = "";
     args.requestid = "";
+    args.limit= "none";
     }
   else
     {
-    args = location.search.toQueryParams();
+    var exportargs = location.search;
+    exportargs = decodeURIComponent(exportargs);
+    exportargs = exportargs.substr(1);
+    exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
+    args = exportargs.toQueryParams();
+    args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
     state=1;
     Cookie.setData("state",state);
     Cookie.setData("search",location.search);
@@ -155,16 +187,29 @@ function getargs()
 
 function OnLoadInit()
   {
-  Cookie.init({name:"exportdata"});
+  var needcount = 0;
+  Cookie.init({name:EXPORTDATA});
   initVars();
   args = getargs();
   if (args.ds)
     {
     RecordSet = args.ds;
     $("ExportRecordSet").value = RecordSet;
-    GetRSCount();
+    needcount = 1;
     }
   if (args.id) RequestID = args.id;
+  if (args.limit) 
+    {
+    $("ExportRecordLimit").value = args.limit;
+    if (args.limit == "none") RecordLimit = 0;
+    else RecordLimit = args.limit;
+    needcount = 1;
+    }
+  if (needcount)
+    {
+    GetRSCount();
+    GetDefaultFormat();
+    }
   // HELP tips enable
   CreateTips();
   $("TipsOnOffButton").value = "Turn Help Off";
@@ -198,6 +243,7 @@ function CreateTips()
         'The file should contain recordSet specifiers in the format allowed by drms_open_records include files.  ' +
         'See http://jsoc.stanford.edu/jsocwiki/AllAboutJsocNames.',tipstyle);
     new Tip("RecordSetHelp","RecordSet to be exported. May be imported on call and/or may be entered directly here.",tipstyle);
+    new Tip("RecordLimitHelp","RecordSet record limit. Max number of records to export.  Modifies RecordSet.  Value should be 'none' or a number. Number > 0 counts from start of RecordSet.  Negative number counts from high end of RecordSet.  0 means no limit",tipstyle);
     new Tip("RecordCountHelp","RecordSet record count.  Update this to repeat export with new method, email, etc.",tipstyle);
     new Tip("ProcessingHelp","Processing to be done to the data prior to export.  Select from drop-down list for details.",tipstyle);
     // Processing options section 4 of 7
@@ -231,10 +277,12 @@ function CreateTips()
         'The special words: seriesname, recnum, and segment are replaced with the series_name, the record number, ' +
         'or the segment name.  The element {#} will generate an increasing number, ' +
         'with optional layout e.g. default is {#:%05d}. ' +
-        'Any keyword in the record may also be used.  ' +
+        'Any keyword in the record may also be used.  Optional layout may be provided after a ":".' +
+        'Special format options are available for type TIME keywords: A leading "A" will strip "." and ":" from the time and ' +
+        'a "D" will strip the "." and ":" but will insert "@" around the date components to allow easy scripts to move the exported ' +
+        'files into date structured directory trees. ' +
         'It is wise to include enough of the "prime-keys" to make a unique filename.  ' +
-        'The default format template is "{seriesname}.{recnum:%lld}.{segment}" will make unique filenames but prime keys ' +
-        'instead of "recnum" may give more useful filenames.',tipstyle);
+        'The default format template is made from series structure.',tipstyle);
     new Tip("RequestorHelp","Optional place for your name, this will be used later when we have a way of saving your preferred export options.",tipstyle);
     new Tip("NotifyHelp","Optional email address to be used to notify you when the export is complete and ready to be fetched using the RequestID.",tipstyle);
     new Tip("ConfirmHelp","Usual duplicate copy of email address to avoid lost exports due to typos.",tipstyle);
@@ -306,6 +354,25 @@ function FileUploadWanted()
     }
   }
 
+function insertOption(list,text,note)
+  {
+  var y=document.createElement('option');
+  y.value=text;
+  if (note.length)
+    y.text = text + "  --- " + note;
+  else
+    y.text = text;
+  var x = $(list);
+  try
+    {
+    x.add(y,null); // standards compliant
+    }
+  catch(ex)
+    {
+    x.add(y); // IE only
+    }
+  }
+
 function MakeFileUploadRequest()
   {
   if (CheckExportParams() == 0)
@@ -359,7 +426,7 @@ function GetRSCount()
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
-    parameters: {"ds" : RecordSet, "op" : "rs_summary" },
+    parameters: {"ds" : RecordSet, "op" : "rs_summary", "n" : RecordLimit },
 
     onSuccess: function(transport, json)
       {
@@ -387,12 +454,69 @@ function GetRSCount()
     });
   }
 
+function GetDefaultFormat()
+  {
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  $("RSCountPlace").innerHTML = "Getting count - wait...";
+  RecordCount = -1;
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
+    {
+    method: 'get',
+    parameters: {"ds" : RecordSet, "op" : "series_struct" },
+
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no response text";
+      SeriesInfo = response.evalJSON();
+      if (SeriesInfo.status == 0)
+        {
+        var nprimes = SeriesInfo.primekeysinfo.length;
+        var nkeys = SeriesInfo.keywords.length;
+        if (nprimes == 0)
+          {
+          $("ExportFilenameFmt").value = "{seriesname}.{recnum:%lld}.{segment}";
+          }
+        else
+          {
+          var newfmt = "{seriesname}.";
+          var i;
+          for (i=0; i<nprimes; i++)
+            {
+            var thisprime = SeriesInfo.primekeys[i];
+            var j;
+            for  (j=0; j<nkeys; j++)
+              {
+              var thiskey = SeriesInfo.keywords[j].name;
+              if (thiskey === thisprime)
+                {
+                if (SeriesInfo.keywords[j].type === "time")
+                  newfmt = newfmt + "{" + thisprime + ":A}.";
+                else
+                  newfmt = newfmt + "{" + thisprime + "}.";
+                break;
+                }
+              }
+            }
+	  newfmt = newfmt + "{segment}";
+          $("ExportFilenameFmt").value = newfmt;
+          }
+	}
+      else
+        alert("failed to get series info\nEnter correct RecordSet or proceed to processing options");
+      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+      },
+    onFailure: function() { alert('Something went wrong...'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+  }
+
 var expURL;
 function CreateDataTable(data, valuetable)
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   valuetable = "";
-  var count = data.count;
+  // var count = data.count;
+  var count = data.data.length;
   valuetable = "<TABLE BORDER=1>"
   valuetable = valuetable + "<TR><TD>File</TD><TD>Record</TD><TD>Filename</TD></TR>"
   for (ifile=0; ifile < count; ifile++)
@@ -424,6 +548,33 @@ function ExportNop()
 function ExportNewRS()
   {
   RecordSet = $("ExportRecordSet").value;
+  GetRSCount();
+  GetDefaultFormat();
+  NotifyProcessingCode();
+  }
+
+function SetRecordLimit()
+  {
+  var newLimit;
+  newLimit = 1 * $("ExportRecordLimit").value;
+  if (isNaN(newLimit))
+    {  // newlimit is a non-numeric string
+    newLimit = $("ExportRecordLimit").value;
+    if (newLimit == "none")
+      RecordLimit = 0;
+    else
+      {
+      $("ExportRecordLimit").style.backgroundColor = "#FF8080";
+      alert("RecordLimit must be a number or 'none'");
+      }
+    }
+  else
+    {
+    if (newLimit == 0)
+      $("ExportRecordLimit").value = "none";
+    RecordLimit = newLimit;
+    }
+  $("ExportRecordLimit").style.backgroundColor = "#FFFFFF";
   GetRSCount();
   }
 
@@ -500,6 +651,8 @@ function SetProcessing()
     }
   if (isok)
     ExportProcessingOK = 1;
+  // Add recordLimit FIRST always.
+  ExportProcessingArgs = "n=" + RecordLimit + "," + ExportProcessingArgs;
   $("ExportProcessingHidden").value = ExportProcessingArgs;
   }
 
@@ -535,7 +688,10 @@ function SetExportCompress()
   {
   var protocolparam = $("ExportProtocol").value;
   if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
-      protocolparam = protocolparam  + "," + $("ExportCompress").value;
+      {
+      for (var i=0; i < SeriesInfo.segments.length; i++)
+        protocolparam = protocolparam  + "," + $("ExportCompress").value;
+      }
   $("ExportProtocolHidden").value = protocolparam;
   ExportCompressOK = 1;
   }
@@ -657,7 +813,7 @@ function GetExport()
     $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
     $("ExportButton").value = "Processing ...";
     $("ExportButton").style.backgroundColor = "#FFD8D8";
-    var protocolparam =  $("ExportProtocol").value;
+    var protocolparam =  $("ExportProtocolHidden").value;
     if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
       protocolparam = protocolparam + "," + $("ExportCompress").value;
     var exportparameters = new Hash( {"op" : $("ExportOpID").value,
@@ -754,6 +910,8 @@ function GetReExport()
 function ProcessExportResponse(response)
   {
   var data = response.evalJSON();
+  state = 3;
+  Cookie.setData("state",state);
   if (data.status == 6)
     {
     alert("RequestID not found, status=6, error=" + data.error + "<BR>Try again in a few seconds, may just be not ready to respond");
@@ -773,6 +931,8 @@ function ProcessExportResponse(response)
     $("RequestIdPlace").innerHTML = "";
     $("ExportStatus").innerHTML = "Export timeout";
     $("ExportLocation").innerHTML = "";
+    state = 0;
+    Cookie.setData("state",state);
     }
   else if (data.status == 4)
     {
@@ -784,6 +944,8 @@ function ProcessExportResponse(response)
     $("RequestIdPlace").innerHTML = "";
     $("ExportStatus").innerHTML = "RecordSet not found";
     $("ExportLocation").innerHTML = "";
+    state = 0;
+    Cookie.setData("state",state);
     }
   else if (data.status == 3)
     {
@@ -798,9 +960,12 @@ function ProcessExportResponse(response)
       data.count + " records found, " +
       data.error + ", contact: " + data.contact;
     $("ExportLocation").innerHTML = "";
+    state = 0;
+    Cookie.setData("state",state);
     }
-  else if (data.status == 1 || data.status == 2)
+  else if (data.status == 1 || data.status == 2 || data.status == 12)
     {
+    ClearStatus();
     if (data.status == 1)
       $("StatusButtonMsg").innerHTML = "Export request is being processed";
     else  // status==2
@@ -812,6 +977,7 @@ function ProcessExportResponse(response)
     RequestID = data.requestid;
     $("RequestIdPlace").innerHTML = data.requestid;
     $("StatusRequestID").value = data.requestid;
+    Cookie.setData("requestid",data.requestid);
     $("ExportLocation").innerHTML = "";
     $("FileUploadInfo").innerHTML = "File upload done, " + data.rcount + " records requested.";
     if (ExportFromFileList == 1)
@@ -823,6 +989,9 @@ function ProcessExportResponse(response)
   else // status == 0 implies url_quick format and all online as-is
     {
     var valuetable = "";
+    state = 0;
+    Cookie.setData("state",state);
+    Cookie.setData("requestid","");
     var count = data.count;
     $("ExportButtonMsg").innerHTML = "Fetch your data at URLs below before starting next request";
     ExportReadyOK = 2;
@@ -839,8 +1008,7 @@ function ProcessExportResponse(response)
       {
       if (count > 1)
         {
-        $("ExportLocation").innerHTML =  "<B>Multiple files returned, direct fetch not possible. </B><P>" +
-          valuetable + "<BR>";
+        $("ExportLocation").innerHTML =  valuetable + "<BR>";
         }
       else
         {
@@ -869,6 +1037,10 @@ function ClearStatus()
   $("StatusButtonMsg").innerHTML = "Waiting new status request...";
   $("StatusButton").value = "Submit Status Request";
   $("StatusRequestID").value = "";
+  $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  $("KeywordFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   }
 
 function GetStatus()
@@ -881,6 +1053,7 @@ function GetStatus()
     }
   $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  $("KeywordFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   $("StatusButton").style.backgroundColor = "#FFD8D8";
   $("StatusStatus").innerHTML = "";
@@ -897,6 +1070,8 @@ function GetStatus()
       {
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
+      state = 2;
+      Cookie.setData("state",state);
       if (data.status == 6)
         {
         alert("RequestID not found, status=6, error=" + data.error + "<BR>Try again in a few seconds, may just be not ready to respond");
@@ -906,6 +1081,8 @@ function GetStatus()
         $("StatusValue").innerHTML = "Requested RecordSet returned error status=6";
         $("StatusOther").innerHTML = $("StatusRequestID").value + " not found,  msg=" + data.error;
         $("ReExportDiv").style.display = "none";
+        state = 1;
+        Cookie.setData("state",state);
         }
       else if (data.status == 5)
         {
@@ -956,6 +1133,8 @@ function GetStatus()
         $("StatusStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
         $("RequestIdPlace").innerHTML = data.requestid;
         $("ReExportDiv").style.display = "none";
+        state = 1;
+        Cookie.setData("state",state);
         }
       else // status == 0
         {
@@ -995,6 +1174,8 @@ function GetStatus()
         if (ExportFromFileList  == 1)
           FinishFileUpload();
         $("ReExportDiv").style.display = "none";
+        state = 1;
+        Cookie.setData("state",state);
         }
       },
     onFailure: function()
@@ -1030,14 +1211,18 @@ function GetStatus()
 </DIV> <!-- end DIV header -->
 <DIV id="ExportRequestDiv">
 <B>JSOC Data Export Request Generation</B>
-<p>
+<P>
 If the Method is changed from "url_quick" or "url_direct" you will have additional options to specify.
+"url-direct" is temporarily disabled.
+<p>
+After the request is submitted
+for Methods of "url", "ftp", "url-tar" or "ftp-tar" you will recieve ON THIS PAGE a "Request_ID" that will be used
+to access the data when it is ready.
 <p>
 If you enter an email address you will be notified when the data is ready.
-<p>
-After the request is submitted, you will recieve ON THIS PAGE a "Request_ID" that will be used
-to access the data when it is ready.  If you do not provide an email address you must save the Request_ID in order to
+If you do not provide an email address you must leave this page open or save the Request_ID in order to
 access the data.
+<p>
 
 <form id='FileUploadFormID' name='FileUploadForm'
   action=''
@@ -1058,6 +1243,12 @@ access the data.
     <TR ID="RecordSetRow">
       <TD style="width:10em" >RecordSet</TD><TD><SPAN ID="RecordSetHelp" class="tip">?</SPAN></TD><TD colspan=2>
         <input id="ExportRecordSet" type="text" name="ds" value="" onChange="ExportNewRS();" > </TD>
+    </TR>
+  
+    <TR ID="RecordLimitRow">
+      <TD>Record Limit</TD><TD><SPAN ID="RecordLimitHelp" class="tip">?</SPAN></TD>
+      <TD><input id="ExportRecordLimit" type="text" name="ReccordLimit" value="none" style="width:15em" onChange="SetRecordLimit();" ></TD>
+      <TD>Limits number of records to export.</TD>
     </TR>
   
     <TR ID="RecordCountRow">
@@ -1083,8 +1274,7 @@ access the data.
     <TR ID="FilenameFmtRow">
       <TD>Filename Format</TD>
       <TD><SPAN ID="FilenameFmtHelp" class="tip">?</SPAN></TD>
-      <TD><input id="ExportFilenameFmt" type="text" name="filenamefmt" value="no_op" style="width:15em" onChange="SetFilenameFmt();" ></TD>
-      <TD>Provide file name format, default: "{seriesname}.{recnum:%lld}.{segment}".</TD>
+      <TD colspan=2><input id="ExportFilenameFmt" type="text" name="filenamefmt" value="no_op" style="width:30em" onChange="SetFilenameFmt();" > File name template.</TD>
     </TR>
   
     <TR ID="ProcessRow">
@@ -1094,7 +1284,7 @@ access the data.
         <option value="no_op">none
         <option value="hg_patch">hg_patch
         </select> </TD>
-      <TD>Set Pre-export processing info, Trials of tracked patches available for hmi_test.XX_45s only.</TD>
+      <TD>Select Pre-export processing</TD>
     </TR>
 
     <!-- Processing selection detail rows go here. section 7 of 7 -->
@@ -1174,7 +1364,7 @@ access the data.
 <TABLE>
   <TR>
     <TD>RequestID</TD>
-    <TD colspan=2><span id="RequestIdPlace" style="background-color:#FFF8DC;">&nbsp;</span></TD>
+    <TD colspan=2><span id="RequestIdPlace" style="width:12em;background-color:#FFF8DC;">&nbsp;</span></TD>
     <TD>This is the ID tag for your export request.  Use the Status Request button below to retrieve the links to the data.</TD>
   </TR>
 
@@ -1191,11 +1381,13 @@ access the data.
 </TABLE>
 </DIV>
 <HR>
-<DIV ExportDataDiv>
+<DIV ExportDataDiv  style="background-color:#C0E0FF;">
+<B>JSOC Data Export Status and Retrieval</B>
+<p>
 <TABLE>
   <TR>
     <TD style="width:10em" >RequestID</TD>
-    <TD><input type="text" id="StatusRequestID" name="StatusRequestID" style="background-color:#FFF8DC;" value="" onChange="GetStatus();"></TD>
+    <TD><input type="text" id="StatusRequestID" name="StatusRequestID" style="width:12em;background-color:#FFF8DC;" value="" onChange="GetStatus();"></TD>
     <TD>This is the ID tag for your export request.</TD>
     <TD><span id="StatusValue">&nbsp;</TD>
   </TR>
