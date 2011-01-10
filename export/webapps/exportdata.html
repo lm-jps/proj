@@ -657,32 +657,44 @@ function SetProcessing()
   }
 
 function SetExportProtocol()
-  {
+{
   var tmp = $("ExportProtocol").value.toUpperCase();
-  if ($("ExportProtocol").value == "as-is" || tmp == "FITS")
-    {
-    if (tmp == "FITS")
-      {
-      $("ExportProtocol").value = "FITS";
-      $("ExportProtocolHidden").value = "FITS";
-      ExportProtocolOK = 2;
-      $("CompressRow").style.display="table-row";
-      }
-    else
-      {
-      $("ExportProtocolHidden").value = "as-is";
-      ExportProtocolOK = 1;
-      $("CompressRow").style.display="none";
-      }
-    }
-  else
-    {
-    ExportProtocolOK = 0;
-    alert('Export Protocol - must be "as-is" or "FITS"'); 
-    $("ExportProtocolHidden").value = "";
-    $("ExportProtocol").value = "";
-    }
+
+  if (tmp == "MPEG")
+  {
+     $("ExportProtocol").value = "MPEG";
+     $("ExportProtocolHidden").value = "MPEG";
+     ExportProtocolOK = 4;
+     $("CompressRow").style.display="table-row";
   }
+  else if (tmp == "JPEG")
+  {
+     $("ExportProtocol").value = "JPEG";
+     $("ExportProtocolHidden").value = "JPEG";
+     ExportProtocolOK = 3;
+     $("CompressRow").style.display="table-row";
+  }
+  else if (tmp == "FITS")
+  {
+     $("ExportProtocol").value = "FITS";
+     $("ExportProtocolHidden").value = "FITS";
+     ExportProtocolOK = 2;
+     $("CompressRow").style.display="table-row";
+  }
+  else if ($("ExportProtocol").value == "as-is")
+  {
+     $("ExportProtocolHidden").value = "as-is";
+     ExportProtocolOK = 1;
+     $("CompressRow").style.display="none";
+  }
+  else
+  {
+     ExportProtocolOK = 0;
+     alert('Export Protocol - must be "as-is", "FITS", "JPEG", or "MPEG"'); 
+     $("ExportProtocolHidden").value = "";
+     $("ExportProtocol").value = "";
+  }
+}
 
 function SetExportCompress()
   {
@@ -824,7 +836,7 @@ function GetExport()
                                       "method" : $("ExportMethod").value,
                                       "filenamefmt" : $("ExportFilenameFmt").value,
 			 	      "format" : "json",
-                 		      "protocol" : protocolparam });
+                                      "protocol" : protocolparam} );
 // alert(Object.inspect(exportparameters));
     // if (nsegsselected) exportparameters = exportparameters.merge({"seg": SegList});
     }
@@ -1295,9 +1307,11 @@ access the data.
       <TD><SPAN ID="ProtocolHelp" class="tip">?</SPAN></TD>
       <TD><select id="ExportProtocol" name="rawprotocol" style="width:15em"  onChange="SetExportProtocol();">
             <option value="as-is">as-is
-            <option value="FITS">FITS 
+            <option value="FITS">FITS
+            <option value="JPEG">JPEG
+            <option value="MPEG">MPEG
           </select> </TD>
-      <TD>Choose protocol, "FITS" or "as-is".</TD>
+      <TD>Choose protocol, "FITS", "JPEG", "MPEG", or "as-is".</TD>
     </TR>
   
     <TR ID="CompressRow">

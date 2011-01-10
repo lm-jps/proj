@@ -32,7 +32,7 @@ span.tip { background-color:yellow }
 var SHOW_SERIES = "show_series_test";
 var JSOC_INFO = "jsoc_info_test";
 var JSOC_FETCH = "jsoc_fetch_test";
-var EXPORTDATA = "exportdata2";
+var EXPORTDATA = "exportdatatest";
 
 // var SHOW_SERIES = "show_series";
 // var JSOC_INFO = "jsoc_info";
@@ -96,7 +96,6 @@ function initVars()
   ExportProtocolOK = 0;
   ExportCompressOK = 1;
   ExportMethodOK = 0;
-  ExportMethodIsDirect = 0;
   ExportFilenameFmtOK = 0;
   ExportProcessingOK = 0;
   ExportUserOK = 0;
@@ -189,6 +188,7 @@ function getargs()
 function OnLoadInit()
   {
   var needcount = 0;
+
   Cookie.init({name:EXPORTDATA});
   initVars();
   args = getargs();
@@ -588,15 +588,9 @@ function SetExportMethod()
     $("ProcessRow").style.display="none";
     $("ProcessHgPatch").style.display="none";
     if ($("ExportMethod").value == "url_direct")
-        {
         $("ProtocolRow").style.display="table-row";
-        ExportMethodIsDirect = 1;
-        }
     else
-        {
         $("ProtocolRow").style.display="none";
-        ExportMethodIsDirect = 0;
-        }
     $("FilenameFmtRow").style.display="none";
     $("CompressRow").style.display="none";
     $("RequestorRow").style.display="none";
@@ -664,36 +658,49 @@ function SetProcessing()
   }
 
 function SetExportProtocol()
-  {
+{
   var tmp = $("ExportProtocol").value.toUpperCase();
-  if ($("ExportProtocol").value == "as-is" || tmp == "FITS")
-    {
-    if (tmp == "FITS")
-      {
-      $("ExportProtocol").value = "FITS";
-      $("ExportProtocolHidden").value = "FITS";
-      ExportProtocolOK = 2;
-      $("CompressRow").style.display="table-row";
-      }
-    else
-      {
-      $("ExportProtocolHidden").value = "as-is";
-      ExportProtocolOK = 1;
-      $("CompressRow").style.display="none";
-      }
-    }
-  else
-    {
-    ExportProtocolOK = 0;
-    alert('Export Protocol - must be "as-is" or "FITS"'); 
-    $("ExportProtocolHidden").value = "";
-    $("ExportProtocol").value = "";
-    }
+
+  if (tmp == "MPEG")
+  {
+     $("ExportProtocol").value = "MPEG";
+     $("ExportProtocolHidden").value = "MPEG";
+     ExportProtocolOK = 4;
+     $("CompressRow").style.display="table-row";
   }
+  else if (tmp == "JPEG")
+  {
+     $("ExportProtocol").value = "JPEG";
+     $("ExportProtocolHidden").value = "JPEG";
+     ExportProtocolOK = 3;
+     $("CompressRow").style.display="table-row";
+  }
+  else if (tmp == "FITS")
+  {
+     $("ExportProtocol").value = "FITS";
+     $("ExportProtocolHidden").value = "FITS";
+     ExportProtocolOK = 2;
+     $("CompressRow").style.display="table-row";
+  }
+  else if ($("ExportProtocol").value == "as-is")
+  {
+     $("ExportProtocolHidden").value = "as-is";
+     ExportProtocolOK = 1;
+     $("CompressRow").style.display="none";
+  }
+  else
+  {
+     ExportProtocolOK = 0;
+     alert('Export Protocol - must be "as-is", "FITS", "JPEG", or "MPEG"'); 
+     $("ExportProtocolHidden").value = "";
+     $("ExportProtocol").value = "";
+  }
+}
 
 function SetExportCompress()
   {
   var protocolparam = $("ExportProtocol").value;
+
   if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
       {
       for (var i=0; i < SeriesInfo.segments.length; i++)
@@ -833,6 +840,7 @@ function GetExport()
 			 	      "format" : "json",
                  		      "protocol" : protocolparam,
                                       "t" : 1} );
+
 // alert(Object.inspect(exportparameters));
     // if (nsegsselected) exportparameters = exportparameters.merge({"seg": SegList});
     }
@@ -1014,20 +1022,16 @@ function ProcessExportResponse(response)
     $("FileUploadInfo").innerHTML = "File upload done, " + data.rcount + " records requested.";
     if ($("ExportMethod").value == "url_quick")
       {
-      if (ExportMethodIsDirect) // was url_direct on call
+      if (count > 1)
         {
-        if (count > 1)
-            $("ExportLocation").innerHTML =  "<B>Multiple files returned, direct fetch not possible. </B><P>" +
-              valuetable + "<BR>";
-        else
-            {
-            var path = encodeURI("http://jsoc.stanford.edu" + data.dir + "/" + data.data[0].filename);
-    //      doucment.write("<link type=\"application/fits\" href="+path+" />");
-    //      fetch image
-            }
+        $("ExportLocation").innerHTML =  valuetable + "<BR>";
         }
-      else // url_quick on call
-        $("ExportLocation").innerHTML = valuetable + "<BR>";
+      else
+        {
+        var path = encodeURI("http://jsoc.stanford.edu" + data.dir + "/" + data.data[0].filename);
+//      doucment.write("<link type=\"application/fits\" href="+path+" />");
+//      fetch image
+        }
       }
     else
       $("ExportLocation").innerHTML =  valuetable + "<BR>";
@@ -1307,9 +1311,11 @@ access the data.
       <TD><SPAN ID="ProtocolHelp" class="tip">?</SPAN></TD>
       <TD><select id="ExportProtocol" name="rawprotocol" style="width:15em"  onChange="SetExportProtocol();">
             <option value="as-is">as-is
-            <option value="FITS">FITS 
+            <option value="FITS">FITS
+            <option value="JPEG">JPEG
+            <option value="MPEG">MPEG
           </select> </TD>
-      <TD>Choose protocol, "FITS" or "as-is".</TD>
+      <TD>Choose protocol, "FITS", "JPEG", "MPEG", or "as-is".</TD>
     </TR>
   
     <TR ID="CompressRow">
