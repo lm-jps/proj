@@ -63,7 +63,8 @@
    @par
    The image filename is generated from the outid, outname, and type parameters.  If outid is the string "time" then
    the time of the image as specified by the tkey (defaults to T_REC) will be used with the "." and ":" and "_<zone>" componenets deleted.  I.e.
-   the time will be in the form "yyyymmdd_hhmmss".  If outid is a literal "#" then the "%04d" layout will be used to generate
+   the time will be in the form "yyyymmdd_hhmmss".  The outid = time can have a suffix specifying the number of time characters to
+   include.  the format of the suffix is ":nn" where nn is from 1 to 15. If outid is a literal "#" then the "%04d" layout will be used to generate
    the image sequence number within the run of the program (i.e. the record number within the current recordset).  the
    type parameter must be "png" or "ppm" unless the out parameter specifies a ppm pipeline in which case type should
    be the suffix for the file type geenrated by the pipe.
@@ -99,12 +100,12 @@
    @endcode
 
    @par Example to generate a set of 4096x4096 and 1024x1024, and 256x256 pixel images of magnetograms in the current directory
-   using a color table the adds dynamic range to small absolute values.
+   using a color table the adds dynamic range to small absolute values.  The times will omit the seconds field in this example.
    @code
    render_image in='hmi.M_45s_nrt'$QRY \
      outname=M \
      pallette=/home/phil/apps/mag.lut \
-     outid=time \
+     outid=time:13 \
      -c \
      min=-500 \
      max=500 \
@@ -360,12 +361,14 @@ int DoIt(void)
       }
     if (strcmp(outid,"#") == 0)
       sprintf(imageID, "%04d", irec);
-    else if (strcasecmp(outid,"time") == 0)
+    else if (strncasecmp(outid,"time",4) == 0)
       {
       int timestatus;
       char timebuf[100];
       static int t[] = {0,1,2,3,5,6,8,9,10,11,12,14,15,17,18};
       int i;
+      int maxtplace = 15;
+      char *tplace = index(outid,':');
       TIME now = drms_getkey_time(inRec, tkey, &timestatus);
       if (timestatus)
         {
@@ -373,13 +376,15 @@ int DoIt(void)
         return(timestatus);
         }
       sprint_time(timebuf, now, "TAI", 0);
-      for (i=0; i<15; i++)
+      if (tplace)
+        sscanf(tplace+1,"%d",&maxtplace);
+      for (i=0; i<maxtplace; i++)
         imageID[i] = timebuf[t[i]];
       imageID[i] = '\0';
       }
     else
       {
-      fprintf(stderr, "Invalid outid param: %s\n", outid);
+      fprintf(stderr, "Invalid outid param: |%s|\n", outid);
       return(1);
       }
     for (iscale=0; iscale<nscales; iscale++)
