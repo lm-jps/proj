@@ -18,6 +18,7 @@ char *module_name    = "correction_velocities";   //name of the module
 #define kRecSetIn2     "end"          //end time for which an output is wanted. MANDATORY PARAMETER.
 #define kTypeSetIn     "levin"        //series name of the input data
 #define kTypeSetOut    "levout"       //series name of the output data
+#define kForced        "forced"       //forced computation even if tuning changes middway
 
 //QUALITY keyword
 #define QUAL_ISSTARGET               (0x4000)               //the ISS loop was OPEN for one or several filtergrams used to produce the observable
@@ -36,6 +37,7 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, kRecSetIn2, "",  "end time for which an output is wanted"},
      {ARG_STRING, kTypeSetIn, "",  "series name of input data"},
      {ARG_STRING, kTypeSetOut,"",  "series name of output data"},
+     {ARG_INT,    kForced, "0", "force computation even if tuning changes midway.Default =0. Set to 1 to force."},
      {ARG_END}
 };
 
@@ -89,6 +91,7 @@ int DoIt(void) {
   char *inRecQuery2 = cmdparams_get_str(&cmdparams, kRecSetIn2,     NULL);      //end time
   char *inLev       = cmdparams_get_str(&cmdparams, kTypeSetIn,     NULL);      //input series
   char *outLev      = cmdparams_get_str(&cmdparams, kTypeSetOut,    NULL);      //output series
+  int forced        = cmdparams_get_int(&cmdparams, kForced, NULL);
 
   char  HMISeriesLev1[MaxNString];                                   //name of the level 1 data series
   char uplo[]    = "U";
@@ -195,22 +198,39 @@ int DoIt(void) {
 	  j-=1;
 	  nsample-=1;
 	}
- 
+
+
+      //We check that the look-up tables were not changed during the time range required
+      if(j > 0)
+	{
+	  if(forced == 0)
+	    {
+	      
+	      if(CALFSN[j] != CALFSN[j-1])
+		{
+		  printf("Error: the look-up tables used to calculate the observables changed during the time range\n");
+		  return 1;
+		}
+	      
+	    }
+	  if(forced == 1)
+	    {
+	      if(CALFSN[j] != CALFSN[j-1])
+		{
+		  printf("Error: the look-up tables used to calculate the observables changed during the time range\n");
+		  j-=1;
+		  nsample-=1;
+		}
+	    }	  
+	}
+
       j++;
     } //UM, what happen if the last record is a NAN?
 
 
   printf("NUMBER OF DATA REJECTED: %d %d\n",nRecs1-nsample,nsample);
 
-  //We check that the look-up tables were not changed during the time range required
-  for(i=1;i<nsample;++i)
-    {
-      if(CALFSN[i] != CALFSN[i-1])
-	{
-	  printf("Error: the look-up tables used to calculate the observables changed during the time range\n");
-	  return 1;
-	}
-    }
+
 
   //we want to solve y=ax with a least-squares polynomial fit
   //the normal equations are: x=(transpose(a)*a)^-1*transpose(A)*y
