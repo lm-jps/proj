@@ -15,7 +15,7 @@
 #define MAXHIST				32768
 
 #ifndef TABLE_DIR
-#define TABLE_DIR 			"/home/production/cvs/EGSE/tables"
+#define TABLE_DIR 			"/home/production/cvs/TBL_JSOC/lev0"
 #endif
 
 #define APID_HMI_SCIENCE_1 		400
