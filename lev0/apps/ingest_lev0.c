@@ -1673,8 +1673,8 @@ void do_ingest()
     firstfound = 1;			//a file has been seen
     if(get_tlm(xxname, rexmit, higherversion)) { // lev0 extraction of image 
       printk("***Error in lev0 extraction for %s\n", xxname);
-      printk("***Going to abort\n");
-      abortflg = 1;
+      //printk("***Going to abort\n");
+      //abortflg = 1;
     }
     if((stat(stopfile, &stbuf) == 0) || abortflg) { break; } //signal to stop
   }
