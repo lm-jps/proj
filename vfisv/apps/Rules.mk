@@ -24,10 +24,12 @@ VFISV_FOBJ_$(d) := $(filter-out $(EXCLUDE_$(d)),$(VFISV_FOBJ_$(d)))
 MODEXE_USEF_$(d):= $(VFISV_$(d))
 MODEXE_USEF	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
-MODEXE_USEF_SOCK_$(d)	:= $(addsuffix _sock, $(MODEXE_USEF_$(d)))
-MODEXE_USEF_SOCK	:= $(MODEXE_USEF_SOCK) $(MODEXE_USEF_SOCK_$(d))
+# Not available as a sock module - uses drms_server_end_transaction()
+# MODEXE_USEF_SOCK_$(d)	:= $(addsuffix _sock, $(MODEXE_USEF_$(d)))
+# MODEXE_USEF_SOCK	:= $(MODEXE_USEF_SOCK) $(MODEXE_USEF_SOCK_$(d))
 
-EXE_$(d)        := $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
+#EXE_$(d)        := $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
+EXE_$(d)        := $(MODEXE_USEF_$(d))
 OBJ_$(d)	:= $(VFISV_COBJ_$(d)) $(VFISV_FOBJ_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
@@ -35,7 +37,7 @@ CLEAN		:= $(CLEAN) \
 		   $(EXE_$(d)) \
 		   $(DEP_$(d))
 
-TGT_BIN	        := $(TGT_BIN) $(EXE_$(d)))
+TGT_BIN	        := $(TGT_BIN) $(EXE_$(d))
 
 S_$(d)		:= $(notdir $(EXE_$(d)))
 
