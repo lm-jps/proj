@@ -1,4 +1,4 @@
-/*
+ /*
  * cosmic_ray_post - Post processing of cosmic ray series for false positives
  *
  */
@@ -120,7 +120,7 @@ int DoIt(void)
       nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
       omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
       printf("Number of threads run in parallel = %d \n",nthreads);
-
+ 
 
 
   /***********************************************************************************************************/
@@ -366,9 +366,9 @@ printf("begin test loop\n");
 	 for (c=0; c<ct; ++c)
 	   {
 	    		
-	     cosmic_new[ctr]=hits[c];
-	     val_new[ctr]=lev[c];
-	     sig_new[ctr]=sig[c];                                  
+	     cosmic_new[c]=hits[c];
+	     val_new[c]=lev[c];
+	     sig_new[c]=sig[c];                                  
 	    
 	   }
 	       
