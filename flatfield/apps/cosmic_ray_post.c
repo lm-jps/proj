@@ -116,9 +116,10 @@ int DoIt(void)
   int axisout[2]={nx,ny};
 
   
-      int nthreads=1; 
-      nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
-      omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
+      int nthreads;
+      nthreads=omp_get_num_threads();
+      //nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
+      //omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
       printf("Number of threads run in parallel = %d \n",nthreads);
  
 
