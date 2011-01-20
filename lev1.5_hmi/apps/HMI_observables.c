@@ -686,13 +686,13 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
   int  nBadPixels=BadPixels->axis[0]; //number of bad pixels in the list
   int *cosmicraylist=NULL;
   int  ncosmic=0;
+
   if(CosmicRays != NULL)
     {
       cosmicraylist=CosmicRays->data;
       ncosmic=CosmicRays->axis[0];
     } 
   else ncosmic = -1;
-
 
   int x_orig,y_orig,x_dir,y_dir;
   int skip, take, skip_x, skip_y;
@@ -749,6 +749,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
       return 1;
       //exit(EXIT_FAILURE);
     }
+
 
   int skipt[4*2048];
   int taket[4*2048];
@@ -819,6 +820,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
     fscanf(config_file, "%d", &datum);
     id[n_config]=datum;
 
+
     do {
       
       fscanf(config_file, "%s", string);
@@ -883,6 +885,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
     fclose(config_file);
   }
   
+
   //printf("reading done\n");
   
   for (i=0; i<n_config; ++i) if (id[i] == HIMGCFID) idn=i;
@@ -961,7 +964,6 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 	      for (i=(skipt[k*nss+j]+taket[k*nss+j]); i<nss; ++i){ix=i+skip_x; Mask[(y_orig+y_dir*jx)*nx+x_orig+x_dir*ix]=2;}
 	    }
 	}
- 
 
       //NEED TO FILL THE NANs INSIDE THE CROP TABLE
       for(k=0;k<nx*ny;++k)
@@ -971,7 +973,6 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 	      if(isnan(image[k])) Mask[k] = 1;
 	    }
 	}
-
 
       //NEED TO FILL THE BAD PIXELS INSIDE THE CROP TABLE (FROM THE BAD PIXEL LIST)
       if(ncosmic != -1 && nbadperm != -1) nBadPixels = nbadperm;//the cosmic-ray hit list is not missing and NBADPERM is a valid keyword
@@ -1049,7 +1050,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.21 2010/12/10 21:47:24 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.22 2011/01/20 21:23:45 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1527,8 +1528,9 @@ int DoIt(void)
   //Parallelization
   /******************************************************************************************************************/
 
-  nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
-  omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
+  //nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
+  //omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
+  nthreads=omp_get_num_threads();
   printf("NUMBER OF THREADS USED BY OPEN MP= %d\n",nthreads);
 
   //Checking the number of command-line parameters inLev and outLev
@@ -3528,6 +3530,7 @@ int DoIt(void)
 					      rectemp=NULL;
 
 					      rectemp=drms_open_records(drms_env,HMISeriesTemp,&statusA[0]);
+					      
 					      if(statusA[0] == DRMS_SUCCESS && rectemp != NULL && rectemp->n != 0)
 						{
 						  segin = drms_segment_lookupnum(rectemp->records[0],0);
@@ -3566,6 +3569,7 @@ int DoIt(void)
 						}
 					      
 					      image  = Segments[temp]->data;
+
 					      status = MaskCreation(Mask,axisin[0],axisin[1],BadPixels,HIMGCFID[temp],image,CosmicRays,NBADPERM[temp]); //first create the mask of missing pixels
 					      if(status != 0)
 						{
@@ -3896,7 +3900,7 @@ int DoIt(void)
 		      statusA[39]= drms_setkey_int(recLev1d->records[k],HWL4POSS,HWL4POS[temp]);
 		      statusA[40]= drms_setkey_int(recLev1d->records[k],FIDS,FID[temp]);           //second prime key of level 1d series
 		      printf("FID of written record: %d\n",FID[temp]);
-		      statusA[41]= drms_setkey_int(recLev1d->records[k],HCAMIDS,CamId);            //third prime key
+		      statusA[41]= drms_setkey_int(recLev1d->records[k],HCAMIDS,CamId);            //third prime key of level 1d series 
 		      sprint_time(DATEOBS,tobs-DataCadence/2.0,"UTC",1);
 		      statusA[42]= drms_setkey_string(recLev1d->records[k],DATEOBSS,DATEOBS); 
 		      sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);

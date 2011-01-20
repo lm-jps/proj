@@ -946,7 +946,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.14 2010/11/20 00:59:40 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.15 2011/01/20 21:24:02 couvidat Exp $");
 }
 
 
@@ -1043,7 +1043,7 @@ int DoIt(void)
 
   // Main Parameters                                                                                                    
   //*****************************************************************************************************************
-  TIME  AverageTime=720.;//360.;                                     //averaging time for the I,Q,U,V in seconds (normally 12 minutes), MUST BE EQUAL TO TREC_STEP OF THE LEVEL 1p SERIES              
+  TIME  AverageTime=5760.;//720.;//360.;                                     //averaging time for the I,Q,U,V in seconds (normally 12 minutes), MUST BE EQUAL TO TREC_STEP OF THE LEVEL 1p SERIES              
   int   NumWavelengths=6;                                            //maximum number of possible values for the input WaveLengthID parameter
   int   MaxNumFiltergrams=72;                                        //maximum number of filtergrams in an observable sequence
   int   TempIntNum;                                                  //number of points requested for temporal interpolation (WARNING: MUST BE AN EVEN NUMBER ONLY!!!!!)
@@ -1337,8 +1337,9 @@ int DoIt(void)
   /******************************************************************************************************************/
 
   int  nthreads;
-  nthreads=omp_get_num_procs();                                          //number of threads supported by the machine where the code is running
-  omp_set_num_threads(nthreads);                                         //set the number of threads to the maximum value
+  //nthreads=omp_get_num_procs();                                          //number of threads supported by the machine where the code is running
+  //omp_set_num_threads(nthreads);                                         //set the number of threads to the maximum value
+  nthreads=omp_get_num_threads();
   printf("NUMBER OF THREADS USED BY OPENMP= %d\n",nthreads);
 
 
@@ -1433,12 +1434,14 @@ int DoIt(void)
    if(QuickLook == 1)                                                //Quick-look data
      { 
        if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
-       else strcpy(HMISeriesLev1p,"hmi.S_360s_nrt");
+       if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s_nrt");
+       if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"hmi.S_5760s_nrt");
      }
    else                                                               //Definitive Data
      {
        if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s");
-       else strcpy(HMISeriesLev1p,"hmi.S_360s");
+       if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s");
+       if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"hmi.S_5760s");
      }
 
   //the requested time range [timeBegin,timeEnd] must be increased to take into account

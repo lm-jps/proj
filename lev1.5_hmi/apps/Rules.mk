@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-GSLEXE_$(d)	:= $(addprefix $(d)/, HMI_observables lookup phasemaps HMIfilters Leka HMI_IQUV_averaging smoothing HMI_Simulate_Doppler phasemaps_old HMI_observables2 HMI_IQUV_averaging2 phasemaps2 phasemaps_test phasemaps_FeI phasemaps_test_doublegaussian phasemaps_test_voigt HMI_observables_arta correction_velocities)
+GSLEXE_$(d)	:= $(addprefix $(d)/, HMI_observables lookup phasemaps HMIfilters Leka HMI_IQUV_averaging smoothing HMI_Simulate_Doppler phasemaps_old HMI_observables2 HMI_IQUV_averaging2 phasemaps2 phasemaps_test phasemaps_FeI phasemaps_test_doublegaussian phasemaps_test_voigt HMI_observables_arta correction_velocities ingest_lookup ingest_core_intensity)
 GSLOBJ_$(d)	:= $(GSLEXE_$(d):%=%.o) 
 
 MODEXE		:= $(MODEXE) $(GSLEXE_$(d))
