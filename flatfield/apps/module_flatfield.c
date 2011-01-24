@@ -14,6 +14,7 @@
 char *module_name  = "module_flatfield";    //name of the module
 
 #define kRecSetIn      "input_series" //name of the series containing the input filtergrams
+#define kRecSetOut      "cosmic_ray_series" //name of the series containing the output series for cosmic rays // optional
 #define kDSCosmic      "cosmic_rays" //name of the cosmic ray series
 #define kDSFlatfield      "flatfield" 
 #define cadence_name "cadence"  //cadence in sec
@@ -30,6 +31,7 @@ char *module_name  = "module_flatfield";    //name of the module
 ModuleArgs_t module_args[] =        
 {
      {ARG_STRING, kRecSetIn, "",  "Input data series."},
+     {ARG_STRING, kRecSetOut, "default",  "Cosmic ray output series."},
      {ARG_INT, kDSCosmic, "0", "Cosmic rays flag"},
      {ARG_INT, kDSFlatfield, "0", "Flatfield flag"},
      {ARG_INT, cadence_name, "0", "Cadence in sec"},
@@ -91,6 +93,9 @@ int DoIt(void)
 #include "module_flatfield_const.h"
 
   const char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL); //cmdparams is defined in jsoc_main.h
+  const char *cosmic_ray_series = cmdparams_get_str(&cmdparams, kRecSetOut, NULL); //cmdparams is defined in jsoc_main.h
+  if (strcmp(cosmic_ray_series, "default") == 0){cosmic_ray_series=filename_cosmic; }
+
   int cosmic_flag=cmdparams_get_int(&cmdparams, kDSCosmic, NULL);
   int flatfield_flag=cmdparams_get_int(&cmdparams, kDSFlatfield, NULL);
   int cadence=cmdparams_get_int(&cmdparams, cadence_name, NULL);
@@ -273,15 +278,15 @@ int DoIt(void)
   /*CHECK WHETHER THE COSMIC RAY OUTPUT SERIES EXIST                                                                    */
   /***********************************************************************************************************/
     
-       drms_series_exists(drms_env, filename_cosmic, &status);
+      drms_series_exists(drms_env, cosmic_ray_series, &status);
       if (status == DRMS_ERROR_UNKNOWNSERIES)
 	{
-	  printf("Cosmic ray series %s doesn't exist\n",filename_cosmic);       //if the output series does not exit
+	  printf("Cosmic ray series %s doesn't exist\n",cosmic_ray_series);       //if the output series does not exit
 	  exit(EXIT_FAILURE);                                        //we exit the program
 	} 
       if (status == DRMS_SUCCESS)
 	{
-	  printf("Cosmic ray series %s exists.\n",filename_cosmic);
+	  printf("Cosmic ray series %s exists.\n",cosmic_ray_series);
 	}
   //**************************************************************************************************************/
 
@@ -631,7 +636,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
    
 	  for (k=0; k<nRecs; ++k){present[k]=1; index[k]=k;}  //loop over all filtergrams: search for valid filtergrams
 	  printf("number of filtergrams %d\n", nRecs);
- 	  dataout = drms_create_records(drms_env,nRecs,filename_cosmic,DRMS_PERMANENT,&stat); //create ALL cosmic_ray records
+ 	  dataout = drms_create_records(drms_env,nRecs,(char *)cosmic_ray_series,DRMS_PERMANENT,&stat); //create ALL cosmic_ray records
 
 	//check each forward and backward pair of images for identity
 	//check for wavelength, polarization,  P-angle, center, and solar radius identity, and for time difference being nominal cadence
