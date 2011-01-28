@@ -389,7 +389,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       data     = drms_open_records(drms_env,query0,&stat);
       if (data == NULL || stat != 0 || data->n == 0){printf("can not open records\n"); exit(EXIT_FAILURE);}
 
-      drms_stage_records(data, 0, 1); //added follwoing the recommendation of Phil
+      drms_stage_records(data, 1, 0); // stage needed records from tape and wait until ready.
 
   int nRecs=data->n;
   printf("number of records %d\n", nRecs);
