@@ -1050,7 +1050,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.22 2011/01/20 21:23:45 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.23 2011/01/31 21:57:08 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1530,7 +1530,7 @@ int DoIt(void)
 
   //nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
   //omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
-  nthreads=omp_get_num_threads();
+  nthreads=omp_get_max_threads();
   printf("NUMBER OF THREADS USED BY OPEN MP= %d\n",nthreads);
 
   //Checking the number of command-line parameters inLev and outLev
@@ -5935,6 +5935,10 @@ int DoIt(void)
 	      else
 		{
 		  printf("Warning: creating empty lev1.5 record\n");
+
+		  if(CamId  == LIGHT_SIDE)  camera=1; //side camera
+		  if(CamId  == LIGHT_FRONT) camera=2; //front camera
+
 		  QUALITY= QUALITY | QUAL_NODATA;
 		  statusA[0] = drms_setkey_time(recLev15a->records[0],TRECS,TargetTime);               //TREC is the slot time
 		  //statusA[1] = drms_setkey_time(recLev15a->records[0],TOBSS,tobs);               //TOBS is the observation time
