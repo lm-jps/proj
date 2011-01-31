@@ -1050,7 +1050,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.23 2011/01/31 21:57:08 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.24 2011/01/31 23:07:36 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -5944,23 +5944,38 @@ int DoIt(void)
 		  //statusA[1] = drms_setkey_time(recLev15a->records[0],TOBSS,tobs);               //TOBS is the observation time
 		  statusA[2] = drms_setkey_int(recLev15a->records[0],CAMERAS,camera);            
 		  statusA[3] = drms_setkey_int(recLev15a->records[0],QUALITYS,QUALITY); 
+		  sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);
+		  statusA[4]= drms_setkey_string(recLev15a->records[0],DATES,DATEOBS); 
+
 		  statusA[0] = drms_setkey_time(recLev15b->records[0],TRECS,TargetTime);               //TREC is the slot time
 		  //statusA[1] = drms_setkey_time(recLev15b->records[0],TOBSS,tobs);               //TOBS is the observation time
 		  statusA[2] = drms_setkey_int(recLev15b->records[0],CAMERAS,camera);            
 		  statusA[3] = drms_setkey_int(recLev15b->records[0],QUALITYS,QUALITY); 
+		  sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);
+		  statusA[4]= drms_setkey_string(recLev15b->records[0],DATES,DATEOBS); 
+
 		  statusA[0] = drms_setkey_time(recLev15c->records[0],TRECS,TargetTime);               //TREC is the slot time
 		  //statusA[1] = drms_setkey_time(recLev15c->records[0],TOBSS,tobs);               //TOBS is the observation time
 		  statusA[2] = drms_setkey_int(recLev15c->records[0],CAMERAS,camera);            
 		  statusA[3] = drms_setkey_int(recLev15c->records[0],QUALITYS,QUALITY); 
+		  sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);
+		  statusA[4]= drms_setkey_string(recLev15c->records[0],DATES,DATEOBS); 
+
 		  statusA[0] = drms_setkey_time(recLev15d->records[0],TRECS,TargetTime);               //TREC is the slot time
 		  //statusA[1] = drms_setkey_time(recLev15d->records[0],TOBSS,tobs);               //TOBS is the observation time
 		  statusA[2] = drms_setkey_int(recLev15d->records[0],CAMERAS,camera);            
 		  statusA[3] = drms_setkey_int(recLev15d->records[0],QUALITYS,QUALITY); 
+		  sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);
+		  statusA[4]= drms_setkey_string(recLev15d->records[0],DATES,DATEOBS); 
+
 		  statusA[0] = drms_setkey_time(recLev15e->records[0],TRECS,TargetTime);               //TREC is the slot time
 		  //statusA[1] = drms_setkey_time(recLev15e->records[0],TOBSS,tobs);               //TOBS is the observation time
 		  statusA[2] = drms_setkey_int(recLev15e->records[0],CAMERAS,camera);            
 		  statusA[3] = drms_setkey_int(recLev15e->records[0],QUALITYS,QUALITY); 
-		  
+		  sprint_time(DATEOBS,CURRENT_SYSTEM_TIME,"UTC",1);
+		  statusA[4]= drms_setkey_string(recLev15e->records[0],DATES,DATEOBS); 
+
+
 		  status=drms_close_records(recLev15a,DRMS_INSERT_RECORD);
 		  status=drms_close_records(recLev15b,DRMS_INSERT_RECORD);
 		  status=drms_close_records(recLev15c,DRMS_INSERT_RECORD);
