@@ -351,7 +351,7 @@ if (!$err)
                # directory is the parent of the code root directory.
                if (-e kRootDir . kSuFlagFile)
                {
-                  my($cvscmd) = "cvs update -A " . kRootDir . kSuFlagFile;
+                  my($cvscmd) = "cvs update -A " . kRootDir . kSuFlagFile . " " . kRootDir . "jsoc_sync.pl " . kRootDir . "jsoc_update.pl";
 
                   if (CallCVS($cvscmd))
                   {
