@@ -104,7 +104,7 @@ if ($wdupdate != 1)
 
 # First, synchronize with CVS repository
 print STDOUT "####### Start cvs update ####################\n";
-$synccmd = "(cd $lwd; jsoc_sync.pl -l$CVSLOG)";
+$synccmd = "(cd $lwd; /home/jsoc/jsoc_sync.pl -l$CVSLOG)";
 print "Calling '$synccmd'.\n";
 system($synccmd);
 
