@@ -99,6 +99,7 @@ use constant kRootDir => "JSOC/";
 use constant kLocDir => "localization/";
 use constant kTmpDir => "/tmp/chkout/";
 use constant kTypeFile => "dlset.txt";
+use constant kSuFlagFile => "suflag.txt";
 
 
 my($arg);
@@ -116,8 +117,10 @@ my($xmldata); # reference to hash array
 my($dltype);
 my($version);
 my($stfile);
+my($stfileold);
 my($stcotype);
 my($stfspec);
+my($compatmode);
 
 # Don't allow more than one version of this file to run concurrently to avoid race conditions.
 unless (flock(DATA, LOCK_EX | LOCK_NB)) 
@@ -126,7 +129,7 @@ unless (flock(DATA, LOCK_EX | LOCK_NB))
    exit(1);
 }
 
-@core = qw(base/cfortran.h base/foundation.h base/jsoc.h base/jsoc_version.h base/mypng.h base/Rules.mk base/drms base/export base/libs base/sums base/util configure configproj.pl customizemake.pl moreconfigure.pl getmachtype.pl doc jsoc_update.pl make_basic.mk Makefile make_jsoc.pl README Rules.mk jsoc_sync.pl target.mk build);
+@core = qw(base/cfortran.h base/foundation.h base/jsoc.h base/jsoc_version.h base/mypng.h base/Rules.mk base/drms base/export base/libs base/sums base/util configure configproj.pl customizemake.pl moreconfigure.pl getmachtype.pl doc make_basic.mk Makefile make_jsoc.pl README Rules.mk target.mk build);
 @netonly = qw(config.local.template gen_init.csh gen_sumcf.csh seed_sums.c netdrms_setup.pl getuid.c proj/example proj/myproj proj/cookbook);
 @sdponly = qw(base/local proj configsdp.txt customizedefs.pl config.local.sutemplate CM);
 
@@ -134,6 +137,7 @@ $err = 0;
 $cotype = kCoSdp;
 $dltype = kDlCheckout;
 $version = "";
+$compatmode = 0;
 
 while ($arg = shift(@ARGV))
 {
@@ -222,11 +226,13 @@ if (!$err)
       my($cdir) = File::Spec->catdir($ENV{'PWD'});
 
       $stfile = kLocDir . kTypeFile;
+      $stfileold = kSuFlagFile;
 
       if ($cdir !~ /$rootdir\s*$/)
       {
          # Assume that the current directory is the parent of the JSOC code tree.
-         $stfile = kRootDir . $stfile
+         $stfile = kRootDir . $stfile;
+         $stfileold = kRootDir . $stfileold;
       }
    }
 
@@ -248,6 +254,22 @@ if (!$err)
          $stfspec = $line;
 
          close(STFILE);
+      }
+      elsif (!(-e $stfile))
+      {
+         # Backward compatibility for previous versions of the cvs tree.
+         if (-e $stfileold)
+         {
+            # Assume old sdp tree.
+            $cotype = kCoSdp;
+         }
+         else
+         {
+            # Assume old net tree.
+            $cotype = kCoNetDRMS;
+         }
+
+         $compatmode = 1;
       }
       else
       {
@@ -321,6 +343,27 @@ if (!$err)
             if ($err)
             {
                print STDERR "Unable to $dltype CVS tree.\n";
+            }
+            elsif ($compatmode)
+            {
+               # Must remove kSuFlagFile if it was present.
+               # compatmode is used only during an update, so the current
+               # directory is the parent of the code root directory.
+               if (-e kRootDir . kSuFlagFile)
+               {
+                  my($cvscmd) = "cvs update -A " . kRootDir . kSuFlagFile;
+
+                  if (CallCVS($cvscmd))
+                  {
+                     print STDERR "Unable to run $cvscmd.\n";
+                     $err = 1;
+                  }
+                  elsif (-e kRootDir . kSuFlagFile || -e kRootDir . "jsoc_sync.pl" || -e kRootDir . "jsoc_update.pl")
+                  {
+                     print STDERR "Unable to delete old suflag.txt, jsoc_sync.pl, or jsoc_update.pl\n";
+                     $err = 1;
+                  }
+               }
             }
          }
 
