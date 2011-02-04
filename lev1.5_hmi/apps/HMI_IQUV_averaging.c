@@ -946,7 +946,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.15 2011/01/20 21:24:02 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.16 2011/02/04 17:19:07 couvidat Exp $");
 }
 
 
@@ -1043,7 +1043,7 @@ int DoIt(void)
 
   // Main Parameters                                                                                                    
   //*****************************************************************************************************************
-  TIME  AverageTime=5760.;//720.;//360.;                                     //averaging time for the I,Q,U,V in seconds (normally 12 minutes), MUST BE EQUAL TO TREC_STEP OF THE LEVEL 1p SERIES              
+  TIME  AverageTime=720.;//5760.;//720.;//360.;                                     //averaging time for the I,Q,U,V in seconds (normally 12 minutes), MUST BE EQUAL TO TREC_STEP OF THE LEVEL 1p SERIES              
   int   NumWavelengths=6;                                            //maximum number of possible values for the input WaveLengthID parameter
   int   MaxNumFiltergrams=72;                                        //maximum number of filtergrams in an observable sequence
   int   TempIntNum;                                                  //number of points requested for temporal interpolation (WARNING: MUST BE AN EVEN NUMBER ONLY!!!!!)
@@ -1107,7 +1107,7 @@ int DoIt(void)
   TIME  tobs;					                     
 
   int combine;                                                       //do we need to combine the front and side camera to produce the desired output? 
-  int ThresholdPol=TempIntNum-2;                                     //minimum number of filtergrams to use to perform the temporal interpolation (!!!!!WARNING!!!! NEED TO BE SET MORE CAREFULLY)
+  int ThresholdPol=TempIntNum-2;                                     //minimum number of filtergrams to use to perform the temporal averaging (!!!!!WARNING!!!! NEED TO BE SET MORE CAREFULLY)
   int npol=Npolin;
   int npolout=4;                                                     //4 polarizations produced (I,Q,U, and V)
   int fsn;
@@ -1339,7 +1339,7 @@ int DoIt(void)
   int  nthreads;
   //nthreads=omp_get_num_procs();                                          //number of threads supported by the machine where the code is running
   //omp_set_num_threads(nthreads);                                         //set the number of threads to the maximum value
-  nthreads=omp_get_num_threads();
+  nthreads=omp_get_max_threads();
   printf("NUMBER OF THREADS USED BY OPENMP= %d\n",nthreads);
 
 
@@ -2105,7 +2105,7 @@ int DoIt(void)
     }
   for(i=0;i<nTime;++i)
     {
-      source[i] = (char *)malloc(12000*sizeof(char));                       //WARNING: MAKE SURE 12000 IS ENOUGH....
+      source[i] = (char *)malloc(32000*sizeof(char));                       //WARNING: MAKE SURE 12000 IS ENOUGH....
       if(source[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to source[%d]\n",i);
@@ -3662,7 +3662,8 @@ int DoIt(void)
 	      arrLev1p[i]->bzero=segout->bzero;
 	      arrLev1p[i]->bscale=segout->bscale; //because BSCALE in the jsd file is not 1
 	      arrLev1p[i]->israw=0;
-	      drms_segment_write(segout,arrLev1p[i],0);        //write the file containing the data (WE ASSUME THAT imagesout ARE IN THE ORDER I,Q,U,V AND LCP followed by RCP)		  
+	      drms_segment_write(segout,arrLev1p[i],0);        //write the file containing the data (WE ASSUME THAT imagesout ARE IN THE ORDER I,Q,U,V AND LCP followed by RCP)		
+  
 	      //call Keh-Cheng's functions for the statistics (NB: this function avoids NANs, but other than that calculates the different quantities on the ENTIRE image)
 	      status=fstats(axisout[0]*axisout[1],imagesout[i],&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
 	      if(status != 0)
@@ -3679,7 +3680,7 @@ int DoIt(void)
 	      statusA[7]= drms_setkey_int(recLev1p->records[timeindex],TOTVALSS[it*npolout+i],axisout[0]*axisout[1]);
 	      statusA[8]= drms_setkey_int(recLev1p->records[timeindex],DATAVALSS[it*npolout+i],ngood);
 	      statusA[9]= drms_setkey_int(recLev1p->records[timeindex],MISSVALSS[it*npolout+i],axisout[0]*axisout[1]-ngood);
-	     
+
 	      image=arrLev1p[i]->data;
 	      for(ii=0;ii<axisout[0]*axisout[1];++ii)
 		{
@@ -3688,7 +3689,7 @@ int DoIt(void)
 		  distance = sqrt(((float)row-Y0AVG[timeindex])*((float)row-Y0AVG[timeindex])+((float)column-X0AVG[timeindex])*((float)column-X0AVG[timeindex])); //distance in pixels
 		  if(distance > 0.99*RSUNint[timeindex]) image[ii]=NAN;
 		}
-	      
+
 	      status=fstats(axisout[0]*axisout[1],imagesout[i],&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
 	      if(status != 0)
 		{
@@ -3701,7 +3702,6 @@ int DoIt(void)
 	      statusA[4]= drms_setkey_float(recLev1p->records[timeindex],DATARMSS2[it*npolout+i],(float)sigma); 
 	      statusA[5]= drms_setkey_float(recLev1p->records[timeindex],DATASKEWS2[it*npolout+i],(float)skewness);
 	      statusA[6]= drms_setkey_float(recLev1p->records[timeindex],DATAKURTS2[it*npolout+i],(float)kurtosis);
-
 
 	      TotalStatus=0;
 	      for(ii=0;ii<10;++ii) TotalStatus+=statusA[ii];
