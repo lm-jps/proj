@@ -1050,7 +1050,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.24 2011/01/31 23:07:36 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.25 2011/02/08 21:44:26 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1234,7 +1234,7 @@ int DoIt(void)
   char  jsocverss[MaxNString];
   char  **HWLTNSET=NULL;
   char  TargetISS[]="CLOSED";
-  char  source[3000];
+  char  source[32000];
   char  recnums[MaxNString];
 
   int  *keyL=NULL;
