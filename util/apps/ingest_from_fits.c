@@ -215,10 +215,10 @@ ModuleArgs_t module_args[] =
 
 int DoIt(void)
   {
-  char *in = params_get_str(&cmdparams, "in");
-  char *ds = params_get_str(&cmdparams, "ds");
-  char *map = params_get_str(&cmdparams, "map");
-  char *primekey = params_get_str(&cmdparams, "primekey");
+  const char *in = params_get_str(&cmdparams, "in");
+  const char *ds = params_get_str(&cmdparams, "ds");
+  const char *map = params_get_str(&cmdparams, "map");
+  const char *primekey = params_get_str(&cmdparams, "primekey");
   int printjsd = params_isflagset(&cmdparams, "j");
   int wantcreate = params_isflagset(&cmdparams, "c");
   int haveseriesname =  strcmp(ds, "NOT_SPECIFIED") != 0;
@@ -246,15 +246,17 @@ int DoIt(void)
 
   data = drms_fitsrw_read(drms_env, in, readraw, &keywords, &status);
   if (status || !keywords)
-    DIE("No keywords found");
+  {
+     DIE("No keywords found");
+  }
 
   if (wantjsd)
     {
     char *pjsd = jsd;
     char keyname[DRMS_MAXNAMELEN];
     char *colon;
-    char *note;
-    int bitpix, iaxis, naxis, dims[10];
+    DRMS_Type_t datatype;
+    int iaxis, naxis, dims[10];
     double bzero, bscale;
 
     // build jsd in internal string
@@ -272,43 +274,23 @@ int DoIt(void)
   
     pjsd += sprintf(pjsd, "#===== Keywords\n");
   
+    // drms_fitsrw_read() does not place reserved fits keywords in the keywords container.
+    // The BITPIX, NAXIS, BLANK, BZERO, BSCALE, SIMPLE, EXTEND values are copied or
+    // set in various fields in the in the DRMS_Array_t struct returned. END is dropped.
+    // Another function, fitsrw_read(), WILL put every FITS keyword into the keywords
+    // container, but it does not convert their names into DRMS-compatible keyword names, 
+    // unlike drms_fitsrw_read().
+    datatype = data->type;
+    naxis = data->naxis;
+    memcpy(dims, data->axis, sizeof(int) * naxis);
+    bzero = data->bzero;
+    bscale = data->bscale;
+
     hiter_new (&hit, keywords);
     while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
       {
       strcpy(keyname, key->info->name);
-      // Special actions for FITS basic structure
-      if (strcmp(keyname, "SIMPLE") == 0) continue;
-      if (strcmp(keyname, "EXTEND") == 0) continue;
-      if (strcmp(keyname, "END") == 0) continue;
   
-      // Special actions for external data representation
-      if (strcmp(keyname, "BITPIX") == 0)
-        {
-        bitpix = drms2int(key->info->type, &key->value, NULL);
-        continue;
-        }
-      if (strcmp(keyname, "NAXIS") == 0)
-        {
-        naxis = drms2int(key->info->type, &key->value, NULL);
-        continue;
-        }
-      if (strncmp(keyname, "NAXIS", 5) == 0 && isdigit(keyname[5]))
-        {
-        dims[keyname[5] - '0' - 1] = drms2int(key->info->type, &key->value, NULL);
-        continue;
-        }
-      if (strcmp(keyname, "BLANK") == 0) continue;
-      if (strcmp(keyname, "BZERO") == 0)
-        {
-        bzero = drms2double(key->info->type, &key->value, NULL);
-        continue;
-        }
-      if (strcmp(keyname, "BSCALE") == 0)
-        {
-        bscale = drms2double(key->info->type, &key->value, NULL);
-        continue;
-        }
-
       colon = index(key->info->description, ':');
       // check for lllegal or reserved DRMS names 
       // In this case the FITS Keyword structure note section will contain the
@@ -362,19 +344,19 @@ int DoIt(void)
         }
       pjsd += sprintf(pjsd, "\"%s\"\n", key->info->description);
       }
+
+    hiter_free(&hit);
   
     pjsd += sprintf(pjsd, "#======= Segments =======\n");
-    pjsd += sprintf(pjsd, "Data: array, variable, %s, %d, ",
-      (bitpix == -64 ? "double" : 
-      (bitpix == -32 ? "float"  :
-      (bitpix == 8 ? "char" :
-      (bitpix == 16 ? "short" :
-      (bitpix == 32 ? "int" :
-      (bitpix == 64 ? "longlong" : "UNKNOWN")))))), naxis);
+    pjsd += sprintf(pjsd, "Data: array, variable, %s, %d, ", drms_type2str(datatype), naxis);
+
     for (iaxis = 0; iaxis < naxis; iaxis++)
       pjsd += sprintf(pjsd, "%d, ", dims[iaxis]);
     pjsd += sprintf(pjsd, "\"\", fits, \"%s\", %f, %f, \"%s\"\n", 
-      (bitpix > 0 ? "compress Rice" : ""), bzero, bscale, in);
+                    (datatype != DRMS_TYPE_FLOAT && 
+                     datatype != DRMS_TYPE_DOUBLE && 
+                     datatype != DRMS_TYPE_LONGLONG) ? "compress Rice" : "",
+                    bzero, bscale, in);
     pjsd += sprintf(pjsd, "#======= End JSD =======\n");
 
     if (printjsd)
@@ -407,7 +389,9 @@ int DoIt(void)
       if (*line == '#')
         continue;
       if (sscanf(line,"%s%s%s", newname, oldname, action) != 3)
-        DIE("A mapfile line does not contain 3 words\n");
+      {
+         DIE("A mapfile line does not contain 3 words\n");
+      }
       for (imap=0; imap<nmap; imap++)
         if (strcmp(oldname, oldnames[imap]) == 0)
           {
@@ -420,7 +404,9 @@ int DoIt(void)
       if (imap == nmap) // new name set found
         {
         if (nmap >= MAXMAPLEN)
-          DIE("Too many mapped keywords, increase MAXMAPLEN\n");
+        {
+           DIE("Too many mapped keywords, increase MAXMAPLEN\n");
+        }
         newnames[nmap] = strdup(newname);
         oldnames[nmap] = strdup(oldname);
         actions[nmap] = strdup(action);
@@ -434,14 +420,22 @@ int DoIt(void)
     {
     DRMS_Record_t *template;
     if (!haveseriesname || !haveprime)
-      DIE("Cant create series without ds and primekey args.\n");
+    {
+       DIE("Cant create series without ds and primekey args.\n");
+    }
     if (drms_series_exists(drms_env , ds, &status))
-      DIE("Cant create existing series\n");
+    {
+       DIE("Cant create existing series\n");
+    }
     template = drms_parse_description(drms_env, jsd);
     if (template==NULL)
-      DIE("Failed to parse\n");
+    {
+       DIE("Failed to parse\n");
+    }
     if (drms_create_series(template, 0))
-      DIE("Failed to create series.\n");
+    {
+       DIE("Failed to create series.\n");
+    }
     drms_free_record_struct(template);
     free(template);
     fprintf(stderr,"Series %s created.\n", ds);
@@ -454,10 +448,14 @@ int DoIt(void)
     DRMS_RecordSet_t *rs;
     DRMS_Record_t *rec;
     if (!drms_series_exists(drms_env , ds, &status))
-      DIE("Series does not exist, cant insert record\n");
+    {
+       DIE("Series does not exist, cant insert record\n");
+    }
     rs = drms_create_records(drms_env, 1, ds, DRMS_PERMANENT, &status);
     if (status)
-      DIE("Could not create new records in series");
+    {
+       DIE("Could not create new records in series");
+    }
     rec = rs->records[0];
     hiter_new (&hit, keywords);
     while ( key = (DRMS_Keyword_t *)hiter_getnext(&hit) )
@@ -486,10 +484,18 @@ int DoIt(void)
           }
         }
       }
+
+    hiter_free(&hit);
     status = drms_segment_write(drms_segment_lookupnum(rec,0), data, 0);
+
     if (status)
+    {
       DIE("Could not write record");
+    }
     drms_close_records(rs, DRMS_INSERT_RECORD);
     }
+
+  drms_free_array(data);
+  hcon_destroy(&keywords);
   return (DRMS_SUCCESS);
   }
