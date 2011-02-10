@@ -72,8 +72,9 @@ void apod_circ(float rad, float nb, float offx, float offy, float *vd);
 int get_flat(char *query, int camera, float *flatfield, float *offpoint, 
 	     short *bad);
 
-//int get_offpoint(TIME t_0, int camera, float *offpoint, long long *recnum);
-int get_latest_record(TIME t_0, int camera, const char *fname, const char *segname, float *offpoint, long long *recnum, int *focus);
+int get_latest_bad(TIME t_0, int camera, const char *fname, const char *segname, short *bad, long long *recnum);
+
+int get_latest_flat(TIME t_0, int camera, const char *fname, const char *segname, float *offpoint, long long *recnum, int *focus);
 
 
 
@@ -108,7 +109,7 @@ int DoIt(void)
   const char *datum=cmdparams_get_str(&cmdparams, datumn, NULL);
  
 
-  if (fid < minfid || fid > maxfid){printf("Not an observable FID\n"); exit(EXIT_FAILURE);}
+  if (fid < minfid || fid > maxfid){printf("Not an observable FID\n"); return 1;}
 
   int  status, status1, status2; 
   int status0=DRMS_SUCCESS;
@@ -143,7 +144,7 @@ int DoIt(void)
 
 
   int i,j,k,km1,c,ki,iii,jjj,kkk;                                                   //loop variables
-
+  int signid=0;
 
  
  //********************************************************************************************************************************/
@@ -240,7 +241,7 @@ int DoIt(void)
   cosmicsig=(float *)(malloc(nx*ny*sizeof(float)));
   float diff_forward, diff_backward;
 
-
+  int fsnarr[3]={0 , 0, 0};
 
   unsigned char *cmarr=(unsigned char *)(malloc(nx*ny*sizeof(unsigned char)));
 
@@ -250,7 +251,7 @@ int DoIt(void)
   TIME tobs_link[2];
   //long long recnum[6];
   //long long recnum_ref[6];
-  long long recnum_offpoint;
+  long long recnum_offpoint, recnum_badpix;
   struct rotpar rot_cur;
   struct rotpar rot_new;
 
@@ -267,7 +268,7 @@ int DoIt(void)
       if (status == DRMS_ERROR_UNKNOWNSERIES)
 	{
 	  printf("Output series %s doesn't exist\n",filename_flatfield_fid);       //if the output series does not exit
-	  exit(EXIT_FAILURE);                                        //we exit the program
+	  return 1;                                        //we exit the program
 	} 
       if (status == DRMS_SUCCESS)
 	{
@@ -282,7 +283,7 @@ int DoIt(void)
       if (status == DRMS_ERROR_UNKNOWNSERIES)
 	{
 	  printf("Cosmic ray series %s doesn't exist\n",cosmic_ray_series);       //if the output series does not exit
-	  exit(EXIT_FAILURE);                                        //we exit the program
+	  return 1;                                        //we exit the program
 	} 
       if (status == DRMS_SUCCESS)
 	{
@@ -293,7 +294,7 @@ int DoIt(void)
 
       //set parallelization parameters
       int nthreads; 
-      nthreads=omp_get_num_threads();
+      nthreads=omp_get_max_threads();
       //nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
       //omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
       printf("Number of threads run in parallel = %d \n",nthreads);
@@ -387,7 +388,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
   
       data     = drms_open_records(drms_env,query0,&stat);
-      if (data == NULL || stat != 0 || data->n == 0){printf("can not open records\n"); exit(EXIT_FAILURE);}
+      if (data == NULL || stat != 0 || data->n == 0){printf("can not open records\n"); return 1;}
 
       drms_stage_records(data, 1, 0); // stage needed records from tape and wait until ready.
 
@@ -588,7 +589,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       else
 	{
 	  printf("Invalid lev1 keywords\n");
-	  exit(EXIT_FAILURE);
+	  return 1;
 	}
 	
      
@@ -644,7 +645,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	
 	  count_filtergram=nRecs;
 
-	  if (count_filtergram >=3){  //if at least 3 filtergrams of this type
+	  //if (count_filtergram >=3){  //if at least 3 filtergrams of this type
 
 	  
 	  printf("filtergram with FID  %d: %d\n", fid, count_filtergram);
@@ -677,7 +678,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 	///read relative flatfield
 
-	status_flatfield_relative=get_latest_record(t_stamp, cam+1, filename_offpoint, segmentname_offpoint, flat_relative, &recnum_offpoint, &focus);
+	status_flatfield_relative=get_latest_flat(t_stamp, cam+1, filename_offpoint, segmentname_offpoint, flat_relative, &recnum_offpoint, &focus);
 
 
 
@@ -729,7 +730,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	  query_flat_ref=flat_default;
 	  printtime();
 
-
+	  printf("count filtergram %d\n", count_filtergram);
 
 	  for (kkk=0; kkk<(count_filtergram+1); ++kkk){ // loop starts at 0
 	  
@@ -783,11 +784,16 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 			    if (status_flatfield ==0)
 			      {
 				printf("Flatfield %s read\n", query_flat);
+
 			      }
 			    else
 
 			      {
 				printf("Failure reading flatfield / Use unity flatfield\n");
+
+				status=get_latest_bad(t_stamp, cam+1, filename_badpix, segmentname_badpix, badpix, &recnum_badpix); //retrieve bad for links a
+				if (status != 0){printf("could not find bad pixel list"); return 1;}
+				else {printf("recnum badpix %ld\n", recnum_badpix);}
 			      }
 		 
 
@@ -812,6 +818,8 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 			if (flatfound == 0) for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)   arrimg[next][jjj][iii]=(float)arrinL0[jjj*nx+iii]*app_flat[jjj*nx+iii]/flat_relative[jjj*nx+iii];      	    
 			if (flatfound != 0) for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)   arrimg[next][jjj][iii]=(float)arrinL0[jjj*nx+iii];
 
+			fsnarr[next]=keyvalue_fsn[kkk];
+
 			keyvalue_flatr[kkk]=flatfound;
 		      }
 		    drms_free_array(arrin0);
@@ -833,11 +841,12 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 			flatrec_index=keyvalue_flatr[index_last]+keyvalue_flatr[index_current]+keyvalue_flatr[index_next]; //==0 if all three flatfields could be retrieved, ==3 if none has been retrieved
 
-			count=0;
+	
 	
 			if (statarr[index_last] < 4 && statarr[index_next] < 4 && (tmind[index_current]-tmind[index_last]) < time_limit && (tmind[index_next]-tmind[index_current]) < time_limit && (flatrec_index == 0 || flatrec_index == 3))
 			  {
-	 #pragma omp parallel 
+			    count=0;
+#pragma omp parallel 
 			    {
 #pragma omp for private(jjj,iii,wlr)	   
 			      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
@@ -845,7 +854,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	
 				  if (rr[jjj*nx+iii] < rad_cosmic_ray)
 				    {
-				      wlr=((float)(keyvalue_wl[km1] % 100)-5.0)/2.0*lambda_sep-keyvalue_vrad[km1]/v_c*lambda0-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))*cos(keyvalue_b0[km1]/180.0*M_PI)/keyvalue_rsun[km1]*cpa.rotcoef0*radsun_mm/v_c*lambda0;
+				      wlr=((float)(keyvalue_wl[km1] % 20)-5.0)/2.0*lambda_sep-keyvalue_vrad[km1]/v_c*lambda0-(cos(keyvalue_p0[km1]/180.*M_PI)*((float)iii-keyvalue_X0[km1])-sin(keyvalue_p0[km1]/180.*M_PI)*((float)jjj-keyvalue_Y0[km1]))*cos(keyvalue_b0[km1]/180.0*M_PI)/keyvalue_rsun[km1]*cpa.rotcoef0*radsun_mm/v_c*lambda0;
 				      limw[jjj*nx+iii]=a1[jjj*nx+iii]*exp(-(wlr-coef3[cam][0])*(wlr-coef3[cam][0])/2.0/w1[jjj*nx+iii]/w1[jjj*nx+iii])+a2[jjj*nx+iii]*exp(-(wlr-coef3[cam][1])*(wlr-coef3[cam][1])/2.0/w2[jjj*nx+iii]/w2[jjj*nx+iii])+cmc[jjj*nx+iii];
 				    }
 				}
@@ -864,7 +873,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 				      diff_backward=arrimg[current][jjj][iii]-arrimg[last][jjj][iii];
 				      diff_forward=arrimg[current][jjj][iii]-arrimg[next][jjj][iii];
 
-				      if (fabs(diff_forward) > (factor[cam]*limw[jjj*nx+iii]) && fabs(diff_backward) > (factor[cam]*limw[jjj*nx+iii])){
+				      if (diff_forward < 0.0 && diff_backward < 0.0) signid=1; else signid=0;
+
+				      if (fabs(diff_forward) > (factor[cam][signid]*limw[jjj*nx+iii]) && fabs(diff_backward) > (factor[cam][signid]*limw[jjj*nx+iii])){
 	     		    
 					if (badpix[jjj*nx+iii]){
 					  if (!isnan(arrimg[last][jjj][iii]) && !isnan(arrimg[current][jjj][iii]) && !isnan(arrimg[next][jjj][iii])){
@@ -874,14 +885,14 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 					      if (diff_forward > 0.0 && diff_backward > 0.0)
 						{
 						  cosmicval[count]=minval(diff_forward, diff_backward);
-						  cosmicsig[count]=cosmicval[count]/limw[jjj*nx+iii];
+						  cosmicsig[count]=fabs(cosmicval[count])/limw[jjj*nx+iii];
 						  ++count; //count number of cosmic rays (using first differences)
 						  cmarr[jjj*nx+iii]=0;
 						}
 					      if (diff_forward < 0.0 && diff_backward < 0.0)
 						{
 						  cosmicval[count]=maxval(diff_forward, diff_backward);
-						  cosmicsig[count]=cosmicval[count]/limw[jjj*nx+iii];
+						  cosmicsig[count]=fabs(cosmicval[count])/limw[jjj*nx+iii];
 						  ++count; //count number of cosmic rays (using first differences)
 						  cmarr[jjj*nx+iii]=0;
 						}
@@ -918,15 +929,18 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	  /////////////////////////////////////////////////////////
 
 		if (cosmic_flag && kkk >= 1){
+		  
+		 
 		  if (present[km1] && keyvalue_fsn[km1] >= fsn_first && keyvalue_fsn[km1] <= fsn_last && time_fl[km1] >= tfirst && time_fl[km1] <= tlast)
 		    {
 		      printf("fsn count %d %d\n", keyvalue_fsn[km1], count);
+		      printf("fsn order %d %d %d\n", fsnarr[last], fsnarr[current],fsnarr[next]);
 
 		      int cosfind, limit_flag;
 		      if (count == -1) cosfind=0; else if (count < limit_cosmic){cosfind=count; limit_flag=0;} else {cosfind=limit_cosmic; limit_flag=1;}
 
 
-			recout = dataout->records[kkk-1];
+			recout = dataout->records[kkk];
 
 			status=drms_setkey_int(recout, keyfsn, keyvalue_fsn[km1]);
 			status=drms_setkey_time(recout, keytobs, time_fl[km1]);
@@ -934,7 +948,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 			status=drms_setkey_int(recout, fidkey, fid);
 			status=drms_setkey_int(recout, keycamera, cam+1);
 			status=drms_setkey_int(recout, keyexmax, limit_flag);
-			status=drms_setkey_float(recout, keylimit, factor[cam]);
+			status=drms_setkey_float(recout, keylimit, factor[cam][0]);
 	
 			drms_keyword_setdate(recout);
 	    
@@ -1118,7 +1132,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	}
 	  }
 	 
-	  }
+	  
 
 	
 
@@ -1178,7 +1192,7 @@ for (j=0; j<ny; ++j){
 
 
     //**************************************************************************************
-    //write out flatfields (original with new T_STOP + updated
+    //write out flatfields
     //**************************************************************************************
   
 
@@ -1188,8 +1202,8 @@ for (j=0; j<ny; ++j){
     printf("query flat %s\n", query_flat);
 
     if (flatfield_flag)
-    write_flatfield_fid(arrout_new, cam+1, recnum_offpoint, t_0, focus, fid, rot_new); 
-
+    status=write_flatfield_fid(arrout_new, cam+1, recnum_offpoint, t_0, focus, fid, rot_new); 
+    if (status != 0){printf("could not write flatfield\n"); return 1;}
 
 
 	  drms_free_array(arrout_new);
@@ -1199,6 +1213,7 @@ for (j=0; j<ny; ++j){
   else 
     {
       printf("No data records found\n");
+      return 1;
     }     
 
     
@@ -1251,6 +1266,5 @@ for (j=0; j<ny; ++j){
 
 
 
-//module_flatfield_256 input_series="su_production.lev1_hmi_test[986331-987330]" cosmic_rays=1
 
 //valgrind --leak-check=full --track-origins=yes --show-reachable=yes module_flatfield_256 input_series="su_production.lev1_hmi_test[986331-986430]" cosmic_rays=1
