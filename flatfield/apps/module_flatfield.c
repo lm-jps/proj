@@ -1,4 +1,50 @@
+/*
+ * module_flatfield - Calculates rotational flatfields (first step) and produces cosmic ray records (first step)
+ *
+ */
 
+/**
+\defgroup module_flatfield module_flatfield - 
+
+\par Synopsis
+\code
+module_flatfield input_series= camera= datum= camera= cadence= cosmic_rays= flatfield= fsn_first= fsn_last= cosmic_ray_series
+\endcode
+
+\details
+
+module_flatfield calculates the rotational flatfield by FID, and produces the cosmic ray records. Both are written to an intermediate series. The flatfield update is produced by module_flatfield_combine, and the cosmic ray series by cosmic_ray_post. If cosmic_ray_series is set to hmi.cosmic_rays, module_flatfield produces the final cosmic ray records directly. 
+
+
+
+\par Options
+
+\par Mandatory arguments:
+
+\li \c input_series="string" where string is the series name of the input level 1 data (hmi.lev1 or hmi.lev1_nrt)
+\li \c camera=cam,  side camera: cam=1, front camera: cam=2
+\li \c fid=fid: observable FID (10054-10159)
+\li \c datum="date" date="yyyy.mm.dd" TAI-day for which the flatfields and cosmic_rays are calculated. End of TAI-day datum is T_START of updated flatfield
+\li \c cadence=cadence: integer number in seconds for the cadence for the framelist that is run (Example: Framelist Mod C, front camera: cadence=45, side camera: cadence=135)
+\li \c cosmic_rays=flag: flag=1 if cosmic ray records should be produced, otherwise flag=0
+\li \c flatfield=flag: flag=1 if rotational flatfield should be produced, otherwise flag=0
+
+\par Optional arguments:
+\li \c cosmic_ray_series="string" where string is the series name of the output cosmic ray series (default is "su_production.cosmic_rays")
+\li \c fsn_first: first FSN for which cosmic ray record is desired, which is included in the flatfield calculation, overrides argument datum: datum still needed for flatfield identification
+\li \c fsn_last: last FSN or which cosmic ray record is desired, which is included in the flatfield calculation, overrides argument datum
+
+
+\par Examples
+
+\b Example 1:
+
+\code
+module_flatfield input_series="hmi.lev1" camera=2 datum="2010.10.09" fid=10059 camera=2 cosmic_rays=1 flatfield=1 cadence=45 
+module_flatfield input_series="hmi.lev1" camera=2 datum="2010.10.09" fid=10059 camera=2 cosmic_rays=1 flatfield=1 cadence=45 fsn_first=12050442 fsn_last=12050459 cosmic_ray_series="hmi.cosmic_rays"
+\endcode
+
+*/
 
 
 #include <stdio.h>
@@ -31,15 +77,16 @@ char *module_name  = "module_flatfield";    //name of the module
 ModuleArgs_t module_args[] =        
 {
      {ARG_STRING, kRecSetIn, "",  "Input data series."},
-     {ARG_STRING, kRecSetOut, "default",  "Cosmic ray output series."},
-     {ARG_INT, kDSCosmic, "0", "Cosmic rays flag"},
-     {ARG_INT, kDSFlatfield, "0", "Flatfield flag"},
-     {ARG_INT, cadence_name, "0", "Cadence in sec"},
-     {ARG_INT, fid_name, "0", "FID"},
-     {ARG_INT, cam_name, "0", "Camera"},
+     {ARG_STRING, datumn, "", "datum string"},
+     {ARG_INT, kDSCosmic, "", "Cosmic rays flag"},
+     {ARG_INT, kDSFlatfield, "", "Flatfield flag"},
+     {ARG_INT, cadence_name, "", "Cadence in sec"},
+     {ARG_INT, fid_name, "", "FID"},
+     {ARG_INT, cam_name, "", "Camera"},
      {ARG_INT, fsnf_name, "0"},
      {ARG_INT, fsnl_name, "2147483647"},
-     {ARG_STRING, datumn},
+     {ARG_STRING, kRecSetOut, "default",  "Cosmic ray output series."},
+     
      {ARG_END}
 };
 
