@@ -8,21 +8,24 @@
 
 \par Synopsis
 \code
-HMI_IQUV_averaging begin= end= wavelength= quicklook= camid= cadence= lev1= npol= size=
+HMI_IQUV_averaging begin= end= wavelength= quicklook= camid= cadence= lev1= npol= size= average=
 \endcode
 
 \details
 
-HMI_IQUV_averaging creates 12-min averaged Stokes vector I,Q,U, and V observables (WARNING: the output series names are built-in and the program should not be run without editing and recompiling except for production).
+HMI_IQUV_averaging creates 12-min or 96-min averaged Stokes vector I,Q,U, and V observables (WARNING: the output series names are built-in and the program should not be run without editing and recompiling except for production).
 The code outputs are level 1.5 DRMS records: Stokes vector I, Q, U, and V.
 The code produces these records for all the slotted times in the time interval provided by the user.
 HMI_IQUV_averaging can produce definitive or quick-look (near-real time, nrt) observables.
 
 Depending on the values of the command-line arguments, the outputs of HMI_observables are put in different DRMS series.
+When the average is 12 minutes:
 For IQUV observables obtained from definitive level 1 records and from a standard observable sequence with a 135s cadence, the output DRMS series is hmi.S_720s.
 For IQUV observables obtained from quicklook/nrt level 1 records, the series is hmi.S_720s_nrt.
+When the average is 96 minutes (WARNING: THIS IS NOT A STANDARD OBSERVABLES PRODUCT, AND NO NRT SERIES IS CURRENTLY AVAILABLE):
+For IQUV observables obtained from definitive level 1 records and from a standard observable sequence with a 135s cadence, the output DRMS series is hmi.S_5760s.
 
-Under normal operations, other DRMS modules (HMI_observables, hmi_segment_module and hmi_patch_module) using the output of HMI_IQUV_averaging are run immediately after completion of HMI_IQUV_averaging: for production these two modules should always be called after.
+Under normal operations, for the 12-min average, other DRMS modules (HMI_observables, hmi_segment_module and hmi_patch_module) using the output of HMI_IQUV_averaging are run immediately after completion of HMI_IQUV_averaging: for production these two modules should always be called after.
 
 \par Options
 
@@ -41,6 +44,7 @@ Under normal operations, other DRMS modules (HMI_observables, hmi_segment_module
 The value by default is hmi.lev1 (to be consistent with the default value of quicklook=0).
 \li \c npol=number where number is an integer and is the number of polarizations taken by the observables sequence. With the sequence currently run, npol should be set to 6 (the value by default).
 \li \c size=number where number is an integer and is the number of frames in the observables sequence. With the sequence currently run, size should be set to 36 (the value by default)
+\li \c average=number where number is an integer and is either 12 (the value by default) or 96 (WARNING: even though the code runs for 96-min averages, it has not yet been optimized for this value)
 
 \par Examples
 
@@ -59,7 +63,8 @@ HMI_IQUV_averaging begin="2010.10.1_0:0:0_TAI" end="2010.10.1_2:45:00_TAI" wavel
 \endcode
 
 
-
+\par Versions
+v 1.17: minor correction; Npol replaced by Npolin to avoid some rare occurences of segmentation faults
 
 */
 
@@ -133,6 +138,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define FramelistSizeIn "size"        //size of the framelist
 #define SeriesIn       "lev1"         //series name for the lev1 filtergrams
 #define QuickLookIn    "quicklook"    //quicklook data (yes=1,no=0)? 0 BY DEFAULT
+#define Average        "average"      //average over 12 or 96 minutes? (12 by default)
 
 #define Q_ACS_ECLP 0x2000 //eclipse keyword for the lev1 data
 
@@ -195,6 +201,7 @@ ModuleArgs_t module_args[] =
      {ARG_INT,    FramelistSizeIn,"36", "size of framelist"},
      {ARG_STRING, SeriesIn, "hmi.lev1",  "Name of the lev1 series"},
      {ARG_INT   , QuickLookIn, "0"    ,  "Quicklook data? No=0; Yes=1"},
+     {ARG_INT   , Average, "12"       ,  "Average over 12 or 96 minutes? (12 by default)"},
      {ARG_END}
 };
 
@@ -946,7 +953,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.16 2011/02/04 17:19:07 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.17 2011/02/10 22:19:24 couvidat Exp $");
 }
 
 
@@ -1026,6 +1033,7 @@ int DoIt(void)
   int   Framelistsizein    = cmdparams_get_int(&cmdparams,FramelistSizeIn,NULL);      //size of framelist
   char *inLev1Series       = cmdparams_get_str(&cmdparams,SeriesIn,       NULL);      //name of the lev1 series
   int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,    NULL);      //Quick look data or no? yes=1, no=0
+  int   Averaging          = cmdparams_get_int(&cmdparams,Average,        NULL);      //Average over 12 or 96 minutes? (12 by default)
 
   if(CamId == 0) CamId = LIGHT_SIDE;
   else           CamId = LIGHT_FRONT;
@@ -1038,12 +1046,16 @@ int DoIt(void)
     }
 
 
-  printf("COMMAND LINE PARAMETERS= %s %s %d %d %f %d %d\n",inRecQuery,inRecQuery2,WavelengthID,CamId,DataCadence,Npolin,QuickLook);
+  printf("COMMAND LINE PARAMETERS= %s %s %d %d %f %d %d %d\n",inRecQuery,inRecQuery2,WavelengthID,CamId,DataCadence,Npolin,QuickLook,Averaging);
 
 
   // Main Parameters                                                                                                    
   //*****************************************************************************************************************
-  TIME  AverageTime=720.;//5760.;//720.;//360.;                                     //averaging time for the I,Q,U,V in seconds (normally 12 minutes), MUST BE EQUAL TO TREC_STEP OF THE LEVEL 1p SERIES              
+  TIME  AverageTime;                                                 //averaging time for the I,Q,U,V in seconds (normally 12 minutes), MUST BE EQUAL TO TREC_STEP OF THE LEVEL 1p SERIES              
+  if(Averaging == 12)  AverageTime=720.;
+  else AverageTime=5760.;
+
+
   int   NumWavelengths=6;                                            //maximum number of possible values for the input WaveLengthID parameter
   int   MaxNumFiltergrams=72;                                        //maximum number of filtergrams in an observable sequence
   int   TempIntNum;                                                  //number of points requested for temporal interpolation (WARNING: MUST BE AN EVEN NUMBER ONLY!!!!!)
@@ -1434,14 +1446,24 @@ int DoIt(void)
    if(QuickLook == 1)                                                //Quick-look data
      { 
        if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
-       if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s_nrt");
-       if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"hmi.S_5760s_nrt");
+       else
+	 {
+	   printf("No output series exists for your command-line parameters\n");
+	   return 1;//exit(EXIT_FAILURE);
+	 }
+       //if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s_nrt");
+       //if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"hmi.S_5760s_nrt");
      }
    else                                                               //Definitive Data
      {
        if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s");
-       if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s");
+       //if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s");
        if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"hmi.S_5760s");
+       if(AverageTime != 5760.0 && AverageTime != 720.0)
+	 {
+	   printf("No output series exists for your command-line parameters\n");
+	   return 1;//exit(EXIT_FAILURE);
+	 }
      }
 
   //the requested time range [timeBegin,timeEnd] must be increased to take into account
@@ -3728,7 +3750,7 @@ int DoIt(void)
 	  if(nIndexFiltergram != 0)
 	    {
 	      printf("free arrLev1d\n");
-	      for(i=0;i<npol;++i)
+	      for(i=0;i<Npolin;++i)
 		{
 		  drms_free_array(arrLev1d[i]);
 		  arrLev1d[i]=NULL;
