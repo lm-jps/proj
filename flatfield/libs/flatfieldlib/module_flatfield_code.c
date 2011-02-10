@@ -1,5 +1,5 @@
 
-// test to modify for flat field code R.W. 01-08-2009
+//all functions that are needed to calculate the rotational flatfield
 
 
 
@@ -26,6 +26,7 @@ void tridag(double veca[nx], double vecb[nx], double vecc[nx], double vecr[nx], 
 void mat_mult(double[nx], double[nx], double[nx], double[nx], double[nx], int);
 void printtime();
 void highpass(int, int, double, double[nx][ny]);
+void highpass_2d(int M, int N, double fwhm1, double fwhm2, double phi, double a[nx][ny]);
 void derotation(double, double, double, double, double, double, double *, int, double *);
 void derotation_test(double time, double radius, double cent_x, double cent_y, double p0, double b0, double *rotf);
 
@@ -36,7 +37,7 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
                double deltat)
 {
 
-  int debug=0; // !! debug
+  
  
   double convergence=cpa.convergence;
   int maxiter=cpa.maxiter;
@@ -110,8 +111,8 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
  
 	//void derotation(double radius, double cent_x, double cent_y, double dist, double p0, double b0, double *rot_coef, int order2_rot_coef, double *shift, int nx, int ny){
     	double rota[nx][ny][2];
-	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rota[i][j][0]=rotf[j*nx+i]; //*deltat; !!
-	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rota[i][j][1]=rotf[nx*ny+j*nx+i]; //*deltat; !!rotf contains deltat
+	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rota[i][j][0]=rotf[j*nx+i];
+	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rota[i][j][1]=rotf[nx*ny+j*nx+i]; //rotf contains deltat
 
 
 
@@ -303,21 +304,7 @@ int flatfield(double *rhsp, double *rhsm, short *badpix, int pairs, double *flat
 	} /// end l-loop
 
 
- //debug !!
-	if (debug)
-	  {
-	     printf("write debug\n");
-		      FILE *fileptr;                                                                                                                          
-		      double *aaa;                                                                                                                            
-	     aaa=(double *)(malloc(nx*sizeof(double)));                                                                                              
-	     fileptr = fopen ("/tmp20/richard/interpol/ddcode.bin", "w");                                                                                    
-		      for (j=0; j<ny; ++j){ for (i=0;i<nx;i++){aaa[i]=rhsm[j*nx+i];} fwrite ((char*)(aaa),sizeof(double),nx,fileptr);} 
-	          	          
-	       fclose(fileptr);                                                                                                                            
-		  	free(aaa);
-
-	  }
-
+ 
 
 
 	for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rh_b[i*ny+j]=rh_a[j*nx+i];
@@ -904,7 +891,7 @@ void highpass(int M, int N, double fwhm, double a[nx][ny])
 
     double sigma=fwhm/2.0/sqrt(2.0*log(2.0));
     double scale=1.0/((double)(M*N));
-
+   
 
      //fft(a)
      p = fftw_plan_dft_r2c_2d(M, N, &a[0][0], &ac[0][0], FFTW_ESTIMATE);
@@ -950,6 +937,82 @@ void highpass(int M, int N, double fwhm, double a[nx][ny])
   }
 
 
+void highpass_2d(int M, int N, double fwhm1, double fwhm2, double phi, double a[nx][ny])
+//highpass filter for 2d-array a
+  {
+ 
+    double b[M][N];
+    fftw_complex ac[M][N/2+1], bc[M][N/2+1];
+    fftw_plan p;
+    long i,j;
+    double x,y;
+
+    double sigma1=fwhm1/2.0/sqrt(2.0*log(2.0));
+    double sigma2=fwhm2/2.0/sqrt(2.0*log(2.0));
+
+    double scale=1.0/((double)(M*N));
+    double sumgauss;
+
+     //fft(a)
+     p = fftw_plan_dft_r2c_2d(M, N, &a[0][0], &ac[0][0], FFTW_ESTIMATE);
+     fftw_execute(p);
+     fftw_destroy_plan(p);
+
+     // Gaussian
+     sumgauss=0.0;
+     for (i = 0; i < N; ++i){
+          for (j = 0; j < M; ++j) {
+	    x=cos(phi/180.0*M_PI)*((double)i-(double)M/2.0)-sin(phi/180.0*M_PI)*((double)j-(double)N/2.0);
+	    y=sin(phi/180.0*M_PI)*((double)i-(double)M/2.0)+cos(phi/180.0*M_PI)*((double)j-(double)N/2.0);
+
+	    b[i][j] = exp(-(pow(x,2)/2.0/pow(sigma1,2)+pow(y,2)/2.0/pow(sigma2,2)));
+	    sumgauss=sumgauss+b[i][j];
+            }
+     }
+
+for (i = 0; i < N; ++i){
+  for (j = 0; j < M; ++j){
+    b[i][j]=b[i][j]/sumgauss;
+  }
+ }
+
+
+
+
+     
+     //fft(gaussian)
+     p = fftw_plan_dft_r2c_2d(M, N, &b[0][0], &bc[0][0], FFTW_ESTIMATE);
+     fftw_execute(p);
+     fftw_destroy_plan(p);  
+
+
+     //fft(a)*fft(b)
+     for (i = 0; i < M; ++i){
+          for (j = 0; j < N/2+1; ++j) {
+	    ac[i][j]=ac[i][j]*bc[i][j]*scale;
+          }
+     }
+
+     //  fft(fft(a)*fft(b),1)
+     p = fftw_plan_dft_c2r_2d(M, N, &ac[0][0], &b[0][0], FFTW_ESTIMATE);
+     fftw_execute(p);
+     fftw_destroy_plan(p);
+
+     //  highpass=data-lowpass
+     for (i = 0; i < M; ++i){
+          for (j = 0; j < N; ++j){
+	    a[i][j]=a[i][j]-b[(i+M/2) % M][(j+N/2) % N];
+	  }
+     }
+
+
+    
+
+  }
+
+
+
+
 
 void limb_darkening(double radius, double cent_x, double cent_y, double *b, int order, double *limb_dark)
 {
@@ -964,7 +1027,16 @@ void limb_darkening(double radius, double cent_x, double cent_y, double *b, int 
   for (i=0; i<nx; ++i){
     for (j=0; j<ny; ++j){
       rad=sqrt(pow((double)i-cent_x,2)+pow((double)j-cent_y,2))/radius;
-      if (rad <= 1.0) mu[j*nx+i]=sqrt(1.0-rad*rad); else mu[j*nx+i]=1.0;
+      if (rad >=1.0)
+	{
+	  mu[j*nx+i]=1.0;
+	}
+      else
+	{
+	  if (rad <= 0.998) mu[j*nx+i]=sqrt(1.0-rad*rad);
+	  if (rad > 0.998) mu[j*nx+i]=sqrt(0.002);
+	}
+
       limb_dark[j*nx+i]=0.0;
     }
   }
@@ -983,5 +1055,32 @@ void limb_darkening(double radius, double cent_x, double cent_y, double *b, int 
 
 
 
+
+void apod_circ(float rad, float nb, float offx, float offy, float *vd)               
+{
+  float *rarr;
+  rarr=(float *)(malloc(nx*ny*sizeof(float)));
+  int i, j;
+
+  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) rarr[j*nx+i]=sqrt(((float)i-((float)nx/2+offx))*((float)i-((float)ny/2+offx))+((float)j-((float)nx/2+offy))*((float)j-((float)ny/2+offy)));
+	 
+ 
+  for (j=0; j<ny; ++j){
+    for (i=0; i<nx; ++i){
+      if (rarr[j*nx+i] < rad) 
+	vd[j*nx+i]=1.0;
+
+      if (rarr[j*nx+i] >= rad && rarr[j*nx+i] < (rad+nb))
+	vd[j*nx+i]=0.5*cos(M_PI/nb*(rarr[j*nx+i]-rad))+0.5;
+
+      if (rarr[j*nx+i] >= (rad+nb))
+	vd[j*nx+i]=0.0;
+
+      
+
+    }
+  }
+	  
+}
 
 

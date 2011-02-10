@@ -36,6 +36,8 @@ const double convconst[2]={1e-4, 1e-4};
 const int b_order=5;
 double b_coef[6]={0.34,1.37,-2.04,2.70,-1.94,0.559};   // Neckel and Labs (MDI wavelength), not good for extreme limb;
 
+//static double LDCoef[] = {0.0, 0.4430, 0.1390, 0.041, 0.0125, 0.0019};
+
 //b_coef[0]=0.34; 
 //b_coef[1]=1.37;
 //b_coef[2]=-2.04;
@@ -131,7 +133,7 @@ float cof_comby[12]={0.283009, 0.0545081, 0.235930, 0.0957727, 0.245011, 0.08152
 //float cof[2][6]={{1.22201 ,    0.362697 ,    0.359817 ,   -0.142182 ,   -0.433347 ,   -0.368998}, {0.300682 ,    0.370525,     0.316930 ,    0.164742,   -0.0441823 ,   -0.108697}}; 
 float cof[2][6]={{0.187514, 0.542523, 0.284918, 0.143162,-0.136262,-0.0218554}, {0.311833, 0.400153, 0.205032,0.0928222,-0.00851838, -0.00132237}}; //for filter fwhm = 1.0
 
-const float factor[2]={6.2, 6.2}; 
+const float factor[2][2]={{6.2, 9.3}, {6.2, 9.3}}; 
 const int limit_cosmic=100000;
   
 
@@ -197,7 +199,7 @@ const char *lev1_y0="Y0_LF";
 const char *lev1_vr="OBS_VR";
 
 
-
+// !! checked in version
 
   //series names
 
@@ -216,11 +218,11 @@ char *filename_flatfield_rel="su_production.flatfield_rel"; //for checked in ver
 //char *filename_flatfield_fid="su_richard.flatfield_fid_b"; //output of module_flatfield // input to module_flatfield_combine
 char *filename_flatfield_fid="su_production.flatfield_fid"; //for checked in version
 
-//char *filename_cosmic="su_richard.cosmic_rays_c"; //output of module_flatfield
+//char *filename_cosmic="su_richard.cosmic_rays"; //output of module_flatfield
 char *filename_cosmic="su_production.cosmic_rays"; //for checked in version  
 
 
-//char *filename_cosmic2_out="su_richard.cosmic_rays";
+//char *filename_cosmic2_out="su_richard.cosmic_rays_b";
 char *filename_cosmic2_out="hmi.cosmic_rays";
 
 
