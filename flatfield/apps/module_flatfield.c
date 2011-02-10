@@ -928,6 +928,53 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	  //write out cosmic ray series
 	  /////////////////////////////////////////////////////////
 
+		if (cosmic_flag && kkk == 0){
+		  if (present[kkk] && keyvalue_fsn[kkk] >= fsn_first && keyvalue_fsn[kkk] <= fsn_last && time_fl[kkk] >= tfirst && time_fl[kkk] <= tlast)
+		    {
+		      printf("anormal writeout of first record\n");
+		      recout = dataout->records[kkk];
+
+			status=drms_setkey_int(recout, keyfsn, keyvalue_fsn[kkk]);
+			status=drms_setkey_time(recout, keytobs, time_fl[kkk]);
+			status=drms_setkey_int(recout, keycount, -1);
+			status=drms_setkey_int(recout, fidkey, fid);
+			status=drms_setkey_int(recout, keycamera, keyvalue_cam[kkk]);
+			status=drms_setkey_int(recout, keyexmax, 0);
+			status=drms_setkey_float(recout, keylimit, factor[cam][0]);
+	
+			drms_keyword_setdate(recout);
+	    
+			if (keyvalue_cam[kkk] == cam_id_front) status=drms_setkey_string(recout, keyinstrument, camera_str_front);
+			if (keyvalue_cam[kkk] == cam_id_side) status=drms_setkey_string(recout, keyinstrument, camera_str_side);
+
+			segout = drms_segment_lookup(recout, segmentname_cosmic);
+			segout_val=drms_segment_lookup(recout, segmentname_val);
+			segout_sig=drms_segment_lookup(recout, segmentname_sig);
+	    
+	 
+
+			axisbad[0]=0;
+			arrout=drms_array_create(type_int,1,axisbad,NULL,&status);
+			cosmic_ray_data=arrout->data;
+	  	 
+			arrout_val=drms_array_create(type_float,1,axisbad,NULL,&status);
+			val_data=arrout_val->data;
+
+			arrout_sig=drms_array_create(type_float,1,axisbad,NULL,&status);
+			sig_data=arrout_sig->data;
+
+			status=drms_segment_write(segout, arrout, 0);
+			status=drms_segment_write(segout_val, arrout_val, 0);
+			status=drms_segment_write(segout_sig, arrout_sig, 0);
+	   
+			drms_free_array(arrout);
+			drms_free_array(arrout_val);
+			drms_free_array(arrout_sig);
+		    }
+		}
+
+
+
 		if (cosmic_flag && kkk >= 1){
 		  
 		 
@@ -946,7 +993,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 			status=drms_setkey_time(recout, keytobs, time_fl[km1]);
 			status=drms_setkey_int(recout, keycount, count);
 			status=drms_setkey_int(recout, fidkey, fid);
-			status=drms_setkey_int(recout, keycamera, cam+1);
+			status=drms_setkey_int(recout, keycamera, keyvalue_cam[km1]);
 			status=drms_setkey_int(recout, keyexmax, limit_flag);
 			status=drms_setkey_float(recout, keylimit, factor[cam][0]);
 	
