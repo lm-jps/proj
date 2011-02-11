@@ -20,6 +20,8 @@ CLEAN		:= $(CLEAN) \
 		   $(MODEXE_SOCK_$(d))\
 		   $(DEP_$(d))
 
+TGT_BIN	        := $(TGT_BIN) $(MODEXE_$(d))
+
 S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
