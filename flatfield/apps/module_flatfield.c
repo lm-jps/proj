@@ -1040,7 +1040,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 			status=drms_setkey_time(recout, keytobs, time_fl[km1]);
 			status=drms_setkey_int(recout, keycount, count);
 			status=drms_setkey_int(recout, fidkey, fid);
-			status=drms_setkey_int(recout, keycamera, keyvalue_cam[km1]);
+			status=drms_setkey_int(recout, keycamera, cam+1);
 			status=drms_setkey_int(recout, keyexmax, limit_flag);
 			status=drms_setkey_float(recout, keylimit, factor[cam][0]);
 	
