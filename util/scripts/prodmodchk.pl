@@ -4,8 +4,21 @@
 
 use XML::Simple;
 use Data::Dumper;
+use File::Spec;
+use Fcntl ':flock';
 use Fcntl ':mode';
+use File::Path qw(make_path);
+use FileHandle;
+use IO::Handle;
 
+use constant kSuccess => 0;
+use constant kAlreadyRunning => 1;
+use constant kInvalidArg => 2;
+use constant kFileIO => 3;
+
+my($logfile);
+my(@parts);
+my($lckfh);
 my($xml);
 my($xmlobj) = new XML::Simple;
 my($xmldata);
@@ -22,105 +35,184 @@ my($actmode);
 my($desmode);
 my($msg);
 my(@projwerr);
+my($mkerr);
 my($err);
 
-$err = 0;
-
-# Read in the configuration file to obtain the set of project files that will reside
-# in the custom checkout set.
-if (!ReadCfg(\$xml) && defined($xml))
+# Allow only one instance of this program 
+unless (flock(DATA, LOCK_EX|LOCK_NB)) 
 {
-   $xmldata = $xmlobj->XMLin($xml, ForceArray => 1);
-   # print Dumper($xmldata);
+   print "$0 is already running. Exiting.\n";
+   exit(kAlreadyRunning);
+}
+
+# Read cmd-line arguments
+if ($#ARGV != 1)
+{
+   print STDERR "Improper argument list.\n";
+   exit(kInvalidArg);
+}
+
+# Lock the log file since the log-maintenance software and monitoring software may
+# attempt to modify the log file as well.
+$logfile = $ARGV[0];
+$lockfile = $ARGV[1];
+
+@parts = File::Spec->splitpath($logfile);
+if (!(-d $parts[1]))
+{
+   make_path($parts[1], {error => $mkerr});
+
+   if ($mkerr)
+   {
+      print STDERR "Unable to create path '$parts[1]'\n";
+      exit(kFileIO);
+   }
+}
+
+@parts = File::Spec->splitpath($lockfile);
+if (!(-d $parts[1]))
+{
+   make_path($parts[1], {error => $mkerr});
+
+   if ($mkerr)
+   {
+      print STDERR "Unable to create path '$parts[1]'\n";
+      exit(kFileIO);
+   }
+}
+
+# Lock the log file
+# Need to figure out how to trap interrupts, since we need to release the lock once we've acquired it.
+if (!AcquireLock($lockfile, \$lckfh))
+{
+   print STDERR "Unable to acquire file lock '$lockfile'\n";
+   exit(kCantGetLock);
+}
+
+# Create the log file, if it doesn't exist
+if (!open(LOGF, ">>$logfile"))
+{
+   print STDERR "Unable to open log file $logfile for writing.\n";
+   $err = kFileIO;
 }
 else
 {
-   print STDERR "Unable to read or parse configuration.\n";
-   $err = 1;
-}
+   my($date);
 
-if (!$err)
-{
-   # Traverse tree, ensuring that all required files are present
-   foreach $enviro (@{$xmldata->{'enviro'}})
+   # OK, no more calling exit in the middle of this file.
+   $err = 0;
+   $date = localtime();
+   
+   print LOGF "***** Running $0 at $date\n";
+
+   if (!STDOUT->fdopen(\*LOGF, 'w') || !STDERR->fdopen(\*LOGF,  'w'))
    {
-      $environame = $enviro->{'name'}->[0];
-      $enviroroot = $enviro->{'root'}->[0];
-
-      print "Processing environment '$environame' at $enviroroot...\n";
-
-      foreach $proj (@{$enviro->{'projects'}->[0]->{'proj'}})
+      print LOGF "Unable to redirect STDOUT or STDERR to log file\n";
+      $err = 1;
+   }
+   else
+   {
+      # Read in the configuration file to obtain the set of project files that will reside
+      # in the custom checkout set.
+      if (!ReadCfg(\$xml) && defined($xml))
       {
-         $projname = $proj->{'name'}->[0];
-      
-         print "  processing project '$projname'\n";
-
-         $projowner{$projname} = {};
-
-         foreach $owner (@{$proj->{'owners'}->[0]->{'owner'}})
-         {
-            $projowner{$projname}->{$owner->{'content'}} = 
-            {
-             'login' => $owner->{'login'}, 'email' => $owner->{'email'}};
-         }
-
-         foreach $file (@{$proj->{'files'}->[0]->{'file'}})
-         {
-            $filename = $file->{'name'}->[0];
-            $filepath = $file->{'path'}->[0];
-            $fileperms = $file->{'perms'}->[0];
-
-            $fullpath = "$enviroroot/$filepath/$filename";
-
-            # Now, actually check for presence of file with correct permissions.
-            print "    checking for existence of $fullpath with permissions $fileperms...";
-
-            $msg = "";
-
-            if (-e $fullpath)
-            {
-               $actmode = (lstat($fullpath))[2] & 07777; # decimal string
-               $desmode = oct($fileperms); # decimal string
-
-               # compare modes by anding
-               if (($actmode & $desmode) != $desmode)
-               {
-                  $msg = $msg . sprintf("Required file '$fullpath' has wrong permissions: actual %o, required %o.\n", $actmode, $desmode);
-               }
-            }
-            else
-            {
-               $msg = $msg . "Required file '$fullpath' does not exist.\n";
-            }
-
-            if (length($msg) > 0)
-            {
-               #print "msg $msg\n";
-               my($reciplist);
-
-               if (!(defined($failedcheck{$projname})))
-               {
-                  print "here1, $projname\n";
-                  $failedcheck{$projname} = {};
-               }
-
-               $reciplist = join(',', keys(%{$projowner{$projname}}));
-               $failedcheck{$projname}->{'msg'} = $msg;
-
-               print "failed, notifying $reciplist.\n";
-            }
-            else
-            {
-               print "passed.\n";
-            }
-         }
+         $xmldata = $xmlobj->XMLin($xml, ForceArray => 1);
+         # print Dumper($xmldata);
       }
-   } # loop on environments
-}
+      else
+      {
+         print STDERR "Unable to read or parse configuration.\n";
+         $err = 1;
+      }
 
-if (!$err)
-{
-   $err = Notify(\%projowner, \%failedcheck);
+      if (!$err)
+      {
+         # Traverse tree, ensuring that all required files are present
+         foreach $enviro (@{$xmldata->{'enviro'}})
+         {
+            $environame = $enviro->{'name'}->[0];
+            $enviroroot = $enviro->{'root'}->[0];
+
+            print "Processing environment '$environame' at $enviroroot...\n";
+
+            foreach $proj (@{$enviro->{'projects'}->[0]->{'proj'}})
+            {
+               $projname = $proj->{'name'}->[0];
+      
+               print "  processing project '$projname'\n";
+
+               $projowner{$projname} = {};
+
+               foreach $owner (@{$proj->{'owners'}->[0]->{'owner'}})
+               {
+                  $projowner{$projname}->{$owner->{'content'}} = 
+                  {
+                   'login' => $owner->{'login'}, 'email' => $owner->{'email'}};
+               }
+
+               foreach $file (@{$proj->{'files'}->[0]->{'file'}})
+               {
+                  $filename = $file->{'name'}->[0];
+                  $filepath = $file->{'path'}->[0];
+                  $fileperms = $file->{'perms'}->[0];
+
+                  $fullpath = "$enviroroot/$filepath/$filename";
+
+                  # Now, actually check for presence of file with correct permissions.
+                  print "    checking for existence of $fullpath with permissions $fileperms...";
+
+                  $msg = "";
+
+                  if (-e $fullpath)
+                  {
+                     $actmode = (lstat($fullpath))[2] & 07777; # decimal string
+                     $desmode = oct($fileperms); # decimal string
+
+                     # compare modes by anding
+                     if (($actmode & $desmode) != $desmode)
+                     {
+                        $msg = $msg . sprintf("Required file '$fullpath' has wrong permissions: actual %o, required %o.\n", $actmode, $desmode);
+                     }
+                  }
+                  else
+                  {
+                     $msg = $msg . "Required file '$fullpath' does not exist.\n";
+                  }
+
+                  if (length($msg) > 0)
+                  {
+                     #print "msg $msg\n";
+                     my($reciplist);
+
+                     if (!(defined($failedcheck{$projname})))
+                     {
+                        print "here1, $projname\n";
+                        $failedcheck{$projname} = {};
+                     }
+
+                     $reciplist = join(',', keys(%{$projowner{$projname}}));
+                     $failedcheck{$projname}->{'msg'} = $msg;
+
+                     print "failed, notifying $reciplist.\n";
+                  }
+                  else
+                  {
+                     print "passed.\n";
+                  }
+               }
+            }
+         }                      # loop on environments
+      }
+
+      if (!$err)
+      {
+         $err = Notify(\%projowner, \%failedcheck);
+      }
+
+   }
+
+   close(LOGF);
+   ReleaseLock(\$lckfh);
 }
 
 exit($err);
@@ -203,6 +295,52 @@ exit;
 
    return $rv;
 }
+
+sub AcquireLock
+{
+   my($path) =$_[0];
+   my($lckfh) = $_[1];
+   my($gotlock);
+   my($natt);
+
+   $$lckfh = FileHandle->new(">$path");
+   $gotlock = 0;
+
+   $natt = 0;
+   while (1)
+   {
+      if (flock($$lckfh, LOCK_EX|LOCK_NB)) 
+      {
+         $gotlock = 1;
+         last;
+      }
+      else
+      {
+         if ($natt < 10)
+         {
+            print "Lock '$path' in use - trying again in 1 second.\n";
+            sleep 1;
+         }
+         else
+         {
+            print "Couldn't acquire lock after $natt times; bailing.\n";
+         }
+      }
+
+      $natt++;
+   }
+
+   return $gotlock;
+}
+
+sub ReleaseLock
+{
+   my($lckfh) = $_[0];
+
+   flock($$lckfh, LOCK_UN);
+   $$lckfh->close;
+}
+
 
 __DATA__
 # This xml defines the set of 'production' modules that must be available in the production
