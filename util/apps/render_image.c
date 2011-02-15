@@ -14,7 +14,7 @@
    render_iamge in=<RecordSet> out=<target> | {outname=<ident_for_filename>}  {scaling=<scaletype>}
                 {pallette=<color_table>}  {type=<image_protocol>} {outid=<filename_code>}
                 {tkey=<time_keyword>} {min=<scale_min>} {max=<scale_max>}
-                {scale=<image_size_ratio>} {-c} {-w} {-x}
+                {scale=<image_size_ratio>} {-c} {-u} {-w} {-x}
    @endcode
 
    @code
@@ -30,6 +30,7 @@
      max=Max value for scaling, default nan
      scale"Reduction factor list, default 1.
      -c Crop flag, causes crop to RSUN_OBS
+     -u use unchanged for rotation and centering
      -w use white for missing pixels, instead of black
      -x High-quality flag, sets bytespercolor to 2 instead of 1,
   @endcode
@@ -161,6 +162,7 @@ ModuleArgs_t module_args[] =
      {ARG_FLOAT, "bias", "30.0", "Max value for mag scaling"},
      {ARG_INTS, "scale", "1", "Reduction factors"},
      {ARG_FLAG, "c", "0", "Crop flag, causes crop to RSUN_OBS"},
+     {ARG_FLAG, "u", "0", "use unchanged, is-is for rotation and centering"},
      {ARG_FLAG, "w", "0", "use white for missing pixels, instead of black"},
      {ARG_FLAG, "x", "0", "High-quality flag, sets bytespercolor to 2 instead of 1"},
      {ARG_END}
@@ -233,6 +235,7 @@ int DoIt(void)
   int bytespercolor = (params_isflagset(&cmdparams, "x") ? 2 : 1);
   int missingwhite = params_isflagset(&cmdparams, "w");
   int crop = params_isflagset(&cmdparams, "c");
+  int asis = params_isflagset(&cmdparams, "u");
   char *type = (char *)params_get_str(&cmdparams, "type");
   char *scaling = (char *)params_get_str(&cmdparams, "scaling");
   double called_min = params_get_double(&cmdparams, "min");
@@ -355,7 +358,7 @@ int DoIt(void)
          continue;
         }
       ObsLoc = GetObsInfo(srcSeg, NULL, &status);
-      upNcenter(srcArray, ObsLoc, crop);
+      if (!asis) upNcenter(srcArray, ObsLoc, crop);
       srcNx = srcArray->axis[0];
       srcNy = srcArray->axis[1];
       }
