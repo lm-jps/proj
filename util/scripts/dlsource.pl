@@ -97,6 +97,7 @@ use constant kStrname => "name";
 # Assume a localization directory of "localization" right in the root of the CVS tree.
 use constant kRootDir => "JSOC/";
 use constant kLocDir => "localization/";
+use constant kProjSubdir => "proj";
 use constant kTmpDir => "/tmp/chkout/";
 use constant kTypeFile => "dlset.txt";
 use constant kSuFlagFile => "suflag.txt";
@@ -295,7 +296,7 @@ if (!$err)
    }
    else
    {
-      if (BuildFilespec($cotype, $dltype, $stfspec, \$xmldata, \@core, \@netonly, \@sdponly, \@filespec))
+      if (BuildFilespec($cotype, $dltype, $stfspec, $xmldata, \@core, \@netonly, \@sdponly, \@filespec))
       {
          print STDERR "Unable to build filespec.\n";
          $err = 1;
@@ -510,6 +511,11 @@ sub ReadCfg
    my($xml) = $_[1]; # reference
    my($rv);
 
+   $rv = 0;
+
+   # initialize xml string variable
+   $$xml = "";
+   
    if (defined($cfgfile) && -e $cfgfile)
    {
       if (open(CFGFILE, "<$cfgfile"))
@@ -536,8 +542,7 @@ sub ReadCfg
             {
                $st = kStProj;
 
-               # initialize xml string variable
-               $$xml = "";
+              
                next;
             }
             elsif ($line =~ /^$ediv/)
@@ -586,7 +591,7 @@ sub BuildFilespec
    my($cotype) = $_[0];
    my($dltype) = $_[1];
    my($stfspec) = $_[2];
-   my($xmldata) = $_[3];
+   my($xmldata) = $_[3]; # reference to hash
    my($core) = $_[4];
    my($netonly) = $_[5];
    my($sdponly) = $_[6];
@@ -627,11 +632,12 @@ sub BuildFilespec
       elsif ($cotype eq kCoCustom)
       {
          push(@$fsout, @$core);
+         push(@$fsout, @$netonly);
 
          # Use $xmldata to populate @cstco;
          foreach $proj (@{$xmldata->{$strproj}})
          {
-            push(@$fsout, $$proj->{$strname}->[0]);
+            push(@$fsout, kProjSubdir . "/" . $proj->{$strname}->[0]);
          }
       }
       else
