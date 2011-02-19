@@ -16,6 +16,11 @@ dir     := $(d)/ident
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/patch
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/d4vm
+-include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/nlfff
+-include                $(SRCDIR)/$(dir)/Rules.mk
+
 
 # Standard things
 d               := $(dirstack_$(sp))
