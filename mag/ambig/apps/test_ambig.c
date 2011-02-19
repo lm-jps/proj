@@ -402,7 +402,8 @@ printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
             // Create bitmap
             bitmap = (int *)calloc(nxny, sizeof(int));
             for (i = 0; i < nxny; i++) {
-               bitmap[i] = (mask[i] >= mask_id) ? 1 : 0;		// updated frpm '==' to '>=' on oct 13 2010
+       //        bitmap[i] = (mask[i] >= mask_id) ? 1 : 0;		// updated frpm '==' to '>=' on oct 13 2010
+				bitmap[i] = 1;		// Feb 11 2010, anneal all pixels. for now
             }
             drms_free_array(maskArray);
         } else {
