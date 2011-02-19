@@ -11,11 +11,12 @@
  */
 
 // Author:  Y. Liu, Apr 07 2010
-// Adated:  X. Sun, Apr 08 2010, for patches with tracking functionality
+// Adapted: X. Sun, Apr 08 2010, for patches with tracking functionality
 // Modified:
 //          X. Sun, Jun 30 2010, added prototypes for oversampling/rebin
 //			X. Sun, Sep 03 2010, implemented Jesper's resize code, registration needs check
-//			X. Sun, Nov 16, 2010, added vlos_mag segment
+//			X. Sun, Nov 16 2010, added vlos_mag segment
+//			X. Sun, Feb 12 2011, fixed for LON_REF, LAT_REF, added check for error.
 
 // mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a[2010.03.29_12:00:00_TAI][2]" "out=su_xudong.test_mercator_vec" "LONWIDTH=15.0" "LATWIDTH=9.0"
 // mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a[2010.03.29_12:12:00_TAI/1h][2]" "out=su_xudong.test_mercator_vec" "LONWIDTH=15.0" "LATWIDTH=9.0" "ref=su_xudong.test_patch_vec_a[2010.03.29_12:12:00_TAI][2]"
@@ -162,7 +163,7 @@ int DoIt(void)
     float ref_lon, ref_lat;
     
     char *ctype1, *ctype2;
-    int useOrigWidth;
+    int useOrigWidth, useRefCenter;
     TIME ref_trec, trec, dt;
 
     int xDim = 4096, yDim = 4096;
@@ -177,7 +178,8 @@ int DoIt(void)
     double asd;
     float xcoor, ycoor, xcen, ycen, x_halfwidth, y_halfwidth;
     float crvalx, crvaly, crpix1, crpix2, crota2, sina, cosa, pcx, pcy;      
-    
+    double xc, yc;	// for disk center in projected plane
+        
     int xMap, yMap, xMap0, yMap0;
     float maplat_size, maplon_size;	// from HWIDTHn
     
@@ -219,6 +221,7 @@ int DoIt(void)
     LatWidth = cmdparams_get_float(&cmdparams, "LATWIDTH", &status);
     ref_lon = cmdparams_get_float(&cmdparams, "REFLON", &status);
     ref_lat = cmdparams_get_float(&cmdparams, "REFLAT", &status);
+	ref_lat *= RADSINDEG; ref_lon *= RADSINDEG;		// added Feb 12 2011
 
     covar = cmdparams_get_int(&cmdparams, "COVAR", &status);
     doerror = cmdparams_get_int(&cmdparams, "e", &status);
@@ -258,7 +261,9 @@ int DoIt(void)
     if (strcmp(mapping, "LAMBERT") == 0 || strcmp(mapping, "Lambert") == 0 ||
         strcmp(mapping, "lambert") == 0) {
                         projection = 9; ctype1 = "HGLN-LAM"; ctype2 = "HGLT-LAM";}
-                        
+
+    printf("proj=%s, no:%d\n", mapping, projection); fflush(stdout);
+
     /* Find the reference record for alignment, if not found, refRec = NULL */
      
     refRS = drms_open_records(drms_env, refQuery, &status);
@@ -299,8 +304,8 @@ int DoIt(void)
                         &sinlat, &coslat, &sig, &mu, &chi)) {
             refRec = NULL;
         } else {
-            ref_lat = maplatc / RADSINDEG;
-            ref_lon = maplonc / RADSINDEG;
+            ref_lat = maplatc;
+            ref_lon = maplonc;
         }
 
     }
@@ -316,6 +321,7 @@ int DoIt(void)
     outRS = drms_create_records(drms_env, nrecs, outQuery, DRMS_PERMANENT, &status);
     if (status) DIE("Output recordset not created");
 
+	printf("start!\n"); fflush(stdout);
     // For each record
     
     for (irec = 0; irec < nrecs; irec++)
@@ -325,6 +331,7 @@ int DoIt(void)
 
         inRec = inRS->records[irec]; // open patch data record
         trec = drms_getkey_time(inRec, "T_REC", &status);
+		if (refRS == NULL) ref_trec = trec;			// Added Feb 12 2011
                 
         dSun = drms_getkey_float(inRec, "DSUN_OBS", &status);
         rSun_ref = drms_getkey_float(inRec, "RSUN_REF", &status);
@@ -364,14 +371,41 @@ int DoIt(void)
         bmy = 2 * (int)y_halfwidth + 1;
         
         /* Find binding lon, lat (maplatc/maplonc, maplatl/maplonl, maplatr/maplonr)  */
+		
+		useRefCenter = 1;	// by default
+		
+		printf("ref_lat=%f, ref_lon=%f\n", ref_lat/RADSINDEG, ref_lon/RADSINDEG);
+		printf("latc=%f, lonc=%f\n", latc/RADSINDEG, lonc/RADSINDEG);
 
-        useOrigWidth = 1;		// Use patch width derived from HWIDTH until overridden by input parameters
-        
-        x = (xcoor - xCenter) / rSun;
-        y = (ycoor - yCenter) / rSun;
-        if (img2sphere (x, y, asd, latc, lonc, pa, &rho, &maplatc, &maplonc,
+		if (!sphere2img (ref_lat, ref_lon, latc, lonc, &xi, &zeta, xCenter/rSun, yCenter/rSun, 1.0,
+						pa, 1., 0., 0., 0.))
+		{
+			x = xi - xCenter / rSun;
+			y = zeta - yCenter / rSun;
+			printf("x=%f, y=%f\n", x, y);
+			if (img2sphere (x, y, asd, latc, lonc, pa, &rho, &maplatc, &maplonc,
+							&sinlat, &coslat, &sig, &mu, &chi))
+				useRefCenter = 0;
+			if ((x < -1.) || (x > 1.) || (y < -1.) || (y > 1.)) useRefCenter = 0.;
+			if (fabs(ref_lat) > PI/2. || fabs(ref_lon - lonc) > PI/2.) useRefCenter = 0.;
+		} else {
+			useRefCenter = 0;
+		}
+
+		
+		dt = trec - ref_trec;
+		if (fabs(dt) > 7. * SECINDAY) useRefCenter = 0;
+		
+		if (useRefCenter == 0)
+		{
+			x = (xcoor - xCenter) / rSun;
+			y = (ycoor - yCenter) / rSun;
+			if (img2sphere (x, y, asd, latc, lonc, pa, &rho, &maplatc, &maplonc,
                         &sinlat, &coslat, &sig, &mu, &chi))
-            DIE("problem finding map center");
+				DIE("problem finding map center");
+		}
+		
+        useOrigWidth = 1;		// Use patch width derived from HWIDTH until overridden by input parameters
 
         x = ((xcoor - x_halfwidth) - xCenter) / rSun;
         y = ((ycoor - y_halfwidth) - yCenter) / rSun;
@@ -421,15 +455,16 @@ int DoIt(void)
             yMap0 = yMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
         }
         
-        printf("xMap0=%d, yMap0=%d\n", xMap0, yMap0);
-        printf("xMap=%d, yMap=%d\n", xMap, yMap);
+//        printf("xMap0=%d, yMap0=%d\n", xMap0, yMap0);
+//        printf("xMap=%d, yMap=%d\n", xMap, yMap);
+		
+		printf("useRefCenter=%d, useOrigWidth=%d\n", useRefCenter, useOrigWidth);
         
         /* Align, using reference record, or reference lat/lon */
         
-        dt = trec - ref_trec;
-        if (fabs(dt) < 7. * SECINDAY) {		// No more than 7 days allowed
-            maplatc = ref_lat * RADSINDEG;
-            maplonc = ref_lon * RADSINDEG;
+        if (useRefCenter) {		// No more than 7 days allowed
+            maplatc = ref_lat;
+            maplonc = ref_lon;
             while (maplonc < 0.) maplonc += (2. * PI);
             while (maplonc >= 2. * PI) maplonc -= (2. * PI);
             printf("Use ref lon/lat: ");
@@ -438,6 +473,13 @@ int DoIt(void)
         }
         
         printf("MapLon = %f, MapLat = %f\n", maplonc / RADSINDEG, maplatc / RADSINDEG);
+
+		/* testing       
+        if (!sphere2plane (maplatc, maplonc, latc, lonc, &xc, &yc, projection)) {
+          printf("%lf,%lf\n", xc/RADSINDEG, yc/RADSINDEG);
+          printf("%lf,%lf\n", -xc/RADSINDEG/xunitMap+xMap/2+0.5, -yc/RADSINDEG/yunitMap+yMap/2+0.5);
+        }
+        */
 
         /* Allocate arrays */
 
@@ -902,12 +944,18 @@ int DoIt(void)
         drms_setkey_string(outRec, "BUNIT", "Gauss");
         drms_setkey_string(outRec, "CTYPE1", ctype1);
         drms_setkey_string(outRec, "CTYPE2", ctype2);
-        drms_setkey_float(outRec, "CRPIX1", xMap / 2. + 0.5);  
-        drms_setkey_float(outRec, "CRPIX2", yMap / 2. + 0.5);
         drms_setkey_float(outRec, "CDELT1", xunitMap);
         drms_setkey_float(outRec, "CDELT2", yunitMap);
-        drms_setkey_float(outRec, "CRVAL1", maplonc / RADSINDEG);
-        drms_setkey_float(outRec, "CRVAL2", maplatc / RADSINDEG);
+        // revised Jan 21 2011, for disk center
+//        double xc, yc;
+        if (!sphere2plane (maplatc, maplonc, latc, lonc, &xc, &yc, projection)) {
+          drms_setkey_float(outRec, "CRPIX1", -xc/RADSINDEG/xunitMap+xMap/2+0.5);  
+          drms_setkey_float(outRec, "CRPIX2", -yc/RADSINDEG/yunitMap+yMap/2+0.5);
+          drms_setkey_float(outRec, "CRVAL1", 0.);
+          drms_setkey_float(outRec, "CRVAL2", 0.);
+//          printf("%lf,%lf\n", -xc/RADSINDEG/xunitMap+xMap/2+0.5, -yc/RADSINDEG/yunitMap+yMap/2+0.5);
+        }
+        //
         drms_setkey_string(outRec, "CUNIT1", "degree");
         drms_setkey_string(outRec, "CUNIT2", "degree");
         drms_setkey_string(outRec, "PROJECT", mapping);

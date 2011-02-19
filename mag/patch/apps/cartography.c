@@ -170,7 +170,7 @@ int plane2sphere (double x, double y, double latc, double lonc,
  *			along meridians. Central latitudes off the equator
  *			merely result in displacement of the map in y
  *			Also known as CYLEQD
- *	CASSINI		The transverse cylindrical equidistant projection
+ *		CASSINI		The transverse cylindrical equidistant projection
  *			(Cassini-Soldner) equidistant along great circles
  *			perpendicular to the central meridian
  *      MERCATOR        Mercator's conformal projection, in which paths of
