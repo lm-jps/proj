@@ -499,6 +499,86 @@ int read_flatfield_series(TIME t_0, int camera, float *flatfield, int *focus, TI
 }
 
 
+int write_rot_flatfield(char *filename_flatfield, DRMS_Array_t *arrout_new, int camera,
+		     TIME t_0, int focus, struct rotpar rot_new)
+{    
+    
+#include "module_flatfield_const.h"
+ 
+  DRMS_Segment_t *segout = NULL;
+  DRMS_RecordSet_t *dataout = NULL, *dataout_new=NULL;
+  DRMS_Record_t *recout  = NULL;
+
+ 
+  int cam_id;
+  char *camera_str;
+
+  TIME t_stop=t_0+24.0*60.0*60.0;
+
+   if (camera == 1){ cam_id=1; camera_str=camera_str_side;}
+   if (camera == 2){ cam_id=2; camera_str=camera_str_front;}
+
+
+ 
+
+   int status, stat;
+
+   dataout_new = drms_create_records(drms_env,1,filename_rot_flatfield,DRMS_PERMANENT,&stat);
+
+
+ if (stat != DRMS_SUCCESS)
+	    {
+	      printf("Could not create a record for the series %s\n",filename_flatfield);
+	      return 1;
+	    }
+	  if (stat == DRMS_SUCCESS)
+	    {	  
+	      printf("Write rotational flatfield\n");
+	     
+	      recout = dataout_new->records[0];
+
+	      status = drms_setkey_time(recout, keytstart, t_0);
+	      status = drms_setkey_int(recout, keycamera, cam_id);
+
+	      status=drms_setkey_int(recout, keyfocusflat, focus);
+	      status=drms_setkey_time(recout, keytstop, t_stop); 
+	      drms_setkey_string(recout, keyinstrument, camera_str);
+
+	      status=drms_setkey_int(recout, "COPYFLAG", 0);
+	      status=drms_setkey_int(recout, keynewpix, rot_new.rotbad);
+	      status=drms_setkey_int(recout, keynpairs, rot_new.rotpairs);
+	      status=drms_setkey_float(recout, keycadence, rot_new.rotcadence);
+
+	      drms_keyword_setdate(recout);
+
+
+	      segout = drms_segment_lookup(recout, segmentname);
+	      if (segout == NULL){printf("could not find segment\n"); return 1;}
+	
+              //arr_flat->bzero=segout->bzero;  //for file compression
+	      //arr_flat->bscale=segout->bscale;
+	      //arr_flat->israw=0;
+
+	      status=drms_segment_write(segout, arrout_new, 0);        //write the file containing the data
+	      if (status != DRMS_SUCCESS){printf("could not write segment\n"); return 1;}
+	      
+	    }
+
+	  if (dataout_new != NULL) status=drms_close_records(dataout_new, DRMS_INSERT_RECORD); //insert the record in DRMS
+	  
+	  if (status == DRMS_SUCCESS)
+	    {
+	      printf("done\n");
+	      return 0;
+	    }
+	  else 
+	    {
+	      return 1;
+	    }
+
+}
+
+
 
 int write_flatfields(char *filename_flatfield, DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
                      long long recnum[6], TIME tobs_link[2], TIME t_0, int focus, int focusclone,
@@ -648,7 +728,7 @@ int write_flatfields(char *filename_flatfield, DRMS_Array_t *arr_flat, DRMS_Arra
 	    }
 	  if (stat == DRMS_SUCCESS)
 	    {	  
-	      printf("Write new flatfield with definite T_STOP\n");
+	      printf("Write new flatfield\n");
 	     
 	      recout = dataout_new->records[0];
 

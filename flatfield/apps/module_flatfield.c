@@ -140,6 +140,11 @@ int DoIt(void)
 
 #include "module_flatfield_const.h"
 
+  ////////////////////////////////////////
+  //read out input parameters
+  /////////////////////////////////////////
+
+
   const char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL); //cmdparams is defined in jsoc_main.h
   const char *cosmic_ray_series = cmdparams_get_str(&cmdparams, kRecSetOut, NULL); //cmdparams is defined in jsoc_main.h
   if (strcmp(cosmic_ray_series, "default") == 0){cosmic_ray_series=filename_cosmic; }
@@ -192,10 +197,10 @@ int DoIt(void)
 
   int i,j,k,km1,c,ki,iii,jjj,kkk;                                                   //loop variables
   int signid=0;
-
+  int nfr;
  
  //********************************************************************************************************************************/
-  //Constants to be set: will maybe be input parameters 
+  //define and initialize quantities
   //********************************************************************************************************************************/
 
 
@@ -242,7 +247,7 @@ int DoIt(void)
  
 
   double flat[nx][ny];
-
+  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i){flat[i][j]=0.0;}
  
 
 
@@ -250,7 +255,7 @@ int DoIt(void)
   double *limb_dark;
   int *count_p, *count_m;
 
-  int count, ccount,ccount1,ccount2, count_filtergram, bad_pix; // counters 
+  int count, ccount,ccount1,ccount2, count_filtergram; // counters 
   int count_flatfields;
 
   int last, current, next, holder;
@@ -265,8 +270,7 @@ int DoIt(void)
   w1=(float *)(malloc(nx*ny*sizeof(float)));
   w2=(float *)(malloc(nx*ny*sizeof(float)));
   cmc=(float *)(malloc(nx*ny*sizeof(float)));
-  //struct list *curr, *head;
-  //struct list **list_pointer;
+  
 
   rhsp=(double *)(malloc(nx*ny*sizeof(double)));
   rhsm=(double *)(malloc(nx*ny*sizeof(double)));
@@ -292,17 +296,20 @@ int DoIt(void)
 
   unsigned char *cmarr=(unsigned char *)(malloc(nx*ny*sizeof(unsigned char)));
 
-  
+  char *query_flat, *query_flat_ref, *query_flat_relative;
+  char flat_default[256]={"none"};
+ 
+  double *param;
+  param=(double *)(malloc(6*sizeof(double)));
+
   
   //parameters to identify records
   TIME tobs_link[2];
-  //long long recnum[6];
-  //long long recnum_ref[6];
   long long recnum_offpoint, recnum_badpix;
   struct rotpar rot_cur;
   struct rotpar rot_new;
 
-
+  int rotpairs;
 
 
   printf("START!\n");
@@ -339,19 +346,20 @@ int DoIt(void)
   //**************************************************************************************************************/
 
 
-      //set parallelization parameters
+      //**********************************
+      //parallelization
+      //**********************************
+
+
       int nthreads; 
       nthreads=omp_get_max_threads();
       //nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
       //omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
       printf("Number of threads run in parallel = %d \n",nthreads);
 
-  //********************************************************************************************************************************/
-
- 
- 
+  
   //**************************************************************************************************************/
-  //read records
+  //built query strings
   //**************************************************************************************************************/
             
  char timefirst[256]="";
@@ -431,7 +439,14 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       printf("query string: %s\n", query0);  
     }
 
+  //************************************************************************
+
+
   
+  //*************************************************************************
+  //open records and stage data
+  //*************************************************************************
+
 
   
       data     = drms_open_records(drms_env,query0,&stat);
@@ -439,10 +454,16 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
       drms_stage_records(data, 1, 0); // stage needed records from tape and wait until ready.
 
+
+      //************************************************************************
+      //define keyword arrays
+      //************************************************************************
+
+
   int nRecs=data->n;
   printf("number of records %d\n", nRecs);
 
-  int nfr;
+
 
 
   DRMS_Record_t *rec0[nRecs];
@@ -478,10 +499,14 @@ if (fsn_first == 0 || fsn_last == 2147483647)
   int index[nRecs];
   int statarr[nRecs];
 
-  char *query_flat, *query_flat_ref, *query_flat_relative;
-  char flat_default[256]={"none"};
- 
-  
+  //********************************************************************************
+
+
+  //****************************************************
+  //get time reference
+  //****************************************************
+
+   
  
   t_0 = drms_getkey_time(data->records[nRecs/2],keytobs,&status);
   fsns=drms_getkey_int(data->records[nRecs/2],keyfsn,&status);
@@ -494,11 +519,15 @@ if (fsn_first == 0 || fsn_last == 2147483647)
   t_stamp=sscan_time(tmstr)+24.0*60.0*60.0; 
 
  
-       
+  //************************************************************
 
 
   int update_stat=2;   // 2: not enough data // 1: no update required // 0: flatfield updated 
     
+
+  //*************************************************************
+  //do camera test
+  //************************************************************
 
   if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
     {
@@ -514,26 +543,19 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	}
 
      
-      int fvers;
-          
      
-
-   
-       
- 
    
      
       
-      for (j=0; j<ny; ++j) for (i=0; i<nx; ++i){flat[i][j]=0.0;}
+   
 
   
       
 
       //******************************************************** 
-      //read records
+      //read records and test keyword range
       //********************************************************
      
-      printtime();
 
       for (k=0; k<nRecs; ++k){
         keyvalue_time=drms_getkey(rec0[k], keytobs, &type_time, &status);       //read "T_OBS" of filtergram
@@ -615,9 +637,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 
       //
-      double *param;
-      param=(double *)(malloc(6*sizeof(double)));      
-
+  
       if (dcount > 0.0){
 	R_SUN=R_SUN/dcount;
 	XX0=XX0/dcount;
@@ -640,28 +660,16 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	}
 	
      
-      //********************************
-
-      int rotpairs;
-          
-   
-
-  
- 
+      printf("disk center and radius: %f %f %f\n", XX0, YY0,R_SUN);	   	   	;
   
 
       //**************************************************************
       //Start flatfield calculations
       //**************************************************************
 
-     
- 
-
-	
-	
-
-
-
+      //************************
+      //get valid frames for flatfield calculation
+      //************************
 
       if (cam ==0)camid=cam_id_side;
       if (cam ==1)camid=cam_id_front;
@@ -669,9 +677,6 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 
       count_flatfields=0;
-
-	
-
 
       for (j=0; j<ny; ++j) for (i=0; i<nx; ++i){rhsm[j*nx+i]=0.0; rhsp[j*nx+i]=0.0; count_p[j*nx+i]=0; count_m[j*nx+i]=0; flati[j*nx+i]=0.0; cmarr[j*nx+i]=1;}
 
@@ -723,7 +728,10 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	//	for (k=0; k < count_filtergram; ++k) printf("%d \t %d \t %s \t %d\t %d \t %d \t %ld   \t %d  \t %f \t %f \t  %f %f %d %d %d %d\n", k, keyvalue_fsn[k], keyvalue_iss[k], keyvalue_wl[k], keyvalue_pl[k], keyvalue_cam[k], tmind[k], keyvalue_fid[k], keyvalue_rsun[k], keyvalue_X0[k], keyvalue_Y0[k], keyvalue_vrad[k], statarr[k], present[k], present_forward[k], present_backward[k]);
 
 
+
+	//*******************************************
 	///read relative flatfield
+	//********************************************
 
 	status_flatfield_relative=get_latest_flat(t_stamp, cam+1, filename_offpoint, segmentname_offpoint, flat_relative, &recnum_offpoint, &focus);
 
@@ -746,8 +754,10 @@ if (fsn_first == 0 || fsn_last == 2147483647)
       
 
 
-
+	 //******************************************
 	 //calculate limit parameters for cosmic ray detection
+	 //******************************************
+
 
 #pragma omp parallel for private(jjj,iii)	   
 	      for (jjj=0; jjj<ny; ++jjj) for (iii=0; iii<nx; ++iii)
@@ -762,10 +772,14 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 		}
 
-	      printf("XX0 YY0 %f %f %f\n", XX0, YY0,R_SUN);	   	   	 
+
+
+
+
+
 
 	  //**********************************************************************************
-	  //loop over filtergrams of the same type
+	  //loop over filtergrams: obtain cosmic ray records and get input arrays for rotational flatfield calculations
 	  //**********************************************************************************
 
 	  printf("cosmic ray detection\n");
@@ -781,12 +795,14 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 	  for (kkk=0; kkk<(count_filtergram+1); ++kkk){ // loop starts at 0
 	  
-	    if (cosmic_flag || ccount >= cthreshold)
+	    if (cosmic_flag || ccount >= cthreshold[cam])
 	      {
 
 		km1=kkk-1;
 
+		//**************************
 		//read in filtergram
+
 		if (kkk < count_filtergram)
 		  {
 		    printf("fsn %d %d\n", kkk, keyvalue_fsn[kkk]);
@@ -818,6 +834,10 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	     
 			printf("filtergram with FSN %d read\n",keyvalue_fsn[kkk]);
 			arrinL0 = arrin0->data;
+
+
+			//**************************************
+			//flatfield query
 
 			query_flat =keyvalue_flatnumb[kkk];
 			if (strcmp(query_flat, query_flat_ref) != 0)
@@ -876,7 +896,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	    
 		count=-1;
 
+		//**********************************************
 		//cosmic ray detection
+
 		if (kkk >= 2 && kkk < count_filtergram)
 		  {
 		    index_last=kkk-2;
@@ -1088,11 +1110,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	   
 	  //**************************************************************************************************
 	  //permanent bad pixel calculation
-	  //*************************************************************************************************
-
 		
 
-		if (ccount >= cthreshold && kkk >= 1){
+		if (ccount >= cthreshold[cam] && kkk >= 1){
 		  update_stat=1;
 
 		  if (present_backward[km1] != 0) ++ccount1;
@@ -1136,8 +1156,9 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	    
 	      }
 
-	 
+	    //**************************************************	 
 	    //exchange indices
+
 	    holder=next;
 	    next=last;
 	    last=current;
@@ -1147,6 +1168,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 	  }//end loop over filtergrams of same type
 	  
+	  //************************************************************************************
 
 
 
@@ -1157,11 +1179,13 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 	  printf("reference flatfield and limb darkening\n");
    
+
+	  //*********************************
+	  //calculate limb darkening function and correct for it
+
 	  limb_darkening((double)R_SUN, (double)XX0, (double)YY0, b_coef, b_order, limb_dark);
 
 	 
-
-
  #pragma omp parallel for private(jjj,iii)
 	  for (jjj=0; jjj<ny; ++jjj){
 	    for (iii=0; iii<nx; ++iii){
@@ -1172,19 +1196,19 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	  }
 
  
-	  if (debug)  //
-	{
-         printf("write debug\n");
-	 printf("count_filtergram %d\n", count_filtergram);
-           FILE *fileptr;                                                                                                                          
-           int *aaa;                                                                                                                            
-           aaa=(int *)(malloc(count_filtergram*sizeof(int)));                                                                                              
-           fileptr = fopen ("/tmp20/richard/interpol/dd.bin", "w");                                                                                    
+	  //	  if (debug)  //
+	  //{
+	  //printf("write debug\n");
+	  //printf("count_filtergram %d\n", count_filtergram);
+          // FILE *fileptr;                                                                                                                          
+          // int *aaa;                                                                                                                            
+          // aaa=(int *)(malloc(count_filtergram*sizeof(int)));                                                                                              
+          // fileptr = fopen ("/tmp20/richard/interpol/dd.bin", "w");                                                                                    
 	   // for (i=0;i<count_filtergram;i++){aaa[i]=farr[i];} fwrite ((char*)(aaa),sizeof(int),count_filtergram,fileptr);
 	   //  for (i=0;i<count_filtergram;i++){aaa[i]=barr[i];} fwrite ((char*)(aaa),sizeof(int),count_filtergram,fileptr);
-           fclose(fileptr);                                                                                                                            
-      	free(aaa);
-	}
+          // fclose(fileptr);                                                                                                                            
+	  //	free(aaa);
+	  //}
 
 
       //*******************************************************************/
@@ -1193,7 +1217,7 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 
 	  printf("forward / backwards pairs %d %d \n", ccount1, ccount2);
  
-	  if (ccount1>= cthreshold){
+	  if (ccount1>= cthreshold[cam]){
 
   
       for (j=0; j<ny; ++j)  for (i=0; i<nx; ++i) flati[j*nx+i]=0.0;
@@ -1226,52 +1250,38 @@ if (fsn_first == 0 || fsn_last == 2147483647)
 	}
 	  }
 	 
-	  
-
-	
 
 
       if (status == 0) printf("flatfield for camera %d calculated \n", cam); else printf("could not calcuate flatfield for camera %d \n", cam);
 
     
      
-    //********************************
-   
-
-  // highpass flatfields
-    
-      //     highpass(nx, ny, fwhm, flat); //   
- 
-
 
       //*********************************************************************
-      //update flatfield
+      //write out  flatfield
       //********************************************************************
 
  
 
 
-   int axisout[2]={nx,ny};                             //size of the output arrays
+      int axisout[2]={nx,ny};                             //size of the output array
       arrout_new  = drms_array_create(type_float,2,axisout,NULL,&status);
       printf("array size %ld\n", drms_array_size(arrout_new)/sizeof(float)); 
   
- 
-
       flatfield_new=arrout_new->data;
   
  
 
-      //update existing flatfield
-       bad_pix=0;
- 
-
-         
+      //*************************
+      //calculate apodization
+             
        apod_circ(R_SUN*cpa.croprad*0.95, R_SUN*cpa.croprad*0.04, XX0-(float)nx/2.0, YY0-(float)ny/2.0, apod);
 
  
   
+       //************************************
+       //copy and apodize flatfield
 
-      //copy and apodize flatfield
 for (j=0; j<ny; ++j){
       for (i=0; i<nx; ++i){
 	flatfield_new[j*nx+i]=(flat[i][j]-1.0)*apod[j*nx+i]+1.0;
@@ -1285,24 +1295,21 @@ for (j=0; j<ny; ++j){
     //rot_new.flatfield_version=rot_cur.flatfield_version;
 
 
-    //**************************************************************************************
-    //write out flatfields
-    //**************************************************************************************
-  
-
-   
+    
     printf("update_stat %d\n", update_stat);
 
     printf("query flat %s\n", query_flat);
 
     if (flatfield_flag)
-    status=write_flatfield_fid(arrout_new, cam+1, recnum_offpoint, t_0, focus, fid, rot_new); 
-    if (status != 0){printf("could not write flatfield\n"); return 1;}
+      {
+	status=write_flatfield_fid(arrout_new, cam+1, recnum_offpoint, t_0, focus, fid, rot_new);;
+	if (status != 0){printf("could not write rotational flatfield\n"); return 1;}
+      }
 
 
 	  drms_free_array(arrout_new);
 
-	  free(param);
+	
     }
   else 
     {
@@ -1318,6 +1325,13 @@ for (j=0; j<ny; ++j){
       drms_close_records(data,DRMS_FREE_RECORD);       
     }
 
+
+  //************************************************************
+  //free arrays
+  //****************************************************
+
+
+  free(param);
   free(rr);
   free(a1);
   free(a2);
@@ -1328,7 +1342,6 @@ for (j=0; j<ny; ++j){
   free(cosmicsig);
   free(cosmicval);
   free(cmarr);
-  //free(sigmacoef);
   free(apod);
 	  free(flat_off);
 	  free(flat_relative);
