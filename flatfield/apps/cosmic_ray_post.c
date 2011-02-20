@@ -79,6 +79,9 @@ int DoIt(void)
 
 #include "module_flatfield_const.h"
 
+  //*********************
+  //read input parameters
+
   const char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL); //cmdparams is defined in jsoc_main.h
   const char *datum =  cmdparams_get_str(&cmdparams, datumn, NULL);
  
@@ -86,6 +89,11 @@ int DoIt(void)
  int hour= cmdparams_get_int(&cmdparams, "hour", NULL);
  int fsn_first=cmdparams_get_int(&cmdparams, fsnf_name, NULL);
  int fsn_last=cmdparams_get_int(&cmdparams, fsnl_name, NULL);
+
+
+ //**********************
+ //define variables
+
 
   int  status= DRMS_SUCCESS, stat=DRMS_SUCCESS;
 
@@ -109,6 +117,7 @@ int DoIt(void)
   int ct,ct_prev,ct_next,ctr;
   float *sig, *lev;
   int *hits;
+  int axisbad[1];
 
   int i, j, k, c; //loop variables
 
@@ -116,17 +125,9 @@ int DoIt(void)
   int axisout[2]={nx,ny};
 
   
-      int nthreads;
-      nthreads=omp_get_num_threads();
-      //nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
-      //omp_set_num_threads(nthreads);                                     //set the number of threads to the maximum value
-      printf("Number of threads run in parallel = %d \n",nthreads);
- 
+  //**********************
+  //*CHECK WHETHER THE FLATFIELD OUTPUT SERIES EXISTS                                                                    */
 
-
-  /***********************************************************************************************************/
-  /*CHECK WHETHER THE FLATFIELD OUTPUT SERIES EXISTS                                                                    */
-  /***********************************************************************************************************/
     
        drms_series_exists(drms_env, filename_cosmic2_out, &status);
       if (status == DRMS_ERROR_UNKNOWNSERIES)
@@ -135,9 +136,12 @@ int DoIt(void)
 	  exit(EXIT_FAILURE);                                        //we exit the program
 	} 
   
+
       printf("START!\n");
       printtime();
 
+      //*****************************
+      //build query string
 
       char fnumb[2]={""};
       char ffnumb[2]={""};
@@ -155,6 +159,8 @@ int DoIt(void)
       TIME tfirst, tlast;
 
       printf("fsnfs %d %d\n", fsn_first, fsn_last);
+
+
  if (fsn_first == 0 || fsn_last == 2147483647)
    {
 
@@ -215,17 +221,23 @@ int DoIt(void)
     }
 
   
+  //****************************
+  //open records
 
  
   data     = drms_open_records(drms_env,query0,&stat);
 
- if (data == NULL){printf("can not open records\n"); exit(EXIT_FAILURE);}
+  if (data == NULL){printf("can not open records\n"); exit(EXIT_FAILURE);}
 
- drms_stage_records(data, 0, 1);
+  drms_stage_records(data, 1, 0);
 
   int nRecs=data->n;
   printf("number of records %d\n", nRecs);
   printtime();
+
+
+  //******************************
+  //read out keywords
 
 
 if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
@@ -245,22 +257,8 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
   float keyvalue_factor[nRecs];
   float *significance[nRecs], *level[nRecs];
   int new_count[nRecs];
-
   int npairs[nRecs];
-  int elem_prev, elem_next;
 
-  int axisbad[1];
-
-  int *cosmic_new;
-  float *val_new;
-  float *sig_new;
-
-  int counter=0;
-  int falsecounter=0, goodcounter=0;
-
-  cosmic_new=(int *)(malloc(limit_cosmic*sizeof(int)));
-  val_new=(float *)(malloc(limit_cosmic*sizeof(float)));
-  sig_new=(float *)(malloc(limit_cosmic*sizeof(float)));
 
   printtime();
   printf("create_records ...");
@@ -279,7 +277,6 @@ for (k=0; k<nRecs; ++k)
     keyvalue_fid[k] = drms_getkey_int(rec0[k],fidkey,&status);
     keyvalue_cam[k] = drms_getkey_int(rec0[k],keycamera,&status);
     keyvalue_fsn[k]= drms_getkey_int(rec0[k],keyfsn,&status);
-    keyvalue_fsn[k]= drms_getkey_int(rec0[k],keyfsn,&status);
     keyvalue_flag[k] = drms_getkey_int(rec0[k],keyexmax,&status);
     keyvalue_factor[k] = drms_getkey_float(rec0[k],keylimit,&status);
 
@@ -293,6 +290,12 @@ for (k=0; k<nRecs; ++k)
 
       }
  printtime();
+
+ 
+
+ //***********************************
+ //data reading loop
+
 
 printf("begin data  reading loop\n");
 
@@ -315,10 +318,32 @@ printf("begin data  reading loop\n");
    }
 
  printtime();
+
+ //******************************
+ //test loop
+
+  int elem_prev, elem_next;
+
+  int *cosmic_new;
+  float *val_new;
+  float *sig_new;
+
+  int counter=0;
+  int falsecounter=0, goodcounter=0;
+
+  cosmic_new=(int *)(malloc(limit_cosmic*sizeof(int)));
+  val_new=(float *)(malloc(limit_cosmic*sizeof(float)));
+  sig_new=(float *)(malloc(limit_cosmic*sizeof(float)));
+
+
+
+
 printf("begin test loop\n");
 
  for (k=0; k<nRecs; ++k)
    {
+     
+
      if (time_fl[k] >= tfirst && time_fl[k] <= tlast  && keyvalue_fsn[k] >= fsn_first && keyvalue_fsn[k] <= fsn_last)
        {
 
@@ -346,6 +371,7 @@ printf("begin test loop\n");
 
 		 if (elem_prev == 0 && elem_next == 0)
 		   {
+		     
 		     cosmic_new[ctr]=hits[c];
 		     val_new[ctr]=lev[c];
 		     sig_new[ctr]=sig[c];
@@ -376,7 +402,8 @@ printf("begin test loop\n");
 	 new_count[k]=ctr;
        }
 
-
+	 //*************************
+	 //set keywords
      
 
      recout = dataout->records[k];
@@ -387,7 +414,7 @@ printf("begin test loop\n");
      status=drms_setkey_int(recout, fidkey, keyvalue_fid[k]);
      status=drms_setkey_int(recout, keycamera, keyvalue_cam[k]);
      status=drms_setkey_int(recout, keyexmax, keyvalue_flag[k]);
-     status=drms_setkey_float(recout, keylimit, keyvalue_factor[k]);
+     status=drms_setkey_float(recout, keylimit, keyvalue_factor[k]); 
 	
      drms_keyword_setdate(recout);
 
@@ -396,13 +423,19 @@ printf("begin test loop\n");
      if (keyvalue_cam[k] == 2) status=drms_setkey_string(recout, keyinstrument, camera_str_front);
      if (keyvalue_cam[k] == 1) status=drms_setkey_string(recout, keyinstrument, camera_str_side);
 	    
-     segout = drms_segment_lookup(recout, segmentname_cosmic);
-     segout_val=drms_segment_lookup(recout, segmentname_val);
-     segout_sig=drms_segment_lookup(recout, segmentname_sig);
-	    
+   	    
 	 
-     if (new_count[k] >= 0) //write out data segments
+     //************************************
+     //write out data segments
+
+
+     if (new_count[k] >= 0)
        {
+
+	 segout = drms_segment_lookup(recout, segmentname_cosmic);
+	 segout_val=drms_segment_lookup(recout, segmentname_val);
+	 segout_sig=drms_segment_lookup(recout, segmentname_sig);
+
      axisbad[0]=new_count[k];
      arrout=drms_array_create(type_int,1,axisbad,NULL,&status);
      cosmic_ray_data=arrout->data;
@@ -414,7 +447,7 @@ printf("begin test loop\n");
      sig_data=arrout_sig->data;
 
 
-     for (i=0; i<new_count[k]; ++i){cosmic_ray_data[i]=cosmic_new[i]; val_data[i]=val_new[i]; sig_data[i]=sig_new[i];}
+     for (i=0; i<new_count[k]; ++i){cosmic_ray_data[i]=cosmic_new[i]; val_data[i]=val_new[i]; sig_data[i]=sig_new[i];} //copy new data array
 
        status=drms_segment_write(segout, arrout, 0);
        status=drms_segment_write(segout_val, arrout_val, 0);
@@ -427,6 +460,9 @@ printf("begin test loop\n");
        }
     
    }
+ 
+ //****************
+ //free arrays
 
  for (k=0; k<nRecs; ++k)
    {
@@ -459,7 +495,7 @@ printf("begin test loop\n");
 
 
 
-printtime();
+ printtime();
 
  printf("COMLETED!\n");
  return 0;
