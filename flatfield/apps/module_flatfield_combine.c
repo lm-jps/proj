@@ -63,14 +63,15 @@ ModuleArgs_t module_args[] =
      {ARG_END}
 };
 
-//void highpass(int, int, double, double[nx][ny]);
-
 
 int write_flatfields(char *filename_flatfield_out, DRMS_Array_t *arr_flat, DRMS_Array_t *arrout_new, int camera,
                      long long recnum[6], TIME tobs_link[2], TIME t_0, int focus, int focusclone, 
                      struct rotpar rot_new, 
                      struct rotpar rot_cur);
 
+
+int write_rot_flatfield(char *filename_flatfield, DRMS_Array_t *arrout_new, int camera,
+			TIME t_0, int focus, struct rotpar rot_new);
 
 int retrieve_offpoint(char *query, int camera, float *offpoint, long long *recnum, int *focus);
 
@@ -83,15 +84,24 @@ int get_latest_bad(TIME t_0, int camera, const char *fname, const char *segname,
 int read_flatfield_series(TIME t_0, int camera, float *flatfield, int *focus, TIME tobs_link[2], long long recnum[6], 
 			  struct rotpar *rot_cur);
 
+void highpass_2d(int M, int N, double fwhm1, double fwhm2, double phi, double a[nx][ny]);
 int DoIt(void)
 {
 
 #include "module_flatfield_const.h"
 
+  //**********************************
+  //read input parameters
+
+
   const char *inRecQuery = cmdparams_get_str(&cmdparams, kRecSetIn, NULL); //cmdparams is defined in jsoc_main.h
   const char *datum =  cmdparams_get_str(&cmdparams, datumn, NULL);
   int cameraint = cmdparams_get_int(&cmdparams, cameran, NULL); //get parameters
 
+
+  //***********************************
+  //define variables and allocate memory
+ 
   int  status, stat, status_bad_s,status_latest_off_s, status_off_s, status_flat_s, status_latest_s;
 
   DRMS_Segment_t *segin = NULL;
@@ -146,7 +156,9 @@ int DoIt(void)
   flathp=(float *)(malloc(nx*ny*sizeof(float)));
 
 
+  //********************************
   //set parallelization parameters
+
       int nthreads; 
       nthreads=omp_get_num_threads(); //read max. number of threads //set outside the module
       //nthreads=omp_get_num_procs();                                      //number of threads supported by the machine where the code is running
@@ -157,7 +169,7 @@ int DoIt(void)
 
   /***********************************************************************************************************/
   /*CHECK WHETHER THE FLATFIELD OUTPUT SERIES EXIST                                                                    */
-  /***********************************************************************************************************/
+
     
        drms_series_exists(drms_env, filename_flatfield_out, &status);
       if (status == DRMS_ERROR_UNKNOWNSERIES)
@@ -170,6 +182,9 @@ int DoIt(void)
 	  printf("Output series %s exists.\n",filename_flatfield_out);
 	}
 
+
+      //*******************************
+      //build query string
 
       char query[256]="";
       strcat(query, inRecQuery);
@@ -185,38 +200,46 @@ int DoIt(void)
       strcat(query, "]");
 
       printf("%s\n", query);
+
+
+      //***************************
+      //open records
+
       data     = drms_open_records(drms_env,query,&stat);  //query fid flatfields
 
- if (data == NULL){printf("can not open records\n"); return 1;}
+      if (data == NULL){printf("can not open records\n"); return 1;}
 
-  int nRecs=data->n;
-  printf("number of records %d\n", nRecs);
+      int nRecs=data->n;
+      printf("number of records %d\n", nRecs);
 
 
 
-if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
-  {
-    int keyvalue_fid[nRecs];
-    int keyvalue_cam[nRecs];
-    int keyvalue_cadence[nRecs];
-    DRMS_Record_t *rec0[nRecs];
-    float *flatfield_fid[nRecs];
-    char *keyvalue_query[nRecs];
-    DRMS_Array_t *arrin0[nRecs];
-    short wave[nRecs];
-    short pol[nRecs];
+      //****************************
+      //read keywords
+
+      if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
+	{
+	  int keyvalue_fid[nRecs];
+	  int keyvalue_cam[nRecs];
+	  int keyvalue_cadence[nRecs];
+	  DRMS_Record_t *rec0[nRecs];
+	  float *flatfield_fid[nRecs];
+	  char *keyvalue_query[nRecs];
+	  DRMS_Array_t *arrin0[nRecs];
+	  short wave[nRecs];
+	  short pol[nRecs];
  
+	  float pang[nRecs];
+	  int npairs[nRecs];
 
-    int npairs[nRecs];
-
-    float nwav[6];
+	  float nwav[6];
     for (i=0; i<6; ++i) nwav[i]=0.0;
 
 
     for (k=0; k<nRecs; ++k) //loop over FIDs
       {
 	rec0[k]=data->records[k];
-
+	pang[k]=drms_getkey_float(rec0[k],"PANG",&status);
 	npairs[k]= drms_getkey_int(rec0[k],keynpairs,&status);
 	keyvalue_query[k]=drms_getkey_string(rec0[k], querykey,&status);
 	keyvalue_cam[k]=drms_getkey_int(rec0[k],keycamera,&status);
@@ -231,12 +254,14 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
 	flatfield_fid[k] = arrin0[k]->data;
 
     
-	
+	if (isnan(pang[k]) || fabs(pang[k] - pang[0]) > 0.01){printf("Inconsistent P-angle in FID flatfields %d %f\n", k, pang[k]); return 1;} 
 
       }
 
- 
+    
 
+    //***********************
+    //get time stamp t_0 (T_START)
 
     char timefirst[256]="";
     strcat(timefirst, datum);
@@ -245,7 +270,9 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
     TIME t_0=sscan_time(timefirst)+24.0*60.0*60.0;  // time stamp: end of day "datum"
 
  
- 
+    //*************************
+    //check parameters for consistency
+
     camera= drms_getkey_int(rec0[nRecs-1],keycamera,&status); //reference camera
     cadence=drms_getkey_int(rec0[nRecs-1],keycadence,&status);  //reference cadence
     char *qstr_refflat=keyvalue_query[nRecs-1]; //reference offpoint flatfield
@@ -266,7 +293,10 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
 
 
 
-   
+    //*******************************
+    //combine FID flatfields
+
+
     float sum=0.0;
     for (k=0; k<nRecs; ++k) // loop over FIDs: add up flatfields
       {
@@ -279,12 +309,12 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
 	  }
       }
 
- printf("query flat %s\n", qstr_refflat);
+    printf("query flat %s\n", qstr_refflat);
 
 
- ////////////////////////////////////////
+ //**********************************
  //   get reference offpoint flatfield and links
- ////////////////////////////////////////
+
 
  status_off_s=retrieve_offpoint(qstr_refflat, cameraint, offpoint, &dummy, &focus); //retrieve offpoint used as reference, which is the offpoint closest to t_0 at the time of porcessing. 
  if (status_off_s != 0){printf("could not find offpoint flatfield\n"); return 1;}
@@ -313,27 +343,45 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
 
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) if (bad[j*nx+i] == 0) flat[j*nx+i]=0.0; //set bad pixels to 0.0
 
- //highpass
+ //*************************************
+ //highpass flatfield
 
- const float kernel_size=4.0;
- float stdd=fwhm[cameraint-1]/2.0/sqrt(2.0*log(2.0)); 
- int nwd=(int)(fwhm[cameraint-1]*kernel_size);  //kernel size
- init_fresize_gaussian(&fresizes,stdd,nwd,1);
+ //*********************
+ //asymmetric filter
 
- fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0); //gaussian filter with FWHM defined in module_flatfield_const.h   
+ double ffr[nx][ny];
+ for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) ffr[i][j]=flat[j*nx+i];
+ highpass_2d(nx, ny, fwhm_x, fwhm_y, pang[0], ffr);
+ for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)flathp[j*nx+i]=ffr[i][j];
 
- for (j=10; j<(ny-10); ++j) for (i=10; i<(nx-10); ++i) flathp[j*nx+i]=flat[j*nx+i]-ffhp[j*nx+i]; //highpass=image-lowpass
+ //******************
+ //symmetric filter
 
- // highpass(nx, ny, fwhm[cameraint-1], ffield);
 
+ //const float kernel_size=4.0;
+ //float stdd=fwhm[cameraint-1]/2.0/sqrt(2.0*log(2.0)); //calculate sigma from FWHM
+ //int nwd=(int)(fwhm[cameraint-1]*kernel_size);  //kernel size
+ //init_fresize_gaussian(&fresizes,stdd,nwd,1);
+
+ //fresize(&fresizes,flat, ffhp, nx,ny,nx,nx,ny,nx,0,0,1.0); //gaussian filter with FWHM defined in module_flatfield_const.h    !!
+
+ //for (j=10; j<(ny-10); ++j) for (i=10; i<(nx-10); ++i) flathp[j*nx+i]=flat[j*nx+i]-ffhp[j*nx+i]; //highpass=image-lowpass !!
+ 
+ //**************************************
+ //normalize highpass filtered flatfield (only necessary, if set is incomplete)
 
  if (sum != 0.0 && sum !=1.0)
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i) flathp[j*nx+i]=flathp[j*nx+i]/sum;
 
+
+ //*************************************
+ //close records
+
  drms_close_records(data,DRMS_FREE_RECORD); //close input data records
 
 
- 
+ //*************************************
+ //update all pixels in hmi.flatfield (not used !!)
 
  int count=0; //number of pixels updated
 
@@ -354,6 +402,8 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
    }
 
 
+ //*************************************
+ //update outlier pixels in hmi.flatfield (not used !!)
 
  if (update_flag == 1) //update only outliers
    {
@@ -369,6 +419,10 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
 	 }
    }
 
+
+//*************************************
+//don't update any pixels (just copy) (used!)
+
  if (update_flag == 0) //don't update anything
    {
    
@@ -381,41 +435,72 @@ if (stat == DRMS_SUCCESS && data != NULL && nRecs > 0)
 
  arr_flat=drms_array_create(type_float,2,axisout,NULL,&status);
  arr_flat_new=drms_array_create(type_float,2,axisout,NULL,&status);
- arr_flat_rel=drms_array_create(type_float,2,axisout,NULL,&status); //second flatfield series
+
 
  ff_new=arr_flat_new->data;
  ff=arr_flat->data;
- ff_rel=arr_flat_rel->data;  //second flatfield series
+ 
 
 
  
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)ff[j*nx+i]=flatfield[j*nx+i];
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i)ff_new[j*nx+i]=flatfield_new[j*nx+i];
 
-//second flatfield series
+
+ rot_new.rotbad=count;
+ rot_new.rotpairs=npairstot;
+ rot_new.rotcadence=cadence;
+
+
+ //*****************************************
+ //second flatfield series (hmi.flatfield_update)
+
+
+ arr_flat_rel=drms_array_create(type_float,2,axisout,NULL,&status); //second flatfield series
+ ff_rel=arr_flat_rel->data;  //second flatfield series
+
+
+ //*****************************************
+ //update all pixels 
+
  int count_rel=0;
  for (j=0; j<ny; ++j) for (i=0; i<nx; ++i){
-   if (bad[j*nx+i])
+   if (bad[j*nx+i] && npairstot >= 11520)
      {
        ff_rel[j*nx+i]=(1.0+flathp[j*nx+i])*offpoint[j*nx+i];
        if (flathp[j*nx+i] != 0.0) ++count_rel;
      }
-   else ff_rel[j*nx+i]=1.0;
+   else 
+     {
+       ff_rel[j*nx+i]=offpoint[j*nx+i];
+     }
  }
 
-rot_new.rotbad=count;
-rot_new.rotpairs=npairstot;
-rot_new.rotcadence=cadence;
 
  rot_rel.rotbad=count_rel;
  rot_rel.rotpairs=npairstot;
  rot_rel.rotcadence=cadence;
 
+ printf("rot_pairs / mod. pixels %d %d\n", npairstot, count_rel);
+
+ //*******************************************
+ //write out to hmi.flatfield
+
 
  status=write_flatfields(filename_flatfield_out, arr_flat, arr_flat_new, camera, recnum, tobs_link, t_0, focus, focusclone, rot_new, rot_cur);
  if (status != 0){printf("could not write out flatfield to hmi series\n"); return 1;}
- //status=write_flatfields(filename_flatfield_rel, arr_flat, arr_flat_rel, camera, recnum, tobs_link, t_0, focus, focusclone, rot_rel, rot_cur);
- //if (status != 0){printf("could not write out flatfield to intermediate series\n"); return 1;}
+
+ //********************************************
+ //write out to hmi.flatfield_update
+
+ if (count_rel == 0){printf("not enough data for rotational flatfield\n"); return 1;}
+ status=write_rot_flatfield(filename_rot_flatfield, arr_flat_rel, camera, t_0, focus, rot_rel);
+
+
+ if (status != 0){printf("could not write out flatfield to intermediate series\n"); return 1;}
+
+ 
+
   }
  else
  
@@ -424,21 +509,29 @@ rot_new.rotcadence=cadence;
       return 1;
    }     
 
+      //*****************
+      //free arrays
+
+      free(flatfield);
+      free(flatfield_new);
+      free(offpoint);
+      free(dummyarr);
+      free(bad);
+      free(dark);
+      free(flat);
+      free(flathp);
+      free(ffhp);
+      free_fresize(&fresizes);
 
 
- free(flatfield);
- free(flatfield_new);
- free(offpoint);
- free(dummyarr);
- free(bad);
- free(dark);
- free(flat);
- free(flathp);
- free(ffhp);
- free_fresize(&fresizes);
+ //**************************
+ //write error if there is not enough information for rotational flatfield
+
+ 
 
 
  printf("COMLETED!\n");
+
  return 0;
 
 }
