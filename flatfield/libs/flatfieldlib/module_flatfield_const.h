@@ -1,12 +1,16 @@
 
 
 const int cam_id_front=3, cam_id_side=2; // 
-const double fwhm[2]={1.0, 1.0};                   // fwhm for highpass filter  
-const int cthreshold=300; // minimum number of pairs of frames (minimum is 3) 
+const double fwhm[2]={1.0, 1.0};                   // fwhm for highpass filter 
+
+const double fwhm_x=3.0; //for asymmetric filter (rotation direction) 
+const double fwhm_y=0.5; //perpendicular direction
+
+const int cthreshold[2]={320,960}; // minimum number of pairs of frames (minimum is 3) 
 const float threshold_lower=-10000.0;  //threshold for lower limit; //!!correction turned off 
 const float threshold_upper=10000.0; //threshold for upper limit; // !! correction turned off
 
-const int update_flag=0; //0: no update, 1: single pixel update, 2:full update // 
+const int update_flag=0; //0: no update, 1: single pixel update, 2:full update for hmi.flatfield// 
 
 const int debug=0; //write out debug information  
 
@@ -21,7 +25,7 @@ cpa.rotcoef1= -2.0*M_PI*1e-3*49.0;
 cpa.rotcoef2= -2.0*M_PI*1e-3*84.0;
 
 const double omegaconst[2]={1.7, 1.2};                         //overrelaxation parameter // 
-const double normconst[2]={0.03/600., 0.01/600.};           //regularization parameter
+const double normconst[2]={0.03/600., 0.01/600.};           //regularization parameter  
 const int maxiterconst[2]={300,200}; 
 const double convconst[2]={1e-4, 1e-4};
 //other possible differential rotation models
@@ -199,7 +203,6 @@ const char *lev1_y0="Y0_LF";
 const char *lev1_vr="OBS_VR";
 
 
-// !! checked in version
 
   //series names
 
@@ -214,6 +217,9 @@ char *filename_dark="hmi.dark";
 
 //char *filename_flatfield_rel="su_richard.flatfield_rel";  //output of module_flatfield_combine
 char *filename_flatfield_rel="su_production.flatfield_rel"; //for checked in version
+
+//char *filename_rot_flatfield="su_richard.flatfield_update";  //output of module_flatfield_combine
+char *filename_rot_flatfield="hmi.flatfield_update"; //for checked in version
 
 //char *filename_flatfield_fid="su_richard.flatfield_fid_b"; //output of module_flatfield // input to module_flatfield_combine
 char *filename_flatfield_fid="su_production.flatfield_fid"; //for checked in version
