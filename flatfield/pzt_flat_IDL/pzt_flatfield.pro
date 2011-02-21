@@ -381,6 +381,13 @@ print, "number of cosmic rays", cnt
 
 if keyword_set(plots) then plot, x0, y0, psym=-2
 
+
+openw,1,'legpos2'
+printf, 1, x0
+printf, 1, y0
+close,1
+
+
 openw,1,'imr_hmi0.bin'
 writeu,1,imr
 close,1
