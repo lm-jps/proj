@@ -111,6 +111,9 @@ Pro sxaddpar, Header, Name, Value, Comment, Location, before=before, $
 ;       Oct 2001, Treat COMMENT or blank string like HISTORY keyword W. Landsman
 ;       Jan 2002, Allow BEFORE, AFTER to apply to COMMENT keywords W. Landsman
 ;       June 2003, Added SAVECOMMENT keyword    W. Landsman
+;       Jan 2004, If END is missing, then add it at the end W. Landsman
+;       May 2005 Fix SAVECOMMENT error with non-string values W. Landsman
+;       Oct 2005 Jan 2004 change made SXADDPAR fail for empty strings W.L. 
 ;       
 ;-
  if N_params() LT 3 then begin             ;Need at least 3 parameters
@@ -156,8 +159,22 @@ Pro sxaddpar, Header, Name, Value, Comment, Location, before=before, $
 
  keywrd = strmid(header,0,8)                 ;Header keywords
  iend = where(keywrd eq 'END     ',nfound)
- if nfound eq 0 then header[0]=ENDLINE      ;no end, insert at beginning
- iend = iend[0] > 0                          ;Make scalar
+;
+;  If no END, then add it.  Either put it after the last non-null string, or
+;  append it to the end.
+;
+        if nfound EQ 0 then begin
+                ii = where(strtrim(header) ne '',nfound)
+                ii = max(ii) + 1
+                if ii eq n_elements(header) then begin
+                        header = [header,endline]
+                        n = n+1 
+                endif else header[ii] = endline
+                keywrd = strmid(header,0,8)
+                iend = where(keywrd eq 'END     ',nfound)
+        endif
+;
+        iend = iend[0] > 0                      ;make scalar
 
 ;  History, comment and "blank" records are treated differently from the
 ;  others.  They are simply added to the header array whether there are any
@@ -168,6 +185,7 @@ Pro sxaddpar, Header, Name, Value, Comment, Location, before=before, $
 ;
 ;  If the header array needs to grow, then expand it in increments of 5 lines.
 ;
+
      if iend GE (n-1) then begin
                  header = [header,replicate(blank,5)] ;yes, add 5.
                  n = N_elements(header)
@@ -242,7 +260,7 @@ Pro sxaddpar, Header, Name, Value, Comment, Location, before=before, $
          i = ipos[nfound-1]
          if comment eq '' or keyword_set(savecom) then begin  ;save comment?
          if strmid(header[i],10,1) NE "'" then $
-                 comment=strmid(header[i],32,48) else begin
+                 ncomment=strmid(header[i],32,48) else begin
                  slash = strpos(header[i],'/', 20)  
                  if slash NE -1 then $
                         ncomment =  strmid(header[i], slash+1, 80) else $

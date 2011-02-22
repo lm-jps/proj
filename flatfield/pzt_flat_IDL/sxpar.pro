@@ -7,7 +7,8 @@ function SXPAR, hdr, name, abort, COUNT=matches, COMMENT = comments, $
 ;      Obtain the value of a parameter in a FITS header
 ;
 ; CALLING SEQUENCE:
-;      result = SXPAR( Hdr, Name, [ Abort, COUNT=, COMMENT =, /NoCONTINUE  ])   
+;      result = SXPAR( Hdr, Name, [ Abort, COUNT=, COMMENT =, /NoCONTINUE, 
+;                                           /SILENT  ])   
 ;
 ; INPUTS:
 ;      Hdr =  FITS header array, (e.g. as returned by READFITS) 
@@ -115,8 +116,12 @@ function SXPAR, hdr, name, abort, COUNT=matches, COMMENT = comments, $
 ;       W. Landsman Dec 2001, Optional /SILENT keyword to suppress warnings
 ;       W. Landsman/D. Finkbeiner  Mar 2002  Make sure extracted vectors 
 ;             of mixed data type are returned with the highest type.
+;       W.Landsman Aug 2008  Use vector form of VALID_NUM()
 ;-
 ;----------------------------------------------------------------------
+ On_error,2
+ compile_opt idl2
+
  if N_params() LT 2 then begin
      print,'Syntax -     result =  sxpar( hdr, name, [abort])'
      print,'   Input Keywords:    /NOCONTINUE, /SILENT'
@@ -183,17 +188,14 @@ function SXPAR, hdr, name, abort, COUNT=matches, COMMENT = comments, $
 
         if vector then begin
             nfound = where(strpos(keyword,nam) GE 0, matches)
-            if ( matches gt 0 ) then begin
+            if  matches GT 0  then begin
                 numst= strmid( hdr[nfound], name_length, num_length)
-                number = replicate(-1, matches)
-                for i = 0, matches-1 do         $
-                    if VALID_NUM( numst[i], num,/INTEGER) then number[i] = num
-                igood = where(number GE 0, matches)
-                if matches GT 0 then begin
-                    nfound = nfound[igood]
-                    number = number[igood]
-                endif
-            endif
+		igood = where(VALID_NUM(numst,/INTEGER), matches)
+		if matches GT 0 then begin 
+		     nfound = nfound[igood]
+                     number = long(numst[igood])
+		endif 
+           endif
 
 ;  Otherwise, find all the instances of the requested keyword.  If more than
 ;  one is found, and NAME is not one of the special cases, then print an error
