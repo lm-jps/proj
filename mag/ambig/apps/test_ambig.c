@@ -69,7 +69,7 @@ ModuleArgs_t module_args[] =
     {ARG_FLOAT, "lambda", "1.", "Weighting factor between div. and vert. current density."},
     {ARG_FLOAT, "tfac0", "2.", "Input factor to scale initial temperature (tfac0>0)."},
     {ARG_FLOAT, "tfactr", "0.990", "Input factor to reduce temperature (0<tfactr<1)."},
-    {ARG_INT, "mask", "0", "Wether to use mask information or not"},
+    {ARG_INT, "bitmap", "0", "Wether to use mask information or not"},
     {ARG_END}
 };
 
@@ -126,7 +126,7 @@ int DoIt(void)
     float bthresh, lambda, tfac0, tfactr;
     int verbflag;
     int outDims[2];
-    int useMask;
+    int useBitmap;
 
     int i, j, l, m;
     int nx, ny, nxny, nxnye, nxnyg, nerode, ngrow;
@@ -183,7 +183,7 @@ int DoIt(void)
     lambda = params_get_float(&cmdparams, "lambda");
     tfac0 = params_get_float(&cmdparams, "tfac0");
     tfactr = params_get_float(&cmdparams, "tfactr");
-    useMask = params_get_int(&cmdparams, "mask");		// control added feb 19 2011 by X. Sun
+    useBitmap = params_get_int(&cmdparams, "bitmap");		// control added feb 19 2011 by X. Sun
 
     /* Check parameters */
     if (nap > npad) {nap = npad; SHOW("nap set to npad\n");}
@@ -406,7 +406,7 @@ printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
             // Create bitmap
             bitmap = (int *)calloc(nxny, sizeof(int));
             for (i = 0; i < nxny; i++) {
-               if (useMask)		// updated feb 19
+               if (useBitmap)		// updated feb 19
                  bitmap[i] = (mask[i] >= mask_id) ? 1 : 0;		// updated frpm '==' to '>=' on oct 13 2010
 			   else
 			     bitmap[i] = 1;		// Feb 11 2010, anneal all pixels. for now
