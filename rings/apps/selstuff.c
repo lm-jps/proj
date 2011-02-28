@@ -125,6 +125,7 @@ DRMS_RecordSet_t *select_dataset_from_time_interval (const char *series,
   int tmid_cr, tstrt_cr, tstop_cr;
   int status;
   char rec_query[DRMS_MAXQUERYLEN];
+char time_str[64];
 		   /*  get required series info from first record in series  */
 					       /*  platform, cadence, phase  */
 /*  not currently implemented  */
@@ -137,7 +138,6 @@ DRMS_RecordSet_t *select_dataset_from_time_interval (const char *series,
   rec = ds->records[0];
   drms_close_records (ds, DRMS_FREE_RECORD);
 */
-
   if (sscanf (tmid_str, "%d:%lf", &tmid_cr, &tmid_cl) == 2) {
 						/*  tmid specified as CR:CL  */
     tmid = earth_meridian_crossing (tmid_cl, tmid_cr);
