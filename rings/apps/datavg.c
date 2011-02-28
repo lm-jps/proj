@@ -1062,5 +1062,6 @@ return 0;
  *	11.01.11	added reporting of locations of extremal values, checks
  *		for out-of-range values
  *	11.02.10	added traps for inappropriate output series structure
+ *  v 0.9 frozen 11.02.28
  *
  */
