@@ -45,6 +45,10 @@ if ($#argv > 2) then
   @ CROT = `echo $2 | sed  -e "s/^0*//"`
   @ CLON = `echo $3 | sed  -e "s/^0*//"`
   set FLAG
+  set MSCALE = Default
+  set MZERO = Default
+  set PSCALE = Default
+  set PZERO = Default
   switch ($1)
     case "-v":
       set TYP = vel
@@ -52,6 +56,10 @@ if ($#argv > 2) then
       set OBS = V
       set RJCT = $RDIR.V
       set FLAG = -o
+      set MSCALE = 0.25
+      set MZERO = 0.0
+      set PSCALE = 10.0
+      set PZERO = 327670.0
       breaksw
     case "-i":
       set TYP = int
@@ -92,6 +100,10 @@ else
   set OUT = $ONMSP.V\_avg120
   set RJCT = $RDIR.V
   set FLAG = -o
+  set MSCALE = 0.25
+  set MZERO = 0.0
+  set PSCALE = 10.0
+  set PZERO = 327670.0
 endif
 set CARTIM = $CROT\:`printf %03d $CLON`
 
@@ -137,8 +149,9 @@ echo "$NOW begin averaging $CARTIM" > $MMSG
 cat $MMSG >> $LOGF
 
 @ BEGUN = `date +%s`
-$DATAVG $FLAG in= $IN tmid= $CARTIM out= $OUT length= 120 mask= $QMASK \
-    reject= $RJCT >>& $RLOG
+$DATAVG $FLAG in= $IN tmid= $CARTIM out= $OUT length= 120 \
+    mask= $QMASK reject= $RJCT \
+    mscale= $MSCALE mzero = $MZERO pscale= $PSCALE pzero= $PZERO >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $OBS averaging for $CARTIM incomplete"
   echo $SUBJ >> $LOGF
@@ -154,6 +167,9 @@ else
   echo "  ($CARTIM) time for averaging $RECS on `hostname`: $ELAPS min" >> $LOGF
   echo "$NOW finish" >> $MMSG
   echo "  average in $OUT""[$CROT][$CLON]" >> $MMSG
+  head -20 $RLOG >> $LOGF
+  echo "  ..." >> $LOGF
+  tail -20 $RLOG >> $LOGF
 endif
 goto CLEANUP
 
