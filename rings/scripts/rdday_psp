@@ -169,12 +169,23 @@ set FLOW = $NMSP.$BASE\flows$SUFX\_frame
 # set THRM = $NMSP.$BASE\struc$SUFX
 
 # input series
-set ISER = hmi.V_45s
+set ISER = $NMSP.V_45s
 # set MSER = mdi.fd_M_96m_lev18
-set MSER = hmi.M_45s
-set BCKG = hmi.V_avg120
+set MSER = $NMSP.M_45s
+set BCKG = $NMSP.V_avg120
 set GSER = yale_cb.guess_table
 set GUESS = $GSER"[1]"
+
+if ($TEST) then
+  grep -q "^ISER =" $TSTOPT
+  if ($status == 0) set ISER = `grep "^ISER =" $TSTOPT | awk '{print $3}'`
+  grep -q "^MSER =" $TSTOPT
+  if ($status == 0) set MSER = `grep "^MSER =" $TSTOPT | awk '{print $3}'`
+  grep -q "^BCKG =" $TSTOPT
+  if ($status == 0) set BCKG = `grep "^BCKG =" $TSTOPT | awk '{print $3}'`
+  grep -q "^GSER =" $TSTOPT
+  if ($status == 0) set GSER = `grep "^GSER =" $TSTOPT | awk '{print $3}'`
+endif
 
 if ($TEST) then
   if ($SKIPTRK) set TSER = hmi.$BASE\track$SUFX
@@ -466,8 +477,8 @@ if ($status) then
   echo "  rdfitf failure on `hostname`"  >> $MMSG
   echo "  run log is on $RLOG"  >> $MMSG
   echo "  ($CARTIM) rdfitf failure on `hostname` for $CARTIM"  >> $LOGF
-  goto SKIP_INVRT
   @ STRTSTOP = 0
+  goto SKIP_INVRT
 else
   @ FINIS = `date +%s`
   @ ELAPS = $FINIS - $BEGUN
@@ -554,6 +565,7 @@ if ($LONC == 360) @ LONC = 0
 if ($SYSE == 5) then
   @ TOTEL = 0
   @ TOTCT = 0
+  @ FAILCT = 0
   foreach LAT (`$GENTG time= $CARTIM grid= rdcm$TILES`)
     set noglob
     set RGNS = (`show_info -iq ds= $PSER"[$CROT][$CLON][][$LAT][]"`)
@@ -575,13 +587,9 @@ if ($SYSE == 5) then
     @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
     @ FAIL = $TOTCT - $QJOK
     if ($FAIL) then
-      set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
-      echo "  $FAIL rdfitc failures on cluster" >> $MMSG
-      echo "  ($CARTIM) $FAIL rdfitc failures on cluster" >> $LOGF
-      echo "  qsub script is $SCRIPT" >> $MMSG
-      echo "  qsub script is $SCRIPT" >> $LOGF
-      @ STRTSTOP = 0
-      goto CLEANUP
+      @ FAILCT++
+      echo "  $FAIL rdfitc failures on cluster at Latitude `printf %+05.1f $LAT`" >> $MMSG
+      echo "  ($CARTIM) $FAIL rdfitc failures on cluster at Latitude `printf %+05.1f $LAT`" >> $LOGF
     endif
     @ FINIS = `date +%s`
     @ ELAPS = $FINIS - $BEGUN
@@ -589,8 +597,18 @@ if ($SYSE == 5) then
   end
   @ TOTEL += 30
   @ TOTEL /= 60
-  echo "  total time for fitting $RGNCT regions on the cluster: $TOTEL min" >> $MMSG
-  echo "  ($CARTIM) total time for fitting $RGNCT regions on the cluster: $TOTEL min" >> $LOGF
+  if ($FAILCT) then
+    set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
+    @ FITSDONE = `show_info -cq ds= $CSER"[$CROT][$CLON]"`
+    echo "  $FITSDONE successful fits" >> $MMSG
+    echo "  $FITSDONE successful fits" >> $LOGF
+    echo "  total time for fitting $FITSDONE regions on the cluster: $TOTEL min" >> $MMSG
+    echo "  ($CARTIM) total time for fitting $FITSDONE regions on the cluster: $TOTEL min" >> $LOGF
+    @ STRTSTOP = 0
+  else
+    echo "  total time for fitting $RGNCT regions on the cluster: $TOTEL min" >> $MMSG
+    echo "  ($CARTIM) total time for fitting $RGNCT regions on the cluster: $TOTEL min" >> $LOGF
+  endif
   echo "    fits in $CSER""[$CROT][$CLON]" >> $MMSG
   set CTIME = $TOTEL
   @ RPCT = `show_info -c ds= $CSER"[$CROT][$CLON]" | awk '{print $1}'`
@@ -622,6 +640,7 @@ else
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
     echo '  in= "$RGN" >>&' $RLOG >> $SCRIPT
   else
+# this branch of the script is never reached
     set RGNS = (`show_info -iq ds= $PSER"[$CROT][$CLON][][][0]"`)
     unset noglob
     @ EXPCT = $#RGNS
