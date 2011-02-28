@@ -80,7 +80,7 @@
 						      /*  module identifier  */
 char *module_name = "rdcoverage";
 char *module_desc = "report input data coverage for tracking options";
-char *version_id = "0.7";
+char *version_id = "0.8";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"ds", "", "input data series or dataset"}, 
@@ -668,17 +668,6 @@ printf ("need ephem from time\n");
   badpkey = badqual = badfill = badtime = blacklist = 0;
   for (nr = 0; nr < recct; nr++) {
     irec = ds->records[nr];
-    tobs = drms_getkey_time (irec, tobs_key, &status);
-    if (time_is_invalid (tobs)) {
-							  /*  no data, skip  */
-      badpkey++;
-      if (verbose) {
-	drms_keyword_snprintfval (drms_keyword_lookup (irec, trec_key, 1),
-	    keyvalstr, DRMS_DEFVAL_MAXLEN);
-	printf ("%s: %s invalid\n", keyvalstr, tobs_key);
-      }
-      continue;
-    }
     quality = drms_getkey_int (irec, qual_key, &status);
     if ((quality & qmask) && !status) {
 						    /*  partial image, skip  */
@@ -688,6 +677,17 @@ printf ("need ephem from time\n");
 	    keyvalstr, DRMS_DEFVAL_MAXLEN);
 	printf ("%s: %s = %08x matches %08x\n", keyvalstr, qual_key, quality,
 	    qmask);
+      }
+      continue;
+    }
+    tobs = drms_getkey_time (irec, tobs_key, &status);
+    if (time_is_invalid (tobs)) {
+							  /*  no data, skip  */
+      badpkey++;
+      if (verbose) {
+	drms_keyword_snprintfval (drms_keyword_lookup (irec, trec_key, 1),
+	    keyvalstr, DRMS_DEFVAL_MAXLEN);
+	printf ("%s: %s invalid\n", keyvalstr, tobs_key);
       }
       continue;
     }
@@ -770,8 +770,12 @@ printf ("need ephem from time\n");
         f = (ttrgt - tlast) / (tobs - tlast);
 	g = 1.0 - f;
 
-	if (verbose) printf ("step %d to be interpolated from images %s and %s\n",
+	if (verbose) {
+	  sprint_time (ptbuf, tlast, "", 0);
+	  sprint_time (tbuf, tobs, "", 0);
+	  printf ("step %d to be interpolated from images %s and %s\n",
 	      or, ptbuf, tbuf);
+	}
 
 	or++;
 	if (or >= length) {
@@ -826,5 +830,7 @@ printf ("need ephem from time\n");
  *  10.04.17 	created this file, based on mtrack; versions < 0.7 not saved
  *  v 0.7	added some verbose reporting, extracted some utility functions
  *  v 0.7 frozen 2010.08.19
+ *  10.10.28	moved quality flag check ahead of T_OBS check
+ *  v 0.8 frozen 2011.02.28
  *
  */
