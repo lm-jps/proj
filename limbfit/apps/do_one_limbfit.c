@@ -7,8 +7,8 @@
 			
 	
 	#define lfr->code_name 		"limbfit"
-	#define lfr->code_version 	"V1.8r0" 
-	#define lfr->code_date 		"Mon Oct 11 14:52:17 PDT 2010" 
+	#define lfr->code_version 	"V1.9r0" 
+	#define lfr->code_date 		"Mon Feb 28 11:45:21 PST 2011" 
 */
 
 #include "limbfit.h"
@@ -98,6 +98,12 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 	DRMS_Segment_t *segment_out;
 	static DRMS_Array_t *img;
 
+	lfr->code_name=CODE_NAME;
+	lfr->code_version=CODE_VERSION;
+	lfr->code_date=CODE_DATE;
+	lfr->comment=comment;
+	lfr->dsin=dsin;
+
 	seg_cnt = drms_record_numsegments (record_in);
 	if (seg_cnt < 1) 
 	{
@@ -120,34 +126,34 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 		lfv->ix = drms_getkey_float(record_in, "X0_LF", &rstatus);
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, "drms_getkey_float(X0_LF)", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,NULL,debug);
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr,debug);
 			return(ERR_DRMS_READ_MISSING_DATA);   
 		}
 		if(isnan(lfv->ix)) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_XYR_LF,rstatus, "X0_LF missing", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,opf,0,NULL,debug);
+			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,opf,0,lfr,debug);
 			return(ERR_DRMS_READ_MISSING_XYR_LF);   
 		}
 		lfv->iy = drms_getkey_float(record_in, "Y0_LF", &rstatus);
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, "drms_getkey_float(Y0_LF)", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,NULL,debug);
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr,debug);
 			return(ERR_DRMS_READ_MISSING_DATA);   
 		}
 		if(isnan(lfv->iy)) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_XYR_LF,rstatus, "Y0_LF missing", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,opf,0,NULL,debug);
+			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,opf,0,lfr,debug);
 			return(ERR_DRMS_READ_MISSING_XYR_LF);   
 		}
 		lfv->ir = drms_getkey_float(record_in, "RSUN_LF", &rstatus);
 		  if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, "drms_getkey_float(RSUN_LF)", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,NULL,debug);
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr,debug);
 			return(ERR_DRMS_READ_MISSING_DATA);   
 		}
 		if(isnan(lfv->ir)) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_XYR_LF,rstatus, "RSUN_LF missing", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,opf,0,NULL,debug);
+			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,opf,0,lfr,debug);
 			return(ERR_DRMS_READ_MISSING_XYR_LF);   
 		}
 		lfv->img_sz0=img->axis[0];
@@ -206,12 +212,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			//---------------------------------------
 			//		2) set all keywords
 			//---------------------------------------
-			lfr->code_name=CODE_NAME;
-			lfr->code_version=CODE_VERSION;
-			lfr->code_date=CODE_DATE;
 			int num_ext=3;
-			lfr->comment=comment;
-			lfr->dsin=dsin;
 // need to test status...
 			rstatus=drms_setkey_string(record_out, "SERIESCN", 	series_name);
 			rstatus=drms_setkey_string(record_out, "INSERIES", 	lfr->dsin);
@@ -246,6 +247,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			//---------------------------------------
 			//		3) write segments
 			//---------------------------------------
+/*
 			int i_naxes[2];
 			i_naxes[0]=lfr->fits_ldfs_naxis1;
 			i_naxes[1]=lfr->fits_ldfs_naxis2;
@@ -264,7 +266,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				close_on_error(	record_in,record_out,data_array1);//,opf);
 				return ERR_DRMS_WRITE;
 			}
-
+*/
 			//---------------------------------------
 			//		4) write the generic segment 
 			//			(as the full FITS file)
@@ -306,7 +308,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,2,lfr,debug);
 				return ERR_FITSIO;
 			}	
-			drms_free_array (data_array1); // NOTE: because of that, from now tbf MUST BE EQUAL to 1
+//			drms_free_array (data_array1); // NOTE: because of that, from now tbf MUST BE EQUAL to 1
 
 		//add more KWs
 			if(get_set_kw(1,"ORIGIN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
@@ -630,7 +632,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 					return ERR_FITSIO;
 				}
 			}	
-
+/*
 			// Full LDF ---EXT#3-------------------------------------------------------------------------
 			char *tunitF[] = { "","" };
 			char *ttypeF[] = { "Intensity", "Radius"};
@@ -652,7 +654,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 					return ERR_FITSIO;
 				}
 			}
-			
+*/			
 			//---------------------------------------
 			//		5) close & free
 			//---------------------------------------
@@ -731,7 +733,7 @@ int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *re
 		drms_setkey_string(record_out, "CODENAME",	lfr->code_name);
 		drms_setkey_string(record_out, "CODEVERS",	lfr->code_version);
 		drms_setkey_string(record_out, "CODEDATE",	lfr->code_date);
-		drms_setkey_string(record_out, "INSERIES",		lfr->dsin);
+		drms_setkey_string(record_out, "INSERIES",	lfr->dsin);
 		drms_setkey_string(record_out, "COMMENTS",	lfr->comment);
 		drms_setkey_string(record_out, "PROCSTAT",	errcode);
 		

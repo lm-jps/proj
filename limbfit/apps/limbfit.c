@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V1.8r0" 
-	#define CODE_DATE 		"Mon Oct 11 14:52:17 PDT 2010" 
+	#define CODE_VERSION 	"V1.9r0" 
+	#define CODE_DATE 		"Mon Feb 28 11:45:21 PST 2011" 
 */
 
 #include "limbfit.h"
@@ -641,7 +641,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 	//**********************************************************************
 	
 		// full LDF
-
+/*
 		int fulldf_nrows, fulldf_ncols=2;
 		int bins1, bins2;
 		int retcode=0;
@@ -663,7 +663,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		}
 		else
 		{
-			retcode=mk_fldfs(cmx, cmy, radius, naxis_row, naxis_col, npixels, data, &save_full_ldf, &bins1, &bins2, opf);
+			retcode=mk_fldfs(cmx, cmy, radius, naxis_row, naxis_col, npixels, data, &save_full_ldf, &bins1, &bins2, opf, debug);
 			if (retcode == ERR_MALLOC_FAILED)
 				return ERR_MALLOC_FAILED;
 			else
@@ -671,7 +671,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 					ret_code=ERR_LIMBFIT_FLDF_FAILED;		
 			fulldf_nrows=bins2;
 		}
-		
+*/		
 		// LDF 				// lprf & rprf come from limbfit.f			
 		float *p_sldf=&save_ldf[0];
 		float *pl_sldf=&save_ldf[(ldf_nrow*ldf_ncol)-1];
@@ -703,13 +703,14 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		results->numext=3;		
 		results->fits_ldfs_naxis1=ldf_ncol;	
 		results->fits_ldfs_naxis2=ldf_nrow;
-		results->fits_fldfs_tfields=fulldf_ncols;
-		results->fits_fldfs_nrows=fulldf_nrows;
+//		results->fits_fldfs_tfields=fulldf_ncols;
+//		results->fits_fldfs_nrows=fulldf_nrows;
 		results->fits_ab_tfields=ab_ncol;
 		results->fits_ab_nrows=ab_nrow;
 		results->fits_params_tfields=params_ncol;
 		results->fits_params_nrows=params_nrow;
-		results->nb_fbins=bins1;
+//		results->nb_fbins=bins1;
+		results->nb_fbins=0;
 		results->ann_wd=w;
 		results->mxszannv=S;
 		results->nb_ldf=nang;
@@ -741,7 +742,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		results->fits_ldfs_data=save_ldf; 
 		results->fits_params=save_params; 
 		results->fits_alpha_beta=save_alpha_beta; 
-		results->fits_fulldfs=save_full_ldf;
+//		results->fits_fulldfs=save_full_ldf;
 
 		free(D);
 		free(LDF);
@@ -1056,7 +1057,7 @@ float median(float * tmed, int siz)
 }
 
 int mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col, long npixels, 
-					float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf)
+					float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf, int debug)
 {
 static char *log_msg_code="mk_fldfs";
 
@@ -1088,7 +1089,10 @@ static char *log_msg_code="mk_fldfs";
 			} else data2[ti]=900000.;	
 		}
 	}
-
+		if (debug) 
+			{
+				lf_logmsg("DEBUG", "APP", NULL, status, "building array", log_msg_code, opf);			
+			}
 	// index them
 	unsigned long *indx;
 	indx=lvector(1,npixels,&status); 
@@ -1097,12 +1101,19 @@ static char *log_msg_code="mk_fldfs";
 			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed", "lvector(indx)", opf);
 			return ERR_MALLOC_FAILED;
 		}
-	retcode=indexx(npixels,data2,indx);	
+		if (debug) 
+			{
+				lf_logmsg("DEBUG", "APP", NULL, status, "vector", log_msg_code, opf);			
+			}	retcode=indexx(npixels,data2,indx);	
 		if (retcode<0) 
 		{
 			lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "indexx", opf);
 			return ERR_NR_STACK_TOO_SMALL;
 		}
+		if (debug) 
+			{
+				lf_logmsg("DEBUG", "APP", NULL, status, "indexx", log_msg_code, opf);			
+			}
 	// make bins        	
 	int rc=4; // size in pixels of DeltaR of the last bin before the limb: 2*the distorsion
 	float v1=(float)(1.-(rc/radius));
@@ -1160,12 +1171,22 @@ static char *log_msg_code="mk_fldfs";
 					lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "sort(1)", opf);
 					return ERR_NR_STACK_TOO_SMALL;
 				}
+/*				if (debug) 
+				{
+					lf_logmsg("DEBUG", "APP", NULL, status, "sort 1a", log_msg_code, opf);			
+				}			retcode=sort(ns,ttmed2);
+*/
 			retcode=sort(ns,ttmed2);
 				if (retcode<0) 
 				{
 					lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "sort(2)", opf);
 					return ERR_NR_STACK_TOO_SMALL;
 				}
+/*				if (debug) 
+				{
+					lf_logmsg("DEBUG", "APP", NULL, status, "sort 2a", log_msg_code, opf);			
+				}
+*/
 			t_med_int[tk]=median(ttmed1,ns);
 			t_med[tk]=median(ttmed2,ns);
 			next_i=(tk+1)*ns;
@@ -1183,17 +1204,31 @@ static char *log_msg_code="mk_fldfs";
 					lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "sort(3)", opf);
 					return ERR_NR_STACK_TOO_SMALL;
 				}
+/*				if (debug) 
+				{
+					lf_logmsg("DEBUG", "APP", NULL, status, "sort 1b", log_msg_code, opf);			
+				}
+*/
 			retcode=sort(sr,ttmed2);
 				if (retcode<0) 
 				{
 					lf_logmsg("ERROR", "APP", ERR_NR_STACK_TOO_SMALL, 0,"stack too small", "sort(4)", opf);
 					return ERR_NR_STACK_TOO_SMALL;
 				}
+/*				if (debug) 
+				{
+					lf_logmsg("DEBUG", "APP", NULL, status, "sort 2b", log_msg_code, opf);			
+				}
+*/
 			t_med_int[tk]=median(ttmed1,sr);
 			t_med[tk]=median(ttmed2,sr);
 			next_i=next_i+sr;
 		}
 	}
+			if (debug) 
+				{
+					lf_logmsg("DEBUG", "APP", NULL, status, "after all sorts", log_msg_code, opf);			
+				}
 /*
 printf("pixels %ld cnt: %lu BINS: %d, MBINS: %d rs: %f st=%u, sb=%d, sr=%d, ns=%d \n",npixels,cnt,bins,mbins,radius,st,sb,sr,ns);
 long last=next_i;
@@ -1234,5 +1269,9 @@ printf("ti=%lu %f ti-1: %f ti+1: %f (in bins:%d)\n",ti,data2[indx[ti]] ,data2[in
 	free_lvector(indx,1,npixels);
 	free_vector(ttmed1,1,ns);
 	free_vector(ttmed2,1,ns);
+				if (debug) 
+				{
+					lf_logmsg("DEBUG", "APP", NULL, status, "end flds", log_msg_code, opf);			
+				}
 return 0;
 }

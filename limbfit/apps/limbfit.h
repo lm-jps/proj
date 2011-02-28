@@ -26,8 +26,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V1.8r0" 
-#define CODE_DATE 		"Mon Oct 11 14:52:17 PDT 2010" 
+#define CODE_VERSION 	"V1.9r0" 
+#define CODE_DATE 		"Mon Feb 28 11:45:21 PST 2011" 
 #define LOGMSG1			"LIMBFIT"
 #define	JSD_NAME		"su_scholl.hmi_lf.jsd"
 
@@ -100,7 +100,7 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define INC_Y -4.0							// 
 #define NUM_FITPNTS 16						// 2*NUM_FITPNTS<NUM_RADIAL_BINS
 #define GUESS_RANGE 8						//
-#define NB_ITER 4							//
+#define NB_ITER 2							//
 #define BAD_PIXEL_VALUE -2147483648.0
 #define	SKIPGC 1							// skip the guess estimation, use X0/YO_LF
 #define	AHI 70000.0							// 
@@ -145,8 +145,8 @@ typedef struct {		// output files content
 	// info to describe extension dimensions
 	long		fits_ldfs_naxis1;		//	ldf_nrow
 	long		fits_ldfs_naxis2;		//	ldf_ncol
-	long		fits_fldfs_nrows;		// 	fldf_nrow
-	long 		fits_fldfs_tfields;		//	fldf_ncol
+//	long		fits_fldfs_nrows;		// 	fldf_nrow
+//	long 		fits_fldfs_tfields;		//	fldf_ncol
 	long 		fits_ab_nrows;			//	alpha_beta_nrow
 	long		fits_ab_tfields;		//	alpha_beta_ncol
 	long 		fits_params_nrows;		//	params_nrow
@@ -187,10 +187,10 @@ double fin_min(double A[6], double m, int range, int debug, FILE *fd);
 int limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,FILE *opf,int debug);
 void limb_(float *anls, long *jk, float *cmx, float *cmy, float *r, int *nitr, int *ncut, int *nang, 
 			int *nprf, float* rprf, float* lprf, int *nreg, float *rsi, float *rso, float *dx, float *dy, 
-			int *jreg, int *jang, int *jprf, float* alph, float* beta, int *ifail, float* b0, int *centyp, int *lahi); 
+			int *jreg, int *jang, int *jprf, float* alph, float* beta, int *ifail, float* b0, int *centyp, float *lahi); 
 int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int spe, char *dsin, char *comment, int debug, int *status);
 int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, char *tmp_dir, FILE *opf, int spe, char *dsin, char *comment, int debug, int *status);
 int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int tbf, LIMBFIT_OUTPUT *lfr, int debug);
-int mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col, long npixels, float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf);
+int mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col, long npixels, float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf, int debug);
 int sort(unsigned long n, float *arr);
 int indexx(unsigned long n, float *arr, unsigned long *indx);

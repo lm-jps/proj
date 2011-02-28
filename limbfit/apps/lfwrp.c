@@ -9,8 +9,8 @@
 			
 	
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V1.8r0" 
-	#define CODE_DATE 		"Mon Oct 11 14:52:17 PDT 2010" 
+	#define CODE_VERSION 	"V1.9r0" 
+	#define CODE_DATE 		"Mon Feb 28 11:45:21 PST 2011" 
 */
 
 #include "limbfit.h"
