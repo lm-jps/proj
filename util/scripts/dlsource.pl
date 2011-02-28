@@ -58,8 +58,8 @@
 #       net (the set of files that compose the NetDRMS release).
 #       <configuration file> (the set of files is specified by <configuration file>).
 #  -r For the checkout, export, and update operations, the revision of files to download. This is a
-#       CVS tag or file version number. For the tag and untag operations, the CVS tag to set or remove.
-
+#       CVS tag or file version number. 
+#  -t For the tag and untag operations, the CVS tag to apply or delete.
 
 use XML::Simple;
 use IO::Dir;
@@ -117,6 +117,7 @@ my($curdir);
 my($xmldata); # reference to hash array
 my($dltype);
 my($version);
+my($cvstag);
 my($stfile);
 my($stfileold);
 my($stcotype);
@@ -138,6 +139,7 @@ $err = 0;
 $cotype = kCoSdp;
 $dltype = kDlCheckout;
 $version = "";
+$cvstag = "";
 $compatmode = 0;
 
 while ($arg = shift(@ARGV))
@@ -167,6 +169,12 @@ while ($arg = shift(@ARGV))
       # revision (version)
       $arg = shift(@ARGV);
       $version = $arg;
+   }
+   elsif ($arg eq "-t")
+   {
+      # CVS tag to set/remove
+      $arg = shift(@ARGV);
+      $cvstag = $arg;
    }
    elsif ($arg eq "-f")
    {
@@ -442,7 +450,7 @@ if (!$err)
                   }
                   else
                   {
-                     if (TagFiles($version, $dltype))
+                     if (TagFiles($cvstag, $dltype))
                      {
                         print STDERR "Unable to tag/untag files in file specification.\n";
                         $err = 1;
