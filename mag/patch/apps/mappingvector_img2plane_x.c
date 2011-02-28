@@ -480,6 +480,8 @@ int DoIt(void)
           printf("%lf,%lf\n", -xc/RADSINDEG/xunitMap+xMap/2+0.5, -yc/RADSINDEG/yunitMap+yMap/2+0.5);
         }
         */
+		
+				// printf("Hithere1\n"); fflush(stdout); 
 
         /* Allocate arrays */
 
@@ -502,6 +504,8 @@ int DoIt(void)
 		{
 		vlos0 = (float *) malloc(xMap0 * yMap0 * sizeof(float));
 		}
+		
+				// printf("Hithere2\n"); fflush(stdout); 
 
         /* Read in segments */
 
@@ -619,8 +623,13 @@ int DoIt(void)
         }	// covar
         }	// doerror
         
+		
+				// printf("Hithere3\n"); fflush(stdout); 
+		
         /* Convert data to Bxyz */
         
+//		printf("%d, %d, %d, %d\n", llx, lly, bmx, bmy);
+		
         int kx, ky, kOff;
         char flag;		// bitmap flag
         int jy = 0, yOff = 0, iData = 0;
@@ -648,8 +657,8 @@ int DoIt(void)
 */
             
                 /* Disambiguation */
-                
-                if (kx < 0 || kx >= bmx || ky < 0 || ky > bmy) {
+               
+                if (kx < 0 || kx >= bmx || ky < 0 || ky >= bmy) {
                 	continue;
                 } else {
                 	kOff = ky * bmx + kx;
@@ -659,6 +668,8 @@ int DoIt(void)
                 }
             }
         }
+		
+				// printf("Hithere4\n"); fflush(stdout); 
         
         /* Start interpolation */
         
@@ -784,6 +795,8 @@ int DoIt(void)
             }	// ix
         }	//jy
         
+				// printf("Hithere5\n"); fflush(stdout); 
+		
         /* Rebinning */
         
         bxHel = (float *) malloc(xMap * yMap * sizeof(float));
@@ -797,6 +810,8 @@ int DoIt(void)
         }
 		if (dovlos)
 			vlos = (float *) malloc(xMap * yMap * sizeof(float));
+		
+				// printf("Hithere6\n"); fflush(stdout); 
         
         // Wrapper for Jesper's code
 
@@ -824,6 +839,8 @@ int DoIt(void)
         frebin_x(errBz0, errBz, xMap0, yMap0);
         }
 */
+		
+				// printf("Hithere7\n"); fflush(stdout); 
 
         /* Stats */
 
@@ -907,9 +924,10 @@ int DoIt(void)
           DIE("problem writing file errBz");
         drms_free_array(outArray);
         }  
+		
+				// printf("Hithere8\n"); fflush(stdout); 
         
-        /* Clean up */
-        
+        /* Clean up */       
         drms_free_array(inArray_ambig);
         drms_free_array(inArray_bTotal); drms_free_array(inArray_bAzim);
         drms_free_array(inArray_bIncl); drms_free_array(inArray_bFill);
