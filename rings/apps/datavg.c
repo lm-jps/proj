@@ -53,6 +53,8 @@
  *	be a per-segment keyword
  *    The check on nominal roll angle assumes that the keyword is CROTA2, and
  *	that the units are degrees
+ *    The reported extremal values of mean and power are determined before
+ *	possible output scaling; they may be outside the representable range
  *
  *  Revision history is at the end of the file.
  *
@@ -67,7 +69,7 @@
 #define	DO_SQUARE	(2)
 
 char *module_name = "data average";
-char *version_id = "0.8";
+char *version_id = "0.9";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"in", "", "input data series or dataset"}, 
@@ -84,6 +86,10 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,  "average",  "+", "comma separated list of keys to average"},
   {ARG_STRING,	"tobs_key", "T_OBS", "keyname for image observation time"}, 
   {ARG_STRING,	"qual_key", "Quality", "keyname for 32-bit image quality field"}, 
+  {ARG_FLOAT,	"mscale", "Segment Default", "output BSCALE factor for mean"},
+  {ARG_FLOAT,	"mzero", "Segment Default", "output BZERO offset for mean"},
+  {ARG_FLOAT,	"pscale", "Segment Default", "output BSCALE factor for power"},
+  {ARG_FLOAT,	"pzero", "Segment Default", "output BZERO offset for power"},
   {ARG_FLAG,	"n",	"", "no output records produced; diagnostics only"}, 
   {ARG_FLAG,	"o",	"", "remove effects of observer velocity"}, 
   {ARG_FLAG,	"v",	"", "verbose mode"}, 
@@ -154,7 +160,8 @@ static int key_params_from_dspec (const char *dspec) {
 }
 
 int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
-    DRMS_Array_t *powr, int ntot) {
+    DRMS_Array_t *powr, int ntot, int mscaled, int pscaled, double mrepmin,
+    double mrepmax, double prepmin, double prepmax, int verbose) {
   double *vavg = (double *)mean->data;
   double *vvar = (double *)powr->data;
   int *vval = (int *)vcts->data;
@@ -163,22 +170,38 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
   int sumv0, sump0;
   int valmin = ntot, valmax = 0;
   int n;
+  int vminloc, vmaxloc, pminloc, pmaxloc;
+  int morhict, morloct, morct, porhict, porloct, porct;
   int kstat = 0;
 
-  mnvmin = pwrmin = HUGE;
-  mnvmax = pwrmax = -HUGE;
+  mnvmin = pwrmin = DBL_MAX;
+  mnvmax = pwrmax = -DBL_MAX;
   sumv1 = sump1 = 0.0;
   sumv0 = sump0 = 0;
-/*
-  mnvavg = pwravg = mnvvar = pwrvar = mnv3 = pwr3 = mnv4 = pwr4 = 0.0;
-*/
+  if (mscaled || pscaled) {
+    morhict = morloct = 0;
+    porhict = porloct = 0;
+  }
+
   for (n = 0; n < ntot; n++) {
     if (vval[n] < valmin) valmin = vval[n];
     if (vval[n] > valmax) valmax = vval[n];
-    if (vavg[n] < mnvmin) mnvmin = vavg[n];
-    if (vavg[n] > mnvmax) mnvmax = vavg[n];
-    if (vvar[n] < pwrmin) pwrmin = vvar[n];
-    if (vvar[n] > pwrmax) pwrmax = vvar[n];
+    if (vavg[n] < mnvmin) {
+      mnvmin = vavg[n];
+      vminloc = n;
+    }
+    if (vavg[n] > mnvmax) {
+      mnvmax = vavg[n];
+      vmaxloc = n;
+    }
+    if (vvar[n] < pwrmin) {
+      pwrmin = vvar[n];
+      pminloc = n;
+    }
+    if (vvar[n] > pwrmax) {
+      pwrmax = vvar[n];
+      pmaxloc = n;
+    }
     if (isfinite (vavg[n])) {
       sumv0++;
       sumv1 += vavg[n];
@@ -186,6 +209,14 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
     if (isfinite (vvar[n])) {
       sump0++;
       sump1 += vvar[n];
+    }
+    if (mscaled) {
+      if (vavg[n] < mrepmin)  morloct++;
+      if (vavg[n] > mrepmax)  morhict++;
+    }
+    if (pscaled) {
+      if (vvar[n] < prepmin)  porloct++;
+      if (vvar[n] > prepmax)  porhict++;
     }
   }
   
@@ -246,6 +277,72 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
     }
   }
 
+  if (verbose) {
+    int rank = mean->naxis;
+    int rmnd;
+
+    printf ("Extrema: minimum value = %.4e @ %d [", mnvmin, vminloc);
+    rmnd = vminloc;
+    for (n = 0; n < rank; n++) {
+      if (n) printf (", ");
+      printf ("%d", rmnd %  mean->axis[n]);
+      rmnd /= mean->axis[n];
+    }
+    printf ("]\n");
+
+    printf ("         maximum value = %.4e @ %d [", mnvmax, vmaxloc);
+    rmnd = vmaxloc;
+    for (n = 0; n < rank; n++) {
+      if (n) printf (", ");
+      printf ("%d", rmnd %  mean->axis[n]);
+      rmnd /= mean->axis[n];
+    }
+    printf ("]\n");
+
+    printf ("         minimum power = %.4e @ %d [", pwrmin, pminloc);
+    rmnd = pminloc;
+    for (n = 0; n < rank; n++) {
+      if (n) printf (", ");
+      printf ("%d", rmnd %  mean->axis[n]);
+      rmnd /= mean->axis[n];
+    }
+    printf ("]\n");
+
+    printf ("         maximum power = %.4e @ %d [", pwrmax, pmaxloc);
+    rmnd = pmaxloc;
+    for (n = 0; n < rank; n++) {
+      if (n) printf (", ");
+      printf ("%d", rmnd %  mean->axis[n]);
+      rmnd /= mean->axis[n];
+    }
+    printf ("]\n");
+  }
+
+  if (mscaled || pscaled) {
+    morct = morloct + morhict;
+    porct = porloct + porhict;
+    if (morct) {
+      fprintf (stderr,
+	  "Warning: %d average values out of representable range\n", morct);
+      fprintf (stderr,
+	  "         for BScale = %g and BZero = %g\n", mean->bscale,
+	  mean->bzero);
+      fprintf (stderr,
+	  "         %d values < %g, %d values > %g\n", morloct, mrepmin,
+	  morhict, mrepmax);
+    }
+    if (porct) {
+      fprintf (stderr,
+	  "Warning: %d variance values out of representable range\n", porct);
+      fprintf (stderr,
+	  "         for PScale = %g and PZero = %g\n", powr->bscale,
+	  powr->bzero);
+      fprintf (stderr,
+	  "         %d values < %g, %d values > %g\n", porloct, prepmin,
+	  porhict, prepmax);
+    }
+  }
+
   return kstat;
 }
 
@@ -262,11 +359,8 @@ int DoIt (void) {
   double *crpixv, *crvalv, *cdeltv, *crotav, *avgvalv;
   double crpix_rec, crval_rec, cdelt_rec, crota_rec, avg_rec;
   double tobsv, vobs;
-/*
-  double crpix1, crpix2, cdelt1, cdelt2, crota2;
-  double crpix1_rec, crpix2_rec, cdelt1_rec, cdelt2_rec, crota2_rec;
-*/
   double log_base;
+  double mrepmin, mrepmax, prepmin, prepmax;
   float clstrt, clmid, clstop;
   float pa_rec, dpa;
   long long ntot, img_size;
@@ -274,7 +368,7 @@ int DoIt (void) {
   int *inaxis, *vval, *reject_list;
   int rec, recct, segct, segnum, maxct, imgct;
   int crstrt, crmid, crstop;
-  int checkseg;
+  int checkseg, mscaled, pscaled;
   int kstat, status;
   int log_status;
   int n, naxis, wcsaxes;
@@ -301,6 +395,10 @@ int DoIt (void) {
   char *average_req = strdup (params_get_str (params, "average"));
   char *tobs_key = strdup (params_get_str (params, "tobs_key"));
   char *qual_key = strdup (params_get_str (params, "qual_key"));
+  double mscale = params_get_double (params, "mscale");
+  double mzero = params_get_double (params, "mzero");
+  double pscale = params_get_double (params, "pscale");
+  double pzero = params_get_double (params, "pzero");
   int no_save = params_isflagset (params, "n");
   int remove_obsvel = params_isflagset (params, "o");
   int verbose = params_isflagset (params, "v");
@@ -329,11 +427,19 @@ int DoIt (void) {
   if ((segct = orec->segments.num_total) < 1) {
     fprintf (stderr, "Error: no data segments in output data series:\n");
     fprintf (stderr, "  %s\n", out_series);
-    if (!no_save) return 1;
+    return 1;
   }
   vseg = drms_segment_lookup (orec, "valid");
   mseg = drms_segment_lookup (orec, "mean");
   pseg = drms_segment_lookup (orec, "power");
+  if (!vseg || !mseg || !pseg) {
+    fprintf (stderr,
+	"Error: output series %s does not contain required segments:\n",
+	out_series);
+    fprintf (stderr, "       \"valid\", \"mean\", \"power\"\n");
+    drms_close_record (orec, DRMS_FREE_RECORD);
+    return 1;
+  }
   switch (vseg->info->type) {
     case (DRMS_TYPE_CHAR):
       maxct = 127;
@@ -346,6 +452,14 @@ int DoIt (void) {
   }
   maxct += vseg->bzero;
   maxct /= vseg->bscale;
+  mscaled = (mseg->info->type == DRMS_TYPE_CHAR) ||
+            (mseg->info->type == DRMS_TYPE_SHORT) ||
+            (mseg->info->type == DRMS_TYPE_INT) ||
+            (mseg->info->type == DRMS_TYPE_LONGLONG);
+  pscaled = (pseg->info->type == DRMS_TYPE_CHAR) ||
+            (pseg->info->type == DRMS_TYPE_SHORT) ||
+            (pseg->info->type == DRMS_TYPE_INT) ||
+            (pseg->info->type == DRMS_TYPE_LONGLONG);
 
 					     /*  process input specification  */
   if (key_params_from_dspec (inset)) {
@@ -540,10 +654,37 @@ return 0;
       &status);
   powr = drms_array_create (DRMS_TYPE_DOUBLE, naxis, iseg->axis, (void *)vvar,
       &status);
-  mean->bscale = mseg->bscale;
-  mean->bzero = mseg->bzero;
-  powr->bscale = pseg->bscale;
-  powr->bzero = pseg->bzero;
+		/*  set the output scaling factors to be segment defaults
+				     if not overridden as argument parmaters  */
+  mean->bscale = (isnan (mscale) || mscale == 0.0) ? mseg->bscale : mscale;
+  mean->bzero = (isnan (mzero)) ?  mseg->bzero : mzero;
+  powr->bscale = (isnan (pscale) || pscale == 0.0) ? pseg->bscale : pscale;
+  powr->bzero = (isnan (pzero)) ?  pseg->bzero : pzero;;
+	       /*  determine range of representable values for scaled output  */
+  if (mscaled) {
+    unsigned long long maxval =
+	(mseg->info->type == DRMS_TYPE_CHAR) ? SCHAR_MAX :
+	(mseg->info->type == DRMS_TYPE_SHORT) ? SHRT_MAX :
+	(mseg->info->type == DRMS_TYPE_INT) ? INT_MAX : LLONG_MAX;
+    mrepmax = maxval;
+    mrepmin = -mrepmax;
+    mrepmax *= mean->bscale;
+    mrepmin *= mean->bscale;
+    mrepmax += mean->bzero;
+    mrepmin += mean->bzero;
+  }
+  if (pscaled) {
+    unsigned long long maxval =
+	(pseg->info->type == DRMS_TYPE_CHAR) ? SCHAR_MAX :
+	(pseg->info->type == DRMS_TYPE_SHORT) ? SHRT_MAX :
+	(pseg->info->type == DRMS_TYPE_INT) ? INT_MAX : LLONG_MAX;
+    prepmax = maxval;
+    prepmin = -prepmax;
+    prepmax *= powr->bscale;
+    prepmin *= powr->bscale;
+    prepmax += powr->bzero;
+    prepmin += powr->bzero;
+  }
   img_size = ntot;
 
   if (recct > maxct) {
@@ -796,7 +937,8 @@ return 0;
   kstat += check_and_set_key_int  (orec, "DataRecs", imgct);
   kstat += check_and_set_key_int  (orec, "MissRecs", recct - imgct);
 							 /*  statistics keys  */
-  kstat += set_stats_keys (orec, vcts, mean, powr, ntot);
+  kstat += set_stats_keys (orec, vcts, mean, powr, ntot, mscaled, pscaled,
+      mrepmin, mrepmax, prepmin, prepmax, verbose);
 						       /*  averaged WCS keys  */
   if (imgct) {
     tobs /= imgct;
@@ -916,5 +1058,9 @@ return 0;
  *	10.11.16	added test for acceptable roll-angles, with defaults
  *		appropriate to HMI
  *  v 0.8 frozen 10.11.16
+ *  v 0.9
+ *	11.01.11	added reporting of locations of extremal values, checks
+ *		for out-of-range values
+ *	11.02.10	added traps for inappropriate output series structure
  *
  */
