@@ -16,14 +16,28 @@
 
 # To test the entire export workflow:
 #  1. Run export manage like so:
-#     ssh jsoc@j0
+#     su <USER>
+#        where <USER> is the user whose $PATH contains the paths to the modules/scripts that have new code to be tested.
+#        The manager program makes shell scripts that call programs and scripts by calling the program/script base file
+#        name (not the full path to the program/script). So the actual program/script that runs will be the one
+#        that the shell resolves using the $PATH variable. For example, if the user arta makes
+#        changes to the jsoc_export_as_fits in arta's home directory, and arta's $PATH contains a pointer to the binaries
+#        in arta's home directory, then arta should run 'su arta' before continuing.
 #     cd /home/jsoc/exports
 #     /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root <ROOT> -dbuser <DBUSER> -dbhost <DBHOST> -manager <MANAGER> -runflag <RFLAG>
 #        where <ROOT> is the CVS code tree root containing <MANAGER>
-#        and <DBUSER> is the PG user who the manager connects as (defaults to "production")
+#        and <DBUSER> is the PG user who the manager connects as (defaults to "production"). IMPORTANT - the manager will
+#           write records to tables that require elevated permissions. Most likely, you'll need to connect to the database 
+#           as user production to do this. This means that you'll need to place the password for user production in 
+#           your .pgpass file.
 #        and <DBHOST> is the host of the database server (defaults to "hmidb"). For internal exports, should be "hmidb", for exports from public db, should be "hmidb2"
-#        and <MANAGER> is the name of the manager programs (defaults to "jsoc_export_manage")
+#        and <MANAGER> is the name of the manager program (defaults to "jsoc_export_manage"). IMPORTANT - you should include 
+#           a "-t" flag. This will cause the manager program to run in test mode, which means that it will process records 
+#           in jsoc.export_new that contain the special test status of 12 (instead of the regular status of 2).
 #        and <RFLAG> is the file flag that keeps this script running in a loop (defaults to keep_running in cdir)
+#
+#     Example - /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root /home/arta/cvs/JSOC -dbuser production -dbhost hmidb2 -manager "jsoc_export_manage -t" -runflag keepruntest.txt &
+#
 #  2. Point a browser at http://jsoc.stanford.edu/ajax/exportdatatest.html and export something.
 
 my($kINTERNALFLAG) = "/home/jsoc/exports/keep_running";
