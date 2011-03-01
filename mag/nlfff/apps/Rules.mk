@@ -23,7 +23,7 @@ CLEAN		:= $(CLEAN) \
 		   $(MODEXE_SOCK_$(d)) \
 		   $(DEP_$(d))
 
-TGT_BIN	        := $(TGT_BIN) $(EXE_$(d))) #$(MODEXE_SOCK_$(d))
+TGT_BIN	        := $(TGT_BIN) $(EXE_$(d)) #$(MODEXE_SOCK_$(d))
 
 S_$(d)		:= $(notdir $(EXE_$(d))) #$(MODEXE_SOCK_$(d)))
 
