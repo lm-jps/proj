@@ -144,6 +144,8 @@
 #define MINMAXGIVEN  6
 #define MAG 7
 #define MAGMINMAXGIVEN 8
+#define LOG 9
+#define SQRT 10
 
 char *module_name = "render_image";
 
@@ -188,7 +190,7 @@ struct ObsInfo_struct
   double x,y,r;
   double rho;
   double lon;
-  double lat;
+    double lat;
   double sinlat, coslat;
   double sig;
   double mu;
@@ -274,8 +276,11 @@ int DoIt(void)
   else if (strcasecmp(scaling, "histeq") == 0) scaletype = HISTEQ;
   else if (strcasecmp(scaling, "minmaxgiven") == 0) scaletype = MINMAXGIVEN;
   else if (strncasecmp(scaling, "mag", 3) == 0) scaletype = MAG;
-  else  scaletype = 0;
+  else if (strncasecmp(scaling, "log", 3) == 0) scaletype = LOG;
+  else if (strncasecmp(scaling, "sqrt", 4) == 0) scaletype = SQRT;
 
+  else  scaletype = 0;
+  fprintf(stdout, " using scaling %d\n", scaletype);
   if (isnan(called_min) || isnan(called_max))
     {
     if (scaletype == MINMAXGIVEN)
@@ -731,8 +736,8 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
     int maxcolor = (bytepercolor == 1 ? 254 : 65534);
     int missingcolor = (usewhite ? maxcolor + 1 : 0);
 
-// fprintf(stderr,"set_scaling called, scaling=%d, pallette=%s, min=%f, max=%f",scaling,pallette,*minp,*maxp);
-// fprintf(stderr,"\n   missingcolor %d maxcolor %d \n", missingcolor, maxcolor);
+fprintf(stderr,"set_scaling called, scaling=%d, pallette=%s, min=%f, max=%f",scaling,pallette,*minp,*maxp);
+fprintf(stderr,"\n   missingcolor %d maxcolor %d \n", missingcolor, maxcolor);
     if (!out)
         return(NULL);
 
@@ -776,6 +781,8 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
       case MINMAX:
       case MAXMIN:
       case MINMAXGIVEN:
+      case LOG:
+      case SQRT:
           {
            double min;
            double max;
@@ -785,6 +792,7 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
              {
              min = *minp;
              max = *maxp;
+	     /*    fprintf(stderr,"debug pt 1: min=%f max=%f\n scaling=%d",min,max,scaling );  */
              }
            else
              {
@@ -793,8 +801,9 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
                int n=0;
                min = 1.0e20;
                max = -min;
+	       /*     fprintf(stderr,"debug pt 2: min=%f max=%f\n",min,max); */
                for (idata=0; idata<ndata; idata++)
-                 {
+                  {
                    float val = inData[idata];
                    if (!isnan(val))
                      {
@@ -814,10 +823,12 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
              if (isnan(*maxp)) *maxp = max;
              min = *minp;
              max = *maxp;
+	     /*  fprintf(stderr,"debug pt 3: min=%f max=%f\n",min,max); */
              }
 // fprintf(stderr,"set_scaling, now min=%f, max=%f\n",min,max);
            for (idata=0; idata<ndata; idata++)
              {
+	       /*    fprintf(stderr,"debug pt 4: min=%f max=%f\n",min,max);   */
              float val = inData[idata];
              int newval;
              if (!isnan(val))
@@ -825,18 +836,36 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
                 if (val <= min) val = min;
                 if (val >= max) val = max;
                 if (val == min || min == max)
-                  newval = 0;
-                else
-                  newval = maxcolor*(val-min)/(max-min) + 0.5;
+                  {
+                  newval = 0; 
+		  /*      fprintf(stderr,"debug pt 5: min=%f max=%f\n",min,max);  */
+		  }
+               else 
+                  newval = maxcolor*(val-min)/(max-min) + 0.5;                   
                 if (scaling == MAXMIN)
                    newval = maxcolor - newval;
                 if (newval >= maxcolor) newval = maxcolor;
                 if (newval < 1) newval = 1;
+		/*	 fprintf(stderr,"debug pt 6 : min=%f max=%f\n",min,max); */
+                if (scaling == LOG  || scaling == SQRT )
+                  {
+		    /*     fprintf(stderr,"debug pt 7: min=%f max=%f\n",min,max);  */
+                    min =*minp=0; 
+                     if (val<= 0) 
+                       newval = 0;
+                     if ( val>0 && scaling == LOG )
+		       newval = (maxcolor*((log10(val))/(log10(*maxp))))+0.5;
+                     if ( val>0 && scaling == SQRT )
+                       newval =(maxcolor*((sqrt(val))/(sqrt(*maxp))))+0.5;                         
+		     /*      fprintf(stderr,"debug pt 8: maxcolor=%d  newval=%d\n",newval);*/
+			
+		   }              
                 }
              else
                 {
                   newval = missingcolor;
                   nmiss += 1;
+		  /* fprintf(stderr,"debug pt 10: min=%f max=%f newval=%d\n",min,max,newval); */
                 }
              for (color=0; color<colors; color++)
                 {
@@ -955,8 +984,7 @@ fprintf(stderr,"newmax %f minp %f \n", newmax, *minp);
           {
           float val = inData[idata];
           unsigned short newval;
-          if (!isnan(val))
-            {
+          if (!isnan(val)){
             if (val <= newmin) val=newmin;
             if (val >= newmax) val=newmax;
             newval = maxcolor*(val-newmin)/(newmax-newmin);
@@ -965,6 +993,7 @@ fprintf(stderr,"newmax %f minp %f \n", newmax, *minp);
             if (newval > maxcolor) newval = maxcolor;
             if (newval < 1) newval = 1;
             }
+            
           else
             newval = missingcolor;
           for (color=0; color<colors; color++)
