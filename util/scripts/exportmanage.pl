@@ -22,9 +22,11 @@
 #        name (not the full path to the program/script). So the actual program/script that runs will be the one
 #        that the shell resolves using the $PATH variable. For example, if the user arta makes
 #        changes to the jsoc_export_as_fits in arta's home directory, and arta's $PATH contains a pointer to the binaries
-#        in arta's home directory, then arta should run 'su arta' before continuing.
+#        in arta's home directory, then arta should run 'su arta' before continuing. IMPORTANT - <USER> will need 
+#        permissions to write into /home/jsoc/exports/tmp and /home/jsoc/exports/logs. Generally <USER> will be a 
+#        member of the group jsoc, so this requirement will be met.
 #     cd /home/jsoc/exports
-#     /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root <ROOT> -dbuser <DBUSER> -dbhost <DBHOST> -manager <MANAGER> -runflag <RFLAG>
+#     /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root <ROOT> -dbuser <DBUSER> -dbhost <DBHOST> -manager <MANAGER> -runflag <RFLAG> &
 #        where <ROOT> is the CVS code tree root containing <MANAGER>
 #        and <DBUSER> is the PG user who the manager connects as (defaults to "production"). IMPORTANT - the manager will
 #           write records to tables that require elevated permissions. Most likely, you'll need to connect to the database 
@@ -36,7 +38,7 @@
 #           in jsoc.export_new that contain the special test status of 12 (instead of the regular status of 2).
 #        and <RFLAG> is the file flag that keeps this script running in a loop (defaults to keep_running in cdir)
 #
-#     Example - /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root /home/arta/cvs/JSOC -dbuser production -dbhost hmidb2 -manager "jsoc_export_manage -t" -runflag keepruntest.txt &
+#        Example : /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root /home/arta/cvs/JSOC -dbuser production -dbhost hmidb2 -manager "jsoc_export_manage -t" -runflag keepruntest.txt &
 #
 #  2. Point a browser at http://jsoc.stanford.edu/ajax/exportdatatest.html and export something.
 
