@@ -210,7 +210,8 @@ int make_png(char *imgPath, unsigned char *data, int height, int width, char *pa
 
 char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp, char *pallette, int colors, int bytepercolor, int scaling, int usewhite);
 
-int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, int crop);
+int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
+int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
 
 ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus);
 
@@ -363,7 +364,8 @@ int DoIt(void)
          continue;
         }
       ObsLoc = GetObsInfo(srcSeg, NULL, &status);
-      if (!asis) upNcenter(srcArray, ObsLoc, crop);
+      if (!asis) upNcenter(srcArray, ObsLoc);
+      if (!asis && crop) crop_image(srcArray, ObsLoc);
       srcNx = srcArray->axis[0];
       srcNy = srcArray->axis[1];
       }
@@ -1067,7 +1069,7 @@ int make_png(char *filename, unsigned char *data,
   }
 
 /* center whith whole pixel shifts and rotate by 180 if needed */
-int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, int crop)
+int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   {
   int nx, ny, ix, iy, i, j, xoff, yoff;
   double rot, x0, y0, mid;
@@ -1142,28 +1144,38 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, int crop)
     }
   ObsLoc->crpix1 = x0 + 1;
   ObsLoc->crpix2 = y0 + 1;
-  if (crop)
-    {
-    double rsun = ObsLoc->rsun_obs/ObsLoc->cdelt1;
-    double scale, crop_limit;
-    x0 = ObsLoc->crpix1 - 1;
-    y0 = ObsLoc->crpix2 - 1;
-    scale = 1.0/rsun;
-    crop_limit = 1.0;
-    for (iy=0; iy<ny; iy++)
-      for (ix=0; ix<nx; ix++)
-        {
-        double x, y, R2;
-        float *Ip = data + iy*nx + ix;
-        if (drms_ismissing_float(*Ip))
-          continue;
-        x = ((double)ix - x0) * scale; /* x,y in pixel coords */
-        y = ((double)iy - y0) * scale;
-        R2 = x*x + y*y;
-        if (R2 > crop_limit)
-          *Ip = DRMS_MISSING_FLOAT;
-        }
-    }
+  return(0);
+  }
+
+int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
+  {
+  int nx, ny, ix, iy, i, j, xoff, yoff;
+  double x0, y0;
+  double rsun = ObsLoc->rsun_obs/ObsLoc->cdelt1;
+  double scale, crop_limit;
+  float *data;
+  if (!arr || !ObsLoc)
+    return(1);
+  data = arr->data;
+  nx = arr->axis[0];
+  ny = arr->axis[1];
+  x0 = ObsLoc->crpix1 - 1;
+  y0 = ObsLoc->crpix2 - 1;
+  scale = 1.0/rsun;
+  crop_limit = 1.0;
+  for (iy=0; iy<ny; iy++)
+    for (ix=0; ix<nx; ix++)
+      {
+      double x, y, R2;
+      float *Ip = data + iy*nx + ix;
+      if (drms_ismissing_float(*Ip))
+        continue;
+      x = ((double)ix - x0) * scale; /* x,y in pixel coords */
+      y = ((double)iy - y0) * scale;
+      R2 = x*x + y*y;
+      if (R2 > crop_limit)
+        *Ip = DRMS_MISSING_FLOAT;
+      }
   return(0);
   }
 
