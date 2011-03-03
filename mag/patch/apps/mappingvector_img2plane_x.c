@@ -17,6 +17,7 @@
 //			X. Sun, Sep 03 2010, implemented Jesper's resize code, registration needs check
 //			X. Sun, Nov 16 2010, added vlos_mag segment
 //			X. Sun, Feb 12 2011, fixed for LON_REF, LAT_REF, added check for error.
+//			X. Sun, Mar 02 2011, added REFCAR, fixing jitter when across two CRs
 
 // mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a[2010.03.29_12:00:00_TAI][2]" "out=su_xudong.test_mercator_vec" "LONWIDTH=15.0" "LATWIDTH=9.0"
 // mappingvector_img2plane_x "in=su_xudong.test_patch_vec_a[2010.03.29_12:12:00_TAI/1h][2]" "out=su_xudong.test_mercator_vec" "LONWIDTH=15.0" "LATWIDTH=9.0" "ref=su_xudong.test_patch_vec_a[2010.03.29_12:12:00_TAI][2]"
@@ -123,10 +124,11 @@ ModuleArgs_t module_args[] =
    {ARG_FLOAT, 	"YUNITMAP", "0.03", "Y resolution in remapped image, in degree"}, 	// correspond to a resolution of 0.5 arc-sec/pixel.
    {ARG_INT, 	"NBIN", "3", "Oversampling rate, for anti-aliasing. Needs to be odd. Image is oversampled NBIN times at desired resolution before binned down."},
    {ARG_INT,	"GAUSSIAN", "1", "Method used for binning oversampled image. 0 for simple binning, 1 for Gaussian"},
-   {ARG_FLOAT, 	"LONWIDTH", "0.", "X dimension for output image, in degrees. Leave 0 for default size determined by original image."},		// dimension, in degree
-   {ARG_FLOAT, 	"LATWIDTH", "0.", "Y dimension for output image, in degrees. Leave 0 for default size determined by original image."},
+   {ARG_FLOAT, 	"LONWIDTH", "-1.", "X dimension for output image, in degrees. Leave 0 for default size determined by original image."},		// dimension, in degree
+   {ARG_FLOAT, 	"LATWIDTH", "-1.", "Y dimension for output image, in degrees. Leave 0 for default size determined by original image."},
    {ARG_FLOAT, 	"REFLON", "999.", "Reference longitude for remapped image center. For tracking/aligning with Carrington rate. Leave 370 for no aligning."},
    {ARG_FLOAT, 	"REFLAT", "999.", "Reference latitude for remapped image center. For tracking/aligning with Carrington rate. Leave 370 for no aligning."},
+   {ARG_INT, 	"REFCAR", "0", "Reference Carrington rotation number, for tracking across two CRs."},
    {ARG_INT, 	"COVAR", "0", "Set this flag 1 for using covariances in error estimation."},
    {ARG_INT, 	"e", "0", "Set this 1 for computing estimated uncertainty from variances/covariances from inversion."},
    {ARG_INT,   "v", "0", "Set this 1 vlos_mag as one of the output segment."},
@@ -158,9 +160,10 @@ int DoIt(void)
     char *mapping;
     int projection, covar, doerror, gauss, nnb, dovlos;
     int nbin;
+    int refcar, carrot;		// command line, inrec
     float xunitMap, yunitMap, xunitMap0, yunitMap0;
     float LonWidth, LatWidth;
-    float ref_lon, ref_lat;
+    float ref_lon, ref_lat, ref_lon0;
     
     char *ctype1, *ctype2;
     int useOrigWidth, useRefCenter;
@@ -219,9 +222,10 @@ int DoIt(void)
 
     LonWidth = cmdparams_get_float(&cmdparams, "LONWIDTH", &status);
     LatWidth = cmdparams_get_float(&cmdparams, "LATWIDTH", &status);
-    ref_lon = cmdparams_get_float(&cmdparams, "REFLON", &status);
+    ref_lon = ref_lon0 = cmdparams_get_float(&cmdparams, "REFLON", &status);
     ref_lat = cmdparams_get_float(&cmdparams, "REFLAT", &status);
-	ref_lat *= RADSINDEG; ref_lon *= RADSINDEG;		// added Feb 12 2011
+	ref_lat *= RADSINDEG; ref_lon *= RADSINDEG;	ref_lon0 *= RADSINDEG;	// added Feb 12 2011
+	refcar = cmdparams_get_int(&cmdparams, "REFCAR", &status);
 
     covar = cmdparams_get_int(&cmdparams, "COVAR", &status);
     doerror = cmdparams_get_int(&cmdparams, "e", &status);
@@ -305,7 +309,8 @@ int DoIt(void)
             refRec = NULL;
         } else {
             ref_lat = maplatc;
-            ref_lon = maplonc;
+            ref_lon = ref_lon0 = maplonc;
+            refcar = drms_getkey_int(refRec, "CAR_ROT", &status);
         }
 
     }
@@ -345,6 +350,7 @@ int DoIt(void)
         crpix1 = drms_getkey_float(inRec, "IMCRPIX1", &status);	// disk center in ccd, original
         crpix2 = drms_getkey_float(inRec, "IMCRPIX2", &status);
         crota2 = drms_getkey_float(inRec, "CROTA2", &status);	// rotation
+        carrot = drms_getkey_int(inRec, "CAR_ROT", &status); if (status) carrot = 0;
         sina = sin(crota2 * RADSINDEG); 
         cosa = cos(crota2 * RADSINDEG);
 
@@ -371,6 +377,11 @@ int DoIt(void)
         bmy = 2 * (int)y_halfwidth + 1;
         
         /* Find binding lon, lat (maplatc/maplonc, maplatl/maplonl, maplatr/maplonr)  */
+        
+        // Adjust lat/lon by 360.
+        if (refcar && abs(refcar - carrot) < 2) {
+        	ref_lon = ref_lon0 + ((carrot - refcar) * PI * 2.);
+        }
 		
 		useRefCenter = 1;	// by default
 		
@@ -392,9 +403,10 @@ int DoIt(void)
 			useRefCenter = 0;
 		}
 
-		
 		dt = trec - ref_trec;
-		if (fabs(dt) > 7. * SECINDAY) useRefCenter = 0;
+		if (fabs(dt) > 7. * SECINDAY) {
+			useRefCenter = 0;
+		}
 		
 		if (useRefCenter == 0)
 		{
@@ -405,72 +417,77 @@ int DoIt(void)
 				DIE("problem finding map center");
 		}
 		
-        useOrigWidth = 1;		// Use patch width derived from HWIDTH until overridden by input parameters
-
-        x = ((xcoor - x_halfwidth) - xCenter) / rSun;
-        y = ((ycoor - y_halfwidth) - yCenter) / rSun;
-        if (img2sphere (x, y, asd, latc, lonc, pa, &rho, &maplatl, &maplonl,
-                    &sinlat, &coslat, &sig, &mu, &chi)) {
-            printf("problem finding left boundary, use command line parameter\n");
-            useOrigWidth = 0;
-        }
-
-        x = ((xcoor + x_halfwidth) - xCenter) / rSun;
-        y = ((ycoor + y_halfwidth) - yCenter) / rSun;
-        if (img2sphere (x, y, asd, latc, lonc, pa, &rho, &maplatr, &maplonr,
-                    &sinlat, &coslat, &sig, &mu, &chi)) {
-            printf("problem finding right boundary, use command line parameter\n");
-            useOrigWidth = 0;
-        }
+		/* Align, using reference record, or reference lat/lon */
         
-        /* Find geometry of the remapped image
-         * try HWIDTH first, overrides with input paramters if necessary
-         * xMap/yMap is dimension; MapLat/MapLon is center lon/lat
-         */
-        
-        if (useOrigWidth) {
+        if (useRefCenter) {		// No more than 7 days allowed
+            maplatc = ref_lat;
+            maplonc = ref_lon;
+//            while (maplonc < 0.) maplonc += (2. * PI);
+//            while (maplonc >= 2. * PI) maplonc -= (2. * PI);
+            printf("Use ref lon/lat: ");
+//            mapcar = refcar;
+        } else {
+            printf("Use orig lon/lat: ");
+//            mapcar = carrot;
+        }
+		
+		
+		// Now center
+		
+		if (LonWidth < 0. || LatWidth < 0.)
+	        useOrigWidth = 1;		// Use patch width derived from HWIDTH
+	    else
+	    	useOrigWidth = 0;
+
+		if (useOrigWidth) {
+	        x = ((xcoor - x_halfwidth) - xCenter) / rSun;
+   		    y = ((ycoor - y_halfwidth) - yCenter) / rSun;
+        	if (img2sphere (x, y, asd, latc, lonc, pa, &rho, &maplatl, &maplonl,
+                    &sinlat, &coslat, &sig, &mu, &chi)) {
+            	DIE("problem finding left boundary, use command line parameter\n");
+        	}
+
+	        x = ((xcoor + x_halfwidth) - xCenter) / rSun;
+    	    y = ((ycoor + y_halfwidth) - yCenter) / rSun;
+        	if (img2sphere (x, y, asd, latc, lonc, pa, &rho, &maplatr, &maplonr,
+            	       &sinlat, &coslat, &sig, &mu, &chi)) {
+            	DIE("problem finding right boundary, use command line parameter\n");
+	        }
+	        
             if (fabs(maplonr - maplonl) < M_PI) {
                 maplon_size = fabs(maplonr - maplonl) / (xunitMap * RADSINDEG);
             } else {
                 maplon_size = (2 * M_PI - fabs(maplonr - maplonl)) / (xunitMap * RADSINDEG);
             }
             maplat_size = fabs(maplatr - maplatl) / (yunitMap * RADSINDEG);
-        }
-        
-        if (LonWidth > 1.E-5) {
-            xMap = rint (LonWidth / xunitMap);
-            xMap0 = xMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
-        } else {
-            if (!useOrigWidth) DIE("no x width available\n");
+            
             xMap = rint (maplon_size);
             xMap0 = xMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
-        }
-        
-        if (LatWidth > 1.E-5) {
-            yMap = rint (LatWidth / yunitMap);
-            yMap0 = yMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
-        } else {
-            if (!useOrigWidth) DIE("no y width available\n");
+            
             yMap = rint (maplat_size);
             yMap0 = yMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
-        }
+
+	    } else {
+	    
+	    	if (LonWidth > 1.E-5) {
+            	xMap = rint (LonWidth / xunitMap);
+            	xMap0 = xMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
+        	} else {
+        		DIE("Wrong lonwidth\n");
+        	}
+        	
+        	if (LatWidth > 1.E-5) {
+           		yMap = rint (LatWidth / yunitMap);
+           		yMap0 = yMap * nbin + (nbin / 2) * 2;		// pad with nbin/2 on edge to avoid NAN
+        	} else {
+	    		DIE("Wrong lonwidth\n");
+	    	}
+	    }
         
 //        printf("xMap0=%d, yMap0=%d\n", xMap0, yMap0);
 //        printf("xMap=%d, yMap=%d\n", xMap, yMap);
 		
 		printf("useRefCenter=%d, useOrigWidth=%d\n", useRefCenter, useOrigWidth);
-        
-        /* Align, using reference record, or reference lat/lon */
-        
-        if (useRefCenter) {		// No more than 7 days allowed
-            maplatc = ref_lat;
-            maplonc = ref_lon;
-            while (maplonc < 0.) maplonc += (2. * PI);
-            while (maplonc >= 2. * PI) maplonc -= (2. * PI);
-            printf("Use ref lon/lat: ");
-        } else {
-            printf("Use orig lon/lat: ");
-        }
         
         printf("MapLon = %f, MapLat = %f\n", maplonc / RADSINDEG, maplatc / RADSINDEG);
 
