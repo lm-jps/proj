@@ -143,9 +143,9 @@ int Dopplergram2(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSi
   float distance;
 
   //check whether or not framelistSize is an even number
-  if(framelistSize != 12 && framelistSize != 10)
+  if(framelistSize != 10 && framelistSize != 12 && framelistSize != 16 && framelistSize != 20)
     {
-      printf("Error in subroutine computing the Dopplergrams: the framelist size is not 12 or 10\n");
+      printf("Error in subroutine computing the Dopplergrams: the framelist size is not 10, 12, 16, or 20\n");
       error=3;
       return error;
     }
@@ -256,6 +256,34 @@ int Dopplergram2(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSi
       tune[2]= 0.0;
       tune[3]=-1.0;
       tune[4]=-2.0;
+      for(i=0;i<N;++i) angle[i]=tune[i];
+    }
+  if(N == 8)
+    {
+      printf("USING 8 WAVELENGTHS\n");
+      tune[7]=+3.5;//I7
+      tune[0]=+2.5;//I0 (location of the filter)
+      tune[1]=+1.5;//I1
+      tune[2]=+0.5;//I2
+      tune[3]=-0.5;//I3
+      tune[4]=-1.5;//I4
+      tune[5]=-2.5;//I5
+      tune[6]=-3.5;//I6
+      for(i=0;i<N;++i) angle[i]=tune[i];
+    }
+  if(N == 10)
+    {
+      printf("USING 10 WAVELENGTHS\n");
+      tune[9]=+4.5;//I9
+      tune[7]=+3.5;//I7
+      tune[0]=+2.5;//I0 (location of the filter)
+      tune[1]=+1.5;//I1
+      tune[2]=+0.5;//I2
+      tune[3]=-0.5;//I3
+      tune[4]=-1.5;//I4
+      tune[5]=-2.5;//I5
+      tune[6]=-3.5;//I6
+      tune[8]=-4.5;//I7
       for(i=0;i<N;++i) angle[i]=tune[i];
     }
 
