@@ -154,6 +154,7 @@ char *module_name= "HMI_observables"; //name of the module
 #define DARK_FRONT  1   //FRONT CAMERA
 
 #define Q_ACS_ECLP 0x2000 //eclipse keyword for the lev1 data
+#define Q_MISSING_SEGMENT 0x80000000 //missing segment for lev1 record 
 
 //definitions for the QUALITY keyword for the lev1.5 records
 
@@ -1050,7 +1051,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.25 2011/02/08 21:44:26 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.26 2011/03/08 22:23:30 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -2215,7 +2216,7 @@ int DoIt(void)
 	      if(isnan(DSUNOBS[i])) statusA[19] = 1;
 	      HIMGCFID[i]   = drms_getkey_int(recLev1->records[i] ,HIMGCFIDS        ,&statusA[20]);
 	      if(isnan(HIMGCFID[i])) statusA[20] = 1;
-	      CDELT1[i]     = (float)drms_getkey_double(recLev1->records[i] ,CDELT1S,&statusA[21]);
+	      CDELT1[i]     = (float)drms_getkey_double(recLev1->records[i],CDELT1S,&statusA[21]);
 	      if(isnan(CDELT1[i])) statusA[21] = 1;
 	      OBSVR[i]      =       drms_getkey_double(recLev1->records[i] ,OBSVRS ,&statusA[22]);
 	      if(isnan(OBSVR[i])) statusA[22] = 1;
@@ -2246,6 +2247,15 @@ int DoIt(void)
 	      NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[31]);
 	      if(statusA[31] != DRMS_SUCCESS) NBADPERM[i]=-1;
 	      QUALITYin[i]  = drms_getkey_int(recLev1->records[i] ,QUALITYS          ,&statusA[32]);
+
+
+	      //WE TEST WHETHER THE DATA SEGMENT IS MISSING
+	      if( (QUALITYin[i] & Q_MISSING_SEGMENT) == Q_MISSING_SEGMENT)
+		{
+		  statusA[32]=1;
+		  SegmentRead[i]= -1;
+		}
+
 
 	      //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	      
@@ -2514,9 +2524,11 @@ int DoIt(void)
 	      Segments[temp]  = drms_segment_read(segin,type1d, &status);             //reading the segment into memory (and converting it into type1d data: FLOAT. the -32768 become NAN)
 	      if (status != DRMS_SUCCESS || Segments[temp] == NULL)
 		{
-		  Segments[temp]=NULL;
-		  SegmentRead[temp]=-1;
-		  image = NULL;
+		  printf("Error: the code could not read the segment of the level 1 filtergram %d\n",FSN[temp]);
+		  return 1;
+		  //Segments[temp]=NULL;
+		  //SegmentRead[temp]=-1;
+		  //image = NULL;
 		  //if(Lev15Wanted) CreateEmptyRecord=1; goto NextTargetTime;
 		} 
 	    }
@@ -2726,9 +2738,10 @@ int DoIt(void)
 	      if(status != DRMS_SUCCESS || BadPixels == NULL)
 		{
 		  printf("Error: cannot read the list of bad pixels of level 1 filtergram FSN = %d at target time %s \n",FSN[temp],timeBegin2);
-		  drms_free_array(Segments[temp]);
-		  Segments[temp]=NULL;
-		  SegmentRead[temp]=-1; 
+		  return 1;
+		  //drms_free_array(Segments[temp]);
+		  //Segments[temp]=NULL;
+		  //SegmentRead[temp]=-1; 
 		  //if(Lev15Wanted) CreateEmptyRecord=1; goto NextTargetTime;
 		}
 	      else
@@ -2748,25 +2761,28 @@ int DoIt(void)
 		      segin = drms_segment_lookupnum(rectemp->records[0],0);
 		      CosmicRays = NULL;
 
-		      CosmicRays = drms_segment_read(segin,segin->info->type,&status);
-		      if(status != DRMS_SUCCESS || CosmicRays == NULL)
-			{
-			  printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
-			  //if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
-			  //else
-			  //  {
-			      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
-			      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
-			      CosmicRays = NULL;
-			      //  }
-			}
-
 		      COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
 		      if(status != DRMS_SUCCESS || COSMICCOUNT == -1)
 			{
 			  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
 			  QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
 			}
+		      else
+			{
+			  CosmicRays = drms_segment_read(segin,segin->info->type,&status);
+			  if(status != DRMS_SUCCESS || CosmicRays == NULL)
+			    {
+			      printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
+			      return 1;//exit(EXIT_FAILURE);
+			      //else
+			      //  {
+			      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+			      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
+			      CosmicRays = NULL;
+			      //  }
+			    }
+			}
+
 		    }
 		  else
 		    {
@@ -3461,12 +3477,13 @@ int DoIt(void)
 			      if (status != DRMS_SUCCESS || Segments[temp] == NULL)
 				{
 				  printf("Error: could not read the segment of level 1 record FSN =  %d at target time %s\n",FSN[temp],timeBegin2); //if there is a problem  
-				  ActualTempIntNum-=1; //we will use one less filtergram for the temporal interpolation
-				  arrin[i] = NULL;
-				  arrerrors[i] = NULL;
-				  Segments[temp] = NULL;
-				  Ierror[temp] = NULL;
-				  SegmentRead[temp]=-1;
+				  return 1;
+				  //ActualTempIntNum-=1; //we will use one less filtergram for the temporal interpolation
+				  //arrin[i] = NULL;
+				  //arrerrors[i] = NULL;
+				  //Segments[temp] = NULL;
+				  //Ierror[temp] = NULL;
+				  //SegmentRead[temp]=-1;
 				}  
 			      else
 				{
@@ -3510,14 +3527,15 @@ int DoIt(void)
 					  if(status != DRMS_SUCCESS || BadPixels == NULL)
 					    {
 					      printf("Error: cannot read the list of bad pixels of level 1 filtergram FSN= %d\n",FSN[temp]);
-					      ActualTempIntNum-=1; //we will use one less filtergram for the temporal interpolation
-					      drms_free_array(Segments[temp]);
-					      drms_free_array(Ierror[temp]);
-					      arrin[i] = NULL;
-					      arrerrors[i] = NULL;
-					      Segments[temp]=NULL;
-					      Ierror[temp]=NULL;
-					      SegmentRead[temp]=-1; 
+					      return 1;
+					      //ActualTempIntNum-=1; //we will use one less filtergram for the temporal interpolation
+					      //drms_free_array(Segments[temp]);
+					      //drms_free_array(Ierror[temp]);
+					      //arrin[i] = NULL;
+					      //arrerrors[i] = NULL;
+					      //Segments[temp]=NULL;
+					      //Ierror[temp]=NULL;
+					      //SegmentRead[temp]=-1; 
 					    }
 					  else
 					    {
@@ -3536,24 +3554,27 @@ int DoIt(void)
 						  segin = drms_segment_lookupnum(rectemp->records[0],0);
 						  CosmicRays = NULL;
 
-						  CosmicRays = drms_segment_read(segin,segin->info->type,&status);
-						  if(status != DRMS_SUCCESS || CosmicRays == NULL)
-						    {
-						      printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
-						      //if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
-						      //else
-						      //	{
-							  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
-							  QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
-							  CosmicRays = NULL;
-							  //	}
-						    }
-
 						  COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
 						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1)
 						    {
 						      QUALITY = QUALITY | QUAL_NOCOSMICRAY;
 						      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
+						    }
+						  else
+						    {
+						      CosmicRays = drms_segment_read(segin,segin->info->type,&status);
+						      if(status != DRMS_SUCCESS || CosmicRays == NULL)
+							{
+							  printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
+							  return 1;//exit(EXIT_FAILURE);
+							  //else
+							  //	{
+							  QUALITY = QUALITY | QUAL_NOCOSMICRAY;
+							  QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
+							  CosmicRays = NULL;
+							  //	}
+							}
+
 						    }
 						}
 					      else
@@ -5036,8 +5057,9 @@ int DoIt(void)
 	  if (status != DRMS_SUCCESS)
 	    {
 	      printf("Error: unable to read the data segment of the look-up table record\n"); //if there is a problem
-	      QUALITY = QUALITY | QUAL_NOLOOKUPRECORD;
-	      CreateEmptyRecord=1; goto NextTargetTime;            
+	      return 1;
+	      //QUALITY = QUALITY | QUAL_NOLOOKUPRECORD;
+	      //CreateEmptyRecord=1; goto NextTargetTime;            
 	    } 
 	  else printf("look-up table record read\n");
 

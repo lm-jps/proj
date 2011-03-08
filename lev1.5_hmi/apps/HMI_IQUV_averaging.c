@@ -64,6 +64,8 @@ HMI_IQUV_averaging begin="2010.10.1_0:0:0_TAI" end="2010.10.1_2:45:00_TAI" wavel
 
 
 \par Versions
+
+v 1.16: addition of command-line parameter "average"
 v 1.17: minor correction; Npol replaced by Npolin to avoid some rare occurences of segmentation faults
 
 */
@@ -141,6 +143,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define Average        "average"      //average over 12 or 96 minutes? (12 by default)
 
 #define Q_ACS_ECLP 0x2000 //eclipse keyword for the lev1 data
+#define Q_MISSING_SEGMENT 0x80000000 //missing segment for lev1 record 
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
@@ -953,7 +956,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.17 2011/02/10 22:19:24 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.18 2011/03/08 22:23:41 couvidat Exp $");
 }
 
 
@@ -1853,6 +1856,13 @@ int DoIt(void)
 	  NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[31]);
 	  if(statusA[31] != DRMS_SUCCESS) NBADPERM[i]=-1;
 	  QUALITYin[i]  = drms_getkey_int(recLev1->records[i] ,QUALITYS          ,&statusA[32]);
+
+	  //WE TEST WHETHER THE DATA SEGMENT IS MISSING
+	  if( (QUALITYin[i] & Q_MISSING_SEGMENT) == Q_MISSING_SEGMENT)
+	    {
+	      statusA[32]=1;
+	      SegmentRead[i]= -1;
+	    }
 	  
 	  //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	  /*if(statusA[9] == DRMS_SUCCESS && statusA[16] == DRMS_SUCCESS && statusA[14] == DRMS_SUCCESS && statusA[22] == DRMS_SUCCESS && statusA[21] == DRMS_SUCCESS)
@@ -3144,12 +3154,13 @@ int DoIt(void)
 			      if (status != DRMS_SUCCESS || Segments[temp] == NULL)
 				{
 				  printf("Error: could not read the segment of level 1 record index %d at target time %s\n",temp,timeBegin2); //if there is a problem  
-				  ActualTempIntNum-=1; //we will use one less filtergram for the temporal interpolation
-				  arrin[i] = NULL;
-				  arrerrors[i] = NULL;
-				  Segments[temp] = NULL;
-				  Ierror[temp] = NULL;
-				  SegmentRead[temp]=-1;
+				  return 1;
+				  //ActualTempIntNum-=1; //we will use one less filtergram for the temporal interpolation
+				  //arrin[i] = NULL;
+				  //arrerrors[i] = NULL;
+				  //Segments[temp] = NULL;
+				  //Ierror[temp] = NULL;
+				  //SegmentRead[temp]=-1;
 				}  
 			      else
 				{
@@ -3192,14 +3203,15 @@ int DoIt(void)
 					  if(status != DRMS_SUCCESS || BadPixels == NULL)
 					    {
 					      printf("Error: cannot read the list of bad pixels of level 1 filtergram FSN= %d\n",FSN[temp]);
-					      ActualTempIntNum-=1; //we will use one less filtergram for the temporal interpolation
-					      drms_free_array(Segments[temp]);
-					      drms_free_array(Ierror[temp]);
-					      arrin[i] = NULL;
-					      arrerrors[i] = NULL;
-					      Segments[temp]=NULL;
-					      Ierror[temp]=NULL;
-					      SegmentRead[temp]=-1; 
+					      return 1;
+					      //ActualTempIntNum-=1; //we will use one less filtergram for the temporal interpolation
+					      //drms_free_array(Segments[temp]);
+					      //drms_free_array(Ierror[temp]);
+					      //arrin[i] = NULL;
+					      //arrerrors[i] = NULL;
+					      //Segments[temp]=NULL;
+					      //Ierror[temp]=NULL;
+					      //SegmentRead[temp]=-1; 
 					    }
 					  else
 					    {
@@ -3217,24 +3229,26 @@ int DoIt(void)
 						  segin = drms_segment_lookupnum(rectemp->records[0],0);
 						  CosmicRays = NULL;
 						
-						  CosmicRays = drms_segment_read(segin,segin->info->type,&status);
-						  if(status != DRMS_SUCCESS || CosmicRays == NULL)
-						    {
-						      printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
-						      //if(QuickLook != 1) return 1;//exit(EXIT_FAILURE);
-						      //else
-						      //{
-							  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
-							  QUALITYlev1[temp]  = QUALITYlev1[temp]  | QUAL_NOCOSMICRAY;
-							  CosmicRays = NULL;
-							  //}
-						    }
-
 						  COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
 						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1)
 						    {
 						      QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
 						      QUALITYlev1[temp] = QUALITYlev1[temp] | QUAL_NOCOSMICRAY;
+						    }
+						  else
+						    {
+						      CosmicRays = drms_segment_read(segin,segin->info->type,&status);
+						      if(status != DRMS_SUCCESS || CosmicRays == NULL)
+							{
+							  printf("Error: the list of cosmic-ray hits could not be read for FSN %d\n",FSN[temp]);
+							  return 1;//exit(EXIT_FAILURE);
+							  //else
+							  //{
+							  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NOCOSMICRAY;
+							  QUALITYlev1[temp]  = QUALITYlev1[temp]  | QUAL_NOCOSMICRAY;
+							  CosmicRays = NULL;
+							  //}
+							}
 						    }
 
 						}
