@@ -154,7 +154,7 @@ char *module_name= "HMI_observables"; //name of the module
 #define DARK_FRONT  1   //FRONT CAMERA
 
 #define Q_ACS_ECLP 0x2000 //eclipse keyword for the lev1 data
-#define Q_MISSING_SEGMENT 0x80000000 //missing segment for lev1 record 
+#define Q_MISSING_SEGMENT 0x80000000 //missing image segment for lev1 record 
 
 //definitions for the QUALITY keyword for the lev1.5 records
 
@@ -1051,7 +1051,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.26 2011/03/08 22:23:30 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.27 2011/03/09 18:24:46 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -3950,7 +3950,13 @@ int DoIt(void)
 			  arrLev1d[k]->bzero=segout->bzero;
 			  arrLev1d[k]->bscale=segout->bscale; //because BSCALE in the jsd file is not necessarily 1
 			  arrLev1d[k]->israw=0;
-			  drms_segment_write(segout,arrLev1d[k],0);
+			  status=drms_segment_write(segout,arrLev1d[k],0);
+			  if(status != DRMS_SUCCESS)
+			    {
+			      printf("Error: a call to drms_segment_write failed\n");
+			      return 1;
+			    } 
+
 			}
 		      
 		    }
@@ -4533,7 +4539,12 @@ int DoIt(void)
 		      arrLev1p[k*npolout+i]->bzero=segout->bzero;
 		      arrLev1p[k*npolout+i]->bscale=segout->bscale; //because BSCALE in the jsd file is not 1
 		      arrLev1p[k*npolout+i]->israw=0;
-		      drms_segment_write(segout,arrLev1p[k*npolout+i], 0);        //write the file containing the data (WE ASSUME THAT imagesout ARE IN THE ORDER I,Q,U,V AND LCP followed by RCP)		  
+		      status = drms_segment_write(segout,arrLev1p[k*npolout+i], 0);        //write the file containing the data (WE ASSUME THAT imagesout ARE IN THE ORDER I,Q,U,V AND LCP followed by RCP)
+		      if(status != DRMS_SUCCESS)
+			{
+			  printf("Error: a call to drms_segment_write failed\n");
+			  return 1;
+			} 
 		    }	      
 		  t1=dsecnd();
 		  printf("TIME ELAPSED TO WRITE THE LEVEL 1p SEGMENTS: %f\n",t1-t0);
@@ -5460,31 +5471,57 @@ int DoIt(void)
 	  arrLev15[0]->bzero=segout->bzero;
 	  arrLev15[0]->bscale=segout->bscale; //because BSCALE in the jsd file is not 1
 	  arrLev15[0]->israw=0;
-	  drms_segment_write(segout,arrLev15[0], 0);
+	  status=drms_segment_write(segout,arrLev15[0], 0);
+	  if(status != DRMS_SUCCESS)
+	    {
+	      printf("Error: a call to drms_segment_write failed\n");
+	      return 1;
+	    } 
 
 	  segout = drms_segment_lookupnum(recLev15b->records[0], 0);
 	  arrLev15[1]->bzero=segout->bzero;
 	  arrLev15[1]->bscale=segout->bscale; //because BSCALE in the jsd file is not 1
 	  arrLev15[1]->israw=0;
-	  drms_segment_write(segout,arrLev15[1], 0);
+	  status=drms_segment_write(segout,arrLev15[1], 0);
+	  if(status != DRMS_SUCCESS)
+	    {
+	      printf("Error: a call to drms_segment_write failed\n");
+	      return 1;
+	    } 
 
 	  segout = drms_segment_lookupnum(recLev15c->records[0], 0);
 	  arrLev15[2]->bzero=segout->bzero;
 	  arrLev15[2]->bscale=segout->bscale; //because BSCALE in the jsd file is not 1
 	  arrLev15[2]->israw=0;
-	  drms_segment_write(segout,arrLev15[2], 0);
+	  status=drms_segment_write(segout,arrLev15[2], 0);
+	  if(status != DRMS_SUCCESS)
+	    {
+	      printf("Error: a call to drms_segment_write failed\n");
+	      return 1;
+	    } 
 
 	  segout = drms_segment_lookupnum(recLev15d->records[0], 0);
 	  arrLev15[3]->bzero=segout->bzero;
 	  arrLev15[3]->bscale=segout->bscale; //because BSCALE in the jsd file is not 1
 	  arrLev15[3]->israw=0;
-	  drms_segment_write(segout,arrLev15[3], 0);
+	  status=drms_segment_write(segout,arrLev15[3], 0);
+	  if(status != DRMS_SUCCESS)
+	    {
+	      printf("Error: a call to drms_segment_write failed\n");
+	      return 1;
+	    } 
 
 	  segout = drms_segment_lookupnum(recLev15e->records[0], 0);
 	  arrLev15[4]->bzero=segout->bzero;
 	  arrLev15[4]->bscale=segout->bscale; //because BSCALE in the jsd file is not 1
 	  arrLev15[4]->israw=0;
-	  drms_segment_write(segout,arrLev15[4], 0);  
+	  status=drms_segment_write(segout,arrLev15[4], 0);  
+	  if(status != DRMS_SUCCESS)
+	    {
+	      printf("Error: a call to drms_segment_write failed\n");
+	      return 1;
+	    } 
+
 	  t1=dsecnd();
 	  printf("TIME ELAPSED TO WRITE THE LEVEL 1.5 SEGMENTS: %f\n",t1-t0);
 

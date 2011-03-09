@@ -143,7 +143,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define Average        "average"      //average over 12 or 96 minutes? (12 by default)
 
 #define Q_ACS_ECLP 0x2000 //eclipse keyword for the lev1 data
-#define Q_MISSING_SEGMENT 0x80000000 //missing segment for lev1 record 
+#define Q_MISSING_SEGMENT 0x80000000 //missing image segment for lev1 record 
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
@@ -956,7 +956,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.18 2011/03/08 22:23:41 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.19 2011/03/09 18:24:30 couvidat Exp $");
 }
 
 
@@ -3698,8 +3698,14 @@ int DoIt(void)
 	      arrLev1p[i]->bzero=segout->bzero;
 	      arrLev1p[i]->bscale=segout->bscale; //because BSCALE in the jsd file is not 1
 	      arrLev1p[i]->israw=0;
-	      drms_segment_write(segout,arrLev1p[i],0);        //write the file containing the data (WE ASSUME THAT imagesout ARE IN THE ORDER I,Q,U,V AND LCP followed by RCP)		
-  
+	      status=drms_segment_write(segout,arrLev1p[i],0);        //write the file containing the data (WE ASSUME THAT imagesout ARE IN THE ORDER I,Q,U,V AND LCP followed by RCP)		
+	      if(status != DRMS_SUCCESS)
+		{
+		  printf("Error: a call to drms_segment_write failed\n");
+		  return 1;
+		} 
+
+
 	      //call Keh-Cheng's functions for the statistics (NB: this function avoids NANs, but other than that calculates the different quantities on the ENTIRE image)
 	      status=fstats(axisout[0]*axisout[1],imagesout[i],&minimum,&maximum,&median,&mean,&sigma,&skewness,&kurtosis,&ngood); //ngood is the number of points that are not NANs
 	      if(status != 0)
