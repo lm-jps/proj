@@ -365,7 +365,7 @@ int DoIt(void)
         }
       ObsLoc = GetObsInfo(srcSeg, NULL, &status);
       if (!asis) upNcenter(srcArray, ObsLoc);
-      if (!asis && crop) crop_image(srcArray, ObsLoc);
+      if (crop) crop_image(srcArray, ObsLoc);
       srcNx = srcArray->axis[0];
       srcNy = srcArray->axis[1];
       }
@@ -1162,7 +1162,7 @@ int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   x0 = ObsLoc->crpix1 - 1;
   y0 = ObsLoc->crpix2 - 1;
   scale = 1.0/rsun;
-  crop_limit = 1.0;
+  crop_limit = 0.99975; // 1 - 1/4000, 1/2 HMI pixel.
   for (iy=0; iy<ny; iy++)
     for (ix=0; ix<nx; ix++)
       {
