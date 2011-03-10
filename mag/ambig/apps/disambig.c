@@ -29,6 +29,7 @@
 #include <math.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include "copy_me_keys.c"
 
 #define PI	(M_PI)
 #define	DTOR	(PI / 180.)
@@ -531,7 +532,10 @@ printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
     	drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
         drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
         // Parameters
-// XXXX update these to reflect geometry flag?
+        copy_me_keys(inRec, outRec);
+        copy_geo_keys(inRec, outRec);
+        if (geometry == 1) copy_patch_keys(inRec, outRec);
+        // Disambiguation
         drms_setkey_int(outRec, "AMBGMTRY", geometry);
         drms_setkey_int(outRec, "AMBWEAK", weak);
         drms_setkey_int(outRec, "AMBNEROD", nerode);
