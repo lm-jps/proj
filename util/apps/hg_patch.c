@@ -526,10 +526,11 @@ fprintf(stderr,"quality bad %d, skip this record.",quality);
     this_car_rot = drms_getkey_int(inRec, "CAR_ROT", &status); TEST_PARAM("CAR_ROT");
     crlt_obs = drms_getkey_double(inRec, "CRLT_OBS", &status); TEST_PARAM("CRLT_OBS");
     crln_obs = drms_getkey_double(inRec, "CRLN_OBS", &status); TEST_PARAM("CRLN_OBS");
-    crpix1 = drms_getkey_double(inRec, "CRPIX1", &status)-1; TEST_PARAM("CRPIX1");
+    crpix1 = drms_getkey_double(inRec, "CRPIX1", &status); TEST_PARAM("CRPIX1");
     x0 = crpix1 - 1;
-    crpix2 = drms_getkey_double(inRec, "CRPIX2", &status)-1; TEST_PARAM("CRPIX2");
+    crpix2 = drms_getkey_double(inRec, "CRPIX2", &status); TEST_PARAM("CRPIX2");
     y0 = crpix2 - 1;
+fprintf(stderr,"new image, initial crpix1=%f, crpix2=%f\n",crpix1,crpix2);
     pa = -drms_getkey_double(inRec, "CROTA2", &status); TEST_PARAM("CROTA2");
     // convert to radians
     crlt_obs_rad = Deg2Rad*crlt_obs;;
@@ -612,9 +613,9 @@ fprintf(stderr,"get this box position crln=%f, crlt=%f height=%f width=%f, crlt_
     int y1 = round(center_y + lly);
     int x2 = round(center_x + urx);
     int y2 = round(center_y + ury);
-fprintf(stderr,"box position from (%d,%d) to (%d,%d)\n",x1,y1,x2,y2);
-    crpix1 -= x1;
-    crpix2 -= y1;
+    crpix1 = 1 + center_x + llx - x0;
+    crpix2 = 1 + center_y + lly - y0;
+fprintf(stderr,"box position from (%d,%d) to (%d,%d), new crpix1=%f, crpix2=%f\n",x1,y1,x2,y2,crpix1,crpix2);
 
     int start1[2] = {x1, y1};
     int end1[2] = {x2, y2};
@@ -684,6 +685,10 @@ fprintf(stderr,"box outside image\n");
           }
         }
       pa -= 180.0;
+      crpix1 = 1 + x2 - x0;
+      crpix2 = 1 + y2 - y0;
+      cosa = 1.0; sina = 0.0;
+fprintf(stderr,"rotated so new crpix1=%f, crpix2=%f\n",crpix1,crpix2);
       }
 
 /*
@@ -883,7 +888,7 @@ int sphere2img (double lat, double lon, double latc, double lonc,
  *      lon         Longitude (in radians)
  *      latc        Heliographic latitude of the disc center (in radians)
  *      lonc        Heliographic longitude of the disc center (in radians)
- *      *x }        Plate locations, in units of the image radius, relative
+ *      *x }        Plate locations, in units of the image radius, NOT relative
  *      *y }          to the image center
  *      xcenter }   Plate locations of the image center, in units of the
  *      ycenter }     image radius, and measured from an arbitrary origin
