@@ -10,7 +10,7 @@
 ! not yet visited to change.                                           *
 !***********************************************************************
 
-subroutine nacute6(bthresh)
+subroutine nacute6(bthresh0,bthresh1)
 
 !-----------------------------------------------------------------------
    use bobs
@@ -27,21 +27,20 @@ subroutine nacute6(bthresh)
    integer,dimension(:),allocatable :: indx
    integer, dimension(9) :: iexp,ishift,jshift
    integer,dimension(:,:),allocatable :: nnn,nnsav,wt
-   real :: Bxs,Bys,bdot,bdotb,bthresh,bdotm
+   real :: Bxs,Bys,bdot,bdotb,bthresh0,bthresh1,bdotm
    real,dimension(:),allocatable :: bt1d
 !-----------------------------------------------------------------------
 ! --> Allocate memory.
    allocate(bt1d(nx*ny),indx(nx*ny))
    allocate(nnn(nx,ny),nnsav(nx,ny),wt(nx,ny))
 
-!   open(8,file='nearest.dat')
-! --> Flag which pixels are above threshold. Also determine the number
-! --> of above threshold neighbors for each pixel. 
+! --> Determine the number of above threshold neighbors for each pixel. 
+! --> Also flag which pixels are themselves above threshold. 
 
    nnn=0
    do i=2,nx-1
       do j=2,ny-1
-         if(bt(i,j)*sin(p(j))*cos(t(i,j)).gt.bthresh.and.mask(i,j).eq.1) then
+         if(bt(i,j).gt.(bthresh1+(bthresh0-bthresh1)*sin(p(j))*cos(t(i,j)))) then
             wt(i,j)=0
             nnn(i-1,j-1)=nnn(i-1,j-1)+1
             nnn(i-1,j)=nnn(i-1,j)+1
@@ -59,7 +58,7 @@ subroutine nacute6(bthresh)
 
 ! --> Edge pixels need to be treated separately. 
    do i=2,nx-1
-      if(bt(i,1)*sin(p(1))*cos(t(i,1)).gt.bthresh.and.mask(i,1).eq.1) then
+      if(bt(i,1).gt.(bthresh1+(bthresh0-bthresh1)*sin(p(1))*cos(t(i,1)))) then
          wt(i,1)=0
          nnn(i-1,1)=nnn(i-1,1)+1
          nnn(i-1,2)=nnn(i-1,2)+1
@@ -70,7 +69,7 @@ subroutine nacute6(bthresh)
          wt(i,1)=1
       endif
 
-      if(bt(i,ny)*sin(p(ny))*cos(t(i,ny)).gt.bthresh.and.mask(i,ny).eq.1) then
+      if(bt(i,ny).gt.(bthresh1+(bthresh0-bthresh1)*sin(p(ny))*cos(t(i,ny)))) then
          wt(i,ny)=0
          nnn(i-1,ny-1)=nnn(i-1,ny-1)+1
          nnn(i-1,ny)=nnn(i-1,ny)+1
@@ -83,7 +82,7 @@ subroutine nacute6(bthresh)
    enddo
 
    do j=2,ny-1
-      if(bt(1,j)*sin(p(j))*cos(t(1,j)).gt.bthresh.and.mask(1,j).eq.1) then
+      if(bt(1,j).gt.(bthresh1+(bthresh0-bthresh1)*sin(p(j))*cos(t(1,j)))) then
          wt(1,j)=0
          nnn(1,j-1)=nnn(1,j-1)+1
          nnn(1,j+1)=nnn(1,j+1)+1
@@ -94,7 +93,7 @@ subroutine nacute6(bthresh)
          wt(1,j)=1
       endif
 
-      if(bt(nx,j)*sin(p(j))*cos(t(nx,j)).gt.bthresh.and.mask(nx,j).eq.1) then
+      if(bt(nx,j).gt.(bthresh1+(bthresh0-bthresh1)*sin(p(j))*cos(t(nx,j)))) then
          wt(nx,j)=0
          nnn(nx,j-1)=nnn(nx,j-1)+1
          nnn(nx,j+1)=nnn(nx,j+1)+1
@@ -107,7 +106,7 @@ subroutine nacute6(bthresh)
    enddo
 
 ! --> Finally corner pixels. 
-   if(bt(1,1)*sin(p(1))*cos(t(1,1)).gt.bthresh.and.mask(1,1).eq.1) then
+   if(bt(1,1).gt.(bthresh1+(bthresh0-bthresh1)*sin(p(1))*cos(t(1,1)))) then
       wt(1,1)=0
       nnn(1,2)=nnn(1,2)+1
       nnn(2,1)=nnn(2,1)+1
@@ -116,7 +115,7 @@ subroutine nacute6(bthresh)
       wt(1,1)=1
    endif
 
-   if(bt(1,ny)*sin(p(ny))*cos(t(1,ny)).gt.bthresh.and.mask(1,ny).eq.1) then
+   if(bt(1,ny).gt.(bthresh1+(bthresh0-bthresh1)*sin(p(ny))*cos(t(1,ny)))) then
       wt(1,ny)=0
       nnn(1,ny-1)=nnn(1,ny-1)+1
       nnn(2,ny)=nnn(2,ny)+1
@@ -125,7 +124,7 @@ subroutine nacute6(bthresh)
       wt(1,ny)=1
    endif
 
-   if(bt(nx,1)*sin(p(1))*cos(t(nx,1)).gt.bthresh.and.mask(nx,1).eq.1) then
+   if(bt(nx,1).gt.(bthresh1+(bthresh0-bthresh1)*sin(p(1))*cos(t(nx,1)))) then
       wt(nx,1)=0
       nnn(nx,2)=nnn(nx,2)+1
       nnn(nx-1,1)=nnn(nx-1,1)+1
@@ -134,7 +133,7 @@ subroutine nacute6(bthresh)
       wt(nx,1)=1
    endif
 
-   if(bt(nx,ny)*sin(p(ny))*cos(t(nx,ny)).gt.bthresh.and.mask(nx,ny).eq.1) then
+   if(bt(nx,ny).gt.(bthresh1+(bthresh0-bthresh1)*sin(p(ny))*cos(t(nx,ny)))) then
       wt(nx,ny)=0
       nnn(nx,ny-1)=nnn(nx,ny-1)+1
       nnn(nx-1,ny)=nnn(nx-1,ny)+1
@@ -143,18 +142,15 @@ subroutine nacute6(bthresh)
       wt(nx,ny)=1
    endif
 
+! --> Create 1-d array of transverse field, rescaled based on variation
+! --> of threshold field, and zeroed for pixels outside mask.
    do i=1,nx
       do j=1,ny
          nnsav(i,j)=nnn(i,j)
          i1d=i+(j-1)*nx
-         bt1d(i1d)=bt(i,j)
+         bt1d(i1d)=bt(i,j)*mask(i,j)*(bthresh1+(bthresh0-bthresh1)*sin(p(j))*cos(t(i,j)))
       enddo
    enddo
-
-! --> write out number of neighbors
-!   do j=1,ny
-!      write(8,*) (nnn(i,j),i=1,nx)
-!   enddo
 
 ! --> Arrays containing shifts about present pixel.
    ishift(1)=-1
@@ -214,10 +210,10 @@ subroutine nacute6(bthresh)
             i=j1d-(j-1)*nx
 
 ! --> Only apply to points below threshold and not already visited.
+! --> Also must be in mask.
 
-            if(wt(i,j).gt.0.5.and.nnsav(i,j).ge.inn) then
+            if(wt(i,j).gt.0.5.and.nnsav(i,j).ge.inn.and.mask(i,j).eq.1) then
 
-!write(8,*) i,j
 ! --> Compute dot product of transverse field at this pixel with
 ! --> transverse field at neighboring pixels. 
 ! --> Also update neighbors to indicate this pixel has been visited.

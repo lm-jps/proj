@@ -4,7 +4,7 @@
 ! construct a set of rectangular tiles which covers the disk.          *
 !***********************************************************************
 
-subroutine tile(ntx,nty,nap)
+subroutine tile(ntx,nty,nap,ipflag)
 
 !-----------------------------------------------------------------------
    use sizes
@@ -21,13 +21,12 @@ subroutine tile(ntx,nty,nap)
 
    implicit none
 
-   integer,intent(in) :: ntx,nty,nap
+   integer,intent(in) :: ntx,nty,nap,ipflag
    integer :: i,j,k,l,ntile,imin,imax,jmin,jmax,nxp,nyp,ishift,jshift
    real :: theta,phi,x1,y1,y2,r1,xmin,xmax,ymin,ymax,bdotb
    real,dimension(:),allocatable :: x,y
    real,dimension(:,:),allocatable :: xs,ys,Bzwin
 !-----------------------------------------------------------------------
-!open(9,file='potential.dat')
 ! --> Allocate memory.
    allocate(x(ntx),y(nty))
    allocate(xs(ntx,nty),ys(ntx,nty))
@@ -224,14 +223,30 @@ subroutine tile(ntx,nty,nap)
                         tmask(ishift,jshift)=1
 
 ! --> Potential field acute angle ambiguity resolution.
+                        if(ipflag.eq.1) then
 
 ! --> Compute dot product of observed transverse field with potential field.
-                        bdotb=Bpix(ishift,jshift)*Bx(ishift,jshift)+Bpiy(ishift,jshift)*By(ishift,jshift)
+                           bdotb=Bpix(k,l)*Bx(ishift,jshift)+Bpiy(k,l)*By(ishift,jshift)
 
 ! --> Flip direction of transverse field if dot product is negative.
-                        if(bdotb.lt.0.) then
-                           Bx(ishift,jshift)=-Bx(ishift,jshift)
-                           By(ishift,jshift)=-By(ishift,jshift)
+                           if(bdotb.lt.0.) then
+                              Bx(ishift,jshift)=-Bx(ishift,jshift)
+                              By(ishift,jshift)=-By(ishift,jshift)
+                           endif
+
+! --> Most radial ambiguity resolution.
+                        elseif(ipflag.eq.2) then
+
+! --> Check if changing direction of transverse field would result in a larger
+! --> radial component of the field.
+                           bdotb=Bz(ishift,jshift)*(Bx(ishift,jshift)*sin(theta)*cos(phi)+By(ishift,jshift)*sin(phi))*cos(theta)*cos(phi)
+
+! --> Flip direction of transverse field if dot product is negative.
+                           if(bdotb.lt.0.) then
+                              Bx(ishift,jshift)=-Bx(ishift,jshift)
+                              By(ishift,jshift)=-By(ishift,jshift)
+                           endif
+
                         endif
                      endif
                   enddo
@@ -240,9 +255,6 @@ subroutine tile(ntx,nty,nap)
          endif
       enddo
    enddo
-!do j=1,ny
-!   write(9,*) (dBzdz(i,j),i=1,nx)
-!enddo
 
 ! --> Deallocate memory.
    deallocate(x,y,xs,ys,Bzwin,dBpzdz,Bpix,Bpiy)

@@ -10,7 +10,7 @@ d := $(dir)
 # module name(s) to be generated and file name(s) to be compiled
 
 ## C-wrapper name (name must end with .c)
-MODEXE_USEF_$(d) := $(addprefix $(d)/, disambig test_ambig)
+MODEXE_USEF_$(d) := $(addprefix $(d)/, disambig)
 
 ## wrapped Fortran codes
 WRAPPEDF_$(d)    := $(addprefix $(d)/, set_geometry.o sizes.o mgram_data.o pad.o point.o pot_field.o verbose.o WeightingFactor.o anneal.o ranseed.o bobs.o constant.o disk_center.o ephemeris.o pix_size.o spherical_position.o bounds.o maskvec.o deriv_coefficients.o spherical_deriv_coefficients.o energy_arrays.o recon.o ran_pix.o ran3.o trnsfrm.o transform.o buffer.o cuspl.o cuspl2d.o cuspleval.o cuspleval2d.o smooth.o mkl_dfti.o dfti_example_status_print.o potential.o pacute.o boxit.o setup_OCBP_PF_dzh_4p.o setup_spherical_PF_4p.o CalcE_OCBP_PF_dzh_4p.o CalcDE_reconfig_OCBP_PF_dzh_4p.o CalcE_spherical_PF_4p.o CalcDE_reconfig_spherical_PF_4p.o get_ran_pix.o CalcDE.o reconfig.o minimise_energy.o global.o sortrx.o nacute5.o nacute6.o nacute6p.o mollweide.o revmollweide.o tile.o colatlon.o grown.o ambig.o)

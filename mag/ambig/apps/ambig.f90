@@ -17,6 +17,7 @@
 
 subroutine ambig(&
 		geometry_p, &			! set_geometry
+		weak_p, &			! set_weak_field_treatment
 		nx_p, ny_p, &			! sizes
 		npad_p, &			! pad
 		xcen_p, ycen_p, &		! disk_center
@@ -29,7 +30,7 @@ subroutine ambig(&
 		probBa_p, &			! uncertainty
 		dBt_p, bitmap_p, &		! maskvec
 		radius_p, &	        	! ephemeris
-		nap, bthresh)
+		nap, bthresh0, bthresh1)
 
 !==============================================================!
 
@@ -60,6 +61,8 @@ subroutine ambig(&
 
 ! set_geometry
    integer, intent(in) :: geometry_p
+! set_weak_field_treatment
+   integer, intent(in) :: weak_p 
 ! sizes
    integer, intent(in) :: nx_p, ny_p
 ! pad
@@ -85,12 +88,12 @@ subroutine ambig(&
    real, intent(in) :: radius_p
 !
    integer, intent(in) :: nap
-   real, intent(in) :: bthresh
+   real, intent(in) :: bthresh0, bthresh1
    real, dimension(nx_p,ny_p), intent(out), target :: probBa_p
 
 ! local temp variables
-   integer :: i, j, nxp, nyp
-   real :: xx, yy, y2
+   integer :: i, j, nxp, nyp, ipflag
+   real :: xx, yy, y2, bthresh
    real,dimension(:,:),pointer :: probBa   ! Pointer to input array probBa_p
    external :: setup_OCBP_PF_dzh_4p, CalcE_OCBP_PF_dzh_4p, CalcDE_reconfig_OCBP_PF_dzh_4p
    external :: setup_spherical_PF_4p, CalcE_spherical_PF_4p, CalcDE_reconfig_spherical_PF_4p
@@ -110,6 +113,8 @@ real,dimension(nx_p,ny_p) :: ba
    ny = ny_p
 ! set_geometry
    geometry = geometry_p
+! set_weak_field_treatment
+   ipflag = weak_p
 ! npad
    npad = npad_p
 ! disk_center
@@ -206,13 +211,15 @@ write(*,*) 'phi,theta',phi,theta
 !
 ! --> Global minimization of "energy" to resolve ambiguity.
 !
-         call global(bthresh, setup_OCBP_PF_dzh_4p, CalcE_OCBP_PF_dzh_4p, CalcDE_reconfig_OCBP_PF_dzh_4p)
+         call global(setup_OCBP_PF_dzh_4p, CalcE_OCBP_PF_dzh_4p, CalcDE_reconfig_OCBP_PF_dzh_4p)
          if(iverb.eq.1) write(*,*) 'optimization done'
 !
 ! --> Perform acute angle to nearest neighbor ambiguity resolution on
 ! --> pixels below a given threshold. 
 !
-         call nacute5(bthresh)
+         bthresh=bthresh1+(bthresh0-bthresh1)*sin(phi)*cos(theta)
+write(*,*) 'bthresh',bthresh
+         call nacute6p(bthresh)
          if(iverb.eq.1) write(*,*) 'smoothing done'
 !
 ! --> Temporary rough estimate of uncertainty in ambiguity resolution:
@@ -243,7 +250,7 @@ write(*,*) 'phi,theta',phi,theta
          call colatlon
 
 ! --> Calculate potential field (and derivatives) using tiling.
-         call tile(ntx,nty,nap)
+         call tile(ntx,nty,nap,ipflag)
          if(iverb.eq.1) write(*,*) 'tiling done'
 
 ! --> Update mask to exclude pixels for which no potential field was calculated.
@@ -252,21 +259,43 @@ write(*,*) 'phi,theta',phi,theta
                mask(i,j)=mask(i,j)*tmask(i,j)
             enddo
          enddo
-         deallocate(tmask)
 
 ! --> Global minimization of "energy" to resolve ambiguity.
-         call global(bthresh, setup_spherical_PF_4p, CalcE_spherical_PF_4p, CalcDE_reconfig_spherical_PF_4p)
+         call global(setup_spherical_PF_4p, CalcE_spherical_PF_4p, CalcDE_reconfig_spherical_PF_4p)
          if(iverb.eq.1) write(*,*) 'optimization done'
 !
 ! --> Perform acute angle to nearest neighbor ambiguity resolution on
 ! --> pixels below a given threshold. 
 !
-         !call nacute6(bthresh)
+         !call nacute6(bthresh0, bthresh1)
          !if(iverb.eq.1) write(*,*) 'smoothing done'
+!
+! --> Temporary rough estimate of uncertainty in ambiguity resolution:
+! --> 0.0 for pixels which were not disambiguated (outside tmask)
+! --> 0.5 for pixels which had weak field method applied
+! --> 0.6 for pixels which were below threshold and annealed
+! --> 0.9 for pixels which were above threshold and annealed
+!
+         do i=1,nx
+            do j=1,ny
+               if(tmask(i,j).eq.0) then
+                  probBa(i,j)=0.0
+               elseif(mask(i,j).eq.0) then
+                  probBa(i,j)=0.5
+               else
+                  if(bt(i,j).gt.(bthresh1+(bthresh0-bthresh1)*sinp(j)*cost(i,j))) then
+                     probBa(i,j)=0.9
+                  else
+                     probBa(i,j)=0.6
+                  endif
+               endif
+            enddo
+         enddo
 
 ! --> Deallocate memory for spherical coordinates.
 
          deallocate(t,p,sint,cost,sinp,cosp)
+         deallocate(tmask)
 !
 ! geometry=other: error
 !
