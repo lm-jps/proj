@@ -55,7 +55,7 @@ for j=i+1, n_elements(minute)-1 do begin
 if minute[j]-minute[i] lt 36.0*60.0 then begin
 print, (minute[j]-minute[i]), 'minutes'
 fsna=[long(result[i]), long(result[j])]
-if (fsna[1]-fsna[0]) gt (fsn[1]-fsn[0]) then fsn=fsna
+if (fsna[1]) gt (fsn[1]) then fsn=fsna
 endif
 endfor
 endfor
@@ -375,7 +375,7 @@ msk_side[*,*,k]=dm
 
 if keyword_set(plots) then plot, x0, y0, psym=2
 
-cnt=0
+cnt=0L
 for i=0, 4095 do for j=0, 4095 do begin & idx=where(abs(imr[i,j,*]-median(imr[i,j,*])) gt std, count) & if sqrt((i-2048-x00)^2+(j-2048-y00)^2) lt float(solrad_side)/100.*0.99*2048.0 and count gt 0 then begin & cnt=cnt+1 & imr[i,j,idx]=-1.0 & endif & endfor
 print, "number of cosmic rays", cnt
 
