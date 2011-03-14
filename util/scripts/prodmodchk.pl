@@ -1,6 +1,8 @@
 #!/home/jsoc/bin/linux_x86_64/perl5.12.2 -w
 
 # This script checks for the presence of vital data-processing modules in the 'production' code trees.
+# Usage:
+#   prodmodchk.pl /home/jsoc/jsoclogs/monitoring/bincheck.log /home/jsoc/jsoclogs/monitoring/lock.txt
 
 use XML::Simple;
 use Data::Dumper;
