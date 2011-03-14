@@ -565,6 +565,7 @@ sub Go
    my($nolock);
    my($row);
    my($atleastone);
+   my($procfailed);
    my($rv);
 
    $rv = kSuccess;
@@ -604,6 +605,8 @@ sub Go
 
             if (defined($unarchLogs->{$lspath}))
             {
+               $procfailed = 0;
+
                # We have a log file to archive. After the file is archived, it will be deleted, so 
                # give the processing program a last chance to run.
                if (defined($lsprocess) && length($lsprocess) > 0)
@@ -611,29 +614,31 @@ sub Go
                   if (!CallCmd($lsprocess))
                   {
                      print STDERR "Unable to run '$lsprocess' properly.\n";
+                     $procfailed = 1;
                   }
+               }
+
+               if (!$procfailed)
+               {
+                  if (!Archive($lspath, $lsbase, $tarbin, $gzbin, $unarchLogs->{$lspath}))
+                  {
+                     print STDERR "Unable to archive log files for logset '$logset'.\n";
+                  } 
                   else
                   {
-                     if (!Archive($lspath, $lsbase, $tarbin, $gzbin, $unarchLogs->{$lspath}))
+                     $atleastone = 1;
+
+                     # Update lastarch value
+                     my($timenow) = strftime("%a %b %e %H:%M:%S %Y", localtime());
+
+                     $stmnt = "UPDATE $conftable SET $headers[kLSLastArch] = '$timenow' WHERE $headers[kLogset] = '$logset'";
+                     $res = $$dbh->do($stmnt);
+
+                     if (!NoErr($res, $dbh, $stmnt))
                      {
-                        print STDERR "Unable to archive log files for logset '$logset'.\n";
-                     } 
-                     else
-                     {
-                        $atleastone = 1;
-
-                        # Update lastarch value
-                        my($timenow) = strftime("%a %b %e %H:%M:%S %Y", localtime());
-
-                        $stmnt = "UPDATE $conftable SET $headers[kLSLastArch] = '$timenow' WHERE $headers[kLogset] = '$logset'";
-                        $res = $$dbh->do($stmnt);
-
-                        if (!NoErr($res, $dbh, $stmnt))
-                        {
-                           print STDERR "Unable to update '$klslastarch' in '$conftable'.\n";
-                           $rv = kCantUpdate;
-                           last;
-                        }
+                        print STDERR "Unable to update '$klslastarch' in '$conftable'.\n";
+                        $rv = kCantUpdate;
+                        last;
                      }
                   }
                }
