@@ -36,6 +36,9 @@
 #   7. the retention time - interval of time (days) to keep tar'd files in the log-set, after this interval
 #      tar'd files are moved to a 'trash' bin (integer)
 #   8. the date of the last archive (timestamp - date + time)
+#   9. a cmd to run before archiving a log - the archive process will result in the active log
+#      being deleted; by running this cmd, any processes that use the log can be invoked
+#      one last time on that log.
 
 # To enter log-set-specific information into this database table, use the '-a' flag, followed
 # by a string containing the seven comma-separated fields.
@@ -62,6 +65,8 @@ use constant kCantUpdate => 4;
 use constant kAlreadyRunning => 5;
 use constant kCantDrop => 6;
 use constant kCantCreate => 7;
+use constant kSQLFailure => 8;
+use constant kProcessorFailure => 9;
 
 use constant kTarChunk => 64;
 
@@ -73,9 +78,10 @@ use constant kLSLock => 4;
 use constant kLSArchInt => 5;
 use constant kLSRetention => 6;
 use constant kLSLastArch => 7;
+use constant kLSProcess => 8;
 
 
-my(@headers) = qw(logset basename path trashdir lckfile archinterval retention lastarch);
+my(@headers) = qw(logset basename path trashdir lckfile archinterval retention lastarch process);
 
 my($klogset) = $headers[kLogset];
 my($klsbase) = $headers[kLSBase];
@@ -85,6 +91,7 @@ my($klslockpath) = $headers[kLSLock];
 my($klsarchint) = $headers[kLSArchInt];
 my($klsretention) = $headers[kLSRetention];
 my($klslastarch) = $headers[kLSLastArch];
+my($klsprocess) = $headers[kLSProcess];
 
 my($lckfh);
 my($gotlock);
@@ -446,7 +453,7 @@ sub CreateTable
 
    $rv = 1;
 
-   $stmnt = "CREATE TABLE $conftable ($headers[kLogset] text NOT NULL, $headers[kLSBase] text NOT NULL, $headers[kLSPath] text NOT NULL, $headers[kLSTrash] text, $headers[kLSLock] text, $headers[kLSArchInt] interval DEFAULT '1 day', $headers[kLSRetention] interval DEFAULT '30 day', $headers[kLSLastArch] timestamp with time zone DEFAULT '1966-12-25 00:54:00 PST', PRIMARY KEY ($klogset))";
+   $stmnt = "CREATE TABLE $conftable ($headers[kLogset] text NOT NULL, $headers[kLSBase] text NOT NULL, $headers[kLSPath] text NOT NULL, $headers[kLSTrash] text, $headers[kLSLock] text, $headers[kLSArchInt] interval DEFAULT '1 day', $headers[kLSRetention] interval DEFAULT '30 day', $headers[kLSLastArch] timestamp with time zone DEFAULT '1966-12-25 00:54:00 PST', $headers[kLSProcess] text, PRIMARY KEY ($klogset))";
 
    $res = $$dbh->do($stmnt);
    if (!NoErr($res, $dbh, $stmnt))
@@ -482,7 +489,7 @@ sub DisplayTable
    my($stmnt);
    my($rrows);
 
-   $stmnt = "SELECT $headers[kLogset], $headers[kLSBase], $headers[kLSPath], $headers[kLSTrash], $headers[kLSLock], $headers[kLSArchInt], $headers[kLSRetention], $headers[kLSLastArch] from $conftable";
+   $stmnt = "SELECT $headers[kLogset], $headers[kLSBase], $headers[kLSPath], $headers[kLSTrash], $headers[kLSLock], $headers[kLSArchInt], $headers[kLSRetention], $headers[kLSLastArch], $headers[kLSProcess] from $conftable";
 
    $rrows = $$dbh->selectall_arrayref($stmnt, undef);
 
@@ -491,7 +498,7 @@ sub DisplayTable
       my($ptbuf);
 
       # Print header
-      $ptbuf = sprintf("%16s%16s%48s%48s%64s%16s%16s%32s", $headers[kLogset], $headers[kLSBase], $headers[kLSPath], $headers[kLSTrash], $headers[kLSLock], $headers[kLSArchInt], $headers[kLSRetention], $headers[kLSLastArch]);
+      $ptbuf = sprintf("%16s%16s%48s%48s%64s%16s%16s%32s%32s", $headers[kLogset], $headers[kLSBase], $headers[kLSPath], $headers[kLSTrash], $headers[kLSLock], $headers[kLSArchInt], $headers[kLSRetention], $headers[kLSLastArch], $headers[kLSProcess]);
       print "$ptbuf\n";
       print "----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n";
 
@@ -499,8 +506,8 @@ sub DisplayTable
       {
          foreach $row (@$rrows)
          {
-            my($logset, $lsbase, $lspath, $lstrash, $lslockpath, $lsarchint, $lsretention, $lslastarch) = @$row;
-            $ptbuf = sprintf("%16s%16s%48s%48s%64s%16s%16s%32s", $logset, $lsbase, $lspath, defined($lstrash) ? $lstrash : "", defined($lslockpath) ? $lslockpath : "", $lsarchint, $lsretention, $lslastarch);
+            my($logset, $lsbase, $lspath, $lstrash, $lslockpath, $lsarchint, $lsretention, $lslastarch, $lsprocess) = @$row;
+            $ptbuf = sprintf("%16s%16s%48s%48s%64s%16s%16s%32s%32s", $logset, $lsbase, $lspath, defined($lstrash) ? $lstrash : "", defined($lslockpath) ? $lslockpath : "", $lsarchint, $lsretention, $lslastarch, $lsprocess);
             print "$ptbuf\n";
          }
       }
@@ -519,7 +526,7 @@ sub AddRecord
    my($rowstr);
    my($colnamesstr);
 
-   #$logset, $lsbase, $lspath, $lstrash, $lslockpath, $lsarchint, $lsretention, $lslastarch
+   #$logset, $lsbase, $lspath, $lstrash, $lslockpath, $lsarchint, $lsretention, $lslastarch, $lsprocess
 
    $ival = 0;
    foreach my $item (@rowin)
@@ -563,7 +570,7 @@ sub Go
    $rv = kSuccess;
 
    # First, archive the non-archived logs, if it is time to do so.
-   $stmnt = "SELECT $headers[kLogset], $headers[kLSBase], $headers[kLSPath], $headers[kLSLock] FROM $conftable WHERE $headers[kLSLastArch] + $headers[kLSArchInt] < current_timestamp";
+   $stmnt = "SELECT $headers[kLogset], $headers[kLSBase], $headers[kLSPath], $headers[kLSLock], $headers[kLSProcess] FROM $conftable WHERE $headers[kLSLastArch] + $headers[kLSArchInt] < current_timestamp";
    $rrows = $$dbh->selectall_arrayref($stmnt, undef);
 
    if (NoErr($rrows, $dbh, $stmnt))
@@ -573,7 +580,7 @@ sub Go
 
       foreach $row (@$rrows)
       {
-         my($logset, $lsbase, $lspath, $lslockpath) = @$row;
+         my($logset, $lsbase, $lspath, $lslockpath, $lsprocess) = @$row;
 
          if (defined($lslockpath) && length($lslockpath) > 0)
          {
@@ -597,35 +604,50 @@ sub Go
 
             if (defined($unarchLogs->{$lspath}))
             {
-               if (!Archive($lspath, $lsbase, $tarbin, $gzbin, $unarchLogs->{$lspath}))
+               # We have a log file to archive. After the file is archived, it will be deleted, so 
+               # give the processing program a last chance to run.
+               if (defined($lsprocess) && length($lsprocess) > 0)
                {
-                  print STDERR "Unable to archive log files for logset '$logset'.\n";
-               }
-               else
-               {
-                  $atleastone = 1;
-
-                  # Update lastarch value
-                  my($timenow) = strftime("%a %b %e %H:%M:%S %Y", localtime());
-
-                  $stmnt = "UPDATE $conftable SET $headers[kLSLastArch] = '$timenow' WHERE $headers[kLogset] = '$logset'";
-                  $res = $$dbh->do($stmnt);
-
-                  if (!NoErr($res, $dbh, $stmnt))
+                  if (!CallCmd($lsprocess))
                   {
-                     print STDERR "Unable to update '$klslastarch' in '$conftable'.\n";
-                     $rv = kCantUpdate;
+                     print STDERR "Unable to run '$lsprocess' properly.\n";
+                  }
+                  else
+                  {
+                     if (!Archive($lspath, $lsbase, $tarbin, $gzbin, $unarchLogs->{$lspath}))
+                     {
+                        print STDERR "Unable to archive log files for logset '$logset'.\n";
+                     } 
+                     else
+                     {
+                        $atleastone = 1;
+
+                        # Update lastarch value
+                        my($timenow) = strftime("%a %b %e %H:%M:%S %Y", localtime());
+
+                        $stmnt = "UPDATE $conftable SET $headers[kLSLastArch] = '$timenow' WHERE $headers[kLogset] = '$logset'";
+                        $res = $$dbh->do($stmnt);
+
+                        if (!NoErr($res, $dbh, $stmnt))
+                        {
+                           print STDERR "Unable to update '$klslastarch' in '$conftable'.\n";
+                           $rv = kCantUpdate;
+                           last;
+                        }
+                     }
                   }
                }
             }
          }
 
+         # Don't hold the lock - allow the processes generating the logs a chance to write in between the processing
+         # of logsets.
          if ($gotlock)
          {
             ReleaseLock(\$lckfh);
             $gotlock = 0;
          }
-      }
+      } # loop over logsets
 
       if (!$atleastone && $#$rrows >= 0 && (keys(%$unarchLogs) > 0))
       {
@@ -641,12 +663,13 @@ sub Go
          print "No log files available for archiving.\n";
       }
    }
+   else
+   {
+      $rv = kSQLFailure;
+   }
 
-   # Don't hold the lock - allow the processes generating the logs a chance to write
-print "here1\n";
    if ($rv == kSuccess)
    {
-print "here2\n";
       my($timetotrash) = 0;
 
       # Second, trash the archive files that have expired.
@@ -747,6 +770,36 @@ print "here2\n";
    return $rv;
 }
 
+sub CallCmd
+{
+   my($cmd) = $_[0];
+
+   my($rv) = 1;
+   my($callstat);
+
+   system($cmd);
+   $callstat = $?;
+
+   if ($callstat == -1)
+   {
+      print STDERR "Failed to execute '$cmd'.\n";
+      $rv = 0;
+   } 
+   elsif ($callstat & 127)
+   {
+      print STDERR "command '$cmd' terminated abnormally.\n";
+      $rv = 0;
+   } 
+   elsif ($callstat >> 8 != 0)
+   {
+      $callstat = $callstat >> 8;
+      print STDERR "command '$cmd' ran unsuccessfully, status == $callstat.\n";
+      $rv = 0;
+   }
+
+   return $rv;
+}
+
 sub Archive
 {
    my($lspath, $lsbase, $tarbin, $gzbin, $rtotar) = @_;
@@ -829,13 +882,14 @@ sub Archive
             if (!move(".tmp.tar.gz", $tarfilename))
             {
                print STDERR "Unable to move .tmp.tar.gz to $tarfilename.\n";
+               $rv = 0;
             }
             else
             {
-               # Remove sql files just tarred.
+               # Remove log files just tarred.
                while (defined($fullpath = shift(@totar)))
                {
-                  print "Deleting tarred sql file: $fullpath.\n";
+                  print "Deleting tarred log file: $fullpath.\n";
                   unlink($fullpath);
                }
             }
@@ -843,6 +897,7 @@ sub Archive
          else
          {
             print STDERR "gzip cmd '$gzcmd' failed to run properly.\n";
+            $rv = 0;
          }
       }
       else
