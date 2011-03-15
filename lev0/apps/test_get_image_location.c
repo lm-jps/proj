@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/test_get_image_location.c,v 1.1 2010/07/28 22:14:04 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/test_get_image_location.c,v 1.2 2011/03/15 21:09:30 carl Exp $"
 /*############################################################################
 # Name:        test_get_image_location.c                                     #
 # Description:Used to unit test get_image_location.c                         # 
@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <unistd.h>
