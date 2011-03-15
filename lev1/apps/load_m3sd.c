@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.8 2010/11/09 23:13:52 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.9 2011/03/15 21:04:41 carl Exp $"
 /*############################################################################
 # Name:        load_m3sd.c - load mean max min and sd in series              #
 # Description: Load Minimum, Maximum, Mean and Standard Deviation keyword    #
@@ -130,7 +130,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <time.h>
 #include <math.h>
 #include <sys/stat.h>
