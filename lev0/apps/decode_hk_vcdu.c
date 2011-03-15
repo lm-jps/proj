@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk_vcdu.c,v 1.10 2010/07/20 21:15:23 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk_vcdu.c,v 1.11 2011/03/15 20:59:21 carl Exp $"
 /*****************************************************************************
  * Filename: decode_hk_vcdu.c                                                *
  * Author: Carl                                                              *
@@ -8,7 +8,6 @@
  * (C) Stanford University, 2008                                             *
  ****************************************************************************/
 #include <stdio.h>
-#include <assert.h>
 #include "decode_hk.h"
 #include "packets.h"
 #include "decode_hk_vcdu.h"
@@ -239,7 +238,12 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
       if (hk_status==HK_SUCCESS_DECODING)
       {      
 	/* Allocate a CCSDS packet. */
-	assert(p = malloc(sizeof(CCSDS_Packet_t)));
+	p = malloc(sizeof(CCSDS_Packet_t));
+        if(!p)
+        {
+          printkerr("ERROR at %s, line %d: Cannot malloc space!\n",__FILE__, __LINE__);
+        }
+
 	memcpy(p, &ccsds, sizeof(CCSDS_Packet_t));
 
 	/* Append to output list. */

@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/load_hk_config_files.c,v 1.8 2010/07/20 20:58:24 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/load_hk_config_files.c,v 1.9 2011/03/15 20:57:03 carl Exp $"
 /*****************************************************************************
  * Filename: load_hk_config_files.c                                          *
  * Author: Carl Cimilluca                                                    *
@@ -48,7 +48,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <assert.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>

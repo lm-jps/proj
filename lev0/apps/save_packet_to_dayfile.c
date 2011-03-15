@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/save_packet_to_dayfile.c,v 1.14 2010/07/20 21:48:05 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/save_packet_to_dayfile.c,v 1.15 2011/03/15 20:57:53 carl Exp $"
 /*****************************************************************************
  * Filename: save_packet_to_dayfile.c                                        *
  * Author: Carl                                                              *
@@ -9,7 +9,6 @@
  ****************************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include "decode_hk.h"
 #include "packets.h"
 #include "save_packet_to_dayfile.h"
@@ -83,7 +82,11 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
   if (*df_head == NULL)
   {
     /* create top data-dayfile node */
-    assert(dd = malloc(sizeof(HK_Dayfile_Data_t)));
+    dd = malloc(sizeof(HK_Dayfile_Data_t));
+    if(!dd)
+    {
+       printkerr("ERROR at %s, line %d: Could not malloc space!\n", __FILE__, __LINE__);
+    }
 
     /* set apid value and time values in HK_DAYFILE_DATA struct*/
     dd->apid=(short)apid;
@@ -182,7 +185,11 @@ int save_packet_to_dayfile(unsigned short *word_ptr, int apid, HK_Dayfile_Data_t
     else
     { 
       /* if does not exist make new node for apid */
-      assert(dd = malloc(sizeof(HK_Dayfile_Data_t)));
+      dd = malloc(sizeof(HK_Dayfile_Data_t));
+      if(!dd)
+      {
+         printkerr("ERROR at %s, line %d: Could not malloc space!\n", __FILE__, __LINE__);
+      }
       dd->apid=(short)apid;
       (void)set_time_values(&dd,  get_packet_time(word_ptr));
       strcpy(dd->dayfile, get_dayfilename(dd->apid, get_packet_time(word_ptr)));
@@ -260,7 +267,11 @@ int load_packet_data( unsigned short *word_ptr, HK_Dayfile_Packet_t **pkt)
   ptr_vn =vn;
 
   /* create packet data node */
-  assert(pp = malloc(sizeof(HK_Dayfile_Packet_t)));
+  pp = malloc(sizeof(HK_Dayfile_Packet_t));
+  if(!pp)
+  {
+     printkerr("ERROR at %s, line %d: Could not malloc space!\n", __FILE__, __LINE__);
+  }
 
   /* get packet version number -Probably don't need*/
   w = word_ptr[7];
@@ -702,7 +713,12 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
       if (!dd)
       {
         /* create top data-dayfile node */
-        assert(dd = malloc(sizeof(HK_Dayfile_Data_t)));
+        dd = malloc(sizeof(HK_Dayfile_Data_t));
+        if(!dd)
+        {
+          printkerr("ERROR at %s, line %d: Could not malloc space!\n", __FILE__, __LINE__);
+          exit(1);
+        }
 
         /* set top pointer **dfd */
         *dfd= dd;
@@ -721,7 +737,11 @@ int load_dfd_node( unsigned short *word_ptr, HK_Dayfile_Data_t **dfd)
       else
       {
         /* create next data-dayfile node */
-        assert(t_dd = malloc(sizeof(HK_Dayfile_Data_t)));
+        t_dd = malloc(sizeof(HK_Dayfile_Data_t));
+        if(!t_dd)
+        {
+          printkerr("ERROR at %s, line %d: Could not malloc space!\n", __FILE__, __LINE__);
+        }
 
         /* set apid value and time values in HK_DAYFILE_DATA struct*/
         sscanf(dir_entry_p->d_name, "hsb_%hd_%hd_%hd_%hd_%hd_%hd_%hd",
