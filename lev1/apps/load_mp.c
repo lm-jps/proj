@@ -1,3 +1,4 @@
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_mp.c,v 1.4 2011/03/15 21:41:57 carl Exp $" 
 /*############################################################################
 # Name:        load_mp.c - Loads image location, leg, iss status data in     #
 #                          master pointing drms series.                      #
