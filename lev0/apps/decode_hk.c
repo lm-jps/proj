@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk.c,v 1.12 2010/10/15 18:12:03 carl Exp $" 
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk.c,v 1.13 2011/03/15 21:00:06 carl Exp $" 
 /*****************************************************************************
  * Filename: decode_hk.c                                                     *
  * Author: Carl                                                              *
@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <assert.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -952,7 +951,11 @@ HK_Keyword_t *copy_hk_keywords(HK_Keyword_t *head)
 
   if (head)
   {
-    assert(newhead = malloc(sizeof(HK_Keyword_t)));
+    newhead = malloc(sizeof(HK_Keyword_t));
+    if(!newhead)
+    {
+      printkerr("ERROR at %s, line %d: malloc failed to allocate space\n",__FILE__, __LINE__);
+    }
     p = newhead;
     memcpy(p, head, sizeof(HK_Keyword_t));
     if (head->eng_type == KW_TYPE_STRING)
@@ -960,7 +963,12 @@ HK_Keyword_t *copy_hk_keywords(HK_Keyword_t *head)
     head = head->next;
     while(head)
     {      
-      assert(p->next = malloc(sizeof(HK_Keyword_t)));
+      p->next = malloc(sizeof(HK_Keyword_t));
+      if(!p->next)
+      {
+        printkerr("ERROR at %s, line %d: malloc failed to allocate space\n",__FILE__, __LINE__);
+      }
+      
       p = p->next;
       memcpy(p, head, sizeof(HK_Keyword_t));
       if (head->eng_type == KW_TYPE_STRING)
