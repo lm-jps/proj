@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/write_hk_to_drms.c,v 1.22 2010/11/17 22:35:03 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/write_hk_to_drms.c,v 1.23 2011/03/15 20:53:58 carl Exp $"
 /*****************************************************************************
  * Filename: write_hk_to_drms.c                                              *
  * Author: Carl                                                              *
@@ -197,8 +197,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         /* check if record exists based on timecode values */
         /* need ds name(above), apid and kw structure(below)  to check if record exists */
         kw = ccsds->keywords;
-        /* Ticket:312 fix:ck_rec_status = check_hk_record_exists(query, kw, ccsds->apid);*/
-        ck_rec_status = 0; /*set to zero to always write records */
+        ck_rec_status = check_hk_record_exists(query, kw, ccsds->apid);
 #ifdef DEBUG_WRITE_HK_TO_DRMS
         printkerr("DEBUG:Message at %s, line %d: After check if record exists. "
                   "Status:<%d> where 0 means write record and 1 means skip "
@@ -755,7 +754,11 @@ char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jm
    if (!jm || new_mf_flag)
    {
       /* if empty structure then create top node */
-      assert(jm = (JSOC_Version_Map_t *)malloc(sizeof(JSOC_Version_Map_t))); 
+      jm = (JSOC_Version_Map_t *)malloc(sizeof(JSOC_Version_Map_t)); 
+      if (!jm)
+      {
+        printkerr("ERROR at %s, line %d: Cannot malloc space!\n", __FILE__ , __LINE__ );
+      }
       *jmap_ptr=jm;
       jm->apid=(short)apid;
       jm->next=NULL;
@@ -796,7 +799,11 @@ char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jm
            (void)free_jsvn_map(jm);
            /* recreate jm structure by loading on demand PVN-TO-JSVN file data*/
            /* create top node */
-           assert(jm = (JSOC_Version_Map_t *)malloc(sizeof(JSOC_Version_Map_t)));
+           jm = (JSOC_Version_Map_t *)malloc(sizeof(JSOC_Version_Map_t));
+           if (!jm)
+           {
+             printkerr("ERROR at %s, line %d: Cannot malloc space!\n", __FILE__ , __LINE__ );
+           } 
            *jmap_ptr=jm;
            jm->apid=(short)apid;
            jm->next=NULL;
@@ -813,7 +820,11 @@ char *lookup_data_series_name(CCSDS_Packet_t *ccsds_ptr, JSOC_Version_Map_t **jm
          /* if cannot find node for apid then create one */ 
          /* go to end of JSOC Version Map nodes and add node */
          /* first create JSOC Version Map node */
-         assert(tmp_jm = (JSOC_Version_Map_t *)malloc(sizeof(JSOC_Version_Map_t))); 
+         tmp_jm = (JSOC_Version_Map_t *)malloc(sizeof(JSOC_Version_Map_t)); 
+         if (!tmp_jm)
+         {
+           printkerr("ERROR at %s, line %d: Cannot malloc space!\n", __FILE__ , __LINE__ );
+         } 
          tmp_jm->apid= (short)apid;
          tmp_jm->next= NULL;
 
@@ -952,14 +963,22 @@ void load_map_data(int apid, JSOC_Version_Map_t  *jm, char *pvn)
       /* for each line load map data in Map_Data_t structure */
       if (!tmp_dm)
       {
-        assert(tmp_dm = (Map_Data_t*)malloc(sizeof(Map_Data_t))); 
+        tmp_dm = (Map_Data_t*)malloc(sizeof(Map_Data_t)); 
+        if (!tmp_dm)
+        {
+          printkerr("ERROR at %s, line %d: Cannot malloc space!\n", __FILE__ , __LINE__ );
+        } 
         tmp_dm->next= NULL;
         jm->mdata = tmp_dm;
         prev_dm =tmp_dm;
       }
       else
       {
-        assert(tmp_dm = (Map_Data_t*)malloc(sizeof(Map_Data_t))); 
+        tmp_dm = (Map_Data_t*)malloc(sizeof(Map_Data_t)); 
+        if (!tmp_dm)
+        {
+          printkerr("ERROR at %s, line %d: Cannot malloc space!\n", __FILE__ , __LINE__ );
+        } 
         tmp_dm->next= NULL;
         prev_dm->next =tmp_dm;
         prev_dm= tmp_dm;
