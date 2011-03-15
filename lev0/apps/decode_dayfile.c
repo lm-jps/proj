@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_dayfile.c,v 1.23 2010/07/20 16:57:40 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_dayfile.c,v 1.24 2011/03/15 21:01:16 carl Exp $"
 /*############################################################################
 # Name:        decode_dayfile.c - Decode Dayfiles                            #
 # Description: Decode dayfile decodes hk packet by sending hk packets to     #
@@ -179,7 +179,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <unistd.h>
