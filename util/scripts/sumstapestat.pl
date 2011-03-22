@@ -63,6 +63,7 @@ if (defined($dbh))
       $now = sprintf("%04d%02d%02d%02d%02d", $timeo->year() + 1900, $timeo->mon() + 1, $timeo->mday(), $timeo->hour(), $timeo->min());
       $nowplus100d = sprintf("%04d%02d%02d%02d%02d", $timeltro->year() + 1900, $timeltro->mon() + 1, $timeltro->mday(), $timeltro->hour(), $timeltro->min());
 
+
       # $rrows is a reference to an array; the array is an array of refereces to an array, so $row
       # is a reference to an array that has just one element (since the SELECT statement has just
       # one column). This element is the namespace name.
@@ -86,7 +87,15 @@ if (defined($dbh))
             # save results
             foreach $rowb (@$rrowsb)
             {
-               $delnow{lc($rowb->[0])} = [$group, $rowb->[1]];
+               if (defined($delnow{lc($rowb->[0])}))
+               {
+                  print "WARNING: series lc($rowb->[0]) appears in more than one tape group.\n";
+                  $delnow{lc($rowb->[0])}->{$group} = $rowb->[1];
+               }
+               else
+               {
+                  $delnow{lc($rowb->[0])} = {$group => $rowb->[1]};
+               }
             }
          }
 
@@ -105,7 +114,15 @@ if (defined($dbh))
                # save results
                foreach $rowb (@$rrowsb)
                {
-                  $delwi100d{lc($rowb->[0])} = [$group, $rowb->[1]];
+                  if (defined($delwi100d{lc($rowb->[0])}))
+                  {
+                     print "WARNING: series lc($rowb->[0]) appears in more than one tape group.\n";
+                     $delwi100d{lc($rowb->[0])}->{$group} = $rowb->[1];
+                  }
+                  else
+                  {
+                     $delwi100d{lc($rowb->[0])} = {$group => $rowb->[1]};
+                  }
                }
             }
          }
@@ -125,7 +142,15 @@ if (defined($dbh))
                # save results
                foreach $rowb (@$rrowsb)
                {
-                  $dellater{lc($rowb->[0])} = [$group, $rowb->[1]];
+                  if (defined($dellater{lc($rowb->[0])}))
+                  {
+                     print "WARNING: series lc($rowb->[0]) appears in more than one tape group.\n";
+                     $dellater{lc($rowb->[0])}->{$group} = $rowb->[1];
+                  }
+                  else
+                  {
+                     $dellater{lc($rowb->[0])} = {$group => $rowb->[1]};
+                  }
                }
             }
          }
@@ -146,13 +171,22 @@ if (defined($dbh))
                # save results
                foreach $rowb (@$rrowsb)
                {
-                  $archivepend{lc($rowb->[0])} = [$group, $rowb->[1]];
+                  if (defined($archivepend{lc($rowb->[0])}))
+                  {
+                     print "WARNING: series lc($rowb->[0]) appears in more than one tape group.\n";
+                     $archivepend{lc($rowb->[0])}->{$group} = $rowb->[1];
+                  }
+                  else
+                  {
+                     $archivepend{lc($rowb->[0])} = {$group => $rowb->[1]};
+                  }
                }
             }
          }
       } # loop over storage groups
 
       # print
+
       PrintResults(\%delnow, \%delwi100d, \%dellater, \%archivepend);
    }
 }
@@ -221,21 +255,23 @@ sub ExecStatement
 
 sub PrintResults
 {
-   # Each of the elements in each of these hash arrays has a series and a byte count; 
-   # the hash arrays do not necessarily all have the same set of series.
+   # Each of the elements in each of these hash arrays is a reference to a hash array.
+   # The parent hash array is keyed by series name. Each child hash array is 
+   # keyed by group with byte count values. The parent hash arrays do not necessarily 
+   # have the same set of series.
    my($delnow) = $_[0];
    my($delwi100d) = $_[1];
    my($dellater) = $_[2];
    my($archivepend) = $_[3];
 
-   my(@kdelnow) = map {[$_, $delnow->{$_}->[0]]} keys(%$delnow); # series, group
-   my(@kdelwi100d) = map {[$_, $delwi100d->{$_}->[0]]} keys(%$delwi100d);
-   my(@kdellater) = map {[$_, $dellater->{$_}->[0]]} keys(%$dellater);
-   my(@karchivepend) = map {[$_, $archivepend->{$_}->[0]]} keys(%$archivepend);
+   my(@kdelnow) = keys(%$delnow);
+   my(@kdelwi100d) = keys(%$delwi100d);
+   my(@kdellater) = keys(%$dellater);
+   my(@karchivepend) = keys(%$archivepend);
    
    my(@superduper) = (@kdelnow, @kdelwi100d, @kdellater, @karchivepend);
 
-   my(@sdsort) = sort {$a->[0] cmp $b->[0]} @superduper;
+   my(@sdsort) = sort {$a cmp $b} @superduper;
    my(@serieslist);
    my($elem);
    my($series);
@@ -243,30 +279,95 @@ sub PrintResults
    my(%seen);
    my($line);
 
+   my(@gdelnow);
+   my(@gdelwi100d);
+   my(@gdellater);
+   my(@ap);
+   my(@supergroup);
+   my(@gsort);
+   my(@grouplist);
+   my($elemin);
+
    my($dnow);
    my($d100);
    my($dlater);
    my($ap);
 
+   my($tdnow);
+   my($td100);
+   my($tdlater);
+   my($tap);
+
    foreach $elem (@sdsort)
    {
-      $series =  $elem->[0];
+      $series =  $elem;
       push(@serieslist, $elem) unless $seen{$series}++;
    }
 
    $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", "DP Now (GB)", "DP < 100d (GB)", "DP > 100d (GB)", "AP (GB)");
    print "$line\n";
 
+   $tdnow = 0;
+   $td100 = 0;
+   $tdlater = 0;
+   $tap = 0;
+
    foreach $elem (@serieslist)
    {
-      $series = $elem->[0];
-      $group = $elem->[1];
-      $dnow = defined($delnow->{$series}->[1]) ? $delnow->{$series}->[1] : 0;
-      $d100 = defined($delwi100d->{$series}->[1]) ? $delwi100d->{$series}->[1] : 0;
-      $dlater = defined($dellater->{$series}->[1]) ? $dellater->{$series}->[1] : 0;
-      $ap = defined($archivepend->{$series}->[1]) ? $archivepend->{$series}->[1] : 0;
+      $series = $elem;
 
-      $line = sprintf("%-48s%-8d%-24f%-24f%-24f%-24f", $series, $group, $dnow / kGig, $d100 / kGig, $dlater / kGig, $ap / kGig);
-      print "$line\n";
+      # Get groups
+      @gdelnow = ();
+      @gdelwi100d = ();
+      @gdellater = ();
+      @gap = ();
+
+      if (defined($delnow->{$series}))
+      {
+         @gdelnow = keys(%{$delnow->{$series}});
+      }
+
+      if (defined($delwi100d->{$series}))
+      {
+         @gdelwi100d = keys(%{$delwi100d->{$series}});
+      }
+
+      if (defined($dellater->{$series}))
+      {
+         @gdellater = keys(%{$dellater->{$series}});
+      }
+
+      if (defined($archivepend->{$series}))
+      {
+         @gap = keys(%{$archivepend->{$series}});
+      }
+
+      @superduper = (@gdelnow, @gdelwi100d, @gdellater, @gap);
+      @gsort = sort {$a <=> $b} @superduper;
+      @grouplist = ();
+
+      %seen = ();
+      foreach $elemin (@gsort)
+      {
+         push(@grouplist, $elemin) unless $seen{$elemin}++;
+      }
+
+      foreach $group (@grouplist)
+      {
+         $dnow = defined($delnow->{$series}->{$group}) ? $delnow->{$series}->{$group} : 0;
+         $d100 = defined($delwi100d->{$series}->{$group}) ? $delwi100d->{$series}->{$group} : 0;
+         $dlater = defined($dellater->{$series}->{$group}) ? $dellater->{$series}->{$group} : 0;
+         $ap = defined($archivepend->{$series}->{$group}) ? $archivepend->{$series}->{$group} : 0;
+
+         $tdnow += $dnow;
+         $td100 += $d100;
+         $tdlater += $dlater;
+         $tap += $ap;
+         
+         $line = sprintf("%-48s%-8d%-24f%-24f%-24f%-24f", $series, $group, $dnow / kGig, $d100 / kGig, $dlater / kGig, $ap / kGig);
+         print "$line\n";
+      }
    }
+   
+   # TODO - print out totals by group
 }
