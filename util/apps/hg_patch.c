@@ -613,8 +613,8 @@ fprintf(stderr,"get this box position crln=%f, crlt=%f height=%f width=%f, crlt_
     int y1 = round(center_y + lly);
     int x2 = round(center_x + urx);
     int y2 = round(center_y + ury);
-    crpix1 = 1 + center_x + llx - x0;
-    crpix2 = 1 + center_y + lly - y0;
+    crpix1 = 1 + x0 - (center_x + llx);
+    crpix2 = 1 + y0 - (center_y + lly);
 fprintf(stderr,"box position from (%d,%d) to (%d,%d), new crpix1=%f, crpix2=%f\n",x1,y1,x2,y2,crpix1,crpix2);
 
     int start1[2] = {x1, y1};
@@ -685,8 +685,8 @@ fprintf(stderr,"box outside image\n");
           }
         }
       pa -= 180.0;
-      crpix1 = 1 + x2 - x0;
-      crpix2 = 1 + y2 - y0;
+      crpix1 = 1 + (center_x + urx) - x0;
+      crpix2 = 1 + (center_y + ury) - y0;
       cosa = 1.0; sina = 0.0;
 fprintf(stderr,"rotated so new crpix1=%f, crpix2=%f\n",crpix1,crpix2);
       }
@@ -781,7 +781,7 @@ int img2sphere (double x, double y, double ang_r, double latc, double lonc,
  *  Map projected coordinates (x, y) to (lon, lat) and (rho | sig, chi)
  *  
  *  Arguments:
- *    x }           Plate locations, in units of the image radius, relative
+ *    x }           Plate locations, in same units as the image radius, relative
  *    y }               to the image center
  *    ang_r         Apparent semi-diameter of sun (angular radius of sun at
  *                      the observer's tangent line)
@@ -888,8 +888,8 @@ int sphere2img (double lat, double lon, double latc, double lonc,
  *      lon         Longitude (in radians)
  *      latc        Heliographic latitude of the disc center (in radians)
  *      lonc        Heliographic longitude of the disc center (in radians)
- *      *x }        Plate locations, in units of the image radius, NOT relative
- *      *y }          to the image center
+ *      *x }        Plate locations, in same units as the image radius, NOT relative
+ *      *y }               to the image center
  *      xcenter }   Plate locations of the image center, in units of the
  *      ycenter }     image radius, and measured from an arbitrary origin
  *                    (presumably the plate center or a corner)
