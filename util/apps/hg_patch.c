@@ -13,7 +13,7 @@
    @brief hg_patch extracts a rectangular 
    heliographic region or patch from an input series.  The patch is tracked across
    the solar disk from t_start to t_stop times.  The patch may be defined by Carrington coordinates or
-   in arcsec.
+   in arcsec.  The extracted patch is rectangular in original image pixels.
 
       Written by: Bala Poduval as extract_region, modified by Phil Scherrer
 
@@ -33,7 +33,8 @@
    boxunits= <patch spec units> \
    height=<height> \
    width=<width> \
-   requestid=<RequestID>
+   requestid=<RequestID> \
+   [-t] \
 
    @endcode
 
@@ -54,7 +55,7 @@
    If the logfile is present, a RecordSet query will be written to it for each image created  containing a query
    that will returnthat image.
 
-   RequestID, if present, is the ID of an on-requst procssing export request.
+   RequestID, if present, is the ID of an on-requst processing export request.
 
    If t_start or t_stop are not present, those values will be inferred from
    the on-disk time span for the center of the patch -90 degrees to +90 degrees from CM.
@@ -78,10 +79,11 @@
 
    The output seriesname defaults to the input seriesname with a suffix of "_hgpatch".
 
-   At present, it doesn't have any flags.
+   The -t, 'no tracking' flag casues the extracted region to remain fixed with respect to disc center.  I.e. the Carrington
+   tracking is disabled.
 
    @par Flags:
-   @c none
+   -t   Disable tracking.
 
    @par GEN_FLAGS:
    Ubiquitous flags present in every module.
@@ -150,6 +152,7 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "where", "1=1", "Additional 'where' clause if needed"},
     {ARG_FLOAT, "x", "0", "Location of extract box center"},
     {ARG_FLOAT, "y", "0", "Location of extract box center"},
+    {ARG_FLAG, "t", "0", "Disable Carrington rate tracking"},
     {ARG_END}
   };
 
@@ -229,6 +232,7 @@ int DoIt(void)
   double y = params_get_double(params, "y");
   const char *boxunits = params_get_str(params, "boxunits");
   const char *locunits = params_get_str(params, "locunits");
+  int NoTrack = params_isflagset(params, "t");
   TIME tNotSpecified = sscan_time("JD_0");
   int do_reftime = 0;  // Target specified by reftime vs Carr rotation mode.
   double crvalx = 0.0;
@@ -236,11 +240,13 @@ int DoIt(void)
   double crota, sina, cosa;
   double width_arcsec, height_arcsec;
   double pa, deltlong;
+  double center_x_first, center_y_first;  // used for NoTrack option
   int firstimage = 1;
   int boxtype, loctype;
   char *timekeyname;
   TIME t_step;
   int npkeys;
+  char timebuf[20];
 
   FILE *log = NULL;
 
@@ -297,14 +303,13 @@ fprintf(stderr,"starting boxtype=%d, loctype=%d\n",boxtype,loctype);
   else
     strcpy(inseries, inparam);
     
-  if (do_reftime) // Arc-sec specification, get ref image information
+// XXXXXXXXXXX Get box location in Carrington Coords for all location types XXXXXXXXXXXXXX
+  if (do_reftime) // Arc-sec, pixel, or Stonyhurst specification, get ref image information
     { // the image for ref_time is supposed to be present in the series.
     char t_ref_text[100];
     sprint_at(t_ref_text, t_ref-3600);
     sprintf(in, "%s[%s/2h]", inseries, t_ref_text);
-fprintf(stderr,"ready to open %s\n",in);
     inRS = drms_open_records(drms_env, in, &status); if (status || inRS->n == 0) DIE2("No input data found for t_ref",in);
-fprintf(stderr,"done with  open %s\n",in);
     int irec, nrecs = inRS->n;
     TIME tdiff = 10000;
     for (irec=0; irec<nrecs; irec++) // find record close to t_ref
@@ -344,7 +349,6 @@ fprintf(stderr,"done with  open %s\n",in);
     rsun_rad = asin(rsun_ref/dsun_obs); 
     rsun = rsun_rad*Rad2arcsec; 
     cdelt = drms_getkey_double(inRec, "CDELT1", &status); TEST_PARAM("CDELT1");
-fprintf(stderr,"cdelt=%f, dsun_obs=%f, rsun=%f\n",cdelt,dsun_obs,rsun);
     rsunpix = rsun/cdelt;
     if (loctype == LOCPIXELS || loctype==LOCARCSEC)
       { /* box ref location is in arcsec - find Carrington equivalent */
@@ -361,14 +365,11 @@ fprintf(stderr,"cdelt=%f, dsun_obs=%f, rsun=%f\n",cdelt,dsun_obs,rsun);
       inSeg = drms_segment_lookupnum(inRec, 0);
       inAxis[0] = inSeg->axis[0];
       inAxis[1] = inSeg->axis[1];
-fprintf(stderr,"calling img2sphere, center_x=%g, center_y=%f, rsunpix=%f\n", center_x, center_y, rsunpix);
-      // if(img2sphere (center_x/rsunpix, center_y/rsunpix, rsunpix, crlt_obs_rad, crln_obs_rad, pa_rad,
-      if(img2sphere (center_x/rsunpix, center_y/rsunpix, rsun_rad, crlt_obs_rad, crln_obs_rad, pa_rad,
-        NULL, &crlt_rad, &crln_rad, NULL, NULL, NULL, NULL, NULL) < 0)
+      if ( img2sphere(center_x/rsunpix, center_y/rsunpix, rsun_rad, crlt_obs_rad, crln_obs_rad, pa_rad,
+           NULL, &crlt_rad, &crln_rad, NULL, NULL, NULL, NULL, NULL) < 0)
           DIE("Starting location is off the solar disk.");
       crln = crln_rad * Rad2Deg;
       crlt = crlt_rad * Rad2Deg;
-fprintf(stderr,"back from img2sphere, crln=%f, crlt=%f\n",crln,crlt);
       }
     else /* loctype==LOCSTONY */
       {
@@ -381,8 +382,9 @@ fprintf(stderr,"back from img2sphere, crln=%f, crlt=%f\n",crln,crlt);
       { car_rot--; crln -= 360.0; }
     else if (deltlong < 0)
       { car_rot++; crln += 360.0; }
+sprint_at(timebuf,drms_getkey_time(inRec,"T_OBS",NULL));
+fprintf(stderr,"t_ref specified, box center is at %4d:%05.1f by %05.1f on %s\n",car_rot, crln,crlt, timebuf);
     drms_close_records(inRS, DRMS_FREE_RECORD);
-fprintf(stderr,"back from close record\n");
     }
   else // Carrington specification
     {
@@ -390,6 +392,7 @@ fprintf(stderr,"back from close record\n");
     crlt = y;
     if (crln < 0) DIE("Box longitude must be specified.");
     if (crlt < -990) DIE("box latitude must be specified.");
+fprintf(stderr,"car_rot specified, box center is at %4d:%05.1f by %05.1f \n",car_rot, crln,crlt);
     }
   crln_rad = crln * Deg2Rad;
   crlt_rad = crlt * Deg2Rad;
@@ -397,33 +400,15 @@ fprintf(stderr,"back from close record\n");
   // Now we have crln, crlt, crln_rad, crlt_rad, car_rot for the target box. 
 
   // Get implied time limits from car_rot and crln
-  // Use quickie estimate of carrtimes for now.
-  // XXXXXX need to fix this later.
-fprintf(stderr, "calling heliographictime carrot=%d, crln=%f\n",car_rot, crln);
   t_ref = HeliographicTime(car_rot, crln);
   if (t_start == tNotSpecified)
-{
-fprintf(stderr,"calling with carrot=%d, crln=%f\n",car_rot, crln+90.0);
     t_start = HeliographicTime(car_rot, crln + 90);
-}
   if (t_stop == tNotSpecified)
-{
-fprintf(stderr,"calling with carrot=%d, crln=%f\n",car_rot, crln-90.0);
     t_stop = HeliographicTime(car_rot, crln - 90);
-}
+// XXXXXXXXXXXXXXXXX End of get target box location
 
-{
-char timetxt[200];
-sprint_ut(timetxt,t_start);
-fprintf(stderr,"t_start=%s\n",timetxt);
-sprint_ut(timetxt,t_stop);
-fprintf(stderr,"t_stop=%s\n",timetxt);
-fprintf(stderr, "back from calling heliographictime\n");
-}
-
-  // get input seriesname and output seriesname
+// XXXXXXXXXXXXXXXX get input seriesname and output seriesname
   // first, get input and output series names.
-fprintf(stderr,"getting intemplate record\n");
   inTemplate = drms_template_record(drms_env, inseries, &status);
   if (status || !inTemplate) DIE2("Input series can not be found: ", inseries);
 
@@ -442,17 +427,16 @@ fprintf(stderr,"getting intemplate record\n");
     int i;
     for (i=0; i<npkeys; i++)
         {
-fprintf(stderr,"looking primes %d of %d\n",i,npkeys);
         DRMS_Keyword_t *pkey, *skey;
         pkey = inTemplate->seriesinfo->pidx_keywords[i];
         if (pkey->info->recscope > 1)
            pkey = drms_keyword_slotfromindex(pkey);
         if (pkey->info->type != DRMS_TYPE_TIME)
           continue;
-if(i > 0) DIE("Input series must have TIME keyword first, for now...");
+	if(i > 0) DIE("Input series must have TIME keyword first, for now...");
         timekeyname = pkey->info->name;
         t_step = drms_keyword_getdouble(drms_keyword_stepfromslot(pkey), &status);
-if (status) DIE("problem getting t_step");
+	if (status) DIE("problem getting t_step");
         }
     }
   else
@@ -486,24 +470,22 @@ if (status) DIE("problem getting t_step");
     sprint_at(t_stop_text, t_stop);
     sprintf(in, "%s[%s-%s%s]%s[? %s ?]", inseries, t_start_text, t_stop_text, cadence_text, (moreQuery ? moreQuery : ""), where);
     }
-fprintf(stderr,"Input recordset Query = %s\n",in);
 
   // Now, make sure output series exists and get template record.
   outTemplate = drms_template_record(drms_env, outseries, &status);
   if (status || !outTemplate) DIE2("Output series can not be found: ", outseries);
-// for now assume output t_step is in sync with input t_step
+// XXXXXXXXXXXXX End of get input and output series information
 
-fprintf(stderr,"finally ready to open %s\n",in);
+// XXXXXXXXXXXXX Now read data and extract boxes.
+
   inRS = drms_open_records(drms_env, in, &status);
   if (status || inRS->n == 0)
            DIE("No input data found");
   nrecs = inRS->n;
-fprintf(stderr,"open %s got %d records\n",in,nrecs);
 
   // extract patches from each record
   for (irec = 0; irec < nrecs; irec ++)
     {
-fprintf(stderr,"irec=%d of %d\n",irec, nrecs);
     inRec = inRS->records[irec];
     if (status || !inRec) DIE("Record read failed.");
     TIME trec = drms_getkey_time(inRec, timekeyname, &status); TEST_PARAM(timekeyname);
@@ -516,10 +498,7 @@ fprintf(stderr,"irec=%d of %d\n",irec, nrecs);
       {
       int quality = drms_getkey_int(inRec, "QUALITY", &status);
       if (quality < 0)
-        {
-fprintf(stderr,"quality bad %d, skip this record.",quality);
-        continue;
-        }
+         continue;
       }
     
     // get coordinate information for this image
@@ -530,15 +509,13 @@ fprintf(stderr,"quality bad %d, skip this record.",quality);
     x0 = crpix1 - 1;
     crpix2 = drms_getkey_double(inRec, "CRPIX2", &status); TEST_PARAM("CRPIX2");
     y0 = crpix2 - 1;
-fprintf(stderr,"new image, initial crpix1=%f, crpix2=%f\n",crpix1,crpix2);
     pa = -drms_getkey_double(inRec, "CROTA2", &status); TEST_PARAM("CROTA2");
     // convert to radians
     crlt_obs_rad = Deg2Rad*crlt_obs;;
     crln_obs_rad = Deg2Rad*crln_obs;;
     pa_rad = Deg2Rad*pa;
 
-    // get coordinate mapping info using keywords from first record
-
+//  XXXXXXXXXXXXXXXXX get coordinate mapping info using keywords from first record
     if (firstimage)
       {
       firstimage = 0;
@@ -556,7 +533,6 @@ fprintf(stderr,"new image, initial crpix1=%f, crpix2=%f\n",crpix1,crpix2);
         // in principle use deltlong to get time to use for correcting crlt_obs, ignore for now
         // get ur, ll coords of box at CM.
         rsunpix = rsun/cdelt;
-fprintf(stderr,"Now Carr box location, car_rot=%d, crln=%f, crlt=%f, rsun(as)=%f, rsunpix=%f\n",car_rot, crln, crlt, rsun, rsunpix);
         }
       if (boxtype == BOXDEGREE)
         {
@@ -566,8 +542,6 @@ fprintf(stderr,"Now Carr box location, car_rot=%d, crln=%f, crlt=%f, rsun(as)=%f
           &urx, &ury, 0.0, 0.0, rsunpix, pa_rad, 0, 0, 0, 0);
         sphere2img(Deg2Rad*(crlt-height/2), -Deg2Rad*(width/2), crlt_obs_rad, 0.0,
           &llx, &lly, 0.0, 0.0, rsunpix, pa_rad, 0, 0, 0, 0);
-fprintf(stderr,"BOXDEGREE width=%f, height=%f, crlt=%f\n",width,height,crlt);
-fprintf(stderr,"BOXDEGREE got llx=%f, lly=%f, urx=%f, ury=%f\n", llx,lly,urx,ury);
         nx = urx-llx;
         ny = ury-lly;
         // fix for 180 flipped coords.
@@ -602,20 +576,31 @@ fprintf(stderr,"BOXDEGREE got llx=%f, lly=%f, urx=%f, ury=%f\n", llx,lly,urx,ury
         nx = urx - llx + 1;  ny = ury - lly + 1;
         width_arcsec = nx * cdelt;
         height_arcsec = nx * cdelt;
-// XXXXX fix crpix by 0.5 later....
         }
-fprintf(stderr,"box limits from (%f,%f) to (%f,%f)\n",llx,lly,urx,ury);
+      if (NoTrack)
+          {
+          sphere2img(crlt_rad, crln_rad, crlt_obs_rad, crln_obs_rad, &center_x, &center_y, x0, y0, rsunpix, pa_rad, 0, 0, 0, 0);
+          center_x_first = center_x - x0;
+          center_y_first = center_y - y0;
+fprintf(stderr,"NoTrack, center_x_first=%f, center_y_first=%f, pa=%f\n",center_x_first,center_y_first,pa);
+          }
       }
 
-fprintf(stderr,"get this box position crln=%f, crlt=%f height=%f width=%f, crlt_obs=%f, crln_obs=%f\n",crln,crlt,height,width,crlt_obs_rad*Deg2Rad,crln_obs_rad*Rad2Deg);
-    sphere2img(crlt_rad, crln_rad, crlt_obs_rad, crln_obs_rad, &center_x, &center_y, x0, y0, rsunpix, pa_rad, 0, 0, 0, 0);
+    if (NoTrack)
+        {
+        center_x = center_x_first + x0;
+        center_y = center_y_first + y0;
+        }
+    else
+        {
+        sphere2img(crlt_rad, crln_rad, crlt_obs_rad, crln_obs_rad, &center_x, &center_y, x0, y0, rsunpix, pa_rad, 0, 0, 0, 0);
+        }
     int x1 = round(center_x + llx);
     int y1 = round(center_y + lly);
     int x2 = round(center_x + urx);
     int y2 = round(center_y + ury);
-    crpix1 = 1 + x0 - (center_x + llx);
-    crpix2 = 1 + y0 - (center_y + lly);
-fprintf(stderr,"box position from (%d,%d) to (%d,%d), new crpix1=%f, crpix2=%f\n",x1,y1,x2,y2,crpix1,crpix2);
+    crpix1 = 1 + x0 - x1;
+    crpix2 = 1 + y0 - y1;
 
     int start1[2] = {x1, y1};
     int end1[2] = {x2, y2};
@@ -625,10 +610,7 @@ fprintf(stderr,"box position from (%d,%d) to (%d,%d), new crpix1=%f, crpix2=%f\n
     inAxis[1] = inSeg->axis[1];
 
     if (x1 >= inAxis[0] || y1 >= inAxis[1] || x2 < 0 || y2 < 0)
-{
-fprintf(stderr,"box outside image\n");
       continue; // slice outside image
-}
 
     if (x1>=0 && y1>=0 && x2<inAxis[0] && y2<inAxis[1])
       {
@@ -685,10 +667,9 @@ fprintf(stderr,"box outside image\n");
           }
         }
       pa -= 180.0;
-      crpix1 = 1 + (center_x + urx) - x0;
-      crpix2 = 1 + (center_y + ury) - y0;
+      crpix1 = 1 + x2 - x0;
+      crpix2 = 1 + y2 - y0;
       cosa = 1.0; sina = 0.0;
-fprintf(stderr,"rotated so new crpix1=%f, crpix2=%f\n",crpix1,crpix2);
       }
 
 /*
@@ -745,6 +726,9 @@ fprintf(stderr,"rotated so new crpix1=%f, crpix2=%f\n",crpix1,crpix2);
     // drms_copykey(outRec, inRec, "T_OBS");
     // drms_copykey(outRec, inRec, "DATE__OBS");
     // drms_copykey(outRec, inRec, "WAVELNTH");
+fprintf(stderr,"Box %04d ",irec);
+drms_fprint_rec_query(stderr, outRec);
+fprintf(stderr,"  crpix1=%f, crpix2=%f\n",crpix1,crpix2);
 
     if (log)
       {
