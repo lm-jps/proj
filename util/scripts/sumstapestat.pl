@@ -5,7 +5,7 @@ use DBD::Pg;
 use Time::localtime;
 use Switch;
 
-use constant kDEBUG => 1;
+use constant kDEBUG => 0;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
@@ -101,12 +101,21 @@ if ($#ARGV >= 6)
 {
    switch (lc($ARGV[6]))
    {
-      case kMetricAll {$metric = kMetricAll;}
+      case kMetricAll 
+      {
+         if ($typequery eq kTypeQueryRaw)
+         {
+            print "Metric all cannot be used with an un-aggregated query.\n";
+            exit(1);
+         }
+
+         $metric = kMetricAll;
+      }
       case kMetricDPS {$metric = kMetricDPS;}
       case kMetricDPM {$metric = kMetricDPM;}
       case kMetricDPL {$metric = kMetricDPL;}
       case kMetricAP {$metric = kMetricAP;}
-      else {print "Invalid metric specified $ARGV[6].\n"; exit;}
+      else {print "Invalid metric specified $ARGV[6].\n"; exit(1);}
    }
 }
 else
@@ -527,6 +536,8 @@ sub SortAndPrintResults
 
    my($ok);
 
+   $ok = 1;
+
    $tdnow = 0;
    $td100 = 0;
    $tdlater = 0;
@@ -545,24 +556,24 @@ sub SortAndPrintResults
             case kTypeOrderSeries
             {
                # type - agg; order - series
-               $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", "DP Now (GB)", "DP <= 100d (GB)", "DP > 100d (GB)", "AP (GB)");
+               $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
                print "$line\n";
                
-               if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $delnow, $delwi100d, $dellater, $archivepend))
+               if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $containers{+kMetricDPS}, $containers{+kMetricDPM}, $containers{+kMetricDPL}, $containers{+kMetricAP}))
                {
                   foreach $elem (@serieslist)
                   {
                      $series = $elem;
                      @grouplist = ();
                      
-                     if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $delnow->{$series}, $delwi100d->{$series}, $dellater->{$series}, $archivepend->{$series}))
+                     if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{+kMetricDPS}->{$series}, $containers{+kMetricDPM}->{$series}, $containers{+kMetricDPL}->{$series}, $containers{+kMetricAP}->{$series}))
                      {
                         foreach $group (@grouplist)
                         {
-                           $dnow = defined($delnow->{$series}->{$group}) ? $delnow->{$series}->{$group} : 0;
-                           $d100 = defined($delwi100d->{$series}->{$group}) ? $delwi100d->{$series}->{$group} : 0;
-                           $dlater = defined($dellater->{$series}->{$group}) ? $dellater->{$series}->{$group} : 0;
-                           $ap = defined($archivepend->{$series}->{$group}) ? $archivepend->{$series}->{$group} : 0;
+                           $dnow = defined($containers{+kMetricDPS}->{$series}->{$group}) ? $containers{+kMetricDPS}->{$series}->{$group} : 0;
+                           $d100 = defined($containers{+kMetricDPM}->{$series}->{$group}) ? $containers{+kMetricDPM}->{$series}->{$group} : 0;
+                           $dlater = defined($containers{+kMetricDPL}->{$series}->{$group}) ? $containers{+kMetricDPL}->{$series}->{$group} : 0;
+                           $ap = defined($containers{+kMetricAP}->{$series}->{$group}) ? $containers{+kMetricAP}->{$series}->{$group} : 0;
                            
                            $tdnow += $dnow;
                            $td100 += $d100;
@@ -595,10 +606,10 @@ sub SortAndPrintResults
                my($contidx);
                my(@bytes); # sum(bytes) of the 4 containers for current series.
 
-               $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", "DP Now (GB)", "DP <= 100d (GB)", "DP > 100d (GB)", "AP (GB)");
+               $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
                print "$line\n";
 
-               if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $delnow, $delwi100d, $dellater, $archivepend))
+               if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{+kMetricDPS}, $containers{+kMetricDPM}, $containers{+kMetricDPL}, $containers{+kMetricAP}))
                {
                   foreach $group (@grouplist)
                   {
@@ -612,10 +623,11 @@ sub SortAndPrintResults
                      # print a record containing the sum(bytes) from each container that has a data element
                      # with that series name. If a container does not have such a data element, then 
                      # we print a value of 0 for the sum(bytes) field.
-                     push(@noelems, scalar(@{$delnow->{$group}}));
-                     push(@noelems, scalar(@{$delwi100d->{$group}}));
-                     push(@noelems, scalar(@{$dellater->{$group}}));
-                     push(@noelems, scalar(@{$archivepend->{$group}}));
+                     @noelems = ();
+                     push(@noelems, scalar(@{$containers{+kMetricDPS}->{$group}}));
+                     push(@noelems, scalar(@{$containers{+kMetricDPM}->{$group}}));
+                     push(@noelems, scalar(@{$containers{+kMetricDPL}->{$group}}));
+                     push(@noelems, scalar(@{$containers{+kMetricAP}->{$group}}));
 
                      @topdataidx = (0, 0, 0, 0); # indices into 4 containers
                      
@@ -626,25 +638,21 @@ sub SortAndPrintResults
                         @stack = (); # each elem contains index of container (0 - 3)
                         @bytes = ();
 
-                        $topdataelem[0] = $topdataidx[0] < $noelems[0] ? $delnow->{$group}->[$topdataidx[0]] : [];
-                        $topdataelem[1] = $topdataidx[1] < $noelems[1] ? $delwi100d->{$group}->[$topdataidx[1]] : [];
-                        $topdataelem[2] = $topdataidx[2] < $noelems[2] ? $dellater->{$group}->[$topdataidx[2]] : [];
-                        $topdataelem[3] = $topdataidx[3] < $noelems[3] ? $archivepend->{$group}->[$topdataidx[3]] : [];
+                        $topdataelem[0] = $topdataidx[0] < $noelems[0] ? $containers{+kMetricDPS}->{$group}->[$topdataidx[0]] : [];
+                        $topdataelem[1] = $topdataidx[1] < $noelems[1] ? $containers{+kMetricDPM}->{$group}->[$topdataidx[1]] : [];
+                        $topdataelem[2] = $topdataidx[2] < $noelems[2] ? $containers{+kMetricDPL}->{$group}->[$topdataidx[2]] : [];
+                        $topdataelem[3] = $topdataidx[3] < $noelems[3] ? $containers{+kMetricAP}->{$group}->[$topdataidx[3]] : [];
                         $contidx = 0;
 
                         foreach $elem (@topdataelem)
                         {
-                           if (kDEBUG)
+                           if (!defined($elem))
                            {
-                              if (!defined($elem))
-                              {
-                                 # for some reason, noelems was 29 for delnow, even though the db returned only 25 rows for group 6.
-                                 print "elem not defined; contidx = $contidx, group = $group, topdataidx = $topdataidx[$contidx], noelems $noelems[$contidx]\n";
-                                 exit;
-                              }
+                              print "Unexpected: reference to top of container points to garbage.\n";
+                              $ok = 0;
                            }
-
-                           if (scalar(@$elem) > 0)
+                           
+                           if (defined($elem) && scalar(@$elem) > 0)
                            {
                               $series = $elem->[0];
 
@@ -734,7 +742,7 @@ sub SortAndPrintResults
          my(%topheaders);
 
          # Only one of the containers should be non-empty - if that is not the case, that is an error
-         if ($metric eq kMetricALL)
+         if ($metric eq kMetricAll)
          {
             print "Cannot generate non-aggregate report for more than one metric.\n";
             $ok = 0;
