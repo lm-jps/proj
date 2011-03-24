@@ -5,7 +5,7 @@ use DBD::Pg;
 use Time::localtime;
 use Switch;
 
-use constant kDEBUG => 0;
+use constant kDEBUG => 1;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
@@ -16,6 +16,17 @@ use constant kTypeQueryAgg => "agg";
 use constant kTypeQueryRaw => "raw";
 use constant kTypeOrderSeries => "series";
 use constant kTypeOrderGroup => "group";
+
+use constant kMetricAll => "all";
+use constant kMetricDPS => "dps"; # delete pending now (short)
+use constant kMetricDPM => "dpm"; # delete pending in 100 days (medium)
+use constant kMetricDPL => "dpl"; # delete pending >= 100 days (long)
+use constant kMetricAP => "ap";   # archive pending
+
+
+# In raw mode, you cannot collect data on dpshort, dpmid, dplong, ap all at the same time. 
+# This will exhaust machine memory. Need to provide yet another flag to select which ONE
+# of these metrics to obtain - only collect data on a single metric.
 
 my($err);
 
@@ -86,6 +97,31 @@ else
    $order = kTypeOrderSeries;
 }
 
+if ($#ARGV >= 6)
+{
+   switch (lc($ARGV[6]))
+   {
+      case kMetricAll {$metric = kMetricAll;}
+      case kMetricDPS {$metric = kMetricDPS;}
+      case kMetricDPM {$metric = kMetricDPM;}
+      case kMetricDPL {$metric = kMetricDPL;}
+      case kMetricAP {$metric = kMetricAP;}
+      else {print "Invalid metric specified $ARGV[6].\n"; exit;}
+   }
+}
+else
+{
+   if ($typequery eq kTypeQueryRaw)
+   {
+      # For non-aggregated queries, do not attempt to perform multiple queries for multiple metrics
+      $metric = kMetricAP;
+   }
+   else
+   {
+      $metric = kMetricAll;
+   }
+}
+
 $err = 0; 
 
 # connect to the database
@@ -128,69 +164,80 @@ if (defined($dbh))
          }
 
          # Delete now
-         $err = !$queryfunc->($group, kStatDADP, "effective_date < '$now'", \$stmnt);
-
-         if (!$err)
+         if ($metric eq kMetricAll || $metric eq kMetricDPS)
          {
-            $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
-            $err = !(NoErr($rrowsb, \$dbh, $stmnt));
-         }
+            $err = !$queryfunc->($group, kStatDADP, "effective_date < '$now'", \$stmnt);
 
-         if (!$err)
-         {
-            # save results
-            $err = !SaveResults($rrowsb, $group, $typequery, $order, \%delnow);
+            if (!$err)
+            {
+               $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
+               $err = !(NoErr($rrowsb, \$dbh, $stmnt));
+            }
+
+            if (!$err)
+            {
+               # save results
+               $err = !SaveResults($rrowsb, $group, $typequery, $order, \%delnow);
+            }
          }
 
          # Delete <= 100 days AND > now
-         if (!$err)
+         if ($metric eq kMetricAll || $metric eq kMetricDPM)
          {
-            $err = !$queryfunc->($group, kStatDADP, "effective_date <= '$nowplus100d' AND effective_date >= '$now'", \$stmnt);
             if (!$err)
             {
-               $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
-               $err = !(NoErr($rrowsb, \$dbh, $stmnt));
-            }
+               $err = !$queryfunc->($group, kStatDADP, "effective_date <= '$nowplus100d' AND effective_date >= '$now'", \$stmnt);
+               if (!$err)
+               {
+                  $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
+                  $err = !(NoErr($rrowsb, \$dbh, $stmnt));
+               }
 
-            if (!$err)
-            {
-               # save results
-               $err = !SaveResults($rrowsb, $group, $typequery, $order, \%delwi100d);
+               if (!$err)
+               {
+                  # save results
+                  $err = !SaveResults($rrowsb, $group, $typequery, $order, \%delwi100d);
+               }
             }
          }
 
-         # Delete > 100 days;
-         if (!$err)
+         if ($metric eq kMetricAll || $metric eq kMetricDPL)
          {
-            $err = !$queryfunc->($group, kStatDADP, "effective_date > '$nowplus100d'", \$stmnt);
             if (!$err)
             {
-               $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
-               $err = !(NoErr($rrowsb, \$dbh, $stmnt));
-            }
+               $err = !$queryfunc->($group, kStatDADP, "effective_date > '$nowplus100d'", \$stmnt);
+               if (!$err)
+               {
+                  $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
+                  $err = !(NoErr($rrowsb, \$dbh, $stmnt));
+               }
 
-            if (!$err)
-            {
-               # save results
-              $err = !SaveResults($rrowsb, $group, $typequery, $order, \%dellater);
+               if (!$err)
+               {
+                  # save results
+                  $err = !SaveResults($rrowsb, $group, $typequery, $order, \%dellater);
+               }
             }
          }
 
          # Archive Pending
-         if (!$err)
+         if ($metric eq kMetricAll || $metric eq kMetricAP)
          {
-            $err = !$queryfunc->($group, kStatDAAP . " AND archive_substatus = " . kSubStatDAADP, "", \$stmnt);
-
             if (!$err)
             {
-               $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
-               $err = !(NoErr($rrowsb, \$dbh, $stmnt));
-            }
+               $err = !$queryfunc->($group, kStatDAAP . " AND archive_substatus = " . kSubStatDAADP, "", \$stmnt);
 
-            if (!$err)
-            {
-               # save results 
-              $err = !SaveResults($rrowsb, $group, $typequery, $order, \%archivepend);
+               if (!$err)
+               {
+                  $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
+                  $err = !(NoErr($rrowsb, \$dbh, $stmnt));
+               }
+
+               if (!$err)
+               {
+                  # save results 
+                  $err = !SaveResults($rrowsb, $group, $typequery, $order, \%archivepend);
+               }
             }
          }
 
@@ -200,7 +247,7 @@ if (defined($dbh))
          }
       } # loop over storage groups
 
-      SortAndPrintResults(\%delnow, \%delwi100d, \%dellater, \%archivepend, $typequery, $order);
+      SortAndPrintResults(\%delnow, \%delwi100d, \%dellater, \%archivepend, $typequery, $order, $metric);
    }
 }
 else
@@ -454,6 +501,7 @@ sub SortAndPrintResults
    my($archivepend) = $_[3];
    my($typequery) = $_[4];
    my($order) = $_[5];
+   my($metric) = $_[6];
 
    my(@serieslist);
    my(@grouplist);
@@ -467,11 +515,15 @@ sub SortAndPrintResults
    my($d100);
    my($dlater);
    my($ap);
+   my($metricval);
 
    my($tdnow);
    my($td100);
    my($tdlater);
    my($tap);
+
+   my(%metricheaders);
+   my(%containers);
 
    my($ok);
 
@@ -480,17 +532,20 @@ sub SortAndPrintResults
    $tdlater = 0;
    $tap = 0;
 
+   %containers = (kMetricDPS, $delnow, kMetricDPM, $delwi100d, kMetricDPL, $dellater, kMetricAP, $archivepend);
 
    switch ($typequery)
    {
       case kTypeQueryAgg
       {
+         %metricheaders = (kMetricDPS, "DP Now (GB)", kMetricDPM, "DP <= 100d (GB)", kMetricDPL, "DP > 100d (GB)", kMetricAP, "AP (GB)");
+
          switch ($order)
          {
             case kTypeOrderSeries
             {
                # type - agg; order - series
-               $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", "DP Now (GB)", "DP < 100d (GB)", "DP > 100d (GB)", "AP (GB)");
+               $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", "DP Now (GB)", "DP <= 100d (GB)", "DP > 100d (GB)", "AP (GB)");
                print "$line\n";
                
                if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $delnow, $delwi100d, $dellater, $archivepend))
@@ -540,7 +595,7 @@ sub SortAndPrintResults
                my($contidx);
                my(@bytes); # sum(bytes) of the 4 containers for current series.
 
-               $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", "DP Now (GB)", "DP < 100d (GB)", "DP > 100d (GB)", "AP (GB)");
+               $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", "DP Now (GB)", "DP <= 100d (GB)", "DP > 100d (GB)", "AP (GB)");
                print "$line\n";
 
                if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $delnow, $delwi100d, $dellater, $archivepend))
@@ -673,77 +728,92 @@ sub SortAndPrintResults
       } # case agg
       case kTypeQueryRaw
       {
+         # **** Can only work with a single container at a time when the query type is raw!! Each container uses up a 
+         # huge amount of memory, so this script must be modified to handle a single one specified on the cmd-line.
          # row is series, ds_index, sudir, bytes
-         switch ($order)
+         my(%topheaders);
+
+         # Only one of the containers should be non-empty - if that is not the case, that is an error
+         if ($metric eq kMetricALL)
          {
-            case kTypeOrderSeries
+            print "Cannot generate non-aggregate report for more than one metric.\n";
+            $ok = 0;
+         }
+         else
+         {
+            %metricheaders = (kMetricDPS, "DP Now (bytes)", kMetricDPM, "DP <= 100d (bytes)", kMetricDPL, "DP > 100d (bytes)", kMetricAP, "AP (bytes)");
+            %topheaders = (kMetricDPS, "*** DP Now ***", kMetricDPM, "*** DP <= 100d ***", kMetricDPL, "*** DP > 100d ***", kMetricAP, "*** AP ***");
+
+            switch ($order)
             {
-               # type - raw; order - series
-               my($sunum);
-               my($sudir);
-               my($rowdata);
-               
-               # First, DP Now
-               print "***DP NOW***\n";
-               $line = sprintf("%-24s%-8s%-16s%-24s%-24s", "series", "group", "sunum", "sudir", "DP Now (bytes)");
-               print "$line\n";
-
-               if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $delnow))
+               case kTypeOrderSeries
                {
-                  foreach $elem (@serieslist)
+                  # type - raw; order - series
+                  my($sunum);
+                  my($sudir);
+                  my($rowdata);
+                  
+                  print "$topheaders{$metric}\n";
+                  $line = sprintf("%-24s%-8s%-16s%-24s%-24s", "series", "group", "sunum", "sudir", $metricheaders{$metric});
+                  print "$line\n";
+                  
+                  if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $containers{$metric}))
                   {
-                     $series = $elem;
-                     @grouplist = ();
-                     
-                     if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $delnow->{$series}))
+                     foreach $elem (@serieslist)
                      {
-                        foreach $group (@grouplist)
+                        $series = $elem;
+                        @grouplist = ();
+                        
+                        if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{$metric}->{$series}))
                         {
-                           if (defined($delnow->{$series}->{$group}))
+                           foreach $group (@grouplist)
                            {
-                              # $delnow->{$series}->{$group} is reference to an array with array references
-                              # as elements. The child arrays have sunum, sudir, and bytes
-                              # as elements.
-                              foreach $rowdata (@{$delnow->{$series}->{$group}})
+                              if (defined($containers{$metric}->{$series}->{$group}))
                               {
-                                 # $rowdata is a reference to an array containing sunum, sudir, and bytes
+                                 # $containers{$metric}->{$series}->{$group} is reference to an array with array references
+                                 # as elements. The child arrays have sunum, sudir, and bytes
                                  # as elements.
-                                 $sunum = $rowdata->[0];
-                                 $sudir = $rowdata->[1];
-                                 $dnow = $rowdata->[2];
-
-                                 $line = sprintf("%-24s%-8d%-16s%-24s%-24d", $series, $group, $sunum, $sudir, $dnow);
-                                 print "$line\n";
+                                 foreach $rowdata (@{$containers{$metric}->{$series}->{$group}})
+                                 {
+                                    # $rowdata is a reference to an array containing sunum, sudir, and bytes
+                                    # as elements.
+                                    $sunum = $rowdata->[0];
+                                    $sudir = $rowdata->[1];
+                                    $metricval = $rowdata->[2];
+                                    
+                                    $line = sprintf("%-24s%-8d%-16s%-24s%-24d", $series, $group, $sunum, $sudir, $metricval);
+                                    print "$line\n";
+                                 }
                               }
                            }
+                        } 
+                        else
+                        {
+                           print "Problem creating group list - continuing.\n";
                         }
                      }
-                     else
-                     {
-                        print "Problem creating group list - continuing.\n";
-                     }
+                  } 
+                  else
+                  {
+                     print "Problem creating series list - bailing.\n";
                   }
                }
+               case kTypeOrderGroup
+               {
+                  print "Unimplemented! Please contact your local systems administrator (or some other useless message).\n";
+                  $ok = 0;
+               } 
                else
                {
-                  print "Problem creating series list - bailing.\n";
+                  print "Invalid column $order by which to order.\n";
+                  $ok = 0;
                }
-            }
-            case kTypeOrderGroup
-            {
-               
-            }
-            else
-            {
-               print "Invalid column $order by which to order.\n";
-               $ok = 0;
             }
          }
       }
       else
       {
          print "Invalid query type $typequery.\n";
-
       }
    } # switch query type
    
