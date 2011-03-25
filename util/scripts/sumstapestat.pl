@@ -5,7 +5,7 @@ use DBD::Pg;
 use Time::localtime;
 use Switch;
 
-use constant kDEBUG => 0;
+use constant kDEBUG => 1;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
@@ -526,29 +526,24 @@ sub SortAndPrintResults
    my($ap);
    my($metricval);
 
-   my($tdnow);
-   my($td100);
-   my($tdlater);
-   my($tap);
-
    my(%metricheaders);
    my(%containers);
+   my(@contkeys);
+   my($contkey);
 
    my($ok);
 
    $ok = 1;
 
-   $tdnow = 0;
-   $td100 = 0;
-   $tdlater = 0;
-   $tap = 0;
-
    %containers = (kMetricDPS, $delnow, kMetricDPM, $delwi100d, kMetricDPL, $dellater, kMetricAP, $archivepend);
+   @contkeys = keys(%containers);
 
    switch ($typequery)
    {
       case kTypeQueryAgg
       {
+         my(%hbytes); # sum(bytes) of the 4 containers for current series.
+
          %metricheaders = (kMetricDPS, "DP Now (GB)", kMetricDPM, "DP <= 100d (GB)", kMetricDPL, "DP > 100d (GB)", kMetricAP, "AP (GB)");
 
          switch ($order)
@@ -561,26 +556,20 @@ sub SortAndPrintResults
                
                if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $containers{+kMetricDPS}, $containers{+kMetricDPM}, $containers{+kMetricDPL}, $containers{+kMetricAP}))
                {
-                  foreach $elem (@serieslist)
+                  foreach $series (@serieslist)
                   {
-                     $series = $elem;
                      @grouplist = ();
                      
                      if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{+kMetricDPS}->{$series}, $containers{+kMetricDPM}->{$series}, $containers{+kMetricDPL}->{$series}, $containers{+kMetricAP}->{$series}))
                      {
                         foreach $group (@grouplist)
                         {
-                           $dnow = defined($containers{+kMetricDPS}->{$series}->{$group}) ? $containers{+kMetricDPS}->{$series}->{$group} : 0;
-                           $d100 = defined($containers{+kMetricDPM}->{$series}->{$group}) ? $containers{+kMetricDPM}->{$series}->{$group} : 0;
-                           $dlater = defined($containers{+kMetricDPL}->{$series}->{$group}) ? $containers{+kMetricDPL}->{$series}->{$group} : 0;
-                           $ap = defined($containers{+kMetricAP}->{$series}->{$group}) ? $containers{+kMetricAP}->{$series}->{$group} : 0;
-                           
-                           $tdnow += $dnow;
-                           $td100 += $d100;
-                           $tdlater += $dlater;
-                           $tap += $ap;
-                           
-                           $line = sprintf("%-48s%-8d%-24f%-24f%-24f%-24f", $series, $group, $dnow / kGig, $d100 / kGig, $dlater / kGig, $ap / kGig);
+                           foreach $contkey (@contkeys)
+                           {
+                              $hbytes{$contkey} = defined($containers{$contkey}->{$series}->{$group}) ? $containers{$contkey}->{$series}->{$group} : 0;
+                           }
+
+                           $line = sprintf("%-48s%-8d%-24f%-24f%-24f%-24f", $series, $group, $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
                            print "$line\n";
                         }
                      }
@@ -598,13 +587,11 @@ sub SortAndPrintResults
             case kTypeOrderGroup
             {
                # type - agg; order - group
-               my(@topdataelem); # 4 elements; each points to the top data element of one container
-               my(@topdataidx); # indices into the top elements of the 4 containers
+               my(%topdataelem); # 4 elements; each points to the top data element of one container
+               my(%topdataidx); # indices into the top elements of the 4 containers
+               my(%noelems); # number of elements in each of the 4 containers
                my(@stack); # index of first (in sort order) data element when each of the top data elements are sorted
-               my(@noelems); # number of elements in each of the 4 containers
-               my($popped); 
-               my($contidx);
-               my(@bytes); # sum(bytes) of the 4 containers for current series.
+               my($popped);
 
                $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
                print "$line\n";
@@ -623,29 +610,28 @@ sub SortAndPrintResults
                      # print a record containing the sum(bytes) from each container that has a data element
                      # with that series name. If a container does not have such a data element, then 
                      # we print a value of 0 for the sum(bytes) field.
-                     @noelems = ();
-                     push(@noelems, scalar(@{$containers{+kMetricDPS}->{$group}}));
-                     push(@noelems, scalar(@{$containers{+kMetricDPM}->{$group}}));
-                     push(@noelems, scalar(@{$containers{+kMetricDPL}->{$group}}));
-                     push(@noelems, scalar(@{$containers{+kMetricAP}->{$group}}));
+                     foreach $contkey (@contkeys)
+                     {
+                        $noelems{$contkey} = scalar(@{$containers{$contkey}->{$group}});
+                        $topdataidx{$contkey} = 0; # indices into 4 containers
+                     }
 
-                     @topdataidx = (0, 0, 0, 0); # indices into 4 containers
-                     
                      # iterate through each top data element, looking for the one with a series that
                      # is first when sorted. $elem is a reference to a data element.
                      while (1)
                      {
-                        @stack = (); # each elem contains index of container (0 - 3)
-                        @bytes = ();
+                        @stack = (); # each elem contains container label (0 - 3)
+                        %hbytes = ();
 
-                        $topdataelem[0] = $topdataidx[0] < $noelems[0] ? $containers{+kMetricDPS}->{$group}->[$topdataidx[0]] : [];
-                        $topdataelem[1] = $topdataidx[1] < $noelems[1] ? $containers{+kMetricDPM}->{$group}->[$topdataidx[1]] : [];
-                        $topdataelem[2] = $topdataidx[2] < $noelems[2] ? $containers{+kMetricDPL}->{$group}->[$topdataidx[2]] : [];
-                        $topdataelem[3] = $topdataidx[3] < $noelems[3] ? $containers{+kMetricAP}->{$group}->[$topdataidx[3]] : [];
-                        $contidx = 0;
-
-                        foreach $elem (@topdataelem)
+                        foreach $contkey (@contkeys)
                         {
+                           $topdataelem{$contkey} = $topdataidx{$contkey} < $noelems{$contkey} ? $containers{$contkey}->{$group}->[$topdataidx{$contkey}] : [];
+                        }
+
+                        foreach $contkey (@contkeys)
+                        {
+                           $elem = $topdataelem{$contkey};
+
                            if (!defined($elem))
                            {
                               print "Unexpected: reference to top of container points to garbage.\n";
@@ -658,7 +644,7 @@ sub SortAndPrintResults
 
                               if ($#stack >= 0)
                               {
-                                 $stackseries = $topdataelem[$stack[$#stack]]->[0];
+                                 $stackseries = $topdataelem{$stack[$#stack]}->[0];
 
                                  if (($series cmp $stackseries) < 0)
                                  {
@@ -668,36 +654,34 @@ sub SortAndPrintResults
                                        $popped = pop(@stack);
                                        
                                        # This element came from a container that doesn't have $series.
-                                       $bytes[$popped] = 0;
+                                       $hbytes{$popped} = 0;
                                     }
                                     
                                     # Push $elem onto stack now (it is the current highest-ranked data element)
-                                    push(@stack, $contidx);
+                                    push(@stack, $contkey);
                                  }
                                  elsif (($series cmp $stackseries) == 0)
                                  {
                                     # $series is equivalent to $stack[0] - push onto stack
-                                    push(@stack, $contidx);
+                                    push(@stack, $contkey);
                                  } 
                                  else
                                  {
                                     # $series sorts after $stack[0] - set bytes to zero for this $series
-                                    $bytes[$contidx] = 0;
+                                    $hbytes{$contkey} = 0;
                                  }
                               } 
                               else
                               {
                                  # stack is empty, push
-                                 push(@stack, $contidx);
+                                 push(@stack, $contkey);
                               }
                            }
                            else
                            {
                               # current container is empty - set bytes to 0
-                              $bytes[$contidx] = 0;
+                              $hbytes{$contkey} = 0;
                            }
-                           
-                           $contidx++;
                         }
 
                         if ($#stack < 0)
@@ -708,21 +692,16 @@ sub SortAndPrintResults
 
                         # Elems on the stack will have non-0 sum(byte) values.
                         # The elems on the stack all have the same series.
-                        foreach $contidx (@stack)
+                        foreach $contkey (@stack)
                         {
-                           $bytes[$contidx] = $topdataelem[$contidx]->[1];
-                           $series = $topdataelem[$contidx]->[0];
+                           $hbytes{$contkey} = $topdataelem{$contkey}->[1];
+                           $series = $topdataelem{$contkey}->[0];
 
                            # advance index into data elem array
-                           $topdataidx[$contidx]++;
+                           $topdataidx{$contkey}++;
                         }
 
-                        $dnow = $bytes[0];
-                        $d100 = $bytes[1];
-                        $dlater = $bytes[2];
-                        $ap = $bytes[3];
-
-                        $line = sprintf("%-8d%-48s%-24f%-24f%-24f%-24f", $group, $series, $dnow / kGig, $d100 / kGig, $dlater / kGig, $ap / kGig);
+                        $line = sprintf("%-8d%-48s%-24f%-24f%-24f%-24f", $group, $series, $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
                         print "$line\n";
                      } # while
                   } # groups
@@ -762,7 +741,7 @@ sub SortAndPrintResults
                   my($rowdata);
                   
                   print "$topheaders{$metric}\n";
-                  $line = sprintf("%-24s%-8s%-16s%-24s%-24s", "series", "group", "sunum", "sudir", $metricheaders{$metric});
+                  $line = sprintf("%-32s%-8s%-16s%-24s%-24s", "series", "group", "sunum", "sudir", $metricheaders{$metric});
                   print "$line\n";
                   
                   if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $containers{$metric}))
@@ -789,7 +768,7 @@ sub SortAndPrintResults
                                     $sudir = $rowdata->[1];
                                     $metricval = $rowdata->[2];
                                     
-                                    $line = sprintf("%-24s%-8d%-16s%-24s%-24d", $series, $group, $sunum, $sudir, $metricval);
+                                    $line = sprintf("%-32s%-8d%-16s%-24s%-24d", $series, $group, $sunum, $sudir, $metricval);
                                     print "$line\n";
                                  }
                               }
@@ -808,8 +787,17 @@ sub SortAndPrintResults
                }
                case kTypeOrderGroup
                {
-                  print "Unimplemented! Please contact your local systems administrator (or some other useless message).\n";
-                  $ok = 0;
+                  my($sunum);
+                  my($sudir);
+                  my($rowdata);
+                  
+                  print "$topheaders{$metric}\n";
+                  $line = sprintf("%-8s%-24s%-16s%-24s%-24s", "group", "series", "sunum", "sudir", $metricheaders{$metric});
+                  print "$line\n";
+                  
+                  # The data in the containers are ordered by group, series. The tuples are
+                  # (series, ds_index, sudir, bytes). So there is very little work to do here.
+                  
                } 
                else
                {
