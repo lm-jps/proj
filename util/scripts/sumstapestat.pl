@@ -5,7 +5,7 @@ use DBD::Pg;
 use Time::localtime;
 use Switch;
 
-use constant kDEBUG => 1;
+use constant kDEBUG => 0;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
@@ -731,15 +731,15 @@ sub SortAndPrintResults
             %metricheaders = (kMetricDPS, "DP Now (bytes)", kMetricDPM, "DP <= 100d (bytes)", kMetricDPL, "DP > 100d (bytes)", kMetricAP, "AP (bytes)");
             %topheaders = (kMetricDPS, "*** DP Now ***", kMetricDPM, "*** DP <= 100d ***", kMetricDPL, "*** DP > 100d ***", kMetricAP, "*** AP ***");
 
+            my($sunum);
+            my($sudir);
+            my($rowdata);
+            
             switch ($order)
             {
                case kTypeOrderSeries
                {
                   # type - raw; order - series
-                  my($sunum);
-                  my($sudir);
-                  my($rowdata);
-                  
                   print "$topheaders{$metric}\n";
                   $line = sprintf("%-32s%-8s%-16s%-24s%-24s", "series", "group", "sunum", "sudir", $metricheaders{$metric});
                   print "$line\n";
@@ -792,12 +792,29 @@ sub SortAndPrintResults
                   my($rowdata);
                   
                   print "$topheaders{$metric}\n";
-                  $line = sprintf("%-8s%-24s%-16s%-24s%-24s", "group", "series", "sunum", "sudir", $metricheaders{$metric});
+                  $line = sprintf("%-8s%-32s%-16s%-24s%-24s", "group", "series", "sunum", "sudir", $metricheaders{$metric});
                   print "$line\n";
                   
                   # The data in the containers are ordered by group, series. The tuples are
                   # (series, ds_index, sudir, bytes). So there is very little work to do here.
-                  
+                   @grouplist = ();
+                        
+                  if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{$metric}))
+                  {
+                     foreach $group (@grouplist)
+                     {
+                        foreach $rowdata (@{$containers{$metric}->{$group}})
+                        {
+                           $series = $rowdata->[0];
+                           $sunum = $rowdata->[1];
+                           $sudir = $rowdata->[2];
+                           $metricval = $rowdata->[3];
+
+                           $line = sprintf("%-8d%-32s%-16s%-24s%-24d", $group, $series, $sunum, $sudir, $metricval);
+                           print "$line\n";
+                        }
+                     }
+                  }
                } 
                else
                {
