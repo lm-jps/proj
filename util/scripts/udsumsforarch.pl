@@ -1,6 +1,6 @@
 #!/home/jsoc/bin/linux_x86_64/perl5.12.2 -w
 
-# udsumsforarch.pl jsoc_sums hmidb 5434 production many
+# udsumsforarch.pl jsoc_sums hmidb 5434 production many /home/arta/Projects/SUMS/UpdateSUMSArch/tabdatgroup6_3cols.txt
 
 use DBI;
 use DBD::Pg;
@@ -35,9 +35,10 @@ my($dbh);       # database handle
 my($stmnt);
 my($row);
 my($rrows);
+my($line);
+my($rv);
 
-
-if ($#ARGV < 4)
+if ($#ARGV < 5)
 {
    print "Improper argument list.\n"; 
    exit(1);
@@ -48,6 +49,7 @@ $dbhost = $ARGV[1];
 $dbport = $ARGV[2];
 $dbuser = $ARGV[3];
 $typequery = $ARGV[4];
+$datafile = $ARGV[5];
 
 
 $err = 0; 
@@ -97,43 +99,90 @@ elsif ($typequery eq kTQueryManyPerTrans)
    
    if (dbconnect($dbname, $dbhost, $dbport, \$dbh))
    {
-      $stmnt = "CREATE TEMPORARY TABLE arta_updatelist (sunum bigint, loc character varying(80), bytes bigint)";
-      ExecStatement(\$dbh, $stmnt, 1, "Unable to create temporary table 'arta_updatelist'.\n");
-
-      $stmnt = "CREATE INDEX artspg_idx on arta_updatelist (sunum)";   
-      ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table 'arta_updatelist'.\n");
-
-      $stmnt = "COPY arta_updatelist (sunum, loc, bytes) FROM stdin WITH DELIMITER '|'";
-      ExecStatement(\$dbh, $stmnt, 1, "Troubles copying data to temporary table 'arta_updatelist'.\n");
-
-      push(@rowdata, "148755880|/SUM19/D148755880|17684\n");
-      push(@rowdata, "148756590|/SUM4/D148756590|17684\n");
-      push(@rowdata, "148757174|/SUM1/D148757174|17684\n");
-      push(@rowdata, "148757826|/SUM5/D148757826|17684\n");
-      push(@rowdata, "148758544|/SUM18/D148758544|17684\n");
-
-      foreach $line (@rowdata)
+      # Open input file for reading
+      if (open(DATAFILE, "<$datafile"))
       {
-         $rv = $dbh->pg_putcopydata($line);
-      }
+         $stmnt = "CREATE TEMPORARY TABLE arta_updatelist (sunum bigint, loc character varying(80), bytes bigint)";
+         ExecStatement(\$dbh, $stmnt, 1, "Unable to create temporary table 'arta_updatelist'.\n");
 
-      $rv = $dbh->pg_putcopyend();
+         $stmnt = "CREATE INDEX arta_updatelist_idx on arta_updatelist (sunum)";   
+         ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table 'arta_updatelist'.\n");
 
-      if (!$err)
-      {
-         if (kDEBUG)
+         $stmnt = "COPY arta_updatelist (sunum, loc, bytes) FROM stdin WITH DELIMITER '|'";
+         ExecStatement(\$dbh, $stmnt, 1, "Troubles copying data to temporary table 'arta_updatelist'.\n");
+
+         # Create a temporary data that holds all update rows - loops through files
+         # provided by Keh-Cheng (one file per tape group).
+         while(defined($line = <DATAFILE>))
          {
-            # test to see if this worked.
-            $stmnt = "SELECT * from arta_updatelist";
+            $rv = $dbh->pg_putcopydata($line);
+            if (!$rv)
+            {
+               print STDERR "Failure sending line '$line' to db.\n";
+               $err = 1;
+            }
+         }
+
+         if (!$err)
+         {
+            $rv = $dbh->pg_putcopyend();
+            if (!$rv)
+            {
+               print STDERR "Failure ending table copy.\n";
+               $err = 1;
+            }
+         }
+
+         if (!$err)
+         {
+            if (0)
+            {
+               # test to see if this worked.
+               $stmnt = "SELECT * from arta_updatelist";
+               $rrows = $dbh->selectall_arrayref($stmnt, undef);
+               $err = !(NoErr($rrows, \$dbh, $stmnt));
+
+               foreach $row (@$rrows)
+               {
+                  print "row $row->[0], $row->[1], $row->[2]\n";
+               }
+            }
+
+            # Do a join that will update sum_main with data from arta_updatelist
+
+            # XXXXXXXXXXXXX - using a surrogate SELECT statement (instead of the real UPDATE one)
+            # because we don't want to actually change the db.
+            # TBD - currently, this uses a select statement to test out run times. The real query
+            # will be an update statement.
+            # REAL QUERY --> "UPDATE sum_main m SET archive_status = '2', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = 'date string' FROM arta_updatelist ul WHERE (m.ds_index = ul.sunum)"
+            $stmnt = "SELECT m.archive_status, m.arch_tape, m.arch_tape_fn, m.arch_tape_date, ul.sunum, ul.loc FROM arta_updatelist ul JOIN (SELECT ds_index, archive_status, arch_tape, arch_tape_fn, arch_tape_date FROM sum_main where storage_group = 6) m ON (m.ds_index = ul.sunum)";
+
             $rrows = $dbh->selectall_arrayref($stmnt, undef);
             $err = !(NoErr($rrows, \$dbh, $stmnt));
 
-            foreach $row (@$rrows)
+            if (kDEBUG)
             {
-               print "row $row->[0], $row->[1], $row->[2]\n";
+               my($col);
+               my(@outd);
+               my($ridx);
+
+               foreach $row (@$rrows)
+               {
+                  $ridx = 0;
+
+                  while ($ridx < scalar(@$row))
+                  {
+                     $outd[$ridx] = (defined($row->[$ridx]) && length($row->[$ridx]) > 0) ? $row->[$ridx] : 0;
+                     $ridx++;
+                  }
+
+                  print "row $outd[0], $outd[1], $outd[2], $outd[3], $outd[4], $outd[5]\n";
+               }
             }
          }
       }
+
+      $dbh->disconnect();
    }
 }
 
@@ -165,10 +214,6 @@ sub dbconnect
    if (defined($dbh))
    {
       print "success!\n";
-
-      
-     
-
    }
    else
    {
