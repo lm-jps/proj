@@ -1,11 +1,11 @@
 #!/home/jsoc/bin/linux_x86_64/perl5.12.2 -w
 
-# udsumsforarch.pl jsoc_sums hmidb 5434 production many /home/arta/Projects/SUMS/UpdateSUMSArch/filelist.txt
+# udsumsforarch.pl jsoc_sums hmidb 5434 production many /home/arta/Projects/SUMS/UpdateSUMSArch/testsm.txt
 
 use DBI;
 use DBD::Pg;
-use Time::localtime;
 use Switch;
+use POSIX qw(strftime);
 
 use constant kDEBUG => 1;
 
@@ -17,6 +17,12 @@ use constant kGig => 1073741824;
 use constant kTQueryOnePerConn => "conn";
 use constant kTQueryOnePerTrans => "xact";
 use constant kTQueryManyPerTrans => "many";
+
+use constant kUdListTableTapeFileInfo => "tmp_ulist_tapefiles";
+use constant kUdListTableMd5 => "tmp_ulist_md5";
+use constant kInTypeList => 0;
+use constant kInTypeMd5 => 1;
+use constant kDelim => '|';
 
 my($err);
 
@@ -91,19 +97,32 @@ elsif ($typequery eq kTQueryOnePerTrans)
 elsif ($typequery eq kTQueryManyPerTrans)
 {
    # batch sunums together
-   my($group);
    my($fpath);
-   
+   my($ftype);
+   my($timenow);
+   my($tapeid);
+   my($ttabrow);
+   my(@md5csums);
+   my($values);
+
    if (dbconnect($dbname, $dbhost, $dbport, \$dbh))
    {
       # Open input file for reading - has 2 columns, group and filepath (path to a file provided by Keh-Cheng)
       if (open(FILELIST, "<$dfilelist"))
       {
-         $stmnt = "CREATE TEMPORARY TABLE arta_updatelist (sunum bigint, loc character varying(80), bytes bigint)";
-         ExecStatement(\$dbh, $stmnt, 1, "Unable to create temporary table 'arta_updatelist'.\n");
+         # create temporary table to hold LIST files (series, sunum, sudir, fileid, tapeid)
+         $stmnt = "CREATE TEMPORARY TABLE " . kUdListTableTapeFileInfo . "(sunum bigint, fileid integer, tapeid character varying(20))";
+         ExecStatement(\$dbh, $stmnt, 1, "Unable to create temporary table " . "'kUdListTableTapeFileInfo'" . ".\n");
 
-         $stmnt = "CREATE INDEX arta_updatelist_idx on arta_updatelist (sunum)";   
-         ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table 'arta_updatelist'.\n");
+         $stmnt = "CREATE INDEX " . kUdListTableTapeFileInfo . "_idx on " . kUdListTableTapeFileInfo . "(sunum)";   
+         ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table " . "'kUdListTableTapeFileInfo'" . ".\n");
+
+         # create temporary table to hold MD5SUM files (fileid, md5sum)
+#         $stmnt = "CREATE TEMPORARY TABLE " . kUdListTableMd5 . "(fileid integer, md5 character varying(36))";
+#         ExecStatement(\$dbh, $stmnt, 1, "Unable to create temporary table " . "'kUdListTableMd5'" . ".\n");
+
+#         $stmnt = "CREATE INDEX " . kUdListTableMd5 . "_idx on " . kUdListTableMd5 . "(fileid)";   
+#         ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table " . "'kUdListTableMd5'" . ".\n");
 
          # loop through filelist
          while (defined($line = <FILELIST>))
@@ -115,10 +134,25 @@ elsif ($typequery eq kTQueryManyPerTrans)
                next;
             }
 
-            if ($line =~ /(\S+)\s+(\S+)/)
+            if ($line =~ /\s*(\S+)/)
             {
-               $group = $1;
-               $fpath = $2;
+               $fpath = $1;
+
+               if ($fpath =~ /LIST\.(\w+)/)
+               {
+                  $tapeid = $1;
+                  $ftype = kInTypeList;
+               }
+               elsif ($fpath =~ /MD5SUM\.(\w+)/)
+               {
+                  $tapeid = $1;
+                  $ftype = kInTypeMd5;
+               }
+               else
+               {
+                  print STDERR "unsupported input file '$fpath'.\n";
+                  next;
+               }
             }
             else
             {
@@ -126,33 +160,72 @@ elsif ($typequery eq kTQueryManyPerTrans)
                next;
             }
 
-            if (open(DATAFILE, "<$fpath"))
+            # There are two types of files that Keh-Cheng is producing:
+            #   1. LIST files - cols: series, sunum, sudir, fileid, tapeid
+            #   2. MD5SUM files - cols: fileid, md5sum
+            if (defined($fpath) && open(DATAFILE, "<$fpath"))
             {
-               $stmnt = "COPY arta_updatelist (sunum, loc, bytes) FROM stdin WITH DELIMITER '|'";
-               ExecStatement(\$dbh, $stmnt, 1, "Troubles copying data to temporary table 'arta_updatelist'.\n");
+               if ($ftype == kInTypeList)
+               {
+                  $stmnt = "COPY " . kUdListTableTapeFileInfo . " (sunum, fileid, tapeid) FROM stdin WITH DELIMITER '" . kDelim . "'";
+                  ExecStatement(\$dbh, $stmnt, 1, "Troubles copying data to temporary table '" . kUdListTableTapeFileInfo . "'.\n");
+               }
+#               else 
+#               {
+#                  $stmnt = "COPY " . kUdListTableMd5 . " (fileid, md5) FROM stdin WITH DELIMITER '" . kDelim . "'";
+#                  ExecStatement(\$dbh, $stmnt, 1, "Troubles copying data to temporary table '" . kUdListTableMd5 . "'.\n");
+#               }
 
-               # Create a temporary data that holds all update rows.
                while (defined($line = <DATAFILE>))
                {
-                  $rv = $dbh->pg_putcopydata($line);
-                  if (!$rv)
+                  chomp($line);
+
+                  # The data file might have extra fields not needed for the update - strip those out
+                  if ($ftype == kInTypeList)
                   {
-                     print STDERR "Failure sending line '$line' to db.\n";
-                     $err = 1;
+                     if ($line =~ /\S+\s+(\S+)\s+\S+\s+(\S+)\s+(\S+)/)
+                     {
+                        $ttabrow = "$1|$2|$3\n";
+                     }
+
+                     $rv = $dbh->pg_putcopydata($ttabrow);
+                     if (!$rv)
+                     {
+                        print STDERR "Failure sending line '$line' to db.\n";
+                        $err = 1;
+                     }
+                  }
+                  else
+                  {
+                     # Don't save to a temporary table - this file will be relatively small
+                     if ($line =~ /(\S+)\s+(\S+)/)
+                     {
+                        # (tapeid, filenum, gtarblock, md5cksum)
+                        $values = "('$tapeid', $1, 256, '$2')";
+                        push(@md5csums, $values);
+                     }
                   }
                }
                
-               if (!$err)
+               if ($ftype == kInTypeList)
                {
-                  $rv = $dbh->pg_putcopyend();
-                  if (!$rv)
+                  if (!$err)
                   {
-                     print STDERR "Failure ending table copy.\n";
-                     $err = 1;
+                     $rv = $dbh->pg_putcopyend();
+                     if (!$rv)
+                     {
+                        print STDERR "Failure ending table copy.\n";
+                        $err = 1;
+                     }
                   }
                }
-               
+
                close(DATAFILE);
+            }
+            else
+            {
+               print "Unable to open '$fpath' for reading.\n";
+               $err = 1;
             }
 
             if (!$err)
@@ -170,45 +243,53 @@ elsif ($typequery eq kTQueryManyPerTrans)
                   }
                }
                
-            # Do a join that will update sum_main with data from arta_updatelist
+               # Do a join that will update sum_main with data from arta_updatelist
+               
+               # XXXXXXXXXXXXX - using a surrogate SELECT statement (instead of the real UPDATE one)
+               # because we don't want to actually change the db.
+               # TBD - currently, this uses a select statement to test out run times. The real query
+               # will be an update statement.
+               # REAL QUERY --> "UPDATE sum_main m SET archive_status = 'Y', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = 'date string' FROM arta_updatelist ul WHERE (m.ds_index = ul.sunum)"
+               # $stmnt = "SELECT m.archive_status, m.arch_tape, m.arch_tape_fn, m.arch_tape_date, ul.sunum, ul.loc FROM arta_updatelist ul JOIN (SELECT ds_index, archive_status, arch_tape, arch_tape_fn, arch_tape_date FROM sum_main where storage_group = $group) m ON (m.ds_index = ul.sunum)";
 
-            # XXXXXXXXXXXXX - using a surrogate SELECT statement (instead of the real UPDATE one)
-            # because we don't want to actually change the db.
-            # TBD - currently, this uses a select statement to test out run times. The real query
-            # will be an update statement.
-            # REAL QUERY --> "UPDATE sum_main m SET archive_status = '2', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = 'date string' FROM arta_updatelist ul WHERE (m.ds_index = ul.sunum)"
-               $stmnt = "SELECT m.archive_status, m.arch_tape, m.arch_tape_fn, m.arch_tape_date, ul.sunum, ul.loc FROM arta_updatelist ul JOIN (SELECT ds_index, archive_status, arch_tape, arch_tape_fn, arch_tape_date FROM sum_main where storage_group = $group) m ON (m.ds_index = ul.sunum)";
+               # Create date string
+               $timenow = strftime("%a %b %e %H:%M:%S %Y", localtime());
 
-               $rrows = $dbh->selectall_arrayref($stmnt, undef);
-               $err = !(NoErr($rrows, \$dbh, $stmnt));
-
-               if (!$err)
+               # SQL to update sum_main:
+               #   archive_status -> character varying(5)
+               #   arch_tape ->  character varying(20)
+               #   arch_tape_fn -> integer
+               #   arch_tape_date -> timestamp(0) without time zone 
+               if ($ftype == kInTypeList)
                {
-                  if (kDEBUG)
+                  # Update sum_main table
+                  $stmnt = "UPDATE arta_main m SET archive_status = 'Y', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = '$timenow' FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
+                  ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_main.\n");
+
+                  # Update sum_partn_alloc table
+                  $stmnt = "UPDATE arta_partn_alloc m SET status = 2 FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
+                  ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_partn_alloc.\n");
+               }
+               else
+               {
+                  # best way is to insert directly into sum_file:
+                  #   tapeid -> character varying(20)
+                  #   filenum -> integer
+                  #   gtarblock -> integer
+                  #   md5cksum -> character varying(36)
+                  foreach $values (@md5csums)
                   {
-                     my($col);
-                     my(@outd);
-                     my($ridx);
-
-                     foreach $row (@$rrows)
-                     {
-                        $ridx = 0;
-
-                        while ($ridx < scalar(@$row))
-                        {
-                           $outd[$ridx] = (defined($row->[$ridx]) && length($row->[$ridx]) > 0) ? $row->[$ridx] : 0;
-                           $ridx++;
-                        }
-
-                        print "row $outd[0], $outd[1], $outd[2], $outd[3], $outd[4], $outd[5]\n";
-                     }
+                     $stmnt = "INSERT INTO arta_file (tapeid, filenum, gtarblock, md5cksum) VALUES $values";
+                     ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_file.\n");
                   }
                }
             }
             
             # drop rows from temp table
-            $stmnt = "DELETE from arta_updatelist";
-            ExecStatement(\$dbh, $stmnt, 1, "Couldn't drop rows from temporary table 'arta_updatelist'.\n");
+            $stmnt = "DELETE from " . kUdListTableTapeFileInfo;
+            ExecStatement(\$dbh, $stmnt, 1, "Couldn't drop rows from temporary table '" . kUdListTableTapeFileInfo . "'.\n");
+#            $stmnt = "DELETE from " . kUdListTableMd5;
+#            ExecStatement(\$dbh, $stmnt, 1, "Couldn't drop rows from temporary table '" . kUdListTableMd5 . "'.\n");
          } # loop over data files
 
          close(FILELIST);
