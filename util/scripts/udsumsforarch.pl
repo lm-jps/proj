@@ -24,6 +24,8 @@ use constant kInTypeList => 0;
 use constant kInTypeMd5 => 1;
 use constant kDelim => '|';
 
+use constant kGTarBlock => "256";
+
 my($err);
 
 my($dbname);    # name of the db instance to connect to
@@ -117,13 +119,6 @@ elsif ($typequery eq kTQueryManyPerTrans)
          $stmnt = "CREATE INDEX " . kUdListTableTapeFileInfo . "_idx on " . kUdListTableTapeFileInfo . "(sunum)";   
          ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table " . "'kUdListTableTapeFileInfo'" . ".\n");
 
-         # create temporary table to hold MD5SUM files (fileid, md5sum)
-#         $stmnt = "CREATE TEMPORARY TABLE " . kUdListTableMd5 . "(fileid integer, md5 character varying(36))";
-#         ExecStatement(\$dbh, $stmnt, 1, "Unable to create temporary table " . "'kUdListTableMd5'" . ".\n");
-
-#         $stmnt = "CREATE INDEX " . kUdListTableMd5 . "_idx on " . kUdListTableMd5 . "(fileid)";   
-#         ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table " . "'kUdListTableMd5'" . ".\n");
-
          # loop through filelist
          while (defined($line = <FILELIST>))
          {
@@ -170,11 +165,6 @@ elsif ($typequery eq kTQueryManyPerTrans)
                   $stmnt = "COPY " . kUdListTableTapeFileInfo . " (sunum, fileid, tapeid) FROM stdin WITH DELIMITER '" . kDelim . "'";
                   ExecStatement(\$dbh, $stmnt, 1, "Troubles copying data to temporary table '" . kUdListTableTapeFileInfo . "'.\n");
                }
-#               else 
-#               {
-#                  $stmnt = "COPY " . kUdListTableMd5 . " (fileid, md5) FROM stdin WITH DELIMITER '" . kDelim . "'";
-#                  ExecStatement(\$dbh, $stmnt, 1, "Troubles copying data to temporary table '" . kUdListTableMd5 . "'.\n");
-#               }
 
                while (defined($line = <DATAFILE>))
                {
@@ -201,7 +191,7 @@ elsif ($typequery eq kTQueryManyPerTrans)
                      if ($line =~ /(\S+)\s+(\S+)/)
                      {
                         # (tapeid, filenum, gtarblock, md5cksum)
-                        $values = "('$tapeid', $1, 256, '$2')";
+                        $values = "('$tapeid', $1, " . kGTarBlock . ", '$2')";
                         push(@md5csums, $values);
                      }
                   }
@@ -245,13 +235,6 @@ elsif ($typequery eq kTQueryManyPerTrans)
                
                # Do a join that will update sum_main with data from arta_updatelist
                
-               # XXXXXXXXXXXXX - using a surrogate SELECT statement (instead of the real UPDATE one)
-               # because we don't want to actually change the db.
-               # TBD - currently, this uses a select statement to test out run times. The real query
-               # will be an update statement.
-               # REAL QUERY --> "UPDATE sum_main m SET archive_status = 'Y', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = 'date string' FROM arta_updatelist ul WHERE (m.ds_index = ul.sunum)"
-               # $stmnt = "SELECT m.archive_status, m.arch_tape, m.arch_tape_fn, m.arch_tape_date, ul.sunum, ul.loc FROM arta_updatelist ul JOIN (SELECT ds_index, archive_status, arch_tape, arch_tape_fn, arch_tape_date FROM sum_main where storage_group = $group) m ON (m.ds_index = ul.sunum)";
-
                # Create date string
                $timenow = strftime("%a %b %e %H:%M:%S %Y", localtime());
 
@@ -269,6 +252,10 @@ elsif ($typequery eq kTQueryManyPerTrans)
                   # Update sum_partn_alloc table
                   $stmnt = "UPDATE arta_partn_alloc m SET status = 2 FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
                   ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_partn_alloc.\n");
+
+                  # drop rows from temp table
+                  $stmnt = "DELETE from " . kUdListTableTapeFileInfo;
+                  ExecStatement(\$dbh, $stmnt, 1, "Couldn't drop rows from temporary table '" . kUdListTableTapeFileInfo . "'.\n");
                }
                else
                {
@@ -284,12 +271,6 @@ elsif ($typequery eq kTQueryManyPerTrans)
                   }
                }
             }
-            
-            # drop rows from temp table
-            $stmnt = "DELETE from " . kUdListTableTapeFileInfo;
-            ExecStatement(\$dbh, $stmnt, 1, "Couldn't drop rows from temporary table '" . kUdListTableTapeFileInfo . "'.\n");
-#            $stmnt = "DELETE from " . kUdListTableMd5;
-#            ExecStatement(\$dbh, $stmnt, 1, "Couldn't drop rows from temporary table '" . kUdListTableMd5 . "'.\n");
          } # loop over data files
 
          close(FILELIST);
