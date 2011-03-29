@@ -9,17 +9,14 @@ use POSIX qw(strftime);
 
 use constant kDEBUG => 1;
 
+# SUs that are archive pending must be set to DADP
 use constant kStatDADP => "2";
-use constant kStatDAAP => "4"; # archive pending
-use constant kSubStatDAADP => "128"; # after archive completes, mark delete pending
-use constant kGig => 1073741824;
 
 use constant kTQueryOnePerConn => "conn";
 use constant kTQueryOnePerTrans => "xact";
 use constant kTQueryManyPerTrans => "many";
 
 use constant kUdListTableTapeFileInfo => "tmp_ulist_tapefiles";
-use constant kUdListTableMd5 => "tmp_ulist_md5";
 use constant kInTypeList => 0;
 use constant kInTypeMd5 => 1;
 use constant kDelim => '|';
@@ -60,41 +57,13 @@ $err = 0;
 
 if ($typequery eq kTQueryOnePerConn)
 {
-   $stmnt = "SELECT archive_status, arch_tape, arch_tape_fn arch_tape_date from sum_main where ds_index=123456";
-
-   foreach $elem (@what)
-   {
-      if (dbconnect($dbname, $dbhost, $dbport, \$dbh))
-      {
-          $rrows = $dbh->selectall_arrayref($stmnt, undef);
-          $err = !(NoErr($rrows, \$dbh, $stmnt));
-
-          if (!$err)
-          {
-             
-          }
-      }
-   }
-
+   print STDERR "One query per database connection unimplemented.\n";
+   $err = 1;
 }
 elsif ($typequery eq kTQueryOnePerTrans)
 {
-   if (dbconnect($dbname, $dbhost, $dbport, \$dbh))
-   {
-      foreach $elem (@what)
-      {
-         
-         $rrows = $dbh->selectall_arrayref($stmnt, undef);
-         $err = !(NoErr($rrows, \$dbh, $stmnt));
-
-         if (!$err)
-         {
-             
-         }
-
-      }
-
-   }
+   print STDERR "One query per database transaction unimplemented.\n";
+   $err = 1;
 }
 elsif ($typequery eq kTQueryManyPerTrans)
 {
@@ -106,6 +75,7 @@ elsif ($typequery eq kTQueryManyPerTrans)
    my($ttabrow);
    my(@md5csums);
    my($values);
+   my($skip);
 
    if (dbconnect($dbname, $dbhost, $dbport, \$dbh))
    {
@@ -151,13 +121,14 @@ elsif ($typequery eq kTQueryManyPerTrans)
             }
             else
             {
-               print STDERR "skipping invalid line $line.\n";
+               print STDERR "skipping invalid input file $line.\n";
                next;
             }
 
             # There are two types of files that Keh-Cheng is producing:
             #   1. LIST files - cols: series, sunum, sudir, fileid, tapeid
             #   2. MD5SUM files - cols: fileid, md5sum
+            $skip = 0;
             if (defined($fpath) && open(DATAFILE, "<$fpath"))
             {
                if ($ftype == kInTypeList)
@@ -183,7 +154,8 @@ elsif ($typequery eq kTQueryManyPerTrans)
                      if (!$rv)
                      {
                         print STDERR "Failure sending line '$line' to db.\n";
-                        $err = 1;
+                        $skip = 1;
+                        last;
                      }
                   }
                   else
@@ -200,13 +172,25 @@ elsif ($typequery eq kTQueryManyPerTrans)
                
                if ($ftype == kInTypeList)
                {
-                  if (!$err)
+                  $rv = $dbh->pg_putcopyend();
+                  if (!$rv)
                   {
-                     $rv = $dbh->pg_putcopyend();
-                     if (!$rv)
+                     print STDERR "Failure ending table copy.\n";
+                     $skip = 1;
+                  }
+                  else
+                  {
+                     if (kDEBUG)
                      {
-                        print STDERR "Failure ending table copy.\n";
-                        $err = 1;
+                        # test to see if this worked.
+                        $stmnt = "SELECT * from " . kUdListTableTapeFileInfo;
+                        $rrows = $dbh->selectall_arrayref($stmnt, undef);
+                        $err = !(NoErr($rrows, \$dbh, $stmnt));
+                  
+                        foreach $row (@$rrows)
+                        {
+                           print "tmp table row: $row->[0], $row->[1], $row->[2]\n";
+                        }
                      }
                   }
                }
@@ -216,51 +200,39 @@ elsif ($typequery eq kTQueryManyPerTrans)
             else
             {
                print "Unable to open '$fpath' for reading.\n";
-               $err = 1;
+               next;
             }
 
-            if (!$err)
+            if (!$skip)
             {
-               if (0)
-               {
-                  # test to see if this worked.
-                  $stmnt = "SELECT * from arta_updatelist";
-                  $rrows = $dbh->selectall_arrayref($stmnt, undef);
-                  $err = !(NoErr($rrows, \$dbh, $stmnt));
-                  
-                  foreach $row (@$rrows)
-                  {
-                     print "row $row->[0], $row->[1], $row->[2]\n";
-                  }
-               }
-               
-               # Do a join that will update sum_main with data from arta_updatelist
-               
                # Create date string
                $timenow = strftime("%a %b %e %H:%M:%S %Y", localtime());
 
-               # SQL to update sum_main:
-               #   archive_status -> character varying(5)
-               #   arch_tape ->  character varying(20)
-               #   arch_tape_fn -> integer
-               #   arch_tape_date -> timestamp(0) without time zone 
                if ($ftype == kInTypeList)
                {
-                  # Update sum_main table
+                  # Do a join that will update sum_main with data from temp table
+                  # SQL to update sum_main:
+                  #   archive_status -> character varying(5)
+                  #   arch_tape ->  character varying(20)
+                  #   arch_tape_fn -> integer
+                  #   arch_tape_date -> timestamp(0) without time zone 
                   $stmnt = "UPDATE arta_main m SET archive_status = 'Y', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = '$timenow' FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
                   ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_main.\n");
 
-                  # Update sum_partn_alloc table
-                  $stmnt = "UPDATE arta_partn_alloc m SET status = 2 FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
+                  # SQL to update sum_partn_alloc:
+                  #   status -> integer
+                  #   ds_index -> bigint
+                  $stmnt = "UPDATE arta_partn_alloc m SET status = " . kStatDADP . " FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
                   ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_partn_alloc.\n");
 
-                  # drop rows from temp table
+                  # Drop rows from temp table.
                   $stmnt = "DELETE from " . kUdListTableTapeFileInfo;
                   ExecStatement(\$dbh, $stmnt, 1, "Couldn't drop rows from temporary table '" . kUdListTableTapeFileInfo . "'.\n");
                }
                else
                {
-                  # best way is to insert directly into sum_file:
+                  # Insert directly into sum_file (we could also use COPY to copy into a temp table, 
+                  # then use a query and constant values for tapeid and gtarblock with the INSERT INTO statement):
                   #   tapeid -> character varying(20)
                   #   filenum -> integer
                   #   gtarblock -> integer
@@ -281,12 +253,10 @@ elsif ($typequery eq kTQueryManyPerTrans)
    }
 }
 
-
 # AL FINAL
 exit($err);
 
-
-
+# SUBROUTINES
 sub dbconnect
 {
    my($dbname) = $_[0];
