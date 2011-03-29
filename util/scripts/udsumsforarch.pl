@@ -216,13 +216,13 @@ elsif ($typequery eq kTQueryManyPerTrans)
                   #   arch_tape ->  character varying(20)
                   #   arch_tape_fn -> integer
                   #   arch_tape_date -> timestamp(0) without time zone 
-                  $stmnt = "UPDATE arta_main m SET archive_status = 'Y', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = '$timenow' FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
+                  $stmnt = "UPDATE sum_main m SET archive_status = 'Y', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = '$timenow' FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
                   ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_main.\n");
 
                   # SQL to update sum_partn_alloc:
                   #   status -> integer
                   #   ds_index -> bigint
-                  $stmnt = "UPDATE arta_partn_alloc m SET status = " . kStatDADP . " FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
+                  $stmnt = "UPDATE sum_partn_alloc m SET status = " . kStatDADP . " FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
                   ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_partn_alloc.\n");
 
                   # Drop rows from temp table.
@@ -239,7 +239,7 @@ elsif ($typequery eq kTQueryManyPerTrans)
                   #   md5cksum -> character varying(36)
                   foreach $values (@md5csums)
                   {
-                     $stmnt = "INSERT INTO arta_file (tapeid, filenum, gtarblock, md5cksum) VALUES $values";
+                     $stmnt = "INSERT INTO sum_file (tapeid, filenum, gtarblock, md5cksum) VALUES $values";
                      ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_file.\n");
                   }
                }
