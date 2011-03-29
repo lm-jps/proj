@@ -119,6 +119,7 @@
 #include "astro.h"
 #include "fstats.h"
 #include "atoinc.h"
+#include <math.h>
 
 // void HeliographicLocation(TIME t, int *crot, double *L, double *B);
 // TIME HeliographicTime(int crot, double L);
@@ -164,6 +165,9 @@ int sphere2img (double lat, double lon, double latc, double lonc,
         double rsun, double peff, double ecc, double chi,
         int xinvrt, int yinvrt);
 
+// experimental make recordset list at cadence
+char *get_input_recset(DRMS_Env_t *env, char *in, TIME cadence);
+
 // Macros for WCS transformations.  assume crpix1, crpix2 = CRPIX1, CRPIX2, sina,cosa = sin and cos of CROTA2 resp.
 // and crvalx and crvaly are CRVAL1 and CRVAL2, cdelt = CDELT1 == CDELT2, then
 // PIX_X and PIX_Y are CCD pixel addresses, WX and WY are arc-sec W and N on the Sun from disk center.
@@ -184,6 +188,9 @@ int sphere2img (double lat, double lon, double latc, double lonc,
 #define LOCSTONY 3
 #define LOCCARR 4
 
+#define TIMES_RECSET 0   // recordset spec contains time range
+#define TIMES_GIVEN 1    // explicit t_start and t_stop provided
+#define TIMES_IMPLICIT 2 // times to be deduced for disk transit of specified box
 int DoIt(void)
 {
   CmdParams_t *params = &cmdparams;
@@ -244,9 +251,11 @@ int DoIt(void)
   int firstimage = 1;
   int boxtype, loctype;
   char *timekeyname;
-  TIME t_step;
+  TIME t_step, t_epoch;
   int npkeys;
+  int times_source = TIMES_RECSET;
   char timebuf[20];
+  char *in_filename = NULL;
 
   FILE *log = NULL;
 
@@ -265,6 +274,7 @@ fprintf(stderr,"starting boxtype=%d, loctype=%d\n",boxtype,loctype);
   if (loctype == LOCCARR)
     {
     if (car_rot < 0) DIE("Carrington rotation number must be provided for locunits=carrlong");
+    if (NoTrack) DIE("Can not use locunits=carrlong for no-tracking mode");
     do_reftime = 0;
     }
   else 
@@ -298,17 +308,29 @@ fprintf(stderr,"starting boxtype=%d, loctype=%d\n",boxtype,loctype);
       moreQuery = lbracket + 3;
       *lbracket = '\0';
       lbracket = NULL;
+      if (t_start == tNotSpecified || t_stop == tNotSpecified)
+          times_source = TIMES_IMPLICIT;
+      else
+          times_source = TIMES_GIVEN;
       }
+    else
+      moreQuery = lbracket;
     }
   else
+    {
     strcpy(inseries, inparam);
+    if (t_start == tNotSpecified || t_stop == tNotSpecified)
+        times_source = TIMES_IMPLICIT;
+    else
+        times_source = TIMES_GIVEN;
+    }
     
 // XXXXXXXXXXX Get box location in Carrington Coords for all location types XXXXXXXXXXXXXX
   if (do_reftime) // Arc-sec, pixel, or Stonyhurst specification, get ref image information
     { // the image for ref_time is supposed to be present in the series.
     char t_ref_text[100];
-    sprint_at(t_ref_text, t_ref-3600);
-    sprintf(in, "%s[%s/2h]", inseries, t_ref_text);
+    sprint_at(t_ref_text, t_ref-7200);
+    sprintf(in, "%s[%s/4h][? QUALITY >=0 ?]", inseries, t_ref_text);
     inRS = drms_open_records(drms_env, in, &status); if (status || inRS->n == 0) DIE2("No input data found for t_ref",in);
     int irec, nrecs = inRS->n;
     TIME tdiff = 10000;
@@ -401,14 +423,18 @@ fprintf(stderr,"car_rot specified, box center is at %4d:%05.1f by %05.1f \n",car
 
   // Get implied time limits from car_rot and crln
   t_ref = HeliographicTime(car_rot, crln);
-  if (t_start == tNotSpecified)
-    t_start = HeliographicTime(car_rot, crln + 90);
-  if (t_stop == tNotSpecified)
-    t_stop = HeliographicTime(car_rot, crln - 90);
+  if (times_source == TIMES_IMPLICIT)
+      {
+      if (t_start == tNotSpecified)
+        t_start = HeliographicTime(car_rot, crln + 90);
+      if (t_stop == tNotSpecified)
+        t_stop = HeliographicTime(car_rot, crln - 90);
+      }
 // XXXXXXXXXXXXXXXXX End of get target box location
 
 // XXXXXXXXXXXXXXXX get input seriesname and output seriesname
-  // first, get input and output series names.
+// first, get input and output series names.
+
   inTemplate = drms_template_record(drms_env, inseries, &status);
   if (status || !inTemplate) DIE2("Input series can not be found: ", inseries);
 
@@ -419,6 +445,11 @@ fprintf(stderr,"car_rot specified, box center is at %4d:%05.1f by %05.1f \n",car
     }
   else
    strncpy(outseries, outparam, DRMS_MAXNAMELEN);
+
+  // Now, make sure output series exists and get template record.
+  outTemplate = drms_template_record(drms_env, outseries, &status);
+  if (status || !outTemplate) DIE2("Output series can not be found: ", outseries);
+
   // Now find the prime time keyword name
   npkeys = inTemplate->seriesinfo->pidx_num;
   timekeyname = NULL;
@@ -437,6 +468,8 @@ fprintf(stderr,"car_rot specified, box center is at %4d:%05.1f by %05.1f \n",car
         timekeyname = pkey->info->name;
         t_step = drms_keyword_getdouble(drms_keyword_stepfromslot(pkey), &status);
 	if (status) DIE("problem getting t_step");
+        t_epoch = drms_keyword_getdouble(drms_keyword_epochfromslot(pkey), &status);
+	if (status) DIE("problem getting t_epoch");
         }
     }
   else
@@ -456,24 +489,41 @@ fprintf(stderr,"car_rot specified, box center is at %4d:%05.1f by %05.1f \n",car
     cadence = t_step;
 
   // Finally, get input recordset spec
-  if (lbracket) // RecordSet query specified
+  if (lbracket && times_source == TIMES_RECSET) // RecordSet query specified
     strncpy(in, inparam, DRMS_MAXQUERYLEN);
   else // need to generate query from limit times
     { 
     char t_start_text[100], t_stop_text[100], cadence_text[100];
     if (cadence > t_step)
+      {
       sprintf(cadence_text,"@%fs", cadence);
+      if (times_source == TIMES_IMPLICIT) // round start and stop to cadence slots for auto limits
+        {
+        int nsteps;
+        nsteps = round((t_start - t_epoch)/cadence);
+        t_start = t_epoch + nsteps * cadence;
+        nsteps = round((t_stop - t_epoch)/cadence);
+        t_stop = t_epoch + nsteps * cadence;
+        }
+      }
     else
       cadence_text[0] = '\0';
-    strncpy(inseries, inparam, DRMS_MAXNAMELEN);
+    // strncpy(inseries, inparam, DRMS_MAXNAMELEN);
     sprint_at(t_start_text, t_start);
     sprint_at(t_stop_text, t_stop);
-    sprintf(in, "%s[%s-%s%s]%s[? %s ?]", inseries, t_start_text, t_stop_text, cadence_text, (moreQuery ? moreQuery : ""), where);
+    if (strncmp(inseries,"aia",3)==0 && t_step == 1.0 && cadence > 1.0) // special case for AIA slots
+        {
+        // experimental, AIA is not tseq slots so get vector of times and convert to list of records
+        // rounded to nearest slots.  Must put this list in a temp file since may be big.
+        sprintf(in, "%s[%s-%s]%s[? %s ?]", inseries, t_start_text, t_stop_text, (moreQuery ? moreQuery : ""), where);
+        in_filename = get_input_recset(drms_env, in, cadence);
+        if (!in_filename) DIE("Cant make AIA cadence recordset list file");
+        sprintf(in, "@%s", in_filename);
+        }
+    else // normal case
+        sprintf(in, "%s[%s-%s%s]%s[? %s ?]", inseries, t_start_text, t_stop_text, cadence_text, (moreQuery ? moreQuery : ""), where);
     }
 
-  // Now, make sure output series exists and get template record.
-  outTemplate = drms_template_record(drms_env, outseries, &status);
-  if (status || !outTemplate) DIE2("Output series can not be found: ", outseries);
 // XXXXXXXXXXXXX End of get input and output series information
 
 // XXXXXXXXXXXXX Now read data and extract boxes.
@@ -739,6 +789,10 @@ fprintf(stderr,"  crpix1=%f, crpix2=%f\n",crpix1,crpix2);
     } 
 
     drms_close_records(inRS, DRMS_FREE_RECORD); 
+    if (in_filename)
+      {
+      unlink(in_filename);
+      }
 
   printf("  DONE! \n \n");
 
@@ -957,3 +1011,102 @@ int sphere2img (double lat, double lon, double latc, double lonc,
 
   return (hemisphere);
 }
+
+
+// Generate explicit recordset list of closest good record to desired grid
+// First get vector of times and quality
+// Then if vector is not OK, quit.
+// then: make temp file to hold recordset list
+//       start with first time to define desired grid, 
+//       make array of desired times.
+//       make empty array of recnums
+//       search vector for good images nearest desired times
+//       for each found time, write record query
+char *get_input_recset(DRMS_Env_t *drms_env, char *in, TIME cadence)
+  {
+  DRMS_Array_t *data;
+  TIME t_start, t_stop, t_now, t_want, t_diff;
+  int status;
+  int nrecs, irec;
+  int nslots, islot;
+  long long *recnums;
+  TIME *slot_times;
+  TIME *t_this;
+  double *drecnum, *dquality;
+  int quality;
+  long long recnum;
+  char keylist[DRMS_MAXQUERYLEN];
+  static char filename[100];
+  char *tmpdir;
+  FILE *tmpfile;
+  char *lbracket;
+  char seriesname[DRMS_MAXQUERYLEN];
+
+  sprintf(keylist, "T_OBS,QUALITY,recnum");
+fprintf(stderr,"Get vector for: %s\n",in);
+  data = drms_record_getvector(drms_env, in, keylist, DRMS_TYPE_DOUBLE, 0, &status);
+  if (!data || status)
+	{
+	fprintf(stderr, "getkey_vector failed status=%d\n", status);
+	return(NULL);
+	}
+  nrecs = data->axis[1];
+fprintf(stderr,"A nrecs=%d\n",nrecs);
+  irec = 0;
+  t_this = (TIME *)data->data;
+  dquality = (double *)data->data + 1*nrecs;
+  drecnum = (double *)data->data + 2*nrecs;
+  t_start = t_this[0];
+  t_stop = t_this[nrecs-1];
+  nslots = (t_stop - t_start + cadence/2)/cadence;
+  recnums = (long long *)malloc(nslots*sizeof(long long));
+  slot_times = (TIME *)malloc(nslots*sizeof(TIME));
+fprintf(stderr,"nslots=%d\n",nslots);
+  islot = 0;
+  t_want = t_start;
+  t_diff = 1.0e8; // 3+ years
+  for (irec = 0; irec<nrecs; irec++)
+      {
+      t_now = t_this[irec];
+      quality = (int)dquality[irec] & 0xFFFFFFFF;
+      recnum = (long long)drecnum[irec];
+      if (quality < 0)
+        continue;
+      if (fabs(t_now - t_want) <= t_diff)
+        {
+        slot_times[islot] = t_now;
+        recnums[islot] = recnum;
+        }
+// fprintf(stderr,"irec=%d, t_want=%f, t_now=%f, t_diff=%f quality=%x, recnum=%lld, slot=%d, slottime=%f, slotrecnum=%lld\n",irec,t_want,t_now,t_diff,quality,recnum,islot,slot_times[islot],recnums[islot]);
+      t_diff = fabs(t_now - t_want);
+      if ( t_now > t_want) // past this slot, time to move to next slot
+        {
+        islot++;
+        if (islot >= nslots)
+           break;
+        t_want = t_start + cadence * islot;
+        slot_times[islot] = t_now;
+        recnums[islot] = recnum;
+        t_diff = fabs(t_now - t_want);
+        }
+      }
+  if (islot+1 < nslots)
+    nslots = islot+1;  // take what we got.
+  strcpy(seriesname, in);
+  lbracket = index(seriesname,'[');
+  if (lbracket) *lbracket = '\0';
+  tmpdir = getenv("TMPDIR");
+  if (!tmpdir) tmpdir = "/tmp";
+  sprintf(filename, "%s/hg_patchXXXXXX", tmpdir);
+  mkstemp(filename);
+  tmpfile = fopen(filename,"w");
+  for (islot=0; islot<nslots; islot++)
+    fprintf(tmpfile, "%s[:#%lld]\n", seriesname, recnums[islot]);
+  fclose(tmpfile);
+  free(recnums);
+  free(slot_times);
+  drms_free_array(data);
+// char cmd[2000];sprintf(cmd,"echo %s\ncat %s",filename,filename);
+// system(cmd);
+  return(filename);
+  }
