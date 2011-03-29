@@ -175,10 +175,11 @@ elsif ($typequery eq kTQueryManyPerTrans)
                   {
                      if ($line =~ /\S+\s+(\S+)\s+\S+\s+(\S+)\s+(\S+)/)
                      {
-                        $ttabrow = "$1|$2|$3\n";
+                        $ttabrow = "$1|$2|$3";
                      }
 
-                     $rv = $dbh->pg_putcopydata($ttabrow);
+                     print "Putting row ($ttabrow).\n";
+                     $rv = $dbh->pg_putcopydata("$ttabrow\n");
                      if (!$rv)
                      {
                         print STDERR "Failure sending line '$line' to db.\n";
