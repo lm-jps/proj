@@ -6,6 +6,7 @@ use DBI;
 use DBD::Pg;
 use Switch;
 use POSIX qw(strftime);
+use File::Copy "mv";
 
 use constant kDEBUG => 1;
 
@@ -22,6 +23,14 @@ use constant kInTypeMd5 => 1;
 use constant kDelim => '|';
 
 use constant kGTarBlock => "256";
+
+use constant kDbTableSumMain => "sum_main";
+use constant kDbTableSumPartnAlloc => "sum_partn_alloc";
+use constant kDbTableSumFile => "sum_file";
+
+use constant kDbTableSumMainDEBUG => "arta_main";
+use constant kDbTableSumPartnAllocDEBUG => "arta_partn_alloc";
+use constant kDbTableSumFileDEBUG => "arta_file";
 
 my($err);
 
@@ -76,6 +85,9 @@ elsif ($typequery eq kTQueryManyPerTrans)
    my(@md5csums);
    my($values);
    my($skip);
+   my($maintable);
+   my($partntable);
+   my($filetable);
 
    if (dbconnect($dbname, $dbhost, $dbport, \$dbh))
    {
@@ -89,6 +101,21 @@ elsif ($typequery eq kTQueryManyPerTrans)
          $stmnt = "CREATE INDEX " . kUdListTableTapeFileInfo . "_idx on " . kUdListTableTapeFileInfo . "(sunum)";   
          ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table " . "'kUdListTableTapeFileInfo'" . ".\n");
 
+         CommitTrans(\$dbh);
+
+         if (kDEBUG)
+         {
+            $maintable = kDbTableSumMainDEBUG;
+            $partntable = kDbTableSumPartnAllocDEBUG;
+            $filetable = kDbTableSumFileDEBUG;
+         }
+         else
+         {
+            $maintable = kDbTableSumMain;
+            $partntable = kDbTableSumPartnAlloc;
+            $filetable = kDbTableSumFile;
+         }
+         
          # loop through filelist
          while (defined($line = <FILELIST>))
          {
@@ -180,7 +207,7 @@ elsif ($typequery eq kTQueryManyPerTrans)
                   }
                   else
                   {
-                     if (kDEBUG)
+                     if (kDEBUG && 0)
                      {
                         # test to see if this worked.
                         $stmnt = "SELECT * from " . kUdListTableTapeFileInfo;
@@ -205,25 +232,29 @@ elsif ($typequery eq kTQueryManyPerTrans)
 
             if (!$skip)
             {
-               # Create date string
-               $timenow = strftime("%a %b %e %H:%M:%S %Y", localtime());
+               CommitTrans(\$dbh); # successfully populated temporary table ($ftype == kInTypeList).
+                                   # when $ftype == kInTypeMd5, this will result in and 'end' being
+                                   # issued right after a 'begin', but this is harmless.
 
                if ($ftype == kInTypeList)
                {
+                  # Create date string
+                  $timenow = strftime("%a %b %e %H:%M:%S %Y", localtime());
+
                   # Do a join that will update sum_main with data from temp table
                   # SQL to update sum_main:
                   #   archive_status -> character varying(5)
                   #   arch_tape ->  character varying(20)
                   #   arch_tape_fn -> integer
                   #   arch_tape_date -> timestamp(0) without time zone 
-                  $stmnt = "UPDATE sum_main m SET archive_status = 'Y', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = '$timenow' FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
-                  ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_main.\n");
+                  $stmnt = "UPDATE $maintable m SET archive_status = 'Y', arch_tape = ul.tapeid, arch_tape_fn = ul.fileid, arch_tape_date = '$timenow' FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
+                  ExecStatement(\$dbh, $stmnt, 1, "Troubles updating $maintable.\n");
 
                   # SQL to update sum_partn_alloc:
                   #   status -> integer
                   #   ds_index -> bigint
-                  $stmnt = "UPDATE sum_partn_alloc m SET status = " . kStatDADP . " FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
-                  ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_partn_alloc.\n");
+                  $stmnt = "UPDATE $partntable m SET status = " . kStatDADP . " FROM " . kUdListTableTapeFileInfo . " ul WHERE (m.ds_index = ul.sunum)";
+                  ExecStatement(\$dbh, $stmnt, 1, "Troubles updating $partntable.\n");
 
                   # Drop rows from temp table.
                   $stmnt = "DELETE from " . kUdListTableTapeFileInfo;
@@ -239,10 +270,28 @@ elsif ($typequery eq kTQueryManyPerTrans)
                   #   md5cksum -> character varying(36)
                   foreach $values (@md5csums)
                   {
-                     $stmnt = "INSERT INTO sum_file (tapeid, filenum, gtarblock, md5cksum) VALUES $values";
-                     ExecStatement(\$dbh, $stmnt, 1, "Troubles updating sum_file.\n");
+                     $stmnt = "INSERT INTO $filetable (tapeid, filenum, gtarblock, md5cksum) VALUES $values";
+                     ExecStatement(\$dbh, $stmnt, 1, "Troubles updating $filetable.\n");
                   }
+
+                  @md5csums = ();
                }
+
+               # Done updating dbase for $fpath - move to ${fpath}.ingested
+               CommitTrans(\$dbh);
+
+               if (mv($fpath, "$fpath\.ingested") == 0)
+               {
+                  print STDERR "Failed to rename $fpath to $fpath\.ingested.\n";
+               }
+               else
+               {
+                  print "Renamed $fpath to $fpath\.ingested\n";
+               }
+            }
+            else
+            {
+               RollbackTrans(\$dbh); # problem populating temporary table ($ftype == kInTypeList)
             }
          } # loop over data files
 
@@ -274,7 +323,7 @@ sub dbconnect
    # provided by DBI are all UNDEFINED, unless there is some kind of failure. So, 
    # never try to look at $dbh->err or $dbh->errstr if the call succeeded.
    
-   $$dbh = DBI->connect($dsn, $dbuser, ''); # will need to put pass in .pg_pass
+   $$dbh = DBI->connect($dsn, $dbuser, '', { AutoCommit => 0 }); # will need to put pass in .pg_pass
 
    if (defined($dbh))
    {
@@ -299,6 +348,30 @@ sub ExecStatement
       $res = $$dbh->do($stmnt);
       NoErr($res, $dbh, $stmnt) || die $msg;
    }
+}
+
+sub BeginTrans
+{
+   my($dbh) = $_[0];
+
+   print "starting transaction\n";
+   ExecStatement($dbh, "BEGIN", 1, "Couldn't begin transaction.\n");
+}
+
+sub CommitTrans
+{
+   my($dbh) = $_[0];
+
+   print "committing transaction\n";
+   ExecStatement($dbh, "COMMIT", 1, "Couldn't begin transaction.\n");
+}
+
+sub RollbackTrans
+{
+   my($dbh) = $_[0];
+
+   print "rolling-back transaction\n";
+   ExecStatement($dbh, "ROLLBACK", 1, "Couldn't begin transaction.\n");
 }
 
 sub NoErr
