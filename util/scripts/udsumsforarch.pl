@@ -8,7 +8,7 @@ use Switch;
 use POSIX qw(strftime);
 use File::Copy "mv";
 
-use constant kDEBUG => 1;
+use constant kDEBUG => 0;
 
 # SUs that are archive pending must be set to DADP
 use constant kStatDADP => "2";
