@@ -5,7 +5,7 @@ use DBD::Pg;
 use Time::localtime;
 use Switch;
 
-use constant kDEBUG => 0;
+use constant kDEBUG => 1;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
@@ -37,6 +37,9 @@ my($dbuser);    # database user name (to connect with)
 my($typequery); # type of query to perform (aggregate bytes over series, groups, or 
                 # don't aggregate)
 my($order);     # series - order by series, then group, or group, order by group, then series
+my($metric);    # while column of data to produce (delete pending short, delete pending medium, delete pending long,
+                # archive pending)
+my($delim);     # separator between output columns (fixed-width columns if not supplied)
 
 my($dsn);       # database connection arguments
 my($dbh);       # database handle
@@ -131,6 +134,11 @@ else
    }
 }
 
+if ($#ARGV >= 7)
+{
+   $delim = substr($ARGV[7], 0, 1);
+}
+
 $err = 0; 
 
 # connect to the database
@@ -169,7 +177,7 @@ if (defined($dbh))
 
          if (kDEBUG)
          {
-            $group = 6;
+            $group = 9;
          }
 
          # Delete now
@@ -256,7 +264,7 @@ if (defined($dbh))
          }
       } # loop over storage groups
 
-      SortAndPrintResults(\%delnow, \%delwi100d, \%dellater, \%archivepend, $typequery, $order, $metric);
+      SortAndPrintResults(\%delnow, \%delwi100d, \%dellater, \%archivepend, $typequery, $order, $metric, $delim);
    }
 }
 else
@@ -511,6 +519,7 @@ sub SortAndPrintResults
    my($typequery) = $_[4];
    my($order) = $_[5];
    my($metric) = $_[6];
+   my($delim) = $_[7];
 
    my(@serieslist);
    my(@grouplist);
@@ -551,7 +560,15 @@ sub SortAndPrintResults
             case kTypeOrderSeries
             {
                # type - agg; order - series
-               $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+               if (defined($delim))
+               {
+                  $line = sprintf("series${delim}group${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
+               }
+               else
+               {
+                  $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+               }
+
                print "$line\n";
                
                if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $containers{+kMetricDPS}, $containers{+kMetricDPM}, $containers{+kMetricDPL}, $containers{+kMetricAP}))
@@ -569,7 +586,14 @@ sub SortAndPrintResults
                               $hbytes{$contkey} = defined($containers{$contkey}->{$series}->{$group}) ? $containers{$contkey}->{$series}->{$group} : 0;
                            }
 
-                           $line = sprintf("%-48s%-8d%-24f%-24f%-24f%-24f", $series, $group, $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
+                           if (defined($delim))
+                           {
+                              $line = sprintf("$series${delim}$group${delim}%f${delim}%f${delim}%f${delim}%f", $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
+                           }
+                           else
+                           {
+                              $line = sprintf("%-48s%-8d%-24f%-24f%-24f%-24f", $series, $group, $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
+                           }
                            print "$line\n";
                         }
                      }
@@ -593,7 +617,15 @@ sub SortAndPrintResults
                my(@stack); # index of first (in sort order) data element when each of the top data elements are sorted
                my($popped);
 
-               $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+               if (defined($delim))
+               {
+                  $line = sprintf("group${delim}series${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
+               }
+               else
+               {
+                  $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+               }
+
                print "$line\n";
 
                if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{+kMetricDPS}, $containers{+kMetricDPM}, $containers{+kMetricDPL}, $containers{+kMetricAP}))
@@ -612,7 +644,7 @@ sub SortAndPrintResults
                      # we print a value of 0 for the sum(bytes) field.
                      foreach $contkey (@contkeys)
                      {
-                        $noelems{$contkey} = scalar(@{$containers{$contkey}->{$group}});
+                        $noelems{$contkey} = defined($containers{$contkey}->{$group}) ? scalar(@{$containers{$contkey}->{$group}}) : 0;
                         $topdataidx{$contkey} = 0; # indices into 4 containers
                      }
 
@@ -701,7 +733,15 @@ sub SortAndPrintResults
                            $topdataidx{$contkey}++;
                         }
 
-                        $line = sprintf("%-8d%-48s%-24f%-24f%-24f%-24f", $group, $series, $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
+                        if (defined($delim))
+                        {
+                           $line = sprintf("$group${delim}$series${delim}%f${delim}%f${delim}%f${delim}%f", $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
+                        }
+                        else
+                        {
+                           $line = sprintf("%-8d%-48s%-24f%-24f%-24f%-24f", $group, $series, $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
+                        }
+                        
                         print "$line\n";
                      } # while
                   } # groups
@@ -741,7 +781,15 @@ sub SortAndPrintResults
                {
                   # type - raw; order - series
                   print "$topheaders{$metric}\n";
-                  $line = sprintf("%-32s%-8s%-16s%-24s%-24s", "series", "group", "sunum", "sudir", $metricheaders{$metric});
+                  if (defined($delim))
+                  {
+                     $line = "series${delim}group${delim}sunum${delim}sudir${delim}$metricheaders{$metric}";
+                  }
+                  else
+                  {
+                     $line = sprintf("%-32s%-8s%-16s%-24s%-24s", "series", "group", "sunum", "sudir", $metricheaders{$metric});
+                  }
+
                   print "$line\n";
                   
                   if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $containers{$metric}))
@@ -768,7 +816,15 @@ sub SortAndPrintResults
                                     $sudir = $rowdata->[1];
                                     $metricval = $rowdata->[2];
                                     
-                                    $line = sprintf("%-32s%-8d%-16s%-24s%-24d", $series, $group, $sunum, $sudir, $metricval);
+                                    if (defined($delim))
+                                    {
+                                       $line = sprintf("$series${delim}$group${delim}$sunum${delim}$sudir${delim}%d", $metricval);
+                                    }
+                                    else
+                                    {
+                                       $line = sprintf("%-32s%-8d%-16s%-24s%-24d", $series, $group, $sunum, $sudir, $metricval);
+                                    }
+
                                     print "$line\n";
                                  }
                               }
@@ -792,7 +848,15 @@ sub SortAndPrintResults
                   my($rowdata);
                   
                   print "$topheaders{$metric}\n";
-                  $line = sprintf("%-8s%-32s%-16s%-24s%-24s", "group", "series", "sunum", "sudir", $metricheaders{$metric});
+                  if (defined($delim))
+                  {
+                     $line =  "group${delim}series${delim}sunum${delim}sudir${delim}$metricheaders{$metric}";
+                  }
+                  else
+                  {
+                     $line = sprintf("%-8s%-32s%-16s%-24s%-24s", "group", "series", "sunum", "sudir", $metricheaders{$metric});
+                  }
+
                   print "$line\n";
                   
                   # The data in the containers are ordered by group, series. The tuples are
@@ -810,7 +874,15 @@ sub SortAndPrintResults
                            $sudir = $rowdata->[2];
                            $metricval = $rowdata->[3];
 
-                           $line = sprintf("%-8d%-32s%-16s%-24s%-24d", $group, $series, $sunum, $sudir, $metricval);
+                           if (defined($delim))
+                           {
+                              $line = sprintf("$group${delim}$series${delim}$sunum${delim}$sudir${delim}%d", $metricval);
+                           }
+                           else
+                           {
+                              $line = sprintf("%-8d%-32s%-16s%-24s%-24d", $group, $series, $sunum, $sudir, $metricval);
+                           }
+
                            print "$line\n";
                         }
                      }
