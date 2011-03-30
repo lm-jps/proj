@@ -5,7 +5,7 @@ use DBD::Pg;
 use Time::localtime;
 use Switch;
 
-use constant kDEBUG => 1;
+use constant kDEBUG => 0;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
