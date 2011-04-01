@@ -5,7 +5,7 @@ use DBD::Pg;
 use Time::localtime;
 use Switch;
 
-use constant kDEBUG => 0;
+use constant kDEBUG => 1;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
@@ -23,6 +23,7 @@ use constant kMetricDPM => "dpm"; # delete pending in 100 days (medium)
 use constant kMetricDPL => "dpl"; # delete pending >= 100 days (long)
 use constant kMetricAP => "ap";   # archive pending
 
+use constant kTempTable => "sumsstat";
 
 # In raw mode, you cannot collect data on dpshort, dpmid, dplong, ap all at the same time. 
 # This will exhaust machine memory. Need to provide yet another flag to select which ONE
@@ -168,6 +169,20 @@ if (defined($dbh))
       $now = sprintf("%04d%02d%02d%02d%02d", $timeo->year() + 1900, $timeo->mon() + 1, $timeo->mday(), $timeo->hour(), $timeo->min());
       $nowplus100d = sprintf("%04d%02d%02d%02d%02d", $timeltro->year() + 1900, $timeltro->mon() + 1, $timeltro->mday(), $timeltro->hour(), $timeltro->min());
 
+
+      if ($typequery)
+      {
+         # Create a temporary table to hold pre-sorted results.
+         $stmnt = "CREATE TEMPORARY TABLE " . kTempTable . "(tgroup integer not null, series varchar(64) not null, metric varchar(8), aggbytes bigint default 0)";
+         ExecStatement(\$dbh, $stmnt, 1, "Unable to create temporary table " . "'kTempTable'" . ".\n");
+         
+         $stmnt = "CREATE INDEX " . kTempTable . "_group_idx on " . kTempTable . "(tgroup, lower(series))";   
+         ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table " . "'kTempTable'" . ".\n");
+         
+         $stmnt = "CREATE INDEX " . kTempTable . "_series_idx on " . kTempTable . "(lower(series), tgroup)";
+         ExecStatement(\$dbh, $stmnt, 1, "Unable to create index on temporary table " . "'kTempTable'" . ".\n");
+      }
+
       # $rrows is a reference to an array; the array is an array of refereces to an array, so $row
       # is a reference to an array that has just one element (since the SELECT statement has just
       # one column). This element is the namespace name.
@@ -183,19 +198,7 @@ if (defined($dbh))
          # Delete now
          if ($metric eq kMetricAll || $metric eq kMetricDPS)
          {
-            $err = !$queryfunc->($group, kStatDADP, "effective_date < '$now'", \$stmnt);
-
-            if (!$err)
-            {
-               $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
-               $err = !(NoErr($rrowsb, \$dbh, $stmnt));
-            }
-
-            if (!$err)
-            {
-               # save results
-               $err = !SaveResults($rrowsb, $group, $typequery, $order, \%delnow);
-            }
+            $err = !$queryfunc->(\$dbh, $group, kStatDADP, "effective_date < '$now'", $typequery, $order, \%delnow, kMetricDPS);
          }
 
          # Delete <= 100 days AND > now
@@ -203,18 +206,7 @@ if (defined($dbh))
          {
             if (!$err)
             {
-               $err = !$queryfunc->($group, kStatDADP, "effective_date <= '$nowplus100d' AND effective_date >= '$now'", \$stmnt);
-               if (!$err)
-               {
-                  $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
-                  $err = !(NoErr($rrowsb, \$dbh, $stmnt));
-               }
-
-               if (!$err)
-               {
-                  # save results
-                  $err = !SaveResults($rrowsb, $group, $typequery, $order, \%delwi100d);
-               }
+               $err = !$queryfunc->(\$dbh, $group, kStatDADP, "effective_date <= '$nowplus100d' AND effective_date >= '$now'", $typequery, $order, \%delwi100d, kMetricDPM);
             }
          }
 
@@ -222,18 +214,7 @@ if (defined($dbh))
          {
             if (!$err)
             {
-               $err = !$queryfunc->($group, kStatDADP, "effective_date > '$nowplus100d'", \$stmnt);
-               if (!$err)
-               {
-                  $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
-                  $err = !(NoErr($rrowsb, \$dbh, $stmnt));
-               }
-
-               if (!$err)
-               {
-                  # save results
-                  $err = !SaveResults($rrowsb, $group, $typequery, $order, \%dellater);
-               }
+               $err = !$queryfunc->(\$dbh, $group, kStatDADP, "effective_date > '$nowplus100d'", $typequery, $order, \%dellater, kMetricDPL);
             }
          }
 
@@ -242,19 +223,7 @@ if (defined($dbh))
          {
             if (!$err)
             {
-               $err = !$queryfunc->($group, kStatDAAP . " AND archive_substatus = " . kSubStatDAADP, "", \$stmnt);
-
-               if (!$err)
-               {
-                  $rrowsb = $dbh->selectall_arrayref($stmnt, undef);
-                  $err = !(NoErr($rrowsb, \$dbh, $stmnt));
-               }
-
-               if (!$err)
-               {
-                  # save results 
-                  $err = !SaveResults($rrowsb, $group, $typequery, $order, \%archivepend);
-               }
+               $err = !$queryfunc->(\$dbh, $group, kStatDAAP . " AND archive_substatus = " . kSubStatDAADP, "", $typequery, $order, \%archivepend, kMetricAP);
             }
          }
 
@@ -264,7 +233,7 @@ if (defined($dbh))
          }
       } # loop over storage groups
 
-      SortAndPrintResults(\%delnow, \%delwi100d, \%dellater, \%archivepend, $typequery, $order, $metric, $delim);
+      SortAndPrintResults(\%delnow, \%delwi100d, \%dellater, \%archivepend, $typequery, $order, $metric, $delim, $dbh);
    }
 }
 else
@@ -279,24 +248,32 @@ exit($err);
 # Aggregate
 sub GenQueryA
 {
-   my($group) = $_[0];
-   my($status) = $_[1];
-   my($datewhere) = $_[2];
-   my($qout) = $_[3];
+   my($dbh) = $_[0]; # reference to a reference
+   my($group) = $_[1];
+   my($status) = $_[2];
+   my($datewhere) = $_[3];
+   my($typequery) = $_[4];
+   my($order) = $_[5];
+   my($container) = $_[6]; # reference
+   my($metric) = $_[7];
 
    my($ok) = 1;
+
+   my($stmnt);
 
    if (length($datewhere) > 0)
    {
       $datewhere = " AND $datewhere";
    }
 
-   $$qout = "SELECT main.owning_series, sum(bytes) FROM (SELECT ds_index, group_id, bytes FROM sum_partn_alloc WHERE status = $status AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series FROM sum_main WHERE storage_group = $group) AS main WHERE partn.ds_index = main.ds_index GROUP BY partn.group_id, main.owning_series ORDER BY lower(main.owning_series)";   
+   $stmnt = "INSERT INTO " . kTempTable . " (tgroup, series, metric, aggbytes) (SELECT '$group', main.owning_series, '$metric', sum(bytes) FROM (SELECT ds_index, group_id, bytes FROM sum_partn_alloc WHERE status = $status AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series FROM sum_main WHERE storage_group = $group) AS main WHERE partn.ds_index = main.ds_index GROUP BY partn.group_id, main.owning_series)";   
 
    if (kDEBUG)
    {
-      print "Query is:\n$$qout\n";
+      print "Query is:\n$stmnt\n";
    }
+
+   ExecStatement($dbh, $stmnt, 1, "Unable to insert data into temporary table.\n");
 
    return $ok;
 }
@@ -304,23 +281,39 @@ sub GenQueryA
 # Don't aggregate
 sub GenQueryB
 {
-   my($group) = $_[0];
-   my($status) = $_[1];
-   my($datewhere) = $_[2];
-   my($qout) = $_[3];
+   my($dbh) = $_[0]; # reference to a reference
+   my($group) = $_[1];
+   my($status) = $_[2];
+   my($datewhere) = $_[3];
+   my($typequery) = $_[4];
+   my($order) = $_[5];
+   my($container) = $_[6]; # reference
+   my($metric) = $_[7];
 
    my($ok) = 1;
+
+   my($stmnt);
+   my($rrows);
 
    if (length($datewhere) > 0)
    {
       $datewhere = " AND $datewhere";
    }
 
-   $$qout = "SELECT main.owning_series, main.ds_index, main.online_loc, partn.bytes FROM (SELECT ds_index, group_id, bytes FROM sum_partn_alloc WHERE status = $status AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series, online_loc FROM sum_main WHERE storage_group = $group) AS main WHERE partn.ds_index = main.ds_index ORDER BY lower(main.owning_series), main.ds_index";
+   $stmnt = "SELECT main.owning_series, main.ds_index, main.online_loc, partn.bytes FROM (SELECT ds_index, group_id, bytes FROM sum_partn_alloc WHERE status = $status AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series, online_loc FROM sum_main WHERE storage_group = $group) AS main WHERE partn.ds_index = main.ds_index ORDER BY lower(main.owning_series), main.ds_index";
 
    if (kDEBUG)
    {
-      print "Query is:\n$$qout\n";
+      print "Query is:\n$stmnt\n";
+   }
+
+   $rrows = $$dbh->selectall_arrayref($stmnt, undef);
+   $ok = NoErr($rrows, $$dbh, $stmnt);
+
+   if ($ok)
+   {
+      # save results
+      $ok = SaveResults($rrows, $group, $typequery, $order, $container);
    }
 
    return $ok;
@@ -341,38 +334,8 @@ sub SaveResults
    {
       case kTypeQueryAgg
       {
-         # row is series, sum(bytes)
-         switch ($order)
-         {
-            case kTypeOrderSeries
-            {
-               foreach $row (@$rrows)
-               {
-                  if (defined($container->{lc($row->[0])}))
-                  {
-                     $container->{lc($row->[0])}->{$group} = $row->[1];
-                  } 
-                  else
-                  {
-                     $container->{lc($row->[0])} = {$group => $row->[1]};
-                  }
-               }
-            }
-            case kTypeOrderGroup
-            {
-               $container->{$group} = [];
-
-               foreach $row (@$rrows)
-               {
-                  push(@{$container->{$group}}, [lc($row->[0]), $row->[1]]);
-               }
-            }
-            else
-            {
-               print "Invalid column $order by which to order.\n";
-               $ok = 0;
-            }
-         } # switch $order
+         # Changed to use a temporary table to hold results. No need to use hash arrays
+         # to hold the data.
       }
       case kTypeQueryRaw
       {
@@ -504,6 +467,31 @@ sub CombineHashKeys
    return $ok;
 }
 
+sub PrintRow
+{
+   my($delim) = $_[0];
+   my($firstarg) = $_[1];
+   my($secondarg) = $_[2];
+   my($hbytes) = $_[3]; # reference
+   my($dformat) = $_[4]; # reference to delimted string format
+   my($fformat) = $_[5]; # reference to fixed-width string format
+
+   my($line);
+   my($actualformat);
+
+   $actualformat = defined($delim) ? $dformat : $fformat;
+     
+   $line = sprintf($$actualformat, 
+                   $firstarg,
+                   $secondarg,
+                   defined($hbytes->{+kMetricDPS}) ? $hbytes->{+kMetricDPS} / kGig : 0, 
+                   defined($hbytes->{+kMetricDPM}) ? $hbytes->{+kMetricDPM} / kGig : 0,
+                   defined($hbytes->{+kMetricDPL}) ? $hbytes->{+kMetricDPL} / kGig : 0,
+                   defined($hbytes->{+kMetricAP}) ? $hbytes->{+kMetricAP} / kGig : 0);
+
+   print "$line\n";
+}
+
 # Orders by series, group first. If caller requests ordering by group, series, the
 # rows are re-ordered.
 sub SortAndPrintResults
@@ -520,6 +508,7 @@ sub SortAndPrintResults
    my($order) = $_[5];
    my($metric) = $_[6];
    my($delim) = $_[7];
+   my($dbh) = $_[8];
 
    my(@serieslist);
    my(@grouplist);
@@ -539,6 +528,10 @@ sub SortAndPrintResults
    my(%containers);
    my(@contkeys);
    my($contkey);
+
+   my($stmnt);
+   my($rrows);
+   my($row);
 
    my($ok);
 
@@ -571,52 +564,49 @@ sub SortAndPrintResults
 
                print "$line\n";
                
-               if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $containers{+kMetricDPS}, $containers{+kMetricDPM}, $containers{+kMetricDPL}, $containers{+kMetricAP}))
-               {
-                  foreach $series (@serieslist)
-                  {
-                     @grouplist = ();
-                     
-                     if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{+kMetricDPS}->{$series}, $containers{+kMetricDPM}->{$series}, $containers{+kMetricDPL}->{$series}, $containers{+kMetricAP}->{$series}))
-                     {
-                        foreach $group (@grouplist)
-                        {
-                           foreach $contkey (@contkeys)
-                           {
-                              $hbytes{$contkey} = defined($containers{$contkey}->{$series}->{$group}) ? $containers{$contkey}->{$series}->{$group} : 0;
-                           }
+               # Just use the db to do the sorting on the temporary table containing the data.
+               $stmnt = "SELECT lower(series), tgroup, metric, aggbytes FROM " . kTempTable . " ORDER BY lower(series), tgroup";
 
-                           if (defined($delim))
-                           {
-                              $line = sprintf("$series${delim}$group${delim}%f${delim}%f${delim}%f${delim}%f", $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
-                           }
-                           else
-                           {
-                              $line = sprintf("%-48s%-8d%-24f%-24f%-24f%-24f", $series, $group, $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
-                           }
-                           print "$line\n";
-                        }
-                     }
-                     else
-                     {
-                        print "Problem creating group list - continuing.\n";
-                     }
-                  }
-               }
-               else
+               if ($ok)
                {
-                  print "Problem creating series list - bailing.\n";
+                  $rrows = $dbh->selectall_arrayref($stmnt, undef);
+                  $ok = NoErr($rrows, \$dbh, $stmnt);
+               }
+
+               $group = "";
+               $series = "";
+
+               if ($ok)
+               {
+                  %hbytes = ();
+                  if (defined($delim))
+                  {
+                     $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
+                  }
+
+                  $fformat = "%-48s%-8d%-24f%-24f%-24f%-24f";
+
+                  foreach $row (@$rrows)
+                  {
+                     if ((length($series) > 0 && $series ne $row->[0]) ||
+                         (length($group) > 0 && $group ne $row->[1]))
+                     {
+                        PrintRow($delim, $series, $group, \%hbytes, \$dformat, \$fformat);
+                        %hbytes = ();
+                     }
+
+                     $series = $row->[0];
+                     $group = $row->[1];
+                     $hbytes{$row->[2]} = $row->[3];
+                  }
+
+                  # Must print last row since only the previous row is printed in the loop above
+                  PrintRow($delim, $series, $group, \%hbytes, \$dformat, \$fformat);
                }
             }
             case kTypeOrderGroup
             {
                # type - agg; order - group
-               my(%topdataelem); # 4 elements; each points to the top data element of one container
-               my(%topdataidx); # indices into the top elements of the 4 containers
-               my(%noelems); # number of elements in each of the 4 containers
-               my(@stack); # index of first (in sort order) data element when each of the top data elements are sorted
-               my($popped);
-
                if (defined($delim))
                {
                   $line = sprintf("group${delim}series${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
@@ -628,123 +618,43 @@ sub SortAndPrintResults
 
                print "$line\n";
 
-               if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{+kMetricDPS}, $containers{+kMetricDPM}, $containers{+kMetricDPL}, $containers{+kMetricAP}))
-               {
-                  foreach $group (@grouplist)
-                  {
-                     # $container->{$group} is a reference to an array where each element is a reference to an array
-                     # of data elements (series, sum(bytes)), ordered by series. Not every container
-                     # has every series!
+               # Just use the db to do the sorting on the temporary table containing the data.
+               $stmnt = "SELECT tgroup, lower(series), metric, aggbytes FROM " . kTempTable . " ORDER BY tgroup, lower(series)";
 
-                     # Within each container, the arrays of data elements are sorted by series. So we 
-                     # need to compare the first-row data elements from each container, finding
-                     # the container that has the series name that is first in alphabetical order. We then
-                     # print a record containing the sum(bytes) from each container that has a data element
-                     # with that series name. If a container does not have such a data element, then 
-                     # we print a value of 0 for the sum(bytes) field.
-                     foreach $contkey (@contkeys)
+               if ($ok)
+               {
+                  $rrows = $dbh->selectall_arrayref($stmnt, undef);
+                  $ok = NoErr($rrows, \$dbh, $stmnt);
+               }
+
+               $group = "";
+               $series = "";
+
+               if ($ok)
+               {
+                  %hbytes = ();
+                  if (defined($delim))
+                  {
+                     $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
+                  }
+                  $fformat = "%-8d%-48s%-24f%-24f%-24f%-24f";
+
+                  foreach $row (@$rrows)
+                  {
+                     if ((length($group) > 0 && $group ne $row->[0]) ||
+                         (length($series) > 0 && $series ne $row->[1]))
                      {
-                        $noelems{$contkey} = defined($containers{$contkey}->{$group}) ? scalar(@{$containers{$contkey}->{$group}}) : 0;
-                        $topdataidx{$contkey} = 0; # indices into 4 containers
+                        PrintRow($delim, $group, $series, \%hbytes, \$dformat, \$fformat);
+                        %hbytes = ();
                      }
 
-                     # iterate through each top data element, looking for the one with a series that
-                     # is first when sorted. $elem is a reference to a data element.
-                     while (1)
-                     {
-                        @stack = (); # each elem contains container label (0 - 3)
-                        %hbytes = ();
+                     $group = $row->[0];
+                     $series = $row->[1];
+                     $hbytes{$row->[2]} = $row->[3];
+                  }
 
-                        foreach $contkey (@contkeys)
-                        {
-                           $topdataelem{$contkey} = $topdataidx{$contkey} < $noelems{$contkey} ? $containers{$contkey}->{$group}->[$topdataidx{$contkey}] : [];
-                        }
-
-                        foreach $contkey (@contkeys)
-                        {
-                           $elem = $topdataelem{$contkey};
-
-                           if (!defined($elem))
-                           {
-                              print "Unexpected: reference to top of container points to garbage.\n";
-                              $ok = 0;
-                           }
-                           
-                           if (defined($elem) && scalar(@$elem) > 0)
-                           {
-                              $series = $elem->[0];
-
-                              if ($#stack >= 0)
-                              {
-                                 $stackseries = $topdataelem{$stack[$#stack]}->[0];
-
-                                 if (($series cmp $stackseries) < 0)
-                                 {
-                                    # $series sorts before $stack[0] - pop from stack
-                                    while ($#stack >= 0)
-                                    {
-                                       $popped = pop(@stack);
-                                       
-                                       # This element came from a container that doesn't have $series.
-                                       $hbytes{$popped} = 0;
-                                    }
-                                    
-                                    # Push $elem onto stack now (it is the current highest-ranked data element)
-                                    push(@stack, $contkey);
-                                 }
-                                 elsif (($series cmp $stackseries) == 0)
-                                 {
-                                    # $series is equivalent to $stack[0] - push onto stack
-                                    push(@stack, $contkey);
-                                 } 
-                                 else
-                                 {
-                                    # $series sorts after $stack[0] - set bytes to zero for this $series
-                                    $hbytes{$contkey} = 0;
-                                 }
-                              } 
-                              else
-                              {
-                                 # stack is empty, push
-                                 push(@stack, $contkey);
-                              }
-                           }
-                           else
-                           {
-                              # current container is empty - set bytes to 0
-                              $hbytes{$contkey} = 0;
-                           }
-                        }
-
-                        if ($#stack < 0)
-                        {
-                           # nothing was done in sort loop (because there were no more elems) done
-                           last;
-                        }
-
-                        # Elems on the stack will have non-0 sum(byte) values.
-                        # The elems on the stack all have the same series.
-                        foreach $contkey (@stack)
-                        {
-                           $hbytes{$contkey} = $topdataelem{$contkey}->[1];
-                           $series = $topdataelem{$contkey}->[0];
-
-                           # advance index into data elem array
-                           $topdataidx{$contkey}++;
-                        }
-
-                        if (defined($delim))
-                        {
-                           $line = sprintf("$group${delim}$series${delim}%f${delim}%f${delim}%f${delim}%f", $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
-                        }
-                        else
-                        {
-                           $line = sprintf("%-8d%-48s%-24f%-24f%-24f%-24f", $group, $series, $hbytes{+kMetricDPS} / kGig, $hbytes{+kMetricDPM} / kGig, $hbytes{+kMetricDPL} / kGig, $hbytes{+kMetricAP} / kGig);
-                        }
-                        
-                        print "$line\n";
-                     } # while
-                  } # groups
+                  # Must print last row since only the previous row is printed in the loop above
+                  PrintRow($delim, $group, $series, \%hbytes, \$dformat, \$fformat);
                }
             }
             else
