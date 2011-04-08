@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/get_image_location.c,v 1.6 2010/12/06 23:03:06 jps Exp $" 
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/get_image_location.c,v 1.7 2011/04/08 19:51:34 carl Exp $" 
 /* GET IMAGE LOCATION to be merged into Jim's Lev1 code */
 /* NOTE1:Jim:Jim's code needs to free Image_Location after calling get_location_information. */
 /* NOTE2:Jim:Example main file used to test at:/home3/carl/cvs/JSOC/proj/lev1/apps/gif_main.c*/
@@ -6,8 +6,7 @@
 /* use by Jim's pre-productions test-> #define GMP_MASTER_POINTING_SERIES  "su_carl.master_pointing" */
 /* use by Carl to test ->#define GMP_MASTER_POINTING_SERIES  "su_carl.test99_master_pointing"*/
 /* use for production after launch ->#define GMP_MASTER_POINTING_SERIES  "sdo._master_pointing"*/
-//#define GMP_MASTER_POINTING_SERIES  "sdo.master_pointing"
-#define GMP_MASTER_POINTING_SERIES  "sdo.lev1_master_pointing"
+#define GMP_MASTER_POINTING_SERIES  "sdo.master_pointing"
 #define GMP_DRMS_OPEN_FAILED           1
 #define GMP_MAX_DSNAME_STR           100
 #define GMP_MAX_KEYWORD_NAME_STR     100
