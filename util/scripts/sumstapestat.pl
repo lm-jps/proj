@@ -5,7 +5,7 @@ use DBD::Pg;
 use Time::localtime;
 use Switch;
 
-use constant kDEBUG => 1;
+use constant kDEBUG => 0;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
@@ -192,7 +192,7 @@ if (defined($dbh))
 
          if (kDEBUG)
          {
-            $group = 9;
+            $group = 6;
          }
 
          # Delete now
@@ -565,7 +565,7 @@ sub SortAndPrintResults
                print "$line\n";
                
                # Just use the db to do the sorting on the temporary table containing the data.
-               $stmnt = "SELECT lower(series), tgroup, metric, aggbytes FROM " . kTempTable . " ORDER BY lower(series), tgroup";
+               $stmnt = "SELECT series, tgroup, metric, aggbytes FROM " . kTempTable . " ORDER BY lower(series), tgroup";
 
                if ($ok)
                {
@@ -619,7 +619,7 @@ sub SortAndPrintResults
                print "$line\n";
 
                # Just use the db to do the sorting on the temporary table containing the data.
-               $stmnt = "SELECT tgroup, lower(series), metric, aggbytes FROM " . kTempTable . " ORDER BY tgroup, lower(series)";
+               $stmnt = "SELECT tgroup, series, metric, aggbytes FROM " . kTempTable . " ORDER BY tgroup, lower(series)";
 
                if ($ok)
                {
