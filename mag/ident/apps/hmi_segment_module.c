@@ -455,6 +455,7 @@ int DoIt(void)
     printf("segment_module: within-loop frees\n");
     drms_free_array(xmArray); 
     drms_free_array(xpArray);
+    drms_free_array(yArray);		// added by Xudong Apr 13 2011
 
     // Establish links to source data
     if ((srcLink_M = hcon_lookup_lower(&yRec->links, "MDATA")) != NULL)

@@ -670,6 +670,7 @@ int DoIt(void)
       status = drms_segment_write(ySeg, yArray, 0);
       if (status)
 	DIE("problem writing drms segment for patches");
+		drms_free_array(yArray);			// Added by Xudong Apr 13 2011
       drms_close_record(yRec, DRMS_INSERT_RECORD);
     }
 
@@ -698,6 +699,7 @@ int DoIt(void)
     if (verbflag) {
       printf("patch_module: within-loop drms_free\n");
       drms_free_array(xArray); 
+	  drms_free_array(magArray);		// Added by Xudong Apr 13 2011
     }
 
     // TODO: copy over more keywords?
