@@ -20,7 +20,8 @@ dir     := $(d)/d4vm
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/nlfff
 -include                $(SRCDIR)/$(dir)/Rules.mk
-
+dir     := $(d)/remapmags
+-include                $(SRCDIR)/$(dir)/Rules.mk
 
 # Standard things
 d               := $(dirstack_$(sp))
