@@ -232,6 +232,8 @@ patch_fixup_patches(double *bbs, int np, int M, int N)
 /*
  * patch_free_bitmaps: free a list of bitmaps allocated 
  * by patch_extract_bitmaps
+ *
+ * NOT CURRENTLY USED
  */
 static
 void
@@ -341,9 +343,9 @@ int DoIt(void)
   // mexFunction arguments
   // (the constants are defined in hmi_patch.c)
   const int nrhs = MXT_Hpat_NARGIN_MAX;     // MIN == MAX
-  const int nlhs = MXT_Hpat_NARGOUT_MAX;    // bounding boxes + labeled HARP
+  const int nlhs = MXT_Hpat_NARGOUT_MAX-1;  // note, last arg, ARG_crit, unused
   mxArray *prhs[MXT_Hpat_NARGIN_MAX];       // input args (too long is OK)
-  mxArray *plhs[MXT_Hpat_NARGOUT_MAX];      // output args
+  mxArray *plhs[MXT_Hpat_NARGOUT_MAX];      // output args (1 extra space)
   double *x_tmp, *mag_tmp;                  // holding place for array data
 
   // other variables
@@ -507,9 +509,10 @@ int DoIt(void)
     mxGetPr(prhs[MXT_Hpat_ARG_geom])[4] = p0;
 
     // print a sample value
-    if (verbflag)
-      printf("\tMask[%d,%d] = %f\n", M/2, N/2, 
-	     ((double *) xArray->data)[M/2+N/2*M]);
+    if (verbflag) {
+      printf("\tMask[%d,%d] = %f\n",M/2,N/2, ((double *) xArray->data)[M/2+N/2*M]);
+      fflush(stdout);
+    }
 
     // call the function
     printf("patch_module: hmi_patch calling mexfunction.\n");fflush(stdout);
@@ -576,16 +579,19 @@ int DoIt(void)
       yRec = drms_create_record(drms_env, (char *) yRecQuery, DRMS_PERMANENT, &status);
       if (status)
 	DIE("Output recordset for patches not created");
-      printf("\tpatch: looking up segment\n");
+      printf("\tpatch: looking up segment\n");fflush(stdout);
       ySeg = drms_segment_lookupnum(yRec, 0);
         
       // get sizes (as integers)
       pDims[0] = rint(yHI[p] - yLO[p] + 1.0);
       pDims[1] = rint(xHI[p] - xLO[p] + 1.0);
 
-      // NB: a subsequent drms_free of yArray would free bmps[p] also!
-      // (this is not done now; we free bmps[...] separately)
+      // NB: our subsequent drms_free of yArray will free bmps[p] also!
+      // We *do* manually free bmps itself, outside this loop, but
+      // we *do not* free each bmps[p] directly, because it is done by 
+      // drms_free(yArray).
       printf("\tpatch: array_create (patch(0,0) = %d)\n", (int) bmps[p][0]);
+      fflush(stdout);
       yArray = drms_array_create(DRMS_TYPE_CHAR, 2, pDims,
 				 bmps[p], &status);
       if (status)
@@ -596,13 +602,13 @@ int DoIt(void)
 
       yArray->parent_segment = ySeg;
 		
-	  // some stats
-	  // updated by xudong oct 13 2010
-	  int missval = 0, totalval = yArray->axis[0] * yArray->axis[1];
-	  char *yData = (char *)yArray->data;
-	  for (int ii = 0; ii < totalval; ii++) {
-	    if (isnan(yData[ii])) missval++;
-	  }
+      // some stats
+      // updated by xudong oct 13 2010
+      int missval = 0, totalval = yArray->axis[0] * yArray->axis[1];
+      char *yData = (char *)yArray->data;
+      for (int ii = 0; ii < totalval; ii++) {
+	if (isnan(yData[ii])) missval++;
+      }
     
       // get mask to insert link
       // FIXME: there must be a better way
@@ -617,25 +623,28 @@ int DoIt(void)
       if (link_mask)
         drms_setlink_static(yRec, "MASK", xRec->recnum);
             
+      if (verbflag)
+	printf("patch_module: done making links\n");
+
       // Essential prime keys
       drms_copykey(yRec, xRec, "T_REC");
       drms_setkey_int(yRec, "PNUM", p+1); // number from 1
 	
-	  // date and build version
-	  // updated by xudong oct 3 2010
-	  drms_setkey_string(yRec, "BLD_VERS", jsoc_version);
-	  drms_setkey_time(yRec, "DATE", CURRENT_SYSTEM_TIME);
+      // date and build version
+      // updated by xudong oct 3 2010
+      drms_setkey_string(yRec, "BLD_VERS", jsoc_version);
+      drms_setkey_time(yRec, "DATE", CURRENT_SYSTEM_TIME);
 		
       // stats
-	  // updated by xudong jun 29 2010
-	  drms_setkey_int(yRec, "TOTVALS", totalval);
-	  drms_setkey_int(yRec, "DATAVALS", totalval - missval);
-	  drms_setkey_int(yRec, "MISSVALS", missval);
+      // updated by xudong jun 29 2010
+      drms_setkey_int(yRec, "TOTVALS", totalval);
+      drms_setkey_int(yRec, "DATAVALS", totalval - missval);
+      drms_setkey_int(yRec, "MISSVALS", missval);
         
       // Geometry
       drms_setkey_int(  yRec, "HWIDTH1", (pDims[0]-1)/2);
       drms_setkey_int(  yRec, "HWIDTH2", (pDims[1]-1)/2);
-	  drms_setkey_float(yRec,  "CRPIX1", (yHI[p]+yLO[p])/2);
+      drms_setkey_float(yRec,  "CRPIX1", (yHI[p]+yLO[p])/2);
       drms_setkey_float(yRec,  "CRPIX2", (xHI[p]+xLO[p])/2);
       // probably should be set as a link
       drms_setkey_float(yRec,  "CDELT1", (float) cdelt);
@@ -666,16 +675,27 @@ int DoIt(void)
 	}
       } // end for sn
 
+      if (verbflag)
+	printf("patch_module: finished patch-stat keys\n");
+
       // Write the complete patch
       status = drms_segment_write(ySeg, yArray, 0);
       if (status)
 	DIE("problem writing drms segment for patches");
-		drms_free_array(yArray);			// Added by Xudong Apr 13 2011
+
+      // NB: This frees bmps[p] also!
+      drms_free_array(yArray);	// Added by Xudong Apr 13 2011
       drms_close_record(yRec, DRMS_INSERT_RECORD);
     }
 
+    if (verbflag) {
+      printf("patch_module: finished loop over patches, freeing images\n");
+      fflush(stdout);
+    }
+
     // free the bitmaps
-    patch_free_bitmaps(bmps, numPatch); // component bitmaps
+    // This is commented out; the drms_free(yArray) takes care of it
+    // patch_free_bitmaps(bmps, numPatch); // component bitmaps
     free(bmps); // pointer array, calloc'd above
 
     // free the AR mask
@@ -694,13 +714,15 @@ int DoIt(void)
     mxDestroyArray(plhs[MXT_Hpat_ARG_bb]); 
     // region statistics
     mxDestroyArray(plhs[MXT_Hpat_ARG_stats]); 
+    // (last output arg, ARG_crit, was not requested, so no need to free)
 
     // free inArray (with its data segment)
     if (verbflag) {
       printf("patch_module: within-loop drms_free\n");
-      drms_free_array(xArray); 
-	  drms_free_array(magArray);		// Added by Xudong Apr 13 2011
+      fflush(stdout);
     }
+    drms_free_array(xArray); 
+    drms_free_array(magArray);		// Added by Xudong Apr 13 2011
 
     // TODO: copy over more keywords?
     // e.g., total number of patches?
@@ -715,7 +737,7 @@ int DoIt(void)
     }
     printf("record %d done\n", ds+1); fflush(stdout);
   } 
-  printf("segment_module: close record (input)\n");
+  printf("segment_module: close record (input)\n");fflush(stdout);
   drms_close_records(xRD, DRMS_FREE_RECORD);
   //drms_close_records(yRD, DRMS_INSERT_RECORD);
 
