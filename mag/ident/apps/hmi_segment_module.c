@@ -1,12 +1,12 @@
 /*
  * Module name: hmi_segment_module.c
- * This jsoc module is in development to generate masks from LOS B and intensity
+ * This jsoc module generates masks from LOS B and intensity
  *
- * Current (10/2010) usage:
+ * Current (04/2011) usage:
  * hmi_segment_module 
- *      xm='hmi_test.M_720s[2010.07.03_12:48:00_TAI/1h]' 
- *      xp='hmi_test.Ic_720s[2010.07.03_12:48:00_TAI/1h]' 
- *      alpha='0,-4' beta=0.4 y=su_turmon.armask2
+ *      xm='hmi.M_720s[2010.07.03_12:48:00_TAI/1h]' 
+ *      xp='hmi.Ic_720s[2010.07.03_12:48:00_TAI/1h]' 
+ *      alpha='0,-4' beta=0.4 y=hmi.Marmask_720s
  *
  *
  * Old (6/2010) usage:
@@ -16,8 +16,10 @@
  *   beta=0.4 alpha="[0,-4]" T="[1,1,0.9,0]" y=su_turmon.armask2
  *
  *
+ * Michael Turmon, JPL
  *  adapted from code by Yang Liu (10/2009)
  *  updated with additions by Xudong Sun (3/2010)
+ *  updated 4/2011
  *
  */
 
@@ -278,7 +280,7 @@ int DoIt(void)
 	
   // loop over a series of (mgram,pgram) pairs
   for (ds = 0; ds < Nds; ds++) {
-    printf("begin record %d of %d\n", ds+1, Nds);
+    printf("begin record %d of %d\n", ds+1, Nds);fflush(stdout);
     // mark the time
     wt1 = getwalltime();
     ct1 = getcputime(&ut1, &st1);
@@ -286,8 +288,8 @@ int DoIt(void)
     xmRec = xmRD->records[ds];
     xpRec = xpRD->records[ds];
 	  
-	// NOTES: Disabled on Oct 27 by Xudong Sun
-	// Creating records one per time, moved to below
+    // NOTES: Disabled on Oct 27 by Xudong Sun
+    // Creating records one per time, moved to below
     // yRec  =  yRD->records[ds];
 
     t_rec = drms_getkey_time(xmRec, "T_REC", &status);
@@ -298,6 +300,7 @@ int DoIt(void)
     // summary
     sprint_time(time_buf, t_rec, "TAI", 0);
     printf("\tprocessing images taken at %s\n", time_buf);
+    fflush(stdout);
 
     // Ephemeris courtesy of Phil's macros above
     // No error checking for now
@@ -366,13 +369,13 @@ int DoIt(void)
       continue;
     }
 
-	// Moved here by X. Sun Oct 27
-	// Input segments exist!
-	yRec = drms_create_record(drms_env, (char *) yRecQuery, DRMS_PERMANENT, &status);
-	if (status) {
-	  WARN("Output recordset for labelings could not be created");
-	  continue;
-	}
+    // Moved here by X. Sun Oct 27
+    // Input segments exist!
+    yRec = drms_create_record(drms_env, (char *) yRecQuery, DRMS_PERMANENT, &status);
+    if (status) {
+      WARN("Output recordset for labelings could not be created");
+      continue;
+    }
 	
     // set up varying arguments to function: xm, xp, ctr
     if ((prhs[MXT_Hseg_ARG_xm] = mxCreateDoubleMatrix(M, N, mxREAL)) == NULL)
@@ -399,7 +402,7 @@ int DoIt(void)
 	     M/2, N/2, ((double *) xpArray->data)[M*N/2+M/2]);
 
     // call the function
-    printf("segment_module: hmi_segment calling mexfunction.\n");
+    printf("segment_module: hmi_segment calling mexfunction.\n");fflush(stdout);
     msg = main_hmi_segment(nlhs, plhs, nrhs, prhs);
     if (msg == NULL) {
       printf("segment_module: hmi_segment returned OK from mexfunction.\n");
@@ -418,6 +421,7 @@ int DoIt(void)
     printf("segment_module: array_create\n");
     printf("segment_module: y[%d,%d] = %g\n", 
 	   M/2, N/2, mxGetPr(plhs[MXT_Hseg_ARG_y])[M*N/2+M/2]);
+    fflush(stdout);
 
     // convert the double mxArray to a char drms_array
     // (this is an independent copy of the output array)
@@ -428,15 +432,15 @@ int DoIt(void)
     // Link array to segment
     yArray->parent_segment = ySeg;
 	  
-	// some stats
-	// updated by xudong oct 13 2010
-	int missval = 0, totalval = yArray->axis[0] * yArray->axis[1];
-	char *yData = (char *)yArray->data;
-	for (int ii = 0; ii < totalval; ii++) {
+    // some stats
+    // updated by xudong oct 13 2010
+    int missval = 0, totalval = yArray->axis[0] * yArray->axis[1];
+    char *yData = (char *)yArray->data;
+    for (int ii = 0; ii < totalval; ii++) {
       if (isnan(yData[ii])) missval++;
-	}
+    }
 
-    printf("segment_module: segment_write\n");
+    printf("segment_module: segment_write\n");fflush(stdout);
     status = drms_segment_write(ySeg, yArray, 0);
     if (status)
       DIE("problem writing drms segment for labeling");
@@ -446,13 +450,13 @@ int DoIt(void)
     mxSetPr(prhs[MXT_Hseg_ARG_xm], (double *) xm_tmp);
     mxSetPr(prhs[MXT_Hseg_ARG_xp], (double *) xp_tmp);
     // now free them
-    printf("segment_module: destroy array: xm, xp, y\n");
+    printf("segment_module: destroy array: xm, xp, y\n");fflush(stdout);
     mxDestroyArray(prhs[MXT_Hseg_ARG_xm]);
     mxDestroyArray(prhs[MXT_Hseg_ARG_xp]);
     mxDestroyArray(plhs[MXT_Hseg_ARG_y ]);
 
     // free input DRMS arrays
-    printf("segment_module: within-loop frees\n");
+    printf("segment_module: within-loop frees\n");fflush(stdout);
     drms_free_array(xmArray); 
     drms_free_array(xpArray);
     drms_free_array(yArray);		// added by Xudong Apr 13 2011
@@ -466,22 +470,22 @@ int DoIt(void)
     // Essential prime key: T_REC
     drms_copykey(yRec, xmRec, "T_REC");
 	  
-	// date and build version
-	// updated by xudong oct 13 2010
-	drms_setkey_string(yRec, "BLD_VERS", jsoc_version);
-	drms_setkey_time(yRec, "DATE", CURRENT_SYSTEM_TIME);
+    // date and build version
+    // updated by xudong oct 13 2010
+    drms_setkey_string(yRec, "BLD_VERS", jsoc_version);
+    drms_setkey_time(yRec, "DATE", CURRENT_SYSTEM_TIME);
 	  
-	// stats
-	// updated by xudong oct 13 2010
-	drms_setkey_int(yRec, "TOTVALS", totalval);
-	drms_setkey_int(yRec, "DATAVALS", totalval - missval);
-	drms_setkey_int(yRec, "MISSVALS", missval);
+    // stats
+    // updated by xudong oct 13 2010
+    drms_setkey_int(yRec, "TOTVALS", totalval);
+    drms_setkey_int(yRec, "DATAVALS", totalval - missval);
+    drms_setkey_int(yRec, "MISSVALS", missval);
 
     // lets me see when the record was actually updated
     time(&now);
     drms_setkey_string(yRec, "RUNTIME1", asctime(localtime(&now)));
 	  
-	// Oct 27
+    // Oct 27
     drms_close_record(yRec, DRMS_INSERT_RECORD);
 
     // Timing info
