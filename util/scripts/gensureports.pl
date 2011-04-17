@@ -4,8 +4,7 @@ use constant kWdPath => "/web/jsoc2/htdocs/sureports";
 use constant kTmpFile => "tmp.txt";
 use constant kDataSec => "__DATA__";
 use constant kEndSec => "__END__";
-#use constant kScrPath => "/home/jsoc/cvs/Development/JSOC/proj/util/scripts";
-use constant kScrPath => "/home/arta/cvs/JSOC/proj/util/scripts";
+use constant kScrPath => "/home/jsoc/cvs/Development/JSOC/proj/util/scripts";
 
 my($res);
 my($cmd);
