@@ -5,7 +5,7 @@ use DBD::Pg;
 use Time::localtime;
 use Switch;
 
-use constant kDEBUG => 0;
+use constant kDEBUG => 1;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
@@ -192,7 +192,7 @@ if (defined($dbh))
 
          if (kDEBUG)
          {
-            $group = 6;
+            $group = 1;
          }
 
          # Delete now
@@ -472,22 +472,33 @@ sub PrintRow
    my($delim) = $_[0];
    my($firstarg) = $_[1];
    my($secondarg) = $_[2];
-   my($hbytes) = $_[3]; # reference
-   my($dformat) = $_[4]; # reference to delimted string format
-   my($fformat) = $_[5]; # reference to fixed-width string format
+   my($metric) = $_[3];
+   my($hbytes) = $_[4]; # reference
+   my($dformat) = $_[5]; # reference to delimted string format
+   my($fformat) = $_[6]; # reference to fixed-width string format
 
    my($line);
    my($actualformat);
 
    $actualformat = defined($delim) ? $dformat : $fformat;
-     
-   $line = sprintf($$actualformat, 
-                   $firstarg,
-                   $secondarg,
-                   defined($hbytes->{+kMetricDPS}) ? $hbytes->{+kMetricDPS} / kGig : 0, 
-                   defined($hbytes->{+kMetricDPM}) ? $hbytes->{+kMetricDPM} / kGig : 0,
-                   defined($hbytes->{+kMetricDPL}) ? $hbytes->{+kMetricDPL} / kGig : 0,
-                   defined($hbytes->{+kMetricAP}) ? $hbytes->{+kMetricAP} / kGig : 0);
+
+   if ($metric eq kMetricAll)
+   {
+      $line = sprintf($$actualformat, 
+                      $firstarg,
+                      $secondarg,
+                      defined($hbytes->{+kMetricDPS}) ? $hbytes->{+kMetricDPS} / kGig : 0, 
+                      defined($hbytes->{+kMetricDPM}) ? $hbytes->{+kMetricDPM} / kGig : 0,
+                      defined($hbytes->{+kMetricDPL}) ? $hbytes->{+kMetricDPL} / kGig : 0,
+                      defined($hbytes->{+kMetricAP}) ? $hbytes->{+kMetricAP} / kGig : 0);
+   }
+   else
+   {
+      $line = sprintf($$actualformat, 
+                      $firstarg,
+                      $secondarg,
+                      defined($hbytes->{$metric}) ? $hbytes->{$metric} / kGig : 0);
+   }
 
    print "$line\n";
 }
@@ -555,11 +566,25 @@ sub SortAndPrintResults
                # type - agg; order - series
                if (defined($delim))
                {
-                  $line = sprintf("series${delim}group${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
+                  if ($metric eq kMetricAll)
+                  {
+                     $line = sprintf("series${delim}group${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
+                  }
+                  else
+                  {
+                     $line = sprintf("series${delim}group${delim}$metricheaders{$metric}");
+                  }
                }
                else
                {
-                  $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+                  if ($metric eq kMetricAll)
+                  {
+                     $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+                  }
+                  else
+                  {
+                     $line = sprintf("%-48s%-8s%-24s", "series", "group", $metricheaders{$metric});
+                  }
                }
 
                print "$line\n";
@@ -579,19 +604,36 @@ sub SortAndPrintResults
                if ($ok)
                {
                   %hbytes = ();
-                  if (defined($delim))
+                  
+                  if ($metric eq kMetricAll)
                   {
-                     $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
+                     if (defined($delim))
+                     {
+                        $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
+                     } 
+                     else
+                     {
+                        $fformat = "%-48s%-8d%-24f%-24f%-24f%-24f";
+                     }
+                  } 
+                  else
+                  {
+                     if (defined($delim))
+                     {
+                        $dformat = "%s${delim}%s${delim}%f";
+                     } 
+                     else
+                     {
+                        $fformat = "%-48s%-8d%-24f";
+                     }
                   }
-
-                  $fformat = "%-48s%-8d%-24f%-24f%-24f%-24f";
 
                   foreach $row (@$rrows)
                   {
                      if ((length($series) > 0 && $series ne $row->[0]) ||
                          (length($group) > 0 && $group ne $row->[1]))
                      {
-                        PrintRow($delim, $series, $group, \%hbytes, \$dformat, \$fformat);
+                        PrintRow($delim, $series, $group, $metric, \%hbytes, \$dformat, \$fformat);
                         %hbytes = ();
                      }
 
@@ -601,7 +643,7 @@ sub SortAndPrintResults
                   }
 
                   # Must print last row since only the previous row is printed in the loop above
-                  PrintRow($delim, $series, $group, \%hbytes, \$dformat, \$fformat);
+                  PrintRow($delim, $series, $group, $metric, \%hbytes, \$dformat, \$fformat);
                }
             }
             case kTypeOrderGroup
@@ -633,18 +675,36 @@ sub SortAndPrintResults
                if ($ok)
                {
                   %hbytes = ();
-                  if (defined($delim))
+                  
+                  if ($metric eq kMetricAll)
                   {
-                     $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
+                     if (defined($delim))
+                     {
+                        $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
+                     }
+                     else
+                     {
+                        $fformat = "%-8d%-48s%-24f%-24f%-24f%-24f";
+                     }
                   }
-                  $fformat = "%-8d%-48s%-24f%-24f%-24f%-24f";
+                  else
+                  {
+                     if (defined($delim))
+                     {
+                        $dformat = "%s${delim}%s${delim}%f";
+                     }
+                     else
+                     {
+                        $fformat = "%-8d%-48s%-24f";
+                     }
+                  }
 
                   foreach $row (@$rrows)
                   {
                      if ((length($group) > 0 && $group ne $row->[0]) ||
                          (length($series) > 0 && $series ne $row->[1]))
                      {
-                        PrintRow($delim, $group, $series, \%hbytes, \$dformat, \$fformat);
+                        PrintRow($delim, $group, $series, $metric, \%hbytes, \$dformat, \$fformat);
                         %hbytes = ();
                      }
 
@@ -654,7 +714,7 @@ sub SortAndPrintResults
                   }
 
                   # Must print last row since only the previous row is printed in the loop above
-                  PrintRow($delim, $group, $series, \%hbytes, \$dformat, \$fformat);
+                  PrintRow($delim, $group, $series, $metric, \%hbytes, \$dformat, \$fformat);
                }
             }
             else
