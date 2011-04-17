@@ -1,8 +1,11 @@
 #!/home/jsoc/bin/linux_x86_64/perl5.12.2 -w
 
-use constant kTmpFile => "/web/jsoc2/htdocs/sureports/tmp.txt";
+use constant kWdPath => "/web/jsoc2/htdocs/sureports";
+use constant kTmpFile => "tmp.txt";
 use constant kDataSec => "__DATA__";
 use constant kEndSec => "__END__";
+#use constant kScrPath => "/home/jsoc/cvs/Development/JSOC/proj/util/scripts";
+use constant kScrPath => "/home/arta/cvs/JSOC/proj/util/scripts";
 
 my($res);
 my($cmd);
@@ -11,20 +14,50 @@ my($datasec);
 
 
 # All Data
-$cmd = "/home/jsoc/cvs/Development/JSOC/proj/util/scripts/sumstapestat.pl jsoc_sums hmidb 5434 production agg group all > " . kTmpFile;
+$cmd = kScrPath . "/sumstapestat.pl jsoc_sums hmidb 5434 production agg group all > " . kWdPath . "/" . kTmpFile;
+`$cmd`;
 
-if (open(REPFILE, "<" . kTmpFile))
+if (open(TMPFILE, "<" . kWdPath . "/" . kTmpFile) && open(REPFILE, ">" . kWdPath . "/sureportA.txt"))
 {
+   FilterData(\*TMPFILE, \*REPFILE);
+
+   close(TMPFILE);
+   close(REPFILE);
+}
+
+# AP Data
+$cmd = kScrPath . "/sumstapestat.pl jsoc_sums hmidb 5434 production agg group ap > " . kWdPath . "/" . kTmpFile;
+`$cmd`;
+
+if (open(TMPFILE, "<" . kWdPath . "/" . kTmpFile) && open(REPFILE, ">" . kWdPath . "/sureportB.txt"))
+{
+   FilterData(\*TMPFILE, \*REPFILE);
+
+   close(TMPFILE);
+   close(REPFILE);
+}
+
+exit(0);
+
+# subroutines
+sub FilterData
+{
+   my($tmpfile) = $_[0];
+   my($repfile) = $_[1];
+   my($datas) = kDataSec;
+   my($ends) = kEndSec;
+ 
    $datasec = 0;
-   while (defined($line = <REPFILE>))
+   while (defined($line = <$tmpfile>))
    {
       chomp($line);
 
-      if ($line =~ /kDataSec/)
+      if ($line =~ /$datas/)
       {
          $datasec = 1;
+         next;
       }
-      elsif ($line =~ /kEndSec/)
+      elsif ($line =~ /$ends/)
       {
          $datasec = 0;
          last;
@@ -32,11 +65,7 @@ if (open(REPFILE, "<" . kTmpFile))
 
       if ($datasec)
       {
-         print "$line\n";
+         print $repfile "$line\n";
       }
-   }
+   }     
 }
-
-
-# AP Data
-# `/home/jsoc/cvs/Development/JSOC/proj/util/scripts/sumstapestat.pl jsoc_sums hmidb 5434 production agg group ap > /web/jsoc2/htdocs/sureports/tmp.txt`;
