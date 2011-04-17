@@ -22,6 +22,7 @@ my($dbname);    # name of the db instance to connect to
 my($dbhost);    # name of the db host on which the db instance resides
 my($dbport);    # port on $dbhost through which connections are made
 my($dbuser);    # database user name (to connect with)
+my($dsn);
 my($dbh);       # database handle
 
 my($stmnt);

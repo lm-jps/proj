@@ -551,6 +551,8 @@ sub SortAndPrintResults
    %containers = (kMetricDPS, $delnow, kMetricDPM, $delwi100d, kMetricDPL, $dellater, kMetricAP, $archivepend);
    @contkeys = keys(%containers);
 
+   print "__DATA__\n";
+
    switch ($typequery)
    {
       case kTypeQueryAgg
@@ -651,11 +653,25 @@ sub SortAndPrintResults
                # type - agg; order - group
                if (defined($delim))
                {
-                  $line = sprintf("group${delim}series${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
+                  if ($metric eq kMetricAll)
+                  {
+                     $line = sprintf("group${delim}series${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
+                  }
+                  else
+                  {
+                     $line = sprintf("group${delim}series${delim}$metricheaders{$metric}");
+                  }
                }
                else
                {
-                  $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+                  if ($metric eq kMetricAll)
+                  {
+                     $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+                  }
+                  else
+                  {
+                     $line = sprintf("%-8s%-48s%-24s", "group", "series", $metricheaders{$metric});
+                  }
                }
 
                print "$line\n";
@@ -871,6 +887,8 @@ sub SortAndPrintResults
          print "Invalid query type $typequery.\n";
       }
    } # switch query type
+
+   print "__END__\n";
    
    # TODO - print out totals by group
 }
