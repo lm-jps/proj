@@ -94,7 +94,7 @@ endif
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng  -L$(FFTW_$(d)) -lfftw3 
+$(SUMEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq -lpng  -L$(FFTW_$(d)) -lfftw3 
 
 
 ifeq ($(COMPILER), icc)
@@ -105,7 +105,7 @@ endif
 
 #$(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng -L/SGE/lib/lx24-amd64/ -ldrmaa -Wl,-rpath,/SGE/lib/lx24-amd64
 
-$(PEEXE_$(d)):		LL_TGT := -lecpg -lpq 
+$(PEEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq 
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include
 
 #$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/cvs/JSOC/proj/libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include
