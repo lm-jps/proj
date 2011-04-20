@@ -5,14 +5,18 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, )
+
+# Common utilities
+EXTRADEPS_$(d)		:= $(addprefix $(d)/, pfss_pkg.o fieldline_pkg.o wsa_pkg.o hccsss_pkg.o)
+
+MODEXE_$(d)	:= $(addprefix $(d)/, jpolfil)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
 MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 
 # Modules with external libraries
-MODEXE_USEF_$(d)	:= $(addprefix $(d)/, )
+MODEXE_USEF_$(d)	:= $(addprefix $(d)/, jsynop2gh)
 MODEXE_USEF		:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 MODEXE_USEF_SOCK_$(d)	:= $(MODEXE_USEF_$(d):%=%_sock)
@@ -26,7 +30,8 @@ CLEAN		:= $(CLEAN) \
 		   $(EXE_$(d)) \
 		   $(MODEXE_SOCK_$(d))\
 		   $(MODEXE_USEF_SOCK_$(d)) \
-		   $(DEP_$(d))
+		   $(DEP_$(d)) \
+		   $(EXTRADEPS_$(d))
 
 TGT_BIN	        := $(TGT_BIN) $(EXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_SOCK_$(d))
 
@@ -34,8 +39,12 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include
+$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include -I/home/jsoc/include
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
+
+$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include -I/home/jsoc/include
+$(MODEXE_$(d)):			$(EXTRADEPS_$(d))
+$(MODEXE_USEF_$(d)):    $(EXTRADEPS_$(d))
 
 MKL     := -lmkl
 
