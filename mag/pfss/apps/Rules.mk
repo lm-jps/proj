@@ -19,8 +19,8 @@ MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 MODEXE_USEF_$(d)	:= $(addprefix $(d)/, jsynop2gh)
 MODEXE_USEF		:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
-MODEXE_USEF_SOCK_$(d)	:= $(MODEXE_USEF_$(d):%=%_sock)
-MODEXE_USEF_SOCK	:= $(MODEXE_USEF_SOCK) $(MODEXE_USEF_SOCK_$(d))
+#MODEXE_USEF_SOCK_$(d)	:= $(MODEXE_USEF_$(d):%=%_sock)
+#MODEXE_USEF_SOCK	:= $(MODEXE_USEF_SOCK) $(MODEXE_USEF_SOCK_$(d))
 
 EXE_$(d)	:= $(MODEXE_$(d)) $(MODEXE_USEF_$(d))
 OBJ_$(d)	:= $(EXE_$(d):%=%.o) 
@@ -29,11 +29,10 @@ CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
 		   $(EXE_$(d)) \
 		   $(MODEXE_SOCK_$(d))\
-		   $(MODEXE_USEF_SOCK_$(d)) \
 		   $(DEP_$(d)) \
 		   $(EXTRADEPS_$(d))
 
-TGT_BIN	        := $(TGT_BIN) $(EXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_SOCK_$(d))
+TGT_BIN	        := $(TGT_BIN) $(EXE_$(d)) $(MODEXE_SOCK_$(d)) #$(MODEXE_USEF_SOCK_$(d))
 
 S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
