@@ -263,17 +263,21 @@ int DoIt(void)
 
         /* This is the working part. Two modes for choice. */
         if (fft) {
-        
+
             if (verbflag) SHOW("starting FFT method... ");
+
+            printf("%d, %d\n", nt, lmax1);
+
             /* FFT, in 3 steps, see glbhs4gh.c */
             /* Step 1: Adapted from jhelio2mlat.c */
             map_mlat = (float *)(malloc(nt * 2 * lmax1 * sizeof(float)));
+SHOW("0");
             helio2mlat(inData, map_mlat, np, nt, lmax, map_lmax);
-
+SHOW("1");
             /* Step 2: Adapted from jqdotprod.c */
             ylm = (float *)(malloc(lmax1 * lmax2 * sizeof(float)));
             qdotprod(map_mlat, ylm, nt, 0, lmax, sinBdelta);
-
+SHOW("2");
             /* Step 3: Re-normalization for mag convention */
             ylm2gh(ylm, g, h, lmax);
             free(map_mlat); free(ylm);
@@ -332,6 +336,8 @@ int DoIt(void)
         /* Set keywords */
         drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
         drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
+        drms_copykey(outRec, inRec, "T_REC");
+        drms_copykey(outRec, inRec, "T_OBS");
         car_rot = drms_getkey_int(inRec, "CAR_ROT", NULL);
         lon_frst = drms_getkey_float(inRec, "LON_FRST", NULL);
         lon0 = car_rot * 360. - (lon_frst + 360.);	// This is for now
