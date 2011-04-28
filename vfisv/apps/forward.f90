@@ -11,12 +11,18 @@ MODULE FORWARD
   ! as a matrix of [NUMW, NBINS] elements. We've exchanged the 
   ! indices with respect to the C-wrapper definition because C and Fortran
   ! read the elements in different order.
+  ! By RCE, Feb 2011: Implemented changes in the derivatives that J.M Borrero
+  ! suggested after changing the voigt.f function by a factor of 2. It affects
+  ! the derivatives of PHI and PSI with respect to the Damping and FREC(B,R,P)
+  !
+  ! By RCE, April 2011: Adding the integral of the filter profiles times the continuum
+  ! (S0+S1) to Stokes I, for the outer wavelength range where the forward modeling is not done.
 
 CONTAINS
   !!
   !! SUBROUTINE SYNTHESIS
   !!
-  SUBROUTINE SYNTHESIS(MODEL,SCAT,DERIVATIVE,SYN,DSYN, FILTERS)
+  SUBROUTINE SYNTHESIS(MODEL,SCAT,DERIVATIVE,SYN,DSYN, FILTERS, INTEG_FILTERS)
     USE FILT_PARAM
     USE LINE_PARAM
     USE CONS_PARAM
@@ -24,6 +30,7 @@ CONTAINS
     REAL(DP), INTENT(IN),  DIMENSION(10)          :: MODEL
     REAL(DP), INTENT(IN),  DIMENSION(NBINS,4)     :: SCAT
     REAL(DP), INTENT(IN),  DIMENSION(NUMW, NBINS)  :: FILTERS
+    REAL(DP), INTENT(IN),  DIMENSION(NBINS)       :: INTEG_FILTERS
     LOGICAL,  INTENT(IN)                          :: DERIVATIVE
     REAL(DP), INTENT(OUT),  DIMENSION(NBINS,4)    :: SYN
     REAL(DP), INTENT(OUT),  DIMENSION(10,NBINS,4) :: DSYN
@@ -96,6 +103,15 @@ CONTAINS
           SYN_MAG(J,K)=SUM(FILTERS(:,J)*STOKES_MAG(:,K))     
        ENDDO
     ENDDO
+
+    ! By RCE, April 2011: Adding integral of filters outside wavelength range for Stokes I
+    ! We're assuming that this outer wavelength range corresponds to continuum, hence we 
+    ! multiply the integral of the filters by the continuum for Stokes I and assume it is 0
+    ! for Stokes Q, U, and V
+    DO J =1, NBINS
+      SYN_MAG(J, 1) = SYN_MAG(J,1)+INTEG_FILTERS(J)*(S0+S1)
+    ENDDO
+
     !---------------------------------------------------------
     ! Total Stokes vector including the non-magnetic component
     !---------------------------------------------------------
@@ -217,6 +233,16 @@ CONTAINS
              ENDDO
           ENDDO
        ENDDO
+
+       ! By RCE: The derivatives of the filtered Stokes parameters with respect to S0 and S1 have to include the 
+       ! derivative of the hack for the wavelength coverage. We basically added (S0+S1)*C to the filtered Stokes I,
+       ! where C is the integral of the filters in the outer range of the wavelength vector. So I have to add C
+       ! to the derivative of Stokes I with respect to S0 and S1.
+       DO J = 1, NBINS
+          DSYN(8,J,1) = DSYN(8,J,1) + INTEG_FILTERS(J)
+ 	  DSYN(9,J,1) = DSYN(9,J,1) + INTEG_FILTERS(J)
+       ENDDO
+ 
        DSYN(1:9,:,:)=ALPHAM*DSYN_MAG
        DSYN(10,:,:)=SYN_MAG-SCAT
     ENDIF
@@ -387,20 +413,22 @@ CONTAINS
        
        ! Derivatives of absortion-dispersion profiles
        ! Sigma-Red component
-       DerPHIR_DerDAM = -2D0/DSQRT(DPI)+2D0*(DAM*PHIR+2D0*FRECR*PSIR)
-       DerPHIR_DerFRECR = 4D0*DAM*PSIR-2D0*FRECR*PHIR
-       DerPSIR_DerDAM = 0.5D0*DerPHIR_DerFRECR
-       DerPSIR_DerFRECR = -0.5D0*DerPHIR_DerDAM
+       DerPHIR_DerDAM = -2D0/DSQRT(DPI)+2D0*(DAM*PHIR+FRECR*PSIR)
+       DerPHIR_DerFRECR = 2D0*DAM*PSIR-2D0*FRECR*PHIR
+       DerPSIR_DerDAM = DerPHIR_DerFRECR
+       DerPSIR_DerFRECR = -DerPHIR_DerDAM
        ! Sigma-Blue component
-       DerPHIB_DerDAM = -2D0/DSQRT(DPI)+2D0*(DAM*PHIB+2D0*FRECB*PSIB)
-       DerPHIB_DerFRECB = 4D0*DAM*PSIB-2D0*FRECB*PHIB
-       DerPSIB_DerDAM = 0.5D0*DerPHIB_DerFRECB
-       DerPSIB_DerFRECB = -0.5D0*DerPHIB_DerDAM
+       DerPHIB_DerDAM = -2D0/DSQRT(DPI)+2D0*(DAM*PHIB+FRECB*PSIB)
+       DerPHIB_DerFRECB = 2D0*DAM*PSIB-2D0*FRECB*PHIB
+       DerPSIB_DerDAM = DerPHIB_DerFRECB
+       DerPSIB_DerFRECB = -DerPHIB_DerDAM
        ! Simga-Pi component
-       DerPHIP_DerDAM = -2D0/DSQRT(DPI)+2D0*(DAM*PHIP+2D0*FRECP*PSIP)
-       DerPHIP_DerFRECP = 4D0*DAM*PSIP-2D0*FRECP*PHIP
-       DerPSIP_DerDAM = 0.5D0*DerPHIP_DerFRECP
-       DerPSIP_DerFRECP = -0.5D0*DerPHIP_DerDAM
+       DerPHIP_DerDAM = -2D0/DSQRT(DPI)+2D0*(DAM*PHIP+FRECP*PSIP)
+       DerPHIP_DerFRECP = 2D0*DAM*PSIP-2D0*FRECP*PHIP
+       DerPSIP_DerDAM = DerPHIP_DerFRECP
+       DerPSIP_DerFRECP = -DerPHIP_DerDAM 
+
+
        ! Derivatives of the frecuency with respect to
        ! the field strength, LOS velocity, Doppler width.
        DerFRECR_DerVLOS = -1D3*LANDA0/(LIGHT*DLDOP)

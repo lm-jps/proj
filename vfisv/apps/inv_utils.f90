@@ -8,6 +8,8 @@ MODULE INV_UTILS
   ! By RCE (June 8, 2010): in  SUBROUTINE SVDSOL(DMODEL, CONV_FLAG) added conv_flag to flag the convergence of the SVD solving routine. If SVD doesn't converge, then CONV_FLAG takes value 0. Changes propagate into SVDCMP.f90. 
   ! This flag is an indication for INVERT to set the results of the inversions to NaN for a particular pixel.
   !
+  ! By RCE, April 2011: Small fixes in GET_LAMBDA routine: Changed increment/decrement sizes, limitted lower value of lambda and fixed a bug.
+  !
 CONTAINS
   !---------------------------------------------------
   PURE SUBROUTINE GET_TOTPOL(OBS,TOTPOL)
@@ -39,18 +41,24 @@ CONTAINS
     !
   END SUBROUTINE SORT_OBS
   !----------------------------------------------------
-  PURE SUBROUTINE GET_WEIGHT (OBS,WEIGHTS)
+  SUBROUTINE GET_WEIGHT (OBS,WEIGHTS)
     !
     USE LINE_PARAM
     USE CONS_PARAM
     USE FILT_PARAM
     IMPLICIT NONE
     REAL(DP), INTENT(IN),  DIMENSION(NBINS,4) :: OBS
-    REAL(DP), INTENT(OUT), DIMENSION(4)       :: WEIGHTS
+    REAL(DP), DIMENSION(4)       :: WEIGHTS
     !
-    WEIGHTS(:) = 1D0/7D0/NOISE
-    WEIGHTS(2:3) = 7D0* WEIGHTS(2:3)
-    WEIGHTS(4) = 3D0 * WEIGHTS(4)
+!    WEIGHTS(:) = 1D0/7D0/NOISE
+!    WEIGHTS(2:3) = 7D0* WEIGHTS(2:3)
+!    WEIGHTS(4) = 3D0 * WEIGHTS(4)
+
+     ! By RCE, Feb 2011: Now the weights are passed by the wrapper to the code. We normalize them to the maximum 
+     WEIGHTS(:) = WEIGHTS(:)/MAXVAL(WEIGHTS(:))
+     ! By RCE: and we divide them by the noise
+     WEIGHTS(:) = WEIGHTS(:)/NOISE
+
     !-----------------------------------------------------------
     ! JM Borrero: Apr 15, 2010
     ! WEIGHTS(1)=(0.8D0*ABS(1.01D0-MAXVAL(OBS(:,1)))+0.2D0)/NOISE
@@ -72,7 +80,7 @@ CONTAINS
     C2=0D0
 
     DO I=1,4    
-    C2=C2+(1D0/NUMFREE_DEG)*(WEIGHTS(I)**2D0)*SUM(((OBS(:,I)-SYN(:,I)))**2D0)/SUM(WEIGHTS)
+    C2=C2+(1D0/NUMFREE_DEG)*(WEIGHTS(I)**2D0)*SUM(((OBS(:,I)-SYN(:,I)))**2D0) !/SUM(WEIGHTS)
     ENDDO
 
 
@@ -123,17 +131,21 @@ CONTAINS
     IF (IMPROVE.EQ..TRUE.) THEN
        ! We start from smallest lambda because we are going to reduce it
        ! and therefore it will not go through 2 ifs.
-       IF (LAMBDA_OLD.LE.1E-4) LAMBDA_NEW=LAMBDA_OLD/2D0       
-       IF (LAMBDA_OLD.LT.1E4.AND.LAMBDA_OLD.GT.1E-4) LAMBDA_NEW=LAMBDA_OLD/10D0
-       IF (LAMBDA_OLD.GE.1E4) LAMBDA_NEW=LAMBDA_OLD/100D0
+       ! By RCE march 2011: If lambda gets too small, then we shouldn't decrease it
+       ! IF (LAMBDA_OLD.LE.1E-4) LAMBDA_NEW=LAMBDA_OLD/2D0
+       IF (LAMBDA_OLD.LE.1E-4) LAMBDA_NEW=LAMBDA_OLD
+       IF (LAMBDA_OLD.LT.1E4.AND.LAMBDA_OLD.GT.1E-4) LAMBDA_NEW=LAMBDA_OLD/5D0
+       IF (LAMBDA_OLD.GE.1E4) LAMBDA_NEW=LAMBDA_OLD/10D0
     ENDIF
     !
     IF (IMPROVE.EQ..FALSE.) THEN
        ! We start from largest lambda because we are going to reduce it
        ! and therefore it will not go through 2 ifs.
-       IF (LAMBDA_OLD.GE.1E4) LAMBDA_NEW=2D0*LAMBDA_OLD       
-       IF (LAMBDA_OLD.LT.1E4.AND.LAMBDA_OLD.GT.1E-4) LAMBDA_NEW=10D0*LAMBDA_OLD
-       IF (LAMBDA_OLD.GE.1E-4) LAMBDA_NEW=100D0*LAMBDA_OLD
+       IF (LAMBDA_OLD.GE.1E4) LAMBDA_NEW=LAMBDA_OLD       
+       IF (LAMBDA_OLD.LT.1E4.AND.LAMBDA_OLD.GT.1E-4) LAMBDA_NEW=5D0*LAMBDA_OLD
+! By RCE: Bug in next line. It used to say .GE. rather than .LE.
+       !IF (LAMBDA_OLD.GE.1E-4) LAMBDA_NEW=100D0*LAMBDA_OLD
+       IF (LAMBDA_OLD.LE.1E-4) LAMBDA_NEW=10D0*LAMBDA_OLD
     ENDIF
   END SUBROUTINE GET_LAMBDA
   !--------------------------------------------------------
@@ -152,7 +164,7 @@ CONTAINS
     DIVC(:)=0D0
     DO I=1,NUMFREE_PARAM
        DO J=1,4
-          DIVC(I)=DIVC(I)-(2D0/NUMFREE_DEG)*(WEIGHTS(J)**2D0)*SUM((OBS(:,J)-SYN(:,J))*DSYN(FREELOC(I),:,J))
+          DIVC(I)=DIVC(I)+(2D0/NUMFREE_DEG)*(WEIGHTS(J)**2D0)*SUM((OBS(:,J)-SYN(:,J))*DSYN(FREELOC(I),:,J))
        ENDDO
     ENDDO
   END SUBROUTINE GET_DIVC
@@ -171,10 +183,17 @@ CONTAINS
     ! Modified to include and normal distribution
     ! instead of uniform distribution
     !--------------------------------------------
+    !CALL RANDOM_SEED()
+
     DO I=1,10
        RAN(I)=NORMAL(0D0,1D0)
        IF (FREE(I).EQ..TRUE.) MODELR(I)=MODELR(I)+RAN(I)*JUMP*MODELR(I)/100D0
     ENDDO
+	
+    ! By RCE, March 2011: Random jumps for the angles should be distributed evenly between 0 and 180.
+    MODELR(2) = 90D0 + 180D0*NORMAL(0D0,1D0)
+    MODELR(3) = 90D0 + 180D0*NORMAL(0D0,1D0)
+
     ! Checking that perturbation did not go too far
     CALL FINE_TUNE_MODEL(MODELR,ICONT)
   END SUBROUTINE RANDOM_MODEL_JUMP
@@ -232,8 +251,8 @@ CONTAINS
     ! Too large magnetic field
     IF (MODEL(6).GT.5000D0) MODEL(6)=5000D0
     ! Too large velocities
-    IF (MODEL(7).GT.5E5) MODEL(7)=7E5
-    IF (MODEL(7).LT.-5E5) MODEL(7)=-7E5
+    IF (MODEL(7).GT.7E5) MODEL(7)=7E5
+    IF (MODEL(7).LT.-7E5) MODEL(7)=-7E5
     ! Filling factor negative or larger than 1 because of MODEL
     IF (FREE(10).EQ..TRUE.) THEN
        IF (MODEL(10).LT.0D0) MODEL(10)=0D0
@@ -258,12 +277,13 @@ CONTAINS
     DO I=1,NUMFREE_PARAM
        DO J=1,NUMFREE_PARAM
           DO K=1,4
-             HESS(I,J)=HESS(I,J)-(2D0/NUMFREE_DEG)*(WEIGHTS(K)**2D0)*SUM(DSYN(FREELOC(I),:,K) &
+             HESS(I,J)=HESS(I,J)+(2D0/NUMFREE_DEG)*(WEIGHTS(K)**2D0)*SUM(DSYN(FREELOC(I),:,K) &
                   *DSYN(FREELOC(J),:,K))
           ENDDO
           IF (I.EQ.J) HESS(I,J)=HESS(I,J)*(1D0+LAMBDA)
        ENDDO
     ENDDO
+
   END SUBROUTINE GET_HESS
   !------------------------------------------------------------
   SUBROUTINE SVDSOL(DMODEL, CONV_FLAG)
@@ -282,11 +302,12 @@ CONTAINS
     REAL(DP), DIMENSION(10)                                          :: DMODEL
     INTEGER                                                          :: CONV_FLAG
     !
+    ! By RCE: commented out all calls to Numerical Recipes routines because of distribution issues. I will stick to LAPACK.
     ! Now call Numerical Recipes SVD
     !
-!    CALL SVDCMP(HESS,NUMFREE_PARAM,NUMFREE_PARAM,NUMFREE_PARAM,NUMFREE_PARAM,W,V,CONV_FLAG)
+    !    CALL SVDCMP(HESS,NUMFREE_PARAM,NUMFREE_PARAM,NUMFREE_PARAM,NUMFREE_PARAM,W,V,CONV_FLAG)
     !
-! By RCE: call LAPACK SVD
+    ! By RCE: call LAPACK SVD
     CALL DGESVD('A','A',NUMFREE_PARAM,NUMFREE_PARAM,HESS,NUMFREE_PARAM,W,U,NUMFREE_PARAM &
          ,VT,NUMFREE_PARAM,WORK,15*NUMFREE_PARAM,INFO)
 
@@ -295,10 +316,10 @@ CONTAINS
        CONV_FLAG = 1
     ENDIF
 
-IF (CONV_FLAG.EQ.1) PRINT*, "CONV_FLAG EQ 1. ERROR IN DGESVD"
+    IF (CONV_FLAG.EQ.1) PRINT*, "CONV_FLAG EQ 1. ERROR IN DGESVD"
    
     IF (CONV_FLAG.NE.1) THEN
-! By RCE: transpose VT matrix to obtain V
+    ! By RCE: transpose VT matrix to obtain V
     DO I = 1, NUMFREE_PARAM
 	DO J = 1, NUMFREE_PARAM
 		V(i,j) = VT(j,i)
@@ -309,6 +330,7 @@ IF (CONV_FLAG.EQ.1) PRINT*, "CONV_FLAG EQ 1. ERROR IN DGESVD"
     DO I=1,NUMFREE_PARAM
        IF (W(I).LT.SVDTOL*WMAX) W(I)=0D0
     ENDDO
+
     CALL SVBKSB(U,W,V,NUMFREE_PARAM,NUMFREE_PARAM,NUMFREE_PARAM,NUMFREE_PARAM,DIVC,PLUSMODEL)
     !
     DO I=1,NUMFREE_PARAM
@@ -386,10 +408,17 @@ IF (CONV_FLAG.EQ.1) PRINT*, "CONV_FLAG EQ 1. ERROR IN DGESVD"
        STOP
     ENDIF
     !
+
+
     DO I=1,NUMFREE_PARAM
        DO J=1,NUMFREE_PARAM
-          COV(I,J)=(CHI2/DBLE(NUMFREE_DEG))*SUM(U(:,I)*U(:,J)/W(:))
-          COV(I,J)=2D0*COV(I,J)*(NORM(FREELOC(I))*NORM(FREELOC(J)))
+!          COV(I,J)=(CHI2/DBLE(NUMFREE_DEG))*SUM(U(:,I)*U(:,J)/W(:))
+!          COV(I,J)=2D0*COV(I,J)*(NORM(FREELOC(I))*NORM(FREELOC(J)))
+
+! By RCE, Jan 2011: Switching indices in what Juanma used 
+
+          COV(I,J)=CHI2/DBLE(NUMFREE_DEG)*SUM(U(I,:)*U(J,:)/W(:))
+          COV(I,J)=COV(I,J)*(NORM(FREELOC(I))*NORM(FREELOC(J)))
        ENDDO
     ENDDO
     !
@@ -402,23 +431,23 @@ IF (CONV_FLAG.EQ.1) PRINT*, "CONV_FLAG EQ 1. ERROR IN DGESVD"
     ! Variances
     !----------
     DO I=1,10
-       SIGMA(I)=COV_DUMMY(I,I)
+       SIGMA(I)=SQRT(COV_DUMMY(I,I))
     ENDDO
     !------------
     ! Covariances
     !------------
     ! B-Gamma
-    SIGMA(11)=COV_DUMMY(6,2)
+    SIGMA(11)=COV_DUMMY(6,2)/SIGMA(6)/SIGMA(2)
     ! B-Phi
-    SIGMA(12)=COV_DUMMY(6,3)
+    SIGMA(12)=COV_DUMMY(6,3)/SIGMA(6)/SIGMA(3)
     ! Gamma-Phi
-    SIGMA(13)=COV_DUMMY(2,3)
+    SIGMA(13)=COV_DUMMY(2,3)/SIGMA(2)/SIGMA(3)
     ! B-Alpha
-    SIGMA(14)=COV_DUMMY(6,10)
+    SIGMA(14)=COV_DUMMY(6,10)/SIGMA(6)/SIGMA(10)
     ! Gamma-Alpha
-    SIGMA(15)=COV_DUMMY(2,10)
+    SIGMA(15)=COV_DUMMY(2,10)/SIGMA(10)/SIGMA(2)
     ! Phi-Alpha
-    SIGMA(16)=COV_DUMMY(3,10)
+    SIGMA(16)=COV_DUMMY(3,10)/SIGMA(3)/SIGMA(10)
   END SUBROUTINE GET_ERR
   !-------------------------------------------
   

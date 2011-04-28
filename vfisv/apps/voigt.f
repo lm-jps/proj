@@ -10,6 +10,8 @@ C Authors: Jack Harvey, Aake Nordlund.                           *
 C Modified by Sami Solanki (1985).                               *  
 C Modified by A.D. Wittmann (1986) to include F(a,-v) and F(0,v) *
 C convertida en rutina por Basilio Ruiz (1993)                   *
+C Modified by R. Centeno on Feb 2011: J.M. Borrero suggested     *
+C including a factor of 2 multiplying F at the end of the routine*
 C -------------------------------------------------------------- *  
 C Last Update: 22-jun 93.                                        *  
 C*****************************************************************  
@@ -82,7 +84,9 @@ c si el damping no es nulo
              
 	END IF
         HH(J)=H
-        FF(J)=F
+c By RCE, Feb 2011: Juanma's modification to Voigt function (factor of 2 multiplying F)
+c       FF(J)=F
+        FF(J)=F*2D0
         ENDDO
 
 	RETURN

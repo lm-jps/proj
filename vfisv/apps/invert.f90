@@ -1,4 +1,4 @@
-SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
+SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_FLAG, WEIGHTS)
   !
   ! J M Borrero
   ! Dec 16, 2009
@@ -28,7 +28,24 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
   ! and the difference between the two is less than GOODFIT, then we stop iterating. This is, when CHI2 doesn't improve
   ! fast enough, we get out of the loop. The absolute check for CHI2 (CHI2 .LT. GOODFIT) has been eliminated because it
   ! wasn't a good measure of convergence.
-
+  ! 
+  ! By RCE Feb 2011: Added the weights for the Stokes profiles as an input parameter rather than having them hard-coded
+  ! in VFISV. The call to GET_WEIGHTS now just normalizes the weights and multiplies by the noise.
+  ! 
+  ! By RCE, April 2011: Changes to the LM algorithm:
+  !  - Reset to zero the FLAG that counts consecutive bad iterations when a good iteration is achieved (line
+  !  - Change random perturbations to angles inside RANDOM_JUMP routine in INV_UTILS
+  !  - Put lower bound on the LM lambda parameter so that it doesn't decrease beyond a value (in GET_LAMBDA in INV_UTILS) 
+  !  - Test flag (TMP_FLAG) to count the number of resets of the model parameters. Saved in one of the error variables
+  !
+  ! By RCE: Re-normalizing filters to different value to account for +/-2A coverage
+  !
+  ! By RCE April 2011: reset FLAG that counts number of consecutive interations to zero when one successful iteration is achieved.
+  ! By RCE April 2011: Included filter hack. FILTERS_LONG are the filters calculated in the full wavelength range.
+  ! FILTERS are the filter profiles in the narrow wavelength range, where we do the forward modeling.
+  ! We do this to avoid computing the forward model very far into the continuum. It takes too much time. So we do
+  ! a quick hack to compute the forward model only in an inner wavelength region and then add the filter contribution 
+  ! outside of this region, in the continuum around the spectral line.
 
   USE FILT_PARAM
   USE CONS_PARAM
@@ -37,11 +54,12 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
   USE SVD_PARAM
   USE INV_UTILS
   USE FORWARD
-!  USE RAN_MOD
+  USE RAN_MOD
   IMPLICIT NONE
   !---------------------------------------------------------------------
   REAL(DP), INTENT(IN),  DIMENSION(NBINS*4)          :: OBS_LONG
   REAL(DP), INTENT(IN),  DIMENSION(NBINS*4)          :: SCAT_LONG
+  REAL(DP),              DIMENSION(NUMW_LONG, NBINS) :: FILTERS_LONG
   REAL(DP), INTENT(IN),  DIMENSION(10)               :: GUESS
   REAL(DP),              DIMENSION(NUMW,NBINS)       :: FILTERS
   REAL(DP), INTENT(OUT), DIMENSION(10)               :: RES
@@ -49,15 +67,16 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
 
   !---------------------------------------------------------------------
   REAL(DP),        DIMENSION(NBINS,4)   :: OBS, SCAT, OBS_REV
+  REAL(DP),        DIMENSION(NBINS)     :: INTEG_FILTERS
   REAL(DP),        DIMENSION(4)         :: WEIGHTS
   REAL(DP),        DIMENSION(10)        :: BESTMODEL, MODELG, LASTGOODMODEL, DMODEL
   REAL(DP),        DIMENSION(16)        :: SIGMA
   REAL(DP)                              :: BESTCHI2, LASTGOODCHI2, TOTPOL, NEWCHI2, LASTGOODLAMBDA, ICONT
   REAL(DP),        DIMENSION(ITER)      :: LAMBDA, CHI2
   REAL(DP),        DIMENSION(10,ITER)   :: MODEL
-  INTEGER                               :: I, K, M, FLAG, WRONG, LASTGOODITER, BESTITER
+  INTEGER                               :: I, K, M, FLAG, WRONG, LASTGOODITER, BESTITER, NPOINTS
   LOGICAL                               :: DERIVATIVE
-  INTEGER                               :: CONV_FLAG, NAN_FLAG, CONVERGENCE_FLAG, EPSILON_FLAG
+  INTEGER                               :: CONV_FLAG, NAN_FLAG, CONVERGENCE_FLAG, EPSILON_FLAG, NRESET
   !---------------------------------------------------------------------
   REAL(DP),     DIMENSION(NBINS,4)      :: SYN, LASTGOODSYN, BESTSYN
   REAL(DP),     DIMENSION(10,NBINS,4)   :: DSYN, LASTGOODDSYN
@@ -66,31 +85,56 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
   CALL SORT_OBS(OBS_LONG,OBS)
   CALL SORT_OBS(SCAT_LONG,SCAT)
 
+
+  ! By RCE April 2011: Select the region of the spectrum of the filters that we are going to use in the 
+  ! synthesis and the region that we are going to integrate assuming that they're in the continuum of the
+  ! spectral line. 
+  
+  ! Difference between NUMW wavelength points for synthesis and NUMW_LONG points in which filters were computed.
+  ! We divide by 2 to get the number of wavelength points at each side of the "synthesis range"
+  NPOINTS = (NUMW_LONG - NUMW)/2  
+  
+  ! Select region of filters corresponding to forward modeling wavelength region
+  FILTERS(:,:) = FILTERS_LONG(NPOINTS+1:NUMW+NPOINTS,:) 
+  ! Integrate the filters in the remaining regions at each side of the forward modeling region.
+  DO I = 1, NBINS 
+     INTEG_FILTERS(I) = SUM(FILTERS_LONG(1:NPOINTS,I)) + SUM(FILTERS_LONG(NUMW_LONG-NPOINTS:,I))
+  ENDDO
+  ! Making sure we add no filter integral if we're doing the forward modeling in the full wavelength range.
+  IF (NPOINTS .EQ. 0) THEN 
+     INTEG_FILTERS(:) = 0D0
+  ENDIF
+  
+
+
   !By RCE, Apr 23, 2010: Normalizing filters
-  FILTERS(:,:) = FILTERS(:,:) / 1.49279D0
 
+!FILTERS(:,:) = FILTERS(:,:) / 1.49279D0 ! Normalization for +/- 0.648A coverage and 27 mA sampling
+FILTERS(:,:) = FILTERS(:,:) /1.5799      ! Normalization for +/- 2A coverage and 27mA sampling
 
-  !By RCE, Apr 23, 2010: Reversing the wavelength order of the observations
+  !By RCE, Apr 23, 2010: Reversing the wavelength order of the observations 
+  ! so that they are in increasing wavelength order
 
   DO k=1,NBINS
      DO m = 1,4
 	OBS_REV(k,m) = OBS(NBINS-k+1,m)		
      ENDDO
   ENDDO
+
   OBS(:,:) = OBS_REV(:,:)
 
   ! By RCE: CONV_FLAG checks for for convergence of SVD and NAN_FLAG checks for NaNs 
   ! in chisqr. 
   ! EPSILON_FLAG checks the convergence rate (how fast CHI2 diminishes). If it's not 
-  ! fast enough (NEWCHI2-OLDCHI2 LT 0.05), the iterative process stops.
+  ! fast enough (NEWCHI2-OLDCHI2 LT epsilon), the iterative process stops.
   ! CONVERGENCE_FLAG is sent out to the wrapper with different values depending 
   ! on whether the algorithm converges or not and why.
-
-   CONV_FLAG = 0
-   NAN_FLAG = 0
-   CONVERGENCE_FLAG = 0
-   EPSILON_FLAG = 0
-
+  
+  CONV_FLAG = 0
+  NAN_FLAG = 0
+  CONVERGENCE_FLAG = 0
+  EPSILON_FLAG = 0
+  
   
   ICONT=MAXVAL(OBS(:,1))
   IF (ICONT .GT. TREIC) THEN
@@ -102,16 +146,16 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
      CALL GET_WEIGHT(OBS,WEIGHTS)
      !----------------------------------------------------
      ! Commented by RCE: check wfa_guess.f90 routine later
-     ! Right now it gives weird results when spectral line
-     ! is highly shifted
+     !     Initial guess for Doppler velocity only
      !----------------------------------------------------
+
 !     IF (TOTPOL.GT.1E-3) THEN
         CALL WFA_GUESS(OBS/ICONT,LANDA0,GUESS(7))
 !     ENDIF
 
      !----------------------------------------------------
      ! Added by RCE: New initialization of Source Function
-     ! used when profiles come in counts
+     ! used when profiles come in photon counts
      !----------------------------------------------------
      !-----------------------------
      ! Inversion initial values
@@ -130,7 +174,10 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
         BESTMODEL(10)=1D0
      ENDIF
 
+  ! By RCE: Default values for lambda and chi2 so that I can find out when they are not being updated.
 
+     LAMBDA(:) = 33.3333
+     CHI2(:) = 33.3333333
      LASTGOODCHI2=1E24
      LAMBDA(1)=0.1D0
      BESTCHI2=1E24
@@ -138,6 +185,9 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
      I=1
      FLAG=0
      WRONG=1
+     ! Counter for the number of random resets that the model parameters suffer.
+     NRESET=0
+
      !-----------------------------
      ! Start LOOP iteration
      !-----------------------------
@@ -146,7 +196,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
         ! Too many consecutive bad iterations
         !------------------------------------
         ! Slightly modified by JM Borrero. Apr 15, 2010
-        IF (FLAG.GT.6) THEN
+        IF (FLAG.GT.5) THEN
            MODELG=BESTMODEL
            CALL RANDOM_MODEL_JUMP(RANDOM_JUMP*WRONG,MODELG,ICONT)
            MODEL(:,I)=MODELG
@@ -155,12 +205,14 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
            FLAG=0
            LAMBDA(I)=10D0*WRONG
            WRONG=WRONG+1
+           NRESET = NRESET+1
         ENDIF
+
         !--------------------------------------
         ! Synthetic profiles but no derivatives
         !--------------------------------------
         DERIVATIVE=.FALSE. 
-        CALL SYNTHESIS(MODEL(:,I),SCAT,DERIVATIVE,SYN,DSYN, FILTERS)
+        CALL SYNTHESIS(MODEL(:,I),SCAT,DERIVATIVE,SYN,DSYN, FILTERS, INTEG_FILTERS)
         !-------------
         ! Getting CHI2
         !-------------
@@ -175,10 +227,10 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
         ! Have we improved ?
         !-------------------
         ! YES ##############
-        IF (NEWCHI2.LT.LASTGOODCHI2) THEN
+        IF (NEWCHI2.LE.LASTGOODCHI2) THEN
            ! Synthetic profiles and derivatives
            DERIVATIVE=.TRUE.
-           CALL SYNTHESIS(MODEL(:,I),SCAT,DERIVATIVE,SYN,DSYN, FILTERS)
+           CALL SYNTHESIS(MODEL(:,I),SCAT,DERIVATIVE,SYN,DSYN, FILTERS, INTEG_FILTERS)
            ! Normalizing Derivatives
            CALL NORMALIZE_DSYN(DSYN,ICONT)
            ! Set to Zero unneeded derivatives
@@ -194,7 +246,11 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
            LASTGOODSYN=SYN
            LASTGOODDSYN=DSYN
            WRONG=1D0
+	   ! By RCE: Resetting to zero FLAG that counts consecutive bad iterations
+	   FLAG = 0
+
            CALL GET_LAMBDA(LAMBDA(I),.TRUE.,LAMBDA(I+1))
+
            IF (NEWCHI2.LT.BESTCHI2) THEN
               BESTITER=I
               BESTMODEL=MODEL(:,I)
@@ -211,6 +267,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
            MODEL(:,I)=LASTGOODMODEL
            FLAG=FLAG+1
         ENDIF
+
         !---------------------------
         ! Getting Divergence of CHI2
         !---------------------------
@@ -260,7 +317,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
      !---------------
 
      IF ((NAN_FLAG .EQ. 0) .AND. (CONV_FLAG .EQ. 0)) THEN
-
+	! Compute non-modified Hessian (lambda = 0)
         CALL GET_HESS(LASTGOODDSYN,0D0,WEIGHTS)
         ! This Hessian is constructed with normalized derivatives
         CALL GET_ERR(BESTCHI2,ICONT,SIGMA)
@@ -302,22 +359,13 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS, CONVERGENCE_FLAG)
      IF (BESTCHI2 .LT. GOODFIT) CONVERGENCE_FLAG = 0
 
 
-!PRINT*, 'CHI2 = ', BESTCHI2, '  FLAG = ', CONVERGENCE_FLAG, '  N. ITER = ', I
-
-!CONVERGENCE_FLAG = 0
-
 ! CONVERGENCE_FLAG values
-!    1: CHI2 LT epsilon (converged!)
+!    1: (CHI2old-CHI2new) LT epsilon (converged!)
 !    2: Maximum number of iterations reached
 !    3: Too many non-consecutive successful iterations
 !    4: NaN in CHI2 detected
 !    5: NaN in SVD
 !    6: Pixel not inverted due to ICONT LT threshold intensity.
-
-!PRINT*, 'RES = ', RES(:)
-!PRINT*, 'OBS = ', OBS(:,:)
-!PRINT*, 'SYN = ', SYN(:,:)
-
 
 
 END SUBROUTINE INVERT

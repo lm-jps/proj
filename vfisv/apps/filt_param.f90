@@ -6,7 +6,7 @@ MODULE FILT_PARAM
   !
   USE CONS_PARAM
   USE LINE_PARAM
-  INTEGER                         :: NBINS, NTUNE
+  INTEGER                         :: NBINS, NTUNE, NUMW_LONG
   LOGICAL                         :: CONT
   REAL(DP), ALLOCATABLE           :: FILTER(:,:)
   REAL(DP), ALLOCATABLE           :: TUNEPOS(:)

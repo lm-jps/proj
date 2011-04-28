@@ -1,7 +1,7 @@
 /* ------------------------------------------------------------------------------------------------------
  *
  *  vfisv.c                                        ~rick/hmi/vecb/src/v09
- * 3/25/10  this is Keiji's less memory usage version with my edits for keywords * and k=0.
+ * 3/25/10 this is Keiji's less memory usage version with my edits for keywords * and k=0.
  * 3/23/10 THIS IS a copy of REBECCA's /v13  except with vfisv_mpi
  * this is the mpi version  vfisv.c version 10. It should have the keywords correct AND 12 err files.
  * This directory contains Rebeccas new/improved Invert code with the "scaling  factor"??
@@ -44,7 +44,7 @@
  *        2**n for full HMI images; need to generalize, and allow for unequal
  *        thread segments
  *
- * --- some comments by K.H. -----
+ * --- some comments by K.H., after March 2010 -----
  *
  *    A) March 26, 2010
  *       First, combining efforts done by 5:00PM, March 26, 2010
@@ -57,6 +57,7 @@
  *        (1) added lines to handle pixels containing NaN or all-zero values in input
  *    C) April  2
  *        (1) added if-blocks at MPI part to avoid deadlock when run with -n 1 or without specifying num. of process
+ *            *) As of Feb 3, 2011, MPI-run with 1 CPU/core must work, but no complete tests were done.
  *        (2) modified DRMS part : correcting JSOC-keyword(s) including T_REC.
  *        (3) moved lines for inversion initialization to be done
  *              after malloc/calloc-ings all wrapper-arrays (and just before the inverson process)
@@ -84,47 +85,130 @@
  *    I) Nov  3
  *        (1) handle a new variable iconverge_flag, flag/index of confidence at invert_(), by Rebecca, and
  *            output the integer as a new segment array (named convflag).
- *        (2) assume the number of output segment be
+ *        (2) give version number 1.00
+ *    I')Nov 23
+ *        (1) add line to write the version number as keyword value, and make new .jsd file
  *    J) Dec 9
  *        (1) now the all float will be rescaled so that the saved data will be of integer type.
+ *        (2) thus, making new .jsd file
+ *        (3) give version number 1.01
+ *    K) Jan 27
+ *        (1) some changes/trial and tips made from Dec 10 to Jan 27, are included/controlled by preprocess.
+ *            INTBSCL, CHNGTREC pre-process flags are added.
+ *    L) Jan 31
+ *        (1) Minor modification around choice MASKPTCH to adjust to the Xudong's latest masking data array.
+ *    L')Feb 03
+ *        (1) clean up code: an unused variable npix is deleted.
+ *    M) Feb 06
+ *        (1) add keyword, mostly at the option argument
+ *    N) Feb 07 until Feb 10.
+ *        (0) efforts making things close to the first published version.
+ *        (1) add a lot of keywords
+ *        (2) add one integer segement qaul_map
+ *        (3) invert() has now one more variable (weights), thank you RCE!.
+ *    O) Feb 17
+ *        (1) add char function to include CVS-based version info. *) modified Apr 27.
+ *    P) Mar 03
+ *        (1) accommodate the choices 8 and 10 of Num_lambda_filter.
+ *    Q) Mar 24 and 25
+ *        (1) fetch hmi.V_720s data to give initial vlos_mag.
+ *        (2) fetch hmi.M_720s data to give initial field strength.
+ *    R) Apr  1
+ *        (1) Adding new variables, num_lambda_synth and lambda_min_synth
+ *    R')Apr 27
+ *        (1) "hacked" code is now implemented !! Changes are argument at filt_init_(), and add two options in wrapper
+ *             and many are in invert.f90, forward.f90, filter_init.f90, filter_param.f90 and vfisv.c
  *
  * ------------------------------------------------------------------------------------------------------ */
 
-/* To speed up, only some rectangle regions or a limited-width column be processed. Set 0 to disable */
+/* A tweak for quick-run for test mode.
+ * Notice that QUICKRUN does not mean this is for QuickLook.
+ * Quick-Look run will be with the masking data (see MASKPTCH below).
+ * Only some selected pixels be processed, to for test purpose.
+ * Set 1 to turn on this functionality.
+ * Different from another similar choice controlled by RECTANGL,
+ *    the output size be same as the input Stokes, thus no need to modify the .jsd file.
+ * Usually, set 0. */
 #define QUICKRUN 0
 
-/* Whether skip or do-anyway when QUALITY index is not zero.
- *    0 : fearless, do process regardless of the index value
- *    1 : do only when the quality index is of perfection, 0x000000.
- *    2 : do only when index is 0x000000 or 0x000400 */
-#define SKIPBADQ 0
-
-/* Do inversion within a rectangle (in CCD coordinate so far) of interest
- * Because the output array size will be arbitrary, a new .jsd file must be prepared if this choice is activated.
+/* Another tweak for quick-run for test mode.
+ * Do inversion for pixels within a selected rectangle (in CCD coordinate so far) of interest.
+ * Defining the rectangle of interest will be done somewhere in this code.
+ * Because the output array size will be arbitrary, the .jsd file must have "vardim"(?) instead of variable.
  * May co-work with QUICKRUN...maybe */
 #define RECTANGL 0
 
-/* set 1 to enable a new feature fetching the (previous) existing data through JSOC-DRMS */
-#define TAKEPREV 0
+/* Set 1 to save as integer arrays with bscale-increment and bzero-offset.
+ * Otherwise, data be saved in float.
+ * 1 will be default for regular automatic runs.
+ * Different jsd file must be prepared for each of 1 or non-1 case */
+#define INTBSCLE 1
 
-/* Non-NAN, physically meaningful, inside-disk pixels will be evenly assigned to each PE. Recommend 1. */
+/* By setting 1, the initial guess value for vlos_mag is given.
+ * As of 2011 Mar 24, the value is given from hmi.V_720s data.
+ * Because hmi.{V,S,M} are made simultaneously, this must work, hopefully.
+ * In case hmi.V is not available, initial guess is caluclated from SDO's orbital info. and pixel address. */
+#define VLOSINIT 0
+
+/* Added on March 25, 2011 
+ * By setting 1, the initial guess value for magnetic field strength is given from hmi.M_720s.
+ * In case hmi.M_720s is not available, left zero */
+#define MGSTINIT 0
+
+/* Include all changes since from Feb 3 until 10, or, the next major change whichever later.
+ * Last changes occurred on Feb 10 (Thursday) after getting latest Fortran codes by Rebecca & Juanma et al.
+ *   Put all inversion parameters at argument as keywords
+ *   Add one quality-map segment
+ * By setting other than 1, the code will behave as if it is as-of 2010-Dec-2 version (not fully confirmed) */
+#define CHANGFEB 1
+
+/* Whether or not using the new invert() added weights array to the argument.
+ * Must be 1 for using the latest.
+ * When CHANGFEB is set 1, this must be 1.
+ * Since Feb 10, 2011, this will be always set 1, regardless of CHANGFEB */
+#define NEWINVRT 1
+
+/* Whether skip or do-anyway when Stokes QUALITY index is not zero.
+ *         1 : do only when the quality index is of ideal condition, 0x000000.
+ *         2 : do only when the index is 0x000000 or 0x000400
+ * otherwese : fearless-mode, do process regardless of the Stokes quality index value, maybe default, for a while */
+#define SKIPBADQ 0
+
+/* By setting 1, the non-NAN, physically meaningful, inside-disk pixels will be evenly assigned to each PE.
+ * Otherwise, all 4k x 4k pixels will be evenly assinged to PEs.
+ * Recommend to always keep 1. */
 #define EQUIAREA 1
 
-/* Use mask-map for local-quick-realtime processing */
+/* By setting 1, the inversion will be processed only for the non-masked pixel.
+ * Assumes the masked data is of the same size as the input Stokes, but not necessarily to be 4k x 4k.
+ * For quick-look real-time processing. */
 #define MASKPTCH 0
 
+/* Set 1 to enable to fetch the (previous) existing data through JSOC-DRMS as better initial guess.
+ * So for, not used, Hmmm.. */
+#define TAKEPREV 0
+
+/* Enforce the output T_REC will be changed, overridden with the one at option out2.
+ * The argument for the option out2 must be a string YYYY:MM:DD_hh:mm:ss_TAI, without [].
+ * Good for parameter-tests using the Stokes of the same T_REC. */
+#define CHNGTREC 0
 
 /* Phil's macro */
 #define DIE(msg) {fflush(stdout);fprintf(stderr,"%s, status=%d\n",msg,status); return(status);}
 
-char *module_name = "vfisv";
-char *version_id  = "1.01";
+/* strings for version info. */
+char *module_name = "vfisv"; // can be constant
+char *version_id  = "2011 April 27";  // (number or) strings to specify version of code.
 
 /* RCE Apr 21, 2010: Added a "double [][]" in definition of invert_ to pass
 the filter profiles computed by Sebastien*/
 
-extern void invert_ (double *, double *, double *, double *, double *, double[][], int *);
-extern void filt_init_ (int *, int *, int *, double *, double *, double *);
+#if NEWINVRT == 1
+extern void invert_ (double *, double *, double *, double *, double *, double[][], int *, double *); // after Feb 10, 2011
+#else
+extern void invert_ (double *, double *, double *, double *, double *, double[][], int *); // before Feb 10, 2011
+#endif
+extern void filt_init_ (int *, int *, int *, double *, double *, double *, int *);
 extern void free_init_ (int *);
 extern void free_memory_ ();
 extern void inv_init_ (int *, double *, double *, double *, double *, double *);
@@ -142,38 +226,47 @@ extern void wave_init_ (double *, double *, int *);
 #define IMGCTR (cols*(rows/2) + cols/2)
 
 ModuleArgs_t module_args[] = {
-  {ARG_STRING,  "in",  "hmi_test.S2_720s[2010.08.01_12:12:00_TAI]", "input series"},
-  {ARG_STRING,  "out", "hao_rce.spikes_epsilon", "output series"},
+  {ARG_STRING,  "in",  "hmi.S_720s[2010.08.01_12:12:00_TAI]", "input record"},
+  {ARG_STRING,  "out", "hmi.ME_720s", "output series"},
+#if CHNGTREC == 1
+  {ARG_STRING,  "out2", "2012.01.02_03:45:00_TAI", "dummy T_REC"},
+#endif
 #if TAKEPREV == 1
-  {ARG_STRING,  "in2", "su_keiji.B_inv_720s_temp[2010.05.25_02:48:00_TAI]", "previous/reference inversion results"},
+  {ARG_STRING,  "in2", "hmi.ME_720s[2010.08.01_12:00:00_TAI]", "reference inversion results"},
 #endif
 #if MASKPTCH == 1
-  {ARG_STRING,  "in3", "su_xudong.mask4inv[2010.07.02_12:00:00_TAI]", "patch masking"},
+  {ARG_STRING,  "in3", "su_xudong.mask4inv[2010.08.01_12:12:00_TAI]", "patch or Harp masking bitmap data"},
 #endif
-  {ARG_INT,  "npix", "0", "number of pixels per segment (default: all/segs)"},
-  {ARG_INT,  "num_iter", "30", "number of iterations(default: 30)"},
-  {ARG_INT,  "num_lambda", "49", "number of ??(default: 33)"},
+#if VLOSINIT == 1
+  {ARG_STRING,  "in4", "hmi.V_720s[2010.08.01_12:12:00_TAI]", "Doppler as initial guess"},
+#endif
+#if MGSTINIT == 1
+  {ARG_STRING,  "in5", "hmi.M_720s[2010.08.01_12:12:00_TAI]", "magnetogram as initial guess"},
+#endif
+/* inversion options, 20, as of April 27, 2011 */
+  {ARG_INT,  "num_iter", "200", "number of iterations(default: 30)"},
+  {ARG_INT,  "num_lambda", "149", "number of ??(default: 33)"},
+  {ARG_DOUBLE,  "Lambda_Min", "-1998.0", "Intensity threshold (default: -432)"},
   {ARG_INT,  "Num_lambda_filter", "6", "Number of filters accross the wvl (default: 6)"},
   {ARG_INT,  "Num_tunning", "6", "Number of ??(default: 6)"},
+  {ARG_INT,  "num_lambda_synth", "49", "Number of synthetic filters (default: 6)"},
+  {ARG_DOUBLE,  "Lambda_Min_synth", "-648.0", "Intensity threshold (default: -432)"},
   {ARG_DOUBLE,  "svd_tolerance", "1.0e-32", "svd tolerance (default: 1.0e-32)"},
-  {ARG_DOUBLE,  "chi2_stop", "2e-6", "chisq-stop (default: 1.0e-6)"},
+  {ARG_DOUBLE,  "chi2_stop", "1e-15", "chisq-stop (default: 1.0e-6)"},
   {ARG_DOUBLE,  "Polarization_threshold", "1.0e-2", "polarization threshold (default: 0.01)"},
   {ARG_DOUBLE,  "Percentage_Jump", "10.0", "Percentage Jump (default: 10%)"},
-  {ARG_DOUBLE,  "Lambda_Min", "-648.0", "Intensity threshold (default: -432)"},
   {ARG_DOUBLE,  "Lambda_0", "6173.3433", "Wavelength(default:6173.3433 Angstrom )"},
   {ARG_DOUBLE,  "Lambda_B", "0.044475775", "FWHM?? (default: 0.044475775)"},
   {ARG_DOUBLE,  "Delta_Lambda", "27.0", "Delta Lambda(default: 27.0)"},
   {ARG_DOUBLE,  "Lyotfwhm", "424.0", "Lyot filter FWHM (default: 424.0)"},
-  {ARG_DOUBLE,  "Wnarrow", "172.0", "W narrow (default: 172.0)"},
-  {ARG_DOUBLE,  "Wspacing", "69.0", "W narrow (default: 69.0)"},
-  {ARG_FLAG, "v",    "", "run verbose"},
-  {ARG_FLAG, "d",    "", "turn damping off"},
+  {ARG_DOUBLE,  "Wnarrow", "172.0", "FSR (full spectral range) of the Narrow-Band Michelson"},
+  {ARG_DOUBLE,  "Wspacing", "69.0", "wavelength spacing between the HMI filters"},
   {ARG_DOUBLE,  "Intensity_Threshold", "1e2", "Intensity threshold (default: 0.8)"},
-  {ARG_DOUBLE,  "Noise_LEVEL", "1.5e2", "Intensity threshold (default: 3.0e-3)"},
+  {ARG_DOUBLE,  "Noise_LEVEL", "4.9e1", "Intensity threshold (default: 3.0e-3)"},
   {ARG_INT,     "Continuum", "0", "Intensity threshold (default: 0)"},
-/* lines not used, or to be used in future...
-  {ARG_INT,     "patchmask", "0", " 1 will be on (default: 0)"}, for future use; whether or not include masking map by Xudong
- */
+/* other options */
+  {ARG_FLAG, "v",    "", "run verbose"},
+/* trailer */
   {}
 };
 
@@ -184,10 +277,9 @@ int DoIt (void)
   DRMS_RecordSet_t *records, *out;
   DRMS_Record_t *inRec, *outRec;
   DRMS_Segment_t *seg;
-  DRMS_Array_t *stokes_array, *invrt_array,*err_array, *flg_array;
+  DRMS_Array_t *stokes_array, *invrt_array,*err_array, *flg_array, *qmap_array;
 
 /* get values at commandline argument, as constant */
-  const int    npixc              = params_get_int(params, "npix");
   const int    NUM_ITERATIONSc    = params_get_int(params, "num_iter");
   const int    NUM_LAMBDAc        = params_get_int(params, "num_lambda");
   const int    NUM_LAMBDA_FILTERc = params_get_int(params, "Num_lambda_filter");
@@ -207,32 +299,57 @@ int DoIt (void)
   const double WNARROWc                = params_get_double(params, "Wnarrow");
   const double WSPACINGc               = params_get_double(params, "Wspacing");
   const char   *indsdescc = params_get_str(params, "in");
+  const char   *outserc   = params_get_str(params, "out");
+
+  const int    NUM_LAMBDA_synthc = params_get_int(params, "num_lambda_synth");
+  const double LAMBDA_MIN_synthc = params_get_double(params, "Lambda_Min_synth");
+
 #if TAKEPREV == 1
   const char   *indsdesc2c= params_get_str(params, "in2");
 #endif
 #if MASKPTCH == 1
   const char   *indsdesc3c= params_get_str(params, "in3");
 #endif
-  const char   *outserc   = params_get_str(params, "out");
+#if VLOSINIT == 1
+  const char   *indsdesc4c= params_get_str(params, "in4");
+#endif
+#if MGSTINIT == 1
+  const char   *indsdesc5c= params_get_str(params, "in5");
+#endif
+#if CHNGTREC == 1
+   const char   *outtrecc  = params_get_str(params, "out2");
+#endif
+
   const int    verbosec   = params_isflagset(params, "v");
+
 /* then copy it to non-constants, to avoid JSOC-compiler's complain */
 
-  int    npix;
-  int    NUM_ITERATIONS, NUM_LAMBDA, NUM_LAMBDA_FILTER, NUM_TUNNING, CONTINUUM;
-  double SVD_TOLERANCE, CHI2_STOP, POLARIZATION_THRESHOLD, INTENSITY_THRESHOLD, PERCENTAGE_JUMP;
-  double LAMBDA_0, LAMBDA_B, NOISE_LEVEL;
-  double LAMBDA_MIN, DELTA_LAMBDA;
-  double LYOTFWHM, WNARROW, WSPACING;
   char   *indsdesc, *outser;
+#if CHNGTREC == 1
+  char   *outtrec;
+#endif
 #if TAKEPREV == 1
   char   *indsdesc2;
 #endif
 #if MASKPTCH == 1
   char   *indsdesc3;
 #endif
+#if VLOSINIT == 1
+  char   *indsdesc4;
+#endif
+#if MGSTINIT == 1
+  char   *indsdesc5;
+#endif
   int    verbose;
 
-  npix = npixc;
+  int    NUM_ITERATIONS, NUM_LAMBDA, NUM_LAMBDA_FILTER, NUM_TUNNING, CONTINUUM;
+  double SVD_TOLERANCE, CHI2_STOP, POLARIZATION_THRESHOLD, INTENSITY_THRESHOLD, PERCENTAGE_JUMP;
+  double LAMBDA_0, LAMBDA_B, NOISE_LEVEL;
+  double LAMBDA_MIN, DELTA_LAMBDA;
+  double LYOTFWHM, WNARROW, WSPACING;
+  int    NUM_LAMBDA_synth;
+  double LAMBDA_MIN_synth;
+
   NUM_ITERATIONS    = NUM_ITERATIONSc;
   NUM_LAMBDA        = NUM_LAMBDAc;
   NUM_LAMBDA_FILTER = NUM_LAMBDA_FILTERc;
@@ -251,62 +368,80 @@ int DoIt (void)
   LYOTFWHM = LYOTFWHMc;
   WNARROW  = WNARROWc;
   WSPACING = WSPACINGc;
+
+  NUM_LAMBDA_synth = NUM_LAMBDA_synthc;
+  LAMBDA_MIN_synth = LAMBDA_MIN_synthc;
+
+/* by RCE */
+// printf ("Num lambda filter: %d\n", NUM_LAMBDA_FILTER);
+
   verbose  = verbosec;
   indsdesc = strdup(indsdescc);
+#if CHNGTREC == 1
+  outtrec= strdup(outtrecc);
+#endif
 #if TAKEPREV == 1
   indsdesc2= strdup(indsdesc2c);
 #endif
 #if MASKPTCH == 1
   indsdesc3= strdup(indsdesc3c);
 #endif
+#if VLOSINIT == 1
+  indsdesc4= strdup(indsdesc4c);
+#endif
+#if MGSTINIT == 1
+  indsdesc5= strdup(indsdesc5c);
+#endif
   outser   = strdup(outserc);
 
 /* important variables for inversions */
-
   int list_free_params[10]={1,1,1,0,1,1,1,1,1,0};
-#if 0
-  double guess[10]= {15.0,90.0,45.0,0.5,40.0,150.0,0.0,0.4*1e6,0.6*1e6,1.0};
-#else
   double guess[10]= {15.0,90.0,45.0,0.5,40.0,150.0,0.0,0.4*6e3,0.6*6e3,1.0};
-#endif
 
 /* inversion-related variables used by wrapper */
   char *Resname[] = {"eta_0", "inclination", "azimuth", "damping", "dop_width", "field",
                      "vlos_mag", "src_continuum", "src_grad", "alpha_mag",
                      "field_err","inclination_err","azimuth_err", "vlos_err", "alpha_err",
                      "field_inclination_err","field_az_err","inclin_azimuth_err", "field_alpha_err",
-                     "inclination_alpha_err", "azimuth_alpha_err", "chisq", "convflag"};
+                     "inclination_alpha_err", "azimuth_alpha_err", "chisq",
+                     "convflag", "qual_map"}; // the last one qual_map is added on Feb 07. 2011
   int Err_ct=12; // MIND newly added convflag will be treated separately from the 12 usual error float arrays
   char segname[16];
   char *spname[] = {"I", "Q", "U", "V"};
   int spct = (sizeof (spname) / sizeof (char *));
-  int wlct = 6;
+//  int wlct = 6;
+  int wlct = NUM_LAMBDA_FILTERc; // now we assume that NUM_LAMBDA_FILTERc is NOT always 6.
   int paramct = 10;
 
 /* bscale and bzero,
-   bzero may be zero for all variable...I think.. 
+   bzero may be zero for all variable... ??
    bscale[] must be in the same order of Resname[].
-   Values assume the variable type will be of 32bit integer.
-   Values are based on email from Rebecca on Dec 9. and ... */
-  double bzero_inv[23] = {0.00,0.00,0.00,0.0000,0.00,0.00,
-                          00.0,0.0,0.0,0.000,
-                          0.0,0.0,0.0,0.0,0.0, 
+   Mind that, for some convenience, the order of variables in jsd file and this C-wrapper are not same.
+   Now assuming the variable will be of 32-bit integer type.
+   Values are based on email from Rebecca on Dec 9. */
+  double bzero_inv[24] = {0.0,0.0,0.0,0.0,0.0,0.0,
                           0.0,0.0,0.0,0.0,
-                          0.0,0.0,0.0,0.0};
-  double bscaleinv[23] = {0.01,0.01,0.01,0.0001,0.01,0.01,
+                          0.0,0.0,0.0,0.0,0.0,
+                          0.0,0.0,0.0,0.0,
+                          0.0,0.0,0.0,
+                          0.0,0.0};
+  double bscaleinv[24] = {0.01,0.01,0.01,0.0001,0.01,0.01,
                           50.0,0.1,0.1,0.001,
-                          1.0,1.0,1.0,1.0,1.0, // unknown yet as of Dec 9
-                          1.0,1.0,1.0,1.0,     // unknown yet as of Dec 9
-                          1.0,1.0,1.0,1.0};     // unknown yet as of Dec 9, except last one (convflag)
+                          0.01,0.01,0.01,50.0,0.01,    // std.
+                          0.0001,0.0001,0.0001,0.0001, // cor. coef.
+                          0.0001,0.0001,0.01,          // cor. coef. and Chi-sq
+                          1.0,1.0};                    // integer arrays for convflag, and qual_map
 
 
 /* working array etc. used by wrapper */
   int    *FinalConvFlag;     // this is a new array to handle converge-flag
+  int    *FinalQualMap;     // this is a new array to handle quality-map
   double *FinalRes,*FinalErr;
   time_t startime, endtime;
   double *ddat, *res;
   double *obs, *scat, *err;
-  float *data, *data0; //, *inv = NULL;
+  double *weights;     // new, on Feb 10, 2011
+  float  *data, *data0; //, *inv = NULL;
   int *nan_map;
   float *stokesi, *stokesq, *stokesu, *stokesv;
   float fval;
@@ -314,17 +449,16 @@ int DoIt (void)
   int rn, rec_ct, sn, seg_ct;
   int cols, rows, imgpix, imgbytes, imgloc;
   int sp, wl, nvar;
-  int imgseg, segsize, ressize;
   int j,m,i,k,n ;
   int status;
   int iquality;
+  float sunradfpix;
 #if RECTANGL == 1
 /* clipping cropping */
-  int xleftbot = 2820;
-  int yleftbot = 1780;
-  int xwidth   = 200;
-  int yheight  = 200;
-  int ipixstart, ipixend;
+  int xleftbot = 1932;
+  int yleftbot = 1466;
+  int xwidth   = 1;
+  int yheight  = 1;
 #endif
 /* MPI variables */
   MPI_Status mpistat;
@@ -333,10 +467,15 @@ int DoIt (void)
   int istart, iend;
   int *istartall, *iendall;
   void para_range(int,int,int,int *,int *);
-/* Sun and CCD */
+/* Sun, SDO and CCD */
+  float obs_vr;
   float crpixx, crpixy;
   float cdeltx, cdelty;
   float rsun_ref, dsun_obs;
+  float sunarc;
+  float crota2;
+/* version info., supplemental */
+  char *meinversion_version();
 /*S.C. filter function */
   int vfisv_filter(int ,int ,double [][],double ,double ,double *,double *,int ,double *,double *,int ,
                    double, double [4],double [3],double [4],double [3],double *,double *,double *,
@@ -368,6 +507,17 @@ int DoIt (void)
   int    HCMWB;
   int    HCMNB;
   int    HCMPOL;
+
+#if VLOSINIT == 1
+  float *vlos_init;   // new, on Mar 24, 2011 
+  int   iexistdoppler;
+  iexistdoppler = 0; // default, no-existing..
+#endif
+#if MGSTINIT == 1
+  float *mgst_init;   // new, on Mar 25, 2011 
+  int   iexistmagnetogram;
+  iexistmagnetogram = 0; // default, no-existing..
+#endif
 #if TAKEPREV == 1
   float *prevdata;
   int   iexistprev;
@@ -409,13 +559,13 @@ int DoIt (void)
       DRMS_RecordSet_t *inRS;
       int nnx, nny;
 
-      if (verbose) printf(" now loading previous results series : %s\n",indsdesc3);
+      if (verbose) printf(" now loading mask-data : %s\n",indsdesc3);
       inRS = drms_open_records (drms_env, indsdesc3, &status); /*  open input record_set  */
 /* this case, never say die.... just turn on flag */
       if ((status) || ((rec_ct = inRS->n) == 0))
       {
         iexistpatchmask = 0;
-        if (verbose) printf(" skip, no data series : %s\n",indsdesc3);
+        printf(" skip, no data series : %s\n",indsdesc3);
       }
       else
       {
@@ -423,14 +573,15 @@ int DoIt (void)
         if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
         rn = 0;
         inRec = inRS->records[rn];
-        inSeg = drms_segment_lookupnum (inRec, 0);
+        char *Resname[] = {"mask"};
+        sprintf(segname,"%s",Resname[0]);
+        inSeg = drms_segment_lookup(inRec,segname);
         cols = inSeg->axis[0];
         rows = inSeg->axis[1];
         imgpix = cols * rows;
         imgbytes = imgpix * sizeof (float);
         patchmask  = (int  *)malloc (sizeof (int)  * imgpix);
         int iseg;
-        char *Resname[] = {"mask"};      // MIND this is only valid within local scope
         for (iseg = 0; iseg < 1; iseg++) // maybe just one segment...
         {
           sprintf(segname,"%s",Resname[iseg]);
@@ -502,6 +653,7 @@ int DoIt (void)
     }  /* end of scope for some DRMS variables */
 #endif /* endif TAKEPREV is 1 or not */
 
+/* Getting Stokes */
     records = drms_open_records (drms_env, indsdesc, &status); /*  open input record_set  */
     if (status) {DIE("drms_open_records failed.\n");}
     if ((rec_ct = records->n) == 0){DIE("No records in selected dataset.\n");}
@@ -520,36 +672,57 @@ int DoIt (void)
 #if MASKPTCH == 1
     if (iexistpatchmask==0){patchmask  = (int  *)malloc (sizeof (int)  * imgpix);} /* allocate anyway */
 #endif
-
 #if TAKEPREV == 1
     if (iexistprev==0){prevdata = (float *)malloc (sizeof (float) * imgpix * (paramct+Err_ct));} /* allocate anyway */
 #endif
-#if RECTANGL == 1
-    ipixstart =  yleftbot              * cols + xleftbot;
-    ipixend   = (yleftbot + yheight-1) * cols + xleftbot + xwidth - 1;
-#endif
-
-    if (npix < 1) npix = imgpix / mpi_size;
-//    if (imgpix % npix) {printf ("Error: npix (%d) must be a divisor of %d\n", npix, imgpix);return 0;} // this is not needed.
 
     data = data0 = (float *)malloc (sizeof (float) * imgpix * nvar); // a noble use of pointer, by Priya & Rick
-    nan_map=(int*)calloc (imgpix, sizeof (int));
+    nan_map=(int *)calloc(imgpix, sizeof (int));
 
-    for (sp = 0; sp < spct; sp++) /* spct=4,wlct=6 */
+//    printf("now loading Stokes of %d wavelength \n",wlct);
+
+    for (sp = 0; sp < spct; sp++) /* spct=4, wlct maybe 6 */
     {
       for (wl = 0; wl < wlct; wl++)
       {
-        sprintf (segname, "%s%d", spname[sp], wl);
+/*
+ * By K.H.
+ * On 2011 March 7, we assume the wlct can be 6, 8 or 10.
+ * The segname will be modified so that the order will be matching with the one
+ * in the hmi.S2_720s, a new test series S.C. prepared.
+ */
+        if (NUM_LAMBDA_FILTER == 6) // wlct is equal to NUM_LAMBDA_FILTER and to NUM_LAMBDA_FILTERc
+        {
+          sprintf (segname, "%s%d", spname[sp], wl); // same as before March 07, 2011
+        }
+        if (NUM_LAMBDA_FILTER == 8) // for 8-wavelength filter, inv. order of 6, I5, I4, I3, I2, I1, I0, and I7 
+        {
+          int idummy;
+          if (wl == 0){idummy = 7;}else{idummy = wl - 1;}
+          sprintf (segname, "%s%d",spname[sp],idummy);
+        }
+        if (NUM_LAMBDA_FILTER == 10) // for 10, inv order of I8, I6, I5, I4, I3, I2, I1, I0, I7, and I9.
+        {
+          int idummy;
+          idummy = wl - 2;
+          if (wl == 0){idummy = 9;}
+          if (wl == 1){idummy = 7;}
+          if (wl == 9){idummy = 8;}
+          sprintf (segname, "%s%d",spname[sp],idummy);
+        }
+//        printf("now loading Stokes : %s\n",segname);
+
         if ((seg = drms_segment_lookup (inRec, segname)) == NULL){
           fprintf (stderr, "Error reading segment %s of record %d\n", segname, rn);
           return 1;
         }
-        /* 4 x 6 segment, 4k x 4k data points each */
+
+        /* 4 x {6, 8 or 10} segments, 4k x 4k data points each */
         stokes_array = drms_segment_read (seg, DRMS_TYPE_FLOAT, &status);
         /* printf("segment read %s\n",segname); */
         memcpy (data, stokes_array->data, imgbytes);
         drms_free_array (stokes_array);
-        data += imgpix;
+        data += imgpix; // another noble use of pointer, by Priya & Rick
       }
     }
     data = data0;
@@ -576,8 +749,9 @@ int DoIt (void)
     }
 #endif
 
-/* Calculate "square" of solar radius in float pixel */
-    float sunarc;
+    obs_vr   = drms_getkey_float(inRec,"OBS_VR",&status); // SDO's relative motion toward/away from the Sun.
+    obs_vr   = obs_vr * 100.0; // in cm per sec
+    crota2   = drms_getkey_float(inRec,"CROTA2",&status);   // P-angle... right?
     crpixx   = drms_getkey_float(inRec,"CRPIX1",&status);   // center of the solar disk
     crpixy   = drms_getkey_float(inRec,"CRPIX2",&status);
     cdeltx   = drms_getkey_float(inRec,"CDELT1",&status);   // arcsec per pixel
@@ -587,16 +761,217 @@ int DoIt (void)
     sunarc = asin(rsun_ref/dsun_obs)              // arc-sin in radian
            / 3.14159265358979e0 * 180.0 * 3600.0; // radian to arc-second
     printf("solar radius is %f in arcsec \n",sunarc);
-    float fdummy;
-    fdummy = sunarc / (cdeltx + cdelty) * 2.0;
-    printf("solar radius is %f in CCD pix.\n",fdummy);
+    sunradfpix = sunarc / (cdeltx + cdelty) * 2.0; // for simplicity
+    printf("solar radius is %f in CCD pix.\n",sunradfpix);
     if ((isnan(sunarc)) ||((isnan(crpixx)) || isnan(crpixy))) // in case something had gone wrong
     {
       sunarc = (float)(cols+rows) * 0.5;
       crpixx = (float)cols * 0.5 + 0.5;
       crpixy = (float)rows * 0.5 + 0.5;
     }
-    sunarc = sunarc*sunarc;  // make it square
+
+/* 2011 March 24, added by K.H. to try to get hmi.V_720s corresponding */
+#if VLOSINIT == 1
+    float defvlosinit;
+    defvlosinit = guess[6];
+    { /* limit scope for some DRMS variables */
+      char segname[100]; /* arbitrary long string... */
+      float *inData; /* I-O pointer */
+      DRMS_Array_t     *inArray; /* add some DRMS variables within this for-loop */
+      DRMS_Segment_t   *inSeg;
+      DRMS_Record_t    *inRec;
+      DRMS_RecordSet_t *inRS;
+      int nnx, nny;
+
+      if (verbose) printf(" now loading Doppler : %s\n",indsdesc4);
+      inRS = drms_open_records (drms_env, indsdesc4, &status); /*  open input record_set  */
+/* this case, never say die.... just turn on flag */
+      if ((status) || ((rec_ct = inRS->n) == 0))
+      {
+        iexistdoppler = 0;
+        printf(" no data series : %s\n",indsdesc4);
+      }
+      else
+      {
+        iexistdoppler = 1;
+        if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
+        rn = 0;
+        inRec = inRS->records[rn];
+        char *Resname[] = {"Dopplergram"};
+        sprintf(segname,"%s",Resname[0]);
+        inSeg = drms_segment_lookup(inRec,segname);
+        cols = inSeg->axis[0];
+        rows = inSeg->axis[1];
+        imgpix = cols * rows;
+        imgbytes = imgpix * sizeof (float);
+        vlos_init = (float *)malloc (sizeof(float) * imgpix);
+        int iseg;
+        for (iseg = 0; iseg < 1; iseg++) // maybe just one segment...
+        {
+          sprintf(segname,"%s",Resname[iseg]);
+          if (verbose) printf(" now loading segment : %-20s",segname);
+          inSeg = drms_segment_lookup(inRec,segname);
+          inArray= drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+          if (status) DIE("Cant read Dopplergram data !\n");
+          inData =(float *)inArray->data;
+          nnx = inArray->axis[0]; // must be same as cols
+          nny = inArray->axis[1]; // must be same as rows
+          if (verbose) {printf(" Nx Ny are = %d %d\n",  nnx, nny);}
+          for (n = 0; n < nnx * nny; n++){vlos_init[n]=inData[n]*100.0;} // silly but safe way to pass data, m/s to cm/s
+          drms_free_array(inArray); // without this, things go mad.
+        }
+        drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
+      }
+    }  /* end of scope for some DRMS variables */
+/* adjust */
+    if (iexistdoppler == 1)
+    {
+      for (n = 0; n < imgpix; n++)
+      {
+        float fpixdist, fxpix, fypix;
+        int   ix, iy;
+        ix = n % cols;
+        iy = n / cols;
+        fxpix = ((float)(ix) -(crpixx - 1.0)) * cdeltx; // in arc-sec
+        fypix = ((float)(iy) -(crpixy - 1.0)) * cdelty;
+        fpixdist = fxpix * fxpix + fypix * fypix + 1e-20;
+        fpixdist = sqrt(fpixdist);
+        if (fpixdist > sunarc * 0.99)
+        {
+          vlos_init[n] = defvlosinit; // replace with the default given by RCE.
+        }
+      }
+    }
+/* making Vlos_init */
+    if (iexistdoppler == 0)
+    {
+      vlos_init = (float *)malloc (sizeof (float) * imgpix * 1); /* allocate anyway */
+      float cospangle, pangrad;
+      pangrad = crota2 / 180.0 * 3.14159265358979;
+      cospangle = cos(pangrad);
+      for (n = 0; n < imgpix; n++)
+      {
+        float fpixdist, fxpix, fypix;
+        int   ix, iy;
+        ix = n % cols;
+        iy = n / cols;
+        fxpix = ((float)(ix) -(crpixx - 1.0)) * cdeltx; // in arc-sec
+        fypix = ((float)(iy) -(crpixy - 1.0)) * cdelty;
+        fpixdist = fxpix * fxpix + fypix * fypix + 1e-20;
+        fpixdist = sqrt(fpixdist);
+        if (fpixdist < sunarc * 0.99)
+        {
+          float sinphi, sintheta, costheta;
+          sintheta = fypix/sunarc; // B0.. ? so what !!
+          costheta = 1.0 - sintheta*sintheta;
+          if (costheta > 0.0){costheta = sqrt(costheta);}else{costheta = 0.0;}
+          float omega, vlosoldiff;
+          omega = 14.713 - 2.396 * sintheta * sintheta - 1.787 * sintheta * sintheta * sintheta * sintheta;
+          omega = omega / (24.0 * 3600.0) * 3.14159265358979 / 180.0 ; // in radian/sec
+          vlosoldiff = rsun_ref * 100.0 * omega; // rsun_ref is in m/sec
+          float fwork;
+          sinphi = fxpix/ (costheta * sunarc);
+          fwork = sinphi * cospangle;
+          vlosoldiff = vlosoldiff * fwork;
+          vlos_init[n] = -obs_vr + vlosoldiff; // check sign etc.....
+        }
+        else
+        {
+          vlos_init[n] = defvlosinit; // replace with the default given by RCE.
+        }
+      }
+    }
+#endif // endif VLOSINIT is 1
+
+/* 2011 March 25, added by K.H. to try to get hmi.M_720s corresponding */
+#if MGSTINIT == 1
+    float defmgstinit;
+    defmgstinit = guess[5];
+    { /* limit scope for some DRMS variables */
+      char segname[100]; /* arbitrary long string... */
+      float *inData; /* I-O pointer */
+      DRMS_Array_t     *inArray; /* add some DRMS variables within this for-loop */
+      DRMS_Segment_t   *inSeg;
+      DRMS_Record_t    *inRec;
+      DRMS_RecordSet_t *inRS;
+      int nnx, nny;
+
+      if (verbose) printf(" now loading magnetogram : %s\n",indsdesc5);
+      inRS = drms_open_records (drms_env, indsdesc5, &status); /*  open input record_set  */
+/* this case, never say die.... just turn on flag */
+      if ((status) || ((rec_ct = inRS->n) == 0))
+      {
+        iexistmagnetogram = 0;
+        printf(" no data series : %s\n",indsdesc5);
+      }
+      else
+      {
+        iexistmagnetogram = 1;
+        if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
+        rn = 0;
+        inRec = inRS->records[rn];
+        char *Resname[] = {"magnetogram"};
+        sprintf(segname,"%s",Resname[0]);
+        inSeg = drms_segment_lookup(inRec,segname);
+        cols = inSeg->axis[0];
+        rows = inSeg->axis[1];
+        imgpix = cols * rows;
+        imgbytes = imgpix * sizeof (float);
+        mgst_init = (float *)malloc (sizeof(float) * imgpix);
+        int iseg;
+        for (iseg = 0; iseg < 1; iseg++) // maybe just one segment...
+        {
+          sprintf(segname,"%s",Resname[iseg]);
+          if (verbose) printf(" now loading segment : %-20s",segname);
+          inSeg = drms_segment_lookup(inRec,segname);
+          inArray= drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+          if (status) DIE("Cant read Dopplergram data !\n");
+          inData =(float *)inArray->data;
+          nnx = inArray->axis[0]; // must be same as cols
+          nny = inArray->axis[1]; // must be same as rows
+          if (verbose) {printf(" Nx Ny are = %d %d\n",  nnx, nny);}
+          for (n = 0; n < nnx * nny; n++){mgst_init[n]=inData[n];} // here both in gauss.
+          drms_free_array(inArray); // without this, things go mad.
+        }
+        drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
+      }
+    }  /* end of scope for some DRMS variables */
+/* adjust */
+    if (iexistmagnetogram == 1)
+    {
+      for (n = 0; n < imgpix; n++)
+      {
+        float fpixdist, fxpix, fypix;
+        int   ix, iy;
+        ix = n % cols;
+        iy = n / cols;
+        fxpix = ((float)(ix) -(crpixx - 1.0)) * cdeltx; // in arc-sec
+        fypix = ((float)(iy) -(crpixy - 1.0)) * cdelty;
+        fpixdist = fxpix * fxpix + fypix * fypix + 1e-20;
+        fpixdist = sqrt(fpixdist);
+        if (fpixdist > sunarc * 0.99)
+        {
+          mgst_init[n] = defmgstinit; // replace with the default given by RCE.
+        }
+	else
+	{
+	  float cosmu, ftmp;
+	  cosmu = 1.0e0 - fpixdist*fpixdist/(sunarc*sunarc);
+	  ftmp = fabs(mgst_init[n]) / (0.8 * sqrt(cosmu) + 0.2); // adding 0.2 did ... I think .. come from Phil's work.
+	  if (ftmp >  4.0e3){ftmp =  4.0e3;}
+	  if (ftmp < -4.0e3){ftmp = -4.0e3;}
+	  mgst_init[n] = ftmp;
+	}
+      }
+    }
+/* making mgst_init anyway */
+    if (iexistmagnetogram == 0)
+    {
+      mgst_init = (float *)malloc (sizeof (float) * imgpix * 1); /* allocate anyway */
+      for (n = 0; n < imgpix; n++){mgst_init[n]=0.0;}
+    }
+#endif // endif MGSTINIT is 1
+
 /* Map of invalid values (NaN or all-zero) , or off-disk */
     for (n = 0; n < imgpix; n++)
     {
@@ -612,7 +987,8 @@ int DoIt (void)
       iy = n / cols;
       fxpix = ((float)(ix) -(crpixx - 1.0)) * cdeltx;
       fypix = ((float)(iy) -(crpixy - 1.0)) * cdelty;
-      fpixdist = fxpix * fxpix + fypix * fypix; // must be square
+      fpixdist = fxpix * fxpix + fypix * fypix + 1e-20;
+      fpixdist = sqrt(fpixdist);
       if (fpixdist > sunarc) {nan_map[n] = 2;}  // turn on flag to-be-skipped for being out-of-disk
 #if RECTANGL == 1
       if ((ix < xleftbot) ||
@@ -621,7 +997,7 @@ int DoIt (void)
           (iy > yleftbot + yheight - 1)) {nan_map[n] = 3;}  // turn on flag to-be-skipped for being out-of-box
 #endif
 #if MASKPTCH == 1
-    if (patchmask[n] < 1){nan_map[n] = 4;}  // turn on flag to-be-skipped for being masked
+    if (patchmask[n] < 2){nan_map[n] = 4;}  // new definition by Xudong
 #endif
     }
     printf("data is read\n");
@@ -735,12 +1111,16 @@ int DoIt (void)
     FinalErr=(double *)malloc(sizeof(double)*imgpix*Err_ct);
     FinalRes=(double *)malloc(sizeof(double)*imgpix*paramct);
     FinalConvFlag=(int *)malloc(sizeof(int)*imgpix);
+    FinalQualMap =(int *)malloc(sizeof(int)*imgpix);
   }
 
 /* part of input/output ; local array for ALL PE. */
   float  *dataLocal;
+  float  *vlos_initLocal;
+  float  *mgst_initLocal;
   double *FinalResLocal,*FinalErrLocal;
   int    *FinalConvFlagLocal;
+  int    *FinalQualMapLocal;
   int    *nan_mapLocal;
   myrank = mpi_rank;
   nprocs = mpi_size;
@@ -759,18 +1139,20 @@ int DoIt (void)
   int imgpixlocal;
   imgpixlocal = iend - istart + 1;
   FinalConvFlagLocal=(int *)malloc(sizeof(int)   *imgpixlocal);
+  FinalQualMapLocal =(int *)malloc(sizeof(int)   *imgpixlocal);
   nan_mapLocal  = (int    *)malloc(sizeof(int)   *imgpixlocal);
   dataLocal     = (float  *)malloc(sizeof(float) *imgpixlocal*nvar);
+  vlos_initLocal= (float  *)malloc(sizeof(float) *imgpixlocal);
+  mgst_initLocal= (float  *)malloc(sizeof(float) *imgpixlocal);
   FinalErrLocal = (double *)malloc(sizeof(double)*imgpixlocal*Err_ct);
   FinalResLocal = (double *)malloc(sizeof(double)*imgpixlocal*paramct);
 
 /* tiny arrays used at processing each pixel as the invert()'s input/output arguments. */
-  segsize = wlct * spct * npix;
-  ressize = paramct * npix;
   obs = (double *)malloc (sizeof (double) * nvar);
   res = (double *)calloc (paramct, sizeof (double));
   scat= (double *)malloc (sizeof (double) * nvar);
   err = (double *)calloc (Err_ct,sizeof (double));
+  weights = (double *)malloc (sizeof (double) * 4); // new one!!! on Feb 10, 2011
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -948,7 +1330,7 @@ int DoIt (void)
         ibufsize = (iend-istart+1) * (paramct + Err_ct);
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
         for (n = istart ; n < iend+1 ; n++){for (m = 0; m < (paramct + Err_ct); m++){fbufsend[(n-istart)*(paramct + Err_ct)+m] = prevdata[n + m*imgpix];}}
-        mpi_tag = 1400 + irank;
+        mpi_tag = 1600 + irank;
         MPI_Send(fbufsend, ibufsize, MPI_REAL, mpi_dest, mpi_tag, MPI_COMM_WORLD);
         free(fbufsend);
       }
@@ -967,7 +1349,7 @@ int DoIt (void)
 #endif
     ibufsize = (iend-istart+1) * (paramct + Err_ct);
     fbufrecv = (float*)malloc(sizeof(float) * ibufsize);
-    mpi_tag = 1400 + mpi_rank;
+    mpi_tag = 1600 + mpi_rank;
     MPI_Recv(fbufrecv, ibufsize, MPI_REAL, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
     for (n = istart ; n < iend+1 ; n++){for (m = 0; m < paramct; m++){PrevResLocal[(n-istart)*paramct+m] = fbufrecv[(n-istart)*(paramct + Err_ct)+m        ];}}
     for (n = istart ; n < iend+1 ; n++){for (m = 0; m < Err_ct;  m++){PrevErrLocal[(n-istart)*Err_ct +m] = fbufrecv[(n-istart)*(paramct + Err_ct)+m+paramct];}}
@@ -979,14 +1361,142 @@ int DoIt (void)
   MPI_Barrier(MPI_COMM_WORLD);
 #endif /* endif TAKEPREV is 1 or not */
 
+#if VLOSINIT == 1
+/* send prev. results to each PE */
+  if (mpi_rank == 0)
+  {
+/* first, the primary makes copy for its own part */
+    myrank = mpi_rank;
+    nprocs = mpi_size;
+    numpix = imgpix;
+#if EQUIAREA == 1
+    istart=istartall[myrank];
+    iend=iendall[myrank];
+#else
+    para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
+    for (n = istart ; n < iend+1 ; n++){vlos_initLocal[n-istart] = vlos_init[n];}
+/* then send the partials to the other PEs */
+    if (mpi_size > 1)
+    {
+      int irank;
+      for(irank = 1; irank < mpi_size; irank++)
+      {
+        int mpi_dest;
+        int ibufsize;
+        float *fbufsend;
+        mpi_dest = irank;
+#if EQUIAREA == 1
+        istart=istartall[mpi_dest];
+        iend=iendall[mpi_dest];
+#else
+        para_range(mpi_dest,nprocs,numpix,&istart,&iend);
+#endif
+        ibufsize = (iend-istart+1) * 1;
+        fbufsend= (float*)malloc(sizeof(float) * ibufsize);
+        for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = vlos_init[n];}
+        mpi_tag = 1900 + irank;
+        MPI_Send(fbufsend, ibufsize, MPI_REAL, mpi_dest, mpi_tag, MPI_COMM_WORLD);
+        free(fbufsend);
+      }
+    }
+  }
+  else
+  {
+    int mpi_from = 0;
+    int ibufsize;
+    float *fbufrecv;
+#if EQUIAREA == 1
+    istart=istartall[myrank];
+    iend=iendall[myrank];
+#else
+    para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
+    ibufsize = (iend-istart+1) * 1;
+    fbufrecv = (float*)malloc(sizeof(float) * ibufsize);
+    mpi_tag = 1900 + mpi_rank;
+    MPI_Recv(fbufrecv, ibufsize, MPI_REAL, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
+    for (n = istart ; n < iend+1 ; n++){vlos_initLocal[n-istart] = fbufrecv[n-istart];}
+    free(fbufrecv);
+  } // end-if mpi_rank is 0, or not.
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (mpi_rank == 0) free(vlos_init); // liberate
+  if (mpi_rank == 0) printf("VLOS_INIT data had propagated to all PE.\n");
+  MPI_Barrier(MPI_COMM_WORLD);
+#endif /* endif VLOSINIT is 1 or not */
+
+#if MGSTINIT == 1
+/* send prev. results to each PE */
+  if (mpi_rank == 0)
+  {
+/* first, the primary makes copy for its own part */
+    myrank = mpi_rank;
+    nprocs = mpi_size;
+    numpix = imgpix;
+#if EQUIAREA == 1
+    istart=istartall[myrank];
+    iend=iendall[myrank];
+#else
+    para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
+    for (n = istart ; n < iend+1 ; n++){mgst_initLocal[n-istart] = mgst_init[n];}
+/* then send the partials to the other PEs */
+    if (mpi_size > 1)
+    {
+      int irank;
+      for(irank = 1; irank < mpi_size; irank++)
+      {
+        int mpi_dest;
+        int ibufsize;
+        float *fbufsend;
+        mpi_dest = irank;
+#if EQUIAREA == 1
+        istart=istartall[mpi_dest];
+        iend=iendall[mpi_dest];
+#else
+        para_range(mpi_dest,nprocs,numpix,&istart,&iend);
+#endif
+        ibufsize = (iend-istart+1) * 1;
+        fbufsend= (float*)malloc(sizeof(float) * ibufsize);
+        for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = mgst_init[n];}
+        mpi_tag = 2000 + irank;
+        MPI_Send(fbufsend, ibufsize, MPI_REAL, mpi_dest, mpi_tag, MPI_COMM_WORLD);
+        free(fbufsend);
+      }
+    }
+  }
+  else
+  {
+    int mpi_from = 0;
+    int ibufsize;
+    float *fbufrecv;
+#if EQUIAREA == 1
+    istart=istartall[myrank];
+    iend=iendall[myrank];
+#else
+    para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
+    ibufsize = (iend-istart+1) * 1;
+    fbufrecv = (float*)malloc(sizeof(float) * ibufsize);
+    mpi_tag = 2000 + mpi_rank;
+    MPI_Recv(fbufrecv, ibufsize, MPI_REAL, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
+    for (n = istart ; n < iend+1 ; n++){mgst_initLocal[n-istart] = fbufrecv[n-istart];}
+    free(fbufrecv);
+  } // end-if mpi_rank is 0, or not.
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (mpi_rank == 0) free(mgst_init); // liberate
+  if (mpi_rank == 0) printf("MGST_INIT data had propagated to all PE.\n");
+  MPI_Barrier(MPI_COMM_WORLD);
+#endif /* endif MGSTINIT is 1 or not */
+
 /* inversion initializations : must be done by each PE. */
   if (mpi_rank == 0) printf("\n----------- inversion initializations ----------------- \n");
 
   line_init_(&LAMBDA_0,&LAMBDA_B,&NOISE_LEVEL);
   if (verbose){printf("done line_init for mpi_rank %d\n",mpi_rank);}
-  wave_init_ (&LAMBDA_MIN,&DELTA_LAMBDA,&NUM_LAMBDA);
+  wave_init_ (&LAMBDA_MIN_synth,&DELTA_LAMBDA,&NUM_LAMBDA_synth);  // use ... synthetic(s) ???
   if (verbose){printf("done wave_init for mpi_rank %d\n", mpi_rank );}
-  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&CONTINUUM,&LYOTFWHM,&WNARROW,&WSPACING);
+  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&CONTINUUM,&LYOTFWHM,&WNARROW,&WSPACING, &NUM_LAMBDA);
   if (verbose){printf("done filt_init for mpi_rank %d\n",mpi_rank);}
 
 /* JM Borrero & RC Elliot Apr 7, 2010
@@ -1134,14 +1644,14 @@ printf("We should be running initialize_vfisv_filter\n");
     {
 #if QUICKRUN == 1
 //     if (n == 15049795) // a non-convergence pixel address of hmi_test.S_720s[2010.05.25_03:00:00_TAI]
-     if ((n % rows > 1997) && (n % rows < 2098)) // central 100-pixel width column
+     if ((n % rows > 1997) && (n % rows < 2098)) // central 100-pixel width column.
      {
 #endif
 
 #if TAKEPREV == 1
 /*
  * K.H. May 12, 2010
- * Here, the previous reference data, prevres and preverr are restored for each pixel, at last,
+ * Here, the previous reference data.
  * Order of the variables must be same as the counterpart output arrays (res and err) at the argument invert_().
  * Use value of integer iexistprev (that must be 0 or 1.) to change behaviour in invert_() etc.
  */
@@ -1287,26 +1797,51 @@ This is done inside the FORTRAN code, in invert.f90
  MIND that previous definition must be never used !!!
  */
 
-      invert_ (obs, scat, guess, res, err, filters, &iconverge_flag);                   // do inversion : convergence_flag
-//      invert_ (obs, scat, guess, res, err, filters);                                  // before flag is included..
+/* since 2011 March 3, the weighting array is filled here */
+//       weights[0]=1.0; weights[1]=7.0; weights[2]=7.0; weights[3]=3.0; // choice 1
+//       weights[0]=1.0; weights[1]=5.0; weights[2]=5.0; weights[3]=3.0; // choice 2
+       weights[0]=1.0; weights[1]=3.0; weights[2]=3.0; weights[3]=2.0; // choice 3
+
+#if VLOSINIT == 1
+     guess[6] = vlos_initLocal[n-istart]; // 7th one ..
+#endif
+#if MGSTINIT == 1
+     guess[5] = mgst_initLocal[n-istart]; // 6th one ..
+#endif
+
+#if NEWINVRT == 1
+      invert_ (obs, scat, guess, res, err, filters, &iconverge_flag, weights); // added the weights. on Feb 10, 2011
+#else
+      invert_ (obs, scat, guess, res, err, filters, &iconverge_flag);          // convergence_flag is added
+//      invert_ (obs, scat, guess, res, err, filters);                         // before flag is included..
+#endif
 
 /*
   here do thing in accordance with the value of iconverge_flag.
   Some NaN-filling be done under wrapper's responsibility by K.H.
 */
-//      if (iconverge_flag == 1) // old 
+//      if (iconverge_flag == 1) // old
       if ((iconverge_flag == 4) ||
           (iconverge_flag == 5) ||
           (iconverge_flag == 6))
       {
-         pix_noconv = pix_noconv + 1;
-         if (verbose){printf("Hello, this is %2d th PE : found non-converging pixel at %9d . \n", mpi_rank, n);}
-         for (j=0; j<paramct; j++){res[j]=NAN;}
-         for (k=0; k<Err_ct;  k++){err[k]=NAN;}
+        if (verbose){printf("Hello, this is %2d th PE : found iconverge_flag ge 4 at %9d . \n", mpi_rank, n);}
+        for (j=0; j<paramct; j++){res[j]=NAN;}
+        for (k=0; k<Err_ct;  k++){err[k]=NAN;}
       }
 
-
       FinalConvFlagLocal[n-istart]=iconverge_flag;
+
+      if (iconverge_flag > 0)
+      {
+        pix_noconv = pix_noconv + 1;
+        FinalQualMapLocal[n-istart]=0x00000002; // 00000...010 , assume this line is the first one giving value to q-map
+      }
+      else
+      {
+        FinalQualMapLocal[n-istart]=0x00000000;
+      }
+
       for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]=res[j];} // copy results to the local-small array(s)
       for (k=0; k<Err_ct;  k++){FinalErrLocal[(n-istart)*Err_ct +k]=err[k];}
 #if QUICKRUN == 1
@@ -1314,6 +1849,7 @@ This is done inside the FORTRAN code, in invert.f90
      else
      {
       FinalConvFlagLocal[n-istart]=-(mpi_rank+1);  // for debugging purpose
+      FinalQualMapLocal [n-istart]=-(mpi_rank+1);  // for debugging purpose
       for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]= 1.0+mpi_rank;}
       for (k=0; k<Err_ct ; k++){FinalErrLocal[(n-istart)*Err_ct +k]=-1.0-mpi_rank;}
      }
@@ -1324,6 +1860,7 @@ This is done inside the FORTRAN code, in invert.f90
     {
       float aa=NAN;
       FinalConvFlagLocal[n-istart]=(int)(aa);    // tweaks, working
+      FinalQualMapLocal [n-istart]=(int)(aa);    // tweaks, working
       for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]=NAN;} // put NAN
       for (k=0; k<Err_ct;  k++){FinalErrLocal[(n-istart)*Err_ct +k]=NAN;}
     } // end of if (NAN) etc.
@@ -1331,17 +1868,22 @@ This is done inside the FORTRAN code, in invert.f90
   if (verbose){printf("Hello, this is %2d th PE : inversion done for %9d pixels. \n", mpi_rank, pixdone);}
   if (verbose){printf("Hello, this is %2d th PE : Num of pixel at which solution did not converge = %d\n",mpi_rank,pix_noconv);}
   MPI_Barrier(MPI_COMM_WORLD);
+
 /* count sum of non-convergent pixel */
+  int sum_pix_noconv;
+  int sum_pixdone;
   { //limit the scope of some integer variables
-    int sum_pix_noconv;
     int *ibufs, *ibufr;
-    ibufs = (int *)malloc(sizeof(int)*1); // silly...MPI
-    ibufr = (int *)malloc(sizeof(int)*1); // silly...MPI
+    ibufs = (int *)malloc(sizeof(int)*2);
+    ibufr = (int *)malloc(sizeof(int)*2);
     ibufs[0] = pix_noconv;
-    MPI_Reduce(ibufs,ibufr,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD); // only 0th PE will know the total.
+    ibufs[1] = pixdone;
+    MPI_Reduce(ibufs,ibufr,2,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD); // only 0th PE will know the total.
     if (mpi_rank == 0)
     {
       sum_pix_noconv = ibufr[0];
+      sum_pixdone    = ibufr[1];
+      printf("Total num. of pixel processed                          = %d\n",sum_pixdone);
       printf("Total num. of pixel at which solution did not converge = %d\n",sum_pix_noconv);
     }
   }
@@ -1456,6 +1998,7 @@ This is done inside the FORTRAN code, in invert.f90
     for (n = istart ; n < iend+1 ; n++)
     {
       FinalConvFlag[n] =  FinalConvFlagLocal[n-istart];
+      FinalQualMap [n] =  FinalQualMapLocal [n-istart];
     }
 /* then collecting the portions done by the others (1) float variables */
     if (mpi_size > 1)
@@ -1475,7 +2018,7 @@ This is done inside the FORTRAN code, in invert.f90
         para_range(irecv,nprocs,numpix,&istart,&iend);
 #endif
         int ibufsize;
-        ibufsize = (iend-istart+1)* 1; // so far only 1 integer-array be handled ...
+        ibufsize = (iend-istart+1) * 2; // so far 2 integer-array be handled ...
         int *ibufrecv;
         ibufrecv = (int*)malloc(sizeof(int) * ibufsize);
         mpi_from = irecv;
@@ -1484,6 +2027,7 @@ This is done inside the FORTRAN code, in invert.f90
         for (n = istart ; n < iend+1 ; n++)
         {
           FinalConvFlag[n] = ibufrecv[n-istart];
+          FinalQualMap [n] = ibufrecv[n-istart+(iend-istart+1)];
         }
         free(ibufrecv);
       }
@@ -1504,12 +2048,13 @@ This is done inside the FORTRAN code, in invert.f90
     para_range(isend,nprocs,numpix,&istart,&iend);
 #endif
     int ibufsize;
-    ibufsize = (iend-istart+1)* 1; // so far only 1 integer-array be handled ...
+    ibufsize = (iend-istart+1) * 2; // so far 2 integer-array be handled ...
     int *ibufsend;
     ibufsend = (int*)malloc(sizeof (int) * ibufsize);
     for (n = istart ; n < iend + 1 ; n++)
     {
-      ibufsend[n-istart]=FinalConvFlagLocal[n-istart];
+      ibufsend[n-istart                ]=FinalConvFlagLocal[n-istart];
+      ibufsend[n-istart+(iend-istart+1)]=FinalQualMapLocal [n-istart];
     }
     mpi_tag = 1300 + mpi_rank;
     MPI_Send(ibufsend, ibufsize, MPI_INT, mpi_dest, mpi_tag, MPI_COMM_WORLD);
@@ -1526,6 +2071,7 @@ This is done inside the FORTRAN code, in invert.f90
       {
         float aa=NAN;
         FinalConvFlag[n] = (int)(aa); // tweak, working
+        FinalQualMap [n] = (int)(aa);
         for (j=0; j<paramct; j++){FinalRes[(n*paramct)+j]=NAN;}
         for (k=0; k<Err_ct ; k++){FinalErr[(n*Err_ct) +k]=NAN;}
       }
@@ -1536,6 +2082,7 @@ This is done inside the FORTRAN code, in invert.f90
       {
         float aa=NAN;
         FinalConvFlag[n] = (int)(aa);
+        FinalQualMap [n] = (int)(aa);
         for (j=0; j<paramct; j++){FinalRes[(n*paramct)+j]=NAN;}
         for (k=0; k<Err_ct ; k++){FinalErr[(n*Err_ct) +k]=NAN;}
       }
@@ -1543,8 +2090,9 @@ This is done inside the FORTRAN code, in invert.f90
   } // end-if mpi_rank is 0.
   MPI_Barrier(MPI_COMM_WORLD); // silly..but always safe
 
-  free(FinalConvFlagLocal);
-  free(FinalResLocal);         // liberate....
+  free(FinalConvFlagLocal); // liberate....
+  free(FinalQualMapLocal);
+  free(FinalResLocal);
   free(FinalErrLocal);
   free(dataLocal);
   free(nan_mapLocal);
@@ -1557,39 +2105,202 @@ This is done inside the FORTRAN code, in invert.f90
     if (!outRec) {fprintf (stderr, "Error creating record in series %s; abandoned\n",outser);return 1;}
 
 /* succeed a lot of info. from the input data record */
-#if 0
-    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_All);
-#else
     drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit); // Phil's solution !
+
+    double blos_ave=0.0;
+    double babs_ave=0.0;
+    double vlos_ave=0.0;
+#if CHANGFEB == 1
+    {// scope limiter
+      int icount1=0;
+      int icount2=0;
+      int n, nend;
+      for(n = 0; n < imgpix ; n++)
+      {
+        int   inan=nan_map[n];
+        if (!inan)
+        {
+          float babs =FinalRes[(n*paramct)+5]; // field strenth in gauss
+          float tht  =FinalRes[(n*paramct)+1]; // inclination in degree...
+          if (!isnan(babs) && !isnan(tht))
+          {
+            float costh, thtr, blos;
+            thtr = tht / 180.0 * 3.14159265358979e0;
+            costh = cos(thtr);
+            blos = - babs * costh; // MIND the sign
+            icount1 = icount1 + 1;
+            babs_ave = babs_ave + babs;
+            blos_ave = blos_ave + blos;
+          }
+          float vlos  =FinalRes[(n*paramct)+6]; // vlos
+          if (!isnan(vlos))
+          {
+            icount2 = icount2 + 1;
+            vlos_ave = vlos_ave + vlos;
+          }
+      } }
+      if (icount1 > 0)
+      {
+        babs_ave=babs_ave/(double)(icount1);
+        blos_ave=blos_ave/(double)(icount1);
+      }
+      else
+      {
+        babs_ave=0.0;
+        blos_ave=0.0;
+      }
+      if (icount2 > 0)
+      {
+        vlos_ave=vlos_ave/(double)(icount2);
+      }
+      else
+      {
+        vlos_ave=0.0;
+      }
+      for(n = 0; n < imgpix ; n++)
+      {
+        int   iqm = FinalQualMap[n];
+        int   inan= nan_map[n];
+        if ((!inan) && (!isnan(iqm)) && (iqm > 0)){FinalQualMap[n]=FinalQualMap[n]+0x00000001;}// turn on rightmost bit
+      }
+    }// end of scope limiter
 #endif
-//  fprintf(stderr,"T_REC_step=%f\n",drms_getkey_double(outRec,"T_REC_step",0)); // test..
-#if 0
-    drms_copykey(outRec, inRec, "CENTER_X"); // itemized
-    drms_copykey(outRec, inRec, "CENTER_Y");
-    drms_copykey(outRec, inRec, "SOLAR_B0");
-    drms_copykey(outRec, inRec, "SOLAR_P0");
-    drms_copykey(outRec, inRec, "R_SUN");
-    drms_copykey(outRec, inRec, "TELESCOP");
-    drms_copykey(outRec, inRec, "INSTRUME");
-    drms_copykey(outRec, inRec, "WAVELENG");
-    drms_copykey(outRec, inRec, "T_REC");
-    drms_copykey(outRec, inRec, "T_OBS");
-#endif
-/* overriding existing keyword, or adding new ones , if needed. : usually not needed, I hope, I think */
+/* overriding existing keyword, or adding new ones */
    { // scope limiter
     char invcodeversion[50];
     sprintf(invcodeversion,"%s %s",module_name,version_id);
-    drms_setkey_string(outRec, "INVCODEV", invcodeversion); // add keyword
-#if 0
+    drms_setkey_string(outRec,"INVCODEV", invcodeversion);
+    
+    char *sdummy;
+    sdummy= meinversion_version();
+    drms_setkey_string(outRec,"CODEVER4", sdummy);
+
+// something added on Feb 6 and later., 2011, by K.H.
+#if CHANGFEB == 1
+/* Inversion settings */
+    drms_setkey_int   (outRec,"INVITERA",NUM_ITERATIONS);
+    drms_setkey_int   (outRec,"INVLMBDA",NUM_LAMBDA);
+    drms_setkey_int   (outRec,"INVLMBDF",NUM_LAMBDA_FILTER);
+    drms_setkey_int   (outRec,"INVTUNEN",NUM_TUNNING);
+    drms_setkey_double(outRec,"INVSVDTL",SVD_TOLERANCE);
+    drms_setkey_double(outRec,"INVCHIST",CHI2_STOP);
+    drms_setkey_double(outRec,"INVPOLTH",POLARIZATION_THRESHOLD);
+    drms_setkey_double(outRec,"INVPJUMP",PERCENTAGE_JUMP);
+    drms_setkey_double(outRec,"INVLMBDM",LAMBDA_MIN);
+    drms_setkey_double(outRec,"INVLMBD0",LAMBDA_0);
+    drms_setkey_double(outRec,"INVLMBDB",LAMBDA_B);
+    drms_setkey_double(outRec,"INVDLTLA",DELTA_LAMBDA);
+    drms_setkey_double(outRec,"INVLYOTW",LYOTFWHM);
+    drms_setkey_double(outRec,"INVWNARW",WNARROW);
+    drms_setkey_double(outRec,"INVWSPAC",WSPACING);
+    drms_setkey_double(outRec,"INVINTTH",INTENSITY_THRESHOLD);
+    drms_setkey_double(outRec,"INVNOISE",NOISE_LEVEL);
+    drms_setkey_int   (outRec,"INVCONTI",CONTINUUM);
+    drms_setkey_int   (outRec,"INVLMBDS",NUM_LAMBDA_synth); 
+    drms_setkey_double(outRec,"INVLMBMS",LAMBDA_MIN_synth);
+/* added on Feb 10 */
+    double weighti, weightu, weightq, weightv;
+    weighti = weights[0];
+    weightq = weights[1];
+    weightu = weights[2];
+    weightv = weights[3];
+    drms_setkey_double(outRec,"INVWGHTI",weighti);
+    drms_setkey_double(outRec,"INVWGHTQ",weightq);
+    drms_setkey_double(outRec,"INVWGHTU",weightu);
+    drms_setkey_double(outRec,"INVWGHTV",weightv);
+/* added on Feb 10 */
+    sdummy="No";
+    drms_setkey_string(outRec,"INVSTLGT",sdummy);
+    sdummy=" ";
+    drms_setkey_string(outRec,"INVFLPRF",sdummy);
+    sdummy=" ";
+    drms_setkey_string(outRec,"INVPHMAP",sdummy);
+/* some index about inversion outputs */
+    drms_setkey_double(outRec,"INVVLAVE",vlos_ave);
+    drms_setkey_double(outRec,"INVBLAVE",blos_ave);
+    drms_setkey_double(outRec,"INVBBAVE",babs_ave);
+    drms_setkey_int   (outRec,"INVNPRCS",sum_pixdone);
+    drms_setkey_int   (outRec,"INVNCNVG",sum_pixdone-sum_pix_noconv); // number of "converged" pixel
+/* overwrite and-or copy Stokes keywords */
+    int iqstokes;
+    iqstokes = drms_getkey_int(inRec,"QUALITY",&status);
+    drms_setkey_int   (outRec,"QUAL_S",iqstokes);
+    int iqinversion;
+    iqinversion = iqstokes;   // must be later modified given
+//    iqinversion = 0xffffffff;
+    drms_setkey_int   (outRec,"QUALITY",iqinversion);
+//
+    TIME stockstime = drms_getkey_time(inRec,"DATE",&status);
     char timestr[26];
-    TIME t_rec = drms_getkey_time(inRec,"T_REC",&status);
-    sprint_time(timestr,t_rec,"TAI",0);
-    drms_setkey_string(outRec, "T_REC", timestr); // enforce-overwrite T_REC
-    TIME t_obs = drms_getkey_time(inRec,"T_OBS",&status);
-    sprint_time(timestr,t_obs,"TAI",0);
-    drms_setkey_string(outRec, "T_OBS", timestr); //    also T_OBS
-//    drms_setkey_string(outRec, "T_REC", "2000.02.02_02:02:02_TAI"); // enforce T_REC dummy ones for test
-//    drms_setkey_string(outRec, "T_OBS", "2000.02.02_02:02:02_TAI"); //    also T_OBS
+    sprint_time(timestr,stockstime,"UTC",0);
+    drms_setkey_string(outRec,"DATE_S",timestr);
+    sprint_time(timestr,CURRENT_SYSTEM_TIME,"UTC",1); // what time it is now
+    drms_setkey_string(outRec,"DATE"  ,timestr);
+//
+    sdummy="HMI observable";
+    drms_setkey_string(outRec,"CONTENT",sdummy);
+//
+    sdummy=" ";
+    drms_setkey_string(outRec,"HISTORY",sdummy);
+    drms_setkey_string(outRec,"COMMENT",sdummy);
+//
+    sdummy=indsdesc;
+    drms_setkey_string(outRec,"SOURCE",sdummy);
+/* padding future-use keywords */
+    sdummy="n/a";
+    drms_setkey_string(outRec,"INVKEYS1",sdummy);
+    drms_setkey_string(outRec,"INVKEYS2",sdummy);
+    drms_setkey_string(outRec,"INVKEYS3",sdummy);
+    int idummy=-666;
+    drms_setkey_int   (outRec,"INVKEYI1",idummy);
+    drms_setkey_int   (outRec,"INVKEYI2",idummy);
+    drms_setkey_int   (outRec,"INVKEYI3",idummy);
+    double ddummy=NAN;
+    drms_setkey_double(outRec,"INVKEYD1",ddummy);
+    drms_setkey_double(outRec,"INVKEYD2",ddummy);
+    drms_setkey_double(outRec,"INVKEYD3",ddummy);
+ /*give keyword (unit, as string) to each segment.... must be same as in jsd, duplicating ... Hmmm*/
+    sdummy="degree";
+    drms_setkey_string(outRec,"BUNIT_000",sdummy); // incli
+    drms_setkey_string(outRec,"BUNIT_001",sdummy); // azimuth
+    sdummy="gauss";
+    drms_setkey_string(outRec,"BUNIT_002",sdummy); // field strength
+    sdummy="cm/s";
+    drms_setkey_string(outRec,"BUNIT_003",sdummy); // doppler LoS velocity
+    sdummy="mA";
+    drms_setkey_string(outRec,"BUNIT_004",sdummy); // dop_width
+    sdummy="adim";
+    drms_setkey_string(outRec,"BUNIT_005",sdummy); // eta_0
+    sdummy=" "; // "dopper width units" ????
+    drms_setkey_string(outRec,"BUNIT_006",sdummy); // damping
+    sdummy=" "; // "data unit ????"
+    drms_setkey_string(outRec,"BUNIT_007",sdummy); // scr_cont
+    drms_setkey_string(outRec,"BUNIT_008",sdummy); // scr_grad
+    sdummy="adim";
+    drms_setkey_string(outRec,"BUNIT_009",sdummy); // alpha_mag
+    sdummy=" ";
+    drms_setkey_string(outRec,"BUNIT_010",sdummy); // chi-sq
+    sdummy="degree";
+    drms_setkey_string(outRec,"BUNIT_011",sdummy); // incli_err
+    drms_setkey_string(outRec,"BUNIT_012",sdummy); // azimuth_err
+    sdummy="gauss";
+    drms_setkey_string(outRec,"BUNIT_013",sdummy); // strength_err
+    sdummy="cm/s";
+    drms_setkey_string(outRec,"BUNIT_014",sdummy); // doppler Vlos error
+    sdummy="adim";
+    drms_setkey_string(outRec,"BUNIT_015",sdummy); // alpha_err
+    sdummy=" ";
+    drms_setkey_string(outRec,"BUNIT_016",sdummy); // field_incl_err
+    drms_setkey_string(outRec,"BUNIT_017",sdummy); // field_azm_err
+    drms_setkey_string(outRec,"BUNIT_018",sdummy); // incl_azim_err
+    drms_setkey_string(outRec,"BUNIT_019",sdummy); // field_alpha_err
+    drms_setkey_string(outRec,"BUNIT_020",sdummy); // incli_alpha_err
+    drms_setkey_string(outRec,"BUNIT_021",sdummy); // azimu_alpha
+    drms_setkey_string(outRec,"BUNIT_022",sdummy); // conv_flag
+    drms_setkey_string(outRec,"BUNIT_023",sdummy); // quality map
+#endif
+#if CHNGTREC == 1
+    drms_setkey_string(outRec, "T_REC",outtrec); // enforce T_REC dummy ones for test
 #endif
    } // end of scope-limit
 
@@ -1606,7 +2317,7 @@ This is done inside the FORTRAN code, in invert.f90
       int axes[2];
 /* collect the result for each parameter over all pixels */
 #if RECTANGL == 1
-      dat1 = (float *)malloc(sizeof(float) * xwidth * yheight);
+      dat1 = (float *)calloc(xwidth * yheight, sizeof(float));
       int icount;
       icount = -1;
       for(n = 0; n < imgpix ; n++)
@@ -1620,17 +2331,21 @@ This is done inside the FORTRAN code, in invert.f90
       axes[0] = xwidth;
       axes[1] = yheight;
 #else
-      dat1 = (float *)malloc(sizeof(float) * imgpix);
+      dat1 = (float *)calloc(imgpix, sizeof(float));
       for(n = 0; n < imgpix ; n++){dat1[n] = FinalRes[(n*paramct)+j];}
       axes[0] = cols;
       axes[1] = rows;
 #endif
       invrt_array = drms_array_create (DRMS_TYPE_FLOAT, 2, axes, dat1, &status);
+
+#if INTBSCLE == 1
       invrt_array->israw  = 0;
       invrt_array->bzero  = bzero_inv[j];
       invrt_array->bscale = bscaleinv[j];
+#endif
       seg = drms_segment_lookup (outRec, Resname[j]);
       if (!seg) {fprintf(stderr, "Error getting data segment %s; abandoned\n", Resname[j]);}
+
       if (drms_segment_write (seg, invrt_array, 0))
       {
         fprintf (stderr, "Error writing segment %d (%s); abandoned\n", j,seg->info->name);
@@ -1649,7 +2364,7 @@ This is done inside the FORTRAN code, in invert.f90
       float *dat2;
       int axes[2];
 #if RECTANGL == 1
-      dat2 = (float *)malloc(sizeof(float) * xwidth * yheight);
+      dat2 = (float *)calloc(xwidth * yheight, sizeof(float));
       int icount;
       icount = -1;
       for(n = 0; n < imgpix ; n++)
@@ -1663,15 +2378,17 @@ This is done inside the FORTRAN code, in invert.f90
       axes[0] = xwidth;
       axes[1] = yheight;
 #else
-      dat2 = (float *)malloc(sizeof(float) * imgpix);
+      dat2 = (float *)calloc(imgpix , sizeof(float));
       for (n=0; n < imgpix;n++){dat2[n] = FinalErr[(n*Err_ct)+k];}
       axes[0] = cols;
       axes[1] = rows;
 #endif
       err_array = drms_array_create (DRMS_TYPE_FLOAT, 2, axes, dat2,&status);
+#if INTBSCLE == 1
       err_array->israw  = 0;
       err_array->bzero  = bzero_inv[k+paramct];
       err_array->bscale = bscaleinv[k+paramct];
+#endif
       seg = drms_segment_lookup (outRec, Resname[k+paramct]);
       if (!seg)
       {
@@ -1693,12 +2410,12 @@ This is done inside the FORTRAN code, in invert.f90
     } // end of k-loop
 
     printf("sending conv.flag array  to DRMS\n");
-    for (k = Err_ct; k < Err_ct + 1; k++) // behave as if this is (Err_ct+1) th error array... so far only one integer array be processed...
+    for (k = Err_ct; k < Err_ct + 1; k++) // behave as if this is (Err_ct+1) th error array.
     {
       int *dat3;
       int axes[2];
 #if RECTANGL == 1
-      dat3 = (int*) calloc(xwidth * yheight, sizeof(int));
+      dat3 = (int *)calloc(xwidth * yheight, sizeof(int));
       int icount;
       icount = -1;
       for(n = 0; n < imgpix ; n++)
@@ -1706,13 +2423,13 @@ This is done inside the FORTRAN code, in invert.f90
         if (nan_map[n] == 0)
         {
           icount = icount + 1;
-          dat3[icount] = FinalConvFlag[n]; // let it be, no need of bzero nor bscale
+          dat3[icount] = FinalConvFlag[n]; // no need of bzero nor bscale
         }
       }
       axes[0] = xwidth;
       axes[1] = yheight;
 #else
-      dat3 = (int*) calloc(imgpix , sizeof(int));
+      dat3 = (int *)calloc(imgpix , sizeof(int));
       for (n=0; n < imgpix;n++){dat3[n] = FinalConvFlag[n];}
       axes[0] = cols;
       axes[1] = rows;
@@ -1738,7 +2455,60 @@ This is done inside the FORTRAN code, in invert.f90
       free(dat3);
     } // end of k-loop
 
+#if CHANGFEB == 1
+    printf("sending quality map array  to DRMS\n");
+    for (k = Err_ct+1; k < Err_ct + 2; k++) // behave as if this is (Err_ct+2) th error array.
+    {
+      int *dat4;
+      int axes[2];
+#if RECTANGL == 1
+      dat4 = (int *)calloc(xwidth * yheight, sizeof(int));
+      int icount;
+      icount = -1;
+      for(n = 0; n < imgpix ; n++)
+      {
+        if (nan_map[n] == 0)
+        {
+          icount = icount + 1;
+          dat4[icount] = FinalQualMap[n]; // no need of bzero nor bscale
+        }
+      }
+      axes[0] = xwidth;
+      axes[1] = yheight;
+#else
+      dat4 = (int *)calloc(imgpix , sizeof(int));
+      for (n=0; n < imgpix;n++){dat4[n] = FinalQualMap[n];}
+      axes[0] = cols;
+      axes[1] = rows;
+#endif
+      qmap_array = drms_array_create (DRMS_TYPE_INT, 2, axes, dat4,&status);
+      seg = drms_segment_lookup (outRec, Resname[k+paramct]);
+      if (!seg)
+      {
+        if (verbose){fprintf(stderr, "Error getting data segment %s; abandoned\n", Resname[k+paramct]);}
+      }
+      else
+      {
+        if (drms_segment_write (seg, qmap_array, 0))
+        {
+          fprintf (stderr, "ConvFlag writing to segment %d (%s); abandoned\n", k+paramct, seg->info->name);
+          return 1;
+        }
+        else
+        {
+          if (verbose){printf("ConvFlag written out to %-s\n", Resname[k+paramct]);}
+        }
+      }
+      free(dat4);
+    } // end of k-loop
+#endif
+
     printf("write-out done !\n");
+
+    free(FinalErr);
+    free(FinalRes);
+    free(FinalConvFlag);
+    free(FinalQualMap);
 
     printf("so, close all DRMS record(s) !\n");
 /* DRMS trailer and closer */
@@ -1748,7 +2518,7 @@ This is done inside the FORTRAN code, in invert.f90
 /* how long it took */
     time(&endtime);
     printf ("%ld sec for %d profiles\n", endtime - startime, imgpix);
-    printf ("%.2f profiles per second\n", (float)(npix*mpi_size) / (0.01 + (float)(endtime - startime)));
+    printf ("%.2f profiles per second\n", (float)(imgpix) / (0.01 + (float)(endtime - startime)));
 
     printf("good bye !\n");
   } // end-if mpi_rank is 0.
@@ -1787,7 +2557,9 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
   if (iwork2 <= myrank){*iend = idummy;}else{*iend=idummy+1;}
 }
 
-/* ----------------------------- Sebastien tex  ----------------------------- */
+/* ----------------------------- by Sebastien ----------------------------- */
+
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.2 2011/04/28 16:57:04 keiji Exp $");}
 
 /*------------------------------------------------------------------------------------------------------*/
 /* Function to perform linear interpolation                                                             */
@@ -2083,9 +2855,9 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
   int status=1;                                           //status=0 means the code succeeded, =1 means the code failed
 
-  if(Num_lambda_filter != 5 && Num_lambda_filter != 6)
+  if(Num_lambda_filter != 5 && Num_lambda_filter != 6 && Num_lambda_filter != 8 && Num_lambda_filter != 10)
     {
-      printf("Error: the number of wavelengths should be either 5 or 6\n");
+      printf("Error: the number of wavelengths should be either 5, 6, 8, or 10\n");
       return status;
     }
 
@@ -2149,7 +2921,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
   lininterp1f(frontwindowint,wavelengthdtmp, frontwindowdtmp,wavelength,ydefault2,nfront,  Num_lambda);   //Interpolation on the same wavelength grid
   lininterp1f(blockerint,    wavelengthbdtmp,blockerbdtmp,   wavelength,ydefault2,nblocker,Num_lambda);
 
-  free(blockerbdtmp);   /* silly mistake..... */
+  free(blockerbdtmp);
   free(wavelengthbdtmp);
   free(wavelengthdtmp);
   free(frontwindowdtmp);
@@ -2252,16 +3024,79 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
       HCMNBphase[1]= (double) ((HCMNB+24)*6 % 360)*M_PI/180.0;
       HCMNBphase[0]= (double) ((HCMNB-12)*6 % 360)*M_PI/180.0;
     }
-
-
-
+  if(Num_lambda_filter == 8)
+    {
+      HCME1phase[7]= (double) ((HCME1+21)*6 % 360)*M_PI/180.0; //I7
+      HCME1phase[6]= (double) ((HCME1+15)*6 % 360)*M_PI/180.0; //I0
+      HCME1phase[5]= (double) ((HCME1+9 )*6 % 360)*M_PI/180.0; //I1
+      HCME1phase[4]= (double) ((HCME1+3 )*6 % 360)*M_PI/180.0; //I2
+      HCME1phase[3]= (double) ((HCME1-3 )*6 % 360)*M_PI/180.0; //I3
+      HCME1phase[2]= (double) ((HCME1-9 )*6 % 360)*M_PI/180.0; //I4
+      HCME1phase[1]= (double) ((HCME1-15)*6 % 360)*M_PI/180.0; //I5
+      HCME1phase[0]= (double) ((HCME1-21)*6 % 360)*M_PI/180.0; //I6
+      
+      HCMWBphase[7]= (double) ((HCMWB+18)*6 % 360)*M_PI/180.0;
+      HCMWBphase[6]= (double) ((HCMWB-30)*6 % 360)*M_PI/180.0;
+      HCMWBphase[5]= (double) ((HCMWB-18)*6 % 360)*M_PI/180.0;
+      HCMWBphase[4]= (double) ((HCMWB-6 )*6 % 360)*M_PI/180.0;
+      HCMWBphase[3]= (double) ((HCMWB+6 )*6 % 360)*M_PI/180.0;
+      HCMWBphase[2]= (double) ((HCMWB+18)*6 % 360)*M_PI/180.0;
+      HCMWBphase[1]= (double) ((HCMWB-30)*6 % 360)*M_PI/180.0;
+      HCMWBphase[0]= (double) ((HCMWB-18)*6 % 360)*M_PI/180.0;
+      
+      HCMNBphase[7]= (double) ((HCMNB-24)*6 % 360)*M_PI/180.0;
+      HCMNBphase[6]= (double) ((HCMNB-0 )*6 % 360)*M_PI/180.0;
+      HCMNBphase[5]= (double) ((HCMNB+24)*6 % 360)*M_PI/180.0;
+      HCMNBphase[4]= (double) ((HCMNB-12)*6 % 360)*M_PI/180.0;
+      HCMNBphase[3]= (double) ((HCMNB+12)*6 % 360)*M_PI/180.0;
+      HCMNBphase[2]= (double) ((HCMNB-24)*6 % 360)*M_PI/180.0;
+      HCMNBphase[1]= (double) ((HCMNB+0 )*6 % 360)*M_PI/180.0;
+      HCMNBphase[0]= (double) ((HCMNB+24 )*6 % 360)*M_PI/180.0;
+    }
+  if(Num_lambda_filter == 10)
+    {
+      HCME1phase[9]= (double) ((HCME1+27)*6 % 360)*M_PI/180.0; //I9
+      HCME1phase[8]= (double) ((HCME1+21)*6 % 360)*M_PI/180.0; //I7
+      HCME1phase[7]= (double) ((HCME1+15)*6 % 360)*M_PI/180.0; //I0
+      HCME1phase[6]= (double) ((HCME1+9 )*6 % 360)*M_PI/180.0; //I1
+      HCME1phase[5]= (double) ((HCME1+3 )*6 % 360)*M_PI/180.0; //I2
+      HCME1phase[4]= (double) ((HCME1-3 )*6 % 360)*M_PI/180.0; //I3
+      HCME1phase[3]= (double) ((HCME1-9 )*6 % 360)*M_PI/180.0; //I4
+      HCME1phase[2]= (double) ((HCME1-15)*6 % 360)*M_PI/180.0; //I5
+      HCME1phase[1]= (double) ((HCME1-21)*6 % 360)*M_PI/180.0; //I6
+      HCME1phase[0]= (double) ((HCME1-27)*6 % 360)*M_PI/180.0; //I8
+      
+      HCMWBphase[9]= (double) ((HCMWB+6)*6 % 360)*M_PI/180.0;
+      HCMWBphase[8]= (double) ((HCMWB+18)*6 % 360)*M_PI/180.0;
+      HCMWBphase[7]= (double) ((HCMWB-30)*6 % 360)*M_PI/180.0;
+      HCMWBphase[6]= (double) ((HCMWB-18)*6 % 360)*M_PI/180.0;
+      HCMWBphase[5]= (double) ((HCMWB-6 )*6 % 360)*M_PI/180.0;
+      HCMWBphase[4]= (double) ((HCMWB+6 )*6 % 360)*M_PI/180.0;
+      HCMWBphase[3]= (double) ((HCMWB+18)*6 % 360)*M_PI/180.0;
+      HCMWBphase[2]= (double) ((HCMWB-30)*6 % 360)*M_PI/180.0;
+      HCMWBphase[1]= (double) ((HCMWB-18)*6 % 360)*M_PI/180.0;
+      HCMWBphase[0]= (double) ((HCMWB-6)*6 % 360)*M_PI/180.0;
+      
+      HCMNBphase[9]= (double) ((HCMNB+12 )*6 % 360)*M_PI/180.0;
+      HCMNBphase[8]= (double) ((HCMNB-24)*6 % 360)*M_PI/180.0;
+      HCMNBphase[7]= (double) ((HCMNB-0 )*6 % 360)*M_PI/180.0;
+      HCMNBphase[6]= (double) ((HCMNB+24)*6 % 360)*M_PI/180.0;
+      HCMNBphase[5]= (double) ((HCMNB-12)*6 % 360)*M_PI/180.0;
+      HCMNBphase[4]= (double) ((HCMNB+12)*6 % 360)*M_PI/180.0;
+      HCMNBphase[3]= (double) ((HCMNB-24)*6 % 360)*M_PI/180.0;
+      HCMNBphase[2]= (double) ((HCMNB+0 )*6 % 360)*M_PI/180.0;
+      HCMNBphase[1]= (double) ((HCMNB+24 )*6 % 360)*M_PI/180.0;
+      HCMNBphase[0]= (double) ((HCMNB-12)*6 % 360)*M_PI/180.0;
+    }
+  
+  
   //NON-TUNABLE TRANSMISSION PROFILE
   for(j=0;j<Num_lambda;++j) {
         lyot[j]=blockerint[j]*(1.+contrastNTi[0]*cos(2.0*M_PI/FSR[3]*wavelength[j]+phaseNTi[0]))/2.*(1.+contrastNTi[1]*cos(2.0*M_PI/FSR[4]*wavelength[j]+phaseNTi[1]))/2.*(1.+contrastNTi[2]*cos(2.0*M_PI/FSR[5]*wavelength[j]+phaseNTi[2]))/2.*(1.+contrastNTi[3]*cos(2.0*M_PI/FSR[6]*wavelength[j]+phaseNTi[3]))/2.;
         }
 
 
-  //TUNABLE TRANSMISSION PROFILE (NB: FILTERS ARE CALCULATED BY ORDER OF INCREASING WAVELENGTH: I5,I4,I3,I2,I1,I0
+  //TUNABLE TRANSMISSION PROFILE (NB: FILTERS ARE CALCULATED FROM I0 TO I9 WHICH IS NOT BY ORDER OF INCREASING WAVELENGTH FOR Num_lambda_filter > 6)
   for(i=0;i<Num_lambda_filter;++i)
     {
       for(j=0;j<Num_lambda;++j){
