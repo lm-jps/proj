@@ -13,9 +13,9 @@ CLEAN		:= $(CLEAN) \
 		   $(CEXE_$(d)) \
 		   $(DEP_$(d))
 
-TGT_BIN	        := $(TGT_BIN) $(EXE_$(d)) $(CEXE_$(d))
+TGT_BIN	        := $(TGT_BIN) $(CEXE_$(d))
 
-S_$(d)		:= $(notdir $(EXE_$(d)) $(CEXE_(d)))
+S_$(d)		:= $(notdir $(CEXE_(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
