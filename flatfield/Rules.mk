@@ -12,6 +12,8 @@ dir	:= $(d)/libs
 # that use those libraries.
 dir	:= $(d)/apps
 -include		$(SRCDIR)/$(dir)/Rules.mk
+dir	:= $(d)/off_flat_IDL
+-include		$(SRCDIR)/$(dir)/Rules.mk
 
 # Standard things
 d		:= $(dirstack_$(sp))
