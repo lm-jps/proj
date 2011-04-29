@@ -511,7 +511,7 @@ fprintf(stderr,"car_rot specified, box center is at %4d:%05.1f by %05.1f \n",car
     // strncpy(inseries, inparam, DRMS_MAXNAMELEN);
     sprint_at(t_start_text, t_start);
     sprint_at(t_stop_text, t_stop);
-    if (strncmp(inseries,"aia",3)==0 && t_step == 1.0 && cadence > 1.0) // special case for AIA slots
+    if (strcmp(inseries,"aia.lev1")==0 && t_step == 1.0 && cadence > 1.0) // special case for AIA slots
         {
         // experimental, AIA is not tseq slots so get vector of times and convert to list of records
         // rounded to nearest slots.  Must put this list in a temp file since may be big.
