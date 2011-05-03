@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk.c,v 1.13 2011/03/15 21:00:06 carl Exp $" 
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk.c,v 1.14 2011/05/03 23:40:42 arta Exp $" 
 /*****************************************************************************
  * Filename: decode_hk.c                                                     *
  * Author: Carl                                                              *
@@ -17,11 +17,15 @@
 #include <fcntl.h> 
 #include <unistd.h>
 #include <libgen.h>
-#include "decompress.h"
-#include "hmi_compression.h"
-#include "decode_hk.h"
+#include "decode_hk.h" // defines DRMS_TYPE_* via packets.h
 #include "printk.h"
 #include "write_hk_to_drms.h"
+#include "egsehmicomp.h" // defines DRMS_TYPE_*
+
+// ERRMSG was already defined in a couple of headers to this file (egsehmicomp.h, sum_rpc.h)
+// Change name to DHK_ERRMSG
+#define DHK_ERRMSG(__msg__) printkerr("ERROR at %s, line %d: " #__msg__"\n",__FILE__,__LINE__);
+
 
 /***************************** extern global variables ***********************/
 extern APID_Pointer_HK_Configs *global_apid_configs;
@@ -52,8 +56,6 @@ extern char * make_strupr (char *in_string);
  *****************************************************************************/
 int decode_hk_keywords(unsigned short *word_ptr, int apid, HK_Keyword_t **kw_head) 
 {
-#define ERRMSG(__msg__) printkerr("ERROR at %s, line %d: " #__msg__"\n",__FILE__,__LINE__);
-
   /* declarations */
   APID_Pointer_HK_Configs *apid_configs;
   HK_Config_Files *config_files;
@@ -368,11 +370,11 @@ __FILE__, __LINE__,apid, ptr_fvn);
     /* Still no matching config information. Return an error code. */
     if(check_for_sdo_apid(apid))
     {
-      ERRMSG("Could not find packet date value because of bad packet date or could not find even after re-reading sdo hk config files."); 
+      DHK_ERRMSG("Could not find packet date value because of bad packet date or could not find even after re-reading sdo hk config files."); 
     }
     else
     {
-      ERRMSG("Could not find  packet version number even after re-reading hk config files."); 
+      DHK_ERRMSG("Could not find  packet version number even after re-reading hk config files."); 
     }
     return HK_DECODER_ERROR_CANNOT_FIND_VER_NUM; 
   }
@@ -394,7 +396,7 @@ __FILE__, __LINE__,apid, ptr_fvn);
   }
   else  
   {
-    ERRMSG("Could not find config data for this packet version number");
+    DHK_ERRMSG("Could not find config data for this packet version number");
     status = HK_DECODER_ERROR_CANNOT_LOAD_HK_VALUES;
   }
   return status;
@@ -613,7 +615,7 @@ HK_Keywords_Format *load_hk_configs(HK_Config_Files *config)
   /* Allocate memory to HK_Keywords_Format structure */
   if (config_kw == NULL)      
   {
-    ERRMSG("Null pointer input.");
+    DHK_ERRMSG("Null pointer input.");
     return NULL;
   }
   /* load values to HK_Keywords_Format structure while not null */

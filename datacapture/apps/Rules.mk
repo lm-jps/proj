@@ -39,11 +39,12 @@ endif
 
 # Local rules
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):	CF_TGT := $(CF_TGT) $(ADD_TGT_$(d)) -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJ_$(d)):	CF_TGT := $(CF_TGT) $(ADD_TGT_$(d)) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/egsehmicomp
 $(OBJ_$(d)):	%.o:	%.c
 		$(LOCALCC)
 
-$(EXE_$(d)):	LL_TGT :=  -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq
+$(EXE_$(d)):	LL_TGT := $(PGL) -lecpg -lpq
+$(EXE_$(d)):	$(LIBEGSEHMICOMP)
 $(EXE_$(d)):	%:	%.o $(EXELIBS)
 		$(LOCALLN)
 		$(SLBIN)

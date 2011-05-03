@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/load_hk_config_files.c,v 1.9 2011/03/15 20:57:03 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/load_hk_config_files.c,v 1.10 2011/05/03 23:40:42 arta Exp $"
 /*****************************************************************************
  * Filename: load_hk_config_files.c                                          *
  * Author: Carl Cimilluca                                                    *
@@ -55,7 +55,8 @@
 #include <fcntl.h> 
 #include <unistd.h>
 #include <libgen.h>
-#include "decompress.h"
+#include "drms_types.h" // I have no idea why this is needed
+#include "egsehmicomp.h"
 #include "printk.h"
 #include "decode_hk.h"
 #include <dirent.h>

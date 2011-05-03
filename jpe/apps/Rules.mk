@@ -59,9 +59,9 @@ $(jpe2_$(d)):     $(jpe2_obj_$(d))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng -lsoi  -L/home/soi/CM/pvm3/lib/LINUX8664 -lpvm3 -L/home/production/cvs/JSOC/lib/$(JSOC_MACHINE) -lsoi
+$(SUMEXE_$(d)):		LL_TGT := -lecpg -lpq -lpng -lsoi -L/home/soi/CM/pvm3/lib/LINUX8664 -lpvm3 -L/home/production/cvs/JSOC/lib/$(JSOC_MACHINE) -lsoi
 $(PEEXE_$(d)):		LL_TGT := -lecpg -lpq 
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro -I/home/soi/CM/pvm3/include -DPVM33
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro -I/home/soi/CM/pvm3/include -DPVM33 -I$(SRCDIR)/$(d)/../../libs/egsehmicomp
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)):	$(LIBASTRO)
 
 # Shortcuts

@@ -48,6 +48,8 @@ typedef union KW_Type_Value
 
 
 //************* Keyword struct ****************/
+// This is a redefined struct - the original is in egsehmicomp.h, and this definition
+// differs from that original one.
 #define MAX_KEYWORD_NAME_SIZE 64
 #define MAX_FITS_NAME_SIZE     9 
 typedef struct HK_Keyword_struct {
@@ -78,6 +80,9 @@ typedef struct IM_PDU_Packet_struct
 
 
 /******************* CCSDS Packet struct ********************/
+// This is a redefined struct - the original is in egsehmicomp.h, and this definition
+// differs from that original one because the definition of HK_Keyword_t differs
+// from the original definition.
 typedef struct CCSDS_Packet_struct 
 {
   /* CCSDS Header fields. */
@@ -97,6 +102,8 @@ typedef struct CCSDS_Packet_struct
 } CCSDS_Packet_t;
 
 
+#if 0
+// already defined in egsehmicomp.h.
 /* Telemetry packet consisting of (possibly byteswapped) raw data and
    parsed header. */
 typedef struct SciDataPacket_struct
@@ -121,7 +128,7 @@ typedef struct SciDataPacket_struct
 
   unsigned short *data;
 } SciDataPacket_t;
-
+#endif
 
 
 /******************** Prototypes for functions. **********/

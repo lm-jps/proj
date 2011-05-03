@@ -42,9 +42,7 @@
 #include <dirent.h>
 #include <unistd.h> /* for alarm(2) among other things... */
 #include <printk.h>
-#include "hmi_compression.h"
-#include "decompress.h"
-#include "load_hk_config_files.h"
+#include "egsehmicomp.h"
 
 
 #define LEV0FILEON "/usr/local/logs/soc/LEV0FILEON" //touch to turnon lev0

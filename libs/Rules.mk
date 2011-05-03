@@ -15,6 +15,8 @@ dir	:= $(d)/gapfiller
 -include		$(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/stats
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/egsehmicomp
+-include                $(SRCDIR)/$(dir)/Rules.mk
 
 ifeq ($(COMPILER), icc)
 ifneq ($(JSOC_MACHINE), linux_ia32) 

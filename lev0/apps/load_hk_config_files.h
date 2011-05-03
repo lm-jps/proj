@@ -74,6 +74,7 @@
 
 
 /*************************typedef structures**********************************/
+// These are defined DIFFERENTLY in egsehmicomp.h. 
 /*****************************************************************************/
 /* Structure used to contain  pointer to the HK Configuration                */
 /*  data based on the APID of packet.  This is a linked list .               */
