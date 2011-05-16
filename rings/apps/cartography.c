@@ -36,8 +36,7 @@
  *      distance to the sun.
  *    sphere2plane and plane2sphere are not true inverses for the following
  *	projections: (Lambert) cylindrical equal area, sinusoidal equal area
- *	(Sanson-
- *	Flamsteed), and Mercator; for these projections, sphere2plane is
+ *	(Sanson-Flamsteed), and Mercator; for these projections, sphere2plane is
  *	implemented as the normal projection, while plane2sphere is implemented
  *	as the oblique projection tangent at the normal to the central meridian
  *    plane2sphere doesn't return 1 if the x coordinate would map to a point
