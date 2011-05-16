@@ -128,7 +128,7 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
   if (verbose) printf ("R = %.7e, M = %.3e\n", rs, rms);
   nmode = 0;
   for (i = 0; i < 20000; i++) {
-    if (fscanf (lun21, "%d %d %g", &lll, &nnn, &ooo) != 3) break;
+    if (fscanf (lun21, "%d %d %lg", &lll, &nnn, &ooo) != 3) break;
     for (nn = 0; nn < np; nn++) fscanf (lun21, "%g", &(ak[nn]));
     if (lll >= 2000) continue;
     if (nnn >= 50) continue;
@@ -155,14 +155,14 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
   }
 
   np = inum;
-  if (verbose) printf ("np = %d\n");
-  sume1 = sume2 - 0.0;
+  if (verbose) printf ("np = %d\n", np);
+  sume1 = sume2 = 0.0;
   for (i = 0; i < nmode; i++) {
     sume1 += 1.0 / (error[2*i] * error[2*i]);
     sume2 += 1.0 / (error[2*i + 1] * error[2*i + 1]);
   }
   if (verbose) printf ("read kernels %d\n", nmode);
-						  /*  set covariance matrix  */
+						   /*  set covariance matrix  */
   sumcx = sumcy = 0.0;
   for (j = 0; j < nmode; j++) {
     sumcx += error[2*j] * error[2*j];
@@ -176,12 +176,13 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
     printf ("sumc: %g, %g\n", sumcx, sumcy);
     printf ("calc. integration weights\n");
   }
+						 /*  get integration weights  */
   weight[0] = 0.5 * (rad[0] - rad[1]);
   for (j = 0; j < np - 2; j++) weight[j+1] = 0.5 * (rad[j] - rad[j+2]);
   weight[np-1] = 0.5 * (rad[np-2] - rad[np-1]);
-					      /*  Now the OLA related stuff  */
+					       /*  Now the OLA related stuff  */
   if (verbose) printf ("calc overlap matrix\n");
-						 /*  set the overlap matrix  */
+						  /*  set the overlap matrix  */
   for (i = 0; i < nmode; i++) {
     for (j = 0; j < nmode; j++) {
       sum2 = sum3 = sa = sb = sc = 0.0;
