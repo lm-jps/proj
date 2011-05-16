@@ -150,7 +150,7 @@ else
     echo Error: file $ARQR not found
     exit
   endif
-  set INFO = `grep "^[ 	]*$AR" $ARQR`
+  set INFO = `awk -F'#' '{print $1}' $ARQR | grep "^[ 	]*$AR"`
   if ($status || $#INFO < 5) then
     echo "Error: no entry or incomplete tabulation for AR $AR in"
     echo "       $ARQR; suggested values;"
@@ -357,7 +357,7 @@ CLEANUP:
 set NOW = `date +%Y.%m.%d_%T`
 set NOTIFY = `grep ^$TYPE $NOTE | awk '{print $2}'`
 if ($#NOTIFY) then
-  echo "$NOW finish AR $AR" >> $MMSG
+  echo "$NOW finish AR $AR $TW" >> $MMSG
   echo $SUBJ > $MSGS/subj.$PROCID
   echo "$NOTIFY" > $MSGS/list.$PROCID
 endif
