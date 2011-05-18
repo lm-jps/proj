@@ -1,6 +1,8 @@
-eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
-    if 0;
+#!/usr/bin/perl
+#module_flatfield_daily_qsub.pl
+#
 #Run daily to get a good flatfield using the hmi.lev1_nrt.
+#Usually run by cvs/JSOC/proj/lev0/scripts/module_flatfield_daily_cron.pl
 #Updates hmi.flatfield.
 #This flatfield is needed to run the definitive hmi.lev1.
 #
@@ -17,6 +19,29 @@ sub usage {
 $IN1 = "hmi.lev1_nrt";
 $IN2 = "hmi.lev1c_nrt";
 $QDIR = "/scr21/production/qsub/flat"; #dir for qsub scripts
+$PID = getppid;
+$host = `hostname -s`;
+chomp($host);
+print "host = $host\n";
+#cl1n001 is a linux_x86_64
+if($host ne "cl1n001") {
+  print "Error: This must be run on cl1n001\n";
+  exit;
+}
+$ENV{'JSOC_MACHINE'} = "linux_x86_64";
+$JSOC_MACHINE = "linux_x86_64";
+$ENV{'PATH'} = "/home/production/cvs/JSOC/bin/$JSOC_MACHINE:/home/production/cvs/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
+
+print "@@@TESTING@@\n"; #!!TEMP
+$ENV{'SGE_ROOT'} = "/SGE";
+$sgeroot = $ENV{'SGE_ROOT'};
+print "SGE_ROOT = $sgeroot\n";
+$path = $ENV{'PATH'};
+print "path = $path\n";  #!!!TEMP
+$mach = $ENV{'JSOC_MACHINE'};
+print "JSOC_MACHINE = $mach\n";  #!!!TEMP
+
+#$BINDIR = "/home/production/cvs/JSOC/bin/linux_x86_64";
 
 $date = &get_date;
 print "Start module_flatfield_daily_qsub.pl on $date\n\n";
@@ -89,52 +114,68 @@ if($pos != 10) { &usage; };
 
 
 $j = 0;
-for($i=0; $i<48; $i++) {	#do all 48 commands as qsub
-  $file = "$QDIR/qsh.$i.csh";
-  open(L0, ">$file") || die "Can't open: $file $!\n";
-  print L0 "#!/bin/csh\n";
-  print L0 "echo \"TMPDIR = \$TMPDIR\"\n";
-  $cmd = @cmds[$j++];
-  print L0 "$cmd\n";
-  close(L0);
-  #$file = "/home/production/cvs/JSOC/proj/lev0/scripts/date.str"; #!!!TEMP
-  #$qsubcmd = sprintf("qsub -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
-  $qsubcmd = sprintf("qsub -o %s -e %s -q j8.q %s", $QDIR, $QDIR, $file);
-  print "$qsubcmd\n";
-  $x = `$qsubcmd`;
-  print "$x";
-  ($a,$b,$jid) = split(/\s+/, $x);
-  print "jid = $jid\n\n";
-  push(@jid, $jid);
-}
-while(1) {
-  sleep(60);
-  @stat = `qstat -u production`;
-  #print "@stat\n";
-  shift(@stat); shift(@stat);	#header lines
-  $done = 1;
-  while($line = shift(@stat)) {
-    ($jid) = split(/\s+/, $line);
-    if(grep(/$jid/, @jid)) {
-      $done = 0;
-      print "Found jid=$jid\n";
-      last;
+for($k=0; $k<48; $k++) {	#do all 48 commands as qsub
+  @jid = ();
+  #only do 3 at a time to not overload the j8 queue
+  for($i=$k; $i<$k+3; $i++) {	#do the next 3
+    $file = "$QDIR/qsh.$PID.$i.csh";
+    open(L0, ">$file") || die "Can't open: $file $!\n";
+    print L0 "#!/bin/csh\n";
+    print L0 "echo \"TMPDIR = \$TMPDIR\"\n";
+    print L0 "setenv OMP_NUM_THREADS 8\n";
+    $cmd = @cmds[$j++];
+    if(!$cmd) {
+      $k = 48;		#all done
+      print "Wait for last batch of qsubs\n";
+      goto NOMORE;
     }
+    print L0 "$cmd\n";
+    close(L0);
+    #$file = "/home/production/cvs/JSOC/proj/lev0/scripts/date.str"; #!!!TEMP
+    #$qsubcmd = sprintf("qsub -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
+    $qsubcmd = sprintf("qsub -o %s -e %s -q j8.q %s", $QDIR, $QDIR, $file);
+    print "$qsubcmd\n";
+    $x = `$qsubcmd`;
+    print "$x";
+    ($a,$b,$jid) = split(/\s+/, $x);
+    print "jid = $jid\n\n";
+    push(@jid, $jid);
   }
-  if(!$done) { next; }
-  else { last; }
+  #$k = $k + 4;
+  $k = $k + 2;
+NOMORE:
+  #TBD: start a new one when one finishes
+  while(1) {
+    sleep(60);
+    @stat = `qstat -u production`;
+    #print "@stat\n";
+    shift(@stat); shift(@stat);	#header lines
+    $done = 1;
+    while($line = shift(@stat)) {
+      ($jid) = split(/\s+/, $line);
+      if(grep(/$jid/, @jid)) {
+        $done = 0;
+        print "Found jid=$jid\n";
+        last;
+      }
+    }
+    if(!$done) { next; }
+    else { last; }
+  }
 }
 print "All module_flatfield qsub done\n";
 
 #Now run the combine program
-$cmd = "module_flatfield_combine camera=2 input_series='su_production.flatfield_fid_a' datum='$datum'";
+$lfile = "$QDIR/combine.$PID.log2";
+$cmd = "/home/production/cvs/JSOC/bin/linux_x86_64/module_flatfield_combine camera=2 input_series='su_production.flatfield_fid' datum='$datum' 1>$lfile 2>&1";
 print "$cmd\n";
 if(system($cmd)) {
   print "ERROR: on $cmd\n";
   exit(1);
 }
 
-$cmd = "module_flatfield_combine camera=1 input_series='su_production.flatfield_fid_a' datum='$datum'";
+$lfile = "$QDIR/combine.$PID.log1";
+$cmd = "/home/production/cvs/JSOC/bin/linux_x86_64/module_flatfield_combine camera=1 input_series='su_production.flatfield_fid' datum='$datum' 1>$lfile 2>&1";
 print "$cmd\n";
 if(system($cmd)) {
   print "ERROR: on $cmd\n";
