@@ -100,6 +100,7 @@ ModuleArgs_t module_args[] =
      {ARG_FLAG, "r", "0", "Restore limb darkening"},
      {ARG_FLAG, "f", "0", "Fit limb darkening before applying"},
      {ARG_FLAG, "n", "0", "Normalize the final image by dividing by the mean"},
+     {ARG_FLOATS, "coefs", "0.0", "Limb darkening coeficients, 5 needed"},
      {ARG_END}
 };
 
@@ -116,7 +117,9 @@ int DoIt(void)
   ObsInfo_t *ObsLoc;
   // static double LDCoef[] = {0.5568, 0.4104, 0.2782, 0.1108, 0.0170 };
   // static double LDCoef[] = {0.4600, 0.2100, 0.1400, 0.0690, 0.0130 };
-  static double LDCoef[] = {0.4430, 0.1390, 0.0410, 0.0125, 0.0019};
+  static double defaultcoefs[] = {0.4430, 0.1390, 0.0410, 0.0125, 0.0019};
+  double use_coefs[5];
+  double n_user_coefs = cmdparams_get_int(&cmdparams, "coefs_nvals", &status);
 
   DRMS_RecordSet_t *inRS, *outRS;
   int nrecs, irec;
@@ -125,8 +128,27 @@ int DoIt(void)
     DIE("Must have input series");;
   if (strcmp(outSeries, "NOT SPECIFIED") == 0)
     DIE("Must have output series");;
-  
+
   printf("FitLimbDark\n");
+  if (n_user_coefs == 5)
+    {
+    double *cmdcoefs;
+    int i;
+    cmdparams_get_dblarr(&cmdparams, "coefs", &cmdcoefs, &status);
+    for (i=0; i<5; i++)
+      {
+      use_coefs[i] = cmdcoefs[i];
+      printf(" Coef%d = %f\n", i+1, use_coefs[i]);
+      }
+    }
+  else
+    {
+    int i;
+    for (i=0; i<5; i++)
+      use_coefs[i] = defaultcoefs[i];
+    printf(" Use default coefs\n");
+    }
+  
   if (restoreLD) noLD = 1;
   if (noLD)
 	printf("   Supress limb darkening removal\n");
@@ -180,7 +202,7 @@ int DoIt(void)
       outSeg = drms_segment_lookupnum(outRec, 0);
       outArray = drms_array_create(DRMS_TYPE_FLOAT, inArray->naxis, inArray->axis, NULL, &status);
 
-      if (rm_limbdark(inArray, outArray, ObsLoc, (do_fit ? coefs : LDCoef), &ncropped, restoreLD, &ld_comment) == DRMS_SUCCESS)
+      if (rm_limbdark(inArray, outArray, ObsLoc, (do_fit ? coefs : use_coefs), &ncropped, restoreLD, &ld_comment) == DRMS_SUCCESS)
         {
         int totvals, datavals;
 
@@ -190,6 +212,11 @@ int DoIt(void)
           free(ld_comment);
           }
 
+        drms_setkey_float(outRec, "LDCoef1", (float)(do_fit ? coefs[0] : use_coefs[0]));
+        drms_setkey_float(outRec, "LDCoef2", (float)(do_fit ? coefs[1] : use_coefs[1]));
+        drms_setkey_float(outRec, "LDCoef3", (float)(do_fit ? coefs[2] : use_coefs[2]));
+        drms_setkey_float(outRec, "LDCoef4", (float)(do_fit ? coefs[3] : use_coefs[3]));
+        drms_setkey_float(outRec, "LDCoef5", (float)(do_fit ? coefs[4] : use_coefs[4]));
         upNcenter(outArray, ObsLoc);
         drms_setkey_double(outRec, "CRPIX1", ObsLoc->crpix1);
         drms_setkey_double(outRec, "CRPIX2", ObsLoc->crpix2);
@@ -239,7 +266,7 @@ int DoIt(void)
       printf("Done with %s\n", drms_getkey_string(inRec, "T_REC", NULL));
       }
     else
-      printf("Skip rec %d, Quality=%#08x\n", irec, quality);
+      printf("Skip Rec %d, Quality=%#08x\n", irec, quality);
     }
   drms_close_records(outRS, DRMS_INSERT_RECORD);
   drms_close_records(inRS, DRMS_FREE_RECORD);
@@ -264,7 +291,7 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
   int ord;
   double *f = (double *)malloc(nx*ny*sizeof(double));
   double *c = (double *)malloc(6*nx*ny*sizeof(double));
-  double LDCoef[6];
+  double fitcoefs[6];
   
   if (!f || !c) DIE("malloc problem");
 
@@ -306,18 +333,20 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
 	  }
         n++;
 	}
-    if (!lsqfitd(f, c, LDCoef, 5, n))
+    if (!lsqfitd(f, c, fitcoefs, 5, n))
       {
       fprintf(stderr,"lsqfit failure\n");
-      LDCoef[0] = LDCoef[1] = LDCoef[2] = LDCoef[3] = LDCoef[4] = LDCoef[5] =  DRMS_MISSING_DOUBLE;
+      fitcoefs[0] = fitcoefs[1] = fitcoefs[2] = fitcoefs[3] = fitcoefs[4] = fitcoefs[5] =  DRMS_MISSING_DOUBLE;
       }
-    printf("Fit %d points, Coefs = %f", n, LDCoef[0]);
+    printf("Fit %d points, Coefs = %f", n, fitcoefs[0]);
     for (ord=0; ord<5; ord++)
       {
-      coefs[ord] = LDCoef[ord+1]/LDCoef[0];
+      coefs[ord] = fitcoefs[ord+1]/fitcoefs[0];
       printf(", %6.4f", coefs[ord]);
       }
     printf("\n");
+  free(f);
+  free(c);
   return(0);
   }
 
