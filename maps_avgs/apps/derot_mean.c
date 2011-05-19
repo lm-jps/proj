@@ -104,6 +104,7 @@ spaced at 15 minute intervals,
 #include <ctype.h>
 #include <time.h>
 #include <math.h>
+#include <limits.h>
 #include <complex.h>
 #include <sys/time.h>
 #include <jsoc_main.h>
@@ -111,6 +112,8 @@ spaced at 15 minute intervals,
 #include "./derot_mean.h"
 #include "./cartography.c"
 #include "./ccinterp.c"
+//  #include "./heliographic_coords.c"
+#include <astro.h>
 #include <assert.h>
 
 char *module_name = "derot_mean";
@@ -119,8 +122,8 @@ char *version_id  = "0.0.1";
 ModuleArgs_t module_args[] =
 {
   {ARG_STRING,  "in",      "",       "Input data series."},
-  {ARG_STRING,  "out",     "",       "Output data series."},
-  {ARG_TIME,    "start_t", "0",      "First output record time "},     // 1
+  {ARG_STRING,  "out",     "",       "Output data series"},
+  {ARG_TIME,    "start_t", "",       "First output record time "},     // 1
   {ARG_TIME,    "end_t",   "-1",     "Last output record time (or upper limit)"},     
   {ARG_INT,     "step_t",  "900",    "Steps between records in seconds"},
   {ARG_INT,     "cols",    "-1",     "Number of columns in output image"},  
@@ -136,12 +139,12 @@ ModuleArgs_t module_args[] =
   {ARG_FLOAT,   "wt_parm", "900.0",  "Weighting Filter Parameter"},
   {ARG_STRING,  "proj",    "ortho",  "Projection Name (MDI style)"},
   {ARG_FLOAT,   "crot",    "0.0",    "WCS Coord Rotation Angle (-pangle)"},   
-  {ARG_FLOAT,   "crpix1",  "0.0",    "Reference Pixel (Columnwise)"},     
-  {ARG_FLOAT,   "crpix2",  "0.0",    "Reference Pixel (Rowwise)"},   
-  {ARG_FLOAT,   "crval1",  "0.0",    "Coord at Ref Pixel (deg/arcsec)"},
-  {ARG_FLOAT,   "crval2",  "0.0",    "Coord at Ref Pixel (deg/arcsec)"},
-  {ARG_FLOAT,   "cdelt1",  "1.0",    "Pixel size at Ref Pix (deg or arcsec)"},
-  {ARG_FLOAT,   "cdelt2",  "1.0",    "Pixel size at Ref Pix (deg or arcsec)"},
+  {ARG_FLOAT,   "crpix1",  "None",    "Reference Pixel (Columnwise)"},     
+  {ARG_FLOAT,   "crpix2",  "None",    "Reference Pixel (Rowwise)"},   
+  {ARG_FLOAT,   "crval1",  "",    "Coord at Ref Pixel (deg/arcsec)"},
+  {ARG_FLOAT,   "crval2",  "",    "Coord at Ref Pixel (deg/arcsec)"},
+  {ARG_FLOAT,   "cdelt1",  "None",    "Pixel size at Ref Pix (in appropriate units)"},
+  {ARG_FLOAT,   "cdelt2",  "None",    "Pixel size at Ref Pix (in appropriate units)"},
   {ARG_STRING,  "ctype1",  "CRLN-SIN", "Coordinate Name for col axis"},
   {ARG_STRING,  "ctype2",  "CRLT-SIN", "Coordinate Name for row axis"}, // 22
   {ARG_FLOAT,   "ang_rsun", "960.",  "Solar Radius in arcsecs (if AERIAL)"},
@@ -168,7 +171,7 @@ int    calc_weight_function(void);
 int    setup_outdb(OutImgs **outimg, DRMS_RecordSet_t **outDB);
 int    check_outdb(DRMS_Record_t *rec);
 int    init_outimgs(OutImgs **outimg);
-int    calc_out_geom(OutImgs out);
+int    calc_out_geom(OutImgs outimg);
 
 // These functions involve opening & testing input db for conformity
 int    open_check_indb(DRMS_RecordSet_t **inDB);
@@ -187,6 +190,7 @@ int    rec_getcheck_time(DRMS_Record_t *rec, char kword[], TIME *out);
 
 // These involve  writing out records
 int    write_out_dbs(OutImgs *outimgs, DRMS_RecordSet_t *outDB, DRMS_RecordSet_t *inDB);
+int    set_bscale_bzero(OutImgs *outimg);
 
 // Some Utility & cleanup functions
 double wcs_parm_unit(double parm, char *unit);
@@ -212,26 +216,27 @@ int DoIt(void)
   DRMS_RecordSet_t *inDB  = NULL;
   DRMS_RecordSet_t *outDB = NULL;
   
-  V_print("===== Checking Commandline Arguments =====\n");
+  V_print("\n===== Checking Commandline Arguments =====\n");
   if(getcheck_cmd_parms() !=  kMyMod_Success) // read command parms
     return (status = If_Err_Print());
 
-  V_print("===== Checking Output Data Series Structure =====\n");
+  V_print("\n===== Checking Output Data Series =====\n");
   if(setup_outdb(&out_imgs, &outDB) != kMyMod_Success) // open & check output DB
     return (status = If_Err_Print());
 
-  V_print("===== Checking Input Data Series Structure =====\n");
+  V_print("\n===== Checking Input Data Series =====\n");
   if(open_check_indb(&inDB) !=  kMyMod_Success ) // open & check  input DB
     return (status = If_Err_Print());
 
-  V_print("===== Summing Derotated Mean =====\n");
+  V_print("\n===== Summing Derotated Mean =====\n");
   if(addin(inDB, out_imgs) !=  kMyMod_Success) // Add input images to output
     return (status = If_Err_Print());
 
-  V_print("===== Writing Records to Output Data Series =====\n");
+  V_print("\n===== Writing Records to Output =====\n\n\n");
   if(write_out_dbs(out_imgs, outDB, inDB) !=  kMyMod_Success)  // Write out all output images
     return (status = If_Err_Print());
 
+  V_print("Done.  derot_mean exiting normally\n");
   return kMyMod_Success;
 }
 
@@ -263,6 +268,7 @@ int  getcheck_cmd_parms(void)
   if((status = calc_weight_function()))
     return status;
   
+  V_print("OK\n");
   return kMyMod_Success;    // Exit getcheck_cmd_params normally
 }
 
@@ -347,33 +353,51 @@ int check_cparms(void)
     parms.Tend = parms.Tstart;
   else if(parms.Tend < parms.Tstart)   // First check that Tend >= Tstart
   {
-    sprintf(parms.Msg,"%s Error: Tend must be greater  or equal to Tstart\n",parms.Msg);
+    fprintf(stderr,"Error: Tend must be greater  or equal to Tstart\n");
+    return (parms.status = kMyMod_ValErr);
+  }
+  if (parms.Tstep == 0)
+  {
+    fprintf(stderr,"Error: Tstep must be greater or equal to zero\n");
+    return (parms.status = kMyMod_ValErr);
+  }
+  else if (parms.Tstep < 0)
+  {
+    V_print("Warning: Tstep < 0.  Absolute value taken\n");
+    parms.Tstep = abs(parms.Tstep);
+  }
+
+  // Then verify that required geometry values are valid
+  // (Note: CRPIXs are checked in check_outdb() where they can be set
+  // to 0.5*cols or rows
+
+  if( isnan(parms.CROTA2))
+    parms.CROTA2 = 0.0;
+
+  if( isnan(parms.CRVAL1) || isnan(parms.CRVAL2) )
+  {
+    fprintf(stderr,"Error: Missing or Invalid CRVALs\n");
+    return (parms.status = kMyMod_ValErr);
+  }
+  if( isnan(parms.CDELT1) || isnan(parms.CDELT2) )
+  {
+    fprintf(stderr,"Error: Missing or Invalid CDELTs\n");
+    return (parms.status = kMyMod_ValErr);
+  }
+  if( isnan(parms.A0) || isnan(parms.A2) || 
+      isnan(parms.A4) || isnan(parms.Meri_V) )
+  {
+    fprintf(stderr,"Error: Invalid Rotation Coefs or V_meridional\n");
     return (parms.status = kMyMod_ValErr);
   }
 
-  // Then verify that all required geometry values are valid
-  if( isnan(parms.CRVAL1) || isnan(parms.CRVAL2) || 
-      isnan(parms.CRPIX1) || isnan(parms.CRPIX2) || 
-      isnan(parms.CDELT1) || isnan(parms.CDELT2) ||
-      isnan(parms.CROTA2)  || isnan(parms.A0)    ||
-      isnan(parms.A2)     || isnan(parms.A4)     ||
-      isnan(parms.Meri_V) || isnan(parms.WtParm) ||
-      parms.rows < 1      || parms.cols < 1      || 
-      parms.WtLen < 1     || parms.Tstep < 1     )
+  if(  isnan(parms.WtParm) || parms.WtLen < 1)
   {
-    sprintf(parms.Msg,"%sError: Invalid Command Line Arguments:\n",parms.Msg);
-    sprintf(parms.Msg,"%sCRVAL1=%f; CRVAL2=%f\n", parms.Msg, parms.CRVAL1,parms.CRVAL2);
-    sprintf(parms.Msg,"%sCRPIX1=%f; CRPIX2=%f\n", parms.Msg, parms.CRPIX1,parms.CRPIX2);
-    sprintf(parms.Msg,"%sCDELT1=%f; CDELT2=%f\n", parms.Msg, parms.CDELT1,parms.CDELT2);
-    sprintf(parms.Msg,"%sCROTA=%f; A0=%f; A2=%f; A4=%f; MeriV=%f WtParm=%f\n",
-	    parms.Msg,parms.CROTA2,parms.A0,parms.A2,parms.A4,
-	    parms.Meri_V,parms.WtParm);
-    sprintf(parms.Msg,"%s Rows=%d; Cols=%d; WtLen=%d; Tstep=%d\n", parms.Msg, 
-	    parms.rows, parms.cols, parms.WtLen, parms.Tstep );
+    fprintf(stderr,"Error: Invalid Weighting Function Parameters\n");
     return (parms.status = kMyMod_ValErr);
   }
-  
-  // test projection specific values and convert all angles to radians
+ 
+  // Convert CRVALs & CDELTs to appropriate (Projection specific) units
   if(parms.projcode == AERIAL)
   {
     if(parms.CRVAL1 != 0 || parms.CRVAL2 != 0)
@@ -398,22 +422,32 @@ int check_cparms(void)
     if(parms.rsun <= 0  && (parms.CDELT1 == parms.CDELT2) )
       parms.rsun = parms.ang_rad / parms.CDELT1;
   }
-  else
+  else if (parms.projcode == LAMBERT || parms.projcode == ORTHOGRAPHIC ||  
+	   parms.projcode == STEREOGRAPHIC || parms.projcode == POSTEL || 
+	   parms.projcode == GNOMONIC || parms.projcode == RECTANGULAR)
   {
-    parms.CRVAL1 *= (M_PI / 180.0);
-    parms.CRVAL2 *= (M_PI / 180.0);
-    parms.CDELT1 *= (M_PI / 180.0);
-    parms.CDELT2 *= (M_PI / 180.0);
+    parms.CRVAL1 *= (M_PI / 180.0);  // Convert from deg to rad
+    parms.CRVAL2 *= (M_PI / 180.0);  // Convert from deg to rad
+    parms.CDELT1 *= (M_PI / 180.0);  // Convert from deg to rad
+    parms.CDELT2 *= (M_PI / 180.0);  // Convert from deg to rad
   }
+  else if (parms.projcode == CYLEQA || parms.projcode == SINEQA ||  
+	   parms.projcode == MERCATOR || parms.projcode == CASSINI)
+  {
+    parms.CRVAL1 *= (M_PI / 180.0);  // Convert from deg to rad
+    parms.CDELT1 *= (M_PI / 180.0);  // Convert from deg to rad
+  }
+
+  //  If projcode is CYLEQA, SINEQA, MERCATOR, CASSINI do not convert!!
   
   // Do some angle converstions & fill in some values
-  parms.CROTA2  *= (M_PI / 180.0);
-  parms.pangle -1.0 * parms.CROTA2;
+  parms.CROTA2  *= (M_PI / 180.0);  // Convert from deg to rad
+  parms.pangle -1.0 * parms.CROTA2; // Change sign 
   parms.A0  =   parms.A0 / 1.0e6;   // convert from uRad/s to Rad/s
   parms.A2  =   parms.A2 / 1.0e6;   // convert from uRad/s to Rad/s
   parms.A4  =   parms.A4 / 1.0e6;   // convert from uRad/s to Rad/s
   parms.Meri_V  =   parms.Meri_V / 6.955e8;   // convert from m/s to Rad/s
-  parms.size = parms.rows * parms.cols;
+  parms.size = parms.rows * parms.cols; // Calc number of pixels
   parms.Nmaps = ceil(((1 + parms.Tend - parms.Tstart)/parms.Tstep));
   if(parms.Nmaps  < 1) 
     parms.Nmaps = 1;
@@ -529,7 +563,7 @@ int wcs_map_proj(void)
     {
       parms.projcode = wcs[i].code;
       strcpy(parms.projname,wcs[i].projname);
-      printf("PROJ_CODE: %s %s - %s\n",parms.CTYPE1,parms.CTYPE2,parms.projname);
+//      printf("PROJ_CODE: %s %s - %s\n",parms.CTYPE1,parms.CTYPE2,parms.projname);
       done = 1;
     }
     i++;
@@ -637,15 +671,24 @@ int calc_weight_function(void)
       Wt[j] = Wt[npts-j-1] = exp (arg);
     }
   }
+  else
+  {
+    sprintf(parms.Msg,"%sUnknown Weight Function: %s\n",parms.Msg,filter);
+    return (parms.status = kMyMod_WrongType);
+  }
+/*
+  Sum = 0.0;
   for(j = 0; j < npts; j++)
     Sum += Wt[j];
-  if(Sum !=0.0)
-    for(j = 0; j < npts; j++)
-    {
-      Wt[j] /= Sum;
-//      printf("Wt[%d] = %12.8f\n",j,Wt[j]);
-    }
 
+  if (Sum == 0.0)
+  {
+    sprintf(parms.Msg,"%sError Calculating Weight Function\n",parms.Msg);
+    return (parms.status = kMyMod_InitErr);
+  }
+  for(j = 0; j < npts; j++)
+    Wt[j] /= Sum;
+*/
   return kMyMod_Success;     // exit calc_weight_func normally
 }
 
@@ -680,6 +723,7 @@ int  setup_outdb(OutImgs **outimg, DRMS_RecordSet_t **outdb)
   if((status = init_outimgs(outimg)))
     return status;
 //   drms_close_records((*outdb), DRMS_FREE_RECORD);
+  V_print("OK\n");
   return  kMyMod_Success;     // exit setup_outdb normally
 }
 
@@ -689,6 +733,7 @@ int    check_outdb(DRMS_Record_t *rec)
 {
   int i, done, segcnt;
   int status = 0;
+  char buff[200];
   TIME ttime;
   DRMS_Segment_t *record_segment;
   DRMS_Keyword_t *keywd;
@@ -746,9 +791,18 @@ int    check_outdb(DRMS_Record_t *rec)
     if(record_segment->axis[0] != parms.cols ||
 	record_segment->axis[1] != parms.rows ) 
     {
-      sprintf(parms.Msg,"%sError: Output DB Seg %d - dimension mismatch\n",parms.Msg,i);
-      return (parms.status = kMyMod_Missing);
+      parms.cols = record_segment->axis[0];
+      parms.rows = record_segment->axis[1];
+      parms.size = parms.rows * parms.cols;
+      sprintf(buff,"Specified dimensions do not match segment definition. Set to %d,%d\n",
+	      parms.cols, parms.rows);
+      V_print(buff);
     }
+    if( isnan(parms.CRPIX1))
+      parms.CRPIX1 = 0.5*parms.cols;
+    if( isnan(parms.CRPIX2))
+      parms.CRPIX2 = 0.5*parms.rows;
+
   }
   
   done = i = 0;
@@ -771,9 +825,9 @@ int    check_outdb(DRMS_Record_t *rec)
   
   // Check that T_REC_step matches step_t variable
   ttime = drms_getkey_time(rec, "T_REC_step", &status);
-  if(status || abs(ttime - parms.Tstep) > 1.0)
+  if(status || ttime > parms.Tstep)
   {
-    sprintf(parms.Msg,"%sError: STEP_T and T_REC_step mis-match\n",parms.Msg);
+    sprintf(parms.Msg,"%sError: STEP_T is less than T_REC_step\n",parms.Msg);
     return (parms.status = kMyMod_WrongType);
   }
   
@@ -786,6 +840,7 @@ int    init_outimgs(OutImgs **outimg)
   int i, status;
   char buff[200], tbuff[200];
   int size = parms.size;
+  double Bz;
   OutImgs *out;
   int naxis = 2;
   int naxes[2] = {parms.cols, parms.rows}; 
@@ -793,17 +848,28 @@ int    init_outimgs(OutImgs **outimg)
   
   out = (OutImgs *)malloc(sizeof(OutImgs)*parms.Nmaps);
   status = 0;
+  sprintf(buff,"%4dx%4d %s,%s CDELT=[%8.5f,%8.5f] CRPIX=[%8.2f,%8.2f]\n", 
+	  parms.cols,parms.rows, 
+	  parms.CTYPE1, parms.CTYPE2,
+	  parms.CDELT1, parms.CDELT2,
+	  parms.CRPIX1, parms.CRPIX2
+    );
+  V_print(buff);
+  V_print("-----------------------\n");
+
   for(i =0; i < parms.Nmaps && !status; i++)
   {
     out[i].DatArray = drms_array_create(DRMS_TYPE_FLOAT, naxis, naxes, NULL, &status);
+    out[i].DatArray->israw = 0;
     if(status)
     {
       sprintf(parms.Msg,"%sError: Creating output arrays",parms.Msg);
       return (parms.status = status);
     }
     out[i].dat = (float *)out[i].DatArray->data;
-    
+
     out[i].WgtArray = drms_array_create(DRMS_TYPE_FLOAT, naxis, naxes, NULL, &status);
+//    out[i].WgtArray->israw = 0;
     if(status)
     {
       sprintf(parms.Msg,"%sError: Creating output arrays",parms.Msg);
@@ -825,14 +891,16 @@ int    init_outimgs(OutImgs **outimg)
       return (parms.status = status);
     }
     out[i].timctr = parms.Tstart + i * parms.Tstep;
-    out[i].LN = parms.CRVAL1 + i * parms.Tstep * parms.A0;
+    out[i].LN = parms.CRVAL1 - (i * parms.Tstep * parms.A0);
     out[i].LT = parms.CRVAL2 + i * parms.Tstep * parms.Meri_V;
+    HeliographicLocation(out[i].timctr, &(out[i].crot), &(out[i].crln), &Bz);
     out[i].irecdt = parms.WtLen;
     out[i].irecno = -1;
     sprint_time(tbuff,out[i].timctr,"TAI",0);
-    sprintf(buff,"[%d] %s; LN=%f; LT=%f Proj=%s (%d)\n",
-	    i, tbuff, out[i].LN,out[i].LT,parms.projname,parms.projcode);
+    sprintf(buff,"[%d] %27s[%.19s]; LN,LT=[%8.4f,%8.4f]\n",i, 
+	    parms.oser, tbuff, out[i].LN,out[i].LT);
     V_print(buff);
+    
     if((status = calc_out_geom(out[i])))
     {
       sprintf(parms.Msg,"%sError: Calculating Geometry for output image",parms.Msg);
@@ -845,7 +913,7 @@ int    init_outimgs(OutImgs **outimg)
 
 
 // CALC_OUT_GEOM
-int calc_out_geom(OutImgs out)
+int calc_out_geom(OutImgs outimg)
 {
   double x, y, xrot, yrot, lon, lat;
   int row, col, i, status;
@@ -871,28 +939,30 @@ int calc_out_geom(OutImgs out)
       x = (col-x0)*parms.CDELT1;
       xrot = (x * cos_phi - y * sin_phi);
       yrot = (y * cos_phi + x * sin_phi);
-      out.dat[i] = out.wgt[i] = 0.0;
       if(parms.projcode == AERIAL)
       {  	// AERIAL: call img2sphere instead of plane2sphere.  
 	double RHO,SLT,CLT,SIG,MU,CHI;  // Dummy Vars for passing 
-	out.osun[i] = img2sphere(xrot,yrot,parms.ang_rad,out.LT,out.LN,0.0,
-				 &RHO,&lat,&lon,&SLT,&CLT,&SIG,&MU,&CHI);
+	outimg.osun[i] = img2sphere(xrot,yrot,parms.ang_rad,outimg.LT,
+				    outimg.LN,0.0, &RHO,&lat,&lon,&SLT,&CLT,
+				    &SIG,&MU,&CHI);
       } 
       else 
       {
-	out.osun[i] = plane2sphere(xrot,yrot,out.LT,out.LN,&lat,&lon,
-				   parms.projcode);
+	outimg.osun[i] = plane2sphere(xrot,yrot,outimg.LT,outimg.LN,&lat,&lon,
+				      parms.projcode);
       }
       if(isnan(lat) || isnan(lon))
-	out.osun[i] = kMyMod_ValErr;
-      out.dat[i] = 0.0;
-      out.wgt[i] = 0.0;
-      out.lat[i] = lat;
-      out.lon[i++] = lon;
+	outimg.osun[i] = kMyMod_ValErr;
+      outimg.dat[i] = 0.0;
+      outimg.wgt[i] = 0.0;
+      outimg.lat[i] = lat;
+      outimg.lon[i++] = lon;
     } 
   }
   return kMyMod_Success;     // exit geom_outimgs normally
 }
+
+
 
 /* 
  ******************************************************************* 
@@ -915,7 +985,7 @@ int  open_check_indb(DRMS_RecordSet_t **indb)
   if(get_query_str(qry_str) != kMyMod_Success)
     return (parms.status = kMyMod_Missing);
 
-  sprintf(temp,"Input Data Series: %s\n",qry_str);
+  sprintf(temp,"%s\n",qry_str);
   V_print(temp);
 
   (*indb) = drms_open_records(drms_env, qry_str, &status);
@@ -938,6 +1008,7 @@ int  open_check_indb(DRMS_RecordSet_t **indb)
   if((status = check_indb(iRec)) != kMyMod_Success)
      return status;
      
+  V_print("OK\n");
   return kMyMod_Success;     // exit open_check_indb normally
 }
 
@@ -1031,7 +1102,7 @@ int    check_indb(DRMS_Record_t *rec)
 */
 // ADDIN
 
-int    addin(DRMS_RecordSet_t *inDB, OutImgs *out)
+int    addin(DRMS_RecordSet_t *inDB, OutImgs *outimgs)
 {
   int i, nInRecs, status;
   int dt, cols, rows, m, n;
@@ -1070,22 +1141,22 @@ int    addin(DRMS_RecordSet_t *inDB, OutImgs *out)
       rows = data_array->axis[1];
       for(m = 0; m < parms.Nmaps; m++) 
       {
-	dt = DT = timg - out[m].timctr;
+	dt = DT = timg - outimgs[m].timctr;
 	if(abs(DT) <= WtLen2)
 	{
 	  sprintf(temp,"+%d,",m);
 	  strcat(repstr,temp);
-	  if(abs(DT) < abs(out[m].irecdt))
+	  if(abs(DT) < abs(outimgs[m].irecdt))
 	  {
-	    out[m].irecdt = DT;
-	    out[m].irecno = i;
+	    outimgs[m].irecdt = DT;
+	    outimgs[m].irecno = i;
 	  }
 	  for(n = 0; n < parms.size; n++) 
 	  {
-	    if(!out[m].osun[n]) 		
+	    if(!outimgs[m].osun[n]) 		
 	    {
-	      lat = out[m].lat[n] + parms.Meri_V * DT;
-	      lon = out[m].lon[n] - parms.A0 * DT;
+	      lat = outimgs[m].lat[n] + parms.Meri_V * DT;
+	      lon = outimgs[m].lon[n] + parms.A0 * DT;
 	      if(parms.A2 != 0 || parms.A4 != 0)
 	      {
 		SB2 = sin(lat) * sin(lat);
@@ -1095,8 +1166,8 @@ int    addin(DRMS_RecordSet_t *inDB, OutImgs *out)
 			  Rsun, phi, 0.0, 1.0, 0.0, 0.0); 
 	      if(!isnan(TEST = ccint2(in_data,cols,rows,xx,yy)))
 	      {
-		out[m].dat[n] += TEST * parms.Wt[dt + WtLen2];
-		out[m].wgt[n] += parms.Wt[dt + WtLen2];
+		outimgs[m].dat[n] += TEST * parms.Wt[dt + WtLen2];
+		outimgs[m].wgt[n] += parms.Wt[dt + WtLen2];
 	      }
 	    }
 	  }
@@ -1111,14 +1182,15 @@ int    addin(DRMS_RecordSet_t *inDB, OutImgs *out)
   {
     for(n = 0; n < parms.size; n++) 
     {
-      if(out[m].wgt[n] > 0.0)
-	out[m].dat[n] = out[m].dat[n] / out[m].wgt[n];
+      if(outimgs[m].wgt[n] > 0.0)
+	outimgs[m].dat[n] = outimgs[m].dat[n] / outimgs[m].wgt[n];
       else
-	out[m].dat[n] = 0.0/0.0;
+	outimgs[m].dat[n] = 0.0/0.0;
     }
   }    
   return kMyMod_Success;     // exit addin normally
 }
+
 
 // READIN reads input image parameters
 
@@ -1268,6 +1340,7 @@ int    write_out_dbs(OutImgs *outimgs, DRMS_RecordSet_t *outDB, DRMS_RecordSet_t
 {
   int i, nrecs, status;
   char cunit[20];
+  char buff[200];
   DRMS_Record_t *orec, *irec;
   DRMS_Segment_t *oseg;
   double SCL, R2D, R2AS;
@@ -1280,6 +1353,9 @@ int    write_out_dbs(OutImgs *outimgs, DRMS_RecordSet_t *outDB, DRMS_RecordSet_t
 //				 parms.oser, DRMS_PERMANENT,&status);
   R2D = 180.0 / M_PI;
   R2AS = 3600.0 *180.0 / M_PI;
+
+// Have to re-do SCL factor to be consistent with input,
+// comp with check_cparms... the key CDELT2 is off!!
 
   nrecs = parms.Nmaps;
   if(parms.projcode == AERIAL)
@@ -1326,27 +1402,105 @@ int    write_out_dbs(OutImgs *outimgs, DRMS_RecordSet_t *outDB, DRMS_RecordSet_t
     drms_setkey_string(orec,"CUNIT1",cunit);
     drms_setkey_string(orec,"CUNIT2",cunit);
     drms_setkey_double(orec,"CADENCE",parms.Tstep);
+    drms_setkey_double(orec,"CRLN_OBS",outimgs[i].crln);
+    drms_setkey_int(orec,"CAR_ROT",outimgs[i].crot);
+
+    if((parms.status = set_bscale_bzero(&outimgs[i])) != kMyMod_Success)
+    {
+      sprintf(parms.Msg,"%sError: setting BSCALE & BZERO\n",parms.Msg);
+      return (parms.status = kMyMod_InitErr);
+    } 
+    sprintf(buff,"[%02d] Data:   Max=%9.4f, Min=%9.4f, Bscale=%9.4f, Bzero=%9.4f\n",
+	    i, outimgs[i].Dmax, outimgs[i].Dmin, 
+	    outimgs[i].DatArray->bscale, outimgs[i].DatArray->bzero);
+    V_print(buff);
+    sprintf(buff,"[%02d] Weight: Max=%9f, Min=%9f, Bscale=%9f, Bzero=%9f\n",
+	    i, outimgs[i].Wmax, outimgs[i].Wmin, 
+	    outimgs[i].WgtArray->bscale, outimgs[i].WgtArray->bzero);
+    V_print(buff);
 
     oseg = drms_segment_lookupnum (orec, 0);
-    outimgs[i].DatArray->bzero  = oseg->bzero;
-    outimgs[i].DatArray->bscale = oseg->bscale;
+    oseg->bzero = outimgs[i].DatArray->bzero;
+    oseg->bscale = outimgs[i].DatArray->bscale;
     outimgs[i].DatArray->parent_segment = oseg;
+    outimgs[i].DatArray->israw = 0;
     drms_segment_write(oseg,outimgs[i].DatArray,0);
     drms_free_array(outimgs[i].DatArray);
 
     oseg = drms_segment_lookupnum (orec, 1);
-    outimgs[i].WgtArray->bzero  = oseg->bzero;
-    outimgs[i].WgtArray->bscale = oseg->bscale;
+    oseg->bzero = outimgs[i].WgtArray->bzero;
+    oseg->bscale = outimgs[i].WgtArray->bscale;
     outimgs[i].WgtArray->parent_segment = oseg;
+    outimgs[i].WgtArray->israw = 0;
     drms_segment_write(oseg,outimgs[i].WgtArray,0);
     drms_free_array(outimgs[i].WgtArray);
-//    drms_close_record(orec, DRMS_INSERT_RECORD);
+
   }
 
   drms_close_records(outDB, DRMS_INSERT_RECORD);
   status = free_outimgs(outimgs);
+
+  V_print("OK\n");
   return kMyMod_Success;     // exit write_out_dbs normally
 }
+
+// SET_BSCALE_BZERO
+int    set_bscale_bzero(OutImgs *outimg)
+{
+  int i;
+  double TAPERNG = 3.0e4;
+  char buff[200];
+
+  outimg->DatArray->bscale = 1.0;
+  outimg->DatArray->bzero = 0.0;
+  outimg->WgtArray->bscale = 0.001;
+  outimg->WgtArray->bzero = 0.0;
+  outimg->Dmax = SHRT_MIN;
+  outimg->Dmin = SHRT_MAX;
+  outimg->Wmax = SHRT_MIN;
+  outimg->Wmin = SHRT_MAX;
+
+  for (i = 0; i < parms.size; i++)
+  {
+    if(!isnan(outimg->dat[i]))
+    {
+      if(outimg->Dmax < outimg->dat[i])
+	outimg->Dmax = outimg->dat[i];
+      if(outimg->Dmin > outimg->dat[i])
+	outimg->Dmin = outimg->dat[i];
+    }
+    if(!isnan(outimg->wgt[i]))
+    {
+      if(outimg->Wmax < outimg->wgt[i])
+	outimg->Wmax = outimg->wgt[i];
+      if(outimg->Wmin > outimg->wgt[i])
+	outimg->Wmin = outimg->wgt[i];
+    }
+  }
+
+  if (outimg->Wmin < 0.0)
+  { 
+    outimg->WgtArray->bscale = (outimg->Wmax - outimg->Wmin)/TAPERNG;
+    outimg->WgtArray->bzero = outimg->Wmin;
+  }
+  else
+  {
+    outimg->WgtArray->bscale = (outimg->Wmax)/TAPERNG;
+    outimg->WgtArray->bzero = 0.0;
+  }
+  
+  if(outimg->Dmax >= TAPERNG || outimg->Dmin <= -1*TAPERNG || 
+     abs(outimg->Dmax - outimg->Dmin) < 0.01*TAPERNG)
+  {
+    outimg->DatArray->bscale = (outimg->Dmax - outimg->Dmin)/TAPERNG/2.0;
+    outimg->DatArray->bzero = 0.5*(outimg->Dmax + outimg->Dmin);
+    if(abs(outimg->DatArray->bzero) < 0.08*(outimg->DatArray->bscale)*TAPERNG)
+      outimg->DatArray->bzero = 0.0;
+  }
+
+  return kMyMod_Success;   // Exit set_bscale_bzero normally - setvals
+}
+
 
 
 /* 
@@ -1397,16 +1551,21 @@ int    free_outimgs(OutImgs *outimg)
 int If_Err_Print(void)
 {
   if(parms.status)
+  {
     fprintf(stderr, "Error %d: %s\n",parms.status,parms.Msg);
+    fflush(stderr);
+  }
   return parms.status;
 }
 
 //   V_PRINT
 void   V_print(char *str)
 {
-  if(parms.verbose)
-    printf("%s",str);
-    
+  if (!parms.verbose && !(parms.verbose = cmdparams_isflagset(&cmdparams,"v")))
+    return;
+  printf("%s",str);
+  fflush(stdout);
+  
 }
 
 
