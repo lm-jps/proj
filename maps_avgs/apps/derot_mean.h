@@ -26,9 +26,15 @@ typedef struct
   TIME   timctr;
   double LN;             // need to add the rest of the geometry stuff
   double LT;             // need to add the rest of the geometry stuff
+  float Dmax;
+  float Dmin;
+  float Wmax;
+  float Wmin;
   DRMS_Record_t *rec;
   double  irecdt;
   int   irecno;
+  double  crln;    /* Carrington Lon for Observer - from ephem */
+  int     crot;    /* Carrington Rotation */
 } OutImgs;
 
 /* Parameter List Structure */
@@ -63,12 +69,12 @@ typedef struct
   char    CTYPE2[100];     /* Type for Coordinate axis 2 */
   double  CRPIX1;     /* Fiducial Pixel for axis 1 */
   double  CRPIX2;     /* Fiducial Pixel for axis 2 */
-  double  CRVAL1;     /* Cordinate for Fiducial pIxel 1 */
-  double  CRVAL2;     /* Cordinate for Fiducial pIxel 2 */
+  double  CRVAL1;     /* Cordinate for Fiducial pixel 1 */
+  double  CRVAL2;     /* Cordinate for Fiducial pixel 2 */
   double  CDELT1;     /* Pixel size, axis 1 - defined at Fiducial Pixel */
   double  CDELT2;     /* Pixel size, axis 2 - defined at Fiducial Pixel */
   short   verbose;    /* Flag set if verbose */
-  int     Nmaps;    /* Number of output maps (size of OutImg structure) */
+  int     Nmaps;      /* Number of output maps (size of OutImg structure) */
   //  This is a poor man's error handling system, so errors can be pass up
   int     status;          /* to pass back error status codes from functions */
   char    Msg[2000];       /* to pass back error messages from functions */
