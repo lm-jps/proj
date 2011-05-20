@@ -9,7 +9,19 @@
 function CheckHgPatch()
   {
   var isok = 0;
+  CheckHgRecordSet();
   ExportProcessingArgs = "hg_patch,";
+  if ($("HgTrack").checked) // checked for tracking, default
+    {
+    ExportProcessingArgs = ExportProcessingArgs + "t=0,";
+    HgTracked = 1;
+    }
+  else
+    {
+    ExportProcessingArgs = ExportProcessingArgs + "t=1,";
+    $("HgTRef").value = $("HgTStart").value;
+    HgTracked = 0;
+    }
   if ($("HgTStart").value == "NotSpecified")
     {
     $("HgTStart").style.backgroundColor="#FFFFFF";
@@ -47,18 +59,18 @@ function CheckHgPatch()
   $("HgLocType").style.backgroundColor="#FFFFFF";
   ExportProcessingArgs = ExportProcessingArgs + "locunits=" + $("HgLocType").value + ",";
   $("HgBoxType").style.backgroundColor="#FFFFFF";
-  ExportProcessingArgs = ExportProcessingArgs + "boxunits=" + $("HgBoxType").value;
+  ExportProcessingArgs = ExportProcessingArgs + "boxunits=" + $("HgBoxType").value + ",";
 
-  if ($("HgLocType").value == "carrlong")
+  if ($("HgLocType").value == "carrlong" && HgTracked == 1)
     {
-    $("HgCarrLi").style.display = "inline";
+    $("HgCarrLi").style.display = "table-row";
     $("HgTRefLi").style.display = "none";
     $("HgTRef").value == "NotSpecified";
     }
   else
     {
     $("HgCarrLi").style.display = "none";
-    $("HgTRefLi").style.display = "inline";
+    $("HgTRefLi").style.display = "table-row";
     $("HgCarrot").value == "NotSpecified";
     }
 
@@ -79,7 +91,7 @@ function CheckHgPatch()
     isok = 0;
     }
   else
-  {
+    {
     $("HgTRef").style.backgroundColor="#FFFFFF";
     ExportProcessingArgs = ExportProcessingArgs + "t_ref=" + $("HgTRef").value + ",";
     isok += 1;
@@ -132,15 +144,47 @@ function CheckHgPatch()
   }
 
 // Special action to modify input RecordSet if no records spec present
+// Also gets list of available series.
 
-function CheckHgRecordset() // If HG Patch selected, convert empty record selector to last record.
+function HgSeriesSelect()
+  {
+  HgSeriesSelected = 1;
+  if (CheckHgRecordSet())
+    ExportNewRS();
+  }
+
+function CheckHgRecordSet() // If HG Patch selected, convert empty record selector to last record.
   {
   var posbracket = $("ExportRecordSet").value.indexOf("[");
-  if (posbracket == -1)
+  var currentSeries = $("ExportRecordSet").value.substring(0,posbracket);
+  var currentSpec = (posbracket < 0 ? "[$]" : $("ExportRecordSet").value.substring(posbracket));
+  var selectedSeries;
+  if (HgSeriesSelected)
+    selectedSeries = $("HgSerList").selectedIndex;
+  else
     {
-    $("ExportRecordSet").value = $("ExportRecordSet").value + "[$]";
-    ExportNewRS();
+    var n = $("HgSerList").length;
+    var i;
+    for (i=0; i<n; i++)
+      if (currentSeries == $("HgSerList").options[i].value) break;
+    if (i == n)
+      {
+      alert("Please select valid hg_patch available series from list.");
+      return;
+      }
+    HgSeriesSelected = 1;
+    $("HgSerList").selectedIndex = i;
+    $("ExportRecordSet").value = currentSeries + currentSpec;
+    selectedSeries = i;
     }
+  currentSeries = $("HgSerList").options[selectedSeries].value;
+  $("ExportRecordSet").value = currentSeries + currentSpec;
+  if (posbracket < 0)
+    {
+    ExportNewRS();
+    return(0);
+    }
+  return(1);
   }
 
 // Set display defaults
@@ -148,6 +192,7 @@ function CheckHgRecordset() // If HG Patch selected, convert empty record select
 function HgPatchInit()
   {
   $("ProcessHgPatch").style.display="none";
+  $("HgTrack").checked = 1;
   $("HgTStart").value = "NotSpecified";
   $("HgTStop").value = "NotSpecified";
   $("HgTDelta").value = "NotSpecified";
@@ -158,6 +203,30 @@ function HgPatchInit()
   $("HgWide").style.backgroundColor = "#D88080"; $("HgWide").value = "NotSpecified";
   $("HgHigh").style.backgroundColor = "#D88080"; $("HgHigh").value = "NotSpecified";
   HgPatchActive = 0;
+  HgGetSeriesList();
+  HgSeriesSelected = 0;
+  HgTracked = 1;
   }
+
+function HgGetSeriesList()
+  {
+  var HgPatchSerList = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/show_hgpatch',
+    {
+    method: 'get',
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no HgPatch series";
+      HgSeriesList = response.evalJSON();
+      var n = HgSeriesList.n;
+      if (n < 1) alert("WARNING: No _hgpatch series found.\n"+response);
+      for (var i=0; i<n; i++)
+         insertOption("HgSerList",HgSeriesList.list[i], "");
+      },
+    onFailure: function() { alert('Failed to get HgPatch Series List'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+  return;
+  }
+
 
 // End of HG Patch code
