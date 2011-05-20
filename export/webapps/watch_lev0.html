@@ -237,7 +237,7 @@ function CheckPending()
     }
   }
 
-// Returns difference in minutes between ISO time string t and the present time
+// Returns difference in minutes between filename time string t and the present time
 function TimeSinceFNT(t)
   {
   now = new Date();
@@ -252,7 +252,7 @@ function TimeSinceFNT(t)
   tms = Date.UTC(yr,0,1,hr,min,sec);
   tms = tms + 86400000 * (doy - 1);
   diff = Math.round((nowms - tms)/60000);
-  hrs = Math.floor(diff/60);
+  hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
   mins = diff - 60*hrs;
   return hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m";
   }
@@ -271,7 +271,7 @@ function TimeSinceISO(t)
   tms = tms - 60000*now.getTimezoneOffset();
   diff = Math.round((nowms - tms)/60000);
   DATE_Lag = diff;
-  hrs = Math.floor(diff/60);
+  hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
   mins = diff - 60*hrs;
   return hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m";
   }
@@ -289,7 +289,7 @@ function TimeSinceJSOC(t)
   tms = Date.parse(t1);
   tms = tms - 60000*now.getTimezoneOffset();
   diff = Math.round((nowms - tms)/60000);
-  hrs = Math.floor(diff/60);
+  hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
   mins = diff - 60*hrs;
   return hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m";
   }
@@ -316,12 +316,12 @@ function GetDCSInfo()
       nowms = now.getTime();
       dcslast = data.hmimt * 1000;
       diff = Math.round((nowms - dcslast)/60000);
-      hrs = Math.floor(diff/60);
+      hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
       mins = diff - 60*hrs;
       $("DCS_info").innerHTML =  $("DCS_info").innerHTML + "<B>Last DCS Received HMI</B> file was " +  hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m ago,";
       dcslast = data.aiamt * 1000;
       diff = Math.round((nowms - dcslast)/60000);
-      hrs = Math.floor(diff/60);
+      hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
       mins = diff - 60*hrs;
       $("DCS_info").innerHTML =  $("DCS_info").innerHTML + "  <B>AIA</B> file was " +  hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m ago";
       },
