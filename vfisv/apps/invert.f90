@@ -13,7 +13,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   !
   ! By RCE, Apr 23, 2010: Changed azimuth reference by 90 degrees at the end (after the inversion loop).
   !
-  ! By RCE, Apr 23, 2010: Normalize all filters to central filter area hard-coded value:
+  ! By RCE, Apr 23, 2010: (OBSOLETE, see May 17 2011 comment) Normalize all filters to central filter area hard-coded value:
   ! The integrated areas of the six filters for the central pixel (pixel # 8386559) are:    
   ! 1.43858806880917  1.49139978559615   1.52324167542270  1.52811487224149  1.50984871281028  1.46553486521323
   ! the average area being:	1.49279. We will normalize ALL the filters by this value.
@@ -38,7 +38,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   !  - Put lower bound on the LM lambda parameter so that it doesn't decrease beyond a value (in GET_LAMBDA in INV_UTILS) 
   !  - Test flag (TMP_FLAG) to count the number of resets of the model parameters. Saved in one of the error variables
   !
-  ! By RCE: Re-normalizing filters to different value to account for +/-2A coverage
+  ! By RCE: Re-normalizing filters to different value to account for +/-2A coverage (OBSOLETE, see May 17 2011 comment)
   !
   ! By RCE April 2011: reset FLAG that counts number of consecutive interations to zero when one successful iteration is achieved.
   ! By RCE April 2011: Included filter hack. FILTERS_LONG are the filters calculated in the full wavelength range.
@@ -46,6 +46,11 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   ! We do this to avoid computing the forward model very far into the continuum. It takes too much time. So we do
   ! a quick hack to compute the forward model only in an inner wavelength region and then add the filter contribution 
   ! outside of this region, in the continuum around the spectral line.
+  !
+  ! By RCE, May 17, 2011: Normalization of filters is now done in the wrapper. This way, when we change parameters such as the wavelength range
+  ! or the wavelength sampling, the normalization factor is computed for the correct parameters. 
+
+
 
   USE FILT_PARAM
   USE CONS_PARAM
@@ -105,12 +110,6 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
      INTEG_FILTERS(:) = 0D0
   ENDIF
   
-
-
-  !By RCE, Apr 23, 2010: Normalizing filters
-
-!FILTERS(:,:) = FILTERS(:,:) / 1.49279D0 ! Normalization for +/- 0.648A coverage and 27 mA sampling
-FILTERS(:,:) = FILTERS(:,:) /1.5799      ! Normalization for +/- 2A coverage and 27mA sampling
 
   !By RCE, Apr 23, 2010: Reversing the wavelength order of the observations 
   ! so that they are in increasing wavelength order
@@ -349,7 +348,7 @@ FILTERS(:,:) = FILTERS(:,:) /1.5799      ! Normalization for +/- 2A coverage and
       ENDIF ! CONV_FLAG and NAN_FLAG are equal to 0.
 
    ELSE ! Intensity above threshold to invert
-        CONVERGENCE_FLAG = 6
+        CONVERGENCE_FLAG = 1
    ENDIF
      
      IF (I .EQ. ITER) THEN 
@@ -360,12 +359,12 @@ FILTERS(:,:) = FILTERS(:,:) /1.5799      ! Normalization for +/- 2A coverage and
 
 
 ! CONVERGENCE_FLAG values
-!    1: (CHI2old-CHI2new) LT epsilon (converged!)
+!    0: (CHI2old-CHI2new) LT epsilon (converged!)
+!    1: Pixel not inverted due to ICONT LT threshold intensity.
 !    2: Maximum number of iterations reached
 !    3: Too many non-consecutive successful iterations
 !    4: NaN in CHI2 detected
 !    5: NaN in SVD
-!    6: Pixel not inverted due to ICONT LT threshold intensity.
 
 
 END SUBROUTINE INVERT
