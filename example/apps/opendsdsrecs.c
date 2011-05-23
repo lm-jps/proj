@@ -52,7 +52,8 @@ int DoIt(void)
 		     segproto->info->protocol = DRMS_FITS;
 		  }
 
-		  XASSERT((matchSegNames = (HContainer_t *)malloc(sizeof(HContainer_t))) != NULL);
+                  matchSegNames = (HContainer_t *)malloc(sizeof(HContainer_t));
+                  XASSERT(matchSegNames != NULL);
 		  int compat =  drms_series_checkrecordcompat(drms_env,
 							      kOutSeries, 
 							      prototype, 
@@ -104,7 +105,8 @@ int DoIt(void)
 		  segproto->info->protocol = DRMS_FITS;
 	       }
 
-	       XASSERT((matchSegNames = (HContainer_t *)malloc(sizeof(HContainer_t))) != NULL);
+               matchSegNames = (HContainer_t *)malloc(sizeof(HContainer_t));
+               XASSERT(matchSegNames != NULL);
 	       int compat =  drms_series_checkrecordcompat(drms_env,
 							   kOutSeries, 
 							   prototype, 

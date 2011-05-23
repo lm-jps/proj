@@ -349,7 +349,8 @@ static int CheckCompat(DRMS_Env_t *env, DRMS_Record_t *rec, const char *dsout)
 	 di.axis[1] = (segproto->axis)[2] / 2;
 	 drms_segment_setdims(segproto, &di);
 
-	 XASSERT((matchSegNames = (HContainer_t *)malloc(sizeof(HContainer_t))) != NULL);
+         matchSegNames = (HContainer_t *)malloc(sizeof(HContainer_t));
+         XASSERT(matchSegNames != NULL);
 	 compat = drms_series_checkrecordcompat(env,
 						dsout, 
 						prototype, 

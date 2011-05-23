@@ -245,7 +245,8 @@ static int ValidateSeries(DRMS_Env_t *drmsEnv,
 	    /* Ensure out series is compatible with in series. */
 	    /* Ensure the prime keywords and at least one segment match, 
 	     * and return a list of matching segments */
-	    XASSERT((*matchSegNames = (HContainer_t *)malloc(sizeof(HContainer_t))) != NULL);
+            *matchSegNames = (HContainer_t *)malloc(sizeof(HContainer_t));
+            XASSERT(*matchSegNames != NULL);
 	    int nMatch = 0;
 	    int compat =  drms_series_checkrecordcompat(drms_env,
 							outSeriesName, 

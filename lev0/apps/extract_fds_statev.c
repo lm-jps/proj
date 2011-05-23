@@ -307,10 +307,11 @@ static DRMS_Keyword_t *AddKey(DRMS_Record_t *prototype,
 {
    DRMS_Keyword_t *tKey = NULL;
 
-   XASSERT(tKey = 
-	   hcon_allocslot_lower(&(prototype->keywords), name));
+   tKey = hcon_allocslot_lower(&(prototype->keywords), name);
+   XASSERT(tKey);
    memset(tKey, 0, sizeof(DRMS_Keyword_t));
-   XASSERT(tKey->info = malloc(sizeof(DRMS_KeywordInfo_t)));
+   tKey->info = malloc(sizeof(DRMS_KeywordInfo_t));
+   XASSERT(tKey->info);
    memset(tKey->info, 0, sizeof(DRMS_KeywordInfo_t));
 
    /* XXX check for invalid input */
