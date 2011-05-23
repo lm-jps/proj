@@ -1716,7 +1716,8 @@ HK_Keyword_t *copy_hk_keywords(HK_Keyword_t *head)
 
   if (head)
   {
-    assert(newhead = malloc(sizeof(HK_Keyword_t)));
+    newhead = malloc(sizeof(HK_Keyword_t));
+    assert(newhead);
     p = newhead;
     memcpy(p, head, sizeof(HK_Keyword_t));
     if (head->eng_type == DRMS_TYPE_STRING)
@@ -1724,7 +1725,8 @@ HK_Keyword_t *copy_hk_keywords(HK_Keyword_t *head)
     head = head->next;
     while(head)
     {      
-      assert(p->next = malloc(sizeof(HK_Keyword_t)));
+      p->next = malloc(sizeof(HK_Keyword_t));
+      assert(p->next);
       p = p->next;
       memcpy(p, head, sizeof(HK_Keyword_t));
       if (head->eng_type == DRMS_TYPE_STRING)
@@ -2185,7 +2187,8 @@ int decompress_writefitsimage(const char* file, Image_t *image, int compress)
     kw = kw->next;
   }
   hlen = ((n_kw+15+35)/36)*36*80;
-  assert(head = malloc(hlen));
+  head = malloc(hlen);
+  assert(head);
   memset(head,' ',hlen);
   p = head;
   /* Write special filtergram keywords. */
@@ -3063,7 +3066,8 @@ int decompress_next_vcdu(unsigned short vcdu[PACKETWORDS],
 	Context[ctx]->image->keywords = copy_hk_keywords(ccsds.keywords);
 	
 	/* Allocate a CCSDS packet. */
-	assert(p = malloc(sizeof(CCSDS_Packet_t)));
+        p = malloc(sizeof(CCSDS_Packet_t));
+        assert(p);
 	memcpy(p, &ccsds, sizeof(CCSDS_Packet_t));
 	/* Append to output list. */
 	if (*hk_packets == NULL)
@@ -3116,7 +3120,8 @@ int decompress_next_vcdu(unsigned short vcdu[PACKETWORDS],
 	Context[ctx]->image->keywords = copy_hk_keywords(ccsds.keywords);
 	
 	/* Allocate a CCSDS packet. */
-	assert(p = malloc(sizeof(CCSDS_Packet_t)));
+        p = malloc(sizeof(CCSDS_Packet_t));
+        assert(p);
 	memcpy(p, &ccsds, sizeof(CCSDS_Packet_t));
 	/* Append to output list. */
 	if (*hk_packets == NULL)
@@ -3139,7 +3144,8 @@ int decompress_next_vcdu(unsigned short vcdu[PACKETWORDS],
       if (status == SUCCESS)
       {
 	/* Allocate a CCSDS packet. */
-	assert(p = malloc(sizeof(CCSDS_Packet_t)));
+        p = malloc(sizeof(CCSDS_Packet_t));
+        assert(p);
 	memcpy(p, &ccsds, sizeof(CCSDS_Packet_t));
 	/* Append to output list. */
 	if (*hk_packets == NULL)
