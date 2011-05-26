@@ -41,11 +41,12 @@ var EXPORTDATA = "exportdata";
 
 // Protect page from accidental BACK button
 window.onbeforeunload = function () 
-   {
-   return "Did you really mean to leave exportdata? Use CANCEL to stay here";
-   }
+  {
+  return "Did you really mean to leave exportdata? Use CANCEL to stay here";
+  }
 
 var Host = location.host;
+var Internal = 0;
 var SeriesName;
 var RequestID;
 var RecordSet;
@@ -74,10 +75,11 @@ var SeriesInfo;
 var HgPatchActive = 0;
 var HgSeriesList;
 var HgSeriesSelected = 0;
+var HgTracked = 0;
 
-NotifyProcessingCode()
+function NotifyProcessingCode()
   {
-  // called when Recordset is changed.
+  // called when RecordSet is changed.
   // Set flags to alert processing or method options here.
   HgSeriesSelected = 0;
   }
@@ -87,6 +89,10 @@ NotifyProcessingCode()
 function initVars()
   {
   Host = location.host;
+  if (Host == "jsoc2.stanford.edu")
+    Internal = 1;
+  else
+    Internal = 0;
   SeriesName = "";
   RequestID = "";
   RecordCount = 0;
@@ -96,6 +102,7 @@ function initVars()
   ExportProtocolOK = 0;
   ExportCompressOK = 1;
   ExportMethodOK = 0;
+  ExportMethodIsDirect = 0;
   ExportFilenameFmtOK = 0;
   ExportProcessingOK = 0;
   ExportUserOK = 0;
@@ -109,8 +116,8 @@ function initVars()
     {
     $("ExportRequestor").value = "";
     $("ExportProcessing").value = "no_op";
-    $("ExportNotify").value = "";
-    $("ExportNotifyConf").value = "";
+    $("ExportNotify").value = "solarmail";
+    $("ExportNotifyConf").value = "solarmail";
     $("RequestIdPlace").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -154,14 +161,25 @@ function initVars()
 function getargs()
   {
   state = Cookie.getData("state");
+  $("ExportRequestor").value = Cookie.getData("user");
+  if ($("ExportRequestor").value == undefined)
+    $("ExportRequestor").value = "";
   if (state == 1)
     {
     var exportargs = Cookie.data["search"];
-    exportargs = decodeURIComponent(exportargs);
-    exportargs = exportargs.substr(1);
-    exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
-    args = exportargs.toQueryParams();
-    args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
+    if (exportargs != undefined)
+      {
+      exportargs = decodeURIComponent(exportargs);
+      exportargs = exportargs.substr(1);
+      exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
+      args = exportargs.toQueryParams();
+      args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
+      }
+    else
+      {
+      args = new Object;
+      args.ds = "";
+      }
     }
   else if (state > 1)
     {
@@ -181,6 +199,7 @@ function getargs()
     state=1;
     Cookie.setData("state",state);
     Cookie.setData("search",location.search);
+    Cookie.setData("user", $("ExportRequestor").value);
     }
   return args;
   }
@@ -210,6 +229,8 @@ function OnLoadInit()
     GetRSCount();
     GetDefaultFormat();
     }
+  if (Internal)
+    $("RequestorMessage").innerHTML = "Provide an identifier for you, e.g. your SolarMail name. Required for jsoc2";
   // HELP tips enable
   CreateTips();
   $("TipsOnOffButton").value = "Turn Help Off";
@@ -244,7 +265,7 @@ function CreateTips()
         'See http://jsoc.stanford.edu/jsocwiki/AllAboutJsocNames.',tipstyle);
     new Tip("RecordSetHelp","RecordSet to be exported. May be imported on call and/or may be entered directly here.",tipstyle);
     new Tip("RecordLimitHelp","RecordSet record limit. Max number of records to export.  Modifies RecordSet.  Value should be 'none' or a number. Number > 0 counts from start of RecordSet.  Negative number counts from high end of RecordSet.  0 means no limit",tipstyle);
-    new Tip("RecordCountHelp","RecordSet record count.  Update this to repeat export with new method, email, etc.",tipstyle);
+    new Tip("RecordCountHelp","RecordSet record count.  Update this to repeat export with new method, email, etc.  There is presently a limit to the memory space allocated for record queries which restricts AIA lev1 requests to about 15,000 records and HMI X_45s or X_720s data to about 32,000 records.  The limit depends on number of keywords in each record.  This limit will be eased in the future.",tipstyle);
     new Tip("ProcessingHelp","Processing to be done to the data prior to export.  Select from drop-down list for details.",tipstyle);
     // Processing options section 4 of 7
     new Tip("HgPatchHelp","Extract patch in heliographic coordinates, trac across the disk, provide Carrington location and size of patch in degrees or ref time and location.",tipstyle);
@@ -252,7 +273,9 @@ function CreateTips()
     new Tip("ProtocolHelp",'Data storage protocol for data files to be fetched.  ' +
         '"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
         '"As-is" leaves the data as it is used inside the JSOC DRMS routines, with the header metadata stored in the database ' +
-        'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten.',tipstyle);
+        'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten. The "JPEG" option will ' +
+        ' yield  png images of the data with a pre-determined scaling and colortable and the "MPEG" option will ' +
+        ' yield a movie in mp4 format along with the png images that make up the frames in the movie.',tipstyle);
     new Tip("CompressHelp",'Compression parameters to be used by the cfitsio library.  ' +
         'Provide up to one comma separated string for each segment name in your export.  ' +
         'Use "**NONE**" to indicate uncompressed FITS files desired.  If more segments are to be exported than strings are provided, ' +
@@ -502,7 +525,7 @@ function GetDefaultFormat()
           }
 	}
       else
-        alert("failed to get series info\nEnter correct RecordSet or proceed to processing options");
+        alert("failed to get series info for " + RecordSet + "\nEnter correct RecordSet or proceed to processing options");
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
     onFailure: function() { alert('Something went wrong...'); },
@@ -587,9 +610,15 @@ function SetExportMethod()
     $("ProcessRow").style.display="none";
     $("ProcessHgPatch").style.display="none";
     if ($("ExportMethod").value == "url_direct")
+        {
         $("ProtocolRow").style.display="table-row";
+        ExportMethodIsDirect = 1;
+        }
     else
+        {
         $("ProtocolRow").style.display="none";
+        ExportMethodIsDirect = 0;
+        }
     $("FilenameFmtRow").style.display="none";
     $("CompressRow").style.display="none";
     $("RequestorRow").style.display="none";
@@ -644,7 +673,7 @@ function SetProcessing()
   else if ($("ExportProcessing").value == "hg_patch") // Export option block for HgPatch, section 6 of 7
     {
     HgPatchActive = 1;
-    CheckHgRecordset();
+    CheckHgRecordSet();
     $("ProcessHgPatch").style.display="table-row";
     if (CheckHgPatch())
       isok = 1;
@@ -711,10 +740,12 @@ function SetExportCompress()
 function SetExportUser()
   {
   if ($("ExportRequestor").value.length != 0)
+    {
+    Cookie.setData("user", $("ExportRequestor").value);
     ExportUserOK = 1;
+    }
   else
     {
-    alert("Please set non-empty name for Requestor");
     ExportUserOK = 0;
     }
   }
@@ -785,7 +816,7 @@ function CheckExportParams()
     {
     SetExportCompress();
     }
-  if (0)
+  if (Internal)
     {
     SetExportUser();
     if (ExportUserOK == 0)
@@ -836,7 +867,7 @@ function GetExport()
                                       "method" : $("ExportMethod").value,
                                       "filenamefmt" : $("ExportFilenameFmt").value,
 			 	      "format" : "json",
-                                      "protocol" : protocolparam} );
+                 		      "protocol" : protocolparam });
 // alert(Object.inspect(exportparameters));
     // if (nsegsselected) exportparameters = exportparameters.merge({"seg": SegList});
     }
@@ -951,7 +982,7 @@ function ProcessExportResponse(response)
     alert("Requested RecordSet not found or specification error, status=4, error=" + data.error +
       "<BR>The export program failed.<BR>" + "JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog");
     ExportReadyOK = 0;
-    $("ExportButton").value = "Bad Recordset";
+    $("ExportButton").value = "Bad RecordSet";
     $("ExportButtonMsg").innerHTML = data.error;
     $("RequestIdPlace").innerHTML = "";
     $("ExportStatus").innerHTML = "RecordSet not found";
@@ -1018,16 +1049,20 @@ function ProcessExportResponse(response)
     $("FileUploadInfo").innerHTML = "File upload done, " + data.rcount + " records requested.";
     if ($("ExportMethod").value == "url_quick")
       {
-      if (count > 1)
+      if (ExportMethodIsDirect) // was url_direct on call
         {
-        $("ExportLocation").innerHTML =  valuetable + "<BR>";
+        if (count > 1)
+            $("ExportLocation").innerHTML =  "<B>Multiple files returned, direct fetch not possible. </B><P>" +
+              valuetable + "<BR>";
+        else
+            {
+            var path = encodeURI("http://jsoc.stanford.edu" + data.dir + "/" + data.data[0].filename);
+    //      doucment.write("<link type=\"application/fits\" href="+path+" />");
+    //      fetch image
+            }
         }
-      else
-        {
-        var path = encodeURI("http://jsoc.stanford.edu" + data.dir + "/" + data.data[0].filename);
-//      doucment.write("<link type=\"application/fits\" href="+path+" />");
-//      fetch image
-        }
+      else // url_quick on call
+        $("ExportLocation").innerHTML = valuetable + "<BR>";
       }
     else
       $("ExportLocation").innerHTML =  valuetable + "<BR>";
@@ -1088,7 +1123,7 @@ function GetStatus()
         {
         alert("RequestID not found, status=6, error=" + data.error + "<BR>Try again in a few seconds, may just be not ready to respond");
         StatusReadyOK = 0;
-        $("StatusButton").value = "Bad Recordset";
+        $("StatusButton").value = "Bad RecordSet";
         $("StatusButtonMsg").innerHTML = data.error + ", processing perhaps not started yet or bad RequestID";
         $("StatusValue").innerHTML = "Requested RecordSet returned error status=6";
         $("StatusOther").innerHTML = $("StatusRequestID").value + " not found,  msg=" + data.error;
@@ -1113,7 +1148,7 @@ function GetStatus()
         alert("Requested RecordSet not found or specification error, status=4, error=" + data.error + "<BR>The export program failed.<BR>" +
 		"JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog");
         StatusReadyOK = 0;
-        $("StatusButton").value = "Bad Recordset";
+        $("StatusButton").value = "Bad RecordSet";
         $("StatusButtonMsg").innerHTML = data.error;
         $("StatusValue").innerHTML = "Requested RecordSet returned error status=4";
         $("StatusOther").innerHTML = $("StatusRequestID").value + "msg=" + data.error;
@@ -1223,6 +1258,10 @@ function GetStatus()
 </DIV> <!-- end DIV header -->
 <DIV id="ExportRequestDiv">
 <B>JSOC Data Export Request Generation</B>
+<SPAN ID="RecordSetExample">
+&nbsp; &nbsp;
+<A HREF=ExportDataErrorHelp.html target="JSOC_Help">Help with Error Messages</A>
+</SPAN>
 <P>
 If the Method is changed from "url_quick" or "url_direct" you will have additional options to specify.
 "url-direct" is temporarily disabled.
@@ -1260,13 +1299,14 @@ access the data.
     <TR ID="RecordLimitRow">
       <TD>Record Limit</TD><TD><SPAN ID="RecordLimitHelp" class="tip">?</SPAN></TD>
       <TD><input id="ExportRecordLimit" type="text" name="ReccordLimit" value="none" style="width:15em" onChange="SetRecordLimit();" ></TD>
-      <TD>Limits number of records to export.</TD>
+      <TD>Optional manual limit to number of records to export.</TD>
     </TR>
   
     <TR ID="RecordCountRow">
       <TD>Record Count</TD><TD><SPAN ID="RecordCountHelp" class="tip">?</SPAN></TD>
       <TD><span id="RSCountPlace" style="width:10em;background-color:#FFF8DC"></span></TD>
-      <TD><input id="CountButton" type="button" value="Recount" onClick="GetRSCount();" ></TD>
+      <TD><input id="CountButton" type="button" value="Recount" onClick="GetRSCount();" >&nbsp;
+          Limit for AIA to about 15,000 and for HMI about 30,000 in each request.</TD>
     </TR>
   
     <TR ID="MethodRow">
@@ -1327,7 +1367,7 @@ access the data.
       <TD>Requestor</TD>
       <TD><SPAN ID="RequestorHelp" class="tip">?</SPAN></TD>
       <TD><input id="ExportRequestor" type="text" name="requestor" value="" onChange="ExportNop();" ></TD>
-      <TD>Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</TD>
+      <TD><SPAN ID="RequestorMessage">Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</SPAN></TD>
     </TR>
   
     <TR ID="NotifyRow">
