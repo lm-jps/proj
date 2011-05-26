@@ -688,6 +688,7 @@ fprintf(stderr,"NoTrack, center_x_first=%f, center_y_first=%f, pa=%f\n",center_x
         for (x=0; x < n3x; x++)
           *((float *)outArray->data + ((start3[1]+y)*dims[0] + x + start3[0])) =
             *((float *)inArray->data + (y*n3x + x));
+      drms_free_array(inArray);
       }
     // Handle special case where |pa| == 180
     if (fabs(fabs(pa)-180.0) < 1.0)
