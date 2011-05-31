@@ -3,6 +3,7 @@
 <HEAD>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; CHARSET=iso-8859-1">
 <TITLE>JSOC Lookdata</TITLE>
+
 <!-- activewidgets fix box model in firefox/safari/opera -->
 <style type="text/css">
         .aw-quirks * {
@@ -104,7 +105,8 @@ var EXPORTDATA = "exportdata";
 // Protect page from accidental BACK button
 window.onbeforeunload = function ()
    {
-   return "Did you really mean to leave lookdata? Use CANCEL to stay here";
+   if (NannyEnabled)
+     return "Did you really mean to leave lookdata? Use CANCEL to stay here";
    }
 
 // var SeriesList = "";
@@ -123,6 +125,7 @@ var askedCount = 0;
 var KeyValsFetched = 0;
 var TipsEnabled=1;
 var TabsEnabled=1;
+var NannyEnabled=1;
 var TipsCreated = 0;
 var MaxRecs = 0;
 var FirstLoad = 1;
@@ -200,6 +203,21 @@ function ToggleTabs()
     $("TabsOnOffButton").value = "Disable Tabs";
     TabsEnabled = 1;
     definetabs();
+    }
+  }
+
+// the Nanny function controls the onbeforeunload event action
+function ToggleNanny()
+  {
+  if (NannyEnabled)
+    {
+    $("NannyOnOffButton").value = "Enable Nanny";
+    NannyEnabled = 0;
+    }
+  else
+    {
+    $("NannyOnOffButton").value = "Disable Nanny";
+    NannyEnabled = 1;
     }
   }
 
@@ -303,6 +321,8 @@ function CleanKeysSelect()
 
 function CleanOnLoad()
   {
+  var args_given = 0;
+  var lookdata_args;
   Host = location.host;
   if (FirstLoad == 1)
     {
@@ -319,6 +339,18 @@ function CleanOnLoad()
       $("SeriesFilter").value = "NOT ^dsds\\.";
       $("JSOC2DIV").style.display="none";
       }
+    lookdata_args = location.search;
+    lookdata_args = decodeURIComponent(lookdata_args);
+    lookdata_args = lookdata_args.substr(1);
+    var args = lookdata_args.toQueryParams();
+    if (args.ds == undefined)
+	{
+        }
+      else
+        {
+        $("SeriesFilter").value = args.ds;
+        args_given = 1;
+        }
     FirstLoad = 0;
     }
   definetabs();
@@ -333,7 +365,14 @@ function CleanOnLoad()
   CreateTips();
   $("TipsOnOffButton").value = "Disable Help";
   $("TabsOnOffButton").value = "Disable Tabs";
+  $("NannyOnOffButton").value = "Disable Nanny";
   newwide();
+  if (args_given)
+    {
+    // GetSeries(); // cant call, since race with PickSeries
+    SeriesName = $("SeriesFilter").value;
+    PickSeries(1);
+    }
   }
 
 function CreateTips()
@@ -524,17 +563,18 @@ function GetSeries()
 // info and reset all associated references.
 // If mode==2 then the section 3 series name becomes the new SeriesName
 // and info for it will be found and displayed.
+// If mode==3, only update the first and last record information
 
 function PickSeries(mode)
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  CleanSeriesPick();
+  if (mode < 3) CleanSeriesPick();
   if (mode == 0)
     {
     CurrentSeries = $("SeriesSelect").selectedIndex;
     SeriesName = $("SeriesSelect").options[CurrentSeries].value;
     }
-  if (mode != 2)
+  if (mode == 0 || mode == 1)
     {
     $("RecordSet").value = SeriesName;
     $("QueryPlace").innerHTML = "";
@@ -566,147 +606,150 @@ function PickSeries(mode)
         {
         var i;
         // Get series descriptive note and display
-        $("Series_Info_Place").innerHTML = SeriesInfo.note;
-
-        // Get list of prime keys and index keys and display info
-        // Get prime key special info from primekeys array, but
-        // get prime keyword type and units, defaults, from matching keywords array element
-        var QueryBoxes = "<TABLE>";
-	nprimes = SeriesInfo.primekeysinfo.length;
-	var primes = "No PrimeKeys";
-        if (nprimes == 1 && SeriesInfo.primekeysinfo[0] == null)
-          nprimes = 0;
-	if (nprimes > 0)
-	  for (i=0; i<nprimes; i++)
-            {
-            if (i==0)
-	        primes = SeriesInfo.primekeysinfo[0].name;
-            else
-	        primes = primes + ", " + SeriesInfo.primekeysinfo[i].name;
-            var k;
-            for (k=0; k<SeriesInfo.keywords.length; k++)
-               if (SeriesInfo.keywords[k].name === SeriesInfo.primekeysinfo[i].name)
-                  break;
-            var isslotted = SeriesInfo.primekeysinfo[i].slotted;
-            QueryBoxes = QueryBoxes + 
-                "<TR><TD>" + SeriesInfo.primekeysinfo[i].name + "</TD>" + 
-                "<TD align='right'>" + "[&nbsp;&nbsp;<input id='Prime" + i +
-                "' type='text' value='' onChange='QueryBuild();' >&nbsp;&nbsp;]</TD>" +
-                "<TD> (" + SeriesInfo.keywords[k].type + (isslotted ? "-slotted, " + SeriesInfo.primekeysinfo[i].step : "") + ")</TD>";
-            if (SeriesInfo.keywords[k].type === "time")
-                QueryBoxes = QueryBoxes + "<TD> expects " + SeriesInfo.keywords[k].units + "</TD>";
-            else
-                QueryBoxes = QueryBoxes + "<TD></TD>";
-
-            QueryBoxes = QueryBoxes +  "</TR>";
-            }
-        QueryBoxes = QueryBoxes +  "<TR><TD>where clause</TD>" + 
-            "<TD align='right'>" + "[?&nbsp;<input id='WhereClause0' type='text' value='' onChange='QueryBuild();' >&nbsp;?]</TD>" +
-            "<TD colspan=2>Uses prime key logic</TD></TR>";
-        QueryBoxes = QueryBoxes +  "<TR><TD>where clause</TD>" + 
-            "<TD align='right'>" + "[!&nbsp;<input id='WhereClause1' type='text' value='' onChange='QueryBuild();' >&nbsp;!]</TD>" +
-            "<TD colspan=2> use disables prime key logic</TD></TR>";
-        QueryBoxes = QueryBoxes + "</TABLE>";
-        $("QueryPlace").innerHTML = QueryBoxes;
-        if ($("QueryDivCheck").checked == 1)
-            {
-	    $("QueryDiv").style.display="block";
-            }
-        else
-            {
-	    $("QueryDiv").style.display="none";
-            }
-	var n = SeriesInfo.dbindex.length;
-	var dbindex = "No DBindex";
-	if (n > 0) dbindex = SeriesInfo.dbindex[0];
-	for (i=1; i<n; i++)
-	    dbindex = dbindex + ", " + SeriesInfo.dbindex[i];
-        $("SSKeysPlace").innerHTML = "PrimeKeys: " + primes + "<BR>" +
-                                     "DBindex: " + dbindex + "<BR>";
-        // Add segment information if present
-        if (SeriesInfo.segments.length > 0)
-	  {
-          if (SeriesInfo.archive > 0)
-            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
-		"Data is archived, online retention " + SeriesInfo.retention + " days<BR>";
-	  else
-            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
-		"Data NOT archived, online retention " + SeriesInfo.retention + " days<BR>";
-          $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "Unitsize: " + SeriesInfo.unitsize + " record" +
-	    (SeriesInfo.unitsize > 1 ? "s" : "") + "<P>";
-	  }
-	else
-          $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "No SUMS storage for this series<P>";
-
-        // build and display keyword selection scroll box and keyword part of full table
-	var keywords = "No keywords";
-	n = SeriesInfo.keywords.length;
-	if (n > 0)
-	   {
-	   insertOption("KeysSelect","**NONE**", "");
-	   insertOption("KeysSelect","**ALL**", "");
-	   for (i=0; i<n; i++)
-	      insertOption("KeysSelect",SeriesInfo.keywords[i].name, "");
-	   keywords = keywords + "</table><P>";
-	   insertOption("KeysSelect","*recdir*", "");
-	   insertOption("KeysSelect","*dirmtime*", "");
-	   insertOption("KeysSelect","*logdir*", "");
-	   insertOption("KeysSelect","*recnum*", "");
-	   insertOption("KeysSelect","*sunum*", "");
-	   insertOption("KeysSelect","*size*", "");
-	   insertOption("KeysSelect","*online*", "");
-	   insertOption("KeysSelect","*retain*", "");
-	   insertOption("KeysSelect","*archive*", "");
-
-	   keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>scope</TH><TH>default</TH><TH>unit</TH><TH>note</TH>"; 
-           for (i=0; i<n; i++)
+        if (mode < 3)
+          {
+          $("Series_Info_Place").innerHTML = SeriesInfo.note;
+  
+          // Get list of prime keys and index keys and display info
+          // Get prime key special info from primekeys array, but
+          // get prime keyword type and units, defaults, from matching keywords array element
+          var QueryBoxes = "<TABLE>";
+  	nprimes = SeriesInfo.primekeysinfo.length;
+  	var primes = "No PrimeKeys";
+          if (nprimes == 1 && SeriesInfo.primekeysinfo[0] == null)
+            nprimes = 0;
+  	if (nprimes > 0)
+  	  for (i=0; i<nprimes; i++)
               {
-              keywords = keywords + "<TR><TD>" + 
-		SeriesInfo.keywords[i].name + "</TD><TD>" +
-		SeriesInfo.keywords[i].type + "</TD><TD>" +
-		SeriesInfo.keywords[i].recscope + "</TD><TD>" +
-		SeriesInfo.keywords[i].defval + "&nbsp;</TD><TD>" +
-		SeriesInfo.keywords[i].units + "&nbsp;</TD><TD>" +
-		SeriesInfo.keywords[i].note + "&nbsp;</TD></TR>";
-	      }
-	   }
-
-        // build and display segment selection scroll box and segment part of full table
-	var segments = "No segments";
-	n = SeriesInfo.segments.length;
-	if (n > 0)
-	   {
-	   segments = "<table BORDER=1><TR><TD>segment</TD><TD>units</TD><TD>dims</TD><TD>protocol</TD><TD>note</TD>";
-	   insertOption("SegsSelect","**NONE**", "");
-	   insertOption("SegsSelect","**ALL**", "");
-	   for (i=0; i<n; i++)
-	      {
-	      insertOption("SegsSelect",SeriesInfo.segments[i].name, "");
-	      segments = segments + "<TR><TD>" + SeriesInfo.segments[i].name + "</TD><TD>" + SeriesInfo.segments[i].units + "&nbsp;</TD><TD>" +
-		SeriesInfo.segments[i].dims + "&nbsp;</TD><TD>" + SeriesInfo.segments[i].protocol + "</TD><TD>" + SeriesInfo.segments[i].note + "&nbsp;</TD></TR>";
-	      }
-	   segments = segments + "</table><P>";
-	   }
-
-        // build and display link selection scroll box and segment part of full table
-	var links = "No links";
-	n = SeriesInfo.links.length;
-	if (n > 0)
-	   {
-	   links = "<table BORDER=1><TR><TD>link</TD><TD>target </TD><TD>kind</TD><TD>note</TD>";
-	   insertOption("LinksSelect","**NONE**", "");
-	   insertOption("LinksSelect","**ALL**", "");
-	   for (i=0; i<n; i++)
-	      {
-	      links = links + "<TR><TD>" + SeriesInfo.links[i].name + "</TD><TD>" + SeriesInfo.links[i].target + "</TD><TD>" +
-		      SeriesInfo.links[i].kind + "</TD><TD>" + SeriesInfo.links[i].note + "&nbsp;</TD></TR>";
-	      insertOption("LinksSelect",SeriesInfo.links[i].name, "");
+              if (i==0)
+  	        primes = SeriesInfo.primekeysinfo[0].name;
+              else
+  	        primes = primes + ", " + SeriesInfo.primekeysinfo[i].name;
+              var k;
+              for (k=0; k<SeriesInfo.keywords.length; k++)
+                 if (SeriesInfo.keywords[k].name === SeriesInfo.primekeysinfo[i].name)
+                    break;
+              var isslotted = SeriesInfo.primekeysinfo[i].slotted;
+              QueryBoxes = QueryBoxes + 
+                  "<TR><TD>" + SeriesInfo.primekeysinfo[i].name + "</TD>" + 
+                  "<TD align='right'>" + "[&nbsp;&nbsp;<input id='Prime" + i +
+                  "' type='text' value='' onChange='QueryBuild();' >&nbsp;&nbsp;]</TD>" +
+                  "<TD> (" + SeriesInfo.keywords[k].type + (isslotted ? "-slotted, " + SeriesInfo.primekeysinfo[i].step : "") + ")</TD>";
+              if (SeriesInfo.keywords[k].type === "time")
+                  QueryBoxes = QueryBoxes + "<TD> expects " + SeriesInfo.keywords[k].units + "</TD>";
+              else
+                  QueryBoxes = QueryBoxes + "<TD></TD>";
+  
+              QueryBoxes = QueryBoxes +  "</TR>";
               }
-	   links = links + "</table><P>";
-	   }
-
-	// Place structure table on screen
-        $("SSPlace").innerHTML =  keywords + "<BR>" + segments + "<BR>" + links;
+          QueryBoxes = QueryBoxes +  "<TR><TD>where clause</TD>" + 
+              "<TD align='right'>" + "[?&nbsp;<input id='WhereClause0' type='text' value='' onChange='QueryBuild();' >&nbsp;?]</TD>" +
+              "<TD colspan=2>Uses prime key logic</TD></TR>";
+          QueryBoxes = QueryBoxes +  "<TR><TD>where clause</TD>" + 
+              "<TD align='right'>" + "[!&nbsp;<input id='WhereClause1' type='text' value='' onChange='QueryBuild();' >&nbsp;!]</TD>" +
+              "<TD colspan=2> use disables prime key logic</TD></TR>";
+          QueryBoxes = QueryBoxes + "</TABLE>";
+          $("QueryPlace").innerHTML = QueryBoxes;
+          if ($("QueryDivCheck").checked == 1)
+              {
+  	    $("QueryDiv").style.display="block";
+              }
+          else
+              {
+  	    $("QueryDiv").style.display="none";
+              }
+  	var n = SeriesInfo.dbindex.length;
+  	var dbindex = "No DBindex";
+  	if (n > 0) dbindex = SeriesInfo.dbindex[0];
+  	for (i=1; i<n; i++)
+  	    dbindex = dbindex + ", " + SeriesInfo.dbindex[i];
+          $("SSKeysPlace").innerHTML = "PrimeKeys: " + primes + "<BR>" +
+                                       "DBindex: " + dbindex + "<BR>";
+          // Add segment information if present
+          if (SeriesInfo.segments.length > 0)
+  	  {
+            if (SeriesInfo.archive > 0)
+              $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
+  		"Data is archived, online retention " + SeriesInfo.retention + " days<BR>";
+  	  else
+              $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
+  		"Data NOT archived, online retention " + SeriesInfo.retention + " days<BR>";
+            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "Unitsize: " + SeriesInfo.unitsize + " record" +
+  	    (SeriesInfo.unitsize > 1 ? "s" : "") + "<P>";
+  	  }
+  	else
+            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "No SUMS storage for this series<P>";
+  
+          // build and display keyword selection scroll box and keyword part of full table
+  	var keywords = "No keywords";
+  	n = SeriesInfo.keywords.length;
+  	if (n > 0)
+  	   {
+  	   insertOption("KeysSelect","**NONE**", "");
+  	   insertOption("KeysSelect","**ALL**", "");
+  	   for (i=0; i<n; i++)
+  	      insertOption("KeysSelect",SeriesInfo.keywords[i].name, "");
+  	   keywords = keywords + "</table><P>";
+  	   insertOption("KeysSelect","*recdir*", "");
+  	   insertOption("KeysSelect","*dirmtime*", "");
+  	   insertOption("KeysSelect","*logdir*", "");
+  	   insertOption("KeysSelect","*recnum*", "");
+  	   insertOption("KeysSelect","*sunum*", "");
+  	   insertOption("KeysSelect","*size*", "");
+  	   insertOption("KeysSelect","*online*", "");
+  	   insertOption("KeysSelect","*retain*", "");
+  	   insertOption("KeysSelect","*archive*", "");
+  
+  	   keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>scope</TH><TH>default</TH><TH>unit</TH><TH>note</TH>"; 
+             for (i=0; i<n; i++)
+                {
+                keywords = keywords + "<TR><TD>" + 
+  		SeriesInfo.keywords[i].name + "</TD><TD>" +
+  		SeriesInfo.keywords[i].type + "</TD><TD>" +
+  		SeriesInfo.keywords[i].recscope + "</TD><TD>" +
+  		SeriesInfo.keywords[i].defval + "&nbsp;</TD><TD>" +
+  		SeriesInfo.keywords[i].units + "&nbsp;</TD><TD>" +
+  		SeriesInfo.keywords[i].note + "&nbsp;</TD></TR>";
+  	      }
+  	   }
+  
+          // build and display segment selection scroll box and segment part of full table
+  	var segments = "No segments";
+  	n = SeriesInfo.segments.length;
+  	if (n > 0)
+  	   {
+  	   segments = "<table BORDER=1><TR><TD>segment</TD><TD>units</TD><TD>dims</TD><TD>protocol</TD><TD>note</TD>";
+  	   insertOption("SegsSelect","**NONE**", "");
+  	   insertOption("SegsSelect","**ALL**", "");
+  	   for (i=0; i<n; i++)
+  	      {
+  	      insertOption("SegsSelect",SeriesInfo.segments[i].name, "");
+  	      segments = segments + "<TR><TD>" + SeriesInfo.segments[i].name + "</TD><TD>" + SeriesInfo.segments[i].units + "&nbsp;</TD><TD>" +
+  		SeriesInfo.segments[i].dims + "&nbsp;</TD><TD>" + SeriesInfo.segments[i].protocol + "</TD><TD>" + SeriesInfo.segments[i].note + "&nbsp;</TD></TR>";
+  	      }
+  	   segments = segments + "</table><P>";
+  	   }
+  
+          // build and display link selection scroll box and segment part of full table
+  	var links = "No links";
+  	n = SeriesInfo.links.length;
+  	if (n > 0)
+  	   {
+  	   links = "<table BORDER=1><TR><TD>link</TD><TD>target </TD><TD>kind</TD><TD>note</TD>";
+  	   insertOption("LinksSelect","**NONE**", "");
+  	   insertOption("LinksSelect","**ALL**", "");
+  	   for (i=0; i<n; i++)
+  	      {
+  	      links = links + "<TR><TD>" + SeriesInfo.links[i].name + "</TD><TD>" + SeriesInfo.links[i].target + "</TD><TD>" +
+  		      SeriesInfo.links[i].kind + "</TD><TD>" + SeriesInfo.links[i].note + "&nbsp;</TD></TR>";
+  	      insertOption("LinksSelect",SeriesInfo.links[i].name, "");
+                }
+  	   links = links + "</table><P>";
+  	   }
+  
+  	// Place structure table on screen
+          $("SSPlace").innerHTML =  keywords + "<BR>" + segments + "<BR>" + links;
+          }
 
 	// Place first and last record info on screen
 	if (SeriesInfo.Interval.MaxRecnum > 0)
@@ -1479,6 +1522,8 @@ function ExportRequestStarted()
   &nbsp;&nbsp;
   <input id="TabsOnOffButton" type="button" value="Disable Tabs" onClick="ToggleTabs();" >
   &nbsp;&nbsp;
+  <input id="NannyOnOffButton" type="button" value="Disable Nanny" onClick="ToggleNanny();" >
+  &nbsp;&nbsp;
   <input id="TipsOnOffButton" type="button" value="Disable Help" onClick="ToggleHelp();" >
   &nbsp;&nbsp;<span id="AjaxBusy">0</span> Requests Pending
   <span id='systemWorking'>, Loading...</span>
@@ -1550,9 +1595,12 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
         </TD>
         <TD colspan=2 style="vertical-align:top">
         <B>Series Description</B> &nbsp;
+        <input type="button" value="(Refresh)"  onClick="PickSeries(3);" >
         <span id="Series_Info_Place" style="background-color:#FFFFFF"></span>
         <BR>
         <B>Release Notes <span id="ReleaseNotes"></span></B>
+        <BR>
+        <B><A target="JSOC Keywords" HREF="http://jsoc.stanford.edu/doc/keywords/JSOC_Keywords_for_metadata.pdf">Keyword Notes</A> (pdf)
         </TD>
       </TR>
       <TR>
@@ -1671,6 +1719,7 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
     <DIV ID=iframeHideDiv style="display:block;">
       <iframe id="ExportRequestFrame" onload="ExportRequestStarted();" name="ExportRequestFrame" src="" style="height:0px;width:0px;border:0px solid #fff;">helloiframe</iframe>
     </DIV>
+
   </DIV> <!-- /DIV Section 7, Export link -->
 </DIV> <!-- /DIV TabExportDiv -->
 <DIV id="TabPlotDiv">
