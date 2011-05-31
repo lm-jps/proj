@@ -15,3 +15,4 @@ MODULE INV_PARAM
   REAL(DP)                           :: RANDOM_JUMP
   !
 END MODULE INV_PARAM
+!CVSVERSIONINFO "$Id: inv_param.f90,v 1.2 2011/05/31 22:24:44 keiji Exp $"

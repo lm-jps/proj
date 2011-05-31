@@ -50,8 +50,6 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   ! By RCE, May 17, 2011: Normalization of filters is now done in the wrapper. This way, when we change parameters such as the wavelength range
   ! or the wavelength sampling, the normalization factor is computed for the correct parameters. 
 
-
-
   USE FILT_PARAM
   USE CONS_PARAM
   USE LINE_PARAM
@@ -86,10 +84,11 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   REAL(DP),     DIMENSION(NBINS,4)      :: SYN, LASTGOODSYN, BESTSYN
   REAL(DP),     DIMENSION(10,NBINS,4)   :: DSYN, LASTGOODDSYN
   !---------------------------------------------------------------------
+  CHARACTER(LEN=20), PARAMETER :: FMT = '("6f14.10")'
 
   CALL SORT_OBS(OBS_LONG,OBS)
   CALL SORT_OBS(SCAT_LONG,SCAT)
-
+	
 
   ! By RCE April 2011: Select the region of the spectrum of the filters that we are going to use in the 
   ! synthesis and the region that we are going to integrate assuming that they're in the continuum of the
@@ -103,13 +102,13 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   FILTERS(:,:) = FILTERS_LONG(NPOINTS+1:NUMW+NPOINTS,:) 
   ! Integrate the filters in the remaining regions at each side of the forward modeling region.
   DO I = 1, NBINS 
-     INTEG_FILTERS(I) = SUM(FILTERS_LONG(1:NPOINTS,I)) + SUM(FILTERS_LONG(NUMW_LONG-NPOINTS:,I))
+     INTEG_FILTERS(I) = SUM(FILTERS_LONG(1:NPOINTS,I)) + SUM(FILTERS_LONG(NUMW_LONG-NPOINTS+1:,I))
   ENDDO
   ! Making sure we add no filter integral if we're doing the forward modeling in the full wavelength range.
   IF (NPOINTS .EQ. 0) THEN 
      INTEG_FILTERS(:) = 0D0
   ENDIF
-  
+
 
   !By RCE, Apr 23, 2010: Reversing the wavelength order of the observations 
   ! so that they are in increasing wavelength order
@@ -368,5 +367,4 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
 
 
 END SUBROUTINE INVERT
-
-!CVSVERSIONINFO "$Id: invert.f90,v 1.4 2011/05/26 22:34:13 keiji Exp $"
+!CVSVERSIONINFO "$Id: invert.f90,v 1.5 2011/05/31 22:24:33 keiji Exp $"

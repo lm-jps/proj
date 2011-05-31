@@ -114,25 +114,36 @@
  *    R) Apr  1
  *        (1) Adding new variables, num_lambda_synth and lambda_min_synth
  *    R')Apr 27
- *        (1) "hacked" code is now implemented !! Changes are argument at filt_init_(), and add two options in wrapper
- *             and many are in invert.f90, forward.f90, filter_init.f90, filter_param.f90 and vfisv.c
- *    S) May 16-18
- *        (1) Add lines to normalize the input Stokes.
- *            This feature is controlled with the pre-process var. NRMLZSTK
- *        (2) some lines for version info., COMMENT keyword etc., to include a lot of info......, a lot.
- *            Stop controlling the version number in ?.??? format. It be done by CVS version control and with date.
- *        (3) Add Yang confidence index
- *        (4) Delete a few preprocessor index, CHANGFEB and  NEWINVRT, because these will be never set non-1.
+ *        (1) "hacked" code be (formally) implemented.
+ *             Changes are appearing at argument of filt_init_()
+ *             Many changes in invert.f90, forward.f90, filter_init.f90, filter_param.f90 as well.
+ *    S) May 16 --
+ *        (0) Delete preprocess-indexes, CHANGFEB and NEWINVRT, because these will be never set non-1.
+ *        (1) Add lines to normalize the filter profile.
+ *            This feature is controlled with the pre-process var. NRMLFLTR
+ *        (2) some lines for version info., COMMENT keyword etc., to include a lot of info. not yet finalized.
+ *        (3) Include Yang's confidence index and quality score, being under developement.
+ *            To give reference, hmi.M_720s will be always referred, regardless of whether hmi.M will be used as initial guess.
+ *        (4) One integer keyword, INVFREEP, is added to show each of 10 free parameters be free or fixed.
+ *            Typically, it is 0x000003be or 1110111110.
+ *     T) May 24 ---
+ *        (1) HARPATCH, a new choice, is added to host HARP-identified region.
+ *            HARPBLOB, another pre-process var., is to choose which blob or rectangle will be processed.
+ *        (2) A few thoughts and preparations for hosting CVS version info of Fortran part. not yet finalized ....
+ *        (3) clean up and modify comments and rename variables (mostly about DRMS words for input Stokes.) etc.
+ *     U) May 31
+ *        (1) Combined this wrapper with RCE's latest codes.
+ *            This associates with changes of argument of void function filt_init_()
  *
  * ------------------------------------------------------------------------------------------------------ */
 
 /* A tweak for quick-run for test mode.
  * Notice that QUICKRUN does not mean this is for QuickLook.
  * Quick-Look run will be with the masking data (see MASKPTCH below).
- * Only some selected pixels be processed, and the selection/definition will be given somewhere in the code..
+ * Only some selected pixels be processed, and the selection will be given somewhere in the code.
  * Set 1 to turn on this functionality.
  * Different from another similar choice controlled by RECTANGL,
- *    the output size be same as the input Stokes, thus no need to modify the .jsd file.
+ *    the output size be same as the input Stokes, typically 4k x 4k, thus no need to modify the .jsd file.
  * Usually, set 0. */
 #define QUICKRUN 0
 
@@ -140,27 +151,27 @@
  * Do inversion for pixels within a selected rectangle (in CCD coordinate so far) of interest.
  * Defining the rectangle of interest will be done somewhere in this code.
  * Because the output array size will be arbitrary, the .jsd file must have "vardim" attribute instead of "variable".
- * May co-work with QUICKRUN...maybe */
+ * May co-work with QUICKRUN ... maybe .... */
 #define RECTANGL 0
 
-/* Set 1 to normalize input Stokes BEFORE the obs data given to invert() subprogram.
- * Added on May 16, 2011 */
-#define NRMLZSTK 1
+/* Set 1 to normalize filter function BEFORE given to invert() subprogram.
+ * This must be default, once a line normalizing filter in invert() routine is commented out.
+ * Added on May 16, 2011. */
+#define NRMLFLTR 1
 
 /* Set 1 to save as integer arrays with bscale-increment and bzero-offset.
  * Otherwise, data be saved in float.
- * 1 will be default for regular automatic runs.
- * Different jsd file must be prepared for each of 1 or non-1 case */
+ * 1 will be default for regular automatic runs. */
 #define INTBSCLE 1
 
-/* By setting 1, the initial guess value for vlos_mag is given.
- * As of 2011 Mar 24, the value is given from hmi.V_720s data.
- * Because hmi.{V,S,M} are made simultaneously, this must work, hopefully.
+/* By setting 1, the initial guess value for vlos_mag is given, from hmi.V* series data.
+ * As of 2011 Mar 24, the values are given from hmi.V_720s. Because hmi.{V,S,M} are made
+ * simultaneously at lev. 1 pipeline process, this must always work.
  * In case hmi.V is not available, initial guess is caluclated from SDO's orbital info. and pixel address. */
 #define VLOSINIT 0
 
 /* Added on March 25, 2011
- * By setting 1, the initial guess value for magnetic field strength is given from hmi.M_720s.
+ * By setting 1, the initial guess value for magnetic field strength is given from hmi.M(_720s).
  * In case hmi.M_720s is not available, left zero */
 #define MGSTINIT 0
 
@@ -176,20 +187,32 @@
 #define EQUIAREA 1
 
 /* By setting 1, the inversion will be processed only for the non-masked pixel.
- * Assumes the masked data is of the same size as the input Stokes, but not necessarily to be 4k x 4k.
- * For quick-look real-time processing. */
+ * As of May 24 2011, this choice assumes the masked data is of the same size as the input Stokes.
+ * This choice cannot co-exist with HARP. */
 #define MASKPTCH 0
 
+/* Use HARP mask data.
+ * Pixel size of HARP map is NOT necessarily same as the Stokes.
+ * Output data pixel size will be same as the HARP bitmap size.
+ * As of May 24, 2011, only one of MASKPTCH and HARPATCH can be 1.
+ * As of May 24, 2011, only one of RECTANGL and HARPATCH can be 1. */
+#define HARPATCH 0
+/* Which, blob or rectangle of HARP region, will be processed.
+ * 1 for blob. 0 (rectangle) will be default. */
+#define HARPBLOB 0
+
 /* Set 1 to enable to fetch the (previous) existing data through JSOC-DRMS as better initial guess.
- * So for, not used, Hmmm.. */
+ * So for, not used, nor finalized.
+ * Keep this zero for a while being. */
 #define TAKEPREV 0
 
-/* Enforce the output T_REC will be changed, overridden with the one at option out2.
+/* Enforce the output T_REC will be changed, overridden with the one given at option out2.
  * The argument for the option out2 must be a string YYYY:MM:DD_hh:mm:ss_TAI, without [].
- * Good for parameter-tests using the Stokes of the same T_REC. */
+ * Good for parameter-tests using the Stokes of the same T_REC and saving outputs at the same series. */
 #define CHNGTREC 0
 
-/* Yang's confidence index */
+/* Yang's confidence and quality index definition.
+ * This choice is added on May 18 2011 */
 #define CONFINDX 1
 
 /* Phil's macro */
@@ -197,13 +220,14 @@
 
 /* strings for version info. */
 char *module_name = "vfisv"; // can be constant
-char *version_id  = "2011 May 18";  // (number or) strings to specify version of code.
+char *version_id  = "2011 May 26";  // (number or) strings to specify version of code.
 
 /* RCE Apr 21, 2010: Added a "double [][]" in definition of invert_ to pass
 the filter profiles computed by Sebastien*/
 
 extern void invert_ (double *, double *, double *, double *, double *, double[][], int *, double *); // after Feb 10, 2011
-extern void filt_init_ (int *, int *, int *, double *, double *, double *, int *);
+extern void filt_init_ (int *, int *, double *, int *);
+/* extern void filt_init_ (int *, int *, int *, double *, double *, double *, int *); before May 31 2011 */
 extern void free_init_ (int *);
 extern void free_memory_ ();
 extern void inv_init_ (int *, double *, double *, double *, double *, double *);
@@ -225,8 +249,11 @@ ModuleArgs_t module_args[] = {
 #if TAKEPREV == 1
   {ARG_STRING,  "in2", "hmi.ME_720s[2010.08.01_12:00:00_TAI]", "reference inversion results"},
 #endif
+#if HARPATCH == 1
+  {ARG_STRING,  "in3", "su_xudong.test_mharp[12][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"},
+#endif
 #if MASKPTCH == 1
-  {ARG_STRING,  "in3", "su_xudong.mask4inv[2010.08.01_12:12:00_TAI]", "patch or Harp masking bitmap data"},
+  {ARG_STRING,  "in3", "su_xudong.mask4inv[2010.08.01_12:12:00_TAI]", "some masking bitmap data"},
 #endif
 #if VLOSINIT == 1
   {ARG_STRING,  "in4", "hmi.V_720s[2010.08.01_12:12:00_TAI]", "Doppler as initial guess"},
@@ -235,26 +262,26 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,  "in5", "hmi.M_720s[2010.08.01_12:12:00_TAI]", "magnetogram as initial guess"},
 #endif
 /* inversion options, 20, as of April 27, 2011 */
-  {ARG_INT,  "num_iter", "200", "number of iterations(default: 30)"},
-  {ARG_INT,  "num_lambda", "149", "number of ??(default: 33)"},
-  {ARG_DOUBLE,  "Lambda_Min", "-1998.0", "Intensity threshold (default: -432)"},
-  {ARG_INT,  "Num_lambda_filter", "6", "Number of filters accross the wvl (default: 6)"},
-  {ARG_INT,  "Num_tunning", "6", "Number of ??(default: 6)"},
-  {ARG_INT,  "num_lambda_synth", "49", "Number of synthetic filters (default: 6)"},
-  {ARG_DOUBLE,  "Lambda_Min_synth", "-648.0", "Intensity threshold (default: -432)"},
-  {ARG_DOUBLE,  "svd_tolerance", "1.0e-32", "svd tolerance (default: 1.0e-32)"},
-  {ARG_DOUBLE,  "chi2_stop", "1e-15", "chisq-stop (default: 1.0e-6)"},
+  {ARG_INT,     "num_iter",                  "200", "number of iterations(default: 30)"},
+  {ARG_INT,     "num_lambda",                "149", "number of ??(default: 33)"},
+  {ARG_DOUBLE,  "Lambda_Min",            "-1998.0", "Intensity threshold (default: -432)"},
+  {ARG_INT,     "Num_lambda_filter",           "6", "Number of filters accross the wvl (default: 6)"},
+  {ARG_INT,     "Num_tunning",                 "6", "Number of ??(default: 6)"},
+  {ARG_INT,     "num_lambda_synth",           "49", "Number of synthetic filters (default: 6)"},
+  {ARG_DOUBLE,  "Lambda_Min_synth",       "-648.0", "Intensity threshold (default: -432)"},
+  {ARG_DOUBLE,  "svd_tolerance",         "1.0e-32", "svd tolerance (default: 1.0e-32)"},
+  {ARG_DOUBLE,  "chi2_stop",             "1.0e-15", "chisq-stop (default: 1.0e-6)"},
   {ARG_DOUBLE,  "Polarization_threshold", "1.0e-2", "polarization threshold (default: 0.01)"},
-  {ARG_DOUBLE,  "Percentage_Jump", "10.0", "Percentage Jump (default: 10%)"},
-  {ARG_DOUBLE,  "Lambda_0", "6173.3433", "Wavelength(default:6173.3433 Angstrom )"},
-  {ARG_DOUBLE,  "Lambda_B", "0.044475775", "FWHM?? (default: 0.044475775)"},
-  {ARG_DOUBLE,  "Delta_Lambda", "27.0", "Delta Lambda(default: 27.0)"},
-  {ARG_DOUBLE,  "Lyotfwhm", "424.0", "Lyot filter FWHM (default: 424.0)"},
-  {ARG_DOUBLE,  "Wnarrow", "172.0", "FSR (full spectral range) of the Narrow-Band Michelson"},
-  {ARG_DOUBLE,  "Wspacing", "69.0", "wavelength spacing between the HMI filters"},
-  {ARG_DOUBLE,  "Intensity_Threshold", "1e2", "Intensity threshold (default: 0.8)"},
-  {ARG_DOUBLE,  "Noise_LEVEL", "4.9e1", "Intensity threshold (default: 3.0e-3)"},
-  {ARG_INT,     "Continuum", "0", "Intensity threshold (default: 0)"},
+  {ARG_DOUBLE,  "Percentage_Jump",          "10.0", "Percentage Jump (default: 10%)"},
+  {ARG_DOUBLE,  "Lambda_0",            "6173.3433", "Wavelength(default:6173.3433 Angstrom )"},
+  {ARG_DOUBLE,  "Lambda_B",          "0.044475775", "FWHM?? (default: 0.044475775)"},
+  {ARG_DOUBLE,  "Delta_Lambda",             "27.0", "Delta Lambda(default: 27.0)"},
+  {ARG_DOUBLE,  "Lyotfwhm",                "424.0", "Lyot filter FWHM (default: 424.0)"},
+  {ARG_DOUBLE,  "Wnarrow",                 "172.0", "FSR (full spectral range) of the Narrow-Band Michelson"},
+  {ARG_DOUBLE,  "Wspacing",                 "69.0", "wavelength spacing between the HMI filters"},
+  {ARG_DOUBLE,  "Intensity_Threshold",     "1.0e2", "Intensity threshold (default: 0.8)"},
+  {ARG_DOUBLE,  "Noise_LEVEL",             "4.9e1", "Intensity threshold (default: 3.0e-3)"},
+  {ARG_INT,     "Continuum",                   "0", "Intensity threshold (default: 0)"},
 /* other options */
   {ARG_FLAG, "v",    "", "run verbose"},
 /* trailer */
@@ -265,10 +292,10 @@ int DoIt (void)
 {
 /* JSOC-DRMS variables */
   CmdParams_t *params = &cmdparams;
-  DRMS_RecordSet_t *records, *out;
-  DRMS_Record_t *inRec, *outRec;
-  DRMS_Segment_t *seg;
-  DRMS_Array_t *stokes_array, *invrt_array,*err_array, *flg_array, *qmap_array;
+  DRMS_RecordSet_t *inRS;
+  DRMS_Record_t    *inRec, *outRec;
+  DRMS_Segment_t   *inSeg, *outSeg;
+  DRMS_Array_t     *stokes_array, *invrt_array, *err_array, *flg_array, *qmap_array;
 
 /* get values at commandline argument, as constant */
   const int    NUM_ITERATIONSc    = params_get_int(params, "num_iter");
@@ -298,7 +325,7 @@ int DoIt (void)
 #if TAKEPREV == 1
   const char   *indsdesc2c= params_get_str(params, "in2");
 #endif
-#if MASKPTCH == 1
+#if MASKPTCH == 1 || HARPATCH == 1
   const char   *indsdesc3c= params_get_str(params, "in3");
 #endif
 #if VLOSINIT == 1
@@ -322,7 +349,7 @@ int DoIt (void)
 #if TAKEPREV == 1
   char   *indsdesc2;
 #endif
-#if MASKPTCH == 1
+#if MASKPTCH == 1 || HARPATCH == 1
   char   *indsdesc3;
 #endif
 #if VLOSINIT == 1
@@ -374,7 +401,7 @@ int DoIt (void)
 #if TAKEPREV == 1
   indsdesc2= strdup(indsdesc2c);
 #endif
-#if MASKPTCH == 1
+#if MASKPTCH == 1 || HARPATCH == 1
   indsdesc3= strdup(indsdesc3c);
 #endif
 #if VLOSINIT == 1
@@ -398,7 +425,7 @@ int DoIt (void)
                      "field_inclination_err","field_az_err","inclin_azimuth_err", "field_alpha_err",
                      "inclination_alpha_err", "azimuth_alpha_err", "chisq",
                      "conv_flag", "qual_map", "confid_map"}; // the last one confid_map is added on May 18. 2011
-  int Err_ct=12; // MIND newly added convflag will be treated separately from the 12 usual error float arrays
+  int Err_ct=12;    // MIND newly added convflag and confidence and qualigy index will be treated separately.
   char segname[16];
   char *spname[] = {"I", "Q", "U", "V"};
   int spct = (sizeof (spname) / sizeof (char *));
@@ -406,12 +433,12 @@ int DoIt (void)
   int wlct = NUM_LAMBDA_FILTERc; // now we assume that NUM_LAMBDA_FILTERc is NOT always 6.
   int paramct = 10;
 
-/* bscale and bzero,
-   bzero may be zero for all variable... ??
-   bscale[] must be in the same order of Resname[].
-   Mind that, for some convenience, the order of variables in jsd file and this C-wrapper are not same.
-   Now assuming the variable will be of 32-bit integer type.
-   Values are based on email from Rebecca on Dec 9. */
+/* bscale and bzero.
+   bzero_inv[] may be zero.
+   bscaleinv[] must be in the same order of Resname[].
+   Mind that, for some convenience, the order of variables in jsd file may be different from Resname[].
+   Now all output variable will be of 32-bit integer or 8-bit character type.
+   Values are based on email from Rebecca on Dec. 9 2010 */
   double bzero_inv[25] = {0.0,0.0,0.0,0.0,0.0,0.0,
                           0.0,0.0,0.0,0.0,
                           0.0,0.0,0.0,0.0,0.0,
@@ -428,31 +455,31 @@ int DoIt (void)
 
 /* working array etc. used by wrapper */
   int    *FinalConvFlag;    // this is a new array to handle converge-flag
-  int    *FinalConfidMap;   // this is a new array to handle quality-map
+  int    *FinalConfidMap;   // this is a new array to handle confidence-map
   int    *FinalQualMap;     // this is a new array to handle quality-map
   double *FinalRes,*FinalErr;
   time_t startime, endtime;
   double *ddat, *res;
   double *obs, *scat, *err;
-  double *weights;     // new, on Feb 10, 2011
-  float  *data, *data0; //, *inv = NULL;
+  double *weights;
+  float  *data, *data0;
   int *nan_map;
-  float *stokesi, *stokesq, *stokesu, *stokesv;
-  float fval;
-  int param[3];
   int rn, rec_ct, sn, seg_ct;
-  int cols, rows, imgpix, imgbytes, imgloc;
+  int cols, rows, imgpix, imgbytes;
   int sp, wl, nvar;
   int j,m,i,k,n ;
   int status;
   int iquality;
-  float sunradfpix;
-#if RECTANGL == 1
-/* clipping cropping */
-  int xleftbot = 1932;
-  int yleftbot = 1466;
-  int xwidth   = 1;
-  int yheight  = 1;
+#if RECTANGL == 1 || HARPATCH == 1
+/* clipping cropping, address start (0,0) at the left bottom corner of CCD */
+  int xleftbot = 1303; // for test, by K.H.
+  int yleftbot = 2327;
+  int xwidth   =  723;
+  int yheight  =  404;
+//  int xleftbot = 1932; // RCE's choice
+//  int yleftbot = 1466;
+//  int xwidth   = 1;
+//  int yheight  = 1;
 #endif
 /* MPI variables */
   MPI_Status mpistat;
@@ -468,7 +495,8 @@ int DoIt (void)
   float rsun_ref, dsun_obs;
   float sunarc;
   float crota2;
-/* version info., supplemental */
+  float sunradfpix;
+/* version info., a dummy function to get CVS version info. when checking in.*/
   char *meinversion_version();
 /*S.C. filter function */
   int vfisv_filter(int ,int ,double [][],double ,double ,double *,double *,int ,double *,double *,int ,
@@ -505,7 +533,7 @@ int DoIt (void)
 #if VLOSINIT == 1
   float *vlos_init;   // new, on Mar 24, 2011
   int   iexistdoppler;
-  iexistdoppler = 0; // default, no-existing..
+  iexistdoppler = 0;  // default, no-existing..
 #endif
 #if MGSTINIT == 1 || CONFINDX == 1
   float *mgst_init;   // new, on Mar 25, 2011
@@ -517,16 +545,24 @@ int DoIt (void)
   float *prevdata;
   int   iexistprev;
 #endif
-#if MASKPTCH == 1
+#if MASKPTCH == 1 || HARPATCH == 1
   int  *patchmask;
   int   iexistpatchmask;
   iexistpatchmask = 0; // default, no-existing..
 #endif
 
+/* check of preprocess */
+#if MASKPTCH == 1 && HARPATCH == 1
+  DIE(" Both MASKPTCH and HARPATCH set 1. So terminated !\n");
+#endif
+#if RECTANGL == 1 && HARPATCH == 1
+  DIE(" Both RECTANGL and HARPATCH set 1. So terminated !\n");
+#endif
+
 /* time at the start */
   time(&startime);
 
-/* Initalizing MPI */
+/* Initalizing MPI, each PE finds where it is, and how many cpu or core be used. */
   MPI_Status mpi_stat;
   status = 0;
   MPI_Init (&status, NULL);
@@ -548,7 +584,7 @@ int DoIt (void)
     { /* limit scope for some DRMS variables */
       char segname[100]; /* arbitrary long string... */
       char *inData; /* I-O pointer */
-      DRMS_Array_t     *inArray; /* add some DRMS variables within this for-loop */
+      DRMS_Array_t     *inArray; /* add some DRMS variables within this scope */
       DRMS_Segment_t   *inSeg;
       DRMS_Record_t    *inRec;
       DRMS_RecordSet_t *inRS;
@@ -574,8 +610,7 @@ int DoIt (void)
         cols = inSeg->axis[0];
         rows = inSeg->axis[1];
         imgpix = cols * rows;
-        imgbytes = imgpix * sizeof (float);
-        patchmask  = (int  *)malloc (sizeof (int)  * imgpix);
+        patchmask = (int *)malloc (sizeof (int) * imgpix * 1);
         int iseg;
         for (iseg = 0; iseg < 1; iseg++) // maybe just one segment...
         {
@@ -585,8 +620,8 @@ int DoIt (void)
           inArray= drms_segment_read(inSeg, DRMS_TYPE_CHAR, &status);
           if (status) DIE("Cant read segment!\n");
           inData =(char *)inArray->data;
-          nnx = inArray->axis[0]; // must be same as cols
-          nny = inArray->axis[1]; // must be same as rows
+          nnx = inArray->axis[0]; // may be same as cols
+          nny = inArray->axis[1]; // may be same as rows
           if (verbose) {printf(" Nx Ny are = %d %d\n",  nnx, nny);}
           for (n = 0; n < nnx * nny; n++){patchmask[n+iseg*imgpix]=inData[n];} // silly but safe way to pass data
           drms_free_array(inArray); // without this, well, things go mad.
@@ -594,13 +629,77 @@ int DoIt (void)
         drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
       }
     }  /* end of scope for some DRMS variables */
-#endif
+#endif /* end if MASKPTCH is 1 */
+
+/* If input Mask map (by HARP or else) does not have pixel size of 4k x 4k,
+ * some part must be different from full-disk masking data.
+ * Here four variables, xleftbot, yleftbot, xwidth and ywidth,
+ * will be modified in accordance with the keywords info. of HARP data */
+#if HARPATCH == 1
+    { /* limit scope for some DRMS variables */
+      char segname[100]; /* arbitrary long string... */
+      char *inData; /* I-O pointer */
+      DRMS_Array_t     *inArray; /* add some DRMS variables within this scope */
+      DRMS_Segment_t   *inSeg;
+      DRMS_Record_t    *inRec;
+      DRMS_RecordSet_t *inRS;
+      int nnx, nny;
+      int colsL, rowsL, imgpixL;  // MIND that the HARP will not be of 4k x 4k.
+
+      if (verbose) printf(" now loading HARP-data : %s\n",indsdesc3);
+      inRS = drms_open_records (drms_env, indsdesc3, &status); /*  open input record_set  */
+/* this case, never say die.... just turn on flag */
+      if ((status) || ((rec_ct = inRS->n) == 0))
+      {
+        iexistpatchmask = 0;
+        printf(" skip, no data series : %s\n",indsdesc3);
+      }
+      else
+      {
+        iexistpatchmask = 1;
+        if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
+        rn = 0;
+        inRec = inRS->records[rn];
+        char *Resname[] = {"bitmap"};
+        sprintf(segname,"%s",Resname[0]);
+        inSeg = drms_segment_lookup(inRec,segname);
+        colsL = inSeg->axis[0];
+        rowsL = inSeg->axis[1];
+        imgpixL = colsL * rowsL;
+        patchmask = (int *)malloc (sizeof (int) * imgpixL * 1);
+        int iseg;
+        for (iseg = 0; iseg < 1; iseg++) // maybe just one segment...
+        {
+          sprintf(segname,"%s",Resname[iseg]);
+          if (verbose) printf(" now loading segment : %-20s",segname);
+          inSeg = drms_segment_lookup(inRec,segname);
+          inArray= drms_segment_read(inSeg, DRMS_TYPE_CHAR, &status);
+          if (status) DIE("Cant read segment!\n");
+          inData =(char *)inArray->data;
+          nnx = inArray->axis[0]; // may be same as colsL
+          nny = inArray->axis[1]; // may be same as rowsL
+          if (verbose) {printf(" Nx Ny are = %d %d\n",  nnx, nny);}
+          for (n = 0; n < nnx * nny; n++){patchmask[n+iseg*imgpixL]=inData[n];} // silly but safe way to pass data
+          drms_free_array(inArray); // without this, well, things go mad.
+        }
+        xleftbot = drms_getkey_int(inRec,"CRPIX1",&status);
+        yleftbot = drms_getkey_int(inRec,"CRPIX2",&status);
+        xwidth   = colsL;
+        yheight  = rowsL;
+        if (verbose) {printf(" HARP info. xleftbot yleftbot xwidth yheight = %d %d %d %d\n",xleftbot,yleftbot,xwidth,yheight);}
+        xleftbot = xleftbot - 1;
+        yleftbot = yleftbot - 1;
+        if (verbose) {printf(" HARP xleftbot yleftbot were shifted         = %d %d\n",xleftbot,yleftbot);}
+        drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
+      }
+    }  /* end of scope for some DRMS variables */
+#endif /* end if HARPATCH is 1 */
 
 #if TAKEPREV == 1
     { /* limit scope for some DRMS variables */
       char segname[100]; /* arbitrary long string... */
       float *inData; /* I-O pointer */
-      DRMS_Array_t     *inArray; /* add some DRMS variables within this for-loop */
+      DRMS_Array_t     *inArray; /* add some DRMS variables within this scope */
       DRMS_Segment_t   *inSeg;
       DRMS_Record_t    *inRec;
       DRMS_RecordSet_t *inRS;
@@ -626,10 +725,9 @@ int DoIt (void)
         cols = inSeg->axis[0];
         rows = inSeg->axis[1];
         imgpix = cols * rows;
-        imgbytes = imgpix * sizeof (float);
         prevdata = (float *)malloc (sizeof (float) * imgpix * (paramct+Err_ct));
         int iseg;
-        for (iseg = 0; iseg < (paramct+Err_ct); iseg++)
+        for (iseg = 0; iseg < (paramct+Err_ct); iseg++) // here we take both physics data and error arrays.
         {
           sprintf(segname,"%s",Resname[iseg]);
           if (verbose) printf(" now loading segment of previous results : %-20s",segname);
@@ -637,8 +735,8 @@ int DoIt (void)
           inArray= drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
           if (status) DIE("Cant read segment!\n");
           inData =(float *)inArray->data;
-          nnx = inArray->axis[0]; // must be same as cols
-          nny = inArray->axis[1]; // must be same as rows
+          nnx = inArray->axis[0]; // may be same as cols
+          nny = inArray->axis[1]; // may be same as rows
           if (verbose) {printf(" Nx Ny are = %d %d\n",  nnx, nny);}
           for (n = 0; n < nnx * nny; n++){prevdata[n+iseg*imgpix]=inData[n];} // silly but safe way to pass data
           drms_free_array(inArray); // without this, well, things go mad.
@@ -649,22 +747,22 @@ int DoIt (void)
 #endif /* endif TAKEPREV is 1 or not */
 
 /* Getting Stokes */
-    records = drms_open_records (drms_env, indsdesc, &status); /*  open input record_set  */
+    inRS = drms_open_records (drms_env, indsdesc, &status); /*  open input record_set  */
     if (status) {DIE("drms_open_records failed.\n");}
-    if ((rec_ct = records->n) == 0){DIE("No records in selected dataset.\n");}
-    if ((rec_ct = records->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
+    if ((rec_ct = inRS->n) == 0){DIE("No records in selected dataset.\n");}
+    if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
 
-    rn = 0; // inversion code will handle only the first record
+    rn = 0; // inversion code will handle only the first record.
 
-    inRec = records->records[rn];
-    seg = drms_segment_lookupnum (inRec, 0);
-    cols = seg->axis[0];
-    rows = seg->axis[1];
+    inRec = inRS->records[rn];
+    inSeg = drms_segment_lookupnum (inRec, 0);
+    cols = inSeg->axis[0];
+    rows = inSeg->axis[1];
     imgpix = cols * rows;
     imgbytes = imgpix * sizeof (float);
     nvar = wlct * spct;
 
-#if MASKPTCH == 1
+#if MASKPTCH == 1 || HARPATCH == 1
     if (iexistpatchmask==0){patchmask  = (int  *)malloc (sizeof (int)  * imgpix);} /* allocate anyway */
 #endif
 #if TAKEPREV == 1
@@ -676,17 +774,17 @@ int DoIt (void)
 
 //    printf("now loading Stokes of %d wavelength \n",wlct);
 
-    for (sp = 0; sp < spct; sp++) /* spct=4, wlct maybe 6 */
+    for (sp = 0; sp < spct; sp++) /* spct=4, wlct maybe 6 (or 8 or 10) */
     {
       for (wl = 0; wl < wlct; wl++)
       {
 /*
  * By K.H.
- * On 2011 March 7, we assume the wlct can be 6, 8 or 10.
+ * Since 2011 March 7, we assume the wlct can be 6, 8 or 10.
  * The segname will be modified so that the order will be matching with the one
- * in the hmi.S2_720s, a new test series S.C. prepared.
+ * in the hmi.S2_720s (or else S.C. prepared for non-6 test).
  */
-        if (NUM_LAMBDA_FILTER == 6) // wlct is equal to NUM_LAMBDA_FILTER and to NUM_LAMBDA_FILTERc
+        if (NUM_LAMBDA_FILTER == 6)
         {
           sprintf (segname, "%s%d", spname[sp], wl); // same as before March 07, 2011
         }
@@ -705,25 +803,22 @@ int DoIt (void)
           if (wl == 9){idummy = 8;}
           sprintf (segname, "%s%d",spname[sp],idummy);
         }
-//        printf("now loading Stokes : %s\n",segname);
+        if (verbose){printf("now loading Stokes : %s\n",segname);}
 
-        if ((seg = drms_segment_lookup (inRec, segname)) == NULL){
+        if ((inSeg = drms_segment_lookup (inRec, segname)) == NULL){
           fprintf (stderr, "Error reading segment %s of record %d\n", segname, rn);
           return 1;
         }
-
         /* 4 x {6, 8 or 10} segments, 4k x 4k data points each */
-        stokes_array = drms_segment_read (seg, DRMS_TYPE_FLOAT, &status);
-        /* printf("segment read %s\n",segname); */
+        stokes_array = drms_segment_read (inSeg, DRMS_TYPE_FLOAT, &status);
         memcpy (data, stokes_array->data, imgbytes);
         drms_free_array (stokes_array);
         data += imgpix; // another noble use of pointer, by Priya & Rick
-      }
-    }
+    } }
     data = data0;
     printf("Imgpix= %d\n",imgpix);
 
-/* get quality index of Stokes */
+/* get quality index at keyword field of Stokes */
     iquality = drms_getkey_int(inRec,"QUALITY",&status);   // quality index, nice data must have zero-value.
 #if SKIPBADQ == 1
     {
@@ -744,7 +839,7 @@ int DoIt (void)
     }
 #endif
 
-    obs_vr   = drms_getkey_float(inRec,"OBS_VR",&status); // SDO's relative motion toward/away from the Sun.
+    obs_vr   = drms_getkey_float(inRec,"OBS_VR",&status);   // SDO's relative motion toward/away from the Sun.
     obs_vr   = obs_vr * 100.0; // in cm per sec
     crota2   = drms_getkey_float(inRec,"CROTA2",&status);   // P-angle... right?
     crpixx   = drms_getkey_float(inRec,"CRPIX1",&status);   // center of the solar disk
@@ -756,28 +851,27 @@ int DoIt (void)
     sunarc = asin(rsun_ref/dsun_obs)              // arc-sin in radian
            / 3.14159265358979e0 * 180.0 * 3600.0; // radian to arc-second
     printf("solar radius is %f in arcsec \n",sunarc);
-    sunradfpix = sunarc / (cdeltx + cdelty) * 2.0; // for simplicity
+    sunradfpix = sunarc / (cdeltx + cdelty) * 2.0; // just averaging for simplicity.
     printf("solar radius is %f in CCD pix.\n",sunradfpix);
-    if ((isnan(sunarc)) ||((isnan(crpixx)) || isnan(crpixy))) // in case something had gone wrong
+    if ((isnan(sunarc)) ||((isnan(crpixx)) || isnan(crpixy))) // in case something had gone wrong.
     {
       sunarc = (float)(cols+rows) * 0.5;
       crpixx = (float)cols * 0.5 + 0.5;
       crpixy = (float)rows * 0.5 + 0.5;
     }
 
-/* 2011 March 24, added by K.H. to try to get hmi.V_720s corresponding */
+/* 2011 March 24, added by K.H. to try to get hmi.V_720s as initial guess */
 #if VLOSINIT == 1
     float defvlosinit;
     defvlosinit = guess[6];
     { /* limit scope for some DRMS variables */
       char segname[100]; /* arbitrary long string... */
       float *inData; /* I-O pointer */
-      DRMS_Array_t     *inArray; /* add some DRMS variables within this for-loop */
+      DRMS_Array_t     *inArray; /* add some DRMS variables within this scope */
       DRMS_Segment_t   *inSeg;
       DRMS_Record_t    *inRec;
       DRMS_RecordSet_t *inRS;
       int nnx, nny;
-
       if (verbose) printf(" now loading Doppler : %s\n",indsdesc4);
       inRS = drms_open_records (drms_env, indsdesc4, &status); /*  open input record_set  */
 /* this case, never say die.... just turn on flag */
@@ -798,7 +892,6 @@ int DoIt (void)
         cols = inSeg->axis[0];
         rows = inSeg->axis[1];
         imgpix = cols * rows;
-        imgbytes = imgpix * sizeof (float);
         vlos_init = (float *)malloc (sizeof(float) * imgpix);
         int iseg;
         for (iseg = 0; iseg < 1; iseg++) // maybe just one segment...
@@ -809,8 +902,8 @@ int DoIt (void)
           inArray= drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
           if (status) DIE("Cant read Dopplergram data !\n");
           inData =(float *)inArray->data;
-          nnx = inArray->axis[0]; // must be same as cols
-          nny = inArray->axis[1]; // must be same as rows
+          nnx = inArray->axis[0]; // may be same as cols
+          nny = inArray->axis[1]; // may be same as rows
           if (verbose) {printf(" Nx Ny are = %d %d\n",  nnx, nny);}
           for (n = 0; n < nnx * nny; n++){vlos_init[n]=inData[n]*100.0;} // silly but safe way to pass data, m/s to cm/s
           drms_free_array(inArray); // without this, things go mad.
@@ -818,7 +911,9 @@ int DoIt (void)
         drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
       }
     }  /* end of scope for some DRMS variables */
-/* adjust */
+/* if hmi.V exisits. do some minor modification,
+ * in case the apparent solar disk sizes in V and S are different each other (least likely), or
+ * or at the outermost pixels of the disk */
     if (iexistdoppler == 1)
     {
       for (n = 0; n < imgpix; n++)
@@ -833,11 +928,11 @@ int DoIt (void)
         fpixdist = sqrt(fpixdist);
         if (fpixdist > sunarc * 0.99)
         {
-          vlos_init[n] = defvlosinit; // replace with the default given by RCE.
+          vlos_init[n] = defvlosinit;
         }
       }
     }
-/* making Vlos_init */
+/* making Vlos_init if no V is available (least likely, just in case) */
     if (iexistdoppler == 0)
     {
       vlos_init = (float *)malloc (sizeof (float) * imgpix * 1); /* allocate anyway */
@@ -857,13 +952,13 @@ int DoIt (void)
         if (fpixdist < sunarc * 0.99)
         {
           float sinphi, sintheta, costheta;
-          sintheta = fypix/sunarc; // B0.. ? so what !!
+          sintheta = fypix/sunarc; // B0.. ? so what !?
           costheta = 1.0 - sintheta*sintheta;
           if (costheta > 0.0){costheta = sqrt(costheta);}else{costheta = 0.0;}
           float omega, vlosoldiff;
           omega = 14.713 - 2.396 * sintheta * sintheta - 1.787 * sintheta * sintheta * sintheta * sintheta;
-          omega = omega / (24.0 * 3600.0) * 3.14159265358979 / 180.0 ; // in radian/sec
-          vlosoldiff = rsun_ref * 100.0 * omega; // rsun_ref is in m/sec
+          omega = omega / (24.0 * 3600.0) * 3.14159265358979 / 180.0 ; // in radian per second
+          vlosoldiff = rsun_ref * 100.0 * omega; // rsun_ref is in m per sec
           float fwork;
           sinphi = fxpix/ (costheta * sunarc);
           fwork = sinphi * cospangle;
@@ -878,19 +973,18 @@ int DoIt (void)
     }
 #endif // endif VLOSINIT is 1
 
-/* 2011 March 25, and May 17, added by K.H. to try to get hmi.M_720s corresponding */
+/* 2011 March 25, and May 17, added by K.H. to try to get hmi.M_720s as initial guess or for bad-pixel judgement */
 #if MGSTINIT == 1 || CONFINDX == 1
     float defmgstinit;
     defmgstinit = guess[5];
     { /* limit scope for some DRMS variables */
       char segname[100]; /* arbitrary long string... */
       float *inData; /* I-O pointer */
-      DRMS_Array_t     *inArray; /* add some DRMS variables within this for-loop */
+      DRMS_Array_t     *inArray; /* add some DRMS variables within this scope */
       DRMS_Segment_t   *inSeg;
       DRMS_Record_t    *inRec;
       DRMS_RecordSet_t *inRS;
       int nnx, nny;
-
       if (verbose) printf(" now loading magnetogram : %s\n",indsdesc5);
       inRS = drms_open_records (drms_env, indsdesc5, &status); /*  open input record_set  */
 /* this case, never say die.... just turn on flag */
@@ -911,7 +1005,6 @@ int DoIt (void)
         cols = inSeg->axis[0];
         rows = inSeg->axis[1];
         imgpix = cols * rows;
-        imgbytes = imgpix * sizeof (float);
         mgst_init = (float *)malloc (sizeof(float) * imgpix);
         blosgram  = (float *)malloc (sizeof(float) * imgpix);
         int iseg;
@@ -932,7 +1025,7 @@ int DoIt (void)
         drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
       }
     }  /* end of scope for some DRMS variables */
-/* adjust */
+/* convert from Blos to Bstrength, with some tweaks */
     if (iexistmagnetogram == 1)
     {
       for (n = 0; n < imgpix; n++)
@@ -953,14 +1046,14 @@ int DoIt (void)
         {
           float cosmu, ftmp;
           cosmu = 1.0e0 - fpixdist*fpixdist/(sunarc*sunarc);
-          ftmp = fabs(blosgram[n]) / (0.8 * sqrt(cosmu) + 0.2); // adding 0.2 did ... I think .. come from Phil's work.
+          ftmp = fabs(blosgram[n]) / (0.8 * sqrt(cosmu) + 0.2); // KH presume this conversion came from Phil's work.
           if (ftmp >  4.0e3){ftmp =  4.0e3;}
           if (ftmp < -4.0e3){ftmp = -4.0e3;}
           mgst_init[n] = ftmp;
         }
       }
     }
-/* making mgst_init anyway */
+/* making mgst_init anyway if no M data available */
     if (iexistmagnetogram == 0)
     {
       mgst_init = (float *)malloc (sizeof (float) * imgpix * 1); /* allocate anyway */
@@ -993,14 +1086,34 @@ int DoIt (void)
           (iy < yleftbot) ||
           (iy > yleftbot + yheight - 1)) {nan_map[n] = 3;}  // turn on flag to-be-skipped for being out-of-box
 #endif
-#if MASKPTCH == 1
-      if (patchmask[n] < 2){nan_map[n] = 4;}  // new definition by Xudong
+#if HARPATCH == 1
+      if ((ix < xleftbot) ||
+          (ix > xleftbot + xwidth  - 1) ||
+          (iy < yleftbot) ||
+          (iy > yleftbot + yheight - 1))
+      {
+        nan_map[n] = 3;
+      }
+#if HARPBLOB == 1  /* Harp blob or rectanlg */
+      else
+      {
+        int i2, j2, n2;
+        i2 = ix - xleftbot;
+        j2 = iy - yleftbot;
+        n2 = xwidth * j2 + i2;
+        if (patchmask[n2] < 4) {nan_map[n] = 4;} // check Xudong's definition .... may change without notice ...
+      }
 #endif
-    }
-    printf("data is read\n");
+#endif // end if HARPATCH is 1
 #if MASKPTCH == 1
+      if (patchmask[n] < 2){nan_map[n] = 4;} // this line statement strongly depends on Xudong's definition.
+#endif
+    } // end of n-loop
+    printf("data is read\n");
+#if MASKPTCH == 1 || HARPATCH == 1
     free(patchmask); // liberate
 #endif
+
 /* counting pixels ; on-disk non-NaN out-of-rectanlge masked etc. */
     int nonnan, numnan, nofdsk, nofrct, nmask;
     nonnan = 0;
@@ -1029,7 +1142,6 @@ int DoIt (void)
     int *itmpe;
     itmps = (int *)malloc(sizeof(int) * mpi_size);
     itmpe = (int *)malloc(sizeof(int) * mpi_size);
-
     for(irank = 0; irank < mpi_size; irank++)
     {
       int myrank, nprocs, numpix;
@@ -1060,13 +1172,13 @@ int DoIt (void)
   } // end if mpi_rank == 0
   else
   { // on non-Primary Process Element
-    drms_server_end_transaction(drms_env, 1, 0);  // Kehcheng and Arts' suggestion
-    db_disconnect(&drms_env->session->db_handle); // disconnect from non-primary PE to DRMS
+    drms_server_end_transaction(drms_env, 1, 0);  // Kehcheng and Arts' suggestion:
+    db_disconnect(&drms_env->session->db_handle); // disconnect from all non-primary PE to DRMS
   }
 
-  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD); // wait until primary PE did a lot of things.
 
-/* at this moment, the PE(s) other than the primary do not know the value of imgpix etc.*/
+/* at this moment, the PE(s) other than the primary do not know the values of imgpix etc.*/
   int *ibuff;
   ibuff=(int *)malloc(sizeof(int)*4);
   ibuff[0]=imgpix;  // packing box
@@ -1102,7 +1214,7 @@ int DoIt (void)
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-/* large array ONLY at the primary */
+/* large array allocation, ONLY on the primary PE */
   if (mpi_rank == 0)
   {
     FinalErr=(double *)malloc(sizeof(double)*imgpix*Err_ct);
@@ -1112,7 +1224,7 @@ int DoIt (void)
     FinalQualMap  =(int *)malloc(sizeof(int)*imgpix);
   }
 
-/* part of input/output ; local array for ALL PE. */
+/* allocate local array on ALL PE. */
   float  *dataLocal;
   float  *vlos_initLocal;
   float  *mgst_initLocal;
@@ -1145,7 +1257,7 @@ int DoIt (void)
   FinalErrLocal = (double *)malloc(sizeof(double)*imgpixlocal*Err_ct);
   FinalResLocal = (double *)malloc(sizeof(double)*imgpixlocal*paramct);
 
-/* tiny arrays used at processing each pixel as the invert()'s input/output arguments. */
+/* tiny arrays used at processing each pixel as the invert()'s arguments. */
   obs = (double *)malloc (sizeof (double) * nvar);
   res = (double *)calloc (paramct, sizeof (double));
   scat= (double *)malloc (sizeof (double) * nvar);
@@ -1164,7 +1276,7 @@ int DoIt (void)
   MPI_Barrier(MPI_COMM_WORLD);
   ibuff=(int *)malloc(sizeof(int)*1);
   ibuff[0] = iexistprev;
-  MPI_Bcast(ibuff,1,MPI_INT,0,MPI_COMM_WORLD); // tell if prevous/reference existed or not
+  MPI_Bcast(ibuff,1,MPI_INT,0,MPI_COMM_WORLD);
   iexistprev = ibuff[0]; //.... silly
   free(ibuff);
   MPI_Barrier(MPI_COMM_WORLD);
@@ -1173,7 +1285,6 @@ int DoIt (void)
 /* send partial input data to each PE */
   if (mpi_rank == 0)
   {
-/* first, the primary makes copy for its own part */
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
@@ -1183,6 +1294,7 @@ int DoIt (void)
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
+/* first, the primary makes copy for its own part */
     for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){dataLocal[(n-istart)*nvar+m] = data[n + m*imgpix];}}
 /* then send the partials to the other PEs */
     if (mpi_size > 1)
@@ -1494,7 +1606,8 @@ int DoIt (void)
   if (verbose){printf("done line_init for mpi_rank %d\n",mpi_rank);}
   wave_init_ (&LAMBDA_MIN_synth,&DELTA_LAMBDA,&NUM_LAMBDA_synth);  // use ... synthetic(s) ???
   if (verbose){printf("done wave_init for mpi_rank %d\n", mpi_rank );}
-  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&CONTINUUM,&LYOTFWHM,&WNARROW,&WSPACING, &NUM_LAMBDA);
+  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&WSPACING, &NUM_LAMBDA); // new one, on May 31, 2011
+//  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&CONTINUUM,&LYOTFWHM,&WNARROW,&WSPACING, &NUM_LAMBDA); old one, 
   if (verbose){printf("done filt_init for mpi_rank %d\n",mpi_rank);}
 
 /* JM Borrero & RC Elliot Apr 7, 2010
@@ -1605,63 +1718,63 @@ printf("We should be running initialize_vfisv_filter\n");
   if (verbose){printf("done initialize_vfisv_filter by S.C., for mpi_rank %d\n",mpi_rank);}
   MPI_Barrier(MPI_COMM_WORLD);
 
-/* 2011 May 16, add these to normalize the filter profiles */
+/* 2011 May 16, added to calculate normalization factor for filter */
   double norm_factor;
-#if NRMLZSTK == 1
+#if NRMLFLTR == 1
   if (mpi_rank == 0)
   {
-/* copy from lines by S. Couvidat : some lines are obviously NOT needed, but just copy everything. */
-      column        = 2048;
-      row           = 2048;
-      ratio         =cols/nx2; //should be 16
-      x0 = (column/ratio); //a column number
-      y0 = (row/ratio);    //a row number
-      x1 = x0+1;
-      y1 = y0+1;
-      if(x1 >= nx2){x0 = x0-1; x1 = x1-1;} //we will extrapolate at the edges
-      if(y1 >= ny2){y0 = y0-1; y1 = y1-1;}
-      xa = ((double)x1-(double)(column % ratio)/(double)ratio-(double)x0);
-      xb = ((double)(column % ratio)/(double)ratio);
-      ya = ((double)y1-(double)(row % ratio)/(double)ratio-(double)y0);
-      yb = ((double)(row % ratio)/(double)ratio);
-      loc1          = x0+y0*nx2;
-      loc2          = x1+y0*nx2;
-      loc3          = x0+y1*nx2;
-      loc4          = x1+y1*nx2;
-      phaseNTi[0]   = ya*(phaseNT[loc1          ]*xa+phaseNT[loc2          ]*xb)
-                     +yb*(phaseNT[loc3          ]*xa+phaseNT[loc4          ]*xb);
-      phaseNTi[1]   = ya*(phaseNT[loc1+  nx2*ny2]*xa+phaseNT[loc2+nx2*ny2  ]*xb)
-                     +yb*(phaseNT[loc3+  nx2*ny2]*xa+phaseNT[loc4+  nx2*ny2]*xb);
-      phaseNTi[2]   = ya*(phaseNT[loc1+2*nx2*ny2]*xa+phaseNT[loc2+2*nx2*ny2]*xb)
-                     +yb*(phaseNT[loc3+2*nx2*ny2]*xa+phaseNT[loc4+2*nx2*ny2]*xb);
-      phaseNTi[3]   = ya*(phaseNT[loc1+3*nx2*ny2]*xa+phaseNT[loc2+3*nx2*ny2]*xb)
-                     +yb*(phaseNT[loc3+3*nx2*ny2]*xa+phaseNT[loc4+3*nx2*ny2]*xb);
-      phaseTi[0]    = ya*(phaseT[loc1*3  ]*xa+phaseT[loc2*3  ]*xb)+yb*(phaseT[loc3*3  ]*xa+phaseT[loc4*3  ]*xb);
-      phaseTi[1]    = ya*(phaseT[loc1*3+1]*xa+phaseT[loc2*3+1]*xb)+yb*(phaseT[loc3*3+1]*xa+phaseT[loc4*3+1]*xb);
-      phaseTi[2]    = ya*(phaseT[loc1*3+2]*xa+phaseT[loc2*3+2]*xb)+yb*(phaseT[loc3*3+2]*xa+phaseT[loc4*3+2]*xb);
-      contrastNTi[0]= ya*(contrastNT[loc1          ]*xa+contrastNT[loc2          ]*xb)
-                     +yb*(contrastNT[loc3          ]*xa+contrastNT[loc4          ]*xb);
-      contrastNTi[1]= ya*(contrastNT[loc1+  nx2*ny2]*xa+contrastNT[loc2+  nx2*ny2]*xb)
-                     +yb*(contrastNT[loc3+  nx2*ny2]*xa+contrastNT[loc4+  nx2*ny2]*xb);
-      contrastNTi[2]= ya*(contrastNT[loc1+2*nx2*ny2]*xa+contrastNT[loc2+2*nx2*ny2]*xb)
-                     +yb*(contrastNT[loc3+2*nx2*ny2]*xa+contrastNT[loc4+2*nx2*ny2]*xb);
-      contrastNTi[3]= ya*(contrastNT[loc1+3*nx2*ny2]*xa+contrastNT[loc2+3*nx2*ny2]*xb)
-                     +yb*(contrastNT[loc3+3*nx2*ny2]*xa+contrastNT[loc4+3*nx2*ny2]*xb);
-      contrastTi[0] = ya*(contrastT[loc1           ]*xa+contrastT[loc2         ]*xb)
-                     +yb*(contrastT[loc3           ]*xa+contrastT[loc4         ]*xb);
-      contrastTi[1] = ya*(contrastT[loc1+  nx2*ny2]*xa+contrastT[loc2+  nx2*ny2]*xb)
-                     +yb*(contrastT[loc3+  nx2*ny2]*xa+contrastT[loc4+  nx2*ny2]*xb);
-      contrastTi[2] = ya*(contrastT[loc1+2*nx2*ny2]*xa+contrastT[loc2+2*nx2*ny2]*xb)
-                     +yb*(contrastT[loc3+2*nx2*ny2]*xa+contrastT[loc4+2*nx2*ny2]*xb);
-      X0            = (double)crpixx-1.0;
-      Y0            = (double)crpixy-1.0;
-      Rsun          = (double)asin(rsun_ref/dsun_obs)/3.14159265358979e0*180.0*3600.0/cdeltx;          //solar radius in pixels
-      distance      = sqrt(((double)row-Y0)*((double)row-Y0)+((double)column-X0)*((double)column-X0)); //distance in pixels
-      distance      = cos(asin(distance/Rsun));                                                        //cosine of angular distance from disk center
-      vfisv_filter(NUM_LAMBDA_FILTERc,NUM_LAMBDAc,filters,LAMBDA_MINc,DELTA_LAMBDAc,
-            wavelengthd,frontwindowd,nfront,wavelengthbd,blockerbd,nblocker,centerblocker,
-            phaseNTi,phaseTi,contrastNTi,contrastTi,FSR,lineref,wavelengthref,referencenlam,distance,HCME1,HCMWB,HCMNB,HCMPOL);
-
+/* copy from lines by S. Couvidat : some lines seems omittable, but K.H. just copied everything. */
+    column = 2048;
+    row    = 2048;
+    ratio  = cols/nx2;   // should be 16
+    x0 = (column/ratio); // a column number
+    y0 = (row/ratio);    // a row number
+    x1 = x0+1;
+    y1 = y0+1;
+    if(x1 >= nx2){x0 = x0-1; x1 = x1-1;} //we will extrapolate at the edges
+    if(y1 >= ny2){y0 = y0-1; y1 = y1-1;}
+    xa = ((double)x1-(double)(column % ratio)/(double)ratio-(double)x0);
+    xb = ((double)(column % ratio)/(double)ratio);
+    ya = ((double)y1-(double)(row % ratio)/(double)ratio-(double)y0);
+    yb = ((double)(row % ratio)/(double)ratio);
+    loc1          = x0+y0*nx2;
+    loc2          = x1+y0*nx2;
+    loc3          = x0+y1*nx2;
+    loc4          = x1+y1*nx2;
+    phaseNTi[0]   = ya*(phaseNT[loc1          ]*xa+phaseNT[loc2          ]*xb)
+                   +yb*(phaseNT[loc3          ]*xa+phaseNT[loc4          ]*xb);
+    phaseNTi[1]   = ya*(phaseNT[loc1+  nx2*ny2]*xa+phaseNT[loc2+nx2*ny2  ]*xb)
+                   +yb*(phaseNT[loc3+  nx2*ny2]*xa+phaseNT[loc4+  nx2*ny2]*xb);
+    phaseNTi[2]   = ya*(phaseNT[loc1+2*nx2*ny2]*xa+phaseNT[loc2+2*nx2*ny2]*xb)
+                   +yb*(phaseNT[loc3+2*nx2*ny2]*xa+phaseNT[loc4+2*nx2*ny2]*xb);
+    phaseNTi[3]   = ya*(phaseNT[loc1+3*nx2*ny2]*xa+phaseNT[loc2+3*nx2*ny2]*xb)
+                   +yb*(phaseNT[loc3+3*nx2*ny2]*xa+phaseNT[loc4+3*nx2*ny2]*xb);
+    phaseTi[0]    = ya*(phaseT[loc1*3  ]*xa+phaseT[loc2*3  ]*xb)+yb*(phaseT[loc3*3  ]*xa+phaseT[loc4*3  ]*xb);
+    phaseTi[1]    = ya*(phaseT[loc1*3+1]*xa+phaseT[loc2*3+1]*xb)+yb*(phaseT[loc3*3+1]*xa+phaseT[loc4*3+1]*xb);
+    phaseTi[2]    = ya*(phaseT[loc1*3+2]*xa+phaseT[loc2*3+2]*xb)+yb*(phaseT[loc3*3+2]*xa+phaseT[loc4*3+2]*xb);
+    contrastNTi[0]= ya*(contrastNT[loc1          ]*xa+contrastNT[loc2          ]*xb)
+                   +yb*(contrastNT[loc3          ]*xa+contrastNT[loc4          ]*xb);
+    contrastNTi[1]= ya*(contrastNT[loc1+  nx2*ny2]*xa+contrastNT[loc2+  nx2*ny2]*xb)
+                   +yb*(contrastNT[loc3+  nx2*ny2]*xa+contrastNT[loc4+  nx2*ny2]*xb);
+    contrastNTi[2]= ya*(contrastNT[loc1+2*nx2*ny2]*xa+contrastNT[loc2+2*nx2*ny2]*xb)
+                   +yb*(contrastNT[loc3+2*nx2*ny2]*xa+contrastNT[loc4+2*nx2*ny2]*xb);
+    contrastNTi[3]= ya*(contrastNT[loc1+3*nx2*ny2]*xa+contrastNT[loc2+3*nx2*ny2]*xb)
+                   +yb*(contrastNT[loc3+3*nx2*ny2]*xa+contrastNT[loc4+3*nx2*ny2]*xb);
+    contrastTi[0] = ya*(contrastT[loc1           ]*xa+contrastT[loc2         ]*xb)
+                   +yb*(contrastT[loc3           ]*xa+contrastT[loc4         ]*xb);
+    contrastTi[1] = ya*(contrastT[loc1+  nx2*ny2]*xa+contrastT[loc2+  nx2*ny2]*xb)
+                   +yb*(contrastT[loc3+  nx2*ny2]*xa+contrastT[loc4+  nx2*ny2]*xb);
+    contrastTi[2] = ya*(contrastT[loc1+2*nx2*ny2]*xa+contrastT[loc2+2*nx2*ny2]*xb)
+                   +yb*(contrastT[loc3+2*nx2*ny2]*xa+contrastT[loc4+2*nx2*ny2]*xb);
+    X0            = (double)crpixx-1.0;
+    Y0            = (double)crpixy-1.0;
+    Rsun          = (double)asin(rsun_ref/dsun_obs)/3.14159265358979e0*180.0*3600.0/cdeltx;          //solar radius in pixels
+    distance      = sqrt(((double)row-Y0)*((double)row-Y0)+((double)column-X0)*((double)column-X0)); //distance in pixels
+    distance      = cos(asin(distance/Rsun));                                                        //cosine of angular distance from disk center
+    vfisv_filter(NUM_LAMBDA_FILTERc,NUM_LAMBDAc,filters,LAMBDA_MINc,DELTA_LAMBDAc,
+          wavelengthd,frontwindowd,nfront,wavelengthbd,blockerbd,nblocker,centerblocker,
+          phaseNTi,phaseTi,contrastNTi,contrastTi,FSR,lineref,wavelengthref,referencenlam,distance,HCME1,HCMWB,HCMNB,HCMPOL);
+/* do some math to yield normalization factor */
     double  *sum_filt;
     sum_filt = (double *)malloc (sizeof (double) * NUM_LAMBDA_FILTER);
     double sumsum, aveave;
@@ -1689,8 +1802,8 @@ printf("We should be running initialize_vfisv_filter\n");
   } // end scope limiter
 #else
   norm_factor = 1.0;
-#endif // end if NRMLZSTK is 1 or not
-  printf(" normalization factor for input Stokes is %f\n", norm_factor);
+#endif // end if NRMLFLTR is 1 or not
+  if (mpi_rank == 0){printf(" normalization factor for filter is %f\n", norm_factor);}
 
 /* ME inversion initialization */
   inv_init_(&NUM_ITERATIONS,&SVD_TOLERANCE,&CHI2_STOP,&POLARIZATION_THRESHOLD,&INTENSITY_THRESHOLD,&PERCENTAGE_JUMP);
@@ -1701,8 +1814,10 @@ printf("We should be running initialize_vfisv_filter\n");
   if (verbose){printf("done svd_init\n");}
 /* By RCE & Borrero */
 /* Changed index of list_free_params to 3 (instead of 4) to refer to Damping*/
-  if  (list_free_params[3] == 0.0) voigt_init_();
-  for (n=0; n< nvar; n++) scat[n]=0;
+  if  (list_free_params[3] == 0) voigt_init_();
+//  if  (list_free_params[3] == 0.0) voigt_init_(); // .... OK???
+  for (n=0; n< nvar; n++) scat[n]=0.0;
+//  for (n=0; n< nvar; n++) scat[n]=0;
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) printf("\n----------- inversion initializations done ------------ \n");
@@ -1735,16 +1850,10 @@ printf("We should be running initialize_vfisv_filter\n");
 #endif
 
 #if TAKEPREV == 1
-/*
- * K.H. May 12, 2010
- * Here, the previous reference data.
- * Order of the variables must be same as the counterpart output arrays (res and err) at the argument invert_().
- * Use value of integer iexistprev (that must be 0 or 1.) to change behaviour in invert_() etc.
- */
       if (iexistprev == 1)
       {
-        for (m = 0; m < paramct; m++){prevres[m]=PrevResLocal[(n-istart)*paramct+m];}
-        for (m = 0; m < Err_ct;  m++){preverr[m]=PrevErrLocal[(n-istart)*Err_ct +m];}
+        for (m = 0; m < paramct; m++){prevres[m]=PrevResLocal[(n-istart)*paramct+m];} // values in this array will be put to guess[] later
+        for (m = 0; m < Err_ct;  m++){preverr[m]=PrevErrLocal[(n-istart)*Err_ct +m];} // values in this array shall not be used....
       }
       if (iexistprev == 0)
       {
@@ -1837,8 +1946,7 @@ printf("We should be running initialize_vfisv_filter\n");
       distance      = sqrt(((double)row-Y0)*((double)row-Y0)+((double)column-X0)*((double)column-X0)); //distance in pixels
       distance      = cos(asin(distance/Rsun));                                                        //cosine of angular distance from disk center
 
-
-      //NB: filters[NUM_LAMBDA_FILTERc,NUM_LAMBDAc] are calculated by order of increasing wavelength, from I5 to I0.
+//NB: filters[NUM_LAMBDA_FILTERc,NUM_LAMBDAc] are calculated by order of increasing wavelength, from I5 to I0.
       vfisv_filter(NUM_LAMBDA_FILTERc,NUM_LAMBDAc,filters,LAMBDA_MINc,DELTA_LAMBDAc,
             wavelengthd,frontwindowd,nfront,wavelengthbd,blockerbd,nblocker,centerblocker,
             phaseNTi,phaseTi,contrastNTi,contrastTi,FSR,lineref,wavelengthref,referencenlam,distance,HCME1,HCMWB,HCMNB,HCMPOL);
@@ -1873,13 +1981,13 @@ This is done inside the FORTRAN code, in invert.f90
 
       int iconverge_flag;
 /*
- modified on Nov 2, 2010
+ modified on Nov 2, 2010, re-modified on May 16, 2011.
  0: Reached convergence with chi2<EPSILON
+ 1: Continuum intensity not above threshold. Pixel not inverted.
  2: Reached maximum number of iterations
  3: Finished with too many consecutive non-converging iterations
  4: NaN in chi2 determination.. exited loop.
  5: NaN in SVDSOL.. exited loop
- 6: Continuum intensity not above threshold. Pixel not inverted.
  MIND that previous definition must be never used !!!
  */
 
@@ -1889,19 +1997,19 @@ This is done inside the FORTRAN code, in invert.f90
        weights[0]=1.0; weights[1]=3.0; weights[2]=3.0; weights[3]=2.0; // choice 3
 
 #if VLOSINIT == 1
-     guess[6] = vlos_initLocal[n-istart]; // 7th one ..
+       guess[6] = vlos_initLocal[n-istart]; // 7th one ..
 #endif
 #if MGSTINIT == 1
-     guess[5] = mgst_initLocal[n-istart]; // 6th one ..
+       guess[5] = mgst_initLocal[n-istart]; // 6th one ..
 #endif
 
-/* added on May 17, 2011 */
-#if NRMLZSTK == 1
-//     for(m = 0; m < nvar; m++){obs[m]=obs[m]/norm_factor;} // silly mistake !!
-    for (i = 0; i < NUM_LAMBDA_FILTER; i++){for (j = 0; j < NUM_LAMBDA; j++)
-    {
-      filters[i][j] = filters[i][j] / norm_factor;
-    } }
+/* added on May 17, 2011.
+ * All filter are normalized here. */
+#if NRMLFLTR == 1
+      for (i = 0; i < NUM_LAMBDA_FILTER; i++){for (j = 0; j < NUM_LAMBDA; j++)
+      {
+        filters[i][j] = filters[i][j] / norm_factor;
+      } }
 #endif
 
       invert_ (obs, scat, guess, res, err, filters, &iconverge_flag, weights); // added the weights. on Feb 10, 2011
@@ -1914,33 +2022,34 @@ This is done inside the FORTRAN code, in invert.f90
           (iconverge_flag == 5) ||
           (iconverge_flag == 1))   // changed on 2011 May 16, responding to the changes in invert.f90 by RCE.
       {
-        if (verbose){printf("Hello, this is %2d th PE : found iconverge_flag ge 4 at %9d . \n", mpi_rank, n);}
+        if (verbose){printf("Hello, this is %2d th PE : found iconverge_flag %d2 at %9d th pixel.\n", mpi_rank, iconverge_flag, n);}
         for (j=0; j<paramct; j++){res[j]=NAN;}
         for (k=0; k<Err_ct;  k++){err[k]=NAN;}
       }
 
       FinalConvFlagLocal[n-istart]=iconverge_flag;
 
+/* Here we assume this line is the first line giving value to q-map. QualMap value will be overwritten below */
       if (iconverge_flag > 0)
       {
         pix_noconv = pix_noconv + 1;
-        FinalQualMapLocal[n-istart]=0x00000002; // 00000...010 , assume this line is the first one giving value to q-map
+        FinalQualMapLocal[n-istart]=0x00000002;
       }
       else
       {
         FinalQualMapLocal[n-istart]=0x00000000;
       }
 
-      for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]=res[j];} // copy results to the local-small array(s)
-      for (k=0; k<Err_ct;  k++){FinalErrLocal[(n-istart)*Err_ct +k]=err[k];}
+        for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]=res[j];} // copy results to the local-small array(s)
+        for (k=0; k<Err_ct;  k++){FinalErrLocal[(n-istart)*Err_ct +k]=err[k];}
 #if QUICKRUN == 1
      }
      else
      {
-      FinalConvFlagLocal[n-istart]=-(mpi_rank+1);  // for debugging purpose
-      FinalQualMapLocal [n-istart]=-(mpi_rank+1);  // for debugging purpose
-      for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]= 1.0+mpi_rank;}
-      for (k=0; k<Err_ct ; k++){FinalErrLocal[(n-istart)*Err_ct +k]=-1.0-mpi_rank;}
+       FinalConvFlagLocal[n-istart]=-(mpi_rank+1);  // for debugging purpose
+       FinalQualMapLocal [n-istart]=-(mpi_rank+1);  // for debugging purpose
+       for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]= 1.0+mpi_rank;}
+       for (k=0; k<Err_ct ; k++){FinalErrLocal[(n-istart)*Err_ct +k]=-1.0-mpi_rank;}
      }
 #endif
       pixdone = pixdone + 1;
@@ -1958,10 +2067,10 @@ This is done inside the FORTRAN code, in invert.f90
   if (verbose){printf("Hello, this is %2d th PE : Num of pixel at which solution did not converge = %d\n",mpi_rank,pix_noconv);}
   MPI_Barrier(MPI_COMM_WORLD);
 
-/* count sum of non-convergent pixel */
+/* count non-convergent pixel etc. */
   int sum_pix_noconv;
   int sum_pixdone;
-  { //limit the scope of some integer variables
+  { // limit the scope of some integer variables
     int *ibufs, *ibufr;
     ibufs = (int *)malloc(sizeof(int)*2);
     ibufr = (int *)malloc(sizeof(int)*2);
@@ -1991,7 +2100,7 @@ This is done inside the FORTRAN code, in invert.f90
   free(lineref);
   free(wavelengthref);
 
-/* output data are gathered to primary from each PE in charge of pixels from istart to iend */
+/* output data are gathered to primary from each PE */
   if (mpi_rank == 0)
   {
 /* first, copy the portion the primary itself did */
@@ -2009,7 +2118,7 @@ This is done inside the FORTRAN code, in invert.f90
       for (j=0; j<paramct; j++){FinalRes[(n*paramct)+j]=FinalResLocal[(n-istart)*paramct+j];}
       for (k=0; k<Err_ct ; k++){FinalErr[(n*Err_ct) +k]=FinalErrLocal[(n-istart)*Err_ct +k];}
     }
-/* then collecting the portions done by the others (1) float variables */
+/* then collecting the portions done by the other PEs */
     if (mpi_size > 1)
     {
       printf("now collecting float   data from PEs : ");
@@ -2089,7 +2198,7 @@ This is done inside the FORTRAN code, in invert.f90
       FinalConvFlag[n] =  FinalConvFlagLocal[n-istart];
       FinalQualMap [n] =  FinalQualMapLocal [n-istart];
     }
-/* then collecting the portions done by the others (1) float variables */
+/* then collecting the portions done by the other PE */
     if (mpi_size > 1)
     {
       printf("now collecting integer data from PEs : ");
@@ -2151,7 +2260,7 @@ This is done inside the FORTRAN code, in invert.f90
   } // end-if mpi_rank is 0, or not.
   MPI_Barrier(MPI_COMM_WORLD); // silly..but always safe
 
-/* the primary PE takes care of pixels none of PE had taken care of */
+/* the primary PE takes care of pixels none had taken care of */
   if (mpi_rank == 0)
   {
     if (istartall[0] > 0)
@@ -2179,8 +2288,8 @@ This is done inside the FORTRAN code, in invert.f90
   } // end-if mpi_rank is 0.
   MPI_Barrier(MPI_COMM_WORLD); // silly..but always safe
 
-/*clean up arrays except to-be-saved ones , mainly for debugging and checking purpose */
-  free(FinalConvFlagLocal); // liberate....
+/* clean up arrays */
+  free(FinalConvFlagLocal);
   free(FinalQualMapLocal);
   free(FinalResLocal);
   free(FinalErrLocal);
@@ -2193,7 +2302,7 @@ This is done inside the FORTRAN code, in invert.f90
 #if CONFINDX == 1
   if (mpi_rank == 0) // only the primary PE has all info needed.
   {
-/* inserting Yang's subroutine, originally as a form of void subprogram
+/* inserting Yang's subroutine, originally as a form of void subprogram;
   void qualMask(float *bTotal, float *bIncl, int *bInvFlag, float *bLos, float *stokesQU, float *stokesV,
               int nx, int ny, int *qualFlag, char *confidFlag)
 * Inputs:
@@ -2222,7 +2331,7 @@ This is done inside the FORTRAN code, in invert.f90
 #define missCode0 0x0000 // Not A missing data
 #define missCode1 0x0040 // Missing data
 #define pixThreshold 500.0 // Threshold value for determining bad pixels
-#define quThreshold  132.0 // The median of qu in a quiet Sun area near the disk center, where 
+#define quThreshold  132.0 // The median of qu in a quiet Sun area near the disk center, where
                            // qu = sqrt((sum[i=0, ..., 5] q_i)^2 + (sum[i=0, ..., 5] u_i)^2))
 #define vThreshold 153.0 // The median of v in a quiet Sun area near the disk center, where v = sum[i =0, .., 5] stokesV_i
 #define losThreshold 1.0 * 6.7 // 1 * sigma of 720s los mags.
@@ -2305,15 +2414,16 @@ This is done inside the FORTRAN code, in invert.f90
   MPI_Barrier(MPI_COMM_WORLD);
 #endif // end if CONFINDX is 1 or not
 
-/* write outputs through DRMS/JSOC */
+/* write outputs through DRMS-JSOC */
   if (mpi_rank == 0)
   {
     outRec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
     if (!outRec) {fprintf (stderr, "Error creating record in series %s; abandoned\n",outser);return 1;}
 
-/* succeed a lot of info. from the input data record */
+/* succeed a lot of keyword info. from the input data record */
     drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit); // Phil's solution !
 
+/* calculate some full-disk summations */
     double blos_ave=0.0;
     double babs_ave=0.0;
     double vlos_ave=0.0;
@@ -2323,8 +2433,8 @@ This is done inside the FORTRAN code, in invert.f90
       int n, nend;
       for(n = 0; n < imgpix ; n++)
       {
-        int   inan=nan_map[n];
-        if (!inan)
+        int inan = nan_map[n];
+        if (inan == 0)
         {
           float babs =FinalRes[(n*paramct)+5]; // field strenth in gauss
           float tht  =FinalRes[(n*paramct)+1]; // inclination in degree...
@@ -2338,7 +2448,7 @@ This is done inside the FORTRAN code, in invert.f90
             babs_ave = babs_ave + babs;
             blos_ave = blos_ave + blos;
           }
-          float vlos  =FinalRes[(n*paramct)+6]; // vlos
+          float vlos = FinalRes[(n*paramct)+6]; // vlos
           if (!isnan(vlos))
           {
             icount2 = icount2 + 1;
@@ -2367,12 +2477,12 @@ This is done inside the FORTRAN code, in invert.f90
       {
         int   iqm = FinalQualMap[n];
         int   inan= nan_map[n];
-        if ((!inan) && (!isnan(iqm)) && (iqm > 0)){FinalQualMap[n]=FinalQualMap[n]+0x00000001;}// turn on rightmost bit
+        if ((inan != 0) && (!isnan(iqm)) && (iqm > 0)){FinalQualMap[n]=FinalQualMap[n]+0x00000001;}// turn on rightmost bit, this may be overwritten later.
       }
     }// end of scope limiter
 
 /* overriding existing keyword, or adding new ones */
-   { // scope limiter
+    { // scope limiter
 
 /* version info., given in this code */
     char invcodeversion[50];
@@ -2511,7 +2621,7 @@ This is done inside the FORTRAN code, in invert.f90
 #if CHNGTREC == 1
     drms_setkey_string(outRec, "T_REC",outtrec); // enforce T_REC dummy ones for test
 #endif
-   } // end of scope-limit
+    } // end of scope-limit
 
     char trectmp2[26];
     TIME trectmp1 = drms_getkey_time(outRec,"T_REC",&status);
@@ -2525,13 +2635,16 @@ This is done inside the FORTRAN code, in invert.f90
       float *dat1;
       int axes[2];
 /* collect the result for each parameter over all pixels */
-#if RECTANGL == 1
+#if RECTANGL == 1 || HARPATCH == 1
       dat1 = (float *)calloc(xwidth * yheight, sizeof(float));
       int icount;
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-        if (nan_map[n] == 0)
+//        if (nan_map[n] == 0)
+        int   ix, iy;
+        ix = n % cols - xleftbot; iy = n / cols - yleftbot;
+        if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
         {
           icount = icount + 1;
           dat1[icount] = FinalRes[(n*paramct)+j];
@@ -2552,12 +2665,12 @@ This is done inside the FORTRAN code, in invert.f90
       invrt_array->bzero  = bzero_inv[j];
       invrt_array->bscale = bscaleinv[j];
 #endif
-      seg = drms_segment_lookup (outRec, Resname[j]);
-      if (!seg) {fprintf(stderr, "Error getting data segment %s; abandoned\n", Resname[j]);}
+      outSeg = drms_segment_lookup (outRec, Resname[j]);
+      if (!outSeg) {fprintf(stderr, "Error getting data segment %s; abandoned\n", Resname[j]);}
 
-      if (drms_segment_write (seg, invrt_array, 0))
+      if (drms_segment_write (outSeg, invrt_array, 0))
       {
-        fprintf (stderr, "Error writing segment %d (%s); abandoned\n", j,seg->info->name);
+        fprintf (stderr, "Error writing segment %d (%s); abandoned\n", j,outSeg->info->name);
         return 1;
       }
       else
@@ -2572,13 +2685,16 @@ This is done inside the FORTRAN code, in invert.f90
     {
       float *dat2;
       int axes[2];
-#if RECTANGL == 1
+#if RECTANGL == 1 || HARPATCH == 1
       dat2 = (float *)calloc(xwidth * yheight, sizeof(float));
       int icount;
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-        if (nan_map[n] == 0)
+//        if (nan_map[n] == 0)
+        int   ix, iy;
+        ix = n % cols - xleftbot; iy = n / cols - yleftbot;
+        if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
         {
           icount = icount + 1;
           dat2[icount] = FinalErr[(n*Err_ct)+k];
@@ -2598,16 +2714,16 @@ This is done inside the FORTRAN code, in invert.f90
       err_array->bzero  = bzero_inv[k+paramct];
       err_array->bscale = bscaleinv[k+paramct];
 #endif
-      seg = drms_segment_lookup (outRec, Resname[k+paramct]);
-      if (!seg)
+      outSeg = drms_segment_lookup (outRec, Resname[k+paramct]);
+      if (!outSeg)
       {
         if (verbose){fprintf(stderr, "Error getting data segment %s; abandoned\n", Resname[k+paramct]);}
       }
       else
       {
-        if (drms_segment_write (seg, err_array, 0))
+        if (drms_segment_write (outSeg, err_array, 0))
         {
-          fprintf (stderr, "Error writing to segment %d (%s); abandoned\n", k+paramct, seg->info->name);
+          fprintf (stderr, "Error writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
           return 1;
         }
         else
@@ -2623,13 +2739,16 @@ This is done inside the FORTRAN code, in invert.f90
     {
       char *dat3;
       int axes[2];
-#if RECTANGL == 1
+#if RECTANGL == 1 || HARPATCH == 1
       dat3 = (char *)calloc(xwidth * yheight, sizeof(char));
       int icount;
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-        if (nan_map[n] == 0)
+//        if (nan_map[n] == 0)
+        int   ix, iy;
+        ix = n % cols - xleftbot; iy = n / cols - yleftbot;
+        if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
         {
           icount = icount + 1;
           dat3[icount] = (char)FinalConvFlag[n]; // no need of bzero nor bscale
@@ -2644,16 +2763,16 @@ This is done inside the FORTRAN code, in invert.f90
       axes[1] = rows;
 #endif
       flg_array = drms_array_create (DRMS_TYPE_CHAR, 2, axes, dat3,&status);
-      seg = drms_segment_lookup (outRec, Resname[k+paramct]);
-      if (!seg)
+      outSeg = drms_segment_lookup (outRec, Resname[k+paramct]);
+      if (!outSeg)
       {
         if (verbose){fprintf(stderr, "Error getting data segment %s; abandoned\n", Resname[k+paramct]);}
       }
       else
       {
-        if (drms_segment_write (seg, flg_array, 0))
+        if (drms_segment_write (outSeg, flg_array, 0))
         {
-          fprintf (stderr, "ConvFlag writing to segment %d (%s); abandoned\n", k+paramct, seg->info->name);
+          fprintf (stderr, "ConvFlag writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
           return 1;
         }
         else
@@ -2669,13 +2788,16 @@ This is done inside the FORTRAN code, in invert.f90
     {
       int *dat4;
       int axes[2];
-#if RECTANGL == 1
+#if RECTANGL == 1 || HARPATCH == 1
       dat4 = (int *)calloc(xwidth * yheight, sizeof(int));
       int icount;
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-        if (nan_map[n] == 0)
+//        if (nan_map[n] == 0)
+        int   ix, iy;
+        ix = n % cols - xleftbot; iy = n / cols - yleftbot;
+        if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
         {
           icount = icount + 1;
           dat4[icount] = FinalQualMap[n]; // no need of bzero nor bscale
@@ -2690,16 +2812,16 @@ This is done inside the FORTRAN code, in invert.f90
       axes[1] = rows;
 #endif
       qmap_array = drms_array_create (DRMS_TYPE_INT, 2, axes, dat4,&status);
-      seg = drms_segment_lookup (outRec, Resname[k+paramct]);
-      if (!seg)
+      outSeg = drms_segment_lookup (outRec, Resname[k+paramct]);
+      if (!outSeg)
       {
         if (verbose){fprintf(stderr, "Error getting data segment %s; abandoned\n", Resname[k+paramct]);}
       }
       else
       {
-        if (drms_segment_write (seg, qmap_array, 0))
+        if (drms_segment_write (outSeg, qmap_array, 0))
         {
-          fprintf (stderr, "ConvFlag writing to segment %d (%s); abandoned\n", k+paramct, seg->info->name);
+          fprintf (stderr, "ConvFlag writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
           return 1;
         }
         else
@@ -2715,13 +2837,16 @@ This is done inside the FORTRAN code, in invert.f90
     {
       char *dat5;
       int axes[2];
-#if RECTANGL == 1
+#if RECTANGL == 1 || HARPATCH == 1
       dat5 = (char *)calloc(xwidth * yheight, sizeof(char));
       int icount;
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-        if (nan_map[n] == 0)
+//        if (nan_map[n] == 0)
+        int   ix, iy;
+        ix = n % cols - xleftbot; iy = n / cols - yleftbot;
+        if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
         {
           icount = icount + 1;
           dat5[icount] = (char)FinalConfidMap[n]; // no need of bzero nor bscale
@@ -2736,16 +2861,16 @@ This is done inside the FORTRAN code, in invert.f90
       axes[1] = rows;
 #endif
       flg_array = drms_array_create (DRMS_TYPE_CHAR, 2, axes, dat5,&status);
-      seg = drms_segment_lookup (outRec, Resname[k+paramct]);
-      if (!seg)
+      outSeg = drms_segment_lookup (outRec, Resname[k+paramct]);
+      if (!outSeg)
       {
         if (verbose){fprintf(stderr, "Error getting data segment %s; abandoned\n", Resname[k+paramct]);}
       }
       else
       {
-        if (drms_segment_write (seg, flg_array, 0))
+        if (drms_segment_write (outSeg, flg_array, 0))
         {
-          fprintf (stderr, "ConfidenceIndex writing to segment %d (%s); abandoned\n", k+paramct, seg->info->name);
+          fprintf (stderr, "ConfidenceIndex writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
           return 1;
         }
         else
@@ -2766,7 +2891,7 @@ This is done inside the FORTRAN code, in invert.f90
     printf("so, close all DRMS record(s) !\n");
 /* DRMS trailer and closer */
     drms_close_record (outRec, DRMS_INSERT_RECORD);
-    drms_close_records (records, DRMS_FREE_RECORD);
+    drms_close_records (inRS, DRMS_FREE_RECORD);
 
 /* how long it took */
     time(&endtime);
@@ -2810,9 +2935,12 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
   if (iwork2 <= myrank){*iend = idummy;}else{*iend=idummy+1;}
 }
 
-/* ----------------------------- by Sebastien ----------------------------- */
+/* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.3 2011/05/23 22:35:49 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.4 2011/05/31 22:26:35 keiji Exp $");}
+/* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
+
+/* ----------------------------- by Sebastien (1), filter profile etc.---------------------------- */
 
 /*------------------------------------------------------------------------------------------------------*/
 /* Function to perform linear interpolation                                                             */
@@ -3371,3 +3499,28 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 
 /* ----------------------------- end of this file ----------------------------- */
+/* --------------------------------------------
+: voigt.f,v 1.3 2011/05/31 22:23:47 keiji Exp 
+: cons_param.f90,v 1.2 2011/05/31 22:23:54 keiji Exp 
+: filt_init.f90,v 1.3 2011/05/31 22:24:00 keiji Exp 
+: filt_param.f90,v 1.3 2011/05/31 22:24:06 keiji Exp 
+: forward.f90,v 1.3 2011/05/31 22:24:12 keiji Exp 
+: free_init.f90,v 1.2 2011/05/31 22:24:18 keiji Exp 
+: free_memory.f90,v 1.2 2011/05/31 22:24:23 keiji Exp 
+: invert.f90,v 1.5 2011/05/31 22:24:33 keiji Exp 
+: inv_init.f90,v 1.2 2011/05/31 22:24:38 keiji Exp 
+: inv_param.f90,v 1.2 2011/05/31 22:24:44 keiji Exp 
+: inv_utils.f90,v 1.3 2011/05/31 22:24:49 keiji Exp 
+: line_init.f90,v 1.2 2011/05/31 22:24:54 keiji Exp 
+: line_param.f90,v 1.2 2011/05/31 22:24:59 keiji Exp 
+: ran_mod.f90,v 1.2 2011/05/31 22:25:04 keiji Exp 
+: svbksb.f90,v 1.2 2011/05/31 22:25:09 keiji Exp 
+: svdcmp.f90,v 1.2 2011/05/31 22:25:14 keiji Exp 
+: svd_init.f90,v 1.2 2011/05/31 22:25:19 keiji Exp 
+: svd_param.f90,v 1.2 2011/05/31 22:25:25 keiji Exp 
+: voigt_data.f90,v 1.2 2011/05/31 22:25:31 keiji Exp 
+: voigt_init.f90,v 1.2 2011/05/31 22:25:36 keiji Exp 
+: voigt_taylor.f90,v 1.3 2011/05/31 22:25:47 keiji Exp 
+: wave_init.f90,v 1.2 2011/05/31 22:25:52 keiji Exp 
+: wfa_guess.f90,v 1.2 2011/05/31 22:25:57 keiji Exp 
+ -------------------------------------------- */

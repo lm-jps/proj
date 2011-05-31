@@ -31,3 +31,4 @@ SUBROUTINE FREE_INIT (LIST_FREE_PARAMS)
   !FREE(9)                                    ! SOURCE FUNCTION GRADIENT
   !FREE(10)                                   ! MAGNETIC FILLING FACTOR
 END SUBROUTINE FREE_INIT
+!CVSVERSIONINFO "$Id: free_init.f90,v 1.2 2011/05/31 22:24:18 keiji Exp $"
