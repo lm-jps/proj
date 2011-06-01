@@ -8,7 +8,11 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #be run for this day and put the answers in the DB table hmi.lev1_probe.
 #NOTE: Does not run anything. Just inserts or updates a DB record.
 #Call:
-#     lev1_definitive_db.pl [-o] hmi,aia 2010.193_UTC
+#     lev1_definitive_db.pl [-o][-q] hmi,aia 2010.193_UTC
+#
+#!!!NOTE: Output of this script is read by lev0a2deflev1_FULL.pl. 
+#	  (Now lev0a2deflev1_FULL_PZT_FSN.pl)
+#         Do not change any output unless check lev0a2deflev1_FULL.pl also.
 #
 #These requirements must be met:
 #
@@ -72,6 +76,7 @@ $DSOUTHMI = "hmi.lev1";
 #$QSUBDIR = "/scr21/production/qsub/tmp";
 $EXECUTE = 0;
 $OVERRIDE = 0;
+$QUIET = 0;
 $| = 1;
 
 @allowhost = ("cl1n001", "cl1n002", "cl1n003"); #hosts w/dcs[0,1] mounts
@@ -80,9 +85,10 @@ $| = 1;
 
 sub usage {
   print "Determine if the lev1 definitive can be made for a given ordinal date(s) and updates the DB table hmi.lev1_probe.\n";
-  print "Usage: lev1_definitive_db.pl [-o] hmi,aia 2010.193_UTC 2010.198_UTC\n";
+  print "Usage: lev1_definitive_db.pl [-oq] hmi,aia 2010.193_UTC 2010.198_UTC\n";
   print " where  -o = overried the check for Xmit_All.ddd (used for older data)\n";
   print "             NOTE: -o s/b used for days before 2010.182_UTC (1July2010)\n";
+  print "        -q = quiet/query only. Do not insert/update hmi.lev1_probe table\n";
   exit(0);
 }
 
@@ -92,7 +98,8 @@ if($user ne "production") {
   exit;
 }
 $host = `hostname -s`;
-if(!grep($host, @allowhost)) {
+chomp($host);
+if(!grep(/$host/, @allowhost)) {
   print "Can only be run on host with dcs[0,1] mounts: @allowhost\n";
   exit(0);
 }
@@ -101,6 +108,9 @@ while ($ARGV[0] =~ /^-/) {
   $_ = shift;
   if (/^-o(.*)/) {
     $OVERRIDE = 1;
+  }
+  if (/^-q(.*)/) {
+    $QUIET = 1;
   }
 }
 
@@ -145,7 +155,7 @@ if($orddate2) {
 }
 
 #connect to database
-  $dbh = DBI->connect("dbi:Pg:dbname=$DB;host=$HOSTDB;port=$PGPORT", "$user", "$password");
+  $dbh = DBI->connect("dbi:Pg:dbname=$DB;host=$HOSTDB;port=$PGPORT", "$user", "");
   if ( !defined $dbh ) {
     die "Cannot do \$dbh->connect: $DBI::errstr\n";
   }
@@ -161,9 +171,9 @@ if($orddate2) {
 }
 
 $fulldate = `time_convert s=$sec zone=UTC`;
-$t_start_sec = $sec + 60;       #add a min to match TAI range in FF rec
+$t_start_sec = $sec - 60;       #subtract a min to match TAI range in FF rec
 $fulldateFF = `time_convert s=$t_start_sec zone=UTC`;
-$nextsec = $sec + 86400;
+$nextsec = $sec + (86400 - 60); #don't go into next TAI day
 $nextdate = `time_convert s=$nextsec zone=UTC`;
 chomp($fulldate);
 chomp($fulldateFF);
@@ -175,7 +185,7 @@ print "for lev1 on ordinal date starting at $orddate1 ($fulldate)\n";
 for(; $sec <= $sec2; $sec = $sec + 86400) {
 
 $fulldate = `time_convert s=$sec zone=UTC`;
-$t_start_sec = $sec + 60;       #add a min to match TAI range in FF rec
+$t_start_sec = $sec - 60;       #subtract a min to match TAI range in FF rec
 $fulldateFF = `time_convert s=$t_start_sec zone=UTC`;
 chomp($fulldateFF);
 chomp($fulldate);
@@ -199,11 +209,13 @@ if(-e $xmitfile) {
   print "*OK for lev1: $xmitfile exists\n";
 }
 else {
-  $OKfile = 0;
-  print "**NG for lev1: $xmitfile does not exist\n";
   if($OVERRIDE) {
     print "*OK override flag set for $xmitfile\n";
     $OKfile = 2;
+  }
+  else {
+    print "**NG for lev1: $xmitfile does not exist\n";
+    $OKfile = 0;
   }
 }
 
@@ -254,8 +266,9 @@ $OKff = 1;
 if(!$hmiaiaflg) {		#ck for hmi flat field
   #Now see if flat field has flatfield_version >= 1
   for($i=1; $i < 3; $i++) {
-    $query = sprintf("%s[? t_start <= \$(%s) and t_stop > \$(%s) and CAMERA=%d and flatfield_version >= 1 ?]", $DSFFNAMEHMI, $fulldateFF, $fulldateFF, $i);
-    #print "hmi query= $query\n"; #!!TEMP
+   $query = sprintf("%s[? t_start <=  \$(%s) and t_stop > \$(%s)and CAMERA=%d ?]",
+        $DSFFNAMEHMI, $fulldate, $fulldateFF, $i);
+    print "hmi query= $query\n"; #!!TEMP
     #print "Must put single quote around the above\n";
     $cmd = "show_info key=date,flatfield_version '$query'";
     #print "$cmd\n";
@@ -266,7 +279,7 @@ if(!$hmiaiaflg) {		#ck for hmi flat field
     if($x =~ /date\tflatfield_version/) {
       $x = shift(@result);	#looks like 2010-07-01T17:28:23Z   1
       ($a, $ffver) = split(/\s+/, $x);
-      if($ffver >= 1) { 
+      if($ffver >= 0) {   #NOTE: now >= 0 is ok, just find one
         print "*OK flatfield found for CAMERA=$i\n";
       } else {
         print "**NG flatfield_version not >= 1  for CAMERA=$i\n";
@@ -281,8 +294,9 @@ if(!$hmiaiaflg) {		#ck for hmi flat field
 }
 else {				#ck for aia flat field
   while($wave = shift(@wavestr)) {
-    $query = sprintf("%s[? t_start <= $sec and t_stop > $sec and WAVE_STR='%s' and flatfield_version >= 1 ?]", $DSFFNAMEAIA, $wave);
-    #print "\naia query= $query\n";
+  $query = sprintf("%s[? t_start <=  $sec and t_stop > $sec and WAVE_STR='%s' ?]",
+        $DSFFNAMEAIA, $wave);
+    print "\naia query= $query\n";
     #print "Must put double quote around the above\n";
     $cmd = "show_info key=date,flatfield_version \"$query\"";
     #print "$cmd\n";
@@ -292,10 +306,10 @@ else {				#ck for aia flat field
     if($x =~ /date\tflatfield_version/) {
       $x = shift(@result);	#looks like 2010-07-01T17:28:23Z   1
       ($a, $ffver) = split(/\s+/, $x);
-      if($ffver >= 1) { 
+      if($ffver >= 0) { 	#just find a flatfield_version
         print "*OK flatfield found for WAVE_STR=$wave\n";
       } else {
-        print "**NG flatfield_version not >= 1  for WAVE_STR=$wave\n";
+        #print "**NG flatfield_version not >= 1  for WAVE_STR=$wave\n";
         print "**OVERRIDE: temp acceptance of flatfield_version not >= 1\n";
         #$OKff = 0;
       }
@@ -325,14 +339,19 @@ else {
 $pos = index($fulldate, '_');
 $fdf = substr($fulldate, 0, $pos+1);
 $full_last_5 = $fdf."23:55:00.00_UTC";
-$cmd = "show_info -c 'hmi.temperature_summary_300s[? t_start >= \$('$fulldate') and t_start <= \$('$full_last_5') ?]'";
+if($hmiaiaflg) {
+  $cmd = "show_info -c 'aia.temperature_summary_300s[? t_start >= \$('$fulldate') and t_start <= \$('$full_last_5') ?]'";
+}
+else {
+  $cmd = "show_info -c 'hmi.temperature_summary_300s[? t_start >= \$('$fulldate') and t_start <= \$('$full_last_5') ?]'";
+}
 $cnt = `$cmd`;
 if($cnt =~ /^288 records/) {
   print "*OK hmi.temperature_summary_300s 288 records found\n";
   $OKtemp = 1; 
 }
 else {
-  print "**NG hmi.temperature_summary_300s incomplete (s/b 288 records):\n";
+  print "**NG temperature_summary_300s incomplete (s/b 288 records):\n";
   print "$cnt\n";
   $OKtemp = 0; 
 }
@@ -349,7 +368,13 @@ if(-e $nogo) {
 }
 else { $OKnogofile = 1; }
 
-$sql = "select count(*) from hmi.lev1_probe where ord_date='$orddate'";
+if(!$QUIET) {
+if($hmiaiaflg) {
+  $sql = "select count(*) from aia.lev1_probe where ord_date='$orddate'";
+}
+else {
+  $sql = "select count(*) from hmi.lev1_probe where ord_date='$orddate'";
+}
 print "$sql\n";
 $sth = $dbh->prepare($sql);
   if ( !defined $sth ) {
@@ -369,7 +394,11 @@ $sth = $dbh->prepare($sql);
     }
 
     if($row == 0) {	#insert new row, else update old one
-      $sql = "SELECT NEXTVAL('hmi.lev1_probe_seq')";
+      if($hmiaiaflg) {
+        $sql = "SELECT NEXTVAL('aia.lev1_probe_seq')";
+      } else {
+        $sql = "SELECT NEXTVAL('hmi.lev1_probe_seq')";
+      }
       $sth = $dbh->prepare($sql);
       if ( !defined $sth ) {
         print "Cannot prepare statement: $DBI::errstr\n";
@@ -382,7 +411,12 @@ $sth = $dbh->prepare($sql);
       if(defined $sth) {
         $sth->finish;
       }
-      $sql = "insert into hmi.lev1_probe (recnum, ORD_DATE,CREATE_DATE,ReXmit,ASD,FDS,FF,MP,TEMP,GOFLG,EXECUTED,EXECUTED_PART,LAST_LEV1_FSN) values ($recnum, '$orddate', '$utcdate', $OKfile, $OKhkdayfile, $OKfdsorbit, $OKff, $OKmp, $OKtemp, $OKnogofile, 0, 0, 0)";
+      if($hmiaiaflg) {
+        $sql = "insert into aia.lev1_probe (recnum, ORD_DATE,CREATE_DATE,ReXmit,ASD,FDS,FF,MP,TEMP,GOFLG,EXECUTED,EXECUTED_PART,LAST_LEV1_FSN) values ($recnum, '$orddate', '$utcdate', $OKfile, $OKhkdayfile, $OKfdsorbit, $OKff, $OKmp, $OKtemp, $OKnogofile, 0, 0, 0)";
+      }
+      else {
+        $sql = "insert into hmi.lev1_probe (recnum, ORD_DATE,CREATE_DATE,ReXmit,ASD,FDS,FF,MP,TEMP,GOFLG,EXECUTED,EXECUTED_PART,LAST_LEV1_FSN) values ($recnum, '$orddate', '$utcdate', $OKfile, $OKhkdayfile, $OKfdsorbit, $OKff, $OKmp, $OKtemp, $OKnogofile, 0, 0, 0)";
+      }
       $sth = $dbh->prepare($sql);
       if ( !defined $sth ) {
         print "Cannot prepare statement: $DBI::errstr\n";
@@ -392,7 +426,12 @@ $sth = $dbh->prepare($sql);
       $sth->execute;
     }
     else {
-      $sql = "update hmi.lev1_probe set CREATE_DATE='$utcdate', ReXmit=$OKfile, ASD=$OKhkdayfile, FDS=$OKfdsorbit, FF=$OKff, MP=$OKmp, TEMP=$OKtemp, GOFLG=$OKnogofile where ord_date='$orddate'";
+      if($hmiaiaflg) {
+        $sql = "update aia.lev1_probe set CREATE_DATE='$utcdate', ReXmit=$OKfile, ASD=$OKhkdayfile, FDS=$OKfdsorbit, FF=$OKff, MP=$OKmp, TEMP=$OKtemp, GOFLG=$OKnogofile where ord_date='$orddate'";
+      }
+      else {
+        $sql = "update hmi.lev1_probe set CREATE_DATE='$utcdate', ReXmit=$OKfile, ASD=$OKhkdayfile, FDS=$OKfdsorbit, FF=$OKff, MP=$OKmp, TEMP=$OKtemp, GOFLG=$OKnogofile where ord_date='$orddate'";
+      }
       #print "!!!TEMP\n$sql\n";
       $sth = $dbh->prepare($sql);
       if ( !defined $sth ) {
@@ -402,7 +441,7 @@ $sth = $dbh->prepare($sql);
       }
       $sth->execute;
     }
-
+}
 }
 
 $dbh->disconnect();

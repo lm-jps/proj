@@ -496,7 +496,7 @@ int do_ingest(long long bbrec, long long eerec)
         }
         asdmiss[j] = 1;		//set for QUALITY for ea image
       }
-      //return(1);		//!!No,press on
+      //return(1);		//!!No,press on. New 2/22/2011
     }
     if ((IOstatus = iorbit_getinfo(drms_env,
                        orbseries,
@@ -516,7 +516,7 @@ int do_ingest(long long bbrec, long long eerec)
       for(j=0; j < ncnt; j++) {	 //set qual bits
         orbmiss[j] = 1;
       }
-      //return(1);
+      return(1);		//new 2/22/2011
     }
     rset1 = drms_create_records(drms_env, ncnt, dsout, DRMS_PERMANENT,&dstatus);
     if(dstatus) {
@@ -524,7 +524,7 @@ int do_ingest(long long bbrec, long long eerec)
       for(j=0; j < ncnt; j++) {	 //set qual bits
         noimage[j] = 1;
       }
-      //return(1);
+      return(1);		//new 2/22/2011
     }
     //Now fill in info for call to Carl's get_image_location()
     for(i=0; i < ncnt; i++) {
@@ -551,7 +551,7 @@ int do_ingest(long long bbrec, long long eerec)
       for(j=0; j < ncnt; j++) {	 //set qual bits
         mpdmiss[i] = 0;
       }
-      //return(1);
+      return(1);		//new 2/22/2011
     }
 
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
@@ -571,7 +571,7 @@ int do_ingest(long long bbrec, long long eerec)
         printk("Can't do drms_segment_read() %s status=%d\n", 
 			lev0name, rstatus);
         noimage[i] = 1;
-        //return(1);	//return until we learn
+        return(1);	//return until we learn
         continue;
       }
       l0l1->adata0 = (short *)Array0->data; //free at end
@@ -632,7 +632,7 @@ int do_ingest(long long bbrec, long long eerec)
       rstatus = drms_copykeys(rs, rs0, 0, kDRMS_KeyClass_Explicit);
       if(rstatus != DRMS_SUCCESS) {
         printk("Error %d in drms_copykeys() for fsn %u\n", fsnx);
-        //return(1);
+        return(1);		//new 2/22/2011
         continue;
       }
       qualint = drms_getkey_int(rs0, "QUALITY", &rstatus);
@@ -736,7 +736,7 @@ int do_ingest(long long bbrec, long long eerec)
         printk("Can't do drms_open_records(%s)\n", open_dsname);
         flatmiss[i] = 1; noimage[i] = 1;
         goto TEMPSKIP;
-        //return(1);
+        return(1);		//new 2/22/2011
       }
       fcnt = rsetff->n;
       if(fcnt > 1) {

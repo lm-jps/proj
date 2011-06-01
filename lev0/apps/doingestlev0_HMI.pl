@@ -45,10 +45,10 @@ if(system($rmcmd3)) {
 }
 
 #Now do the initial start of the 4 ingest_lev0
-#$cmd0 = "ingest_lev0  vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
-#$cmd1 = "ingest_lev0  vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
-$cmd2 = "ingest_lev0  vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
-$cmd3 = "ingest_lev0  vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
+#$cmd0 = "ingest_lev0 --loopconn  vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
+#$cmd1 = "ingest_lev0 --loopconn  vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
+$cmd2 = "ingest_lev0 --loopconn  vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
+$cmd3 = "ingest_lev0 --loopconn  vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
 #print "$cmd0\n";
 #if(system($cmd0)) {
 #  print "Failed: $cmd0\n";
@@ -121,22 +121,22 @@ while(1) {
   sleep(5);			#make sure previous commit to db is done
 
       #`$rmcmd0`;
-      #$cmd = "ingest_lev0 -r vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
+      #$cmd = "ingest_lev0 --loopconn -r vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
       #if(system($cmd)) {
       #  print "Failed: $cmd\n";
       #}
       #`$rmcmd1`;
-      #$cmd = "ingest_lev0 -r vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
+      #$cmd = "ingest_lev0 --loopconn -r vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
       #if(system($cmd)) {
       #  print "Failed: $cmd\n";
       #}
       `$rmcmd2`;
-      $cmd = "ingest_lev0 -r vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
+      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
       `$rmcmd3`;
-      $cmd = "ingest_lev0 -r vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
+      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }

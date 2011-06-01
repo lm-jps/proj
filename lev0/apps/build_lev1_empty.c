@@ -58,7 +58,6 @@ ModuleArgs_t module_args[] = {
   {ARG_INTS, "efsn", "0", "last lev1 fsn# to process. 0=error"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
-  {ARG_FLAG, "r", "0", "restart flag"},
   {ARG_END}
 };
 
@@ -164,7 +163,7 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
-    printf ("Usage:\nbuild_lev1_empty [-vhr] "
+    printf ("Usage:\nbuild_lev1_empty [-vh] "
 	"instru=<hmi|aia> dsout=<lev1>\n"
 	"bfsn=<fsn#> efsn=<fsn#>\n"
         "argfile=<file>\n"
@@ -182,7 +181,7 @@ int nice_intro ()
     return(1);
     }
   verbose = cmdparams_get_int (&cmdparams, "v", NULL);
-  restartflg = cmdparams_get_int (&cmdparams, "r", NULL);
+  //restartflg = cmdparams_get_int (&cmdparams, "r", NULL);
   return (0);
 }
 
@@ -350,7 +349,7 @@ void setup()
   strcat(idstr, string);
   printk("%s", idstr);
   printf("%s", idstr);
-  if(restartflg) printk("-r ");
+  //if(restartflg) printk("-r ");
   sprintf(arginstru, "instru=%s", instru);
   sprintf(argdsout, "dsout=%s", dsout);
     sprintf(argbx, "bfsn=%u", bfsn);
@@ -439,6 +438,9 @@ int DoIt(void)
     fprintf(stderr, "Can't open %s\n", argfile);
     return(0);
   }
+  //argfile lines look like:
+  //Missing FSN: went from 12207204 to 12207207
+  //Missing FSN: went from 12207603 to 12207610
   while(fgets(line, 128, fplog)) {       /* get ps lines */
      if (strstr(line, "Missing FSN:")) {
        sscanf(line, "%s %s %s %s %u %s %u", scr, scr, scr, scr, &lowfsn, scr, &highfsn);
