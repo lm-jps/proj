@@ -2302,20 +2302,6 @@ This is done inside the FORTRAN code, in invert.f90
 #if CONFINDX == 1
   if (mpi_rank == 0) // only the primary PE has all info needed.
   {
-/* inserting Yang's subroutine, originally as a form of void subprogram;
-  void qualMask(float *bTotal, float *bIncl, int *bInvFlag, float *bLos, float *stokesQU, float *stokesV,
-              int nx, int ny, int *qualFlag, char *confidFlag)
-* Inputs:
-*  bTotal, bInc, bInvFlag:     magnetic field inverted by an inversion code. They are
-*                              field strength, inclination, and inversion flag.
-* bLos:                        line-of-sight magnetogram from lcp/rcp.
-* stokesQU, stokesV:           Stokes QU and Stokes V -- probably integral of the measurements at 6 wavelengths.
-* nx, ny:                      size of the array.
-* Outputs:
-* qualFlag:                    data quality mask, including information describing missing data, Stokes signals, inversion, and
-* confidFlag                   confidence index, that describes how confident the pixel is. Currently defined in a range from
-*                              0 (best) to 5 (worst)
-*/
 #define invCode0 0x0000 // inversion convergence
 #define invCode2 0x0002 // reached maximum number of iterations
 #define invCode3 0x0003 // finished with too many consecutive non-converging iterations
@@ -2324,92 +2310,102 @@ This is done inside the FORTRAN code, in invert.f90
 #define invCode1 0x0001 // continuum intensity not above the required threshold. pixel not inverted
 #define pixCode0 0x0000 // good pixel
 #define pixCode1 0x0008 // bad pixel
-#define quCode0  0x0000 // good QU-signal
-#define quCode1  0x0010 // low QU-signal
-#define vCode0   0x0000 // good V-signal
-#define vCode1   0x0020 // low V-signal
+#define quCode0 0x0000 // good QU-signal
+#define quCode1 0x0010 // low QU-signal
+#define vCode0 0x0000 // good V-signal
+#define vCode1 0x0020 // low V-signal
+#define blosCode0 0x0000 //good Blos value
+#define blosCode1 0x0040 //low Blos value
 #define missCode0 0x0000 // Not A missing data
-#define missCode1 0x0040 // Missing data
+#define missCode1 0x0080 // Missing data
 #define pixThreshold 500.0 // Threshold value for determining bad pixels
-#define quThreshold  132.0 // The median of qu in a quiet Sun area near the disk center, where
+#define quvScale 0.204 // scaling factor for the Stokes quv noise; sigma(Q,U,V) = 0.204 * sqrt(I)
+#define iScale   0.118 // scaling factor for Stokes I noise; sigma(I) = 0.118 * sqrt(I)
+//#define quThreshold  132.0 // The median of qu in a quiet Sun area near the disk center, where 
                            // qu = sqrt((sum[i=0, ..., 5] q_i)^2 + (sum[i=0, ..., 5] u_i)^2))
-#define vThreshold 153.0 // The median of v in a quiet Sun area near the disk center, where v = sum[i =0, .., 5] stokesV_i
+//#define vThreshold 153.0 // The median of v in a quiet Sun area near the disk center, where v = sum[i =0, .., 5] stokesV_i
 #define losThreshold 1.0 * 6.7 // 1 * sigma of 720s los mags.
-#define RADSINDEG    3.14159265358979 / 180.0
-
+#define RADSINDEG 3.14159265358979 / 180.0
     int yOff = 0, iData = 0;
-    int invQual, pixQual, quQual, vQual, missQual;
-
+    int invQual, pixQual, quQual, vQual, blosQual, missQual;
     int nx = cols;
     int ny = rows;
-
-    int jy = 0;
     for (iData = 0; iData < imgpix; iData++)
     {
-      float stokesV, stokesQU, stokesU, stokesQ;
+      float stokesV, stokesU, stokesQ, stokesI;
+      stokesI  = 0.0;
       stokesQ  = 0.0;
       stokesU  = 0.0;
       stokesV  = 0.0;
-      stokesQU = 0.0;
+//      float stokesQU;
+//      stokesQU = 0.0;
       int    m;
       for (m = 0; m < NUM_LAMBDA_FILTER; m++)
       {
-//        float ii = data[iData +(m+NUM_LAMBDA_FILTER*0)*imgpix];
-        float uu = data[iData +(m+NUM_LAMBDA_FILTER*1)*imgpix];
-        float qq = data[iData +(m+NUM_LAMBDA_FILTER*2)*imgpix];
-        float vv = data[iData +(m+NUM_LAMBDA_FILTER*3)*imgpix];
-//        stokesQU= stokesQU + qq*qq + uu*uu;
-//        stokesQ = stokesQ  + fabs(qq);
-//        stokesU = stokesU  + fabs(uu);
-//        stokesV = stokesV  + fabs(vv);
-        stokesQ = stokesQ  + qq;
-        stokesU = stokesU  + uu;
-        stokesV = stokesV  + vv;
+        stokesI = stokesI + data[iData +(m+NUM_LAMBDA_FILTER*0)*imgpix];
+        stokesQ = stokesQ + data[iData +(m+NUM_LAMBDA_FILTER*1)*imgpix];
+        stokesU = stokesU + data[iData +(m+NUM_LAMBDA_FILTER*2)*imgpix];
+        stokesV = stokesV + data[iData +(m+NUM_LAMBDA_FILTER*3)*imgpix];
       }
-      stokesQU = sqrt(stokesU*stokesU + stokesQ*stokesQ);
+//      stokesQU = sqrt(stokesU*stokesU + stokesQ*stokesQ);
 
-      float  bLos   = blosgram[ iData];
-      double bTotal = FinalRes[(iData*paramct)+5]; // field strenth in gauss
-      double bIncl  = FinalRes[(iData*paramct)+1]; // inclination in degree...
-      int iconvflag = FinalConvFlag[iData];
+      float  bLos     = blosgram[ iData];
+      double bTotal   = FinalRes[(iData*paramct)+5]; // field strenth in gauss
+      double bIncl    = FinalRes[(iData*paramct)+1]; // inclination in degree...
+      int    bInvFlag = FinalConvFlag[iData];
+
 
       FinalConfidMap[iData] = 0;
       invQual = invCode0;
       pixQual = pixCode0;
-      quQual = quCode0;
-      vQual = vCode0;
+      quQual  = quCode0;
+      vQual   = vCode0;
+      blosQual = blosCode0;
       missQual = missCode0;
-
-      if (isnan(bTotal) || isnan(bIncl) || isnan(bLos) || isnan(stokesQU)
-           || isnan(stokesV) || isnan(iconvflag))
+      if (isnan(bTotal) || isnan(bIncl) || isnan(bLos) || 
+          isnan(stokesI) || isnan(stokesQ) || isnan(stokesU) || isnan(stokesV) || isnan(bInvFlag))
       {
         missQual = missCode1;
-        FinalQualMap[iData] = invQual | pixQual | quQual | vQual | missQual;
-        FinalConfidMap[iData] = 5;
+        FinalQualMap[iData] = invQual | pixQual | quQual | vQual | blosQual | missQual;
+        FinalConfidMap[iData] = 6;
       }
       else
       {
-        if (iconvflag == 2) {invQual = invCode2;}
-        if (iconvflag == 3) {invQual = invCode3;}
-        if (iconvflag == 4) {invQual = invCode4;}
-        if (iconvflag == 5) {invQual = invCode5;}
-        if (iconvflag == 1) {invQual = invCode1;}
-        if (fabs(bLos) - fabs(bTotal * cos(bIncl * RADSINDEG)) > pixThreshold) {pixQual = pixCode1;}
-        if (stokesQU   < quThreshold)  {quQual = quCode1;}
-        if (fabs(bLos) < losThreshold) {vQual  = vCode1;}
-        FinalQualMap[iData] = invQual | pixQual | quQual | vQual | missQual;
-
+// compute the noise level
+        float sigmaLP = 0.0, sigmaV = 0.0;
+        float Qall = 0.0, Uall = 0.0, varQUVall = 0.0, LP = 0.0, Vall = 0.0;
+        Qall = stokesQ;
+        Uall = stokesU;
+        Vall = stokesV;
+        LP = sqrt(Qall * Qall + Uall * Uall);
+        varQUVall = quvScale * quvScale * stokesI;
+        sigmaLP = sqrt(varQUVall);
+        sigmaV = sqrt(varQUVall);
+//end of noise computation
+        if (bInvFlag == 2) invQual = invCode2;
+        if (bInvFlag == 3) invQual = invCode3;
+        if (bInvFlag == 4) invQual = invCode4;
+        if (bInvFlag == 5) invQual = invCode5;
+        if (bInvFlag == 1) invQual = invCode1;
+        if ((fabs(bLos) - fabs(bTotal * cos(bIncl * RADSINDEG)) > pixThreshold)) pixQual = pixCode1;
+        if (LP < sigmaLP) quQual = quCode1;
+        if (Vall < sigmaV) vQual = vCode1;
+        if (fabs(bLos) < losThreshold) blosQual = blosCode1;
+        FinalQualMap[iData] = invQual | pixQual | quQual | vQual | blosQual | missQual;
         if ((pixQual == 0) && (invQual == 0))
         {
-          if ((vQual != 0) && (quQual == 0)) {FinalConfidMap[iData] = 1;} // neutral line or other places where only one
-          if ((vQual == 0) && (quQual != 0)) {FinalConfidMap[iData] = 1;} // component is strong. 1 may be as good as 0.
-          if ((vQual != 0) && (quQual != 0)) {FinalConfidMap[iData] = 2;}
+          if ((vQual != 0) && (quQual == 0) && (blosQual == 0)) FinalConfidMap[iData] = 1; // neutral line or other places where only one
+          if ((vQual == 0) && (quQual != 0) && (blosQual == 0)) FinalConfidMap[iData] = 1; // component is strong. 1 may be as good as 0.
+          if ((vQual == 0) && (quQual == 0) && (blosQual != 0)) FinalConfidMap[iData] = 1;
+          if ((vQual != 0) && (quQual != 0) && (blosQual == 0)) FinalConfidMap[iData] = 2; // neutral line or other places where only one
+          if ((vQual == 0) && (quQual != 0) && (blosQual != 0)) FinalConfidMap[iData] = 2; // component is strong. 2 may be as good as 0.
+          if ((vQual != 0) && (quQual == 0) && (blosQual != 0)) FinalConfidMap[iData] = 2;
+          if ((vQual != 0) && (quQual != 0) && (blosQual != 0)) FinalConfidMap[iData] = 3;
         }
-        if ((pixQual == 0) && (invQual != 0)){FinalConfidMap[iData] = 3;}
-        if  (pixQual != 0)                   {FinalConfidMap[iData] = 4;}
+        if ((pixQual == 0) && (invQual != 0)) FinalConfidMap[iData] = 4;
+        if (pixQual != 0) FinalConfidMap[iData] = 5;
       }
-    }
-
+    } // end for-loop
   } // end if mpi_rank is zero
   MPI_Barrier(MPI_COMM_WORLD);
 #endif // end if CONFINDX is 1 or not
@@ -2477,7 +2473,7 @@ This is done inside the FORTRAN code, in invert.f90
       {
         int   iqm = FinalQualMap[n];
         int   inan= nan_map[n];
-        if ((inan != 0) && (!isnan(iqm)) && (iqm > 0)){FinalQualMap[n]=FinalQualMap[n]+0x00000001;}// turn on rightmost bit, this may be overwritten later.
+//        if ((inan != 0) && (!isnan(iqm)) && (iqm > 0)){FinalQualMap[n]=FinalQualMap[n]+0x00000001;}// turn on rightmost bit, this may be overwritten later.
       }
     }// end of scope limiter
 
@@ -2937,7 +2933,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.4 2011/05/31 22:26:35 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.5 2011/06/03 21:24:27 keiji Exp $");}
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- by Sebastien (1), filter profile etc.---------------------------- */
@@ -3499,28 +3495,3 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 
 /* ----------------------------- end of this file ----------------------------- */
-/* --------------------------------------------
-: voigt.f,v 1.3 2011/05/31 22:23:47 keiji Exp 
-: cons_param.f90,v 1.2 2011/05/31 22:23:54 keiji Exp 
-: filt_init.f90,v 1.3 2011/05/31 22:24:00 keiji Exp 
-: filt_param.f90,v 1.3 2011/05/31 22:24:06 keiji Exp 
-: forward.f90,v 1.3 2011/05/31 22:24:12 keiji Exp 
-: free_init.f90,v 1.2 2011/05/31 22:24:18 keiji Exp 
-: free_memory.f90,v 1.2 2011/05/31 22:24:23 keiji Exp 
-: invert.f90,v 1.5 2011/05/31 22:24:33 keiji Exp 
-: inv_init.f90,v 1.2 2011/05/31 22:24:38 keiji Exp 
-: inv_param.f90,v 1.2 2011/05/31 22:24:44 keiji Exp 
-: inv_utils.f90,v 1.3 2011/05/31 22:24:49 keiji Exp 
-: line_init.f90,v 1.2 2011/05/31 22:24:54 keiji Exp 
-: line_param.f90,v 1.2 2011/05/31 22:24:59 keiji Exp 
-: ran_mod.f90,v 1.2 2011/05/31 22:25:04 keiji Exp 
-: svbksb.f90,v 1.2 2011/05/31 22:25:09 keiji Exp 
-: svdcmp.f90,v 1.2 2011/05/31 22:25:14 keiji Exp 
-: svd_init.f90,v 1.2 2011/05/31 22:25:19 keiji Exp 
-: svd_param.f90,v 1.2 2011/05/31 22:25:25 keiji Exp 
-: voigt_data.f90,v 1.2 2011/05/31 22:25:31 keiji Exp 
-: voigt_init.f90,v 1.2 2011/05/31 22:25:36 keiji Exp 
-: voigt_taylor.f90,v 1.3 2011/05/31 22:25:47 keiji Exp 
-: wave_init.f90,v 1.2 2011/05/31 22:25:52 keiji Exp 
-: wfa_guess.f90,v 1.2 2011/05/31 22:25:57 keiji Exp 
- -------------------------------------------- */
