@@ -145,7 +145,7 @@ ModuleArgs_t module_args[] =
     {ARG_INT, "NFLAG", "1", "Filling for north pole: 1 for yes, 0 for no."},
     {ARG_INT, "SFLAG", "1", "Filling for south pole: 1 for yes, 0 for no."},
     {ARG_INT, "VERB", "1", "Level of verbosity: 0=errors/warnings; 1=all messages"},
-    {ARG_INT, "ORDER", "3", "Highest power of polynomials."},
+    {ARG_INT, "ORDER", "7", "Highest power of polynomials."},
     {ARG_END}
 };
 
@@ -155,7 +155,10 @@ char *synop_keys[] = {"TELESCOP", "INSTRUME", "WAVELNTH", "BUNIT", "CONTENT", "H
                       "CUNIT1", "CUNIT2", "CRDER1", "CRDER2", "CSYSER1", "CSYSER2", "WCSNAME", 
                       "T_REC", "T_REC_epoch", "T_REC_step", "T_REC_unit", "CADENCE", "DATASIGN", "T_OBS", "T_START", "T_STOP", "T_ROT", "T_EARTH", 
                       "CARRTIME", "B0_ROT", "B0_FRST", "B0_LAST", "EARTH_B0", "LON_FRST", "LON_LAST", "LON_STEP", "W_OFFSET", "W_WEIGHT", 
-                      "MAG_NUM", "MAG_FRST", "MAG_LAST", "MAG_ROT", "HWNWIDTH", "EQPOINTS", "CARSTRCH", "DIFROT_A", "DIFROT_B", "DIFROT_C"};
+                      "MAG_NUM", "MAG_FRST", "MAG_LAST", "MAG_ROT", "HWNWIDTH", "EQPOINTS", "CARSTRCH", "DIFROT_A", "DIFROT_B", "DIFROT_C",
+                      "DSUN_OBS", "CRLN_OBS", "CRLT_OBS", "OBS_VR", "OBS_VN", "OBS_VW", "QUALITY", "MAPMMAX", "MAPLGMAX", "MAPLGMIN", "SINBDIVS",
+                      "MAPBMAX", "MAPRMAX", "LGSHIFT", "INTERPO", "MCORLEV", "MOFFSET", "FRTIMWDN", "FRAVEPNT", "FRWINDOW", "SYNDRORA",
+                      "SYNDRO_A", "SYNDRO_B", "SYNDRO_C", "HWNWIDTH", "EQPOINTS", "OSYNDR_A", "OSYNDR_B", "OSYNDR_C"};
 
 int DoIt(void)
 {
@@ -372,6 +375,7 @@ int DoIt(void)
     	    drms_setkey_double(outRec, "DATASKEW", dat_skew);
     	    drms_setkey_double(outRec, "DATAKURT", dat_kurt);
     	}
+    	drms_copykey(outRec, inRec, "T_REC");
     	
     	/* Result writing */
         status = drms_segment_write(outSeg, outArray, 0);
