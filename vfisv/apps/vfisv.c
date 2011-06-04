@@ -2342,10 +2342,10 @@ This is done inside the FORTRAN code, in invert.f90
       int    m;
       for (m = 0; m < NUM_LAMBDA_FILTER; m++)
       {
-        stokesI = stokesI + data[iData +(m+NUM_LAMBDA_FILTER*0)*imgpix];
-        stokesQ = stokesQ + data[iData +(m+NUM_LAMBDA_FILTER*1)*imgpix];
-        stokesU = stokesU + data[iData +(m+NUM_LAMBDA_FILTER*2)*imgpix];
-        stokesV = stokesV + data[iData +(m+NUM_LAMBDA_FILTER*3)*imgpix];
+        stokesI = stokesI +      data[iData +(m+NUM_LAMBDA_FILTER*0)*imgpix];
+        stokesQ = stokesQ +      data[iData +(m+NUM_LAMBDA_FILTER*1)*imgpix];
+        stokesU = stokesU +      data[iData +(m+NUM_LAMBDA_FILTER*2)*imgpix];
+        stokesV = stokesV + fabs(data[iData +(m+NUM_LAMBDA_FILTER*3)*imgpix]);
       }
 //      stokesQU = sqrt(stokesU*stokesU + stokesQ*stokesQ);
 
@@ -2933,7 +2933,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.5 2011/06/03 21:24:27 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.6 2011/06/04 01:14:40 keiji Exp $");}
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- by Sebastien (1), filter profile etc.---------------------------- */
