@@ -2933,7 +2933,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.6 2011/06/04 01:14:40 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.7 2011/06/06 18:24:52 keiji Exp $");}
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- by Sebastien (1), filter profile etc.---------------------------- */
@@ -3495,3 +3495,28 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 
 /* ----------------------------- end of this file ----------------------------- */
+/* --------------------------------------------
+: voigt.f,v 1.3 2011/05/31 22:23:47 keiji Exp 
+: cons_param.f90,v 1.2 2011/05/31 22:23:54 keiji Exp 
+: filt_init.f90,v 1.3 2011/05/31 22:24:00 keiji Exp 
+: filt_param.f90,v 1.3 2011/05/31 22:24:06 keiji Exp 
+: forward.f90,v 1.3 2011/05/31 22:24:12 keiji Exp 
+: free_init.f90,v 1.2 2011/05/31 22:24:18 keiji Exp 
+: free_memory.f90,v 1.2 2011/05/31 22:24:23 keiji Exp 
+: invert.f90,v 1.5 2011/05/31 22:24:33 keiji Exp 
+: inv_init.f90,v 1.2 2011/05/31 22:24:38 keiji Exp 
+: inv_param.f90,v 1.2 2011/05/31 22:24:44 keiji Exp 
+: inv_utils.f90,v 1.3 2011/05/31 22:24:49 keiji Exp 
+: line_init.f90,v 1.2 2011/05/31 22:24:54 keiji Exp 
+: line_param.f90,v 1.2 2011/05/31 22:24:59 keiji Exp 
+: ran_mod.f90,v 1.2 2011/05/31 22:25:04 keiji Exp 
+: svbksb.f90,v 1.2 2011/05/31 22:25:09 keiji Exp 
+: svdcmp.f90,v 1.2 2011/05/31 22:25:14 keiji Exp 
+: svd_init.f90,v 1.2 2011/05/31 22:25:19 keiji Exp 
+: svd_param.f90,v 1.2 2011/05/31 22:25:25 keiji Exp 
+: voigt_data.f90,v 1.2 2011/05/31 22:25:31 keiji Exp 
+: voigt_init.f90,v 1.2 2011/05/31 22:25:36 keiji Exp 
+: voigt_taylor.f90,v 1.3 2011/05/31 22:25:47 keiji Exp 
+: wave_init.f90,v 1.2 2011/05/31 22:25:52 keiji Exp 
+: wfa_guess.f90,v 1.2 2011/05/31 22:25:57 keiji Exp 
+ -------------------------------------------- */
