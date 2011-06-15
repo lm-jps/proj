@@ -80,7 +80,7 @@ nm=nm[fsn-fsn[0]]
 
 if (nfiles-1) ne (max(long(fsn))-min(long(fsn))) then begin & print, 'missing image' & stop & endif
 
-stop
+
 
 nm=reform(nm, n_focpos, n_pos)
 
