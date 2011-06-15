@@ -58,7 +58,7 @@ endelse
 spawn, 'show_info -q ds="'+series_string+'['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d][?HFTSACID = '+ftsstring+'?][?CAMERA='+string(cam, format='(i1.1)')+'?]" key=FSN,SAT_Y0,SAT_Z0,HCFTID,RSUN_LF,HCAMID > test.txt'
 
  
-ll=fltarr(6, nf)
+ll=dblarr(6, nf)
 openr,1,'test.txt'
 readf,1,ll
 close,1
@@ -80,7 +80,7 @@ nm=nm[fsn-fsn[0]]
 
 if (nfiles-1) ne (max(long(fsn))-min(long(fsn))) then begin & print, 'missing image' & stop & endif
 
-
+stop
 
 nm=reform(nm, n_focpos, n_pos)
 
