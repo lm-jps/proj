@@ -42,6 +42,9 @@
 #
 #  2. Point a browser at http://jsoc.stanford.edu/ajax/exportdatatest.html and export something.
 
+use FileHandle;
+use Fcntl ':flock';
+
 my($kINTERNALFLAG) = "/home/jsoc/exports/keep_running";
 my($kWEBFLAG) = "/home/jsoc/exports/keep_running_web";
 my($kTESTFLAG) = "/home/jsoc/exports/keep_running_test";
@@ -79,6 +82,7 @@ my($dbuser) = "production";
 my($binpath);
 my($manage) = "jsoc_export_manage";
 my($logfile);
+my($lckfh);
 
 while ($arg = shift(@ARGV))
 {
@@ -155,10 +159,17 @@ while ($arg = shift(@ARGV))
 #}
 
 # Don't run if somebody is already managing the export
-if (-e $runningflag)
+$lckfh = FileHandle->new(">$runningflag.lck");
+unless (flock($lckfh, LOCK_EX|LOCK_NB)) 
 {
-    die "Can't manage export; another process is already managing it.\n";
+   print "$0 is already running. Exiting.\n";
+   exit(1);
 }
+
+#if (-e $runningflag)
+#{
+#    die "Can't manage export; another process is already managing it.\n";
+#}
 
 if (defined($binpath))
 {
@@ -188,7 +199,7 @@ while (1)
 {
     print LOG `$binpath/$manage JSOC_DBHOST="$dbhost"`;
 #    print "running $binpath/$manage JSOC_DBHOST=\"$dbhost\"\n";
-    if (-e $runningflag) 
+    if (KeepRunning($runningflag))
     {
         sleep(2);
     }
@@ -199,3 +210,32 @@ while (1)
         exit(0);
     }
 }
+
+# release the exclusive file lock
+flock($lckfh, LOCK_UN);
+$lckfh->close;
+
+# END
+sub KeepRunning
+{
+   my($file) = $_[0];
+   my($fexists);
+   my($iownit);
+   my($line);
+   
+   $fexists = (-e $file);
+   if ($fexists)
+   {
+      if (open(FLFILE, "<$file"))
+      {
+         $line = <FLFILE>;
+         chomp($line);
+         $iownit = ($line == $$);
+         close(FLFILE);
+      }
+   }
+
+   return $fexists && $iownit;
+}
+
+__DATA__
