@@ -134,6 +134,9 @@
  *     U) May 31
  *        (1) Combined this wrapper with RCE's latest codes.
  *            This associates with changes of argument of void function filt_init_()
+ *     V June 6
+ *        (1) Add one choice to host multiple HARP maps for one T_REC.
+ *            This choice be controlled with MULTHARP. 
  *
  * ------------------------------------------------------------------------------------------------------ */
 
@@ -193,13 +196,17 @@
 
 /* Use HARP mask data.
  * Pixel size of HARP map is NOT necessarily same as the Stokes.
- * Output data pixel size will be same as the HARP bitmap size.
+ * If MULTHARP is 1, output data pixel size will be same as the Stokes (typically 4k x 4k).
+ * If MULTHARP is not 1, then the output data size will be HARP bitmap size.
  * As of May 24, 2011, only one of MASKPTCH and HARPATCH can be 1.
  * As of May 24, 2011, only one of RECTANGL and HARPATCH can be 1. */
 #define HARPATCH 0
 /* Which, blob or rectangle of HARP region, will be processed.
  * 1 for blob. 0 (rectangle) will be default. */
 #define HARPBLOB 0
+/* Importing multiple HARP at one instant.
+ * If 0, only one HARP specified HARPNUM primekey */
+#define MULTHARP 1
 
 /* Set 1 to enable to fetch the (previous) existing data through JSOC-DRMS as better initial guess.
  * So for, not used, nor finalized.
@@ -250,7 +257,11 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,  "in2", "hmi.ME_720s[2010.08.01_12:00:00_TAI]", "reference inversion results"},
 #endif
 #if HARPATCH == 1
+#if MULTHARP == 1
+  {ARG_STRING,  "in3", "su_xudong.test_mharp[][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"}, // without specific HARPnum.
+#else
   {ARG_STRING,  "in3", "su_xudong.test_mharp[12][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"},
+#endif
 #endif
 #if MASKPTCH == 1
   {ARG_STRING,  "in3", "su_xudong.mask4inv[2010.08.01_12:12:00_TAI]", "some masking bitmap data"},
@@ -635,7 +646,7 @@ int DoIt (void)
  * some part must be different from full-disk masking data.
  * Here four variables, xleftbot, yleftbot, xwidth and ywidth,
  * will be modified in accordance with the keywords info. of HARP data */
-#if HARPATCH == 1
+#if HARPATCH == 1 && MULTHARP != 1
     { /* limit scope for some DRMS variables */
       char segname[100]; /* arbitrary long string... */
       char *inData; /* I-O pointer */
@@ -693,7 +704,7 @@ int DoIt (void)
         drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
       }
     }  /* end of scope for some DRMS variables */
-#endif /* end if HARPATCH is 1 */
+#endif /* end if HARPATCH is 1 and  MULTHARP is NOT 1 */
 
 #if TAKEPREV == 1
     { /* limit scope for some DRMS variables */
@@ -762,9 +773,6 @@ int DoIt (void)
     imgbytes = imgpix * sizeof (float);
     nvar = wlct * spct;
 
-#if MASKPTCH == 1 || HARPATCH == 1
-    if (iexistpatchmask==0){patchmask  = (int  *)malloc (sizeof (int)  * imgpix);} /* allocate anyway */
-#endif
 #if TAKEPREV == 1
     if (iexistprev==0){prevdata = (float *)malloc (sizeof (float) * imgpix * (paramct+Err_ct));} /* allocate anyway */
 #endif
@@ -859,6 +867,90 @@ int DoIt (void)
       crpixx = (float)cols * 0.5 + 0.5;
       crpixy = (float)rows * 0.5 + 0.5;
     }
+
+/* 2011 June 6 
+ * Here mask map has pixel size of 4k x 4k to host multi-HARP maps,
+ * The four variables, xleftbot, yleftbot, xwidth and ywidth be fixed at 0, 0, 4096 and 4096. */
+#if HARPATCH == 1 && MULTHARP == 1
+    patchmask  = (int  *)malloc (sizeof (int)  * imgpix); /* allocate same size as Stokes */
+    { /* limit scope for some DRMS variables */
+      int i;
+      for (i = 0; i < imgpix; i++){patchmask[i]=0;} // 0 means .. skip!
+      char segname[100]; /* arbitrary long string... */
+      char *inData; /* I-O pointer */
+      DRMS_Array_t     *inArray; /* add some DRMS variables within this scope */
+      DRMS_Segment_t   *inSeg;
+      DRMS_Record_t    *inRec;
+      DRMS_RecordSet_t *inRS;
+      int nnx, nny;
+      int colsL, rowsL, imgpixL;  // MIND that the HARP will not be of 4k x 4k.
+
+      if (verbose) printf(" now loading HARP-data : %s\n",indsdesc3);
+      inRS = drms_open_records (drms_env, indsdesc3, &status); /*  open input record_set  */
+/* this case, never say die.... just turn on flag */
+      if ((status) || ((rec_ct = inRS->n) == 0))
+      {
+        iexistpatchmask = 0;
+        printf(" skip, no data series : %s\n",indsdesc3);
+      }
+      else
+      {
+	rec_ct = inRS->n; // redo .. just in case.
+        printf(" There are %d HARP for %s\n",rec_ct, indsdesc3);
+        iexistpatchmask = 1;
+        for (rn = 0; rn < rec_ct; rn++)
+        {
+          inRec = inRS->records[rn];
+          char *Resname[] = {"bitmap"};
+          sprintf(segname,"%s",Resname[0]);
+          inSeg = drms_segment_lookup(inRec,segname);
+          colsL = inSeg->axis[0];
+          rowsL = inSeg->axis[1];
+          imgpixL = colsL * rowsL;
+          int *patchmaskL;
+          patchmaskL = (int *)malloc (sizeof (int) * imgpixL * 1);
+          int iseg;
+          for (iseg = 0; iseg < 1; iseg++) // maybe just one segment...
+          {
+            sprintf(segname,"%s",Resname[iseg]);
+            if (verbose) printf(" now loading segment : %-20s",segname);
+            inSeg = drms_segment_lookup(inRec,segname);
+            inArray= drms_segment_read(inSeg, DRMS_TYPE_CHAR, &status);
+            if (status) DIE("Cant read segment!\n");
+            inData =(char *)inArray->data;
+            nnx = inArray->axis[0]; // may be same as colsL
+            nny = inArray->axis[1]; // may be same as rowsL
+            if (verbose) {printf(" Nx Ny are = %d %d\n",  nnx, nny);}
+            for (n = 0; n < nnx * nny; n++){patchmaskL[n+iseg*imgpixL]=inData[n];} // silly but safe way to pass data
+            drms_free_array(inArray); // without this, well, things go mad.
+          }
+          int xleftbotL, yleftbotL;
+          xleftbotL = drms_getkey_int(inRec,"CRPIX1",&status);
+          yleftbotL = drms_getkey_int(inRec,"CRPIX2",&status);
+          int i2, j2, n2, m2;
+          for (i2 = 0; i2 < colsL; i2++)
+          {
+            for (j2 = 0; j2 < rowsL; j2++)
+            {
+              n2 = j2 * colsL + i2;
+              m2 =(j2 + yleftbotL + 1) * cols + (i2 + xleftbotL + 1);
+              patchmask[m2] = 600; // here assume non-blob ... some larger number than 4.
+//              patchmask[m2] = patchmaskL[n2];
+          } }
+          free(patchmaskL);
+        }
+        drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
+      }
+      xwidth   = cols; // must be same as Stokes
+      yheight  = rows;
+      xleftbot = 0;
+      yleftbot = 0;
+    }  /* end of scope for some DRMS variables */
+#endif /* end if HARPATCH is 1 and  MULTHARP is 1 */
+
+#if MASKPTCH == 1 || HARPATCH == 1
+    if (iexistpatchmask==0){patchmask  = (int  *)malloc (sizeof (int)  * imgpix);} /* allocate anyway */
+#endif
 
 /* 2011 March 24, added by K.H. to try to get hmi.V_720s as initial guess */
 #if VLOSINIT == 1
@@ -1086,7 +1178,7 @@ int DoIt (void)
           (iy < yleftbot) ||
           (iy > yleftbot + yheight - 1)) {nan_map[n] = 3;}  // turn on flag to-be-skipped for being out-of-box
 #endif
-#if HARPATCH == 1
+#if HARPATCH == 1 && MULTHARP != 1
       if ((ix < xleftbot) ||
           (ix > xleftbot + xwidth  - 1) ||
           (iy < yleftbot) ||
@@ -1104,7 +1196,10 @@ int DoIt (void)
         if (patchmask[n2] < 4) {nan_map[n] = 4;} // check Xudong's definition .... may change without notice ...
       }
 #endif
-#endif // end if HARPATCH is 1
+#endif // end if HARPATCH is 1 and MULTHARP is NOT 1
+#if HARPATCH == 1 && MULTHARP == 1
+      if (patchmask[n] < 4){nan_map[n] = 4;} // mind that non-blob is assumed somewhere above.
+#endif // end if HARPATCH is 1 and MULTHARP is NOT 1
 #if MASKPTCH == 1
       if (patchmask[n] < 2){nan_map[n] = 4;} // this line statement strongly depends on Xudong's definition.
 #endif
@@ -2933,7 +3028,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.7 2011/06/06 18:24:52 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.8 2011/06/20 23:03:43 keiji Exp $");}
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- by Sebastien (1), filter profile etc.---------------------------- */
