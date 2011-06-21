@@ -110,7 +110,8 @@ window.onbeforeunload = function ()
    }
 
 // var SeriesList = "";
-// var SeriesInfo = "";
+var SeriesInfo;
+var RecnumQueryLimit = 250000;
 var Host = location.host;
 var CurrentSeries = 0;
 var SeriesName = "";
@@ -563,12 +564,14 @@ function GetSeries()
 // info and reset all associated references.
 // If mode==2 then the section 3 series name becomes the new SeriesName
 // and info for it will be found and displayed.
-// If mode==3, only update the first and last record information
+// If mode==3 then the section 3 series name becomes the new SeriesName
+// and info for it will be found and displayed and RSCount will be started.
+// If mode==4, only update the first and last record information
 
 function PickSeries(mode)
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  if (mode < 3) CleanSeriesPick();
+  if (mode < 4) CleanSeriesPick();
   if (mode == 0)
     {
     CurrentSeries = $("SeriesSelect").selectedIndex;
@@ -594,7 +597,7 @@ function PickSeries(mode)
       {
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
-      var SeriesInfo = response.evalJSON();
+      SeriesInfo = response.evalJSON();
       if (SeriesInfo.status == 1)
         {
         $("FirstLastPlace").innerHTML = "No Matching Series Found";
@@ -606,7 +609,7 @@ function PickSeries(mode)
         {
         var i;
         // Get series descriptive note and display
-        if (mode < 3)
+        if (mode < 4)
           {
           $("Series_Info_Place").innerHTML = SeriesInfo.note;
   
@@ -747,8 +750,10 @@ function PickSeries(mode)
   	   links = links + "</table><P>";
   	   }
   
-  	// Place structure table on screen
+  	  // Place structure table on screen
           $("SSPlace").innerHTML =  keywords + "<BR>" + segments + "<BR>" + links;
+          // cleanup pending count place
+          $("RSCount_Place").innerHTML = "";
           }
 
 	// Place first and last record info on screen
@@ -762,6 +767,7 @@ function PickSeries(mode)
         // Done displaying detailed information for this series
         }
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+      if (mode==3) GetRSCount();
       },
     onFailure: function() { alert('Something went wrong with series structure request'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
@@ -811,11 +817,24 @@ function GetRSCount()
     }
   if (thisSeriesName != SeriesName)
     {
-    $("RSCount_Place").innerHTML = "Getting series information - wait...";
     SeriesName = thisSeriesName;
-    PickSeries(2);
+    PickSeries(3);
+    $("RSCount_Place").innerHTML = "Getting series information - wait";
+    return;
     }
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  if (SeriesInfo.Interval.MaxRecnum > RecnumQueryLimit)
+    {
+    posbracket = $("RecordSet").value.indexOf("[");
+    posRbracket = $("RecordSet").value.lastIndexOf("]");
+    if (posRbracket == posbracket+1 || (posbracket == -1 && posRbracket == -1))
+      {
+      alert("This series, "+thisSeriesName+", has many records, you must specify an explicit " +
+            "clause or clauses in [...] to limit the number of records. Defaulting to [$]");
+      $("RecordSet").value = thisSeriesName + '[$]';
+      // return;
+      }
+    }
   $("RSCount_Place").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   askedCount = 1;

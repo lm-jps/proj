@@ -77,6 +77,20 @@ var HgSeriesList;
 var HgSeriesSelected = 0;
 var HgTracked = 0;
 
+function OnEnterKey(evt,action)
+  {
+  var keynum;
+  var keychar;
+  if(window.event) // IE
+    keynum = evt.keyCode;
+  else if(evt.which) // Netscape/Firefox/Opera
+    keynum = evt.which;
+  if(keynum == 13)
+    action();
+  keychar = String.fromCharCode(keynum);
+  return keychar;
+  }
+
 function NotifyProcessingCode()
   {
   // called when RecordSet is changed.
@@ -195,6 +209,10 @@ function getargs()
     exportargs = exportargs.substr(1);
     exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
     args = exportargs.toQueryParams();
+    if (args.ds == undefined)
+      {
+      args.ds = "";
+      }
     args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
     state=1;
     Cookie.setData("state",state);
@@ -443,6 +461,23 @@ function GetSeriesList(filter)
 
 function GetRSCount()
   {
+// XXXXX
+  var posbracket = RecordSet.indexOf("[");
+  var posRbracket = RecordSet.lastIndexOf("]");
+  if (posbracket == -1)
+    {
+    if (posRbracket == -1)
+      {
+      RecordSet = RecordSet + '[$]';
+      $("ExportRecordSet").value = RecordSet;
+      }
+    else
+      {
+      $("RSCountPlace").innerHTML = "ERROR - missing left bracket - [";
+      return;
+      }
+    }
+// XXXXX
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCountPlace").innerHTML = "Getting count - wait...";
   RecordCount = -1;
@@ -1293,7 +1328,7 @@ access the data.
   
     <TR ID="RecordSetRow">
       <TD style="width:10em" >RecordSet</TD><TD><SPAN ID="RecordSetHelp" class="tip">?</SPAN></TD><TD colspan=2>
-        <input id="ExportRecordSet" type="text" name="ds" value="" onChange="ExportNewRS();" > </TD>
+        <input id="ExportRecordSet" type="text" name="ds" value="" onkeydown="return OnEnterKey(event,ExportNewRS);"> </TD>
     </TR>
   
     <TR ID="RecordLimitRow">
