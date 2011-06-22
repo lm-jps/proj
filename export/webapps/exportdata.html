@@ -49,7 +49,6 @@ var Host = location.host;
 var Internal = 0;
 var SeriesName;
 var RequestID;
-var RecordSet;
 var RecordLimit;
 var RecordCount;
 var ExportRecordSetOK;
@@ -187,6 +186,8 @@ function getargs()
       exportargs = exportargs.substr(1);
       exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
       args = exportargs.toQueryParams();
+      if (args.ds == undefined)
+        args.ds = "";
       args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
       }
     else
@@ -210,9 +211,7 @@ function getargs()
     exportargs = exportargs.replace(/\?/g,"QUESTIONMARK");
     args = exportargs.toQueryParams();
     if (args.ds == undefined)
-      {
       args.ds = "";
-      }
     args.ds = args.ds.replace(/QUESTIONMARK/g, "?");
     state=1;
     Cookie.setData("state",state);
@@ -230,8 +229,7 @@ function OnLoadInit()
   args = getargs();
   if (args.ds)
     {
-    RecordSet = args.ds;
-    $("ExportRecordSet").value = RecordSet;
+    $("ExportRecordSet").value = args.ds;
     needcount = 1;
     }
   if (args.id) RequestID = args.id;
@@ -357,8 +355,7 @@ function ToggleHelp()
 
 function FileUploadCleanup()
   {
-  RecordSet = "";
-  $("ExportRecordSet").value = RecordSet;
+  $("ExportRecordSet").value = "";
   ExportRecordSetOK = 0;
   ExportFromFileList = 0;
   $("FileUploadCheckbox").checked = 0;
@@ -375,8 +372,7 @@ function FileUploadWanted()
   {
   if (ExportFromFileList == 0)
     {
-    RecordSet = "*file*";
-    $("ExportRecordSet").value = RecordSet;
+    $("ExportRecordSet").value = "*file*";
     ExportRecordSetOK = 1;
     ExportFromFileList = 1;
     $("FileUploadCheckbox").checked = 1;
@@ -462,14 +458,13 @@ function GetSeriesList(filter)
 function GetRSCount()
   {
 // XXXXX
-  var posbracket = RecordSet.indexOf("[");
-  var posRbracket = RecordSet.lastIndexOf("]");
+  var posbracket = $("ExportRecordSet").value.indexOf("[");
+  var posRbracket = $("ExportRecordSet").value.lastIndexOf("]");
   if (posbracket == -1)
     {
     if (posRbracket == -1)
       {
-      RecordSet = RecordSet + '[$]';
-      $("ExportRecordSet").value = RecordSet;
+      $("ExportRecordSet").value = $("ExportRecordSet").value + '[$]';
       }
     else
       {
@@ -481,6 +476,7 @@ function GetRSCount()
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCountPlace").innerHTML = "Getting count - wait...";
   RecordCount = -1;
+  var RecordSet = $("ExportRecordSet").value;
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
@@ -517,6 +513,7 @@ function GetDefaultFormat()
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCountPlace").innerHTML = "Getting count - wait...";
   RecordCount = -1;
+  var RecordSet = $("ExportRecordSet").value;
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
@@ -605,7 +602,6 @@ function ExportNop()
 
 function ExportNewRS()
   {
-  RecordSet = $("ExportRecordSet").value;
   GetRSCount();
   GetDefaultFormat();
   NotifyProcessingCode();
@@ -894,6 +890,7 @@ function GetExport()
     var protocolparam =  $("ExportProtocolHidden").value;
     if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
       protocolparam = protocolparam + "," + $("ExportCompress").value;
+    var RecordSet = $("ExportRecordSet").value;
     var exportparameters = new Hash( {"op" : $("ExportOpID").value,
                  		      "ds" : RecordSet, 
                  		      "process" :  ExportProcessingArgs,
@@ -913,7 +910,7 @@ function GetExport()
     }
   else // ExportReadyOK == 2
     {
-    $("ExportRecordSet").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+    $("ExportRecordSet").value = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     ExportRecordSetOK = 0;
     alert("Export Request Complete, Please change RecordSet to make another request");
     return;
