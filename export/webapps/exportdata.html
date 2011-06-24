@@ -910,7 +910,7 @@ function GetExport()
     }
   else // ExportReadyOK == 2
     {
-    $("ExportRecordSet").value = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+    $("ExportRecordSet").value = "";
     ExportRecordSetOK = 0;
     alert("Export Request Complete, Please change RecordSet to make another request");
     return;
@@ -1048,7 +1048,8 @@ function ProcessExportResponse(response)
     ExportReadyOK = 1;
     $("ExportButton").value = "Request Export Status";
     $("ExportButton").style.backgroundColor = "#D8D8D8";
-    $("ExportStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
+    //  XXXX FIX $("ExportStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
+    $("ExportStatus").innerHTML = "Processing, size estimate = " + data.size + " MB";
     RequestID = data.requestid;
     $("RequestIdPlace").innerHTML = data.requestid;
     $("StatusRequestID").value = data.requestid;
@@ -1209,7 +1210,9 @@ function GetStatus()
           $("StatusButtonMsg").innerHTML = "Export request waiting for processing";
         $("StatusButton").value = "Submit Status Request";
         $("StatusButton").style.backgroundColor = "#D8D8D8";
-        $("StatusStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
+        // XXXXX FIX $("StatusStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
+        var waiting = 10 - data.wait;
+        $("StatusStatus").innerHTML = "Processing, size estimate = " + data.size + " MB, " + waiting + " seconds since request";
         $("RequestIdPlace").innerHTML = data.requestid;
         $("ReExportDiv").style.display = "none";
         state = 1;
@@ -1337,7 +1340,7 @@ access the data.
     <TR ID="RecordCountRow">
       <TD>Record Count</TD><TD><SPAN ID="RecordCountHelp" class="tip">?</SPAN></TD>
       <TD><span id="RSCountPlace" style="width:10em;background-color:#FFF8DC"></span></TD>
-      <TD><input id="CountButton" type="button" value="Recount" onClick="GetRSCount();" >&nbsp;
+      <TD><input id="CountButton" type="button" value="Recount" onClick="ExportNewRS();" >&nbsp;
           Limit for AIA to about 15,000 and for HMI about 30,000 in each request.</TD>
     </TR>
   
