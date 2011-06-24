@@ -224,23 +224,27 @@ function getargs()
 function OnLoadInit()
   {
   var needcount = 0;
-  Cookie.init({name:EXPORTDATA});
+  Cookie.init({name:EXPORTDATA, expires:5});
   initVars();
+  state = 0;
+  Cookie.setData("state",state);
   args = getargs();
   if (args.ds)
     {
     $("ExportRecordSet").value = args.ds;
     needcount = 1;
     }
-  if (args.id) RequestID = args.id;
+  if (args.id)
+    {
+    RequestID = args.id;
+    }
   if (args.limit) 
     {
     $("ExportRecordLimit").value = args.limit;
     if (args.limit == "none") RecordLimit = 0;
     else RecordLimit = args.limit;
-    needcount = 1;
     }
-  if (needcount)
+  if (needcount && $("ExportRecordSet").value != "")
     {
     GetRSCount();
     GetDefaultFormat();
