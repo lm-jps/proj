@@ -328,7 +328,14 @@ sub AcquireLock
    my($gotlock);
    my($natt);
 
-   $$lckfh = FileHandle->new(">$path");
+   if (-e $path)
+   {
+      $$lckfh = FileHandle->new("<$path");
+   }
+   else
+   {
+      $$lckfh = FileHandle->new(">$path");
+   }
    $gotlock = 0;
 
    $natt = 0;
