@@ -857,7 +857,7 @@ function GetRSCount()
 	RecordCount = SummaryData.count;
 	$("RSCount_Place").innerHTML = SummaryData.count;
 	}
-      $("ExportRecordSetLimit").innerHTML = RecordLimit.value;
+      $("ExportRecordSetLimit").innerHTML = $("RecordLimit").value;
       $("ExportRecordSet").innerHTML = $("RecordSet").value;
       if (nsegsselected > 0)
         $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
@@ -1090,6 +1090,20 @@ function setgriddata(i,val)
   return i;
   }
 
+function report_lag(status, lag)
+  {
+  var getparameters = new Hash( {"ds" : $("RecordSet").value, "op" : "rs_list", "host" : Host, "status" : status, "lag" : lag });
+  if (MaxRecs != 0)
+    getparameters = getparameters.merge({"n": MaxRecs});
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_stats1',
+    {
+    method: 'get',
+    parameters: getparameters.toObject(),
+    onSuccess: function() {},
+    onFailure: function() { alert('Something went wrong with lag report'); },
+    });
+  }
+
 var RecordData;
 
 function GetKeyValues()
@@ -1149,6 +1163,8 @@ function GetKeyValues()
   $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
   $("FetchKeyValsButton").disabled = true;
   $("AbortKeyValsButton").show();
+  var StartTime = new Date()
+  $("requestTime").innerHTML = "";
   GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
@@ -1156,6 +1172,7 @@ function GetKeyValues()
 
     onSuccess: function(transport, json)
       {
+      var DoneTime = new Date()
       $("DisplayPlace").innerHTML = "Data received, processing ...";
       tabs.setSelectedItems([tabdisplay]); // show the display page.
       var response = transport.responseText || "no response text";
@@ -1316,6 +1333,9 @@ valuegrid.getCellTemplate().setStyle('border-left-width','1');
 	gridmade = 1;
         newwide();
         tabs.setSelectedItems([tabdisplay]); // show the display page.
+        var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
+        $("requestTime").innerHTML = ", Query time = " + tdiff + "s";
+        report_lag(RecordData.status,tdiff);
         }
       },
     onFailure: function() { alert('Something went wrong with series data request'); },
@@ -1504,8 +1524,8 @@ function Export_Recordset()
   Cookie.setData("state",0);
   if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
     $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-  $("ExportRecordSetLimit").innerHTML = RecordLimit.value;
-  var exportargs="ds="+$("ExportRecordSet").innerHTML  + "&limit=" + RecordLimit.value
+  $("ExportRecordSetLimit").innerHTML = $("RecordLimit").value;
+  var exportargs="ds="+$("ExportRecordSet").innerHTML  + "&limit=" + $("RecordLimit").value
   Cookie.setData("search",encodeURIComponent(exportargs));
   ExportWindow=window.open("http://" + Host + "/ajax/" + EXPORTDATA + ".html?" + encodeURIComponent(exportargs), "JSOC_Export");
   ExportWindow.window.focus();
@@ -1515,8 +1535,8 @@ function StartExportRequest()
   {
   if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
     $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
-    $("ExportRecordSetLimit").innerHTML = RecordLimit.value;
-  $("ExportRequestFrame").src = "http://" + Host + "/ajax/" + EXPORTDATA + ".html?ds="+$("ExportRecordSet").innerHTML  + "&limit=" + RecordLimit.value;
+    $("ExportRecordSetLimit").innerHTML = $("RecordLimit").value;
+  $("ExportRequestFrame").src = "http://" + Host + "/ajax/" + EXPORTDATA + ".html?ds="+$("ExportRecordSet").innerHTML  + "&limit=" + $("RecordLimit").value;
   }
 
 function ExportRequestStarted()
@@ -1546,6 +1566,7 @@ function ExportRequestStarted()
   <input id="TipsOnOffButton" type="button" value="Disable Help" onClick="ToggleHelp();" >
   &nbsp;&nbsp;<span id="AjaxBusy">0</span> Requests Pending
   <span id='systemWorking'>, Loading...</span>
+  <span id='requestTime'></span>
   <!-- <HR> -->
   <P>
 </DIV> <!-- end DIV header -->
