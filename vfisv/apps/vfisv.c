@@ -933,7 +933,8 @@ int DoIt (void)
             for (j2 = 0; j2 < rowsL; j2++)
             {
               n2 = j2 * colsL + i2;
-              m2 =(j2 + yleftbotL + 1) * cols + (i2 + xleftbotL + 1);
+              m2 =(j2 + yleftbotL - 1) * cols + (i2 + xleftbotL - 1);
+//              m2 =(j2 + yleftbotL + 1) * cols + (i2 + xleftbotL + 1);
               patchmask[m2] = 600; // here assume non-blob ... some larger number than 4.
 //              patchmask[m2] = patchmaskL[n2];
           } }
@@ -3028,7 +3029,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.8 2011/06/20 23:03:43 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.9 2011/06/28 19:02:35 keiji Exp $");}
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- by Sebastien (1), filter profile etc.---------------------------- */
