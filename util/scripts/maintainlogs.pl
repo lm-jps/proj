@@ -93,6 +93,8 @@ my($klsretention) = $headers[kLSRetention];
 my($klslastarch) = $headers[kLSLastArch];
 my($klsprocess) = $headers[kLSProcess];
 
+my(%fpaths);
+
 my($lckfh);
 my($gotlock);
 my($nolock);
@@ -331,6 +333,7 @@ sub AcquireLock
    if (-e $path)
    {
       $$lckfh = FileHandle->new("<$path");
+      $fpaths{fileno($$lckfh)} = $path;
    }
    else
    {
@@ -368,9 +371,20 @@ sub AcquireLock
 sub ReleaseLock
 {
    my($lckfh) = $_[0];
+   my($lckfn);
+   my($lckfpath);
+
+   $lckfn = fileno($$lckfh);
+   $lckfpath = $fpaths{$lckfn};
 
    flock($$lckfh, LOCK_UN);
    $$lckfh->close;
+
+   if (defined($lckfpath))
+   {
+      chmod(0664, $lckfpath);
+      delete($fpaths{$lckfn});
+   }
 }
 
 sub NoErr
