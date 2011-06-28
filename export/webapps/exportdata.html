@@ -426,10 +426,15 @@ function MakeFileUploadRequest()
 
 function uploadDone()
   { //Function will be called when iframe is loaded
+  var StartTime = new Date()
   if (uploadOndoneAction == 1)
     {
+    var DoneTime = new Date()
     var response = window.frames[0].document.getElementsByTagName("body")[0].innerHTML;
-    ProcessExportResponse(response);
+    var status = ProcessExportResponse(response);
+    var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
+    var op = "exp_upload";
+    report_lag(op,status,tdiff);
     uploadOndoneAction = 0;
     }
   }
@@ -461,7 +466,6 @@ function GetSeriesList(filter)
 
 function GetRSCount()
   {
-// XXXXX
   var posbracket = $("ExportRecordSet").value.indexOf("[");
   var posRbracket = $("ExportRecordSet").value.lastIndexOf("]");
   if (posbracket == -1)
@@ -476,11 +480,11 @@ function GetRSCount()
       return;
       }
     }
-// XXXXX
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCountPlace").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   var RecordSet = $("ExportRecordSet").value;
+  var StartTime = new Date()
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
@@ -488,6 +492,7 @@ function GetRSCount()
 
     onSuccess: function(transport, json)
       {
+      var DoneTime = new Date()
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status != 0)
@@ -506,9 +511,26 @@ function GetRSCount()
       $("ExportButton").value = "Submit Export Request";
       $("ExportButton").style.backgroundColor = "#D8D8D8";
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+      var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
+      var op = "rs_summary";
+      report_lag(op,status,tdiff);
       },
     onFailure: function() { alert('Something went wrong...'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+  }
+
+function report_lag(op, status, lag)
+  { 
+  var RecordSet = $("ExportRecordSet").value;
+  var RecordSet = $("ExportRecordSet").value;
+  var getparameters = new Hash( {"ds" : RecordSet, "op" : op, "host" : Host, "status" : status, "lag" : lag, "n" : RecordLimit });
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_stats1',
+    {
+    method: 'get',
+    parameters: getparameters.toObject(),
+    onSuccess: function() {},
+    onFailure: function() { alert('Something went wrong with lag report'); },
     });
   }
 
@@ -920,6 +942,7 @@ function GetExport()
     return;
     }
 
+  var StartTime = new Date()
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_FETCH,
     {
     method: 'post',
@@ -927,9 +950,13 @@ function GetExport()
 
     onSuccess: function(transport, json)
       {
+      var DoneTime = new Date()
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
-      ProcessExportResponse(response);
+      var status = ProcessExportResponse(response);
+      var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
+      var op = $("ExportOpID").value;
+      report_lag(op, status,tdiff);
       },
     onFailure: function()
       {
@@ -961,6 +988,7 @@ function GetReExport()
 			 	    "format" : "json",
                  		    "notify" : $("ReExportNotify").value });
 
+  var StartTime = new Date()
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_FETCH,
     {
     method: 'post',
@@ -968,9 +996,13 @@ function GetReExport()
 
     onSuccess: function(transport, json)
       {
+      var DoneTime = new Date()
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
-      ProcessExportResponse(response);
+      var status = ProcessExportResponse(response);
+      var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
+      var op = "exp_repeat";
+      report_lag(op,status,tdiff);
       },
     onFailure: function()
       {
@@ -1110,6 +1142,7 @@ function ProcessExportResponse(response)
       $("FileUploadInfoRow").style.display="table-row";
       }
     }
+  return(data.status);
   }
 
 function ClearStatus()
