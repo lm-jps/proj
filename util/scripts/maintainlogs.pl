@@ -521,14 +521,14 @@ sub DisplayTable
       # Print header
       $ptbuf = sprintf("%16s%16s%48s%48s%64s%16s%16s%32s%32s", $headers[kLogset], $headers[kLSBase], $headers[kLSPath], $headers[kLSTrash], $headers[kLSLock], $headers[kLSArchInt], $headers[kLSRetention], $headers[kLSLastArch], $headers[kLSProcess]);
       print "$ptbuf\n";
-      print "----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n";
+      print "--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n";
 
       if ($#$rrows >= 0)
       {
          foreach $row (@$rrows)
          {
             my($logset, $lsbase, $lspath, $lstrash, $lslockpath, $lsarchint, $lsretention, $lslastarch, $lsprocess) = @$row;
-            $ptbuf = sprintf("%16s%16s%48s%48s%64s%16s%16s%32s%32s", $logset, $lsbase, $lspath, defined($lstrash) ? $lstrash : "", defined($lslockpath) ? $lslockpath : "", $lsarchint, $lsretention, $lslastarch, $lsprocess);
+            $ptbuf = sprintf("%16s%16s%48s%48s%64s%16s%16s%32s%32s", $logset, $lsbase, $lspath, defined($lstrash) ? $lstrash : "", defined($lslockpath) ? $lslockpath : "", $lsarchint, $lsretention, $lslastarch, defined($lsprocess) ? $lsprocess : "");
             print "$ptbuf\n";
          }
       }
