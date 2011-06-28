@@ -1,4 +1,4 @@
-#! $Id: in_air_cal3.w,v 1.2 2007/11/30 22:16:20 arta Exp $
+#! $Id: in_air_cal3.w,v 1.3 2011/06/28 20:47:30 production Exp $
 #! $Name:  $
 #! Description: Standard Wavelength tuning table
 #  File created by:  J. Drake
@@ -442,3 +442,83 @@
 477   58   99    0   42  # cotune_744572 (20071024, air, 30C)
 478   61   93    0   90  # cotune_744572 (20071024, air, 30C)
 479   64   87    0   78  # cotune_744572 (20071024, air, 30C)
+500    6   58    0   82  # Cotune_100324 (on orbit)
+501    9   52    0   70  # Cotune_100324 (on orbit)
+502   12   46    0   58  # Cotune_100324 (on orbit)
+503   15   40    0  106  # Cotune_100324 (on orbit)
+504   18   34    0   94  # Cotune_100324 (on orbit)
+505   21   28    0   82  # Cotune_100324 (on orbit)
+506   24   82    0   70  # Cotune_100324 (on orbit)
+507   27   76    0   58  # Cotune_100324 (on orbit)
+508   30   70    0  106  # Cotune_100324 (on orbit)
+509   33   64    0   94  # Cotune_100324 (on orbit)
+510   36   58    0   82  # Cotune_100324 (on orbit)
+511   39   52    0   70  # Cotune_100324 (on orbit)
+512   42   46    0   58  # Cotune_100324 (on orbit)
+513   45   40    0  106  # Cotune_100324 (on orbit)
+514   48   34    0   94  # Cotune_100324 (on orbit)
+515   51   28    0   82  # Cotune_100324 (on orbit)
+516   54   82    0   70  # Cotune_100324 (on orbit)
+517   57   76    0   58  # Cotune_100324 (on orbit)
+518   60   70    0  106  # Cotune_100324 (on orbit)
+519   63   64    0   94  # Cotune_100324 (on orbit)
+520    7   56    0   78  # Cotune_100324 (on orbit). Shifted +1
+521   10   50    0   66  # Cotune_100324 (on orbit). Shifted +1
+522   13   44    0   54  # Cotune_100324 (on orbit). Shifted +1
+523   16   38    0  102  # Cotune_100324 (on orbit). Shifted +1
+524   19   32    0   90  # Cotune_100324 (on orbit). Shifted +1
+525   22   26    0   78  # Cotune_100324 (on orbit). Shifted +1
+526   25   80    0   66  # Cotune_100324 (on orbit). Shifted +1
+527   28   74    0   54  # Cotune_100324 (on orbit). Shifted +1
+528   31   68    0  102  # Cotune_100324 (on orbit). Shifted +1
+529   34   62    0   90  # Cotune_100324 (on orbit). Shifted +1
+530   37   56    0   78  # Cotune_100324 (on orbit). Shifted +1
+531   40   50    0   66  # Cotune_100324 (on orbit). Shifted +1
+532   43   44    0   54  # Cotune_100324 (on orbit). Shifted +1
+533   46   38    0  102  # Cotune_100324 (on orbit). Shifted +1
+534   49   32    0   90  # Cotune_100324 (on orbit). Shifted +1
+535   52   26    0   78  # Cotune_100324 (on orbit). Shifted +1
+536   55   80    0   66  # Cotune_100324 (on orbit). Shifted +1
+537   58   74    0   54  # Cotune_100324 (on orbit). Shifted +1
+538   61   68    0  102  # Cotune_100324 (on orbit). Shifted +1
+539   64   62    0   90  # Cotune_100324 (on orbit). Shifted +1
+540    5   60    0   86  # Cotune_100324 (on orbit). Shifted -1
+541    8   54    0   74  # Cotune_100324 (on orbit). Shifted -1
+542   11   48    0   62  # Cotune_100324 (on orbit). Shifted -1
+543   14   42    0  110  # Cotune_100324 (on orbit). Shifted -1
+544   17   36    0   98  # Cotune_100324 (on orbit). Shifted -1
+545   20   30    0   86  # Cotune_100324 (on orbit). Shifted -1
+546   23   84    0   74  # Cotune_100324 (on orbit). Shifted -1
+547   26   78    0   62  # Cotune_100324 (on orbit). Shifted -1
+548   29   72    0  110  # Cotune_100324 (on orbit). Shifted -1
+549   32   66    0   98  # Cotune_100324 (on orbit). Shifted -1
+550   35   60    0   86  # Cotune_100324 (on orbit). Shifted -1
+551   38   54    0   74  # Cotune_100324 (on orbit). Shifted -1
+552   41   48    0   62  # Cotune_100324 (on orbit). Shifted -1
+553   44   42    0  110  # Cotune_100324 (on orbit). Shifted -1
+554   47   36    0   98  # Cotune_100324 (on orbit). Shifted -1
+555   50   30    0   86  # Cotune_100324 (on orbit). Shifted -1
+556   53   84    0   74  # Cotune_100324 (on orbit). Shifted -1
+557   56   78    0   62  # Cotune_100324 (on orbit). Shifted -1
+558   59   72    0  110  # Cotune_100324 (on orbit). Shifted -1
+559   62   66    0   98  # Cotune_100324 (on orbit). Shifted -1
+600   7	   56	 0   82	 # Cotune_101203
+601   10   50	 0   70	 # Cotune_101203
+602   13   44	 0   58	 # Cotune_101203
+603   16   38	 0   106 # Cotune_101203
+604   19   32	 0   94	 # Cotune_101203
+605   22   26	 0   82	 # Cotune_101203
+606   25   80	 0   70	 # Cotune_101203
+607   28   74	 0   58	 # Cotune_101203
+608   31   68	 0   106 # Cotune_101203
+609   34   62	 0   94	 # Cotune_101203
+610   37   56	 0   82	 # Cotune_101203
+611   40   50	 0   70	 # Cotune_101203
+612   43   44	 0   58	 # Cotune_101203
+613   46   38	 0   106 # Cotune_101203
+614   49   32	 0   94	 # Cotune_101203
+615   52   26	 0   82	 # Cotune_101203
+616   55   80	 0   70	 # Cotune_101203
+617   58   74	 0   58	 # Cotune_101203
+618   61   68	 0   106 # Cotune_101203
+619   64   62	 0   94	 # Cotune_101203
