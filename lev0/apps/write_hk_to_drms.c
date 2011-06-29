@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/write_hk_to_drms.c,v 1.23 2011/03/15 20:53:58 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/write_hk_to_drms.c,v 1.24 2011/06/29 22:35:11 carl Exp $"
 /*****************************************************************************
  * Filename: write_hk_to_drms.c                                              *
  * Author: Carl                                                              *
@@ -197,7 +197,8 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
         /* check if record exists based on timecode values */
         /* need ds name(above), apid and kw structure(below)  to check if record exists */
         kw = ccsds->keywords;
-        ck_rec_status = check_hk_record_exists(query, kw, ccsds->apid);
+        /* Ticket:312 fix:ck_rec_status = check_hk_record_exists(query, kw, ccsds->apid);*/
+        ck_rec_status = 0; /*set to zero to always write records */
 #ifdef DEBUG_WRITE_HK_TO_DRMS
         printkerr("DEBUG:Message at %s, line %d: After check if record exists. "
                   "Status:<%d> where 0 means write record and 1 means skip "
