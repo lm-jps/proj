@@ -88,12 +88,17 @@
 //#define TLMSERIESNAMEAIA "aia.tlm_60d"
 
 //When change to these data series below to save real data.
-//#define TLMSERIESNAMEHMI "hmi.tlm"
-#define TLMSERIESNAMEHMI "su_production.tlm"
-//#define LEV0SERIESNAMEHMI "hmi.lev0a"
-#define LEV0SERIESNAMEHMI "su_production.lev0a"
+#define TLMSERIESNAMEHMI "hmi.tlm"
+#define LEV0SERIESNAMEHMI "hmi.lev0a"
 #define LEV0SERIESNAMEAIA "aia.lev0"
 #define TLMSERIESNAMEAIA "aia.tlm"
+
+//for xingest_lev0 testing:
+#define TLMSERIESNAMEHMI "su_production.tlm_test"
+#define LEV0SERIESNAMEHMI "su_production.lev0a"
+#define LEV0SERIESNAMEAIA "su_production.tlm_test_aia"
+#define TLMSERIESNAMEAIA "su_production.lev0_aia"
+
 
 //#define LEV0SERIESNAMEAIA "aia.lev0d"
 //#define TLMSERIESNAMEAIA "aia.tlmd"
@@ -113,7 +118,7 @@
 
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
-#define MAXFILES 16384		//max # of file can handle in tlmdir
+#define MAXFILES 65535		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
 #define IMAGE_NUM_COMMIT 12	//number of complete images until commit
 //#define IMAGE_NUM_COMMIT 2	//!!TEMP number of complete images until commit
@@ -393,6 +398,7 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   if(img->headerr) quallev0 = quallev0 | Q_HDRERR;
   if(img->nerrors) quallev0 = quallev0 | Q_CMPERR;
   if(img->last_pix_err) quallev0 = quallev0 | Q_LPXERR;
+  if(img->reopened) quallev0 = quallev0 | Q_REOPENED;
   missvals = img->totalvals - img->datavals;
   if(missvals > 0) quallev0 = quallev0 | Q_MISS0;
   datav = img->totalvals;
@@ -1187,7 +1193,8 @@ int get_tlm(char *file, int rexmit, int higherver)
       eflg++;
       if(sync_bad_cnt++ > 4) {
         printk("**Too many out of sync packets.\n");
-        return(1);
+        //return(1);
+        return(0);		//changed on 01Oct2010
       }
       printk("  Will attempt to press on...\n");
       zero_pn = 0;
@@ -1673,8 +1680,8 @@ void do_ingest()
     firstfound = 1;			//a file has been seen
     if(get_tlm(xxname, rexmit, higherversion)) { // lev0 extraction of image 
       printk("***Error in lev0 extraction for %s\n", xxname);
-      printk("***Going to abort\n");
-      abortflg = 1;
+      //printk("***Going to abort\n");
+      //abortflg = 1;
     }
     if((stat(stopfile, &stbuf) == 0) || abortflg) { break; } //signal to stop
   }
