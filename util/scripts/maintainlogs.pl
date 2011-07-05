@@ -119,18 +119,19 @@ my($tablename);
 my($tarbin);
 my($gzbin);
 my($action);
+my($loglevel);
 my($addfile);
 my(@addrow);
 
 # Allow only one instance of this program 
 unless (flock(DATA, LOCK_EX|LOCK_NB)) 
 {
-   print "$0 is already running. Exiting.\n";
+   print STDERR "$0 is already running. Exiting.\n";
    exit(kAlreadyRunning);
 }
 
 # Read cmd-line arguments
-if ($#ARGV != 8)
+if ($#ARGV < 8)
 {
    print STDERR "Improper argument list.\n";
    exit(kInvalidArg);
@@ -145,6 +146,15 @@ $tablename = $ARGV[5];
 $tarbin = $ARGV[6];
 $gzbin = $ARGV[7];
 $action = $ARGV[8]; # 'add=<filename>', 'add=A,B,C,...', 'go', 'disp', 'create', 'drop'
+
+if ($#ARGV >= 9)
+{
+   $loglevel = $ARGV[9];
+}
+else
+{
+   $loglevel = 0;
+}
 
 $conftable = "$schemaname\.$tablename";
 
@@ -169,9 +179,15 @@ elsif ($action !~ /^go$/i && $action !~ /^disp$/i && $action !~ /^create$/i && $
    exit kInvalidArg;
 }
 
+if (!($loglevel =~ /\d+/ && $loglevel >= 0 && $loglevel <=1))
+{
+   print STDERR "Invalid log level argument '$loglevel'.\n";
+   exit kInvalidArg;
+}
+
 # connect to the database
 $dsn = "dbi:Pg:dbname=$dbname;host=$dbhost;port=$dbport";
-print "Connection to database with '$dsn' as user '$dbuser' ... ";
+LogLevPrint("Connection to database with '$dsn' as user '$dbuser' ... ", 1, $loglevel);
 
 # Despite ALL documentation saying otherwise, it looks like the error codes/string
 # provided by DBI are all UNDEFINED, unless there is some kind of failure. So, 
@@ -183,7 +199,7 @@ if (defined($dbh))
 {
    $tableExists = 0;
 
-   print "success!\n";
+   LogLevPrint("success!\n", 1, $loglevel);
 
    # Check for table existence
    $stmnt = "SELECT * FROM information_schema.tables WHERE table_schema = '$schemaname' AND table_name = '$tablename'";
@@ -210,7 +226,7 @@ if (defined($dbh))
          }
          else
          {
-            print "Successfully created configuration table '$conftable'.\n";
+            LogLevPrint("Successfully created configuration table '$conftable'.\n", 0, $loglevel);
          }
       }
       else
@@ -225,7 +241,7 @@ if (defined($dbh))
 
       if ($action eq "addrow")
       {
-         if (!AddRecord(\$dbh, $conftable, @addrow))
+         if (!AddRecord(\$dbh, $conftable, $loglev, @addrow))
          {
             print STDERR "Unable to add the following record to '$conftable':\n";
             print STDERR "@addrow\n";
@@ -233,7 +249,7 @@ if (defined($dbh))
          }
          else
          {
-            print "Successfully added one row to '$conftable'.\n";
+            LogLevPrint("Successfully added one row to '$conftable'.\n", 0, $loglevel);
          }
       }
       elsif ($action eq "addfile")
@@ -249,7 +265,7 @@ if (defined($dbh))
             {
                chomp($line);
                @onerow = split(/,/, $line);
-               if (!AddRecord(\$dbh, $conftable, @onerow))
+               if (!AddRecord(\$dbh, $conftable, $loglev, @onerow))
                {
                   print STDERR "Unable to add the following record to '$conftable':\n";
                   print STDERR "$line\n";
@@ -267,7 +283,7 @@ if (defined($dbh))
             }
             else
             {
-               print "Successfully added at least one row to '$conftable'.\n";
+               LogLevPrint("Successfully added at least one row to '$conftable'.\n", 0, $loglevel);
             }
 
             close(ADDFILE);
@@ -292,7 +308,7 @@ if (defined($dbh))
          }
          else
          {
-            print "Successfully deleted configuration table '$conftable'.\n"
+            LogLevPrint("Successfully deleted configuration table '$conftable'.\n", 0, $loglevel);
          }
       }
       elsif ($action eq "disp")
@@ -301,7 +317,7 @@ if (defined($dbh))
       } 
       elsif ($action eq "go")
       {
-         if (Go(\$dbh, $conftable, \%unarchLogs, \%archLogs) != kSuccess)
+         if (Go(\$dbh, $conftable, \%unarchLogs, \%archLogs, $loglevel) != kSuccess)
          {
             print STDERR "Failure performing 'go' action.\n";
             $rv = kActionFailed;
@@ -353,12 +369,12 @@ sub AcquireLock
       {
          if ($natt < 10)
          {
-            print "Lock '$path' in use - trying again in 1 second.\n";
+            LogLevPrint("Lock '$path' in use - trying again in 1 second.\n", 1, $loglevel);
             sleep 1;
          }
          else
          {
-            print "Couldn't acquire lock after $natt times; bailing.\n";
+            LogLevPrint("Couldn't acquire lock after $natt times; bailing.\n", 1, $loglevel);
          }
       }
 
@@ -538,7 +554,7 @@ sub DisplayTable
 sub AddRecord
 {
    my($ok);
-   my($dbh, $conftable, @rowin) = @_;
+   my($dbh, $conftable, $loglev, @rowin) = @_;
    my(@row);
    my(@colnames);
    my($stmnt);
@@ -569,7 +585,7 @@ sub AddRecord
    $stmnt = "INSERT into $conftable ($colnamesstr) VALUES ($rowstr)";
    $rv = $$dbh->do($stmnt);
 
-   print "$stmnt\n";
+   LogLevPrint("$stmnt\n", 1, $loglev);
 
    $ok = NoErr($rv, $dbh, $stmnt);
 
@@ -578,7 +594,7 @@ sub AddRecord
 
 sub Go
 {
-   my($dbh, $conftable, $unarchLogs, $archLogs) = @_;
+   my($dbh, $conftable, $unarchLogs, $archLogs, $loglev) = @_;
    my($stmnt);
    my($rrows);
    my($lckfh);
@@ -641,7 +657,7 @@ sub Go
 
                if (!$procfailed)
                {
-                  if (!Archive($lspath, $lsbase, $tarbin, $gzbin, $unarchLogs->{$lspath}))
+                  if (!Archive($lspath, $lsbase, $tarbin, $gzbin, $unarchLogs->{$lspath}, $loglev))
                   {
                      print STDERR "Unable to archive log files for logset '$logset'.\n";
                   } 
@@ -682,11 +698,11 @@ sub Go
       }
       elsif ($#$rrows < 0)
       {
-         print "Not time to archive any logs.\n";
+         LogLevPrint("Not time to archive any logs.\n", 1, $loglev);
       }
       elsif ((keys(%$unarchLogs) < 1))
       {
-         print "No log files available for archiving.\n";
+         LogLevPrint("No log files available for archiving.\n", 1, $loglev);
       }
    }
    else
@@ -784,11 +800,11 @@ sub Go
          }
          elsif (!$timetotrash && keys(%$archLogs) > 0)
          {
-            print "Not time to trash any archives.\n";
+            LogLevPrint("Not time to trash any archives.\n", 1, $loglev);
          }
          elsif ((keys(%$archLogs) < 1))
          {
-            print "No archives available for trashing.\n";
+            LogLevPrint("No archives available for trashing.\n", 1, $loglev);
          }
       }
    }
@@ -828,7 +844,7 @@ sub CallCmd
 
 sub Archive
 {
-   my($lspath, $lsbase, $tarbin, $gzbin, $rtotar) = @_;
+   my($lspath, $lsbase, $tarbin, $gzbin, $rtotar, $loglev) = @_;
    my(@totar);
    my($rpath);
    my($isfile);
@@ -862,7 +878,7 @@ sub Archive
       # Tar the first log file, because tar cannot create an empty archive
       $fullpath = $totar[0];
       $sfilelist = "";
-      RunTar($tarbin, "cf", ".tmp.tar", "", $fullpath);
+      RunTar($tarbin, "cf", ".tmp.tar", "", $fullpath, $loglev);
 
       # Chunk tar cmds so that we don't overrun the cmd-line with too many chars.
       $isfile = 1;
@@ -873,7 +889,7 @@ sub Archive
          if ($isfile % kTarChunk == 0)
          {
             # Execute tar cmd.
-            RunTar($tarbin, "rf", ".tmp.tar", "", $sfilelist);
+            RunTar($tarbin, "rf", ".tmp.tar", "", $sfilelist, $loglev);
             $sfilelist = "";
          }
 
@@ -882,7 +898,7 @@ sub Archive
 
       if (length($sfilelist) > 0)
       {
-         RunTar($tarbin, "rf", ".tmp.tar", "", $sfilelist);
+         RunTar($tarbin, "rf", ".tmp.tar", "", $sfilelist, $loglev);
       }
 
       # Calculate a date string to insert into the tar's filename
@@ -890,7 +906,7 @@ sub Archive
       $datestr = sprintf("%4d%02d%02d_%02d%02d%02d", $ltime[5] + 1900, $ltime[4] + 1, $ltime[3], $ltime[2], $ltime[1], $ltime[0]);
 
       # Validate tar file
-      print "Validating tar '$lspath/.tmp.tar'.\n";
+      LogLevPrint("Validating tar '$lspath/.tmp.tar'.\n", 0, $loglev);
       $res = Validatetar(".tmp.tar", @totar);
 
       if ($res == 1)
@@ -899,12 +915,12 @@ sub Archive
          my($tarfilename) = sprintf("%s_%s.tar.gz", $lsbase, $datestr);
 
          $gzcmd = "$gzbin --best .tmp.tar";
-         print "Gzipping '$lspath/.tmp.tar' to '$lspath/.tmp.tar.gz'\n";
+         LogLevPrint("Gzipping '$lspath/.tmp.tar' to '$lspath/.tmp.tar.gz'\n", 0, $loglev);
 
          $res = system($gzcmd);
          if ($res == 0) 
          {
-            print "Moving '$lspath/.tmp.tar.gz' to '$lspath/$tarfilename'.\n";
+            LogLevPrint("Moving '$lspath/.tmp.tar.gz' to '$lspath/$tarfilename'.\n", 0, $loglev);
             if (!move(".tmp.tar.gz", $tarfilename))
             {
                print STDERR "Unable to move .tmp.tar.gz to $tarfilename.\n";
@@ -915,7 +931,7 @@ sub Archive
                # Remove log files just tarred.
                while (defined($fullpath = shift(@totar)))
                {
-                  print "Deleting tarred log file: $fullpath.\n";
+                  LogLevPrint("Deleting tarred log file: $fullpath.\n", 0, $loglev);
                   unlink($fullpath);
                }
             }
@@ -938,7 +954,7 @@ sub Archive
 
 sub RunTar
 {
-   my($tarbin, $op, $file, $list, $options) = @_;
+   my($tarbin, $op, $file, $list, $options, $loglev) = @_;
    my($tarcmd);
    my($res);
    my($rv);
@@ -946,7 +962,7 @@ sub RunTar
    $rv = 1;
 
    $tarcmd = "$tarbin $op $file $list $options";
-   print "Running tar '$tarcmd'\n";
+   LogLevPrint("Running tar '$tarcmd'\n", 0, $loglev);
 
    $res = system($tarcmd);
    ($res == 0) || ($rv = 0);
@@ -1047,4 +1063,15 @@ sub Trash
    return $rv;
 }
 
+sub LogLevPrint
+{
+   my($msg) = $_[0];
+   my($printlev) = $_[1];
+   my($loglev) = $_[2];
+
+   if ($loglev >= $printlev)
+   {
+      print $msg;
+   }
+}
 __DATA__
