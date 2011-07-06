@@ -415,7 +415,7 @@ int forkstream(long long recn0, long long maxrecn0, int force)
       //!!TBD assumes we catch up at some point and we know where we're at
       //now and can update the DB table. Check that this is ok.
       //now update lev1_highest_lev0_recnum table with lrec
-      sprintf(pcmd, "echo \"update lev1_highest_lev0_recnum set lev0recnum=%lld, date='%s' where lev0series='%s'\" | psql -h hmidb jsoc", lrec, get_datetime(), dsin);
+      sprintf(pcmd, "echo \"update lev1_highest_lev0_recnum set lev0recnum=%lld, date='%s' where lev0series='%s'\" | psql -h hmidb -U production jsoc", lrec, get_datetime(), dsin);
       printf("%s\n", pcmd); //!!TEMP echo
       system(pcmd); 
       if(stat(stopfile, &stbuf) == 0) {
@@ -706,7 +706,7 @@ int do_ingest(int force)
   char string[128], pcmd[128];
 
   if(stream_mode) {		//start past last lev0 rec# processed 
-    sprintf(pcmd, "echo \"select lev0recnum from lev1_highest_lev0_recnum where lev0series='%s'\" | psql -h hmidb jsoc", dsin);
+    sprintf(pcmd, "echo \"select lev0recnum from lev1_highest_lev0_recnum where lev0series='%s'\" | psql -h hmidb -U production jsoc", dsin);
     fin = popen(pcmd, "r");
     while(fgets(string, sizeof string, fin)) {  //get psql return line
       if(strstr(string, "lev0recnum")) continue;
@@ -721,7 +721,7 @@ int do_ingest(int force)
       break;
     }
     pclose(fin);
-    sprintf(pcmd, "echo \"select max(recnum) from %s\" | psql -h hmidb jsoc", dsin);
+    sprintf(pcmd, "echo \"select max(recnum) from %s\" | psql -h hmidb -U production jsoc", dsin);
     fin = popen(pcmd, "r");
     while(fgets(string, sizeof string, fin)) {  //get psql return line
       if(strstr(string, "max")) continue;
