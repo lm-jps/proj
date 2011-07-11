@@ -9,7 +9,7 @@ d		:= $(dir)
 EXTRADEPS_$(d)		:= $(addprefix $(d)/, fresize.o)
 
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, mappingvector_img2plane_x patch_los2vec)
+MODEXE_$(d)	:= $(addprefix $(d)/, mappingvector_img2plane_x patch_los2vec bmap)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -38,7 +38,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include
+$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/interpolate -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
 $(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I/home/jsoc/include -I$(SRCDIR)/$(d) -openmp
@@ -50,11 +50,11 @@ ifeq ($(COMPILER), icc)
 endif
 
 ifeq ($(JSOC_MACHINE), linux_x86_64)
-  MKL     := $(NOIPO_$(d)) -lmkl_em64t
+  MKL     := $(NOIPO_$(d)) -lmkl_em64t -lfftw3f
 endif
 
 ifeq ($(JSOC_MACHINE), linux_ia32)
-  MKL     := $(NOIPO_$(d)) -lmkl_lapack -lmkl_ia32
+  MKL     := $(NOIPO_$(d)) -lmkl_lapack -lmkl_ia32 -lfftw3f
 endif
 
 SVML_$(d)       :=
@@ -67,7 +67,7 @@ endif
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
 $(ALL_$(d)) : $(EXTRADEPS_$(d))
-$(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS)
+$(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS) $(LIBINTERP)
 $(ALL_$(d)) : LF_TGT := $(LF_TGT) -openmp $(MKL)
 $(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) $(FMATHLIBS) $(SVML_$(d)) $(MKL) $(GUIDE_$(d))
 
