@@ -9,7 +9,7 @@ d		:= $(dir)
 EXTRADEPS_$(d)		:= $(addprefix $(d)/, fresize.o)
 
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, mappingvector_img2plane_x patch_los2vec bmap)
+MODEXE_$(d)	:= $(addprefix $(d)/, bmap)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
