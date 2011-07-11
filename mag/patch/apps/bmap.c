@@ -52,7 +52,6 @@
 #include "cartography.c"
 #include "fresize.h"
 #include "finterpolate.h"
-#include "interpolate.c"
 #include "img2helioVector.c"
 #include "copy_me_keys.c"
 
