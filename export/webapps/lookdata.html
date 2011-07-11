@@ -36,7 +36,7 @@
 #LookdataTabs-item-5 {font-size: medium}
 
 #ValueGrid { width: 400px}
-#ValueGrid .aw-grid-row {height: 24px; border-bottom: 1px solid #bbb}
+#ValueGrid .aw-grid-row {height:24px; border-bottom:1px solid #bbb}
 #ValueGrid .aw-alternate-even {background: #fcf4fc;}
 #ValueGrid .aw-alternate-odd {background: #f8fcf8;}
 #ValueGrid .aw-mouseover-row {background: #f0f0f0;} 
@@ -96,11 +96,13 @@ span.tip { background-color:yellow }
 // var JSOC_INFO = "jsoc_info_test";
 // var SHOW_INFO = "show_info_test";
 // var EXPORTDATA = "exportdata2";
+// var USER_KILL = "jsoc_userkill_test";
 
 var SHOW_SERIES = "show_series";
 var JSOC_INFO = "jsoc_info";
 var SHOW_INFO = "show_info";
 var EXPORTDATA = "exportdata";
+var USER_KILL = "jsoc_userkill";
 
 // Protect page from accidental BACK button
 window.onbeforeunload = function ()
@@ -132,6 +134,7 @@ var MaxRecs = 0;
 var FirstLoad = 1;
 
 var GetSeriesObject;
+var GetRSCountObject;
 var GetValuesObject;
 var valuegrid;
 var valuegridlabel;
@@ -141,7 +144,13 @@ var CHeight;
 var amCharOK = 0;
 // var flashMovie = new Object();
 var flashMovie;
-
+var RequestHandle = "";
+var SessionHandle = "";
+var LPINK = "#FFD8D8";
+var PINK = "#FFC8C8";
+var YELLOW = "#FFFF80";
+var GREY = "#D8D8D8";
+var GREEN = "#A9F5A9";
 
 // ActiveWidgets Tab setup
 var tabnames = ["Series Select", "Series Content", "RecordSet Select", "Values Display", "Export Data", "Test"];
@@ -253,9 +262,9 @@ function CleanSeriesInfo()
   SeriesName = "";
   $("RecordSet").value = "";
   $("SeriesButton").disabled = false;
-  $("FetchKeyValsButton").disabled = false;
+  $("FetchKeyValsButton").disabled = true;
   $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
-  $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
+  $("FetchKeyValsButton").style.backgroundColor = GREY;
   $("Series_Info_Place").innerHTML = "";
   $("Series_Name_Place").innerHTML = "";
   $("FirstLastPlace").innerHTML = "";
@@ -352,17 +361,29 @@ function CleanOnLoad()
         $("SeriesFilter").value = args.ds;
         args_given = 1;
         }
+    new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_WebRequestID',
+      {
+      method: 'get',
+      onSuccess: function(transport, json)
+        {
+        var response = transport.responseText || "no response text";
+        var result = response.evalJSON();
+        SessionHandle = result.handle;
+// $("HandleDiv").innerHTML = SessionHandle;
+        }
+      });
     FirstLoad = 0;
     }
   definetabs();
   Element.hide('systemWorking');
   $("AbortGetSeriesButton").hide();
+  $("AbortRSCountButton").hide();
   $("AbortKeyValsButton").hide();
-  $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
-  $("SeriesButton").style.backgroundColor = "#FFFF80";
+  $("FetchKeyValsButton").style.backgroundColor = YELLOW;
+  $("SeriesButton").style.backgroundColor = YELLOW;
   // $("SeriesDiv").style.display="block";
   // $("FullInfoDiv").style.display="block";
-  // $("FullInfoDivButton").style.backgroundColor = "FFD8D8";
+  // $("FullInfoDivButton").style.backgroundColor = LPINK;
   CreateTips();
   $("TipsOnOffButton").value = "Disable Help";
   $("TabsOnOffButton").value = "Disable Tabs";
@@ -374,6 +395,27 @@ function CleanOnLoad()
     SeriesName = $("SeriesFilter").value;
     PickSeries(1);
     }
+  // UserKill(RequestHandle);
+  RequestHandle = "";
+  }
+
+function UserKill(userhandle)
+  {
+  if (userhandle == "")
+    return;
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + USER_KILL,
+    {
+    method: 'get',
+    parameters: {"userhandle" : userhandle },
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no response text";
+      var result = response.evalJSON();
+// if (result.status > 0) $("HandleDiv").innerHTML = $("HandleDiv").innerHTML + " kill failed, status="+result.status;
+// else $("HandleDiv").innerHTML = $("HandleDiv").innerHTML + " kill Ok";
+      }
+    , onFailure: function() { alert('Something went wrong...'); }
+    });
   }
 
 function CreateTips()
@@ -497,7 +539,7 @@ function GetSeriesAbort()
   else if (GetSeriesObject.transport.readyState != 4)
     {
     GetSeriesObject.transport.abort();
-    $("SeriesButton").style.backgroundColor = "#FFFF80";
+    $("SeriesButton").style.backgroundColor = YELLOW;
     $("SeriesButton").value = "Fetch seriesname list";
     $("SeriesButton").disabled = false;
     $("AbortGetSeriesButton").hide();
@@ -523,7 +565,7 @@ function GetSeries()
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   CleanSeriesInfo();
   $("SeriesButton").value = "Processing...";
-  $("SeriesButton").style.backgroundColor = "#FFC8C8";
+  $("SeriesButton").style.backgroundColor = PINK;
   $("SeriesButton").disabled = true;
   $("AbortGetSeriesButton").show();
   $("SeriesCountPlace").innerHTML = "<I>wait...</I>";
@@ -542,7 +584,7 @@ function GetSeries()
 	insertOption("SeriesSelect",SeriesList.names[i].name,SeriesList.names[i].note);
         }
       $("SeriesCountPlace").innerHTML = SeriesList.n ;
-      $("SeriesButton").style.backgroundColor = "#FFFF80";
+      $("SeriesButton").style.backgroundColor = YELLOW;
       $("SeriesButton").value = "Fetch seriesname list";
       $("SeriesButton").disabled = false;
       $("AbortGetSeriesButton").hide();
@@ -767,7 +809,13 @@ function PickSeries(mode)
         // Done displaying detailed information for this series
         }
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-      if (mode==3) GetRSCount();
+      if (mode==3) 
+        GetRSCount();
+      else
+        {
+        $("GetRSCountButton").disabled = false;
+        $("GetRSCountButton").style.backgroundColor = GREEN;
+        }
       },
     onFailure: function() { alert('Something went wrong with series structure request'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
@@ -794,6 +842,26 @@ function SetRSLimit()
     }
   GetRSCount();
   }
+
+function AbortRSCount()
+  {
+  $("AbortRSCountButton").hide();
+  $("GetRSCountButton").disabled = false;
+  $("GetRSCountButton").style.backgroundColor = GREEN;
+  $("RSCount_Place").innerHTML = "Count aborted";
+  tabs.setSelectedItems([tabrecset]); // stay on record set select page
+  if (GetRSCountObject == undefined)
+    {
+    return;
+    }
+  else if (GetRSCountObject.transport.readyState != 4)
+    {
+    UserKill(RequestHandle);
+    GetRSCountObject.transport.abort();
+    $("RSCount_Place").innerHTML = "Count aborted with "+RequestHandle;
+    }
+  }
+
 
 function GetRSCount()
   {
@@ -827,7 +895,7 @@ function GetRSCount()
     {
     posbracket = $("RecordSet").value.indexOf("[");
     posRbracket = $("RecordSet").value.lastIndexOf("]");
-    if (posRbracket == posbracket+1 || (posbracket == -1 && posRbracket == -1))
+    if ((posRbracket == posbracket+1 || (posbracket == -1 && posRbracket == -1)) && MaxRecs == 0)
       {
       alert("This series, "+thisSeriesName+", has many records, you must specify an explicit " +
             "clause or clauses in [...] to limit the number of records. Defaulting to [$]");
@@ -835,13 +903,20 @@ function GetRSCount()
       // return;
       }
     }
+// $("GetRSCountButton").value = "Kill Count?";
+  $("GetRSCountButton").style.backgroundColor = GREY;
+  $("GetRSCountButton").disabled = true;
+  $("AbortRSCountButton").show();
   $("RSCount_Place").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   askedCount = 1;
-  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
+  var StartTime = new Date()
+  RequestHandle = SessionHandle + "_" + StartTime.getTime();
+// $("HandleDiv").innerHTML = RequestHandle;
+  GetRSCountObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
-    parameters: {"ds" : $("RecordSet").value, "op" : "rs_summary", "n" : MaxRecs },
+    parameters: {"ds" : $("RecordSet").value, "op" : "rs_summary", "n" : MaxRecs, "userhandle" : RequestHandle },
 
     onSuccess: function(transport, json)
       {
@@ -865,8 +940,13 @@ function GetRSCount()
       if (KeyValsFetched == 1)
         {
         $("FetchKeyValsButton").value = "Update Keyword Values for RecordSet";
-        $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
+        $("FetchKeyValsButton").style.backgroundColor = GREEN;
         }
+      $("GetRSCountButton").disabled = false;
+      $("GetRSCountButton").style.backgroundColor = YELLOW;
+      $("AbortRSCountButton").hide();
+      $("FetchKeyValsButton").style.backgroundColor = GREEN;
+      $("FetchKeyValsButton").disabled = false;
       },
     onFailure: function() { alert('Something went wrong with series summary request'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
@@ -1069,12 +1149,15 @@ function AbortGetKeyValues()
     }
   else if (GetValuesObject.transport.readyState != 4)
     {
+    UserKill(RequestHandle);
     GetValuesObject.transport.abort();
     $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
-    $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
+    $("FetchKeyValsButton").style.backgroundColor = YELLOW;
     $("FetchKeyValsButton").disabled = false;
     $("AbortKeyValsButton").hide();
+    $("AbortRSCountButton").hide();
     $("DisplayPlace").innerHTML = "Request aborted";
+    tabs.setSelectedItems([tabrecset]); // stay on record set select page
     }
   }
 
@@ -1088,20 +1171,6 @@ function setgriddata(i,val)
   gridcolwidth[i] = Math.max(gridcolwidth[i], thisval.length);
   i++;
   return i;
-  }
-
-function report_lag(status, lag)
-  {
-  var getparameters = new Hash( {"ds" : $("RecordSet").value, "op" : "rs_list", "host" : Host, "status" : status, "lag" : lag });
-  if (MaxRecs != 0)
-    getparameters = getparameters.merge({"n": MaxRecs});
-  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_stats1',
-    {
-    method: 'get',
-    parameters: getparameters.toObject(),
-    onSuccess: function() {},
-    onFailure: function() { alert('Something went wrong with lag report'); },
-    });
   }
 
 var RecordData;
@@ -1160,10 +1229,13 @@ function GetKeyValues()
     return;
     }
   $("FetchKeyValsButton").value = "Processing ...";
-  $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
+  $("FetchKeyValsButton").style.backgroundColor = GREY;
   $("FetchKeyValsButton").disabled = true;
   $("AbortKeyValsButton").show();
   var StartTime = new Date()
+  RequestHandle = SessionHandle + "_" + StartTime.getTime();
+// $("HandleDiv").innerHTML = RequestHandle;
+  getparameters = getparameters.merge({"userhandle": RequestHandle});
   $("requestTime").innerHTML = "";
   GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
@@ -1172,6 +1244,7 @@ function GetKeyValues()
 
     onSuccess: function(transport, json)
       {
+      RequestHandle = "";
       var DoneTime = new Date()
       $("DisplayPlace").innerHTML = "Data received, processing ...";
       tabs.setSelectedItems([tabdisplay]); // show the display page.
@@ -1190,7 +1263,7 @@ function GetKeyValues()
         valuegrid.setId("ValueGrid");
 
         $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
-        $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
+        $("FetchKeyValsButton").style.backgroundColor = YELLOW;
         $("FetchKeyValsButton").disabled = false;
         $("AbortKeyValsButton").hide();
         KeyValsFetched = 1;
@@ -1333,9 +1406,7 @@ valuegrid.getCellTemplate().setStyle('border-left-width','1');
 	gridmade = 1;
         newwide();
         tabs.setSelectedItems([tabdisplay]); // show the display page.
-        var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
-        $("requestTime").innerHTML = ", Query time = " + tdiff + "s";
-        report_lag(RecordData.status,tdiff);
+        $("requestTime").innerHTML = ", Query time = " + RecordData.runtime + "s";
         }
       },
     onFailure: function() { alert('Something went wrong with series data request'); },
@@ -1407,7 +1478,7 @@ function GetShowInfo()
     return;
     }
   $("FetchKeyValsButton").value = "Processing ...";
-  $("FetchKeyValsButton").style.backgroundColor = "#FFD8D8";
+  $("FetchKeyValsButton").style.backgroundColor = GREY;
   $("FetchKeyValsButton").disabled = true;
   $("AbortKeyValsButton").show();
 // XXXXXXXXXXXXXXXXXX ACK - this of course does not work, FORM wants args in its own structures.
@@ -1419,7 +1490,7 @@ function GetShowInfo()
    $("ShowInfoForm").submit();
 
   $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
-  $("FetchKeyValsButton").style.backgroundColor = "#FFFF80";
+  $("FetchKeyValsButton").style.backgroundColor = YELLOW;
   $("FetchKeyValsButton").disabled = false;
   $("AbortKeyValsButton").hide();
   $("DisplayPlace").innerHTML = "Key values will be returned in a new window.";
@@ -1570,6 +1641,9 @@ function ExportRequestStarted()
   <!-- <HR> -->
   <P>
 </DIV> <!-- end DIV header -->
+<DIV id="HandleDiv" style="display:none" >
+RequestID
+</DIV>
 <DIV id="JSOC2DIV">
 <P>
 <B>
@@ -1675,7 +1749,8 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
         <input type="text" value="none" name="" id="RecordLimit" onChange="SetRSLimit();" >
         &nbsp;  Optional, + for from start, - for from end.
         <P>
-        <input type="button" value="GetRecordCount"  style="background-color:#FFFF80" onClick="GetRSCount();" >
+        <input type="button" id="GetRSCountButton" value="GetRecordCount"  style="background-color:#FFFF80" onClick="GetRSCount();" >
+        <input type="button" id="AbortRSCountButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortRSCount();" >
         Record Count:&nbsp;&nbsp;
         <span id="RSCount_Place" style="width:10em;background-color:#FFFFFF"></span>
         <P>
