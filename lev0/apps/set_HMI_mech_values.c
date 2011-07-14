@@ -22,10 +22,15 @@
 /* Function to set HMI mechanism position keywords */
 
 /* The "mech" tables are found in $JSOCROOT at these locations */
-#define TABLE_PATH "proj/lev0/apps/data/"
-#define POL_TABLE   "in_air_cal3.p"
-#define TUNE_TABLE  "in_air_cal3.w"
-#define FOCUS_TABLE "in_air_cal.c"
+/* #define TABLE_PATH "proj/lev0/apps/data/" */
+/* path now absolute as users don't have a Development directory */
+#define TABLE_PATH "/home/jsoc/cvs/Development/JSOC/proj/tables/hmi_mech/"
+/* #define POL_TABLE   "in_air_cal3.p" */
+/* #define TUNE_TABLE  "in_air_cal3.w" */
+/* #define FOCUS_TABLE "in_air_cal.c" */
+#define POL_TABLE   "std_flight.p"
+#define TUNE_TABLE  "std_flight.w"
+#define FOCUS_TABLE "std_flight.c"
 
 
 #define MECHMAXROWS	2000
@@ -60,10 +65,11 @@ for (tab=0; tab<3; tab++)
     FILE *fp;
     char line[1024];
     /* get file for this table */
-    if(!(tableroot = (char *)getenv("JSOCROOT"))) return(MECHINIT_NOFILE);
-    strcpy(tablepath, tableroot);
-    strcat(tablepath, "/");
-    strcat(tablepath, TABLE_PATH);
+    //if(!(tableroot = (char *)getenv("JSOCROOT"))) return(MECHINIT_NOFILE);
+    //strcpy(tablepath, tableroot);
+    //strcat(tablepath, "/");
+    //strcat(tablepath, TABLE_PATH);
+    strcpy(tablepath, TABLE_PATH);
     strcat(tablepath, tabinfo[tab].filename);
     fp = fopen(tablepath, "r");
     if (!fp)
