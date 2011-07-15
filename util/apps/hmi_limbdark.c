@@ -1,4 +1,4 @@
-#define CVSVERSION "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/util/apps/hmi_limbdark.c,v 1.5 2011/07/15 01:27:27 phil Exp $"
+#define CVSVERSION "$Id: hmi_limbdark.c,v 1.6 2011/07/15 01:40:06 phil Exp $"
 /**
    @defgroup analysis
    @ingroup su_util
@@ -121,7 +121,7 @@ int DoIt(void)
   int status = 0;
   ObsInfo_t *ObsLoc;
   // Coef version 1
-  static double defaultcoefs[] = {0.4430, 0.1390, 0.0410, 0.0125, 0.0019};
+  static double defaultcoefs[] = {0.443000, 0.139000, 0.041000, 0.012500, 0.001900};
   char *CoefVersion = "1";
 
   double use_coefs[5];
@@ -145,7 +145,7 @@ int DoIt(void)
     for (i=0; i<5; i++)
       {
       use_coefs[i] = cmdcoefs[i];
-      printf(" Coef%d = %f\n", i+1, use_coefs[i]);
+      printf(" Coef%d = %0.6f\n", i+1, use_coefs[i]);
       }
     }
   else
@@ -182,6 +182,7 @@ int DoIt(void)
     drms_copykey(outRec, inRec, "T_OBS");
     drms_copykey(outRec, inRec, "QUALITY");
     drms_setkey_time(outRec, "DATE", time(0) + UNIX_EPOCH);
+    drms_setkey_string(outRec, "CODEVER4", CVSVERSION);
 
     if (quality >= 0)
       {
@@ -347,11 +348,11 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
       fprintf(stderr,"lsqfit failure\n");
       fitcoefs[0] = fitcoefs[1] = fitcoefs[2] = fitcoefs[3] = fitcoefs[4] = fitcoefs[5] =  DRMS_MISSING_DOUBLE;
       }
-    printf("Fit %d points, Coefs = %f", n, fitcoefs[0]);
+    printf("Fit %d points, Coefs = %0.6f", n, fitcoefs[0]);
     for (ord=0; ord<5; ord++)
       {
       coefs[ord] = fitcoefs[ord+1]/fitcoefs[0];
-      printf(", %6.4f", coefs[ord]);
+      printf(", %8.6f", coefs[ord]);
       }
     printf("\n");
   free(f);
