@@ -1,3 +1,4 @@
+#define CVSVERSION "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/util/apps/hmi_limbdark.c,v 1.4 2011/07/15 01:25:43 phil Exp $"
 /**
    @defgroup analysis
    @ingroup su_util
@@ -14,12 +15,14 @@
    profile comes from Tech Note SOI_TN_095 but the values in use here are from
    an average of several runs with the -f flag set.
    Modified from MDI DSDS program fitlimbdark.
+   Default is to rotate to solar north up, and center to nearest pixel.
   
    Parameters are:
      in         input recordset, expected to be an Ic product
      out        output seriesname
      f          FLAG: Compute limb-darkening fit parameters.
      l          FLAG: non-zero supresses limb darkening removal
+     c          FLAG: Do not center or rotate from input data orientation
      r          FLAG: non-zero performs REVERSE limb darkening removal
      n          FLAG: normalize output by dividing by image mean
                       i.e. puts limb darkening back in
@@ -78,7 +81,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *ObsLoc, int *status);
 
 int  GetObsLocInfo(DRMS_Segment_t *seg, int i, int j, ObsInfo_t *ObsLoc);
 
-int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncropped, int do_reverse, char **ld_log);
+int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncropped, int do_reverse);
 
 int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs);
 
@@ -100,6 +103,7 @@ ModuleArgs_t module_args[] =
      {ARG_FLAG, "r", "0", "Restore limb darkening"},
      {ARG_FLAG, "f", "0", "Fit limb darkening before applying"},
      {ARG_FLAG, "n", "0", "Normalize the final image by dividing by the mean"},
+     {ARG_FLAG, "c", "0", "Supress center and flip 180 degrees if CROTA~180."},
      {ARG_FLOATS, "coefs", "0.0", "Limb darkening coeficients, 5 needed"},
      {ARG_END}
 };
@@ -107,6 +111,7 @@ ModuleArgs_t module_args[] =
 int DoIt(void)
   {
   int noLD = cmdparams_isflagset(&cmdparams, "l");
+  int noFlip = cmdparams_isflagset(&cmdparams, "c");
   int restoreLD = cmdparams_isflagset(&cmdparams, "r");
   int do_fit = cmdparams_isflagset(&cmdparams, "f");
   int do_normalize = cmdparams_isflagset(&cmdparams, "n");
@@ -115,9 +120,10 @@ int DoIt(void)
   char *p;
   int status = 0;
   ObsInfo_t *ObsLoc;
-  // static double LDCoef[] = {0.5568, 0.4104, 0.2782, 0.1108, 0.0170 };
-  // static double LDCoef[] = {0.4600, 0.2100, 0.1400, 0.0690, 0.0130 };
+  // Coef version 1
   static double defaultcoefs[] = {0.4430, 0.1390, 0.0410, 0.0125, 0.0019};
+  char *CoefVersion = "1";
+
   double use_coefs[5];
   double n_user_coefs = cmdparams_get_int(&cmdparams, "coefs_nvals", &status);
 
@@ -134,6 +140,7 @@ int DoIt(void)
     {
     double *cmdcoefs;
     int i;
+    CoefVersion = "user given";
     cmdparams_get_dblarr(&cmdparams, "coefs", &cmdcoefs, &status);
     for (i=0; i<5; i++)
       {
@@ -202,7 +209,7 @@ int DoIt(void)
       outSeg = drms_segment_lookupnum(outRec, 0);
       outArray = drms_array_create(DRMS_TYPE_FLOAT, inArray->naxis, inArray->axis, NULL, &status);
 
-      if (rm_limbdark(inArray, outArray, ObsLoc, (do_fit ? coefs : use_coefs), &ncropped, restoreLD, &ld_comment) == DRMS_SUCCESS)
+      if (rm_limbdark(inArray, outArray, ObsLoc, (do_fit ? coefs : use_coefs), &ncropped, restoreLD) == DRMS_SUCCESS)
         {
         int totvals, datavals;
 
@@ -212,12 +219,14 @@ int DoIt(void)
           free(ld_comment);
           }
 
+        drms_setkey_string(outRec, "COEF_VER", CoefVersion);
         drms_setkey_float(outRec, "LDCoef1", (float)(do_fit ? coefs[0] : use_coefs[0]));
         drms_setkey_float(outRec, "LDCoef2", (float)(do_fit ? coefs[1] : use_coefs[1]));
         drms_setkey_float(outRec, "LDCoef3", (float)(do_fit ? coefs[2] : use_coefs[2]));
         drms_setkey_float(outRec, "LDCoef4", (float)(do_fit ? coefs[3] : use_coefs[3]));
         drms_setkey_float(outRec, "LDCoef5", (float)(do_fit ? coefs[4] : use_coefs[4]));
-        upNcenter(outArray, ObsLoc);
+        if (!noFlip)
+          upNcenter(outArray, ObsLoc);
         drms_setkey_double(outRec, "CRPIX1", ObsLoc->crpix1);
         drms_setkey_double(outRec, "CRPIX2", ObsLoc->crpix2);
         drms_setkey_double(outRec, "CROTA2", ObsLoc->crota2);
@@ -350,7 +359,7 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
   return(0);
   }
 
-int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncrop, int do_reverse, char **ld_log)
+int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncrop, int do_reverse)
   {
   double x0 = ObsLoc->crpix1 - 1;
   double y0 = ObsLoc->crpix2 - 1;
@@ -366,12 +375,6 @@ int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, doub
   float missval = DRMS_MISSING_FLOAT;
   int ncropped = 0;
   char comment[4096];
-  /*
-  static double LimbDarkCoef[] = {0.41708, 0.12512, 0.02825, 0.00528, 0.00051};
-  static double LimbDarkCoef[] = {0.5836, 0.3765, 0.1829, 0.0501, 0.0050 };
-  static double LimbDarkCoef[] = {0.5814, 0.4104, 0.2427, 0.0844, 0.0114 };
-  static double LimbDarkCoef[] = {0.5568, 0.4104, 0.2782, 0.1108, 0.0170 };
-  */
   
   scale = 1.0/rsun;
   crop_limit = 1.0;
@@ -425,9 +428,6 @@ int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, doub
 	else
 	  *Op = *Ip / ld;
 	}
-  sprintf(comment, "LimbDark Coefs={%6.4f,%6.4f,%6.4f,%6.4f,%6.4f}\n",
-       coefs[0], coefs[1], coefs[2], coefs[3], coefs[4]); 
-  *ld_log = strdup(comment);
   *ncrop = ncropped;
   return(0);
   }
