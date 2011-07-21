@@ -4,13 +4,15 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODEXE_$(d)	:= $(addprefix $(d)/, hmi_segment_module hmi_patch_module) # put module names here
+MODEXE_$(d)	:= $(addprefix $(d)/, hmi_segment_module) # put module names here
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 EXE_$(d)	:= $(MODEXE_$(d))
 
+OBJsegment_$(d) := $(addprefix $(d)/, cJSON.o segment_modelset.o)
+
 # these files are needed by hmi_segment_module
-OBJ_$(d)	:= $(EXE_$(d):%=%.o)
+OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(OBJsegment_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
@@ -30,7 +32,7 @@ $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""	# append to $(CF_TGT)
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/src $(FMATHLIBSH) $(MYCMPFLG_$(d))
 
-$(EXE_$(d)):		$(LIBsegment) $(LIBpatch) $(LIBmex2c_jsoc) $(LIBmexrng) $(LIBmextools)
+$(EXE_$(d)):		$(OBJsegment_$(d)) $(LIBsegment) $(LIBmex2c_jsoc) $(LIBmexrng) $(LIBmextools)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
