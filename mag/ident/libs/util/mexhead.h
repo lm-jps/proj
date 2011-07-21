@@ -115,6 +115,28 @@ extern "C" {
 } /* fool emacs */
 #endif
 
+/* HACK: turmon 8/2010: Stanford uses matlab 7.1, these
+ * types were defined only as of matlab 7.3.
+ * I'm putting them here even though they should go into
+ * mex.h; this file goes into mexhead.h which is included
+ * early in my mexfiles...
+ */
+#ifdef MATLAB_MEX_FILE
+/* indexing abstractions */
+#define MX_COMPAT_32  /* undef for large (>2G) arrays, cf -largeArrayDims
+*/
+#ifdef MX_COMPAT_32
+typedef int mwSize;
+typedef int mwIndex;
+typedef int mwSignedIndex;
+#else
+typedef size_t    mwSize;
+typedef size_t    mwIndex;
+typedef ptrdiff_t mwSignedIndex; /* when you need a signed type */
+#endif
+#endif
+
+
 /* If mexFunction is passed nrhs < 0, it causes special behavior, including
  * passing back information about the function signature of the mexFunction.
  * This enum lists the possibilities for returned information.

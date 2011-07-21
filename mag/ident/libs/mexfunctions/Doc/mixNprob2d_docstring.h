@@ -4,7 +4,7 @@
  *
  * This documentation string was generated from
  * a C comment block within a mex program
- * by `doc2docstring.py' on Mon May 17 17:04:08 2010.
+ * by `doc2docstring.py' on Wed Jul 14 12:49:31 2010.
  */
  
 static const char docstring[] =

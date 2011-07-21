@@ -4,9 +4,12 @@
  *
  * Declarations for calling `mixNprob2d' a.k.a. `m2d' as a C library.
  *
- * Made by intermediate binary mixNprob2d.out on Mon May  3 17:24:41 2010
+ * Made by intermediate binary `mixNprob2d.out' on:
+ * 	Thu Jul  7 23:02:43 2011
  *
- * Source file ../Gen-include.c last modified on Mon May  3 17:04:13 2010
+ * Code for include-generation driver `../Gen-include.c' last modified on:
+ * 	Mon Jun  7 15:11:28 2010
+ *
  */
 
 // Original documentation block
@@ -37,6 +40,9 @@
  * 
  */
 
+#ifndef _mexfn_mixNprob2d_h_
+#define _mexfn_mixNprob2d_h_
+
 // function entry point
 mexfn_lib_t main_mixNprob2d;
 
@@ -55,5 +61,7 @@ mexfn_lib_t main_mixNprob2d;
 // output argument numbers
 #define MXT_m2d_ARG_p	0
 
+
+#endif // _mexfn_mixNprob2d_h_
 
 // (file ends)

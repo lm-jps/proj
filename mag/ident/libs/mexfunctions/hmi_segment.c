@@ -8,7 +8,7 @@
 
 %hmi_segment	driver for HMI segmentation
 % 
-% y=hmi_segment(xm,xp,iter,T,beta,alpha,ctr,rho,m1,...)
+% [y,s,post,nclean]=hmi_segment(xm,xp,edge,iter,T,beta,alpha,geom,rho,m1,...)
 % * Integrated routine for deriving HMI segmentations.  Uses
 % models (m1,m2,...), plus a magnetogram-photogram pair (xm,xp),
 % to deduce an integer labeling.  Besides images and models,
@@ -16,62 +16,76 @@
 % parameters.
 % * The defaults for iter and T are inherited from mrf_segment_wts,
 % and should be looked up there.
+% * The posterior probability `post' of the mrf fit can be returned;
+% this can quickly verify repeatability.
+% * The extreme limb can be a problem for labeling; `edge' helps with
+% this.  We set the last edge(1) pixels to the value edge(2), and 
+% return the number of such pixels modified, optionally, in nclean.
+% Typically edge=[3 1]; both can be real-valued.
 % 
 % Inputs:
 %   real xm(m,n)
 %   real xp(m,n)
-%   int iter[1] or [2];
-%   real T[0] or [1] or [2] or [3] or [4];
-%   real beta[1] or [K,K];
-%   real alpha[K] or [0] = [];
-%   real ctr(3) or ctr(4) or ctr(5);
-%   real rho;
+%   real edge(2)
+%   int iter(1) or (2)
+%   real T[0] or [1] or [2] or [3] or [4]
+%   real beta[1] or [K,K]
+%   real alpha[K] or [0] = []
+%   real geom(5)
+%   real rho
 %   real m1(l,k1)
 %   ...
 %   real mR(l,kR)
 % 
 % Outputs:
 %   int y(m,n)
+%   opt real s(R,nS)
 %   opt real post
+%   opt int nclean
 % 
-% See Also:  makemrfdiscwts, mrf_segment_wts, mixNprobNd, clean_edge_label
+% See Also:  makemrfdiscwts, mrf_segment_wts, mixNprobNd, 
+%            clean_edge_label, roi_stats_mag
 
-% turmon oct 2009, june 2010
+% turmon oct 2009, june 2010, june 2011
 
 ****************************************************************/
 
 /* standard boilerplate */
-#define NARGIN_MIN	10	   /* min number of inputs (2 classes) */
-#define NARGIN_MAX	12	   /* max number of inputs (4 classes) */
+#define NARGIN_MIN	11	   /* min number of inputs (2 classes) */
+#define NARGIN_MAX	13	   /* max number of inputs (4 classes) */
 #define NARGOUT_MIN	1	   /* min number of output args */
-#define NARGOUT_MAX	2	   /* max number of output args */
+#define NARGOUT_MAX	4	   /* max number of output args */
 
 #define ARG_xm    0
 #define ARG_xp    1
-#define ARG_iter  2
-#define ARG_T     3
-#define ARG_beta  4
-#define ARG_alpha 5
-#define ARG_ctr   6
-#define ARG_rho   7
-#define ARG_m1    8
-#define ARG_m2    9
-#define ARG_m3    10
-#define ARG_m4    11
+#define ARG_edge  2 
+#define ARG_iter  3 
+#define ARG_T     4 
+#define ARG_beta  5 
+#define ARG_alpha 6 
+#define ARG_geom  7 
+#define ARG_rho   8 
+#define ARG_m1    9 
+#define ARG_m2    10
+#define ARG_m3    11
+#define ARG_m4    12
 
-#define ARG_y     0
-#define ARG_post  1
+#define ARG_y      0
+#define ARG_s      1
+#define ARG_post   2
+#define ARG_nclean 3
 
 static const char *progname = "hmi_segment";
 #define PROGNAME hmi_segment
 static const char *in_specs[NARGIN_MAX] = {
   "RM",
   "RM",
+  "RV(2)",                // edge
   "RS|RV(2)",             // iter
   "RS|RV(2)|RV(3)|RV(4)", // T
   "RS(1)|RM",             // beta
   "RV",                   // alpha
-  "RV(3)|RV(4)|RV(5)",    // ctr
+  "RV(5)",                // geom
   "RS(1)",                // rho
   "RM",                   // m1, etc.
   "RM",
@@ -80,17 +94,18 @@ static const char *in_specs[NARGIN_MAX] = {
 static const char *in_names[NARGIN_MAX] = {
   "xm",
   "xp",
+  "edge",
   "iter",
   "T",
   "beta",
   "alpha",
-  "ctr",
+  "geom",
   "rho",
   "m1",
   "m2",
   "m3",
   "m4"};
-static const char *out_names[NARGOUT_MAX] = {"y", "post"};
+static const char *out_names[NARGOUT_MAX] = {"y", "s", "post", "nclean"};
 
 // short form of PROGNAME for #include identifiers
 #define SHORTNAME Hseg
@@ -100,16 +115,19 @@ static const char *out_names[NARGOUT_MAX] = {"y", "post"};
 #include "mixNprob2d.h"
 #include "mrf_segment_wts.h"
 #include "clean_edge_label.h"
+#include "roi_stats_mag.h"
 
 // define the argument numbers we actually use
-#define MXT_mdw_NARGIN_USE  MXT_mdw_NARGIN_MAX
+#define MXT_mdw_NARGIN_USE  MXT_mdw_NARGIN_MIN // omit last arg (ell)
 #define MXT_mdw_NARGOUT_USE MXT_mdw_NARGOUT_MAX
 #define MXT_m2d_NARGIN_USE  MXT_m2d_NARGIN_MIN // omit last arg (mode)
 #define MXT_m2d_NARGOUT_USE MXT_m2d_NARGOUT_MAX
 #define MXT_msw_NARGIN_USE  MXT_msw_NARGIN_MAX // actually variadic
 #define MXT_msw_NARGOUT_USE MXT_msw_NARGOUT_MAX
 #define MXT_cel_NARGIN_USE  MXT_cel_NARGIN_MAX
-#define MXT_cel_NARGOUT_USE MXT_cel_NARGOUT_MIN // omit last output (nclean)
+#define MXT_cel_NARGOUT_USE MXT_cel_NARGOUT_MAX
+#define MXT_rsm_NARGIN_USE  MXT_rsm_NARGIN_MAX
+#define MXT_rsm_NARGOUT_USE 1 // names, combo unused
 
 
 /************************************************************************
@@ -123,23 +141,27 @@ static const char *out_names[NARGOUT_MAX] = {"y", "post"};
  *
  * This is currently used for probability maps, but it could
  * also be used for the source images.
+ *
+ * This assumes standard HMI sesw ordering.
  */
 
 static
 void
 segment_offdisk_nan(double *p, int maxx, int maxy, double *ctr)
 {
-  const double cenx = ctr[0];
-  const double ceny = ctr[1];
+  const double cenx = ctr[0] - 1.0; // from 1-based to 0-based
+  const double ceny = ctr[1] - 1.0; // ditto
   const double rsun2 = ctr[2]*ctr[2];
   const double nan = mxt_getnand();
   int x, y, inx;
   double dx, dy, r2;
 
-  inx = 0;
-  for (x = 0; x < maxx; x++)
-    for (y = 0; y < maxy; y++, inx++) {
-      // within the loop: inx = x*maxy + y
+  for (y = 0; y < maxy; y++)
+    for (x = 0; x < maxx; x++) {
+      // sene (jpl-mdi): inx = x*maxy + y
+      // inx = x*maxy + y;
+      // sesw (native): inx = x*maxy + y
+      inx = y*maxx + x;
       if (isnan(p[inx]))
 	continue; // already nan
       // offsets from center
@@ -178,10 +200,14 @@ mexFunction(int nlhs,
   // res=clean_edge_label(img,center,delta,mode)
   mxArray *prhs_cel[MXT_cel_NARGIN_USE];
   mxArray *plhs_cel[MXT_cel_NARGOUT_USE];
+  // roi_stats_mag
+  mxArray *prhs_rsm[MXT_rsm_NARGIN_USE];
+  mxArray *plhs_rsm[MXT_rsm_NARGOUT_USE];
   // general declarations
   int M, N;         // size of disc 
   int Nmod;         // number of models
   int i;
+  const int verbose = 0;
   char errstr[256];
   char *msg;        // returned error message
 
@@ -198,13 +224,13 @@ mexFunction(int nlhs,
    */
   if ((nrhs < NARGIN_MIN) || (nrhs > NARGIN_MAX))
     mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
-			 "%s: Expect %d <= input args <= %d",
-			  progname, NARGIN_MIN, NARGIN_MAX), errstr));
+			   "%s: Expect %d <= input args <= %d",
+			   progname, NARGIN_MIN, NARGIN_MAX), errstr));
   if ((nlhs < NARGOUT_MIN) || (nlhs > NARGOUT_MAX))
     mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
-			 "%s: Expect %d <= output args <= %d",
-			  progname, NARGOUT_MIN, NARGOUT_MAX), errstr));
-  printf("in hmi_segment\n");
+			   "%s: Expect %d <= output args <= %d",
+			   progname, NARGOUT_MIN, NARGOUT_MAX), errstr));
+  if (verbose) printf("in %s\n", progname);
   mexargparse(nrhs, prhsC, in_names, in_specs, NULL, progname);
 
   start_sizechecking();
@@ -220,40 +246,53 @@ mexFunction(int nlhs,
   Nmod = nrhs - ARG_m1; // number of models
 
   // disk-weighting function call
-  prhs_mdw[MXT_mdw_ARG_n] = mxCreateDoubleMatrix(1, 2, mxREAL); // size
+  //  (ell input argument omitted)
+  prhs_mdw[MXT_mdw_ARG_n   ] = mxCreateDoubleMatrix(1, 2, mxREAL); // size
+  prhs_mdw[MXT_mdw_ARG_del ] = mxCreateDoubleScalar(3.0); // del
+  prhs_mdw[MXT_mdw_ARG_ctr ] = prhs[ARG_geom]; // ctr (5-tuple is OK)
+  prhs_mdw[MXT_mdw_ARG_rho ] = prhs[ARG_rho]; // rho
+  prhs_mdw[MXT_mdw_ARG_mode] = mxCreateString("sesw");
+  if (!prhs_mdw[MXT_mdw_ARG_n  ] ||
+      !prhs_mdw[MXT_mdw_ARG_del ] ||
+      !prhs_mdw[MXT_mdw_ARG_mode])
+    mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
+			   "%s: Failed to allocate makemrfdiscwts inputs",
+			   progname), errstr));
+  // we know it's non-null, so set it up
   mxGetPr(prhs_mdw[MXT_mdw_ARG_n])[0] = (double) M;
   mxGetPr(prhs_mdw[MXT_mdw_ARG_n])[1] = (double) N;
-  prhs_mdw[MXT_mdw_ARG_del] = mxCreateDoubleScalar(3.0); // del
-  prhs_mdw[MXT_mdw_ARG_ctr] = prhs[ARG_ctr]; // ctr
-  prhs_mdw[MXT_mdw_ARG_rho] = prhs[ARG_rho]; // rho
-  printf("segment: calling makemrfdiscwts\n");
+  if (verbose) printf("segment: calling makemrfdiscwts\n");
   msg = main_makemrfdiscwts(MXT_mdw_NARGOUT_USE, plhs_mdw, 
 			    MXT_mdw_NARGIN_USE,  prhs_mdw);
   if (msg)
     mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
-			   "%s: Trouble in make_mrfdiscwts (%s)",
+			   "%s: Trouble in makemrfdiscwts (%s)",
 			   progname, msg), errstr));
   // free what we allocated here, if we no longer need it
-  mxDestroyArray(prhs_mdw[MXT_mdw_ARG_n]);
-  mxDestroyArray(prhs_mdw[MXT_mdw_ARG_del]);
+  mxDestroyArray(prhs_mdw[MXT_mdw_ARG_n   ]);
+  mxDestroyArray(prhs_mdw[MXT_mdw_ARG_del ]);
+  mxDestroyArray(prhs_mdw[MXT_mdw_ARG_mode]);
 
   // set up prob-finder input args
   prhs_m2d[MXT_m2d_ARG_i1] = prhs[ARG_xm]; // i1 = mgram
   prhs_m2d[MXT_m2d_ARG_i2] = prhs[ARG_xp]; // i2 = pgram
   for (i = 0; i < Nmod; i++) {
     prhs_m2d[MXT_m2d_ARG_model] = prhs[ARG_m1+i]; // m1, etc.
-    printf("segment: calling mixNprob2d\n");
+    if (verbose) printf("segment: calling mixNprob2d\n");
     msg = main_mixNprob2d(MXT_m2d_NARGOUT_USE, plhs_m2d, 
 			  MXT_m2d_NARGIN_USE,  prhs_m2d);
     if (msg)
       mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
 			     "%s: Trouble in mixNprob2d[mod=%d] (%s)",
 			     progname, i, msg), errstr));
-    printf("\tprob%d[2048,2048] = %g\n", i, 
-           mxGetPr(plhs_m2d[MXT_m2d_ARG_p])[2048*4096+2048]);
-    // set off-disk to nan, in-place
-    segment_offdisk_nan(mxGetPr(plhs_m2d[MXT_m2d_ARG_p]),
-			M, N, mxGetPr(prhs[ARG_ctr]));
+    if (verbose) printf("\tprob%d[M/2,N/2] = %g\n", i, 
+			mxGetPr(plhs_m2d[MXT_m2d_ARG_p])[(M/2)*N+N/2]);
+    // set off-disk to nan, in-place; only need to do one class
+    //  (this helper routine assumes sesw ordering)
+    //  (note that the disk center below is 1-based, not 0-based)
+    if (i == 0)
+      segment_offdisk_nan(mxGetPr(plhs_m2d[MXT_m2d_ARG_p]),
+			  M, N, mxGetPr(prhs[ARG_geom]));
     // plunk into mrf input arg
     prhs_msw[MXT_msw_ARG_lprob1+i] = plhs_m2d[MXT_m2d_ARG_p]; 
   }
@@ -267,7 +306,11 @@ mexFunction(int nlhs,
   prhs_msw[MXT_msw_ARG_alpha] = prhs[ARG_alpha];
   prhs_msw[MXT_msw_ARG_dist]  = plhs_mdw[MXT_mdw_ARG_dist];
   prhs_msw[MXT_msw_ARG_y]     = mxCreateDoubleMatrix(0, 0, mxREAL); // IC
-  printf("segment: calling mrf_segment\n");
+  if (!prhs_msw[MXT_msw_ARG_y])
+    mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
+			   "%s: Failed to allocate mrf_segment_wts input",
+			   progname), errstr));
+  if (verbose) printf("segment: calling mrf_segment\n");
   // segment is variadic, so NARGIN uses #models
   msg = main_mrf_segment_wts(MXT_msw_NARGOUT_USE,     plhs_msw, 
 			     MXT_msw_ARG_lprob1+Nmod, prhs_msw);
@@ -275,8 +318,8 @@ mexFunction(int nlhs,
     mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
 			   "%s: Trouble in mrf_segment (%s)",
 			   progname, msg), errstr));
-  printf("\tseg[2048,2048] = %g\n", 
-	 mxGetPr(plhs_msw[MXT_msw_ARG_yp])[2048*4096+2048]);
+  if (verbose) printf("\tseg[M/2,N/2] = %g\n", 
+		      mxGetPr(plhs_msw[MXT_msw_ARG_yp])[(M/2)*N+N/2]);
   // free what we allocated here, if we no longer need it
   mxDestroyArray(prhs_msw[MXT_msw_ARG_dist]);
   mxDestroyArray(prhs_msw[MXT_msw_ARG_y]);
@@ -284,40 +327,95 @@ mexFunction(int nlhs,
     mxDestroyArray(prhs_msw[MXT_msw_ARG_lprob1+i]);
 
   // set up edge-clean input args
-  prhs_cel[MXT_cel_ARG_image]  = plhs_msw[MXT_msw_ARG_yp];
-  prhs_cel[MXT_cel_ARG_center] = prhs[ARG_ctr];  // center, used above too
-  prhs_cel[MXT_cel_ARG_delta]  = mxCreateDoubleScalar(3.0); // fixed for now
-  prhs_cel[MXT_cel_ARG_mode]   = mxCreateDoubleScalar(1.0);
-  printf("segment: calling clean_edge_label\n");
+  // note, edge = [delta_pix edge_fill_value]
+  prhs_cel[MXT_cel_ARG_image ] = plhs_msw[MXT_msw_ARG_yp];
+  prhs_cel[MXT_cel_ARG_center] = prhs[ARG_geom];  // 5-tuple OK
+  prhs_cel[MXT_cel_ARG_delta ] = mxCreateDoubleScalar(mxGetPr(prhs[ARG_edge])[0]);
+  prhs_cel[MXT_cel_ARG_fill  ] = mxCreateDoubleScalar(mxGetPr(prhs[ARG_edge])[1]);
+  prhs_cel[MXT_cel_ARG_mode  ] = mxCreateString("sesw");
+  if (!prhs_cel[MXT_cel_ARG_delta] ||
+      !prhs_cel[MXT_cel_ARG_fill ] ||
+      !prhs_cel[MXT_cel_ARG_mode ])
+    mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
+			   "%s: Failed to allocate clean_edge_label inputs",
+			   progname), errstr));
+  if (verbose) printf("segment: calling clean_edge_label\n");
   msg = main_clean_edge_label(MXT_cel_NARGOUT_USE, plhs_cel, 
 			      MXT_cel_NARGIN_USE,  prhs_cel);
   if (msg)
     mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
 			   "%s: Trouble in clean_edge_label (%s)",
 			   progname, msg), errstr));
-  printf("\tsegp[2048,2048] = %g\n", 
-	 mxGetPr(plhs_cel[MXT_cel_ARG_res])[2048*4096+2048]);
+  if (verbose) printf("\tsegp[M/2,N/2] = %g\n", 
+		      mxGetPr(plhs_cel[MXT_cel_ARG_res])[(M/2)*N+N/2]);
   // free what we allocated here, if we no longer need it
   mxDestroyArray(prhs_cel[MXT_cel_ARG_image]);
   mxDestroyArray(prhs_cel[MXT_cel_ARG_delta]);
-  mxDestroyArray(prhs_cel[MXT_cel_ARG_mode]);
+  mxDestroyArray(prhs_cel[MXT_cel_ARG_fill ]);
+  mxDestroyArray(prhs_cel[MXT_cel_ARG_mode ]);
 
-  // set up output args
-  printf("segment: setting up outputs...\n");
+  // Optionally find per-class summary statistics
+  if (nlhs > ARG_s) {
+    //   s = roi_stats_mag(x,y,mag,geom,nroi,mode)
+    // (only the first output arg is used)
+    // (x and y arg are both the activity mask)
+    // (specify Nmod output roi's in case a class is missing from res)
+    prhs_rsm[MXT_rsm_ARG_x   ] = plhs_cel[MXT_cel_ARG_res]; // 1..Nr
+    prhs_rsm[MXT_rsm_ARG_y   ] = plhs_cel[MXT_cel_ARG_res]; // 0/1
+    prhs_rsm[MXT_rsm_ARG_mag ] = prhs[ARG_xm];   // magnetogram
+    prhs_rsm[MXT_rsm_ARG_geom] = prhs[ARG_geom]; // require the 5-tuple
+    prhs_rsm[MXT_rsm_ARG_nroi] = mxCreateDoubleScalar((double) Nmod);
+    prhs_rsm[MXT_rsm_ARG_mode] = mxCreateString("sesw");
+    if (!prhs_rsm[MXT_rsm_ARG_mode])
+      mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
+			     "%s: Failed to allocate roi_stats_mag inputs",
+			     progname), errstr));
+
+    if (verbose) printf("segment: calling roi_stats_mag\n");
+    msg = main_roi_stats_mag(MXT_rsm_NARGOUT_USE, plhs_rsm, 
+			     MXT_rsm_NARGIN_USE,  prhs_rsm);
+    if (msg)
+      mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
+			     "%s: Trouble in roi_stats_mag (%s)",
+			     progname, msg), errstr));
+    // free arrays allocated in this block
+    mxDestroyArray(prhs_rsm[MXT_rsm_ARG_mode]);
+    mxDestroyArray(prhs_rsm[MXT_rsm_ARG_nroi]);
+  }
+
+  /*
+   *  set up output args
+   */
+  if (verbose) printf("segment: setting up outputs...\n");
+  // y
   plhs[ARG_y] = plhs_cel[MXT_cel_ARG_res];
-  if (nlhs > ARG_post)
+  // s
+  if (nlhs > ARG_s) {
+    // s was found above
+    plhs[ARG_s] = plhs_rsm[MXT_rsm_ARG_s]; 
+  } else {
+    // s was not found, so no need to free it
+  }
+  // post
+  if (nlhs > ARG_post) {
+    // asked for posterior output
     plhs[ARG_post] = plhs_msw[MXT_msw_ARG_post];
-  else
-    // did not need it after all
+  } else {
+    // did not need posterior (but found it anyway)
     mxDestroyArray(plhs_msw[MXT_msw_ARG_post]);
-
-  printf("segment: returning from hmi_segment...\n");
+  }
+  // nclean
+  if (nlhs > ARG_nclean) {
+    // asked for #pixels cleaned output
+    plhs[ARG_nclean] = plhs_cel[MXT_cel_ARG_nclean];
+  } else {
+    // did not need posterior (but found it anyway)
+    mxDestroyArray(plhs_cel[MXT_cel_ARG_nclean]);
+  }
 }
-
 
 
 /* Hook for generic tail matter */
 #ifdef MEX2C_TAIL_HOOK
 #include "mex2c_tail.h"
 #endif
-

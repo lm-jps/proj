@@ -5,7 +5,7 @@
  * Declarations for calling `smoothsphere' a.k.a. `ssp' as a C library.
  *
  * Made by intermediate binary `smoothsphere.out' on:
- * 	Thu Oct  7 22:21:29 2010
+ * 	Thu Jul  7 23:02:43 2011
  *
  * Code for include-generation driver `../Gen-include.c' last modified on:
  * 	Mon Jun  7 15:11:28 2010
@@ -16,9 +16,11 @@
 /*
  * smoothsphere: smooth a projected sphere with a kernel
  * 
- *  [y,s]=smoothsphere(x,geom,k,kparam,kwt,bws)
- *  * Given a solar image of location given by geom, smooth it
+ *  [y,s,p]=smoothsphere(x,geom,k,kparam,kwt,bws)
+ *  * Given a solar image of location given by `geom', smooth it
  *  using the radially-symmetric kernel `k'.
+ *  * This version is threaded, using 8 threads by default.
+ *  Set MXT_NUM_THREADS in the environment to lower this number.
  *  * Off-disk values are indicated by NaN in the output.
  *  * The kernel used is dependent only on the weighted distance
  *  between two positions, say P1 and P2, in three-dimensional
@@ -26,11 +28,21 @@
  *    d = P1 - P2
  *    dist = d' W d  (>= 0)
  *  for a diagonal weight matrix W.
- *  The kernel values are specified for values of "dist" taken
- *  from a linear range from 0 to kparam(1).  Given a certain
- *  value of "dist" found between an image pixel and the kernel
- *  center, the associated weight is interpolated linearly using
- *  the table.  If dot > kparam(1), a zero weight is used.
+ *  The kernel values in `k' are specified for values of `dist'
+ *  in a linear range from 0 to kparam(1), typically 0.015.
+ *  Given a certain value of `dist' found between an image pixel
+ *  and the kernel center, the associated weight is interpolated
+ *  linearly using the table.  If dot > kparam(1), a zero weight
+ *  is used.
+ *  * We have typically let k be a gaussian kernel of width
+ *  (standard deviation) = 0.0325, i.e.,
+ *    k(dist) = C * exp[ -0.5 * dist / sqr(0.0325) ],
+ *  since dist is a squared quantity already, and C is a constant
+ *  chosen to make k have unit norm as a spherical kernel.
+ *  * As a shortcut, if k is a scalar, the kernel is taken to
+ *  be the above function, but with width 0.0325 multiplied by
+ *  k(1).  In this case, the LUT consists of 256 points evenly
+ *  spaced over [0,kparam(1)].
  *  * The diagonal portion of the distance weight matrix W may be
  *  supplied as a triple kwt.  This weights distances between
  *  P1 and P2 in the x, y, and z directions respectively.   The
@@ -68,7 +80,7 @@
  *  Inputs:
  *    real x[m,n];
  *    real geom[5];  -- [x0 y0 rsun b0 p0]
- *    real k[p];
+ *    real k[p] or k[1];
  *    real kparam[2];  -- [top window]
  *    opt real kwt = [1 1 1];
  *    opt real bws[bwnum,2] = [0.4 2;0.6 4];         -- m <  2048

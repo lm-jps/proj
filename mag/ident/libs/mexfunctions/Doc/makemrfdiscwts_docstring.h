@@ -4,13 +4,13 @@
  *
  * This documentation string was generated from
  * a C comment block within a mex program
- * by `doc2docstring.py' on Mon May 17 17:04:07 2010.
+ * by `doc2docstring.py' on Thu Jun 16 23:24:56 2011.
  */
  
 static const char docstring[] =
 	"makemrfdiscwts	make distance metric for mrf segmentation\n"
 	"\n"
-	" dist=makemrfdiscwts(n,del,ctr,rho)\n"
+	" dist=makemrfdiscwts(n,del,ctr,rho,mode,ell)\n"
 	" * Given image sizes n, and neighborhood size del, make a distance\n"
 	" metric array dist, such that dist(:,m1,n1) is the distance-to-\n"
 	" neighbors of the site m1,n1, where 1 <= m1 <= n(1) and 1 <= n1 <= n(2).\n"
@@ -21,12 +21,9 @@ static const char docstring[] =
 	" * Thus, for instance, if Cx, Cy, r is the MDI center from mdidisk(),\n"
 	" we would specify ctr=[Cx Cy r].  Note that ctr(1) and n(2) correspond\n"
 	" to x, while ctr(2) and n(1) correspond to y.\n"
-	" * Elliptical discs are allowed for.  ctr(3) is the major axis\n"
-	" semidiameter, and ctr(4) is that of the minor axis.\n"
-	" ctr(5) is the counterclockwise rotation, in degrees, of the major\n"
-	" axis off of the \"m\" or \"y\" axis.  If not given, ctr(4)=ctr(3) and\n"
-	" ctr(5)=0.  The implied condition ctr(4) <= ctr(3) is not required\n"
-	" by the code.\n"
+	" * Note that p-angle and b-angle are not needed by this routine.\n"
+	" For simplicity, a 5-tuple containing these as entries 4 and 5\n"
+	" (a `geom' vector) can be given for ctr, and the tail will be ignored.\n"
 	" * The distance scale factor is rho.  Zero corresponds to uniform\n"
 	" distances (all one) and large positive values correspond to\n"
 	" separation-sensitive distances.  100 (20..200) is a typical value\n"
@@ -49,8 +46,21 @@ static const char docstring[] =
 	" between sites s,s' where s' is less than s.  This is the case if\n"
 	" the pixel corresponding to s' comes before s in the memory footprint\n"
 	" of an image.\n"
+	" * Elliptical discs are allowed for.  In this case, ctr(3) is the\n"
+	" major axis semidiameter, and ell(1) is that of the minor axis.\n"
+	" ell(2) is the counterclockwise rotation, in degrees, of the major\n"
+	" axis off of the \"m\" or \"y\" axis.  If not given, ell(1)=ctr(3) and\n"
+	" ell(2)=0.  The implied condition ell(1) <= ctr(3) is not required\n"
+	" by the code.\n"
 	" * If either s or s' is off-disk, zero is put in the corresponding\n"
 	" distance value.  This is required by mrf_segment_wts.\n"
+	" * The required mode string switches between sesw (mode = 'sesw')\n"
+	" or transposed (mode = 'sene') pixel ordering, which works as follows.\n"
+	" * The normal HMI (and normal MDI) pixel ordering starts in the\n"
+	" southeast corner, and the first scan line of pixels runs toward the\n"
+	" southwest corner.  This is `sesw' ordering.  The transposed ordering\n"
+	" is `sene'; this ordering is what we used for the JPL MDI processing.\n"
+	" This is implemented via internal stride parameters.\n"
 	" * This is implemented as a MEX file.  It agrees with makemrfdiscwts2.m\n"
 	"\n"
 	" Inputs:\n"
@@ -58,6 +68,8 @@ static const char docstring[] =
 	"   int del;\n"
 	"   real ctr(3) or ctr(4) or ctr(5);\n"
 	"   real rho;\n"
+	"   string mode;\n"
+	"   opt real ell(2) = [ctr(3) 0];\n"
 	"\n"
 	" Outputs:\n"
 	"   real dist ((del*del-1)/2,n(1),n(2));\n"

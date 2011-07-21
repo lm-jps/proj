@@ -38,6 +38,16 @@ typedef enum {
   RS_rgn_bnet,      // net LoS flux within the identified region
   RS_rgn_bpos,      // absolute value of total positive ROI LoS flux
   RS_rgn_bneg,      // absolute value of total negative ROI LoS flux
+  // flux moments
+  RS_rgn_bsum1,     // sum of  LoS flux    within the identified region (== bnet)
+  RS_rgn_bsum2,     // sum of (LoS flux)^2 within the identified region
+  RS_rgn_bsum3,     // sum of (LoS flux)^3 within the identified region
+  RS_rgn_bsum4,     // sum of (LoS flux)^4 within the identified region
+  // flux moments, standardized
+  RS_rgn_bmean,     // mean of LoS flux within the region
+  RS_rgn_bsdev,     // standard deviation of LoS flux within the region
+  RS_rgn_bskew,     // skewness of LoS flux within the region
+  RS_rgn_bkurt,     // kurtosis (subtracting 3) of LoS flux within the region
   // size
   RS_ar_num,        // # active pixels
   RS_ar_size,       // projected (flat) active area in microhemispheres (0..1e6)
@@ -82,6 +92,16 @@ static const char *RS_index2name[] = {
   "rgn_bnet",
   "rgn_bpos",
   "rgn_bneg",
+  // flux moments
+  "rgn_bsum1",
+  "rgn_bsum2",
+  "rgn_bsum3",
+  "rgn_bsum4",
+  // flux moments, standardized
+  "rgn_bmean",
+  "rgn_bsdev",
+  "rgn_bskew",
+  "rgn_bkurt",
   // size
   "ar_num",
   "ar_size",
@@ -105,11 +125,66 @@ static const char *RS_index2name[] = {
   NULL,
 };
 
-// correspondence of statistics above to HMI keywords
-// NULL means, no such HMI keyword
+// how to combine two or more summary statistics
+// into a pooled statistic: sum, min, max, or
+// weighted average
+
+static const char *RS_index2combo[] = {
+  // size
+  "sum",          // rgn_num
+  "sum",          // rgn_size
+  "sum",          // rgn_area
+  // extent
+  "min",          // rgn_min_lat
+  "min",          // rgn_min_lon
+  "max",          // rgn_max_lat
+  "max",          // rgn_max_lon
+  // return time
+  "max",          // rgn_daysgone
+  "min",          // rgn_daysback
+  // flux
+  "sum",          // rgn_btot
+  "sum",          // rgn_bnet
+  "sum",          // rgn_bpos
+  "sum",          // rgn_bneg
+  // flux moments
+  "sum",          // rgn_bsum1
+  "sum",          // rgn_bsum2
+  "sum",          // rgn_bsum3
+  "sum",          // rgn_bsum4
+  // flux moments, standardized
+  "recomp",       // rgn_bmean
+  "recomp",       // rgn_bsdev
+  "recomp",       // rgn_bskew
+  "recomp",       // rgn_bkurt
+  // size
+  "sum",          // ar_num
+  "sum",          // ar_size
+  "sum",          // ar_area
+  // flux
+  "sum",          // ar_btot
+  "sum",          // ar_bnet
+  "sum",          // ar_bpos
+  "sum",          // ar_bneg
+  // mean location
+  "avg.ar_area",  // ar_area_lat
+  "avg.ar_area",  // ar_area_lon
+  "avg.ar_btot",  // ar_fwt_lat
+  "avg.ar_btot",  // ar_fwt_lon
+  "avg.ar_bpos",  // ar_fwtpos_lat
+  "avg.ar_bpos",  // ar_fwtpos_lon
+  "avg.ar_bneg",  // ar_fwtneg_lat
+  "avg.ar_bneg",  // ar_fwtneg_lon
+  // bookkeeping
+  NULL,
+  NULL,
+};
+
+// correspondence of statistics above to HMI "patch" keywords
+// NULL means, no such keyword in patch series
 // first char gives type of HMI keyword
 
-static const char *RS_index2keyname[] = {
+static const char *RS_index2patch_keyname[] = {
   // size
   "iNPIX",        // RS_rgn_num
   "fSIZE",        // RS_rgn_size
@@ -123,10 +198,20 @@ static const char *RS_index2keyname[] = {
   NULL,           // RS_rgn_daysgone
   NULL,           // RS_rgn_daysback
   // flux
-  "fBTOT",        // RS_rgn_btot    
-  "fBNET",        // RS_rgn_bnet    
-  "fBPOS_TOT",    // RS_rgn_bpos    
-  "fBNEG_TOT",    // RS_rgn_bneg    
+  "fMTOT",        // RS_rgn_btot    
+  "fMNET",        // RS_rgn_bnet    
+  "fMPOS_TOT",    // RS_rgn_bpos    
+  "fMNEG_TOT",    // RS_rgn_bneg    
+  // flux moments
+  NULL,           // RS_rgn_bsum1
+  NULL,           // RS_rgn_bsum2
+  NULL,           // RS_rgn_bsum3
+  NULL,           // RS_rgn_bsum4
+  // flux moments, standardized
+  "fMMEAN",       // RS_rgn_bmean
+  "fMSTDEV",      // RS_rgn_bsdev
+  "fMSKEW",       // RS_rgn_bskew
+  "fMKURT",       // RS_rgn_bkurt
   // size
   "iNACR",        // RS_ar_num
   "fSIZE_ACR",    // RS_ar_size     
@@ -145,6 +230,59 @@ static const char *RS_index2keyname[] = {
   "fFWTPOS_LON",  // RS_ar_fwtpos_lon
   "fFWTNEG_LAT",  // RS_ar_fwtneg_lat
   "fFWTNEG_LON",  // RS_ar_fwtneg_lon
+  // end
+};
+
+// correspondence of statistics above to HMI "mask" keywords
+// NULL means, no such keyword in mask series
+// first char gives type of HMI keyword
+
+static const char *RS_index2mask_keyname[] = {
+  // size
+  "iAR_NPIX",     // RS_rgn_num
+  "fAR_SIZE",     // RS_rgn_size
+  "fAR_AREA",     // RS_rgn_area    
+  // extent
+  NULL,           // RS_rgn_min_lat   
+  NULL,           // RS_rgn_min_lon	 
+  NULL,           // RS_rgn_max_lat   
+  NULL,           // RS_rgn_max_lon	 
+  // return time
+  NULL,           // RS_rgn_daysgone
+  NULL,           // RS_rgn_daysback
+  // flux
+  "fAR_MTOT",     // RS_rgn_btot    
+  "fAR_MNET",     // RS_rgn_bnet    
+  "fAR_MPOS",     // RS_rgn_bpos    
+  "fAR_MNEG",     // RS_rgn_bneg    
+  // flux moments
+  NULL,           // RS_rgn_bsum1
+  NULL,           // RS_rgn_bsum2
+  NULL,           // RS_rgn_bsum3
+  NULL,           // RS_rgn_bsum4
+  // flux moments, standardized
+  "fAR_MMEAN",    // RS_rgn_bmean
+  "fAR_MSDEV",    // RS_rgn_bsdev
+  "fAR_MSKEW",    // RS_rgn_bskew
+  "fAR_MKURT",    // RS_rgn_bkurt
+  // size
+  NULL,           // RS_ar_num
+  NULL,           // RS_ar_size     
+  NULL,           // RS_ar_area     
+  // flux
+  NULL,           // RS_ar_btot    
+  NULL,           // RS_ar_bnet    
+  NULL,           // RS_ar_bpos    
+  NULL,           // RS_ar_bneg    
+  // mean location
+  NULL,           // RS_ar_area_lat
+  NULL,           // RS_ar_area_lon	 
+  NULL,           // RS_ar_fwt_lat   
+  NULL,           // RS_ar_fwt_lon 	 
+  NULL,           // RS_ar_fwtpos_lat
+  NULL,           // RS_ar_fwtpos_lon
+  NULL,           // RS_ar_fwtneg_lat
+  NULL,           // RS_ar_fwtneg_lon
   // end
 };
 

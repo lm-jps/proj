@@ -16,6 +16,7 @@
 #include <string.h>
 #include <strings.h>
 #include "mex.h"
+#include "mextool.h"
 #include "mexargcheck.h"
 
 #define ERRBUFSIZE 120

@@ -15,6 +15,7 @@
 #include <string.h>
 #include <math.h>
 #include "mex.h"         /* mwSize type, et al. */
+#include "mextool.h"
 #include "num_strings.h" /* function templates: current file */
 #include "ieee_consts.h" /* mxt_getnand */
 

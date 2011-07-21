@@ -11,21 +11,26 @@
 
 %roi_stats_mag: accumulate statistics on regions
 % 
-% [s,names]=roi_stats_mag(x,y,mag,geom,mode)
+% [s,names,combo]=roi_stats_mag(x,y,mag,geom,nroi,mode)
 % * A set of per-region statistics is gathered based on regions 
 % encoded in the image inputs x (containing region tags, 1..Nr, or
 % 0 for no tag) and y (containing region indicators, 0/1).  The
 % statistics are functions of region configuration, and of 
-% line-of-sight magnetic field mag.
-% * x must be Nan, or a nonnegative integer.  Pixels in the 
+% line-of-sight magnetic field `mag'.
+% * x should be 0/NaN, or a nonnegative integer.  Pixels in the 
 % range 1..Nr, where Nr is the number of regions, are treated as
-% tags for being within the named region.
+% indicators for being within the numbered region.
 % Inputs x of 0 or NaN are treated as not belonging to any
 % labeled region.
-% * y must be NaN, 0, or 1 -- 1 indicates activity present.  Not all
-% tagged pixels will be active; typically the tagged pixels are
-% large blobs, and the active pixels are finer details within each
-% blob.
+% * The number of regions, Nr, is deduced from x.  Often you want
+% the statistics to cover a known range of classes regardless of x.  
+% If so, specify the nroi input (an integer).  If you give nroi < 0,
+% or empty, it is taken as equal to Nr.  If nroi < Nr, pixels with 
+% x > nroi are ignored.
+% * y that is finite and nonzero (e.g., 1) indicates activity present.  
+% Not all tagged pixels will be active; typically the tagged pixels 
+% are large blobs, and the active pixels are finer details within 
+% each blob.
 % * For each region, a row of statistics is computed:
 %    1: rgnnum = # pixels tagged (all may not be active)
 %    2: rgnsize = projected (flat) area in microhemispheres (0..1e6)
@@ -51,18 +56,22 @@
 % angle beta, in degrees.
 % * Optionally returns the standard text name of each of the
 % computed statistics. 
+% * Optionally returns the means of combination of each of the 
+% computed statistics. 
 % * This is implemented as a MEX file.
 % 
 % Inputs:
-%   int  x(m,n);
-%   int  y(m,n);
+%   real x(m,n);   -- 1..Nr, or 0/NaN
+%   int  y(m,n);   -- 0/NaN, or otherwise
 %   real mag(m,n);
 %   real geom(5);  -- [x0 y0 r_sun b p]
+%   int nroi;      -- [] same as -1
 %   string mode;
 % 
 % Outputs:
-%   real s(nr,ns)
+%   real s(nr,ns)  -- nr = (nroi < 0) ? Nr : nroi
 %   opt string names(ns)
+%   opt string combo(ns)
 % 
 % See Also:
 
@@ -76,35 +85,40 @@ static const char *progname = "roi_stats_mag";
 #define PROGNAME roi_stats_mag
 #define SHORTNAME rsm
 
-#define NARGIN_MIN	5	   /* min number of inputs */
-#define NARGIN_MAX	5	   /* max number of inputs */
+#define NARGIN_MIN	6	   /* min number of inputs */
+#define NARGIN_MAX	6	   /* max number of inputs */
 #define NARGOUT_MIN	0	   /* min number of outputs */
-#define NARGOUT_MAX	2	   /* max number of outputs */
+#define NARGOUT_MAX	3	   /* max number of outputs */
 
 #define ARG_X     0
 #define ARG_Y     1
 #define ARG_MAG   2
 #define ARG_GEOM  3
-#define ARG_MODE  4
+#define ARG_NROI  4
+#define ARG_MODE  5
 
 #define ARG_S     0
 #define ARG_NAMES 1
+#define ARG_COMBO 2
 
 static const char *in_specs[NARGIN_MAX] = {
   "RM",
   "RM",
   "RM",
   "RV(5)",
+  "IS",
   "SV"};
 static const char *in_names[NARGIN_MAX] = {
   "x",
   "y",
   "mag",
   "geom",
+  "nroi",
   "mode"};
 static const char *out_names[NARGOUT_MAX] = {
   "s",
-  "names"};
+  "names",
+  "combo"};
 
 #include "roi_stats_mag_defs.h"
 
@@ -159,8 +173,8 @@ extract_mode(char *mode, int *Msesw)
  */
 static
 void
-stat_compute(double *roi,   // input roi image
-	     double *ar,    // input acr image
+stat_compute(double *roi,   // input roi image ("x")
+	     double *ar,    // input acr image ("y")
 	     double *mag,   // input mgram image, or NULL
 	     double **s,    // result: statistics per region (2d)
 	     int Nr,        // number of regions
@@ -177,7 +191,8 @@ stat_compute(double *roi,   // input roi image
 
 {
   int x, y;               // loop counters
-  int r;                  // region counter
+  double r_dbl;           // region number as a double
+  int r;                  // region number as an int
   int offset;             // offset into arrays
   double lat, lon;        // hold current lat,lon
   double p1x, p1y, p1z;   // point P1 coords in 3D
@@ -211,6 +226,10 @@ stat_compute(double *roi,   // input roi image
     // 0: daysgone, daysback (they are not accumulators)
     // flux
     // 0: rgn_btot, rgn_bnet, rgn_bpos, rgn_bneg,    
+    // flux moments
+    // 0: rgn_bsum1, 2, 3, 4
+    // flux moments, standardized
+    // 0: rgn_bmean, rgn_bsdev, rgn_bskew, rgn_bkurt
     /* (next, ar stuff) */
     // size
     // 0: ar_num,  ar_size,  ar_area     
@@ -229,8 +248,10 @@ stat_compute(double *roi,   // input roi image
   for (x = 0; x < maxx; x++) 
     for (y = 0; y < maxy; y++) {
       offset = x*strx + y*stry;  // still in units of doubles
-      r = roi[offset];
-      if (!WithinROI(r)) continue;
+      r_dbl = roi[offset]; // a double
+      if (!WithinROI(r_dbl)) continue; // ensure the NaN check works
+      r = (int) floor(r_dbl);
+      if (r > Nr || r < 1) continue;  // ensure it's in-range
       r--; /* make region number (1..Nr) into a region index (0..Nr-1) */
       mag1  = mag ? mag[offset] : nan; // abbreviate the magnetic field...
       magM1 = fabs(mag1); // ...and its magnitude
@@ -279,6 +300,12 @@ stat_compute(double *roi,   // input roi image
       s[RS_rgn_bnet][r] += mag1;
       s[RS_rgn_bpos][r] += (mag1 > 0) ? magM1 : 0.0;
       s[RS_rgn_bneg][r] += (mag1 < 0) ? magM1 : 0.0;
+      // line-of-sight flux, moments
+      // TODO: check if number-of-pixels normalization is correct
+      s[RS_rgn_bsum1][r] += mag1;
+      s[RS_rgn_bsum2][r] += mag1*mag1;
+      s[RS_rgn_bsum3][r] += mag1*mag1*mag1;
+      s[RS_rgn_bsum4][r] += mag1*mag1*mag1*mag1;
       if (ActiveLabel(ar[offset])) {
 	// basic sizes
 	s[RS_ar_num ][r]++;              // count pixels
@@ -355,7 +382,34 @@ stat_compute(double *roi,   // input roi image
     s[RS_rgn_daysgone][r] = (tau -            s[RS_rgn_min_lon][r])/temp;  
     s[RS_rgn_daysback][r] = ((2*M_PI - tau) - s[RS_rgn_max_lon][r])/temp; 
   }
-  // 2c: unit conversions, in order of definition
+  // 2c: compute (mean,sdev,skew,kurtosis) from moments
+  for (r = 0; r < Nr; r++) {
+    double N;        // normalizing constant
+    double mu, sig2; // first moment, and second central moment (variance)
+    double M_3, M_4; // third and fourth central moments
+
+    // using number-of-pixels normalization, not area
+    N    =  s[RS_rgn_num  ][r]; // currently, number-of-pixels
+    mu   =  s[RS_rgn_bsum1][r] / N;
+    sig2 = (s[RS_rgn_bsum2][r] / N) - mu*mu;
+    if (sig2 < 0) sig2 = 0;  // numerical trouble could cause this
+    if (N < 2) sig2 = nan;   // cannot compute sdev in this case
+    // third central moment, where S_i is the i'th noncentral moment:
+    //  (use binomial row [1 -3 3 -1]; last two entries combine into +2)
+    // E (x-mu)^3 = S_3 - 3 mu S_2 + 2 mu^3
+    M_3 = (s[RS_rgn_bsum3][r]/N) - 3*mu*(s[RS_rgn_bsum2][r]/N) + 2*mu*mu*mu;
+    // fourth central moment:
+    //  (use binomial row [1 -4 +6 -4 1]; last two entries combine into -3)
+    // E (x-mu)^4 = S_4 - 4 mu S_3 + 6 mu^2 S_2 - 3 mu^4
+    M_4 = (s[RS_rgn_bsum4][r]/N) - 4*mu*(s[RS_rgn_bsum3][r]/N) +
+      6*mu*mu*(s[RS_rgn_bsum2][r]/N) - 3*mu*mu*mu*mu;
+
+    s[RS_rgn_bmean][r] = mu;
+    s[RS_rgn_bsdev][r] = sqrt(sig2);
+    s[RS_rgn_bskew][r] = M_3 / (sig2 * sqrt(sig2));
+    s[RS_rgn_bkurt][r] = (M_4 / (sig2*sig2)) - 3.0;
+  }
+  // 2d: unit conversions, in order of definition
   for (r = 0; r < Nr; r++) {
     const double rad2deg = 180.0/M_PI;
     const double size2uhemi = 1e6/(M_PI*R*R);   // 1 hemi has pi R^2 pixels
@@ -387,8 +441,13 @@ stat_compute(double *roi,   // input roi image
     s[RS_ar_fwtneg_lon][r] *= rad2deg;
   }
   // 2d: ensure NaNs for empty regions
-  //     (probably redundant)
+  //     (Nr may be larger than range of roi array)
   for (r = 0; r < Nr; r++) {
+    if (s[RS_rgn_num][r] == 0) {
+      s[RS_rgn_min_lat ][r] = s[RS_rgn_min_lon ][r] = nan;
+      s[RS_rgn_max_lat ][r] = s[RS_rgn_max_lon ][r] = nan;
+      s[RS_rgn_daysgone][r] = s[RS_rgn_daysback][r] = nan;
+    }
     if (s[RS_ar_num][r] == 0) {
       s[RS_ar_area_lat  ][r] = s[RS_ar_area_lon  ][r] = nan;
       s[RS_ar_fwt_lat   ][r] = s[RS_ar_fwt_lon   ][r] = nan;
@@ -412,8 +471,7 @@ count_classes(double *y,
 
   for (n = 0; n < N; n++)
     if (!isnan(y[n])) {
-      /* below commented out for speed */
-      if (y[n] < 0 /* || floor(y[n]) != y[n] */ )
+      if (y[n] < 0 || floor(y[n]) != y[n])
 	return -1;
       if (y[n] > Nr)
 	Nr = y[n];
@@ -448,7 +506,8 @@ mexFunction(
   int m,  n;                 // size of x
   int maxx, maxy;            // sizes, transposed if needed
   int strx, stry;            // strides in images along x and y dims
-  int Nr;                    // number of regions found
+  int Nr;                    // number of regions found in x
+  int Nroi;                  // number of regions in the output
   int mode_sesw;             // sesw = 1, transposed = 0
   char *mode, *word;         // label for converted mode string and substring
   double *g;                 // convenience
@@ -477,6 +536,17 @@ mexFunction(
 			   "%s: Expect %d <= output args <= %d",
 			   progname, NARGOUT_MIN, NARGOUT_MAX), errstr));
   mexargparse(nrhs, prhs, in_names, in_specs, NULL, progname);
+  start_sizechecking();
+  // size(x) == size(y)
+  sizeinit(prhs[ARG_Y]);
+  sizeagree(prhs[ARG_X]); 
+  sizecheck_msg(progname, in_names, ARG_Y);
+  // if size(mag) > 0, size(mag) == size(x)
+  if (mxGetNumberOfElements(prhs[ARG_MAG]) > 0) {
+    sizeinit(prhs[ARG_MAG]);
+    sizeagree(prhs[ARG_X]); 
+    sizecheck_msg(progname, in_names, ARG_MAG);
+  }
 
   /* get size of input image x, needed below */
   m = (int) mxGetM(prhs[ARG_X]);
@@ -496,6 +566,15 @@ mexFunction(
   r  = g[2];             // disk radius
   b  = g[3]*M_PI/180.0;  // deg -> rad
   p  = g[4]*M_PI/180.0;  // deg -> rad
+
+  /* 
+   * `nroi' input
+   * (required, can be empty by IS rules)
+   */
+  if (mxGetNumberOfElements(prhs[ARG_NROI])) 
+    Nroi = mxGetScalar(prhs[ARG_NROI]);
+  else
+    Nroi = -1;
 
   /* 
    * `mode' input
@@ -528,13 +607,20 @@ mexFunction(
   n  = mxGetN(prhs[ARG_X]);
 
   /* 2: make the space */
-  /* first, check x and find #regions */
+  // first, check x and find #regions
   if ((Nr = count_classes(mxGetPr(prhs[ARG_X]), m*n)) < 0)
     mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
 			   "%s: Regions x must be NaN or integers >= 0", 
 			   progname), errstr));
-  /* now, create space for the region info */
-  plhs[ARG_S] = mxCreateDoubleMatrix(Nr, (mwSize) RS_num_stats, mxREAL); 
+  // this Nroi lets range of x determine the number of regions to use
+  if (Nroi < 0)
+    Nroi = Nr;
+  // create space for the region info
+  plhs[ARG_S] = mxCreateDoubleMatrix(Nroi, (mwSize) RS_num_stats, mxREAL); 
+  if (!plhs[ARG_S])
+    mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
+			   "%s: Failed to allocate space for s output", 
+			   progname), errstr));
 
   /*
    * Depending on pixel-order mode, set up strides and bounding boxes in
@@ -553,7 +639,11 @@ mexFunction(
   }
 
   // simplify indexing into stat
-  stat2 = mxt_make_matrix2(plhs[ARG_S],   -1, -1, 0.0);
+  stat2 = mxt_make_matrix2(plhs[ARG_S], -1, -1, 0.0);
+  if (!stat2)
+    mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
+			   "%s: Failed to allocate space for s pointers", 
+			   progname), errstr));
   // account for empty mag case
   mag = (mxGetNumberOfElements(prhs[ARG_MAG]) > 0) ? 
     mxGetPr(prhs[ARG_MAG]) : NULL;
@@ -565,10 +655,10 @@ mexFunction(
 	       mxGetPr(prhs[ARG_Y]), 
 	       mag,
 	       stat2,
-	       Nr,                           // computed number of regions
-	       maxx, maxy,                   // size
-	       strx, stry,                   // strides in units of doubles
-	       x0, y0, r, b, p);             // geom
+	       Nroi,                  // desired number of regions
+	       maxx, maxy,            // size
+	       strx, stry,            // strides in units of doubles
+	       x0, y0, r, b, p);      // geom
   // for debugging 
   if (0) {
     int r, sn;
@@ -577,10 +667,10 @@ mexFunction(
     for (sn = 0; sn < RS_num_stats; sn++)
       printf("\t%s", RS_index2name[sn]);
     printf("\n");
-    for (r = 0; r < Nr; r++) {
+    for (r = 0; r < Nroi; r++) {
       printf("P%d: ", r);
       for (sn = 0; sn < RS_num_stats; sn++)
-	printf("\t%.3g", stats[sn*Nr+r]);
+	printf("\t%.3g", stats[sn*Nroi+r]);
       printf("\n");
     }
   }
@@ -597,6 +687,20 @@ mexFunction(
       mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
 			     "%s: Failed to create `%s' output for %d names",
 			     progname, out_names[ARG_NAMES], 
+			     (int) RS_num_stats), 
+		    errstr));
+  }
+
+  /*
+   * plug in combo if wanted
+   */
+  if (nlhs > ARG_COMBO) {
+    plhs[ARG_COMBO] = mxCreateCharMatrixFromStrings((int) RS_num_stats, 
+						    RS_index2combo);
+    if (plhs[ARG_COMBO] == NULL)
+      mexErrMsgTxt((snprintf(errstr, sizeof(errstr),
+			     "%s: Failed to create `%s' output for %d combo-specs",
+			     progname, out_names[ARG_COMBO], 
 			     (int) RS_num_stats), 
 		    errstr));
   }
