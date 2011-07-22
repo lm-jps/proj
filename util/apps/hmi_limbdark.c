@@ -1,4 +1,4 @@
-#define CVSVERSION "$Id: hmi_limbdark.c,v 1.6 2011/07/15 01:40:06 phil Exp $"
+#define CVSVERSION "$Id: hmi_limbdark.c,v 1.7 2011/07/22 06:35:59 phil Exp $"
 /**
    @defgroup analysis
    @ingroup su_util
@@ -16,6 +16,8 @@
    an average of several runs with the -f flag set.
    Modified from MDI DSDS program fitlimbdark.
    Default is to rotate to solar north up, and center to nearest pixel.
+
+   Fit formula comes from Pierce, A.K. and C. Slaughter, "Solar Limb Darkening", Solar Physics 51, 25-41, 1977.
   
    Parameters are:
      in         input recordset, expected to be an Ic product
@@ -81,7 +83,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *ObsLoc, int *status);
 
 int  GetObsLocInfo(DRMS_Segment_t *seg, int i, int j, ObsInfo_t *ObsLoc);
 
-int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncropped, int do_reverse);
+int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncrop, int do_reverse, int do_norm);
 
 int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs);
 
@@ -104,6 +106,7 @@ ModuleArgs_t module_args[] =
      {ARG_FLAG, "f", "0", "Fit limb darkening before applying"},
      {ARG_FLAG, "n", "0", "Normalize the final image by dividing by the mean"},
      {ARG_FLAG, "c", "0", "Supress center and flip 180 degrees if CROTA~180."},
+     {ARG_FLAG, "x", "0", "Exclude pixels that deviate from the default LD, <0.875 or >1.25."},
      {ARG_FLOATS, "coefs", "0.0", "Limb darkening coeficients, 5 needed"},
      {ARG_END}
 };
@@ -115,16 +118,20 @@ int DoIt(void)
   int restoreLD = cmdparams_isflagset(&cmdparams, "r");
   int do_fit = cmdparams_isflagset(&cmdparams, "f");
   int do_normalize = cmdparams_isflagset(&cmdparams, "n");
+  int do_exclude = cmdparams_isflagset(&cmdparams, "x");
   const char *inQuery = params_get_str(&cmdparams, "in");
   const char *outSeries = params_get_str(&cmdparams, "out");
   char *p;
   int status = 0;
   ObsInfo_t *ObsLoc;
   // Coef version 1
-  static double defaultcoefs[] = {0.443000, 0.139000, 0.041000, 0.012500, 0.001900};
-  char *CoefVersion = "1";
+  // static double defaultcoefs[] = {1.0, 0.443000, 0.139000, 0.041000, 0.012500, 0.001900};
+  // char *CoefVersion = "1";
+  // Coef version 2
+  static double defaultcoefs[] = {1.0, 0.459224, 0.132395, 0.019601, 0.000802, -4.31934E-05 };
+  char *CoefVersion = "2";
 
-  double use_coefs[5];
+  double use_coefs[6];
   double n_user_coefs = cmdparams_get_int(&cmdparams, "coefs_nvals", &status);
 
   DRMS_RecordSet_t *inRS, *outRS;
@@ -136,22 +143,22 @@ int DoIt(void)
     DIE("Must have output series");;
 
   printf("FitLimbDark\n");
-  if (n_user_coefs == 5)
+  if (n_user_coefs == 6)
     {
     double *cmdcoefs;
     int i;
     CoefVersion = "user given";
     cmdparams_get_dblarr(&cmdparams, "coefs", &cmdcoefs, &status);
-    for (i=0; i<5; i++)
+    for (i=0; i<6; i++)
       {
       use_coefs[i] = cmdcoefs[i];
-      printf(" Coef%d = %0.6f\n", i+1, use_coefs[i]);
+      printf(" Coef%d = %0.6f\n", i, use_coefs[i]);
       }
     }
   else
     {
     int i;
-    for (i=0; i<5; i++)
+    for (i=0; i<6; i++)
       use_coefs[i] = defaultcoefs[i];
     printf(" Use default coefs\n");
     }
@@ -174,7 +181,6 @@ int DoIt(void)
     DRMS_Record_t *outRec;
     int quality = drms_getkey_int(inRec, "QUALITY", NULL);
     ObsInfo_t *ObsLoc;
-    double normalize;
 
     outRec = outRS->records[irec];
     drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
@@ -186,11 +192,11 @@ int DoIt(void)
 
     if (quality >= 0)
       {
-      double coefs[5];
+      double mean=1.0;
+      double coefs[6];
       DRMS_Segment_t *inSeg, *outSeg;
       DRMS_Array_t *inArray, *outArray;
       int ncropped = 0;
-      char *ld_comment = NULL;
       inSeg = drms_segment_lookupnum(inRec, 0);
       inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
       if (status)
@@ -204,28 +210,52 @@ int DoIt(void)
       if (status)
         DIE("Failed to get observatory location.");
 
+      // if (do_exclude && do_fit)
       if (do_fit)
-        fit_limbdark(inArray, ObsLoc, coefs);
+        {
+        if (do_exclude )
+          {
+          DRMS_Array_t *xArray = drms_array_create(DRMS_TYPE_FLOAT, inArray->naxis, inArray->axis, NULL, &status);
+          DRMS_Array_t *inxArray = drms_array_create(DRMS_TYPE_FLOAT, inArray->naxis, inArray->axis, NULL, &status);
+          float *iv = (float*)inArray->data;
+          float *v = (float*)xArray->data;
+          float *nv = (float*)inxArray->data;
+          int i, n = inArray->axis[0] * inArray->axis[1];
+          int nskip = 0;
+          float missval = DRMS_MISSING_FLOAT;
+          rm_limbdark(inArray, xArray, ObsLoc, use_coefs, &ncropped, 0, 1);
+          for (i=0; i<n; i++, v++, iv++)
+            if (!isnan(*v) && *v > 0.850 && *v < 1.150) 
+              *nv++ = *iv;
+            else
+              {
+              *nv++ = missval;
+              if (!isnan(*v))
+                nskip++;
+              }
+          printf("exclude %d pixels\n", nskip);
+          fit_limbdark(inxArray, ObsLoc, coefs);
+          drms_free_array(xArray);
+          drms_free_array(inxArray);
+          }
+        else
+          fit_limbdark(inArray, ObsLoc, coefs);
+        }
 
       outSeg = drms_segment_lookupnum(outRec, 0);
       outArray = drms_array_create(DRMS_TYPE_FLOAT, inArray->naxis, inArray->axis, NULL, &status);
 
-      if (rm_limbdark(inArray, outArray, ObsLoc, (do_fit ? coefs : use_coefs), &ncropped, restoreLD) == DRMS_SUCCESS)
+      if (rm_limbdark(inArray, outArray, ObsLoc, (do_fit ? coefs : use_coefs), &ncropped, restoreLD, do_normalize) == DRMS_SUCCESS)
         {
         int totvals, datavals;
 
-        if (ld_comment)
-          {
-          drms_setkey_string(outRec, "HISTORY", ld_comment);
-          free(ld_comment);
-          }
-
         drms_setkey_string(outRec, "COEF_VER", CoefVersion);
-        drms_setkey_float(outRec, "LDCoef1", (float)(do_fit ? coefs[0] : use_coefs[0]));
-        drms_setkey_float(outRec, "LDCoef2", (float)(do_fit ? coefs[1] : use_coefs[1]));
-        drms_setkey_float(outRec, "LDCoef3", (float)(do_fit ? coefs[2] : use_coefs[2]));
-        drms_setkey_float(outRec, "LDCoef4", (float)(do_fit ? coefs[3] : use_coefs[3]));
-        drms_setkey_float(outRec, "LDCoef5", (float)(do_fit ? coefs[4] : use_coefs[4]));
+        drms_setkey_float(outRec, "LDCoef0", (float)(do_fit ? coefs[0] : use_coefs[0]));
+        drms_setkey_float(outRec, "LDCoef1", (float)(do_fit ? coefs[1] : use_coefs[1]));
+        drms_setkey_float(outRec, "LDCoef2", (float)(do_fit ? coefs[2] : use_coefs[2]));
+        drms_setkey_float(outRec, "LDCoef3", (float)(do_fit ? coefs[3] : use_coefs[3]));
+        drms_setkey_float(outRec, "LDCoef4", (float)(do_fit ? coefs[4] : use_coefs[4]));
+        drms_setkey_float(outRec, "LDCoef5", (float)(do_fit ? coefs[5] : use_coefs[5]));
         if (!noFlip)
           upNcenter(outArray, ObsLoc);
         drms_setkey_double(outRec, "CRPIX1", ObsLoc->crpix1);
@@ -234,29 +264,13 @@ int DoIt(void)
 
         if (do_normalize)
           {
-          int i, nok=0, n = outArray->axis[0] * outArray->axis[1];
-          double mean=0.0;
-          float *v = outArray->data;
-          for (i=0; i<n; i++, v++)
-            if (!isnan(*v)) 
-              { nok++; mean += *v; }
-          if (nok)
-            {
-            mean /= nok;
-            v = outArray->data;
-            for (i=0; i<n; i++, v++)
-              if (!isnan(*v)) 
-                *v /= mean;
-            }
-          outArray->bzero = 0.5;
-          outArray->bscale= 1.0/32768.0;
-          drms_setkey_double(outRec, "NORMALIZE", mean);
+          outArray->bzero = 1.0;
+          outArray->bscale= 1.0/30000.0;
           }
        else
           {
           outArray->bzero = 32768.0;
-          outArray->bscale=1.0;
-          drms_setkey_double(outRec, "NORMALIZE", 1.0);
+          outArray->bscale=1.5;
           }
 
         set_statistics(outSeg, outArray, 1);
@@ -295,7 +309,7 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
   int ny = arr->axis[1];
   double scale;
   double crop_limit;
-  float *data = arr->data;
+  float *data = (float*)arr->data;
   float missval = DRMS_MISSING_FLOAT;
   int n;
   int ord;
@@ -306,14 +320,14 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
   if (!f || !c) DIE("malloc problem");
 
   scale = 1.0/rsun;
-  crop_limit = 0.998;
+  crop_limit = 0.9995;
 
   n = 0;
   for (iy=0; iy<ny; iy++)
     for (ix=0; ix<nx; ix++)
         {
-	double costheta, costheta2;
-        double mu, z, ld;
+	double costheta2;
+        double xi, mu, z, ld;
 	double x, y, R2;
         float *Ip = data + iy*nx + ix;
 
@@ -331,14 +345,14 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
 	  continue;
 
         costheta2 = 1.0 - R2;
-        costheta = sqrt(costheta2);
-	mu = log(costheta);
+        mu = sqrt(costheta2);
+	xi = log(mu);
 	z = 1.0;
         f[n] = *Ip;
         c[6*n + 0] = 1.0;
 	for (ord=1; ord<6; ord++)
 	  {
-	  z *= mu;
+	  z *= xi;
           c[6*n + ord] = z;
 	  }
         n++;
@@ -349,18 +363,19 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
       fitcoefs[0] = fitcoefs[1] = fitcoefs[2] = fitcoefs[3] = fitcoefs[4] = fitcoefs[5] =  DRMS_MISSING_DOUBLE;
       }
     printf("Fit %d points, Coefs = %0.6f", n, fitcoefs[0]);
-    for (ord=0; ord<5; ord++)
+    for (ord=0; ord<6; ord++)
       {
-      coefs[ord] = fitcoefs[ord+1]/fitcoefs[0];
+      coefs[ord] = fitcoefs[ord]/fitcoefs[0];
       printf(", %8.6f", coefs[ord]);
       }
     printf("\n");
+    coefs[0] = fitcoefs[0];
   free(f);
   free(c);
   return(0);
   }
 
-int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncrop, int do_reverse)
+int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncrop, int do_reverse, int do_norm)
   {
   double x0 = ObsLoc->crpix1 - 1;
   double y0 = ObsLoc->crpix2 - 1;
@@ -371,11 +386,10 @@ int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, doub
   int ny = arr->axis[1];
   double scale;
   double crop_limit;
-  float *data = arr->data;
-  float *odata = outarr->data;
+  float *data = (float *)arr->data;
+  float *odata = (float *)outarr->data;
   float missval = DRMS_MISSING_FLOAT;
   int ncropped = 0;
-  char comment[4096];
   
   scale = 1.0/rsun;
   crop_limit = 1.0;
@@ -383,8 +397,8 @@ int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, doub
   for (iy=0; iy<ny; iy++)
     for (ix=0; ix<nx; ix++)
         {
-	double costheta, costheta2;
-        double mu, z, ld;
+	double costheta2;
+        double xi, mu, z, ld;
 	double x, y, R2;
         int ord;
         float *Ip = data + iy*nx + ix;
@@ -410,26 +424,55 @@ int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, doub
 	  continue;
 	  }
 
-        if (R2 < 0.998)
+        if (R2 <= 1.0)
           costheta2 = 1.0 - R2;
         else
-          costheta2 = 0.002;
+          costheta2 = 0.0;
 
-        costheta = sqrt(costheta2);
-	mu = log(costheta);
+        mu = sqrt(costheta2);
+	xi = log(mu);
 	z = 1.0;
 	ld = 1.0;
-	for (ord=0; ord<5; ord++)
+	for (ord=1; ord<6; ord++)
 	  {
-	  z *= mu;
+	  z *= xi;
 	  ld += coefs[ord] * z;
 	  }
-	if (do_reverse)
+        if (ld <= 0.0)
+          {
+          *Op = missval;
+          ncropped++;
+          }
+	else if (do_reverse)
 	  *Op = *Ip * ld;
 	else
 	  *Op = *Ip / ld;
 	}
   *ncrop = ncropped;
+  if (do_norm)
+    {
+    double mean;
+    float *v = odata;
+    int i, n = outarr->axis[0] * outarr->axis[1];
+    if (coefs[0] == 1.0)
+      {
+      int nok=0;
+      v = odata;
+      for (i=0; i<n; i++, v++)
+        if (!isnan(*v)) 
+          { nok++; mean += *v; }
+      if (nok)
+        mean /= nok;
+      else
+        mean = 1.0;
+      }
+    else
+      mean = coefs[0];
+    v = odata;
+    for (i=0; i<n; i++, v++)
+      if (!isnan(*v)) 
+        *v /= mean;
+    }
   return(0);
   }
 
@@ -492,7 +535,7 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   float *data;
   if (!arr || !ObsLoc)
     return(1);
-  data = arr->data;
+  data = (float *)arr->data;
   nx = arr->axis[0];
   ny = arr->axis[1];
   x0 = ObsLoc->crpix1 - 1;
