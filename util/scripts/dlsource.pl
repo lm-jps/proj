@@ -58,7 +58,9 @@
 #       net (the set of files that compose the NetDRMS release).
 #       <configuration file> (the set of files is specified by <configuration file>).
 #  -r For the checkout, export, and update operations, the revision of files to download. This is a
-#       CVS tag or file version number. 
+#       CVS tag or file version number. If the file-set type is net
+#  -R Applies to the net and custom file-set types. For the checkout, export, and update operations, the revision 
+#       of non-NetDRMS project files to download. 
 #  -t For the tag and untag operations, the CVS tag to apply or delete.
 
 use XML::Simple;
@@ -112,17 +114,20 @@ my(@core);
 my(@netonly);
 my(@netco);
 my(@sdbco);
-my(@cstco);
 my($curdir);
 my($xmldata); # reference to hash array
 my($dltype);
 my($version);
+my($pversion); # version of project files (when for net and custom file-set types)
 my($cvstag);
 my($stfile);
 my($stfileold);
 my($stcotype);
 my($stfspec);
 my($compatmode);
+my(@filespec); # the complete file spec for all types of file-sets
+my(@pfilespec); # for custom file-set types, the file spec of the files in the configuration file
+my(@bfilespec); # for custom file-set types, the file spec of the files NOT in the configuration file
 
 # Don't allow more than one version of this file to run concurrently to avoid race conditions.
 unless (flock(DATA, LOCK_EX | LOCK_NB)) 
@@ -169,6 +174,11 @@ while ($arg = shift(@ARGV))
       # revision (version)
       $arg = shift(@ARGV);
       $version = $arg;
+   }
+   elsif ($arg eq "-R")
+   {
+      $arg = shift(@ARGV);
+      $pversion = $arg;
    }
    elsif ($arg eq "-t")
    {
@@ -304,7 +314,7 @@ if (!$err)
    }
    else
    {
-      if (BuildFilespec($cotype, $dltype, $stfspec, $xmldata, \@core, \@netonly, \@sdponly, \@filespec))
+      if (BuildFilespec($cotype, $dltype, $stfspec, $xmldata, \@core, \@netonly, \@sdponly, \@filespec, \@bfilespec, \@pfilespec))
       {
          print STDERR "Unable to build filespec.\n";
          $err = 1;
@@ -348,7 +358,7 @@ if (!$err)
          # Do a cvs checkout, export, or update into the current directory
          if (!$err)
          {
-            $err = DownloadTree($cotype, $dltype, $version, \@filespec);
+            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec);
             if ($err)
             {
                print STDERR "Unable to $dltype CVS tree.\n";
@@ -604,6 +614,8 @@ sub BuildFilespec
    my($netonly) = $_[5];
    my($sdponly) = $_[6];
    my($fsout) = $_[7];
+   my($bfsout) = $_[8];
+   my($pfsout) = $_[9];
 
    my($rv);
    my($strproj) = kStrproj;
@@ -631,21 +643,29 @@ sub BuildFilespec
       {
          push(@$fsout, @$core);
          push(@$fsout, @$netonly);
+         push(@$bfsout, @$fsout);
       }
       elsif ($cotype eq kCoSdp)
       {
          push(@$fsout, @$core);
          push(@$fsout, @$sdponly);
+         push(@$bfsout, @$fsout);
       }
       elsif ($cotype eq kCoCustom)
       {
          push(@$fsout, @$core);
          push(@$fsout, @$netonly);
+         push(@$bfsout, @$fsout);
 
-         # Use $xmldata to populate @cstco;
+         # If there is a -R flag, then it applies only to the checkout of project directories specified in 
+         # the config file - so keep these files separate from the rest. @$bfsout contains the files in base, 
+         # @$pfsout contains the files in proj.
+
+         # Use $xmldata to populate @pfsout and @fsout
          foreach $proj (@{$xmldata->{$strproj}})
          {
             push(@$fsout, kProjSubdir . "/" . $proj->{$strname}->[0]);
+            push(@$pfsout, kProjSubdir . "/" . $proj->{$strname}->[0]);
          }
       }
       else
@@ -663,7 +683,10 @@ sub DownloadTree
    my($cotype) = $_[0];
    my($dltype) = $_[1];
    my($version) = $_[2];
-   my($fspec) = $_[3];
+   my($pversion) = $_[3];
+   my($fspec) = $_[4];
+   my($bfspec) = $_[5];
+   my($pfspec) = $_[6];
 
    my($rv) = 0;
    my($curdir);
@@ -671,6 +694,7 @@ sub DownloadTree
    my($cvscmd);
    my($cmd);
    my($rev);
+   my($prev);
    my(@relpaths);
 
    if (length($dltype) > 0)
@@ -716,6 +740,20 @@ sub DownloadTree
       else
       {
          $rev = "";
+      }
+
+      if (length($pversion) > 0)
+      {
+         $prev = "-r $pversion";
+      } 
+      elsif ($dltype eq kDlExport || $dltype eq kDlPrint)
+      {
+         # Only export requires a revision argument
+         $prev = "-r HEAD";
+      } 
+      else
+      {
+         $prev = "";
       }
    }
 
@@ -764,13 +802,31 @@ sub DownloadTree
 
    if (!$rv)
    {
-      @relpaths = map({kRootDir . "$_"} @{$fspec});
+      # Checkout the project files with a separate cvs command - using the version tag specific to the project
+      # files.
+      @relpaths = map({kRootDir . "$_"} @{$bfspec});
       $cmd = join(' ', "cvs", $cvscmd, $rev, @relpaths);
 
       if (CallCVS($cmd))
       {
          print STDERR "Unable to $dltype repository files.\n";
          $rv = 1;
+      }
+      else
+      {
+         # If this is a sdp or net checkout, then $pfspec will be empty, so we can skip this second
+         # checkout.
+         if (defined($pfspec) && $#{$pfspec} >= 0)
+         {
+            @relpaths = map({kRootDir . "$_"} @{$pfspec});
+            $cmd = join(' ', "cvs", $cvscmd, $prev, @relpaths);
+
+            if (CallCVS($cmd))
+            {
+               print STDERR "Unable to $dltype repository files.\n";
+               $rv = 1;
+            }
+         }
       }
    }
 
