@@ -98,6 +98,7 @@ static const char *intensity2mask_keys[] = {
   // limb darkening function
   "NORMALIZE",NULL,
   "COEF_VER", NULL,
+  "LDCoef0",  NULL,
   "LDCoef1",  NULL,
   "LDCoef2",  NULL,
   "LDCoef3",  NULL,

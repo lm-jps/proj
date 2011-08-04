@@ -1,25 +1,28 @@
 /*
  * Module name: hmi_segment_module.c
- * This jsoc module generates masks from LOS B and intensity
+ * This jsoc module generates masks from LOS field and intensity
  *
- * We currently use hmi.M_720s and hmi.Ic_noLD_720s, but this is
+ * We currently use hmi.M_720s and hmi.Ic_noLimbDark_720s, but this is
  * change-able by specifying a different model.  In particular,
  * to use hmi.M_720s and hmi.Ic_720s, you can use:
- *   model='hmi.production.M_Ic_720s'
+ *   model=/builtin/hmi.M_Ic_720s.production
+ * To use hmi.Ic_noLimbDark_720s instead, use:
+ *   model=/builtin/hmi.M_Ic_noLimbDark_720s.production
+ * To see all builtin models, use model=/builtin/all
  *
  * You must specify M and Ic series that match up in time (T_REC) 
- * and coordinates.  (The code checks for this.)  By coordinates,
+ * and image coordinates.  (The code checks for this.)  By coordinates,
  * we mean that XO, Y0, R_SUN, CROTA2, and CRLT_OBS, or their WCS
  * analogs, must agree.
  *
- * Accepts a verbose option (VERB=v where v is 0 or 1).
+ * Accepts a verbose option (VERB=v where v is 0, 1, 2, or 3).
  *
  * Current (07/2011) usage:
+ *
  * hmi_segment_module 
  *      xm='hmi.M_720s[2010.07.03_12:48:00_TAI/1h]' 
- *      xp='hmi.Ic_noLD_720s[2010.07.03_12:48:00_TAI/1h]' 
- *      model='hmi.production.M_Ic_noLD_720s' beta=0.4 y=hmi.Marmask_720s
- *
+ *      xp='hmi.Ic_noLimbDark_720s[2010.07.03_12:48:00_TAI/1h]' 
+ *      model=/builtin/hmi.M_Ic_noLimbDark_720s.production beta=0.4 y=hmi.Marmask_720s
  *
  * Michael Turmon, JPL
  *  adapted from code by Yang Liu (10/2009)
@@ -393,7 +396,7 @@ ModuleArgs_t module_args[] =
    {ARG_FLOATS,  kParT,      "[1,1,0.9,0]","Temperature (RV(4))"},
    {ARG_FLOAT,   kParBeta,   "0.4",        "Smoothness"},
    {ARG_FLOAT,   kParRho,    "100",        "Smoothness Anisotropy"},
-   {ARG_STRING,  kParModel,  "",           "Model set name (`all' for list)"},
+   {ARG_STRING,  kParModel,  "",           "Model set name (`/builtin/all' for list)"},
    {ARG_STRING,  kSeriesOut, "",           "Output data series."},
    {ARG_INT,     kVerb,      "1",          "Verbosity: 0=errs only; 1, 2, 3 = more"},
    {ARG_END}

@@ -16,7 +16,7 @@
  *   "version":  "1 from 2010.10.10",
  *   "nclass":   2,
  *   "ndim":     2,
- *   "format":   "var,chol,diag-then-upper",
+ *   "format":   "var,diag-then-upper",
  *   "alpha":    [0.0, -4.0],
  *   "models": [
  * 	{ "name": "quiet Sun", "k": 3, "params": [ (list of k*6 doubles) ] }, 
@@ -150,7 +150,7 @@ seg_model_test_yang = {
   "Pre-launch model for proxy images made by Yang Liu",
   "1 from 2010.03.01",
   2, 
-  2, "var,chol,diag-then-upper", // always like this
+  2, "var,diag-then-upper", // always like this
   seg_model_alpha_test_yang, 
   { 
     // this is a list of seg_onemodel_t structures
@@ -169,7 +169,7 @@ seg_model_M_Ic_720s = {
   "First post-launch model using hmi.Ic_720s and hmi.M_720s",
   "1 from 2010.04.15",
   2, 
-  2, "var,chol,diag-then-upper", // always like this
+  2, "var,diag-then-upper", // always like this
   seg_model_alpha_M_Ic_720s, 
   {
     // this is a list of seg_onemodel_t structures
@@ -188,7 +188,7 @@ seg_model_M_Ic_noLD_720s = {
   "Model using hmi.Ic_noLimbDark_720s and hmi.M_720s",
   "1 from 2011.06.20",
   2, 
-  2, "var,chol,diag-then-upper", // always like this
+  2, "var,diag-then-upper", // always like this
   seg_model_alpha_M_Ic_noLD_720s,
   {
     // this is a list of seg_onemodel_t structures

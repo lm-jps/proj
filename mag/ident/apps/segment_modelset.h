@@ -54,7 +54,7 @@ typedef struct {
   char *version;   // version identifier
   int nclass;      // number of classes, e.g. 2 for quiet Sun vs. active region
   int ndim;        // number of image observations (always ndim = 2 = M + Ic)
-  char *format;    // ordering of params (always = "var,chol,diag-then-upper")
+  char *format;    // ordering of params (always = "var,diag-then-upper")
   double *alpha;   // length-nclass vector of per-class probabilities
   seg_onemodel_t models[]; // length-nclass list of models, one for each class
 } seg_modelset_t;
