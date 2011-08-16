@@ -50,11 +50,11 @@ ifeq ($(COMPILER), icc)
 endif
 
 ifeq ($(JSOC_MACHINE), linux_x86_64)
-  MKL     := $(NOIPO_$(d)) -lmkl_em64t -lfftw3f
+  MKL     := $(NOIPO_$(d)) -L /home/jsoc/lib/linux-x86_64 -lmkl_em64t -lfftw3f
 endif
 
 ifeq ($(JSOC_MACHINE), linux_ia32)
-  MKL     := $(NOIPO_$(d)) -lmkl_lapack -lmkl_ia32 -lfftw3f
+  MKL     := $(NOIPO_$(d)) -L /home/jsoc/lib/linux-ia32 -lmkl_lapack -lmkl_ia32 -lfftw3f
 endif
 
 SVML_$(d)       :=
