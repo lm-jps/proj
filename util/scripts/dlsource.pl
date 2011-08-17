@@ -62,6 +62,7 @@
 #  -R Applies to the net and custom file-set types. For the checkout, export, and update operations, the revision 
 #       of non-NetDRMS project files to download. 
 #  -t For the tag and untag operations, the CVS tag to apply or delete.
+#  -l A log file (for the output of CVS commands for now).
 
 use XML::Simple;
 use IO::Dir;
@@ -108,6 +109,7 @@ use constant kSuFlagFile => "suflag.txt";
 my($arg);
 my($cotype);
 my($cfgfile);
+my($logfile);
 my($cmd);
 my($err);
 my(@core);
@@ -185,6 +187,12 @@ while ($arg = shift(@ARGV))
       # CVS tag to set/remove
       $arg = shift(@ARGV);
       $cvstag = $arg;
+   }
+   elsif ($arg eq "-l")
+   {
+      $arg = shift(@ARGV);
+      $logfile = $arg;
+
    }
    elsif ($arg eq "-f")
    {
@@ -358,7 +366,7 @@ if (!$err)
          # Do a cvs checkout, export, or update into the current directory
          if (!$err)
          {
-            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec);
+            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec, $logfile);
             if ($err)
             {
                print STDERR "Unable to $dltype CVS tree.\n";
@@ -372,7 +380,7 @@ if (!$err)
                {
                   my($cvscmd) = "cvs update -A " . kRootDir . kSuFlagFile . " " . kRootDir . "jsoc_sync.pl " . kRootDir . "jsoc_update.pl";
 
-                  if (CallCVS($cvscmd))
+                  if (CallCVS($cvscmd, $logfile))
                   {
                      print STDERR "Unable to run $cvscmd.\n";
                      $err = 1;
@@ -445,6 +453,19 @@ if (!$err)
                {
                   print STDERR "Unable to open file " . kRootDir . kLocDir . kTypeFile . " for writing.\n";
                }
+
+               # Copy the cvs update log, if it exists, back to the kRootDir (programs calling this script)
+               # expect it in kRootDir.
+               if (-e $logfile)
+               {
+                  # cp $logfile kRootDir
+                  if (!copy($logfile, kRootDir))
+                  {
+                     # copy failure
+                     print STDERR "Unable to copy log file $logfile to " . kRootDir . ".\n";
+                     $err = 1;
+                  }
+               }
             }
             elsif ($dltype eq kDlTag || $dltype eq kDlUntag)
             {
@@ -460,7 +481,7 @@ if (!$err)
                   }
                   else
                   {
-                     if (TagFiles($cvstag, $dltype))
+                     if (TagFiles($cvstag, $dltype, $logfile))
                      {
                         print STDERR "Unable to tag/untag files in file specification.\n";
                         $err = 1;
@@ -687,6 +708,7 @@ sub DownloadTree
    my($fspec) = $_[4];
    my($bfspec) = $_[5];
    my($pfspec) = $_[6];
+   my($logfile) = $_[7];
 
    my($rv) = 0;
    my($curdir);
@@ -807,7 +829,7 @@ sub DownloadTree
       @relpaths = map({kRootDir . "$_"} @{$bfspec});
       $cmd = join(' ', "cvs", $cvscmd, $rev, @relpaths);
 
-      if (CallCVS($cmd))
+      if (CallCVS($cmd, $logfile))
       {
          print STDERR "Unable to $dltype repository files.\n";
          $rv = 1;
@@ -821,7 +843,7 @@ sub DownloadTree
             @relpaths = map({kRootDir . "$_"} @{$pfspec});
             $cmd = join(' ', "cvs", $cvscmd, $prev, @relpaths);
 
-            if (CallCVS($cmd))
+            if (CallCVS($cmd, $logfile))
             {
                print STDERR "Unable to $dltype repository files.\n";
                $rv = 1;
@@ -854,7 +876,7 @@ sub TagFiles
       $cmd = "cvs tag -d $tag ."
    }
    
-   if (CallCVS($cmd))
+   if (CallCVS($cmd, $logfile))
    {
       print STDERR "Unable to tag repository files.\n";
       $rv = 1;
@@ -964,11 +986,12 @@ sub GetFileList
 sub CallCVS
 {
    my($cmd) = $_[0];
+   my($log) = $_[1];
 
    my($rv) = 0;
    my($callstat);
 
-   system($cmd);
+   system("$cmd 1>$log 2>&1");
    $callstat = $?;
 
    if ($callstat == -1)

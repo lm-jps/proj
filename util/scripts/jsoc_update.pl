@@ -11,6 +11,8 @@
 #    n12 formerly used for AMD x86-64 can also be used instead of n02
 #    lws Itaniam processors no longer supported for JSOC
 
+use FindBin qw($Bin);
+
 $JSOCROOT = $ENV{"JSOCROOT"};
 $CVSLOG = "cvsupdate.log";
 $CVSSTATUS = "$JSOCROOT/base/util/scripts/cvsstatus.pl";
@@ -104,7 +106,7 @@ if ($wdupdate != 1)
 
 # First, synchronize with CVS repository
 print STDOUT "####### Start cvs update ####################\n";
-$synccmd = "(cd $lwd; /home/jsoc/jsoc_sync.pl -l$CVSLOG)";
+$synccmd = "(cd $lwd; $Bin/jsoc_sync.pl -l$CVSLOG)"; # use the jsoc_sync.pl relative to this script
 print "Calling '$synccmd'.\n";
 system($synccmd);
 
