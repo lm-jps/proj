@@ -69,9 +69,12 @@
 #define WARN(msg) do { \
 	fflush(stdout); \
         fprintf(stderr, "%s: WARNING: %s. Continuing.\n", module_name, msg); \
+	fflush(stderr); \
         } while (0)
-// facilitate verbose output
-// if flag is true, print the message in the form:
+// V_printf: facilitate verbose output
+//   if flag is > 0, output is to stdout, if < 0, to stderr
+//   if flag is 0, no output is made at all
+// The message is printed in the form:
 // <first><module_name>: <message>"
 // Usage:
 // V_printf(VERB > 0, "\t", "Mask(%d) = %d\n", 2048, mask[2048]);
@@ -79,15 +82,16 @@ void
 V_printf(int flag, char *first, char *format, ...) {
   va_list args;
   extern char *module_name;
+  FILE *fp = (flag > 0) ? stdout : stderr;
 
   va_start(args, format);
-  if (flag) {
+  if (flag != 0) {
     // first is a string, even "" -- print the module name too
     // otherwise, omit it
     if (first)
-      printf("%s%s: ", first, module_name);
-    vprintf(format, args);
-    fflush(stdout);
+      fprintf(fp, "%s%s: ", first, module_name);
+    vfprintf(fp, format, args);
+    fflush(fp);
   }
   va_end(args);
 }
