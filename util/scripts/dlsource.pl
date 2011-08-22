@@ -192,7 +192,6 @@ while ($arg = shift(@ARGV))
    {
       $arg = shift(@ARGV);
       $logfile = $arg;
-
    }
    elsif ($arg eq "-f")
    {
@@ -456,7 +455,7 @@ if (!$err)
 
                # Copy the cvs update log, if it exists, back to the kRootDir (programs calling this script)
                # expect it in kRootDir.
-               if (-e $logfile)
+               if (defined($logfile) && -e $logfile)
                {
                   # cp $logfile kRootDir
                   if (!copy($logfile, kRootDir))
@@ -860,6 +859,7 @@ sub TagFiles
 {
    my($tag) = $_[0];
    my($dltype) = $_[1];
+   my($logfile) = $_[2];
 
    my($rv) = 0;
    my(@allfiles);
@@ -991,7 +991,15 @@ sub CallCVS
    my($rv) = 0;
    my($callstat);
 
-   system("$cmd 1>$log 2>&1");
+   if (defined($log))
+   {
+      system("$cmd 1>$log 2>&1");
+   }
+   else
+   {
+      system($cmd);
+   }
+
    $callstat = $?;
 
    if ($callstat == -1)
