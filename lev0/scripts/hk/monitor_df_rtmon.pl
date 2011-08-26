@@ -27,8 +27,9 @@ else
 }
 
 #set common email arguments
-$hm=$ENV{'HOME'};
-$script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
+#$hm=$ENV{'HOME'};
+$hm="/home/jsoc/cvs/Development";
+$script_dir="$hm/JSOC/proj/lev0/scripts/hk";
 $ENV{'MAILTO'}="";
 $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
 ##$to_email="jsoc_ops\@sun.stanford.edu";

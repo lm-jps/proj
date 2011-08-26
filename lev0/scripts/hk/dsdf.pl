@@ -61,20 +61,22 @@ $source=check_agruments($ARGV[0]);
 
 # (2)setup common  variables
 $ENV{'SUMSERVER'}="j1.Stanford.edu";
-$hm="/home/production";
-$exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/cvs/JSOC/bin/linux_x86_64";
+$ENV{'JSOC_DBUSER'}="production";
+$hm="/home/jsoc/cvs/Development";
+$exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/JSOC/bin/linux_x86_64";
 $ENV{'MAILTO'}="";
-$script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
-$script_lev1_dir="$hm/cvs/JSOC/proj/lev1/scripts";
+$script_dir="$hm/JSOC/proj/lev0/scripts/hk";
+$log_dir="/home/jsocprod/hk/logs";
+$script_lev1_dir="$hm/JSOC/proj/lev1/scripts";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$script_lev1_dir:$ENV{'DF_EXEC_PATH'}";
 
 # (3)setup instruction filename for each apid to use when running load_m3sd
-$inst_apid_17="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/hmi.leg_status.txt";
-$inst_apid_19="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/hmi_thermal_300s_template.txt";
-$inst_apid_21="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/hmi.iss_status.txt";
-$inst_apid_38="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/aia.iss_3_4_status.txt";
-$inst_apid_40="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/aia.iss_1_2_status.txt";
-$inst_apid_44="$hm/cvs/TBL_JSOC/lev1/instruction_file/prod/aia_thermal_300s_template.txt";
+$inst_apid_17="$hm/TBL_JSOC/lev1/instruction_file/prod/hmi.leg_status.txt";
+$inst_apid_19="$hm/TBL_JSOC/lev1/instruction_file/prod/hmi_thermal_300s_template.txt";
+$inst_apid_21="$hm/TBL_JSOC/lev1/instruction_file/prod/hmi.iss_status.txt";
+$inst_apid_38="$hm/TBL_JSOC/lev1/instruction_file/prod/aia.iss_3_4_status.txt";
+$inst_apid_40="$hm/TBL_JSOC/lev1/instruction_file/prod/aia.iss_1_2_status.txt";
+$inst_apid_44="$hm/TBL_JSOC/lev1/instruction_file/prod/aia_thermal_300s_template.txt";
 
 # (4)setup pickup and dropoff directories and email variables based on source value
 if ($source eq "moc")
@@ -195,14 +197,14 @@ else
 }
 
 # (9)set up where to put backup logs written monthly
-$logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
+$logs_dir="$hm/JSOC/proj/lev0/scripts/hk/logs/old";
 
 # (10)open log file
-open(LF,">>$script_dir/$logfile") || die "Can't Open $script_dir/$logfile: $!\n";
+open(LF,">>$log_dir/$logfile") || die "Can't Open $log_dir/$logfile: $!\n";
 print LF `/bin/date -u`;
 print LF "--->Starting script dsdf.pl\n";
 # send message to users running script at command line so they know something is working
-print "...running dsdf.pl script\n...please wait to finish\n...view status on run by doing: tail -f $script_dir\/$logfile\n";
+print "...running dsdf.pl script\n...please wait to finish\n...view status on run by doing: tail -f $log_dir\/$logfile\n";
 
 # (11)"move" files over to /tmp22/production/lev0/hk_moc_dayfile for moc
 # or "copy" files to /tmp02/production/lev0/hk_rtmon_dayfile for rtmon
@@ -276,18 +278,18 @@ if($hkt_filecount > 0 or $xml_filecount > 0)
 }
 
 # (17)reopen log
-open(LF,">>$script_dir/$logfile") || die "Can't Open $script_dir/$logfile: $!\n";
+open(LF,">>$log_dir/$logfile") || die "Can't Open $log_dir/$logfile: $!\n";
 print LF "--->Processed df and xml files to data series. Log results:$log\n";
 
 # (18)Check if there and then delete all dayfiles that where ingested in dayfile data series 
 #     note:These files gets loaded with files by ingest_dayfile.pl, if ingest was successful.
 if ($source eq "moc")
 {
-  open(DELFILE, "$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
+  open(DELFILE, "$log_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
 }
 elsif ($source eq "rtmon")
 {
-  open(DELFILE, "$script_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
+  open(DELFILE, "$log_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
 }
 else
 {
@@ -322,7 +324,7 @@ elsif (($hkt_filecount +   $xml_filecount) == 0)
 {
   print LF "--->status:warning got no files to loaded into DRMS\n";
   ##note sent email here if occurs
-  sendEmail("$to_email", "$from_email", "$subject_email_no_files","Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/dsdf.pl> from cron job.\n");
+  sendEmail("$to_email", "$from_email", "$subject_email_no_files","Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script <$hm/JSOC/proj/lev0/scripts/hk/dsdf.pl> from cron job.\n");
 }
 elsif($hkt_filecount !=  $xml_filecount)
 {
@@ -330,14 +332,14 @@ elsif($hkt_filecount !=  $xml_filecount)
   print LF "--->delcount:$delcount hkt_filecount:$hkt_filecount xml_filecount:$xml_filecount\n";
   print LF "--->hkt and xml file counts should match therefore could not load dayfile and xml to dayfile series.\n";
   print LF "--->Check why each hkt file does not have a corresponding xml.\n";
-  sendEmail("$to_email", "$from_email", "$subject_email_not_equal_count", "Error Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/dsdf.pl> from cron job.\n-->All of the  hkt files don't have corresponding xml files therefore can not ingest dayfile.\n-->Check why each hkt file does not have a corresponding xml.\n");
+  sendEmail("$to_email", "$from_email", "$subject_email_not_equal_count", "Error Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script <$hm/JSOC/proj/lev0/scripts/hk/dsdf.pl> from cron job.\n-->All of the  hkt files don't have corresponding xml files therefore can not ingest dayfile.\n-->Check why each hkt file does not have a corresponding xml.\n");
 
 }
 else
 {
   print LF "--->status:not sure of status but got delcount:$delcount hkt_filecount:$hkt_filecount xml_filecount:$xml_filecount\n";
   print LF "--->Check if there is problem. The dayfiles to ingest into data series and delete from directory did not match the count of the dayfiles received.\n--->Possibly a problem ingesting dayfiles in series because of bad setting of SUMSERVER parameter or SUMS could be not available.\n--->Possibly not an issue which was caused by the dayfiles not being ingested on previous day(s) therefore the file count received today does not match files ingested.\n";
-  sendEmail("$to_email", "$from_email", "$subject_email_not_sure", "Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script </home/production/cvs/JSOC/proj/lev0/scripts/hk/dsdf.pl> from cron job.\n-->Check if there is problem. The dayfiles to ingest into data series and delete from directory did not match the count of the dayfiles received.\n-->Possibly a problem ingesting dayfiles in series because of bad setting of SUMSERVER parameter or SUMS could be not available.\n-->Possibly not an issue which was caused by the dayfiles not being ingested on previous day(s) therefore the file count received today does not match files ingested.\n");
+  sendEmail("$to_email", "$from_email", "$subject_email_not_sure", "Warning Message:\n-->Received count of <$hkt_filecount> hkt files and count of <$xml_filecount> xml files from directory <$pup_dir>.\n-->When executing script <$hm/JSOC/proj/lev0/scripts/hk/dsdf.pl> from cron job.\n-->Check if there is problem. The dayfiles to ingest into data series and delete from directory did not match the count of the dayfiles received.\n-->Possibly a problem ingesting dayfiles in series because of bad setting of SUMSERVER parameter or SUMS could be not available.\n-->Possibly not an issue which was caused by the dayfiles not being ingested on previous day(s) therefore the file count received today does not match files ingested.\n");
 }
 
 close DELFILE;
@@ -345,11 +347,11 @@ close DELFILE;
 # (21)set DELFILE file to blank since work was completed
 if ($source eq "moc")
 {
-open(DELFILE, ">$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
+open(DELFILE, ">$log_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
 }
 elsif ($source eq "rtmon")
 {
-open(DELFILE, ">$script_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
+open(DELFILE, ">$log_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
 }
 
 
@@ -477,14 +479,14 @@ sub check_log()
     #check if logs directory exists
     if ( -e $logs_dir)
     {
-      $lm=`cp $script_dir/$logfile $logs_dir/$logfile-$mon-$year`;
+      $lm=`cp $log_dir/$logfile $logs_dir/$logfile-$mon-$year`;
       #set log file to blank - copy was completed
-      open(LF, ">$script_dir/$logfile") || die "Can't Open $script_dir/$logfile file: $!\n";
+      open(LF, ">$log_dir/$logfile") || die "Can't Open $log_dir/$logfile file: $!\n";
       close LF;
     }
     else
     {
-      print LF "WARNING:movedf.pl:missing logs directory:<$logs_dir>. Create one at <$script_dir>\n";
+      print LF "WARNING:movedf.pl:missing logs directory:<$logs_dir>. Create one at <$log_dir>\n";
     }
   }
 }
@@ -834,7 +836,7 @@ sub do_ingest_dayfile($,$,$,$)
   $log=`$script_dir/ingest_dayfile.pl apid=$arg1 start=$arg2 end=$arg3 dsnlist=$arg4 src=$arg5 merged=$arg6`;
 
   #reopen log appending more messages
-  open(LF,">>$script_dir/$logfile") || die "Can't Open $script_dir/$logfile: $!\n";
+  open(LF,">>$log_dir/$logfile") || die "Can't Open $log_dir/$logfile: $!\n";
 
 }
 

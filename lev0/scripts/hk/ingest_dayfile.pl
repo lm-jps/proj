@@ -35,10 +35,11 @@
   #set environment variables specific for this script
   #common setting for all environments
   $ENV{'SUMSERVER'}="j1.Stanford.edu";
-  $hm="/home/production";
+  $hm="/home/jsoc/cvs/Development";
   $ENV{'MAILTO'}="";
-  $exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
-  $script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
+  $exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/JSOC/bin/linux_x86_64";
+  $script_dir="$hm/JSOC/proj/lev0/scripts/hk";
+  $log_dir="/home/jsocprod/hk/logs";
   $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
   # set debug flag 1 to turn on and 0 to turn off
@@ -50,19 +51,19 @@
   # set log file based on sdo, moc, or egsefm
   if ($source eq "hsb" or $source eq "hsb_r")
   {
-    $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-hsb";
+    $logfile="$log_dir/log-df-hsb";
   }
   elsif ($source eq "moc")
   {
-    $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-moc";
+    $logfile="$log_dir/log-df-moc";
   }
   elsif ($source eq "egsefm")
   {
-    $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-egsefm";
+    $logfile="$log_dir/log-df-egsefm";
   }
   elsif ($source eq "rtmon")
   {
-    $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-rtmon";
+    $logfile="$log_dir/log-df-rtmon";
   }
   else
   {
@@ -821,15 +822,15 @@ sub ingest_day_files()
        #add just filename to delete_file list
        if ( $source eq "rtmon")
        {
-         open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST_RTMON") || die "(7)Can't Open $script_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
+         open(DELFILE,">>$log_dir/DF_DELETE_FILE_LIST_RTMON") || die "(7)Can't Open $log_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
        }
        elsif ( $source eq "moc")
        {
-         open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(7)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
+         open(DELFILE,">>$log_dir/DF_DELETE_FILE_LIST_MOC") || die "(7)Can't Open $log_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
        }
        else #assumed hsb case
        {
-         open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST") || die "(7)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+         open(DELFILE,">>$log_dir/DF_DELETE_FILE_LIST") || die "(7)Can't Open $log_dir/DF_DELETE_FILE_LIST file: $!\n";
        }
        print DELFILE "$file\n";
        if($xfile ne "")
@@ -889,15 +890,15 @@ sub ingest_day_files()
          {
            if ( $source eq "rtmon")
            {
-             open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
+             open(DELFILE,">>$log_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
            }
            elsif ( $source eq "moc")
            {
-             open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
+             open(DELFILE,">>$log_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
            }
            else #assumed hsb case
            {
-             open(DELFILE,">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+             open(DELFILE,">>$log_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST file: $!\n";
 
            }
            print DELFILE "$filename\n";
@@ -915,16 +916,16 @@ sub ingest_day_files()
         {
            if ( $source eq "rtmon")
            {
-             open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
+             open(DELFILE, ">>$log_dir/DF_DELETE_FILE_LIST_RTMON") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST_RTMON file: $!\n";
            }
            elsif ( $source eq "moc")
            {
-             open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
+             open(DELFILE, ">>$log_dir/DF_DELETE_FILE_LIST_MOC") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST_MOC file: $!\n";
 
            }
            else
            {
-             open(DELFILE, ">>$script_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
+             open(DELFILE, ">>$log_dir/DF_DELETE_FILE_LIST") || die "(6)Can't Open $log_dir/DF_DELETE_FILE_LIST file: $!\n";
 
            }
           print DELFILE "$xmlfilename\n";
