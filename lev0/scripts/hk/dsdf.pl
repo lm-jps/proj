@@ -197,7 +197,7 @@ else
 }
 
 # (9)set up where to put backup logs written monthly
-$logs_dir="$hm/JSOC/proj/lev0/scripts/hk/logs/old";
+$logs_dir="$log_dir/old";
 
 # (10)open log file
 open(LF,">>$log_dir/$logfile") || die "Can't Open $log_dir/$logfile: $!\n";
