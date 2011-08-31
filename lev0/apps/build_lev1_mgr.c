@@ -636,7 +636,8 @@ int qsubmode(long long frec, long long lrec)
   //sprintf(qsubcmd, "qstat -j %s 2>/dev/null | grep \"job_number:\"", jidstr);
   //sprintf(qsubcmd, "qstat -u production | grep \"qsub_prod_%d\"", mypid);
   //the grep string is from qlogname set in qsubjob()
-  sprintf(qsubcmd, "qstat -u production | grep \"p_%d_\"", mypid);
+  //sprintf(qsubcmd, "qstat -u production | grep \"p_%d_\"", mypid);
+  sprintf(qsubcmd, "qstat -u jsocprod | grep \"p_%d_\"", mypid);
   while(1) {
     //printf("\ncmd: %s\n", qsubcmd);	//!!TEMP
     if(!(fin = popen(qsubcmd, "r"))) {
