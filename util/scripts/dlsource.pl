@@ -57,12 +57,16 @@
 #       sdp (all files in the repository, aka the "full JSOC" source tree).
 #       net (the set of files that compose the NetDRMS release).
 #       <configuration file> (the set of files is specified by <configuration file>).
-#  -r For the checkout, export, and update operations, the revision of files to download. This is a
-#       CVS tag or file version number. If the file-set type is net
-#  -R Applies to the net and custom file-set types. For the checkout, export, and update operations, the revision 
-#       of non-NetDRMS project files to download. 
+#  -r For the checkout, export, and update operations, this parameter is the CVS tag that identifies 
+#       the revision of each file to download. For the sdp and net file-sets, this tag is applied to 
+#       all files. For the custom file-set, this tag is applied to only the NetDRMS subset of files.
+#  -R Applies to the custom file-set only. For the checkout, export, and update operations, this parameter is 
+#       the CVS tag that identifies the revision of each non-NetDRMS project file to download. 
 #  -t For the tag and untag operations, the CVS tag to apply or delete.
 #  -l A log file (for the output of CVS commands for now).
+#  -F If a tagged checkout occurs as a result of other options, then tell CVS to retrieve the most recent
+#       file version of any file that is part of the file-set, but is not tagged with the tag provided
+#       by the -r or -R option.
 
 use XML::Simple;
 use IO::Dir;
@@ -127,6 +131,7 @@ my($stfileold);
 my($stcotype);
 my($stfspec);
 my($compatmode);
+my($forceco);
 my(@filespec); # the complete file spec for all types of file-sets
 my(@pfilespec); # for custom file-set types, the file spec of the files in the configuration file
 my(@bfilespec); # for custom file-set types, the file spec of the files NOT in the configuration file
@@ -148,6 +153,7 @@ $dltype = kDlCheckout;
 $version = "";
 $cvstag = "";
 $compatmode = 0;
+$forceco = 0;
 
 while ($arg = shift(@ARGV))
 {
@@ -220,6 +226,10 @@ while ($arg = shift(@ARGV))
             $err = 1;
          }
       }
+   }
+   elsif ($arg eq "-F")
+   {
+      $forceco = 1;
    }
 }
 
@@ -365,7 +375,7 @@ if (!$err)
          # Do a cvs checkout, export, or update into the current directory
          if (!$err)
          {
-            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec, $logfile);
+            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec, $logfile, $forceco);
             if ($err)
             {
                print STDERR "Unable to $dltype CVS tree.\n";
@@ -708,6 +718,7 @@ sub DownloadTree
    my($bfspec) = $_[5];
    my($pfspec) = $_[6];
    my($logfile) = $_[7];
+   my($forceco) = $_[8];
 
    my($rv) = 0;
    my($curdir);
@@ -717,6 +728,7 @@ sub DownloadTree
    my($rev);
    my($prev);
    my(@relpaths);
+   my($forcecostr) = $forceco ? "f" : "";
 
    if (length($dltype) > 0)
    {
@@ -825,6 +837,11 @@ sub DownloadTree
    {
       # Checkout the project files with a separate cvs command - using the version tag specific to the project
       # files.
+      if (length($rev) > 0)
+      {
+         $cvscmd = $cvscmd . $forcecostr;
+      }
+
       @relpaths = map({kRootDir . "$_"} @{$bfspec});
       $cmd = join(' ', "cvs", $cvscmd, $rev, @relpaths);
 
@@ -839,6 +856,11 @@ sub DownloadTree
          # checkout.
          if (defined($pfspec) && $#{$pfspec} >= 0)
          {
+            if (length($prev) > 0)
+            {
+               $cvscmd = $cvscmd . $forcecostr;
+            }
+
             @relpaths = map({kRootDir . "$_"} @{$pfspec});
             $cmd = join(' ', "cvs", $cvscmd, $prev, @relpaths);
 
