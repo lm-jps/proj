@@ -270,7 +270,6 @@ int DoIt(void)
   else if (strncasecmp(boxunits, "degrees", 3) == 0) boxtype = BOXDEGREE;
   else loctype = BOXBAD;
 
-fprintf(stderr,"starting boxtype=%d, loctype=%d\n",boxtype,loctype);
   if (loctype == LOCCARR)
     {
     if (car_rot < 0) DIE("Carrington rotation number must be provided for locunits=carrlong");
@@ -404,8 +403,6 @@ fprintf(stderr,"starting boxtype=%d, loctype=%d\n",boxtype,loctype);
       { car_rot--; crln -= 360.0; }
     else if (deltlong < 0)
       { car_rot++; crln += 360.0; }
-sprint_at(timebuf,drms_getkey_time(inRec,"T_OBS",NULL));
-fprintf(stderr,"t_ref specified, box center is at %4d:%05.1f by %05.1f on %s\n",car_rot, crln,crlt, timebuf);
     drms_close_records(inRS, DRMS_FREE_RECORD);
     }
   else // Carrington specification
@@ -414,7 +411,6 @@ fprintf(stderr,"t_ref specified, box center is at %4d:%05.1f by %05.1f on %s\n",
     crlt = y;
     if (crln < 0) DIE("Box longitude must be specified.");
     if (crlt < -990) DIE("box latitude must be specified.");
-fprintf(stderr,"car_rot specified, box center is at %4d:%05.1f by %05.1f \n",car_rot, crln,crlt);
     }
   crln_rad = crln * Deg2Rad;
   crlt_rad = crlt * Deg2Rad;
@@ -632,7 +628,6 @@ fprintf(stderr,"car_rot specified, box center is at %4d:%05.1f by %05.1f \n",car
           sphere2img(crlt_rad, crln_rad, crlt_obs_rad, crln_obs_rad, &center_x, &center_y, x0, y0, rsunpix, pa_rad, 0, 0, 0, 0);
           center_x_first = center_x - x0;
           center_y_first = center_y - y0;
-fprintf(stderr,"NoTrack, center_x_first=%f, center_y_first=%f, pa=%f\n",center_x_first,center_y_first,pa);
           }
       }
 
@@ -777,9 +772,6 @@ fprintf(stderr,"NoTrack, center_x_first=%f, center_y_first=%f, pa=%f\n",center_x
     // drms_copykey(outRec, inRec, "T_OBS");
     // drms_copykey(outRec, inRec, "DATE__OBS");
     // drms_copykey(outRec, inRec, "WAVELNTH");
-fprintf(stderr,"Box %04d ",irec);
-drms_fprint_rec_query(stderr, outRec);
-fprintf(stderr,"  crpix1=%f, crpix2=%f\n",crpix1,crpix2);
 
     if (log)
       {
@@ -1044,7 +1036,6 @@ char *get_input_recset(DRMS_Env_t *drms_env, char *in, TIME cadence)
   char seriesname[DRMS_MAXQUERYLEN];
 
   sprintf(keylist, "T_OBS,QUALITY,recnum");
-fprintf(stderr,"Get vector for: %s\n",in);
   data = drms_record_getvector(drms_env, in, keylist, DRMS_TYPE_DOUBLE, 0, &status);
   if (!data || status)
 	{
@@ -1052,7 +1043,6 @@ fprintf(stderr,"Get vector for: %s\n",in);
 	return(NULL);
 	}
   nrecs = data->axis[1];
-fprintf(stderr,"A nrecs=%d\n",nrecs);
   irec = 0;
   t_this = (TIME *)data->data;
   dquality = (double *)data->data + 1*nrecs;
@@ -1062,7 +1052,6 @@ fprintf(stderr,"A nrecs=%d\n",nrecs);
   nslots = (t_stop - t_start + cadence/2)/cadence;
   recnums = (long long *)malloc(nslots*sizeof(long long));
   slot_times = (TIME *)malloc(nslots*sizeof(TIME));
-fprintf(stderr,"nslots=%d\n",nslots);
   islot = 0;
   t_want = t_start;
   t_diff = 1.0e8; // 3+ years
