@@ -270,30 +270,30 @@ function MainTips(tipstyle)
     new Tip('RecordFromFileHelp','Allows user to provide a RecordSet list in a file.  ' +
         'The file should contain recordSet specifiers in the format allowed by drms_open_records include files.  ' +
         'See http://jsoc.stanford.edu/jsocwiki/AllAboutJsocNames.',tipstyle);
-    new Tip("RecordSetHelp","RecordSet to be exported. May be imported on call and/or may be entered directly here. ' +
-        'May be filled in by series select in Hg_patch processing option.",tipstyle);
-    new Tip("RecordLimitHelp","RecordSet record limit. Max number of records to export.  Modifies RecordSet. ' +
-        'Value should be 'none' or a number. Number > 0 counts from start of RecordSet.  Negative number counts ' +
-        'from high end of RecordSet.  0 means no limit",tipstyle);
-    new Tip("RecordCountHelp","RecordSet record count.  Update this to repeat export with new method, email, etc.  ' +
+    new Tip('RecordSetHelp','RecordSet to be exported. May be imported on call and/or may be entered directly here. ' +
+        'May be filled in by series select in Hg_patch processing option.',tipstyle);
+    new Tip('RecordLimitHelp','RecordSet record limit. Max number of records to export.  Modifies RecordSet. ' +
+        'Value should be "none" or a number. Number > 0 counts from start of RecordSet.  Negative number counts ' +
+        'from high end of RecordSet.  0 means no limit',tipstyle);
+    new Tip('RecordCountHelp','RecordSet record count.  Update this to repeat export with new method, email, etc.  ' +
         'There is presently a limit to the memory space allocated for record queries which restricts AIA lev1 ' +
         'requests to about 15,000 records and HMI X_45s or X_720s data to about 32,000 records.  ' +
-        'The limit depends on number of keywords in each record.  This limit will be eased in the future.",tipstyle);
-    new Tip("ProcessingHelp","Processing to be done to the data prior to export.  Select from drop-down list for details.",tipstyle);
-    new Tip("ProtocolHelp",'Data storage protocol for data files to be fetched.  ' +
+        'The limit depends on number of keywords in each record.  This limit will be eased in the future.',tipstyle);
+    new Tip('ProcessingHelp','Processing to be done to the data prior to export.  Select from drop-down list for details.',tipstyle);
+    new Tip('ProtocolHelp','Data storage protocol for data files to be fetched.  ' +
         '"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
         '"As-is" leaves the data as it is used inside the JSOC DRMS routines, with the header metadata stored in the database ' +
         'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten. The "JPEG" option will ' +
         ' yield  jpeg images of the data with a pre-determined scaling and colortable and the "MPEG" option will ' +
         ' yield a movie in mp4 format along with the jpeg images that make up the frames in the movie.',tipstyle);
-    new Tip("CompressHelp",'Compression parameters to be used by the cfitsio library.  ' +
+    new Tip('CompressHelp','Compression parameters to be used by the cfitsio library.  ' +
         'Provide up to one comma separated string for each segment name in your export.  ' +
         'Use "**NONE**" to indicate uncompressed FITS files desired.  If more segments are to be exported than strings are provided, ' +
         'then the last string will be used repeatedly as needed.  ' +
         'If this parameter is empty, the exported FITS file will have the same compression parameters as the original DRMS ' +
         'series segment as specified in the JSD for that series.  ' +
         'Advice: use **NONE** to ensure uncompressed.  See lookdata.html for the "cparms_sg###" keyword for the default.',tipstyle);
-    new Tip("MethodHelp",'Handshake method to be used in the process of doing the export and to fetch the data files. ' +
+    new Tip('MethodHelp','Handshake method to be used in the process of doing the export and to fetch the data files. ' +
         '"url-quick" is the fastest but can only be used if the data is online and will be exported "as-is". ' +
         '"url-direct" is has the constraints of url_quick with the limit of one file per request but it will ' +
         'automatically do the postprocessing specified in the "protocol" instruction. For "url_direct" the file ' +
@@ -304,7 +304,7 @@ function MainTips(tipstyle)
         '"ftp" is like "url" but the returned links will be to an ftp directory. ' +
         ' A "-tar" suffix will cause a tar of all files in the request to be included with the separate files. ' +
         'NOTE: do not use "-tar" unless you really need it since that will generate an extra copy of the data.',tipstyle);
-    new Tip("FilenameFmtHelp",'Filename format to be used in the process of doing the export.  ' +
+    new Tip('FilenameFmtHelp','Filename format to be used in the process of doing the export.  ' +
         'The filename format is a template used to construct a filename for each segment of each record requested.  ' +
         'The template consists of literal characters and substitution tokens enclosed in "{}".  ' +
         'The special words: seriesname, recnum, and segment are replaced with the series_name, the record number, ' +
@@ -316,12 +316,12 @@ function MainTips(tipstyle)
         'files into date structured directory trees. ' +
         'It is wise to include enough of the "prime-keys" to make a unique filename.  ' +
         'The default format template is made from series structure.',tipstyle);
-    new Tip("RequestorHelp","Optional place for your name, this will be used later when we have a way of saving your ' +
-        'preferred export options.",tipstyle);
-    new Tip("NotifyHelp","Optional email address to be used to notify you when the export is complete and ready to be ' +
-        'fetched using the RequestID.",tipstyle);
-    new Tip("ConfirmHelp","Usual duplicate copy of email address to avoid lost exports due to typos.",tipstyle);
-    new Tip("SendFileHelp","This action will submit the export request with the RecordSet specified in the upload file.",tipstyle);
+    new Tip('RequestorHelp','Optional place for your name, this will be used later when we have a way of saving your ' +
+        'preferred export options.',tipstyle);
+    new Tip('NotifyHelp','Optional email address to be used to notify you when the export is complete and ready to be ' +
+        'fetched using the RequestID.',tipstyle);
+    new Tip('ConfirmHelp','Usual duplicate copy of email address to avoid lost exports due to typos.',tipstyle);
+    new Tip('SendFileHelp','This action will submit the export request with the RecordSet specified in the upload file.',tipstyle);
     }
   };
 
