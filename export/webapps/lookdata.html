@@ -1,8 +1,14 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <HTML>
 <HEAD>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; CHARSET=iso-8859-1">
 <TITLE>JSOC Lookdata</TITLE>
+
+<SCRIPT TYPE="text/javascript" SRC="js/prototype.js"></SCRIPT>
+<SCRIPT TYPE="text/javascript" SRC="js/cookies.js"></SCRIPT>
+<SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
+<SCRIPT TYPE="text/javascript" SRC="js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/amcharts.js"></SCRIPT>
+<SCRIPT TYPE="text/javascript" SRC="js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/raphael.js"></SCRIPT>
 
 <!-- activewidgets fix box model in firefox/safari/opera -->
 <style type="text/css">
@@ -12,13 +18,8 @@
                 -webkit-box-sizing: border-box;
         }
 
-        // body {font: 12px Tahoma}
 </style>
 
-<SCRIPT TYPE="text/javascript" SRC="js/prototype-1.6.1.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="js/cookies.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="js/amCharts/swfobject.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/ActiveWidgets/runtime/lib/aw.js"></SCRIPT>
 <LINK HREF="js/ActiveWidgets/runtime/styles/system/aw.css" rel="stylesheet">
 <!-- add activewidgets image libraries -->
@@ -47,6 +48,9 @@
 #ValueGrid .aw-grid-cell {font-family: "DejaVu Sans Mono",monospace; font-size: 12;}
 #ValueGrid .aw-grid-header {font-family: "DejaVu Sans Mono",monospace; font-size: 12;}
 #ValueGrid .aw-grid-header .aw-column-1 {font-weight: bold}
+#ValueGrid .aw-grid-header {border-right: 1px solid threedlightshadow;}
+#ValueGrid .aw-grid-cell {border-right: 1px solid threedlightshadow;}
+#ValueGrid .aw-grid-row {border-bottom: 1px solid threedlightshadow;}
 
 </style>
 
@@ -141,9 +145,10 @@ var valuegridlabel;
 var gridmade = 0;
 var CWide;
 var CHeight;
-var amCharOK = 0;
-// var flashMovie = new Object();
-var flashMovie;
+var amChartOK = 0;
+var swfo;
+var graphcols;
+var datecol = -1;
 var RequestHandle = "";
 var SessionHandle = "";
 var LPINK = "#FFD8D8";
@@ -153,7 +158,7 @@ var GREY = "#D8D8D8";
 var GREEN = "#A9F5A9";
 
 // ActiveWidgets Tab setup
-var tabnames = ["Series Select", "Series Content", "RecordSet Select", "Values Display", "Export Data", "Test"];
+var tabnames = ["Series Select", "Series Content", "RecordSet Select", "Values Display", "Export Data", "Graph"];
 var tabvalues = ["TabSeriesSelectDiv",  "TabSeriesStructDiv", "TabRecSetDiv", "TabDisplayDiv", "TabExportDiv", "TabPlotDiv"];
 var tabs = new AW.UI.Tabs;
 var tabseries = 0;
@@ -278,7 +283,6 @@ function CleanSeriesPick()
   $("SegListPlace").innerHTML = "All Segments";
   $("LinkListPlace").innerHTML = "All Links";
   $("DisplayPlace").innerHTML = "";
-  $("PlotPlace").innerHTML = "";
   KeyList = "";
   SegList = "";
   $("SSKeysPlace").innerHTML = "";
@@ -318,7 +322,6 @@ function CleanKeysSelect()
   for (var i=$("GraphKeysSelect").length; i > 0; i--)
     $("GraphKeysSelect").remove(i-1);
   $("DisplayPlace").innerHTML = "";
-  $("PlotPlace").innerHTML = "";
   $("SegListPlace").innerHTML = "";
   $("LinkListPlace").innerHTML = "";
   $("KeyListPlace").innerHTML = "";
@@ -435,23 +438,46 @@ function CreateTips()
   if (TipsCreated == 0)
     {
     // The following sample line goes in html code
-       // <SPAN ID="SampleHelp" class="tip">?</SPAN>
+    //    <SPAN ID="SampleHelp" class="tip">?</SPAN>
     // the following line goes here
-       // new Tip("SampleHelp","Help text here.",tipstyle);
+    //    new Tip("SampleHelp","Help text here.",tipstyle);
     // XXXX HELP XXXX
-    new Tip("AboutHelp","The yellow '?'s are links to help messages.  The messages will disapear a few seconds after the mouse leaves the message or if the '?' is clicked again.  Remove all '?' with the Disable Help button.",tipstyle);
+    new Tip("AboutHelp","The yellow '?'s are links to help messages.  The messages will disapear a " +
+        "few seconds after the mouse leaves the message or if the '?' is clicked again.  " +
+        "Remove all '?' with the Disable Help button.",tipstyle);
 
-    new Tip("PickSeriesHelp","This section is used to identify the JSOC data series you want to explore.  If you already know the series you may go to step 3 and enter the seriesname there.",tipstyle);
+    new Tip("PickSeriesHelp","This section is used to identify the JSOC data series you want to explore.  " +
+        "If you already know the series you may go to step 3 and enter the seriesname there.",tipstyle);
 
-    new Tip("SeriesFilterHelp", "filter is regular expression to select series names. If the filter begins with the word NOT it will exclude the patterns following the 'NOT '.  While the filter may be a complex regular expression, a simple text string is usually sufficient to limit the number of seriesnames found to a short list.  Case is ignored. Example: 'mdi\\.' will find SOHO/MDI specific dataseries.",tipstyle);
+    new Tip("SeriesFilterHelp", "filter is regular expression to select series names. " +
+        "If the filter begins with the word NOT it will exclude the patterns following the 'NOT '.  " +
+        "While the filter may be a complex regular expression, a simple text string is usually sufficient " +
+        "to limit the number of seriesnames found to a short list.  Case is ignored. Example: 'mdi\\.' " +
+        "will find SOHO/MDI specific dataseries.",tipstyle);
 
-    new Tip("SeriesContentHelp","This section contains the DRMS data series basic structure information for this dataseries.  It shows the full set of Keywords, Segments, and Links.  See the JSOC Wiki page 'Overview of JSOC Data Series, DRMS, and SUMS' to learn about the JSOC use of these terms.",tipstyle);
+    new Tip("SeriesContentHelp","This section contains the DRMS data series basic structure information " +
+        "for this dataseries.  It shows the full set of Keywords, Segments, and Links.  " +
+        "See the JSOC Wiki page 'Overview of JSOC Data Series, DRMS, and SUMS' to learn about the JSOC " +
+        "use of these terms.",tipstyle);
 
-    new Tip("SeriesPickHelp", "After pressing the <B>Fetch seriesname list</B> on the left, the selection list here will contain all available data series matching your filter.  Simply click on the series that contains the data you are looking for.  The text after the seriesname is the series Note provided when the series was first created and should help you decide which series you need.  After clicking on the desired seriesname, lookdata will fetch more information about the series and jump to the <B>RecordSet Select</B> tab where you can select which subset of records to examine and select which keyword or file contents to examine.",tipstyle);
+    new Tip("SeriesPickHelp", "After pressing the <B>Fetch seriesname list</B> on the left, the " +
+        "selection list here will contain all available data series matching your filter.  " +
+        "Simply click on the series that contains the data you are looking for.  The text after the " +
+        "seriesname is the series Note provided when the series was first created and should help you " +
+        "decide which series you need.  After clicking on the desired seriesname, lookdata will fetch " +
+        "more information about the series and jump to the <B>RecordSet Select</B> tab where you can select " +
+        "which subset of records to examine and select which keyword or file contents to examine.",tipstyle);
 
-    new Tip("QueryBuilderHelp","This checkbox enables input boxes for recordset query clauses.  You may enter the desired recordset query in the text box below or with the QueryBuilder enabled just enter the seriesname in the main box and record selection clauses in the subsequent boxes.  There will be one box for each Prime-Key and one SQL where-clause box that keeps the Prime-Key version logic enabled '[?...?]', and one SQL where-clause box that will disable the Prime-Key version logic if the box is not empty '[!...!]'.  The punctuation is filled-in for you, i.e. the '[,?,!,]' as needed.",tipstyle);
+    new Tip("QueryBuilderHelp","This checkbox enables input boxes for recordset query clauses.  " +
+        "You may enter the desired recordset query in the text box below or with the QueryBuilder " +
+        "enabled just enter the seriesname in the main box and record selection clauses in the subsequent boxes.  " +
+        "There will be one box for each Prime-Key and one SQL where-clause box that keeps the Prime-Key version " +
+        "logic enabled '[?...?]', and one SQL where-clause box that will disable the Prime-Key version logic " +
+        "if the box is not empty '[!...!]'.  The punctuation is filled-in for you, i.e. the '[,?,!,]' as needed.",tipstyle);
 
-    new Tip("RecordSetHelp","This text box is used to specify the Recordset you wish to examine or export.  You may start with just the seriesname to get a count of all the records in the series, then add filter clauses to limit the selected records to just the ones you want to examine or export.",tipstyle);
+    new Tip("RecordSetHelp","This text box is used to specify the Recordset you wish to examine or export.  " +
+        "You may start with just the seriesname to get a count of all the records in the series, then add " +
+        "filter clauses to limit the selected records to just the ones you want to examine or export.",tipstyle);
     }
   TipsCreated = 1;
   $$("span.tip").each(function(showspan){showspan.show();}); 
@@ -628,7 +654,8 @@ function PickSeries(mode)
   $("RecSetPlace").innerHTML = SeriesName;
   // Get link to release notes
   ProjectName = SeriesName.match(/[a-zA-Z_]*/);
-  $("ReleaseNotes").innerHTML = "<A HREF='http://jsoc.stanford.edu/doc/data/" + ProjectName + "/' target='_blank'>for " + ProjectName + "</A>";
+  $("ReleaseNotes").innerHTML = "<A HREF='http://jsoc.stanford.edu/doc/data/" + ProjectName +
+                                "/' target='_blank'>for " + ProjectName + "</A>";
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
@@ -679,7 +706,8 @@ function PickSeries(mode)
                   "<TR><TD>" + SeriesInfo.primekeysinfo[i].name + "</TD>" + 
                   "<TD align='right'>" + "[&nbsp;&nbsp;<input id='Prime" + i +
                   "' type='text' value='' onChange='QueryBuild();' >&nbsp;&nbsp;]</TD>" +
-                  "<TD> (" + SeriesInfo.keywords[k].type + (isslotted ? "-slotted, " + SeriesInfo.primekeysinfo[i].step : "") + ")</TD>";
+                  "<TD> (" + SeriesInfo.keywords[k].type + (isslotted ? "-slotted, " + 
+                  SeriesInfo.primekeysinfo[i].step : "") + ")</TD>";
               if (SeriesInfo.keywords[k].type === "time")
                   QueryBoxes = QueryBoxes + "<TD> expects " + SeriesInfo.keywords[k].units + "</TD>";
               else
@@ -769,8 +797,10 @@ function PickSeries(mode)
   	   for (i=0; i<n; i++)
   	      {
   	      insertOption("SegsSelect",SeriesInfo.segments[i].name, "");
-  	      segments = segments + "<TR><TD>" + SeriesInfo.segments[i].name + "</TD><TD>" + SeriesInfo.segments[i].units + "&nbsp;</TD><TD>" +
-  		SeriesInfo.segments[i].dims + "&nbsp;</TD><TD>" + SeriesInfo.segments[i].protocol + "</TD><TD>" + SeriesInfo.segments[i].note + "&nbsp;</TD></TR>";
+  	      segments = segments + "<TR><TD>" + SeriesInfo.segments[i].name + "</TD><TD>" + 
+                SeriesInfo.segments[i].units + "&nbsp;</TD><TD>" +
+  		SeriesInfo.segments[i].dims + "&nbsp;</TD><TD>" + SeriesInfo.segments[i].protocol +
+                "</TD><TD>" + SeriesInfo.segments[i].note + "&nbsp;</TD></TR>";
   	      }
   	   segments = segments + "</table><P>";
   	   }
@@ -980,9 +1010,10 @@ function PickKeys()
   var selkeys =  "";
   $("KeyListPlace").innerHTML = "";
   $("DisplayPlace").innerHTML = "";
-  $("PlotPlace").innerHTML = "";
   for (var i=$("GraphKeysSelect").length; i > 0; i--)
     $("GraphKeysSelect").remove(i-1);
+  for (var i=$("GraphXKeysSelect").length; i > 0; i--)
+    $("GraphXKeysSelect").remove(i-1);
   // $("WantRecInfo").checked = 0;
   KeyList =  "";
   selkeys = "";
@@ -1012,39 +1043,8 @@ function PickKeys()
       nkeysselected = nkeysselected + 1;
       selkeys = selkeys + $("KeysSelect")[ikey].text;
       KeyList = KeyList + $("KeysSelect")[ikey].text;
-      if (ikey > 0)
-        insertOption("GraphKeysSelect",$("KeysSelect")[ikey].text, ikey);
       }
   $("KeyListPlace").innerHTML = nkeysselected + " Keys Chosen:&nbsp;" + selkeys;
-  }
-
-// Graph making code
-//
-// code to get the list of keywords to be graphed
-// this should be called only after the data is fetched for ValueTable
-//
-  // <form id="GraphSelectForm">
-  // <select id="GraphKeysSelect" size=8 multiple="multiple" onChange="GraphPickKeys();" > </select>
-
-function GraphPickKeys()
-  {
-  var igraphkey = 0;
-  var ngraphkeys = $("GraphKeysSelect").length;
-  var ikey = 0;
-  var nkeys = RecordData.keywords.length;
-  var graphKeysSelected = 0;
-  for (igraphkey=0; ikey < ngraphkeys; igraphkey++)
-    if ($("GraphKeysSelect")[igraphkey].selected)
-      {
-      // get column number and name for graph
-      for (ikey=0; ikey < nkeys; ikey++)
-        {
-        if ($("GraphKeysSelect")[igraphkey].text == RecordData.keywords[ikey].name)
-          { alert ("got graph key for col="+ikey+" name=" + RecordData.keywords[ikey].name);
-          graphAddCol(RecordData.keywords[ikey].name, ikey);
-          }
-        }
-      }
   }
 
 // Section 5., Select segments for fetching pathnames
@@ -1169,8 +1169,7 @@ function setgriddata(i,val)
   var thisval = (val != null && val.length > 0 ? val : "&nbsp");
   griddata[i] = thisval;
   gridcolwidth[i] = Math.max(gridcolwidth[i], thisval.length);
-  i++;
-  return i;
+  return i+1;
   }
 
 var RecordData;
@@ -1192,20 +1191,21 @@ function GetKeyValues()
     return;
     }
   if (MaxRecs != 0)
-    getparameters = getparameters.merge({"n": MaxRecs});
+    getparameters.update({"n": MaxRecs});
   if (nkeysselected)
-    getparameters = getparameters.merge({"key": KeyList});
+    getparameters.update({"key": KeyList});
   else
-    getparameters = getparameters.merge({"key":"**NONE**"});
+    getparameters.update({"key":"**NONE**"});
   if (nsegsselected)
-    getparameters = getparameters.merge({"seg": SegList});
+    getparameters.update({"seg": SegList});
   else
-    getparameters = getparameters.merge({"seg":"**NONE**"});
+    getparameters.update({"seg":"**NONE**"});
   if (nlinksselected)
-    getparameters = getparameters.merge({"link": LinkList});
+    getparameters.update({"link": LinkList});
   else
-    getparameters = getparameters.merge({"link":"**NONE**"});
-  if ($("WantRecInfo").checked) getparameters = getparameters.merge({"R":1});
+    getparameters.update({"link":"**NONE**"});
+  if ($("WantRecInfo").checked)
+    getparameters.update({"R":1});
   if (RecordCount == 0 && askedCount == 0)
       GetRSCount();
   if (RecordCount < 0)
@@ -1235,7 +1235,7 @@ function GetKeyValues()
   var StartTime = new Date()
   RequestHandle = SessionHandle + "_" + StartTime.getTime();
 // $("HandleDiv").innerHTML = RequestHandle;
-  getparameters = getparameters.merge({"userhandle": RequestHandle});
+  getparameters.update({"userhandle": RequestHandle});
   $("requestTime").innerHTML = "";
   GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
@@ -1281,7 +1281,8 @@ function GetKeyValues()
         var gridrows = nrecs;
         var irow, icol;
 
-        $("DisplayPlace").innerHTML = "Status = " + RecordData.status + ", Recordset Key Values for " + nrecs + " records returned, preparing page ...";
+        $("DisplayPlace").innerHTML = "Status = " + RecordData.status + ", Recordset Key Values for " +
+                                      nrecs + " records returned, preparing page ...";
 
         var gridcells = new Array(gridrows);
 
@@ -1321,7 +1322,8 @@ function GetKeyValues()
 	     for (ikey=0; ikey<nkeys; ikey++)
 	       {
 	       var this_keyval =  RecordData.keywords[ikey].values[irec] + "";
-               if (this_keyval.length == 0) this_keyval = " ";
+               // if (this_keyval.length == 0) this_keyval = " ";
+               if (this_keyval.length > 60) this_keyval = this_keyval.slice(0,47) + "...TRUNCATED";
 	       idata = setgriddata(idata, this_keyval);
 	       }
 	     for (iseg=0; iseg<nsegs; iseg++)
@@ -1355,9 +1357,6 @@ function GetKeyValues()
         valuegrid.setHeaderText(gridhead);
         valuegrid.setCellData(gridcells);
         valuegrid.setVirtualMode(true);
-// valuegrid.getCellTemplate().setStyle('border-style','thin');
-valuegrid.getCellTemplate().setStyle('border-left-style','dotted');
-valuegrid.getCellTemplate().setStyle('border-left-width','1');
 	// valuegrid.setSelectorVisible(true);
 	// valuegrid.setSelectorWidth(28);
 	// valuegrid.setSelectorText(function(i){return this.getRowPosition(i)+1});
@@ -1398,7 +1397,7 @@ valuegrid.getCellTemplate().setStyle('border-left-width','1');
 	  }
         for (icol=0; icol<gridcols; icol++)
            {
-	   valuegrid.setColumnWidth(Math.round(8.5*gridcolwidth[icol]), icol);
+	   valuegrid.setColumnWidth(Math.round(8.0*gridcolwidth[icol]), icol);
            }
 	valuegrid.refresh();
 
@@ -1406,6 +1405,21 @@ valuegrid.getCellTemplate().setStyle('border-left-width','1');
 	gridmade = 1;
         newwide();
         tabs.setSelectedItems([tabdisplay]); // show the display page.
+
+        // initialize graph select table
+        GraphDelete();
+        insertOption("GraphXKeysSelect","index", "");
+        for (ikey=0; ikey < nkeys; ikey++)
+              {
+              insertOption("GraphKeysSelect",RecordData.keywords[ikey].name, "");
+              var jkey; for (jkey=0; jkey < SeriesInfo.keywords.length; jkey++)
+                if (RecordData.keywords[ikey].name == SeriesInfo.keywords[jkey].name)
+                   { // now have access to SeriesInfo for this keyword
+                   if (SeriesInfo.keywords[jkey].type == "time")
+                     insertOption("GraphXKeysSelect",RecordData.keywords[ikey].name, "");
+                   break;
+                   }
+              }
         $("requestTime").innerHTML = ", Query time = " + RecordData.runtime + "s";
         }
       },
@@ -1501,24 +1515,78 @@ function newwide(thisevent)
   {
   if (gridmade)
         {
-	CWidth = self.innerWidth;
-	CHeight = self.innerHeight;
+        CWidth = self.innerWidth;
+        CHeight = self.innerHeight;
         valuegrid.setSize(CWidth - 35 ,CHeight - 310);
         $("DisplayPlace").innerHTML = valuegrid;
         }
-  $("SeriesInfoDiv").style.height = (1*CHeight - 200);
+  else
+        {
+        // CHeight = self.innerHeight;
+        // $("SeriesInfoDiv").style.height = (1*CHeight - 200);
+        }
   return true;
   }
 
 
-function amChartInited(chart_id)
+// Graph making code
+//
+// code to get the list of keywords to be graphed
+// this should be called only after the data is fetched for ValueTable
+//
+  // <form id="GraphSelectForm">
+  // <select id="GraphKeysSelect" size=8 multiple="multiple" onChange="GraphPickKeys();" > </select>
+
+function GraphPickKeys()
   {
-  flashMovie = document.getElementById(chart_id);
-  $("amChartDiv").style.display="block";
-  amChartOK = 1;
-  }
+  var igraphkey = 0;
+  var ngraphkeys = $("GraphKeysSelect").length;
+  var ikey = 0;
+  var nkeys = RecordData.keywords.length;
+  var graphKeysSelected = 0;
+  var yDesc = "<TABLE id='graphYTable' border=1><TR><TD>Keyword</TD><TD>Type</TD></TR>";
+  graphcols = new Array();
   
-var graphcols = new Array();
+  for (igraphkey=0; igraphkey < ngraphkeys; igraphkey++)
+    if ($("GraphKeysSelect")[igraphkey].selected)
+      {
+      for (ikey=0; ikey < nkeys; ikey++)
+        {
+        if ($("GraphKeysSelect")[igraphkey].text == RecordData.keywords[ikey].name)
+          {
+          var ntype = "unk";
+          var jkey; for (jkey=0; jkey < SeriesInfo.keywords.length; jkey++)
+            if (RecordData.keywords[ikey].name == SeriesInfo.keywords[jkey].name)
+               { // now have access to SeriesInfo for this keyword
+               ntype = SeriesInfo.keywords[jkey].type;
+               break;
+               }
+          yDesc = yDesc + "<TD>" + RecordData.keywords[ikey].name + "</TD><TD>"+ntype+"</TD></TR>";
+          graphAddCol(RecordData.keywords[ikey].name, ikey);
+          }
+        }
+      }
+  $("graphYAxis").innerHTML = yDesc + "</TABLE>";
+  }
+
+function GraphPickXKey()
+  {
+  var ngraphkeys = $("GraphXKeysSelect").length;
+  var ikey = 0;
+  var nkeys = RecordData.keywords.length;
+  var igraphkey = $("GraphXKeysSelect").selectedIndex;
+  if ($("GraphXKeysSelect")[igraphkey].text == "index")
+     datecol = -1;
+  else
+    for (ikey=0; ikey < nkeys; ikey++)
+      {
+      if ($("GraphXKeysSelect")[igraphkey].text == RecordData.keywords[ikey].name)
+        {
+        datecol = ikey;
+        }
+      }
+  $("graphXAxis").innerHTML = (datecol == -1 ? "index" : RecordData.keywords[datecol].name);
+  }
 
 function graphAddCol(name, column)
   {
@@ -1529,64 +1597,203 @@ function graphAddCol(name, column)
   graphcols[ncols] = colinfo;
   }
 
+// RecordData.recinfo[irec].name
+
 function GraphDelete()
   {
   graphcols = new Array();
-  for (igraphkey=0; ikey < ngraphkeys; igraphkey++)
-    $("GraphKeysSelect")[igraphkey].selected = 0;
+  var ngraphkeys = $("GraphKeysSelect").length;
+  var ikey = 0;
+  for (ikey=0; ikey < ngraphkeys; ikey++)
+    $("GraphKeysSelect")[ikey].selected = 0;
+  $("graphYAxis").innerHTML = "No keywords selected";
   GraphCreate();
+  }
+
+var timeZone = "";
+function strToDate(timestr)
+  {
+  var t1;
+  var t0 = new String(timestr);
+  if (t0.indexOf("_") >= 0)
+    {
+    // JSOC format, example 2008.06.23_00:58:42.95_TAI
+    t1 = t0.replace(/\./g,"/");
+    t0 = t1.replace(/_/," ");
+    timeZone = t0.substr(20,3);
+    }
+  else
+    {
+    //  ISO format, example 2008/06/22 21:45:32
+    t1 = t0.replace(/-/g,"/");
+    t0 = t1.replace(/T/," ");
+    timeZone = "ISO";
+    }
+  t1 = t0.substr(0,19);
+  return(new Date(t1));
+  }
+
+function saveGraph(node)
+  {
+//alert(node.localName);
+  var dataURL = node.toDataURL();
+  $("graphImage").src = dataURL;
   }
 
 function GraphCreate()
   {
+  var n=RecordData.count;
+  var graphDesc = "<TABLE><TR><TD>Graph for:</TD><TD>" + $("RecordSet").value;
+  if ($("RecordLimit").value != "none")
+    graphDesc = graphDesc + ", limit=" + $("RecordLimit").value;
+  graphDesc = graphDesc + "</TD></TR>";
+  graphDesc = graphDesc + "<TR><TD>From:</TD><TD>" + RecordData.recinfo[0].name + "</TD></TR></TR>";
+  graphDesc = graphDesc + "<TR><TD>To:</TD><TD>" + RecordData.recinfo[n-1].name + "</TD></TR></TR>";
+  graphDesc = graphDesc + "</TABLE>";
+  $("graphDescription").innerHTML = graphDesc;
 
   var gcols = graphcols.length;
-  var datecol = $("DateColumn").value;
   var ncols = RecordData.keywords.length;
-  var n=RecordData.count;
-  var csvdata = "";
-  for (i=0; i<n; i++)
+  if (gcols > 0)
     {
-    var line = "";
-    var val, x, y;
+    var chartData = new Array();
+    GraphPickXKey();
+    var xname, yname;
     if (datecol == -1)
-      x = i;
+      xname = "index";
     else
-      x = RecordData.keywords[datecol].values[i];
-    line = line + x;
+      xname = RecordData.keywords[datecol].name;
+    var i; for (i=0; i<n; i++)
+      {
+      var lineObj = new Object();
+      var val, x, y;
+      if (datecol == -1)
+        x = i;
+      else
+        { // convert time string to Date object
+        var timestr = RecordData.keywords[datecol].values[i];
+        if (timestr === "MISSING")
+          continue;
+        else
+          x = strToDate(timestr);
+        }
+      lineObj[xname] = x;
+
+      var yvals = 0;
+      var icol; for (icol=0; icol<gcols; icol++)
+        {
+        var pcol = graphcols[icol].col;
+        val = RecordData.keywords[pcol].values[i];
+        if (val === "MISSING")
+{
+//          y = 0.0;
+// continue;
+y = NaN;
+}
+        else
+          y = val;
+        lineObj[graphcols[icol].name] = y;
+        yvals++;
+        }
+      if (yvals) chartData.push(lineObj);
+      }
+  
+    var ndata = chartData.length;
+    var chart = new AmCharts.AmSerialChart();
+    chart.pathToImages = "js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/images/";
+    chart.dataProvider = chartData;
+    chart.categoryField = xname;
+    chart.marginTop = 20;
+    chart.marginLeft = 80;
+    chart.marginRight = gcols*50;
+
+    var legend = new AmCharts.AmLegend();
+    chart.addLegend(legend);
+  
+    var catAxis = chart.categoryAxis;
+    catAxis.axisColor = "#FF0000";
+    catAxis.gridColor = "#FF00FF";
+    catAxis.gridAlpha = 0.5;
+    catAxis.dashLength = 5;
+    catAxis.autoGridCount = true;
+    catAxis.title = xname;
+    if (datecol >= 0)
+      {
+      catAxis.parseDates = true;
+      catAxis.minPeriod = "ss";
+      catAxis.equalSpacing = true;
+      catAxis.dateFormats [{period:"ss",format:"YYYY.MM.DD_JJ:NN:SS"},
+			   {period:"mm",format:"YYYY.MM.DD_JJ:NN:SS"},
+			   {period:"hh",format:"YYYY.MM.DD_JJ:NN:SS"},
+			   {period:"DD",format:"YYYY.MM.DD_JJ:NN:SS"},
+			   {period:"MM",format:"YYYY.MM.DD_JJ:NN:SS"}];
+      }
+    else
+      {
+      //catAxis.minPeriod = 5;
+      }
+    
+    graphs = new Array();
+    valAxes = new Array();
     for (icol=0; icol<gcols; icol++)
       {
-      var pcol = graphcols[icol].col;
-      val = RecordData.keywords[pcol].values[i];
-      if (val === "MISSING")
-        y = 0.0;
-      else
-        y = val;
-      line = line + "," + y;
+      var valAxis = new AmCharts.ValueAxis();
+      valAxis.axisColor = "#FF0000";
+      valAxis.gridColor = "#FF00FF";
+      valAxis.gridAlpha = "0.5";
+      valAxis.dashLength = 5;
+      valAxis.useScientificNotation = true;
+      valAxis.title = graphcols[icol].name;
+      valAxis.titleTextColor = "#000000";
+      // chart.addLabel(50,50,graphcols[icol].name);
+      if (icol > 0)
+        {
+        valAxis.position = "right";
+        valAxis.offset = (icol-1)*50;
+        }
+      chart.addValueAxis(valAxis);
+      valAxes[icol] = valAxis;
+  
+      var graph = new AmCharts.AmGraph();
+      graph.valueAxis = valAxes[icol];
+      graph.valueField = graphcols[icol].name;
+      graph.title = graphcols[icol].name;
+      graph.type = "line";
+      chart.addGraph(graph);
+      graphs[icol] = graph;
       }
-    csvdata = csvdata + line + '\n';
-    }
-// alert("data ready" + csvdata);
-  <!-- amline script-->
-  var so = new SWFObject("js/amCharts/amline.swf", "jsocgraph", "900", "400", "8", "#FFFFFF");
-  so.addVariable("chart_id", "jsocgraph");
-  so.addVariable("path", "js/amCharts/");
-  so.addVariable("settings_file", encodeURIComponent("js/amCharts/jsocline_settings.xml"));
-  so.addVariable("preloader_color", "#999999");
-  var labl = "<settings><graphs>" ;
-  for (icol=0; icol<gcols; icol++)
+  
+    var chartCursor = new AmCharts.ChartCursor();
+    chartCursor.cursorAlpha = 0;
+    chartCursor.cursorPosition = "mouse";
+    chartCursor.categoryBalloonDateFormat = "YYYY.MM.DD_JJ:NN:SS" + (timeZone=="TAI" ? "_tai" : "");
+    chart.addChartCursor(chartCursor);
+  
+    var chartScrollbar = new AmCharts.ChartScrollbar();
+    // chartScrollbar.graph = graphs[0];
+    chartScrollbar.backgroundAlpha = 0.1;
+    chartScrollbar.backgroundColor = "#000000";
+    // chartScrollbar.scrollbarHeight = 40;
+    chartScrollbar.scrollbarHeight = 20;
+  
+    chartScrollbar.selectedBackgroundColor = "#FFCC32";
+    chart.addChartScrollbar(chartScrollbar);
+  
+    $("graphPlace").innerHTML = "";
+    $("amChartDiv").innerHTML = "";
+    $("amChartDiv").style.display = "block";
+    
+    chart.write($("amChartDiv"));
+    for (icol=0; icol<gcols; icol++)
       {
-      var pcol = icol+1;
-      labl = labl + '<graph gid="'+pcol+'"><title>"'+graphcols[icol].name+'"</title><line_width>1</line_width>' +
-		 '<selected>0</selected></graph>' ;
+      $("graphYTable").rows[icol+1].cells[0].style.backgroundColor = chart.graphs[icol].lineColor;
       }
-  labl = labl + "</graphs></settings>";
-  so.addVariable("additional_chart_settings", encodeURIComponent(labl));
-  so.addVariable("chart_data", encodeURIComponent(csvdata));
-  //  so.setData(csvdata);
-  so.write("flashcontent");
-so.rebuild();
-  <!-- end of amline script -->
+saveGraph($("amChartDiv").childNodes[0].childNodes[0]);
+    }
+  else
+    {
+    $("amChartDiv").innerHTML = "Graph removed or no keywords selected.";
+    }
   }
 
 function Export_Recordset()
@@ -1607,7 +1814,8 @@ function StartExportRequest()
   if (nsegsselected > 0 && $("ExportRecordSet").innerHTML.indexOf("}") == -1)
     $("ExportRecordSet").innerHTML = $("ExportRecordSet").innerHTML + "{" + SegList + "}";
     $("ExportRecordSetLimit").innerHTML = $("RecordLimit").value;
-  $("ExportRequestFrame").src = "http://" + Host + "/ajax/" + EXPORTDATA + ".html?ds="+$("ExportRecordSet").innerHTML  + "&limit=" + $("RecordLimit").value;
+  $("ExportRequestFrame").src = "http://" + Host + "/ajax/" + EXPORTDATA + ".html?ds="+$("ExportRecordSet").innerHTML  +
+      "&limit=" + $("RecordLimit").value;
   }
 
 function ExportRequestStarted()
@@ -1655,7 +1863,7 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
 </B>
 <P>
 <HR>
-</DIV>
+</DIV> <! -- end DIV JSOC2DIV -->
 <SPAN id="LookdataTabs"></SPAN>
 <DIV id="JsocLookdata" style="border: 1px solid #aaa;">
 <DIV id="TabSeriesSelectDiv" style="display:block">
@@ -1839,27 +2047,49 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
 </DIV> <!-- /DIV TabExportDiv -->
 <DIV id="TabPlotDiv">
   <P>
+  <SPAN id="graphDescription">
   Graph Selected Data
+  </SPAN>
   <P>
-  <B>4. Select Keywords</B><BR>
-  <form id="GraphSelectForm">
-    <select id="GraphKeysSelect" size=8 multiple="multiple" onChange="GraphPickKeys();" > </select>
-  </form>
-  <input type="text" value="-1" name="DateColumn" id="DateColumn" >Date Col 
-  <input type="text" value="none" name="PlotColumn" id="PlotColumn" > Column
+  <TABLE>
+  <TR>
+    <TD>
+    <B>Select X axis</B><BR>
+    </TD>
+    <TD>
+    <form id="GraphXSelectForm">
+      <select id="GraphXKeysSelect" value="index" onChange="GraphPickXKey();" > </select>
+    </form>
+    </TD>
+    <TD>
+    X-axis will be: <span id="graphXAxis">index</span>
+    </TD>
+  </TR>
+  <TR>
+    <TD>
+    <B>Select Keywords</B><BR>
+    </TD>
+    <TD>
+    <form id="GraphSelectForm">
+      <select id="GraphKeysSelect" size=8 multiple="multiple" onChange="GraphPickKeys();" > </select>
+    </form>
+    </TD>
+    <TD>
+    <span id="graphYAxis"></span>
+    </TD>
+  </TR>
+  </TABLE>
   <input type="button" value="Create Graph"  style="background-color:#FFFF80" onClick="GraphCreate();" >
   <input type="button" value="Delete Graph"  style="background-color:#FFFF80" onClick="GraphDelete();" >
-  <DIV ID="amChartDiv" style="display:block">
-    <HR>
-    <span id="PlotPlace" style="background-color:#FFFFFF;"></span>
-    <div id="flashcontent">
-       <strong>No graph created yet</strong>
-       <P>
-       or if graph made but not showm you may need to upgrade your Flash Player.
-    </div>
-  </DIV> <!-- ChartReady -->
+  <BR>
+  <SPAN id="graphPlace"> <strong>No graph created yet</strong> </SPAN>
+  <DIV ID="amChartDiv" style="display:none; height:600px; background-color:#FFFFFF">
+  </DIV> <!-- amChartDiv -->
 </DVI> <!-- /DIV TabPlotDiv -->
 </DIV> <!-- /DIV Main including all tab divs -->
+<DIV>
+<img id="graphImage" alt="Right click to save me!">
+</DIV>
 <P style="height:1px">
 <DIV id="footer" style="vertical-align:bottom;text-align:center;">
 <HR>
