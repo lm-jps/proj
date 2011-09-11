@@ -6,6 +6,80 @@
 // Processing details for Patch in Heliographic Coords
 //
 
+//function HgPatchGetNoaa()
+  //{
+  // if $("HgNOAA").value is a number
+  //   { // lookup NOAA number
+  //   do lookdata rs list fetch of su_rsb.NOAA_Regions key=....
+  //   find instance nearest CM, get long and lat and time, use stonyhurst since do not know rot
+  //   populate $("HgLocType").value, $("HgX").value, $("HgY").value, $("HgTRef").value
+  //   call CheckHgPatch()
+  //   return
+  //   }
+  //}
+
+var noaaColor;
+
+function HgPatchGetNoaa()
+  {
+  var noaaNum = 1 * $("HgNOAA").value;
+  if (noaaNum < 7000) 
+    {
+    noaaNum = noaaNum + 10000; // OK for times after 1996 Jan.
+    $("HgNOAA").value = noaaNum + "";
+    }
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  new Ajax.Request('http://jsoc2.stanford.edu/cgi-bin/ajax/' + JSOC_INFO,
+    {
+    method: 'get',
+    parameters: {"op" : "rs_list", "ds": "su_rsb.NOAA_ActiveRegions[][" + noaaNum + "]", "key": "ObservationTime,LatitudeHG,LongitudeCM" },
+    onSuccess: function(transport, json)
+      {
+      var response = transport.responseText || "no response text";
+      var NOAA_rslist = response.evalJSON();
+      try {if (NOAA_rslist.status > 0 || NOAA_rslist.count == 0) throw "noRecords";}
+      catch(err) { $("HgNOAA").value = noaaNum + " " + err; return; }
+      var minLong = 999, minLat, minTime;
+      var irec, nrecs = NOAA_rslist.count;
+      var thisTime, thisLong, thisLat;
+      for (irec=0; irec<nrecs; irec++)
+        {
+        thisTime = NOAA_rslist.keywords[0].values[irec];
+        thisLat = NOAA_rslist.keywords[1].values[irec];
+        thisLong = NOAA_rslist.keywords[2].values[irec];
+        if (Math.abs(thisLong) < Math.abs(minLong))
+          {
+          minLong = thisLong;
+          minLat = thisLat;
+          minTime = thisTime;
+          }
+        }
+      try
+        {
+        if (minLong == 999) throw "noRegion";
+        $("HgLocType").value = "stony";
+        $("HgTRef").value = minTime;
+        $("HgX").value = minLong + "";
+        $("HgY").value = minLat + "";
+	$("HgNOAA").style.backgroundColor="#FFCC66";
+        noaaColor = "#D8D8D8";
+        $("HgLocType").style.backgroundColor = noaaColor;
+        $("HgTRef").style.backgroundColor = noaaColor;
+        $("HgX").style.backgroundColor = noaaColor;
+        $("HgY").style.backgroundColor = noaaColor;
+	CheckHgPatch();
+        }
+      catch(err) { $("HgNOAA").value = noaaNum + " " + err; return; }
+      },
+    onFailure: function()
+      {
+      alert('Something went wrong with NOAA num data request');
+      $("HgNOAA").value = "Not Found";
+      },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+  }
+
 function CheckHgPatch()
   {
   var isok = 0;
@@ -56,7 +130,7 @@ function CheckHgPatch()
     isok += 1;
     }
 
-  $("HgLocType").style.backgroundColor="#FFFFFF";
+  $("HgLocType").style.backgroundColor=noaaColor;
   ExportProcessingArgs = ExportProcessingArgs + "locunits=" + $("HgLocType").value + ",";
   $("HgBoxType").style.backgroundColor="#FFFFFF";
   ExportProcessingArgs = ExportProcessingArgs + "boxunits=" + $("HgBoxType").value + ",";
@@ -92,7 +166,7 @@ function CheckHgPatch()
     }
   else
     {
-    $("HgTRef").style.backgroundColor="#FFFFFF";
+    $("HgTRef").style.backgroundColor=noaaColor;
     ExportProcessingArgs = ExportProcessingArgs + "t_ref=" + $("HgTRef").value + ",";
     isok += 1;
     }
@@ -103,7 +177,7 @@ function CheckHgPatch()
     }
   else
     {
-    $("HgX").style.backgroundColor="#FFFFFF";
+    $("HgX").style.backgroundColor=noaaColor;
     ExportProcessingArgs = ExportProcessingArgs + "x=" + $("HgX").value + ",";
     isok += 1;
     }
@@ -114,7 +188,7 @@ function CheckHgPatch()
     }
   else
     {
-    $("HgY").style.backgroundColor="#FFFFFF";
+    $("HgY").style.backgroundColor=noaaColor;
     ExportProcessingArgs = ExportProcessingArgs + "y=" + $("HgY").value + ",";
     isok += 1;
     }
@@ -191,17 +265,20 @@ function CheckHgRecordSet() // If HG Patch selected, convert empty record select
 
 function HgPatchInit()
   {
+  noaaColor = "#FFFFFF";
+  var requireColor = "#D88080";
   $("ProcessHgPatch").style.display="none";
   $("HgTrack").checked = 1;
+  $("HgNOAA").style.backgroundColor="#FFFFFF"; $("HgNOAA").value = "NotSpecified";
   $("HgTStart").value = "NotSpecified";
   $("HgTStop").value = "NotSpecified";
   $("HgTDelta").value = "NotSpecified";
-  $("HgTRef").style.backgroundColor = "#D88080"; $("HgTRef").value = "NotSpecified";
-  $("HgCarrot").style.backgroundColor = "#D88080"; $("HgCarrot").value = "NotSpecified";
-  $("HgX").style.backgroundColor = "#D88080"; $("HgX").value = "NotSpecified";
-  $("HgY").style.backgroundColor = "#D88080"; $("HgY").value = "NotSpecified";
-  $("HgWide").style.backgroundColor = "#D88080"; $("HgWide").value = "NotSpecified";
-  $("HgHigh").style.backgroundColor = "#D88080"; $("HgHigh").value = "NotSpecified";
+  $("HgTRef").style.backgroundColor = requireColor; $("HgTRef").value = "NotSpecified";
+  $("HgCarrot").style.backgroundColor = requireColor; $("HgCarrot").value = "NotSpecified";
+  $("HgX").style.backgroundColor = requireColor; $("HgX").value = "NotSpecified";
+  $("HgY").style.backgroundColor = requireColor; $("HgY").value = "NotSpecified";
+  $("HgWide").style.backgroundColor = requireColor; $("HgWide").value = "NotSpecified";
+  $("HgHigh").style.backgroundColor = requireColor; $("HgHigh").value = "NotSpecified";
   HgPatchActive = 0;
   HgGetSeriesList();
   HgSeriesSelected = 0;

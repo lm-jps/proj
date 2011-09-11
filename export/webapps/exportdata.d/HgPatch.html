@@ -36,11 +36,18 @@
        <TD>&nbsp;</TD>
     </TR> 
     <TR>
-       <TD>Tracking </TD>
-       <TD>
+       <TD>Options</TD>
+       <TD colspan=2>
+       Tracking:&nbsp;
        <input id="HgTrack" type="checkbox" name="HgTrack" onChange="CheckHgPatch();">
-       </TD>
-       <TD>&nbsp;</TD>
+       &nbsp;
+       &nbsp;
+       &nbsp;
+       &nbsp;
+       <SPAN id="HgNoaaTip" class="tip">?</SPAN>
+       NOAA AR number:&nbsp;
+         <input id="HgNOAA" type="text" style="width:8em;background-color:#FFFFFF" value="NotSpecified" onChange="HgPatchGetNoaa();">
+      </TD>
     </TR>
     <TR>
        <TD>T_START </TD>
