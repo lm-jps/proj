@@ -214,8 +214,8 @@ int DoIt(void)
   TIME t_rec;
   double box_x, box_y;
   double crln, crlt;
-  char outseries[DRMS_MAXNAMELEN];
-  char inseries[DRMS_MAXNAMELEN];
+  char outseries[DRMS_MAXSERIESNAMELEN];
+  char inseries[DRMS_MAXSERIESNAMELEN];
   char inQuery[DRMS_MAXQUERYLEN];
   char in[DRMS_MAXQUERYLEN];
 
@@ -436,11 +436,11 @@ int DoIt(void)
 
   if (strcmp(outparam, "NOTSPECIFIED") == 0)
     {
-    strncpy(outseries, inseries, DRMS_MAXNAMELEN);
-    strncat(outseries, "_hgpatch", DRMS_MAXNAMELEN);
+    strncpy(outseries, inseries, DRMS_MAXSERIESNAMELEN);
+    strncat(outseries, "_hgpatch", DRMS_MAXSERIESNAMELEN);
     }
   else
-   strncpy(outseries, outparam, DRMS_MAXNAMELEN);
+   strncpy(outseries, outparam, DRMS_MAXSERIESNAMELEN);
 
   // Now, make sure output series exists and get template record.
   outTemplate = drms_template_record(drms_env, outseries, &status);
@@ -504,7 +504,7 @@ int DoIt(void)
       }
     else
       cadence_text[0] = '\0';
-    // strncpy(inseries, inparam, DRMS_MAXNAMELEN);
+    // strncpy(inseries, inparam, DRMS_MAXSERIESNAMELEN);
     sprint_at(t_start_text, t_start);
     sprint_at(t_stop_text, t_stop);
     if (strncmp(inseries,"aia.lev1",8)==0 && t_step == 1.0 && cadence > 1.0) // special case for AIA slots
@@ -722,7 +722,7 @@ int DoIt(void)
  *               writing the extracted region data file
 */
     outRS = drms_create_records(drms_env, 1, outseries, DRMS_PERMANENT, &status);
-    if (status) DIE("Cant make outout record");
+    if (status) {fprintf(stderr,"Output series is %s, ",outseries); DIE("Cant make outout record");}
     outRec = outRS->records[0];
     drms_copykeys(outRec, inRec, 1, kDRMS_KeyClass_Explicit);
     outSeg = drms_segment_lookupnum(outRec, 0);
