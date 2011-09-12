@@ -83,7 +83,7 @@ function HgPatchGetNoaa()
 function CheckHgPatch()
   {
   var isok = 0;
-  CheckHgRecordSet();
+  CheckHgRecordSet(0);
   ExportProcessingArgs = "hg_patch,";
   if ($("HgTrack").checked) // checked for tracking, default
     {
@@ -223,34 +223,33 @@ function CheckHgPatch()
 function HgSeriesSelect()
   {
   HgSeriesSelected = 1;
-  if (CheckHgRecordSet())
-    ExportNewRS();
+  CheckHgRecordSet(1);
+  //if (CheckHgRecordSet())
+  //ExportNewRS();
   }
 
-function CheckHgRecordSet() // If HG Patch selected, convert empty record selector to last record.
+function CheckHgRecordSet(clicked) // If HG Patch selected, convert empty record selector to last record.
   {
   var posbracket = $("ExportRecordSet").value.indexOf("[");
   var currentSeries = $("ExportRecordSet").value.substring(0,posbracket);
   var currentSpec = (posbracket < 0 ? "[$]" : $("ExportRecordSet").value.substring(posbracket));
   var selectedSeries;
+  var n = $("HgSerList").length;
   if (HgSeriesSelected)
     selectedSeries = $("HgSerList").selectedIndex;
   else
     {
-    var n = $("HgSerList").length;
-    var i;
-    for (i=0; i<n; i++)
-      if (currentSeries == $("HgSerList").options[i].value) break;
-    if (i == n)
-      {
-      alert("Please select valid hg_patch available series from list.");
-      return;
-      }
-    HgSeriesSelected = 1;
-    $("HgSerList").selectedIndex = i;
-    $("ExportRecordSet").value = currentSeries + currentSpec;
-    selectedSeries = i;
+    for (selectedSeries=1; selectedSeries<n; selectedSeries++)
+      if (currentSeries == $("HgSerList").options[selectedSeries].value) break;
     }
+  if ((clicked && selectedSeries == 0) || selectedSeries == n)
+    {
+    HgSeriesSelected = 0;
+    alert("Please select valid hg_patch available series from list.");
+    return(0);
+    }
+  HgSeriesSelected = 1;
+  $("HgSerList").selectedIndex = selectedSeries;
   currentSeries = $("HgSerList").options[selectedSeries].value;
   $("ExportRecordSet").value = currentSeries + currentSpec;
   if (posbracket < 0)
@@ -294,10 +293,13 @@ function HgGetSeriesList()
       {
       var response = transport.responseText || "no HgPatch series";
       HgSeriesList = response.evalJSON();
+      for (var i=$("HgSerList").length; i > 0; i--)
+        $("HgSerList").remove(i-1);
       var n = HgSeriesList.n;
       if (n < 1) alert("WARNING: No _hgpatch series found.\n"+response);
+      insertOption("HgSerList","Not Selected Yet", "");
       for (var i=0; i<n; i++)
-         insertOption("HgSerList",HgSeriesList.list[i], "");
+         insertOption("HgSerList",HgSeriesList.list[i+1], "");
       },
     onFailure: function() { alert('Failed to get HgPatch Series List'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
