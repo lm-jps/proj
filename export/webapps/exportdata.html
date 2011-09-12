@@ -627,6 +627,7 @@ function ExportNewRS()
   SetRecordLimit();
   GetRSCount();
   GetDefaultFormat();
+  SetProcessing();
   NotifyProcessingCode();
   }
 
@@ -728,7 +729,8 @@ function SetProcessing()
   else if ($("ExportProcessing").value == "hg_patch") // Export option block for HgPatch, section 6 of 7
     {
     HgPatchActive = 1;
-    CheckHgRecordSet();
+    HgSeriesSelected = 0;
+    CheckHgRecordSet(0);
     $("ProcessHgPatch").style.display="table-row";
     if (CheckHgPatch())
       isok = 1;
@@ -749,14 +751,14 @@ function SetExportProtocol()
      $("ExportProtocol").value = "MPEG";
      $("ExportProtocolHidden").value = "MPEG";
      ExportProtocolOK = 4;
-     $("CompressRow").style.display="table-row";
+     $("CompressRow").style.display="none";
   }
   else if (tmp == "JPEG")
   {
      $("ExportProtocol").value = "JPEG";
      $("ExportProtocolHidden").value = "JPEG";
      ExportProtocolOK = 3;
-     $("CompressRow").style.display="table-row";
+     $("CompressRow").style.display="none";
   }
   else if (tmp == "FITS")
   {
