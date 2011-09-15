@@ -53,22 +53,15 @@
 #       tag      - tag the set of files in the CVS respository implied by the -f flag.
 #       untag    - remove the tag on the  set of files in the CVS respository implied by the -f flag.
 #       print    - print the set of files in the CVS repository implied by the -f flag.
-#       printrel - print the set of files in the CVS repostiroy implied by the -f flag (but stripped 
-#                  of files that need to be filtered out for releases).
 #  -f The type of file set to operate on, which includes:
 #       sdp (all files in the repository, aka the "full JSOC" source tree).
 #       net (the set of files that compose the NetDRMS release).
 #       <configuration file> (the set of files is specified by <configuration file>).
-#  -r For the checkout, export, and update operations, this parameter is the CVS tag that identifies 
-#       the revision of each file to download. For the sdp and net file-sets, this tag is applied to 
-#       all files. For the custom file-set, this tag is applied to only the NetDRMS subset of files.
-#  -R Applies to the custom file-set only. For the checkout, export, and update operations, this parameter is 
-#       the CVS tag that identifies the revision of each non-NetDRMS project file to download. 
+#  -r For the checkout, export, and update operations, the revision of files to download. This is a
+#       CVS tag or file version number. If the file-set type is net
+#  -R Applies to the net and custom file-set types. For the checkout, export, and update operations, the revision 
+#       of non-NetDRMS project files to download. 
 #  -t For the tag and untag operations, the CVS tag to apply or delete.
-#  -l A log file (for the output of CVS commands for now).
-#  -F If a tagged checkout occurs as a result of other options, then tell CVS to retrieve the most recent
-#       file version of any file that is part of the file-set, but is not tagged with the tag provided
-#       by the -r or -R option.
 
 use XML::Simple;
 use IO::Dir;
@@ -99,7 +92,6 @@ use constant kDlUpdate => "update";
 use constant kDlTag => "tag";
 use constant kDlUntag => "untag";
 use constant kDlPrint => "print";
-use constant kDlPrintRelease => "printrel";
 
 use constant kStrproj => "proj";
 use constant kStrname => "name";
@@ -116,14 +108,10 @@ use constant kSuFlagFile => "suflag.txt";
 my($arg);
 my($cotype);
 my($cfgfile);
-my($logfile);
 my($cmd);
 my($err);
 my(@core);
 my(@netonly);
-my(@sdponly);
-my(@netfilter);
-my(@sdpfilter);
 my(@netco);
 my(@sdbco);
 my($curdir);
@@ -137,7 +125,6 @@ my($stfileold);
 my($stcotype);
 my($stfspec);
 my($compatmode);
-my($forceco);
 my(@filespec); # the complete file spec for all types of file-sets
 my(@pfilespec); # for custom file-set types, the file spec of the files in the configuration file
 my(@bfilespec); # for custom file-set types, the file spec of the files NOT in the configuration file
@@ -149,15 +136,9 @@ unless (flock(DATA, LOCK_EX | LOCK_NB))
    exit(1);
 }
 
-@core = qw(base/cfortran.h base/foundation.h base/jsoc.h base/jsoc_version.h base/mypng.h base/Rules.mk base/export base/drms base/libs base/sums base/util configure configproj.pl customizemake.pl doc moreconfigure.pl getmachtype.pl make_basic.mk Makefile make_jsoc.pl README Rules.mk target.mk build);
-
-@netonly = qw(config.local.template gen_init.csh gen_sumcf.csh seed_sums.c netdrms_setup.pl getuid.c proj/example proj/myproj proj/cookbook);
-
-@sdponly = qw(base/local proj configsdp.txt customizedefs.pl config.local.sutemplate CM);
-
-@netfilter = qw(base/drms/doc base/drms/libs/api/test base/sums/libs/api/perl base/sums/libs/api/tape.h base/sums/libs/pg/SUMLIB_DS_DataRequest_Tst.pgc base/sums/libs/pg/SUMLIB_NC_PaRequest_AP_60d.pgc base/sums/libs/pg/SUMLIB_TapeClose.pgc base/sums/libs/pg/SUMLIB_TapeFindGroup.pgc base/sums/libs/pg/SUMLIB_TapeUpdate.pgc base/sums/apps/main.c base/sums/apps/main2.c base/sums/apps/main3.c base/sums/apps/main4.c base/sums/apps/main5.c base/sums/apps/robotn_svc.c base/sums/apps/sum_forker.c base/sums/apps/sum_test.c base/sums/apps/sum_test.pl base/sums/apps/tapearc.c base/sums/apps/tapearc0.c base/sums/apps/tapearc1.c base/sums/apps/tapearc2.c base/sums/apps/tapearc3.c base/sums/apps/tapearc4.c base/sums/apps/tapearc5.c base/sums/apps/tapearc6.c base/sums/apps/tapearc7.c base/sums/apps/tapearc8.c base/sums/apps/tapearcinfo.c base/sums/apps/tapearcX.c base/sums/apps/tape_inventory.c base/sums/apps/tapeonoff.c base/sums/apps/tape_svc.c base/sums/apps/tape_svc_proc.c base/sums/apps/tapeutil.c base/sums/apps/xsum_svc.c base/sums/apps/xsum_svc_proc.c base/sums/apps/xtape_svc.c base/sums/scripts/build_parc_file.pl base/sums/scripts/find_dir_sum_partn_alloc_dc base/sums/scripts/fixportm.pl base/sums/scripts/get_dcs_times.csh base/sums/scripts/GRAD_BLUE_LINE.gif base/sums/scripts/lev1_def_gui base/sums/scripts/lev1_def_gui_aia base/sums/scripts/lev1_def_gui_called base/sums/scripts/lev1_def_gui_called_PZT_FSN base/sums/scripts/lev1_def_gui_hmi base/sums/scripts/rsync_scr111.pl base/sums/scripts/SDO_Badge.gif base/sums/scripts/SDO_HSB_CCSDS_Data_Structures.gif base/sums/scripts/ssh_rsync.source base/sums/scripts/sum_bad_permissions.pl base/sums/scripts/sumck base/sums/scripts/sumck_j1 base/sums/scripts/sumck_j1M base/sums/scripts/sumck_n02_jim base/sums/scripts/sumlookgroup.pl base/sums/scripts/sumlook.pl base/sums/scripts/sum_start base/sums/scripts/sum_start_d00_jim base/sums/scripts/sum_start_d02 base/sums/scripts/sum_start_d02_auto base/sums/scripts/sum_start_dc base/sums/scripts/sum_start_j1 base/sums/scripts/sum_start_j1_auto base/sums/scripts/sum_start_j1_auto.MULTI base/sums/scripts/sum_start_j1.MULTI base/sums/scripts/sum_start_n02_jim base/sums/scripts/sum_start_n02_jim_auto base/sums/scripts/sum_start_xim.MULTI base/sums/scripts/sum_stop base/sums/scripts/sum_stop_d00_jim base/sums/scripts/sum_stop_d02 base/sums/scripts/sum_stop_d02_auto base/sums/scripts/sum_stop_d02_tape base/sums/scripts/sum_stop_dc base/sums/scripts/sum_stop_j1 base/sums/scripts/sum_stop_j1_auto base/sums/scripts/sum_stop_j1_auto.MULTI base/sums/scripts/sum_stop_j1.MULTI base/sums/scripts/sum_stop_n02_jim base/sums/scripts/sum_stop_n02_jim_auto base/sums/scripts/sum_stop_xim.MULTI base/sums/scripts/sum_tape_catchup_update.pl base/sums/scripts/sum_tape_insert.pl base/sums/scripts/sum_tape_insert_t50.pl base/sums/scripts/sum_tape_insert_t950.pl base/sums/scripts/t120_reachive.pl base/sums/scripts/t120stageall.pl base/sums/scripts/t120view base/sums/scripts/t50view base/sums/scripts/t950view base/sums/scripts/tapearc_do base/sums/scripts/tapearc_do_dcs1 base/sums/scripts/tape_do_0.pl base/sums/scripts/tape_do_1.pl base/sums/scripts/tape_do_2.pl base/sums/scripts/tape_do_3.pl base/sums/scripts/tape_do_4.pl base/sums/scripts/tape_do_7.pl base/sums/scripts/tape_do_8.pl base/sums/scripts/tape_do_archive.pl base/sums/scripts/tape_do.pl base/sums/scripts/tapeid.list base/sums/scripts/tapeid_t50.list base/sums/scripts/tape_verify.pl base/sums/scripts/test base/sums/scripts/tmp.pl doc/dcs2_convert_to_0_or_1.txt doc/dcs3_name_change.txt doc/dcs_warmstandby.txt doc/dsc0_just_rebooted.txt doc/HK_Level0_Debug_Guide.odt doc/HK_Level0_Debug_Guide.pdf doc/whattodo_aia_lev1.txt doc/whattodo_dcs.txt doc/whattodolev0.txt doc/whattodo_start_stop_lev1_0_sums.txt);
-
-@sdpfilter = qw(base/drms/doc base/drms/libs/api/test base/sums/libs/api/perl base/sums/libs/pg/SUMLIB_DS_DataRequest_Tst.pgc base/sums/libs/pg/SUMLIB_NC_PaRequest_AP_60d.pgc base/sums/apps/main.c base/sums/apps/main2.c base/sums/apps/main3.c base/sums/apps/main4.c base/sums/apps/main5.c base/sums/apps/sum_test.c base/sums/apps/sum_test.pl base/sums/apps/tapearcX.c base/sums/apps/xsum_svc.c base/sums/apps/xsum_svc_proc.c base/sums/apps/xtape_svc.c base/sums/scripts/fixportm.pl base/sums/scripts/get_dcs_times.csh base/sums/scripts/GRAD_BLUE_LINE.gif base/sums/scripts/lev1_def_gui base/sums/scripts/lev1_def_gui_aia base/sums/scripts/lev1_def_gui_called base/sums/scripts/lev1_def_gui_called_PZT_FSN base/sums/scripts/lev1_def_gui_hmi base/sums/scripts/rsync_scr111.pl base/sums/scripts/SDO_Badge.gif base/sums/scripts/SDO_HSB_CCSDS_Data_Structures.gif base/sums/scripts/ssh_rsync.source base/sums/scripts/sum_bad_permissions.pl base/sums/scripts/sumck base/sums/scripts/sumck_j1 base/sums/scripts/sumck_j1M base/sums/scripts/sumck_n02_jim base/sums/scripts/sumlookgroup.pl base/sums/scripts/sumlook.pl base/sums/scripts/sum_start base/sums/scripts/sum_start_d00_jim base/sums/scripts/sum_start_d02 base/sums/scripts/sum_start_d02_auto base/sums/scripts/sum_start_dc base/sums/scripts/sum_start_j1 base/sums/scripts/sum_start_j1_auto base/sums/scripts/sum_start_j1_auto.MULTI base/sums/scripts/sum_start_j1.MULTI base/sums/scripts/sum_start_n02_jim base/sums/scripts/sum_start_n02_jim_auto base/sums/scripts/sum_start_xim.MULTI base/sums/scripts/sum_stop base/sums/scripts/sum_stop_d00_jim base/sums/scripts/sum_stop_d02 base/sums/scripts/sum_stop_d02_auto base/sums/scripts/sum_stop_d02_tape base/sums/scripts/sum_stop_dc base/sums/scripts/sum_stop_j1 base/sums/scripts/sum_stop_j1_auto base/sums/scripts/sum_stop_j1_auto.MULTI base/sums/scripts/sum_stop_j1.MULTI base/sums/scripts/sum_stop_n02_jim base/sums/scripts/sum_stop_n02_jim_auto base/sums/scripts/sum_stop_xim.MULTI base/sums/scripts/sum_tape_catchup_update.pl base/sums/scripts/sum_tape_insert.pl base/sums/scripts/sum_tape_insert_t50.pl base/sums/scripts/sum_tape_insert_t950.pl base/sums/scripts/t120_reachive.pl base/sums/scripts/t120stageall.pl base/sums/scripts/t120view base/sums/scripts/t50view base/sums/scripts/t950view base/sums/scripts/tapearc_do base/sums/scripts/tapearc_do_dcs1 base/sums/scripts/tape_do_0.pl base/sums/scripts/tape_do_1.pl base/sums/scripts/tape_do_2.pl base/sums/scripts/tape_do_3.pl base/sums/scripts/tape_do_4.pl base/sums/scripts/tape_do_7.pl base/sums/scripts/tape_do_8.pl base/sums/scripts/tape_do_archive.pl base/sums/scripts/tape_do.pl base/sums/scripts/tapeid.list base/sums/scripts/tapeid_t50.list base/sums/scripts/tape_verify.pl base/sums/scripts/test base/sums/scripts/tmp.pl CM doc/dcs2_convert_to_0_or_1.txt doc/dcs3_name_change.txt doc/dcs_warmstandby.txt doc/dsc0_just_rebooted.txt doc/HK_Level0_Debug_Guide.odt doc/HK_Level0_Debug_Guide.pdf doc/whattodo_aia_lev1.txt doc/whattodo_dcs.txt doc/whattodolev0.txt doc/whattodo_start_stop_lev1_0_sums.txt);
+@core = qw(base/cfortran.h base/foundation.h base/jsoc.h base/jsoc_version.h base/mypng.h base/Rules.mk base/export base/libs base/util configure configproj.pl customizemake.pl moreconfigure.pl getmachtype.pl make_basic.mk Makefile make_jsoc.pl README Rules.mk target.mk build);
+@netonly = qw(config.local.template gen_init.csh gen_sumcf.csh seed_sums.c netdrms_setup.pl getuid.c proj/example proj/myproj proj/cookbook base/drms/apps base/drms/fragments base/drms/libs/api/drms_storageunit.c base/drms/libs/api/drms_keyword.c base/drms/libs/api/drms_record.c base/drms/libs/api/drms_defs.c base/drms/libs/api/drms_link.h base/drms/libs/api/drms_series.h base/drms/libs/api/drms_segment.c base/drms/libs/api/client_fpic base/drms/libs/api/server base/drms/libs/api/drms_protocol.h base/drms/libs/api/drms_names_priv.h base/drms/libs/api/drms_link_priv.h base/drms/libs/api/drms_keyword_priv.h base/drms/libs/api/drms_client.c base/drms/libs/api/drms_segment_priv.h base/drms/libs/api/drms_names.h base/drms/libs/api/drms_dsdsapi.h base/drms/libs/api/drms_env.c base/drms/libs/api/drms_binfile.c base/drms/libs/api/drms_names.c base/drms/libs/api/drms_network_priv.h base/drms/libs/api/drms_record_priv.h base/drms/libs/api/drms_storageunit.h base/drms/libs/api/defkeymapclass.h base/drms/libs/api/drms_fitsrw_priv.h base/drms/libs/api/drms_env_priv.h base/drms/libs/api/drms_network.h base/drms/libs/api/drms_keyword.h base/drms/libs/api/drms_array.h base/drms/libs/api/drms_parser.c base/drms/libs/api/drms_series_priv.h base/drms/libs/api/drms_server.h base/drms/libs/api/drms_protocol.c base/drms/libs/api/drms_fortran.h base/drms/libs/api/drms_binfile.h base/drms/libs/api/drms_record.h base/drms/libs/api/drms_cmdparams.c base/drms/libs/api/drms_types.h base/drms/libs/api/drms_segment.h base/drms/libs/api/Rules.mk base/drms/libs/api/drms_fitstas_priv.h base/drms/libs/api/drms_fitsrw.c base/drms/libs/api/drms_array.c base/drms/libs/api/drms_server.c base/drms/libs/api/drms_link.c base/drms/libs/api/drms_dsdsapi.c base/drms/libs/api/drms_statuscodes.h base/drms/libs/api/drms_fitstas.c base/drms/libs/api/drms_parser.h base/drms/libs/api/drms_defs.h base/drms/libs/api/drms_fitsrw.h base/drms/libs/api/drms_storageunit_priv.h base/drms/libs/api/drms_priv.h base/drms/libs/api/client base/drms/libs/api/fdrms.f base/drms/libs/api/drms_types.c base/drms/libs/api/drms_env.h base/drms/libs/api/drms_fortran.c base/drms/libs/api/drms.h base/drms/libs/api/drms_cmdparams.h base/drms/libs/api/drms_series.c base/drms/libs/main base/drms/libs/meta base/drms/libs/Rules.mk base/drms/replication base/drms/scripts base/drms/Rules.mk base/sums/apps/sum_adv.c base/sums/apps/sum_export.c base/sums/apps/impexp.c base/sums/apps/sum_svc_proc.c base/sums/apps/sum_chmown.c base/sums/apps/main.c base/sums/apps/main2.c base/sums/apps/main3.c base/sums/apps/main4.c base/sums/apps/main5.c base/sums/apps/sum_rm.c base/sums/apps/sum_rm_0.c base/sums/apps/sum_rm_1.c base/sums/apps/sum_rm_2.c base/sums/apps/sum_svc.c base/sums/apps/sumrmdo_1.c base/sums/apps/printkey.c base/sums/apps/padata.c base/sums/apps/sumget.c base/sums/apps/sum_init.c base/sums/apps/sum_export_svc.c base/sums/apps/sum_forker.c base/sums/apps/Rules.mk base/sums/apps/du_dir.c base/sums/apps/jmtx.c base/sums/apps/md5filter.c base/sums/apps/tapeonoff.c base/sums/apps/driveonoff.c base/sums/apps/driven_svc.c base/sums/apps/tape_svc.c base/sums/apps/tape_svc_proc.c base/sums/apps/tapeutil.c base/sums/apps/tape_inventory.c base/sums/apps/tapearc.c base/sums/apps/tapearcinfo.c base/sums/apps/xsum_svc.c base/sums/apps/robotn_svc.c base/sums/scripts/prune_log_list.pl base/sums/scripts/sum_start base/sums/scripts/sum_ck base/sums/scripts/dpck.pl base/sums/scripts/find_dir_sum_partn_alloc base/sums/scripts/postgres base/sums/scripts/find_dir_sum_partn_alloc.README base/sums/scripts/find_dir_main_rm base/sums/scripts/sum_stop base/sums/Rules.mk base/sums/libs doc/doxygen/doxygen.css doc/doxygen/JsocLayout.xml doc/doxygen/gendox.csh doc/doxygen/doxygen_main_page.txt doc/doxygen/doxygen_priv.cfg doc/doxygen/doxygen_publ.cfg doc/doxygen/doxygen_moduletemplate.txt);
+@sdponly = qw(base/drms base/local base/sums proj configsdp.txt customizedefs.pl config.local.sutemplate CM doc);
 
 $err = 0;
 $cotype = kCoSdp;
@@ -165,7 +146,6 @@ $dltype = kDlCheckout;
 $version = "";
 $cvstag = "";
 $compatmode = 0;
-$forceco = 0;
 
 while ($arg = shift(@ARGV))
 {
@@ -178,14 +158,13 @@ while ($arg = shift(@ARGV))
           $arg eq kDlUpdate ||
           $arg eq kDlTag ||
           $arg eq kDlUntag ||
-          $arg eq kDlPrint ||
-          $arg eq kDlPrintRelease)
+          $arg eq kDlPrint)
       {
          $dltype = $arg;
       }
       else
       {
-         print STDERR "Invalid download type - please choose from 'checkout', 'export', 'update', 'tag', 'untag', 'print', or 'printrel'.\n";
+         print STDERR "Invalid download type - please choose from 'checkout', 'export', 'update', 'tag', 'untag' or 'print'.\n";
          $err = 1;
          last;
       }
@@ -206,11 +185,6 @@ while ($arg = shift(@ARGV))
       # CVS tag to set/remove
       $arg = shift(@ARGV);
       $cvstag = $arg;
-   }
-   elsif ($arg eq "-l")
-   {
-      $arg = shift(@ARGV);
-      $logfile = $arg;
    }
    elsif ($arg eq "-f")
    {
@@ -239,10 +213,6 @@ while ($arg = shift(@ARGV))
             $err = 1;
          }
       }
-   }
-   elsif ($arg eq "-F")
-   {
-      $forceco = 1;
    }
 }
 
@@ -337,7 +307,7 @@ if (!$err)
       $err = 1;
    }
    elsif ($dltype ne kDlCheckout && $dltype ne kDlExport && $dltype ne kDlUpdate && 
-          $dltype ne kDlTag && $dltype ne kDlUntag && $dltype ne kDlPrint && $dltype ne kDlPrintRelease)
+          $dltype ne kDlTag && $dltype ne kDlUntag && $dltype ne kDlPrint)
    {
       print STDERR "Invalid operation '$dltype'.\n";
       $err = 1;
@@ -353,7 +323,7 @@ if (!$err)
       {
          undef($curdir);
 
-         if ($dltype eq kDlTag || $dltype eq kDlUntag || $dltype eq kDlPrint || $dltype eq kDlPrintRelease)
+         if ($dltype eq kDlTag || $dltype eq kDlUntag || $dltype eq kDlPrint)
          {
             # cd to tmp directory for these commands
             if (!(-d kTmpDir))
@@ -388,7 +358,7 @@ if (!$err)
          # Do a cvs checkout, export, or update into the current directory
          if (!$err)
          {
-            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec, $logfile, $forceco, \@netfilter, \@sdpfilter);
+            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec);
             if ($err)
             {
                print STDERR "Unable to $dltype CVS tree.\n";
@@ -402,7 +372,7 @@ if (!$err)
                {
                   my($cvscmd) = "cvs update -A " . kRootDir . kSuFlagFile . " " . kRootDir . "jsoc_sync.pl " . kRootDir . "jsoc_update.pl";
 
-                  if (CallCVS($cvscmd, $logfile))
+                  if (CallCVS($cvscmd))
                   {
                      print STDERR "Unable to run $cvscmd.\n";
                      $err = 1;
@@ -475,19 +445,6 @@ if (!$err)
                {
                   print STDERR "Unable to open file " . kRootDir . kLocDir . kTypeFile . " for writing.\n";
                }
-
-               # Copy the cvs update log, if it exists, back to the kRootDir (programs calling this script)
-               # expect it in kRootDir.
-               if (defined($logfile) && -e $logfile)
-               {
-                  # cp $logfile kRootDir
-                  if (!copy($logfile, kRootDir))
-                  {
-                     # copy failure
-                     print STDERR "Unable to copy log file $logfile to " . kRootDir . ".\n";
-                     $err = 1;
-                  }
-               }
             }
             elsif ($dltype eq kDlTag || $dltype eq kDlUntag)
             {
@@ -499,11 +456,11 @@ if (!$err)
                   $err = (chdir(kTmpDir . kRootDir) == 0);
                   if ($err)
                   {
-                     print STDERR "Unable to cd to " . kTmpDir . kRootDir . ".\n";
+                     print STDERR "Unable to cd to " . kTmpDir . ".\n";
                   }
                   else
                   {
-                     if (TagFiles($cvstag, $dltype, $logfile))
+                     if (TagFiles($cvstag, $dltype))
                      {
                         print STDERR "Unable to tag/untag files in file specification.\n";
                         $err = 1;
@@ -525,7 +482,7 @@ if (!$err)
                   $err = 1;
                }
             }
-            elsif ($dltype eq kDlPrint || $dltype eq kDlPrintRelease)
+            elsif ($dltype eq kDlPrint)
             {
                if (PrintFilenames(*STDOUT, kTmpDir . kRootDir))
                {
@@ -721,57 +678,6 @@ sub BuildFilespec
    return $rv;
 }
 
-sub IsBadGuy
-{
-   my($file) = $_[0]; 
-   my($badguys) = $_[1];
-
-   my($dir);
-
-   if (defined($badguys->{$file}))
-   {
-      return 1;
-   }
-   else
-   {
-      if (substr($file, -1, 1) eq '/')
-      {
-         $file = substr($file, 0, length($file) - 1);
-      }
-
-      while (1)
-      {        
-         my($fn, $dir, $sfx) = fileparse($file);
-
-         if (substr($dir, -1, 1) eq '/')
-         {
-            $dir = substr($dir, 0, length($dir) - 1);
-         }
-
-         if (!defined($dir) || length($dir) == 0 || $dir eq ".")
-         {
-            return 0;
-         }
-
-         if (defined($badguys->{$dir}))
-         {
-            return 1;
-         }
-
-         if ($file ne $dir)
-         {
-            $file = $dir;
-         }
-         else
-         {
-            return 0;
-         }
-      }
-   }
-
-   return 0;
-}
-
 sub DownloadTree
 {
    my($cotype) = $_[0];
@@ -781,10 +687,6 @@ sub DownloadTree
    my($fspec) = $_[4];
    my($bfspec) = $_[5];
    my($pfspec) = $_[6];
-   my($logfile) = $_[7];
-   my($forceco) = $_[8];
-   my($netfilter) = $_[9];
-   my($sdpfilter) = $_[10];
 
    my($rv) = 0;
    my($curdir);
@@ -794,21 +696,6 @@ sub DownloadTree
    my($rev);
    my($prev);
    my(@relpaths);
-   my($forcecostr) = $forceco ? "-f" : "";
-   my($filterdir);
-   my(@specfiles);
-   my($filter);
-   my($log);
-
-   if ($dltype eq kDlPrint || $dltype eq kDlPrintRelease)
-   {
-      # Output should be a list of files only.
-      $log = "/dev/null";
-   }
-   else
-   {
-      $log = $logfile;
-   }
 
    if (length($dltype) > 0)
    {
@@ -816,7 +703,7 @@ sub DownloadTree
       {
          $cvscmd = "checkout -AP";
       }
-      elsif ($dltype eq kDlExport || $dltype eq kDlPrint || $dltype eq kDlPrintRelease)
+      elsif ($dltype eq kDlExport || $dltype eq kDlPrint)
       {
          $cvscmd = "export";
       }
@@ -845,7 +732,7 @@ sub DownloadTree
       {
          $rev = "-r $version";
       } 
-      elsif ($dltype eq kDlExport || $dltype eq kDlPrint || $dltype eq kDlPrintRelease)
+      elsif ($dltype eq kDlExport || $dltype eq kDlPrint)
       {
          # Only export requires a revision argument
          $rev = "-r HEAD";
@@ -859,7 +746,7 @@ sub DownloadTree
       {
          $prev = "-r $pversion";
       } 
-      elsif ($dltype eq kDlExport || $dltype eq kDlPrint || $dltype eq kDlPrintRelease)
+      elsif ($dltype eq kDlExport || $dltype eq kDlPrint)
       {
          # Only export requires a revision argument
          $prev = "-r HEAD";
@@ -882,9 +769,9 @@ sub DownloadTree
             $rv = 1;
          }
       }
-      elsif ($dltype eq kDlTag || $dltype eq kDlUntag || $dltype eq kDlPrint || $dltype eq kDlPrintRelease)
+      elsif ($dltype eq kDlTag || $dltype eq kDlUntag || $dltype eq kDlPrint)
       {
-         # If $dltype is kDlTag,  kDlUntag, kDlPrint, or kDlPrintRelease then it is okay to delete the JSOC subdirectory 
+         # If $dltype is kDlTag,  kDlUntag, or kDlPrint then it is okay to delete the JSOC subdirectory 
          # because these three operations create a temporary JSOC directory.
          if (-e kTmpDir . kRootDir)
          {
@@ -915,98 +802,12 @@ sub DownloadTree
 
    if (!$rv)
    {
-      # If this is an export or print command, download to a temporary directory, 
-      # obtain the full list of files from the download directory, 
-      # apply the filters to remove files from this list, then call CVS again
-      # providing this list of file paths. After obtaining this list, 
-      # delete the files in the temporary directory.
-      #
-      # Must cd to the temporary directory because if this is an export, 
-      # then the current directory is not the temporary directory.
-      if ($dltype eq kDlExport || $dltype eq kDlPrint || $dltype eq kDlPrintRelease)
-      {
-         $filterdir = $ENV{'PWD'};
-         $filter = ($cotype eq kCoSdp) ? $sdpfilter : $netfilter;
-
-         # The temp directory may not exist if this is an export.
-         if (!(-d kTmpDir))
-         {
-            # no need to check this call, because the chdir() cmd is being checked.
-            mkpath(kTmpDir);
-         }
-      }
-   }
-
-   if (!$rv)
-   {
       # Checkout the project files with a separate cvs command - using the version tag specific to the project
       # files.
-
-      # THIS SECTION CHECKS-OUT THE BASE FILES.
-      if (length($rev) > 0)
-      {
-         $cvscmd = "$cvscmd $forcecostr";
-      }
-
       @relpaths = map({kRootDir . "$_"} @{$bfspec});
-
-      if (defined($filterdir))
-      {
-         # We need to filter out undesirables - checkout into temp dir now (which we cded to above).
-         my(%badguys);
-         my($tcmd) = join(' ', "cvs", $cvscmd, $rev, @relpaths);
-
-         $rv = (chdir(kTmpDir) == 0);
-         if ($rv)
-         {
-            print STDERR "Unable to cd to " . kTmpDir . ".\n";
-         } 
-         else
-         {
-            # Check-out all files from repository (will filter out the non-release files below).
-            if (CallCVS($tcmd, $log))
-            {
-               print STDERR "Unable to $dltype repository files.\n";
-               $rv = 1;
-            }
-            else
-            {
-               # Get a list of all files from temp dir.
-               @specfiles = ();
-               if (GetFileList(kRootDir, "", \@specfiles))
-               {
-                  print STDERR "Unable to retrieve list of files rooted at " . kTmpDir . kRootDir . ".\n";
-                  $rv = 1;
-               }
-               else
-               {
-                  # At long last we can filter out the bad guys.
-                  foreach $guy (@{$filter})
-                  {
-                     $badguys{kRootDir . $guy} = 1;
-                  }
-                  
-                  # Since badguys might contain directories, not just plain files, we have to 
-                  # check ALL parent directories for existence in badguys. Blah.
-                  @relpaths = map({IsBadGuy($_, \%badguys) ? () : $_;} @specfiles);
-               }
-            }
-         }
-
-         # Back to the original working directory
-         remove_tree(kTmpDir . kRootDir, {error => \my $errlist});
-         if (@{$errlist})
-         {
-            print STDERR "Unable to properly remove temporary subdirectory $tmpdir.\n";
-            $rv = 1;
-         }
-
-         chdir($filterdir);
-      }
-
       $cmd = join(' ', "cvs", $cvscmd, $rev, @relpaths);
 
-      if (CallCVS($cmd, $log))
+      if (CallCVS($cmd))
       {
          print STDERR "Unable to $dltype repository files.\n";
          $rv = 1;
@@ -1015,71 +816,12 @@ sub DownloadTree
       {
          # If this is a sdp or net checkout, then $pfspec will be empty, so we can skip this second
          # checkout.
-
          if (defined($pfspec) && $#{$pfspec} >= 0)
          {
-            # THIS SECTION CHECKS-OUT THE PROJECT FILES (if this is a custom checkout).
-            if (length($prev) > 0)
-            {
-               $cvscmd = "$cvscmd $forcecostr";
-            }
-
             @relpaths = map({kRootDir . "$_"} @{$pfspec});
-
-            if (defined($filterdir))
-            {
-               # We need to filter out undesirables - checkout into temp dir now (which we cded to above).
-               my(%badguys);
-               my($tcmd) = join(' ', "cvs", $cvscmd, $prev, @relpaths);
-
-               $rv = (chdir(kTmpDir) == 0);
-               if ($rv)
-               {
-                  print STDERR "Unable to cd to " . kTmpDir . ".\n";
-               } 
-               else
-               {
-                  # Check-out all files from repository (will filter out the non-release files below).
-                  if (CallCVS($tcmd, $log))
-                  {
-                     print STDERR "Unable to $dltype repository files.\n";
-                     $rv = 1;
-                  }
-                  else
-                  {
-                     # Get a list of all files from temp dir.
-                     @specfiles = ();
-                     if (GetFileList(kRootDir, "", \@specfiles))
-                     {
-                        print STDERR "Unable to retrieve list of files rooted at " . kTmpDir . kRootDir . ".\n";
-                        $rv = 1;
-                     }
-                     else
-                     {
-                        # At long last we can filter out the bad guys.
-                        foreach $guy (@{$filter})
-                        {
-                           $badguys{kRootDir . $guy} = 1;
-                        }
-                        
-                        @relpaths = map({IsBadGuy($_, \%badguys) ? () : $_;} @specfiles);
-                     }
-                  }
-               }
-
-               remove_tree(kTmpDir . kRootDir, {error => \my $errlist});
-               if (@{$errlist})
-               {
-                  print STDERR "Unable to properly remove temporary subdirectory $tmpdir.\n";
-                  $rv = 1;
-               }
-
-               chdir($filterdir);
-            }
-
             $cmd = join(' ', "cvs", $cvscmd, $prev, @relpaths);
 
-            if (CallCVS($cmd, $log))
+            if (CallCVS($cmd))
             {
                print STDERR "Unable to $dltype repository files.\n";
                $rv = 1;
@@ -1096,7 +838,6 @@ sub TagFiles
 {
    my($tag) = $_[0];
    my($dltype) = $_[1];
-   my($logfile) = $_[2];
 
    my($rv) = 0;
    my(@allfiles);
@@ -1113,7 +854,7 @@ sub TagFiles
       $cmd = "cvs tag -d $tag ."
    }
    
-   if (CallCVS($cmd, $logfile))
+   if (CallCVS($cmd))
    {
       print STDERR "Unable to tag repository files.\n";
       $rv = 1;
@@ -1223,20 +964,11 @@ sub GetFileList
 sub CallCVS
 {
    my($cmd) = $_[0];
-   my($log) = $_[1];
 
    my($rv) = 0;
    my($callstat);
 
-   if (defined($log) && length($log) > 0)
-   {
-      system("$cmd 1>$log 2>&1");
-   }
-   else
-   {
-      system($cmd);
-   }
-
+   system($cmd);
    $callstat = $?;
 
    if ($callstat == -1)

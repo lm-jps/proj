@@ -28,7 +28,7 @@
 const char *meKeys[] =
 {
 	"QUALITY", "QUAL_S", "QUALLEV1", "INSTRUME", "CAMERA",		// info
-	"T_OBS", "CADENCE", "DATE_S", "DATE__OBS",											// time
+	"T_OBS", "CADENCE",											// time
 	"DSUN_OBS", "CRLN_OBS", "CRLT_OBS", "CAR_ROT",
 	"OBS_VR", "OBS_VW", "OBS_VN", "RSUN_OBS",					// geometry
 	"INVCODEV", "INVITERA", "INVLMBDA", "INVLMBDF",
@@ -37,18 +37,8 @@ const char *meKeys[] =
 	"INVDLTLA", "INVLYOTW", "INVWNARW", "INVWSPAC",
 	"INVINTTH", "INVNOISE", "INVCONTI", "INVWGHTI",
 	"INVWGHTQ", "INVWGHTU", "INVWGHTV", "INVSTLGT",
-	"INVFLPRF", "INVPHMAP", "INVVLAVE", "INVBLAVE", "INVBBAVE",
-	"INVNPRCS", "INVNCNVG",
-	"INVKEYS1", "INVKEYS2", "INVKEYS3", 
-	"INVKEYI1", "INVKEYI2", "INVKEYI3", 
-	"INVKEYD1", "INVKEYD2", "INVKEYD3", 								// inversion
-	"BUNIT",
-	"BUNIT_000", "BUNIT_001", "BUNIT_002", "BUNIT_003", "BUNIT_004",
-	"BUNIT_005", "BUNIT_006", "BUNIT_007", "BUNIT_008", "BUNIT_009",
-	"BUNIT_010", "BUNIT_011", "BUNIT_012", "BUNIT_013", "BUNIT_014",
-	"BUNIT_015", "BUNIT_016", "BUNIT_017", "BUNIT_018", "BUNIT_019",
-	"BUNIT_020", "BUNIT_021", "BUNIT_022", "BUNIT_023", "BUNIT_024",
-  "BUNIT_025", "BUNIT_026", "BUNIT_027",
+	"INVFLPRF", "INVPHMAP", "INVBLAVE", "INVBBAVE",
+	"INVNPRCS", "INVNCNVG",										// inversion
 	"HFLID", "HCFTID", "QLOOK", "TINTNUM", "SINTNUM",
 	"DISTCOEF", "ROTCOEF", "POLCALM", "SOURCE",
 	"CODEVER0", "CODEVER1", "CODEVER2", "CODEVER3", "CODEVER4"	// misc
@@ -56,16 +46,14 @@ const char *meKeys[] =
 
 const char *patchKeys[] = 
 {
-	"PATCHNUM", "OFFDISK", "QUIET", "MASK",
-	"MINLON", "MINLAT", "MAXLON", "MAXLAT", "OMEGA"
+	"PATCHNUM", "OFFDISK", "QUIET", "MASK"
 };
 
 const char *geoKeys[] =
 {
 	"CRPIX1", "CRPIX2", "CRVAL1", "CRVAL2",
 	"CDELT1", "CDELT2", "CROTA2",
-	"CRDER1", "CRDER2", "CSYSER1", "CSYSER2",
-	"IMCRPIX1", "IMCRPIX2"
+	"CRDER1", "CRDER2", "CSYSER1", "CSYSER2"
 };
 
 const char *ambigKeys[] =
@@ -90,7 +78,7 @@ int copy_me_keys (DRMS_Record_t *inRec, DRMS_Record_t *outRec)
 	
 	for (iKey = 0; iKey < nKeys; iKey++)
 	{
-		failCount += drms_copykey(outRec, inRec, meKeys[iKey]);
+		failCount += drms_copykey(inRec, outRec, meKeys[iKey]);
 	}
 	
 	return failCount;
@@ -110,7 +98,7 @@ int copy_patch_keys (DRMS_Record_t *inRec, DRMS_Record_t *outRec)
 	
 	for (iKey = 0; iKey < nKeys; iKey++)
 	{
-		failCount += drms_copykey(outRec, inRec, patchKeys[iKey]);
+		failCount += drms_copykey(inRec, outRec, patchKeys[iKey]);
 	}
 	
 	return failCount;
@@ -130,7 +118,7 @@ int copy_geo_keys (DRMS_Record_t *inRec, DRMS_Record_t *outRec)
 	
 	for (iKey = 0; iKey < nKeys; iKey++)
 	{
-		failCount += drms_copykey(outRec, inRec, geoKeys[iKey]);
+		failCount += drms_copykey(inRec, outRec, geoKeys[iKey]);
 	}
 	
 	return failCount;
@@ -150,7 +138,7 @@ int copy_ambig_keys (DRMS_Record_t *inRec, DRMS_Record_t *outRec)
 	
 	for (iKey = 0; iKey < nKeys; iKey++)
 	{
-		failCount += drms_copykey(outRec, inRec, ambigKeys[iKey]);
+		failCount += drms_copykey(inRec, outRec, ambigKeys[iKey]);
 	}
 	
 	return failCount;

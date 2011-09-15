@@ -98,6 +98,7 @@ subroutine ambig(&
    external :: setup_OCBP_PF_dzh_4p, CalcE_OCBP_PF_dzh_4p, CalcDE_reconfig_OCBP_PF_dzh_4p
    external :: setup_spherical_PF_4p, CalcE_spherical_PF_4p, CalcDE_reconfig_spherical_PF_4p
 
+
 real,dimension(nx_p,ny_p) :: ba
 
 !==============================================================!
@@ -180,25 +181,32 @@ write(*,*) 'phi,theta',phi,theta
 ! --> Construct coordinate transformation matrices.
          call transform(theta,phi)
          if(iverb.eq.1) write(*,*) 'transform calculated'
-!
-! --> Applying a Tukey windowing to smooth the transition to zero field
-! --> at the edges. This reduces the impact of the periodic boundary
-! --> conditions.
-!
-         call tukey(Bz,nx,ny,nap)
-         if(iverb.eq.1) write(*,*) 'windowing done'
-!
-! --> Calculate transverse components of potential field, and vertical
-! --> derivative of vertical component of potential field using FFTs.
-!
-         allocate(dBpzdz(nx,ny),Bpix(nx,ny),Bpiy(nx,ny))
-         call potential(nx,ny)
-         dBzdz=dBpzdz
+
+! --> Pad the input array with zeros.
+! --> This reduces the impact of the periodic boundary conditions.
+         call buffer(Bz,nxp,nyp)
+         if(iverb.eq.1) write(*,*) 'buffering done'
+
+! --> Smooth the transition to zero field.
+! --> This reduces ringing if the field is non-zero at boundaries.
+         if(nap.ge.1) call smooth(nap)
+         if(iverb.eq.1) write(*,*) 'apodizing done'
+
+! --> Calculate potential field (and derivatives) using FFTs.
+         allocate(dBpzdz(nxp,nyp),Bpix(nxp,nyp),Bpiy(nxp,nyp))
+         call potential(nxp,nyp)
+         do i=1,nx
+            do j=1,ny
+               dBzdz(i,j)=dBpzdz(ixmin+i-1,iymin+j-1)
+            enddo
+         enddo
          if(iverb.eq.1) write(*,*) 'potential field done'
-!
+
 ! --> Perform acute angle to potential field ambiguity resolution on
 ! --> pixels below a given threshold.
 !
+!         call pacute(bthresh)
+!         if(iverb.eq.1) write(*,*) 'acute angle ambiguity resolution done'
           deallocate(dBpzdz,Bpix,Bpiy)
 !
 ! --> Global minimization of "energy" to resolve ambiguity.
@@ -210,6 +218,7 @@ write(*,*) 'phi,theta',phi,theta
 ! --> pixels below a given threshold. 
 !
          bthresh=bthresh1+(bthresh0-bthresh1)*sin(phi)*cos(theta)
+write(*,*) 'bthresh',bthresh
          call nacute6p(bthresh)
          if(iverb.eq.1) write(*,*) 'smoothing done'
 !
@@ -258,8 +267,8 @@ write(*,*) 'phi,theta',phi,theta
 ! --> Perform acute angle to nearest neighbor ambiguity resolution on
 ! --> pixels below a given threshold. 
 !
-         call nacute6(bthresh0, bthresh1)
-         if(iverb.eq.1) write(*,*) 'smoothing done'
+         !call nacute6(bthresh0, bthresh1)
+         !if(iverb.eq.1) write(*,*) 'smoothing done'
 !
 ! --> Temporary rough estimate of uncertainty in ambiguity resolution:
 ! --> 0.0 for pixels which were not disambiguated (outside tmask)

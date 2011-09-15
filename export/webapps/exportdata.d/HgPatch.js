@@ -6,84 +6,10 @@
 // Processing details for Patch in Heliographic Coords
 //
 
-//function HgPatchGetNoaa()
-  //{
-  // if $("HgNOAA").value is a number
-  //   { // lookup NOAA number
-  //   do lookdata rs list fetch of su_rsb.NOAA_Regions key=....
-  //   find instance nearest CM, get long and lat and time, use stonyhurst since do not know rot
-  //   populate $("HgLocType").value, $("HgX").value, $("HgY").value, $("HgTRef").value
-  //   call CheckHgPatch()
-  //   return
-  //   }
-  //}
-
-var noaaColor;
-
-function HgPatchGetNoaa()
-  {
-  var noaaNum = 1 * $("HgNOAA").value;
-  if (noaaNum < 7000) 
-    {
-    noaaNum = noaaNum + 10000; // OK for times after 1996 Jan.
-    $("HgNOAA").value = noaaNum + "";
-    }
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  new Ajax.Request('http://jsoc2.stanford.edu/cgi-bin/ajax/' + JSOC_INFO,
-    {
-    method: 'get',
-    parameters: {"op" : "rs_list", "ds": "su_rsb.NOAA_ActiveRegions[][" + noaaNum + "]", "key": "ObservationTime,LatitudeHG,LongitudeCM" },
-    onSuccess: function(transport, json)
-      {
-      var response = transport.responseText || "no response text";
-      var NOAA_rslist = response.evalJSON();
-      try {if (NOAA_rslist.status > 0 || NOAA_rslist.count == 0) throw "noRecords";}
-      catch(err) { $("HgNOAA").value = noaaNum + " " + err; return; }
-      var minLong = 999, minLat, minTime;
-      var irec, nrecs = NOAA_rslist.count;
-      var thisTime, thisLong, thisLat;
-      for (irec=0; irec<nrecs; irec++)
-        {
-        thisTime = NOAA_rslist.keywords[0].values[irec];
-        thisLat = NOAA_rslist.keywords[1].values[irec];
-        thisLong = NOAA_rslist.keywords[2].values[irec];
-        if (Math.abs(thisLong) < Math.abs(minLong))
-          {
-          minLong = thisLong;
-          minLat = thisLat;
-          minTime = thisTime;
-          }
-        }
-      try
-        {
-        if (minLong == 999) throw "noRegion";
-        $("HgLocType").value = "stony";
-        $("HgTRef").value = minTime;
-        $("HgX").value = minLong + "";
-        $("HgY").value = minLat + "";
-	$("HgNOAA").style.backgroundColor="#FFCC66";
-        noaaColor = "#D8D8D8";
-        $("HgLocType").style.backgroundColor = noaaColor;
-        $("HgTRef").style.backgroundColor = noaaColor;
-        $("HgX").style.backgroundColor = noaaColor;
-        $("HgY").style.backgroundColor = noaaColor;
-	CheckHgPatch();
-        }
-      catch(err) { $("HgNOAA").value = noaaNum + " " + err; return; }
-      },
-    onFailure: function()
-      {
-      alert('Something went wrong with NOAA num data request');
-      $("HgNOAA").value = "Not Found";
-      },
-    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-    });
-  }
-
 function CheckHgPatch()
   {
   var isok = 0;
-  CheckHgRecordSet(0);
+  CheckHgRecordSet();
   ExportProcessingArgs = "hg_patch,";
   if ($("HgTrack").checked) // checked for tracking, default
     {
@@ -130,7 +56,7 @@ function CheckHgPatch()
     isok += 1;
     }
 
-  $("HgLocType").style.backgroundColor=noaaColor;
+  $("HgLocType").style.backgroundColor="#FFFFFF";
   ExportProcessingArgs = ExportProcessingArgs + "locunits=" + $("HgLocType").value + ",";
   $("HgBoxType").style.backgroundColor="#FFFFFF";
   ExportProcessingArgs = ExportProcessingArgs + "boxunits=" + $("HgBoxType").value + ",";
@@ -166,7 +92,7 @@ function CheckHgPatch()
     }
   else
     {
-    $("HgTRef").style.backgroundColor=noaaColor;
+    $("HgTRef").style.backgroundColor="#FFFFFF";
     ExportProcessingArgs = ExportProcessingArgs + "t_ref=" + $("HgTRef").value + ",";
     isok += 1;
     }
@@ -177,7 +103,7 @@ function CheckHgPatch()
     }
   else
     {
-    $("HgX").style.backgroundColor=noaaColor;
+    $("HgX").style.backgroundColor="#FFFFFF";
     ExportProcessingArgs = ExportProcessingArgs + "x=" + $("HgX").value + ",";
     isok += 1;
     }
@@ -188,7 +114,7 @@ function CheckHgPatch()
     }
   else
     {
-    $("HgY").style.backgroundColor=noaaColor;
+    $("HgY").style.backgroundColor="#FFFFFF";
     ExportProcessingArgs = ExportProcessingArgs + "y=" + $("HgY").value + ",";
     isok += 1;
     }
@@ -223,33 +149,34 @@ function CheckHgPatch()
 function HgSeriesSelect()
   {
   HgSeriesSelected = 1;
-  CheckHgRecordSet(1);
-  //if (CheckHgRecordSet())
-  //ExportNewRS();
+  if (CheckHgRecordSet())
+    ExportNewRS();
   }
 
-function CheckHgRecordSet(clicked) // If HG Patch selected, convert empty record selector to last record.
+function CheckHgRecordSet() // If HG Patch selected, convert empty record selector to last record.
   {
   var posbracket = $("ExportRecordSet").value.indexOf("[");
   var currentSeries = $("ExportRecordSet").value.substring(0,posbracket);
   var currentSpec = (posbracket < 0 ? "[$]" : $("ExportRecordSet").value.substring(posbracket));
   var selectedSeries;
-  var n = $("HgSerList").length;
   if (HgSeriesSelected)
     selectedSeries = $("HgSerList").selectedIndex;
   else
     {
-    for (selectedSeries=1; selectedSeries<n; selectedSeries++)
-      if (currentSeries == $("HgSerList").options[selectedSeries].value) break;
+    var n = $("HgSerList").length;
+    var i;
+    for (i=0; i<n; i++)
+      if (currentSeries == $("HgSerList").options[i].value) break;
+    if (i == n)
+      {
+      alert("Please select valid hg_patch available series from list.");
+      return;
+      }
+    HgSeriesSelected = 1;
+    $("HgSerList").selectedIndex = i;
+    $("ExportRecordSet").value = currentSeries + currentSpec;
+    selectedSeries = i;
     }
-  if ((clicked && selectedSeries == 0) || selectedSeries == n)
-    {
-    HgSeriesSelected = 0;
-    alert("Please select valid hg_patch available series from list.");
-    return(0);
-    }
-  HgSeriesSelected = 1;
-  $("HgSerList").selectedIndex = selectedSeries;
   currentSeries = $("HgSerList").options[selectedSeries].value;
   $("ExportRecordSet").value = currentSeries + currentSpec;
   if (posbracket < 0)
@@ -264,20 +191,17 @@ function CheckHgRecordSet(clicked) // If HG Patch selected, convert empty record
 
 function HgPatchInit()
   {
-  noaaColor = "#FFFFFF";
-  var requireColor = "#D88080";
   $("ProcessHgPatch").style.display="none";
   $("HgTrack").checked = 1;
-  $("HgNOAA").style.backgroundColor="#FFFFFF"; $("HgNOAA").value = "NotSpecified";
   $("HgTStart").value = "NotSpecified";
   $("HgTStop").value = "NotSpecified";
   $("HgTDelta").value = "NotSpecified";
-  $("HgTRef").style.backgroundColor = requireColor; $("HgTRef").value = "NotSpecified";
-  $("HgCarrot").style.backgroundColor = requireColor; $("HgCarrot").value = "NotSpecified";
-  $("HgX").style.backgroundColor = requireColor; $("HgX").value = "NotSpecified";
-  $("HgY").style.backgroundColor = requireColor; $("HgY").value = "NotSpecified";
-  $("HgWide").style.backgroundColor = requireColor; $("HgWide").value = "NotSpecified";
-  $("HgHigh").style.backgroundColor = requireColor; $("HgHigh").value = "NotSpecified";
+  $("HgTRef").style.backgroundColor = "#D88080"; $("HgTRef").value = "NotSpecified";
+  $("HgCarrot").style.backgroundColor = "#D88080"; $("HgCarrot").value = "NotSpecified";
+  $("HgX").style.backgroundColor = "#D88080"; $("HgX").value = "NotSpecified";
+  $("HgY").style.backgroundColor = "#D88080"; $("HgY").value = "NotSpecified";
+  $("HgWide").style.backgroundColor = "#D88080"; $("HgWide").value = "NotSpecified";
+  $("HgHigh").style.backgroundColor = "#D88080"; $("HgHigh").value = "NotSpecified";
   HgPatchActive = 0;
   HgGetSeriesList();
   HgSeriesSelected = 0;
@@ -293,13 +217,10 @@ function HgGetSeriesList()
       {
       var response = transport.responseText || "no HgPatch series";
       HgSeriesList = response.evalJSON();
-      for (var i=$("HgSerList").length; i > 0; i--)
-        $("HgSerList").remove(i-1);
       var n = HgSeriesList.n;
       if (n < 1) alert("WARNING: No _hgpatch series found.\n"+response);
-      insertOption("HgSerList","Not Selected Yet", "");
       for (var i=0; i<n; i++)
-         insertOption("HgSerList",HgSeriesList.list[i+1], "");
+         insertOption("HgSerList",HgSeriesList.list[i], "");
       },
     onFailure: function() { alert('Failed to get HgPatch Series List'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }

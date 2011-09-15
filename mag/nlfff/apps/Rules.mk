@@ -31,7 +31,7 @@ S_$(d)		:= $(notdir $(EXE_$(d))) #$(MODEXE_SOCK_$(d)))
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 $(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include $(MYCMPFLG)
-$(EXE_$(d)):		LF_TGT := $(LF_TGT) -lmkl_em64t -openmp -fp-model precise -fp-model source
+$(EXE_$(d)):		LF_TGT := $(LF_TGT) -lmkl_em64t -openmp
 
 # Shortcuts
 .PHONY:	$(S_$(d))

@@ -19,7 +19,6 @@ char *module_name    = "correction_velocities";   //name of the module
 #define kTypeSetIn     "levin"        //series name of the input data
 #define kTypeSetOut    "levout"       //series name of the output data
 #define kForced        "forced"       //forced computation even if tuning changes middway
-#define kForced2       "mindata"      //forced computation even if the minimum number of hmi.V_45s_nrt data is not available
 
 //QUALITY keyword
 #define QUAL_ISSTARGET               (0x4000)               //the ISS loop was OPEN for one or several filtergrams used to produce the observable
@@ -39,7 +38,6 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, kTypeSetIn, "",  "series name of input data"},
      {ARG_STRING, kTypeSetOut,"",  "series name of output data"},
      {ARG_INT,    kForced, "0", "force computation even if tuning changes midway.Default =0. Set to 1 to force."},
-     {ARG_INT,    kForced2,"0", "force computation even if minimum number of input data is not available.Default =0. Set to 1 to force."},
      {ARG_END}
 };
 
@@ -85,7 +83,6 @@ void lininterp1f(double *yinterp, double *xv, double *yv, double *x, double ydef
 int DoIt(void) {
 
 #define MaxNString 256
-#define mindata    1600
 
   int errbufstat    = setvbuf(stderr, NULL, _IONBF, BUFSIZ);                    //for debugging purpose when running on the cluster
   int outbufstat    = setvbuf(stdout, NULL, _IONBF, BUFSIZ);
@@ -95,7 +92,6 @@ int DoIt(void) {
   char *inLev       = cmdparams_get_str(&cmdparams, kTypeSetIn,     NULL);      //input series
   char *outLev      = cmdparams_get_str(&cmdparams, kTypeSetOut,    NULL);      //output series
   int forced        = cmdparams_get_int(&cmdparams, kForced, NULL);
-  int forced2       = cmdparams_get_int(&cmdparams, kForced2,NULL);
 
   char  HMISeriesLev1[MaxNString];                                   //name of the level 1 data series
   char uplo[]    = "U";
@@ -192,8 +188,8 @@ int DoIt(void) {
       QUALITY[j]= drms_getkey_int(recLev1->records[i],QUALITYS,&status);
       //NB: THE POLYNOMIAL FIT IS RAWMEDN-OBS_VR AS A FUNCTION OF RAWMEDN, NOT OBS_VR
       temp      = RAWMEDN[j];
-      RAWMEDN[j]= RAWMEDN[j]-OBSVR[j]; //we want to fit the difference RAWMEDN-OBSVR as a function of RAWMEDN
-      OBSVR[j]  = temp/6500.;          //to make the polynomial fit better; DESPITE THE NAME, OBSVR IS ACTUALLY RAWMEDN
+      RAWMEDN[j]= RAWMEDN[j]-OBSVR[j]; //we want to fit the difference RAWMEDN-OBSVR as a function of OBSVR
+      OBSVR[j]  = temp/6500.;          //to make the polynomial fit better
       CALFSN[j] = drms_getkey_int(recLev1->records[i],CALFSNS,&status);
       CROTA2[j] = drms_getkey_float(recLev1->records[i],CROTA2S,&status);
 
@@ -234,12 +230,6 @@ int DoIt(void) {
 
   printf("NUMBER OF DATA REJECTED: %d %d\n",nRecs1-nsample,nsample);
 
-  //check that the number of data available is large enough
-  if(nsample < mindata)
-    {
-      printf("NUMBER OF AVAILABLE DATA %d IS BELOW MINIMUM NUMBER %d\n",nsample,mindata);
-      if(forced2 == 0) return 1;
-    }
 
 
   //we want to solve y=ax with a least-squares polynomial fit

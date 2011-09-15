@@ -322,7 +322,6 @@ int DoIt(void)
 
   for (irec=0; irec<nrecs; irec++)
     {
-    int status;
     DRMS_Array_t *srcArray;
     DRMS_Segment_t *srcSeg;
     ObsInfo_t *ObsLoc;
@@ -330,8 +329,8 @@ int DoIt(void)
  
     char imageID[100];
     inRec = inRS->records[irec];
-    quality = drms_getkey_int(inRec, "QUALITY", &status);
-    if (!status && quality < 0)
+    quality = drms_getkey_int(inRec, "QUALITY", NULL);
+    if (quality < 0)
       {
       fprintf(stderr,"Quality bad for rec %d\n", irec);
       continue;

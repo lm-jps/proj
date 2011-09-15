@@ -36,8 +36,6 @@
 #   working directory.  The second call will add files WITHIN THE CORRECT CVS 
 #   MODULE that the user doesn't have.
 
-use FindBin qw($Bin);
-
 $LATESTREL = "Ver_LATEST";
 $CVSLOG = "cvsupdate.log";
 
@@ -47,7 +45,6 @@ my($pos);
 my($rev) = "";
 my($line);
 my($cvsmod);
-my($output);
 my($err);
 
 $err = 0;
@@ -72,12 +69,12 @@ if (-e $CVSLOG)
     unlink $CVSLOG;
 }
 
-# call dlsource.pl (which lives in the same directory as this script).
-`$Bin/dlsource.pl -o update -l $CVSLOG`;
+# call dlsource.pl (which lives in in /home/jsoc).
+`/home/jsoc/dlsource.pl -o update`;
 
 if ($? >> 8)
 {
-   print STDERR "Unable to properly run $Bin/dlsource.pl\n";
+   print STDERR "Unable to properly run /home/jsoc/dlsource.pl\n";
    $err = 1;
 }
 else

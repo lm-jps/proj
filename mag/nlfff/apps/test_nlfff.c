@@ -397,8 +397,7 @@ printf("preproc"); fflush(stdout);
         } else {
             drms_copykey(outRec, inRec, "T_REC");
             drms_copykey(outRec, inRec, "T_OBS");
-            drms_copykey(outRec, inRec, "HARPNUM");
-            drms_copykey(outRec, inRec, "RUNNUM");
+            drms_copykey(outRec, inRec, "PNUM");
             drms_setkey_string(outRec, "COMMENT", comment);
         }
 

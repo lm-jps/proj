@@ -43,12 +43,10 @@
 
 #(1)common setting for all environmnents
 $ENV{'SUMSERVER'}="j1.Stanford.edu";
-#$hm=$ENV{'HOME'};
-$hm="/home/jsoc/cvs/Development";
+$hm=$ENV{'HOME'};
 $ENV{'MAILTO'}="";
-$exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/JSOC/bin/linux_x86_64";
-$script_dir=$ENV{'HK_SCRIPT_DIR'}="$hm/JSOC/proj/lev0/scripts/hk";
-$log_dir="/home/jsocprod/hk/logs";
+$exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/cvs/JSOC/bin/linux_x86_64";
+$script_dir=$ENV{'HK_SCRIPT_DIR'}="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'HK_DF_RT_LOGFILE'}="log-gdfrt-apid-";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$exec_dir";
 #username and user id used to check if need to restart process
@@ -56,7 +54,7 @@ $user=$ENV{'USER'};
 $uid =`id -u`;
 $uid =~ s/\n//g; #regular exp rm cr
 # set up where to put backup logs written monthly 
-$logs_dir="$log_dir/old";
+$logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
 
 #(2)set common email arguments
 $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
@@ -80,14 +78,14 @@ $dflg=$ENV{'DF_GDFRT_DEBUG'}=2;#use 0 to display min debug to standard out, 1 to
 #(7) setup log file 
 $apid= substr($ARGV[0],5);#get apid for log file
 $logfile=`echo $ENV{'HK_DF_RT_LOGFILE'}$apid`;
-$dir_logfile=`echo $log_dir/$ENV{'HK_DF_RT_LOGFILE'}$apid`;
+$dir_logfile=`echo $script_dir/$ENV{'HK_DF_RT_LOGFILE'}$apid`;
 $logfile =~ s/\n//g; #regular exp rm cr
 $dir_logfile =~ s/\n//g; #regular exp rm cr
 
 if($dir_logfile eq "")
 {
    #use default name
-   $logfile="$log_dir/log-gdfrt-default";#send log here when logfile not set
+   $logfile="$script_dir/log-gdfrt-default";#send log here when logfile not set
 }
 
 #(8) open log file
@@ -106,7 +104,7 @@ if($dflg == 2) {print LF "DEBUG:MESSAGE:gdfrt: apid value is $av\n";}
 while (1)
 {
   #(12) check if need to move log to logs directory every month when the 1st-UTC is detected. gzip backup log too.
-  &check_log($logs_dir,$logfile, $log_dir);
+  &check_log($logs_dir,$logfile, $script_dir);
 
   #(14)get list of dates to do 
   $date_to_do=get_date_to_do();

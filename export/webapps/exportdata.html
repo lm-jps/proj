@@ -19,7 +19,7 @@
 #header { position:relative; top:0; left:0; width:100%; background:#eee; }
 #footer { position:fixed; bottom:0; left:0; width:100%; background:#eee; }
 #ExportRecordSet { width:40em; font-size:100%; }
-span.tip { background-color:blue;font-family:verdana;color:white;font-size:1em;font-weight:bold;}
+span.tip { background-color:yellow }
 .prototip { font:0.8em Arial, Helvetica, sans-serif; }
 </style>
 
@@ -263,73 +263,6 @@ function ReInitPage()
   OnLoadInit();
   }
 
-function MainTips(tipstyle)
-  {
-  if (TipsCreated == 0)
-    {
-    new Tip('RecordFromFileHelp','Allows user to provide a RecordSet list in a file.  ' +
-        'The file should contain recordSet specifiers in the format allowed by drms_open_records include files.  ' +
-        'See http://jsoc.stanford.edu/jsocwiki/AllAboutJsocNames.',tipstyle);
-    new Tip('RecordSetHelp','RecordSet to be exported. May be imported on call and/or may be entered directly here. ' +
-        'May be filled in by series select in Hg_patch processing option.',tipstyle);
-    new Tip('RecordLimitHelp','RecordSet record limit. Max number of records to export.  Modifies RecordSet. ' +
-        'Value should be "none" or a number. Number > 0 counts from start of RecordSet.  Negative number counts ' +
-        'from high end of RecordSet.  0 means no limit',tipstyle);
-    new Tip('RecordCountHelp','RecordSet record count.  Update this to repeat export with new method, email, etc.  ' +
-        'There is presently a limit to the memory space allocated for record queries which restricts AIA lev1 ' +
-        'requests to about 15,000 records and HMI X_45s or X_720s data to about 32,000 records.  ' +
-        'The limit depends on number of keywords in each record.  This limit will be eased in the future.',tipstyle);
-    new Tip('ProcessingHelp','Processing to be done to the data prior to export.  Select from drop-down list for details.',tipstyle);
-    new Tip('ProtocolHelp','Data storage protocol for data files to be fetched.  ' +
-        '"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
-        '"As-is" leaves the data as it is used inside the JSOC DRMS routines, with the header metadata stored in the database ' +
-        'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten. The "JPEG" option will ' +
-        ' yield  jpeg images of the data with a pre-determined scaling and colortable and the "MPEG" option will ' +
-        ' yield a movie in mp4 format along with the jpeg images that make up the frames in the movie.',tipstyle);
-    new Tip('CompressHelp','Compression parameters to be used by the cfitsio library.  ' +
-        'Provide up to one comma separated string for each segment name in your export.  ' +
-        'Use "**NONE**" to indicate uncompressed FITS files desired.  If more segments are to be exported than strings are provided, ' +
-        'then the last string will be used repeatedly as needed.  ' +
-        'If this parameter is empty, the exported FITS file will have the same compression parameters as the original DRMS ' +
-        'series segment as specified in the JSD for that series.  ' +
-        'Advice: use **NONE** to ensure uncompressed.  See lookdata.html for the "cparms_sg###" keyword for the default.',tipstyle);
-    new Tip('MethodHelp','Handshake method to be used in the process of doing the export and to fetch the data files. ' +
-        '"url-quick" is the fastest but can only be used if the data is online and will be exported "as-is". ' +
-        '"url-direct" is has the constraints of url_quick with the limit of one file per request but it will ' +
-        'automatically do the postprocessing specified in the "protocol" instruction. For "url_direct" the file ' +
-        'is returned directly to your browser rather than returning to the export page.  If you have the ' +
-        'set to load some fits reader program when the mime-ype "fits" is encountered you will see the image promptly. ' +
-        '"url" will result in a temporary directory being created and the URL to that directory be returned to you after ' +
-        'a handshake process using the RequestID provided. ' +
-        '"ftp" is like "url" but the returned links will be to an ftp directory. ' +
-        ' A "-tar" suffix will cause a tar of all files in the request to be included with the separate files. ' +
-        'NOTE: do not use "-tar" unless you really need it since that will generate an extra copy of the data.',tipstyle);
-    new Tip('FilenameFmtHelp','Filename format to be used in the process of doing the export.  ' +
-        'The filename format is a template used to construct a filename for each segment of each record requested.  ' +
-        'The template consists of literal characters and substitution tokens enclosed in "{}".  ' +
-        'The special words: seriesname, recnum, and segment are replaced with the series_name, the record number, ' +
-        'or the segment name.  The element {#} will generate an increasing number, ' +
-        'with optional layout e.g. default is {#:%05d}. ' +
-        'Any keyword in the record may also be used.  Optional layout may be provided after a ":".' +
-        'Special format options are available for type TIME keywords: A leading "A" will strip "." and ":" from the time and ' +
-        'a "D" will strip the "." and ":" but will insert "@" around the date components to allow easy scripts to move the exported ' +
-        'files into date structured directory trees. ' +
-        'It is wise to include enough of the "prime-keys" to make a unique filename.  ' +
-        'The default format template is made from series structure.',tipstyle);
-    new Tip('RequestorHelp','Optional place for your name, this will be used later when we have a way of saving your ' +
-        'preferred export options.',tipstyle);
-    new Tip('NotifyHelp','Optional email address to be used to notify you when the export is complete and ready to be ' +
-        'fetched using the RequestID.',tipstyle);
-    new Tip('ConfirmHelp','Usual duplicate copy of email address to avoid lost exports due to typos.',tipstyle);
-    new Tip('SendFileHelp','This action will submit the export request with the RecordSet specified in the upload file.',tipstyle);
-    }
-  };
-
-// section 4 of 7 for add-on code sections.  No changes needed here but add tips to addOnTips.js
-</SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="exportdata.d/addOnTips.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript">
-
 function CreateTips()
   {
   var tipstyle =
@@ -345,9 +278,59 @@ function CreateTips()
     radius:3,
     width:300,
     };
-
-  MainTips(tipstyle);
-  AddOnTips(tipstyle, Tip);
+  if (TipsCreated == 0)
+    {
+    new Tip('RecordFromFileHelp','Allows user to provide a RecordSet list in a file.  ' +
+        'The file should contain recordSet specifiers in the format allowed by drms_open_records include files.  ' +
+        'See http://jsoc.stanford.edu/jsocwiki/AllAboutJsocNames.',tipstyle);
+    new Tip("RecordSetHelp","RecordSet to be exported. May be imported on call and/or may be entered directly here.",tipstyle);
+    new Tip("RecordLimitHelp","RecordSet record limit. Max number of records to export.  Modifies RecordSet.  Value should be 'none' or a number. Number > 0 counts from start of RecordSet.  Negative number counts from high end of RecordSet.  0 means no limit",tipstyle);
+    new Tip("RecordCountHelp","RecordSet record count.  Update this to repeat export with new method, email, etc.  There is presently a limit to the memory space allocated for record queries which restricts AIA lev1 requests to about 15,000 records and HMI X_45s or X_720s data to about 32,000 records.  The limit depends on number of keywords in each record.  This limit will be eased in the future.",tipstyle);
+    new Tip("ProcessingHelp","Processing to be done to the data prior to export.  Select from drop-down list for details.",tipstyle);
+    // Processing options section 4 of 7
+    new Tip("HgPatchHelp","Extract patch in heliographic coordinates, trac across the disk, provide Carrington location and size of patch in degrees or ref time and location.",tipstyle);
+    // End of processing options help
+    new Tip("ProtocolHelp",'Data storage protocol for data files to be fetched.  ' +
+        '"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
+        '"As-is" leaves the data as it is used inside the JSOC DRMS routines, with the header metadata stored in the database ' +
+        'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten. The "JPEG" option will ' +
+        ' yield  png images of the data with a pre-determined scaling and colortable and the "MPEG" option will ' +
+        ' yield a movie in mp4 format along with the png images that make up the frames in the movie.',tipstyle);
+    new Tip("CompressHelp",'Compression parameters to be used by the cfitsio library.  ' +
+        'Provide up to one comma separated string for each segment name in your export.  ' +
+        'Use "**NONE**" to indicate uncompressed FITS files desired.  If more segments are to be exported than strings are provided, ' +
+        'then the last string will be used repeatedly as needed.  ' +
+        'If this parameter is empty, the exported FITS file will have the same compression parameters as the original DRMS ' +
+        'series segment as specified in the JSD for that series.  ' +
+        'Advice: use **NONE** to ensure uncompressed.  See lookdata.html for the "cparms_sg###" keyword for the default.',tipstyle);
+    new Tip("MethodHelp",'Handshake method to be used in the process of doing the export and to fetch the data files. ' +
+        '"url-quick" is the fastest but can only be used if the data is online and will be exported "as-is". ' +
+        '"url-direct" is has the constraints of url_quick with the limit of one file per request but it will ' +
+	'automatically do the postprocessing specified in the "protocol" instruction. For "url_direct" the file ' +
+	'is returned directly to your browser rather than returning to the export page.  If you have the ' +
+	'set to load some fits reader program when the mime-ype "fits" is encountered you will see the image promptly. ' +
+        '"url" will result in a temporary directory being created and the URL to that directory be returned to you after ' +
+        'a handshake process using the RequestID provided. ' +
+        '"ftp" is like "url" but the returned links will be to an ftp directory. ' +
+        ' A "-tar" suffix will cause a tar of all files in the request to be included with the separate files. ' +
+        'NOTE: do not use "-tar" unless you really need it since that will generate an extra copy of the data.',tipstyle);
+    new Tip("FilenameFmtHelp",'Filename format to be used in the process of doing the export.  ' +
+        'The filename format is a template used to construct a filename for each segment of each record requested.  ' +
+        'The template consists of literal characters and substitution tokens enclosed in "{}".  ' +
+        'The special words: seriesname, recnum, and segment are replaced with the series_name, the record number, ' +
+        'or the segment name.  The element {#} will generate an increasing number, ' +
+        'with optional layout e.g. default is {#:%05d}. ' +
+        'Any keyword in the record may also be used.  Optional layout may be provided after a ":".' +
+        'Special format options are available for type TIME keywords: A leading "A" will strip "." and ":" from the time and ' +
+        'a "D" will strip the "." and ":" but will insert "@" around the date components to allow easy scripts to move the exported ' +
+        'files into date structured directory trees. ' +
+        'It is wise to include enough of the "prime-keys" to make a unique filename.  ' +
+        'The default format template is made from series structure.',tipstyle);
+    new Tip("RequestorHelp","Optional place for your name, this will be used later when we have a way of saving your preferred export options.",tipstyle);
+    new Tip("NotifyHelp","Optional email address to be used to notify you when the export is complete and ready to be fetched using the RequestID.",tipstyle);
+    new Tip("ConfirmHelp","Usual duplicate copy of email address to avoid lost exports due to typos.",tipstyle);
+    new Tip("SendFileHelp","This action will submit the export request with the RecordSet specified in the upload file.",tipstyle);
+    }
   TipsCreated = 1;
   $$("span.tip").each(function(showspan){showspan.show();}); 
   }
@@ -443,11 +426,15 @@ function MakeFileUploadRequest()
 
 function uploadDone()
   { //Function will be called when iframe is loaded
+  var StartTime = new Date()
   if (uploadOndoneAction == 1)
     {
+    var DoneTime = new Date()
     var response = window.frames[0].document.getElementsByTagName("body")[0].innerHTML;
     var status = ProcessExportResponse(response);
+    var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
     var op = "exp_upload";
+    report_lag(op,status,tdiff);
     uploadOndoneAction = 0;
     }
   }
@@ -485,8 +472,7 @@ function GetRSCount()
     {
     if (posRbracket == -1)
       {
-      if (RecordLimit == 0)
-        $("ExportRecordSet").value = $("ExportRecordSet").value + '[$]';
+      $("ExportRecordSet").value = $("ExportRecordSet").value + '[$]';
       }
     else
       {
@@ -498,6 +484,7 @@ function GetRSCount()
   $("RSCountPlace").innerHTML = "Getting count - wait...";
   RecordCount = -1;
   var RecordSet = $("ExportRecordSet").value;
+  var StartTime = new Date()
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
@@ -505,6 +492,7 @@ function GetRSCount()
 
     onSuccess: function(transport, json)
       {
+      var DoneTime = new Date()
       var response = transport.responseText || "no response text";
       var data = response.evalJSON();
       if (data.status != 0)
@@ -523,10 +511,26 @@ function GetRSCount()
       $("ExportButton").value = "Submit Export Request";
       $("ExportButton").style.backgroundColor = "#D8D8D8";
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+      var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
       var op = "rs_summary";
+      report_lag(op,status,tdiff);
       },
     onFailure: function() { alert('Something went wrong...'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+  }
+
+function report_lag(op, status, lag)
+  { 
+  var RecordSet = $("ExportRecordSet").value;
+  var RecordSet = $("ExportRecordSet").value;
+  var getparameters = new Hash( {"ds" : RecordSet, "op" : op, "host" : Host, "status" : status, "lag" : lag, "n" : RecordLimit });
+  new Ajax.Request('http://jsoc.stanford.edu/cgi-bin/ajax/jsoc_stats1',
+    {
+    method: 'get',
+    parameters: getparameters.toObject(),
+    onSuccess: function() {},
+    onFailure: function() { alert('Something went wrong with lag report'); },
     });
   }
 
@@ -624,10 +628,8 @@ function ExportNop()
 
 function ExportNewRS()
   {
-  SetRecordLimit();
   GetRSCount();
   GetDefaultFormat();
-  SetProcessing();
   NotifyProcessingCode();
   }
 
@@ -644,7 +646,6 @@ function SetRecordLimit()
       {
       $("ExportRecordLimit").style.backgroundColor = "#FF8080";
       alert("RecordLimit must be a number or 'none'");
-      RecordLimit = 0;
       }
     }
   else
@@ -729,8 +730,7 @@ function SetProcessing()
   else if ($("ExportProcessing").value == "hg_patch") // Export option block for HgPatch, section 6 of 7
     {
     HgPatchActive = 1;
-    HgSeriesSelected = 0;
-    CheckHgRecordSet(0);
+    CheckHgRecordSet();
     $("ProcessHgPatch").style.display="table-row";
     if (CheckHgPatch())
       isok = 1;
@@ -751,14 +751,14 @@ function SetExportProtocol()
      $("ExportProtocol").value = "MPEG";
      $("ExportProtocolHidden").value = "MPEG";
      ExportProtocolOK = 4;
-     $("CompressRow").style.display="none";
+     $("CompressRow").style.display="table-row";
   }
   else if (tmp == "JPEG")
   {
      $("ExportProtocol").value = "JPEG";
      $("ExportProtocolHidden").value = "JPEG";
      ExportProtocolOK = 3;
-     $("CompressRow").style.display="none";
+     $("CompressRow").style.display="table-row";
   }
   else if (tmp == "FITS")
   {
@@ -936,12 +936,13 @@ function GetExport()
     }
   else // ExportReadyOK == 2
     {
-    // $("ExportRecordSet").value = "";
+    $("ExportRecordSet").value = "";
     ExportRecordSetOK = 0;
     alert("Export Request Complete, Please change RecordSet to make another request");
     return;
     }
 
+  var StartTime = new Date()
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_FETCH,
     {
     method: 'post',
@@ -949,10 +950,13 @@ function GetExport()
 
     onSuccess: function(transport, json)
       {
+      var DoneTime = new Date()
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var status = ProcessExportResponse(response);
+      var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
       var op = $("ExportOpID").value;
+      report_lag(op, status,tdiff);
       },
     onFailure: function()
       {
@@ -984,6 +988,7 @@ function GetReExport()
 			 	    "format" : "json",
                  		    "notify" : $("ReExportNotify").value });
 
+  var StartTime = new Date()
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_FETCH,
     {
     method: 'post',
@@ -991,9 +996,13 @@ function GetReExport()
 
     onSuccess: function(transport, json)
       {
+      var DoneTime = new Date()
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var response = transport.responseText || "no response text";
       var status = ProcessExportResponse(response);
+      var tdiff = (DoneTime.getTime() - StartTime.getTime())/1000.0;
+      var op = "exp_repeat";
+      report_lag(op,status,tdiff);
       },
     onFailure: function()
       {
@@ -1157,17 +1166,6 @@ function GetStatus()
   if ($("StatusRequestID").value.length == 0)
     {
     alert("You must provide a RequestID");
-    return;
-    }
-  var is_IN = ($("StatusRequestID").value.search("_IN") > 0);
-  if (is_IN && Host == "jsoc.stanford.edu")
-    {
-    alert("RequestID ending with '_IN' belongs to jsoc2.stanford.edu, use proper RequestID or swtich to jsoc2.stanford.edu.");
-    return;
-    }
-  if (!is_IN && Host == "jsoc2.stanford.edu")
-    {
-    alert("RequestID without '_IN' belongs to jsoc.stanford.edu, use proper RequestID or switch to jsoc.stanford.edu.");
     return;
     }
   $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -1372,7 +1370,7 @@ access the data.
   
     <TR ID="RecordLimitRow">
       <TD>Record Limit</TD><TD><SPAN ID="RecordLimitHelp" class="tip">?</SPAN></TD>
-      <TD><input id="ExportRecordLimit" type="text" name="ExportReccordLimit" value="none" style="width:15em" onChange="SetRecordLimit();" ></TD>
+      <TD><input id="ExportRecordLimit" type="text" name="ReccordLimit" value="none" style="width:15em" onChange="SetRecordLimit();" ></TD>
       <TD>Optional manual limit to number of records to export.</TD>
     </TR>
   

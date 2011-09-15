@@ -23,12 +23,10 @@ $dflg=$ENV{'DF_GETDF_DEBUG'}=0;
 
 #common setting for all environments
 $ENV{'SUMSERVER'}="j1.Stanford.edu";
-#$hm=$ENV{'HOME'};
-$hm="/home/jsoc/cvs/Development";
+$hm=$ENV{'HOME'};
 $ENV{'MAILTO'}="";
-$ENV{'DF_DRMS_EXECUTABLES'}="$hm/JSOC/bin/linux_x86_64";
-$script_dir="$hm/JSOC/proj/lev0/scripts/hk";
-$log_dir="/home/jsocprod/hk/logs";
+$ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
+$script_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
 #set common email arguments
@@ -44,7 +42,7 @@ $to_email="jsoc_ops\@sun.stanford.edu";
 if ($src eq "hsb")
 {
   $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/tmp22/production/lev0/hk_hsb_dayfile";
-  $logfile="$hm/JSOC/proj/lev0/scripts/hk/log-df-hsb";
+  $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-hsb";
   $subject_email="JSOC:WARNING:Ingesting HSB dayfiles: status:no files loaded today";
   $subject_email_old_df="JSOC:WARNING:Ingesting HSB dayfiles: status:Found Old HSB Dayfile Not Processed->Action Required";
   $subject_email_gt_currentdate="JSOC:WARNING:Ingesting HSB dayfiles: status:Found HSB Dayfile(s) Greater Than Current Date->Action Required";
@@ -52,21 +50,21 @@ if ($src eq "hsb")
 }
 elsif ($src eq "moc")
 {
-  $logfile="$hm/JSOC/proj/lev0/scripts/hk/log-df-moc";
+  $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-moc";
 }
 elsif ($src eq "egsefm")
 {
-  $logfile="$hm/JSOC/proj/lev0/scripts/hk/log-df-egsefm";
+  $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-egsefm";
 }
 elsif ($src eq "rtmon")
 {
   $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/tmp22/production/lev0/hk_rtmon_dayfile";
-  $logfile="$hm/JSOC/proj/lev0/scripts/hk/log-df-rtmon";
+  $logfile="$hm/cvs/JSOC/proj/lev0/scripts/hk/log-df-rtmon";
   $subject_email="JSOC:WARNING:Ingesting RTMON dayfiles: status:no files loaded today";
 }
  
 # set up where to put backup logs written monthly 
-$logs_dir="$log_dir/old";
+$logs_dir="$hm/cvs/JSOC/proj/lev0/scripts/hk/logs";
 
 # open log file and append
 open(LF,">>$logfile") || die "getdf.pl:1:Can't Open $logfile: $!\n";
@@ -121,7 +119,7 @@ elsif ($src eq "egsefm")
 }
 
 #Check if there and then delete all dayfiles that where ingested in dayfile data series 
-open(DELFILE, "$log_dir/DF_DELETE_FILE_LIST") || die "getdf.pl:4:Can't Open $log_dir/DF_DELETE_FILE_LIST file: $!\n";
+open(DELFILE, "$script_dir/DF_DELETE_FILE_LIST") || die "getdf.pl:4:Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
 @all_del_file_lines="";
 $hkt_filecount =0;
 while (<DELFILE>)
@@ -140,13 +138,13 @@ if($hkt_filecount > 0)
 else
 {
   print LF "--->Skipping deleting dayfiles because no files ingested to hk_dayfile series\n";
-  sendEmail("$to_email", "$from_email", "$subject_email", "Warning Message:\n-->Received count of hkt day files of <$hkt_filecount> files from directory $doff_dir\n-->When executing <$hm/JSOC/proj/lev0/scripts/hk/getdf.pl hsb > from cron job.\n");
+  sendEmail("$to_email", "$from_email", "$subject_email", "Warning Message:\n-->Received count of hkt day files of <$hkt_filecount> files from directory $doff_dir\n-->When executing </home/production/cvs/JSOC/proj/lev0/scripts/hk/getdf.pl hsb > from cron job.\n");
 }
 
 close DELFILE;
 
 #set MF file to blank work was completed
-open(DELFILE, ">$log_dir/DF_DELETE_FILE_LIST") || die "getdf.pl:5:Can't Open $log_dir/DF_DELETE_FILE_LIST file: $!\n";
+open(DELFILE, ">$script_dir/DF_DELETE_FILE_LIST") || die "getdf.pl:5:Can't Open $script_dir/DF_DELETE_FILE_LIST file: $!\n";
 close DELFILE;
 
 # check if old hsb dayfile were left in directory and send email warning if see old dayfiles or future dayfiles
@@ -238,14 +236,14 @@ sub check_log()
       my $d=`date`;
       #regular expression to add - were there are blanks
       $d =~ s/^| /-/g;
-      $lm=`cp $log_dir/$logfile $logs_dir/$logfile-$d`;
+      $lm=`cp $script_dir/$logfile $logs_dir/$logfile-$d`;
       #set log file to blank - copy was completed
-      open(LF, ">$log_dir/$logfile") || die "getdf.pl:6:Can't Open $log_dir/$logfile file: $!\n";
+      open(LF, ">$script_dir/$logfile") || die "getdf.pl:6:Can't Open $script_dir/$logfile file: $!\n";
       close LF;
     }
     else
     {
-      print "WARNING:movedf.pl:missing logs directory:<$logs_dir>. Create one at <$log_dir>\n";
+      print "WARNING:movedf.pl:missing logs directory:<$logs_dir>. Create one at <$script_dir>\n";
     }
   }
 }

@@ -1,7 +1,7 @@
 /*
- * Module name:		disambig.c
+ * Module name:		test_ambig.c
  *
- * Description:		Wrapper for Graham Barnes' disambiguation module
+ * Description:		Testing wrapper for Graham Barnes' disambiguation module
  *
  * Original source:	Fortran wrapper by Graham and Igor (~graham/ME0/HMI/ambig.c)
  *
@@ -18,8 +18,8 @@
  *
  * Example:
  * limit s u
- * disambig "in=su_keiji.vmagf_2d_720s_3_fltprf[2010.03.29_12:00:00_TAI]" "out=su_xudong.test_vmagf_a" "mask=su_xudong.test_armask_720s" "geometry=2"
- * disambig "in=su_xudong.test_meharp[2][2011.02.14_00:00:00_TAI]" "out=su_xudong.test_patch_vec_a" "geometry=1"
+ * test_ambig "in=su_keiji.vmagf_2d_720s_3_fltprf[2010.03.29_12:00:00_TAI]" "out=su_xudong.test_vmagf_a" "mask=su_xudong.test_armask_720s" "geometry=2"
+ * test_ambig "in=su_xudong.test_patch_vec[2010.03.29_12:00:00_TAI][2]" "out=su_xudong.test_patch_vec_a" "geometry=1"
  */
 
 
@@ -50,29 +50,7 @@
 #define WX(pix_x,pix_y) (((pix_x-crpix1)*cosa - (pix_y-crpix2)*sina)*cdelt+crvalx)
 #define WY(pix_x,pix_y) (((pix_y-crpix2)*cosa + (pix_x-crpix1)*sina)*cdelt+crvaly)
 
-// Jul 22 Xudong
-
-// Quality bit for disambiguation
-#define ambCode0 0x0000 // 0.9 for pixels which were above threshold and annealed
-#define ambCode1 0x0100 // 0.6 for pixels which were below threshold and annealed
-#define ambCode2 0x0200 // 0.5 for pixels which had weak field method applied
-#define ambCode3 0x0400 // 0.0 for pixels which were not disambiguated
-
-int getAmbCode (float prob)
-{
-  if (prob > 0.89)
-    return ambCode0;
-  else if (prob > 0.59)
-    return ambCode1;
-  else if (prob > 0.49)
-    return ambCode2;
-  else
-    return ambCode3;
-}
-
-//====================
-
-char *module_name = "disambig";	/* Module name */
+char *module_name = "test_ambig";	/* Module name */
 
 ModuleArgs_t module_args[] =
 {
@@ -80,11 +58,11 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "out", NULL,  "Output data series."},
     {ARG_STRING, "mask", " ", "Bitmap series name, as AR mask, for full disk"},
     {ARG_INT, "VERB", "1", "Level of verbosity: 0=errors/warnings; 1=minimal messages; 2=all messages"},
-    {ARG_INT, "AMBGMTRY", "0", "0 for automatic selection; 1 for planar; 2 for spherical."},
+    {ARG_INT, "AMBGMTRY", "1", "1 for planar; 2 for spherical."},
     {ARG_INT, "AMBWEAK", "1", "0 for random; 1 for potential field; 2 for most radial."},
     {ARG_INT, "AMBNEROD", "1", "Number of pixels by which to erode map of above threshold pixels."},
     {ARG_INT, "AMBNGROW", "5", "Number of pixels by which to grow eroded map."},
-    {ARG_INT, "AMBNPAD", "20", "Pixel number to pad with zeros for potential field."},
+    {ARG_INT, "AMBNPAD", "200", "Pixel number to pad with zeros for potential field."},
     {ARG_INT, "AMBNAP", "10", "Pixel number to apodize for potential field."},
     {ARG_INT, "AMBNTX", "20", "Tile number in x (lon) direction for pf on a sphere."},
     {ARG_INT, "AMBNTY", "20", "Tile number in y (lat) direction for pf on a sphere."},
@@ -129,8 +107,8 @@ int DoIt(void)
                          "field_err", "inclination_err", "alpha_err", 
                          "field_inclination_err", "field_alpha_err", "inclination_alpha_err"};
     
-    DRMS_Segment_t *inSeg[nseg], *inSeg_conf, *inSeg_qual, *outSeg_flag, *outSeg_prob, *outSeg_conf, *outSeg_qual;
-    DRMS_Array_t *inArray[nseg], *inArray_conf, *inArray_qual, *outArray_flag, *outArray_prob, *outArray_conf, *outArray_qual;
+    DRMS_Segment_t *inSeg[nseg], *outSeg_flag, *outSeg_prob;
+    DRMS_Array_t *inArray[nseg], *outArray_flag, *outArray_prob;
     float *inData[nseg];
 
     // Link
@@ -139,14 +117,13 @@ int DoIt(void)
     // Bitmap mask, comes with patch, from mask data series for full disk
     // Read in as char *mask, converted to int *bitmap later
     // Query for mask data created from series name and time
-    char *trec_str = NULL;
+    char *maskSeries, *maskQuery = NULL, *trec_str = NULL;
     DRMS_RecordSet_t *maskRS;
     DRMS_Record_t *maskRec;
     DRMS_Segment_t *maskSeg;
     DRMS_Array_t *maskArray;
     char *mask;
-    char harpflag;
-    int mask_id, harpnum;	// id of main feature identified in patch
+    int mask_id;	// id of main feature identified in patch
 
     int geometry, weak;
     int npad, nap, ntx, nty, seed, neq;
@@ -154,8 +131,8 @@ int DoIt(void)
     int verbflag;
     int outDims[2];
 
-    int i, j, l, m, i0, j0;
-    int nx, ny, nxny, nx0, ny0, nxny0, nxnye, nxnyg, nerode, ngrow;
+    int i, j, l, m;
+    int nx, ny, nxny, nxnye, nxnyg, nerode, ngrow;
 
     TIME t_rec;
 
@@ -164,9 +141,9 @@ int DoIt(void)
     float im_scale, rsun_ref, dsun_obs;  // More keywords
     float crvalx, crvaly, cdelt, crota2, sina, cosa;
     // for patch
-    int ll0[2], ur0[2];
+    float center_x, center_y;
+    int hw_x, hw_y;
     int ll[2], ur[2];
-    float minlon, minlat, maxlon, maxlat;
 
     float *Bx, *By, *Bz, *dBt;	// Arrays to be computed + passed to ambig
     float *probBa;  // Array to be computed in ambig and returned
@@ -178,12 +155,9 @@ int DoIt(void)
     float BmagBfil, SinBinc, BmagBfilSinBinc, CosBinc;
     float varBfil, varBinc, varBmag, varBfilBmag, varBfilBinc, varBmagBinc;
     float xx, yy, r2, rad2;
-    float *confidence;
     int *bitmap = NULL;
     int *erodemap, *growmap;
     char *ambig_flag;
-    int *qual_map, *inData_qual, qual;						// Jun 22 Xudong
-    char *confid_map, *inData_conf, *inData_conf_fd;
 
     // Time measuring
     double wt0, wt1, wt;
@@ -199,6 +173,7 @@ int DoIt(void)
     /* Get parameters */
     inQuery = (char *)params_get_str(&cmdparams, "in");
     outQuery = (char *)params_get_str(&cmdparams, "out");
+    maskSeries = (char *)params_get_str(&cmdparams, "mask");
     verbflag = params_get_int(&cmdparams, "VERB");
     geometry = params_get_int(&cmdparams, "AMBGMTRY");
     weak = params_get_int(&cmdparams, "AMBWEAK");
@@ -223,7 +198,7 @@ int DoIt(void)
     if (tfac0 < 0) {tfac0 = 2.; SHOW("tfac0 set to 2.0\n");}
     if (neq <= 0) {neq = 20; SHOW("neq set to 20\n");}
     if ((tfactr < 0) || (tfactr > 1)) {tfactr = 0.995; SHOW("tfactr set to 0.995\n");}
-    if (geometry < 0 || geometry > 2) {DIE("Unknown geometry flag");}
+    if (geometry < 1 || geometry > 2) {DIE("Unknown geometry flag");}
     if (weak < 0 || weak > 2) {DIE("Unknown weak flag");}
     if (nerode <= 0) {nerode = 1; SHOW("nerode set to 1\n");}
     if (ngrow <= 0) {ngrow = 5; SHOW("ngrow set to 5\n");}
@@ -263,143 +238,28 @@ int DoIt(void)
         rsun_ref = drms_getkey_double(inRec, "RSUN_REF", &status);
         if (status) rsun_ref = 6.96e8;
         dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &status);
-		radius = asin(rsun_ref / dsun_obs) * Rad2arcsec / cdelt;
+   	radius = asin(rsun_ref / dsun_obs) * Rad2arcsec / cdelt;
 
-        /* Set harp flag based on whether a HARPNUM is found */
-
-        harpnum = drms_getkey_int(inRec, "HARPNUM", &status);	// HARP number
-		// Changed Jun 28 by Xudong
-		if (harpnum == DRMS_MISSING_INT)
-			harpflag = 0;
-		else
-			harpflag = 1;
-
-printf("harpflag=%d\n",harpflag);
-
-      
-        /* Depending on whether it's a patch or not, read in the
-           appropriate keywords and data segments. */
-
-        if (harpflag) {
-        /* Patch case */
-            // If unspecified, set geometry based on patch size
-            if (geometry == 0) {
-                minlon = drms_getkey_float(inRec, "MINLON", &status);
-                minlat = drms_getkey_float(inRec, "MINLAT", &status);
-                maxlon = drms_getkey_float(inRec, "MAXLON", &status);
-                maxlat = drms_getkey_float(inRec, "MAXLAT", &status);
-                if (maxlon - minlon < 20. && maxlat - minlat < 20.) {
-                    geometry = 1;
-                    printf("using planar geometry\n");
-                } else {
-                    geometry = 2;
-                    printf("using spherical geometry\n");
-                }
-            }
-
-            // Read the mask array
-            maskSeg = drms_segment_lookup(inRec, "bitmap");		// from segment, for patch
-
-            mask = (char *)maskArray->data;
-            mask_id = drms_getkey_int(inRec, "MASK", &status);		// main AR in patch
-
-            // Get array dimensions from mask array.
-            nx0 = maskSeg->axis[0]; ny0 = maskSeg->axis[1];
-            nxny0 = nx0 * ny0;
-
-            // Pointing information.
+        if (geometry == 1) {
             crvalx = drms_getkey_float(inRec, "IMCRVAL1", &status);	// center of solar disc in arcsec
             crvaly = drms_getkey_float(inRec, "IMCRVAL2", &status);
             crpix1 = drms_getkey_float(inRec, "IMCRPIX1", &status);	// disk center in ccd, original
             crpix2 = drms_getkey_float(inRec, "IMCRPIX2", &status);
 
+            center_x = drms_getkey_float(inRec, "CRPIX1", &status) - 1; // Center
+            center_y = drms_getkey_float(inRec, "CRPIX2", &status) - 1;
+            hw_x = drms_getkey_int(inRec, "HWIDTH1", &status);      // Half width
+            hw_y = drms_getkey_int(inRec, "HWIDTH2", &status);
+
+            // center of patch relative to disk center in arcsec
+            xcen = center_x - (PIX_X(0.0,0.0) - 1.);
+            ycen = center_y - (PIX_Y(0.0,0.0) - 1.);
+printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
+
             // Coordinates of cut out rectangle
-            ll0[0] = drms_getkey_float(inRec, "CRPIX1", &status) - 1;	// lower left corner
-            ll0[1] = drms_getkey_float(inRec, "CRPIX2", &status) - 1;
-            ur0[0] = ll0[0] + nx0 - 1;					// upper right corner
-            ur0[1] = ll0[1] + ny0 - 1;
-
-            // Pad the actual patch
-            nx = nx0 + 2*npad;
-            ny = ny0 + 2*npad;
-           
-            ll[0] = ll0[0] - npad;
-            ll[1] = ll0[1] - npad;
-            ur[0] = ur0[0] + npad;
-            ur[1] = ur0[1] + npad;
-
-            // Ensure that this stays within the image
-            if (ll[0] < 0) {
-                nx = nx + ll[0];
-                ll[0] = 0;
-            }
-            if (ll[1] < 0) {
-                ny = ny + ll[1];
-                ll[1] = 0;
-            }
-            if (ur[0] > 4095) {
-                nx = nx + ur[0] - 4095;
-                ur[0] = 4095;
-            }
-            if (ur[1] > 4095) {
-                ny = ny + ur[1] - 4095;
-                ur[1] = 4095;
-            }
-            nxny = nx * ny;
-            printf("nx0=%d, ny0=%d\n", nx0, ny0);
-
-            // Different pointing information depending on geometry
-            // Added by G. Barnes Aug 9 2011
-            if (geometry == 1) {
-               // center of patch relative to disk center
-               xcen = (float)ll0[0] + 0.5*((float)nx0 - 1.) - (PIX_X(0.0,0.0) - 1.);
-               ycen = (float)ll0[1] + 0.5*((float)ny0 - 1.) - (PIX_Y(0.0,0.0) - 1.);
-            }
-            if (geometry == 2) {
-               // disk center relative to lower left corner of padded patch
-               xcen = PIX_X(0.0,0.0) - (float)ll[0];
-               ycen = PIX_Y(0.0,0.0) - (float)ll[1];
-            }
-
-
-            // Find segments and read in data
-            for (i = 0; i < nseg; i++) {
-                inSeg[i] = drms_segment_lookup(inRec, segName[i]);
-            
-                inArray[i] = drms_segment_readslice(inSeg[i], DRMS_TYPE_FLOAT, ll, ur, &status);
-            
-                if (status) {
-                    for (j = 0; j <= i; j++)
-  	                drms_free_array(inArray[i]);
-                    DIE("Segment reading error \n");
-                }
-                inData[i] = (float *)inArray[i]->data;
-            }
-            
-            // Jun 22 Xudong
-            
-            inSeg_qual = drms_segment_lookup(inRec, "qual_map");
-            inArray_qual = drms_segment_readslice(inSeg_qual, DRMS_TYPE_INT, ll0, ur0, &status);
-            if (status) DIE("Segment reading error \n");
-            inData_qual = (int *) inArray_qual->data;
-            
-            inSeg_conf = drms_segment_lookup(inRec, "confid_map");
-//            inArray_conf = drms_segment_readslice(inSeg_conf, DRMS_TYPE_CHAR, ll0, ur0, &status);
-            inArray_conf = drms_segment_read(inSeg_conf, DRMS_TYPE_CHAR, &status);
-            if (status) DIE("Segment reading error \n");
-            if (status) DIE("Segment reading error \n");
-            inData_conf_fd = (char *) inArray_conf->data;
-            inData_conf = (char *) calloc(nxny0, sizeof(char));
-            for (i = 0; i < nx0; i++) {
-                for (j = 0; j < ny0; j++) {
-                    inData_conf[i + j * nx0] = inData_conf_fd[ll0[0] + i + (ll0[1] + j) * 4096];
-                }
-            }
-            
+            ll[0] = (int)center_x - hw_x; ll[1] = (int)center_y - hw_y;
+            ur[0] = (int)center_x + hw_x; ur[1] = (int)center_y + hw_y;         
         } else {
-            /* Full disk case */
-            if (geometry != 2) geometry = 2;	// force spherical geometry for full disk
-
             crvalx = drms_getkey_float(inRec, "CRVAL1", &status);	// center of solar disc in arcsec
             crvaly = drms_getkey_float(inRec, "CRVAL2", &status);
             crpix1 = drms_getkey_float(inRec, "CRPIX1", &status);	// disk center in ccd, original
@@ -407,40 +267,59 @@ printf("harpflag=%d\n",harpflag);
 
             xcen = PIX_X(0.0,0.0);
             ycen = PIX_Y(0.0,0.0);
+        }
 
-            // Find segments and read in data
-            for (i = 0; i < nseg; i++) {
-                inSeg[i] = drms_segment_lookup(inRec, segName[i]);
+        /* Find segments and read in data */
+        for (i = 0; i < nseg; i++) {
+            inSeg[i] = drms_segment_lookup(inRec, segName[i]);
             
+            if (geometry == 1) {
+                inArray[i] = drms_segment_readslice(inSeg[i], DRMS_TYPE_FLOAT, ll, ur, &status);
+            } else {
                 inArray[i] = drms_segment_read(inSeg[i], DRMS_TYPE_FLOAT, &status);
-            
-                if (status) {
-                    for (j = 0; j <= i; j++)
-  	                drms_free_array(inArray[i]);
-                    DIE("Segment reading error \n");
-                }
-                inData[i] = (float *) inArray[i]->data;
             }
             
-            // Jun 22 Xudong
-            
-            inSeg_qual = drms_segment_lookup(inRec, "qual_map");
-            inArray_qual = drms_segment_read(inSeg_qual, DRMS_TYPE_INT, &status);
-            if (status) DIE("Segment reading error \n");
-            inData_qual = (int *) inArray_qual->data;
-            
-            inSeg_conf = drms_segment_lookup(inRec, "confid_map");
-            inArray_conf = drms_segment_read(inSeg_conf, DRMS_TYPE_CHAR, &status);
-            if (status) DIE("Segment reading error \n");
-            inData_conf = (char *) inArray_conf->data;
-	
-            // Dimensions
-            nx = inArray[0]->axis[0]; ny = inArray[0]->axis[1];
-            nxny = nx * ny;
-            nx0 = nx; ny0 = ny; nxny0 = nxny;
+            if (status) {
+                for (j = 0; j <= i; j++)
+  	            drms_free_array(inArray[i]);
+                DIE("Segment reading error \n");
+            }
+            inData[i] = (float *)inArray[i]->data;
         }
+	
+        /* Dimensions */
+        nx = inArray[0]->axis[0]; ny = inArray[0]->axis[1];
+        if (geometry == 1) {
+            if (nx != 2 * hw_x + 1 || ny != 2 * hw_y + 1) DIE("wrong cut out dimension");
+        }
+        nxny = nx * ny;
         printf("nx=%d, ny=%d\n", nx, ny);
-        printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
+        
+        /* Get mask, if any */
+        if (geometry == 1) {
+            maskSeg = drms_segment_lookup(inRec, "bitmap");		// from segment, for patch
+            mask_id = drms_getkey_int(inRec, "MASK", &status);		// main AR in patch
+        } else {
+            // Create query string for mask, from series name and time
+            // e.g. "su_turmon.armask_45s" and "[2010.03.29_12:00:00_TAI]"
+            maskQuery = (char *)malloc(100 * sizeof(char));
+            trec_str = (char *)malloc(30 * sizeof(char));
+            sprint_time(trec_str, t_rec, "TAI", 0);
+            sprintf(maskQuery, "%s[%s]", maskSeries, trec_str);
+            // Get mask record, continue if not found
+            maskRS = drms_open_records(drms_env, maskQuery, &status);
+            if (status || maskRS->n != 1) {
+                maskSeg = NULL;				// no mask used;
+                printf("no mask used\n");
+            } else {
+                maskRec = maskRS->records[0];
+                maskSeg = drms_segment_lookup(maskRec, "bitmap");
+                mask_id = 1;
+                printf("%s, %s\n", trec_str, maskSeries);
+                printf("#%d: t_inrec = %lf; t_mask = %lf\n", 
+                       irec, t_rec, drms_getkey_time(maskRec, "T_REC", &status));
+            }
+        }
 
         // Allocate arrays to pass to ambig()
         // Re-created for each record as patch could have different dimensions
@@ -465,7 +344,8 @@ printf("harpflag=%d\n",harpflag);
             varBmag = inData[4][i];	    	// "field_err"
             varBinc = inData[5][i];		// "inclination_err"
             //varBfil = inData[6][i];		// "alpha_err"
-            varBfil = 0.;			// set to 0. since fill factor not computed
+// XXXX zero this until it's clear the fill factor is being computed
+            varBfil = 0.;
 
             // Covariances
             varBmagBinc = inData[7][i];		// "field_inclination_err"
@@ -511,29 +391,22 @@ printf("harpflag=%d\n",harpflag);
            drms_free_array(inArray[i]);
         }
 
-	/* Create bitmap, with different methods depending on whether */
-        /* it's a patch or full disk */
-		
-	if (harpflag) {
-	/* Patch case */
+        if (geometry == 1 && maskSeg == NULL) DIE("Error for patch mask");	// mandatory for patch
+        if (maskSeg != NULL) {
+            /* maskArray = drms_segment_read(maskSeg, DRMS_TYPE_CHAR, &status);
+            if (status) DIE("Error reading mask");
+            mask = (char *)maskArray->data;
+            if (maskArray->axis[0] != nx || maskArray->axis[1] != ny)
+                DIE("Mask has wrong dimension");*/
+            // Create bitmap
             bitmap = (int *)calloc(nxny, sizeof(int));
-            /* bitmap no longer being used; all pixels treated the same
             for (i = 0; i < nxny; i++) {
                // bitmap[i] = (mask[i] == mask_id) ? 1 : 0;
-            } */ 
-            // only pixels in unpadded rectangle are disambiguated
-            // XXXX add one extra pixel to account for one-sided differences?
-            i0 = ll0[0] - ll[0];// i < ur[0] - ur0[0]; i++ 
-            j0 = ll0[1] - ll[1];// j < ur[1] - ur0[1]; j++
-            for (i = i0; i < nx - ur[0] + ur0[0]; i++) {
-                for (j = j0; j < ny - ur[1] + ur0[1]; j++) {
-                   bitmap[i + j*nx] = 1;
-                }
+               // bitmap no longer being used; instead, all pixels in rectangle are disambiguated
+               bitmap[i] = 1;
             }
             drms_free_array(maskArray);
         } else {
-        /* Full disk case */
-			
             // Construct bitmap based on transverse field strength and distance from disk center.
             bitmap = (int *)calloc(nxny, sizeof(int));
             rad2 = radius * radius;
@@ -544,6 +417,8 @@ printf("harpflag=%d\n",harpflag);
                r2 = xx * xx + yy * yy;
                if (r2 < rad2) {
                   bitmap[i] = (sqrt(Bx[i] * Bx[i] + By[i] * By[i]) > bthresh1 + (bthresh0 - bthresh1) * sqrt(1. - r2 / rad2)) ? 1 : 0;
+                  //bitmap[i] = (sqrt(Bx[i] * Bx[i] + By[i] * By[i]) > bthresh * (2. - sqrt(1. - r2 / rad2))) ? 1 : 0;
+                  //bitmap[i] = (sqrt(Bx[i] * Bx[i] + By[i] * By[i]) > bthresh) ? 1 : 0;
                } else {
                   bitmap[i] = 0;
                }
@@ -589,16 +464,14 @@ printf("harpflag=%d\n",harpflag);
             for (i = 0; i < nxny; i++) {
                bitmap[i] = growmap[i + (nerode + ngrow) * (nx + 1 + 2 * (i / nx + nerode + ngrow))];
             }
-			
-			// added by X. Sun, to be consistent with harp case
-			i0 = 0; j0 = 0;
-			
         }
 
-        probBa = (float *) calloc(nxny, sizeof(float));
+        /* Output data */
+        outDims[0] = nx; outDims[1] = ny;	// Output array dimensions
+        probBa = (float *) malloc(nxny * sizeof(float));
+        ambig_flag = (char *) calloc(nxny, sizeof(char));
 
         /* This is the working part */
-
         ambig_(&geometry,
                &weak,
                &nx, &ny,
@@ -613,75 +486,33 @@ printf("harpflag=%d\n",harpflag);
                dBt, bitmap,
                &radius,
                &nap, &bthresh0, &bthresh1);
-
-
-        /* Output data */
-        outDims[0] = nx0; outDims[1] = ny0;	// Output array dimensions
-		
-	printf("nx=%d, ny=%d\n", nx0, ny0);
-	printf("i0=%d, j0=%d\n", i0, j0);
-		
-        confidence = (float *) calloc(nxny0, sizeof(float));
-        ambig_flag = (char *) calloc(nxny0, sizeof(char));
-
         /* Flag pixels for which the azimuth angle needs to be changed */
-        for (i = 0; i < nx0; i++) {
-            for (j = 0; j < ny0; j++) {
-               ambig_flag[i + j * nx0] = (Bx[i + i0 + (j + j0) * nx] > 0.) ? 1 : 0;
-               confidence[i + j * nx0] = probBa[i + i0 + (j + j0) * nx];
-            }
+        for (i = 0; i < nxny; i++) {
+            ambig_flag[i] = (Bx[i] > 0.) ? 1 : 0;
         }
-        
-        /* Bit maps */
-        // Jun 22 Xudong
-        qual_map = (int *) calloc(nxny0, sizeof(int));
-        confid_map = (char *) calloc(nxny0, sizeof(char));
-        for (i = 0; i < nx0; i++) {
-            for (j = 0; j < ny0; j++) {
-                // Jun 22 Xudong: update highest bit for now, should be lowest bit in final version
-                qual_map[i + j * nx0] = inData_qual[i + j * nx0] | getAmbCode(confidence[i + j * nx0]);
-                // Jun 22 Xudong: not updated for now, waiting for final scheme
-                confid_map[i + j * nx0] = inData_conf[i + j * nx0];
-            }
-        }
-        drms_free_array(inArray_qual); drms_free_array(inArray_conf);
 
-		
         /* Stats */
         int nancount = 0, outsz = outDims[0] * outDims[1]; 
         for (i = 0; i < outsz; i++) {
-            if (isnan(confidence[i])) nancount++;
+            if (isnan(probBa[i])) nancount++;
         }
 
         /* Output segment */
         outArray_flag = drms_array_create(DRMS_TYPE_CHAR, 2, outDims, ambig_flag, &status);
         if (status) DIE("Error creating flag array");
-        outArray_prob = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, confidence, &status);
+        outArray_prob = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, probBa, &status);
         if (status) DIE("Error creating prob array");
-        outArray_qual = drms_array_create(DRMS_TYPE_INT, 2, outDims, qual_map, &status);
-        if (status) DIE("Error creating qual array");
-        outArray_conf = drms_array_create(DRMS_TYPE_CHAR, 2, outDims, confid_map, &status);
-        if (status) DIE("Error creating conf array");
 
         /* Output record */
         outRec = outRS->records[irec];
-        outSeg_flag = drms_segment_lookup(outRec, "disambig");
-        outSeg_prob = drms_segment_lookup(outRec, "conf_disambig");
-        outSeg_qual = drms_segment_lookup(outRec, "qual_map");
-        outSeg_conf = drms_segment_lookup(outRec, "confid_map");
+        outSeg_flag = drms_segment_lookup(outRec, "ambig_flag");
+        outSeg_prob = drms_segment_lookup(outRec, "confidence");
         for (i = 0; i < 2; i++) {
           outSeg_flag->axis[i] = outArray_flag->axis[i];	// For variable dimensions
           outSeg_prob->axis[i] = outArray_prob->axis[i];
-          outSeg_qual->axis[i] = outArray_qual->axis[i];
-          outSeg_conf->axis[i] = outArray_conf->axis[i];
         }
         outArray_flag->parent_segment = outSeg_flag;
         outArray_prob->parent_segment = outSeg_prob;
-        outArray_qual->parent_segment = outSeg_qual;
-        outArray_conf->parent_segment = outSeg_conf;
-        // Compressed
-        outArray_prob->bscale = 0.01;
-        outArray_prob->bzero = 0.0;
 
         /* Result writing */
         status = drms_segment_write(outSeg_flag, outArray_flag, 0);
@@ -690,30 +521,21 @@ printf("harpflag=%d\n",harpflag);
         status = drms_segment_write(outSeg_prob, outArray_prob, 0);
         if (status) DIE("Problem writing prob file");
         drms_free_array(outArray_prob);
-        status = drms_segment_write(outSeg_qual, outArray_qual, 0);
-        if (status) DIE("Problem writing qual file");
-        drms_free_array(outArray_qual);
-        status = drms_segment_write(outSeg_conf, outArray_conf, 0);
-        if (status) DIE("Problem writing conf file");
-        drms_free_array(outArray_conf);
 
         /* Set keywords */
         // Prime key
     	drms_copykey(outRec, inRec, "T_REC");
-    	if (harpflag) {
-    	    drms_copykey(outRec, inRec, "HARPNUM");
+    	if (geometry == 1) {
+    	    drms_copykey(outRec, inRec, "PNUM");
     	}
         // Info
-        drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
+    	drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
         drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
         // Parameters
         copy_me_keys(inRec, outRec);
         copy_geo_keys(inRec, outRec);
-        if (harpflag) copy_patch_keys(inRec, outRec);
-        drms_setkey_string(outRec, "BUNIT_026", " ");
-        drms_setkey_string(outRec, "BUNIT_027", " ");
+        if (geometry == 1) copy_patch_keys(inRec, outRec);
         // Disambiguation
-        drms_setkey_int(outRec, "AMBPATCH", harpflag);	// Jun 22 Xudong
         drms_setkey_int(outRec, "AMBGMTRY", geometry);
         drms_setkey_int(outRec, "AMBWEAK", weak);
         drms_setkey_int(outRec, "AMBNEROD", nerode);
@@ -735,7 +557,7 @@ printf("harpflag=%d\n",harpflag);
         drms_setkey_int(outRec, "MISSVALS", nancount);
     
         /* Set link */
-        if (harpflag) {
+        if (geometry == 1) {
             magLink = hcon_lookup_lower(&outRec->links, "PATCH");
             if (magLink) {
                 drms_setlink_static(outRec, "PATCH", inRec->recnum);
@@ -757,8 +579,8 @@ printf("harpflag=%d\n",harpflag);
 
         /* Clean up */
         free(Bx); free(By); free(Bz); free(dBt);  // ELW20100226 - mainly for sanity
-        if (harpflag) free(inData_conf);
         if (bitmap != NULL) { free(bitmap); bitmap = NULL; }
+        if (maskQuery != NULL) { free(maskQuery); maskQuery = NULL; }
         if (trec_str != NULL) { free(trec_str); trec_str = NULL; }
 
     }
