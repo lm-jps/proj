@@ -724,7 +724,7 @@ int DoIt(void)
     outRS = drms_create_records(drms_env, 1, outseries, DRMS_PERMANENT, &status);
     if (status) {fprintf(stderr,"Output series is %s, ",outseries); DIE("Cant make outout record");}
     outRec = outRS->records[0];
-    drms_copykeys(outRec, inRec, 1, kDRMS_KeyClass_Explicit);
+    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
     outSeg = drms_segment_lookupnum(outRec, 0);
     outArray->bzero = outSeg->bzero;
     outArray->bscale = outSeg->bscale;
