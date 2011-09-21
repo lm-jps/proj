@@ -134,9 +134,11 @@
  *     U) May 31
  *        (1) Combined this wrapper with RCE's latest codes.
  *            This associates with changes of argument of void function filt_init_()
- *     V June 6
+ *     V) June 6
  *        (1) Add one choice to host multiple HARP maps for one T_REC.
  *            This choice be controlled with MULTHARP. 
+ *     W) July 15
+ *        (1) Add lines to make HARP box wider, and a few clean-up
  *
  * ------------------------------------------------------------------------------------------------------ */
 
@@ -226,8 +228,8 @@
 #define DIE(msg) {fflush(stdout);fprintf(stderr,"%s, status=%d\n",msg,status); return(status);}
 
 /* strings for version info. */
-char *module_name = "vfisv"; // can be constant
-char *version_id  = "2011 May 26";  // (number or) strings to specify version of code.
+char *module_name = "vfisv";        // may be unchanged
+char *version_id  = "2011 Sep.13";  // (number or) strings to specify version of code. Typically date of editing. Given by hand....hmmm
 
 /* RCE Apr 21, 2010: Added a "double [][]" in definition of invert_ to pass
 the filter profiles computed by Sebastien*/
@@ -458,11 +460,10 @@ int DoIt (void)
                           0.0,0.0,0.0};
   double bscaleinv[25] = {0.01,0.01,0.01,0.0001,0.01,0.01,
                           50.0,0.1,0.1,0.001,
-                          0.01,0.01,0.01,50.0,0.01,    // std.
+                          0.001,0.001,0.001,50.0,0.01,    // std.
                           0.0001,0.0001,0.0001,0.0001, // cor. coef.
                           0.0001,0.0001,0.01,          // cor. coef. and Chi-sq
                           1.0,1.0,1.0};                // integer arrays for convflag, qual_map and confid_map
-
 
 /* working array etc. used by wrapper */
   int    *FinalConvFlag;    // this is a new array to handle converge-flag
@@ -671,10 +672,11 @@ int DoIt (void)
         if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
         rn = 0;
         inRec = inRS->records[rn];
+#if 1 
         char *Resname[] = {"bitmap"};
         sprintf(segname,"%s",Resname[0]);
         inSeg = drms_segment_lookup(inRec,segname);
-        colsL = inSeg->axis[0];
+        colsL = inSeg->axis[0]; // we need Naxis(1,2)
         rowsL = inSeg->axis[1];
         imgpixL = colsL * rowsL;
         patchmask = (int *)malloc (sizeof (int) * imgpixL * 1);
@@ -693,6 +695,7 @@ int DoIt (void)
           for (n = 0; n < nnx * nny; n++){patchmask[n+iseg*imgpixL]=inData[n];} // silly but safe way to pass data
           drms_free_array(inArray); // without this, well, things go mad.
         }
+#endif
         xleftbot = drms_getkey_int(inRec,"CRPIX1",&status);
         yleftbot = drms_getkey_int(inRec,"CRPIX2",&status);
         xwidth   = colsL;
@@ -870,7 +873,7 @@ int DoIt (void)
 
 /* 2011 June 6 
  * Here mask map has pixel size of 4k x 4k to host multi-HARP maps,
- * The four variables, xleftbot, yleftbot, xwidth and ywidth be fixed at 0, 0, 4096 and 4096. */
+ * The four variables, xleftbot, yleftbot, xwidth and ywidth be given 0, 0, 4096 and 4096. */
 #if HARPATCH == 1 && MULTHARP == 1
     patchmask  = (int  *)malloc (sizeof (int)  * imgpix); /* allocate same size as Stokes */
     { /* limit scope for some DRMS variables */
@@ -895,16 +898,17 @@ int DoIt (void)
       }
       else
       {
-	rec_ct = inRS->n; // redo .. just in case.
+        rec_ct = inRS->n; // redo .. just in case.
         printf(" There are %d HARP for %s\n",rec_ct, indsdesc3);
         iexistpatchmask = 1;
         for (rn = 0; rn < rec_ct; rn++)
         {
           inRec = inRS->records[rn];
+#if 1
           char *Resname[] = {"bitmap"};
           sprintf(segname,"%s",Resname[0]);
           inSeg = drms_segment_lookup(inRec,segname);
-          colsL = inSeg->axis[0];
+          colsL = inSeg->axis[0]; // we need the Naxis(1,2)
           rowsL = inSeg->axis[1];
           imgpixL = colsL * rowsL;
           int *patchmaskL;
@@ -924,9 +928,22 @@ int DoIt (void)
             for (n = 0; n < nnx * nny; n++){patchmaskL[n+iseg*imgpixL]=inData[n];} // silly but safe way to pass data
             drms_free_array(inArray); // without this, well, things go mad.
           }
+#endif
           int xleftbotL, yleftbotL;
           xleftbotL = drms_getkey_int(inRec,"CRPIX1",&status);
           yleftbotL = drms_getkey_int(inRec,"CRPIX2",&status);
+          xwidth   = colsL;
+          yheight  = rowsL;
+          if (verbose) {printf(" HARP info. xleftbot yleftbot xwidth yheight = %d %d %d %d\n",xleftbot,yleftbot,xwidth,yheight);}
+
+/* extend HARP box */
+          int iextendx =  30;
+          int iextendy = 150;
+          xleftbotL = xleftbotL - iextendx;
+          yleftbotL = yleftbotL - iextendy;
+          colsL     = colsL + iextendx * 2;
+          rowsL     = rowsL + iextendy * 2;
+
           int i2, j2, n2, m2;
           for (i2 = 0; i2 < colsL; i2++)
           {
@@ -938,7 +955,9 @@ int DoIt (void)
               patchmask[m2] = 600; // here assume non-blob ... some larger number than 4.
 //              patchmask[m2] = patchmaskL[n2];
           } }
+#if 1
           free(patchmaskL);
+#endif
         }
         drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
       }
@@ -1225,7 +1244,7 @@ int DoIt (void)
       if (nan_map[n] == 3) nofrct = nofrct + 1;
       if (nan_map[n] == 4) nmask  = nmask  + 1;
     }
-    printf(" Num of pixel total (4k x 4k or 16 x 2^10)   : %8d \n", imgpix);
+    printf(" Num of pixel total (4k x 4k or 16 x 2^20)   : %8d \n", imgpix);
     printf(" Num of pixel out-of-disk                    : %8d \n", nofdsk);
     printf(" Num of pixel out-of-rectangle of interest   : %8d \n", nofrct);
     printf(" Num of pixel skipped due to all-zero or NaN : %8d \n", numnan);
@@ -1822,7 +1841,8 @@ printf("We should be running initialize_vfisv_filter\n");
 /* copy from lines by S. Couvidat : some lines seems omittable, but K.H. just copied everything. */
     column = 2048;
     row    = 2048;
-    ratio  = cols/nx2;   // should be 16
+    ratio  = 4096/nx2;   // modified on Sep 8, 2011. Now it assumes that cols and rows will not be necessarily 4k.
+//    ratio  = cols/nx2;   // should be 16
     x0 = (column/ratio); // a column number
     y0 = (row/ratio);    // a row number
     x1 = x0+1;
@@ -1973,9 +1993,25 @@ printf("We should be running initialize_vfisv_filter\n");
 
 /*S.C. filter function */
 
-      column        =n % cols; //column from 0 to 4095
-      row           =n / cols; //row from 0 to 4095
-      ratio         =cols/nx2; //should be 16
+      { /* scope limiter, within which value of n must never be changed. Added on Sep 8, 2011 by K.H.*/
+      int nloc, iloc, jloc;
+      float filoc, fjloc;
+      iloc = n % cols; // column address in the input data array, whose size is not necessarily 4k x 4k.
+      jloc = n / cols;
+      filoc = (float)(iloc) / (float)(cols); // address(es) in float that must run from 0 to 0.999999
+      fjloc = (float)(jloc) / (float)(rows);
+      filoc = filoc * 4096.0 + 0.000000001; // then, it be now running from 0.0 to 4095.99999
+      fjloc = fjloc * 4096.0 + 0.000000001;
+      iloc = (int)(filoc); // enforce it integer
+      jloc = (int)(fjloc);
+      nloc = iloc + 4096 * jloc;  // address in 4k x 4k arrays
+
+if ((n != nloc)){printf("test ... : %d %d %d %d\n",nloc,n,cols,rows);} // if cols=rows=4096, nloc must be equal to n.
+
+      column        =nloc % 4096; // column from 0 to 4095
+      row           =nloc / 4096; // row from 0 to 4095
+      ratio         =4096 /  nx2; // should be 16
+      } // end of scope limiter
 
       /*-------------------------------------------------------------*/
       /* bilinear interpolation of the phase maps at pixel (x,y) */
@@ -2110,6 +2146,11 @@ This is done inside the FORTRAN code, in invert.f90
 
       invert_ (obs, scat, guess, res, err, filters, &iconverge_flag, weights); // added the weights. on Feb 10, 2011
 
+/* normalization for err array, this must be temporal : later done inisde invert_(), 2011 Sept 7, by K.H. */
+      err[0] = err[0] / 1500.0;    // field strength in gauss,     ERR(1) in Fortran
+      err[1] = err[1] / 90.0;      // inclination angle in degree, ERR(2) in Fortran 
+      err[2] = err[2] / 90.0;      // azithum angle in degree,     ERR(3) in Fortran
+
 /*
   here do thing in accordance with the value of iconverge_flag.
   Some NaN-filling be done under wrapper's responsibility by K.H.
@@ -2118,7 +2159,7 @@ This is done inside the FORTRAN code, in invert.f90
           (iconverge_flag == 5) ||
           (iconverge_flag == 1))   // changed on 2011 May 16, responding to the changes in invert.f90 by RCE.
       {
-        if (verbose){printf("Hello, this is %2d th PE : found iconverge_flag %d2 at %9d th pixel.\n", mpi_rank, iconverge_flag, n);}
+        if (verbose){printf("Hello, this is %2d th PE : found iconverge_flag %d at %9d th pixel.\n", mpi_rank, iconverge_flag, n);}
         for (j=0; j<paramct; j++){res[j]=NAN;}
         for (k=0; k<Err_ct;  k++){err[k]=NAN;}
       }
@@ -3029,7 +3070,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.9 2011/06/28 19:02:35 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.10 2011/09/21 01:21:53 keiji Exp $");}
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- by Sebastien (1), filter profile etc.---------------------------- */
