@@ -477,9 +477,12 @@ int DoIt(void)
   if (strcmp(cadence_str, "NOTSPECIFIED") != 0)
     {
     int ratio;
-    cadence = atoinc((char *)cadence_str);
-    ratio = round(cadence/t_step);
+    double initial_cadence;
+    initial_cadence = atoinc((char *)cadence_str);
+    ratio = round(initial_cadence/t_step);
     cadence = ratio * t_step;
+    if (cadence != initial_cadence)
+      fprintf(stderr,"Cadence rounded from %f to %f, since t_step == %f\n", initial_cadence, cadence, t_step);
     }
   else
     cadence = t_step;
@@ -517,8 +520,9 @@ int DoIt(void)
         sprintf(in, "@%s", in_filename);
         }
     else // normal case
-        sprintf(in, "%s[%s-%s%s]%s[? %s ?]", inseries, t_start_text, t_stop_text, cadence_text, (moreQuery ? moreQuery : ""), where);
+        sprintf(in, "%s[%s-%s%s][? %s ?]%s", inseries, t_start_text, t_stop_text, cadence_text, where, (moreQuery ? moreQuery : ""));
     }
+fprintf(stderr,"Query is %s\n",in);
 
 // XXXXXXXXXXXXX End of get input and output series information
 
