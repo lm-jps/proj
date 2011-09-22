@@ -150,7 +150,7 @@ ModuleArgs_t module_args[] =
     {ARG_TIME, "cadence", "NOTSPECIFIED", "Cadence of product, defaults to input cadence."},
     {ARG_TIME, "t_ref", "JD_0", "Time for which x and y apply, implies ref image."},
     {ARG_STRING, "locunits", "pixels", "Location units in 'pixels', 'arcsec', or 'degrees'"},
-    {ARG_STRING, "where", "1=1", "Additional 'where' clause if needed"},
+    {ARG_STRING, "where", "NOTSPECIFIED", "Additional 'where' clause if needed"},
     {ARG_FLOAT, "x", "0", "Location of extract box center"},
     {ARG_FLOAT, "y", "0", "Location of extract box center"},
     {ARG_FLAG, "t", "0", "Disable Carrington rate tracking"},
@@ -293,6 +293,18 @@ int DoIt(void)
     if (!log) DIE2("Can not create log file.",logfile);
     }
 
+  if (strcmp(where, "NOTSPECIFIED") == 0)
+    {
+    where = "";
+    }
+  else
+    {
+    char wherework[4096];
+    sprintf(wherework,"[? %s ?]", where);
+    where = strdup(wherework);
+fprintf(stderr,"where is %s\n", where);
+    }
+
   inparam = strdup(ingiven);
   if (strcmp(inparam, "NOTSPECIFIED") == 0) DIE("Input series must be specified.");
   lbracket = index(inparam, '[');
@@ -324,13 +336,14 @@ int DoIt(void)
         times_source = TIMES_GIVEN;
     }
     
+fprintf(stderr,"general params processed.\n");
 // XXXXXXXXXXX Get box location in Carrington Coords for all location types XXXXXXXXXXXXXX
   if (do_reftime) // Arc-sec, pixel, or Stonyhurst specification, get ref image information
     { // the image for ref_time is supposed to be present in the series.
     char t_ref_text[100];
     sprint_at(t_ref_text, t_ref-7200);
     sprintf(in, "%s[%s/4h][? QUALITY >=0 ?]", inseries, t_ref_text);
-    inRS = drms_open_records(drms_env, in, &status); if (status || inRS->n == 0) DIE2("No input data found for t_ref",in);
+    inRS = drms_open_records(drms_env, in, &status); if (status || inRS->n == 0) DIE2("No input data found within 2-hours of t_ref",in);
     int irec, nrecs = inRS->n;
     TIME tdiff = 10000;
     for (irec=0; irec<nrecs; irec++) // find record close to t_ref
@@ -404,6 +417,7 @@ int DoIt(void)
     else if (deltlong < 0)
       { car_rot++; crln += 360.0; }
     drms_close_records(inRS, DRMS_FREE_RECORD);
+fprintf(stderr,"reftime params processed.\n");
     }
   else // Carrington specification
     {
@@ -426,6 +440,7 @@ int DoIt(void)
       if (t_stop == tNotSpecified)
         t_stop = HeliographicTime(car_rot, crln - 90);
       }
+fprintf(stderr,"box location params processed.\n");
 // XXXXXXXXXXXXXXXXX End of get target box location
 
 // XXXXXXXXXXXXXXXX get input seriesname and output seriesname
@@ -471,6 +486,7 @@ int DoIt(void)
   else
     DIE("Must have time prime key");
 
+fprintf(stderr,"prime key params processed.\n");
   // Get cadence for output data.  The output series should be slotted on a multiple of
   // the input series, multiple may be 1.
   
@@ -514,13 +530,13 @@ int DoIt(void)
         {
         // experimental, AIA is not tseq slots so get vector of times and convert to list of records
         // rounded to nearest slots.  Must put this list in a temp file since may be big.
-        sprintf(in, "%s[%s-%s]%s[? %s ?]", inseries, t_start_text, t_stop_text, (moreQuery ? moreQuery : ""), where);
+        sprintf(in, "%s[%s-%s]%s%s", inseries, t_start_text, t_stop_text, where , (moreQuery ? moreQuery : ""));
         in_filename = get_input_recset(drms_env, in, cadence);
         if (!in_filename) DIE("Cant make AIA cadence recordset list file");
         sprintf(in, "@%s", in_filename);
         }
     else // normal case
-        sprintf(in, "%s[%s-%s%s][? %s ?]%s", inseries, t_start_text, t_stop_text, cadence_text, where, (moreQuery ? moreQuery : ""));
+        sprintf(in, "%s[%s-%s%s]%s%s", inseries, t_start_text, t_stop_text, cadence_text, where, (moreQuery ? moreQuery : ""));
     }
 fprintf(stderr,"Query is %s\n",in);
 
@@ -568,6 +584,7 @@ fprintf(stderr,"Query is %s\n",in);
 //  XXXXXXXXXXXXXXXXX get coordinate mapping info using keywords from first record
     if (firstimage)
       {
+fprintf(stderr,"start exam of first image params.\n");
       firstimage = 0;
       if (loctype==LOCCARR)
         {
@@ -633,6 +650,7 @@ fprintf(stderr,"Query is %s\n",in);
           center_x_first = center_x - x0;
           center_y_first = center_y - y0;
           }
+fprintf(stderr,"finish exam of first image params.\n");
       }
 
     if (NoTrack)
