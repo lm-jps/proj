@@ -2147,9 +2147,12 @@ This is done inside the FORTRAN code, in invert.f90
       invert_ (obs, scat, guess, res, err, filters, &iconverge_flag, weights); // added the weights. on Feb 10, 2011
 
 /* normalization for err array, this must be temporal : later done inisde invert_(), 2011 Sept 7, by K.H. */
-      err[0] = err[0] / 1500.0;    // field strength in gauss,     ERR(1) in Fortran
-      err[1] = err[1] / 90.0;      // inclination angle in degree, ERR(2) in Fortran 
-      err[2] = err[2] / 90.0;      // azithum angle in degree,     ERR(3) in Fortran
+//      err[0] = err[0] / 1500.0;    // field strength in gauss,     ERR(1) in Fortran
+//      err[1] = err[1] / 90.0;      // inclination angle in degree, ERR(2) in Fortran 
+//      err[2] = err[2] / 90.0;      // azithum angle in degree,     ERR(3) in Fortran
+      err[0] = err[0] / 38.729833462; // field strength in gauss,     ERR(1) in Fortran
+      err[1] = err[1] /  9.486832981; // inclination angle in degree, ERR(2) in Fortran 
+      err[2] = err[2] /  9.486832981; // azithum angle in degree,     ERR(3) in Fortran
 
 /*
   here do thing in accordance with the value of iconverge_flag.
@@ -3070,7 +3073,8 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.10 2011/09/21 01:21:53 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.11 2011/09/27 19:16:13 keiji Exp $");}
+
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- by Sebastien (1), filter profile etc.---------------------------- */
