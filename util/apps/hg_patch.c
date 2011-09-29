@@ -75,12 +75,12 @@
    
    If the input is only a seriesname, it must have a prime key of type time.
 
-   If the t_ref parameter is specified, it must refer to a non-missing image in the input series.
+   If the t_ref parameter is specified, there must be a non-missing image within +- 2 hours of t_ref.
 
    The output seriesname defaults to the input seriesname with a suffix of "_hgpatch".
 
    The -t, 'no tracking' flag casues the extracted region to remain fixed with respect to disc center.  I.e. the Carrington
-   tracking is disabled.
+   tracking is disabled.  The center of the extract region must be on the disk.
 
    @par Flags:
    -t   Disable tracking.
@@ -126,7 +126,6 @@
 
 char *module_name = "hg_patch";
 
-#define NOTSPECIFIED "***NOTSPECIFIED***"
 #define	DIE(msg) {fprintf(stderr,"%s  Status=%d\n",msg, status); return(status?status:1);}
 #define	DIE2(msg,val) {fprintf(stderr,"%s %s,  Status=%d\n",msg, val,  status); return(status?status:1);}
 #define TEST_PARAM(param) {if (status) DIE2("Required keyword missing: ", param);}
@@ -144,12 +143,12 @@ ModuleArgs_t module_args[] =
     {ARG_INT, "car_rot", "-1", "Carrington Rotation when the region crosses CM"},
     {ARG_FLOAT, "width", "0", "width of box in degrees of longitude"},
     {ARG_FLOAT, "height", "0", "height of box in degrees of latitude when it corsses CM"},
-    {ARG_STRING, "boxunits", "pixels", "units of patch, 'pixels', 'arcsecs', or 'degrees'"},
+    {ARG_STRING, "boxunits", "NOTSPECIFIED", "units of patch, 'pixels', 'arcsecs', or 'degrees'"},
     {ARG_TIME, "t_start", "JD_0", "Start time, defaults to time at 90E"},
     {ARG_TIME, "t_stop", "JD_0", "End time, defauolts to 90W"},
     {ARG_TIME, "cadence", "NOTSPECIFIED", "Cadence of product, defaults to input cadence."},
     {ARG_TIME, "t_ref", "JD_0", "Time for which x and y apply, implies ref image."},
-    {ARG_STRING, "locunits", "pixels", "Location units in 'pixels', 'arcsec', or 'degrees'"},
+    {ARG_STRING, "locunits", "NOTSPECIFIED", "Location units in 'pixels', 'arcsec', or 'degrees'"},
     {ARG_STRING, "where", "NOTSPECIFIED", "Additional 'where' clause if needed"},
     {ARG_FLOAT, "x", "0", "Location of extract box center"},
     {ARG_FLOAT, "y", "0", "Location of extract box center"},
@@ -287,13 +286,13 @@ int DoIt(void)
   if (boxtype==BOXBAD)
     DIE2("patch dimensions not understood,", boxunits);
 
-  if (strcmp(logfile, "NOTSPECIFIED") != 0)
+  if (strcasecmp(logfile, "NOTSPECIFIED") != 0)
     {
     log = fopen(logfile, "w");
     if (!log) DIE2("Can not create log file.",logfile);
     }
 
-  if (strcmp(where, "NOTSPECIFIED") == 0)
+  if (strcasecmp(where, "NOTSPECIFIED") == 0)
     {
     where = "";
     }
@@ -306,7 +305,7 @@ fprintf(stderr,"where is %s\n", where);
     }
 
   inparam = strdup(ingiven);
-  if (strcmp(inparam, "NOTSPECIFIED") == 0) DIE("Input series must be specified.");
+  if (strcasecmp(inparam, "NOTSPECIFIED") == 0) DIE("Input series must be specified.");
   lbracket = index(inparam, '[');
   // first, get input series names.
   if (lbracket)
@@ -449,7 +448,7 @@ fprintf(stderr,"box location params processed.\n");
   inTemplate = drms_template_record(drms_env, inseries, &status);
   if (status || !inTemplate) DIE2("Input series can not be found: ", inseries);
 
-  if (strcmp(outparam, "NOTSPECIFIED") == 0)
+  if (strcasecmp(outparam, "NOTSPECIFIED") == 0)
     {
     strncpy(outseries, inseries, DRMS_MAXSERIESNAMELEN);
     strncat(outseries, "_hgpatch", DRMS_MAXSERIESNAMELEN);
@@ -490,7 +489,7 @@ fprintf(stderr,"prime key params processed.\n");
   // Get cadence for output data.  The output series should be slotted on a multiple of
   // the input series, multiple may be 1.
   
-  if (strcmp(cadence_str, "NOTSPECIFIED") != 0)
+  if (strcasecmp(cadence_str, "NOTSPECIFIED") != 0)
     {
     int ratio;
     double initial_cadence;
@@ -555,9 +554,9 @@ fprintf(stderr,"Query is %s\n",in);
     inRec = inRS->records[irec];
     if (status || !inRec) DIE("Record read failed.");
     TIME trec = drms_getkey_time(inRec, timekeyname, &status); TEST_PARAM(timekeyname);
-    if (trec < t_start)
+    if (t_start != tNotSpecified && trec < t_start)
       continue;
-    if (trec > t_stop)
+    if (t_stop != tNotSpecified && trec > t_stop)
       break;
     // skip records without images.
     if (drms_keyword_lookup(inRec, "QUALITY", 1))
