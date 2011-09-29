@@ -680,6 +680,7 @@ fprintf(stderr,"finish exam of first image params.\n");
 
     if (x1>=0 && y1>=0 && x2<inAxis[0] && y2<inAxis[1])
       {
+      status = 0;
       outArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start1, end1, &status);
       if (status) DIE("Cant read input record");
       }
@@ -694,6 +695,7 @@ fprintf(stderr,"finish exam of first image params.\n");
       start2[1] = y1 < 0 ? 0 : y1;
       end2[0] = x2 >= inAxis[0] ? inAxis[0]-1 : x2;
       end2[1] = y2 >= inAxis[1] ? inAxis[1]-1 : y2;
+      status = 0;
       inArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start2, end2, &status);
       if (status) DIE("Cant read input record");
       int start3[2] = {start2[0]-start1[0],start2[1]-start1[1]}; // fetched slice offset in outarray
