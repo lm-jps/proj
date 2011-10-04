@@ -1041,13 +1041,12 @@ int sphere2img (double lat, double lon, double latc, double lonc,
 char *get_input_recset(DRMS_Env_t *drms_env, char *in, TIME cadence)
   {
   DRMS_Array_t *data;
-  TIME t_start, t_stop, t_now, t_want, t_diff;
+  TIME t_start, t_stop, t_now, t_want, t_diff, this_t_diff;
   int status;
   int nrecs, irec;
   int nslots, islot;
   long long *recnums;
-  TIME *slot_times;
-  TIME *t_this;
+  TIME *t_this, half = cadence/2.0;
   double *drecnum, *dquality;
   int quality;
   long long recnum;
@@ -1074,34 +1073,33 @@ char *get_input_recset(DRMS_Env_t *drms_env, char *in, TIME cadence)
   t_stop = t_this[nrecs-1];
   nslots = (t_stop - t_start + cadence/2)/cadence;
   recnums = (long long *)malloc(nslots*sizeof(long long));
-  slot_times = (TIME *)malloc(nslots*sizeof(TIME));
+  for (islot=0; islot<nslots; islot++)
+    recnums[islot] = 0;
   islot = 0;
   t_want = t_start;
-  t_diff = 1.0e8; // 3+ years
+  t_diff = 1.0e9; 
   for (irec = 0; irec<nrecs; irec++)
       {
       t_now = t_this[irec];
       quality = (int)dquality[irec] & 0xFFFFFFFF;
       recnum = (long long)drecnum[irec];
+      this_t_diff = fabs(t_now - t_want);
       if (quality < 0)
         continue;
-      if (fabs(t_now - t_want) <= t_diff)
-        {
-        slot_times[islot] = t_now;
-        recnums[islot] = recnum;
-        }
-// fprintf(stderr,"irec=%d, t_want=%f, t_now=%f, t_diff=%f quality=%x, recnum=%lld, slot=%d, slottime=%f, slotrecnum=%lld\n",irec,t_want,t_now,t_diff,quality,recnum,islot,slot_times[islot],recnums[islot]);
-      t_diff = fabs(t_now - t_want);
-      if ( t_now > t_want) // past this slot, time to move to next slot
+      if (t_now <= (t_want-half))
+        continue;
+      while (t_now > (t_want+half))
         {
         islot++;
         if (islot >= nslots)
            break;
         t_want = t_start + cadence * islot;
-        slot_times[islot] = t_now;
-        recnums[islot] = recnum;
-        t_diff = fabs(t_now - t_want);
+        this_t_diff = fabs(t_now - t_want);
+        t_diff = 1.0e8;
         }
+      if (this_t_diff <= t_diff)
+        recnums[islot] = recnum;
+      t_diff = fabs(t_now - t_want);
       }
   if (islot+1 < nslots)
     nslots = islot+1;  // take what we got.
@@ -1114,12 +1112,10 @@ char *get_input_recset(DRMS_Env_t *drms_env, char *in, TIME cadence)
   mkstemp(filename);
   tmpfile = fopen(filename,"w");
   for (islot=0; islot<nslots; islot++)
-    fprintf(tmpfile, "%s[:#%lld]\n", seriesname, recnums[islot]);
+    if (recnums[islot])
+      fprintf(tmpfile, "%s[:#%lld]\n", seriesname, recnums[islot]);
   fclose(tmpfile);
   free(recnums);
-  free(slot_times);
   drms_free_array(data);
-// char cmd[2000];sprintf(cmd,"echo %s\ncat %s",filename,filename);
-// system(cmd);
   return(filename);
   }
