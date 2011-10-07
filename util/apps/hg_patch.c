@@ -199,6 +199,7 @@ int DoIt(void)
   DRMS_Array_t *inArray, *outArray;
   int i, ii, status = DRMS_SUCCESS, nrecs; 
   int  irec;
+  int  OK_recs = 0;
   double center_x, center_y, crpix1, crpix2, x0, y0; 
   double rsun_ref, dsun_obs, rsun, rsun_rad, rsunpix;
   double crln_obs, crlt_obs;
@@ -547,6 +548,7 @@ fprintf(stderr,"Query is %s\n",in);
   if (status || inRS->n == 0)
            DIE("No input data found");
   nrecs = inRS->n;
+fprintf(stderr,"Query finds %d records\n", nrecs);
 
   // extract patches from each record
   for (irec = 0; irec < nrecs; irec ++)
@@ -555,7 +557,10 @@ fprintf(stderr,"Query is %s\n",in);
     if (status || !inRec) DIE("Record read failed.");
     TIME trec = drms_getkey_time(inRec, timekeyname, &status); TEST_PARAM(timekeyname);
     if (t_start != tNotSpecified && trec < t_start)
+      {
+fprintf(stderr,"Rec %d, skip, trec < tstart\n",irec);
       continue;
+      }
     if (t_stop != tNotSpecified && trec > t_stop)
       break;
     // skip records without images.
@@ -563,7 +568,10 @@ fprintf(stderr,"Query is %s\n",in);
       {
       int quality = drms_getkey_int(inRec, "QUALITY", &status);
       if (quality < 0)
+         {
+fprintf(stderr,"Rec %d, skip, QUALITY=%0x\n",irec, quality);
          continue;
+         }
       }
     
     // get coordinate information for this image
@@ -676,7 +684,10 @@ fprintf(stderr,"finish exam of first image params.\n");
     inAxis[1] = inSeg->axis[1];
 
     if (x1 >= inAxis[0] || y1 >= inAxis[1] || x2 < 0 || y2 < 0)
+      {
+fprintf(stderr, "Rec %d, slice outside image, (x1,y1)=(%d,%d), (x2,y2)=(%d,%d)\n",irec,x1,y1,x2,y2);
       continue; // slice outside image
+      }
 
     if (x1>=0 && y1>=0 && x2<inAxis[0] && y2<inAxis[1])
       {
@@ -795,6 +806,9 @@ fprintf(stderr,"finish exam of first image params.\n");
     // drms_copykey(outRec, inRec, "T_OBS");
     // drms_copykey(outRec, inRec, "DATE__OBS");
     // drms_copykey(outRec, inRec, "WAVELNTH");
+fprintf(stderr,"Rec %d done OK\n", irec);
+
+    OK_recs += 1;
 
     if (log)
       {
@@ -810,7 +824,10 @@ fprintf(stderr,"finish exam of first image params.\n");
       unlink(in_filename);
       }
 
-  printf("  DONE! \n \n");
+  if (OK_recs)
+    printf("  DONE, %d records made! \n \n",OK_recs);
+  else
+    printf("  DONE but no useful records created! \n \n");
 
   if (log)
     fclose(log);
