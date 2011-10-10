@@ -2548,7 +2548,11 @@ This is done inside the FORTRAN code, in invert.f90
     } // end for-loop
 
 /* On 2011 Oct 10, 24-bit shift is made to make room for disambiguation index */
-    for (iData = 0; iData < imgpix; iData++){FinalQualMap[iData] = FinalQualMap[iData] * 256 * 256 * 256;}
+    for (iData = 0; iData < imgpix; iData++)
+    {
+      int ival = FinalQualMap[iData]
+      if (!isnan(ival)){FinalQualMap[iData] = ival * 256 * 256 * 256;}
+    }
 
   } // end if mpi_rank is zero
   MPI_Barrier(MPI_COMM_WORLD);
@@ -3077,7 +3081,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.12 2011/10/10 22:03:48 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.13 2011/10/10 23:36:22 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
