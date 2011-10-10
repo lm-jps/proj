@@ -2550,7 +2550,7 @@ This is done inside the FORTRAN code, in invert.f90
 /* On 2011 Oct 10, 24-bit shift is made to make room for disambiguation index */
     for (iData = 0; iData < imgpix; iData++)
     {
-      int ival = FinalQualMap[iData]
+      int ival = FinalQualMap[iData];
       if (!isnan(ival)){FinalQualMap[iData] = ival * 256 * 256 * 256;}
     }
 
@@ -3081,7 +3081,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.13 2011/10/10 23:36:22 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.14 2011/10/10 23:39:31 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
