@@ -229,7 +229,7 @@
 
 /* strings for version info. */
 char *module_name = "vfisv";        // may be unchanged
-char *version_id  = "2011 Sep.13";  // (number or) strings to specify version of code. Typically date of editing. Given by hand....hmmm
+char *version_id  = "2011 Oct. 10"; // (number or) strings to specify version of code. Typically date of editing. Given by hand....hmmm
 
 /* RCE Apr 21, 2010: Added a "double [][]" in definition of invert_ to pass
 the filter profiles computed by Sebastien*/
@@ -2546,6 +2546,10 @@ This is done inside the FORTRAN code, in invert.f90
         if (pixQual != 0) FinalConfidMap[iData] = 5;
       }
     } // end for-loop
+
+/* On 2011 Oct 10, 24-bit shift is made to make room for disambiguation index */
+    for (iData = 0; iData < imgpix; iData++){FinalQualMap[iData] = FinalQualMap[iData] * 256 * 256 * 256;}
+
   } // end if mpi_rank is zero
   MPI_Barrier(MPI_COMM_WORLD);
 #endif // end if CONFINDX is 1 or not
@@ -3073,7 +3077,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.11 2011/09/27 19:16:13 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.12 2011/10/10 22:03:48 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
