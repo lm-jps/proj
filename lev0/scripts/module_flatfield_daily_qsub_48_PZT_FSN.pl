@@ -149,8 +149,9 @@ NOMORE:
     #print "@stat\n";
     shift(@stat); shift(@stat);	#header lines
     $done = 1;
-    while($line = shift(@stat)) {
-      ($jid) = split(/\s+/, $line);
+    while($_ = shift(@stat)) {
+      s/^\s+//g;		#elim leading whitespace
+      ($jid) = split(/\s+/);
       if(grep(/$jid/, @jid)) {
         $done = 0;
         print "Found jid=$jid\n";
@@ -261,8 +262,9 @@ NOMOREP:
     #print "@stat\n";
     shift(@stat); shift(@stat);	#header lines
     $done = 1;
-    while($line = shift(@stat)) {
-      ($jid) = split(/\s+/, $line);
+    while($_ = shift(@stat)) {
+      s/^\s+//g;                #elim leading whitespace
+      ($jid) = split(/\s+/);
       if(grep(/$jid/, @jid)) {
         $done = 0;
         print "Found jid=$jid\n";
