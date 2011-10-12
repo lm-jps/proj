@@ -7,8 +7,8 @@
 			
 	
 	#define lfr->code_name 		"limbfit"
-	#define lfr->code_version 	"V1.9r0" 
-	#define lfr->code_date 		"Mon Feb 28 11:45:21 PST 2011" 
+	#define lfr->code_version 	"V1.12r0" 
+	#define lfr->code_date 		"Wed Oct 12 09:01:28 HST 2011" 
 */
 
 #include "limbfit.h"
@@ -78,7 +78,7 @@ int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn,
 return(0);
 }
 
-int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out,char *tmp_dir,FILE *opf, int spe, char *dsin, char *comment, int debug, int *status)
+int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out,char *tmp_dir,FILE *opf, int cc, int spe, int iter, char *dsin, char *comment, int debug, int *status)
 {
 	static char *log_msg_code="do_one_limbfit";
 	static char *series_name="limbfit data";
@@ -104,6 +104,8 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 	lfr->comment=comment;
 	lfr->dsin=dsin;
 
+	//if (debug) lf_logmsg("DEBUG", "INFO", 0, 0, "IN do___", log_msg_code, opf);
+
 	seg_cnt = drms_record_numsegments (record_in);
 	if (seg_cnt < 1) 
 	{
@@ -122,6 +124,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 	} 
 	else
 	{
+		//if (debug) lf_logmsg("DEBUG", "INFO", 0, 0, "IN do___getting data", log_msg_code, opf);
 		// add a test if these values are ok, otherwise terminate this observation
 		lfv->ix = drms_getkey_float(record_in, "X0_LF", &rstatus);
 		if(rstatus) {
@@ -158,7 +161,9 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 		}
 		lfv->img_sz0=img->axis[0];
 		lfv->img_sz1=img->axis[1];
+		lfv->cc=cc;
 		lfv->spe=spe;
+		lfv->iter=iter;
 		lfv->data=img->data;
 
 		if (debug) 
@@ -172,8 +177,8 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 		}
 		
 		lf_retcode=limbfit(lfv,lfr,opf,debug);
-		free(img->data);
-		
+		//free(img->data);
+		drms_free_array(img);
 
 		if (debug) 
 		{
@@ -212,14 +217,12 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			//---------------------------------------
 			//		2) set all keywords
 			//---------------------------------------
-			int num_ext=3;
 // need to test status...
 			rstatus=drms_setkey_string(record_out, "SERIESCN", 	series_name);
 			rstatus=drms_setkey_string(record_out, "INSERIES", 	lfr->dsin);
 			rstatus=drms_setkey_string(record_out, "CODENAME",	lfr->code_name);
 			rstatus=drms_setkey_string(record_out, "CODEVERS",	lfr->code_version);
 			rstatus=drms_setkey_string(record_out, "CODEDATE",	lfr->code_date);
-			rstatus=drms_setkey_int	  (record_out, "FITS_NXT",	num_ext);  
 			rstatus=drms_setkey_float (record_out, "X_LFS",		lfr->cenx);
 			rstatus=drms_setkey_float (record_out, "Y_LFS",		lfr->ceny);
 			rstatus=drms_setkey_double(record_out, "R_LFS",		lfr->radius);
@@ -240,35 +243,12 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			rstatus=drms_setkey_double(record_out, "INC_Y",		lfr->inc_y);
 			rstatus=drms_setkey_int   (record_out, "NFITPNTS",	lfr->nfitpnts);
 			rstatus=drms_setkey_int   (record_out, "NB_ITER",	lfr->nb_iter);
+			rstatus=drms_setkey_int   (record_out, "CEN_CALC",	lfv->cc);
 			rstatus=drms_setkey_double(record_out, "AHI",		lfr->ahi);
-			rstatus=drms_setkey_int   (record_out, "SKIPGC",	lfr->skipgc);
 			rstatus=drms_setkey_string(record_out, "COMMENTS",	lfr->comment);
 
 			//---------------------------------------
-			//		3) write segments
-			//---------------------------------------
-/*
-			int i_naxes[2];
-			i_naxes[0]=lfr->fits_ldfs_naxis1;
-			i_naxes[1]=lfr->fits_ldfs_naxis2;
-			//ldfs
-			DRMS_Array_t *data_array1;
-			segment_out = drms_segment_lookupnum (record_out, 0);
-			drms_setkey_string(record_out, "FILETYPE[0]", "LDFS");
-			data_array1 = drms_array_create (DRMS_TYPE_FLOAT, 2, i_naxes, (void *)lfr->fits_ldfs_data, &rstatus);
-			data_array1->bscale = 1.0;
-			data_array1->bzero = 0.0;
-			rstatus = drms_segment_write (segment_out, data_array1, 0);
-			if (rstatus) 
-			{
-				sprintf(log_msg,"can't create segment 0 (LDF) for fsn# %u in series", fsn);
-				lf_logmsg("ERROR", "DRMS", ERR_DRMS_WRITE, rstatus, log_msg, log_msg_code, opf);			
-				close_on_error(	record_in,record_out,data_array1);//,opf);
-				return ERR_DRMS_WRITE;
-			}
-*/
-			//---------------------------------------
-			//		4) write the generic segment 
+			//		3) write the generic segment 
 			//			(as the full FITS file)
 			//---------------------------------------
 // something left...: in case of problem, filenameout not closed and therefore not removed...
@@ -312,8 +292,6 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 
 		//add more KWs
 			if(get_set_kw(1,"ORIGIN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"TELESCOP","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"INSTRUME","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status); 
 			
 			TIME tobs;
 			static char s_tobs[50];
@@ -335,7 +313,6 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			}
 				
 			if(get_set_kw(2,"CAMERA","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"IMG_TYPE","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(4,"EXPTIME","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(3,"EXPSDEV","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(2,"WAVELNTH","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
@@ -347,14 +324,11 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				return ERR_FITSIO;
 			}
 			if(get_set_kw(2,"FID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"QUALLEV0","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"QUALITY","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(2,"DATAMIN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(2,"DATAMAX","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(2,"DATAMEDN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(3,"DATAMEAN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(3,"DATARMS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"MISSVALS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(1,"FLAT_REC","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(1,"CTYPE1","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(1,"CUNIT1","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
@@ -370,9 +344,6 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			if(get_set_kw(3,"R_SUN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(1,"MPO_REC","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(3,"INST_ROT","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);			
-			if(get_set_kw(3,"HPL1POS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);			
-			if(get_set_kw(3,"HPL2POS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);			
-			if(get_set_kw(3,"HPL3POS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);			
 			if (isnan(lfv->ix)) { lfv->ix=0.0;}
 			if ( fits_update_key(outfptr, TDOUBLE, "X0_LF", &lfv->ix, "",&rstatus) )
 			{
@@ -402,10 +373,10 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			if(get_set_kw(4,"HAEX_OBS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(4,"HAEY_OBS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if(get_set_kw(4,"HAEZ_OBS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(4,"HPLTID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"HWLTNSET","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(4,"HCFTID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(4,"HFTSACID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
+			if(get_set_kw(2,"HPLTID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
+			if(get_set_kw(2,"HFTSACID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
+			if(get_set_kw(2,"HWLTID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
+			if(get_set_kw(2,"HCFTID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
 			if ( fits_update_key(outfptr, TSTRING, "SERIESCN", series_name, "Series Name",&rstatus) )
 			{
 				lf_logmsg4fitsio(log_msg, log_msg_code, "(SERIESCN)",fsn,rstatus,opf);			
@@ -448,12 +419,6 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			if ( fits_update_key(outfptr, TSTRING, "DATE", s_tobs, "",&rstatus) )
 			{
 				lf_logmsg4fitsio(log_msg, log_msg_code, "(DATE)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
-				return ERR_FITSIO;
-			}
-			if ( fits_update_key(outfptr, TINT, "FITS_NXT", &num_ext, "Number of extensions",&rstatus) )
-			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(FITS_NXT)",fsn,rstatus,opf);			
 				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
 				return ERR_FITSIO;
 			}
@@ -577,12 +542,6 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "SKIPGC", &lfr->skipgc, "",&rstatus) )
-			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(SKIPGC)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
-				return ERR_FITSIO;
-			}
 
 			rstatus=0;
 			int i;			
@@ -632,29 +591,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 					return ERR_FITSIO;
 				}
 			}	
-/*
-			// Full LDF ---EXT#3-------------------------------------------------------------------------
-			char *tunitF[] = { "","" };
-			char *ttypeF[] = { "Intensity", "Radius"};
-			char *tformF[] = { "1E","1E" };
-			char extnameF[]="Full LDF ";
-			if ( fits_create_tbl( outfptr, BINARY_TBL, lfr->fits_fldfs_nrows, lfr->fits_fldfs_tfields, 
-													ttypeF, tformF, tunitF, extnameF, &rstatus) )
-			{
-				fits_report_error(opf, rstatus); 
-				return ERR_FITSIO;
-			}
-			for (i=1;i<=lfr->fits_fldfs_tfields;i++)
-			{
-				if (fits_write_col(outfptr, TFLOAT, i, firstrow, firstelem, lfr->fits_fldfs_nrows, 
-												lfr->fits_fulldfs+(i-1)*lfr->fits_fldfs_nrows, &rstatus))
-				{
-					lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_col(FLDF)",fsn,rstatus,opf);			
-					write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
-					return ERR_FITSIO;
-				}
-			}
-*/			
+		
 			//---------------------------------------
 			//		5) close & free
 			//---------------------------------------
@@ -672,10 +609,13 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
 				return ERR_FITSIO;
 			}						
+
 			//warning change segment number !!!
-			segment_out = drms_segment_lookupnum (record_out, 1); //WARNING change this number if the number of segment changes...
+			segment_out = drms_segment_lookupnum (record_out, 0); //WARNING change this number if the number of segment changes...
+
 			rstatus=drms_segment_write_from_file(segment_out,filenameout);
 			// a tester ! abort if pb
+
 			rstatus=drms_setkey_string(record_out, "PROCSTAT",	PROCSTAT_OK);
 			// a tester ! abort if pb
 
@@ -691,7 +631,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				
 			free(lfr->fits_alpha_beta);
 			free(lfr->fits_params);
-			free(lfr->fits_fulldfs);
+			//free(lfr->fits_fulldfs);
 			
 			if (debug) printf("done...%u\n",fsn);							
 			lf_logmsg("INFO", "APP", 0, 0, "End writing in the DB", log_msg_code, opf);
@@ -709,7 +649,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				free(lfr->fits_ldfs_data);
 				free(lfr->fits_alpha_beta);
 				free(lfr->fits_params);
-				free(lfr->fits_fulldfs);
+				//free(lfr->fits_fulldfs);
 			}
 			return(0);
 		}
@@ -736,12 +676,26 @@ int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *re
 		drms_setkey_string(record_out, "INSERIES",	lfr->dsin);
 		drms_setkey_string(record_out, "COMMENTS",	lfr->comment);
 		drms_setkey_string(record_out, "PROCSTAT",	errcode);
-		
+		drms_setkey_int   (record_out, "QUAL_LFS",	lfr->quality);
+		drms_setkey_int   (record_out, "ERRO_LFS",	lfr->error1);
+		drms_setkey_int   (record_out, "ERRO_FIT",	lfr->error2);
+		drms_setkey_int   (record_out, "ANN_WD",	lfr->ann_wd);
+		drms_setkey_int   (record_out, "MXSZANNV",	lfr->mxszannv);
+		drms_setkey_int   (record_out, "NB_LDF",	lfr->nb_ldf);
+		drms_setkey_int   (record_out, "NB_RDB",	lfr->nb_rdb);
+		drms_setkey_int   (record_out, "NB_ABB",	lfr->nb_abb);
+		drms_setkey_double(record_out, "UP_LIMIT",	lfr->up_limit);
+		drms_setkey_double(record_out, "LO_LIMIT",	lfr->lo_limit);
+		drms_setkey_double(record_out, "INC_X",		lfr->inc_x);
+		drms_setkey_double(record_out, "INC_Y",		lfr->inc_y);
+		drms_setkey_int   (record_out, "NB_ITER",	lfr->nb_iter);
+		drms_setkey_int   (record_out, "CEN_CALC",	lfr->cc);
+		drms_setkey_double(record_out, "AHI",		lfr->ahi);		
 		if (tbf >=1)
 		{
 			free(lfr->fits_alpha_beta);
 			free(lfr->fits_params);
-			free(lfr->fits_fulldfs);
+			//free(lfr->fits_fulldfs);
 			if (tbf ==2) free(lfr->fits_ldfs_data);	
 		}
 return(0);

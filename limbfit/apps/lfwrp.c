@@ -9,8 +9,8 @@
 			
 	
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V1.9r0" 
-	#define CODE_DATE 		"Mon Feb 28 11:45:21 PST 2011" 
+	#define CODE_VERSION 	"V1.12r0" 
+	#define CODE_DATE 		"Wed Oct 12 09:01:28 HST 2011" 
 */
 
 #include "limbfit.h"
@@ -23,13 +23,17 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, 	"logdir", "./", "logs directory"},
   {ARG_STRING, 	"tmpdir", "./", "tmp directory"},
   {ARG_INTS, 	"bfsn", "0", "first lev1 fsn# to process"},
-  {ARG_INTS, 	"efsn", "0", "last  lev1 fsn# to process."},
-  {ARG_INT, 	"spe", "0", "to activate 1 iteration of the FORTRAN code and AHI low (default: 0 - otherwise: 1)"},
+  {ARG_INTS, 	"efsn", "0", "last  lev1 fsn# to process"},
+  {ARG_INT, 	"cam", "0", "camera selection: 0: both = default, otherwise: 1 or 2"},
+  {ARG_INT, 	"spe", "0", "used to activate only 1 iteration of the FORTRAN code and AHI low for roll analaysis (default=0 normal processing - =1 activate)"},
+  {ARG_INT, 	"cc",  "0", "used to activate center calculation instead of using X0/YO_LF (default=0 no center calculation, =1 calculation)"},
+  {ARG_INT, 	"iter", "2", "to change the number of iterations of the limb.f code (default=2)"},
+  {ARG_INT, 	"src", "0", "0: hmi.lev1 (default), 1: hmi.lev1_nrt  (quality test is different)"},
   {ARG_STRING, 	"comment", " ", "to add a comment in a dataset"},
-  {ARG_INT, 	"debug", "0", "debug level (default: 0)"},
+  {ARG_INT, 	"debug", "0", "debug level (default: 0 no debug info)"},
   {ARG_END}
 
-};
+};  // ADD A SWITCH FOR A DIFFERENT QUALITY KW
 
 void get_sdate(char *sdate)
 {
@@ -66,7 +70,7 @@ void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out,DRMS_Arra
 // Get N records, decide or not to process them
 //************************************************************************
 
-int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int spe, char *dsin, char *comment, int debug, int *status)    
+int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int cc, int spe, int iter, char *dsin, char *comment, int debug, int *status)    
 {
 	static char *log_msg_code="process_n_records";
 	char log_msg[120];
@@ -120,9 +124,6 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
 	}
     
 	unsigned int fsn = 0;
-	char *imgtype;
-    char *hwltnset;
-	int missvals;
 	
     for(r=0; r < ncnt; r++) 
     {
@@ -138,55 +139,19 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
 		}
 		sprintf(log_msg,"FSN:%u processing",fsn);
 		lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, opf);			
+		printf("selection: #%u\n",fsn);
 
-		hwltnset = drms_getkey_string(record_in, "HWLTNSET", &rstatus);
-		if(rstatus) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(HWLTNSET)", log_msg_code, opf);			
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr_t,debug);
-			*status=ERR_DRMS_READ_MISSING_KW;   
-			return(0);   
-		}
-		missvals = drms_getkey_int(record_in, "MISSVALS", &rstatus);
-		if(rstatus) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_int(MISSVALS)", log_msg_code, opf);			
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr_t,debug);
-			*status=ERR_DRMS_READ_MISSING_KW;   
-			return(0);   
-		}
-		imgtype = drms_getkey_string(record_in, "IMG_TYPE", &rstatus);
-		if(rstatus) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(IMG_TYPE)", log_msg_code, opf);			
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr_t,debug);
-			*status=ERR_DRMS_READ_MISSING_KW;   
-			return(ERR_DRMS_READ_MISSING_KW);   
-		}
-
-		sprintf(log_msg," Selection: %s %d %s", hwltnset,missvals,imgtype);
-		lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);			
-		//if (debug) 
-		printf("selection: #%u %s %d %s\n",fsn,hwltnset,missvals,imgtype);
-
-   		if ((strncmp(hwltnset,"CLOSE",5)==0) && (missvals==0) && (strncmp(imgtype,"LIGHT",5)==0)) 
+		if (do_one_limbfit(fsn,record_in,record_out,tmp_dir,opf,cc,spe,iter,dsin,comment,debug,&rstatus))
 		{
-			if (do_one_limbfit(fsn,record_in,record_out,tmp_dir,opf,spe,dsin,comment,debug,&rstatus))
+			if (rstatus < 0 && rstatus > -300)
 			{
-				if (rstatus < 0 && rstatus > -300)
-				{
-					drms_close_records(drs_out, DRMS_INSERT_RECORD);
-					drms_close_records(drs_in, DRMS_FREE_RECORD);
-					lf_logmsg("ERROR", "APP", rstatus, 0, "to be aborted", log_msg_code, opf);			
-					return(rstatus);
-				}
+				drms_close_records(drs_out, DRMS_INSERT_RECORD);
+				drms_close_records(drs_in, DRMS_FREE_RECORD);
+				lf_logmsg("ERROR", "APP", rstatus, 0, "to be aborted", log_msg_code, opf);			
+				return(rstatus);
 			}
 		}
-		else
-		{
-			sprintf(errcode,"%s",PROCSTAT_NOK);
-			if (strncmp(hwltnset,"CLOSE",5)!=0) sprintf(errcode,"%s",PROCSTAT_NO_LF_OPENLOOP); 
-				else if (missvals!=0) sprintf(errcode,"%s",PROCSTAT_NO_LF_MISSVALS);
-					else if (strncmp(imgtype,"LIGHT",5)!=0) sprintf(errcode,"%s",PROCSTAT_NO_LF_DARKIMG);
-			write_mini_output(errcode,record_in,record_out,opf,0,lfr_t,debug);
-		}
+		fflush(opf);
 	}
 	drms_close_records(drs_out, DRMS_INSERT_RECORD);
 	drms_close_records(drs_in, DRMS_FREE_RECORD);
@@ -207,9 +172,13 @@ int DoIt(void)
 
 	CmdParams_t *params = &cmdparams;
 	
-	int  debug = params_get_int (params, "debug");
-	int  spe = params_get_int (params, "spe");
-	char* dsin = params_get_str (params, "dsin");
+	int  debug 	= params_get_int (params, "debug");
+	int  spe 	= params_get_int (params, "spe");
+	int  cc 	= params_get_int (params, "cc");
+	int  iter	= params_get_int (params, "iter");
+	int  cam 	= params_get_int (params, "cam");
+	int  src 	= params_get_int (params, "src");
+	char* dsin 	= params_get_str (params, "dsin");
 	char* dsout = params_get_str (params, "dsout");
 	char* log_dir = params_get_str (params, "logdir");
 	char* tmp_dir = params_get_str (params, "tmpdir");
@@ -223,6 +192,7 @@ int DoIt(void)
 		
 	static char open_dsname[256];
 	char recrange[128];
+	static char qual[15];
 
     if(bfsn == 0 || efsn == 0) 
     {
@@ -234,7 +204,15 @@ int DoIt(void)
 		fprintf(stderr, "bfsn must be <= efsn\n");
 		return(0);
     }
-
+    if(cam < 0 || cam > 2) 
+    {
+		fprintf(stderr, "cam must be equal to 0, 1, or 2\n");
+		return(0);
+    }
+	if(src == 0) 
+		sprintf(qual,"0");
+	else 
+		sprintf(qual,"1073741824"); //= 0x40000000 
 	//**********************************************************************
 	//	LOG FILE: MAKE A GLOBAL LOG FILE FOR THE WHOLE SESSION: 
 	//**********************************************************************
@@ -244,12 +222,11 @@ int DoIt(void)
 
 	FILE *opf;
 	sprintf(flogname, "%slimbfit_%s_%lld_%lld.log",log_dir,sdate,bfsn,efsn);
-    if((opf=fopen(flogname, "w")) == NULL)
-    {
+	if((opf=fopen(flogname, "w")) == NULL)
+	{
 		fprintf(stderr, "**Can't open the log file %s\n", flogname);
 		return(0);
 	}
-
 	lf_logmsg("INFO", "APP", 0, 0, "Begin... ", log_msg_code, opf);
 
 	//------------------------------------------------------
@@ -268,10 +245,15 @@ int DoIt(void)
 		lrec = (frec + numrec)-1;
 		if(lrec > efsn) lrec=efsn;
 		sprintf(recrange, "%lld-%lld", frec, lrec);
-		sprintf(open_dsname, "%s[%s]", dsin, recrange);	
-		sprintf(log_msg,"open %s", open_dsname);
+		if (cam == 1 || cam == 2) 
+			sprintf(open_dsname, "%s[%s][? camera = %d and quality = %s ?]", dsin, recrange,cam,qual);	
+		else			
+			sprintf(open_dsname, "%s[%s][? quality = %s ?]", dsin, recrange,qual);	
+		sprintf(log_msg,"open %s -> %s (logdir: %s, tmpdir: %s, cam: %d, spe: %d, cc: %d, iter: %d, comment: %s , debug: %d)",
+								open_dsname,dsout,log_dir,tmp_dir,cam,spe,cc,iter,comment,debug);
+
 		lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
-		if(process_n_records(open_dsname, dsout, tmp_dir,opf, spe, dsin, comment, debug, &result)) 
+		if(process_n_records(open_dsname, dsout, tmp_dir,opf, cc, spe, iter,dsin, comment, debug, &result)) 
 		{  //do a chunk to get files from the lev0
 			if (result < 0 && result > -300)
 			{

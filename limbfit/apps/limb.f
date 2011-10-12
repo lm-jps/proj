@@ -1,4 +1,8 @@
-c
+c------------------------------------------------------------------------------------------------
+c	#define CODE_NAME 		"limbfit"
+c	#define CODE_VERSION 	"V1.12r0" 
+c	#define CODE_DATE 		"Wed Oct 12 09:01:28 HST 2011" 
+c------------------------------------------------------------------------------------------------
 c Revision 1.0  2009/01/08  17:20:00  Marcelo Emilio
 c changed assumed-size array declaration from "real xxx(1)" to "real xxx(3)"
 c jreg=1024, jang=129,jprf=160, jpt=4000000, ahi=30000.0
@@ -168,12 +172,20 @@ c	call gplot(setn, thet, inte, 1, hc, it)
 
 c Fit sin/cos function (found in "funcs") to intensity(angle)
 	call lfit(thet,inte,sig,setn,cf,3,lista,3,cov,3,chi,funcs,ifail)
-	if(ifail.gt.0) return
+	if(ifail.gt.0)then
+c add by IS Oct5	
+		ifail=20
+		return
+	endif
 c Remove outliers from fit 
 	call fitb(thet,inte,setn,fbrem,chi,sig,cf,nremv)
 c Fit again
 	call lfit(thet,inte,sig,setn,cf,3,lista,3,cov,3,chi,funcs,ifail)
-	if(ifail.gt.0) return
+	if(ifail.gt.0)then
+c add by IS Oct5	
+		ifail=21
+		return
+	endif 
 	crit=(cf(1)*cf(1)+cf(2)*cf(2))/cf(3)/cf(3)
 c Save the center with the best convergence
 c	PRINT*,"scrit,criti, cmx, cmy:",scrit,crit, cmx, cmy	
@@ -211,11 +223,19 @@ c Recompute the coefficients for a center position offset by dx,dy
 	enddo
 	call darr(anls,npts,ain,aout,cmx,cmy,rin,rout,thet,inte,setn)
 	call lfit(thet,inte,sig,setn,cf,3,lista,3,cov,3,chi,funcs,ifail)
-	if(ifail.gt.0) return
+	if(ifail.gt.0)then
+c add by IS Oct5	
+		ifail=22
+		return
+	endif 
 	call fitb(thet,inte,setn,fbrem,chi,sig,cf,nremv)
 	call lfit(thet,inte,sig,setn,cf,3,lista,3,cov,3,chi,funcs,ifail)
 c	PRINT*, "ITR, CHI, NREMV", itr, chi, nremv	
-	if(ifail.gt.0) return
+	if(ifail.gt.0)then
+c add by IS Oct5	
+		ifail=23
+		return
+	endif
 	
 c Compute the factor with two sets of coefficients to scale the step size
 	xscal=cfo(1)/(cf(1)-cfo(1))
@@ -327,7 +347,9 @@ c  this added to preshift limb distortion to get cleaner mean LDF (IS: maximum d
 	   r = r - b0(ind)
 c  end of radius correction
 	   ind=int((r-rmin)/dr+2.0)
-	   if(ind.lt.1) goto 80
+c	   if(ind.lt.1) goto 80
+c changed w/Jeff Oct 6,2011
+	   if(ind.lt.1.or.ind.gt.nb) goto 80
 	   bin(ind)=bin(ind)+a
 	   pix(ind)=pix(ind)+1.0
 80      enddo 
@@ -342,8 +364,15 @@ c Make the Chebyschev fit
 	rminp=rmin-dr
 	rmaxp=rmax+dr
 	spflag=0
+c	print*,"before: ",spflag,nb,rad,bin,cp,cpp
+c	print*,rminp," ",rmaxp," ",dr,c,nc
 	call chebft(rminp,rmaxp,c,nc,ldf,ifail)
-	if(ifail.gt.0) return
+c	print*,"after: ",spflag,nb,rad,bin,cp,cpp
+	if(ifail.gt.0)then
+c add by IS Oct5	
+		ifail=24
+		return
+	endif
 	call chder(rminp,rmaxp,c,cp,nc)
 	call chder(rminp,rmaxp,cp,cpp,nc)
 
@@ -357,7 +386,11 @@ c Do a least-squares calculation
 	   r=((an(1,i)-cmx)**2+(an(2,i)-cmy)**2)**0.5
 	   lsq=lsq+(chebev(rminp,rmaxp,c,nc,r,ifail)-a)**2
 90      enddo
-	if(ifail.gt.0) return
+	if(ifail.gt.0) then
+c add by IS Oct5	
+		ifail=25
+		return
+	endif
 	if(ln.eq.0.0)then
 c This should not happen with normal data.
 	  ifail=2
@@ -387,7 +420,11 @@ c obviously large and "ifail"=3.
 	     an(3,i)=flag
 	   endif
 100     enddo
-	if(ifail.gt.0) return 
+	if(ifail.gt.0) then
+c add by IS Oct5	
+		ifail=26
+		return 
+	endif
 	ncut=ncut+nbad
 c This criteria works ok for reasonable data.
 	if((wbad.eq.0).and.(nbad.eq.0)) goto 110 	! continue on
@@ -475,6 +512,7 @@ c	correct radius bin
 c	end correction
 	   D0=chebev(rminp,rmaxp,c,nc,R,ifail)
 	   if(ifail.eq.11) then
+c	    print*,"ifail=11!"
 	   	ifail=0
 	    goto 120
 	   endif
@@ -487,7 +525,11 @@ c	end correction
 	   expn(5,ind)=expn(5,ind)+D0*D2+D1**2
 	   expn(6,ind)=expn(6,ind)+D0**2
 120	enddo
-	if(ifail.gt.0) return
+	if(ifail.gt.0)then
+c add by IS Oct5	
+		ifail=27
+		return
+	endif
 
 c Determine alpha (the LDF scale factor) and beta (the offset)
 	do i=1,nreg
@@ -844,8 +886,11 @@ C FUNCTION FOR LFIT
       ENDIF
 
       CALL GAUSSJ(COVAR,MFIT,NCVM,BETA,1,1,ifail)
-      if(ifail.gt.0) return
-
+      if(ifail.gt.0)  then
+c add by IS Oct5	
+		ifail=30
+		return
+	  endif
       DO 22 J=1,MFIT
         A(LISTA(J))=BETA(J)
 22    CONTINUE
@@ -950,7 +995,12 @@ c Compute coefficients c(1:n)
 	   y=cos(pi*(k-0.5)/n)
 	   f(k)=func(y*bma+bpa,ifail)
 	enddo
-	if(ifail.gt.0) return
+	if(ifail.gt.0) then
+c add by IS Oct5	
+		ifail=31
+		print*,"ifail=31"
+		return
+	endif
 	fac=2.0/n
 	do j=1,n
 	   sum=0.D0

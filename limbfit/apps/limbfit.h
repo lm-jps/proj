@@ -1,4 +1,4 @@
-/* I.Scholl "Mon Oct 11 14:52:17 PDT 2010" 
+/* I.Scholl "Wed Oct 12 09:01:28 HST 2011" 
 */
 
 #include <string.h>
@@ -18,7 +18,6 @@
 #include <time.h>
 
 #include "fitsio.h"
-#include "nrutil.h"
 
 #include <jsoc_main.h>
 
@@ -26,8 +25,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V1.9r0" 
-#define CODE_DATE 		"Mon Feb 28 11:45:21 PST 2011" 
+#define CODE_VERSION 	"V1.12r0" 
+#define CODE_DATE 		"Wed Oct 12 09:01:28 HST 2011" 
 #define LOGMSG1			"LIMBFIT"
 #define	JSD_NAME		"su_scholl.hmi_lf.jsd"
 
@@ -103,6 +102,7 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define NB_ITER 2							//
 #define BAD_PIXEL_VALUE -2147483648.0
 #define	SKIPGC 1							// skip the guess estimation, use X0/YO_LF
+//#define	IFAC 0								// skip the center calculation, use X0/YO_LF
 #define	AHI 70000.0							// 
 
 // alternate parameters for low LDF threshold - needed for roll analysis
@@ -117,7 +117,9 @@ typedef struct {
 	float			*data;			// image to analyze
 	int				img_sz0;
 	int				img_sz1;
+	int				cc;
 	int				spe;
+	int				iter;
 	double			ix;
 	double			iy;
 	double			ir;
@@ -138,7 +140,7 @@ typedef struct {		// output files content
 		
 	// result data
 	float*		fits_ldfs_data; 		// main table / segment
-	float*		fits_fulldfs; 			// extension #2
+	//float*		fits_fulldfs; 			// extension #2
 	float*		fits_alpha_beta;  	 	// extension #0
 	double*		fits_params;   			// extension #1
 
@@ -164,8 +166,8 @@ typedef struct {		// output files content
 	double		inc_y;
 	int			nfitpnts;
 	int			nb_iter;
+	int			cc;
 	double		ahi;
-	int			skipgc;
 	int 		nb_fbins;
 	
 	// extra for error management
@@ -188,9 +190,6 @@ int limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,FILE *opf,int debug);
 void limb_(float *anls, long *jk, float *cmx, float *cmy, float *r, int *nitr, int *ncut, int *nang, 
 			int *nprf, float* rprf, float* lprf, int *nreg, float *rsi, float *rso, float *dx, float *dy, 
 			int *jreg, int *jang, int *jprf, float* alph, float* beta, int *ifail, float* b0, int *centyp, float *lahi); 
-int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int spe, char *dsin, char *comment, int debug, int *status);
-int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, char *tmp_dir, FILE *opf, int spe, char *dsin, char *comment, int debug, int *status);
+int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int cc, int spe, int iter, char *dsin, char *comment, int debug, int *status);
+int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, char *tmp_dir, FILE *opf, int cc, int spe, int iter, char *dsin, char *comment, int debug, int *status);
 int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int tbf, LIMBFIT_OUTPUT *lfr, int debug);
-int mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col, long npixels, float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf, int debug);
-int sort(unsigned long n, float *arr);
-int indexx(unsigned long n, float *arr, unsigned long *indx);
