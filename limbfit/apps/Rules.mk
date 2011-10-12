@@ -26,8 +26,8 @@ S_$(d)			:= $(notdir $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d)))
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/include 
 
-$(MODEXE_USEF_$(d)):		LL_TGT := $(LL_TGT) -L/home/jsoc/linux_x86_64/ -lgsl -lgslcblas
-$(MODEXE_USEF_SOCK_$(d)):	LL_TGT := $(LL_TGT) -L/home/jsoc/linux_x86_64/ -lgsl -lgslcblas
+$(MODEXE_USEF_$(d)):		LL_TGT := $(LL_TGT) -L/home/jsoc/lib/linux_x86_64/ -lgsl -lgslcblas
+$(MODEXE_USEF_SOCK_$(d)):	LL_TGT := $(LL_TGT) -L/home/jsoc/lib/linux_x86_64/ -lgsl -lgslcblas
 
 $(MODEXE_USEF_$(d)):		$(SUPPOBJ_$(d))
 $(MODEXE_USEF_SOCK_$(d)):	$(SUPPOBJ_$(d))
