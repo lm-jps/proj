@@ -8,10 +8,10 @@
 
 #define NBINS 1048576
 static int hist[NBINS];
-/*
+
 int image_magrotate(void *, int, int, int, float, float, float, float,
                     void **, int *, int *, int, int);
-*/
+
 ModuleArgs_t module_args[] =
 {
   {ARG_STRING, "dsinp", NOT_SPECIFIED, "Input series query"},
