@@ -229,7 +229,7 @@
 
 /* strings for version info. */
 char *module_name = "vfisv";        // may be unchanged
-char *version_id  = "2011 Oct. 10"; // (number or) strings to specify version of code. Typically date of editing. Given by hand....hmmm
+char *version_id  = "2011 Oct. 11"; // (number or) strings to specify version of code. Typically date of editing. Given by hand....hmmm
 
 /* RCE Apr 21, 2010: Added a "double [][]" in definition of invert_ to pass
 the filter profiles computed by Sebastien*/
@@ -460,7 +460,7 @@ int DoIt (void)
                           0.0,0.0,0.0};
   double bscaleinv[25] = {0.01,0.01,0.01,0.0001,0.01,0.01,
                           50.0,0.1,0.1,0.001,
-                          0.001,0.001,0.001,50.0,0.01,    // std.
+                          0.01,0.01,0.01,50.0,0.01,    // std.
                           0.0001,0.0001,0.0001,0.0001, // cor. coef.
                           0.0001,0.0001,0.01,          // cor. coef. and Chi-sq
                           1.0,1.0,1.0};                // integer arrays for convflag, qual_map and confid_map
@@ -2150,9 +2150,10 @@ This is done inside the FORTRAN code, in invert.f90
 //      err[0] = err[0] / 1500.0;    // field strength in gauss,     ERR(1) in Fortran
 //      err[1] = err[1] / 90.0;      // inclination angle in degree, ERR(2) in Fortran 
 //      err[2] = err[2] / 90.0;      // azithum angle in degree,     ERR(3) in Fortran
-      err[0] = err[0] / 38.729833462; // field strength in gauss,     ERR(1) in Fortran
-      err[1] = err[1] /  9.486832981; // inclination angle in degree, ERR(2) in Fortran 
-      err[2] = err[2] /  9.486832981; // azithum angle in degree,     ERR(3) in Fortran
+
+//      err[0] = err[0] / 38.729833462; // field strength in gauss,     ERR(1) in Fortran
+//      err[1] = err[1] /  9.486832981; // inclination angle in degree, ERR(2) in Fortran 
+//      err[2] = err[2] /  9.486832981; // azithum angle in degree,     ERR(3) in Fortran
 
 /*
   here do thing in accordance with the value of iconverge_flag.
@@ -3081,7 +3082,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.14 2011/10/10 23:39:31 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.15 2011/10/12 18:48:24 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
