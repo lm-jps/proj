@@ -20,5 +20,5 @@
 ############################################################
 
 
-transactions earlier than XID | $kRepDir/manageslony/slon_email_alert $kServerCfg | true      | 1
+transactions earlier than XID | $kRepDir/manageslony/slon_email_alert $kServerCfg | true      | 0
 Cannot write to archive file |  $kRepDir/manageslony/sl_restart_slon_daemons.sh $kServerCfg | false | 0
