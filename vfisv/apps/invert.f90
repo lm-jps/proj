@@ -49,6 +49,18 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   !
   ! By RCE, May 17, 2011: Normalization of filters is now done in the wrapper. This way, when we change parameters such as the wavelength range
   ! or the wavelength sampling, the normalization factor is computed for the correct parameters. 
+  ! By RCE May 24 2011: Defined the CHANGEVAR_FLAG, that decides whether the variable changes
+  ! for the inversion become in effect or not. There are IF statements in invert.f90 and the
+  ! synthesis that check the flag before doing variable conversion.
+  !
+  ! By RCE, July 2011: I added a module to the code that performs variable changes/combinations of the model atmosphere.
+  ! Instead of inverting for eta0 and DoppWidth, now we invert for eta0 and sqrt(eta0)*DoppWidth.
+  ! Instead of inverting B0 and B1 (source function and gradient) we invert B0 and B0+B1.
+  ! The routines in the CHANGE_VAR module are called from invert at two different points. First after computing the derivatives. 
+  ! The variable change is done for the derivatives. Then the gradient and Hessian are computed in order to obtain the perturbation
+  ! to the model. This perturbation is given in the new variables, so we call a routine that undoes the change, so that we can
+  ! add the perturbation to the model in order to move on to the next iteration.
+  ! CHANGEVAR_FLAG is a flag that allows us to decide whether we want the inversion code to work with the changes or not.
 
   USE FILT_PARAM
   USE CONS_PARAM
@@ -58,6 +70,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   USE INV_UTILS
   USE FORWARD
   USE RAN_MOD
+  USE CHANGE_VAR
   IMPLICIT NONE
   !---------------------------------------------------------------------
   REAL(DP), INTENT(IN),  DIMENSION(NBINS*4)          :: OBS_LONG
@@ -79,7 +92,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   REAL(DP),        DIMENSION(10,ITER)   :: MODEL
   INTEGER                               :: I, K, M, FLAG, WRONG, LASTGOODITER, BESTITER, NPOINTS
   LOGICAL                               :: DERIVATIVE
-  INTEGER                               :: CONV_FLAG, NAN_FLAG, CONVERGENCE_FLAG, EPSILON_FLAG, NRESET
+  INTEGER                               :: CONV_FLAG, NAN_FLAG, CONVERGENCE_FLAG, EPSILON_FLAG, NRESET, CHANGEVAR_FLAG
   !---------------------------------------------------------------------
   REAL(DP),     DIMENSION(NBINS,4)      :: SYN, LASTGOODSYN, BESTSYN
   REAL(DP),     DIMENSION(10,NBINS,4)   :: DSYN, LASTGOODDSYN
@@ -90,25 +103,30 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   CALL SORT_OBS(SCAT_LONG,SCAT)
 	
 
-  ! By RCE April 2011: Select the region of the spectrum of the filters that we are going to use in the 
-  ! synthesis and the region that we are going to integrate assuming that they're in the continuum of the
-  ! spectral line. 
+  ! By RCE April 2011: Select the region of the spectrum of the filters that we are 
+  ! going to use in the synthesis and the region that we are going to integrate 
+  ! assuming that they're in the continuum of the spectral line. 
   
-  ! Difference between NUMW wavelength points for synthesis and NUMW_LONG points in which filters were computed.
-  ! We divide by 2 to get the number of wavelength points at each side of the "synthesis range"
+  ! Difference between NUMW wavelength points for synthesis and NUMW_LONG points in 
+  ! which filters were computed.
+  ! We divide by 2 to get the number of wavelength points at each side of the
+  ! "synthesis range"
   NPOINTS = (NUMW_LONG - NUMW)/2  
   
   ! Select region of filters corresponding to forward modeling wavelength region
   FILTERS(:,:) = FILTERS_LONG(NPOINTS+1:NUMW+NPOINTS,:) 
-  ! Integrate the filters in the remaining regions at each side of the forward modeling region.
+  ! Integrate the filters in the remaining regions at each side of the forward
+  ! modeling region.
   DO I = 1, NBINS 
-     INTEG_FILTERS(I) = SUM(FILTERS_LONG(1:NPOINTS,I)) + SUM(FILTERS_LONG(NUMW_LONG-NPOINTS+1:,I))
+     INTEG_FILTERS(I) = SUM(FILTERS_LONG(1:NPOINTS,I)) +  &
+          SUM(FILTERS_LONG(NUMW_LONG-NPOINTS+1:,I))
   ENDDO
-  ! Making sure we add no filter integral if we're doing the forward modeling in the full wavelength range.
+  ! Making sure we add no filter integral if we're doing the forward modeling in the
+  ! full wavelength range.
   IF (NPOINTS .EQ. 0) THEN 
      INTEG_FILTERS(:) = 0D0
   ENDIF
-
+  
 
   !By RCE, Apr 23, 2010: Reversing the wavelength order of the observations 
   ! so that they are in increasing wavelength order
@@ -121,17 +139,20 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
 
   OBS(:,:) = OBS_REV(:,:)
 
-  ! By RCE: CONV_FLAG checks for for convergence of SVD and NAN_FLAG checks for NaNs 
-  ! in chisqr. 
+  ! By RCE: 
+  ! CONV_FLAG checks for for convergence of SVD.
+  ! NAN_FLAG checks for NaNs in chisqr. 
   ! EPSILON_FLAG checks the convergence rate (how fast CHI2 diminishes). If it's not 
-  ! fast enough (NEWCHI2-OLDCHI2 LT epsilon), the iterative process stops.
+  !   fast enough (NEWCHI2-OLDCHI2 LT epsilon), the iterative process stops.
   ! CONVERGENCE_FLAG is sent out to the wrapper with different values depending 
-  ! on whether the algorithm converges or not and why.
+  !   on whether the algorithm converges or not and why.
+  ! CHANGEVAR_FLAG decides whether variable change for inversion is implemented or not.
   
   CONV_FLAG = 0
   NAN_FLAG = 0
   CONVERGENCE_FLAG = 0
   EPSILON_FLAG = 0
+  CHANGEVAR_FLAG = 0             !!NEW!!
   
   
   ICONT=MAXVAL(OBS(:,1))
@@ -172,8 +193,9 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
         BESTMODEL(10)=1D0
      ENDIF
 
-  ! By RCE: Default values for lambda and chi2 so that I can find out when they are not being updated.
 
+     ! By RCE: Default values for lambda and chi2 so that I can find out when they 
+     ! are not being updated.
      LAMBDA(:) = 33.3333
      CHI2(:) = 33.3333333
      LASTGOODCHI2=1E24
@@ -234,6 +256,17 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
            ! Set to Zero unneeded derivatives
            CALL ZERO_DSYN(DSYN)
            !
+           
+           !--------------------------------------------
+           ! Calling change of variables for derivatives
+           !--------------------------------------------
+           IF (CHANGEVAR_FLAG .EQ. 1) THEN
+              CALL DO_CHANGE_DER(MODEL(:,I), DSYN)     !!NEW!!
+           ENDIF
+           ! From now on, the derivatives correspond to the changed variable ones.
+           !---------------------------------
+
+
            !CHECKING THE RATE OF CONVERGENCE OF CHI2
            IF ((LASTGOODCHI2 - NEWCHI2) .LT. (GOODFIT*ICONT*GOODFIT*ICONT)) EPSILON_FLAG = 1
            !
@@ -266,6 +299,9 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
            FLAG=FLAG+1
         ENDIF
 
+        ! The divergence and the Hessian are computed with the changed variables (in the
+        ! derivatives).
+
         !---------------------------
         ! Getting Divergence of CHI2
         !---------------------------
@@ -289,6 +325,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
         !---------------------------------------------------
         ! Checking for NaN in DMODEL
         !---------------------------------------------------
+        
         DO M=1,10
            IF (DMODEL(M).EQ.DMODEL(M)+1D0) DMODEL(M)=0D0
            IF (ABS(DMODEL(M)).GT.1E10) THEN 
@@ -299,24 +336,50 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
         !-----------------------------------------
         ! Normalizing, trimming and tunning DMODEL
         !-----------------------------------------
+        !
+        ! Undoing variable change to obtain the perturbations to the original model
+        ! parameters. Overwriting DMODEL!
+        !
+        IF (CHANGEVAR_FLAG .EQ. 1) THEN
+           CALL UNDO_CHANGE_DMODEL(MODEL(:,I),DMODEL)    !!NEW!!
+        ENDIF
+        !-------------------------------------
         CALL NORMALIZE_DMODEL(DMODEL,ICONT)
         CALL CUT_DMODEL(DMODEL,ICONT)
         MODEL(:,I+1)=LASTGOODMODEL+DMODEL
+        !
         CALL FINE_TUNE_MODEL(MODEL(:,I+1),ICONT)
+        !--------------------------------------   
         ! New Iteration
         I=I+1
+        !
      ENDIF ! Checking for CONV_FLAG for SVD convergence
      END IF ! NaN detected in chi2 routine
 
      ENDDO ! Main loop
+
 
      !---------------
      ! Getting Errors
      !---------------
 
      IF ((NAN_FLAG .EQ. 0) .AND. (CONV_FLAG .EQ. 0)) THEN
+       
+        ! We compute the derivatives with the best model parameters (without doing the
+        ! change of variable afterwards), and we compute the Hessiand and the errors from 
+        ! there.
+        
+        DERIVATIVE = .TRUE.
+        CALL SYNTHESIS(BESTMODEL,SCAT,DERIVATIVE,SYN,LASTGOODDSYN, FILTERS, INTEG_FILTERS)
+        !
+	! By RCE, Sept. 2011: Normalizing the derivatives: this wasn't done before, and that
+	! made errors a couple of orders of magnitude larger than they should be.
+	!
+        CALL NORMALIZE_DSYN(LASTGOODDSYN,ICONT)
+        !
 	! Compute non-modified Hessian (lambda = 0)
-        CALL GET_HESS(LASTGOODDSYN,0D0,WEIGHTS)
+        !
+        Call GET_HESS(LASTGOODDSYN,0D0,WEIGHTS)
         ! This Hessian is constructed with normalized derivatives
         CALL GET_ERR(BESTCHI2,ICONT,SIGMA)
         ERR(1)=SIGMA(6)  ! Bfield
@@ -336,8 +399,9 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
         !--------------
         RES=BESTMODEL
         
-        ! By RCE, Apr 23, 2010: Juanma's correction to azimuth (which is rotated by 90 degrees with
-        ! respect to the convention that people want.
+        ! By RCE, Apr 23, 2010: Juanma's correction to azimuth (which is rotated by 
+        ! 90 degrees with respect to the convention that people want).
+
         RES(3) = RES(3) + 90D0
         IF (RES(3) .GT. 180D0) RES(3) = RES(3) - 180D0
         
@@ -367,4 +431,4 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
 
 
 END SUBROUTINE INVERT
-!CVSVERSIONINFO "$Id: invert.f90,v 1.5 2011/05/31 22:24:33 keiji Exp $"
+!CVSVERSIONINFO "$Id: invert.f90,v 1.6 2011/10/14 17:22:41 keiji Exp $"

@@ -97,7 +97,7 @@ CONTAINS
   !------------------------------------------------------
   !By RCE, May 20, 2011: Defines Normalization vector for the derivatives
   !
-  PURE SUBROUTINE NORMALIZATION(NORM, ICONT)
+  PURE SUBROUTINE NORMALIZATION(NORM, ICONT)    !!NEW!!
       
     USE CONS_PARAM
 
@@ -113,7 +113,7 @@ CONTAINS
   !
   !By RCE May 20 2011: We define the lower and upper limits for the model variables
   ! 
-  PURE SUBROUTINE LIMITS(LOWER, UPPER, ICONT)
+  PURE SUBROUTINE LIMITS(LOWER, UPPER, ICONT)     !!NEW!!
   !
     USE CONS_PARAM
 
@@ -128,7 +128,7 @@ CONTAINS
     ! source function gradient, filling factor
 
     LOWER = (/1D0, 0D0 , 0D0 , 1D-4,5D0,5D0,-7D5, 1.5E-1*ICONT, 1.5E-1*ICONT, 0D0/)
-    UPPER  = (/1D2, 180D0,180D0,5D0, 5D1,5D3, 7D5, 1.5D0*ICONT,  1.5D0*ICONT,  1D0/)
+    UPPER  = (/1D3, 180D0,180D0,5D0, 5D2,5D3, 7D5, 1.2D0*ICONT,  1.2D0*ICONT,  1D0/)
  
   END SUBROUTINE LIMITS
   !
@@ -260,7 +260,7 @@ CONTAINS
   !
   !--------------------------------------------------------
   !
-  PURE SUBROUTINE FINE_TUNE_MODEL(MODEL,ICONT)
+   SUBROUTINE FINE_TUNE_MODEL(MODEL,ICONT)
     USE INV_PARAM
     USE CONS_PARAM
     IMPLICIT NONE
@@ -270,15 +270,22 @@ CONTAINS
     INTEGER                                   :: REV, I
 
     ! Call routine that sets lower and upper limits for model parameters
-    CALL LIMITS(LOWER, UPPER, ICONT)
+    CALL LIMITS(LOWER, UPPER, ICONT)        !!NEW!!
 
     ! Check all the limits except the angles and non-free parameters
     DO I = 1, 10
       IF ((FREE(I).EQ..TRUE.) .AND. (I .NE. 2) .AND. (I .NE. 3)) THEN
-        IF (MODEL(I) .LT. LOWER(I)) MODEL(I) = LOWER(I)
-        IF (MODEL(I) .GT. UPPER(I)) MODEL(I) = UPPER(I)
+        IF (MODEL(I) .LT. LOWER(I)) MODEL(I) = LOWER(I)        !!NEW!!
+        IF (MODEL(I) .GT. UPPER(I)) MODEL(I) = UPPER(I)        !!NEW!!
       ENDIF
     ENDDO
+
+   ! Additional constraint on the source function and its gradient. This
+   ! is to ensure that the sum of both quantities stays close to the  
+   ! value of the continuum intensity.
+
+IF ((MODEL(8)+MODEL(9)) .LT. 0.8 * ICONT) MODEL(8) = 0.8*ICONT - MODEL(9)        !!NEW!!
+IF ((MODEL(8)+MODEL(9)) .GT. 1.2*ICONT) MODEL(8) = 1.2*ICONT-MODEL(9)            !!NEW!!
 
     ! Check the angles independently so that they vary between 0 and 180.
  
@@ -460,6 +467,7 @@ CONTAINS
     INTEGER                                                :: I, J, INFO, NFREE, CONV_FLAG
     !
 
+    ! By RCE: call normalization vector to re-normalize derivatives in Hessian.
     CALL NORMALIZATION(NORM, ICONT)
  
     ! Use LAPACK for calculating SVD of the HESSIAN
@@ -483,6 +491,7 @@ CONTAINS
     !          COV(I,J)=2D0*COV(I,J)*(NORM(FREELOC(I))*NORM(FREELOC(J)))
 
           COV(I,J)=CHI2/DBLE(NUMFREE_DEG)*SUM(U(I,:)*U(J,:)/W(:))
+    ! Re-normalizing the derivatives:
           COV(I,J)=COV(I,J)*(NORM(FREELOC(I))*NORM(FREELOC(J)))
        ENDDO
     ENDDO
@@ -517,4 +526,4 @@ CONTAINS
   !-------------------------------------------
   
 END MODULE INV_UTILS
-!CVSVERSIONINFO "$Id: inv_utils.f90,v 1.3 2011/05/31 22:24:49 keiji Exp $"
+!CVSVERSIONINFO "$Id: inv_utils.f90,v 1.4 2011/10/14 17:22:55 keiji Exp $"

@@ -11,4 +11,4 @@ MODULE LINE_PARAM
   REAL(DP),         ALLOCATABLE              :: WAVE(:)
   !
 END MODULE LINE_PARAM
-!CVSVERSIONINFO "$Id: line_param.f90,v 1.2 2011/05/31 22:24:59 keiji Exp $"
+!CVSVERSIONINFO "$Id: line_param.f90,v 1.3 2011/10/14 17:23:06 keiji Exp $"

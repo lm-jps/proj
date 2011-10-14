@@ -137,8 +137,12 @@
  *     V) June 6
  *        (1) Add one choice to host multiple HARP maps for one T_REC.
  *            This choice be controlled with MULTHARP. 
- *     W) July 15
+ *     W) July 15 -- Oct 13
  *        (1) Add lines to make HARP box wider, and a few clean-up
+ *        (2) A few minor tweaks to process a bit wider box than HARP-defined one
+ *        (3) A part calculating filter profile is more flexible and now does not assume the input must be of 4k by 4k.
+ *     V) 2011 Oct 14
+ *        (1) Modified to host RCE's recent efforts
  *
  * ------------------------------------------------------------------------------------------------------ */
 
@@ -229,7 +233,7 @@
 
 /* strings for version info. */
 char *module_name = "vfisv";        // may be unchanged
-char *version_id  = "2011 Oct. 11"; // (number or) strings to specify version of code. Typically date of editing. Given by hand....hmmm
+char *version_id  = "2011 Oct.14"; // (number or) strings to specify version of code. Typically date of editing. Given by hand....hmmm
 
 /* RCE Apr 21, 2010: Added a "double [][]" in definition of invert_ to pass
 the filter profiles computed by Sebastien*/
@@ -427,7 +431,8 @@ int DoIt (void)
 
 /* important variables for inversions */
   int list_free_params[10]={1,1,1,0,1,1,1,1,1,0};
-  double guess[10]= {15.0,90.0,45.0,0.5,40.0,150.0,0.0,0.4*6e3,0.6*6e3,1.0};
+//  double guess[10]= {15.0,90.0,45.0,0.5,40.0,150.0,0.0,0.4*6e3,0.6*6e3,1.0};
+  double guess[10]= {15.0,90.0,45.0,0.5,50.0,150.0,0.0,0.4*6e3,0.6*6e3,1.0};
   int keyfreep;
   keyfreep = 0x000003be; /* 1110111110=958=3BE*/
 
@@ -484,14 +489,10 @@ int DoIt (void)
   int iquality;
 #if RECTANGL == 1 || HARPATCH == 1
 /* clipping cropping, address start (0,0) at the left bottom corner of CCD */
-  int xleftbot = 1303; // for test, by K.H.
-  int yleftbot = 2327;
-  int xwidth   =  723;
-  int yheight  =  404;
-//  int xleftbot = 1932; // RCE's choice
-//  int yleftbot = 1466;
-//  int xwidth   = 1;
-//  int yheight  = 1;
+  int xleftbot = 1785+143;
+  int yleftbot = 1310+161;
+  int xwidth   = 3; //300;
+  int yheight  = 3; //300;
 #endif
 /* MPI variables */
   MPI_Status mpistat;
@@ -644,7 +645,7 @@ int DoIt (void)
 #endif /* end if MASKPTCH is 1 */
 
 /* If input Mask map (by HARP or else) does not have pixel size of 4k x 4k,
- * some part must be different from full-disk masking data.
+ * some variable must be modified.
  * Here four variables, xleftbot, yleftbot, xwidth and ywidth,
  * will be modified in accordance with the keywords info. of HARP data */
 #if HARPATCH == 1 && MULTHARP != 1
@@ -1931,9 +1932,7 @@ printf("We should be running initialize_vfisv_filter\n");
 /* By RCE & Borrero */
 /* Changed index of list_free_params to 3 (instead of 4) to refer to Damping*/
   if  (list_free_params[3] == 0) voigt_init_();
-//  if  (list_free_params[3] == 0.0) voigt_init_(); // .... OK???
   for (n=0; n< nvar; n++) scat[n]=0.0;
-//  for (n=0; n< nvar; n++) scat[n]=0;
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) printf("\n----------- inversion initializations done ------------ \n");
@@ -3082,7 +3081,7 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.15 2011/10/12 18:48:24 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.16 2011/10/14 17:27:21 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
@@ -3646,27 +3645,30 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- end of this file ----------------------------- */
 /* --------------------------------------------
-: voigt.f,v 1.3 2011/05/31 22:23:47 keiji Exp 
-: cons_param.f90,v 1.2 2011/05/31 22:23:54 keiji Exp 
-: filt_init.f90,v 1.3 2011/05/31 22:24:00 keiji Exp 
-: filt_param.f90,v 1.3 2011/05/31 22:24:06 keiji Exp 
-: forward.f90,v 1.3 2011/05/31 22:24:12 keiji Exp 
-: free_init.f90,v 1.2 2011/05/31 22:24:18 keiji Exp 
-: free_memory.f90,v 1.2 2011/05/31 22:24:23 keiji Exp 
-: invert.f90,v 1.5 2011/05/31 22:24:33 keiji Exp 
-: inv_init.f90,v 1.2 2011/05/31 22:24:38 keiji Exp 
-: inv_param.f90,v 1.2 2011/05/31 22:24:44 keiji Exp 
-: inv_utils.f90,v 1.3 2011/05/31 22:24:49 keiji Exp 
-: line_init.f90,v 1.2 2011/05/31 22:24:54 keiji Exp 
-: line_param.f90,v 1.2 2011/05/31 22:24:59 keiji Exp 
-: ran_mod.f90,v 1.2 2011/05/31 22:25:04 keiji Exp 
-: svbksb.f90,v 1.2 2011/05/31 22:25:09 keiji Exp 
-: svdcmp.f90,v 1.2 2011/05/31 22:25:14 keiji Exp 
-: svd_init.f90,v 1.2 2011/05/31 22:25:19 keiji Exp 
-: svd_param.f90,v 1.2 2011/05/31 22:25:25 keiji Exp 
-: voigt_data.f90,v 1.2 2011/05/31 22:25:31 keiji Exp 
-: voigt_init.f90,v 1.2 2011/05/31 22:25:36 keiji Exp 
-: voigt_taylor.f90,v 1.3 2011/05/31 22:25:47 keiji Exp 
-: wave_init.f90,v 1.2 2011/05/31 22:25:52 keiji Exp 
-: wfa_guess.f90,v 1.2 2011/05/31 22:25:57 keiji Exp 
+ -------------------------------------------- */
+/* --------------------------------------------
+: voigt.f,v 1.4 2011/10/14 17:21:58 keiji Exp 
+: change_var.f90,v 1.1 2011/10/14 17:24:47 keiji Exp 
+: cons_param.f90,v 1.3 2011/10/14 17:22:09 keiji Exp 
+: filt_init.f90,v 1.4 2011/10/14 17:22:14 keiji Exp 
+: filt_param.f90,v 1.4 2011/10/14 17:22:19 keiji Exp 
+: forward.f90,v 1.4 2011/10/14 17:22:26 keiji Exp 
+: free_init.f90,v 1.3 2011/10/14 17:22:31 keiji Exp 
+: free_memory.f90,v 1.3 2011/10/14 17:22:36 keiji Exp 
+: invert.f90,v 1.6 2011/10/14 17:22:41 keiji Exp 
+: inv_init.f90,v 1.3 2011/10/14 17:22:46 keiji Exp 
+: inv_param.f90,v 1.3 2011/10/14 17:22:51 keiji Exp 
+: inv_utils.f90,v 1.4 2011/10/14 17:22:55 keiji Exp 
+: line_init.f90,v 1.3 2011/10/14 17:23:01 keiji Exp 
+: line_param.f90,v 1.3 2011/10/14 17:23:06 keiji Exp 
+: ran_mod.f90,v 1.3 2011/10/14 17:23:11 keiji Exp 
+: svbksb.f90,v 1.3 2011/10/14 17:23:16 keiji Exp 
+: svdcmp.f90,v 1.3 2011/10/14 17:23:21 keiji Exp 
+: svd_init.f90,v 1.3 2011/10/14 17:23:27 keiji Exp 
+: svd_param.f90,v 1.3 2011/10/14 17:23:32 keiji Exp 
+: voigt_data.f90,v 1.3 2011/10/14 17:23:36 keiji Exp 
+: voigt_init.f90,v 1.3 2011/10/14 17:23:41 keiji Exp 
+: voigt_taylor.f90,v 1.4 2011/10/14 17:23:46 keiji Exp 
+: wave_init.f90,v 1.3 2011/10/14 17:23:51 keiji Exp 
+: wfa_guess.f90,v 1.3 2011/10/14 17:23:56 keiji Exp 
  -------------------------------------------- */

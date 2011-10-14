@@ -19,4 +19,4 @@ SUBROUTINE SVD_INIT
   !
 END SUBROUTINE SVD_INIT
   
-!CVSVERSIONINFO "$Id: svd_init.f90,v 1.2 2011/05/31 22:25:19 keiji Exp $"
+!CVSVERSIONINFO "$Id: svd_init.f90,v 1.3 2011/10/14 17:23:27 keiji Exp $"

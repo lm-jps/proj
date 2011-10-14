@@ -18,6 +18,7 @@ MODULE FORWARD
   ! By RCE, April 2011: Adding the integral of the filter profiles times the continuum
   ! (S0+S1) to Stokes I, for the outer wavelength range where the forward modeling is not done.
 
+
 CONTAINS
   !!
   !! SUBROUTINE SYNTHESIS
@@ -26,16 +27,19 @@ CONTAINS
     USE FILT_PARAM
     USE LINE_PARAM
     USE CONS_PARAM
+    USE CHANGE_VAR
+
     IMPLICIT NONE
-    REAL(DP), INTENT(IN),  DIMENSION(10)          :: MODEL
+    REAL(DP),              DIMENSION(10)          :: MODEL
     REAL(DP), INTENT(IN),  DIMENSION(NBINS,4)     :: SCAT
-    REAL(DP), INTENT(IN),  DIMENSION(NUMW, NBINS)  :: FILTERS
+    REAL(DP), INTENT(IN),  DIMENSION(NUMW, NBINS) :: FILTERS
     REAL(DP), INTENT(IN),  DIMENSION(NBINS)       :: INTEG_FILTERS
     LOGICAL,  INTENT(IN)                          :: DERIVATIVE
     REAL(DP), INTENT(OUT),  DIMENSION(NBINS,4)    :: SYN
     REAL(DP), INTENT(OUT),  DIMENSION(10,NBINS,4) :: DSYN
     REAL(DP),               DIMENSION(NBINS,4)    :: SYN_MAG
     REAL(DP),               DIMENSION(9,NBINS,4)  :: DSYN_MAG
+    INTEGER                                       :: CHANGEVAR_FLAG
     !------------------------------------------------------
     REAL(DP),    DIMENSION(NUMW)       :: ETAI, ETAQ, ETAU, ETAV, RHOQ, RHOU, RHOV
     REAL(DP),    DIMENSION(7,NUMW)     :: DerETAI, DerETAQ, DerETAU, DerETAV
@@ -52,6 +56,9 @@ CONTAINS
     REAL(DP),    DIMENSION(NUMW)       :: PART1, PART2
     INTEGER                            :: I, J, K, M
     !------------------------------------------------------
+
+
+
     S0=MODEL(8)
     S1=MODEL(9)
     ALPHAM=MODEL(10)
@@ -245,6 +252,7 @@ CONTAINS
  
        DSYN(1:9,:,:)=ALPHAM*DSYN_MAG
        DSYN(10,:,:)=SYN_MAG-SCAT
+
     ENDIF
   END SUBROUTINE SYNTHESIS
   !!
@@ -557,4 +565,4 @@ CONTAINS
   ENDSUBROUTINE ABSMAT
 END MODULE FORWARD
 
-!CVSVERSIONINFO "$Id: forward.f90,v 1.3 2011/05/31 22:24:12 keiji Exp $"
+!CVSVERSIONINFO "$Id: forward.f90,v 1.4 2011/10/14 17:22:26 keiji Exp $"
