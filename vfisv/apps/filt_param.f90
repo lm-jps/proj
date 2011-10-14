@@ -11,4 +11,4 @@ MODULE FILT_PARAM
   REAL(DP), ALLOCATABLE           :: FILTER(:,:)
   REAL(DP), ALLOCATABLE           :: TUNEPOS(:)
 END MODULE FILT_PARAM
-!CVSVERSIONINFO "$Id: filt_param.f90,v 1.3 2011/05/31 22:24:06 keiji Exp $"
+!CVSVERSIONINFO "$Id: filt_param.f90,v 1.4 2011/10/14 17:22:19 keiji Exp $"
