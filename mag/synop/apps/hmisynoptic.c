@@ -11,8 +11,8 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
-#include "fstats.c"
-#include "heliographic_coords.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
+#include "/home0/yliu/cvs/JSOC/proj/libs/astro/heliographic_coords.c"
 
 #include <mkl_blas.h>^M
 #include <mkl_service.h>^M
@@ -851,8 +851,8 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_string(outRec, "T_START", tstr);
         sprint_at(tstr, tstop);
         drms_setkey_string(outRec, "T_STOP", tstr);
-        sprint_at(tstr, tearth);
-        drms_setkey_string(outRec, "T_EARTH", tstr);
+//        sprint_at(tstr, tearth);
+//        drms_setkey_string(outRec, "T_EARTH", tstr);
         drms_setkey_int(outRec, "CAR_ROT", cr);
         drms_setkey_double(outRec, "CARRTIME", carrtime);
         HeliographicLocation(trot, &i, &l, &b);
@@ -861,7 +861,7 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_double(outRec, "B0_FRST", b);
         HeliographicLocation(tstop, &i, &l, &b);
         drms_setkey_double(outRec, "B0_LAST", b);
-        drms_setkey_double(outRec, "EARTH_B0", bearth);
+//        drms_setkey_double(outRec, "EARTH_B0", bearth);
         l=(cr-1)*360.0;
         drms_setkey_double(outRec, "LON_FRST", l);
         l=cr*360.0-360.0/len[0];
@@ -1591,7 +1591,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.1 2011/10/13 22:43:11 xudong Exp $
+$Id: hmisynoptic.c,v 1.2 2011/10/19 22:10:53 xudong Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: xudong $
 */
@@ -1604,8 +1604,8 @@ $Author: xudong $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
- * Revision 1.1  2011/10/13 22:43:11  xudong
- * Added files for Yang by Xudong
+ * Revision 1.2  2011/10/19 22:10:53  xudong
+ * Updated per Yang's request
  *
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.
