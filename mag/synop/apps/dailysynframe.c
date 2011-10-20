@@ -9,7 +9,7 @@ synframe sdate='2010.08.12' stime='16:00:00' in='su_yang.fd_M12m_remap_los' out=
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "fstats.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
 
 char *module_name = "dailysynframe";
 
@@ -127,7 +127,7 @@ int DoIt(void)
   crln = drms_getkey_float(inRecfinal, "CRLN_OBS", &status);
   clog0 = drms_getkey_float(inRecfinal, "CRVAL1", &status);
 
-  drms_copykey(outRec, inRecfinal, "CADENCE");
+//  drms_copykey(outRec, inRecfinal, "CADENCE");
   drms_copykey(outRec, inRecfinal, "DATASIGN");
   drms_copykey(outRec, inRecfinal, "DSUN_OBS");
   drms_copykey(outRec, inRecfinal, "OBS_VR");
@@ -290,9 +290,9 @@ int DoIt(void)
     drms_setkey_int(outRec, "CAR_ROT", crn);
     drms_setkey_float(outRec, "CRLT_OBS", crlt);
     drms_setkey_float(outRec, "CRLN_OBS", crln);
-    float loncen = xdim_syn/2;
+    float loncen = xdim_syn/2 + 0.5;
     drms_setkey_int(outRec, "CRPIX1", loncen);
-    float latcen = ydim_syn/2;
+    float latcen = ydim_syn/2 + 0.5;
     drms_setkey_double(outRec, "CRPIX2", latcen);
     float lonstep = -360.0/xdim_syn;
     drms_setkey_float(outRec, "CDELT1", lonstep);
