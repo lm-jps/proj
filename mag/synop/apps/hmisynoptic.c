@@ -740,7 +740,7 @@ for (ds = 0; ds < nsynop; ds++)
 //  frebin(epts, smallEpts, len[0], len[1], nbin);
 
   frebinbox(synop, smallSynop, len[0], len[1], nbin, nbin-1);
-//  frebinbox(epts, smallEpts, len[0], len[1], nbin, nbin-1);
+  frebinbox(epts, smallEpts, len[0], len[1], nbin, nbin-1);
 
 // compute statistics
 
@@ -1591,7 +1591,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.2 2011/10/19 22:10:53 xudong Exp $
+$Id: hmisynoptic.c,v 1.3 2011/10/20 17:36:46 xudong Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: xudong $
 */
@@ -1604,7 +1604,7 @@ $Author: xudong $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
- * Revision 1.2  2011/10/19 22:10:53  xudong
+ * Revision 1.3  2011/10/20 17:36:46  xudong
  * Updated per Yang's request
  *
  * Revision 1.24  2007/10/26 17:51:39  arta
