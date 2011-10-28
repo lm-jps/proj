@@ -35,7 +35,6 @@
 #define	DTOR	(PI / 180.)
 #define Rad2arcsec	(3600. * 180. / PI) 
 
-
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 #define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status=%d\n", msg, status); return(status);}
 #define SHOW(msg) {printf("%s", msg); fflush(stdout);}
@@ -51,20 +50,24 @@
 #define WY(pix_x,pix_y) (((pix_y-crpix2)*cosa + (pix_x-crpix1)*sina)*cdelt+crvaly)
 
 // Jul 22 Xudong
-
 // Quality bit for disambiguation
-#define ambCode0 0x0000 // 0.9 for pixels which were above threshold and annealed
-#define ambCode1 0x0100 // 0.6 for pixels which were below threshold and annealed
-#define ambCode2 0x0200 // 0.5 for pixels which had weak field method applied
-#define ambCode3 0x0400 // 0.0 for pixels which were not disambiguated
+// Updated Oct 12
+// Now occupy lower 8 bits
+#define ambCode0 0x0000 // 10 for pixels which were above threshold and annealed (was 0.9)
+#define ambCode1 0x0001 // 40 for pixels which were below threshold and annealed (was 0.6)
+#define ambCode2 0x0002 // 50 for pixels which had weak field method applied (was 0.5)
+#define ambCode3 0x0004 // 100 for pixels which were not disambiguated (was 0.0)
 
-int getAmbCode (float prob)
+// switches
+#define QUALMAP 1
+
+int getAmbCode (char prob)
 {
-  if (prob > 0.89)
+  if (prob < 11)
     return ambCode0;
-  else if (prob > 0.59)
+  else if (prob < 41)
     return ambCode1;
-  else if (prob > 0.49)
+  else if (prob < 51)
     return ambCode2;
   else
     return ambCode3;
@@ -73,6 +76,7 @@ int getAmbCode (float prob)
 //====================
 
 char *module_name = "disambig";	/* Module name */
+char *version_id = "201 Oct 27";  /* Version number */
 
 ModuleArgs_t module_args[] =
 {
@@ -118,6 +122,10 @@ extern void ambig_(int *geometry,
 
 int DoIt(void)
 {
+  
+    char ambcodev[50];
+    sprintf(ambcodev,"%s %s", module_name, version_id);
+  
     int status = DRMS_SUCCESS;
     char *inQuery, *outQuery;
     DRMS_RecordSet_t *inRS, *outRS;
@@ -178,7 +186,7 @@ int DoIt(void)
     float BmagBfil, SinBinc, BmagBfilSinBinc, CosBinc;
     float varBfil, varBinc, varBmag, varBfilBmag, varBfilBinc, varBmagBinc;
     float xx, yy, r2, rad2;
-    float *confidence;
+    char *confidence;			// changed Oct 13 2011
     int *bitmap = NULL;
     int *erodemap, *growmap;
     char *ambig_flag;
@@ -377,7 +385,7 @@ printf("harpflag=%d\n",harpflag);
             }
             
             // Jun 22 Xudong
-            
+#if QUALMAP==1            
             inSeg_qual = drms_segment_lookup(inRec, "qual_map");
             inArray_qual = drms_segment_readslice(inSeg_qual, DRMS_TYPE_INT, ll0, ur0, &status);
             if (status) DIE("Segment reading error \n");
@@ -387,7 +395,6 @@ printf("harpflag=%d\n",harpflag);
 //            inArray_conf = drms_segment_readslice(inSeg_conf, DRMS_TYPE_CHAR, ll0, ur0, &status);
             inArray_conf = drms_segment_read(inSeg_conf, DRMS_TYPE_CHAR, &status);
             if (status) DIE("Segment reading error \n");
-            if (status) DIE("Segment reading error \n");
             inData_conf_fd = (char *) inArray_conf->data;
             inData_conf = (char *) calloc(nxny0, sizeof(char));
             for (i = 0; i < nx0; i++) {
@@ -395,6 +402,7 @@ printf("harpflag=%d\n",harpflag);
                     inData_conf[i + j * nx0] = inData_conf_fd[ll0[0] + i + (ll0[1] + j) * 4096];
                 }
             }
+#endif
             
         } else {
             /* Full disk case */
@@ -423,7 +431,7 @@ printf("harpflag=%d\n",harpflag);
             }
             
             // Jun 22 Xudong
-            
+#if QUALMAP==1            
             inSeg_qual = drms_segment_lookup(inRec, "qual_map");
             inArray_qual = drms_segment_read(inSeg_qual, DRMS_TYPE_INT, &status);
             if (status) DIE("Segment reading error \n");
@@ -433,7 +441,7 @@ printf("harpflag=%d\n",harpflag);
             inArray_conf = drms_segment_read(inSeg_conf, DRMS_TYPE_CHAR, &status);
             if (status) DIE("Segment reading error \n");
             inData_conf = (char *) inArray_conf->data;
-	
+#endif	
             // Dimensions
             nx = inArray[0]->axis[0]; ny = inArray[0]->axis[1];
             nxny = nx * ny;
@@ -621,19 +629,22 @@ printf("harpflag=%d\n",harpflag);
 	printf("nx=%d, ny=%d\n", nx0, ny0);
 	printf("i0=%d, j0=%d\n", i0, j0);
 		
-        confidence = (float *) calloc(nxny0, sizeof(float));
+		// Updated Oct 12, confidence is now char
+        confidence = (char *) calloc(nxny0, sizeof(char));
         ambig_flag = (char *) calloc(nxny0, sizeof(char));
 
         /* Flag pixels for which the azimuth angle needs to be changed */
         for (i = 0; i < nx0; i++) {
             for (j = 0; j < ny0; j++) {
                ambig_flag[i + j * nx0] = (Bx[i + i0 + (j + j0) * nx] > 0.) ? 1 : 0;
-               confidence[i + j * nx0] = probBa[i + i0 + (j + j0) * nx];
+               // Updated Oct 12, now a char from 0 to 100
+               confidence[i + j * nx0] = (char) (100 - probBa[i + i0 + (j + j0) * nx] * 100);
             }
         }
         
         /* Bit maps */
         // Jun 22 Xudong
+#if QUALMAP==1 
         qual_map = (int *) calloc(nxny0, sizeof(int));
         confid_map = (char *) calloc(nxny0, sizeof(char));
         for (i = 0; i < nx0; i++) {
@@ -645,7 +656,7 @@ printf("harpflag=%d\n",harpflag);
             }
         }
         drms_free_array(inArray_qual); drms_free_array(inArray_conf);
-
+#endif
 		
         /* Stats */
         int nancount = 0, outsz = outDims[0] * outDims[1]; 
@@ -656,7 +667,7 @@ printf("harpflag=%d\n",harpflag);
         /* Output segment */
         outArray_flag = drms_array_create(DRMS_TYPE_CHAR, 2, outDims, ambig_flag, &status);
         if (status) DIE("Error creating flag array");
-        outArray_prob = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, confidence, &status);
+        outArray_prob = drms_array_create(DRMS_TYPE_CHAR, 2, outDims, confidence, &status);
         if (status) DIE("Error creating prob array");
         outArray_qual = drms_array_create(DRMS_TYPE_INT, 2, outDims, qual_map, &status);
         if (status) DIE("Error creating qual array");
@@ -667,21 +678,27 @@ printf("harpflag=%d\n",harpflag);
         outRec = outRS->records[irec];
         outSeg_flag = drms_segment_lookup(outRec, "disambig");
         outSeg_prob = drms_segment_lookup(outRec, "conf_disambig");
+#if QUALMAP==1 
         outSeg_qual = drms_segment_lookup(outRec, "qual_map");
         outSeg_conf = drms_segment_lookup(outRec, "confid_map");
+#endif
         for (i = 0; i < 2; i++) {
           outSeg_flag->axis[i] = outArray_flag->axis[i];	// For variable dimensions
           outSeg_prob->axis[i] = outArray_prob->axis[i];
+#if QUALMAP==1
           outSeg_qual->axis[i] = outArray_qual->axis[i];
           outSeg_conf->axis[i] = outArray_conf->axis[i];
+#endif
         }
         outArray_flag->parent_segment = outSeg_flag;
         outArray_prob->parent_segment = outSeg_prob;
+#if QUALMAP==1
         outArray_qual->parent_segment = outSeg_qual;
         outArray_conf->parent_segment = outSeg_conf;
+#endif
         // Compressed
-        outArray_prob->bscale = 0.01;
-        outArray_prob->bzero = 0.0;
+//        outArray_prob->bscale = 0.01;
+//        outArray_prob->bzero = 0.0;
 
         /* Result writing */
         status = drms_segment_write(outSeg_flag, outArray_flag, 0);
@@ -690,19 +707,21 @@ printf("harpflag=%d\n",harpflag);
         status = drms_segment_write(outSeg_prob, outArray_prob, 0);
         if (status) DIE("Problem writing prob file");
         drms_free_array(outArray_prob);
+#if QUALMAP==1
         status = drms_segment_write(outSeg_qual, outArray_qual, 0);
         if (status) DIE("Problem writing qual file");
         drms_free_array(outArray_qual);
         status = drms_segment_write(outSeg_conf, outArray_conf, 0);
         if (status) DIE("Problem writing conf file");
         drms_free_array(outArray_conf);
-
+#endif
         /* Set keywords */
         // Prime key
     	drms_copykey(outRec, inRec, "T_REC");
     	if (harpflag) {
     	    drms_copykey(outRec, inRec, "HARPNUM");
     	}
+    	drms_copykey(outRec, inRec, "RUNNUM");
         // Info
         drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
         drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
@@ -733,6 +752,9 @@ printf("harpflag=%d\n",harpflag);
         drms_setkey_int(outRec, "TOTVALS", outsz);
         drms_setkey_int(outRec, "DATAVALS", outsz - nancount);
         drms_setkey_int(outRec, "MISSVALS", nancount);
+        // Code version
+      drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.5 2011/10/28 05:13:13 xudong Exp $");
+      drms_setkey_string(outRec, "AMBCODEV", ambcodev);
     
         /* Set link */
         if (harpflag) {
