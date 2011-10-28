@@ -52,7 +52,7 @@ const char *meKeys[] =
   "BUNIT_025", "BUNIT_026", "BUNIT_027",
 	"HFLID", "HCFTID", "QLOOK", "TINTNUM", "SINTNUM",
 	"DISTCOEF", "ROTCOEF", "POLCALM", "SOURCE",
-	"CODEVER0", "CODEVER1", "CODEVER2", "CODEVER3", "CODEVER4"	// misc
+	"CODEVER0", "CODEVER1", "CODEVER2", "CODEVER3", "CODEVER4", "CODEVER5", "CODEVER6"	// misc
 };
 
 const char *patchKeys[] = 
