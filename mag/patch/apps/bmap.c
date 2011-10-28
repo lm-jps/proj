@@ -28,13 +28,25 @@
  *
  *	Version:
  *			v0.0	Jul 07 2011
+ *			v0.1	Sep 22 2011
+ *			v0.2  Oct 07 2011
+ *      v0.3  Oct 17 2011
  *
  *
  *
  *
  *	Notes:
  *			v0.0
- *
+ *			v0.1
+ *			Added -x flag for local Cartesian vector transformation
+ *			The original "xyz" representation does r, theta, phi decomposition
+ *			New -x flag uses patch center as the only direction reference
+ *			v0.2
+ *			Add spherical flag -s, so y is flipped, pointing south as theta component (use with care)
+ *      v0.3
+ *      Add error propagation option doerr
+ *      Now only support field_err, inclination_err and azimuth_err in cutout mode
+ *      or Br_err, Bt_err and Bp_err in mapping mode
  *
  *
  */
@@ -54,6 +66,7 @@
 #include "finterpolate.h"
 #include "img2helioVector.c"
 #include "copy_me_keys.c"
+#include "errorprop.c"
 
 #include <mkl_blas.h>
 #include <mkl_service.h>
@@ -66,6 +79,7 @@
 #define RAD2ARCSEC		(648000./M_PI)
 #define SECINDAY		(86400.)
 #define FOURK			(4096)
+#define FOURK2    (16777216)
 
 // Nyqvist rate at disk center is 0.03 degree. Oversample above 0.015 degree
 #define NYQVIST		(0.015)
@@ -95,9 +109,11 @@
 struct mapInfo {
 	// fixed
 	int cutOut, localOpt, globalOpt, fullDisk;
-	int latlon, noDisamb;
+	int localCart, spheric;
+	int latlon, noDisamb, fillNan;
 	int autoTrack, autoSize;
 	int verbose;
+  int doerr;
 	int nbin, gauss;
 	int mapOpt, repOpt, interpOpt;
 	float ref_lon, ref_lat;
@@ -138,6 +154,12 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 				   float *bx_img, float *by_img, float *bz_img,
 				   float *bx_map, float *by_map, float *bz_map);
 
+/* Get error estimation */
+
+int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
+             float *b1_err, float *b2_err, float *b3_err,
+             int *qual_map, char *confid_map);
+
 /* Performing local vector transformation */
 
 int localVectorTransform(DRMS_Record_t *inRec, struct mapInfo *mInfo, 
@@ -154,6 +176,12 @@ void repVectorTransform(float *bx_map, float *by_map, float *bz_map,
 
 int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 			 float *b1, float *b2, float *b3);
+
+/* Write error estimation to output series */
+
+int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
+               float *b1_err, float *b2_err, float *b3_err,
+               int *qual_map, char *confid_map);
 
 /* For testing, output Lat/Lon */
 
@@ -188,7 +216,7 @@ ModuleArgs_t module_args[] =
 	{ARG_STRING, "out", "Not Specified", "Output map series."},
 	{ARG_NUME, "map", "carree", "Projetion method, carree by default.",
 		"carree, Cassini, Mercator, cyleqa, sineqa, gnomonic, Postel, stereographic, orthographic, Lambert"},
-	{ARG_NUME, "rep", "xyz", "Vector representation, local Bxyz by default.",
+	{ARG_NUME, "rep", "xyz", "Vector representation, xyz by default.",
 		"xyz, fia, lta"},
 	{ARG_NUME, "interp", "wiener", "Interpolation method, higher order polynomial by default.",
 		"wiener, cubic, bilinear, nearest"},
@@ -199,6 +227,7 @@ ModuleArgs_t module_args[] =
 	{ARG_INT, "cols", "0", "Columns in output map"},
 	{ARG_INT, "rows", "0", "Rows in output map"},
 	{ARG_INT, "nbin", "3", "Oversampling rate for anti-aliasing. See documentation."},
+  {ARG_INT, "doerr", "1", "Perform error propagation, use near neighbor so far."},
 	{ARG_FLAG, "c",	"", "Simple full pixel cutout without interpolation, override all mapping options."},
 	{ARG_FLAG, "l",	"", "Force vector representation in local tangent coordinates, for cutout mode only."},
 	{ARG_FLAG, "g",	"", "Force vector representation in plane of sky coordinates, for remap mode only."},
@@ -209,6 +238,9 @@ ModuleArgs_t module_args[] =
 	{ARG_FLAG, "e", "", "Output latitude, longitude."},
 	{ARG_FLAG, "z", "", "Skip disambiguation solution."},
 	{ARG_FLAG, "v", "", "Verbose mode."},
+	{ARG_FLAG, "x", "", "Uses patch center direction for vector decomposition"},
+	{ARG_FLAG, "q", "", "Fill regions outside HARP defined area as NaN"},
+	{ARG_FLAG, "s", "", "Spherical option, flip By as Btheta"},
 	{ARG_END}
 };
 
@@ -227,8 +259,8 @@ int DoIt(void)
 	
 	/* Get parameters */
     
-    inQuery = (char *) params_get_str(&cmdparams, "in");
-    outQuery = (char *) params_get_str(&cmdparams, "out");
+  inQuery = (char *) params_get_str(&cmdparams, "in");
+  outQuery = (char *) params_get_str(&cmdparams, "out");
 	
 	mInfo.mapOpt = params_get_int(&cmdparams, "map");
 	mInfo.repOpt = params_get_int(&cmdparams, "rep");
@@ -240,6 +272,8 @@ int DoIt(void)
 	mInfo.xscale = params_get_float(&cmdparams, "xscale");
 	mInfo.yscale = params_get_float(&cmdparams, "yscale");
 	mInfo.nbin = params_get_int(&cmdparams, "nbin");
+  
+  mInfo.doerr = params_get_int(&cmdparams, "doerr");
 	
 	if ((mInfo.xscale / mInfo.nbin) > NYQVIST || (mInfo.yscale / mInfo.nbin) > NYQVIST)
 		mInfo.nbin = MAX((round(mInfo.xscale / NYQVIST)),(round(mInfo.yscale / NYQVIST)));
@@ -257,6 +291,7 @@ int DoIt(void)
 	else
 		mInfo.autoSize = 0;
 	
+	mInfo.localCart = params_isflagset(&cmdparams, "x");
 	mInfo.cutOut = params_isflagset(&cmdparams, "c");
 	mInfo.localOpt = params_isflagset(&cmdparams, "l");
 	mInfo.globalOpt = params_isflagset(&cmdparams, "g");
@@ -273,6 +308,8 @@ int DoIt(void)
 	mInfo.latlon = params_isflagset(&cmdparams, "e");
 	mInfo.noDisamb = params_isflagset(&cmdparams, "z");
 	mInfo.verbose = params_isflagset(&cmdparams, "v");
+	mInfo.fillNan = params_isflagset(&cmdparams, "q");
+	mInfo.spheric = params_isflagset(&cmdparams, "s");
 	
 	/* Check and print parameters */
 	
@@ -319,8 +356,7 @@ int DoIt(void)
 	printf("==============\nStart mapping, %d image(s) in total.\n", nrecs);
 
 //	nrecs = 2;
-	for (irec = 0; irec < nrecs; irec++)
-    {
+	for (irec = 0; irec < nrecs; irec++) {
 		
 		inRec = inRS->records[irec];
         TIME trec = drms_getkey_time(inRec, "T_REC", &status);
@@ -393,6 +429,38 @@ int DoIt(void)
 		}
 		
 		if (mInfo.verbose) printf(" done.\n");
+      
+    // Added Oct 17 2011: Do error
+    
+    float *b1_err = NULL, *b2_err = NULL, *b3_err = NULL;   // final error arrays
+    int *qual_map = NULL; char *confid_map = NULL;
+    
+    if (mInfo.doerr) {
+      if (mInfo.verbose) SHOW("Getting error estimation...");
+      
+      if (!mInfo.fullDisk) {
+        b1_err = (float *) malloc(mapsize * sizeof(float));
+        b2_err = (float *) malloc(mapsize * sizeof(float));
+        b3_err = (float *) malloc(mapsize * sizeof(float));
+        qual_map = (int *) malloc(mapsize * sizeof(int));
+        confid_map = (char *) malloc(mapsize * sizeof(char));
+      } else {
+        b1_err = (float *) malloc(FOURK * FOURK * sizeof(float));
+        b2_err = (float *) malloc(FOURK * FOURK * sizeof(float));
+        b3_err = (float *) malloc(FOURK * FOURK * sizeof(float));
+        qual_map = (int *) malloc(FOURK * FOURK * sizeof(int));
+        confid_map = (char *) malloc(FOURK * FOURK * sizeof(char));
+      }
+
+if (1) {     
+      if (getError(inRec, &mInfo, b1_err, b2_err, b3_err, qual_map, confid_map)) {
+        printf("Image #%d skipped.", irec);
+        if (mInfo.verbose) printf(": error estimation error\n"); else printf("\n");
+        continue;
+      }
+}      
+      if (mInfo.verbose) printf(" done.\n");
+    }
 		
 		// Representation
 		// Note that the definition of representation depends on the coordinate
@@ -403,7 +471,9 @@ int DoIt(void)
 		// lta: longitudinal along +z, transverse in plane of sky
 		
 		// In remap format (local):
-		// xyz: z refers to vertical component (r), x largely to west (-theta), y north (phi)
+		// xyz: z refers to vertical (radial) component, x largely to west (phi), y north (-theta)
+		// if -x is specified, change to local xyz
+		// if -s is specified, change to spherical setup, y is flipped
 		// fia: inclination 0 pointing +z, azimuth 0 pointing +y, CCW
 		// lta: vertical/horizontal/azimuth
 
@@ -448,7 +518,7 @@ int DoIt(void)
 		// Output
 		// note that b1, b2, b3 are freed in writeMap 
 		
-        outRec = outRS->records[irec];  
+    outRec = outRS->records[irec];  
 		
 		if (mInfo.verbose) SHOW("Output...");
 		
@@ -460,11 +530,24 @@ int DoIt(void)
 		}
 		
 		if (mInfo.verbose) printf(" done.\n");
+    
+    // Write error if necessary
+    
+    if (mInfo.doerr) {
+      if (mInfo.verbose) SHOW("Output error estimation...");
+      if (writeError(outRec, &mInfo, b1_err, b2_err, b3_err, qual_map, confid_map)) {
+        printf("Image #%d skipped.", irec);
+        if (mInfo.verbose) printf(": error estimation output error\n"); else printf("\n");
+        if (b1_err) free(b1_err); if (b2_err) free(b2_err); if (b3_err) free(b3_err);
+        continue;
+      }
+      if (mInfo.verbose) printf(" done.\n");     
+    }
 		
 		// For testing, output lat/lon
 		
 		if (mInfo.latlon) {
-			if (mInfo.verbose) SHOW("Outout lat/lon...");
+			if (mInfo.verbose) SHOW("Output lat/lon...");
 			outputLatLon(outRec, inRec, &mInfo);
 			if (mInfo.verbose) printf(" done.\n");
 		}
@@ -472,7 +555,8 @@ int DoIt(void)
 		// Keywords
 		
 		drms_copykey(outRec, inRec, "T_REC");
-        drms_copykey(outRec, inRec, "HARPNUM");
+    drms_copykey(outRec, inRec, "HARPNUM");
+		drms_copykey(outRec, inRec, "RUNNUM");		// for Monte-Carlo
 		
 		setKeys(outRec, inRec, &mInfo);
 		
@@ -484,7 +568,7 @@ int DoIt(void)
 	
 	drms_close_records(inRS, DRMS_FREE_RECORD);
 	
-    drms_close_records(outRS, DRMS_INSERT_RECORD);
+  drms_close_records(outRS, DRMS_INSERT_RECORD);
 	
 	return 0;
 	
@@ -740,6 +824,8 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 				   float *bx_map, float *by_map, float *bz_map)
 {
 	
+	int status = 0;
+	
 	if (mInfo->cutOut) {		// for cutout, simply copy over
 		
 		int nrow = mInfo->nrow, ncol = mInfo->ncol;
@@ -772,6 +858,28 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 			}
 		}
 		
+		// perform NaN filling if necessary
+		if (mInfo->fillNan) {
+		  int col0 = drms_getkey_float(inRec, "CRPIX1", &status) - 1.;
+		  int row0 = drms_getkey_float(inRec, "CRPIX2", &status) - 1.;
+		  DRMS_Segment_t *inSeg = drms_segment_lookup(inRec, "disambig");
+		  int col1 = col0 + inSeg->axis[0];
+		  int row1 = row0 + inSeg->axis[1];
+  		for (int row = 0; row < nrow; row++) {
+  			for (int col = 0; col < ncol; col++) {
+    			ind_map = row * ncol + col;
+  		  	x = round(col + xc + 0.5 - ncol / 2.0);
+			  	y = round(row + yc + 0.5 - nrow / 2.0);
+			  	if (x < col0 || x >= col1 || y < row0 || y >= row1) {
+					  bx_map[ind_map] = DRMS_MISSING_FLOAT;
+					  by_map[ind_map] = DRMS_MISSING_FLOAT;
+					  bz_map[ind_map] = DRMS_MISSING_FLOAT;
+				  }
+  			}
+  		}
+		
+		}
+		
 	} else {				// mapping
 		
 		// Now get all ephemeris
@@ -796,8 +904,8 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 		float *bx_map0 = NULL, *by_map0 = NULL, *bz_map0 = NULL;	// intermediate maps, in CCD xyz representation
 		
 		bx_map0 = (float *) malloc(ncol0 * nrow0 * sizeof(float));
-        by_map0 = (float *) malloc(ncol0 * nrow0 * sizeof(float));
-        bz_map0 = (float *) malloc(ncol0 * nrow0 * sizeof(float));
+    by_map0 = (float *) malloc(ncol0 * nrow0 * sizeof(float));
+    bz_map0 = (float *) malloc(ncol0 * nrow0 * sizeof(float));
 		
 		double lonc = mInfo->xc, latc = mInfo->yc;
 		
@@ -817,42 +925,40 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 		// Determine sampling coord
 		
 		
-		
 		for (int row0 = 0; row0 < nrow0; row0++) {
 			for (int col0 = 0; col0 < ncol0; col0++) {
 				
 				ind_map = row0 * ncol0 + col0;
 				
 				x = (col0 + 0.5 - ncol0/2.) * xscale0;
-                y = (row0 + 0.5 - nrow0/2.) * yscale0;
+        y = (row0 + 0.5 - nrow0/2.) * yscale0;
 				
 				/* map grid [x, y] corresponds to the point [lon, lat] in the heliographic coordinates. 
-                 * the [x, y] are in radians with respect of the center of the map [xcMap, ycMap].
-                 * projection methods could be Mercator, Lambert, and many others. [maplonc, mapLatc]
-                 * is the heliographic longitude and latitude of the map center. Both are in degree.    
-                 */
+         * the [x, y] are in radians with respect of the center of the map [xcMap, ycMap].
+         * projection methods could be Mercator, Lambert, and many others. [maplonc, mapLatc]
+         * is the heliographic longitude and latitude of the map center. Both are in degree.    
+         */
 				
-                if (plane2sphere (x * RADSINDEG, y * RADSINDEG, latc * RADSINDEG, lonc * RADSINDEG, 
-                                  &lat, &lon, mInfo->mapOpt)) {
-                    xi_out[ind_map] = -1;
-                    zeta_out[ind_map] = -1;
-                    continue;
-                }
+        if (plane2sphere (x * RADSINDEG, y * RADSINDEG, latc * RADSINDEG, lonc * RADSINDEG, 
+                          &lat, &lon, mInfo->mapOpt)) {
+          xi_out[ind_map] = -1;
+          zeta_out[ind_map] = -1;
+          continue;
+        }
 				
-                /* map the grid [lon, lat] in the heliographic coordinates to [xi, zeta], a point in the
-                 * image coordinates. The image properties, xCenter, yCenter, rSun, pa, ecc and chi are given.
-                 */
+        /* map the grid [lon, lat] in the heliographic coordinates to [xi, zeta], a point in the
+         * image coordinates. The image properties, xCenter, yCenter, rSun, pa, ecc and chi are given.
+         */
 				
-                if (sphere2img (lat, lon, disk_latc, disk_lonc, &xi, &zeta, 
-								disk_xc/rSun, disk_yc/rSun, 1.0, pa, 1., 0., 0., 0.)) {
-                    xi_out[ind_map] = -1;
-                    zeta_out[ind_map] = -1;
-                    continue;
-                }
+        if (sphere2img (lat, lon, disk_latc, disk_lonc, &xi, &zeta, 
+                        disk_xc/rSun, disk_yc/rSun, 1.0, pa, 1., 0., 0., 0.)) {
+          xi_out[ind_map] = -1;
+          zeta_out[ind_map] = -1;
+          continue;
+        }
 				
-                xi_out[ind_map] = xi * rSun;
-                zeta_out[ind_map] = zeta * rSun;
-				
+        xi_out[ind_map] = xi * rSun;
+        zeta_out[ind_map] = zeta * rSun;
 				
 			}
 		}
@@ -911,6 +1017,280 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 
 }
 
+/* ======================================= */
+
+/* Get error estimation */
+
+int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
+             float *b1_err, float *b2_err, float *b3_err,
+             int *qual_map, char *confid_map)
+{
+  int status = 0;
+  
+  int prop = (mInfo->cutOut && mInfo->localOpt == 1) || 
+              (!mInfo->cutOut && mInfo->globalOpt == 0);
+  
+  DRMS_Segment_t *inSeg;
+  
+  DRMS_Array_t *inArray_bTotal, *inArray_bAzim, *inArray_bIncl;
+  DRMS_Array_t *inArray_qual, *inArray_confid;
+  DRMS_Array_t *inArray_errbT, *inArray_errbAz, *inArray_errbIn;
+  DRMS_Array_t *inArray_bTbI, *inArray_bTbA, *inArray_bAbI;
+  
+  float *bTotal, *bAzim, *bIncl;
+  int *qual; char *confid;
+  float *errbT0, *errbAz0, *errbIn0;
+  float *errbT, *errbAz, *errbIn;
+  float *errbTbI0, *errbTbA0, *errbAbI0;
+  float *errbTbI, *errbTbA, *errbAbI;
+  
+  // Read full disk images
+  
+	inSeg = drms_segment_lookup(inRec, "field");
+	inArray_bTotal = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+	if (status) return 1;
+	bTotal = (float *)inArray_bTotal->data;
+	
+	inSeg = drms_segment_lookup(inRec, "azimuth");
+	inArray_bAzim = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+	if (status) return 1;
+	bAzim = (float *)inArray_bAzim->data;
+	
+	inSeg = drms_segment_lookup(inRec, "inclination");
+	inArray_bIncl = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+	if (status) return 1;
+	bIncl = (float *)inArray_bIncl->data;
+	  
+  // Bitmaps
+  
+  inSeg = drms_segment_lookup(inRec, "qual_map");
+  inArray_qual = drms_segment_read(inSeg, DRMS_TYPE_INT, &status);
+  if (status) return 1;
+  qual = (int *)inArray_qual->data;
+  
+  inSeg = drms_segment_lookup(inRec, "confid_map");
+  inArray_confid = drms_segment_read(inSeg, DRMS_TYPE_CHAR, &status);
+  if (status) return 1;
+  confid = (char *)inArray_confid->data;
+  
+  // Errors, need to convert to variances
+  
+  inSeg = drms_segment_lookup(inRec, "field_err");
+  inArray_errbT = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+  if (status) return 1;
+  errbT0 = (float *)inArray_errbT->data;
+  
+  inSeg = drms_segment_lookup(inRec, "azimuth_err");
+  inArray_errbAz = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+  if (status) return 1;
+  errbAz0 = (float *)inArray_errbAz->data;
+  
+  inSeg = drms_segment_lookup(inRec, "inclination_err");
+  inArray_errbIn = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+  if (status) return 1;
+  errbIn0 = (float *)inArray_errbIn->data;
+  
+  errbT = (float *) (malloc(FOURK2 * sizeof(float)));
+  errbAz = (float *) (malloc(FOURK2 * sizeof(float)));
+  errbIn = (float *) (malloc(FOURK2 * sizeof(float)));
+  
+  for (int i = 0; i < FOURK2; i++) {
+    errbT[i] = errbT0[i] * errbT0[i];
+    if (fabs(errbAz0[i]) > 180.) errbAz0[i] = 180.;
+    if (fabs(errbIn0[i]) > 180.) errbIn0[i] = 180.;
+    errbAz[i] = errbAz0[i] * errbAz0[i] * RADSINDEG * RADSINDEG;
+    errbIn[i] = errbIn0[i] * errbIn0[i] * RADSINDEG * RADSINDEG;
+  }
+  
+  // Correlation coefficients, need to convert to covariances
+  
+  if (prop) {
+    
+    inSeg = drms_segment_lookup(inRec, "field_inclination_err");
+    inArray_bTbI = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+    if (status) return 1;
+    errbTbI0 = (float *)inArray_bTbI->data;
+    
+    inSeg = drms_segment_lookup(inRec, "field_az_err");
+    inArray_bTbA = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+    if (status) return 1;
+    errbTbA0 = (float *)inArray_bTbA->data;
+    
+    inSeg = drms_segment_lookup(inRec, "inclin_azimuth_err");
+    inArray_bAbI = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+    if (status) return 1;
+    errbAbI0 = (float *)inArray_bAbI->data;
+    
+    errbTbI = (float *) (malloc(FOURK2 * sizeof(float)));
+    errbTbA = (float *) (malloc(FOURK2 * sizeof(float)));
+    errbAbI = (float *) (malloc(FOURK2 * sizeof(float)));
+    
+    for (int i = 0; i < FOURK2; i++) {
+      errbTbI[i] = errbTbI0[i] * errbT0[i] * errbIn0[i] * RADSINDEG;
+      errbTbA[i] = errbTbA0[i] * errbT0[i] * errbAz0[i] * RADSINDEG;
+      errbAbI[i] = errbAbI0[i] * errbAz0[i] * errbIn0[i] * RADSINDEG * RADSINDEG;
+    }
+  }
+  
+  // Ephemeris
+	
+	double disk_latc, disk_lonc, disk_xc, disk_yc, rSun, asd, pa;
+	
+	if (getEphemeris(inRec, &disk_lonc, &disk_latc, &disk_xc, &disk_yc, &rSun, &asd, &pa))
+		return 1;
+  
+  // Get error arrays
+  
+  double x, y;          // map coord
+  double lat, lon;      // spherical coord
+  double xi, zeta;      // image coord, round to full pixel
+  
+  int nrow = mInfo->nrow, ncol = mInfo->ncol;
+  float xc = mInfo->xc, yc = mInfo->yc;
+  float xscale = mInfo->xscale, yscale = mInfo->yscale;
+  double lonc = mInfo->xc, latc = mInfo->yc;
+  
+  int ind_map, ind_img;
+
+  int dx0, dy0, ind_img0;		// address for cutout maps
+  inSeg = drms_segment_lookup(inRec, "disambig");
+  int col0 = drms_getkey_float(inRec, "CRPIX1", &status) - 1.;		// offset for qual_map and confid_map
+  int row0 = drms_getkey_float(inRec, "CRPIX2", &status) - 1.;
+  int nx0 = inSeg->axis[0];
+  int ny0 = inSeg->axis[1];
+  int col1 = col0 + nx0;
+  int row1 = row0 + ny0;
+  
+  double btSigma2, bpSigma2, brSigma2;
+  
+  if (mInfo->verbose) {
+    if (prop) SHOW("\nError propagation...") else SHOW("\nCopy variance...");
+  }
+
+  for (int row = 0; row < nrow; row++) {
+    for (int col = 0; col < ncol; col++) {
+      
+      ind_map = row * ncol + col;
+      
+      // First, get image coord
+      
+      if (mInfo->cutOut) {
+
+				xi = round(col + xc + 0.5 - ncol / 2.0);
+				zeta = round(row + yc + 0.5 - nrow / 2.0);
+        
+      } else {
+        
+        x = (col + 0.5 - ncol/2.) * xscale;
+        y = (row + 0.5 - nrow/2.) * yscale;
+        
+        if (plane2sphere (x * RADSINDEG, y * RADSINDEG, latc * RADSINDEG, lonc * RADSINDEG, 
+                          &lat, &lon, mInfo->mapOpt)) {
+          qual_map[ind_map] = DRMS_MISSING_CHAR;
+          confid_map[ind_map] = DRMS_MISSING_CHAR;
+          b1_err[ind_map] = DRMS_MISSING_FLOAT;
+          b2_err[ind_map] = DRMS_MISSING_FLOAT;
+          b3_err[ind_map] = DRMS_MISSING_FLOAT;
+          continue;
+        }
+
+        if (sphere2img (lat, lon, disk_latc, disk_lonc, &xi, &zeta, 
+                        disk_xc/rSun, disk_yc/rSun, 1.0, pa, 1., 0., 0., 0.)) {
+          qual_map[ind_map] = DRMS_MISSING_CHAR;
+          confid_map[ind_map] = DRMS_MISSING_CHAR;
+          b1_err[ind_map] = DRMS_MISSING_FLOAT;
+          b2_err[ind_map] = DRMS_MISSING_FLOAT;
+          b3_err[ind_map] = DRMS_MISSING_FLOAT;
+          continue;
+        }
+				
+        xi *= rSun; xi = round(xi);
+        zeta *= rSun; zeta = round(zeta);     // nearest neighbor
+        
+      }
+
+      // Now let's get confid_map and qual_map
+
+      dx0 = xi - col0; dy0 = zeta - row0;
+      if (dx0 < 0 || dy0 < 0 || dx0 >= nx0 || dy0 >= ny0) {
+        qual_map[ind_map] = DRMS_MISSING_INT;
+        confid_map[ind_map] = DRMS_MISSING_CHAR;
+      } else {
+        ind_img0 = dy0 * nx0 + dx0;
+        qual_map[ind_map] = qual[ind_img0];
+        confid_map[ind_map] = confid[ind_img0];
+      }
+            
+      // Error, note we need to use variances
+      // Currently only support fia and local xyz (brt) output
+      
+      ind_img = round(zeta * FOURK + xi);
+      
+//      if (ind_map < 10) printf("ind_map=%d, xi=%f, zeta=%f\n", ind_map, xi, zeta);
+      
+      if (prop) {
+        
+        if (errorprop (bTotal, bAzim, bIncl, 
+                       errbT, errbAz, errbIn, errbTbA, errbTbI, errbAbI, 
+                       lon, lat, disk_lonc, disk_latc, pa, FOURK, FOURK, xi, zeta, 
+                       &btSigma2, &bpSigma2, &brSigma2)) {
+          b1_err[ind_map] = DRMS_MISSING_FLOAT;
+          b2_err[ind_map] = DRMS_MISSING_FLOAT;
+          b3_err[ind_map] = DRMS_MISSING_FLOAT;
+//          SHOW("dod");
+          continue;
+        }
+//        
+        b1_err[ind_map] = sqrt(bpSigma2);
+        b2_err[ind_map] = sqrt(btSigma2);
+        b3_err[ind_map] = sqrt(brSigma2);
+
+      } else {
+
+        b1_err[ind_map] = sqrt(errbT[ind_img]);
+        b2_err[ind_map] = sqrt(errbIn[ind_img])/RADSINDEG;
+        b3_err[ind_map] = sqrt(errbAz[ind_img])/RADSINDEG;
+        
+      }
+      
+    }
+  }
+  
+  // perform NaN filling if necessary
+  if (mInfo->cutOut && !mInfo->localOpt && mInfo->fillNan) {
+    for (int row = 0; row < nrow; row++) {
+      for (int col = 0; col < ncol; col++) {
+        ind_map = row * ncol + col;
+        int x1 = round(col + xc + 0.5 - ncol / 2.0);
+        int y1 = round(row + yc + 0.5 - nrow / 2.0);
+        if (x1 < col0 || x1 >= col1 || y1 < row0 || y1 >= row1) {
+          b1_err[ind_map] = DRMS_MISSING_FLOAT;
+          b2_err[ind_map] = DRMS_MISSING_FLOAT;
+          b3_err[ind_map] = DRMS_MISSING_FLOAT;
+        }
+      }
+    }
+  }
+  
+  // Clean up
+  
+  free(errbT); free(errbAz); free(errbIn);
+  drms_free_array(inArray_bTotal); drms_free_array(inArray_bAzim);
+  drms_free_array(inArray_bIncl);
+  drms_free_array(inArray_qual); drms_free_array(inArray_confid);
+  drms_free_array(inArray_errbT); drms_free_array(inArray_errbAz);
+  drms_free_array(inArray_errbIn);
+  if (prop) {
+    free(errbTbI); free(errbTbA); free(errbAbI);
+    drms_free_array(inArray_bTbI); drms_free_array(inArray_bTbA);
+    drms_free_array(inArray_bAbI);
+  }
+
+  return 0;
+  
+}
+
+
 
 /* ======================================= */
 
@@ -949,6 +1329,23 @@ int localVectorTransform(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 	
 //	printf("xc=%f, yc=%f\n", mInfo->xc, mInfo->yc);
 	
+	// For local Cartesian
+	if (mInfo->repOpt == 0 && mInfo->localCart == 1) {
+		
+		if (mInfo->cutOut) {
+			x = (int) mInfo->xc;
+			y = (int) mInfo->yc;
+			x = (x - disk_xc) / rSun;
+			y = (y - disk_yc) / rSun;
+			img2sphere(x, y, asd, disk_latc, disk_lonc, pa,
+					   &rho, &lat, &lon, &sinlat, &coslat, &sig, &mu, &chi);
+		} else {
+			lat = latc * RADSINDEG;
+			lon = lonc * RADSINDEG;
+		}
+	}
+	
+	
 	for (int row = 0; row < mInfo->nrow; row++) {
 		for (int col = 0; col < mInfo->ncol; col++) {
 			
@@ -956,35 +1353,40 @@ int localVectorTransform(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 			
 			// Find lat/lon for each point
 				
-			if (mInfo->cutOut) {
+			if (mInfo->repOpt != 0 || mInfo->localCart == 0) {
 				
-				x = (int)(col + mInfo->xc + 0.5 - mInfo->ncol / 2.0);
-				y = (int)(row + mInfo->yc + 0.5 - mInfo->nrow / 2.0);
-				x = (x - disk_xc) / rSun;
-				y = (y - disk_yc) / rSun;
-				
-				if (img2sphere(x, y, asd, disk_latc, disk_lonc, pa,
-							   &rho, &lat, &lon, &sinlat, &coslat, &sig, &mu, &chi)) {
-					bx_map[ind_map] = DRMS_MISSING_FLOAT;
-					by_map[ind_map] = DRMS_MISSING_FLOAT;
-					bz_map[ind_map] = DRMS_MISSING_FLOAT;
-					continue;
-				}
-				
-			} else {
-				
-				x = (col + 0.5 - mInfo->ncol / 2.) * mInfo->xscale;
-				y = (row + 0.5 - mInfo->nrow / 2.) * mInfo->yscale;
-				
-				if (plane2sphere (x * RADSINDEG, y * RADSINDEG, latc * RADSINDEG, lonc * RADSINDEG, 
-								  &lat, &lon, mInfo->mapOpt)) {
-					bx_map[ind_map] = DRMS_MISSING_FLOAT;
-					by_map[ind_map] = DRMS_MISSING_FLOAT;
-					bz_map[ind_map] = DRMS_MISSING_FLOAT;
-					continue;
+				if (mInfo->cutOut) {
+					
+					x = (int)(col + mInfo->xc + 0.5 - mInfo->ncol / 2.0);
+					y = (int)(row + mInfo->yc + 0.5 - mInfo->nrow / 2.0);
+					x = (x - disk_xc) / rSun;
+					y = (y - disk_yc) / rSun;
+					
+					if (img2sphere(x, y, asd, disk_latc, disk_lonc, pa,
+								   &rho, &lat, &lon, &sinlat, &coslat, &sig, &mu, &chi)) {
+						bx_map[ind_map] = DRMS_MISSING_FLOAT;
+						by_map[ind_map] = DRMS_MISSING_FLOAT;
+						bz_map[ind_map] = DRMS_MISSING_FLOAT;
+						continue;
+					}
+					
+				} else {
+					
+					x = (col + 0.5 - mInfo->ncol / 2.) * mInfo->xscale;
+					y = (row + 0.5 - mInfo->nrow / 2.) * mInfo->yscale;
+					
+					if (plane2sphere (x * RADSINDEG, y * RADSINDEG, latc * RADSINDEG, lonc * RADSINDEG, 
+									  &lat, &lon, mInfo->mapOpt)) {
+						bx_map[ind_map] = DRMS_MISSING_FLOAT;
+						by_map[ind_map] = DRMS_MISSING_FLOAT;
+						bz_map[ind_map] = DRMS_MISSING_FLOAT;
+						continue;
+					}
 				}
 				
 			}
+			
+			// printf("%f, %f\n", lat/RADSINDEG, lon/RADSINDEG);
 			
 			// Vector transformation
 			
@@ -1015,13 +1417,17 @@ void repVectorTransform(float *bx_map, float *by_map, float *bz_map,
 {
 	
 	int mapsize = mInfo->ncol * mInfo->nrow;
+	float k = 1;
 	
 	switch (mInfo->repOpt) {
 		default:
 		case 0:				// xyz
+		  if ((!mInfo->cutOut && !mInfo->localCart && mInfo->spheric) ||
+		      (mInfo->cutOut && mInfo->localOpt && !mInfo->localCart && mInfo->spheric))
+		    k = -1;
 			for (int i = 0; i < mapsize; i++) {
 				b1[i] = bx_map[i];
-				b2[i] = by_map[i];
+				b2[i] = by_map[i] * k;		// Btheta pointing south
 				b3[i] = bz_map[i];
 			}
 			break;
@@ -1051,7 +1457,7 @@ void repVectorTransform(float *bx_map, float *by_map, float *bz_map,
 /* Write to output series */
 
 int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
-			 float *b1, float *b2, float *b3)
+             float *b1, float *b2, float *b3)
 {
 	
 	int status = 0;
@@ -1062,7 +1468,7 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	DRMS_Segment_t *outSeg;
 	DRMS_Array_t *outArray;
 	
-	// write b1 as the first segment
+	// write b1 as the 1st segment
 	outSeg = drms_segment_lookupnum(outRec, 0);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b1, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
@@ -1071,7 +1477,7 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	if (status) return 1;
 	drms_free_array(outArray);
 	
-	// write b2 as the second segment
+	// write b2 as the 2nd segment
 	outSeg = drms_segment_lookupnum(outRec, 1);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b2, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
@@ -1080,7 +1486,7 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	if (status) return 1;
 	drms_free_array(outArray);
 	
-	// write b3 as the third segment
+	// write b3 as the 3rd segment
 	outSeg = drms_segment_lookupnum(outRec, 2);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b3, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
@@ -1091,6 +1497,74 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	
 	return 0;
 	
+}
+
+/* ======================================= */
+
+/* Write error estimation to output series */
+
+int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
+               float *b1_err, float *b2_err, float *b3_err,
+               int *qual_map, char *confid_map)
+{
+  
+  int status = 0;
+	
+	int outDims[2];
+	outDims[0] = mInfo->ncol; outDims[1] = mInfo->nrow;
+	
+	DRMS_Segment_t *outSeg;
+	DRMS_Array_t *outArray;
+	
+	// write b1_err as the 4th segment
+	outSeg = drms_segment_lookupnum(outRec, 3);
+	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b1_err, &status);
+	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
+	outArray->parent_segment = outSeg;
+	status = drms_segment_write(outSeg, outArray, 0);
+	if (status) return 1;
+	drms_free_array(outArray);
+	
+	// write b2_err as the 5th segment
+	outSeg = drms_segment_lookupnum(outRec, 4);
+	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b2_err, &status);
+	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
+	outArray->parent_segment = outSeg;
+	status = drms_segment_write(outSeg, outArray, 0);
+	if (status) return 1;
+	drms_free_array(outArray);
+	
+	// write b3_err as the 6th segment
+	outSeg = drms_segment_lookupnum(outRec, 5);
+	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b3_err, &status);
+	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
+	outArray->parent_segment = outSeg;
+	status = drms_segment_write(outSeg, outArray, 0);
+	if (status) return 1;
+	drms_free_array(outArray);
+  
+  // write qual_map
+  if (1) {
+	outSeg = drms_segment_lookup(outRec, "qual_map");
+	outArray = drms_array_create(DRMS_TYPE_INT, 2, outDims, qual_map, &status);
+	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
+	outArray->parent_segment = outSeg;
+	status = drms_segment_write(outSeg, outArray, 0);
+	if (status) return 1;
+	drms_free_array(outArray);
+
+	
+	// write confid_map
+	outSeg = drms_segment_lookup(outRec, "confid_map");
+	outArray = drms_array_create(DRMS_TYPE_CHAR, 2, outDims, confid_map, &status);
+	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
+	outArray->parent_segment = outSeg;
+	status = drms_segment_write(outSeg, outArray, 0);
+	if (status) return 1;
+	drms_free_array(outArray);
+	} 
+  return 0;
+  
 }
 
 
