@@ -9,7 +9,9 @@
 <link rel="stylesheet" type="text/css" href="css/prototip.css" ></link>
 
 <!-- Add functions for export processing options, section 1 of 7 -->
-<SCRIPT TYPE="text/javascript" SRC="exportdata.d/HgPatch.js"></SCRIPT>
+<SCRIPT TYPE="text/javascript" SRC="exportdata.d/processing.js"></SCRIPT>
+<!-- Add functions for export protocol options, section 1 of X -->
+<SCRIPT TYPE="text/javascript" SRC="exportdata.d/protocols.js"></SCRIPT>
 
 <HEAD>
 
@@ -48,6 +50,7 @@ window.onbeforeunload = function ()
 var Host = location.host;
 var Internal = 0;
 var SeriesName;
+var SeriesInfo;
 var RequestID;
 var RecordLimit;
 var RecordCount;
@@ -67,7 +70,6 @@ var args;
 var state=0;
 var uploadOndoneAction = 0;
 var ExportProcessingArgs = "";
-var SeriesInfo;
 
 // Processing options code section 2 of 7
 // Processing specific control variables
@@ -75,6 +77,7 @@ var HgPatchActive = 0;
 var HgSeriesList;
 var HgSeriesSelected = 0;
 var HgTracked = 0;
+var ProtocolOptionsSet = 0;
 
 function OnEnterKey(evt,action)
   {
@@ -119,7 +122,7 @@ function initVars()
   ExportFilenameFmtOK = 0;
   ExportProcessingOK = 0;
   ExportUserOK = 0;
-  ExportNotifyOK = 0;
+  ExportNotifyOK = 2;
   ExportReadyOK = 0;
   TipsEnabled = 1;
   uploadOndoneAction = 0;
@@ -130,7 +133,6 @@ function initVars()
     $("ExportRequestor").value = "";
     $("ExportProcessing").value = "no_op";
     $("ExportNotify").value = "solarmail";
-    $("ExportNotifyConf").value = "solarmail";
     $("RequestIdPlace").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -154,7 +156,6 @@ function initVars()
     $("FilenameFmtRow").style.display="none";
     $("RequestorRow").style.display="none";
     $("NotifyRow").style.display="none";
-    $("ConfirmRow").style.display="none";
     $("FileUploadCheckbox").checked = 0;
     $("ExportOpID").value = "exp_request";
     $("ReRequestID").value = "";
@@ -164,9 +165,13 @@ function initVars()
 
     // Processing options code section 3 of 7
     // Init/clear display options
-    HgPatchInit();
+    ProcessingInit();
     // End of processing options section
 
+    // Protocol options code section 3 of X
+    // Init/clear display options
+    ProtocolOptionsInit();
+    // End of processing options section
     }
   FileUploadCleanup();
   }
@@ -175,7 +180,7 @@ function getargs()
   {
   state = Cookie.getData("state");
   $("ExportRequestor").value = Cookie.getData("user");
-  if ($("ExportRequestor").value == undefined)
+  if ($("ExportRequestor").value == "undefined")
     $("ExportRequestor").value = "";
   if (state == 1)
     {
@@ -283,8 +288,8 @@ function MainTips(tipstyle)
     new Tip('ProtocolHelp','Data storage protocol for data files to be fetched.  ' +
         '"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
         '"As-is" leaves the data as it is used inside the JSOC DRMS routines, with the header metadata stored in the database ' +
-        'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten. The "JPEG" option will ' +
-        ' yield  jpeg images of the data with a pre-determined scaling and colortable and the "MPEG" option will ' +
+        'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten. The "jpeg" option will ' +
+        ' yield  jpeg images of the data with a pre-determined scaling and colortable and the "mpg" option will ' +
         ' yield a movie in mp4 format along with the jpeg images that make up the frames in the movie.',tipstyle);
     new Tip('CompressHelp','Compression parameters to be used by the cfitsio library.  ' +
         'Provide up to one comma separated string for each segment name in your export.  ' +
@@ -320,7 +325,6 @@ function MainTips(tipstyle)
         'preferred export options.',tipstyle);
     new Tip('NotifyHelp','Optional email address to be used to notify you when the export is complete and ready to be ' +
         'fetched using the RequestID.',tipstyle);
-    new Tip('ConfirmHelp','Usual duplicate copy of email address to avoid lost exports due to typos.',tipstyle);
     new Tip('SendFileHelp','This action will submit the export request with the RecordSet specified in the upload file.',tipstyle);
     }
   };
@@ -483,6 +487,7 @@ function GetRSCount()
   var posRbracket = $("ExportRecordSet").value.lastIndexOf("]");
   if (posbracket == -1)
     {
+    Seriesname = $("ExportRecordSet").value;
     if (posRbracket == -1)
       {
       if (RecordLimit == 0)
@@ -494,6 +499,8 @@ function GetRSCount()
       return;
       }
     }
+  posbracket = $("ExportRecordSet").value.indexOf("[");
+  SeriesName = $("ExportRecordSet").value.substr(0,posbracket);
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCountPlace").innerHTML = "Getting count - wait...";
   RecordCount = -1;
@@ -551,11 +558,11 @@ function GetDefaultFormat()
         var nkeys = SeriesInfo.keywords.length;
         if (nprimes == 0)
           {
-          $("ExportFilenameFmt").value = "{seriesname}.{recnum:%lld}.{segment}";
+          $("ExportFilenameFmt").value = SeriesName + ".{recnum:%lld}.{segment}";
           }
         else
           {
-          var newfmt = "{seriesname}.";
+          var newfmt = SeriesName + ".";
           var i;
           for (i=0; i<nprimes; i++)
             {
@@ -679,7 +686,6 @@ function SetExportMethod()
     $("CompressRow").style.display="none";
     $("RequestorRow").style.display="none";
     $("NotifyRow").style.display="none";
-    $("ConfirmRow").style.display="none";
     }
   else if ($("ExportMethod").value == "url" ||
            $("ExportMethod").value == 'ftp' ||
@@ -693,7 +699,6 @@ function SetExportMethod()
     $("FilenameFmtRow").style.display="table-row";
     $("RequestorRow").style.display="table-row";
     $("NotifyRow").style.display="table-row";
-    $("ConfirmRow").style.display="table-row";
     if($("ExportProtocol").value == "FITS")
        $("CompressRow").style.display="table-row";
     }
@@ -724,6 +729,7 @@ function SetProcessing()
     { // Add reset code for export options here, section 5 of 7
     if (HgPatchActive)
       HgPatchInit();
+    AiaScaleInit();
     isok = 1;
     }
   else if ($("ExportProcessing").value == "hg_patch") // Export option block for HgPatch, section 6 of 7
@@ -734,6 +740,13 @@ function SetProcessing()
     $("ProcessHgPatch").style.display="table-row";
     if (CheckHgPatch())
       isok = 1;
+    AiaScaleInit();
+    }
+  else if ($("ExportProcessing").value == "aia_scale") // Export option block for Normalize Scale, section 6 of 7
+    {
+    $("ProcessAiaScale").style.display="table-row";
+    ExportProcessingArgs = "aia_scale";
+    isok = 1;
     }
   if (isok)
     ExportProcessingOK = 1;
@@ -743,54 +756,70 @@ function SetProcessing()
   }
 
 function SetExportProtocol()
-{
+  {
   var tmp = $("ExportProtocol").value.toUpperCase();
 
   if (tmp == "MPEG")
-  {
-     $("ExportProtocol").value = "MPEG";
-     $("ExportProtocolHidden").value = "MPEG";
-     ExportProtocolOK = 4;
-     $("CompressRow").style.display="none";
-  }
+    {
+    $("ExportProtocol").value = "MPEG";
+    ExportProtocolOK = 4;
+    $("CompressRow").style.display="none";
+    $("ExportProtocolHidden").value = "mpg";
+    }
+  else if (tmp == "MP4")
+    {
+    $("ExportProtocol").value = "MP4";
+    ExportProtocolOK = 4;
+    $("CompressRow").style.display="none";
+    $("ExportProtocolHidden").value = "mp4";
+    }
   else if (tmp == "JPEG")
-  {
-     $("ExportProtocol").value = "JPEG";
-     $("ExportProtocolHidden").value = "JPEG";
-     ExportProtocolOK = 3;
-     $("CompressRow").style.display="none";
-  }
+    {
+    $("ExportProtocol").value = "JPEG";
+    ExportProtocolOK = 3;
+    $("CompressRow").style.display="none";
+    $("ExportProtocolHidden").value = "jpg";
+    }
   else if (tmp == "FITS")
-  {
-     $("ExportProtocol").value = "FITS";
-     $("ExportProtocolHidden").value = "FITS";
-     ExportProtocolOK = 2;
-     $("CompressRow").style.display="table-row";
-  }
+    {
+    $("ExportProtocol").value = "FITS";
+    ExportProtocolOK = 2;
+    $("CompressRow").style.display="table-row";
+    $("ExportProtocolHidden").value = "FITS";
+    }
   else if ($("ExportProtocol").value == "as-is")
-  {
-     $("ExportProtocolHidden").value = "as-is";
-     ExportProtocolOK = 1;
-     $("CompressRow").style.display="none";
-  }
+    {
+    ExportProtocolOK = 1;
+    $("CompressRow").style.display="none";
+    $("ExportProtocolHidden").value = "as-is";
+    }
   else
-  {
-     ExportProtocolOK = 0;
-     alert('Export Protocol - must be "as-is", "FITS", "JPEG", or "MPEG"'); 
-     $("ExportProtocolHidden").value = "";
-     $("ExportProtocol").value = "";
+    {
+    ExportProtocolOK = 0;
+    alert('Export Protocol - must be "as-is", "FITS", "JPEG", "MP4" OR "MPG"'); 
+    $("ExportProtocol").value = "";
+    $("ExportProtocolHidden").value = "NOT_VALID";
+    }
+  if (ExportProtocolOK == 4 || ExportProtocolOK == 3)
+    if (ProtocolOptionsSet)
+      ProtocolSetMinMax();
+    else
+      ProtocolImageInit(ExportProtocolOK);
   }
-}
 
 function SetExportCompress()
   {
   var protocolparam = $("ExportProtocol").value;
   if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
       {
-      for (var i=0; i < SeriesInfo.segments.length; i++)
-        protocolparam = protocolparam  + "," + $("ExportCompress").value;
+      var tmp = SeriesName.toUpperCase();
+      if (tmp == "HMI.AIA" || tmp == "AIA.LEV1_EUV_12S" || tmp == "AIA.LEV1_UV_24S" || tmp == "AIA.LEV1_VIS_1H")
+        protocolparam = "as-is";
+      else
+        for (var i=0; i < SeriesInfo.segments.length; i++)
+          protocolparam = protocolparam  + "," + $("ExportCompress").value;
+      $("ExportProtocolHidden").value = protocolparam;
       }
-  $("ExportProtocolHidden").value = protocolparam;
   ExportCompressOK = 1;
   }
 
@@ -810,26 +839,31 @@ function SetExportUser()
 function SetExportNotify()
   {
   var tmp1 = $("ExportNotify").value.toUpperCase();
-  var tmp2 = $("ExportNotifyConf").value.toUpperCase();
   if (tmp1.length == 0)
     {
     ExportNotifyOK = 0;
-    alert("Please enter e-mail address in Notify and Confirm fields.");
+    $("ExportNotify").value = "NO";
     return;
     }
-  if ( tmp1 == tmp2 )
+  if ( tmp1 ==  "SOLARMAIL" )
     {
-    if ( tmp1 ==  "SOLARMAIL" )
-      ExportNotifyOK = 2;
-    else if ( tmp1 == "NONE" || tmp1 == "NO")
-      ExportNotifyOK = 3;
-    else
-      ExportNotifyOK = 1;
+    ExportNotifyOK = 2;
+    if ($("ExportRequestor").value.length <= 0)
+      {
+      ExportUserOK = 0;
+      ExportNotifyOK = 0;
+      }
     }
+  else if ( tmp1 == "NONE" || tmp1 == "NO")
+    ExportNotifyOK = 3;
   else
     {
-    alert("Please enter same e-mail address in both places.");
-    ExportNotifyOK = 0;
+    if ($("ExportNotify").value.indexOf("@") < 0)
+      { 
+      ExportNotifyOK = 0;
+      }
+    else
+      ExportNotifyOK = 1;
     }
   }
 
@@ -873,23 +907,23 @@ function CheckExportParams()
     {
     SetExportCompress();
     }
-  if (Internal)
+  if (Internal || ExportNotifyOK == 2)
     {
     SetExportUser();
     if (ExportUserOK == 0)
       {
       $("ExportButtonMsg").innerHTML = "Retry after entering your identification in Requestor field";
-      alert("Requestor not given, Enter name you will use in Requestor field then retry export request.");
-      return 0;
-      }
-    SetExportNotify();
-    if (ExportNotifyOK == 0)
-      {
-      $("ExportButtonMsg").innerHTML = "Retry after entering your e-mail address in Notify field";
-      alert("Notify email not given or confirmed, Enter 'solarmail' or 'no' or email address then retry export request.");
+      alert("Requestor not given, Enter name you will use in Requestor field then retry export request.  This field in required if Notify is 'solarmail'");
       return 0;
       }
     }
+    SetExportNotify();
+    if (ExportNotifyOK == 0)
+      {
+      $("ExportButtonMsg").innerHTML = "Retry after entering your complete e-mail address or 'NO' or 'solarmail' in Notify field";
+      alert("Notify email not given or confirmed, Enter 'solarmail' or 'no' or email address then retry export request.");
+      return 0;
+      }
   return 1;
   }
 
@@ -914,8 +948,8 @@ function GetExport()
     $("ExportButton").value = "Processing ...";
     $("ExportButton").style.backgroundColor = "#FFD8D8";
     var protocolparam =  $("ExportProtocolHidden").value;
-    if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
-      protocolparam = protocolparam + "," + $("ExportCompress").value;
+    // if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
+      // protocolparam = protocolparam + "," + $("ExportCompress").value;
     var RecordSet = $("ExportRecordSet").value;
     var exportparameters = new Hash( {"op" : $("ExportOpID").value,
                  		      "ds" : RecordSet, 
@@ -1403,18 +1437,8 @@ access the data.
       <TD colspan=2><input id="ExportFilenameFmt" type="text" name="filenamefmt" value="no_op" style="width:30em" onChange="SetFilenameFmt();" > File name template.</TD>
     </TR>
   
-    <TR ID="ProcessRow">
-      <TD>Processing</TD>
-      <TD><SPAN ID="ProcessingHelp" class="tip">?</SPAN></TD>
-      <TD><select id="ExportProcessing" type="text" name="processraw" style="width:15em" onChange="SetProcessing();" >
-        <option value="no_op">none
-        <option value="hg_patch">hg_patch
-        </select> </TD>
-      <TD>Select Pre-export processing</TD>
-    </TR>
-
     <!-- Processing selection detail rows go here. section 7 of 7 -->
-    <!--#include virtual="exportdata.d/HgPatch.html" -->
+    <!--#include virtual="exportdata.d/processing.html" -->
   
     <TR ID="ProtocolRow">
       <TD>Protocol</TD>
@@ -1424,9 +1448,13 @@ access the data.
             <option value="FITS">FITS
             <option value="JPEG">JPEG
             <option value="MPEG">MPEG
+            <option value="MP4">MP4
           </select> </TD>
-      <TD>Choose protocol, "FITS", "JPEG", "MPEG", or "as-is".</TD>
+      <TD>Choose protocol, "FITS", "JPEG", "MPG", "MP4", or "as-is". Note AIA lev1 FITS,compressed is same as "as-is".</TD>
     </TR>
+
+    <!-- Protocol selection detail rows go here. section 1 of X -->
+    <!--#include virtual="exportdata.d/protocols.html" -->
   
     <TR ID="CompressRow">
       <TD>Compression</TD>
@@ -1449,13 +1477,6 @@ access the data.
       <TD><SPAN ID="NotifyHelp" class="tip">?</SPAN></TD>
       <TD><input id="ExportNotify" type="text" name="notify" value="" onChange="ExportNop();" ></TD>
       <TD>Provide your email address for notification.  May be omitted for online delivery.</TD>
-    </TR>
-  
-    <TR ID="ConfirmRow">
-      <TD>Confirm Email</TD>
-      <TD><SPAN ID="ConfirmHelp" class="tip">?</SPAN></TD>
-      <TD><input id="ExportNotifyConf" type="text" name="notifyconf" value="" onChange="ExportNop();" ></TD>
-      <TD>Please confirm e-mail address.</TD>
     </TR>
   
     <TR ID="AjaxExportRequestRow">
