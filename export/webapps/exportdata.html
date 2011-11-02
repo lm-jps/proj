@@ -838,6 +838,11 @@ function SetExportUser()
 
 function SetExportNotify()
   {
+  if ($("ExportMethod").value == "url_direct" || $("ExportMethod").value == "url_quick")
+    {
+    ExportNotifyOK = 1;
+    return;
+    }
   var tmp1 = $("ExportNotify").value.toUpperCase();
   if (tmp1.length == 0)
     {
@@ -907,7 +912,7 @@ function CheckExportParams()
     {
     SetExportCompress();
     }
-  if (Internal || ExportNotifyOK == 2)
+  if ((Internal && ExportNotifyOK != 1) || ExportNotifyOK == 2)
     {
     SetExportUser();
     if (ExportUserOK == 0)
