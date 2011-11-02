@@ -9,8 +9,8 @@
 			
 	
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V1.12r0" 
-	#define CODE_DATE 		"Wed Oct 12 09:01:28 HST 2011" 
+	#define CODE_VERSION 	"V1.14r0" 
+	#define CODE_DATE 		"Sat Oct 22 09:44:08 HST 2011" 
 */
 
 #include "limbfit.h"
@@ -73,7 +73,7 @@ void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out,DRMS_Arra
 int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int cc, int spe, int iter, char *dsin, char *comment, int debug, int *status)    
 {
 	static char *log_msg_code="process_n_records";
-	char log_msg[120];
+	char log_msg[200];
 	sprintf(log_msg,"doing process for %s -> %s",open_dsname,dsout);
 	lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, opf);			
 	static char errcode[20]=PROCSTAT_NOK;
@@ -187,7 +187,7 @@ int DoIt(void)
 	long long efsn = params_get_int (params, "efsn");
 
 	static char *log_msg_code="DoIt";
-	char log_msg[120];
+	char log_msg[200];
 	int result;
 		
 	static char open_dsname[256];

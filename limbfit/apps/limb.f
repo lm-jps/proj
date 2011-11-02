@@ -1,7 +1,7 @@
 c------------------------------------------------------------------------------------------------
 c	#define CODE_NAME 		"limbfit"
-c	#define CODE_VERSION 	"V1.12r0" 
-c	#define CODE_DATE 		"Wed Oct 12 09:01:28 HST 2011" 
+c	#define CODE_VERSION 	"V1.14r0" 
+c	#define CODE_DATE 		"Sat Oct 22 09:44:08 HST 2011" 
 c------------------------------------------------------------------------------------------------
 c Revision 1.0  2009/01/08  17:20:00  Marcelo Emilio
 c changed assumed-size array declaration from "real xxx(1)" to "real xxx(3)"
@@ -117,7 +117,7 @@ c Initialize stuff; find the min & max radii
 	   ir=ir+1
 2       enddo 
 	if(centyp.eq.1) goto 40 
-c	PRINT*, ("center determination")
+c	PRINT*, ("center determination"),cmx,cmy
 c Begin center-finding routine.  Starting from the rough center input, find
 c the mean radius of the annulus.  Define a sub-annulus; find intensity(angle).
 c Iteratively, find a new center that minimizes the difference in the measured

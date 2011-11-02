@@ -7,8 +7,8 @@
 			
 	
 	#define lfr->code_name 		"limbfit"
-	#define lfr->code_version 	"V1.12r0" 
-	#define lfr->code_date 		"Wed Oct 12 09:01:28 HST 2011" 
+	#define lfr->code_version 	"V1.14r0" 
+	#define lfr->code_date 		"Sat Oct 22 09:44:08 HST 2011" 
 */
 
 #include "limbfit.h"
@@ -28,7 +28,7 @@ int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn,
 	int kw_i;
 	char *kw_c;
 	int rstatus;
-	char log_msg[120];
+	char log_msg[200];
 	char *log_msg_code="get_set_kw";
 
 	switch( typ ) 
@@ -91,7 +91,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 	static LIMBFIT_OUTPUT *lfr = &limbfit_res;
  	int lf_retcode;
 	int rstatus;
-	char log_msg[120];
+	char log_msg[200];
 	
 	int seg_cnt;
 	DRMS_Segment_t *segment_in;

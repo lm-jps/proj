@@ -1,6 +1,6 @@
 JPLAT=linux_x86_64
 include Makevars/Makevars_$(JPLAT).mk
-ICC =           icc
+ICC =           icc 
 CC =            $(ICC)
 #CFLAGS =        -O3 -std=c99 -Wall -g
 CFLAGS =        -O3 -std=c99 -Wall

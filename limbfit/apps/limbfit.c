@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V1.12r0" 
-	#define CODE_DATE 		"Wed Oct 12 09:01:28 HST 2011" 
+	#define CODE_VERSION 	"V1.14r0" 
+	#define CODE_DATE 		"Sat Oct 22 09:44:08 HST 2011" 
 */
 
 #include "limbfit.h"
@@ -17,7 +17,7 @@
 int limbfit(LIMBFIT_INPUT *input,LIMBFIT_OUTPUT *results,FILE *opf,int debug)
 {
 static char *log_msg_code="limbfit";
-char log_msg[120];
+char log_msg[200];
 
 if (debug) lf_logmsg("DEBUG", "APP", 0, 0, "", log_msg_code, opf);
 
@@ -45,6 +45,7 @@ float 	dy		 = INC_Y;
 int		naxis_row= input->img_sz0;
 int		naxis_col= input->img_sz1;
 float	lahi	 = AHI;
+//int		skip	 = SKIPGC;
 //float 	flag	 = BAD_PIXEL_VALUE; 
 int		iter	 = NB_ITER;
 if (input->iter!=NB_ITER) iter=input->iter; 
@@ -60,156 +61,18 @@ if (input->spe==1)
 /************************************************************************/
 /*                        set parameters                               */
 /************************************************************************/
-long npixels=naxis_row*naxis_col;
 long ii, jj, jk, i,j; 
 float cmx, cmy,r;//, guess_cx, guess_cy, guess_r;
 int nitr, ncut, ifail;
 int jreg, jang, jprf;
 
-int cx = naxis_row/2;
-int cy = naxis_col/2;
 r  = (float)naxis_row/2;
-int ng = naxis_row/16;//4; 
-int nb_lines=3;
-float *Dx, *xx;
-float *line;
 float sav_max=0.;
 	
-if (input->cc == 0) 
-{
-	/* Initial guess estimate of center position from Richard's code*/
-		cmx=(float)input->ix;
-		cmy=(float)input->iy;
-		r=(float)input->ir;
-}
-else
-{
-		/***********************************************************************
-		   Find the guess for the center position and radius                 
-		***********************************************************************/
-		int nb_iters=3;
-
-		line = (float *) malloc(sizeof(float)*(nb_lines*ng));
-		if(!line) 
-		{
-			lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (line)", log_msg_code, opf);
-			return ERR_MALLOC_FAILED;
-		}
-
-	
-		for (i=0;i<npixels;i++)
-			if (data[i] <0.0)
-				data[i] =0.0;
-	
-		Dx = (float *) malloc(sizeof(float)*(nb_lines*ng));
-			if(!Dx) 
-			{
-				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (Dx)", log_msg_code, opf);
-				return ERR_MALLOC_FAILED;
-			}
-
-		xx = (float *) malloc(sizeof(float)*(nb_lines*ng));
-			if(!xx) 
-			{
-				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (xx)", log_msg_code, opf);
-				return ERR_MALLOC_FAILED;
-			}
-
-		int k, kk, dh, vv; 
-		float x1, x2, x3, y1, y2, y3, ma, mb, mx[nb_lines], maximo;
-		
-		for(jj = 0; jj < nb_iters ; jj++) 
-		{		
-			for(ii = 0; ii < ng ; ii++)
-			{
-				xx[ii] = (float)ii;
-				line[ii] = 0;
-				if (data[ii*naxis_col+cy] > 0) line[ii] = data[ii*naxis_col+cy];
-			}
-	
-			for(ii = naxis_row-1; ii > naxis_row-ng-1 ; ii--) 
-			{
-				vv=abs(ii-naxis_row+1);
-				xx[ng+vv] = (float)ii;
-				line[ng+vv] = 0;
-				if (data[ii*naxis_col+cy] > 0) line[ng+vv] = data[ii*naxis_col+cy];
-			 }
-			
-			for(ii = 0; ii < ng ; ii++) 
-			{
-				xx[(2*ng)+ii] =  (float)ii;
-				line[(2*ng)+ii] = 0;
-				if (data[cx*naxis_col+ii] > 0) line[(2*ng)+ii] = data[cx*naxis_col+ii];
-			}
-			dh = 1;
-			for(k = 0; k < nb_lines ; k++) 
-			{
-				kk=k*ng;
-				 /* Calculate the Derivative */ 
-				Dx[kk]		=(float)(-3*line[kk+4]+16*line[kk+3]-36*line[kk+2]+48*line[kk+1]-25*line[kk])/(12*dh);
-				Dx[kk+1]	=(float)(line[kk+4]-6*line[kk+3]+18*line[kk+2]-10*line[kk+1]-3*line[kk])/(12*dh);
-				for (i=2; i< ng-2; i++) 
-					Dx[kk+i]=(float)(line[kk+i-2]-8*line[kk+i-1]+8*line[kk+i+1]-line[kk+i+2])/(12*dh);
-				Dx[kk+ng-2] =(float)(-line[kk+ng-5] +6*line[kk+ng-4]-18*line[kk+ng-3]+10*line[kk+ng-2]+3*line[kk+ng-1])/(12*dh);
-				Dx[kk+ng-1] =(float)(3*line[kk+ng-5]-16*line[kk+ng-4]+36*line[kk+ng-3]-48*line[kk+ng-2]+25*line[kk+ng-1])/(12*dh);
-				
-				/* square the result */
-				for(ii = 0; ii < ng ; ii++) 
-					Dx[kk+ii]=Dx[kk+ii]*Dx[kk+ii];
-	
-				for(ii = 0; ii < ng ; ii++) 
-					if (line[kk+ii] < 0.0001)   // IS: because a float cannot be compared to 0
-						Dx[kk+ii]=0; 
-	
-				 /* smooth */
-				for(ii = 1; ii < ng-1 ; ii++) 
-					Dx[kk+ii]=(Dx[kk+ii-1]+Dx[kk+ii]+Dx[kk+ii+1])/3;
-				
-				 /* find the maximum */
-				mx[k]=0.;					
-				maximo=-1.;
-				for(ii = 1; ii < ng-1 ; ii++) {
-					if (Dx[kk+ii] > maximo) {
-						maximo=Dx[kk+ii];
-						mx[k]=xx[kk+ii];
-					}
-				}
-			} // endfor k
-	
-			/* find the geometric center */
-			
-			y1 = (float)mx[0];
-			x1 = (float)cy;
-			y3 = (float)mx[1];
-			x3 = (float)cy;
-			y2 = (float)cx;
-			x2 = (float)mx[2];
-
-			if (mx[0] > sav_max) sav_max=mx[0];
-			if (mx[1] > sav_max) sav_max=mx[1];
-			if (mx[2] > sav_max) sav_max=mx[2];
-			
-			ma=(y2-y1)/((x2-x1)*1);
-			mb=(y3-y2)/((x3-x2)*1);
-			
-			cx=(int) ((ma*mb*(y1-y3)+mb*(x1+x2)-ma*(x2+x3))/(2*(mb-ma)));
-			cy=(int) (-(cx-(x1+x2)/2.)/ma+(y1+y2)/2.);
-			r=(float)sqrt((x1-cx)*(x1-cx)+(y1-cy)*(y1-cy));		
-		} // endfor jj
-		
-		if (debug) 
-		{
-			sprintf(log_msg," Guess : cx = %6i, cy = %6i, r = %6.2f", cx, cy, r);
-			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
-		}
-	
-	/************************************************************************/
-	/*                        set parameters                               */
-	/************************************************************************/		
-	/* Initial guess estimate of center position */
-		cmx=(float)cx;
-		cmy=(float)cy;
-} //skip center calculation
+/* Initial guess estimate of center position from Richard's code*/
+	cmx=(float)input->ix;
+	cmy=(float)input->iy;
+	r=(float)input->ir;
 
 jreg = nreg ;
 jang = nang + 1;
@@ -350,6 +213,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 	}
 //printf("ifail %d %f %f\n",ifail,cmx,cmy);
+
 	centyp=1;
 	if (iter > 1 && ifail == 0)
 	{	
@@ -398,7 +262,7 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 		sprintf(log_msg," nitr = %6d", nitr);
 		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
-		sprintf(log_msg," cx = %6.2f, cy = %6.2f", cmx, cmy);
+		sprintf(log_msg," cmx = %6.2f, cmy = %6.2f", cmx, cmy);
 		lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, opf);
 	}
 	
@@ -748,16 +612,9 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		results->cc=input->cc;
 	} // end limb failed
 	// IS: do not free those (save_ldf,save_params,save_alpha_beta) passed from or to the structure !
-//	if (ifail !=4) {
 		free(x);
 		free(y);
 		free(v); 
-		if (input->cc == 1) 
-		{
-			free(line);
-			free(Dx);
-			free(xx);
-		}
 		free(rprf);
 		free(alph);
 		free(beta);
@@ -767,8 +624,6 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 		free(b0);
 		free(lprf);
 		if (debug != 3) free(anls);
-//sprintf("end free\n");	
-//	}
 	if (debug)
 	{	
 		sprintf(log_msg," >>>>end of limbfit with: %d", ret_code);
@@ -776,7 +631,6 @@ b0 = (float *) malloc(sizeof(float)*(nreg));
 	}
 	sprintf(log_msg," end: RC: %d - limb:%d - fit:%d - quality: %d", ret_code, results->error1, results->error2, results->quality);
 	lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
-//printf("end\n");	
 
 return(ret_code);
 
@@ -808,7 +662,7 @@ int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6],
 {
 	static char *log_msg_code="gaussfit";
 	int ret_code=0;
-	char log_msg[120];
+	char log_msg[200];
 	
 	const gsl_multifit_fdfsolver_type *T;
 	gsl_multifit_fdfsolver *s;
@@ -928,7 +782,7 @@ double fin_min(double A[6], double m, int range, int debug, FILE *opf)
 	int status;
 	gsl_set_error_handler_off();
 	int ret_code=0;
-	char log_msg[120];
+	char log_msg[200];
 	
 	 int iter = 0, max_iter = 1000;
 	 const gsl_min_fminimizer_type *T;
