@@ -126,6 +126,17 @@ cfitsio and postgres that are essential for DRMS, reside in one of the default
 search locations, /usr/lib or /usr/local/lib. If they are elsewehere, then
 you will need to add the base path to the LIBD definition line in the Makefile.
 
+In order to build a debug version of any of the modules in the project (with
+symbols and without optimization), you can set the environment variable JPLAT
+to debug. The debug "platform" variables are identical to those in the
+linux_x86_64 file, except for the C compiler options. Since it is very likely
+in debugging that you may need symbols in the DRMS library as well, you should
+build a debug platform version of that library by running (in the DRMS root
+directory):
+
+	setenv JSOC_DEBUG 1
+	make MACH=debug
+
 ********************************************************************************
 
 Recipe 1: How to write and build a minimal DRMS module
