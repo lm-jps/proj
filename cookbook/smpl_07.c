@@ -98,7 +98,7 @@ int DoIt (void) {
   int axes[2];
   int status = 0;
 
-  char *series = params_get_str (params, "ds");
+  char *series = strdup (params_get_str (params, "ds"));
   int cols = params_get_int (params, "cols");
   int rows = params_get_int (params, "rows");
   int distrib = params_get_int (params, "dist");
