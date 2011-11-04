@@ -53,7 +53,7 @@ int DoIt (void) {
   int ival = params_get_int (params, "ival");
   int colour = params_get_int (params, "colour");
   int mois = params_get_int (params, "mois");
-  char *name = params_get_str (params, "name");
+  char *name = strdup (params_get_str (params, "name"));
   int flagset = params_isflagset (params, "e");
 
   printf ("name = %s\n", name);
