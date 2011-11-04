@@ -86,8 +86,8 @@ int DoIt () {
   int n, seg_selected;
   int status;
 						/* Get command line arguments */
-  char *dsspec = params_get_str (&cmdparams, "ds");
-  char *seg_name = params_get_str (&cmdparams, "seg");
+  char *dsspec = strdup (params_get_str (&cmdparams, "ds"));
+  char *seg_name = strdup (params_get_str (&cmdparams, "seg"));
 
   seg_selected = strcmp (seg_name, "Not Specified");
   drs = drms_open_records (drms_env, dsspec, &status);
