@@ -37,8 +37,8 @@ int DoIt (void) {
   char *line = (char *)malloc (linelen);
   int rct = 0, status = 0;
 
-  char *series = params_get_str (params, "ds");
-  char *filename = params_get_str (params, "data");
+  char *series = strdup (params_get_str (params, "ds"));
+  char *filename = strdup (params_get_str (params, "data"));
   int verbose = cmdparams_exists (&cmdparams, "v");
 
   datafile = fopen (filename, "r");
