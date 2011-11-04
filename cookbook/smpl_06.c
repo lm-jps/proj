@@ -77,11 +77,11 @@ int DoIt (void) {
   DRMS_Record_t *record;
   int rec, recct, status = 0;
 
-  char *dspec = params_get_str (params, "ds");
+  char *dspec = strdup (params_get_str (params, "ds"));
   TIME date = params_get_time (params, "date");
   int arnum = params_get_int (params, "ar");
-  char *keynam = params_get_str (params, "key");
-  char *keyval = params_get_str (params, "value");
+  char *keynam = strdup (params_get_str (params, "key"));
+  char *keyval = strdup (params_get_str (params, "value"));
   int force = params_isflagset (params, "f");
 
   if (!(ds = drms_open_records (drms_env, dspec, &status))) {
