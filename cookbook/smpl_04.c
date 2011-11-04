@@ -32,7 +32,7 @@ int DoIt (void) {
   int status = 0;
   char query[DRMS_MAXQUERYLEN];
 
-  char *ds = params_get_str (params, "ds");
+  char *ds = strdup (params_get_str (params, "ds"));
 
   record = drms_template_record (drms_env, ds, &status);
   if (record && !status) {
