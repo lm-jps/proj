@@ -34,7 +34,7 @@ ModuleArgs_t module_args[] = {
 int DoIt (void) {
   int status;
 
-  char *msg = cmdparams_get_str (&cmdparams, "print", &status);
+  char *msg = strdup (cmdparams_get_str (&cmdparams, "print", &status));
 
   if (params_isflagset (&cmdparams, "v"))
     printf ("running module %s version %s\n", module_name, version_id);
