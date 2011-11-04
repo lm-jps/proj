@@ -30,7 +30,7 @@ CmdParams_t cmdparams;
 
 int DoIt (void) {
   int status;
-  char *msg = cmdparams_get_str (&cmdparams, "print", &status);
+  char *msg = strdup (cmdparams_get_str (&cmdparams, "print", &status));
   printf ("%s\n", msg);
   return 0;
 }
