@@ -61,6 +61,7 @@ $(VFISV_COBJ_$(d)):	ICC_CMPLR := /home/jsoc/mpich2/bin/mpicc
 # files in a specific order - you must compile dependent files before you compile the files that require
 # the dependent files. So we have to specify the order of compilation of the f90 files (by specifying
 # the dependency relationships between them.
+$(d)/change_var.o: $(d)/cons_param.o  $(d)/filt_param.o
 $(d)/filt_init.o: $(d)/filt_param.o $(d)/cons_param.o $(d)/line_param.o
 $(d)/filt_param.o: $(d)/line_param.o $(d)/cons_param.o
 $(d)/forward.o: $(d)/line_param.o $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_param.o $(d)/voigt.o $(d)/voigt_taylor.o $(d)/change_var.o
