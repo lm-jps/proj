@@ -18,8 +18,8 @@ VFISV_FOBJ_$(d)	:= $(addprefix $(d)/, $(notdir $(patsubst %.f,%.o,$(wildcard $(S
 VFISV_FOBJ_$(d)	:= $(VFISV_FOBJ_$(d)) $(addprefix $(d)/, $(notdir $(patsubst %.f90,%.o,$(wildcard $(SRCDIR)/$(d)/*.f90))))
 
 # Actually, we don't need dmrs.f90 for now
-EXCLUDE_$(d)	:= $(d)/dmrs.o
-VFISV_FOBJ_$(d) := $(filter-out $(EXCLUDE_$(d)),$(VFISV_FOBJ_$(d)))
+# EXCLUDE_$(d)	:= $(d)/dmrs.o
+# VFISV_FOBJ_$(d) := $(filter-out $(EXCLUDE_$(d)),$(VFISV_FOBJ_$(d)))
 
 MODEXE_USEF_$(d):= $(VFISV_$(d))
 MODEXE_USEF	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
@@ -63,14 +63,14 @@ $(VFISV_COBJ_$(d)):	ICC_CMPLR := /home/jsoc/mpich2/bin/mpicc
 # the dependency relationships between them.
 $(d)/filt_init.o: $(d)/filt_param.o $(d)/cons_param.o $(d)/line_param.o
 $(d)/filt_param.o: $(d)/line_param.o $(d)/cons_param.o
-$(d)/forward.o: $(d)/line_param.o $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_param.o $(d)/voigt.o $(d)/voigt_taylor.o
+$(d)/forward.o: $(d)/line_param.o $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_param.o $(d)/voigt.o $(d)/voigt_taylor.o $(d)/change_var.o
 $(d)/free_init.o: $(d)/inv_param.o $(d)/cons_param.o $(d)/filt_param.o
 $(d)/free_memory.o: $(d)/filt_param.o $(d)/svd_param.o $(d)/line_param.o
 $(d)/inv_param.o: $(d)/cons_param.o
 $(d)/inv_utils.o: $(d)/cons_param.o $(d)/filt_param.o $(d)/svd_param.o $(d)/inv_param.o $(d)/line_param.o $(d)/svdcmp.o $(d)/svbksb.o $(d)/ran_mod.o
 $(d)/wfa_guess.o: $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_param.o
 $(d)/ran_mod.o: $(d)/cons_param.o
-$(d)/invert.o: $(d)/invert.f90 $(d)/forward.o $(d)/line_param.o $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_utils.o $(d)/svd_param.o $(d)/inv_param.o $(d)/svdcmp.o $(d)/svbksb.o $(d)/wfa_guess.o
+$(d)/invert.o: $(d)/invert.f90 $(d)/forward.o $(d)/line_param.o $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_utils.o $(d)/svd_param.o $(d)/inv_param.o $(d)/svdcmp.o $(d)/svbksb.o $(d)/wfa_guess.o $(d)/change_var.o
 $(d)/line_init.o: $(d)/line_param.o $(d)/cons_param.o
 $(d)/line_param.o: $(d)/cons_param.o
 $(d)/svbksb.o: $(d)/cons_param.o
