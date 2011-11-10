@@ -139,8 +139,8 @@ function initVars()
     $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("ExportRecordSet").value = "";
-    $("ExportProtocol").value = "as-is";
-    $("ExportProtocolHidden").value = "as-is";
+    $("ExportProtocol").value = "FITS";
+    $("ExportProtocolHidden").value = "FITS";
     $("ExportCompress").value = "compress Rice";
     $("ExportProcessingHidden").value = "no_op";
     $("ExportMethod").value = "url_quick";
@@ -813,7 +813,7 @@ function SetExportCompress()
   if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
       {
       var tmp = SeriesName.toUpperCase();
-      if (tmp == "HMI.AIA" || tmp == "AIA.LEV1_EUV_12S" || tmp == "AIA.LEV1_UV_24S" || tmp == "AIA.LEV1_VIS_1H")
+      if (tmp == "AIA.LEV1" || tmp == "AIA.LEV1_EUV_12S" || tmp == "AIA.LEV1_UV_24S" || tmp == "AIA.LEV1_VIS_1H")
         protocolparam = "as-is";
       else
         for (var i=0; i < SeriesInfo.segments.length; i++)
