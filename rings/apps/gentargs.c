@@ -70,6 +70,8 @@
  *				20 deg spacings
  *		timed24		HMI time-distance synoptic set of 25 tiles at
  *				24 deg spacings
+ *		timed24+	HMI time-distance synoptic set of 25 tiles at
+ *				24 deg spacings plus 4 extremal tiles at 68 deg
  *		mdidp		MDI "extended dense-pack" set of 195 tiles
  *		mdisp		MDI "structure-pack" set of 39 tiles
  *		rdcm05		central meridian strip from rdsyn05
@@ -90,6 +92,8 @@
  *		rdx30		"X" pattern from rdsyn30 (lat = +/- lonCM) (17)
  *
  *  Flags
+ *	B		use geocentric center of disc latitude as base for
+ *		latitude targets, rather then equator
  *	M		use SOHO ephemeris for B0 calculation or conversion of
  *		time in calendar-clock format to Carrington time
  *	c		report longitudes relative to CM rather than HG
@@ -102,6 +106,8 @@
  *	implemented for the rd+30 grid
  *    A number of the options have not been implemented at all
  *    There may be problems parsing regular calendar-clock time strings
+ *    There is no check in the -B case that the requested targets do not go
+ *	beyond the poles
  *
  *  Revision history is at end of file.
  */
@@ -112,14 +118,16 @@
 #include "soho_ephem.c"
 						      /*  module identifier  */
 char *module_name = "track_target_list";
-char *version_id = "1.0";
+char *version_id = "1.1";
 
 ModuleArgs_t module_args[] = {
   {ARG_TIME,   "time",  "now-120deg", "midpoint of desired tracking interval"},
   {ARG_NUME, "grid", "discross", "target grid",
-      "discross, rdsyn05, rdsyn15, rdsyn30, timed20, timed24, mdidp, mdisp, rd+05, rd+15, rd+30, rdx05, rdx15, rdx30, rdcm05, rdcm15, rdcm30, rdeq05, rdeq15, rdeq30"},
+      "discross, rdsyn05, rdsyn15, rdsyn30, timed20, timed24, timed24+, mdidp, mdisp, rd+05, rd+15, rd+30, rdx05, rdx15, rdx30, rdcm05, rdcm15, rdcm30, rdeq05, rdeq15, rdeq30"},
   {ARG_INTS,	"ar", "{}",
       "target active regions for ring diagrams structure grid"},
+  {ARG_FLAG,   "B", "",
+      "use midtime geocentric latitude of disc center as base for latitude targets"}, 
   {ARG_FLAG,   "M", "", "midtime Carrington longitude appropriate for MDI"}, 
   {ARG_FLAG,   "c", "", "report longitudes relative to CM rather than HG"}, 
   {ARG_FLAG,   "v", "", "run verbose (with commentary to stderr)"}, 
@@ -309,16 +317,16 @@ int dense_pack_list (double clon) {
   return 0;
 }
 
-int timed_grid_list (double clon, float step) {
+int timed_grid_list (double clon, double clat, float step) {
   float lat, lon, loncm;
   float edge = 2.0 * step;
 
-  for (lat = -edge; lat <= edge; lat += step) {
+  for (lat = clat - edge; lat <= clat + edge; lat += step) {
     for (loncm = -edge; loncm <= edge; loncm += step)
       printf (" %+05.1f", lat);
   }
   printf ("\n");
-  for (lat = -edge; lat <= edge; lat += step) {
+  for (lat = clat - edge; lat <= clat + edge; lat += step) {
     for (loncm = -edge; loncm <= edge; loncm += step) {
       lon = clon + loncm;
       while (lon < 0.0) lon += 360.0;
@@ -326,6 +334,42 @@ int timed_grid_list (double clon, float step) {
       printf (" %05.1f", lon);
     }
   }
+  printf ("\n");
+  return 0;
+}
+
+int timed_grid_list_plus (double clon, double clat) {
+  float lat, lon, loncm;
+  float step = 24.0, edge = 48.0;
+
+  for (lat = clat - edge; lat <= clat + edge + 0.1; lat += step) {
+    for (loncm = -edge; loncm <= edge; loncm += step)
+      printf (" %+05.1f", lat);
+  }
+  printf (" %+05.1f", clat - edge - 20.0);
+  printf (" %+05.1f", clat);
+  printf (" %+05.1f", clat);
+  printf (" %+05.1f", clat + edge + 20.0);
+  printf ("\n");
+
+  for (lat = clat - edge; lat <= clat + edge + 0.1; lat += step) {
+    for (loncm = -edge; loncm <= edge; loncm += step) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf (" %05.1f", clon);
+  lon = clon - edge - 20.0;
+  while (lon < 0.0) lon += 360.0;
+  while (lon >= 360.0) lon -= 360.0;
+  printf (" %05.1f", lon);
+  lon = clon + edge + 20.0;
+  while (lon < 0.0) lon += 360.0;
+  while (lon >= 360.0) lon -= 360.0;
+  printf (" %05.1f", lon);
+  printf (" %05.1f", clon);
   printf ("\n");
   return 0;
 }
@@ -522,9 +566,27 @@ int hmi15_pack_list (double clon, double b0) {
       for (loncm = -lim; loncm <= lim; loncm += 7.5)
         printf (" %+05.1f", lat);
     }
-    lat = -7.5;
     lim = 67.5;
-    for (loncm = -lim; loncm <= lim; loncm += 7.5)
+    for (lat = -7.5; lat <= 30.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 7.5)
+        printf (" %+05.1f", lat);
+    }
+    lim = 60.0;
+    for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 10.0)
+        printf (" %+05.1f", lat);
+    }
+    lat = 52.5;
+    lim = 50.0;
+    for (loncm = -lim; loncm <= lim; loncm += 12.5)
+      printf (" %+05.1f", lat);
+    lat = 60.0;
+    lim = 45.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0)
+      printf (" %+05.1f", lat);
+    lat = 67.5;
+    lim = 20.0;
+    for (loncm = -lim; loncm <= lim; loncm += 20.0)
       printf (" %+05.1f", lat);
     printf ("\n");
 
@@ -572,42 +634,8 @@ int hmi15_pack_list (double clon, double b0) {
 	printf (" %05.1f", lon);
       }
     }
-    lat = -7.5;
     lim = 67.5;
-    for (loncm = -lim; loncm <= lim; loncm += 7.5) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
-    }
-    printf ("\n");
-
-    lim = 67.5;
-    for (lat = 0.0; lat <= 30.0; lat += 7.5) {
-      for (loncm = -lim; loncm <= lim; loncm += 7.5)
-        printf (" %+05.1f", lat);
-    }
-    lim = 60.0;
-    for (lat = 37.5; lat <= 45.0; lat += 7.5) {
-      for (loncm = -lim; loncm <= lim; loncm += 10.0)
-        printf (" %+05.1f", lat);
-    }
-    lat = 52.5;
-    lim = 50.0;
-    for (loncm = -lim; loncm <= lim; loncm += 12.5)
-      printf (" %+05.1f", lat);
-    lat = 60.0;
-    lim = 45.0;
-    for (loncm = -lim; loncm <= lim; loncm += 15.0)
-      printf (" %+05.1f", lat);
-    lat = 67.5;
-    lim = 20.0;
-    for (loncm = -lim; loncm <= lim; loncm += 20.0)
-      printf (" %+05.1f", lat);
-    printf ("\n");
-
-    lim = 67.5;
-    for (lat = 0.0; lat <= 30.0; lat += 7.5) {
+    for (lat = -7.5; lat <= 30.0; lat += 7.5) {
       for (loncm = -lim; loncm <= lim; loncm += 7.5) {
 	lon = clon + loncm;
 	while (lon < 0.0) lon += 360.0;
@@ -668,10 +696,34 @@ int hmi15_pack_list (double clon, double b0) {
         printf (" %+05.1f", lat);
     }
     lim = 67.5;
-    for (lat = -30.0; lat <= 0.0; lat += 7.5) {
+    for (lat = -30.0; lat <= 7.5; lat += 7.5) {
       for (loncm = -lim; loncm <= lim; loncm += 7.5)
         printf (" %+05.1f", lat);
     }
+    lim = 75.0;
+    for (lat = 15.0; lat <= 30.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 7.5)
+        printf (" %+05.1f", lat);
+    }
+    lim = 70.0;
+    for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 10.0)
+        printf (" %+05.1f", lat);
+    }
+    lat = 52.5;
+    lim = 75.0;
+    for (loncm = -lim; loncm <= lim; loncm += 12.5)
+      printf (" %+05.1f", lat);
+    lat = 60.0;
+    lim = 75.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0)
+      printf (" %+05.1f", lat);
+    lat = 67.5;
+    lim = 60.0;
+    for (loncm = -lim; loncm <= lim; loncm += 20.0)
+      printf (" %+05.1f", lat);
+    lat = 75.0;
+    printf (" %+05.1f", lat);
     printf ("\n");
 
     lat = -67.5;
@@ -708,53 +760,13 @@ int hmi15_pack_list (double clon, double b0) {
       }
     }
     lim = 67.5;
-    for (lat = -30.0; lat <= 0.0; lat += 7.5) {
+    for (lat = -30.0; lat <= 7.5; lat += 7.5) {
       for (loncm = -lim; loncm <= lim; loncm += 7.5) {
 	lon = clon + loncm;
 	while (lon < 0.0) lon += 360.0;
 	while (lon >= 360.0) lon -= 360.0;
 	printf (" %05.1f", lon);
       }
-    }
-    printf ("\n");
-
-    lat = 7.5;
-    lim = 67.5;
-    for (loncm = -lim; loncm <= lim; loncm += 7.5)
-      printf (" %+05.1f", lat);
-    lim = 75.0;
-    for (lat = 15.0; lat <= 30.0; lat += 7.5) {
-      for (loncm = -lim; loncm <= lim; loncm += 7.5)
-        printf (" %+05.1f", lat);
-    }
-    lim = 70.0;
-    for (lat = 37.5; lat <= 45.0; lat += 7.5) {
-      for (loncm = -lim; loncm <= lim; loncm += 10.0)
-        printf (" %+05.1f", lat);
-    }
-    lat = 52.5;
-    lim = 75.0;
-    for (loncm = -lim; loncm <= lim; loncm += 12.5)
-      printf (" %+05.1f", lat);
-    lat = 60.0;
-    lim = 75.0;
-    for (loncm = -lim; loncm <= lim; loncm += 15.0)
-      printf (" %+05.1f", lat);
-    lat = 67.5;
-    lim = 60.0;
-    for (loncm = -lim; loncm <= lim; loncm += 20.0)
-      printf (" %+05.1f", lat);
-    lat = 75.0;
-    printf (" %+05.1f", lat);
-    printf ("\n");
-
-    lat = 7.5;
-    lim = 67.5;
-    for (loncm = -lim; loncm <= lim; loncm += 7.5) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
     }
     lim = 75.0;
     for (lat = 15.0; lat <= 30.0; lat += 7.5) {
@@ -820,10 +832,27 @@ int hmi15_pack_list (double clon, double b0) {
         printf (" %+05.1f", lat);
     }
     lim = 67.5;
-    for (lat = -30.0; lat <= 0.0; lat += 7.5) {
+    for (lat = -30.0; lat <= 30.0; lat += 7.5) {
       for (loncm = -lim; loncm <= lim; loncm += 7.5)
         printf (" %+05.1f", lat);
     }
+    lim = 70.0;
+    for (lat = 37.5; lat <= 45.0; lat += 7.5) {
+      for (loncm = -lim; loncm <= lim; loncm += 10.0)
+        printf (" %+05.1f", lat);
+    }
+    lat = 52.5;
+    lim = 62.5;
+    for (loncm = -lim; loncm <= lim; loncm += 12.5)
+      printf (" %+05.1f", lat);
+    lat = 60.0;
+    lim = 60.0;
+    for (loncm = -lim; loncm <= lim; loncm += 15.0)
+      printf (" %+05.1f", lat);
+    lat = 67.5;
+    lim = 40.0;
+    for (loncm = -lim; loncm <= lim; loncm += 20.0)
+      printf (" %+05.1f", lat);
     printf ("\n");
 
     lat = -67.5;
@@ -860,42 +889,7 @@ int hmi15_pack_list (double clon, double b0) {
       }
     }
     lim = 67.5;
-    for (lat = -30.0; lat <= 0.0; lat += 7.5) {
-      for (loncm = -lim; loncm <= lim; loncm += 7.5) {
-	lon = clon + loncm;
-	while (lon < 0.0) lon += 360.0;
-	while (lon >= 360.0) lon -= 360.0;
-	printf (" %05.1f", lon);
-      }
-    }
-    printf ("\n");
-
-    lim = 67.5;
-    for (lat = 7.5; lat <= 30.0; lat += 7.5) {
-      for (loncm = -lim; loncm <= lim; loncm += 7.5)
-        printf (" %+05.1f", lat);
-    }
-    lim = 70.0;
-    for (lat = 37.5; lat <= 45.0; lat += 7.5) {
-      for (loncm = -lim; loncm <= lim; loncm += 10.0)
-        printf (" %+05.1f", lat);
-    }
-    lat = 52.5;
-    lim = 62.5;
-    for (loncm = -lim; loncm <= lim; loncm += 12.5)
-      printf (" %+05.1f", lat);
-    lat = 60.0;
-    lim = 60.0;
-    for (loncm = -lim; loncm <= lim; loncm += 15.0)
-      printf (" %+05.1f", lat);
-    lat = 67.5;
-    lim = 40.0;
-    for (loncm = -lim; loncm <= lim; loncm += 20.0)
-      printf (" %+05.1f", lat);
-    printf ("\n");
-
-    lim = 67.5;
-    for (lat = 7.5; lat <= 30.0; lat += 7.5) {
+    for (lat = -30.0; lat <= 30.0; lat += 7.5) {
       for (loncm = -lim; loncm <= lim; loncm += 7.5) {
 	lon = clon + loncm;
 	while (lon < 0.0) lon += 360.0;
@@ -1113,6 +1107,319 @@ int hmi5_pack_list (double clon, double b0) {
       limit[nlat] = -1;
   }
 
+   for (nlat = X25_85S; nlat <= X25_55S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_85S; nlat <= X25_55S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+				       /*  126 targets B0+; 193 B00; 289 B0-  */
+
+  for (nlat = X25_525S; nlat <= X25_40S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_525S; nlat <= X25_40S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  182, 204, 220  */
+  for (nlat = X25_375S; nlat <= X25_30S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_375S; nlat <= X25_30S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  230, 244, 260  */
+  for (nlat = X25_275S; nlat <= X25_20S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_275S; nlat <= X25_20S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  238, 250, 260  */
+  for (nlat = X25_175S; nlat <= X25_10S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_175S; nlat <= X25_10S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  244, 252, 258  */
+  for (nlat = X25_075S; nlat <= X25_05S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_075S; nlat <= X25_05S; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  126, 126, 126  */
+  for (nlat = X25_025S; nlat <= X25_025N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_025S; nlat <= X25_025N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  189, 189, 189  */
+  for (nlat = X25_05N; nlat <= X25_075N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_05N; nlat <= X25_075N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  126, 126, 126  */
+  for (nlat = X25_10N; nlat <= X25_175N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_10N; nlat <= X25_175N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  258, 252, 244  */
+  for (nlat = X25_20N; nlat <= X25_275N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_20N; nlat <= X25_275N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  260, 250, 238  */
+  for (nlat = X25_30N; nlat <= X25_375N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_30N; nlat <= X25_375N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  260, 244, 230  */
+  for (nlat = X25_40N; nlat <= X25_525N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+      printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_40N; nlat <= X25_525N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  220, 204, 182  */
+  for (nlat = X25_55N; nlat <= X25_85N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
+	printf (" %+05.1f", latv[nlat]);
+  }
+  printf ("\n");
+  for (nlat = X25_55N; nlat <= X25_85N; nlat++) {
+    for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat]) {
+      lon = clon + loncm;
+      while (lon < 0.0) lon += 360.0;
+      while (lon >= 360.0) lon -= 360.0;
+      printf (" %05.1f", lon);
+    }
+  }
+  printf ("\n");
+							   /*  289, 193, 126  */
+
+  return 0;
+}
+
+int orig_hmi5_pack_list (double clon, double b0) {
+/*  This is the orignal version of hmi5_pack_list, designed to produce no
+  			more than 195 targets per pair of lines of output
+  					   it is here only for documentation  */
+  float limit[X25_85N + 1], latv[X25_85N + 1], step[X25_85N + 1];
+  float lat, lon, loncm, lim;
+  int nlat;
+
+  for (nlat = X25_85S; nlat <= X25_85N; nlat++)
+    latv[nlat] = -85.0 + 2.5 * nlat;
+  for (nlat = X25_85S; nlat <= X25_75S; nlat++)
+    step[nlat] = 10.0;
+  for (nlat = X25_725S; nlat <= X25_675S; nlat++)
+    step[nlat] = 7.5;
+  for (nlat = X25_65S; nlat <= X25_425S; nlat++)
+    step[nlat] = 5.0;
+  for (nlat = X25_40S; nlat <= X25_40N; nlat++)
+    step[nlat] = 2.5;
+  for (nlat = X25_425N; nlat <= X25_65N; nlat++)
+    step[nlat] = 5.0;
+  for (nlat = X25_675N; nlat <= X25_725N; nlat++)
+    step[nlat] = 7.5;
+  for (nlat = X25_75N; nlat <= X25_85N; nlat++)
+    step[nlat] = 10.0;
+
+  if (b0 < -3.625) {
+    limit[X25_85S] = 50.0;
+    for (nlat = X25_825S; nlat <= X25_75S; nlat++)
+      limit[nlat] = 70.0;
+    for (nlat = X25_725S; nlat <= X25_425S; nlat++)
+      limit[nlat] = 75.0;
+    for (nlat = X25_40S; nlat <= X25_125S; nlat++)
+      limit[nlat] = 80.0;
+    for (nlat = X25_10S; nlat <= X25_075N; nlat++)
+      limit[nlat] = 77.5;
+    for (nlat = X25_10N; nlat <= X25_20N; nlat++)
+      limit[nlat] = 75.0;
+    for (nlat = X25_225N; nlat <= X25_30N; nlat++)
+      limit[nlat] = 72.5;
+    for (nlat = X25_325N; nlat <= X25_375N; nlat++)
+      limit[nlat] = 70.0;
+    limit[X25_40N] = 67.5;
+    limit[X25_425N] = 65.0;
+    for (nlat = X25_45N; nlat <= X25_55N; nlat++)
+      limit[nlat] = 60.0;
+    limit[X25_575N] = 55.0;
+    for (nlat = X25_60N; nlat <= X25_625N; nlat++)
+      limit[nlat] = 50.0;
+    limit[X25_65N] = 40.0;
+    limit[X25_675N] = 30.0;
+    limit[X25_70N] = 22.5;
+    limit[X25_725N] = 7.5;
+    for (nlat = X25_75N; nlat <= X25_85N; nlat++)
+      limit[nlat] = -1;
+  } else if (b0 > 3.625) {
+    for (nlat = X25_85S; nlat <= X25_75S; nlat++)
+      limit[nlat] = -1;
+    limit[X25_725S] = 7.5;
+    limit[X25_70S] = 22.5;
+    limit[X25_675S] = 30.0;
+    limit[X25_65S] = 40.0;
+    for (nlat = X25_625S; nlat <= X25_60S; nlat++)
+      limit[nlat] = 50.0;
+    limit[X25_575S] = 55.0;
+    for (nlat = X25_55S; nlat <= X25_45S; nlat++)
+      limit[nlat] = 60.0;
+    limit[X25_425S] = 65.0;
+    limit[X25_40S] = 67.5;
+    for (nlat = X25_375S; nlat <= X25_325S; nlat++)
+      limit[nlat] = 70.0;
+    for (nlat = X25_30S; nlat <= X25_225S; nlat++)
+      limit[nlat] = 72.5;
+    for (nlat = X25_20S; nlat <= X25_10S; nlat++)
+      limit[nlat] = 75.0;
+    for (nlat = X25_075S; nlat <= X25_10N; nlat++)
+      limit[nlat] = 77.5;
+    for (nlat = X25_125N; nlat <= X25_40N; nlat++)
+      limit[nlat] = 80.0;
+    for (nlat = X25_425N; nlat <= X25_725N; nlat++)
+      limit[nlat] = 75.0;
+    for (nlat = X25_75N; nlat <= X25_825N; nlat++)
+      limit[nlat] = 70.0;
+    limit[X25_85N] = 50.0;
+  } else {
+    for (nlat = X25_85S; nlat <= X25_825S; nlat++)
+      limit[nlat] = -1;
+    limit[X25_80S] = limit[X25_80N] = 0.0;
+    limit[X25_775S] = limit[X25_775N] = 30.0;
+    limit[X25_75S] = limit[X25_75N] = 40.0;
+    limit[X25_725S] = limit[X25_725N] = 45.0;
+    for (nlat = X25_70S; nlat <= X25_675S; nlat++)
+      limit[nlat] = 52.5;
+    limit[X25_65S] = limit[X25_65N] = 60.0;
+    for (nlat = X25_625S; nlat <= X25_525S; nlat++)
+      limit[nlat] = 65.0;
+    for (nlat = X25_50S; nlat <= X25_425S; nlat++)
+      limit[nlat] = 70.0;
+    for (nlat = X25_40S; nlat <= X25_275S; nlat++)
+      limit[nlat] = 75.0;
+    for (nlat = X25_25S; nlat <= X25_25N; nlat++)
+      limit[nlat] = 77.5;
+    for (nlat = X25_275N; nlat <= X25_40N; nlat++)
+      limit[nlat] = 75.0;
+    for (nlat = X25_425N; nlat <= X25_50N; nlat++)
+      limit[nlat] = 70.0;
+    for (nlat = X25_525N; nlat <= X25_625N; nlat++)
+      limit[nlat] = 65.0;
+    for (nlat = X25_675N; nlat <= X25_70N; nlat++)
+      limit[nlat] = 52.5;
+    for (nlat = X25_825N; nlat <= X25_85N; nlat++)
+      limit[nlat] = -1;
+  }
+
   if (b0 > 3.625) {
     for (nlat = X25_85S; nlat <= X25_55S; nlat++) {
       for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
@@ -1128,6 +1435,7 @@ int hmi5_pack_list (double clon, double b0) {
       }
     }
     printf ("\n");
+							     /*  126 targets  */
   } else {
     for (nlat = X25_85S; nlat <= X25_675S; nlat++) {
       for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
@@ -1143,7 +1451,7 @@ int hmi5_pack_list (double clon, double b0) {
       }
     }
     printf ("\n");
-
+						/*  60 targets, B00; 134 B0-  */
     for (nlat = X25_65S; nlat <= X25_55S; nlat++) {
       for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
 	printf (" %+05.1f", latv[nlat]);
@@ -1158,6 +1466,7 @@ int hmi5_pack_list (double clon, double b0) {
       }
     }
     printf ("\n");
+					       /*  133 targets, B00; 155 B0-  */
   }
 
   for (nlat = X25_525S; nlat <= X25_425S; nlat++) {
@@ -1174,7 +1483,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+				      /*  127 targets, B0+; 143 B00; 155 B0-  */
   for (nlat = X25_40S; nlat <= X25_35S; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1189,7 +1498,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  169, 183, 195  */
   for (nlat = X25_325S; nlat <= X25_275S; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1204,7 +1513,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  175, 183, 195  */
   for (nlat = X25_25S; nlat <= X25_20S; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1219,7 +1528,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  179, 189, 195  */
   for (nlat = X25_175S; nlat <= X25_125S; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1234,7 +1543,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  183, 189, 195  */
   for (nlat = X25_10S; nlat <= X25_05S; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1249,7 +1558,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  187, 189, 189  */
   for (nlat = X25_025S; nlat <= X25_025N; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1264,7 +1573,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  189, 189, 189  */
   for (nlat = X25_05N; nlat <= X25_10N; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1279,7 +1588,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  189, 189, 187  */
   for (nlat = X25_125N; nlat <= X25_175N; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1294,7 +1603,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  195, 189, 183  */
   for (nlat = X25_20N; nlat <= X25_25N; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1309,7 +1618,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  195, 189, 179  */
   for (nlat = X25_275N; nlat <= X25_325N; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1324,7 +1633,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  195, 183, 175  */
   for (nlat = X25_35N; nlat <= X25_40N; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1339,7 +1648,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  195, 183, 169  */
   for (nlat = X25_425N; nlat <= X25_525N; nlat++) {
     for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
       printf (" %+05.1f", latv[nlat]);
@@ -1354,7 +1663,7 @@ int hmi5_pack_list (double clon, double b0) {
     }
   }
   printf ("\n");
-
+							   /*  155, 143, 127  */
   if (b0 < -3.625) {
     for (nlat = X25_55N; nlat <= X25_85N; nlat++) {
       for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
@@ -1370,6 +1679,7 @@ int hmi5_pack_list (double clon, double b0) {
     		}
     }
     printf ("\n");
+							     /*  126 targets  */
   } else {
     for (nlat = X25_55N; nlat <= X25_65N; nlat++) {
       for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
@@ -1385,7 +1695,7 @@ int hmi5_pack_list (double clon, double b0) {
     		}
     }
     printf ("\n");
-
+					       /*  133 targets, B00; 155 B0+  */
     for (nlat = X25_675N; nlat <= X25_85N; nlat++) {
       for (loncm = -limit[nlat]; loncm <= limit[nlat]; loncm += step[nlat])
 	printf (" %+05.1f", latv[nlat]);
@@ -1400,6 +1710,7 @@ int hmi5_pack_list (double clon, double b0) {
       }
     }
     printf ("\n");
+						/*  60 targets, B00; 134 B0+  */
   }
 
   return 0;
@@ -1513,9 +1824,9 @@ int main (int argc, char **argv) {
   int dosp25 = 0, dosp75 = 0, dosp150  = 0;
   char tbuf[64];
   enum grid_choice {DISCROSS, RD_SYN05, RD_SYN15, RD_SYN30, TD_SYN20, TD_SYN24,
-      MDI_DP, MDI_SP, RD_PLUS05, RD_PLUS15, RD_PLUS30, RD_X05, RD_X15, RD_X30,
-      RD_CM05, RD_CM15, RD_CM30, RD_EQ05, RD_EQ15, RD_EQ30,
-      TARGETS, LAST_CHOICE};
+      TD_SYN24PLUS, MDI_DP, MDI_SP, RD_PLUS05, RD_PLUS15, RD_PLUS30,
+      RD_X05, RD_X15, RD_X30, RD_CM05, RD_CM15, RD_CM30, RD_EQ05, RD_EQ15,
+      RD_EQ30, TARGETS, LAST_CHOICE};
   int trackct = 0, track5ct = 0, track16ct = 0, track32ct = 0;
 
   int status = cmdparams_parse (params, argc, argv);
@@ -1533,6 +1844,7 @@ int main (int argc, char **argv) {
 
   TIME tmid = params_get_time (params, "time");
   int target_grid = params_get_int (params, "grid");
+  int relB0 = cmdparams_isflagset (params, "B");
   int formdi = cmdparams_isflagset (params, "M");
   int stony = cmdparams_isflagset (params, "c");
   int verbose = cmdparams_isflagset (params, "v");
@@ -1545,6 +1857,7 @@ int main (int argc, char **argv) {
   int do_hmi5_pack = target_grid == RD_SYN05;
   int do_timed_grid20 = target_grid == TD_SYN20;
   int do_timed_grid24 = target_grid == TD_SYN24;
+  int do_timed_grid24p = target_grid == TD_SYN24PLUS;
   int do_cm30 = target_grid == RD_CM30;
   int do_cm15 = target_grid == RD_CM15;
   int do_cm05 = target_grid == RD_CM05;
@@ -1560,7 +1873,7 @@ int main (int argc, char **argv) {
 
   lonstp = (do_dense_pack || do_struc_pack || do_hmi15_pack|| do_cm15 || do_eq15) ? 150 :
       (do_hmi30_pack|| do_eq30 || do_cm30) ? 300 : \
-      (do_timed_grid20 || do_timed_grid24) ? 1 : 25;
+      (do_timed_grid20 || do_timed_grid24 || do_timed_grid24p) ? 1 : 25;
 					   /*  parse the target time string  */
   if (sscanf (tstr, "%d:%lf", &cr, &cl) != 2) {
 				      /* requested time not in format CR:CL  */
@@ -1634,8 +1947,12 @@ int main (int argc, char **argv) {
   if (do_hmi30_pack) return hmi30_pack_list (cl, b0);
   if (do_hmi15_pack) return hmi15_pack_list (cl, b0);
   if (do_hmi5_pack) return hmi5_pack_list (cl, b0);
-  if (do_timed_grid20) return timed_grid_list (cl, 20.0);
-  if (do_timed_grid24) return timed_grid_list (cl, 24.0);
+  if (do_timed_grid20) return (relB0) ? timed_grid_list (cl, b0, 20.0) :
+      timed_grid_list (cl, 0.0, 20.0);
+  if (do_timed_grid24) return (relB0) ? timed_grid_list (cl, b0, 24.0) :
+      timed_grid_list (cl, 0.0, 24.0);
+  if (do_timed_grid24p) return (relB0) ? timed_grid_list_plus (cl, b0) :
+      timed_grid_list_plus (cl, 0.0);
   if (do_cm30) return hmi30_cm_list ();
   if (do_cm15) return hmi15_cm_list (b0);
   if (do_cm05) return hmi5_cm_list (b0);
@@ -1985,4 +2302,14 @@ for (n = L25_825S; n <= L25_825N; n++) printf ("%5.1f: %d\n", lat25[n], trlat25[
  *		for 30-deg tiles (all with -c option); made -c option available
  *		for equatorial strips
  *  v 1.0 frozen 2010.08.23
+ *  v 1.1
+ *	11.09.19	Added option timed+ for 24 degree grid with four points
+ *		at extremal locations in latitude and longitude (by 68 deg)
+ *		Added -B option for latitudes relative to disc center rather
+ *		than equator (only implemented for tdsynop options)
+ *	11.11.09	Generate single rather than dual target lists for
+ *		rdsyn15 case, to take advantage of increased allowance in open
+ *		file pointers; likewise generate reduced number of target lists
+ *		for case rdsyn05
+ *  v 1.1 frozen 2011.11.14
  */
