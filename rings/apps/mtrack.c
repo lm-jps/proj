@@ -121,8 +121,8 @@
  *	-r	remove line-of-sight component of solar rotation
  *	-v	run verbose
  *	-x	experimental run (do not insert output records)
- *	-G	use GONG keywords for input
  *	-M	use MDI keywords for input and correct for MDI distortion
+ *	-Z	log times in UT (default is TAI)
  *
  *  Notes:
  *    This module is a DRMS-based version of fastrack, which it is intended
@@ -171,6 +171,9 @@
  *	the map center. This is efficient for a small number of tracked
  *	regions, but implies field inaccuracies over large regions
  *    Image geometry for cases with unequal scales CDELti is not to be trusted
+ *    The function set_stat_keys tries to set DataVals and MissVals as int's,
+ *	even though the relevant values are long long, since there is no
+ *	long long checking set key function in keystuff
  *
  *  Future Updates
  *	reorganize code, adding functions and simplifying main module;
@@ -189,7 +192,7 @@
 						      /*  module identifier  */
 char *module_name = "mtrack";
 char *module_desc = "track multiple regions from solar image sequences";
-char *version_id = "1.1";
+char *version_id = "1.3";
 
 #define CARR_RATE       (2.86532908457)
 #define RSUNM		(6.96e8)
@@ -253,9 +256,9 @@ ModuleArgs_t module_args[] = {
       "remove line-of-sight component of solar rotation"}, 
   {ARG_FLAG,	"v",	"", "verbose mode"}, 
   {ARG_FLAG,	"x",	"", "experimental mode (do not save output)"}, 
-  {ARG_FLAG,	"G",	"", "use GONG keywords for input"}, 
   {ARG_FLAG,	"M",	"",
       "use MDI keywords for input and correct for MDI distortion"}, 
+  {ARG_FLAG,	"Z",	"", "log times in UTC rather than TAI"}, 
   {}
 };
        /*  list of keywords to propagate (if possible) from input to output  */
@@ -388,6 +391,37 @@ static void adjust_for_observer_velocity (float *map, int mapct,
     for (n = 0; n < pixct; n++) map[n + mset] -= vobs;
     mset += pixct;
   }
+}
+
+static int set_stat_keys (DRMS_Record_t *rec, long long ntot, long long valid,
+    double vmn, double vmx, double sum, double sum2, double sum3, double sum4) {
+  double scal, avg, var, skew, kurt;
+  int kstat = 0;
+
+  kstat += check_and_set_key_int (rec, "DATAVALS", valid);
+  kstat += check_and_set_key_int (rec, "MISSVALS", ntot - valid);
+  if (valid <= 0) return kstat;
+
+  kstat += check_and_set_key_double (rec, "DATAMIN", vmn);
+  kstat += check_and_set_key_double (rec, "DATAMAX", vmx);
+
+  scal = 1.0 / valid;
+  avg = scal * sum;
+  var = scal * sum2 - avg * avg;
+  skew = scal * sum3 - 3 * var * avg - avg * avg * avg;
+  kurt = scal * sum4 - 4 * skew * avg - 6 * avg * avg * var -
+      avg * avg * avg * avg;
+  kstat += check_and_set_key_double (rec, "DATAMEAN", avg);
+  if (var < 0.0) return kstat;
+  kstat += check_and_set_key_double (rec, "DATARMS", sqrt (var));
+  if (var == 0.0) return kstat;
+  skew /= var * sqrt (var);
+  kurt /= var * var;
+  kurt -= 3.0;
+  kstat += check_and_set_key_double (rec, "DATASKEW", skew);
+  kstat += check_and_set_key_double (rec, "DATAKURT", kurt);
+
+  return kstat;
 }
 
 				/*  adapted from SOI libM/interpolate.c  */
@@ -711,6 +745,37 @@ static void perform_mappings (DRMS_Array_t *img, float *maps, double *delta_rot,
   }
 }
 
+void calc_limb_distance (double *delta_rot, int mapct, double *maplat,
+    double *maplon, double delta_time, double merid_v,unsigned char *offsun,
+    double latc, double lonc, double *mu) {
+/*
+ *  Return instantaneous center-limb distances for selected target locations
+ *    N.B. there is no finite distance correction
+ */
+  static double sin_asd = 0.004660, cos_asd = 0.99998914;
+                                                   /*  appropriate to 1 AU  */
+  double lat, lon, cos_lat, sin_lat, cos_lat_lon;
+  double cos_cang;
+  int m;
+
+  double cos_latc = cos (latc);
+  double sin_latc = sin (latc);
+  double delta_lat = merid_v * delta_time;
+  double missing_val = 0.0 / 0.0;
+
+  for (m = 0; m < mapct; m++) {
+    mu[m] = missing_val;
+    double delta_lon = delta_rot[m] * delta_time;
+    if (offsun[m]) continue;
+    lat = maplat[m] + delta_lat;
+    lon = maplon[m] + delta_lon;
+    cos_lat_lon = cos (lat) * cos (lon - lonc);
+    cos_cang  = sin (lat) * sin_latc + cos_latc * cos_lat_lon;
+    if (cos_cang < 0.0) continue;
+    mu[m] = cos_cang;
+  }
+}
+
 TIME time_from_crcl (int cr, double cl, int from_soho) {
   if (from_soho)
     return SOHO_meridian_crossing (cl, cr);
@@ -818,8 +883,10 @@ int DoIt (void) {
   FILE **log;
   TIME trec, tobs, tmid, tbase, tfirst, tlast, ttrgt;
   double *maplat, *maplon, *map_coslat, *map_sinlat = NULL;
+  double *cmaplat, *cmaplon, *ctrmu, *muavg, *latavg;
   double *delta_rot;
-  double *minval, *maxval;
+  double *minval, *maxval, *datamean, *datarms, *dataskew, *datakurt;
+  double min_scaled, max_scaled;
   double carr_lon, cm_lon_start, cm_lon_stop, lon_span;
   double cm_lon_first, cm_lon_last;
   double cadence, data_cadence, coverage, t_eps, phase;
@@ -835,8 +902,10 @@ int DoIt (void) {
   enum platloc {LOC_UNKNOWN, LOC_MWO, LOC_GONG_MR, LOC_GONG_LE, LOC_GONG_UD,
       LOC_GONG_TD, LOC_GONG_CT, LOC_GONG_TC, LOC_GONG_BB, LOC_GONG_ML, LOC_SOHO,
       LOC_SDO} platform = LOC_UNKNOWN;
-  long long nn;
+  long long *datavalid, *origvalid;
+  long long nn, nntot;
   unsigned int quality;
+  int *mnlatct, *muct;
   int *reject_list = NULL;
   int axes[3], slice_start[3], slice_end[3];
   int recct, rgn, rgnct, segct, valid;
@@ -845,9 +914,11 @@ int DoIt (void) {
   int col, row, pixct, dxy, i, found, n, nr, or;
   int blankvals, no_merid_v, rejects, status, verbose_logs, setmais;
   int x_invrt, y_invrt;
-  int need_cadence, need_ephem, need_stats, MDI_correct, MDI_correct_distort;
+  int need_cadence, need_ephem, need_limb_dist, need_stats;
+  int MDI_correct, MDI_correct_distort;
+  int data_scaled;
   int badpkey, badqual, badfill, badtime, qualcheck;
-  unsigned char *offsun;
+  unsigned char *offsun, *ctroffsun;
   char *input, *source, *eoser, *osegname, *pkeyval;
   char logfilename[DRMS_MAXPATHLEN], ctimefmt[DRMS_MAXFORMATLEN];
   char rec_query[256];
@@ -923,13 +994,10 @@ int DoIt (void) {
   int dispose = (params_isflagset (params, "x")) ? DRMS_FREE_RECORD :
       DRMS_INSERT_RECORD;
   int MDI_proc = params_isflagset (params, "M");
-/*
-printf ("time_is_invalid (%s -> %23.16e) = %d\n",
-  params_get_str (params, "tstart"), tstrt, time_is_invalid (tstrt));
-printf ("drms_ismissing_time (%s) = %d\n", params_get_str (params, "tstart"),
-  drms_ismissing_time (tstrt));
-return 0;
-*/
+  int ut_times = params_isflagset (params, "Z");
+
+need_limb_dist = 1;
+
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s: JSOC version %s\n", module_ident, jsoc_version);
   verbose_logs = (dispose == DRMS_INSERT_RECORD) ? verbose : 0;
@@ -1044,11 +1112,40 @@ return 0;
   if ((keywd = drms_keyword_lookup (orec, "CMLon", 1)))
     sprintf (ctimefmt, "%%d:%s", keywd->info->format);
   else sprintf (ctimefmt, "%%d:%%07.3f");
+			  /*  scaling check initializations added for v 1.2  */
   need_stats = (drms_keyword_lookup (orec, "DATAMIN", 1) ||
-      drms_keyword_lookup (orec, "DATAMAX", 1));
+      drms_keyword_lookup (orec, "DATAMAX", 1) ||
+      drms_keyword_lookup (orec, "DATAMEAN", 1) ||
+      drms_keyword_lookup (orec, "DATARMS", 1) ||
+      drms_keyword_lookup (orec, "DATASKEW", 1) ||
+      drms_keyword_lookup (orec, "DATAKURT", 1) ||
+      drms_keyword_lookup (orec, "DATAVALS", 1) ||
+      drms_keyword_lookup (orec, "MISSVALS", 1));
+  data_scaled = ((record_segment->info->type == DRMS_TYPE_CHAR) ||
+      (record_segment->info->type == DRMS_TYPE_SHORT) ||
+      (record_segment->info->type == DRMS_TYPE_INT) ||
+      (record_segment->info->type == DRMS_TYPE_LONGLONG));
+  need_stats |= data_scaled;
+  if (data_scaled) {
+    max_scaled = (record_segment->info->type == DRMS_TYPE_CHAR) ?
+	SCHAR_MAX : (record_segment->info->type == DRMS_TYPE_SHORT) ?
+	SHRT_MAX : (record_segment->info->type == DRMS_TYPE_INT) ?
+	INT_MAX : LLONG_MAX;
+    min_scaled = - max_scaled;
+    max_scaled *= bscale;
+    min_scaled *= bscale;
+    max_scaled += bzero;
+    min_scaled += bzero;
+  }
 
   if (key_params_from_dspec (inset)) {
 				   /*  input specified as specific data set  */
+    if (!time_is_invalid (tstrt) || !time_is_invalid (tstop) ||
+        strcmp (tmid_str, "Not Specified") || (length > 0)) {
+      fprintf (stderr, "Warning: input record set explicitly specified:\n");
+      fprintf (stderr,
+	  "         tstart, tstop, tmid and length values ignored\n");
+    }
     if (!(ids = drms_open_records (drms_env, inset, &status))) {
       fprintf (stderr, "Error: (%s) unable to open input data set \"%s\"\n",
         module_ident, inset);
@@ -1113,7 +1210,7 @@ return 0;
     }
 		   /*  get required series info from first record in series  */
 					       /*  platform, cadence, phase  */
-    snprintf (rec_query, 256, "%s[#^]", inset);
+    snprintf (rec_query, 256, "%s[:#^]", inset);
     if (!(ids = drms_open_records (drms_env, rec_query, &status))) {
       fprintf (stderr, "Error: unable to open input data set \"%s\"\n", inset);
       fprintf (stderr, "       status = %d\n", status);
@@ -1203,14 +1300,16 @@ return 0;
 	    tmid = earth_meridian_crossing (tmid_cl, tmid_cr);
 */
           tmid = time_from_crcl (tmid_cr, tmid_cl, platform == LOC_SOHO);
-	  sprint_time (ptbuf, tmid, "TAI", 0);
+	  if (ut_times) sprint_time (ptbuf, tmid, "UTC", 0);
+	  else sprint_time (ptbuf, tmid, "TAI", 0);
 			  /*  adjust to phase of input, within data cadence  */
 	  tbase = drms_getkey_time (irec, trec_key, &status);
 	  phase = fmod ((tmid - tbase), data_cadence);
 	  tmid -= phase;
 	  if (phase > 0.5 * data_cadence) tmid += data_cadence;
 	  if (verbose) {
-	    sprint_time (tbuf, tmid, "TAI", 0);
+	    if (ut_times) sprint_time (tbuf, tmid, "UTC", 0);
+	    else sprint_time (tbuf, tmid, "TAI", 0);
 	    printf ("Target time %d:%05.1f = %s adjusted to\n\t%s\n",
 	        tmid_cr, tmid_cl, ptbuf, tbuf);
 	  }
@@ -1246,28 +1345,32 @@ return 0;
 	       /*  tstart and tstop specified, determine midtime and length  */
       if (sscanf (tstrt_str, "%d:%lf", &t_cr, &t_cl) == 2) {
         tstrt = time_from_crcl (t_cr, t_cl, platform == LOC_SOHO);
-	sprint_time (ptbuf, tstrt, "TAI", 0);
+	if (ut_times) sprint_time (ptbuf, tstrt, "UTC", 0);
+	else sprint_time (ptbuf, tstrt, "TAI", 0);
 			  /*  adjust to phase of input, within data cadence  */
 	tbase = drms_getkey_time (irec, trec_key, &status);
 	phase = fmod ((tstrt - tbase), data_cadence);
 	tstrt -= phase;
 	if (phase > 0.5 * data_cadence) tstrt += data_cadence;
 	if (verbose) {
-	  sprint_time (tbuf, tstrt, "TAI", 0);
+	  if (ut_times) sprint_time (tbuf, tstrt, "UTC", 0);
+	  else sprint_time (tbuf, tstrt, "TAI", 0);
 	  printf ("Start time %d:%05.1f = %s adjusted to\n\t%s\n",
 	      t_cr, t_cl, ptbuf, tbuf);
 	}
       }
       if (sscanf (tstop_str, "%d:%lf", &t_cr, &t_cl) == 2) {
         tstop = time_from_crcl (t_cr, t_cl, platform == LOC_SOHO);
-	sprint_time (ptbuf, tstop, "TAI", 0);
+	if (ut_times) sprint_time (ptbuf, tstop, "UTC", 0);
+	else sprint_time (ptbuf, tstop, "TAI", 0);
 			  /*  adjust to phase of input, within data cadence  */
 	tbase = drms_getkey_time (irec, trec_key, &status);
 	phase = fmod ((tstop - tbase), data_cadence);
 	tstop -= phase;
 	if (phase > 0.5 * data_cadence) tstop += data_cadence;
 	if (verbose) {
-	  sprint_time (tbuf, tstop, "TAI", 0);
+	  if (ut_times) sprint_time (tbuf, tstop, "UTC", 0);
+	  else sprint_time (tbuf, tstop, "TAI", 0);
 	  printf ("Stop time %d:%05.1f = %s adjusted to\n\t%s\n",
 	      t_cr, t_cl, ptbuf, tbuf);
 	}
@@ -1311,6 +1414,7 @@ return 0;
 /*
   drms_stage_records (ids, 1, 0);
 */
+  irec = ids->records[0];
   if (segct > 1) {
     if (strcmp (seg_name, "Not Specified")) {
       int n;
@@ -1420,7 +1524,6 @@ return 0;
 	  &table_mod_time);
       cr_stop = carrington_rots (tstop, 1);
     } else {
-printf ("need ephem from time\n");
       if (!found_first || !found_last) {
         fprintf (stderr, "Error: Carrington ephemeris from time not supported\n");
         fprintf (stderr, "         and no valid times in data for estimation!\n");
@@ -1460,6 +1563,7 @@ printf ("need ephem from time\n");
     cr_start++;
     lon_span += 360.0;
   }
+  nntot = (long long)recct * pixct;
 					  /*  allocate map parameter arrays  */
   clat = (float *)malloc (rgnct * sizeof (float));
   clon = (float *)malloc (rgnct * sizeof (float));
@@ -1493,6 +1597,12 @@ printf ("need ephem from time\n");
   if (need_stats) {
     minval = (double *)malloc (rgnct * sizeof (double));
     maxval = (double *)malloc (rgnct * sizeof (double));
+    datamean = (double *)calloc (rgnct, sizeof (double));
+    datarms = (double *)calloc (rgnct, sizeof (double));
+    dataskew = (double *)calloc (rgnct, sizeof (double));
+    datakurt = (double *)calloc (rgnct, sizeof (double));
+    datavalid = (long long *)calloc (rgnct, sizeof (long long));
+    origvalid = (long long *)calloc (rgnct, sizeof (long long));
   }
   maps = (float *)malloc (pixct * rgnct * sizeof (float));
   last = (float *)malloc (pixct * rgnct * sizeof (float));
@@ -1504,12 +1614,22 @@ printf ("need ephem from time\n");
     map_sinlat = (double *)malloc (pixct * rgnct * sizeof (double));
   }
   offsun = (unsigned char *)malloc (pixct * rgnct * sizeof (char));
+  latavg = (double *)calloc (rgnct, sizeof (double));
+  mnlatct = (int *)calloc (rgnct, sizeof (int));
+  if (need_limb_dist) {
+    cmaplat = (double *)malloc (rgnct * sizeof (double));
+    cmaplon = (double *)malloc (rgnct * sizeof (double));
+    ctrmu = (double *)malloc (rgnct * sizeof (double));
+    muavg = (double *)calloc (rgnct, sizeof (double));
+    muct = (int *)calloc (rgnct, sizeof (int));
+    ctroffsun = (unsigned char *)malloc (rgnct * sizeof (char));
+  }
     /*  Calculate heliographic coordinates corresponding to map location(s)  */
   n = 0;
   for (rgn = 0; rgn < rgnct; rgn++) {
     double xrot, yrot;
-    for (row=0, y =y0; row < map_rows; row++, y +=ystp) {
-      for (col=0, x =x0; col < map_cols; col++, x +=xstp, n++) {
+    for (row=0, y=y0; row < map_rows; row++, y +=ystp) {
+      for (col=0, x=x0; col < map_cols; col++, x +=xstp, n++) {
 	xrot = x * cos_phi - y * sin_phi;
 	yrot = y * cos_phi + x * sin_phi;
 	offsun[n] = plane2sphere (xrot, yrot, clat[rgn], clon[rgn], &lat, &lon,
@@ -1520,11 +1640,24 @@ printf ("need ephem from time\n");
 	  map_coslat[n] = cos (lat);
 	  map_sinlat[n] = sin (lat);
 	}
+	if (!offsun[n]) {
+	  mnlatct[rgn]++;
+	  latavg[rgn] += lat;
+	}
       }
     }
+    if (mnlatct[rgn]) latavg[rgn] /= mnlatct[rgn];
     if (need_stats) {
-      minval[rgn] = HUGE;
-      maxval[rgn] = -HUGE;
+      minval[rgn] = 1./ 0.;
+      maxval[rgn] = -minval[rgn];
+      datavalid[rgn] = nntot;
+      origvalid[rgn] = nntot;
+    }
+    if (need_limb_dist) {
+      ctroffsun[rgn] = plane2sphere (0.0, 0.0, clat[rgn], clon[rgn], &lat, &lon,
+	  proj);
+      cmaplat[rgn] = lat;
+      cmaplon[rgn] = lon;
     }
   }
 				    /*  this should not really be necessary  */
@@ -1721,7 +1854,8 @@ printf ("need ephem from time\n");
     record_segment = drms_segment_lookupnum (irec, segnum);
     data_array = drms_segment_read (record_segment, DRMS_TYPE_FLOAT, &status);
     if (status) {
-      sprint_time (tbuf, tobs, "TAI", 0);
+      if (ut_times) sprint_time (tbuf, tobs, "UTC", 0);
+      else sprint_time (tbuf, tobs, "TAI", 0);
       fprintf (stderr, "Error: segment read failed for record %s\n", tbuf);
       if (qualcheck) {
 	if (data_array) drms_free_array (data_array);
@@ -1741,7 +1875,8 @@ printf ("need ephem from time\n");
       }
     }
 
-    sprint_time (tbuf, tobs, "TAI", 0);
+    if (ut_times) sprint_time (tbuf, tobs, "UTC", 0);
+    else sprint_time (tbuf, tobs, "TAI", 0);
     tbuf[strlen (tbuf) - 4] = '\0';
     img_xc -= 0.5 * (data_array->axis[0] - 1);
     img_yc -= 0.5 * (data_array->axis[1] - 1);
@@ -1752,12 +1887,6 @@ img_lat *= raddeg;
       ; 
     }
 /*
-double maxval = -HUGE;
-double minval = HUGE;
-for (n = 0; n < data_array->axis[0]*data_array->axis[1]; n++) {
-  if (data[n] > maxval) maxval = data[n];
-  if (data[n] < minval) minval = data[n];
-}
 fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
 */
     if (!extrapolate)
@@ -1768,12 +1897,57 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
 	img_lat, img_lon, img_xc, img_yc, a0, a2, a4, merid_v, img_radius,
 	img_pa, ellipse_e, ellipse_pa, x_invrt, y_invrt, intrpopt,
 	MDI_correct_distort);
-    if (need_stats) {
+    if (need_limb_dist) {
+      calc_limb_distance (delta_rot, rgnct, cmaplat, cmaplon, tobs - tmid,
+	  merid_v, ctroffsun, img_lat, img_lon, ctrmu);
       for (rgn = 0; rgn < rgnct; rgn++) {
-        nn = rgn * pixct;
-	for (n = 0; n < pixct; n++) {
-	  if (maps[n + nn] > maxval[rgn]) maxval[rgn] = maps[n + nn];
-	  if (maps[n + nn] < minval[rgn]) minval[rgn] = maps[n + nn];
+        if (isfinite (ctrmu[rgn])) {
+	  muct[rgn]++;
+	  muavg[rgn] += ctrmu[rgn];
+	}
+      }
+    }
+    if (need_stats) {
+      double v, v2;
+      if (data_scaled) {
+	for (rgn = 0; rgn < rgnct; rgn++) {
+          nn = rgn * pixct;
+	  for (n = 0; n < pixct; n++) {
+	    v = maps[n + nn];
+	    if (!isfinite (v)) {
+	      origvalid[rgn]--;
+	      datavalid[rgn]--;
+	    } else if (v < min_scaled || v > max_scaled) {
+	      datavalid[rgn]--;
+	    } else {
+	      if (v > maxval[rgn]) maxval[rgn] = v;
+	      if (v < minval[rgn]) minval[rgn] = v;
+	      datamean[rgn] += v;
+	      v2 = v * v;
+	      datarms[rgn] += v2;
+	      dataskew[rgn] += v2 * v;
+	      datakurt[rgn] += v2 * v2;
+	    }
+	  }
+	}
+      } else {
+	for (rgn = 0; rgn < rgnct; rgn++) {
+          nn = rgn * pixct;
+	  for (n = 0; n < pixct; n++) {
+	    v = maps[n + nn];
+	    if (!isfinite (v)) {
+	      origvalid[rgn]--;
+	      datavalid[rgn]--;
+	    } else {
+	      if (v > maxval[rgn]) maxval[rgn] = v;
+	      if (v < minval[rgn]) minval[rgn] = v;
+	      datamean[rgn] += v;
+	      v2 = v * v;
+	      datarms[rgn] += v2;
+	      dataskew[rgn] += v2 * v;
+	      datakurt[rgn] += v2 * v2;
+	    }
+	  }
 	}
       }
     }
@@ -1926,11 +2100,10 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
   }
   if (bck) free (bck);
   for (rgn = 0; rgn < rgnct; rgn++) {
-							 /*  set key values  */
+       /*  propagate designated key values from last input record to output  */
     int kstat = 0;
     int keyct = sizeof (propagate) / sizeof (char *);
     orec = orecs[rgn];
-		        /*  copy designated keywords from last input record  */
     kstat += propagate_keys (orec, irec, propagate, keyct);
     if (kstat) {
       fprintf (stderr, "Error writing key value(s) to record %d in series %s\n",
@@ -1948,9 +2121,18 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
 					 /*  extend last image if necessary  */
   if (!valid) {
     fprintf (stderr, "Error: no valid records in input dataset %s\n", source);
-    fprintf (stderr,
-        "       %d of %d records failed quality test on mask of %08x\n",
-        badqual, recct, qmask);
+    if (badpkey) fprintf (stderr,
+	"    %d of %d records rejected for invalid values of %s\n",
+	badpkey, recct, trec_key);
+    if (badqual) fprintf (stderr,
+	"    %d of %d records rejected for quality matching %08x\n",
+	badqual, recct, qmask);
+    if (badfill) fprintf (stderr,
+	"    %d  of %d records rejected for missing values exceeding %d\n",
+	badfill, recct, max_miss);
+    if (badtime) fprintf (stderr,
+	"    %d of %d records rejected for duplicate values of %s\n",
+	badtime, recct, trec_key);
     drms_close_records (ods, DRMS_FREE_RECORD);
     free_all (clat, clon, mai, delta_rot, maps, last, maplat, maplon,
 	map_sinlat, offsun, orecs, log, reject_list);
@@ -2005,6 +2187,30 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
     if (badtime) printf
 	("    %d input records rejected for duplicate values of %s\n",
 	badtime, trec_key);
+  }
+				     /*  check for scaled data out of range  */
+  if (data_scaled) {
+    long long totor = 0;
+    int orrgn = 0;
+    for (rgn = 0; rgn < rgnct; rgn++) {
+      totor += origvalid[rgn] - datavalid[rgn];
+      orrgn++;
+    }
+    if (totor) {
+      fprintf (stderr,
+  	  "Warning: %lld valid values scaled out of representable range in %d records\n",
+	  totor, orrgn);
+      for (rgn = 0; rgn < rgnct; rgn++) {
+	if (origvalid[rgn] != datavalid[rgn])  {
+	  if (verbose_logs) fprintf (log[rgn],
+	      "         %lld valid values scaled out of representable range\n",
+	      origvalid[rgn] - datavalid[rgn]);
+	  if (verbose)
+	      printf ("         %lld valid values scaled out of representable range in region #%d\n",
+	      origvalid[rgn] - datavalid[rgn], rgn);
+	} 
+      }
+    }
   }
 						      /*  write out records  */
   for (rgn = 0; rgn < rgnct; rgn++) {
@@ -2079,9 +2285,9 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
       kstat += check_and_set_key_float (orec, "MAI", mai[rgn]);
     if (scaling_override) {
       sprintf (key, "%s_bscale", osegname);
-      kstat += check_and_set_key_double(orec, key, bscale);
+      kstat += check_and_set_key_double (orec, key, bscale);
       sprintf (key, "%s_bzero", osegname);
-      kstat += check_and_set_key_double(orec, key, bzero);
+      kstat += check_and_set_key_double (orec, key, bzero);
     }
     if (MDI_correct)
       kstat += check_and_set_key_float (orec, "MDI_PA_Corr", MDI_IMG_SOHO_PA);
@@ -2089,6 +2295,15 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
       kstat += check_and_set_key_str (orec, "PrimeKeyString", pkeyval);
     if (strcmp (identifier, "Not Specified"))
       kstat += check_and_set_key_str (orec, "Ident", identifier);
+    if (need_stats) kstat += set_stat_keys (orec, nntot, datavalid[rgn],
+        minval[rgn], maxval[rgn], datamean[rgn], datarms[rgn], dataskew[rgn],
+	datakurt[rgn]);
+    if (need_limb_dist) {
+      if (muct[rgn]) kstat +=
+	  check_and_set_key_float (orec, "MeanMU", muavg[rgn] / muct[rgn]);
+    }
+    if (mnlatct[rgn])
+      kstat += check_and_set_key_float (orec, "MeanLat", latavg[rgn] * degrad);
     if (kstat) {
       fprintf (stderr, "Error writing key value(s) to record %d in series %s\n",
 	  rgn, outser);
@@ -2203,4 +2418,16 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
  *		Added mai, log, orecs, and reject_list to free_all arguments
  *		Fixed  bug in setting of MAI values
  *  v 1.1 frozen 2010.08.20
+ *    1.2	Added setting of statistics keywords
+ *		Added calculation of center-limb distances for region centers
+ *	for keyword setting
+ *		Added calculation of mean latitude for regions for key setting
+ *		Added warnings about redundant unused parameters
+ *		Added reporting of additional reasons for failure to find any
+ *	valid records
+ *  v 1.2 frozen 2011.06.06
+ *    1.3	First record for series info is first recnum, not first pkey
+ *		Fixed bug in determination of segment from multiple candidates
+ *		Removed unused -G flag, added -Z flag for UT time logging
+ *  v 1.3 frozen 2011.11.09
  */
