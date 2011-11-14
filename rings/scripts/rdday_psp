@@ -220,6 +220,7 @@ if (!(-d $MSGS)) mkdir $MSGS
 set SCRT = /scr21/`whoami`
 if (!(-d $SCRT)) set SCRT = /tmp
 set SCRB = $SCRT/$PLID
+if ($TEST) set SCRB = $SCRB\_test
 if (!(-d $SCRB)) mkdir $SCRB
 set TMPD = $TMPB/$CROT
 if (!(-d $TMPD)) mkdir $TMPD
@@ -478,7 +479,7 @@ if ($status) then
   echo "  run log is on $RLOG"  >> $MMSG
   echo "  ($CARTIM) rdfitf failure on `hostname` for $CARTIM"  >> $LOGF
   @ STRTSTOP = 0
-  goto SKIP_INVRT
+  goto CLEANUP
 else
   @ FINIS = `date +%s`
   @ ELAPS = $FINIS - $BEGUN
@@ -578,10 +579,11 @@ if ($SYSE == 5) then
     echo set noglob >> $SCRIPT
     echo 'set RGNS =  ('"$RGNS"')' >> $SCRIPT
     echo 'set RGN = $RGNS[$SGE_TASK_ID]' >> $SCRIPT
+    echo 'set RRLOG = '$RLOG$LAT'.$SGE_TASK_ID.' >> $SCRIPT
     echo "$RFITC \" >> $SCRIPT
     echo "  out= $CSER \" >> $SCRIPT
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-    echo '  in= "$RGN" >>&' $RLOG >> $SCRIPT
+    echo '  in= "$RGN" >>&' $RRLOG >> $SCRIPT
     @ BEGUN = `date +%s`
     qsub -sync yes -t 1-$EXPCT -q j.q $SCRIPT >>& $RLOG
     @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
@@ -634,11 +636,12 @@ else
     echo 'set LONS =  ('"$LONS"')' >> $SCRIPT
     echo 'set LAT = $LATS[$SGE_TASK_ID]' >> $SCRIPT
     echo 'set LON = $LONS[$SGE_TASK_ID]' >> $SCRIPT
+    echo 'set RRLOG = '$RLOG'.$SGE_TASK_ID >> $SCRIPT
     echo 'set RGN = `show_info -iq ds= '$PSER'"['$CROT']['$CLON'][][$LAT][$LON]"`' >> $SCRIPT
     echo "$RFITC \" >> $SCRIPT
     echo "  out= $CSER \" >> $SCRIPT
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-    echo '  in= "$RGN" >>&' $RLOG >> $SCRIPT
+    echo '  in= "$RGN" >>&' $RRLOG >> $SCRIPT
   else
 # this branch of the script is never reached
     set RGNS = (`show_info -iq ds= $PSER"[$CROT][$CLON][][][0]"`)
@@ -650,11 +653,12 @@ else
     echo "limit vm $VMEM"M >> $SCRIPT
     echo set noglob >> $SCRIPT
     echo 'set RGNS =  ('"$RGNS"')' >> $SCRIPT
+    echo 'set RRLOG = '$RLOG'.$SGE_TASK_ID >> $SCRIPT
     echo 'set RGN = $RGNS[$SGE_TASK_ID]' >> $SCRIPT
     echo "$RFITC \" >> $SCRIPT
     echo "  out= $CSER \" >> $SCRIPT
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-    echo '  in= "$RGN" >>&' $RLOG >> $SCRIPT
+    echo '  in= "$RGN" >>&' $RRLOG >> $SCRIPT
   endif
   @ BEGUN = `date +%s`
   qsub -sync yes -t 1-$EXPCT -q j.q $SCRIPT >>& $RLOG
