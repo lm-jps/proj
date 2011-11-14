@@ -2,7 +2,7 @@
  *  datavg.c						~rick/src/drms
  *
  *  Construct mean and variance matrices of selected data segments from an
- *    input records set (same format)
+ *    input record set (same format)
  *  This is a DRMS version of SOI module doppavg generalized to a
  *    larger variety of data series and types
  *
@@ -16,6 +16,9 @@
  *			if only a data series name, additional selection
  *			parameters will be required
  *      out	str	-		Output data series
+ *      count	str	valid		Output series segment containing count
+ *      mean	str	mean		Output series segment containing mean
+ *      power	str	power		Output series segment containing variance
  *      tmid	str	unspecified	midpoint of averaging interval (CR:CL)
  *	length	float	unspecified	length of averaging interval (in deg og
  *			Carrington rotation)
@@ -26,8 +29,8 @@
  *				records rejected if (qmask & qkey:value) != 0
  *	copy	str	+		list of keys to be propagated as-is
  *	average	str	+		list of keys to be averaged
- *	tobs_key str	T_OBS		Key name of time type keyword describing
- *			observation time (midpoint) of each input image
+ *	pkey	str	T_OBS		Name of keyword to be used as index
+ *			over which input records are selected for averaging
  *	qual_key str	Quality		Key name of uint type keyword describing
  *			data quality
  *
@@ -37,7 +40,7 @@
  *	-v	run verbose
  *
  *  Status:
- *    Works with limited functionality; not widely tested
+ *    Works with reasonable functionality
  *
  *  Bugs:
  *    Propagated keys are copied from the first input record, without checking
@@ -69,7 +72,7 @@
 #define	DO_SQUARE	(2)
 
 char *module_name = "data average";
-char *version_id = "0.9";
+char *version_id = "1.0";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"in", "", "input data series or dataset"}, 
@@ -84,8 +87,12 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
   {ARG_STRING,  "copy",  "+", "comma separated list of keys to propagate"},
   {ARG_STRING,  "average",  "+", "comma separated list of keys to average"},
-  {ARG_STRING,	"tobs_key", "T_OBS", "keyname for image observation time"}, 
+  {ARG_STRING,	"pkey", "T_OBS",
+      "keyname for index over which records are selected for averaging"}, 
   {ARG_STRING,	"qual_key", "Quality", "keyname for 32-bit image quality field"}, 
+  {ARG_STRING,	"count", "valid", "output data series segment containing count"}, 
+  {ARG_STRING,	"mean", "mean", "output data series segment containing mean"}, 
+  {ARG_STRING,	"power", "power", "output data series segment containing variance"}, 
   {ARG_FLOAT,	"mscale", "Segment Default", "output BSCALE factor for mean"},
   {ARG_FLOAT,	"mzero", "Segment Default", "output BZERO offset for mean"},
   {ARG_FLOAT,	"pscale", "Segment Default", "output BSCALE factor for power"},
@@ -346,6 +353,21 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
   return kstat;
 }
 
+void report_pkey_value (DRMS_Record_t *rec, char *key, int recnum) {
+  DRMS_Keyword_t *keyword;
+  char buf[128];
+
+  printf ("processing record ");
+  keyword = drms_keyword_lookup (rec, key, 1);
+  if (!keyword) {
+    printf (" %d (unknown value) : ", recnum);
+    return;
+  }
+  drms_keyword_snprintfval (keyword, buf, sizeof (buf));
+  printf ("%s (%d): ", buf, recnum);
+  fflush (stdout);
+}
+
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
   DRMS_RecordSet_t *ids = NULL;
@@ -353,7 +375,7 @@ int DoIt (void) {
   DRMS_Segment_t *iseg, *vseg = NULL, *mseg = NULL, *pseg = NULL;
   DRMS_Array_t *data_array, *vcts, *mean, *powr;
   DRMS_Keyword_t *keywd;
-  TIME tmid, tobs_rec, tobs;
+  TIME tmid, tobs_rec, tobs, tfirst, tlast;
   double *v, *vavg, *vvar;
   double *crpix, *crval, *cdelt, *crota, *avgval;
   double *crpixv, *crvalv, *cdeltv, *crotav, *avgvalv;
@@ -361,13 +383,14 @@ int DoIt (void) {
   double tobsv, vobs;
   double log_base;
   double mrepmin, mrepmax, prepmin, prepmax;
+  double crlnobs, crlnval, crlnvalv;
   float clstrt, clmid, clstop;
   float pa_rec, dpa;
   long long ntot, img_size;
   unsigned int quality;
   int *inaxis, *vval, *reject_list;
   int rec, recct, segct, segnum, maxct, imgct;
-  int crstrt, crmid, crstop;
+  int crstrt, crmid, crstop, carrot;
   int checkseg, mscaled, pscaled;
   int kstat, status;
   int log_status;
@@ -376,7 +399,7 @@ int DoIt (void) {
   char **copykeylist, **meankeylist;
   char *source, *keystr;
   char recset_query[DRMS_MAXQUERYLEN], keyname[DRMS_MAXKEYNAMELEN];
-  char module_ident[64], tbuf[64];
+  char module_ident[64], tbuf[64], vbuf[128];
 
   double fp_nan = 0.0 / 0.0;
   int badqual = 0, blacklist = 0, badpa = 0, rejects = 0;
@@ -385,6 +408,9 @@ int DoIt (void) {
 
   char *inset = strdup (params_get_str (params, "in"));
   char *out_series = strdup (params_get_str (params, "out"));
+  char *vsegname = strdup (params_get_str (params, "count"));
+  char *msegname = strdup (params_get_str (params, "mean"));
+  char *psegname = strdup (params_get_str (params, "power"));
   char *tmid_str = strdup (params_get_str (params, "tmid"));
   float intrvl = params_get_float (params, "length");
   float pa_nom = params_get_float (params, "pa");
@@ -393,7 +419,7 @@ int DoIt (void) {
   char *rejectfile = strdup (params_get_str (params, "reject"));
   char *propagate_req = strdup (params_get_str (params, "copy"));
   char *average_req = strdup (params_get_str (params, "average"));
-  char *tobs_key = strdup (params_get_str (params, "tobs_key"));
+  char *primekey = strdup (params_get_str (params, "pkey"));
   char *qual_key = strdup (params_get_str (params, "qual_key"));
   double mscale = params_get_double (params, "mscale");
   double mzero = params_get_double (params, "mzero");
@@ -429,37 +455,59 @@ int DoIt (void) {
     fprintf (stderr, "  %s\n", out_series);
     return 1;
   }
-  vseg = drms_segment_lookup (orec, "valid");
-  mseg = drms_segment_lookup (orec, "mean");
-  pseg = drms_segment_lookup (orec, "power");
-  if (!vseg || !mseg || !pseg) {
+  vseg = drms_segment_lookup (orec, vsegname);
+  mseg = drms_segment_lookup (orec, msegname);
+  pseg = drms_segment_lookup (orec, psegname);
+  if (!vseg && !mseg && !pseg) {
     fprintf (stderr,
-	"Error: output series %s does not contain required segments:\n",
+	"Error: output series %s does not contain any of the required segments:\n",
 	out_series);
-    fprintf (stderr, "       \"valid\", \"mean\", \"power\"\n");
+    fprintf (stderr, "       \"%s\", \"%s\", \"%s\"\n", vsegname, msegname,
+	psegname);
     drms_close_record (orec, DRMS_FREE_RECORD);
     return 1;
   }
-  switch (vseg->info->type) {
-    case (DRMS_TYPE_CHAR):
-      maxct = 127;
-      break;
-    case (DRMS_TYPE_SHORT):
-      maxct = 32767;
-      break;
-    default:
-      maxct = 2147483648;
+  if (vseg) {
+    switch (vseg->info->type) {
+      case (DRMS_TYPE_CHAR):
+	maxct = SCHAR_MAX;
+	break;
+      case (DRMS_TYPE_SHORT):
+	maxct = SHRT_MAX;
+	break;
+      default:
+	maxct = INT_MAX;
+    }
+    maxct += vseg->bzero;
+    maxct /= vseg->bscale;
+  } else {
+    fprintf (stderr,
+	"Warning: output series %s does not contain the segment %s\n",
+	out_series, vsegname);
+    maxct = INT_MAX;
   }
-  maxct += vseg->bzero;
-  maxct /= vseg->bscale;
-  mscaled = (mseg->info->type == DRMS_TYPE_CHAR) ||
-            (mseg->info->type == DRMS_TYPE_SHORT) ||
-            (mseg->info->type == DRMS_TYPE_INT) ||
-            (mseg->info->type == DRMS_TYPE_LONGLONG);
-  pscaled = (pseg->info->type == DRMS_TYPE_CHAR) ||
-            (pseg->info->type == DRMS_TYPE_SHORT) ||
-            (pseg->info->type == DRMS_TYPE_INT) ||
-            (pseg->info->type == DRMS_TYPE_LONGLONG);
+  if (mseg) {
+    mscaled = (mseg->info->type == DRMS_TYPE_CHAR) ||
+              (mseg->info->type == DRMS_TYPE_SHORT) ||
+              (mseg->info->type == DRMS_TYPE_INT) ||
+              (mseg->info->type == DRMS_TYPE_LONGLONG);
+  } else {
+    fprintf (stderr,
+	"Warning: output series %s does not contain the segment %s\n",
+	out_series, msegname);
+    mscaled = 0;
+  }
+  if (pseg) {
+    pscaled = (pseg->info->type == DRMS_TYPE_CHAR) ||
+              (pseg->info->type == DRMS_TYPE_SHORT) ||
+              (pseg->info->type == DRMS_TYPE_INT) ||
+              (pseg->info->type == DRMS_TYPE_LONGLONG);
+  } else {
+    fprintf (stderr,
+	"Warning: output series %s does not contain the segment %s\n",
+	out_series, psegname);
+    pscaled = 0;
+  }
 
 					     /*  process input specification  */
   if (key_params_from_dspec (inset)) {
@@ -655,11 +703,21 @@ return 0;
   powr = drms_array_create (DRMS_TYPE_DOUBLE, naxis, iseg->axis, (void *)vvar,
       &status);
 		/*  set the output scaling factors to be segment defaults
-				     if not overridden as argument parmaters  */
-  mean->bscale = (isnan (mscale) || mscale == 0.0) ? mseg->bscale : mscale;
-  mean->bzero = (isnan (mzero)) ?  mseg->bzero : mzero;
-  powr->bscale = (isnan (pscale) || pscale == 0.0) ? pseg->bscale : pscale;
-  powr->bzero = (isnan (pzero)) ?  pseg->bzero : pzero;;
+				    if not overridden as argument parameters  */
+  if (mseg) {
+    mean->bscale = (isnan (mscale) || mscale == 0.0) ? mseg->bscale : mscale;
+    mean->bzero = (isnan (mzero)) ?  mseg->bzero : mzero;
+  } else {
+    mean->bscale = (isnan (mscale) || mscale == 0.0) ? 1.0 : mscale;
+    mean->bzero = (isnan (mzero)) ?  0.0 : mzero;
+  }
+  if (pseg) {
+    powr->bscale = (isnan (pscale) || pscale == 0.0) ? pseg->bscale : pscale;
+    powr->bzero = (isnan (pzero)) ?  pseg->bzero : pzero;;
+  } else {
+    powr->bscale = (isnan (pscale) || pscale == 0.0) ? 1.0 : pscale;
+    powr->bzero = (isnan (pzero)) ?  0.0 : pzero;;
+  }
 	       /*  determine range of representable values for scaled output  */
   if (mscaled) {
     unsigned long long maxval =
@@ -688,7 +746,8 @@ return 0;
   img_size = ntot;
 
   if (recct > maxct) {
-    double bscale = vseg->bscale;
+    double bscale = 1.0;
+    if (vseg) bscale = vseg->bscale;
     while (recct > maxct) {
       bscale *= 0.5;
       maxct *= 2;
@@ -696,7 +755,7 @@ return 0;
     vcts->bscale = bscale;
     fprintf (stderr,
         "Warning: more records in input data set than maximum valid count\n");
-    fprintf (stderr,
+    if (vseg) fprintf (stderr,
         "BSCALE adjusted from %g to %g\n", vseg->bscale, bscale);
   }
 	 /*  write out some keys to make sure they're okay before proceeding  */
@@ -739,15 +798,8 @@ return 0;
 					      /*  loop through input records  */
   for (rec = 0; rec < recct; rec++) {
     irec = ids->records[rec];
-    if (verbose) {
-      printf ("processing record ");
-      tobs_rec = drms_getkey_time (irec, tobs_key, &status);
-      if (status) printf (" %d (unknown time) : ", rec);
-      else {
-	sprint_time (tbuf, tobs_rec, "TAI", 0);
-	printf ("%s (%d): ", tbuf, rec);
-      }
-    }
+    if (verbose) report_pkey_value (irec, primekey, rec);
+
 			  /*  check for record quality, reject as applicable  */
     quality = drms_getkey_int (irec, qual_key, &status);
     if ((quality & qmask) && !status) {
@@ -819,23 +871,33 @@ return 0;
       if (verbose) printf ("skipped (segment read error)\n");
       else {
 	fprintf (stderr, "Error reading file for record %d: ", rec);
-	tobs_rec = drms_getkey_time (irec, tobs_key, &status);
+	keywd = drms_keyword_lookup (irec, primekey, 1);
+	if (!keywd) fprintf (stderr, "unknown value\n");
+	else {
+	  drms_keyword_snprintfval (keywd, vbuf, sizeof (vbuf));
+	  fprintf (stderr, "%s\n", vbuf);
+	}
+/*
+	tobs_rec = drms_getkey_time (irec, primekey, &status);
 	if (status) fprintf (stderr, "unknown time\n");
 	else {
 	  sprint_time (tbuf, tobs_rec, "TAI", 0);
 	  fprintf (stderr, "%s\n", tbuf);
 	}
+*/
       }
       continue;
     }
 
-    tobs_rec = drms_getkey_time (irec, tobs_key, &status);
+    tobs_rec = drms_getkey_time (irec, primekey, &status);
     if (status || time_is_invalid (tobs_rec)) {
       if (verbose) printf ("skipped (time invalid)\n");
-      else fprintf (stderr, "error reading %s from record #%d\n", tobs_key, rec);
+      else fprintf (stderr, "error reading %s from record #%d\n", primekey, rec);
       if (data_array) drms_free_array (data_array);
       continue;
     }
+    if (!imgct) tfirst = tobs_rec;
+    tlast = tobs_rec;
     tobs += tobs_rec;
     tobsv += tobs_rec * tobs_rec;
     imgct++;
@@ -898,6 +960,18 @@ return 0;
 	crotav[n] += crota_rec * crota_rec;
       }
     }
+				   /*  averaged CRLN_OBS and CarrRot/CAR_ROT  */
+    crlnobs = drms_getkey_double (irec, "CRLN_OBS", &status);
+    if (!status && isfinite (crlnobs)) {
+      carrot = drms_getkey_int (irec, "CAR_ROT", &status);
+      if (status || (carrot < 1)) {
+	carrot = drms_getkey_int (irec, "CarrRot", &status);
+	if (status || (carrot < 1)) carrot = 0;
+      }
+      crlnobs = 360.0 * carrot - crlnobs;
+      crlnval += crlnobs;
+      crlnvalv += crlnobs * crlnobs;
+    }
 				        /*  get requested keys for averaging  */
     for (n = 0; n < meanct; n++) {
       avg_rec = drms_getkey_double (irec, meankeylist[n], &status);
@@ -926,12 +1000,15 @@ return 0;
       vvar[n] = scale * log (vvar[n]);
     }
   }
-  if (drms_segment_write (vseg, vcts, 0))
-    fprintf (stderr, "Warning: unable to write to count segment\n");
-  if (drms_segment_write (mseg, mean, 0))
-    fprintf (stderr, "Warning: unable to write to mean segment\n");
-  if (drms_segment_write (pseg, powr, 0))
-    fprintf (stderr, "Warning: unable to write to variance segment\n");
+  if (vseg)
+    if (drms_segment_write (vseg, vcts, 0))
+      fprintf (stderr, "Warning: unable to write to count segment\n");
+  if (mseg)
+    if (drms_segment_write (mseg, mean, 0))
+      fprintf (stderr, "Warning: unable to write to mean segment\n");
+  if (pseg)
+    if (drms_segment_write (pseg, powr, 0))
+      fprintf (stderr, "Warning: unable to write to variance segment\n");
 						      /*  set remaining keys  */
   kstat = 0;
   kstat += check_and_set_key_int  (orec, "DataRecs", imgct);
@@ -941,11 +1018,13 @@ return 0;
       mrepmin, mrepmax, prepmin, prepmax, verbose);
 						       /*  averaged WCS keys  */
   if (imgct) {
+    kstat += check_and_set_key_time  (orec, "T_FIRST", tfirst);
+    kstat += check_and_set_key_time  (orec, "T_LAST", tlast);
     tobs /= imgct;
-    kstat += check_and_set_key_time  (orec, tobs_key, tobs);
+    kstat += check_and_set_key_time  (orec, primekey, tobs);
     tobsv /= imgct;
     tobsv -= tobs * tobs;
-    sprintf (keyname, "D_%s", tobs_key);
+    sprintf (keyname, "D_%s", primekey);
     kstat += check_and_set_key_time  (orec, keyname, sqrt (tobsv));
     for (n = 0; n < wcsaxes; n++) {
       crpix[n] /= imgct;
@@ -977,6 +1056,13 @@ return 0;
       sprintf (keyname, "D_CROTA%d", n + 1);
       kstat += check_and_set_key_double (orec, keyname, sqrt (crotav[n]));
     }
+				 /*  averaged CRLN_OBS (and CarrRot/CAR_ROT)  */
+    crlnval /= imgct;
+    crlnobs = 360.0 - fmod (crlnval, 360.0);
+    kstat += check_and_set_key_double (orec, "CRLN_OBS", crlnobs);
+    crlnvalv /= imgct;
+    crlnvalv -= crlnval * crlnval;
+    kstat += check_and_set_key_double (orec, "D_CRLN_OBS", sqrt (crlnvalv));
 						     /*  other averaged keys  */
     for (n = 0; n < meanct; n++) {
       avgval[n] /= imgct;
@@ -1063,5 +1149,13 @@ return 0;
  *		for out-of-range values
  *	11.02.10	added traps for inappropriate output series structure
  *  v 0.9 frozen 11.02.28
+ *  v 1.0 frozen 11.11.14
+ *	11.04.23	changed argument tobs_key to pkey, generalized treatment
+ *		of prime key to different types
+ *	11.06.06	added keywords for output segment names to override the
+ *		default values
+ *	11.06.17	allow for output series without all three segments
+ *	11.06.21	added setting of T_FIRST, T_LAST keys
+ *	11.06.22	added avergaing of CRLN_OBS
  *
  */
