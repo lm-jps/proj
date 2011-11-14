@@ -16,6 +16,10 @@
  *    non-default value of nmax seems to force premature termination; in
  *	particular, nmax <= 3 causes crash due to going beyond array bounds
  *	of freq, wid
+ *    It is implicitly assumed (not checked) that the spectrum is centred,
+ *	with CRPIX1 = cols / 2 + 0.5, CRPIX2 = rows / 2 + 0.5, CRPIX3 = 1,
+ *	CRVALi = 0 (or the equivlent), and that the units are in Mm-1 and
+ *	sec-1
  *
  *  Planned development:
  *    parametrize test criteria for bad fits
@@ -32,7 +36,7 @@
 						      /*  module identifier  */
 char *module_name = "ringfit_bba";
 char *module_desc = "ring fitting using method of Basu and Antia";
-char *version_id = "1.1";
+char *version_id = "1.2";
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET,	"in", "", "input dataset"}, 
@@ -54,6 +58,10 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT, "S", "fit", "fixed value for asymmetry term in place of fit"},
   {ARG_FLOAT, "A1_guess", "0.0", "initial guess for amplitude term A1"},
   {ARG_FLOAT, "S_guess", "-200.0", "initial guess for asymmetry term S"},
+  {ARG_FLOAT, "kxmin", "unspecified", "minimum cutoff for kx in spectrum"},
+  {ARG_FLOAT, "kxmax", "unspecified", "maximum cutoff for kx in spectrum"},
+  {ARG_FLOAT, "kymin", "unspecified", "minimum cutoff for ky in spectrum"},
+  {ARG_FLOAT, "kymax", "unspecified", "maximum cutoff for ky in spectrum"},
   {ARG_STRING, "copy",  "+",
       "comma separated list of keys to propagate forward"},
   {ARG_FLAG, "n", "0", "no fitting (diagnostics only)"},      
@@ -74,6 +82,7 @@ char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
 #include <math.h>
 #include <time.h>
 #include "keystuff.c"
+#include "rdutil.c"
 
 #define VSCALE	(-0.4372)
 #define RSUN_MM	(696.0)
@@ -962,11 +971,14 @@ int DoIt (void) {
   double f, fr, f0, f00;
   double pk1, reps, kmax, rkw, rl0, sn, wd;
   double pk, fm, rki, xf;
-  double dval;
+  double dval, kval;
+  double *l_fit, *freq_fit, *ux_fit, *uy_fit, **par_fit, *rki_fit, *f_fit;
+  double *fm_fit, **h_fit, **hs_fit;
   float *spec;
   int intg[20];
   int c;
   int i, j, jj, k, kx, k0, l;
+  int col, row, pln;
   int bfgs_iter, bfgs_status, flnm_ct, linmin_iter;
   int iers, fp0, fplo, fpup, fp;
   int nkx, nky, nnu, nfr, nstp;
@@ -975,6 +987,8 @@ int DoIt (void) {
   int npx, npxmax, status, total_clock;
   int rgn, rgnct, segct, isegnum, osegnum, logsegnum, drms_output, dispose;
   int propct;
+  int pspec_restrict;
+  int *n_fit, *mask, *bfgs_fit;
   char **copykeylist;
   char logfile[DRMS_MAXPATHLEN], outfile[DRMS_MAXPATHLEN];
   char source[DRMS_MAXQUERYLEN], recid[DRMS_MAXQUERYLEN];
@@ -1019,6 +1033,11 @@ int DoIt (void) {
   double A1_guess = params_get_double (params, "A1_guess");
   double asym_guess = params_get_double (params, "S_guess");
 
+  double kxmin = params_get_double (params, "kxmin");
+  double kxmax = params_get_double (params, "kxmax");
+  double kymin = params_get_double (params, "kymin");
+  double kymax = params_get_double (params, "kymax");
+
   char *inds = strdup (params_get_str (params, "in"));
   char *guessfile =  strdup (params_get_str (params, "guessfile"));
   char *outser =  strdup (params_get_str (params, "out"));
@@ -1060,6 +1079,8 @@ int DoIt (void) {
     dofit[12] = 0.0;
     asym_guess = asym_val;
   }
+  pspec_restrict = (isfinite (kxmin) || isfinite (kxmax) || isfinite (kymin) ||
+      isfinite (kymax));
 
   d2 = (double *)malloc (npar * npar * sizeof (double));
   h = (double *)malloc (npar * npar * sizeof (double));
@@ -1105,26 +1126,41 @@ int DoIt (void) {
     return 0;
   }
   irec = ids->records[0];
-  segct = irec->segments.num_total;
+  segct = drms_record_numsegments (irec);
   if (segct != 1) {
+    int found = 0;
     for (n = 0; n < segct; n++) {
       iseg = drms_segment_lookupnum (irec, n);
-      if (iseg->info->naxis == 3) break;
-      isegnum = n;
+      if (!iseg) continue;
+      if (iseg->info->naxis == 3) {
+        if (!found) isegnum = n;
+	found++;
+      }
     }
-    if (n >= segct) {
-      fprintf (stderr, "found no segmemt of rank 3 in input dataset\n");
+    if (!found) {
+      fprintf (stderr, "Error: found no segment of rank 3 in input dataset\n");
       drms_close_records (ids, DRMS_FREE_RECORD);
       return 1;
     }
+    if (found > 1) {
+      fprintf (stderr,
+	  "Warning: found multiple segments of rank 3 in input dataset\n");
+      iseg = drms_segment_lookupnum (irec, isegnum);
+      fprintf (stderr, "         using segment %s\n", iseg->info->name);
+    }
   } else {
-    isegnum = 0;
-    iseg = drms_segment_lookupnum (irec, isegnum);
-  }
-  if (!iseg) {
-    fprintf (stderr, "Error, could not open data segment\n");
-    drms_close_records (ids, DRMS_FREE_RECORD);
-    return 1;
+    segct = DRMS_MAXSEGMENTS;
+    for (n = 0; n < segct; n++) {
+      iseg = drms_segment_lookupnum (irec, n);
+      if (!iseg) continue;
+      if (iseg->info->naxis != 3) {
+        fprintf (stderr, "Error: found no segment of rank 3 in input dataset\n");
+        drms_close_records (ids, DRMS_FREE_RECORD);
+        return 1;
+      }
+      isegnum = n;
+      break;
+    }
   }
 					/*  check output data series struct  */
   orec = drms_create_record (drms_env, outser, DRMS_TRANSIENT, &status);
@@ -1261,6 +1297,54 @@ int DoIt (void) {
       int ntot = nkx * nky * nnu;
       for (n = 0; n < ntot; n++) spec[n] = (float)exp (scaled_log_base * spec[n]);
     }
+			/*  if kx or ky restricted, zero out relevant values  */
+    if (pspec_restrict) {
+      if (isfinite (kymin)) {
+	for (n = 0, pln = 0; pln < nnu; pln++) {
+	  for (row = 0; row < nky; row++) {
+	    kval = dky * (row - 0.5 * nky);
+	    if (kval > kymin) {
+	      row = nky;
+	      continue;
+	    }
+	    for (col = 0; col < nkx; col++, n++) spec[n] = 0.0;
+	  }
+	}
+      }
+      if (isfinite (kymax)) {
+	for (n = 0, pln = 0; pln < nnu; pln++) {
+	  for (row = 0; row < nky; row++) {
+	    kval = dky * (row - 0.5 * nky);
+	    if (kval <= kymax) {
+	      n += nkx;
+	      continue;
+	    }
+	    for (col = 0; col < nkx; col++, n++) spec[n] = 0.0;
+	  }
+	}
+      }
+      if (isfinite (kxmin)) {
+	for (n = 0, pln = 0; pln < nnu; pln++) {
+	  for (row = 0; row < nky; row++) {
+	    for (col = 0; col < nkx; col++, n++) {
+	      kval = dkx * (col - 0.5 * nkx);
+	      if (kval < kxmin) spec[n] = 0.0;
+	    }
+	  }
+	}
+      }
+      if (isfinite (kxmax)) {
+	for (n = 0, pln = 0; pln < nnu; pln++) {
+	  for (row = 0; row < nky; row++) {
+	    for (col = 0; col < nkx; col++, n++) {
+	      kval = dkx * (col - 0.5 * nkx);
+	      if (kval > kxmax) spec[n] = 0.0;
+	    }
+	  }
+	}
+      }
+   }
+
     nt = nnu;
 /*
     dkx = 2.0 * M_PI / (dlon * nkx);
@@ -1275,7 +1359,7 @@ int DoIt (void) {
     fprintf (unit22, "# nmin=%d nmax=%d lmin=%d lmax=%d fmin=%d fmax=%d\n",
 	nmin, nmax, lmin, lmax, fmin, fmax);
     fprintf (unit22, "# bfgsct=%d linminct=%d\n", bfgs_nit, linmin_nit);
-    fprintf (unit22, "#n        l        k        nu      w0");
+    fprintf (unit22, "#n        l        k        nu    D_w0");
     for (n = 2; n < 4; n++) {
       fprintf (unit22, "%s%s", hdrstr[n], hdrstr2[n]);
       if (calc_seconds) fprintf (unit22, "            ");
@@ -1375,6 +1459,27 @@ int DoIt (void) {
     k2 = (double *)malloc (npxmax * sizeof (double));
     omeg = (double *)malloc (npxmax * sizeof (double));
     ppow = (double *)malloc (npxmax * sizeof (double));
+
+    				/* added 03/24/2011 */
+    n_fit = (int*) malloc(lct*sizeof(int));
+    l_fit = (double*) malloc(lct*sizeof(double));
+    freq_fit = (double*) malloc(lct*sizeof(double));
+    ux_fit = (double*) malloc(lct*sizeof(double));
+    uy_fit = (double*) malloc(lct*sizeof(double));
+    par_fit = (double**) malloc(lct*sizeof(double*));
+    rki_fit = (double*) malloc(lct*sizeof(double));
+    bfgs_fit = (int*) malloc(lct*sizeof(int));
+    f_fit = (double*) malloc(lct*sizeof(double));
+    fm_fit = (double*) malloc(lct*sizeof(double));
+    mask = (int*) malloc(lct*sizeof(int));
+    h_fit = (double**) malloc(lct*sizeof(double*));
+    hs_fit = (double**) malloc(lct*sizeof(double*));
+    for(i=0; i<lct; i++)	{
+      par_fit[i] = (double*) malloc(npar*sizeof(double));
+      h_fit[i] = (double*) malloc(npar*npar*sizeof(double));
+      hs_fit[i] = (double*) malloc(npar*npar*sizeof(double));
+    }
+
     for (n = nmin; n <= nmax; n++) {
       int row = nnu * n;
       int reject_ux = 0, reject_bfgs =0, reject_k = 0, reject_fm = 0,
@@ -1574,6 +1679,22 @@ int DoIt (void) {
         if ((bfgs_status < 100) &&
             (fabs (rl0 - rki) < 50.0) && (fm < 26.5) && (sn > -2.0) &&
 	    (sn < 45.0) && (rl0 > 40.0)) {
+	  n_fit[cvg_ct] = n;
+	  l_fit[cvg_ct] = rl0;
+	  freq_fit[cvg_ct] = f0;
+	  ux_fit[cvg_ct] = par[2];
+	  uy_fit[cvg_ct] = par[3];
+	  rki_fit[cvg_ct] = rki;
+	  bfgs_fit[cvg_ct] = bfgs_status;
+	  f_fit[cvg_ct] = f;
+	  fm_fit[cvg_ct] = fm;
+	  for(i=0; i<npar; i++) {
+	    par_fit[cvg_ct][i] = par[i];
+	    for(j=0; j<npar; j++) {
+	      h_fit[cvg_ct][i+j*npar] = h[i+j*npar];
+	      hs_fit[cvg_ct][i+j*npar] = hs[i+j*npar];
+	    }
+	  }
 	  if (!cvg_ct) cvg_minf = fp0;
 	  cvg_maxf = fp0;
 	  cvg_ct++;
@@ -1590,15 +1711,20 @@ int DoIt (void) {
       if (calc_seconds) fprintf (unit22, "            ");
     }
 */
-	  fprintf (unit22, "%2d %8.3f %8.5f %9.3f %7.3f", n, rl0, rl0 * rscale,
+	  /* removed 3/24/2011 */
+//	  fprintf (unit22, "%2d %8.3f %8.5f %9.3f %7.3f", n, rl0, rl0 * rscale,
+/*
 	      f0, par[4]*scale[4]);
+*/
+/*	      f0, sqrt (scale[4] * scale[4] * fabs (h[4 + npar*4])));
 	  for (i=2; i<4; i++) {
 	    fprintf (unit22, "%12.4e%12.4e", par[i] * scale[i],
 		sqrt (scale[i] * scale[i] * fabs (h[i + npar*i])));
 	    if (calc_seconds) fprintf (unit22, "%12.4e",
 	        sqrt (scale[i] * scale[i] * fabs (hs[i + npar*i])));
-	  }
+	  }*/
 						   /*  set fit quality flag  */
+	  /*
 	  fprintf (unit22, "%5i", -1);
 
 	  fprintf (unit22, " %8.3f %4d%12.4e%12.4e", rki, bfgs_status, f, fm);
@@ -1618,7 +1744,7 @@ int DoIt (void) {
 	        sqrt (scale[i] * scale[i] * fabs (hs[i + npar*i])));
 	  }
 	  h[10 + 10 *npar] *= 1.0e8;
-	  par[10] = dval;
+	  par[10] = dval;*/
 /*
 	  fprintf (unit22, "%2d%10.3f%9.3f%9.3f%5d", n, f0, rki, rl0,
 		bfgs_status);
@@ -1643,7 +1769,7 @@ int DoIt (void) {
 	  if (extra_reporting)
 	    fprintf (unit22, "%5d%5d%5d", flnm_ct, bfgs_iter, linmin_iter);
 */
-	  fprintf (unit22, "\n");
+//	  fprintf (unit22, "\n");
 	  iers = 0;
 	  for (j = 0; j < npar; j++) par0[j] = par[j];
 	  f00 = f0;
@@ -1658,6 +1784,36 @@ int DoIt (void) {
 	}
 	if ((fit_ct % 10) == 9) time_elapsed (fit_ct, &total_clock); 
       }
+      			/* Added write statements (moved from inside n loop) 3/24/2011 */
+      autoweed_vel(n_fit, l_fit, ux_fit, uy_fit, mask, cvg_ct);
+      for(j=0; j<cvg_ct; j++)	{
+	fprintf (unit22, "%2d %8.3f %8.5f %9.3f %7.3f", n, l_fit[j], l_fit[j] * rscale,
+	    freq_fit[j], sqrt(fabs(h_fit[j][4+npar*4]) * scale[4] * scale[4]));
+	for (i=2; i<4; i++) {
+	  fprintf (unit22, "%12.4e%12.4e", par_fit[j][i] * scale[i],
+	      sqrt (scale[i] * scale[i] * fabs (h_fit[j][i + npar*i])));
+	  if (calc_seconds) fprintf (unit22, "%12.4e",
+	      sqrt (scale[i] * scale[i] * fabs (hs_fit[j][i + npar*i])));
+	}
+	if(mask[j]) fprintf (unit22, "%5i", 0);
+	else fprintf (unit22, "%5i", 1);
+	fprintf (unit22, " %8.3f %4d%12.4e%12.4e", rki_fit[j], bfgs_fit[j], f_fit[j], fm_fit[j]);
+	for (i=0; i<2; i++) {
+	  fprintf (unit22, "%12.4e%12.4e", par_fit[j][i] * scale[i],
+	      sqrt (scale[i] * scale[i] * fabs (h_fit[j][i + npar*i])));
+	  if (calc_seconds) fprintf (unit22, "%12.4e",
+	      sqrt (scale[i] * scale[i] * fabs (hs_fit[j][i + npar*i])));
+	}
+	for (i=4; i<npar; i++) {
+	  fprintf (unit22, "%12.4e%12.4e", par_fit[j][i] * scale[i],
+	      sqrt (scale[i] * scale[i] * fabs (h_fit[j][i + npar*i])));
+	  if (calc_seconds) fprintf (unit22, "%12.4e",
+	      sqrt (scale[i] * scale[i] * fabs (hs_fit[j][i + npar*i])));
+	}
+	fprintf (unit22, "\n");
+      }
+
+
       fprintf (runlog, "End iteration n = %d; time = %s\n", n,
           time_elapsed (0, &total_clock));
       fprintf (runlog, "  %d converged", cvg_ct);
@@ -1791,4 +1947,13 @@ int DoIt (void) {
  *			default fmax from 7000 to 5500
  *	10.11.30		Additional fix to take care of maintaining p
  *			parameter value
+ *  v 1.1 frozen 2010.12.02
+ *	11.03.23		Changed output column 5 from w0 to D_w0
+ *	11.03.25		Include autoweeding of velocities to set values
+ *			in qual column
+ *	11.04.18		Fixed bug in determination of default input
+ *			segment when multiple segments possible
+ *	11.06.06		ditto
+ *				Added optional rectangular filtering on spectrum
+ *  v 1.2 frozen 2011.06.09
  */	
