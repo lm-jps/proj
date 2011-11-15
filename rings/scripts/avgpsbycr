@@ -1,0 +1,189 @@
+#!/bin/csh -f
+# Create averages of hmi.rdv_pspec_fd* power spectra over a rotation by
+#   Stonyhurst coordinates (cf. avgpscrsyn)
+
+@ TEST = 0	# set to 1 for production in namespace hmi_test
+set TW
+if ("$1" =~ '-test') then
+  @ TEST = 1
+  set TW = test
+  shift
+endif
+
+if ($#argv < 2) then
+  echo "usage: $0 [-test] Size CarRot"
+  exit
+endif
+
+@ SYSER = `echo $1 | sed  -e "s/^0*//"`
+@ CROT = `echo $2 | sed  -e "s/^0*//"`
+
+# modules and programs
+set DATAVG = datavg
+
+# base naming convention for I/O series and logs
+set INMSP = hmi
+if ($TEST) then
+  set ONMSP = hmi_test
+else
+  set ONMSP = hmi
+endif
+
+#  check that required scripts and programs are in path or rooted
+foreach CMD ($DATAVG)
+  which $CMD > /dev/null
+  if ($status) then
+    if (!(-x $CMD)) then
+      echo Error: command $CMD not in path\; script will fail
+      exit
+    endif
+  endif
+end
+
+# add flags
+set DATAVG = "$DATAVG -v"
+
+# select from synoptic series
+set TILESS = (  05    15    30)
+set VMEMS =  ( 250  5000 10000)
+set QUEUES = ( j.q  j8.q  j8.q)
+
+@ NT = 1
+while ($NT <= $#TILESS)
+  set TILES = $TILESS[$NT]
+  @ SYSE = `echo $TILES | sed  -e "s/^0*//"`
+  if ($SYSER == $SYSE) break
+  @ NT++
+end
+if ($NT > $#TILESS) then
+  echo "usage: $0 Size CR"
+  echo "       Size must be one of: $TILESS"
+  exit
+endif
+
+# base naming convention for I/O series and logs
+set BASE = rdV
+set TILES = $TILESS[$NT]
+set SUFX = _fd$TILES
+set PLID = hmi$BASE
+
+# input series
+set PSER = $INMSP.$BASE\pspec$SUFX
+
+# output series
+set AVGS = $ONMSP.$BASE\avgpspec$SUFX
+
+#  check that input and product series exist
+foreach SER ($PSER $AVGS)
+  show_info -j ds= $SER >& /dev/null
+  if ($status) then
+    echo Error: series $SER does not exist\; script will fail
+    exit
+  endif
+end
+
+# parameters
+set MSCALE = 0.0005
+set MZERO = -11.5
+# set PSCALE = 0.00025
+# set PZERO = -23.0
+@ VMEM = $VMEMS[$NT]
+set QUEUE = $QUEUES[$NT]
+
+# auxiliary files
+set HOSTNAME = `hostname`
+set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set PROCID = $HOSTID\_$$
+set NOTE = ~rick/rings/notify
+set SCRT = /scr21/`whoami`
+if (!(-d $SCRT)) set SCRT = /tmp
+set SCRB = $SCRT/misc
+if (!(-d $SCRB)) mkdir $SCRB
+set LOGF = $SCRB/runlog.avgpsbycr
+set TEMP = /tmp23/`whoami`
+if (!(-d $TEMP)) set TEMP = /tmp
+set TMPB = $TEMP/rdVavgps$TILES
+if (!(-d $TMPB)) mkdir $TMPB
+set MSGS = $TEMP/msgs
+set MMSG = $MSGS/msg.$PROCID
+set RLOG = $TMPB/$CROT
+set TMPD = $TMPB/scripts
+if (!(-d $TMPD)) mkdir $TMPD
+
+set TYPE = misc
+
+# set up logging, notification
+set NOW = `date +%Y.%m.%d_%T`
+set SUBJ = "power spectrum $TW averaging for $CROT"
+echo "$NOW begin $TW averaging CR $CROT fd$TILES" > $MMSG
+cat $MMSG >> $LOGF
+
+if (-e $RLOG)  then
+  rm $RLOG.*
+  mv $RLOG $RLOG.bck
+endif
+touch $RLOG
+
+# prepare scripts for batch processing
+set FILEN = rdVavgps$TILES.$CROT
+set SCRIPT = $TMPD/$FILEN
+
+set LON0 = `show_info -q ds= $PSER"[$CROT][][][0][0]" key= CMLon | head -1`
+set LON1 = `show_info -q ds= $PSER"[$CROT][][][0][0]" key= CMLon | tail -1`
+
+set TLATS = (`show_info -q ds= $PSER"[$CROT][$LON0,$LON1][][][0]" key= LatHG | sort -u`)
+
+@ TOTEL = 0
+@ TOTCT = 0
+foreach TLAT ($TLATS)
+  @ LONCT0 = `show_info -cq ds= $PSER"[$CROT][$LON0][][$TLAT][0]"`
+  @ LONCT1 = `show_info -cq ds= $PSER"[$CROT][$LON1][][$TLAT][0]"`
+  @ LONCT = $LONCT0
+  if ($LONCT1 > $LONCT) @ LONCT = $LONCT1
+  if ($LONCT == 0) continue
+  set noglob
+  set LONS = (`show_info -q ds= $PSER"[$CROT][180][][$TLAT][]" key= LonCM`)
+  unset noglob
+  @ EXPCT = $#LONS
+  @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
+  @ TOTCT = $QJOK + $EXPCT
+  echo "#\!/bin/csh -f" > $SCRIPT
+  echo "limit vm $VMEM"M >> $SCRIPT
+  echo set noglob >> $SCRIPT
+  echo 'set LONS =  ('"$LONS"')' >> $SCRIPT
+  echo 'set LON = $LONS[$SGE_TASK_ID]' >> $SCRIPT
+  echo 'set LOG = '$RLOG'.$SGE_TASK_ID.'$TLAT >> $SCRIPT
+  echo "$DATAVG \" >> $SCRIPT
+  echo "  out= $AVGS mean= logP \" >> $SCRIPT
+  echo "  pkey= CMLon \" >> $SCRIPT
+  echo "  mscale= $MSCALE mzero= $MZERO \" >> $SCRIPT
+  echo '  copy= "CarrRot,LatHG,LonCM,DELTA_K,DELTA_NU,D_OMEGA,Apode_f,APOD_MIN,APOD_MAX" \' >> $SCRIPT
+  echo '  in= '$PSER'"['$CROT'][][]['$TLAT'][$LON]" >>& $LOG' >> $SCRIPT
+  @ BEGUN = `date +%s`
+  qsub -sync yes -t 1-$EXPCT -q $QUEUE $SCRIPT >>& $RLOG
+  @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
+  @ FAIL = $TOTCT - $QJOK
+  if ($FAIL) then
+    echo "  $FAIL averaging failures on cluster at Latitude `printf %+05.1f $TLAT`" >> $MMSG
+    echo "  ($CROT) $FAIL averaging failures on cluster at Latitude `printf %+05.1f $TLAT`" >> $LOGF
+  endif
+  @ FINIS = `date +%s`
+  @ ELAPS = $FINIS - $BEGUN
+  @ TOTEL += $ELAPS
+  @ ELAPS += 30
+  @ ELAPS /= 60
+  echo "  time for averaging $EXPCT spectra on the cluster: $ELAPS min" >> $MMSG
+end
+@ TOTEL += 30
+@ TOTEL /= 60
+echo "Total time for averaging $TOTCT spectra on the cluster: $TOTEL min" >> $MMSG
+echo "    averaged spectra in $AVGS""[$CROT]" >> $MMSG
+
+CLEANUP:
+set NOW = `date +%Y.%m.%d_%T`
+set NOTIFY = `grep ^$TYPE $NOTE | awk '{print $2}'`
+if ($#NOTIFY) then
+  echo $SUBJ > $MSGS/subj.$PROCID
+  echo "$NOTIFY" > $MSGS/list.$PROCID
+endif
+echo "$NOW finish $TW averaging CR $CROT fd$TILES" >> $LOGF
