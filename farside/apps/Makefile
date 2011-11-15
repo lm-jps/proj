@@ -8,7 +8,7 @@ include $(MAKEROOT)/Makevars_$(JPLAT).mk
 INCL = -I$(DRMS)/base/include
 LIBD = -L$(DRMS)/lib/$(JPLAT) -L/home/jsoc/lib/$(JPLAT)
 
-DLIBS = $(LIBD) -ldrms -lpq -lz -lpthread -lcfitsio -lm
+DLIBS = $(LIBD) -ldrms -lpq -lz -lpthread -lcfitsio -lm -lfftw3 -lfftw3f
 
 DEST = ../bin/$(JPLAT)
 
