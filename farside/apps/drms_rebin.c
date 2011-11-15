@@ -17,7 +17,11 @@
  *			input to output records, if possible
  *
  *  Flags
+ *	-c	collapse output rank if possible
  *	-n	do not save results (diagnostic only)
+ *	-o	remove radial component of orbital velocity from signal
+ *	-O	remove radial component of vector orbital velocity from signal
+ *		(unimplemented)
  *	-v	run verbose
  *
  *  Notes:
@@ -30,6 +34,8 @@
  *	in vardim		out vardim		never
  *
  *  Bugs:
+ *    Status of keyword setting not checked
+ *    The collapse option is a quick hack and has not been well tested
  *    Recalculation of target arrays for vardim input has not been tested
  *    Only one input segment and one output segment can be processed; there
  *	is currently no way of dealing with the situation when there are
@@ -40,15 +46,16 @@
  *	as it is the same as specifying offset= -OBS_VR
  *    Has not been tested with arrays of rank > 3
  *    There may be some inconsistency about use of long long's for indexing in
- *	possibly large arrays
+ *	large arrays
  *
  *  Revision history is at end of file.
  */
 #include <jsoc_main.h>
+#include <fftw3.h>
 #include "keystuff.c"
 
 char *module_name = "drms_rebin";
-char *version_id = "0.9";
+char *version_id = "1.0";
 char *module_desc = "rectangular region binning";
 
 ModuleArgs_t module_args[] = {
@@ -58,12 +65,15 @@ ModuleArgs_t module_args[] = {
   {ARG_INTS,   "bin",   "{1}", "array of per-axis bin widths"},
   {ARG_INTS,   "start", "{0}", "array of input axis starting pixels"},
   {ARG_INTS,   "stop",  "{-1}", "array of input axis ending pixels"},
+  {ARG_FLOATS, "wmin",  "{NaN}",
+      "minimum wavelengths per axis for low-pass filtering"},
   {ARG_STRING, "copy",  "+",
       "comma separated list of keys to propagate forward"},
   {ARG_STRING, "scale",  "Not Specified", "scaling value (number or keyword)"},
   {ARG_STRING, "offset",  "Not Specified", "offset value (number or keyword)"},
   {ARG_INT,    "qmask", "0x80000000", "quality bit mask for image rejection"},
   {ARG_STRING, "qual_key", "Quality", "keyname for 32-bit input image quality field"}, 
+  {ARG_FLAG,   "c", "", "collapse rank of output for unit axes"},
   {ARG_FLAG,   "n", "", "do not save output (for testing)"},
   {ARG_FLAG,   "o", "",
       "remove orbital velocity from signal (radial component only)"},
@@ -147,6 +157,261 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *v, long long ntot) {
   return kstat;
 }
 
+static int data_filter (DRMS_Array_t *data) {
+  double *wdata = (double *)data->data;
+  double norm;
+  float *xdata = (float *)data->data;
+  long long n, ntot;
+  int dp_calc;
+  int *axes = data->axis;
+  int rank = data->naxis;
+  static char *valid = NULL;
+				       /* Declarations for FFTW library calls */
+  fftw_plan fplan, iplan;
+  fftwf_plan rfplan, riplan;
+  static fftw_complex *wform = NULL;
+  static fftwf_complex *xform = NULL;
+
+  if (data->type == DRMS_TYPE_DOUBLE) dp_calc = 1;
+  else if (data->type == DRMS_TYPE_FLOAT) dp_calc = 0;
+  else {
+    fprintf (stderr, "Error: filtering of data of type %s not supported\n",
+	drms_type_names[data->type]);
+    return 1;
+  }
+
+  ntot = 1;
+  for (n = 0; n < rank; n++) ntot *= axes[n];
+  norm = 1.0 / ntot;
+  valid = (char *)realloc (valid, ntot * sizeof (char));
+
+  if (dp_calc) {
+    wform = (fftw_complex *)realloc (wform, (ntot + 1) * sizeof (fftw_complex));
+    fplan = fftw_plan_dft_r2c (rank, axes, wdata, wform, FFTW_ESTIMATE);
+    iplan = fftw_plan_dft_c2r (rank, axes, wform, wdata, FFTW_ESTIMATE);
+  } else {
+    xform = (fftwf_complex *)realloc (xform, (ntot + 1) * sizeof (fftwf_complex));
+    rfplan = fftwf_plan_dft_r2c (rank, axes, xdata, xform, FFTW_ESTIMATE);
+    riplan = fftwf_plan_dft_c2r (rank, axes, xform, xdata, FFTW_ESTIMATE);
+  }
+						       /*  forward transform  */
+  if (dp_calc) {
+    for (n = 0; n < ntot; n++)
+      if (isnan (wdata[n])) valid[n] = wdata[n] = 0;
+      else valid[n] = 1;
+    fftw_execute (fplan);
+  } else {
+    for (n = 0; n < ntot; n++)
+      if (isnan (xdata[n])) valid[n] = xdata[n] = 0;
+      else valid[n] = 1;
+    fftwf_execute (rfplan);
+  }
+double rx2, rxfac, ry2, ryfac, rfilt;
+int col, hcols, cols = axes[0];
+int row, hrows, rows = axes[1];
+hrows = (rows + 1) / 2;
+hcols = cols / 2;		     /*  possible bug if cols odd  */
+rxfac = 1.0 / cols;
+ryfac = 1.0 / rows;
+if (dp_calc) {
+for (row = 0, n = 0; row < hrows; row++) {
+  ry2 = row * ryfac;
+  ry2 *= ry2;
+  for (col = 0; col < cols; col++, n+=2) {
+    rx2 = col * rxfac;
+    rx2 *= rx2;
+    rfilt = sqrt (rx2 + ry2);
+if (rfilt > 0.1) wform[n] = wform[n+1] = 0.0;
+  }
+}
+} else {
+for (row = 0, n = 0; row < hrows; row++) {
+  ry2 = row * ryfac;
+  ry2 *= ry2;
+  for (col = 0; col < cols; col++, n+=2) {
+    rx2 = col * rxfac;
+    rx2 *= rx2;
+    rfilt = sqrt (rx2 + ry2);
+if (rfilt > 0.1) xform[n] = xform[n+1] = 0.0;
+  }
+}
+}
+						       /*  inverse transform  */
+  if (dp_calc) {
+    fftw_execute (iplan);
+    for (n = 0; n < ntot; n++) {
+      if (!valid[n]) wdata[n] = NAN;
+      else wdata[n] *= norm;
+    }
+  } else {
+    fftwf_execute (riplan);
+    for (n = 0; n < ntot; n++) {
+      if (!valid[n]) xdata[n] = NAN;
+      else xdata[n] *= norm;
+    }
+  }
+  return 0;
+}
+
+static int check_input_series (char *inds, int *segnum) {
+/*
+ *  Check input data series structure for the existence of a unique segment of
+ *    appropriate protocol for array segment reads, if the segment is not
+ *    named as part of the dataset specification; otherwise check that the
+ *    named segment has the appropriate protocol
+ */
+  DRMS_RecordSet_t *drs = NULL;
+  DRMS_Record_t *irec;
+  DRMS_Segment_t *iseg;
+  HIterator_t *lastseg = NULL;
+  int rec_ct;
+  int status = 0, valid_ct = 0;
+
+  *segnum = 0;
+  drs = drms_open_records (drms_env, inds, &status);
+  if (!drs) {
+    fprintf (stderr, "Error: unable to open record set %s\n", inds);
+    return 1;
+  }
+  irec = drs->records[0];
+		    /*  must use iterator in case segment name is included
+					   as part of record set specifier  */
+  while (iseg = drms_record_nextseg (irec, &lastseg, 1)) {
+    if (iseg->info->protocol == DRMS_PROTOCOL_INVALID ||
+	iseg->info->protocol == DRMS_GENERIC) continue;
+    if (!valid_ct) *segnum = iseg->info->segnum;
+    valid_ct++;
+  }
+  if (valid_ct > 1) {
+    fprintf (stderr, "Error: input data set %s\n", inds);
+    fprintf (stderr,
+	"       contains multiple segments of appropriate protocol;\n");
+    fprintf (stderr, "       in segment must be specified\n");
+    status = 1;
+  }
+  if (valid_ct < 1) {
+    fprintf (stderr, "Error: input data set %s\n", inds);
+    fprintf (stderr, "       contains no segments of appropriate protocol\n");
+    status = 1;
+  }
+  rec_ct = drs->n;
+  if (rec_ct < 1) {
+    fprintf (stderr, "No records in selected set %s\n", inds);
+    status = 1;
+  }
+  drms_close_records (drs, DRMS_FREE_RECORD);
+  return status;
+}
+
+static int check_output_series (char *series, char *segname, int *segnum,
+    int *check) {
+/*
+ *  Check output data series structure for the existence of segments of
+ *    appropriate protocol for array segment writes, if the segment is not
+ *    explicitly named; otherwise check that the named segment has the
+ *    appropriate protocol. If multiple acceptable output segments exist,
+ *    set check argument.
+ */
+  DRMS_Record_t *orec;
+  DRMS_Segment_t *oseg;
+  int oseg_ct, seg_n;
+  int status;
+
+  orec = drms_create_record (drms_env, series, DRMS_TRANSIENT, &status);
+  if (!orec) {
+    fprintf (stderr, "Error: unable to create records in series %s\n", series);
+    fprintf (stderr, "       drms_create_record() returned status %d\n",
+	status); 
+    return 1;
+  }
+
+  *check = 0;
+  if (strcmp (segname, "Not Specified")) {
+	  /*  make sure the named output segment is writeable from an array  */
+    oseg = drms_segment_lookup (orec, segname);
+    if (!oseg) {
+      fprintf (stderr, "Error: no such data segment %s in series %s\n", segname,
+	  series);
+      drms_free_record (orec);
+      return 1;
+    }
+    if (oseg->info->protocol == DRMS_PROTOCOL_INVALID ||
+	oseg->info->protocol == DRMS_GENERIC) {
+      fprintf (stderr, "Error: output data segment %s\n", segname);
+      fprintf (stderr, "       is not of appropriate protocol\n");
+      drms_free_record (orec);
+      return 1;
+    }
+    *segnum = oseg->info->segnum;
+  } else {
+    int valid_ct = 0;
+    oseg_ct = drms_record_numsegments (orec);
+		 /*  find the (only) output segment writeable from an array  */
+    for (seg_n = 0; seg_n < oseg_ct; seg_n++) {
+      oseg = drms_segment_lookupnum (orec, seg_n);
+      if (oseg->info->protocol == DRMS_PROTOCOL_INVALID ||
+	  oseg->info->protocol == DRMS_GENERIC) continue;
+      if (!valid_ct) *segnum = seg_n;
+      valid_ct++;
+    }
+    if (valid_ct > 1) *check = 1;
+    if (valid_ct < 1) {
+      fprintf (stderr, "Error: output data series %s\n", series);
+      fprintf (stderr, "       contains no segments of appropriate protocol\n");
+      drms_free_record (orec);
+      return 1;
+    }
+  }
+  drms_free_record (orec);
+  return 0;
+}
+
+static int check_output_segment (DRMS_Segment_t *seg, int rank, int *axes) {
+  return 0;
+}
+
+static int find_output_segment (char *series, int rank, int *axes) {
+/*
+ *  Find the unique (or first) output data segment matching the requirements
+ *    for appropriate protocol for array segment writes
+ */
+  DRMS_Record_t *orec;
+  DRMS_Segment_t *oseg;
+  int oseg_ct, seg_n, n;
+  int status;
+  int valid_ct = 0, segnum = -1;
+
+  orec = drms_create_record (drms_env, series, DRMS_TRANSIENT, &status);
+  oseg_ct = drms_record_numsegments (orec);
+  for (seg_n = 0; seg_n < oseg_ct; seg_n++) {
+    oseg = drms_segment_lookupnum (orec, seg_n);
+    if (oseg->info->protocol == DRMS_PROTOCOL_INVALID ||
+	oseg->info->protocol == DRMS_GENERIC) continue;
+    if (oseg->info->naxis != rank) continue;
+    if (oseg->info->scope != DRMS_VARDIM) {
+      for (n = 0; n < rank; n++) {
+		  /*  the output segment has fixed axis sizes, so check them  */
+	if (axes[n] != oseg->axis[n]) continue;
+      }
+    }
+    if (!valid_ct) segnum = seg_n;
+    valid_ct++;
+  }
+
+  drms_free_record (orec);
+  if (valid_ct > 1) {
+    oseg = drms_segment_lookupnum (orec, segnum);
+    fprintf (stderr, "Warning: output data series %s\n", series);
+    fprintf (stderr,
+	"       contains multiple segments of appropriate protocol and dimensions;\n");
+    fprintf (stderr,
+	"       using first matching segment: %s.\n", oseg->info->name);
+    fprintf (stderr,
+	"       To use another, seg must be specified\n");
+  }
+  drms_free_record (orec);
+  return segnum;
+}
 							/*  main module body  */
 int DoIt (void) {
   CmdParams_t *params = &cmdparams;
@@ -157,10 +422,10 @@ int DoIt (void) {
   DRMS_Record_t *irec, *orec;
   DRMS_Segment_t *iseg, *oseg;
   DRMS_Array_t *orig_array, *bind_array;
-  HIterator_t *lastseg;
   double *vdat, *vbin;
   double crpix, cdelt;
   double scale, bias, vr, vw, vn;
+  float *wmin;
   long long *nssub, *ntsub;
   long long nn, ntdat, ntbin;
   unsigned int qual_inp, qual_out;
@@ -169,9 +434,10 @@ int DoIt (void) {
   int *in_axes, *out_axes;
   int *bin, *strt, *stop, *strt0, *stop0;
   int axis, npmax;
-  int m, n, key_n, rec_n, rec_ct, seg_n, iseg_ct, oseg_ct, valid_ct;
-  int isegnum, osegnum, rank, axis_check;
+  int m, n, key_n, rec_n, rec_ct;
+  int isegnum, osegnum, rank, crank, axis_check;
   int bias_mult, bias_sign, scale_mult, scale_sign;
+  int prefilter;
   int kstat, status = 0;
   int keyct = sizeof (propagate) / sizeof (char *);
   char *key_scale, *key_bias;
@@ -186,9 +452,11 @@ int DoIt (void) {
   int binvals = params_get_int (params, "bin_nvals");
   int strtvals = params_get_int (params, "start_nvals");
   int stopvals = params_get_int (params, "stop_nvals");
+  int wminvals = params_get_int (params, "wmin_nvals");
   char *propagate_req = strdup (params_get_str (params, "copy"));
   unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
   char *qual_key = strdup (params_get_str (params, "qual_key"));
+  int collapse = params_isflagset (params, "c");
   int no_save = params_isflagset (params, "n");
   int add_orbital_vr = params_isflagset (params, "o");
   int add_orbital_full = params_isflagset (params, "O");
@@ -200,16 +468,9 @@ int DoIt (void) {
   snprintf (module_ident, 128, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s:\n", module_ident);
 
-  drs = drms_open_records (drms_env, inds, &status);
-  if (!drs) {
-    fprintf (stderr, "Error: unable to open record set %s\n", inds);
-    return 1;
-  }
-  rec_ct = drs->n;
-  if (rec_ct < 1) {
-    fprintf (stderr, "No records in selected set %s\n", inds);
-    return 1;
-  }
+ 				      /*  check input data series structure  */
+  if (check_input_series (inds, &isegnum)) return 1;
+
   if (!strcmp (outser, "in")) {
     outser = strdup (inds);
     for (n = 0; n < strlen (outser); n++) if (outser[n] == '[') {
@@ -217,48 +478,118 @@ int DoIt (void) {
       break;
     }
   }
- 				    /*  create sample output series record  */
-  orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
-  if (!orec) {
-    fprintf (stderr, "Error: unable to create records in series %s\n",
-	outser);
-    fprintf (stderr, "       drms_create_record() returned status %d\n",
-	status); 
+ 				     /*  check output data series structure  */
+  if (check_output_series (outser, out_segname, &osegnum, &axis_check)) {
+    drms_close_records (drs, DRMS_FREE_RECORD);
     return 1;
   }
- 					 /*  check input data series struct  */
+						    /*  open input data set  */
+  drs = drms_open_records (drms_env, inds, &status);
+  rec_ct = drs->n;
   irec = drs->records[0];
-  iseg_ct = drms_record_numsegments (irec);
-  valid_ct = 0;
-  lastseg = NULL;
-		    /*  must use iterator in case segment name is included
-					   as part of record set specifier  */
-		/*  must add another argument (0?) to call in next release  */
-  while (iseg = drms_record_nextseg (irec, &lastseg, 1)) {
-    if (iseg->info->protocol == DRMS_PROTOCOL_INVALID ||
-	iseg->info->protocol == DRMS_GENERIC) continue;
-    if (!valid_ct) isegnum = iseg->info->segnum;
-    valid_ct++;
-  }
-  if (valid_ct > 1) {
-    fprintf (stderr, "Error: input data set %s\n", inds);
-    fprintf (stderr,
-	"       contains multiple segments of appropriate protocol;\n");
-    fprintf (stderr, "       in segment must be specified\n");
-    drms_free_record (orec);
-    drms_close_records (drs, DRMS_FREE_RECORD);
-    return 1;
-  }
-  if (valid_ct < 1) {
-    fprintf (stderr, "Error: input data set %s\n", inds);
-    fprintf (stderr, "       contains no segments of appropriate protocol\n");
-    drms_free_record (orec);
-    drms_close_records (drs, DRMS_FREE_RECORD);
-    return 1;
-  }
   iseg = drms_segment_lookupnum (irec, isegnum);
-  rank = iseg->info->naxis;
- 				       /*  check input data series keywords  */
+  crank = rank = iseg->info->naxis;
+	  /*  fill the per-axis arrays of bin, start, stop, and wmin values,
+				extending with the last element as necessary  */
+  bin = (int *)malloc (rank * sizeof (int));
+  strt = (int *)malloc (rank * sizeof (int));
+  stop = (int *)malloc (rank * sizeof (int));
+  strt0 = (int *)malloc (rank * sizeof (int));
+  stop0 = (int *)malloc (rank * sizeof (int));
+  wmin = (float *)malloc (rank * sizeof (float));
+  if (binvals > rank) binvals = rank;
+  if (strtvals > rank) strtvals = rank;
+  if (stopvals > rank) stopvals = rank;
+  if (wminvals > rank) wminvals = rank;
+  for (n = 0; n < binvals; n++) {
+    sprintf (key, "bin_%d_value", n);
+    bin[n] = params_get_int (params, key);
+  }
+  while (n < rank) {
+    bin[n] = bin[n-1];
+    n++;
+  }
+  for (n = 0; n < strtvals; n++) {
+    sprintf (key, "start_%d_value", n);
+    strt[n] = params_get_int (params, key);
+  }
+  while (n < rank) {
+    strt[n] = strt[n-1];
+    n++;
+  }
+  for (n = 0; n < stopvals; n++) {
+    sprintf (key, "stop_%d_value", n);
+    stop[n] = params_get_int (params, key);
+  }
+  while (n < rank) {
+    stop[n] = stop[n-1];
+    n++;
+  }
+  for (n = 0; n < wminvals; n++) {
+    sprintf (key, "wmin_%d_value", n);
+    wmin[n] = params_get_float (params, key);
+  }
+  while (n < rank) {
+    wmin[n] = wmin[n-1];
+    n++;
+  }
+			   /*  save argument values for case of vardim input  */
+  for (n = 0; n < rank; n++) {
+    strt0[n] = strt[n];
+    stop0[n] = stop[n];
+  }
+     /*  initialize arrays and calculate target pixel lists for first record  */
+		 /*  determine source locations for each binned target pixel  */
+  in_axes = (int *)malloc (rank * sizeof (int));
+  out_axes = (int *)malloc (rank * sizeof (int));
+  nssub = (long long *)malloc (rank * sizeof (long long));
+  ntsub = (long long *)malloc (rank * sizeof (long long));
+  ntdat = ntbin = npmax = 1;
+  nssub[0] = ntsub[0] = 1;
+  for (n = 0; n < rank; n++) {
+    in_axes[n] = iseg->axis[n];
+					    /*  adjust start and stop values  */
+    while (strt[n] < 0) strt[n] += in_axes[n];
+    while (stop[n] < 0) stop[n] += in_axes[n];
+    while (strt[n] >= in_axes[n]) strt[n] -= in_axes[n];
+    while (stop[n] >= in_axes[n]) stop[n] -= in_axes[n];
+    if (stop[n] < strt[n]) {
+      int save = strt[n];
+      strt[n] = stop[n];
+      stop[n] = save;
+    }
+
+    axis = stop[n] - strt[n] + 1;
+    out_axes[n] = axis / bin[n];
+    if (axis % bin[n]) out_axes[n]++;
+    ntdat *= in_axes[n];
+    ntbin *= out_axes[n];
+    npmax *= bin[n];
+    if (n) {
+      nssub[n] = nssub[n-1] * in_axes[n-1];
+      ntsub[n] = ntsub[n-1] * out_axes[n-1];
+    }
+  }
+  if (collapse) {
+    for (n = 0; n < rank; n++) {
+      if (out_axes[n] == 1) {
+	crank--;
+	for (m = n; m < crank; m++) out_axes[m] = out_axes[m + 1];
+      }
+    }
+    if (crank == rank) collapse = 0;
+  }
+	/*  use first input record segment to find appropriate output segment
+								   if needed  */
+  if (axis_check) {
+    osegnum = find_output_segment (outser, crank, out_axes);
+    if (osegnum < 0) return 1;
+  }
+ 				      /*  create sample output series record  */
+  orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
+  oseg = drms_segment_lookupnum (orec, osegnum);
+  axis_check = (oseg->info->scope != DRMS_VARDIM);
+ 				        /*  check input data series keywords  */
   if (scale_values) {
     char *endptr;
     scale = strtod (params_get_str (params, "scale"), &endptr);
@@ -315,48 +646,7 @@ int DoIt (void) {
       add_orbital_full = 0;
     }
   }
- 					/*  check output data series struct  */
-  oseg_ct = drms_record_numsegments (orec);
-  if (strcmp (out_segname, "Not Specified")) {
-	  /*  make sure the named output segment is writeable from an array  */
-    oseg = drms_segment_lookup (orec, out_segname);
-    if (!oseg) {
-      fprintf (stderr, "Error: no such data segment %s\n", out_segname);
-      drms_free_record (orec);
-      drms_close_records (drs, DRMS_FREE_RECORD);
-      return 1;
-    }
-    if (oseg->info->protocol == DRMS_PROTOCOL_INVALID ||
-	oseg->info->protocol == DRMS_GENERIC) {
-      fprintf (stderr, "Error: output data segment %s\n", out_segname);
-      fprintf (stderr, "       is not of appropriate protocol\n");
-      drms_free_record (orec);
-      drms_close_records (drs, DRMS_FREE_RECORD);
-      return 1;
-    }
-    valid_ct = 1;
-    osegnum = oseg->info->segnum;
-  } else {
-		 /*  find the (only) output segment writeable from an array  */
-    for (seg_n = 0, valid_ct = 0; seg_n < oseg_ct; seg_n++) {
-      oseg = drms_segment_lookupnum (orec, seg_n);
-      if (oseg->info->protocol == DRMS_PROTOCOL_INVALID ||
-	  oseg->info->protocol == DRMS_GENERIC) continue;
-      if (!valid_ct) osegnum = seg_n;
-      valid_ct++;
-    }
-    if (valid_ct > 1) {
-      fprintf (stderr, "Error: output data series %s\n", outser);
-      fprintf (stderr,
-	  "       contains multiple segments of appropriate protocol;\n");
-      fprintf (stderr, "       seg must be specified\n");
-      drms_free_record (orec);
-      drms_close_records (drs, DRMS_FREE_RECORD);
-      return 1;
-    }
-  }
-  oseg = drms_segment_lookupnum (orec, osegnum);
-  if (oseg->info->naxis != rank) {
+  if (!collapse && oseg->info->naxis != rank) {
     fprintf (stderr,
 	"Error: ranks of input and output data segments do not match\n");
     drms_free_record (orec);
@@ -364,16 +654,19 @@ int DoIt (void) {
     return 1;
   }
   axis_check = (oseg->info->scope != DRMS_VARDIM);
-		   /*  fill the per-axis arrays of bin, start & stop values,
+	  /*  fill the per-axis arrays of bin, start, stop, and wmin values,
 				extending with the last element as necessary  */
+/*
   bin = (int *)malloc (rank * sizeof (int));
   strt = (int *)malloc (rank * sizeof (int));
   stop = (int *)malloc (rank * sizeof (int));
   strt0 = (int *)malloc (rank * sizeof (int));
   stop0 = (int *)malloc (rank * sizeof (int));
+  wmin = (float *)malloc (rank * sizeof (float));
   if (binvals > rank) binvals = rank;
   if (strtvals > rank) strtvals = rank;
   if (stopvals > rank) stopvals = rank;
+  if (wminvals > rank) wminvals = rank;
   for (n = 0; n < binvals; n++) {
     sprintf (key, "bin_%d_value", n);
     bin[n] = params_get_int (params, key);
@@ -398,13 +691,35 @@ int DoIt (void) {
     stop[n] = stop[n-1];
     n++;
   }
-			  /*  save argument values for case of vardim input  */
+  for (n = 0; n < wminvals; n++) {
+    sprintf (key, "wmin_%d_value", n);
+    wmin[n] = params_get_float (params, key);
+  }
+  while (n < rank) {
+    wmin[n] = wmin[n-1];
+    n++;
+  }
+*/
+			   /*  save argument values for case of vardim input  */
+/*
   for (n = 0; n < rank; n++) {
     strt0[n] = strt[n];
     stop0[n] = stop[n];
   }
-    /*  initialize arrays and calculate target pixel lists for first record  */
-		/*  determine source locations for each binned target pixel  */
+*/
+						/*  prefilter to be applied?  */
+  prefilter = isfinite (wmin[0]);
+  for (n = 1; n < rank; n++) {
+    if (prefilter && isnan (wmin[n])) {
+      fprintf (stderr, "Warning: not all wmin values valid\n");
+      fprintf (stderr, "         filtering turned off\n");
+      prefilter = 0;
+      break;
+    }
+    if (isfinite (wmin[n])) prefilter = 1;
+  }
+     /*  initialize arrays and calculate target pixel lists for first record  */
+		 /*  determine source locations for each binned target pixel  */
   in_axes = (int *)malloc (rank * sizeof (int));
   out_axes = (int *)malloc (rank * sizeof (int));
   nssub = (long long *)malloc (rank * sizeof (long long));
@@ -413,7 +728,7 @@ int DoIt (void) {
   nssub[0] = ntsub[0] = 1;
   for (n = 0; n < rank; n++) {
     in_axes[n] = iseg->axis[n];
-					   /*  adjust start and stop values  */
+					    /*  adjust start and stop values  */
     while (strt[n] < 0) strt[n] += in_axes[n];
     while (stop[n] < 0) stop[n] += in_axes[n];
     while (strt[n] >= in_axes[n]) strt[n] -= in_axes[n];
@@ -435,9 +750,9 @@ int DoIt (void) {
       ntsub[n] = ntsub[n-1] * out_axes[n-1];
     }
   }
-		       /*  this check also belongs below if input is vardim  */
+			/*  this check also belongs below if input is vardim  */
   if (axis_check) {
-    /*  the output and the input both have fixed sizes; they'd better match  */
+     /*  the output and the input both have fixed sizes; they'd better match  */
     for (n = 0; n < rank; n++) {
       if (out_axes[n] != oseg->axis[n]) {
 	fprintf (stderr,
@@ -483,7 +798,7 @@ int DoIt (void) {
   bind_array = drms_array_create (DRMS_TYPE_DOUBLE, rank, out_axes,
       (void *)vbin, &status);
   bind_array->bscale = oseg->bscale;
-  bind_array->bscale = oseg->bscale;
+  bind_array->bzero = oseg->bzero;
   drms_free_record (orec);
 
   propct = construct_stringlist (propagate_req, ',', &copykeylist);
@@ -545,6 +860,11 @@ int DoIt (void) {
       fprintf (stderr, "Warning: could not read segment # %d\n", isegnum);
       fprintf (stderr, "       in %s; skipped\n", source);
       continue;
+    }
+    if (prefilter) {
+					/*  apply optional prefilter to data  */
+      status = data_filter (orig_array);
+      fprintf (stderr, "Warning: prefiltering not implemented\n");
     }
     vdat = (double *)orig_array->data;
     oseg = drms_segment_lookupnum (orec, osegnum);
@@ -671,7 +991,21 @@ int DoIt (void) {
     }
     drms_free_array (orig_array);
     
-    drms_segment_write (oseg, bind_array, 0);
+    if (collapse) {
+      DRMS_Array_t *coll_array;
+      int crank = rank;
+      for (n = 0; n < rank; n++) {
+        if (out_axes[n] == 1) {
+	  crank--;
+	  for (m = n; m < crank; m++) out_axes[m] = out_axes[m + 1];
+	}
+      }
+      coll_array = drms_array_create (DRMS_TYPE_DOUBLE, crank, out_axes,
+	  (void *)vbin, &status);
+      coll_array->bscale = bind_array->bscale;
+      coll_array->bzero = bind_array->bzero;
+      drms_segment_write (oseg, coll_array, 0);
+    } else drms_segment_write (oseg, bind_array, 0);
     kstat += check_and_set_key_int (orec, "Quality", qual_out);
 							 /*  parameter keys  */
     for (n = 0; n < rank; n++) {
@@ -772,4 +1106,8 @@ int DoIt (void) {
  *	flags
  *		Moved construct_stringlist() function to keystuff
  *  v 0.9 frozen 2010.08.20
+ *  v 1.0	Added stubs for optional pre-filtering
+ *		Added collapse option
+ *		Fixed setting of array bzero
+ *  v 1.0 frozen 2011.11.15
  */
