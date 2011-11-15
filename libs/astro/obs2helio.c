@@ -39,7 +39,7 @@
 #include <math.h>
 #include "astro.h"
 
-const int kMaxCols = 3072;
+const int kMaxCols = 20000;
 const double kOmegaCarr = (360 /  27.27527); /* degrees/day - synodic Carrington rotation rate */
 const double kRadsPerDegree = M_PI/180.;
 
