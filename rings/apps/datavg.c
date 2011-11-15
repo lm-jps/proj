@@ -1149,13 +1149,14 @@ return 0;
  *		for out-of-range values
  *	11.02.10	added traps for inappropriate output series structure
  *  v 0.9 frozen 11.02.28
- *  v 1.0 frozen 11.11.14
+ *  v 1.0
  *	11.04.23	changed argument tobs_key to pkey, generalized treatment
  *		of prime key to different types
  *	11.06.06	added keywords for output segment names to override the
  *		default values
  *	11.06.17	allow for output series without all three segments
  *	11.06.21	added setting of T_FIRST, T_LAST keys
- *	11.06.22	added avergaing of CRLN_OBS
+ *	11.06.22	added averaging of CRLN_OBS
+ *  v 1.0 frozen 11.11.14
  *
  */
