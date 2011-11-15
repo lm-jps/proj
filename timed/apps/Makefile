@@ -9,7 +9,6 @@ FC = ifort11
 LDCMD = $(FC) -nofor_main -no-ipo 
 
 INCL = -I$(DRMS)/base/include
-INC =   -I$(INCL)
 LIBD = -L$(DRMS)/lib/$(JPLAT) -L/home/jsoc/lib/$(JPLAT)
 
 DLIBS = $(LIBD) -ldrms -lpq -lz -lcfitsio -lfftw3f -lmkl_em64t -lguide -lpthread
@@ -29,11 +28,11 @@ all:	invert_td_hr travel_times
 .SECONDEXPANSION:
 
 invert_td_hr:	$$@.o $(NVOBJ)
-	$(LDCMD) -o $(DEST)/$@ $? $(NVOBJ) $(DLIBS)
+	$(LDCMD) -o $(DEST)/$@ $? $(DLIBS)
 	$(RM) $?
 
 travel_times:	$$@.o $(TTOBJ)
-	$(LDCMD) -o $(DEST)/$@ $?$(TTOBJ) $(DLIBS)
+	$(LDCMD) -o $(DEST)/$@ $? $(DLIBS)
 	$(RM) $?
 
 clean:
@@ -41,7 +40,7 @@ clean:
 	$(RM) $(FPLS)
 
 .c.o:
-	$(CC) $(CCFLAGS) $(@:.o=.c) $(INC)
+	$(CC) $(CCFLAGS) $(@:.o=.c) $(INCL)
 
 .f.o:
 	$(FC) $(FFLAGS) $(@:.o=.f)
