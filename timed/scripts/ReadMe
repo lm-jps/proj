@@ -1,0 +1,29 @@
+Release scripts for time-distance analysis in the HMI pipeline
+
+If this directory is part of the CVS tree, the files in this directory have
+been mirrored from a specific version control system outside CVS and should
+not be modified without the consent of the author, Rick Bogart. Any changes
+introduced that are not synchronized with changes to the original control
+files are likely to be lost.
+
+N.B. The pipeline scripts of this project require, in addition to the module
+applications in ../apps the following additional modules from proj/rings/apps:
+	gentargs
+	mtrack
+
+Table of contents last updated 11.11.14
+
+	Directories
+CVS/		version control information
+
+	Scripts
+		version
+tdsynop*	0.9	run  a single instance of trackings plus analyses in
+	the synoptic pipeline for a given time center
+= tdsynop_ttim*		"_ttim and "_inv restart the processing at the point of
+= tdsynop_inv*		the travel time calculations or inversions
+runtdsynop*	0.9	run multiple tdsynop instances for selected time range
+	in parallel
+
+	Other
+ReadMe			This file
