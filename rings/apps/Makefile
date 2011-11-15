@@ -47,7 +47,7 @@ rdsinv:		$$@.o h1h2.o
 	$(FC) -nofor_main -openmp -o $(DEST)/$@ $? $(DLIBS) -lmkl_em64t
 	$(RM) $?
 
-rdvinv:		$$@.o ola_xy.o ola_subs.o
+rdvinv:		$$@.o ola_xy_v10.o ola_subs.o
 	$(FC) -nofor_main -openmp -o $(DEST)/$@ $? $(DLIBS) -lmkl_em64t
 	$(RM) $?
 
@@ -77,7 +77,7 @@ hmifits.o:
 multfactor.o:
 	$(FC) $(F90F) -o $(@) $(@:.o=.f90)
 
-ola_xy.o:
+ola_xy_v10.o:
 	$(FC) $(FFLAGS) $(@:.o=.f)
 
 polyval.o:
