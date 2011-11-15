@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/fstats2.c,v 1.2 2010/07/21 00:47:35 phil Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/fstats2.c,v 1.3 2011/11/15 20:35:19 kehcheng Exp $"
 
 #include <stdlib.h>
 #include <math.h>
@@ -13,7 +13,7 @@ int fstats2(int n, float arr[], double *min, double *max, double *medn,
 	   double *mean, double *sig, double *skew, double *kurt, int *ngood)
 {
     int i, bin, nv = 0;
-    float fmin = FLT_MAX, fmax = FLT_MIN;
+    float fmin = FLT_MAX, fmax = -FLT_MAX;
     double s = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, avg, var;
     static int hist[NBINS];
     double delta;

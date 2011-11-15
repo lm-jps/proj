@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/fstats.c,v 1.2 2010/07/21 00:47:35 phil Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/fstats.c,v 1.3 2011/11/15 20:35:19 kehcheng Exp $"
 
 //CODE FROM KEH-CHENG, SLIGHTLY MODIFIED BY SEBASTIEN
 
@@ -78,7 +78,7 @@ int fstats(int n, float arr[], double *min, double *max, double *medn,
 {
     int i;
     int nv = 0;
-    float *dat, fmin = FLT_MAX, fmax = FLT_MIN;
+    float *dat, fmin = FLT_MAX, fmax = -FLT_MAX;
     double s = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, avg, var;
 
     *min = *max = *medn = *mean = *sig = *skew = *kurt = __builtin_nan("");
@@ -104,6 +104,13 @@ int fstats(int n, float arr[], double *min, double *max, double *medn,
 	    *min = *max = *medn = *mean = s;
 	free(dat);
 	return TOO_FEW_GOOD_POINTS;
+    }
+
+    if (fmin == fmax) {
+	*min = *max = *medn = *mean = fmin;
+	*sig = *skew = *kurt = 0;
+	free(dat);
+	return OK;
     }
 
     avg = s / nv;
