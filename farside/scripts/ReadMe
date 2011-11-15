@@ -6,13 +6,13 @@ not be modified without the consent of the author, Rick Bogart. Any changes
 introduced that are not synchronized with changes to the original control
 files are likely to be lost.
 
-Table of contents last updated 10.08.22
+Table of contents last updated 11.11.15
 
 	Directories
 CVS/		version control information
 
 	Scripts
-fsbin*		update GONG rebinned image stream to current series
+fsbin_nrt*	update GONG rebinned image stream to current series
 		hmi_test.fsVbinned
 
 
