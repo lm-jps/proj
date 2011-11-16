@@ -22,9 +22,10 @@ FOBJ =	cart_to_polar.o fourier_filter.o ring_pass.o polyval.o \
 	dogleg3.o hmifits.o ringanalysis.o ccint2.o fourierlibn32.o 
 
 FPLS =	$(addprefix $(DEST)/, $(MODS)) $(addprefix $(DEST)/, $(PROG)) \
-	$(addprefix $(DEST)/, rdvinv) $(addprefix $(DEST)/, rdsinv)
+	$(addprefix $(DEST)/, rdvinv) $(addprefix $(DEST)/, rdsinv) \
+	$(addprefix $(DEST)/, rdfitf)
 
-all:	$(MODS) $(PROG) rdfitf
+all:	$(MODS) $(PROG) rdfitf rdvinv
 
 FC = ifort11
 F90F = -c -O3
