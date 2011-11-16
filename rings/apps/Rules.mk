@@ -11,7 +11,7 @@ RDVINV_$(d)	:= $(addprefix $(d)/, rdvinv)
 endif
 
 ifeq ($(COMPILER), icc)
-  MODEXE_$(d)	:= $(addprefix $(d)/, mtrack pspec3 rdfitc) 
+  MODEXE_$(d)	:= $(addprefix $(d)/, datavg maicalc mtrack pspec3 rdcover rdfitc) 
 endif
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
@@ -21,8 +21,11 @@ MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 MODEXE_USEF_$(d):= $(RDVINV_$(d))
 MODEXE_USEF	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
-EXE_$(d)        := $(MODEXE_$(d)) $(MODEXE_USEF_$(d))
-OBJ_OLAXY_$(d)	:= $(addprefix $(d)/, ola_xy.o)
+CEXE_$(d)	:= $(addprefix $(d)/, gentargs) 
+CEXE		:= $(CEXE) $(CEXE_$(d))
+
+EXE_$(d)        := $(MODEXE_$(d)) $(MODEXE_USEF_$(d) $(CEXE_$(d))
+OBJ_OLAXY_$(d)	:= $(addprefix $(d)/, ola_xy_v10.o ola_subs.o)
 OBJ_$(d)	:= $(EXE_$(d):%=%.o) $(OBJ_OLAXY_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
