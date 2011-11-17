@@ -30,6 +30,12 @@ endif
 if ($PROG =~ "*_ttim") @ SKIPTRK = 1
 if ($PROG =~ "*_inv") @ SKIPFIT = 1
 
+# modules and programs
+set GENTG = gentargs
+set TRACK = mtrack
+set TTFIT = travel_times
+set TDINV = invert_td_hr
+
 if ($TEST) then
   set TSTOPT = ~rick/hmi/timed/testoptions
   if (!(-r $TSTOPT)) then
@@ -48,12 +54,6 @@ if ($TEST) then
 else
   set NMSP = hmi
 endif
-
-# modules and programs
-set GENTG = gentargs
-set TRACK = mtrack
-set TTFIT = travel_times
-set TDINV = invert_td_hr
 
 #  check that required scripts and programs are in path or rooted
 foreach CMD ($GENTG $TRACK $TTFIT)
