@@ -1,101 +1,148 @@
+/*
+ *  rdutil.c
+ *
+ *  library of utility functions for dealing with ring-diagram fit files
+ *
+ *    autoweed_vel	automatically weed velocities for inversions
+ *    read_fit		reads n, l, f, and d_f from a fit file
+ *    read_fit_v	reads n, l, f, d_f, u_i and d_ui from a fit file
+ *
+ *  Bugs:
+ *    read_fit() and read_fit_v() assume that the frequency error estimate
+ *	is in column 5 of the fit table; for fit files produced with versions
+ *	of rdfitc below 1.2, this is not the case
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-// #include "rdutil.h"
 
-int read_fit_v(FILE *fpt, int *npts, int **n, double **l, double **f,
-    double **ef, double **ux, double **eux, double **uy, double **euy)       {
-  /*
-     Function - read_fit
-     Takes an open file pointer, and reads n, l, frequencies, and velocities
-  */
-  int i, nlines;
-  char buffer[8192];
-  if( ferror(fpt) )     {
-    //perror(fpt);
-    return -1;
-  } 
-  if( feof(fpt)) rewind(fpt);
-  
-  nlines = 0;
-  while(!feof(fpt))     {
-    fgets(buffer, 8192, fpt);
-    if(buffer[0] != '#' && !feof(fpt)) nlines++;
+	/*  some or all of the following declarations may be unnecessary  */
+/*
+int interp_vel(int *n, double *l, double *f, double *ef, double *ux,
+    double *eux, double *uy, double *euy, int npts);
+int interp_freq(int *n, double *l, double *f, double *ef, int npts,
+    int *ni, int *li, double *fi, double *efi, int *npts_out);
+int freqdif(int *n1, int *n2, int *l1, double *l2, double *f1, double *f2,
+    double *ef1, double *ef2, int npts1, int npts2, int *n, int *l, double *f,
+    double *df, double *edf, int *npts);
+int autoweed(int *l, int *n, double *f, double *df, double *edf, int *msk,
+    int npts);
+
+int nearst(double xb, double x[], int ntab);
+int divdif(double xb, double x[], double f[], int *nuse, int ntab,
+    double fb[], double aeps, double *dfb, double *ddfb);
+int svdevl(int n, int m, double *u, double *v, double sigma[], int lu,
+    int lv, double b[], double reps);
+int svd(int n, int m, double *a, double *v, double sigma[], int la, int lv);
+int llsq(int n, int m, int k, double *x, int ix, double f[], double ef[],
+    double a[], double *u, double *v, int iu, int iv, double sigma[],
+    double y[], void (* phi) (int , double * , double * ), double reps,
+    double *chisq);
+void line(int m, double *x, double *y);
+*/
+/*
+ * The following have been commented out for dependencies and because they are
+ *    not used by rdfitc (which only uses autoweed_vel())
+ *	interp_vel
+ *	interp_freq
+ *	freqdif
+ *	autoweed
+ */
+int autoweed_vel (int *n, double *l, double *ux, double *uy, int *mask,
+    int npts) {
+/*
+ *  Returns 'mask' of length npts: mask[i] is False for rejected modes.
+ *    Ux and Uy are weeded together. Values are rejected when their difference
+ *    from the mean exceeds 5 (tol?) std. dev., both the mean and std dev
+ *    being calculated over the central 3/5 of the l range for the order
+ */
+  const int maxn = 8;
+  const double tol = 5.0;
+
+  int i, j, offset;
+  int n_num[maxn];
+  double num;
+  double sumx, sumxx, sumy, sumyy, meanx, meany, stdx, stdy;
+  double range, uxmin, uxmax, uymin, uymax;
+  double lmin,lmax;
+	  
+  for (i=0; i<maxn; i++) n_num[i] = 0;
+  for (i=0; i<npts; i++)
+    if (n[i] < maxn) n_num[n[i]]++;
+
+  offset=0;
+  for (i=0; i<maxn; i++) {
+    num = 0.0;
+    sumx = 0.0;
+    sumy = 0.0;
+    sumxx = 0.0;
+    sumyy = 0.0;
+							    /*  get l limits  */
+    lmin = lmax = l[offset];
+    for (j=offset; j < n_num[i] + offset; j++) {
+      if (l[j] < lmin) lmin = l[j];
+      if (l[j] > lmax) lmax = l[j];
+    }
+    range = 0.2 * (lmax - lmin);
+    lmin += 2.0 * range;
+    lmax -= 2.0 * range;
+    for (j=offset; j < n_num[i] + offset; j++) {
+      if ((l[j] <= lmax) && (l[j] >= lmin)) {
+	sumx += ux[j];
+	sumxx += ux[j]*ux[j];
+	sumy += uy[j];
+	sumyy += uy[j]*uy[j];
+	num++;
+      }
+    }
+    meanx = sumx / num;
+    meany = sumy / num;
+    stdx = num*sumxx - sumx*sumx;
+    stdy = num*sumyy - sumy*sumy;
+    stdx /= (num * (num - 1));
+    stdy /= (num * (num - 1));
+    stdx = sqrt (stdx);
+    stdy = sqrt (stdy);
+    uxmin = meanx - 5.0 * stdx;
+    uxmax = meanx + 5.0 * stdx;
+    uymin = meany - 5.0 * stdy;
+    uymax = meany + 5.0 * stdy;
+    
+    for (j=offset; j<n_num[i]+offset; j++) {
+      if (ux[j] <= uxmax && ux[j] >= uxmin &&
+	  uy[j] <= uymax && uy[j] >= uymin) mask[j]=1;
+      else mask[j]=0;
+    }
+    offset +=n_num[i];
   }
-  if(nlines == 0) return 1;
-  
-  *n = (int*) malloc(nlines*sizeof(int));
-  *l = (double*) malloc(nlines*sizeof(double));
-  *f = (double*) malloc(nlines*sizeof(double));
-  *ef = (double*) malloc(nlines*sizeof(double));
-  *ux = (double*) malloc(nlines*sizeof(double));
-  *eux = (double*) malloc(nlines*sizeof(double));
-  *uy = (double*) malloc(nlines*sizeof(double));
-  *euy = (double*) malloc(nlines*sizeof(double));
-  
-  rewind(fpt);
-  
-  for(i=0; i<nlines; i++)       {
-    fgets(buffer, 8192, fpt);
-    while(buffer[0] == '#') fgets(buffer, 8192, fpt);
-    sscanf(buffer, "%i %lf %*f %lf %lf %lf %lf %lf %lf", &(*n)[i], &(*l)[i], &(*f)[i], 
-        &(*ef)[i], &(*ux)[i], &(*eux)[i], &(*uy)[i], &(*euy)[i]);
-  } 
-  *npts = nlines;
-  
   return 0;
 }
 
-int nearst(double xb, double x[], int ntab)	{
-  int low, igh, mid;
-
-  low=0; igh=ntab-1;
-  if((xb < x[low]) != (xb < x[igh]) ) {
-
-/*	If the point is within the range of table, then locate it by bisection */
-
-    while(igh-low > 1) {
-      mid=(low+igh)/2;
-      if((xb < x[mid]) == (xb < x[low])) low=mid;
-      else igh=mid;
-    }
-  }
-
-  if(fabs(xb-x[low]) < fabs(xb-x[igh])) return low;
-  else return igh;
-}
-
-int read_fit(FILE *fpt, int *npts, int **n, double **l, double **f, double **ef)	{
-  /*
-     Function - read_fit
-     Takes an open file pointer, and reads n, l, frequencies, and velocities
-  */
+int read_fit (FILE *fpt, int *npts, int **n, double **l, double **f,
+    double **ef) {
   int i, nlines;
   char buffer[8192];
-  if( ferror(fpt) )     {
-    //perror(fpt);
-    return -1;
-  } 
-  if( feof(fpt)) rewind(fpt);
-  
+  if (ferror (fpt)) return -1;
+  if (feof (fpt)) rewind (fpt);
+
   nlines = 0;
-  while(!feof(fpt))     {
-    fgets(buffer, 8192, fpt);
-    if(buffer[0] != '#' && !feof(fpt)) nlines++;
+  while (!feof(fpt)) {
+    fgets (buffer, 8192, fpt);
+    if (buffer[0] != '#' && !feof (fpt)) nlines++;
   }
-  if(nlines == 0) return 1;
+  if (nlines == 0) return 1;
   
-  *n = (int*) malloc(nlines*sizeof(int));
-  *l = (double*) malloc(nlines*sizeof(double));
-  *f = (double*) malloc(nlines*sizeof(double));
-  *ef = (double*) malloc(nlines*sizeof(double));
+  *n = (int *)malloc (nlines * sizeof (int));
+  *l = (double *)malloc (nlines * sizeof (double));
+  *f = (double *)malloc (nlines * sizeof (double));
+  *ef = (double *)malloc (nlines * sizeof (double));
   
-  rewind(fpt);
+  rewind (fpt);
   
-  for(i=0; i<nlines; i++)       {
-    fgets(buffer, 8192, fpt);
-    while(buffer[0] == '#') fgets(buffer, 8192, fpt);
-    sscanf(buffer, "%i %lf %*f %lf %lf", &(*n)[i], &(*l)[i], &(*f)[i], 
+  for (i=0; i<nlines; i++) {
+    fgets (buffer, 8192, fpt);
+    while (buffer[0] == '#') fgets( buffer, 8192, fpt);
+    sscanf (buffer, "%i %lf %*f %lf %lf", &(*n)[i], &(*l)[i], &(*f)[i], 
         &(*ef)[i]);
   } 
   *npts = nlines;
@@ -103,82 +150,51 @@ int read_fit(FILE *fpt, int *npts, int **n, double **l, double **f, double **ef)
   return 0;
 }
 
-int divdif(double xb, double x[], double f[], int *nuse, int ntab,
-    double fb[], double aeps, double *dfb, double *ddfb)	{
-  int i,j,k,next,in,ip,nit,ier, nmax=10;
-  double err,px,dpx,ddpx,xn[11],xd[11];
-
-/*	Find the nearest point */
-
-  next=nearst(xb,x,ntab);
-  fb[1]=f[next];
-  xd[1]=f[next];
-  xn[1]=x[next];
-  ier=0;
-  px=1.0;
-
-/*	Initialisation for the derivatives */
-
-  *dfb=0.0; *ddfb=0.0;
-  dpx=0.0; ddpx=0.0;
-
-/*	Points between IN and IP are used for interpolation */
-
-  ip=next; in=next;
-
-/*	Maximum number of points to be used for interpolation */
-  nit=*nuse; if(nmax<nit) nit=nmax; if(ntab<nit) nit=ntab;
-  if(*nuse>nmax || *nuse>ntab) ier=22;
-  if(*nuse<1) {
-    ier=21;
-    nit=6; if(nmax<nit) nit=nmax; if(ntab<nit) nit=ntab;
+int read_fit_v (FILE *fpt, int *npts, int **n, double **l, double **f,
+    double **ef, double **ux, double **eux, double **uy, double **euy) {
+  int i, nlines;
+  char buffer[8192];
+  if (ferror (fpt)) return -1;
+  if (feof (fpt)) rewind (fpt);
+  
+  nlines = 0;
+  while (!feof(fpt)) {
+    fgets (buffer, 8192, fpt);
+    if (buffer[0] != '#' && !feof (fpt)) nlines++;
   }
-  *nuse=1;
-	  
-/*	Calculate successive interpolation polynomial */
-  for(j=2; j<=nit; ++j) {
-/*	Choose the next nearest point to XB */
-    if(in<=0 ) {
-      ip=ip+1; next=ip;
-    }
-    else if(ip >= ntab-1) {
-      in=in-1; next=in;
-    }
-    else if(fabs(xb-x[ip+1]) < fabs(xb-x[in-1]) ) {
-      ip=ip+1; next=ip;
-    }
-    else {
-      in=in-1; next=in;
-    }
-
-/*	Calculating the divided differences */
-    xd[j]=f[next];
-    xn[j]=x[next];
-    for(k=j-1; k>=1; --k) xd[k]=(xd[k+1]-xd[k])/(xn[j]-xn[k]);
-
-/*	Calculating the derivatives */
-    ddpx=ddpx*(xb-xn[j-1])+2.*dpx;
-    dpx=dpx*(xb-xn[j-1])+px;
-    *dfb = *dfb+dpx*xd[1];
-    *ddfb = *ddfb+ddpx*xd[1];
-
-    px=px*(xb-xn[j-1]);
-    err=xd[1]*px;
-    fb[j]=fb[j-1]+err;
-    *nuse=j;
-
-    if(fabs(err) < aeps) return ier;
-  }
-  return 23;
+  if (nlines == 0) return 1;
+  
+  *n = (int *)malloc (nlines * sizeof (int));
+  *l = (double *)malloc (nlines * sizeof (double));
+  *f = (double *)malloc (nlines * sizeof (double));
+  *ef = (double *)malloc (nlines * sizeof (double));
+  *ux = (double *)malloc (nlines * sizeof (double));
+  *eux = (double* )malloc (nlines * sizeof (double));
+  *uy = (double *)malloc (nlines * sizeof (double));
+  *euy = (double *)malloc (nlines * sizeof (double));
+  
+  rewind (fpt);
+  
+  for (i=0; i<nlines; i++) {
+    fgets (buffer, 8192, fpt);
+    while (buffer[0] == '#') fgets (buffer, 8192, fpt);
+    sscanf (buffer, "%i %lf %*f %lf %lf %lf %lf %lf %lf", &(*n)[i], &(*l)[i],
+        &(*f)[i], &(*ef)[i], &(*ux)[i], &(*eux)[i], &(*uy)[i], &(*euy)[i]);
+  } 
+  *npts = nlines;
+  
+  return 0;
 }
-
+/*
 int interp_vel(int *n, double *l, double *f, double *ef, double *ux, 
       double *eux, double *uy, double *euy, int npts)	{
+*/
   /*
      Function - interp
      Takes power spectra fit parameters, and interpolates them to integer l.
      Data are returned in the input arrays - **data is overwritten!**
   */
+/*
   int i, j, nuse, ierr, offset=0;
   int n_num[13];
   double fb[10], ll;
@@ -255,7 +271,8 @@ int interp_vel(int *n, double *l, double *f, double *ef, double *ux,
   
   return 0;
 }
-
+*/
+/*
 int interp_freq(int *n, double *l, double *f, double *ef, int npts, 
     int *ni, int *li, double *fi, double *efi, int *npts_out)	{
   int i, j, nn, ll, nmin, nmax, this_npts, nuse;
@@ -312,7 +329,8 @@ int interp_freq(int *n, double *l, double *f, double *ef, int npts,
 
   return 0;
 }
-
+*/
+/*
 int freqdif(int *n1, int *n2, int *l1, double *l2, double *f1, double *f2, 
     double *ef1, double *ef2, int npts1, int npts2, int *n, int *l, double *f,
     double *df, double *edf, int *npts)	{
@@ -393,87 +411,181 @@ int freqdif(int *n1, int *n2, int *l1, double *l2, double *f1, double *f2,
 
   return 0;
 }
-
-int autoweed_vel(int* n, double* l, double *ux, double *uy, 
-    int *mask, int npts)	{
-  /*
-     Function - autoweed_vel
-     Function to automatically weed velocities.  An int array 
-     'mask' is returned of length npts - mask[i] is False for 
-     rejected modes.  Ux and Uy are weeded together.
-  */
-  const int maxn=8;
-  const double tol=5.0;
-
-  int i, j, offset;
-  int n_num[maxn];
-  double num;
-  double sumx, sumxx, sumy, sumyy, meanx, meany, stdx, stdy;
-  double range, uxmin, uxmax, uymin, uymax;
-  double lmin,lmax;
-	  
-  for(i=0; i<maxn; i++)	{
-    n_num[i]=0;
-  }
-  for(i=0; i<npts; i++)	{
-    if(n[i] < maxn) n_num[n[i]]++;
-  }
-
-  offset=0;
-  for(i=0; i<maxn; i++)	{
-    num=0.0;
-    sumx=0.0;
-    sumy=0.0;
-    sumxx=0.0;
-    sumyy=0.0;
-    // get l limits
-    lmin=lmax=l[offset];
-    for(j=offset; j<n_num[i]+offset; j++)	{
-      if(l[j] < lmin) lmin=l[j];
-      if(l[j] > lmax) lmax= l[j];
-    }
-    range=(lmax-lmin)/5.0;
-    //printf("%f %f %f",lmin,lmax,range);
-    lmin+=2.0*range;
-    lmax-=2.0*range;
-    for(j=offset; j<n_num[i]+offset; j++)	{
-      if(l[j] <= lmax && l[j] >= lmin)	{
-	sumx+=ux[j];
-	sumxx+=ux[j]*ux[j];
-	sumy+=uy[j];
-	sumyy+=uy[j]*uy[j];
-	num++;
-      }
-    }
-    meanx=sumx/num;
-    meany=sumy/num;
-    stdx=num*sumxx-sumx*sumx;
-    stdy=num*sumyy-sumy*sumy;
-    stdx/=(num*(num-1));
-    stdy/=(num*(num-1));
-    stdx=sqrt(stdx);
-    stdy=sqrt(stdy);
-    //printf("%f  %f  %f  %f\n",stdx,stdy,lmin,lmax);
-    uxmin=meanx-5.0*stdx;
-    uxmax=meanx+5.0*stdx;
-    uymin=meany-5.0*stdy;
-    uymax=meany+5.0*stdy;
-    //printf("%f  %f  %f  %f\n",uxmin,uxmax,uymin,uymax);
-    
-    for(j=offset; j<n_num[i]+offset; j++)	{
-      if(ux[j] <= uxmax && ux[j] >= uxmin &&
-	  uy[j] <= uymax && uy[j] >= uymin) mask[j]=1;
-      else mask[j]=0;
-    }
-    offset+=n_num[i];
-  }
-  return 0;
-}
-
+*/
 void line(int m, double *x, double *y)	{
   y[0] = x[0];
   y[1] = 1.0;
   return;
+}
+/*
+int autoweed(int *l, int *n, double *f, double *df, double *edf, int *msk,
+    int npts)	{
+  int avglen = 4;
+  double tol = 4.0;
+  double delnu = 50.0;
+  int i, j, nn, this_npts, llim, ulim, offset;
+  int data_range[2], *this_l;
+  double *this_f, *this_df, *this_edf, *slopes, *a, *u, *y;
+  double v[4], sigma[2], chisq;
+  double mean, std;
+
+  this_l = (int*) malloc(npts*sizeof(int));
+  this_f = (double*) malloc(npts*sizeof(double));
+  this_df = (double*) malloc(npts*sizeof(double));
+  this_edf = (double*) malloc(npts*sizeof(double));
+  slopes = (double*) malloc(npts*sizeof(double));
+  a = (double*) malloc(avglen*sizeof(double));
+  u = (double*) malloc(2*avglen*sizeof(double));
+  y = (double*) malloc(avglen*sizeof(double));
+  offset = 0;
+  for(i=0; i<npts; i++) msk[i] = 0;
+  for(nn=0; nn<7; nn++)	{
+    j = 0;
+    mean = 0.0;
+    std = 0.0;
+    for(i=0; i<npts; i++)	{
+      if(n[i] == nn)	{
+	this_l[j] = l[i];
+	this_f[j] = f[i];
+	this_df[j] = df[i];
+	this_edf[j] = edf[i];
+	j++;
+      }
+    }
+    this_npts = j;
+    if(this_npts > avglen + 5)	{
+      data_range[0] = (int) 2*this_npts/10.;
+      data_range[1] = (int) 8*this_npts/10.;
+      for(i=0; i<this_npts-avglen; i++)	{
+	llsq(avglen, 2, 1, &this_f[i], 1, &this_df[i], &this_edf[i], a, u, 
+	    v, 2, 2, sigma, y, *line, 1.0e-6, &chisq);
+	slopes[i] = a[0];
+	//printf("%i  %f\n",nn,a[0]);
+	mean += a[0];
+      }
+      mean /= (double) this_npts;
+      for(i=0; i<this_npts-avglen; i++) std += (slopes[i]-mean)*(slopes[i]-mean);
+      std /= (double) this_npts;
+      std = sqrt(std);
+//      printf("%i %i %i\n",data_range[0], data_range[1], this_npts/2);
+      llim = data_range[0];
+      ulim = data_range[1];
+      while(llim > 0)	{
+	if( fabs(slopes[llim]-mean)/std > tol) break;
+	llim--;
+      }
+      while(ulim<this_npts-avglen-1)	{
+	if( fabs(slopes[ulim]-mean)/std > tol) break;
+	ulim++;
+      }
+      i = this_npts/2;
+      while(i>0)	{
+	if(this_f[i]-this_f[i-1] > delnu) break;
+	i--;
+      }
+      if(i > llim) llim = i;
+      i = this_npts/2;
+      while(i<this_npts)	{
+	if(this_f[i]-this_f[i-1] > delnu) break;
+	i++;
+      }
+      if(i < ulim) ulim = i;
+      printf("%i %i %i %i\n",nn,this_npts,llim,ulim);
+      for(i=offset+llim; i<offset+ulim; i++) msk[i] = 1;//i<this_npts+offset-ulim; i++) msk[i] = 1;
+      offset += this_npts;
+    }
+  }
+
+  return 0;
+}
+*/
+
+int nearst(double xb, double x[], int ntab)	{
+  int low, igh, mid;
+
+  low=0; igh=ntab-1;
+  if((xb < x[low]) != (xb < x[igh]) ) {
+
+/*	If the point is within the range of table, then locate it by bisection */
+
+    while(igh-low > 1) {
+      mid=(low+igh)/2;
+      if((xb < x[mid]) == (xb < x[low])) low=mid;
+      else igh=mid;
+    }
+  }
+
+  if(fabs(xb-x[low]) < fabs(xb-x[igh])) return low;
+  else return igh;
+}
+
+int divdif(double xb, double x[], double f[], int *nuse, int ntab,
+    double fb[], double aeps, double *dfb, double *ddfb)	{
+  int i,j,k,next,in,ip,nit,ier, nmax=10;
+  double err,px,dpx,ddpx,xn[11],xd[11];
+
+/*	Find the nearest point */
+
+  next=nearst(xb,x,ntab);
+  fb[1]=f[next];
+  xd[1]=f[next];
+  xn[1]=x[next];
+  ier=0;
+  px=1.0;
+
+/*	Initialisation for the derivatives */
+
+  *dfb=0.0; *ddfb=0.0;
+  dpx=0.0; ddpx=0.0;
+
+/*	Points between IN and IP are used for interpolation */
+
+  ip=next; in=next;
+
+/*	Maximum number of points to be used for interpolation */
+  nit=*nuse; if(nmax<nit) nit=nmax; if(ntab<nit) nit=ntab;
+  if(*nuse>nmax || *nuse>ntab) ier=22;
+  if(*nuse<1) {
+    ier=21;
+    nit=6; if(nmax<nit) nit=nmax; if(ntab<nit) nit=ntab;
+  }
+  *nuse=1;
+	  
+/*	Calculate successive interpolation polynomial */
+  for(j=2; j<=nit; ++j) {
+/*	Choose the next nearest point to XB */
+    if(in<=0 ) {
+      ip=ip+1; next=ip;
+    }
+    else if(ip >= ntab-1) {
+      in=in-1; next=in;
+    }
+    else if(fabs(xb-x[ip+1]) < fabs(xb-x[in-1]) ) {
+      ip=ip+1; next=ip;
+    }
+    else {
+      in=in-1; next=in;
+    }
+
+/*	Calculating the divided differences */
+    xd[j]=f[next];
+    xn[j]=x[next];
+    for(k=j-1; k>=1; --k) xd[k]=(xd[k+1]-xd[k])/(xn[j]-xn[k]);
+
+/*	Calculating the derivatives */
+    ddpx=ddpx*(xb-xn[j-1])+2.*dpx;
+    dpx=dpx*(xb-xn[j-1])+px;
+    *dfb = *dfb+dpx*xd[1];
+    *ddfb = *ddfb+ddpx*xd[1];
+
+    px=px*(xb-xn[j-1]);
+    err=xd[1]*px;
+    fb[j]=fb[j-1]+err;
+    *nuse=j;
+
+    if(fabs(err) < aeps) return ier;
+  }
+  return 23;
 }
 
 int svd(int n, int m, double *a, double *v, double sigma[], int la, int lv)
@@ -758,85 +870,3 @@ int llsq(int n, int m, int k, double *x, int ix, double f[], double ef[],
 //	free(wk);
 	return 0;
 }
-
-int autoweed(int *l, int *n, double *f, double *df, double *edf, int *msk,
-    int npts)	{
-  int avglen = 4;
-  double tol = 4.0;
-  double delnu = 50.0;
-  int i, j, nn, this_npts, llim, ulim, offset;
-  int data_range[2], *this_l;
-  double *this_f, *this_df, *this_edf, *slopes, *a, *u, *y;
-  double v[4], sigma[2], chisq;
-  double mean, std;
-
-  this_l = (int*) malloc(npts*sizeof(int));
-  this_f = (double*) malloc(npts*sizeof(double));
-  this_df = (double*) malloc(npts*sizeof(double));
-  this_edf = (double*) malloc(npts*sizeof(double));
-  slopes = (double*) malloc(npts*sizeof(double));
-  a = (double*) malloc(avglen*sizeof(double));
-  u = (double*) malloc(2*avglen*sizeof(double));
-  y = (double*) malloc(avglen*sizeof(double));
-  offset = 0;
-  for(i=0; i<npts; i++) msk[i] = 0;
-  for(nn=0; nn<7; nn++)	{
-    j = 0;
-    mean = 0.0;
-    std = 0.0;
-    for(i=0; i<npts; i++)	{
-      if(n[i] == nn)	{
-	this_l[j] = l[i];
-	this_f[j] = f[i];
-	this_df[j] = df[i];
-	this_edf[j] = edf[i];
-	j++;
-      }
-    }
-    this_npts = j;
-    if(this_npts > avglen + 5)	{
-      data_range[0] = (int) 2*this_npts/10.;
-      data_range[1] = (int) 8*this_npts/10.;
-      for(i=0; i<this_npts-avglen; i++)	{
-	llsq(avglen, 2, 1, &this_f[i], 1, &this_df[i], &this_edf[i], a, u, 
-	    v, 2, 2, sigma, y, *line, 1.0e-6, &chisq);
-	slopes[i] = a[0];
-	//printf("%i  %f\n",nn,a[0]);
-	mean += a[0];
-      }
-      mean /= (double) this_npts;
-      for(i=0; i<this_npts-avglen; i++) std += (slopes[i]-mean)*(slopes[i]-mean);
-      std /= (double) this_npts;
-      std = sqrt(std);
-//      printf("%i %i %i\n",data_range[0], data_range[1], this_npts/2);
-      llim = data_range[0];
-      ulim = data_range[1];
-      while(llim > 0)	{
-	if( fabs(slopes[llim]-mean)/std > tol) break;
-	llim--;
-      }
-      while(ulim<this_npts-avglen-1)	{
-	if( fabs(slopes[ulim]-mean)/std > tol) break;
-	ulim++;
-      }
-      i = this_npts/2;
-      while(i>0)	{
-	if(this_f[i]-this_f[i-1] > delnu) break;
-	i--;
-      }
-      if(i > llim) llim = i;
-      i = this_npts/2;
-      while(i<this_npts)	{
-	if(this_f[i]-this_f[i-1] > delnu) break;
-	i++;
-      }
-      if(i < ulim) ulim = i;
-      printf("%i %i %i %i\n",nn,this_npts,llim,ulim);
-      for(i=offset+llim; i<offset+ulim; i++) msk[i] = 1;//i<this_npts+offset-ulim; i++) msk[i] = 1;
-      offset += this_npts;
-    }
-  }
-
-  return 0;
-}
-
