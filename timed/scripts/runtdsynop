@@ -26,8 +26,10 @@ endif
 
 if ($TEST) then
   set SCRIPT = ~rick/hmi/timed/scripts/tdsynop
+  set ARG = -test
 else
   set SCRIPT = tdsynop
+  set ARG
 endif
 
 foreach CMD ($SCRIPT)
@@ -47,7 +49,7 @@ if ($YR % 4 == 0) set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
 
 while ($YYMMDD <= $YYMMDD1)
   foreach HR (04 12 20)
-    qsub -q j.q $SCRIPT $YYMMDD $HR
+    qsub -q j.q $SCRIPT $ARG $YYMMDD $HR
     if ($YYMMDD < $YYMMDD1) sleep $SLEEP
     if ($YYMMDD == $YYMMDD1 && $HR < 20) sleep $SLEEP
   end
