@@ -38,36 +38,27 @@ set QMASK = 0x80004000
 @ MMISS = 10000
 @ MINCV = 700
 
-# modules and programs
+# modules, programs, scripts
 set COVER = rdcover
+set SCRIPT = rdday
+set AVG120 = avg120
 
 # base naming convention for I/O series, logs, and scripts
 if ($TEST) then
+  set TSTOPT = ~rick/hmi/rings/testoptions
+  if (!(-r $TSTOPT)) then
+    echo Error: unable to read file $TSTOPT for test options
+    exit
+  endif
   set NMSP = hmi_test
-  set SCRDIR = ~rick/hmi/rings/scripts
-  set SCRIPT = $SCRDIR/rdday
-  set AVG120 = $SCRDIR/avg120
   set ARG = -test
-  set OBS = V2
+  grep -q "^COVER =" $TSTOPT
+  if ($status == 0) set COVER = `grep "^COVER =" $TSTOPT | awk '{print $3}'`
 else
   set NMSP = hmi
-  set SCRIPT = rdday
-  set AVG120 = avg120
   set ARG
-  set OBS = V
 endif
 set PLID = hmirdVsyn
-
-# input/output series
-set BCKG = $NMSP.$OBS\_avg120
-set ISER = $NMSP.$OBS\_45s
-
-# auxiliary files
-set TEMP = /tmp23/`whoami`
-if (!(-d $TEMP)) set TEMP = /tmp
-set TMPB = $TEMP/$PLID
-if (!(-d $TMPB)) mkdir $TMPB
-set TLIST = $TMPB/rd_inf.$$
 
 #  check that required scripts and programs are in path or rooted
 foreach CMD ($SCRIPT $AVG120 $COVER)
@@ -79,6 +70,24 @@ foreach CMD ($SCRIPT $AVG120 $COVER)
     endif
   endif
 end
+
+# input/output series
+set BCKG = $NMSP.V_avg120
+set ISER = $NMSP.V_45s
+
+if ($TEST) then
+  grep -q "^ISER =" $TSTOPT
+  if ($status == 0) set ISER = `grep "^ISER =" $TSTOPT | awk '{print $3}'`
+  grep -q "^BCKG =" $TSTOPT
+  if ($status == 0) set BCKG = `grep "^BCKG =" $TSTOPT | awk '{print $3}'`
+endif
+
+# auxiliary files
+set TEMP = /tmp23/`whoami`
+if (!(-d $TEMP)) set TEMP = /tmp
+set TMPB = $TEMP/$PLID
+if (!(-d $TMPB)) mkdir $TMPB
+set TLIST = $TMPB/rd_inf.$$
 
 #  check that input and product series exist
 foreach SER ($ISER $BCKG)
