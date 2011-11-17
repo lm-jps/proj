@@ -4,7 +4,7 @@ dirstack_$(sp)  := $(d)
 d               := $(dir)
 
 
-MODEXE_$(d)	:= $(addprefix $(d)/, aia_lev1p5)
+MODEXE_$(d)	:= $(addprefix $(d)/, aia_lev1p5 aia_synoptic)
 MODEXE	 	:= $(MODEXE) $(MODEXE_$(d))
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock) 
 MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
