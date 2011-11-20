@@ -16,6 +16,7 @@
  *			v1.3		Mar 16 2010
  *			v1.4		Mar 26 2010
  *			v1.5		Mar 30 2010
+ *      v1.6    Nov 13 2011
  *
  * Issues:
  *			v1.0
@@ -37,8 +38,10 @@
  *			v1.5
  *			Moved fitimage and timing out
  *			Added a link to original synoptic map (subject to change)
+ *      v1.6
+ *      Updated keywords list for official hmi synoptic map
  *
- * Example:		jpolfil "in=su_xudong.hmi_synop[1928]" out=su_xudong.hmi_synop_polfil
+ * Example:		jpolfil "in=hmi.Synoptic_Mr_720s[1928]" out=hmi_test.Synoptic_Mr_polfil_720s
  *
  */
 
@@ -155,10 +158,10 @@ char *synop_keys[] = {"TELESCOP", "INSTRUME", "WAVELNTH", "BUNIT", "CONTENT", "H
                       "CUNIT1", "CUNIT2", "CRDER1", "CRDER2", "CSYSER1", "CSYSER2", "WCSNAME", 
                       "T_REC", "T_REC_epoch", "T_REC_step", "T_REC_unit", "CADENCE", "DATASIGN", "T_OBS", "T_START", "T_STOP", "T_ROT", "T_EARTH", 
                       "CARRTIME", "B0_ROT", "B0_FRST", "B0_LAST", "EARTH_B0", "LON_FRST", "LON_LAST", "LON_STEP", "W_OFFSET", "W_WEIGHT", 
-                      "MAG_NUM", "MAG_FRST", "MAG_LAST", "MAG_ROT", "HWNWIDTH", "EQPOINTS", "CARSTRCH", "DIFROT_A", "DIFROT_B", "DIFROT_C",
+                      "MAG_NUM", "MAG_FRST", "MAG_LAST", "MAG_ROT", "HWNWIDTH", "EQPOINTS", "NSIGMA", "CARSTRCH", "DIFROT_A", "DIFROT_B", "DIFROT_C",
                       "DSUN_OBS", "CRLN_OBS", "CRLT_OBS", "OBS_VR", "OBS_VN", "OBS_VW", "QUALITY", "MAPMMAX", "MAPLGMAX", "MAPLGMIN", "SINBDIVS",
                       "MAPBMAX", "MAPRMAX", "LGSHIFT", "INTERPO", "MCORLEV", "MOFFSET", "FRTIMWDN", "FRAVEPNT", "FRWINDOW", "SYNDRORA",
-                      "SYNDRO_A", "SYNDRO_B", "SYNDRO_C", "HWNWIDTH", "EQPOINTS", "OSYNDR_A", "OSYNDR_B", "OSYNDR_C"};
+                      "SYNDRO_A", "SYNDRO_B", "SYNDRO_C", "OSYNDR_A", "OSYNDR_B", "OSYNDR_C"};
 
 int DoIt(void)
 {
@@ -341,9 +344,9 @@ int DoIt(void)
         outArray->parent_segment = outSeg;
         
         /* Set link */
-        srcLink = hcon_lookup_lower(&outRec->links, "SYNOP_ORIG");
+        srcLink = hcon_lookup_lower(&outRec->links, "SYNOPMR_ORIG");
         if (srcLink) {
-            drms_setlink_static(outRec, "SYNOP_ORIG", inRec->recnum);
+            drms_setlink_static(outRec, "SYNOPMR_ORIG", inRec->recnum);
         }
 
         /* Set keywords */
