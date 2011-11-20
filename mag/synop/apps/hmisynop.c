@@ -11,7 +11,7 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
-#include "fstats.c"
+#include "fstats.h"
 #include "heliographic_coords.c"
 
 //#include "/home0/yliu/cvs/JSOC/proj/rings/apps/soho_ephem.c"
@@ -1395,14 +1395,17 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynop.c,v 1.1 2011/04/15 01:44:09 xudong Exp $
+$Id: hmisynop.c,v 1.2 2011/11/20 01:27:32 xudong Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynop.c,v $
 $Author: xudong $
 */
 /* $Log: hmisynop.c,v $
- * Revision 1.1  2011/04/15 01:44:09  xudong
- * for yang
+ * Revision 1.2  2011/11/20 01:27:32  xudong
+ * updated fstats.h
  *
+/* Revision 1.1  2011/04/15 01:44:09  xudong
+/* for yang
+/*
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.
  *

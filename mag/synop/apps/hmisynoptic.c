@@ -11,8 +11,8 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
-#include "/home0/yliu/cvs/JSOC/proj/libs/astro/heliographic_coords.c"
+#include "fstats.h"
+#include "heliographic_coords.c"
 
 #include <mkl_blas.h>^M
 #include <mkl_service.h>^M
@@ -1591,7 +1591,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.3 2011/10/20 17:36:46 xudong Exp $
+$Id: hmisynoptic.c,v 1.4 2011/11/20 01:27:32 xudong Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: xudong $
 */
@@ -1604,6 +1604,9 @@ $Author: xudong $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
+ * Revision 1.4  2011/11/20 01:27:32  xudong
+ * updated fstats.h
+ *
  * Revision 1.3  2011/10/20 17:36:46  xudong
  * Updated per Yang's request
  *

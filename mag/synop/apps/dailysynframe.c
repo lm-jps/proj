@@ -9,7 +9,7 @@ synframe sdate='2010.08.12' stime='16:00:00' in='su_yang.fd_M12m_remap_los' out=
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
+#include "fstats.h"
 
 char *module_name = "dailysynframe";
 
