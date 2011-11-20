@@ -33,7 +33,7 @@
 #include "saveparm.c"
 #include "obs2helio.c"
 #include "obs2heliodb.c"
-#include "fstats.c"
+#include "fstats.h"
 
 #define PI		(M_PI)
 #define RADSINDEG 	(PI/180)
