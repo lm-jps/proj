@@ -1,3 +1,5 @@
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1.5_hmi/libs/lev15/dstats.c,v 1.2 2011/11/23 21:54:42 couvidat Exp $"
+
 #include <stdlib.h>
 #include <math.h>
 #include <float.h>
@@ -74,7 +76,7 @@ int dstats(int n, double arr[], double *min, double *max, double *medn,
 {
     int i;
     int nv = 0;
-    double *dat, dmin = DBL_MAX, dmax = DBL_MIN;
+    double *dat, dmin = DBL_MAX, dmax = -DBL_MAX;
     double s = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, avg, var;
 
     *min = *max = *medn = *mean = *sig = *skew = *kurt = __builtin_nan("");
@@ -100,6 +102,13 @@ int dstats(int n, double arr[], double *min, double *max, double *medn,
 	    *min = *max = *medn = *mean = s;
 	free(dat);
 	return TOO_FEW_GOOD_POINTS;
+    }
+
+    if (dmin == dmax) {
+	*min = *max = *medn = *mean = dmin;
+	*sig = *skew = *kurt = 0;
+	free(dat);
+	return OK;
     }
 
     avg = s / nv;

@@ -1,16 +1,19 @@
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1.5_hmi/libs/lev15/fstats2.c,v 1.2 2011/11/23 21:54:23 couvidat Exp $"
+
 #include <stdlib.h>
 #include <math.h>
 #include <float.h>
+#include <string.h>
 
 #define NBINS 65536
 #define OK 0
 #define TOO_FEW_GOOD_POINTS -2
 
-int fstats(int n, float arr[], double *min, double *max, double *medn,
+int fstats2(int n, float arr[], double *min, double *max, double *medn,
 	   double *mean, double *sig, double *skew, double *kurt, int *ngood)
 {
     int i, bin, nv = 0;
-    float fmin = FLT_MAX, fmax = FLT_MIN;
+    float fmin = FLT_MAX, fmax = -FLT_MAX;
     double s = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, avg, var;
     static int hist[NBINS];
     double delta;
@@ -43,7 +46,7 @@ int fstats(int n, float arr[], double *min, double *max, double *medn,
     }
 
     delta = (fmax - fmin) / NBINS;
-    memset(hist, 0, 4*NBINS);
+    memset(hist, 0, sizeof(int)*NBINS);
     avg = s / nv;
     for (i = 0; i < n; ++i) {
 	double tmp = arr[i];
