@@ -205,6 +205,7 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, SeriesIn, "hmi.lev1",  "Name of the lev1 series"},
      {ARG_INT   , QuickLookIn, "0"    ,  "Quicklook data? No=0; Yes=1"},
      {ARG_INT   , Average, "12"       ,  "Average over 12 or 96 minutes? (12 by default)"},
+     {ARG_STRING, "dpath", "",  "directory where the source code is located"},
      {ARG_END}
 };
 
@@ -320,7 +321,7 @@ int WhichWavelength(int FID)
 /*                                                                                                                                                                                          */
 /*------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS,int *WavelengthIndex,int *WavelengthLocation, int *PPolarizationType,int CamIdIn,int *Pcombine,int *Pnpol,int MaxNumFiltergrams,TIME *PDataCadence,int *CameraValues,int *FID)
+int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS,int *WavelengthIndex,int *WavelengthLocation, int *PPolarizationType,int CamIdIn,int *Pcombine,int *Pnpol,int MaxNumFiltergrams,TIME *PDataCadence,int *CameraValues,int *FID,char *dpath)
 {
   int framelistSize=0,HFLIDread,FIDread,i,j,compteur;
   int PLINDEX,WLINDEX;
@@ -332,13 +333,17 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   //char filename2[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.w";         //file containing the HCM positions for the wavelength selection
   //char filename3[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.p";         //file containing the HCM positions for the polarization selection
 
-  char *filename=NULL;
+  char *filename =NULL;
   char *filename2=NULL;
   char *filename3=NULL;
 
-  filename=strdup(DEFS_MKPATH("/../Sequences3.txt"));
-  filename2=strdup(DEFS_MKPATH("/../std.w"));
-  filename3=strdup(DEFS_MKPATH("/../std.p"));
+  char dpath2[256];
+  strcpy(dpath2,dpath);
+  filename =strdup(strcat(dpath2,"/../Sequences3.txt"));
+  strcpy(dpath2,dpath);
+  filename2=strdup(strcat(dpath2,"/../std.w"));
+  strcpy(dpath2,dpath);
+  filename3=strdup(strcat(dpath2,"/../std.p"));
 
 
   char line[256];
@@ -956,7 +961,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.19 2011/03/09 18:24:30 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.20 2011/11/23 21:21:20 couvidat Exp $");
 }
 
 
@@ -983,6 +988,20 @@ int DoIt(void)
   int errbufstat    =setvbuf(stderr, NULL, _IONBF, BUFSIZ);           //for debugging purpose when running on the cluster
   int outbufstat    =setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 
+  //Reading the command line parameters
+  //*****************************************************************************************************************
+
+  char *inRecQuery         = cmdparams_get_str(&cmdparams, kRecSetIn,     NULL);      //beginning time
+  char *inRecQuery2        = cmdparams_get_str(&cmdparams, kRecSetIn2,    NULL);      //end time
+  int   WavelengthID       = cmdparams_get_int(&cmdparams,WaveLengthIn ,  NULL);      //wavelength of the target filtergram
+  int   CamId              = cmdparams_get_int(&cmdparams,CamIDIn,        NULL);      //front (1) or side (0) camera?
+  TIME  DataCadence        = cmdparams_get_double(&cmdparams,DataCadenceIn,NULL);     //cadence of the observable sequence (45, 48, 90, 96, or 135 seconds)
+  int   Npolin             = cmdparams_get_int(&cmdparams,NpolIn,         NULL);      //number of polarizations in the framelist
+  int   Framelistsizein    = cmdparams_get_int(&cmdparams,FramelistSizeIn,NULL);      //size of framelist
+  char *inLev1Series       = cmdparams_get_str(&cmdparams,SeriesIn,       NULL);      //name of the lev1 series
+  int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,    NULL);      //Quick look data or no? yes=1, no=0
+  int   Averaging          = cmdparams_get_int(&cmdparams,Average,        NULL);      //Average over 12 or 96 minutes? (12 by default)
+  char *dpath              = cmdparams_get_str(&cmdparams,"dpath",        NULL);      //directory where the source code is located
 
   //THE FOLLOWING VARIABLES SHOULD BE SET AUTOMATICALLY BY OTHER PROGRAMS. FOR NOW SOME ARE SET MANUALLY
   char *CODEVERSION =NULL;                                                             //version of the IQUV averaging code
@@ -1012,11 +1031,18 @@ int DoIt(void)
   char *DISTCOEFFILEF=NULL;
   char *DISTCOEFFILES=NULL;
   char *ROTCOEFFILE=NULL;
-  DISTCOEFFILEF=strdup(DEFS_MKPATH("/../libs/lev15/distmodel_front_o6_100624.txt"));
-  DISTCOEFFILES=strdup(DEFS_MKPATH("/../libs/lev15/distmodel_side_o6_100624.txt"));
-  ROTCOEFFILE  =strdup(DEFS_MKPATH("/../libs/lev15/rotcoef_file.txt"));
-  DISTCOEFPATH =strdup(DEFS_MKPATH("/../libs/lev15/"));
-  ROTCOEFPATH  =strdup(DEFS_MKPATH("/../libs/lev15/"));
+
+  char dpath2[MaxNString]; 
+  strcpy(dpath2,dpath);
+  DISTCOEFFILEF=strdup(strcat(dpath2,"/../libs/lev15/distmodel_front_o6_100624.txt"));
+  strcpy(dpath2,dpath);
+  DISTCOEFFILES=strdup(strcat(dpath2,"/../libs/lev15/distmodel_side_o6_100624.txt"));
+  strcpy(dpath2,dpath);
+  ROTCOEFFILE  =strdup(strcat(dpath2,"/../libs/lev15/rotcoef_file.txt"));
+  strcpy(dpath2,dpath);
+  DISTCOEFPATH =strdup(strcat(dpath2,"/../libs/lev15/"));
+  strcpy(dpath2,dpath);
+  ROTCOEFPATH  =strdup(strcat(dpath2,"/../libs/lev15/"));
 
 
   //char ROTCOEFFILE[]  ="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/rotcoef_file.txt";
@@ -1024,19 +1050,6 @@ int DoIt(void)
   initfiles.dist_file_side=DISTCOEFFILES;
   initfiles.diffrot_coef=ROTCOEFFILE;
 
-  //Reading the command line parameters
-  //*****************************************************************************************************************
-
-  char *inRecQuery         = cmdparams_get_str(&cmdparams, kRecSetIn,     NULL);      //beginning time
-  char *inRecQuery2        = cmdparams_get_str(&cmdparams, kRecSetIn2,    NULL);      //end time
-  int   WavelengthID       = cmdparams_get_int(&cmdparams,WaveLengthIn ,  NULL);      //wavelength of the target filtergram
-  int   CamId              = cmdparams_get_int(&cmdparams,CamIDIn,        NULL);      //front (1) or side (0) camera?
-  TIME  DataCadence        = cmdparams_get_double(&cmdparams,DataCadenceIn,NULL);     //cadence of the observable sequence (45, 48, 90, 96, or 135 seconds)
-  int   Npolin             = cmdparams_get_int(&cmdparams,NpolIn,         NULL);      //number of polarizations in the framelist
-  int   Framelistsizein    = cmdparams_get_int(&cmdparams,FramelistSizeIn,NULL);      //size of framelist
-  char *inLev1Series       = cmdparams_get_str(&cmdparams,SeriesIn,       NULL);      //name of the lev1 series
-  int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,    NULL);      //Quick look data or no? yes=1, no=0
-  int   Averaging          = cmdparams_get_int(&cmdparams,Average,        NULL);      //Average over 12 or 96 minutes? (12 by default)
 
   if(CamId == 0) CamId = LIGHT_SIDE;
   else           CamId = LIGHT_FRONT;
@@ -2614,7 +2627,7 @@ int DoIt(void)
 	      if(!strcmp(TargetISS,"OPEN")) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET;
 	      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
 	
-	      framelistSize   = framelistInfo(TargetHFLID,TargetHPLTID,TargetHWLTID,WavelengthID,PHWPLPOS,WavelengthIndex,WavelengthLocation,&PolarizationType,CamId,&combine,&npol,MaxNumFiltergrams,&CadenceRead,CameraValues,FIDValues);
+	      framelistSize   = framelistInfo(TargetHFLID,TargetHPLTID,TargetHWLTID,WavelengthID,PHWPLPOS,WavelengthIndex,WavelengthLocation,&PolarizationType,CamId,&combine,&npol,MaxNumFiltergrams,&CadenceRead,CameraValues,FIDValues,dpath);
 	      if(framelistSize == 1) return 1;
 
 	      if(framelistSize != Framelistsizein)
