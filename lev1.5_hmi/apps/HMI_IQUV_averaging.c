@@ -205,7 +205,7 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, SeriesIn, "hmi.lev1",  "Name of the lev1 series"},
      {ARG_INT   , QuickLookIn, "0"    ,  "Quicklook data? No=0; Yes=1"},
      {ARG_INT   , Average, "12"       ,  "Average over 12 or 96 minutes? (12 by default)"},
-     {ARG_STRING, "dpath", "",  "directory where the source code is located"},
+     {ARG_STRING, "dpath", "/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/",  "directory where the source code is located"},
      {ARG_END}
 };
 
@@ -961,7 +961,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.20 2011/11/23 21:21:20 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.21 2011/11/28 18:14:09 couvidat Exp $");
 }
 
 
@@ -984,7 +984,7 @@ char *iquv_version() // Returns CVS version of IQUV averaging
 int DoIt(void)
 {
 
-#define MaxNString 256                                               //maximum length of strings in character number
+#define MaxNString 512                                               //maximum length of strings in character number
   int errbufstat    =setvbuf(stderr, NULL, _IONBF, BUFSIZ);           //for debugging purpose when running on the cluster
   int outbufstat    =setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 
@@ -1019,8 +1019,13 @@ int DoIt(void)
 
 
   char HISTORY[MaxNString];                                                            //history of the data
-  char COMMENT[]="De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.6; correction for cosmic-ray hits"; //comment about what the observables code is doing
+
+  char COMMENT[MaxNString];
+  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.6; correction for cosmic-ray hits; dpath="); //comment about what the observables code is doing
+  strcat(COMMENT,dpath);
+
   struct init_files initfiles;
+
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
   //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist2.bin";
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist_v3-d6_256_128_f09_c0_front_lim_v1.bin";
@@ -1062,7 +1067,7 @@ int DoIt(void)
     }
 
 
-  printf("COMMAND LINE PARAMETERS= %s %s %d %d %f %d %d %d\n",inRecQuery,inRecQuery2,WavelengthID,CamId,DataCadence,Npolin,QuickLook,Averaging);
+  printf("COMMAND LINE PARAMETERS= %s %s %d %d %f %d %d %d %s\n",inRecQuery,inRecQuery2,WavelengthID,CamId,DataCadence,Npolin,QuickLook,Averaging,dpath);
 
 
   // Main Parameters                                                                                                    

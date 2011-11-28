@@ -209,7 +209,7 @@ ModuleArgs_t module_args[] =
      {ARG_INT   , CamIDIn    , "1"    ,  "Front (1) or side (0) camera?"},
      {ARG_DOUBLE, DataCadenceIn,"45.0"  ,"Cadence (in seconds)"},
      {ARG_STRING, SeriesIn, "hmi.lev1",  "Name of the lev1 series"},
-     {ARG_STRING, "dpath", "",  "directory where the source code is located"},
+     {ARG_STRING, "dpath", "/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/",  "directory where the source code is located"},
      {ARG_END}
 };
 
@@ -1056,7 +1056,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.28 2011/11/23 21:20:56 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.29 2011/11/28 18:13:56 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1076,7 +1076,7 @@ char *observables_version() // Returns CVS version of Observables
 
 int DoIt(void)
 {
-#define MaxNString 256                                               //maximum length of strings in character number
+#define MaxNString 512                                               //maximum length of strings in character number
   double tstart=dsecnd();
 
   //Reading the command line parameters
@@ -1109,7 +1109,11 @@ int DoIt(void)
   char *ROTCOEFPATH =NULL;                                                             //path to file containing rotation coefficients
 
   char HISTORY[MaxNString];                                                            //history of the data
-  char COMMENT[]="De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.5; correction for cosmic-ray hits"; //comment about what the observables code is doing
+
+  char COMMENT[MaxNString];
+  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.5; correction for cosmic-ray hits; dpath="); //comment about what the observables code is doing
+  strcat(COMMENT,dpath);
+
   struct init_files initfiles;
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
   //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist2.bin";
@@ -1152,7 +1156,7 @@ int DoIt(void)
       //exit(EXIT_FAILURE);
     }
 
-  printf("COMMAND LINE PARAMETERS:\n inRecquery = %s \n inRecquery2 = %s \ninLev = %s \n outLev = %s \n WavelengthID = %d \n QuickLook = %d \n CamId = %d \n DataCadence = %f\n",inRecQuery,inRecQuery2,inLev,outLev,WavelengthID,QuickLook,CamId,DataCadence);
+  printf("COMMAND LINE PARAMETERS:\n inRecquery = %s \n inRecquery2 = %s \ninLev = %s \n outLev = %s \n WavelengthID = %d \n QuickLook = %d \n CamId = %d \n DataCadence = %f \n dpath = %s\n",inRecQuery,inRecQuery2,inLev,outLev,WavelengthID,QuickLook,CamId,DataCadence,dpath);
 
   // Main Parameters                                                                                                    
   //*****************************************************************************************************************
