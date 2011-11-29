@@ -51,6 +51,7 @@
 #ValueGrid .aw-grid-header {border-right: 1px solid threedlightshadow;}
 #ValueGrid .aw-grid-cell {border-right: 1px solid threedlightshadow;}
 #ValueGrid .aw-grid-row {border-bottom: 1px solid threedlightshadow;}
+/* #ValueGrid .aw-grid-row, .active-grid-row.active-list-item, .active-scroll-left.active-list-item {height:auto;} */
 
 </style>
 
@@ -299,6 +300,7 @@ function CleanSeriesPick()
   $("RecSetPlace").innerHTML = "";
   $("MakeLocalFileLinks").checked = 0;
   $("UseShowInfo").checked = 0;
+  $("wantTruncate").checked = 1;
   $("SIFi").value = "0";
   $("SIFn").value = "0";
   $("SIFa").value = "0";
@@ -1321,9 +1323,9 @@ function GetKeyValues()
 		idata = setgriddata(idata, RecordData.recinfo[irec].name);
 	     for (ikey=0; ikey<nkeys; ikey++)
 	       {
-	       var this_keyval =  RecordData.keywords[ikey].values[irec] + "";
-               // if (this_keyval.length == 0) this_keyval = " ";
-               if (this_keyval.length > 60) this_keyval = this_keyval.slice(0,47) + "...TRUNCATED";
+	       var this_keystr =  RecordData.keywords[ikey].values[irec] + "";
+               var this_keyval = this_keystr.replace(/\n/g,"<B>NL</B>>");
+               if ($("wantTruncate").checked && this_keyval.length > 60) this_keyval = this_keyval.slice(0,47) + "...TRUNCATED";
 	       idata = setgriddata(idata, this_keyval);
 	       }
 	     for (iseg=0; iseg<nsegs; iseg++)
@@ -1964,9 +1966,10 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
         <P>
         <input type="checkbox" name="Get Record Query" id="WantRecInfo"> Check to Get Record Query.  <BR>
         <input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.  <BR>
-        <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info <BR>
+        <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info.<BR>
         <input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).  <BR>
-        <input type="checkbox" name="UseShowInfo" id="UseShowInfo"> Prepare value table in 'show_info' format in new window. (No *psuedo* keywords yet please) Segments fail <BR>
+        <input type="checkbox" name="wantTruncate" id="wantTruncate"> Check to truncate long strings in values display.  <BR>
+        <input type="checkbox" name="UseShowInfo" id="UseShowInfo"> Prepare keyword table in plain text format, e.g. as show_info output, in new window. (No *psuedo* keywords) <BR>
         <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
         <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
         </TD>
