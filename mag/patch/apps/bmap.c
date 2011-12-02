@@ -31,6 +31,7 @@
  *			v0.1	Sep 22 2011
  *			v0.2  Oct 07 2011
  *      v0.3  Oct 17 2011
+ *      v0.4  Oct 28 2011
  *
  *
  *
@@ -47,6 +48,10 @@
  *      Add error propagation option doerr
  *      Now only support field_err, inclination_err and azimuth_err in cutout mode
  *      or Br_err, Bt_err and Bp_err in mapping mode
+ *      v0.4
+ *      Now assumes output are Rice compressed, "rice=1"
+ *      with field scaled to 0.01, angles 0.01, errors 0.001, covariances 0.0001
+ *      Add option "covar" to output covariances for cutout
  *
  *
  */
@@ -113,7 +118,7 @@ struct mapInfo {
 	int latlon, noDisamb, fillNan;
 	int autoTrack, autoSize;
 	int verbose;
-  int doerr;
+  int doerr, covar, rice;
 	int nbin, gauss;
 	int mapOpt, repOpt, interpOpt;
 	float ref_lon, ref_lat;
@@ -158,6 +163,7 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 
 int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
              float *b1_err, float *b2_err, float *b3_err,
+             float *cc_fi, float *cc_fa, float *cc_ai,
              int *qual_map, char *confid_map);
 
 /* Performing local vector transformation */
@@ -181,6 +187,7 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 
 int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
                float *b1_err, float *b2_err, float *b3_err,
+               float *cc_fi, float *cc_fa, float *cc_ai,
                int *qual_map, char *confid_map);
 
 /* For testing, output Lat/Lon */
@@ -228,6 +235,8 @@ ModuleArgs_t module_args[] =
 	{ARG_INT, "rows", "0", "Rows in output map"},
 	{ARG_INT, "nbin", "3", "Oversampling rate for anti-aliasing. See documentation."},
   {ARG_INT, "doerr", "1", "Perform error propagation, use near neighbor so far."},
+  {ARG_INT, "covar", "0", "Out put covariances for field, only work for cutout now."},
+  {ARG_INT, "rice", "1", "Use Rice compression."},
 	{ARG_FLAG, "c",	"", "Simple full pixel cutout without interpolation, override all mapping options."},
 	{ARG_FLAG, "l",	"", "Force vector representation in local tangent coordinates, for cutout mode only."},
 	{ARG_FLAG, "g",	"", "Force vector representation in plane of sky coordinates, for remap mode only."},
@@ -274,6 +283,8 @@ int DoIt(void)
 	mInfo.nbin = params_get_int(&cmdparams, "nbin");
   
   mInfo.doerr = params_get_int(&cmdparams, "doerr");
+  mInfo.covar = params_get_int(&cmdparams, "covar");
+  mInfo.rice = params_get_int(&cmdparams, "rice");
 	
 	if ((mInfo.xscale / mInfo.nbin) > NYQVIST || (mInfo.yscale / mInfo.nbin) > NYQVIST)
 		mInfo.nbin = MAX((round(mInfo.xscale / NYQVIST)),(round(mInfo.yscale / NYQVIST)));
@@ -339,6 +350,7 @@ int DoIt(void)
 		if (mInfo.latlon) printf("Output latitude/longitude\n");
 		if (mInfo.noDisamb) printf("No disambiguation\n");
 	}
+  if (! mInfo.cutOut) mInfo.covar = 0;
 	
 	/* Input data */
 	
@@ -433,6 +445,7 @@ int DoIt(void)
     // Added Oct 17 2011: Do error
     
     float *b1_err = NULL, *b2_err = NULL, *b3_err = NULL;   // final error arrays
+    float *cc_fi = NULL, *cc_fa = NULL, *cc_ai = NULL;      // final cc arrays
     int *qual_map = NULL; char *confid_map = NULL;
     
     if (mInfo.doerr) {
@@ -444,21 +457,30 @@ int DoIt(void)
         b3_err = (float *) malloc(mapsize * sizeof(float));
         qual_map = (int *) malloc(mapsize * sizeof(int));
         confid_map = (char *) malloc(mapsize * sizeof(char));
+        if (mInfo.covar) {
+          cc_fi = (float *) malloc(mapsize * sizeof(float));
+          cc_fa = (float *) malloc(mapsize * sizeof(float));
+          cc_ai = (float *) malloc(mapsize * sizeof(float));
+        }
       } else {
         b1_err = (float *) malloc(FOURK * FOURK * sizeof(float));
         b2_err = (float *) malloc(FOURK * FOURK * sizeof(float));
         b3_err = (float *) malloc(FOURK * FOURK * sizeof(float));
         qual_map = (int *) malloc(FOURK * FOURK * sizeof(int));
         confid_map = (char *) malloc(FOURK * FOURK * sizeof(char));
+        if (mInfo.covar) {
+          cc_fi = (float *) malloc(FOURK * FOURK * sizeof(float));
+          cc_fa = (float *) malloc(FOURK * FOURK * sizeof(float));
+          cc_ai = (float *) malloc(FOURK * FOURK * sizeof(float));
+        }
       }
-
-if (1) {     
-      if (getError(inRec, &mInfo, b1_err, b2_err, b3_err, qual_map, confid_map)) {
+   
+      if (getError(inRec, &mInfo, b1_err, b2_err, b3_err, cc_fi, cc_fa, cc_ai, qual_map, confid_map)) {
         printf("Image #%d skipped.", irec);
         if (mInfo.verbose) printf(": error estimation error\n"); else printf("\n");
         continue;
       }
-}      
+     
       if (mInfo.verbose) printf(" done.\n");
     }
 		
@@ -535,7 +557,7 @@ if (1) {
     
     if (mInfo.doerr) {
       if (mInfo.verbose) SHOW("Output error estimation...");
-      if (writeError(outRec, &mInfo, b1_err, b2_err, b3_err, qual_map, confid_map)) {
+      if (writeError(outRec, &mInfo, b1_err, b2_err, b3_err, cc_fi, cc_fa, cc_ai, qual_map, confid_map)) {
         printf("Image #%d skipped.", irec);
         if (mInfo.verbose) printf(": error estimation output error\n"); else printf("\n");
         if (b1_err) free(b1_err); if (b2_err) free(b2_err); if (b3_err) free(b3_err);
@@ -638,7 +660,7 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	if (mInfo->cutOut) {
 		
 		if (sphere2img (latc * RADSINDEG, lonc * RADSINDEG, disk_latc, disk_lonc, &xi, &zeta, 
-						 disk_xc/rSun, disk_yc/rSun, 1.0, pa, 1., 0., 0., 0.))
+						 disk_xc/rSun, disk_yc/rSun, 1.0, pa, 0., 0., 0., 0.))
 			return 1;			// off disk
 		
 		xi *= rSun;
@@ -951,7 +973,7 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
          */
 				
         if (sphere2img (lat, lon, disk_latc, disk_lonc, &xi, &zeta, 
-                        disk_xc/rSun, disk_yc/rSun, 1.0, pa, 1., 0., 0., 0.)) {
+                        disk_xc/rSun, disk_yc/rSun, 1.0, pa, 0., 0., 0., 0.)) {
           xi_out[ind_map] = -1;
           zeta_out[ind_map] = -1;
           continue;
@@ -1023,6 +1045,7 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 
 int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
              float *b1_err, float *b2_err, float *b3_err,
+             float *cc_fi, float *cc_fa, float *cc_ai,
              int *qual_map, char *confid_map)
 {
   int status = 0;
@@ -1063,7 +1086,7 @@ int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 	  
   // Bitmaps
   
-  inSeg = drms_segment_lookup(inRec, "qual_map");
+  inSeg = drms_segment_lookup(inRec, "info_map");
   inArray_qual = drms_segment_read(inSeg, DRMS_TYPE_INT, &status);
   if (status) return 1;
   qual = (int *)inArray_qual->data;
@@ -1104,7 +1127,7 @@ int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
   
   // Correlation coefficients, need to convert to covariances
   
-  if (prop) {
+  if (prop || mInfo->covar) {
     
     inSeg = drms_segment_lookup(inRec, "field_inclination_err");
     inArray_bTbI = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
@@ -1121,14 +1144,16 @@ int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
     if (status) return 1;
     errbAbI0 = (float *)inArray_bAbI->data;
     
-    errbTbI = (float *) (malloc(FOURK2 * sizeof(float)));
-    errbTbA = (float *) (malloc(FOURK2 * sizeof(float)));
-    errbAbI = (float *) (malloc(FOURK2 * sizeof(float)));
+    if (prop) {
+      errbTbI = (float *) (malloc(FOURK2 * sizeof(float)));
+      errbTbA = (float *) (malloc(FOURK2 * sizeof(float)));
+      errbAbI = (float *) (malloc(FOURK2 * sizeof(float)));
     
-    for (int i = 0; i < FOURK2; i++) {
-      errbTbI[i] = errbTbI0[i] * errbT0[i] * errbIn0[i] * RADSINDEG;
-      errbTbA[i] = errbTbA0[i] * errbT0[i] * errbAz0[i] * RADSINDEG;
-      errbAbI[i] = errbAbI0[i] * errbAz0[i] * errbIn0[i] * RADSINDEG * RADSINDEG;
+      for (int i = 0; i < FOURK2; i++) {
+        errbTbI[i] = errbTbI0[i] * errbT0[i] * errbIn0[i] * RADSINDEG;
+        errbTbA[i] = errbTbA0[i] * errbT0[i] * errbAz0[i] * RADSINDEG;
+        errbAbI[i] = errbAbI0[i] * errbAz0[i] * errbIn0[i] * RADSINDEG * RADSINDEG;
+      }
     }
   }
   
@@ -1195,7 +1220,7 @@ int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
         }
 
         if (sphere2img (lat, lon, disk_latc, disk_lonc, &xi, &zeta, 
-                        disk_xc/rSun, disk_yc/rSun, 1.0, pa, 1., 0., 0., 0.)) {
+                        disk_xc/rSun, disk_yc/rSun, 1.0, pa, 0., 0., 0., 0.)) {
           qual_map[ind_map] = DRMS_MISSING_CHAR;
           confid_map[ind_map] = DRMS_MISSING_CHAR;
           b1_err[ind_map] = DRMS_MISSING_FLOAT;
@@ -1247,9 +1272,14 @@ int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 
       } else {
 
-        b1_err[ind_map] = sqrt(errbT[ind_img]);
-        b2_err[ind_map] = sqrt(errbIn[ind_img])/RADSINDEG;
-        b3_err[ind_map] = sqrt(errbAz[ind_img])/RADSINDEG;
+        b1_err[ind_map] = errbT0[ind_img];
+        b2_err[ind_map] = errbIn0[ind_img];
+        b3_err[ind_map] = errbAz0[ind_img];
+        if (mInfo->covar) {
+          cc_fi[ind_map] = errbTbI0[ind_img];
+          cc_fa[ind_map] = errbTbA0[ind_img];
+          cc_ai[ind_map] = errbAbI0[ind_img];
+        }
         
       }
       
@@ -1267,6 +1297,11 @@ int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
           b1_err[ind_map] = DRMS_MISSING_FLOAT;
           b2_err[ind_map] = DRMS_MISSING_FLOAT;
           b3_err[ind_map] = DRMS_MISSING_FLOAT;
+          if (mInfo->covar) {
+            cc_fi[ind_map] = DRMS_MISSING_FLOAT;
+            cc_fa[ind_map] = DRMS_MISSING_FLOAT;
+            cc_ai[ind_map] = DRMS_MISSING_FLOAT;
+          }
         }
       }
     }
@@ -1280,8 +1315,10 @@ int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
   drms_free_array(inArray_qual); drms_free_array(inArray_confid);
   drms_free_array(inArray_errbT); drms_free_array(inArray_errbAz);
   drms_free_array(inArray_errbIn);
-  if (prop) {
-    free(errbTbI); free(errbTbA); free(errbAbI);
+  if (prop || mInfo->covar) {
+    if (prop) {
+      free(errbTbI); free(errbTbA); free(errbAbI);
+    }
     drms_free_array(inArray_bTbI); drms_free_array(inArray_bTbA);
     drms_free_array(inArray_bAbI);
   }
@@ -1467,12 +1504,19 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	
 	DRMS_Segment_t *outSeg;
 	DRMS_Array_t *outArray;
+  
+  SHOW("here");
 	
 	// write b1 as the 1st segment
 	outSeg = drms_segment_lookupnum(outRec, 0);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b1, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
+  if (mInfo->rice) {
+    outArray->israw = 0;
+    outArray->bzero = 0;
+    outArray->bscale = 0.01;
+  }
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
@@ -1482,6 +1526,11 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b2, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
+  if (mInfo->rice) {
+    outArray->israw = 0;
+    outArray->bzero = 0;
+    outArray->bscale = 0.01;
+  }
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
@@ -1491,6 +1540,11 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b3, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
+  if (mInfo->rice) {
+    outArray->israw = 0;
+    outArray->bzero = 0;
+    outArray->bscale = 0.01;
+  }
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
@@ -1505,6 +1559,7 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 
 int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
                float *b1_err, float *b2_err, float *b3_err,
+               float *cc_fi, float *cc_fa, float *cc_ai,
                int *qual_map, char *confid_map)
 {
   
@@ -1521,6 +1576,11 @@ int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b1_err, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
+  if (mInfo->rice) {
+    outArray->israw = 0;
+    outArray->bzero = 0;
+    outArray->bscale = 0.001;
+  }
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
@@ -1530,6 +1590,11 @@ int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b2_err, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
+  if (mInfo->rice) {
+    outArray->israw = 0;
+    outArray->bzero = 0;
+    outArray->bscale = 0.001;
+  }
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
@@ -1539,20 +1604,23 @@ int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b3_err, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
+  if (mInfo->rice) {
+    outArray->israw = 0;
+    outArray->bzero = 0;
+    outArray->bscale = 0.001;
+  }
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
   
   // write qual_map
-  if (1) {
-	outSeg = drms_segment_lookup(outRec, "qual_map");
+	outSeg = drms_segment_lookup(outRec, "info_map");
 	outArray = drms_array_create(DRMS_TYPE_INT, 2, outDims, qual_map, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
-
 	
 	// write confid_map
 	outSeg = drms_segment_lookup(outRec, "confid_map");
@@ -1562,7 +1630,52 @@ int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
-	} 
+  
+  if (! mInfo->covar || ! cc_fi || ! cc_fa || ! cc_ai) return 0;
+  
+  // Write correlation coefficient field-inclination
+  outSeg = drms_segment_lookup(outRec, "field_inclination_err");
+	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, cc_fi, &status);
+	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
+	outArray->parent_segment = outSeg;
+  if (mInfo->rice) {
+    outArray->israw = 0;
+    outArray->bzero = 0;
+    outArray->bscale = 0.0001;
+  }
+	status = drms_segment_write(outSeg, outArray, 0);
+	if (status) return 1;
+	drms_free_array(outArray);
+  
+  // Write correlation coefficient field-azimuth
+  outSeg = drms_segment_lookup(outRec, "field_az_err");
+	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, cc_fa, &status);
+	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
+	outArray->parent_segment = outSeg;
+  if (mInfo->rice) {
+    outArray->israw = 0;
+    outArray->bzero = 0;
+    outArray->bscale = 0.0001;
+  }
+	status = drms_segment_write(outSeg, outArray, 0);
+	if (status) return 1;
+	drms_free_array(outArray);
+  
+  // Write correlation coefficient azimuth-inclination
+  outSeg = drms_segment_lookup(outRec, "inclin_azimuth_err");
+	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, cc_ai, &status);
+	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
+	outArray->parent_segment = outSeg;
+  if (mInfo->rice) {
+    outArray->israw = 0;
+    outArray->bzero = 0;
+    outArray->bscale = 0.0001;
+  }
+	status = drms_segment_write(outSeg, outArray, 0);
+	if (status) return 1;
+	drms_free_array(outArray);
+  
+  
   return 0;
   
 }
@@ -1719,6 +1832,12 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 		return;
 	
 	drms_copykey(outRec, inRec, "CAR_ROT");
+	drms_copykey(outRec, inRec, "CDELT1");
+	drms_copykey(outRec, inRec, "CDELT2");
+	drms_copykey(outRec, inRec, "IMCRPIX1");
+	drms_copykey(outRec, inRec, "IMCRPIX2");
+	drms_copykey(outRec, inRec, "IMCRVAL1");
+	drms_copykey(outRec, inRec, "IMCRVAL2");
 	
 	switch (mInfo->repOpt) {
 		default:
@@ -1778,7 +1897,8 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 		drms_setkey_string(outRec, "PROJECTION", mapName[mInfo->mapOpt]);
 		
 	}
-
+  
+  
 }
 
 
