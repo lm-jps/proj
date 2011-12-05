@@ -82,10 +82,10 @@ $inst_apid_44="$hm/TBL_JSOC/lev1/instruction_file/prod/aia_thermal_300s_template
 if ($source eq "moc")
 {
   # moc pickup directory setup:
-  $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/tmp22/jsoc/sdo/mocprods/lzp";
+  $pup_dir=$ENV{'DF_PICKUP_MOC_FILES'}="/surge40/jsocprod/sdo/mocprods/lzp";
 
   # moc dropoff directory setup
-  $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/tmp22/production/lev0/hk_moc_dayfile";
+  $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/surge40/jsocprod/lev0/hk_moc_dayfile";
 
   # moc common email arguments
   $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
@@ -107,7 +107,7 @@ elsif ($source eq "rtmon")
   $pup_dir=$ENV{'DF_PICKUP_RTMON_FILES'}="/hmisdp-mon/log/packets";
 
   # rtmon dropoff directory setup 
-  $doff_dir=$ENV{'DF_DROPOFF_RTMON_FILES'}="/tmp22/production/lev0/hk_rtmon_dayfile";
+  $doff_dir=$ENV{'DF_DROPOFF_RTMON_FILES'}="/surge40/jsocprod/lev0/hk_rtmon_dayfile";
 
   # rtmon common email variables
   $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
@@ -206,8 +206,8 @@ print LF "--->Starting script dsdf.pl\n";
 # send message to users running script at command line so they know something is working
 print "...running dsdf.pl script\n...please wait to finish\n...view status on run by doing: tail -f $log_dir\/$logfile\n";
 
-# (11)"move" files over to /tmp22/production/lev0/hk_moc_dayfile for moc
-# or "copy" files to /tmp02/production/lev0/hk_rtmon_dayfile for rtmon
+# (11)"move" files over to /surge40/jsocprod/lev0/hk_moc_dayfile for moc
+# or "copy" files to /surge40/jsocprod/lev0/hk_rtmon_dayfile for rtmon
 if ($source eq "moc")
 {
   foreach $hkt (@list_hkt_files)

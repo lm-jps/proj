@@ -69,7 +69,7 @@ $ENV{'HK_DDF_RT_DIRECTORY'}="/hmisdp-mon/log/packets";
 
 #(4) set choices for minute file directory
 # minute dayfile directory location - this is temp location- since all files are deleted  
-$minfiles=$ENV{'HK_DDF_MINUTE_FILE_DIRECTORY'}="/tmp22/production/lev0/hk_minute_dayfiles";
+$minfiles=$ENV{'HK_DDF_MINUTE_FILE_DIRECTORY'}="/surge40/jsocprod/lev0/hk_minute_dayfiles";
 
 #(5) set debug flag 
 $dflg=$ENV{'DF_GDFRT_DEBUG'}=2;#use 0 to display min debug to standard out, 1 to send log to file or use 2 to send max debug log to display
