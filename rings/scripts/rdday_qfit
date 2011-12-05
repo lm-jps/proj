@@ -207,18 +207,28 @@ end
 set HOSTNAME = `hostname`
 set HOSTID = `basename $HOSTNAME .Stanford.EDU`
 set PROCID = $HOSTID\_$$
-set NOTE = ~rick/rings/notify
+set NOTE = ~rick/hmi/notify
+set TMPFSLOC = ~rick/hmi/tmpfs
 set RJCT = ~rick/hmi/qual/reject.V
-# set KERN = /tmp21/baldner/kernels/ringker.kur_cm_opal_78_mod.ascii
 set KERN = ~rick/rings/kernels/ringker.kur_cm_opal_78_mod.ascii
-set TEMP = /tmp23/`whoami`
-if (!(-d $TEMP)) set TEMP = /tmp
+if (-r $TMPFSLOC) then
+  set TMPFS = `egrep ^/tmp $TMPFSLOC`
+  set TEMP = $TMPFS/`whoami`
+  if (!(-d $TEMP)) mkdir $TEMP
+  if (!(-w $TEMP)) set TEMP = /tmp
+  set SCRFS = `egrep ^/scr $TMPFSLOC`
+  set SCRT = $SCRFS/`whoami`
+  if (!(-d $SCRT)) mkdir $SCRT
+  if (!(-w $SCRT)) set SCRT = /tmp
+else
+  set TEMP = /tmp
+  set SCRT = /tmp
+endif
+
 set TMPB = $TEMP/$PLID$SUFX
 if (!(-d $TMPB)) mkdir $TMPB
 set MSGS = $TEMP/msgs
 if (!(-d $MSGS)) mkdir $MSGS
-set SCRT = /scr21/`whoami`
-if (!(-d $SCRT)) set SCRT = /tmp
 set SCRB = $SCRT/$PLID
 if ($TEST) set SCRB = $SCRB\_test
 if (!(-d $SCRB)) mkdir $SCRB
@@ -400,6 +410,7 @@ while ($STRIP < $STRIPCT)
     echo "  tracking failure on `hostname`"  >> $MMSG
     echo "  run log is on $RLOG"  >> $MMSG
     echo "  tracking failure on `hostname` for $CARTIM ($TYPE)"  >> $LOGF
+    @ RGNCT -= $EXPCT
     @ STRTSTOP = 0
     goto CLEANUP
   else
@@ -572,21 +583,23 @@ if ($SYSE == 5) then
     set RGNS = (`show_info -iq ds= $PSER"[$CROT][$CLON][][$LAT][]"`)
     unset noglob
     @ EXPCT = $#RGNS
-    @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
+    @ QJOK = 0
+    if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
     @ TOTCT = $QJOK + $EXPCT
     echo "#\!/bin/csh -f" > $SCRIPT
     echo "limit vm $VMEM"M >> $SCRIPT
     echo set noglob >> $SCRIPT
     echo 'set RGNS =  ('"$RGNS"')' >> $SCRIPT
     echo 'set RGN = $RGNS[$SGE_TASK_ID]' >> $SCRIPT
-    echo 'set RRLOG = '$RLOG$LAT'.$SGE_TASK_ID.' >> $SCRIPT
+    echo 'set RRLOG = '$RLOG$LAT.'$SGE_TASK_ID' >> $SCRIPT
     echo "$RFITC \" >> $SCRIPT
     echo "  out= $CSER \" >> $SCRIPT
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-    echo '  in= "$RGN" >>&' $RRLOG >> $SCRIPT
+    echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
     @ BEGUN = `date +%s`
     qsub -sync yes -t 1-$EXPCT -q j.q $SCRIPT >>& $RLOG
-    @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
+    @ QJOK = 0
+    if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
     @ FAIL = $TOTCT - $QJOK
     if ($FAIL) then
       @ FAILCT++
@@ -627,7 +640,8 @@ else
     set LONS = `$GENTG -c time= $CARTIM grid= rd+$TILES | tail -1`
     unset noglob
     @ EXPCT = $#LATS
-    @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
+    @ QJOK = 0
+    if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
     @ EXPCT += $QJOK
     echo "#\!/bin/csh -f" > $SCRIPT
     echo "limit vm $VMEM"M >> $SCRIPT
@@ -636,33 +650,35 @@ else
     echo 'set LONS =  ('"$LONS"')' >> $SCRIPT
     echo 'set LAT = $LATS[$SGE_TASK_ID]' >> $SCRIPT
     echo 'set LON = $LONS[$SGE_TASK_ID]' >> $SCRIPT
-    echo 'set RRLOG = '$RLOG'.$SGE_TASK_ID >> $SCRIPT
+    echo 'set RRLOG = '$RLOG.'$SGE_TASK_ID' >> $SCRIPT
     echo 'set RGN = `show_info -iq ds= '$PSER'"['$CROT']['$CLON'][][$LAT][$LON]"`' >> $SCRIPT
     echo "$RFITC \" >> $SCRIPT
     echo "  out= $CSER \" >> $SCRIPT
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-    echo '  in= "$RGN" >>&' $RRLOG >> $SCRIPT
+    echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
   else
 # this branch of the script is never reached
     set RGNS = (`show_info -iq ds= $PSER"[$CROT][$CLON][][][0]"`)
     unset noglob
     @ EXPCT = $#RGNS
-    @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
+    @ QJOK = 0
+    if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
     @ EXPCT += $QJOK
     echo "#\!/bin/csh -f" > $SCRIPT
     echo "limit vm $VMEM"M >> $SCRIPT
     echo set noglob >> $SCRIPT
     echo 'set RGNS =  ('"$RGNS"')' >> $SCRIPT
-    echo 'set RRLOG = '$RLOG'.$SGE_TASK_ID >> $SCRIPT
+    echo 'set RRLOG = '$RLOG.'$SGE_TASK_ID' >> $SCRIPT
     echo 'set RGN = $RGNS[$SGE_TASK_ID]' >> $SCRIPT
     echo "$RFITC \" >> $SCRIPT
     echo "  out= $CSER \" >> $SCRIPT
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-    echo '  in= "$RGN" >>&' $RRLOG >> $SCRIPT
+    echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
   endif
   @ BEGUN = `date +%s`
   qsub -sync yes -t 1-$EXPCT -q j.q $SCRIPT >>& $RLOG
-  @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
+  @ QJOK = 0
+  if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
   @ FAIL = $EXPCT - $QJOK
   if ($FAIL) then
     set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
