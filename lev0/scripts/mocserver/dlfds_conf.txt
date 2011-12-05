@@ -1,12 +1,12 @@
-ssh-agent_conf = /home/jsoc/.ssh-agent
-log = /home/jsoc/sdo/fds/fds.log
+ssh-agent_conf = /home/jsocprod/.ssh-agent
+log = /home/jsocprod/sdo/fds/fds.log
 scrpath = /home/jsoc/cvs/Development/JSOC/scripts
 binpath = /home/jsoc/cvs/Development/JSOC/bin
-permdpath = /home/jsoc/sdo/fds
-dpath = /tmp22/jsoc/sdo/mocprods
+permdpath = /home/jsocprod/sdo/fds
+dpath = /surge40/jsocprod/sdo/mocprods
 ns = sdo
 fdsseries = fds
 orbvseries = fds_orbit_vectors
 dbuser = production
 dbname = jsoc
-notify = arta@sun.stanford.edu jeneen@sun.stanford.edu rock@sun.stanford.edu thailand@stanford.edu
+notify = arta@sun.stanford.edu jeneen@sun.stanford.edu rock@sun.stanford.edu thailand@un.stanford.edu
