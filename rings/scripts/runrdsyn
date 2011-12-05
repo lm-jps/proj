@@ -43,6 +43,8 @@ set COVER = rdcover
 set SCRIPT = rdday
 set AVG120 = avg120
 
+set QUEUE = j.q
+
 # base naming convention for I/O series, logs, and scripts
 if ($TEST) then
   set TSTOPT = ~rick/hmi/rings/testoptions
@@ -58,7 +60,7 @@ else
   set NMSP = hmi
   set ARG
 endif
-set PLID = hmirdVsyn
+set PLID = $NMSP\rdVsyn
 
 #  check that required scripts and programs are in path or rooted
 foreach CMD ($SCRIPT $AVG120 $COVER)
@@ -83,11 +85,26 @@ if ($TEST) then
 endif
 
 # auxiliary files
-set TEMP = /tmp23/`whoami`
-if (!(-d $TEMP)) set TEMP = /tmp
+set TMPFSLOC = ~rick/hmi/tmpfs
+if (-r $TMPFSLOC) then
+  set TMPFS = `egrep ^/tmp $TMPFSLOC`
+  set TEMP = $TMPFS/`whoami`
+  if (!(-d $TEMP)) mkdir $TEMP
+  if (!(-w $TEMP)) set TEMP = /tmp
+  set SCRFS = `egrep ^/scr $TMPFSLOC`
+  set SCRT = $SCRFS/`whoami`
+  if (!(-d $SCRT)) mkdir $SCRT
+  if (!(-w $SCRT)) set SCRT = /tmp
+else
+  set TEMP = /tmp
+  set SCRT = /tmp
+endif
 set TMPB = $TEMP/$PLID
 if (!(-d $TMPB)) mkdir $TMPB
 set TLIST = $TMPB/rd_inf.$$
+set RLOG = $SCRT/$PLID.log
+set QRES = $TEMP/qres
+if (!(-d $QRES)) mkdir $QRES
 
 #  check that input and product series exist
 foreach SER ($ISER $BCKG)
@@ -122,7 +139,7 @@ while ($CLON >= $CL1)
   @ BCKCT = `show_info -c ds= "$BCK" | awk '{print $1}'`
   if ($BCKCT < 1) then
     echo "Data average record $BCK does not exist"
-    qsub -q j.q -sync y $AVG120 $ARG -v $CR60 $CL60
+    qsub -q $QUEUE -e $QRES -o $QRES -sync y $AVG120 $ARG -v $CR60 $CL60
     if ($status) echo "Warning: data averaging failed; no background subtraction"
   endif
 
@@ -144,7 +161,16 @@ while ($CLON >= $CL1)
   rm $TLIST
   if ($CVG > $MINCV) then
     @ RUNNING++
-    qsub -q j.q $SCRIPT $ARG 5 $CROT $CLON
+    set NOW = `date +%Y.%m.%d_%T`
+    set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 5 $CROT $CLON`
+    if ($#QINFO) then
+      set QPID = `echo $QINFO | awk '{print $3}'`
+      echo $NOW $SCRIPT $ARG 5 $CROT $CLON submitted to $QUEUE as job $QPID >> $RLOG
+    else
+      echo $NOW Failed to submit $SCRIPT $ARG 5 $CROT $CLON >> $RLOG
+    endif
+  else
+    echo Processing of 5-deg $CROT\:$CLON skipped: coverage = $ECVG >> $RLOG
   endif
   if ($CLON % 15 == 0) then
 # check for coverage, skip if too low
@@ -163,7 +189,16 @@ while ($CLON >= $CL1)
     rm $TLIST
     if ($CVG > $MINCV) then
       @ RUNNING++
-      qsub -q j.q $SCRIPT $ARG 15 $CROT $CLON
+      set NOW = `date +%Y.%m.%d_%T`
+      set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 15 $CROT $CLON`
+      if ($#QINFO) then
+	set QPID = `echo $QINFO | awk '{print $3}'`
+	echo $NOW $SCRIPT $ARG 15 $CROT $CLON submitted to $QUEUE as job $QPID >> $RLOG
+      else
+	echo $NOW Failed to submit $SCRIPT $ARG 15 $CROT $CLON >> $RLOG
+      endif
+    else
+      echo Processing of 15-deg $CROT\:$CLON skipped: coverage = $ECVG >> $RLOG
     endif
   endif
   if ($CLON % 30 == 0) then
@@ -183,7 +218,16 @@ while ($CLON >= $CL1)
     rm $TLIST
     if ($CVG > $MINCV) then
       @ RUNNING++
-      qsub -q j.q $SCRIPT $ARG 30 $CROT $CLON
+      set NOW = `date +%Y.%m.%d_%T`
+      set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 30 $CROT $CLON`
+      if ($#QINFO) then
+	set QPID = `echo $QINFO | awk '{print $3}'`
+	echo $NOW $SCRIPT $ARG 30$CROT $CLON submitted to $QUEUE as job $QPID >> $RLOG
+      else
+	echo $NOW Failed to submit $SCRIPT $ARG 30 $CROT $CLON >> $RLOG
+      endif
+    else
+      echo Processing of 30-deg $CROT\:$CLON skipped: coverage = $ECVG >> $RLOG
     endif
   endif
   @ CLON -= 5
