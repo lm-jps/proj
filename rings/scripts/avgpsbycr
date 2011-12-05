@@ -95,13 +95,23 @@ set HOSTNAME = `hostname`
 set HOSTID = `basename $HOSTNAME .Stanford.EDU`
 set PROCID = $HOSTID\_$$
 set NOTE = ~rick/rings/notify
-set SCRT = /scr21/`whoami`
-if (!(-d $SCRT)) set SCRT = /tmp
+set TMPFSLOC = ~rick/hmi/tmpfs
+if (-r $TMPFSLOC) then
+  set TMPFS = `egrep ^/tmp $TMPFSLOC`
+  set TEMP = $TMPFS/`whoami`
+  if (!(-d $TEMP)) mkdir $TEMP
+  if (!(-w $TEMP)) set TEMP = /tmp
+  set SCRFS = `egrep ^/scr $TMPFSLOC`
+  set SCRT = $SCRFS/`whoami`
+  if (!(-d $SCRT)) mkdir $SCRT
+  if (!(-w $SCRT)) set SCRT = /tmp
+else
+  set TEMP = /tmp
+  set SCRT = /tmp
+endif
 set SCRB = $SCRT/misc
 if (!(-d $SCRB)) mkdir $SCRB
 set LOGF = $SCRB/runlog.avgpsbycr
-set TEMP = /tmp23/`whoami`
-if (!(-d $TEMP)) set TEMP = /tmp
 set TMPB = $TEMP/rdVavgps$TILES
 if (!(-d $TMPB)) mkdir $TMPB
 set MSGS = $TEMP/msgs
@@ -109,6 +119,8 @@ set MMSG = $MSGS/msg.$PROCID
 set RLOG = $TMPB/$CROT
 set TMPD = $TMPB/scripts
 if (!(-d $TMPD)) mkdir $TMPD
+set QRES = $TEMP/qres
+if (!(-d $QRES)) mkdir $QRES
 
 set TYPE = misc
 
@@ -160,7 +172,7 @@ foreach TLAT ($TLATS)
   echo '  copy= "CarrRot,LatHG,LonCM,DELTA_K,DELTA_NU,D_OMEGA,Apode_f,APOD_MIN,APOD_MAX" \' >> $SCRIPT
   echo '  in= '$PSER'"['$CROT'][][]['$TLAT'][$LON]" >>& $LOG' >> $SCRIPT
   @ BEGUN = `date +%s`
-  qsub -sync yes -t 1-$EXPCT -q $QUEUE $SCRIPT >>& $RLOG
+  qsub -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
   @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
   @ FAIL = $TOTCT - $QJOK
   if ($FAIL) then
