@@ -55,7 +55,7 @@
 #include <math.h>
 #include <jsoc_main.h>
 #include "keystuff.c"
-#include "rdutil.c"
+#include "old_rdutil.c"
 #include "ola_xy.c"
 
 /* prototypes */
@@ -66,7 +66,7 @@ extern void ola_(double *, int *, double *, double *, double *,
       int, int, int, int, int);
 
 char *module_name = "rdvinv";
-char *version_id = "0.7";
+char *version_id = "0.8";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "in", "", "Input data series or recordset"},
@@ -82,12 +82,13 @@ ModuleArgs_t module_args[] = {
   {ARG_DOUBLE, "oe", "5.2", "Upper frequency limit (mHz)"},
   {ARG_DOUBLE, "rb", "0.97", "Lower radius limit"},
   {ARG_DOUBLE, "re", "1.00", "Upper radius limit"},
-  {ARG_INT, "num", "40", "Number of target inversion points"},
+  {ARG_INT,    "num", "40", "Number of target inversion points"},
   {ARG_STRING, "out", "fort.10.hmixy", "Output filename"},
-  {ARG_STRING, "kernel", "/tmp21/baldner/kernels/ringker.kur_cm_opal_78_mod.ascii", ""},
-  {ARG_STRING, "ave", "Not Specified", "output file for averaging kernels (if not set, kernels are not written)"},
+  {ARG_STRING, "kernel", "", ""},
+  {ARG_STRING, "ave",  "Not Specified",
+      "output file for averaging kernels (if not set, kernels are not written)"},
   {ARG_STRING, "coef", "Not Specified", ""},
-  {ARG_FLAG,    "v",    "", "run in verbose mode"},
+  {ARG_FLAG,   "v",    "", "run in verbose mode"},
   {ARG_END}
 };
 
@@ -182,13 +183,34 @@ int unique_key_values (const char *dsqry, const char *key, DRMS_Record_t *rec) {
   return values;
 }
 
-char *printcrcl_loc (int cr, double cl, double lon, double lat) {
+char *printcrcl_loc (int cr, double cl, double lnhg, double lncm, double lat) {
   static char fnam[32];
-  double dlon;
-						/*  construct a filename CR:CL_lonEWlatNS  */
-  while (lon < 0) lon += 360;
-  while (lon > 360) lon -= 360;
+  double dlon = lncm;
+
   if (cr > 0) {
+    if (isnan (cl)) {
+      if (isnan (lncm)) {
+				       /*  construct a filename CR_lonHG+lat  */
+	sprintf (fnam, "%04d_%04.1f%+05.1f", cr, lnhg, lat);
+      } else {
+				      /*  construct a filename CR_lonEWlatNS  */
+	if (dlon >= 0) {
+	  if (lat >= 0) sprintf (fnam, "%04d_%04.1fW%04.1fN", cr, dlon, lat);
+	  else if (lat > -0.05) sprintf (fnam, "%04d_%04.1fW%04.1fN", cr, dlon, -lat);
+          else sprintf (fnam, "%04d_%04.1fW%04.1fS", cr, dlon, -lat);
+	} else if (dlon > -0.05) {
+	  if (lat >= 0) sprintf (fnam, "%04d_%04.1fW%04.1fN", cr, -dlon, lat);
+	  else if (lat > -0.05) sprintf (fnam, "%04d_%04.1fW%04.1fN", cr, -dlon, -lat);
+          else sprintf (fnam, "%04d_%04.1fW%04.1fS", cr, -dlon, -lat);
+	} else {
+	  if (lat >= 0) sprintf (fnam, "%04d_%04.1fE%04.1fN", cr, -dlon, lat);
+	  else if (lat > -0.05) sprintf (fnam, "%04d_%04.1fE%04.1fN", cr, -dlon, -lat);
+          else sprintf (fnam, "%04d_%04.1fE%04.1fS", cr, -dlon, -lat);
+	}
+      }
+      return fnam;
+    }
+				   /*  construct a filename CR:CL_lonEWlatNS  */
     while (cl < 0) {
       cl += 360;
       cr++;
@@ -196,20 +218,54 @@ char *printcrcl_loc (int cr, double cl, double lon, double lat) {
       cl -= 360;
       cr--;
     }
-    dlon = lon - cl;
-    while (dlon > 180) dlon -= 360;
-    while (dlon < -180) dlon += 360;
+    if (isnan (lncm)) {
+      dlon = lnhg - cl;
+      while (dlon > 180) dlon -= 360;
+      while (dlon < -180) dlon += 360;
+    }
     if (dlon >= 0) {
-      if (lat >= 0) sprintf (fnam, "%04d:%05.1f_%04.1fW%04.1fN", cr, cl, dlon, lat);
+      if (lat >= 0)
+        sprintf (fnam, "%04d:%05.1f_%04.1fW%04.1fN", cr, cl, dlon, lat);
+      else if (lat > -0.05)
+        sprintf (fnam, "%04d:%05.1f_%04.1fW%04.1fN", cr, cl, dlon, -lat);
       else sprintf (fnam, "%04d:%05.1f_%04.1fW%04.1fS", cr, cl, dlon, -lat);
+    } else if (dlon > -0.05) {
+      if (lat >= 0)
+        sprintf (fnam, "%04d:%05.1f_%04.1fW%04.1fN", cr, cl, -dlon, lat);
+      else if (lat > -0.05)
+        sprintf (fnam, "%04d:%05.1f_%04.1fW%04.1fN", cr, cl, -dlon, -lat);
+      else sprintf (fnam, "%04d:%05.1f_%04.1fW%04.1fS", cr, cl, -dlon, -lat);
     } else {
-      if (lat >= 0) sprintf (fnam, "%04d:%05.1f_%04.1fE%04.1fN", cr, cl, -dlon, lat);
+      if (lat >= 0)
+        sprintf (fnam, "%04d:%05.1f_%04.1fE%04.1fN", cr, cl, -dlon, lat);
+      else if (lat > -0.05)
+        sprintf (fnam, "%04d:%05.1f_%04.1fE%04.1fN", cr, cl, -dlon, -lat);
       else sprintf (fnam, "%04d:%05.1f_%04.1fE%04.1fS", cr, cl, -dlon, -lat);
     }
-  } else sprintf (fnam, "%05.1f%+04.1f", lon, lat);
+  } else {
+    if (isnan (dlon)) {
+					  /*  construct a filename lonHG+lat  */
+      sprintf (fnam, "%04.1f%+05.1f", lnhg, lat);
+      return fnam;
+    }
+					 /*  construct a filename lonEWlatNS  */
+    if (dlon >= 0) {
+      if (lat >= 0) sprintf (fnam, "%04.1fW%04.1fN", dlon, lat);
+      else if (lat > -0.05) sprintf (fnam, "%04.1fW%04.1fN", dlon, -lat);
+      else sprintf (fnam, "%04.1fW%04.1fS", dlon, -lat);
+    } else if (dlon > -0.05) {
+      if (lat >= 0) sprintf (fnam, "%04.1fW%04.1fN", -dlon, lat);
+      else if (lat > -0.05) sprintf (fnam, "%04.1fW%04.1fN", -dlon, -lat);
+      else sprintf (fnam, "%04.1fW%04.1fS", -dlon, -lat);
+    } else {
+      if (lat >= 0) sprintf (fnam, "%04.1fE%04.1fN", -dlon, lat);
+      else if (lat > -0.05) sprintf (fnam, "%04.1fE%04.1fN", -dlon, -lat);
+      else sprintf (fnam, "%04.1fE%04.1fS", -dlon, -lat);
+    }
+  }
   return fnam;
 }
-							    /*  module body  */
+							     /*  module body  */
 int DoIt(void)	{
   CmdParams_t *params = &cmdparams;
   int status = 0;
@@ -219,7 +275,7 @@ int DoIt(void)	{
   DRMS_Record_t *irec, *orec;
   DRMS_Segment_t *segment, *oseg;
   FILE *fpt;
-  double latc, lonc, loncCar;
+  double latc, loncm, lonhg, loncCar;
   float fval;
   int ival;
   int n;
@@ -371,7 +427,8 @@ int DoIt(void)	{
     drms_output = 0;
     fprintf (stderr,
         "Warning: drms_create_record() returned %d for data series:\n", status);
-    fprintf (stderr, "       %s; will be interpreted as directory name\n", out);
+    fprintf (stderr,
+	"       %s\n       will be interpreted as directory name\n", out);
     strncpy (odir, out, DRMS_MAXPATHLEN);
   } else if (drms_record_directory (orec, odir, 1)) {
     fprintf (stderr,
@@ -505,37 +562,34 @@ int DoIt(void)	{
       sprintf (filename, "%s/S%05i/%s", segment->record->su->sudir,
 	  segment->record->slotnum, seg);
       drms_sprint_rec_query (source, irec);
+      cr = drms_getkey_int (irec, "CarrRot", &status);
       latc = drms_getkey_double (irec, "LatHG", &status);
-      lonc = drms_getkey_double (irec, "LonHG", &status);
+      lonhg = drms_getkey_double (irec, "LonHG", &status);
       carstr = drms_getkey_string (irec, "CarrTime", &status);
-      if (status) {
-        cr = drms_getkey_int (irec, "CarrRot", &status);
-	if (status) cr = -1;
-	loncCar = drms_getkey_double (irec, "CMLon", &status);
-	if (status) loncCar = 2 * lonc;
-      } else sscanf (carstr, "%i:%lf", &cr, &loncCar);
-      lonc = loncCar - lonc;
+      if (status) loncCar = drms_getkey_double (irec, "CMLon", &status);
+      else sscanf (carstr, "%i:%lf", &cr, &loncCar);
+      loncm = drms_getkey_double (irec, "LonCM", &status);
     } else {
       strcpy (filename, in);
       strcpy (source, in);
-      latc = lonc = 0.0;
+      latc = loncm = lonhg = 0.0;
     }
     if (twosegs) {
       sprintf (outfilex, "%s/%s/%s.Ux", odir, uxseg, 
-	  printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
       sprintf (outfiley, "%s/%s/%s.Uy", odir, uyseg,
-	  printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
     } else {
       sprintf (outfilex, "%s/%s.Ux", outdir, 
-	  printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
       sprintf (outfiley, "%s/%s.Uy", outdir,
-	  printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
     }
     status = process_record (filename, drms_output, outfilex, outfiley,
 	kernel, ave, coef, qave, qcoef, verbose, ob, oe, num, rb, re, amu);
     if (status && drms_output)	{
       fprintf (stderr, "Error processing record %d (%s); aborted\n", rec_i,
-	  printcrcl_loc (cr, loncCar, lonc + loncCar, latc));
+	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
       if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
       if (drms_output) drms_close_record (orec, DRMS_FREE_RECORD);
       return 1;
@@ -574,4 +628,9 @@ int DoIt(void)	{
  *		subdirectories; added option for naming individual segments
  *		(if there are two)
  *  v 0.7 frozen 2010.08.19
+ *    0.8	Created 2011.04.22; Fixed bugs in printing of filenames
+ *		(particularly the reversal of east and west), and dropped
+ *		requirement for CMLon; heliographic option for file naming
+ *		Removed default for kernel
+ *    0.9	Created 2011.12.04; Fixed typos in ola_xy.c (not yet used)
  */
