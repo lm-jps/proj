@@ -44,7 +44,7 @@ $to_email="jsoc_ops\@sun.stanford.edu";
 if ($src eq "hsb")
 {
   $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/surge40/jsocprod/lev0/hk_hsb_dayfile";
-  $logfile="$hm/JSOC/proj/lev0/scripts/hk/log-df-hsb";
+  $logfile="$log_dir/log-df-hsb";
   $subject_email="JSOC:WARNING:Ingesting HSB dayfiles: status:no files loaded today";
   $subject_email_old_df="JSOC:WARNING:Ingesting HSB dayfiles: status:Found Old HSB Dayfile Not Processed->Action Required";
   $subject_email_gt_currentdate="JSOC:WARNING:Ingesting HSB dayfiles: status:Found HSB Dayfile(s) Greater Than Current Date->Action Required";
@@ -52,16 +52,16 @@ if ($src eq "hsb")
 }
 elsif ($src eq "moc")
 {
-  $logfile="$hm/JSOC/proj/lev0/scripts/hk/log-df-moc";
+  $logfile="$log_dir/log-df-moc";
 }
 elsif ($src eq "egsefm")
 {
-  $logfile="$hm/JSOC/proj/lev0/scripts/hk/log-df-egsefm";
+  $logfile="$log_dir/log-df-egsefm";
 }
 elsif ($src eq "rtmon")
 {
   $doff_dir=$ENV{'DF_DROPOFF_HSB_FILES'}="/surge40/jsocprod/lev0/hk_rtmon_dayfile";
-  $logfile="$hm/JSOC/proj/lev0/scripts/hk/log-df-rtmon";
+  $logfile="$log_dir/log-df-rtmon";
   $subject_email="JSOC:WARNING:Ingesting RTMON dayfiles: status:no files loaded today";
 }
  
