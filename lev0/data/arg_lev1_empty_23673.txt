@@ -1,0 +1,4 @@
+Missing FSN: went from 30570318 to 30570343
+Missing FSN: went from 30570390 to 30575539
+Total missing FSN = 5172
+update hmi.lev1_probe set executed_part=1,executed=0,last_lev1_fsn=30575538 where ord_date='2011.319_UTC'

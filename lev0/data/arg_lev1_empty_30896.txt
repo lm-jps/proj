@@ -1,0 +1,3 @@
+Missing FSN: went from 36829414 to 36829439
+Total missing FSN = 24
+update aia.lev1_probe set executed_part=1,executed=0,last_lev1_fsn=36837942 where ord_date='2011.326_UTC'

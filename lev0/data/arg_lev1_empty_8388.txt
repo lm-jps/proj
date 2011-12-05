@@ -1,0 +1,7 @@
+Missing FSN: went from 37323348 to 37323361
+Missing FSN: went from 37354188 to 37354201
+Missing FSN: went from 37355196 to 37355209
+Missing FSN: went from 37355352 to 37355365
+Missing FSN: went from 37355436 to 37355449
+Total missing FSN = 60
+update aia.lev1_probe set executed_part=1,executed=0,last_lev1_fsn=37355892 where ord_date='2011.335_UTC'
