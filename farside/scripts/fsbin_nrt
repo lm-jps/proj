@@ -21,9 +21,15 @@ set OSER = $NMSP.fsVbinned$SUFX
 set HOSTNAME = `hostname`
 set HOSTID = `basename $HOSTNAME .Stanford.EDU`
 set PROCID = $HOSTID\_$$
-set TEMP = /tmp23/`whoami`
-if (!(-d $TEMP)) mkdir $TEMP
-if (!(-d $TEMP)) set TEMP = /tmp
+set TMPFSLOC = ~rick/hmi/tmpfs
+if (-r $TMPFSLOC) then
+  set TMPFS = `egrep ^/tmp $TMPFSLOC`
+  set TEMP = $TMPFS/`whoami`
+  if (!(-d $TEMP)) mkdir $TEMP
+  if (!(-w $TEMP)) set TEMP = /tmp
+else
+  set TEMP = /tmp
+endif
 set QRES = $TEMP/qres
 if (!(-d $QRES)) mkdir $QRES
 set MSGS = $TEMP/msgs
