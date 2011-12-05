@@ -1,5 +1,7 @@
 /*
  *  C version of subroutine ola_ in ola_xf.f included in rdvinv_v04
+ *
+ *  N.B.: this code has a bug, and seg faults at line 230
  */
 
 #include <stdlib.h>
@@ -12,8 +14,8 @@ extern void solve_ (int *, int *, int *, int *, double *, double *,
 
 extern void fwidth_ (int *, int*, int *, double *, double *, double *, int *);
 
-void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *euxinp,
-    double *uy_inp, double *euyinp,int nmodes,
+void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp,
+    double *euxinp, double *uy_inp, double *euyinp, int nmodes,
     char *filek1, char *filsolx, char *filsoly, char *filker, char *filcoef,
     int qave, int qcoef, int verbose, double ob, double oe, int num,
     double beg, double endd, double amu) {
@@ -66,27 +68,57 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
     printf ("error trade-off parameter = %.5f\n", amu);
   }
   lun21 = fopen (filek1, "r");
+  if (!lun21) {
+    fprintf (stderr, "Error: unable to open input file %s\n", filek1);
+    return;
+  }
   lun10 = fopen (filsolx, "w");
+  if (!lun10) {
+    fprintf (stderr, "Error: unable to open output file %s\n", filsolx);
+    return;
+  }
   lun20 = fopen (filsoly, "w");
+  if (!lun20) {
+    fprintf (stderr, "Error: unable to open output file %s\n", filsoly);
+    return;
+  }
   if (qave) {
-				/*  open output files for averaging kernels  */
+				 /*  open output files for averaging kernels  */
     char *filkern = (char *)malloc (sizeof (char) * (strlen (filker) + 3));
     sprintf (filkern, "Ux_%s", filker);
     lun19 = fopen (filkern, "w");
+    if (!lun19) {
+      fprintf (stderr, "Error: unable to open kernel output file %s\n", filkern);
+      return;
+    }
     sprintf (filkern, "Uy_%s", filker);
     lun29 = fopen (filkern, "w");
+    if (!lun29) {
+      fprintf (stderr, "Error: unable to open kernel output file %s\n", filkern);
+      return;
+    }
     free (filkern);
   }
   if (qcoef) {
-				/*  open output files for averaging kernels  */
+			    /*  open output files for inversion coefficients  */
     char *filkern = (char *)malloc (sizeof (char) * (strlen (filcoef) + 3));
     sprintf (filkern, "Ux_%s", filcoef);
     lun27 = fopen (filkern, "w");
+    if (!lun27) {
+      fprintf (stderr, "Error: unable to open coefficient output file %s\n",
+	  filkern);
+      return;
+    }
     sprintf (filkern, "Uy_%s", filcoef);
     lun37 = fopen (filkern, "w");
+    if (!lun37) {
+      fprintf (stderr, "Error: unable to open coefficient output file %s\n",
+	  filkern);
+      return;
+    }
     free (filkern);
   }
-						    /*  initialize matrices  */
+						     /*  initialize matrices  */
   memset (fdif, 0, sizeof (fdif));
   memset (freq, 0, sizeof (freq));
   memset (err, 0, sizeof (err));
@@ -97,7 +129,7 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
 
   vv1x = (double *)calloc (num * nmd, sizeof (double));
   vv1y = (double *)calloc (num * nmd, sizeof (double));
-						/*  read in observed errors  */
+						 /*  read in observed errors  */
   nsp = 0;
   for (i = 0; i < nmodes; i++) {
     int ni = n_inp[i];
@@ -118,10 +150,10 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
     printf ("%d frequencies and velocities\n", i);
     printf ("MESSAGE: READ IN DATA\n");
   }
-						    /*  read in the kernels  */
-						/*  read in radius and mass  */
+						     /*  read in the kernels  */
+						 /*  read in radius and mass  */
   fscanf (lun21, "%g %g", &rs, &rms);
-							   /*  read in mesh  */
+							    /*  read in mesh  */
   fscanf (lun21, "%d", &np);
   for (i = 0; i < np; i++) fscanf (lun21, "%g", &(rd[i]));
   ak = (float *)malloc (np * sizeof (float));
@@ -139,7 +171,7 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
     if (erri1 <= 1.0e-12) continue;
     if (erri2 <= 1.0e-12) continue;
     ot = fdif[lll][nnn];
-					     /* turning floats into doubles  */
+					      /* turning floats into doubles  */
     for (jj = 0, inum = 0; jj < np - 1; jj++, inum++) {
       fakc[npt*nmode + inum] = ak[jj];
       rad[inum] = rd[jj];
@@ -197,28 +229,30 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
       suml[nmd*nmd*2 + nmd*j + i] = suml[nmd*nmd*2 + nmd*i + j] = sc;
     }
   }
-						/*  the Lagrange multiplier  */
+						 /*  the Lagrange multiplier  */
   for (i = 0; i < nmode; i++) {
     sum1 = 0.0;
     for (k = 0; k < np; k++) sum1 += weight[k] * fakc[npt*i + k];
-    ov1[nmd*(nmode+1) + i] = ov1[nmd*i + nmode+1] = 0.5 * sum1;
-    suml[nmd*(nmode+1) + i] = suml[nmd*i +  nmode+1] = 0.5 * sum1;
+    ov1[nmd*nmode + i] = ov1[nmd*i + nmode] = 0.5 * sum1;
+    suml[nmd*nmode + i] = suml[nmd*i + nmode] = 0.5 * sum1;
   }
 
   numker = nmode + 1;
   if (verbose) printf ("numker = %d\n", numker);
-						       /*  set target radii  */
+							/*  set target radii  */
   if (verbose) printf ("calc. targets\n");
   ntab = np;
   dx = (endd - beg) / (num - 1.0);
   for (i = 0; i < num; i++) x0[i] = beg + i * dx;
+fprintf (stderr, "writing to lun10\n");
   fprintf (lun10, "#target rad, err-suppr. param, CG of av. kernel, \n");
   fprintf (lun10, " 1st,2nd,3rd quart. pt, (3rd-1st)quart.pt., soln, err\n");
+fprintf (stderr, "writing to lun20\n");
   fprintf (lun20, "#target rad, err-suppr. param, CG of av. kernel, \n");
   fprintf (lun20, " 1st,2nd,3rd quart. pt, (3rd-1st)quart.pt., soln, err\n");						   /* Now for the Solutions  */
-					    /*  need loop over X and Y here  */
+					     /*  need loop over X and Y here  */
   for (itnum = 0; itnum < num; itnum++) {
-						 /*  set the overlap matrix  */
+						  /*  set the overlap matrix  */
     if (verbose) printf ("calc. ov1\n");
     for (i = 0; i < nmode; i++) {
       for (j = i; j < nmode; j++) {
@@ -228,10 +262,13 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
 	ov1[nmd*j + i] = ov1[nmd*i + j] = sum1;
       }
     }
-					  /*  set inhomogeneous part of rhs  */
+fprintf (stderr, "overlap matrix set\n");
+fprintf (stderr, "allocation on vv1x/y: %d\n", num * nmd);
+fprintf (stderr, "max indices on vv1x/y: %d\n", num*nmd + nmode);
+					   /*  set inhomogeneous part of rhs  */
     for (j = 0; j < num; j++)
-      vv1x[nmode*nmd + j] = vv1y[nmode*nmd + j] = 0.5;
-						     /*  set matrix for lhs  */
+      vv1x[j*nmd + nmode] = vv1y[j*nmd + nmode] = 0.5;
+						      /*  set matrix for lhs  */
     if (verbose)  printf ("calc. lhs\n");
     for (j = 0; j < nmode; j++) {
       for (i = 0; i < nmode; i++) {
@@ -253,6 +290,7 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
       }
     }
 						  /*  solving the equations  */
+fprintf (stderr, "Before FTN solve nmd = %d, numker = %d\n", nmd, numker);
     if (verbose) printf ("solving eqn\n");
     nrhs = 1;
     solve_ (&nmd, &nmd, &numker, &nrhs, aa1x, ctil1x, &ierr, &ipiv, &verbose);
@@ -264,19 +302,28 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
       ctil2x[itnum*nmd + i] = ctil1x[i];
       ctil2y[itnum*nmd + i] = ctil1y[i];
     }
+fprintf (stderr, "After FTN solve nmd = %d, numker = %d\n", nmd, numker);
 					   /*  Calculating averaging kernel  */
+fprintf (stderr, "Calculating averaging kernel: np = %d\n", np);
     for (j = 0; j < np; j++) {
+fprintf (stderr, "j = %d, nmode = %d\n", j, nmode);
       sumccx = sumccy = 0.0;
+fprintf (stderr, "allocations of ctil1x/y, fakc = %d, %d\n", nmd*nx0, npt*nmd);
+fprintf (stderr, "max indices on ctil1x/y, fakc = %d, %d\n", nmode, np + npt*nmode);
       for (i = 0; i < nmode; i++) {
+if (i >= 17515 || i <= 1) fprintf (stderr, "i = %d, nmode = %d; (i < nmode) ? %d\n",
+i, nmode, (i < nmode));
 	sumccx += ctil1x[i] * fakc[npt*i + j];
 	sumccy += ctil1y[i] * fakc[npt*i + j];
       }
+fprintf (stderr, "finished i loop\n");
       avcx[j] = sumccx;
       avccx[nx0*j + itnum] = sumccx;
       avcy[j] = sumccy;
       avccy[nx0*j + itnum] = sumccy;
     }
 					 /*  Finding cg of averaging kernel  */
+fprintf (stderr, "Finding CG of averaging kernel\n");
     sumc1x = sumc2x = sumc1y = sumc2y = 0.0;
     for (j = 0; j < np; j++) {
       sumc1x += weight[j] * rad[j] * avcx[j];
@@ -297,7 +344,7 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
     fwidth_ (&npt, &np, &num, rad, avcy, dthcy, &verbose);
     if (verbose) printf ("width done for Uy: %g %g %g\n",
 	dthcy[0], dthcy[1], dthcy[2]);
-							   /*  the solution  */
+							    /*  the solution  */
     sum1x = er1x = sum1y = er1y = 0.0;
     for (i = 0; i < nmode; i++) {
       sum1x += ctil1x[i] * dom[2*i];
@@ -319,7 +366,7 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
   }
 
   if (qave) {
-				        /*  write out the averaging kernels  */
+				         /*  write out the averaging kernels  */
     fprintf (lun19, "# radius ");
     fprintf (lun29, "# radius ");
     for (i = 0; i < num; i++) fprintf (lun19, "%13.5e", x0[i]);
@@ -334,7 +381,7 @@ void ola_xy (double *dl_inp, int *n_inp, double *f_inp, double *ux_inp, double *
     fclose (lun29);
   }
   if (qcoef) {
-				       /*  write out inversion coefficients  */
+				        /*  write out inversion coefficients  */
     fprintf (lun27, "# ");
     for (i = 0; i < num; i++) fprintf (lun27, "%13.5e", x0[i]);
     fprintf (lun27, "\n");
