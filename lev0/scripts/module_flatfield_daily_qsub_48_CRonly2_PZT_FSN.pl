@@ -8,7 +8,7 @@
 #NOTE: some notes below may be obsolete for the CRonly mode
 #
 #Run daily to get a good flatfield using the hmi.lev1_nrt.
-#Usually run by cvs/JSOC/proj/lev0/scripts/module_flatfield_daily_cron.pl
+#Usually run by cvs/Development/JSOC/proj/lev0/scripts/module_flatfield_daily_cron.pl
 #Updates hmi.flatfield.
 #This flatfield is needed to run the definitive hmi.lev1.
 #
@@ -39,7 +39,7 @@ print "host = $host\n";
 #}
 $ENV{'JSOC_MACHINE'} = "linux_x86_64";
 $JSOC_MACHINE = "linux_x86_64";
-$ENV{'PATH'} = "/home/production/cvs/JSOC/bin/$JSOC_MACHINE:/home/production/cvs/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
+$ENV{'PATH'} = "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE:/home/jsoc/cvs/Development/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
 
 $ENV{'SGE_ROOT'} = "/SGE";
 $sgeroot = $ENV{'SGE_ROOT'};
@@ -50,7 +50,7 @@ $mach = $ENV{'JSOC_MACHINE'};
 #print "JSOC_MACHINE = $mach\n";  #!!!TEMP
 $ENV{'OMP_NUM_THREADS'} = 8;
 
-#$BINDIR = "/home/production/cvs/JSOC/bin/linux_x86_64";
+#$BINDIR = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64";
 
 $date = &get_date;
 print "Start module_flatfield_daily_qsub.pl on $date\n\n";
@@ -145,7 +145,7 @@ $j = 0;
     }
     print L0 "$cmd\n";
     close(L0);
-    #$file = "/home/production/cvs/JSOC/proj/lev0/scripts/date.str"; #!!!TEMP
+    #$file = "/home/jsoc/cvs/Development/JSOC/proj/lev0/scripts/date.str"; #!!!TEMP
     #$qsubcmd = sprintf("qsub -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
     $qsubcmd = sprintf("qsub -o %s -e %s -q j8.q %s", $QDIR, $QDIR, $file);
     print "$qsubcmd\n";
@@ -158,12 +158,14 @@ $j = 0;
 NOMORE:
   while(1) {
     sleep(60);
-    @stat = `qstat -u production`;
+    @stat = `qstat -u jsocprod`;
     #print "@stat\n";
     shift(@stat); shift(@stat);	#header lines
     $done = 1;
-    while($line = shift(@stat)) {
-      ($jid) = split(/\s+/, $line);
+#    while($line = shift(@stat)) {
+    while($_ = shift(@stat)) {
+      s/^\s+//g;                #elim leading whitespace
+      ($jid) = split(/\s+/);
       if(grep(/$jid/, @jid)) {
         $done = 0;
         print "Found jid=$jid\n";
@@ -249,11 +251,13 @@ for($l=0; $l<12; $l++) {	#12 sets of 2 processes
 NOMOREP:
   while(1) {
     sleep(45);
-    @stat = `qstat -u production`;
+    @stat = `qstat -u jsocprod`;
     #print "@stat\n";
     shift(@stat); shift(@stat);	#header lines
     $done = 1;
-    while($line = shift(@stat)) {
+#    while($line = shift(@stat)) {
+    while($_ = shift(@stat)) {
+      s/^\s+//g;                #elim leading whitespace
       ($jid) = split(/\s+/, $line);
       if(grep(/$jid/, @jid)) {
         $done = 0;

@@ -30,7 +30,7 @@ if($host ne "cl1n001") {
 }
 $ENV{'JSOC_MACHINE'} = "linux_x86_64";
 $JSOC_MACHINE = "linux_x86_64";
-$ENV{'PATH'} = "/home/production/cvs/JSOC/bin/$JSOC_MACHINE:/home/production/cvs/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
+$ENV{'PATH'} = "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE:/home/jsoc/cvs/Development/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
 
 $ENV{'SGE_ROOT'} = "/SGE";
 $sgeroot = $ENV{'SGE_ROOT'};
@@ -145,7 +145,7 @@ $j = 0;
 NOMORE:
   while(1) {
     sleep(60);
-    @stat = `qstat -u production`;
+    @stat = `qstat -u jsocprod`;
     #print "@stat\n";
     shift(@stat); shift(@stat);	#header lines
     $done = 1;
@@ -170,7 +170,7 @@ open (CF,">$CFILE") || die "Can't Open : $CFILE $!\n";
 $lfile = "$QDIR/combine.$PID.log2";
 #$cmd = "/home/production/cvs/JSOC/bin/linux_x86_64/module_flatfield_combine camera=2 input_series='su_production.flatfield_fid' datum='$datum' 1>$lfile 2>&1";
 
-$cmd = "/home/production/cvs/JSOC/bin/linux_x86_64/module_flatfield_combine camera=2 input_series='su_production.flatfield_fid' datum='$datum' >& $lfile";
+$cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/module_flatfield_combine camera=2 input_series='su_production.flatfield_fid' datum='$datum' >& $lfile";
 print "$cmd\n";
 print CF "#!/bin/csh\n";
 print CF "limit stacksize unlimited\n";
@@ -189,7 +189,7 @@ open (CF,">$CFILE") || die "Can't Open : $CFILE $!\n";
 $lfile = "$QDIR/combine.$PID.log1";
 #$cmd = "/home/production/cvs/JSOC/bin/linux_x86_64/module_flatfield_combine camera=1 input_series='su_production.flatfield_fid' datum='$datum' 1>$lfile 2>&1";
 
-$cmd = "/home/production/cvs/JSOC/bin/linux_x86_64/module_flatfield_combine camera=1 input_series='su_production.flatfield_fid' datum='$datum' >& $lfile";
+$cmd = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/module_flatfield_combine camera=1 input_series='su_production.flatfield_fid' datum='$datum' >& $lfile";
 print "$cmd\n";
 print CF "#!/bin/csh\n";
 print CF "limit stacksize unlimited\n";
@@ -258,7 +258,7 @@ for($l=0; $l<12; $l++) {	#12 sets of 2 processes
 NOMOREP:
   while(1) {
     sleep(45);
-    @stat = `qstat -u production`;
+    @stat = `qstat -u jsocprod`;
     #print "@stat\n";
     shift(@stat); shift(@stat);	#header lines
     $done = 1;

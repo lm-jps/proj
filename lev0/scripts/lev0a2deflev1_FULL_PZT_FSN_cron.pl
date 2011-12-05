@@ -30,7 +30,7 @@ if($host ne "cl1n001") {
 }
 $ENV{'JSOC_MACHINE'} = "linux_x86_64";
 $JSOC_MACHINE = "linux_x86_64";
-$ENV{'PATH'} = "/home/production/cvs/JSOC/bin/$JSOC_MACHINE:/home/production/cvs/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
+$ENV{'PATH'} = "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE:/home/jsoc/cvs/Development/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
 
 $ENV{'SGE_ROOT'} = "/SGE";
 $sgeroot = $ENV{'SGE_ROOT'};
@@ -56,7 +56,7 @@ print "$ord_date\n";
 
 #New 16Feb2011 First do a pzt flat
 if($instru eq "hmi") {
-  `/home/production/cvs/JSOC/proj/lev0/scripts/pzt_flat_cron.pl`;
+  `/home/jsoc/cvs/Development/JSOC/proj/lev0/scripts/pzt_flat_cron.pl`;
 }
 
 #Now make the def lev1 for our given date

@@ -54,14 +54,15 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 
 use DBI;
 
-$DB = jsoc;
+$DB = "jsoc";
 $HOSTDB = "hmidb";      #host where DB runs
 $PGPORT=5432;
+$USER = "production";
 
 $XmitFlgDirHMI = "/dds/soc2pipe/hmi";
 $XmitFlgDirAIA = "/dds/soc2pipe/aia";
-$NoGoFileHMI = "/home/production/cvs/JSOC/proj/lev0/data/NoDefLev1HMI";
-$NoGoFileAIA = "/home/production/cvs/JSOC/proj/lev0/data/NoDefLev1AIA";
+$NoGoFileHMI = "/home/jsoc/cvs/Development/JSOC/proj/lev0/data/NoDefLev1HMI";
+$NoGoFileAIA = "/home/jsoc/cvs/Development/JSOC/proj/lev0/data/NoDefLev1AIA";
 #$DSFFNAMEHMI = "su_production.hmi_flatfield";
 $DSFFNAMEHMI = "hmi.flatfield";
 $DSFFNAMEAIA = "aia.flatfield";
@@ -92,9 +93,9 @@ sub usage {
   exit(0);
 }
 
-$user = $ENV{'USER'};
-if($user ne "production") {
-  print "You must be user production to run\n";
+#$user = $ENV{'USER'};
+if($ENV{'USER'} ne "jsocprod") {
+  print "You must be user jsocprod to run\n";
   exit;
 }
 $host = `hostname -s`;
@@ -155,7 +156,7 @@ if($orddate2) {
 }
 
 #connect to database
-  $dbh = DBI->connect("dbi:Pg:dbname=$DB;host=$HOSTDB;port=$PGPORT", "$user", "");
+  $dbh = DBI->connect("dbi:Pg:dbname=$DB;host=$HOSTDB;port=$PGPORT", "production", "");
   if ( !defined $dbh ) {
     die "Cannot do \$dbh->connect: $DBI::errstr\n";
   }
@@ -231,7 +232,7 @@ $qtime = $querypart."00:00:00_UTC";
 $qsec = `time_convert time=$qtime`;
 chomp($qsec);
 #print "$qsec\n";
-$cmd = "echo \"select sunum from sdo.hk_dayfile where obs_date=$qsec and merged=1\" | psql -h hmidb jsoc";
+$cmd = "echo \"select sunum from sdo.hk_dayfile where obs_date=$qsec and merged=1\" | psql -h hmidb -U production jsoc";
 @select = `$cmd`;
 #print "select is:\n@select";
 shift(@select); shift(@select);  #elim hdr info
@@ -248,7 +249,7 @@ else {
 
 
 #Now determine if a sdo.fds_oribit_vectors record exists for our ord date.
-$cmd = "echo \"select obs_date from sdo.fds_orbit_vectors where obs_date=$sec\" | psql -h hmidb jsoc";
+$cmd = "echo \"select obs_date from sdo.fds_orbit_vectors where obs_date=$sec\" | psql -h hmidb -U production jsoc";
 @select = `$cmd`;
 shift(@select); shift(@select);  #elim hdr info
 $ans = shift(@select);

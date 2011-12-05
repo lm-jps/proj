@@ -24,7 +24,7 @@ $QSUBDIR = "/scr21/production/qsub/flat";
 #}
 $ENV{'JSOC_MACHINE'} = "linux_x86_64";
 $JSOC_MACHINE = "linux_x86_64";
-$ENV{'PATH'} = "/home/production/cvs/JSOC/bin/$JSOC_MACHINE:/home/production/cvs/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:/home/production/STAGING/bin/_linux4:";
+$ENV{'PATH'} = "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE:/home/jsoc/cvs/Development/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:/home/production/STAGING/bin/_linux4:";
 
 $ENV{'SGE_ROOT'} = "/SGE";
 $sgeroot = $ENV{'SGE_ROOT'};
@@ -39,7 +39,7 @@ print "pztdate = $pztdate\n";
 $logfile = "$QSUBDIR/pzt2.$PID.log";
 open(LOG, ">$logfile") || die "Can't Open: $logfile $!\n";
 
-$cmd = "cd /home/production/cvs/JSOC/proj/lev0/apps/pztflat; echo \"pzt_flatfield, $pztdate\" | /usr/local/bin/idl 1>> $QSUBDIR/pzt2.$PID.log 2>&1";
+$cmd = "cd /home/jsocprod/pztflat; echo \"pzt_flatfield, $pztdate\" | /usr/local/bin/idl 1>> $QSUBDIR/pzt2.$PID.log 2>&1";
 print LOG "$cmd\n";
 print "$cmd\n";
 `$cmd`;

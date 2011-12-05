@@ -61,8 +61,9 @@ if($host ne "cl1n001") {
   exit;
 }
 $ENV{'JSOC_MACHINE'} = "linux_x86_64";
+$ENV{'JSOC_DBUSER'}="production";
 $JSOC_MACHINE = "linux_x86_64";
-$ENV{'PATH'} = "/home/production/cvs/JSOC/bin/$JSOC_MACHINE:/home/production/cvs/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
+$ENV{'PATH'} = "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE:/home/jsoc/cvs/Development/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
 
 $ENV{'SGE_ROOT'} = "/SGE";
 $sgeroot = $ENV{'SGE_ROOT'};
@@ -117,7 +118,7 @@ $ord_dateEX = "$ord_date"."::FEX";
 #$cmd = "touch /usr/local/logs/lev1_gui/$ord_dateEX";
 #do the command immediately !!!NEW
  $statlog = "$LOGDIR/lev1gui_call_$date.log";
- $cmd = "/home/production/cvs/JSOC/base/sums/scripts/lev1_def_gui_called_PZT_FSN -x $instru $ord_date 1> $statlog 2>&1";
+ $cmd = "/home/jsoc/cvs/Development/JSOC/base/sums/scripts/lev1_def_gui_called_PZT_FSN -x $instru $ord_date 1> $statlog 2>&1";
 print "$cmd\n";
 print LOG "$cmd\n";
 `$cmd`;
