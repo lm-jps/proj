@@ -5,12 +5,15 @@
 #include <math.h>
 #include <mkl.h>
 #include <omp.h>
+#include <sys/param.h>
 #include "cholesky_down.h"
 #include "gapfill.h"
-#include "drms_defs.h"
+
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
+
+#define kInterpDataDir "proj/libs/interpolate/data"
 
 struct work_struct {
  double *a,*rh,*a1b,*a1r,*a1x;
@@ -56,8 +59,9 @@ int init_fill(
   int targetx, // Target point in x (normally (order-1)/2)
   int targety, // Target point in y (normally (order-1)/2)
   struct fill_struct *pars, // Structure to save setup information etc.
-  char **filenamep // Pointer to name of file to read covariance from.
-                   // Set to actual file used if method > 0.
+  char **filenamep, // Pointer to name of file to read covariance from.
+                    // Set to actual file used if method > 0.
+  const char *path // to data files read by this function.
 )
 {
   double *acor;
@@ -72,6 +76,7 @@ int init_fill(
   double *a0,*rh0,*a0t,*rh0t;
   int info;
   char uplo[] = "U";
+  char buf[PATH_MAX];
 
   pars->order=order;
 
@@ -81,16 +86,20 @@ int init_fill(
     pars->filename=strdup(*filenamep);
     break;
   case 8:
-    pars->filename=strdup(DEFS_MKPATH("/data/acor1_08_80.txt"));
+    snprintf(buf, sizeof(buf), "%s/%s/acor1_08_80.txt", path, kInterpDataDir);
+    pars->filename=strdup(buf);
     break;
   case 9:
-    pars->filename=strdup(DEFS_MKPATH("/data/acor1_09_80.txt"));
+    snprintf(buf, sizeof(buf), "%s/%s/acor1_09_80.txt", path, kInterpDataDir);
+    pars->filename=strdup(buf);
     break;
   case 10:
-    pars->filename=strdup(DEFS_MKPATH("/data/acor1_10_80.txt"));
+    snprintf(buf, sizeof(buf), "%s/%s/acor1_10_80.txt", path, kInterpDataDir);
+    pars->filename=strdup(buf);
     break;
   case 11:
-    pars->filename=strdup(DEFS_MKPATH("/data/acor1_11_80.txt"));
+    snprintf(buf, sizeof(buf), "%s/%s/acor1_11_80.txt", path, kInterpDataDir);
+    pars->filename=strdup(buf);
     break;
   default:
     printf("Unknown method in init_fill.\n");
@@ -649,7 +658,7 @@ reduction(+:nofill)
 
 char *gapfill_version() // Returns CVS version of gapfill.c
 {
-  return strdup("$Id: gapfill.c,v 1.9 2010/09/02 18:29:49 schou Exp $");
+  return strdup("$Id: gapfill.c,v 1.10 2011/12/06 18:11:03 arta Exp $");
 }
 
 

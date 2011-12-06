@@ -17,7 +17,8 @@ int tinterpolate(
   int method, // Interpolation method
   char **filenamep, // Pointer to name of file to read covariance from.
                    // Set to actual file used if method > 0.
-  float fillval // Value to use if not enough points present
+  float fillval, // Value to use if not enough points present
+  const char *path // to data files read by this function.
 );
 
 int taverage(
@@ -40,7 +41,8 @@ int taverage(
   int hwidth, // Window width in units of tspace. Total width is 2*hwidth+1
   double par1, // In units of tspace. Meaning depends on avmethod.
   double par2, // In units of tspace. Meaning depends on avmethod.
-  float fillval // Value to use if not enough points present
+  float fillval, // Value to use if not enough points present
+  const char *path // to data files read by this function.
 );
 
 char *tinterpolate_version(); // Returns CVS version of tinterpolate.c

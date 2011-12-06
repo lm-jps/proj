@@ -5,15 +5,18 @@
 #include <math.h>
 #include <mkl.h>
 #include <omp.h>
+#include <sys/param.h>
 #include "finterpolate.h"
-#include "drms_defs.h"
+
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
+
+#define kInterpDataDir "proj/libs/interpolate/data"
+
 #define fint_wiener 1
 #define fint_linear 2
 #define fint_cubic_conv 3
-#define corfile1 DEFS_MKPATH("/data/acor1d_80x100_double.txt")
 
 static double sinc(double x)
 {
@@ -30,15 +33,17 @@ int init_finterpolate_wiener_old(
                 // Otherwise go further (as set by extrapolate)
   float extrapolate, // How far to extrapolate
   int minorder, // Minimum order to use when approaching edge or beyond
-  int nconst // Number of polynomial constraints
-             // 0 None, 1 for norm, 2 for linear preserved, etc.
+  int nconst, // Number of polynomial constraints
+              // 0 None, 1 for norm, 2 for linear preserved, etc.
+  const char *path // to data files read by this function.
 )
 {
   int status;
   int table=0;
-  char *filename = corfile1;
+  char filename[PATH_MAX];
 
-  status=init_finterpolate_wiener(pars,order,edgemode,extrapolate,minorder,nconst,table,&filename);
+  snprintf(filename, sizeof(filename), "%s/%s/acor1d_80x100_double.txt", path, kInterpDataDir);
+  status=init_finterpolate_wiener(pars,order,edgemode,extrapolate,minorder,nconst,table,&filename, path);
 
   return status;
 }
@@ -54,8 +59,9 @@ int init_finterpolate_wiener(
              // 0 None, 1 for norm, 2 for linear preserved, etc.
   int cortable, // Which of the hardcoded tables to use. 
                 // 0 To use table pointed to by filenamep
-  char **filenamep // Pointer to name of file to read covariance from.
+  char **filenamep, // Pointer to name of file to read covariance from.
                  // Set to actual file used if cortable>0
+  const char *path // to data files read by this function.
 )
 {
   const int malign=32;
@@ -122,7 +128,9 @@ int init_finterpolate_wiener(
     pars->filename=strdup(*filenamep);
   }
   if (cortable == 1) {
-    pars->filename=strdup(corfile1);
+     char dfile[PATH_MAX];
+     snprintf(dfile, sizeof(dfile), "%s/%s/acor1d_80x100_double.txt", path, kInterpDataDir);
+     pars->filename=strdup(dfile);
   }
   fileptr = fopen (pars->filename, "r");
   if (fileptr == NULL) {
@@ -784,7 +792,7 @@ return status;
 
 char *finterpolate_version() // Returns CVS version of finterpolate.c
 {
-  return strdup("$Id: finterpolate.c,v 1.5 2010/09/02 18:29:49 schou Exp $");
+  return strdup("$Id: finterpolate.c,v 1.6 2011/12/06 18:11:03 arta Exp $");
 }
 
 

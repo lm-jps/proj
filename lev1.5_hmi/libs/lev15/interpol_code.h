@@ -40,9 +40,9 @@ struct keyword{
 
 
 
-int initialize_interpol(struct initial *const_param, struct init_files *infiles, int nx, int ny);
+int initialize_interpol(struct initial *const_param, struct init_files *infiles, int nx, int ny, const char *dpath);
 
-int do_interpolate(float **images, char **errors, float *image_out, struct keyword *key, struct keyword *key_out, struct initial *const_param, int nsample, int nx, int ny, float average);
+int do_interpolate(float **images, char **errors, float *image_out, struct keyword *key, struct keyword *key_out, struct initial *const_param, int nsample, int nx, int ny, float average, const char *dpath);
 
 int do_gapfill(float *image, unsigned char *masks, struct initial *const_param, char *ierror, int nx, int ny);
 

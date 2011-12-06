@@ -53,7 +53,10 @@
 #define NUMTIMERS 8		//number of seperate timers avail
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define LOGTEST 0
-#define CAL_HCFTID 17		//image is cal mode 
+#define CAL_HCFTID 17		//image is cal mode
+ 
+#define kDpath    "dpath"
+#define kDpathDef "/home/jsoc/cvs/Development/JSOC"
 
 int compare_rptr(const void *a, const void *b);
 static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
@@ -70,6 +73,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
   {ARG_FLAG, "r", "0", "restart flag"},
+  {ARG_STRING, kDpath, kDpathDef, "path to the source code tree (the JSOC root directory)"},
   {ARG_END}
 };
 
@@ -376,7 +380,7 @@ int orbit_calc()
 #include "limb_fit_function.c"
 //#include "cosmic_ray.c"
 
-int do_ingest(unsigned int bbfsn, unsigned int eefsn)
+int do_ingest(unsigned int bbfsn, unsigned int eefsn, const char *dpath)
 {
   //FILE *fwt;
   Image_Location *p_imageloc;
@@ -854,7 +858,7 @@ TEMPSKIP:
     }
   }
   if(!skiplimb && !hmiaiaflg) {		//only call for HMI
-    dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,1);
+     dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,1, dpath);
     if(dstatus) {
       printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
       noimage[i] = 1;
@@ -1021,6 +1025,7 @@ int DoIt(void)
   long long numofrecs, frec, lrec;
   int numrec, numofchunks, i;
   char line[80];
+  const char *dpath = NULL;
 
   if (nice_intro())
     return (0);
@@ -1036,6 +1041,9 @@ int DoIt(void)
   bfsn = cmdparams_get_int(&cmdparams, "bfsn", NULL);
   efsn = cmdparams_get_int(&cmdparams, "efsn", NULL);
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
+
+  dpath = cmdparams_get_str(&cmdparams, kDpath, NULL);
+
   if(bfsn == 0 || efsn == 0) {
     fprintf(stderr, "bfsn and/or efsn must be given. 0 not allowed\n");
     return(0);
@@ -1094,7 +1102,7 @@ int DoIt(void)
   for(i = 0; i < numofchunks; i++) {
     frec = lrec+1; lrec = (frec + numrec)-1;
     if(lrec > efsn) lrec=efsn;
-    if(do_ingest(frec, lrec)) {  //do a chunk to get files from the lev0
+    if(do_ingest(frec, lrec, dpath)) {  //do a chunk to get files from the lev0
       printf("build_lev1_fsn abort\nSee log: %s\n", logname); 
       send_mail("build_lev1_fsn abort\nSee log: %s\n", logname); 
       return(0);

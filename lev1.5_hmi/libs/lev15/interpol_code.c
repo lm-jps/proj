@@ -13,7 +13,7 @@
 ////constants 
 
 
-int initialize_interpol(struct initial *const_param, struct init_files *infiles, int nx, int ny)
+int initialize_interpol(struct initial *const_param, struct init_files *infiles, int nx, int ny, const char *dpath)
 {
 
   char *namep;
@@ -40,7 +40,7 @@ int initialize_interpol(struct initial *const_param, struct init_files *infiles,
  int malign=32;
 
  struct fill_struct fills;
- status=init_fill(gapfill_method, gapfill_regular, gapfill_order,gapfill_order2,gapfill_order2,&fills,&namep);
+ status=init_fill(gapfill_method, gapfill_regular, gapfill_order,gapfill_order2,gapfill_order2,&fills,&namep,dpath);
  printf("table for gapfill %s\n", namep);
 
 float **dist_par_front, **dist_par_side;
@@ -208,7 +208,7 @@ int do_gapfill(float *image, unsigned char *mask, struct initial *const_param, c
 }
 
 
-int do_interpolate(float **images, char **ierrors, float *image_out, struct keyword *key, struct keyword *key_out, struct initial *const_param, int nsample, int nx, int ny, float average)
+int do_interpolate(float **images, char **ierrors, float *image_out, struct keyword *key, struct keyword *key_out, struct initial *const_param, int nsample, int nx, int ny, float average, const char *dpath)
 {
 
   void derotation(float, float, float, float, float, float, float *, int, float *, int, int);
@@ -460,7 +460,7 @@ int do_interpolate(float **images, char **ierrors, float *image_out, struct keyw
  
  
   
-  init_finterpolate_wiener(&fints,order_int,0,1.0,2,1,1,&namep);  //initialize interpolation
+  init_finterpolate_wiener(&fints,order_int,0,1.0,2,1,1,&namep, dpath);  //initialize interpolation
   printf("table name for interpolation %s\n", namep);
   free(namep);
 
@@ -599,9 +599,6 @@ int do_interpolate(float **images, char **ierrors, float *image_out, struct keyw
     derotation_full(&fints_error, distx, disty, time, rrsun[isample], rsun, xx0[isample], cent_x, yy0[isample], cent_y, ddist[isample], dist, pp0[isample], p0, bb0[isample], b0, rot_coef, order2_rot_coef,const_param->order_dist_coef, nx, ny, xin, yin);
     
        
-
-    
-
      if (derot_status == 0)
        {
 #pragma omp parallel for private(j,i)
@@ -690,14 +687,14 @@ int do_interpolate(float **images, char **ierrors, float *image_out, struct keyw
   t1=dsecnd();
   if (average < 0.0)
     {
-      status=tinterpolate(nvalid,tvalid,tint,const_param->nconst,valid_images,valid_masks,image_out,nx,ny,nlead,1,&namep_temp, fillval);  //call temporal interpolation function
+      status=tinterpolate(nvalid,tvalid,tint,const_param->nconst,valid_images,valid_masks,image_out,nx,ny,nlead,1,&namep_temp, fillval,dpath);  //call temporal interpolation function
     }
   else {
   
     int torder=4;
     double avgval=round(average/2.0/45.0/2.0)*2.0;
     int hwidth=(int)(avgval*1.5);
-    status=taverage(nvalid,tvalid,tint,const_param->nconst,valid_images,valid_masks,image_out,nx,ny,nlead,1,&namep_temp, tavg_cosine,torder,45.0,hwidth,avgval,avgval/2.0,fillval);
+    status=taverage(nvalid,tvalid,tint,const_param->nconst,valid_images,valid_masks,image_out,nx,ny,nlead,1,&namep_temp, tavg_cosine,torder,45.0,hwidth,avgval,avgval/2.0,fillval,dpath);
   }
 
  
@@ -1135,7 +1132,7 @@ float intsincos(unsigned int n, unsigned int m)
 
 char *interpol_version() // Returns CVS version
 {
-  return strdup("$Id: interpol_code.c,v 1.1 2010/09/16 20:46:48 couvidat Exp $");
+  return strdup("$Id: interpol_code.c,v 1.2 2011/12/06 18:11:03 arta Exp $");
 }
 
 

@@ -5,11 +5,13 @@
 #include <string.h>
 #include <math.h>
 #include <mkl.h>
+#include <sys/param.h>
 #include "tinterpolate.h"
-#include "drms_defs.h"
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) > (y)) ? (x) : (y))
+
+#define kInterpDataDir "proj/libs/interpolate/data"
 
 int tinterpolate(
   int nsample, // Number of input times
@@ -25,7 +27,8 @@ int tinterpolate(
   int method, // Interpolation method
   char **filenamep, // Pointer to name of file to read covariance from.
                    // Set to actual file used if method > 0.
-  float fillval // Value to use if not enough points present
+  float fillval, // Value to use if not enough points present
+  const char *path // to data files read by this function.
 )
 {
   const unsigned char maskgood=0; // Value of good entries in masks
@@ -55,6 +58,7 @@ int tinterpolate(
   double sum;
   double *xc,*b,*rhc,*bta1b1,*help;
   int iconst,jconst;
+  char fbuf[PATH_MAX];
 
   if ((nsample < 1) || (nsample > 20)) {
 // Code breaks at 31 or 32 due to the use of summed masks
@@ -68,7 +72,8 @@ int tinterpolate(
     filename=strdup(*filenamep);
     break;
   case 1:
-    filename=strdup(DEFS_MKPATH("/data/acort_hr12.txt"));
+    snprintf(fbuf, sizeof(fbuf), "%s/%s/acort_hr12.txt", path, kInterpDataDir);
+    filename = strdup(fbuf);
     break;
   default:
     printf("Unknown method in init_fill.\n");
@@ -371,7 +376,8 @@ int taverage(
   int hwidth, // Window width in units of tspace. Total width is 2*hwidth+1
   double par1, // In units of tspace. Meaning depends on avmethod.
   double par2, // In units of tspace. Meaning depends on avmethod.
-  float fillval // Value to use if not enough points present
+  float fillval, // Value to use if not enough points present
+  const char *path // to data files read by this function.
 )
 {
   const unsigned char maskgood=0; // Value of good entries in masks
@@ -401,6 +407,7 @@ int taverage(
   //int ib, nblock;
   char *filename;
   int ibad;
+  char fbuf[PATH_MAX];
 
   if ((order < 1) || (order > 20)) {
 // Code breaks at 31 or 32 due to the use of summed masks
@@ -414,7 +421,8 @@ int taverage(
     filename=strdup(*filenamep);
     break;
   case 1:
-    filename=strdup(DEFS_MKPATH("/data/acort_hr12.txt"));
+    snprintf(fbuf, sizeof(fbuf), "%s/%s/acort_hr12.txt", path, kInterpDataDir);
+    filename = strdup(fbuf);
     break;
   default:
     printf("Unknown method in init_fill.\n");
@@ -781,7 +789,7 @@ printf("\n");
 
 char *tinterpolate_version() // Returns CVS version of tinterpolate.c
 {
-  return strdup("$Id: tinterpolate.c,v 1.8 2010/09/08 00:04:45 schou Exp $");
+  return strdup("$Id: tinterpolate.c,v 1.9 2011/12/06 18:11:03 arta Exp $");
 }
 
 

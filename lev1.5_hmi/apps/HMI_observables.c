@@ -1056,7 +1056,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.29 2011/11/28 18:13:56 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.30 2011/12/06 18:11:03 arta Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1652,7 +1652,9 @@ int DoIt(void)
 
   if(TestLevIn[0]==1)
     {
-      status = initialize_interpol(&const_param,&initfiles,4096,4096); //*************************************************** WARNING **********************************
+      strcpy(dpath2,dpath);
+      strcat(dpath2,"/../../../");
+      status = initialize_interpol(&const_param,&initfiles,4096,4096,dpath2); //*************************************************** WARNING **********************************
       if(status != 0)
 	{
 	  printf("Error: could not initialize the gapfilling, derotation, and temporal interpolation routines\n");
@@ -3817,7 +3819,9 @@ int DoIt(void)
 		      printf("KEYWORDS OUT: %f %f %f %f %f %f %f %d\n",KeyInterpOut.rsun,KeyInterpOut.xx0,KeyInterpOut.yy0,KeyInterpOut.dist,KeyInterpOut.b0,KeyInterpOut.p0,KeyInterpOut.time,KeyInterpOut.focus);
 		      
 		      t0=dsecnd();
-		      status=do_interpolate(images,ierrors,arrLev1d[k]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],-1.0);
+                      strcpy(dpath2,dpath);
+                      strcat(dpath2,"/../../../");
+		      status=do_interpolate(images,ierrors,arrLev1d[k]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],-1.0,dpath2);
 		      t1=dsecnd();
 		      printf("TIME ELAPSED IN DO_INTERPOLATE: %f\n",t1-t0);
 		    }

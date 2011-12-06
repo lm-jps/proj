@@ -107,6 +107,9 @@
 #define WX(pix_x,pix_y) (((pix_x-crpix1)*cosa - (pix_y-crpix2)*sina)*cdelt+crvalx)
 #define WY(pix_x,pix_y) (((pix_y-crpix2)*cosa + (pix_x-crpix1)*sina)*cdelt+crvaly)
 
+#define kDpath    "dpath"
+#define kDpathDef "/home/jsoc/cvs/Development/JSOC"
+
 /* ========================================================================================================== */
 
 /* Data structure for mapping info */
@@ -157,7 +160,7 @@ int readFullDisk(DRMS_Record_t *inRec, struct mapInfo *mInfo, float *bx_img, flo
 
 int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 				   float *bx_img, float *by_img, float *bz_img,
-				   float *bx_map, float *by_map, float *bz_map);
+                                   float *bx_map, float *by_map, float *bz_map, const char *dpath);
 
 /* Get error estimation */
 
@@ -250,6 +253,7 @@ ModuleArgs_t module_args[] =
 	{ARG_FLAG, "x", "", "Uses patch center direction for vector decomposition"},
 	{ARG_FLAG, "q", "", "Fill regions outside HARP defined area as NaN"},
 	{ARG_FLAG, "s", "", "Spherical option, flip By as Btheta"},
+        {ARG_STRING, kDpath, kDpathDef, "path to the source code tree (the JSOC root directory)"},
 	{ARG_END}
 };
 
@@ -265,6 +269,7 @@ int DoIt(void)
 	
 	DRMS_RecordSet_t *inRS = NULL, *outRS = NULL;
 	DRMS_Record_t *inRec = NULL, *outRec = NULL;
+        const char *dpath = NULL;
 	
 	/* Get parameters */
     
@@ -432,7 +437,7 @@ int DoIt(void)
 		if (!mInfo.fullDisk &&
 			performMapping(inRec, &mInfo,
 						   bx_img, by_img, bz_img,
-						   bx_map, by_map, bz_map)) {
+                                                   bx_map, by_map, bz_map, dpath)) {
 			printf("Image #%d skipped.", irec);
 			if (mInfo.verbose) printf(": mapping error\n"); else printf("\n");
 			if (bx_img) free(bx_img); if (by_img) free(by_img); if (bz_img) free(bz_img);
@@ -843,7 +848,7 @@ int readFullDisk(DRMS_Record_t *inRec, struct mapInfo *mInfo, float *bx_img, flo
 
 int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 				   float *bx_img, float *by_img, float *bz_img,
-				   float *bx_map, float *by_map, float *bz_map)
+                                   float *bx_map, float *by_map, float *bz_map, const char *dpath)
 {
 	
 	int status = 0;
@@ -992,7 +997,7 @@ int performMapping(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 		switch (mInfo->interpOpt) {
 			default:
 			case 0:			// Wiener, 6 order, 1 constraint
-				init_finterpolate_wiener(&pars, 6, 1, 6, 2, 1, 1, NULL);
+                          init_finterpolate_wiener(&pars, 6, 1, 6, 2, 1, 1, NULL, dpath);
 				break;
 			case 1:			// Cubic convolution
 				init_finterpolate_cubic_conv(&pars, 1., 3.);

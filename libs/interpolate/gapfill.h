@@ -34,8 +34,9 @@ int init_fill(
   int targetx, // Target point in x (normally (order-1)/2)
   int targety, // Target point in y (normally (order-1)/2)
   struct fill_struct *pars, // Structure to save setup information etc.
-  char **filenamep // Pointer to name of file to read covariance from.
+  char **filenamep, // Pointer to name of file to read covariance from.
                    // Set to actual file used if method > 0.
+  const char *path // to data files read by this function.
 
 );
 

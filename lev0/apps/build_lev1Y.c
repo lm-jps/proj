@@ -55,6 +55,9 @@
 #define LOGTEST 0
 #define CAL_HCFTID 17		//image is cal mode 
 
+#define kDpath    "dpath"
+#define kDpathDef "/home/jsoc/cvs/Development/JSOC"
+
 int compare_rptr(const void *a, const void *b);
 static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 
@@ -73,6 +76,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
   {ARG_FLAG, "r", "0", "restart flag"},
+  {ARG_STRING, kDpath, kDpathDef, "path to the source code tree (the JSOC root directory)"},
   {ARG_END}
 };
 
@@ -390,7 +394,7 @@ int orbit_calc()
 #include "cosmic_ray.c"
 
 //Called with the range to do. The args are either rec#s or fsn#s accord to modeflg
-int do_ingest(long long bbrec, long long eerec)
+int do_ingest(long long bbrec, long long eerec, const char *dpath)
 {
   //FILE *fwt;
   Image_Location *p_imageloc;
@@ -907,7 +911,7 @@ TEMPSKIP:
   }
   if(!skiplimb && !hmiaiaflg) {		//only call for HMI
     //dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,1);
-    dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,0);
+     dstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,0, dpath);
     if(dstatus) {
       printk("ERROR: limb_fit() %d error for fsn=%u\n", dstatus, fsnx);
       noimage[i] = 1;
@@ -1093,6 +1097,7 @@ int DoIt(void)
   long long numofrecs, frec, lrec;
   int numrec, numofchunks, i;
   char line[80];
+  const char *dpath = NULL;
 
   if (nice_intro())
     return (0);
@@ -1116,6 +1121,9 @@ int DoIt(void)
   bfsn = cmdparams_get_int(&cmdparams, "bfsn", NULL);
   efsn = cmdparams_get_int(&cmdparams, "efsn", NULL);
   quicklook = cmdparams_get_int(&cmdparams, "quicklook", NULL);
+
+  dpath = cmdparams_get_str(&cmdparams, kDpath, NULL);
+
   if(modeflg) {		//recnum mode
     if(brec == 0 || erec == 0) {
       fprintf(stderr, "brec and erec must be given for recnum mode. 0 not allowed\n");
@@ -1190,7 +1198,7 @@ int DoIt(void)
   for(i = 0; i < numofchunks; i++) {
     frec = lrec+1; lrec = (frec + numrec)-1;
     if(lrec > enumx) lrec=enumx;
-    if(do_ingest(frec, lrec)) {  //do a chunk to get files from the lev0
+    if(do_ingest(frec, lrec, dpath)) {  //do a chunk to get files from the lev0
       printf("build_lev1 abort\nSee log: %s\n", logname); 
       send_mail("build_lev1 abort\nSee log: %s\n", logname); 
       return(0);

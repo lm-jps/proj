@@ -961,7 +961,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.21 2011/11/28 18:14:09 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.22 2011/12/06 18:11:03 arta Exp $");
 }
 
 
@@ -1438,8 +1438,9 @@ int DoIt(void)
   //initialization of Richard's and Jesper's codes
   //*************************************************************************************
 
-
-  status = initialize_interpol(&const_param,&initfiles,4096,4096);
+  strcpy(dpath2,dpath);
+  strcat(dpath2,"/../../../");
+  status = initialize_interpol(&const_param,&initfiles,4096,4096,dpath2);
   if(status != 0)
     {
       printf("Error: could not initialize the gapfilling, derotation, and temporal interpolation routines\n");
@@ -3485,7 +3486,7 @@ int DoIt(void)
 		      printf("KEYWORDS OUT: %f %f %f %f %f %f %f %d\n",KeyInterpOut.rsun,KeyInterpOut.xx0,KeyInterpOut.yy0,KeyInterpOut.dist,KeyInterpOut.b0,KeyInterpOut.p0,KeyInterpOut.time,KeyInterpOut.focus);
 
 		      //printf("JESPER !!! %f %d\n",imagesi[0][40970],ierrors[0][40970]);
-		      status=do_interpolate(imagesi,ierrors,arrLev1d[it2]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],AverageTime);
+		      status=do_interpolate(imagesi,ierrors,arrLev1d[it2]->data,KeyInterp,&KeyInterpOut,&const_param,ActualTempIntNum,axisin[0],axisin[1],AverageTime,dpath2);
 		      //float *richard;
 		      //richard=arrLev1d[it2]->data;
 		      //printf("JESPER !!! %f\n",richard[40970]);

@@ -18,8 +18,9 @@ int init_finterpolate_wiener_old(
                 // Otherwise go further (as set by extrapolate)
   float extrapolate, // How far to extrapolate
   int minorder, // Minimum order to use when approaching edge or beyond
-  int nconst // Number of polynomial constraints
-             // 0 None, 1 for norm, 2 for linear preserved, etc.
+  int nconst, // Number of polynomial constraints
+              // 0 None, 1 for norm, 2 for linear preserved, etc.
+  const char *path // to data files read by this function.
 );
 
 int init_finterpolate_wiener(
@@ -33,8 +34,9 @@ int init_finterpolate_wiener(
              // 0 None, 1 for norm, 2 for linear preserved, etc.
   int cortable, // Which of the hardcoded tables to use.
                 // 0 To use table pointed to by filenamep
-  char **filenamep // Pointer to name of file to read covariance from.
-                 // Set to actual file used if cortable>0
+  char **filenamep, // Pointer to name of file to read covariance from.
+                    // Set to actual file used if cortable>0
+  const char *path // to data files read by this function.
 );
 
 int init_finterpolate_linear(
