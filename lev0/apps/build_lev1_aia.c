@@ -731,8 +731,10 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
           if(rstatus) printk("Can not open temperature series.\n");
           else {
             nr = rs_t->n;
-            if(nr != 1) printk("%d records != 1.\n", nr);
-            rt = rs_t->records[0];
+            if (nr>0) {
+              if(nr != 1) printk("%d records != 1.\n", nr);
+              rt = rs_t->records[0];
+            }
           }
           t_obs0 = tobs[i];
         }
