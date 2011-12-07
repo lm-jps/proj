@@ -791,7 +791,7 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
         if(rstatus) printk("Can not open aia.response series.\n");
         else {
           nr = rs_resp->n;
-          rresp = rs_resp->records[0];
+          if (nr>0) rresp = rs_resp->records[0];
         }
         if(rresp) {
           eperdn = drms_getkey_float(rresp, "EPERDN", &st);
