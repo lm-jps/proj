@@ -17,16 +17,7 @@ ModuleArgs_t module_args[] = {
 };
 
 char *module_name = "pfss_backup";
-
 int verbose = 0;
-
-void sprint_time_ISO (char *tstring, TIME t)
-{
-  sprint_at(tstring,t);
-  tstring[4] = tstring[7] = '-';
-  tstring[10] = 'T';
-  tstring[19] = '\0';
-}
 
 int nice_intro(int help)
 {
@@ -46,17 +37,16 @@ int nice_intro(int help)
 
 int DoIt ()
 {
-  char *ds, *spath, *bpath, sname[512], bname[512], now_str[64];
+  char *ds, *spath, *bpath, sname[512], bname[512];
   int ser_beg, ser_end, ser_num, status=0;
   int s_ok, b_ok; /* yr, mo, da, hr, mn; */
-  time_t tnow, trec;
+  time_t trec;
   DRMS_Record_t *outrec;
   DRMS_Segment_t *outseg;
   struct tm tm_rec;
   struct stat sbuf;
 
   if (nice_intro(0)) return(0);
-  tnow = time(NULL);
   ser_beg = cmdparams_get_int(&cmdparams, "ser_beg", NULL);
   ser_end = cmdparams_get_int(&cmdparams, "ser_end", NULL);
   ds = strdup(cmdparams_get_str(&cmdparams, "ds", NULL));
@@ -69,27 +59,24 @@ int DoIt ()
     snprintf(sname, 512, "%s/kitrun048_%5.5d.sav", spath, ser_num);
     snprintf(bname, 512, "%s/Bfield_%5.5d.sav", bpath, ser_num);
     outrec = drms_create_record(drms_env, ds, DRMS_PERMANENT, &status);
-    sprint_time_ISO(now_str, trec + UNIX_EPOCH);
-    drms_setkey_string(outrec, "model_date", now_str);
+    if (status) DIE("Can't create output record");
+    drms_setkey_time(outrec, "model_date", (double) (trec + UNIX_EPOCH));
     drms_setkey_int(outrec, "serial", ser_num);
     if (stat(sname, &sbuf)) {
       s_ok = 0;
       fprintf(stderr, "Can not stat %s\n", sname);
     } else {
       s_ok = 1;
-      sprint_time_ISO(now_str, sbuf.st_mtime + UNIX_EPOCH);
-      drms_setkey_string(outrec, "s_calc_date", now_str);
+      drms_setkey_time(outrec,"s_calc_date",(double)(sbuf.st_mtime+UNIX_EPOCH));
     }
     if (stat(bname, &sbuf)) {
       b_ok = 0;
       fprintf(stderr, "Can not stat %s\n", bname);
     } else {
       b_ok = 1;
-      sprint_time_ISO(now_str, sbuf.st_mtime + UNIX_EPOCH);
-      drms_setkey_string(outrec, "b_calc_date", now_str);
+      drms_setkey_time(outrec,"b_calc_date",(double)(sbuf.st_mtime+UNIX_EPOCH));
     }
-    sprint_time_ISO(now_str, CURRENT_SYSTEM_TIME);
-    drms_setkey_string(outrec, "backup_date", now_str);
+    drms_setkey_time(outrec, "backup_date", CURRENT_SYSTEM_TIME);
     if (s_ok) {
       outseg = drms_segment_lookup(outrec, "surffield");
       if(drms_segment_write_from_file(outseg, sname)) {
@@ -102,7 +89,8 @@ int DoIt ()
         fprintf(stderr, "Can not write B field segment for %s.\n", bname);
       }
     }
-    status = drms_close_record(outrec, DRMS_INSERT_RECORD);
+    if (s_ok && b_ok) status = drms_close_record(outrec, DRMS_INSERT_RECORD);
+    else status = drms_close_record(outrec, DRMS_FREE_RECORD);
     if(status) fprintf(stderr, "Error closing rec for ser #: %d.\n", ser_num);
   }
   return status;
