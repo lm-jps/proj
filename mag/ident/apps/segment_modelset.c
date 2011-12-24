@@ -115,19 +115,35 @@ static double seg_model_ar_M_Ic_720s[] = {
   0.0161017226367, 0,             13038.102521,  165305.443351, 73124251.7542,  0};
 static double seg_model_alpha_M_Ic_720s[] = {0, -4.0};
 
-
 // in development for Ic_noLimbDark_720s, June 2011
+// (AR class proved to be too permissive, discontinued November 2011)
 // scaled from M_Ic_720s models above by 13500 along Ic coordinate
-static double seg_model_qs_M_Ic_noLD_720s[] = {
+static double seg_model_qs_M_Ic_noLD_V1_720s[] = {
   0.6767003790, 0.0000000000, 0.9867689225,   137.6658188140, 0.7329523679, 0.0000000000, 
   0.3051652496, 0.0000000000, 1.0246812160,   214.1933164040, 0.7013849462, 0.0000000000, 
   0.0181343713, 0.0000000000, 0.9852468761,  4715.8705032800, 0.8106604708, 0.0000000000};
-static double seg_model_ar_M_Ic_noLD_720s[] = {
+static double seg_model_ar_M_Ic_noLD_V1_720s[] = {
   0.3732497758, -534.1668277480, 0.9978206222, 87955.4275489000, 0.7733031552, -1.6172716687, 
   0.3732497758,  534.1668277480, 0.9978206222, 87955.4275489000, 0.7733031552,  1.6172716687, 
   0.1186993629,  194.0685799550, 1.0089880054,  6919.6034971600, 0.8242070161, -2.4729433383, 
   0.1186993629, -194.0685799550, 1.0089880054,  6919.6034971600, 0.8242070161,  2.4729433383, 
   0.0161017226,    0.0000000000, 0.9657853719, 165305.443351000, 0.4012304623,  0.0000000000};
+static double seg_model_alpha_M_Ic_noLD_V1_720s[] = {0, -4.0};
+
+// in development for Ic_noLimbDark_720s, October 2011
+// scaled from original M_IC_noLD_720s model by 1.3 along M coordinate
+// latter had been already, in turn:
+// scaled from M_Ic_720s models above by 13500 along Ic coordinate
+static double seg_model_qs_M_Ic_noLD_720s[] = {
+  0.6767003790, 0.0000000000, 0.9867689225,  232.65523379566, 0.7329523679, 0.0000000000,
+  0.3051652496, 0.0000000000, 1.0246812160,  361.98670472276, 0.7013849462, 0.0000000000,
+  0.0181343713, 0.0000000000, 0.9852468761, 7969.82115054320, 0.8106604708, 0.0000000000};
+static double seg_model_ar_M_Ic_noLD_720s[] = {
+  0.3732497758, -694.4168760724, 0.9978206222, 148644.672557641, 0.7733031552, -2.1024531693,
+  0.3732497758,  694.4168760724, 0.9978206222, 148644.672557641, 0.7733031552,  2.1024531693,
+  0.1186993629,  252.2891539415, 1.0089880054,  11694.129910200, 0.8242070161, -3.2148263398,
+  0.1186993629, -252.2891539415, 1.0089880054,  11694.129910200, 0.8242070161,  3.2148263398,
+  0.0161017226,    0.0000000000, 0.9657853719, 279366.199263190, 0.4012304623,  0.0000000000};
 static double seg_model_alpha_M_Ic_noLD_720s[] = {0, -4.0};
 
 
@@ -183,10 +199,29 @@ seg_model_M_Ic_720s = {
 };
 
 static seg_modelset_t 
+seg_model_M_Ic_noLD_V1_720s = {
+  SEG_BUILTIN_PREFIX "/hmi.M_Ic_noLimbDark_720s.version1",
+  "Model using hmi.Ic_noLimbDark_720s and hmi.M_720s, June 2011, obsolete",
+  "1 from 2011.06.20",
+  2, 
+  2, "var,diag-then-upper", // always like this
+  seg_model_alpha_M_Ic_noLD_V1_720s,
+  {
+    // this is a list of seg_onemodel_t structures
+    {"quiet Sun",     
+     sizeof(seg_model_qs_M_Ic_noLD_V1_720s)/SEG_MODEL_ONEROW, 
+     seg_model_qs_M_Ic_noLD_720s}, 
+    {"active region", 
+     sizeof(seg_model_ar_M_Ic_noLD_V1_720s)/SEG_MODEL_ONEROW, 
+     seg_model_ar_M_Ic_noLD_720s}
+  }
+};
+
+static seg_modelset_t 
 seg_model_M_Ic_noLD_720s = {
   SEG_BUILTIN_PREFIX "/hmi.M_Ic_noLimbDark_720s.production",
   "Model using hmi.Ic_noLimbDark_720s and hmi.M_720s",
-  "1 from 2011.06.20",
+  "1 from 2011.10.10",
   2, 
   2, "var,diag-then-upper", // always like this
   seg_model_alpha_M_Ic_noLD_720s,
@@ -210,6 +245,7 @@ static seg_modelset_t *
 seg_models_known[] = {
   &seg_model_test_yang, 
   &seg_model_M_Ic_720s, 
+  &seg_model_M_Ic_noLD_V1_720s,  // unused in production
   &seg_model_M_Ic_noLD_720s, 
   NULL}; // MUST be null-terminated
 

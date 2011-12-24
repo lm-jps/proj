@@ -22,7 +22,7 @@
  * hmi_segment_module 
  *      xm='hmi.M_720s[2010.07.03_12:48:00_TAI/1h]' 
  *      xp='hmi.Ic_noLimbDark_720s[2010.07.03_12:48:00_TAI/1h]' 
- *      model=/builtin/hmi.M_Ic_noLimbDark_720s.production beta=0.4 y=hmi.Marmask_720s
+ *      model=/builtin/hmi.M_Ic_noLimbDark_720s.production beta=0.3 y=hmi.Marmask_720s
  *
  * Michael Turmon, JPL
  *  adapted from code by Yang Liu (10/2009)
@@ -211,7 +211,7 @@ setkey_mask_qual(DRMS_Record_t *outRec,
   if (ok != DRMS_SUCCESS) not_ok++;
   // quality (more would be better...)
   quality = 0x0;
-  quality |= (nclean > 1000) ? 1 : 0;
+  quality |= (nclean > 2000) ? 1 : 0;
   ok = drms_setkey_int(outRec, "ARM_QUAL", quality);
   if (ok != DRMS_SUCCESS) not_ok++;
 
@@ -288,8 +288,8 @@ setkey_model_params(DRMS_Record_t *outRec,
   // offdisk is always 0
   ok = drms_setkey_int(outRec, "OFFDISK", 0);
   if (ok != DRMS_SUCCESS) not_ok++;
-  // on-patch mask is always 64
-  ok = drms_setkey_int(outRec, "ON_PATCH", 64);
+  // on-patch mask is always 32
+  ok = drms_setkey_int(outRec, "ON_PATCH", 32);
   if (ok != DRMS_SUCCESS) not_ok++;
   // add class numbers
   for (inx = 0; model2key[inx] != NULL; inx += 2) {
@@ -398,7 +398,7 @@ ModuleArgs_t module_args[] =
    {ARG_FLOAT,   kParEdge,   "2.5",        "Limb width set-to-quiet (pixels)"},
    {ARG_FLOATS,  kParIter,   "[0,0.05]",   "Iterations (RV(2))"},
    {ARG_FLOATS,  kParT,      "[1,1,0.9,0]","Temperature (RV(4))"},
-   {ARG_FLOAT,   kParBeta,   "0.4",        "Smoothness"},
+   {ARG_FLOAT,   kParBeta,   "0.3",        "Smoothness"},
    {ARG_FLOAT,   kParRho,    "100",        "Smoothness Anisotropy"},
    {ARG_STRING,  kParModel,  "",           "Model set name (`/builtin/all' for list)"},
    {ARG_STRING,  kSeriesOut, "",           "Output data series."},
