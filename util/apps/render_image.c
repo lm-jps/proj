@@ -312,13 +312,13 @@ int DoIt(void)
     {
     // output to a record segment
     fileonly = 0;
-   if (strcmp(inRS->records[0]->seriesinfo->seriesname, outQuery) == 0)
+    if (strcmp(inRS->records[0]->seriesinfo->seriesname, outQuery) == 0)
       outRS = drms_clone_records(inRS, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
-   else
-     outRS = drms_create_records(drms_env, nrecs, outQuery, DRMS_PERMANENT, &status);
-   if (status)
-     DIE("Output recordset not created");
-   }
+    else
+      outRS = drms_create_records(drms_env, nrecs, outQuery, DRMS_PERMANENT, &status);
+    if (status)
+      DIE("Output recordset not created");
+    }
 
   for (irec=0; irec<nrecs; irec++)
     {
@@ -326,7 +326,6 @@ int DoIt(void)
     DRMS_Array_t *srcArray;
     DRMS_Segment_t *srcSeg;
     ObsInfo_t *ObsLoc;
-// fprintf(stderr,"begin record %d\n",irec);
  
     char imageID[100];
     inRec = inRS->records[irec];
@@ -335,20 +334,6 @@ int DoIt(void)
       {
       fprintf(stderr,"Quality bad for rec %d\n", irec);
       continue;
-      // srcSeg = NULL;
-      // srcArray = NULL;
-      // status = 1;
-      // if (srcNx > 0 && srcNy > 0)
-        // {
-        // int i, n = srcNx*srcNy;
-        // float *data;
-        // int dims[] = {srcNx,srcNy};
-        // srcArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, NULL, &status);
-        // data = (float *)srcArray->data;
-        // for (i=0; i<n; i++) data[i] = DRMS_MISSING_FLOAT;
-        // }
-      // else
-        // continue;
       }
     else
       {
@@ -502,10 +487,12 @@ int DoIt(void)
       }
     drms_free_array(srcArray);
     }
-
+fprintf(stderr,"render_image done, irec=%d\n",irec);
   drms_close_records(inRS, DRMS_FREE_RECORD);
+fprintf(stderr,"render_image close in records done\n");
   if (!fileonly && outRS)
     drms_close_records(outRS, DRMS_INSERT_RECORD);
+fprintf(stderr,"leaving module\n");
   return (DRMS_SUCCESS);
   } // end of DoIt
 
