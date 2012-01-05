@@ -45,6 +45,13 @@
 use FileHandle;
 use Fcntl ':flock';
 
+use constant kExportDir => "/home/jsoc/exports";
+use constant kMailList => "arta\@sun.stanford.edu jeneen\@sun.stanford.edu phil\@sun.stanford.edu";
+use constant kMailMessage1 => "exportmanage.pl could not start jsoc_export_manage. This is a critical failure.\nYou should probably contact Art, who was also notified and should respond shortly.\n";
+use constant kMailMessage2 => "jsoc_export_manage died in response to an unhandled signal (e.g., a segfault).\n";
+use constant kMailMessage3 => "Could not open log export-daemon log file for writing.\nThis is not a critical failure, but we should\nfix this so that we can track-down future export problems more easily.\nContact Art.\n";
+
+
 my($kINTERNALFLAG) = "/home/jsoc/exports/keep_running";
 my($kWEBFLAG) = "/home/jsoc/exports/keep_running_web";
 my($kTESTFLAG) = "/home/jsoc/exports/keep_running_test";
@@ -82,7 +89,9 @@ my($dbuser) = "production";
 my($binpath);
 my($manage) = "jsoc_export_manage";
 my($logfile);
+my($daemonlog);
 my($lckfh);
+my($msg);
 
 while ($arg = shift(@ARGV))
 {
@@ -188,35 +197,103 @@ local $ENV{"JSOC_DBNAME"} = $dbname;
 
 #`touch $runningflag`;
 `echo $$ > $runningflag`;
-$logfile = "/home/jsoc/exports/logs/" . `date +"%F_%R.log"`;
+$logfile = kExportDir . "/logs/" . `date +"%F_%R.log"`;
 open(LOG, ">> $logfile") || die "Couldn't open logfile '$logfile'.\n";
+$daemonlog = kExportDir . "/export.log";
 
 my($datenow) = `date`;
 chomp($datenow);
-print LOG "Started by $ENV{'USER'} at $datenow on machine $ENV{'HOST'} using $dbhost.\n";
+$msg = "Started by $ENV{'USER'} at $datenow on machine $ENV{'HOST'} using $dbhost.\n";
+print LOG $msg;
+
+my($rout);
+my($cmd);
+my($dlogfh);
+my($err) = 0;
+
+unless (GetDLogFH(\$dlogfh, $daemonlog))
+{
+    print $dlogfh $msg;
+    CloseDLog(\$dlogfh);
+}
+
+$cmd = "$binpath/$manage JSOC_DBHOST=$dbhost";
 
 while (1)
 {
-    print LOG `$binpath/$manage JSOC_DBHOST="$dbhost"`;
-#    print "running $binpath/$manage JSOC_DBHOST=\"$dbhost\"\n";
-    if (KeepRunning($runningflag))
-    {
-        sleep(2);
-    }
-    else
-    {
-        print LOG "Stopped by $ENV{'USER'} at " . `date` . ".\n";
-        close(LOG);
-        exit(0);
-    }
+   # print "running $cmd.\n";
+   $rout = qx($cmd 2>&1);
+   
+   if ($? == -1)
+   {
+      open(MAILPIPE, "| /bin/mail -s \"Export Daemon Execution Failure!!\"" . kMailList) || die "Couldn't open 'mail' pipe.\n";
+      print MAILPIPE kMailMessage1;
+      close(MAILPIPE);
+      $err = 1;
+      last;
+   } 
+   elsif ($? & 127)
+   {
+      # jsoc_export_manage died in response to an unhandled signal
+      my($sig) = $? & 127;
+      open(MAILPIPE, "| /bin/mail -s \"Export Daemon Execution Failure!!\"" . kMailList) || die "Couldn't open 'mail' pipe.\n";
+      print MAILPIPE kMailMessage2;
+      print MAILPIPE "Unhandled signal: $sig.\n";
+      close(MAILPIPE);
+      $err = 1;
+      last;
+         
+   } 
+   elsif (($? >> 8) != 0)
+   {
+      # jsoc_export_manage returned with an error code
+      unless (GetDLogFH(\$dlogfh, $daemonlog))
+      {
+          print $dlogfh "$manage returned with a non-zero code of $? >> 8.\n";
+      }
+   }
+
+   if (length($rout) > 0)
+   {
+       unless (GetDLogFH(\$dlogfh, $daemonlog))
+       {
+           print $dlogfh "$rout\n";
+       }
+   }
+
+   CloseDLog(\$dlogfh);
+      
+   if (KeepRunning($runningflag))
+   {
+      sleep(2);
+   } 
+   else
+   {
+      last;
+   }
 }
+
+$msg = "Stopped by $ENV{'USER'} at " . `date` . ".\n";
+unless (GetDLogFH(\$dlogfh, $daemonlog))
+{
+    print $dlogfh $msg;
+    CloseDLog(\$dlogfh);
+}
+
+print LOG $msg;
+close(LOG);
+
+# Don't leave junk laying about
+CleanRunFlag($runningflag);
 
 # release the exclusive file lock
 flock($lckfh, LOCK_UN);
 $lckfh->close;
 
+exit($err);
+
 # END
-sub KeepRunning
+sub IOwnRunFlag
 {
    my($file) = $_[0];
    my($fexists);
@@ -236,6 +313,58 @@ sub KeepRunning
    }
 
    return $fexists && $iownit;
+}
+
+sub KeepRunning
+{
+   my($file) = $_[0];
+
+   return IOwnRunFlag($file)
+}
+
+sub CleanRunFlag
+{
+   my($file) = $_[0];
+
+   if (IOwnRunFlag($file))
+   {
+      unlink($file);
+   }
+}
+
+sub GetDLogFH
+{
+    my($rfh) = $_[0]; # reference to filehandle object
+    my($dlog) = $_[1];
+    my($err);
+
+    $err = 0;
+
+    if (!defined($$rfh))
+    {
+        $$rfh = FileHandle->new(">>$dlog");
+
+        if (!defined($$rfh))
+        {
+            open(MAILPIPE, "| /bin/mail -s \"Export Daemon Log Unavailable\"" . kMailList) || die "Couldn't open 'mail' pipe.\n";
+            print MAILPIPE kMailMessage3;
+            close(MAILPIPE);
+            $err = 1;
+        }
+    }
+
+    return $err;
+}
+
+sub CloseDLog
+{
+    my($rfh) = $_[0]; # reference to filehandle object 
+
+    if (defined($$rfh))
+    {
+        $$rfh->close();
+        undef($$rfh);
+    }
 }
 
 __DATA__
