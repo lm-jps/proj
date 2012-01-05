@@ -199,6 +199,7 @@ int abortflg = 0;
 int sigalrmflg = 0;             // set on signal so prog will know 
 int ignoresigalrmflg = 0;       // set after a close_image()
 int firstfound = 0;		// set if see any file after startup
+int rexmitmode = 0;		// set if this process is doing /rexmit dir
 int ALRMSEC = 60;               // must get 2 in a row for no image timeout
 int sleep_interval = 2;		// #of sec to sleep after do_ingest() calls
 char logname[128];
@@ -1714,8 +1715,13 @@ void setup()
   }
   strcpy(pchan, vc);		// virtual channel primary 
   sprintf(stopfile, "/usr/local/logs/lev0/%s_stop", pchan);
-  sprintf(string, "/bin/rm -f %s", stopfile);	//remove any stop file
-  system(string);
+  //Dont rm stopfile any more (1/6/2012). 
+  //With the new rexmit dir there is a second
+  //ingest_lev0 running on a VC and it needs the stop file too.
+  //The stop file is removed when ingest_lev0 is started by
+  //doingestlev0_[HMI,AIA].pl
+  //sprintf(string, "/bin/rm -f %s", stopfile);	//remove any stop file
+  //system(string);
   for(i=0; ; i++) {		// ck for valid and get redundant chan 
     if(!strcmp(p_r_chan_pairs[i].pchan, pchan)) {
       strcpy(rchan, p_r_chan_pairs[i].rchan);
@@ -1812,6 +1818,7 @@ int DoIt(void)
   tlmdir = cmdparams_get_str(&cmdparams, "indir", NULL);
   outdir = cmdparams_get_str(&cmdparams, "outdir", NULL);
   logfile = cmdparams_get_str(&cmdparams, "logfile", NULL);
+  if(strstr(tlmdir, "rexmit")) { rexmitmode = 1; }
   if (strcmp(vc, NOTSPECIFIED) == 0) {
     fprintf(stderr, "'vc' virt channel must be specified.  Abort\n");
     return(1);
@@ -1899,13 +1906,17 @@ int DoIt(void)
     if(cntsleeps == 0) {	//file was seen
       if(paused) {		//send resume data flow msg
         paused = 0;
-        send_mail("tlm files seen again for ingest_lev0 for %s\n", pchan);
+        if(!rexmitmode) {
+          send_mail("tlm files seen again for ingest_lev0 for %s\n", pchan);
+        }
       }
     }
     cntsleeps++;		//#of 2sec sleeps w/o any files in do_ingest()
     if(cntsleeps > 300) {	// >600sec w/o any files
       if(!paused) {
-        send_mail("No files seen for ingest_lev0 for %s for 600sec\n", pchan);
+        if(!rexmitmode) {
+          send_mail("No files seen for ingest_lev0 for %s for 600sec\n", pchan);
+        }
         paused = 1;
       }
     }
