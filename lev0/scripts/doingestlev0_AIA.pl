@@ -1,7 +1,12 @@
 #!/usr/bin/perl 
 #/home/production/cvs/JSOC/proj/lev0/apps/doingestlev0_AIA.pl
-#Start up the (four) two ingest_lev0 programs and periodically cause them
+#Start up the four ingest_lev0 programs and periodically cause them
 #to exit and then restart them.
+#ingest_lev0 vc=VC01 indir=/dds/soc2pipe/aia
+#ingest_lev0 vc=VC04 indir=/dds/soc2pipe/aia
+#ingest_lev0 vc=VC01 indir=/dds/soc2pipe/aia/rexmit
+#ingest_lev0 vc=VC04 indir=/dds/soc2pipe/aia/rexmit
+
 #
 $user = "388";
 if($user ne "388") {
@@ -47,6 +52,11 @@ if(system($rmcmd1)) {
 #Now do the initial start of the 4 ingest_lev0
 $cmd0 = "ingest_lev0 --loopconn  vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
 $cmd1 = "ingest_lev0 --loopconn  vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
+$log4 = sprintf("/usr/local/logs/lev0/%sX", @lognames[0]);
+$log5 = sprintf("/usr/local/logs/lev0/%sX", @lognames[1]);
+$cmd4 = "ingest_lev0 --loopconn  vc=@vcnames[0] indir=/dds/soc2pipe/aia/rexmit logfile=$log4 &";
+$cmd5 = "ingest_lev0 --loopconn  vc=@vcnames[1] indir=/dds/soc2pipe/aia/rexmit logfile=$log5 &";
+
 #$cmd2 = "ingest_lev0 --loopconn  vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
 #$cmd3 = "ingest_lev0 --loopconn  vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
 print "$cmd0\n";
@@ -56,6 +66,14 @@ if(system($cmd0)) {
 print "$cmd1\n";
 if(system($cmd1)) {
   print "Failed: $cmd1\n";
+}
+print "$cmd4\n";
+if(system($cmd4)) {
+  print "Failed: $cmd4\n";
+}
+print "$cmd5\n";
+if(system($cmd5)) {
+  print "Failed: $cmd5\n";
 }
 #print "$cmd2\n";
 #if(system($cmd2)) {
@@ -130,16 +148,15 @@ while(1) {
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
-      #`$rmcmd2`;
-      #$cmd = "ingest_lev0 --loopconn -r vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
-      #if(system($cmd)) {
-      #  print "Failed: $cmd\n";
-      #}
-      #`$rmcmd3`;
-      #$cmd = "ingest_lev0 --loopconn -r vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
-      #if(system($cmd)) {
-      #  print "Failed: $cmd\n";
-      #}
+      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[0] indir=/dds/soc2pipe/aia/rexmit logfile=$log4 &";
+      if(system($cmd)) {
+        print "Failed: $cmd\n";
+      }
+      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[1] indir=/dds/soc2pipe/aia/rexmit logfile=$log5 &";
+      if(system($cmd)) {
+        print "Failed: $cmd\n";
+      }
+
 }
 
 sub ckingest {

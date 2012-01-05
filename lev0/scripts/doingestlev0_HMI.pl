@@ -1,7 +1,11 @@
 #!/usr/bin/perl 
 #/home/production/cvs/JSOC/proj/lev0/apps/doingestlev0_HMI.pl
-#Start up the (four) two ingest_lev0 programs and periodically cause them
-#to exit and then restart them.
+#Start up the four ingest_lev0 programs and periodically cause them
+#to exit and then restart them. These are started:
+#ingest_lev0 vc=VC02 indir=/dds/soc2pipe/hmi
+#ingest_lev0 vc=VC05 indir=/dds/soc2pipe/hmi 
+#ingest_lev0 vc=VC02 indir=/dds/soc2pipe/hmi/rexmit
+#ingest_lev0 vc=VC05 indir=/dds/soc2pipe/hmi/rexmit 
 #
 $user = "388";
 if($user ne "388") {
@@ -49,6 +53,11 @@ if(system($rmcmd3)) {
 #$cmd1 = "ingest_lev0 --loopconn  vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
 $cmd2 = "ingest_lev0 --loopconn  vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
 $cmd3 = "ingest_lev0 --loopconn  vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
+$log4 = sprintf("/usr/local/logs/lev0/%sX", @lognames[2]);
+$log5 = sprintf("/usr/local/logs/lev0/%sX", @lognames[3]);
+$cmd4 = "ingest_lev0 --loopconn  vc=@vcnames[2] indir=/dds/soc2pipe/hmi/rexmit logfile=$log4 &";
+$cmd5 = "ingest_lev0 --loopconn  vc=@vcnames[3] indir=/dds/soc2pipe/hmi/rexmit logfile=$log5 &";
+
 #print "$cmd0\n";
 #if(system($cmd0)) {
 #  print "Failed: $cmd0\n";
@@ -64,6 +73,14 @@ if(system($cmd2)) {
 print "$cmd3\n";
 if(system($cmd3)) {
   print "Failed: $cmd3\n";
+}
+print "$cmd4\n";
+if(system($cmd4)) {
+  print "Failed: $cmd4\n";
+}
+print "$cmd5\n";
+if(system($cmd5)) {
+  print "Failed: $cmd5\n";
 }
 
 print "\nTo cleanly stop all ingest_lev0 and commit any open images, call:\n";
@@ -137,6 +154,14 @@ while(1) {
       }
       `$rmcmd3`;
       $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
+      if(system($cmd)) {
+        print "Failed: $cmd\n";
+      }
+      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[2] indir=/dds/soc2pipe/hmi/rexmit logfile=$log4 &";
+      if(system($cmd)) {
+        print "Failed: $cmd\n";
+      }
+      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[3] indir=/dds/soc2pipe/hmi/rexmit logfile=$log5 &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
