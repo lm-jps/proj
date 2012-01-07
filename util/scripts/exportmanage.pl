@@ -51,6 +51,8 @@ use constant kMailMessage1 => "exportmanage.pl could not start jsoc_export_manag
 use constant kMailMessage2 => "jsoc_export_manage died in response to an unhandled signal (e.g., a segfault).\n";
 use constant kMailMessage3 => "Could not open log export-daemon log file for writing.\nThis is not a critical failure, but we should\nfix this so that we can track-down future export problems more easily.\nContact Art.\n";
 
+use constant kLogFlagInt => "Int";
+use constant kLogFlagExt => "Ext";
 
 my($kINTERNALFLAG) = "/home/jsoc/exports/keep_running";
 my($kWEBFLAG) = "/home/jsoc/exports/keep_running_web";
@@ -92,6 +94,7 @@ my($logfile);
 my($daemonlog);
 my($lckfh);
 my($msg);
+my($logflag);
 
 while ($arg = shift(@ARGV))
 {
@@ -129,6 +132,7 @@ while ($arg = shift(@ARGV))
         $dbhost = $kJSOCDEV_DBHOST;
         $manage = $kJSOCDEV_MANAGE;
         $runningflag = $kINTERNALFLAG;
+        $logflag = kLogFlagInt;
     }
     elsif ($arg eq "-jsocpro")
     {
@@ -139,6 +143,7 @@ while ($arg = shift(@ARGV))
         $dbhost = $kJSOCPRO_DBHOST;
         $manage = $kJSOCPRO_MANAGE;
         $runningflag = $kINTERNALFLAG;
+        $logflag = kLogFlagInt;
     }
     elsif ($arg eq "-jsocweb")
     {
@@ -149,6 +154,7 @@ while ($arg = shift(@ARGV))
         $dbhost = $kJSOCWEB_DBHOST;
         $manage = $kJSOCWEB_MANAGE;
         $runningflag = $kWEBFLAG;
+        $logflag = kLogFlagExt;
     }
     elsif ($arg eq "-jsoctest")
     {
@@ -159,6 +165,7 @@ while ($arg = shift(@ARGV))
         $dbhost = $kJSOCTEST_DBHOST;
         $manage = $kJSOCTEST_MANAGE;
         $runningflag = $kTESTFLAG;
+        $logflag = "Test";
     }
 }
 
@@ -199,7 +206,7 @@ local $ENV{"JSOC_DBNAME"} = $dbname;
 `echo $$ > $runningflag`;
 $logfile = kExportDir . "/logs/" . `date +"%F_%R.log"`;
 open(LOG, ">> $logfile") || die "Couldn't open logfile '$logfile'.\n";
-$daemonlog = kExportDir . "/export.log";
+$daemonlog = kExportDir . "/exportlog${logflag}.txt";
 
 my($datenow) = `date`;
 chomp($datenow);
@@ -226,23 +233,18 @@ while (1)
    
    if ($? == -1)
    {
-      open(MAILPIPE, "| /bin/mail -s \"Export Daemon Execution Failure!!\"" . kMailList) || die "Couldn't open 'mail' pipe.\n";
+      open(MAILPIPE, "| /bin/mail -s \"Export Daemon Execution Failure!!\" " . kMailList) || die "Couldn't open 'mail' pipe.\n";
       print MAILPIPE kMailMessage1;
       close(MAILPIPE);
-      $err = 1;
-      last;
    } 
    elsif ($? & 127)
    {
       # jsoc_export_manage died in response to an unhandled signal
       my($sig) = $? & 127;
-      open(MAILPIPE, "| /bin/mail -s \"Export Daemon Execution Failure!!\"" . kMailList) || die "Couldn't open 'mail' pipe.\n";
+      open(MAILPIPE, "| /bin/mail -s \"Export Daemon Execution Failure!!\" " . kMailList) || die "Couldn't open 'mail' pipe.\n";
       print MAILPIPE kMailMessage2;
       print MAILPIPE "Unhandled signal: $sig.\n";
       close(MAILPIPE);
-      $err = 1;
-      last;
-         
    } 
    elsif (($? >> 8) != 0)
    {
@@ -346,7 +348,7 @@ sub GetDLogFH
 
         if (!defined($$rfh))
         {
-            open(MAILPIPE, "| /bin/mail -s \"Export Daemon Log Unavailable\"" . kMailList) || die "Couldn't open 'mail' pipe.\n";
+            open(MAILPIPE, "| /bin/mail -s \"Export Daemon Log Unavailable\" " . kMailList) || die "Couldn't open 'mail' pipe.\n";
             print MAILPIPE kMailMessage3;
             close(MAILPIPE);
             $err = 1;
