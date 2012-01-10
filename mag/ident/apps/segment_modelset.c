@@ -210,10 +210,10 @@ seg_model_M_Ic_noLD_V1_720s = {
     // this is a list of seg_onemodel_t structures
     {"quiet Sun",     
      sizeof(seg_model_qs_M_Ic_noLD_V1_720s)/SEG_MODEL_ONEROW, 
-     seg_model_qs_M_Ic_noLD_720s}, 
+     seg_model_qs_M_Ic_noLD_V1_720s}, 
     {"active region", 
      sizeof(seg_model_ar_M_Ic_noLD_V1_720s)/SEG_MODEL_ONEROW, 
-     seg_model_ar_M_Ic_noLD_720s}
+     seg_model_ar_M_Ic_noLD_V1_720s}
   }
 };
 
