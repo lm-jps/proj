@@ -42,7 +42,9 @@
 #include <dirent.h>
 #include <unistd.h> /* for alarm(2) among other things... */
 #include <printk.h>
-#include "egsehmicomp.h"
+#include "hmi_compression.h"
+#include "decompress.h"
+#include "load_hk_config_files.h"
 
 
 #define LEV0FILEON "/usr/local/logs/soc/LEV0FILEON" //touch to turnon lev0
@@ -899,7 +901,10 @@ void do_pipe2soc() {
         printk("%s", line);
         su_name = (char *)strtok(line, " ");
         ptape_id = (char *)strtok(NULL, " ");
-        ptape_fn = atoi((char *)strtok(NULL, " "));
+        //ptape_fn = atoi((char *)strtok(NULL, " "));
+        errno = 0;
+        ptape_fn = (int)strtol((char *)strtok(NULL, " "), (char **) NULL, 10);
+        if(errno) continue;	//!!TBD ck what to do here
         ptape_date = (char *)strtok(NULL, "\n");
         if(SUMLIB_SafeTapeUpdate(su_name,ptape_id,ptape_fn,ptape_date)) {
           printk("**ERROR in SUMLIB_SafeTapeUpdate(%s...)\n", su_name);
@@ -934,7 +939,7 @@ void do_ingest()
   float ttmp;
   int found, i, j, status;
   char name[128], line[128], mvname[128], tlmfile[128], tlmname[96];
-  char cmd[128], xxname[128], tlmsize[80];
+  char cmd[128], xxname[128], tlmsize[80], pipedirx[96];
   char *token;
 
   /* init summary timers */
@@ -1089,15 +1094,21 @@ void do_ingest()
     }
 
     /*StartTimer(7);*/
-    //must move .tlm file first
-    sprintf(cmd, "/bin/mv -f %s %s", tlmfile, pipedir);
-    printk("*mv tlm file to %s\n", pipedir);
+    //must move .tlm file first. Use special dir if a qacx pair
+    if(strstr(name, ".qacx")) {	 //the .tlm and .qacx go to their own pipe dir
+      sprintf(pipedirx, "%s/rexmit", pipedir);
+    }
+    else {
+      sprintf(pipedirx, "%s", pipedir);
+    }
+    sprintf(cmd, "/bin/mv -f %s %s", tlmfile, pipedirx);
+    printk("*mv tlm file to %s\n", pipedirx);
     printk("%s\n", cmd);
     if(system(cmd)) {
       printk("***Error on: %s\n", cmd);
     }
-    sprintf(cmd, "/bin/mv -f %s %s", name, pipedir);
-    printk("*mv qac file to %s\n", pipedir);
+    sprintf(cmd, "/bin/mv -f %s %s", name, pipedirx);
+    printk("*mv qac file to %s\n", pipedirx);
     printk("%s\n", cmd);
     if(system(cmd)) {
       printk("***Error on: %s\n", cmd);
