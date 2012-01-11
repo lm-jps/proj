@@ -46,7 +46,8 @@ use FileHandle;
 use Fcntl ':flock';
 
 use constant kExportDir => "/home/jsoc/exports";
-use constant kMailList => "arta\@sun.stanford.edu jeneen\@sun.stanford.edu phil\@sun.stanford.edu";
+# use constant kMailList => "arta\@sun.stanford.edu jeneen\@sun.stanford.edu phil\@sun.stanford.edu";
+use constant kMailList => "arta\@sun.stanford.edu";
 use constant kMailMessage1 => "exportmanage.pl could not start jsoc_export_manage. This is a critical failure.\nYou should probably contact Art, who was also notified and should respond shortly.\n";
 use constant kMailMessage2 => "jsoc_export_manage died in response to an unhandled signal (e.g., a segfault).\n";
 use constant kMailMessage3 => "Could not open log export-daemon log file for writing.\nThis is not a critical failure, but we should\nfix this so that we can track-down future export problems more easily.\nContact Art.\n";
