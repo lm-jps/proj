@@ -12,6 +12,8 @@ dir     := $(d)/pfss
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/ambig
 -include                $(SRCDIR)/$(dir)/Rules.mk
+dir     := $(d)/harp
+-include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/ident
 -include                $(SRCDIR)/$(dir)/Rules.mk
 dir     := $(d)/patch
