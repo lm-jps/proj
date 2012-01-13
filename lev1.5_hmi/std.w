@@ -1,4 +1,4 @@
-#! $Id: std.w,v 1.4 2011/07/12 20:23:52 couvidat Exp $
+#! $Id: std.w,v 1.5 2012/01/13 23:50:55 couvidat Exp $
 #! $Name:  $
 #! Description: Standard Wavelength tuning table
 #  File created by:  J. Drake
@@ -542,3 +542,23 @@
 637   58   72	 0    58 # Cotune_110707
 638   61   66	 0   106 # Cotune_110707
 639   64   60	 0    94 # Cotune_110707
+640    7   53    0    81 # Cotune_120118
+641   10   47    0    69 # Cotune_120118
+642   13   41    0    57 # Cotune_120118
+643   16   35    0   105 # Cotune_120118
+644   19   29    0    93 # Cotune_120118
+645   22   23    0    81 # Cotune_120118
+646   25   77    0    69 # Cotune_120118
+647   28   71    0    57 # Cotune_120118
+648   31   65    0   105 # Cotune_120118
+649   34   59    0    93 # Cotune_120118
+650   37   53    0    81 # Cotune_120118
+651   40   47    0    69 # Cotune_120118
+652   43   41    0    57 # Cotune_120118
+653   46   35    0   105 # Cotune_120118
+654   49   29    0    93 # Cotune_120118
+655   52   23    0    81 # Cotune_120118
+656   55   77    0    69 # Cotune_120118
+657   58   71    0    57 # Cotune_120118
+658   61   65    0   105 # Cotune_120118
+659   64   59    0    93 # Cotune_120118
