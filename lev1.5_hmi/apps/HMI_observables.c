@@ -355,9 +355,9 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   strcpy(dpath2,dpath);
   filename =strdup(strcat(dpath2,"/../Sequences3.txt"));
   strcpy(dpath2,dpath);
-  filename2=strdup(strcat(dpath2,"/../std.w"));
+  filename2=strdup(strcat(dpath2,"/../../tables/hmi_mech/std_flight.w"));
   strcpy(dpath2,dpath);
-  filename3=strdup(strcat(dpath2,"/../std.p"));
+  filename3=strdup(strcat(dpath2,"/../../tables/hmi_mech/std_flight.p"));
 
   char line[256];
   int  PL_Index[MaxNumFiltergrams],WL_Index[MaxNumFiltergrams];
@@ -1056,7 +1056,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.30 2011/12/06 18:11:03 arta Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.31 2012/01/18 22:13:39 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/

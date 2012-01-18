@@ -341,9 +341,9 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   strcpy(dpath2,dpath);
   filename =strdup(strcat(dpath2,"/../Sequences3.txt"));
   strcpy(dpath2,dpath);
-  filename2=strdup(strcat(dpath2,"/../std.w"));
+  filename2=strdup(strcat(dpath2,"/../../tables/hmi_mech/std_flight.w"));
   strcpy(dpath2,dpath);
-  filename3=strdup(strcat(dpath2,"/../std.p"));
+  filename3=strdup(strcat(dpath2,"/../../tables/hmi_mech/std_flight.p"));
 
 
   char line[256];
@@ -961,7 +961,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.22 2011/12/06 18:11:03 arta Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.23 2012/01/18 22:13:54 couvidat Exp $");
 }
 
 
