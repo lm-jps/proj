@@ -530,7 +530,7 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 
 
 
-  //WE READ THE sdt.w AND std.p FILES THAT PROVIDE, FOR THE HPLTID AND HWLTID VALUES, THE CORRESPONDING HCM POSITIONS
+  //WE READ THE std.w AND std.p FILES THAT PROVIDE, FOR THE HPLTID AND HWLTID VALUES, THE CORRESPONDING HCM POSITIONS
   //------------------------------------------------------------------------------------------------------------------
 
   sequencefile = fopen(filename2,"r");
@@ -549,15 +549,18 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   for(j=0;j<6;++j) fgets(line,256,sequencefile);
   while (fgets(line,256,sequencefile) != NULL)
     {
-      sscanf(line,"%d %d %d %d %d",&j,&WT1P,&WT2P,&WT3P,&WT4P);
-      for(i=0;i<framelistSize;++i)
+      if(line[0] != '#')
 	{
-	  if(j == WL_Index[i])
+	  sscanf(line,"%d %d %d %d %d",&j,&WT1P,&WT2P,&WT3P,&WT4P);
+	  for(i=0;i<framelistSize;++i)
 	    {
-	      PHWPLPOS[i*7  ]=WT1P;
-	      PHWPLPOS[i*7+1]=WT2P;
-	      PHWPLPOS[i*7+2]=WT3P;
-	      PHWPLPOS[i*7+3]=WT4P;
+	      if(j == WL_Index[i])
+		{
+		  PHWPLPOS[i*7  ]=WT1P;
+		  PHWPLPOS[i*7+1]=WT2P;
+		  PHWPLPOS[i*7+2]=WT3P;
+		  PHWPLPOS[i*7+3]=WT4P;
+		}
 	    }
 	}
     }
@@ -579,14 +582,17 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   for(j=0;j<6;++j) fgets(line,256,sequencefile);
   while (fgets(line,256,sequencefile) != NULL)
     {
-      sscanf(line,"%d %d %d %d",&j,&PS1P,&PS2P,&PS3P);
-      for(i=0;i<framelistSize;++i)
+      if(line[0] != '#')
 	{
-	  if(j == PL_Index[i])
+	  sscanf(line,"%d %d %d %d",&j,&PS1P,&PS2P,&PS3P);
+	  for(i=0;i<framelistSize;++i)
 	    {
-	      PHWPLPOS[i*7+4]=PS1P;
-	      PHWPLPOS[i*7+5]=PS2P;
-	      PHWPLPOS[i*7+6]=PS3P;
+	      if(j == PL_Index[i])
+		{
+		  PHWPLPOS[i*7+4]=PS1P;
+		  PHWPLPOS[i*7+5]=PS2P;
+		  PHWPLPOS[i*7+6]=PS3P;
+		}
 	    }
 	}
     }
@@ -961,7 +967,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.23 2012/01/18 22:13:54 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.24 2012/01/18 23:28:30 couvidat Exp $");
 }
 
 
