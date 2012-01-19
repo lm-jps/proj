@@ -114,12 +114,14 @@ int DoIt(void) {
   char *COEFF3S  = "COEFF3";
   char *NDATAS   = "NDATA";
   char *CROTA2S  = "CROTA2";
+  char *MISSVALS = "MISSVALS";
 
   double *RAWMEDN=NULL;
   double *OBSVR=NULL;
   double *A=NULL,*coeffd=NULL;
   double temp=0.0;
   float *CROTA2=NULL;
+  int *MISSVAL=NULL;
 
   int *QUALITY=NULL;
   int *CALFSN=NULL;
@@ -182,6 +184,12 @@ int DoIt(void) {
       return 1;//exit(EXIT_FAILURE);
     }
 
+  MISSVAL = (int *) malloc(nRecs1*sizeof(int)); 
+  if(MISSVAL == NULL)
+    {
+      printf("Error: memory could not be allocated to MISSVAL\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
 
   nsample=nRecs1;
   j=0;
@@ -196,8 +204,9 @@ int DoIt(void) {
       OBSVR[j]  = temp/6500.;          //to make the polynomial fit better; DESPITE THE NAME, OBSVR IS ACTUALLY RAWMEDN
       CALFSN[j] = drms_getkey_int(recLev1->records[i],CALFSNS,&status);
       CROTA2[j] = drms_getkey_float(recLev1->records[i],CROTA2S,&status);
+      MISSVAL[j]= drms_getkey_int(recLev1->records[i],MISSVALS,&status);
 
-      if(isnan(RAWMEDN[j]) || isnan(OBSVR[j]) || (QUALITY[j] & QUAL_ISSTARGET) == QUAL_ISSTARGET || fabs(RAWMEDN[j]-OBSVR[j]) > 1000. || (QUALITY[j] & QUAL_ECLIPSE) == QUAL_ECLIPSE || fabs(CROTA2[j]-180.) > 5.0) 
+      if(isnan(RAWMEDN[j]) || isnan(OBSVR[j]) || (QUALITY[j] & QUAL_ISSTARGET) == QUAL_ISSTARGET || fabs(RAWMEDN[j]-OBSVR[j]) > 1000. || (QUALITY[j] & QUAL_ECLIPSE) == QUAL_ECLIPSE || fabs(CROTA2[j]-180.) > 5.0 || MISSVAL[j] > 10000) 
 	{
 	  j-=1;
 	  nsample-=1;
@@ -238,6 +247,7 @@ int DoIt(void) {
   if(nsample < mindata)
     {
       printf("NUMBER OF AVAILABLE DATA %d IS BELOW MINIMUM NUMBER %d\n",nsample,mindata);
+      printf("IF THE CODE IS NOT FORCED, IT WILL NOT PRODUCE ANY OUTPUT RECORD\n");
       if(forced2 == 0) return 1;
     }
 
@@ -370,6 +380,7 @@ int DoIt(void) {
   free(QUALITY);
   free(CALFSN);
   free(CROTA2);
+  free(MISSVAL);
 
   return error;
   
