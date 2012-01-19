@@ -40,7 +40,8 @@ LIBRARY = $(LIBMEX2C) $(LIBMEX2MATL)
 INCLUDE = mex.h
 
 # includes (need other package dirs)
-CPPFLAGS += -I$(JSOC_ROOT)/include -I../util
+#CPPFLAGS += -I$(JSOC_ROOT)/include -I../util
+CPPFLAGS += -I$(JSOC_ROOT)/include -I$(OUTDIR)/$(CSDIR)/../util
 
 # default target
 all:$(LIBRARY)
@@ -57,7 +58,7 @@ LIBMEX2MATL_OBJ	:= $(addprefix $(OUTDIR)/$(CSDIR)/, mex2matlab.o)
 $(LIBMEX2MATL):	$(LIBMEX2MATL_OBJ)
 	ar crus $@ $^
 
-$(LIBMEX2C_OBJ)	: $(notdir $(LIBMEX2C_OBJ:%.o=%.c))
+$(LIBMEX2C_OBJ)	: $(notdir $(LIBMEX2C_OBJ:%.o=%.c)) $(OUTDIR)/$(CSDIR)/../util/mexhead.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ -c $<
 
 $(LIBMEX2MATL_OBJ)	: $(notdir $(LIBMEX2MATL_OBJ:%.o=%.c))
