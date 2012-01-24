@@ -9,6 +9,13 @@ d               := $(dir)
 OUTDIR		:= $(WORKINGDIR)/_$(MACH)
 PSDIR		:= $(d)
 
+# Set the MEXEXT variable used in the lower-level make files
+ifeq ($(JSOC_MACHINE), linux_x86_64) 
+  MEXEXT := mexa64
+else
+  MEXECT := mexa32
+endif
+
 # Util libraries
 UTILSDIR	:= mex/src/util
 CSDIRUTIL	:= $(PSDIR)/$(UTILSDIR)
@@ -46,7 +53,6 @@ S1MEX2C_$(d)		:= $(addprefix $(PSDIR)/$(MEX2CSDIR)/, $(SMEX2C_$(d)))
 # to come up with a path relative to where you think make is, just avoid relative paths altogether.
 $(LIBMEX2C) $(LIBMEX2MATL):
 	$(MAKE) -C $(WORKINGDIR)/$(PSDIR)/$(MEX2CSDIR) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRMEX2C) $@
-#        $(MAKE) -C mfile-mex OUTDIR=$(CURDIR)/$(d) $@
 
 .PHONY:	$(SMEX2C_$(d))
 $(SMEX2C_$(d)):	%:	$(OUTDIR)/$(PSDIR)/$(MEX2CSDIR)/%
@@ -54,8 +60,62 @@ $(SMEX2C_$(d)):	%:	$(OUTDIR)/$(PSDIR)/$(MEX2CSDIR)/%
 .PHONY:	$(S1MEX2C_$(d))
 $(S1MEX2C_$(d)):	%:	$(OUTDIR)/%
 
+# mfile-mex dir libraries and files
 
-TGT_LIB         := $(TGT_LIB) $(LIBMEX2MATL) $(LIBMEX2C) $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER)
+MFILEMEXDIR	:= mfile-mex
+
+# standalone libraries
+CSDIRSTANDALONE	:= $(PSDIR)/$(MFILEMEXDIR)/standalone
+MEXSTANDALONE	:= mexstandalone
+
+# generate the dynamic libraries, used by matlab
+SASRC 		:= $(shell egrep -l '^mexFunction' `find $(WORKINGDIR)/$(CSDIRSTANDALONE) -maxdepth 1 -name '*.c'` /dev/null;  exit 0)
+SAMEXFILES	:= $(addprefix $(OUTDIR)/$(CSDIRSTANDALONE)/, $(notdir $(SASRC:%.c=%.$(MEXEXT))))
+
+
+SSAMEXFILES_$(d)	:= $(notdir $(SAMEXFILES))
+S1SAMEXFILES_$(d)	:= $(addprefix $(CSDIRSTANDALONE)/, $(SSAMEXFILES_$(d)))
+
+# combine $(SAMEXFILES) with the rule for $(MEXSTANDALONE)
+
+$(SAMEXFILES) $(MEXSTANDALONE):
+	$(MAKE) -C $(WORKINGDIR)/$(CSDIRSTANDALONE) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRSTANDALONE) MEXEXT=$(MEXEXT) $@
+
+
+.PHONY: $(SSAMEXFILES_$(d))
+$(SSAMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRSTANDALONE)/%
+
+.PHONY:	$(S1SAMEXFILES_$(d))
+$(S1SAMEXFILES_$(d)):	%:	$(OUTDIR)/%
+
+
+
+
+
+# assignment libraries
+CSDIRASSIGN	:= $(PSDIR)/$(MFILEMEXDIR)/assignment
+MEXASSIGN	:= mexassign
+
+$(MEXASSIGN):
+	$(MAKE) -C $(WORKINGDIR)/$(CSDIRASSIGN) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRASSIGN) MEXEXT=$(MEXEXT) $@
+
+# fits libraries
+CSDIRFITS	:= $(PSDIR)/$(MFILEMEXDIR)/fits
+MEXFITS		:= mexfits
+
+$(MEXFITS):
+	$(MAKE) -C $(WORKINGDIR)/$(CSDIRFITS) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRFITS) MEXEXT=$(MEXEXT) $@
+
+
+# hmi-mask-path libraries
+CSDIRHMIMASK	:= $(PSDIR)/$(MFILEMEXDIR)/hmi-mask-patch
+MEXHMIMASK	:= mexhmimask
+
+$(MEXHMIMASK):
+	$(MAKE) -C $(WORKINGDIR)/$(CSDIRHMIMASK) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRHMIMASK) MEXEXT=$(MEXEXT) $@
+
+
+TGT_LIB         := $(TGT_LIB) $(LIBMEX2MATL) $(LIBMEX2C) $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER) $(MEXSTANDALONE) $(MEXASSIGN) $(MEXFITS) $(MEXHMIMASK)
 
 # Standard things                                                                
 -include        $(DEP_$(d))
