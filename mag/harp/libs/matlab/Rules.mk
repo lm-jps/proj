@@ -27,7 +27,7 @@ SUTIL_$(d)		:= $(notdir $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER))
 S1UTIL_$(d)		:= $(addprefix $(PSDIR)/$(UTILSDIR)/, $(SUTIL_$(d)))
 
 $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER):
-	$(MAKE) -C $(WORKINGDIR)/$(PSDIR)/$(UTILSDIR) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRUTIL) $@
+	$(MAKE) -C $(WORKINGDIR)/$(PSDIR)/$(UTILSDIR) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRUTIL) MEXEXT=$(MEXEXT) $@
 
 .PHONY:	$(SUTIL_$(d))
 $(SUTIL_$(d)):	%:	$(OUTDIR)/$(PSDIR)/$(UTILSDIR)/%
@@ -52,7 +52,7 @@ S1MEX2C_$(d)		:= $(addprefix $(PSDIR)/$(MEX2CSDIR)/, $(SMEX2C_$(d)))
 # Don't rely upon $(PWD) to tell you make's current working directory. It lies! Instead of trying 
 # to come up with a path relative to where you think make is, just avoid relative paths altogether.
 $(LIBMEX2C) $(LIBMEX2MATL):
-	$(MAKE) -C $(WORKINGDIR)/$(PSDIR)/$(MEX2CSDIR) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRMEX2C) $@
+	$(MAKE) -C $(WORKINGDIR)/$(PSDIR)/$(MEX2CSDIR) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRMEX2C) MEXEXT=$(MEXEXT) $@
 
 .PHONY:	$(SMEX2C_$(d))
 $(SMEX2C_$(d)):	%:	$(OUTDIR)/$(PSDIR)/$(MEX2CSDIR)/%

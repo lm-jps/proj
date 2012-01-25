@@ -15,7 +15,7 @@ else
 endif
 # suppress Makefile re-make
 # need -fexceptions to support C++ error handling when called from Matlab
-CFLAGS = -m$(MODE) -fPIC -Wall -O -fexceptions
+CFLAGS = -m$(MODE) -fPIC -Wall -O -fexceptions 
 # CFLAGS = -m$(MODE) -fPIC -Wall -g -fexceptions
 # need "mxArray" definitions for mextool.c
 CPPFLAGS = -I../mex2c
@@ -26,7 +26,6 @@ CMEXPPFLAGS =
 # CC = $(HOME)/unix/gcc-3.3.1/bin/gcc
 # turmon -- this might work with Matlab r2010
 CC = /usr/local/gcc43/bin/gcc
-
 
 # installation locations
 MISCLIBDIR = $(TOP)/lib/$(MEXEXT)  # arch-dependent libs
