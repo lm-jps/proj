@@ -72,7 +72,6 @@ MEXSTANDALONE	:= mexstandalone
 SASRC 		:= $(shell egrep -l '^mexFunction' `find $(WORKINGDIR)/$(CSDIRSTANDALONE) -maxdepth 1 -name '*.c'` /dev/null;  exit 0)
 SAMEXFILES	:= $(addprefix $(OUTDIR)/$(CSDIRSTANDALONE)/, $(notdir $(SASRC:%.c=%.$(MEXEXT))))
 
-
 SSAMEXFILES_$(d)	:= $(notdir $(SAMEXFILES))
 S1SAMEXFILES_$(d)	:= $(addprefix $(CSDIRSTANDALONE)/, $(SSAMEXFILES_$(d)))
 
@@ -88,32 +87,62 @@ $(SSAMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRSTANDALONE)/%
 .PHONY:	$(S1SAMEXFILES_$(d))
 $(S1SAMEXFILES_$(d)):	%:	$(OUTDIR)/%
 
-
-
-
-
 # assignment libraries
 CSDIRASSIGN	:= $(PSDIR)/$(MFILEMEXDIR)/assignment
 MEXASSIGN	:= mexassign
 
-$(MEXASSIGN):
+ASSRC		:= $(shell egrep -l '^mexFunction' `find $(WORKINGDIR)/$(CSDIRASSIGN) -maxdepth 1 -name '*.c'` /dev/null;  exit 0)
+ASMEXFILES	:= $(addprefix $(OUTDIR)/$(CSDIRASSIGN)/, $(notdir $(ASSRC:%.c=%.$(MEXEXT))))
+
+SASMEXFILES_$(d)	:= $(notdir $(ASMEXFILES))
+S1ASMEXFILES_$(d)	:= $(addprefix $(CSDIRASSIGN)/, $(SASMEXFILES_$(d)))
+
+$(ASMEXFILES) $(MEXASSIGN):
 	$(MAKE) -C $(WORKINGDIR)/$(CSDIRASSIGN) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRASSIGN) MEXEXT=$(MEXEXT) $@
+
+.PHONY:	$(SASMEXFILES_$(d))
+$(SASMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRASSIGN)/%
+
+.PHONY: $(S1ASMEXFILES_$(d))
+$(S1ASMEXFILES_$(d)):	%:	$(OUTDIR)/%
 
 # fits libraries
 CSDIRFITS	:= $(PSDIR)/$(MFILEMEXDIR)/fits
 MEXFITS		:= mexfits
 
-$(MEXFITS):
+FTSRC		:= $(shell egrep -l '^mexFunction' `find $(WORKINGDIR)/$(CSDIRFITS) -maxdepth 1 -name '*.c'` /dev/null;  exit 0)
+FTMEXFILES	:= $(addprefix $(OUTDIR)/$(CSDIRFITS)/, $(notdir $(FTSRC:%.c=%.$(MEXEXT))))
+
+SFTMEXFILES_$(d)	:= $(notdir $(FTMEXFILES))
+S1FTMEXFILES_$(d)	:= $(addprefix $(CSDIRFITS)/, $(SFTMEXFILES_$(d)))
+
+$(FTMEXFILES) $(MEXFITS):
 	$(MAKE) -C $(WORKINGDIR)/$(CSDIRFITS) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRFITS) MEXEXT=$(MEXEXT) $@
 
+.PHONY:	$(SFTMEXFILES_$(d))
+$(SFTMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRFITS)/%
+
+.PHONY: $(S1FTMEXFILES_$(d))
+$(S1FTMEXFILES_$(d)):	%:	$(OUTDIR)/%
 
 # hmi-mask-path libraries
 CSDIRHMIMASK	:= $(PSDIR)/$(MFILEMEXDIR)/hmi-mask-patch
 MEXHMIMASK	:= mexhmimask
 
-$(MEXHMIMASK):
+HMSRC		:= $(shell egrep -l '^mexFunction' `find $(WORKINGDIR)/$(CSDIRHMIMASK) -maxdepth 1 -name '*.c'` /dev/null;  exit 0)
+HMMEXFILES	:= $(addprefix $(OUTDIR)/$(CSDIRHMIMASK)/, $(notdir $(HMSRC:%.c=%.$(MEXEXT))))
+
+SHMMEXFILES_$(d)	:= $(notdir $(HMMEXFILES))
+S1HMMEXFILES_$(d)	:= $(addprefix $(CSDIRHMIMASK)/, SHMMEXFILES_$(d))
+
+$(HMMEXFILES) $(MEXHMIMASK):
 	$(MAKE) -C $(WORKINGDIR)/$(CSDIRHMIMASK) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRHMIMASK) MEXEXT=$(MEXEXT) $@
 
+.PHONY: $(SHMMEXFILES_$(d))
+$(SHMMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRHMIMASK)/%
+
+.PHONY: $(S1HMMEXFILES_$(d))
+$(S1HMMEXFILES_$(d)):	%:	$(OUTDIR)/%
 
 TGT_LIB         := $(TGT_LIB) $(LIBMEX2MATL) $(LIBMEX2C) $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER) $(MEXSTANDALONE) $(MEXASSIGN) $(MEXFITS) $(MEXHMIMASK)
 
