@@ -4,8 +4,9 @@ sp              := $(sp).x
 dirstack_$(sp)  := $(d)
 d               := $(dir)
 
-# OUTDIR is the root directory that contains all make-generated binary files
-# PDIR is the sub-directory of OUTDIR that is the parent 
+# OUTDIR is the root directory that contains all make-generated binary files.
+# PDIR is the sub-directory of OUTDIR that is the parent of all the 
+# matlab sub-directories.
 OUTDIR		:= $(WORKINGDIR)/_$(MACH)
 PSDIR		:= $(d)
 
@@ -16,46 +17,51 @@ else
   MEXECT := mexa32
 endif
 
+# ***************
 # Util libraries
+# ***************
 UTILSDIR	:= mex/src/util
 CSDIRUTIL	:= $(PSDIR)/$(UTILSDIR)
-LIBEXRNG	:= $(OUTDIR)/$(PSDIR)/$(UTILSDIR)/libmexrng.a
-LIBMEXTOOLS	:= $(OUTDIR)/$(PSDIR)/$(UTILSDIR)/libmextoolsMW.a
-METAHEADER	:= $(OUTDIR)/$(PSDIR)/$(UTILSDIR)/mexhead.h
+LIBEXRNG	:= $(OUTDIR)/$(CSDIRUTIL)/libmexrng.a
+LIBMEXTOOLS	:= $(OUTDIR)/$(CSDIRUTIL)/libmextoolsMW.a
+METAHEADER	:= $(OUTDIR)/$(CSDIRUTIL)/mexhead.h
 
 SUTIL_$(d)		:= $(notdir $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER))
 S1UTIL_$(d)		:= $(addprefix $(PSDIR)/$(UTILSDIR)/, $(SUTIL_$(d)))
 
 $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER):
-	$(MAKE) -C $(WORKINGDIR)/$(PSDIR)/$(UTILSDIR) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRUTIL) MEXEXT=$(MEXEXT) $@
+	$(MAKE) -C $(WORKINGDIR)/$(CSDIRUTIL) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRUTIL) MEXEXT=$(MEXEXT) $@
 
 .PHONY:	$(SUTIL_$(d))
-$(SUTIL_$(d)):	%:	$(OUTDIR)/$(PSDIR)/$(UTILSDIR)/%
+$(SUTIL_$(d)):	%:	$(OUTDIR)/$(CSDIRUTIL)/%
 
 .PHONY:	$(S1UTIL_$(d))
 $(S1UTIL_$(d)):	%:	$(OUTDIR)/%
 
-
+# ****************
 # mex2c libraries
+# ****************
 
 # Don't even try to re-use variables in the 'recipes' - make will have problems. 
-# I tried re-using CSDIR, and apparently that will cause the value of $(CSDIR) on 
-# line 23 to change, even though line 23 comes before line 36. 
+# I tried using the re-using the variable above that holds the sub-directory
+# and it caused the value of the variable in the make command-line (above) to change,
+# even though that line appears in this file BEFORE the variable-re-use line BELOW.
 MEX2CSDIR	:= mex/src/mex2c
 CSDIRMEX2C	:= $(PSDIR)/$(MEX2CSDIR)
-LIBMEX2C	:= $(OUTDIR)/$(PSDIR)/$(MEX2CSDIR)/libmex2c_lib.a
-LIBMEX2MATL	:= $(OUTDIR)/$(PSDIR)/$(MEX2CSDIR)/libmex2matl.a
+LIBMEX2C	:= $(OUTDIR)/$(CSDIRMEX2C)/libmex2c_lib.a
+LIBMEX2MATL	:= $(OUTDIR)/$(CSDIRMEX2C)/libmex2matl.a
 
 SMEX2C_$(d)		:= $(notdir $(LIBMEX2C) $(LIBMEX2MATL))
-S1MEX2C_$(d)		:= $(addprefix $(PSDIR)/$(MEX2CSDIR)/, $(SMEX2C_$(d)))
+S1MEX2C_$(d)		:= $(addprefix $(CSDIRMEX2C)/, $(SMEX2C_$(d)))
 
-# Don't rely upon $(PWD) to tell you make's current working directory. It lies! Instead of trying 
-# to come up with a path relative to where you think make is, just avoid relative paths altogether.
+# Don't rely upon $(PWD) to tell you make's current working directory. It isnt' correct! 
+# Instead of trying to come up with a path relative to where you think make is, just 
+# avoid relative paths altogether.
 $(LIBMEX2C) $(LIBMEX2MATL):
-	$(MAKE) -C $(WORKINGDIR)/$(PSDIR)/$(MEX2CSDIR) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRMEX2C) MEXEXT=$(MEXEXT) $@
+	$(MAKE) -C $(WORKINGDIR)/$(CSDIRMEX2C) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRMEX2C) MEXEXT=$(MEXEXT) $@
 
 .PHONY:	$(SMEX2C_$(d))
-$(SMEX2C_$(d)):	%:	$(OUTDIR)/$(PSDIR)/$(MEX2CSDIR)/%
+$(SMEX2C_$(d)):	%:	$(OUTDIR)/$(CSDIRMEX2C)/%
 
 .PHONY:	$(S1MEX2C_$(d))
 $(S1MEX2C_$(d)):	%:	$(OUTDIR)/%
@@ -63,8 +69,9 @@ $(S1MEX2C_$(d)):	%:	$(OUTDIR)/%
 # mfile-mex dir libraries and files
 
 MFILEMEXDIR	:= mfile-mex
-
+# *********************
 # standalone libraries
+# *********************
 CSDIRSTANDALONE	:= $(PSDIR)/$(MFILEMEXDIR)/standalone
 MEXSTANDALONE	:= mexstandalone
 
@@ -75,11 +82,11 @@ SAMEXFILES	:= $(addprefix $(OUTDIR)/$(CSDIRSTANDALONE)/, $(notdir $(SASRC:%.c=%.
 SSAMEXFILES_$(d)	:= $(notdir $(SAMEXFILES))
 S1SAMEXFILES_$(d)	:= $(addprefix $(CSDIRSTANDALONE)/, $(SSAMEXFILES_$(d)))
 
-# combine $(SAMEXFILES) with the rule for $(MEXSTANDALONE)
-
-$(SAMEXFILES) $(MEXSTANDALONE):
+$(SAMEXFILES):
 	$(MAKE) -C $(WORKINGDIR)/$(CSDIRSTANDALONE) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRSTANDALONE) MEXEXT=$(MEXEXT) $@
 
+.PHONY: $(MEXSTANDALONE)
+$(MEXSTANDALONE):	$(SAMEXFILES)
 
 .PHONY: $(SSAMEXFILES_$(d))
 $(SSAMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRSTANDALONE)/%
@@ -87,7 +94,9 @@ $(SSAMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRSTANDALONE)/%
 .PHONY:	$(S1SAMEXFILES_$(d))
 $(S1SAMEXFILES_$(d)):	%:	$(OUTDIR)/%
 
+# ********************
 # assignment libraries
+# ********************
 CSDIRASSIGN	:= $(PSDIR)/$(MFILEMEXDIR)/assignment
 MEXASSIGN	:= mexassign
 
@@ -97,8 +106,11 @@ ASMEXFILES	:= $(addprefix $(OUTDIR)/$(CSDIRASSIGN)/, $(notdir $(ASSRC:%.c=%.$(ME
 SASMEXFILES_$(d)	:= $(notdir $(ASMEXFILES))
 S1ASMEXFILES_$(d)	:= $(addprefix $(CSDIRASSIGN)/, $(SASMEXFILES_$(d)))
 
-$(ASMEXFILES) $(MEXASSIGN):
+$(ASMEXFILES):
 	$(MAKE) -C $(WORKINGDIR)/$(CSDIRASSIGN) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRASSIGN) MEXEXT=$(MEXEXT) $@
+
+.PHONY: $(MEXASSIGN)
+$(MEXASSIGN):		$(ASMEXFILES)
 
 .PHONY:	$(SASMEXFILES_$(d))
 $(SASMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRASSIGN)/%
@@ -106,7 +118,9 @@ $(SASMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRASSIGN)/%
 .PHONY: $(S1ASMEXFILES_$(d))
 $(S1ASMEXFILES_$(d)):	%:	$(OUTDIR)/%
 
+# ***************
 # fits libraries
+# ***************
 CSDIRFITS	:= $(PSDIR)/$(MFILEMEXDIR)/fits
 MEXFITS		:= mexfits
 
@@ -116,8 +130,11 @@ FTMEXFILES	:= $(addprefix $(OUTDIR)/$(CSDIRFITS)/, $(notdir $(FTSRC:%.c=%.$(MEXE
 SFTMEXFILES_$(d)	:= $(notdir $(FTMEXFILES))
 S1FTMEXFILES_$(d)	:= $(addprefix $(CSDIRFITS)/, $(SFTMEXFILES_$(d)))
 
-$(FTMEXFILES) $(MEXFITS):
+$(FTMEXFILES):
 	$(MAKE) -C $(WORKINGDIR)/$(CSDIRFITS) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRFITS) MEXEXT=$(MEXEXT) $@
+
+.PHONY: $(MEXFITS)
+$(MEXFITS):		$(FTMEXFILES)
 
 .PHONY:	$(SFTMEXFILES_$(d))
 $(SFTMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRFITS)/%
@@ -125,7 +142,9 @@ $(SFTMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRFITS)/%
 .PHONY: $(S1FTMEXFILES_$(d))
 $(S1FTMEXFILES_$(d)):	%:	$(OUTDIR)/%
 
+# ************************
 # hmi-mask-path libraries
+# ************************
 CSDIRHMIMASK	:= $(PSDIR)/$(MFILEMEXDIR)/hmi-mask-patch
 MEXHMIMASK	:= mexhmimask
 
@@ -135,8 +154,11 @@ HMMEXFILES	:= $(addprefix $(OUTDIR)/$(CSDIRHMIMASK)/, $(notdir $(HMSRC:%.c=%.$(M
 SHMMEXFILES_$(d)	:= $(notdir $(HMMEXFILES))
 S1HMMEXFILES_$(d)	:= $(addprefix $(CSDIRHMIMASK)/, SHMMEXFILES_$(d))
 
-$(HMMEXFILES) $(MEXHMIMASK):
+$(HMMEXFILES):
 	$(MAKE) -C $(WORKINGDIR)/$(CSDIRHMIMASK) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRHMIMASK) MEXEXT=$(MEXEXT) $@
+
+.PHONY: $(MEXHMIMASK)
+$(MEXHMIMASK):		$(HMMEXFILES)
 
 .PHONY: $(SHMMEXFILES_$(d))
 $(SHMMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRHMIMASK)/%
@@ -144,7 +166,14 @@ $(SHMMEXFILES_$(d)):	%:	$(OUTDIR)/$(CSDIRHMIMASK)/%
 .PHONY: $(S1HMMEXFILES_$(d))
 $(S1HMMEXFILES_$(d)):	%:	$(OUTDIR)/%
 
-TGT_LIB         := $(TGT_LIB) $(LIBMEX2MATL) $(LIBMEX2C) $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER) $(MEXSTANDALONE) $(MEXASSIGN) $(MEXFITS) $(MEXHMIMASK)
+# This line tells the make system to make all the libraries defined in this file as part of the
+# default make (e.g., running 'make' or 'make all').
+TGT_LIB         := $(TGT_LIB) $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER) $(LIBMEX2C) $(LIBMEX2MATL) $(MEXSTANDALONE) $(MEXASSIGN) $(MEXFITS) $(MEXHMIMASK)
+
+# I don't think this does anything. There is a clean rule in target.mk that simply removes
+# the entire output directory. But all other projects set-up this CLEAN variable,
+# so just to be consistent...
+CLEAN		:= $(CLEAN) $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER) $(LIBMEX2C) $(LIBMEX2MATL) $(MEXSTANDALONE) $(MEXASSIGN) $(MEXFITS) $(MEXHMIMASK)
 
 # Standard things                                                                
 -include        $(DEP_$(d))
