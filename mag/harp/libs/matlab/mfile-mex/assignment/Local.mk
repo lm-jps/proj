@@ -1,6 +1,6 @@
 
 LIBSUSED += -lmatch
-CMEXLDFLAGS += -L.
+CMEXLDFLAGS += -L$(OUTDIR)/$(CSDIR)
 MEX2C_LIBS += -lmatch
 LDFLAGS += -L.
 
