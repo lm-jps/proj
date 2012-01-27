@@ -269,7 +269,7 @@ int DoIt(void)
 	
 	DRMS_RecordSet_t *inRS = NULL, *outRS = NULL;
 	DRMS_Record_t *inRec = NULL, *outRec = NULL;
-        const char *dpath = NULL;
+        const char *dpath = params_get_str(&cmdparams, kDpath);
 	
 	/* Get parameters */
     
