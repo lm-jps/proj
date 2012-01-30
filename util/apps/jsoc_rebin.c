@@ -6,7 +6,7 @@
 
    @par Synopsis:
    @code
-   jsoc_rebin  in=input_data out=output_data  scale=<scale> mode={nearest,boxcar}
+   jsoc_rebin  in=input_data out=output_data  scale=<scale> method={nearest,boxcar,gaussian}
    where scale is a multiple/fraction of 2.
    @endcode
 
@@ -14,7 +14,7 @@
    data and modifies its spatial resolution by a factor (multiples 
    or fractions of 2) as required and gives out a set of output 
    data. The method for avaraging (interpolation) can be specified 
-   through the input "mode". The current version handles a simple 
+   through the input "method". The current version handles a simple 
    boxcar average. If 'scale' < 1 then the input is reduced in size.
 
    Modified from rebin2.
@@ -22,6 +22,7 @@
    @par Flags:
    @c
    -c  Crop before scaling.  Use rsun_obs/cdelt1 for limb radius.
+   -h  Write full FITS headers.
    -u  Leave unchanged, do NOT rotate by 180 degrees if CROTA2 is near 180.  default is to do flip-flip method so
        image is norths up and no pixel values are changed.
 
@@ -40,7 +41,7 @@
    produces images with the resolution of HMI, 4096 X 4096.
 
    @code
-   jsoc_rebin in='mdi.fd_M_96m_lev18[2003.10.20/1d]' out='su_phil.mdi_M_4k' scale=4 mode='simple'
+   jsoc_rebin in='mdi.fd_M_96m_lev18[2003.10.20/1d]' out='su_phil.mdi_M_4k' scale=4 method='boxcar'
    @endcode
 
    @par Example:
@@ -48,7 +49,7 @@
    1024 X 1024. Here the input is the HMI images and the output
    is the lower resolution HMI images.  Crop and rotate before rescaling.
    @code
-   jsoc_rebin  -c in=hmi.M_45s[2011.10.20/1d]' out='su_phil.hmi_M_1k_45s' scale=0.25 mode='simple'
+   jsoc_rebin  -c in=hmi.M_45s[2011.10.20/1d]' out='su_phil.hmi_M_1k_45s' scale=0.25 method='boxcar'
    @endcode
 
    @bug
@@ -69,9 +70,12 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, "in", "NOT SPECIFIED",  "Input data series."},
      {ARG_STRING, "out", "NOT SPECIFIED",  "Output data series."},
      {ARG_FLAG, "c", "0", "Crop at rsun_obs."},
+     {ARG_FLAG, "h", "0", "Include full FITS header in output segment."},
      {ARG_FLAG, "u", "0", "do not rotate by 180 if needed."},
-     {ARG_FLOAT, "scale", "NOTSPECIFIED", "Scale factor."},
-     {ARG_STRING, "mode", "simple", "conversion type."},
+     {ARG_FLOAT, "scale", "1.0", "Scale factor."},
+     {ARG_FLOAT, "FWHM", "-1.0", "Smoothing Gaussian FWHM for method=gaussian."},
+     {ARG_INT, "nvector", "-1.0", "Smoothing Gaussian vector length for method=gaussian."},
+     {ARG_STRING, "method", "boxcar", "conversion type."},
      {ARG_STRING, "requestid", "NA", "RequestID if called as an export processing step."},
      {ARG_END}
 };
@@ -119,16 +123,67 @@ int DoIt(void)
   int irec, nrecs;
   const char *inQuery = params_get_str(&cmdparams, "in");
   const char *outSeries = params_get_str(&cmdparams, "out");
-  const char *mode = params_get_str(&cmdparams, "mode");
+  const char *method = params_get_str(&cmdparams, "method");
   const char *requestid = params_get_str(&cmdparams, "requestid");
+  int nvector = params_get_int(&cmdparams, "nvector");
   float fscale = params_get_float(&cmdparams, "scale");
+  float fwhm = params_get_float(&cmdparams, "FWHM");
   int crop = params_get_int(&cmdparams, "c");
   int as_is = params_get_int(&cmdparams, "u");
-  int iscale;
+  int full_header = params_get_int(&cmdparams, "h");
+
+  int iscale, ivec, vec_half;
+  double *vector;
+  char history[4096];
+
   if (fscale < 1.0) // shrinking
     iscale = 1.0/fscale + 0.5;
   else  // enlarging
     iscale = fscale + 0.5;
+  if (nvector < 0)
+    nvector = iscale;
+  // Both 1/scale and nvector must be odd or both even so add 1 to nvector if needed       
+  if (((iscale & 1) && !(nvector & 1)) || ((!(iscale & 1) && (nvector & 1) )))
+    nvector += 1;
+  vector = (double *)malloc(nvector * sizeof(double));
+  vec_half = nvector/2; // counts on truncate to int if nvector is odd.
+
+  if (strcasecmp(method, "boxcar")==0 && fscale < 1)
+    {
+    for (ivec = 0; ivec < nvector; ivec++)
+      vector[ivec] = 1.0;
+    sprintf(history, "Boxcar bin by %d%s%s\n",
+      iscale,
+      (crop ? ", Cropped at rsun_obs" : ""),
+      (!as_is ? ", North is up" : "") );
+    }
+  else if (strcasecmp(method, "boxcar")==0 && fscale >= 1)
+    {
+    if (nvector != iscale)
+      DIE("For fscale>=1 nvector must be fscale");
+    for (ivec = 0; ivec < nvector; ivec++)
+      vector[ivec] = 1.0;
+    sprintf(history, "Replicate to expand by %d%s%s\n",
+      iscale,
+      (crop ? ", Cropped at rsun_obs" : ""),
+      (!as_is ? ", North is up" : "") );
+    }
+  else if (strcasecmp(method, "gaussian")==0) // do 2-D vector weights calculated as Gaussian
+    {
+    if (fwhm < 0)
+      DIE("Need FWHM parameter");
+    for (ivec = 0; ivec < nvector; ivec++)
+      {
+      double arg = (ivec - (nvector-1)/2.0) * (ivec - (nvector-1)/2.0);
+      vector[ivec] = exp(-arg/(fwhm*fwhm*0.52034));
+      }
+    sprintf(history, "Scale by %f with Gasussian smoothing FWHM=%f, nvector=%d%s%s\n",
+      fscale, fwhm, nvector,
+      (crop ? ", Cropped at rsun_obs" : ""),
+      (!as_is ? ", North is up" : "") );
+    }
+  else
+    DIE("invalid conversion method");
 
   inRS = drms_open_records(drms_env, inQuery, &status);
   if (status || inRS->n == 0)
@@ -149,7 +204,6 @@ int DoIt(void)
     DRMS_Segment_t *outSeg, *inSeg;
     DRMS_Array_t *inArray, *outArray;
     float *inData, *outData;
-    int inx, iny, outx, outy, i, j;
     float val;
     int quality=0;
  
@@ -165,102 +219,108 @@ int DoIt(void)
         drms_free_array(inArray);
         continue;
         }
-fprintf(stderr,"got rec\n");
       ObsLoc = GetObsInfo(inSeg, NULL, &status);
-fprintf(stderr,"got obs info\n");
       if (!as_is) upNcenter(inArray, ObsLoc);
-fprintf(stderr,"got rotated\n");
       if (crop) crop_image(inArray, ObsLoc);
-fprintf(stderr,"got cropped\n");
   
+      int inx, iny, outx, outy, i, j;
       int in_nx = inArray->axis[0];
       int in_ny = inArray->axis[1];
-      int in_inc = (fscale < 1 ? 1 : iscale);
-      int out_inc = (fscale < 1 ? iscale : 1);
       int out_nx = in_nx * fscale + 0.5;
       int out_ny = in_ny * fscale + 0.5;
-  
       int outDims[2] = {out_nx, out_ny};
       inData = (float *)inArray->data;
       outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, NULL, &status);
       outData = (float *)outArray->data;
-  
-      if (strcmp(mode, "simple")==0) // setup for better HMI proxy
+
+      if (fscale > 1.0)
         {
-        if (fscale < 1) // need to average input chunk
-          {
-fprintf(stderr,"starting reduce factor of %d\n", iscale);
-          for (outy = 0; outy < out_ny; outy += 1)
-            for (outx = 0; outx < out_nx; outx += 1)
+        int out_go = (iscale-1)/2.0 + 0.5;
+        for (iny = 0; iny < in_ny; iny += 1)
+          for (inx = 0; inx < in_nx; inx += 1)
+            {
+            val = inData[in_nx*iny + inx];
+            for (j = 0; j < nvector; j += 1)
               {
-              double total = 0.0;
-              int nn = 0;
-              for (j = 0; j < in_inc; j += 1)
-                for (i = 0; i < in_inc; i += 1)
-                  {
-                  val = inData[in_nx*(outy*iscale + j) + outx*iscale + i];
-                  if (!drms_ismissing_float(val))
-                      {
-                       total = total + val; 
-                       nn++;
-                      }
-                  }
-              outData[out_nx*outy + outx] = (nn > 0 ? total/nn : DRMS_MISSING_FLOAT); 
+              outy = iny*iscale + out_go + j - vec_half;
+              for (i = 0; i < nvector; i += 1)
+                {
+                outx = inx*iscale + out_go + i - vec_half;
+                if (outx >= 0 && outx < out_nx && outy >= 0 && outy < out_ny)
+                  outData[out_nx*outy + outx] = val;
+                }
               }
-          }
-        else  // need to replicate input point
-          {
-          for (iny = 0; iny < in_ny; iny += 1)
-            for (inx = 0; inx < in_nx; inx += 1)
-              {
-              val = inData[in_nx*iny + inx];
-              for (j = 0; j < out_inc; j += 1)
-                for (i = 0; i < out_inc; i += 1)
-                  outData[out_nx*(iny*iscale + j) + inx*iscale + i] = val;
-              }
-          }
+            }
         }
-    else
-      DIE("invalid conversion mode");
+      else
+        {
+        int in_go = (iscale-1)/2.0 + 0.5;
+        for (outy = 0; outy < out_ny; outy += 1)
+          for (outx = 0; outx < out_nx; outx += 1)
+            {
+            double total = 0.0;
+            double weight = 0.0;
+            int nn = 0;
+            for (j = 0; j < nvector; j += 1)
+              {
+              iny = outy*iscale + in_go + j - vec_half;
+              for (i = 0; i < nvector; i += 1)
+                {
+                inx = outx*iscale + in_go + i - vec_half;
+                if (inx >= 0 && inx < in_nx && iny >=0 && iny < in_ny)
+                  {
+                  val = inData[in_nx*(iny) + inx];
+                  if (!drms_ismissing_float(val))
+                    {
+                    double w = vector[i]*vector[j];
+                    total += w*val; 
+                    weight += w;
+                    nn++;
+                    }
+                  }
+                }
+              }
+            outData[out_nx*outy + outx] = (nn > 0 ? total/weight : DRMS_MISSING_FLOAT); 
+            }
+        }
   
-    drms_free_array(inArray);
+      drms_free_array(inArray);
   
-    // write data file
-    outRec = outRS->records[irec];
-    outSeg = drms_segment_lookupnum(outRec, 0);
+      // write data file
+      outRec = outRS->records[irec];
+      outSeg = drms_segment_lookupnum(outRec, 0);
 
-    // copy all keywords
-    drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
+      // copy all keywords
+      drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
 
-    // Now fixup coordinate keywords
-    // Only CRPIX1,2 and CDELT1,2 and CROTA2 should need repair.
-    drms_setkey_double(outRec, "CDELT1", ObsLoc->cdelt1/fscale);
-    drms_setkey_double(outRec, "CDELT2", ObsLoc->cdelt2/fscale);
-    drms_setkey_double(outRec, "CRPIX1", (ObsLoc->crpix1-0.5) * fscale + 0.5);
-    drms_setkey_double(outRec, "CRPIX2", (ObsLoc->crpix2-0.5) * fscale + 0.5);
-    drms_setkey_double(outRec, "CROTA2", ObsLoc->crota2);
-    char history[4096];
-    sprintf(history, "Scale by %f%s%s\n",
-          fscale,
-          (crop ? ", Cropped at rsun_obs" : ""),
-          (!as_is ? ", North is up" : "") );
-    drms_setkey_string(outRec, "HISTORY", history);
-    drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
-    if (strcmp(requestid, "NA") != 0)
+      // Now fixup coordinate keywords
+      // Only CRPIX1,2 and CDELT1,2 and CROTA2 should need repair.
+      drms_setkey_double(outRec, "CDELT1", ObsLoc->cdelt1/fscale);
+      drms_setkey_double(outRec, "CDELT2", ObsLoc->cdelt2/fscale);
+      drms_setkey_double(outRec, "CRPIX1", (ObsLoc->crpix1-0.5) * fscale + 0.5);
+      drms_setkey_double(outRec, "CRPIX2", (ObsLoc->crpix2-0.5) * fscale + 0.5);
+      drms_setkey_double(outRec, "CROTA2", ObsLoc->crota2);
+      drms_setkey_double(outRec, "FWHM", fwhm);
+      drms_setkey_string(outRec, "HISTORY", history);
+      drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
+      if (strcmp(requestid, "NA") != 0)
         drms_setkey_string(outRec, "RequestID", requestid);
 
-    // get info for array from segment
-    outArray->bzero = outSeg->bzero;
-    outArray->bscale = outSeg->bscale;
-    outArray->parent_segment = outSeg;
+      // get info for array from segment
+      outArray->bzero = outSeg->bzero;
+      outArray->bscale = outSeg->bscale;
+      outArray->parent_segment = outSeg;
   
-    set_statistics(outSeg, outArray, 1);
-    status = drms_segment_write(outSeg, outArray, 0);
-    if (status)
-      DIE("problem writing file");
-    drms_free_array(outArray);
-    }
-   } //end of "irec" loop
+      set_statistics(outSeg, outArray, 1);
+      if (full_header)
+        status = drms_segment_writewithkeys(outSeg, outArray, 0);
+      else
+        status = drms_segment_write(outSeg, outArray, 0);
+      if (status)
+        DIE("problem writing file");
+      drms_free_array(outArray);
+      }
+    } //end of "irec" loop
 
   drms_close_records(inRS, DRMS_FREE_RECORD);
   drms_close_records(outRS, DRMS_INSERT_RECORD);
@@ -270,9 +330,12 @@ fprintf(stderr,"starting reduce factor of %d\n", iscale);
 // ----------------------------------------------------------------------
 
 /* center whith whole pixel shifts and rotate by 180 if needed */
+/* Only apply center if it will not result in an image crop.  I.e. not ever
+   for AIA, and not for HMI or MDI or other if a shift of more than 20 arcsec
+   is implied  */
 int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   {
-  int nx, ny, ix, iy, i, j, xoff, yoff;
+  int nx, ny, ix, iy, i, j, xoff, yoff, max_off;
   double rot, x0, y0, mid;
   float *data;
   if (!arr || !ObsLoc)
@@ -301,48 +364,61 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
         data[j] = val;
         }
       }
-    x0 = nx - x0;
-    y0 = ny - y0;
+    x0 = nx - 1 - x0;
+    y0 = ny - 1 - y0;
     rot = ObsLoc->crota2 - 180.0;
     if (rot < -90.0) rot += 360.0;
     ObsLoc->crota2 = rot;
     }
+  // Center to nearest pixel - if OK to do so
   xoff = round(x0 - mid);
   yoff = round(y0 - mid);
-  if (abs(xoff) > 1.0)
+  max_off = 20.0 / ObsLoc->cdelt1;
+  if (arr->parent_segment &&
+      arr->parent_segment->record &&
+      arr->parent_segment->record->seriesinfo && 
+      arr->parent_segment->record->seriesinfo->seriesname && 
+      strncasecmp(arr->parent_segment->record->seriesinfo->seriesname, "aia", 3) &&
+      abs(xoff) < max_off && abs(yoff) < max_off) 
     {
-    for (iy=0; iy<ny; iy++)
+    if (abs(xoff) >= 1)
       {
-      float valarr[nx];
-      for (ix=0; ix<nx; ix++)
-        {
-        int jx = ix - xoff;
-        if (jx >= nx) jx -= nx;
-        if (jx < 0) jx += nx;
-        valarr[jx] = data[iy*nx + ix];
-        }
-      for (ix=0; ix<nx; ix++)
-        data[iy*nx + ix] = valarr[ix];
-      }
-    x0 -= xoff;
-    }
-  if (abs(yoff) > 1.0)
-    {
-    for (ix=0; ix<nx; ix++)
-      {
-      float valarr[ny];
       for (iy=0; iy<ny; iy++)
         {
-        int jy = iy - yoff;
-        if (jy >= ny) jy -= ny;
-        if (jy < 0) jy += ny;
-        valarr[jy] = data[iy*nx + ix];
+        float valarr[nx];
+        for (ix=0; ix<nx; ix++)
+          {
+          int jx = ix + xoff;
+          if (jx < nx && jx >= 0)
+            valarr[ix] = data[iy*nx + jx];
+          else
+            valarr[ix] = DRMS_MISSING_FLOAT;
+          }
+        for (ix=0; ix<nx; ix++)
+          data[iy*nx + ix] = valarr[ix];
         }
-      for (iy=0; iy<ny; iy++)
-        data[iy*nx + ix] = valarr[iy];
+      x0 -= xoff;
       }
-    y0 -= yoff;
+    if (abs(yoff) >= 1)
+      {
+      for (ix=0; ix<nx; ix++)
+        {
+        float valarr[ny];
+        for (iy=0; iy<ny; iy++)
+          {
+          int jy = iy + yoff;
+          if (jy < ny && jy >= 0)
+            valarr[iy] = data[jy*nx + ix];
+          else
+            valarr[iy] = DRMS_MISSING_FLOAT;
+          }
+        for (iy=0; iy<ny; iy++)
+          data[iy*nx + ix] = valarr[iy];
+        }
+      y0 -= yoff;
+      }
     }
+  // update center location
   ObsLoc->crpix1 = x0 + 1;
   ObsLoc->crpix2 = y0 + 1;
   return(0);
@@ -355,7 +431,7 @@ int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   int nx, ny, ix, iy, i, j, xoff, yoff;
   double x0, y0;
   double rsun = ObsLoc->rsun_obs/ObsLoc->cdelt1;
-  double scale, crop_limit;
+  double scale, crop_limit2;
   float *data;
   if (!arr || !ObsLoc)
     return(1);
@@ -365,7 +441,8 @@ int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   x0 = ObsLoc->crpix1 - 1;
   y0 = ObsLoc->crpix2 - 1;
   scale = 1.0/rsun;
-  crop_limit = 0.99975; // 1 - 1/4000, 1/2 HMI pixel.
+  // crop_limit = 0.99975; // 1 - 1/4000, 1/2 HMI pixel.
+  crop_limit2 = 0.99950; // square of 1 - 1/4000, 1/2 HMI pixel.
   for (iy=0; iy<ny; iy++)
     for (ix=0; ix<nx; ix++)
       {
@@ -376,7 +453,7 @@ int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
       x = ((double)ix - x0) * scale; /* x,y in pixel coords */
       y = ((double)iy - y0) * scale;
       R2 = x*x + y*y;
-      if (R2 > crop_limit)
+      if (R2 > crop_limit2)
         *Ip = DRMS_MISSING_FLOAT;
       }
   return(0);
