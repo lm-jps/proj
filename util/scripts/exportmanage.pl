@@ -250,18 +250,24 @@ while (1)
    elsif (($? >> 8) != 0)
    {
       # jsoc_export_manage returned with an error code
+      $msg = "$manage returned with a non-zero code of $? >> 8.\n";
       unless (GetDLogFH(\$dlogfh, $daemonlog))
       {
-          print $dlogfh "$manage returned with a non-zero code of $? >> 8.\n";
+          print $dlogfh $msg;
       }
+
+      print LOG $msg;
    }
 
    if (length($rout) > 0)
    {
-       unless (GetDLogFH(\$dlogfh, $daemonlog))
-       {
-           print $dlogfh "$rout\n";
-       }
+      $msg = "$rout\n";
+      unless (GetDLogFH(\$dlogfh, $daemonlog))
+      {
+         print $dlogfh $msg;
+      }
+
+      print LOG $msg;
    }
 
    CloseDLog(\$dlogfh);
