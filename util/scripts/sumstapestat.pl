@@ -9,6 +9,7 @@ use constant kDEBUG => 0;
 
 use constant kStatDADP => "2";
 use constant kStatDAAP => "4"; # archive pending
+use constant kStatDAAEDDP => "32"; # archive pending too I guess
 use constant kSubStatDAADP => "128"; # after archive completes, mark delete pending
 use constant kGig => 1073741824;
 
@@ -198,7 +199,7 @@ if (defined($dbh))
          # Delete now
          if ($metric eq kMetricAll || $metric eq kMetricDPS)
          {
-            $err = !$queryfunc->(\$dbh, $group, kStatDADP, "effective_date < '$now'", $typequery, $order, \%delnow, kMetricDPS);
+            $err = !$queryfunc->(\$dbh, $group, kStatDAAP . " AND archive_substatus = " . kStatDAAEDDP . " OR status = " . kStatDADP, "effective_date < '$now'", $typequery, $order, \%delnow, kMetricDPS);
          }
 
          # Delete <= 100 days AND > now
@@ -206,7 +207,7 @@ if (defined($dbh))
          {
             if (!$err)
             {
-               $err = !$queryfunc->(\$dbh, $group, kStatDADP, "effective_date <= '$nowplus100d' AND effective_date >= '$now'", $typequery, $order, \%delwi100d, kMetricDPM);
+               $err = !$queryfunc->(\$dbh, $group, kStatDAAP . " AND archive_substatus = " . kStatDAAEDDP . " OR status = " . kStatDADP, "effective_date <= '$nowplus100d' AND effective_date >= '$now'", $typequery, $order, \%delwi100d, kMetricDPM);
             }
          }
 
@@ -214,7 +215,7 @@ if (defined($dbh))
          {
             if (!$err)
             {
-               $err = !$queryfunc->(\$dbh, $group, kStatDADP, "effective_date > '$nowplus100d'", $typequery, $order, \%dellater, kMetricDPL);
+               $err = !$queryfunc->(\$dbh, $group, kStatDAAP . " AND archive_substatus = " . kStatDAAEDDP . " OR status = " . kStatDADP, "effective_date > '$nowplus100d'", $typequery, $order, \%dellater, kMetricDPL);
             }
          }
 
@@ -266,7 +267,7 @@ sub GenQueryA
       $datewhere = " AND $datewhere";
    }
 
-   $stmnt = "INSERT INTO " . kTempTable . " (tgroup, series, metric, aggbytes) (SELECT '$group', main.owning_series, '$metric', sum(bytes) FROM (SELECT ds_index, group_id, bytes FROM sum_partn_alloc WHERE status = $status AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series FROM sum_main WHERE storage_group = $group) AS main WHERE partn.ds_index = main.ds_index GROUP BY partn.group_id, main.owning_series)";   
+   $stmnt = "INSERT INTO " . kTempTable . " (tgroup, series, metric, aggbytes) (SELECT '$group', main.owning_series, '$metric', sum(bytes) FROM (SELECT ds_index, group_id, bytes FROM sum_partn_alloc WHERE (status = $status) AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series FROM sum_main) AS main WHERE partn.ds_index = main.ds_index GROUP BY partn.group_id, main.owning_series)";   
 
    if (kDEBUG)
    {
@@ -300,7 +301,7 @@ sub GenQueryB
       $datewhere = " AND $datewhere";
    }
 
-   $stmnt = "SELECT main.owning_series, main.ds_index, main.online_loc, partn.bytes FROM (SELECT ds_index, group_id, bytes FROM sum_partn_alloc WHERE status = $status AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series, online_loc FROM sum_main WHERE storage_group = $group) AS main WHERE partn.ds_index = main.ds_index ORDER BY lower(main.owning_series), main.ds_index";
+   $stmnt = "SELECT main.owning_series, main.ds_index, main.online_loc, partn.bytes FROM (SELECT ds_index, group_id, bytes FROM sum_partn_alloc WHERE (status = $status) AND group_id = $group$datewhere) AS partn, (SELECT ds_index, owning_series, online_loc FROM sum_main) AS main WHERE partn.ds_index = main.ds_index ORDER BY lower(main.owning_series), main.ds_index";
 
    if (kDEBUG)
    {
