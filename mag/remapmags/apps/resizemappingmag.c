@@ -22,7 +22,7 @@
 #include <mkl_vml_functions.h>
 #include <omp.h>
 #include "fresize.c"
-#include "fstats.h"
+#include "fstats.c"
 
 #define	DEG2RAD	(M_PI / 180.)
 #define RAD2ARCSEC	(648000. / M_PI)

@@ -29,11 +29,8 @@
 #include "jsoc_main.h"
 #include "astro.h"
 #include "drms_dsdsapi.h"
-
-#include "saveparm.c"
-#include "obs2helio.c"
 #include "obs2heliodb.c"
-#include "fstats.h"
+#include "fstats.c"
 
 #define PI		(M_PI)
 #define RADSINDEG 	(PI/180)
@@ -117,6 +114,8 @@ ModuleArgs_t module_args[] =
    {ARG_END}
 };
 
+#include "saveparm.c"
+#include "/home0/yliu/cvs/JSOC/proj/libs/astro/obs2helio.c"
 
 double getwalltime(void)
 {
