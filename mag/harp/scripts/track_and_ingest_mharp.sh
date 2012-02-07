@@ -233,7 +233,7 @@ HAVE_BEGUN=1
 # driver invokes matlab to perform tracking
 #  -- note, track_opts is unquoted
 echo "${progname}: Beginning tracking."
-cmd=track_hmi_production_driver_stable.sh 
+cmd=/home/jsoc/cvs/Development/JSOC/proj/mag/harp/scripts/track_hmi_production_driver_stable.sh 
 $cmd $track_opts "$mask_series" "$dest_dir"
 echo "${progname}: Finished tracking."
 
