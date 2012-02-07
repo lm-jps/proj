@@ -116,10 +116,10 @@ if [ "$developer_path" -eq 1 ]; then
     MATLABPATH=`find $mtHome/matlab/mfile -maxdepth 1 -type d | paste -d : -s -`
 else
     # (this is the default code path)
-    # not 100% sure this is the right production path
-    # rootD=/home/jsoc/cvs/Development/JSOC
-    # for now, using arta's path
-    rootD=/home/arta/jsoctrees/JSOC
+    # not 100% sure this is the right production path (It is - ART)
+    rootD=/home/jsoc/cvs/Development/JSOC
+    # arta's path
+    # rootD=/home/arta/jsoctrees/JSOC
     # below here, should not change
     rootDbin=$rootD/_$JSOC_MACHINE/proj/mag/harp/libs/matlab/mfile-mex
     rootDsrc=$rootD/proj/mag/harp/libs/matlab/mfile-plain
