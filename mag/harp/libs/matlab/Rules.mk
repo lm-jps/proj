@@ -170,6 +170,9 @@ $(S1HMMEXFILES_$(d)):	%:	$(OUTDIR)/%
 # default make (e.g., running 'make' or 'make all').
 TGT_LIB         := $(TGT_LIB) $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER) $(LIBMEX2C) $(LIBMEX2MATL) $(MEXSTANDALONE) $(MEXASSIGN) $(MEXFITS) $(MEXHMIMASK)
 
+.PHONY	: harp
+harp	: $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER) $(LIBMEX2C) $(LIBMEX2MATL) $(MEXSTANDALONE) $(MEXASSIGN) $(MEXFITS) $(MEXHMIMASK)
+
 # I don't think this does anything. There is a clean rule in target.mk that simply removes
 # the entire output directory. But all other projects set-up this CLEAN variable,
 # so just to be consistent...
