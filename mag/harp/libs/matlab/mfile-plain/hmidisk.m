@@ -9,11 +9,15 @@ function [x0,y0,r,b0,p0]=hmidisk(trec,mode)
 % x0,y0 keyword values.)
 % * If five outputs are given, also finds SOLAR_B0 and SOLAR_P0, the
 % solar tilt parameters.
-% * A typical T_REC is: 2010.07.03_13:12:00_TAI
-% * Given a list of T_REC's, returns the disk parameters for each one.
-% The list of strings can be a cell array or a string array, with the
-% strings "stacked vertically" in each case; see cellstr for example.
-% If a cell array is used, it must be nf-by-1.
+% * This is done by querying the JSOC database.
+% * A typical T_REC is: 2010.07.03_13:12:00_TAI .  If trec is given 
+% as a matlab datenum (a double), this is converted to a T_REC string 
+% before the JSOC database is queried.
+% * Given a list of T_REC's or datenums, returns the disk parameters 
+% for each one.  If given as T_REC's, the list of strings can be a 
+% cell array or a string array, with the strings "stacked vertically" 
+% in each case; see cellstr for example.  If a cell array of strings 
+% is used, it must be nf-by-1.
 % * If only one output is to be returned, it is returned as an nf-by-5
 % matrix containing all values.  If mode = 'disk', only the first three
 % disk parameters are returned.
@@ -22,8 +26,8 @@ function [x0,y0,r,b0,p0]=hmidisk(trec,mode)
 % with this routine; see hmi/wcs2center.m
 % 
 % Inputs:
-%   string trec(nf);        -- a valid time index
-%   opt char mode = 'geom'  -- 'geom' or 'disk'
+%   string or real trec(nf);   -- a valid time index
+%   opt char mode = 'geom'     -- 'geom' or 'disk'
 % 
 % Outputs:
 %   real x0(nf);
@@ -48,6 +52,7 @@ if nargin < 2, mode = 'geom'; end;
 % Computation
 % 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % WCS transformations
 
 % Nested functions for WCS transformations.  
@@ -74,7 +79,15 @@ py = ((((wy-crvaly)*cosa - (wx-crvalx)*sina)/cdelt)+crpix2);
 return;
 end
 
-% convert input to cell array
+% (end WCS)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% convert input from double (datestr) to char (t_rec)
+if isnumeric(trec),
+  trec = datestr(trec, 'yyyy.mm.dd_HH:MM:SS_TAI');
+end;
+
+% convert char input to cell array
 if ischar(trec),
   trec = cellstr(trec);
 end;
@@ -88,7 +101,7 @@ b0 = x0;
 p0 = x0;
 
 % try to find disk metadata in these data series
-Parents = { 'hmi.M_720s', 'hmi_test.M_720s' };
+Parents = { 'hmi.M_720s', 'hmi.M_720s_nrt' };
 
 % keys needed for disk params
 keys = {'CRVAL1', ... % disc center in arcsec

@@ -154,8 +154,10 @@ for f = 1:Nf,
   % lat/lon bounding box vs. time
   LatLonBBs = sprintf('%.4f ', LatLonBB(f,:));
   % add a line to the file
-  fprintf(fp, '%d %s %s %s %s %.4f\n', tid, rois(f).fn, ...
-          PixSzs, PixBBs, LatLonBBs, deg_day);
+  %  T# FN Tag Sizes Corners LatLonBB Deg/Day
+  % tag is 0 for try-harder, 1 for regular, 2 where a merge was done
+  fprintf(fp, '%d %s %d %s %s %s %.4f\n', tid, rois(f).fn, ...
+          rois(f).tag, PixSzs, PixBBs, LatLonBBs, deg_day);
 end
 fclose(fp);
 

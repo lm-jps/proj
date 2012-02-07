@@ -236,19 +236,41 @@ typedef enum {
                       // padding occurs at end, and for placeholder ROIs in middle
 } patch_status_t;
 
+/*
+ * Discrete tag indicating patch type that is read from a file
+ *
+ * Currently the frame file can have tag = 0, 1, or 2.
+ * The tracker internals can have (-1) which is for a placeholder patch,
+ * but these patches are not written out by the tracker.  We re-introduce
+ * it as Tag_Faint to indicate the patch was too faint to see (even after 
+ * trying harder).
+ */
+typedef enum {
+  // a special value we introduce for patches not read from a file
+  //   (typically padding patches)
+  Patch_Tag_None   = -99,   // no tag was read for this patch
+  // not read from file, but inserted by us while interpolating HARP
+  Patch_Tag_Faint  =  -1,   // placeholder patch (between t0 and t1 of HARP)
+  // these are as read from files and defined in Matlab
+  Patch_Tag_Harder =   0,   // tried harder and matched
+  Patch_Tag_Normal =   1,   // ordinary, observed image
+  Patch_Tag_Merge  =   2,   // tracks were merged on this frame
+} patch_tag_t;
+
 /* 
  * Information for one patch: one HARP at one T_REC
  */
 typedef struct {
   patch_status_t valid;            // see enum above
   int num;                         // HARP id number
+  patch_tag_t tag;                 // tag: patch category from frame file
   int x0, y0;                      // origin of HARP bitmap in fulldisk image
   int fits_nx, fits_ny;		   // HARP bitmap size from frame file
   float lat0, lon0, lat1, lon1;    // bounding box from track-frame.txt
   float omega;	                   // HARP-specific angular rotation (deg/day)
   float stats[RS_num_stats];	   // statistics from track-stats.txt
   char patchName[STR_MAX];	   // bitmap image file path
-  char *image;		           // bitmap image itself, from fits file
+  char *image;		           // bitmap HARP image itself
   int dims[2];	                   // dimension of above image
   int xmin, xmax, ymin, ymax;	   // calculated bounding box
 } patch_info_t;
@@ -805,7 +827,7 @@ int DoIt(void)
   nRec_eat = cmdparams_get_int(&cmdparams, "trec", NULL);
   nRec_pad = cmdparams_get_int(&cmdparams, "tpad", NULL);
   nRec_min = cmdparams_get_int(&cmdparams, "tmin", NULL);
-  verbflag  = cmdparams_get_int(&cmdparams, "verb", NULL); // an int, not a flag
+  verbflag = cmdparams_get_int(&cmdparams, "verb", NULL); // an int, not a flag
   // check numbers for sanity
   if (nRec_min <= 0)
     DIE("tmin must be a positive integer");
@@ -898,7 +920,7 @@ int DoIt(void)
 	   (wt - wt0)*1e-3, (ct - ct0)*1e-3);
   // allow exit without ingestion to facilitate match testing
   if (matchStatus < 0) {
-    V_printf(-1, "", "Given match option commanded an early exit (match = %d)\n", matchStatus);
+    V_printf(-1, "", "Early exit due to given match option (match = %d)\n", matchStatus);
     return DRMS_SUCCESS;
   }
 
@@ -931,7 +953,7 @@ int DoIt(void)
     if (status != 0 || magRecSet->n == 0) {
       V_printf(-1, "", "Could not open mag %s -- skipping this T_REC.\n", magRecQuery);
       Rec_miss++;
-      Harp_miss1 += tRec[rec].nharp; // an "expected" error -- don't count as an ingestion error
+      Harp_miss1 += tRec[rec].nharp; // an "expected" error -- not an ingestion error
       continue;
     }
     magRec = magRecSet->records[0];
@@ -940,7 +962,7 @@ int DoIt(void)
     if (status != 0 || (quality & 0x80000000)) {
       V_printf(-1, "", "Missing mag data %s -- skipping this T_REC.\n", magRecQuery);
       Rec_miss++;
-      Harp_miss1 += tRec[rec].nharp; // an "expected" error -- don't count as an ingestion error
+      Harp_miss1 += tRec[rec].nharp; // an "expected" error -- not an ingestion error
       continue;
     }
     // Open mask record
@@ -1444,7 +1466,8 @@ extrapolate_harp(patch_info_t *patchInfo,    // head of array this HARP's patche
     // set up patchInfo[rec]
     if (patchInfo[rec].valid == Patch_Invalid) {
       // it will be invalid if it was never initialized
-      patchInfo[rec].valid = Patch_Padding; // placeholder ROI
+      patchInfo[rec].valid = Patch_Padding;   // placeholder ROI
+      patchInfo[rec].tag   = Patch_Tag_Faint; // indicate HARP not observed
       patchInfo[rec].num   = patchInfo[rec0].num;
       patchInfo[rec].lat0  = patchInfo[rec0].lat0;
       patchInfo[rec].lat1  = patchInfo[rec0].lat1;
@@ -1460,7 +1483,8 @@ extrapolate_harp(patch_info_t *patchInfo,    // head of array this HARP's patche
   omega = patchInfo[rec0].omega / SEC_PER_DAY * CADENCE;
   for (rec = rec0p; rec < rec0; rec++) {
     // set up patchInfo[rec]
-    patchInfo[rec].valid = Patch_Padding; // extrapolated
+    patchInfo[rec].valid = Patch_Padding;  // extrapolated
+    patchInfo[rec].tag   = Patch_Tag_None; // no tag
     patchInfo[rec].num   = patchInfo[rec0].num;
     patchInfo[rec].lat0  = patchInfo[rec0].lat0;
     patchInfo[rec].lat1  = patchInfo[rec0].lat1;
@@ -1474,7 +1498,8 @@ extrapolate_harp(patch_info_t *patchInfo,    // head of array this HARP's patche
   // extend forward (count down)
   omega = patchInfo[rec1].omega / SEC_PER_DAY * CADENCE;
   for (rec = rec1p; rec > rec1; rec--) {
-    patchInfo[rec].valid = Patch_Padding; // extrapolated
+    patchInfo[rec].valid = Patch_Padding;  // extrapolated
+    patchInfo[rec].tag   = Patch_Tag_None; // no tag
     patchInfo[rec].num   = patchInfo[rec1].num;
     patchInfo[rec].lat0  = patchInfo[rec1].lat0;
     patchInfo[rec].lat1  = patchInfo[rec1].lat1;
@@ -1754,8 +1779,13 @@ ingest_harp(patch_info_t *pInfo,     // the patch to ingest, function of (HARP,T
 
 /* 
  * Update bitmap image so it is correct size, and contains mask overlay
- * Input: full-disk mask image, pInfo metadata (image sizes)
- * Output: updates pInfo->image
+ * Input: 
+ *    inner HARP bitmap image, as read from file, in pInfo->image
+ *    full-disk mask image
+ *    desired bitmap image bounding box in pInfo->{xmin, xmax, ymin, ymax}
+ * Output: 
+ *    updates pInfo->image with enlarged version according to bbox
+ * 
  * Returns 0 on success, 1 on failure
  */
 
@@ -1956,6 +1986,23 @@ ingest_record(patch_info_t *pInfo,
 }
 
 
+/*
+ * utility: return 1 if tag is invalid, 0 otherwise
+ * (allow Faint = -1 here, even though don't expect to read it)
+ */
+static
+int 
+tag_is_invalid(int tag)
+{
+  if ((tag == (int) Patch_Tag_Faint ) ||
+      (tag == (int) Patch_Tag_Harder) ||
+      (tag == (int) Patch_Tag_Normal) ||
+      (tag == (int) Patch_Tag_Merge ))
+    return 0;  // valid
+  else
+    return 1;  // invalid
+}
+
 /* 
  * Coordinate-Frame file parser, one line per call
  * return 0 if successful, -1 for EOF, +1 for format error
@@ -1964,15 +2011,17 @@ static
 int 
 load_frame(FILE *fp, patch_info_t *pInfo, TIME *t)
 {
-  const int rv_expect = 11; // tied to format string below
-  char t_rec[24];
+  const int rv_expect = 12; // tied to format string below
+  char t_rec[24]; // time
+  int tag;        // tag
   int rv;
 
   pInfo->valid = Patch_Invalid; // set to invalid
   // reading rv_expect items
-  rv = fscanf(fp, "%d %23s %d %d %d %d %f %f %f %f %f", 
+  rv = fscanf(fp, "%d %23s %d %d %d %d %d %f %f %f %f %f", 
 	      &(pInfo->num), 
 	      t_rec, // string
+	      &tag,
 	      &(pInfo->fits_nx), 
 	      &(pInfo->fits_ny),
 	      &(pInfo->x0), 
@@ -1986,6 +2035,12 @@ load_frame(FILE *fp, patch_info_t *pInfo, TIME *t)
   if (rv != rv_expect) {
     V_printf(-1, "", "Warning: could not read frame line, bad file?\n");
     return 1;
+  }
+  if (tag_is_invalid(tag)) {
+    V_printf(-1, "", "Warning: could not read frame tag (%d), bad value?\n", tag);
+    return 1;
+  } else {
+    pInfo->tag = (patch_tag_t) tag;
   }
   // convert the time to a rec number
   *t = sscan_time(t_rec);
@@ -2003,8 +2058,6 @@ load_frame(FILE *fp, patch_info_t *pInfo, TIME *t)
   pInfo->valid = Patch_Normal; // regular patch
   return 0;
 }
-
-
 
 /* 
  * Stats file parser
@@ -2206,10 +2259,17 @@ set_keys_stats(DRMS_Record_t *rec,
   } else {
     not_ok += status;
   }
+  // TODO: set the NRT harp parameters:
+  //   OHRP_ID, OHRP_NUM, OHRP_IDS
   // remainder of WCS
   ok = drms_setkey_float(rec, "CRPIX1", pInfo->x0);
   if (ok != DRMS_SUCCESS) not_ok++;
   ok = drms_setkey_float(rec, "CRPIX2", pInfo->y0);
+  if (ok != DRMS_SUCCESS) not_ok++;
+  // sizes (not part of WCS, but related to CRPIX* above)
+  ok = drms_setkey_float(rec, "CRSIZE1", pInfo->dims[0]);
+  if (ok != DRMS_SUCCESS) not_ok++;
+  ok = drms_setkey_float(rec, "CRSIZE2", pInfo->dims[1]);
   if (ok != DRMS_SUCCESS) not_ok++;
   // harp-extent metadata
   ok = drms_setkey_time(rec, "T_FRST",  tRec[hInfo->rec0p].t);
@@ -2227,6 +2287,13 @@ set_keys_stats(DRMS_Record_t *rec,
   ok = drms_setkey_int(rec, "N_PATCHM", hInfo->n_missing);
   if (ok != DRMS_SUCCESS) not_ok++;
   // other metadata, from frame file
+  // tag, from ROI_s(patch).tag
+  ok = drms_setkey_int(rec, "H_MERGE", (pInfo->tag == Patch_Tag_Merge ) ? 1 : 0);
+  if (ok != DRMS_SUCCESS) not_ok++;
+  ok = drms_setkey_int(rec, "H_FAINT", 
+		       ((pInfo->tag == Patch_Tag_Harder) || 
+			(pInfo->tag == Patch_Tag_Faint )) ? 1 : 0);
+  if (ok != DRMS_SUCCESS) not_ok++;
   // Note, these are for the whole disk transit ("DT")
   ok = drms_setkey_float(rec, "LONDTMIN", pInfo->lon0);
   if (ok != DRMS_SUCCESS) not_ok++;
@@ -2268,6 +2335,8 @@ set_keys_stats(DRMS_Record_t *rec,
 
 /* 
  * Find bounding box from given lat/lon range 
+ *
+ * Computes: pInfo->{xmin, xmax, ymin, ymax}
  *
  * return value:
  *   2 if geometry was not found (an error)

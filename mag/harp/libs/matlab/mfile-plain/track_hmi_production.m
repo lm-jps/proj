@@ -42,7 +42,10 @@
 % tracker state
 global ROI_s ROI_t ROI_rgn
 
-fprintf('\nPath info: track_hmi_loop is at: %s\n\n', which('track_hmi_loop'));
+fprintf('\n');
+fprintf('%s: Path info: now running: %s\n', mfilename, mfilename('fullpath'));
+fprintf('%s: Path info: track_hmi_loop is at: %s\n', mfilename, which('track_hmi_loop'));
+fprintf('\n');
 
 % require mask_series
 if ~exist('mask_series', 'var'),
@@ -78,8 +81,8 @@ if first_track == 0,
 else,
   first_run_string = 'Removing';
 end;
-fprintf('Tracking from "%s" and "%s".\n%s existing files in "%s".\n', ...
-        mask_series, mag_series, first_run_string, dest_dir);
+fprintf('%s: Tracking from "%s" and "%s".\n', mfilename, mask_series, mag_series);
+fprintf('%s: %s existing files in "%s".\n', mfilename, first_run_string, dest_dir);
 clear first_run_string
 
 % delete existing files if the tracker is being restarted
@@ -110,7 +113,7 @@ paramsep = unique([0 strfind(params, ';') length(params)+1]);
 for i = 1:length(paramsep)-1,
   param1 = params(paramsep(i)+1:paramsep(i+1)-1);
   if isempty(param1), continue; end;
-  fprintf('\tparam = <%s>\n', param1);
+  fprintf('%s: \tparam = <%s>\n', mfilename, param1);
   inx1 = strfind(param1, '=');
   if length(inx1) ~= 1,
     error('Did not find key=val in param %s from %s', param1, params);
@@ -134,7 +137,7 @@ end;
 clear paramsep i param1 inx1 key val
 
 if length(params) > 0,
-  fprintf('Modified tracker_params according to params as follows:\n');
+  fprintf('%s: Modified tracker_params according to params:\n', mfilename);
   disp(tracker_params1);
 end;
 
@@ -155,6 +158,10 @@ hooks.filename.imagenum = '%06d';
 
 jsoc_ds = {mask_series, mag_series};
 
+% display tracker parameters for capture in the log file
+fprintf('%s: Tracker parameters used:\n', mfilename);
+disp(hooks.tracker_params)
+
 % switches from loading images by http versus filesystem
 % (see jsoc_trec_loop for more)
 if ~isempty(regexpi(getenv('HOST'), 'stanford')),
@@ -164,7 +171,7 @@ else,
 end;
 
 % run the tracker
-fprintf('*** Beginning tracking.\n');
+fprintf('%s: Beginning tracking.\n', mfilename);
 [fn,res,fnfail,fnlog]=jsoc_trec_loop(jsoc_ds, [smpl 1 1], 'track_hmi_loop', hooks);
 
 % preserve log file and failures, if any
@@ -172,7 +179,7 @@ fprintf('*** Beginning tracking.\n');
 tag = track_hmi_postrun_files(fullfile(dest_dir, 'Tracks', 'jsoc'), ...
                               hooks.run_name, fnlog, fnfail);
 
-fprintf('*** Completed tracking.\n');
+fprintf('%s: Completed tracking.\n', mfilename);
 
 % optionally make a movie from above run
 if make_movie,
@@ -186,9 +193,10 @@ if make_movie,
   % (make it run-specific)
   fnAVI = sprintf(hooks.filename.template, 'movie', '-movie.', [tag '_%d'], 'avi');
   % loop which makes the movie
-  fprintf('*** Beginning movie.\n');
+  fprintf('%s: Beginning movie.\n', mfilename);
   [fn,res]=file_loop_cat(fnIC, [0 dt 1], @track_hmi_movie_loop, 4, cm, fnTs, fnAVI);
-  fprintf('*** Completed movie.\n');
+  fprintf('%s: Completed movie.\n', mfilename);
 end;
 
+fprintf('%s: Done.\n', mfilename);
 return

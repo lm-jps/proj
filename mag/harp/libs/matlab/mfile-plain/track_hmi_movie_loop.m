@@ -15,6 +15,7 @@ function res=track_hmi_movie_loop(fn, t, smpl, cm, fnTs, Mname)
 % AVI file.  If Mname is not given, the movie frames are returned 
 % in res.  This is unworkable for long movies, so if Mname is given,
 % just the number of regions present is returned.
+% * TODO: Convert to the new movie-exporter (writeVideo).
 % * Note fnTs corresponds to mat-files corresponding to individual
 % tracks, while the fulldisk instant catfile, given to file_loop_cat, 
 % corresponds to the fulldisk images.
@@ -85,8 +86,9 @@ if isnumeric(fn),
     end;
   end;
   if fn > 0, 
+    fprintf('\n');
     if ~isempty(Mavi),
-      disp(sprintf('\nWriting final movie (#%d).', Mavi_num));
+      fprintf('%s: Writing final movie (#%d).\n', mfilename, Mavi_num);
       Mavi_name = Mavi.Filename;
       Mavi = close(Mavi);
       % convert to mp4
@@ -98,7 +100,7 @@ if isnumeric(fn),
     clear Tinfo FTinx FTpatch
     clear Mavi Mavi_num
     clear(mfilename) % clears all persistent vars?
-    disp(sprintf('\nDone.')); 
+    fprintf('%s: Done.\n', mfilename); 
   end;
   return;
 end;
@@ -157,14 +159,18 @@ keys = {'segment', 'boundary', 'boundary0', 'metadata.name'};
 [ims,JJ1,JJ2,JJ3,JJ4,JJ5,fns] = loadinstant(fn, keys, -smpl);
 clear JJ*
 
+% get the geometry for this frame
+%  (formerly used Tinfo{t}.geom, but fails if no tracks in a frame)
+geom = hmidisk(t);
+
 % get the regions for this frame
-[rgn,rgnTid,rgnAge,rgnMrg,rgnTag,bound2tk,geom] = ...
+[rgn,rgnTid,rgnAge,rgnMrg,rgnTag,bound2tk] = ...
     get_regions(frame_num, Tinfo, FTinx, FTpatch);
 nR = size(rgn, 1);
 
 % set FLIP
 % +1 for no flip (P=0), -1 for flip (P=180)
-p0 = geom(5); % found p-angle using Tinfo{t}.geom
+p0 = geom(5); 
 FLIP = 2*(cosd(p0) > 0) - 1;
 
 % load NOAA regions
@@ -495,12 +501,13 @@ return;
 %
 % get_regions: extract regions from all tracks in a given frame
 %
-function [rgn,rgnTid,rgnAge,rgnMrg,rgnTag,bound2tk,geom] = get_regions(f1, Tinfo, FTinx, FTpatch)
+function [rgn,rgnTid,rgnAge,rgnMrg,rgnTag,bound2tk] = get_regions(f1, Tinfo, FTinx, FTpatch)
 
 tlist = find(FTinx(f1,:)); % tracks overlapping current frame
 nT = length(tlist);
 rgn = zeros(nT,4);
 [rgnTid,rgnAge,rgnTag,rgnMrg] = deal(zeros(nT,1)); % ensure columns
+bound2tk = [];
 for i = 1:nT,
   t1 = tlist(i); % current track
   % FIXME: per-blob track number
@@ -518,15 +525,16 @@ for i = 1:nT,
   rgnAge(i) = (t1_f1 - 1);
   % # merged (0 and up, rgnMrg = -1 if ROI not seen this frame)
   rgnMrg(i) = length(FTpatch{f1,t1}) - 1;
-  % tag: -1 => placeholder. 0 => try-harder. 1 => regular roi
+  % tag: -1 => placeholder. 0 => try-harder. 1 => regular roi. 2 => merged.
   rgnTag(i) = Tinfo{t1}(t1_f1).tag;
   % coords
   base = Tinfo{t1}(t1_f1).coords;
   dims = Tinfo{t1}(t1_f1).dims;
-  geom = Tinfo{t1}(t1_f1).geom; % same for all i
+  % (no longer find geom here because no tracks => nT == 0 => no geometry)
+  % geom = Tinfo{t1}(t1_f1).geom; % same for all i
   rgn(i,:) = [base base+dims-1];
 end;
-bound2tk = bound2tk(:); % ensure columns
+bound2tk = bound2tk(:); % ensure column
 % ...if merges, this may not be the case...
 % assert(all(bound2tk > 0));
 return

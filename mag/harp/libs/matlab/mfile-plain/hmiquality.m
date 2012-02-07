@@ -45,7 +45,7 @@ q  = zeros(nf,1);
 ok = false(nf,1);
 
 % try to find disk metadata in these data series
-Parents = { 'hmi.M_720s', 'hmi_test.M_720s' };
+Parents = { 'hmi.M_720s', 'hmi.M_720s_nrt' };
 
 key_query = 'key=QUALITY';
 
