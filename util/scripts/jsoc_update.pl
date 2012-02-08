@@ -491,7 +491,7 @@ sub BuildOnMachine
          print "## Starting build on platform $plat.\n";
 
          # Should really capture return code from this ssh cmd.
-         if (open(CMD, "(ssh $mach 'cd $lpath; $lpath/make_jsoc.pl') 1>make_jsoc_$plat.log 2>&1 |"))
+         if (open(CMD, "(ssh $mach 'cd $lpath; /home/jsoc/make_jsoc.pl') 1>make_jsoc_$plat.log 2>&1 |"))
          {
             close(CMD);
          } 
