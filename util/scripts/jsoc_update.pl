@@ -1,408 +1,510 @@
-#!/usr/bin/perl -w 
+#!/home/jsoc/bin/linux_x86_64/perl5.12.2 -w  
 
-# script for synchronizing your CVS working directory with the CVS JSOC module (new tree)
 
-# must run from root of JSOC tree (not necessarily from $JSOCROOT)
-
-# run this on each machine to be used.
-#    n02 - for linux_X86_64 machines
-#    n00 - for linux4 machines such as n00, phil, etc.
-# 
-#    n12 formerly used for AMD x86-64 can also be used instead of n02
-#    lws Itaniam processors no longer supported for JSOC
-
+use File::stat;
+use Fcntl qw(:mode);
+use Getopt::Long;
+use FileHandle;
+use Sys::Hostname;
+use Cwd qw(realpath);
 use FindBin qw($Bin);
 
-$JSOCROOT = $ENV{"JSOCROOT"};
-$CVSLOG = "cvsupdate.log";
-$CVSSTATUS = "$JSOCROOT/base/util/scripts/cvsstatus.pl";
+use constant kSuccess       => 0;
+use constant kBadArgs       => 1;
+use constant kCantSSH       => 2;
+use constant kConflicts     => 3;
+use constant kFileStatus    => 4;
+use constant kCantExeOnMach => 5;
 
-my($aidx) = 0;
-my($arg);
-my($line);
-my($synccmd);
-my($wdupdate) = 0;
-my($lwd); # local working directory
-my($rwd); # remote working directory
-my($mach);
-my(@rsp);
 
-# Each is a hash of hash references. There will be three elements in this hash: one for
-# the local machine, and one for each of the machines in @machines. For fs2mount, each hash
-# reference will be populated with mappings from a file system to a mount point.
-my(%fs2mount);
-my(%mount2fs);
+use constant kUpdateLog => "cvsupdate.log";
+use constant kMtabFile  => "/etc/mtab";
+use constant kTmpDir    => "/tmp";
 
 my(@machines) = 
 (
     "n02"
 );
 
-# set up mappings
-InitMaps();
+my($optdir);
+my($cvstree);
+my($jsocroot);
+my($nfsf);
+my($volume);
+my($mount);
+my($netpath);
+my($mach);
+my($hostnm);
 
-while ($arg = shift(@ARGV))
+
+# If the caller is attempting to update a CVS tree that resides on a local disk, then 
+# it MIGHT not be possible to update that tree after ssh'ing to a sanctioned machine
+# (e.g., n02). Or the caller might be attempting to update a CVS tree that resides
+# on a network disk, but the disk might not be exported to a sanctioned machine.
+# This script checks for those problems.
+#
+# Determine whether the cvs tree resides on a local disk, or if it is NFS-
+# mounted. If it is on local disk, then create a network volume name for the disk (e.g.,
+# <machine>:<path>). If the tree is NFS-mounted, then use the mtab to create a
+# network volume.
+# 
+# If the CVS tree does not reside on a disk accessible from the sanctioned machines,
+# ask the caller if they want to build the updated tree on the machine running this
+# script.
+
+unless (GetOptions("dir=s"    => \$optdir
+                  ))
 {
-    if (-d $arg)
-    {
-	# Script will update working directory - ensure this is an absolute path.
-	# May be a relative path
-	my($lfspath);
-	my($rfspath);
-	my($savedp);
-
-	@rsp = ResolvePath($arg);
-	$lwd = shift(@rsp);
-
-	@rsp = GetFSPath("local", $lwd);
-	$lfspath = shift(@rsp);
-
-	if ($lfspath !~ /:\S+::/)
-	{
-	    print STDERR "Path '$lwd' is mounted locally only; bailing.\n";
-	    exit(1);
-	}
-
-	foreach $mach (@machines)
-	{
-	    # check for existence of mountpath on $mach that points to $lfspath
-	    $rwd = GetMountPath($mach, $lfspath);
-
-	    if ($rwd eq "")
-	    {
-		print STDERR "Path '$lwd' is not a network filesystem mounted on '$mach'; bailing.\n";
-		exit(1);
-	    }
-	}
-
-	$wdupdate = 1;
-    }
-    else
-    {
-	print STDERR "Invalid JSOC working directory argument; bailing.\n";
-	exit(1);
-    }
-
-    $aidx++;
+   Usage();
+   exit(kBadArgs);
 }
 
-if ($wdupdate != 1)
+# If user did not specify a directory to update, use the one specified by the JSOCROOT
+# env variable, if it exists.
+if (!defined($optdir))
 {
-    if (!defined($JSOCROOT))
-    {
-	print STDERR "Environment variable 'JSOCROOT' not set; bailing.\n";
-	exit(1);
-    }
-    
-    if (!(-d $JSOCROOT))
-    {
-	print STDERR "Invalid JSOC root directory; bailing.\n";
-	exit(1);
-    }
-
-    @rsp = ResolvePath($JSOCROOT);
-    $lwd = shift(@rsp);
-}
-
-# First, synchronize with CVS repository
-print STDOUT "####### Start cvs update ####################\n";
-$synccmd = "(cd $lwd; $Bin/jsoc_sync.pl -l$CVSLOG)"; # use the jsoc_sync.pl relative to this script
-print "Calling '$synccmd'.\n";
-system($synccmd);
-
-print STDOUT "##\n";
-print STDOUT "## A scan of $CVSLOG for files with conflicts follows:\n";
-print STDOUT "## Start scanning cvsupdate.log\n";
-system("(cd $lwd; grep '^C ' $CVSLOG)");
-
-print STDOUT "## Done scanning cvsupdate.log\n";
-print STDOUT "## Any lines starting with a 'C' between the 'Start' and 'Done' lines above should be fixed.\n";
-print STDOUT "## See release notes to deal with 'C' status conflicts.\n";
-print STDOUT "##\n";
-print STDOUT "## Now Check cvsstatus for files that should be in the release ##\n";
-print STDOUT "####### Start checking status ####################\n";
-    
-if (-e $CVSSTATUS)
-{
-    system("cd $lwd; $CVSSTATUS");
-
-    print STDOUT "####### Done checking status ####################\n";
-	print STDOUT "## If no lines between the 'Start' and 'Done' lines then there are no cvsstatus problems.\n";
-    print STDOUT "## Continue with 'cont' when ready.\n";
-
-    $line = <STDIN>;
-    chomp($line);
-    $line = lc($line);
-
-    if ($line =~ /.*cont.*/)
-    {
-	my($lfspath);
-	my($machtype);
-	my($echocmd) = 'echo $JSOC_MACHINE';
-
-	system("(cd $lwd; ./configure)");
-
-	@rsp = GetFSPath("local", $lwd);
-	$lfspath = shift(@rsp); # could be local only
-
-	if ($lfspath !~ /:\S+::/)
-	{
-	    print STDERR "Path '$lwd' is mounted locally only; bailing.\n";
-	    exit(1);
-	}
-
-        my($cmd);
-
-	foreach $mach (@machines)
-	{
-	    $machtype = `ssh $mach '$echocmd'`;
-	    chomp($machtype);
-
-	    print STDOUT "start build on $machtype\n";
-	    @rsp = GetMountPath($mach, $lfspath);
-	    $rwd = shift(@rsp);
-            $cmd = "(ssh $mach 'cd $rwd;$rwd/make_jsoc.pl') 1>make_jsoc_$machtype.log 2>&1";
-            print STDOUT "$cmd\n";
-	    system($cmd);
-	    print STDOUT "done on $machtype\n";
-	}
-    }
-    else
-    {
-	print STDOUT "Bailing upon user request.\n";
-	exit(0);
-    }
+   $jsocroot = $ENV{'JSOCROOT'};
+   (!defined($jsocroot)) ? $cvstree = $ENV{'PWD'} : $cvstree = $jsocroot;
 }
 else
 {
-    print STDERR "Required script $CVSSTATUS missing; bailing.\n";
-    exit(1);
+   $cvstree = $optdir;
 }
 
-print STDOUT "JSOC update Finished.\n";
-
-sub InitMaps
+# Determine if the cvs tree specified exists
+if (!(-d $cvstree))
 {
-    my($first);
-    my($mach);
-    my($fs);
-    my($mountpoint);
-
-    # current machine
-    open(DFCMD, "df |");
-    $first = 1;
-    while (defined($line = <DFCMD>))
-    {
-	if ($first == 1)
-	{
-	    $first = 0;
-	    next;
-	}
-	chomp($line);
-	if ($line =~ /^(\S+:\S+)\s+.+\s+(\S+)$/)
-	{
-	    if (defined($1) && defined($2))
-	    {
-		$fs = $1;
-		$mountpoint = $2;
-		$fs =~ s/g:/:/;
-		$fs2mount{"local"}->{$fs} = $mountpoint;
-		$mount2fs{"local"}->{$mountpoint} = $fs;
-
-		#print "$fs\t$mountpoint\n";
-	    }
-	}
-    }
-
-    close DFCMD;
-
-    # remote machines
-    foreach $mach (@machines)
-    {
-	open(DFCMD, "ssh $mach df |");
-	$first = 1;
-	while (defined($line = <DFCMD>))
-	{
-	    if ($first == 1)
-	    {
-		$first = 0;
-		next;
-	    }
-	    chomp($line);
-	    if ($line =~ /^(\S+:\S+)\s+.+\s+(\S+)$/)
-	    {
-		if (defined($1) && defined($2))
-		{
-		    $fs = $1;
-		    $mountpoint = $2;
-		    $fs =~ s/g:/:/;
-		    $fs2mount{$mach}->{$fs} = $mountpoint;
-		    $mount2fs{$mach}->{$mountpoint} = $fs;
-
-		    #print "$fs\t$mountpoint\n";
-		}
-	    }
-	}
-
-	close DFCMD;
-    }
+   print STDERR "Specified CVS tree does not exist.\n";
+   exit(kBadArgs);
 }
 
-sub ResolvePath
+# Determine if the cvs tree resides on a local disk.
+# 1. Obtain the device number for each record in /etc/mtab.
+# 2. Walk down this list, comparing the device on which the CVS tree resides with each
+#    record in this list. If there is a match, then the CVS tree resides on a mounted directory.
+#    Check the matching mtab record for an NFS file system. If not, then assume
+#    the CVS tree is on a local disk. Otherwise, it is NFS-mounted, and we should
+#    obtain the hosting volume and mount point from the mtab record.
+$nfsf = (GetNFSInfo($cvstree, \$volume, \$mount));
+
+if (!$nfsf)
 {
-    my($path) = @_;
-    my($savedp);
-    my($rpath);
-    my(@ret);
-
-    $savedp = `pwd`;
-    chdir($path);
-    $rpath = `pwd`;
-    chdir($savedp);
-    chomp($rpath);
-
-    push(@ret, $rpath);
-    return @ret;
+   # Assume the tree is on a local disk. Create a 'network name' for the tree.
+   $hostnm = hostname();
+   $netpath = "$hostnm:" . realpath($cvstree);
+}
+else
+{
+   $netpath = realpath($cvstree);
+   $netpath =~ s/$mount/$volume/;
 }
 
-# input is an absolute path on $mach
-sub GetFSPath
+# Take the local path of the JSOC tree, identify the mount root in this path
+# (the mount root is the part of the path that resides in the appropriate mtab 
+# record), then substitute the mount-path part of the local path with the 
+# network volume (e.g., <machine>:<path>). So if the JSOC tree's local path
+# is /auto/home1/arta/jsoctrees/JSOC, and the mtab record for the network
+# drive that contains this tree is "sunroom:/home1 /auto/home1 ..." 
+# substitute "/auto/home1" in the JSOC-tree path with "sunroom:/home1" to
+# form the network path "sunroom:/home1/arta/jsoctrees/JSOC".
+
+print "CVS JSOC tree being updated ==> $netpath\n";
+
+# Build the JSOC tree on the sanctioned machines, if it is mounted.
+
+# Anonymous hash whose keys are machines. For each key, the value is the 
+# path, local to the machine, to the CVS tree being updated.
+my($mpaths) = GetLocalPaths(@machines, $netpath);
+my(@mpkeys) = keys(%$mpaths);
+my($impkey);
+my($line);
+my($cmd);
+
+if ($#mpkeys == -1)
 {
-    my($mach, $mountpath) = @_;
-    my($fs);
-    my($mountpoint);
-    my(@fsinfo);
-    my(@ret);
-    my($fspath);
+   $hostnm = hostname();
+   print "The CVS tree $netpath is not mounted on any of the requested build machines (i.e., n02).\n";
+   print "Would you like to build on the machine on which this script is running, $hostnm? (y/n)\n";
+   $line = <STDIN>;
+   chomp($line);
+   $line = lc($line);
 
-    @fsinfo = GetFS($mach, $mountpath);
-    $fs = shift(@fsinfo);
-    $mountpoint = shift(@fsinfo);
-
-    $fspath = $mountpath;
-    $fspath =~ s/$mountpoint/${fs}::/;
-
-    push(@ret, $fspath);
-    return @ret;
+   if ($line =~ /^y/)
+   {
+      $mpaths->{$hostnm} = $cvstree;
+      push(@mpkeys, $hostnm);
+      print "                 Local path ==> $hostnm:$cvstree.\n";
+   }
 }
 
-# input is an FS path and a machine on which the FS is mounted
-sub GetMountPath
+if ($#mpkeys >= 0)
 {
-    my($mach, $fspath) = @_;
-    my($mountpath);
-    my($mountpoint);
-    my($fs);
-    my(@ret);
+   my($cdir) = realpath($ENV{'PWD'});
+   my(@rsp);
+   my($rspstr);
 
-    $fs = $fspath;
-    if ($fs =~ /(.+)::/)
-    {
-	$fs = $1;
-    }
+   print "\n";
+   print "#############################################\n";
+   print "####### Starting CVS update #################\n";
+   print "#############################################\n";
+   print "##\n";
 
-    $mountpoint = $fs2mount{$mach}->{$fs};
+   chdir($cvstree);
+   unless (UpdateTree($cvstree))
+   {
+      # Run the configure script - should really check the return code.
+      print "####### Running configure script ############\n";
+      @rsp = `./configure 2>&1`;
+      print "## Done (output from configure follows).\n";
+      print "## ";
+      $rspstr = join("## ", @rsp);
+      print $rspstr;
 
-    if (defined($mountpoint))
-    {
-	$mountpath = $fspath;
-	$mountpath =~ s/${fs}::/$mountpoint/;
+      # Do the build on each machine
+      print "####### Building binaries on machines #####\n";
+      map({ BuildOnMachine($_, $mpaths); } @mpkeys);
+      print "## Done building.\n";
+      print "##\n";
+   }
+   chdir($cdir);
 
-	if ($mach eq "local")
-	{
-	    if (!(-d $mountpath))
-	    {
-		print STDERR "Directory '$mountpath' does not exist on machine '$mach'; bailing.\n";
-		exit(1);
-	    }
-	}
-	else
-	{
-	    open(STATCMD, "(ssh $mach stat $mountpath | sed 's/^/STDOUT:/') 2>&1 |");
-
-	    while (defined($line = <STATCMD>))
-	    {
-		chomp($line);
-		if ($line !~ /^STDOUT:/)
-		{
-		    if ($line =~ /No such file or directory/)
-		    {
-			print STDERR "Directory '$mountpath' does not exist on machine '$mach'; bailing.\n";
-			close STATCMD;
-			exit(1);
-		    }
-		}
-	    }
-
-	    close STATCMD;
-	}
-
-	push(@ret, $mountpath);
-    }
-    else
-    {
-	push(@ret, "");
-    }
-
-    return @ret;
+   print "###########################################\n";
+   print "####### Update of CVS binaries complete. ##\n";
+   print "###########################################\n";
 }
 
-# input is an absolute path on $mach 
-sub GetFS
+exit(kSuccess);
+
+#my($st) = stat("/tmp"); # 2050
+#my($st) = stat("/SUM12"); # 33 (must refer to the physical disk device on d02)
+#my($st) = stat("/auto/SUM12"); # 33
+#my($st) = stat("/dev/sda2"); # 2050
+#my($st) = stat("/auto/home1");
+#print "isblock\n" if (S_ISBLK($st->mode));
+#(S_ISBLK($st->mode)) ? print $st->rdev . "\n" :  print $st->dev . "\n";
+
+sub Usage
 {
-    my($mach, $path) = @_;
-    my($fs);
-    my($mountpoint);
-    my(@ret);
+   print "jsoc_update.pl\n";
+   print "  If the environment variable JSOCROOT is set, update the CVS tree specified by\n";
+   print "  \$JSOCROOT. Otherwise, if the current directory is a valid DRMS CVS tree, update\n";
+   print "  the current directory. If the current directory is not a valid DRMS CVS tree, exit\n";
+   print "  without updating anything.\n";
 
-    if ($mach eq "local")
-    {
-	if (-d $path)
-	{
-	    $fs = `df $path`;
-	}
-	else
-	{
-	    print STDERR "Directory '$path' does not exist on machine '$mach'; bailing.\n";
-	    exit(1);
-	}
-    }
-    else
-    {
-	open(STATCMD, "(ssh $mach stat $path | sed 's/^/STDOUT:/') 2>&1 |");
+   print "jsoc_update -d <path>";
+   print "  Update the DRMS CVS tree specified by <path>.\n";
+}
 
-	while (defined($line = <STATCMD>))
-	{
-	    chomp($line);
-	    if ($line !~ /^STDOUT:/)
-	    {
-		if ($line =~ /No such file or directory/)
-		{
-		    print STDERR "Directory '$path' does not exist on machine '$mach'; bailing.\n";
-		    close STATCMD;
-		    exit(1);
-		}
-	    }
-	}
+# Returns 1 and the network volume containing the JSOC tree (if the JSOC tree is
+# NFS-mounted). Returns 0 otherwise.
+sub GetNFSInfo
+{
+   my($tree) = $_[0];
+   my($volr) = $_[1];
+   my($mountr) = $_[2];
+   
+   my($rv) = 0;
+   my(@mtab);
+   my($fh);
 
-	$fs = `ssh $mach df $path`;
-    }
+   # Get the device number for the CVS tree.
+   my($st) = stat($tree);
+   my($devno) = (S_ISBLK($st->mode)) ? $st->rdev : $st->dev; # number of device containing 
+                                                             # JSOC tree.
+   my($info);
 
-    if ($fs =~ /.+\n(\S+)\s+.+\s+(\S+)$/)
-    {
-	$fs = $1;
-	$mountpoint = $2;
-    }
-    else
-    {
-	 print STDERR "Invalid 'df' response '$fs'; bailing.\n";
-	 exit(1);
-    }
+   # Open mtab file
+   $fh = FileHandle->new("<" . kMtabFile);
 
-    # This is SU-specific!
-    $fs =~ s/g:/:/;
+   if (defined($fh))
+   {
+      @mtab = <$fh>;
+      
+      # Not sure how to short-circuit the map function (we don't want to examine every line
+      # in the mtab if we found a relevant one).
+      map({ ProcessMtabInfo(\$info, $devno, $_); } @mtab);
+      $fh->close();
+   }
+   else
+   {
+      print STDERR "Fatal error - cannot find mtab.\n";
+   }
 
-    push(@ret, $fs);
-    push(@ret, $mountpoint);
-    return @ret;
+   if (defined($info))
+   {
+      $rv = 1;
+      $$volr = $info->{'vol'};
+      $$mountr = $info->{'mount'};
+   }
+
+   return $rv;
+}
+
+# Find the network drive that contains the JSOC tree.
+sub ProcessMtabInfo
+{
+   my($infor) = $_[0];
+   my($devno) = $_[1]; # number of the device containing the JSOC tree
+   my($line) = $_[2];
+
+   my($vol);
+   my($mount);
+   my($type);
+   my($st);
+   my($mtabdevno);
+
+   chomp($line);
+
+   # 1 - NFS volume (machine:volume)
+   # 2 - mount point
+   # 3 - partition type
+   if ($line =~ /\s*(\S+)\s*(\S+)\s*(\S+)/)
+   {
+      $vol = $1;
+      $mount = $2;
+      $type = $3;
+
+      # Look up the device number for this line
+      $st = stat($mount);
+      $mtabdevno = (S_ISBLK($st->mode)) ? $st->rdev : $st->dev;
+
+      if ($devno == $mtabdevno && $type =~ /nfs/i)
+      {
+         # match - we have the device on which the CVS tree resides, and that device
+         # is NFS-mounted.
+         if (!(defined($$infor)))
+         {
+            # New empty hash.
+            $$infor = {};
+         }
+         
+         # Save the network drive that contains the JSOC tree (and where it is mounted on
+         # the current machine).
+         $$infor->{'vol'} = $vol;
+         $$infor->{'mount'} = $mount;
+      }
+   }
+}
+
+sub ExtractMachPath
+{
+   my($netpath) = $_[0];
+   my($line) = $_[1];
+
+   my($volume);
+   my($mount);
+
+   # First, extract the volume from the mtab record
+   chomp($line);
+
+   if ($line =~ /^\s*(\S+)\s+(\S+)/)
+   {
+      $volume = $1;
+      $mount = $2;
+   }
+
+   if ($netpath =~ /^$volume(.+)/)
+   {
+      return $mount . $1;
+   }
+   else
+   {
+      return ();
+   }
+}
+
+sub GetLocalPaths
+{
+   my(@machines) = $_[0];
+   my($netpath) = $_[1]; # network path to CVS tree
+
+   my($rv);
+   my(@machpath);
+
+   foreach $mach (@machines)
+   {
+      if (open(STATCMD, "(ssh $mach cat /etc/mtab) 2>&1 |"))
+      {
+         my(@remotemtab) = <STATCMD>;
+
+         close(STATCMD);
+
+         # Extract record for $volume.
+         @machpath = map({ ExtractMachPath($netpath, $_); } @remotemtab);
+
+         my($test) = $#machpath;
+
+         if ($#machpath == 0)
+         {
+            # CVS tree lives on $mach at $machpath[0];
+            print "                 Local path ==> $mach:$machpath[0].\n";
+
+            if (!defined($rv))
+            {
+               $rv = {};
+            }
+
+            $rv->{$mach} = $machpath[0];
+         }
+         else
+         {
+            print "CVS tree $netpath is not mounted on $mach; skipping machine.\n";
+            next;
+         }
+      }
+      else
+      {
+         print "Cannot ssh to $mach.\n"; 
+         exit(kCantSSH);
+      }
+   }
+
+   return $rv;
+}
+
+sub UpdateTree
+{
+   my($cvstree) = $_[0];
+
+   my($rv) = 0;
+   my(@statchk);
+   my($rsp);
+
+   print "####### Downloading repository changes ######\n";
+
+   # Update local CVS tree with CVS-repository changes.
+   $cmd = "$Bin/jsoc_sync.pl -l" . kUpdateLog; # use the jsoc_sync.pl relative to this script
+   print "## Updating source files in $cvstree (calling '$cmd').\n";
+   $rsp = qx($cmd 2>&1);
+   print "## $rsp";
+   print "##\n";
+
+   if (open(UDL, "<" . kUpdateLog))
+   {
+      my(@content) = <UDL>;
+      my(@conflicts) = grep({ ($_ =~ /^\s*C/) ? $_ : () } @content);
+      my($iline);
+
+      close(UDL);
+
+      if ($#conflicts >= 0)
+      {
+         print "## A list of locally modified files with changes that conflict with repository changes follows:\n";
+         foreach $iline (@conflicts)
+         {
+            print "## $iline\n";
+         }
+
+         print "## Please resolve these conflicts, then update again.\n";
+         print "## (see release notes to learn how to deal with conflicting file changes.)\n";
+         exit(kConflicts);
+      }
+
+      print "####### Checking file status ################\n";
+      @content = CheckStatus();
+      print "## Done.\n";
+      
+      if ($#content >= 0)
+      {
+         print "## A list of local files that differ from their repository counterparts follows:\n";
+         foreach $iline (@content)
+         {
+            chomp($iline);
+            print "## $iline\n";
+         }
+
+         print "##\n";
+      }
+
+      print "## All checks succeeded. Continue by entering 'cont'.\n";
+      print "## ";
+      $line = <STDIN>;
+      chomp($line);
+      $line = lc($line);
+
+      if ($line !~ /^\s*cont/)
+      {
+         print "## Update aborted by user.\n";
+         $rv = 1;
+      }
+   }
+   else
+   {
+      # Couldn't open update log - bail.
+      print "## Could not open update log file " . kUpdateLog . ".\n";
+      $rv = 1;
+   }
+
+   print "##\n";
+
+   return $rv;
+}
+
+sub CheckStatus
+{
+   my(@res);
+
+   my $PID = getppid;
+   my $user = $ENV{'USER'};
+   my $logfile = "/tmp/cvs_status_".$user."_$PID.log";
+   `cvs status 1> $logfile 2>&1`;
+   open(CV, $logfile) || die "Can't open $logfile: $!\n";
+
+   while (<CV>)
+   {
+      #print "$_";		#!!!TEMP
+      if (/^File:/)
+      {
+         if (/Up-to-date/)
+         {
+            next;
+         }
+         push(@res, "$_");
+         <CV>;
+         <CV>;
+         $_ = <CV>;             #get Repository revision line
+         s/\s+/ /g;             #compress multiple spaces
+         push(@res, "$_\n");
+      }
+   }
+
+   return @res;
+}
+
+sub BuildOnMachine
+{
+   my($mach) = $_[0];
+   my($mpathsr) = $_[1];
+
+   my($plat);
+   my($lpath) = $mpathsr->{$mach};
+
+   if (defined($lpath))
+   {
+      # Should really capture the return code from this ssh cmd.
+      if (open(CMD, "(ssh $mach echo \$JSOC_MACHINE) 2>&1 |"))
+      {
+         $plat = <CMD>;
+         chomp($plat);
+         close(CMD);
+
+         print "## Starting build on platform $plat.\n";
+
+         # Should really capture return code from this ssh cmd.
+         if (open(CMD, "(ssh $mach 'cd $lpath; $lpath/make_jsoc.pl') 1>make_jsoc_$plat.log 2>&1 |"))
+         {
+            close(CMD);
+         } 
+         else
+         {
+            print "## Unable to run cmd on $mach [1].\n";
+         }
+
+         print "## Build on platform $plat complete.\n";
+      } 
+      else
+      {
+         print "## Unable to run cmd on $mach [2].\n";
+      }
+   }
 }
