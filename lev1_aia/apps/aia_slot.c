@@ -91,6 +91,12 @@ int DoIt ()
   PrintElapsedTime("to read input arguments");
   TimeReset();
   inprs = drms_open_records(drms_env, dsinp, &status);
+
+  if (dsinp)
+  {
+     free(dsinp);
+  }
+
   PrintElapsedTime("to open input records");
 
   if (status) DIE("cant open recordset query");
@@ -146,5 +152,16 @@ int DoIt ()
     drms_close_record(outrec, DRMS_INSERT_RECORD);
     PrintElapsedTime("to close 1 output record");
   }
+
+  if (inprs)
+  {
+     drms_close_records(inprs, DRMS_FREE_RECORD);
+  }
+
+  if (dsout)
+  {
+     free(dsout);
+  }
+  
   return 0;
 }
