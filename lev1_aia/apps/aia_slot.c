@@ -3,8 +3,14 @@
 #include "drms.h"
 #include "drms_names.h"
 
+/* Timing statements added by Art - 2/10/2012 */
+
 #define NOT_SPECIFIED "***Not Specified***"
 #define DIE(msg) {fprintf(stderr,"$$$$ %s: %s\n", module_name, msg); return 1;}
+
+#define kTimerFlag       "t"
+
+TIMER_t *gTimer = NULL;
 
 ModuleArgs_t module_args[] =
 {
@@ -12,11 +18,28 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "dsout", NOT_SPECIFIED, "Output series"},
   {ARG_FLAG, "h", "0", "Print usage message and quit"},
   {ARG_FLAG, "v", "0", "verbose flag"},
+  {ARG_FLAG, kTimerFlag, NULL, "When set, enables timing code and causes timing messages to be printed."},
   {ARG_END}
 };
 
 char *module_name = "aia_slot";
 int verbose;
+
+static void PrintElapsedTime(const char *msg)
+{
+   if (gTimer)
+   {
+      fprintf(stdout, "  Elapsed Time - %s: %f seconds.\n", msg, GetElapsedTime(gTimer));
+   }
+}
+
+static void TimeReset()
+{
+   if (gTimer)
+   {
+      ResetTimer(gTimer);
+   }
+}
 
 int nice_intro(int help)
 {
@@ -52,6 +75,12 @@ int DoIt ()
   DRMS_RecordSet_t *inprs;
   DRMS_Keyword_t *inpkey = NULL, *outkey = NULL;
   DRMS_Segment_t *inpseg, *outseg;
+  int timestuff = cmdparams_isflagset(&cmdparams, kTimerFlag);
+
+  if (timestuff)
+  {
+     gTimer = CreateTimer();
+  }
 
   if (nice_intro(0)) return(0);
 
@@ -59,14 +88,20 @@ int DoIt ()
   dsout = strdup(cmdparams_get_str(&cmdparams, "dsout", NULL));
   if (strcmp(dsinp, NOT_SPECIFIED)==0) DIE("dsinp argument is required");
   if (strcmp(dsout, NOT_SPECIFIED)==0) DIE("dsout argument is required");
-
+  PrintElapsedTime("to read input arguments");
+  TimeReset();
   inprs = drms_open_records(drms_env, dsinp, &status);
+  PrintElapsedTime("to open input records");
+
   if (status) DIE("cant open recordset query");
-  drms_stage_records(inprs, 1, 0);
+
   nrecs = inprs->n;
   for (irec=0; irec<nrecs; irec++) {
     inprec = inprs->records[irec];
+    TimeReset();
     outrec = drms_create_record(drms_env, dsout, DRMS_PERMANENT, &status);
+    PrintElapsedTime("to create 1 output record");
+
     if (status) DIE("cant create recordset");
     if (first) {
       tr_step = drms_getkey_double(outrec, "T_REC_step", &status);
@@ -104,8 +139,12 @@ int DoIt ()
     if (!status) drms_setkey_int(outrec, "FSN", fsn);
     qual = drms_getkey_int(inprec, "QUALITY", &status);
     if (!status) drms_setkey_int(outrec, "QUALITY", qual);
+    TimeReset();
     status = drms_link_set("lev1", outrec, inprec);
+    PrintElapsedTime("to set the link from the input record to the output record");
+    TimeReset();
     drms_close_record(outrec, DRMS_INSERT_RECORD);
+    PrintElapsedTime("to close 1 output record");
   }
   return 0;
 }
