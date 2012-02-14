@@ -49,6 +49,14 @@ Parents = { 'hmi.M_720s', 'hmi.M_720s_nrt' };
 
 key_query = 'key=QUALITY';
 
+% this mask contains the OR of:
+%   QUAL_NODATA:  0x80000000 -- the MSB is set when there is no LOS observable produced
+%   QUAL_ECLIPSE: 0x00000200 -- at least 1 lev1 observable had an eclipse
+% See http://jsoc.stanford.edu/doc/data/hmi/Quality_Bits/QUALITY.txt -- you are looking
+% for the lines for the 12-min averaged IQUV -- for lev 1.5 quality bits (not the same as lev1).
+% the eclipses are seen around 2011.03.04_12:36_TAI, and possibly again in feb-mar 2012.
+bad_quality = hex2dec('80000200');
+
 % begin getting keywords
 for f = 1:nf,
   for parent = Parents,
@@ -68,8 +76,8 @@ for f = 1:nf,
 
   % insert the numeric quality (a 32-bit integer stored as a double)
   q(f) = qnum;
-  % insert the "ok for most purposes" flag
-  ok(f) = (qnum < 2^31);
+  % insert the "ok for tracking purposes" flag
+  ok(f) = bitand(qnum, bad_quality) == 0;
 end;
 
 return;

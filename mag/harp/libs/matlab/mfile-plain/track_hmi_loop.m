@@ -221,26 +221,34 @@ clear roi1 tinx mask roi2 tinx2
 %
 % detect merging tracks
 %
+% tbuds is a map on tlist x tlist. 
+% if i ~= j and tbuds(i,j) = 1, then tlist(i) will merge with tlist(j)
 tbuds = expm(double((rho*rho')>0)) > 0; % track index of matching tracks
-t_merged = []; % remember the merged track slots
+t_merged_away = []; % remember the merged-out track *indexes*
+t_merged_into = []; % merged-into track *slots*
 for t = 1:Nt0,
-  % note: t is a track index
+  % t is a track index, tlist(t) is a track slot for ROI_t
   tbuds1 = find(tbuds(t,:)); % tbuds1 are track indexes
   if length(tbuds1) <= 1, continue; end; 
-  if tbuds1(1) ~= t, continue; end; % only merge groups once
+  if tbuds1(1) ~= t, continue; end; % only merge the first time we hit the group
   % perform the merge
-  fprintf('merging %s', sprintf('%d ', tlist(tbuds1)));
-  tracker_merge_tracks(hooks, tlist(tbuds1));
-  t_merged = [t_merged tbuds1(2:end)];
+  fprintf('merge:%s', sprintf(' %d', tlist(tbuds1)));
+  % t1: the *track slot* of the merged-into track, an element of tlist
+  % t1_inx: the index of the merged-into track within tbuds1
+  t1 = tracker_merge_tracks(hooks, tlist(tbuds1));
+  t1_inx = find(t1 == tlist(tbuds1));
+  % all of tbuds1, except the merged-into element
+  t_merged_away = [t_merged_away tbuds1([1:end] ~= t1_inx)];
+  t_merged_into = [t_merged_into t1];
   % add the overlap back into the row of rho we will retain
-  rho(tbuds1(1),:) = sum(rho(tbuds1,:));
+  rho(tbuds1(t1_inx),:) = sum(rho(tbuds1,:));
 end;
 % update local variables to reflect the merges
 Nt0 = ROI_rgn.Nt0; % number of active tracks
 % remove the merged rows of rho; these rows were summed above
-rho(t_merged,:) = []; 
-tlist = setdiff(tlist, tlist(t_merged));
-clear tbuds1 % don't need this, but retain tbuds
+rho(t_merged_away,:) = []; 
+tlist = setdiff(tlist, tlist(t_merged_away));
+clear t1 t1_inx tbuds1 % don't need this, but retain tbuds
 
 %
 % match tracks to rois
@@ -347,10 +355,11 @@ for r = 1:Nr,
     continue; % r was combined above: skip
   end;
   % existing or new track
-  t = tlist(pi2(r)); % ROI r matches track t
+  t = tlist(pi2(r)); % ROI r matches track slot t
   % add region r to track t: update the segmentation scroll, ROI_s{t}
   tracker_cons_ROI(t, tracker_mask_map_encode(im, roimap_p, b(r,:), r), ...
-                   b(r,1:2), s_time, s_geom, s(r,:), fn, r, r>Nr_orig);
+                   b(r,1:2), s_time, s_geom, s(r,:), fn, r, ...
+                   r > Nr_orig, any(t == t_merged_into));
 end;
 
 % 
@@ -380,7 +389,7 @@ for t = tlist,
     % note, the stats argument will never be output, but it may be merged-in
     stats1 = roi_stats_mag(0, 0, [], s_geom, 1, 'sesw');
     tracker_cons_ROI(t, tracker_mask_map_encode(im, roimap1, b1, 1), ...
-                     b1(1:2), s_time, s_geom, stats1, fn, 0, false);
+                     b1(1:2), s_time, s_geom, stats1, fn, 0, false, false);
     % restore old map, so it's not repeatedly rotated
     if ~isempty(map_save(t).map),
       ROI_t(t).map     = map_save(t).map;
@@ -403,7 +412,7 @@ if 0,
   res.nacr = nnz(im == hooks.tracker_params.active); % #active pixels
   res.tracks = [ROI_t(tinx).tid].';
   res.tlist = tlist;
-  res.t_merged = t_merged; % track slots: merged 
+  res.t_merged_away = t_merged_away; % track slots: merged 
   res.t_harder = t_harder; % track slots: tried harder to match and succeeded
   % geom: Ntot by whatever
   % res.geom = [[ROI_t(tinx).time].' reshape([ROI_t(tinx).mapgeom], [], Ntot).'];
@@ -578,14 +587,25 @@ return
 %
 % Merge tracks
 %
-% input: nonempty list of track slot numbers (1..Nt) to merge
-% tlist(2:end) are merged in to the slot numbered tlist(1)
-% these merged slots are deleted
+% input: 
+%   hooks, side information for closing merged tracks
+%   tlist, a nonempty list of track slot numbers (1..Nt) to merge
+% output:
+%   t1, the track slot which was merged-into, a member of tlist
+%
+% The merged track slots, tlist \ {t1}, are closed and written out
+%
+% Currently t1 is chosen as the track with the longest history
+% among tlist
 % 
-function tracker_merge_tracks(hooks, tlist)
+function t1 = tracker_merge_tracks(hooks, tlist)
 global ROI_t ROI_s % state information
 
-% 1: Merge the scrolls, ROI_s(tlist)
+% 1: Find the track number to preserve
+% t1_inx is index of the longest scroll among tlist
+[junk,t1_inx] = max(cellfun('length', ROI_s(tlist)));
+t1 = tlist(t1_inx); % will merge (tlist \ {t1}) into t1
+% 2: Merge the scrolls, ROI_s(tlist)
 rois = [ROI_s{tlist}]; % all rois in all tracks
 sp1 = rois(1); % prototype to ensure the field names agree
 sp1.chip = sp1.chip(1); % economize the prototype, preserving type
@@ -601,8 +621,8 @@ for f = 1:nf,
   sp(f).time = rois1(1).time; % all times in these roi's will be the same
   sp(f).geom = rois1(1).geom; % all geoms are the same
   sp(f).fn   = rois1(1).fn;   % all filenames are the same
-  sp(f).tag = max([rois1.tag]); % favor 0 vs. -1, 1 vs. 0
-  sp(f).rgn = sort(cat(2, rois1.rgn)); % cat region IDs together
+  sp(f).tag  = max([rois1.tag]); % 2 beats 1, 1 beats 0, 0 beats 1
+  sp(f).rgn  = sort(cat(2, rois1.rgn)); % cat region IDs together
   % merge statistics
   sp(f).stats = roi_stats_combine(reshape([rois1.stats], ...
                                           size(rois1(1).stats, 2), [])');
@@ -624,20 +644,21 @@ for f = 1:nf,
   end;
   sp(f).chip = chip1; % plug it in
 end;
-sp(end).tag = 1; % indicate a merge took place
-ROI_s{tlist(1)} = sp; % plug the new entry in
-% 2: Merge the track state, ROI_t(tlist)
-t1 = tlist(1); % merge 2:end into 1
+% (merged-to status is indicated in .tag of present frame, not yet in ROI_s)
+ROI_s{t1} = sp; % plug the new entry in
+% 3: Merge the track state, ROI_t(tlist), into ROI_t(t1)
 ROI_t(t1).state = max([ROI_t(tlist).state]); % highest state
 ROI_t(t1).time  = max([ROI_t(tlist).time]);  % latest time seen
 ROI_t(t1).birth = min([ROI_t(tlist).birth]); % earliest appearance
 % do not alter: geom, last, maptime
 % get rid of redundant tracks
-for t = tlist(2:end),
+for t = tlist,
+  if t == t1, continue; end; % do not get rid of the merged-into track
   % maps are already commensurate: same coord system (.mapgeom) and .maptime
   ROI_t(t1).map = ROI_t(t1).map + ROI_t(t).map; % combine uint8's
   tracker_close_track(t, hooks, 'merged'); % note, this dumps ROI_s{t} also!
 end;
+% (returns t1)
 return
 
 
@@ -645,7 +666,7 @@ return
 %
 % add the ROI chip to track slot t, with useful side info
 %
-function tracker_cons_ROI(t, chip, coords, s_time, s_geom, stats, fn, r, harder)
+function tracker_cons_ROI(t, chip, coords, s_time, s_geom, stats, fn, r, harder, merge)
 global ROI_t ROI_s ROI_rgn % state information
 
 nr = length(ROI_s{t}) + 1; % the new region number
@@ -656,19 +677,24 @@ ROI_s{t}(nr).time   = s_time; % numeric time in matlab format
 ROI_s{t}(nr).geom   = s_geom;
 ROI_s{t}(nr).stats  = stats;
 ROI_s{t}(nr).fn     = fn;     % current filename as a string
+% set up roi.rgn, a list.  note, .rgn's are concatenated after merge!
+% (do not use 0 for placeholder because 0 is not a valid region number)
 if r > 0,
-  ROI_s{t}(nr).rgn    = r;    % region number (after merges, can be a list)
+  ROI_s{t}(nr).rgn = r;    % region number (after merges, can be a list)
 else
-  ROI_s{t}(nr).rgn    = [];   % is a placeholder region
+  ROI_s{t}(nr).rgn = [];   % is a placeholder region
 end;  
+% set up roi.tag, an integer.
 if ROI_t(t).state == 0,
-  if harder,
-    ROI_s{t}(nr).tag    =  0; % regular ROI, had to try harder
+  if merge,
+    ROI_s{t}(nr).tag = 2;  % regular ROI, merged-into on this frame
+  elseif harder,
+    ROI_s{t}(nr).tag = 0;  % regular ROI, had to try harder
   else,
-    ROI_s{t}(nr).tag    =  1; % regular ROI
+    ROI_s{t}(nr).tag = 1;  % regular ROI
   end;
 else,
-  ROI_s{t}(nr).tag    = -1;   % just a placeholder ROI
+  ROI_s{t}(nr).tag   = -1; % just a placeholder ROI
 end;
 return
 

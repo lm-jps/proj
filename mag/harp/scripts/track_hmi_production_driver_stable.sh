@@ -15,10 +15,14 @@
 # The stable one is intended for production.
 #
 # usage:
-#   track_hmi_production_driver.sh [ -i N ] [ -r R ] [ -p PARS ] [-m] [-d] mask_series dest_dir
+#   track_hmi_production_driver_stable.sh ...
+#       [ -i N ] [ -r R ] [ -p PARS ] [-m] [-d] mask_series mag_series dest_dir
+#
 # where:
-#   mask_series is a mask data series from JSOC
+#   mask_series is a mask data series from JSOC (includes T_REC range)
+#   mag_series is a magnetogram data series from JSOC (no T_REC range)
 #   dest_dir is a destination directory for file and state input and output
+#
 # and:
 #   -i introduces an optional argument indicating an initial run with 
 #      new tracks numbered starting from N.  Otherwise, a run that picks
@@ -40,7 +44,9 @@
 #      than the regular production path (~jsoc).
 #
 # * Both masks and corresponding magnetograms are needed.  The magnetogram 
-# series used is always hmi.M_720s.  The mask_series is typically of the form: 
+# series used is typically hmi.M_720s, but you can use hmi.M_720s_nrt.  
+# You DO NOT give a T_REC range to the magnetograms, only the series name.
+# The mask_series is typically of the form: 
 #     any_series[any_range] 
 # for example,
 #     hmi.Marmask_720s[2011.01.01/7d]
@@ -52,13 +58,13 @@
 # Usage:
 #   If tracking was already started, and an earlier run ended on Sept 19 at midnight:
 #
-#  track_hmi_production_driver_stable.sh 'hmi.Marmask_720s[2010.09.20_TAI/24h]' /tmp/sept
+#  track_hmi_production_driver_stable.sh 'hmi.Marmask_720s[2010.09.20_TAI/24h]' hmi.M_720s /tmp/sept
 #
 # Michael Turmon, JPL, December 2010, June 2011
 
 
 progname=`basename $0`
-USAGE="Usage: $progname [ -i N ] [ -r R ] [ -p PARS ] [ -m ] [ -d ] mask_series dest_dir"
+USAGE="Usage: $progname [ -i N ] [ -r R ] [ -p PARS ] [ -m ] [ -d ] mask_series mag_series dest_dir"
 
 # get options
 first_track=0
@@ -82,13 +88,14 @@ done
 shift `expr $OPTIND - 1`
 
 # get arguments
-if [ "$#" -ne 2 ]; then
+if [ "$#" -ne 3 ]; then
     echo "$USAGE" 1>&2
     exit 2
 fi
 # ok to get them -- note, we add {mask} on to the mask series
 mask_series="$1{mask}"
-dest_dir="$2"
+mag_series="$2"
+dest_dir="$3"
 
 # validate first_track is an int
 if [[ $first_track =~ ^[0-9]+$ ]]; then 
@@ -116,11 +123,10 @@ if [ "$developer_path" -eq 1 ]; then
     MATLABPATH=`find $mtHome/matlab/mfile -maxdepth 1 -type d | paste -d : -s -`
 else
     # (this is the default code path)
-    # not 100% sure this is the right production path (It is - ART)
+    # believe this is the right production path
     rootD=/home/jsoc/cvs/Development/JSOC
-    # arta's path
+    # for a time, was using arta's path
     # rootD=/home/arta/jsoctrees/JSOC
-    # below here, should not change
     rootDbin=$rootD/_$JSOC_MACHINE/proj/mag/harp/libs/matlab/mfile-mex
     rootDsrc=$rootD/proj/mag/harp/libs/matlab/mfile-plain
     # all matlab m-files and shared libraries (.m and .mexFOO) are in these dirs
@@ -168,6 +174,7 @@ t0=`date +%s`
 /bin/echo \
     "try," \
       "mask_series='$mask_series';" \
+      "mag_series='$mag_series';" \
       "dest_dir='$dest_dir';" \
       "first_track=$first_track;" \
       "retain_history=$retain_history;" \

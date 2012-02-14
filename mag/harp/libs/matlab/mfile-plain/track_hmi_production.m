@@ -21,6 +21,8 @@
 %       of each track is retained.
 %       it truncates history both in loading and saving checkpoints.
 % The following variables are optional:
+%   mag_series: defaults to `hmi.M_720s'
+%       for NRT processing, set to: `hmi.M_720s_nrt'
 %   make_movie: defaults to false
 %       if true or nonzero, compiles a large .avi movie of the
 %       time history of the tracker; it's wise to transcode this
@@ -63,17 +65,19 @@ end;
 if ~exist('retain_history', 'var'),
   error('Require "retain_history" to be defined (= inf to retain all)');
 end;
-% make_movie is optional
+
+% magnetogram data series: optional, but default to M_720s
+if ~exist('mag_series', 'var'),
+  mag_series = 'hmi.M_720s{magnetogram}';
+end;
+% make_movie: optional, default to false
 if ~exist('make_movie', 'var'),
   make_movie = false;
 end;
-% params is optional
+% params: optional, default to none
 if ~exist('params', 'var'),
   params = '';
 end;
-
-% the magnetogram data series is always the same
-mag_series = 'hmi.M_720s{magnetogram}';
 
 % Echo what we're about to do
 if first_track == 0,
@@ -183,6 +187,9 @@ fprintf('%s: Completed tracking.\n', mfilename);
 
 % optionally make a movie from above run
 if make_movie,
+  % turn off annoying warnings about NOAA metadata
+  warning('off','hmi_base:no_noaa_info');
+  % set up parameters
   dt = 1; % interval between frames
   cm = [1,1,1; 0,0,0; 0.4,0.4,0.4; 0.7,0.7,0.7; prism2(40)];
   % master cat file

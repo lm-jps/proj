@@ -24,9 +24,12 @@
 #      up where an earlier one left off, according to a checkpoint file
 #      in `dest_dir', is assumed.
 #      IF GIVEN, `-i N' CLEARS ALL EXISTING RESULTS.
-#   -n indicates near-real-time (NRT) mode.  Less track history is retained,
-#      allowing faster startup and more compact checkpoint files.  And, both
+#   -n indicates near-real-time (NRT) mode: (1) NRT magnetograms in
+#      hmi.M_720s_nrt are used (otherwise, hmi.M_720s is used).  
+#      (2) Less track history is retained, allowing faster startup and 
+#      more compact checkpoint files.  (3)  Both
 #      finalized and currently-pending tracks are ingested into JSOC.
+#      
 #   -d is a flag which signals to use the developer MATLABPATH (~turmon) rather
 #      than the regular production path (~jsoc).
 #
@@ -90,14 +93,14 @@ trap 'die $LINENO "Received SIGTERM"' SIGTERM
 # get options -- pass them down to tracker/ingestor
 make_movie=1
 first_track=0
-other_path=0
+developer_path=0
 track_opts=""
 nrt_mode=0
 while getopts "hndi:" o; do
     case "$o" in
 	i)    first_track="$OPTARG"
 	      track_opts="$track_opts -i $first_track";;
-	d)    other_path=1
+	d)    developer_path=1
 	      track_opts="$track_opts -d";;
 	n)    nrt_mode=1;;
 	[?h]) echo "$USAGE" 1>&2
@@ -113,6 +116,8 @@ set -f
 # handle setup for NRT versus definitive mode
 if [ "$nrt_mode" -eq 1 ]; then
     # tracker options:
+    # nrt mags
+    mag_series=hmi.M_720s_nrt
     #   retain only r days of history
     track_opts="$track_opts -r 1"
     # ingest both new and pending regions
@@ -125,6 +130,8 @@ if [ "$nrt_mode" -eq 1 ]; then
     do_match=0
 else
     # tracker options:
+    # definitive mags
+    mag_series=hmi.M_720s
     #   retain all history
     track_opts="$track_opts -r inf"
     # ingest only new regions
@@ -136,6 +143,7 @@ else
     ingest_opts="tmin=3 match=1"
     do_match=1
 fi
+
 # movie vs. no movie
 if [ "$make_movie" -eq 1 ]; then
     # -m makes a movie, its absence does not
@@ -188,6 +196,15 @@ if [ $first_track = 0 ]; then
     fi
 fi
 
+# ensure track_hmi_production_driver_stable.sh is in PATH
+if [ "$developer_path" -eq 1 ]; then
+    # put script dir of developer into path
+    PATH="${PATH}:$HOME/cvs/JSOC/proj/mag/harp/scripts"
+else
+    # put script dir of JSOC into path
+    PATH="${PATH}:/home/jsoc/cvs/Development/JSOC/proj/mag/harp/scripts"
+fi
+
 # for show_info, ingestor, and log-ingestor
 # there is no sh version of .setJSOCenv, so we use this to get JSOC_MACHINE
 jsoc_mach=`csh -f -c 'source /home/jsoc/.setJSOCenv && echo $JSOC_MACHINE'`
@@ -195,7 +212,11 @@ PATH="${PATH}:$HOME/cvs/JSOC/bin/$jsoc_mach"
 
 echo "${progname}: show_info is at:" `which show_info`
 echo "${progname}: ingest_mharp is at:" `which ingest_mharp`
+echo "${progname}: tracker driver is at:" `which track_hmi_production_driver_stable.sh`
 
+# check that mag_series exists
+cmd="show_info -s $mag_series"
+$cmd > /dev/null
 # check that mask_series exists
 cmd="show_info -s $mask_series"
 $cmd > /dev/null
@@ -233,8 +254,8 @@ HAVE_BEGUN=1
 # driver invokes matlab to perform tracking
 #  -- note, track_opts is unquoted
 echo "${progname}: Beginning tracking."
-cmd=/home/jsoc/cvs/Development/JSOC/proj/mag/harp/scripts/track_hmi_production_driver_stable.sh 
-$cmd $track_opts "$mask_series" "$dest_dir"
+cmd=track_hmi_production_driver_stable.sh 
+$cmd $track_opts "$mask_series" "$mag_series" "$dest_dir"
 echo "${progname}: Finished tracking."
 
 echo "${progname}: Ingesting tracks."
@@ -242,7 +263,7 @@ echo "${progname}: Ingesting tracks."
 # ingest data
 #  -- note, ingest_opts is unquoted
 cmd=ingest_mharp 
-$cmd $ingest_opts "root=$dest_dir/Tracks/jsoc" "lists=$listfiles" "out=$harp_series" "mask=$mask_series_only" verb=1
+$cmd $ingest_opts "mag=$mag_series" "root=$dest_dir/Tracks/jsoc" "lists=$listfiles" "out=$harp_series" "mask=$mask_series_only" verb=1
 # preserve NOAA AR match data
 if [ $do_match = 1 ]; then
     # name for saved match info
@@ -256,11 +277,11 @@ if [ $do_match = 1 ]; then
 fi
 
 # ingest log and checkpoint file
-#   name is a string indicating run name; we just use the mask series
-#   which contains the time interval.  This is *not* interpreted as a 
+#   run_name is a string indicating run name.  We use the mask series,
+#   because it contains the time interval.  This is *not* interpreted as a 
 #   data series by ingest_mharp_log.  It is just an identifying string.
 cmd=ingest_mharp_log
-$cmd root="$dest_dir/Tracks/jsoc" out="$harp_log_series" trec="$trec_frst" name="$mask_series"
+$cmd root="$dest_dir/Tracks/jsoc" out="$harp_log_series" trec="$trec_frst" run_name="$mask_series"
 
 echo "${progname}: Finished ingesting tracks."
 

@@ -58,7 +58,8 @@ for f = 1:nf,
   a = rs_list(query, 'web_access');
   if a.count == 0,
     ar1 = hmi_noaa_info_empty();
-    warning('No NOAA info for %s, leaving empty, continuing.', trec{f});
+    % can turn off with warning('off','hmi_base:no_noaa_info')
+    warning('hmi_base:no_noaa_info', 'No NOAA info for %s, leaving empty, continuing.', trec{f});
   else,
     % does some of the conversion work
     s1 = jsoc_cell2struct_keys(a.keywords);
