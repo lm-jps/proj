@@ -306,11 +306,39 @@ $cspec = "";
 if (defined($pbegin))
 {
     $pspec = "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::000[1-9]_${pyr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::00[1-5][0-9]_${pyr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::006[0-3]_${pyr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::0129_${pyr}_$kFILESUFFIX\n";
+
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::0193_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::0213_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::0283_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::0287_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::0303_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::0307_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::2002_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::2003_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::2004_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::2005_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::2008_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::2024_${pyr}_$kFILESUFFIX\n";
+    $pspec = $pspec . "${kSPECPREFIX}lzp/${pyr}_|s[$pbegin-$pend]::2028_${pyr}_$kFILESUFFIX\n";
 }
 
 if (defined($cbegin))
 {
     $cspec = "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::000[1-9]_${yr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::00[1-5][0-9]_${yr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::006[0-3]_${yr}_$kFILESUFFIX\n${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::0129_${yr}_$kFILESUFFIX\n";
+
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::0193_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::0213_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::0283_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::0287_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::0303_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::0307_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::2002_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::2003_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::2004_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::2005_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::2008_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::2024_${yr}_$kFILESUFFIX\n";
+    $cspec = $cspec . "${kSPECPREFIX}lzp/${yr}_|s[$cbegin-$cend]::2028_${yr}_$kFILESUFFIX\n";
 }
 
 $fullspec = "$pspec$cspec";
