@@ -1,5 +1,5 @@
 /*-----------------------------------------------------------------------------
- * cvs/JSOC/proj/lev1/apps/build_lev1.c
+ * cvs/JSOC/proj/lev1/apps/build_lev1_aia.c
  *-----------------------------------------------------------------------------
  *
  * This is a module that runs with DRMS and processes lev0
@@ -786,8 +786,11 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 //          drms_close_records(rs_resp, DRMS_FREE_RECORD);
           rs_resp = NULL;
         }
-        sprintf(open_dsname, "%s[][%s][? t_start=(%s %s %s %f) ?]",
-                dsresp, wavstr, selstr, dsresp, whrstr, tobs[i]);
+//        sprintf(open_dsname, "%s[][%s][? t_start=(%s %s %s %f) ?]",
+//                dsresp, wavstr, selstr, dsresp, whrstr, tobs[i]);
+        //change from Rock on Jan 31, 2012
+        sprintf(open_dsname, "%s[][%s][? t_start <= %10.5f and t_stop > %10.5f ?]",
+                dsresp, wavstr, tobs[i], tobs[i]);
         rresp = NULL;
         rs_resp = drms_open_records(drms_env, open_dsname, &rstatus);
         if(rstatus) printk("Can not open aia.response series.\n");
