@@ -179,7 +179,5 @@ harp	: $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER) $(LIBMEX2C) $(LIBMEX2MATL) $(MEX
 CLEAN		:= $(CLEAN) $(LIBEXRNG) $(LIBMEXTOOLS) $(METAHEADER) $(LIBMEX2C) $(LIBMEX2MATL) $(MEXSTANDALONE) $(MEXASSIGN) $(MEXFITS) $(MEXHMIMASK)
 
 # Standard things                                                                
--include        $(DEP_$(d))
-
 d               := $(dirstack_$(sp))
 sp              := $(basename $(sp))

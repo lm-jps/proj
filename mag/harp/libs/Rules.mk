@@ -6,8 +6,6 @@ d               := $(dir)
 dir     := $(d)/matlab
 -include                $(SRCDIR)/$(dir)/Rules.mk
 
-# Standard things                                                                                            
--include        $(DEP_$(d))
-
+# Standard things
 d               := $(dirstack_$(sp))
 sp              := $(basename $(sp))
