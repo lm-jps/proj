@@ -77,7 +77,7 @@ use File::Basename;
 use File::Path qw(mkpath remove_tree);
 use File::Spec;
 use Fcntl ':flock';
-use Cwd qw(chdir getcwd); # need to override chdir so that $ENV{'PWD'} is changed when chdir is called.
+use Cwd qw(chdir getcwd realpath); # need to override chdir so that $ENV{'PWD'} is changed when chdir is called.
 use Data::Dumper;
 
 use constant kMakeDiv => "__MAKE__";
@@ -275,7 +275,8 @@ if (!$err)
    {
       # Set the state file path.
       my($rootdir) = File::Spec->catdir(kRootDir);
-      my($cdir) = File::Spec->catdir($ENV{'PWD'});
+      #my($cdir) = File::Spec->catdir($ENV{'PWD'});
+      my($cdir) =realpath($ENV{'PWD'});
 
       $stfile = kLocDir . kTypeFile;
       $stfileold = kSuFlagFile;
@@ -378,7 +379,10 @@ if (!$err)
             # cd up to the parent directory (DownloadTree assumes the current directory is the
             # parent of the CVS working directory).
             my($rootdir) = File::Spec->catdir(kRootDir);
-            my($cdir) = File::Spec->catdir($ENV{'PWD'});
+            #my($cdir) = File::Spec->catdir($ENV{'PWD'});
+            my($cdir) = realpath($ENV{'PWD'});
+
+            print "dlsource.pl: rootdir == $rootdir, cdir == $cdir.\n";
 
             if ($cdir =~ /$rootdir\s*$/)
             {
