@@ -88,16 +88,25 @@ a = rs_list(sprintf('%s key=T_REC', lsts{1}), 'web_access');
 if a.status > 0,
   error('Could not get T_RECs for %s (rs_list failed)', lsts{1});
 end;
-% exhaustively test the response
-if ~isfield(a, 'keywords') || ~iscell(a.keywords) || length(a.keywords) ~= 1,
-  error('Could not get T_RECs for %s (empty response from rs_list)', lsts{1});
+if ~isfield(a, 'count'),
+  error('Could not get T_RECs for %s (rs_list had no count)', lsts{1});
 end;
-if ~isfield(a.keywords{1}, 'values'),
-  error('Could not get T_RECs for %s (no values from rs_list)', lsts{1});
+if a.count == 0,
+  % empty T_REC list, but a.status ==0: this is OK
+  TRECs = {};
+  nTREC = 0;
+else,
+  % exhaustively test the response
+  if ~isfield(a, 'keywords') || ~iscell(a.keywords) || length(a.keywords) ~= 1,
+    error('Could not get T_RECs for %s (empty response from rs_list)', lsts{1});
+  end;
+  if ~isfield(a.keywords{1}, 'values'),
+    error('Could not get T_RECs for %s (no values from rs_list)', lsts{1});
+  end;
+  % this is the T_REC indexes as a cell array of strings
+  TRECs = a.keywords{1}.values';
+  nTREC = length(TRECs);   % number of TREC's
 end;
-% this is the T_REC indexes as a cell array of strings
-TRECs = a.keywords{1}.values';
-nTREC = length(TRECs);   % number of TREC's
 % number of images passed in per function call
 if skip(1) ~= 0,
   nImg = length(dsnames); 

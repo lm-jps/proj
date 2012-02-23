@@ -144,6 +144,8 @@ static int verbflag;
 #define FN_TRACK_FRAME "track-frame.txt"
 // per-track space weather keywords
 #define FN_TRACK_STATS "track-stats.txt"
+// per-track status summary
+#define FN_TRACK_STATUS "track-status.txt"
 // per-track subdirectory name
 #define FN_TRACK_DIR   "track-%06d"
 // bitmap outlines, one for each appearance of each track
@@ -264,7 +266,7 @@ typedef struct {
   patch_status_t valid;            // see enum above
   int num;                         // HARP id number
   patch_tag_t tag;                 // tag: patch category from frame file
-  int x0, y0;                      // origin of HARP bitmap in fulldisk image
+  int x0, y0;                      // origin of HARP bitmap in FD image (0-based)
   int fits_nx, fits_ny;		   // HARP bitmap size from frame file
   float lat0, lon0, lat1, lon1;    // bounding box from track-frame.txt
   float omega;	                   // HARP-specific angular rotation (deg/day)
@@ -272,7 +274,7 @@ typedef struct {
   char patchName[STR_MAX];	   // bitmap image file path
   char *image;		           // bitmap HARP image itself
   int dims[2];	                   // dimension of above image
-  int xmin, xmax, ymin, ymax;	   // calculated bounding box
+  int xmin, xmax, ymin, ymax;	   // calculated bounding box (0-based)
 } patch_info_t;
 
 /* 
@@ -375,6 +377,8 @@ int load_all_patch_info(const char *rootDir,
 int load_frame(FILE *fp, patch_info_t *pInfo, TIME *t);
 // Stats file parser, one line per time, return 0 if successful
 int load_stats(FILE *fp, float *stats);
+// mark harp as ingested within disk file
+int mark_ingested_harp(const char *, run_info_t *, harp_info_t *);
 // print one patch to file
 void patch_print(FILE *fp, char *s, trec_info_t *tI, patch_info_t *pI);
 // set up fields in trec info array
@@ -1030,6 +1034,19 @@ int DoIt(void)
     drms_close_records(maskRecSet, DRMS_FREE_RECORD); maskRecSet = NULL;
     
   }
+  /* 
+   * Fifth step: Record ingested HARPs
+   */
+  // loop over HARPs, marking them as ingested
+  for (i = 0; i < nHarp; i++) {
+    if (mark_ingested_harp(rootDir, &runInfo, harpInfo+i) != 0)
+      V_printf(-1, "", "HARP %d was ingested into JSOC but not noted in status file.\n", 
+	       harpInfo[i].id);
+  }
+
+  /* 
+   * Print summary info
+   */
   V_printf(1, "", "Ingestion summary: across T_REC:\n");
   V_printf(1, "", "  Processed %d T_RECs; ingested across NT = %d T_RECs.\n", nRec_all, Rec_valid);
   V_printf(1, "", "  Of NT, found %d T_RECs with all data present.\n", Rec_ok);
@@ -1601,6 +1618,53 @@ set_harp_info_miss(patch_info_t *patchInfo, // offset to this HARP's patches
   return 0;
 }
 
+/* 
+ * Mark a HARP as ingested: returns 0 if OK
+ */
+static
+int 
+mark_ingested_harp(const char *rootDir, 
+		   run_info_t *runInfo,
+		   harp_info_t *hInfo)
+{
+  char statusFile[STR_MAX];
+  FILE *statusFp;
+  int harp_id;
+  time_t tloc;
+  char timestr[32]; // enough for an ISO date
+  const char *run_key = "run_name"; // in runInfo, from tracker_params
+  char *run_name; // "" if not found in runInfo
+  int p;
+
+  harp_id = hInfo->id;
+  // ISO date, like: 20120217T102626
+  time(&tloc);
+  strftime(timestr, sizeof(timestr), "%Y%m%dT%H%M%S", localtime(&tloc));
+  // run name: find a parameter p matching the name in run_key
+  run_name = "unnamed_run"; // in case it's not found
+  for (p = 0; p < runInfo->n_par; p++) {
+    if (strcasecmp(run_key, runInfo->par_names[p]) == 0) {
+      run_name = runInfo->par_vals[p];
+      break;
+    }
+  }
+  // Name of HARP status file
+  // using implicit string concatenation below to construct format
+  snprintf(statusFile, sizeof(statusFile), 
+	   "%s/" FN_TRACK_DIR "/%s", rootDir, harp_id, FN_TRACK_STATUS);
+  // append to status info for this HARP
+  statusFp = fopen(statusFile, "a");
+  if (!statusFp) {
+    V_printf(-1, "", 
+	     "Warning: unable to append to status file %s for HARP %06d (post-ingest).\n", 
+	     statusFile, harp_id);
+    return 1; // probably non-fatal
+  }
+  fprintf(statusFp, "%s\t%s\t%s\n", "ingested", run_name, timestr);
+  fclose(statusFp);
+  return 0; // OK
+}
+
 
 /* 
  * Most complete routine for loading patch information
@@ -1819,6 +1883,7 @@ update_bitmap(patch_info_t *pInfo, char *maskImg)
     return 1;
   }
   // copy maskImg into new cutout first (it is the "background")
+  // note: xmin, ymin are 0-based offsets: (0,0) is the top corner
   for (j = 0; j < ny; j++)
     for (i = 0; i < nx; i++)
       pInfo->image[j*nx + i] = maskImg[(j + pInfo->ymin) * NPIX_FULLDISK + 
@@ -1831,7 +1896,8 @@ update_bitmap(patch_info_t *pInfo, char *maskImg)
     for (j = 0; j < ny; j++) {
       for (i = 0; i < nx; i++) {
 	// compute old bitmap index (i0, j0) from expanded bitmap index (i,j)
-	// (keep these lines together for clarity, ignore possible speed penalty)
+	// (keep these lines together for clarity, ignore minor speed penalty)
+	// note: xmin,ymin and x0,y0 are 0-based offsets
 	i0 = pInfo->xmin + i - pInfo->x0;
 	j0 = pInfo->ymin + j - pInfo->y0;
 	// ensure (i0, j0) is in the old bitmap
@@ -2042,6 +2108,10 @@ load_frame(FILE *fp, patch_info_t *pInfo, TIME *t)
   } else {
     pInfo->tag = (patch_tag_t) tag;
   }
+  // convert inputs, which were from Matlab and have origin=1 (x0,y0), 
+  // to origin=0 in keeping with typical C usage
+  pInfo->x0 -= 1;
+  pInfo->y0 -= 1;
   // convert the time to a rec number
   *t = sscan_time(t_rec);
   if (time_is_invalid(*t)) {
@@ -2259,9 +2329,8 @@ set_keys_stats(DRMS_Record_t *rec,
   } else {
     not_ok += status;
   }
-  // TODO: set the NRT harp parameters:
-  //   OHRP_ID, OHRP_NUM, OHRP_IDS
   // remainder of WCS
+  // x0, y0 are 0-based offsets
   ok = drms_setkey_float(rec, "CRPIX1", pInfo->x0);
   if (ok != DRMS_SUCCESS) not_ok++;
   ok = drms_setkey_float(rec, "CRPIX2", pInfo->y0);
@@ -2345,8 +2414,8 @@ set_keys_stats(DRMS_Record_t *rec,
  *
  * Not sure if the caller cares about +1 value, but someone should 
  * handle this case.
- * NEW: We now handle the case where the hi/lo pixel site is
- * not on the lat/lon bounding box (e.g., lat1 = -lat0 = 20, lon0 = 45,
+ * We handle the case where the hi/lo pixel site is not on the 
+ * lat/lon bounding box (e.g., lat1 = -lat0 = 20, lon0 = 45,
  * lon1 = 45+90).
  */
 // macro to update local variables
@@ -2405,7 +2474,7 @@ compute_boundary(patch_info_t *pInfo, DRMS_Record_t *rec)
   lat1 = pInfo->lat1 * RADSINDEG;
   lon0 = pInfo->lon0 * RADSINDEG + lonc;
   lon1 = pInfo->lon1 * RADSINDEG + lonc;
-  dl = 0.03 * RADSINDEG;
+  dl = 0.03 * RADSINDEG; // lat and lon step size -- a design parameter
   
   // Step 1: Traverse lat/lon BB edges to find pixel BB
   /*  sphere2img synopsis:
@@ -2416,6 +2485,7 @@ compute_boundary(patch_info_t *pInfo, DRMS_Record_t *rec)
    *    on the far side (>90 deg from disc center), 0 otherwise.
    */
   farside = 0; // do any pixels in the lat/lon BB map to the far side?
+  // the five variables below are maintained by the UPDATE_RANGE macro
   ondisk = 0;  // do any pixels in the lat/lon BB map to the visible disk?
   xmin = ymin =  HUGE_VAL; // will be reset in the loop
   xmax = ymax = -HUGE_VAL;

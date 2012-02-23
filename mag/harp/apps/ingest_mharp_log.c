@@ -140,11 +140,11 @@ int DoIt(void)
 	
 	/* Get and check filenames */
 	if (snprintf(logFile, sizeof(logFile), "%s/%s", rootDir, log) >= sizeof(logFile))
-		DIE("Log filename was too long.\n");
+	  DIE("Log filename was too long.\n");
 	if (snprintf(errlogFile, sizeof(errlogFile), "%s/%s", rootDir, errlog) >= sizeof(errlogFile))
-		DIE("Error log filename was too long.\n");
+	  DIE("Error log filename was too long.\n");
 	if (snprintf(ckpFile, sizeof(ckpFile), "%s/%s", rootDir, ckp) >= sizeof(ckpFile))
-		DIE("Checkpoint filename was too long.\n");
+	  DIE("Checkpoint filename was too long.\n");
 	printf("%s: Log filename: `%s'\n",        module_name, logFile);
 	printf("%s: Error log filename: `%s'\n",  module_name, errlogFile);
 	printf("%s: Checkpoint filename: `%s'\n", module_name, ckpFile);
@@ -166,7 +166,7 @@ int DoIt(void)
 	/* Get and check the time */
 	trec_num = sscan_time((char *) trec);
 	if (time_is_invalid(trec_num))
-		DIE("Could not understand T_REC input time\n");
+	  DIE("Could not understand T_REC input time\n");
 	sprint_at(trec_buf, trec_num); // round-trip it to TAI
 	printf("%s: T_REC = %s\n", module_name, trec_buf);
 
@@ -180,12 +180,16 @@ int DoIt(void)
 	/* Ingest files */
 	// regular log
 	outSegLog = drms_segment_lookup(outRec, "Log");
+	if (!outSegLog)
+	  DIE("Log segment lookup failed.\n");
 	if (drms_segment_write_from_file(outSegLog, logFile))
 	  DIE("Log file ingestion failed.\n");
 	printf("%s: ingested `%s'\n", module_name, logFile);
 
 	// error log
 	outSegLog = drms_segment_lookup(outRec, "ErrLog");
+	if (!outSegLog)
+	  DIE("Error log segment lookup failed.\n");
 	if (errlog_present) {
 	  if (drms_segment_write_from_file(outSegLog, errlogFile))
 	    DIE("Error log file ingestion failed (even though error log was present).\n");
@@ -199,11 +203,14 @@ int DoIt(void)
 	}
 	// checkpoint
 	outSegChkpt = drms_segment_lookup(outRec, "Checkpoint");
+	if (!outSegChkpt)
+	  DIE("Checkpoint segment lookup failed.\n");
 	if (drms_segment_write_from_file(outSegChkpt, ckpFile))
 	  DIE("Checkpoint file ingestion failed.\n");
 	printf("%s: ingested `%s'\n", module_name, ckpFile);
 
 	/* Keywords */
+	// errors here are not fatal, just count them
 	int errs = 0;
 	errs += (drms_setkey_time  (outRec, "T_REC",    trec_num)           != DRMS_SUCCESS);
 	errs += (drms_setkey_string(outRec, "BLD_VERS", jsoc_version)       != DRMS_SUCCESS);

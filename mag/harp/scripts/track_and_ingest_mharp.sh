@@ -66,9 +66,12 @@ HAVE_BEGUN=0
 echo "${progname}: Invoked as:" "$0" "$@"
 
 # alas, we require a temp file
+# default to nonzero exit status
+exit_status=1
 function cleanup() {
     # clean the whole temp dir
     rm -rf "$TEMP_DIR"
+    exit $exit_status
 }
 trap cleanup EXIT
 
@@ -80,7 +83,10 @@ function die() {
 	echo "${progname}: Note: Before running $progname again," \
              "you likely must roll back the checkpoint file in $dest_dir" 1>&2
     fi
-    exit ${3:- 1}
+    # set exit status to $3 if present, else generic nonzero status
+    exit_status=${3:- 1}
+    # will trap through cleanup()
+    exit
 }
 
 # Error message selection upon exit
@@ -199,7 +205,8 @@ fi
 # ensure track_hmi_production_driver_stable.sh is in PATH
 if [ "$developer_path" -eq 1 ]; then
     # put script dir of developer into path
-    PATH="${PATH}:$HOME/cvs/JSOC/proj/mag/harp/scripts"
+    # (could equally be .../proj/mag/harp/scripts)
+    PATH="${PATH}:$HOME/cvs/JSOC/proj/myproj/scripts"
 else
     # put script dir of JSOC into path
     PATH="${PATH}:/home/jsoc/cvs/Development/JSOC/proj/mag/harp/scripts"
@@ -235,18 +242,31 @@ $cmd > /dev/null
 # filenames must match the deletion pattern in cleanup() above
 # hold mask list
 TEMPMASK="$TEMP_DIR/mask.list"
-
 # stage data (include T_REC)
 #   (this does not fail if the series is empty)
 echo "${progname}: Staging masks."
 cmd="show_info -q -ip $mask_series"
 $cmd > $TEMPMASK
 echo "${progname}: Finished staging masks."
-# find first T_REC, for later
-trec_frst=`awk 'NR == 1 {print $1}' $TEMPMASK | sed -e 's/.*\[//' -e 's/\].*//'`
-trec_last=`awk 'NR == 1 {print $1}' $TEMPMASK | sed -e 's/.*\[//' -e 's/\].*//'`
+cmd="shell code"
+# mask series can be empty while mag is not, attempt to recover a T_REC in this case
+#  (we need T_REC to ingest the log: no masks means no harps, but there will be a log)
+if [ ! -s $TEMPMASK ]; then
+  echo "${progname}: Looking up T_REC in mags, because masks seem empty."
+  mag_range=`echo "$mask_series" | sed "s/.*\[/${mag_series}[/"`
+  cmd="show_info -q -ip $mag_range"
+  $cmd > $TEMPMASK
+  cmd="shell code"
+fi
+# find first T_REC, for later (and last for info)
+trec_frst=`awk '{print $1}' $TEMPMASK | head -n 1 | sed -e 's/[^[]*\[//' -e 's/\].*//'`
+trec_last=`awk '{print $1}' $TEMPMASK | tail -n 1 | sed -e 's/[^[]*\[//' -e 's/\].*//'`
 # no longer needed
 rm -f "$TEMPMASK"
+if [ -z "$trec_frst" ]; then
+  die $LINENO "Could not find a valid first T_REC within $mask_series"
+fi
+echo "${progname}: Processing from $trec_frst to $trec_last"
 
 # after this point, simple re-runs may not work because tracker alters $dest_dir
 HAVE_BEGUN=1
@@ -256,6 +276,7 @@ HAVE_BEGUN=1
 echo "${progname}: Beginning tracking."
 cmd=track_hmi_production_driver_stable.sh 
 $cmd $track_opts "$mask_series" "$mag_series" "$dest_dir"
+cmd="shell code"
 echo "${progname}: Finished tracking."
 
 echo "${progname}: Ingesting tracks."
@@ -264,6 +285,7 @@ echo "${progname}: Ingesting tracks."
 #  -- note, ingest_opts is unquoted
 cmd=ingest_mharp 
 $cmd $ingest_opts "mag=$mag_series" "root=$dest_dir/Tracks/jsoc" "lists=$listfiles" "out=$harp_series" "mask=$mask_series_only" verb=1
+cmd="shell code"
 # preserve NOAA AR match data
 if [ $do_match = 1 ]; then
     # name for saved match info
@@ -282,10 +304,12 @@ fi
 #   data series by ingest_mharp_log.  It is just an identifying string.
 cmd=ingest_mharp_log
 $cmd root="$dest_dir/Tracks/jsoc" out="$harp_log_series" trec="$trec_frst" run_name="$mask_series"
+cmd="shell code"
 
 echo "${progname}: Finished ingesting tracks."
 
-# Exit OK
+# Exit OK -- will trap thru cleanup()
 echo "${progname}: Done."
-exit 0
+exit_status=0
+exit
 

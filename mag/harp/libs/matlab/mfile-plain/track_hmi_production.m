@@ -186,7 +186,8 @@ tag = track_hmi_postrun_files(fullfile(dest_dir, 'Tracks', 'jsoc'), ...
 fprintf('%s: Completed tracking.\n', mfilename);
 
 % optionally make a movie from above run
-if make_movie,
+
+if make_movie && length(fn) > 0,
   % turn off annoying warnings about NOAA metadata
   warning('off','hmi_base:no_noaa_info');
   % set up parameters
