@@ -14,8 +14,8 @@
 
 $XmitFlgDirHMI = "/dds/soc2pipe/hmi";
 $XmitFlgDirAIA = "/dds/soc2pipe/aia"; 
-$NoGoFileHMI = "/home/jsoc/cvs/Development/JSOC/proj/lev0/data/NoDefLev1HMI";
-$NoGoFileAIA = "/home/jsoc/cvs/Development/JSOC/proj/lev0/data/NoDefLev1AIA";
+$NoGoFileHMI = "/surge40/jsocprod/lev0/data/NoDefLev1HMI";
+$NoGoFileAIA = "/surge40/jsocprod/lev0/data/NoDefLev1AIA";
 $LOGDIR = "/usr/local/logs/lev1_def";
 @allowhost = ("cl1n001", "cl1n002", "cl1n003"); #hosts w/dcs[0,1] mounts
 @mstr = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December");

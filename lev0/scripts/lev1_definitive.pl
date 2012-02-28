@@ -30,15 +30,15 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #6. Check that hmi,aia.temperature_summary_300s exists for our date.
 #
 #7. Check that the manually set No Go file does not exist:
-#/home/production/cvs/JSOC/proj/lev0/data/NoDefLev1[HMI,AIA]
+#/surge40/jsocprod/lev0/data/NoDefLev1[HMI,AIA]
 #
 #
 ######################################################################
 
 $XmitFlgDirHMI = "/dds/soc2pipe/hmi";
 $XmitFlgDirAIA = "/dds/soc2pipe/aia";
-$NoGoFileHMI = "/home/production/cvs/JSOC/proj/lev0/data/NoDefLev1HMI";
-$NoGoFileAIA = "/home/production/cvs/JSOC/proj/lev0/data/NoDefLev1AIA";
+$NoGoFileHMI = "/surge40/jsocprod/lev0/data/NoDefLev1HMI";
+$NoGoFileAIA = "/surge40/jsocprod/lev0/data/NoDefLev1AIA";
 #$DSFFNAMEHMI = "su_production.hmi_flatfield";
 $DSFFNAMEHMI = "hmi.flatfield";
 $DSFFNAMEAIA = "aia_test.flatfield";

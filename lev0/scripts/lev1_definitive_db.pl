@@ -43,7 +43,7 @@ eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
 #Sets the DB column TEMP to 1.
 #
 #7. Check that the manually set No Go file does not exist:
-#/home/production/cvs/JSOC/proj/lev0/data/NoDefLev1[HMI,AIA]
+#/surge40/jsocprod/lev0/data/NoDefLev1[HMI,AIA]
 #Sets the DB column GOFLG to 1 if file does not exist.
 #
 #When the lev1_def_gui calls build_lev1_mgr for an ordinal date, 
@@ -61,8 +61,8 @@ $USER = "production";
 
 $XmitFlgDirHMI = "/dds/soc2pipe/hmi";
 $XmitFlgDirAIA = "/dds/soc2pipe/aia";
-$NoGoFileHMI = "/home/jsoc/cvs/Development/JSOC/proj/lev0/data/NoDefLev1HMI";
-$NoGoFileAIA = "/home/jsoc/cvs/Development/JSOC/proj/lev0/data/NoDefLev1AIA";
+$NoGoFileHMI = "/surge40/jsocprod/lev0/data/NoDefLev1HMI";
+$NoGoFileAIA = "/surge40/jsocprod/lev0/data/NoDefLev1AIA";
 #$DSFFNAMEHMI = "su_production.hmi_flatfield";
 $DSFFNAMEHMI = "hmi.flatfield";
 $DSFFNAMEAIA = "aia.flatfield";
