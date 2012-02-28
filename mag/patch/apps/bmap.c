@@ -32,6 +32,7 @@
  *			v0.2  Oct 07 2011
  *      v0.3  Oct 17 2011
  *      v0.4  Oct 28 2011
+ *		v0.5  Feb 23 2012
  *
  *
  *
@@ -52,6 +53,11 @@
  *      Now assumes output are Rice compressed, "rice=1"
  *      with field scaled to 0.01, angles 0.01, errors 0.001, covariances 0.0001
  *      Add option "covar" to output covariances for cutout
+ *		v0.5
+ *		Added -d for differential rotation tracking
+ *		tref is the mid-point of data series, hard-coded for now
+ *		a0, a2, a4 all hard-coded for now
+ *		overridden by autoTrack (HARP defined) or full disk
  *
  *
  */
@@ -110,6 +116,13 @@
 #define kDpath    "dpath"
 #define kDpathDef "/home/jsoc/cvs/Development/JSOC"
 
+#define kNotSpecified "Not Specified"
+
+// differential rotation rate, urad/sec; from mtrack
+#define a0 (0.0734)
+#define a2 (-0.412)
+#define a4 (-0.300)
+
 /* ========================================================================================================== */
 
 /* Data structure for mapping info */
@@ -119,9 +132,9 @@ struct mapInfo {
 	int cutOut, localOpt, globalOpt, fullDisk;
 	int localCart, spheric;
 	int latlon, noDisamb, fillNan;
-	int autoTrack, autoSize;
+	int autoTrack, autoSize, diffTrack;
 	int verbose;
-  int doerr, covar, rice;
+	int doerr, covar, rice;
 	int nbin, gauss;
 	int mapOpt, repOpt, interpOpt;
 	float ref_lon, ref_lat;
@@ -130,6 +143,7 @@ struct mapInfo {
 	// variable
 	float xc, yc;		// reference point
 	int nrow, ncol;		// size
+	TIME tref;			// reference time for differential rotation tracking
 };
 
 /* ========================================================================================================== */
@@ -219,17 +233,19 @@ void frebin (float *image_in, float *image_out, int nx, int ny, int nbin, int ga
 /* ========================================================================================================== */
 
 char *module_name = "bmap";
+char *version_id = "2012 Feb 28";  /* Version number */
 
 ModuleArgs_t module_args[] =
 {
-	{ARG_STRING, "in", "Not Specified", "Input vector image series."},
-	{ARG_STRING, "out", "Not Specified", "Output map series."},
+	{ARG_STRING, "in", kNotSpecified, "Input vector image series."},
+	{ARG_STRING, "out", kNotSpecified, "Output map series."},
 	{ARG_NUME, "map", "carree", "Projetion method, carree by default.",
 		"carree, Cassini, Mercator, cyleqa, sineqa, gnomonic, Postel, stereographic, orthographic, Lambert"},
 	{ARG_NUME, "rep", "xyz", "Vector representation, xyz by default.",
 		"xyz, fia, lta"},
 	{ARG_NUME, "interp", "wiener", "Interpolation method, higher order polynomial by default.",
 		"wiener, cubic, bilinear, nearest"},
+//	{ARG_STRING, "tref", kNotSpecified, "Reference time for differential tracking"},
 	{ARG_FLOAT, "lon", "0.", "Reference longitude for output map center."},
 	{ARG_FLOAT, "lat", "0.", "Reference latitude for output map center."},
 	{ARG_FLOAT, "xscale", "0.03", "Scale in x direction at map center, in degrees."},
@@ -237,9 +253,9 @@ ModuleArgs_t module_args[] =
 	{ARG_INT, "cols", "0", "Columns in output map"},
 	{ARG_INT, "rows", "0", "Rows in output map"},
 	{ARG_INT, "nbin", "3", "Oversampling rate for anti-aliasing. See documentation."},
-  {ARG_INT, "doerr", "1", "Perform error propagation, use near neighbor so far."},
-  {ARG_INT, "covar", "0", "Out put covariances for field, only work for cutout now."},
-  {ARG_INT, "rice", "1", "Use Rice compression."},
+	{ARG_INT, "doerr", "1", "Perform error propagation, use near neighbor so far."},
+	{ARG_INT, "covar", "0", "Out put covariances for field, only work for cutout now."},
+	{ARG_INT, "rice", "1", "Use Rice compression."},
 	{ARG_FLAG, "c",	"", "Simple full pixel cutout without interpolation, override all mapping options."},
 	{ARG_FLAG, "l",	"", "Force vector representation in local tangent coordinates, for cutout mode only."},
 	{ARG_FLAG, "g",	"", "Force vector representation in plane of sky coordinates, for remap mode only."},
@@ -253,7 +269,8 @@ ModuleArgs_t module_args[] =
 	{ARG_FLAG, "x", "", "Uses patch center direction for vector decomposition"},
 	{ARG_FLAG, "q", "", "Fill regions outside HARP defined area as NaN"},
 	{ARG_FLAG, "s", "", "Spherical option, flip By as Btheta"},
-        {ARG_STRING, kDpath, kDpathDef, "path to the source code tree (the JSOC root directory)"},
+	{ARG_FLAG, "d", "", "Enable differential rotation tracking"},
+	{ARG_STRING, kDpath, kDpathDef, "path to the source code tree (the JSOC root directory)"},
 	{ARG_END}
 };
 
@@ -269,12 +286,12 @@ int DoIt(void)
 	
 	DRMS_RecordSet_t *inRS = NULL, *outRS = NULL;
 	DRMS_Record_t *inRec = NULL, *outRec = NULL;
-        const char *dpath = params_get_str(&cmdparams, kDpath);
+	const char *dpath = params_get_str(&cmdparams, kDpath);
 	
 	/* Get parameters */
     
-  inQuery = (char *) params_get_str(&cmdparams, "in");
-  outQuery = (char *) params_get_str(&cmdparams, "out");
+	inQuery = (char *) params_get_str(&cmdparams, "in");
+	outQuery = (char *) params_get_str(&cmdparams, "out");
 	
 	mInfo.mapOpt = params_get_int(&cmdparams, "map");
 	mInfo.repOpt = params_get_int(&cmdparams, "rep");
@@ -287,9 +304,9 @@ int DoIt(void)
 	mInfo.yscale = params_get_float(&cmdparams, "yscale");
 	mInfo.nbin = params_get_int(&cmdparams, "nbin");
   
-  mInfo.doerr = params_get_int(&cmdparams, "doerr");
-  mInfo.covar = params_get_int(&cmdparams, "covar");
-  mInfo.rice = params_get_int(&cmdparams, "rice");
+	mInfo.doerr = params_get_int(&cmdparams, "doerr");
+	mInfo.covar = params_get_int(&cmdparams, "covar");
+	mInfo.rice = params_get_int(&cmdparams, "rice");
 	
 	if ((mInfo.xscale / mInfo.nbin) > NYQVIST || (mInfo.yscale / mInfo.nbin) > NYQVIST)
 		mInfo.nbin = MAX((round(mInfo.xscale / NYQVIST)),(round(mInfo.yscale / NYQVIST)));
@@ -314,6 +331,9 @@ int DoIt(void)
 	
 	mInfo.autoTrack = params_isflagset(&cmdparams, "a");
 	mInfo.gauss = !(params_isflagset(&cmdparams, "b"));
+	
+	mInfo.diffTrack = params_isflagset(&cmdparams, "d");
+	if (mInfo.globalOpt || mInfo.autoTrack) mInfo.diffTrack = 0;
 	
 	mInfo.fullDisk = params_isflagset(&cmdparams, "f");
 	if (mInfo.fullDisk) {
@@ -355,13 +375,18 @@ int DoIt(void)
 		if (mInfo.latlon) printf("Output latitude/longitude\n");
 		if (mInfo.noDisamb) printf("No disambiguation\n");
 	}
-  if (! mInfo.cutOut) mInfo.covar = 0;
+	if (! mInfo.cutOut) mInfo.covar = 0;
 	
 	/* Input data */
 	
     inRS = drms_open_records(drms_env, inQuery, &status);
     if (status || inRS->n == 0) DIE("No input data found");
     nrecs = inRS->n;
+	
+	if (mInfo.diffTrack) {
+		mInfo.tref = (drms_getkey_time(inRS->records[0], "T_OBS", &status) +
+					  drms_getkey_time(inRS->records[nrecs-1], "T_OBS", &status))/2.;
+	}
 	
     /* Output data */
 
@@ -437,7 +462,7 @@ int DoIt(void)
 		if (!mInfo.fullDisk &&
 			performMapping(inRec, &mInfo,
 						   bx_img, by_img, bz_img,
-                                                   bx_map, by_map, bz_map, dpath)) {
+						   bx_map, by_map, bz_map, dpath)) {
 			printf("Image #%d skipped.", irec);
 			if (mInfo.verbose) printf(": mapping error\n"); else printf("\n");
 			if (bx_img) free(bx_img); if (by_img) free(by_img); if (bz_img) free(bz_img);
@@ -651,6 +676,19 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 		
 		latc = mInfo->ref_lat;
 		lonc = mInfo->ref_lon;
+		
+		// apply differential rotation correction if necessary
+		
+		if (mInfo->diffTrack) {
+			TIME t_obs = drms_getkey_time(inRec, "T_OBS", &status);
+			TIME delta_t = t_obs - mInfo->tref;
+			double sinlat = sin(latc * RADSINDEG);
+			double sinlat2 = sinlat * sinlat;
+			double delta_rot = a0 + sinlat2 * (a2 + a4 * sinlat2);
+			double delta_lon = delta_rot * 1.0e-6 * delta_t;
+			lonc += delta_lon / RADSINDEG;
+			printf("dlon=%f\n",delta_lon / RADSINDEG);
+		}
 		
 		// It's possible that reference pixel and disk center belong to two Carrington rotations
 		// We make sure the difference is less than 180 deg, i.e. always using the current image's CAR_ROT
@@ -1091,7 +1129,7 @@ int getError(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 	  
   // Bitmaps
   
-  inSeg = drms_segment_lookup(inRec, "info_map");
+  inSeg = drms_segment_lookup(inRec, "info_map");		// be careful, changed to info_map from qual_map
   inArray_qual = drms_segment_read(inSeg, DRMS_TYPE_INT, &status);
   if (status) return 1;
   qual = (int *)inArray_qual->data;
@@ -1881,6 +1919,18 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 		
 		drms_setkey_string(outRec, "PROJECTION", "Cutout");
 		
+		// For now
+		drms_setkey_string(outRec, "BUNIT_003", "Gauss");
+		drms_setkey_string(outRec, "BUNIT_004", "degree");
+		drms_setkey_string(outRec, "BUNIT_005", "degree");
+		drms_setkey_string(outRec, "BUNIT_006", " ");
+		drms_setkey_string(outRec, "BUNIT_007", " ");
+		drms_setkey_string(outRec, "BUNIT_008", " ");
+		drms_setkey_string(outRec, "BUNIT_009", " ");
+		drms_setkey_string(outRec, "BUNIT_010", " ");
+		drms_setkey_string(outRec, "BUNIT_011", "degree");
+		drms_setkey_string(outRec, "BUNIT_012", "degree");
+		
 	} else {
 		
 		drms_setkey_float(outRec, "CRPIX1", mInfo->ncol/2. + 0.5);
@@ -1900,6 +1950,15 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 		drms_setkey_float(outRec, "CROTA2", 0.0);
 		
 		drms_setkey_string(outRec, "PROJECTION", mapName[mInfo->mapOpt]);
+		
+		// For now
+		drms_setkey_string(outRec, "BUNIT_003", "Gauss");
+		drms_setkey_string(outRec, "BUNIT_004", "Gauss");
+		drms_setkey_string(outRec, "BUNIT_005", "Gauss");
+		drms_setkey_string(outRec, "BUNIT_006", " ");
+		drms_setkey_string(outRec, "BUNIT_007", " ");
+		drms_setkey_string(outRec, "BUNIT_008", "degree");
+		drms_setkey_string(outRec, "BUNIT_009", "degree");
 		
 	}
   
