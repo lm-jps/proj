@@ -271,6 +271,7 @@ ModuleArgs_t module_args[] =
 	{ARG_FLAG, "s", "", "Spherical option, flip By as Btheta"},
 	{ARG_FLAG, "d", "", "Enable differential rotation tracking"},
 	{ARG_STRING, kDpath, kDpathDef, "path to the source code tree (the JSOC root directory)"},
+	{ARG_INT, "harpnum", "0", "HARP number"},
 	{ARG_END}
 };
 
@@ -287,6 +288,8 @@ int DoIt(void)
 	DRMS_RecordSet_t *inRS = NULL, *outRS = NULL;
 	DRMS_Record_t *inRec = NULL, *outRec = NULL;
 	const char *dpath = params_get_str(&cmdparams, kDpath);
+	
+	int hn = params_get_int(&cmdparams, "harpnum");
 	
 	/* Get parameters */
     
@@ -607,7 +610,7 @@ int DoIt(void)
 		// Keywords
 		
 		drms_copykey(outRec, inRec, "T_REC");
-    drms_copykey(outRec, inRec, "HARPNUM");
+		if (!hn) drms_copykey(outRec, inRec, "HARPNUM"); else drms_setkey_int(outRec, "HARPNUM", hn);
 		drms_copykey(outRec, inRec, "RUNNUM");		// for Monte-Carlo
 		
 		setKeys(outRec, inRec, &mInfo);
@@ -1425,6 +1428,8 @@ int localVectorTransform(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 		}
 	}
 	
+//	printf("%f,%f\n",disk_xc,disk_yc);
+//  printf("%d\n",mInfo->cutOut);	
 	
 	for (int row = 0; row < mInfo->nrow; row++) {
 		for (int col = 0; col < mInfo->ncol; col++) {
@@ -1437,10 +1442,16 @@ int localVectorTransform(DRMS_Record_t *inRec, struct mapInfo *mInfo,
 				
 				if (mInfo->cutOut) {
 					
-					x = (int)(col + mInfo->xc + 0.5 - mInfo->ncol / 2.0);
-					y = (int)(row + mInfo->yc + 0.5 - mInfo->nrow / 2.0);
-					x = (x - disk_xc) / rSun;
-					y = (y - disk_yc) / rSun;
+					if (!mInfo->fullDisk) {
+						x = (int)(col + mInfo->xc + 0.5 - mInfo->ncol / 2.0);
+						y = (int)(row + mInfo->yc + 0.5 - mInfo->nrow / 2.0);
+						x = (x - disk_xc) / rSun;
+						y = (y - disk_yc) / rSun;
+					} else {
+						x = (col - disk_xc) / rSun;
+						y = (row - disk_yc) / rSun;
+					}
+
 					
 					if (img2sphere(x, y, asd, disk_latc, disk_lonc, pa,
 								   &rho, &lat, &lon, &sinlat, &coslat, &sig, &mu, &chi)) {
