@@ -53,10 +53,17 @@
 // Quality bit for disambiguation
 // Updated Oct 12
 // Now occupy lower 8 bits
+/*
 #define ambCode0 0x0000 // 10 for pixels which were above threshold and annealed (was 0.9)
 #define ambCode1 0x0001 // 40 for pixels which were below threshold and annealed (was 0.6)
 #define ambCode2 0x0002 // 50 for pixels which had weak field method applied (was 0.5)
 #define ambCode3 0x0004 // 100 for pixels which were not disambiguated (was 0.0)
+*/
+#define ambCode3 0x0000 // not disambiguated, turned
+#define ambCode0 0x0001 // strong annealed
+#define ambCode1 0x0002 // weak annealed
+#define ambCode2 0x0004 // weak smooth
+
 
 // switches
 #define QUALMAP 1
@@ -76,7 +83,7 @@ int getAmbCode (char prob)
 //====================
 
 char *module_name = "disambig";	/* Module name */
-char *version_id = "201 Oct 27";  /* Version number */
+char *version_id = "2011 Oct 27";  /* Version number */
 
 ModuleArgs_t module_args[] =
 {
@@ -604,6 +611,8 @@ printf("harpflag=%d\n",harpflag);
         }
 
         probBa = (float *) calloc(nxny, sizeof(float));
+		
+		printf("start\n"); fflush(stdout);
 
         /* This is the working part */
 
@@ -679,7 +688,7 @@ printf("harpflag=%d\n",harpflag);
         outSeg_flag = drms_segment_lookup(outRec, "disambig");
         outSeg_prob = drms_segment_lookup(outRec, "conf_disambig");
 #if QUALMAP==1 
-        outSeg_qual = drms_segment_lookup(outRec, "qual_map");
+        outSeg_qual = drms_segment_lookup(outRec, "info_map");
         outSeg_conf = drms_segment_lookup(outRec, "confid_map");
 #endif
         for (i = 0; i < 2; i++) {
@@ -753,7 +762,7 @@ printf("harpflag=%d\n",harpflag);
         drms_setkey_int(outRec, "DATAVALS", outsz - nancount);
         drms_setkey_int(outRec, "MISSVALS", nancount);
         // Code version
-      drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.5 2011/10/28 05:13:13 xudong Exp $");
+      drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.6 2012/03/01 00:11:13 xudong Exp $");
       drms_setkey_string(outRec, "AMBCODEV", ambcodev);
     
         /* Set link */
