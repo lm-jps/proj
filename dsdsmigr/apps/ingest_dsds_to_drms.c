@@ -636,8 +636,8 @@ if (!strcmp("/home/soi/CM/tables/calib/flat/fd/vers_1/", caltbls))
   calrecstring="mdi.caltables_intensity[fd_vers_1]";
 if (!strcmp("/home/soi/CM/tables/calib/flat/hr/", caltbls))
   calrecstring="mdi.caltables_intensity[hr_vers_1]";
-if (!strcmp("/home/soi/CM/tables/calib/flat/hr/vers_1", caltbls))
-  calrecstring="mdi.caltables_intensity[hr_vers_1]";
+if (!strcmp("/home/soi/CM/tables/calib/flat/hr/vers_0", caltbls))
+  calrecstring="mdi.caltables_intensity[hr_vers_0]";
 if (!strcmp("/home/soi/CM/tables/calib/obflat/vers_0/", caltbls))
   calrecstring="mdi.caltables_intensity[obflat_vers_0]";
 if (!strcmp("/home/soi/CM/tables/calib/obflat/vers_1/", caltbls))
