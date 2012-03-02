@@ -7,7 +7,7 @@ d		:= $(dir)
 #STORDSDS_$(d)  := $(addprefix $(d)/, store_dsds_2_drms)
 STORDSDS_EXTRA_LIBS = $(LIBSOIJSOC)
 
-MODEXE_$(d)	:= $(addprefix $(d)/, store_ds_fd_M_01h_lev1_8 store_ds_fd_M_96m_01d_lev1_8 store_ds_fd_V_01h_lev1_8 store_ds_fd_V_30s_01h_lev1_8 store_ds_vw_V_06h_lev1_8 ingest_dsds_a store_dsds_migrate ingest_dsds_to_drms set_gaps_missing_v2 plate_scale_test mdi_fdmag_cal)
+MODEXE_$(d)	:= $(addprefix $(d)/, store_ds_fd_M_01h_lev1_8 store_ds_fd_M_96m_01d_lev1_8 store_ds_fd_V_01h_lev1_8 store_ds_fd_V_30s_01h_lev1_8 store_ds_vw_V_06h_lev1_8 ingest_dsds_a store_dsds_migrate ingest_dsds_to_drms)
 
 MODEXESUMS_$(d)	:= $(addprefix $(d)/, sum_pe_svc sum_pe) $(STORDSDS_$(d))
 MODEXE		:= $(MODEXE) $(MODEXE_$(d)) $(MODEXESUMS_$(d))
