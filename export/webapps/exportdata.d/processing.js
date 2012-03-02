@@ -2,10 +2,10 @@
 //
 // CheckXXXX creates the contents of ExportProcessingArgs from parameters for
 // this export type
+
 //
 // Processing details for Patch in Heliographic Coords
 //
-
 
 var noaaColor;
 
@@ -301,7 +301,7 @@ function HgGetSeriesList()
       if (n < 1) alert("WARNING: No _hgpatch series found.\n"+response);
       insertOption("HgSerList","Not Selected Yet", "");
       for (var i=0; i<n; i++)
-         insertOption("HgSerList",HgSeriesList.list[i+1], "");
+         insertOption("HgSerList",HgSeriesList.list[i], "");
       },
     onFailure: function() { alert('Failed to get HgPatch Series List'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
@@ -311,3 +311,23 @@ function HgGetSeriesList()
 
 
 // End of HG Patch code
+
+//
+// Processing details for normalized Scaling
+//
+
+function AiaScaleInit()
+  {
+  $("ProcessAiaScale").style.display="none";
+  }
+
+//
+// Processing details for all options
+//
+
+function ProcessingInit()
+  {
+  AiaScaleInit();
+  HgPatchInit();
+  }
+
