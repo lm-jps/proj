@@ -6,7 +6,8 @@ use Fcntl qw(:mode);
 use Getopt::Long;
 use FileHandle;
 use Sys::Hostname;
-use Cwd qw(realpath);
+use Cwd qw(realpath chdir); # OMG! Need to override chdir, otherwise $ENV{PWD} is NOT
+                            # updated when chdir is called.
 use FindBin qw($Bin);
 
 use constant kSuccess       => 0;
@@ -15,6 +16,7 @@ use constant kCantSSH       => 2;
 use constant kConflicts     => 3;
 use constant kFileStatus    => 4;
 use constant kCantExeOnMach => 5;
+use constant kCantUpdateSrc => 6;
 
 
 use constant kUpdateLog => "cvsupdate.log";
@@ -68,7 +70,15 @@ if (!defined($optdir))
 }
 else
 {
-   $cvstree = $optdir;
+    # $cvstree needs to be an absolute path. If it isn't, make it so.
+    if ($optdir =~ /^\s*\//)
+    {
+        $cvstree = $optdir;        
+    }
+    else
+    {
+        $cvstree = "$ENV{'PWD'}/$optdir"
+    }
 }
 
 # Determine if the cvs tree specified exists
@@ -139,38 +149,53 @@ if ($#mpkeys == -1)
 
 if ($#mpkeys >= 0)
 {
-   my($cdir) = realpath($ENV{'PWD'});
-   my(@rsp);
-   my($rspstr);
-
-   print "\n";
-   print "#############################################\n";
-   print "####### Starting CVS update #################\n";
-   print "#############################################\n";
-   print "##\n";
-
-   chdir($cvstree);
-   unless (UpdateTree($cvstree))
-   {
-      # Run the configure script - should really check the return code.
-      print "####### Running configure script ############\n";
-      @rsp = `./configure 2>&1`;
-      print "## Done (output from configure follows).\n";
-      print "## ";
-      $rspstr = join("## ", @rsp);
-      print $rspstr;
-
-      # Do the build on each machine
-      print "####### Building binaries on machines #####\n";
-      map({ BuildOnMachine($_, $mpaths); } @mpkeys);
-      print "## Done building.\n";
-      print "##\n";
-   }
-   chdir($cdir);
-
-   print "###########################################\n";
-   print "####### Update of CVS binaries complete. ##\n";
-   print "###########################################\n";
+    my($cdir) = realpath($ENV{'PWD'});
+    my(@rsp);
+    my($rspstr);
+    
+    print "\n";
+    print "#############################################\n";
+    print "####### Starting CVS update #################\n";
+    print "#############################################\n";
+    print "##\n";
+    print "## changing working directory to $cvstree.\n";
+    
+    chdir($cvstree);
+    unless (UpdateTree($cvstree))
+    {
+        # Run the configure script - should really check the return code.
+        print "####### Running configure script ############\n";
+        @rsp = `./configure 2>&1`;
+        print "## Done (output from configure follows).\n";
+        print "## ";
+        $rspstr = join("## ", @rsp);
+        print $rspstr;
+        
+        # Do the build on each machine
+        print "####### Building binaries on machines #####\n";
+        map({ BuildOnMachine($_, $mpaths); } @mpkeys);
+        print "## Done building.\n";
+        print "##\n";
+    }
+    else
+    {
+        # Failure updating CVS tree.
+        print "## restoring working directory to $cdir.\n";
+        chdir($cdir);
+        
+        print "###########################################\n";
+        print "####### Update of CVS binaries FAILED!! ###\n";
+        print "###########################################\n";
+        
+        exit(kCantUpdateSrc);
+    }
+    
+    print "## restoring working directory to $cdir.\n";
+    chdir($cdir);
+    
+    print "###########################################\n";
+    print "####### Update of CVS binaries complete. ##\n";
+    print "###########################################\n";
 }
 
 exit(kSuccess);
@@ -286,31 +311,52 @@ sub ProcessMtabInfo
    }
 }
 
+# $line is the remote machine's (e.g., n02) mtab line.
 sub ExtractMachPath
 {
-   my($netpath) = $_[0];
-   my($line) = $_[1];
-
-   my($volume);
-   my($mount);
-
-   # First, extract the volume from the mtab record
-   chomp($line);
-
-   if ($line =~ /^\s*(\S+)\s+(\S+)/)
-   {
-      $volume = $1;
-      $mount = $2;
-   }
-
-   if ($netpath =~ /^$volume(.+)/)
-   {
-      return $mount . $1;
-   }
-   else
-   {
-      return ();
-   }
+    my($netpath) = $_[0];
+    my($line) = $_[1];
+    
+    my($volume);
+    my($mount);
+    
+    # First, extract the volume from the mtab record
+    chomp($line);
+    
+    if ($line =~ /^\s*(\S+)\s+(\S+)/)
+    {
+        $volume = $1;
+        $mount = $2;
+    }
+    
+    # $volume - like sunroom:/home0
+    # $1 - like /home0
+    # $netpath - like sunroomg:/home0/arta/jsoctrees/JSOC
+    if ($netpath =~ /^$volume(.+)/)
+    {
+        return $mount . $1;
+    }
+    else
+    {
+        # There might be a trailing 'g' on the $netpath (legacy - used to mean
+        # gigabit for a gigabit network. But all networds are at least Gb now.
+        # One physical drive might have a network name whose symbolic name ends
+        # in a 'g' on one machine, but not on another. Try to remove the trailing
+        # 'g' before doing a comparison.
+        #
+        # $netpath2 - like sunroom:/home0/arta/jsoctrees/JSOC
+        my($netpath2) = $netpath;
+        
+        $netpath2 =~ s/g:/:/;
+        if ($netpath2 =~ /^$volume(.+)/)
+        {
+            return $mount . $1; 
+        }
+        else
+        {
+            return ();
+        }
+    }
 }
 
 sub GetLocalPaths

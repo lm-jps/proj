@@ -905,13 +905,16 @@ sub DownloadTree
       }
       elsif ($dltype eq kDlUpdate)
       {
-         # If $dltype is kDlUpdate, then there MUST be a working directory root.
-         # The current directory is the parent of the root directory (if it exists).
-         if (!(-e kRootDir))
-         {
-            print STDERR "No CVS working directory exists in $ENV{'PWD'}.\n";
-            $rv = 1;
-         }
+          # If $dltype is kDlUpdate, then there MUST be a working directory root.
+          # The current directory is the parent of the root directory (if it exists).
+          my($rootdir) = File::Spec->catdir(kRootDir);
+          
+          if (!(-d $rootdir))
+          {
+              print STDERR "Working dir is $ENV{PWD}; expected DRMS root dir is $rootdir.\n";
+              print STDERR "No CVS working directory exists in $ENV{'PWD'}.\n";
+              $rv = 1;
+          }
       }
       else
       {
