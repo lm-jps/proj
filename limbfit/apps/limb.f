@@ -1,7 +1,7 @@
 c------------------------------------------------------------------------------------------------
 c	#define CODE_NAME 		"limbfit"
-c	#define CODE_VERSION 	"V1.19r0" 
-c	#define CODE_DATE 		"Sun Jan 22 13:15:25 PST 2012" 
+c	#define CODE_VERSION 	"V2.0r0" 
+c	#define CODE_DATE 		"Fri Mar  2 13:28:38 PST 2012" 
 c------------------------------------------------------------------------------------------------
 c Revision 1.0  2009/01/08  17:20:00  Marcelo Emilio
 c changed assumed-size array declaration from "real xxx(1)" to "real xxx(3)"

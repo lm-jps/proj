@@ -7,8 +7,8 @@
 			
 	
 	#define lfr->code_name 		"limbfit"
-	#define lfr->code_version 	"V1.19r0" 
-	#define lfr->code_date 		"Sun Jan 22 13:15:25 PST 2012" 
+	#define lfr->code_version 	"V2.0r0" 
+	#define lfr->code_date 		"Fri Mar  2 13:28:38 PST 2012" 
 */
 
 #include "limbfit.h"

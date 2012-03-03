@@ -1,4 +1,4 @@
-/* I.Scholl "Sun Jan 22 13:15:25 PST 2012" 
+/* I.Scholl "Fri Mar  2 13:28:38 PST 2012" 
 */
 
 #include <string.h>
@@ -26,8 +26,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V1.19r0" 
-#define CODE_DATE 		"Sun Jan 22 13:15:25 PST 2012" 
+#define CODE_VERSION 	"V2.0r0" 
+#define CODE_DATE 		"Fri Mar  2 13:28:38 PST 2012" 
 #define LOGMSG1			"LIMBFIT"
 #define	JSD_NAME		"su_scholl.hmi_lf.jsd"
 
