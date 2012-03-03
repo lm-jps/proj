@@ -7,8 +7,8 @@
 			
 	
 	#define lfr->code_name 		"limbfit"
-	#define lfr->code_version 	"V1.14r0" 
-	#define lfr->code_date 		"Sat Oct 22 09:44:08 HST 2011" 
+	#define lfr->code_version 	"V1.19r0" 
+	#define lfr->code_date 		"Sun Jan 22 13:15:25 PST 2012" 
 */
 
 #include "limbfit.h"
@@ -78,7 +78,7 @@ int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn,
 return(0);
 }
 
-int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out,char *tmp_dir,FILE *opf, int cc, int spe, int iter, char *dsin, char *comment, int debug, int *status)
+int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out,char *tmp_dir,FILE *opf, int cc, int spe, int iter, int fldf, char *dsin, char *comment, char *bld_vers, int debug, int *status)
 {
 	static char *log_msg_code="do_one_limbfit";
 	static char *series_name="limbfit data";
@@ -103,7 +103,8 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 	lfr->code_date=CODE_DATE;
 	lfr->comment=comment;
 	lfr->dsin=dsin;
-
+	lfr->bld_vers=bld_vers;
+	
 	//if (debug) lf_logmsg("DEBUG", "INFO", 0, 0, "IN do___", log_msg_code, opf);
 
 	seg_cnt = drms_record_numsegments (record_in);
@@ -164,6 +165,8 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 		lfv->cc=cc;
 		lfv->spe=spe;
 		lfv->iter=iter;
+		lfv->fldf=fldf;
+		//lfv->sav=sav;
 		lfv->data=img->data;
 
 		if (debug) 
@@ -177,7 +180,6 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 		}
 		
 		lf_retcode=limbfit(lfv,lfr,opf,debug);
-		//free(img->data);
 		drms_free_array(img);
 
 		if (debug) 
@@ -199,7 +201,9 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 		// >= 0 => all
 		// ERR_LIMBFIT_FIT_FAILED => all
 		// ERR_LIMBFIT_FAILED => mini
-		
+
+		if (fldf==0) lfr->fldfr=4;
+
 		if (lf_retcode >= 0 || lf_retcode == ERR_LIMBFIT_FIT_FAILED)
 		{	
 			if (debug) printf("write in the db\n");
@@ -230,6 +234,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			rstatus=drms_setkey_int   (record_out, "ERRO_LFS",	lfr->error1);
 			rstatus=drms_setkey_int   (record_out, "ERRO_FIT",	lfr->error2);
 			rstatus=drms_setkey_int   (record_out, "NB_FBINS",	lfr->nb_fbins);
+			rstatus=drms_setkey_int   (record_out, "FLDFR",		lfr->fldfr);
 			rstatus=drms_setkey_double(record_out, "MAX_LIMB",	lfr->max_limb);
 			rstatus=drms_setkey_double(record_out, "CMEAN",		lfr->cmean);
 			rstatus=drms_setkey_int   (record_out, "ANN_WD",	lfr->ann_wd);
@@ -245,8 +250,8 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			rstatus=drms_setkey_int   (record_out, "NB_ITER",	lfr->nb_iter);
 			rstatus=drms_setkey_int   (record_out, "CEN_CALC",	lfv->cc);
 			rstatus=drms_setkey_double(record_out, "AHI",		lfr->ahi);
-			rstatus=drms_setkey_string(record_out, "COMMENTS",	lfr->comment);
-
+			rstatus=drms_setkey_string(record_out, "COMMENTS",	lfr->comment);			
+			rstatus=drms_setkey_string(record_out, "BLD_VERS",  lfr->bld_vers);
 			//---------------------------------------
 			//		3) write the generic segment 
 			//			(as the full FITS file)
@@ -470,6 +475,12 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
 				return ERR_FITSIO;
 			}
+			if ( fits_update_key(outfptr, TINT, "FLDFR", &lfr->fldfr, "",&rstatus) )
+			{
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(FLDFR)",fsn,rstatus,opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				return ERR_FITSIO;
+			}
 			if ( fits_update_key(outfptr, TINT, "NB_FBINS", &lfr->nb_fbins, "",&rstatus) )
 			{
 				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_FBINS)",fsn,rstatus,opf);			
@@ -547,15 +558,31 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			int i;			
 		
 			// AB ---EXT#1---------------------------------------------------------------------
-			char *tunitAB[] = { "","" };
-			char *ttypeAB[] = { "Alpha", "Beta"};
-			char *tformAB[] = { "1E","1E" };
-			char extnameAB[]="LDF info / Alpha&Beta";
-			if ( fits_create_tbl( outfptr, BINARY_TBL, lfr->fits_ab_nrows, lfr->fits_ab_tfields, 
-													ttypeAB, tformAB, tunitAB, extnameAB, &rstatus) )
+			if (lfr->nb_iter==1)
 			{
-				fits_report_error(opf, rstatus); 
-				return ERR_FITSIO;
+				char *tunitAB[] = { "","" };
+				char *ttypeAB[] = { "Alpha", "Beta"};
+				char *tformAB[] = { "1E","1E" };
+				char extnameAB[]="LDF info / Alpha&Beta";
+				if ( fits_create_tbl( outfptr, BINARY_TBL, lfr->fits_ab_nrows, lfr->fits_ab_tfields, 
+													ttypeAB, tformAB, tunitAB, extnameAB, &rstatus) )
+				{
+					fits_report_error(opf, rstatus); 
+					return ERR_FITSIO;
+				}
+			}
+			else
+			{
+				char *tunitAB[] = { "","",""};
+				char *ttypeAB[] = { "Alpha", "Beta","Beta Prev"};
+				char *tformAB[] = { "1E","1E","1E" };
+				char extnameAB[]="LDF info / Alpha&Beta[&Beta Prev]";
+				if ( fits_create_tbl( outfptr, BINARY_TBL, lfr->fits_ab_nrows, lfr->fits_ab_tfields, 
+													ttypeAB, tformAB, tunitAB, extnameAB, &rstatus) )
+				{
+					fits_report_error(opf, rstatus); 
+					return ERR_FITSIO;
+				}			
 			}
 			for (i=1;i<=lfr->fits_ab_tfields;i++)
 			{
@@ -591,7 +618,31 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 					return ERR_FITSIO;
 				}
 			}	
-		
+			
+			if (fldf==1)
+			{
+				// Full LDF ---EXT#3-------------------------------------------------------------------------
+				char *tunitF[] = { "","" };
+				char *ttypeF[] = { "Intensity", "Radius"};
+				char *tformF[] = { "1E","1E" };
+				char extnameF[]="Full LDF ";
+				if ( fits_create_tbl( outfptr, BINARY_TBL, lfr->fits_fldfs_nrows, lfr->fits_fldfs_tfields, 
+														ttypeF, tformF, tunitF, extnameF, &rstatus) )
+				{
+					fits_report_error(opf, rstatus); 
+					return ERR_FITSIO;
+				}
+				for (i=1;i<=lfr->fits_fldfs_tfields;i++)
+				{
+					if (fits_write_col(outfptr, TFLOAT, i, firstrow, firstelem, lfr->fits_fldfs_nrows, 
+													lfr->fits_fulldfs+(i-1)*lfr->fits_fldfs_nrows, &rstatus))
+					{
+						lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_col(FLDF)",fsn,rstatus,opf);			
+						write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+						return ERR_FITSIO;
+					}
+				}
+			}
 			//---------------------------------------
 			//		5) close & free
 			//---------------------------------------
@@ -629,9 +680,10 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 					return(ERR_DRMS_WRITE);
 				}
 				
+			free(lfr->fits_ldfs_data);
 			free(lfr->fits_alpha_beta);
 			free(lfr->fits_params);
-			//free(lfr->fits_fulldfs);
+			if (lfr->fldfr<3) free(lfr->fits_fulldfs);
 			
 			if (debug) printf("done...%u\n",fsn);							
 			lf_logmsg("INFO", "APP", 0, 0, "End writing in the DB", log_msg_code, opf);
@@ -649,7 +701,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				free(lfr->fits_ldfs_data);
 				free(lfr->fits_alpha_beta);
 				free(lfr->fits_params);
-				//free(lfr->fits_fulldfs);
+				if (lfr->fldfr<3) free(lfr->fits_fulldfs);
 			}
 			return(0);
 		}
@@ -691,11 +743,14 @@ int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *re
 		drms_setkey_int   (record_out, "NB_ITER",	lfr->nb_iter);
 		drms_setkey_int   (record_out, "CEN_CALC",	lfr->cc);
 		drms_setkey_double(record_out, "AHI",		lfr->ahi);		
+		drms_setkey_int   (record_out, "FLDFR",		lfr->fldfr);
+		drms_setkey_int   (record_out, "NFITPNTS",	lfr->nfitpnts);
+		drms_setkey_string(record_out, "BLD_VERS", 	lfr->bld_vers);
 		if (tbf >=1)
 		{
 			free(lfr->fits_alpha_beta);
 			free(lfr->fits_params);
-			//free(lfr->fits_fulldfs);
+			if (lfr->fldfr<3) free(lfr->fits_fulldfs);
 			if (tbf ==2) free(lfr->fits_ldfs_data);	
 		}
 return(0);

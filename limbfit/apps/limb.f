@@ -1,7 +1,7 @@
 c------------------------------------------------------------------------------------------------
 c	#define CODE_NAME 		"limbfit"
-c	#define CODE_VERSION 	"V1.14r0" 
-c	#define CODE_DATE 		"Sat Oct 22 09:44:08 HST 2011" 
+c	#define CODE_VERSION 	"V1.19r0" 
+c	#define CODE_DATE 		"Sun Jan 22 13:15:25 PST 2012" 
 c------------------------------------------------------------------------------------------------
 c Revision 1.0  2009/01/08  17:20:00  Marcelo Emilio
 c changed assumed-size array declaration from "real xxx(1)" to "real xxx(3)"
@@ -42,37 +42,46 @@ c      "ifail=#".  With one exception, a failure (ifail >< 0) is coupled with
 c      a "return" to the limb wrapper calling procedure.
 c   8) b0 is the "preshift" add this to the output beta to get the net
 c	*) centyp to specify if cmx/cmy are guess center(=0) or to be used as center(=1)
-	Subroutine limb(anls,npts,cmx,cmy,rguess, nitr,ncut,nang,nprf,rprf,
-     &                  lprf,nreg, rsi, rso, dx, dy, jreg, jang, jprf, 
+	Subroutine limb(anls,npts,cmx,cmy,rguess,nitr,ncut,rprf,lprf, rsi, rso, dx, dy, 
      &                   alph,beta,ifail,b0, centyp, ahi)
 	
 c      parameter(jpt=40000,jreg=4096,jb=50,jc=50,jang=129,jprf=160)
-       parameter(jpt=4000000,jb=200,jc=200)
+c	values for HMI rolls
+	implicit none
+	integer jpt,jb,jc,jreg,jang,jprf,nang,nprf,nreg
+	parameter(jpt=8000000,jb=200,jc=200,jreg=180,jang=181,jprf=64)
+	parameter(nang=180,nprf=64,nreg=180)
 	integer i,j,itr,itr2,ilt,ilt2,lmt,ir,lista(3),setn,nremv,centyp
-	integer n,nb,ind,nc,spflag,nbad,wbad,cut,nang,nprf,jnd
-	integer npts,nreg,nitr,ncut,ifail
+	integer n,nb,ind,nc,spflag,nbad,wbad,cut,jnd
+	integer npts,nitr,ncut,ifail,nrem
+	real rguess,ain,aout,chebev
 	real anls(3,jpt),an(3,jpt),cmx,cmy,alph(jreg),beta(jreg),rsi,rso
 	real pi,tpi,alo,ahi,flag,asi,aso,rni,rno,clmt,rem,dreg,dx,dy,fbrem
 	real rmax,rmin,rminp,rmaxp,dr,pix(jb+2),rad(jb+2),bin(jb+2)
 	real a,x,y,r,savr(jpt),savi(jpt),rmean,imean,rout,rin,theta
 	real inte(jpt),thet(jpt),sig(jpt),scmx,scmy,scrit,stpscl
-	real cf(3),cov(3,3),chi,funcsb,cfo(3),cxo,cyo 
-	real c(jc),cp(jc),cpp(jc),ldf,lsq,ln,dev,err,vr
+	real cf(3),cov(3,3),chi,cfo(3),cxo,cyo 
+	real c(jc),cp(jc),cpp(jc),lsq,ln,dev,err,vr
 	real d0,d1,d2,expn(6,jreg),da,db,dc,dd,de,df,dbb,daa
 	real crit,svx,svy,xscal,yscal
 	real lprf(jprf,jang),prf(jprf,jang),rprf(jprf),dprf,dang
 	real b0(jreg)	
-
 	common /ldfcom/ spflag,nb,rad,bin
 	common /model/ nc,c,cp,cpp
 
-	external ldf,funcs
-
+	external funcs
+c	print*,("in fortran")	
+c	print*,("cc:"),centyp,ahi,rsi,rso,dx,dy
+c	print*,("--:"),ifail,ncut,nitr,cmx,cmy,rguess
+c	print*,("--:"),jprf,jang,jreg,jpt,npts
+c	print*,(">>"),rprf(1),rprf(jprf),lprf(1,1),lprf(jprf,jang)
+c	print*,(">>"),anls(1,1),anls(2,1),anls(3,1),anls(1,npts),anls(2,npts),anls(3,npts)
+c	print*,(">>:"),alph(1),alph(jreg),beta(1),beta(jreg),b0(1),b0(jreg)
 	pi=3.141592654
 	tpi=2.0*pi
 	dreg=tpi/float(nreg)	! angular bin size for alpha & beta 
 	dang=tpi/float(nang)	! angular bin size for profiles
-	alo=0.0		! lower limit for acceptable data
+	alo=1.0	! lower limit for acceptable data
 c	ahi=70000.0	! upper limit ...
 	flag=-2147483648.0	! flag bad pixels
 c	rsi=18.0		! rmean-rsi lower limit to use in center-finder
@@ -143,7 +152,8 @@ c Compute radial and intensity means
 	   ir=ir+1
 	   savr(ir)=r
 	   savi(ir)=a
-20      enddo 
+20     enddo 
+c	print*,ir
 	call Hpsort(ir,savr)
 	call Hpsort(ir,savi)
 	i=ir/2
@@ -305,7 +315,6 @@ c SOI data, but was for data where larger annuli (or full disk was available).
 	   an(2,n)=y
 	   an(3,n)=a
 50      enddo 
-	
 c Loop to cut points deviating from the Chebyschev fit.
 	nbad=0		! current number of bad points
 	cut=0		! loop counter
@@ -321,8 +330,7 @@ c Find min and max radii
 	   r=((an(1,i)-cmx)**2+(an(2,i)-cmy)**2)**0.5
 	   if(r.gt.rmax) rmax=r
 	   if(r.lt.rmin) rmin=r
-70	enddo
-	
+70	enddo	
 c Put data into "nb" radial bins
 	dr=(rmax-rmin)/float(nb)
 	rad(1)=rmin-dr/2.0
@@ -330,11 +338,13 @@ c Put data into "nb" radial bins
 	   rad(i)=rad(i-1)+dr
 c	(IS: 1st bin -> rmin-dr , 2nd -> rmin)
 	enddo
+c	print*,rad
 	do i=1,nb+2
 	   pix(i)=0.0
 	   bin(i)=0.0
 	enddo
 	nrem=0
+c-	print*,"-",alo,ahi,tpi,dreg,cmx,cmy,nrem
 	do 80 i=1,n
 	   a=an(3,i)
 	   if((a.le.alo).or.(a.gt.ahi)) goto 80
@@ -344,29 +354,40 @@ c  this added to preshift limb distortion to get cleaner mean LDF (IS: maximum d
 	   theta=atan2((an(2,i)-cmy),(an(1,i)-cmx))
 	   if(theta.lt.0.0) theta=theta+tpi
 	   ind=int(theta/dreg+1.0)
+c-	   print*,"->",i,a,an(1,i),an(2,i),r,rmin,dr,ind,theta,b0(ind)
 	   r = r - b0(ind)
 c  end of radius correction
 	   ind=int((r-rmin)/dr+2.0)
+c-		print*," ",r,rmin,dr,ind
 c	   if(ind.lt.1) goto 80
 c changed w/Jeff Oct 6,2011
 	   if(ind.lt.1.or.ind.gt.nb) goto 80
 	   bin(ind)=bin(ind)+a
 	   pix(ind)=pix(ind)+1.0
-80      enddo 
+c	   print*,"=>",i,ind,bin(ind),pix(ind)
+80	enddo 
 	do i=2,nb+1
-	   if (pix(i).ne.0.0) bin(i)=bin(i)/pix(i)
+	   if (pix(i).ne.0.0) then
+	   	bin(i)=bin(i)/pix(i)
+c	   print*,"Z=",i,pix(i),bin(i)
+		endif
 	enddo
 	bin(1)=2.0*bin(2)-bin(3)
 c nb+2 bin from above loop only contains intensity values for r=rmax
 	bin(nb+2)=2.0*bin(nb+1)-bin(nb)
+c	print*,"X>",nb,bin(nb+2)
 
 c Make the Chebyschev fit
 	rminp=rmin-dr
 	rmaxp=rmax+dr
 	spflag=0
+
+c	print*,"3->",bin
+
 c	print*,"before: ",spflag,nb,rad,bin,cp,cpp
 c	print*,rminp," ",rmaxp," ",dr,c,nc
-	call chebft(rminp,rmaxp,c,nc,ldf,ifail)
+	call chebft(rminp,rmaxp,c,nc,ifail)
+
 c	print*,"after: ",spflag,nb,rad,bin,cp,cpp
 	if(ifail.gt.0)then
 c add by IS Oct5	
@@ -432,12 +453,13 @@ c This criteria works ok for reasonable data.
 
 110	continue
 c Compute the radial profile for "nang" angular bins
-	do j=1,jang
-	   do i=1,jprf
-	      lprf(i,j)=0.0
-	      prf(i,j)=0.0
-	   enddo
-	enddo
+c  comment below because already done in the C wrapper
+c	do j=1,jang
+c	   do i=1,jprf
+c	      lprf(i,j)=0.0
+c	      prf(i,j)=0.0
+c	   enddo
+c	enddo
 	dprf=dr  ! =(rmax-rmin)/float(nb)
 	do 118 i=1,n
  	   a=an(3,i)
@@ -481,11 +503,12 @@ c	     return
 	end do
 c The last profile in the array is the average.  "bin" & "rad" were offset 
 c one array element to insure the Chebyschev fit do a good job near the edges
+c	print*,"jang=",jang
 	do i=1,nprf
 	   lprf(i,jang)=bin(i+1)
 	   rprf(i)=rad(i+1)
+c		print*,"avg #:",i,lprf(i,jang),rprf(i)
 	enddo
-
 c Determine quantities per angular bin for alpha, beta calculation 
 	do j=1,jreg
 	   do i=1,6
@@ -530,7 +553,6 @@ c add by IS Oct5
 		ifail=27
 		return
 	endif
-
 c Determine alpha (the LDF scale factor) and beta (the offset)
 	do i=1,nreg
 	   thet(i)=float(i)*360.0/float(nreg)
@@ -561,7 +583,7 @@ c for this unnatural phenomenon.
 	   endif
 	   alph(i)=(DB-DBB*DC)/DAA-1.0
 130	enddo
-c	print*,cmx,cmy	
+c	print*,"end... ",cmx,cmy	
 	return
 	end	
 	
@@ -569,8 +591,9 @@ c	print*,cmx,cmy
 c Convert data into angle vs. radius, intensity, or I*r using trial center, 
 c cuts in radius, and intensity cuts
 	Subroutine Darr(anls,npts,ain,aout,cmx,cmy,rin,rout,thet,inte,n)
-
-	parameter(jpt=4000000)
+	implicit none
+	integer jpt
+	parameter(jpt=8000000)
 
 	integer i,n,npts
 	real anls(3,jpt),aout,ain,rout,rin,thet(1),inte(1)
@@ -601,7 +624,7 @@ c	   inte(n)=a
 
 c Flags points to cut for a better fit
 	Subroutine Fitb(thet,inte,n,rem,chi,sig,cf,npts)
-
+	implicit none
 	integer i,n,npts
 	real thet(1),inte(1),rem,chi,sig(1),cf(3),dev,err,tp
 
@@ -622,7 +645,8 @@ c Flags points to cut for a better fit
 
 c Computes the limb darkening function at any radius with a cubic spline	
 	Real Function Ldf(r,ifail)
-	
+	implicit none
+	integer jb
 	parameter(jb=200)
 
 	integer nb,nb2,spflag,ifail
@@ -630,7 +654,7 @@ c Computes the limb darkening function at any radius with a cubic spline
 
 	common /ldfcom/ spflag,nb,rad,bin
 
-	nb2=nb+2
+	nb2=nb+2 
 	ldf=0.0
 	if(spflag.eq.0)then
 	  call spline(rad,bin,nb2,2.0e30,2.0e30,snd)
@@ -644,7 +668,7 @@ c Computes the limb darkening function at any radius with a cubic spline
 
 c Performs a Heap Sort (see Numerical Recipes) to find the mean of array "ra"
 	Subroutine Hpsort(n,ra)
-
+	implicit none
 	integer i,ir,j,l,n
 	real ra(1),rra
 
@@ -687,12 +711,14 @@ c Performs a Heap Sort (see Numerical Recipes) to find the mean of array "ra"
 	end
    
 
-      SUBROUTINE COVSRT(COVAR,NCVM,MA,LISTA,MFIT)
-
+	SUBROUTINE COVSRT(COVAR,NCVM,MA,LISTA,MFIT)
+	  implicit none
+	  integer ncvmp,ma,mfit
       parameter(ncvmp=3)
       real COVAR(ncvmp,ncvmp)
-      integer LISTA(1)
-
+      real swap
+      integer LISTA(3),j,i,ncvm
+      
       DO 12 J=1,MA-1
         DO 11 I=J+1,MA
           COVAR(I,J)=0.
@@ -728,11 +754,12 @@ c Performs a Heap Sort (see Numerical Recipes) to find the mean of array "ra"
       END
 
 
-      SUBROUTINE GAUSSJ(A,N,NP,B,M,MP,ifail)
-
+	SUBROUTINE GAUSSJ(A,N,NP,B,M,MP,ifail)
+	implicit none
+	integer nmax,npp,mpp,n,mp,ifail,m,np
       PARAMETER(NMAX=200,npp=3,mpp=1)
-      real B(npp,mpp),A(npp,npp)
-      integer IPIV(NMAX),INDXR(NMAX),INDXC(NMAX)
+      real B(npp,mpp),A(npp,npp),big,dum,pivinv
+      integer IPIV(NMAX),INDXR(NMAX),INDXC(NMAX),j,k,i,irow,icol,l,ll
 
       DO 11 J=1,N
         IPIV(J)=0
@@ -813,8 +840,8 @@ c Performs a Heap Sort (see Numerical Recipes) to find the mean of array "ra"
 
 C FUNCTION FOR LFIT
 	SUBROUTINE FUNCS(X,AFUNC)
-
-	REAL AFUNC(3) 
+	implicit none
+	REAL AFUNC(3) ,x
 
 	AFUNC(1)=SIN(X)
 	AFUNC(2)=COS(X)
@@ -824,14 +851,14 @@ C FUNCTION FOR LFIT
 	END
 
 
-      SUBROUTINE 
-     & LFIT(X,Y,SIG,NDATA,A,MA,LISTA,MFIT,COVAR,NCVM,CHISQ,FUNCS,ifail)
-
-      PARAMETER (MMAX=3,ncvmp=3)
-      integer lista(1)
-      real X(1),Y(1),SIG(1),A(1),COVAR(ncvmp,ncvmp)
-      real BETA(MMAX),AFUNC(MMAX)
-      external funcs
+	SUBROUTINE LFIT(X,Y,SIG,NDATA,A,MA,LISTA,MFIT,COVAR,NCVM,CHISQ,FUNCS,ifail)
+	implicit none
+	integer mmax,ncvmp,jpt
+	PARAMETER (MMAX=3,ncvmp=3,jpt=8000000)
+	integer lista(3),kk,j,k,ihit,ifail,i,ncvm,ndata,mfit,ma
+	real X(jpt),Y(jpt),SIG(jpt),A(3),COVAR(ncvmp,ncvmp)
+	real BETA(MMAX),AFUNC(MMAX),CHISQ,SUM,WT,SIG2I,YM
+	external funcs
 
       KK=MFIT+1
       DO 12 J=1,MA
@@ -906,14 +933,16 @@ c add by IS Oct5
 
       CALL COVSRT(COVAR,NCVM,MA,LISTA,MFIT)
 
-      RETURN
-      END
+	RETURN
+	END
 
 
-      SUBROUTINE SPLINE(X,Y,N,YP1,YPN,Y2)
-
-      PARAMETER (NMAX=200)
-      real X(2),Y(2),Y2(1),U(NMAX)
+	SUBROUTINE SPLINE(X,Y,N,YP1,YPN,Y2)
+	implicit none
+	integer nmax,jb2
+	PARAMETER (NMAX=200,jb2=202)
+	real X(jb2),Y(jb2),Y2(jb2),U(NMAX),yp1,YPN,p,qn,un,k,sig
+	integer n,i
 
       IF (YP1.GT..99E30) THEN
         Y2(1)=0.
@@ -943,13 +972,17 @@ c add by IS Oct5
         Y2(K)=Y2(K)*Y2(K+1)+U(K)
 12    CONTINUE
 
-      RETURN
-      END
+	RETURN
+	END
 
 
-      SUBROUTINE SPLINT(XA,YA,Y2A,N,X,Y,ifail)
-
-      real XA(1),YA(1),Y2A(1)
+	SUBROUTINE SPLINT(XA,YA,Y2A,N,X,Y,ifail)
+	implicit none
+	integer jb2
+	PARAMETER (jb2=202)
+	
+	real XA(jb2),YA(jb2),Y2A(jb2),x,y,a,b
+	integer k,klo,khi,h,ifail,n
 
       KLO=1
       KHI=N
@@ -963,17 +996,18 @@ c add by IS Oct5
       GOTO 1
       ENDIF
       H=XA(KHI)-XA(KLO)
-      IF (H.EQ.0.)then
-	 ifail=10
-	 return
+      IF(H.EQ.0.)then
+		ifail=10
+c		print*,"ifail=10"
+		return
       endif
       A=(XA(KHI)-X)/H
       B=(X-XA(KLO))/H
       Y=A*YA(KLO)+B*YA(KHI)+
      *      ((A**3-A)*Y2A(KLO)+(B**3-B)*Y2A(KHI))*(H**2)/6.
 
-      RETURN
-      END
+	RETURN
+	END
 
 
 c Chebyschev Approximation to function expressed in func on interval
@@ -981,24 +1015,26 @@ c [a,b].  Numerical Recipes pp 184-190.
 
 
 c Compute coefficients c(1:n)
-	Subroutine CHEBFT(a,b,c,n,func,ifail)
-
+	Subroutine CHEBFT(a,b,c,n,ifail)
+	implicit none
+	integer nmax
+	real pi
 	parameter(nmax=200,pi=3.141592653589793D0)	
 	integer n,j,k,ifail
-	real a,b,c(1),bma,bpa,fac,y,f(nmax)
+	real a,b,c(nmax),bma,bpa,fac,y,f(nmax),ldf
 	double precision sum
-	external func
+c	external func
 	
 	bma=0.5*(b-a)
 	bpa=0.5*(b+a)
 	do k=1,n
 	   y=cos(pi*(k-0.5)/n)
-	   f(k)=func(y*bma+bpa,ifail)
+	   f(k)=ldf(y*bma+bpa,ifail)
 	enddo
 	if(ifail.gt.0) then
 c add by IS Oct5	
 		ifail=31
-		print*,"ifail=31"
+c		print*,"ifail=31"
 		return
 	endif
 	fac=2.0/n
@@ -1016,9 +1052,11 @@ c add by IS Oct5
 
 c Evaluate the approximation to f(x)
 	Function CHEBEV(a,b,c,m,x,ifail)
+	implicit none
 
-	integer m,j,ifail
-	real chebev,a,b,x,c(1),d,dd,sv,y,y2
+	integer m,j,ifail,jb
+	parameter(jb=200)
+	real chebev,a,b,x,c(jb),d,dd,sv,y,y2
 
 	if((x-a)*(x-b).gt.0.0) then
 c CHEBEV out of range
@@ -1043,9 +1081,11 @@ c CHEBEV out of range
 c Compute the coefficients of the derivative of the function whose
 c coefficients are c(n)
 	Subroutine CHDER(a,b,c,cder,n)
-
+	implicit none
+	integer jc
+	parameter(jc=200)
 	integer n,j
-	real a,b,c(1),cder(1),con
+	real a,b,c(jc),cder(jc),con
 
 	cder(n)=0.0
 	cder(n-1)=2.0*(n-1)*c(n)
