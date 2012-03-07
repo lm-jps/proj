@@ -38,7 +38,7 @@
 #           in jsoc.export_new that contain the special test status of 12 (instead of the regular status of 2).
 #        and <RFLAG> is the file flag that keeps this script running in a loop (defaults to keep_running in cdir)
 #
-#        Example : /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root /home/arta/cvs/JSOC -dbuser production -dbhost hmidb2 -manager "jsoc_export_manage -t" -runflag keepruntest.txt &
+#        Example : /home/jsoc/cvs/Development/JSOC/proj/util/scripts/exportmanage.pl -root /home/arta/cvs/JSOC -dbuser production -dbhost hmidb2 -manager "jsoc_export_manage -t" -runflag keepruntest.txt -logflag Test &
 #
 #  2. Point a browser at http://jsoc.stanford.edu/ajax/exportdatatest.html and export something.
 
@@ -123,6 +123,10 @@ while ($arg = shift(@ARGV))
     elsif ($arg eq "-runflag")
     {
         $runningflag = shift(@ARGV);
+    }
+    elsif ($arg eq "-logflag")
+    {
+        $logflag = shift(@ARGV);
     }
     elsif ($arg eq "-jsocdev")
     {
