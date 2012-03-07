@@ -86,8 +86,7 @@ end;
 %
 % Computation
 % 
-% is it OK to process this image?
-% 1: check that time is increasing
+% Check that we have not seen this image before
 if ROI_rgn.currtime == s_time,
   % overlap by one -- assume a fencepost issue
   res = sprintf('Image at %s just before last time %s. Skipping.\n', ...
@@ -101,13 +100,24 @@ elseif ROI_rgn.currtime > s_time,
   % skip it
   return;
 end;
-% 2: check the QUALITY at the current time
+
+% image is new: update current progress info
+ROI_rgn.currfile = fn;
+ROI_rgn.currtime = s_time;
+if length(ROI_rgn.firstfile) == 0,
+  ROI_rgn.firstfile = fn;
+end;
+
+% check the QUALITY at the current time
 [q,q_ok] = hmiquality(fn);
 if ~q_ok,
   res = sprintf('Bad quality 0x%08x.  Skipping the image at %s', q, fn);
   return;
 end;
 clear q q_ok
+
+% image will be processed by this tracker: update its number
+ROI_rgn.imagenum = ROI_rgn.imagenum + 1; % have done one more image
 
 %% tracker parameters
 % map parameters
@@ -135,11 +145,6 @@ clear s_Cx s_Cy s_rsun s_b0 s_p0; % keep namespace clean
 % demote the active tracks by one image
 tlist = find(([ROI_t(:).tid] >= 0) & ([ROI_t(:).state] <= 0));
 for t = tlist, ROI_t(t).state = ROI_t(t).state-1; end;
-
-% update current progress info
-ROI_rgn.imagenum = ROI_rgn.imagenum + 1; % have done one more image
-ROI_rgn.currfile = fn;
-ROI_rgn.currtime = s_time;
 
 % Identify ROIs in current labeling
 % b is ROI bounding boxes; roimap maps pixels to regions (1..Nr or 0)
@@ -445,6 +450,8 @@ if hooks.first_track == 0,
     ROI_rgn = prior.ROI_rgn;
     ROI_t   = prior.ROI_t;
     ROI_s   = hmi_rois_truncate(prior.ROI_s, hooks.retain_history);
+    ROI_rgn.curr_run = ROI_rgn.curr_run + 1;
+    ROI_rgn.firstfile = ''; % first file examined in this run
     fprintf('Restart: track ID = %d, pending tracks = %d, history_retain = %d\n', ...
             ROI_rgn.Ntot, ROI_rgn.Nt0, hooks.retain_history);
   else,
@@ -460,6 +467,8 @@ else,
   ROI_rgn.imagenum = 0; % #image frames processed
   ROI_rgn.currfile = '';% current filename is TBD
   ROI_rgn.currtime = 0; % current file's time is TBD
+  ROI_rgn.curr_run = 1; % current run number
+  ROI_rgn.firstfile = ''; % first file examined in this run
   % 2: ROI_t, ROI_s: tracks and scrolls are empty
   ROI_t = struct([]);
   ROI_s = {};

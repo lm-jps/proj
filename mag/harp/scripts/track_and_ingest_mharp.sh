@@ -299,11 +299,8 @@ if [ $do_match = 1 ]; then
 fi
 
 # ingest log and checkpoint file
-#   run_name is a string indicating run name.  We use the mask series,
-#   because it contains the time interval.  This is *not* interpreted as a 
-#   data series by ingest_mharp_log.  It is just an identifying string.
 cmd=ingest_mharp_log
-$cmd root="$dest_dir/Tracks/jsoc" out="$harp_log_series" trec="$trec_frst" run_name="$mask_series"
+$cmd root="$dest_dir/Tracks/jsoc" out="$harp_log_series" trec="$trec_frst"
 cmd="shell code"
 
 echo "${progname}: Finished ingesting tracks."

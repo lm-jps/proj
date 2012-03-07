@@ -140,6 +140,8 @@ static int verbflag;
 // this is one more than the max number of list files in the "lists" argument
 #define LIST_MAX 10
 // standard file names
+// per-run parameter info
+#define FN_TRACK_PARAM "track-param.txt"
 // per-track coordinate frame info
 #define FN_TRACK_FRAME "track-frame.txt"
 // per-track space weather keywords
@@ -302,7 +304,7 @@ typedef struct {
 
 /*
  * Whole-run info
- * (currently only contains tracker parameters)
+ * (run start/end, tracker parameters)
  */
 typedef struct {
   int n_par;              // number of parameters
@@ -336,8 +338,8 @@ typedef struct {
   char class_zur[4];         // zurich classification (3 chars)
 } match_info_t;
 
-static const char *tracker_param_keys[] = {
-  // the most important tracker params
+static const char *tracker_run_info_keys[] = {
+  // the most important per-run params
   "TKP_KWID", "kwid",
   "TKP_KLAT", "klat",
   "TKP_TAU",  "tau",
@@ -346,8 +348,9 @@ static const char *tracker_param_keys[] = {
   "TKP_FNUM", "final_num",
   "TKP_FTIM", "final_time",
   "TKP_MAPR", "maprate",
-  // these are not tracker_params, but are in the param file
+  // other per-run parameters
   "TKP_RUNN", "run_name",
+  "TKP_RUNC", "run_number",
   "TKP_RUNT", "run_time",
   // end sentinel -- required
   NULL, NULL,
@@ -398,7 +401,7 @@ int ingest_record(patch_info_t *, harp_info_t *, trec_info_t *trec1, trec_info_t
 int update_bitmap(patch_info_t *pInfo, char *maskImg);
 // Keywords
 int set_keys_code_info(DRMS_Record_t *);
-int set_keys_tracker(DRMS_Record_t *rec, run_info_t *runInfo);
+int set_keys_runinfo(DRMS_Record_t *rec, run_info_t *runInfo);
 int set_keys_stats(DRMS_Record_t *rec, DRMS_Record_t *magRec, DRMS_Record_t *maskRec, 
 		   patch_info_t *, harp_info_t *, trec_info_t *);
 int set_keys_match(DRMS_Record_t *rec, harp_info_t  *hInfo, marp_info_t  *mInfo);
@@ -1157,7 +1160,7 @@ patch_print(FILE *fp, char *s, trec_info_t *tI, patch_info_t *pI)
 }
 
 /*
- * load tracker parameters -- fields of the tracker_params variable
+ * load tracker parameters
  */
 int
 load_tracker_params(const char *rootDir, run_info_t *ri)
@@ -1168,7 +1171,7 @@ load_tracker_params(const char *rootDir, run_info_t *ri)
   char line[STR_MAX];
   char *val, *name_end;
 
-  snprintf(fn, sizeof(fn), "%s/%s", rootDir, "track-param.txt");
+  snprintf(fn, sizeof(fn), "%s/%s", rootDir, FN_TRACK_PARAM);
   if ((fp = fopen(fn, "r")) == NULL) {
     V_printf(-1, "", "Failed to open `%s'.\n", fn);
     return 1;
@@ -1996,8 +1999,8 @@ ingest_record(patch_info_t *pInfo,
   if (ok != DRMS_SUCCESS) not_ok++;
   // code version
   not_ok += set_keys_code_info(outRec);
-  // tracking parameter keys
-  not_ok += set_keys_tracker(outRec, runInfo);
+  // per tracker run keys
+  not_ok += set_keys_runinfo(outRec, runInfo);
   // patch summary statistics
   not_ok += set_keys_stats(outRec, magRec, maskRec, pInfo, hInfo, tRec);
   // match summary
@@ -2235,15 +2238,15 @@ set_keys_code_info(DRMS_Record_t *outRec)
 }
 
 /*
- * set_keys_tracker: set up drms keys using tracker_params keys
+ * set_keys_runinfo: set up drms keys using per-tracker-run keys
  * which are stored in runInfo
  */
 static
 int
-set_keys_tracker(DRMS_Record_t *rec, 
+set_keys_runinfo(DRMS_Record_t *rec, 
 		 run_info_t *runInfo)
 {
-  const char **keys = tracker_param_keys;
+  const char **keys = tracker_run_info_keys;
   const char *drms_key;
   const char *tracker_key;
   int not_ok, iKey;    // outer loop

@@ -503,7 +503,11 @@ return;
 %
 function [rgn,rgnTid,rgnAge,rgnMrg,rgnTag,bound2tk] = get_regions(f1, Tinfo, FTinx, FTpatch)
 
-tlist = find(FTinx(f1,:)); % tracks overlapping current frame
+if f1 > size(FTinx, 1),
+  tlist = [];
+else,
+  tlist = find(FTinx(f1,:)); % tracks overlapping current frame
+end;
 nT = length(tlist);
 rgn = zeros(nT,4);
 [rgnTid,rgnAge,rgnTag,rgnMrg] = deal(zeros(nT,1)); % ensure columns
