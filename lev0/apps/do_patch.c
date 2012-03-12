@@ -5,7 +5,7 @@
 
 void do_patch1(short *adata0)
 {
-    short *p = adata0[4096*1065];
+    short *p = adata0+4096*1065;
     short tmp[2048];
     int i;
     for (i=0; i<512; ++i) tmp[i] = DRMS_MISSING_SHORT;
