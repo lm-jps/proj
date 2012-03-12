@@ -90,4 +90,8 @@ int imgdecode(unsigned short *impdu, IMG *img);
 int imgdecode_init_hack(IMG *img);
 int imgstat(IMG *img, STAT *stat);
 
+// Image corruption patches
+// Patch 1: crop table corruption Dec 2011 - Jan 2012
+#define NEED_PATCH1(fsn) (!(fsn%2) && (fsn<=33190636) && (fsn>=32249884))
+
 #endif

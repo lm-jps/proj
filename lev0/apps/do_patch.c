@@ -3,9 +3,9 @@
 // was 512 pixels too large.  Need to shift whole row
 // right by 512 pixels and fill in MISSING on the left
 
-void do_patch1(IMG *img)
+void do_patch1(short *adata0)
 {
-    short *p = &(img->dat[4096*1065]);
+    short *p = adata0[4096*1065];
     short tmp[2048];
     int i;
     for (i=0; i<512; ++i) tmp[i] = DRMS_MISSING_SHORT;
