@@ -595,7 +595,7 @@ int do_ingest(long long bbrec, long long eerec, const char *dpath)
 	// Apply image corruption patch(es)
 	// Patch 1 - crop table corruption Dec 2011 - Jan 2012
 	if (NEED_PATCH1(fsnx))
-	    do_patch1(adata0);
+	    do_patch1(l0l1->adata0);
 
         l0l1->dat1.adata1 = &data1;
         l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);
