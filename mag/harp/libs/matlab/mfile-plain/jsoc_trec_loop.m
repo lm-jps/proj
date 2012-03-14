@@ -292,6 +292,11 @@ for i = 1:Nimg,
     err = sprintf('Failed to load %s, segment seems offline\n', obj1);
     return;
   end;
+  if v(end) == '/',
+    % 3/2012, no data segment gives v = '/path/to/dir/', but no file
+    err = sprintf('Failed to load %s, segment seems not to exist\n', obj1);
+    return;
+  end;
   % this is the SUMS filename
   file1 = v;
   % load the file

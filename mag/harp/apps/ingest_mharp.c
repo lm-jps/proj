@@ -136,7 +136,7 @@
 static int verbflag;
 
 // standard string length
-#define STR_MAX 200
+#define STR_MAX 256
 // this is one more than the max number of list files in the "lists" argument
 #define LIST_MAX 10
 // standard file names
@@ -350,7 +350,8 @@ static const char *tracker_run_info_keys[] = {
   "TKP_MAPR", "maprate",
   // other per-run parameters
   "TKP_RUNN", "run_name",
-  "TKP_RUNC", "run_number",
+  // this is present in params, but not currently in JSD, and is unimportant
+  // "TKP_RUNC", "run_number", 
   "TKP_RUNT", "run_time",
   // end sentinel -- required
   NULL, NULL,

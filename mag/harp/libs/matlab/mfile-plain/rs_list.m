@@ -44,7 +44,9 @@ end
 % input defaults
 if nargin < 2, method = 'web'; end;
 % parameter defaults
-retries = 2; % 0 for no retries
+% abs() = between-try delay in s, [] for no retries, <0 for announcement
+%  (set to announce for long delays)
+retries = [0.1 10 -60 -60 -60]; 
 host = 'jsoc2.stanford.edu';
 
 
@@ -61,19 +63,31 @@ do_err_out = (nargout < 2);
 res = [];
 
 if use_ajax,
-  % failure of AJAX call due to SUMS restart signalled by 'status':-1 or "status":-1
-  failure_re = '[''"]status[''"]\s*:\s*-1';
   % url escape, replacing spaces with &
   query2 = regexprep(query, ' ', '&');
   query_url = sprintf('http://%s/cgi-bin/ajax/jsoc_info?op=rs_list&ds=%s',...
                       host, query2);
-  for ntry = 1:(1+retries),
-    if ntry > 1, pause(min(2, -log(rand))); end; % brief pause if retry
+  max_try = length(retries)+1;
+  for ntry = 1:max_try,
     [json_content,status] = urlread_jsoc(query_url);
-    if status == 1 && isempty(regexp(json_content(1:min(end,256)), failure_re)), 
+    if status == 1, 
       break; % success
     end;
-    % (otherwise, retry as permitted)
+    % retry mechanism: a bit baroque
+    if ntry < max_try,
+      % more tries remain
+      msg = 'Retrying after pause.';
+      delay = retries(ntry);
+    else,
+      % the last try failed
+      msg = 'Giving up.';
+      delay = -0.001; % tiny delay, with announcement
+    end;
+    if delay < 0,
+      fprintf('%s: Query %d of %d failed.  %s\n', mfilename, ntry, max_try, msg);
+    end;
+    pause(abs(delay)); % can have delay < 0
+    % (go on to retry as permitted)
   end;
   if status == 0,
     % failed
@@ -94,9 +108,9 @@ else,
   end;
   % a valid message always starts with this...
   % remove it in a way that is efficient even for long result strings.
-  json_header = 'Content-Type: application/json';
+  json_header = 'Content-type: application/json';
   if length(res) >= length(json_header) &&  ...
-        strcmpi(res(1:length(json_header)), json_header) == 1,
+        strcmp(res(1:length(json_header)), json_header) == 1,
     json_content = res(length(json_header)+1:end);
   else,
     json_content = json_header;

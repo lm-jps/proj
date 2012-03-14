@@ -10,17 +10,17 @@
  *  Input:
  *    Files are taken from specified locations underneath a standard
  *    root directory, and ingested directly:
- *      log file (text):          root/
- *	error file (text):        root/
- *      checkpoint file (binary): root/
- *    Metadata is read from a key: value file, root/
+ *      log file (text):          root/track-latest.log
+ *	error file (text):        root/track-latest.err
+ *      checkpoint file (binary): root/track-post.mat
+ *    Metadata is read from a key: value file, root/track-param.txt
  *
  *  Output:
  *    Files and metadata are inserted into a tailor-made data series.
  *
  *  Usage:
  *
- *  ingest_mharp_log root=/tmp22/xudong/Tracks/jsoc out=su_xudong.test_mharp_log \
+ *  ingest_mharp_log root=/tmp22/HARPs/Tracks/jsoc out=hmi.Mharp_log_720s \
  *       "trec=2011.03.07_12:00_TAI" 
  *
  *
@@ -282,7 +282,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, kTRec,      kNOT_SPEC, "T_REC as primary key"},
   {ARG_STRING, kLogFile,   "track-latest.log", "Log file name (typ. .log extension)"},
   {ARG_STRING, kErrFile,   "track-latest.err", "Error file name (typ. .err extension)"},
-  {ARG_STRING, kCkpFile,   "track-prior.mat",  "Checkpoint file name (.mat extension)"},
+  {ARG_STRING, kCkpFile,   "track-post.mat",   "Checkpoint file name (.mat extension)"},
   {ARG_INT,    kVerbosity, "1",                "Verbosity: 0=errs only; 1, 2 = more"},
   {ARG_END}
 };

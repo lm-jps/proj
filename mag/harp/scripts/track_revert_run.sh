@@ -90,7 +90,7 @@ if [ ! -r $ckpt ]; then
 	echo "and move it to $ckpt, or check SUMS for a checkpoint file."
 	echo "Try $sums_ckpt"
 	echo ""
-	echo "Here are the checkopints now in $root_dir/State:"
+	echo "Here are the checkpoints now in $root_dir/State:"
 	ls -lt $root_dir/State/*.mat
     fi
     die $LINENO "Could not find checkpoint file within $root_dir"

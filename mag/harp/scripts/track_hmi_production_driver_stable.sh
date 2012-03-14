@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -e
 # (line below is for qsub)
 #$ -S /bin/sh
 # 
@@ -92,10 +92,13 @@ if [ "$#" -ne 3 ]; then
     echo "$USAGE" 1>&2
     exit 2
 fi
-# ok to get them -- note, we add {mask} on to the mask series
+
+echo "${progname}: Beginning."
+# ok to get args -- note, we add {mask} on to the mask series
 mask_series="$1{mask}"
 mag_series="$2"
 dest_dir="$3"
+
 
 # validate first_track is an int
 if [[ $first_track =~ ^[0-9]+$ ]]; then 
@@ -171,22 +174,25 @@ OSCHECK_ENFORCE_LIMITS=0; export OSCHECK_ENFORCE_LIMITS
 tmpnam="/tmp/$progname.$$.err"
 rm -f "$tmpnam"
 t0=`date +%s`
-/bin/echo \
-    "try," \
-      "mask_series='$mask_series';" \
-      "mag_series='$mag_series';" \
-      "dest_dir='$dest_dir';" \
-      "first_track=$first_track;" \
-      "retain_history=$retain_history;" \
-      "make_movie=$make_movie;" \
-      "params='$params';" \
-      "track_hmi_production;" \
-    "catch," \
-      "e=lasterror;" \
-      "fprintf(1, '\\nERROR: %s in %s (Line %d)\\n', e.message, e.stack(1).name, e.stack(1).line);" \
-    "end;" \
-    "quit" | \
-    $matlab_binary -nodesktop -nosplash -nodisplay -logfile "$tmpnam" 1>&2
+$matlab_binary -nodesktop -nosplash -nodisplay -logfile "$tmpnam" <<EOF
+% use outer try/catch to catch *all* exceptions
+try,
+  mask_series='$mask_series';
+  mag_series='$mag_series';
+  dest_dir='$dest_dir';
+  first_track=$first_track;
+  retain_history=$retain_history;
+  make_movie=$make_movie;
+  params='$params';
+  track_hmi_production;
+catch ME,
+  % ensure these errors start on a new line
+  fprintf(1, '\\nERROR: %s in %s (Line %d)\\n', ME.message, ME.stack(1).name, ME.stack(1).line);
+  fprintf(2, '\\nERROR: %s in %s (Line %d)\\n', ME.message, ME.stack(1).name, ME.stack(1).line);
+  rethrow(ME);
+end;
+quit;
+EOF
 t1=`date +%s`
 tdiff=`expr $t1 - $t0`
 echo "${progname}: Matlab call took $tdiff seconds."
@@ -199,9 +205,12 @@ mv -f "$tmpnam" "$tmpnam2"
 # generate exit status
 if grep -q "^ERROR" "$tmpnam2" ; then
     # grep above matched an error
+    echo "${progname}: Exiting with error." 
+    echo "${progname}: Exiting with error." 1>&2
     exit 1
 else
     # no error found
+    echo "${progname}: Done."
     exit 0
 fi
 

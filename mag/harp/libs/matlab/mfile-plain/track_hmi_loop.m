@@ -490,8 +490,8 @@ function tracker_loop_end(hooks)
 global ROI_t ROI_s ROI_rgn % state information
 
 % save state in all cases
-% (writing the file is cheap; allows later restart)
-fn = sprintf(hooks.filename.template, 'jsoc', '-prior', '', 'mat');
+% (fast to write the file, allows later restart, do not overwrite prior state)
+fn = sprintf(hooks.filename.template, 'jsoc', '-post', '', 'mat');
 [junk1,junk2] = mkdir(fileparts(fn)); % ensure the dir exists
 % truncate ROI_s
 ROI_s = hmi_rois_truncate(ROI_s, hooks.retain_history);

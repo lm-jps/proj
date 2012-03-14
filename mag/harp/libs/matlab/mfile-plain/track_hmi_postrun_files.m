@@ -49,8 +49,8 @@ ctag = regexprep(ctag, '_+', '_');
 ctag = regexprep(ctag, '_$', '');
 
 % copy tracker state in ddir to another spot
-fs = sprintf('%s/track-prior.mat', ddir); % source file
-fn = sprintf('%s/State/track-prior-%s.mat', ddir, ctag);
+fs = sprintf('%s/track-post.mat', ddir); % source file
+fn = sprintf('%s/State/track-post-%s.mat', ddir, ctag);
 [junk1,junk2] = mkdir(fileparts(fn));
 [st,res] = system(sprintf('cp -pf %s %s', fs, fn));
 if st > 0,

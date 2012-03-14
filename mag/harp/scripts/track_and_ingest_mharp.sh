@@ -36,8 +36,8 @@
 # Note that we require a T_REC to be supplied with mask_series.  
 # 
 # Typical command line:
-# [monthly]
-#   track_and_ingest_mharp.sh -i 1 /tmp/harp/monthly hmi.Marmask_720s[2011.10.01/10d]
+# [definitive]
+#   track_and_ingest_mharp.sh -i 1 /tmp/harp/definitive hmi.Marmask_720s[2011.10.01/10d]
 #     hmi.Mharp_720s hmi.Mharp_log_720s
 # [nrt]
 #   track_and_ingest_mharp.sh -i 1 -n /tmp/harp/nrt hmi.Marmask_720s_nrt[2011.10.01_12:36_TAI]
@@ -80,8 +80,8 @@ trap cleanup EXIT
 function die() {
     echo "${progname}: Error near line ${1:- \?}: ${2:-(no message)}" 1>&2
     if [ $HAVE_BEGUN = 1 ]; then
-	echo "${progname}: Note: Before running $progname again," \
-             "you likely must roll back the checkpoint file in $dest_dir" 1>&2
+	echo "${progname}: Note: Filesystem state is inconsistent." \
+             "Fix by re-running using same T_REC range" 1>&2
     fi
     # set exit status to $3 if present, else generic nonzero status
     exit_status=${3:- 1}
@@ -200,6 +200,15 @@ if [ $first_track = 0 ]; then
     if [ ! -w "$dest_dir/Tracks/jsoc" ]; then
 	die $LINENO "Not initial run: need write permission on Tracks/jsoc within dest_dir"
     fi
+    if [ ! -r "$dest_dir/Tracks/jsoc/track-post.mat" ]; then
+	die $LINENO "Not initial run: could not find checkpoint Tracks/jsoc/track-post.mat within dest_dir"
+    fi
+    if [ ! -w "$dest_dir/Tracks/jsoc/track-post.mat" ]; then
+	die $LINENO "To complete this run, require write permission on Tracks/jsoc/track-post.mat within dest_dir"
+    fi
+    if [ -e "$dest_dir/Tracks/jsoc/track-prior.mat" -a ! -w "$dest_dir/Tracks/jsoc/track-prior.mat" ]; then
+	die $LINENO "Need write permission on existing file Tracks/jsoc/track-prior.mat within dest_dir"
+    fi
 fi
 
 # ensure track_hmi_production_driver_stable.sh is in PATH
@@ -268,10 +277,16 @@ if [ -z "$trec_frst" ]; then
 fi
 echo "${progname}: Processing from $trec_frst to $trec_last"
 
-# after this point, simple re-runs may not work because tracker alters $dest_dir
+# after this point, the filesystem may get out of sync because tracker alters $dest_dir
 HAVE_BEGUN=1
 
+# put earlier-run post-run checkpoint file into current-run prior-run checkpoint location
+if [ $first_track = 0 ]; then
+    cp -pf "$dest_dir/Tracks/jsoc/track-post.mat" "$dest_dir/Tracks/jsoc/track-prior.mat"
+fi
+
 # driver invokes matlab to perform tracking
+#  -- if not first run, reads checkpoint from track-prior.mat and writes to track-post.mat
 #  -- note, track_opts is unquoted
 echo "${progname}: Beginning tracking."
 cmd=track_hmi_production_driver_stable.sh 
@@ -295,6 +310,8 @@ if [ $do_match = 1 ]; then
     matchold="$dest_dir/Tracks/jsoc/Match-old"
     # -p also suppresses errors if the dir exists already
     mkdir -p "$matchold"
+    # ensure nothing is there from an earlier run
+    rm -rf "$matchold/Match-$ext"
     mv "$matchdir" "$matchold/Match-$ext"
 fi
 
