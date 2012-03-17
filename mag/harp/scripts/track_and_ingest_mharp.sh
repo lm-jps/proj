@@ -80,8 +80,9 @@ trap cleanup EXIT
 function die() {
     echo "${progname}: Error near line ${1:- \?}: ${2:-(no message)}" 1>&2
     if [ $HAVE_BEGUN = 1 ]; then
-	echo "${progname}: Note: Filesystem state is inconsistent." \
-             "Fix by re-running using same T_REC range" 1>&2
+	echo "${progname}: Exiting with error: Filesystem state is OK, but inconsistent."
+	echo "${progname}: Can run again using same T_REC range."
+	echo "${progname}: Can run again using same T_REC range." 1>&2
     fi
     # set exit status to $3 if present, else generic nonzero status
     exit_status=${3:- 1}
@@ -192,22 +193,19 @@ fi
 #
 #############################################################
 
-# if not -i, check that dest_dir exists and is writable
+# if not -i, check that dest_dir exists and is writable, etc.
 if [ $first_track = 0 ]; then
     if [ ! -d "$dest_dir/Tracks/jsoc" ]; then
 	die $LINENO "Not initial run, but could not find Tracks/jsoc within dest_dir"
     fi
-    if [ ! -w "$dest_dir/Tracks/jsoc" ]; then
-	die $LINENO "Not initial run: need write permission on Tracks/jsoc within dest_dir"
+    if [ ! -w "$dest_dir/Tracks/jsoc" -o ! -x "$dest_dir/Tracks/jsoc" ]; then
+	die $LINENO "Not initial run: need write+execute permission on Tracks/jsoc within dest_dir"
     fi
-    if [ ! -r "$dest_dir/Tracks/jsoc/track-post.mat" ]; then
-	die $LINENO "Not initial run: could not find checkpoint Tracks/jsoc/track-post.mat within dest_dir"
+    if [ ! -w "$dest_dir/Tracks/jsoc/track-prior.mat" ]; then
+	die $LINENO "Not initial run: could not find/write Tracks/jsoc/track-prior.mat within dest_dir"
     fi
-    if [ ! -w "$dest_dir/Tracks/jsoc/track-post.mat" ]; then
-	die $LINENO "To complete this run, require write permission on Tracks/jsoc/track-post.mat within dest_dir"
-    fi
-    if [ -e "$dest_dir/Tracks/jsoc/track-prior.mat" -a ! -w "$dest_dir/Tracks/jsoc/track-prior.mat" ]; then
-	die $LINENO "Need write permission on existing file Tracks/jsoc/track-prior.mat within dest_dir"
+    if [ -e "$dest_dir/Tracks/jsoc/track-post.mat" -a ! -w "$dest_dir/Tracks/jsoc/track-post.mat" ]; then
+	die $LINENO "Need write permission on existing file Tracks/jsoc/track-post.mat within dest_dir"
     fi
 fi
 
@@ -280,11 +278,6 @@ echo "${progname}: Processing from $trec_frst to $trec_last"
 # after this point, the filesystem may get out of sync because tracker alters $dest_dir
 HAVE_BEGUN=1
 
-# put earlier-run post-run checkpoint file into current-run prior-run checkpoint location
-if [ $first_track = 0 ]; then
-    cp -pf "$dest_dir/Tracks/jsoc/track-post.mat" "$dest_dir/Tracks/jsoc/track-prior.mat"
-fi
-
 # driver invokes matlab to perform tracking
 #  -- if not first run, reads checkpoint from track-prior.mat and writes to track-post.mat
 #  -- note, track_opts is unquoted
@@ -322,8 +315,11 @@ cmd="shell code"
 
 echo "${progname}: Finished ingesting tracks."
 
+# put newly-generated post-run checkpoint file into next-run checkpoint location
+cp -pf "$dest_dir/Tracks/jsoc/track-post.mat" "$dest_dir/Tracks/jsoc/track-prior.mat"
+
 # Exit OK -- will trap thru cleanup()
-echo "${progname}: Done."
+echo "${progname}: Done, status OK."
 exit_status=0
 exit
 
