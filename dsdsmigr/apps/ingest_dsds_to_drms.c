@@ -354,9 +354,10 @@ int DoIt(void)
 	  drms_segment_filename(inSeg, filepath);
         else 
           filepath[0] = '\0';
-        //printf("filepath=%s\n",filepath);             
-        //printf("ss=%d\n",access(filepath, R_OK | F_OK));
-	if (*DataFile && access(filepath, R_OK | F_OK) == 0)
+        printf("filepath=%s\n",filepath);             
+        printf("ss=%d\n",access(filepath, R_OK | F_OK));
+        val = drms_getkey_time(inRec, "T_OBS",&status);
+	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0)
 	  {
           outSeg = drms_segment_lookupnum(outRec, 0);
           if (inSeg && outSeg)
@@ -377,8 +378,11 @@ int DoIt(void)
             drms_free_array(data);
             Record_OK = 1;    
 	    quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
+            printf("qualstat=%d\n",&qualstat);
             quality = quality & (~qualnodata);
+            printf("QUALITY=%08x\n",quality);
             drms_setkey_int(outRec,"QUALITY",quality);
+
         //    printf("QUALITY=%08x\n",quality);
         //  drms_keyword_fprint(stderr, drms_keyword_lookup(iRec, "QUALITY",0));
         //    printf("QUALITY=%08x, DRMS_MISSING_INT=%08x\n",quality,DRMS_MISSING_INT);
@@ -414,15 +418,17 @@ int DoIt(void)
 	  drms_setkey_double(outRec, "RSUN_OBS", val);
   	  val = drms_getkey_double(inRec, "OBS_L0", &status);
 	  drms_setkey_double(outRec, "CRLN_OBS", val); 
-	  drms_setkey_int(outRec, "QUALITY", 0X80000000);
+          drms_setkey_int(outRec, "QUALITY", 0X80000000);
   	  val = drms_getkey_int(inRec, "DPC", &status);
 	  drms_setkey_int(outRec, "DPC", val);
-          /* commenting out the qualstat procedure
-	  qualstat = 0;
-          int quality = drms_getkey_int(outRec, "QUALITY", &qualstat);
-	  if (!qualstat)
-	    drms_setkey_int(outRec, "QUALITY", 0X80000000 | quality); 
-          end commenting out the qualstat procedure*/
+
+          // begin qualstat procedure
+	  //qualstat = 0;
+          //int quality = drms_getkey_int(outRec, "QUALITY", &qualstat);
+	  //if (!qualstat)
+	  //  drms_setkey_int(outRec, "QUALITY", 0X80000000 | quality); 
+
+
 	  if (drms_keyword_lookup(outRec, "DATAVALS", 0))
 	    drms_setkey_int(outRec, "DATAVALS", 0);
           if (SkipMissingFiles)
