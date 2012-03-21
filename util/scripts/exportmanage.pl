@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w 
+#!/usr/bin/perl 
 
 # Here's how to run this script (from scratch)
 #  ssh jsoc@j0
@@ -42,6 +42,9 @@
 #
 #  2. Point a browser at http://jsoc.stanford.edu/ajax/exportdatatest.html and export something.
 
+use strict;
+use warnings;
+
 use FileHandle;
 use Fcntl ':flock';
 
@@ -51,6 +54,13 @@ use constant kMailList => "arta\@sun.stanford.edu";
 use constant kMailMessage1 => "exportmanage.pl could not start jsoc_export_manage. This is a critical failure.\nYou should probably contact Art, who was also notified and should respond shortly.\n";
 use constant kMailMessage2 => "jsoc_export_manage died in response to an unhandled signal (e.g., a segfault).\n";
 use constant kMailMessage3 => "Could not open log export-daemon log file for writing.\nThis is not a critical failure, but we should\nfix this so that we can track-down future export problems more easily.\nContact Art.\n";
+
+use constant kMsgType1 => "msgtype1";
+use constant kMsgType2 => "msgtype2";
+use constant kMsgType3 => "msgtype3";
+
+use constant kMsgQInterval => 600; # 10 minutes, at least, between message inserts
+use constant kMsgQSendInterval => 120; # 2 minutes between mailing of messages
 
 use constant kLogFlagInt => "Int";
 use constant kLogFlagExt => "Ext";
@@ -83,7 +93,7 @@ my($kJSOCTEST_DBNAME) = "jsoc";
 my($kJSOCTEST_DBHOST) = "hmidb";
 my($kJSOCTEST_MANAGE) = "jsoc_export_manage_test";
 
-$runningflag = $kINTERNALFLAG;
+my($runningflag) = $kINTERNALFLAG;
 my($arg);
 my($root);
 my($dbhost) = "hmidb";
@@ -231,6 +241,8 @@ unless (GetDLogFH(\$dlogfh, $daemonlog))
 
 $cmd = "$binpath/$manage JSOC_DBHOST=$dbhost";
 
+my($msgq) = {lastsend => time(), msgs => {}};
+
 while (1)
 {
    # print "running $cmd.\n";
@@ -238,18 +250,14 @@ while (1)
    
    if ($? == -1)
    {
-      open(MAILPIPE, "| /bin/mail -s \"Export Daemon Execution Failure!!\" " . kMailList) || die "Couldn't open 'mail' pipe.\n";
-      print MAILPIPE kMailMessage1;
-      close(MAILPIPE);
+       QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage1);
    } 
    elsif ($? & 127)
    {
       # jsoc_export_manage died in response to an unhandled signal
       my($sig) = $? & 127;
-      open(MAILPIPE, "| /bin/mail -s \"Export Daemon Execution Failure!!\" " . kMailList) || die "Couldn't open 'mail' pipe.\n";
-      print MAILPIPE kMailMessage2;
-      print MAILPIPE "Unhandled signal: $sig.\n";
-      close(MAILPIPE);
+       
+       QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "Unhandled signal: $sig.\n");
    } 
    elsif (($? >> 8) != 0)
    {
@@ -274,6 +282,8 @@ while (1)
       print LOG $msg;
    }
 
+    SendPendingMessages($msgq);
+    
    CloseDLog(\$dlogfh);
       
    if (KeepRunning($runningflag))
@@ -347,8 +357,9 @@ sub CleanRunFlag
 
 sub GetDLogFH
 {
-    my($rfh) = $_[0]; # reference to filehandle object
-    my($dlog) = $_[1];
+    my($rfh) = shift; # reference to filehandle object
+    my($dlog) = shift;
+    my($msgq) = shift;
     my($err);
 
     $err = 0;
@@ -359,9 +370,7 @@ sub GetDLogFH
 
         if (!defined($$rfh))
         {
-            open(MAILPIPE, "| /bin/mail -s \"Export Daemon Log Unavailable\" " . kMailList) || die "Couldn't open 'mail' pipe.\n";
-            print MAILPIPE kMailMessage3;
-            close(MAILPIPE);
+            QueueMessage($msgq, &kMsgType1, "Export Daemon Log Unavailable", &kMailMessage3);   
             $err = 1;
         }
     }
@@ -377,6 +386,70 @@ sub CloseDLog
     {
         $$rfh->close();
         undef($$rfh);
+    }
+}
+
+sub SendPendingMessages
+{
+    my($msgs) = shift;
+    my($imsg);
+    my($msg);
+    my($subj);
+    
+    if (time() - $msgs->{lastsend} > &kMsgQSendInterval)
+    {
+        # Check for pending messages
+        foreach $imsg (keys(%{$msgq->{msgs}}))
+        {
+            $msg = $msgq->{msgs}->{$imsg}->{msg};
+            $subj = $msgq->{msgs}->{$imsg}->{subj};
+            open(MAILPIPE, "| /bin/mail -s \"$subj\" " . &kMailList) || die "Couldn't open 'mail' pipe.\n";
+            print MAILPIPE $msg;
+            close(MAILPIPE);
+            
+            if ($msgq->{msgs}->{$imsg}->{ntimes} > 1)
+            {
+                $msgq->{msgs}->{$imsg}->{ntimes} = $msgq->{msgs}->{$imsg}->{ntimes} - 1;
+            }
+            else
+            {
+                delete($msgq->{msgs}->{$imsg});
+            }
+        }
+        
+        $msgs->{lastsend} = time();
+    }
+}
+
+# Message queue:
+#   key - id
+#   val - hash : {instime => 10292392, msg => "export failure", ntimes => 5}
+#     where instime is unix seconds identifying time message was inserted into queue.
+#           subj is the mail subject
+#           msg is the message to mail
+#           ntimes is the number of times to send message out.
+sub QueueMessage
+{
+    my($msgq) = shift;
+    my($type) = shift;
+    my($subj) = shift;
+    my(@msg) = @_;
+    my($oktoins);
+    
+    if (exists($msgq->{msgs}->{$type}))
+    {
+        $oktoins = time() - $msgq->{msgs}->{$type}->{instime} > &kMsgQInterval;
+        
+        # Message already exists. Don't add to queue until some time elapses.
+        if ($oktoins)
+        {
+            $msgq->{msgs}->{$type}->{ntimes} = $msgq->{msgs}->{$type}->{ntimes} + 1;
+        }
+    }
+    else
+    {
+        my($msgstr) = join('', @msg);
+        $msgq->{msgs}->{$type} = {instime => time(), subj => $subj, msg => $msgstr, ntimes => 1};
     }
 }
 
