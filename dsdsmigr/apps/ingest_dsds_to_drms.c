@@ -1,4 +1,21 @@
-/* ingest_dsds_to_drms.c */
+/* MODULE NAME: ingest_dsds_to_drms.c */
+/*
+ * CREATED BY : P. SCHERRER
+ * MODIFIED BY: M. BOBRA 
+ * MODIFIED TO: -- include updated scale corrections calculation using mdi.scale_corrections drms series as an input
+ *              -- populate ephemeris keywords
+ *              -- populate calibration and roll table keywords
+ *              -- check for input data availability for a general file  
+ *   
+ *  USE:
+ *  INPUT PARAMETERS:  IN  = <SUMS directory>
+ *                     MAP = <mapfile>
+ *                     SCALE_CORRECTIONS = <drms series with scale corrections file>
+ *  OUTPUT PARAMETERS: OUT = <drms series>
+ *
+ *  EXAMPLE: 
+ *  ingest_dsds_to_drms in=/SUM17/D231103541/D18885727/S00000 out=su_mbobra.test_vwv map=fd_test.map SCALE_CORRECTIONS=mdi.scale_corrections
+ */
 
 #include "jsoc_main.h"
 #include "drms_types.h"
@@ -354,8 +371,8 @@ int DoIt(void)
 	  drms_segment_filename(inSeg, filepath);
         else 
           filepath[0] = '\0';
-        printf("filepath=%s\n",filepath);             
-        printf("ss=%d\n",access(filepath, R_OK | F_OK));
+        //printf("filepath=%s\n",filepath);             
+        //printf("ss=%d\n",access(filepath, R_OK | F_OK));
         val = drms_getkey_time(inRec, "T_OBS",&status);
 	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0)
 	  {
@@ -378,9 +395,9 @@ int DoIt(void)
             drms_free_array(data);
             Record_OK = 1;    
 	    quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
-            printf("qualstat=%d\n",&qualstat);
+            //printf("qualstat=%d\n",&qualstat);
             quality = quality & (~qualnodata);
-            printf("QUALITY=%08x\n",quality);
+            //printf("QUALITY=%08x\n",quality);
             drms_setkey_int(outRec,"QUALITY",quality);
 
         //    printf("QUALITY=%08x\n",quality);
