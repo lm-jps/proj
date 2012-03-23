@@ -1,8 +1,6 @@
 eval 'exec /home/jsoc/bin/$JSOC_MACHINE/perl -S $0 "$@"'
     if 0;
 #
-#!!!NOTE: Under Development. With restart feature.
-#
 #/home/production/cvs/JSOC/proj/datacapture/scripts/socdc
 #
 #Perl/Tk gui.
@@ -45,6 +43,7 @@ $GENTLM2HMI = "/dds/stage/VC02_2007_312_16_52_44_0000248ab71_0e2d1_00.tlm";
 #$GENTLM1 = "hmi_primary.tlm";	#see mail from D. Smith July 22, 2004
 #$GENTLM2 = "hmi_primary.tlm";
 
+$FORCE_DELAY = 16;              #hrs into new day to force rexmits done (1-23)
 $GREPPS = "388";		#grep for this in ps -ef
 $CONFIGFILE = "DDSSOC_PLAY.cfg";#file containing the config vrbls
 $IMAGEDIR = "/tmp/jim";
@@ -69,9 +68,13 @@ $pid00 = -1;
 $pid000 = -1;
 $pid1 = -1;
 $flipflop = 0;
+$fileUTCdayofyr = 0;		#UTC day of year 1-366 in file name
+$todayUTCdayofyr = 0;		#today UTC day of yr 1-366
+$reck_xmit_dayofyr = 0;		#init re check for xmits all done
 $fitzmode = " ";
 @xmitpend = ();
 #@tlmreceived = ();
+%seen = ();			#hash key is UTC dofy 1-366
 %Hoftlmreceived = ();           #hash key is tlm file name
 @rexmitfiles = ();
 
@@ -90,6 +93,7 @@ $fitzmode = " ";
 
 $SIG{INT} = 'Exit_sub';
 
+&inittoday();		#init $todayUTCdayofyr
 $ldate = &labeldate();
 $user = $ENV{'USER'};
 if($user ne "production") {
@@ -340,6 +344,7 @@ sub Submit_b
   print LOG "$ldate $logfe\n\n";
 
   if($RESTART) {	#restore received and rexmit file info before restart
+    print LOG "!!TEMP hmiaiaflg = $hmiaiaflg\n"; #!!TEMP
     if(!open(TR, "<$TRFILE")) {
       print LOG "Error: Can't open $TRFILE\n";
     }
@@ -867,7 +872,7 @@ sub all_20_update
 #Called by all_update().
 sub ls_update
 {
-  $t = &labeldate;  #!!TEMP
+  #$t = &labeldate;  #!!TEMP
   #print "This is ls_update() $t\n"; #!!TEMP
   if($pause) { return; }
   @selected = $lb->curselection();
@@ -887,6 +892,7 @@ sub ls_update
     $lb->insert('end', "$name");
     push(@filenames, $name);
   }
+  undef(@dds2soc_ls);
   shift(@dds2soc_rex_ls);		#elim "total" line in front of ls
   $lb->insert('end', "retrans:");
   foreach $x (@dds2soc_rex_ls) {
@@ -897,6 +903,7 @@ sub ls_update
     $lb->insert('end', "$name");
     push(@filenames_rex, $name);
   }
+  undef(@dds2soc_rex_ls);
   foreach(@selected) {
     $lb->selectionSet($_);
   }
@@ -959,6 +966,7 @@ sub ls_update_s2p
     $lbs3s->insert('end', "$name");
     push(@filenames_s2p, $name);
   }
+  undef(@soc2pipe_ls);
   foreach(@selected_s2p) {
     $lbs3s->selectionSet($_);
   }
@@ -982,6 +990,7 @@ sub ls_update_p2s
     $lbs2s->insert('end', "$name");
     push(@filenames_p2s, $name);
   }
+  undef(@pipe2soc_ls);
   foreach(@selected_p2s) {
     $lbs2s->selectionSet($_);
   }
@@ -1755,6 +1764,7 @@ sub Readme_b
     chomp($line);
     $rmelb->insert('end', "$line");
   }
+  undef(@ftypes);
   $btclose = $rme->Button(
         -text => 'Close',
 	-background => 'grey',
@@ -1950,7 +1960,8 @@ sub Sim_DDS
       #print DSF "$x $size 3\n"; #!!TEMP illegal value
     }
     close(DSF);
-    @alltlm = ();
+    #@alltlm = ();
+    undef(@alltlm);
   }
 }
 
@@ -2301,10 +2312,21 @@ for($k = 0; $k < 2; $k++) {
       $qacx = 0;
       if($k == 1) {				#this is a rexmission
         $qacx = 1;
-        @tmppend = ();
+        #@tmppend = ();
+        undef(@tmppend);
         while($x = shift(@xmitpend)) {		#remove from list
           if($x ne $tlmfile) {
             push(@tmppend, $x);
+          }
+          else {
+            $fileUTCdayofyr = substr($x, 10, 3); #001-366
+            if($seen{$fileUTCdayofyr}) {
+              $seen{$fileUTCdayofyr}--;
+            }
+            else {
+              print "Warning: A rexmitted file $x was not in \%seen count\n";
+              print LOG "Warning: A rexmitted file $x was not in \%seen count\n";
+            }
           }
         }
         @xmitpend = @tmppend;
@@ -2312,6 +2334,10 @@ for($k = 0; $k < 2; $k++) {
       #!!!TBD mv of files to $DIRSOC2PIPE will be done by ingest_tlm
       #$cmd = "cp -p $ftlm $DIRSOC2PIPE";	#cp .tlm to pipe dir
       #print LOG "  $cmd\n";
+      #`$cmd`;
+      #!!TEMP copy to IRIS machine for testing there
+      #$cmd = "scp $ftlm prodtest\@aia0:/dds/dds2soc/hmi";
+      #print "$cmd\n"; #!!TEMP
       #`$cmd`;
       $cmd = "mv -f $ftlm $DIRSOC2SOC";         #move the good .tlm file
       print LOG "  $cmd\n";
@@ -2322,25 +2348,61 @@ for($k = 0; $k < 2; $k++) {
       if($qacx) {
         $filex = $file."x";			   #make this a .qacx file 
         $cmd = "mv -f $ffile $DIRSOC2SOC/$filex";
+        #!!TEMP copy to IRIS machine for testing
+        #$cmdiris = "scp $ffile prodtest\@aia0:/dds/dds2soc/hmi/$filex";
       } else {
         $cmd = "mv -f $ffile $DIRSOC2SOC"; #and the good .qac file
+        #!!TEMP copy to IRIS machine for testing
+        #$cmdiris = "scp $ffile prodtest\@aia0:/dds/dds2soc/hmi";
       }
       print LOG "  $cmd\n";
+      #`$cmdiris`;		#!!TEMP
       `$cmd`;
     }
     if($pid0 == -1) {
       &Sched_ingest;		#schedule the ingest processing
     }
   }
+  undef(@qacqac);
+  if(k == 0) { undef(@qacfiles); }
+  else { undef(@qacfiles_rex); }
 }
   #Now process any .dsf files and send a proper .dsf file to the pipeline
   #backend system and reply to the DDS with an .asf file.
+  $adone = 0;
   while($dsffile = shift(@dsffiles)) {
+    if(!$adone) {
+      #NEW 10Jan2012:
+      #First get the info in any existing .asf files that the DDS has not yet
+      #picked up and make sure we don't put the same info in our new .dsf
+      $adone = 1;
+      @soc2ddsasf_ls = `ls -lt $DIRSOC2DDS/asf`;
+      @asffilenames = ();
+      shift(@soc2ddsasf_ls);		#elim "total" line in front of ls
+      foreach $x (@soc2ddsasf_ls) {
+        if($x =~ /^l/) { next; }            #ignore links
+        if($x =~ /^d/) { next; }            #ignore dirs
+        ($a1,$a2,$a3,$a4,$size,$a6,$a7,$a8,$name) = split(/\s+/, $x);
+        chomp($name);
+        push(@asffilenames, $name);
+      }
+      undef(@soc2ddsasf_ls);
+      @asfcontent = ();
+      while($afile = shift(@asffilenames)) {
+        $aafile = "$DIRSOC2DDS/asf/"."$afile";
+        print LOG "Left over asf: $aafile\n";
+        @y = `cat $aafile`;
+        while($z = shift(@y)) {
+          push(@asfcontent, $z);
+        }
+      }
+    }
     print LOG "*  RECEIVED: $dsffile:\n";
     $f = "$DIRDDS2SOC/$dsffile";
     @x = `cat $f`;
     print LOG " @x\n";
     `/bin/rm -f $f`;
+    #`/bin/rm -f $aafile`;	#No, keep old asf for DDS to see
     $dsfpipefile = "$DIRSOC2PIPE/$dsffile";
     if(!open(DSFPIPE, ">$dsfpipefile")) {
       print LOG "*  **ERROR: Can't open $dsfpipefile\n";
@@ -2378,6 +2440,9 @@ for($k = 0; $k < 2; $k++) {
         ($a, $lstat) = split(/=/, $line);
         chomp($lstat);
       }
+      #skip this file if already in a .asf file
+      $aa = grep(/$lfile/, @asfcontent);
+      if($aa) { next; }			#skip if in an old asf
       if($lstat == 1) {
   	if($Hoftlmreceived{$lfile}) {           #send back positive ack
           print ASF "FILE_NAME=$lfile\nSTATUS=3\n";
@@ -2390,6 +2455,8 @@ for($k = 0; $k < 2; $k++) {
             if($lfile =~ /$vaname/) { $recntva++; }
   	    else { $recntvb++; }
             push(@xmitpend, $lfile);		#remember we requested this
+            $fileUTCdayofyr = substr($lfile, 10, 3); #001-366
+            $seen{$fileUTCdayofyr}++;	#count all rexmits for this day
           }
         }
       }
@@ -2400,6 +2467,7 @@ for($k = 0; $k < 2; $k++) {
         print LOG "**ERROR: Illegal status = $lstat in .dsf file\n";
       }
     }
+    undef(@x);
     #now include all the rexmit requests
     while($line = shift(@rexmitfiles)) {
       chomp($line);
@@ -2408,6 +2476,8 @@ for($k = 0; $k < 2; $k++) {
         else { $recntvb++; }
       print LOG "  Rexmit request for: $line\n"; #!!TEMP
       push(@xmitpend, $line);			#remember we requested this
+      $fileUTCdayofyr = substr($line, 10, 3);	#001-366
+      $seen{$fileUTCdayofyr}++;		#count all rexmits for this day
     }
     print ASF "EOF_MARKER=C5C5\n";
     close(ASF);
@@ -2416,8 +2486,11 @@ for($k = 0; $k < 2; $k++) {
     @cat = `cat $asffile`;
     print LOG " @cat\n";
     #@tlmreceived = ();
-    @rexmitfiles = ();
+    #@rexmitfiles = ();
+    undef(@rexmitfiles);
+    undef(@cat);
   }
+  undef(@asfcontent);
   $embsrex->delete(0, 'end');
   $embsrex->insert(0, "$recntva");
   $embsrexz->delete(0, 'end');
@@ -2640,9 +2713,76 @@ sub tail_update {
   }
 }
 
+#Initialize $todayUTCdayofyr when first start
+sub inittoday {
+  local($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst,$date,$sec2,$min2,$hour2,$mday2);
+  ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = gmtime(time);
+  $todayUTCdayofyr = $yday+1;	#1-366
+}
+
 #Return date in form for a label e.g. 1998.01.07_14:42:00
 sub labeldate {
   local($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst,$date,$sec2,$min2,$hour2,$mday2);
+  ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = gmtime(time);
+  $year4 = sprintf("%04d", $year+1900);
+
+#print LOG "labeldate called. todayUTCdayofyr = $todayUTCdayofyr\n"; #!!TEMP
+#print "labeldate called. todayUTCdayofyr = $todayUTCdayofyr\n"; #!!TEMP
+
+  if($reck_xmit_dayofyr != 0) {		#recheck if all file in from yesterday
+    #fix added to make 3 digit 
+    $reck_xmit_dayofyr3 = sprintf("%03d", $reck_xmit_dayofyr);
+    if($seen{$reck_xmit_dayofyr} == 0) {
+      print LOG "All files in for day of year $reck_xmit_dayofyr3\n";
+      print "All files in for day of year $reck_xmit_dayofyr3\n";
+      if($hmiaiaflg) {
+        `touch /dds/soc2pipe/aia/xday/Xmit_All.$reck_xmit_dayofyr3`;
+        `touch /dds/soc2pipe/aia/xday/Xmit_All.$year4.$reck_xmit_dayofyr3`;
+      } else {
+        `touch /dds/soc2pipe/hmi/xday/Xmit_All.$reck_xmit_dayofyr3`;
+        `touch /dds/soc2pipe/hmi/xday/Xmit_All.$year4.$reck_xmit_dayofyr3`;
+      }
+      $reck_xmit_dayofyr = 0; 
+    }
+    else {		#force ok if 12hrs has passed since new day
+      if($hour >= $FORCE_DELAY) {
+        print LOG "**FORCE all files in for day of year $reck_xmit_dayofyr3\n";
+        print "**FORCE all files in for day of year $reck_xmit_dayofyr3\n";
+        if($hmiaiaflg) {
+          `touch /dds/soc2pipe/aia/xday/Xmit_All.$reck_xmit_dayofyr3`;
+          `touch /dds/soc2pipe/aia/xday/Xmit_All.$year4.$reck_xmit_dayofyr3`;
+        } else {
+          `touch /dds/soc2pipe/hmi/xday/Xmit_All.$reck_xmit_dayofyr3`;
+          `touch /dds/soc2pipe/hmi/xday/Xmit_All.$year4.$reck_xmit_dayofyr3`;
+        }
+        $reck_xmit_dayofyr = 0; 
+      }
+    }
+  }
+  if($todayUTCdayofyr != $yday + 1) {	#it's a new day
+    #fix added to make 3 digit 
+    $todayUTCdayofyr3 = sprintf("%03d", $todayUTCdayofyr);
+    #check if $seen{$fileUTCdayofyr} for yesterday is 0, so all rexmit are in
+    if($seen{$todayUTCdayofyr} == 0) {
+      print LOG "All files in for day of year $todayUTCdayofyr\n";
+      print "All files in for day of year $todayUTCdayofyr\n";
+print LOG "hmiaiaflg = $hmiaiaflg\n"; #!!!TEMP
+      if($hmiaiaflg) {
+        `touch /dds/soc2pipe/aia/xday/Xmit_All.$todayUTCdayofyr3`;
+        `touch /dds/soc2pipe/aia/xday/Xmit_All.$year4.$todayUTCdayofyr3`;
+      } else {
+        `touch /dds/soc2pipe/hmi/xday/Xmit_All.$todayUTCdayofyr3`;
+        `touch /dds/soc2pipe/hmi/xday/Xmit_All.$year4.$todayUTCdayofyr3`;
+      }
+      $reck_xmit_dayofyr = 0;
+    }
+    else {
+      print LOG "Files still outstanding for day of year $todayUTCdayofyr\n";
+      print "Files still outstanding for day of year $todayUTCdayofyr\n";
+      $reck_xmit_dayofyr = $todayUTCdayofyr;
+    }
+    $todayUTCdayofyr = $yday+1;		#reset the day 1-366
+  }
   ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
   $sec2 = sprintf("%02d", $sec);
   $min2 = sprintf("%02d", $min);
