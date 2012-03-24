@@ -10,10 +10,15 @@
  * External function:
  *			ambig.f
  *
- * Version:		v1.0		Jan 25 2009
+ * Version:
+ *			v1.0		Jan 25 2009
+ *			v1.1		Mar 21 2012
  *
  * Issues:
  *			v1.0
+ *			v1.1
+ *			Added 3 solutions for weak field
+ *			Re-defined confidence array (0-100, 100 is good)
  *
  *
  * Example:
@@ -30,6 +35,8 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "copy_me_keys.c"
+// Added Mar 21 for geometry
+#include "cartography.c"
 
 #define PI	(M_PI)
 #define	DTOR	(PI / 180.)
@@ -82,8 +89,8 @@ int getAmbCode (char prob)
 
 //====================
 
-char *module_name = "disambig";	/* Module name */
-char *version_id = "2011 Oct 27";  /* Version number */
+char *module_name = "disambig_new";	/* Module name */
+char *version_id = "2012 Mar 21";  /* Version number */
 
 ModuleArgs_t module_args[] =
 {
@@ -92,7 +99,7 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "mask", " ", "Bitmap series name, as AR mask, for full disk"},
     {ARG_INT, "VERB", "1", "Level of verbosity: 0=errors/warnings; 1=minimal messages; 2=all messages"},
     {ARG_INT, "AMBGMTRY", "0", "0 for automatic selection; 1 for planar; 2 for spherical."},
-    {ARG_INT, "AMBWEAK", "1", "0 for random; 1 for potential field; 2 for most radial."},
+//	{ARG_INT, "AMBWEAK", "1", "0 for random; 1 for potential field; 2 for most radial."},
     {ARG_INT, "AMBNEROD", "1", "Number of pixels by which to erode map of above threshold pixels."},
     {ARG_INT, "AMBNGROW", "5", "Number of pixels by which to grow eroded map."},
     {ARG_INT, "AMBNPAD", "20", "Pixel number to pad with zeros for potential field."},
@@ -216,7 +223,8 @@ int DoIt(void)
     outQuery = (char *)params_get_str(&cmdparams, "out");
     verbflag = params_get_int(&cmdparams, "VERB");
     geometry = params_get_int(&cmdparams, "AMBGMTRY");
-    weak = params_get_int(&cmdparams, "AMBWEAK");
+//    weak = params_get_int(&cmdparams, "AMBWEAK");
+	weak = 1;		// Mar 21 2012 set to be constant as now we compute all thress options
     nerode = params_get_int(&cmdparams, "AMBNEROD");
     ngrow = params_get_int(&cmdparams, "AMBNGROW");
     npad = params_get_int(&cmdparams, "AMBNPAD");
@@ -414,6 +422,11 @@ printf("harpflag=%d\n",harpflag);
         } else {
             /* Full disk case */
             if (geometry != 2) geometry = 2;	// force spherical geometry for full disk
+            
+            // added by X. Sun, to be consistent with harp case
+			      i0 = 0; j0 = 0;
+			      ll0[0] = ll0[1] = ll[0] = ll[1] = 0;
+			      ur0[0] = ur0[1] = ur[0] = ur[1] = 0;
 
             crvalx = drms_getkey_float(inRec, "CRVAL1", &status);	// center of solar disc in arcsec
             crvaly = drms_getkey_float(inRec, "CRVAL2", &status);
@@ -605,16 +618,55 @@ printf("harpflag=%d\n",harpflag);
                bitmap[i] = growmap[i + (nerode + ngrow) * (nx + 1 + 2 * (i / nx + nerode + ngrow))];
             }
 			
-			// added by X. Sun, to be consistent with harp case
-			i0 = 0; j0 = 0;
-			
+		
         }
 
         probBa = (float *) calloc(nxny, sizeof(float));
 		
-		printf("start\n"); fflush(stdout);
+		
+		/* Before Bx, By, Bz change, find the radial acute solution */
+		// Added Mar 21
+		
+		int index, index1;
+		char *ambig_radial = (char *) calloc(nxny0, sizeof(char));		// solution for radial acute
+		double bz0, bz1;		// two versions of radial, zonal and meridional field
+		double pa = -1. * crota2 * DTOR;
+		double lonc = drms_getkey_float(inRec, "CRLN_OBS", &status) * DTOR;
+		double latc = drms_getkey_float(inRec, "CRLT_OBS", &status) * DTOR;
+		double xx, yy;
+		double lat, lon;
+		double asd = asin(rsun_ref / dsun_obs);
+		double rho, sinlat, coslat, sig, mu, chi;
+		double a31, a32, a33;
+		
+		for (i = 0; i < nx0; i++) {
+        for (j = 0; j < ny0; j++) {
+				index = i + j * nx0;
+				index1 = i + i0 + (j + j0) * nx;
+				// find lat/lon
+				xx = (ll0[0] + i - (crpix1 - 1)) / radius;		// radius computed earlier
+				yy = (ll0[1] + j - (crpix2 - 1)) / radius;
+				if (img2sphere(xx, yy, asd, latc, lonc, pa,
+							   &rho, &lat, &lon, &sinlat, &coslat, &sig, &mu, &chi))
+					continue;		// off disk or something
+				// from img2helioVector.c
+				a31 =  cos(lat) * (sin(latc) * sin(pa) * cos(lon - lonc) + cos(pa) * sin(lon - lonc))
+						- sin(lat) * cos(latc) * sin(pa);
+				a32 = - cos(lat) * (sin(latc) * cos(pa) * cos(lon - lonc) - sin(pa) * sin(lon - lonc))
+						+ sin(lat) * cos(latc) * cos(pa);
+				a33 =  cos(lat) * cos(latc) * cos(lon - lonc) + sin(lat) * sin(latc);
+				bz0 = a31 * Bx[index1] + a32 * By[index1] + a33 * Bz[index1];
+				bz1 = - a31 * Bx[index1] - a32 * By[index1] + a33 * Bz[index1];
+				//
+				ambig_radial[index] = (fabs(bz0) < fabs(bz1)) ? 1 : 0;
+            }
+        }
 
+		
+		
         /* This is the working part */
+		
+		printf("start\n"); fflush(stdout);
 
         ambig_(&geometry,
                &weak,
@@ -643,13 +695,51 @@ printf("harpflag=%d\n",harpflag);
         ambig_flag = (char *) calloc(nxny0, sizeof(char));
 
         /* Flag pixels for which the azimuth angle needs to be changed */
+
         for (i = 0; i < nx0; i++) {
             for (j = 0; j < ny0; j++) {
-               ambig_flag[i + j * nx0] = (Bx[i + i0 + (j + j0) * nx] > 0.) ? 1 : 0;
+				index = i + j * nx0;
+				index1 = i + i0 + (j + j0) * nx;
                // Updated Oct 12, now a char from 0 to 100
-               confidence[i + j * nx0] = (char) (100 - probBa[i + i0 + (j + j0) * nx] * 100);
+			   // Updated Mar 21, still from 0 to 100, but 100 is good.
+			   confidence[index] = (char) (probBa[index1] * 100);
+			   ambig_flag[index] = (Bx[index1] > 0.) ? 1 : 0;
             }
         }
+		
+		/* The above solution is for potential only, now update the random solution as second bit */
+		
+		char pot;		// result from potential
+		char r;
+		srand((unsigned)time(NULL));	// might not be the best random number generator
+		for (i = 0; i < nx0; i++) {
+            for (j = 0; j < ny0; j++) {
+				index = i + j * nx0;
+				pot = (ambig_flag[index] % 2);
+				if (confidence[index] > 51) {
+					ambig_flag[index] += pot * 2;
+				} else {
+					r = rand() % 2;
+					ambig_flag[index] += r * 2;
+				}
+			}
+		}
+		
+		/* Update the radial acute solution as third bit */
+
+		for (i = 0; i < nx0; i++) {
+            for (j = 0; j < ny0; j++) {
+				index = i + j * nx0;
+				pot = (ambig_flag[index] % 2);
+				if (confidence[index] > 51) {
+					ambig_flag[index] += pot * 4;
+				} else {
+					ambig_flag[index] += ambig_radial[index] * 4;
+				}
+			}
+		}
+		
+		free(ambig_radial);
         
         /* Bit maps */
         // Jun 22 Xudong
@@ -762,7 +852,7 @@ printf("harpflag=%d\n",harpflag);
         drms_setkey_int(outRec, "DATAVALS", outsz - nancount);
         drms_setkey_int(outRec, "MISSVALS", nancount);
         // Code version
-      drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.6 2012/03/01 00:11:13 xudong Exp $");
+      drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.7 2012/03/24 02:28:36 xudong Exp $");
       drms_setkey_string(outRec, "AMBCODEV", ambcodev);
     
         /* Set link */
