@@ -66,7 +66,7 @@ void sprint_time_ISO (char *tstring, TIME t)
 
 int DoIt ()
 {
-  int irec, nrecs, status, wl, fsn, qual, first = 1, cmdexp, explim;
+  int irec, nrecs, status, wl, first = 1, cmdexp, explim;
   char *dsinp, *dsout, now_str[100];
   double tr_step;
   long long tr_index;
@@ -77,13 +77,8 @@ int DoIt ()
   DRMS_Segment_t *inpseg, *outseg;
   int timestuff = cmdparams_isflagset(&cmdparams, kTimerFlag);
 
-  if (timestuff)
-  {
-     gTimer = CreateTimer();
-  }
-
+  if (timestuff) { gTimer = CreateTimer(); }
   if (nice_intro(0)) return(0);
-
   dsinp = strdup(cmdparams_get_str(&cmdparams, "dsinp", NULL));
   dsout = strdup(cmdparams_get_str(&cmdparams, "dsout", NULL));
   if (strcmp(dsinp, NOT_SPECIFIED)==0) DIE("dsinp argument is required");
@@ -91,24 +86,18 @@ int DoIt ()
   PrintElapsedTime("to read input arguments");
   TimeReset();
   inprs = drms_open_records(drms_env, dsinp, &status);
-
-  if (dsinp)
-  {
-     free(dsinp);
-  }
-
+  if (dsinp) { free(dsinp); }
   PrintElapsedTime("to open input records");
-
   if (status) DIE("cant open recordset query");
-
   nrecs = inprs->n;
   for (irec=0; irec<nrecs; irec++) {
     inprec = inprs->records[irec];
     TimeReset();
     outrec = drms_create_record(drms_env, dsout, DRMS_PERMANENT, &status);
     PrintElapsedTime("to create 1 output record");
-
     if (status) DIE("cant create recordset");
+    status = drms_copykeys(outrec, inprec, 0, kDRMS_KeyClass_Explicit);
+    if (status) DIE("Error in drms_copykeys()");
     if (first) {
       tr_step = drms_getkey_double(outrec, "T_REC_step", &status);
       if (status) DIE("T_REC_step not found!");
@@ -121,7 +110,8 @@ int DoIt ()
     t_obs = drms_getkey_time(inprec, "T_OBS", &status);
     if (status) DIE("T_OBS not found!");
     cmdexp = drms_getkey_int(inprec, "AIMGSHCE", &status);
-    if (status) DIE("cant get commanded exposure AIMGSHCE");
+    if (status) { DIE("cant get commanded exposure AIMGSHCE"); }
+    else drms_setkey_int(outrec, "AIMGSHCE", cmdexp);
     wl = drms_getkey_int(inprec, "WAVELNTH", &status);
     if (!status) drms_setkey_int(outrec, "WAVELNTH", wl);
     switch (wl) {
@@ -141,10 +131,6 @@ int DoIt ()
     tr_index = (t_obs - tr_epoch)/tr_step;
     t_rec = tr_epoch + tr_index*tr_step;
     drms_setkey_time(outrec, "T_REC", t_rec);
-    fsn = drms_getkey_int(inprec, "FSN", &status);
-    if (!status) drms_setkey_int(outrec, "FSN", fsn);
-    qual = drms_getkey_int(inprec, "QUALITY", &status);
-    if (!status) drms_setkey_int(outrec, "QUALITY", qual);
     TimeReset();
     status = drms_link_set("lev1", outrec, inprec);
     PrintElapsedTime("to set the link from the input record to the output record");
@@ -153,15 +139,8 @@ int DoIt ()
     PrintElapsedTime("to close 1 output record");
   }
 
-  if (inprs)
-  {
-     drms_close_records(inprs, DRMS_FREE_RECORD);
-  }
-
-  if (dsout)
-  {
-     free(dsout);
-  }
+  if (inprs) { drms_close_records(inprs, DRMS_FREE_RECORD); }
+  if (dsout) { free(dsout); }
   
   return 0;
 }
