@@ -32,7 +32,8 @@
  *			v0.2  Oct 07 2011
  *      v0.3  Oct 17 2011
  *      v0.4  Oct 28 2011
- *		v0.5  Feb 23 2012
+ *		  v0.5  Feb 23 2012
+ *			v0.6  Mar 25 2012
  *
  *
  *
@@ -53,11 +54,13 @@
  *      Now assumes output are Rice compressed, "rice=1"
  *      with field scaled to 0.01, angles 0.01, errors 0.001, covariances 0.0001
  *      Add option "covar" to output covariances for cutout
- *		v0.5
- *		Added -d for differential rotation tracking
- *		tref is the mid-point of data series, hard-coded for now
- *		a0, a2, a4 all hard-coded for now
- *		overridden by autoTrack (HARP defined) or full disk
+ *			v0.5
+ *			Added -d for differential rotation tracking
+ *			tref is the mid-point of data series, hard-coded for now
+ *			a0, a2, a4 all hard-coded for now
+ *			overridden by autoTrack (HARP defined) or full disk
+ *			v0.6
+ *			added flags to select the ambiguity resolution method
  *
  *
  */
@@ -134,6 +137,7 @@ struct mapInfo {
 	int latlon, noDisamb, fillNan;
 	int autoTrack, autoSize, diffTrack;
 	int verbose;
+	int ambweak;
 	int doerr, covar, rice;
 	int nbin, gauss;
 	int mapOpt, repOpt, interpOpt;
@@ -256,6 +260,7 @@ ModuleArgs_t module_args[] =
 	{ARG_INT, "doerr", "1", "Perform error propagation, use near neighbor so far."},
 	{ARG_INT, "covar", "0", "Out put covariances for field, only work for cutout now."},
 	{ARG_INT, "rice", "1", "Use Rice compression."},
+	{ARG_INT, "ambweak", "0", "Ambiguity resolution for weak field. 0: potential; 1: random; 2: radial acute"},
 	{ARG_FLAG, "c",	"", "Simple full pixel cutout without interpolation, override all mapping options."},
 	{ARG_FLAG, "l",	"", "Force vector representation in local tangent coordinates, for cutout mode only."},
 	{ARG_FLAG, "g",	"", "Force vector representation in plane of sky coordinates, for remap mode only."},
@@ -310,6 +315,8 @@ int DoIt(void)
 	mInfo.doerr = params_get_int(&cmdparams, "doerr");
 	mInfo.covar = params_get_int(&cmdparams, "covar");
 	mInfo.rice = params_get_int(&cmdparams, "rice");
+	
+	mInfo.ambweak = params_get_int(&cmdparams, "ambweak");
 	
 	if ((mInfo.xscale / mInfo.nbin) > NYQVIST || (mInfo.yscale / mInfo.nbin) > NYQVIST)
 		mInfo.nbin = MAX((round(mInfo.xscale / NYQVIST)),(round(mInfo.yscale / NYQVIST)));
@@ -404,7 +411,7 @@ int DoIt(void)
 	for (irec = 0; irec < nrecs; irec++) {
 		
 		inRec = inRS->records[irec];
-        TIME trec = drms_getkey_time(inRec, "T_REC", &status);
+    TIME trec = drms_getkey_time(inRec, "T_REC", &status);
 		
 		if (mInfo.verbose) {
 			printf("==============\nImage #%d: ", irec);
@@ -661,10 +668,13 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	double lonc, latc;
 	
 	float minlon, maxlon, minlat, maxlat;
-	minlon = drms_getkey_float(inRec, "MINLON", &status); if (status) return 1;		// Stonyhurst lon
-	maxlon = drms_getkey_float(inRec, "MAXLON", &status); if (status) return 1;
-	minlat = drms_getkey_float(inRec, "MINLAT", &status); if (status) return 1;
-	maxlat = drms_getkey_float(inRec, "MAXLAT", &status); if (status) return 1;
+	
+	if (mInfo->autoTrack || mInfo->autoSize) {
+		minlon = drms_getkey_float(inRec, "MINLON", &status); if (status) return 1;		// Stonyhurst lon
+		maxlon = drms_getkey_float(inRec, "MAXLON", &status); if (status) return 1;
+		minlat = drms_getkey_float(inRec, "MINLAT", &status); if (status) return 1;
+		maxlat = drms_getkey_float(inRec, "MAXLAT", &status); if (status) return 1;
+	}
 	
 	if (mInfo->autoTrack) {
 		
@@ -826,6 +836,8 @@ int readFullDisk(DRMS_Record_t *inRec, struct mapInfo *mInfo, float *bx_img, flo
 	int ix = 0;
 	int xDim = FOURK, yDim = FOURK;
 	
+	int amb = (int)(pow(2,mInfo->ambweak));
+	
 	for (jy = 0; jy < yDim; jy++)
 	{
 		ix = 0;
@@ -846,7 +858,7 @@ int readFullDisk(DRMS_Record_t *inRec, struct mapInfo *mInfo, float *bx_img, flo
 			if (mInfo->noDisamb) continue;
 			
 			if (mInfo->fullDisk || fullDisk) {
-				if (ambig[iData]) {
+				if ((ambig[iData] / amb) % 2) {
 					bx_img[iData] *= -1.; by_img[iData] *= -1.;
 				}
 				continue;
@@ -856,7 +868,7 @@ int readFullDisk(DRMS_Record_t *inRec, struct mapInfo *mInfo, float *bx_img, flo
 				continue;
 			} else {
 				kOff = ky * bmx + kx;
-				if (ambig[kOff]) {		// 180
+				if ((ambig[kOff] / amb) % 2) {		// 180
 					bx_img[iData] *= -1.; by_img[iData] *= -1.;
 				} 
 			}
