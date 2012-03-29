@@ -98,7 +98,7 @@ subroutine ambig(&
    external :: setup_OCBP_PF_dzh_4p, CalcE_OCBP_PF_dzh_4p, CalcDE_reconfig_OCBP_PF_dzh_4p
    external :: setup_spherical_PF_4p, CalcE_spherical_PF_4p, CalcDE_reconfig_spherical_PF_4p
 
-real,dimension(nx_p,ny_p) :: ba
+!real,dimension(nx_p,ny_p) :: ba
 
 !==============================================================!
 
@@ -300,11 +300,11 @@ write(*,*) 'phi,theta',phi,theta
 ! --> Recompute azimuth from ambiguity-resolved Cartesian components, 
 ! --> unless transverse field is zero, in which case use original angle.
 
-   do i=1,nx
-      do j=1,ny
-         if(bt(i,j).ne.0.) ba(i,j)=atan2(By(i,j),Bx(i,j))
-      enddo
-   enddo
+!   do i=1,nx
+!      do j=1,ny
+!         if(bt(i,j).ne.0.) ba(i,j)=atan2(By(i,j),Bx(i,j))
+!      enddo
+!   enddo
 
    deallocate(bt,dBzdz)
 !  deallocate(mask)
