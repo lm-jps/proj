@@ -31,7 +31,7 @@ const char *meKeys[] =
 	"T_OBS", "CADENCE", "DATE_S", "DATE__OBS",											// time
 	"DSUN_OBS", "CRLN_OBS", "CRLT_OBS", "CAR_ROT",
 	"OBS_VR", "OBS_VW", "OBS_VN", "RSUN_OBS",					// geometry
-	"INVCODEV", "INVITERA", "INVLMBDA", "INVLMBDF",
+	"INVCODEV", "INVDOCU", "INVITERA", "INVLMBDA", "INVLMBDF",
 	"INVTUNEN", "INVSVDTL", "INVCHIST", "INVPOLTH",
 	"INVPJUMP", "INVLMBDM", "INVLMBD0", "INVLMBDB",
 	"INVDLTLA", "INVLMBDS", "INVLMBMS",
@@ -58,7 +58,7 @@ const char *meKeys[] =
 const char *patchKeys[] = 
 {
 	"PATCHNUM", "OFFDISK", "QUIET", "MASK",
-	"MINLON", "MINLAT", "MAXLON", "MAXLAT", "OMEGA"
+	"LON_MIN", "LAT_MIN", "LON_MAX", "LAT_MAX", "OMEGA"
 };
 
 const char *geoKeys[] =
@@ -71,6 +71,7 @@ const char *geoKeys[] =
 
 const char *ambigKeys[] =
 {
+  "AMBCODEV", "AMBDOCU",
 	"AMBGMTRY", "AMBWEAK", "AMBNEROD", "AMBNGROW",
 	"AMBNPAD", "AMBNAP", "AMBNTX", "AMBNTY",
 	"AMBBTHR0", "AMBBTHR1", "AMBSEED", "AMBNEQ",

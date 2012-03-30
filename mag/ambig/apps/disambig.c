@@ -286,7 +286,7 @@ int DoIt(void)
 		maskSeg = drms_segment_lookup(maskRec, "mask");
 		maskArray = drms_segment_read(maskSeg, DRMS_TYPE_FLOAT, &status);
 		noiseMask = (float *)maskArray->data;
-		SHOW("Use nosie mask\n");
+		SHOW("Use noise mask\n");
 	}
 	
     /* Do this for each record */
@@ -886,7 +886,7 @@ int DoIt(void)
         drms_setkey_int(outRec, "DATAVALS", outsz - nancount);
         drms_setkey_int(outRec, "MISSVALS", nancount);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.8 2012/03/29 22:33:11 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.9 2012/03/30 01:24:51 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {

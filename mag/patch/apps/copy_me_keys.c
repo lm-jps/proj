@@ -58,7 +58,7 @@ const char *meKeys[] =
 const char *patchKeys[] = 
 {
 	"PATCHNUM", "OFFDISK", "QUIET", "MASK",
-	"MINLON", "MINLAT", "MAXLON", "MAXLAT", "OMEGA"
+	"LON_MIN", "LAT_MIN", "LON_MAX", "LAT_MAX", "OMEGA"
 };
 
 const char *geoKeys[] =

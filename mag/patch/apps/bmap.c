@@ -670,10 +670,10 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	float minlon, maxlon, minlat, maxlat;
 	
 	if (mInfo->autoTrack || mInfo->autoSize) {
-		minlon = drms_getkey_float(inRec, "MINLON", &status); if (status) return 1;		// Stonyhurst lon
-		maxlon = drms_getkey_float(inRec, "MAXLON", &status); if (status) return 1;
-		minlat = drms_getkey_float(inRec, "MINLAT", &status); if (status) return 1;
-		maxlat = drms_getkey_float(inRec, "MAXLAT", &status); if (status) return 1;
+		minlon = drms_getkey_float(inRec, "LON_MIN", &status); if (status) return 1;		// Stonyhurst lon
+		maxlon = drms_getkey_float(inRec, "LON_MAX", &status); if (status) return 1;
+		minlat = drms_getkey_float(inRec, "LAT_MIN", &status); if (status) return 1;
+		maxlat = drms_getkey_float(inRec, "LAT_MAX", &status); if (status) return 1;
 	}
 	
 	if (mInfo->autoTrack) {
