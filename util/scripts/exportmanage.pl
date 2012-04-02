@@ -74,24 +74,28 @@ my($kJSOCDEV_DBUSER) = "production";
 my($kJSOCDEV_DBNAME) = "jsoc";
 my($kJSOCDEV_DBHOST) = "hmidb";
 my($kJSOCDEV_MANAGE) = "jsoc_export_manage";
+use constant kProcInfoSeriesDev => "jsoc.export_procs";
 #
 my($kJSOCPRO_ROOT) = "/home/jsoc/cvs/JSOC";
 my($kJSOCPRO_DBUSER) = "production";
 my($kJSOCPRO_DBNAME) = "jsoc";
 my($kJSOCPRO_DBHOST) = "hmidb";
 my($kJSOCPRO_MANAGE) = "jsoc_export_manage";
+use constant kProcInfoSeriesPro => "jsoc.export_procs";
 #
 my($kJSOCWEB_ROOT) = "/home/jsoc/cvs/Development/JSOC";
 my($kJSOCWEB_DBUSER) = "production";
 my($kJSOCWEB_DBNAME) = "jsoc";
 my($kJSOCWEB_DBHOST) = "hmidb2";
 my($kJSOCWEB_MANAGE) = "jsoc_export_manage";
+use constant kProcInfoSeriesWeb => "jsoc.export_procs";
 #
 my($kJSOCTEST_ROOT) = "/home/jsoc/cvs/Development/JSOC";
 my($kJSOCTEST_DBUSER) = "phil";
 my($kJSOCTEST_DBNAME) = "jsoc";
 my($kJSOCTEST_DBHOST) = "hmidb";
 my($kJSOCTEST_MANAGE) = "jsoc_export_manage_test";
+use constant kProcInfoSeriesTst => "jsoc.export_procs";
 
 my($runningflag) = $kINTERNALFLAG;
 my($arg);
@@ -106,6 +110,7 @@ my($daemonlog);
 my($lckfh);
 my($msg);
 my($logflag);
+my($procser);
 
 while ($arg = shift(@ARGV))
 {
@@ -138,6 +143,10 @@ while ($arg = shift(@ARGV))
     {
         $logflag = shift(@ARGV);
     }
+    elsif ($arg eq "-procser")
+    {
+        $procser = shift(@ARGV);
+    }
     elsif ($arg eq "-jsocdev")
     {
         $root = $kJSOCDEV_ROOT;
@@ -148,6 +157,7 @@ while ($arg = shift(@ARGV))
         $manage = $kJSOCDEV_MANAGE;
         $runningflag = $kINTERNALFLAG;
         $logflag = kLogFlagInt;
+        $procser = &kProcInfoSeriesDev;
     }
     elsif ($arg eq "-jsocpro")
     {
@@ -159,6 +169,7 @@ while ($arg = shift(@ARGV))
         $manage = $kJSOCPRO_MANAGE;
         $runningflag = $kINTERNALFLAG;
         $logflag = kLogFlagInt;
+        $procser = &kProcInfoSeriesPro;
     }
     elsif ($arg eq "-jsocweb")
     {
@@ -170,6 +181,7 @@ while ($arg = shift(@ARGV))
         $manage = $kJSOCWEB_MANAGE;
         $runningflag = $kWEBFLAG;
         $logflag = kLogFlagExt;
+        $procser = &kProcInfoSeriesWeb;
     }
     elsif ($arg eq "-jsoctest")
     {
@@ -181,6 +193,7 @@ while ($arg = shift(@ARGV))
         $manage = $kJSOCTEST_MANAGE;
         $runningflag = $kTESTFLAG;
         $logflag = "Test";
+        $procser = &kProcInfoSeriesTst;
     }
 }
 
@@ -239,7 +252,7 @@ unless (GetDLogFH(\$dlogfh, $daemonlog))
     CloseDLog(\$dlogfh);
 }
 
-$cmd = "$binpath/$manage JSOC_DBHOST=$dbhost";
+$cmd = "$binpath/$manage JSOC_DBHOST=$dbhost procser=$procser";
 
 my($msgq) = {lastsend => time(), msgs => {}};
 
