@@ -21,6 +21,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "regrid", "1", "regrid type 0: nearest neighbor, 1: bicubic"},
   {ARG_STRING, "scale_to", "0.6", "rescale to fixed plate scale"},
   {ARG_STRING, "do_stretchmarks", "0", "fill in empty pixels created"},
+  {ARG_STRING, "requestid", NOT_SPECIFIED, "Export request id if this program was invoked by the export system."},
   {ARG_FLAG, "h", "0", "Print usage message and quit"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_END}
@@ -58,6 +59,32 @@ void sprint_time_ISO (char *tstring, TIME t)
   tstring[19] = '\0';
 } 
 
+static void FreeRecSpecParts(char ***snames, int nitems)
+{
+    if (snames)
+    {
+        int iname;
+        char **snameArr = *snames;
+        
+        if (snameArr)
+        {
+            for (iname = 0; iname < nitems; iname++)
+            {
+                char *oneSname = snameArr[iname];
+                
+                if (oneSname)
+                {
+                    free(oneSname);
+                }
+            }
+            
+            free(snameArr);
+        }
+        
+        *snames = NULL;
+    }
+}
+
 int DoIt ()
 {
   int irec, iseg, nrecs, nsegs, status, is_aia=0;
@@ -69,6 +96,15 @@ int DoIt ()
   DRMS_Keyword_t *inpkey = NULL, *outkey = NULL;
   DRMS_Array_t *inparr=NULL, *outarr=NULL;
   DRMS_Segment_t *inpseg, *outseg;
+  const char *reqid = NULL;
+  char seriesout[DRMS_MAXSERIESNAMELEN];
+  char *allvers = NULL;
+  char **sets = NULL;
+  DRMS_RecordSetType_t *settypes = NULL; /* a maximum doesn't make sense */
+  char **snames = NULL;
+  int nsets = 0;
+  DRMS_RecQueryInfo_t rsinfo;
+    
   if (nice_intro(0)) return(0);
 
   dsinp = strdup(cmdparams_get_str(&cmdparams, "dsinp", NULL));
@@ -80,6 +116,27 @@ int DoIt ()
   scale_to = cmdparams_get_float(&cmdparams, "scale_to", NULL);
   regridtype = cmdparams_get_int(&cmdparams, "regrid", NULL);
   do_stretchmarks = cmdparams_get_int(&cmdparams, "do_stretchmarks", NULL);
+  reqid = cmdparams_get_str(&cmdparams, "requestid", NULL);
+    
+    if (strcmp(reqid, NOT_SPECIFIED) == 0)
+    {
+        reqid = NULL;
+    }
+    
+    /* Parse output series name. */
+    if (DRMS_SUCCESS != drms_record_parserecsetspec(dsout, &allvers, &sets, &settypes, &snames, &nsets, &rsinfo))
+    {
+        DIE("Invalid output record-set specification.");
+    }
+    
+    if (nsets != 1)
+    {
+        FreeRecSpecParts(&snames, nsets);
+        DIE("aia_lev1p5 supports writing to a single output series.");
+    }
+    
+    snprintf(seriesout, sizeof(seriesout), "%s", snames[0]);
+    FreeRecSpecParts(&snames, nsets);
 
   if (strstr(dsinp, "aia")) is_aia = 1;
   inprs = drms_open_records(drms_env, dsinp, &status);
@@ -90,7 +147,10 @@ int DoIt ()
   for (irec=0; irec<nrecs; irec++) {
     int save_rec = 1, qualmask = 0x800100f0;
     inprec = inprs->records[irec];
-    outrec = drms_create_record(drms_env, dsout, DRMS_PERMANENT, &status);
+    /* dsout isn't the correct argument to drms_create_record(). dsout is a record-set
+     * specification, but this call takes a seriesname.
+     outrec = drms_create_record(drms_env, dsout, DRMS_PERMANENT, &status); */
+    outrec = drms_create_record(drms_env, seriesout, DRMS_PERMANENT, &status); 
     if (status) DIE("cant create recordset");
     status = drms_copykeys(outrec, inprec, 0, kDRMS_KeyClass_Explicit);
     if (status) DIE("Error in drms_copykeys()");
@@ -147,6 +207,16 @@ int DoIt ()
            if(!status) drms_setkey_double(outrec, "HAEZ_OBS", haez_obs);
          }
        }
+        
+        /* Set RequestID keyword, if it exists. */
+        if (reqid && drms_keyword_lookup(outrec, "RequestID", 0))
+        {
+            if (DRMS_SUCCESS != drms_setkey_string(outrec, "RequestID", reqid))
+            {
+                DIE("Unable to set RequestID in output record.");
+            }
+        }
+        
        if (t_obs < 0) save_rec = 0;
        crpix1 = drms_getkey_float(inprec, "CRPIX1", &status);
        if (status) DIE("CRPIX1 not found!");
