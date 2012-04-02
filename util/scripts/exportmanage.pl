@@ -284,7 +284,7 @@ while (1)
       print LOG $msg;
    }
 
-   if (length($rout) > 0)
+   if (defined($rout) && length($rout) > 0)
    {
       $msg = "$rout\n";
       unless (GetDLogFH(\$dlogfh, $daemonlog))
