@@ -48,6 +48,7 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, "SCALE_CORRECTIONS", "", "scale correction recordset (1 record)"},
      {ARG_FLAG, "M", "0", "SkipMissingFiles - no records if DATAFILE is blank."},
      {ARG_FLAG, "v", "0", "verbose - more diagnostics"},
+     {ARG_FLAG, "z", "0", "Use DPC_SMPL of '60 second' only"},
      {ARG_END}
 };
 
@@ -293,9 +294,9 @@ int DoIt(void)
    int verbose;
    int qualnodata=0x80000000;
    int nRecs, iRec;
-   int qualstat;
+   int qualstat, dpcflag;
    double val;
-   char val1;
+   char *val1;
 # define AU_m (149597870691.0)
    char *inRecQuery, *outRecQuery;
    DRMS_RecordSet_t *inRecSet, *outRecSet; 
@@ -306,6 +307,7 @@ int DoIt(void)
    verbose = cmdparams_get_int(&cmdparams, "v", NULL) != 0;
    char scfilepath[DRMS_MAXPATHLEN];
    char infilepath[DRMS_MAXPATHLEN];
+   dpcflag = params_isflagset(&cmdparams, "z");
 
    if (strcmp(inRecQuery, kNOT_SPEC) == 0 || strcmp(outRecQuery, kNOT_SPEC) == 0)
       DIE("Both the "kRecSetIn" and "kRecSetOut" dataseries must be specified.\n");
@@ -372,16 +374,16 @@ int DoIt(void)
 	  drms_segment_filename(inSeg, filepath);
         else 
           filepath[0] = '\0';
-        //printf("filepath=%s\n",filepath);             
-        //printf("ss=%d\n",access(filepath, R_OK | F_OK));
         val = drms_getkey_time(inRec, "T_OBS",&status);
         val1= drms_getkey_string(inRec,"DPC_SMPL",&status);
-	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0 && val1 == '60 second')
-	  {
-          outSeg = drms_segment_lookupnum(outRec, 0);
-          if (inSeg && outSeg)
+
+	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0)
+	   {
+           if( dpcflag && strcmp(val1,"60 second") == 0)
+           {
+           outSeg = drms_segment_lookupnum(outRec, 0);
+           if (inSeg && outSeg)
             {
-        //    printf("ss=%d\n",iRec);
             DRMS_Array_t *data;
             /* read the data ad doubles so allow rescaling on output */
             data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
@@ -397,28 +399,13 @@ int DoIt(void)
             drms_free_array(data);
             Record_OK = 1;    
 	    quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
-            //printf("qualstat=%d\n",&qualstat);
             quality = quality & (~qualnodata);
-            //printf("QUALITY=%08x\n",quality);
             drms_setkey_int(outRec,"QUALITY",quality);
-
-        //    printf("QUALITY=%08x\n",quality);
-        //  drms_keyword_fprint(stderr, drms_keyword_lookup(iRec, "QUALITY",0));
-        //    printf("QUALITY=%08x, DRMS_MISSING_INT=%08x\n",quality,DRMS_MISSING_INT);
-	//    printf("qualstat=%d\n",qualstat);
-        //    if (quality & 0x40000000) {
-	//      fprintf (stderr, "Error: found bit 30 set in quality (%08x) for record %d\n",
-	//	       quality, iRec);
-	//      return 1;
-	//       }
-	//	if (quality & 0x8a000000) {
-	//	  quality |= 0x40000000;
-	//	  quality &= 0x7fffffff;
-	//	}
 	    }
           else
             DIE("Bad data segment lookup, in or out\n");
-	  }
+	    }
+           }
         else
 	  { /* record is missing, copy t_rec and soho ephemeris keywords anyway*/
           drms_copykey(outRec, inRec, "T_REC");
@@ -440,13 +427,6 @@ int DoIt(void)
           drms_setkey_int(outRec, "QUALITY", 0X80000000);
   	  val = drms_getkey_int(inRec, "DPC", &status);
 	  drms_setkey_int(outRec, "DPC", val);
-
-          // begin qualstat procedure
-	  //qualstat = 0;
-          //int quality = drms_getkey_int(outRec, "QUALITY", &qualstat);
-	  //if (!qualstat)
-	  //  drms_setkey_int(outRec, "QUALITY", 0X80000000 | quality); 
-
 
 	  if (drms_keyword_lookup(outRec, "DATAVALS", 0))
 	    drms_setkey_int(outRec, "DATAVALS", 0);
