@@ -21,6 +21,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, "regrid", "1", "regrid type 0: nearest neighbor, 1: bicubic"},
   {ARG_STRING, "scale_to", "0.6", "rescale to fixed plate scale"},
   {ARG_STRING, "do_stretchmarks", "0", "fill in empty pixels created"},
+  {ARG_STRING, "with_keys", "0", "write segment with all FITS keywords"},
   {ARG_STRING, "requestid", NOT_SPECIFIED, "Export request id if this program was invoked by the export system."},
   {ARG_FLAG, "h", "0", "Print usage message and quit"},
   {ARG_FLAG, "v", "0", "verbose flag"},
@@ -29,6 +30,7 @@ ModuleArgs_t module_args[] =
 
 char *module_name = "aia_lev1p5";
 int despike = 1, rescale = 1, regridtype = 1, verbose = 0, do_stretchmarks = 0;
+int withkeys = 0;
 float scale_to = 0.6, scale_by;
 
 int nice_intro(int help)
@@ -44,6 +46,7 @@ int nice_intro(int help)
         "regrid=0, nearest neighbor, default=1, bicubic\n"
         "scale_to=0.6, rescale to fixed plate scale, default=0.6\n"
         "do_stretchmarks=1, fill in empty pixels created, default=0\n"
+        "with_keys=1, write segment with all FITS keywords, default=0\n"
         "dsinp=<recordset query> as <series>{[record specifier]} - required\n"
         "dsout=<series> - required\n");
     return(1);
@@ -116,6 +119,7 @@ int DoIt ()
   scale_to = cmdparams_get_float(&cmdparams, "scale_to", NULL);
   regridtype = cmdparams_get_int(&cmdparams, "regrid", NULL);
   do_stretchmarks = cmdparams_get_int(&cmdparams, "do_stretchmarks", NULL);
+  withkeys = cmdparams_get_int(&cmdparams, "with_keys", NULL);
   reqid = cmdparams_get_str(&cmdparams, "requestid", NULL);
     
     if (strcmp(reqid, NOT_SPECIFIED) == 0)
@@ -332,7 +336,11 @@ int DoIt ()
         drms_setkey_float(outrec, "CRPIX2", (m + 1.0)*0.5);
         drms_setkey_float(outrec, "X0", 0.0);
         drms_setkey_float(outrec, "Y0", 0.0);
-        drms_segment_write(outseg, outarr, 0);
+        if (withkeys) {
+          drms_segment_writewithkeys(outseg, outarr, 0);
+         } else {
+          drms_segment_write(outseg, outarr, 0);
+        }
         if (inparr) drms_free_array(inparr);
         if (output_array) free(output_array);
         if (outarr) drms_free_array(outarr);
