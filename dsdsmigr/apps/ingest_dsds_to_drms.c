@@ -295,6 +295,7 @@ int DoIt(void)
    int nRecs, iRec;
    int qualstat;
    double val;
+   char val1;
 # define AU_m (149597870691.0)
    char *inRecQuery, *outRecQuery;
    DRMS_RecordSet_t *inRecSet, *outRecSet; 
@@ -374,7 +375,8 @@ int DoIt(void)
         //printf("filepath=%s\n",filepath);             
         //printf("ss=%d\n",access(filepath, R_OK | F_OK));
         val = drms_getkey_time(inRec, "T_OBS",&status);
-	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0)
+        val1= drms_getkey_string(inRec,"DPC_SMPL",&status);
+	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0 && val1 == '60 second')
 	  {
           outSeg = drms_segment_lookupnum(outRec, 0);
           if (inSeg && outSeg)
