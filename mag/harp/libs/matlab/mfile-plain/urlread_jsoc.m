@@ -1,4 +1,4 @@
-function [output,status] = urlread_jsoc(urlChar,method,params)
+function [output,status,req] = urlread_jsoc(urlChar,method,params)
 %URLREAD_JSOC Returns the contents of a URL as a string (JSOC authentication)
 %
 %   S = URLREAD('URL') reads the content at a URL into a string, S.  If the
@@ -38,7 +38,7 @@ function [output,status] = urlread_jsoc(urlChar,method,params)
 
 %   Matthew J. Simoneau, 13-Nov-2001
 %   Copyright 1984-2008 The MathWorks, Inc.
-%   $Revision: 1.1 $ $Date: 2012/01/19 18:22:49 $
+%   $Revision: 1.2 $ $Date: 2012/04/05 16:31:35 $
 
 % This function requires Java.
 if ~usejava('jvm')
@@ -52,7 +52,10 @@ com.mathworks.mlwidgets.html.HTMLPrefs.setProxySettings
 
 % Check number of inputs and outputs.
 error(nargchk(1,3,nargin))
-error(nargoutchk(0,2,nargout))
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% turmon: allow three output args
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+error(nargoutchk(0,3,nargout))
 if ~ischar(urlChar)
     error('MATLAB:urlread:InvalidInput','The first input, the URL, must be a character array.');
 end
@@ -61,11 +64,29 @@ if (nargin > 1) && ~strcmpi(method,'get') && ~strcmpi(method,'post')
 end
 
 % Do we want to throw errors or catch them?
-if nargout == 2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% turmon: catch errors if 2 or 3 outputs requested
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+if nargout >= 2
     catchErrors = true;
 else
     catchErrors = false;
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% turmon: extract username:password from url, if it's there
+% form expected: http://user:pass@site
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+m = regexp(urlChar, '^https?://(?<name>\w+):(?<pwd>.*)@\w+', 'names');
+if isempty(m),
+  % no match
+  auth = '';
+else,
+  % yes match
+  auth = base64encode(sprintf('%s:%s', m.name, m.pwd), '');
+end;
+clear m
+
 
 % Set default outputs.
 output = '';
@@ -84,18 +105,31 @@ if (nargin > 1) && strcmpi(method,'get')
     end
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% turmon: save request URL as sent
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+req = urlChar;
 % Create a urlConnection.
 [urlConnection,errorid,errormsg] = urlreadwrite(mfilename,urlChar);
 if isempty(urlConnection)
-    if catchErrors, return
-    else error(errorid,errormsg);
+    fprintf(2, '%s: HTTP connection %s failed to open: %d, %s\n', ...
+            mfilename, req, errorid, errormsg);
+    if catchErrors, 
+      % turmon: return error message through output; they asked for status
+      output = sprintf('connection failed to open -- HTTP %d -- %s', errorid, errormsg);
+      return;
+    else,
+      error(errorid,errormsg);
     end
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% turmon this is the base64 encoding of hmiteam:hmiteam
-urlConnection.setRequestProperty('Authorization','Basic aG1pdGVhbTpobWl0ZWFt');
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% turmon this is the base64 encoding of user:pass, if it was given
+% e.g., hmiteam:hmiteam is: aG1pdGVhbTpobWl0ZWFt
+if ~isempty(auth),
+  urlConnection.setRequestProperty('Authorization',['Basic ' auth]);
+end;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % POST method.  Write param/values to server.
 if (nargin > 1) && strcmpi(method,'post')
@@ -112,8 +146,11 @@ if (nargin > 1) && strcmpi(method,'post')
         end
         printStream.close;
     catch
-        if catchErrors, return
-        else error('MATLAB:urlread:ConnectionFailed','Could not POST to URL.');
+        if catchErrors, 
+          output = 'connection failed -- error on POST to URL';
+          return;
+        else,
+          error('MATLAB:urlread:ConnectionFailed','Could not POST to URL.');
         end
     end
 end
@@ -129,8 +166,12 @@ try
     byteArrayOutputStream.close;
     output = native2unicode(typecast(byteArrayOutputStream.toByteArray','uint8'),'UTF-8');
 catch
-    if catchErrors, return
-    else error('MATLAB:urlread:ConnectionFailed','Error downloading URL. Your network connection may be down or your proxy settings improperly configured.');
+    fprintf(2, '%s: error downloading URL after HTTP GET: %s\n', mfilename, req);
+    if catchErrors, 
+      output = 'connection failed -- error downloading URL after HTTP GET';
+      return;
+    else,
+      error('MATLAB:urlread:ConnectionFailed','Error downloading URL. Your network connection may be down or your proxy settings improperly configured.');
     end
 end
 

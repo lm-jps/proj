@@ -1,23 +1,23 @@
-function [q,ok]=hmiquality(trec)
+function [q,ok,msg]=hmiquality(trec)
 %hmiquality	find quality parameter from HMI T_REC index
 % 
-% [q,ok]=hmiquality(trec)
+% [q,ok,msg]=hmiquality(trec)
 % * Given a T_REC index, finds the quality parameter which lives
 % in the QUALITY keyword.
 % * If two outputs are given, also finds ok, a boolean value which
 % tells if the quality is sufficient for most operations.
+% * If three outputs are given, also returns a descriptive error
+% message upon error, or empty if no error.  In this case, no errors
+% are thrown.
 % * A typical T_REC is: 2010.07.03_13:12:00_TAI
-% * Given a list of T_REC's, returns the quality parameter for each one.
-% The list of strings can be a cell array or a string array, with the
-% strings "stacked vertically" in each case; see cellstr for example.
-% If a cell array is used, it must be nf-by-1.
 % 
 % Inputs:
 %   string trec(nf);        -- a valid time index
 % 
 % Outputs:
-%   real q(nf);
-%   bool ok(nf);
+%   real q;
+%   bool ok;
+%   string msg;
 % 
 % See Also:
 
@@ -28,26 +28,26 @@ function [q,ok]=hmiquality(trec)
 % Error checking
 % 
 if all(nargin  ~= [1]), error ('Bad input arg number'); end;
-if all(nargout ~= [0 1 2]), error ('Bad output arg number'); end;
+if all(nargout ~= [0 1 2 3]), error ('Bad output arg number'); end;
+
+do_err_out = (nargout < 3); % otherwise, return an error message
 
 %
 % Computation
 % 
 
-% convert input to cell array
-if ischar(trec),
-  trec = cellstr(trec);
-end;
+% default return values in case of early exit
+q = [];
+ok = [];
+msg = '';
 
-% initialize sizes
-nf = size(trec,1);
-q  = zeros(nf,1); 
-ok = false(nf,1);
-
-% try to find disk metadata in these data series
-Parents = { 'hmi.M_720s', 'hmi.M_720s_nrt' };
-
-key_query = 'key=QUALITY';
+% look for metadata in this data series
+nrt_mode = hmi_property('get', 'nrt_mode');
+if nrt_mode,
+  parent = 'hmi.M_720s_nrt';
+else,
+  parent = 'hmi.M_720s';
+end
 
 % this mask contains the OR of:
 %   QUAL_NODATA:  0x80000000 -- the MSB is set when there is no LOS observable produced
@@ -57,28 +57,59 @@ key_query = 'key=QUALITY';
 % the eclipses are seen around 2011.03.04_12:36_TAI, and possibly again in feb-mar 2012.
 bad_quality = hex2dec('80000200');
 
-% begin getting keywords
-for f = 1:nf,
-  for parent = Parents,
-    query = sprintf('%s[%s]&%s', parent{1}, trec{f}, key_query);
-    a = rs_list(query, 'web_access');
-    if a.count > 0,
-      break; % found the QUALITY
-    end;
+% get keywords
+series = sprintf('%s[%s]', parent, trec);
+if do_err_out,
+  % do not ask for msg argument -- will error out if QUALITY is not present
+  a = rs_list(series, {'key', 'QUALITY'});
+else,
+  % ask for msg argument
+  [a,msg] = rs_list(series, {'key', 'QUALITY'});
+  if ~isempty(msg),
+    % q and ok already set up
+    return;
   end;
-  if a.count == 0,
-    error('Did not find quality bits for %s', trec{f});
-  end;
-  q1 = jsoc_cell2struct_keys(a.keywords);
-  qstr = q1.quality{1}; % the string
-  qchr = qstr(3:end); % mask off the leading 0x
-  qnum = hex2dec(qchr); % actually a double
+end;  
 
-  % insert the numeric quality (a 32-bit integer stored as a double)
-  q(f) = qnum;
-  % insert the "ok for tracking purposes" flag
-  ok(f) = bitand(qnum, bad_quality) == 0;
+% insist on exactly one response
+if a.count ~= 1,
+  msg = sprintf('Response for %s for QUALITY had count = %d, needed 1', series, a.count);
+  if do_err_out,
+    error(msg);
+  else,
+    % q and ok already set up
+    return;
+  end;
 end;
+
+q1 = jsoc_cell2struct_keys(a.keywords);
+
+if ~isfield(q1, 'quality'),
+  msg = sprintf('Keyword response for %s for QUALITY not present', series);
+  if do_err_out,
+    error(msg);
+  else,
+    % q and ok already set up
+    return;
+  end;
+end;
+
+if length(q1.quality) ~= 1,
+  msg = sprintf('Keyword response for %s for QUALITY wrong length', series);
+  if do_err_out,
+    error(msg);
+  else,
+    % q and ok already set up
+    return;
+  end;
+end;
+
+qstr = q1.quality{1}; % the string
+qchr = qstr(3:end); % mask off the leading 0x
+q = hex2dec(qchr); % 32-bit integer stored as a double
+
+% insert the "ok for tracking purposes" flag
+ok = bitand(q, bad_quality) == 0;
 
 return;
 end

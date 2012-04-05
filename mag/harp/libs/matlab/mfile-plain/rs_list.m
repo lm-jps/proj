@@ -1,30 +1,28 @@
-function [res,msg] = rs_list(query, method)
-% rs_list	return result from jsoc_info op=rs_list
+function varargout = rs_list(series, varargin)
+% rs_list	return result from jsoc_info op=rs_list ds=series
 %
-% [res,msg] = rs_list(query, method)
+% [res,msg] = rs_list(series, params, method, retries)
 % * Invoke jsoc_info, op=rs_list, using the given query.  This can 
 % return lists of keywords, or segments, or links, or any combination
 % thereof.
+% * The params argument is an even-length cell array containing 
+% pairs of parameters for rs_list, most importantly: 'key' for a keyword list,
+% 'seg' for segments, and 'link' for links.
 % * If method contains 'web' (the default) the CGI gateway speaking JSON 
-% over http will be used.  This works remotely.  If method is 'system', 
+% over http will be used.  This works remotely.  If method is 'shell', 
 % the system jsoc_info command will be run and its output intercepted.
-% * If method contains 'verbose' (not the default), a printed summary
-% of the result will be shown.
-% * This routine queries jsoc2.stanford.edu, and re-tries twice on 
-% failure.
 % * If the second output, msg, is not requested, errors will result if
 % there is no response from JSOC.  If msg is requested, it will be 
 % empty if no error, or a descriptive string if there was an error, but
 % an error will not be raised for communication or parsing failures.
 %
-% Examples: 
-%   res = rs_list('hmi.M_720s[$]&key=T_OBS')
-%   res = rs_list('hmi.M_720s[$]&key=T_OBS','web');
-%   [res,msg] = rs_list('hmi.M_720s[2010.06.01/1d]&key=T_OBS','web');
+% Usage: 
+%   res = rs_list('hmi.M_720s[$]', {'key', 'T_REC,QUALITY'})
+%   [res,msg] = rs_list('hmi.M_720s[2010.06.01/1d]', {'key','T_REC','seg','**ALL**'})
 % 
 % Inputs:
 %   string query
-%   opt string method = 'web'
+%   opt string method
 % 
 % Outputs:
 %   struct res
@@ -38,136 +36,51 @@ function [res,msg] = rs_list(query, method)
 % 
 % Error checking
 % 
-if nargin < 1 || nargin > 2,
-  error('Need 1 or 2 input arguments');
+if nargin < 1 || nargin > 4,
+  error('Need 1 to 4 input arguments');
 end
-% input defaults
-if nargin < 2, method = 'web'; end;
-% parameter defaults
-% abs() = between-try delay in s, [] for no retries, <0 for announcement
-%  (set to announce for long delays)
-retries = [0.1 10 -60 -60 -60]; 
-host = 'jsoc2.stanford.edu';
 
+% set up output args (length must pass down to jsoc_info)
+varargout = cell(1, max(1,nargout));
 
-%
-% Computation
-% 
+% allow jsoc_info_request to handle argument defaults
+% note: params is always {}
+[varargout{:}] = jsoc_info_request('rs_list', series, varargin{:});
 
-% Check for web or local (default)
-use_ajax = ~isempty(strfind(method, 'web'));
-verbose = ~isempty(strfind(method, 'verbose'));
+% always can count on the result
+res = varargout{1}; 
+
+% if status OK, validate res
+must_exist = {'keywords', 'segments', 'links'};
+msg = '';
+EFMT = sprintf('%s: Error at %s: %%s.', mfilename, datestr(now));
+if ~isempty(res) && res.status == 0,
+  % OK: check fields
+  if ~isfield(res, 'count'),
+    msg = sprintf(EFMT, 'Missing count field in result, this should not happen.');
+  elseif res.count > 0,
+    % yes, it does not return other fields if count is zero
+    not_exist = ~isfield(res, must_exist);
+    if any(not_exist),
+      missing = sprintf('%s,', must_exist{not_exist});
+      msg = sprintf(EFMT, ['Missing field(s) in result: ' ...
+                          missing ...
+                          ' this should not happen.']);
+    end;
+  end;
+end;
 
 % allow error() exit if true
 do_err_out = (nargout < 2);
-res = [];
 
-if use_ajax,
-  % url escape, replacing spaces with &
-  query2 = regexprep(query, ' ', '&');
-  query_url = sprintf('http://%s/cgi-bin/ajax/jsoc_info?op=rs_list&ds=%s',...
-                      host, query2);
-  max_try = length(retries)+1;
-  for ntry = 1:max_try,
-    [json_content,status] = urlread_jsoc(query_url);
-    if status == 1, 
-      break; % success
-    end;
-    % retry mechanism: a bit baroque
-    if ntry < max_try,
-      % more tries remain
-      msg = 'Retrying after pause.';
-      delay = retries(ntry);
-    else,
-      % the last try failed
-      msg = 'Giving up.';
-      delay = -0.001; % tiny delay, with announcement
-    end;
-    if delay < 0,
-      fprintf('%s: Query %d of %d failed.  %s\n', mfilename, ntry, max_try, msg);
-    end;
-    pause(abs(delay)); % can have delay < 0
-    % (go on to retry as permitted)
+% act on msg if it is nonempty
+if ~isempty(msg),
+  if do_err_out,
+    error(msg);
+  elseif isempty(varargout{2}),
+    varargout{2} = msg;
   end;
-  if status == 0,
-    % failed
-    msg = sprintf('urlread_jsoc failed (%s)', query_url);
-    res = json_content;
-    if do_err_out, error(msg); else, return; end;
-  end;
-
-else,
-  % shell out to a system command
-  line = strcat('jsoc_info op=rs_list ds=', query);
-  % escape shell metacharacters, esp. []
-  line_e = regexprep(line, '([\[\]{}])','\\$1');
-  [status,res] = system(line_e);
-  if status ~= 0,
-    msg = sprintf('jsoc_info system call (%s) failed: %s', line_e, res);
-    if do_err_out, error(msg); else, return; end;
-  end;
-  % a valid message always starts with this...
-  % remove it in a way that is efficient even for long result strings.
-  json_header = 'Content-type: application/json';
-  if length(res) >= length(json_header) &&  ...
-        strcmp(res(1:length(json_header)), json_header) == 1,
-    json_content = res(length(json_header)+1:end);
-  else,
-    json_content = json_header;
-  end;
-end
-
-% parse the JSON response
-[res,msg1] = parse_json(json_content);
-if ~isempty(msg1),
-  fprintf('rs_list: failed parse.\n  query = %s\n  reply length = \n', ...
-          query, length(json_content));
-  fprintf('rs_list: reply follows:\n%s', json_content);
-  % failed
-  msg = sprintf('could not parse json reply (%s)', msg1);
-  if do_err_out, error(msg); else, return; end;
 end;
-% Note: status type is double
-if res.status > 0, 
-  msg = sprintf('Error response from JSOC (status = %g)', res.status);
-  if do_err_out, error(msg); else, return; end;
-end
-
-%
-% Display the response...this is getting into the weeds
-%
-if verbose,
-  % Keywords {'name': , 'type': , 'units': , 'note': }
-  fprintf('\nKeywords:\n');
-  for k = 1:length(res.keywords),
-    fprintf ('  %s\n',res.keywords{k}.name);  
-  end
-  % Records found
-  fprintf('\nTotal records found: %d\n',res.count);
-  for j = 1:res.count,
-    for k = 1:length(res.keywords),
-      if ischar(res.keywords{k}.values{j})
-        fprintf('%s\t',res.keywords{k}.values{j});
-      else
-        fprintf('%f\t',res.keywords{k}.values{j});            
-      end
-    end
-    fprintf('\n');
-  end
-  % Segments
-  fprintf('\nSegments:\n');
-  for k=1:length(res.segments)    
-    fprintf ('  %s\n',res.segments{k}.name);
-    disp(res.segments{k})
-  end
-  % Links
-  fprintf('\nLinks:\n');
-  for k=1:length(res.links)    
-    fprintf ('  %s\n',res.link{k}.name);
-  end
-end; % if verbose
-
-msg = ''; % signals OK
 
 return
-
+end

@@ -79,6 +79,12 @@ if ~exist('params', 'var'),
   params = '';
 end;
 
+% set up NRT mode if mag_series contains _nrt
+%   (used internally for WCS and QUALITY)
+if ~isempty(strfind(mag_series, '_nrt')),
+    hmi_property('set', 'nrt_mode', 1);
+end;
+
 % Echo what we're about to do
 if first_track == 0,
   first_run_string = 'Appending to ';
@@ -146,7 +152,8 @@ if length(params) > 0,
 end;
 
 % handlers for utilities, abstracted from the tracker itself
-hooks.load_meta      = @hmidisk;
+hooks.load_meta      = @(t)(hmidisk(t, 'geom,vector,quiet'));
+hooks.load_quality   = @hmiquality;
 hooks.save_track     = @hmi_save_track_production;
 hooks.init_run       = @hmi_init_run_production;
 hooks.loop_hook      = 'hmi_loop_hook_local'; % a script, not a function

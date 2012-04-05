@@ -1,67 +1,45 @@
-% rs_summary.m
+function varargout = rs_summary(series, varargin)
+% rs_summary	find: jsoc_info op=rs_summary ds=series
 %
-% Usage  : rs_summary series_name
-% Example: rs_summary ('hmi.lev0e')
-%          results = rs_summary('hmi.lev0e', 'web_access')
+% [res,msg] = rs_summary(series, method, retries)
+% * Invoke jsoc_info, op=rs_summary, using the given series.
+% * See jsoc_info_request for more on the method and retries arguments.
+% * If the second output, msg, is not requested, errors will result if
+% there is no response from JSOC.  If msg is requested, it will be 
+% empty if no error, or a descriptive string if there was an error, but
+% an error will not be raised for communication or parsing failures.
+% * So, if you request the msg output, you *must* check it to be sure it
+% is empty, before using res.
 %
-% Note: if (2nd parameter == 'web_access'), go through web server
-%       default call jsoc_info directly
+% Usage: 
+%   res = rs_summary('hmi.M_720s')
+%   [res,msg] = rs_summary('hmi.M_720s','shell')
+% 
+% Inputs:
+%   string series
+%   opt string method
+%   opt real retries
+% 
+% Outputs:
+%   struct res
+%   string msg
+%    
+% See Also: jsoc_info_request
 
-function results = rs_summary(series_name, web_access)
 
-% Check series_name
-if (nargin <1)
-    fprintf ('Series name not specified.\n\n');
-    return;
+% 
+% Error checking
+% 
+if nargin < 1 || nargin > 3,
+  error('Need 1 to 3 input arguments');
 end
 
-% Check web_access or local (defaul)
-if ((nargin > 1) & (web_access == 'web_access'))
-    web_access = true;
-else
-    web_access = false;   
-end
+% set up output args (length must pass down to jsoc_info)
+varargout = cell(1, max(1,nargout));
 
-
-if (web_access == true)
-    
-    try 
-        line = strcat('http://jsoc2.stanford.edu/cgi-bin/ajax/jsoc_info?op=rs_summary&ds=',series_name);
-        json_content = urlread_jsoc(line);  
-    catch
-        disp(lasterror);
-        fprintf('Fail to get a response from JSOC\n');
-        return;      
-    end
-    
-else
-    
-    line = strcat('jsoc_info op=rs_summary ds=',series_name);
-    % escape shell metacharacters, esp. []
-    line_e = regexprep(line, '([\[\]{}])','\\$1');
-    [status results] = system(line_e);
-    if status > 0,
-        error('system call <%s> failed', line_e);
-    end;
-    % a valid message always starts with this...
-    % remove it in a way that is efficient even for long result strings.
-    json_header = 'Content-type: application/json';
-    if length(results) >= length(json_header) &&  ...
-        strcmp(results(1:length(json_header)), json_header) == 1,
-        json_content = results(length(json_header)+1:end);
-    else,
-        json_content = json_header;
-    end;
-end
-
-% turmon: change API to handle old matlabs
-[results,err] = parse_json(json_content);
-if ~isempty(err),
-   error('could not parse json reply: %s', err);
-end;
-
-if nargout == 0, 
-  disp(results);
-end;
+% allow jsoc_info_request to handle argument defaults
+% note: params is always {}
+[varargout{:}] = jsoc_info_request('rs_summary', series, {}, varargin{:});
 
 return
+end

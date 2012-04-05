@@ -24,7 +24,8 @@ function res=track_hmi_loop(fn, s_time, im, hooks)
 %   - first_track: 0 -> restart from saved state; >0 -> TID of first track
 %   - retain_history: inf -> retain all; integer -> retain n chips
 %   - filename: filename template info (struct)
-%   - load_meta: loads a mask's metadata
+%   - load_meta: loads a mask's geometry metadata
+%   - load_quality: loads a mask's quality metadata
 %   - save_track: saves a track (list-of-chips) to disk, DB, etc.
 %   - loop_hook: script called near end of track match process
 %   - find_roi: given segmentation, finds ROIs
@@ -109,12 +110,23 @@ if length(ROI_rgn.firstfile) == 0,
 end;
 
 % check the QUALITY at the current time
-[q,q_ok] = hmiquality(fn);
-if ~q_ok,
+[q,q_ok,msg] = hooks.load_quality(fn);
+if ~isempty(msg),
+  res = msg; % will continue
+  return;
+elseif ~q_ok,
   res = sprintf('Bad quality 0x%08x.  Skipping the image at %s', q, fn);
   return;
 end;
-clear q q_ok
+clear q q_ok msg
+
+% get geometry 5-tuple, msg is error message or ''
+[s_geom,msg] = hooks.load_meta(fn);
+if ~isempty(msg),
+  res = msg; % will continue
+  return;
+end;
+clear msg
 
 % image will be processed by this tracker: update its number
 ROI_rgn.imagenum = ROI_rgn.imagenum + 1; % have done one more image
@@ -138,10 +150,6 @@ tkp_pixpad = 4;
 
 % get observation time for catfiles
 s_timeS = [datestr(s_time,10) '/' datestr(s_time,6) ' ' datestr(s_time,13) ];
-% get geometry info for later
-[s_Cx,s_Cy,s_rsun,s_b0,s_p0] = hooks.load_meta(fn); % geometry info
-s_geom = [s_Cx s_Cy s_rsun s_b0 s_p0];
-clear s_Cx s_Cy s_rsun s_b0 s_p0; % keep namespace clean
 % demote the active tracks by one image
 tlist = find(([ROI_t(:).tid] >= 0) & ([ROI_t(:).state] <= 0));
 for t = tlist, ROI_t(t).state = ROI_t(t).state-1; end;

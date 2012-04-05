@@ -47,15 +47,21 @@ nf = length(trec);
 % source for NOAA metadata, maintained by Rick's scripts
 source = 'su_rsb.NOAA_ActiveRegions';
 % which keys to get
-key_query = 'key=**ALL**';
+key_query = {'key', '**ALL**'};
 % date string format (omit trailing 'Z')
 date_fmt = 'yyyy.mm.dd_HH:MM:SS';
 
 % begin getting keywords
 ars = [];
 for f = 1:nf,
-  query = sprintf('%s[%s]&%s', source, trec{f}, key_query);
-  a = rs_list(query, 'web_access');
+  series = sprintf('%s[%s]', source, trec{f});
+  [a,msg] = rs_list(series, key_query);
+  if ~isempty(msg),
+    ar1 = hmi_noaa_info_empty();
+    warning('hmi_base:no_noaa_response', ...
+            'Error getting NOAA info for %s, leaving empty, continuing:\n%s', ...
+            trec{f}, msg);
+  end;
   if a.count == 0,
     ar1 = hmi_noaa_info_empty();
     % can turn off with warning('off','hmi_base:no_noaa_info')

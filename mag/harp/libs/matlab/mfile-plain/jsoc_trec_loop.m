@@ -84,15 +84,16 @@ end;
 % 1: Read reference series to get times
 %
 % retrieve T_REC's and data segments
-a = rs_list(sprintf('%s key=T_REC', lsts{1}), 'web_access');
+a = rs_list(lsts{1}, {'key', 'T_REC'});
 if a.status > 0,
   error('Could not get T_RECs for %s (rs_list failed)', lsts{1});
 end;
+% rs_list checks this already
 if ~isfield(a, 'count'),
   error('Could not get T_RECs for %s (rs_list had no count)', lsts{1});
 end;
 if a.count == 0,
-  % empty T_REC list, but a.status ==0: this is OK
+  % empty T_REC list, but a.status == 0: this is OK
   TRECs = {};
   nTREC = 0;
 else,
@@ -266,7 +267,8 @@ for i = 1:Nimg,
   seg1 = segnames{i};
   obj1 = sprintf('%s[%s]', ds1, trec1);
   % query JSOC to locate the segment
-  a = rs_list(sprintf('%s&seg=%s', obj1, seg1), 'web_access');
+  % NB: this errors out if JSOC does not respond
+  a = rs_list(obj1, {'seg', seg1});
   if a.status > 0,
     err = sprintf('Failed to load %s, not found by rs_list\n', obj1);
     return;
@@ -363,9 +365,9 @@ for i = 1:length(dsnames),
     return;
   end;
   % check that it's present
-  s = rs_summary(ds1, 'web_access');
+  s = rs_list(sprintf('%s[$]', ds1));
   if s.status > 0,
-    trec_spec = sprintf('Series %s appears invalid to series_info', ds1);
+    trec_spec = sprintf('Series %s appears invalid to rs_list', ds1);
     return;
   end;
 end;

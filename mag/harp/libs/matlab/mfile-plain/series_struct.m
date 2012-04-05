@@ -1,69 +1,53 @@
-% series_struct.m
+function varargout = series_struct(series, varargin)
+% [res,msg] = series_struct(series, method, retries)
+% * Invoke jsoc_info, op=series_struct, using the given series.
+% * See jsoc_info_request for more on the method and retries arguments.
+% * If the second output, msg, is not requested, errors will result if
+% there is no response from JSOC.  If msg is requested, it will be 
+% empty if no error, or a descriptive string if there was an error, but
+% an error will not be raised for communication or parsing failures.
+% * So, if you request the msg output, you *must* check it to be sure it
+% is empty, before using res.
 %
-% Usage  : series_struct series_name
-% Example: series_struct hmi.lev0e  
-%          a = series_struct ('hmi.lev0e', 'web_access')
-%
+% Usage: 
+%   res = series_struct('hmi.M_720s')
+%   series_struct('hmi.M_720s', 'verbose')
+% 
+% Inputs:
+%   string series
+%   opt string method
+%   opt real retries
+% 
+% Outputs:
+%   struct res
+%   string msg
+%    
+% See Also: jsoc_info_request
 
-function results = series_struct(series_name, web_access)
-
-% Check series_name
-if (nargin <1)
-    fprintf ('Series name not specified.\n\n');
-    return;
+% 
+% Error checking
+% 
+if nargin < 1 || nargin > 3,
+  error('Need 1 to 3 input arguments');
 end
 
-% Check web_access or local (default)
-if ((nargin > 1) & (web_access == 'web_access'))
-    web_access = true;
-else
-    web_access = false;   
-end
+% verbosity
+if nargin >= 2, 
+  verbose = ~isempty(strfind(varargin{1}, 'verbose'));
+else,
+  verbose = false;
+end;
 
-% default to *not* printing the response
-verbose = false;
+% set up output args (length must pass down to jsoc_info)
+varargout = cell(1, max(1,nargout));
 
-if (web_access == true)
+% allow jsoc_info_request to handle argument defaults
+% note: params is always {}
+[varargout{:}] = jsoc_info_request('series_struct', series, {}, varargin{:});
 
-    try
-        url_string = strcat('http://jsoc2.stanford.edu/cgi-bin/ajax/jsoc_info?op=series_struct&ds=',series_name);
-        json_content = urlread_jsoc(url_string);
+if verbose && isfield(varargout{1}, 'status') && varargout{1}.status == 0,
+  results = varargout{1};
   
-        % turmon: change API to handle old matlabs
-        [results,err] = parse_json(json_content);
-        if ~isempty(err),
-           error('could not parse json reply: %s', err);
-        end;
-    catch
-        disp(lasterror);
-    return;
-end
-
-if (results.status > 0) % Note: status type is double
-    fprintf ('Fail to get a response from JSOC\n');
-    return;
-end
-
-else
-
-    line = strcat('jsoc_info op=series_struct ds=',series_name);
-    [status results] = system(line);
-    if status > 0,
-      error('system call to <%s> failed', line);
-    end;
-    json_content = regexprep(results,'Content-type: application/json',''); % remove this line
-
-    % turmon: change API to handle old matlabs
-    [results,err] = parse_json(json_content);
-    if ~isempty(err),
-       error('could not parse json reply: %s', err);
-    end;
-
-end
-
-
-
-if verbose,
   % Keywords {'name': , 'type': , 'units': , 'note': }
   fprintf('\nKeywords:\n');
   for k=1:length(results.keywords)    
@@ -96,3 +80,5 @@ if verbose,
 end;
 
 return
+end
+
