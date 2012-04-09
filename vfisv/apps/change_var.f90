@@ -31,7 +31,7 @@ CONTAINS
     ! We compute sqrt(eta0)*DopplerWidth instead DopplerWidth
     MODELC(5) = MODEL(5) * dsqrt(MODEL(1)) 
     ! We compute the sum of the Source Function and its gradient instead of its gradient.
-    MODELC(9) = MODEL(9) + MODEL(8) 
+    !MODELC(9) = MODEL(9) + MODEL(8) 
 
   END SUBROUTINE DO_CHANGE_VAR
 !
@@ -54,9 +54,32 @@ CONTAINS
     DMODEL(5) = (DMODEL(5) - 0.5/DSQRT(INMODEL(1))*INMODEL(5)*DMODEL(1)) / &
          (DSQRT(INMODEL(1)))
 !         (0.5/DSQRT(INMODEL(1))*DMODEL(1) + DSQRT(INMODEL(1)))
-    DMODEL(9) = DMODEL(9) - DMODEL(8)
+    !DMODEL(9) = DMODEL(9) - DMODEL(8)
+
 
   END SUBROUTINE UNDO_CHANGE_DMODEL
+
+  SUBROUTINE UNDO_CHANGE_DMODEL_FINITE(INMODEL, DMODEL)
+
+    USE CONS_PARAM
+    USE FILT_PARAM
+    IMPLICIT NONE
+    
+    REAL(DP),   DIMENSION(10)          :: INMODEL, DMODEL
+    REAL(DP)                           :: MODELP1, MODELP5
+    
+    ! INMODEL is the original model (no variable change)
+    ! DMODEL is the perturbation obtained from the inversion, with variable change. 
+    ! We overwrite it to obtained the perturbation to the original variables
+
+! Get perturbed model in new variables
+    MODELP1 = INMODEL(1)+DMODEL(1)
+    MODELP5 = INMODEL(5)*dsqrt(INMODEL(1))+DMODEL(5)
+    if (MODELP1.lt.0.001) MODELP1=0.001 ! Avoid negative eta0
+    DMODEL(5)=MODELP5/dsqrt(MODELP1)-INMODEL(5) ! orig perturbed - orig input
+!    DMODEL(9)=DMODEL(9)-DMODEL(8) ! Simplified version
+
+  END SUBROUTINE UNDO_CHANGE_DMODEL_FINITE
 
 !
 ! -------------------------------------------------------
@@ -69,25 +92,28 @@ CONTAINS
     USE FILT_PARAM
     IMPLICIT NONE
     
-    REAL(DP),   DIMENSION(10)          :: INMODEL, CHMODEL
+    REAL(DP),   DIMENSION(10)          :: INMODEL
     REAL(DP), INTENT(OUT),  DIMENSION(10,NBINS,4) :: DSYN
 
     ! INMODEL is the original model with no variable change
     ! CHMODEL is the model with the variable change.
-    ! DSYN are the derivatives without the variable change. They are overwritten with 
-    ! those that do have the change in variable.
+    ! DSYN are the derivatives without the variable change.
+    ! They are overwritten with those that do have the change in variable.
 
-
-    CALL DO_CHANGE_VAR(INMODEL, CHMODEL)
+    !CALL DO_CHANGE_VAR(INMODEL, CHMODEL)
 
     ! For eta0*DopplerWidth 
-    DSYN(1,:,:)=DSYN(1,:,:)-0.5*CHMODEL(5)/CHMODEL(1)/dsqrt(CHMODEL(1))*DSYN(5,:,:)
-    DSYN(5,:,:)=DSYN(5,:,:)/dsqrt(CHMODEL(1)) 
+    !DSYN(1,:,:)=DSYN(1,:,:)-0.5*CHMODEL(5)/CHMODEL(1)/dsqrt(CHMODEL(1))*DSYN(5,:,:)
+    !DSYN(5,:,:)=DSYN(5,:,:)/dsqrt(CHMODEL(1)) 
+    
+    ! No need to use transformed variables
+    DSYN(1,:,:)=DSYN(1,:,:)-0.5*INMODEL(5)/INMODEL(1)*DSYN(5,:,:)
+    DSYN(5,:,:)=DSYN(5,:,:)/dsqrt(INMODEL(1)) 
     ! For Source Function + Gradient
-    DSYN(8,:,:)=DSYN(8,:,:)-DSYN(9,:,:)
+    !DSYN(8,:,:)=DSYN(8,:,:)-DSYN(9,:,:)
 
   END SUBROUTINE DO_CHANGE_DER
 
 
 END MODULE CHANGE_VAR
-!CVSVERSIONINFO "$Id: change_var.f90,v 1.1 2011/10/14 17:24:47 keiji Exp $"
+!CVSVERSIONINFO "$Id: change_var.f90,v 1.2 2012/04/09 22:20:31 keiji Exp $"

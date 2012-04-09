@@ -10,4 +10,4 @@ MODULE VOIGT_DATA
   REAL(DP),   DIMENSION(3000)  :: FF, HH, UU
   !
 END MODULE VOIGT_DATA
-!CVSVERSIONINFO "$Id: voigt_data.f90,v 1.3 2011/10/14 17:23:36 keiji Exp $"
+!CVSVERSIONINFO "$Id: voigt_data.f90,v 1.4 2012/04/09 22:22:03 keiji Exp $"

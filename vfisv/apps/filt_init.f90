@@ -29,7 +29,7 @@ SUBROUTINE FILT_INIT (NUM_LAMBDA_FILTER, NUM_TUNNING, WSPACING, NUM_LAMBDA_LONG)
    !-------------------------------------------------------------
    ! Allocating arrays
    !-------------------------------------------------------------
-   ALLOCATE (FILTER(NUMW,NBINS),TUNEPOS(NBINS))
+!   ALLOCATE (FILTER(NUMW,NBINS),TUNEPOS(NBINS))
    !-------------------------------------------------------------
 
    ! TUNEPOS is used in wfa_guess to calculate velocity guess
@@ -38,4 +38,4 @@ SUBROUTINE FILT_INIT (NUM_LAMBDA_FILTER, NUM_TUNNING, WSPACING, NUM_LAMBDA_LONG)
    ENDDO
 
 END SUBROUTINE FILT_INIT
-!CVSVERSIONINFO "$Id: filt_init.f90,v 1.4 2011/10/14 17:22:14 keiji Exp $"
+!CVSVERSIONINFO "$Id: filt_init.f90,v 1.5 2012/04/09 22:20:44 keiji Exp $"

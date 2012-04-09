@@ -8,18 +8,29 @@ SUBROUTINE FREE_INIT (LIST_FREE_PARAMS)
   USE FILT_PARAM
   IMPLICIT NONE
   INTEGER, INTENT(IN), DIMENSION(10)         :: LIST_FREE_PARAMS
-  INTEGER                                    :: I
+  INTEGER                                    :: I,J
   !
   FREE(:) = .FALSE.
-  NUMFREE_DEG = 4*NBINS-10
+  NUMFREE_PARAM = 0
+  NUMFREE_DEG = 4*NBINS
   !
   DO I=1,10
      IF (LIST_FREE_PARAMS(I).EQ.1) THEN
         FREE(I) = .TRUE.
-        NUMFREE_DEG = NUMFREE_DEG + 1
+        NUMFREE_PARAM=NUMFREE_PARAM+1
+        NUMFREE_DEG = NUMFREE_DEG - 1
      ENDIF
   ENDDO
   WRITE(*,*) 'freed parameters'
+  ALLOCATE (FREELOC(NUMFREE_PARAM))
+  J=1
+  DO I=1,10
+     IF (FREE(I).EQ..TRUE.) THEN
+        FREELOC(J)=I
+        J=J+1
+     ENDIF
+  ENDDO
+
   !FREE(1)                                    ! ETA0
   !FREE(2)                                    ! FIELD INCLINATION
   !FREE(3)                                    ! FIELD AZIMUTH
@@ -31,4 +42,4 @@ SUBROUTINE FREE_INIT (LIST_FREE_PARAMS)
   !FREE(9)                                    ! SOURCE FUNCTION GRADIENT
   !FREE(10)                                   ! MAGNETIC FILLING FACTOR
 END SUBROUTINE FREE_INIT
-!CVSVERSIONINFO "$Id: free_init.f90,v 1.3 2011/10/14 17:22:31 keiji Exp $"
+!CVSVERSIONINFO "$Id: free_init.f90,v 1.4 2012/04/09 22:21:00 keiji Exp $"

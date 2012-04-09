@@ -1,5 +1,7 @@
 /* ------------------------------------------------------------------------------------------------------
  *
+ * --- comments by Rick and Priya  -----
+ *
  *  vfisv.c                                        ~rick/hmi/vecb/src/v09
  * 3/25/10 this is Keiji's less memory usage version with my edits for keywords * and k=0.
  * 3/23/10 THIS IS a copy of REBECCA's /v13  except with vfisv_mpi
@@ -46,110 +48,136 @@
  *
  * --- some comments by K.H., after March 2010 -----
  *
- *    A) March 26, 2010
+ *    1) March 26, 2010
  *       First, combining efforts done by 5:00PM, March 26, 2010
- *        (1) a lot of things such as JSOC/DRMS things done by Priya and Rick
+ *        (a) a lot of things such as JSOC DRMS things done by Priya and Rick
  *              /home/priya/vecb/VFISV_new/v11/vfisv.c
- *        (2) Default parameters defined by Rebecca
+ *        (b) Default parameters defined by Rebecca
  *              /home/rce/v16/vfisv.c
- *        (3) MPI things by Priya, Rick and Keiji
- *    B) March 29
- *        (1) added lines to handle pixels containing NaN or all-zero values in input
- *    C) April  2
- *        (2) modified DRMS part : correcting JSOC-keyword(s) including T_REC.
- *        (3) moved lines for inversion initialization to be done
+ *        (c) MPI things by Priya, Rick and K.H.
+ *    2) March 29
+ *        (a) added lines to handle pixels containing NaN or all-zero values in input
+ *    3) April  2
+ *        (b) modified DRMS part : correcting JSOC-keyword(s) including T_REC.
+ *        (c) moved lines for inversion initialization that should be done
  *              after malloc/calloc-ings all wrapper-arrays (and just before the inverson process)
- *        (4) modified positions and contents of printf().
- *        (5) modified how the argument at the command line will be taken into:
- *              All arguments variables/flags be treated as constant in wrapper.
- *    D) April 16
- *        (1) added a feature doing only the rectangle region of interest,
+ *        (d) modified positions and contents of printf().
+ *        (e) modified how the argument at the command line will be taken into:
+ *              All arguments variables and flags be treated as constant in wrapper.
+ *    4) April 16
+ *        (a) added a feature doing only the rectangle region of interest,
  *              being enabled by setting #define RECTANGL 1
- *    E) April 20
- *        (1) added Sebastien's filter function,
+ *    5) April 20
+ *        (a) added Sebastien's filter function,
  *              being enabled by setting #define FILTFUNC 1
- *    F) May 11
- *        (1) add part to take previous (and/or existing) results for initial guess,
+ *    6) May 11
+ *        (a) add part to take previous (and/or existing) results for initial guess,
  *              being enabled by setting #define TAKEPREV 1
- *    G) June 21
- *        (1) some minor tweaks at wrapper, to do process only regions of interest
+ *    7) June 21
+ *        (a) some minor tweaks at wrapper, to do process only regions of interest
  *            enabled by turning QUICKRUN to be 1
- *    H) Oct  5
- *        (1) accomodate the mask-data from patch clipping / automated-AR recognition algorithm
+ *    8) Oct  5
+ *        (a) accomodate the mask-data from patch clipping / automated-AR recognition algorithm
  *               implemented in JSOC by Xudong Sun.
  *            By setting MASKPTCH == 1, this functionality be enabled.
- *        (2) remove/erase the choice FILTFUNC because it will be always 1.
- *        (3) remove/erase the choice NEWARRAY because it will be always 1.
- *    I) Nov  3
- *        (1) handle a new variable iconverge_flag, flag/index of confidence at invert_(), by Rebecca, and
+ *        (b) remove the choice FILTFUNC because it will be always 1.
+ *        (c) remove the choice NEWARRAY because it will be always 1.
+ *    9) Nov  3
+ *        (a) handle a new variable iconverge_flag, flag/index of confidence at invert_(), by Rebecca, and
  *            output the integer as a new segment array (named convflag).
- *        (2) give version number 1.00
- *    I')Nov 23
- *        (1) add line to write the version number as keyword value, and make new .jsd file
- *    J) Dec 9
- *        (1) now the all float will be rescaled so that the saved data will be of integer type.
- *        (2) thus, making new .jsd file
- *        (3) give version number 1.01
- *    K) Jan 27
- *        (1) some changes/trial and tips made from Dec 10 to Jan 27, are included/controlled by preprocess.
+ *        (b) give version number 1.00
+ *    9')Nov 23
+ *        (a) add line to write the version number as keyword value, and make new .jsd file
+ *   10) Dec 9
+ *        (a) now the all float will be rescaled so that the saved data will be of integer type.
+ *        (b) thus, making new .jsd file
+ *        (c) give version number 1.01
+ *   11) 2011 Jan 27
+ *        (a) some changes/trial and tips made from Dec 10 to Jan 27, are included/controlled by preprocess.
  *            INTBSCL, CHNGTREC pre-process flags are added.
- *    L) Jan 31
- *        (1) Minor modification around choice MASKPTCH to adjust to the Xudong's latest masking data array.
- *    L')Feb 03
- *        (1) clean up code: an unused variable npix is deleted.
- *    M) Feb 06
- *        (1) add keyword, mostly at the option argument
- *    N) Feb 07 until Feb 10.
+ *   12) Jan 31
+ *        (a) Minor modification around choice MASKPTCH to adjust to the Xudong's latest masking data array.
+ *   13')Feb 03
+ *        (a) clean up code: an unused variable npix is deleted.
+ *   14) Feb 06
+ *        (a) add keyword, mostly at the option argument
+ *   15) Feb 07 until Feb 10.
  *        (0) efforts making things close to the first published version.
- *        (1) add a lot of keywords
- *        (2) add one integer segement qaul_map
- *        (3) invert() has now one more variable (weights), thank you RCE!.
- *    O) Feb 17
- *        (1) add char function to include CVS-based version info. *) modified Apr 27.
- *    P) Mar 03
- *        (1) accommodate the choices 8 and 10 of Num_lambda_filter.
- *    Q) Mar 24 and 25
- *        (1) choice to fetch hmi.V_720s data to give initial vlos_mag.
- *        (2) choice to fetch hmi.M_720s data to give initial field strength.
- *    R) Apr  1
- *        (1) Adding new variables, num_lambda_synth and lambda_min_synth
- *    R')Apr 27
- *        (1) "hacked" code be (formally) implemented.
+ *        (a) add a lot of keywords
+ *        (b) add one integer segement qaul_map
+ *        (c) invert() has now one more variable (weights), thank you RCE!.
+ *   16) Feb 17
+ *        (a) add char function to include CVS-based version info. *) modified Apr 27.
+ *   17) Mar 03
+ *        (a) accommodate the choices 8 and 10 of Num_lambda_filter.
+ *   18) Mar 24 and 25
+ *        (a) choice to fetch hmi.V_720s data to give initial vlos_mag.
+ *        (b) choice to fetch hmi.M_720s data to give initial field strength.
+ *   19) Apr  1
+ *        (a) Adding new variables, num_lambda_synth and lambda_min_synth
+ *   19')Apr 27
+ *        (a) "hacked" code be (formally) implemented.
  *             Changes are appearing at argument of filt_init_()
  *             Many changes in invert.f90, forward.f90, filter_init.f90, filter_param.f90 as well.
- *    S) May 16 --
+ *   20) May 16 --
  *        (0) Delete preprocess-indexes, CHANGFEB and NEWINVRT, because these will be never set non-1.
- *        (1) Add lines to normalize the filter profile.
+ *        (a) Add lines to normalize the filter profile.
  *            This feature is controlled with the pre-process var. NRMLFLTR
- *        (2) some lines for version info., COMMENT keyword etc., to include a lot of info. not yet finalized.
- *        (3) Include Yang's confidence index and quality score, being under developement.
+ *        (b) some lines for version info., COMMENT keyword etc., to include a lot of info. not yet finalized.
+ *        (c) Include Yang's confidence index and quality score, being under developement.
  *            To give reference, hmi.M_720s will be always referred, regardless of whether hmi.M will be used as initial guess.
- *        (4) One integer keyword, INVFREEP, is added to show each of 10 free parameters be free or fixed.
+ *        (d) One integer keyword, INVFREEP, is added to show each of 10 free parameters be free or fixed.
  *            Typically, it is 0x000003be or 1110111110.
- *     T) May 24 ---
- *        (1) HARPATCH, a new choice, is added to host HARP-identified region.
+ *   21) May 24 ---
+ *        (a) HARPATCH, a new choice, is added to host HARP-identified region.
  *            HARPBLOB, another pre-process var., is to choose which blob or rectangle will be processed.
- *        (2) A few thoughts and preparations for hosting CVS version info of Fortran part. not yet finalized ....
- *        (3) clean up and modify comments and rename variables (mostly about DRMS words for input Stokes.) etc.
- *     U) May 31
- *        (1) Combined this wrapper with RCE's latest codes.
+ *        (b) A few thoughts and preparations for hosting CVS version info of Fortran part. not yet finalized ....
+ *        (c) clean up and modify comments and rename variables (mostly about DRMS words for input Stokes.) etc.
+ *   22) May 31
+ *        (a) Combined this wrapper with RCE's latest codes.
  *            This associates with changes of argument of void function filt_init_()
- *     V) June 6
- *        (1) Add one choice to host multiple HARP maps for one T_REC.
- *            This choice be controlled with MULTHARP. 
- *     W) July 15 -- Oct 13
- *        (1) Add lines to make HARP box wider, and a few clean-up
- *        (2) A few minor tweaks to process a bit wider box than HARP-defined one
- *        (3) A part calculating filter profile is more flexible and now does not assume the input must be of 4k by 4k.
- *     V) 2011 Oct 14
- *        (1) Modified to host RCE's recent efforts
+ *   23) June 6
+ *        (a) Add one choice to host multiple HARP maps for one T_REC.
+ *            This choice be controlled with MULTHARP.
+ *   24) July 15 -- Oct 13
+ *        (a) Add lines to make HARP box wider, and a few clean-up
+ *        (b) A few minor tweaks to process a bit wider box than HARP-defined one
+ *        (c) A part calculating filter profile is more flexible and now does not assume the input must be of 4k by 4k.
+ *   25) 2011 Oct 14
+ *        (a) Modified to host RCE's recent efforts
+ *        (b) For test data release of AR11158, the checked-in files of this as-of-oct14 version is used.
+ *   26) 2011 Nov 22 until 2012 Jan 13
+ *        (a) Segment name change : series name qual_map is rename to info_map.
+ *            * MIND that this change be suspended to be effective.
+ *        (b) Add some to MULTHARP-choice to avoid termination when the input HARP segment had been expired or not ready.
+ *        (c) Trivials : some language corrections at the standard outputs.
+ *        (d) Add comments, to maintain and refresh K.H.'s memory.....
+ *   27) 2012 Jan 23 ... until Feb 3.
+ *        (a) To determine and use photon noise level at each pixel, instead of using uniform factor overall pixels,
+ *            the third argument of line_init_() be double[4].
+ *            This choice is enabled by setting NLEVPIXL 1.
+ *            MIND that line_init_() etc. will be called just before the invert_(), within the pixel-by-pixel loop.
+ *            Thus, we need some cares and attention about (de)allocate statements in the Fortran part.
+ *        (b) Add one choice, HANDHARP, for using pseudo-HARP defined-by-hand-and-eye.
+ *            Note that the current code may have if-statement definining one rectangle,
+ *            but plural boxes of interest can be defined by editing the if-condition accordingly.
+ *   28) 2012 Feb 11 -- 21
+ *        (a) Do add a wise, really, way of parallelism suggested by Jesper.
+ *            Enable by setting JESPARAL preprocess 1. : EQUIAREA must (maybe) be set 1.
+ *        (b) Some changes in QUICKRUN so that it will be really useful...
+ *   29) 2012 Mar 27
+ *        (a) New VFISV !!
  *
  * ------------------------------------------------------------------------------------------------------ */
 
+
+/* A lot of pre-process switches: Set 0 (turn-off) or 1 (turn-on).
+ * K.H. assume the value must be 0 or 1.
+ * If you write other number, consequences will be unpredictable. */
+
 /* A tweak for quick-run for test mode.
- * Notice that QUICKRUN does not mean this is for QuickLook.
- * Quick-Look run will be with the masking data (see MASKPTCH below).
- * Only some selected pixels be processed, and the selection will be given somewhere in the code.
+ * MIND that QUICKRUN does not mean this is for QuickLook. Quick-Look (or nrt) run will be done with the masking data (see MASKPTCH below).
+ * Only some selected columns will be processed, and the selection will be given at if-block(s) somewhere in the code.
  * Set 1 to turn on this functionality.
  * Different from another similar choice controlled by RECTANGL,
  *    the output size be same as the input Stokes, typically 4k x 4k, thus no need to modify the .jsd file.
@@ -160,7 +188,7 @@
  * Do inversion for pixels within a selected rectangle (in CCD coordinate so far) of interest.
  * Defining the rectangle of interest will be done somewhere in this code.
  * Because the output array size will be arbitrary, the .jsd file must have "vardim" attribute instead of "variable".
- * May co-work with QUICKRUN ... maybe .... */
+ * May co-work with QUICKRUN, but KH strongly encourage to use either of QUICKRUN and RECTANGL because it is not fully confirmed yet (as of 2012 02 21). */
 #define RECTANGL 0
 
 /* Set 1 to normalize filter function BEFORE given to invert() subprogram.
@@ -176,13 +204,21 @@
 /* By setting 1, the initial guess value for vlos_mag is given, from hmi.V* series data.
  * As of 2011 Mar 24, the values are given from hmi.V_720s. Because hmi.{V,S,M} are made
  * simultaneously at lev. 1 pipeline process, this must always work.
- * In case hmi.V is not available, initial guess is caluclated from SDO's orbital info. and pixel address. */
+ * In case hmi.V is not available, initial guess is caluclated from SDO's orbital info. and pixel address.
+ * Note that, inside the VFISV, the initial guess for LoS velocity is replaced with the one
+ * calculated from Stokes I (or V if dark sunspot), thus essentially, this flag may be of less meanings */
 #define VLOSINIT 0
 
 /* Added on March 25, 2011
  * By setting 1, the initial guess value for magnetic field strength is given from hmi.M(_720s).
- * In case hmi.M_720s is not available, left zero */
+ * In case hmi.M_720s is not available, the data will be filled with zero value. */
 #define MGSTINIT 0
+
+/* Whether or not to determine the noise level at each pixel, or use the one uniform over full-disk.
+ * 1 means to do for each pixel.
+ * On 2012 Jan 24.
+ * This choice will change where the init_line_() subroutine is called. */
+#define NLEVPIXL 1
 
 /* Whether skip or do-anyway when Stokes QUALITY index is not zero.
  *         1 : do only when the quality index is of ideal condition, 0x000000.
@@ -191,13 +227,23 @@
 #define SKIPBADQ 0
 
 /* By setting 1, the non-NAN, physically meaningful, inside-disk pixels will be evenly assigned to each PE.
- * Otherwise, all 4k x 4k pixels will be evenly assinged to PEs.
+ * Otherwise, the 16M (4k x 4k) pixels will be evenly assinged to PEs.
+ * No side effect found.
  * Recommend to always keep 1. */
 #define EQUIAREA 1
+/* Another way to allocate pixels to each PE, suggested by J.S.
+ * This choice is preparation for future changes in VFISV.
+ * In near-future improved version of VFISV, the elapsed time for processing a pixel will be
+ * significantly pixel-dependent. In this case, EUQIAREA strategy will no longer provide good parallel efficiency.
+ * Set 1 to use this.
+ * JESPARAL choice will override EQUIAREA: The value of JESPARAL will be first evaluated before EQUAREA will be.
+ * K.H. yet recommends to leave EQUIAREA set 1, regardless of whether JESPARAL is turned on or off, for a while. */
+#define JESPARAL 1
 
 /* By setting 1, the inversion will be processed only for the non-masked pixel.
  * As of May 24 2011, this choice assumes the masked data is of the same size as the input Stokes.
- * This choice cannot co-exist with HARP. */
+ * This choice cannot co-exist with HARPs.
+ * As of Oct. 2011, the HARP module is almost ready, thus, this option will not be used and some day be cleaned up. */
 #define MASKPTCH 0
 
 /* Use HARP mask data.
@@ -211,29 +257,46 @@
  * 1 for blob. 0 (rectangle) will be default. */
 #define HARPBLOB 0
 /* Importing multiple HARP at one instant.
- * If 0, only one HARP specified HARPNUM primekey */
+ * If 0, only one HARP explicitly specified by HARPNUM primekey will be processed.
+ * K.H. strongly recommend this parameter be left 1, for it often fails for unsolved reasons maybe at memory allocation, nut. */
 #define MULTHARP 1
+/* Added on Jan 27, 2012, by K.H.
+ * This choice will give you an alternative way, simiar to RECTANGL, to process only the (rectangle) region(s) of your interest.
+ * Different from RECTANGL choice, the output will be of 4k x 4k (or same size as the input Stokes).
+ * The output file size of 4k x 4k will bring some conveniences, e.g. for mtracking etc.
+ * Turn on by setting value to be 1.
+ * The size and position of rectangles will be specified at lines somewhere in this code.
+ * This choice works only when both HARPATCH and MULTHARP is set 1. */
+#define HANDHARP 0
 
 /* Set 1 to enable to fetch the (previous) existing data through JSOC-DRMS as better initial guess.
  * So for, not used, nor finalized.
  * Keep this zero for a while being. */
 #define TAKEPREV 0
 
-/* Enforce the output T_REC will be changed, overridden with the one given at option out2.
+/* Enforce the output T_REC to be the one given at option out2.
  * The argument for the option out2 must be a string YYYY:MM:DD_hh:mm:ss_TAI, without [].
- * Good for parameter-tests using the Stokes of the same T_REC and saving outputs at the same series. */
+ * Good for parameter-tests using the Stokes of the same T_REC and saving outputs at the same series but different primary keywords. */
 #define CHNGTREC 0
 
 /* Yang's confidence and quality index definition.
- * This choice is added on May 18 2011 */
+ * This choice was first added on May 18 2011. */
 #define CONFINDX 1
 
 /* Phil's macro */
 #define DIE(msg) {fflush(stdout);fprintf(stderr,"%s, status=%d\n",msg,status); return(status);}
 
 /* strings for version info. */
-char *module_name = "vfisv";        // may be unchanged
-char *version_id  = "2011 Oct.14"; // (number or) strings to specify version of code. Typically date of editing. Given by hand....hmmm
+#if HARPATCH == 1
+char *module_name = "vfisv FD10 HARP"; // may be kept unchanged
+#else
+char *module_name = "vfisv FD10"; // may be kept unchanged
+#endif
+// char *version_id  = "2011 Oct. 14"; // numerics or string representing version of VFISV. Typically date of last editing of core Fortran part. Given by hand....hmmm
+// char *version_id  = "2012 Jan. 24";
+char *version_id  = "2012 Mar. 29";
+
+/* external subroutine etc. written in Fortran files */
 
 /* RCE Apr 21, 2010: Added a "double [][]" in definition of invert_ to pass
 the filter profiles computed by Sebastien*/
@@ -244,8 +307,14 @@ extern void filt_init_ (int *, int *, double *, int *);
 extern void free_init_ (int *);
 extern void free_memory_ ();
 extern void inv_init_ (int *, double *, double *, double *, double *, double *);
-extern void line_init_ (double *, double *, double *);
-extern void svd_init_ ();
+extern void vfisvalloc_ (int *, int *, int *, int *);
+#if NLEVPIXL == 1
+extern void line_init_ (double *, double *, double [4]);
+#else
+extern void line_init_(double *, double *, double *);
+// extern void line_init_old_ (double *, double *, double *); // K.H. assumes the old one be rename.
+#endif
+// extern void svd_init_ ();
 extern void voigt_init_ ();
 extern void wave_init_ (double *, double *, int *);
 
@@ -266,7 +335,7 @@ ModuleArgs_t module_args[] = {
 #if MULTHARP == 1
   {ARG_STRING,  "in3", "su_xudong.test_mharp[][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"}, // without specific HARPnum.
 #else
-  {ARG_STRING,  "in3", "su_xudong.test_mharp[12][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"},
+  {ARG_STRING,  "in3", "su_xudong.test_mharp[12][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"}, // with a given HARPnum. : usually not used.
 #endif
 #endif
 #if MASKPTCH == 1
@@ -278,7 +347,7 @@ ModuleArgs_t module_args[] = {
 #if MGSTINIT == 1 || CONFINDX == 1
   {ARG_STRING,  "in5", "hmi.M_720s[2010.08.01_12:12:00_TAI]", "magnetogram as initial guess"},
 #endif
-/* inversion options, 20, as of April 27, 2011 */
+/* inversion options, 20 */
   {ARG_INT,     "num_iter",                  "200", "number of iterations(default: 30)"},
   {ARG_INT,     "num_lambda",                "149", "number of ??(default: 33)"},
   {ARG_DOUBLE,  "Lambda_Min",            "-1998.0", "Intensity threshold (default: -432)"},
@@ -297,7 +366,14 @@ ModuleArgs_t module_args[] = {
   {ARG_DOUBLE,  "Wnarrow",                 "172.0", "FSR (full spectral range) of the Narrow-Band Michelson"},
   {ARG_DOUBLE,  "Wspacing",                 "69.0", "wavelength spacing between the HMI filters"},
   {ARG_DOUBLE,  "Intensity_Threshold",     "1.0e2", "Intensity threshold (default: 0.8)"},
+#if NLEVPIXL == 1
+  {ARG_DOUBLE,  "Noise_LEVELFI",           "0.118", "Noise Sigma factor for I"},
+  {ARG_DOUBLE,  "Noise_LEVELFQ",           "0.204", "Noise Sigma factor for Q"},
+  {ARG_DOUBLE,  "Noise_LEVELFU",           "0.204", "Noise Sigma factor for U"},
+  {ARG_DOUBLE,  "Noise_LEVELFV",           "0.204", "Noise Sigma factor for V"},
+#else
   {ARG_DOUBLE,  "Noise_LEVEL",             "4.9e1", "Intensity threshold (default: 3.0e-3)"},
+#endif
   {ARG_INT,     "Continuum",                   "0", "Intensity threshold (default: 0)"},
 /* other options */
   {ARG_FLAG, "v",    "", "run verbose"},
@@ -314,7 +390,7 @@ int DoIt (void)
   DRMS_Segment_t   *inSeg, *outSeg;
   DRMS_Array_t     *stokes_array, *invrt_array, *err_array, *flg_array, *qmap_array;
 
-/* get values at commandline argument, as constant */
+/* get values at commandline argument : the variables will be treated as constant */
   const int    NUM_ITERATIONSc    = params_get_int(params, "num_iter");
   const int    NUM_LAMBDAc        = params_get_int(params, "num_lambda");
   const int    NUM_LAMBDA_FILTERc = params_get_int(params, "Num_lambda_filter");
@@ -329,7 +405,14 @@ int DoIt (void)
   const double LAMBDA_0c               = params_get_double(params, "Lambda_0");
   const double LAMBDA_Bc               = params_get_double(params, "Lambda_B");
   const double DELTA_LAMBDAc           = params_get_double(params, "Delta_Lambda");
+#if NLEVPIXL == 1
+  const double NOISE_LEVELFIc          = params_get_double(params, "Noise_LEVELFI");
+  const double NOISE_LEVELFQc          = params_get_double(params, "Noise_LEVELFQ");
+  const double NOISE_LEVELFUc          = params_get_double(params, "Noise_LEVELFU");
+  const double NOISE_LEVELFVc          = params_get_double(params, "Noise_LEVELFV");
+#else
   const double NOISE_LEVELc            = params_get_double(params, "Noise_LEVEL");
+#endif
   const double LYOTFWHMc               = params_get_double(params, "Lyotfwhm");
   const double WNARROWc                = params_get_double(params, "Wnarrow");
   const double WSPACINGc               = params_get_double(params, "Wspacing");
@@ -379,7 +462,16 @@ int DoIt (void)
 
   int    NUM_ITERATIONS, NUM_LAMBDA, NUM_LAMBDA_FILTER, NUM_TUNNING, CONTINUUM;
   double SVD_TOLERANCE, CHI2_STOP, POLARIZATION_THRESHOLD, INTENSITY_THRESHOLD, PERCENTAGE_JUMP;
-  double LAMBDA_0, LAMBDA_B, NOISE_LEVEL;
+  double LAMBDA_0, LAMBDA_B;
+#if NLEVPIXL == 1
+  double NOISE_LEVEL[4];
+  double NOISE_LEVELFI;
+  double NOISE_LEVELFQ;
+  double NOISE_LEVELFU;
+  double NOISE_LEVELFV;
+#else
+  double NOISE_LEVEL;
+#endif
   double LAMBDA_MIN, DELTA_LAMBDA;
   double LYOTFWHM, WNARROW, WSPACING;
   int    NUM_LAMBDA_synth;
@@ -397,7 +489,15 @@ int DoIt (void)
   PERCENTAGE_JUMP        = PERCENTAGE_JUMPc;
   LAMBDA_0     = LAMBDA_0c;
   LAMBDA_B     = LAMBDA_Bc;
+
+#if NLEVPIXL == 1
+  NOISE_LEVELFI   = NOISE_LEVELFIc;
+  NOISE_LEVELFQ   = NOISE_LEVELFQc;
+  NOISE_LEVELFU   = NOISE_LEVELFUc;
+  NOISE_LEVELFV   = NOISE_LEVELFVc;
+#else
   NOISE_LEVEL  = NOISE_LEVELc;
+#endif
   LAMBDA_MIN   = LAMBDA_MINc;
   DELTA_LAMBDA = DELTA_LAMBDAc;
   LYOTFWHM = LYOTFWHMc;
@@ -443,7 +543,7 @@ int DoIt (void)
                      "field_inclination_err","field_az_err","inclin_azimuth_err", "field_alpha_err",
                      "inclination_alpha_err", "azimuth_alpha_err", "chisq",
                      "conv_flag", "qual_map", "confid_map"}; // the last one confid_map is added on May 18. 2011
-  int Err_ct=12;    // MIND newly added convflag and confidence and qualigy index will be treated separately.
+  int Err_ct=12;   // MIND newly added convflag and confidence and qualigy index will be treated separately.
   char segname[16];
   char *spname[] = {"I", "Q", "U", "V"};
   int spct = (sizeof (spname) / sizeof (char *));
@@ -452,11 +552,12 @@ int DoIt (void)
   int paramct = 10;
 
 /* bscale and bzero.
-   bzero_inv[] may be zero.
-   bscaleinv[] must be in the same order of Resname[].
-   Mind that, for some convenience, the order of variables in jsd file may be different from Resname[].
-   Now all output variable will be of 32-bit integer or 8-bit character type.
-   Values are based on email from Rebecca on Dec. 9 2010 */
+ * bzero_inv[] may be zero.
+ * bscaleinv[] must be in the same order of Resname[].
+ * Mind that, for some convenience, the order of variables in jsd file may be different from Resname[].
+ * This does not matter.
+ * In total 25 arrays will be generated by JSOC-VFISV module: 10 physics, 12 error, and 3 supplementals.
+ * Values are mainly based on email from Rebecca on Dec. 9 2010 */
   double bzero_inv[25] = {0.0,0.0,0.0,0.0,0.0,0.0,
                           0.0,0.0,0.0,0.0,
                           0.0,0.0,0.0,0.0,0.0,
@@ -467,15 +568,15 @@ int DoIt (void)
                           50.0,0.1,0.1,0.001,
                           0.01,0.01,0.01,50.0,0.01,    // std.
                           0.0001,0.0001,0.0001,0.0001, // cor. coef.
-                          0.0001,0.0001,0.01,          // cor. coef. and Chi-sq
-                          1.0,1.0,1.0};                // integer arrays for convflag, qual_map and confid_map
+                          0.0001,0.0001,0.0001,        // cor. coef. and Chi-sq
+                          1.0,1.0,1.0};                // integer (or character) arrays for convflag, qual_map and confid_map: must be 1.0
 
-/* working array etc. used by wrapper */
+/* arrays and variables, used by wrapper */
   int    *FinalConvFlag;    // this is a new array to handle converge-flag
   int    *FinalConfidMap;   // this is a new array to handle confidence-map
   int    *FinalQualMap;     // this is a new array to handle quality-map
   double *FinalRes,*FinalErr;
-  time_t startime, endtime;
+  time_t startime, endtime, starttime1, endtime1;
   double *ddat, *res;
   double *obs, *scat, *err;
   double *weights;
@@ -484,24 +585,41 @@ int DoIt (void)
   int rn, rec_ct, sn, seg_ct;
   int cols, rows, imgpix, imgbytes;
   int sp, wl, nvar;
-  int j,m,i,k,n ;
+  int j,m,i,k,n;
   int status;
   int iquality;
 #if RECTANGL == 1 || HARPATCH == 1
 /* clipping cropping, address start (0,0) at the left bottom corner of CCD */
-  int xleftbot = 1785+143;
-  int yleftbot = 1310+161;
-  int xwidth   = 3; //300;
-  int yheight  = 3; //300;
+
+  int xleftbot = 1785;
+  int yleftbot = 1310;
+  int xwidth   = 300;
+  int yheight  = 300;
+/*
+  int xleftbot = 1890+50;
+  int yleftbot = 0;
+  int xwidth   = 1;
+  int yheight  = 4096;
+*/
+/*
+  int xleftbot = 1940;
+  int yleftbot = 411;
+  int xwidth   = 1;
+  int yheight  = 1;
+*/
 #endif
 /* MPI variables */
   MPI_Status mpistat;
   int mpi_tag, mpi_rank, mpi_size;
   int myrank, nprocs, numpix;
   int istart, iend;
-  int *istartall, *iendall;
-  void para_range(int,int,int,int *,int *);
-/* Sun, SDO and CCD */
+  int *istartall, *iendall;   // start and end pixel addresses, in 4k x 4k sense, of the region assigned to each PE.
+  void para_range(int,int,int,int *,int *); // by K.H., written in somewhere in this code.
+#if JESPARAL == 1
+  int *jobassignmap; // job assginment map, in JESPARAL choice. ... allocated only at primary (0th) PE. Only mom knows everything.
+  int jobnum;        // number of pixel each PE will take care of in JESPARAL choice
+#endif
+/* the Sun, SDO and HMI CCD */
   float obs_vr;
   float crpixx, crpixy;
   float cdeltx, cdelty;
@@ -511,7 +629,8 @@ int DoIt (void)
   float sunradfpix;
 /* version info., a dummy function to get CVS version info. when checking in.*/
   char *meinversion_version();
-/*S.C. filter function */
+
+/*S.C. filter function, written in this code */
   int vfisv_filter(int ,int ,double [][],double ,double ,double *,double *,int ,double *,double *,int ,
                    double, double [4],double [3],double [4],double [3],double *,double *,double *,
                    int, double ,int ,int ,int ,int);
@@ -564,12 +683,15 @@ int DoIt (void)
   iexistpatchmask = 0; // default, no-existing..
 #endif
 
-/* check of preprocess */
+/* check of preprocess : MIND that these if-list do not cover all possible prohibited choices. */
 #if MASKPTCH == 1 && HARPATCH == 1
   DIE(" Both MASKPTCH and HARPATCH set 1. So terminated !\n");
 #endif
 #if RECTANGL == 1 && HARPATCH == 1
   DIE(" Both RECTANGL and HARPATCH set 1. So terminated !\n");
+#endif
+#if EQUIAREA != 1 && JESPARAL == 1
+  DIE(" JESPARAL cannot work when EQUIAREA is turned off. So terminated !\n");
 #endif
 
 /* time at the start */
@@ -587,7 +709,8 @@ int DoIt (void)
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  if (mpi_rank == 0) {
+  if (mpi_rank == 0) // very very long long lines for the primary PE. reading data, allocating memory, and assigning job to the other PEs.
+  {
 
     printf ("%s Ver. %s\n", module_name, version_id);
     if (verbose) printf ("%d CPU/core(s) be used for parallel-inversion. \n", mpi_size);
@@ -673,7 +796,6 @@ int DoIt (void)
         if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
         rn = 0;
         inRec = inRS->records[rn];
-#if 1 
         char *Resname[] = {"bitmap"};
         sprintf(segname,"%s",Resname[0]);
         inSeg = drms_segment_lookup(inRec,segname);
@@ -696,7 +818,6 @@ int DoIt (void)
           for (n = 0; n < nnx * nny; n++){patchmask[n+iseg*imgpixL]=inData[n];} // silly but safe way to pass data
           drms_free_array(inArray); // without this, well, things go mad.
         }
-#endif
         xleftbot = drms_getkey_int(inRec,"CRPIX1",&status);
         yleftbot = drms_getkey_int(inRec,"CRPIX2",&status);
         xwidth   = colsL;
@@ -872,12 +993,12 @@ int DoIt (void)
       crpixy = (float)rows * 0.5 + 0.5;
     }
 
-/* 2011 June 6 
+/* 2011 June 6
  * Here mask map has pixel size of 4k x 4k to host multi-HARP maps,
  * The four variables, xleftbot, yleftbot, xwidth and ywidth be given 0, 0, 4096 and 4096. */
 #if HARPATCH == 1 && MULTHARP == 1
     patchmask  = (int  *)malloc (sizeof (int)  * imgpix); /* allocate same size as Stokes */
-    { /* limit scope for some DRMS variables */
+{ /* limit scope for some DRMS variables */
       int i;
       for (i = 0; i < imgpix; i++){patchmask[i]=0;} // 0 means .. skip!
       char segname[100]; /* arbitrary long string... */
@@ -888,7 +1009,8 @@ int DoIt (void)
       DRMS_RecordSet_t *inRS;
       int nnx, nny;
       int colsL, rowsL, imgpixL;  // MIND that the HARP will not be of 4k x 4k.
-
+#if HANDHARP != 1
+/* do with real-HARP data */
       if (verbose) printf(" now loading HARP-data : %s\n",indsdesc3);
       inRS = drms_open_records (drms_env, indsdesc3, &status); /*  open input record_set  */
 /* this case, never say die.... just turn on flag */
@@ -905,7 +1027,6 @@ int DoIt (void)
         for (rn = 0; rn < rec_ct; rn++)
         {
           inRec = inRS->records[rn];
-#if 1
           char *Resname[] = {"bitmap"};
           sprintf(segname,"%s",Resname[0]);
           inSeg = drms_segment_lookup(inRec,segname);
@@ -921,52 +1042,125 @@ int DoIt (void)
             if (verbose) printf(" now loading segment : %-20s",segname);
             inSeg = drms_segment_lookup(inRec,segname);
             inArray= drms_segment_read(inSeg, DRMS_TYPE_CHAR, &status);
-            if (status) DIE("Cant read segment!\n");
-            inData =(char *)inArray->data;
-            nnx = inArray->axis[0]; // may be same as colsL
-            nny = inArray->axis[1]; // may be same as rowsL
-            if (verbose) {printf(" Nx Ny are = %d %d\n",  nnx, nny);}
-            for (n = 0; n < nnx * nny; n++){patchmaskL[n+iseg*imgpixL]=inData[n];} // silly but safe way to pass data
+//            if (status) DIE("Cant read segment!\n"); // never say die this case.
+            if (status)
+            {
+              printf("no valid HARP data, maybe expired ... skip %d th HARP\n", iseg);
+            }
+            else
+            {
+              inData =(char *)inArray->data;
+              nnx = inArray->axis[0]; // may be same as colsL
+              nny = inArray->axis[1]; // may be same as rowsL
+              if (verbose) {printf(" Nx Ny are = %d %d\n",  nnx, nny);}
+              for (n = 0; n < nnx * nny; n++){patchmaskL[n+iseg*imgpixL]=inData[n];} // silly but safe way to pass data
+            }
             drms_free_array(inArray); // without this, well, things go mad.
-          }
-#endif
+          } // end-for loop for bit map segment.
           int xleftbotL, yleftbotL;
           xleftbotL = drms_getkey_int(inRec,"CRPIX1",&status);
           yleftbotL = drms_getkey_int(inRec,"CRPIX2",&status);
           xwidth   = colsL;
           yheight  = rowsL;
-          if (verbose) {printf(" HARP info. xleftbot yleftbot xwidth yheight = %d %d %d %d\n",xleftbot,yleftbot,xwidth,yheight);}
+          if (verbose) {printf(" HARP info. xleftbot yleftbot xwidth yheight = %d %d %d %d\n",xleftbotL,yleftbotL,xwidth,yheight);}
 
+/* a standard use of HARP : do all */
+#if 1
 /* extend HARP box */
+#if 0
           int iextendx =  30;
           int iextendy = 150;
           xleftbotL = xleftbotL - iextendx;
           yleftbotL = yleftbotL - iextendy;
           colsL     = colsL + iextendx * 2;
           rowsL     = rowsL + iextendy * 2;
-
-          int i2, j2, n2, m2;
+#endif
+          int i2, j2, m2;
           for (i2 = 0; i2 < colsL; i2++)
           {
             for (j2 = 0; j2 < rowsL; j2++)
             {
-              n2 = j2 * colsL + i2;
-              m2 =(j2 + yleftbotL - 1) * cols + (i2 + xleftbotL - 1);
-//              m2 =(j2 + yleftbotL + 1) * cols + (i2 + xleftbotL + 1);
+              int iL, jL;
+              jL = j2 + yleftbotL - 1;
+              iL = i2 + xleftbotL - 1;
+              if (iL <        0){iL =      0;}
+              if (iL > cols - 1){iL = cols-1;}
+              if (jL <        0){jL =      0;}
+              if (jL > rows - 1){jL = rows-1;}
+              m2 = jL * cols + iL;
               patchmask[m2] = 600; // here assume non-blob ... some larger number than 4.
-//              patchmask[m2] = patchmaskL[n2];
           } }
-#if 1
+
+#else
+/* do only specified HARP region(s) and enfoce the size to 700 or greater. : may be exclusive to the above */
+          int numharp = drms_getkey_time(inRec,"HARPNUM",&status);
+          if ((numharp == 2081) || (numharp == 4087)) // give HARP number here as many as you want.
+          {
+            int icenter, jcenter;
+            icenter = xleftbotL + colsL / 2;
+            jcenter = yleftbotL + rowsL / 2;
+            if (colsL < 700){xleftbotL = icenter - 350; colsL = 700;}
+            if (rowsL < 700){yleftbotL = jcenter - 350; rowsL = 700;}
+            int i2, j2, n2, m2;
+            for (i2 = 0; i2 < colsL; i2++)
+            {
+              for (j2 = 0; j2 < rowsL; j2++)
+              {
+                int iL, jL;
+                jL = j2 + yleftbotL - 1;
+                iL = i2 + xleftbotL - 1;
+                if (iL <        0){iL =      0;}
+                if (iL > cols - 1){iL = cols-1;}
+                if (jL <        0){jL =      0;}
+                if (jL > rows - 1){jL = rows-1;}
+                m2 = jL * cols + iL;
+                patchmask[m2] = 600; // here assume non-blob ... some larger number than 4.
+            } }
+          }
+          else
+          {
+            printf(" Out of Xudong's interest, thus skipped : RecNum and HARPnum = %d %d\n",rn,numharp);
+          }
+#endif // endif whether the standard use of HAPR or something else.
+
           free(patchmaskL);
-#endif
-        }
+        } // end-for loop for each HARP number at a specified time
         drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
-      }
+      } // end-if the HARP record(s) exist or not.
+#else
+/* pseudo-HARP, by hand */
+      iexistpatchmask = 1; // pretend to have read the authentic HARP data.
+      int xleftbotL, yleftbotL;
+      xleftbotL = 1450; // x of left bottom corner
+      yleftbotL = 1250; // y of left bottom corner
+      colsL = 600;  // width
+      rowsL = 400;  // height 
+      xwidth   = colsL;
+      yheight  = rowsL;
+      if (verbose) {printf(" pseudo-HARP info. xleftbot yleftbot xwidth yheight = %d %d %d %d\n",xleftbotL,yleftbotL,xwidth,yheight);}
+      int i2, j2, m2;
+      for (i2 = 0; i2 < colsL; i2++)
+      {
+        for (j2 = 0; j2 < rowsL; j2++)
+        {
+          int iL, jL;
+          jL = j2 + yleftbotL - 1;
+          iL = i2 + xleftbotL - 1;
+          if (iL <        0){iL =      0;}
+          if (iL > cols - 1){iL = cols-1;}
+          if (jL <        0){jL =      0;}
+          if (jL > rows - 1){jL = rows-1;}
+          m2 = jL * cols + iL;
+          patchmask[m2] = 600; // here assume non-blob ... some larger number than 4.
+      } }
+#endif /* end if HANDHARP is NOT 1 or is 1 */
+
+/* recover some info. */
       xwidth   = cols; // must be same as Stokes
       yheight  = rows;
       xleftbot = 0;
       yleftbot = 0;
-    }  /* end of scope for some DRMS variables */
+}  /* end of scope for some DRMS variables */
 #endif /* end if HARPATCH is 1 and  MULTHARP is 1 */
 
 #if MASKPTCH == 1 || HARPATCH == 1
@@ -1024,9 +1218,9 @@ int DoIt (void)
         drms_close_records (inRS, DRMS_FREE_RECORD); /* close record */
       }
     }  /* end of scope for some DRMS variables */
-/* if hmi.V exisits. do some minor modification,
- * in case the apparent solar disk sizes in V and S are different each other (least likely), or
- * or at the outermost pixels of the disk */
+/* If hmi.V exisits, do some minor modification.
+ *  In case the apparent solar disk sizes in V and S are different (least likely).
+ *  At the outermost pixels of the disk */
     if (iexistdoppler == 1)
     {
       for (n = 0; n < imgpix; n++)
@@ -1045,7 +1239,7 @@ int DoIt (void)
         }
       }
     }
-/* making Vlos_init if no V is available (least likely, just in case) */
+/* making Vlos_init if no V was available (least likely, just in case) */
     if (iexistdoppler == 0)
     {
       vlos_init = (float *)malloc (sizeof (float) * imgpix * 1); /* allocate anyway */
@@ -1086,14 +1280,14 @@ int DoIt (void)
     }
 #endif // endif VLOSINIT is 1
 
-/* 2011 March 25, and May 17, added by K.H. to try to get hmi.M_720s as initial guess or for bad-pixel judgement */
+/* 2011 March 25, and May 17, added by K.H. to try to get hmi.M_720s as initial guess or as reference for bad-pixel judgement */
 #if MGSTINIT == 1 || CONFINDX == 1
     float defmgstinit;
     defmgstinit = guess[5];
     { /* limit scope for some DRMS variables */
       char segname[100]; /* arbitrary long string... */
-      float *inData; /* I-O pointer */
-      DRMS_Array_t     *inArray; /* add some DRMS variables within this scope */
+      float *inData;     /* I-O pointer */
+      DRMS_Array_t     *inArray;
       DRMS_Segment_t   *inSeg;
       DRMS_Record_t    *inRec;
       DRMS_RecordSet_t *inRS;
@@ -1166,7 +1360,7 @@ int DoIt (void)
         }
       }
     }
-/* making mgst_init anyway if no M data available */
+/* making mgst_init anyway if no M data was available */
     if (iexistmagnetogram == 0)
     {
       mgst_init = (float *)malloc (sizeof (float) * imgpix * 1); /* allocate anyway */
@@ -1175,7 +1369,7 @@ int DoIt (void)
     }
 #endif // endif MGSTINIT or CONFINDX is 1
 
-/* Map of invalid values (NaN or all-zero) , or off-disk */
+/* Map of invalid values (NaN or all-zero) , or off-disk, out of rectangle of interest, or out of the HARP region etc. */
     for (n = 0; n < imgpix; n++)
     {
       nan_map[n] = 0; // because nan_map was calloc-ed, this is not needed.
@@ -1199,6 +1393,11 @@ int DoIt (void)
           (iy < yleftbot) ||
           (iy > yleftbot + yheight - 1)) {nan_map[n] = 3;}  // turn on flag to-be-skipped for being out-of-box
 #endif
+#if QUICKRUN == 1
+//     if (n == 15049795) // a non-convergence pixel address of hmi_test.S_720s[2010.05.25_03:00:00_TAI]
+       if ((ix < 1997) || (ix > 2097)) // an example : central 100-pixel width column.
+           {nan_map[n] = 3;}                                // turn on flag to-be-skipped for being out-of-box
+#endif
 #if HARPATCH == 1 && MULTHARP != 1
       if ((ix < xleftbot) ||
           (ix > xleftbot + xwidth  - 1) ||
@@ -1220,9 +1419,9 @@ int DoIt (void)
 #endif // end if HARPATCH is 1 and MULTHARP is NOT 1
 #if HARPATCH == 1 && MULTHARP == 1
       if (patchmask[n] < 4){nan_map[n] = 4;} // mind that non-blob is assumed somewhere above.
-#endif // end if HARPATCH is 1 and MULTHARP is NOT 1
+#endif
 #if MASKPTCH == 1
-      if (patchmask[n] < 2){nan_map[n] = 4;} // this line statement strongly depends on Xudong's definition.
+      if (patchmask[n] < 2){nan_map[n] = 4;} // the condition at left hand side depends on Xudong's definition.
 #endif
     } // end of n-loop
     printf("data is read\n");
@@ -1285,6 +1484,48 @@ int DoIt (void)
     }
     free(itmps); // liberate
     free(itmpe);
+
+/* make job assignment list */
+#if JESPARAL == 1
+    jobnum = -100000; // negative in order that the later part will be derailed, to detect if the value is not properly given ... for debugging purpose
+{ // scope limiter
+    int modjob;
+    modjob = nonnan % mpi_size;
+    if (modjob == 0){jobnum = nonnan / mpi_size;}else{jobnum = nonnan / mpi_size + 1;} // maybe.. OK
+    jobassignmap = (int *)malloc(sizeof(int) * jobnum * mpi_size);
+    int icount, n, nlast;
+    nlast  = -1;
+    icount = -1;
+    for (n = 0; n < imgpix; n++)
+    {
+      if (nan_map[n] == 0) // pixel to be processed.
+      {
+        icount = icount + 1;
+        int npe, ndo, ntemp;
+        npe = icount % mpi_size; // PE, starting with 0
+        ndo = icount / mpi_size; // serial number at each PE, starting with 0
+        ntemp = ndo + npe * jobnum; // address stored to-do list. ...
+        jobassignmap[ntemp] = n; // n is in original input Stokes address.
+        nlast = n; // remember the address.
+      }
+    }
+    icount = icount + 1;
+    if (icount != nonnan){printf("%d %d\n",icount,nonnan); DIE("Mistake at new parallel job assignment, at debug point 13 \n");}
+    if (icount < 0){DIE("Mistake at new parallel job assignment, at debug point 14 !\n");}
+    printf(" Modulo JobNum = %d %d \n",modjob, jobnum);
+    if (modjob > 0) // do padding ... by the last valid pixel address
+    {
+      int ntemp, n;
+      for (ntemp = 0; ntemp < (mpi_size - modjob); ntemp++)
+      {
+        int npadding;
+        npadding = (jobnum * mpi_size - 1) - ntemp * jobnum;
+        jobassignmap[npadding] = nlast;
+      }
+    }
+} // end of scope limiter
+#endif // end if JESPARAL is 1
+
   } // end if mpi_rank == 0
   else
   { // on non-Primary Process Element
@@ -1302,11 +1543,18 @@ int DoIt (void)
   ibuff[2]=cols;
   ibuff[3]=rows;
   MPI_Bcast(ibuff,4,MPI_INT,0,MPI_COMM_WORLD);
-  imgpix = ibuff[0];
+  imgpix = ibuff[0]; // unpacking
   nvar   = ibuff[1];
   cols   = ibuff[2];
   rows   = ibuff[3];
   free(ibuff);
+#if JESPARAL == 1
+  ibuff=(int *)malloc(sizeof(int)*1);
+  ibuff[0]=jobnum;  // packing even though the size is 1
+  MPI_Bcast(ibuff,1,MPI_INT,0,MPI_COMM_WORLD);
+  jobnum = ibuff[0];
+  free(ibuff);
+#endif
 /* sending the istart-iend list array */
   MPI_Bcast(istartall,mpi_size,MPI_INT,0,MPI_COMM_WORLD);
   MPI_Bcast(iendall,  mpi_size,MPI_INT,0,MPI_COMM_WORLD);
@@ -1351,17 +1599,30 @@ int DoIt (void)
   myrank = mpi_rank;
   nprocs = mpi_size;
   numpix = imgpix;
+#if JESPARAL == 1
+  istart=0;
+  iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
   istart=istartall[myrank];
   iend=iendall[myrank];
 #else
   para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
+#endif
+#if JESPARAL == 1
+  if (verbose)
+  {
+    printf("Hello, this is %2d th PE of %2d, in charge of %9d pixels, of 0 to %9d.\n",
+           mpi_rank,mpi_size,jobnum,(imgpix-1));
+  }
+#else
   if (verbose)
   {
     printf("Hello, this is %2d th PE of %2d, in charge of pixels from %9d to %9d of 0 to %9d.\n",
            mpi_rank,mpi_size,istart,iend,(imgpix-1));
   }
+#endif
   int imgpixlocal;
   imgpixlocal = iend - istart + 1;
   FinalConvFlagLocal=(int *)malloc(sizeof(int)   *imgpixlocal);
@@ -1398,20 +1659,84 @@ int DoIt (void)
   MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
+#if JESPARAL == 1
+  int    *jobassignmapLocal;
+  jobassignmapLocal = (int *)malloc(sizeof(int) * jobnum);
+/* send assignment list from primary PE to the others */
+  if (mpi_rank == 0)
+  {
+    myrank = mpi_rank;
+    nprocs = mpi_size;
+    numpix = imgpix;
+    istart=0;
+    iend  =jobnum-1;
+/* first, the primary makes copy for its own part */
+    for (n = istart ; n < iend+1 ; n++){jobassignmapLocal[n -istart] = jobassignmap[n];}
+/* then send the partials to the other PEs */
+    if (mpi_size > 1)
+    {
+      int irank;
+      for(irank = 1; irank < mpi_size; irank++)
+      {
+        int mpi_dest;
+        int ibufsize;
+        int *ibufsend;
+        mpi_dest = irank;
+        istart=0;
+        iend  =jobnum-1;
+        ibufsize = (iend-istart+1) * 1;
+        ibufsend= (int*)malloc(sizeof(int) * ibufsize);
+        for (n = istart ; n < iend+1 ; n++){ibufsend[n -istart] = jobassignmap[n+mpi_dest*jobnum];} // jobnum = ibufsize = iend-istart+1
+        mpi_tag = 1000 + irank;
+        MPI_Send(ibufsend, ibufsize, MPI_INTEGER, mpi_dest, mpi_tag, MPI_COMM_WORLD);
+        free(ibufsend);
+      }
+    }
+  }
+  else
+  {
+/* non-primary PEs wait until served */
+    int mpi_from = 0;
+    int ibufsize;
+    int *ibufrecv;
+    istart=0;
+    iend  =jobnum-1;
+    ibufsize = (iend-istart+1) * 1;
+    ibufrecv = (int*)malloc(sizeof(int) * ibufsize);
+//    printf(" at MPIrank Ibuffsize = %d %d\n",mpi_rank,ibufsize);
+    mpi_tag = 1000 + mpi_rank;
+    MPI_Recv(ibufrecv, ibufsize, MPI_INTEGER, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
+    for (n = istart ; n < iend+1 ; n++){jobassignmapLocal[n-istart] = ibufrecv[n-istart];}
+    free(ibufrecv);
+  } // end-if mpi_rank is 0, or not.
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (mpi_rank == 0) printf(" job assignment address data had propagated to all PE.\n");
+#endif // end-if JESPARAL is 1
+
 /* send partial input data to each PE */
   if (mpi_rank == 0)
   {
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
+#if JESPARAL == 1
+  istart=0;
+  iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
+#endif
 /* first, the primary makes copy for its own part */
-    for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){dataLocal[(n-istart)*nvar+m] = data[n + m*imgpix];}}
+#if JESPARAL == 1
+    for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){dataLocal[(n-istart)*nvar+m] = data[jobassignmap[n] + m*imgpix];}}
+#else
+    for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){dataLocal[(n-istart)*nvar+m] = data[n               + m*imgpix];}}
+#endif
 /* then send the partials to the other PEs */
     if (mpi_size > 1)
     {
@@ -1422,15 +1747,24 @@ int DoIt (void)
         int ibufsize;
         float *fbufsend;
         mpi_dest = irank;
+#if JESPARAL == 1
+        istart=0;
+        iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
         istart=istartall[mpi_dest];
         iend=iendall[mpi_dest];
 #else
         para_range(mpi_dest,nprocs,numpix,&istart,&iend);
 #endif
+#endif
         ibufsize = (iend-istart+1) * nvar;
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
-        for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){fbufsend[(n-istart)*nvar+m] = data[n + m*imgpix];}}
+#if JESPARAL == 1
+        for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){fbufsend[(n-istart)*nvar+m] = data[jobassignmap[n+jobnum*mpi_dest] + m*imgpix];}}
+#else
+        for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){fbufsend[(n-istart)*nvar+m] = data[n                               + m*imgpix];}}
+#endif
         mpi_tag = 1400 + irank;
         MPI_Send(fbufsend, ibufsize, MPI_REAL, mpi_dest, mpi_tag, MPI_COMM_WORLD);
         free(fbufsend);
@@ -1442,11 +1776,16 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     float *fbufrecv;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
 #endif
     ibufsize = (iend-istart+1) * nvar;
     fbufrecv = (float*)malloc(sizeof(float) * ibufsize);
@@ -1462,18 +1801,27 @@ int DoIt (void)
 /* send partial non-NAN mask-map from primary PE to the others */
   if (mpi_rank == 0)
   {
-/* first, the primary makes copy for its own part */
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
-    for (n = istart ; n < iend+1 ; n++){nan_mapLocal[n-istart] = nan_map[n];}
-/* then send the partial to each PE */
+#endif
+/* first, the primary makes copy for its own part */
+#if JESPARAL == 1
+    for (n = istart ; n < iend+1 ; n++){nan_mapLocal[n -istart] = nan_map[jobassignmap[n]];}
+#else
+    for (n = istart ; n < iend+1 ; n++){nan_mapLocal[n -istart] = nan_map[n];}
+#endif
+/* then send the partials to the other PEs */
     if (mpi_size > 1)
     {
       int irank;
@@ -1483,15 +1831,24 @@ int DoIt (void)
         int ibufsize;
         int *ibufsend;
         mpi_dest = irank;
+#if JESPARAL == 1
+        istart=0;
+        iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
         istart=istartall[mpi_dest];
         iend=iendall[mpi_dest];
 #else
         para_range(mpi_dest,nprocs,numpix,&istart,&iend);
 #endif
+#endif
         ibufsize = (iend-istart+1) * 1;
         ibufsend= (int*)malloc(sizeof(int) * ibufsize);
-        for (n = istart ; n < iend+1 ; n++){ibufsend[n-istart] = nan_map[n];}
+#if JESPARAL == 1
+        for (n = istart ; n < iend+1 ; n++){ibufsend[n -istart] = nan_map[jobassignmap[n+jobnum*mpi_dest]];}
+#else
+        for (n = istart ; n < iend+1 ; n++){ibufsend[n -istart] = nan_map[n];}
+#endif
         mpi_tag = 1500 + irank;
         MPI_Send(ibufsend, ibufsize, MPI_INTEGER, mpi_dest, mpi_tag, MPI_COMM_WORLD);
         free(ibufsend);
@@ -1504,11 +1861,16 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     int *ibufrecv;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
 #endif
     ibufsize = (iend-istart+1) * 1;
     ibufrecv = (int*)malloc(sizeof(int) * ibufsize);
@@ -1525,18 +1887,28 @@ int DoIt (void)
 /* send prev. results to each PE */
   if (mpi_rank == 0)
   {
-/* first, the primary makes copy for its own part */
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
-    for (n = istart ; n < iend+1 ; n++){for (m = 0; m < paramct; m++){PrevResLocal[(n-istart)*paramct+m] = prevdata[n + m         *imgpix];}}
-    for (n = istart ; n < iend+1 ; n++){for (m = 0; m < Err_ct;  m++){PrevErrLocal[(n-istart)*Err_ct +m] = prevdata[n +(m+paramct)*imgpix];}}
+#endif
+/* first, the primary makes copy for its own part */
+#if JESPARAL == 1
+    for (n = istart ; n < iend+1 ; n++){for (m = 0; m < paramct; m++){PrevResLocal[(n-istart)*paramct+m] = prevdata[jobassignmap[n] + m         *imgpix];}}
+    for (n = istart ; n < iend+1 ; n++){for (m = 0; m < Err_ct;  m++){PrevErrLocal[(n-istart)*Err_ct +m] = prevdata[jobassignmap[n] +(m+paramct)*imgpix];}}
+#else
+    for (n = istart ; n < iend+1 ; n++){for (m = 0; m < paramct; m++){PrevResLocal[(n-istart)*paramct+m] = prevdata[n               + m         *imgpix];}}
+    for (n = istart ; n < iend+1 ; n++){for (m = 0; m < Err_ct;  m++){PrevErrLocal[(n-istart)*Err_ct +m] = prevdata[n               +(m+paramct)*imgpix];}}
+#endif
 /* then send the partials to the other PEs */
     if (mpi_size > 1)
     {
@@ -1547,15 +1919,24 @@ int DoIt (void)
         int ibufsize;
         float *fbufsend;
         mpi_dest = irank;
+#if JESPARAL == 1
+        istart=0;
+        iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
         istart=istartall[mpi_dest];
         iend=iendall[mpi_dest];
 #else
         para_range(mpi_dest,nprocs,numpix,&istart,&iend);
 #endif
+#endif
         ibufsize = (iend-istart+1) * (paramct + Err_ct);
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
-        for (n = istart ; n < iend+1 ; n++){for (m = 0; m < (paramct + Err_ct); m++){fbufsend[(n-istart)*(paramct + Err_ct)+m] = prevdata[n + m*imgpix];}}
+#if JESPARAL == 1
+        for (n = istart ; n < iend+1 ; n++){for (m = 0; m < (paramct + Err_ct); m++){fbufsend[(n-istart)*(paramct + Err_ct)+m] = prevdata[jobassignmap[n+jobnum*mpi_dest] + m*imgpix];}}
+#else
+        for (n = istart ; n < iend+1 ; n++){for (m = 0; m < (paramct + Err_ct); m++){fbufsend[(n-istart)*(paramct + Err_ct)+m] = prevdata[n                               + m*imgpix];}}
+#endif
         mpi_tag = 1600 + irank;
         MPI_Send(fbufsend, ibufsize, MPI_REAL, mpi_dest, mpi_tag, MPI_COMM_WORLD);
         free(fbufsend);
@@ -1567,11 +1948,16 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     float *fbufrecv;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
 #endif
     ibufsize = (iend-istart+1) * (paramct + Err_ct);
     fbufrecv = (float*)malloc(sizeof(float) * ibufsize);
@@ -1588,20 +1974,29 @@ int DoIt (void)
 #endif /* endif TAKEPREV is 1 or not */
 
 #if VLOSINIT == 1
-/* send prev. results to each PE */
+/* send Doppler velocity, as initial guess, to each PE */
   if (mpi_rank == 0)
   {
-/* first, the primary makes copy for its own part */
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
+#endif
+/* first, the primary makes copy for its own part */
+#if JESPARAL == 1
+    for (n = istart ; n < iend+1 ; n++){vlos_initLocal[n-istart] = vlos_init[jobassignmap[n]];}
+#else
     for (n = istart ; n < iend+1 ; n++){vlos_initLocal[n-istart] = vlos_init[n];}
+#endif
 /* then send the partials to the other PEs */
     if (mpi_size > 1)
     {
@@ -1612,15 +2007,24 @@ int DoIt (void)
         int ibufsize;
         float *fbufsend;
         mpi_dest = irank;
+#if JESPARAL == 1
+        istart=0;
+        iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
         istart=istartall[mpi_dest];
         iend=iendall[mpi_dest];
 #else
         para_range(mpi_dest,nprocs,numpix,&istart,&iend);
 #endif
+#endif
         ibufsize = (iend-istart+1) * 1;
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
+#if JESPARAL == 1
+        for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = vlos_init[jobassignmap[n+jobnum*mpi_dest]];}
+#else
         for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = vlos_init[n];}
+#endif
         mpi_tag = 1900 + irank;
         MPI_Send(fbufsend, ibufsize, MPI_REAL, mpi_dest, mpi_tag, MPI_COMM_WORLD);
         free(fbufsend);
@@ -1632,11 +2036,16 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     float *fbufrecv;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
 #endif
     ibufsize = (iend-istart+1) * 1;
     fbufrecv = (float*)malloc(sizeof(float) * ibufsize);
@@ -1652,20 +2061,29 @@ int DoIt (void)
 #endif /* endif VLOSINIT is 1 or not */
 
 #if MGSTINIT == 1
-/* send prev. results to each PE */
+/* send magnetogram data, as initial guess, to each PE */
   if (mpi_rank == 0)
   {
-/* first, the primary makes copy for its own part */
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
+#endif
+/* first, the primary makes copy for its own part */
+#if JESPARAL == 1
+    for (n = istart ; n < iend+1 ; n++){mgst_initLocal[n-istart] = mgst_init[jobassignmap[n]];}
+#else
     for (n = istart ; n < iend+1 ; n++){mgst_initLocal[n-istart] = mgst_init[n];}
+#endif
 /* then send the partials to the other PEs */
     if (mpi_size > 1)
     {
@@ -1676,15 +2094,24 @@ int DoIt (void)
         int ibufsize;
         float *fbufsend;
         mpi_dest = irank;
+#if JESPARAL == 1
+        istart=0;
+        iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
         istart=istartall[mpi_dest];
         iend=iendall[mpi_dest];
 #else
         para_range(mpi_dest,nprocs,numpix,&istart,&iend);
 #endif
+#endif
         ibufsize = (iend-istart+1) * 1;
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
+#if JESPARAL == 1
+        for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = mgst_init[jobassignmap[n+jobnum*mpi_dest]];}
+#else
         for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = mgst_init[n];}
+#endif
         mpi_tag = 2000 + irank;
         MPI_Send(fbufsend, ibufsize, MPI_REAL, mpi_dest, mpi_tag, MPI_COMM_WORLD);
         free(fbufsend);
@@ -1696,11 +2123,16 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     float *fbufrecv;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
 #endif
     ibufsize = (iend-istart+1) * 1;
     fbufrecv = (float*)malloc(sizeof(float) * ibufsize);
@@ -1718,17 +2150,22 @@ int DoIt (void)
 /* inversion initializations : must be done by each PE. */
   if (mpi_rank == 0) printf("\n----------- inversion initializations ----------------- \n");
 
+  vfisvalloc_(&NUM_LAMBDA_FILTER,&NUM_TUNNING,&NUM_LAMBDA,&NUM_LAMBDA_synth); // allocate small variables..here
+
+/* On 2012 Jan 24. When determining noise-level at each pixel, the lines below be disabled. */
+#if NLEVPIXL != 1
   line_init_(&LAMBDA_0,&LAMBDA_B,&NOISE_LEVEL);
   if (verbose){printf("done line_init for mpi_rank %d\n",mpi_rank);}
-  wave_init_ (&LAMBDA_MIN_synth,&DELTA_LAMBDA,&NUM_LAMBDA_synth);  // use ... synthetic(s) ???
-  if (verbose){printf("done wave_init for mpi_rank %d\n", mpi_rank );}
+  wave_init_ (&LAMBDA_MIN_synth,&DELTA_LAMBDA,&NUM_LAMBDA_synth);
+  if (verbose){printf("done wave_init for mpi_rank %d\n",mpi_rank );}
   filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&WSPACING, &NUM_LAMBDA); // new one, on May 31, 2011
-//  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&CONTINUUM,&LYOTFWHM,&WNARROW,&WSPACING, &NUM_LAMBDA); old one, 
+//  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&CONTINUUM,&LYOTFWHM,&WNARROW,&WSPACING, &NUM_LAMBDA); old one,
   if (verbose){printf("done filt_init for mpi_rank %d\n",mpi_rank);}
+#endif
 
 /* JM Borrero & RC Elliot Apr 7, 2010
-  filt_init should be replaced for a routine, written by Sebastien
-  that will read from the DMRS the phases, contrasts, etcetera: ONLY READ */
+ * filt_init should be replaced for a routine, written by Sebastien
+ * that will read from the DMRS the phases, contrasts, etcetera: ONLY READ */
 
 /*S.C. filter function */
   int location,column,row,ratio,x0,y0,x1,y1,loc1,loc2,loc3,loc4;
@@ -1839,9 +2276,9 @@ printf("We should be running initialize_vfisv_filter\n");
 #if NRMLFLTR == 1
   if (mpi_rank == 0)
   {
-/* copy from lines by S. Couvidat : some lines seems omittable, but K.H. just copied everything. */
-    column = 2048;
-    row    = 2048;
+/* copy from lines by S. Couvidat : some lines here seem omittable, but K.H. just copied everything. */
+    column = 2048;       // MIND these two assume the case input be 4k x 4k, but no need to modify even when the input is not of 4k x 4k:
+    row    = 2048;       //      This part just calculate the filter-normalization factor at the center.
     ratio  = 4096/nx2;   // modified on Sep 8, 2011. Now it assumes that cols and rows will not be necessarily 4k.
 //    ratio  = cols/nx2;   // should be 16
     x0 = (column/ratio); // a column number
@@ -1907,16 +2344,17 @@ printf("We should be running initialize_vfisv_filter\n");
     norm_factor = aveave;
     free(sum_filt);
   } // end if mpi_rank is 0.
-  { // scope limiter
-    MPI_Barrier(MPI_COMM_WORLD);
-    fbuff=(float *)malloc(sizeof(float)*1);
-    fbuff[0] = norm_factor;
-    MPI_Bcast(fbuff,1,MPI_FLOAT,0,MPI_COMM_WORLD); // broadcasting the norm_factor values, from 0th PE to the others.
-    norm_factor = fbuff[0]; //.... silly
-    free(fbuff);
-    if (verbose) {printf(" normalization factor reaching to %d PE is %f\n",mpi_rank,norm_factor);}
-    MPI_Barrier(MPI_COMM_WORLD);
-  } // end scope limiter
+/* broadcast the value of norm_factor, from the primary PE to the rest */
+{ // scope limiter
+  MPI_Barrier(MPI_COMM_WORLD);
+  fbuff=(float *)malloc(sizeof(float)*1);
+  fbuff[0] = norm_factor;
+  MPI_Bcast(fbuff,1,MPI_FLOAT,0,MPI_COMM_WORLD); // broadcasting the norm_factor values, from 0th PE to the others.
+  norm_factor = fbuff[0]; //.... silly
+  free(fbuff);
+  if (verbose) {printf(" normalization factor reaching to %d PE is %f\n",mpi_rank,norm_factor);}
+  MPI_Barrier(MPI_COMM_WORLD);
+} // end of scope limiter
 #else
   norm_factor = 1.0;
 #endif // end if NRMLFLTR is 1 or not
@@ -1927,8 +2365,8 @@ printf("We should be running initialize_vfisv_filter\n");
   if (verbose){printf("done inv_init\n");}
   free_init_(list_free_params);
   if (verbose){printf("done list_free_params for mpi_rank %d\n", mpi_rank);}
-  svd_init_();
-  if (verbose){printf("done svd_init\n");}
+//  svd_init_();
+//  if (verbose){printf("done svd_init\n");}
 /* By RCE & Borrero */
 /* Changed index of list_free_params to 3 (instead of 4) to refer to Damping*/
   if  (list_free_params[3] == 0) voigt_init_();
@@ -1940,14 +2378,21 @@ printf("We should be running initialize_vfisv_filter\n");
 /* at last, do inversion in parallel */
   if (mpi_rank == 0) printf("\n----------- finally, do inversion in parallel --------- \n");
 
+  time(&starttime1);
+
   myrank = mpi_rank;
   nprocs = mpi_size;
   numpix = imgpix;
+#if JESPARAL == 1
+  istart=0;
+  iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
   istart=istartall[myrank];
   iend  =iendall[myrank];
 #else
   para_range(myrank,nprocs,numpix,&istart,&iend);
+#endif
 #endif
   int pixdone;
   pixdone = 0;
@@ -1956,13 +2401,11 @@ printf("We should be running initialize_vfisv_filter\n");
 
   for (n = istart; n < iend + 1; n++)
   {
+#if JESPARAL == 1
+    if (nan_mapLocal[n-istart] != 0){printf("something nasty happened at %9d th pixel on %2d th PE, %9d th pixel of original. Ah.\n",n,myrank,jobassignmapLocal[n]);DIE(" ah...");}
+#endif
     if (nan_mapLocal[n-istart] == 0)
     {
-#if QUICKRUN == 1
-//     if (n == 15049795) // a non-convergence pixel address of hmi_test.S_720s[2010.05.25_03:00:00_TAI]
-     if ((n % rows > 1997) && (n % rows < 2098)) // central 100-pixel width column.
-     {
-#endif
 
 #if TAKEPREV == 1
       if (iexistprev == 1)
@@ -1990,27 +2433,34 @@ printf("We should be running initialize_vfisv_filter\n");
       /* Note: I would avoid sending this program the full 512*512 matrixes (can slow down teh code)
          but rather the 4 neighboring points to perform the bilinear interpolation */
 
+      int nccd; // pixel address in the original input Stokes CCD system. Used in cal. Filter func. and other places.
+#if JESPARAL == 1
+      nccd = jobassignmapLocal[n]; // MIND that this must be the only one occassion jobassignmapLocal be referred within the for-n-loop.
+#else
+      nccd = n;
+#endif
+
 /*S.C. filter function */
 
-      { /* scope limiter, within which value of n must never be changed. Added on Sep 8, 2011 by K.H.*/
+{ /* scope limiter, within which value of nccd must never be changed. Added on Sep 8, 2011 by K.H.*/
       int nloc, iloc, jloc;
       float filoc, fjloc;
-      iloc = n % cols; // column address in the input data array, whose size is not necessarily 4k x 4k.
-      jloc = n / cols;
+      iloc = nccd % cols; // column address in the input data array, whose size is not necessarily 4k x 4k.
+      jloc = nccd / cols;
       filoc = (float)(iloc) / (float)(cols); // address(es) in float that must run from 0 to 0.999999
       fjloc = (float)(jloc) / (float)(rows);
-      filoc = filoc * 4096.0 + 0.000000001; // then, it be now running from 0.0 to 4095.99999
+      filoc = filoc * 4096.0 + 0.000000001; // then, it be now running from 0.0000001 to 4095.999990001 or somthing alike.
       fjloc = fjloc * 4096.0 + 0.000000001;
       iloc = (int)(filoc); // enforce it integer
       jloc = (int)(fjloc);
       nloc = iloc + 4096 * jloc;  // address in 4k x 4k arrays
 
-if ((n != nloc)){printf("test ... : %d %d %d %d\n",nloc,n,cols,rows);} // if cols=rows=4096, nloc must be equal to n.
+// if ((n != nloc)){printf("test ... : %d %d %d %d\n",nloc,n,cols,rows);} // if cols=rows=4096, nloc must be equal to n.
 
       column        =nloc % 4096; // column from 0 to 4095
       row           =nloc / 4096; // row from 0 to 4095
       ratio         =4096 /  nx2; // should be 16
-      } // end of scope limiter
+} // end of scope limiter
 
       /*-------------------------------------------------------------*/
       /* bilinear interpolation of the phase maps at pixel (x,y) */
@@ -2125,7 +2575,8 @@ This is done inside the FORTRAN code, in invert.f90
 /* since 2011 March 3, the weighting array is filled here */
 //       weights[0]=1.0; weights[1]=7.0; weights[2]=7.0; weights[3]=3.0; // choice 1
 //       weights[0]=1.0; weights[1]=5.0; weights[2]=5.0; weights[3]=3.0; // choice 2
-       weights[0]=1.0; weights[1]=3.0; weights[2]=3.0; weights[3]=2.0; // choice 3
+//       weights[0]=1.0; weights[1]=3.0; weights[2]=3.0; weights[3]=2.0; // choice 3
+       weights[0]=1.0; weights[1]=5.0; weights[2]=5.0; weights[3]=3.5; // choice 3 new !!
 
 #if VLOSINIT == 1
        guess[6] = vlos_initLocal[n-istart]; // 7th one ..
@@ -2134,24 +2585,55 @@ This is done inside the FORTRAN code, in invert.f90
        guess[5] = mgst_initLocal[n-istart]; // 6th one ..
 #endif
 
+/* since 2012 Jan 24, to calculate noise-level at each pixel, the lines below were added */
+#if NLEVPIXL == 1
+       double ivalmax, ivalave;
+       ivalmax = -100.0e0;
+       ivalave =    0.0e0;
+{ // scope limiter
+       int m;
+       for (m = 0; m < NUM_LAMBDA_FILTER; m++) //     very rarely, mostly for test purpose, NUM_LAMBDA_FILTER be other than 6.
+       {
+         double tmpval=obs[0*NUM_LAMBDA_FILTER+m]; // obs(0:5) for Stokes I0 to I5 (or Ix, in an order defined somewhere above)
+         ivalave = ivalave + tmpval;
+         if (tmpval > ivalmax){ivalmax = tmpval;}
+       }
+       ivalave = ivalave / ((double)(NUM_LAMBDA_FILTER));
+       ivalave = sqrt(ivalave);
+       ivalmax = sqrt(ivalmax);
+// The line below will make dangerous amount of standard output. just for debugging.
+//       if (verbose){printf("IvalMax at %d th pixel at %d th PE = %e\n",n,mpi_rank,ivalmax);}
+} // end of scope limiter
+       NOISE_LEVEL[0] = NOISE_LEVELFI   * ivalave;
+       NOISE_LEVEL[1] = NOISE_LEVELFQ   * ivalave;
+       NOISE_LEVEL[2] = NOISE_LEVELFU   * ivalave;
+       NOISE_LEVEL[3] = NOISE_LEVELFV   * ivalave;
+       line_init_(&LAMBDA_0,&LAMBDA_B,NOISE_LEVEL); // MIND now the third argument is of 4-element double array.
+//       if (verbose){printf("done line_init for mpi_rank %d\n",mpi_rank);}
+       wave_init_ (&LAMBDA_MIN_synth,&DELTA_LAMBDA,&NUM_LAMBDA_synth);
+//       if (verbose){printf("done wave_init for mpi_rank %d\n", mpi_rank );}
+       filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&WSPACING, &NUM_LAMBDA);
+//       if (verbose){printf("done filt_init for mpi_rank %d\n",mpi_rank);}
+#endif
+
 /* added on May 17, 2011.
  * All filter are normalized here. */
 #if NRMLFLTR == 1
-      for (i = 0; i < NUM_LAMBDA_FILTER; i++){for (j = 0; j < NUM_LAMBDA; j++)
-      {
-        filters[i][j] = filters[i][j] / norm_factor;
-      } }
+       for (i = 0; i < NUM_LAMBDA_FILTER; i++){for (j = 0; j < NUM_LAMBDA; j++)
+       {
+         filters[i][j] = filters[i][j] / norm_factor;
+       } }
 #endif
 
       invert_ (obs, scat, guess, res, err, filters, &iconverge_flag, weights); // added the weights. on Feb 10, 2011
 
 /* normalization for err array, this must be temporal : later done inisde invert_(), 2011 Sept 7, by K.H. */
 //      err[0] = err[0] / 1500.0;    // field strength in gauss,     ERR(1) in Fortran
-//      err[1] = err[1] / 90.0;      // inclination angle in degree, ERR(2) in Fortran 
+//      err[1] = err[1] / 90.0;      // inclination angle in degree, ERR(2) in Fortran
 //      err[2] = err[2] / 90.0;      // azithum angle in degree,     ERR(3) in Fortran
 
 //      err[0] = err[0] / 38.729833462; // field strength in gauss,     ERR(1) in Fortran
-//      err[1] = err[1] /  9.486832981; // inclination angle in degree, ERR(2) in Fortran 
+//      err[1] = err[1] /  9.486832981; // inclination angle in degree, ERR(2) in Fortran
 //      err[2] = err[2] /  9.486832981; // azithum angle in degree,     ERR(3) in Fortran
 
 /*
@@ -2162,7 +2644,7 @@ This is done inside the FORTRAN code, in invert.f90
           (iconverge_flag == 5) ||
           (iconverge_flag == 1))   // changed on 2011 May 16, responding to the changes in invert.f90 by RCE.
       {
-        if (verbose){printf("Hello, this is %2d th PE : found iconverge_flag %d at %9d th pixel.\n", mpi_rank, iconverge_flag, n);}
+        if (verbose){printf("Hello, this is %2d th PE : found iconverge_flag %d at %9d th pixel.\n", mpi_rank, iconverge_flag, nccd);}
         for (j=0; j<paramct; j++){res[j]=NAN;}
         for (k=0; k<Err_ct;  k++){err[k]=NAN;}
       }
@@ -2179,19 +2661,9 @@ This is done inside the FORTRAN code, in invert.f90
       {
         FinalQualMapLocal[n-istart]=0x00000000;
       }
+      for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]=res[j];} // copy results to the local-small array(s)
+      for (k=0; k<Err_ct;  k++){FinalErrLocal[(n-istart)*Err_ct +k]=err[k];}
 
-        for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]=res[j];} // copy results to the local-small array(s)
-        for (k=0; k<Err_ct;  k++){FinalErrLocal[(n-istart)*Err_ct +k]=err[k];}
-#if QUICKRUN == 1
-     }
-     else
-     {
-       FinalConvFlagLocal[n-istart]=-(mpi_rank+1);  // for debugging purpose
-       FinalQualMapLocal [n-istart]=-(mpi_rank+1);  // for debugging purpose
-       for (j=0; j<paramct; j++){FinalResLocal[(n-istart)*paramct+j]= 1.0+mpi_rank;}
-       for (k=0; k<Err_ct ; k++){FinalErrLocal[(n-istart)*Err_ct +k]=-1.0-mpi_rank;}
-     }
-#endif
       pixdone = pixdone + 1;
     }
     else
@@ -2205,12 +2677,14 @@ This is done inside the FORTRAN code, in invert.f90
   } // end of n-loop
   if (verbose){printf("Hello, this is %2d th PE : inversion done for %9d pixels. \n", mpi_rank, pixdone);}
   if (verbose){printf("Hello, this is %2d th PE : Num of pixel at which solution did not converge = %d\n",mpi_rank,pix_noconv);}
+  time(&endtime1);
+  if (verbose){printf("Hello, this is %2d th PE : Time spent %ld\n",mpi_rank,endtime1-starttime1);}
   MPI_Barrier(MPI_COMM_WORLD);
 
 /* count non-convergent pixel etc. */
   int sum_pix_noconv;
   int sum_pixdone;
-  { // limit the scope of some integer variables
+{ // limit the scope of some integer variables
     int *ibufs, *ibufr;
     ibufs = (int *)malloc(sizeof(int)*2);
     ibufr = (int *)malloc(sizeof(int)*2);
@@ -2224,10 +2698,10 @@ This is done inside the FORTRAN code, in invert.f90
       printf("Total num. of pixel processed                          = %d\n",sum_pixdone);
       printf("Total num. of pixel at which solution did not converge = %d\n",sum_pix_noconv);
     }
-  }
+} // end of scope limiter
   MPI_Barrier(MPI_COMM_WORLD);
 
-/* S.C. filter function */
+/* arrays used in S.C. filter function */
   free(FSR);
   free(phaseNT);
   free(contrastNT);
@@ -2243,21 +2717,34 @@ This is done inside the FORTRAN code, in invert.f90
 /* output data are gathered to primary from each PE */
   if (mpi_rank == 0)
   {
-/* first, copy the portion the primary itself did */
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
+#endif
+/* first, copy the portion the primary itself did */
+#if JESPARAL == 1
     for (n = istart ; n < iend+1 ; n++)
     {
-      for (j=0; j<paramct; j++){FinalRes[(n*paramct)+j]=FinalResLocal[(n-istart)*paramct+j];}
-      for (k=0; k<Err_ct ; k++){FinalErr[(n*Err_ct) +k]=FinalErrLocal[(n-istart)*Err_ct +k];}
+      for (j=0; j<paramct; j++){FinalRes[(jobassignmap[n]*paramct)+j]=FinalResLocal[(n-istart)*paramct+j];}
+      for (k=0; k<Err_ct ; k++){FinalErr[(jobassignmap[n]*Err_ct) +k]=FinalErrLocal[(n-istart)*Err_ct +k];}
     }
+#else
+    for (n = istart ; n < iend+1 ; n++)
+    {
+      for (j=0; j<paramct; j++){FinalRes[(n              *paramct)+j]=FinalResLocal[(n-istart)*paramct+j];}
+      for (k=0; k<Err_ct ; k++){FinalErr[(n              *Err_ct) +k]=FinalErrLocal[(n-istart)*Err_ct +k];}
+    }
+#endif
 /* then collecting the portions done by the other PEs */
     if (mpi_size > 1)
     {
@@ -2269,11 +2756,16 @@ This is done inside the FORTRAN code, in invert.f90
         int mpi_from;
         nprocs = mpi_size;
         numpix = imgpix;
+#if JESPARAL == 1
+        istart=0;
+        iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
         istart=istartall[irecv];
         iend=iendall[irecv];
 #else
         para_range(irecv,nprocs,numpix,&istart,&iend);
+#endif
 #endif
         int ibufsize;
         ibufsize = (iend-istart+1) * (paramct+Err_ct);
@@ -2282,15 +2774,23 @@ This is done inside the FORTRAN code, in invert.f90
         mpi_from = irecv;
         mpi_tag = 1200 + irecv;
         MPI_Recv(dbufrecv, ibufsize, MPI_DOUBLE, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
+#if JESPARAL == 1
         for (n = istart ; n < iend+1 ; n++)
         {
-          for (j=0; j<paramct; j++){FinalRes[(n*paramct)+j]=dbufrecv[(n-istart)*(paramct+Err_ct)        +j];}
-          for (k=0; k<Err_ct ; k++){FinalErr[(n*Err_ct) +k]=dbufrecv[(n-istart)*(paramct+Err_ct)+paramct+k];}
+          for (j=0; j<paramct; j++){FinalRes[(jobassignmap[n+jobnum*mpi_from]*paramct)+j]=dbufrecv[(n-istart)*(paramct+Err_ct)        +j];}
+          for (k=0; k<Err_ct ; k++){FinalErr[(jobassignmap[n+jobnum*mpi_from]*Err_ct) +k]=dbufrecv[(n-istart)*(paramct+Err_ct)+paramct+k];}
         }
+#else
+        for (n = istart ; n < iend+1 ; n++)
+        {
+          for (j=0; j<paramct; j++){FinalRes[(n                              *paramct)+j]=dbufrecv[(n-istart)*(paramct+Err_ct)        +j];}
+          for (k=0; k<Err_ct ; k++){FinalErr[(n                              *Err_ct) +k]=dbufrecv[(n-istart)*(paramct+Err_ct)+paramct+k];}
+        }
+#endif
         free(dbufrecv);
       }
       printf("done \n");
-   }
+    }
   }
   else
   {
@@ -2299,11 +2799,16 @@ This is done inside the FORTRAN code, in invert.f90
     nprocs = mpi_size;
     numpix = imgpix;
     isend = mpi_rank;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[isend];
     iend=iendall[isend];
 #else
     para_range(isend,nprocs,numpix,&istart,&iend);
+#endif
 #endif
     int ibufsize;
     ibufsize = (iend-istart+1) * (paramct+Err_ct);
@@ -2323,21 +2828,34 @@ This is done inside the FORTRAN code, in invert.f90
 /* collecting integer array(s) in the same way */
   if (mpi_rank == 0)
   {
-/* first, copy the portion the primary itself did */
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[myrank];
     iend=iendall[myrank];
 #else
     para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
+#endif
+/* first, copy the portion the primary itself did */
+#if JESPARAL == 1
     for (n = istart ; n < iend+1 ; n++)
     {
-      FinalConvFlag[n] =  FinalConvFlagLocal[n-istart];
-      FinalQualMap [n] =  FinalQualMapLocal [n-istart];
+      FinalConvFlag[jobassignmap[n]] =  FinalConvFlagLocal[n-istart];
+      FinalQualMap [jobassignmap[n]] =  FinalQualMapLocal [n-istart];
     }
+#else
+    for (n = istart ; n < iend+1 ; n++)
+    {
+      FinalConvFlag[n]               =  FinalConvFlagLocal[n-istart];
+      FinalQualMap [n]               =  FinalQualMapLocal [n-istart];
+    }
+#endif
 /* then collecting the portions done by the other PE */
     if (mpi_size > 1)
     {
@@ -2349,11 +2867,16 @@ This is done inside the FORTRAN code, in invert.f90
         int mpi_from;
         nprocs = mpi_size;
         numpix = imgpix;
+#if JESPARAL == 1
+        istart=0;
+        iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
         istart=istartall[irecv];
         iend=iendall[irecv];
 #else
         para_range(irecv,nprocs,numpix,&istart,&iend);
+#endif
 #endif
         int ibufsize;
         ibufsize = (iend-istart+1) * 2; // so far 2 integer-array be handled ...
@@ -2362,15 +2885,23 @@ This is done inside the FORTRAN code, in invert.f90
         mpi_from = irecv;
         mpi_tag = 1300 + irecv;
         MPI_Recv(ibufrecv, ibufsize, MPI_INT, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
+#if JESPARAL == 1
         for (n = istart ; n < iend+1 ; n++)
         {
-          FinalConvFlag[n] = ibufrecv[n-istart];
-          FinalQualMap [n] = ibufrecv[n-istart+(iend-istart+1)];
+          FinalConvFlag[jobassignmap[n+jobnum*mpi_from]] = ibufrecv[n-istart];
+          FinalQualMap [jobassignmap[n+jobnum*mpi_from]] = ibufrecv[n-istart+(iend-istart+1)];
         }
+#else
+        for (n = istart ; n < iend+1 ; n++)
+        {
+          FinalConvFlag[n]                               = ibufrecv[n-istart];
+          FinalQualMap [n]                               = ibufrecv[n-istart+(iend-istart+1)];
+        }
+#endif // end if JESPARAL is 1 or not
         free(ibufrecv);
       }
       printf("done \n");
-   }
+    }
   }
   else
   {
@@ -2379,11 +2910,16 @@ This is done inside the FORTRAN code, in invert.f90
     nprocs = mpi_size;
     numpix = imgpix;
     isend = mpi_rank;
+#if JESPARAL == 1
+    istart=0;
+    iend  =jobnum-1;
+#else
 #if EQUIAREA == 1
     istart=istartall[isend];
     iend=iendall[isend];
 #else
     para_range(isend,nprocs,numpix,&istart,&iend);
+#endif
 #endif
     int ibufsize;
     ibufsize = (iend-istart+1) * 2; // so far 2 integer-array be handled ...
@@ -2403,6 +2939,19 @@ This is done inside the FORTRAN code, in invert.f90
 /* the primary PE takes care of pixels none had taken care of */
   if (mpi_rank == 0)
   {
+#if JESPARAL == 1
+    for (n = 0 ; n < imgpix; n++)
+    {
+      if (nan_map[n] != 0) // pixel not to be processed.
+      {
+        float aa=NAN;
+        FinalConvFlag[n] = 1; // (int)(aa); // tweak, working
+        FinalQualMap [n] = (int)(aa);
+        for (j=0; j<paramct; j++){FinalRes[(n*paramct)+j]=NAN;}
+        for (k=0; k<Err_ct ; k++){FinalErr[(n*Err_ct) +k]=NAN;}
+      }
+    }
+#else
     if (istartall[0] > 0)
     {
       for (n = 0 ; n < istartall[0]; n++)
@@ -2425,7 +2974,9 @@ This is done inside the FORTRAN code, in invert.f90
         for (k=0; k<Err_ct ; k++){FinalErr[(n*Err_ct) +k]=NAN;}
       }
     }
+#endif // end if JESPARAL is 1 or not
   } // end-if mpi_rank is 0.
+
   MPI_Barrier(MPI_COMM_WORLD); // silly..but always safe
 
 /* clean up arrays */
@@ -2435,10 +2986,12 @@ This is done inside the FORTRAN code, in invert.f90
   free(FinalErrLocal);
   free(dataLocal);
   free(nan_mapLocal);
-
+#if JESPARAL == 1
+  free(jobassignmapLocal);
+#endif
   MPI_Barrier(MPI_COMM_WORLD);
 
-/* finalizing quality map */
+/* finalizing confidence and qualily info. maps */
 #if CONFINDX == 1
   if (mpi_rank == 0) // only the primary PE has all info needed.
   {
@@ -2461,7 +3014,7 @@ This is done inside the FORTRAN code, in invert.f90
 #define pixThreshold 500.0 // Threshold value for determining bad pixels
 #define quvScale 0.204 // scaling factor for the Stokes quv noise; sigma(Q,U,V) = 0.204 * sqrt(I)
 #define iScale   0.118 // scaling factor for Stokes I noise; sigma(I) = 0.118 * sqrt(I)
-//#define quThreshold  132.0 // The median of qu in a quiet Sun area near the disk center, where 
+//#define quThreshold  132.0 // The median of qu in a quiet Sun area near the disk center, where
                            // qu = sqrt((sum[i=0, ..., 5] q_i)^2 + (sum[i=0, ..., 5] u_i)^2))
 //#define vThreshold 153.0 // The median of v in a quiet Sun area near the disk center, where v = sum[i =0, .., 5] stokesV_i
 #define losThreshold 1.0 * 6.7 // 1 * sigma of 720s los mags.
@@ -2502,7 +3055,7 @@ This is done inside the FORTRAN code, in invert.f90
       vQual   = vCode0;
       blosQual = blosCode0;
       missQual = missCode0;
-      if (isnan(bTotal) || isnan(bIncl) || isnan(bLos) || 
+      if (isnan(bTotal) || isnan(bIncl) || isnan(bLos) ||
           isnan(stokesI) || isnan(stokesQ) || isnan(stokesU) || isnan(stokesV) || isnan(bInvFlag))
       {
         missQual = missCode1;
@@ -2552,6 +3105,7 @@ This is done inside the FORTRAN code, in invert.f90
     {
       int ival = FinalQualMap[iData];
       if (!isnan(ival)){FinalQualMap[iData] = ival * 256 * 256 * 256;}
+//      if (!isnan(ival)){FinalQualMap[iData] = ival << 24;} // elegant, but dangerous
     }
 
   } // end if mpi_rank is zero
@@ -2571,7 +3125,7 @@ This is done inside the FORTRAN code, in invert.f90
     double blos_ave=0.0;
     double babs_ave=0.0;
     double vlos_ave=0.0;
-    {// scope limiter
+{// scope limiter
       int icount1=0;
       int icount2=0;
       int n, nend;
@@ -2617,16 +3171,10 @@ This is done inside the FORTRAN code, in invert.f90
       {
         vlos_ave=0.0;
       }
-      for(n = 0; n < imgpix ; n++)
-      {
-        int   iqm = FinalQualMap[n];
-        int   inan= nan_map[n];
-//        if ((inan != 0) && (!isnan(iqm)) && (iqm > 0)){FinalQualMap[n]=FinalQualMap[n]+0x00000001;}// turn on rightmost bit, this may be overwritten later.
-      }
-    }// end of scope limiter
+}// end of scope limiter
 
 /* overriding existing keyword, or adding new ones */
-    { // scope limiter
+{ // scope limiter
 
 /* version info., given in this code */
     char invcodeversion[50];
@@ -2663,7 +3211,14 @@ This is done inside the FORTRAN code, in invert.f90
     drms_setkey_double(outRec,"INVWNARW",WNARROW);
     drms_setkey_double(outRec,"INVWSPAC",WSPACING);
     drms_setkey_double(outRec,"INVINTTH",INTENSITY_THRESHOLD);
+#if NLEVPIXL == 1
+    drms_setkey_double(outRec,"INVNFCTI",NOISE_LEVELFI);
+    drms_setkey_double(outRec,"INVNFCTQ",NOISE_LEVELFQ);
+    drms_setkey_double(outRec,"INVNFCTU",NOISE_LEVELFU);
+    drms_setkey_double(outRec,"INVNFCTV",NOISE_LEVELFV);
+#else
     drms_setkey_double(outRec,"INVNOISE",NOISE_LEVEL);
+#endif
     drms_setkey_int   (outRec,"INVCONTI",CONTINUUM);
     drms_setkey_int   (outRec,"INVLMBDS",NUM_LAMBDA_synth);
     drms_setkey_double(outRec,"INVLMBMS",LAMBDA_MIN_synth);
@@ -2759,13 +3314,13 @@ This is done inside the FORTRAN code, in invert.f90
     drms_setkey_string(outRec,"BUNIT_020",sdummy); // incli_alpha_err
     drms_setkey_string(outRec,"BUNIT_021",sdummy); // azimu_alpha
     drms_setkey_string(outRec,"BUNIT_022",sdummy); // conv_flag
-    drms_setkey_string(outRec,"BUNIT_023",sdummy); // quality map
+    drms_setkey_string(outRec,"BUNIT_023",sdummy); // qual_map
     drms_setkey_string(outRec,"BUNIT_024",sdummy); // confidence index
 
 #if CHNGTREC == 1
     drms_setkey_string(outRec, "T_REC",outtrec); // enforce T_REC dummy ones for test
 #endif
-    } // end of scope-limit
+} // end of scope-limit
 
     char trectmp2[26];
     TIME trectmp1 = drms_getkey_time(outRec,"T_REC",&status);
@@ -2785,7 +3340,6 @@ This is done inside the FORTRAN code, in invert.f90
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-//        if (nan_map[n] == 0)
         int   ix, iy;
         ix = n % cols - xleftbot; iy = n / cols - yleftbot;
         if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
@@ -2835,7 +3389,6 @@ This is done inside the FORTRAN code, in invert.f90
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-//        if (nan_map[n] == 0)
         int   ix, iy;
         ix = n % cols - xleftbot; iy = n / cols - yleftbot;
         if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
@@ -2889,13 +3442,12 @@ This is done inside the FORTRAN code, in invert.f90
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-//        if (nan_map[n] == 0)
         int   ix, iy;
         ix = n % cols - xleftbot; iy = n / cols - yleftbot;
         if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
         {
           icount = icount + 1;
-          dat3[icount] = (char)FinalConvFlag[n]; // no need of bzero nor bscale
+          dat3[icount] = (char)FinalConvFlag[n]; // no need of bzero nor bscale ... maybe
         }
       }
       axes[0] = xwidth;
@@ -2927,7 +3479,7 @@ This is done inside the FORTRAN code, in invert.f90
       free(dat3);
     } // end of k-loop
 
-    printf("sending quality map array  to DRMS\n");
+    printf("sending info. map array  to DRMS\n");
     for (k = Err_ct + 1; k < Err_ct + 2; k++) // behave as if this is (Err_ct+2) th error array.
     {
       int *dat4;
@@ -2938,13 +3490,12 @@ This is done inside the FORTRAN code, in invert.f90
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-//        if (nan_map[n] == 0)
         int   ix, iy;
         ix = n % cols - xleftbot; iy = n / cols - yleftbot;
         if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
         {
           icount = icount + 1;
-          dat4[icount] = FinalQualMap[n]; // no need of bzero nor bscale
+          dat4[icount] = FinalQualMap[n]; // no need of bzero nor bscale ... maybe
         }
       }
       axes[0] = xwidth;
@@ -2965,12 +3516,12 @@ This is done inside the FORTRAN code, in invert.f90
       {
         if (drms_segment_write (outSeg, qmap_array, 0))
         {
-          fprintf (stderr, "ConvFlag writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
+          fprintf (stderr, "QualMap writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
           return 1;
         }
         else
         {
-          if (verbose){printf("ConvFlag written out to %-s\n", Resname[k+paramct]);}
+          if (verbose){printf("QualMap written out to %-s\n", Resname[k+paramct]);}
         }
       }
       free(dat4);
@@ -2987,13 +3538,12 @@ This is done inside the FORTRAN code, in invert.f90
       icount = -1;
       for(n = 0; n < imgpix ; n++)
       {
-//        if (nan_map[n] == 0)
         int   ix, iy;
         ix = n % cols - xleftbot; iy = n / cols - yleftbot;
         if ((ix >= 0) && (ix < xwidth) && (iy >= 0) && (iy < yheight))
         {
           icount = icount + 1;
-          dat5[icount] = (char)FinalConfidMap[n]; // no need of bzero nor bscale
+          dat5[icount] = (char)FinalConfidMap[n]; // no need of bzero nor bscale ... maybe
         }
       }
       axes[0] = xwidth;
@@ -3027,10 +3577,11 @@ This is done inside the FORTRAN code, in invert.f90
 
     printf("write-out done !\n");
 
-    free(FinalErr);
+    free(FinalErr); // clean up
     free(FinalRes);
     free(FinalConvFlag);
     free(FinalQualMap);
+    free(FinalConfidMap);
 
     printf("so, close all DRMS record(s) !\n");
 /* DRMS trailer and closer */
@@ -3039,8 +3590,10 @@ This is done inside the FORTRAN code, in invert.f90
 
 /* how long it took */
     time(&endtime);
-    printf ("%ld sec for %d profiles\n", endtime - startime, imgpix);
-    printf ("%.2f profiles per second\n", (float)(imgpix) / (0.01 + (float)(endtime - startime)));
+    printf ("%ld sec for %d profiles\n", endtime - startime, sum_pixdone);
+    printf ("%.2f profiles per second\n", (float)(sum_pixdone) / (0.01 + (float)(endtime - startime)));
+//    printf ("%ld sec for %d profiles\n", endtime - startime, imgpix);
+//    printf ("%.2f profiles per second\n", (float)(imgpix) / (0.01 + (float)(endtime - startime)));
 
     printf("good bye !\n");
   } // end-if mpi_rank is 0.
@@ -3051,7 +3604,7 @@ This is done inside the FORTRAN code, in invert.f90
   MPI_Finalize();
 
   return 0;
-}
+} // end of DoIt
 
 /* ------------------------------- end of main-wrapper layer ------------------------------- */
 
@@ -3062,6 +3615,8 @@ This is done inside the FORTRAN code, in invert.f90
 /* --------------------------------------------------------------------------------
  *
  * Calculate the first and the last addresses of array each PE will be in charge of.
+ * From MPI text book.
+ * By K.H.
  *
  * -------------------------------------------------------------------------------- */
 
@@ -3078,12 +3633,6 @@ void para_range(int myrank, int nprocs, int numpix, int *istart, int *iend)
   idummy  = *istart + iwork1 - 1;
   if (iwork2 <= myrank){*iend = idummy;}else{*iend=idummy+1;}
 }
-
-/* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
-
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.1 2012/02/09 20:36:38 keiji Exp $");}
-
-/* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- by Sebastien (1), filter profile etc.---------------------------- */
 
@@ -3642,33 +4191,35 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 }
 
+/* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
+
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.2 2012/04/09 22:23:13 keiji Exp $");}
+
+/* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- end of this file ----------------------------- */
 /* --------------------------------------------
- -------------------------------------------- */
-/* --------------------------------------------
-: voigt.f,v 1.4 2011/10/14 17:21:58 keiji Exp 
-: change_var.f90,v 1.1 2011/10/14 17:24:47 keiji Exp 
-: cons_param.f90,v 1.3 2011/10/14 17:22:09 keiji Exp 
-: filt_init.f90,v 1.4 2011/10/14 17:22:14 keiji Exp 
-: filt_param.f90,v 1.4 2011/10/14 17:22:19 keiji Exp 
-: forward.f90,v 1.4 2011/10/14 17:22:26 keiji Exp 
-: free_init.f90,v 1.3 2011/10/14 17:22:31 keiji Exp 
-: free_memory.f90,v 1.3 2011/10/14 17:22:36 keiji Exp 
-: invert.f90,v 1.6 2011/10/14 17:22:41 keiji Exp 
-: inv_init.f90,v 1.3 2011/10/14 17:22:46 keiji Exp 
-: inv_param.f90,v 1.3 2011/10/14 17:22:51 keiji Exp 
-: inv_utils.f90,v 1.4 2011/10/14 17:22:55 keiji Exp 
-: line_init.f90,v 1.3 2011/10/14 17:23:01 keiji Exp 
-: line_param.f90,v 1.3 2011/10/14 17:23:06 keiji Exp 
-: ran_mod.f90,v 1.3 2011/10/14 17:23:11 keiji Exp 
-: svbksb.f90,v 1.3 2011/10/14 17:23:16 keiji Exp 
-: svdcmp.f90,v 1.3 2011/10/14 17:23:21 keiji Exp 
-: svd_init.f90,v 1.3 2011/10/14 17:23:27 keiji Exp 
-: svd_param.f90,v 1.3 2011/10/14 17:23:32 keiji Exp 
-: voigt_data.f90,v 1.3 2011/10/14 17:23:36 keiji Exp 
-: voigt_init.f90,v 1.3 2011/10/14 17:23:41 keiji Exp 
-: voigt_taylor.f90,v 1.4 2011/10/14 17:23:46 keiji Exp 
-: wave_init.f90,v 1.3 2011/10/14 17:23:51 keiji Exp 
-: wfa_guess.f90,v 1.3 2011/10/14 17:23:56 keiji Exp 
+: voigt.f,v 1.5 2012/04/09 22:20:25 keiji Exp 
+: change_var.f90,v 1.2 2012/04/09 22:20:31 keiji Exp 
+: cons_param.f90,v 1.4 2012/04/09 22:20:37 keiji Exp 
+: filt_init.f90,v 1.5 2012/04/09 22:20:44 keiji Exp 
+: filt_param.f90,v 1.5 2012/04/09 22:20:50 keiji Exp 
+: forward.f90,v 1.5 2012/04/09 22:20:55 keiji Exp 
+: free_init.f90,v 1.4 2012/04/09 22:21:00 keiji Exp 
+: free_memory.f90,v 1.4 2012/04/09 22:21:05 keiji Exp 
+: inv1_init.f90,v 1.1 2012/04/09 22:21:10 keiji Exp 
+: invert.f90,v 1.7 2012/04/09 22:21:17 keiji Exp 
+: inv_init.f90,v 1.4 2012/04/09 22:21:23 keiji Exp 
+: inv_param.f90,v 1.4 2012/04/09 22:21:28 keiji Exp 
+: inv_utils.f90,v 1.5 2012/04/09 22:21:33 keiji Exp 
+: line_init.f90,v 1.4 2012/04/09 22:21:38 keiji Exp 
+: line_param.f90,v 1.4 2012/04/09 22:21:43 keiji Exp 
+: ran_mod.f90,v 1.4 2012/04/09 22:21:48 keiji Exp 
+: svbksb.f90,v 1.4 2012/04/09 22:21:53 keiji Exp 
+: svdcmp.f90,v 1.4 2012/04/09 22:21:58 keiji Exp 
+: voigt_data.f90,v 1.4 2012/04/09 22:22:03 keiji Exp 
+: voigt_init.f90,v 1.4 2012/04/09 22:22:08 keiji Exp 
+: voigt_taylor.f90,v 1.5 2012/04/09 22:22:13 keiji Exp 
+: wave_init.f90,v 1.4 2012/04/09 22:22:19 keiji Exp 
+: wfa_guess.f90,v 1.4 2012/04/09 22:22:24 keiji Exp 
  -------------------------------------------- */

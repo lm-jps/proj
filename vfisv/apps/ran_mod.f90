@@ -50,4 +50,4 @@ contains
     end function normal
 
 end module ran_mod 
-!CVSVERSIONINFO "$Id: ran_mod.f90,v 1.3 2011/10/14 17:23:11 keiji Exp $"
+!CVSVERSIONINFO "$Id: ran_mod.f90,v 1.4 2012/04/09 22:21:48 keiji Exp $"

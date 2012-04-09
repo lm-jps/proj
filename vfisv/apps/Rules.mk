@@ -66,17 +66,17 @@ $(d)/filt_init.o: $(d)/filt_param.o $(d)/cons_param.o $(d)/line_param.o
 $(d)/filt_param.o: $(d)/line_param.o $(d)/cons_param.o
 $(d)/forward.o: $(d)/line_param.o $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_param.o $(d)/voigt.o $(d)/voigt_taylor.o $(d)/change_var.o
 $(d)/free_init.o: $(d)/inv_param.o $(d)/cons_param.o $(d)/filt_param.o
-$(d)/free_memory.o: $(d)/filt_param.o $(d)/svd_param.o $(d)/line_param.o
+$(d)/free_memory.o: $(d)/filt_param.o $(d)/line_param.o
 $(d)/inv_param.o: $(d)/cons_param.o
-$(d)/inv_utils.o: $(d)/cons_param.o $(d)/filt_param.o $(d)/svd_param.o $(d)/inv_param.o $(d)/line_param.o $(d)/svdcmp.o $(d)/svbksb.o $(d)/ran_mod.o
+$(d)/inv_utils.o: $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_param.o $(d)/line_param.o $(d)/svdcmp.o $(d)/svbksb.o $(d)/ran_mod.o
+$(d)/inv1_init.o: $(d)/inv_param.o
 $(d)/wfa_guess.o: $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_param.o
 $(d)/ran_mod.o: $(d)/cons_param.o
-$(d)/invert.o: $(d)/invert.f90 $(d)/forward.o $(d)/line_param.o $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_utils.o $(d)/svd_param.o $(d)/inv_param.o $(d)/svdcmp.o $(d)/svbksb.o $(d)/wfa_guess.o $(d)/change_var.o
+$(d)/invert.o: $(d)/invert.f90 $(d)/forward.o $(d)/line_param.o $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_utils.o $(d)/inv_param.o $(d)/svdcmp.o $(d)/svbksb.o $(d)/wfa_guess.o $(d)/change_var.o
 $(d)/line_init.o: $(d)/line_param.o $(d)/cons_param.o
 $(d)/line_param.o: $(d)/cons_param.o
 $(d)/svbksb.o: $(d)/cons_param.o
 $(d)/svdcmp.o: $(d)/cons_param.o
-$(d)/svd_init.o: $(d)/svd_param.o $(d)/inv_param.o $(d)/cons_param.o
 $(d)/voigt_data.o: $(d)/cons_param.o
 $(d)/voigt_init.o: $(d)/voigt_data.o $(d)/cons_param.o
 $(d)/voigt_taylor.o: $(d)/voigt_data.o $(d)/voigt_init.o $(d)/voigt.o $(d)/cons_param.o $(d)/line_param.o

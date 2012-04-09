@@ -16,7 +16,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   ! By RCE, Apr 23, 2010: (OBSOLETE, see May 17 2011 comment) Normalize all filters to central filter area hard-coded value:
   ! The integrated areas of the six filters for the central pixel (pixel # 8386559) are:    
   ! 1.43858806880917  1.49139978559615   1.52324167542270  1.52811487224149  1.50984871281028  1.46553486521323
-  ! the average area being:	1.49279. We will normalize ALL the filters by this value.
+  ! the average area being: 1.49279. We will normalize ALL the filters by this value.
   !
   ! By RCE, Apr 23, 2010: Reverse the wavelength order of the observed Stokes profiles so
   ! that the convention of the filter profiles matches the convention for the observations.
@@ -32,15 +32,11 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   ! By RCE Feb 2011: Added the weights for the Stokes profiles as an input parameter rather than having them hard-coded
   ! in VFISV. The call to GET_WEIGHTS now just normalizes the weights and multiplies by the noise.
   ! 
-  ! By RCE, April 2011: Changes to the LM algorithm:
-  !  - Reset to zero the FLAG that counts consecutive bad iterations when a good iteration is achieved (line
-  !  - Change random perturbations to angles inside RANDOM_JUMP routine in INV_UTILS
   !  - Put lower bound on the LM lambda parameter so that it doesn't decrease beyond a value (in GET_LAMBDA in INV_UTILS) 
   !  - Test flag (TMP_FLAG) to count the number of resets of the model parameters. Saved in one of the error variables
   !
   ! By RCE: Re-normalizing filters to different value to account for +/-2A coverage (OBSOLETE, see May 17 2011 comment)
   !
-  ! By RCE April 2011: reset FLAG that counts number of consecutive interations to zero when one successful iteration is achieved.
   ! By RCE April 2011: Included filter hack. FILTERS_LONG are the filters calculated in the full wavelength range.
   ! FILTERS are the filter profiles in the narrow wavelength range, where we do the forward modeling.
   ! We do this to avoid computing the forward model very far into the continuum. It takes too much time. So we do
@@ -61,12 +57,17 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   ! to the model. This perturbation is given in the new variables, so we call a routine that undoes the change, so that we can
   ! add the perturbation to the model in order to move on to the next iteration.
   ! CHANGEVAR_FLAG is a flag that allows us to decide whether we want the inversion code to work with the changes or not.
+  !
+  ! By RCE Jan 2012:
+  ! Introducing CHI2 REGULARIZATION: There is a regularization term in chi2. It penalizes chi2 for high values of eta0. We
+  ! are using this to get rid of the double minima problem, by which, chi2 showed two minima at very different values of eta0
+  ! (one low and one high), that was compensated by other parameters like the field strength and the doppler width.
+  ! REGUL_FLAG switches the regularization on (1) and off (0).
 
   USE FILT_PARAM
   USE CONS_PARAM
   USE LINE_PARAM
   USE INV_PARAM
-  USE SVD_PARAM
   USE INV_UTILS
   USE FORWARD
   USE RAN_MOD
@@ -85,24 +86,33 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   REAL(DP),        DIMENSION(NBINS,4)   :: OBS, SCAT, OBS_REV
   REAL(DP),        DIMENSION(NBINS)     :: INTEG_FILTERS
   REAL(DP),        DIMENSION(4)         :: WEIGHTS
-  REAL(DP),        DIMENSION(10)        :: BESTMODEL, MODELG, LASTGOODMODEL, DMODEL
+  REAL(DP),        DIMENSION(10)        :: BESTMODEL, MODELG, LASTGOODMODEL, DMODEL,test1,test2,GUESS_TWEAK,BESTMINMODEL
   REAL(DP),        DIMENSION(16)        :: SIGMA
-  REAL(DP)                              :: BESTCHI2, LASTGOODCHI2, TOTPOL, NEWCHI2, LASTGOODLAMBDA, ICONT
+  REAL(DP)                              :: BESTCHI2, LASTGOODCHI2, TOTPOL, NEWCHI2, LASTGOODLAMBDA, ICONT, DELTACHI2, DUMMY, LAMBDAX, BESTMINCHI2
   REAL(DP),        DIMENSION(ITER)      :: LAMBDA, CHI2
+  REAL(DP),        ALLOCATABLE          :: HESS(:,:), DIVC(:)
   REAL(DP),        DIMENSION(10,ITER)   :: MODEL
-  INTEGER                               :: I, K, M, FLAG, WRONG, LASTGOODITER, BESTITER, NPOINTS
-  LOGICAL                               :: DERIVATIVE
-  INTEGER                               :: CONV_FLAG, NAN_FLAG, CONVERGENCE_FLAG, EPSILON_FLAG, NRESET, CHANGEVAR_FLAG
+  REAL(DP)                              :: SSUM,SRATIO,BNOISE, divc_norm, B_LOW, B_HIGH, LAMBDA_START, LAMBDA_RESET
+  INTEGER                               :: I, J, K, M, NPOINTS
+  INTEGER                               :: CONV_FLAG, CONVERGENCE_FLAG, NRESET, CHANGEVAR_FLAG, REGUL_FLAG, RESET_FLAG, DONE, ITSTART, ABANDON, N_ABANDON
+  REAL(DP),        DIMENSION(NBINS)     :: pweights
   !---------------------------------------------------------------------
   REAL(DP),     DIMENSION(NBINS,4)      :: SYN, LASTGOODSYN, BESTSYN
   REAL(DP),     DIMENSION(10,NBINS,4)   :: DSYN, LASTGOODDSYN
   !---------------------------------------------------------------------
   CHARACTER(LEN=20), PARAMETER :: FMT = '("6f14.10")'
+! Some variables for random number initialization
+  integer                               :: dt_return(1:8), nseed,clock_count
+  integer, dimension(:), allocatable :: seed
+
 
   CALL SORT_OBS(OBS_LONG,OBS)
   CALL SORT_OBS(SCAT_LONG,SCAT)
-	
 
+  ALLOCATE(HESS(NUMFREE_PARAM,NUMFREE_PARAM),DIVC(NUMFREE_PARAM))
+
+
+  ! --- BEGIN THE WAVELENGTH HACK
   ! By RCE April 2011: Select the region of the spectrum of the filters that we are 
   ! going to use in the synthesis and the region that we are going to integrate 
   ! assuming that they're in the continuum of the spectral line. 
@@ -111,6 +121,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   ! which filters were computed.
   ! We divide by 2 to get the number of wavelength points at each side of the
   ! "synthesis range"
+
   NPOINTS = (NUMW_LONG - NUMW)/2  
   
   ! Select region of filters corresponding to forward modeling wavelength region
@@ -126,40 +137,56 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
   IF (NPOINTS .EQ. 0) THEN 
      INTEG_FILTERS(:) = 0D0
   ENDIF
-  
+  ! --- END OF WAVELENGTH HACK
 
   !By RCE, Apr 23, 2010: Reversing the wavelength order of the observations 
   ! so that they are in increasing wavelength order
 
   DO k=1,NBINS
      DO m = 1,4
-	OBS_REV(k,m) = OBS(NBINS-k+1,m)		
+        OBS_REV(k,m) = OBS(NBINS-k+1,m)
      ENDDO
   ENDDO
-
   OBS(:,:) = OBS_REV(:,:)
 
+  ! ----- FLAGS FOR THE CODE
   ! By RCE: 
-  ! CONV_FLAG checks for for convergence of SVD.
-  ! NAN_FLAG checks for NaNs in chisqr. 
-  ! EPSILON_FLAG checks the convergence rate (how fast CHI2 diminishes). If it's not 
-  !   fast enough (NEWCHI2-OLDCHI2 LT epsilon), the iterative process stops.
   ! CONVERGENCE_FLAG is sent out to the wrapper with different values depending 
   !   on whether the algorithm converges or not and why.
-  ! CHANGEVAR_FLAG decides whether variable change for inversion is implemented or not.
+  ! CHANGEVAR_FLAG decides whether variable change for inversion is implemented (1) or not (0).
   
-  CONV_FLAG = 0
-  NAN_FLAG = 0
   CONVERGENCE_FLAG = 0
-  EPSILON_FLAG = 0
-  CHANGEVAR_FLAG = 0             !!NEW!!
+  CHANGEVAR_FLAG = 1 ! Use new variables or not
+  REGUL_FLAG = 1
+  ! ---- END FLAGS
+
+! Some constants for later for control of iterations etc.
+  BNOISE=300D0 ! Fields above this are dominated by signal
+  N_ABANDON=5 ! Abandon 1st reset if no better than this many iterations.
+  DELTACHIMIN=1D-4 ! Min change of chi2 to decrease lambda for.
+  LAMBDA_START=0.1D0 ! Initial value of lambda
+  LAMBDA_RESET=0.1D0 ! Value of lambda after a reset
+  LAMBDA_DOWN=5D0 ! How much to decrease lambda for good guess
+  LAMBDA_UP=10D0 ! How much to increase lambda for bad guess
+  LAMBDA_MIN=1D-4 ! Min lambda value
+  LAMBDA_MAX=100D0 ! Max lambda value (exit criterion)
   
+! Get seed for random generator
+! Both values incement with time, so not entirely independent
+  call date_and_time(values=dt_return)
+  call system_clock(count=clock_count,count_rate=i,count_max=j)
   
+  call random_seed(size=nseed)
+  allocate(seed(1:nseed))
+  seed(:) = dt_return(8) ! Milliseconds of system clock
+  seed(1)=clock_count ! Something to do with time spent
+
   ICONT=MAXVAL(OBS(:,1))
   IF (ICONT .GT. TREIC) THEN
+     CALL INV1_INIT (ICONT,REGUL_FLAG) ! Initialize limits and norms
      !---------------------------------------------------------------------------------
-     ! This IF statement checks wheter the intensity is large enough to invert the data
-     ! Otherwsie the pixel is ignored. This is used to avoid pixels off-the-limb
+     ! This IF statement checks whether the intensity is large enough to invert the data
+     ! Otherwise the pixel is ignored. This is used to avoid pixels off-the-limb
      !---------------------------------------------------------------------------------
      CALL GET_TOTPOL(OBS,TOTPOL)
      CALL GET_WEIGHT(OBS,WEIGHTS)
@@ -172,6 +199,7 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
         CALL WFA_GUESS(OBS/ICONT,LANDA0,GUESS(7))
 !     ENDIF
 
+
      !----------------------------------------------------
      ! Added by RCE: New initialization of Source Function
      ! used when profiles come in photon counts
@@ -179,84 +207,117 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
      !-----------------------------
      ! Inversion initial values
      !-----------------------------
-     MODEL(:,1)=GUESS
-     MODEL(8,1)=0.4D0*0.98D0*ICONT
-     MODEL(9,1)=0.6D0*0.98D0*ICONT
-     BESTMODEL(:)=MODEL(:,1)
+     GUESS_TWEAK=GUESS
+     GUESS_TWEAK(1)=5
+     GUESS_TWEAK(3)=atan2(sum(obs(:,3)),sum(obs(:,2)))*90/DPI
+! The following is slightly better
+!    pweights=[0.4,1.0,1.0,1.0,1.0,0.4]
+!    GUESS_TWEAK(3)=atan2(sum(pweights*obs(:,3)),sum(pweights*obs(:,2)))*90/DPI
+     GUESS_TWEAK(5)=20 ! More reasonable Doppler width
+     GUESS_TWEAK(8)=0.15D0*0.98D0*ICONT
+     GUESS_TWEAK(9)=0.85D0*0.98D0*ICONT
+!     call random_seed(put=seed)
+!     GUESS_TWEAK(1)=exp(5*ran1()) ! eta0
+!     GUESS_TWEAK(2)=180*ran1() ! incl
+!     GUESS_TWEAK(3)=180*ran1() ! az
+!     GUESS_TWEAK(5)=5+50*ran1() ! Dop
+!     GUESS_TWEAK(6)=exp(2.5+5*ran1()) ! B
+!     GUESS_TWEAK(7)=GUESS_TWEAK(7)+(ran1()-0.5)*100000 ! vlos +/- 500m/s
+!     GUESS_TWEAK(8)=(0.15+0.90*ran1())*ICONT
+!     GUESS_TWEAK(9)=ICONT-GUESS_TWEAK(8)
 
-     IF (FREE(4).EQ..FALSE.) THEN
-        MODEL(4,1)=0.5D0
-        BESTMODEL(4)=0.5D0
-     ENDIF
-     IF (FREE(10).EQ..FALSE.) THEN
-        MODEL(10,1)=1D0
-        BESTMODEL(10)=1D0
-     ENDIF
+     IF (FREE(4).EQ..FALSE.) GUESS_TWEAK(4)=0.5D0
+     IF (FREE(10).EQ..FALSE.) GUESS_TWEAK(10)=1D0
 
+     CALL FINE_TUNE_MODEL(GUESS_TWEAK)
 
-     ! By RCE: Default values for lambda and chi2 so that I can find out when they 
-     ! are not being updated.
+     MODEL(:,1)=GUESS_TWEAK
+     BESTMODEL(:)=GUESS_TWEAK
+
+     ! By RCE: Default values for lambda and chi2 so that I can find out
+     ! when they are not being updated.
      LAMBDA(:) = 33.3333
      CHI2(:) = 33.3333333
      LASTGOODCHI2=1E24
-     LAMBDA(1)=0.1D0
-     BESTCHI2=1E24
-     LASTGOODITER = 1 
+     LAMBDA(1)=LAMBDA_START
+     BESTCHI2=1E24 ! Best chi2 ever seen
+     BESTMINCHI2=1E24 ! Best value actually converged
+     BESTMINMODEL=1E24 ! Best model actually converged
+     ITSTART=1 ! Start of current iteration
+
      I=1
-     FLAG=0
-     WRONG=1
      ! Counter for the number of random resets that the model parameters suffer.
      NRESET=0
+     DUMMY=0
+     RESET_FLAG=0
+     DONE=0
 
      !-----------------------------
      ! Start LOOP iteration
      !-----------------------------
-     DO WHILE (I .LT. ITER .AND. EPSILON_FLAG .EQ. 0 .AND. NAN_FLAG .EQ. 0 .AND. CONV_FLAG .EQ. 0)
-        !----------------------------------------
-        ! Too many consecutive bad iterations
-        !------------------------------------
-        ! Slightly modified by JM Borrero. Apr 15, 2010
-        IF (FLAG.GT.5) THEN
+     DO WHILE ((I.LT.ITER).and.(DONE.EQ.0))
+
+        ! Restart with new guess?
+        IF (RESET_FLAG.ne.0) THEN
+           BESTMINCHI2=BESTCHI2 ! Save current best chi2
+           BESTMINMODEL=BESTMODEL ! Save current best chi2
+           ITSTART=I ! Remember where we started
            MODELG=BESTMODEL
-           CALL RANDOM_MODEL_JUMP(RANDOM_JUMP*WRONG,MODELG,ICONT)
+           CALL RANDOM_MODEL_JUMP(RANDOM_JUMP,MODELG)
+           if (mod(nreset,2).eq.0) then ! Do clever resets every other time.
+              if (bestmodel(6).ge.BNOISE) then
+                 modelg=bestmodel
+                 if (bestmodel(6).gt.1000) then
+                    modelg(1)=50
+                    modelg(5)=12
+                 else
+                    if (mod(nreset,4).eq.2) then
+                       modelg(1)=10
+                       modelg(5)=7
+                       sratio=.2
+                    else
+                       modelg(1)=9
+                       modelg(5)=30
+                       sratio=1
+                    endif
+                    ssum=bestmodel(8)+bestmodel(9)
+                    modelg(8)=ssum*sratio/(1+sratio)
+                    modelg(9)=ssum/(1+sratio)
+                 endif
+              endif
+              if (BESTMODEL(6).lt.BNOISE) then
+                 modelg=bestmodel
+                 modelg(1)=8
+                 modelg(5)=0.75*bestmodel(5)
+                 modelg(6)=85
+! Predict S0/S1 from Doppler width. Maintain S0+S1
+                 ssum=bestmodel(8)+bestmodel(9)
+                 sratio=0.017*bestmodel(5)
+                 modelg(8)=ssum*sratio/(1+sratio)
+                 modelg(9)=ssum/(1+sratio)
+              endif
+           endif
+           CALL FINE_TUNE_MODEL(MODELG)
            MODEL(:,I)=MODELG
            LASTGOODMODEL=MODEL(:,I)
-           LASTGOODCHI2=1E12*WRONG
-           FLAG=0
-           LAMBDA(I)=10D0*WRONG
-           WRONG=WRONG+1
+           LASTGOODCHI2=1E24
+           LAMBDA(I)=LAMBDA_RESET
            NRESET = NRESET+1
         ENDIF
 
-        !--------------------------------------
-        ! Synthetic profiles but no derivatives
-        !--------------------------------------
-        DERIVATIVE=.FALSE. 
-        CALL SYNTHESIS(MODEL(:,I),SCAT,DERIVATIVE,SYN,DSYN, FILTERS, INTEG_FILTERS)
-        !-------------
-        ! Getting CHI2
-        !-------------
-        CALL GET_CHI2(SYN,OBS,WEIGHTS,NEWCHI2)
+        ! Get chi2 only, see if it is better and only calculate derivatives if it is.
+        CALL SYNTHESIS(MODEL(:,I),SCAT,.FALSE.,SYN,DSYN, FILTERS, INTEG_FILTERS)
+        CALL GET_CHI2(MODEL(:,I),SYN,OBS,WEIGHTS,REGUL_FLAG,NEWCHI2)
         ! Checking for NAN in NEWCHI2
         IF (NEWCHI2.EQ.NEWCHI2+1D0) THEN
            PRINT*,'NaN detected in Subroutine GETCHI2'
-           NAN_FLAG = 1
-        ELSE 
+           NEWCHI2=2*LASTGOODCHI2
+        ENDIF
         CHI2(I)=NEWCHI2
-        !-------------------
-        ! Have we improved ?
-        !-------------------
-        ! YES ##############
-        IF (NEWCHI2.LE.LASTGOODCHI2) THEN
-           ! Synthetic profiles and derivatives
-           DERIVATIVE=.TRUE.
-           CALL SYNTHESIS(MODEL(:,I),SCAT,DERIVATIVE,SYN,DSYN, FILTERS, INTEG_FILTERS)
-           ! Normalizing Derivatives
-           CALL NORMALIZE_DSYN(DSYN,ICONT)
-           ! Set to Zero unneeded derivatives
-           CALL ZERO_DSYN(DSYN)
-           !
-           
+        DELTACHI2=LASTGOODCHI2-NEWCHI2
+        IF (DELTACHI2.GE.0.0) THEN ! Things got better
+           ! Get synthetic profiles and derivatives
+           CALL SYNTHESIS(MODEL(:,I),SCAT,.TRUE.,SYN,DSYN, FILTERS, INTEG_FILTERS)
            !--------------------------------------------
            ! Calling change of variables for derivatives
            !--------------------------------------------
@@ -264,124 +325,101 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
               CALL DO_CHANGE_DER(MODEL(:,I), DSYN)     !!NEW!!
            ENDIF
            ! From now on, the derivatives correspond to the changed variable ones.
-           !---------------------------------
-
-
-           !CHECKING THE RATE OF CONVERGENCE OF CHI2
-           IF ((LASTGOODCHI2 - NEWCHI2) .LT. (GOODFIT*ICONT*GOODFIT*ICONT)) EPSILON_FLAG = 1
-           !
+           ! Normalizing Derivatives
+           CALL NORMALIZE_DSYN(DSYN)
+           ! Set to Zero unneeded derivatives
+           CALL ZERO_DSYN(DSYN)
+           
            LASTGOODLAMBDA=LAMBDA(I)
-           LASTGOODITER=I
            LASTGOODMODEL=MODEL(:,I)
            LASTGOODCHI2=NEWCHI2
            LASTGOODSYN=SYN
            LASTGOODDSYN=DSYN
-           WRONG=1D0
-	   ! By RCE: Resetting to zero FLAG that counts consecutive bad iterations
-	   FLAG = 0
-
-           CALL GET_LAMBDA(LAMBDA(I),.TRUE.,LAMBDA(I+1))
 
            IF (NEWCHI2.LT.BESTCHI2) THEN
-              BESTITER=I
               BESTMODEL=MODEL(:,I)
               BESTCHI2=NEWCHI2
               BESTSYN=SYN
            ENDIF
-        ENDIF
-
-        ! NO ##############
-        IF (NEWCHI2.GT.LASTGOODCHI2) THEN
-           CALL GET_LAMBDA(LAMBDA(I),.FALSE.,LAMBDA(I+1))
+        ELSE ! Things did not get better
            SYN=LASTGOODSYN
            DSYN=LASTGOODDSYN
            MODEL(:,I)=LASTGOODMODEL
-           FLAG=FLAG+1
         ENDIF
+        CALL GET_LAMBDA(DELTACHI2,LAMBDA(I),LAMBDA(I+1))
 
-        ! The divergence and the Hessian are computed with the changed variables (in the
-        ! derivatives).
+        ! Getting Divergence and Hessian.
+        CALL GET_DIVC(LASTGOODSYN,OBS,LASTGOODDSYN,WEIGHTS,DIVC)
+        divc_norm=sqrt(sum(divc*divc))
+        CALL GET_HESS(LASTGOODDSYN,WEIGHTS,HESS)
 
-        !---------------------------
-        ! Getting Divergence of CHI2
-        !---------------------------
-        CALL GET_DIVC(LASTGOODSYN,OBS,LASTGOODDSYN,WEIGHTS)
-        !------------------------------------------------
-        ! Getting Hessian matrix
-        !------------------------------------------------ 
-        CALL GET_HESS(LASTGOODDSYN,LAMBDA(I+1),WEIGHTS)
-        !------------------------------------------------------------
-        ! SVD of the Hessian matrix to get perturbations to old model
-        !------------------------------------------------------------
-        CALL SVDSOL(DMODEL, CONV_FLAG)
+        ! Get perturbations to old model
+        CALL GET_DMODEL(LASTGOODMODEL, REGUL_FLAG, DIVC, HESS, LAMBDA(I+1), DMODEL, CONV_FLAG)
+        ! Ignore CONV_FLAG and rely on DMODEL set to zero/LAMBDA increase.
 
-        IF (CONV_FLAG .NE. 1) THEN
-        !---------------------------------------------------------
-        ! Make sure non-inverted parameters are not affected
-        !---------------------------------------------------------
-        DO M=1,10
-           IF (FREE(M).EQ..FALSE.) DMODEL(M)=0D0
-        ENDDO
-        !---------------------------------------------------
-        ! Checking for NaN in DMODEL
-        !---------------------------------------------------
-        
-        DO M=1,10
-           IF (DMODEL(M).EQ.DMODEL(M)+1D0) DMODEL(M)=0D0
-           IF (ABS(DMODEL(M)).GT.1E10) THEN 
-              DMODEL(M)=0D0
-              LAMBDA(I+1)=LAMBDA(I)*10D0
-           ENDIF
-        ENDDO
-        !-----------------------------------------
-        ! Normalizing, trimming and tunning DMODEL
-        !-----------------------------------------
-        !
-        ! Undoing variable change to obtain the perturbations to the original model
-        ! parameters. Overwriting DMODEL!
-        !
+        ! Normalizing, trimming and tuning DMODEL
+        ! Undoing variable change to obtain the perturbations to
+        ! the original model parameters. Overwriting DMODEL!
+        CALL NORMALIZE_DMODEL(DMODEL)
         IF (CHANGEVAR_FLAG .EQ. 1) THEN
-           CALL UNDO_CHANGE_DMODEL(MODEL(:,I),DMODEL)    !!NEW!!
+           CALL UNDO_CHANGE_DMODEL_FINITE(MODEL(:,I),DMODEL)    !!NEW!!
         ENDIF
-        !-------------------------------------
-        CALL NORMALIZE_DMODEL(DMODEL,ICONT)
-        CALL CUT_DMODEL(DMODEL,ICONT)
+        CALL CUT_DMODEL(DMODEL,MODEL)
         MODEL(:,I+1)=LASTGOODMODEL+DMODEL
-        !
-        CALL FINE_TUNE_MODEL(MODEL(:,I+1),ICONT)
-        !--------------------------------------   
-        ! New Iteration
+        CALL FINE_TUNE_MODEL(MODEL(:,I+1))
+
+        DONE=0
+        RESET_FLAG=0
+        ABANDON=0
+        if ((nreset.eq.1).and.((i-itstart).ge.N_ABANDON).and.((lastgoodchi2-bestminchi2).gt.0).and.(bestmodel(6).lt.BNOISE)) ABANDON=1 ! Restart is not getting better.
+        if ((LAMBDA(I+1).GE.LAMBDA_MAX).or.(ABANDON.ne.0)) then ! We are done with this round.
+
+           ! Test if reset is desired.
+           if (abs(BESTMODEL(2)-90).gt.45) RESET_FLAG=1 ! Inclination spike
+           if (BESTMODEL(6).lt.30) RESET_FLAG=1 ! Low field
+           if (BESTMODEL(6).gt.BNOISE) RESET_FLAG=1 ! High field
+           if (BESTCHI2.gt.20.00) RESET_FLAG=1
+           if ((BESTCHI2.gt.2.75).and.(BESTMODEL(6).lt.70).and.(BESTMODEL(5).lt.15)) RESET_FLAG=1 ! A few really bad points
+           if (abs(BESTMODEL(2)-90).gt.(10*log(BESTMODEL(6)/7))) RESET_FLAG=1 ! A stab at high incl points
+           if ((BESTMODEL(1).lt.5).and.(BESTMODEL(5).gt.20).and.(BESTMODEL(6).gt.000).and.(BESTMODEL(6).lt.BNOISE)) RESET_FLAG=2
+
+           if (NRESET.ne.0) RESET_FLAG=0 ! Force a max of one reset for items above.
+
+           B_LOW=35D0-nreset
+           B_HIGH=500D0
+           if (abs(BESTMODEL(2)-90).gt.60) RESET_FLAG=1 ! Inclination spike
+           if (BESTMODEL(6).lt.B_LOW) RESET_FLAG=1 ! Low field
+           if (BESTMODEL(6).gt.B_HIGH) RESET_FLAG=1 ! High field
+           if ((BESTMODEL(1).lt.3.5).and.(BESTMODEL(5).gt.30).and.(BESTMODEL(6).lt.45)) RESET_FLAG=2
+
+           if (RESET_FLAG.EQ.0) DONE=1 ! No resets desired
+        endif
+
         I=I+1
-        !
-     ENDIF ! Checking for CONV_FLAG for SVD convergence
-     END IF ! NaN detected in chi2 routine
+     ENDDO ! Main iteration loop
 
-     ENDDO ! Main loop
-
-
-     !---------------
-     ! Getting Errors
-     !---------------
-
-     IF ((NAN_FLAG .EQ. 0) .AND. (CONV_FLAG .EQ. 0)) THEN
+     ! Get errors
+     IF (BESTCHI2.gt.1d20) THEN
+        CONVERGENCE_FLAG = 4 ! Set flag and give up
+     ELSE
        
-        ! We compute the derivatives with the best model parameters (without doing the
-        ! change of variable afterwards), and we compute the Hessiand and the errors from 
-        ! there.
+        ! We compute the derivatives with the best model parameters (without
+        ! doing the change of variable afterwards), and we compute the Hessian
+        ! and the errors from there.
         
-        DERIVATIVE = .TRUE.
-        CALL SYNTHESIS(BESTMODEL,SCAT,DERIVATIVE,SYN,LASTGOODDSYN, FILTERS, INTEG_FILTERS)
-        !
-	! By RCE, Sept. 2011: Normalizing the derivatives: this wasn't done before, and that
-	! made errors a couple of orders of magnitude larger than they should be.
-	!
-        CALL NORMALIZE_DSYN(LASTGOODDSYN,ICONT)
-        !
-	! Compute non-modified Hessian (lambda = 0)
-        !
-        Call GET_HESS(LASTGOODDSYN,0D0,WEIGHTS)
+        ! Recalculate chi2 and derivatives. No regularization.
+        ! JS: Not clear why NEWCHI2 is recalculated.
+        CALL GET_CHI2(BESTMODEL,BESTSYN,OBS,WEIGHTS,0,NEWCHI2)
+        CALL SYNTHESIS(BESTMODEL,SCAT,.TRUE.,SYN,LASTGOODDSYN, FILTERS, INTEG_FILTERS)
+
+        CALL NORMALIZE_DSYN(LASTGOODDSYN)
+
+        ! Compute Hessian
+        Call GET_HESS(LASTGOODDSYN,WEIGHTS,HESS)
         ! This Hessian is constructed with normalized derivatives
-        CALL GET_ERR(BESTCHI2,ICONT,SIGMA)
+        CALL GET_ERR(HESS, BESTCHI2,SIGMA,CONV_FLAG)
+        if (CONV_FLAG.NE.0) CONVERGENCE_FLAG = 5 ! Set flag, otherwise proceed.
+
         ERR(1)=SIGMA(6)  ! Bfield
         ERR(2)=SIGMA(2)  ! Gamma
         ERR(3)=SIGMA(3)  ! Phi
@@ -394,41 +432,63 @@ SUBROUTINE INVERT (OBS_LONG,SCAT_LONG,GUESS,RES,ERR, FILTERS_LONG, CONVERGENCE_F
         ERR(10)=SIGMA(15)! Gamma-Alpha
         ERR(11)=SIGMA(16)! Phi-Alpha
         ERR(12)=BESTCHI2 ! Bestchi2
-        !--------------
+        ! Replace some errors with assorted other parameters
+        !ERR(9)=Nreset ! Save number of resets
+        !ERR(10)=I! Save number of iterations
+        !ERR(11)=ICONT
+
         ! Final Result
-        !--------------
         RES=BESTMODEL
         
-        ! By RCE, Apr 23, 2010: Juanma's correction to azimuth (which is rotated by 
-        ! 90 degrees with respect to the convention that people want).
-
+        ! By RCE, Apr 23, 2010: Juanma's correction to azimuth (which is
+        ! rotated by 90 degrees with respect to the convention people want).
         RES(3) = RES(3) + 90D0
         IF (RES(3) .GT. 180D0) RES(3) = RES(3) - 180D0
-        
-      ELSE
-           IF (NAN_FLAG .EQ. 1) CONVERGENCE_FLAG = 4
-           IF (CONV_FLAG .EQ. 1) CONVERGENCE_FLAG = 5
-      ENDIF ! CONV_FLAG and NAN_FLAG are equal to 0.
 
-   ELSE ! Intensity above threshold to invert
-        CONVERGENCE_FLAG = 1
-   ENDIF
+        IF ((I .EQ. ITER).and.(NRESET.eq.0)) THEN 
+           CONVERGENCE_FLAG = 2 ! Not converged
+        ELSE
+           CONVERGENCE_FLAG = 0 ! Found at least one local minimum.
+        ENDIF
+
+     ENDIF ! Decent chisq
+
+  ELSE ! Intensity too low to invert
+     CONVERGENCE_FLAG = 1
+  ENDIF
      
-     IF (I .EQ. ITER) THEN 
-        CONVERGENCE_FLAG = 2
-        IF (FLAG .GT. 5) CONVERGENCE_FLAG = 3
-     ENDIF
-     IF (BESTCHI2 .LT. GOODFIT) CONVERGENCE_FLAG = 0
 
 
 ! CONVERGENCE_FLAG values
-!    0: (CHI2old-CHI2new) LT epsilon (converged!)
+!    0: Converged!
 !    1: Pixel not inverted due to ICONT LT threshold intensity.
-!    2: Maximum number of iterations reached
-!    3: Too many non-consecutive successful iterations
-!    4: NaN in CHI2 detected
-!    5: NaN in SVD
+!    2: Maximum number of iterations reached without convergence.
+!    4: Never got decent chisq.
+!    5: Could not get errors.
 
+  DEALLOCATE(HESS, DIVC)
 
 END SUBROUTINE INVERT
-!CVSVERSIONINFO "$Id: invert.f90,v 1.6 2011/10/14 17:22:41 keiji Exp $"
+
+
+! subroutines added by K.H.
+! consolidate (some of) allocate arrays 
+SUBROUTINE VFISVALLOC(NUM_LAMBDA_FILTER, NUM_TUNNING, NUM_LAMBDA_LONG, NUM_LAMBDA)
+  USE FILT_PARAM
+  USE LINE_PARAM
+  USE CONS_PARAM
+  USE INV_PARAM
+  IMPLICIT NONE
+  INTEGER,  INTENT(IN)           :: NUM_LAMBDA_FILTER, NUM_TUNNING, NUM_LAMBDA_LONG, NUM_LAMBDA
+  
+  NUMW_LONG = NUM_LAMBDA_LONG
+  NBINS = NUM_LAMBDA_FILTER
+  NTUNE = NUM_TUNNING
+  ALLOCATE (FILTER(NUMW,NBINS),TUNEPOS(NBINS))
+
+  NUMW=NUM_LAMBDA
+  ALLOCATE (WAVE(NUMW))
+     
+END SUBROUTINE VFISVALLOC
+
+!CVSVERSIONINFO "$Id: invert.f90,v 1.7 2012/04/09 22:21:17 keiji Exp $"

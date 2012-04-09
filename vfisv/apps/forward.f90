@@ -230,6 +230,7 @@ CONTAINS
        DSTOKES_MAG(8,:,2:4) = 0D0
        DSTOKES_MAG(9,:,1) = (STOKES_MAG(:,1)-S0)/S1
        DSTOKES_MAG(9,:,2:4) = STOKES_MAG(:,2:4)/S1
+
        !-----------------------------------------------------------------------------
        ! Now we apply HMI Filters
        !-----------------------------------------------------------------------------
@@ -249,7 +250,7 @@ CONTAINS
           DSYN(8,J,1) = DSYN(8,J,1) + INTEG_FILTERS(J)
  	  DSYN(9,J,1) = DSYN(9,J,1) + INTEG_FILTERS(J)
        ENDDO
- 
+	
        DSYN(1:9,:,:)=ALPHAM*DSYN_MAG
        DSYN(10,:,:)=SYN_MAG-SCAT
 
@@ -565,4 +566,4 @@ CONTAINS
   ENDSUBROUTINE ABSMAT
 END MODULE FORWARD
 
-!CVSVERSIONINFO "$Id: forward.f90,v 1.4 2011/10/14 17:22:26 keiji Exp $"
+!CVSVERSIONINFO "$Id: forward.f90,v 1.5 2012/04/09 22:20:55 keiji Exp $"
