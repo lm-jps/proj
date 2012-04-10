@@ -11,7 +11,7 @@ synframe sdate='2010.08.12' stime='16:00:00' in='su_yang.fd_M12m_remap_los' out=
 #include "jsoc_main.h"
 #include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
 
-char *module_name = "dailysynframe";
+char *module_name = "dailysynframe_nrt";
 
 #define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status = %d \n", msg, status); return(status);}
 #define PARAMETER_ERROR(PNAME)
@@ -51,9 +51,10 @@ int DoIt(void)
   int status = DRMS_SUCCESS, nrecs, irec;
   int i, j, crn;
   int xdim_syn, ydim_syn, xmg, ymg;
-  char sdatestime[100], sdatetmp[100], timetmp[100];
+  char sdatestime[100], sdatetmp[100], timetmp[100], timeprint[100];
   memset(sdatetmp, 0, sizeof(sdatetmp));
   memset(timetmp, 0, sizeof(timetmp));
+  memset(timeprint, 0, sizeof(timeprint));
   memset(sdatestime, 0, sizeof(sdatestime));
 
   char *sdate, *stime, *inQuery, *outQuery, *synQuery;
@@ -215,17 +216,18 @@ int DoIt(void)
   float *synData, *supsynData, *outData;
   int i1, j1;
   int synleftst = ppd * hwd, supleftst = ppd * clog0;
-
   zgrid(dxsz, ith, 0, 0, 0, phd, thd, lad, cth, sth, csc, scs);
 
-  snprintf(timetmp, sizeof(timetmp), "%s[%d/3]", synQuery, crn-2);
+  snprintf(timetmp, sizeof(timetmp), "%s[%d/2]", synQuery, crn-2);
+  snprintf(timeprint, sizeof(timeprint), "%s%s", synQuery, "_nrt");
   synQuery = timetmp;
   printf("inputname= %s\n", synQuery);
+
   synRS = drms_open_records(drms_env, synQuery, &status);
   if (status || synRS->n == 0) DIE("No input data found");
                      // start combining the synoptic charts
   int nds = synRS->n;
-  int supxDim = nds * xdim_syn;
+  int supxDim = (nds + 1) * xdim_syn;
   int supsynDim[2] = {supxDim, ydim_syn};
   int synDim[2] = {xdim_syn, ydim_syn};
   supsynArray = drms_array_create(DRMS_TYPE_FLOAT, 2, supsynDim, NULL, &status);
@@ -239,13 +241,35 @@ int DoIt(void)
        synSeg = drms_segment_lookupnum(synRec, 0);
        synArray = drms_segment_read(synSeg, DRMS_TYPE_FLOAT, &status);
        synData = synArray->data;
-       int ii = (nds - 1 - i) * xdim_syn;
+       int ii = ((nds + 1) - 1 - i) * xdim_syn;
        for (j1 = 0; j1 < ydim_syn; j1++)
           for (i1 = 0; i1 < xdim_syn; i1++)
             {
                supsynData[supxDim * j1 + ii + i1] = synData[xdim_syn * j1 + i1];
             }                  
      }
+
+  drms_free_array(synArray);
+  drms_close_records(synRS, DRMS_FREE_RECORD);
+
+  snprintf(timetmp, sizeof(timetmp), "%s[%d]", timeprint, crn);
+  synQuery = timetmp;
+  printf("inputname= %s\n", synQuery);
+
+  synRS = drms_open_records(drms_env, synQuery, &status);
+  if (status || synRS->n == 0) DIE("No input data found");
+
+       synRec = synRS->records[0];
+       synSeg = drms_segment_lookupnum(synRec, 0);
+       synArray = drms_segment_read(synSeg, DRMS_TYPE_FLOAT, &status);
+       synData = synArray->data;
+       ii = 0;
+       for (j1 = 0; j1 < ydim_syn; j1++)
+          for (i1 = 0; i1 < xdim_syn; i1++)
+            {
+               supsynData[supxDim * j1 + ii + i1] = synData[xdim_syn * j1 + i1];
+            }
+
                    // end of the combination: the super synoptic map--supsynData
 
                    // start to generate the right portion of synchronic map
