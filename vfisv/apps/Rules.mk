@@ -69,7 +69,7 @@ $(d)/free_init.o: $(d)/inv_param.o $(d)/cons_param.o $(d)/filt_param.o
 $(d)/free_memory.o: $(d)/filt_param.o $(d)/line_param.o
 $(d)/inv_param.o: $(d)/cons_param.o
 $(d)/inv_utils.o: $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_param.o $(d)/line_param.o $(d)/svdcmp.o $(d)/svbksb.o $(d)/ran_mod.o
-$(d)/inv1_init.o: $(d)/inv_param.o
+$(d)/lim_init.o: $(d)/inv_param.o
 $(d)/wfa_guess.o: $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_param.o
 $(d)/ran_mod.o: $(d)/cons_param.o
 $(d)/invert.o: $(d)/invert.f90 $(d)/forward.o $(d)/line_param.o $(d)/cons_param.o $(d)/filt_param.o $(d)/inv_utils.o $(d)/inv_param.o $(d)/svdcmp.o $(d)/svbksb.o $(d)/wfa_guess.o $(d)/change_var.o

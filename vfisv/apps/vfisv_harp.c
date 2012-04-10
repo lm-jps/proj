@@ -163,16 +163,23 @@
  *            but plural boxes of interest can be defined by editing the if-condition accordingly.
  *   28) 2012 Feb 11 -- 21
  *        (a) Do add a wise, really, way of parallelism suggested by Jesper.
- *            Enable by setting JESPARAL preprocess 1. : EQUIAREA must (maybe) be set 1.
+ *            Enable by setting CYCLPRLL preprocess 1. : EQUIAREA must (maybe) be set 1.
  *        (b) Some changes in QUICKRUN so that it will be really useful...
- *   29) 2012 Mar 27
- *        (a) New VFISV !!
+ *   29) 2012 Mar 27 -- Apr 09
+ *        (a) New VFISV FD10
+ *        (b) KH Checked in this version on April 09.
+ *   30) 2012 Apr 10
+ *        (a) Now assume to use the Fortran codes cleaned-up by RCE, with C-wrapper (this file) modified accordingly.
+ *            The Fortrans and C-wrapper were provided by RCE, on April 09.
+ *        (b) KH include all changes by RCE, from the version (29).
+ *        (c) The cleanup by RCE should not affect the outputs, which KH confirmed., on Apr 10
+ *        (d) Change some name of preprocess parameter turnning on or off the cyclic parallelism
  *
  * ------------------------------------------------------------------------------------------------------ */
 
 
 /* A lot of pre-process switches: Set 0 (turn-off) or 1 (turn-on).
- * K.H. assume the value must be 0 or 1.
+ * K.H. assumes the value must be 0 or 1, or 2 for a few preprocess parameter.
  * If you write other number, consequences will be unpredictable. */
 
 /* A tweak for quick-run for test mode.
@@ -236,9 +243,9 @@
  * In near-future improved version of VFISV, the elapsed time for processing a pixel will be
  * significantly pixel-dependent. In this case, EUQIAREA strategy will no longer provide good parallel efficiency.
  * Set 1 to use this.
- * JESPARAL choice will override EQUIAREA: The value of JESPARAL will be first evaluated before EQUAREA will be.
- * K.H. yet recommends to leave EQUIAREA set 1, regardless of whether JESPARAL is turned on or off, for a while. */
-#define JESPARAL 1
+ * CYCLPRLL choice will override EQUIAREA: The value of CYCLPRLL will be first evaluated before EQUAREA will be.
+ * K.H. yet recommends to leave EQUIAREA set 1, regardless of whether CYCLPRLL is turned on or off, for a while. */
+#define CYCLPRLL 1
 
 /* By setting 1, the inversion will be processed only for the non-masked pixel.
  * As of May 24 2011, this choice assumes the masked data is of the same size as the input Stokes.
@@ -294,7 +301,7 @@ char *module_name = "vfisv FD10"; // may be kept unchanged
 #endif
 // char *version_id  = "2011 Oct. 14"; // numerics or string representing version of VFISV. Typically date of last editing of core Fortran part. Given by hand....hmmm
 // char *version_id  = "2012 Jan. 24";
-char *version_id  = "2012 Mar. 29";
+char *version_id  = "2012 Apr 10";
 
 /* external subroutine etc. written in Fortran files */
 
@@ -302,19 +309,21 @@ char *version_id  = "2012 Mar. 29";
 the filter profiles computed by Sebastien*/
 
 extern void invert_ (double *, double *, double *, double *, double *, double[][], int *, double *); // after Feb 10, 2011
-extern void filt_init_ (int *, int *, double *, int *);
+extern void filt_init_ (int *, double *, int *);
+/* extern void filt_init_ (int *, int *, double *, int *); before April 10 2012*/
 /* extern void filt_init_ (int *, int *, int *, double *, double *, double *, int *); before May 31 2011 */
 extern void free_init_ (int *);
 extern void free_memory_ ();
-extern void inv_init_ (int *, double *, double *, double *, double *, double *);
+/* extern void inv_init_ (int *, double *, double *, double *, double *, double *); before April 10 2012 */
+extern void inv_init_ (int *, double *, double *, double *, double *);
 extern void vfisvalloc_ (int *, int *, int *, int *);
+extern void lim_init_ (double *); // on and after April 10 2012
 #if NLEVPIXL == 1
 extern void line_init_ (double *, double *, double [4]);
 #else
 extern void line_init_(double *, double *, double *);
-// extern void line_init_old_ (double *, double *, double *); // K.H. assumes the old one be rename.
 #endif
-// extern void svd_init_ ();
+// extern void svd_init_ (); // commentted out on March 29, 2012
 extern void voigt_init_ ();
 extern void wave_init_ (double *, double *, int *);
 
@@ -568,7 +577,7 @@ int DoIt (void)
                           50.0,0.1,0.1,0.001,
                           0.01,0.01,0.01,50.0,0.01,    // std.
                           0.0001,0.0001,0.0001,0.0001, // cor. coef.
-                          0.0001,0.0001,0.0001,        // cor. coef. and Chi-sq
+                          0.0001,0.0001,0.0001,        // cor. coef. and Chi-sq (on March 29, 2012, Bscale for Chi-sq changed.
                           1.0,1.0,1.0};                // integer (or character) arrays for convflag, qual_map and confid_map: must be 1.0
 
 /* arrays and variables, used by wrapper */
@@ -590,23 +599,10 @@ int DoIt (void)
   int iquality;
 #if RECTANGL == 1 || HARPATCH == 1
 /* clipping cropping, address start (0,0) at the left bottom corner of CCD */
-
-  int xleftbot = 1785;
-  int yleftbot = 1310;
-  int xwidth   = 300;
-  int yheight  = 300;
-/*
-  int xleftbot = 1890+50;
-  int yleftbot = 0;
-  int xwidth   = 1;
-  int yheight  = 4096;
-*/
-/*
-  int xleftbot = 1940;
-  int yleftbot = 411;
-  int xwidth   = 1;
-  int yheight  = 1;
-*/
+  int xleftbot = 1885;
+  int yleftbot = 1410;
+  int xwidth   = 100;
+  int yheight  = 100;
 #endif
 /* MPI variables */
   MPI_Status mpistat;
@@ -615,9 +611,9 @@ int DoIt (void)
   int istart, iend;
   int *istartall, *iendall;   // start and end pixel addresses, in 4k x 4k sense, of the region assigned to each PE.
   void para_range(int,int,int,int *,int *); // by K.H., written in somewhere in this code.
-#if JESPARAL == 1
-  int *jobassignmap; // job assginment map, in JESPARAL choice. ... allocated only at primary (0th) PE. Only mom knows everything.
-  int jobnum;        // number of pixel each PE will take care of in JESPARAL choice
+#if CYCLPRLL == 1
+  int *jobassignmap; // job assginment map, in CYCLPRLL choice. ... allocated only at primary (0th) PE. Only mom knows everything.
+  int jobnum;        // number of pixel each PE will take care of in CYCLPRLL choice
 #endif
 /* the Sun, SDO and HMI CCD */
   float obs_vr;
@@ -690,8 +686,8 @@ int DoIt (void)
 #if RECTANGL == 1 && HARPATCH == 1
   DIE(" Both RECTANGL and HARPATCH set 1. So terminated !\n");
 #endif
-#if EQUIAREA != 1 && JESPARAL == 1
-  DIE(" JESPARAL cannot work when EQUIAREA is turned off. So terminated !\n");
+#if EQUIAREA != 1 && CYCLPRLL == 1
+  DIE(" CYCLPRLL cannot work when EQUIAREA is turned off. So terminated !\n");
 #endif
 
 /* time at the start */
@@ -1486,7 +1482,7 @@ int DoIt (void)
     free(itmpe);
 
 /* make job assignment list */
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     jobnum = -100000; // negative in order that the later part will be derailed, to detect if the value is not properly given ... for debugging purpose
 { // scope limiter
     int modjob;
@@ -1524,7 +1520,7 @@ int DoIt (void)
       }
     }
 } // end of scope limiter
-#endif // end if JESPARAL is 1
+#endif // end if CYCLPRLL is 1
 
   } // end if mpi_rank == 0
   else
@@ -1548,7 +1544,7 @@ int DoIt (void)
   cols   = ibuff[2];
   rows   = ibuff[3];
   free(ibuff);
-#if JESPARAL == 1
+#if CYCLPRLL == 1
   ibuff=(int *)malloc(sizeof(int)*1);
   ibuff[0]=jobnum;  // packing even though the size is 1
   MPI_Bcast(ibuff,1,MPI_INT,0,MPI_COMM_WORLD);
@@ -1599,7 +1595,7 @@ int DoIt (void)
   myrank = mpi_rank;
   nprocs = mpi_size;
   numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
   istart=0;
   iend  =jobnum-1;
 #else
@@ -1610,7 +1606,7 @@ int DoIt (void)
   para_range(myrank,nprocs,numpix,&istart,&iend);
 #endif
 #endif
-#if JESPARAL == 1
+#if CYCLPRLL == 1
   if (verbose)
   {
     printf("Hello, this is %2d th PE of %2d, in charge of %9d pixels, of 0 to %9d.\n",
@@ -1659,7 +1655,7 @@ int DoIt (void)
   MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
-#if JESPARAL == 1
+#if CYCLPRLL == 1
   int    *jobassignmapLocal;
   jobassignmapLocal = (int *)malloc(sizeof(int) * jobnum);
 /* send assignment list from primary PE to the others */
@@ -1712,7 +1708,7 @@ int DoIt (void)
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (mpi_rank == 0) printf(" job assignment address data had propagated to all PE.\n");
-#endif // end-if JESPARAL is 1
+#endif // end-if CYCLPRLL is 1
 
 /* send partial input data to each PE */
   if (mpi_rank == 0)
@@ -1720,7 +1716,7 @@ int DoIt (void)
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
   istart=0;
   iend  =jobnum-1;
 #else
@@ -1732,7 +1728,7 @@ int DoIt (void)
 #endif
 #endif
 /* first, the primary makes copy for its own part */
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){dataLocal[(n-istart)*nvar+m] = data[jobassignmap[n] + m*imgpix];}}
 #else
     for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){dataLocal[(n-istart)*nvar+m] = data[n               + m*imgpix];}}
@@ -1747,7 +1743,7 @@ int DoIt (void)
         int ibufsize;
         float *fbufsend;
         mpi_dest = irank;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         istart=0;
         iend  =jobnum-1;
 #else
@@ -1760,7 +1756,7 @@ int DoIt (void)
 #endif
         ibufsize = (iend-istart+1) * nvar;
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){fbufsend[(n-istart)*nvar+m] = data[jobassignmap[n+jobnum*mpi_dest] + m*imgpix];}}
 #else
         for (n = istart ; n < iend+1 ; n++){for (m = 0; m < nvar; m++){fbufsend[(n-istart)*nvar+m] = data[n                               + m*imgpix];}}
@@ -1776,7 +1772,7 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     float *fbufrecv;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -1804,7 +1800,7 @@ int DoIt (void)
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -1816,7 +1812,7 @@ int DoIt (void)
 #endif
 #endif
 /* first, the primary makes copy for its own part */
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     for (n = istart ; n < iend+1 ; n++){nan_mapLocal[n -istart] = nan_map[jobassignmap[n]];}
 #else
     for (n = istart ; n < iend+1 ; n++){nan_mapLocal[n -istart] = nan_map[n];}
@@ -1831,7 +1827,7 @@ int DoIt (void)
         int ibufsize;
         int *ibufsend;
         mpi_dest = irank;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         istart=0;
         iend  =jobnum-1;
 #else
@@ -1844,7 +1840,7 @@ int DoIt (void)
 #endif
         ibufsize = (iend-istart+1) * 1;
         ibufsend= (int*)malloc(sizeof(int) * ibufsize);
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         for (n = istart ; n < iend+1 ; n++){ibufsend[n -istart] = nan_map[jobassignmap[n+jobnum*mpi_dest]];}
 #else
         for (n = istart ; n < iend+1 ; n++){ibufsend[n -istart] = nan_map[n];}
@@ -1861,7 +1857,7 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     int *ibufrecv;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -1890,7 +1886,7 @@ int DoIt (void)
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -1902,7 +1898,7 @@ int DoIt (void)
 #endif
 #endif
 /* first, the primary makes copy for its own part */
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     for (n = istart ; n < iend+1 ; n++){for (m = 0; m < paramct; m++){PrevResLocal[(n-istart)*paramct+m] = prevdata[jobassignmap[n] + m         *imgpix];}}
     for (n = istart ; n < iend+1 ; n++){for (m = 0; m < Err_ct;  m++){PrevErrLocal[(n-istart)*Err_ct +m] = prevdata[jobassignmap[n] +(m+paramct)*imgpix];}}
 #else
@@ -1919,7 +1915,7 @@ int DoIt (void)
         int ibufsize;
         float *fbufsend;
         mpi_dest = irank;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         istart=0;
         iend  =jobnum-1;
 #else
@@ -1932,7 +1928,7 @@ int DoIt (void)
 #endif
         ibufsize = (iend-istart+1) * (paramct + Err_ct);
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         for (n = istart ; n < iend+1 ; n++){for (m = 0; m < (paramct + Err_ct); m++){fbufsend[(n-istart)*(paramct + Err_ct)+m] = prevdata[jobassignmap[n+jobnum*mpi_dest] + m*imgpix];}}
 #else
         for (n = istart ; n < iend+1 ; n++){for (m = 0; m < (paramct + Err_ct); m++){fbufsend[(n-istart)*(paramct + Err_ct)+m] = prevdata[n                               + m*imgpix];}}
@@ -1948,7 +1944,7 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     float *fbufrecv;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -1980,7 +1976,7 @@ int DoIt (void)
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -1992,7 +1988,7 @@ int DoIt (void)
 #endif
 #endif
 /* first, the primary makes copy for its own part */
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     for (n = istart ; n < iend+1 ; n++){vlos_initLocal[n-istart] = vlos_init[jobassignmap[n]];}
 #else
     for (n = istart ; n < iend+1 ; n++){vlos_initLocal[n-istart] = vlos_init[n];}
@@ -2007,7 +2003,7 @@ int DoIt (void)
         int ibufsize;
         float *fbufsend;
         mpi_dest = irank;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         istart=0;
         iend  =jobnum-1;
 #else
@@ -2020,7 +2016,7 @@ int DoIt (void)
 #endif
         ibufsize = (iend-istart+1) * 1;
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = vlos_init[jobassignmap[n+jobnum*mpi_dest]];}
 #else
         for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = vlos_init[n];}
@@ -2036,7 +2032,7 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     float *fbufrecv;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -2067,7 +2063,7 @@ int DoIt (void)
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -2079,7 +2075,7 @@ int DoIt (void)
 #endif
 #endif
 /* first, the primary makes copy for its own part */
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     for (n = istart ; n < iend+1 ; n++){mgst_initLocal[n-istart] = mgst_init[jobassignmap[n]];}
 #else
     for (n = istart ; n < iend+1 ; n++){mgst_initLocal[n-istart] = mgst_init[n];}
@@ -2094,7 +2090,7 @@ int DoIt (void)
         int ibufsize;
         float *fbufsend;
         mpi_dest = irank;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         istart=0;
         iend  =jobnum-1;
 #else
@@ -2107,7 +2103,7 @@ int DoIt (void)
 #endif
         ibufsize = (iend-istart+1) * 1;
         fbufsend= (float*)malloc(sizeof(float) * ibufsize);
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = mgst_init[jobassignmap[n+jobnum*mpi_dest]];}
 #else
         for (n = istart ; n < iend+1 ; n++){fbufsend[n-istart] = mgst_init[n];}
@@ -2123,7 +2119,7 @@ int DoIt (void)
     int mpi_from = 0;
     int ibufsize;
     float *fbufrecv;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -2158,7 +2154,8 @@ int DoIt (void)
   if (verbose){printf("done line_init for mpi_rank %d\n",mpi_rank);}
   wave_init_ (&LAMBDA_MIN_synth,&DELTA_LAMBDA,&NUM_LAMBDA_synth);
   if (verbose){printf("done wave_init for mpi_rank %d\n",mpi_rank );}
-  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&WSPACING, &NUM_LAMBDA); // new one, on May 31, 2011
+  filt_init_ (&NUM_LAMBDA_FILTER,&WSPACING, &NUM_LAMBDA); // new one, on April 10, 2012
+//  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&WSPACING, &NUM_LAMBDA); // new one, on May 31, 2011
 //  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&CONTINUUM,&LYOTFWHM,&WNARROW,&WSPACING, &NUM_LAMBDA); old one,
   if (verbose){printf("done filt_init for mpi_rank %d\n",mpi_rank);}
 #endif
@@ -2361,7 +2358,8 @@ printf("We should be running initialize_vfisv_filter\n");
   if (mpi_rank == 0){printf(" normalization factor for filter is %f\n", norm_factor);}
 
 /* ME inversion initialization */
-  inv_init_(&NUM_ITERATIONS,&SVD_TOLERANCE,&CHI2_STOP,&POLARIZATION_THRESHOLD,&INTENSITY_THRESHOLD,&PERCENTAGE_JUMP);
+  inv_init_(&NUM_ITERATIONS,&SVD_TOLERANCE,&CHI2_STOP,&POLARIZATION_THRESHOLD,&INTENSITY_THRESHOLD); // new one on April 10, 2012
+//  inv_init_(&NUM_ITERATIONS,&SVD_TOLERANCE,&CHI2_STOP,&POLARIZATION_THRESHOLD,&INTENSITY_THRESHOLD,&PERCENTAGE_JUMP);
   if (verbose){printf("done inv_init\n");}
   free_init_(list_free_params);
   if (verbose){printf("done list_free_params for mpi_rank %d\n", mpi_rank);}
@@ -2383,7 +2381,7 @@ printf("We should be running initialize_vfisv_filter\n");
   myrank = mpi_rank;
   nprocs = mpi_size;
   numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
   istart=0;
   iend  =jobnum-1;
 #else
@@ -2401,7 +2399,7 @@ printf("We should be running initialize_vfisv_filter\n");
 
   for (n = istart; n < iend + 1; n++)
   {
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     if (nan_mapLocal[n-istart] != 0){printf("something nasty happened at %9d th pixel on %2d th PE, %9d th pixel of original. Ah.\n",n,myrank,jobassignmapLocal[n]);DIE(" ah...");}
 #endif
     if (nan_mapLocal[n-istart] == 0)
@@ -2434,7 +2432,7 @@ printf("We should be running initialize_vfisv_filter\n");
          but rather the 4 neighboring points to perform the bilinear interpolation */
 
       int nccd; // pixel address in the original input Stokes CCD system. Used in cal. Filter func. and other places.
-#if JESPARAL == 1
+#if CYCLPRLL == 1
       nccd = jobassignmapLocal[n]; // MIND that this must be the only one occassion jobassignmapLocal be referred within the for-n-loop.
 #else
       nccd = n;
@@ -2587,7 +2585,7 @@ This is done inside the FORTRAN code, in invert.f90
 
 /* since 2012 Jan 24, to calculate noise-level at each pixel, the lines below were added */
 #if NLEVPIXL == 1
-       double ivalmax, ivalave;
+       double ivalmax, ivalave, CONT;
        ivalmax = -100.0e0;
        ivalave =    0.0e0;
 { // scope limiter
@@ -2595,25 +2593,23 @@ This is done inside the FORTRAN code, in invert.f90
        for (m = 0; m < NUM_LAMBDA_FILTER; m++) //     very rarely, mostly for test purpose, NUM_LAMBDA_FILTER be other than 6.
        {
          double tmpval=obs[0*NUM_LAMBDA_FILTER+m]; // obs(0:5) for Stokes I0 to I5 (or Ix, in an order defined somewhere above)
-         ivalave = ivalave + tmpval;
+	 ivalave = ivalave + tmpval;
          if (tmpval > ivalmax){ivalmax = tmpval;}
        }
+       CONT = ivalmax;
        ivalave = ivalave / ((double)(NUM_LAMBDA_FILTER));
        ivalave = sqrt(ivalave);
        ivalmax = sqrt(ivalmax);
-// The line below will make dangerous amount of standard output. just for debugging.
-//       if (verbose){printf("IvalMax at %d th pixel at %d th PE = %e\n",n,mpi_rank,ivalmax);}
 } // end of scope limiter
        NOISE_LEVEL[0] = NOISE_LEVELFI   * ivalave;
        NOISE_LEVEL[1] = NOISE_LEVELFQ   * ivalave;
        NOISE_LEVEL[2] = NOISE_LEVELFU   * ivalave;
        NOISE_LEVEL[3] = NOISE_LEVELFV   * ivalave;
+// By RCE: to initialize limits
+       lim_init_(&CONT);
        line_init_(&LAMBDA_0,&LAMBDA_B,NOISE_LEVEL); // MIND now the third argument is of 4-element double array.
-//       if (verbose){printf("done line_init for mpi_rank %d\n",mpi_rank);}
        wave_init_ (&LAMBDA_MIN_synth,&DELTA_LAMBDA,&NUM_LAMBDA_synth);
-//       if (verbose){printf("done wave_init for mpi_rank %d\n", mpi_rank );}
-       filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&WSPACING, &NUM_LAMBDA);
-//       if (verbose){printf("done filt_init for mpi_rank %d\n",mpi_rank);}
+       filt_init_ (&NUM_LAMBDA_FILTER,&WSPACING, &NUM_LAMBDA);
 #endif
 
 /* added on May 17, 2011.
@@ -2720,7 +2716,7 @@ This is done inside the FORTRAN code, in invert.f90
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -2732,7 +2728,7 @@ This is done inside the FORTRAN code, in invert.f90
 #endif
 #endif
 /* first, copy the portion the primary itself did */
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     for (n = istart ; n < iend+1 ; n++)
     {
       for (j=0; j<paramct; j++){FinalRes[(jobassignmap[n]*paramct)+j]=FinalResLocal[(n-istart)*paramct+j];}
@@ -2756,7 +2752,7 @@ This is done inside the FORTRAN code, in invert.f90
         int mpi_from;
         nprocs = mpi_size;
         numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         istart=0;
         iend  =jobnum-1;
 #else
@@ -2774,7 +2770,7 @@ This is done inside the FORTRAN code, in invert.f90
         mpi_from = irecv;
         mpi_tag = 1200 + irecv;
         MPI_Recv(dbufrecv, ibufsize, MPI_DOUBLE, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         for (n = istart ; n < iend+1 ; n++)
         {
           for (j=0; j<paramct; j++){FinalRes[(jobassignmap[n+jobnum*mpi_from]*paramct)+j]=dbufrecv[(n-istart)*(paramct+Err_ct)        +j];}
@@ -2799,7 +2795,7 @@ This is done inside the FORTRAN code, in invert.f90
     nprocs = mpi_size;
     numpix = imgpix;
     isend = mpi_rank;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -2831,7 +2827,7 @@ This is done inside the FORTRAN code, in invert.f90
     myrank = mpi_rank;
     nprocs = mpi_size;
     numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -2843,7 +2839,7 @@ This is done inside the FORTRAN code, in invert.f90
 #endif
 #endif
 /* first, copy the portion the primary itself did */
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     for (n = istart ; n < iend+1 ; n++)
     {
       FinalConvFlag[jobassignmap[n]] =  FinalConvFlagLocal[n-istart];
@@ -2867,7 +2863,7 @@ This is done inside the FORTRAN code, in invert.f90
         int mpi_from;
         nprocs = mpi_size;
         numpix = imgpix;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         istart=0;
         iend  =jobnum-1;
 #else
@@ -2885,7 +2881,7 @@ This is done inside the FORTRAN code, in invert.f90
         mpi_from = irecv;
         mpi_tag = 1300 + irecv;
         MPI_Recv(ibufrecv, ibufsize, MPI_INT, mpi_from, mpi_tag, MPI_COMM_WORLD, &mpistat);
-#if JESPARAL == 1
+#if CYCLPRLL == 1
         for (n = istart ; n < iend+1 ; n++)
         {
           FinalConvFlag[jobassignmap[n+jobnum*mpi_from]] = ibufrecv[n-istart];
@@ -2897,7 +2893,7 @@ This is done inside the FORTRAN code, in invert.f90
           FinalConvFlag[n]                               = ibufrecv[n-istart];
           FinalQualMap [n]                               = ibufrecv[n-istart+(iend-istart+1)];
         }
-#endif // end if JESPARAL is 1 or not
+#endif // end if CYCLPRLL is 1 or not
         free(ibufrecv);
       }
       printf("done \n");
@@ -2910,7 +2906,7 @@ This is done inside the FORTRAN code, in invert.f90
     nprocs = mpi_size;
     numpix = imgpix;
     isend = mpi_rank;
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     istart=0;
     iend  =jobnum-1;
 #else
@@ -2939,7 +2935,7 @@ This is done inside the FORTRAN code, in invert.f90
 /* the primary PE takes care of pixels none had taken care of */
   if (mpi_rank == 0)
   {
-#if JESPARAL == 1
+#if CYCLPRLL == 1
     for (n = 0 ; n < imgpix; n++)
     {
       if (nan_map[n] != 0) // pixel not to be processed.
@@ -2974,7 +2970,7 @@ This is done inside the FORTRAN code, in invert.f90
         for (k=0; k<Err_ct ; k++){FinalErr[(n*Err_ct) +k]=NAN;}
       }
     }
-#endif // end if JESPARAL is 1 or not
+#endif // end if CYCLPRLL is 1 or not
   } // end-if mpi_rank is 0.
 
   MPI_Barrier(MPI_COMM_WORLD); // silly..but always safe
@@ -2986,7 +2982,7 @@ This is done inside the FORTRAN code, in invert.f90
   free(FinalErrLocal);
   free(dataLocal);
   free(nan_mapLocal);
-#if JESPARAL == 1
+#if CYCLPRLL == 1
   free(jobassignmapLocal);
 #endif
   MPI_Barrier(MPI_COMM_WORLD);
@@ -4193,33 +4189,33 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.2 2012/04/09 22:23:13 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.3 2012/04/10 22:19:57 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
 /* ----------------------------- end of this file ----------------------------- */
 /* --------------------------------------------
-: voigt.f,v 1.5 2012/04/09 22:20:25 keiji Exp 
-: change_var.f90,v 1.2 2012/04/09 22:20:31 keiji Exp 
-: cons_param.f90,v 1.4 2012/04/09 22:20:37 keiji Exp 
-: filt_init.f90,v 1.5 2012/04/09 22:20:44 keiji Exp 
-: filt_param.f90,v 1.5 2012/04/09 22:20:50 keiji Exp 
-: forward.f90,v 1.5 2012/04/09 22:20:55 keiji Exp 
-: free_init.f90,v 1.4 2012/04/09 22:21:00 keiji Exp 
-: free_memory.f90,v 1.4 2012/04/09 22:21:05 keiji Exp 
-: inv1_init.f90,v 1.1 2012/04/09 22:21:10 keiji Exp 
-: invert.f90,v 1.7 2012/04/09 22:21:17 keiji Exp 
-: inv_init.f90,v 1.4 2012/04/09 22:21:23 keiji Exp 
-: inv_param.f90,v 1.4 2012/04/09 22:21:28 keiji Exp 
-: inv_utils.f90,v 1.5 2012/04/09 22:21:33 keiji Exp 
-: line_init.f90,v 1.4 2012/04/09 22:21:38 keiji Exp 
-: line_param.f90,v 1.4 2012/04/09 22:21:43 keiji Exp 
-: ran_mod.f90,v 1.4 2012/04/09 22:21:48 keiji Exp 
-: svbksb.f90,v 1.4 2012/04/09 22:21:53 keiji Exp 
-: svdcmp.f90,v 1.4 2012/04/09 22:21:58 keiji Exp 
-: voigt_data.f90,v 1.4 2012/04/09 22:22:03 keiji Exp 
-: voigt_init.f90,v 1.4 2012/04/09 22:22:08 keiji Exp 
-: voigt_taylor.f90,v 1.5 2012/04/09 22:22:13 keiji Exp 
-: wave_init.f90,v 1.4 2012/04/09 22:22:19 keiji Exp 
-: wfa_guess.f90,v 1.4 2012/04/09 22:22:24 keiji Exp 
+: voigt.f,v 1.6 2012/04/10 22:16:09 keiji Exp 
+: change_var.f90,v 1.3 2012/04/10 22:16:14 keiji Exp 
+: cons_param.f90,v 1.5 2012/04/10 22:16:19 keiji Exp 
+: filt_init.f90,v 1.6 2012/04/10 22:16:24 keiji Exp 
+: filt_param.f90,v 1.6 2012/04/10 22:16:29 keiji Exp 
+: forward.f90,v 1.6 2012/04/10 22:16:34 keiji Exp 
+: free_init.f90,v 1.5 2012/04/10 22:16:39 keiji Exp 
+: free_memory.f90,v 1.5 2012/04/10 22:16:44 keiji Exp 
+: invert.f90,v 1.8 2012/04/10 22:16:49 keiji Exp 
+: inv_init.f90,v 1.5 2012/04/10 22:16:54 keiji Exp 
+: inv_param.f90,v 1.5 2012/04/10 22:16:59 keiji Exp 
+: inv_utils.f90,v 1.6 2012/04/10 22:17:03 keiji Exp 
+: lim_init.f90,v 1.1 2012/04/10 22:17:08 keiji Exp 
+: line_init.f90,v 1.5 2012/04/10 22:17:12 keiji Exp 
+: line_param.f90,v 1.5 2012/04/10 22:17:18 keiji Exp 
+: ran_mod.f90,v 1.5 2012/04/10 22:17:23 keiji Exp 
+: svbksb.f90,v 1.5 2012/04/10 22:17:28 keiji Exp 
+: svdcmp.f90,v 1.5 2012/04/10 22:17:33 keiji Exp 
+: voigt_data.f90,v 1.5 2012/04/10 22:17:39 keiji Exp 
+: voigt_init.f90,v 1.5 2012/04/10 22:17:46 keiji Exp 
+: voigt_taylor.f90,v 1.6 2012/04/10 22:17:51 keiji Exp 
+: wave_init.f90,v 1.5 2012/04/10 22:17:56 keiji Exp 
+: wfa_guess.f90,v 1.5 2012/04/10 22:18:01 keiji Exp 
  -------------------------------------------- */

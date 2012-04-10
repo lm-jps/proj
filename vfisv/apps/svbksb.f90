@@ -51,4 +51,4 @@
 
       END
 
-!CVSVERSIONINFO "$Id: svbksb.f90,v 1.4 2012/04/09 22:21:53 keiji Exp $"
+!CVSVERSIONINFO "$Id: svbksb.f90,v 1.5 2012/04/10 22:17:28 keiji Exp $"

@@ -38,6 +38,9 @@ CONTAINS
 !-----------------------------------------------------
 !
 ! Routine that undoes the variable change of the perturbations to the model
+! NOTE: this routine is not used anymore. It's an approximation using partial
+! derivatives and doesn't perform as well as the exact solution. We use
+! UNDO_CHANGE_DEMODEL_FINITE instead
 !
   SUBROUTINE UNDO_CHANGE_DMODEL(INMODEL, DMODEL)
 
@@ -58,6 +61,8 @@ CONTAINS
 
 
   END SUBROUTINE UNDO_CHANGE_DMODEL
+
+! ---------------------------------------------------------------------------------
 
   SUBROUTINE UNDO_CHANGE_DMODEL_FINITE(INMODEL, DMODEL)
 
@@ -116,4 +121,4 @@ CONTAINS
 
 
 END MODULE CHANGE_VAR
-!CVSVERSIONINFO "$Id: change_var.f90,v 1.2 2012/04/09 22:20:31 keiji Exp $"
+!CVSVERSIONINFO "$Id: change_var.f90,v 1.3 2012/04/10 22:16:14 keiji Exp $"

@@ -17,6 +17,7 @@ MODULE FORWARD
   !
   ! By RCE, April 2011: Adding the integral of the filter profiles times the continuum
   ! (S0+S1) to Stokes I, for the outer wavelength range where the forward modeling is not done.
+  ! Derivatives of Stokes I are changed correspondingly.
 
 
 CONTAINS
@@ -247,8 +248,8 @@ CONTAINS
        ! where C is the integral of the filters in the outer range of the wavelength vector. So I have to add C
        ! to the derivative of Stokes I with respect to S0 and S1.
        DO J = 1, NBINS
-          DSYN(8,J,1) = DSYN(8,J,1) + INTEG_FILTERS(J)
- 	  DSYN(9,J,1) = DSYN(9,J,1) + INTEG_FILTERS(J)
+          DSYN_MAG(8,J,1) = DSYN_MAG(8,J,1) + INTEG_FILTERS(J)
+ 	  DSYN_MAG(9,J,1) = DSYN_MAG(9,J,1) + INTEG_FILTERS(J)
        ENDDO
 	
        DSYN(1:9,:,:)=ALPHAM*DSYN_MAG
@@ -566,4 +567,4 @@ CONTAINS
   ENDSUBROUTINE ABSMAT
 END MODULE FORWARD
 
-!CVSVERSIONINFO "$Id: forward.f90,v 1.5 2012/04/09 22:20:55 keiji Exp $"
+!CVSVERSIONINFO "$Id: forward.f90,v 1.6 2012/04/10 22:16:34 keiji Exp $"

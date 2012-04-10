@@ -21,7 +21,7 @@ SUBROUTINE FREE_INIT (LIST_FREE_PARAMS)
         NUMFREE_DEG = NUMFREE_DEG - 1
      ENDIF
   ENDDO
-  WRITE(*,*) 'freed parameters'
+
   ALLOCATE (FREELOC(NUMFREE_PARAM))
   J=1
   DO I=1,10
@@ -42,4 +42,4 @@ SUBROUTINE FREE_INIT (LIST_FREE_PARAMS)
   !FREE(9)                                    ! SOURCE FUNCTION GRADIENT
   !FREE(10)                                   ! MAGNETIC FILLING FACTOR
 END SUBROUTINE FREE_INIT
-!CVSVERSIONINFO "$Id: free_init.f90,v 1.4 2012/04/09 22:21:00 keiji Exp $"
+!CVSVERSIONINFO "$Id: free_init.f90,v 1.5 2012/04/10 22:16:39 keiji Exp $"

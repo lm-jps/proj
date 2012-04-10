@@ -6,9 +6,8 @@ MODULE FILT_PARAM
   !
   USE CONS_PARAM
   USE LINE_PARAM
-  INTEGER                         :: NBINS, NTUNE, NUMW_LONG
-  LOGICAL                         :: CONT
+  INTEGER                         :: NBINS, NUMW_LONG
   REAL(DP), ALLOCATABLE           :: FILTER(:,:)
   REAL(DP), ALLOCATABLE           :: TUNEPOS(:)
 END MODULE FILT_PARAM
-!CVSVERSIONINFO "$Id: filt_param.f90,v 1.5 2012/04/09 22:20:50 keiji Exp $"
+!CVSVERSIONINFO "$Id: filt_param.f90,v 1.6 2012/04/10 22:16:29 keiji Exp $"

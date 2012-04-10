@@ -131,10 +131,12 @@ CONTAINS
 
   END SUBROUTINE REGULARIZATION
 
+  !------------------------------------------------------
+
   SUBROUTINE NORMALIZE_DSYN(DSYN)
     ! 
-    ! By RCE, May 20, 2011: We use the NORM vector defined in 
-    ! the NORMALIZATION subroutine, by calling NORMALIZATION(NORM)
+    ! By RCE, May 20, 2011: We use the NORM vector initialized in 
+    ! LIM_INIT
     !
     USE FILT_PARAM
     USE CONS_PARAM
@@ -218,12 +220,11 @@ CONTAINS
   !
   !--------------------------------------------------------
   !
-  SUBROUTINE RANDOM_MODEL_JUMP(JUMP,MODELR)
+  SUBROUTINE RANDOM_MODEL_JUMP(MODELR)
     USE CONS_PARAM
     USE INV_PARAM
     USE RAN_MOD
     IMPLICIT NONE
-    REAL(DP), INTENT(IN)                      :: JUMP
     REAL(DP), INTENT(INOUT),    DIMENSION(10) :: MODELR
     REAL(DP), DIMENSION(10)                   :: INMODEL
     REAL(DP),                   DIMENSION(10) :: RAN
@@ -236,15 +237,7 @@ CONTAINS
     !--------------------------------------------
 
     INMODEL=MODELR ! Save input model
-!    DO I=1,10
-!       RAN(I)=NORMAL(0D0,1D0)
-!       IF (FREE(I).EQ..TRUE.) MODELR(I)=MODELR(I)+RAN(I)*JUMP*MODELR(I)/100D0
-!    ENDDO
-	
-    ! By RCE, March 2011: Random jumps for the angles should be distributed 
-    ! evenly between 0 and 180. CHECK THIS because I believe it's not right.
-    !MODELR(2) = 90D0 + 180D0*NORMAL(0D0,1D0)
-    !MODELR(3) = 90D0 + 180D0*NORMAL(0D0,1D0)
+
 
     MODELR(2) = 90D0 + 10D0*NORMAL(0D0,1D0)
     modelr(1)=normal(5D0,5D0)
@@ -255,7 +248,6 @@ CONTAINS
     sratio=0.2D0+0.3D0*ran1()
     modelr(8)=ssum*sratio/(1+sratio)
     modelr(9)=ssum/(1+sratio)
-
 
     ! Checking that perturbation did not go too far
     CALL FINE_TUNE_MODEL(MODELR)
@@ -272,12 +264,16 @@ CONTAINS
     INTEGER                                   :: REV, I
     REAL(DP)                                  :: S0,S1,SS
 
-! Save inout values
+  ! We use the variable limits defined in LIM_INIT (called from wrapper)
+
+  ! Save inout values
     S0=MODEL(8)
     S1=MODEL(9)
     SS=S0+S1
+
     MODEL(8)=MAX(S0,LOWER_LIMIT(8))
     MODEL(9)=SS-MODEL(8) ! Keep sum unchanged
+
     ! Check all the limits except the angles and non-free parameters
     DO I = 1, 10
       IF ((FREE(I).EQ..TRUE.) .AND. (I .NE. 2) .AND. (I .NE. 3)) THEN
@@ -325,6 +321,10 @@ CONTAINS
   !--------------------------------------------------------
   !
   SUBROUTINE GET_HESS(DSYN,WEIGHTS,HESS)
+
+  ! NOTE that the Hessian doesn't have the (1+lambda) Marquardt factor
+  ! scaling in the diagonal elements of the matrix. This is now included
+  ! in the routine that calculates the model improvement (GET_DMODEL).
 
     USE CONS_PARAM
     USE FILT_PARAM
@@ -374,7 +374,7 @@ CONTAINS
 
     DMODEL=0D0 ! In case parameter is not free or SVD fails.
 
-! Don't stomp on hessian and divergence.
+  ! Marquardt (1+ lambda) factor applied to diagonal of Hessian matrix
     DIVC1=DIVC
     DO I = 1, NUMFREE_PARAM
        DO J = 1, NUMFREE_PARAM
@@ -427,89 +427,10 @@ CONTAINS
   !
   !------------------------------------------------------------
   !
-  SUBROUTINE GET_DMODEL8(MODEL, REGUL_FLAG, DIVC, HESS, LAMBDA, DMODEL, CONV_FLAG)
-    !
-    ! JS: Appears to solve HESS DMODEL = DIVC
-    USE INV_PARAM
-    USE CONS_PARAM
-    USE FILT_PARAM
-    IMPLICIT NONE
-
-    REAL(DP), INTENT(IN), DIMENSION(10)                     :: MODEL
-    INTEGER, INTENT(IN)                                     :: REGUL_FLAG
-    REAL(DP), INTENT(IN)                                    :: LAMBDA
-    REAL(DP), DIMENSION(15*NUMFREE_PARAM)                   :: WORK
-    REAL(DP),       DIMENSION(NUMFREE_PARAM,NUMFREE_PARAM)  :: VT, U, WINV, HINV, V, HESS1
-    REAL(DP),       DIMENSION(NUMFREE_PARAM)                :: PLUSMODEL, W, DIVC1
-    REAL(DP), INTENT(INOUT), DIMENSION(NUMFREE_PARAM)       :: DIVC
-    REAL(DP), INTENT(INOUT), DIMENSION(NUMFREE_PARAM,NUMFREE_PARAM) :: HESS
-    REAL(DP)                                                :: WMAX, DUM, MX
-    INTEGER                                                 :: I, J, INFO
-    REAL(DP), DIMENSION(10)                                 :: DMODEL
-    INTEGER                                                 :: CONV_FLAG
-
-    DMODEL=0D0 ! In case parameter is not free or SVD fails.
-
-! Don't stomp on hessian and divergence.
-    DIVC1=DIVC
-    DO I = 1, NUMFREE_PARAM
-       DO J = 1, NUMFREE_PARAM
-          HESS1(j,i) = HESS(j,i)
-       ENDDO
-       HESS1(i,i)=HESS1(i,i)*(1D0+LAMBDA)
-    ENDDO
-    DIVC1(7)=0
-    HESS1(7,:)=0
-    HESS1(:,7)=0
-    HESS1(7,7)=1
-
-    ! Regularize, if desired
-    IF (REGUL_FLAG .EQ. 1) THEN
-       CALL REGULARIZATION(3, MODEL, DUM,DIVC1,HESS1)
-    ENDIF
-
-
-    ! By RCE: call LAPACK SVD
-    CALL DGESVD('A','A',NUMFREE_PARAM,NUMFREE_PARAM,HESS1,NUMFREE_PARAM,W,U &
-   ,NUMFREE_PARAM,VT,NUMFREE_PARAM,WORK,15*NUMFREE_PARAM,INFO)
-
-    IF (INFO.NE.0) THEN
-       PRINT*,'ERROR IN SVD'
-       CONV_FLAG = 1
-    ELSE
-       CONV_FLAG=0
-       ! By RCE: transpose VT matrix to obtain V and use it in SVBKSB
-       DO I = 1, NUMFREE_PARAM
-          DO J = 1, NUMFREE_PARAM
-             V(i,j) = VT(j,i)
-          ENDDO
-       ENDDO
-   
-       WMAX=MAXVAL(W)
-       DO I=1,NUMFREE_PARAM
-          IF (W(I).LT.SVDTOL*WMAX) W(I)=0D0
-       ENDDO
-   
-       CALL SVBKSB(U,W,V,NUMFREE_PARAM,NUMFREE_PARAM,NUMFREE_PARAM, &
-            NUMFREE_PARAM,DIVC1,PLUSMODEL)
-   
-       DO I=1,NUMFREE_PARAM
-          MX=PLUSMODEL(I)
-          IF ((MX.eq.(MX+1D0)).or.(abs(MX).gt.1D10)) then
-             CONV_FLAG=2
-          ELSE
-             DMODEL(FREELOC(I))=MX
-          ENDIF
-       ENDDO
-    ENDIF
-
-  END SUBROUTINE GET_DMODEL8
-  !
-  !------------------------------------------------------------
-  !
+ 
   PURE SUBROUTINE NORMALIZE_DMODEL(DMODEL)
     !
-    ! By RCE: May 20 2011: Call NORMALIZATION subroutine for NORM vector.
+    ! By RCE, April 2012: normalization vector defined in LIM_INIT
     !
     USE CONS_PARAM
     USE INV_PARAM
@@ -522,8 +443,13 @@ CONTAINS
     ENDDO
     !
   END SUBROUTINE NORMALIZE_DMODEL
+  !
   !------------------------------------------------------------
+  !
   PURE SUBROUTINE CUT_DMODEL(DMODEL,MODEL)
+    !
+    ! BY RCE April 2012: New limits for DMODEL by Jesper Schou.
+    ! Defined in LIM_INIT
     !
     USE CONS_PARAM
     USE INV_PARAM
@@ -541,22 +467,28 @@ CONTAINS
     ENDDO
     !   
   END SUBROUTINE CUT_DMODEL
-
+  !
+  !------------------------------------------------------------
+  !
   SUBROUTINE GET_ERR(HESS, CHI2,SIGMA,CONV_FLAG)
+  ! 
+  ! The variances and co-variances are the elements of the inverse of the 
+  ! Hessian matrix when the algorithm has converged. The errors are scaled
+  ! by chi2 over the number of degrees of freedom. 
 
     USE CONS_PARAM
     USE INV_PARAM
     USE LINE_PARAM
     IMPLICIT NONE
-    REAL(DP), DIMENSION(NUMFREE_PARAM,NUMFREE_PARAM)       :: VT, U, COV
-    REAL(DP), DIMENSION(15*NUMFREE_PARAM)                  :: WORK
-    REAL(DP), DIMENSION(NUMFREE_PARAM)                     :: W
-    REAL(DP)                                               :: CHI2
-    REAL(DP), DIMENSION(10,10)                             :: COV_DUMMY
-    REAL(DP), DIMENSION(16)                                :: SIGMA
+    REAL(DP), DIMENSION(NUMFREE_PARAM,NUMFREE_PARAM)                :: VT, U, COV
+    REAL(DP), DIMENSION(15*NUMFREE_PARAM)                           :: WORK
+    REAL(DP), DIMENSION(NUMFREE_PARAM)                              :: W
+    REAL(DP)                                                        :: CHI2
+    REAL(DP), DIMENSION(10,10)                                      :: COV_DUMMY
+    REAL(DP), DIMENSION(16)                                         :: SIGMA
     REAL(DP), INTENT(INOUT), DIMENSION(NUMFREE_PARAM,NUMFREE_PARAM) :: HESS
-    INTEGER                                                :: I, J, INFO, NFREE
-    INTEGER, INTENT(OUT)                                   :: CONV_FLAG
+    INTEGER                                                         :: I, J, INFO, NFREE
+    INTEGER, INTENT(OUT)                                            :: CONV_FLAG
     !
 
     ! Use LAPACK for calculating SVD of the HESSIAN
@@ -574,7 +506,7 @@ CONTAINS
        DO I=1,NUMFREE_PARAM
           DO J=1,NUMFREE_PARAM
              COV(I,J)=CHI2/DBLE(NUMFREE_DEG)*SUM(U(I,:)*U(J,:)/W(:))
-! Re-normalizing the derivatives:
+  ! Re-normalizing the derivatives:
              COV(I,J)=COV(I,J)*(NORM(FREELOC(I))*NORM(FREELOC(J)))
           ENDDO
        ENDDO
@@ -610,4 +542,4 @@ CONTAINS
   !-------------------------------------------
   
 END MODULE INV_UTILS
-!CVSVERSIONINFO "$Id: inv_utils.f90,v 1.5 2012/04/09 22:21:33 keiji Exp $"
+!CVSVERSIONINFO "$Id: inv_utils.f90,v 1.6 2012/04/10 22:17:03 keiji Exp $"

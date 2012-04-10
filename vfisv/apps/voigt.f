@@ -91,4 +91,4 @@ c       FF(J)=F
 
 	RETURN
         END   
-!CVSVERSIONINFO "$Id: voigt.f,v 1.5 2012/04/09 22:20:25 keiji Exp $"
+!CVSVERSIONINFO "$Id: voigt.f,v 1.6 2012/04/10 22:16:09 keiji Exp $"

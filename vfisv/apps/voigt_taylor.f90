@@ -21,8 +21,11 @@ SUBROUTINE VOIGT_TAYLOR(DAM,FREC,PHI,PSI)
 !     CALL VOIGT(1,DAM,FREC(I),PHI(I),PSI(I))
      IF (U.GE.29.99D0.OR.U.LT.1D0) CALL VOIGT(1,DAM,FREC(I),PHI(I),PSI(I))
      IF (U.LT.29.99D0.AND.U.GE.1D0) THEN
-        HERE=ANINT(3001D0*U/30D0)
-HERE = ANINT(U*1D2+1D0)
+        ! By RCE: bug commented out in next line. Caused regular 
+        ! jumps in area/amplitude of Voigt function with increasing
+        ! field strength, every 10 gauss or so.
+    !    HERE=ANINT(3001D0*U/30D0)
+        HERE = ANINT(U*1D2+1D0)
         DELTAU=U-UU(HERE)
         COEF1=HH(HERE)
         COEF2=FF(HERE)
@@ -38,4 +41,4 @@ HERE = ANINT(U*1D2+1D0)
   ENDDO
 
 END SUBROUTINE VOIGT_TAYLOR
-!CVSVERSIONINFO "$Id: voigt_taylor.f90,v 1.5 2012/04/09 22:22:13 keiji Exp $"
+!CVSVERSIONINFO "$Id: voigt_taylor.f90,v 1.6 2012/04/10 22:17:51 keiji Exp $"
