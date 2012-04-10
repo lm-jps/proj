@@ -182,7 +182,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define QUAL_LIMBFITISSUE            (0x800)                //some lev1 records were discarded because R_SUN, and/or CRPIX1/CRPIX2 were missing or too different from the median value of the other lev 1 records (too much jitter for instance)
 #define QUAL_NOCOSMICRAY             (0x400)                //some cosmic-ray hit lists could not be read for the level 1 filtergrams
 #define QUAL_ECLIPSE                 (0x200)                //at least one lev1 record was taken during an eclipse
-
+#define QUAL_LARGEFTSID              (0x100)                //HFTSACID of target filtergram > 4000, which adds noise to observables
 
 //DRMS FAILURE (AN OBSERVABLE COULD, A PRIORI, BE CREATED, BUT THERE WAS A MOMENTARY FAILURE OF THE DRMS)
 //#define QUAL_NOLEV1D                 (0x20)                 //could not create lev1d records
@@ -967,7 +967,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.24 2012/01/18 23:28:30 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.25 2012/04/10 22:18:57 couvidat Exp $");
 }
 
 
@@ -2625,6 +2625,7 @@ int DoIt(void)
 	      temp            = IndexFiltergram[TargetWavelength]; //index of the current target filtergram
 
 	      TargetHFLID     =   HFLID[temp];      //some keyword values for the current target wavelength
+	      if(TargetHFLID >= 4000) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_LARGEFTSID;
 	      TargetHWLPOS[0] = HWL1POS[temp];
 	      TargetHWLPOS[1] = HWL2POS[temp];
 	      TargetHWLPOS[2] = HWL3POS[temp];

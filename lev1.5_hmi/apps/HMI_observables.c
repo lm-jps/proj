@@ -186,6 +186,7 @@ char *module_name= "HMI_observables"; //name of the module
 #define QUAL_LIMBFITISSUE            (0x800)                //some lev1 records were discarded because R_SUN, and/or CRPIX1/CRPIX2 were missing or too different from the median value of the other lev 1 records (too much jitter for instance)
 #define QUAL_NOCOSMICRAY             (0x400)                //some cosmic-ray hit lists could not be read for the level 1 filtergrams
 #define QUAL_ECLIPSE                 (0x100)                //at least one lev1 record was taken during an eclipse
+#define QUAL_LARGEFTSID              (0x40)                 //HFTSACID of target filtergram > 4000, which adds noise to observables
 
 
 //DRMS FAILURE (AN OBSERVABLE COULD, A PRIORI, BE CREATED, BUT THERE WAS A MOMENTARY FAILURE OF THE DRMS)
@@ -1062,7 +1063,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.32 2012/01/18 23:28:15 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.33 2012/04/10 22:18:30 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -2534,6 +2535,7 @@ int DoIt(void)
 	  else printf("Target filtergram is before target time\n");
 
 	  TargetHFLID     =   HFLID[temp];      //some keyword values for the target wavelength (we know these values exist and are not MISSINGKEYWORD)
+	  if(TargetHFLID >= 4000) QUALITY = QUALITY | QUAL_LARGEFTSID;
 	  TargetHWLPOS[0] = HWL1POS[temp];
 	  TargetHWLPOS[1] = HWL2POS[temp];
 	  TargetHWLPOS[2] = HWL3POS[temp];
