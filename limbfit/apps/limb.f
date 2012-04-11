@@ -1,7 +1,7 @@
 c------------------------------------------------------------------------------------------------
 c	#define CODE_NAME 		"limbfit"
-c	#define CODE_VERSION 	"V2.0r0" 
-c	#define CODE_DATE 		"Fri Mar  2 13:28:38 PST 2012" 
+c	#define CODE_VERSION 	"V3.0r0" 
+c	#define CODE_DATE 		"Wed Apr 11 13:17:38 HST 2012" 
 c------------------------------------------------------------------------------------------------
 c Revision 1.0  2009/01/08  17:20:00  Marcelo Emilio
 c changed assumed-size array declaration from "real xxx(1)" to "real xxx(3)"
@@ -19,9 +19,11 @@ c      "anls(3,*)" x,y coordinates: anls(1,*),anls(2,*); intensity anls(3,*).
 c      Expect the number of annulus pixels, integer "ndat", to be <= 40000
 c   2) Intial guessimate of the center position, real "cmx,cmy"; try (511.5, 
 c      511.5)
-c   3) Number of angular bins in which to find average profiles, integer "nang" c      to be <=16 (16 gives good resolution for a 7 pixel annulus) 
+c   3) Number of angular bins in which to find average profiles, integer "nang" 
+c      to be <=16 (16 gives good resolution for a 7 pixel annulus) 
 c   4) Number of radial bins, integer "nprf" <=40 (if this parameter is set to
-c      much less than 40, the order of the Chebyschev polynomial "jc" should be c      changed)
+c      much less than 40, the order of the Chebyschev polynomial "jc" should be
+c      changed)
 c   5) Number of angular bins in which to compute alpha & beta, the limb scale
 c      factor and offset, integer "nreg" <= 512
 c Output:
@@ -42,7 +44,8 @@ c      "ifail=#".  With one exception, a failure (ifail >< 0) is coupled with
 c      a "return" to the limb wrapper calling procedure.
 c   8) b0 is the "preshift" add this to the output beta to get the net
 c	*) centyp to specify if cmx/cmy are guess center(=0) or to be used as center(=1)
-	Subroutine limb(anls,npts,cmx,cmy,rguess,nitr,ncut,rprf,lprf, rsi, rso, dx, dy, 
+	Subroutine limb(anls,npts,cmx,cmy,rguess,nitr,ncut,rprf,lprf, 
+     &                   rsi, rso, dx, dy, 
      &                   alph,beta,ifail,b0, centyp, ahi)
 	
 c      parameter(jpt=40000,jreg=4096,jb=50,jc=50,jang=129,jprf=160)
@@ -288,13 +291,13 @@ c "cut" is "lmt".  Note: if cut > lmt, the code continues without action.
 c Find the min and max radii
 	rmax=0.0
 	rmin=100000.0
-c	do 42 i=1,npts 
-c	   a=anls(3,i)
-c	   if((a.le.alo).or.(a.gt.ahi)) goto 42
-c	   r=((anls(1,i)-cmx)**2+(anls(2,i)-cmy)**2)**0.5
-c	   if(r.gt.rmax) rmax=r
-c	   if(r.lt.rmin) rmin=r
-c42      enddo 
+	do 42 i=1,npts 
+	   a=anls(3,i)
+	   if((a.le.alo).or.(a.gt.ahi)) goto 42
+	   r=((anls(1,i)-cmx)**2+(anls(2,i)-cmy)**2)**0.5
+	   if(r.gt.rmax) rmax=r
+	   if(r.lt.rmin) rmin=r
+42      enddo 
 
 c Find a sub-annulus about the mean radius.  This may not be necessary with the 
 c SOI data, but was for data where larger annuli (or full disk was available).
@@ -453,13 +456,11 @@ c This criteria works ok for reasonable data.
 
 110	continue
 c Compute the radial profile for "nang" angular bins
-c  comment below because already done in the C wrapper
-c	do j=1,jang
-c	   do i=1,jprf
-c	      lprf(i,j)=0.0
-c	      prf(i,j)=0.0
-c	   enddo
-c	enddo
+	do j=1,jang
+	   do i=1,jprf
+	      prf(i,j)=0.0
+	   enddo
+	enddo
 	dprf=dr  ! =(rmax-rmin)/float(nb)
 	do 118 i=1,n
  	   a=an(3,i)
@@ -851,7 +852,8 @@ C FUNCTION FOR LFIT
 	END
 
 
-	SUBROUTINE LFIT(X,Y,SIG,NDATA,A,MA,LISTA,MFIT,COVAR,NCVM,CHISQ,FUNCS,ifail)
+	SUBROUTINE LFIT(X,Y,SIG,NDATA,A,MA,LISTA,MFIT,COVAR,NCVM,CHISQ,
+     & FUNCS,ifail)
 	implicit none
 	integer mmax,ncvmp,jpt
 	PARAMETER (MMAX=3,ncvmp=3,jpt=8000000)

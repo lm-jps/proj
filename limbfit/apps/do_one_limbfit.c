@@ -6,9 +6,9 @@
 			calls: limbfit() and reformat output data to be rewritten in the DB
 			
 	
-	#define lfr->code_name 		"limbfit"
-	#define lfr->code_version 	"V2.0r0" 
-	#define lfr->code_date 		"Fri Mar  2 13:28:38 PST 2012" 
+	#define results->code_name 		"limbfit"
+	#define results->code_version 	"V3.0r0" 
+	#define results->code_date 		"Wed Apr 11 13:17:38 HST 2012" 
 */
 
 #include "limbfit.h"
@@ -21,7 +21,7 @@ void lf_logmsg4fitsio(char *log_msg,char *log_msg_code,char *kw,unsigned int fsn
 }
 
 int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn, 
-		DRMS_Record_t *record_in,DRMS_Record_t *record_out, fitsfile *outfptr, FILE *opf, int debug, int tbf, LIMBFIT_OUTPUT *lfr, int *status)
+		DRMS_Record_t *record_in,DRMS_Record_t *record_out, fitsfile *outfptr, int tbf, LIMBFIT_OUTPUT *results, int *status)
 {
 	float kw_f;
 	double kw_d;
@@ -47,8 +47,8 @@ int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn,
 	}
 	if(rstatus) {
 		sprintf(log_msg,"drms_getkey_xxxx(%s)",kw);
-		lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, log_msg, log_msg_code, opf);
-		write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,tbf,lfr,debug);
+		lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, log_msg, log_msg_code, results->opf);
+		write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,tbf,results);
 		*status=ERR_DRMS_READ_MISSING_DATA;   
 		return(ERR_DRMS_READ_MISSING_DATA);   
 	}
@@ -70,25 +70,22 @@ int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn,
 
 	if ( rstatus != 0)
 	{
-		lf_logmsg4fitsio(log_msg, log_msg_code,kw,fsn,rstatus,opf);			
-		write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,tbf,lfr,debug);
+		lf_logmsg4fitsio(log_msg, log_msg_code,kw,fsn,rstatus,results->opf);			
+		write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,tbf,results);
 		*status=ERR_DRMS_READ_MISSING_DATA;   
 		return ERR_FITSIO;
 	}
 return(0);
 }
 
-int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out,char *tmp_dir,FILE *opf, int cc, int spe, int iter, int fldf, char *dsin, char *comment, char *bld_vers, int debug, int *status)
+int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
+					LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios, int *status)
 {
 	static char *log_msg_code="do_one_limbfit";
 	static char *series_name="limbfit data";
 	static char *file_type="full FITS";
 	static char *proc_stat=PROCSTAT_OK;
 
-	static LIMBFIT_INPUT limbfit_vars ;
-	static LIMBFIT_INPUT *lfv = &limbfit_vars;
-	static LIMBFIT_OUTPUT limbfit_res ;
-	static LIMBFIT_OUTPUT *lfr = &limbfit_res;
  	int lf_retcode;
 	int rstatus;
 	char log_msg[200];
@@ -98,115 +95,103 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 	DRMS_Segment_t *segment_out;
 	static DRMS_Array_t *img;
 
-	lfr->code_name=CODE_NAME;
-	lfr->code_version=CODE_VERSION;
-	lfr->code_date=CODE_DATE;
-	lfr->comment=comment;
-	lfr->dsin=dsin;
-	lfr->bld_vers=bld_vers;
-	
-	//if (debug) lf_logmsg("DEBUG", "INFO", 0, 0, "IN do___", log_msg_code, opf);
+	//if (debug) lf_logmsg("DEBUG", "INFO", 0, 0, "IN do___", log_msg_code, results->opf);
 
 	seg_cnt = drms_record_numsegments (record_in);
 	if (seg_cnt < 1) 
 	{
 		sprintf(log_msg,"no segments in selected record_in");
-		lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA, 0, log_msg, log_msg_code,opf);
-		write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,NULL,debug);
+		lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA, 0, log_msg, log_msg_code,results->opf);
+		write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,0,results);
 		return(ERR_DRMS_READ_MISSING_DATA);   
 	}
 	segment_in = drms_segment_lookupnum(record_in, 0);
 	img = drms_segment_read(segment_in, DRMS_TYPE_FLOAT, &rstatus);
 	if(!img) {
 		sprintf(log_msg,"Can't do drms_segment_read() status=%d", rstatus);
-		lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA, 0, log_msg, log_msg_code, opf);
-		write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,NULL,debug);
+		lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA, 0, log_msg, log_msg_code, results->opf);
+		write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,0,results);
 		return(ERR_DRMS_READ_MISSING_DATA);   
 	} 
 	else
 	{
-		//if (debug) lf_logmsg("DEBUG", "INFO", 0, 0, "IN do___getting data", log_msg_code, opf);
+		//if (debug) lf_logmsg("DEBUG", "INFO", 0, 0, "IN do___getting data", log_msg_code, results->opf);
 		// add a test if these values are ok, otherwise terminate this observation
-		lfv->ix = drms_getkey_float(record_in, "X0_LF", &rstatus);
+		input->ix = drms_getkey_float(record_in, "X0_LF", &rstatus);
 		if(rstatus) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, "drms_getkey_float(X0_LF)", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr,debug);
+			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, "drms_getkey_float(X0_LF)", log_msg_code, results->opf);
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,0,results);
 			return(ERR_DRMS_READ_MISSING_DATA);   
 		}
-		if(isnan(lfv->ix)) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_XYR_LF,rstatus, "X0_LF missing", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,opf,0,lfr,debug);
+		if(isnan(input->ix)) {
+			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_XYR_LF,rstatus, "X0_LF missing", log_msg_code, results->opf);
+			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,0,results);
 			return(ERR_DRMS_READ_MISSING_XYR_LF);   
 		}
-		lfv->iy = drms_getkey_float(record_in, "Y0_LF", &rstatus);
+		input->iy = drms_getkey_float(record_in, "Y0_LF", &rstatus);
 		if(rstatus) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, "drms_getkey_float(Y0_LF)", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr,debug);
+			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, "drms_getkey_float(Y0_LF)", log_msg_code, results->opf);
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,0,results);
 			return(ERR_DRMS_READ_MISSING_DATA);   
 		}
-		if(isnan(lfv->iy)) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_XYR_LF,rstatus, "Y0_LF missing", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,opf,0,lfr,debug);
+		if(isnan(input->iy)) {
+			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_XYR_LF,rstatus, "Y0_LF missing", log_msg_code, results->opf);
+			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,0,results);
 			return(ERR_DRMS_READ_MISSING_XYR_LF);   
 		}
-		lfv->ir = drms_getkey_float(record_in, "RSUN_LF", &rstatus);
+		input->ir = drms_getkey_float(record_in, "RSUN_LF", &rstatus);
 		  if(rstatus) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, "drms_getkey_float(RSUN_LF)", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr,debug);
+			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA,rstatus, "drms_getkey_float(RSUN_LF)", log_msg_code, results->opf);
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,0,results);
 			return(ERR_DRMS_READ_MISSING_DATA);   
 		}
-		if(isnan(lfv->ir)) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_XYR_LF,rstatus, "RSUN_LF missing", log_msg_code, opf);
-			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,opf,0,lfr,debug);
+		if(isnan(input->ir)) {
+			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_XYR_LF,rstatus, "RSUN_LF missing", log_msg_code, results->opf);
+			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,0,results);
 			return(ERR_DRMS_READ_MISSING_XYR_LF);   
 		}
-		lfv->img_sz0=img->axis[0];
-		lfv->img_sz1=img->axis[1];
-		lfv->cc=cc;
-		lfv->spe=spe;
-		lfv->iter=iter;
-		lfv->fldf=fldf;
-		//lfv->sav=sav;
-		lfv->data=img->data;
+		input->img_sz0=img->axis[0];
+		input->img_sz1=img->axis[1];
+		input->data=img->data;
 
-		if (debug) 
+		if (results->debug) 
 		{
-			sprintf(log_msg,"X0_LF %f", lfv->ix);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, opf);
-			sprintf(log_msg,"Y0_LF %f", lfv->iy);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, opf);
-			sprintf(log_msg,"RSUN_LF %f", lfv->ir);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, opf);
+			sprintf(log_msg,"X0_LF %f", input->ix);
+			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
+			sprintf(log_msg,"Y0_LF %f", input->iy);
+			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
+			sprintf(log_msg,"RSUN_LF %f", input->ir);
+			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
 		}
 		
-		lf_retcode=limbfit(lfv,lfr,opf,debug);
+		lf_retcode=limbfit(input,results,ios);
 		drms_free_array(img);
 
-		if (debug) 
+		if (results->debug) 
 		{
-			sprintf(log_msg,"XC %f", lfr->cenx);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, opf);
-			sprintf(log_msg,"YC %f", lfr->ceny);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, opf);
-			sprintf(log_msg,"R %f", lfr->radius);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, opf);
+			sprintf(log_msg,"XC %f", results->cenx);
+			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
+			sprintf(log_msg,"YC %f", results->ceny);
+			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
+			sprintf(log_msg,"R %f", results->radius);
+			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
 			sprintf(log_msg,"Returned code %d", lf_retcode);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, opf);
-			sprintf(log_msg,"err1 %d", lfr->error1);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, opf);
-			sprintf(log_msg,"err2 %d", lfr->error2);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, opf);
+			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
+			sprintf(log_msg,"err1 %d", results->error1);
+			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
+			sprintf(log_msg,"err2 %d", results->error2);
+			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
 		}
 		
 		// >= 0 => all
 		// ERR_LIMBFIT_FIT_FAILED => all
 		// ERR_LIMBFIT_FAILED => mini
 
-		if (fldf==0) lfr->fldfr=4;
+		if (input->fldf==0) results->fldfr=4;
 
 		if (lf_retcode >= 0 || lf_retcode == ERR_LIMBFIT_FIT_FAILED)
 		{	
-			if (debug) printf("write in the db\n");
+			if (results->debug) printf("write in the db\n");
 			//**********************************************************************
 			//	Write into the DB
 			//**********************************************************************
@@ -223,35 +208,35 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			//---------------------------------------
 // need to test status...
 			rstatus=drms_setkey_string(record_out, "SERIESCN", 	series_name);
-			rstatus=drms_setkey_string(record_out, "INSERIES", 	lfr->dsin);
-			rstatus=drms_setkey_string(record_out, "CODENAME",	lfr->code_name);
-			rstatus=drms_setkey_string(record_out, "CODEVERS",	lfr->code_version);
-			rstatus=drms_setkey_string(record_out, "CODEDATE",	lfr->code_date);
-			rstatus=drms_setkey_float (record_out, "X_LFS",		lfr->cenx);
-			rstatus=drms_setkey_float (record_out, "Y_LFS",		lfr->ceny);
-			rstatus=drms_setkey_double(record_out, "R_LFS",		lfr->radius);
-			rstatus=drms_setkey_int   (record_out, "QUAL_LFS",	lfr->quality);
-			rstatus=drms_setkey_int   (record_out, "ERRO_LFS",	lfr->error1);
-			rstatus=drms_setkey_int   (record_out, "ERRO_FIT",	lfr->error2);
-			rstatus=drms_setkey_int   (record_out, "NB_FBINS",	lfr->nb_fbins);
-			rstatus=drms_setkey_int   (record_out, "FLDFR",		lfr->fldfr);
-			rstatus=drms_setkey_double(record_out, "MAX_LIMB",	lfr->max_limb);
-			rstatus=drms_setkey_double(record_out, "CMEAN",		lfr->cmean);
-			rstatus=drms_setkey_int   (record_out, "ANN_WD",	lfr->ann_wd);
-			rstatus=drms_setkey_int   (record_out, "MXSZANNV",	lfr->mxszannv);
-			rstatus=drms_setkey_int   (record_out, "NB_LDF",	lfr->nb_ldf);
-			rstatus=drms_setkey_int   (record_out, "NB_RDB",	lfr->nb_rdb);
-			rstatus=drms_setkey_int   (record_out, "NB_ABB",	lfr->nb_abb);
-			rstatus=drms_setkey_double(record_out, "UP_LIMIT",	lfr->up_limit);
-			rstatus=drms_setkey_double(record_out, "LO_LIMIT",	lfr->lo_limit);
-			rstatus=drms_setkey_double(record_out, "INC_X",		lfr->inc_x);
-			rstatus=drms_setkey_double(record_out, "INC_Y",		lfr->inc_y);
-			rstatus=drms_setkey_int   (record_out, "NFITPNTS",	lfr->nfitpnts);
-			rstatus=drms_setkey_int   (record_out, "NB_ITER",	lfr->nb_iter);
-			rstatus=drms_setkey_int   (record_out, "CEN_CALC",	lfv->cc);
-			rstatus=drms_setkey_double(record_out, "AHI",		lfr->ahi);
-			rstatus=drms_setkey_string(record_out, "COMMENTS",	lfr->comment);			
-			rstatus=drms_setkey_string(record_out, "BLD_VERS",  lfr->bld_vers);
+			rstatus=drms_setkey_string(record_out, "INSERIES", 	results->dsin);
+			rstatus=drms_setkey_string(record_out, "CODENAME",	results->code_name);
+			rstatus=drms_setkey_string(record_out, "CODEVERS",	results->code_version);
+			rstatus=drms_setkey_string(record_out, "CODEDATE",	results->code_date);
+			rstatus=drms_setkey_float (record_out, "X_LFS",		results->cenx);
+			rstatus=drms_setkey_float (record_out, "Y_LFS",		results->ceny);
+			rstatus=drms_setkey_double(record_out, "R_LFS",		results->radius);
+			rstatus=drms_setkey_int   (record_out, "QUAL_LFS",	results->quality);
+			rstatus=drms_setkey_int   (record_out, "ERRO_LFS",	results->error1);
+			rstatus=drms_setkey_int   (record_out, "ERRO_FIT",	results->error2);
+			rstatus=drms_setkey_int   (record_out, "NB_FBINS",	results->nb_fbins);
+			rstatus=drms_setkey_int   (record_out, "FLDFR",		results->fldfr);
+			rstatus=drms_setkey_double(record_out, "MAX_LIMB",	results->max_limb);
+			rstatus=drms_setkey_double(record_out, "CMEAN",		results->cmean);
+			rstatus=drms_setkey_int   (record_out, "ANN_WD",	results->ann_wd);
+			rstatus=drms_setkey_int   (record_out, "MXSZANNV",	results->mxszannv);
+			rstatus=drms_setkey_int   (record_out, "NB_LDF",	results->nb_ldf);
+			rstatus=drms_setkey_int   (record_out, "NB_RDB",	results->nb_rdb);
+			rstatus=drms_setkey_int   (record_out, "NB_ABB",	results->nb_abb);
+			rstatus=drms_setkey_double(record_out, "UP_LIMIT",	results->up_limit);
+			rstatus=drms_setkey_double(record_out, "LO_LIMIT",	results->lo_limit);
+			rstatus=drms_setkey_double(record_out, "INC_X",		results->inc_x);
+			rstatus=drms_setkey_double(record_out, "INC_Y",		results->inc_y);
+			rstatus=drms_setkey_int   (record_out, "NFITPNTS",	results->nfitpnts);
+			rstatus=drms_setkey_int   (record_out, "NB_ITER",	results->nb_iter);
+			rstatus=drms_setkey_int   (record_out, "CEN_CALC",	input->cc);
+			rstatus=drms_setkey_double(record_out, "AHI",		results->ahi);
+			rstatus=drms_setkey_string(record_out, "COMMENTS",	results->comment);			
+			rstatus=drms_setkey_string(record_out, "BLD_VERS",  results->bld_vers);
 			//---------------------------------------
 			//		3) write the generic segment 
 			//			(as the full FITS file)
@@ -260,7 +245,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 
 			long nelements, firstrow, firstelem;
 			static char filenameout[128];
-			sprintf(filenameout,"%s%u_full.fits",tmp_dir,fsn);
+			sprintf(filenameout,"%s%u_full.fits",results->tmp_dir,fsn);
 		
 			firstrow=1;
 			firstelem=1;
@@ -270,33 +255,33 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			fitsfile *outfptr;
 			if (fits_create_file(&outfptr, filenameout, &rstatus)) 
 			{
-				fits_report_error(opf, rstatus); 
-				lf_logmsg4fitsio(log_msg, log_msg_code, "fits_create_file()",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,2,lfr,debug);
+				fits_report_error(results->opf, rstatus); 
+				lf_logmsg4fitsio(log_msg, log_msg_code, "fits_create_file()",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,2,results);
 				return ERR_FITSIO;
 			}
 
 			long l_naxes[2];
-			l_naxes[0]=lfr->fits_ldfs_naxis1;
-			l_naxes[1]=lfr->fits_ldfs_naxis2;
+			l_naxes[0]=results->fits_ldfs_naxis1;
+			l_naxes[1]=results->fits_ldfs_naxis2;
 			nelements=l_naxes[0]*l_naxes[1];
 			int nax=2;
 			if ( fits_create_img(outfptr, FLOAT_IMG, nax, l_naxes, &rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "fits_create_img()",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,2,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "fits_create_img()",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,2,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_write_img(outfptr, TFLOAT, 1, nelements, lfr->fits_ldfs_data, &rstatus) ) 
+			if ( fits_write_img(outfptr, TFLOAT, 1, nelements, results->fits_ldfs_data, &rstatus) ) 
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_img()",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,2,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_img()",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,2,results);
 				return ERR_FITSIO;
 			}	
 //			drms_free_array (data_array1); // NOTE: because of that, from now tbf MUST BE EQUAL to 1
 
 		//add more KWs
-			if(get_set_kw(1,"ORIGIN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
+			if(get_set_kw(1,"ORIGIN","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
 			
 			TIME tobs;
 			static char s_tobs[50];
@@ -304,118 +289,118 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			sprint_time(s_tobs, tobs, "UTC", 0);
 			if ( fits_update_key(outfptr, TSTRING, "DATE-OBS", &s_tobs, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(DATE__OBS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(DATE__OBS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
 			tobs = drms_getkey_time(record_in, "T_OBS", &rstatus);
 			sprint_time(s_tobs, tobs, "UTC", 0);
 			if ( fits_update_key(outfptr, TSTRING, "T_OBS", s_tobs, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(T_OBS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(T_OBS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
 				
-			if(get_set_kw(2,"CAMERA","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(4,"EXPTIME","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"EXPSDEV","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"WAVELNTH","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"WAVEUNIT","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
+			if(get_set_kw(2,"CAMERA","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(4,"EXPTIME","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"EXPSDEV","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(2,"WAVELNTH","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(1,"WAVEUNIT","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
 			if ( fits_update_key(outfptr, TINT, "FSN", &fsn, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(FSN)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(FSN)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if(get_set_kw(2,"FID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"DATAMIN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"DATAMAX","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"DATAMEDN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"DATAMEAN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"DATARMS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"FLAT_REC","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"CTYPE1","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"CUNIT1","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"CRVAL1","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"CDELT1","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"CRPIX1","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"CTYPE2","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"CUNIT2","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"CRVAL2","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"CDELT2","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"CRPIX2","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"CROTA2","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"R_SUN","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"MPO_REC","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"INST_ROT","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);			
-			if (isnan(lfv->ix)) { lfv->ix=0.0;}
-			if ( fits_update_key(outfptr, TDOUBLE, "X0_LF", &lfv->ix, "",&rstatus) )
+			if(get_set_kw(2,"FID","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(2,"DATAMIN","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(2,"DATAMAX","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(2,"DATAMEDN","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"DATAMEAN","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"DATARMS","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(1,"FLAT_REC","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(1,"CTYPE1","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(1,"CUNIT1","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"CRVAL1","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"CDELT1","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"CRPIX1","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(1,"CTYPE2","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(1,"CUNIT2","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"CRVAL2","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"CDELT2","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"CRPIX2","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"CROTA2","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"R_SUN","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(1,"MPO_REC","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"INST_ROT","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);			
+			if (isnan(input->ix)) { input->ix=0.0;}
+			if ( fits_update_key(outfptr, TDOUBLE, "X0_LF", &input->ix, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(X0_LF)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(X0_LF)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if (isnan(lfv->iy)) { lfv->iy=0.0;}
-			if ( fits_update_key(outfptr, TDOUBLE, "Y0_LF", &lfv->iy, "",&rstatus) )
+			if (isnan(input->iy)) { input->iy=0.0;}
+			if ( fits_update_key(outfptr, TDOUBLE, "Y0_LF", &input->iy, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(Y0_LF)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(Y0_LF)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if (isnan(lfv->ir)) { lfv->ir=0.0;}
-			if ( fits_update_key(outfptr, TDOUBLE, "RSUN_LF", &lfv->ir, "",&rstatus) )
+			if (isnan(input->ir)) { input->ir=0.0;}
+			if ( fits_update_key(outfptr, TDOUBLE, "RSUN_LF", &input->ir, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(RSUN_LF)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(RSUN_LF)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if(get_set_kw(1,"ASD_REC","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(3,"SAT_ROT","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(1,"ORB_REC","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(4,"DSUN_OBS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(4,"RSUN_OBS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(4,"HAEX_OBS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(4,"HAEY_OBS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(4,"HAEZ_OBS","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"HPLTID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"HFTSACID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"HWLTID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
-			if(get_set_kw(2,"HCFTID","",fsn,record_in,record_out,outfptr,opf,debug,1,lfr,status)) return(*status);
+			if(get_set_kw(1,"ASD_REC","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(3,"SAT_ROT","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(1,"ORB_REC","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(4,"DSUN_OBS","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(4,"RSUN_OBS","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(4,"HAEX_OBS","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(4,"HAEY_OBS","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(4,"HAEZ_OBS","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(2,"HPLTID","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(2,"HFTSACID","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(2,"HWLTID","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
+			if(get_set_kw(2,"HCFTID","",fsn,record_in,record_out,outfptr,1,results,status)) return(*status);
 			if ( fits_update_key(outfptr, TSTRING, "SERIESCN", series_name, "Series Name",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(SERIESCN)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(SERIESCN)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
 			if ( fits_update_key(outfptr, TSTRING, "FILETYPE", file_type, "File content",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(FILETYPE)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(FILETYPE)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TSTRING, "CODENAME", lfr->code_name, "Code Name",&rstatus) )
+			if ( fits_update_key(outfptr, TSTRING, "CODENAME", results->code_name, "Code Name",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(CODENAME)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(CODENAME)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TSTRING, "CODEVERS", lfr->code_version, "Code Version",&rstatus) )
+			if ( fits_update_key(outfptr, TSTRING, "CODEVERS", results->code_version, "Code Version",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(CODEVERS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(CODEVERS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TSTRING, "CODEDATE", lfr->code_date, "Code Date",&rstatus) )
+			if ( fits_update_key(outfptr, TSTRING, "CODEDATE", results->code_date, "Code Date",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(CODEDATE)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(CODEDATE)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
 			if ( fits_update_key(outfptr, TSTRING, "PROCSTAT", proc_stat, "Processing rstatus code",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(PROCSTAT)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(PROCSTAT)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
 		
@@ -423,134 +408,134 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			sprint_time(s_tobs, tobs, "UTC", 0);
 			if ( fits_update_key(outfptr, TSTRING, "DATE", s_tobs, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(DATE)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(DATE)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TFLOAT, "X_LFS", &lfr->cenx, "Center Position X",&rstatus) )
+			if ( fits_update_key(outfptr, TFLOAT, "X_LFS", &results->cenx, "Center Position X",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(X_LFS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(X_LFS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TFLOAT, "Y_LFS", &lfr->ceny, "Center Position Y",&rstatus) )
+			if ( fits_update_key(outfptr, TFLOAT, "Y_LFS", &results->ceny, "Center Position Y",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(Y_LFS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(Y_LFS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TDOUBLE, "R_LFS", &lfr->radius, "Solar Radius",&rstatus) )
+			if ( fits_update_key(outfptr, TDOUBLE, "R_LFS", &results->radius, "Solar Radius",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(R_LFS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(R_LFS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TDOUBLE, "CMEAN", &lfr->cmean, "Mean value of the 500x500 pixels center",&rstatus) )
+			if ( fits_update_key(outfptr, TDOUBLE, "CMEAN", &results->cmean, "Mean value of the 500x500 pixels center",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(CMEAN)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(CMEAN)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TDOUBLE, "MAX_LIMB", &lfr->cmean, "Maximum value on the limb",&rstatus) )
+			if ( fits_update_key(outfptr, TDOUBLE, "MAX_LIMB", &results->cmean, "Maximum value on the limb",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(MAX_LIMB)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(MAX_LIMB)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "QUAL_LFS", &lfr->quality, "Processing quality indicator",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "QUAL_LFS", &results->quality, "Processing quality indicator",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(QUAL_LFS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(QUAL_LFS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "ERRO_LFS", &lfr->error1, "Limb.f Processing error code",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "ERRO_LFS", &results->error1, "Limb.f Processing error code",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(ERRO_LFS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(ERRO_LFS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "ERRO_FIT", &lfr->error2, "Fitting Processing error code",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "ERRO_FIT", &results->error2, "Fitting Processing error code",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(ERRO_FIT)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(ERRO_FIT)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "FLDFR", &lfr->fldfr, "",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "FLDFR", &results->fldfr, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(FLDFR)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(FLDFR)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "NB_FBINS", &lfr->nb_fbins, "",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "NB_FBINS", &results->nb_fbins, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_FBINS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_FBINS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "ANN_WD", &lfr->ann_wd, "",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "ANN_WD", &results->ann_wd, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(ANN_WD)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(ANN_WD)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "MXSZANNV", &lfr->mxszannv, "",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "MXSZANNV", &results->mxszannv, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(MXSZANNV)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(MXSZANNV)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "NB_LDF", &lfr->nb_ldf, "",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "NB_LDF", &results->nb_ldf, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_LDF)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_LDF)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "NB_RDB", &lfr->nb_rdb, "",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "NB_RDB", &results->nb_rdb, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_RDB)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_RDB)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "NB_ABB", &lfr->nb_abb, "",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "NB_ABB", &results->nb_abb, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_ABB)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_ABB)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TDOUBLE, "UP_LIMIT", &lfr->up_limit, "",&rstatus) )
+			if ( fits_update_key(outfptr, TDOUBLE, "UP_LIMIT", &results->up_limit, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(UP_LIMIT)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(UP_LIMIT)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TDOUBLE, "LO_LIMIT", &lfr->lo_limit, "",&rstatus) )
+			if ( fits_update_key(outfptr, TDOUBLE, "LO_LIMIT", &results->lo_limit, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(LO_LIMIT)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(LO_LIMIT)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TDOUBLE, "INC_X", &lfr->inc_x, "",&rstatus) )
+			if ( fits_update_key(outfptr, TDOUBLE, "INC_X", &results->inc_x, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(INC_X)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(INC_X)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TDOUBLE, "INC_Y", &lfr->inc_y, "",&rstatus) )
+			if ( fits_update_key(outfptr, TDOUBLE, "INC_Y", &results->inc_y, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(INC_Y)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(INC_Y)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "NFITPNTS", &lfr->nfitpnts, "",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "NFITPNTS", &results->nfitpnts, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(NFITPNTS)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(NFITPNTS)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
-			if ( fits_update_key(outfptr, TINT, "NB_ITER", &lfr->nb_iter, "",&rstatus) )
+			if ( fits_update_key(outfptr, TINT, "NB_ITER", &results->nb_iter, "",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_ITER)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(NB_ITER)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
 
@@ -558,16 +543,16 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			int i;			
 		
 			// AB ---EXT#1---------------------------------------------------------------------
-			if (lfr->nb_iter==1)
+			if (results->nb_iter==1)
 			{
 				char *tunitAB[] = { "","" };
 				char *ttypeAB[] = { "Alpha", "Beta"};
 				char *tformAB[] = { "1E","1E" };
 				char extnameAB[]="LDF info / Alpha&Beta";
-				if ( fits_create_tbl( outfptr, BINARY_TBL, lfr->fits_ab_nrows, lfr->fits_ab_tfields, 
+				if ( fits_create_tbl( outfptr, BINARY_TBL, results->fits_ab_nrows, results->fits_ab_tfields, 
 													ttypeAB, tformAB, tunitAB, extnameAB, &rstatus) )
 				{
-					fits_report_error(opf, rstatus); 
+					fits_report_error(results->opf, rstatus); 
 					return ERR_FITSIO;
 				}
 			}
@@ -577,20 +562,20 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 				char *ttypeAB[] = { "Alpha", "Beta","Beta Prev"};
 				char *tformAB[] = { "1E","1E","1E" };
 				char extnameAB[]="LDF info / Alpha&Beta[&Beta Prev]";
-				if ( fits_create_tbl( outfptr, BINARY_TBL, lfr->fits_ab_nrows, lfr->fits_ab_tfields, 
+				if ( fits_create_tbl( outfptr, BINARY_TBL, results->fits_ab_nrows, results->fits_ab_tfields, 
 													ttypeAB, tformAB, tunitAB, extnameAB, &rstatus) )
 				{
-					fits_report_error(opf, rstatus); 
+					fits_report_error(results->opf, rstatus); 
 					return ERR_FITSIO;
 				}			
 			}
-			for (i=1;i<=lfr->fits_ab_tfields;i++)
+			for (i=1;i<=results->fits_ab_tfields;i++)
 			{
-				if (fits_write_col(outfptr, TFLOAT, i, firstrow, firstelem, lfr->fits_ab_nrows, 
-												lfr->fits_alpha_beta+(i-1)*lfr->fits_ab_nrows, &rstatus))
+				if (fits_write_col(outfptr, TFLOAT, i, firstrow, firstelem, results->fits_ab_nrows, 
+												results->fits_alpha_beta+(i-1)*results->fits_ab_nrows, &rstatus))
 				{
-					lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_col(AB)",fsn,rstatus,opf);			
-					write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+					lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_col(AB)",fsn,rstatus,results->opf);			
+					write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 					return ERR_FITSIO;
 				}
 			}
@@ -601,44 +586,44 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			char *tformAE[] = { "1D", "1D", "1D", "1D", "1D", "1D", "1D", "1D", "1D", "1D", "1D", "1D", "1D", "1D"  };
 			char *ttypeA[]  = { "A0", "A1", "A2", "A3", "A4", "A5", "E0", "E1", "E2", "E3", "E4", "E5", "Radius", "IP1"};
 		
-			if ( fits_create_tbl(outfptr, BINARY_TBL, lfr->fits_params_nrows, lfr->fits_params_tfields, 
+			if ( fits_create_tbl(outfptr, BINARY_TBL, results->fits_params_nrows, results->fits_params_tfields, 
 												ttypeA, tformAE,tunitAE, extnameA, &rstatus) )
 			{
-					fits_report_error(opf, rstatus); 
+					fits_report_error(results->opf, rstatus); 
 					return ERR_FITSIO;
 			}
 
-			for (i=1;i<=lfr->fits_params_tfields;i++)
+			for (i=1;i<=results->fits_params_tfields;i++)
 			{
-				if (fits_write_col(outfptr, TDOUBLE, i, firstrow, firstelem, lfr->fits_params_nrows, 
-												lfr->fits_params+(i-1)*lfr->fits_params_nrows, &rstatus))
+				if (fits_write_col(outfptr, TDOUBLE, i, firstrow, firstelem, results->fits_params_nrows, 
+												results->fits_params+(i-1)*results->fits_params_nrows, &rstatus))
 				{
-					lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_col(PARAMS)",fsn,rstatus,opf);			
-					write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+					lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_col(PARAMS)",fsn,rstatus,results->opf);			
+					write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 					return ERR_FITSIO;
 				}
 			}	
 			
-			if (fldf==1)
+			if (input->fldf==1)
 			{
 				// Full LDF ---EXT#3-------------------------------------------------------------------------
 				char *tunitF[] = { "","" };
 				char *ttypeF[] = { "Intensity", "Radius"};
 				char *tformF[] = { "1E","1E" };
 				char extnameF[]="Full LDF ";
-				if ( fits_create_tbl( outfptr, BINARY_TBL, lfr->fits_fldfs_nrows, lfr->fits_fldfs_tfields, 
+				if ( fits_create_tbl( outfptr, BINARY_TBL, results->fits_fldfs_nrows, results->fits_fldfs_tfields, 
 														ttypeF, tformF, tunitF, extnameF, &rstatus) )
 				{
-					fits_report_error(opf, rstatus); 
+					fits_report_error(results->opf, rstatus); 
 					return ERR_FITSIO;
 				}
-				for (i=1;i<=lfr->fits_fldfs_tfields;i++)
+				for (i=1;i<=results->fits_fldfs_tfields;i++)
 				{
-					if (fits_write_col(outfptr, TFLOAT, i, firstrow, firstelem, lfr->fits_fldfs_nrows, 
-													lfr->fits_fulldfs+(i-1)*lfr->fits_fldfs_nrows, &rstatus))
+					if (fits_write_col(outfptr, TFLOAT, i, firstrow, firstelem, results->fits_fldfs_nrows, 
+													results->fits_fulldfs+(i-1)*results->fits_fldfs_nrows, &rstatus))
 					{
-						lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_col(FLDF)",fsn,rstatus,opf);			
-						write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+						lf_logmsg4fitsio(log_msg, log_msg_code, "fits_write_col(FLDF)",fsn,rstatus,results->opf);			
+						write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 						return ERR_FITSIO;
 					}
 				}
@@ -648,16 +633,16 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			//---------------------------------------
 			if ( fits_update_key(outfptr, TSTRING, "PROCSTAT", proc_stat, "Processing rstatus code",&rstatus) )
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "(PROCSTAT)",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "(PROCSTAT)",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}
 
 			// Close file & attach to DB & remove
 			if ( fits_close_file(outfptr, &rstatus) ) 
 			{
-				lf_logmsg4fitsio(log_msg, log_msg_code, "fits_close_file()",fsn,rstatus,opf);			
-				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,opf,1,lfr,debug);
+				lf_logmsg4fitsio(log_msg, log_msg_code, "fits_close_file()",fsn,rstatus,results->opf);			
+				write_mini_output(PROCSTAT_NO_LF_FITS_WRITE_PB,record_in,record_out,1,results);
 				return ERR_FITSIO;
 			}						
 
@@ -665,43 +650,44 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 			segment_out = drms_segment_lookupnum (record_out, 0); //WARNING change this number if the number of segment changes...
 
 			rstatus=drms_segment_write_from_file(segment_out,filenameout);
-			// a tester ! abort if pb
+			if(rstatus) {
+					sprintf(log_msg,"can't drms_segment_write_from_file() for fsn# %u", fsn);
+					lf_logmsg("ERROR", "DRMS", ERR_DRMS_WRITE, rstatus, log_msg, log_msg_code, results->opf);
+					return(ERR_DRMS_WRITE);
+			}
 
 			rstatus=drms_setkey_string(record_out, "PROCSTAT",	PROCSTAT_OK);
-			// a tester ! abort if pb
-
-			if (debug) printf("end write in the db %d\n",rstatus);
-
 			if (!rstatus) remove(filenameout); // test if this is ok too!!!
 			else 
 				{
-					sprintf(log_msg,"can't drms_segment_write_from_file() for fsn# %u", fsn);
-					lf_logmsg("ERROR", "DRMS", ERR_DRMS_WRITE, rstatus, log_msg, log_msg_code, opf);
+					sprintf(log_msg,"can't drms_setkey_string(PROCSTAT) for fsn# %u", fsn);
+					lf_logmsg("ERROR", "DRMS", ERR_DRMS_WRITE, rstatus, log_msg, log_msg_code, results->opf);
 					return(ERR_DRMS_WRITE);
 				}
+			if (results->debug) printf("end write in the db %d\n",rstatus);
 				
-			free(lfr->fits_ldfs_data);
-			free(lfr->fits_alpha_beta);
-			free(lfr->fits_params);
-			if (lfr->fldfr<3) free(lfr->fits_fulldfs);
+			free(results->fits_ldfs_data);
+			free(results->fits_alpha_beta);
+			free(results->fits_params);
+			if (results->fldfr<3) free(results->fits_fulldfs);
 			
-			if (debug) printf("done...%u\n",fsn);							
-			lf_logmsg("INFO", "APP", 0, 0, "End writing in the DB", log_msg_code, opf);
+			if (results->debug) printf("done...%u\n",fsn);							
+			lf_logmsg("INFO", "APP", 0, 0, "End writing in the DB", log_msg_code, results->opf);
 		}
 		else 
 		{
 			sprintf(log_msg,"NO LDFS file created (ifail >0) or retcode <0 for fsn# %u", fsn);
-			lf_logmsg("WARNING", "APP", ERR_LIMBFIT_FAILED, lf_retcode, log_msg, log_msg_code, opf);			
-			write_mini_output(PROCSTAT_NO_LF_FAILED,record_in,record_out,opf,0,lfr,debug);
+			lf_logmsg("WARNING", "APP", ERR_LIMBFIT_FAILED, lf_retcode, log_msg, log_msg_code, results->opf);			
+			write_mini_output(PROCSTAT_NO_LF_FAILED,record_in,record_out,0,results);
 			// is this the right retcode? or should I make a test???
 			
 			// free 
-			if (lfr->error1 == 0)
+			if (results->error1 == 0)
 			{
-				free(lfr->fits_ldfs_data);
-				free(lfr->fits_alpha_beta);
-				free(lfr->fits_params);
-				if (lfr->fldfr<3) free(lfr->fits_fulldfs);
+				free(results->fits_ldfs_data);
+				free(results->fits_alpha_beta);
+				free(results->fits_params);
+				if (results->fldfr<3) free(results->fits_fulldfs);
 			}
 			return(0);
 		}
@@ -710,11 +696,12 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 return 0;
 }
 //pb here: quand this is called then no free are executed!!! 
-int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int tbf, LIMBFIT_OUTPUT *lfr, int debug)
+int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
+			int tbf, LIMBFIT_OUTPUT *results)
 {
 		//int status;
 		char *log_msg_code="write_mini_output";
-		lf_logmsg("INFO", "APP", 0, 0, "Writing only header", log_msg_code, opf);			
+		lf_logmsg("INFO", "APP", 0, 0, "Writing only header", log_msg_code, results->opf);			
 		// write only the header of segment in the DB
 		drms_copykeys(record_out, record_in, 1, kDRMS_KeyClass_All); 	
 		// change DATE to our proc_date, do not keep level 1 DATE:
@@ -722,36 +709,36 @@ int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *re
 
 // need to test status...
 		drms_setkey_string(record_out, "SERIESCN", "Limbfit data");
-		drms_setkey_string(record_out, "CODENAME",	lfr->code_name);
-		drms_setkey_string(record_out, "CODEVERS",	lfr->code_version);
-		drms_setkey_string(record_out, "CODEDATE",	lfr->code_date);
-		drms_setkey_string(record_out, "INSERIES",	lfr->dsin);
-		drms_setkey_string(record_out, "COMMENTS",	lfr->comment);
+		drms_setkey_string(record_out, "CODENAME",	results->code_name);
+		drms_setkey_string(record_out, "CODEVERS",	results->code_version);
+		drms_setkey_string(record_out, "CODEDATE",	results->code_date);
+		drms_setkey_string(record_out, "INSERIES",	results->dsin);
+		drms_setkey_string(record_out, "COMMENTS",	results->comment);
 		drms_setkey_string(record_out, "PROCSTAT",	errcode);
-		drms_setkey_int   (record_out, "QUAL_LFS",	lfr->quality);
-		drms_setkey_int   (record_out, "ERRO_LFS",	lfr->error1);
-		drms_setkey_int   (record_out, "ERRO_FIT",	lfr->error2);
-		drms_setkey_int   (record_out, "ANN_WD",	lfr->ann_wd);
-		drms_setkey_int   (record_out, "MXSZANNV",	lfr->mxszannv);
-		drms_setkey_int   (record_out, "NB_LDF",	lfr->nb_ldf);
-		drms_setkey_int   (record_out, "NB_RDB",	lfr->nb_rdb);
-		drms_setkey_int   (record_out, "NB_ABB",	lfr->nb_abb);
-		drms_setkey_double(record_out, "UP_LIMIT",	lfr->up_limit);
-		drms_setkey_double(record_out, "LO_LIMIT",	lfr->lo_limit);
-		drms_setkey_double(record_out, "INC_X",		lfr->inc_x);
-		drms_setkey_double(record_out, "INC_Y",		lfr->inc_y);
-		drms_setkey_int   (record_out, "NB_ITER",	lfr->nb_iter);
-		drms_setkey_int   (record_out, "CEN_CALC",	lfr->cc);
-		drms_setkey_double(record_out, "AHI",		lfr->ahi);		
-		drms_setkey_int   (record_out, "FLDFR",		lfr->fldfr);
-		drms_setkey_int   (record_out, "NFITPNTS",	lfr->nfitpnts);
-		drms_setkey_string(record_out, "BLD_VERS", 	lfr->bld_vers);
+		drms_setkey_int   (record_out, "QUAL_LFS",	results->quality);
+		drms_setkey_int   (record_out, "ERRO_LFS",	results->error1);
+		drms_setkey_int   (record_out, "ERRO_FIT",	results->error2);
+		drms_setkey_int   (record_out, "ANN_WD",	results->ann_wd);
+		drms_setkey_int   (record_out, "MXSZANNV",	results->mxszannv);
+		drms_setkey_int   (record_out, "NB_LDF",	results->nb_ldf);
+		drms_setkey_int   (record_out, "NB_RDB",	results->nb_rdb);
+		drms_setkey_int   (record_out, "NB_ABB",	results->nb_abb);
+		drms_setkey_double(record_out, "UP_LIMIT",	results->up_limit);
+		drms_setkey_double(record_out, "LO_LIMIT",	results->lo_limit);
+		drms_setkey_double(record_out, "INC_X",		results->inc_x);
+		drms_setkey_double(record_out, "INC_Y",		results->inc_y);
+		drms_setkey_int   (record_out, "NB_ITER",	results->nb_iter);
+		drms_setkey_int   (record_out, "CEN_CALC",	results->cc);
+		drms_setkey_double(record_out, "AHI",		results->ahi);		
+		drms_setkey_int   (record_out, "FLDFR",		results->fldfr);
+		drms_setkey_int   (record_out, "NFITPNTS",	results->nfitpnts);
+		drms_setkey_string(record_out, "BLD_VERS", 	results->bld_vers);
 		if (tbf >=1)
 		{
-			free(lfr->fits_alpha_beta);
-			free(lfr->fits_params);
-			if (lfr->fldfr<3) free(lfr->fits_fulldfs);
-			if (tbf ==2) free(lfr->fits_ldfs_data);	
+			free(results->fits_alpha_beta);
+			free(results->fits_params);
+			if (results->fldfr<3) free(results->fits_fulldfs);
+			if (tbf ==2) free(results->fits_ldfs_data);	
 		}
 return(0);
 }

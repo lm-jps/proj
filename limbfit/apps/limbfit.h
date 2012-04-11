@@ -1,4 +1,4 @@
-/* I.Scholl "Fri Mar  2 13:28:38 PST 2012" 
+/* I.Scholl "Wed Apr 11 13:17:38 HST 2012" 
 */
 
 #include <string.h>
@@ -26,8 +26,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V2.0r0" 
-#define CODE_DATE 		"Fri Mar  2 13:28:38 PST 2012" 
+#define CODE_VERSION 	"V3.0r0" 
+#define CODE_DATE 		"Wed Apr 11 13:17:38 HST 2012" 
 #define LOGMSG1			"LIMBFIT"
 #define	JSD_NAME		"su_scholl.hmi_lf.jsd"
 
@@ -99,7 +99,7 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define UP_LIMIT 32.0						// 
 #define INC_X -4.0							// 
 #define INC_Y -4.0							// 
-#define NUM_FITPNTS 16						// 2*NUM_FITPNTS<NUM_RADIAL_BINS
+#define NUM_FITPNTS 9						// 2*NUM_FITPNTS<NUM_RADIAL_BINS
 #define GUESS_RANGE 8						//
 #define NB_ITER 2							//
 #define BAD_PIXEL_VALUE -2147483648.0
@@ -116,20 +116,28 @@ drms_set_key_string for the final status of the current processed record (becaus
 //------------------------------------------------------
 
 typedef struct {
-	float			*data;			// image to analyze
-	int				img_sz0;
-	int				img_sz1;
-	int				cc;
-	int				spe;
-	int				iter;
-	int				fldf;
-	//int				sav;
-	double			ix;
-	double			iy;
-	double			ir;
+	float		*data;			// image to analyze
+	int			img_sz0;
+	int			img_sz1;
+	int			cc;
+	int			spe;
+	int			iter;
+	int			fldf;
+	double		ix;
+	double		iy;
+	double		ir;
+	//int		sav;
 } LIMBFIT_INPUT;
 
-typedef struct {		// output files content
+typedef struct {
+	float 		*anls;			// annulus passed from one image to the next
+	long		anls_nbpix;		// <=> jk
+	float		*pf_anls;		//
+	float		*pl_anls;		//
+	int			is_firstobs;	// 0=yes, 1=no
+} LIMBFIT_IO_PUT;
+
+typedef struct {	// output files content
 		
 	// general keywords
 	int			numext;
@@ -182,25 +190,38 @@ typedef struct {		// output files content
 	char*		code_version;
 	char*		code_name;
 	char*		bld_vers;
+	
+	// not to save
+	FILE 		*opf;
+	char*		tmp_dir;
+	char*		dsout;
+	int			debug;
+	
 } LIMBFIT_OUTPUT;
 
-void get_sdate(char *sdate);
-void lf_logmsg(char * type1, char * type2, int return_code, int status, char *message, char *code_name, FILE *opf);
-void lf_logmsg4fitsio(char *log_msg,char *log_msg_code,char *kw,unsigned int fsn,int status, FILE *opf);
-void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out, DRMS_Array_t *data_array); //, FILE *opf);
-int get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, fitsfile *outfptr, FILE *opf, int debug, int tbf, LIMBFIT_OUTPUT *lfr, int *status);
-float median(float * tmed, int siz);
-int gaussfit(double y[], double t[],double sigma[], double A[6], double erro[6], long N, int debug, FILE *fd);
-double fin_min(double A[6], double m, int range, int debug, FILE *fd);
-int limbfit(LIMBFIT_INPUT *info,LIMBFIT_OUTPUT *results,FILE *opf,int debug);
-void limb_(float *anls, long *jk, float *cmx, float *cmy, float *r, int *nitr, int *ncut,
-			float* rprf, float* lprf, float *rsi, float *rso, float *dx, float *dy, 
-			float* alph, float* beta, int *ifail, float* b0, int *centyp, float *lahi); 
-int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int cc, int spe, int iter, int fldf, char *dsin, char *comment, char *bld_vers, int debug, int *status);
-int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, char *tmp_dir, FILE *opf, int cc, int spe, int iter, int fldf, char *dsin, char *comment, char *bld_vers, int debug, int *status);
-int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,FILE *opf, int tbf, LIMBFIT_OUTPUT *lfr, int debug);
-int mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col, long npixels, float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf, int debug);
-int sort(unsigned long n, float *arr);
-int indexx(unsigned long n, float *arr, unsigned long *indx);
-void sav_b0(float *pf_sb0, float *pl_sb0, float *pf_b0);
-void sum_b0(float *beta, float *pf_b0, float *pl_b0);
+// C functions
+void	close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out, DRMS_Array_t *data_array); //, FILE *opf);
+int		do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
+					LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios, int *status);
+double	fin_min(double A[], double m, int range, int degf, int debug, FILE *fd);
+int		gaussfit(double y[], double t[],double sigma[], double A[], double erro[], long N, int degf, int debug, FILE *opf);
+void	get_sdate(char *sdate);
+int		get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn, DRMS_Record_t *record_in,
+					DRMS_Record_t *record_out, fitsfile *outfptr, int tbf, LIMBFIT_OUTPUT *lfr, int *status);
+int		indexx(unsigned long n, float *arr, unsigned long *indx);
+void	lf_logmsg(char * type1, char * type2, int return_code, int status, char *message, char *code_name, FILE *opf);
+void	lf_logmsg4fitsio(char *log_msg,char *log_msg_code,char *kw,unsigned int fsn,int status, FILE *opf);
+int		limbfit(LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios);
+float	median(float * tmed, int siz);
+int		mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col, 
+			long npixels, float *data, float **save_full_ldf, int *bins1, int *bins2, FILE *opf, int debug);
+int		process_n_records(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, LIMBFIT_IO_PUT *lfw, int *status);
+int		write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,int tbf, LIMBFIT_OUTPUT *lfr);
+void	sav_b0(float *pf_sb0, float *pl_sb0, float *pf_b0);
+void	sum_b0(float *beta, float *pf_b0, float *pl_b0);
+int		sort(unsigned long n, float *arr);
+
+// fortran subroutine
+void	limb_(float *anls, long *jk, float *cmx, float *cmy, float *r, int *nitr, int *ncut,
+				float* rprf, float* lprf, float *rsi, float *rso, float *dx, float *dy, 
+				float* alph, float* beta, int *ifail, float* b0, int *centyp, float *lahi); 

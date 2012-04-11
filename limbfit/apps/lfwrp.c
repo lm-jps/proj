@@ -9,8 +9,8 @@
 			
 	
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V2.0r0" 
-	#define CODE_DATE 		"Fri Mar  2 13:28:38 PST 2012" 
+	#define CODE_VERSION 	"V3.0r0" 
+	#define CODE_DATE 		"Wed Apr 11 13:17:38 HST 2012" 
 */
 
 #include "limbfit.h"
@@ -38,7 +38,7 @@ ModuleArgs_t module_args[] = {
   {ARG_INT, 	"debug", "0", "debug level (default: 0 no debug info)"},
   {ARG_END}
 
-};  // ADD A SWITCH FOR A DIFFERENT QUALITY KW
+}; 
 
 void get_sdate(char *sdate)
 {
@@ -75,23 +75,13 @@ void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out,DRMS_Arra
 // Get N records, decide or not to process them
 //************************************************************************
 
-int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf, int cc, int spe, int iter, int fldf, char *dsin, char *comment, char *bld_vers, int debug, int *status)    
+int process_n_records(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, LIMBFIT_IO_PUT *lfw, int *status)    
 {
 	static char *log_msg_code="process_n_records";
 	char log_msg[200];
-	sprintf(log_msg,"doing process for %s -> %s",open_dsname,dsout);
-	lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, opf);			
+	sprintf(log_msg,"doing process for %s -> %s",open_dsname,lfr->dsout);
+	lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
 	static char errcode[20]=PROCSTAT_NOK;
-
-	// for error management purposes
-	static LIMBFIT_OUTPUT limbfit_res_t ;
-	static LIMBFIT_OUTPUT *lfr_t = &limbfit_res_t;
-	lfr_t->code_name=CODE_NAME;
-	lfr_t->code_version=CODE_VERSION;
-	lfr_t->code_date=CODE_DATE;
-	lfr_t->comment=comment;
-	lfr_t->dsin=dsin;
-	lfr_t->bld_vers=bld_vers;
 	
 	//************************************************************************
 	//  Open DRMS connexion, get the range of data, decide what to do, 
@@ -105,7 +95,7 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
     drs_in = drms_open_records(drms_env, open_dsname, &rstatus);
 	if (!drs_in) {
 		sprintf(log_msg,"unable to open record set %s\n",open_dsname);
-		lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ, rstatus, log_msg, log_msg_code, opf);			
+		lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ, rstatus, log_msg, log_msg_code, lfr->opf);			
 		fprintf (stderr, log_msg);
 		*status=ERR_DRMS_READ;
 		return(ERR_DRMS_READ);
@@ -114,17 +104,17 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
 	ncnt = drs_in->n;
 	if (ncnt < 1) {
 		sprintf(log_msg,"no records in selected set %s\n",open_dsname);
-		lf_logmsg("WARNING", "DRMS", WAR_DRMS_NORECORD, rstatus, log_msg, log_msg_code, opf);			
+		lf_logmsg("WARNING", "DRMS", WAR_DRMS_NORECORD, rstatus, log_msg, log_msg_code, lfr->opf);			
 		fprintf (stderr, log_msg);
 		*status=WAR_DRMS_NORECORD;
 		drms_close_records(drs_in, DRMS_FREE_RECORD);
 		return(WAR_DRMS_NORECORD);
 	}
 
-    drs_out = drms_create_records(drms_env, ncnt, dsout, DRMS_PERMANENT,&rstatus);
+    drs_out = drms_create_records(drms_env, ncnt, lfr->dsout, DRMS_PERMANENT,&rstatus);
 	if (!drs_out) {
-		sprintf(log_msg,"unable to create record set %s\n",dsout);
-		lf_logmsg("ERROR", "DRMS", ERR_DRMS_WRITE, rstatus, log_msg, log_msg_code, opf);			
+		sprintf(log_msg,"unable to create record set %s\n",lfr->dsout);
+		lf_logmsg("ERROR", "DRMS", ERR_DRMS_WRITE, rstatus, log_msg, log_msg_code, lfr->opf);			
 		fprintf (stderr, log_msg);
 		*status=ERR_DRMS_WRITE;
 		drms_close_records(drs_in, DRMS_FREE_RECORD);
@@ -132,7 +122,7 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
 	}
     
 	unsigned int fsn = 0;
-	
+
     for(r=0; r < ncnt; r++) 
     {
 		record_in = drs_in->records[r];
@@ -140,33 +130,33 @@ int process_n_records(char * open_dsname, char *dsout, char *tmp_dir, FILE *opf,
 
 		fsn = drms_getkey_int(record_in, "FSN", &rstatus);       
 		if(rstatus) {
-			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(FSN)", log_msg_code, opf);			
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,opf,0,lfr_t,debug);
+			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(FSN)", log_msg_code, lfr->opf);			
+			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,0,lfr);
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			drms_close_records(drs_out, DRMS_INSERT_RECORD);
 			drms_close_records(drs_in, DRMS_FREE_RECORD);
 			return(0);   
 		}
 		sprintf(log_msg,"FSN:%u processing",fsn);
-		lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, opf);			
+		lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
 		printf("selection: #%u\n",fsn);
 
-		if (do_one_limbfit(fsn,record_in,record_out,tmp_dir,opf,cc,spe,iter,fldf,dsin,comment,bld_vers,debug,&rstatus))
+		if (do_one_limbfit(fsn,record_in,record_out,lfv,lfr,lfw,&rstatus))
 		{
 			if (rstatus < 0 && rstatus > -300)
 			{
 				drms_close_records(drs_out, DRMS_INSERT_RECORD);
 				drms_close_records(drs_in, DRMS_FREE_RECORD);
-				lf_logmsg("ERROR", "APP", rstatus, 0, "to be aborted", log_msg_code, opf);			
+				lf_logmsg("ERROR", "APP", rstatus, 0, "to be aborted", log_msg_code, lfr->opf);			
 				return(rstatus);
 			}
 		}
-		fflush(opf);
+		fflush(lfr->opf);
 	}
 	drms_close_records(drs_out, DRMS_INSERT_RECORD);
 	drms_close_records(drs_in, DRMS_FREE_RECORD);
-	lf_logmsg("INFO", "APP", 0, 0, "Records saved", log_msg_code, opf);			
- 	if (debug) printf("records saved\n");
+	lf_logmsg("INFO", "APP", 0, 0, "Records saved", log_msg_code, lfr->opf);			
+ 	if (lfr->debug) printf("records saved\n");
 	
 return(0);
 }
@@ -179,7 +169,8 @@ return(0);
 
 int DoIt(void)
 {
-
+	// get arguments
+	
 	CmdParams_t *params = &cmdparams;
 	
 	int  debug 	= params_get_int (params, "debug");
@@ -190,7 +181,7 @@ int DoIt(void)
 	int  cam 	= params_get_int (params, "cam");
 	int  fid 	= params_get_int (params, "fid");
 	int  src 	= params_get_int (params, "src");
-//	int  sav 	= params_get_int (params, "sav");
+	//	int  sav 	= params_get_int (params, "sav");
 	char* dsin 	= params_get_str (params, "dsin");
 	char* dsout = params_get_str (params, "dsout");
 	char* log_dir = params_get_str (params, "logdir");
@@ -229,21 +220,14 @@ int DoIt(void)
 		sprintf(qual,"1073741824"); //= 0x40000000 
 		
 	char ext_dsin[256];
-//	if !(strncmp(dates,"-",1) 
-//	{
-//		sprintf(ext_dsin, "%s[%s]", dsin,dates); 
-//	}
-//	else
-//	{
-		sprintf(ext_dsin, "%s[]", dsin);
-//	}	
+	sprintf(ext_dsin, "%s[]", dsin);
 
 	static char bld_vers[16];
   	sprintf(bld_vers, "%s", jsoc_version);
  	
-	//**********************************************************************
-	//	LOG FILE: MAKE A GLOBAL LOG FILE FOR THE WHOLE SESSION: 
-	//**********************************************************************
+	//---------------------------------------------------------
+	//	Create a global log file for the whole session 
+	//---------------------------------------------------------
 	static char flogname[128];
 	static char sdate[32];
 	get_sdate(sdate);
@@ -273,22 +257,21 @@ int DoIt(void)
 	static char tfil[20];
 	static char tbase[128];
 	sprintf(tfil, "[? quality = %s ", qual);
-		
-	if(strcmp(preset,"pipeline"))
+	if(strcmp(preset,"pipeline")==0)
 	{
 		sprintf(tcam, " ");
 		sprintf(tfid, "AND (FID<10010 or CAST(FID AS TEXT) LIKE '%8')");
 	}
 	else 
 	{
-		if(strcmp(preset,"roll_all"))
+		if(strcmp(preset,"roll_all")==0)
 		{
 			sprintf(tcam, " ");
 			sprintf(tfid, " ");
 		}
 		else
 		{
-			if(strcmp(preset,"roll_cont"))
+			if(strcmp(preset,"roll_cont")==0)
 			{
 				sprintf(tcam, " ");
 				sprintf(tfid, "AND FID<10010 ");
@@ -301,7 +284,55 @@ int DoIt(void)
 		}
 	}
 	sprintf(tbase, "%s%s%s ?]", tfil,tcam,tfid);	
-printf("%s\n",tbase);
+
+	//------------------------------------------------------
+	// prepare an annulus coordinate for the whole session 
+	//      which will be initialized with the first image
+	//------------------------------------------------------
+	
+	float * anls = (float *) malloc(sizeof(float)*(MAX_SIZE_ANN_VARS*3));
+	if(!anls) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (anls)", log_msg_code, opf);
+		return ERR_MALLOC_FAILED;
+	}
+
+	//------------------------------------------------------
+	// initialize global structures
+	//------------------------------------------------------
+	static LIMBFIT_INPUT limbfit_vars ;
+	static LIMBFIT_INPUT *lfv = &limbfit_vars;
+	static LIMBFIT_OUTPUT limbfit_res ;
+	static LIMBFIT_OUTPUT *lfr = &limbfit_res;
+	static LIMBFIT_IO_PUT limbfit_ios ;
+	static LIMBFIT_IO_PUT *lfw = &limbfit_ios;
+
+	lfr->code_name=CODE_NAME;
+	lfr->code_version=CODE_VERSION;
+	lfr->code_date=CODE_DATE;
+	lfr->comment=comment;
+	lfr->dsin=dsin;
+	lfr->bld_vers=bld_vers;
+	lfr->opf=opf;
+	lfr->tmp_dir=tmp_dir;
+	lfr->dsout=dsout;
+	lfr->debug=debug;
+	
+	lfv->cc=cc;
+	lfv->spe=spe;
+	lfv->iter=iter;
+	lfv->fldf=fldf;
+	//lfv->sav=sav;
+	
+	lfw->anls=anls;
+	lfw->is_firstobs=0;
+	lfw->anls_nbpix=0;
+	lfw->pf_anls=&anls[0];	
+
+	//------------------------------------------------------
+	// run it!
+	//------------------------------------------------------
+
 	for(i = 0; i < numofchunks; i++) 
 	{
 		frec = lrec+1; 
@@ -314,7 +345,7 @@ printf("%s\n",tbase);
 								open_dsname,dsout,log_dir,tmp_dir,cam,spe,cc,iter,comment,debug);
 
 		lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
-		if(process_n_records(open_dsname, dsout, tmp_dir,opf, cc, spe, iter, fldf, dsin, comment, bld_vers, debug, &result)) 
+		if(process_n_records(open_dsname, lfv, lfr, lfw, &result)) 
 		{  //do a chunk to get files from the lev0
 			if (result < 0 && result > -300)
 			{
@@ -330,8 +361,11 @@ printf("%s\n",tbase);
 		drms_server_end_transaction(drms_env,0,0);
 		drms_server_begin_transaction(drms_env);
 	}
+	fflush(lfr->opf);
+	free(anls);
 	lf_logmsg("INFO", "APP", 0, 0, "End... ", log_msg_code, opf);
 	fclose(opf);
+	
 
 return(0);
 } //end doit()
