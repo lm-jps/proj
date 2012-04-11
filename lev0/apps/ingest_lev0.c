@@ -1523,7 +1523,7 @@ void do_ingest()
         printf("***Fatal error. Too many (%d) files in %s\n", MAXFILES, tlmdir);
         abortit(3);
       }
-      cntsleeps = 0;		//we saw a file
+      if(!strstr(dp->d_name, ".dsf")) cntsleeps = 0;	//we saw a file
     }
   }
   closedir(dfd);
