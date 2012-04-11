@@ -316,7 +316,8 @@ extern void free_init_ (int *);
 extern void free_memory_ ();
 /* extern void inv_init_ (int *, double *, double *, double *, double *, double *); before April 10 2012 */
 extern void inv_init_ (int *, double *, double *, double *, double *);
-extern void vfisvalloc_ (int *, int *, int *, int *);
+extern void vfisvalloc_ (int *, int *, int *);
+// extern void vfisvalloc_ (int *, int *, int *, int *);
 extern void lim_init_ (double *); // on and after April 10 2012
 #if NLEVPIXL == 1
 extern void line_init_ (double *, double *, double [4]);
@@ -2146,7 +2147,8 @@ int DoIt (void)
 /* inversion initializations : must be done by each PE. */
   if (mpi_rank == 0) printf("\n----------- inversion initializations ----------------- \n");
 
-  vfisvalloc_(&NUM_LAMBDA_FILTER,&NUM_TUNNING,&NUM_LAMBDA,&NUM_LAMBDA_synth); // allocate small variables..here
+  vfisvalloc_(&NUM_LAMBDA_FILTER,&NUM_LAMBDA,&NUM_LAMBDA_synth); // new one on April 10, 2012
+//  vfisvalloc_(&NUM_LAMBDA_FILTER,&NUM_TUNNING,&NUM_LAMBDA,&NUM_LAMBDA_synth); // allocate small variables..here
 
 /* On 2012 Jan 24. When determining noise-level at each pixel, the lines below be disabled. */
 #if NLEVPIXL != 1
@@ -4189,7 +4191,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.18 2012/04/10 22:19:50 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.19 2012/04/11 00:08:49 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
