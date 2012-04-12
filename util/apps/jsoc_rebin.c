@@ -2,22 +2,30 @@
    @defgroup jsoc_rebin jsoc_rebin reduce/increase image size by integer multiples
    @ingroup su_util
 
-   @brief Reduce (increase) the resolution of the input data to that of by an integer factor.
+   @brief Reduce (increase) the dimension of the input data by an integer factor.
 
    @par Synopsis:
    @code
-   jsoc_rebin  in=input_data out=output_data  scale=<scale> method={nearest,boxcar,gaussian}
-   where scale is a multiple/fraction of 2.
+   jsoc_rebin  in=input_data out=output_data  scale=<scale> method={boxcar,gaussian}
+   where scale is <1 for size reduction and >1 for size increase.  The output image scale
+   will be the nearest integer to "scale" or its reciprocal for scale < 1.0. 
    @endcode
 
    This is a general purpose module that takes a series of input 
-   data and modifies its spatial resolution by a factor (multiples 
-   or fractions of 2) as required and gives out a set of output 
-   data. The method for avaraging (interpolation) can be specified 
+   data and modifies its spatial size by a factor 
+   specified by "scale".
+   The method for avaraging (interpolation) can be specified 
    through the input "method". The current version handles a simple 
-   boxcar average. If 'scale' < 1 then the input is reduced in size.
+   boxcar average and Gaussian filtered sampling. If 'scale' < 1 then the input is reduced in size.
 
-   Modified from rebin2.
+   The image is not registered to solar center by this module.  The image will be rotated by
+   a flip-flip procedure is the CROTA2 parameter is near +-180.0 unless the -u flag (unchanged) is
+   present.  If the -c flag is present the image will be cropped at the solar limb before scaling.
+   If the -h flag or requestid parameter is present the output segments will have full headers.
+
+   If gaussian smoothing is specified (via method) then the FWHM and nvector parameters should also
+   be provided.  These define the Gaussian smoothing vector.  nvector is the full width of the
+   smoothing function.  nvector will be adjusted such that nvector is odd if 1/scale rounds to an odd integer.
 
    @par Flags:
    @c
@@ -34,7 +42,6 @@
    @param out The output series.
 
    @par Exit_Status:
-   Brief description of abnormal, non-zero, exit values.
 
    @par Example:
    Takes a series of 1024 X 1024 MDI full disk magnetogram and
@@ -75,7 +82,7 @@ ModuleArgs_t module_args[] =
      {ARG_FLOAT, "scale", "1.0", "Scale factor."},
      {ARG_FLOAT, "FWHM", "-1.0", "Smoothing Gaussian FWHM for method=gaussian."},
      {ARG_INT, "nvector", "-1.0", "Smoothing Gaussian vector length for method=gaussian."},
-     {ARG_STRING, "method", "boxcar", "conversion type."},
+     {ARG_STRING, "method", "boxcar", "conversion type, one of: boxcar, gaussian."},
      {ARG_STRING, "requestid", "NA", "RequestID if called as an export processing step."},
      {ARG_END}
 };
@@ -130,7 +137,7 @@ int DoIt(void)
   float fwhm = params_get_float(&cmdparams, "FWHM");
   int crop = params_get_int(&cmdparams, "c");
   int as_is = params_get_int(&cmdparams, "u");
-  int full_header = params_get_int(&cmdparams, "h");
+  int full_header = params_get_int(&cmdparams, "h") || strcmp(requestid, "NA");
 
   int iscale, ivec, vec_half;
   double *vector;
@@ -300,7 +307,9 @@ int DoIt(void)
       drms_setkey_double(outRec, "CRPIX1", (ObsLoc->crpix1-0.5) * fscale + 0.5);
       drms_setkey_double(outRec, "CRPIX2", (ObsLoc->crpix2-0.5) * fscale + 0.5);
       drms_setkey_double(outRec, "CROTA2", ObsLoc->crota2);
-      drms_setkey_double(outRec, "FWHM", fwhm);
+
+      if (strcasecmp(method, "gaussian")==0) 
+        drms_setkey_double(outRec, "FWHM", fwhm);
       drms_setkey_string(outRec, "HISTORY", history);
       drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
       if (strcmp(requestid, "NA") != 0)
