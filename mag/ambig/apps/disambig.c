@@ -14,6 +14,7 @@
  *			v1.0		Jan 25 2009
  *			v1.1		Mar 21 2012
  *			v1.2		Mar 27 2012
+ *			v1.3		Apr 09 2012
  *
  * Issues:
  *			v1.0
@@ -23,6 +24,8 @@
  *			v1.2
  *			Added preliminary full disk noise mask. the I/O needs to be updated once
  *			the format of the mask is determined
+ *			v1.3
+ *			Added query for speed
  *
  *
  * Example:
@@ -102,7 +105,8 @@ ModuleArgs_t module_args[] =
     {ARG_STRING, "out", NULL,  "Output data series."},
     {ARG_STRING, "mask", " ", "Bitmap series name, as AR mask, for full disk"},
     {ARG_INT, "VERB", "1", "Level of verbosity: 0=errors/warnings; 1=minimal messages; 2=all messages"},
-    {ARG_INT, "ksig", "3", "Multiplier of the noise mask"},
+    {ARG_INT, "ksig", "1", "Multiplier of the noise mask"},
+    {ARG_INT, "offset", "50", "Constant added to the noise mask"},
     {ARG_INT, "AMBGMTRY", "0", "0 for automatic selection; 1 for planar; 2 for spherical."},
 	//	{ARG_INT, "AMBWEAK", "1", "0 for random; 1 for potential field; 2 for most radial."},
     {ARG_INT, "AMBNEROD", "1", "Number of pixels by which to erode map of above threshold pixels."},
@@ -174,7 +178,7 @@ int DoIt(void)
     int mask_id, harpnum;	// id of main feature identified in patch
 
 	// For full disk
-	char *maskQuery;
+	char *maskName, *maskQuery;
 	DRMS_RecordSet_t *maskRS;
     DRMS_Record_t *maskRec;
 	int useMask;
@@ -185,12 +189,14 @@ int DoIt(void)
     float bthresh0, bthresh1, lambda, tfac0, tfactr;
     int verbflag;
     int outDims[2];
-    int ksig;
+    int ksig, offset;
 	
     int i, j, l, m, i0, j0;
     int nx, ny, nxny, nx0, ny0, nxny0, nxnye, nxnyg, nerode, ngrow;
 	
     TIME t_rec;
+	double obs_vr;
+	int vr_min, vr_max;
 	
     float radius, xcen, ycen;  // Pointing information to be computed and passed to ambig
     float crpix1, crpix2, cdelt1, cdelt2;  // Keywords
@@ -234,7 +240,7 @@ int DoIt(void)
     outQuery = (char *)params_get_str(&cmdparams, "out");
     verbflag = params_get_int(&cmdparams, "VERB");
     geometry = params_get_int(&cmdparams, "AMBGMTRY");
-	maskQuery = (char *)params_get_str(&cmdparams, "mask");
+	maskName = (char *)params_get_str(&cmdparams, "mask");
 	//    weak = params_get_int(&cmdparams, "AMBWEAK");
 	weak = 1;		// Mar 21 2012 set to be constant as now we compute all thress options
     nerode = params_get_int(&cmdparams, "AMBNEROD");
@@ -251,6 +257,7 @@ int DoIt(void)
     tfac0 = params_get_float(&cmdparams, "AMBTFCT0");
     tfactr = params_get_float(&cmdparams, "AMBTFCTR");
     ksig = params_get_int(&cmdparams, "ksig");
+    offset = params_get_int(&cmdparams, "offset");
 	
     /* Check parameters */
     if (nap > npad) {nap = npad; SHOW("nap set to npad\n");}
@@ -276,17 +283,20 @@ int DoIt(void)
 	
 	/* Find mask for full disk, if failed, use default linear scale */
 	// This is for now. Later for each record we need to query according to the velocity
-    maskRS = drms_open_records(drms_env, maskQuery, &status);
+    maskRS = drms_open_records(drms_env, maskName, &status);
     if (status) {
 		useMask = 0;
 	} else {
 		useMask = 1;
+	/*
 		maskRec = maskRS->records[0];			// this is for now
 		// Read the mask array
 		maskSeg = drms_segment_lookup(maskRec, "mask");
 		maskArray = drms_segment_read(maskSeg, DRMS_TYPE_FLOAT, &status);
 		noiseMask = (float *)maskArray->data;
+	 */
 		SHOW("Use noise mask\n");
+		drms_close_records(maskRS, DRMS_FREE_RECORD);
 	}
 	
     /* Do this for each record */
@@ -301,10 +311,33 @@ int DoIt(void)
         
         /* Input record and data */
         inRec = inRS->records[irec];
+		
+		/* If specified, look for mask record */
+		if (useMask) {
+			obs_vr = drms_getkey_double(inRec, "OBS_VR", &status);
+			if (status) {SHOW("Velocity not found, record skipped.\n"); continue;}
+		//	printf("%f\n",obs_vr);
+			//
+			maskQuery = (char *) calloc(100, sizeof(char));
+			sprintf(maskQuery, "%s[][][? VR_MIN<=%f ?][? VR_MAX>%f ?]", maskName, obs_vr, obs_vr);
+			printf("%s\n",maskQuery);
+			maskRS = drms_open_records(drms_env, maskQuery, &status);
+			if (status || maskRS->n == 0) {SHOW("Mask corresponding to given velocity not found, record skipped.\n"); free(maskQuery); continue;}
+			//
+			maskRec = maskRS->records[0];			// use the first record that matches
+			// Read the mask array
+			maskSeg = drms_segment_lookup(maskRec, "mask");
+			maskArray = drms_segment_read(maskSeg, DRMS_TYPE_FLOAT, &status);
+			noiseMask = (float *)maskArray->data;
+			vr_min = drms_getkey_int(maskRec, "VR_MIN", &status);
+			vr_max = drms_getkey_int(maskRec, "VR_MAX", &status);
+			printf("Use mask record with VR_MIN: %d, VR_MAX: %d.\n", vr_min, vr_max);
+			free(maskQuery);
+		}
         
         /* Processing keywords */
 		
-        t_rec = drms_getkey_time(inRec, "T_REC", &status);
+		t_rec = drms_getkey_time(inRec, "T_REC", &status);
 		
         crota2 = drms_getkey_float(inRec, "CROTA2", &status);	// rotation
         sina = sin(crota2 * DTOR); 
@@ -595,7 +628,7 @@ int DoIt(void)
             rad2 = radius * radius;
 			if (useMask) {						// Added Mar 27 2012
 				for (i = 0; i < nxny; i++) {
-					bitmap[i] = (sqrt(Bx[i] * Bx[i] + By[i] * By[i] + Bz[i] * Bz[i]) > (noiseMask[i] * ksig)) ? 1 : 0;
+					bitmap[i] = (sqrt(Bx[i] * Bx[i] + By[i] * By[i] + Bz[i] * Bz[i]) > (noiseMask[i] * ksig + offset)) ? 1 : 0;
 				}
 			} else {
 				for (i = 0; i < nxny; i++) {
@@ -886,16 +919,18 @@ int DoIt(void)
         drms_setkey_int(outRec, "DATAVALS", outsz - nancount);
         drms_setkey_int(outRec, "MISSVALS", nancount);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.9 2012/03/30 01:24:51 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.10 2012/04/12 20:44:16 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
 			drms_setkey_int(outRec, "USEMASK", 1);
 			drms_setkey_string(outRec, "MASKINFO", maskQuery);
       drms_setkey_int(outRec, "KSIG", ksig);
+      drms_setkey_int(outRec, "C_NOISE", offset);
 		} else {
   		drms_setkey_int(outRec, "USEMASK", 0);
       drms_setkey_int(outRec, "KSIG", 0);
+      drms_setkey_int(outRec, "C_NOISE", offset);
 		}
 		
         /* Set link */
@@ -910,6 +945,12 @@ int DoIt(void)
                 drms_setlink_static(outRec, "MDATA", inRec->recnum);
             }
         }
+		
+		/* Close mask */
+		if (useMask) {		// If it gets here the mask record set is not empty
+			drms_free_array(maskArray);
+			drms_close_records(maskRS, DRMS_FREE_RECORD);
+		}
 		
         /* Time measure */
         if (verbflag) {
@@ -928,10 +969,7 @@ int DoIt(void)
     }
 	
     drms_close_records(inRS, DRMS_FREE_RECORD);
-	if (useMask) {		// this is for now
-		drms_free_array(maskArray);
-		drms_close_records(maskRS, DRMS_FREE_RECORD);
-	}
+	
     drms_close_records(outRS, DRMS_INSERT_RECORD);
 	
     if (verbflag) {
