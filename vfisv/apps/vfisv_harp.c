@@ -168,12 +168,13 @@
  *   29) 2012 Mar 27 -- Apr 09
  *        (a) New VFISV FD10
  *        (b) KH Checked in this version on April 09.
- *   30) 2012 Apr 10
+ *   30) 2012 Apr 10 -- 13
  *        (a) Now assume to use the Fortran codes cleaned-up by RCE, with C-wrapper (this file) modified accordingly.
  *            The Fortrans and C-wrapper were provided by RCE, on April 09.
  *        (b) KH include all changes by RCE, from the version (29).
  *        (c) The cleanup by RCE should not affect the outputs, which KH confirmed., on Apr 10
  *        (d) Change some name of preprocess parameter turnning on or off the cyclic parallelism
+ *        (e) Errors for inclinatin and azimuth are capped at value of 180 degrees.
  *
  * ------------------------------------------------------------------------------------------------------ */
 
@@ -301,7 +302,7 @@ char *module_name = "vfisv FD10"; // may be kept unchanged
 #endif
 // char *version_id  = "2011 Oct. 14"; // numerics or string representing version of VFISV. Typically date of last editing of core Fortran part. Given by hand....hmmm
 // char *version_id  = "2012 Jan. 24";
-char *version_id  = "2012 Apr 10";
+char *version_id  = "2012 Apr. 13";
 
 /* external subroutine etc. written in Fortran files */
 
@@ -1061,43 +1062,18 @@ int DoIt (void)
           yheight  = rowsL;
           if (verbose) {printf(" HARP info. xleftbot yleftbot xwidth yheight = %d %d %d %d\n",xleftbotL,yleftbotL,xwidth,yheight);}
 
-/* a standard use of HARP : do all */
-#if 1
-/* extend HARP box */
 #if 0
-          int iextendx =  30;
-          int iextendy = 150;
-          xleftbotL = xleftbotL - iextendx;
-          yleftbotL = yleftbotL - iextendy;
-          colsL     = colsL + iextendx * 2;
-          rowsL     = rowsL + iextendy * 2;
-#endif
-          int i2, j2, m2;
-          for (i2 = 0; i2 < colsL; i2++)
-          {
-            for (j2 = 0; j2 < rowsL; j2++)
-            {
-              int iL, jL;
-              jL = j2 + yleftbotL - 1;
-              iL = i2 + xleftbotL - 1;
-              if (iL <        0){iL =      0;}
-              if (iL > cols - 1){iL = cols-1;}
-              if (jL <        0){jL =      0;}
-              if (jL > rows - 1){jL = rows-1;}
-              m2 = jL * cols + iL;
-              patchmask[m2] = 600; // here assume non-blob ... some larger number than 4.
-          } }
-
-#else
 /* do only specified HARP region(s) and enfoce the size to 700 or greater. : may be exclusive to the above */
           int numharp = drms_getkey_time(inRec,"HARPNUM",&status);
-          if ((numharp == 2081) || (numharp == 4087)) // give HARP number here as many as you want.
+          if ((numharp == 2081) || (numharp == 4087)) // give HARP numbers here as many as you want.
           {
+#if 1
             int icenter, jcenter;
             icenter = xleftbotL + colsL / 2;
             jcenter = yleftbotL + rowsL / 2;
             if (colsL < 700){xleftbotL = icenter - 350; colsL = 700;}
             if (rowsL < 700){yleftbotL = jcenter - 350; rowsL = 700;}
+#endif
             int i2, j2, n2, m2;
             for (i2 = 0; i2 < colsL; i2++)
             {
@@ -1116,8 +1092,44 @@ int DoIt (void)
           }
           else
           {
-            printf(" Out of Xudong's interest, thus skipped : RecNum and HARPnum = %d %d\n",rn,numharp);
+            printf(" Out of interest this time, thus skipped : RecNum and HARPnum = %d %d\n",rn,numharp);
           }
+#else
+/* a standard use of HARP : do all */
+#if 0
+/* extend HARP box with some prefixed margin */
+          int iextendx =  30;
+          int iextendy = 150;
+          xleftbotL = xleftbotL - iextendx;
+          yleftbotL = yleftbotL - iextendy;
+          colsL     = colsL + iextendx * 2;
+          rowsL     = rowsL + iextendy * 2;
+#endif
+#if 0
+/* extend HARP box; force to be 700 pixel or bigger */
+          {
+            int icenter, jcenter;
+            icenter = xleftbotL + colsL / 2;
+            jcenter = yleftbotL + rowsL / 2;
+            if (colsL < 700){xleftbotL = icenter - 350; colsL = 700;}
+            if (rowsL < 700){yleftbotL = jcenter - 350; rowsL = 700;}
+          }
+#endif
+          int i2, j2, m2;
+          for (i2 = 0; i2 < colsL; i2++)
+          {
+            for (j2 = 0; j2 < rowsL; j2++)
+            {
+              int iL, jL;
+              jL = j2 + yleftbotL - 1;
+              iL = i2 + xleftbotL - 1;
+              if (iL <        0){iL =      0;}
+              if (iL > cols - 1){iL = cols-1;}
+              if (jL <        0){jL =      0;}
+              if (jL > rows - 1){jL = rows-1;}
+              m2 = jL * cols + iL;
+              patchmask[m2] = 600; // here assume non-blob ... some larger number than 4.
+          } }
 #endif // endif whether the standard use of HAPR or something else.
 
           free(patchmaskL);
@@ -2595,7 +2607,7 @@ This is done inside the FORTRAN code, in invert.f90
        for (m = 0; m < NUM_LAMBDA_FILTER; m++) //     very rarely, mostly for test purpose, NUM_LAMBDA_FILTER be other than 6.
        {
          double tmpval=obs[0*NUM_LAMBDA_FILTER+m]; // obs(0:5) for Stokes I0 to I5 (or Ix, in an order defined somewhere above)
-	 ivalave = ivalave + tmpval;
+         ivalave = ivalave + tmpval;
          if (tmpval > ivalmax){ivalmax = tmpval;}
        }
        CONT = ivalmax;
@@ -2633,6 +2645,10 @@ This is done inside the FORTRAN code, in invert.f90
 //      err[0] = err[0] / 38.729833462; // field strength in gauss,     ERR(1) in Fortran
 //      err[1] = err[1] /  9.486832981; // inclination angle in degree, ERR(2) in Fortran
 //      err[2] = err[2] /  9.486832981; // azithum angle in degree,     ERR(3) in Fortran
+
+/* angular error cap, 2012 April 13, by K.H. */
+      if (err[1] > 180.0) {err[1] = 180.0;}
+      if (err[2] > 180.0) {err[2] = 180.0;}
 
 /*
   here do thing in accordance with the value of iconverge_flag.
@@ -4191,7 +4207,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.4 2012/04/11 00:08:41 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.5 2012/04/13 20:34:51 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
