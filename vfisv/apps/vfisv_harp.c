@@ -2647,8 +2647,9 @@ This is done inside the FORTRAN code, in invert.f90
 //      err[2] = err[2] /  9.486832981; // azithum angle in degree,     ERR(3) in Fortran
 
 /* angular error cap, 2012 April 13, by K.H. */
-      if (err[1] > 180.0) {err[1] = 180.0;}
-      if (err[2] > 180.0) {err[2] = 180.0;}
+      if (err[0] > 12000.0) {err[0] = 12000.0;}
+      if (err[1] >   180.0) {err[1] =   180.0;}
+      if (err[2] >   180.0) {err[2] =   180.0;}
 
 /*
   here do thing in accordance with the value of iconverge_flag.
@@ -4207,7 +4208,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.5 2012/04/13 20:34:51 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.6 2012/04/13 20:47:51 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
