@@ -1096,10 +1096,10 @@ int DoIt (void)
           }
 #else
 /* a standard use of HARP : do all */
-#if 0
+#if 1
 /* extend HARP box with some prefixed margin */
-          int iextendx =  30;
-          int iextendy = 150;
+          int iextendx =  50;
+          int iextendy =  50;
           xleftbotL = xleftbotL - iextendx;
           yleftbotL = yleftbotL - iextendy;
           colsL     = colsL + iextendx * 2;
@@ -4208,7 +4208,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.6 2012/04/13 20:47:51 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.7 2012/04/16 22:48:31 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
