@@ -174,6 +174,7 @@
  *    The function set_stat_keys tries to set DataVals and MissVals as int's,
  *	even though the relevant values are long long, since there is no
  *	long long checking set key function in keystuff
+ *    It is assumed that CROTA2 is opposite to the AIPS convention
  *
  *  Future Updates
  *	reorganize code, adding functions and simplifying main module;
@@ -192,7 +193,7 @@
 						      /*  module identifier  */
 char *module_name = "mtrack";
 char *module_desc = "track multiple regions from solar image sequences";
-char *version_id = "1.3";
+char *version_id = "1.4";
 
 #define CARR_RATE       (2.86532908457)
 #define RSUNM		(6.96e8)
@@ -285,12 +286,12 @@ static char *create_prime_key (DRMS_Record_t *rec) {
  *    appropriate format
  */
 
-static int fgetline (FILE *in, char *line, int max) {
+int fgetline (FILE *in, char *line, int max) {
   if (fgets (line, max, in) == NULL) return 0;
   else return (strlen (line));
 }
 
-static int read_reject_list (FILE *file, int **list) {
+int read_reject_list (FILE *file, int **list) {
   int ds, sn, rec, last_rec;
   int allocd = 1024, ct = 0, gap = 0;
   char line[1024], t_str[64], estr[16];
@@ -329,7 +330,7 @@ static int read_reject_list (FILE *file, int **list) {
   return ct;
 }
 
-static int key_params_from_dspec (const char *dspec) {
+int key_params_from_dspec (const char *dspec) {
 /*
  *  Establish whether target times are determined from dataset specifier
  *  assume that if a bracket is found in the dataset specifier it is a
@@ -344,8 +345,7 @@ static int key_params_from_dspec (const char *dspec) {
 		 /*  global declaration of missing to be initialized as NaN  */
 float missing_val;
 
-static int ephemeris_params (DRMS_Record_t *img, double *vr, double *vw,
-    double *vn) {
+int ephemeris_params (DRMS_Record_t *img, double *vr, double *vw, double *vn) {
   int status, kstat = 0;
 
   *vr = drms_getkey_double (img, "OBS_VR", &status);
@@ -363,9 +363,9 @@ static int ephemeris_params (DRMS_Record_t *img, double *vr, double *vw,
  *    velocity at center of map (does not require image geometry, only
  *    target heliographic coordinates)
  */
-static void adjust_for_observer_velocity (float *map, int mapct,
-    float *mapclat, float *mapclon, int pixct, double latc, double lonc,
-    double orbvr, double orbvw, double orbvn, double semidiam, int radial_only) {
+void adjust_for_observer_velocity (float *map, int mapct, float *mapclat,
+    float *mapclon, int pixct, double latc, double lonc, double orbvr,
+    double orbvw, double orbvn, double semidiam, int radial_only) {
 /*
  *  Adjust values for heliocentric observer motion
  */
@@ -393,13 +393,13 @@ static void adjust_for_observer_velocity (float *map, int mapct,
   }
 }
 
-static int set_stat_keys (DRMS_Record_t *rec, long long ntot, long long valid,
+int set_stat_keys (DRMS_Record_t *rec, long long ntot, long long valid,
     double vmn, double vmx, double sum, double sum2, double sum3, double sum4) {
   double scal, avg, var, skew, kurt;
   int kstat = 0;
 
-  kstat += check_and_set_key_int (rec, "DATAVALS", valid);
-  kstat += check_and_set_key_int (rec, "MISSVALS", ntot - valid);
+  kstat += check_and_set_key_longlong (rec, "DATAVALS", valid);
+  kstat += check_and_set_key_longlong (rec, "MISSVALS", ntot - valid);
   if (valid <= 0) return kstat;
 
   kstat += check_and_set_key_double (rec, "DATAMIN", vmn);
@@ -747,14 +747,14 @@ static void perform_mappings (DRMS_Array_t *img, float *maps, double *delta_rot,
 
 void calc_limb_distance (double *delta_rot, int mapct, double *maplat,
     double *maplon, double delta_time, double merid_v,unsigned char *offsun,
-    double latc, double lonc, double *mu) {
+    double latc, double lonc, double *mu, double *ctrx, double *ctry) {
 /*
- *  Return instantaneous center-limb distances for selected target locations
- *    N.B. there is no finite distance correction
+ *  Return instantaneous center-limb distances and position angles for selected
+ *    target locations
+ *  N.B. there is no finite distance correction
  */
-  static double sin_asd = 0.004660, cos_asd = 0.99998914;
-                                                   /*  appropriate to 1 AU  */
-  double lat, lon, cos_lat, sin_lat, cos_lat_lon;
+  static double degrad = 180.0 / M_PI;
+  double lat, lon, cos_lat, cos_lon, cos_lat_lon;
   double cos_cang;
   int m;
 
@@ -769,10 +769,14 @@ void calc_limb_distance (double *delta_rot, int mapct, double *maplat,
     if (offsun[m]) continue;
     lat = maplat[m] + delta_lat;
     lon = maplon[m] + delta_lon;
-    cos_lat_lon = cos (lat) * cos (lon - lonc);
+    cos_lat = cos (lat);
+    cos_lon = cos (lon - lonc);
+    cos_lat_lon = cos_lat * cos_lon;
     cos_cang  = sin (lat) * sin_latc + cos_latc * cos_lat_lon;
     if (cos_cang < 0.0) continue;
     mu[m] = cos_cang;
+    ctrx[m] = cos_lat * sin (lon - lonc);
+    ctry[m] = sin (lat) * cos_latc - sin_latc * cos_lat * cos_lon;
   }
 }
 
@@ -883,7 +887,7 @@ int DoIt (void) {
   FILE **log;
   TIME trec, tobs, tmid, tbase, tfirst, tlast, ttrgt;
   double *maplat, *maplon, *map_coslat, *map_sinlat = NULL;
-  double *cmaplat, *cmaplon, *ctrmu, *muavg, *latavg;
+  double *cmaplat, *cmaplon, *ctrmu, *ctrx, *ctry, *muavg, *xavg, *yavg, *latavg;
   double *delta_rot;
   double *minval, *maxval, *datamean, *datarms, *dataskew, *datakurt;
   double min_scaled, max_scaled;
@@ -946,9 +950,6 @@ int DoIt (void) {
   char *bckgn = strdup (params_get_str (params, "bckgn"));
   char *rejectfile = strdup (params_get_str (params, "reject"));
   char *seg_name = strdup (params_get_str (params, "segment"));
-/*
-  unsigned int qmask = params_get_int (params, "qmask");
-*/
   unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
   int max_miss = params_get_int (params, "max_miss");
   char *tmid_str = strdup (params_get_str (params, "tmid"));
@@ -1620,8 +1621,12 @@ need_limb_dist = 1;
     cmaplat = (double *)malloc (rgnct * sizeof (double));
     cmaplon = (double *)malloc (rgnct * sizeof (double));
     ctrmu = (double *)malloc (rgnct * sizeof (double));
+    ctrx = (double *)malloc (rgnct * sizeof (double));
+    ctry = (double *)malloc (rgnct * sizeof (double));
     muavg = (double *)calloc (rgnct, sizeof (double));
     muct = (int *)calloc (rgnct, sizeof (int));
+    xavg = (double *)calloc (rgnct, sizeof (double));
+    yavg = (double *)calloc (rgnct, sizeof (double));
     ctroffsun = (unsigned char *)malloc (rgnct * sizeof (char));
   }
     /*  Calculate heliographic coordinates corresponding to map location(s)  */
@@ -1725,9 +1730,6 @@ need_limb_dist = 1;
 
   found = 0;
   for (rgn = 0; rgn < rgnct; rgn++) {
-/*
-    map[rgn] = (float *)malloc (pixct * sizeof (float));
-*/
     orec = orecs[rgn] = drms_recordset_getrec (ods, rgn);
     if (!orec) {
       fprintf (stderr, "Error accessing record %d in series %s\n", rgn, outser);
@@ -1826,7 +1828,7 @@ need_limb_dist = 1;
 			   /*  get needed info from record keys for mapping  */
     status = solar_image_info (irec, &img_xscl, &img_yscl, &img_xc, &img_yc,
 	&img_radius, rsun_key, apsd_key, &img_pa, &ellipse_e, &ellipse_pa,
-	&x_invrt, &y_invrt, &need_ephem);
+	&x_invrt, &y_invrt, &need_ephem, 0);
     if (status & NO_SEMIDIAMETER) {
       int keystat = 0;
       double dsun_obs = drms_getkey_double (irec, dsun_key, &keystat);
@@ -1899,11 +1901,13 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
 	MDI_correct_distort);
     if (need_limb_dist) {
       calc_limb_distance (delta_rot, rgnct, cmaplat, cmaplon, tobs - tmid,
-	  merid_v, ctroffsun, img_lat, img_lon, ctrmu);
+	  merid_v, ctroffsun, img_lat, img_lon, ctrmu, ctrx, ctry);
       for (rgn = 0; rgn < rgnct; rgn++) {
         if (isfinite (ctrmu[rgn])) {
 	  muct[rgn]++;
 	  muavg[rgn] += ctrmu[rgn];
+	  xavg[rgn] += ctrx[rgn];
+	  yavg[rgn] += ctry[rgn];
 	}
       }
     }
@@ -2212,9 +2216,25 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
       }
     }
   }
-						      /*  write out records  */
+      /*  adjust CR:CL if necessary for slotted output series to avoid lon 0  */						      /*  write out records  */
+  if (tmid_cl <= 0.0) {
+    tmid_cl += 360.0;
+    tmid_cr++;
+  }
+  orec = orecs[0];
+  if ((keywd = drms_keyword_lookup (orec, "CMLon", 1))) {
+    if (keywd->info->recscope > 1) {
+      double kstep;
+      sprintf (key, "CMLon_step");
+      kstep = fabs (drms_getkey_double (orec, key, &status));
+      if (tmid_cl <= 0.5 * kstep) {
+	tmid_cl += 360.0;
+	tmid_cr++;
+      }
+    }
+  }
   for (rgn = 0; rgn < rgnct; rgn++) {
-							 /*  set key values  */
+							  /*  set key values  */
     int kstat = 0;
     orec = orecs[rgn];
     kstat += check_and_set_key_str   (orec, "WCSNAME", "Carrington Heliographic/Time");
@@ -2299,8 +2319,14 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
         minval[rgn], maxval[rgn], datamean[rgn], datarms[rgn], dataskew[rgn],
 	datakurt[rgn]);
     if (need_limb_dist) {
-      if (muct[rgn]) kstat +=
-	  check_and_set_key_float (orec, "MeanMU", muavg[rgn] / muct[rgn]);
+      if (muct[rgn]) {
+	kstat +=
+	    check_and_set_key_float (orec, "MeanMU", muavg[rgn] / muct[rgn]);
+	xavg[rgn] /= muct[rgn];
+	yavg[rgn] /= muct[rgn];
+	kstat += check_and_set_key_float (orec, "MeanPA",
+	    degrad * atan2 (xavg[rgn], yavg[rgn]));
+      }
     }
     if (mnlatct[rgn])
       kstat += check_and_set_key_float (orec, "MeanLat", latavg[rgn] * degrad);
@@ -2430,4 +2456,12 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
  *		Fixed bug in determination of segment from multiple candidates
  *		Removed unused -G flag, added -Z flag for UT time logging
  *  v 1.3 frozen 2011.11.09
+ *    1.4	Require that output CMLon key value >= 0, and > 0 if key is
+ *		slotted
+ *		Allow setting of long long key values as appropriate
+ *		Removed needless scope declarations on helper functions
+ *		Added argument to call to solar_image_info to (always) specify
+ *		CROTA2 keyword as opposite to AIPS convention
+ *		Added calculation of mean position angle for region centers
+ *		for keyword setting (not tested)
  */
