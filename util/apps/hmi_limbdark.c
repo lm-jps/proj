@@ -1,4 +1,4 @@
-#define CVSVERSION "$Id: hmi_limbdark.c,v 1.7 2011/07/22 06:35:59 phil Exp $"
+#define CVSVERSION "$Id: hmi_limbdark.c,v 1.8 2012/04/23 16:43:30 phil Exp $"
 /**
    @defgroup analysis
    @ingroup su_util
@@ -28,6 +28,8 @@
      r          FLAG: non-zero performs REVERSE limb darkening removal
      n          FLAG: normalize output by dividing by image mean
                       i.e. puts limb darkening back in
+     croplimit   float crop limit for removing limb darkening, default 1.0
+     requestid  optional string
   
    @endcode
 
@@ -83,7 +85,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *ObsLoc, int *status);
 
 int  GetObsLocInfo(DRMS_Segment_t *seg, int i, int j, ObsInfo_t *ObsLoc);
 
-int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncrop, int do_reverse, int do_norm);
+int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncrop, int do_reverse, int do_norm, double crop_limit2);
 
 int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs);
 
@@ -107,7 +109,10 @@ ModuleArgs_t module_args[] =
      {ARG_FLAG, "n", "0", "Normalize the final image by dividing by the mean"},
      {ARG_FLAG, "c", "0", "Supress center and flip 180 degrees if CROTA~180."},
      {ARG_FLAG, "x", "0", "Exclude pixels that deviate from the default LD, <0.875 or >1.25."},
+     {ARG_FLAG, "h", "0", "Include full headers, set when requestid is present"},
      {ARG_FLOATS, "coefs", "0.0", "Limb darkening coeficients, 5 needed"},
+     {ARG_FLOAT, "croplimit", "1.0", "crop limit for removing limbdarkening"},
+     {ARG_STRING, "requestid", "NA",  "JSOC export identifier"},
      {ARG_END}
 };
 
@@ -121,6 +126,10 @@ int DoIt(void)
   int do_exclude = cmdparams_isflagset(&cmdparams, "x");
   const char *inQuery = params_get_str(&cmdparams, "in");
   const char *outSeries = params_get_str(&cmdparams, "out");
+  const char *requestid = params_get_str(&cmdparams, "requestid");
+  int full_headers = cmdparams_isflagset(&cmdparams, "h") || strcmp(requestid, "NA");
+  float crop_limit = params_get_float(&cmdparams, "croplimit");
+  double crop_limit2 = crop_limit*crop_limit;
   char *p;
   int status = 0;
   ObsInfo_t *ObsLoc;
@@ -134,8 +143,8 @@ int DoIt(void)
   double use_coefs[6];
   double n_user_coefs = cmdparams_get_int(&cmdparams, "coefs_nvals", &status);
 
-  DRMS_RecordSet_t *inRS, *outRS;
   int nrecs, irec;
+  DRMS_RecordSet_t *inRS, *outRS;
 
   if (strcmp(inQuery, "NOT SPECIFIED") == 0)
     DIE("Must have input series");;
@@ -188,6 +197,7 @@ int DoIt(void)
     drms_copykey(outRec, inRec, "T_OBS");
     drms_copykey(outRec, inRec, "QUALITY");
     drms_setkey_time(outRec, "DATE", time(0) + UNIX_EPOCH);
+    drms_setkey_string(outRec, "RequestID", requestid);
     drms_setkey_string(outRec, "CODEVER4", CVSVERSION);
 
     if (quality >= 0)
@@ -223,7 +233,7 @@ int DoIt(void)
           int i, n = inArray->axis[0] * inArray->axis[1];
           int nskip = 0;
           float missval = DRMS_MISSING_FLOAT;
-          rm_limbdark(inArray, xArray, ObsLoc, use_coefs, &ncropped, 0, 1);
+          rm_limbdark(inArray, xArray, ObsLoc, use_coefs, &ncropped, 0, 1, crop_limit2);
           for (i=0; i<n; i++, v++, iv++)
             if (!isnan(*v) && *v > 0.850 && *v < 1.150) 
               *nv++ = *iv;
@@ -245,7 +255,7 @@ int DoIt(void)
       outSeg = drms_segment_lookupnum(outRec, 0);
       outArray = drms_array_create(DRMS_TYPE_FLOAT, inArray->naxis, inArray->axis, NULL, &status);
 
-      if (rm_limbdark(inArray, outArray, ObsLoc, (do_fit ? coefs : use_coefs), &ncropped, restoreLD, do_normalize) == DRMS_SUCCESS)
+      if (rm_limbdark(inArray, outArray, ObsLoc, (do_fit ? coefs : use_coefs), &ncropped, restoreLD, do_normalize, crop_limit2) == DRMS_SUCCESS)
         {
         int totvals, datavals;
 
@@ -283,11 +293,14 @@ int DoIt(void)
           drms_setkey_int(outRec, "MISSVALS", totvals - datavals);
           }
 
-        drms_segment_write(outSeg, outArray, 0);
+        if (full_headers)
+          drms_segment_writewithkeys(outSeg, outArray, 0);
+        else
+          drms_segment_write(outSeg, outArray, 0);
         drms_free_array(inArray);
         drms_free_array(outArray);
         }
-      printf("Done with %s\n", drms_getkey_string(inRec, "T_REC", NULL));
+      // printf("Done with %s\n", drms_getkey_string(inRec, "T_OBS", NULL));
       }
     else
       printf("Skip Rec %d, Quality=%#08x\n", irec, quality);
@@ -308,7 +321,7 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
   int nx = arr->axis[0];
   int ny = arr->axis[1];
   double scale;
-  double crop_limit;
+  double crop_limit2;
   float *data = (float*)arr->data;
   float missval = DRMS_MISSING_FLOAT;
   int n;
@@ -320,7 +333,7 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
   if (!f || !c) DIE("malloc problem");
 
   scale = 1.0/rsun;
-  crop_limit = 0.9995;
+  crop_limit2 = 0.9995;
 
   n = 0;
   for (iy=0; iy<ny; iy++)
@@ -341,7 +354,7 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
         /* only fit points within limit radius */
         R2 = x*x + y*y;
 
-        if (R2 >= crop_limit)
+        if (R2 >= crop_limit2)
 	  continue;
 
         costheta2 = 1.0 - R2;
@@ -375,7 +388,7 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
   return(0);
   }
 
-int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncrop, int do_reverse, int do_norm)
+int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, double *coefs, int *ncrop, int do_reverse, int do_norm, double crop_limit2)
   {
   double x0 = ObsLoc->crpix1 - 1;
   double y0 = ObsLoc->crpix2 - 1;
@@ -385,14 +398,12 @@ int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, doub
   int nx = arr->axis[0];
   int ny = arr->axis[1];
   double scale;
-  double crop_limit;
   float *data = (float *)arr->data;
   float *odata = (float *)outarr->data;
   float missval = DRMS_MISSING_FLOAT;
   int ncropped = 0;
   
   scale = 1.0/rsun;
-  crop_limit = 1.0;
 
   for (iy=0; iy<ny; iy++)
     for (ix=0; ix<nx; ix++)
@@ -417,17 +428,17 @@ int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, doub
         /* only fix points within limit radius */
         R2 = x*x + y*y;
 
-        if (R2 >= crop_limit)
+        if (R2 >= crop_limit2)
 	  {
 	  *Op = missval;
 	  ncropped++;
 	  continue;
 	  }
 
-        if (R2 <= 1.0)
+        if (R2 < 1.0)
           costheta2 = 1.0 - R2;
         else
-          costheta2 = 0.0;
+          costheta2 = 0.9995;
 
         mu = sqrt(costheta2);
 	xi = log(mu);
