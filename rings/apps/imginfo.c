@@ -83,7 +83,7 @@ static char *lookup_str (DRMS_Record_t *rec, ParamDef key, int *status) {
 static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
     double *ctrx, double *ctry, double *apsd, const char *rsun_key,
     const char *apsd_key, double *pang, double *ellipse_e, double *ellipse_pa,
-    int *x_invrt, int *y_invrt, int *need_ephem) {
+    int *x_invrt, int *y_invrt, int *need_ephem, int AIPS_convention) {
 /*
  *  Provides the following values from the DRMS record:
  *    xscl  scale in the image column direction (arc-sec/pixel)
@@ -97,7 +97,7 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
  *    apsd  apparent semi-diameter (semimajor-axis) of the solar disc, in
  *	pixel units
  *    pang  position angle of solar north relative to image vertical
- *	([0,0] -> [0,1]), measured eastward (counterclockwise), in radians
+ *	([0,0] -> [0,1]), measured westward (clockwise), in radians
  *    eecc  eccentricity of best-fit ellipse describing limb
  *    eang  position angle of best-fit ellipse describing limb, relative
  *	to ?, in radians
@@ -208,7 +208,8 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
 	strncpy (param[APSD].name, apsd_key, 31);
 	sprintf (param[APSD].name, "OBS_ASD");
 	sprintf (param[PANG].name, "CROTA2");
-	param[PANG].scale = raddeg;
+	param[PANG].scale = -raddeg;
+	if (AIPS_convention) param[PANG].scale *= -1;
 	sprintf (param[ESMA].name, "S_MAJOR");
 	sprintf (param[ESMI].name, "S_MINOR");
 	sprintf (param[EANG].name, "S_ANGLE");
@@ -261,6 +262,10 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
  *  10.08.19		make sure status is initialized to 0
  *  10.09.03		fixed initialization of default values for ellipse
  *		elements
- *  10.10.05		fixed define of keyscoe_variable (removed ;)
+ *  10.10.05		fixed define of keyscope_variable (removed ;)
+ *  12.04.17		changed return value of pang to conform to Thompson
+ *		(solar WCS) convention rather than the AIPS convention for
+ *		CROTA2; added argument AIPS_convention to solar_image_info to
+ *		be set if the CROTA2 keyword conforms to the AIPS convention
  */
 
