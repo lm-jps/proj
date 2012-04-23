@@ -190,33 +190,6 @@ char *get_input_recset(DRMS_Env_t *env, char *in, TIME cadence);
 #define TIMES_RECSET 0   // recordset spec contains time range
 #define TIMES_GIVEN 1    // explicit t_start and t_stop provided
 #define TIMES_IMPLICIT 2 // times to be deduced for disk transit of specified box
-
-static void FreeRecSpecParts(char ***snames, int nitems)
-{
-    if (snames)
-    {
-        int iname;
-        char **snameArr = *snames;
-        
-        if (snameArr)
-        {
-            for (iname = 0; iname < nitems; iname++)
-            {
-                char *oneSname = snameArr[iname];
-                
-                if (oneSname)
-                {
-                    free(oneSname);
-                }
-            }
-            
-            free(snameArr);
-        }
-        
-        *snames = NULL;
-    }
-}
-
 int DoIt(void)
 {
   CmdParams_t *params = &cmdparams;
@@ -482,37 +455,7 @@ fprintf(stderr,"box location params processed.\n");
     strncat(outseries, "_hgpatch", DRMS_MAXSERIESNAMELEN);
     }
   else
-  {
-      /* ART - outparam is not the correct argument. It is a record-set specification, 
-       * but outseries should be a series name.
-       *
-       *    strncpy(outseries, outparam, DRMS_MAXSERIESNAMELEN);
-       */
-      char seriesout[DRMS_MAXSERIESNAMELEN];
-      char *allvers = NULL;
-      char **sets = NULL;
-      DRMS_RecordSetType_t *settypes = NULL; /* a maximum doesn't make sense */
-      char **snames = NULL;
-      int nsets = 0;
-      DRMS_RecQueryInfo_t rsinfo;
-      
-      /* Parse output series name. */
-      if (DRMS_SUCCESS != drms_record_parserecsetspec(outparam, &allvers, &sets, &settypes, &snames, &nsets, &rsinfo))
-      {
-          DIE("Invalid output record-set specification.");
-      }
-      
-      if (nsets != 1)
-      {
-          FreeRecSpecParts(&snames, nsets);
-          DIE("hg_patch supports writing to a single output series.");
-      }
-      
-      snprintf(seriesout, sizeof(seriesout), "%s", snames[0]);
-      FreeRecSpecParts(&snames, nsets);
-      
-      strncpy(outseries, seriesout, DRMS_MAXSERIESNAMELEN);
-  }
+   strncpy(outseries, outparam, DRMS_MAXSERIESNAMELEN);
 
   // Now, make sure output series exists and get template record.
   outTemplate = drms_template_record(drms_env, outseries, &status);
