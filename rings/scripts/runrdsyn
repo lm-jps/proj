@@ -23,6 +23,7 @@ if ($#argv < 2) then
 endif
 
 @ CROT = $1
+@ CR1 = $CROT
 @ CL0 = `echo $2 | sed  -e "s/^0*//"`
 @ CL1 = $CL0
 @ SLEEP = 540
@@ -32,6 +33,8 @@ if ($#argv > 2) then
 endif
 
 @ SLEEP *= 60
+
+if ($CL1 > $CL0) @ CR1++
 
 # parameters (for coverage)
 set QMASK = 0x80004000
@@ -85,6 +88,8 @@ if ($TEST) then
 endif
 
 # auxiliary files
+set RJCT = ~rick/hmi/qual/reject.V
+
 set TMPFSLOC = ~rick/hmi/tmpfs
 if (-r $TMPFSLOC) then
   set TMPFS = `egrep ^/tmp $TMPFSLOC`
@@ -99,6 +104,7 @@ else
   set TEMP = /tmp
   set SCRT = /tmp
 endif
+
 set TMPB = $TEMP/$PLID
 if (!(-d $TMPB)) mkdir $TMPB
 set TLIST = $TMPB/rd_inf.$$
@@ -116,7 +122,7 @@ foreach SER ($ISER $BCKG)
 end
 
 @ CLON = $CL0
-while ($CLON >= $CL1)
+while ($CROT < $CR1 || $CLON >= $CL1)
 # check for background average, create if necessary
   @ CR60 = $CROT
   if ($CLON > 330) then
@@ -138,9 +144,14 @@ while ($CLON >= $CL1)
   set BCK = $BCKG"[$CR60][$CL60]"
   @ BCKCT = `show_info -c ds= "$BCK" | awk '{print $1}'`
   if ($BCKCT < 1) then
-    echo "Data average record $BCK does not exist"
+    echo "Data average record $BCK does not exist: processing" >> $RLOG
     qsub -q $QUEUE -e $QRES -o $QRES -sync y $AVG120 $ARG -v $CR60 $CL60
-    if ($status) echo "Warning: data averaging failed; no background subtraction"
+    if ($status) then
+      set NOW = `date +%Y.%m.%d_%T`
+      echo "$NOW Data averaging for background subtraction failed" >> $RLOG
+      echo "  Processing abandoned" >> $RLOG
+      exit
+    endif
   endif
 
   @ RUNNING = 0
@@ -148,7 +159,7 @@ while ($CLON >= $CL1)
 # check for coverage, skip if too low
   @ LNGTH = 768
   $COVER ds= $ISER tmid= $CARTIM length= $LNGTH \
-      max_miss= $MMISS qmask= $QMASK > $TLIST
+      max_miss= $MMISS qmask= $QMASK reject= $RJCT > $TLIST
   @ LINES = `wc -l $TLIST |  awk '{print $1}'`
   if ($LINES < 2) then
     @ CVG = 0
@@ -176,7 +187,7 @@ while ($CLON >= $CL1)
 # check for coverage, skip if too low
     @ LNGTH = 2304
     $COVER ds= $ISER tmid= $CARTIM length= $LNGTH \
-	max_miss= $MMISS qmask= $QMASK > $TLIST
+	max_miss= $MMISS qmask= $QMASK reject= $RJCT > $TLIST
     @ LINES = `wc -l $TLIST |  awk '{print $1}'`
     if ($LINES < 2) then
       @ CVG = 0
@@ -205,7 +216,7 @@ while ($CLON >= $CL1)
 # check for coverage, skip if too low
     @ LNGTH = 4608
     $COVER ds= $ISER tmid= $CARTIM length= $LNGTH \
-	max_miss= $MMISS qmask= $QMASK > $TLIST
+	max_miss= $MMISS qmask= $QMASK reject= $RJCT > $TLIST
     @ LINES = `wc -l $TLIST |  awk '{print $1}'`
     if ($LINES < 2) then
       @ CVG = 0
@@ -222,7 +233,7 @@ while ($CLON >= $CL1)
       set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 30 $CROT $CLON`
       if ($#QINFO) then
 	set QPID = `echo $QINFO | awk '{print $3}'`
-	echo $NOW $SCRIPT $ARG 30$CROT $CLON submitted to $QUEUE as job $QPID >> $RLOG
+	echo $NOW $SCRIPT $ARG 30 $CROT $CLON submitted to $QUEUE as job $QPID >> $RLOG
       else
 	echo $NOW Failed to submit $SCRIPT $ARG 30 $CROT $CLON >> $RLOG
       endif
@@ -231,5 +242,9 @@ while ($CLON >= $CL1)
     endif
   endif
   @ CLON -= 5
-  if ($CLON >= $CL1 && $RUNNING) sleep $SLEEP
+  if ($CLON <= 0) then
+    @ CLON += 360
+    @ CROT++
+  endif
+  if (($CLON >= $CL1 || $CROT < $CR1) && $RUNNING) sleep $SLEEP
 end
