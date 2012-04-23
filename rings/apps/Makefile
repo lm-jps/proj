@@ -48,7 +48,7 @@ rdsinv:		$$@.o h1h2.o
 	$(FC) -nofor_main -openmp -o $(DEST)/$@ $? $(DLIBS) -lmkl_em64t
 	$(RM) $?
 
-rdvinv:		$$@.o ola_xy_v10.o ola_subs.o
+rdvinv:		$$@.o ola_xy_v11.o ola_subs.o
 	$(FC) -nofor_main -openmp -o $(DEST)/$@ $? $(DLIBS) -lmkl_em64t
 	$(RM) $?
 
