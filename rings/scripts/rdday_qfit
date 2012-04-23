@@ -4,6 +4,11 @@
 # This script should be run every 5 deg of Carrington rotation, i.e. about
 #   9 hours for the 5-deg series, every 15 deg (27 hours) for the 15-deg
 #   series, and 30 deg (54 hours) for the 30-deg series
+# Bugs:
+#   The Guess series override in the options file in test runs has no effect;
+#	the guess table is determined earlier
+#   The intermediate input series cannot be overridden by the options file in
+#	continuation test runs
 
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 set TW
@@ -19,9 +24,9 @@ if ($#argv < 3) then
   exit
 endif
 
-@ SYSER = `echo $1 | sed  -e "s/^0*//"`
-@ CROT = `echo $2 | sed  -e "s/^0*//"`
-@ CLON = `echo $3 | sed  -e "s/^0*//"`
+@ SYSER = `echo $1 | sed -e "s/^0*//"`
+@ CROT = `echo $2 | sed -e "s/^0*//"`
+@ CLON = `echo $3 | sed -e "s/^0*//"`
 @ RESTART = 0
 while ($CLON > 360)
   @ CLON -= 360
@@ -61,6 +66,8 @@ set PSPEC = pspec3
 set RFITF = rdfitf
 set RFITC = rdfitc
 set RVINV = rdvinv
+
+set QUEUE = j.q
 
 if ($TEST) then
   set TSTOPT = ~rick/hmi/rings/testoptions
@@ -175,6 +182,7 @@ set MSER = $NMSP.M_45s
 set BCKG = $NMSP.V_avg120
 set GSER = yale_cb.guess_table
 set GUESS = $GSER"[1]"
+set KSER = hmi.HSKernels
 
 if ($TEST) then
   grep -q "^ISER =" $TSTOPT
@@ -185,6 +193,8 @@ if ($TEST) then
   if ($status == 0) set BCKG = `grep "^BCKG =" $TSTOPT | awk '{print $3}'`
   grep -q "^GSER =" $TSTOPT
   if ($status == 0) set GSER = `grep "^GSER =" $TSTOPT | awk '{print $3}'`
+  grep -q "^KSER =" $TSTOPT
+  if ($status == 0) set KSER = `grep "^KSER =" $TSTOPT | awk '{print $3}'`
 endif
 
 if ($TEST) then
@@ -195,22 +205,24 @@ if ($TEST) then
 endif
 
 #  check that input and product series exist
-foreach SER ($ISER $MSER $BCKG $GSER $TSER $PSER $CSER $FSER $FLOW)
-  show_info -j ds= $SER >& /dev/null
+foreach SER ($ISER $MSER $BCKG $GSER $TSER $PSER $CSER $FSER $FLOW $KSER)
+  show_info -j ds= "$SER" >& /dev/null
   if ($status) then
-    echo Error: series $SER does not exist\; full script will fail
+    echo Error: series "$SER" does not exist\; full script will fail
     exit
   endif
 end
+
+set KRNL = $KSER"[cm_opal78]"
 
 # auxiliary files
 set HOSTNAME = `hostname`
 set HOSTID = `basename $HOSTNAME .Stanford.EDU`
 set PROCID = $HOSTID\_$$
 set NOTE = ~rick/hmi/notify
-set TMPFSLOC = ~rick/hmi/tmpfs
 set RJCT = ~rick/hmi/qual/reject.V
-set KERN = ~rick/rings/kernels/ringker.kur_cm_opal_78_mod.ascii
+
+set TMPFSLOC = ~rick/hmi/tmpfs
 if (-r $TMPFSLOC) then
   set TMPFS = `egrep ^/tmp $TMPFSLOC`
   set TEMP = $TMPFS/`whoami`
@@ -226,6 +238,7 @@ else
 endif
 
 set TMPB = $TEMP/$PLID$SUFX
+if ($TEST) set TMPB = $TMPB.$TW
 if (!(-d $TMPB)) mkdir $TMPB
 set MSGS = $TEMP/msgs
 if (!(-d $MSGS)) mkdir $MSGS
@@ -241,6 +254,8 @@ set TLIST = $TMPB/rd_inf.$$
 set MLIST = $TMPB/rd_mai.$$
 set TIMES = $SCRB/latency
 set DTIME = $SCRB/fd$TILES
+set QRES = $TEMP/qres
+if (!(-d $QRES)) mkdir $QRES
 
 set NOW = `date +%Y.%m.%d_%T`
 set STARTED = $NOW
@@ -413,18 +428,17 @@ while ($STRIP < $STRIPCT)
     @ RGNCT -= $EXPCT
     @ STRTSTOP = 0
     goto CLEANUP
-  else
-    @ FINIS = `date +%s`
-    @ ELAPS = $FINIS - $BEGUN
-    @ TOTEL += $ELAPS
-    @ ELAPS += 30
-    @ ELAPS /= 60
-    if ($STRIPCT == 1) then
-      echo "  time for tracking $EXPCT regions on `hostname`: $ELAPS min" >> $MMSG
-      set TTIME = $ELAPS
-    endif
-    echo "  ($CARTIM) time for tracking $EXPCT regions on `hostname` ($STRIP / $STRIPCT): $ELAPS min" >> $LOGF
   endif
+  @ FINIS = `date +%s`
+  @ ELAPS = $FINIS - $BEGUN
+  @ TOTEL += $ELAPS
+  @ ELAPS += 30
+  @ ELAPS /= 60
+  if ($STRIPCT == 1) then
+    echo "  time for tracking $EXPCT regions on `hostname`: $ELAPS min" >> $MMSG
+    set TTIME = $ELAPS
+  endif
+  echo "  ($CARTIM) time for tracking $EXPCT regions on `hostname` ($STRIP / $STRIPCT): $ELAPS min" >> $LOGF
 end
 
 if ($STRIPCT > 1) then
@@ -460,22 +474,21 @@ if ($status) then
   echo "  ($CARTIM) pspec failure on `hostname` for $CARTIM"  >> $LOGF
   @ STRTSTOP = 0
   goto CLEANUP
-else
-  @ FINIS = `date +%s`
-  @ ELAPS = $FINIS - $BEGUN
-  @ ELAPS += 30
-  @ ELAPS /= 60
-  echo "  time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $MMSG
-  echo "    spectra in $PSER""[$CROT][$CLON]" >> $MMSG
-  echo "  ($CARTIM) time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $LOGF
-  set PTIME = $ELAPS
-  @ RPCT = `show_info -c ds= $PSER"[$CROT][$CLON]" | awk '{print $1}'`
-  if ($RPCT != $RGNCT) then
-    echo "  WARNING:  only $RPCT spectra written!" >> $MMSG
-    echo "  WARNING:  only $RPCT spectra written!" >> $LOGF
-    set PTIME = $PTIME'*'
-    @ STRTSTOP = 0
-  endif
+endif
+@ FINIS = `date +%s`
+@ ELAPS = $FINIS - $BEGUN
+@ ELAPS += 30
+@ ELAPS /= 60
+echo "  time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $MMSG
+echo "    spectra in $PSER""[$CROT][$CLON]" >> $MMSG
+echo "  ($CARTIM) time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $LOGF
+set PTIME = $ELAPS
+@ RPCT = `show_info -c ds= $PSER"[$CROT][$CLON]" | awk '{print $1}'`
+if ($RPCT != $RGNCT) then
+  echo "  WARNING:  only $RPCT spectra written!" >> $MMSG
+  echo "  WARNING:  only $RPCT spectra written!" >> $LOGF
+  set PTIME = $PTIME'*'
+  @ STRTSTOP = 0
 endif
 
 SKIP_PSPEC:
@@ -491,23 +504,22 @@ if ($status) then
   echo "  ($CARTIM) rdfitf failure on `hostname` for $CARTIM"  >> $LOGF
   @ STRTSTOP = 0
   goto CLEANUP
-else
-  @ FINIS = `date +%s`
-  @ ELAPS = $FINIS - $BEGUN
-  @ ELAPS += 30
-  @ ELAPS /= 60
-  echo "  time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $MMSG
-  echo "    fits in $FSER""[$CROT][$CLON]" >> $MMSG
-  echo "  ($CARTIM) time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $LOGF
-  set FTIME = $ELAPS
-  @ RPCT = `show_info -c ds= $FSER"[$CROT][$CLON]" | awk '{print $1}'`
-  if ($RPCT != $RGNCT) then
-    echo "  WARNING:  only $RPCT fit records written!" >> $MMSG
-    echo "  WARNING:  only $RPCT fit records written!" >> $LOGF
-    set FTIME = $FTIME'*'
-    @ STRTSTOP = 0
-    goto SKIP_INVRT
-  endif
+endif
+@ FINIS = `date +%s`
+@ ELAPS = $FINIS - $BEGUN
+@ ELAPS += 30
+@ ELAPS /= 60
+echo "  time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $MMSG
+echo "    fits in $FSER""[$CROT][$CLON]" >> $MMSG
+echo "  ($CARTIM) time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $LOGF
+set FTIME = $ELAPS
+@ RPCT = `show_info -c ds= $FSER"[$CROT][$CLON]" | awk '{print $1}'`
+if ($RPCT != $RGNCT) then
+  echo "  WARNING:  only $RPCT fit records written!" >> $MMSG
+  echo "  WARNING:  only $RPCT fit records written!" >> $LOGF
+  set FTIME = $FTIME'*'
+  @ STRTSTOP = 0
+  goto SKIP_INVRT
 endif
 
 SKIP_FITSF:
@@ -516,7 +528,7 @@ if ($SYSE == 5) goto SKIP_INVRT
 
 @ BEGUN = `date +%s`
 @ RGNCT = `show_info -cq ds= $FSER"[$CROT][$CLON]"`
-$RVINV out= $FLOW in= $FSER cr= $CROT clon= $CLON kernel= $KERN \
+$RVINV out= $FLOW in= $FSER cr= $CROT clon= $CLON kernel= "$KRNL" \
     num= $RTGCT rb= $RIMIN re= $RIMAX >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
@@ -570,10 +582,6 @@ endif
 set GUESSNAM = `/bin/ls $GUESSDIR | awk '{print $1}'`
 set GUESSFIL = $GUESSDIR/$GUESSNAM
 
-# special hack for difference between Carrington longitudes of regions and times
-@ LONC = $CLON
-if ($LONC == 360) @ LONC = 0
-
 if ($SYSE == 5) then
   @ TOTEL = 0
   @ TOTCT = 0
@@ -597,7 +605,7 @@ if ($SYSE == 5) then
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
     echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
     @ BEGUN = `date +%s`
-    qsub -sync yes -t 1-$EXPCT -q j.q $SCRIPT >>& $RLOG
+    qsub -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
     @ QJOK = 0
     if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
     @ FAIL = $TOTCT - $QJOK
@@ -676,7 +684,7 @@ else
     echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
   endif
   @ BEGUN = `date +%s`
-  qsub -sync yes -t 1-$EXPCT -q j.q $SCRIPT >>& $RLOG
+  qsub -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
   @ QJOK = 0
   if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
   @ FAIL = $EXPCT - $QJOK
@@ -734,13 +742,13 @@ else
 endif
 echo "$CARTIM $TILES  $STARTED  $HREL`printf :%02d $MNEL`" >> $TIMES
 echo "$CARTIM\t""$TTIME\t$PTIME\t$FTIME\t$CTIME\t$ITIME" >> $DTIME
+echo "$NOW finish $CARTIM $SYSE-deg ($RGNCT regions)" >> $MMSG
+if ($STRTSTOP) echo "  End-to-end latency = $HREL`printf :%02d $MNEL`" >> $MMSG
+echo $SUBJ > $MSGS/subj.$PROCID
 if ($#NOTIFY) then
-  echo "$NOW finish $CARTIM $SYSE-deg ($RGNCT regions)" >> $MMSG
-  if ($STRTSTOP) then
-    echo "  End-to-end latency = $HREL`printf :%02d $MNEL`" >> $MMSG
-  endif
-  echo $SUBJ > $MSGS/subj.$PROCID
   echo "$NOTIFY" > $MSGS/list.$PROCID
+else
+  echo `whoami` > $MSGS/list.$PROCID
 endif
 echo "$NOW finish $CARTIM ($RGNCT regions)" >> $LOGF
 if (-e $TLIST) rm $TLIST
