@@ -20,8 +20,8 @@
  *	rb	double	0.97		Lower radius limit
  *	re	double	1.00		Upper radius limit
  *	num	int	40		Number of target inversion points
- *	kernel	string	/tmp21/baldner/kernels/ringker.kur_cm_opal_78_mod.ascii
- *				Pathname of file containing inversion kernels
+ *	kernel	string	-		Data record or pathname of file
+ *				containing mode kernels for inversions
  *	ave	string	Not Specified	Output file for averaging kernels
  *				(if not set, kernels are not written)
  *	coef	string	Not Specified	Output file for ?? coefficients
@@ -45,6 +45,9 @@
  *	data record, each inversion will overwrite the last.
  *    There is no verification that the requested output segments have the
  *	correct protocol; probably doesn't matter anyway
+ *    The constant value of amu is written needlessly for each target location
+ *	for backward compatability
+ *    The reading of the kernel file is still in the FORTRAN subroutine
  *
  *  Revision history is at end of file
  ******************************************************************/
@@ -59,14 +62,22 @@
 #include "ola_xy.c"
 
 /* prototypes */
+
+
+extern void ola_(double *, int *, double *, double *, double *,
+      double *, double *, int *, char *, double *, double *, double *,
+      double *, double *, double *, double *, double *, double *,
+      char *, char *, int *, int *, int *, double *, double *,
+      int *, double *, double *, double *, int, int, int);
+/*
 extern void ola_(double *, int *, double *, double *, double *,
       double *, double *, int *, char *, char *, char *, char *, char *,
       int *, int *, int *, double *, double *,
       int *, double *, double *, double *,
       int, int, int, int, int);
-
+*/
 char *module_name = "rdvinv";
-char *version_id = "0.8";
+char *version_id = "0.9";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "in", "", "Input data series or recordset"},
@@ -74,7 +85,8 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "uxseg", "Ux", "Output data segment name for Ux inversions"},
   {ARG_STRING, "uyseg", "Uy", "Output data segment name for Uy inversions"},
   {ARG_INT,    "cr", "Not Specified", "Carrington rotation for all regions"},
-  {ARG_FLOAT,  "clon", "Not Specified", "Carrington longitude of CM for all regions"},
+  {ARG_FLOAT,  "clon", "Not Specified",
+      "Carrington longitude of CM for all regions"},
   {ARG_FLOAT,  "lon", "Not Specified", "Carrington longitude of all regions"},
   {ARG_FLOAT,  "lat", "Not Specified", "Carrington latitude of all regions"},
   {ARG_DOUBLE, "amu", "0.005", "Error trade-off parameter"},
@@ -98,21 +110,33 @@ char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
     "Size", "Cadence", "ZonalTrk", "ZonalVel", "MeridTrk", "MeridVel", "MAI"};
 
 int process_record (const char *filename, int drms_output, char *outfilex,
-    char *outfiley, char *kernel, char *ave, char *coef, int qave, int qcoef,
+    char *outfiley, char *kernel, char *kername, char *ave, char *coef, int qave, int qcoef,
     int verbose, double ob, double oe, int num, double rb, double re,
-    double amu) {
+    double amu, char *sourcerec, char *codever) {
   FILE *infile = fopen (filename, "r");
-  double *l, *f, *ef, *ux, *eux, *uy, *euy;
+  FILE *filex = fopen (outfilex, "w");
+  FILE *filey = fopen (outfiley, "w");
+  double *rcgx, *rcgy, *quartx, *quarty, *solnx, *solny, *errx, *erry;
+  double *l, *f, *ef, *ux, *eux, *uy, *euy, *rtrg;
   int *n, *mask;
   int npts, i, j, status;
-  int lenoutx, lenouty, lenkern, lenave, lencoef;
-
+  int lenkern, lenave, lencoef;
   status = read_fit_v (infile, &npts, &n, &l, &f, &ef, &ux, &eux, &uy, &euy);
   fclose (infile);
   if(status)	{
     fprintf(stderr, "File %s could not be read\n", filename);
     return 1;
   }
+
+  rtrg = (double *)malloc (num * sizeof (double));
+  rcgx = (double *)malloc (num * sizeof (double));
+  rcgy = (double *)malloc (num * sizeof (double));
+  quartx = (double *)malloc (3 * num * sizeof (double));
+  quarty = (double *)malloc (3 * num * sizeof (double));
+  solnx = (double *)malloc (num * sizeof (double));
+  solny = (double *)malloc (num * sizeof (double));
+  errx = (double *)malloc (num * sizeof (double));
+  erry = (double *)malloc (num * sizeof (double));
   mask = (int *)malloc (npts * sizeof(int));
   interp_vel (n, l, f, ef, ux, eux, uy, euy, npts);
   autoweed_vel (n, l, ux, uy, mask, npts);
@@ -131,15 +155,44 @@ int process_record (const char *filename, int drms_output, char *outfilex,
     }
   }
   npts = j;
-  lenoutx = strlen (outfilex);
-  lenouty = strlen (outfiley);
+
+  fprintf (filex, "# Flow inversion of %s\n", sourcerec);
+  fprintf (filey, "# Flow inversion of %s\n", sourcerec);
+  fprintf (filex, "# against kernel %s\n", kername);
+  fprintf (filey, "# against kernel %s\n", kername);
+  fprintf (filex, "# %s\n", codever);
+  fprintf (filey, "# %s\n", codever);
+  fprintf (filex, "# amu = %.5f ob = %.3f mHz, oe = %.3f mHz\n", amu, ob, oe);
+  fprintf (filey, "# amu = %.5f ob = %.3f mHz, oe = %.3f mHz\n", amu, ob, oe);
+  fprintf (filex, "# rb = %.3f, re= %.3f, num = %d\n",rb, re, num);
+  fprintf (filey, "# rb = %.3f, re= %.3f, num = %d\n",rb, re, num);
+  fprintf (filex,
+      "# Rtrg    amu    CG of av. kernel, quartiles                soln          err\n");
+  fprintf (filex, "#                           1       2       3     3-1\n");
+  fprintf (filey,
+      "# Rtrg    amu    CG of av. kernel, quartiles                soln          err\n");
+  fprintf (filey, "#                           1       2       3     3-1\n");
+
   lenkern = strlen (kernel);
   lenave = (qave) ? strlen (ave) : 0;
   lencoef = (qcoef) ? strlen (coef) : 0;
 
-  ola_ (l, n, f, ux, eux, uy, euy, &npts, kernel, outfilex, outfiley, ave,
-      coef, &qave, &qcoef, &verbose, &ob, &oe, &num, &rb, &re, &amu, lenkern,
-      lenoutx, lenouty, lenave, lencoef);
+  ola_ (l, n, f, ux, eux, uy, euy, &npts, kernel, rtrg, rcgx, rcgy,
+      quartx, quarty, solnx, solny, errx, erry, ave, coef, &qave, &qcoef,
+      &verbose, &ob, &oe, &num, &rb, &re, &amu, lenkern, lenave, lencoef);
+/*
+  ola_xy (l, n, f, ux, eux, uy, euy, npts, kernel, outfilex, outfiley, ave,
+      coef, qave, qcoef, verbose, ob, oe, num, rb, re, amu);
+*/
+  for (i = 0; i < num; i++)
+    fprintf (filex, "%7.5f %7.5f %7.5f %7.5f %7.5f %7.5f %7.5f %12.5e %12.5e\n",
+	rtrg[i], amu, rcgx[i], quartx[2 + 3*i], quartx[1 + 3*i], quartx[3*i],
+	fabs (quartx[3*i] - quartx[2+ 3*i]), solnx[i], errx[i]);
+  for (i = 0; i < num; i++)
+    fprintf (filey, "%7.5f %7.5f %7.5f %7.5f %7.5f %7.5f %7.5f %12.5e %12.5e\n",
+	rtrg[i], amu, rcgy[i], quarty[2 + 3*i], quarty[1 + 3*i], quarty[3*i],
+	fabs (quarty[3*i] - quarty[2+ 3*i]), solny[i], erry[i]);
+
   free (n);
   free (mask);
   free (l);
@@ -149,6 +202,19 @@ int process_record (const char *filename, int drms_output, char *outfilex,
   free (eux);
   free (uy);
   free (euy);
+
+  free (rtrg);
+  free (rcgx);
+  free (rcgy);
+  free (quartx);
+  free (quarty);
+  free (solnx);
+  free (solny);
+  free (errx);
+  free (erry);
+  fclose (filex);
+  fclose (filey);
+
   return 0;
 }
 		 /*  these functions should probably be added to keystuff.c  */
@@ -196,15 +262,18 @@ char *printcrcl_loc (int cr, double cl, double lnhg, double lncm, double lat) {
 				      /*  construct a filename CR_lonEWlatNS  */
 	if (dlon >= 0) {
 	  if (lat >= 0) sprintf (fnam, "%04d_%04.1fW%04.1fN", cr, dlon, lat);
-	  else if (lat > -0.05) sprintf (fnam, "%04d_%04.1fW%04.1fN", cr, dlon, -lat);
+	  else if (lat > -0.05) sprintf (fnam, "%04d_%04.1fW%04.1fN",
+	      cr, dlon, -lat);
           else sprintf (fnam, "%04d_%04.1fW%04.1fS", cr, dlon, -lat);
 	} else if (dlon > -0.05) {
 	  if (lat >= 0) sprintf (fnam, "%04d_%04.1fW%04.1fN", cr, -dlon, lat);
-	  else if (lat > -0.05) sprintf (fnam, "%04d_%04.1fW%04.1fN", cr, -dlon, -lat);
+	  else if (lat > -0.05) sprintf (fnam, "%04d_%04.1fW%04.1fN",
+	      cr, -dlon, -lat);
           else sprintf (fnam, "%04d_%04.1fW%04.1fS", cr, -dlon, -lat);
 	} else {
 	  if (lat >= 0) sprintf (fnam, "%04d_%04.1fE%04.1fN", cr, -dlon, lat);
-	  else if (lat > -0.05) sprintf (fnam, "%04d_%04.1fE%04.1fN", cr, -dlon, -lat);
+	  else if (lat > -0.05) sprintf (fnam, "%04d_%04.1fE%04.1fN",
+	      cr, -dlon, -lat);
           else sprintf (fnam, "%04d_%04.1fE%04.1fS", cr, -dlon, -lat);
 	}
       }
@@ -271,7 +340,7 @@ int DoIt(void)	{
   int status = 0;
   int drms_input, drms_output;
   int nrec, rec_i;
-  DRMS_RecordSet_t *recordSet = NULL;
+  DRMS_RecordSet_t *recordSet = NULL, *kern_set = NULL;
   DRMS_Record_t *irec, *orec;
   DRMS_Segment_t *segment, *oseg;
   FILE *fpt;
@@ -282,7 +351,7 @@ int DoIt(void)	{
   char odir[DRMS_MAXPATHLEN], filename[DRMS_MAXPATHLEN+5];
   char buffer[1024], outfilex[DRMS_MAXPATHLEN], outfiley[DRMS_MAXPATHLEN];
   char outdir[DRMS_MAXPATHLEN], outdirx[DRMS_MAXPATHLEN],
-      outdiry[DRMS_MAXPATHLEN];
+      outdiry[DRMS_MAXPATHLEN], kernfile[DRMS_MAXPATHLEN];
   char *carstr;
   char rec_query[DRMS_MAXQUERYLEN], source[DRMS_MAXQUERYLEN];
   char module_ident[64];
@@ -320,15 +389,50 @@ int DoIt(void)	{
   if (verbose) printf ("%s:\n", module_ident);
 
   drms_input = 1;
+			 /*  attempt to open the kernel as a DRMS record set  */
+  kern_set = drms_open_records (drms_env, kernel, &status);
+  if (status) {
+			       /*  attempt to open the kernel as a file name  */
+    fpt = fopen (kernel, "r");
+    if (!fpt) {
+      fprintf (stderr, "Error: kernel specification \"%s\"\n", kernel);
+      fprintf (stderr,
+          "       does not specify a readable data record nor file\n");
+      return 1;
+    }
+    fclose (fpt);
+    strcpy (kernfile, kernel);
+  } else {
+		       /*  check that the kernel set specifies unique record  */
+    if (kern_set->n != 1) {
+      fprintf (stderr, "Error: no data records in set %s\n", in);
+      return 1;
+    }
+    irec = kern_set->records[0];
+    drms_record_directory (irec, kernfile, 1);
+    segment = drms_segment_lookup (irec, "kernel");
+    if (!segment) {
+			       /*  and that it contains the segment "kernel"  */
+      fprintf (stderr, "Error: kernel record \"%s\"\n", kernel);
+      fprintf (stderr, "       does not contain a segment \"kernel\"\n");
+      drms_close_records (kern_set, DRMS_FREE_RECORD);
+      return 1;
+    }
+    sprintf (kernfile, "%s/S%05i/kernel", segment->record->su->sudir,
+	segment->record->slotnum);
+    drms_close_records (kern_set, DRMS_FREE_RECORD);
+  }
+
   if (anycr && anycl && anylon && anylat) {
-		/*  no target range specified, assume implicit in input set  */
-			/*  but it might be implicit in output series spec!  */
+		 /*  no target range specified, assume implicit in input set  */
+			 /*  but it might be implicit in output series spec!  */
     recordSet = drms_open_records (drms_env, in, &status);
     if (status) {
       fpt = fopen (in, "r");
       if (!fpt) {
 	fprintf (stderr, "Error: in specification \"%s\"\n", in);
-	fprintf (stderr, "       does not specify a readable data set nor file\n");
+	fprintf (stderr,
+	    "       does not specify a readable data set nor file\n");
 	return 1;
       }
       fclose (fpt);
@@ -453,8 +557,10 @@ int DoIt(void)	{
 				 /*  set possible prime keys as appropriate  */
     if (anycr) {
       if (key_is_prime (orec, "CarrRot")) {
-	fprintf (stderr, "Error: CarrRot is prime key for output series %s\n", out);
-	fprintf (stderr, "       but input data set contains multiple values\n");
+	fprintf (stderr,
+	    "Error: CarrRot is prime key for output series %s\n", out);
+	fprintf (stderr,
+	    "       but input data set contains multiple values\n");
 	drms_close_record (orec, DRMS_FREE_RECORD);
 				     /*  this pretty much has to be true...  */
 	if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
@@ -463,8 +569,10 @@ int DoIt(void)	{
     } else kstat += check_and_set_key_int (orec, "CarrRot", cr);
     if (anycl) {
       if (key_is_prime (orec, "CMLon")) {
-	fprintf (stderr, "Error: CMLon is prime key for output series %s\n", out);
-	fprintf (stderr, "       but input data set contains multiple values\n");
+	fprintf (stderr,
+	    "Error: CMLon is prime key for output series %s\n", out);
+	fprintf (stderr,
+	    "       but input data set contains multiple values\n");
 	drms_close_record (orec, DRMS_FREE_RECORD);
 	if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
 	return 1;
@@ -472,8 +580,10 @@ int DoIt(void)	{
     } else kstat += check_and_set_key_double (orec, "CMLon", cl);
     if (anycr || anycl) {
       if (key_is_prime (orec, "CarrTime")) {
-	fprintf (stderr, "Error: CarrTime is prime key for output series %s\n", out);
-	fprintf (stderr, "       but input data set contains multiple values\n");
+	fprintf (stderr,
+	    "Error: CarrTime is prime key for output series %s\n", out);
+	fprintf (stderr,
+	    "       but input data set contains multiple values\n");
 	drms_close_record (orec, DRMS_FREE_RECORD);
 	if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
 	return 1;
@@ -485,8 +595,10 @@ int DoIt(void)	{
     }
     if (anylon) {
       if (key_is_prime (orec, "LonHG")) {
-	fprintf (stderr, "Error: LonHG is prime key for output series %s\n", out);
-	fprintf (stderr, "       but input data set contains multiple values\n");
+	fprintf (stderr,
+	    "Error: LonHG is prime key for output series %s\n", out);
+	fprintf (stderr,
+	    "       but input data set contains multiple values\n");
 	drms_close_record (orec, DRMS_FREE_RECORD);
 	if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
 	return 1;
@@ -494,8 +606,10 @@ int DoIt(void)	{
     } else kstat += check_and_set_key_double (orec, "LonHG", lon);
     if (anylat) {
       if (key_is_prime (orec, "LatHG")) {
-	fprintf (stderr, "Error: LatHG is prime key for output series %s\n", out);
-	fprintf (stderr, "       but input data set contains multiple values\n");
+	fprintf (stderr,
+	    "Error: LatHG is prime key for output series %s\n", out);
+	fprintf (stderr,
+	    "       but input data set contains multiple values\n");
 	drms_close_record (orec, DRMS_FREE_RECORD);
 	if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
 	return 1;
@@ -549,11 +663,12 @@ int DoIt(void)	{
       mkdir (outdir, 01755);
     } else strcpy (outdir, out);
   }
+						     /*  main processing loop  */
   for (rec_i=0; rec_i<nrec; rec_i++) {
     if (verbose) printf ("  Processing record %i\n", rec_i);
     if (drms_input) {
       irec = recordSet->records[rec_i];
-		    /*  should use call to drms_record_directory() instead  */
+		       /*  should use call to drms_record_directory() instead  */
       if (irec->sunum != -1LL && irec->su == NULL) {
 	irec->su = drms_getunit (irec->env, irec->seriesinfo->seriesname,
 	    irec->sunum, 1, &status);
@@ -586,7 +701,8 @@ int DoIt(void)	{
 	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
     }
     status = process_record (filename, drms_output, outfilex, outfiley,
-	kernel, ave, coef, qave, qcoef, verbose, ob, oe, num, rb, re, amu);
+	kernfile, kernel, ave, coef, qave, qcoef, verbose, ob, oe, num, rb, re, amu,
+	source, module_ident);
     if (status && drms_output)	{
       fprintf (stderr, "Error processing record %d (%s); aborted\n", rec_i,
 	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
@@ -606,8 +722,9 @@ int DoIt(void)	{
  *  Revision History
  *
  *  June 2009 - v 0.1 module created, no real drms functionality
- *  09.10.2009 - v 0.2 drms functionality added - input and output from drms records now 
- *  	possible, but input/output to rooted filenames also possible
+ *  09.10.2009 - v 0.2 drms functionality added - input and output from drms
+ *	records now  possible, but input/output to rooted filenames also
+ *	possible
  *  0.3 2009.10.22	fixed format of name of output files
  *  0.4 2010.02.11	unified processing calls for named file and drms input
  *	branches
@@ -628,9 +745,14 @@ int DoIt(void)	{
  *		subdirectories; added option for naming individual segments
  *		(if there are two)
  *  v 0.7 frozen 2010.08.19
- *    0.8	Created 2011.04.22; Fixed bugs in printing of filenames
- *		(particularly the reversal of east and west), and dropped
- *		requirement for CMLon; heliographic option for file naming
+ *    0.8	Created 2011.04.22; Fixed typos in ola_xy.c (not yet used)
+ *		Fixed bugs in printing of filenames (particularly the
+ *		reversal of east and west), and dropped requirement for CMLon;
+ *		heliographic option for file naming
  *		Removed default for kernel
  *    0.9	Created 2011.12.04; Fixed typos in ola_xy.c (not yet used)
+ *  v 0.8 frozen 2012.02.01 (but included in JSOC release 6.1 2011.12.05 in
+ *		identical form except for comments)
+ *    0.9	added (preferred) option for specifying kernel as DRMS data
+ *		record rather than filename
  */
