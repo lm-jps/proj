@@ -405,7 +405,7 @@ int DoIt(void)	{
   } else {
 		       /*  check that the kernel set specifies unique record  */
     if (kern_set->n != 1) {
-      fprintf (stderr, "Error: no data records in set %s\n", in);
+      fprintf (stderr, "Error: no data records in set %s\n", kernel);
       return 1;
     }
     irec = kern_set->records[0];
