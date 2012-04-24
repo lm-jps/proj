@@ -43,7 +43,7 @@
 
 char *module_name = "maicalc";
 char *module_desc = "integration of mapped and tracked magnetogram data";
-char *version_id = "0.8";
+char *version_id = "0.9";
 
 #define RSUNM		(6.96e8)
 
@@ -617,7 +617,7 @@ printf ("%d: %s\n", nrec, time_str);
 			   /*  get needed info from record keys for mapping  */
     status = solar_image_info (rec, &xscale, &yscale, &xc, &yc,
 	&img_radius, rsun_key, apsd_key, &peff, &ellipse_e, &ellipse_pa,
-	&x_invrt, &y_invrt, &need_ephem);
+	&x_invrt, &y_invrt, &need_ephem, 0);
     if (status & NO_SEMIDIAMETER) {
       int keystat = 0;
       double dsun_obs = drms_getkey_double (rec, dsun_key, &keystat);
@@ -841,4 +841,6 @@ printf ("\n");
  *		Added rec_step argument with default corresponding to 48 min
  *	for HMI; provided local version of Carrington rots estimator
  *  v 0.8 frozen 2010.08.20
+ *  v 0.9	Modified for new call to solar_image_info
+ *  v 0.9 frozen 2012.04.24
  */
