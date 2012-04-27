@@ -326,8 +326,114 @@ function AiaScaleInit()
 //
 
 function ProcessingInit()
-  {
-  AiaScaleInit();
-  HgPatchInit();
-  }
+{
+    AiaScaleInit();
+    HgPatchInit();
+    $("ProcessRebin").style.display="none";
+}
 
+function RebinInit()
+{
+    // Clear out any old settings.
+    $("RebinMethod").value = "boxcar";
+    $("RebinCrop").checked = false;
+    $("RebinRotate").checked = false;
+    $("RebinScale").value = "1.0";
+    
+    $("RebinFWHMRow").style.display = "none";
+    $("RebinNvectorRow").style.display = "none";
+    
+    // Display the rebin options table.
+    $("ProcessRebin").style.display="table-row";   
+}
+
+function CheckRebin(control)
+{
+    if (control == "method")
+    {
+        if ($("RebinMethod").value == "gaussian")
+        {
+            $("RebinFWHMRow").style.display = "table-row";
+            $("RebinNvectorRow").style.display = "table-row";
+        }
+        else if ($("RebinMethod").value == "boxcar")
+        {
+            $("RebinFWHMRow").style.display = "none";
+            $("RebinNvectorRow").style.display = "none";
+        }
+    }
+    else if (control == "fwhm")
+    {
+        if (parseFloat($("RebinFWHM").value) == -1.0)
+        {
+            $("RebinFWHM").style.backgroundColor = "#D88080";
+        }
+        else
+        {
+            $("RebinFWHM").style.backgroundColor = "#FFFFFF";
+        }
+    }
+    else if (control == "nvector")
+    {
+        if (parseFloat($("RebinNvector").value) == -1.0)
+        {
+            $("RebinNvector").style.backgroundColor = "#D88080";
+        }
+        else
+        {
+            $("RebinNvector").style.backgroundColor = "#FFFFFF";
+        }
+    }
+}
+
+function GetRebinArgs()
+{
+    var rv = "rebin";
+    
+    if ($("RebinCrop").checked)
+    {
+        rv = rv + ",";
+        rv = rv + "-c";
+    }
+    
+    if ($("RebinRotate").checked)
+    {
+        rv = rv + ",";
+        rv = rv + "-u";
+    }
+    
+    alert("1");
+    
+    if (parseFloat($("RebinScale").value) != 1.0)
+    {
+        rv = rv + ",";
+        rv = rv + "scale=" + $("RebinScale").value;
+    }
+
+        alert("2");
+    
+    if ($("RebinMethod").value == "gaussian")
+    {
+        if (parseFloat($("RebinFWHM").value) != -1.0)
+        {
+            rv = rv + ",";
+            rv = rv + "FHWM=" + $("RebinFWHM").value;
+        }
+        
+        if (parseFloat($("RebinNvector").value) != -1.0)
+        {
+            rv = rv + ",";
+            rv = rv + "nvector=" +  $("RebinNvector").value;
+        }
+    }
+    
+    if ($("RebinMethod").value != "boxcar")
+    {
+        rv = rv + ",";
+        rv = rv + "method=" + $("RebinMethod").value;
+    }
+    
+    alert("3: " + rv);
+    
+    return rv;
+}

@@ -3,15 +3,25 @@
 <HEAD>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; CHARSET=iso-8859-1">
 <TITLE>JSOC Export Data</TITLE>
+    
+<!-- Global 'variable' that contains the path to the directory containing all files to be included into this one -->
+<input type='hidden' id='context' value='artswebapps' />
+     
 <SCRIPT TYPE="text/javascript" SRC="js/prototype-1.6.0.3.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/cookies.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
 <link rel="stylesheet" type="text/css" href="css/prototip.css" ></link>
 
 <!-- Add functions for export processing options, section 1 of 7 -->
-<SCRIPT TYPE="text/javascript" SRC="exportdata.d/processing.js"></SCRIPT>
+<script type="text/javascript">
+    var scpath="<script type='text/javascript' src='" + $("context").value + "/exportdata.d/processing.js'><\/script>";
+    document.write(scpath);
+</script>
 <!-- Add functions for export protocol options, section 1 of X -->
-<SCRIPT TYPE="text/javascript" SRC="exportdata.d/protocols.js"></SCRIPT>
+<script type="text/javascript">
+    var scpath="<script type='text/javascript' src='" + $("context").value + "/exportdata.d/protocols.js'><\/script>";
+    document.write(scpath);
+</script>
 
 <HEAD>
 
@@ -28,7 +38,9 @@ span.tip { background-color:blue;font-family:verdana;color:white;font-size:1em;f
 <script type="text/javascript">
 
 // Global variables and initialize page locations
- 
+var gRoot; // The directory containing this file. To develop, we need to be able to
+           // specify where all the files to be included live.
+    
 // Set CGI-BIN targets
 
 // var SHOW_SERIES = "show_series_test";
@@ -78,6 +90,12 @@ var HgSeriesList;
 var HgSeriesSelected = 0;
 var HgTracked = 0;
 var ProtocolOptionsSet = 0;
+    
+var gAiaScaleActive = 0;
+    
+// Processing steps
+var gRebin = "rebin";
+var gRebinActive = 0;
 
 function OnEnterKey(evt,action)
   {
@@ -672,6 +690,7 @@ function SetExportMethod()
     ExportMethodOK = 1;
     $("ProcessRow").style.display="none";
     $("ProcessHgPatch").style.display="none";
+    $("ProcessRebin").style.display="none";
     if ($("ExportMethod").value == "url_direct")
         {
         $("ProtocolRow").style.display="table-row";
@@ -695,6 +714,7 @@ function SetExportMethod()
     ExportMethodOK = 1;
     $("ProcessRow").style.display="table-row";
     $("ProcessHgPatch").style.display="none";
+    $("ProcessRebin").style.display="none";
     $("ProtocolRow").style.display="table-row";
     $("FilenameFmtRow").style.display="table-row";
     $("RequestorRow").style.display="table-row";
@@ -725,29 +745,61 @@ function SetProcessing()
   ExportProcessingOK = 0;
   ExportProcessingArgs = "no_op";
   var isok = 0;
+      
   if ($("ExportProcessing").value == "no_op")
     { // Add reset code for export options here, section 5 of 7
-    if (HgPatchActive)
-      HgPatchInit();
-    AiaScaleInit();
     isok = 1;
+
+      $("ProcessHgPatch").style.display="none";
+      $("ProcessAiaScale").style.display="none";
+      $("ProcessRebin").style.display="none";
     }
   else if ($("ExportProcessing").value == "hg_patch") // Export option block for HgPatch, section 6 of 7
     {
-    HgPatchActive = 1;
+    if (!HgPatchActive)
+    {
+        HgPatchInit();
+        HgPatchActive = 1;
+    }
+
     HgSeriesSelected = 0;
     CheckHgRecordSet(0);
     $("ProcessHgPatch").style.display="table-row";
+    $("ProcessAiaScale").style.display="none";
+    $("ProcessRebin").style.display="none";
+
     if (CheckHgPatch())
       isok = 1;
-    AiaScaleInit();
     }
   else if ($("ExportProcessing").value == "aia_scale") // Export option block for Normalize Scale, section 6 of 7
     {
+    if (!gAiaScaleActive)
+    {
+        AiaScaleInit();
+        gAiaScaleActive = 1;
+    }
+
+    $("ProcessHgPatch").style.display="none";
     $("ProcessAiaScale").style.display="table-row";
+    $("ProcessRebin").style.display="none";
+
     ExportProcessingArgs = "aia_scale";
     isok = 1;
     }
+  else if ($("ExportProcessing").value == gRebin)
+  {
+      if (!gRebinActive)
+      {
+          RebinInit();
+          gRebinActive = 1;
+      }
+
+      ExportProcessingArgs = gRebin;
+      $("ProcessHgPatch").style.display="none";
+      $("ProcessAiaScale").style.display="none";
+      $("ProcessRebin").style.display="table-row";
+      isok = 1;
+  }
   if (isok)
     ExportProcessingOK = 1;
   // Add recordLimit FIRST always.
@@ -932,6 +984,7 @@ function CheckExportParams()
   return 1;
   }
 
+// This is the code executed when the user clicks on the "Submit Export Request" button.
 function GetExport()
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
@@ -952,10 +1005,13 @@ function GetExport()
     $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
     $("ExportButton").value = "Processing ...";
     $("ExportButton").style.backgroundColor = "#FFD8D8";
-    var protocolparam =  $("ExportProtocolHidden").value;
+    var protocolparam = $("ExportProtocolHidden").value;
     // if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
       // protocolparam = protocolparam + "," + $("ExportCompress").value;
     var RecordSet = $("ExportRecordSet").value;
+        alert("getting rebin args");
+    ExportProcessingArgs = GetRebinArgs();
+        alert("args: ExportProcessingArgs");
     var exportparameters = new Hash( {"op" : $("ExportOpID").value,
                  		      "ds" : RecordSet, 
                  		      "process" :  ExportProcessingArgs,
@@ -1443,7 +1499,7 @@ access the data.
     </TR>
   
     <!-- Processing selection detail rows go here. section 7 of 7 -->
-    <!--#include virtual="exportdata.d/processing.html" -->
+    <!--#include virtual="artswebapps/exportdata.d/processing.html" -->
   
     <TR ID="ProtocolRow">
       <TD>Protocol</TD>

@@ -6,12 +6,13 @@
       <option value="no_op">none
       <option value="aia_scale">aia_scale
       <option value="hg_patch">hg_patch
+      <option value="rebin">rebin
     </select>
   </TD>
   <TD>Select Pre-export processing</TD>
 </TR>
 
-<TR ID="ProcessAiaScale">
+<TR ID="ProcessAiaScale" style="display:none">
   <TD>&nbsp;&nbsp;&nbsp;&nbsp;AIA_Scale</TD> 
   <TD><SPAN ID="AiaScaleHelp" class="tip">?</SPAN></TD> 
   <TD COLSPAN=2>
@@ -23,7 +24,7 @@
   </TD>
 </TR>
 
-<TR ID="ProcessHgPatch">
+<TR ID="ProcessHgPatch" style="display:none">
   <TD>&nbsp;&nbsp;&nbsp;&nbsp;HG_Patch</TD> 
   <TD><SPAN ID="HgPatchHelp" class="tip">?</SPAN></TD> 
   <TD COLSPAN=2>
@@ -160,3 +161,40 @@
     </TABLE>
   </TD> 
 </TR>
+
+<tr ID="ProcessRebin" style="display:none">
+  <td>&nbsp;&nbsp;&nbsp;&nbsp;Rebin</td>
+  <td><span ID="RebinHelp" class="tip">?</span></td>
+  <td COLSPAN=2>
+    <table style="border-style:solid">
+    <tr>
+        <td>Please specify rebin options:</td>
+    </tr>
+    <tr>
+        <td colspan="2">
+            <select id="RebinMethod" type="text" size=1 name="RebinMethod" style="width:12em;background-color:#FFFFFF" onChange="CheckRebin('method')">
+                <option value="boxcar">boxcar</option>
+                <option value="gaussian">gaussian</option>
+            </select> Re-binning method to use.
+        </td>
+    </tr>
+    <tr>
+        <td colspan="2"><input id="RebinScale" type="text" name="RebinScale" style="width:12em;background-color:#FFFFFF" value="1.0" onChange="CheckRebin('scale')" /> Scaling factor to apply to image.</td>
+    </tr>
+    <tr id="RebinFWHMRow">
+        <td colspan="2"><input id="RebinFWHM" type="text" name="RebinFWHM" style="width:12em;background-color:#D88080" value="-1.0" onChange="CheckRebin('fwhm')" /> Width of smoothing Gaussian function (FWHM).</td>
+    </tr>
+    <tr id="RebinNvectorRow">
+        <td colspan="2"><input id="RebinNvector" type="text" name="RebinNvector" style="width:12em;background-color:#D88080" value="-1.0" onChange="CheckRebin('nvector')" /> Vector length of smoothing Gaussian function.</td>
+    </tr>
+    <tr>
+        <td colspan="2"><input id="RebinCrop" type="checkbox" name="RebinCrop" value="cropon" onChange="CheckRebi
+n(crop)" /> Crop pixels that are greater than rsun_obs units from the center of the image.</td>
+    </tr>
+    <tr>
+        <td colspan="2"><input id="RebinRotate" type="checkbox" name="RebinRotate" value="roton" onChange="CheckR
+ebin('rotate')" /> Rotate image by 180 degrees.</td>
+    </tr>
+    </table>
+  </td>
+</tr>
