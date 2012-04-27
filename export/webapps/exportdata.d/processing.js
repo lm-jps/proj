@@ -402,15 +402,11 @@ function GetRebinArgs()
         rv = rv + "-u";
     }
     
-    alert("1");
-    
     if (parseFloat($("RebinScale").value) != 1.0)
     {
         rv = rv + ",";
         rv = rv + "scale=" + $("RebinScale").value;
     }
-
-        alert("2");
     
     if ($("RebinMethod").value == "gaussian")
     {
@@ -432,8 +428,6 @@ function GetRebinArgs()
         rv = rv + ",";
         rv = rv + "method=" + $("RebinMethod").value;
     }
-    
-    alert("3: " + rv);
     
     return rv;
 }

@@ -1014,9 +1014,7 @@ function GetExport()
     // if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
       // protocolparam = protocolparam + "," + $("ExportCompress").value;
     var RecordSet = $("ExportRecordSet").value;
-        alert("getting rebin args");
     ExportProcessingArgs = GetRebinArgs();
-        alert("args: ExportProcessingArgs");
     var exportparameters = new Hash( {"op" : $("ExportOpID").value,
                  		      "ds" : RecordSet, 
                  		      "process" :  ExportProcessingArgs,
