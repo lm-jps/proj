@@ -24,8 +24,8 @@ pro flat_inorbit, year, month, day, cam, focus,ftsid,flatfield,time_stamp=time_s
 print, systime()
 
 if not keyword_set(drk) then begin
-make_dark, year, month, day, cam, ftsid, time_stamp_dark, drk, write=write
-
+;make_dark, year, month, day, cam, ftsid, time_stamp_dark, drk, write=write
+make_dark, year, month, day, cam, ftsid, time_stamp_dark, drk
 endif
 
 
@@ -278,9 +278,9 @@ writeu,1,im
 close,1
 
 print, 'calculate flatfield'
-print, "./flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
+print, "/home/jeneen/cvs/JSOC/bin/linux_x86_64/flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
 
-spawn, "./flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
+spawn, "/home/jeneen/cvs/JSOC/bin/linux_x86_64/flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
 
 print, 'read flatfield'
 
@@ -318,8 +318,8 @@ endif
 
 
 
-ingest_string='write_offpoint instrument="HMI" file_offpoint="'+filename_flatfield+'" series_offpoint="hmi.offpoint_flatfield" camera='+string(cam, format='(i1.1)')+' pztflag=0 focus='+string(focus, format='(i2.2)')+' t_obs="'+time_stamp+'" fsn_list_offpoint='+strcompress(string(min(fsn_list)),/rem)+','+strcompress(string(max(fsn_list)),/rem)
-
+;ingest_string='write_offpoint instrument="HMI" file_offpoint="'+filename_flatfield+'" series_offpoint="hmi.offpoint_flatfield" camera='+string(cam, format='(i1.1)')+' pztflag=0 focus='+string(focus, format='(i2.2)')+' t_obs="'+time_stamp+'" fsn_list_offpoint='+strcompress(string(min(fsn_list)),/rem)+','+strcompress(string(max(fsn_list)),/rem)
+ingest_string='write_offpoint instrument="HMI" file_offpoint="'+filename_flatfield+'" series_offpoint="hmi.inspect_offpoint_ff" camera='+string(cam, format='(i1.1)')+' pztflag=0 focus='+string(focus, format='(i2.2)')+' t_obs="'+time_stamp+'" fsn_list_offpoint='+strcompress(string(min(fsn_list)),/rem)+','+strcompress(string(max(fsn_list)),/rem)
 print, ingest_string
 
 openw,1,'ingest_command_'+camerastr[cam-1]+'_'+focstr+'_'+string(fsn_list[0],format='(i8.8)')+'.csh'
