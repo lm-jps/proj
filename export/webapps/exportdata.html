@@ -5,8 +5,13 @@
 <TITLE>JSOC Export Data</TITLE>
     
 <!-- Global 'variable' that contains the path to the directory containing all files to be included into this one -->
-<input type='hidden' id='context' value='artswebapps' />
-     
+    
+<!--
+<input type='hidden' id='context' value='artswebapps/' />
+-->
+    
+<input type='hidden' id='context' value='' />
+ 
 <SCRIPT TYPE="text/javascript" SRC="js/prototype-1.6.0.3.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/cookies.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
@@ -14,12 +19,12 @@
 
 <!-- Add functions for export processing options, section 1 of 7 -->
 <script type="text/javascript">
-    var scpath="<script type='text/javascript' src='" + $("context").value + "/exportdata.d/processing.js'><\/script>";
+    var scpath="<script type='text/javascript' src='" + $("context").value + "exportdata.d/processing.js'><\/script>";
     document.write(scpath);
 </script>
 <!-- Add functions for export protocol options, section 1 of X -->
 <script type="text/javascript">
-    var scpath="<script type='text/javascript' src='" + $("context").value + "/exportdata.d/protocols.js'><\/script>";
+    var scpath="<script type='text/javascript' src='" + $("context").value + "exportdata.d/protocols.js'><\/script>";
     document.write(scpath);
 </script>
 
@@ -1499,7 +1504,7 @@ access the data.
     </TR>
   
     <!-- Processing selection detail rows go here. section 7 of 7 -->
-    <!--#include virtual="artswebapps/exportdata.d/processing.html" -->
+    <!--#include virtual="exportdata.d/processing.html" -->
   
     <TR ID="ProtocolRow">
       <TD>Protocol</TD>
