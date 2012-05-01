@@ -11,7 +11,7 @@
 -->
     
 <input type='hidden' id='context' value='' />
- 
+
 <SCRIPT TYPE="text/javascript" SRC="js/prototype-1.6.0.3.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/cookies.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
@@ -506,24 +506,73 @@ function GetSeriesList(filter)
 
 function GetRSCount()
   {
-  var posbracket = $("ExportRecordSet").value.indexOf("[");
-  var posRbracket = $("ExportRecordSet").value.lastIndexOf("]");
-  if (posbracket == -1)
-    {
-    Seriesname = $("ExportRecordSet").value;
-    if (posRbracket == -1)
+      // There was a bug here. The record-set specification might have a segment 
+      // specifier (e.g., {data}), in which case you do not want to append [$]. The [$] needs to
+      // be placed between the series name and the segment specifier.
+      
+      // DO NOT USE THE RegExp OBJECT!! IT DOESN'T WORK - YOU CANNOT PUT METACHARACTERS
+      // LIKE \w IN THE STRING ARGUMENT, DESPITE DOCUMENTATION SAYING YOU CAN DO THIS.
+      // IT PROBABLY HAS TO BE ESCAPED PROPERLY.
+      var filtRE = /^\s*[A-z]\w*\.\w+[\[]/;
+
+      // Extract series name from record-set specification
+      var seriesRE = /^\s*[A-z]\w*\.\w+/;
+      var series = seriesRE.exec($("ExportRecordSet").value); // array
+      
+      if (!filtRE.test($("ExportRecordSet").value))
       {
-      if (RecordLimit == 0)
-        $("ExportRecordSet").value = $("ExportRecordSet").value + '[$]';
+          // alert("no filter");
+          // No filter
+          var noFiltSegRE = /^\s*[A-z]\w*\.\w+\{[\*_A-z0-9]+\}\s*$/;
+          var noFiltRE = /^\s*[A-z]\w*\.\w+\s*$/;
+          
+          if (noFiltSegRE.test($("ExportRecordSet").value))
+          {
+              // alert("has seg spec");
+              // A seg specifier exists - place "[$]" between series and seg specifier
+              var segspecRE = /\{[\*_A-z0-9]+\}/;
+              var segspec = segspecRE.exec($("ExportRecordSet").value); // array
+              
+              if (RecordLimit == 0)
+              {
+                  $("ExportRecordSet").value = series[0] + '[$]' + segspec[0];
+              }
+          }
+          else if (noFiltRE.test($("ExportRecordSet").value))
+          {
+              // alert("has NO seg spec");
+              // No filter and no seg specifier present              
+              if (RecordLimit == 0)
+              {
+                  $("ExportRecordSet").value = series[0] + '[$]';
+              }
+          }
+          else
+          {
+              // Invalid record-set specification
+              alert("bad record-set specification: " + $("ExportRecordSet").value);
+              $("RSCountPlace").innerHTML = "ERROR - invalid record-set specification.";
+              return;
+          }
       }
-    else
+      else
       {
-      $("RSCountPlace").innerHTML = "ERROR - missing left bracket - [";
-      return;
+          // alert("has filter");
+          // Filter exists, verify that record-set specification is valid
+          var fullFiltSegRE = /^\s*[A-z]\w*\.\w+(\[.+\])+\{[\*_A-z0-9]+\}\s*$/;
+          var fullFiltRE = /^\s*[A-z]\w*\.\w+(\[[^\[\]]*\])+\s*$/;
+          
+          if (!fullFiltSegRE.test($("ExportRecordSet").value) && 
+              !fullFiltRE.test($("ExportRecordSet").value))
+          {
+              alert("bad record-set specification: " + $("ExportRecordSet").value);
+              $("RSCountPlace").innerHTML = "ERROR - invalid record-set specification.";
+              return;
+          }
       }
-    }
-  posbracket = $("ExportRecordSet").value.indexOf("[");
-  SeriesName = $("ExportRecordSet").value.substr(0,posbracket);
+      
+      SeriesName = series[0];
+                                      
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCountPlace").innerHTML = "Getting count - wait...";
   RecordCount = -1;
