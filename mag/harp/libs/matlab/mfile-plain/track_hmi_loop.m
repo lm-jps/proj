@@ -503,7 +503,9 @@ fn = sprintf(hooks.filename.template, 'jsoc', '-post', '', 'mat');
 [junk1,junk2] = mkdir(fileparts(fn)); % ensure the dir exists
 % truncate ROI_s
 ROI_s = hmi_rois_truncate(ROI_s, hooks.retain_history);
-save(fn, 'ROI_t', 'ROI_s', 'ROI_rgn');
+% save as -v7.3 because ROI_s can be larger than 2GB after unpacking
+% (v7.0 is the default)
+save(fn, 'ROI_t', 'ROI_s', 'ROI_rgn', '-v7.3');
 % loop over all allocated tracks
 for t = find([ROI_t(:).tid] >= 0),
   tracker_close_track(t, hooks, 'pending'); % still pending
