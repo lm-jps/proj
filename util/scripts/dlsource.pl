@@ -69,6 +69,9 @@
 #  -F If a tagged checkout occurs as a result of other options, then tell CVS to retrieve the most recent
 #       file version of any file that is part of the file-set, but is not tagged with the tag provided
 #       by the -r or -R option.
+#  -s This argument can only be provided if the -o flag is update, tag, or untag. This argument contains 
+#     a comma-separated list of file specifications. The files specified by this list must exist in the
+#     working directory.
 
 use XML::Simple;
 use IO::Dir;
@@ -112,6 +115,8 @@ use constant kTmpDir => "/tmp/chkout/";
 use constant kTypeFile => "dlset.txt";
 use constant kSuFlagFile => "suflag.txt";
 
+use constant kMaxFileSpecs => 50;
+
 
 my($arg);
 my($cotype);
@@ -141,6 +146,10 @@ my($forceco);
 my(@filespec); # the complete file spec for all types of file-sets
 my(@pfilespec); # for custom file-set types, the file spec of the files in the configuration file
 my(@bfilespec); # for custom file-set types, the file spec of the files NOT in the configuration file
+my(@cmdlspec); # can specify file specifications on the cmd-line.
+my($actcvs); # if the user provided a cmdlspec, then this var holds the cvs command used to update
+             # the files specified by $cmdlspec.
+my(@actspec); # The actual file specification that was used to download files from the repository.
 
 # Don't allow more than one version of this file to run concurrently to avoid race conditions.
 unless (flock(DATA, LOCK_EX | LOCK_NB)) 
@@ -247,10 +256,19 @@ while ($arg = shift(@ARGV))
    {
       $forceco = 1;
    }
+    elsif ($arg eq "-s")
+    {
+        $arg = shift(@ARGV);
+        @cmdlspec = split(/,/, $arg);
+    }
 }
 
 if (!$err)
 {
+    my($inparent); # if 1, curr dir is the parent of JSOC root dir.
+    my($rootdir);
+    
+    $inparent = 0;
    if (defined($cfgfile))
    {
       # Custom checkout - if the user is performing an update, then use the file spec saved
@@ -274,9 +292,9 @@ if (!$err)
    if ($dltype eq kDlCheckout || $dltype eq kDlExport || $dltype eq kDlUpdate)
    {
       # Set the state file path.
-      my($rootdir) = File::Spec->catdir(kRootDir);
+      $rootdir = File::Spec->catdir(kRootDir);
       #my($cdir) = File::Spec->catdir($ENV{'PWD'});
-      my($cdir) =realpath($ENV{'PWD'});
+      my($cdir) = realpath($ENV{'PWD'});
 
       $stfile = kLocDir . kTypeFile;
       $stfileold = kSuFlagFile;
@@ -286,6 +304,7 @@ if (!$err)
          # Assume that the current directory is the parent of the JSOC code tree.
          $stfile = kRootDir . $stfile;
          $stfileold = kRootDir . $stfileold;
+          $inparent = 1;
       }
    }
 
@@ -347,8 +366,23 @@ if (!$err)
       $err = 1;
    }
    else
-   {
-      if (BuildFilespec($cotype, $dltype, $stfspec, $xmldata, \@core, \@netonly, \@sdponly, \@filespec, \@bfilespec, \@pfilespec))
+   { 
+       my(@cmdlspecrel);
+       
+       if ($#cmdlspec >= 0)
+       {
+           if ($inparent)
+           {
+               # Prepend each spec with the $rootdir
+               @cmdlspecrel = map({($rootdir . $_)} @cmdlspec);
+           }
+           else
+           {
+               @cmdlspecrel = @cmdlspec;
+           }
+       }
+       
+      if (BuildFilespec($cotype, $dltype, $stfspec, $xmldata, \@core, \@netonly, \@sdponly, \@filespec, \@bfilespec, \@pfilespec, \@cmdlspecrel))
       {
          print STDERR "Unable to build filespec.\n";
          $err = 1;
@@ -383,19 +417,25 @@ if (!$err)
             my($cdir) = realpath($ENV{'PWD'});
 
             print "dlsource.pl: rootdir == $rootdir, cdir == $cdir.\n";
-
             if ($cdir =~ /$rootdir\s*$/)
             {
                # The current directory is the CVS working directory.
                $curdir = $ENV{'PWD'};
-               $err = (chdir('..') == 0);
+                $err = (chdir('..') == 0) ? 1 : 0;
             }
          }
 
          # Do a cvs checkout, export, or update into the current directory
          if (!$err)
          {
-            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec, $logfile, $forceco, \@netfilter, \@sdpfilter);
+             # @filespec - the complete set of files that reside on the server for the current check-out type.
+             # @bfilespec - for non-custom check-out, the set of files to update or checkout. For 
+             #              custom check-out, the set of files in the base dir to update or checkout.
+             # @pfilespec - for custom check-out, the set of files in the proj dir to update or checkout.
+             # @actspec - the spec actually used with the cvs command. Might differ from the others if
+             #            an export was done and undesirable files were filtered out.
+            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec, $logfile, $forceco, \@netfilter, \@sdpfilter, \$actcvs, \@actspec);
+
             if ($err)
             {
                print STDERR "Unable to $dltype CVS tree.\n";
@@ -409,7 +449,7 @@ if (!$err)
                {
                   my($cvscmd) = "cvs update -A " . kRootDir . kSuFlagFile . " " . kRootDir . "jsoc_sync.pl " . kRootDir . "jsoc_update.pl";
 
-                  if (CallCVS($cvscmd, $logfile))
+                  if (CallCVS($cvscmd, $logfile, 0))
                   {
                      print STDERR "Unable to run $cvscmd.\n";
                      $err = 1;
@@ -422,79 +462,179 @@ if (!$err)
                }
             }
          }
-
+          
          if (!$err)
          {
             # Assumes that the cdir is the one containing kRootDir
             if ($dltype eq kDlCheckout || $dltype eq kDlExport || $dltype eq kDlUpdate)
             {
-               if (!(-d kRootDir . kLocDir))
-               {
-                  mkpath(kRootDir . kLocDir);
-               }
+                my($typefile);
+                my($tmptypefile);
+                my($ierr) = 0;
+                
+                $typefile = &kRootDir . &kLocDir . &kTypeFile;
+                $tmptypefile = &kRootDir . &kLocDir . "." . &kTypeFile . ".tmp";
+                if (!(-d kRootDir . kLocDir))
+                {
+                    mkpath(kRootDir . kLocDir);
+                }
+                
+                # Copy original version of TYPEFILE
+                if (-e $typefile)
+                {
+                    copy($typefile, $tmptypefile);
+                }
 
-               # save state file
-               if (open(TYPEFILE, ">" . kRootDir . kLocDir . kTypeFile))
-               {
-                  # save check-out type                 
-                  print TYPEFILE "$cotype\n";
-
-                  # print file spec used during checkout
-                  if (!$err)
-                  {
-                     my($fs) = join(' ', @filespec);
-                     print TYPEFILE "$fs\n";
-                  }
-
-                  # Now print list of files that compose the file set.
-                  if (!$err)
-                  {
-                     if ($dltype eq kDlUpdate)
-                     {
+                # save state file
+                if (open(TYPEFILE, ">" . $typefile))
+                {
+                    # save check-out type                 
+                    print TYPEFILE "$cotype\n";
+                    
+                    # print file spec used during checkout
+                    my($fs) = join(' ', @filespec);
+                    print TYPEFILE "$fs\n";                  
+                    
+                    # Now print list of files that compose the file set.
+                    if ($dltype eq kDlUpdate)
+                    {
                         # Must print each tree in file specification, since
-                        # the tree rooted at kRootDir may not contain
+                        # the tree rooted at kRootDir may contain
                         # files other than the files originally downloaded
                         # from CVS (e.g., running make will create new 
                         # files).
-                        foreach $subspec (@filespec)
+                        
+                        # The update may have downloaded additional files that were not
+                        # in the original check-out set. And, only a subset of files 
+                        # may have been updated. So, read in the previous set of 
+                        # files in the TYPEFILE, then add to this list files new files
+                        # that were downloaded by the update.
+                        my(@combined);
+                        my(@sorted);
+                        my(@listf);
+                        my($sdir);
+                        my(@oldflist);
+                        my(@dlist);
+                        my(%seen);
+                        my($lastindx);
+                        
+                        # Read-in the list of files in the old TYPEFILE.
+                        if (open(OLDTYPEFILE, "<" . $tmptypefile))
                         {
-                           if (PrintFilenames(*TYPEFILE, kRootDir . $subspec))
-                           {
-                              print STDERR "Unable to print file-set file names.\n";
-                              $err = 1;
-                              last;
-                           }
+                            @oldflist = <OLDTYPEFILE>;
+                            $lastindx = $#oldflist;          
+                            push(@combined, @oldflist[2..$lastindx]);
+                            close(OLDTYPEFILE);
+
+                            # Export-download the update filespec into the tmp directory. The 
+                            # user may have provided a cmd-line spec, in which case it should
+                            # be used for the download, and not the full file spec. The previous
+                            # DownloadTree() did perform this logic, and saved the cvs command
+                            # used in $actcvs.
+                            if (!(-d kTmpDir))
+                            {
+                                # no need to check this call, because the chdir() cmd is being checked.
+                                mkpath(kTmpDir);
+                            }
+                            
+                            $sdir = $ENV{'PWD'};
+                            if (chdir(kTmpDir) == 0)
+                            {
+                                print STDERR "Unable to cd to " . kTmpDir . ".\n";
+                                $ierr = 1;
+                            }
+                            else
+                            {
+                                # The $actcvs command won't be quite right. We need to change the
+                                # word 'update -APd' to export, and if there is no '-r' flag, we need to 
+                                # add '-r HEAD' after update.
+                                $actcvs =~ s/update\s+-APd\s+/export /;
+                                if ($actcvs !~ /-r\s/)
+                                {                                    
+                                    $actcvs =~ s/export\s/export -r HEAD /;
+                                }
+                                
+                                unless (CallCVSInChunks($actcvs, \@actspec, undef, 1))
+                                {
+                                    unless (GetFileList(&kTmpDir . &kRootDir, "", \@dlist))
+                                    {
+                                        # Combine the list of files in the downloaded tree with the list of
+                                        # files in @combined.
+                                        my($tmpdiri) = &kTmpDir;
+                                        foreach my $afile (@dlist)
+                                        {
+                                            # remove &kTmpDir
+                                            $afile =~ s/$tmpdiri//;
+                                            push(@combined, "$afile\n");
+                                        }
+                                        
+                                        # Sort and extract list of unique file names.
+                                        @sorted = sort(@combined);
+                                        @listf = map({ unless ($seen{$_}++){($_)}else{()} } @sorted);
+                                        
+                                        # Finally, print list.
+                                        foreach my $afile (@listf)
+                                        {
+                                            print TYPEFILE $afile;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        $ierr = 1;
+                                    }
+                                                   
+                                    remove_tree(&kTmpDir);
+                                }
+                                else
+                                {
+                                    $ierr = 1;
+                                }
+                                
+                                chdir($sdir);
+                            }
                         }
-                     }
-                     else
-                     {
-                        if (PrintFilenames(*TYPEFILE, kRootDir))
+                        else
                         {
-                           print STDERR "Unable to print file-set file names.\n";
-                           $err = 1;
+                            print STDERR "Unable to open $tmptypefile for reading.\n";
+                            $ierr = 1;
                         }
-                     }
-                  }
-
-                  close(TYPEFILE);
-               }
-               else
-               {
-                  print STDERR "Unable to open file " . kRootDir . kLocDir . kTypeFile . " for writing.\n";
-               }
-
-               # Copy the cvs update log, if it exists, back to the kRootDir (programs calling this script)
-               # expect it in kRootDir.
-               if (defined($logfile) && -e $logfile)
-               {
-                  # cp $logfile kRootDir
-                  if (!copy($logfile, kRootDir))
-                  {
-                     # copy failure
-                     print STDERR "Unable to copy log file $logfile to " . kRootDir . ".\n";
-                     $err = 1;
-                  }
-               }
+                    }
+                    else
+                    {
+                        print "woohoo.\n";
+                        
+                        if (PrintFilenames(*TYPEFILE, kRootDir, 1, qr(\/CVS\/)))
+                        {
+                            print STDERR "Unable to print file-set file names.\n";
+                            $ierr = 1;
+                        }
+                    }
+                    
+                    close(TYPEFILE);
+                }
+                else
+                {
+                    print STDERR "Unable to open file " . kRootDir . kLocDir . kTypeFile . " for writing.\n";
+                    $ierr = 1;
+                }
+                
+                if (!$ierr && -e $tmptypefile)
+                {
+                    unlink($tmptypefile);
+                }
+                
+                # Copy the cvs update log, if it exists, back to the kRootDir (programs calling this script)
+                # expect it in kRootDir.
+                if (defined($logfile) && -e $logfile)
+                {
+                    # cp $logfile kRootDir
+                    if (!copy($logfile, kRootDir))
+                    {
+                        # copy failure
+                        print STDERR "Unable to copy log file $logfile to " . kRootDir . ".\n";
+                        $err = 1;
+                    }
+                }
             }
             elsif ($dltype eq kDlTag || $dltype eq kDlUntag)
             {
@@ -534,7 +674,7 @@ if (!$err)
             }
             elsif ($dltype eq kDlPrint || $dltype eq kDlPrintRelease)
             {
-               if (PrintFilenames(*STDOUT, kTmpDir . kRootDir))
+               if (PrintFilenames(*STDOUT, kTmpDir . kRootDir, 0))
                {
                   print STDERR "Unable to print file set file names.\n";
                   $err = 1;
@@ -654,6 +794,9 @@ sub ReadCfg
    return $rv;
 }
 
+# fsout - The full file spec for the given type of checkout.
+# bfsout - Same as fsout. Used only for custom checkouts.
+# pfsout - For custom checkouts only. This is the project-directory file spec.
 sub BuildFilespec
 {
    my($cotype) = $_[0];
@@ -666,64 +809,142 @@ sub BuildFilespec
    my($fsout) = $_[7];
    my($bfsout) = $_[8];
    my($pfsout) = $_[9];
-
+   my($cmdlspec) = $_[10]; # Altenate file spec - use in place of $core, $netonly, and $sdponly.
+                            # Can be used only for an update, tag, or untag download type.
+    
    my($rv);
-   my($strproj) = kStrproj;
-   my($strname) = kStrname;
+   my($strproj) = &kStrproj;
+   my($strname) = &kStrname;
 
    $rv = 0;
-
-   if ($cotype eq kCoCustom && $dltype eq kDlUpdate && (!defined($xmldata) || $#{$xmldata->{$strproj}} < 0))
-   {
-      # If this is an update of a custom checkout, and the user did not provide a config-file argument,
-      # then use the file spec stored in the existing typefile
-      if (defined($stfspec) && length($stfspec) > 0)
-      {
-         @$fsout = qw($stfspec);
-      }
-      else
-      {
-         print STDERR "Invalid file specification in state file.\n";
-         $rv = 1;
-      }
-   }
-   else
-   {
-      if ($cotype eq kCoNetDRMS)
-      {
-         push(@$fsout, @$core);
-         push(@$fsout, @$netonly);
-         push(@$bfsout, @$fsout);
-      }
-      elsif ($cotype eq kCoSdp)
-      {
-         push(@$fsout, @$core);
-         push(@$fsout, @$sdponly);
-         push(@$bfsout, @$fsout);
-      }
-      elsif ($cotype eq kCoCustom)
-      {
-         push(@$fsout, @$core);
-         push(@$fsout, @$netonly);
-         push(@$bfsout, @$fsout);
-
-         # If there is a -R flag, then it applies only to the checkout of project directories specified in 
-         # the config file - so keep these files separate from the rest. @$bfsout contains the files in base, 
-         # @$pfsout contains the files in proj.
-
-         # Use $xmldata to populate @pfsout and @fsout
-         foreach $proj (@{$xmldata->{$strproj}})
-         {
-            push(@$fsout, kProjSubdir . "/" . $proj->{$strname}->[0]);
-            push(@$pfsout, kProjSubdir . "/" . $proj->{$strname}->[0]);
-         }
-      }
-      else
-      {
-         print STDERR "Unsupported checkout type $cotype.\n";
-         $rv = 1;
-      }
-   }
+    
+    if ($#cmdlspec >= 0)
+    {
+        if ($cotype ne kCoCustom && ($dltype eq kDlUpdate || $dltype eq kDlTag || $dltype eq kDlTag))
+        {
+            my($compflistH);
+            my(@fset);
+            
+            # Ensure that files represented by the specs in $cmdlspec exist in the current workspace.
+            foreach my $spec (@$cmdlspec)
+            {
+                if (!(-e $spec))
+                {
+                    print STDERR "Invalid cmd-line file specification $spec.\n";
+                    $rv = 1;
+                    last;
+                }
+            }
+            
+            # Should also ensure that files specified on the cmd-line are actually part of the current 
+            # check-out type (net, sdp, or custom). To obtain the list of the current check-out set, 
+            # we need to check out everything in the appropriate definitive file spec (as an export).
+            
+            # This function returns a hash whose element keys are file names. If the filename-key
+            # represents a regualar file, then the value for the key is 'f'. If the filename-key
+            # represents a directory, then the value for this key is a hash with one element
+            # per file in this directory. 
+            # 
+            # If there is a regular file in $cmdlspec, then traverse $compflistH until the 
+            # parent directory is found. Then verify that the regular file is in the hash
+            # of this parent directory. If it is found, then add the regular file
+            # to the array of file-specs returned to the caller. If there is a directory in $cmdlspec, 
+            # traverse $compflistH until the directory is found. Then collect ALL regular files rooted
+            # at this directory and add those to the array of file-specs returned to the caller.
+            if (!$rv)
+            {
+                $compflistH = GetDefinitiveFileSet($cotype, $core, $netonly, $sdponly, $xmldata, $stfspec);
+                
+                foreach my $spec (@$cmdlspec)
+                {
+                    @fset = CollectFiles($spec, $compflistH);
+                    if ($#fset >= 0)
+                    {
+                        # ART - If this is a custom check-out, then this is wrong. We'd need to 
+                        # sort the files into those in the proj dir, and those in the base dir,
+                        # then put the proj-dir ones into $fpsout. But there is too much to do,
+                        # so for now ignore the custom check-out case.
+                        push(@$bfsout, @fset);
+                    }
+                    else
+                    {
+                        print STDERR "Warning: Invalid cmd-line file specification $spec.\n";
+                    }
+                }
+                
+                # fill in the complete set of files
+                if ($cotype eq kCoNetDRMS)
+                {
+                    push(@$fsout, @$core);
+                    push(@$fsout, @$netonly);
+                }
+                elsif ($cotype eq kCoSdp)
+                {
+                    push(@$fsout, @$core);
+                    push(@$fsout, @$sdponly);
+                }
+            }
+        }
+        else
+        {
+            print STDERR "No support for cmd-line file specification with this check-out type/operation.\n";
+            $rv = 1;
+        }
+    }    
+    else
+    {
+        if ($cotype eq kCoCustom && $dltype eq kDlUpdate && (!defined($xmldata) || $#{$xmldata->{$strproj}} < 0))
+        {
+            # If this is an update of a custom checkout, and the user did not provide a config-file argument,
+            # then use the file spec stored in the existing typefile
+            if (defined($stfspec) && length($stfspec) > 0)
+            {
+                @$fsout = qw($stfspec);
+            }
+            else
+            {
+                print STDERR "Invalid file specification in state file.\n";
+                $rv = 1;
+            }
+        }
+        else
+        {
+            if ($cotype eq kCoNetDRMS)
+            {
+                push(@$fsout, @$core);
+                push(@$fsout, @$netonly);
+                push(@$bfsout, @$fsout);
+            }
+            elsif ($cotype eq kCoSdp)
+            {
+                push(@$fsout, @$core);
+                push(@$fsout, @$sdponly);
+                push(@$bfsout, @$fsout);
+            }
+            elsif ($cotype eq kCoCustom)
+            {
+                push(@$fsout, @$core);
+                push(@$fsout, @$netonly);
+                push(@$bfsout, @$fsout);
+                
+                # If there is a -R flag, then it applies only to the checkout of project directories specified in 
+                # the config file - so keep these files separate from the rest. @$bfsout contains the files in base, 
+                # @$pfsout contains the files in proj.
+                
+                # Use $xmldata to populate @pfsout and @fsout
+                foreach $proj (@{$xmldata->{$strproj}})
+                {
+                    push(@$fsout, kProjSubdir . "/" . $proj->{$strname}->[0]);
+                    push(@$pfsout, kProjSubdir . "/" . $proj->{$strname}->[0]);
+                }
+            }
+            else
+            {
+                print STDERR "Unsupported checkout type $cotype.\n";
+                $rv = 1;
+            }
+        }
+    }
 
    return $rv;
 }
@@ -792,6 +1013,8 @@ sub DownloadTree
    my($forceco) = $_[8];
    my($netfilter) = $_[9];
    my($sdpfilter) = $_[10];
+    my($actualcvs) = $_[11];
+    my($actualspec) = $_[12];
 
    my($rv) = 0;
    my($curdir);
@@ -957,9 +1180,10 @@ sub DownloadTree
       {
          $cvscmd = "$cvscmd $forcecostr";
       }
-
-      @relpaths = map({kRootDir . "$_"} @{$bfspec});
-
+       
+       @relpaths = map({kRootDir . "$_"} @{$bfspec});           
+       
+       # Filter out undesired files. $filter contains a black list.
       if (defined($filterdir))
       {
          # We need to filter out undesirables - checkout into temp dir now (which we cded to above).
@@ -974,7 +1198,7 @@ sub DownloadTree
          else
          {
             # Check-out all files from repository (will filter out the non-release files below).
-            if (CallCVS($tcmd, $log))
+            if (CallCVS($tcmd, $log, 0))
             {
                print STDERR "Unable to $dltype repository files.\n";
                $rv = 1;
@@ -1014,9 +1238,19 @@ sub DownloadTree
          chdir($filterdir);
       }
 
-      $cmd = join(' ', "cvs", $cvscmd, $rev, @relpaths);
-
-      if (CallCVS($cmd, $log))
+      $cmd = join(' ', $cvscmd, $rev);
+       
+       if (defined($actualcvs))
+       {
+           $$actualcvs = $cmd;
+       }
+       
+       if (defined($actualspec))
+       {
+           @$actualspec = @relpaths;
+       }
+       
+       if (CallCVSInChunks($cmd, \@relpaths, $log, 0))
       {
          print STDERR "Unable to $dltype repository files.\n";
          $rv = 1;
@@ -1050,7 +1284,7 @@ sub DownloadTree
                else
                {
                   # Check-out all files from repository (will filter out the non-release files below).
-                  if (CallCVS($tcmd, $log))
+                  if (CallCVS($tcmd, $log, 0))
                   {
                      print STDERR "Unable to $dltype repository files.\n";
                      $rv = 1;
@@ -1089,7 +1323,7 @@ sub DownloadTree
 
             $cmd = join(' ', "cvs", $cvscmd, $prev, @relpaths);
 
-            if (CallCVS($cmd, $log))
+            if (CallCVS($cmd, $log, 0))
             {
                print STDERR "Unable to $dltype repository files.\n";
                $rv = 1;
@@ -1097,7 +1331,7 @@ sub DownloadTree
          }
       }
    }
-
+    
    return $rv;
 }
 
@@ -1123,7 +1357,7 @@ sub TagFiles
       $cmd = "cvs tag -d $tag ."
    }
    
-   if (CallCVS($cmd, $logfile))
+   if (CallCVS($cmd, $logfile, 0))
    {
       print STDERR "Unable to tag repository files.\n";
       $rv = 1;
@@ -1136,6 +1370,8 @@ sub PrintFilenames
 {
    my($fh) = $_[0];
    my($froot) = $_[1];
+    my($sort) = $_[2];
+    my($regexp) = $_[3];
 
    my($rv) = 0;
    my(@allfiles);
@@ -1147,13 +1383,58 @@ sub PrintFilenames
    }
    else
    {
-      foreach $afile (@allfiles)
-      {
-         print $fh "$afile\n";
-      }
+       my(@final);
+       
+       if ($sort)
+       {
+           @final = sort(@allfiles);
+       }
+       else
+       {
+           @final = @allfiles;
+       }
+       
+       foreach $afile (@final)
+       {
+           if (defined($regexp))
+           {
+               if ($afile !~ $regexp)
+               {
+                   print $fh "$afile\n";
+               }
+           }
+           else
+           {
+               print $fh "$afile\n";
+           }
+       }
    }
 
    return $rv;
+}
+
+sub SPrintFilenames
+{
+    my($listA) = $_[0];
+    my($froot) = $_[1];
+    
+    my($rv) = 0;
+    my(@allfiles);
+    
+    if (GetFileList($froot, "", \@allfiles))
+    {
+        print STDERR "Unable to retrieve list of files rooted at $froot.\n";
+        $rv = 1;
+    }
+    else
+    {
+        foreach $afile (@allfiles)
+        {
+            push(@$listA, "$afile");
+        }
+    }
+    
+    return $rv;
 }
 
 # Returns a list of all files in the code tree rooted at $spec. The names of each file
@@ -1234,6 +1515,7 @@ sub CallCVS
 {
    my($cmd) = $_[0];
    my($log) = $_[1];
+    my($silent) = $_[2];
 
    my($rv) = 0;
    my($callstat);
@@ -1242,10 +1524,14 @@ sub CallCVS
    {
       system("$cmd 1>$log 2>&1");
    }
-   else
+   elsif ($silent)
    {
-      system($cmd);
+      system("$cmd 1>/dev/null 2>&1");
    }
+    else
+    {
+        system($cmd);
+    }
 
    $callstat = $?;
 
@@ -1267,6 +1553,51 @@ sub CallCVS
    }
 
    return $rv;
+}
+
+sub CallCVSInChunks
+{
+    my($cmd) = $_[0];
+    my($specs) = $_[1];
+    my($log) = $_[2];
+    my($silent) = $_[3];
+    
+    my(@chunk);
+    my($fullcmd);
+    my($rv);
+    
+    $rv = 0;
+    
+    # Submit with kMaxFileSpecs file specs at most.
+    foreach my $aspec (@$specs)
+    {
+        push(@chunk, $aspec);
+        
+        if ($#chunk == &kMaxFileSpecs - 1)
+        {
+            $fullcmd = join(' ', "cvs", $cmd, @chunk);
+            if (CallCVS($fullcmd, $log, $silent))
+            {
+                $rv = 1;
+                last;
+            }
+            
+            @chunk = ();
+        }
+    }
+    
+    if ($#chunk >= 0)
+    {
+        $fullcmd = join(' ', "cvs", $cmd, @chunk);
+        if (CallCVS($fullcmd, $log, $silent))
+        {
+            $rv = 1;
+        }
+     
+        @chunk = ();
+    }
+    
+    return $rv;
 }
 
 sub MoveFiles
@@ -1314,6 +1645,234 @@ sub MoveFiles
 
    return $rv;
 }
+
+sub InsertFile
+{
+    my($root) = shift;
+    my($afile) = shift; 
+    my($hash) = $_[0];
+    
+    my($top);
+    my($bot);
+    
+    if ($afile =~ /^([^\/]+)\/(.+)$/)
+    {
+        $top = $1;
+        $bot = $2;
+        
+        if (!exists($hash->{$top}))
+        {
+            $hash->{$top} = {};
+        }
+        
+        if (length($root) > 0)
+        {
+            InsertFile("$root/$top", $bot, $hash->{$top});
+        }
+        else
+        {
+            InsertFile($top, $bot, $hash->{$top});
+        }
+    }
+    else
+    {
+        $hash->{$afile} = $root;
+    }
+}
+
+sub GetDefinitiveFileSet
+{
+    my($cotype) = $_[0];
+    my($core) = $_[1];
+    my($netonly) = $_[2];
+    my($sdponly) = $_[3];
+    my($xmldata) = $_[4];
+    my($stfspec) = $_[5];
+    my($version) = $_[6];
+    my($pversion) = $_[7];
+    
+    my($sdir);
+    my(@dlist);
+    my(@flist);
+    my(@sorted);
+    my($listf);
+    my($cmdlcvs);
+    my(%seen);
+    my($ierr);
+    my($rv);
+    
+    $rv = {};
+    
+    if (!(-d &kTmpDir))
+    {
+        # no need to check this call, because the chdir() cmd is being checked.
+        mkpath(kTmpDir);
+    }
+    
+    $sdir = $ENV{'PWD'};
+    if (chdir(kTmpDir) == 0)
+    {
+        print STDERR "Unable to cd to " . kTmpDir . ".\n";
+        $ierr = 1;
+    }
+    else
+    {
+        my(@allspecs);
+        my(@wroot);
+
+        $cmdlcvs = "cvs export ";
+        
+        if ($cotype eq &kCoSdp || $cotype eq &kCoNetDRMS)
+        {
+            if (length($version) > 0)
+            {
+                $cmdlcvs = $cmdlcvs . "-r $version ";
+            }
+            else
+            {
+                $cmdlcvs = $cmdlcvs . "-r HEAD ";
+            }
+            
+            if ($cotype eq &kCoSdp)
+            {
+                @wroot = map({kRootDir . "$_"} @{$core});
+                push(@allspecs, @wroot);
+                @wroot = map({kRootDir . "$_"} @{$sdponly});
+                push(@allspecs, @wroot);
+
+                $cmdlcvs = join(' ', $cmdlcvs, @allspecs);
+
+            }
+            else
+            {
+                @wroot = map({kRootDir . "$_"} @{$core});
+                push(@allspecs, @wroot);
+                @wroot = map({kRootDir . "$_"} @{$sdponly});
+                push(@allspecs, @wroot);
+
+                $cmdlcvs = join(' ', $cmdlcvs, @allspecs);
+            }
+        }
+        else
+        {
+            # ??
+            print STDERR "Can't specify cmd-line file spec for custom check-out type.\n";
+            $ierr = 1;
+        }
+        
+        if (!$ierr)
+        {
+            unless (CallCVS($cmdlcvs, undef, 1))
+            {
+                unless (GetFileList(&kTmpDir . &kRootDir, "", \@dlist))
+                {
+                    my($prefdiri) = &kTmpDir . &kRootDir;
+
+                    foreach my $afile (@dlist)
+                    {
+                        # remove &kTmpDir . &kRootDir
+                        $afile =~ s/$prefdiri//;
+                        push(@flist, "$afile");
+                    }
+                    
+                    # Sort and extract list of unique file names.
+                    @sorted = sort(@flist);
+                    @listf = map({ unless ($seen{$_}++){($_)}else{()} } @sorted);
+                    
+                    foreach my $afile (@listf)
+                    {
+                        # Insert into $rv.
+                        InsertFile("", $afile, $rv);
+                    }
+                }
+                else
+                {
+                    $ierr = 1;
+                }
+
+                remove_tree(&kTmpDir);
+            }
+            else
+            {
+                $ierr = 1;
+            }
+            
+            chdir($sdir);
+        }
+    }
+
+    return $rv;
+}
+
+sub CollectFiles
+{
+    my($spec) = $_[0];
+    my($deflistH) = $_[1];
+    
+    my($ierr);
+    my(@rv);
+    
+    $ierr = 0;
+
+    # Peel off the top directory name (must be relative to jsocroot).
+    if ($spec =~ /^([^\/]+)\/(.+)$/)
+    {
+        my($top) = $1;
+        my($bottom) = $2;
+        my($listH) = $deflistH->{$top};
+        
+        if (ref($listH))
+        {
+            @rv = CollectFiles($bottom, $listH);
+        }
+        else
+        {
+            print STDERR "The directory $top should have a hash array associated with it.\n";
+            $ierr = 1;
+        }
+    }
+    else
+    {
+        my($listH);
+        
+        # $spec could have a trailing '/'.
+        if ($spec =~ /\s*(.+)\/\s*$/)
+        {
+            $spec = $1;
+        }
+        
+        # This is a node - either a directory or a regular file.
+        $listH = $deflistH->{$spec};
+        
+        if (!defined($listH))
+        {
+            print STDERR "Unknown file $spec.\n";
+            $ierr = 1;
+        }
+        else
+        {
+            if (ref($listH))
+            {
+                # Directory.
+                my(@dirfiles);
+                
+                foreach my $elem (keys(%$listH))
+                {
+                    @dirfiles = CollectFiles($elem, $listH);
+                    push(@rv, @dirfiles);
+                }
+            }
+            else
+            {
+                # Regular file.
+                @rv = $listH . "/" . $spec;
+            }
+        }
+    }
+
+    return @rv;
+}
+
 
 __DATA__
 
