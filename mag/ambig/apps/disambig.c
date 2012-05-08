@@ -32,6 +32,7 @@
  * limit s u
  * disambig "in=su_keiji.vmagf_2d_720s_3_fltprf[2010.03.29_12:00:00_TAI]" "out=su_xudong.test_vmagf_a" "mask=su_xudong.test_armask_720s" "geometry=2"
  * disambig "in=su_xudong.test_meharp[2][2011.02.14_00:00:00_TAI]" "out=su_xudong.test_patch_vec_a" "geometry=1"
+ * disambig "in=hmi_test.MEharp_720s_fd10_nrt[][2012.05.07]" "out=hmi_test.Bharp_720s_fd10_nrt" "gemetry=2"
  */
 
 
@@ -919,7 +920,7 @@ int DoIt(void)
         drms_setkey_int(outRec, "DATAVALS", outsz - nancount);
         drms_setkey_int(outRec, "MISSVALS", nancount);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.10 2012/04/12 20:44:16 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.11 2012/05/08 00:33:01 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
