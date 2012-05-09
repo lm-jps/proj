@@ -168,13 +168,13 @@ for ntry = 1:max_try,
     if res.status > 0, 
       % make this return immediately: we have our answer
       msg = sprintf(EFMT, 'JSOC returned error within JSON status', ...
-                    req, res.error);
+                    req, res.status);
       % preserve res in this case; it's valid
       if do_err_out, error(msg); else, return; end;
     elseif res.status < 0,
       % not fatal, allow retry
       msg = sprintf(EFMT, 'JSOC returned cancellation error (status < 0)', ...
-                    req, res.error);
+                    req, res.status);
       % preserve res in this case; it's valid
     end;
   end
