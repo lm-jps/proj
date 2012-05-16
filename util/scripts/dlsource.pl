@@ -434,7 +434,7 @@ if (!$err)
              # @pfilespec - for custom check-out, the set of files in the proj dir to update or checkout.
              # @actspec - the spec actually used with the cvs command. Might differ from the others if
              #            an export was done and undesirable files were filtered out.
-            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec, $logfile, $forceco, \@netfilter, \@sdpfilter, \$actcvs, \@actspec);
+            $err = DownloadTree($cotype, $dltype, $version, $pversion, \@filespec, \@bfilespec, \@pfilespec, \@cmdlspec, $logfile, $forceco, \@netfilter, \@sdpfilter, \$actcvs, \@actspec);
 
             if ($err)
             {
@@ -449,7 +449,7 @@ if (!$err)
                {
                   my($cvscmd) = "cvs update -A " . kRootDir . kSuFlagFile . " " . kRootDir . "jsoc_sync.pl " . kRootDir . "jsoc_update.pl";
 
-                  if (CallCVS($cvscmd, $logfile, 0))
+                  if (CallCVS($cvscmd, $logfile, undef, 0))
                   {
                      print STDERR "Unable to run $cvscmd.\n";
                      $err = 1;
@@ -554,7 +554,7 @@ if (!$err)
                                     $actcvs =~ s/export\s/export -r HEAD /;
                                 }
                                 
-                                unless (CallCVSInChunks($actcvs, \@actspec, undef, 1))
+                                unless (CallCVSInChunks($actcvs, \@actspec, undef, undef, 1))
                                 {
                                     unless (GetFileList(&kTmpDir . &kRootDir, "", \@dlist))
                                     {
@@ -1009,12 +1009,13 @@ sub DownloadTree
    my($fspec) = $_[4];
    my($bfspec) = $_[5];
    my($pfspec) = $_[6];
-   my($logfile) = $_[7];
-   my($forceco) = $_[8];
-   my($netfilter) = $_[9];
-   my($sdpfilter) = $_[10];
-    my($actualcvs) = $_[11];
-    my($actualspec) = $_[12];
+    my($cmdlspec) = $_[7];
+   my($logfile) = $_[8];
+   my($forceco) = $_[9];
+   my($netfilter) = $_[10];
+   my($sdpfilter) = $_[11];
+    my($actualcvs) = $_[12];
+    my($actualspec) = $_[13];
 
    my($rv) = 0;
    my($curdir);
@@ -1183,7 +1184,7 @@ sub DownloadTree
        
        @relpaths = map({kRootDir . "$_"} @{$bfspec});           
        
-       # Filter out undesired files. $filter contains a black list.
+       # Filter out undesired files. $filter contains a black list. DOES NOT APPLY TO update.
       if (defined($filterdir))
       {
          # We need to filter out undesirables - checkout into temp dir now (which we cded to above).
@@ -1198,7 +1199,7 @@ sub DownloadTree
          else
          {
             # Check-out all files from repository (will filter out the non-release files below).
-            if (CallCVS($tcmd, $log, 0))
+            if (CallCVS($tcmd, $log, undef, 0))
             {
                print STDERR "Unable to $dltype repository files.\n";
                $rv = 1;
@@ -1250,7 +1251,7 @@ sub DownloadTree
            @$actualspec = @relpaths;
        }
        
-       if (CallCVSInChunks($cmd, \@relpaths, $log, 0))
+       if (CallCVSInChunks($cmd, \@relpaths, $log, undef, 0))
       {
          print STDERR "Unable to $dltype repository files.\n";
          $rv = 1;
@@ -1273,6 +1274,7 @@ sub DownloadTree
             if (defined($filterdir))
             {
                # We need to filter out undesirables - checkout into temp dir now (which we cded to above).
+                # DOES NOT APPLY TO update.
                my(%badguys);
                my($tcmd) = join(' ', "cvs", $cvscmd, $prev, @relpaths);
 
@@ -1284,7 +1286,7 @@ sub DownloadTree
                else
                {
                   # Check-out all files from repository (will filter out the non-release files below).
-                  if (CallCVS($tcmd, $log, 0))
+                  if (CallCVS($tcmd, $log, undef, 0))
                   {
                      print STDERR "Unable to $dltype repository files.\n";
                      $rv = 1;
@@ -1322,8 +1324,8 @@ sub DownloadTree
             }
 
             $cmd = join(' ', "cvs", $cvscmd, $prev, @relpaths);
-
-            if (CallCVS($cmd, $log, 0))
+             
+            if (CallCVS($cmd, $log, undef, 0))
             {
                print STDERR "Unable to $dltype repository files.\n";
                $rv = 1;
@@ -1331,6 +1333,98 @@ sub DownloadTree
          }
       }
    }
+    
+    if (!$rv && $dltype eq kDlUpdate)
+    {
+        # An update will not remove files that were deleted from the repository from the sandbox.
+        # So, we must do a cvs update on every file that was deleted from the server. Shit. 
+        # How do we figure out which files were deleted from the server? It's not like
+        # we can ask cvs that question? But we can run any old cvs command using the global
+        # -n flag, which will forestall any sandbox changes. Call cvs -n update on the root dir.
+        # Then parse STDERR results (for some crazy reason cvs prints this output to stderr), 
+        # saving all lines with "is no longer in the repository". The text immediately before this
+        # string is the name of the file. For all these files, call cvs update.
+        my(@resp);
+        my(@orig);
+        my(@delfiles);
+        
+        # The working directory is the root directory.
+        
+        # Unfortunately, we have to call CVS twice - once for base specs and once for proj 
+        # specs. Each type of spec will use a different -r flag.
+        $cmd = "-n update $rev";
+        
+        if (length($rev) > 0)
+        {
+            $cmd = "$cmd $forcecostr";
+        }
+        
+        # Original file specs.
+        if ($#cmdlspec >= 0)
+        {
+            @orig = map({kRootDir . "$_"} @{$cmdlspec});
+        }
+        else
+        {
+            @orig = map({kRootDir . "$_"} @{$bfspec});
+        }
+        
+        if (CallCVSInChunks($cmd, \@orig, undef, \@resp, 1))
+        {
+            print STDERR "Unable to locate sandbox files that were deleted from the repository.\n";
+            $rv = 1;
+        }
+        else
+        {
+            push(@delfiles, @resp);
+
+            if ($#cmdlspec < 0)
+            {
+                # If a cmdlspec was given, then all specs are in cmdlspec.
+                $cmd = "-n update $prev";
+                if (length($prev) > 0)
+                {
+                    $cmd = "$cmd $forcecostr";
+                }
+                
+                if (CallCVSInChunks($cmd, \@$pfspec, undef, \@resp, 1))
+                {
+                    print STDERR "Unable to locate sandbox files that were deleted from the repository.\n";
+                    $rv = 1;
+                }
+                else
+                {
+                    push(@delfiles, @resp);
+                }
+            }
+        }
+        
+        if (!$rv)
+        {
+            my(@filestoud);
+            
+            foreach my $line (@delfiles)
+            {
+                chomp($line);
+                if ($line =~ /(\S+)\s+is no longer in the repository/)
+                {
+                    push(@filestoud, $1);
+                }
+            }
+            
+            # Finally, call CVS yet again, but without the "-n" flag. This will remove from the sandbox
+            # files deleted from the repository.
+            
+            my($removecmd) = $cmd;
+            $removecmd =~ s/-n//;
+            
+            if (CallCVSInChunks($removecmd, \@filestoud, $log, undef, 0))
+            {
+                print STDERR "Unable to locate sandbox files that were deleted from the repository.\n";
+                $rv = 1;
+            }
+        }
+    }
     
    return $rv;
 }
@@ -1357,7 +1451,7 @@ sub TagFiles
       $cmd = "cvs tag -d $tag ."
    }
    
-   if (CallCVS($cmd, $logfile, 0))
+   if (CallCVS($cmd, $logfile, undef, 0))
    {
       print STDERR "Unable to tag repository files.\n";
       $rv = 1;
@@ -1515,7 +1609,8 @@ sub CallCVS
 {
    my($cmd) = $_[0];
    my($log) = $_[1];
-    my($silent) = $_[2];
+    my($rsp) = $_[2];
+    my($silent) = $_[3];
 
    my($rv) = 0;
    my($callstat);
@@ -1524,6 +1619,20 @@ sub CallCVS
    {
       system("$cmd 1>$log 2>&1");
    }
+    elsif (defined($rsp))
+    {
+        if (open(PIPE, "$cmd 2>&1 |"))
+        {
+            @$rsp = <PIPE>;
+            close(PIPE);
+        }
+        else
+        {
+            print STDERR "Could not run '$cmd'\n";
+            $rv = 1;
+        }
+
+    }
    elsif ($silent)
    {
       system("$cmd 1>/dev/null 2>&1");
@@ -1560,7 +1669,8 @@ sub CallCVSInChunks
     my($cmd) = $_[0];
     my($specs) = $_[1];
     my($log) = $_[2];
-    my($silent) = $_[3];
+    my($rsp) = $_[3];
+    my($silent) = $_[4];
     
     my(@chunk);
     my($fullcmd);
@@ -1576,7 +1686,8 @@ sub CallCVSInChunks
         if ($#chunk == &kMaxFileSpecs - 1)
         {
             $fullcmd = join(' ', "cvs", $cmd, @chunk);
-            if (CallCVS($fullcmd, $log, $silent))
+
+            if (CallCVS($fullcmd, $log, $rsp, $silent))
             {
                 $rv = 1;
                 last;
@@ -1589,7 +1700,8 @@ sub CallCVSInChunks
     if ($#chunk >= 0)
     {
         $fullcmd = join(' ', "cvs", $cmd, @chunk);
-        if (CallCVS($fullcmd, $log, $silent))
+
+        if (CallCVS($fullcmd, $log, $rsp, $silent))
         {
             $rv = 1;
         }
@@ -1762,7 +1874,7 @@ sub GetDefinitiveFileSet
         
         if (!$ierr)
         {
-            unless (CallCVS($cmdlcvs, undef, 1))
+            unless (CallCVS($cmdlcvs, undef, undef, 1))
             {
                 unless (GetFileList(&kTmpDir . &kRootDir, "", \@dlist))
                 {
