@@ -1,7 +1,7 @@
 c------------------------------------------------------------------------------------------------
 c	#define CODE_NAME 		"limbfit"
-c	#define CODE_VERSION 	"V3.0r0" 
-c	#define CODE_DATE 		"Wed Apr 11 13:17:38 HST 2012" 
+c	#define CODE_VERSION 	"V4.0r0" 
+c	#define CODE_DATE 		"Tue May  1 13:34:54 PDT 2012" 
 c------------------------------------------------------------------------------------------------
 c Revision 1.0  2009/01/08  17:20:00  Marcelo Emilio
 c changed assumed-size array declaration from "real xxx(1)" to "real xxx(3)"
@@ -52,8 +52,8 @@ c      parameter(jpt=40000,jreg=4096,jb=50,jc=50,jang=129,jprf=160)
 c	values for HMI rolls
 	implicit none
 	integer jpt,jb,jc,jreg,jang,jprf,nang,nprf,nreg
-	parameter(jpt=8000000,jb=200,jc=200,jreg=180,jang=181,jprf=64)
-	parameter(nang=180,nprf=64,nreg=180)
+	parameter(jpt=8000000,jb=200,jc=200,jreg=256,jang=181,jprf=64)
+	parameter(nang=180,nprf=64,nreg=256)
 	integer i,j,itr,itr2,ilt,ilt2,lmt,ir,lista(3),setn,nremv,centyp
 	integer n,nb,ind,nc,spflag,nbad,wbad,cut,jnd
 	integer npts,nitr,ncut,ifail,nrem

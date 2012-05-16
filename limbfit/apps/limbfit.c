@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V3.0r0" 
-	#define CODE_DATE 		"Wed Apr 11 13:17:38 HST 2012" 
+	#define CODE_VERSION 	"V4.0r0" 
+	#define CODE_DATE 		"Tue May  1 13:34:54 PDT 2012" 
 */
 
 #include "limbfit.h"
@@ -688,12 +688,12 @@ float sav_max=0.;
 		results->cc=input->cc;
 	} // end limb failed
 	// IS: do not free those (save_ldf,save_params,save_alpha_beta,save_full_ldf) passed from or to the structure !
-		free(rprf);
-		free(alph);
-		free(beta);
-		free(b0);
-		free(sb0);
-		free(lprf);
+	free(rprf);
+	free(alph);
+	free(beta);
+	free(b0);
+	free(sb0);
+	free(lprf);
 	if (results->debug)
 	{	
 		sprintf(log_msg," >>>>end of limbfit with: %d", ret_code);

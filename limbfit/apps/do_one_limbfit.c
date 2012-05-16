@@ -7,8 +7,8 @@
 			
 	
 	#define results->code_name 		"limbfit"
-	#define results->code_version 	"V3.0r0" 
-	#define results->code_date 		"Wed Apr 11 13:17:38 HST 2012" 
+	#define results->code_version 	"V4.0r0" 
+	#define results->code_date 		"Tue May  1 13:34:54 PDT 2012" 
 */
 
 #include "limbfit.h"
