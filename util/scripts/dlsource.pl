@@ -600,9 +600,7 @@ if (!$err)
                         }
                     }
                     else
-                    {
-                        print "woohoo.\n";
-                        
+                    {                        
                         if (PrintFilenames(*TYPEFILE, kRootDir, 1, qr(\/CVS\/)))
                         {
                             print STDERR "Unable to print file-set file names.\n";
