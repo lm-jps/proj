@@ -11,10 +11,10 @@ OUTDIR		:= $(WORKINGDIR)/_$(MACH)
 PSDIR		:= $(d)
 
 # Set the MEXEXT variable used in the lower-level make files
-ifeq ($(JSOC_MACHINE), linux_x86_64) 
-  MEXEXT := mexa64
+ifeq ($(JSOC_MACHINE), linux_ia32) 
+  MEXEXT := mexa32
 else
-  MEXECT := mexa32
+  MEXEXT := mexa64
 endif
 
 # ***************
