@@ -327,35 +327,40 @@ sub ExtractMachPath
     {
         $volume = $1;
         $mount = $2;
-    }
-    
-    # $volume - like sunroom:/home0
-    # $1 - like /home0
-    # $netpath - like sunroomg:/home0/arta/jsoctrees/JSOC
-    if ($netpath =~ /^$volume(.+)/)
-    {
-        return $mount . $1;
-    }
-    else
-    {
-        # There might be a trailing 'g' on the $netpath (legacy - used to mean
-        # gigabit for a gigabit network. But all networds are at least Gb now.
-        # One physical drive might have a network name whose symbolic name ends
-        # in a 'g' on one machine, but not on another. Try to remove the trailing
-        # 'g' before doing a comparison.
-        #
-        # $netpath2 - like sunroom:/home0/arta/jsoctrees/JSOC
-        my($netpath2) = $netpath;
         
-        $netpath2 =~ s/g:/:/;
-        if ($netpath2 =~ /^$volume(.+)/)
+        # $volume - like sunroom:/home0
+        # $1 - like /home0
+        # $netpath - like sunroomg:/home0/arta/jsoctrees/JSOC
+        if ($netpath =~ /^$volume(.+)/)
         {
-            return $mount . $1; 
+            return $mount . $1;
         }
         else
         {
-            return ();
+            # There might be a trailing 'g' on the $netpath (legacy - used to mean
+            # gigabit for a gigabit network). But all networks are at least Gb now.
+            # One physical drive might have a network name whose symbolic name ends
+            # in a 'g' on one machine, but not on another. Try to remove the trailing
+            # 'g' before doing a comparison.
+            #
+            # $netpath2 - like sunroom:/home0/arta/jsoctrees/JSOC
+            my($netpath2) = $netpath;
+            
+            $netpath2 =~ s/g:/:/;
+            if ($netpath2 =~ /^$volume(.+)/)
+            {
+                return $mount . $1; 
+            }
+            else
+            {
+                return ();
+            }
         }
+    }
+    else
+    {
+        print STDERR "Unexpected response from server: $line\n";
+        return ();
     }
 }
 
@@ -369,6 +374,17 @@ sub GetLocalPaths
 
    foreach $mach (@machines)
    {
+       # make a test connection
+       system("(ssh $mach ls) 2>&1 1>/dev/null");
+
+       if ($? != 0)
+       {
+           my(@rsp) = `ssh $mach 2>&1`;          
+           print STDERR "Problem connecting to machine '$mach':\n";
+           print STDERR " @rsp";
+           last;
+       }
+
       if (open(STATCMD, "(ssh $mach cat /etc/mtab) 2>&1 |"))
       {
          my(@remotemtab) = <STATCMD>;
