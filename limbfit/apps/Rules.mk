@@ -22,6 +22,8 @@ CLEAN			:= $(CLEAN) \
 			   $(MODEXE_USEF_SOCK_$(d)) \
 			   $(DEP_$(d))
 
+TGT_BIN	        := $(TGT_BIN) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
+
 S_$(d)			:= $(notdir $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d)))
 
 # Local rules
