@@ -41,6 +41,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "dsdsseries", "", "orig name of dsds series prog: etc."},
   {ARG_STRING, "dirname", "", "Dir to store into SUMS"},
   {ARG_STRING, "note", "N/A", "comment field"},
+  {ARG_STRING, "namespace", "dsds", "namespace of output ds"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "j", "0", "only print the jsd"},
   {ARG_END}
@@ -54,7 +55,7 @@ char *module_name = "store_dsds_migrate";
 /* Some global variables for this module. */
 int verbose = 0;
 int jsdflg = 0;
-char *pname, *lname, *sname;
+char *pname, *lname, *sname, *namespace;
 char *dsdsseries;
 
 static char * make_series_jsd(char *series);
@@ -88,6 +89,7 @@ note = cmdparams_get_str(&cmdparams, "note", NULL);
 lnum = cmdparams_get_int (&cmdparams, "lnum", NULL);
 snum = cmdparams_get_int (&cmdparams, "snum", NULL);
 dsdsseries = cmdparams_get_str(&cmdparams, "dsdsseries", NULL);
+namespace = cmdparams_get_str(&cmdparams, "namespace", NULL);
 if(!dsdsseries) {
   printf("Must give a dsdsseries= %s\n");
   return(1);
@@ -106,7 +108,7 @@ cptr = (char *)index(lname, '.'); //no dsds lname has more then one '.'
 if(cptr) { 
   *cptr = '_';		//replace '.' with '_'
 }
-sprintf(drmsseries, "dsds.%s__%s__%s", pname, lname, sname);
+sprintf(drmsseries, "%s.%s__%s__%s", namespace, pname, lname, sname);
 if(jsdflg) {
   printf("%s", make_series_jsd(drmsseries));
   return(1);
@@ -163,7 +165,7 @@ if (! *path)
   fprintf(stderr,"no path found\n");
   return(1);
   }
-sprintf(cmd, "cp -rp %s/* %s", in, path);
+sprintf(cmd, "cd %s; cp -rp . %s", in, path);
 status = system(cmd);
 if (status)
     {
@@ -179,9 +181,29 @@ return(status);
 }
 
 char * make_series_jsd(char *series)
-  {
+{
   char *user = getenv("USER");
   char jsd[2048];
+  if(!strcmp(namespace, "dsds_bak")) {
+  sprintf(jsd,
+    "Seriesname:     %s\n"
+    "Author:         %s\n"
+    "Owners:         %s\n"
+    "Unitsize:       1\n"
+    "Archive:        1\n"
+    "Retention:      1\n"
+    "Tapegroup:      200\n"
+    "PrimeKeys:      snum\n"
+    "DBIndex:        snum,lnum\n"
+    "Description:    \"%s\"\n"
+    "Keyword: dirname,  string, variable, record, \" \",  %%s, none, \"Original dirname\"\n"
+    "Keyword: note,      string, variable, record, \" \",  %%s, none, \" \"\n"
+    "Keyword: lnum,      int, variable, record, \"0\",  %%d, none, \"level: number\"\n"
+    "Keyword: snum,      int, variable, record, \"-1\",  %%d, none, \"series: number\"\n"
+    "Data: dir, constant, int, 0, none, generic, \" \"\n",
+    series, user, user, dsdsseries);
+  }
+  else {
   sprintf(jsd,
     "Seriesname:     %s\n"
     "Author:         %s\n"
@@ -199,8 +221,9 @@ char * make_series_jsd(char *series)
     "Keyword: snum,      int, variable, record, \"-1\",  %%d, none, \"series: number\"\n"
     "Data: dir, constant, int, 0, none, generic, \" \"\n",
     series, user, user, dsdsseries);
-  return (strdup(jsd));
   }
+  return (strdup(jsd));
+}
 
 
 int create_series(char *series)
