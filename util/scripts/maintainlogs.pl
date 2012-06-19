@@ -241,7 +241,7 @@ if (defined($dbh))
 
       if ($action eq "addrow")
       {
-         if (!AddRecord(\$dbh, $conftable, $loglev, @addrow))
+         if (!AddRecord(\$dbh, $conftable, $loglevel, @addrow))
          {
             print STDERR "Unable to add the following record to '$conftable':\n";
             print STDERR "@addrow\n";
@@ -265,7 +265,7 @@ if (defined($dbh))
             {
                chomp($line);
                @onerow = split(/,/, $line);
-               if (!AddRecord(\$dbh, $conftable, $loglev, @onerow))
+               if (!AddRecord(\$dbh, $conftable, $loglevel, @onerow))
                {
                   print STDERR "Unable to add the following record to '$conftable':\n";
                   print STDERR "$line\n";
