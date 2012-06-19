@@ -234,7 +234,7 @@ local $ENV{"JSOC_DBNAME"} = $dbname;
 `echo $$ > $runningflag`;
 $logfile = kExportDir . "/logs/" . `date +"%F_%R.log"`;
 open(LOG, ">> $logfile") || die "Couldn't open logfile '$logfile'.\n";
-$daemonlog = kExportDir . "/exportlog${logflag}.txt";
+$daemonlog = kExportDir . "/logs/exportlog${logflag}.txt";
 
 my($datenow) = `date`;
 chomp($datenow);
