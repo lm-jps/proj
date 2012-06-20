@@ -1,4 +1,4 @@
-#!/home/jsoc/bin/linux_x86_64/perl -w
+#!/home/jsoc/bin/linux_x86_64/perl5.12.2
 
 # This script can be run on many 'log-sets'. Each log-set contains all log
 # files for a single project, tar'ed or otherwise. All log files in a set reside in a single 
@@ -43,6 +43,8 @@
 # To enter log-set-specific information into this database table, use the '-a' flag, followed
 # by a string containing the seven comma-separated fields.
 
+use warnings;
+use strict;
 
 use IO::Dir;
 use FileHandle;
@@ -50,6 +52,7 @@ use File::stat;
 use File::Copy;
 use File::Basename;
 use Fcntl ':flock';
+use File::lockf;
 use Time::HiRes qw(gettimeofday);
 use Cwd 'abs_path';
 use POSIX qw(strftime);
@@ -122,6 +125,8 @@ my($action);
 my($loglevel);
 my($addfile);
 my(@addrow);
+
+my($rv) = &kSuccess;
 
 # Allow only one instance of this program 
 unless (flock(DATA, LOCK_EX|LOCK_NB)) 
@@ -222,7 +227,7 @@ if (defined($dbh))
          if (!CreateTable(\$dbh, $conftable))
          {
             print STDERR "Unable to create table '$conftable'.\n";
-            $rv = kCantCreate;
+            $rv = &kCantCreate;
          }
          else
          {
@@ -232,7 +237,7 @@ if (defined($dbh))
       else
       {
          print STDERR "Table $schemaname\.$tablename does not exist - nothing to do.\n";
-         $rv = kInvalidArg;
+         $rv = &kInvalidArg;
       }
    }
    else
@@ -245,7 +250,7 @@ if (defined($dbh))
          {
             print STDERR "Unable to add the following record to '$conftable':\n";
             print STDERR "@addrow\n";
-            $rv = kInvalidRow;
+            $rv = &kInvalidRow;
          }
          else
          {
@@ -279,7 +284,7 @@ if (defined($dbh))
 
             if (!$atleastone)
             {
-               $rv = kInvalidRow;
+               $rv = &kInvalidRow;
             }
             else
             {
@@ -291,20 +296,20 @@ if (defined($dbh))
          else
          {
             print STDERR "Unable to read input file '$addfile'.\n";
-            $rv = kFileIO;
+            $rv = &kFileIO;
          }
       }
       elsif ($action eq "create")
       {
          print STDERR "Configuration table '$conftable' already exists.\n";
-         $rv = kInvalidArg;
+         $rv = &kInvalidArg;
       }
       elsif ($action eq "drop")
       {
          if (!DropTable(\$dbh, $conftable))
          {
             print STDERR "Unable to delete configuration table.\n";
-            $rv = kCantDrop;
+            $rv = &kCantDrop;
          }
          else
          {
@@ -320,13 +325,13 @@ if (defined($dbh))
          if (Go(\$dbh, $conftable, \%unarchLogs, \%archLogs, $loglevel) != kSuccess)
          {
             print STDERR "Failure performing 'go' action.\n";
-            $rv = kActionFailed;
+            $rv = &kActionFailed;
          }
       }
       else
       {
          print STDERR "Invalid action '$action'.\n";
-         $rv = kInvalidArg;
+         $rv = &kInvalidArg;
       }
    }
 
@@ -346,9 +351,9 @@ sub AcquireLock
    my($gotlock);
    my($natt);
 
-   if (-e $path)
+   if (!(-e $path))
    {
-      $$lckfh = FileHandle->new("<$path");
+      $$lckfh = FileHandle->new(">$path");
       $fpaths{fileno($$lckfh)} = $path;
    }
    else
@@ -358,9 +363,11 @@ sub AcquireLock
    $gotlock = 0;
 
    $natt = 0;
+    
    while (1)
    {
-      if (flock($$lckfh, LOCK_EX|LOCK_NB)) 
+       #      if (flock($$lckfh, LOCK_EX|LOCK_NB)) 
+      if (!File::lockf::tlock($$lckfh, 0))
       {
          $gotlock = 1;
          last;
@@ -375,6 +382,7 @@ sub AcquireLock
          else
          {
             LogLevPrint("Couldn't acquire lock after $natt times; bailing.\n", 1, $loglevel);
+            last;
          }
       }
 
@@ -393,12 +401,13 @@ sub ReleaseLock
    $lckfn = fileno($$lckfh);
    $lckfpath = $fpaths{$lckfn};
 
-   flock($$lckfh, LOCK_UN);
+    #flock($$lckfh, LOCK_UN);
+    File::lockf::ulock($$lckfh, 0);
    $$lckfh->close;
 
    if (defined($lckfpath))
    {
-      chmod(0664, $lckfpath);
+      chmod(0666, $lckfpath);
       delete($fpaths{$lckfn});
    }
 }
@@ -603,6 +612,7 @@ sub Go
    my($row);
    my($atleastone);
    my($procfailed);
+   my($res);
    my($rv);
 
    $rv = kSuccess;
@@ -619,6 +629,8 @@ sub Go
       foreach $row (@$rrows)
       {
          my($logset, $lsbase, $lspath, $lslockpath, $lsprocess) = @$row;
+          
+         LogLevPrint("Archiving $logset logset.\n", 0, $loglev);
 
          if (defined($lslockpath) && length($lslockpath) > 0)
          {
@@ -1045,6 +1057,8 @@ sub Trash
    {
       foreach my $afile (@files)
       {
+         LogLevPrint("Trashing archive $afile.\n", 0, $loglev);
+
          # Move the file to the trash bin
          if (!move($afile, $trashbin))
          {
