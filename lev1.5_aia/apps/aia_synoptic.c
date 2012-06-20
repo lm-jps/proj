@@ -286,7 +286,7 @@ printf("%s\n", querystr);
           if (stat(outfilename, &sbuf)) {
             outcparms = "compress";
             if (DRMS_SUCCESS != fitsexport_export_tofile(outseg, outcparms,
-              outfilename)) DIE("cant write FITS file");
+              outfilename, NULL, NULL)) DIE("cant write FITS file");
           }
         }
         if (inparr) drms_free_array(inparr);
