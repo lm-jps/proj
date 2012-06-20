@@ -178,7 +178,7 @@ int DoIt ()
           if (de_compress) {
             outcparms = "";
           }
-          if (DRMS_SUCCESS != fitsexport_export_tofile(inpseg, outcparms, outfilename)) {
+          if (DRMS_SUCCESS != fitsexport_export_tofile(inpseg, outcparms, outfilename, NULL, NULL)) {
             DIE("cant write FITS file");
           }
           if (do_sleep) {
