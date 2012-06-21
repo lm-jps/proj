@@ -782,7 +782,7 @@ sub Go
                   if (-d $lstrash)
                   {
                      # Trashing a single log-set's old archives
-                     if (!Trash($lstrash, @totrash))
+                     if (!Trash($lstrash, @totrash, $loglev))
                      {
                         print STDERR "Unable to move expired archives in '$lspath' to trash bin.\n";
                      }
@@ -1050,7 +1050,7 @@ sub Validatetar
 
 sub Trash
 {
-   my($trashbin, @files) = @_;
+   my($trashbin, @files, $loglev) = @_;
    my($rv) = 1;
    
    if (-d $trashbin)
