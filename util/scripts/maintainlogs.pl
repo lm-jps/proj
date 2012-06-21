@@ -432,62 +432,83 @@ sub NoErr
    return $ok;
 }
 
-# Logs are returned in an hash array, keyed by the parent directory.
+# Logs are returned in an hash array, keyed by the logset name.
 # unarchRef - a reference to an hash array of array references. There is one one top-level element
-#   per log-set, keyed by log-set path. Each element's value is a reference to an array of 
-#   unarchived log-file names.
+#   per log-set, keyed by log-set name. Each element's value is a reference to a 2-element array. The
+#   first element of this array is the path to the files in the log-set, and the second element
+#   is an array of files in the path.
+#
+#{
+#    logset1 => [path, [file1, file2, ...]],
+#    logset2 => [path, [file1, file2, ...]],
+#    ...
+#}
+#
 # archRef - a reference to an hash array of hash array references. There is one top-level element
-#   per log-set, keyed by log-set path. Each element's value is a reference to an hash array keyed by 
-#   archive file name and whose values are the timestamps of the files.
+#   per log-set, keyed by log-set name. Each element's value is a reference to a 2-element array. The
+#   first element of this array is the path to the files in the log-set, and the second element
+#   is an hash-array reference. The key for this hash is the archive filename, and the value is
+#   the timestamp of the archive file.
+#
+#{
+#    logset1 => [path, {tarfile1 => timestamp, tarfile2 => timestamp}],
+#    logset2 => [path, {tarfile1 => timestamp, tarfile2 => timestamp}],
+#    ...
+#}
+
 sub FindLogs
 {
-   my($lspath) = $_[0];
-   my($lsbase) = $_[1];
-   my($unarchRef) = $_[2];
-   my($archRef) = $_[3];
-
-   my(@allfiles);
-   my(@lfiles);
-   my($date);
-
-   # First, check to see if we already have the log files for $lspath
-   if (!defined($unarchRef->{$lspath}) || !defined($archRef->{$lspath}))
-   {
-      tie(my(%logfiles), "IO::Dir", $lspath);
-      @allfiles = keys(%logfiles);
-      @lfiles = map({$_ =~ /$lsbase/ ? $_ : ()} @allfiles);
-         
-      foreach my $onelog (@lfiles)
-      {
-         if ($onelog =~ /\.tar\.gz$/i)
-         {
-	    # An archive file
-            my($sb) = stat("$lspath/$onelog");
-	    $date = $sb->mtime; # seconds since epoch
-
-            if (!defined($archRef->{$lspath}))
+    my($logset) = shift;
+    my($lspath) = $_[0];
+    my($lsbase) = $_[1];
+    my($unarchRef) = $_[2];
+    my($archRef) = $_[3];
+    
+    my(@allfiles);
+    my(@lfiles);
+    my($date);
+    
+    # First, check to see if we already have the log files for logset
+    if (!defined($unarchRef->{$logset}) || !defined($archRef->{$logset}))
+    {
+        tie(my(%logfiles), "IO::Dir", $lspath);
+        @allfiles = keys(%logfiles);
+        @lfiles = map({$_ =~ /$lsbase/ ? $_ : ()} @allfiles);
+        
+        foreach my $onelog (@lfiles)
+        {
+            if ($onelog =~ /\.tar\.gz$/i)
             {
-               $archRef->{$lspath} = {}; # anonymous empty hash
+                # An archive file
+                my($sb) = stat("$lspath/$onelog");
+                $date = $sb->mtime; # seconds since epoch
+                
+                if (!defined($archRef->{$logset}))
+                {
+                    $archRef->{$logset} = []; # anonymous empty array
+                    $archRef->{$logset}->[0] = $lspath;
+                    $archRef->{$logset}->[1] = {}; # anonymous empty hash
+                }
+                
+                $archRef->{$logset}->[1]->{$onelog} = $date;
             }
-
-            $archRef->{$lspath}->{$onelog} = $date;
-         }
-         else
-	 {
-	    # An unarchived file
-            if (!defined($unarchRef->{$lspath}))
+            else
             {
-               $unarchRef->{$lspath} = []; # anonymous empty array
+                # An unarchived file
+                if (!defined($unarchRef->{$logset}))
+                {
+                    $unarchRef->{$logset} = []; # anonymous empty array
+                    $unarchRef->{$logset}->[0] = $lspath;
+                    $unarchRef->{$logset}->[1] = [];  # anonymous empty array
+                }
+                
+                my($arrref) = $unarchRef->{$logset}->[1];
+                push(@$arrref, $onelog);
             }
-
-            my($arrref) = $unarchRef->{$lspath};
-
-            push(@$arrref, $onelog);
-         }
-      }
-
-      untie(%logfiles);
-   }
+        }
+        
+        untie(%logfiles);
+    }
 }
 
 sub CreateTable
@@ -650,9 +671,9 @@ sub Go
          else
          {
             # Archive the current logs for $logset
-            FindLogs($lspath, $lsbase, $unarchLogs, $archLogs);
+            FindLogs($logset, $lspath, $lsbase, $unarchLogs, $archLogs);
 
-            if (defined($unarchLogs->{$lspath}))
+            if (defined($unarchLogs->{$logset}))
             {
                $procfailed = 0;
 
@@ -669,7 +690,8 @@ sub Go
 
                if (!$procfailed)
                {
-                  if (!Archive($lspath, $lsbase, $tarbin, $gzbin, $unarchLogs->{$lspath}, $loglev))
+                  LogLevPrint("Archiving logset $logset (base filename: $lsbase).\n", 0, $loglev);
+                  if (!Archive($lspath, $lsbase, $tarbin, $gzbin, $unarchLogs->{$logset}->[1], $loglev))
                   {
                      print STDERR "Unable to archive log files for logset '$logset'.\n";
                   } 
@@ -758,19 +780,24 @@ sub Go
             {
                # Trash archives that have expired
                my(@totrash);
-               my($onehash);
+               my($onearr);
+               my($cpath);
+               my($cfilesH);
 
-               FindLogs($lspath, $lsbase, $unarchLogs, $archLogs);
+               FindLogs($logset, $lspath, $lsbase, $unarchLogs, $archLogs);
 
                # Find out which archives are old enough to trash
-               if (defined($archLogs->{$lspath}))
+               if (defined($archLogs->{$logset}))
                {
-                  $onehash =  $archLogs->{$lspath};
-                  foreach my $key (keys %$onehash)
+                  $onearr = $archLogs->{$logset}; # returns an array reference
+                  $cpath = $onearr->[0];
+                  $cfilesH = $onearr->[1];
+                   
+                  foreach my $key (keys(%$cfilesH))
                   {
-                     if ($archLogs->{$lspath}->{$key} + $lsretention < time())
+                     if ($cfilesH->{$key} + $lsretention < time())
                      {
-                        push(@totrash, "$lspath/$key");
+                        push(@totrash, "$cpath/$key");
                      }
                   }
                }
@@ -901,7 +928,7 @@ sub Archive
          if ($isfile % kTarChunk == 0)
          {
             # Execute tar cmd.
-            RunTar($tarbin, "rf", ".tmp.tar", "", $sfilelist, $loglev);
+             RunTar($tarbin, "rf", ".tmp.tar", "", $sfilelist, $loglev);
             $sfilelist = "";
          }
 
@@ -910,7 +937,7 @@ sub Archive
 
       if (length($sfilelist) > 0)
       {
-         RunTar($tarbin, "rf", ".tmp.tar", "", $sfilelist, $loglev);
+          RunTar($tarbin, "rf", ".tmp.tar", "", $sfilelist, $loglev);
       }
 
       # Calculate a date string to insert into the tar's filename
