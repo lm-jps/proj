@@ -694,26 +694,26 @@ sub Go
                   if (!Archive($lspath, $lsbase, $tarbin, $gzbin, $unarchLogs->{$logset}->[1], $loglev))
                   {
                      print STDERR "Unable to archive log files for logset '$logset'.\n";
-                  } 
+                  }
                   else
                   {
                      $atleastone = 1;
-
-                     # Update lastarch value
-                     my($timenow) = strftime("%a %b %e %H:%M:%S %Y", localtime());
-
-                     $stmnt = "UPDATE $conftable SET $headers[kLSLastArch] = '$timenow' WHERE $headers[kLogset] = '$logset'";
-                     $res = $$dbh->do($stmnt);
-
-                     if (!NoErr($res, $dbh, $stmnt))
-                     {
-                        print STDERR "Unable to update '$klslastarch' in '$conftable'.\n";
-                        $rv = kCantUpdate;
-                        last;
-                     }
                   }
                }
             }
+         }
+          
+         # Update lastarch value
+         my($timenow) = strftime("%a %b %e %H:%M:%S %Y", localtime());
+          
+         $stmnt = "UPDATE $conftable SET $headers[kLSLastArch] = '$timenow' WHERE $headers[kLogset] = '$logset'";
+         $res = $$dbh->do($stmnt);
+          
+         if (!NoErr($res, $dbh, $stmnt))
+         {
+             print STDERR "Unable to update '$klslastarch' in '$conftable'.\n";
+             $rv = kCantUpdate;
+             last;
          }
 
          # Don't hold the lock - allow the processes generating the logs a chance to write in between the processing
@@ -724,19 +724,22 @@ sub Go
             $gotlock = 0;
          }
       } # loop over logsets
-
-      if (!$atleastone && $#$rrows >= 0 && (keys(%$unarchLogs) > 0))
+       
+      if ($rv == &kSuccess)
       {
-         print STDERR "Failure archiving at least one log-set.\n";
-         $rv = kCantArchive;
-      }
-      elsif ($#$rrows < 0)
-      {
-         LogLevPrint("Not time to archive any logs.\n", 1, $loglev);
-      }
-      elsif ((keys(%$unarchLogs) < 1))
-      {
-         LogLevPrint("No log files available for archiving.\n", 1, $loglev);
+          if (!$atleastone && $#$rrows >= 0 && (keys(%$unarchLogs) > 0))
+          {
+              print STDERR "Failure archiving at least one log-set.\n";
+              $rv = kCantArchive;
+          }
+          elsif ($#$rrows < 0)
+          {
+              LogLevPrint("Not time to archive any logs.\n", 0, $loglev);
+          }
+          elsif ((keys(%$unarchLogs) < 1))
+          {
+              LogLevPrint("No log files available for archiving.\n", 0, $loglev);
+          }
       }
    }
    else
@@ -778,7 +781,7 @@ sub Go
             } 
             else
             {
-               # Trash archives that have expired
+               # Trash archives that have expired (based on file timestamp, NOT lastarch).
                my(@totrash);
                my($onearr);
                my($cpath);
