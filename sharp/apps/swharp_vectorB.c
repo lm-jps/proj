@@ -1,10 +1,12 @@
-/*
- *  swharp_vectorB.
+/* 
+ *  swharp_vectorB. 
  *
  *  Created by Xudong Sun on 8/22/11.
- *  Modified to -- include ALL spaceweather keywords by Monica Bobra 25 Aug 2011
- *              -- include potential field calculation 
- *              -- run only on los data 5 March 2011
+ *
+ *  Modified by Monica Bobra to 
+ *              -- include ALL spaceweather keywords in Leka and Barnes (2003, I and II)
+ *              -- include potential field calculation from Keiji Hayashi
+ *              -- run on los and vector data 15 april 2012 via sharp_functions.c
  *  Bz arrays
  *  Write out abs(B) as data segment and a few keywords as SW index
  *
@@ -12,25 +14,36 @@
  *  First use the bmap module to create the in= and mask= parameters.
  *
  *  then run this module:
- *  swharp_vectorB  "in=su_mbobra.test_mmap_me[][]" /
- *  "mask=su_mbobra.test_mmap_bitmap_me[][]" "out=su_mbobra.swharp_test_v2" "dzvalue=0.001"
+ *  swharp_vectorB "in=su_mbobra.bmap_fd10[401][2011.03.09_00:00:00_TAI-2011.03.10_03:00:00_TAI]" /
+ *  "mask=su_mbobra.bitmap_fd10[401][2011.03.09_00:00:00_TAI-2011.03 * .10_03:00:00_TAI]" /
+ *  "out=su_mbobra.sharp_fd10" "dzvalue=0.001" 
  */
-
 
 #include <jsoc_main.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+float cdelt1_orig;
+float cdelt1;
+double rsun_ref;
+double dsun_obs;
+double rsun_obs;
+float imcrpix1;
+float imcrpix2;
+float crpix1;
+float crpix2;
+
 #include "sharp_functions.c"
 
 #define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status=%d\n", msg, status); return(status);}
 #define SHOW(msg) {printf("%s", msg); fflush(stdout);}
-#define IN_FILES	3   /* Number of input files */
-#define PI (3.141592653589793)
+#define IN_FILES	3             /* Number of input files */
+#define PI (3.141592653589793)        /* Ratio of circumference to diameter of a circle*/
+#define MUNAUGHT (0.0000012566370614) /* magnetic constant */
 
 /* declaring all the functions */
-
-int computeAbsFlux(float *bz, int *dims, float *absFlux, float *mean_vf_ptr, int *mask);
+int computeMu(float *bz, int *dims, float *mu, float *inverseMu);
+int computeAbsFlux(float *bz, int *dims, float *absFlux, float *mean_vf_ptr, int *mask, float *inverseMu);
 int computeBh(float *bx, float *by, float *bz, float *bh, int *dims, float *mean_hf_ptr, int *mask);
 int computeGamma(float *bx, float *by, float *bz, float *bh, int *dims, float *mean_gamma_ptr, int *mask);
 int readFits(char *filename, float **image, int *dims);
@@ -58,21 +71,20 @@ ModuleArgs_t module_args[] =
     {ARG_END}
 };
 
-
 int DoIt(void)
 {
 	
     int status = DRMS_SUCCESS;
 	
-	char *inQuery, *outQuery;		// input series query string
+	char *inQuery, *outQuery;	// input series query string
         char *maskQuery;		// mask series query string
 	DRMS_RecordSet_t *inRecSet, *outRecSet, *maskRecSet;
 	DRMS_Record_t *inRec, *outRec, *maskRec;
         DRMS_Segment_t *inSegBx, *inSegBy, *inSegBz, *outSeg, *maskSeg;
 	DRMS_Array_t *inArrayBx, *inArrayBy, *inArrayBz, *outArray, *maskArray;	
-        float *bx, *by, *bz, *outData, *bh, *bt, *jz, *bpx, *bpy, *bpz;
+        float *inverseMu, *mu, *bx, *by, *bz, *outData, *bh, *bt, *jz, *bpx, *bpy, *bpz;
         int *mask;
-        int dims[2], nxny, nx, ny;		// dimensions;  NAXIS1 = dims[0] which is the number of columns.
+        int dims[2], nxny, nx, ny;	// dimensions;  NAXIS1 = dims[0] which is the number of columns.
         float mean_vf = 0.0; 
         float absFlux = 0.0;
         float mean_hf = 0.0;
@@ -143,6 +155,25 @@ int DoIt(void)
                 maskArray = drms_segment_read(maskSeg, DRMS_TYPE_INT, &status);
 		if (status) DIE("No mask data file found. \n");
 
+                cdelt1_orig = drms_getkey_float(inRec, "CDELT1",   &status);
+                dsun_obs    = drms_getkey_float(inRec, "DSUN_OBS",   &status);
+                rsun_ref    = drms_getkey_double(inRec, "RSUN_REF", &status);
+                rsun_obs    = drms_getkey_double(inRec, "RSUN_OBS", &status);
+                imcrpix1    = drms_getkey_float(inRec, "IMCRPIX1", &status);
+                imcrpix2    = drms_getkey_float(inRec, "IMCRPIX2", &status);
+                crpix1      = drms_getkey_float(inRec, "CRPIX1", &status);
+                crpix2      = drms_getkey_float(inRec, "CRPIX2", &status);
+
+                
+                cdelt1=( (rsun_ref*cdelt1_orig*PI/180.) / (dsun_obs) )*(180./PI)*(3600.); //convert cdelt1 from degrees to arcsec (approximately)
+                
+                printf("cdelt1_orig=%f\n",cdelt1_orig);
+                printf("cdelt1=%f\n",cdelt1);
+                printf("rsun_obs/rsun_ref=%f\n",rsun_obs/rsun_ref);
+                printf("rsun_ref/rsun_obs=%f\n",rsun_ref/rsun_obs);
+                printf("test1=%f\n",((1/cdelt1_orig)*(rsun_obs/rsun_ref)*(1000000.)));
+                printf("test2=%f\n",((cdelt1_orig)*(PI/180)*(rsun_ref)*(1/1000000.)));
+
                 bx   = (float *)inArrayBx->data;
                 by   = (float *)inArrayBy->data;
                 bz   = (float *)inArrayBz->data;
@@ -179,6 +210,8 @@ int DoIt(void)
                 /*===========================================*/    
                 /* Malloc some arrays     */
 
+                inverseMu   = (float *)malloc(nx*ny*sizeof(float));
+                mu   = (float *)malloc(nx*ny*sizeof(float));
                 bh   = (float *)malloc(nx*ny*sizeof(float));
                 bt   = (float *)malloc(nx*ny*sizeof(float));
                 jz   = (float *)malloc(nx*ny*sizeof(float));
@@ -189,7 +222,9 @@ int DoIt(void)
                 /*===========================================*/   
                 /* SW Keyword computation */
                 
-                if (computeAbsFlux(bz, dims, &absFlux, &mean_vf, mask)) 
+                computeMu(bz, dims, mu, inverseMu);
+
+                if (computeAbsFlux(bz, dims, &absFlux, &mean_vf, mask, inverseMu)) 
                 {
                    absFlux = 0.0 / 0.0;		// If fail, fill in NaN
                    mean_vf = 0.0 / 0.0;
@@ -228,7 +263,7 @@ int DoIt(void)
 
                 if (computeHelicity(bz, dims, jz, &mean_ih, &total_us_ih, &total_abs_ih, mask)) 
                 {  
-                   mean_ih     = 0.0/0.0;
+                   mean_ih     = 0.0/0.0; 
                    total_us_ih = 0.0/0.0;
                    total_abs_ih= 0.0/0.0;
                 } 
