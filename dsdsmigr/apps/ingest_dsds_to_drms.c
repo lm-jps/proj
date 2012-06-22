@@ -11,6 +11,7 @@
  *  INPUT PARAMETERS:  IN  = <SUMS directory>
  *                     MAP = <mapfile>
  *                     SCALE_CORRECTIONS = <drms series with scale corrections file>
+ *              
  *  OUTPUT PARAMETERS: OUT = <drms series>
  *
  *  EXAMPLE: 
@@ -49,6 +50,7 @@ ModuleArgs_t module_args[] =
      {ARG_FLAG, "M", "0", "SkipMissingFiles - no records if DATAFILE is blank."},
      {ARG_FLAG, "v", "0", "verbose - more diagnostics"},
      {ARG_FLAG, "z", "0", "Use DPC_SMPL of '60 second' only"},
+     {ARG_FLAG, "p", "0", "Indicate polarization state in POLSTATE keyword"},
      {ARG_END}
 };
 
@@ -294,7 +296,7 @@ int DoIt(void)
    int verbose;
    int qualnodata=0x80000000;
    int nRecs, iRec;
-   int qualstat, dpcflag;
+   int qualstat, dpcflag, polflag;
    double val;
    char *val1;
 # define AU_m (149597870691.0)
@@ -308,6 +310,8 @@ int DoIt(void)
    char scfilepath[DRMS_MAXPATHLEN];
    char infilepath[DRMS_MAXPATHLEN];
    dpcflag = params_isflagset(&cmdparams, "z");
+   polflag = params_isflagset(&cmdparams, "p");
+   printf("dpcflag=%d\n",dpcflag);
 
    if (strcmp(inRecQuery, kNOT_SPEC) == 0 || strcmp(outRecQuery, kNOT_SPEC) == 0)
       DIE("Both the "kRecSetIn" and "kRecSetOut" dataseries must be specified.\n");
@@ -337,9 +341,9 @@ int DoIt(void)
    printf("scale corrections filepath = %s\n", scfilepath);
 
 
-   DRMS_Segment_t *inseg = drms_segment_lookupnum(inRecSet->records[0], 0);
-   drms_segment_filename(inseg,infilepath);
-   printf("incoming filepath = %s\n", infilepath);
+   //DRMS_Segment_t *inseg = drms_segment_lookupnum(inRecSet->records[0], 0);
+   //drms_segment_filename(inseg,infilepath);
+   //printf("incoming filepath = %s\n", infilepath);
 
 
    for (iRec=0; iRec<nRecs; iRec++)
@@ -377,10 +381,25 @@ int DoIt(void)
         val = drms_getkey_time(inRec, "T_OBS",&status);
         val1= drms_getkey_string(inRec,"DPC_SMPL",&status);
 
-	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0)
+        printf("incoming filepath = %s\n", filepath);
+
+/* Check the polarisation status of the data. If the data has the string "_Vm_", then it is circularly polarized*/ 
+if (polflag && time_is_invalid(val) == 0 )
+{
+
+   char *val2     = drms_getkey_string(inRec,"DATAFILE",&status);
+   char *val2test = strstr(val2,"_Vm_");
+   if (val2test == NULL) drms_setkey_string(outRec,"POLSTATE","LP");
+   else drms_setkey_string(outRec,"POLSTATE","CP");
+}
+
+
+
+
+if (dpcflag)
+{
+	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0 && strcmp(val1,"60 second") == 0)
 	   {
-           if( dpcflag && strcmp(val1,"60 second") == 0)
-           {
            outSeg = drms_segment_lookupnum(outRec, 0);
            if (inSeg && outSeg)
             {
@@ -404,7 +423,6 @@ int DoIt(void)
 	    }
           else
             DIE("Bad data segment lookup, in or out\n");
-	    }
            }
         else
 	  { /* record is missing, copy t_rec and soho ephemeris keywords anyway*/
@@ -441,6 +459,73 @@ int DoIt(void)
           drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
           continue;
 	  }
+}
+else
+{
+	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0)
+	   {
+           outSeg = drms_segment_lookupnum(outRec, 0);
+           if (inSeg && outSeg)
+            {
+            DRMS_Array_t *data;
+            /* read the data ad doubles so allow rescaling on output */
+            data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
+            if (!data)
+                  {
+                     fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
+                  DIE_status("giveup\n");
+                  }
+            /* use the zero and offset values in the JSD for the new record segment */
+            data->bscale = outSeg->bscale;
+            data->bzero = outSeg->bzero;
+            drms_segment_write(outSeg, data, 0);
+            drms_free_array(data);
+            Record_OK = 1;    
+	    quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
+            quality = quality & (~qualnodata);
+            drms_setkey_int(outRec,"QUALITY",quality);
+	    }
+          else
+            DIE("Bad data segment lookup, in or out\n");
+           }
+        else
+	  { /* record is missing, copy t_rec and soho ephemeris keywords anyway*/
+          drms_copykey(outRec, inRec, "T_REC");
+	  drms_copykey(outRec, inRec, "OBS_VW");
+	  drms_copykey(outRec, inRec, "OBS_VR");
+	  drms_copykey(outRec, inRec, "OBS_VN");
+	  sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
+	  drms_setkey_string(outRec, "DATE", timebuf);
+	  val = drms_getkey_double(inRec, "OBS_DIST", &status);
+	  drms_setkey_double(outRec, "DSUN_OBS", val*AU_m);
+	  val = drms_getkey_double(inRec, "OBS_B0", &status);
+	  drms_setkey_double(outRec, "CRLT_OBS", val);	
+	  val = drms_getkey_double(inRec, "OBS_CR", &status);
+	  drms_setkey_double(outRec, "CAR_ROT", val);	
+	  val = drms_getkey_double(inRec, "OBS_R0", &status);
+	  drms_setkey_double(outRec, "RSUN_OBS", val);
+  	  val = drms_getkey_double(inRec, "OBS_L0", &status);
+	  drms_setkey_double(outRec, "CRLN_OBS", val); 
+          drms_setkey_int(outRec, "QUALITY", 0X80000000);
+  	  val = drms_getkey_int(inRec, "DPC", &status);
+	  drms_setkey_int(outRec, "DPC", val);
+
+	  if (drms_keyword_lookup(outRec, "DATAVALS", 0))
+	    drms_setkey_int(outRec, "DATAVALS", 0);
+          if (SkipMissingFiles)
+             {
+             Record_OK = 0;
+             if (verbose) 
+               fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
+             }
+          else
+             Record_OK = 1;
+          drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
+          continue;
+	  }
+
+
+}
       /* loop through all target keywords */
       outKey_last = NULL;
       while (outKey = drms_record_nextkey(outRec, &outKey_last, 1))
@@ -624,8 +709,6 @@ if ( status == DRMS_SUCCESS)
         drms_setkey_string(outRec, "ROLL_TBL", rollrecstring);
 	}			
 
-
-
 /* populate the CALTBLS keyword */
 
 char *calrecstring;
@@ -673,6 +756,8 @@ if (!strcmp("/home/soi/CM/tables/calib/dop/hr/tune_4/", caltbls))
   calrecstring="mdi.caltables_doppler[hr_tune_4]";
 if (!strcmp("/home/soi/CM/tables/calib/dop/hr/tune_5/", caltbls))
   calrecstring="mdi.caltables_doppler[hr_tune_5]";
+if (!strcmp("/home/soi/CM/tables/calib/dop/hr/tune_6/", caltbls))
+  calrecstring="mdi.caltables_doppler[hr_tune_6]";
 if (!strcmp("/home/soi/CM/tables/calib/dop/hr_spec/tune_0/", caltbls))
   calrecstring="mdi.caltables_doppler[hr_spec_tune_0]";
 if (!strcmp("/home/soi/CM/tables/calib/dop/orig/tune_1/", caltbls))
