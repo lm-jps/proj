@@ -167,24 +167,32 @@
  *        (b) Some changes in QUICKRUN so that it will be really useful...
  *   29) 2012 Mar 27 -- Apr 09
  *        (a) New VFISV FD10
- *        (b) KH Checked in this version on April 09.
  *   30) 2012 Apr 10 -- 13
  *        (a) Now assume to use the Fortran codes cleaned-up by RCE, with C-wrapper (this file) modified accordingly.
- *            The Fortrans and C-wrapper were provided by RCE, on April 09.
- *        (b) KH include all changes by RCE, from the version (29).
- *        (c) The cleanup by RCE should not affect the outputs, which KH confirmed., on Apr 10
- *        (d) Change some name of preprocess parameter turnning on or off the cyclic parallelism
- *        (e) Errors for inclinatin and azimuth are capped at value of 180 degrees.
+ *            The Fortrans and C-wrapper modified were provided by RCE, on April 09.
+ *            The cleanup by RCE should not affect the outputs, which KH confirmed on Apr 10
+ *        (b) KH includes all changes by RCE, since the last version (29).
+ *        (c) Change some name of preprocess parameter turnning on or off the cyclic parallelism
+ *        (d) Errors for inclinatin and azimuth are capped at value of 180 degrees.
+ *        (e) KH checked in this version to CVS tree on April 13. This version is used for preparing data release (June 1)
+ *   31) 2012 Jun 19 --
+ *        (a) Add a few standard FITS keywords, DATA{VALS,MEAN,RMS}
+ *            Add one integer keyword NHARP, number of HARP region: zero for full-disk, 1 or greater for HARP runs.
+ *        (b) Add lines to prevent overwriting a full disk data with the HARP one.
+ *            Add lines to host option (-f) to enforce overwriting the existing output data record.
+ *        (c) This modification should not affect the output data, which KH confirmed.
+ *        (d) Checked-in on June ??.
  *
  * ------------------------------------------------------------------------------------------------------ */
 
 
 /* A lot of pre-process switches: Set 0 (turn-off) or 1 (turn-on).
- * K.H. assumes the value must be 0 or 1, or 2 for a few preprocess parameter.
- * If you write other number, consequences will be unpredictable. */
+ * K.H. assumes the value must be 0 or 1. One or a few parameters will accommodate value 2.
+ * If you give other number, consequences will be unpredictable. */
 
 /* A tweak for quick-run for test mode.
- * MIND that QUICKRUN does not mean this is for QuickLook. Quick-Look (or nrt) run will be done with the masking data (see MASKPTCH below).
+ * MIND that QUICKRUN does not mean this is for QuickLook.
+ * Quick-Look (or nrt) run will be done with the masking data (see MASKPTCH or HARPATCH options, below).
  * Only some selected columns will be processed, and the selection will be given at if-block(s) somewhere in the code.
  * Set 1 to turn on this functionality.
  * Different from another similar choice controlled by RECTANGL,
@@ -196,25 +204,24 @@
  * Do inversion for pixels within a selected rectangle (in CCD coordinate so far) of interest.
  * Defining the rectangle of interest will be done somewhere in this code.
  * Because the output array size will be arbitrary, the .jsd file must have "vardim" attribute instead of "variable".
- * May co-work with QUICKRUN, but KH strongly encourage to use either of QUICKRUN and RECTANGL because it is not fully confirmed yet (as of 2012 02 21). */
+ * May co-work with QUICKRUN, but KH strongly discourage to use both QUICKRUN and RECTANGL (as of 2012 02 21). */
 #define RECTANGL 0
 
 /* Set 1 to normalize filter function BEFORE given to invert() subprogram.
- * This must be default, once a line normalizing filter in invert() routine is commented out.
- * Added on May 16, 2011. */
+ * This must be default, since May 16, 2011.*/
 #define NRMLFLTR 1
 
-/* Set 1 to save as integer arrays with bscale-increment and bzero-offset.
+/* Set 1 to save as integer (Rice-compressed) arrays with bscale-increment and bzero-offset.
  * Otherwise, data be saved in float.
  * 1 will be default for regular automatic runs. */
 #define INTBSCLE 1
 
-/* By setting 1, the initial guess value for vlos_mag is given, from hmi.V* series data.
- * As of 2011 Mar 24, the values are given from hmi.V_720s. Because hmi.{V,S,M} are made
- * simultaneously at lev. 1 pipeline process, this must always work.
+/* By setting 1, the initial guess value for vlos_mag is given from hmi.V* series data.
+ * As of 2011 Mar 24, the values are given from hmi.V_720s.
+ * Because hmi.{V,S,M} are made simultaneously at lev. 1 pipeline process, this must always work.
  * In case hmi.V is not available, initial guess is caluclated from SDO's orbital info. and pixel address.
  * Note that, inside the VFISV, the initial guess for LoS velocity is replaced with the one
- * calculated from Stokes I (or V if dark sunspot), thus essentially, this flag may be of less meanings */
+ * calculated from Stokes I (or V if dark sunspot), thus essentially, this flag may be of less meanings. */
 #define VLOSINIT 0
 
 /* Added on March 25, 2011
@@ -222,9 +229,9 @@
  * In case hmi.M_720s is not available, the data will be filled with zero value. */
 #define MGSTINIT 0
 
-/* Whether or not to determine the noise level at each pixel, or use the one uniform over full-disk.
+/* Whether or not to determine the noise level at each pixel, or use uniform number over full-disk.
  * 1 means to do for each pixel.
- * On 2012 Jan 24.
+ * Added on 2012 Jan 24.
  * This choice will change where the init_line_() subroutine is called. */
 #define NLEVPIXL 1
 
@@ -240,8 +247,7 @@
  * Recommend to always keep 1. */
 #define EQUIAREA 1
 /* Another way to allocate pixels to each PE, suggested by J.S.
- * This choice is preparation for future changes in VFISV.
- * In near-future improved version of VFISV, the elapsed time for processing a pixel will be
+ * In the latest (as of 2012 April) version of VFISV, the elapsed time for processing one pixel will be
  * significantly pixel-dependent. In this case, EUQIAREA strategy will no longer provide good parallel efficiency.
  * Set 1 to use this.
  * CYCLPRLL choice will override EQUIAREA: The value of CYCLPRLL will be first evaluated before EQUAREA will be.
@@ -255,41 +261,54 @@
 #define MASKPTCH 0
 
 /* Use HARP mask data.
- * Pixel size of HARP map is NOT necessarily same as the Stokes.
- * If MULTHARP is 1, output data pixel size will be same as the Stokes (typically 4k x 4k).
- * If MULTHARP is not 1, then the output data size will be HARP bitmap size.
+ * Host each HARP segment map that does not have 4k x 4k size.
+ * If MULTHARP is set to be 1, then output data pixel size will be same as the Stokes (typically 4k x 4k).
+ * If MULTHARP is not set to be 1, then the output data size will be same as each HARP bitmap.
  * As of May 24, 2011, only one of MASKPTCH and HARPATCH can be 1.
  * As of May 24, 2011, only one of RECTANGL and HARPATCH can be 1. */
 #define HARPATCH 1
 /* Which, blob or rectangle of HARP region, will be processed.
  * 1 for blob. 0 (rectangle) will be default. */
 #define HARPBLOB 0
-/* Importing multiple HARP at one instant.
+/* Processing multiple HARPs.
  * If 0, only one HARP explicitly specified by HARPNUM primekey will be processed.
- * K.H. strongly recommend this parameter be left 1, for it often fails for unsolved reasons maybe at memory allocation, nut. */
+ * K.H. strongly recommend this parameter be left 1, because the run will fail maybe due to failure of memory (de)allocation, nuts. */
 #define MULTHARP 1
 /* Added on Jan 27, 2012, by K.H.
  * This choice will give you an alternative way, simiar to RECTANGL, to process only the (rectangle) region(s) of your interest.
  * Different from RECTANGL choice, the output will be of 4k x 4k (or same size as the input Stokes).
  * The output file size of 4k x 4k will bring some conveniences, e.g. for mtracking etc.
  * Turn on by setting value to be 1.
- * The size and position of rectangles will be specified at lines somewhere in this code.
+ * The size and position of rectangles will be specified at if-then block somewhere in this code.
  * This choice works only when both HARPATCH and MULTHARP is set 1. */
 #define HANDHARP 0
 
 /* Set 1 to enable to fetch the (previous) existing data through JSOC-DRMS as better initial guess.
- * So for, not used, nor finalized.
+ * So for, not used.
  * Keep this zero for a while being. */
 #define TAKEPREV 0
 
 /* Enforce the output T_REC to be the one given at option out2.
  * The argument for the option out2 must be a string YYYY:MM:DD_hh:mm:ss_TAI, without [].
- * Good for parameter-tests using the Stokes of the same T_REC and saving outputs at the same series but different primary keywords. */
+ * Good for parameter-tests using the Stokes of the same T_REC, saving outputs at the same series, and using different parameters. */
 #define CHNGTREC 0
 
 /* Yang's confidence and quality index definition.
  * This choice was first added on May 18 2011. */
 #define CONFINDX 1
+
+/* Add 4 keywords, defined/reminded on June 19, 2012.
+ * 3 segment-keywords, DATAVALS, DATAMEAN and DATARMS: these will be calculated in set_statistics().
+ * 1 record-keyword, NHARP (number of HARP regions, 0 for full-disk).
+ * Set 1 to activate this. */
+#define ADNEWKWD 1
+
+/* Added on Jun. 21, 2012.
+ * ME will be skipped, when the full-disk data exists at the destination record.
+ * ME will be done, when no record exists, or the existing one is of HARP.
+ * -f option will enforce to do ME, overriding any condition above.
+ * Set 1 to activate this. */
+#define CHCKSKIP  1
 
 /* Phil's macro */
 #define DIE(msg) {fflush(stdout);fprintf(stderr,"%s, status=%d\n",msg,status); return(status);}
@@ -298,27 +317,20 @@
 #if HARPATCH == 1
 char *module_name = "vfisv FD10 HARP"; // may be kept unchanged
 #else
-char *module_name = "vfisv FD10"; // may be kept unchanged
+char *module_name = "vfisv FD10";      // may be kept unchanged
 #endif
-// char *version_id  = "2011 Oct. 14"; // numerics or string representing version of VFISV. Typically date of last editing of core Fortran part. Given by hand....hmmm
-// char *version_id  = "2012 Jan. 24";
-char *version_id  = "2012 Apr. 13";
+/* Version of VFISV. Typically date of last editing (of Fortran or C-wrapper, whichever later). Given by hand....hmmm */
+//char *version_id  = "2012 Apr. 13";
+char *version_id  = "2012 Jun. 23";
 
-/* external subroutine etc. written in Fortran files */
-
-/* RCE Apr 21, 2010: Added a "double [][]" in definition of invert_ to pass
-the filter profiles computed by Sebastien*/
+/* external subroutine etc. written in Fortran files, essentially all fortran variables are of pointer */
 
 extern void invert_ (double *, double *, double *, double *, double *, double[][], int *, double *); // after Feb 10, 2011
 extern void filt_init_ (int *, double *, int *);
-/* extern void filt_init_ (int *, int *, double *, int *); before April 10 2012*/
-/* extern void filt_init_ (int *, int *, int *, double *, double *, double *, int *); before May 31 2011 */
 extern void free_init_ (int *);
 extern void free_memory_ ();
-/* extern void inv_init_ (int *, double *, double *, double *, double *, double *); before April 10 2012 */
 extern void inv_init_ (int *, double *, double *, double *, double *);
 extern void vfisvalloc_ (int *, int *, int *);
-// extern void vfisvalloc_ (int *, int *, int *, int *);
 extern void lim_init_ (double *); // on and after April 10 2012
 #if NLEVPIXL == 1
 extern void line_init_ (double *, double *, double [4]);
@@ -334,31 +346,31 @@ extern void wave_init_ (double *, double *, int *);
 #include <mpi.h>
 
 ModuleArgs_t module_args[] = {
-  {ARG_STRING,  "in",  "hmi.S_720s[2010.08.01_12:12:00_TAI]", "input record"},
+  {ARG_STRING,  "in",  "hmi.S_720s[2012.02.15_00:00:00_TAI]", "input record"},
   {ARG_STRING,  "out", "hmi.ME_720s", "output series"},
 #if CHNGTREC == 1
-  {ARG_STRING,  "out2", "2012.01.02_03:45:00_TAI", "dummy T_REC"},
+  {ARG_STRING,  "out2", "2020.01.02_03:45:00_TAI", "dummy T_REC"},
 #endif
 #if TAKEPREV == 1
-  {ARG_STRING,  "in2", "hmi.ME_720s[2010.08.01_12:00:00_TAI]", "reference inversion results"},
+  {ARG_STRING,  "in2", "hmi.ME_720s[2011.02.15_00:00:00_TAI]", "reference inversion results"},
 #endif
 #if HARPATCH == 1
 #if MULTHARP == 1
-  {ARG_STRING,  "in3", "su_xudong.test_mharp[][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"}, // without specific HARPnum.
+  {ARG_STRING,  "in3", "hmi.Mharp_720s[][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"},    // for processing all HARPnum at one instant.
 #else
-  {ARG_STRING,  "in3", "su_xudong.test_mharp[12][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"}, // with a given HARPnum. : usually not used.
+  {ARG_STRING,  "in3", "hmi.Mharp_720s[380][2011.02.15_00:00:00_TAI]", "HARP masking bitmap data"}, // for processing a specified HARPnum. : usually not used.
 #endif
 #endif
 #if MASKPTCH == 1
-  {ARG_STRING,  "in3", "su_xudong.mask4inv[2010.08.01_12:12:00_TAI]", "some masking bitmap data"},
+  {ARG_STRING,  "in3", "su_xudong.mask4inv[2010.08.01_12:12:00_TAI]", "some masking bitmap data"},  // full disk mask data. Stale. To be deleted someday.
 #endif
 #if VLOSINIT == 1
-  {ARG_STRING,  "in4", "hmi.V_720s[2010.08.01_12:12:00_TAI]", "Doppler as initial guess"},
+  {ARG_STRING,  "in4", "hmi.V_720s[2012.02.15_00:00:00_TAI]", "Doppler as initial guess"},
 #endif
 #if MGSTINIT == 1 || CONFINDX == 1
-  {ARG_STRING,  "in5", "hmi.M_720s[2010.08.01_12:12:00_TAI]", "magnetogram as initial guess"},
+  {ARG_STRING,  "in5", "hmi.M_720s[2012.02.15_00:00:00_TAI]", "magnetogram as initial guess"},
 #endif
-/* inversion options, 20 */
+/* default values of inversion options, as of April 2012. */
   {ARG_INT,     "num_iter",                  "200", "number of iterations(default: 30)"},
   {ARG_INT,     "num_lambda",                "149", "number of ??(default: 33)"},
   {ARG_DOUBLE,  "Lambda_Min",            "-1998.0", "Intensity threshold (default: -432)"},
@@ -388,6 +400,7 @@ ModuleArgs_t module_args[] = {
   {ARG_INT,     "Continuum",                   "0", "Intensity threshold (default: 0)"},
 /* other options */
   {ARG_FLAG, "v",    "", "run verbose"},
+  {ARG_FLAG, "f",    "", "enforce overwritng"},
 /* trailer */
   {}
 };
@@ -450,6 +463,7 @@ int DoIt (void)
 #endif
 
   const int    verbosec   = params_isflagset(params, "v");
+  const int    enfdoitc   = params_isflagset(params, "f"); // added on Jun 19, 2012 and later..
 
 /* then copy it to non-constants, to avoid JSOC-compiler's complain */
 
@@ -469,7 +483,7 @@ int DoIt (void)
 #if MGSTINIT == 1 || CONFINDX == 1
   char   *indsdesc5;
 #endif
-  int    verbose;
+  int    verbose, enfdoit;
 
   int    NUM_ITERATIONS, NUM_LAMBDA, NUM_LAMBDA_FILTER, NUM_TUNNING, CONTINUUM;
   double SVD_TOLERANCE, CHI2_STOP, POLARIZATION_THRESHOLD, INTENSITY_THRESHOLD, PERCENTAGE_JUMP;
@@ -518,10 +532,9 @@ int DoIt (void)
   NUM_LAMBDA_synth = NUM_LAMBDA_synthc;
   LAMBDA_MIN_synth = LAMBDA_MIN_synthc;
 
-/* by RCE */
-// printf ("Num lambda filter: %d\n", NUM_LAMBDA_FILTER);
+  verbose = verbosec;
+  enfdoit = enfdoitc;
 
-  verbose  = verbosec;
   indsdesc = strdup(indsdescc);
 #if CHNGTREC == 1
   outtrec= strdup(outtrecc);
@@ -542,7 +555,6 @@ int DoIt (void)
 
 /* important variables for inversions */
   int list_free_params[10]={1,1,1,0,1,1,1,1,1,0};
-//  double guess[10]= {15.0,90.0,45.0,0.5,40.0,150.0,0.0,0.4*6e3,0.6*6e3,1.0};
   double guess[10]= {15.0,90.0,45.0,0.5,50.0,150.0,0.0,0.4*6e3,0.6*6e3,1.0};
   int keyfreep;
   keyfreep = 0x000003be; /* 1110111110=958=3BE*/
@@ -558,7 +570,6 @@ int DoIt (void)
   char segname[16];
   char *spname[] = {"I", "Q", "U", "V"};
   int spct = (sizeof (spname) / sizeof (char *));
-//  int wlct = 6;
   int wlct = NUM_LAMBDA_FILTERc; // now we assume that NUM_LAMBDA_FILTERc is NOT always 6.
   int paramct = 10;
 
@@ -583,9 +594,9 @@ int DoIt (void)
                           1.0,1.0,1.0};                // integer (or character) arrays for convflag, qual_map and confid_map: must be 1.0
 
 /* arrays and variables, used by wrapper */
-  int    *FinalConvFlag;    // this is a new array to handle converge-flag
-  int    *FinalConfidMap;   // this is a new array to handle confidence-map
-  int    *FinalQualMap;     // this is a new array to handle quality-map
+  int    *FinalConvFlag;
+  int    *FinalConfidMap;
+  int    *FinalQualMap;
   double *FinalRes,*FinalErr;
   time_t startime, endtime, starttime1, endtime1;
   double *ddat, *res;
@@ -599,8 +610,9 @@ int DoIt (void)
   int j,m,i,k,n;
   int status;
   int iquality;
+  int nharp = 0; // zero for full-disk
 #if RECTANGL == 1 || HARPATCH == 1
-/* clipping cropping, address start (0,0) at the left bottom corner of CCD */
+/* clipping cropping, address starts (0,0) at the left bottom corner of CCD */
   int xleftbot = 1885;
   int yleftbot = 1410;
   int xwidth   = 100;
@@ -611,13 +623,13 @@ int DoIt (void)
   int mpi_tag, mpi_rank, mpi_size;
   int myrank, nprocs, numpix;
   int istart, iend;
-  int *istartall, *iendall;   // start and end pixel addresses, in 4k x 4k sense, of the region assigned to each PE.
-  void para_range(int,int,int,int *,int *); // by K.H., written in somewhere in this code.
+  int *istartall, *iendall;   // start and end pixel addresses, in 16M address space, of a region assigned to each PE.
+  void para_range(int,int,int,int *,int *); // by K.H., written somewhere in this code.
 #if CYCLPRLL == 1
-  int *jobassignmap; // job assginment map, in CYCLPRLL choice. ... allocated only at primary (0th) PE. Only mom knows everything.
+  int *jobassignmap; // job assginment map, in CYCLPRLL choice. ... allocated only at primary (0th) PE. Only Mom knows everything.
   int jobnum;        // number of pixel each PE will take care of in CYCLPRLL choice
 #endif
-/* the Sun, SDO and HMI CCD */
+/* the Sun, SDO, HMI and CCD */
   float obs_vr;
   float crpixx, crpixy;
   float cdeltx, cdelty;
@@ -628,7 +640,7 @@ int DoIt (void)
 /* version info., a dummy function to get CVS version info. when checking in.*/
   char *meinversion_version();
 
-/*S.C. filter function, written in this code */
+/*S.C. filter function, written in this code file */
   int vfisv_filter(int ,int ,double [][],double ,double ,double *,double *,int ,double *,double *,int ,
                    double, double [4],double [3],double [4],double [3],double *,double *,double *,
                    int, double ,int ,int ,int ,int);
@@ -659,17 +671,21 @@ int DoIt (void)
   int    HCMWB;
   int    HCMNB;
   int    HCMPOL;
+/* Phil's set_statistics function */
+#if ADNEWKWD == 1
+  int set_statistics(DRMS_Segment_t *, DRMS_Array_t *, int);
+#endif
 
 #if VLOSINIT == 1
-  float *vlos_init;   // new, on Mar 24, 2011
+  float *vlos_init;
   int   iexistdoppler;
   iexistdoppler = 0;  // default, no-existing..
 #endif
 #if MGSTINIT == 1 || CONFINDX == 1
-  float *mgst_init;   // new, on Mar 25, 2011
+  float *mgst_init;
   int   iexistmagnetogram;
   iexistmagnetogram = 0; // default, no-existing..
-  float *blosgram;       // new, on May 18, 2011
+  float *blosgram;
 #endif
 #if TAKEPREV == 1
   float *prevdata;
@@ -681,7 +697,7 @@ int DoIt (void)
   iexistpatchmask = 0; // default, no-existing..
 #endif
 
-/* check of preprocess : MIND that these if-list do not cover all possible prohibited choices. */
+/* check of preprocess parameters : MIND that these do not cover all possible prohibited choices. */
 #if MASKPTCH == 1 && HARPATCH == 1
   DIE(" Both MASKPTCH and HARPATCH set 1. So terminated !\n");
 #endif
@@ -695,7 +711,7 @@ int DoIt (void)
 /* time at the start */
   time(&startime);
 
-/* Initalizing MPI, each PE finds where it is, and how many cpu or core be used. */
+/* Initalizing MPI, each PE finds where it is, and how many CPUs or cores be used. */
   MPI_Status mpi_stat;
   status = 0;
   MPI_Init (&status, NULL);
@@ -706,13 +722,91 @@ int DoIt (void)
   iendall   = (int *)malloc(sizeof(int) * mpi_size);
 
   MPI_Barrier(MPI_COMM_WORLD);
+  if (mpi_rank == 0){printf ("%s Ver. %s\n", module_name, version_id);}
 
-  if (mpi_rank == 0) // very very long long lines for the primary PE. reading data, allocating memory, and assigning job to the other PEs.
+#if CHCKSKIP == 1
+/* first of all, check if the output data already exists or not, then decide to do ME VFISV or quit */
+{ // scope limiter
+  int idoit;
+  idoit = 0; // 1 for to-do, otherwise for skip
+  if (enfdoit)
   {
+    if (mpi_rank == 0){printf ("Enforcing running VFISV even when the output destination record exits.\n");}
+    idoit = 1;
+  }
+  else
+  {
+    if (mpi_rank == 0)
+    {
+/* try to provisionally open the input Stokes record */
+      inRS = drms_open_records (drms_env, indsdesc, &status); /*  open input record_set  */
+      if (status) {DIE("drms_open_records failed.\n");}
+      if ((rec_ct = inRS->n) == 0){DIE("No records in selected dataset.\n");}
+      if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
+      inRec = inRS->records[0]; // This wrapper assume only the first Stokes be taken care of.
+//      inSeg = drms_segment_lookupnum (inRec, 0);
+      TIME t_rec = drms_getkey_time(inRec,"T_REC",&status);
+      drms_close_records(inRS, DRMS_FREE_RECORD); // once close the input Stokes record.
+/* try to open the destination record */
+      DRMS_RecordSet_t *inRS2;
+      DRMS_Record_t   *inRec2;
+      char timestr2[26];
+      sprint_time(timestr2,t_rec,"TAI",0);
+      char stroutdat[80];
+      sprintf(stroutdat,"%s[%s]",outserc,timestr2);
+      printf(" destination record : %s ",stroutdat);
+      char *inQuery2 = stroutdat;
+      inRS2 = drms_open_records(drms_env, inQuery2, &status);
+      if (status || inRS2->n == 0)
+      {
+        printf("not exist, so ME will start.\n");
+        idoit = 1;
+      }
+      else
+      {
+        printf("    exist.:");
+        idoit = 0;
+        inRec2= inRS2->records[0]; // there must be only one record, this case.
+	int nprc2;
+        nprc2 = drms_getkey_float(inRec2,"INVNPRCS",&status); 
+        if (nprc2 < 1e7)
+        {
+          idoit   = 1;
+          printf(" but it seems to be of HARP, so ME VFISV will start.\n");
+        }
+        else
+        {
+          idoit   = 0;
+          printf(" the existing one seems to be of full-disk, so ME VFISV will be skipped.\n");
+        }
+      }
+      drms_close_records(inRS2, DRMS_FREE_RECORD);
+    } // end if mpi_rank is 0
+    MPI_Barrier(MPI_COMM_WORLD);
+    int *ibuff;
+    ibuff=(int *)malloc(sizeof(int)*1);
+    ibuff[0]=idoit;
+    MPI_Bcast(ibuff,1,MPI_INT,0,MPI_COMM_WORLD);
+    idoit = ibuff[0]; // unpacking
+    free(ibuff);
+  } // endif enforce do-it option is given or not.
+  if (idoit != 1)
+  {
+    if (mpi_rank == 0){printf("ME VFISV run will be skipped. Good bye !\n");}
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Finalize();
+    return 0;
+  }
+} // scope limiter
+#endif /* end if CHCKSKIP is 1 */
 
-    printf ("%s Ver. %s\n", module_name, version_id);
+/* very very long long if-block lines for the primary PE.
+ * Reading data, allocating memory, assigning job amount and sending the input data to the other PEs. */
+  if (mpi_rank == 0)
+  {
+//    printf ("%s Ver. %s\n", module_name, version_id);
     if (verbose) printf ("%d CPU/core(s) be used for parallel-inversion. \n", mpi_size);
-    printf("Lambda_O= %f\n",LAMBDA_0);
+//    printf("Lambda_O= %f\n",LAMBDA_0);
 
 #if MASKPTCH == 1
     { /* limit scope for some DRMS variables */
@@ -1020,6 +1114,7 @@ int DoIt (void)
       else
       {
         rec_ct = inRS->n; // redo .. just in case.
+        nharp = rec_ct;   // for keyword NHARP
         printf(" There are %d HARP for %s\n",rec_ct, indsdesc3);
         iexistpatchmask = 1;
         for (rn = 0; rn < rec_ct; rn++)
@@ -1063,11 +1158,12 @@ int DoIt (void)
           if (verbose) {printf(" HARP info. xleftbot yleftbot xwidth yheight = %d %d %d %d\n",xleftbotL,yleftbotL,xwidth,yheight);}
 
 #if 0
-/* do only specified HARP region(s) and enfoce the size to 700 or greater. : may be exclusive to the above */
+/* do only specified HARP region(s) */
           int numharp = drms_getkey_time(inRec,"HARPNUM",&status);
           if ((numharp == 2081) || (numharp == 4087)) // give HARP numbers here as many as you want.
           {
 #if 1
+/* enfoce the size to 700 or greater */
             int icenter, jcenter;
             icenter = xleftbotL + colsL / 2;
             jcenter = yleftbotL + rowsL / 2;
@@ -2160,7 +2256,6 @@ int DoIt (void)
   if (mpi_rank == 0) printf("\n----------- inversion initializations ----------------- \n");
 
   vfisvalloc_(&NUM_LAMBDA_FILTER,&NUM_LAMBDA,&NUM_LAMBDA_synth); // new one on April 10, 2012
-//  vfisvalloc_(&NUM_LAMBDA_FILTER,&NUM_TUNNING,&NUM_LAMBDA,&NUM_LAMBDA_synth); // allocate small variables..here
 
 /* On 2012 Jan 24. When determining noise-level at each pixel, the lines below be disabled. */
 #if NLEVPIXL != 1
@@ -2169,8 +2264,6 @@ int DoIt (void)
   wave_init_ (&LAMBDA_MIN_synth,&DELTA_LAMBDA,&NUM_LAMBDA_synth);
   if (verbose){printf("done wave_init for mpi_rank %d\n",mpi_rank );}
   filt_init_ (&NUM_LAMBDA_FILTER,&WSPACING, &NUM_LAMBDA); // new one, on April 10, 2012
-//  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&WSPACING, &NUM_LAMBDA); // new one, on May 31, 2011
-//  filt_init_ (&NUM_LAMBDA_FILTER,&NUM_TUNNING,&CONTINUUM,&LYOTFWHM,&WNARROW,&WSPACING, &NUM_LAMBDA); old one,
   if (verbose){printf("done filt_init for mpi_rank %d\n",mpi_rank);}
 #endif
 
@@ -2290,7 +2383,7 @@ printf("We should be running initialize_vfisv_filter\n");
 /* copy from lines by S. Couvidat : some lines here seem omittable, but K.H. just copied everything. */
     column = 2048;       // MIND these two assume the case input be 4k x 4k, but no need to modify even when the input is not of 4k x 4k:
     row    = 2048;       //      This part just calculate the filter-normalization factor at the center.
-    ratio  = 4096/nx2;   // modified on Sep 8, 2011. Now it assumes that cols and rows will not be necessarily 4k.
+    ratio  = 4096/nx2;   // Modified on Sep 8, 2011. Now it assumes that cols and rows will not be necessarily 4k.
 //    ratio  = cols/nx2;   // should be 16
     x0 = (column/ratio); // a column number
     y0 = (row/ratio);    // a row number
@@ -2373,14 +2466,10 @@ printf("We should be running initialize_vfisv_filter\n");
 
 /* ME inversion initialization */
   inv_init_(&NUM_ITERATIONS,&SVD_TOLERANCE,&CHI2_STOP,&POLARIZATION_THRESHOLD,&INTENSITY_THRESHOLD); // new one on April 10, 2012
-//  inv_init_(&NUM_ITERATIONS,&SVD_TOLERANCE,&CHI2_STOP,&POLARIZATION_THRESHOLD,&INTENSITY_THRESHOLD,&PERCENTAGE_JUMP);
   if (verbose){printf("done inv_init\n");}
   free_init_(list_free_params);
   if (verbose){printf("done list_free_params for mpi_rank %d\n", mpi_rank);}
-//  svd_init_();
-//  if (verbose){printf("done svd_init\n");}
-/* By RCE & Borrero */
-/* Changed index of list_free_params to 3 (instead of 4) to refer to Damping*/
+/* Changed index of list_free_params to refer to Damping*/
   if  (list_free_params[3] == 0) voigt_init_();
   for (n=0; n< nvar; n++) scat[n]=0.0;
 
@@ -2454,7 +2543,7 @@ printf("We should be running initialize_vfisv_filter\n");
 
 /*S.C. filter function */
 
-{ /* scope limiter, within which value of nccd must never be changed. Added on Sep 8, 2011 by K.H.*/
+{ /* scope limiter to protect values of nccd. It later turned out we do not need this scope. haha. On Sep 8, 2011 by K.H.*/
       int nloc, iloc, jloc;
       float filoc, fjloc;
       iloc = nccd % cols; // column address in the input data array, whose size is not necessarily 4k x 4k.
@@ -3332,6 +3421,10 @@ This is done inside the FORTRAN code, in invert.f90
     drms_setkey_string(outRec,"BUNIT_023",sdummy); // qual_map
     drms_setkey_string(outRec,"BUNIT_024",sdummy); // confidence index
 
+#if ADNEWKWD == 1
+    drms_setkey_int   (outRec,"NHARP",nharp);
+#endif
+
 #if CHNGTREC == 1
     drms_setkey_string(outRec, "T_REC",outtrec); // enforce T_REC dummy ones for test
 #endif
@@ -3381,6 +3474,9 @@ This is done inside the FORTRAN code, in invert.f90
       outSeg = drms_segment_lookup (outRec, Resname[j]);
       if (!outSeg) {fprintf(stderr, "Error getting data segment %s; abandoned\n", Resname[j]);}
 
+#if ADNEWKWD == 1
+      set_statistics(outSeg, invrt_array, 1); // 1 at the third argument is for "quick" run
+#endif
       if (drms_segment_write (outSeg, invrt_array, 0))
       {
         fprintf (stderr, "Error writing segment %d (%s); abandoned\n", j,outSeg->info->name);
@@ -3433,6 +3529,9 @@ This is done inside the FORTRAN code, in invert.f90
       }
       else
       {
+#if ADNEWKWD == 1
+        set_statistics(outSeg, err_array, 1); // 1 at the third argument is for "quick" run
+#endif
         if (drms_segment_write (outSeg, err_array, 0))
         {
           fprintf (stderr, "Error writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
@@ -3481,6 +3580,9 @@ This is done inside the FORTRAN code, in invert.f90
       }
       else
       {
+#if ADNEWKWD == 1
+        set_statistics(outSeg, flg_array, 1); // 1 at the third argument is for "quick" run
+#endif
         if (drms_segment_write (outSeg, flg_array, 0))
         {
           fprintf (stderr, "ConvFlag writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
@@ -3529,6 +3631,9 @@ This is done inside the FORTRAN code, in invert.f90
       }
       else
       {
+#if ADNEWKWD == 1
+        set_statistics(outSeg, qmap_array, 1); // 1 at the third argument is for "quick" run
+#endif
         if (drms_segment_write (outSeg, qmap_array, 0))
         {
           fprintf (stderr, "QualMap writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
@@ -3577,6 +3682,9 @@ This is done inside the FORTRAN code, in invert.f90
       }
       else
       {
+#if ADNEWKWD == 1
+        set_statistics(outSeg, flg_array, 1); // 1 at the third argument is for "quick" run
+#endif
         if (drms_segment_write (outSeg, flg_array, 0))
         {
           fprintf (stderr, "ConfidenceIndex writing to segment %d (%s); abandoned\n", k+paramct, outSeg->info->name);
@@ -3607,8 +3715,6 @@ This is done inside the FORTRAN code, in invert.f90
     time(&endtime);
     printf ("%ld sec for %d profiles\n", endtime - startime, sum_pixdone);
     printf ("%.2f profiles per second\n", (float)(sum_pixdone) / (0.01 + (float)(endtime - startime)));
-//    printf ("%ld sec for %d profiles\n", endtime - startime, imgpix);
-//    printf ("%.2f profiles per second\n", (float)(imgpix) / (0.01 + (float)(endtime - startime)));
 
     printf("good bye !\n");
   } // end-if mpi_rank is 0.
@@ -4208,7 +4314,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.7 2012/04/16 22:48:31 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.8 2012/06/25 19:49:26 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
