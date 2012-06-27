@@ -824,8 +824,7 @@ int DoIt (void)
       if ((status) || ((rec_ct = inRS->n) == 0))
       {
         iexistpatchmask = 0;
-//        printf(" skip, no data series : %s\n",indsdesc3);
-	DIE("terminated due to no HARP data.\n");
+        printf(" skip, no data series : %s\n",indsdesc3);
       }
       else
       {
@@ -881,8 +880,7 @@ int DoIt (void)
       if ((status) || ((rec_ct = inRS->n) == 0))
       {
         iexistpatchmask = 0;
-//        printf(" skip, no data series : %s\n",indsdesc3);
-	DIE("terminated due to no HARP data.\n");
+        printf(" skip, no data series : %s\n",indsdesc3);
       }
       else
       {
@@ -1107,11 +1105,12 @@ int DoIt (void)
 /* do with real-HARP data */
       if (verbose) printf(" now loading HARP-data : %s\n",indsdesc3);
       inRS = drms_open_records (drms_env, indsdesc3, &status); /*  open input record_set  */
-/* this case, never say die.... just turn on flag */
+/* this case, say die .... just turn on flag */
       if ((status) || ((rec_ct = inRS->n) == 0))
       {
         iexistpatchmask = 0;
-        printf(" skip, no data series : %s\n",indsdesc3);
+//        printf(" skip, no data series : %s\n",indsdesc3);
+	DIE("terminated due to no HARP data.\n");
       }
       else
       {
@@ -4316,7 +4315,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.9 2012/06/27 17:09:47 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.10 2012/06/27 17:48:30 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
