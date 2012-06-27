@@ -824,7 +824,8 @@ int DoIt (void)
       if ((status) || ((rec_ct = inRS->n) == 0))
       {
         iexistpatchmask = 0;
-        printf(" skip, no data series : %s\n",indsdesc3);
+//        printf(" skip, no data series : %s\n",indsdesc3);
+	DIE("terminated due to no HARP data.\n");
       }
       else
       {
@@ -880,7 +881,8 @@ int DoIt (void)
       if ((status) || ((rec_ct = inRS->n) == 0))
       {
         iexistpatchmask = 0;
-        printf(" skip, no data series : %s\n",indsdesc3);
+//        printf(" skip, no data series : %s\n",indsdesc3);
+	DIE("terminated due to no HARP data.\n");
       }
       else
       {
@@ -4314,7 +4316,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.8 2012/06/25 19:49:26 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.9 2012/06/27 17:09:47 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
