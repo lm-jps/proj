@@ -49,14 +49,16 @@ function ProtocolsGetImageInfo()
 
 function ProtocolOptionsInit()
   {
-  $("ProtocolOptions").style.display="none";
+  // $("ProtocolOptions").style.display="none";
+  $("ImagingOptions").style.display="none";
   }
 
 function ProtocolImageInit(imageType)
   {
   ProtocolsGetImageInfo();
   ProtocolOptionsSet = 0;
-  $("ProtocolOptions").style.display="table-row";
+  // $("ProtocolOptions").style.display="table-row";
+  $("ImagingOptions").style.display="table-row";
   }
 
 
