@@ -1,34 +1,38 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<HTML>
-<HEAD>
-<META HTTP-EQUIV="Content-Type" CONTENT="text/html; CHARSET=iso-8859-1">
-<TITLE>JSOC Export Data</TITLE>
-    
-<!-- Global 'variable' that contains the path to the directory containing all files to be included into this one -->
-    
-<!--
-<input type='hidden' id='context' value='artswebapps/' />
--->
-    
-<input type='hidden' id='context' value='' />
+<html>
+<head>
+<meta HTTP-EQUIV="Content-Type" content="text/html; charset=iso-8859-1">
+<title>JSOC Export Data</title>
 
-<SCRIPT TYPE="text/javascript" SRC="js/prototype-1.6.0.3.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="js/cookies.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
-<link rel="stylesheet" type="text/css" href="css/prototip.css" ></link>
+<script type="text/javascript" src="js/prototype-1.6.0.3.js"></script>
+<script type="text/javascript" src="js/cookies.js"></script>
+<script type="text/javascript" src="js/prototip.js"></script>
+<link rel="stylesheet" type="text/css" href="css/prototip.css" >
 
-<!-- Add functions for export processing options, section 1 of 7 -->
 <script type="text/javascript">
-    var scpath="<script type='text/javascript' src='" + $("context").value + "exportdata.d/processing.js'><\/script>";
-    document.write(scpath);
+// Global variables and initialize page locations
+var exportdata = location.pathname.sub(".html",""); 
 </script>
-<!-- Add functions for export protocol options, section 1 of X -->
 <script type="text/javascript">
-    var scpath="<script type='text/javascript' src='" + $("context").value + "exportdata.d/protocols.js'><\/script>";
-    document.write(scpath);
+document.write('<base id="basepath" href="'+exportdata+'/"><\/base>');
 </script>
 
-<HEAD>
+<script type="text/javascript">
+
+// Set CGI-BIN and include targets
+
+// var SHOW_SERIES = "show_series_test";
+// var JSOC_INFO = "jsoc_info_test";
+// var JSOC_FETCH = "jsoc_fetch_test";
+
+var SHOW_SERIES = "show_series";
+var JSOC_INFO = "jsoc_info";
+var JSOC_FETCH = "jsoc_fetch";
+</script>
+
+<!-- Add functions for export processing and protocol options  -->
+<script type="text/javascript" src="exportdata.d/processing.js"></script>
+<script type="text/javascript" src="exportdata.d/protocols.js"></script>
 
 <style type="text/css">
 
@@ -41,22 +45,6 @@ span.tip { background-color:blue;font-family:verdana;color:white;font-size:1em;f
 </style>
 
 <script type="text/javascript">
-
-// Global variables and initialize page locations
-var gRoot; // The directory containing this file. To develop, we need to be able to
-           // specify where all the files to be included live.
-    
-// Set CGI-BIN targets
-
-// var SHOW_SERIES = "show_series_test";
-// var JSOC_INFO = "jsoc_info_test";
-// var JSOC_FETCH = "jsoc_fetch_test";
-// var EXPORTDATA = "exportdata2";
-
-var SHOW_SERIES = "show_series";
-var JSOC_INFO = "jsoc_info";
-var JSOC_FETCH = "jsoc_fetch";
-var EXPORTDATA = "exportdata";
 
 // Protect page from accidental BACK button
 window.onbeforeunload = function () 
@@ -78,6 +66,7 @@ var ExportCompressOK;
 var ExportMethodOK;
 var ExportFilenameFmtOK;
 var ExportProcessingOK;
+var ExportProcessingOptions;
 var ExportUserOK;
 var ExportNotifyOK;
 var ExportReadyOK;
@@ -87,20 +76,16 @@ var args;
 var state=0;
 var uploadOndoneAction = 0;
 var ExportProcessingArgs = "";
+var ExportMethodValue = "url_quick";
+var ExportCompressValue = "compress Rice";
+var ExportProtocolValue = "FITS";
 
 // Processing options code section 2 of 7
 // Processing specific control variables
-var HgPatchActive = 0;
 var HgSeriesList;
 var HgSeriesSelected = 0;
 var HgTracked = 0;
 var ProtocolOptionsSet = 0;
-    
-var gAiaScaleActive = 0;
-    
-// Processing steps
-var gRebin = "rebin";
-var gRebinActive = 0;
 
 function OnEnterKey(evt,action)
   {
@@ -151,10 +136,12 @@ function initVars()
   uploadOndoneAction = 0;
   ExportProcessingArgs = "";
 
+  ProcessingInit();
+  ProtocolOptionsInit();
+
   // if (state < 2)
     {
     $("ExportRequestor").value = "";
-    $("ExportProcessing").value = "no_op";
     $("ExportNotify").value = "solarmail";
     $("RequestIdPlace").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -162,11 +149,11 @@ function initVars()
     $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("ExportRecordSet").value = "";
-    $("ExportProtocol").value = "FITS";
+    $("ExportProtocol").selectedIndex = 1;
     $("ExportProtocolHidden").value = "FITS";
-    $("ExportCompress").value = "compress Rice";
+    $("ExportCompress").value = 0;
     $("ExportProcessingHidden").value = "no_op";
-    $("ExportMethod").value = "url_quick";
+    $("ExportMethod").selectedIndex = 1;
     $("ExportFilenameFmt").value = "{seriesname}.{recnum:%lld}.{segment}";
     $("ExportButton").value = "Submit Export Request";
     $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
@@ -185,16 +172,6 @@ function initVars()
     $("ReExportDiv").style.display = "none";
     $("TarFileLocationRow").style.display = "none";
     $("KeywordFileLocationRow").style.display = "none";
-
-    // Processing options code section 3 of 7
-    // Init/clear display options
-    ProcessingInit();
-    // End of processing options section
-
-    // Protocol options code section 3 of X
-    // Init/clear display options
-    ProtocolOptionsInit();
-    // End of processing options section
     }
   FileUploadCleanup();
   }
@@ -252,7 +229,7 @@ function getargs()
 function OnLoadInit()
   {
   var needcount = 0;
-  Cookie.init({name:EXPORTDATA, expires:5});
+  Cookie.init({name:exportdata, expires:5});
   initVars();
   state = 0;
   Cookie.setData("state",state);
@@ -309,10 +286,11 @@ function MainTips(tipstyle)
         'The limit depends on number of keywords in each record.  This limit will be eased in the future.',tipstyle);
     new Tip('ProcessingHelp','Processing to be done to the data prior to export.  Select from drop-down list for details.',tipstyle);
     new Tip('ProtocolHelp','Data storage protocol for data files to be fetched.  ' +
-        '"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
-        '"As-is" leaves the data as it is used inside the JSOC DRMS routines, with the header metadata stored in the database ' +
-        'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten. The "jpeg" option will ' +
-        ' yield  jpeg images of the data with a pre-determined scaling and colortable and the "mpg" option will ' +
+        '<br>"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
+        '<br>"As-is" leaves the data as it is used inside the JSOC DRMS routines, with the header metadata stored in the database ' +
+        'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten.  In as-is mode the header data is ' +
+        'provided in a tab-delimited file named {RequestID}.keywords.txt. <br> The "jpeg" option will ' +
+        ' yield  jpeg images of the data with a pre-determined scaling and colortable and the <br>"mpg" option will ' +
         ' yield a movie in mp4 format along with the jpeg images that make up the frames in the movie.',tipstyle);
     new Tip('CompressHelp','Compression parameters to be used by the cfitsio library.  ' +
         'Provide up to one comma separated string for each segment name in your export.  ' +
@@ -352,10 +330,9 @@ function MainTips(tipstyle)
     }
   };
 
-// section 4 of 7 for add-on code sections.  No changes needed here but add tips to addOnTips.js
-</SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="exportdata.d/addOnTips.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript">
+</script>
+<script type="text/javascript" src="exportdata.d/addOnTips.js"></script>
+<script type="text/javascript">
 
 function CreateTips()
   {
@@ -506,73 +483,26 @@ function GetSeriesList(filter)
 
 function GetRSCount()
   {
-      // There was a bug here. The record-set specification might have a segment 
-      // specifier (e.g., {data}), in which case you do not want to append [$]. The [$] needs to
-      // be placed between the series name and the segment specifier.
-      
-      // DO NOT USE THE RegExp OBJECT!! IT DOESN'T WORK - YOU CANNOT PUT METACHARACTERS
-      // LIKE \w IN THE STRING ARGUMENT, DESPITE DOCUMENTATION SAYING YOU CAN DO THIS.
-      // IT PROBABLY HAS TO BE ESCAPED PROPERLY.
-      var filtRE = /^\s*[A-z]\w*\.\w+[\[]/;
-
-      // Extract series name from record-set specification
-      var seriesRE = /^\s*[A-z]\w*\.\w+/;
-      var series = seriesRE.exec($("ExportRecordSet").value); // array
-      
-      if (!filtRE.test($("ExportRecordSet").value))
-      {
-          // alert("no filter");
-          // No filter
-          var noFiltSegRE = /^\s*[A-z]\w*\.\w+\{[\*_A-z0-9]+\}\s*$/;
-          var noFiltRE = /^\s*[A-z]\w*\.\w+\s*$/;
-          
-          if (noFiltSegRE.test($("ExportRecordSet").value))
-          {
-              // alert("has seg spec");
-              // A seg specifier exists - place "[$]" between series and seg specifier
-              var segspecRE = /\{[\*_A-z0-9]+\}/;
-              var segspec = segspecRE.exec($("ExportRecordSet").value); // array
-              
-              if (RecordLimit == 0)
-              {
-                  $("ExportRecordSet").value = series[0] + '[$]' + segspec[0];
-              }
-          }
-          else if (noFiltRE.test($("ExportRecordSet").value))
-          {
-              // alert("has NO seg spec");
-              // No filter and no seg specifier present              
-              if (RecordLimit == 0)
-              {
-                  $("ExportRecordSet").value = series[0] + '[$]';
-              }
-          }
-          else
-          {
-              // Invalid record-set specification
-              alert("bad record-set specification: " + $("ExportRecordSet").value);
-              $("RSCountPlace").innerHTML = "ERROR - invalid record-set specification.";
-              return;
-          }
-      }
-      else
-      {
-          // alert("has filter");
-          // Filter exists, verify that record-set specification is valid
-          var fullFiltSegRE = /^\s*[A-z]\w*\.\w+(\[.+\])+\{[\*_A-z0-9]+\}\s*$/;
-          var fullFiltRE = /^\s*[A-z]\w*\.\w+(\[[^\[\]]*\])+\s*$/;
-          
-          if (!fullFiltSegRE.test($("ExportRecordSet").value) && 
-              !fullFiltRE.test($("ExportRecordSet").value))
-          {
-              alert("bad record-set specification: " + $("ExportRecordSet").value);
-              $("RSCountPlace").innerHTML = "ERROR - invalid record-set specification.";
-              return;
-          }
-      }
-      
-      SeriesName = series[0];
-                                      
+  var recset = $("ExportRecordSet").value;
+  var recfilt, segfilt;
+  var posbracket = recset.indexOf("[");
+  var posRbracket = recset.lastIndexOf("]");
+  var posCurlbracket = recset.indexOf("{");
+  var posCurlRbracket = recset.lastIndexOf("}");
+  if ((posbracket>=0 && posRbracket < posbracket) || 
+      (posRbracket>=0 && posbracket < 0) ||
+      (posCurlbracket>=0 && (posCurlRbracket < posCurlbracket || posCurlbracket < posbracket || posCurlbracket < posRbracket)) ||
+      (posCurlRbracket>=0 && posCurlbracket < 0))
+       {
+       $("RSCountPlace").innerHTML = "ERROR - missing or wrong bracket or seglist precedes record filter";
+       return(1);
+       }
+  var firstbracket = posbracket>=0 ? posbracket : posCurlbracket;
+  SeriesName = (firstbracket == -1 ? recset : recset.substring(0,firstbracket));
+  recfilt = (posbracket >=0 ? recset.substring(posbracket,posRbracket+1) : "[$]");
+  segfilt = (posCurlbracket >=0 ? recset.substring(posCurlbracket,posCurlRbracket+1) : "");
+  $("ExportRecordSet").value = SeriesName + recfilt + segfilt;
+  
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("RSCountPlace").innerHTML = "Getting count - wait...";
   RecordCount = -1;
@@ -607,6 +537,7 @@ function GetRSCount()
     onFailure: function() { alert('Something went wrong...'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
+  return(0);
   }
 
 function GetDefaultFormat()
@@ -673,16 +604,16 @@ function CreateDataTable(data, valuetable)
   valuetable = "";
   // var count = data.count;
   var count = data.data.length;
-  valuetable = "<TABLE BORDER=1>"
-  valuetable = valuetable + "<TR><TD>File</TD><TD>Record</TD><TD>Filename</TD></TR>"
+  valuetable = "<table border='1'>"
+  valuetable = valuetable + "<tr><td>File</td><td>Record</td><td>Filename</td></tr>"
   for (ifile=0; ifile < count; ifile++)
     {
-    valuetable = valuetable + "<TR>";
-    valuetable = valuetable +  "<TD>" + (ifile + 1) + "</TD>";
-    valuetable = valuetable +  "<TD>" + data.data[ifile].record + "</TD>";
+    valuetable = valuetable + "<tr>";
+    valuetable = valuetable +  "<td>" + (ifile + 1) + "</td>";
+    valuetable = valuetable +  "<td>" + data.data[ifile].record + "</td>";
     thisfile = data.data[ifile].filename;
     if (data.method.indexOf("tar") > 0)
-      valuetable = valuetable +  "<TD>" + thisfile + "</TD></TR>";
+      valuetable = valuetable +  "<td>" + thisfile + "</td></tr>";
     else
       {
       if (data.method.indexOf("ftp") >= 0)
@@ -690,10 +621,10 @@ function CreateDataTable(data, valuetable)
       else
         expURL = "http://jsoc.stanford.edu" + data.dir + "/" + thisfile;
       tmp = "<A href='" + expURL + "' target='_blank'>" + thisfile + "</A>";
-      valuetable = valuetable +  "<TD>" + tmp + "</TD></TR>";
+      valuetable = valuetable +  "<td>" + tmp + "</td></tr>";
       }
     }
-  valuetable = valuetable + "</TABLE>";
+  valuetable = valuetable + "</table>";
   return valuetable;
   }
 
@@ -704,9 +635,9 @@ function ExportNop()
 function ExportNewRS()
   {
   SetRecordLimit();
-  GetRSCount();
+  if (GetRSCount()) return;
   GetDefaultFormat();
-  SetProcessing();
+  SetProcessing(-1);
   NotifyProcessingCode();
   }
 
@@ -738,42 +669,58 @@ function SetRecordLimit()
 
 function SetExportMethod()
   {
-  $("ExportMethod").value = $("ExportMethod").value.toLowerCase();
-  if ($("ExportMethod").value == "url_quick" || $("ExportMethod").value == "url_direct")
+  var ExportMethodIndex = $("ExportMethod").selectedIndex;
+  ExportMethodValue = $("ExportMethod").options[ExportMethodIndex].value;
+  if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
     {
     ExportMethodOK = 1;
     $("ProcessRow").style.display="none";
-    $("ProcessHgPatch").style.display="none";
-    $("ProcessRebin").style.display="none";
-    if ($("ExportMethod").value == "url_direct")
-        {
-        $("ProtocolRow").style.display="table-row";
-        ExportMethodIsDirect = 1;
-        }
+    var nProcs = ExportProcessingOptions.length;
+    $(ExportProcessingOptions[0].id).checked = true;
+    for (var iProc=1; iProc < nProcs; iProc++)
+      { 
+      var ExpOpt = ExportProcessingOptions[iProc];
+      $(ExpOpt.id).checked = false;
+      $(ExpOpt.rowid).style.display = "none";
+      }
+    if (ExportMethodValue == "url_direct")
+      {
+      $("ProtocolRow").style.display="table-row";
+      ExportMethodIsDirect = 1;
+      }
     else
-        {
-        $("ProtocolRow").style.display="none";
-        ExportMethodIsDirect = 0;
-        }
+      {
+      $("ProtocolRow").style.display="none";
+      ExportMethodIsDirect = 0;
+      }
     $("FilenameFmtRow").style.display="none";
+    ExportProtocolValue = "as-is";
+    $("ExportProtocol").selectedIndex = 0;
+    ExportCompressValue = "**NONE**";
+    $("ExportCompress").selectedIndex = 1;
     $("CompressRow").style.display="none";
     $("RequestorRow").style.display="none";
     $("NotifyRow").style.display="none";
     }
-  else if ($("ExportMethod").value == "url" ||
-           $("ExportMethod").value == 'ftp' ||
-           $("ExportMethod").value == "url-tar" ||
-           $("ExportMethod").value == 'ftp-tar')
+  else if (ExportMethodValue == "url" ||
+           ExportMethodValue == 'ftp' ||
+           ExportMethodValue == "url-tar" ||
+           ExportMethodValue == 'ftp-tar')
     {
     ExportMethodOK = 1;
     $("ProcessRow").style.display="table-row";
-    $("ProcessHgPatch").style.display="none";
-    $("ProcessRebin").style.display="none";
     $("ProtocolRow").style.display="table-row";
     $("FilenameFmtRow").style.display="table-row";
     $("RequestorRow").style.display="table-row";
     $("NotifyRow").style.display="table-row";
-    if($("ExportProtocol").value == "FITS")
+    if(ExportProtocolValue == "as-is")
+      {
+      ExportProtocolValue = "FITS";
+      $("ExportProtocol").selectedIndex = 1;
+      ExportCompressValue = "compress Rice";
+      $("ExportCompress").selectedIndex = 0;
+      }
+    if(ExportProtocolValue == "FITS")
        $("CompressRow").style.display="table-row";
     }
   else
@@ -794,117 +741,108 @@ function SetExportFilenameFmt()
     }
   }
 
-function SetProcessing()
+function SetProcessing(ichecked)
   {
+  if (ichecked > 0) $(ExportProcessingOptions[0].id).checked = false;
   ExportProcessingOK = 0;
-  ExportProcessingArgs = "no_op";
-  var isok = 0;
-      
-  if ($("ExportProcessing").value == "no_op")
-    { // Add reset code for export options here, section 5 of 7
-    isok = 1;
-
-      $("ProcessHgPatch").style.display="none";
-      $("ProcessAiaScale").style.display="none";
-      $("ProcessRebin").style.display="none";
-    }
-  else if ($("ExportProcessing").value == "hg_patch") // Export option block for HgPatch, section 6 of 7
+  // Add recordLimit FIRST always.
+  ExportProcessingArgs = "n=" + RecordLimit;
+  var isok = 1;
+  var nchecked = 0;
+  var iProc = 0;
+  var nProcs = ExportProcessingOptions.length;
+  if ($(ExportProcessingOptions[0].id).checked) // no_op case must be first
     {
-    if (!HgPatchActive)
-    {
-        HgPatchInit();
-        HgPatchActive = 1;
-    }
-
-    HgSeriesSelected = 0;
-    CheckHgRecordSet(0);
-    $("ProcessHgPatch").style.display="table-row";
-    $("ProcessAiaScale").style.display="none";
-    $("ProcessRebin").style.display="none";
-
-    if (CheckHgPatch())
-      isok = 1;
-    }
-  else if ($("ExportProcessing").value == "aia_scale") // Export option block for Normalize Scale, section 6 of 7
-    {
-    if (!gAiaScaleActive)
-    {
-        AiaScaleInit();
-        gAiaScaleActive = 1;
-    }
-
-    $("ProcessHgPatch").style.display="none";
-    $("ProcessAiaScale").style.display="table-row";
-    $("ProcessRebin").style.display="none";
-
-    ExportProcessingArgs = "aia_scale";
-    isok = 1;
-    }
-  else if ($("ExportProcessing").value == gRebin)
-  {
-      if (!gRebinActive)
+    nchecked++;
+    for (iProc=1; iProc<nProcs; iProc++)
       {
-          RebinInit();
-          gRebinActive = 1;
+      var ExpOpt = ExportProcessingOptions[iProc];
+      $(ExpOpt.id).checked = false;
+      $(ExpOpt.rowid).style.display = "none";
       }
-
-      ExportProcessingArgs = gRebin;
-      $("ProcessHgPatch").style.display="none";
-      $("ProcessAiaScale").style.display="none";
-      $("ProcessRebin").style.display="table-row";
-      isok = 1;
-  }
+    ExportProcessingArgs += "|no_op";
+    }
+  else
+    {
+    for (iProc=1; iProc<nProcs; iProc++)
+      {
+      var ExpOpt = ExportProcessingOptions[iProc];
+      if ($(ExpOpt.id).checked)
+        {
+        nchecked++;
+        $(ExportProcessingOptions[0].id).checked = false;
+        ExpOpt.Init(1);
+        $(ExpOpt.rowid).style.display="table-row";
+        var args = ExpOpt.Check();
+        if (args.length > 0)
+          {
+          ExportProcessingArgs += "|"+args;
+          }
+        else
+          {
+          ExportProcessingArgs += "|--ERROR>>"+args+"<<";
+          alert("Error in processing parameters for "+$(ExpOpt.id).value);
+          isok = 0;
+          }
+        }
+      else
+        {
+        $(ExpOpt.rowid).style.display="none";
+        ExpOpt.Init(0);
+        }
+      }
+    }
+  if (nchecked == 0)
+    {
+    $(ExportProcessingOptions[0].id).checked = true;
+    SetProcessing(0);
+    }
+        
   if (isok)
     ExportProcessingOK = 1;
-  // Add recordLimit FIRST always.
-  ExportProcessingArgs = "n=" + RecordLimit + "," + ExportProcessingArgs;
   $("ExportProcessingHidden").value = ExportProcessingArgs;
+// $("ProcArgsDisplay").innerHTML = ExportProcessingArgs;
   }
 
 function SetExportProtocol()
   {
-  var tmp = $("ExportProtocol").value.toUpperCase();
+  var ExportProtocolIndex = $("ExportProtocol").selectedIndex;
+  ExportProtocolValue = $("ExportProtocol").options[ExportProtocolIndex].value;
 
-  if (tmp == "MPEG")
+  if (ExportProtocolValue == "MPEG")
     {
-    $("ExportProtocol").value = "MPEG";
     ExportProtocolOK = 4;
+    $("ImagingOptions").style.display="table-row";
     $("CompressRow").style.display="none";
     $("ExportProtocolHidden").value = "mpg";
     }
-  else if (tmp == "MP4")
+  else if (ExportProtocolValue == "MP4")
     {
-    $("ExportProtocol").value = "MP4";
     ExportProtocolOK = 4;
+    $("ImagingOptions").style.display="table-row";
     $("CompressRow").style.display="none";
     $("ExportProtocolHidden").value = "mp4";
     }
-  else if (tmp == "JPEG")
+  else if (ExportProtocolValue == "JPEG")
     {
-    $("ExportProtocol").value = "JPEG";
     ExportProtocolOK = 3;
+    $("ImagingOptions").style.display="table-row";
     $("CompressRow").style.display="none";
     $("ExportProtocolHidden").value = "jpg";
     }
-  else if (tmp == "FITS")
+  else if (ExportProtocolValue == "FITS")
     {
-    $("ExportProtocol").value = "FITS";
     ExportProtocolOK = 2;
+    $("ImagingOptions").style.display="none";
     $("CompressRow").style.display="table-row";
     $("ExportProtocolHidden").value = "FITS";
     }
-  else if ($("ExportProtocol").value == "as-is")
+  else if (ExportProtocolValue == "as-is")
     {
     ExportProtocolOK = 1;
+    $("ImagingOptions").style.display="none";
     $("CompressRow").style.display="none";
     $("ExportProtocolHidden").value = "as-is";
-    }
-  else
-    {
-    ExportProtocolOK = 0;
-    alert('Export Protocol - must be "as-is", "FITS", "JPEG", "MP4" OR "MPG"'); 
-    $("ExportProtocol").value = "";
-    $("ExportProtocolHidden").value = "NOT_VALID";
     }
   if (ExportProtocolOK == 4 || ExportProtocolOK == 3)
     if (ProtocolOptionsSet)
@@ -915,15 +853,17 @@ function SetExportProtocol()
 
 function SetExportCompress()
   {
-  var protocolparam = $("ExportProtocol").value;
-  if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
+  var ExportCompressIndex = $("ExportCompress").selectedIndex;
+  ExportCompressValue = $("ExportCompress").options[ExportCompressIndex].value;
+  var protocolparam = ExportProtocolValue;
+  if (ExportCompressValue == "compress Rice" &&  protocolparam == "FITS")
       {
       var tmp = SeriesName.toUpperCase();
-      if (tmp == "AIA.LEV1" || tmp == "AIA.LEV1_EUV_12S" || tmp == "AIA.LEV1_UV_24S" || tmp == "AIA.LEV1_VIS_1H")
+      if ($("ExportProcessing").selectedIndex == 0 && (tmp == "AIA.LEV1" || tmp == "AIA.LEV1_EUV_12S" || tmp == "AIA.LEV1_UV_24S" || tmp == "AIA.LEV1_VIS_1H"))
         protocolparam = "as-is";
       else
         for (var i=0; i < SeriesInfo.segments.length; i++)
-          protocolparam = protocolparam  + "," + $("ExportCompress").value;
+          protocolparam = protocolparam  + "," + ExportCompressValue;
       $("ExportProtocolHidden").value = protocolparam;
       }
   ExportCompressOK = 1;
@@ -944,7 +884,7 @@ function SetExportUser()
 
 function SetExportNotify()
   {
-  if ($("ExportMethod").value == "url_direct" || $("ExportMethod").value == "url_quick")
+  if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
     {
     ExportNotifyOK = 1;
     return;
@@ -1000,7 +940,7 @@ function CheckExportParams()
     alert("FilenameFmt not given, Enter FilenameFmt then retry export request.");
     return 0;
     }
-  SetProcessing();
+  SetProcessing(-1);
   if (ExportProcessingOK == 0)
     {
     $("ExportButtonMsg").innerHTML = "Retry after entering processing specs";
@@ -1014,14 +954,14 @@ function CheckExportParams()
     alert("Protocol not given, Enter export protocol then retry export request.");
     return 0;
     }
-  if ($("ExportProtocol").value == "FITS" || $("ExportProtocol").value == "as-is")
+  if ((ExportProtocolValue == "FITS" || ExportProtocolValue == "as-is") && ExportMethodValue != "url_quick")
     {
     SetExportCompress();
     }
   if ((Internal && ExportNotifyOK != 1) || ExportNotifyOK == 2)
     {
     SetExportUser();
-    if (ExportUserOK == 0)
+    if (ExportUserOK == 0 && ExportMethodValue != "url_quick")
       {
       $("ExportButtonMsg").innerHTML = "Retry after entering your identification in Requestor field";
       alert("Requestor not given, Enter name you will use in Requestor field then retry export request.  This field in required if Notify is 'solarmail'");
@@ -1060,16 +1000,13 @@ function GetExport()
     $("ExportButton").value = "Processing ...";
     $("ExportButton").style.backgroundColor = "#FFD8D8";
     var protocolparam = $("ExportProtocolHidden").value;
-    // if ($("ExportCompress").value.length > 0 && protocolparam == "FITS")
-      // protocolparam = protocolparam + "," + $("ExportCompress").value;
     var RecordSet = $("ExportRecordSet").value;
-    ExportProcessingArgs = GetRebinArgs();
     var exportparameters = new Hash( {"op" : $("ExportOpID").value,
                  		      "ds" : RecordSet, 
                  		      "process" :  ExportProcessingArgs,
                  		      "requestor" : $("ExportRequestor").value,
                  		      "notify" : $("ExportNotify").value,
-                                      "method" : $("ExportMethod").value,
+                                      "method" : ExportMethodValue,
                                       "filenamefmt" : $("ExportFilenameFmt").value,
 			 	      "format" : "json",
                  		      "protocol" : protocolparam });
@@ -1163,7 +1100,7 @@ function ProcessExportResponse(response)
   Cookie.setData("state",state);
   if (data.status == 6)
     {
-    alert("RequestID not found, status=6, error=" + data.error + "<BR>Try again in a few seconds, may just be not ready to respond");
+    alert("RequestID not found, status=6, error=" + data.error + "<br>Try again in a few seconds, may just be not ready to respond");
     ExportReadyOK = 0;
     $("ExportButton").value = "Retry";
     $("ExportButtonMsg").innerHTML = data.error;
@@ -1186,7 +1123,7 @@ function ProcessExportResponse(response)
   else if (data.status == 4)
     {
     alert("Requested RecordSet not found or specification error, status=4, error=" + data.error +
-      "<BR>The export program failed.<BR>" + "JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog");
+      "<br>The export program failed.<br>" + "JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog");
     ExportReadyOK = 0;
     $("ExportButton").value = "Bad RecordSet";
     $("ExportButtonMsg").innerHTML = data.error;
@@ -1205,7 +1142,7 @@ function ProcessExportResponse(response)
     $("ExportButton").style.backgroundColor = "#D8D8D8";
     RequestID = data.requestid;
     $("RequestIdPlace").innerHTML = data.requestid;
-    $("ExportStatus").innerHTML = "Needs Intervention, size=" + data.size + "MB, <BR>" +
+    $("ExportStatus").innerHTML = "Needs Intervention, size=" + data.size + "MB, <br>" +
       data.count + " records found, " +
       data.error + ", contact: " + data.contact;
     $("ExportLocation").innerHTML = "";
@@ -1252,15 +1189,15 @@ function ProcessExportResponse(response)
     $("RequestIdPlace").innerHTML = RequestID;
     $("ExportStatus").innerHTML = "Data Ready, size=" + data.size + "MB";
     valuetable = CreateDataTable(data, valuetable);
-    $("ExportLocation").innerHTML =  valuetable + "<BR>";
+    $("ExportLocation").innerHTML =  valuetable + "<br>";
     $("FileUploadInfo").innerHTML = "File upload done, " + data.rcount + " records requested.";
-    if ($("ExportMethod").value == "url_quick")
+    if (ExportMethodValue == "url_quick")
       {
       if (ExportMethodIsDirect) // was url_direct on call
         {
         if (count > 1)
-            $("ExportLocation").innerHTML =  "<B>Multiple files returned, direct fetch not possible. </B><P>" +
-              valuetable + "<BR>";
+            $("ExportLocation").innerHTML =  "<b>Multiple files returned, direct fetch not possible. </b><p>" +
+              valuetable + "<br>";
         else
             {
             var path = encodeURI("http://jsoc.stanford.edu" + data.dir + "/" + data.data[0].filename);
@@ -1269,10 +1206,10 @@ function ProcessExportResponse(response)
             }
         }
       else // url_quick on call
-        $("ExportLocation").innerHTML = valuetable + "<BR>";
+        $("ExportLocation").innerHTML = valuetable + "<br>";
       }
     else
-      $("ExportLocation").innerHTML =  valuetable + "<BR>";
+      $("ExportLocation").innerHTML =  valuetable + "<br>";
     if (ExportFromFileList == 1)
       {
       FinishFileUpload();
@@ -1340,7 +1277,7 @@ function GetStatus()
       Cookie.setData("state",state);
       if (data.status == 6)
         {
-        alert("RequestID not found, status=6, error=" + data.error + "<BR>Try again in a few seconds, may just be not ready to respond");
+        alert("RequestID not found, status=6, error=" + data.error + "<br>Try again in a few seconds, may just be not ready to respond");
         StatusReadyOK = 0;
         $("StatusButton").value = "Bad RecordSet";
         $("StatusButtonMsg").innerHTML = data.error + ", processing perhaps not started yet or bad RequestID";
@@ -1364,7 +1301,7 @@ function GetStatus()
         }
       else if (data.status == 4)
         {
-        alert("Requested RecordSet not found or specification error, status=4, error=" + data.error + "<BR>The export program failed.<BR>" +
+        alert("Requested RecordSet not found or specification error, status=4, error=" + data.error + "<br>The export program failed.<br>" +
 		"JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog");
         StatusReadyOK = 0;
         $("StatusButton").value = "Bad RecordSet";
@@ -1383,9 +1320,9 @@ function GetStatus()
         $("RequestIdPlace").innerHTML = data.requestid;
         $("StatusValue").innerHTML = "Requested RecordSet returned error status=3";
         $("StatusOther").innerHTML = $("StatusRequestID").value +
-           "<BR>The requested RecordSet is too large for chosen export method." +
-           "<BR>" + data.count + " records found, " + data.error +
-           "<BR>Please contact the JSOC for help." ;
+           "<br>The requested RecordSet is too large for chosen export method." +
+           "<br>" + data.count + " records found, " + data.error +
+           "<br>Please contact the JSOC for help." ;
         $("ReExportDiv").style.display = "none";
         }
       else if (data.status == 1 || data.status == 2)
@@ -1435,9 +1372,9 @@ function GetStatus()
 
         $("ExportStatus").innerHTML = "Data Ready, size=" + data.size + "MB";
         valuetable = CreateDataTable(data, valuetable);
-        $("StatusDataLocation").innerHTML =  valuetable + "<BR>";
+        $("StatusDataLocation").innerHTML =  valuetable + "<br>";
         $("StatusValue").innerHTML = "Success";
-        $("StatusOther").innerHTML = "List formats are index.html, index.json, and index.txt<BR>" +
+        $("StatusOther").innerHTML = "List formats are index.html, index.json, and index.txt<br>" +
              "export script file is " + $("StatusRequestID").value +".drmsrun" ;
         if (ExportFromFileList  == 1)
           FinishFileUpload();
@@ -1460,13 +1397,13 @@ function GetStatus()
 
 </script>
 
-</HEAD>
-<BODY BGCOLOR="#E0F0FF" onload="OnLoadInit();" >
-<DIV ID="header">
-<IMG src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
+</head>
+<body bgcolor="#E0F0FF" onload="OnLoadInit();" >
+<div id="header">
+<img src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
   style="vertical-align:middle;height:60" alt="JSOC logo">
 &nbsp;&nbsp;&nbsp;
-<B><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Export</big></B>
+<b><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Export</big></b>
 &nbsp;&nbsp;&nbsp;
 &nbsp;&nbsp;&nbsp;
 <input type="button" value="reset page" onClick="ReInitPage();" >
@@ -1475,15 +1412,15 @@ function GetStatus()
 &nbsp;&nbsp;<span id="AjaxBusy">0</span> Requests Pending
 <span id='systemWorking'>, Loading...</span>
 <!-- <br clear=all> -->
-<HR>
-</DIV> <!-- end DIV header -->
-<DIV id="ExportRequestDiv">
-<B>JSOC Data Export Request Generation</B>
-<SPAN ID="RecordSetExample">
+<hr>
+</div> <!-- end div header -->
+<div id="ExportRequestDiv">
+<b>JSOC Data Export Request Generation</b>
+<span id="RecordSetExample">
 &nbsp; &nbsp;
-<A HREF=ExportDataErrorHelp.html target="JSOC_Help">Help with Error Messages</A>
-</SPAN>
-<P>
+<a href="ExportDataErrorHelp.html" target="JSOC_Help">Help with Error Messages</a>
+</span>
+<p>
 If the Method is changed from "url_quick" or "url_direct" you will have additional options to specify.
 "url-direct" is temporarily disabled.
 <p>
@@ -1505,228 +1442,532 @@ access the data.
 <input type='hidden' id="ExportProtocolHidden" name='protocol' value='as-is' >
 <input type='hidden' id="ExportProcessingHidden" name='process' value='no_op' >
 
-  <TABLE>
-    <TR>
-      <TD>RecordSet from file</TD><TD><SPAN ID="RecordFromFileHelp" class="tip">?</SPAN></TD>
-      <TD colspan=2><input type="checkbox" name="FileUploadCheckbox" id="FileUploadCheckbox" onChange="FileUploadWanted();">
-        Check box to allow upload of RecordSet list file, file will be requested after Submit button click.</TD>
-    </TR>
+  <table>
+    <tr>
+      <td>RecordSet from file</td><td><span id="RecordFromFileHelp" class="tip">?</span></td>
+      <td colspan="2"><input type="checkbox" name="FileUploadCheckbox" id="FileUploadCheckbox" onChange="FileUploadWanted();">
+        Check box to allow upload of RecordSet list file, file will be requested after Submit button click.</td>
+    </tr>
   
-    <TR ID="RecordSetRow">
-      <TD style="width:10em" >RecordSet</TD><TD><SPAN ID="RecordSetHelp" class="tip">?</SPAN></TD><TD colspan=2>
-        <input id="ExportRecordSet" type="text" name="ds" value="" onkeydown="return OnEnterKey(event,ExportNewRS);"> </TD>
-    </TR>
+    <tr id="RecordSetRow">
+      <td style="width:10em" >RecordSet</td><td><span id="RecordSetHelp" class="tip">?</span></td><td colspan="2">
+        <input id="ExportRecordSet" type="text" name="ds" value="" onkeydown="return OnEnterKey(event,ExportNewRS);"> </td>
+    </tr>
   
-    <TR ID="RecordLimitRow">
-      <TD>Record Limit</TD><TD><SPAN ID="RecordLimitHelp" class="tip">?</SPAN></TD>
-      <TD><input id="ExportRecordLimit" type="text" name="ExportReccordLimit" value="none" style="width:15em" onChange="SetRecordLimit();" ></TD>
-      <TD>Optional manual limit to number of records to export.</TD>
-    </TR>
+    <tr id="RecordLimitRow">
+      <td>Record Limit</td><td><span id="RecordLimitHelp" class="tip">?</span></td>
+      <td><input id="ExportRecordLimit" type="text" name="ExportReccordLimit" value="none" style="width:15em" onChange="SetRecordLimit();" ></td>
+      <td>Optional manual limit to number of records to export.</td>
+    </tr>
   
-    <TR ID="RecordCountRow">
-      <TD>Record Count</TD><TD><SPAN ID="RecordCountHelp" class="tip">?</SPAN></TD>
-      <TD><span id="RSCountPlace" style="width:10em;background-color:#FFF8DC"></span></TD>
-      <TD><input id="CountButton" type="button" value="Recount" onClick="ExportNewRS();" >&nbsp;
-          Limit for AIA to about 15,000 and for HMI about 30,000 in each request.</TD>
-    </TR>
+    <tr id="RecordCountRow">
+      <td>Record Count</td><td><span id="RecordCountHelp" class="tip">?</span></td>
+      <td><span id="RSCountPlace" style="width:10em;background-color:#FFF8DC"></span></td>
+      <td><input id="CountButton" type="button" value="Recount" onClick="ExportNewRS();" >&nbsp;
+          Limit for AIA to about 15,000 and for HMI about 30,000 in each request.</td>
+    </tr>
   
-    <TR ID="MethodRow">
-      <TD>Method</TD>
-      <TD><SPAN ID="MethodHelp" class="tip">?</SPAN></TD>
-      <TD><select id="ExportMethod" type="text" name="method" style="width:15em" onChange="SetExportMethod();" >
+    <tr id="MethodRow">
+      <td>Method</td>
+      <td><span id="MethodHelp" class="tip">?</span></td>
+      <td><select id="ExportMethod" type="text" name="method" style="width:15em" onChange="SetExportMethod();" >
         <option value="url_direct">url_direct
         <option value="url_quick">url_quick
         <option value="url">url
         <option value="ftp">ftp
         <option value="url-tar">url-tar
         <option value="ftp-tar">ftp-tar
-        </select> </TD>
-      <TD>Choose method, url_quick or url for now. url_quick implies protocol of "as-is"</TD>
-    </TR>
+        </select> </td>
+      <td>Choose method, url_quick or url for now. url_quick implies protocol of "as-is"</td>
+    </tr>
   
-    <TR ID="FilenameFmtRow">
-      <TD>Filename Format</TD>
-      <TD><SPAN ID="FilenameFmtHelp" class="tip">?</SPAN></TD>
-      <TD colspan=2><input id="ExportFilenameFmt" type="text" name="filenamefmt" value="no_op" style="width:30em" onChange="SetFilenameFmt();" > File name template.</TD>
-    </TR>
-  
-    <!-- Processing selection detail rows go here. section 7 of 7 -->
-    <!--#include virtual="exportdata.d/processing.html" -->
-  
-    <TR ID="ProtocolRow">
-      <TD>Protocol</TD>
-      <TD><SPAN ID="ProtocolHelp" class="tip">?</SPAN></TD>
-      <TD><select id="ExportProtocol" name="rawprotocol" style="width:15em"  onChange="SetExportProtocol();">
-            <option value="as-is">as-is
-            <option value="FITS">FITS
-            <option value="JPEG">JPEG
-            <option value="MPEG">MPEG
-            <option value="MP4">MP4
-          </select> </TD>
-      <TD>Choose protocol, "FITS", "JPEG", "MPG", "MP4", or "as-is". Note AIA lev1 FITS,compressed is same as "as-is".</TD>
-    </TR>
+    <tr id="FilenameFmtRow">
+      <td>Filename Format</td>
+      <td><span id="FilenameFmtHelp" class="tip">?</span></td>
+      <td colspan="2">
+        <input id="ExportFilenameFmt" type="text" name="filenamefmt" value="no_op" style="width:30em" onChange="SetFilenameFmt();" />
+        File name template.</td>
+      </td>
+    </tr>
 
-    <!-- Protocol selection detail rows go here. section 1 of X -->
-    <!--#include virtual="exportdata.d/protocols.html" -->
-  
-    <TR ID="CompressRow">
-      <TD>Compression</TD>
-      <TD><SPAN ID="CompressHelp" class="tip">?</SPAN></TD>
-      <TD><select id="ExportCompress" name="compress" style="width:15em"  onChange="SetExportCompress();">
+    <!-- Inserted from old processing.html -->
+
+    <!-- Processing Select -->
+    <tr id="ProcessRow">
+      <td>Processing</td>
+      <td><span id="ProcessingHelp" class="tip">?</span></td>
+      <td colspan="2">
+        <span id="ExportProcessing"></span>
+      </td>
+    </tr>
+    <!-- END Processing Select -->
+    
+    <!-- BEGIN AIA_SCALE -->
+    <tr id="ProcessAiaScale">
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;AIA_Scale</td> 
+      <td><span id="AiaScaleHelp" class="tip">?</span></td> 
+      <td colspan="2">
+        <table style="border-style:solid" >
+        <tr>
+        <td>Normalize image scale to AIA standard 0.6 arc-sec per pixel is enabled <b>Only for aia.lev1 for now.</b></td>
+        </tr>
+        </table>
+      </td>
+    </tr>
+    <!-- END AIA_SCALE -->
+    
+    <!-- BEGIN RESIZE -->
+    <tr id="ProcessResize" style="display:none">
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;Resize</td>
+      <td><span id="ResizeHelp" class="tip">?</span></td>
+      <td colspan="2">
+        <table style="border-style:solid">
+          <tr>
+            <td>Please specify resize options:</td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <form>
+              Co-register images to:
+              <input value="0" id="ResizeSunCenter" name="ResizeRegisterTo" type="radio" onChange="ResizeSet('register_to')" />Sun center or
+              <input value="1" id="ResizeFirstImage" name="ResizeRegisterTo" type="radio" onChange="ResizeSet('register_to')" />First Image
+              </form>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <form>
+              Interpolation method is:
+              <input value="bicubic" id="ResizeBicubic" name="ResizeMethod" type="radio"  onChange="ResizeSet('method')" />bicubic or
+              <input value="nearest" id="ResizeNearest" name="ResizeMethod" type="radio"  onChange="ResizeSet('method')" />nearest
+              </form>
+              <input id="ResizeDoScale" type="checkbox" name="ResizeDoScale" onChange="ResizeSet('do_scale')" />
+              Do scale change as well as registration.
+            </td>
+          </tr>
+          <tr id="ResizeScaleRow" style="display:table-row">
+            <td colspan="2">
+              <input id="ResizeCdelt" type="text" name="ResizeCdelt" style="width:12em;background-color:#FFFFFF" value="1.0"
+               onChange="ResizeSet('scale')" />
+              Target scale in arcsec per pixel. (for AIA lev1p5 use 0.6)
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <input id="ResizeCrop" type="checkbox" name="ResizeCrop" onChange="ResizeSet('crop')" />
+              Crop pixels that are located outside the limb.<br>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <input id="ResizeReplicate" type="checkbox" name="ResizeReplicate" value="0" onChange="ResizeSet('replicate')" />
+              Replicate needed pixels, i.e. do stretchmarks instead of blank pixels.
+            </td>
+          </tr>
+        </table>
+	</td>
+	</tr>
+    <!-- END RESIZE -->
+
+    <!-- BEGIN REBIN -->
+    <tr id="ProcessRebin" style="display:none">
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;Rebin</td>
+      <td><span id="RebinHelp" class="tip">?</span></td>
+      <td colspan="2">
+        <table style="border-style:solid">
+          <tr>
+            <td>Please specify rebin options:</td>
+          </tr>
+          <tr>
+            <td>
+              <select id="RebinMethod" size=1 name="RebinMethod" style="width:12em;background-color:#FFFFFF"
+                onChange="RebinSet('method')">
+                 <option value="boxcar">boxcar</option>
+                 <option value="gaussian">gaussian</option>
+              </select> Re-binning method to use.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <input id="RebinScale" type="text" name="RebinScale" style="width:12em;background-color:#FFFFFF" value="1.0"
+               onChange="RebinSet('scale')" />
+              Scaling factor to apply to image, < 1.0 for smaller images.
+            </td>
+          </tr>
+          <tr id="RebinFWHMRow">
+            <td>
+              <input id="RebinFWHM" type="text" name="RebinFWHM" style="width:12em;background-color:#D88080" value="-1.0"
+                onChange="RebinSet('fwhm')" />
+              Width in pixels of smoothing Gaussian function (FWHM).
+            </td>
+          </tr>
+          <tr id="RebinNvectorRow">
+            <td>
+              <input id="RebinNvector" type="text" name="RebinNvector" style="width:12em;background-color:#D88080" value="-1.0"
+                onChange="RebinSet('nvector')" />
+              Length in pixels of smoothing Gaussian function.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <input id="RebinCrop" type="checkbox" name="RebinCrop" onChange="RebinSet('crop')" />
+              Crop pixels that are greater than rsun_obs units from the center of the image.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <input id="RebinRotate" type="checkbox" name="RebinRotate" value="roton" onChange="RebinSet('rotate')" />
+              Rotate image by 180 degrees if needed for north up.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <!-- END REBIN -->
+
+    <!-- BEGIN HG_PATCH -->
+    <tr id="ProcessHgPatch">
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;HG_Patch</td> 
+      <td><span id="HgPatchHelp" class="tip">?</span></td> 
+      <td colspan="2">
+        <table style="border-style:solid" >
+        <tr>
+        <td colspan="3">
+        <b>WARNING - Explicit Record Limit does not work for hg_patch processing</b>
+        </td>
+        </tr>
+        <tr>
+        <td colspan="3">
+          Specify patch to extract and track.  The default is to track the patch from East limb to West limb. 
+          T_START and/or T_STOP can limit the tracking as can a recodrset specification. 
+          If only the seriesname is given, the query will be made for the last record only, [$],
+          to prevent the export tools from doing a full check on the series. 
+          In this special case, the final record of the series will not actually be used unless it is in the bounds of
+          T_START and T_STOP and is a time with the patch on the disk.
+          <p> 
+          The patch icenter locationa(x,y) can be specified in Carrington Rot, Lat, and Longitude or with a reference time and location in arcsec,
+          or degrees from CM and equator or in pixels from the lower left of the image (1,1) before any implied rotation or center offset. 
+          One of T_REF or CAR_ROT is required to locate the patch in time. 
+          Width and Height are used to specify the size of the box.
+          The units of width and height must be specified and can be pixels, arcsec, or degrees. 
+          The pixel size is computed from these box sizes when they are at disk center.
+        </td>
+        </tr>
+        <tr>
+           <td width=20>Series</td>
+           <td>
+           <select id="HgSerList" type="text" size=1 style="width:20em;background-color:#FFFFFF" onChange="HgSeriesSelect();"></select>
+           </td>
+           <td>&nbsp;</td>
+        </tr> 
+        <tr>
+           <td>Options</td>
+           <td colspan="2">
+           Tracking:&nbsp;
+           <input id="HgTrack" type="checkbox" name="HgTrack" onChange="HgPatchCheck();">
+           &nbsp;
+           &nbsp;
+           &nbsp;
+           &nbsp;
+           <span id="HgNoaaTip" class="tip">?</span>
+           NOAA AR number:&nbsp;
+             <input id="HgNOAA" type="text" style="width:8em;background-color:#FFFFFF" value="NotSpecified" onChange="HgPatchGetNoaa();">
+          </td>
+        </tr>
+        <tr>
+           <td>T_START </td>
+           <td>
+           <input id="HgTStart" type="text" name="HgTStart" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="HgPatchCheck();">
+           </td>
+           <td rowspan=2>&nbsp;Note - T_START and T_STOP are not used if the RecordSet is specified explicitly above.  Use '[$]' if you
+              want to use T_START, T_STOP, and/or CADENCE to specify the coverage you want.</td>
+        </tr>
+        <tr>
+           <td>T_STOP </td>
+           <td>
+           <input id="HgTStop" type="text" name="HgTStop" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="HgPatchCheck();">
+           </td>
+        </tr>
+        <tr>
+           <td>CADENCE</td> 
+           <td>
+           <input id="HgTDelta" type="text" name="HgTDelta" style="width:12em;background-color:#FFFFFF" value="NotSpecified" onChange="HgPatchCheck();">
+           </td>
+           <td>&nbsp;Note - CADENCE is not used if the RecordSet is specified explicitly in the '[...]' notation.</td>
+        </tr>
+        <tr>
+           <td>LocUnits</td>
+           <td>
+           <select id="HgLocType" type="text" name="HgLocType" style="width:20em;background-color:#FFFFFF" value="stony" onChange="HgPatchCheck();">
+             <option value="stony">Stonyhurst degrees 
+             <option value="arcsec">arcsec from center 
+             <option value="pixels">pixels from (1,1) 
+    	 <option value="carrlong">Carrington LatLon 
+    	 </select>
+           </td>
+           <td>&nbsp;</td>
+        </tr> 
+        <tr id="HgTRefLi">
+           <td>T_REF</td>
+           <td>
+           <input id="HgTRef" type="text" name="HgTRef" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="HgPatchCheck();">
+           </td>
+           <td>&nbsp;</td>
+        </tr>
+        <tr id="HgCarrLi">
+           <td>CAR_ROT </td>
+           <td>
+           <input id="HgCarrot" type="text" name="HgCarrot" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="HgPatchCheck();">
+           </td>
+           <td>&nbsp;</td>
+        </tr>
+        <tr>
+           <td>X</td>
+           <td>
+           <input id="HgX" type="text" name="HgX" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="HgPatchCheck();">
+           </td>
+           <td>&nbsp;</td>
+        </tr>
+        <tr>
+           <td>Y</td>
+           <td>
+           <input id="HgY" type="text" name="HgY" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="HgPatchCheck();">
+           </td>
+           <td>&nbsp;</td>
+        </tr>
+        <tr>
+           <td>BoxUnits</td>
+           <td>
+           <select id="HgBoxType" type="text" name="HgBoxType" style="width:20em;background-color:#FFFFFF" value="pixels" onChange="HgPatchCheck();">
+             <option value="pixels">pixels 
+             <option value="degrees">degrees 
+             <option value="arcsec">arcsec 
+             </select>
+           </td>
+           <td>&nbsp;</td>
+        </tr>
+        <tr>
+           <td>Width </td>
+           <td>
+           <input id="HgWide" type="text" name="HgWide" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="HgPatchCheck();">
+           </td>
+           <td>&nbsp;</td>
+        </tr>
+        <tr>
+          <td>Height </td>
+          <td>
+          <input id="HgHigh" type="text" name="HgHigh" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="HgPatchCheck();">
+          </td>
+           <td>&nbsp;</td>
+        </tr>
+        </table>
+      </td> 
+    </tr>
+    <!-- END HG_PATCH -->
+
+<tr><td colspan="4"><span id="ProcArgsDisplay"></span></td></tr>
+    <!-- End of processing  special code -->
+
+    <!-- Insert from protocols.html -->
+    <tr id="ProtocolRow">
+      <td>Protocol</td>
+      <td><span id="ProtocolHelp" class="tip">?</span></td>
+      <td><select id="ExportProtocol" name="rawprotocol" style="width:15em"  onChange="SetExportProtocol();">
+          <option value="as-is">as-is
+          <option value="FITS">FITS
+          <option value="JPEG">JPEG
+          <option value="MPEG">MPEG
+          <option value="MP4">MP4
+        </select> </td>
+      <td>Choose protocol, "FITS", "JPEG", "MPG", "MP4", or "as-is". Note AIA lev1 FITS,compressed is same as "as-is".</td>
+    </tr>
+    <tr id="ImagingOptions">
+      <td>Images</td>
+      <td><span id="ImagesHelp" class="tip">?</span></td>
+      <td colspan="2">
+        <table>
+        <tr>
+          <td>
+            For:&nbsp;
+            <span id="ImageSer" name="ImageSer" ></span>
+          </td>
+          <td>
+            ,&nbsp;ColorTable:&nbsp;
+            <select id="ImageCT" type="text" size=1 name="ImageCT" onChange="ProtocolSetColorTable();" ></select>
+          </td>
+          <td>
+            &nbsp;&nbsp;Min:&nbsp;
+            <input id="ImageMin" type="text" name="ImageMin" value="" onChange="ProtocolSetMinMax();" >
+          </td>
+          <td>
+            &nbsp;&nbsp;Max:&nbsp;
+            <input id="ImageMax" type="text" name="ImageMax" value="" onChange="ProtocolSetMinMax();" >
+            <b>&nbsp;NOTE changes to colortable are not seen yet.</b>
+          </td>
+        </tr>
+        </table>
+      </td>
+    </tr>
+    <!-- End of insert from protocols.html -->
+
+    <tr id="CompressRow">
+      <td>Compression</td>
+      <td><span id="CompressHelp" class="tip">?</span></td>
+      <td><select id="ExportCompress" name="compress" style="width:15em"  onChange="SetExportCompress();">
         <option value="compress Rice" selected="selected" >compress Rice
-        <option value="**NONE**">**NONE** </select> </TD>
-      <TD>Choose compression parameters for each segment., **NONE** for no compression.</TD>
-    </TR>
+        <option value="**NONE**">**NONE** </select> </td>
+      <td>Choose compression parameters for each segment., **NONE** for no compression.</td>
+    </tr>
   
-    <TR ID="RequestorRow">
-      <TD>Requestor</TD>
-      <TD><SPAN ID="RequestorHelp" class="tip">?</SPAN></TD>
-      <TD><input id="ExportRequestor" type="text" name="requestor" value="" onChange="ExportNop();" ></TD>
-      <TD><SPAN ID="RequestorMessage">Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</SPAN></TD>
-    </TR>
+    <tr id="RequestorRow">
+      <td>Requestor</td>
+      <td><span id="RequestorHelp" class="tip">?</span></td>
+      <td><input id="ExportRequestor" type="text" name="requestor" value="" onChange="ExportNop();" ></td>
+      <td><span id="RequestorMessage">Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</span></td>
+    </tr>
   
-    <TR ID="NotifyRow">
-      <TD>Notify</TD>
-      <TD><SPAN ID="NotifyHelp" class="tip">?</SPAN></TD>
-      <TD><input id="ExportNotify" type="text" name="notify" value="" onChange="ExportNop();" ></TD>
-      <TD>Provide your email address for notification.  May be omitted for online delivery.</TD>
-    </TR>
+    <tr id="NotifyRow">
+      <td>Notify</td>
+      <td><span id="NotifyHelp" class="tip">?</span></td>
+      <td><input id="ExportNotify" type="text" name="notify" value="" onChange="ExportNop();" ></td>
+      <td>Provide your email address for notification.  May be omitted for online delivery.</td>
+    </tr>
   
-    <TR ID="AjaxExportRequestRow">
-      <TD colspan=4>
+    <tr id="AjaxExportRequestRow">
+      <td colspan="4">
         <input id="ExportButton" type="button" value="Submit Export Request" style="background-color:#D8D8D8" onClick="GetExport();" >
       <span id="ExportButtonMsg">Please only click once for export request.</span >
-      </TD>
-    </TR>
+      </td>
+    </tr>
   
-    <TR id="FileUploadRow" style="display:none;">
-      <TD >Select File</TD>
-      <TD><SPAN ID="SendFileHelp" class="tip">?</SPAN></TD>
-      <TD colspan=2>
+    <tr id="FileUploadRow" style="display:none;">
+      <td >Select File</td>
+      <td><span id="SendFileHelp" class="tip">?</span></td>
+      <td colspan="2">
       <input type='file' id='newFile' name='file' >
       <input type='button' value='Submit Export Request' class='button' onClick="MakeFileUploadRequest();">
-      </TD>
-    </TR>
+      </td>
+    </tr>
 
-    <TR id="FileUploadInfoRow" style="display:none;">
-      <TD>Uploaded File:</TD>
-      <TD>&nbsp;</TD>
-      <TD><span id="FileUploadInfo"></span></TD>
-      <TD></TD>
-    </TR>
-  </TABLE>
+    <tr id="FileUploadInfoRow" style="display:none;">
+      <td>Uploaded File:</td>
+      <td>&nbsp;</td>
+      <td><span id="FileUploadInfo"></span></td>
+      <td></td>
+    </tr>
+  </table>
 </form>
 
-<DIV ID=iframeHideDiv style="display:none;">
+<div id="iframeHideDiv" style="display:none;">
   <iframe id="FileUploadFrame" onload="uploadDone();" name="FileUploadFrame" src="" style="height:0px;width:0px;border:0px solid #fff;"></iframe>
-</DIV>
+</div>
 
 
-<DIV ID=SubmitResponseDiv>
-<TABLE>
-  <TR>
-    <TD>RequestID</TD>
-    <TD colspan=2><span id="RequestIdPlace" style="width:12em;background-color:#FFF8DC;">&nbsp;</span></TD>
-    <TD>This is the ID tag for your export request.  Use the Status Request button below to retrieve the links to the data.</TD>
-  </TR>
+<div id="SubmitResponseDiv">
+<table>
+  <tr>
+    <td>RequestID</td>
+    <td colspan="2"><span id="RequestIdPlace" style="width:12em;background-color:#FFF8DC;">&nbsp;</span></td>
+    <td>This is the ID tag for your export request.  Use the Status Request button below to retrieve the links to the data.</td>
+  </tr>
 
-  <TR>
-    <TD>Status</TD>
-    <TD colspan=3> <span id="ExportStatus" style="background-color:#FFF8DC;"> </span ></TD>
-  </TR>
+  <tr>
+    <td>Status</td>
+    <td colspan="3"> <span id="ExportStatus" style="background-color:#FFF8DC;"> </span ></td>
+  </tr>
 
-  <TR>
-    <TD>Data Location</TD>
-    <TD colspan=3><span id="ExportLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></TD>
-  </TR>
+  <tr>
+    <td>Data Location</td>
+    <td colspan="3"><span id="ExportLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+  </tr>
 
-</TABLE>
-</DIV>
-<HR>
-<DIV ExportDataDiv  style="background-color:#C0E0FF;">
-<B>JSOC Data Export Status and Retrieval</B>
+</table>
+</div>
+<hr>
+<div ExportDataDiv  style="background-color:#C0E0FF;">
+<b>JSOC Data Export Status and Retrieval</b>
 <p>
-<TABLE>
-  <TR>
-    <TD style="width:10em" >RequestID</TD>
-    <TD><input type="text" id="StatusRequestID" name="StatusRequestID" style="width:12em;background-color:#FFF8DC;" value="" onChange="GetStatus();"></TD>
-    <TD>This is the ID tag for your export request.</TD>
-    <TD><span id="StatusValue">&nbsp;</TD>
-  </TR>
+<table>
+  <tr>
+    <td style="width:10em" >RequestID</td>
+    <td><input type="text" id="StatusRequestID" name="StatusRequestID" style="width:12em;background-color:#FFF8DC;" value="" onChange="GetStatus();"></td>
+    <td>This is the ID tag for your export request.</td>
+    <td><span id="StatusValue">&nbsp;</td>
+  </tr>
 
-  <TR>
-    <TD colspan=2 align="center" >
-      <input id="StatusButton" type="button" value="Submit Status Request" style="background-color:#D8D8D8" onClick="GetStatus();" ></TD>
-    <TD><span id="StatusButtonMsg">Please only click once for status request.</span ></TD>
-    <TD rowspan=3><span id="StatusOther">&nbsp;</TD>
-  </TR>
+  <tr>
+    <td colspan="2" align="center" >
+      <input id="StatusButton" type="button" value="Submit Status Request" style="background-color:#D8D8D8" onClick="GetStatus();" ></td>
+    <td><span id="StatusButtonMsg">Please only click once for status request.</span ></td>
+    <td rowspan="3"><span id="StatusOther">&nbsp;</td>
+  </tr>
 
-  <TR>
-    <TD colspan=2 align="center" >
-      <input id="ClearButton" type="button" value="Clear Request" style="background-color:#D8D8D8" onClick="ClearStatus();" ></TD>
-    <TD>Clear old status RequestID</TD>
-  </TR>
+  <tr>
+    <td colspan="2" align="center" >
+      <input id="ClearButton" type="button" value="Clear Request" style="background-color:#D8D8D8" onClick="ClearStatus();" ></td>
+    <td>Clear old status RequestID</td>
+  </tr>
 
-  <TR>
-    <TD>Status</TD>
-    <TD colspan=2> <span id="StatusStatus" :tyle="background-color:#FFF8DC;"> </span ></TD>
-  </TR>
+  <tr>
+    <td>Status</td>
+    <td colspan="2"> <span id="StatusStatus" :tyle="background-color:#FFF8DC;"> </span ></td>
+  </tr>
 
-  <TR>
-    <TD>Data Location</TD>
-    <TD colspan=3><span id="StatusLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></TD>
-  </TR>
+  <tr>
+    <td>Data Location</td>
+    <td colspan="3"><span id="StatusLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+  </tr>
 
-  <TR ID="TarFileLocationRow" style="display:none;">
-    <TD>Tar File Location</TD>
-    <TD colspan=3><span id="TarFileLocation"  style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></TD>
-  </TR>
+  <tr id="TarFileLocationRow" style="display:none;">
+    <td>Tar File Location</td>
+    <td colspan="3"><span id="TarFileLocation"  style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+  </tr>
 
-  <TR ID="KeywordFileLocationRow" style="display:none;">
-    <TD>Keyword File Location</TD>
-    <TD colspan=3><span id="KeywordFileLocation"  style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></TD>
-  </TR>
+  <tr id="KeywordFileLocationRow" style="display:none;">
+    <td>Keyword File Location</td>
+    <td colspan="3"><span id="KeywordFileLocation"  style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+  </tr>
 
-  <TR>
-  <TD colspan=4><span id="StatusDataLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></TD>
-  </TR>
+  <tr>
+  <td colspan="4"><span id="StatusDataLocation" style="background-color:#FFF8DC;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span ></td>
+  </tr>
 
-</TABLE>
-</DIV> <!-- id="ExportRequestDiv" -->
+</table>
+</div> <!-- id="ExportRequestDiv" -->
 
-<DIV ID="ReExportDiv" style="display:none">
+<div id="ReExportDiv" style="display:none">
 <HR>
 Use this section to request a renewal/repeat of a prior export for which the data online-retention time has expired.
-<TABLE>
+<table>
 
-  <TR>
-    <TD style="width:10em" >RequestID</TD>
-    <TD><input type="text" id="ReRequestID" name="ReRequestID" style="background-color:#FFF8DC;" value="" onChange="ExportNop();"></TD>
-    <TD>Enter RequestID for repeat or prior export</TD>
-    <TD><span id="ReStatusValue">&nbsp;</TD>
-  </TR>
+  <tr>
+    <td style="width:10em" >RequestID</td>
+    <td><input type="text" id="ReRequestID" name="ReRequestID" style="background-color:#FFF8DC;" value="" onChange="ExportNop();"></td>
+    <td>Enter RequestID for repeat or prior export</td>
+    <td><span id="ReStatusValue">&nbsp;</td>
+  </tr>
 
-  <TR ID="ReNotifyRow">
-    <TD>Notify</TD>
-    <TD><input id="ReExportNotify" type="text" name="Renotify" value="" onChange="ExportNop();" ></TD>
-    <TD colspan=2>Provide your email address for notification.  May be omitted for online delivery.</TD>
-  </TR>
+  <tr id="ReNotifyRow">
+    <td>Notify</td>
+    <td><input id="ReExportNotify" type="text" name="Renotify" value="" onChange="ExportNop();" ></td>
+    <td colspan="2">Provide your email address for notification.  May be omitted for online delivery.</td>
+  </tr>
   
-  <TR ID="AjaxReExportRequestRow">
-    <TD colspan=4>
+  <tr id="AjaxReExportRequestRow">
+    <td colspan="4">
       re-<input id="ReExportButton" type="button" value="Submit Export Request" style="background-color:#D8D8D8" onClick="GetReExport();" >
     <span id="ReExportButtonMsg">Please only click once for re-export request.</span >
-    </TD>
-  </TR>
+    </td>
+  </tr>
   
-</TABLE>
-</DIV> <!-- id="ReExportDiv" -->
+</table>
+</div> <!-- id="ReExportDiv" -->
 
 <HR>
 <P style="height:1px">
-<DIV id="footer" style="vertical-align:bottom;text-align:center;">
+<div id="footer" style="vertical-align:bottom;text-align:center;">
 <I>Home page for:</I>
-<A HREF = "http://jsoc.stanford.edu/"><B>SDO-JSOC</B></A>
-</DIV>
-</BODY>
-</HTML>
+<A HREF = "http://jsoc.stanford.edu/"><b>SDO-JSOC</b></A>
+</div>
+</body>
+</html>
