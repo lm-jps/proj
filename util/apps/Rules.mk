@@ -4,7 +4,7 @@ dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
 # Local variables
-MODEXE_$(d)	:= $(addprefix $(d)/, arithtool rebin2 ingest_from_fits hg_patch render_image index_convert hmi_limbdark drms2hdir pfss_backup jsoc_rebin)
+MODEXE_$(d)	:= $(addprefix $(d)/, arithtool rebin2 ingest_from_fits hg_patch render_image index_convert hmi_limbdark drms2hdir pfss_backup jsoc_resize jsoc_rebin )
 MODEXE		:= $(MODEXE) $(MODEXE_$(d)) 
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -32,10 +32,10 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/stats
+$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/imrotate/ -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/stats
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):      LL_TGT := $(LL_TGT) -lpng
 
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBASTRO) $(LIBSTATS)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBASTRO) $(LIBSTATS) $(LIBIMROTATE)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
