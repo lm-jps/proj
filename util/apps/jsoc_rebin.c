@@ -162,7 +162,7 @@ int DoIt(void)
     {
     for (ivec = 0; ivec < nvector; ivec++)
       vector[ivec] = 1.0;
-    sprintf(history, "Boxcar bin by %d%s%s\n",
+    sprintf(history, "Boxcar bin by %d%s%s",
       iscale,
       (crop ? ", Cropped at rsun_obs" : ""),
       (!as_is ? ", North is up" : "") );
@@ -173,7 +173,7 @@ int DoIt(void)
       DIE("For fscale>=1 nvector must be fscale");
     for (ivec = 0; ivec < nvector; ivec++)
       vector[ivec] = 1.0;
-    sprintf(history, "Replicate to expand by %d%s%s\n",
+    sprintf(history, "Replicate to expand by %d%s%s",
       iscale,
       (crop ? ", Cropped at rsun_obs" : ""),
       (!as_is ? ", North is up" : "") );
@@ -187,7 +187,7 @@ int DoIt(void)
       double arg = (ivec - (nvector-1)/2.0) * (ivec - (nvector-1)/2.0);
       vector[ivec] = exp(-arg/(fwhm*fwhm*0.52034));
       }
-    sprintf(history, "Scale by %f with Gasussian smoothing FWHM=%f, nvector=%d%s%s\n",
+    sprintf(history, "Scale by %f with Gasussian smoothing FWHM=%f, nvector=%d%s%s",
       fscale, fwhm, nvector,
       (crop ? ", Cropped at rsun_obs" : ""),
       (!as_is ? ", North is up" : "") );
@@ -349,7 +349,7 @@ fprintf(stderr,"Special cadence processing, newIn = %s, inStr = %s\n",newIn, inS
 
       if (strcasecmp(method, "gaussian")==0) 
         drms_setkey_double(outRec, "FWHM", fwhm);
-      drms_setkey_string(outRec, "HISTORY", history);
+      drms_appendhistory(outRec, history, 1);
       drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
       if (strcmp(requestid, "NA") != 0)
         drms_setkey_string(outRec, "RequestID", requestid);
@@ -577,6 +577,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
 //       for each found time, write record query
 char *get_input_recset(DRMS_Env_t *drms_env, char *in, TIME cadence)
   {
+  TIME epoch = (cmdparams_exists(&cmdparams, "epoch")) ? params_get_time(&cmdparams, "epoch") : 0;
   DRMS_Array_t *data;
   TIME t_start, t_stop, t_now, t_want, t_diff, this_t_diff;
   int status;
@@ -606,7 +607,14 @@ char *get_input_recset(DRMS_Env_t *drms_env, char *in, TIME cadence)
   t_this = (TIME *)data->data;
   dquality = (double *)data->data + 1*nrecs;
   drecnum = (double *)data->data + 2*nrecs;
-  t_start = t_this[0];
+  if (epoch > 0.0)
+    {
+    int s0 = (t_this[0] - epoch)/cadence;
+    TIME t0 = s0*cadence + epoch;
+    t_start = (t0 < t_this[0] ? t0 + cadence : t0);
+    }
+  else
+    t_start = t_this[0];
   t_stop = t_this[nrecs-1];
   nslots = (t_stop - t_start + cadence/2)/cadence;
   recnums = (long long *)malloc(nslots*sizeof(long long));
