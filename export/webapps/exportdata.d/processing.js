@@ -228,6 +228,11 @@ function ResizeCheck()
   else
     rv += ",regrid=0";
 
+  if ($("ResizeReplicate").checked)
+    rv += ",do_stretchmarks=1";
+  else
+    rv += ",do_stretchmarks=0";
+    
   if ($("ResizeSunCenter").checked)
     rv += ",center_to=0";
   else
