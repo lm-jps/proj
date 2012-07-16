@@ -778,6 +778,7 @@ static int ParseSVRecFields(char *recBuf, char **date, double *xVal, double *yVa
 	       char day[8];
 	       char hour[8];
 	       char minute[8];
+           char second[8];
 
 	       strncpy(year, token, 4);
 	       year[4] = '\0';
@@ -787,9 +788,11 @@ static int ParseSVRecFields(char *recBuf, char **date, double *xVal, double *yVa
 	       hour[2] = '\0';
 	       strncpy(minute, &token[10], 2);
 	       minute[2] = '\0';
+           strncpy(second, &token[12], 2);
+           second[2] = '\0';
 
 	       char timeBuf[64];
-	       snprintf(timeBuf, sizeof(timeBuf), "%s.01.%s_%s:%s_UT", year, day, hour, minute);
+	       snprintf(timeBuf, sizeof(timeBuf), "%s.01.%s_%s:%s:%s_UT", year, day, hour, minute, second);
 
 	       *date = strdup(timeBuf);
 	  
