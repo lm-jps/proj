@@ -59,6 +59,7 @@ var SeriesInfo;
 var RequestID;
 var RecordLimit;
 var RecordCount;
+var RecordCountNeeded;
 var ExportRecordSetOK;
 var ExportFromFileList;
 var ExportProtocolOK;
@@ -79,12 +80,21 @@ var ExportProcessingArgs = "";
 var ExportMethodValue = "url_quick";
 var ExportCompressValue = "compress Rice";
 var ExportProtocolValue = "FITS";
+var firstTimePrime;
+
+var colorNeutral = "#D4D0C8";
+var colorPreset = "D8D8D8";
+var colorOptionSet = "#FFCC66";
+var colorPink = "#FFD8D8";
+var colorRed = "#D88080";
+var colorDarkRed = "#FF8080";
+var colorWhite = "#FFFFFF";
+var colorGreen = "#80FF80";
+var colorYellow = "#FFF8DC";
+
 
 // Processing options code section 2 of 7
-// Processing specific control variables
-var HgSeriesList;
-var HgSeriesSelected = 0;
-var HgTracked = 0;
+//    these quantities moved or will be moved to code in exportdata.d/
 var ProtocolOptionsSet = 0;
 
 function OnEnterKey(evt,action)
@@ -101,11 +111,24 @@ function OnEnterKey(evt,action)
   return keychar;
   }
 
+var previousSeries = "";
 function NotifyProcessingCode()
   {
   // called when RecordSet is changed.
   // Set flags to alert processing or method options here.
-  HgSeriesSelected = 0;
+  // variables here will usually be defined in exportdata.d/processing.js
+
+  if (SeriesName === previousSeries)
+{
+// alert("Notify, same seriesname");
+    SetProcessing(-1);
+}
+  else
+{
+// alert("Notify, new seriesname");
+    SetProcessing(-2);
+}
+  previousSeries = SeriesName;
   }
 
 // End of processing options section
@@ -120,21 +143,23 @@ function initVars()
   SeriesName = "";
   RequestID = "";
   RecordCount = 0;
+  RecordCountNeeded = 1;
   RecordLimit = 0;
-  ExportRecordSetOK = 0;
+  ExportRecordSetOK = 1;
   ExportFromFileList = 0;
-  ExportProtocolOK = 0;
+  ExportProtocolOK = 1;
   ExportCompressOK = 1;
-  ExportMethodOK = 0;
+  ExportMethodOK = 1;
   ExportMethodIsDirect = 0;
-  ExportFilenameFmtOK = 0;
-  ExportProcessingOK = 0;
-  ExportUserOK = 0;
+  ExportFilenameFmtOK = 1;
+  ExportProcessingOK = 1;
+  ExportUserOK = 1;
   ExportNotifyOK = 2;
   ExportReadyOK = 0;
   TipsEnabled = 1;
   uploadOndoneAction = 0;
   ExportProcessingArgs = "";
+  firstTimePrime = "";
 
   ProcessingInit();
   ProtocolOptionsInit();
@@ -153,11 +178,12 @@ function initVars()
     $("ExportProtocolHidden").value = "FITS";
     $("ExportCompress").value = 0;
     $("ExportProcessingHidden").value = "no_op";
+    $("ProcessingCheckbox").checked = 0;
     $("ExportMethod").selectedIndex = 1;
     $("ExportFilenameFmt").value = "{seriesname}.{recnum:%lld}.{segment}";
     $("ExportButton").value = "Submit Export Request";
     $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
-    $("ExportButton").style.backgroundColor = "#D8D8D8";
+    $("ExportButton").style.backgroundColor = colorRed;
     $("RecordSetRow").style.display="table-row";
     $("RecordCountRow").style.display="table-row";
     $("ProcessRow").style.display="none";
@@ -257,6 +283,7 @@ function OnLoadInit()
   if (Internal)
     $("RequestorMessage").innerHTML = "Provide an identifier for you, e.g. your SolarMail name. Required for jsoc2";
   // HELP tips enable
+  ProcessingEnabled();
   CreateTips();
   $("TipsOnOffButton").value = "Turn Help Off";
   window.focus();
@@ -276,7 +303,7 @@ function MainTips(tipstyle)
         'The file should contain recordSet specifiers in the format allowed by drms_open_records include files.  ' +
         'See http://jsoc.stanford.edu/jsocwiki/AllAboutJsocNames.',tipstyle);
     new Tip('RecordSetHelp','RecordSet to be exported. May be imported on call and/or may be entered directly here. ' +
-        'May be filled in by series select in Hg_patch processing option.',tipstyle);
+        'May be filled in by series select in Im_patch processing option.',tipstyle);
     new Tip('RecordLimitHelp','RecordSet record limit. Max number of records to export.  Modifies RecordSet. ' +
         'Value should be "none" or a number. Number > 0 counts from start of RecordSet.  Negative number counts ' +
         'from high end of RecordSet.  0 means no limit',tipstyle);
@@ -530,13 +557,14 @@ function GetRSCount()
       ExportRecordSetOK = 1;
       $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
       $("ExportButton").value = "Submit Export Request";
-      $("ExportButton").style.backgroundColor = "#D8D8D8";
+      $("ExportButton").style.backgroundColor = colorRed;
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       var op = "rs_summary";
       },
     onFailure: function() { alert('Something went wrong...'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
+  CheckRediness();
   return(0);
   }
 
@@ -577,7 +605,10 @@ function GetDefaultFormat()
               if (thiskey === thisprime)
                 {
                 if (SeriesInfo.keywords[j].type === "time")
+                  {
                   newfmt = newfmt + "{" + thisprime + ":A}.";
+                  if (firstTimePrime ==="") firstTimePrime = thisprime;
+                  }
                 else
                   newfmt = newfmt + "{" + thisprime + "}.";
                 break;
@@ -632,12 +663,18 @@ function ExportNop()
   {
   }
 
+function ExportRSChanged()
+  {
+  RecordCountNeeded = 1;
+  $("CountButton").style.backgroundColor = colorYellow;
+  }
+
 function ExportNewRS()
   {
-  SetRecordLimit();
-  if (GetRSCount()) return;
+  $("CountButton").style.backgroundColor = colorNeutral;
+  RecordCountNeeded = 0;
+  if (SetRecordLimit()) return; // SetRecordLimit calls GetRSCount()
   GetDefaultFormat();
-  SetProcessing(-1);
   NotifyProcessingCode();
   }
 
@@ -652,7 +689,7 @@ function SetRecordLimit()
       RecordLimit = 0;
     else
       {
-      $("ExportRecordLimit").style.backgroundColor = "#FF8080";
+      $("ExportRecordLimit").style.backgroundColor = colorRed;
       alert("RecordLimit must be a number or 'none'");
       RecordLimit = 0;
       }
@@ -663,8 +700,8 @@ function SetRecordLimit()
       $("ExportRecordLimit").value = "none";
     RecordLimit = newLimit;
     }
-  $("ExportRecordLimit").style.backgroundColor = "#FFFFFF";
-  GetRSCount();
+  $("ExportRecordLimit").style.backgroundColor = colorWhite;
+  return(GetRSCount());
   }
 
 function SetExportMethod()
@@ -728,6 +765,7 @@ function SetExportMethod()
     alert("Please set Method to url_quick, url_direct,  url, or ftp");
     ExportMethodOK = 0;
     }
+  CheckRediness();
   }
 
 function SetExportFilenameFmt()
@@ -738,6 +776,29 @@ function SetExportFilenameFmt()
     {
     alert("Please set non-empty name for FilenameFmt");
     ExportFilenameFmtOK = 0;
+    }
+  CheckRediness();
+  }
+
+function ProcessingEnabled()
+  {
+  if ($("ProcessingCheckboxHide").checked)
+    $("ProcessingCheckbox").checked = false;
+  if ($("ProcessingCheckbox").checked)
+    {
+    $("ProcessingCheckbox").checked = true;
+    $("ProcessingCheckboxHide").checked = false;
+    $("ProcessingShowCheckbox").style.display = "none";
+    $("ExportProcessing").style.display = "table-row";
+    }
+  else
+    {
+    $("ProcessingCheckbox").checked = false;
+    $("ProcessingCheckboxHide").checked = false;
+    $(ExportProcessingOptions[0].id).checked = true;
+    SetProcessing(0);
+    $("ProcessingShowCheckbox").style.display = "table-row";
+    $("ExportProcessing").style.display = "none";
     }
   }
 
@@ -771,18 +832,28 @@ function SetProcessing(ichecked)
         {
         nchecked++;
         $(ExportProcessingOptions[0].id).checked = false;
-        ExpOpt.Init(1);
-        $(ExpOpt.rowid).style.display="table-row";
-        var args = ExpOpt.Check();
-        if (args.length > 0)
+        if (ichecked == -2)
           {
-          ExportProcessingArgs += "|"+args;
+          ExpOpt.Init(0);
+          $(ExpOpt.rowid).style.display="table-row";
+          isok = 0;
           }
         else
           {
-          ExportProcessingArgs += "|--ERROR>>"+args+"<<";
-          alert("Error in processing parameters for "+$(ExpOpt.id).value);
-          isok = 0;
+// alert("ExpOpt.Init(1) called for iProc="+iProc);
+          ExpOpt.Init(1);
+          $(ExpOpt.rowid).style.display="table-row";
+          var args = ExpOpt.Check();
+          if (args.length > 0)
+            {
+            ExportProcessingArgs += "|"+args;
+            }
+          else
+            {
+            ExportProcessingArgs += "|--ERROR>>"+args+"<<";
+    // alert("Error in processing parameters for "+$(ExpOpt.id).value);
+            isok = 0;
+            }
           }
         }
       else
@@ -802,6 +873,7 @@ function SetProcessing(ichecked)
     ExportProcessingOK = 1;
   $("ExportProcessingHidden").value = ExportProcessingArgs;
 // $("ProcArgsDisplay").innerHTML = ExportProcessingArgs;
+  CheckRediness();
   }
 
 function SetExportProtocol()
@@ -849,6 +921,7 @@ function SetExportProtocol()
       ProtocolSetMinMax();
     else
       ProtocolImageInit(ExportProtocolOK);
+  CheckRediness();
   }
 
 function SetExportCompress()
@@ -867,6 +940,7 @@ function SetExportCompress()
       $("ExportProtocolHidden").value = protocolparam;
       }
   ExportCompressOK = 1;
+  CheckRediness();
   }
 
 function SetExportUser()
@@ -880,6 +954,7 @@ function SetExportUser()
     {
     ExportUserOK = 0;
     }
+  CheckRediness();
   }
 
 function SetExportNotify()
@@ -916,6 +991,23 @@ function SetExportNotify()
     else
       ExportNotifyOK = 1;
     }
+  CheckRediness();
+  }
+
+function CheckRediness()
+  {
+  var status = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK;
+  if ((Internal && ExportNotifyOK != 1) || ExportNotifyOK == 2)
+    {
+    if (ExportUserOK == 0 && ExportMethodValue != "url_quick")
+      status = 0;
+    }
+  else
+    status *= ExportNotifyOK; 
+  if (status)
+    $("ExportButton").style.backgroundColor = colorGreen;
+  else
+    $("ExportButton").style.backgroundColor = colorRed;
   }
 
 function CheckExportParams()
@@ -975,6 +1067,7 @@ function CheckExportParams()
       alert("Notify email not given or confirmed, Enter 'solarmail' or 'no' or email address then retry export request.");
       return 0;
       }
+  $("ExportButton").style.backgroundColor = colorGreen;
   return 1;
   }
 
@@ -998,7 +1091,7 @@ function GetExport()
     $("ExportLocation").innerHTML = "";
     $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
     $("ExportButton").value = "Processing ...";
-    $("ExportButton").style.backgroundColor = "#FFD8D8";
+    $("ExportButton").style.backgroundColor = colorDarkRed;
     var protocolparam = $("ExportProtocolHidden").value;
     var RecordSet = $("ExportRecordSet").value;
     var exportparameters = new Hash( {"op" : $("ExportOpID").value,
@@ -1062,7 +1155,7 @@ function GetReExport()
   $("ExportLocation").innerHTML = "";
   $("ReExportButtonMsg").innerHTML = "Export request submitted, please wait...";
   $("ReExportButton").value = "Processing ...";
-  $("ReExportButton").style.backgroundColor = "#FFD8D8";
+  $("ReExportButton").style.backgroundColor = colorPink;
   var exportparameters = new Hash( {"op" : "exp_repeat",
                  		    "requestid" : $("ReRequestID").value,
 			 	    "format" : "json",
@@ -1258,7 +1351,7 @@ function GetStatus()
   $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   $("KeywordFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
   $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-  $("StatusButton").style.backgroundColor = "#FFD8D8";
+  $("StatusButton").style.backgroundColor = colorPink;
   $("StatusStatus").innerHTML = "";
   $("StatusValue").innerHTML = "";
   $("StatusOther").innerHTML = "";
@@ -1451,7 +1544,7 @@ access the data.
   
     <tr id="RecordSetRow">
       <td style="width:10em" >RecordSet</td><td><span id="RecordSetHelp" class="tip">?</span></td><td colspan="2">
-        <input id="ExportRecordSet" type="text" name="ds" value="" onkeydown="return OnEnterKey(event,ExportNewRS);"> </td>
+        <input id="ExportRecordSet" type="text" name="ds" value="" onChange="ExportRSChanged();" onkeydown="return OnEnterKey(event,ExportNewRS);"> </td>
     </tr>
   
     <tr id="RecordLimitRow">
@@ -1494,10 +1587,18 @@ access the data.
 
     <!-- Processing Select -->
     <tr id="ProcessRow">
-      <td>Processing</td>
-      <td><span id="ProcessingHelp" class="tip">?</span></td>
+      <td>
+        Processing
+      </td>
+      <td>
+        <span id="ProcessingHelp" class="tip">?</span>
+      </td>
       <td colspan="2">
-        <span id="ExportProcessing"></span>
+        <span id="ProcessingShowCheckbox">
+          <input id="ProcessingCheckbox" type="checkbox" checked="0" onChange="ProcessingEnabled();" >
+          &nbsp; Enable Processing
+        </span>
+        <span id="ExportProcessing" style="display:none" ></span>
       </td>
     </tr>
     <!-- END Processing Select -->
@@ -1531,6 +1632,7 @@ access the data.
               Co-register images to:
               <input value="0" id="ResizeSunCenter" name="ResizeRegisterTo" type="radio" onChange="ResizeSet('register_to')" />Sun center or
               <input value="1" id="ResizeFirstImage" name="ResizeRegisterTo" type="radio" onChange="ResizeSet('register_to')" />First Image
+              <input value="2" id="ResizeNoInterp" name="ResizeRegisterTo" type="radio" onChange="ResizeSet('register_to')" />No Change
               </form>
             </td>
           </tr>
@@ -1561,7 +1663,7 @@ access the data.
           <tr>
             <td colspan="2">
               <input id="ResizeReplicate" type="checkbox" name="ResizeReplicate" value="0" onChange="ResizeSet('replicate')" />
-              Replicate needed pixels, i.e. do stretchmarks instead of blank pixels.
+              Replicate needed pixels, select if HMI and cropped to get NaNs instead of 0.0 for extra pixels.
             </td>
           </tr>
         </table>
@@ -1765,6 +1867,162 @@ access the data.
     </tr>
     <!-- END HG_PATCH -->
 
+    <!-- BEGIN IM_PATCH -->
+    <tr id="ProcessImPatch">
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;IM_Patch</td> 
+      <td><span id="ImPatchHelp" class="tip">?</span></td> 
+      <td colspan="2">
+        <table style="border-style:solid" >
+        <tr>
+        <td colspan="3">
+          Image Patch Extract - used to export rectangular sub-frames from a sequence of images.
+          The patch may be stationary or tracked at the Carrington rate.
+          <br>
+          If only the seriesname is given, the query will be made for the last record only, [$], unless tracking
+          a from the east limb is requested.
+          <br>
+          If the limb checkboxes are checked, tracking will begin or end at the indicated limb(s).
+          If the "register" checkbox is checked, the patch will be interpolated to the desired location.
+          If "register" is not-checked the patch will be exact pixel cutout from the input image.
+        </td>
+        </tr>
+        <tr>
+        <td colspan="3">
+        RecordSet:&nbsp;
+        <span id="ImRecordSet"></span>
+        </td>
+        </tr>
+        <tr>
+           <td>Options</td>
+           <td colspan="2">
+           <input id="ImTrack" type="checkbox" name="ImTrack" onChange="ImPatchCheck();">
+           &nbsp;Tracking,
+           &nbsp;
+           &nbsp;
+           <input id="ImRegister" type="checkbox" name="ImRegister" onChange="ImPatchCheck();">
+           &nbsp;Register,
+           &nbsp;
+           &nbsp;
+           <input id="ImCrop" type="checkbox" name="ImCrop" onChange="ImPatchCheck();">
+           &nbsp;Crop,
+           &nbsp;
+           &nbsp;
+           NOAA AR number:&nbsp;
+           <span id="ImNoaaTip" class="tip">?</span>
+           <input id="ImNOAA" type="text" style="width:8em;background-color:#FFFFFF" 
+              value="NotSpecified" onChange="ImPatchGetNoaa();">
+          </td>
+        </tr>
+        <tr>
+           <td>T_START </td>
+           <td colspan="2">
+           <span id="ImTStartHelp" class="tip">?</span>
+           <input id="ImTStart" type="text" name="ImTStart" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="ImPatchSet(1);">
+           &nbsp; <input id="ImEastLimb" type="checkbox" onChange="ImPatchCheck();"> &nbsp; Check for start at east limb.
+           </td>
+        </tr>
+        <tr>
+           <td>T_STOP </td>
+           <td colspan="2">
+           <span id="ImTStopHelp" class="tip">?</span>
+           <input id="ImTStop" type="text" name="ImTStop" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="ImPatchSet(2);">
+           &nbsp; <input id="ImWestLimb" type="checkbox" onChange="ImPatchCheck();"> &nbsp; Check for start at west limb.
+           </td>
+        </tr>
+        <tr>
+           <td>CADENCE</td> 
+           <td colspan="2">
+           &nbsp;<span id="ImCadenceHelp" class="tip">?</span>
+           <input id="ImTDelta" type="text" name="ImTDelta" style="width:12em;background-color:#FFFFFF" value="NotSpecified" onChange="ImPatchCheck();">
+           </td>
+        </tr>
+        <tr>
+           <td>LocUnits</td>
+           <td colspan="2">
+           &nbsp;<span id="ImLocUnitsHelp" class="tip">?</span>
+           <select id="ImLocType" type="text" name="ImLocType" style="width:20em;background-color:#FFFFFF" value="stony" onChange="ImPatchSet(3);">
+             <option value="stony">Stonyhurst degrees 
+             <option value="arcsec">arcsec from center 
+             <option value="pixels">pixels from (1,1) 
+    	 <option value="carrlong">Carrington LatLon 
+    	 </select>
+           &nbsp; Units for X and Y to select center of extracted patch
+           </td>
+        </tr> 
+        <tr id="ImTRefLi">
+           <td>T_REF</td>
+           <td colspan="2">
+           &nbsp;<span id="ImTRefHelp" class="tip">?</span>
+           <input id="ImTRef" type="text" name="ImTRef" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="ImPatchCheck();">
+           &nbsp; Reference time for X,Y to define center of extract patch.
+           </td>
+        </tr>
+        <tr id="ImCarrLi">
+           <td>CAR_ROT </td>
+           <td colspan="2">
+           &nbsp;<span id="ImCARROTHelp" class="tip">?</span>
+           <input id="ImCarrot" type="text" name="ImCarrot" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="ImPatchCheck();">
+           &nbsp; Carrington rotation number for X and Y, latitude and longitude.
+           </td>
+        </tr>
+        <tr>
+           <td>X</td>
+           <td colspan="2">
+           &nbsp;<span id="ImXHelp" class="tip">?</span>
+           <input id="ImX" type="text" name="ImX" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="ImPatchCheck();">
+           &nbsp; East-West location of patch center.
+           </td>
+        </tr>
+        <tr>
+           <td>Y</td>
+           <td colspan="2">
+           &nbsp;<span id="ImYHelp" class="tip">?</span>
+           <input id="ImY" type="text" name="ImY" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="ImPatchCheck();">
+           &nbsp; North-South location of patch center.
+           </td>
+        </tr>
+        <tr>
+           <td>BoxUnits</td>
+           <td colspan="2">
+	   &nbsp;<span id="ImBoxUnitsHelp" class="tip">?</span>
+           <select id="ImBoxType" type="text" name="ImBoxType" style="width:20em;background-color:#FFFFFF" value="pixels" onChange="ImPatchCheck();">
+             <option value="pixels">pixels 
+             <option value="degrees">degrees 
+             <option value="arcsec">arcsec 
+             </select>
+           &nbsp; Width of extracted patch, Units determined be BoxUnits.
+           </td>
+        </tr>
+        <tr>
+           <td>Width </td>
+           <td colspan="2">
+           &nbsp;<span id="ImWideHelp" class="tip">?</span>
+           <input id="ImWide" type="text" name="ImWide" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="ImPatchCheck();">
+           &nbsp; Width of extracted patch, Units determined be BoxUnits.
+           </td>
+        </tr>
+        <tr>
+          <td>Height </td>
+          <td colspan="2">
+           &nbsp;<span id="ImHighHelp" class="tip">?</span>
+          <input id="ImHigh" type="text" name="ImHigh" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="ImPatchCheck();">
+           &nbsp; Height of extracted patch, Units determined be BoxUnits.
+          </td>
+        </tr>
+        <tr>
+          <td>Verify </td>
+          <td colspan="2">
+           &nbsp;<span id="ImVerifyHelp" class="tip">?</span>
+          <input type="button" style="width:12em" value="Check params" onClick="ImPatchCheck();">
+          &nbsp;
+          <span id="ImVerify" style="width:12em;background-color:#D88080">Not Ready</span>
+          </td>
+        </tr>
+        </table>
+      </td> 
+    </tr>
+    <!-- END IM_PATCH -->
+
 <tr><td colspan="4"><span id="ProcArgsDisplay"></span></td></tr>
     <!-- End of processing  special code -->
 
@@ -1833,6 +2091,7 @@ access the data.
       <td>Provide your email address for notification.  May be omitted for online delivery.</td>
     </tr>
   
+    <tr><td colspan="4"><input type="button" value="Check Params for Export" onClick="CheckExportParams();"></td></tr>
     <tr id="AjaxExportRequestRow">
       <td colspan="4">
         <input id="ExportButton" type="button" value="Submit Export Request" style="background-color:#D8D8D8" onClick="GetExport();" >
