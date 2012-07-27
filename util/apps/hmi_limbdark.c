@@ -1,4 +1,4 @@
-#define CVSVERSION "$Id: hmi_limbdark.c,v 1.8 2012/04/23 16:43:30 phil Exp $"
+#define CVSVERSION "$Id: hmi_limbdark.c,v 1.9 2012/07/27 23:07:57 phil Exp $"
 /**
    @defgroup analysis
    @ingroup su_util
@@ -110,7 +110,7 @@ ModuleArgs_t module_args[] =
      {ARG_FLAG, "c", "0", "Supress center and flip 180 degrees if CROTA~180."},
      {ARG_FLAG, "x", "0", "Exclude pixels that deviate from the default LD, <0.875 or >1.25."},
      {ARG_FLAG, "h", "0", "Include full headers, set when requestid is present"},
-     {ARG_FLOATS, "coefs", "0.0", "Limb darkening coeficients, 5 needed"},
+     {ARG_DOUBLES, "coefs", "0.0", "Limb darkening coeficients, 5 needed"},
      {ARG_FLOAT, "croplimit", "1.0", "crop limit for removing limbdarkening"},
      {ARG_STRING, "requestid", "NA",  "JSOC export identifier"},
      {ARG_END}
@@ -259,13 +259,30 @@ int DoIt(void)
         {
         int totvals, datavals;
 
-        drms_setkey_string(outRec, "COEF_VER", CoefVersion);
-        drms_setkey_float(outRec, "LDCoef0", (float)(do_fit ? coefs[0] : use_coefs[0]));
-        drms_setkey_float(outRec, "LDCoef1", (float)(do_fit ? coefs[1] : use_coefs[1]));
-        drms_setkey_float(outRec, "LDCoef2", (float)(do_fit ? coefs[2] : use_coefs[2]));
-        drms_setkey_float(outRec, "LDCoef3", (float)(do_fit ? coefs[3] : use_coefs[3]));
-        drms_setkey_float(outRec, "LDCoef4", (float)(do_fit ? coefs[4] : use_coefs[4]));
-        drms_setkey_float(outRec, "LDCoef5", (float)(do_fit ? coefs[5] : use_coefs[5]));
+        if (drms_keyword_lookup(outRec, "COEF_VER", 0))
+          {
+          drms_setkey_string(outRec, "COEF_VER", CoefVersion);
+          drms_setkey_float(outRec, "LDCoef0", (float)(do_fit ? coefs[0] : use_coefs[0]));
+          drms_setkey_float(outRec, "LDCoef1", (float)(do_fit ? coefs[1] : use_coefs[1]));
+          drms_setkey_float(outRec, "LDCoef2", (float)(do_fit ? coefs[2] : use_coefs[2]));
+          drms_setkey_float(outRec, "LDCoef3", (float)(do_fit ? coefs[3] : use_coefs[3]));
+          drms_setkey_float(outRec, "LDCoef4", (float)(do_fit ? coefs[4] : use_coefs[4]));
+          drms_setkey_float(outRec, "LDCoef5", (float)(do_fit ? coefs[5] : use_coefs[5]));
+          }
+        else
+          {
+          char LDhistory[1000];
+          sprintf(LDhistory, "hmi_limbdark: COEF_VER=%s", CoefVersion);
+          drms_appendhistory(outRec, LDhistory, 0);
+          sprintf(LDhistory, "LDCoefs=%0.6f,%0.6f,%0.6f,%0.6f,%0.6f,%0.6f", 
+            (float)(do_fit ? coefs[0] : use_coefs[0]),
+            (float)(do_fit ? coefs[1] : use_coefs[1]),
+            (float)(do_fit ? coefs[2] : use_coefs[2]),
+            (float)(do_fit ? coefs[3] : use_coefs[3]),
+            (float)(do_fit ? coefs[4] : use_coefs[4]),
+            (float)(do_fit ? coefs[5] : use_coefs[5]));
+          drms_appendhistory(outRec, LDhistory, 1);
+          }
         if (!noFlip)
           upNcenter(outArray, ObsLoc);
         drms_setkey_double(outRec, "CRPIX1", ObsLoc->crpix1);
@@ -333,7 +350,7 @@ int fit_limbdark(DRMS_Array_t *arr, ObsInfo_t *ObsLoc, double* coefs)
   if (!f || !c) DIE("malloc problem");
 
   scale = 1.0/rsun;
-  crop_limit2 = 0.9995;
+  crop_limit2 = 0.99975;
 
   n = 0;
   for (iy=0; iy<ny; iy++)
@@ -435,10 +452,10 @@ int rm_limbdark(DRMS_Array_t *arr, DRMS_Array_t *outarr, ObsInfo_t *ObsLoc, doub
 	  continue;
 	  }
 
-        if (R2 < 1.0)
+        if (R2 < 0.99975)
           costheta2 = 1.0 - R2;
         else
-          costheta2 = 0.9995;
+          costheta2 = 1.0 - 0.99975;  /* 1/4 pixel from limb */
 
         mu = sqrt(costheta2);
 	xi = log(mu);

@@ -59,7 +59,7 @@
 
    If neither a limiting recordset specification nor t_start or t_stop are present, those values will be inferred from
    the on-disk time span for the center of the patch -90 degrees to +90 degrees from CM.
-   If cadence is not specified, the full cadence of the dataset will be used.
+   If cadence is not specified explicitly on the command line or in the recordset spec, the full cadence of the dataset will be used.
    This module computes the beginning and ending time for tracking the 
    region identified at time = t_ref, x and y or by the Carrington coordinates of the box center.
    In the Carrington case the module extracts a rectangular region 
@@ -181,7 +181,6 @@ ModuleArgs_t module_args[] =
     {ARG_FLAG, "f", "0", "FAKE tracking target added, val=0"},
     {ARG_FLAG, "F", "0", "FAKE tracking target added, val=datamax"},
     {ARG_FLAG, "r", "0", "Register to fractional CRPIXi, all frames to first frame round(crpix)"},
-    {ARG_FLAG, "R", "0", "Sun center to image center, implies -r"},
     {ARG_STRING, "FDS", "NOTSPECIFIED", "FDS file for tracking coords"},
     {ARG_END}
   };
@@ -239,7 +238,7 @@ int DoIt(void)
   double crln_rad, crlt_rad;
   double pa_rad;
   double cdelt;
-  double urx, ury, llx, lly;
+  double llx, lly;
   int inAxis[2];
   int this_car_rot;
   char *ctype1, *ctype2;
@@ -260,7 +259,6 @@ int DoIt(void)
   const char *requestid = params_get_str(params, "requestid");
   const char *where = params_get_str(params, "where");
   const char *FDSfile = params_get_str(params, "FDS");
-  const char *file = params_get_str(params, "FDS");
   TIME t_start = params_get_time(params, "t_start");
   TIME t_stop = params_get_time(params, "t_stop");
   const char *cadence_str = params_get_str(params, "cadence");
@@ -268,6 +266,8 @@ int DoIt(void)
   TIME t_ref = params_get_time(params, "t_ref");
   double width = params_get_double(params, "width");
   double height = params_get_double(params, "height");
+  int pixwidth, pixheight;
+  double midx, midy;
   int car_rot = params_get_int(params, "car_rot");
   double x = params_get_double(params, "x");
   double y = params_get_double(params, "y");
@@ -276,8 +276,7 @@ int DoIt(void)
   int NoTrack = params_isflagset(params, "t");
   int wantFAKEwhite = params_isflagset(params, "F");
   int wantFAKE = params_isflagset(params, "f") || wantFAKEwhite;
-  int do_suncenter = params_isflagset(params, "R");
-  int do_register = (do_suncenter ? 1 : params_isflagset(params, "r"));
+  int do_register = params_isflagset(params, "r");
   int export_keys = params_isflagset(params, "h");
   int do_crop = params_isflagset(params, "c");
   TIME tNotSpecified = sscan_time("JD_0");
@@ -285,7 +284,6 @@ int DoIt(void)
   double crvalx = 0.0;
   double crvaly = 0.0;
   double crota, sina, cosa;
-  double width_arcsec, height_arcsec;
   double pa, deltlong;
   double center_x_first, center_y_first;  // used for NoTrack option
   int firstimage = 1;
@@ -299,6 +297,7 @@ int DoIt(void)
   double trackx, tracky;
   double track_radius;
   double crpix1_0, crpix2_0;
+  int register_padding = 5; // later this should be based on crota2 and box size.
 
   FILE *log = NULL;
 
@@ -352,6 +351,8 @@ int DoIt(void)
 
   inparam = strdup(ingiven);
   if (strcasecmp(inparam, "NOTSPECIFIED") == 0) DIE("Input series must be specified.");
+  // WARNING - there should be a check here to make sure the first prime key is a time and that the first bracket
+  // is a normal time spec.
   lbracket = index(inparam, '[');
   // first, get input series names.
   if (lbracket)
@@ -686,48 +687,39 @@ int DoIt(void)
         // get ur, ll coords of box at CM.
         rsunpix = rsun/cdelt;
         }
+
       if (boxtype == BOXDEGREE)
         {
         int nx, ny;
+        double urx, ury;
         // get corners of sample box at zero longitude wrt center.
         sphere2img(Deg2Rad*(crlt+height/2), Deg2Rad*(width/2), crlt_obs_rad, 0.0,
           &urx, &ury, 0.0, 0.0, rsunpix, pa_rad, 0, 0, 0, 0);
         sphere2img(Deg2Rad*(crlt-height/2), -Deg2Rad*(width/2), crlt_obs_rad, 0.0,
           &llx, &lly, 0.0, 0.0, rsunpix, pa_rad, 0, 0, 0, 0);
-        nx = urx-llx;
-        ny = ury-lly;
-        // fix for 180 flipped coords.
-        if (nx < 0) nx = -nx;
-        if (ny < 0) ny = -ny;
-        llx = -nx/2;  lly = -ny/2;  urx = nx/2; ury = ny/2;
-        urx = round(urx); ury = round(ury); llx = round(llx); lly = round(lly);
-        // make size odd, increase smaller distance from center
-        nx = urx - llx + 1;  ny = ury - lly + 1;
-        if (!(nx&1)) {if (urx > -llx) llx-=1; else urx+=1;}
-        if (!(ny&1)) {if (ury > -lly) lly-=1; else ury+=1;}
-        width_arcsec = nx * cdelt;
-        height_arcsec = nx * cdelt;
+        // llx, urx, lly, ury are image coordinates for Sun, want llx and lly
+        // on plate so need to swap if image rotated.
+        nx = urx - llx ;
+        ny = ury - lly ;
+        if (nx < 0) { nx = -nx; llx = urx; }
+        if (ny < 0) { ny = -ny; lly = ury; }
+        pixwidth = nx + 1;
+        pixheight = ny + 1;
         }
       else if (boxtype==BOXARCSEC)
         {
         int nx, ny;
-        urx = width/(2.0*cdelt); llx = -urx; ury = height/(2.0*cdelt); lly = -ury;
-        urx = round(urx); ury = round(ury); llx = round(llx); lly = round(lly);
-        nx = urx - llx + 1;  ny = ury - lly + 1;
-        width_arcsec = nx * cdelt;
-        height_arcsec = nx * cdelt;
+        llx = -width/(2.0*cdelt);
+        lly = -height/(2.0*cdelt);
+        pixwidth = 1 - 2 * llx;
+        pixheight = 1 - 2 * lly;
         }
       else /* boxtype == BOXPIXELS */
         {
-        int nx, ny;
-        int iurx, iury, illx, illy;
-        iurx = width/2.0; illx = -iurx; iury = height/2.0; illy = -iury;
-        if (((int)(round(width)) & 1) == 0 && ((iurx-illx+1) & 1) == 1) iurx--;
-        if (((int)(round(height)) & 1) == 0 && ((iury-illy+1) & 1) == 1) iury--;
-        urx = iurx; ury = iury; llx = illx; lly = illy;
-        nx = urx - llx + 1;  ny = ury - lly + 1;
-        width_arcsec = nx * cdelt;
-        height_arcsec = nx * cdelt;
+        pixwidth = round(width);
+        pixheight = round(height);
+        llx = -pixwidth / 2.0;
+        lly = -pixheight / 2.0;
         }
       }
 
@@ -735,16 +727,26 @@ int DoIt(void)
         {
         if (FDSfile)
           {
-          center_x = PIX_X(trackx,tracky);
-          center_y = PIX_Y(trackx,tracky);
+          center_x = PIX_X(trackx,tracky) - 1;
+          center_y = PIX_Y(trackx,tracky) - 1;
           }
         else
           sphere2img(crlt_rad, crln_rad, crlt_obs_rad, crln_obs_rad, &center_x, &center_y, x0, y0, rsunpix, pa_rad, 0, 0, 0, 0);
         }
+
+    // center_x and center_y are target locations for the center of the desired patch, pixels from 0 of as-is image.
+
     int x1 = round(center_x + llx);
     int y1 = round(center_y + lly);
-    int x2 = round(center_x + urx);
-    int y2 = round(center_y + ury);
+    int x2 = x1 + pixwidth - 1;
+    int y2 = y1 + pixheight - 1;
+    if (do_register)
+      {
+      x1 -= register_padding;
+      y1 -= register_padding;
+      x2 += register_padding;
+      y2 += register_padding;
+      }
     crpix1 = 1 + x0 - x1;
     crpix2 = 1 + y0 - y1;
 
@@ -756,18 +758,17 @@ int DoIt(void)
     inAxis[1] = inSeg->axis[1];
 
     if (x1 >= inAxis[0] || y1 >= inAxis[1] || x2 < 0 || y2 < 0)
-      {
-      continue; // slice outside image
+      {  // patch completely outside image
+      continue;
       }
-
-    if (x1>=0 && y1>=0 && x2<inAxis[0] && y2<inAxis[1])
-      {
+    else if (x1>=0 && y1>=0 && x2<inAxis[0] && y2<inAxis[1])
+      {  // patch entirely in image.
       status = 0;
       outArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start1, end1, &status);
       if (status) DIE("Cant read input record");
       }
     else
-      {
+      { // patch partly outside image.
       int dims[2] = {x2-x1+1,y2-y1+1};
       int start2[2], end2[2];
       int x,y;
@@ -816,7 +817,7 @@ int DoIt(void)
             data[j*nx + i] = DRMS_MISSING_FLOAT;
           }
       }
-    // Handle special case where |pa| == 180
+    // Always handle special case where |pa| == 180
     if (fabs(fabs(pa)-180.0) < 1.0)
       {
       // Tracking should be OK for center, but patch rotated.  Flip on both axes.
@@ -844,9 +845,14 @@ int DoIt(void)
           }
         }
       pa -= 180.0;
-      crota -= 180.0;  // why was this missing??
+      crota -= 180.0;  // why was this missing in hg_patch??
       crpix1 = 1 + x2 - x0;
       crpix2 = 1 + y2 - y0;
+      // adjust internal quantities for after the flip, may be needed by do_register.
+      x1 = inAxis[0] - 1 - x2;
+      y1 = inAxis[1] - 1 - y2;
+      center_x = inAxis[0] - 1 - center_x;
+      center_y = inAxis[1] - 1 - center_y;
       // cosa = 1.0; sina = 0.0;
       }
 
@@ -855,39 +861,32 @@ int DoIt(void)
  */
     if (do_register)
       {
+      DRMS_Array_t *tmpArray;
       int status;
+      int i,j;
       float *data = (float *)outArray->data;
       float *newdata = NULL;
-      float dx, dy;
-      int idx, idy;
-      int newnx, newny, newdims[2];
+      int newnx, newny;
       int nx = outArray->axis[0];
       int ny = outArray->axis[1];
+      int wantnewdims[2] = {nx - 2 * register_padding, ny - 2 * register_padding};
+      float midx=(nx-1)/2.0, midy = (ny-1)/2.0;
       int dtyp = 3;
-      if (do_suncenter)
-        {
-        crpix1_0 = (nx-1)/2.0;
-        crpix2_0 = (ny-1)/2.0;
-        }
-      // else  - this code above in firstimage section
-        // {
-        // if (irec == 0)
-          // {
-          // idx = crpix1 + 0.5;
-          // idy = crpix2 + 0.5;
-          // crpix1_0 = idx;
-          // crpix2_0 = idy;
-          // }
-        // }
-      dx = crpix1_0 - crpix1;
-      dy = crpix2_0 - crpix2;
+      float dx = (x1 + midx) - center_x;
+      float dy = (y1 + midy) - center_y;
       image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &(void *)newdata, &newnx, &newny, 1, 0);
+      if (newnx != nx || newny != ny)
+        fprintf(stderr,"image_magrotate changed dimensions: nx want %d got %d, ny want %d got %d\n",nx,newnx,ny,newny);
       crota = 0.0;
-      newdims[0] = newnx; newdims[1] = newny;
       drms_free_array(outArray);
-      outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, newdims, newdata, &status);
-      crpix1 -= dx;
-      crpix2 -= dy;
+      int outdims[2] = {pixwidth, pixheight};
+      outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outdims, NULL, &status);
+      data = (float *)outArray->data;
+      for (j=0; j<pixheight; j++)
+        for (i=0; i< pixwidth; i++)
+          data[j*pixwidth + i] = newdata[(j+register_padding)*nx + i+register_padding];
+      crpix1 += dx;
+      crpix2 += dy;
       }
 
 /*
@@ -916,8 +915,6 @@ int DoIt(void)
     drms_setkey_string(outRec, "HGLOCUNITS", locunits);
     drms_setkey_float(outRec, "HGWIDE", width);
     drms_setkey_float(outRec, "HGHIGH", height);
-    drms_setkey_float(outRec, "HGASWIDE", width_arcsec);
-    drms_setkey_float(outRec, "HGASHIGH", height_arcsec);
     drms_setkey_float(outRec, "HGCRLN", crln);
     drms_setkey_float(outRec, "HGCRLT", crlt);
     drms_setkey_int(outRec, "HGCARROT", car_rot);
