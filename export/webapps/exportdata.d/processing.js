@@ -3,7 +3,7 @@
 // CheckXXXX creates the contents of ExportProcessingArgs from parameters for
 // this export type
 //
-// Each processing type needs a common name, e.g. HgPatch, used for the first part of
+// Each processing type needs a common name, e.g. ImPatch, used for the first part of
 // function and variable names associated with that processing type.
 // For processing 'Xxxx' the following functions should be defined in this file.
 //
@@ -73,8 +73,8 @@ function RebinInit(isActive)
     $("RebinScale").value = "1.0";
     $("RebinFWHM").value = "-1.0";
     $("RebinNvector").value = "-1.0";
-    $("RebinFWHM").style.backgroundColor = "#D88080";
-    $("RebinNvector").style.backgroundColor = "#D88080";
+    $("RebinFWHM").style.backgroundColor = colorRed;
+    $("RebinNvector").style.backgroundColor = colorRed;
     $("RebinFWHMRow").style.display = "none";
     $("RebinNvectorRow").style.display = "none";
     $("ProcessRebin").style.display = "none";
@@ -102,22 +102,22 @@ function RebinSet(control)
     {
         if (parseFloat($("RebinFWHM").value) == -1.0)
         {
-            $("RebinFWHM").style.backgroundColor = "#D88080";
+            $("RebinFWHM").style.backgroundColor = colorRed;
         }
         else
         {
-            $("RebinFWHM").style.backgroundColor = "#FFFFFF";
+            $("RebinFWHM").style.backgroundColor = colorWhite;
         }
     }
     else if (control == "nvector")
     {
         if (parseFloat($("RebinNvector").value) == -1.0)
         {
-            $("RebinNvector").style.backgroundColor = "#D88080";
+            $("RebinNvector").style.backgroundColor = colorRed;
         }
         else
         {
-            $("RebinNvector").style.backgroundColor = "#FFFFFF";
+            $("RebinNvector").style.backgroundColor = colorWhite;
         }
     }
   RebinCheck();
@@ -192,7 +192,7 @@ function ResizeInit(isActive)
     $("ResizeReplicate").checked = false;
     $("ResizeDoScale").checked = false;
     $("ResizeCdelt").value = "-1.0";
-    $("ResizeCdelt").style.backgroundColor = "#D88080";
+    $("ResizeCdelt").style.backgroundColor = colorRed;
     $("ResizeScaleRow").style.display = "none";
     }
   }
@@ -212,7 +212,7 @@ function ResizeSet(control)
     }
   else if (control == "scale")
     {
-    $("ResizeCdelt").style.backgroundColor = "#FFFFFF";
+    $("ResizeCdelt").style.backgroundColor = colorWhite;
     }
   // no specific action needed for "method", "register_to", "crop", or "replicate" 
   ResizeCheck();
@@ -235,8 +235,10 @@ function ResizeCheck()
     
   if ($("ResizeSunCenter").checked)
     rv += ",center_to=0";
-  else
+  else if ($("ResizeFirstImage").checked)
     rv += ",center_to=1";
+  else
+    rv += ",center_to=2";
     
   if ($("ResizeDoScale").checked)
     {
@@ -263,6 +265,9 @@ function ResizeCheck()
 //
 
 var noaaColor;
+var HgTracked = 0;
+var HgSeriesList;
+var HgSeriesSelected = 0;
 
 function HgPatchGetNoaa()
   {
@@ -308,8 +313,8 @@ function HgPatchGetNoaa()
           $("HgTRef").value = minTime;
           $("HgX").value = minLong + "";
           $("HgY").value = minLat + "";
-	  $("HgNOAA").style.backgroundColor="#FFCC66";
-          noaaColor = "#D8D8D8";
+	  $("HgNOAA").style.backgroundColor=colorOptionSet;
+          noaaColor = colorPreset;
           $("HgLocType").style.backgroundColor = noaaColor;
           $("HgTRef").style.backgroundColor = noaaColor;
           $("HgX").style.backgroundColor = noaaColor;
@@ -348,36 +353,36 @@ function HgPatchCheck()
   if ($("HgTStart").value.strip().empty()) $("HgTStart").value = "NotSpecified";
   if ($("HgTStart").value == "NotSpecified")
     {
-    $("HgTStart").style.backgroundColor="#FFFFFF";
+    $("HgTStart").style.backgroundColor=colorWhite;
     isok = 1;
     }
   else
     {
-    $("HgTStart").style.backgroundColor="#FFFFFF";
+    $("HgTStart").style.backgroundColor=colorWhite;
     args += ",t_start=" + $("HgTStart").value;
     isok += 1;
     }
   if ($("HgTStop").value.strip().empty()) $("HgTStop").value = "NotSpecified";
   if ($("HgTStop").value == "NotSpecified")
     {
-    $("HgTStop").style.backgroundColor="#FFFFFF";
+    $("HgTStop").style.backgroundColor=colorWhite;
     isok = 1;
     }
   else
     {
-    $("HgTStop").style.backgroundColor="#FFFFFF";
+    $("HgTStop").style.backgroundColor=colorWhite;
     args += ",t_stop=" + $("HgTStop").value;
     isok += 1;
     }
   if ($("HgTDelta").value.strip().empty()) $("HgTDelta").value = "NotSpecified";
   if ($("HgTDelta").value == "NotSpecified")
     {
-    $("HgTDelta").style.backgroundColor="#FFFFFF";
+    $("HgTDelta").style.backgroundColor=colorWhite;
     isok = 1;
     }
   else
     {
-    $("HgTDelta").style.backgroundColor="#FFFFFF";
+    $("HgTDelta").style.backgroundColor=colorWhite;
     args += ",cadence=" + $("HgTDelta").value;
     isok += 1;
     }
@@ -385,7 +390,7 @@ function HgPatchCheck()
   $("HgLocType").style.backgroundColor=noaaColor;
   HgLocOption = $("HgLocType").selectedIndex;
   args += ",locunits=" + $("HgLocType").options[HgLocOption].value;
-  $("HgBoxType").style.backgroundColor="#FFFFFF";
+  $("HgBoxType").style.backgroundColor=colorWhite;
   args += ",boxunits=" + $("HgBoxType").options[$("HgBoxType").selectedIndex].value;
 
   if ($("HgLocType").options[HgLocOption].value == "carrlong" && HgTracked == 1)
@@ -404,19 +409,19 @@ function HgPatchCheck()
   if ($("HgCarrot").value.strip().empty()) $("HgCarrot").value = "NotSpecified";
   if ($("HgCarrot").value == "NotSpecified" )
     {
-    $("HgCarrot").style.backgroundColor="#D88080";
+    $("HgCarrot").style.backgroundColor=colorRed;
     isok = 0;
     }
   else
     {
-    $("HgCarrot").style.backgroundColor="#FFFFFF";
+    $("HgCarrot").style.backgroundColor=colorWhite;
     args += ",car_rot=" + $("HgCarrot").value;
     isok += 1;
     }
   if ($("HgTRef").value.strip().empty()) $("HgTRef").value = "NotSpecified";
   if ($("HgTRef").value == "NotSpecified")
     {
-    $("HgTRef").style.backgroundColor="#D88080";
+    $("HgTRef").style.backgroundColor=colorRed;
     isok = 0;
     }
   else
@@ -428,7 +433,7 @@ function HgPatchCheck()
   if ($("HgX").value.strip().empty()) $("HgX").value = "NotSpecified";
   if ($("HgX").value == "NotSpecified")
     {
-    $("HgX").style.backgroundColor="#D88080";
+    $("HgX").style.backgroundColor=colorRed;
     isok = 0;
     }
   else
@@ -440,7 +445,7 @@ function HgPatchCheck()
   if ($("HgY").value.strip().empty()) $("HgY").value = "NotSpecified";
   if ($("HgY").value == "NotSpecified")
     {
-    $("HgY").style.backgroundColor="#D88080";
+    $("HgY").style.backgroundColor=colorRed;
     isok = 0;
     }
   else
@@ -452,24 +457,24 @@ function HgPatchCheck()
   if ($("HgWide").value.strip().empty()) $("HgWide").value = "NotSpecified";
   if ($("HgWide").value == "NotSpecified")
     {
-    $("HgWide").style.backgroundColor="#D88080";
+    $("HgWide").style.backgroundColor=colorRed;
     isok = 0;
     }
   else
     {
-    $("HgWide").style.backgroundColor="#FFFFFF";
+    $("HgWide").style.backgroundColor=colorWhite;
     args += ",width=" + $("HgWide").value;
     isok += 1;
     }
   if ($("HgHigh").value.strip().empty()) $("HgHigh").value = "NotSpecified";
   if ($("HgHigh").value == "NotSpecified")
     {
-    $("HgHigh").style.backgroundColor="#D88080";
+    $("HgHigh").style.backgroundColor=colorRed;
     isok = 0;
     }
   else
     {
-    $("HgHigh").style.backgroundColor="#FFFFFF";
+    $("HgHigh").style.backgroundColor=colorWhite;
     args += ",height=" + $("HgHigh").value;
     isok += 1;
     }
@@ -527,11 +532,11 @@ function HgPatchInit(isActive)
   {
   if (!isActive)
     {
-    noaaColor = "#FFFFFF";
-    var requireColor = "#D88080";
+    noaaColor = colorWhite;
+    var requireColor = colorRed;
     $("ProcessHgPatch").style.display="none";
     $("HgTrack").checked = true;
-    $("HgNOAA").style.backgroundColor="#FFFFFF"; $("HgNOAA").value = "NotSpecified";
+    $("HgNOAA").style.backgroundColor=colorWhite; $("HgNOAA").value = "NotSpecified";
     $("HgTStart").value = "NotSpecified";
     $("HgTStop").value = "NotSpecified";
     $("HgTDelta").value = "NotSpecified";
@@ -572,6 +577,416 @@ function HgGetSeriesList()
 
 // End of HG Patch code
 
+//
+// Process ImPatch
+//
+
+var noaaColor;
+var ImTracked = 0;
+
+function ImPatchGetNoaa()
+  {
+  if ($("ImNOAA").value.strip().empty()) $("ImNOAA").value = "NotSpecified";
+  if ($("ImNOAA").value != "NotSpecified")
+    {
+    var noaaNum = 1 * $("ImNOAA").value;
+    if (noaaNum < 7000) 
+      {
+      noaaNum = noaaNum + 10000; // OK for times after 1996 Jan.
+      $("ImNOAA").value = noaaNum + "";
+      }
+    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+    new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_jsoc2',
+      {
+      method: 'get',
+      parameters: {"op" : "rs_list", "ds": "su_rsb.NOAA_ActiveRegions[][" + noaaNum + "]", "key": "ObservationTime,LatitudeHG,LongitudeCM" },
+      onSuccess: function(transport, json)
+        {
+        var response = transport.responseText || "no response text";
+        var NOAA_rslist = response.evalJSON();
+        try {if (NOAA_rslist.status > 0 || NOAA_rslist.count == 0) throw "noRecords";}
+        catch(err) { $("ImNOAA").value = noaaNum + " " + err; return; }
+        var minLong = 999, minLat, minTime;
+        var irec, nrecs = NOAA_rslist.count;
+        var thisTime, thisLong, thisLat;
+        for (irec=0; irec<nrecs; irec++)
+          {
+          thisTime = NOAA_rslist.keywords[0].values[irec];
+          thisLat = NOAA_rslist.keywords[1].values[irec];
+          thisLong = NOAA_rslist.keywords[2].values[irec];
+          if (Math.abs(thisLong) < Math.abs(minLong))
+            {
+            minLong = thisLong;
+            minLat = thisLat;
+            minTime = thisTime;
+            }
+          }
+        try
+          {
+          if (minLong == 999) throw "noRegion";
+          $("ImLocType").selectedIndex = 0;
+          $("ImTRef").value = minTime;
+          $("ImX").value = minLong + "";
+          $("ImY").value = minLat + "";
+	  $("ImNOAA").style.backgroundColor=colorOptionSet;
+          noaaColor = colorPreset;
+          $("ImLocType").style.backgroundColor = noaaColor;
+          $("ImTRef").style.backgroundColor = noaaColor;
+          $("ImX").style.backgroundColor = noaaColor;
+          $("ImY").style.backgroundColor = noaaColor;
+	  // CheckImPatch();
+          }
+        catch(err) { $("ImNOAA").value = noaaNum + " " + err; return; }
+        },
+      onFailure: function()
+        {
+        alert('Something went wrong with NOAA num data request');
+        $("ImNOAA").value = "Not Found";
+        },
+      onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+      });
+    }
+  }
+  
+function ImPatchSet(param)
+  {
+  // Get first and last record info
+  if (param == 1) defaultStartUsed = 0;
+  if (param == 2) defaultStopUsed = 0;
+  var needCheck = 1;
+  if (!ImFirstRecord)
+    {
+    needCheck = 0;
+    ImGetRecInfo(1);
+    }
+  if (!ImLastRecord)
+    {
+    needCheck = 0;
+    ImGetRecInfo(-1);
+    }
+  if (needCheck)
+    ImPatchCheck();
+  }
+
+var defaultStartUsed = 1;
+var defaultStopUsed = 1;
+function ImPatchCheck()
+  {
+  var isok = 1;
+  var args = "im_patch";
+  var ImLocOption;
+// alert("ImPatchCheck, RecordCountNeeded="+RecordCountNeeded+", default start,stop="+defaultStartUsed+","+defaultStopUsed);
+  if (RecordCountNeeded)
+    {
+    ImFirstRecord = null;
+    ImLastRecord = null;
+    if (defaultStartUsed) $("ImTStart").value = "NotSpecified";
+    if (defaultStopUsed) $("ImTStop").value = "NotSpecified";
+    ExportNewRS();
+    // ImPatchSet();
+    return("");
+    }
+
+  if ( ($("ImTStart").value === "East Limb" && !$("ImEastLimb").checked) || ($("ImTStart").value.strip().empty()) )
+     $("ImTStart").value = "NotSpecified";
+  if ($("ImTStart").value == "NotSpecified")
+    {
+    if (ImFirstRecord)
+      $("ImTStart").value = ImFirstRecord.keywords[0].values[0];
+    }
+  if ($("ImTStart").value == "NotSpecified")
+    {
+    $("ImTStart").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("ImTStart").style.backgroundColor=colorWhite;
+    if ($("ImEastLimb").checked)
+      {
+      $("ImTStart").value = "East Limb";
+      args += ",t_start=" + "NotSpecified";
+      defaultStartUsed = 0;
+      }
+    else
+      args += ",t_start=" + $("ImTStart").value;
+    }
+
+  if ( ($("ImTStop").value === "West Limb" && !$("ImWestLimb").checked) || ($("ImTStop").value.strip().empty()) )
+    $("ImTStop").value = "NotSpecified";
+  if ($("ImTStop").value == "NotSpecified")
+    {
+    if (ImLastRecord)
+      $("ImTStop").value = ImLastRecord.keywords[0].values[0];
+    }
+  if ($("ImTStop").value == "NotSpecified")
+    {
+    $("ImTStop").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("ImTStop").style.backgroundColor=colorWhite;
+    if ($("ImWestLimb").checked)
+      {
+      $("ImTStop").value = "West Limb";
+      args += ",t_stop=" + "NotSpecified";
+      defaultStopUsed = 0;
+      }
+    else
+      args += ",t_stop=" + $("ImTStop").value;
+    }
+
+  if ($("ImTrack").checked) // checked for tracking, default
+    {
+    args += ",t=0";
+    ImTracked = 1;
+    }
+  else
+    {
+    args += ",t=1";
+    $("ImTRef").value = $("ImTStart").value;
+    ImTracked = 0;
+    }
+
+  if ($("ImRegister").checked) // checked for registering by interpolation, default is no.
+    args += ",r=1";
+  else
+    args += ",r=0";
+
+  if ($("ImCrop").checked) // checked for crop to limb, default is no.
+    args += ",c=1";
+  else
+    args += ",c=0";
+
+  if ($("ImTDelta").value.strip().empty()) $("ImTDelta").value = "NotSpecified";
+  if ($("ImTDelta").value == "NotSpecified" && ImFirstRecord)
+    {
+    var recset = $("ExportRecordSet").value;
+    var posAt = recset.indexOf("@");
+    if (posAt > 0)
+      {
+      var patt = /@[0-9]+[a-z]*/;
+      var cads = $("ExportRecordSet").value.match(patt);
+      $("ImTDelta").value = cads[0].substring(1);
+      }
+    else
+      $("ImTDelta").value = ImFirstRecord.keywords[3].values[0] + "s";
+    }
+  if ($("ImTDelta").value == "NotSpecified")
+    {
+    $("ImTDelta").style.backgroundColor=colorWhite;
+    }
+  else
+    {
+    $("ImTDelta").style.backgroundColor=colorWhite;
+    args += ",cadence=" + $("ImTDelta").value;
+    }
+
+  $("ImLocType").style.backgroundColor=noaaColor;
+  ImLocOption = $("ImLocType").selectedIndex;
+  // values are one of: stony, arcsec, pixels, carrlong
+  args += ",locunits=" + $("ImLocType").options[ImLocOption].value;
+  $("ImBoxType").style.backgroundColor=colorWhite;
+  args += ",boxunits=" + $("ImBoxType").options[$("ImBoxType").selectedIndex].value;
+
+  if ($("ImLocType").selectedIndex == 3 && ImTracked == 1)
+    {
+    $("ImCarrLi").style.display = "table-row";
+    $("ImTRefLi").style.display = "none";
+    $("ImTRef").value == "NotSpecified";
+    }
+  else
+    {
+    $("ImCarrLi").style.display = "none";
+    $("ImTRefLi").style.display = "table-row";
+    $("ImCarrot").value == "NotSpecified";
+    }
+
+  if ($("ImTRef").value.strip().empty()) $("ImTRef").value = "NotSpecified";
+  if ($("ImTRef").value == "NotSpecified")
+    {
+    $("ImTRef").value = $("ImTStart").value;
+    }
+  if ($("ImTRef").value == "NotSpecified" && $("ImLocType").indexSelected != 3)
+    {
+    $("ImTRef").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("ImTRef").style.backgroundColor=noaaColor;
+    args += ",t_ref=" + $("ImTRef").value;
+    }
+
+  if ($("ImCarrot").value.strip().empty()) $("ImCarrot").value = "NotSpecified";
+  if ($("ImLocType").selectedIndex == 3)
+    {
+    if ($("ImCarrot").value == "NotSpecified" && ImFirstRecord)
+      $("ImCarrot").value = ImFirstRecord.keywords[1].values[0];
+    if ($("ImCarrot").value == "NotSpecified" )
+      {
+      isok = 0;
+      $("ImCarrot").style.backgroundColor=colorRed;
+      }
+    else
+      {
+      $("ImCarrot").style.backgroundColor=colorWhite;
+      args += ",car_rot=" + $("ImCarrot").value;
+      }
+    }
+
+  if ($("ImX").value.strip().empty()) $("ImX").value = "NotSpecified";
+  if ($("ImLocType").selectedIndex == 3)
+    {
+    if ($("ImX").value == "NotSpecified" && ImFirstRecord)
+      $("ImX").value = ImFirstRecord.keywords[2].values[0];
+    }
+  if ($("ImX").value == "NotSpecified")
+    {
+    isok = 0;
+    $("ImX").style.backgroundColor=colorRed;
+    }
+  else
+    {
+    $("ImX").style.backgroundColor=noaaColor;
+    args += ",x=" + $("ImX").value;
+    }
+
+  if ($("ImY").value.strip().empty()) $("ImY").value = "NotSpecified";
+  if ($("ImY").value == "NotSpecified")
+    {
+    $("ImY").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("ImY").style.backgroundColor=noaaColor;
+    args += ",y=" + $("ImY").value;
+    }
+
+  if ($("ImWide").value.strip().empty()) $("ImWide").value = "NotSpecified";
+  if ($("ImWide").value == "NotSpecified")
+    {
+    $("ImWide").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("ImWide").style.backgroundColor=colorWhite;
+    args += ",width=" + $("ImWide").value;
+    }
+
+  if ($("ImHigh").value.strip().empty()) $("ImHigh").value = "NotSpecified";
+  if ($("ImHigh").value == "NotSpecified")
+    {
+    $("ImHigh").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("ImHigh").style.backgroundColor=colorWhite;
+    args += ",height=" + $("ImHigh").value;
+    }
+
+  if (isok)
+    {
+    $("ImVerify").innerHTML = "OK to submit";
+    $("ImVerify").style.backgroundColor = colorWhite;
+    }
+  else
+    {
+    $("ImVerify").innerHTML = "Not Ready";
+    $("ImVerify").style.backgroundColor = colorRed;
+    }
+  return (isok ? args : "");
+  }
+
+var ImFirstRecord = null;
+var ImLastRecord = null;
+function ImGetRecInfo(n)
+  {
+  // Get keywords for a single record.  firstlast will be 1 for first record, -1 for last record.
+  if (n==1)
+    ImFirstRecord = null;
+  else
+    ImLastRecord = null;
+  $("ImRecordSet").innerHTML = RecordSet;
+  var timePrime = (firstTimePrime.length > 0 ? firstTimePrime : "T_REC");
+  var keysneeded = timePrime+",CAR_ROT,CRLN_OBS,"+timePrime+"_step";
+// alert("ImGetRecInfo("+n+") called");
+  var recinfo;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  var RecordSet = $("ExportRecordSet").value;
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
+    {
+    method: 'get',
+    parameters: {"ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded },
+
+    onSuccess: function(transport, json)
+      {
+      var thisN = ""+n;
+      var response = transport.responseText || "no response text";
+      var recinfo = response.evalJSON();
+      if (recinfo.status == 0)
+        {
+        if (thisN == "1")
+          {
+          ImFirstRecord = recinfo;
+          if (ImLastRecord)
+            ImPatchCheck();
+          }
+        if (thisN == "-1")
+          {
+          ImLastRecord = recinfo;
+          if (ImFirstRecord)
+            ImPatchCheck();
+          }
+        }
+      else
+        alert("failed to get record info for n="+thisN+" of " + RecordSet);
+      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+      },
+    onFailure: function() { alert('Something went wrong...'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+  }
+
+// Set display defaults
+
+function ImPatchInit(isActive)
+  {
+  if (!isActive)
+    {
+    noaaColor = colorWhite;
+    var requireColor = colorRed;
+    $("ProcessImPatch").style.display="none";
+    $("ImTrack").checked = true;
+    $("ImRegister").checked = false;
+    $("ImCrop").checked = false;
+    $("ImNOAA").style.backgroundColor=colorWhite; $("ImNOAA").value = "NotSpecified";
+    $("ImTStart").value = "NotSpecified";
+    $("ImTStop").value = "NotSpecified";
+    $("ImTDelta").value = "NotSpecified";
+    $("ImTRef").style.backgroundColor = requireColor; $("ImTRef").value = "NotSpecified";
+    $("ImCarrot").style.backgroundColor = requireColor; $("ImCarrot").value = "NotSpecified";
+    $("ImX").style.backgroundColor = requireColor; $("ImX").value = "NotSpecified";
+    $("ImY").style.backgroundColor = requireColor; $("ImY").value = "NotSpecified";
+    $("ImWide").style.backgroundColor = requireColor; $("ImWide").value = "NotSpecified";
+    $("ImHigh").style.backgroundColor = requireColor; $("ImHigh").value = "NotSpecified";
+    ImTracked = 1;
+    ImFirstRecord = null;
+    ImLastRecord = null;
+    defaultStartUsed = 1;
+    defaultStopUsed = 1;
+    }
+  else
+    {
+    ImPatchSet(0);
+    }
+  }
+
+// End of IM Patch code
 
 //
 // Processing details for all options
@@ -588,7 +1003,8 @@ function ProcessingInit()
   iOpt = 0;
   ProcessingOptionsHTML += 
     '<input type="checkbox" checked="true" value="no_op" id="OptionNone" onChange="SetProcessing('+iOpt+');" />' +
-    'no_op - none<br>';
+    'no_op - none&nbsp;' +
+    '<input id="ProcessingCheckboxHide" type="checkbox" checked="0" onChange="ProcessingEnabled();" />&nbsp;hide<br>';
   ExpOpt = new Object();
   ExpOpt.id="OptionNone";
   ExpOpt.rowid = "ExpSel_none";
@@ -639,6 +1055,18 @@ function ProcessingInit()
   ExpOpt.rowid = "ProcessHgPatch";
   ExpOpt.Init = HgPatchInit;
   ExpOpt.Check = HgPatchCheck;
+  ExpOpt.Set = null;
+  ExportProcessingOptions[iOpt] = ExpOpt;
+
+  iOpt++;
+  ProcessingOptionsHTML += 
+    '<input type="checkbox" checked="false" value="im_patch" id="OptionImPatch" onChange="SetProcessing('+iOpt+');" /> ' +
+    'im_patch - Extract sub-frame<br>';
+  ExpOpt = new Object();
+  ExpOpt.id = "OptionImPatch";
+  ExpOpt.rowid = "ProcessImPatch";
+  ExpOpt.Init = ImPatchInit;
+  ExpOpt.Check = ImPatchCheck;
   ExpOpt.Set = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
 
