@@ -62,7 +62,7 @@ void sprint_time_ISO (char *tstring, TIME t)
   tstring[19] = '\0';
 } 
 
-static void FreeRecSpecParts(char ***snames, int nitems)
+static void FreeRecSpecParts(char ***snames, char ***filts, int nitems)
 {
     if (snames)
     {
@@ -86,6 +86,29 @@ static void FreeRecSpecParts(char ***snames, int nitems)
         
         *snames = NULL;
     }
+    
+    if (filts)
+    {
+        int ifilt;
+        char **filtArr = *filts;
+        
+        if (filtArr)
+        {
+            for (ifilt = 0; ifilt < nitems; ifilt++)
+            {
+                char *onefilt = filtArr[ifilt];
+                
+                if (onefilt)
+                {
+                    free(onefilt);
+                }
+            }
+            
+            free(filtArr);
+        }
+        
+        *filts = NULL;
+    }
 }
 
 int DoIt ()
@@ -105,6 +128,7 @@ int DoIt ()
   char **sets = NULL;
   DRMS_RecordSetType_t *settypes = NULL; /* a maximum doesn't make sense */
   char **snames = NULL;
+  char **filts = NULL;
   int nsets = 0;
   DRMS_RecQueryInfo_t rsinfo;
     
@@ -128,19 +152,19 @@ int DoIt ()
     }
     
     /* Parse output series name. */
-    if (DRMS_SUCCESS != drms_record_parserecsetspec(dsout, &allvers, &sets, &settypes, &snames, &nsets, &rsinfo))
+    if (DRMS_SUCCESS != drms_record_parserecsetspec(dsout, &allvers, &sets, &settypes, &snames, &filts, &nsets, &rsinfo))
     {
         DIE("Invalid output record-set specification.");
     }
     
     if (nsets != 1)
     {
-        FreeRecSpecParts(&snames, nsets);
+        FreeRecSpecParts(&snames, &filts, nsets);
         DIE("aia_lev1p5 supports writing to a single output series.");
     }
     
     snprintf(seriesout, sizeof(seriesout), "%s", snames[0]);
-    FreeRecSpecParts(&snames, nsets);
+    FreeRecSpecParts(&snames, &filts, nsets);
 
   if (strstr(dsinp, "aia")) is_aia = 1;
   inprs = drms_open_records(drms_env, dsinp, &status);
