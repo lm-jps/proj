@@ -23,16 +23,16 @@ int read_fit_v(FILE *fpt, int *npts, int **n, double **l, double **f,
     if(buffer[0] != '#' && !feof(fpt)) nlines++;
   }
   if(nlines == 0) return 1;
-  
+nlines++;
   *n = (int*) malloc(nlines*sizeof(int));
-  *l = (double*) malloc(nlines*sizeof(double));
+  *l = (double *)calloc(nlines, sizeof(double));
   *f = (double*) malloc(nlines*sizeof(double));
   *ef = (double*) malloc(nlines*sizeof(double));
   *ux = (double*) malloc(nlines*sizeof(double));
   *eux = (double*) malloc(nlines*sizeof(double));
   *uy = (double*) malloc(nlines*sizeof(double));
   *euy = (double*) malloc(nlines*sizeof(double));
-  
+nlines--;
   rewind(fpt);
   
   for(i=0; i<nlines; i++)       {
@@ -42,6 +42,7 @@ int read_fit_v(FILE *fpt, int *npts, int **n, double **l, double **f,
         &(*ef)[i], &(*ux)[i], &(*eux)[i], &(*uy)[i], &(*euy)[i]);
   } 
   *npts = nlines;
+//fprintf (stderr, "read_fit_v(): returning npts = %d\n", nlines);
   
   return 0;
 }
@@ -427,6 +428,8 @@ int autoweed_vel(int* n, double* l, double *ux, double *uy,
     sumxx=0.0;
     sumyy=0.0;
     // get l limits
+//fprintf (stderr, "autoweed_vel(): i = %d: lmin = lmax = l[%d] = %f\n",
+//i, offset, l[offset]);
     lmin=lmax=l[offset];
     for(j=offset; j<n_num[i]+offset; j++)	{
       if(l[j] < lmin) lmin=l[j];
