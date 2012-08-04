@@ -53,7 +53,7 @@
 #define KERNTYP_BORN	(2)
                                                       /*   module identifier  */
 char *module_name = "timed_invert";
-char *version_id = "0.7";
+char *version_id = "0.8";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "in", "hmi_test.tdVtimes_synop[2010.12.12_12:00]",
@@ -479,4 +479,5 @@ int DoIt (void) {
  *		Check for existence of required segments in output record, and
  *		modify attempted inversions accordingly; check for agreement of
  *		ouput segment structure with hard-coded dimensions
+ *  v 0.8 frozen 2012.08.04
  */
