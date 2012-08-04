@@ -81,6 +81,7 @@
  *    FORTRAN Code writes progress/status to stdout
  *    Missing input data are unconditionally set to 0
  *    The value written into CRLT_Mid is geocentric
+ *    The MapScale keyword is not set in the output record
  *    No documentation
  *
  *  Revision history is at the end of the file.
@@ -92,7 +93,7 @@
 #include "earth_ephem.c"
 						      /*   module identifier  */
 char *module_name = "travel_times_loop_wGB";
-char *version_id = "0.8";
+char *version_id = "0.9.1";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "in",
@@ -106,7 +107,7 @@ ModuleArgs_t module_args[] = {
 
        /*  list of keywords to propagate (if possible) from input to output  */
 char *propagate[] = {"CarrRot", "CMLon", "LonHG", "LatHG", "LonCM", "MidTime",
-    "MapScale", "CRPIX1", "CRPIX2", "CRVAL1", "CRVAL2", "CDELT1", "CDELT2",
+    "CRPIX1", "CRPIX2", "CRVAL1", "CRVAL2", "CDELT1", "CDELT2",
     "CTYPE1", "CTYPE2", "CUNIT1", "CUNIT2", "T_START", "T_STOP", "LonSpan",
     "Coverage", "Duration", "Zonal Trk", "ZonalVel"};
 
@@ -126,12 +127,15 @@ int DoIt (void) {
   DRMS_Segment_t *pseg, *dseg, *seg_gabor, *seg_gb;
   DRMS_Array_t *data_array, *res_gabor, *res_gb;
   FILE *timesfile, *fout;
+  double mapscale_factor;
   float **ttimes;
   float *data, *input, *input2, *input3, *output, *output2, *out1, *out2;
-  float *velo, *wid, *coef0, *coef1, *coef2, *coef3, *coef4;
+  float *annmin, *annmax, *velo, *wid, *coef0, *coef1, *coef2, *coef3, *coef4;
   float coef[5];
+  float newscale;
   long long n, ntot;
   int *num_annuli, *n_start;
+  int trck_axis[2];
   int ann, i, j, k, *axes;
   int len_ploc_file, kstat, outok, ploc_version, status;
   int rec, rgnct, smpl, smpls;
@@ -140,7 +144,7 @@ int DoIt (void) {
   char *errmsg;
   char plocfile[DRMS_MAXQUERYLEN];
   char source[DRMS_MAXQUERYLEN], recid[DRMS_MAXQUERYLEN];
-  char module_ident[64];
+  char module_ident[64], keyname[32];
 
   int keyct = sizeof (propagate) / sizeof (char *);
 
@@ -164,6 +168,8 @@ int DoIt (void) {
   if (smpls != 11)
     fprintf (stderr, "Warning: untested case of %d annulus sets\n", smpls);
   num_annuli = (int *)malloc (smpls * sizeof (int));
+  annmin = (float *)malloc (smpls * sizeof (float));
+  annmax = (float *)malloc (smpls * sizeof (float));
   velo = (float *)malloc (smpls * sizeof (float));
   wid = (float *)malloc (smpls * sizeof (float));
   n_start = (int *)malloc (smpls * sizeof (int));
@@ -204,6 +210,8 @@ int DoIt (void) {
       fprintf (stderr, "         reduced to %d\n", NUM_ANNULI_MAX);
       num_annuli[smpl] = NUM_ANNULI_MAX;
     }
+    annmin[smpl] = drms_getkey_float (ploc, "RadInner", &status);
+    annmax[smpl] = drms_getkey_float (ploc, "RadOuter", &status);
     velo[smpl] = drms_getkey_float (ploc, "PhaseVel", &status);
     wid[smpl] = drms_getkey_float (ploc, "FiltWid", &status);
     coef0[smpl] = drms_getkey_float (ploc, "AmplInit", &status);
@@ -277,6 +285,20 @@ int DoIt (void) {
       fprintf (stderr, "Error: no segment \"V\" in record %d; skipped\n", rec);
       continue;
     }
+    for (i = 0; i < 2; i++) {
+      trck_axis[i] = dseg->axis[i];
+      if (i) {
+        if (trck_axis[i] - trck_axis[i-1]) {
+	  fprintf (stderr,
+	      "Error: code as implemented requires square tracked regions\n");
+	  drms_free_array (res_gabor);
+	  drms_free_array (res_gb);
+	  drms_close_records (inds, DRMS_FREE_RECORD);
+	  return 1;
+	}
+      }
+    }
+    mapscale_factor = 256.0 / (double)trck_axis[0];
 						/*  create the output record  */
     orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
     if (!orec) {
@@ -326,13 +348,30 @@ int DoIt (void) {
       kstat += check_and_set_key_float (orec, "CRLT_Mid", clat);
     }
 							    /*  set WCS keys  */
-    kstat += check_and_set_key_int (orec, "WCSAXES", 4);
+    kstat += check_and_set_key_int (orec, "WCSAXES", 2);
 					     /*  set segment descriptor keys  */
     kstat += check_and_set_key_str (orec, "TTDiff_1",
 	"mean (outgoing,ingoing)");
     kstat += check_and_set_key_str (orec, "TTDiff_2", "outgoing-ingoing");
     kstat += check_and_set_key_str (orec, "TTDiff_3", "west-east");
     kstat += check_and_set_key_str (orec, "TTDiff_4", "north-south");
+						 /*  update the MapScale key  */
+    newscale = drms_getkey_float (trck, "MapScale", &status);
+    if (!status) {
+      newscale /= mapscale_factor;
+      kstat += check_and_set_key_float (orec, "MapScale", newscale);
+    }
+					     /*  set annulus descriptor keys  */
+    for (smpl = 0; smpl < smpls; smpl++) {
+      sprintf (keyname, "AnnMin%02d", smpl + 1);
+      kstat += check_and_set_key_float (orec, keyname, annmin[smpl]);
+      sprintf (keyname, "AnnMax%02d", smpl + 1);
+      kstat += check_and_set_key_float (orec, keyname, annmax[smpl]);
+      sprintf (keyname, "PhsVel%02d", smpl + 1);
+      kstat += check_and_set_key_float (orec, keyname, velo[smpl]);
+      sprintf (keyname, "FltWid%02d", smpl + 1);
+      kstat += check_and_set_key_float (orec, keyname, wid[smpl]);
+    }
     if (kstat) {
       fprintf (stderr, "Error writing key value(s) to record in series %s:\n",
 	  outser);
@@ -375,8 +414,8 @@ int DoIt (void) {
       coef[3] = coef3[ann];
       coef[4] = coef4[ann];
       mainsub1_ (&velo[ann], &wid[ann], &num_annuli[ann], ttimes[ann], coef,
-	  &n_start[ann], &nth, input, pix_locat_file[ann], &len_ploc_file,
-	  out1, out2);
+	  &n_start[ann], &nth, input, pix_locat_file[ann],
+	  &len_ploc_file, out1, out2);
 
       for (j=0; j<4*256*256; j++) {
         output[ann*4*256*256+j] = out1[j]; 
@@ -410,8 +449,8 @@ int DoIt (void) {
       coef[3] = coef3[ann];
       coef[4] = coef4[ann];
       mainsub2_ (&velo[ann], &wid[ann], &num_annuli[ann], ttimes[ann], coef,
-	  &n_start[ann], &nth, input3, pix_locat_file[ann], &len_ploc_file,
-	  out1, out2);
+	  &n_start[ann], &nth, input3, pix_locat_file[ann],
+	  &len_ploc_file, out1, out2);
       for (j=0; j<4*256*256; j++) {
         output[ann*4*256*256 + j] = out1[j]; 
         output2[ann*4*256*256 + j] = out2[j];
@@ -491,4 +530,10 @@ int DoIt (void) {
  *  11.06.10	added propagation of version number of pixel locator records
  *  11.07.18	added setting of CRLT_Mid; added WCS keys plus numerous others
  *	to default propagation list
+ *  v 0.8 frozen 2011.07,18
+ *  11.12.03	removed setting of MapScale key, pending availability from
+ *	pxloc data
+ *  12.01.13	fixed setting of MapScale key; added setting of annuli info
+ *	keys
+ *  v 0.91 frozen 2012.08.04
  */
