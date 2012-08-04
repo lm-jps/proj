@@ -3,14 +3,17 @@
 #   time-distance synoptic series for a set of given time centers
 # The invoked scripts should be run every 8 hours
 
+set TW
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 if ("$1" =~ '-test') then
   @ TEST = 1
+  set TW = test
   shift
 endif
 
 if ($#argv < 1) then
-  echo "usage: $0 YYMMDD [YYMMDD] [spacing]"
+  echo "usage: $0 [-test] YYMMDD [YYMMDD [spacing]]"
+  echo "       default spacing = 480 min"
   exit
 endif
 @ YYMMDD0 = `echo $1 | sed  -e "s/^0*//"`
@@ -24,13 +27,18 @@ if ($#argv > 1) then
 endif
 @ SLEEP *= 60
 
+set NOTIFY = `whoami`
+
+set SCRIPT = tdsynop
+
 if ($TEST) then
-  set SCRIPT = ~rick/hmi/timed/scripts/tdsynop
+  set NMSP = hmi_test
   set ARG = -test
 else
-  set SCRIPT = tdsynop
+  set NMSP = hmi
   set ARG
 endif
+set PLID = $NMSP\tdVsyn
 
 foreach CMD ($SCRIPT)
   which $CMD > /dev/null
@@ -42,6 +50,32 @@ foreach CMD ($SCRIPT)
   endif
 end
 
+set QUEUE = j.q
+
+# auxiliary files
+set HOSTNAME = `hostname`
+set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set PROCID = $HOSTID\_$$
+set TMPFSLOC = ~rick/hmi/tmpfs
+if (-r $TMPFSLOC) then
+  set TMPFS = `egrep ^/tmp $TMPFSLOC`
+  set TEMP = $TMPFS/`whoami`
+  if (!(-w $TEMP)) set TEMP = /tmp
+  set SCRFS = `egrep ^/scr $TMPFSLOC`
+  set SCRT = $SCRFS/`whoami`
+  if (!(-d $SCRT)) mkdir $SCRT
+  if (!(-w $SCRT)) set SCRT = /tmp
+else
+  set TEMP = /tmp
+  set SCRT = /tmp
+endif
+set MSGS = $TEMP/msgs
+if (!(-d $MSGS)) mkdir $MSGS
+set RLOG = $SCRT/$PLID.log
+set MMSG = $MSGS/msg.$PROCID
+set QRES = $TEMP/qres
+if (!(-d $QRES)) mkdir $QRES
+
 @ YYMMDD = $YYMMDD0
 set MOLEN = (31 28 31 30 31 30 31 31 30 31 30 31)
 @ YR = $YYMMDD / 10000
@@ -49,9 +83,19 @@ if ($YR % 4 == 0) set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
 
 while ($YYMMDD <= $YYMMDD1)
   foreach HR (04 12 20)
-    qsub -q j.q $SCRIPT $ARG $YYMMDD $HR
-    if ($YYMMDD < $YYMMDD1) sleep $SLEEP
-    if ($YYMMDD == $YYMMDD1 && $HR < 20) sleep $SLEEP
+    set NOW = `date +%Y.%m.%d_%T`
+    set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG $YYMMDD $HR`
+    if ($#QINFO) then
+      set QPID = `echo $QINFO | awk '{print $3}'`
+      echo $NOW $SCRIPT $ARG $YYMMDD $HR submitted to $QUEUE as job $QPID >> $RLOG
+      if ($YYMMDD < $YYMMDD1) then
+	sleep $SLEEP
+      else if ($HR < 20) then
+	sleep $SLEEP
+      endif
+    else
+      echo $NOW Failed to submit $SCRIPT $ARG $YYMMDD $HR >> $RLOG
+    endif
   end
   @ YR = $YYMMDD / 10000
   @ MO = ($YYMMDD % 10000) / 100
@@ -67,5 +111,11 @@ while ($YYMMDD <= $YYMMDD1)
       if ($YR % 4 == 0) set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
     endif
   endif
+  @ YYMMDDL = $YYMMDD
   @ YYMMDD = $YR`printf %02d $MO``printf %02d $DA`
 end
+
+echo -n "Final script $SCRIPT $YYMMDDL $HR submitted " > $MMSG
+date '+%e %b %H:%M' >> $MMSG
+echo "HMI time-distance $TW pipeline run" > $MSGS/subj.$PROCID
+echo "$NOTIFY" > $MSGS/list.$PROCID
