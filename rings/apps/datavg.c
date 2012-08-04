@@ -33,6 +33,17 @@
  *			over which input records are selected for averaging
  *	qual_key str	Quality		Key name of uint type keyword describing
  *			data quality
+ *	roll_key str	CROTA2		Name of keyword describing roll angle
+ *	pa	float	180.0		Centre of acceptable roll angles
+ *	dpa	float	1.0		Maximum deviation of acceptable roll
+ *			angles from nominal centre
+ *	mscale	float	(SEG default)	Output BSCALE factor for mean
+ *	mzero	float	(SEG default)	Output BZERO offset for mean
+ *	pscale	float	(SEG default)	Output BSCALE factor for power
+ *	pzero	float	(SEG default)	Output BZERO offset for power
+ *	setkey	str	Not Specified	Name of special keyword to be set
+ *	setval	double	Not Specified	Value for special keyword to be set, or
+ *			name of key whose value is to be used
  *
  *  Flags
  *	-n	no ingestion of output; diagnostic only
@@ -54,8 +65,8 @@
  *    For log-base data, the LOG_BASE keyword is propagated to the output
  *	record, but it really only applies to the mean and variance; it should
  *	be a per-segment keyword
- *    The check on nominal roll angle assumes that the keyword is CROTA2, and
- *	that the units are degrees
+ *    The check on nominal roll angle and the averagang of CROTA* values
+ *	assumes that the units are degrees
  *    The reported extremal values of mean and power are determined before
  *	possible output scaling; they may be outside the representable range
  *
@@ -72,7 +83,7 @@
 #define	DO_SQUARE	(2)
 
 char *module_name = "data average";
-char *version_id = "1.0";
+char *version_id = "1.1";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"in", "", "input data series or dataset"}, 
@@ -90,9 +101,13 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,	"pkey", "T_OBS",
       "keyname for index over which records are selected for averaging"}, 
   {ARG_STRING,	"qual_key", "Quality", "keyname for 32-bit image quality field"}, 
+  {ARG_STRING,	"roll_key", "CROTA2", "keyname for input roll-angle field"}, 
   {ARG_STRING,	"count", "valid", "output data series segment containing count"}, 
   {ARG_STRING,	"mean", "mean", "output data series segment containing mean"}, 
   {ARG_STRING,	"power", "power", "output data series segment containing variance"}, 
+  {ARG_STRING,	"setkey", "Not Specified", "name of special extra key to be set"}, 
+  {ARG_DOUBLE,	"setval", "Not Specified",
+	"value of special extra key to be set; if invalid, name of key whose value is to be used"}, 
   {ARG_FLOAT,	"mscale", "Segment Default", "output BSCALE factor for mean"},
   {ARG_FLOAT,	"mzero", "Segment Default", "output BZERO offset for mean"},
   {ARG_FLOAT,	"pscale", "Segment Default", "output BSCALE factor for power"},
@@ -103,12 +118,12 @@ ModuleArgs_t module_args[] = {
   {ARG_END}
 };
 	/*  list of keywords to propagate by default (if possible and unique)
-						       from input to output  */
+						        from input to output  */
 char *propagate[] = {"TELESCOP", "INSTRUME", "WCSNAME", "WCSAXES"};
 		 /*  list of keywords to average by default (if possible)
-						       from input to output  */
-char *average[] = {"SAT_ROT", "OBS_VR", "OBS_VW", "OBS_VN"};
-			/*  the following belong in external utility files  */
+						        from input to output  */
+char *average[] = {"OBS_VR", "OBS_VW", "OBS_VN"};
+			  /*  the following belong in external utility files  */
 static int fgetline (FILE *in, char *line, int max) {
   if (fgets (line, max, in) == NULL) return 0;
   else return (strlen (line));
@@ -421,6 +436,10 @@ int DoIt (void) {
   char *average_req = strdup (params_get_str (params, "average"));
   char *primekey = strdup (params_get_str (params, "pkey"));
   char *qual_key = strdup (params_get_str (params, "qual_key"));
+  char *roll_key = strdup (params_get_str (params, "roll_key"));
+  char *spec_key = strdup (params_get_str (params, "setkey"));
+  double spec_val = params_get_double (params, "setval");
+  char *specuse_key = strdup (params_get_str (params, "setval"));
   double mscale = params_get_double (params, "mscale");
   double mzero = params_get_double (params, "mzero");
   double pscale = params_get_double (params, "pscale");
@@ -428,11 +447,15 @@ int DoIt (void) {
   int no_save = params_isflagset (params, "n");
   int remove_obsvel = params_isflagset (params, "o");
   int verbose = params_isflagset (params, "v");
+
   int dispose = (no_save) ? DRMS_FREE_RECORD : DRMS_INSERT_RECORD;
   int check_pa = (dpa_max < 180.0);
+  int set_extra_key = (strcmp (spec_key, "Not Specified")) ? 1 : 0;
+  int use_other_key = isnan (spec_val);
 
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s:\n", module_ident);
+  if (!isfinite (pa_nom)) pa_nom = 180.0;
 						    /*  create output record  */
   if (no_save) {
     orec = drms_create_record (drms_env, out_series, DRMS_TRANSIENT, &status);
@@ -831,9 +854,9 @@ return 0;
     }
 			      /*  check for non-nominal image rotation angle  */
     if (check_pa) {
-      pa_rec = drms_getkey_float (irec, "CROTA2", &status);
+      pa_rec = drms_getkey_float (irec, roll_key, &status);
       if (status && check_pa) {
-	fprintf (stderr, "Warning: \"CROTA2\" keyword not found\n");
+	fprintf (stderr, "Warning: \"%s\" keyword not found\n", roll_key);
 	fprintf (stderr, "         no limits on rotation angle\n");
 	check_pa = 0;
 	dpa_max = 360.0;
@@ -907,14 +930,14 @@ return 0;
     vavg = (double *)mean->data;
     vvar = (double *)powr->data;
     vobs = (remove_obsvel) ? drms_getkey_double (irec, "OBS_VR", &status) : 0.0;
-				      /*  exponentiate logarithm as necessary  */
+				     /*  exponentiate logarithm as necessary  */
     log_base = drms_getkey_double (irec, "LOG_BASE", &status);
     if (!status && isfinite (log_base)) {
       log_base = log (log_base);
       for (n = 0; n < ntot; n++) v[n] = exp (log_base * v[n]);
       log_status = 1;
     } else log_status = 0;
-						       /*  process valid data  */
+						      /*  process valid data  */
     n = ntot;
     while (n--) {
       if (isfinite (*v)) {
@@ -933,7 +956,7 @@ return 0;
       vvar++;
     }
     drms_free_array (data_array);
-					       /*  get WCS keys for averaging  */
+					      /*  get WCS keys for averaging  */
     for (n = 0; n < wcsaxes; n++) {
       sprintf (keyname, "CRPIX%d", n + 1);
       crpix_rec = drms_getkey_double (irec, keyname, &status);
@@ -956,6 +979,9 @@ return 0;
       sprintf (keyname, "CROTA%d", n + 1);
       crota_rec = drms_getkey_double (irec, keyname, &status);
       if (!status && isfinite (crota_rec)) {
+        crota_rec -= pa_nom;
+	while (crota_rec < -180.0) crota_rec += 360.0;
+	while (crota_rec > 180.0) crota_rec -= 360.0;
 	crota[n] += crota_rec;
 	crotav[n] += crota_rec * crota_rec;
       }
@@ -1049,10 +1075,11 @@ return 0;
       sprintf (keyname, "D_CDELT%d", n + 1);
       kstat += check_and_set_key_double (orec, keyname, sqrt (cdeltv[n]));
       crota[n] /= imgct;
-      sprintf (keyname, "CROTA%d", n + 1);
-      kstat += check_and_set_key_double (orec, keyname, crota[n]);
       crotav[n] /= imgct;
       crotav[n] -= crota[n] * crota[n];
+      crota[n] += pa_nom;
+      sprintf (keyname, "CROTA%d", n + 1);
+      kstat += check_and_set_key_double (orec, keyname, crota[n]);
       sprintf (keyname, "D_CROTA%d", n + 1);
       kstat += check_and_set_key_double (orec, keyname, sqrt (crotav[n]));
     }
@@ -1076,6 +1103,19 @@ return 0;
       sprintf (keyname, "LOG_BASE");
       kstat += check_and_set_key_double (orec, "LOG_BASE", exp (log_base));
     }
+  }
+  if (set_extra_key) {
+    if (use_other_key) {
+      spec_val = drms_getkey_double (orec, specuse_key, &status);
+      if (status) {
+        fprintf (stderr,
+	    "Warning: key %s does not exist in output series or is of wront type\n",
+	    specuse_key);
+	fprintf (stderr, "         key %s will not be set\n", spec_key);
+	set_extra_key = 0;
+      }
+    }
+    kstat += check_and_set_key_double (orec, spec_key, spec_val);
   }
   if (kstat) {
     fprintf (stderr, "Error writing key value(s) to %s\n", out_series);
@@ -1158,5 +1198,9 @@ return 0;
  *	11.06.21	added setting of T_FIRST, T_LAST keys
  *	11.06.22	added averaging of CRLN_OBS
  *  v 1.0 frozen 11.11.14
- *
+ *	12.05.24	fixed averaging of CROTA* for cases where values may
+ *		wrap; SAT_ROT values no longer averaged by default; provide
+ *		option for overriding roll angle keyword; added setkey, setval
+ *		options
+ *  v 1.1 frozen 12.08.03
  */
