@@ -2,7 +2,8 @@
      +  n_start, n_th, a, pix_locat, len2, output, output2)
 C pix_locat is the filename for pixel locations.
 C a is the 256x256x512 datacube for analysis.
-C output is the final results of travel times.
+C output and output2 are the final results of travel time determinations for
+C Gabor wavelet and Gizon-Birch methods respectively.
       IMPLICIT REAL*4(a-h,o-z)
 
       PARAMETER (n1=512,n2=512,n3=640,n12=n1/2,n22=n2/2)
@@ -28,7 +29,7 @@ C a few arrays.
       INTEGER*2 quad_w_x(100),quad_w_y(100),quad_e_x(100),quad_e_y(100)
       INTEGER*2 quad_n_x(100),quad_n_y(100),quad_s_x(100),quad_s_y(100)
       INTEGER np,naxes(3),noutaxes(3),num_annuli
-      REAL velo,wid
+      REAL velo,wid,minorm
       INTEGER n_start, n_th
       CHARACTER pix_locat*len2
 
@@ -36,13 +37,6 @@ C a few arrays.
       DATA noutaxes/n12,n22,4/
       DATA ia/1,1,1,1,1/
 
-C      OPEN(3,FILE=para_fil,STATUS='OLD')
-C      READ(3,*) velo,wid,num_annuli
-C      READ(3,*) (time(i),i=1,num_annuli)
-C      READ(3,*) (coef_temp(i),i=1,n_coe)
-C      READ(3,*) n_start
-C      READ(3,*) n_th
-C      CLOSE(3)
       DO 1 i=1,num_annuli
         shft(i)=time(num_annuli/2+1)-time(i)
  1    CONTINUE
@@ -54,7 +48,6 @@ C      CLOSE(3)
             c(k,j,i)=a(i,j,k)/n1/n2/n3
  2    CONTINUE
 
-C      WRITE(*,*) 'Now calculations begin ...'
       DO 5 i=1,num
         lag(i)=i-(num+1)/2
  5    CONTINUE
@@ -156,7 +149,6 @@ C for other more general cases, need to revise this part.
 
  15     CONTINUE
         e=ETIME(t2)
-C        IF((i MOD 10).EQ.0) WRITE(*,*) i,(t2(1)-t1(1))/60.
  10   CONTINUE
       CLOSE(3)
 
@@ -175,21 +167,22 @@ C        IF((i MOD 10).EQ.0) WRITE(*,*) i,(t2(1)-t1(1))/60.
           output(i,j,4)=(sn_out(i,j)-sn_in(i,j))*0.75
  100  CONTINUE
 
-      CALL GBTIMES02(rr_oi,n12,n22,num,n_th,gb)
-      DO 101 i=1,n1/2
-        DO 101 j=1,n2/2
-          output2(i,j,1)=gb(i,j,1)/60.
-          output2(i,j,2)=gb(i,j,2)/60.
+      minorm = 1.0 / 60.0
+      CALL GBTIMES02(rr_oi,rr_oi,n12,n22,num,n_th,gb)
+      DO 101 j=1,n2/2
+        DO 101 i=1,n1/2
+          output2(i,j,1) = minorm * gb(i,j,1)
+          output2(i,j,2) = minorm * gb(i,j,2)
  101  CONTINUE
-      CALL GBTIMES02(rr_we,n12,n22,num,n_th,gb)
-      DO 102 i=1,n1/2
-        DO 102 j=1,n2/2
-          output2(i,j,3)=gb(i,j,2)/60.
+      CALL GBTIMES02(rr_we,rr_oi,n12,n22,num,n_th,gb)
+      DO 102 j=1,n2/2
+        DO 102 i=1,n1/2
+          output2(i,j,3) = minorm * gb(i,j,2)
  102  CONTINUE
-      CALL GBTIMES02(rr_ns,n12,n22,num,n_th,gb)
-      DO 103 i=1,n1/2
-        DO 103 j=1,n2/2
-          output2(i,j,4)=gb(i,j,2)/60.
+      CALL GBTIMES02(rr_ns,rr_oi,n12,n22,num,n_th,gb)
+      DO 103 j=1,n2/2
+        DO 103 i=1,n1/2
+          output2(i,j,4) = minorm * gb(i,j,2)
  103  CONTINUE
 
       END
