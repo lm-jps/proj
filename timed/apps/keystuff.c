@@ -83,6 +83,34 @@ int check_and_set_key_int (DRMS_Record_t *new, const char *key, int val) {
   return 0;
 }
 
+int check_and_set_key_longlong (DRMS_Record_t *new, const char *key,
+    long long val) {
+  DRMS_Keyword_t *keywd;
+  long long vreq;
+  int status;
+
+  if (!(keywd = drms_keyword_lookup (new, key, 1))) return 0;
+  if (keywd->info->recscope != 1) {
+		       /*  it's not a constant, so don't worry, just set it  */
+    drms_setkey_longlong (new, key, val);
+    return 0;
+  }
+  vreq = drms_getkey_longlong (new, key, &status);
+  if (status) {
+    fprintf (stderr, "Error retrieving value for constant keyword %s\n", key);
+    return 1;
+  }
+  if (vreq != val) {
+    char format[256];
+    sprintf (format,
+	"Error:  parameter value %s for keyword %%s\n  differs from required value %s\n",
+	keywd->info->format, keywd->info->format);
+    fprintf (stderr, format, val, key, vreq);
+    return 1;
+  }
+  return 0;
+}
+
 int check_and_set_key_float (DRMS_Record_t *new, const char *key, float val) {
   DRMS_Keyword_t *keywd;
   float vreq;
@@ -749,4 +777,5 @@ int drms_wcs_timestep (DRMS_Record_t *rec, int axis, double *tstep) {
  *  10.02.03		relaxed check in check_and_copy_key (too much)
  *  10.04.24		added copy_prime_keys()
  *  10.06.11		added construct_stringlist() (orig in drms_rebin)
+ *  12.03.21		added check_and_set_key_longlong()
  */
