@@ -63,21 +63,14 @@
 
 /* prototypes */
 
-
 extern void ola_(double *, int *, double *, double *, double *,
       double *, double *, int *, char *, double *, double *, double *,
       double *, double *, double *, double *, double *, double *,
       char *, char *, int *, int *, int *, double *, double *,
-      int *, double *, double *, double *, int, int, int);
-/*
-extern void ola_(double *, int *, double *, double *, double *,
-      double *, double *, int *, char *, char *, char *, char *, char *,
-      int *, int *, int *, double *, double *,
-      int *, double *, double *, double *,
-      int, int, int, int, int);
-*/
+      int *, double *, double *, double *, int *, int, int, int);
+
 char *module_name = "rdvinv";
-char *version_id = "0.9";
+char *version_id = "0.91";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "in", "", "Input data series or recordset"},
@@ -110,9 +103,9 @@ char *propagate[] = {"CarrTime", "CarrRot", "CMLon", "LonHG", "LatHG", "LonCM",
     "Size", "Cadence", "ZonalTrk", "ZonalVel", "MeridTrk", "MeridVel", "MAI"};
 
 int process_record (const char *filename, int drms_output, char *outfilex,
-    char *outfiley, char *kernel, char *kername, char *ave, char *coef, int qave, int qcoef,
-    int verbose, double ob, double oe, int num, double rb, double re,
-    double amu, char *sourcerec, char *codever) {
+    char *outfiley, char *kernel, char *kername, char *ave, char *coef,
+    int qave, int qcoef, int verbose, double ob, double oe, int num,
+    double rb, double re, double amu, char *sourcerec, char *codever) {
   FILE *infile = fopen (filename, "r");
   FILE *filex = fopen (outfilex, "w");
   FILE *filey = fopen (outfiley, "w");
@@ -179,11 +172,10 @@ int process_record (const char *filename, int drms_output, char *outfilex,
 
   ola_ (l, n, f, ux, eux, uy, euy, &npts, kernel, rtrg, rcgx, rcgy,
       quartx, quarty, solnx, solny, errx, erry, ave, coef, &qave, &qcoef,
-      &verbose, &ob, &oe, &num, &rb, &re, &amu, lenkern, lenave, lencoef);
-/*
-  ola_xy (l, n, f, ux, eux, uy, euy, npts, kernel, outfilex, outfiley, ave,
-      coef, qave, qcoef, verbose, ob, oe, num, rb, re, amu);
-*/
+      &verbose, &ob, &oe, &num, &rb, &re, &amu, &status,
+      lenkern, lenave, lencoef);
+  if (status) return status;
+
   for (i = 0; i < num; i++)
     fprintf (filex, "%7.5f %7.5f %7.5f %7.5f %7.5f %7.5f %7.5f %12.5e %12.5e\n",
 	rtrg[i], amu, rcgx[i], quartx[2 + 3*i], quartx[1 + 3*i], quartx[3*i],
@@ -663,12 +655,12 @@ int DoIt(void)	{
       mkdir (outdir, 01755);
     } else strcpy (outdir, out);
   }
-						     /*  main processing loop  */
+						    /*  main processing loop  */
   for (rec_i=0; rec_i<nrec; rec_i++) {
     if (verbose) printf ("  Processing record %i\n", rec_i);
     if (drms_input) {
       irec = recordSet->records[rec_i];
-		       /*  should use call to drms_record_directory() instead  */
+		      /*  should use call to drms_record_directory() instead  */
       if (irec->sunum != -1LL && irec->su == NULL) {
 	irec->su = drms_getunit (irec->env, irec->seriesinfo->seriesname,
 	    irec->sunum, 1, &status);
@@ -703,12 +695,14 @@ int DoIt(void)	{
     status = process_record (filename, drms_output, outfilex, outfiley,
 	kernfile, kernel, ave, coef, qave, qcoef, verbose, ob, oe, num, rb, re, amu,
 	source, module_ident);
-    if (status && drms_output)	{
+    if (status)	{
       fprintf (stderr, "Error processing record %d (%s); aborted\n", rec_i,
 	  printcrcl_loc (cr, loncCar, lonhg, loncm, latc));
-      if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
-      if (drms_output) drms_close_record (orec, DRMS_FREE_RECORD);
-      return 1;
+      if (drms_output) {
+	if (drms_input) drms_close_records (recordSet, DRMS_FREE_RECORD);
+	drms_close_record (orec, DRMS_FREE_RECORD);
+	return 1;
+      }
     }
   }
 
@@ -755,4 +749,8 @@ int DoIt(void)	{
  *		identical form except for comments)
  *    0.9	added (preferred) option for specifying kernel as DRMS data
  *		record rather than filename
+ *  v 0.9 frozen 2012.04.24
+ *    0.91	similar to 0.9, but includes fixes in FORTRAN code ola_xy_v12
+ *		and provision for return status
+ *  v 0.91 frozen 2012.04.24
  */
