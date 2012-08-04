@@ -70,7 +70,7 @@ int autoweed_vel (int *n, double *l, double *ux, double *uy, int *mask,
   for (i=0; i<npts; i++)
     if (n[i] < maxn) n_num[n[i]]++;
 
-  offset=0;
+  offset = 0;
   for (i=0; i<maxn; i++) {
     num = 0.0;
     sumx = 0.0;
@@ -158,20 +158,20 @@ int read_fit_v (FILE *fpt, int *npts, int **n, double **l, double **f,
   if (feof (fpt)) rewind (fpt);
   
   nlines = 0;
-  while (!feof(fpt)) {
+  while (!feof (fpt)) {
     fgets (buffer, 8192, fpt);
     if (buffer[0] != '#' && !feof (fpt)) nlines++;
   }
   if (nlines == 0) return 1;
   
-  *n = (int *)malloc (nlines * sizeof (int));
-  *l = (double *)malloc (nlines * sizeof (double));
-  *f = (double *)malloc (nlines * sizeof (double));
-  *ef = (double *)malloc (nlines * sizeof (double));
-  *ux = (double *)malloc (nlines * sizeof (double));
-  *eux = (double* )malloc (nlines * sizeof (double));
-  *uy = (double *)malloc (nlines * sizeof (double));
-  *euy = (double *)malloc (nlines * sizeof (double));
+  *n = (int *)realloc (*n, nlines * sizeof (int));
+  *l = (double *)realloc (*l, nlines * sizeof (double));
+  *f = (double *)realloc (*f, nlines * sizeof (double));
+  *ef = (double *)realloc (*ef, nlines * sizeof (double));
+  *ux = (double *)realloc (*ux, nlines * sizeof (double));
+  *eux = (double *)realloc (*eux, nlines * sizeof (double));
+  *uy = (double *)realloc (*uy, nlines * sizeof (double));
+  *euy = (double *)realloc (*euy, nlines * sizeof (double));
   
   rewind (fpt);
   
@@ -412,7 +412,7 @@ int freqdif(int *n1, int *n2, int *l1, double *l2, double *f1, double *f2,
   return 0;
 }
 */
-void line(int m, double *x, double *y)	{
+void line (int m, double *x, double *y)	{
   y[0] = x[0];
   y[1] = 1.0;
   return;
@@ -500,7 +500,7 @@ int autoweed(int *l, int *n, double *f, double *df, double *edf, int *msk,
 }
 */
 
-int nearst(double xb, double x[], int ntab)	{
+int nearst (double xb, double x[], int ntab) {
   int low, igh, mid;
 
   low=0; igh=ntab-1;
@@ -588,10 +588,8 @@ int divdif(double xb, double x[], double f[], int *nuse, int ntab,
   return 23;
 }
 
-int svd(int n, int m, double *a, double *v, double sigma[], int la, int lv)
-
-{
-	int i,j,k,l,itr,ier, itmax=30;
+int svd (int n, int m, double *a, double *v, double sigma[], int la, int lv) {
+  int i, j, k, l, itr, ier, itmax=30;
 	double f, g, h, rmax, s, r1, r2, c, x, y, z, aeps, eps=1.e-16;
 //	double *e;
 	double e[2];
@@ -869,4 +867,84 @@ int llsq(int n, int m, int k, double *x, int ix, double f[], double ef[],
 
 //	free(wk);
 	return 0;
+}
+
+int interp_vel (int *n, double *l, double *f, double *ef, double *ux, 
+    double *eux, double *uy, double *euy, int npts) {
+/*
+     Takes power spectra fit parameters, and interpolates them to integer l.
+     Data are returned in the input arrays - **data is overwritten!**
+*/
+  int i, j, nuse, ierr, offset=0;
+  int n_num[13];
+  double fb[10], ll;
+  double dfb, ddfb, aeps=1e-7;
+  double *inp_l, *inp_f, *inp_ef, *inp_ux, *inp_uy, *inp_eux, *inp_euy;
+/*					count number of frequencies for each n
+			N.B. It is assumed that all frequencies for each n
+					are grouped together in the arrays
+*/
+  for (i=0; i < 13; i++) n_num[i] = 0;
+  for (i=0; i < npts; i++) if (n[i] < 13) n_num[n[i]]++;
+  
+  inp_l = (double *) malloc (npts*sizeof(double));
+  inp_f = (double *) malloc (npts*sizeof(double));
+  inp_ef = (double *) malloc (npts*sizeof(double));
+  inp_ux = (double *) malloc (npts*sizeof(double));
+  inp_uy = (double *) malloc (npts*sizeof(double));
+  inp_eux = (double *) malloc (npts*sizeof(double));
+  inp_euy = (double *) malloc (npts*sizeof(double));
+/*  							loop over n  */
+  for (i=0; i < 10; i++) {
+    for (j=0; j<npts; j++) {
+      inp_l[j] = 0.0;
+      inp_f[j] = 0.0;
+      inp_ef[j] = 0.0;
+      inp_ux[j] = 0.0;
+      inp_uy[j] = 0.0;
+      inp_eux[j] = 0.0;
+      inp_euy[j] = 0.0;
+    }
+    for(j=0; j<n_num[i]; j++) {
+      inp_l[j] = l[j+offset];
+      inp_f[j] = f[j+offset];
+      inp_ef[j] = ef[j+offset];
+      inp_ux[j] = ux[j+offset];
+      inp_uy[j] = uy[j+offset];
+      inp_eux[j] = eux[j+offset];
+      inp_euy[j] = euy[j+offset];
+    }
+    for (j = 0; j<n_num[i]; j++) {
+      ll = (int)(inp_l[j]+0.5);
+      nuse = 3;
+      ierr = divdif (ll, inp_l, inp_f, &nuse, n_num[i], fb, aeps, &dfb, &ddfb);
+      f[j+offset] = fb[nuse];
+      nuse = 3;
+      ierr = divdif (ll, inp_l, inp_ef, &nuse, n_num[i], fb, aeps, &dfb, &ddfb);
+      ef[j+offset] = fb[nuse];
+      nuse = 3;
+      ierr = divdif (ll, inp_l, inp_ux, &nuse, n_num[i], fb, aeps, &dfb, &ddfb);
+      ux[j+offset] = fb[nuse];
+      nuse = 3;
+      ierr = divdif (ll, inp_l, inp_uy, &nuse, n_num[i], fb, aeps, &dfb, &ddfb);
+      uy[j+offset] = fb[nuse];
+      nuse = 3;
+      ierr = divdif (ll, inp_l, inp_eux, &nuse, n_num[i], fb, aeps, &dfb, &ddfb);
+      eux[j+offset] = fb[nuse];
+      nuse = 3;
+      ierr = divdif (ll, inp_l, inp_euy, &nuse, n_num[i], fb, aeps, &dfb, &ddfb);
+      euy[j+offset] = fb[nuse];
+      l[j+offset] = ll;
+    }
+    offset += n_num[i];
+  }
+  free (inp_l);
+  free (inp_f);
+  free (inp_ef);
+  free (inp_ux);
+  free (inp_uy);
+  free (inp_eux);
+  free (inp_euy);
+ 
+  return 0;
 }
