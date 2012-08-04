@@ -35,11 +35,11 @@ C  kn = kernel number. kn=1 is for ray kernel and kn=2 is for Born kernel.
 C      DATA vv/6.25,8.83,10.9,14.2,18.3,20.8,22.7,24.6,27.,30.,34./
       DATA vv/8.25, 13.10,18.25,23.82,31.28,38.79,45.41,52.82,60.51,
      +        67.50,73.84/
-      DATA velo_param/15675.0,11266.0,20440.0,32157.0,29716.0,48487.5,
-     +        1.,1.,1.,1.,1./
-      DATA trans_born/1.5,1.15,0.8,1.,1.,1.,1.,1.,1.,1.,1./
-      DATA velo_param2/23512.5,12955.9,16352.0,32157.0,29716.0,48487.5,
-     +        1.,1.,1.,1.,1./
+      DATA velo_param/14577.8,10702.7,18600.4,31513.9,28527.4,45578.2,
+     +        54492.0,73948.0,1.,1.,1./
+      DATA trans_born/0.8,1.05,0.94,0.98,1.05,1.,1.,1.,1.,1.,1./
+      DATA velo_param2/11662.2,11237.8,17484.4,30883.6,29953.7,45578.2,
+     +        54492.0,73948.0,1.,1.,1./
       ONE=CMPLX(1.,0.)
       ZERO=CMPLX(0.,0.)
 
@@ -170,14 +170,14 @@ CC Calculate the res=h*yy
         IF(kn .EQ. 1) THEN
           vx(i,j,k)=(vx_exp(i,j)*COS(ang1(i,j))+
      +           vy_exp(i,j)*SIN(ang1(i,j)))*scale*scale*velo_param(k)
-          vy(i,j,k)=(vy_exp(i,j)*COS(-ang2(i,j))+
-     +           vx_exp(i,j)*SIN(-ang2(i,j)))*scale*scale*velo_param(k)
+          vy(i,j,k)=(vy_exp(i,j)*COS(ang2(i,j))+
+     +           vx_exp(i,j)*SIN(ang2(i,j)))*scale*scale*velo_param(k)
           vz(i,j,k)=vz_exp(i,j)*scale*scale*velo_param(k)
         ELSE 
           vx(i,j,k)=(vx_exp(i,j)*COS(ang1(i,j))+
      +           vy_exp(i,j)*SIN(ang1(i,j)))*scale*scale*velo_param2(k)
-          vy(i,j,k)=(vy_exp(i,j)*COS(-ang2(i,j))+
-     +           vx_exp(i,j)*SIN(-ang2(i,j)))*scale*scale*velo_param2(k)
+          vy(i,j,k)=(vy_exp(i,j)*COS(ang2(i,j))+
+     +           vx_exp(i,j)*SIN(ang2(i,j)))*scale*scale*velo_param2(k)
           vz(i,j,k)=vz_exp(i,j)*scale*scale*velo_param2(k)
         ENDIF
  64     CONTINUE
@@ -260,10 +260,10 @@ CC R_sun is the solar radius in a unit of 0.12 heliographic degree.
       Rsun=478. 
       alon1=alon0*PI/180.
       alat1=alat0*PI/180.
-      DO 10 i=1,nx
-        DO 10 j=1,ny
+      DO 10 j=1,ny
+        yy=(j-128.5)/Rsun
+        DO 10 i=1,nx
           xx=(i-128.5)/Rsun 
-          yy=(j-128.5)/Rsun
           cc=SQRT(xx**2+yy**2)
           IF(cc.LE.PI/2) THEN
             tt=ASIN(COS(cc)*SIN(alat1)+yy*SIN(cc)*COS(alat1)/cc)
@@ -277,8 +277,8 @@ CC R_sun is the solar radius in a unit of 0.12 heliographic degree.
           alon(i,j)=pp
  10   CONTINUE
 
-      DO 20 i=2,nx-1
-        DO 20 j=2,ny-1
+      DO 20 j=2,ny-1
+        DO 20 i=2,nx-1
           dx=(alat(i+1,j)-alat(i-1,j))*180/PI
           dy=(alon(i,j+1)-alon(i,j-1))*180/PI
           ang1(i,j)=ATAN(-dx/0.12/2)
