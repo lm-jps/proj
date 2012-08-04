@@ -11,7 +11,7 @@ RDVINV_$(d)	:= $(addprefix $(d)/, rdvinv)
 endif
 
 ifeq ($(COMPILER), icc)
-  MODEXE_$(d)	:= $(addprefix $(d)/, datavg maicalc mtrack pspec3 rdcover rdfitc) 
+  MODEXE_$(d)	:= $(addprefix $(d)/, datavg maicalc maproj mtrack pspec3 rdcover rdfitc xtrackd) 
 endif
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
