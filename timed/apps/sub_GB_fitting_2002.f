@@ -18,13 +18,13 @@ c MAKE SURE THAT kmmin-thresh >= 1, kpmin-thresh>=1, kmmax+thresh<=nt,
 c kmmin+thresh<=nt
 c COMPILE ON n00 WITH exe77
 
-        SUBROUTINE gbtimes02(correl2,nx,ny,nt,iii,tau)
+        SUBROUTINE gbtimes02(correl2,correl3,nx,ny,nt,iii,tau)
 
         IMPLICIT REAL(a-h,o-z)
         PARAMETER (pi=3.141592653589793116)
         PARAMETER (naxis=3,nmax=4096)
         PARAMETER (dt=45.,nt2=1791,dt2=5.,nt3=63,nthresh=31,nt4=5)
-        REAL correl2(nt,ny,nx)
+        REAL correl2(nt,ny,nx),correl3(nt,ny,nx)
         REAL correl(nx,ny,nt),correltemp(nt),correlint(nt2),amaxi
         REAL taup(nx,ny),tp(nt3),tm(nt3),sinc(nt2,nt)
         REAL taum(nx,ny),correlref(nt),correlrefint(nt2),tau(nx,ny,2)
@@ -36,7 +36,7 @@ c COMPILE ON n00 WITH exe77
         DO 5 i=1,nx
           DO 5 j=1,ny
            DO 5 k=1,nt
-             correl(i,j,k)=correl2(k,j,i)
+             correl(i,j,k)=correl3(k,j,i)
  5      CONTINUE
 
         threshold=5.0
@@ -63,6 +63,12 @@ c       normalize the reference cross-covariance
         DO k=1,nt
            correlref(k)=correlref(k)/amaxi
         ENDDO
+
+        DO 10 i=1,nx
+          DO 10 j=1,ny
+           DO 10 k=1,nt
+             correl(i,j,k)=correl2(k,j,i)
+ 10      CONTINUE
 
 c       initialize some interpolation parameters
         DO i=1,nt2
