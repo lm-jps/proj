@@ -15,7 +15,7 @@ DEST = ../bin/$(JPLAT)
 
 PROG =	gentargs
 
-MODS =	datavg maicalc mtrack pspec3 rdcover rdfitc
+MODS =	datavg maicalc maproj mtrack pspec3 rdcover rdfitc xtrackd
 
 FOBJ =	cart_to_polar.o fourier_filter.o ring_pass.o polyval.o \
 	multfactor.o func1.o first_deriv_1.o second_deriv.o \
