@@ -481,8 +481,10 @@ float linint2 (float *f, int cols, int rows, double x, double y) {
   int col = (int)x, row = (int)y;
   int onerow = cols * row;
   int colp1 = col + 1, onerowp1 = onerow + cols;
-
+/*
   if (x < 0.0 || x > cols  || y < 0.0 || y >= rows)
+*/
+  if (x < 0.0 || x > cols - 1.0 || y < 0.0 || y > rows - 1.0)
     return missing_val;
   p = x - col;
   q = y - row;
@@ -1773,6 +1775,7 @@ need_limb_dist = 1;
   badpkey = badqual = badfill = badtime = 0;
   if (verbose) fflush (stdout);
   for (nr = 0; nr < recct; nr++) {
+fprintf (stderr, "processing record %d of %d\n", nr, recct);
     irec = ids->records[nr];
     tobs = drms_getkey_time (irec, tobs_key, &status);
     if (time_is_invalid (tobs)) {
@@ -1780,6 +1783,8 @@ need_limb_dist = 1;
       badpkey++;
       continue;
     }
+sprint_time (tbuf, tobs, "Z", 0);
+fprintf (stderr, "t_obs = %s okay\n", tbuf);
     quality = drms_getkey_int (irec, qual_key, &status);
     if (status) qualcheck = 0;
     else if (quality & qmask) {
@@ -1787,20 +1792,25 @@ need_limb_dist = 1;
       badqual++;
       continue;
     } else qualcheck = 1;
+fprintf (stderr, "quality = %08x okay\n", quality);
     blankvals = drms_getkey_int (irec, "MISSVALS", &status);
     if (blankvals > max_miss && !status) {
 						    /*  partial image, skip  */
       badfill++;
       continue;
     }
+fprintf (stderr, "blankvals = %d okay\n", blankvals);
     if (tobs == tlast) {
 					 /*  same time as last record, skip  */
       badtime++;
       continue;
     }
+fprintf (stderr, "tobs != tlast\n");
 			     /*  replace with call to solar_ephemeris_info?  */
     img_lon = drms_getkey_double (irec, clon_key, &status);
     img_lat = drms_getkey_double (irec, clat_key, &status);
+fprintf (stderr, "img_lon = %.3f\n", img_lon);
+fprintf (stderr, "img_lat = %.3f\n", img_lat);
 			 /*  check for record quality, reject as applicable  */
     if (rejects) {
       int idrec = drms_getkey_int (irec, "T_REC_index", &status);
@@ -1825,10 +1835,12 @@ need_limb_dist = 1;
         continue;
       }
     }
+fprintf (stderr, "no rejects\n");
 			   /*  get needed info from record keys for mapping  */
     status = solar_image_info (irec, &img_xscl, &img_yscl, &img_xc, &img_yc,
 	&img_radius, rsun_key, apsd_key, &img_pa, &ellipse_e, &ellipse_pa,
 	&x_invrt, &y_invrt, &need_ephem, 0);
+fprintf (stderr, "solar_image_info returned %08x\n", status);
     if (status & NO_SEMIDIAMETER) {
       int keystat = 0;
       double dsun_obs = drms_getkey_double (irec, dsun_key, &keystat);
@@ -1854,7 +1866,9 @@ need_limb_dist = 1;
     }
 						  /*  read input data image  */
     record_segment = drms_segment_lookupnum (irec, segnum);
+fprintf (stderr, "reading data segment %d\n", segnum);
     data_array = drms_segment_read (record_segment, DRMS_TYPE_FLOAT, &status);
+fprintf (stderr, "drms_segment_read returned %08x\n", status);
     if (status) {
       if (ut_times) sprint_time (tbuf, tobs, "UTC", 0);
       else sprint_time (tbuf, tobs, "TAI", 0);
@@ -2464,4 +2478,8 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
  *		CROTA2 keyword as opposite to AIPS convention
  *		Added calculation of mean position angle for region centers
  *		for keyword setting (not tested)
+ *  v 1.4 frozen 2012.04.23
+ *    1.5	Fixed bug in bilinear interpolation function (failure to
+ *		properly detect out of range)
+ *  v 1.5 frozen 2012.08.03
  */
