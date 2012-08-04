@@ -1,7 +1,6 @@
 #!/bin/csh -f
 # script to run a single instance of trackings plus analyses in the 
 #   time-distance synoptic series for a given time center
-# Prototype!
 # This script should be run every 8 hours
 
 set TW
@@ -13,7 +12,7 @@ if ("$1" =~ '-test') then
 endif
 
 if ($#argv < 2) then
-  echo "usage: $0 YYMMDD HR"
+  echo "usage: $0 [-test] YYMMDD HR"
   exit
 endif
 @ YYMMDD = `echo $1 | sed  -e "s/^0*//"`
@@ -31,6 +30,7 @@ if ($PROG =~ "*_ttim") @ SKIPTRK = 1
 if ($PROG =~ "*_inv") @ SKIPFIT = 1
 
 # modules and programs
+set COVER = rdcover
 set GENTG = gentargs
 set TRACK = mtrack
 set TTFIT = travel_times
@@ -73,9 +73,8 @@ set TTFIT = "$TTFIT -v"
 set TDINV = "$TDINV -v"
 
 # base naming convention for I/O series and logs
-set NMSP = hmi
 set BASE = tdV
-set SUFX = _synop
+set SUFX = _synopHC
 set PLID = hmitdV
 set TYPE = $NMSP.$BASE$SUFX
 
@@ -83,13 +82,16 @@ set TYPE = $NMSP.$BASE$SUFX
 @ LNGTH = 640
 @ SIZE = 512
 set SCALE = 0.06
-set QMASK = 0x8004000
-set MMISS = 5000
+set QMASK = 0x80004000
+@ MMISS = 5000
+@ MINCV = 900
+@ MMINCV = 500
+set QUEUE = j.q
 
 # output series
 set TSER = $NMSP.$BASE\track$SUFX
 set OSER = $NMSP.$BASE\times$SUFX
-set RSER = hmi_test.$BASE\invrt$SUFX
+set RSER = $NMSP.$BASE\invrt$SUFX
 
 # input series
 set ISER = hmi.V_45s
@@ -107,11 +109,11 @@ if ($TEST) then
   grep -q "^KSER =" $TSTOPT
   if ($status == 0) set GSER = `grep "^KSER =" $TSTOPT | awk '{print $3}'`
   grep -q "^TSER =" $TSTOPT
-  if ($status == 0) set GSER = `grep "^TSER =" $TSTOPT | awk '{print $3}'`
+  if ($status == 0) set TSER = `grep "^TSER =" $TSTOPT | awk '{print $3}'`
   grep -q "^OSER =" $TSTOPT
-  if ($status == 0) set GSER = `grep "^OSER =" $TSTOPT | awk '{print $3}'`
+  if ($status == 0) set OSER = `grep "^OSER =" $TSTOPT | awk '{print $3}'`
   grep -q "^RSER =" $TSTOPT
-  if ($status == 0) set GSER = `grep "^RSER =" $TSTOPT | awk '{print $3}'`
+  if ($status == 0) set RSER = `grep "^RSER =" $TSTOPT | awk '{print $3}'`
 endif
 
 #  check that input and product series exist
@@ -148,16 +150,25 @@ set HOSTID = `basename $HOSTNAME .Stanford.EDU`
 set PROCID = $HOSTID\_$$
 set NOTE = ~rick/rings/notify
 set RJCT = ~rick/hmi/qual/reject.V
-set TEMP = /tmp23/`whoami`
-if (!(-d $TEMP)) set TEMP = /tmp
+set TMPFSLOC = ~rick/hmi/tmpfs
+if (-r $TMPFSLOC) then
+  set TMPFS = `egrep ^/tmp $TMPFSLOC`
+  set TEMP = $TMPFS/`whoami`
+  if (!(-w $TEMP)) set TEMP = /tmp
+  set SCRFS = `egrep ^/scr $TMPFSLOC`
+  set SCRT = $SCRFS/`whoami`
+  if (!(-d $SCRT)) mkdir $SCRT
+  if (!(-w $SCRT)) set SCRT = /tmp
+else
+  set TEMP = /tmp
+  set SCRT = /tmp
+endif
 set TMPB = $TEMP/$PLID$SUFX
 if (!(-d $TMPB)) mkdir $TMPB
 set TMPD = $TMPB/scripts
 if (!(-d $TMPD)) mkdir $TMPD
 set MSGS = $TEMP/msgs
 if (!(-d $MSGS)) mkdir $MSGS
-set SCRT = /scr21/`whoami`
-if (!(-d $SCRT)) set SCRT = /tmp
 set SCRB = $SCRT/$PLID
 if (!(-d $SCRB)) mkdir $SCRB
 set LOGF = $SCRB/runlog$SUFX
@@ -167,6 +178,8 @@ set MMSG = $MSGS/msg.$PROCID
 set TLIST = $TMPB/td_inf.$$
 set TIMES = $SCRB/latency
 set DTIME = $SCRB/synop
+set QRES = $TEMP/qres
+if (!(-d $QRES)) mkdir $QRES
 
 set NOW = `date +%Y.%m.%d_%T`
 set STARTED = $NOW
@@ -180,6 +193,21 @@ if ($STRTSTOP) @ PBEGIN = `date +%s`
 
 # check coverage
 
+$COVER ds= $ISER tmid= $TMID length= $LNGTH \
+    max_miss= $MMISS qmask= $QMASK reject= $RJCT > $TLIST
+@ LINES = `wc -l $TLIST |  awk '{print $1}'`
+if ($LINES < 2) then
+  @ CVG = 0
+else
+  set ECVG = `head -2 $TLIST | tail -1 | awk '{print $4}'`
+  @ CVG = `echo $ECVG | awk -F. '{print $1}'`
+  @ CVG *= 1000
+  @ CVGFRAC = `echo $ECVG | awk -F. '{print $2}' | sed  -e "s/^0*//"`
+  @ CVG += $CVGFRAC
+endif
+set CVRG = 0.$CVG
+if ($CVG >= 1000) set CVRG = 1.000
+
 # set up logging, notification
 set SUBJ = "HMI time-distance $TW processing for $CTIME"
 if ($SKIPTRK || $SKIPFIT) then
@@ -189,7 +217,24 @@ else
   echo "$NOW begin $CTIME" > $MMSG
   @ STRTSTOP = 1
 endif
-cat $MMSG >> $LOGF
+if ($CVG < $MINCV) then
+  if (($CVG < $MMINCV) && ($TEST == 0)) then
+    echo "Notice: effective coverage < 0.$MMINCV" >> $MMSG
+    echo "        processing not attempted" >> $MMSG
+    cat $TLIST >> $MMSG
+    echo "  ($CTIME) Effective coverage < 0.$MMINCV; processing abandoned" >> $LOGF
+    set SUBJ = "HMI time-distance $TW processing abandoned for $CTIME"
+    @ STRTSTOP = 0
+    set STARTED = "not attempted"
+    goto CLEANUP
+  endif
+  echo "Warning: effective coverage < 0.$MINCV" >> $MMSG
+  cat $MMSG >> $LOGF
+  cat $TLIST >> $MMSG
+else
+  cat $MMSG >> $LOGF
+endif
+rm $TLIST
 
 $GENTG time= $TMID > $TLIST
 set LATS = (`head -1 $TLIST`)
@@ -285,11 +330,11 @@ echo "$TTFIT \" >> $SCRIPT
 echo '  in= '$TSER'"['$TMID'][$LON][$LAT]" \' >> $SCRIPT
 echo "  pxloc= "'"'$PLOC'" \' >> $SCRIPT
 echo "  out= $OSER "'>>&' $RLOG >> $SCRIPT
-qsub -sync yes -t 1-$RGNCT -q j.q $SCRIPT >>& $RLOG
+qsub -sync yes -t 1-$RGNCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
 @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
 @ FAIL = $RGNCT - $QJOK
-if ($FAIL) then
-  @ FDCT = `show_info -cq ds= $OSER"[$TMID]"`
+@ FDCT = `show_info -cq ds= $OSER"[$TMID]"`
+if ($FAIL || $FDCT != $RGNCT) then
   set SUBJ = "$SUBJ incomplete"
   echo "  $FAIL travel-time failures on cluster" >> $MMSG
   echo "  $FDCT records in $OSER""[$TMID]" >> $MMSG
