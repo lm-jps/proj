@@ -22,11 +22,11 @@ document.write('<base id="basepath" href="'+exportdata+'/"><\/base>');
 // Set CGI-BIN and include targets
 
 // var SHOW_SERIES = "show_series_test";
-// var JSOC_INFO = "jsoc_info_test";
+var JSOC_INFO = "jsoc_info_test";
 // var JSOC_FETCH = "jsoc_fetch_test";
 
 var SHOW_SERIES = "show_series";
-var JSOC_INFO = "jsoc_info";
+// var JSOC_INFO = "jsoc_info";
 var JSOC_FETCH = "jsoc_fetch";
 </script>
 
@@ -936,7 +936,13 @@ function SetExportCompress()
         protocolparam = "as-is";
       else
         for (var i=0; i < SeriesInfo.segments.length; i++)
-          protocolparam = protocolparam  + "," + ExportCompressValue;
+          {
+          var segtype = SeriesInfo.segments[i].type;
+          if (segtype == "float" || segtype == "double")
+            protocolparam = protocolparam  + ",**NONE**";
+          else
+            protocolparam = protocolparam  + "," + ExportCompressValue;
+          }
       $("ExportProtocolHidden").value = protocolparam;
       }
   ExportCompressOK = 1;
