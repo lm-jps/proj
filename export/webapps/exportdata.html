@@ -932,19 +932,19 @@ function SetExportCompress()
   if (ExportCompressValue == "compress Rice" &&  protocolparam == "FITS")
       {
       var tmp = SeriesName.toUpperCase();
-      if ($("ExportProcessing").selectedIndex == 0 && (tmp == "AIA.LEV1" || tmp == "AIA.LEV1_EUV_12S" || tmp == "AIA.LEV1_UV_24S" || tmp == "AIA.LEV1_VIS_1H"))
+      if ($("ExportProcessing").selectedIndex == 0 && (tmp == "AIA.LEV1" ||
+            tmp == "AIA.LEV1_EUV_12S" || tmp == "AIA.LEV1_UV_24S" || tmp == "AIA.LEV1_VIS_1H"))
         protocolparam = "as-is";
-      else
-        for (var i=0; i < SeriesInfo.segments.length; i++)
-          {
-          var segtype = SeriesInfo.segments[i].type;
-          if (segtype == "float" || segtype == "double")
-            protocolparam = protocolparam  + ",**NONE**";
-          else
-            protocolparam = protocolparam  + "," + ExportCompressValue;
-          }
-      $("ExportProtocolHidden").value = protocolparam;
       }
+  for (var i=0; i < SeriesInfo.segments.length; i++)
+    {
+    var segtype = SeriesInfo.segments[i].type;
+    if (ExportCompressValue == "compress Rice" &&  protocolparam == "FITS" && (segtype == "float" || segtype == "double"))
+      protocolparam = protocolparam  + ",**NONE**";
+    else
+      protocolparam = protocolparam  + "," + ExportCompressValue;
+    }
+  $("ExportProtocolHidden").value = protocolparam;
   ExportCompressOK = 1;
   CheckRediness();
   }
