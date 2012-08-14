@@ -5,7 +5,7 @@ char *module_name = "hmi_fixCROTA2";
 
 /*
  * This program updates CROTA2 based on results of the 2012 transit of Venus.
- * CROTA2 is corrected by adding either CAM1DELTA or CAM2DELTA
+ * CROTA2 is corrected by adding either CAM1_DELTA or CAM2_DELTA
  * CALVERS0 is set to 1
  * DATE is updated.
  * A HISTORY line is added.
@@ -40,7 +40,7 @@ ModuleArgs_t module_args[] =
 int DoIt(void)
   {
   int status = DRMS_SUCCESS;
-  DRMS_Record_t *Template;
+  DRMS_Record_t *inTemplate;
   DRMS_RecordSet_t *inRS, *outRS;
   DRMS_Keyword_t *pkey;
   int irec, nrecs, npkeys;
@@ -54,8 +54,8 @@ int DoIt(void)
   char history[4096];
 
   // Now find the prime time keyword name
-  Template = drms_template_record(drms_env, dsSeries, &status);
-  if (status || !Template) DIE("series not found");
+  inTemplate = drms_template_record(drms_env, dsSeries, &status);
+  if (status || !inTemplate) DIE("series not found");
   npkeys = inTemplate->seriesinfo->pidx_num;
   timekeyname = NULL;
   if (npkeys > 0)
@@ -96,8 +96,8 @@ int DoIt(void)
     t_stop = t_start + t_block - t_step;
     if (t_stop > t_last)
       t_stop = t_last;
-    sprint_time(first, t_start, pkey->info->unit, 0)
-    sprint_time(last, t_stop, pkey->info->unit, 0)
+    sprint_time(first, t_start, pkey->info->unit, 0);
+    sprint_time(last, t_stop, pkey->info->unit, 0);
 
     sprintf(dsQuery, "%s[%s-%s]", dsSeries, first, last);
     
@@ -116,8 +116,8 @@ int DoIt(void)
       {
       int crotstat, camstat;
       DRMS_Record_t *rec = outRS->records[irec]; 
-      double crota2 = drms_getkey_double(rec, "CROTA2", crotstat);
-      int camera = drms_getkey_int(rec, "CAMERA", camstat);
+      double crota2 = drms_getkey_double(rec, "CROTA2", &crotstat);
+      int camera = drms_getkey_int(rec, "CAMERA", &camstat);
       if (crotstat || camstat)
         {
         fprintf(stderr, "ERROR getkey CROTA2 or CAMERA bad, irec=%d, t_start=%s, crotstat=%d, camstat=%d\n",
@@ -128,13 +128,15 @@ int DoIt(void)
       // The action is all between here and the end of the irec loop
       if (camera == 1)
         {
-        crota2 += CAM1DELTA;
-        sprintf(history, "CROTA2 corrected by adding %6.4f degrees", CAM1DELTA);
+        crota2 += CAM1_DELTA;
+        drms_setkey_double(rec, "INST_ROT", CAM1_DELTA);
+        sprintf(history, "CROTA2 corrected by adding %6.4f degrees", CAM1_DELTA);
         }
       else
         {
-        crota2 += CAM2DELTA;
-        sprintf(history, "CROTA2 corrected by adding %6.4f degrees", CAM2DELTA);
+        crota2 += CAM2_DELTA;
+        drms_setkey_double(rec, "INST_ROT", CAM2_DELTA);
+        sprintf(history, "CROTA2 corrected by adding %6.4f degrees", CAM2_DELTA);
         }
       
       drms_setkey_double(rec, "CROTA2", crota2);
