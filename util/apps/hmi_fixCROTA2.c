@@ -48,8 +48,9 @@ int DoIt(void)
   char dsQuery[DRMS_MAXQUERYLEN];
   char *timekeyname;
   TIME t_first = params_get_time(&cmdparams, "first");
-  TIME t_last = params_get_time(&cmdparams, "first");
+  TIME t_last = params_get_time(&cmdparams, "last");
   TIME t_step, t_epoch, t_block, t_start, t_stop;
+  int hasCAL_VERS;
 
   char history[4096];
 
@@ -79,6 +80,10 @@ int DoIt(void)
     }
   else
     DIE("Must have time prime key");
+
+  hasCAL_VERS = drms_keyword_lookup(inTemplate, "CAL_VERS", 0) != NULL;
+  if (strcmp(dsSeries, "hmi.lev1") && !hasCAL_VERS)
+    DIE("Must have non-linked CAL_VERS keyword");
 
   t_block = t_step * BLOCKSIZE;
   if (t_block > 100*86400)
@@ -114,19 +119,26 @@ int DoIt(void)
   
     for (irec=0; irec<nrecs; irec++)
       {
-      int crotstat, camstat, inststat, verstat;
       DRMS_Record_t *rec = outRS->records[irec]; 
-      double crota2 = drms_getkey_double(rec, "CROTA2", &crotstat);
-      double inst_rot = drms_getkey_double(rec, "INST_ROT", &inststat);
-      long long calvers = drms_getkey_longlong(rec, "CAL_VERS", &verstat);
-      int camera = drms_getkey_int(rec, "CAMERA", &camstat);
-      if (crotstat || camstat || inststat)
-        {
-        fprintf(stderr, "ERROR getkey failed, irec=%d, t_start=%s, crotstat=%d, camstat=%d, inststat=%d, verstat=%d\n",
-           irec, first, crotstat, camstat, inststat, verstat);
+      double inst_rot, crota2; 
+      long long calvers = 0;
+      int quality, camera, instrot_status;
+
+      quality = drms_getkey_int(rec, "QUALITY", &status);
+      if (!status && quality < 0)
         continue;
+
+      if (hasCAL_VERS)
+        {
+        calvers = drms_getkey_longlong(rec, "CAL_VERS", NULL);
+        if ((calvers & 0xF) != 0)
+          DIE("hmi_fixCROTA2 already run for this data\n");
         }
-  
+
+      inst_rot = drms_getkey_double(rec, "INST_ROT", &instrot_status);
+      camera = drms_getkey_int(rec, "CAMERA", NULL);
+      crota2 = drms_getkey_double(rec, "CROTA2", NULL);
+
       // The action is all between here and the end of the irec loop
       if (camera == 1)
         {
@@ -141,16 +153,23 @@ int DoIt(void)
         sprintf(history, "CROTA2 corrected by adding %6.4f degrees", CAM2_DELTA);
         }
       
-      calvers &= 0xFFFFFFFFFFFFFFF0;
-      calvers |= 0x0000000000000001;
+      if (hasCAL_VERS)
+        {
+        calvers &= 0xFFFFFFFFFFFFFFF0;
+        calvers |= 0x0000000000000001;
+        drms_setkey_longlong(rec, "CAL_VERS", calvers);
+        }
+      if (!instrot_status)
+        drms_setkey_double(rec, "INST_ROT", inst_rot);
+
       drms_setkey_double(rec, "CROTA2", crota2);
-      drms_setkey_double(rec, "INST_ROT", inst_rot);
-      drms_setkey_longlong(rec, "CAL_VERS", calvers);
       drms_appendhistory(rec, history, 1);
       drms_setkey_time(rec, "DATE", CURRENT_SYSTEM_TIME);
       } //end of "irec" loop
   
-    drms_close_records(outRS, DRMS_INSERT_RECORD);
+    if (drms_close_records(outRS, DRMS_INSERT_RECORD))
+      fprintf(stderr, "drms_close_records failure for first=%s\n", first);
+
     fprintf(stdout, "%s CROTA2 fixed for %s through %s\n", dsSeries, first, last);
     } // end of time chunk loop
 
