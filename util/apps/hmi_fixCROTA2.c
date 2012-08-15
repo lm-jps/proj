@@ -114,15 +114,16 @@ int DoIt(void)
   
     for (irec=0; irec<nrecs; irec++)
       {
-      int crotstat, camstat, inststat;
+      int crotstat, camstat, inststat, verstat;
       DRMS_Record_t *rec = outRS->records[irec]; 
       double crota2 = drms_getkey_double(rec, "CROTA2", &crotstat);
       double inst_rot = drms_getkey_double(rec, "INST_ROT", &inststat);
+      long long calvers = drms_getkey_longlong(rec, "CAL_VERS", &verstat);
       int camera = drms_getkey_int(rec, "CAMERA", &camstat);
       if (crotstat || camstat || inststat)
         {
-        fprintf(stderr, "ERROR getkey CROTA2 or CAMERA bad, irec=%d, t_start=%s, crotstat=%d, camstat=%d, inststat=%d\n",
-           irec, first, crotstat, camstat, inststat);
+        fprintf(stderr, "ERROR getkey failed, irec=%d, t_start=%s, crotstat=%d, camstat=%d, inststat=%d, verstat=%d\n",
+           irec, first, crotstat, camstat, inststat, verstat);
         continue;
         }
   
@@ -140,9 +141,11 @@ int DoIt(void)
         sprintf(history, "CROTA2 corrected by adding %6.4f degrees", CAM2_DELTA);
         }
       
+      calvers &= 0xFFFFFFFFFFF0;
+      calvers |= 0x000000000001;
       drms_setkey_double(rec, "CROTA2", crota2);
       drms_setkey_double(rec, "INST_ROT", inst_rot);
-      drms_setkey_int(rec, "CALVERS0", 1);
+      drms_setkey_longlong(rec, "CAL_VERS", calvers);
       drms_appendhistory(rec, history, 1);
       drms_setkey_time(rec, "DATE", CURRENT_SYSTEM_TIME);
       } //end of "irec" loop
