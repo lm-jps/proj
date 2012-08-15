@@ -160,7 +160,11 @@ int DoIt(void)
         drms_setkey_longlong(rec, "CAL_VERS", calvers);
         }
       if (!instrot_status)
+        {
+        if ((camera == 1 && inst_rot < 0.06) || (camera == 2 && inst_rot < -0.01))
+          DIE("INST_ROT has been changed before, abort!");
         drms_setkey_double(rec, "INST_ROT", inst_rot);
+        }
 
       drms_setkey_double(rec, "CROTA2", crota2);
       drms_appendhistory(rec, history, 1);
