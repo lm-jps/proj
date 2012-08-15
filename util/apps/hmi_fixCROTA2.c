@@ -141,8 +141,8 @@ int DoIt(void)
         sprintf(history, "CROTA2 corrected by adding %6.4f degrees", CAM2_DELTA);
         }
       
-      calvers &= 0xFFFFFFFFFFF0;
-      calvers |= 0x000000000001;
+      calvers &= 0xFFFFFFFFFFFFFFF0;
+      calvers |= 0x0000000000000001;
       drms_setkey_double(rec, "CROTA2", crota2);
       drms_setkey_double(rec, "INST_ROT", inst_rot);
       drms_setkey_longlong(rec, "CAL_VERS", calvers);
