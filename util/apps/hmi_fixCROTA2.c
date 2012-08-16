@@ -132,7 +132,11 @@ int DoIt(void)
         {
         calvers = drms_getkey_longlong(rec, "CAL_VERS", NULL);
         if ((calvers & 0xF) != 0)
-          DIE("hmi_fixCROTA2 already run for this data\n");
+          {
+          // DIE("hmi_fixCROTA2 already run for this data\n");
+          fprintf(stdout, "Record previously processed, skip, first=%s, irec=%d\n", first, irec);
+          continue;
+          }
         }
 
       inst_rot = drms_getkey_double(rec, "INST_ROT", &instrot_status);
@@ -162,7 +166,11 @@ int DoIt(void)
       if (!instrot_status)
         {
         if ((camera == 1 && inst_rot < 0.06) || (camera == 2 && inst_rot < -0.01))
-          DIE("INST_ROT has been changed before, abort!");
+          {
+          // DIE("hmi_fixCROTA2 already run for this data\n");
+          fprintf(stdout, "Record previously processed, skip, first=%s, irec=%d\n", first, irec);
+          continue;
+          }
         drms_setkey_double(rec, "INST_ROT", inst_rot);
         }
 
