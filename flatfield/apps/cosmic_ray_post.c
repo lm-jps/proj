@@ -42,7 +42,6 @@ cosmic_ray_post input_series="su_production.flatfield_fid" camera=2 datum="2010.
 #include <jsoc_main.h>
 #include <string.h>
 #include <time.h>
-#include </home/jsoc/include/fftw3.h>
 #include <omp.h>
 #include <fresize.h>
 #include <module_flatfield.h>

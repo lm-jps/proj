@@ -43,7 +43,6 @@ module_flatfield_combine input_series="su_production.flatfield_fid" camera=2 dat
 #include <jsoc_main.h>
 #include <string.h>
 #include <time.h>
-#include </home/jsoc/include/fftw3.h>
 #include <omp.h>
 #include <fresize.h>
 #include <module_flatfield.h>

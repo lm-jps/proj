@@ -53,7 +53,6 @@ module_flatfield input_series="hmi.lev1" camera=2 datum="2010.10.09" fid=10059 c
 #include <jsoc_main.h>
 #include <string.h>
 #include <time.h>
-#include </home/jsoc/include/fftw3.h>
 #include <omp.h>
 #include <module_flatfield.h>
 
