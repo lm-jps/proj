@@ -264,6 +264,7 @@ function ResizeCheck()
 // Process HgPatch
 //
 
+
 var noaaColor;
 var HgTracked = 0;
 var HgSeriesList;
@@ -989,6 +990,79 @@ function ImPatchInit(isActive)
 // End of IM Patch code
 
 //
+// Maproj - map projections
+//
+
+
+// get NOAA AR info
+function MapProgGetNoaa()
+  {
+  if ($("MpNOAA").value.strip().empty()) $("MpNOAA").value = "NotSpecified";
+  if ($("MpNOAA").value != "NotSpecified")
+    {
+    var noaaNum = 1 * $("MpNOAA").value;
+    if (noaaNum < 7000) 
+      {
+      noaaNum = noaaNum + 10000; // OK for times after 1996 Jan.
+      $("MpNOAA").value = noaaNum + "";
+      }
+    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+    new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_jsoc2',
+      {
+      method: 'get',
+      parameters: {"op" : "rs_list", "ds": "su_rsb.NOAA_ActiveRegions[][" + noaaNum + "]", "key": "ObservationTime,LatitudeHG,LongitudeCM,LongitudeHG,LongitudinalExtent" },
+      onSuccess: function(transport, json)
+        {
+        var response = transport.responseText || "no response text";
+        var NOAA_rslist = response.evalJSON();
+        try {if (NOAA_rslist.status > 0 || NOAA_rslist.count == 0) throw "noRecords";}
+        catch(err) { $("MpNOAA").value = noaaNum + " " + err; return; }
+        var minLong = 999, minRec=-1;
+        var extentLon = 0;
+        var irec, nrecs = NOAA_rslist.count;
+        var thisTime, thisLong, thisLongHG,thisLat,thisExtent;
+        for (irec=0; irec<nrecs; irec++)
+          {
+          // thisTime = NOAA_rslist.keywords[0].values[irec];
+          // thisLat = NOAA_rslist.keywords[1].values[irec];
+          thisLong = NOAA_rslist.keywords[2].values[irec];
+          // thisLongHg = NOAA_rslist.keywords[3].values[irec];
+          // thisExtent = NOAA_rslist.keywords[4].values[irec];
+          if (Math.abs(thisLong) < Math.abs(minLong))
+            {
+            minLong = thisLong;
+            minRec = irec;
+            }
+          }
+        try
+          {
+          if (minLong == 999) throw "noRegion";
+          // $("MpLocType").selectedIndex = 0;
+          $("MpTRef").value =  NOAA_rslist.keywords[0].values[irec];
+          $("MpX").value = NOAA_rslist.keywords[3].values[irec];
+          $("MpY").value = NOAA_rslist.keywords[1].values[irec];
+          $("MpWidth").value = 2*NOAA_rslist.keywords[1].values[irec];
+	  $("MpNOAA").style.backgroundColor=colorOptionSet;
+          noaaColor = colorPreset;
+          //$("MpLocType").style.backgroundColor = noaaColor;
+          $("MpTRef").style.backgroundColor = noaaColor;
+          $("MpX").style.backgroundColor = noaaColor;
+          $("MpY").style.backgroundColor = noaaColor;
+	  // CheckMpPatch();
+          }
+        catch(err) { $("MpNOAA").value = noaaNum + " " + err; return; }
+        },
+      onFailure: function()
+        {
+        alert('Something went wrong with NOAA num data request');
+        $("MpNOAA").value = "Not Found";
+        },
+      onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+      });
+    }
+  }
+
+//
 // Processing details for all options
 //
 
@@ -1049,7 +1123,7 @@ function ProcessingInit()
   iOpt++;
   ProcessingOptionsHTML += 
     '<input type="checkbox" checked="false" value="hg_patch" id="OptionHgPatch" onChange="SetProcessing('+iOpt+');" /> ' +
-    'hg_patch - Extract sub-frame<br>';
+    'hg_patch - Extract sub-frame (old version, switch to im_patch)<br>';
   ExpOpt = new Object();
   ExpOpt.id = "OptionHgPatch";
   ExpOpt.rowid = "ProcessHgPatch";
