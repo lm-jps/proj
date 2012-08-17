@@ -36,6 +36,8 @@ ModuleArgs_t module_args[] =
 #define     CAM1_DELTA	(0.0135 - 0.082596) // i.e. change 180.082596 to 180.0135 by adding CAM1_DELTA to INST_ROT and  CROTAT2
 #define     CAM2_DELTA	(-0.0702)           // i.e. change 180.0 to 179.9298 by adding CAM1_DELTA to INST_ROT and  CROTAT2
 #define     BLOCKSIZE   (25000)             // approx number of records to process in one call, will be rounded down to nice time.
+#define     HOUR        (3600)
+#define     DAY         (86400)
 
 int DoIt(void)
   {
@@ -50,7 +52,7 @@ int DoIt(void)
   TIME t_first = params_get_time(&cmdparams, "first");
   TIME t_last = params_get_time(&cmdparams, "last");
   TIME t_step, t_epoch, t_block, t_start, t_stop;
-  int hasCAL_VERS;
+  int hasCALVERS;
 
   char history[4096];
 
@@ -81,18 +83,18 @@ int DoIt(void)
   else
     DIE("Must have time prime key");
 
-  hasCAL_VERS = drms_keyword_lookup(inTemplate, "CAL_VERS", 0) != NULL;
-  if (strcmp(dsSeries, "hmi.lev1") && !hasCAL_VERS)
-    DIE("Must have non-linked CAL_VERS keyword");
+  hasCALVERS = drms_keyword_lookup(inTemplate, "CALVERS", 0) != NULL;
+  if (strcmp(dsSeries, "hmi.lev1") && !hasCALVERS)
+    DIE("Must have non-linked CALVERS keyword");
 
   t_block = t_step * BLOCKSIZE;
-  if (t_block > 100*86400)
-    t_block = 100*86500;
-  else if (t_block > 10*86400)
-    t_block = 10*86400;
-  else if (t_block > 86400)
-    t_block = 86400;
-  else if (t_block > 6*3600)
+  if (t_block > 100*DAY)
+    t_block = 100*DAY;
+  else if (t_block > 10*DAY)
+    t_block = 10*DAY;
+  else if (t_block > DAY)
+    t_block = DAY;
+  else if (t_block > 6*HOUR)
     t_block = 6*3600;
 
   for (t_start = t_first; t_start <= t_last; t_start += t_block)
@@ -128,9 +130,9 @@ int DoIt(void)
       if (!status && quality < 0)
         continue;
 
-      if (hasCAL_VERS)
+      if (hasCALVERS)
         {
-        calvers = drms_getkey_longlong(rec, "CAL_VERS", NULL);
+        calvers = drms_getkey_longlong(rec, "CALVERS", NULL);
         if ((calvers & 0xF) != 0)
           {
           // DIE("hmi_fixCROTA2 already run for this data\n");
@@ -157,11 +159,11 @@ int DoIt(void)
         sprintf(history, "CROTA2 corrected by adding %6.4f degrees", CAM2_DELTA);
         }
       
-      if (hasCAL_VERS)
+      if (hasCALVERS)
         {
         calvers &= 0xFFFFFFFFFFFFFFF0;
         calvers |= 0x0000000000000001;
-        drms_setkey_longlong(rec, "CAL_VERS", calvers);
+        drms_setkey_longlong(rec, "CALVERS", calvers);
         }
       if (!instrot_status)
         {
