@@ -70,7 +70,7 @@ int computeAbsFlux(float *bz, int *dims, float *absFlux,
 	{
 		for (i = 0; i < nx; i++) 
 		{
-                  if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+                  if ( mask[j * nx + i] < 70 ) continue;
                   sum += (fabs(bz[j * nx + i]));
                   //sum += (fabs(bz[j * nx + i]))*inverseMu[j * nx + i]; // use this with mu function
                   count_mask++;
@@ -137,8 +137,7 @@ int computeGamma(float *bx, float *by, float *bz, float *bh, int *dims,
 	      {
 		if (bh[j * nx + i] > 100)
 		  {
-                    //if (mask[j * nx + i] != 90 ) continue;
-                    if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+                    if (mask[j * nx + i] < 70 ) continue;
 		    sum += (atan (fabs( bz[j * nx + i] / bh[j * nx + i] ))* (180./PI));
 		    count_mask++;
 		  }
@@ -251,8 +250,7 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
             for (j = 0; j <= ny-1; j++) 
             {
                // if ( (derx_bt[j * nx + i]-dery_bt[j * nx + i]) == 0) continue; 
-	       //if (mask[j * nx + i] != 90 ) continue;
-               if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+	       if (mask[j * nx + i] < 70 ) continue;
                sum += sqrt( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  ); /* Units of Gauss */
                count_mask++;
             }	
@@ -342,8 +340,7 @@ int computeBhderivative(float *bh, int *dims, float *mean_derivative_bh_ptr, int
             for (j = 0; j <= ny-1; j++) 
             {
                // if ( (derx_bh[j * nx + i]-dery_bh[j * nx + i]) == 0) continue; 
-	       //if (mask[j * nx + i] != 90 ) continue;
-               if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+	       if (mask[j * nx + i] < 70 ) continue;
                sum += sqrt( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  ); /* Units of Gauss */
                count_mask++;
             }	
@@ -431,8 +428,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
             for (j = 0; j <= ny-1; j++) 
             {
                // if ( (derx_bz[j * nx + i]-dery_bz[j * nx + i]) == 0) continue; 
-	       //if (mask[j * nx + i] != 90 ) continue;
-               if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+	       if (mask[j * nx + i] < 70 ) continue;
                sum += sqrt( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  ); /* Units of Gauss */
                count_mask++;
             }	
@@ -556,8 +552,7 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
             for (j = 0; j <= ny-1; j++) 
             {
                // if ( (derx[j * nx + i]-dery[j * nx + i]) == 0) continue;
-               if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
-               //if (mask[j * nx + i] != 90 ) continue;
+               if (mask[j * nx + i] < 70 ) continue;
                curl +=     (derx[j * nx + i]-dery[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
                us_i += fabs(derx[j * nx + i]-dery[j * nx + i])*(1/cdelt1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A  / m^2 */
                jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);                                                          /* jz is in units of Gauss/pix */                                     
@@ -602,8 +597,7 @@ int computeAlpha(float *bz, int *dims, float *jz, float *mean_alpha_ptr, int *ma
 	  {
 	    for (j = 1; j < ny-1; j++) 
 	      {
-                //if (mask[j * nx + i] != 90 ) continue;
-                if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+                if (mask[j * nx + i] < 70 ) continue;
                 if isnan(jz[j * nx + i]) continue;
                 if isnan(bz[j * nx + i]) continue;
                 if (bz[j * nx + i] == 0.0) continue;
@@ -646,8 +640,7 @@ int computeHelicity(float *bz, int *dims, float *jz, float *mean_ih_ptr, float *
 	{
 		for (i = 0; i < nx; i++) 
 		{
-                //if (mask[j * nx + i] != 90 ) continue;
-                if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+                if (mask[j * nx + i] < 70 ) continue;
                 if isnan(jz[j * nx + i]) continue;
                 if isnan(bz[j * nx + i]) continue;
                 if (bz[j * nx + i] == 0.0) continue;
@@ -692,8 +685,7 @@ int computeSumAbsPerPolarity(float *bz, float *jz, int *dims, float *totaljzptr,
 	  {
 	    for (j = 0; j < ny; j++) 
 	      {
-                //if (mask[j * nx + i] != 90 ) continue;
-                if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+                if (mask[j * nx + i] < 70 ) continue;
 		if (bz[j * nx + i] >  0) sum1 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
                 if (bz[j * nx + i] <= 0) sum2 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
        	      }
@@ -733,8 +725,7 @@ int computeFreeEnergy(float *bx, float *by, float *bpx, float *bpy, int *dims,
 	  {
 	    for (j = 0; j < ny; j++) 
 	      {
-                 //if (mask[j * nx + i] != 90 ) continue;
-                 if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+                 if (mask[j * nx + i] < 70 ) continue;
                  sum += ((    ((bx[j * nx + i])*(bx[j * nx + i]) + (by[j * nx + i])*(by[j * nx + i]) ) -  ((bpx[j * nx + i])*(bpx[j * nx + i]) + (bpy[j * nx + i])*(bpy[j * nx + i]))  )/8.*PI);
                  count_mask++;
 	      }
@@ -767,8 +758,7 @@ int computeShearAngle(float *bx, float *by, float *bz, float *bpx, float *bpy, f
 	  {
 	    for (j = 0; j < ny; j++) 
 	      {
-                 //if (mask[j * nx + i] != 90 ) continue;
-                 if ( (mask[j * nx + i] != 7) && (mask[j * nx + i] != 5) ) continue;
+                 if (mask[j * nx + i] < 70 ) continue;
                  if isnan(bpx[j * nx + i]) continue;                
                  if isnan(bpy[j * nx + i]) continue;                
                  if isnan(bpz[j * nx + i]) continue;

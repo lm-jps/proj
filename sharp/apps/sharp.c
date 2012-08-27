@@ -594,11 +594,8 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	if (mapScaler(sharpRec, contRec, mharpRec, &mInfo, "continuum")) return 1;
 	printf("Intensitygram mapping done.\n");
 
-	//if (mapScaler(sharpRec, bharpRec, mharpRec, &mInfo, "conf_disambig")) return 1;
-	//printf("Conf disambig mapping done.\n");
-
-	if (mapScaler(sharpRec, bharpRec, mharpRec, &mInfo, "disambig")) return 1;
-	printf("disambig mapping done.\n");	
+	if (mapScaler(sharpRec, bharpRec, mharpRec, &mInfo, "conf_disambig")) return 1;
+	printf("Conf disambig mapping done.\n");
 
 	// Mapping vector B
 	
@@ -1619,8 +1616,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	//int *mask = (int *) maskArray->data;		// get the previously made mask array
 
         //Use conf_disambig map as a threshold on spaceweather quantities 
-	//DRMS_Segment_t *maskSeg = drms_segment_lookup(inRec, "conf_disambig");         
-	DRMS_Segment_t *maskSeg = drms_segment_lookup(inRec, "disambig");
+	DRMS_Segment_t *maskSeg = drms_segment_lookup(inRec, "conf_disambig");         
 	DRMS_Array_t *maskArray = drms_segment_read(maskSeg, DRMS_TYPE_INT, &status);
 	int *mask = (int *) maskArray->data;		// get the previously made mask array
 
@@ -1656,7 +1652,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         printf("rsun_obs=%f\n",rsun_obs);
         printf("dsun_obs=%f\n",dsun_obs);
 
-	// Temp arrays   
+	// Temp arrays                
 	
 	float *bh = (float *) (malloc(nxny * sizeof(float)));
 	float *bt = (float *) (malloc(nxny * sizeof(float)));
