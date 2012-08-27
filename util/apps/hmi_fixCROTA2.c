@@ -6,7 +6,7 @@ char *module_name = "hmi_fixCROTA2";
 /*
  * This program updates CROTA2 based on results of the 2012 transit of Venus.
  * CROTA2 is corrected by adding either CAM1_DELTA or CAM2_DELTA
- * CALVERS0 is set to 1
+ * CALVERS has its second nibble set to 1.
  * DATE is updated.
  * A HISTORY line is added.
  *
@@ -18,6 +18,11 @@ char *module_name = "hmi_fixCROTA2";
  * The program requires (for now) that the first primekey be a slotted TIME.
  *
  * No query arguments other than the time range for each chunk are used.
+ *
+ * CALVERS bit assignments:
+ * At present CALVERS is a string of 16 Hex digits.  It can be divided finer or coarser later as needed.
+ * bits 00:03 == HFCORRVR from old lev1, limb height of formation code version number
+ * bits 04:07 == CROTA2 version.  Was version 0 since launch, now becomes version 1.
  *
  */
 
@@ -133,7 +138,7 @@ int DoIt(void)
       if (hasCALVERS)
         {
         calvers = drms_getkey_longlong(rec, "CALVERS", NULL);
-        if ((calvers & 0xF) != 0)
+        if ((calvers & 0xF0) != 0)
           {
           // DIE("hmi_fixCROTA2 already run for this data\n");
           fprintf(stdout, "Record previously processed, skip, first=%s, irec=%d\n", first, irec);
@@ -161,15 +166,14 @@ int DoIt(void)
       
       if (hasCALVERS)
         {
-        calvers &= 0xFFFFFFFFFFFFFFF0;
-        calvers |= 0x0000000000000001;
+        calvers &= 0xFFFFFFFFFFFFFF0F;
+        calvers |= 0x0000000000000010;
         drms_setkey_longlong(rec, "CALVERS", calvers);
         }
       if (!instrot_status)
         {
         if ((camera == 1 && inst_rot < 0.06) || (camera == 2 && inst_rot < -0.01))
           {
-          // DIE("hmi_fixCROTA2 already run for this data\n");
           fprintf(stdout, "Record previously processed, skip, first=%s, irec=%d\n", first, irec);
           continue;
           }
