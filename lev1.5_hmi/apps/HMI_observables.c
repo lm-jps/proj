@@ -1064,7 +1064,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.34 2012/08/31 15:58:09 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.35 2012/08/31 16:28:43 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -2255,7 +2255,7 @@ int DoIt(void)
 		  SegmentRead[i]= -1;
 		}
 
-	      CALVER32[i]   = (long long) drms_getkey_int(recLev1->records[i] ,CALVER32S,&statusA[33]);
+	      CALVER32[i]   = (long long)drms_getkey_int(recLev1->records[i] ,CALVER32S,&statusA[33]);
 	      if(statusA[33] != DRMS_SUCCESS)
 		{
 		  CALVER32[i]=CALVER_DEFAULT; //following Phil's email of August 28, 2012
