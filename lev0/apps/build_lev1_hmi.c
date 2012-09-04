@@ -1163,19 +1163,21 @@ WCSEND:
     if(!hmiaiaflg && !lstatus) {	//only do for hmi and good limb fit
       //Now call Sebastien's heightformation() fuction (email 08/09/10 17:50)
       //21Sep2010 change -crota2 to crota2 and HFCORRVR to 2
+      //31Aug2012 The HFCORRVR has been eliminated. Set CALVER32 to 0x12
       if(!(dstatus = heightformation(fid, IOdata.obs_vr, &cdelt1, &rsun, &crpix1, &crpix2, crota2))) {
         drms_setkey_float(rs, "CDELT1", cdelt1);
         drms_setkey_float(rs, "CDELT2", cdelt1);
         drms_setkey_float(rs, "R_SUN", rsun);
         drms_setkey_float(rs, "CRPIX1", crpix1);
         drms_setkey_float(rs, "CRPIX2", crpix2);
-        drms_setkey_int(rs, "HFCORRVR", 2);
+        //drms_setkey_int(rs, "HFCORRVR", 2);
       }
       else {
-        drms_setkey_int(rs, "HFCORRVR", 0);
+        //drms_setkey_int(rs, "HFCORRVR", 0);
         printk("ERROR: heightformation() returned error for FID=%d\n", fid);
       }
     }
+    drms_setkey_int(rs, "CALVER32", 0x12);
 
   //if(hmiaiaflg) {                       //aia
   //  int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
