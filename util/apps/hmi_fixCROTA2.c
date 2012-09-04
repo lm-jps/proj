@@ -95,6 +95,9 @@ int DoIt(void)
   hasCALVER64 = drms_keyword_lookup(inTemplate, "CALVER64", 0) != NULL;
   hasCALVER32 = drms_keyword_lookup(inTemplate, "CALVER32", 0) != NULL;
 
+fprintf(stdout,"Series %s hasCALVER32=%d hasCALVER64=%d\n",dsSeries, hasCALVER32, hasCALVER64);
+fflush(stdout);
+
   if (strncmp(dsSeries, "hmi.lev1", 8) && !hasCALVER64)
     DIE("Must have non-linked CALVER64 keyword for products above lev1");
 
@@ -111,6 +114,9 @@ int DoIt(void)
   else if (t_block > 6*HOUR)
     t_block = 6*3600;
 
+fprintf(stdout,"Block size is %lf\n",t_block);
+fflush(stdout);
+
   for (t_start = t_first; t_start <= t_last; t_start += t_block)
     {
     char first[100], last[100];
@@ -121,21 +127,26 @@ int DoIt(void)
     sprint_time(last, t_stop, pkey->info->unit, 0);
 
     sprintf(dsQuery, "%s[%s-%s]", dsSeries, first, last);
+fprintf(stdout,"Query %s ",dsQuery);
+fflush(stdout);
     
     inRS = drms_open_records(drms_env, dsQuery, &status);
     nrecs = inRS->n;
     if (status || nrecs == 0)
       {
-      fprintf(stdout, "query=%s status=%d, no records found, skip this block\n",dsQuery,status);
+      fprintf(stdout, " status=%d, no records found, skip this block\n",status);
       fflush(stdout);
       continue;
       }
   
-    outRS = drms_clone_records(inRS, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
+fprintf(stderr," start clone records\n");
+    outRS = drms_clone_records_nosums(inRS, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
     nrecs = outRS->n;
     if (status || nrecs == 0)
       DIE("No records cloned");
+fprintf(stderr," start close input records\n");
     drms_close_records(inRS, DRMS_FREE_RECORD);
+fprintf(stderr," start processing %d records\n",nrecs);
   
     for (irec=0; irec<nrecs; irec++)
       {
