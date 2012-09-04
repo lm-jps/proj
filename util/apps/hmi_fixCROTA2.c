@@ -127,6 +127,7 @@ int DoIt(void)
     if (status || nrecs == 0)
       {
       fprintf(stdout, "query=%s status=%d, no records found, skip this block\n",dsQuery,status);
+      fflush(stdout);
       continue;
       }
   
@@ -154,6 +155,7 @@ int DoIt(void)
         if ((calver64 & 0xF0) != 0)
           {
           fprintf(stdout, "Record previously processed, skip, first=%s, irec=%d\n", first, irec);
+          fflush(stdout);
           continue;
           }
         }
@@ -163,6 +165,7 @@ int DoIt(void)
         if ((calver32 & 0xF0) != 0)
           {
           fprintf(stdout, "Record previously processed, skip, first=%s, irec=%d\n", first, irec);
+          fflush(stdout);
           continue;
           }
         }
@@ -211,6 +214,7 @@ int DoIt(void)
       fprintf(stderr, "drms_close_records failure for first=%s\n", first);
 
     fprintf(stdout, "%s CROTA2 fixed for %s through %s\n", dsSeries, first, last);
+    fflush(stdout);
     } // end of time chunk loop
 
   return (DRMS_SUCCESS);
