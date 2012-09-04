@@ -43,7 +43,7 @@ ModuleArgs_t module_args[] =
 
 #define     CAM1_DELTA	(0.0135 - 0.082596) // i.e. change 180.082596 to 180.0135 by adding CAM1_DELTA to INST_ROT and  CROTAT2
 #define     CAM2_DELTA	(-0.0702)           // i.e. change 180.0 to 179.9298 by adding CAM1_DELTA to INST_ROT and  CROTAT2
-#define     BLOCKSIZE   (25000)             // approx number of records to process in one call, will be rounded down to nice time.
+#define     BLOCKSIZE   (20000)             // approx number of records to process in one call, will be rounded down to nice time.
 #define     HOUR        (3600)
 #define     DAY         (86400)
 
@@ -125,7 +125,10 @@ int DoIt(void)
     inRS = drms_open_records(drms_env, dsQuery, &status);
     nrecs = inRS->n;
     if (status || nrecs == 0)
-      DIE("No records found");
+      {
+      fprintf(stdout, "query=%s status=%d, no records found, skip this block\n",dsQuery,status);
+      continue;
+      }
   
     outRS = drms_clone_records(inRS, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
     nrecs = outRS->n;
