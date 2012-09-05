@@ -325,7 +325,7 @@ char *version_id  = "2012 Jun. 23";
 
 /* external subroutine etc. written in Fortran files, essentially all fortran variables are of pointer */
 
-extern void invert_ (double *, double *, double *, double *, double *, double[][], int *, double *); // after Feb 10, 2011
+extern void invert_ (double *, double *, double *, double *, double *, double[*][*], int *, double *); // after Feb 10, 2011
 extern void filt_init_ (int *, double *, int *);
 extern void free_init_ (int *);
 extern void free_memory_ ();
@@ -641,7 +641,7 @@ int DoIt (void)
   char *meinversion_version();
 
 /*S.C. filter function, written in this code file */
-  int vfisv_filter(int ,int ,double [][],double ,double ,double *,double *,int ,double *,double *,int ,
+  int vfisv_filter(int ,int ,double[*][*],double ,double ,double *,double *,int ,double *,double *,int ,
                    double, double [4],double [3],double [4],double [3],double *,double *,double *,
                    int, double ,int ,int ,int ,int);
   int initialize_vfisv_filter(double *,double *,int *,double *,double *,int *,double *,double *,
@@ -4315,7 +4315,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.24 2012/06/27 17:48:22 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.25 2012/09/05 19:49:22 kehcheng Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
