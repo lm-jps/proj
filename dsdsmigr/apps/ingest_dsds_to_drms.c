@@ -13,6 +13,8 @@
  *                     SCALE_CORRECTIONS = <drms series with scale corrections file>
  *              
  *  OUTPUT PARAMETERS: OUT = <drms series>
+ * 
+ *  FLAGS: 
  *
  *  EXAMPLE: 
  *  ingest_dsds_to_drms in=/SUM17/D231103541/D18885727/S00000 out=su_mbobra.test_vwv map=fd_test.map SCALE_CORRECTIONS=mdi.scale_corrections
@@ -345,7 +347,6 @@ int DoIt(void)
    //drms_segment_filename(inseg,infilepath);
    //printf("incoming filepath = %s\n", infilepath);
 
-
    for (iRec=0; iRec<nRecs; iRec++)
       {
       char *DataFile;
@@ -393,7 +394,9 @@ if (polflag && time_is_invalid(val) == 0 )
    else drms_setkey_string(outRec,"POLSTATE","CP");
 }
 
-
+  // set cvs commit version into keyword HEADER
+   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.8 2012/09/05 20:23:00 mbobra Exp $");
+   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
 
 
 if (dpcflag)
