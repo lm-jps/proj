@@ -43,7 +43,7 @@ ModuleArgs_t module_args[] =
 
 #define     CAM1_DELTA	(0.0135 - 0.082596) // i.e. change 180.082596 to 180.0135 by adding CAM1_DELTA to INST_ROT and  CROTAT2
 #define     CAM2_DELTA	(-0.0702)           // i.e. change 180.0 to 179.9298 by adding CAM1_DELTA to INST_ROT and  CROTAT2
-#define     BLOCKSIZE   (20000)             // approx number of records to process in one call, will be rounded down to nice time.
+#define     BLOCKSIZE   (4000)             // approx number of records to process in one call, will be rounded down to nice time.
 #define     HOUR        (3600)
 #define     DAY         (86400)
 
@@ -114,9 +114,6 @@ fflush(stdout);
   else if (t_block > 6*HOUR)
     t_block = 6*3600;
 
-fprintf(stdout,"Block size is %lf\n",t_block);
-fflush(stdout);
-
   for (t_start = t_first; t_start <= t_last; t_start += t_block)
     {
     char first[100], last[100];
@@ -139,14 +136,11 @@ fflush(stdout);
       continue;
       }
   
-fprintf(stderr," start clone records\n");
     outRS = drms_clone_records_nosums(inRS, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
     nrecs = outRS->n;
     if (status || nrecs == 0)
       DIE("No records cloned");
-fprintf(stderr," start close input records\n");
     drms_close_records(inRS, DRMS_FREE_RECORD);
-fprintf(stderr," start processing %d records\n",nrecs);
   
     for (irec=0; irec<nrecs; irec++)
       {
