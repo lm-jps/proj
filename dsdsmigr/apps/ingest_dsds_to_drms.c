@@ -395,7 +395,7 @@ if (polflag && time_is_invalid(val) == 0 )
 }
 
   // set cvs commit version into keyword HEADER
-   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.8 2012/09/05 20:23:00 mbobra Exp $");
+   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.9 2012/09/06 20:27:15 mbobra Exp $");
    status = drms_setkey_string(outRec, "HEADER", cvsinfo);
 
 
@@ -727,7 +727,7 @@ if (!strcmp("/home/soi/CM/tables/calib/flat/fd/vers_1/", caltbls))
   calrecstring="mdi.caltables_intensity[fd_vers_1]";
 if (!strcmp("/home/soi/CM/tables/calib/flat/hr/", caltbls))
   calrecstring="mdi.caltables_intensity[hr_vers_1]";
-if (!strcmp("/home/soi/CM/tables/calib/flat/hr/vers_0", caltbls))
+if (!strcmp("/home/soi/CM/tables/calib/flat/hr/vers_0/", caltbls))
   calrecstring="mdi.caltables_intensity[hr_vers_0]";
 if (!strcmp("/home/soi/CM/tables/calib/obflat/vers_0/", caltbls))
   calrecstring="mdi.caltables_intensity[obflat_vers_0]";
