@@ -151,8 +151,8 @@ fflush(stdout);
       int quality, camera, instrot_status;
 
       quality = drms_getkey_int(rec, "QUALITY", &status);
-      if (!status && quality < 0)
-        continue;
+      // if (!status && quality < 0)
+        // continue;
 
       if (hasCALVER64)
         {
