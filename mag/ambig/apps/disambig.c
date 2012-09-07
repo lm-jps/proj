@@ -15,6 +15,7 @@
  *			v1.1		Mar 21 2012
  *			v1.2		Mar 27 2012
  *			v1.3		Apr 09 2012
+ *			v2.0		Mon 04 2012
  *
  * Issues:
  *			v1.0
@@ -26,13 +27,17 @@
  *			the format of the mask is determined
  *			v1.3
  *			Added query for speed
+ *			v2.0
+ *			Record all three weak field solutions
+ *			Implemented noise mask, added -l flag for control
+ *			Clean-up
  *
  *
  * Example:
  * limit s u
- * disambig "in=hmi_test.MEharp_720s_fd10_nrt[][2012.05.07]" "out=hmi_test.Bharp_720s_fd10_nrt" "AMBGMTRY=2"
+ *
+ *
  */
-
 
 #include <jsoc_main.h>
 #include <stdio.h>
@@ -43,10 +48,13 @@
 #include "copy_me_keys.c"
 // Added Mar 21 for geometry
 #include "cartography.c"
+#include "noisemask.c"
 
 #define PI	(M_PI)
 #define	DTOR	(PI / 180.)
-#define Rad2arcsec	(3600. * 180. / PI) 
+#define Rad2arcsec	(3600. * 180. / PI)
+#define FOURK (4096)
+#define FOURK2	(16777216)
 
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
 #define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status=%d\n", msg, status); return(status);}
@@ -62,52 +70,51 @@
 #define WX(pix_x,pix_y) (((pix_x-crpix1)*cosa - (pix_y-crpix2)*sina)*cdelt+crvalx)
 #define WY(pix_x,pix_y) (((pix_y-crpix2)*cosa + (pix_x-crpix1)*sina)*cdelt+crvaly)
 
-// Jul 22 Xudong
 // Quality bit for disambiguation
-// Updated Oct 12
 // Now occupy lower 8 bits
-/*
- #define ambCode0 0x0000 // 10 for pixels which were above threshold and annealed (was 0.9)
- #define ambCode1 0x0001 // 40 for pixels which were below threshold and annealed (was 0.6)
- #define ambCode2 0x0002 // 50 for pixels which had weak field method applied (was 0.5)
- #define ambCode3 0x0004 // 100 for pixels which were not disambiguated (was 0.0)
- */
-#define ambCode3 0x0000 // not disambiguated, turned
-#define ambCode0 0x0001 // strong annealed
-#define ambCode1 0x0002 // weak annealed
-#define ambCode2 0x0004 // weak smooth
-
+// lowest bit disambiguated or not
+// 2nd last bit annealed or not
+// 3rd last bit strong or not
+#define ambCode0 0x0000 // not disambiguated, turned
+#define ambCode1 0x0001 // weak not annealed (pf/radial acute/random)
+#define ambCode2 0x0003 // weak annealed
+#define ambCode3 0x0007 // strong annealed
 
 // switches
-#define QUALMAP 1
+#define QUALMAP 1		// QUALMAP not updated if 0
 
 int getAmbCode (char prob)
 {
 	if (prob < 11)
 		return ambCode0;
-	else if (prob < 41)
-		return ambCode1;
 	else if (prob < 51)
+		return ambCode1;
+	else if (prob < 61)
 		return ambCode2;
 	else
 		return ambCode3;
 }
 
+// Wrapper for Yang's mask function
+
+int createMask(float obs_vr, float radius, float x0, float y0, double *noiseMask)
+{return noisemask(4096, 4096, (int)x0, (int)y0, (int)radius, obs_vr, noiseMask);}
+
 //====================
 
 char *module_name = "disambig_new";	/* Module name */
-char *version_id = "2012 Mar 21";  /* Version number */
+char *version_id = "2012 Jun 04";  /* Version number */
 
 ModuleArgs_t module_args[] =
 {
     {ARG_STRING, "in", NULL, "Input data series."},
     {ARG_STRING, "out", NULL,  "Output data series."},
-    {ARG_STRING, "mask", " ", "Bitmap series name, as AR mask, for full disk"},
     {ARG_INT, "VERB", "1", "Level of verbosity: 0=errors/warnings; 1=minimal messages; 2=all messages"},
+		{ARG_FLAG, "l", "", "Flag to use linear noise threshold (AMBTHRn)"},
     {ARG_INT, "ksig", "1", "Multiplier of the noise mask"},
     {ARG_INT, "offset", "50", "Constant added to the noise mask"},
     {ARG_INT, "AMBGMTRY", "0", "0 for automatic selection; 1 for planar; 2 for spherical."},
-	//	{ARG_INT, "AMBWEAK", "1", "0 for random; 1 for potential field; 2 for most radial."},
+//	{ARG_INT, "AMBWEAK", "1", "0 for random; 1 for potential field; 2 for most radial."},
     {ARG_INT, "AMBNEROD", "1", "Number of pixels by which to erode map of above threshold pixels."},
     {ARG_INT, "AMBNGROW", "5", "Number of pixels by which to grow eroded map."},
     {ARG_INT, "AMBNPAD", "20", "Pixel number to pad with zeros for potential field."},
@@ -123,6 +130,7 @@ ModuleArgs_t module_args[] =
     {ARG_FLOAT, "AMBTFCTR", "0.990", "Input factor to reduce temperature (0<tfactr<1)."},
     {ARG_END}
 };
+
 
 /* ##### Prototypes for external Fortran functions ##### */
 extern void ambig_(int *geometry,
@@ -144,17 +152,17 @@ extern void ambig_(int *geometry,
 
 int DoIt(void)
 {
+
+	char ambcodev[50];
+	sprintf(ambcodev,"%s %s", module_name, version_id);
+
+	int status = DRMS_SUCCESS;
+	char *inQuery, *outQuery;
+	DRMS_RecordSet_t *inRS, *outRS;
+ 	int irec, nrecs;
+	DRMS_Record_t *inRec, *outRec;
 	
-    char ambcodev[50];
-    sprintf(ambcodev,"%s %s", module_name, version_id);
-	
-    int status = DRMS_SUCCESS;
-    char *inQuery, *outQuery;
-    DRMS_RecordSet_t *inRS, *outRS;
-    int irec, nrecs;
-    DRMS_Record_t *inRec, *outRec;
-	
-    int nseg = 10;
+	int nseg = 10;
     char *segName[10] = {"field", "inclination", "azimuth", "alpha_mag", 
 		"field_err", "inclination_err", "alpha_err", 
 		"field_inclination_err", "field_alpha_err", "inclination_alpha_err"};
@@ -166,22 +174,14 @@ int DoIt(void)
     // Link
     DRMS_Link_t *magLink;
 	
-    // Bitmap mask, comes with patch, from mask data series for full disk
-    // Read in as char *mask, converted to int *bitmap later
-    // Query for mask data created from series name and time
-    char *trec_str = NULL;
-    DRMS_Segment_t *maskSeg;
+	int useMask, useMask0;		// user specified & for each record
+	double *noiseMask = NULL;		// full disk mask; real size mask
+	
+	DRMS_Segment_t *maskSeg;		// this is actually bitmap
     DRMS_Array_t *maskArray;
     char *mask;
-    char harpflag;
+	char harpflag;
     int mask_id, harpnum;	// id of main feature identified in patch
-
-	// For full disk
-	char *maskName, *maskQuery;
-	DRMS_RecordSet_t *maskRS;
-    DRMS_Record_t *maskRec;
-	int useMask;
-	float *noiseMask;
 	
     int geometry, weak;
     int npad, nap, ntx, nty, seed, neq;
@@ -194,8 +194,9 @@ int DoIt(void)
     int nx, ny, nxny, nx0, ny0, nxny0, nxnye, nxnyg, nerode, ngrow;
 	
     TIME t_rec;
-	double obs_vr;
-	int vr_min, vr_max;
+	float obs_vr;		// radial speed
+//	int vr_min, vr_max;
+	float x0, y0;		// disk center, plate scale
 	
     float radius, xcen, ycen;  // Pointing information to be computed and passed to ambig
     float crpix1, crpix2, cdelt1, cdelt2;  // Keywords
@@ -230,17 +231,17 @@ int DoIt(void)
     double ct0, ct1, ct;
     wt0 = getwalltime();
     ct0 = getcputime(&ut0, &st0);
-	
-	
-	/* cmdparams defined in jsoc_main.h:  extern CmdParams_t cmdparams; */
-	
-    /* Get parameters */
+
+	/* Get parameters */
     inQuery = (char *)params_get_str(&cmdparams, "in");
     outQuery = (char *)params_get_str(&cmdparams, "out");
     verbflag = params_get_int(&cmdparams, "VERB");
     geometry = params_get_int(&cmdparams, "AMBGMTRY");
-	maskName = (char *)params_get_str(&cmdparams, "mask");
-	//    weak = params_get_int(&cmdparams, "AMBWEAK");
+	useMask = !(params_isflagset(&cmdparams, "l"));
+	ksig = params_get_int(&cmdparams, "ksig");
+    offset = params_get_int(&cmdparams, "offset");
+	
+//	weak = params_get_int(&cmdparams, "AMBWEAK");
 	weak = 1;		// Mar 21 2012 set to be constant as now we compute all thress options
     nerode = params_get_int(&cmdparams, "AMBNEROD");
     ngrow = params_get_int(&cmdparams, "AMBNGROW");
@@ -255,8 +256,6 @@ int DoIt(void)
     lambda = params_get_float(&cmdparams, "AMBLMBDA");
     tfac0 = params_get_float(&cmdparams, "AMBTFCT0");
     tfactr = params_get_float(&cmdparams, "AMBTFCTR");
-    ksig = params_get_int(&cmdparams, "ksig");
-    offset = params_get_int(&cmdparams, "offset");
 	
     /* Check parameters */
     if (nap > npad) {nap = npad; SHOW("nap set to npad\n");}
@@ -279,98 +278,75 @@ int DoIt(void)
     /* Create output */
     outRS = drms_create_records(drms_env, nrecs, outQuery, DRMS_PERMANENT, &status);
     if (status) DIE("Output recordset not created");
-	
-	/* Find mask for full disk, if failed, use default linear scale */
-	// This is for now. Later for each record we need to query according to the velocity
-    maskRS = drms_open_records(drms_env, maskName, &status);
-    if (status) {
-		useMask = 0;
-	} else {
-		useMask = 1;
-	/*
-		maskRec = maskRS->records[0];			// this is for now
-		// Read the mask array
-		maskSeg = drms_segment_lookup(maskRec, "mask");
-		maskArray = drms_segment_read(maskSeg, DRMS_TYPE_FLOAT, &status);
-		noiseMask = (float *)maskArray->data;
-	 */
-		SHOW("Use noise mask\n");
-		drms_close_records(maskRS, DRMS_FREE_RECORD);
-	}
-	
-    /* Do this for each record */
+
+	/* Do this for each record */
     for (irec = 0; irec < nrecs; irec++) {
-		
-        /* Measure time */
+	
+		/* Measure time */
         if (verbflag) {
             wt1 = getwalltime();
             ct1 = getcputime(&ut1, &st1);
             printf("processing record %d...\n", irec);
         }
-        
-        /* Input record and data */
+		
+		/* Input record and data */
         inRec = inRS->records[irec];
 		
-		/* If specified, look for mask record */
-		if (useMask) {
-			obs_vr = drms_getkey_double(inRec, "OBS_VR", &status);
-			if (status) {SHOW("Velocity not found, record skipped.\n"); continue;}
-		//	printf("%f\n",obs_vr);
-			//
-			maskQuery = (char *) calloc(100, sizeof(char));
-			sprintf(maskQuery, "%s[][][? VR_MIN<=%f ?][? VR_MAX>%f ?]", maskName, obs_vr, obs_vr);
-			printf("%s\n",maskQuery);
-			maskRS = drms_open_records(drms_env, maskQuery, &status);
-			if (status || maskRS->n == 0) {SHOW("Mask corresponding to given velocity not found, record skipped.\n"); free(maskQuery); continue;}
-			//
-			maskRec = maskRS->records[0];			// use the first record that matches
-			// Read the mask array
-			maskSeg = drms_segment_lookup(maskRec, "mask");
-			maskArray = drms_segment_read(maskSeg, DRMS_TYPE_FLOAT, &status);
-			noiseMask = (float *)maskArray->data;
-			vr_min = drms_getkey_int(maskRec, "VR_MIN", &status);
-			vr_max = drms_getkey_int(maskRec, "VR_MAX", &status);
-			printf("Use mask record with VR_MIN: %d, VR_MAX: %d.\n", vr_min, vr_max);
-			free(maskQuery);
-		}
-        
-        /* Processing keywords */
-		
+		/* Processing keywords */
 		t_rec = drms_getkey_time(inRec, "T_REC", &status);
-		
         crota2 = drms_getkey_float(inRec, "CROTA2", &status);	// rotation
         sina = sin(crota2 * DTOR); 
         cosa = cos(crota2 * DTOR);
         cdelt = drms_getkey_float(inRec, "CDELT1", &status);	// in arcsec, assuming dx=dy
-		
         rsun_ref = drms_getkey_double(inRec, "RSUN_REF", &status);
         if (status) rsun_ref = 6.96e8;
         dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &status);
 		radius = asin(rsun_ref / dsun_obs) * Rad2arcsec / cdelt;
-		
-        /* Set harp flag based on whether a HARPNUM is found */
-		
+
+		/* Set harp flag based on whether a HARPNUM is found */
         harpnum = drms_getkey_int(inRec, "HARPNUM", &status);	// HARP number
 		// Changed Jun 28 by Xudong
-		if (harpnum == DRMS_MISSING_INT)
+		if (harpnum == DRMS_MISSING_INT) {
 			harpflag = 0;
-		else
+		}
+		else {
 			harpflag = 1;
-		
+		}
+		status = 0;
 		printf("harpflag=%d\n",harpflag);
 		
+		/* If specified, obtain full-disk noise mask */
 		
+		useMask0 = useMask && (!harpflag);		// no noise mask for harp now
+		if (useMask0) {
+			obs_vr = drms_getkey_float(inRec, "OBS_VR", &status);
+			printf("status=%d, obs_vr=%f\n",status, obs_vr);
+			if (harpflag) x0 = drms_getkey_double(inRec, "IMCRPIX1", &status)-1.;
+				else x0 = drms_getkey_double(inRec, "CRPIX1", &status)-1.;
+			if (harpflag) y0 = drms_getkey_double(inRec, "IMCRPIX2", &status)-1.;
+				else y0 = drms_getkey_double(inRec, "CRPIX2", &status)-1.;
+			noiseMask = (double *) (malloc(FOURK2 * sizeof(double)));
+			/* Create the full disk mask using Yang's code, TBD */
+			/****************************************************/
+			if (createMask(obs_vr, radius, x0, y0, noiseMask)) {		// error
+				if (noiseMask) free(noiseMask); noiseMask = NULL;
+				useMask0 = 0; continue;
+			}
+			/****************************************************/
+		}
+		
+printf("here\n");
+
         /* Depending on whether it's a patch or not, read in the
 		 appropriate keywords and data segments. */
 		
         if (harpflag) {
-			/* Patch case */
             // If unspecified, set geometry based on patch size
             if (geometry == 0) {
-                minlon = drms_getkey_float(inRec, "MINLON", &status);
-                minlat = drms_getkey_float(inRec, "MINLAT", &status);
-                maxlon = drms_getkey_float(inRec, "MAXLON", &status);
-                maxlat = drms_getkey_float(inRec, "MAXLAT", &status);
+                minlon = drms_getkey_float(inRec, "LON_MIN", &status);
+                minlat = drms_getkey_float(inRec, "LAT_MIN", &status);
+                maxlon = drms_getkey_float(inRec, "LON_MAX", &status);
+                maxlat = drms_getkey_float(inRec, "LAT_MAX", &status);
                 if (maxlon - minlon < 20. && maxlat - minlat < 20.) {
                     geometry = 1;
                     printf("using planar geometry\n");
@@ -379,38 +355,27 @@ int DoIt(void)
                     printf("using spherical geometry\n");
                 }
             }
-			
             // Read the mask array; no longer used
             maskSeg = drms_segment_lookup(inRec, "bitmap");		// from segment, for patch
-//			maskArray = drms_segment_read(maskSeg, DRMS_TYPE_CHAR, &status);
-//            mask = (char *)maskArray->data;
-//            mask_id = drms_getkey_int(inRec, "MASK", &status);		// main AR in patch
-			
-            // Get array dimensions from mask array.
-            nx0 = maskSeg->axis[0]; ny0 = maskSeg->axis[1];
+            nx0 = maskSeg->axis[0]; ny0 = maskSeg->axis[1];		// Get array dimensions from mask array.
             nxny0 = nx0 * ny0;
-			
             // Pointing information.
             crvalx = drms_getkey_float(inRec, "IMCRVAL1", &status);	// center of solar disc in arcsec
             crvaly = drms_getkey_float(inRec, "IMCRVAL2", &status);
             crpix1 = drms_getkey_float(inRec, "IMCRPIX1", &status);	// disk center in ccd, original
             crpix2 = drms_getkey_float(inRec, "IMCRPIX2", &status);
-			
             // Coordinates of cut out rectangle
             ll0[0] = drms_getkey_float(inRec, "CRPIX1", &status) - 1;	// lower left corner
             ll0[1] = drms_getkey_float(inRec, "CRPIX2", &status) - 1;
             ur0[0] = ll0[0] + nx0 - 1;					// upper right corner
             ur0[1] = ll0[1] + ny0 - 1;
-			
             // Pad the actual patch
             nx = nx0 + 2*npad;
             ny = ny0 + 2*npad;
-			
             ll[0] = ll0[0] - npad;
             ll[1] = ll0[1] - npad;
             ur[0] = ur0[0] + npad;
             ur[1] = ur0[1] + npad;
-			
             // Ensure that this stays within the image
             if (ll[0] < 0) {
                 nx = nx + ll[0];
@@ -429,8 +394,7 @@ int DoIt(void)
                 ur[1] = 4095;
             }
             nxny = nx * ny;
-            printf("nx0=%d, ny0=%d\n", nx0, ny0);
-			
+//            printf("nx0=%d, ny0=%d\n", nx0, ny0);
             // Different pointing information depending on geometry
             // Added by G. Barnes Aug 9 2011
             if (geometry == 1) {
@@ -443,14 +407,10 @@ int DoIt(void)
 				xcen = PIX_X(0.0,0.0) - (float)ll[0];
 				ycen = PIX_Y(0.0,0.0) - (float)ll[1];
             }
-			
-			
             // Find segments and read in data
             for (i = 0; i < nseg; i++) {
                 inSeg[i] = drms_segment_lookup(inRec, segName[i]);
-				
                 inArray[i] = drms_segment_readslice(inSeg[i], DRMS_TYPE_FLOAT, ll, ur, &status);
-				
                 if (status) {
                     for (j = 0; j <= i; j++)
 						drms_free_array(inArray[i]);
@@ -458,7 +418,6 @@ int DoIt(void)
                 }
                 inData[i] = (float *)inArray[i]->data;
             }
-            
             // Jun 22 Xudong
 #if QUALMAP==1            
             inSeg_qual = drms_segment_lookup(inRec, "qual_map");
@@ -478,30 +437,24 @@ int DoIt(void)
                 }
             }
 #endif
-            
-        } else {
+        }		// harp case done
+		else {
             /* Full disk case */
             if (geometry != 2) geometry = 2;	// force spherical geometry for full disk
-            
             // added by X. Sun, to be consistent with harp case
 			i0 = 0; j0 = 0;
 			ll0[0] = ll0[1] = ll[0] = ll[1] = 0;
 			ur0[0] = ur0[1] = ur[0] = ur[1] = 0;
-			
             crvalx = drms_getkey_float(inRec, "CRVAL1", &status);	// center of solar disc in arcsec
             crvaly = drms_getkey_float(inRec, "CRVAL2", &status);
             crpix1 = drms_getkey_float(inRec, "CRPIX1", &status);	// disk center in ccd, original
             crpix2 = drms_getkey_float(inRec, "CRPIX2", &status);
-			
             xcen = PIX_X(0.0,0.0);
             ycen = PIX_Y(0.0,0.0);
-			
             // Find segments and read in data
             for (i = 0; i < nseg; i++) {
                 inSeg[i] = drms_segment_lookup(inRec, segName[i]);
-				
                 inArray[i] = drms_segment_read(inSeg[i], DRMS_TYPE_FLOAT, &status);
-				
                 if (status) {
                     for (j = 0; j <= i; j++)
 						drms_free_array(inArray[i]);
@@ -509,14 +462,12 @@ int DoIt(void)
                 }
                 inData[i] = (float *) inArray[i]->data;
             }
-            
             // Jun 22 Xudong
 #if QUALMAP==1            
             inSeg_qual = drms_segment_lookup(inRec, "qual_map");
             inArray_qual = drms_segment_read(inSeg_qual, DRMS_TYPE_INT, &status);
             if (status) DIE("Segment reading error \n");
             inData_qual = (int *) inArray_qual->data;
-            
             inSeg_conf = drms_segment_lookup(inRec, "confid_map");
             inArray_conf = drms_segment_read(inSeg_conf, DRMS_TYPE_CHAR, &status);
             if (status) DIE("Segment reading error \n");
@@ -526,18 +477,23 @@ int DoIt(void)
             nx = inArray[0]->axis[0]; ny = inArray[0]->axis[1];
             nxny = nx * ny;
             nx0 = nx; ny0 = ny; nxny0 = nxny;
-        }
-        printf("nx=%d, ny=%d\n", nx, ny);
-        printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
+        }		// full disk case done
+//        printf("nx=%d, ny=%d\n", nx, ny);
+//        printf("xcen=%f, ycen=%f\n", xcen, ycen); fflush(stdout);
+
+		printf("ll=[%d,%d], ur=[%d,%d], nx=%d, ny=%d\n", ll[0], ll[1], ur[0], ur[1], nx, ny);
+		printf("ll0=[%d,%d], ur0=[%d,%d], nx0=%d, ny0=%d\n", ll0[0], ll0[1], ur0[0], ur0[1], nx0, ny0);
+		printf("radius=%f, xcen=%f, ycen=%f\n", radius, xcen, ycen);
 		
-        // Allocate arrays to pass to ambig()
+		
+		// Allocate arrays to pass to ambig()
         // Re-created for each record as patch could have different dimensions
         Bx = (float *) malloc(nxny * sizeof(float));
         By = (float *) malloc(nxny * sizeof(float));
         Bz = (float *) malloc(nxny * sizeof(float));
         dBt = (float *) malloc(nxny * sizeof(float));
-		
-        //
+
+		//
         // Parse inData, and compute Bx,By,Bz along the way
         //
 		
@@ -594,7 +550,7 @@ int DoIt(void)
         }
         printf("Arrays read. \n");
 		
-        /* Free input arrays */
+		/* Free input arrays */
         for (i = 0; i < nseg; i++) {
 			drms_free_array(inArray[i]);
         }
@@ -602,34 +558,26 @@ int DoIt(void)
 		/* Create bitmap, with different methods depending on whether */
         /* it's a patch or full disk */
 		
-		if (harpflag) {
-			/* Patch case */
+		if (harpflag) {		// harp
             bitmap = (int *)calloc(nxny, sizeof(int));
-            /* bitmap no longer being used; all pixels treated the same
-			 for (i = 0; i < nxny; i++) {
-			 // bitmap[i] = (mask[i] == mask_id) ? 1 : 0;
-			 } */ 
+            /* bitmap no longer being used; all pixels treated the same */
             // only pixels in unpadded rectangle are disambiguated
             // XXXX add one extra pixel to account for one-sided differences?
             i0 = ll0[0] - ll[0];// i < ur[0] - ur0[0]; i++ 
             j0 = ll0[1] - ll[1];// j < ur[1] - ur0[1]; j++
             for (i = i0; i < nx - ur[0] + ur0[0]; i++) {
                 for (j = j0; j < ny - ur[1] + ur0[1]; j++) {
-					bitmap[i + j*nx] = 1;
+					bitmap[i + j*nx] = 1;						// Question: what to do when we have noise mask?
                 }
             }
-//            drms_free_array(maskArray);
-        } else {
-			/* Full disk case */
-			
-            // Construct bitmap based on transverse field strength and distance from disk center.
+        } else {			// full disk
             bitmap = (int *)calloc(nxny, sizeof(int));
             rad2 = radius * radius;
-			if (useMask) {						// Added Mar 27 2012
+			if (useMask0) {						// Added Mar 27 2012
 				for (i = 0; i < nxny; i++) {
 					bitmap[i] = (sqrt(Bx[i] * Bx[i] + By[i] * By[i] + Bz[i] * Bz[i]) > (noiseMask[i] * ksig + offset)) ? 1 : 0;
 				}
-			} else {
+			} else {  // Construct bitmap based on transverse field strength and distance from disk center.
 				for (i = 0; i < nxny; i++) {
 					j = i / nx;
 					xx = i - j * nx - xcen + 1;
@@ -651,7 +599,6 @@ int DoIt(void)
             for (i = 0; i < nxny; i++) {
 				if (bitmap[i] == 0) {
 					j = i + nerode * (nx + 1 + 2 * (i / nx + nerode));
-					
 					erodemap[j - 2 * nerode - nx - 1] = 0;
 					erodemap[j - 2 * nerode - nx] = 0;
 					erodemap[j - 2 * nerode - nx + 1] = 0;
@@ -683,16 +630,14 @@ int DoIt(void)
             for (i = 0; i < nxny; i++) {
 				bitmap[i] = growmap[i + (nerode + ngrow) * (nx + 1 + 2 * (i / nx + nerode + ngrow))];
             }
-			
-			
-        }
+        }		// end creating noise bitmap
 		
-        probBa = (float *) calloc(nxny, sizeof(float));
+		free(erodemap); free(growmap);
 		
-		
+		probBa = (float *) calloc(nxny, sizeof(float));
+
 		/* Before Bx, By, Bz change, find the radial acute solution */
 		// Added Mar 21
-		
 		int index, index1;
 		char *ambig_radial = (char *) calloc(nxny0, sizeof(char));		// solution for radial acute
 		double bz0, bz1;		// two versions of radial, zonal and meridional field
@@ -704,7 +649,6 @@ int DoIt(void)
 		double asd = asin(rsun_ref / dsun_obs);
 		double rho, sinlat, coslat, sig, mu, chi;
 		double a31, a32, a33;
-		
 		for (i = 0; i < nx0; i++) {
 			for (j = 0; j < ny0; j++) {
 				index = i + j * nx0;
@@ -723,12 +667,10 @@ int DoIt(void)
 				a33 =  cos(lat) * cos(latc) * cos(lon - lonc) + sin(lat) * sin(latc);
 				bz0 = a31 * Bx[index1] + a32 * By[index1] + a33 * Bz[index1];
 				bz1 = - a31 * Bx[index1] - a32 * By[index1] + a33 * Bz[index1];
-				//
 				ambig_radial[index] = (fabs(bz0) < fabs(bz1)) ? 1 : 0;
             }
         }
-		
-		
+
 		
         /* This is the working part */
 		
@@ -755,13 +697,13 @@ int DoIt(void)
 		
 		printf("nx=%d, ny=%d\n", nx0, ny0);
 		printf("i0=%d, j0=%d\n", i0, j0);
+
 		
 		// Updated Oct 12, confidence is now char
         confidence = (char *) calloc(nxny0, sizeof(char));
         ambig_flag = (char *) calloc(nxny0, sizeof(char));
 		
         /* Flag pixels for which the azimuth angle needs to be changed */
-		
         for (i = 0; i < nx0; i++) {
             for (j = 0; j < ny0; j++) {
 				index = i + j * nx0;
@@ -774,7 +716,6 @@ int DoIt(void)
         }
 		
 		/* The above solution is for potential only, now update the random solution as second bit */
-		
 		char pot;		// result from potential
 		char r;
 		srand((unsigned)time(NULL));	// might not be the best random number generator
@@ -792,7 +733,6 @@ int DoIt(void)
 		}
 		
 		/* Update the radial acute solution as third bit */
-		
 		for (i = 0; i < nx0; i++) {
             for (j = 0; j < ny0; j++) {
 				index = i + j * nx0;
@@ -804,9 +744,9 @@ int DoIt(void)
 				}
 			}
 		}
-		
 		free(ambig_radial);
-        
+		
+		
         /* Bit maps */
         // Jun 22 Xudong
 #if QUALMAP==1 
@@ -918,18 +858,18 @@ int DoIt(void)
         drms_setkey_int(outRec, "DATAVALS", outsz - nancount);
         drms_setkey_int(outRec, "MISSVALS", nancount);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.12 2012/05/08 19:11:21 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.13 2012/09/07 03:25:13 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
 			drms_setkey_int(outRec, "USEMASK", 1);
-			drms_setkey_string(outRec, "MASKINFO", maskQuery);
-      drms_setkey_int(outRec, "KSIG", ksig);
-      drms_setkey_int(outRec, "C_NOISE", offset);
+//			drms_setkey_string(outRec, "MASKINFO", maskQuery);
+			drms_setkey_int(outRec, "KSIG", ksig);
+			drms_setkey_int(outRec, "C_NOISE", offset);
 		} else {
-  		drms_setkey_int(outRec, "USEMASK", 0);
-      drms_setkey_int(outRec, "KSIG", 0);
-      drms_setkey_int(outRec, "C_NOISE", offset);
+			drms_setkey_int(outRec, "USEMASK", 0);
+			drms_setkey_int(outRec, "KSIG", 0);
+			drms_setkey_int(outRec, "C_NOISE", offset);
 		}
 		
         /* Set link */
@@ -945,13 +885,10 @@ int DoIt(void)
             }
         }
 		
-		/* Close mask */
-		if (useMask) {		// If it gets here the mask record set is not empty
-			drms_free_array(maskArray);
-			drms_close_records(maskRS, DRMS_FREE_RECORD);
-		}
+		// Free mask
+		if (noiseMask) free(noiseMask); noiseMask = NULL;
 		
-        /* Time measure */
+		/* Time measure */
         if (verbflag) {
             wt = getwalltime();
             ct = getcputime(&ut, &st);
@@ -963,11 +900,12 @@ int DoIt(void)
         free(Bx); free(By); free(Bz); free(dBt);  // ELW20100226 - mainly for sanity
         if (harpflag) free(inData_conf);
         if (bitmap != NULL) { free(bitmap); bitmap = NULL; }
-        if (trec_str != NULL) { free(trec_str); trec_str = NULL; }
+		free(probBa);
 		
-    }
-	
-    drms_close_records(inRS, DRMS_FREE_RECORD);
+
+	}
+
+	drms_close_records(inRS, DRMS_FREE_RECORD);
 	
     drms_close_records(outRS, DRMS_INSERT_RECORD);
 	
@@ -977,8 +915,7 @@ int DoIt(void)
         printf("total time spent: %.2f ms wall time, %.2f ms cpu time\n", 
 			   wt - wt0, ct - ct0);
     }
-	
-	
-    
+
     return(DRMS_SUCCESS);
+
 }
