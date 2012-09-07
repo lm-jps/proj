@@ -630,9 +630,10 @@ printf("here\n");
             for (i = 0; i < nxny; i++) {
 				bitmap[i] = growmap[i + (nerode + ngrow) * (nx + 1 + 2 * (i / nx + nerode + ngrow))];
             }
+            
+            		free(erodemap); free(growmap);
         }		// end creating noise bitmap
 		
-		free(erodemap); free(growmap);
 		
 		probBa = (float *) calloc(nxny, sizeof(float));
 
@@ -858,7 +859,7 @@ printf("here\n");
         drms_setkey_int(outRec, "DATAVALS", outsz - nancount);
         drms_setkey_int(outRec, "MISSVALS", nancount);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.13 2012/09/07 03:25:13 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.14 2012/09/07 04:19:10 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
