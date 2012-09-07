@@ -1838,8 +1838,9 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec)
    drms_setkey_string(outRec, "DATE", timebuf);
 
    // set cvs commit version into keyword HEADER
-   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.3 2012/09/07 02:14:02 xudong Exp $");
-   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
+   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.4 2012/09/07 22:08:36 xudong Exp $");
+//   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
+	status = drms_setkey_string(outRec, "CODEVER7", cvsinfo);
 
 };
 
