@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/imagefromchebyshev.c"
+#include "imagefromchebyshev.c"
 
 /* cmd-line parameters */
 #define kRecSetIn       "in"
