@@ -155,7 +155,6 @@ char *module_name= "HMI_observables"; //name of the module
 
 #define Q_ACS_ECLP 0x2000 //eclipse keyword for the lev1 data
 #define Q_MISSING_SEGMENT 0x80000000 //missing image segment for lev1 record 
-#define CALVER_DEFAULT 0 //both default and missing values of CALVER64
 
 //definitions for the QUALITY keyword for the lev1.5 records
 
@@ -1064,7 +1063,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.35 2012/08/31 16:28:43 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.33 2012/04/10 22:18:30 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1301,8 +1300,6 @@ int DoIt(void)
   int *QUALITYlev1=NULL;
   int COSMICCOUNT=0;
 
-  long long *CALVER32=NULL;
-
   DRMS_RecordSet_t *recLev1  = NULL;                                 //records for the level 1 data
   DRMS_RecordSet_t *recLev1d = NULL;                                 //records for the level 1d data
   DRMS_RecordSet_t *recLev1p = NULL;                                 //record for the level 1p data
@@ -1405,9 +1402,6 @@ int DoIt(void)
   char *COEFF2S           = "COEFF2";
   char *COEFF3S           = "COEFF3";
   char *COUNTS            = "COUNT";
-  char *CALVER32S         = "CALVER32";
-  char *CALVER64S         = "CALVER64";
-
 
   //KEYWORDS FOR OUTPUT LEVEL 1d, 1p, AND 1.5 DATA
   char *TRECS             = "T_REC";                                   //"nominal" slot time and time at which the level 1 data are temporally interpolated
@@ -2111,12 +2105,6 @@ int DoIt(void)
 	      printf("Error: memory could not be allocated to QUALITYin\n");
 	      return 1;//exit(EXIT_FAILURE);
 	    }
-	  CALVER32 = (long long *)malloc(nRecs1*sizeof(long long)); 
- 	  if(CALVER32 == NULL)
-	    {
-	      printf("Error: memory could not be allocated to CALVER32\n");
-	      return 1;//exit(EXIT_FAILURE);
-	    }
 
 
 
@@ -2247,7 +2235,8 @@ int DoIt(void)
 	      NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[31]);
 	      if(statusA[31] != DRMS_SUCCESS) NBADPERM[i]=-1;
 	      QUALITYin[i]  = drms_getkey_int(recLev1->records[i] ,QUALITYS          ,&statusA[32]);
-	      if(statusA[32] != DRMS_SUCCESS) KeywordMissing[i]=1;
+
+
 	      //WE TEST WHETHER THE DATA SEGMENT IS MISSING
 	      if( (QUALITYin[i] & Q_MISSING_SEGMENT) == Q_MISSING_SEGMENT)
 		{
@@ -2255,18 +2244,6 @@ int DoIt(void)
 		  SegmentRead[i]= -1;
 		}
 
-	      CALVER32[i]   = (long long)drms_getkey_int(recLev1->records[i] ,CALVER32S,&statusA[33]);
-	      if(statusA[33] != DRMS_SUCCESS)
-		{
-		  CALVER32[i]=CALVER_DEFAULT; //following Phil's email of August 28, 2012
-		  KeywordMissing[i]=1;
-		}
-	      if( CALVER32[i] != CALVER32[0] ) //all the CALVER32 must be the same
-		{
-		  printf("Error: CALVER32[%d] is different from CALVER32[0]\n",i);
-		  return 1;
-		}
-		
 
 	      //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	      
@@ -2292,7 +2269,7 @@ int DoIt(void)
 	      //WE TEST WHETHER ANY IMPORTANT KEYWORD ARE MISSING
 	      TotalStatus=0;
 	      for(ii=0;ii<=30;++ii) TotalStatus+=statusA[ii];
-	      if(TotalStatus != 0 || !strcmp(IMGTYPE[i],"DARK") || KeywordMissing[i] != 0)
+	      if(TotalStatus != 0 || !strcmp(IMGTYPE[i],"DARK"))
 		{
 		  printf("Error: the level 1 filtergram index %d is missing at least one keyword\n",i);
 
@@ -3947,10 +3924,9 @@ int DoIt(void)
 		      if(camera  == 1) strcpy(DATEOBS,"HMI_SIDE1");
 		      if(camera  == 3) strcpy(DATEOBS,"HMI_COMBINED");
 		      statusA[47]= drms_setkey_string(recLev1d->records[k],INSTRUMES,DATEOBS); 
-		      statusA[48]= drms_setkey_longlong(recLev1d->records[k],CALVER64S,CALVER32[0]); 
 
 		      TotalStatus=0;
-		      for(i=0;i<49;++i) TotalStatus+=statusA[i];
+		      for(i=0;i<48;++i) TotalStatus+=statusA[i];
 		      if(TotalStatus != 0)
 			{
 			  for(ii=0;ii<49;++ii) if(statusA[ii] != 0) printf(" %d ",ii);

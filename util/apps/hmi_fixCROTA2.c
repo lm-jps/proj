@@ -43,7 +43,7 @@ ModuleArgs_t module_args[] =
 
 #define     CAM1_DELTA	(0.0135 - 0.082596) // i.e. change 180.082596 to 180.0135 by adding CAM1_DELTA to INST_ROT and  CROTAT2
 #define     CAM2_DELTA	(-0.0702)           // i.e. change 180.0 to 179.9298 by adding CAM1_DELTA to INST_ROT and  CROTAT2
-#define     BLOCKSIZE   (4000)             // approx number of records to process in one call, will be rounded down to nice time.
+#define     BLOCKSIZE   (25000)             // approx number of records to process in one call, will be rounded down to nice time.
 #define     HOUR        (3600)
 #define     DAY         (86400)
 
@@ -95,9 +95,6 @@ int DoIt(void)
   hasCALVER64 = drms_keyword_lookup(inTemplate, "CALVER64", 0) != NULL;
   hasCALVER32 = drms_keyword_lookup(inTemplate, "CALVER32", 0) != NULL;
 
-fprintf(stdout,"Series %s hasCALVER32=%d hasCALVER64=%d\n",dsSeries, hasCALVER32, hasCALVER64);
-fflush(stdout);
-
   if (strncmp(dsSeries, "hmi.lev1", 8) && !hasCALVER64)
     DIE("Must have non-linked CALVER64 keyword for products above lev1");
 
@@ -124,19 +121,13 @@ fflush(stdout);
     sprint_time(last, t_stop, pkey->info->unit, 0);
 
     sprintf(dsQuery, "%s[%s-%s]", dsSeries, first, last);
-fprintf(stdout,"Query %s ",dsQuery);
-fflush(stdout);
     
     inRS = drms_open_records(drms_env, dsQuery, &status);
     nrecs = inRS->n;
     if (status || nrecs == 0)
-      {
-      fprintf(stdout, " status=%d, no records found, skip this block\n",status);
-      fflush(stdout);
-      continue;
-      }
+      DIE("No records found");
   
-    outRS = drms_clone_records_nosums(inRS, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
+    outRS = drms_clone_records(inRS, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
     nrecs = outRS->n;
     if (status || nrecs == 0)
       DIE("No records cloned");
@@ -151,8 +142,8 @@ fflush(stdout);
       int quality, camera, instrot_status;
 
       quality = drms_getkey_int(rec, "QUALITY", &status);
-      // if (!status && quality < 0)
-        // continue;
+      if (!status && quality < 0)
+        continue;
 
       if (hasCALVER64)
         {
@@ -160,7 +151,6 @@ fflush(stdout);
         if ((calver64 & 0xF0) != 0)
           {
           fprintf(stdout, "Record previously processed, skip, first=%s, irec=%d\n", first, irec);
-          fflush(stdout);
           continue;
           }
         }
@@ -170,7 +160,6 @@ fflush(stdout);
         if ((calver32 & 0xF0) != 0)
           {
           fprintf(stdout, "Record previously processed, skip, first=%s, irec=%d\n", first, irec);
-          fflush(stdout);
           continue;
           }
         }
@@ -219,7 +208,6 @@ fflush(stdout);
       fprintf(stderr, "drms_close_records failure for first=%s\n", first);
 
     fprintf(stdout, "%s CROTA2 fixed for %s through %s\n", dsSeries, first, last);
-    fflush(stdout);
     } // end of time chunk loop
 
   return (DRMS_SUCCESS);

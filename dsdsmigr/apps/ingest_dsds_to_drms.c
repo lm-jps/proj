@@ -13,8 +13,6 @@
  *                     SCALE_CORRECTIONS = <drms series with scale corrections file>
  *              
  *  OUTPUT PARAMETERS: OUT = <drms series>
- * 
- *  FLAGS: 
  *
  *  EXAMPLE: 
  *  ingest_dsds_to_drms in=/SUM17/D231103541/D18885727/S00000 out=su_mbobra.test_vwv map=fd_test.map SCALE_CORRECTIONS=mdi.scale_corrections
@@ -42,8 +40,6 @@ char *module_name = "opendsrecs";
 #define BEYOND_TABLE_RANGE      (1)
 #define EPHEMERIS_GAP   (2)
 #define TRUNCATED_FIT   (3)
-
-
 
 ModuleArgs_t module_args[] =
 {
@@ -295,8 +291,6 @@ int keyNameCheck(char *name, char **fromname)
 
 int DoIt(void) 
    {
-   int errbufstat=setvbuf(stderr, NULL, _IONBF, BUFSIZ);
-   int outbufstat=setvbuf(stdout, NULL, _IONBF, BUFSIZ);
    int status = DRMS_SUCCESS;
    int SkipMissingFiles;
    int verbose;
@@ -351,6 +345,7 @@ int DoIt(void)
    //drms_segment_filename(inseg,infilepath);
    //printf("incoming filepath = %s\n", infilepath);
 
+
    for (iRec=0; iRec<nRecs; iRec++)
       {
       char *DataFile;
@@ -365,6 +360,7 @@ int DoIt(void)
       DRMS_Segment_t *inSeg, *outSeg;
       HIterator_t *outKey_last = NULL;
 //      DRMS_Link_t *outLink;
+
       /* create output series rec prototype */
       inRec = inRecSet->records[iRec];
       outRecSet = drms_create_records(drms_env, 1, outRecQuery, DRMS_PERMANENT, &status);
@@ -387,22 +383,17 @@ int DoIt(void)
 
         printf("incoming filepath = %s\n", filepath);
 
-    
 /* Check the polarisation status of the data. If the data has the string "_Vm_", then it is circularly polarized*/ 
-
-
 if (polflag && time_is_invalid(val) == 0 )
 {
 
-   char *val2     = drms_getkey_string(inRec,"DATAFILE",&status); 
-   char *val2test = strstr(val2,"_Vm_"); 
-   if (val2test == NULL) drms_setkey_string(outRec,"POLSTATE","LP"); 
-   else drms_setkey_string(outRec,"POLSTATE","CP"); 
-}  
+   char *val2     = drms_getkey_string(inRec,"DATAFILE",&status);
+   char *val2test = strstr(val2,"_Vm_");
+   if (val2test == NULL) drms_setkey_string(outRec,"POLSTATE","LP");
+   else drms_setkey_string(outRec,"POLSTATE","CP");
+}
 
-  // set cvs commit version into keyword HEADER
-   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.10 2012/09/12 00:10:51 mbobra Exp $");
-   status = drms_setkey_string(outRec, "HEADER", cvsinfo); 
+
 
 
 if (dpcflag)
@@ -518,6 +509,7 @@ else
           drms_setkey_int(outRec, "QUALITY", 0X80000000);
   	  val = drms_getkey_int(inRec, "DPC", &status);
 	  drms_setkey_int(outRec, "DPC", val);
+
 	  if (drms_keyword_lookup(outRec, "DATAVALS", 0))
 	    drms_setkey_int(outRec, "DATAVALS", 0);
           if (SkipMissingFiles)
@@ -732,7 +724,7 @@ if (!strcmp("/home/soi/CM/tables/calib/flat/fd/vers_1/", caltbls))
   calrecstring="mdi.caltables_intensity[fd_vers_1]";
 if (!strcmp("/home/soi/CM/tables/calib/flat/hr/", caltbls))
   calrecstring="mdi.caltables_intensity[hr_vers_1]";
-if (!strcmp("/home/soi/CM/tables/calib/flat/hr/vers_0/", caltbls))
+if (!strcmp("/home/soi/CM/tables/calib/flat/hr/vers_0", caltbls))
   calrecstring="mdi.caltables_intensity[hr_vers_0]";
 if (!strcmp("/home/soi/CM/tables/calib/obflat/vers_0/", caltbls))
   calrecstring="mdi.caltables_intensity[obflat_vers_0]";
@@ -778,9 +770,6 @@ if (!strcmp("/home/soi/CM/tables/calib/dop/orig/tune_5/", caltbls))
   calrecstring="mdi.caltables_doppler_orig[orig_tune_5]";
 if (!strcmp("/home/soi/CM/tables/calib/dop/orig/tune_6/", caltbls))
   calrecstring="mdi.caltables_doppler_orig[orig_tune_6]";
-if (!strcmp("NONE", caltbls))
-  calrecstring="NONE";
-
 drms_setkey_string(outRec, "CALTBLS", calrecstring); 
 }
 		

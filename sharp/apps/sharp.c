@@ -19,7 +19,6 @@
  *	Version:
  *		v0.0	Jul 02 2012
  *		v0.1	Jul 23 2012
- *              v0.2    Sep 04 2012
  *
  *	Notes:
  *		v0.0
@@ -32,7 +31,6 @@
  *		Fixed char I/O thanks to Art
  *		SW indices fixed
  *		Added doppler and continuum
- *              Added other keywords: HEADER (populated by cvs build version), DATE_B
  *
  *	Example:
  *	sharp "mharp=hmi.Mharp_720s[1404][2012.02.20_10:00]" \
@@ -566,17 +564,11 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	
 	// Get ephemeris
 
-	if (getEphemeris(mharpRec, &(mInfo.ephem))) {
-		SHOW("CEA: get ephemeris error\n");
-		return 1;
-	}
+	if (getEphemeris(mharpRec, &(mInfo.ephem))) return 1;
 	
 	// Find position
 	
-	if (findPosition(mharpRec, &mInfo)) {
-		SHOW("CEA: find position error\n");
-		return 1;
-	}
+	if (findPosition(mharpRec, &mInfo)) return 1;
 	
 	// Create xi_out, zeta_out array in mInfo:
 	// Coordinates to sample in original full disk image
@@ -592,48 +584,27 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	
 	// Mapping single segment: Mharp, etc.
 	
-	if (mapScaler(sharpRec, mharpRec, mharpRec, &mInfo, "magnetogram")) {
-		SHOW("CEA: mapping magnetogram error\n");
-		return 1;
-	}
-	if (mapScaler(sharpRec, mharpRec, mharpRec, &mInfo, "bitmap")) {
-		SHOW("CEA: mapping bitmap error\n");
-		return 1;
-	}
+	if (mapScaler(sharpRec, mharpRec, mharpRec, &mInfo, "magnetogram")) return 1;
+	if (mapScaler(sharpRec, mharpRec, mharpRec, &mInfo, "bitmap")) return 1;
 	printf("Magnetogram mapping done.\n");
 	
-	if (mapScaler(sharpRec, dopRec, mharpRec, &mInfo, "Dopplergram")) {
-		SHOW("CEA: mapping dopplergram error\n");
-		return 1;
-	}
+	if (mapScaler(sharpRec, dopRec, mharpRec, &mInfo, "Dopplergram")) return 1;
 	printf("Dopplergram mapping done.\n");
 	
-	if (mapScaler(sharpRec, contRec, mharpRec, &mInfo, "continuum")) {
-		SHOW("CEA: mapping continuum error\n");
-		return 1;
-	}
+	if (mapScaler(sharpRec, contRec, mharpRec, &mInfo, "continuum")) return 1;
 	printf("Intensitygram mapping done.\n");
 
-	if (mapScaler(sharpRec, bharpRec, mharpRec, &mInfo, "conf_disambig")) {
-		SHOW("CEA: mapping conf_disambig error\n");
-		return 1;
-	}
+	if (mapScaler(sharpRec, bharpRec, mharpRec, &mInfo, "conf_disambig")) return 1;
 	printf("Conf disambig mapping done.\n");
 
 	// Mapping vector B
 	
-	if (mapVectorB(sharpRec, bharpRec, &mInfo)) {
-		SHOW("CEA: mapping vector B error\n");
-		return 1;
-	}
+	if (mapVectorB(sharpRec, bharpRec, &mInfo)) return 1;
 	printf("Vector B mapping done.\n");
 	
 	// Mapping vector B errors
 	
-	if (mapVectorBErr(sharpRec, bharpRec, &mInfo)) {
-		SHOW("CEA: mapping vector B uncertainty error\n");
-		return 1;
-	}
+	if (mapVectorBErr(sharpRec, bharpRec, &mInfo)) return 1;
 	printf("Vector B error done.\n");
 	
 	// Keywords & Links
@@ -647,7 +618,6 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	if (bHarpLink) drms_link_set("BHARP", sharpRec, bharpRec);
 	
 	setKeys(sharpRec, bharpRec);		// Set all other keywords
-	drms_copykey(sharpRec, mharpRec, "QUALITY");		// copied from los records
 
 	// Space weather
 	
@@ -1484,10 +1454,7 @@ int createCutRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 			break;
 		}
 	}
-	if (iHarpSeg != nMharpSegs) {
-		SHOW("Cutout: segment number unmatch\n");
-		return 1;		// if failed
-	}
+	if (iHarpSeg != nMharpSegs) return 1;		// if failed
 	printf("Magnetogram cutout done.\n");
 	
 	// Cutout Doppler
@@ -1826,22 +1793,6 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec)
    copy_patch_keys(inRec, outRec);
    copy_geo_keys(inRec, outRec);
    copy_ambig_keys(inRec, outRec);
-
-   char timebuf[1024];
-   float UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
-   double val;
-   int status = DRMS_SUCCESS;
-
-   val = drms_getkey_double(inRec, "DATE",&status); 
-   drms_setkey_double(outRec, "DATE_B", val);
-   sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
-   drms_setkey_string(outRec, "DATE", timebuf);
-
-   // set cvs commit version into keyword HEADER
-   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.4 2012/09/07 22:08:36 xudong Exp $");
-//   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
-	status = drms_setkey_string(outRec, "CODEVER7", cvsinfo);
-
 };
 
 //

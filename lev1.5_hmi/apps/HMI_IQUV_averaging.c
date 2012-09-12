@@ -154,8 +154,6 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define DARK_SIDE   0   //SIDE CAMERA
 #define DARK_FRONT  1   //FRONT CAMERA
 
-#define CALVER_DEFAULT 0 // both the default and missing value of CALVER64
-
  //definitions for the QUALITY keyword for the lev1.5 records
 
 //SOME OR ALL OBSERVABLES WERE NOT PRODUCED AND THE REASON WHY
@@ -969,7 +967,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.26 2012/08/31 15:58:33 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.25 2012/04/10 22:18:57 couvidat Exp $");
 }
 
 
@@ -1215,8 +1213,6 @@ int DoIt(void)
   int  *QUALITYLEV1=NULL;
   int   COSMICCOUNT=0;
 
-  long long *CALVER32=NULL;
-
   float *image=NULL;                                                 //for gapfilling code
   float **images=NULL;                                               //for temporal interpolation function
   float **imagesi=NULL;
@@ -1291,8 +1287,6 @@ int DoIt(void)
   char *X0LFS             = "X0_LF";
   char *Y0LFS             = "Y0_LF";
   char *COUNTS            = "COUNT";
-  char *CALVER32S         = "CALVER32";
-  char *CALVER64S         = "CALVER64";
 
   //KEYWORDS FOR OUTPUT LEVEL 1p
   char *TRECS             = "T_REC";                                   //"nominal" slot time and time at which the level 1 data are temporally interpolated
@@ -1772,14 +1766,7 @@ int DoIt(void)
 	  return 1;//exit(EXIT_FAILURE);
 	}
       for(i=0;i<nRecs1;++i) QUALITYlev1[i]=0;
-      CALVER32 = (long long *)malloc(nRecs1*sizeof(long long)); 
-      if(CALVER32 == NULL)
-	{
-	  printf("Error: memory could not be allocated to CALVER32\n");
-	  return 1;//exit(EXIT_FAILURE);
-	}
-   
-
+      
       //reading some keyword values for all the open records (PUT MISSINGKEYWORD OR MISSINGKEYWORDINT IF THE KEYWORD IS MISSING) and
       //create an array IndexFiltergram with the record index of all the filtergrams with the wavelength WavelengthID
       //***********************************************************************************************************************
@@ -1894,26 +1881,13 @@ int DoIt(void)
 	  NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[31]);
 	  if(statusA[31] != DRMS_SUCCESS) NBADPERM[i]=-1;
 	  QUALITYin[i]  = drms_getkey_int(recLev1->records[i] ,QUALITYS          ,&statusA[32]);
-	  if(statusA[32] != DRMS_SUCCESS) KeywordMissing[i]=1;
+
 	  //WE TEST WHETHER THE DATA SEGMENT IS MISSING
 	  if( (QUALITYin[i] & Q_MISSING_SEGMENT) == Q_MISSING_SEGMENT)
 	    {
 	      statusA[32]=1;
 	      SegmentRead[i]= -1;
 	    }
-
-	  CALVER32[i]   = (long long)drms_getkey_int(recLev1->records[i] ,CALVER32S    ,&statusA[33]);
-	  if(statusA[33] != DRMS_SUCCESS)
-	    {
-	      CALVER32[i]=CALVER_DEFAULT; //following Phil's email of August 27, 2012
-	      KeywordMissing[i]=1;
-	    }
-	  if( CALVER32[i] != CALVER32[0] ) //all the CALVER32 must be the same
-	    {
-	      printf("Error: CALVER32[%d] is different from CALVER32[0]\n",i);
-	      return 1;
-	    }
-
 	  
 	  //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	  /*if(statusA[9] == DRMS_SUCCESS && statusA[16] == DRMS_SUCCESS && statusA[14] == DRMS_SUCCESS && statusA[22] == DRMS_SUCCESS && statusA[21] == DRMS_SUCCESS)
@@ -1932,7 +1906,7 @@ int DoIt(void)
 	  //Now we test whether any keyword is missing and we act accordingly
 	  TotalStatus=0;
 	  for(ii=0;ii<=30;++ii) TotalStatus+=statusA[ii];
-	  if(TotalStatus != 0 || !strcmp(IMGTYPE[i],"DARK") || KeywordMissing[i] != 0)  //at least one keyword is missing or the image is a dark frame
+	  if(TotalStatus != 0 || !strcmp(IMGTYPE[i],"DARK") )  //at least one keyword is missing or the image is a dark frame
 	    {
 	      printf("Error: the level 1 filtergram index %d is missing at least one keyword, or is a dark frame\n",i);
 	      for(iii=0;iii<=30;++iii) printf(" %d ",statusA[iii]);
@@ -3717,10 +3691,9 @@ int DoIt(void)
 	      if(camera  == 3) strcpy(DATEOBS,"HMI_COMBINED");
 	      statusA[42]= drms_setkey_string(recLev1p->records[timeindex],INSTRUMES,DATEOBS); 
 	      statusA[43]= drms_setkey_int(recLev1p->records[timeindex],HCAMIDS,CamId); 
-	      statusA[45]= drms_setkey_longlong(recLev1p->records[timeindex],CALVER64S,CALVER32[0]); 
 
 	      TotalStatus=0;
-	      for(i=0;i<46;++i) 
+	      for(i=0;i<45;++i) 
 	      if(TotalStatus != 0)
 		{
 		  printf("WARNING: could not set some of the keywords modified by the temporal interpolation subroutine for the level 1p data at target time %s\n",timeBegin2);
