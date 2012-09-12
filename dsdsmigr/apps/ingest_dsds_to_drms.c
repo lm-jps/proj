@@ -14,7 +14,10 @@
  *              
  *  OUTPUT PARAMETERS: OUT = <drms series>
  * 
- *  FLAGS: 
+ *  FLAGS: M =
+ *         v =
+ *         z =
+ *         p = 
  *
  *  EXAMPLE: 
  *  ingest_dsds_to_drms in=/SUM17/D231103541/D18885727/S00000 out=su_mbobra.test_vwv map=fd_test.map SCALE_CORRECTIONS=mdi.scale_corrections
@@ -401,7 +404,7 @@ if (polflag && time_is_invalid(val) == 0 )
 }  
 
   // set cvs commit version into keyword HEADER
-   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.10 2012/09/12 00:10:51 mbobra Exp $");
+   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.11 2012/09/12 20:42:59 mbobra Exp $");
    status = drms_setkey_string(outRec, "HEADER", cvsinfo); 
 
 
