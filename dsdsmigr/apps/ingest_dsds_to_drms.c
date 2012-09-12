@@ -43,6 +43,8 @@ char *module_name = "opendsrecs";
 #define EPHEMERIS_GAP   (2)
 #define TRUNCATED_FIT   (3)
 
+
+
 ModuleArgs_t module_args[] =
 {
      {ARG_STRING, kRecSetIn, kNOT_SPEC, "Input data series."},
@@ -293,6 +295,8 @@ int keyNameCheck(char *name, char **fromname)
 
 int DoIt(void) 
    {
+   int errbufstat=setvbuf(stderr, NULL, _IONBF, BUFSIZ);
+   int outbufstat=setvbuf(stdout, NULL, _IONBF, BUFSIZ);
    int status = DRMS_SUCCESS;
    int SkipMissingFiles;
    int verbose;
@@ -361,7 +365,6 @@ int DoIt(void)
       DRMS_Segment_t *inSeg, *outSeg;
       HIterator_t *outKey_last = NULL;
 //      DRMS_Link_t *outLink;
-
       /* create output series rec prototype */
       inRec = inRecSet->records[iRec];
       outRecSet = drms_create_records(drms_env, 1, outRecQuery, DRMS_PERMANENT, &status);
@@ -384,19 +387,22 @@ int DoIt(void)
 
         printf("incoming filepath = %s\n", filepath);
 
+    
 /* Check the polarisation status of the data. If the data has the string "_Vm_", then it is circularly polarized*/ 
+
+
 if (polflag && time_is_invalid(val) == 0 )
 {
 
-   char *val2     = drms_getkey_string(inRec,"DATAFILE",&status);
-   char *val2test = strstr(val2,"_Vm_");
-   if (val2test == NULL) drms_setkey_string(outRec,"POLSTATE","LP");
-   else drms_setkey_string(outRec,"POLSTATE","CP");
-}
+   char *val2     = drms_getkey_string(inRec,"DATAFILE",&status); 
+   char *val2test = strstr(val2,"_Vm_"); 
+   if (val2test == NULL) drms_setkey_string(outRec,"POLSTATE","LP"); 
+   else drms_setkey_string(outRec,"POLSTATE","CP"); 
+}  
 
   // set cvs commit version into keyword HEADER
-   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.9 2012/09/06 20:27:15 mbobra Exp $");
-   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
+   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.10 2012/09/12 00:10:51 mbobra Exp $");
+   status = drms_setkey_string(outRec, "HEADER", cvsinfo); 
 
 
 if (dpcflag)
@@ -512,7 +518,6 @@ else
           drms_setkey_int(outRec, "QUALITY", 0X80000000);
   	  val = drms_getkey_int(inRec, "DPC", &status);
 	  drms_setkey_int(outRec, "DPC", val);
-
 	  if (drms_keyword_lookup(outRec, "DATAVALS", 0))
 	    drms_setkey_int(outRec, "DATAVALS", 0);
           if (SkipMissingFiles)
@@ -773,6 +778,9 @@ if (!strcmp("/home/soi/CM/tables/calib/dop/orig/tune_5/", caltbls))
   calrecstring="mdi.caltables_doppler_orig[orig_tune_5]";
 if (!strcmp("/home/soi/CM/tables/calib/dop/orig/tune_6/", caltbls))
   calrecstring="mdi.caltables_doppler_orig[orig_tune_6]";
+if (!strcmp("NONE", caltbls))
+  calrecstring="NONE";
+
 drms_setkey_string(outRec, "CALTBLS", calrecstring); 
 }
 		
