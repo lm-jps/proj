@@ -97,8 +97,8 @@ int getAmbCode (char prob)
 
 // Wrapper for Yang's mask function
 
-int createMask(float obs_vr, float radius, float x0, float y0, double *noiseMask)
-{return noisemask(4096, 4096, (int)x0, (int)y0, (int)radius, obs_vr, noiseMask);}
+int createMask(TIME tobs, float obs_vr, float radius, float x0, float y0, double *noiseMask)
+{return noisemask(tobs, 4096, 4096, (int)x0, (int)y0, (int)radius, obs_vr, noiseMask);}
 
 //====================
 
@@ -319,6 +319,7 @@ int DoIt(void)
 		
 		useMask0 = useMask && (!harpflag);		// no noise mask for harp now
 		if (useMask0) {
+			TIME tobs = drms_getkey_time(inRec, "T_OBS", &status);
 			obs_vr = drms_getkey_float(inRec, "OBS_VR", &status);
 			printf("status=%d, obs_vr=%f\n",status, obs_vr);
 			if (harpflag) x0 = drms_getkey_double(inRec, "IMCRPIX1", &status)-1.;
@@ -328,7 +329,7 @@ int DoIt(void)
 			noiseMask = (double *) (malloc(FOURK2 * sizeof(double)));
 			/* Create the full disk mask using Yang's code, TBD */
 			/****************************************************/
-			if (createMask(obs_vr, radius, x0, y0, noiseMask)) {		// error
+			if (createMask(tobs, obs_vr, radius, x0, y0, noiseMask)) {		// error
 				if (noiseMask) free(noiseMask); noiseMask = NULL;
 				useMask0 = 0; continue;
 			}
@@ -859,7 +860,7 @@ printf("here\n");
         drms_setkey_int(outRec, "DATAVALS", outsz - nancount);
         drms_setkey_int(outRec, "MISSVALS", nancount);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.14 2012/09/07 04:19:10 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig.c,v 1.15 2012/09/17 13:41:15 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
