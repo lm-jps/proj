@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "imagefromchebyshev.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/imagefromchebyshev.c"
 
 /* cmd-line parameters */
 #define kRecSetIn       "in"
@@ -19,28 +19,44 @@
 #define kNOTSPECIFIED   "not specified"
 #define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status=%d\n", msg, status); return(status);}
 
-int noisemask(xDim, yDim, xcen, ycen, rsun, vrcenter, image) 
+int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image) 
     double *image;
     int xDim, yDim, xcen, ycen, rsun;
     float vrcenter;
+    TIME tobs;
  {
-
     CmdParams_t *params = &cmdparams;
     int valid, status = 0;
     DRMS_Segment_t *inSeg, *inSegfinal, *outSeg;
     DRMS_RecordSet_t *inRS, *inRSfinal, *outRS;
     DRMS_Record_t *inRec, *inRecfinal, *outRec;
     DRMS_Array_t *inArray, *outArray;
-    char *inQuery="su_yang.cheby_coef", *outQuery;
+    char *inQuery="hmi_test.lookup_ChebyCoef_BNoise", *outQuery;
     char *inRecQuery, *outRecQuery;
     char *inQueryfinal, *vr_start_str, *vr_stop_str;
-//    int xDim = 4096, yDim = 4096, order = 15;
+    char ttemp[64];
+    TIME ChangeTime1, ChangeTime2, ChangeTime3;
+    int MaskIndex = 0;
     int vr_start, vr_stop, order;
+    float vr_coef, weight;
     double *coef, *mask;
     int i, j, t, s, nrecs, ii, jj, k;
     int sunSize = 2 * rsun;  
 
-//    inQuery = (char *)params_get_str(&cmdparams, "su_yang.cheby_coef");
+    strcpy(ttemp, "2010.12.13_19:47:00_TAI");
+    ChangeTime1 = sscan_time(ttemp);
+
+    strcpy(ttemp, "2011.07.13_18:35:00_TAI");
+    ChangeTime2 = sscan_time(ttemp);
+
+    strcpy(ttemp, "2012.01.18_18:15:00_TAI");
+    ChangeTime3 = sscan_time(ttemp);
+
+    if (tobs<ChangeTime1) MaskIndex = 0;
+    if (tobs>ChangeTime1 && tobs<ChangeTime2) MaskIndex = 1;
+    if (tobs>ChangeTime2 && tobs<ChangeTime3) MaskIndex = 2;
+    if (tobs>ChangeTime3) MaskIndex = 3;
+
     vr_start = (int)(vrcenter - 50.0);
     vr_stop = (int)(vrcenter + 50.0);
     inQueryfinal = (char *)malloc(100 * sizeof(char));
@@ -48,24 +64,19 @@ int noisemask(xDim, yDim, xcen, ycen, rsun, vrcenter, image)
     vr_stop_str = (char *)malloc(100 * sizeof(char));
     mask = (double *)malloc(sunSize * sunSize * sizeof(double));
 
-//sprintf(inQuery, "su_yang.cheby_coef");
-//printf("%s\n", inQuery);
-
-//printf(" I'm here \n");
-
     inRS = drms_open_records(drms_env, inQuery, &status);
     if (status || inRS->n == 0)
-       DIE("No input data found_a");
+       DIE("No input data found");
     inRec = inRS->records[0];
 
     sprintf(vr_start_str, "%d",  vr_start);
     sprintf(vr_stop_str, "%d",  vr_stop);
-    sprintf(inQueryfinal, "%s[%s-%s]", inRec->seriesinfo->seriesname, vr_start_str, vr_stop_str);
+    sprintf(inQueryfinal, "%s[%s-%s][%d]", inRec->seriesinfo->seriesname, vr_start_str, vr_stop_str, MaskIndex);
     printf("%s\n", inQueryfinal);
     drms_close_records(inRS, DRMS_FREE_RECORD);
 
     inRSfinal = drms_open_records(drms_env, inQueryfinal, &status);
-    if (status || inRSfinal->n == 0) DIE("No input data found_b");
+    if (status || inRSfinal->n == 0) DIE("No input data found");
     nrecs = inRSfinal->n;
     inRecfinal = inRSfinal->records[0];
     inSeg = drms_segment_lookupnum(inRecfinal, 0);
@@ -78,8 +89,6 @@ int noisemask(xDim, yDim, xcen, ycen, rsun, vrcenter, image)
             coef[i * order + j] = 0;
         }
 
-//printf(" I'm here \n");
-
     if (nrecs == 1)
       {
         inRecfinal = inRSfinal->records[0];
@@ -91,7 +100,6 @@ int noisemask(xDim, yDim, xcen, ycen, rsun, vrcenter, image)
               drms_free_array(inArray);
             }
          double *inData = (double *)inArray->data;
-//                order = inArray->axis[0];
 
                 for (jj = 0; jj < order; jj++)
                     {
@@ -115,12 +123,14 @@ int noisemask(xDim, yDim, xcen, ycen, rsun, vrcenter, image)
                   drms_free_array(inArray);
                   continue;
                 }
+             vr_coef = drms_getkey_float(inRecfinal, "VRCENT", &status);
+             weight = 1.0 - fabs(vr_coef - vrcenter)/50.0;
              double *inData = (double *)inArray->data;
                  for (jj = 0; jj < order; jj++)
                     {
                     for (ii = 0; ii < order; ii++)
                         {
-                          coef[jj * order + ii] += 0.5 * inData[jj * order + ii];
+                          coef[jj * order + ii] += weight * inData[jj * order + ii];
                         }
                     }
            }
@@ -158,7 +168,7 @@ int noisemask(xDim, yDim, xcen, ycen, rsun, vrcenter, image)
                    image[iData] = mask[iMask];    
                 }
           }
-	 free(inQueryfinal); free(vr_start_str); free(vr_stop_str);
+
 //printf(" I'm here \n");
     return 0;
 }
