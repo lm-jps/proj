@@ -1078,7 +1078,7 @@ function ProcessingInit()
   ProcessingOptionsHTML += 
     '<input type="checkbox" checked="true" value="no_op" id="OptionNone" onChange="SetProcessing('+iOpt+');" />' +
     'no_op - none&nbsp;' +
-    '<input id="ProcessingCheckboxHide" type="checkbox" checked="0" onChange="ProcessingEnabled();" />&nbsp;hide<br>';
+    '<input id="ProcessingCheckboxHide" type="checkbox" checked="false" onChange="ProcessingEnabled();" />&nbsp;hide<br>';
   ExpOpt = new Object();
   ExpOpt.id="OptionNone";
   ExpOpt.rowid = "ExpSel_none";
