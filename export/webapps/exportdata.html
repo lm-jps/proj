@@ -119,7 +119,7 @@ var ExportProtocolValue = "FITS";
 var userWantsAsis = 0;
 var firstTimePrime;
 var expURL;
-
+var exportdataLoaded = false;
 var colorNeutral = "#D4D0C8";
 var colorPreset = "D8D8D8";
 var colorOptionSet = "#FFCC66";
@@ -159,8 +159,11 @@ function initVars()
   ExportProcessingArgs = "";
   firstTimePrime = "";
 
-  // ProcessingInit();
-  // ProtocolOptionsInit();
+  if (exportdataLoaded)
+    {
+    ProcessingInit();
+    ProtocolOptionsInit();
+    }
 
   // if (state < 2)
     {
@@ -281,7 +284,8 @@ function OnLoadInit()
   if (Internal)
     $("RequestorMessage").innerHTML = "Provide an identifier for you, e.g. your SolarMail name. Required for jsoc2";
   // HELP tips enable
-  // ProcessingEnabled();
+  if (exportdataLoaded)
+    ProcessingEnabled();
   CreateTips();
   $("TipsOnOffButton").value = "Turn Help Off";
   window.focus();
@@ -1653,6 +1657,7 @@ var unescaped_html = unescape(escaped_html);
 $("ExportRequestForm").innerHTML = unescaped_html;
 ProcessingInit();
 ProcessingEnabled();
+exportdataLoaded = true;
 </script>
 
 </body>
