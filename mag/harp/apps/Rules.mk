@@ -25,7 +25,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/include
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" $(CFITSIOH)
 
 # NOTE: Add dependent libraries with the -I compiler flag, and make the module depend
 #   on that library

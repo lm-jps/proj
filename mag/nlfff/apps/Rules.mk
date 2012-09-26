@@ -10,10 +10,6 @@ MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 #MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
 #MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 
-# flags for compiling and linking
-MYCMPFLG	:= -openmp
-MYLNKFLG	:= -lmkl_em64t -openmp
-
 EXE_$(d)	:= $(MODEXE_$(d))
 OBJ_$(d)	:= $(EXE_$(d):%=%.o) 
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
@@ -30,8 +26,13 @@ S_$(d)		:= $(notdir $(EXE_$(d))) #$(MODEXE_SOCK_$(d)))
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
-$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include $(MYCMPFLG)
-$(EXE_$(d)):		LF_TGT := $(LF_TGT) -lmkl_em64t -openmp -fp-model precise -fp-model source
+$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/src/
+$(EXE_$(d)):		LF_TGT := $(LF_TGT) -lmkl_em64t 
+
+# I removed the compiler flags "-fp-model precise" and "-fp-model source" 
+# from the LINK command.  If the module really needs such precise handling 
+# of floating-point operations, then the flags will have to be added to the 
+# COMPILE command.  Keh-Cheng 2012.08.31    
 
 # Shortcuts
 .PHONY:	$(S_$(d))

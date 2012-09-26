@@ -22,17 +22,9 @@ $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):	CF_TGT := $(CF_TGT) -I$(FFTW_INCS) -DCDIR="\"$(SRCDIR)/$(d)\""
 
 
-# Add something like this when linking against this library
-# ifeq ($(COMPILER), icc)
-#   MKL     := -lmkl
-#
-#   ifeq ($(JSOC_MACHINE), linux_x86_64) 
-#     MKL     := -static-intel -lmkl_em64t
-#   endif
-#
-# MODPATH:	LL_TGT := $(LL_TGT) -L$(CFITSIO_LIBS) -l$(FFTW3_LIB)
-#
-# endif
+# For modules linking against this library, please 
+# consult proj/lev1.5_hmi/apps/Rules.mk
+
 
 $(LIBINTERP):	$(OBJ_$(d))
 		$(ARCHIVE)

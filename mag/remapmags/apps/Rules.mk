@@ -38,38 +38,15 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include
+$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ 
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
-$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I/home/jsoc/include -I$(SRCDIR)/$(d) -openmp
-
-MKL     := -lmkl
-
-ifeq ($(COMPILER), icc)
-  NOIPO_$(d)    := -no-ipo
-endif
-
-ifeq ($(JSOC_MACHINE), linux_x86_64)
-  MKL     := $(NOIPO_$(d)) -lmkl_em64t
-endif
-
-ifeq ($(JSOC_MACHINE), linux_ia32)
-  MKL     := $(NOIPO_$(d)) -lmkl_lapack -lmkl_ia32
-endif
-
-SVML_$(d)       :=
-GUIDE_$(d)      :=
-
-ifeq ($(COMPILER), icc)
-  SVML_$(d)     := #-lsvml
-  GUIDE_$(d)    := #-lguide
-endif
+$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d) $(GSLH)
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
 $(ALL_$(d)) : $(EXTRADEPS_$(d))
 $(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS)
-$(ALL_$(d)) : LF_TGT := $(LF_TGT) -openmp $(MKL)
-$(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) $(FMATHLIBS) $(SVML_$(d)) $(MKL) $(GUIDE_$(d))
+$(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) -lmkl_em64t
 
 # Shortcuts
 .PHONY:	$(S_$(d))

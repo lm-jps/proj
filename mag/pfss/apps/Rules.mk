@@ -38,38 +38,16 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include -I/home/jsoc/include
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH) $(GSLH) -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ 
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
-$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include -I/home/jsoc/include
+$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) $(FFTWH) $(GSLH) -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/src/
 $(MODEXE_$(d)):			$(EXTRADEPS_$(d))
 $(MODEXE_USEF_$(d)):    $(EXTRADEPS_$(d))
 
-MKL     := -lmkl
-
-ifeq ($(COMPILER), icc)
-  NOIPO_$(d)    := -no-ipo
-endif
-
-ifeq ($(JSOC_MACHINE), linux_x86_64)
-  MKL     := $(NOIPO_$(d)) -lmkl_em64t
-endif
-
-ifeq ($(JSOC_MACHINE), linux_ia32)
-  MKL     := $(NOIPO_$(d)) -lmkl_lapack -lmkl_ia32
-endif
-
-SVML_$(d)       :=
-GUIDE_$(d)      :=
-
-ifeq ($(COMPILER), icc)
-  SVML_$(d)     := 
-  GUIDE_$(d)    := #-lguide
-endif
-
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
 $(ALL_$(d)) : $(LIBASTRO)
-$(ALL_$(d)) : LL_TGT :=  $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) $(FMATHLIBS) $(SVML_$(d)) $(MKL) $(GUIDE_$(d))
+$(ALL_$(d)) : LL_TGT :=  $(LL_TGT) $(GSLLIBS) $(FFTW3LIBS) $(CFITSIOLIBS) -lmkl_em64t
 
 # Shortcuts
 .PHONY:	$(S_$(d))
