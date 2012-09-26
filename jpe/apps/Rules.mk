@@ -3,7 +3,7 @@ sp 		:= $(sp).x
 dirstack_$(sp)	:= $(d)
 d		:= $(dir)
 
-ifeq ($(JSOC_MACHINE), linux_x86_64)
+#ifeq ($(JSOC_MACHINE), linux_x86_64)
 
 # Local variables
 #test0_$(d)		:= $(addprefix $(d)/, test0)
@@ -73,7 +73,7 @@ $(S_$(d)):	%:	$(d)/%
 -include	$(DEP_$(d))
 
 # x86_64
-endif
+#endif
 
 d		:= $(dirstack_$(sp))
 sp		:= $(basename $(sp))

@@ -20,7 +20,7 @@ CLEAN		:= $(CLEAN) \
 
 
 $(OBJ_$(d)):	$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/imrotate/ -I/home/jsoc/include 
+$(OBJ_$(d)):	CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/imrotate/
 
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBIMROTATE)
 

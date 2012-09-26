@@ -44,12 +44,12 @@ ifeq ($(JSOC_MACHINE), linux_ia32)
 endif
 
 # Remove from ia32 and gcc builds (since they don't build on ia32 and with gcc)
-ifeq ($(JSOC_MACHINE), linux_x86_64)
+#ifeq ($(JSOC_MACHINE), linux_x86_64)
   ifeq ($(COMPILER), icc)
 #    BUILDLEV1_$(d)		:=  build_lev1X build_lev1Y build_lev1 build_lev1_fsn
     BUILDLEV1_$(d)		:= build_lev1_aia build_lev1_hmi build_lev1_empty
   endif
-endif
+#endif
 
 MODEXE_USEF_$(d)	:= $(addprefix $(d)/, getorbitinfo $(BUILDLEV1_$(d)))
 MODEXE_USEF 	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
@@ -84,36 +84,22 @@ $(ingestlev0_$(d)):	$(ingestlev0_obj_$(d))
 $(xingestlev0_$(d)):	$(xingestlev0_obj_$(d))
 #$(yingestlev0_$(d)):	$(yingestlev0_obj_$(d))
 
-ifeq ($(JSOC_MACHINE), linux_ia32)
-  FFTW_$(d) = /home/jsoc/lib/linux-ia32
-endif
-ifeq ($(JSOC_MACHINE), linux_x86_64)
-  FFTW_$(d) = /home/jsoc/lib/linux-x86_64
-endif
-
-
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(SUMEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq -lpng  -L$(FFTW_$(d)) -lfftw3 
+$(SUMEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq -lpng
 
 
 ifeq ($(COMPILER), icc)
-   ifeq ($(JSOC_MACHINE), linux_x86_64) 
-     MKL     := -static-intel -lmkl_em64t
-   endif
+   MKL     := -static-intel -lmkl_em64t
 endif
 
-#$(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng -L/SGE/lib/lx24-amd64/ -ldrmaa -Wl,-rpath,/SGE/lib/lx24-amd64
-
 $(PEEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq 
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include -DLEV0SLOP
-
-#$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/cvs/JSOC/proj/libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -DLEV0SLOP
 
 ifeq ($(COMPILER), icc)
-   ifeq ($(JSOC_MACHINE), linux_x86_64)
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MKL)
-   endif
+   #ifeq ($(JSOC_MACHINE), linux_x86_64)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(FFTW3LIBS) $(MKL)
+   #endif
 endif
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)):	$(LIBASTRO) $(LIBINTERP)
 
