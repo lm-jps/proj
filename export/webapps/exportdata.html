@@ -633,30 +633,30 @@ function GetDefaultFormat()
 function CreateDataTable(data, valuetable)
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  valuetable = "";
+  // valuetable = "";
   // var count = data.count;
   var count = data.data.length;
-  valuetable = "<table border='1'>"
-  valuetable = valuetable + "<tr><td>File</td><td>Record</td><td>Filename</td></tr>"
+  valuetable = "<table border='1'>";
+  valuetable = valuetable + "<tr><td>File<\/td><td>Record<\/td><td>Filename<\/td><\/tr>";
   for (ifile=0; ifile < count; ifile++)
     {
     valuetable = valuetable + "<tr>";
-    valuetable = valuetable +  "<td>" + (ifile + 1) + "</td>";
-    valuetable = valuetable +  "<td>" + data.data[ifile].record + "</td>";
+    valuetable = valuetable +  "<td>" + (ifile + 1) + "<\/td>";
+    valuetable = valuetable +  "<td>" + data.data[ifile].record + "<\/td>";
     thisfile = data.data[ifile].filename;
     if (data.method.indexOf("tar") > 0)
-      valuetable = valuetable +  "<td>" + thisfile + "</td></tr>";
+      valuetable = valuetable +  "<td>" + thisfile + "<\/td><\/tr>";
     else
       {
       if (data.method.indexOf("ftp") >= 0)
         expURL = "ftp://pail.stanford.edu/export" + data.dir + "/" + thisfile;
       else
         expURL = "http://jsoc.stanford.edu" + data.dir + "/" + thisfile;
-      tmp = "<A href='" + expURL + "' target='_blank'>" + thisfile + "</A>";
-      valuetable = valuetable +  "<td>" + tmp + "</td></tr>";
+      tmp = "<A href='" + expURL + "' target='_blank'>" + thisfile + "<\/A>";
+      valuetable = valuetable +  "<td>" + tmp + "<\/td><\/tr>";
       }
     }
-  valuetable = valuetable + "</table>";
+  valuetable = valuetable + "<\/table>";
   return valuetable;
   }
 
@@ -1300,7 +1300,7 @@ function ProcessExportResponse(response)
       if (ExportMethodIsDirect) // was url_direct on call
         {
         if (count > 1)
-            $("ExportLocation").innerHTML =  "<b>Multiple files returned, direct fetch not possible. </b><p>" +
+            $("ExportLocation").innerHTML =  "<b>Multiple files returned, direct fetch not possible. <\/b><p>" +
               valuetable + "<br>";
         else
             {
@@ -1458,17 +1458,17 @@ function GetStatus()
           StatusLoc = "ftp://pail.stanford.edu/export" + data.dir + "/";
         else
           StatusLoc = "http://jsoc.stanford.edu" + data.dir + "/";
-        $("StatusLocation").innerHTML = "<A HREF='" + StatusLoc + "' target='_blank'>" + StatusLoc + "</A>";
+        $("StatusLocation").innerHTML = "<A HREF='" + StatusLoc + "' target='_blank'>" + StatusLoc + "<\/A>";
         if (data.method.indexOf("-tar") > 0)
           {
-          $("TarFileLocation").innerHTML = "<A HREF='" + data.tarfile + "'>" + data.tarfile + "</A>";
+          $("TarFileLocation").innerHTML = "<A HREF='" + data.tarfile + "'>" + data.tarfile + "<\/A>";
           $("TarFileLocationRow").style.display = "table-row";
-          }
+	  }
         else
           $("TarFileLocationRow").style.display = "none";
         if (data.protocol.indexOf("as-is") >= 0)
           {
-          $("KeywordFileLocation").innerHTML = "<A HREF='" + data.keywords + "' target='_blank'>" + data.keywords + "</A>";
+          $("KeywordFileLocation").innerHTML = "<A HREF='" + data.keywords + "' target='_blank'>" + data.keywords + "<\/A>";
           $("KeywordFileLocationRow").style.display = "table-row";
           }
         else
@@ -1541,7 +1541,7 @@ access the data.
 <span id="ExportRequestForm"></span>
 
 <div id="iframeHideDiv" style="display:none;">
-  <iframe id="FileUploadFrame" onload="uploadDone();" name="FileUploadFrame" src="" style="height:0px;width:0px;border:0px solid #fff;"></iframe>
+  <iframe id="FileUploadFrame" onload="uploadDone();" src="" style="height:0px;width:0px;border:0px solid #fff;"></iframe>
 </div>
 
 
@@ -1566,7 +1566,7 @@ access the data.
 </table>
 </div>
 <hr>
-<div ExportDataDiv  style="background-color:#C0E0FF;">
+<div id="ExportDataDiv"  style="background-color:#C0E0FF;">
 <b>JSOC Data Export Status and Retrieval</b>
 <p>
 <table>
@@ -1574,14 +1574,14 @@ access the data.
     <td style="width:10em" >RequestID</td>
     <td><input type="text" id="StatusRequestID" name="StatusRequestID" style="width:12em;background-color:#FFF8DC;" value="" onChange="GetStatus();"></td>
     <td>This is the ID tag for your export request.</td>
-    <td><span id="StatusValue">&nbsp;</td>
+    <td><span id="StatusValue">&nbsp;</span></td>
   </tr>
 
   <tr>
     <td colspan="2" align="center" >
       <input id="StatusButton" type="button" value="Submit Status Request" style="background-color:#D8D8D8" onClick="GetStatus();" ></td>
     <td><span id="StatusButtonMsg">Please only click once for status request.</span ></td>
-    <td rowspan="3"><span id="StatusOther">&nbsp;</td>
+    <td rowspan="3"><span id="StatusOther">&nbsp;</span></td>
   </tr>
 
   <tr>
@@ -1592,7 +1592,7 @@ access the data.
 
   <tr>
     <td>Status</td>
-    <td colspan="2"> <span id="StatusStatus" :tyle="background-color:#FFF8DC;"> </span ></td>
+    <td colspan="2"> <span id="StatusStatus" style="background-color:#FFF8DC;"> </span ></td>
   </tr>
 
   <tr>
@@ -1626,7 +1626,7 @@ Use this section to request a renewal/repeat of a prior export for which the dat
     <td style="width:10em" >RequestID</td>
     <td><input type="text" id="ReRequestID" name="ReRequestID" style="background-color:#FFF8DC;" value="" onChange="ExportNop();"></td>
     <td>Enter RequestID for repeat or prior export</td>
-    <td><span id="ReStatusValue">&nbsp;</td>
+    <td><span id="ReStatusValue">&nbsp;</span></td>
   </tr>
 
   <tr id="ReNotifyRow">
@@ -1644,6 +1644,7 @@ Use this section to request a renewal/repeat of a prior export for which the dat
   
 </table>
 </div> <!-- id="ReExportDiv" -->
+</div>
 
 <HR>
 <P style="height:1px">
