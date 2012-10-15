@@ -8,7 +8,7 @@
 
 \par Synopsis
 \code
-HMI_IQUV_averaging begin= end= wavelength= quicklook= camid= cadence= lev1= npol= size= average=
+HMI_IQUV_averaging begin= end= wavelength= quicklook= camid= cadence= lev1= npol= size= average= rotational= linearity=
 \endcode
 
 \details
@@ -45,6 +45,8 @@ The value by default is hmi.lev1 (to be consistent with the default value of qui
 \li \c npol=number where number is an integer and is the number of polarizations taken by the observables sequence. With the sequence currently run, npol should be set to 6 (the value by default).
 \li \c size=number where number is an integer and is the number of frames in the observables sequence. With the sequence currently run, size should be set to 36 (the value by default)
 \li \c average=number where number is an integer and is either 12 (the value by default) or 96 (WARNING: even though the code runs for 96-min averages, it has not yet been optimized for this value)
+\li \c rotational=number where number is an integer and is either 0 (the value by default) or 1. 1 means that the user wishes to use rotational flat fields instead of the standard pzt flat fields.
+\li \c linearity=number where number is an integer and is either 0 (the value by default) or 1. 1 means that the user wishes to correct for the non-linearity of the cameras.
 
 \par Examples
 
@@ -67,6 +69,10 @@ HMI_IQUV_averaging begin="2010.10.1_0:0:0_TAI" end="2010.10.1_2:45:00_TAI" wavel
 
 v 1.16: addition of command-line parameter "average"
 v 1.17: minor correction; Npol replaced by Npolin to avoid some rare occurences of segmentation faults
+v 1.18 and 1.19: code now aborts when status of drms_segment_read() or drms_segment_write() is not DRMS_SUCCESS
+v 1.20: possibility to apply a rotational flat field instead of the pzt flat field, and possibility to use smooth look-up tables instead of the standard ones
+        support for the 8- and 10-wavelength observable sequences run in April 2010
+v 1.21: correcting for non-linearity of cameras
 
 */
 
@@ -79,13 +85,18 @@ v 1.17: minor correction; Npol replaced by Npolin to avoid some rare occurences 
 /*                                                                                                                                        */
 /* FILTER/WAVELENGTH NAMES:                                                                                                               */
 /*--------------------------------                                                                                                        */
-/* with a 6-position cotune sequence (assuming a nominal separation of 68.8 mA):                                                          */
+/*                                                                                                                                        */
+/* 6, 8, or 10-position cotune sequence (assuming a nominal separation of 68.8 mA):                                                       */
 /* I0 is centered at +172.0 mA                                                                                                            */
 /* I1 is centered at +103.2 mA                                                                                                            */
 /* I2 is centered at +34.4  mA                                                                                                            */
 /* I3 is centered at -34.4  mA                                                                                                            */
 /* I4 is centered at -103.2 mA                                                                                                            */
 /* I5 is centered at -172.0 mA                                                                                                            */
+/* I6 is centered at -240.8 mA                                                                                                            */
+/* I7 is centered at +240.8 mA                                                                                                            */
+/* I8 is centered at -309.6 mA                                                                                                            */
+/* I9 is centered at +309.6 mA                                                                                                            */
 /*                                                                                                                                        */
 /* with a 5-position cotune sequence:                                                                                                     */
 /* I0 is centered at +137.6 mA                                                                                                            */
@@ -93,6 +104,7 @@ v 1.17: minor correction; Npol replaced by Npolin to avoid some rare occurences 
 /* I2 is centered at  0.0   mA                                                                                                            */
 /* I3 is centered at -68.8  mA                                                                                                            */
 /* I4 is centered at -137.6 mA                                                                                                            */
+/*                                                                                                                                        */
 /*                                                                                                                                        */
 /*                                                                                                                                        */
 /* the level 1 data are flat fielded and dark-subtracted and are the input data                                                           */
@@ -135,15 +147,14 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
                                       //NB: the user provides the camera wanted instead of the type of observables wanted (l.o.s. or full vector)
                                       //because for some framelists for instance, both camera produce l.o.s. data or both camera produce
                                       //full vector data. so there would be the need to specific, at some point, which camera to use  
-#define DataCadenceIn  "cadence"      //cadence (45, 90, or 135 seconds)   
+#define DataCadenceIn  "cadence"      //cadence (45, 90, 120, 135, or 150 seconds)   
 #define NpolIn         "npol"         //number of polarizations in observable framelist
 #define FramelistSizeIn "size"        //size of the framelist
 #define SeriesIn       "lev1"         //series name for the lev1 filtergrams
 #define QuickLookIn    "quicklook"    //quicklook data (yes=1,no=0)? 0 BY DEFAULT
 #define Average        "average"      //average over 12 or 96 minutes? (12 by default)
-
-#define Q_ACS_ECLP 0x2000 //eclipse keyword for the lev1 data
-#define Q_MISSING_SEGMENT 0x80000000 //missing image segment for lev1 record 
+#define RotationalFlat "rotational"   //force the use of rotational flat fields?
+#define Linearity      "linearity"    //force the correction for non-linearity of cameras
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
@@ -154,7 +165,12 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define DARK_SIDE   0   //SIDE CAMERA
 #define DARK_FRONT  1   //FRONT CAMERA
 
+#define Q_ACS_ECLP 0x2000             //eclipse keyword for the lev1 data
+#define Q_MISSING_SEGMENT 0x80000000  //missing image segment for lev1 record 
+
 #define CALVER_DEFAULT 0 // both the default and missing value of CALVER64
+#define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction
+#define CALVER_ROTATIONAL 0x10000      //bitmask for CALVER64 to indicate the use of rotational flat fields 
 
  //definitions for the QUALITY keyword for the lev1.5 records
 
@@ -186,6 +202,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define QUAL_ECLIPSE                 (0x200)                //at least one lev1 record was taken during an eclipse
 #define QUAL_LARGEFTSID              (0x100)                //HFTSACID of target filtergram > 4000, which adds noise to observables
 
+
 //DRMS FAILURE (AN OBSERVABLE COULD, A PRIORI, BE CREATED, BUT THERE WAS A MOMENTARY FAILURE OF THE DRMS)
 //#define QUAL_NOLEV1D                 (0x20)                 //could not create lev1d records
 //#define QUAL_NOLEV1P                 (0x100)                //could not create lev1p records
@@ -201,13 +218,15 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, kRecSetIn2, ""      ,  "end time for which an output is wanted"},
      {ARG_INT   , WaveLengthIn,"3"    ,  "Index of the wavelength starting the framelist. FROM 0 TO 5"},
      {ARG_INT   , CamIDIn    , "0"    ,  "Front (1) or side (0) camera?"},
-     {ARG_DOUBLE, DataCadenceIn,"135.0"  ,"Cadence: 45, 90, or 135"},
+     {ARG_DOUBLE, DataCadenceIn,"135.0"  ,"Cadence: 45, 90, 120, 135, or 150 seconds"},
      {ARG_INT,    NpolIn,"4", "Number of polarizations in framelist"},
      {ARG_INT,    FramelistSizeIn,"36", "size of framelist"},
      {ARG_STRING, SeriesIn, "hmi.lev1",  "Name of the lev1 series"},
      {ARG_INT   , QuickLookIn, "0"    ,  "Quicklook data? No=0; Yes=1"},
      {ARG_INT   , Average, "12"       ,  "Average over 12 or 96 minutes? (12 by default)"},
+     {ARG_INT   , RotationalFlat, "0", "Use rotational flat fields? yes=1, no=0 (default)"},
      {ARG_STRING, "dpath", "/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/",  "directory where the source code is located"},
+     {ARG_INT   , Linearity, "0", "Correct for non-linearity of cameras? yes=1, no=0 (default)"},
      {ARG_END}
 };
 
@@ -249,7 +268,7 @@ return v > 0 ? 1 : (v < 0 ? -1 : 0);
 /*                                                                                                                  */
 /*function that uses the FID of a filtergram to tell what wavelength/filter it is                                   */
 /* returns 0 for I0, 1 for I1, and so on...                                                                         */
-/* returns -1 if there is an error                                                                                  */
+/* returns -101 if there is an error                                                                                */
 /*                                                                                                                  */
 /*------------------------------------------------------------------------------------------------------------------*/
 
@@ -267,29 +286,37 @@ int WhichWavelength(int FID)
     }
   switch (temp)
     {
-    case 15: result=0;//I0 for 6 wavelengths
+    case 19: result=9;//I9 for 10 wavelengths
+      break;
+    case 17: result=7;//I7 for 8 and 10 wavelengths
+      break;
+    case 15: result=0;//I0 for 6, 8, and 10  wavelengths
       break;
     case 14: result=0;//I0 for 5 wavelengths
       break;
-    case 13: result=1;//I1 for 6 wavelengths
+    case 13: result=1;//I1 for 6, 8, and 10  wavelengths
       break;
     case 12: result=1;//I1 for 5 wavelengths
       break;
-    case 11: result=2;//I2 for 6 wavelengths
+    case 11: result=2;//I2 for 6, 8, and 10  wavelengths
       break;
     case 10: result=2;//I2 for 5 wavelengths
       break;
-    case  9: result=3;//I3 for 6 wavelengths
+    case  9: result=3;//I3 for 6, 8, and 10  wavelengths
       break;
     case  8: result=3;//I3 for 5 wavelengths
       break;
-    case  7: result=4;//I4 for 6 wavelengths
+    case  7: result=4;//I4 for 6, 8, and 10  wavelengths
       break;
     case  6: result=4;//I4 for 5 wavelengths
       break;
-    case  5: result=5;//I5 for 6 wavelengths
+    case  5: result=5;//I5 for 6, 8, and 10  wavelengths
       break;
-    default: result=-1;
+    case  3: result=6;//I6 for 8 and 10 wavelengths
+      break;
+    case  1: result=8;//I8 for 10 wavelengths
+      break;
+    default: result=-101;
     }
 
     return result; //contains the filter name corresponding to the input FID
@@ -335,7 +362,7 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   //char filename2[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.w";         //file containing the HCM positions for the wavelength selection
   //char filename3[] = "/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/std.p";         //file containing the HCM positions for the polarization selection
 
-  char *filename =NULL;
+  char *filename=NULL;
   char *filename2=NULL;
   char *filename3=NULL;
 
@@ -446,10 +473,15 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
   //------------------------------------------------------------------------------------------------------------------
   int baseindexW,baseindexP;
 
-  if((framelistSize % 6) == 0) //6-wavelength framelist
+
+  if((framelistSize == 12) || (framelistSize == 24) || (framelistSize == 36) || (framelistSize == 48) || (framelistSize == 16) || (framelistSize == 32) || (framelistSize == 20) || (framelistSize == 40)) //6, 8, or 10-wavelength framelist
     {
       switch(WavelengthID)
 	{
+	case 9: baseindexW=HWLTID-19;
+	  break;
+	case 7: baseindexW=HWLTID-17;
+	  break;
 	case 0: baseindexW=HWLTID-15;
 	  break;
 	case 1: baseindexW=HWLTID-13;
@@ -462,9 +494,13 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 	  break;
 	case 5: baseindexW=HWLTID-5;
 	  break;
+	case 6: baseindexW=HWLTID-3;
+	  break;
+	case 8: baseindexW=HWLTID-1;
+	  break;
 	}
     }
-  else
+  if( (framelistSize == 10) ) //5-wavelength framelist (WARNING: ISSUE FOR THE CASE =20: 5 or 10 WAVELENGTHS? !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!)
     {
       switch(WavelengthID)
 	{
@@ -479,10 +515,9 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
 	case 4: baseindexW=HWLTID-6;
 	  break;
 	}
-    }
-
-  baseindexP=(HPLTID/10)*10; //WARNING: ASSUMES THAT THERE ARE ONLY 10 POLARIZATIONS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+    }      
+  
+    baseindexP=(HPLTID/10)*10; //WARNING: ASSUMES THAT THERE ARE ONLY 10 POLARIZATIONS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   for(i=0;i<framelistSize;++i)
     {
@@ -492,33 +527,41 @@ int framelistInfo(int HFLID,int HPLTID,int HWLTID,int WavelengthID,int *PHWPLPOS
       PL_Index[i]=PLINDEX+baseindexP;
       switch(WLINDEX)
 	{
-	case 15: WavelengthIndex[i]=0;//I0 for 6 wavelengths
+	case 19: WavelengthIndex[i]=9;//I9 for 10 wavelengths
+	  break;
+	case 17: WavelengthIndex[i]=7;//I7 for 8 and 10 wavelengths
+	  break;
+	case 15: WavelengthIndex[i]=0;//I0 for 6, 8, and 10  wavelengths
 	  break;
 	case 14: WavelengthIndex[i]=0;//I0 for 5 wavelengths
 	  break;
-	case 13: WavelengthIndex[i]=1;//I1 for 6 wavelengths
+	case 13: WavelengthIndex[i]=1;//I1 for 6, 8, and 10  wavelengths
 	  break;
 	case 12: WavelengthIndex[i]=1;//I1 for 5 wavelengths
 	  break;
-	case 11: WavelengthIndex[i]=2;//I2 for 6 wavelengths
+	case 11: WavelengthIndex[i]=2;//I2 for 6, 8, and 10  wavelengths
 	  break;
 	case 10: WavelengthIndex[i]=2;//I2 for 5 wavelengths
 	  break;
-	case  9: WavelengthIndex[i]=3;//I3 for 6 wavelengths
+	case  9: WavelengthIndex[i]=3;//I3 for 6, 8, and 10  wavelengths
 	  break;
 	case  8: WavelengthIndex[i]=3;//I3 for 5 wavelengths
 	  break;
-	case  7: WavelengthIndex[i]=4;//I4 for 6 wavelengths
+	case  7: WavelengthIndex[i]=4;//I4 for 6, 8, and 10  wavelengths
 	  break;
 	case  6: WavelengthIndex[i]=4;//I4 for 5 wavelengths
 	  break;
-	case  5: WavelengthIndex[i]=5;//I5 for 6 wavelengths
+	case  5: WavelengthIndex[i]=5;//I5 for 6, 8, and 10  wavelengths
 	  break;
-	default: WavelengthIndex[i]=-1;
+	case  3: WavelengthIndex[i]=6;//I6 for 8 and 10 wavelengths
+	  break;
+	case  1: WavelengthIndex[i]=8;//I8 for 10 wavelengths
+	  break;
+	default: WavelengthIndex[i]=-101;
 	}
-      if(WavelengthIndex[i] == -1)
+      if(WavelengthIndex[i] == -101)
 	{
-	  printf("Error: WavelengthIndex[i]=-1 \n");
+	  printf("Error: WavelengthIndex[i]=-101 \n");
 	  free(filename);
 	  free(filename2);
 	  free(filename3);
@@ -969,7 +1012,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.26 2012/08/31 15:58:33 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.27 2012/10/15 17:38:16 couvidat Exp $");
 }
 
 
@@ -992,7 +1035,7 @@ char *iquv_version() // Returns CVS version of IQUV averaging
 int DoIt(void)
 {
 
-#define MaxNString 512                                               //maximum length of strings in character number
+#define MaxNString 512                                                //maximum length of strings in character number
   int errbufstat    =setvbuf(stderr, NULL, _IONBF, BUFSIZ);           //for debugging purpose when running on the cluster
   int outbufstat    =setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 
@@ -1009,7 +1052,9 @@ int DoIt(void)
   char *inLev1Series       = cmdparams_get_str(&cmdparams,SeriesIn,       NULL);      //name of the lev1 series
   int   QuickLook          = cmdparams_get_int(&cmdparams,QuickLookIn,    NULL);      //Quick look data or no? yes=1, no=0
   int   Averaging          = cmdparams_get_int(&cmdparams,Average,        NULL);      //Average over 12 or 96 minutes? (12 by default)
-  char *dpath              = cmdparams_get_str(&cmdparams,"dpath",        NULL);      //directory where the source code is located
+  int   inRotationalFlat   = cmdparams_get_int(&cmdparams,RotationalFlat, NULL);      //Use rotational flat fields? yes=1, no=0 (default)
+  char *dpath              = cmdparams_get_str(&cmdparams,"dpath",         NULL);      //directory where the source code is located
+  int   inLinearity        = cmdparams_get_int(&cmdparams,Linearity,       NULL);      //Correct for non-linearity of cameras? yes=1, no=0 (default)
 
   //THE FOLLOWING VARIABLES SHOULD BE SET AUTOMATICALLY BY OTHER PROGRAMS. FOR NOW SOME ARE SET MANUALLY
   char *CODEVERSION =NULL;                                                             //version of the IQUV averaging code
@@ -1029,11 +1074,12 @@ int DoIt(void)
   char HISTORY[MaxNString];                                                            //history of the data
 
   char COMMENT[MaxNString];
-  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; RSUNerr=0.6; correction for cosmic-ray hits; dpath="); //comment about what the observables code is doing
+  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
+  if(inLinearity == 1) strcat(COMMENT,"; linearity=1;");
+  if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1;");
 
   struct init_files initfiles;
-
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
   //char DISTCOEFFILES[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist2.bin";
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist_v3-d6_256_128_f09_c0_front_lim_v1.bin";
@@ -1075,7 +1121,7 @@ int DoIt(void)
     }
 
 
-  printf("COMMAND LINE PARAMETERS= %s %s %d %d %f %d %d %d %s\n",inRecQuery,inRecQuery2,WavelengthID,CamId,DataCadence,Npolin,QuickLook,Averaging,dpath);
+  printf("COMMAND LINE PARAMETERS= %s %s %d %d %f %d %d %d %d %s %d\n",inRecQuery,inRecQuery2,WavelengthID,CamId,DataCadence,Npolin,QuickLook,Averaging,inRotationalFlat,dpath,inLinearity);
 
 
   // Main Parameters                                                                                                    
@@ -1085,7 +1131,7 @@ int DoIt(void)
   else AverageTime=5760.;
 
 
-  int   NumWavelengths=6;                                            //maximum number of possible values for the input WaveLengthID parameter
+  int   NumWavelengths=10;                                           //maximum number of possible values for the input WaveLengthID parameter
   int   MaxNumFiltergrams=72;                                        //maximum number of filtergrams in an observable sequence
   int   TempIntNum;                                                  //number of points requested for temporal interpolation (WARNING: MUST BE AN EVEN NUMBER ONLY!!!!!)
   TIME  TimeCaution = DataCadence;                                   //extra time in seconds padded to the beginning and ending input times
@@ -1103,10 +1149,11 @@ int DoIt(void)
 
   if(TempIntNum % 2 != 0) TempIntNum+=1;                             //We want an even number (really, why?)
   printf("TEMPINTNUM = %d\n",TempIntNum);
+  //following examples are for a 12 minute average:
   //example: for a cadence of 45  seconds, 26 points will be used for the temporal interpolation
   //example: for a cadence of 90  seconds, 14 points will be used for the temporal interpolation
   //example: for a cadence of 135 seconds, 10 points will be used for the temporal interpolation
-
+  //example: for a cadence of 150 seconds,  8 points will be used for the temporal interpolation
 
 
   //Miscellaneous variables
@@ -1116,6 +1163,8 @@ int DoIt(void)
   DRMS_RecordSet_t *recLev1  = NULL;                                 //records for the level 1 data (input data)
   DRMS_RecordSet_t *recLev1p = NULL;                                 //record for the level 1p data (output data)
   DRMS_RecordSet_t *rectemp  = NULL;     
+  DRMS_RecordSet_t *recflat  = NULL;                                 //record for the pzt flatfield
+  DRMS_RecordSet_t *recflatrot= NULL;                                //record for the rotational flatfield
 
   char  CosmicRaySeries[MaxNString]= "hmi.cosmic_rays";     //name of the series containing the cosmic-ray hits
   char  HMISeries[MaxNString];
@@ -1133,6 +1182,9 @@ int DoIt(void)
   char  FSNtemps[]="00000000000000";
   char  **source;
   char  recnums[MaxNString];
+  char  HMIRotationalFlats[MaxNString]= "hmi.flatfield_update";//contains the rotational flatfields
+  char  HMIFlatField0[MaxNString];
+  char  *HMIFlatField;                                               //pzt flafields applied to hmi.lev1 records
 
   TIME  MaxSearchDistanceL,MaxSearchDistanceR;
 
@@ -1143,7 +1195,7 @@ int DoIt(void)
 
   TIME  TREC_STEP = AverageTime;
   TIME  temptime=0.0, temptime2=0.0;
-  TIME  TimeBegin,TimeEnd,TimeBegin2,TimeEnd2,TargetTime;
+  TIME  TimeBegin,TimeEnd,TimeBegin2,TimeEnd2,TargetTime,PreviousTargetTime;
   TIME *internTOBS=NULL ;					                     
   TIME  tobs;					                     
 
@@ -1214,6 +1266,7 @@ int DoIt(void)
   int  *QUALITYlev1=NULL;
   int  *QUALITYLEV1=NULL;
   int   COSMICCOUNT=0;
+  int   initialrun=0;
 
   long long *CALVER32=NULL;
 
@@ -1248,6 +1301,10 @@ int DoIt(void)
   float correction,correction2;
   float distance;
   float X0LF=0.0,Y0LF=0.0;
+  float *pztflat;
+  float *rotflat;
+  float *EXPTIME=NULL;
+  float tempvalue=0.0;
 
   //KEYWORD FROM INPUT LEVEL 1 DATA
   char *FSNS              = "FSN";                                    //Filtergram Sequence Number
@@ -1291,6 +1348,7 @@ int DoIt(void)
   char *X0LFS             = "X0_LF";
   char *Y0LFS             = "Y0_LF";
   char *COUNTS            = "COUNT";
+  char *FLATREC           = "FLAT_REC";
   char *CALVER32S         = "CALVER32";
   char *CALVER64S         = "CALVER64";
 
@@ -1340,11 +1398,14 @@ int DoIt(void)
   char *TS08              = "T08_PSASM_MEAN";
   char *TS01              = "T01_FWMR1_MEAN";
   char *TS02              = "T02_FWMR2_MEAN";
-  char  query[]           = "000";
+  char  query[MaxNString];
   char *ierror            = NULL;                                    //for gapfilling code
   char **ierrors          = NULL;                                    //for temporal interpolation function
   char *SOURCES           = "SOURCE";
   char *QUALLEV1S         = "QUALLEV1";
+  char *ROTFLAT           = "ROT_FLAT";                              //rotational flat field was used (query used) or not (empty string)
+  char QueryFlatField[MaxNString];
+  strcpy(QueryFlatField,"");
 
   DRMS_Array_t **Segments=NULL;                                      //pointer to pointers to structures that will contain the segments of the level 1 filtergrams
   DRMS_Array_t **Ierror=NULL;                                        //for gapfilling code
@@ -1354,6 +1415,9 @@ int DoIt(void)
   DRMS_Array_t  *CosmicRays= NULL;                                   //list of cosmic ray hits
   DRMS_Array_t **arrLev1d= NULL;                                     //pointer to pointer to an array that will contain a lev1d data produced by Richard's function
   DRMS_Array_t **arrLev1p= NULL;                                     //pointer to pointer of an array that will contain a lev1p data produced by Jesper's function
+  DRMS_Array_t  *flatfield=NULL;                                     //pzt flatfield used for hmi.lev1 records
+  DRMS_Array_t  *flatfieldrot=NULL;                                  //rotational flat field
+  DRMS_Array_t *rotationalflats=NULL;
 
   DRMS_Segment_t *segin  = NULL;		                     
   DRMS_Segment_t *segout = NULL;		                     
@@ -1372,8 +1436,18 @@ int DoIt(void)
   struct polcal_struct pars;                                         //for initialization of Jesper's routine
 
   double minimum,maximum,median,mean,sigma,skewness,kurtosis;        //for Keh-Cheng's statistics functions
+  double *keyF=NULL;
+  double TSTARTFLAT=0.0, TSTOPFLAT=0.0;
 
-  char Lev1pSegName[24][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2","V2","I3","Q3","U3","V3","I4","Q4","U4","V4","I5","Q5","U5","V5"};   //names of the segments of the level 1 p records
+  //to remove non-linearity of cameras (values from sun_lin.pro, from hmi_ground.lev0[1420880-1420945])
+  //NON LINEARITY OF SIDE CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
+  double nonlins[]={-8.2799134,0.017660396,-3.7157499e-06,9.0137137e-11};
+  //NON LINEARITY OF FRONT CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
+  double nonlinf[]={-11.081771,0.017383740,-2.7165221e-06,6.9233459e-11}; 
+
+  //char Lev1pSegName[24][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2","V2","I3","Q3","U3","V3","I4","Q4","U4","V4","I5","Q5","U5","V5"};   //names of the segments of the level 1 p records
+  char Lev1pSegName[40][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2","V2","I3","Q3","U3","V3","I4","Q4","U4","V4","I5","Q5","U5","V5","I6","Q6","U6","V6","I7","Q7","U7","V7","I8","Q8","U8","V8","I9","Q9","U9","V9"};   //names of the segments of the level 1 p records !!!!!! WARNING DIFFERENT FOR THE DIFFERENT NUMBERS OF POSSIBLE WAVELENGTHS !!!!!
+
 
   DRMS_Record_t *rec = NULL;
 
@@ -1398,18 +1472,18 @@ int DoIt(void)
       return 1;//exit(EXIT_FAILURE);
       }*/
 
-  //check that the command line parameter for the target filtergram is valid (must be in the range [0,5] for I0, I1, I2, I3, I4, or I5)
+  //check that the command line parameter for the target filtergram is valid (must be in the range [0,9] for I0 to I9)
   if(WavelengthID > NumWavelengths-1 || WavelengthID < 0)
     {
-      printf("The parameter WaveLengthIn is not in the range 0-5\n");
+      printf("The parameter WaveLengthIn is not in the range 0-9\n");
       return 1;//exit(EXIT_FAILURE);  
     }
 
 
-  //check that the cadence entered on the command line is a "correct" one (45, 90, 96, or 135 seconds)
-  if(DataCadence != 45.0 && DataCadence != 90.0 && DataCadence != 135.0)
+  //check that the cadence entered on the command line is a "correct" one (45, 90, 96, 120, 135, or 150 seconds)
+  if(DataCadence != 45.0 && DataCadence != 90.0 && DataCadence != 120.0 && DataCadence != 135.0 && DataCadence != 150.0)
     {
-      printf("The parameter cadence should be 45, 90, or 135 seconds\n");
+      printf("The parameter cadence should be 45, 90, 120, 135, or 150 seconds\n");
       return 1;//exit(EXIT_FAILURE);  
     }
 
@@ -1433,6 +1507,8 @@ int DoIt(void)
   printf("ENDING TIME: %s\n",inRecQuery2);
   TimeBegin=sscan_time(inRecQuery);  //number of seconds elapsed since a given date;
   TimeEnd  =sscan_time(inRecQuery2);   
+  printf("TimeBegin= %f\n",TimeBegin);
+  printf("TimeEnd= %f\n",TimeEnd);
 
 
   temptime = (TIME)floor((TimeBegin-TREC_EPOCH+TREC_STEP/2.0)/TREC_STEP)*TREC_STEP+TREC_EPOCH;  //WE LOCATE THE SLOT TIME CLOSEST TO THE BEGINNING TIME REQUIRED BY THE USER
@@ -1490,8 +1566,11 @@ int DoIt(void)
      }
    else                                                               //Definitive Data
      {
-       if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s");
-       //if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s");
+       if(AverageTime == 720.0 && DataCadence == 90.0)  strcpy(HMISeriesLev1p,"hmi.S_720s"); //6 wavelengths (mod A)
+       if(AverageTime == 720.0 && DataCadence == 135.0) strcpy(HMISeriesLev1p,"hmi.S_720s"); //6 wavelengths (mod C)
+       if(AverageTime == 720.0 && DataCadence == 120.0) strcpy(HMISeriesLev1p,"hmi.S2_720s"); //8 wavelengths
+       if(AverageTime == 720.0 && DataCadence == 150.0) strcpy(HMISeriesLev1p,"hmi.S2_720s"); //10 wavelengths
+     //if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s");
        if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"hmi.S_5760s");
        if(AverageTime != 5760.0 && AverageTime != 720.0)
 	 {
@@ -1772,14 +1851,19 @@ int DoIt(void)
 	  return 1;//exit(EXIT_FAILURE);
 	}
       for(i=0;i<nRecs1;++i) QUALITYlev1[i]=0;
+      EXPTIME = (float *)malloc(nRecs1*sizeof(float)); 
+      if(EXPTIME == NULL)
+	{
+	  printf("Error: memory could not be allocated to EXPTIME\n");
+	  return 1;//exit(EXIT_FAILURE);
+	}
       CALVER32 = (long long *)malloc(nRecs1*sizeof(long long)); 
       if(CALVER32 == NULL)
 	{
 	  printf("Error: memory could not be allocated to CALVER32\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
-   
-
+      
       //reading some keyword values for all the open records (PUT MISSINGKEYWORD OR MISSINGKEYWORDINT IF THE KEYWORD IS MISSING) and
       //create an array IndexFiltergram with the record index of all the filtergrams with the wavelength WavelengthID
       //***********************************************************************************************************************
@@ -1891,19 +1975,21 @@ int DoIt(void)
 	      return 1;//exit(EXIT_FAILURE);
 	    }
 	  HWLTNSET[i]   = drms_getkey_string(recLev1->records[i] ,HWLTNSETS      ,&statusA[30]);
-	  NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[31]);
-	  if(statusA[31] != DRMS_SUCCESS) NBADPERM[i]=-1;
-	  QUALITYin[i]  = drms_getkey_int(recLev1->records[i] ,QUALITYS          ,&statusA[32]);
-	  if(statusA[32] != DRMS_SUCCESS) KeywordMissing[i]=1;
+	  EXPTIME[i]    = (float)drms_getkey_double(recLev1->records[i],"EXPTIME",&statusA[31]);
+	      
+	  NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[32]);
+	  if(statusA[32] != DRMS_SUCCESS) NBADPERM[i]=-1;
+	  QUALITYin[i]  = drms_getkey_int(recLev1->records[i] ,QUALITYS          ,&statusA[33]);
+	  if(statusA[33] != DRMS_SUCCESS) KeywordMissing[i]=1;
 	  //WE TEST WHETHER THE DATA SEGMENT IS MISSING
 	  if( (QUALITYin[i] & Q_MISSING_SEGMENT) == Q_MISSING_SEGMENT)
 	    {
-	      statusA[32]=1;
+	      statusA[33]=1;
 	      SegmentRead[i]= -1;
 	    }
-
-	  CALVER32[i]   = (long long)drms_getkey_int(recLev1->records[i] ,CALVER32S    ,&statusA[33]);
-	  if(statusA[33] != DRMS_SUCCESS)
+	  
+	  CALVER32[i]   = (long long)drms_getkey_int(recLev1->records[i] ,CALVER32S    ,&statusA[34]);
+	  if(statusA[34] != DRMS_SUCCESS)
 	    {
 	      CALVER32[i]=CALVER_DEFAULT; //following Phil's email of August 27, 2012
 	      KeywordMissing[i]=1;
@@ -1914,7 +2000,6 @@ int DoIt(void)
 	      return 1;
 	    }
 
-	  
 	  //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	  /*if(statusA[9] == DRMS_SUCCESS && statusA[16] == DRMS_SUCCESS && statusA[14] == DRMS_SUCCESS && statusA[22] == DRMS_SUCCESS && statusA[21] == DRMS_SUCCESS)
 	    {
@@ -1931,11 +2016,11 @@ int DoIt(void)
 	  
 	  //Now we test whether any keyword is missing and we act accordingly
 	  TotalStatus=0;
-	  for(ii=0;ii<=30;++ii) TotalStatus+=statusA[ii];
-	  if(TotalStatus != 0 || !strcmp(IMGTYPE[i],"DARK") || KeywordMissing[i] != 0)  //at least one keyword is missing or the image is a dark frame
+	  for(ii=0;ii<=31;++ii) TotalStatus+=statusA[ii];
+	  if(TotalStatus != 0 || !strcmp(IMGTYPE[i],"DARK") )  //at least one keyword is missing or the image is a dark frame
 	    {
 	      printf("Error: the level 1 filtergram index %d is missing at least one keyword, or is a dark frame\n",i);
-	      for(iii=0;iii<=30;++iii) printf(" %d ",statusA[iii]);
+	      for(iii=0;iii<=31;++iii) printf(" %d ",statusA[iii]);
 	      printf("\n");
 	      //we set some keywords to unrealistic values so that this record cannot be considered a valid record later in the program and will be rejected
 	      FID[i]        = MISSINGKEYWORDINT;
@@ -1966,6 +2051,8 @@ int DoIt(void)
 	      HWLTID[i]     = MISSINGKEYWORD;
 	      HPLTID[i]     = MISSINGKEYWORD;
 	      strcpy(HWLTNSET[i],"NONE");
+	      EXPTIME[i]    = MISSINGKEYWORD;
+
 	      //SegmentRead[i]= -1; //-1 denotes a problem with the data segment
 	      KeywordMissing[i]=1;
 	    }
@@ -2052,9 +2139,10 @@ int DoIt(void)
 
 
   nWavelengths = Framelistsizein/Npolin;
-  if(nWavelengths != 5 && nWavelengths != 6)
+  printf("number of wavelengths = %d\n",nWavelengths);
+  if(nWavelengths != 5 && nWavelengths != 6 && nWavelengths != 8 && nWavelengths != 10)
     {
-      printf("Error: the number of wavelengths should be 5 or 6 but is %d\n",nWavelengths);
+      printf("Error: the number of wavelengths should be 5, 6, 8, or 10 but is %d\n",nWavelengths);
       return 1;//exit(EXIT_FAILURE);
     }
   
@@ -2188,7 +2276,7 @@ int DoIt(void)
     }
   for(i=0;i<nTime;++i)
     {
-      source[i] = (char *)malloc(32000*sizeof(char));                       //WARNING: MAKE SURE 12000 IS ENOUGH....
+      source[i] = (char *)malloc(64000*sizeof(char));                       //WARNING: MAKE SURE 64000 IS ENOUGH....
       if(source[i] == NULL)
 	{
 	  printf("Error: memory could not be allocated to source[%d]\n",i);
@@ -2555,16 +2643,17 @@ int DoIt(void)
   /********************************************************************************************************/
   /*                                                                                                      */
   /*                                                                                                      */
-  /*       LOOP OVER THE LEVEL 1 DATA BY WAVELENGTH (IN THE ORDER I0 to I5)                               */
+  /*       LOOP OVER THE LEVEL 1 DATA BY WAVELENGTH (IN THE ORDER I-2 to I7)                              */
   /*                                                                                                      */
   /*                                                                                                      */
   /********************************************************************************************************/
 
+  initialrun=1;
 
-  for(it=0;it<nWavelengths;++it) //nWavelengths=5 or 6
+  for(it=0;it<nWavelengths;++it) //nWavelengths=5, 6, 8, or 10
     {
       printf("----------------------------------------------------------------------------------------\n");
-      printf("CURRENT WAVELENGTH/FILTER = I%d\n",it);
+      printf("CURRENT WAVELENGTH/FILTER NUMBER = %d\n",it);
       printf("----------------------------------------------------------------------------------------\n");
 
       /********************************************************************************************************/
@@ -2579,11 +2668,38 @@ int DoIt(void)
       if(temptime < TimeBegin) temptime += TREC_STEP;
       TargetTime = temptime;                                        //NB: NEED TO ADD A FUNCTION TO SWITCH FROM SDO TIME TO EARTH TIME
       timeindex  = 0;
+      PreviousTargetTime=TargetTime;
 
       while(TargetTime <= TimeEnd)
 	{
 	  
+
+	  //additional tests when rotational flat field is required
+	  if(inRotationalFlat == 1) 
+	    {
+	      
+	      //check that the run does not straddle 2 days
+	      if(floor(TargetTime/86400.0) != floor(PreviousTargetTime/86400.0) )
+		{
+		  printf("Error: the new target time is for a different day than the previous target time: you are not allowed to change day when applying a rotational flat field\n");
+		  return 1;
+		}
+	      
+	      //check that TargetTime is still within the range of the rotational flat field used
+	      if(initialrun != 1)
+		{
+		  if(TargetTime < TSTARTFLAT || TargetTime > TSTOPFLAT)
+		    {
+		      printf("Error: the target time is not within the time range for which the rotation flat field used is valid\n");
+		      return 1;
+		    }
+		}
+	      
+	    }
+
+	  
 	  sprint_time(timeBegin2,TargetTime,"TAI",0);                   //convert the time TargetTime from TIME format to a string with TAI type
+	  printf("TARGET TIME= %s %f\n",timeBegin2,TargetTime);
 
 	  if(nIndexFiltergram == 0)
 	    {
@@ -2666,12 +2782,152 @@ int DoIt(void)
 	      if(!strcmp(TargetISS,"OPEN")) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET;
 	      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
 	
+
+	      //***************************************************************************
+	      //read the pzt and rotational flat fields of the target filtergram, if needed
+	      //***************************************************************************
+
+	      if(inRotationalFlat == 1)                                               //rotation flatfield wanted instead of pzt flatfield
+		{
+
+		  HMIFlatField    = (char *)malloc(MaxNString*sizeof(char *));
+		  if(HMIFlatField == NULL)
+		    {
+		      printf("Error: memory could not be allocated to HMIFlatField\n");
+		      return 1;//exit(EXIT_FAILURE);
+		    }
+
+		  HMIFlatField    = drms_getkey_string(recLev1->records[temp],FLATREC,&status);  //read the pzt flatfield used
+		  if (status != DRMS_SUCCESS)
+		    {
+		      printf("Error: could not read the FLAT_REC keyword for the target filtergram FSN= %d",FSN[temp]);
+		      return 1;
+		    }
+		  else
+		    {
+		      printf("PZT FLAT FIELD USED ON TARGET FILTERGRAM= %s\n",HMIFlatField);
+		      if(initialrun == 1)
+			{
+			  strcpy(HMIFlatField0,HMIFlatField); //if this is the first timestep of this run of the observables code
+
+			  //access the pzt flatfield
+			  recflat  = drms_open_records(drms_env,HMIFlatField,&status);
+			  if (status != DRMS_SUCCESS || recflat == NULL || recflat->n == 0)
+			    {
+			      printf("Error: record missing or corrupt for the flat field query %s\n",HMIFlatField);
+			      return 1;
+			    }
+			  segin     = drms_segment_lookup(recflat->records[0],"flatfield");
+			  flatfield = drms_segment_read(segin,type1d,&status); 
+			  if (status != DRMS_SUCCESS || flatfield == NULL)
+			  {
+			    printf("Error: could not read the data segment for the flat field query %s\n",HMIFlatField);
+			    return 1;
+			  }
+			  pztflat  = flatfield->data;
+			  status=drms_close_records(recflat,DRMS_FREE_RECORD);
+
+			  //access the rotational flatfield
+			  char keylist[]="T_START,T_STOP";
+			  int unique = 0;
+			  rotationalflats = drms_record_getvector(drms_env,HMIRotationalFlats,keylist,DRMS_TYPE_DOUBLE,unique,&status);
+			  if(status != DRMS_SUCCESS)
+			    {
+			      printf("Error: cannot read a list of keywords in the rotation flat-field series\n");
+			      return 1;
+			    }
+			  printf("DIMENSIONS OF ROTATIONAL FLAT-FIELD SERIES= %d %d\n",rotationalflats->axis[0],rotationalflats->axis[1]);
+			  int n0,n1;
+			  n1  =rotationalflats->axis[1]; //number of rotational flat-field records found
+			  n0  =rotationalflats->axis[0]; //number of keywords read (should be 2)
+			  keyF=rotationalflats->data;
+
+			  i=0;
+			  while(TargetTime > keyF[i] && TargetTime > keyF[n1+i])
+			    {
+			      i++;
+			    }
+
+			  if(TargetTime >= keyF[i] && TargetTime <= keyF[n1+i]) //we want this record
+			    {
+			      //we build the query for the rotational flatfield 
+			      TSTARTFLAT=keyF[i];
+			      TSTOPFLAT =keyF[n1+i];
+			      sprint_time(query,keyF[i],"TAI",1);
+			      strcpy(QueryFlatField,HMIRotationalFlats); 
+			      strcat(QueryFlatField,"[");
+			      if(CamId == LIGHT_SIDE)  strcat(QueryFlatField,"1"); 
+			      if(CamId == LIGHT_FRONT) strcat(QueryFlatField,"2");
+			      strcat(QueryFlatField,"][");
+			      strcat(QueryFlatField,query);
+			      strcat(QueryFlatField,"]");
+			      printf("QUERY FOR ROTATIONAL FLAT FIELD= %s\n",QueryFlatField);
+	
+			      //we read the rotational flat field
+			      recflatrot  = drms_open_records(drms_env,QueryFlatField,&status);
+			      if (status != DRMS_SUCCESS || recflatrot == NULL || recflatrot->n == 0)
+				{
+				  printf("Error: record missing or corrupt for the rotational flat field query %s\n",QueryFlatField);
+				  return 1;
+				}
+			      segin     = drms_segment_lookup(recflatrot->records[0],"flatfield");
+			      flatfieldrot = drms_segment_read(segin,type1d,&status); 
+			      if (status != DRMS_SUCCESS || flatfieldrot == NULL)
+				{
+				  printf("Error: could not read the data segment for the rotational flat field query %s\n",QueryFlatField);
+				  return 1;
+				}
+			      rotflat  = flatfieldrot->data;
+			      
+			    }
+			  else //no rotational flafield record exists for the target time 
+			    {
+			      printf("Error: no rotational flat field record exists for the target time %s\n",timeBegin2);
+			      return 1;
+			    }
+
+			  drms_free_array(rotationalflats);
+			  rotationalflats=NULL;
+			}//if(initialrun == 1)
+		      else if(strcmp(HMIFlatField,HMIFlatField0) != 0) //if the pzt flatfield changes during a run of the osbervables code
+			{
+			  printf("Warning: the hmi.flatfield record used to produce the level 1 records changed during the run of the observables code\n");
+			  printf("The new hmi,flatfield record used is: %s\n",HMIFlatField);
+			  //access the pzt flatfield
+			  recflat  = drms_open_records(drms_env,HMIFlatField,&status);
+			  if (status != DRMS_SUCCESS || recflat == NULL || recflat->n == 0)
+			    {
+			      printf("Error: record missing or corrupt for the flat field query %s\n",HMIFlatField);
+			      return 1;
+			    }
+			  drms_free_array(flatfield);
+			  strcpy(HMIFlatField0,HMIFlatField);
+			  segin     = drms_segment_lookup(recflat->records[0],"flatfield");
+			  flatfield = drms_segment_read(segin,type1d,&status); 
+			  if (status != DRMS_SUCCESS || flatfield == NULL)
+			  {
+			    printf("Error: could not read the data segment for the flat field query %s\n",HMIFlatField);
+			    return 1;
+			  }
+			  pztflat  = flatfield->data;
+			  status=drms_close_records(recflat,DRMS_FREE_RECORD);
+			}
+
+		    }
+		  free(HMIFlatField);
+		}//if(inRotationalFlat == 1)
+	      
+	      //*************************************************************************************
+
+
+
+
 	      framelistSize   = framelistInfo(TargetHFLID,TargetHPLTID,TargetHWLTID,WavelengthID,PHWPLPOS,WavelengthIndex,WavelengthLocation,&PolarizationType,CamId,&combine,&npol,MaxNumFiltergrams,&CadenceRead,CameraValues,FIDValues,dpath);
 	      if(framelistSize == 1) return 1;
 
 	      if(framelistSize != Framelistsizein)
 		{
-		  printf("Error: the current framelist does not match what is expectedf rom the command line, at target time %s\n",timeBegin2);
+		  printf("Error: the current framelist does not match what is expected from the command line, at target time %s\n",timeBegin2);
 		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_WRONGFRAMELISTSIZE;
 		  CreateEmptyRecord=1; goto NextTargetTime;
 		}
@@ -2710,7 +2966,7 @@ int DoIt(void)
 		} 
 	      if(k != Npolin)
 		{
-		  printf("Error: k is different from NpolIn\n");
+		  printf("Error: k is different from NpolIn %d %d\n",k,Npolin);
 		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_WRONGNPOL;
 		  CreateEmptyRecord=1; goto NextTargetTime;		  
 		}
@@ -3247,6 +3503,7 @@ int DoIt(void)
 				      else
 					{
 					  SegmentRead[temp]=1; //now the segment for this record is in memory
+
 					  //call gapfilling code of Richard and Jesper
 					  //*******************************************************************
 					  segin           = drms_segment_lookup(recLev1->records[temp],"bad_pixel_list");
@@ -3280,7 +3537,7 @@ int DoIt(void)
 						{
 						  segin = drms_segment_lookupnum(rectemp->records[0],0);
 						  CosmicRays = NULL;
-						
+									
 						  COSMICCOUNT=drms_getkey_int(rectemp->records[0],COUNTS,&status);
 						  if(status != DRMS_SUCCESS || COSMICCOUNT == -1)
 						    {
@@ -3303,6 +3560,7 @@ int DoIt(void)
 							}
 						    }
 
+
 						}
 					      else
 						{
@@ -3317,6 +3575,99 @@ int DoIt(void)
 						}
 					      					      
 					      image  = Segments[temp]->data;
+
+					      //***********************************************************************
+					      // applying rotational flat field and correcting for non-linearity
+					      //***********************************************************************
+
+					      if(inRotationalFlat == 1)
+						{
+
+						  HMIFlatField    = (char *)malloc(MaxNString*sizeof(char *));
+						  if(HMIFlatField == NULL)
+						    {
+						      printf("Error: memory could not be allocated to HMIFlatField\n");
+						      return 1;//exit(EXIT_FAILURE);
+						    }
+						  HMIFlatField    = drms_getkey_string(recLev1->records[temp],FLATREC,&status);  //read the pzt flatfield used
+						  if (status != DRMS_SUCCESS)
+						    {
+						      printf("Error: could not read the FLAT_REC keyword for the target filtergram FSN= %d",FSN[temp]);
+						      return 1;
+						    }
+
+
+						  if(strcmp(HMIFlatField,HMIFlatField0) != 0) //if the pzt flatfield changes during a run of the osbervables code
+						    {
+						      printf("Warning: the hmi.flatfield record used to produce the level 1 records changed during the run of the observables code\n");
+						      //access the pzt flatfield
+						      recflat  = drms_open_records(drms_env,HMIFlatField,&status);
+						      if (status != DRMS_SUCCESS || recflat == NULL || recflat->n == 0)
+							{
+							  printf("Error: record missing or corrupt for the flat field query %s\n",HMIFlatField);
+							  return 1;
+							}
+						      drms_free_array(flatfield);
+						      strcpy(HMIFlatField0,HMIFlatField);
+						      segin     = drms_segment_lookup(recflat->records[0],"flatfield");
+						      flatfield = drms_segment_read(segin,type1d,&status); 
+						      if (status != DRMS_SUCCESS || flatfield == NULL)
+							{
+							  printf("Error: could not read the data segment for the flat field query %s\n",HMIFlatField);
+							  return 1;
+							}
+						      pztflat  = flatfield->data;
+						      status=drms_close_records(recflat,DRMS_FREE_RECORD);
+						    }
+						  
+						  if(inLinearity == 1)
+						    {
+						      printf("applying rotational flat field and correcting for non-linearity of camera on record FSN=%d\n",FSN[temp]);
+						      for(iii=0;iii<axisin[0]*axisin[1];++iii)
+							{
+							  //removing the pzt flat field and applying the rotational flat field
+							  image[iii]=(image[iii]*pztflat[iii])/rotflat[iii];
+							  //remove non-linearity of cameras
+							  tempvalue = image[iii]*EXPTIME[temp];
+							  if(CamId == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+							  else tempvalue = (nonlins[0]+nonlins[1]*tempvalue+nonlins[2]*tempvalue*tempvalue+nonlins[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+							  image[iii]  = tempvalue/EXPTIME[temp];    
+							}
+						    }
+						  else
+						    {
+						      printf("applying rotational flat field on record FSN=%d\n",FSN[temp]);
+						      for(iii=0;iii<axisin[0]*axisin[1];++iii)
+							{
+							  //removing the pzt flat field and applying the rotational flat field
+							  image[iii]=(image[iii]*pztflat[iii])/rotflat[iii];
+							}
+						    }
+	
+						  free(HMIFlatField);
+
+						}//if(inRotationalFlat == 1)
+					      else
+						{
+						  if(inLinearity == 1)
+						    {
+						      printf("correcting for non-linearity of camera on record FSN=%d\n",FSN[temp]);
+						      for(iii=0;iii<axisin[0]*axisin[1];++iii)
+							{
+							  //remove non-linearity of cameras
+							  tempvalue = image[iii]*EXPTIME[temp];
+							  if(CamId == LIGHT_FRONT) tempvalue = (nonlinf[0]+nonlinf[1]*tempvalue+nonlinf[2]*tempvalue*tempvalue+nonlinf[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+							  else tempvalue = (nonlins[0]+nonlins[1]*tempvalue+nonlins[2]*tempvalue*tempvalue+nonlins[3]*tempvalue*tempvalue*tempvalue)+tempvalue;
+							  image[iii]  = tempvalue/EXPTIME[temp];
+							}
+						    }
+						  
+						}
+
+
+					      //**********************************************************************8
+
+
 					      status = MaskCreation(Mask,axisin[0],axisin[1],BadPixels,HIMGCFID[temp],image,CosmicRays,NBADPERM[temp]); //first create the mask of missing pixels
 					      if(status != 0)
 						{
@@ -3717,6 +4068,9 @@ int DoIt(void)
 	      if(camera  == 3) strcpy(DATEOBS,"HMI_COMBINED");
 	      statusA[42]= drms_setkey_string(recLev1p->records[timeindex],INSTRUMES,DATEOBS); 
 	      statusA[43]= drms_setkey_int(recLev1p->records[timeindex],HCAMIDS,CamId); 
+	      //statusA[45]= drms_setkey_string(recLev1p->records[timeindex],ROTFLAT,QueryFlatField); //apply a rotational flat field yes (query used) or no (empty string)?
+	      if(inLinearity == 1)      CALVER32[0] = CALVER32[0] | CALVER_LINEARITY;
+	      if(inRotationalFlat == 1) CALVER32[0] = CALVER32[0] | CALVER_ROTATIONAL;
 	      statusA[45]= drms_setkey_longlong(recLev1p->records[timeindex],CALVER64S,CALVER32[0]); 
 
 	      TotalStatus=0;
@@ -3752,7 +4106,7 @@ int DoIt(void)
 	      arrLev1p[i]->bscale=segout->bscale; //because BSCALE in the jsd file is not 1
 	      arrLev1p[i]->israw=0;
 	      status=drms_segment_write(segout,arrLev1p[i],0);        //write the file containing the data (WE ASSUME THAT imagesout ARE IN THE ORDER I,Q,U,V AND LCP followed by RCP)		
-	      if(status != DRMS_SUCCESS)
+ 	      if(status != DRMS_SUCCESS)
 		{
 		  printf("Error: a call to drms_segment_write failed\n");
 		  return 1;
@@ -3859,10 +4213,12 @@ int DoIt(void)
 
 
 	  printf("TIME= %f\n",TargetTime);
+	  PreviousTargetTime=TargetTime;
 	  TargetTime+=AverageTime;  //this way I avoid taking as the next TargetFID the filtergram just next to the current TargetFID (because LCP and RCP are grouped together) 
 	  printf("TIME= %f\n",TargetTime);
 	  printf("END TIME= %f\n",TimeEnd);
 	  timeindex+=1;
+	  initialrun=0;
 	}//END LOOP ON TIME
 
     }//END LOOP OVER WAVELENGTH
@@ -3909,6 +4265,13 @@ if(nIndexFiltergram != 0)
 	free(SegmentRead);
 	free(KeywordMissing);
 	free(Segments);
+	//free the pzt and rotational flat fields of the target filtergram, if needed
+	if(inRotationalFlat == 1)
+	  {
+	    drms_free_array(flatfield);
+	    drms_free_array(flatfieldrot);
+	    status=drms_close_records(recflatrot,DRMS_FREE_RECORD);
+	  }
 	free(Badkeyword);
 	free(Ierror);  
 	free(IndexFiltergram);
@@ -3922,6 +4285,7 @@ if(nIndexFiltergram != 0)
 	free(HWLTNSET);
 	free(NBADPERM);
 	free(QUALITYin);
+	free(EXPTIME);	  
       }
     
     for(i=0;i<nTime;++i) free(source[i]);
