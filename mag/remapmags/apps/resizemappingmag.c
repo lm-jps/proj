@@ -54,23 +54,23 @@ double getcputime(double *utime, double *stime)
 
 /* ################## Wrapper for Jesper's code ################## */
 
-void frebin(float *image_in, float *image_out, int nx, int ny, int nbin)
+void frebin(float *image_in, float *image_out, int nx_in, int ny_in, int nx_out, int ny_out, int nbin)
 {
   struct fresize_struct fresizes;
-  int nxout, nyout;
-  int nlead = nx;
+//  int nxout, nyout;
+  int nlead_in = nx_in, nlead_out = nx_out;
   
-  nxout = nx / nbin; nyout = ny / nbin;
-  init_fresize_gaussian(&fresizes, (nbin / 2) * 2, (nbin / 2) * 2, nbin);
-  fresize(&fresizes, image_in, image_out, nx, ny, nlead, nxout, nyout, nxout, (nbin / 2) * 2, (nbin / 2) * 2, DRMS_MISSING_FLOAT);
+//  nxout = nx / nbin; nyout = ny / nbin;
+  init_fresize_gaussian2(&fresizes, nbin, (3 * nbin)/2, (3 * nbin)/2, nbin);
+
+//  fresize(&fresizes, image_in, image_out, nx, ny, nlead, nxout, nyout, nxout, (nbin / 2) * 2, (nbin / 2) * 2, DRMS_MISSING_FLOAT);
+
+  fresize(&fresizes, image_in, image_out, nx_in, ny_in, nlead_in, nx_out, ny_out, nlead_out, 4*nbin + 1, 4*nbin + 1, DRMS_MISSING_FLOAT);
   free_fresize(&fresizes);
 
 }
 
-
-
 /* ################## Main Module ################## */
-
 
 char *module_name = "resizemappingmag";	/* Module name */
 
@@ -163,18 +163,77 @@ int DoIt(void)
         if (status) continue;
         inData = inArray->data;
         n0 = inArray->axis[0]; n1 = inArray->axis[1];
+// create an array larger than the original array. The extra data at edge are 
+// mirrowed with the data at the original edge.
+        int xNewdim = n0 + 8 * nbin, yNewdim = n1 + 8 * nbin;
+        int xStart = 4 * nbin, yStart = 4 * nbin;
+        long long iDataOld, yOffOld, iDataNew, yOffNew;
+        int ii, jj;
+        float *tmpData;
+
         xout = n0 / nbin; yout = n1 / nbin;
+//        xout = xNewdim; yout = yNewdim;
         if (verbflag) printf("n0=%d, n1=%d, xout=%d, yout=%d\n", n0, n1, xout, yout); //fflush(stdout);
         
         /* Output array */
         outDims[0] = xout; outDims[1] = yout;		// Odd pixels
-        if (!(outData = (float *) malloc(xout*yout*4))) DIE("MALLOC_FAILED");
-	    outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, outData, &status);
-       
+        outData = (float *) malloc(xout * yout * sizeof(float));
+	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, outData, &status);
+
+        tmpData = (float *) malloc(xNewdim * yNewdim * sizeof(float));
+
+        for (jj = 0; jj < 4 * nbin; jj++) {
+            yOffNew = jj * xNewdim;
+            yOffOld = (4 * nbin - jj) * n0;
+            for (ii = 0; ii < n0; ii++) {
+                iDataNew = yOffNew + xStart + ii;
+                iDataOld = yOffOld + ii;
+                tmpData[iDataNew] = inData[iDataOld];
+            }
+        }
+      
+        for (jj = 0; jj < 4 * nbin; jj++) {
+            yOffNew = (jj + n1 + 4 * nbin) * xNewdim;
+            yOffOld = (n1 - 1 - jj) * n0;
+            for (ii = 0; ii < n0; ii++) {
+                iDataNew = yOffNew + xStart + ii;
+                iDataOld = yOffOld + ii;
+                tmpData[iDataNew] = inData[iDataOld];
+            }
+        }
+
+        for (jj = 0; jj < n1; jj++) {
+            yOffNew = (jj + 4 * nbin) * xNewdim;
+            yOffOld = jj * n0;
+            for (ii = 0; ii < n0; ii++) {
+                iDataNew = yOffNew + xStart + ii;
+                iDataOld = yOffOld + ii;
+                tmpData[iDataNew] = inData[iDataOld];
+            }
+        }
+
+        for (jj = 0; jj < yNewdim; jj++) {
+            yOffNew = jj * xNewdim;
+            for (ii = 0; ii < xStart; ii++) {
+                iDataNew = yOffNew + (xStart - 1) - ii;
+                iDataOld = yOffNew + xStart + ii;
+                tmpData[iDataNew] = tmpData[iDataOld];
+            }
+        }
+
+        for (jj = 0; jj < yNewdim; jj++) {
+            yOffNew = jj * xNewdim;
+            for (ii = 0; ii < xStart; ii++) {
+                iDataNew = yOffNew + (xNewdim - xStart) + ii;
+                iDataOld = yOffNew + (xNewdim - xStart) - 1 - ii;
+                tmpData[iDataNew] = tmpData[iDataOld];
+            }
+        }
+ 
         /************************************************************/
         /************************ Rebin here ************************/
         /************************************************************/
-        frebin(inData, outData, n0, n1, nbin);
+        frebin(tmpData, outData, xNewdim, yNewdim, xout, yout, nbin);
         counting++;
 printf("processing files number = %d\n", counting);
 
@@ -263,6 +322,7 @@ printf("processing files number = %d\n", counting);
         drms_copykey(outRec, inRec, "DIFROT_A");
         drms_copykey(outRec, inRec, "DIFROT_B");
         drms_copykey(outRec, inRec, "DIFROT_C");
+        drms_copykey(outRec, inRec, "CALVER64");
 
         /* Time measure */
         if (verbflag) {
@@ -273,6 +333,7 @@ printf("processing files number = %d\n", counting);
         }
 
         /* Clean up */
+        free(tmpData);
         drms_free_array(inArray);
         drms_free_array(outArray);
         drms_close_record(outRec, DRMS_INSERT_RECORD);

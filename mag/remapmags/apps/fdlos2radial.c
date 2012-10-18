@@ -38,6 +38,8 @@ ModuleArgs_t module_args[] =
    {ARG_STRING,  kSeriesOut, "", "Output data series."},
    {ARG_STRING,  kSegIn, kNOTSPECIFIED, ""},
    {ARG_STRING,  kSegOut, kNOTSPECIFIED, ""},
+   {ARG_INT, "XSIZE", "4096", "", ""},
+   {ARG_INT, "YSIZE", "4096", "", ""},
    {ARG_END}
 };
 
@@ -46,11 +48,14 @@ int DoIt(void)
 
     int status = DRMS_SUCCESS;
     int ds, nds;
+    int xsize, ysize;
     char *inRecQuery, *outRecQuery;
     DRMS_RecordSet_t *inRD, *outRD;
 
     inRecQuery = (char *)params_get_str(&cmdparams, kRecSetIn);
     outRecQuery = (char *)params_get_str(&cmdparams, kSeriesOut);
+    xsize = cmdparams_get_int(&cmdparams, "XSIZE", &status);
+    ysize = cmdparams_get_int(&cmdparams, "YSIZE", &status);
     inRD = drms_open_records(drms_env, inRecQuery, &status);
     if (status || inRD->n == 0)
         DIE("No input data found");
@@ -62,7 +67,7 @@ int DoIt(void)
 
     for (ds = 0; ds < nds; ds++)
       {
-        int xDim = 4096, yDim = 4096;
+        int xDim = xsize, yDim = ysize;
         double xDist = 0.0;
         double yDist = 0.0;
         double xDist2 = 0.0;
@@ -191,6 +196,7 @@ int DoIt(void)
         drms_copykey(outRec, inRec, "TOTVALS");
         drms_copykey(outRec, inRec, "DATAVALS");
         drms_copykey(outRec, inRec, "MISSVALS");
+        drms_copykey(outRec, inRec, "CALVER64");
 
 // write Bradial as the first segment
         outSeg = drms_segment_lookupnum(outRec, 0);
@@ -216,8 +222,9 @@ $Author: xudong $
 */
 
 /* $Log: fdlos2radial.c,v $
- * Revision 1.1  2011/04/15 01:27:29  xudong
- * added remap etc for yang
+ * Revision 1.2  2012/10/18 17:37:05  xudong
+ * updated per Yang's request
+ * CV: ----------------------------------------------------------------------
  *
 Purpose: Convert los mags to radial mags by assuming that the field is purely radial.
 % vectortransform in='su_yang.hmi_vector' out='su_yang.hmi_maghelio'

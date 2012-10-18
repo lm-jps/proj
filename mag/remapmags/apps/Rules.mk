@@ -38,15 +38,15 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ 
+$(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) $(FFTWH)
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
-$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d) $(GSLH)
+$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
 $(ALL_$(d)) : $(EXTRADEPS_$(d))
 $(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS)
-$(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) -lmkl_em64t
+$(ALL_$(d)) : LL_TGT := $(LL_TGT) $(FFTW3LIBS) $(CFITSIOLIBS) -lmkl_em64t
 
 # Shortcuts
 .PHONY:	$(S_$(d))

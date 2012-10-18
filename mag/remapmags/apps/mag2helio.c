@@ -29,8 +29,8 @@
 #include "jsoc_main.h"
 #include "astro.h"
 #include "drms_dsdsapi.h"
-#include "obs2heliodb.c"
-#include "fstats.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/obs2heliodb.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
 
 #define PI		(M_PI)
 #define RADSINDEG 	(PI/180)
@@ -1001,6 +1001,7 @@ imagescale=xscale;
       drms_copykey(outrec, inrec, "OBS_VR");
       drms_copykey(outrec, inrec, "OBS_VW");
       drms_copykey(outrec, inrec, "OBS_VN");
+      drms_copykey(outrec, inrec, "CALVER64");
 
 // write the statistical results
         drms_setkey_int(outrec, "TOTVALS", xDims*yDims);
