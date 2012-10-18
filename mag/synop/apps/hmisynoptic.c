@@ -11,8 +11,8 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
-#include "/home0/yliu/cvs/JSOC/proj/libs/astro/heliographic_coords.c"
+#include "fstats.c"
+#include "heliographic_coords.c"
 
 /* cmd-line parameters */
 #define kRecSetIn       "in"
@@ -46,6 +46,9 @@
 #define kDIFROT_C              "DIFROT_C"
 #define CR                     "CR"
 #define NBIN                   "NBIN"
+
+void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny);
+
 
 //const float kOutScale = 0.1;
 //const int kOutBPP = 16;
@@ -1581,7 +1584,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.5 2012/10/18 00:51:01 xudong Exp $
+$Id: hmisynoptic.c,v 1.6 2012/10/18 17:55:54 xudong Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: xudong $
 */
@@ -1594,6 +1597,9 @@ $Author: xudong $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
+ * Revision 1.6  2012/10/18 17:55:54  xudong
+ * *** empty log message ***
+ *
  * Revision 1.5  2012/10/18 00:51:01  xudong
  * updated per Yang's request
  *
