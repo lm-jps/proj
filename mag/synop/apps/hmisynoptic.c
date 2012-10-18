@@ -11,15 +11,8 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
-#include "fstats.h"
-#include "heliographic_coords.c"
-
-#include <mkl_blas.h>^M
-#include <mkl_service.h>^M
-#include <mkl_lapack.h>^M
-#include <mkl_vml_functions.h>^M
-#include <omp.h>^M
-#include "fresize.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
+#include "/home0/yliu/cvs/JSOC/proj/libs/astro/heliographic_coords.c"
 
 /* cmd-line parameters */
 #define kRecSetIn       "in"
@@ -53,8 +46,6 @@
 #define kDIFROT_C              "DIFROT_C"
 #define CR                     "CR"
 #define NBIN                   "NBIN"
-
-void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny);
 
 //const float kOutScale = 0.1;
 //const int kOutBPP = 16;
@@ -188,6 +179,7 @@ int DoIt(void)
   double smallstatMin, smallstatMax, smallstatMedn, smallstatMean, smallstatSig, smallstatSkew, smallstatKurt;
   int statNgood;
   int smallstatNgood;
+  long long calVer;
 
   struct {
       int recno;
@@ -322,9 +314,11 @@ for (ds=0; ds < nds; ds++)
         int csKey = 0;
         float csCoeffKey;
         int sensAdjKey;
+//        long long calVer; 
         DRMS_Record_t *inRec;
         inRec = inRD->records[ds];
 
+        calVer = drms_getkey_longlong(inRec, "CALVER64", &status);
 /*
         if (checkqual) 
         {
@@ -806,17 +800,19 @@ for (ds = 0; ds < nsynop; ds++)
         sscanf(tstr, "%d.%d.%d", &y, &m, &d);
         sprintf(tstr, "%04d-%02d-%02d", y, m, d);
         drms_setkey_string(outRec, "DATE", tstr);
-        drms_setkey_string(outRec, "BUNIT", "Gauss");
+        drms_setkey_string(outRec, "BUNIT", "Mx/cm^2");
 
 //for image coordinate mapping keywords
 
         drms_setkey_string(outRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(outRec, "CTYPE2", "CRLT-CEA");
-        i=len[0]/2+0.5;
+        i=len[0]/2+0.0;
         drms_setkey_int(outRec, "CRPIX1", i);
-        l=len[1]/2+0.5;
+                // origin is at the left corner of the first pixel
+        l=len[1]/2+0.0;
         drms_setkey_float(outRec, "CRPIX2", l);
-        carrtime = cr*360.0 - 180.0;
+                // origin is at the left corner of the first pixel
+        carrtime = (cr*360.0-360.0/len[0]) - 180.0 + 0.5 * 360.0/len[0];
         drms_setkey_float(outRec, "CRVAL1", carrtime);
         i=0.0;
         drms_setkey_float(outRec, "CRVAL2", i);
@@ -825,10 +821,14 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_float(outRec, "CDELT2", 1.0/sinbdivs);
         drms_setkey_string(outRec, "CUNIT1", "degree");
         drms_setkey_string(outRec, "CUNIT2", "Sine Latitude");
+        drms_setkey_string(outRec, "WCSNAME", "Carrington Heliographic");
 
 //HMI observables keywords
         sprint_at(tstr, trot);
-        drms_setkey_string(outRec, "T_REC", tstr);
+//        drms_setkey_string(outRec, "T_REC", tstr);
+        drms_setkey_float(outRec, "CADENCE", 27.2753*24.*60.*60.);
+        drms_setkey_float(outRec, "T_REC_step", 27.2753*24.*60.*60.);
+
 // image statistics
 
         i = len[0]*len[1];
@@ -882,6 +882,9 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_float(outRec, HWNWIDTH, halfWindow);
         drms_setkey_float(outRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(outRec, "NSIGMA", nsig);
+        drms_setkey_longlong(outRec, "CALVER64", calVer);
+
+//        drms_copykey(outRec, inRec, "CALVER64");
 
 // save the differential rotation correction parameters 
         if (carrStretch > 0)
@@ -901,17 +904,17 @@ for (ds = 0; ds < nsynop; ds++)
         sscanf(tstr, "%d.%d.%d", &y, &m, &d);
         sprintf(tstr, "%04d-%02d-%02d", y, m, d);
         drms_setkey_string(smallRec, "DATE", tstr);
-        drms_setkey_string(smallRec, "BUNIT", "Gauss");
+        drms_setkey_string(smallRec, "BUNIT", "Mx/cm^2");
 
 //for image coordinate mapping keywords
 
         drms_setkey_string(smallRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(smallRec, "CTYPE2", "CRLT-CEA");
-        i=xout/2+0.5;
+        i=xout/2+0.0;
         drms_setkey_int(smallRec, "CRPIX1", i);
-        l=yout/2+0.5;
+        l=yout/2+0.0;
         drms_setkey_float(smallRec, "CRPIX2", l);
-        carrtime = cr*360.0 - 180.0;
+        carrtime = (cr*360.0-360.0/xout) - 180.0 + 0.5 * 360.0/xout;
         drms_setkey_float(smallRec, "CRVAL1", carrtime);
         i=0.0;
         drms_setkey_float(smallRec, "CRVAL2", i);
@@ -920,10 +923,14 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_float(smallRec, "CDELT2", nbin*1.0/sinbdivs);
         drms_setkey_string(smallRec, "CUNIT1", "degree");
         drms_setkey_string(smallRec, "CUNIT2", "Sine Latitude");
+        drms_setkey_string(smallRec, "WCSNAME", "Carrington Heliographic");
 
 //HMI observables keywords
         sprint_at(tstr, trot);
-        drms_setkey_string(smallRec, "T_REC", tstr);
+//        drms_setkey_string(smallRec, "T_REC", tstr);
+        drms_setkey_float(smallRec, "CADENCE", 27.2753*24.*60.*60.);
+        drms_setkey_float(smallRec, "T_REC_step", 27.2753*24.*60.*60.);
+
 // image statistics
 
         i = xout*yout;
@@ -978,9 +985,7 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_float(smallRec, HWNWIDTH, halfWindow);
         drms_setkey_float(smallRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(smallRec, "NSIGMA", nsig);
-
-//        drms_setkey_float(outRec, "NNOISE", noiseS); -- noiseS not be used so far.
-        
+        drms_setkey_longlong(smallRec, "CALVER64", calVer);
 
 // save the differential rotation correction parameters 
         if (carrStretch > 0)
@@ -1396,21 +1401,6 @@ void m_sort(MagCol_t *mc, MagCol_t *mc_cpy, int sz)
         mc[n++] = mc_cpy2[j++];
 }
 
-/* ################## Wrapper for Jesper's code ################## */
-
-void frebin(float *image_in, float *image_out, int nx, int ny, int nbin)
-{
-  struct fresize_struct fresizes;
-  int nxout, nyout;
-  int nlead = nx;
-
-  nxout = nx / nbin; nyout = ny / nbin;
-  init_fresize_gaussian(&fresizes, (nbin / 2) * 2, (nbin / 2) * 2, nbin);
-  fresize(&fresizes, image_in, image_out, nx, ny, nlead, nxout, nyout, nxout, (nbin / 2) * 2, (nbin / 2) * 2, DRMS_MISSING_FLOAT);
-  free_fresize(&fresizes);
-
-}
-
 void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny)
 {
   int nxout, nyout;
@@ -1591,7 +1581,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.4 2011/11/20 01:27:32 xudong Exp $
+$Id: hmisynoptic.c,v 1.5 2012/10/18 00:51:01 xudong Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: xudong $
 */
@@ -1604,11 +1594,8 @@ $Author: xudong $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
- * Revision 1.4  2011/11/20 01:27:32  xudong
- * updated fstats.h
- *
- * Revision 1.3  2011/10/20 17:36:46  xudong
- * Updated per Yang's request
+ * Revision 1.5  2012/10/18 00:51:01  xudong
+ * updated per Yang's request
  *
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.

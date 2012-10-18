@@ -3,13 +3,12 @@
 synframe sdate='2010.08.12' stime='16:00:00' in='su_yang.fd_M12m_remap_los' out='su_yang.synframe_los' synoptic='su_yang.hmi_M12m_synop' drmethod='Snodgrass' magresoln=1 synresoln=1 MAXMISSVALS=0 xx1=30
 
 */
-
 // -----------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
+#include "fstats.c"
 
 #include <mkl_blas.h>^M
 #include <mkl_service.h>^M
@@ -17,6 +16,10 @@ synframe sdate='2010.08.12' stime='16:00:00' in='su_yang.fd_M12m_remap_los' out=
 #include <mkl_vml_functions.h>^M
 #include <omp.h>^M
 #include "fresize.c"
+
+void frebin(float *image_in, float *image_out, int nx, int ny, int nbin);
+void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny);
+
 
 char *module_name = "dailysynframe";
 
@@ -41,7 +44,6 @@ ModuleArgs_t module_args[] =
   float zgrid(int jph, int ith, int cmp, int rup, int dbl, 
        float phd[], float thd[], float lad[], float cth[], 
        float sth[], float csc[], float scs[]);
-void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny);
 
 int DoIt(void)
 {
@@ -115,7 +117,7 @@ int DoIt(void)
 
   inRS = drms_open_records(drms_env, inQuery, &status);
   if (status || inRS->n == 0)
-     DIE("No input data found");
+     DIE("No input data found -- no remapped files");
   inRec = inRS->records[0];
   t_rec = drms_getkey_time(inRec, "T_REC", &status);
   t_rec0 = t_rec - halfw;
@@ -129,10 +131,40 @@ int DoIt(void)
   free(trec_str);
 
   inRSfinal = drms_open_records(drms_env, inQueryfinal, &status);
-  if (status || inRS->n == 0) DIE("No input data found");
+  if (status || inRSfinal->n == 0) DIE("No input data found -- files contain no data");
   nrecs = inRSfinal->n;
-  int nref = (int)(nrecs/2);
+
+// find the middle data
+
+  int count = 0;
+  int *recp;
+  int nref, rec_cen;
+  recp = (int *)malloc(nrecs * sizeof(int));
+  for (i = 0; i < nrecs; i++)
+    {
+        inRecfinal = inRSfinal->records[i];
+        inSeg = drms_segment_lookupnum(inRecfinal, 0);
+        inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+        if (status)
+           {
+              printf(" No data file found, status=%d\n", status);
+              drms_free_array(inArray);
+              continue;
+            }
+        recp[count] = i;
+        count += 1;
+        drms_free_array(inArray);
+    }
+
+  if (count==0) DIE("No input remapped data found");
+  rec_cen = (int)(count/2);
+  nref = recp[rec_cen];
+  printf("middle data id=%d\n", nref);
   inRecfinal = inRSfinal->records[nref];
+  inSeg = drms_segment_lookupnum(inRecfinal, 0);
+  inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+  int naxis = inArray->naxis;
+  xmg = inArray->axis[0]; ymg = inArray->axis[1];
   t_rec = drms_getkey_time(inRecfinal, "T_REC", &status);
   t_rec0 = drms_getkey_time(inRecfinal, "T_OBS", &status);
   crn = drms_getkey_int(inRecfinal, "CAR_ROT", &status);
@@ -163,6 +195,7 @@ int DoIt(void)
   drms_copykey(outRec, inRecfinal, "DIFROT_C");
   drms_copykey(outRec, inRecfinal, "INSTRUME");
   drms_copykey(outRec, inRecfinal, "BLD_VERS");
+  drms_copykey(outRec, inRecfinal, "CALVER64");
 
 //  smallRD;
 int itmp;
@@ -193,62 +226,60 @@ double dtmp;
   drms_copykey(smallRD, inRecfinal, "DIFROT_C");
   drms_copykey(smallRD, inRecfinal, "INSTRUME");
   drms_copykey(smallRD, inRecfinal, "BLD_VERS");
+  drms_copykey(smallRD, inRecfinal, "CALVER64");
+  drms_free_array(inArray);
 
-  inSeg = drms_segment_lookupnum(inRecfinal, 0);
-  inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
-  if (status) DIE("No input data found");
+// average remapped mags
 
   float *aveData;
-  int naxis = inArray->naxis;
-  xmg = inArray->axis[0]; ymg = inArray->axis[1];
+//  xmg = 1801; ymg = 1440;
   xdim_syn = 3600; ydim_syn = 1440;
   int inDims[2] = {xmg, ymg};
   int dxsz = 2 * inDims[0];     // jph in IDL, zgrid.pro
   int ith = inDims[1];
   int ppd = xdim_syn/360;       // pixels per degree
-  int count = 0, xbeg = 30;
+  int xbeg = 30;
   if (xx1 == -1) xx1 = 60;              // in degrees
   if (yy1 == -1) yy1 = 0;                  // in pixels
   int hwd = xx1;       // in degree
+  int ii, jj;
+  int smallDims[2], xout, yout;
+  TIME tobs_total = 0.0, tobs_ave;
   xx1 *= ppd;          // in pixels
   xbeg *= ppd;
   aveData = (float *)malloc(xmg * ymg * sizeof(float));
-  int ii, jj;
-  int smallDims[2], xout, yout;
   xout = xdim_syn/nbin; yout = ydim_syn/(nbin-1);
   smallDims[0] = xout; smallDims[1] = yout;
 
-  for (i = 0; i < nrecs; i++)
+  for (i = 0; i < count; i++)
     {
-        inRecfinal = inRSfinal->records[i];
+        inRecfinal = inRSfinal->records[recp[i]];
         inSeg = drms_segment_lookupnum(inRecfinal, 0);
         inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
-        if (status) 
-           {
-              printf(" No data file found, status=%d\n", status);
-              drms_free_array(inArray);
-              continue;
-            }
-        count += 1;
         float *inData = (float *)inArray->data;
         int crnn = drms_getkey_int(inRecfinal, "CAR_ROT", &status);
         float clogn = drms_getkey_float(inRecfinal, "CRVAL1", &status);
         int xshift = (int)(ppd * ((clogn - clog0) - 360.0 * (crnn - crn)));
-//printf("count=%d, xshift=%d\n", i, xshift);
+        TIME Tobs = drms_getkey_time(inRecfinal, "T_OBS", &status);
+        tobs_total += Tobs;
+
+// printf("count=, record id=, indata[]=%d, %d,%f\n", count, recp[i], inData[1081*50 + 900]);
         for (jj = 0; jj < ymg; jj++)
             {
             for (ii = xbeg; ii < xmg - xbeg; ii++)
                 {
                   aveData[jj * xmg + ii] += inData[jj * xmg + ii - xshift];
                 }
-            }
+            } 
         drms_free_array(inArray);
     }
-   drms_close_records(inRSfinal, DRMS_FREE_RECORD);
+
+   tobs_ave = tobs_total/count;
    for (jj = 0; jj < ymg; jj++)
        for (ii = 0; ii < xmg; ii++)
            aveData[jj * xmg + ii] /= count;
 
+  drms_close_records(inRSfinal, DRMS_FREE_RECORD);
   float thd[ith], csc[ith], phd[dxsz];
   float lad[ith], sth[ith], cth[ith], scs[dxsz];
   double dtor = PI/180.;
@@ -268,7 +299,7 @@ double dtmp;
   synQuery = timetmp;
   printf("inputname= %s\n", synQuery);
   synRS = drms_open_records(drms_env, synQuery, &status);
-  if (status || synRS->n == 0) DIE("No input data found");
+  if (status || synRS->n == 0) DIE("No input data found -- no synoptic charts");
                      // start combining the synoptic charts
   int nds = synRS->n;
   int supxDim = nds * xdim_syn;
@@ -342,22 +373,34 @@ double dtmp;
 //    if (status) DIE("Output recordset not created");
 
     drms_setkey_time(outRec, "T_REC", t_rec);
-    drms_setkey_time(outRec, "T_OBS", t_rec0);
+    trec_str = (char *)malloc(30 * sizeof(char));
+    sprint_time(trec_str, tobs_ave, "TAI", 0);
+    drms_setkey_time(outRec, "T_OBS", tobs_ave);
     drms_setkey_int(outRec, "CAR_ROT", crn);
     drms_setkey_float(outRec, "CRLT_OBS", crlt);
     drms_setkey_float(outRec, "CRLN_OBS", crln);
-    float loncen = xdim_syn/2 + 0.5;
-    drms_setkey_int(outRec, "CRPIX1", loncen);
-    float latcen = ydim_syn/2 + 0.5;
-    drms_setkey_double(outRec, "CRPIX2", latcen);
+    drms_setkey_float(outRec, "CADENCE", 24.0 * 60.0 * 60.0);
+    drms_setkey_float(outRec, "CROTA2", 0.0);
+    drms_setkey_string(outRec, "WCSNAME", "Carrington Heliographic");
+    float loncen = xdim_syn/2 + 0.0;
+    drms_setkey_float(outRec, "CRPIX1", loncen);
+        // origin is at the left corner of the first pixel
+    float latcen = ydim_syn/2 + 0.0;
+    drms_setkey_float(outRec, "CRPIX2", latcen);
+        // origin is at the left corner of the first pixel
     float lonstep = -360.0/xdim_syn;
     drms_setkey_float(outRec, "CDELT1", lonstep);
     float latstep = 2.0/ydim_syn;
     drms_setkey_float(outRec, "CDELT2", latstep);
-    double lonfirst = 360.0 * crn - clog0 + hwd - 360.0 + 360.0/xdim_syn;
-    drms_setkey_double(outRec, "LON_FRST", lonfirst);
-    double lonlast = 360.0 * crn - clog0 + hwd;
-    drms_setkey_double(outRec, "LON_LAST", lonlast);
+    float lonfirst = 360.0 * crn - clog0 + hwd - 360.0 + 360.0/xdim_syn;
+                         // longitude for the last pixel is counted at the center of the pixel.
+    drms_setkey_float(outRec, "LON_FRST", lonfirst);
+    float lonlast = 360.0 * crn - (clog0 - hwd);
+                         // longitude for the first pixel is counted at the center of the pixel.
+    drms_setkey_float(outRec, "LON_LAST", lonlast);
+    float loncenter = lonlast - 180.0 + 0.5 * 360.0/xdim_syn;
+    drms_setkey_float(outRec, "CRVAL1", loncenter);
+    drms_setkey_float(outRec, "CARRTIME", loncenter);
     drms_setkey_float(outRec, "LON_STEP", lonstep);
 
 // synoptic map info
@@ -387,7 +430,7 @@ double dtmp;
 // frame info.  
     drms_setkey_string(outRec, "FRTIMWDN", t_window); 
     drms_setkey_string(outRec, "SYNDRORA", drmethod);
-    drms_setkey_int(outRec, "FRAVEPNT", nrecs);
+    drms_setkey_int(outRec, "FRAVEPNT", count);
     drms_setkey_float(outRec, "FRWINDOW", 2.0 * hwd);
     drms_setkey_float(outRec, "SYNDRO_A", aa);
     drms_setkey_float(outRec, "SYNDRO_B", bb);
@@ -404,22 +447,29 @@ double dtmp;
 
 // writting the small size map 
     drms_setkey_time(smallRD, "T_REC", t_rec);
-    drms_setkey_time(smallRD, "T_OBS", t_rec0);
+//    drms_setkey_time(smallRD, "T_OBS", t_rec0);
+    drms_setkey_time(smallRD, "T_OBS", tobs_ave);
     drms_setkey_int(smallRD, "CAR_ROT", crn);
     drms_setkey_float(smallRD, "CRLT_OBS", crlt);
     drms_setkey_float(smallRD, "CRLN_OBS", crln);
-    loncen = xout/2 + 0.5;
-    drms_setkey_int(smallRD, "CRPIX1", loncen);
-    latcen = yout/2 + 0.5;
-    drms_setkey_double(smallRD, "CRPIX2", latcen);
+    drms_setkey_float(smallRD, "CADENCE", 24.0 * 60.0 * 60.0);
+    drms_setkey_float(smallRD, "CROTA2", 0.0);
+    drms_setkey_string(smallRD, "WCSNAME", "Carrington Heliographic");
+    loncen = xout/2 + 0.0;
+    drms_setkey_float(smallRD, "CRPIX1", loncen);
+    latcen = yout/2 + 0.0;
+    drms_setkey_float(smallRD, "CRPIX2", latcen);
     lonstep = -360.0/xout;
     drms_setkey_float(smallRD, "CDELT1", lonstep);
     latstep = 2.0/yout;
     drms_setkey_float(smallRD, "CDELT2", latstep);
     lonfirst = 360.0 * crn - clog0 + hwd - 360.0 + 360.0/xout;
-    drms_setkey_double(smallRD, "LON_FRST", lonfirst);
+    drms_setkey_float(smallRD, "LON_FRST", lonfirst);
     lonlast = 360.0 * crn - clog0 + hwd;
-    drms_setkey_double(smallRD, "LON_LAST", lonlast);
+    drms_setkey_float(smallRD, "LON_LAST", lonlast);
+    loncenter = lonlast - 180.0 + 0.5 * 360.0/xout;
+    drms_setkey_float(smallRD, "CRVAL1", loncenter);
+    drms_setkey_float(smallRD, "CARRTIME", loncenter);
     drms_setkey_float(smallRD, "LON_STEP", lonstep);
 // synoptic map info
     hwnwidth = drms_getkey_float(synRec, "HWNWIDTH", &status);
@@ -448,11 +498,11 @@ double dtmp;
 // frame info.  
     drms_setkey_string(smallRD, "FRTIMWDN", t_window);
     drms_setkey_string(smallRD, "SYNDRORA", drmethod);
-    drms_setkey_int(smallRD, "FRAVEPNT", nrecs);
+    drms_setkey_int(smallRD, "FRAVEPNT", count);
     drms_setkey_float(smallRD, "FRWINDOW", 2.0 * hwd);
     drms_setkey_float(smallRD, "SYNDRO_A", aa);
     drms_setkey_float(smallRD, "SYNDRO_B", bb);
-    drms_setkey_float(outRec, "SYNDRO_C", cc);
+    drms_setkey_float(smallRD, "SYNDRO_C", cc);
 
     drms_keyword_setdate(smallRD);
 
@@ -463,6 +513,7 @@ double dtmp;
     status = drms_segment_write(smalloutSeg, smalloutArray, 0);
     if (status) DIE("problem writing file");
 
+    free(trec_str);
     drms_free_array(smalloutArray);
     drms_free_array(outArray);
     drms_free_array(supsynArray);
@@ -471,6 +522,7 @@ double dtmp;
     drms_close_record(smallRD, DRMS_INSERT_RECORD);
     drms_close_record(outRec, DRMS_INSERT_RECORD);
     drms_close_records(synRS, DRMS_FREE_RECORD);
+//    drms_close_records(inRS, DRMS_FREE_RECORD);
   return 0;
 }        // end DoIt
 
