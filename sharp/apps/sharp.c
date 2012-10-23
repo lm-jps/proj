@@ -1644,9 +1644,9 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	// Get bx, by, bz, mask
 	
         // Use HARP (Turmon) bitmap as a threshold on spaceweather quantities
-	//DRMS_Segment_t *maskSeg = drms_segment_lookup(inRec, "bitmap");
-	//DRMS_Array_t *maskArray = drms_segment_read(maskSeg, DRMS_TYPE_INT, &status);
-	//int *mask = (int *) maskArray->data;		// get the previously made mask array
+	DRMS_Segment_t *bitmaskSeg = drms_segment_lookup(inRec, "bitmap");
+	DRMS_Array_t *bitmaskArray = drms_segment_read(bitmaskSeg, DRMS_TYPE_INT, &status);
+	int *bitmask = (int *) bitmaskArray->data;		// get the previously made mask array
 
         //Use conf_disambig map as a threshold on spaceweather quantities 
 	DRMS_Segment_t *maskSeg = drms_segment_lookup(inRec, "conf_disambig");         
@@ -1705,7 +1705,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	// Compute      
 	
 	if (computeAbsFlux(bz, dims, &(swKeys_ptr->absFlux), &(swKeys_ptr->mean_vf), 
-					   mask, cdelt1, rsun_ref, rsun_obs)){
+					   mask, bitmask, cdelt1, rsun_ref, rsun_obs)){
 		swKeys_ptr->absFlux = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
 		swKeys_ptr->mean_vf = DRMS_MISSING_FLOAT;
 	}
@@ -1713,25 +1713,25 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	for (int i = 0; i < nxny; i++) bpz[i] = bz[i];
        	greenpot(bpx, bpy, bpz, nx, ny);                      
 	
-	computeBh(bx, by, bz, bh, dims, &(swKeys_ptr->mean_hf), mask);
+	computeBh(bx, by, bz, bh, dims, &(swKeys_ptr->mean_hf), mask, bitmask);
 	
-	if (computeGamma(bx, by, bz, bh, dims, &(swKeys_ptr->mean_gamma), mask))
+	if (computeGamma(bx, by, bz, bh, dims, &(swKeys_ptr->mean_gamma), mask, bitmask))
 		swKeys_ptr->mean_gamma = DRMS_MISSING_FLOAT;
 	
-	computeB_total(bx, by, bz, bt, dims, mask);
+	computeB_total(bx, by, bz, bt, dims, mask, bitmask);
 	
-	if (computeBtotalderivative(bt, dims, &(swKeys_ptr->mean_derivative_btotal), mask, derx_bt, dery_bt))
+	if (computeBtotalderivative(bt, dims, &(swKeys_ptr->mean_derivative_btotal), mask, bitmask, derx_bt, dery_bt))
 		swKeys_ptr->mean_derivative_btotal = DRMS_MISSING_FLOAT;
 	
-	if (computeBhderivative(bh, dims, &(swKeys_ptr->mean_derivative_bh), mask, derx_bh, dery_bh))
+	if (computeBhderivative(bh, dims, &(swKeys_ptr->mean_derivative_bh), mask, bitmask, derx_bh, dery_bh))
 		swKeys_ptr->mean_derivative_bh = DRMS_MISSING_FLOAT;
 	
-	if (computeBzderivative(bz, dims, &(swKeys_ptr->mean_derivative_bz), mask, derx_bz, dery_bz))
+	if (computeBzderivative(bz, dims, &(swKeys_ptr->mean_derivative_bz), mask, bitmask, derx_bz, dery_bz))
 		swKeys_ptr->mean_derivative_bz = DRMS_MISSING_FLOAT; // If fail, fill in NaN
 	
 
 
-	if(computeJz(bx, by, dims, jz, &(swKeys_ptr->mean_jz), &(swKeys_ptr->us_i), mask, 
+	if(computeJz(bx, by, dims, jz, &(swKeys_ptr->mean_jz), &(swKeys_ptr->us_i), mask, bitmask, 
                      cdelt1, rsun_ref, rsun_obs, derx, dery)) {
 		swKeys_ptr->mean_jz = DRMS_MISSING_FLOAT;
 		swKeys_ptr->us_i = DRMS_MISSING_FLOAT;
@@ -1739,25 +1739,25 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	
                         printf("swKeys_ptr->mean_jz=%f\n",swKeys_ptr->mean_jz);
 
-        if (computeAlpha(bz, dims, jz, &(swKeys_ptr->mean_alpha), mask, cdelt1, rsun_ref, rsun_obs))
+        if (computeAlpha(bz, dims, jz, &(swKeys_ptr->mean_alpha), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
 		swKeys_ptr->mean_alpha = DRMS_MISSING_FLOAT;
 	
 	if (computeHelicity(bz, dims, jz, &(swKeys_ptr->mean_ih), 
 						&(swKeys_ptr->total_us_ih), &(swKeys_ptr->total_abs_ih), 
-						mask, cdelt1, rsun_ref, rsun_obs)) {  
+						mask, bitmask, cdelt1, rsun_ref, rsun_obs)) {  
 		swKeys_ptr->mean_ih = DRMS_MISSING_FLOAT; 
 		swKeys_ptr->total_us_ih = DRMS_MISSING_FLOAT;
 		swKeys_ptr->total_abs_ih = DRMS_MISSING_FLOAT;
 	}
 	
 	if (computeSumAbsPerPolarity(bz, jz, dims, &(swKeys_ptr->totaljz), 
-								 mask, cdelt1, rsun_ref, rsun_obs))
+								 mask, bitmask, cdelt1, rsun_ref, rsun_obs))
 		swKeys_ptr->totaljz = DRMS_MISSING_FLOAT;
 
 	
 	if (computeFreeEnergy(bx, by, bpx, bpy, dims, 
 						  &(swKeys_ptr->meanpot), &(swKeys_ptr->totpot), 
-						  mask, cdelt1, rsun_ref, rsun_obs)) {
+						  mask, bitmask, cdelt1, rsun_ref, rsun_obs)) {
 		swKeys_ptr->meanpot = DRMS_MISSING_FLOAT; // If fail, fill in NaN
 		swKeys_ptr->totpot = DRMS_MISSING_FLOAT;
 	}
@@ -1765,7 +1765,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	if (computeShearAngle(bx, by, bz, bpx, bpy, bpz, dims, 
 						  &(swKeys_ptr->meanshear_angle), &(swKeys_ptr->area_w_shear_gt_45), 
 						  &(swKeys_ptr->meanshear_angleh), &(swKeys_ptr->area_w_shear_gt_45h), 
-						  mask)) {
+						  mask, bitmask)) {
 		swKeys_ptr->meanshear_angle = DRMS_MISSING_FLOAT; // If fail, fill in NaN
 		swKeys_ptr->area_w_shear_gt_45 = DRMS_MISSING_FLOAT;
 		swKeys_ptr->meanshear_angleh = DRMS_MISSING_FLOAT; // If fail, fill in NaN
@@ -1838,7 +1838,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec)
    drms_setkey_string(outRec, "DATE", timebuf);
 
    // set cvs commit version into keyword HEADER
-   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.4 2012/09/07 22:08:36 xudong Exp $");
+   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.5 2012/10/23 19:35:37 mbobra Exp $");
 //   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
 	status = drms_setkey_string(outRec, "CODEVER7", cvsinfo);
 
