@@ -704,7 +704,7 @@ int do_interpolate(float **images, char **ierrors, float *image_out, struct keyw
   t0=dsecnd()-t0;
 
 
-  MKL_FreeBuffers();
+  MKL_Free_Buffers();
  
 
  for (isample=0;isample<nsample;isample++){if (status_arr[isample] ==0){MKL_free(*(int_images+isample)); MKL_free(*(masks+isample));}}
@@ -1132,7 +1132,7 @@ float intsincos(unsigned int n, unsigned int m)
 
 char *interpol_version() // Returns CVS version
 {
-  return strdup("$Id: interpol_code.c,v 1.2 2011/12/06 18:11:03 arta Exp $");
+  return strdup("$Id: interpol_code.c,v 1.3 2012/10/23 23:49:48 kehcheng Exp $");
 }
 
 
