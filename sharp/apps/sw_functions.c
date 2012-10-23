@@ -18,9 +18,24 @@
     TOTPOT Total photospheric magnetic energy density in ergs per cubic centimeter
     MEANSHR Mean shear angle (measured using Btotal) in degrees  
 
-   The indices are calculated on the pixels in which the disambig bitmap equals 5 or 7:
-    5: pixels for which the radial acute disambiguation solution was chosen
-    7: pixels for which the radial acute and NRWA disambiguation agree
+   The indices are calculated on the pixels in which the conf_disambig segment is greater than 70 and
+   pixels in which the bitmap segment is greater than 30. These ranges are selected because the CCD 
+   coordinate bitmaps are interpolated.
+
+   In the CCD coordinates, this means that we are selecting the pixels that equal 90 in conf_disambig
+   and the pixels that equal 33 or 44 in bitmap. Here are the definitions of the pixel values:
+
+   For conf_disambig:
+   50 : not all solutions agree (weak field method applied)
+   60 : not all solutions agree (weak field + annealed)
+   90 : all solutions agree (strong field + annealed)
+    0 : not disambiguated
+
+   For bitmap:
+   1  : weak field outside smooth bounding curve
+   2  : strong field outside smooth bounding curve
+   33 : weak field inside smooth bounding curve
+   34 : strong field inside smooth bounding curve
 
    Written by Monica Bobra 15 August 2012 
    Potential Field code (appended) written by Keiji Hayashi
@@ -52,7 +67,7 @@
 //  7: pixels for which the radial acute and NRWA disambiguation agree
 
 int computeAbsFlux(float *bz, int *dims, float *absFlux, 
-				   float *mean_vf_ptr, int *mask, 
+				   float *mean_vf_ptr, int *mask,  int *bitmask,
                                    float cdelt1, double rsun_ref, double rsun_obs)
 
 {
@@ -70,9 +85,8 @@ int computeAbsFlux(float *bz, int *dims, float *absFlux,
 	{
 		for (i = 0; i < nx; i++) 
 		{
-                  if ( mask[j * nx + i] < 70 ) continue;
+                  if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                   sum += (fabs(bz[j * nx + i]));
-                  //sum += (fabs(bz[j * nx + i]))*inverseMu[j * nx + i]; // use this with mu function
                   count_mask++;
 		}	
 	}
@@ -88,7 +102,7 @@ int computeAbsFlux(float *bz, int *dims, float *absFlux,
 // Native units of Bh are Gauss
 
 int computeBh(float *bx, float *by, float *bz, float *bh, int *dims, 
-			  float *mean_hf_ptr, int *mask)
+			  float *mean_hf_ptr, int *mask, int *bitmask)
 
 {
 
@@ -120,7 +134,7 @@ int computeBh(float *bx, float *by, float *bz, float *bh, int *dims,
 
 
 int computeGamma(float *bx, float *by, float *bz, float *bh, int *dims,
-				 float *mean_gamma_ptr, int *mask)
+				 float *mean_gamma_ptr, int *mask, int *bitmask)
 {
     int nx = dims[0], ny = dims[1];
     int i, j, count_mask=0;
@@ -137,7 +151,7 @@ int computeGamma(float *bx, float *by, float *bz, float *bh, int *dims,
 	      {
 		if (bh[j * nx + i] > 100)
 		  {
-                    if (mask[j * nx + i] < 70 ) continue;
+                    if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
 		    sum += (atan (fabs( bz[j * nx + i] / bh[j * nx + i] ))* (180./PI));
 		    count_mask++;
 		  }
@@ -153,7 +167,7 @@ int computeGamma(float *bx, float *by, float *bz, float *bh, int *dims,
 /* Example function 4: Calculate B_Total*/
 // Native units of B_Total are in gauss
 
-int computeB_total(float *bx, float *by, float *bz, float *bt, int *dims, int *mask)
+int computeB_total(float *bx, float *by, float *bz, float *bt, int *dims, int *mask, int *bitmask)
 {
 
     int nx = dims[0], ny = dims[1];
@@ -174,7 +188,7 @@ int computeB_total(float *bx, float *by, float *bz, float *bt, int *dims, int *m
 /*===========================================*/
 /* Example function 5:  Derivative of B_Total SQRT( (dBt/dx)^2 + (dBt/dy)^2 ) */
 
-int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_ptr, int *mask, float *derx_bt, float *dery_bt)
+int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_ptr, int *mask, int *bitmask, float *derx_bt, float *dery_bt)
 {
 
     int nx = dims[0], ny = dims[1];
@@ -250,7 +264,7 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
             for (j = 0; j <= ny-1; j++) 
             {
                // if ( (derx_bt[j * nx + i]-dery_bt[j * nx + i]) == 0) continue; 
-	       if (mask[j * nx + i] < 70 ) continue;
+	       if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                sum += sqrt( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  ); /* Units of Gauss */
                count_mask++;
             }	
@@ -265,7 +279,7 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
 /*===========================================*/
 /* Example function 6:  Derivative of Bh SQRT( (dBh/dx)^2 + (dBh/dy)^2 ) */
 
-int computeBhderivative(float *bh, int *dims, float *mean_derivative_bh_ptr, int *mask, float *derx_bh, float *dery_bh)
+int computeBhderivative(float *bh, int *dims, float *mean_derivative_bh_ptr, int *mask, int *bitmask, float *derx_bh, float *dery_bh)
 {
 
         int nx = dims[0], ny = dims[1];
@@ -340,7 +354,7 @@ int computeBhderivative(float *bh, int *dims, float *mean_derivative_bh_ptr, int
             for (j = 0; j <= ny-1; j++) 
             {
                // if ( (derx_bh[j * nx + i]-dery_bh[j * nx + i]) == 0) continue; 
-	       if (mask[j * nx + i] < 70 ) continue;
+	       if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                sum += sqrt( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  ); /* Units of Gauss */
                count_mask++;
             }	
@@ -353,7 +367,7 @@ int computeBhderivative(float *bh, int *dims, float *mean_derivative_bh_ptr, int
 /*===========================================*/
 /* Example function 7:  Derivative of B_vertical SQRT( (dBz/dx)^2 + (dBz/dy)^2 ) */
 
-int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int *mask, float *derx_bz, float *dery_bz)
+int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int *mask, int *bitmask, float *derx_bz, float *dery_bz)
 {
 
 	int nx = dims[0], ny = dims[1];
@@ -428,7 +442,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
             for (j = 0; j <= ny-1; j++) 
             {
                // if ( (derx_bz[j * nx + i]-dery_bz[j * nx + i]) == 0) continue; 
-	       if (mask[j * nx + i] < 70 ) continue;
+	       if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                sum += sqrt( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  ); /* Units of Gauss */
                count_mask++;
             }	
@@ -471,7 +485,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 //  =(Gauss/pix)(1/CDELT1)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)(1000.)
 
 int computeJz(float *bx, float *by, int *dims, float *jz, 
-			  float *mean_jz_ptr, float *us_i_ptr, int *mask,
+			  float *mean_jz_ptr, float *us_i_ptr, int *mask, int *bitmask,
                           float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery)
 
 
@@ -552,7 +566,7 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
             for (j = 0; j <= ny-1; j++) 
             {
                // if ( (derx[j * nx + i]-dery[j * nx + i]) == 0) continue;
-               if (mask[j * nx + i] < 70 ) continue;
+               if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                curl +=     (derx[j * nx + i]-dery[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
                us_i += fabs(derx[j * nx + i]-dery[j * nx + i])*(1/cdelt1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A  / m^2 */
                jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);                                                          /* jz is in units of Gauss/pix */                                     
@@ -582,7 +596,7 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
 //                               = (Gauss/pix)(1/Gauss)(1/CDELT1)(RSUN_OBS/RSUN_REF)(10^6)
 //                               = 1/Mm
 
-int computeAlpha(float *bz, int *dims, float *jz, float *mean_alpha_ptr, int *mask, 
+int computeAlpha(float *bz, int *dims, float *jz, float *mean_alpha_ptr, int *mask, int *bitmask, 
                  float cdelt1, double rsun_ref, double rsun_obs)
 {
 	int nx = dims[0], ny = dims[1];
@@ -597,7 +611,7 @@ int computeAlpha(float *bz, int *dims, float *jz, float *mean_alpha_ptr, int *ma
 	  {
 	    for (j = 1; j < ny-1; j++) 
 	      {
-                if (mask[j * nx + i] < 70 ) continue;
+                if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                 if isnan(jz[j * nx + i]) continue;
                 if isnan(bz[j * nx + i]) continue;
                 if (bz[j * nx + i] == 0.0) continue;
@@ -624,7 +638,7 @@ int computeAlpha(float *bz, int *dims, float *jz, float *mean_alpha_ptr, int *ma
 
 
 int computeHelicity(float *bz, int *dims, float *jz, float *mean_ih_ptr, float *total_us_ih_ptr, 
-					float *total_abs_ih_ptr, int *mask, float cdelt1, double rsun_ref, double rsun_obs)
+					float *total_abs_ih_ptr, int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
 
 {
 
@@ -640,7 +654,7 @@ int computeHelicity(float *bz, int *dims, float *jz, float *mean_ih_ptr, float *
 	{
 		for (i = 0; i < nx; i++) 
 		{
-                if (mask[j * nx + i] < 70 ) continue;
+                if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                 if isnan(jz[j * nx + i]) continue;
                 if isnan(bz[j * nx + i]) continue;
                 if (bz[j * nx + i] == 0.0) continue;
@@ -670,7 +684,7 @@ int computeHelicity(float *bz, int *dims, float *jz, float *mean_ih_ptr, float *
 //     = (Gauss/pix)(1/CDELT1)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)
 
 int computeSumAbsPerPolarity(float *bz, float *jz, int *dims, float *totaljzptr, 
-							 int *mask, float cdelt1, double rsun_ref, double rsun_obs)
+							 int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
 
 {	
 	int nx = dims[0], ny = dims[1];
@@ -685,7 +699,7 @@ int computeSumAbsPerPolarity(float *bz, float *jz, int *dims, float *totaljzptr,
 	  {
 	    for (j = 0; j < ny; j++) 
 	      {
-                if (mask[j * nx + i] < 70 ) continue;
+                if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
 		if (bz[j * nx + i] >  0) sum1 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
                 if (bz[j * nx + i] <= 0) sum2 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
        	      }
@@ -708,7 +722,7 @@ int computeSumAbsPerPolarity(float *bz, float *jz, int *dims, float *totaljzptr,
 // = erg/cm(1/pix^2)
 
 int computeFreeEnergy(float *bx, float *by, float *bpx, float *bpy, int *dims, 
-					  float *meanpotptr, float *totpotptr, int *mask, 
+					  float *meanpotptr, float *totpotptr, int *mask, int *bitmask, 
 					  float cdelt1, double rsun_ref, double rsun_obs)
 
 {
@@ -725,7 +739,7 @@ int computeFreeEnergy(float *bx, float *by, float *bpx, float *bpy, int *dims,
 	  {
 	    for (j = 0; j < ny; j++) 
 	      {
-                 if (mask[j * nx + i] < 70 ) continue;
+                 if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                  sum += ((    ((bx[j * nx + i])*(bx[j * nx + i]) + (by[j * nx + i])*(by[j * nx + i]) ) -  ((bpx[j * nx + i])*(bpx[j * nx + i]) + (bpy[j * nx + i])*(bpy[j * nx + i]))  )/8.*PI);
                  count_mask++;
 	      }
@@ -742,7 +756,7 @@ int computeFreeEnergy(float *bx, float *by, float *bpx, float *bpy, int *dims,
 int computeShearAngle(float *bx, float *by, float *bz, float *bpx, float *bpy, float *bpz, int *dims,
 					  float *meanshear_angleptr, float *area_w_shear_gt_45ptr, 
 					  float *meanshear_anglehptr, float *area_w_shear_gt_45hptr, 
-					  int *mask)
+					  int *mask, int *bitmask)
 {	
 	int nx = dims[0], ny = dims[1];
 	int i, j;
@@ -758,7 +772,7 @@ int computeShearAngle(float *bx, float *by, float *bz, float *bpx, float *bpy, f
 	  {
 	    for (j = 0; j < ny; j++) 
 	      {
-                 if (mask[j * nx + i] < 70 ) continue;
+                 if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                  if isnan(bpx[j * nx + i]) continue;                
                  if isnan(bpy[j * nx + i]) continue;                
                  if isnan(bpz[j * nx + i]) continue;
