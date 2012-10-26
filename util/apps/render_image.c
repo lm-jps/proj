@@ -54,11 +54,11 @@
    replacement instructions are available:
   @code
    The word 'ID' is replaced by the filename ID as built from outid.
-   The word '%' is replaced by that percent of the width of the image rounded
+   The word '%' is replaced by that percent of the height of the image rounded
        to the nearest pixel.  If the floating point number after the '%' is itself
        followed by a ':' and an integer, then that integer will be used as the
        smallest number for the replacement token.  So, for instance '{%1.2:5}'
-       with the image width of 256 pixels will be processed as: 1.2% of 256 is 3.072
+       with the image height of 256 pixels will be processed as: 1.2% of 256 is 3.072
        which rounds to 3 which is smaller than 5 so the result will be 5.
   @endcode
    @par
@@ -438,7 +438,7 @@ int DoIt(void)
                 int ix, minx;
                 c++;
                 x = strtof(c, &c);
-                ix = round(0.01*x*imageDims[0]);
+                ix = round(0.01*x*imageDims[1]);
                 if (*c == ':')
                   {
                   c++;
