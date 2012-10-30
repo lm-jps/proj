@@ -323,9 +323,9 @@ int DoIt(void)
       if (strcmp(requestid, "NA") != 0)
         drms_setkey_string(outRec, "RequestID", requestid);
 
-      // get info for array from segment
-      outArray->bzero = outSeg->bzero;
-      outArray->bscale = outSeg->bscale;
+      // get info for array from input segment
+      outArray->bzero = inSeg->bzero;
+      outArray->bscale = inSeg->bscale*(fscale<1 ? fscale : 1.0);
       outArray->parent_segment = outSeg;
   
       set_statistics(outSeg, outArray, 1);
