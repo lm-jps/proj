@@ -325,7 +325,7 @@ int DoIt(void)
 
       // get info for array from input segment
       outArray->bzero = inSeg->bzero;
-      outArray->bscale = inSeg->bscale*(fscale<1 ? fscale : 1.0);
+      outArray->bscale = inSeg->bscale;
       outArray->parent_segment = outSeg;
   
       set_statistics(outSeg, outArray, 1);
