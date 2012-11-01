@@ -343,7 +343,7 @@ else
    print STDERR "Failure connecting to database: '$DBI::errstr'\n";
 }
 
-return $rv;
+exit($rv);
 
 # FIN
 
