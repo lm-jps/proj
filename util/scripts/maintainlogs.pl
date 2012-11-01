@@ -70,6 +70,7 @@ use constant kCantDrop => 6;
 use constant kCantCreate => 7;
 use constant kSQLFailure => 8;
 use constant kProcessorFailure => 9;
+use constant kActionFailed => 10;
 
 use constant kTarChunk => 64;
 
@@ -341,6 +342,8 @@ else
 {
    print STDERR "Failure connecting to database: '$DBI::errstr'\n";
 }
+
+return $rv;
 
 # FIN
 
@@ -812,7 +815,7 @@ sub Go
                   if (-d $lstrash)
                   {
                      # Trashing a single log-set's old archives
-                     if (!Trash($lstrash, @totrash, $loglev))
+                     if (!Trash($lstrash, $loglev, @totrash))
                      {
                         print STDERR "Unable to move expired archives in '$lspath' to trash bin.\n";
                      }
@@ -1080,9 +1083,9 @@ sub Validatetar
 
 sub Trash
 {
-   my($trashbin, @files, $loglev) = @_;
+   my($trashbin, $loglev, @files) = @_;
    my($rv) = 1;
-   
+
    if (-d $trashbin)
    {
       foreach my $afile (@files)
