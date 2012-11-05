@@ -23,8 +23,8 @@ $ldate = &labeldate();
 
 #$rmcmd0 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[0]_stop /usr/local/logs/lev0/@vcnames[0]_exit";
 #$rmcmd1 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[1]_stop /usr/local/logs/lev0/@vcnames[1]_exit";
-$rmcmd2 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[2]_stop /usr/local/logs/lev0/@vcnames[2]_exit";
-$rmcmd3 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[3]_stop /usr/local/logs/lev0/@vcnames[3]_exit";
+$rmcmd2 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[2]_stop /usr/local/logs/lev0/@vcnames[2]_stopX  /usr/local/logs/lev0/@vcnames[2]_exit /usr/local/logs/lev0/@vcnames[2]_exitX";
+$rmcmd3 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[3]_stop /usr/local/logs/lev0/@vcnames[3]_stopX /usr/local/logs/lev0/@vcnames[3]_exit /usr/local/logs/lev0/@vcnames[3]_exitX";
 
 #clean up the signal files
 #print "$rmcmd0\n";
@@ -119,7 +119,11 @@ while(1) {
   #`$cmd`;
   $cmd = "touch /usr/local/logs/lev0/@vcnames[2]_stop";
   `$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/@vcnames[2]_stopX";
+  `$cmd`;
   $cmd = "touch /usr/local/logs/lev0/@vcnames[3]_stop";
+  `$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/@vcnames[3]_stopX";
   `$cmd`;
   while(1) {
     $found = 0;

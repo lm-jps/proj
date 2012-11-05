@@ -22,8 +22,8 @@ if(!($host =~ /cl1n001/)) {
 $ldate = &labeldate();
 @lognames = ("VC01_$ldate.log", "VC04_$ldate.log", "VC02_$ldate.log", "VC05_$ldate.log");
 
-$rmcmd0 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[0]_stop /usr/local/logs/lev0/@vcnames[0]_exit";
-$rmcmd1 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[1]_stop /usr/local/logs/lev0/@vcnames[1]_exit";
+$rmcmd0 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[0]_stop /usr/local/logs/lev0/@vcnames[0]_stopX /usr/local/logs/lev0/@vcnames[0]_exit /usr/local/logs/lev0/@vcnames[0]_exitX";
+$rmcmd1 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[1]_stop /usr/local/logs/lev0/@vcnames[1]_stopX /usr/local/logs/lev0/@vcnames[1]_exit /usr/local/logs/lev0/@vcnames[1]_exitX";
 #$rmcmd2 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[2]_stop /usr/local/logs/lev0/@vcnames[2]_exit";
 #$rmcmd3 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[3]_stop /usr/local/logs/lev0/@vcnames[3]_exit";
 
@@ -116,7 +116,11 @@ while(1) {
   }
   $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stop"; #tell ingest to stop
   `$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stopX"; #tell ingest to stop
+  `$cmd`;
   $cmd = "touch /usr/local/logs/lev0/@vcnames[1]_stop";
+  `$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/@vcnames[1]_stopX";
   `$cmd`;
   #$cmd = "touch /usr/local/logs/lev0/@vcnames[2]_stop";
   #`$cmd`;
