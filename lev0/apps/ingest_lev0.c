@@ -1714,7 +1714,10 @@ void setup()
     printk("%s %s %s\n", argvc, argindir, arglogfile);
   }
   strcpy(pchan, vc);		// virtual channel primary 
-  sprintf(stopfile, "/usr/local/logs/lev0/%s_stop", pchan);
+  if(rexmitmode)		//new 'stopX' 11/2/2012
+    sprintf(stopfile, "/usr/local/logs/lev0/%s_stopX", pchan);
+  else
+    sprintf(stopfile, "/usr/local/logs/lev0/%s_stop", pchan);
   //Dont rm stopfile any more (1/6/2012). 
   //With the new rexmit dir there is a second
   //ingest_lev0 running on a VC and it needs the stop file too.
@@ -1897,7 +1900,10 @@ int DoIt(void)
       //Must use doingestlev0_HMI(AIA).pl to start ingest_lev0
       //sprintf(callcmd, "/bin/rm -f %s", stopfile);
       //system(callcmd);
-      sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exit", pchan);
+      if(rexmitmode)		//new 11/02/21012
+        sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exitX", pchan);
+      else
+        sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exit", pchan);
       system(callcmd);		//let the world know we're gone
       wflg = 0; //leave DoIt()
       continue;
