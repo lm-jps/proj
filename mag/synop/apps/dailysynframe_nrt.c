@@ -173,6 +173,8 @@ int DoIt(void)
   crln = drms_getkey_float(inRecfinal, "CRLN_OBS", &status);
   clog0 = drms_getkey_float(inRecfinal, "CRVAL1", &status);
 
+printf("crn=%d, clog0=%f\n", crn, clog0);
+
 //  drms_copykey(outRec, inRecfinal, "CADENCE");
   drms_copykey(outRec, inRecfinal, "DATASIGN");
   drms_copykey(outRec, inRecfinal, "DSUN_OBS");
@@ -295,8 +297,10 @@ double dtmp;
   int synleftst = ppd * hwd, supleftst = ppd * clog0;
   zgrid(dxsz, ith, 0, 0, 0, phd, thd, lad, cth, sth, csc, scs);
 
+//  snprintf(timetmp, sizeof(timetmp), "%s%s[%d/2]", synQuery, "_nrt", crn-2);
   snprintf(timetmp, sizeof(timetmp), "%s[%d/2]", synQuery, crn-2);
-  snprintf(timeprint, sizeof(timeprint), "%s%s", synQuery, "_nrt");
+//  snprintf(timeprint, sizeof(timeprint), "%s%s", synQuery, "_nrt");
+  snprintf(timeprint, sizeof(timeprint), "%s", synQuery);
   synQuery = timetmp;
   printf("inputname= %s\n", synQuery);
 
@@ -314,6 +318,7 @@ double dtmp;
   smalloutArray = drms_array_create(DRMS_TYPE_FLOAT, 2, smallDims, NULL, &status);
   smalloutData = smalloutArray->data;
 
+printf("synopN=%d\n", nds);
   for (i = 0; i < nds; i++)
     {
        synRec = synRS->records[i];
