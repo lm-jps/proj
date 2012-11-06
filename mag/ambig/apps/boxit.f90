@@ -26,7 +26,7 @@ subroutine boxit
    do i=1,nx
       do j=1,ny
 
-         if(mask(i,j).eq.1) then
+         if(mask(i,j).ge.1) then
 
             if(nxb.lt.i) nxb=i
             if(nxa.gt.i) nxa=i

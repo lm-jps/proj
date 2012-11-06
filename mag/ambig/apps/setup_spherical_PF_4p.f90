@@ -25,6 +25,7 @@ subroutine setup_spherical_PF_4p
 !
 ! Determine the size of the region of interest
 !
+   write (*,*) nxa, nxb
    dnx=nxb-nxa+1
    dny=nyb-nya+1
    if (dnx.lt.2) then
@@ -58,7 +59,7 @@ subroutine setup_spherical_PF_4p
 !
    do i=1,(nx-1)
       do j=1,(ny-1)
-         if(mask(i,j).eq.1.and.mask(i+1,j).eq.1.and.mask(i,j+1).eq.1.and.mask(i+1,j+1).eq.1) then
+         if(mask(i,j).ge.1.and.mask(i+1,j).ge.1.and.mask(i,j+1).ge.1.and.mask(i+1,j+1).ge.1) then
             ddt1(i,j)=1./(t(i,j)-t(i+1,j))
             ddt3(i,j)=1./(t(i,j+1)-t(i+1,j+1))
          endif
@@ -69,7 +70,7 @@ subroutine setup_spherical_PF_4p
 !
    do i=1,(nx-1)
       do j=1,(ny-1)
-         if(mask(i,j).eq.1.and.mask(i+1,j).eq.1.and.mask(i,j+1).eq.1.and.mask(i+1,j+1).eq.1) then
+         if(mask(i,j).ge.1.and.mask(i+1,j).ge.1.and.mask(i,j+1).ge.1.and.mask(i+1,j+1).ge.1) then
             ddp(i,j,1)=(t(i,j)+t(i,j+1)-3.*t(i+1,j)+t(i+1,j+1))/(2.*(p(j)-p(j+1))*(t(i,j)-t(i+1,j)))
             ddp(i,j,2)=-(-3.*t(i,j)+t(i,j+1)+t(i+1,j)+t(i+1,j+1))/(2.*(p(j)-p(j+1))*(t(i,j)-t(i+1,j)))
             ddp(i,j,3)=-(t(i,j)+t(i,j+1)+t(i+1,j)-3.*t(i+1,j+1))/(2.*(p(j)-p(j+1))*(t(i,j+1)-t(i+1,j+1)))
@@ -82,7 +83,7 @@ subroutine setup_spherical_PF_4p
 !
    do i=1,(nx-1)
       do j=1,(ny-1)
-         if(mask(i,j).eq.1.and.mask(i+1,j).eq.1.and.mask(i,j+1).eq.1.and.mask(i+1,j+1).eq.1) then
+         if(mask(i,j).ge.1.and.mask(i+1,j).ge.1.and.mask(i,j+1).ge.1.and.mask(i+1,j+1).ge.1) then
             ddr(i,j,1)=(t(i,j)+t(i,j+1)-3.*t(i+1,j)+t(i+1,j+1))/(4.*t(i,j)-4.*t(i+1,j))
             ddr(i,j,2)=-(-3.*t(i,j)+t(i,j+1)+t(i+1,j)+t(i+1,j+1))/(4.*t(i,j)-4.*t(i+1,j))
             ddr(i,j,3)=(t(i,j)+t(i,j+1)+t(i+1,j)-3.*t(i+1,j+1))/(4.*t(i,j+1)-4.*t(i+1,j+1))

@@ -28,9 +28,9 @@ subroutine ambig(&
 		ntx, nty, &			! ntiles
 		Bx_p, By_p, Bz_p, &		! mgram_data
 		probBa_p, &			! uncertainty
-		dBt_p, bitmap_p, &		! maskvec
+		bitmap_p, &     		! maskvec
 		radius_p, &	        	! ephemeris
-		nap, bthresh0, bthresh1)
+		nap)
 
 !==============================================================!
 
@@ -81,30 +81,27 @@ subroutine ambig(&
 ! ntiles
    integer, intent(in) :: ntx, nty
 ! mgram_data /maskvec
-   real, dimension(nx_p,ny_p), intent(inout), target :: Bx_p, By_p, Bz_p, dBt_p
+   real, dimension(nx_p,ny_p), intent(inout), target :: Bx_p, By_p, Bz_p
 ! maskvec
    integer, dimension(nx_p,ny_p), intent(inout), target :: bitmap_p
 ! ephemeris
    real, intent(in) :: radius_p
 !
    integer, intent(in) :: nap
-   real, intent(in) :: bthresh0, bthresh1
    real, dimension(nx_p,ny_p), intent(out), target :: probBa_p
 
 ! local temp variables
    integer :: i, j, nxp, nyp, ipflag
-   real :: xx, yy, y2, bthresh
+   real :: xx, yy, y2
    real,dimension(:,:),pointer :: probBa   ! Pointer to input array probBa_p
    external :: setup_OCBP_PF_dzh_4p, CalcE_OCBP_PF_dzh_4p, CalcDE_reconfig_OCBP_PF_dzh_4p
    external :: setup_spherical_PF_4p, CalcE_spherical_PF_4p, CalcDE_reconfig_spherical_PF_4p
-
-!real,dimension(nx_p,ny_p) :: ba
 
 !==============================================================!
 
 ! Assign pointers to input arrays
    Bx => Bx_p ; By => By_p ; Bz => Bz_p  ! mgram_data
-   dBt => dBt_p ; mask => bitmap_p       ! maskvec
+   mask => bitmap_p                      ! maskvec
    probBa => probBa_p                    ! uncertainty
 
 ! sizes
@@ -119,8 +116,8 @@ subroutine ambig(&
 ! disk_center
 ! --> Compute position of center of FOV relative to disk center in same
 ! --> units as the radius/pixel size.
-   xcen = xcen_p!0.5*float(nx+1)*dxi
-   ycen = ycen_p!0.5*float(ny+1)*dyi
+   xcen = xcen_p
+   ycen = ycen_p
 ! verbose
    iverb = verb_p
 ! WeightingFactor
@@ -194,12 +191,8 @@ write(*,*) 'phi,theta',phi,theta
          allocate(dBpzdz(nx,ny),Bpix(nx,ny),Bpiy(nx,ny))
          call potential(nx,ny)
          dBzdz=dBpzdz
+         deallocate(dBpzdz,Bpix,Bpiy)
          if(iverb.eq.1) write(*,*) 'potential field done'
-!
-! --> Perform acute angle to potential field ambiguity resolution on
-! --> pixels below a given threshold.
-!
-          deallocate(dBpzdz,Bpix,Bpiy)
 !
 ! --> Global minimization of "energy" to resolve ambiguity.
 !
@@ -207,27 +200,24 @@ write(*,*) 'phi,theta',phi,theta
          if(iverb.eq.1) write(*,*) 'optimization done'
 !
 ! --> Perform acute angle to nearest neighbor ambiguity resolution on
-! --> pixels below a given threshold. 
+! --> pixels below the noise threshold. 
 !
-         bthresh=bthresh1+(bthresh0-bthresh1)*sin(phi)*cos(theta)
-         call nacute6p(bthresh)
+         call nacute6
          if(iverb.eq.1) write(*,*) 'smoothing done'
 !
 ! --> Temporary rough estimate of uncertainty in ambiguity resolution:
 ! --> 0.0 for pixels which were not disambiguated (outside mask)
-! --> 0.5 for pixels which had acute angle method applied
+! --> 0.6 for pixels which had acute angle method applied
 ! --> 0.9 for pixels which were above threshold and annealed
 !
          do i=1,nx
             do j=1,ny
                if(mask(i,j).eq.0) then
-                  probBa(i,j)=0.0
-               else
-                  if(bt(i,j).gt.bthresh) then
-                     probBa(i,j)=0.9
-                  else
-                     probBa(i,j)=0.5
-                  endif
+                  probBa(i,j)=0.5
+               else if(mask(i,j).eq.1) then
+                  probBa(i,j)=0.6
+               else if(mask(i,j).eq.2) then
+                  probBa(i,j)=0.9
                endif
             enddo
          enddo
@@ -256,15 +246,15 @@ write(*,*) 'phi,theta',phi,theta
          if(iverb.eq.1) write(*,*) 'optimization done'
 !
 ! --> Perform acute angle to nearest neighbor ambiguity resolution on
-! --> pixels below a given threshold. 
+! --> pixels below the noise threshold. 
 !
-         call nacute6(bthresh0, bthresh1)
+         call nacute6
          if(iverb.eq.1) write(*,*) 'smoothing done'
 !
 ! --> Temporary rough estimate of uncertainty in ambiguity resolution:
 ! --> 0.0 for pixels which were not disambiguated (outside tmask)
 ! --> 0.5 for pixels which had weak field method applied
-! --> 0.6 for pixels which were below threshold and annealed
+! --> 0.6 for pixels which had acute angle method applied
 ! --> 0.9 for pixels which were above threshold and annealed
 !
          do i=1,nx
@@ -273,12 +263,10 @@ write(*,*) 'phi,theta',phi,theta
                   probBa(i,j)=0.0
                elseif(mask(i,j).eq.0) then
                   probBa(i,j)=0.5
-               else
-                  if(bt(i,j).gt.(bthresh1+(bthresh0-bthresh1)*sinp(j)*cost(i,j))) then
-                     probBa(i,j)=0.9
-                  else
-                     probBa(i,j)=0.6
-                  endif
+               else if(mask(i,j).eq.1) then
+                  probBa(i,j)=0.6
+               else if(mask(i,j).eq.2) then
+                  probBa(i,j)=0.9
                endif
             enddo
          enddo
@@ -297,16 +285,6 @@ write(*,*) 'phi,theta',phi,theta
 
    end select
 
-! --> Recompute azimuth from ambiguity-resolved Cartesian components, 
-! --> unless transverse field is zero, in which case use original angle.
-
-!   do i=1,nx
-!      do j=1,ny
-!         if(bt(i,j).ne.0.) ba(i,j)=atan2(By(i,j),Bx(i,j))
-!      enddo
-!   enddo
-
    deallocate(bt,dBzdz)
-!  deallocate(mask)
 
 end subroutine ambig

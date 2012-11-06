@@ -62,8 +62,8 @@ void cheby_basis(n, order, x, cheb, ldc)
 /* ################ Image Fitting ################ */
 
 
-void imagefromchebyshev(image, m, n, order, coef)
-    double *image;
+void imagefromchebyshev(image, m, n, order, coef, xdelta, ydelta)
+    double *image, xdelta, ydelta;
     int m, n, order;
     double coef[];
 {
@@ -93,10 +93,10 @@ void imagefromchebyshev(image, m, n, order, coef)
 
     /* Set up abscissa grid on [-1;1]x[-1;1] and Chebychev polynomials. */
     for (i = 0; i < n; i++) 
-        x[i] = (double)(2.0 * i) / (n - 1) - 1;
+        x[i] = (double)(2.0 * (i + xdelta)) / (n - 1) - 1;
     cheby_basis(n, order, x, chebx, n);
     for (j = 0; j < m; j++)
-        y[j] = (double)(2.0 * j) / (m - 1) - 1;
+        y[j] = (double)(2.0 * (j + ydelta)) / (m - 1) - 1;
     cheby_basis(m, order, y, cheby, m);
 
     /* Extract "good" pixels and set up matrix with bivariate polynomials

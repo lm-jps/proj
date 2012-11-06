@@ -83,12 +83,12 @@ subroutine get_ran_pix
          jj=jj+1
       enddo
 !
-! Set up ivec and jvec so that we only visit pixels that have mask.eq.1
+! Set up ivec and jvec so that we only visit pixels that have mask.ge.1
 !
       ng=0
       do i=1,nxg
          do j=1,nyg
-            if (mask(ivec1(i),jvec1(j)).eq.1) then
+            if (mask(ivec1(i),jvec1(j)).ge.1) then
                ng=ng+1
                ivec(ng)=ivec1(i)
                jvec(ng)=jvec1(j)

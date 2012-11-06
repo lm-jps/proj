@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/imagefromchebyshev.c"
+#include "imagefromchebyshev.c"
 
 /* cmd-line parameters */
 #define kRecSetIn       "in"
@@ -21,7 +21,8 @@
 
 int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image) 
     double *image;
-    int xDim, yDim, xcen, ycen, rsun;
+    int xDim, yDim;
+    float xcen, ycen, rsun;
     float vrcenter;
     TIME tobs;
  {
@@ -39,9 +40,9 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
     int MaskIndex = 0;
     int vr_start, vr_stop, order;
     float vr_coef, weight;
-    double *coef, *mask;
+    double *coef, *mask, xc_shift, yc_shift;
     int i, j, t, s, nrecs, ii, jj, k;
-    int sunSize = 2 * rsun;  
+    int sunSize = (int)(2 * (rsun+1));  
 
     strcpy(ttemp, "2010.12.13_19:47:00_TAI");
     ChangeTime1 = sscan_time(ttemp);
@@ -136,7 +137,10 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
            }
          }
 
-        imagefromchebyshev(mask, sunSize, sunSize, order, coef);
+        xc_shift = (double)xcen - (int)xcen;
+        yc_shift = (double)ycen - (int)ycen;
+printf("xc-shift = %f, yc-shift = %f\n", xc_shift, yc_shift);
+        imagefromchebyshev(mask, sunSize, sunSize, order, coef, xc_shift, yc_shift);
 
 // paste the mask in the 4096x4096 array
 
