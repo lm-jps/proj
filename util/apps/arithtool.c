@@ -30,6 +30,8 @@
  *
  */
 
+/* Adding a comment for testing. */
+
 #include "jsoc_main.h"
 
 #define kRecSetIn "recSetIn"
@@ -5258,6 +5260,8 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
      char **outSegNames = NULL; 
      int nSegs = 0;
      DRMS_Type_t actualtype;
+    double *insegBZERO = NULL;
+    double *insegBSCALE = NULL;
 
      /* Open the inSeries. */
      DRMS_RecordSet_t *inRecSet = drms_open_recordset(drmsEnv, inSeriesQuery, &status);
@@ -5270,11 +5274,21 @@ static int DoUnaryOp(DRMS_Env_t *drmsEnv, ArithOp_t op, DRMS_Type_t dtype,
 
      if (!error)
      {
-	  nSegs = segsToProc->items->num_total;
+         if (segsToProc && segsToProc->items)
+         {
+             nSegs = segsToProc->items->num_total;
+         }
+         else
+         {
+             nSegs = 0;
+         }
      }
 
-     double *insegBZERO = (double *)malloc(sizeof(double) * nSegs);
-     double *insegBSCALE = (double *)malloc(sizeof(double) * nSegs);
+     if (nSegs > 0)
+     {
+         insegBZERO = (double *)malloc(sizeof(double) * nSegs);
+         insegBSCALE = (double *)malloc(sizeof(double) * nSegs);
+     }
 
      while ((inRec = drms_recordset_fetchnext(drmsEnv, inRecSet, &status, &cstat, NULL)) != NULL)
      {
@@ -6165,7 +6179,7 @@ int DoIt(void)
                            {
                               error = 1;
                            }
-                           else if (nSegsToProc != segsToProc.items->num_total)
+                           else if (nSegsToProc > 0 && nSegsToProc != segsToProc.items->num_total)
                            {
                               error = 1;
                               fprintf(stderr, "Target series is missing one or more required segments.\n");
