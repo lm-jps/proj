@@ -1012,7 +1012,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.27 2012/10/15 17:38:16 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.28 2012/11/08 00:41:34 couvidat Exp $");
 }
 
 
@@ -1267,6 +1267,7 @@ int DoIt(void)
   int  *QUALITYLEV1=NULL;
   int   COSMICCOUNT=0;
   int   initialrun=0;
+  int  *totalTempIntNum;
 
   long long *CALVER32=NULL;
 
@@ -2285,6 +2286,13 @@ int DoIt(void)
       strcpy(source[i],HMISeriesLev10);                                     //INITIALIZE THE SOURCE KEYWORD
       strcat(source[i],"[:");
     }
+  totalTempIntNum  =(int *)malloc(nTime*sizeof(int));
+  if(totalTempIntNum == NULL)
+    {
+      printf("Error: memory could not be allocated to totalTempIntNum\n");
+      return 1;//exit(EXIT_FAILURE);
+    }
+  for(i=0;i<nTime;++i) totalTempIntNum[i]=0;
 
   //create array for the names of the 
   TOTVALSS =(char **)malloc(nWavelengths*npolout*sizeof(char *));
@@ -3852,6 +3860,7 @@ int DoIt(void)
 		  //calling Richard's code: temporal interpolation, de-rotation, un-distortion
 		  printf("Calling temporal averaging, de-rotation, and un-distortion code\n");
 
+		  totalTempIntNum[timeindex] += ActualTempIntNum;
 		  if(ActualTempIntNum != TempIntNum) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_LOWINTERPNUM;
 		  else
 		    {
@@ -3998,8 +4007,9 @@ int DoIt(void)
 	    }
 
 	  //propagate keywords from level 1 data to level 1p	  
-	  statusA[8] = drms_setkey_int(recLev1p->records[timeindex],QUALITYS,QUALITY[timeindex]); //Quality word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
+	  statusA[8] = drms_setkey_int(recLev1p->records[timeindex],QUALITYS,QUALITY[timeindex]);      //Quality word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
 	  statusA[44]= drms_setkey_int(recLev1p->records[timeindex],QUALLEV1S,QUALITYLEV1[timeindex]); //Quality lev1 word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
+	  statusA[23]= drms_setkey_int(recLev1p->records[timeindex],TINTNUMS,totalTempIntNum[timeindex]);
 
 	  if(it == 0)
 	    { 
@@ -4042,7 +4052,6 @@ int DoIt(void)
 	      statusA[20]=0;
 	      statusA[21]= drms_setkey_float(recLev1p->records[timeindex],CRLNOBSS,CRLNOBSint[timeindex]);
 	      statusA[22]= drms_setkey_int(recLev1p->records[timeindex],CARROTS,CARROTint[timeindex]);
-	      statusA[23]= drms_setkey_int(recLev1p->records[timeindex],TINTNUMS,ActualTempIntNum);
 	      statusA[24]= drms_setkey_int(recLev1p->records[timeindex],SINTNUMS,const_param.order_int);
 	      statusA[25]= drms_setkey_string(recLev1p->records[timeindex],CODEVER0S,CODEVERSION);
 	      statusA[26]= drms_setkey_string(recLev1p->records[timeindex],DISTCOEFS,DISTCOEFPATH); 
@@ -4290,6 +4299,7 @@ if(nIndexFiltergram != 0)
     
     for(i=0;i<nTime;++i) free(source[i]);
     free(source);
+    free(totalTempIntNum);
     free(images);
     free(imagesout);
     free(ps1);

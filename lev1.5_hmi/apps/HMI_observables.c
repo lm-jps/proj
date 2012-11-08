@@ -1090,7 +1090,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.36 2012/10/15 17:37:56 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.37 2012/11/08 00:41:21 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1338,6 +1338,7 @@ int DoIt(void)
   int *QUALITYlev1=NULL;
   int COSMICCOUNT=0;
   int initialrun=0;
+  int totalTempIntNum;
 
   long long *CALVER32=NULL;
   long long  CALVER64=-11;
@@ -1860,6 +1861,14 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  strcpy(HMISeriesLev15c,"hmi_test.Ld_75s" );              
 	  strcpy(HMISeriesLev15d,"hmi_test.Lw_75s" );              
 	  strcpy(HMISeriesLev15e,"hmi_test.Ic_75s" );
+	}
+      if(DataCadence == 135.0)
+	{						             
+	  strcpy(HMISeriesLev15a,"hmi.V_135s");              
+	  strcpy(HMISeriesLev15b,"hmi.M_135s");              
+	  strcpy(HMISeriesLev15c,"hmi.Ld_135s");              
+	  strcpy(HMISeriesLev15d,"hmi.Lw_135s");              
+	  strcpy(HMISeriesLev15e,"hmi.Ic_135s");
 	}
       if(DataCadence == 720.0)
 	{						             
@@ -2523,6 +2532,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       QUALITY = 0;                                                  //we initialize the QUALITY keyword, for lev 1.5 data, to 0
       QUALITYLEV1 = 0;                                              //we initialize the QUALITYLEV1 keyword, for lev 1.5 data, to 0
       strcpy(HISTORY,"");                                           //INITIALIZE THE HISTORY KEYWORD
+      totalTempIntNum = 0;                                          //INITIALIZE THE TINTNUM KEYWORD
 
       /****************************************************************************************************************************/
       /*                                                                                                                          */
@@ -4228,8 +4238,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		  //TEMPORAL INTERPOLATION, DE-ROTATION, UN-DISTORTION (FROM RICHARD)
 		  printf("Calling temporal interpolation, de-rotation, and un-distortion code\n");
 
-
-		  printf("ACTUALTEMPINT %d\n",ActualTempIntNum);
+		  totalTempIntNum += ActualTempIntNum;
+		  printf("ACTUALTEMPINT= %d, TOTALTEMPINTNUM= %d\n",ActualTempIntNum,totalTempIntNum);
 		  if(ActualTempIntNum != TempIntNum) QUALITY = QUALITY | QUAL_LOWINTERPNUM; //if we don't have enough intwerpolation points
 		  else
 		    {
@@ -4408,7 +4418,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       /****************************************************************************************************************************/
       /*                                                                                                                          */
       /*                                                                                                                          */
-      /* IF INPUT IS LEVEL 1P FILTERGRAMS  (MODIFIED TO WORK ONLY ON OUTPUT OF 12-MIN AVERAGED IQUV CODE)                         */
+      /* IF INPUT IS LEVEL 1P FILTERGRAMS  (MODIFIED TO WORK ON OUTPUT OF 12-MIN AVERAGED IQUV CODE AND WITH 135 s CADENCE)       */
       /*                                                                                                                          */
       /*                                                                                                                          */
       /****************************************************************************************************************************/
@@ -4426,6 +4436,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  //strcpy(source,"[RECORDS USED: NOT REPORTED");
 
 	  //MODIFICATION FOR THE 12-MIN AVERAGED IQUV DATA
+	  //NB: FOR hmi.HMISeriesLev1pa135, HCAMID is a prime key, while for hmi.S_720s it's CAMERA
 	  PolarizationType=1; 
 	  if(CamId  == LIGHT_SIDE)  camera=1; //side camera
 	  if(CamId  == LIGHT_FRONT) camera=2; //front camera
@@ -4443,12 +4454,12 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  strcat(HMISeries,"[");                                   
 	  strcat(HMISeries,timeBegin2);
 	  strcat(HMISeries,"][");                                    //HMISeriesLev1p is in the format: seriesname[2000.12.25_00:00:00_TAI]
-	  //sprintf(CamIds,"%d",CamId); 
-	  sprintf(CamIds,"%d",camera);   
+	  if(DataCadence != 720.0) sprintf(CamIds,"%d",CamId);       //hmi.S_720s does not use the same prime key as the other lev1p series!
+	  else sprintf(CamIds,"%d",camera);   
 	  strcat(HMISeries,CamIds);
 	  strcat(HMISeries,"]");
 
-
+	  printf("Opening the record %s\n",HMISeries);
 	  recLev1p = drms_open_records(drms_env,HMISeries,&status);
 	  
 	  if (status == DRMS_SUCCESS && recLev1p != NULL && recLev1p->n > 0)  //successful opening of the input records
@@ -5012,12 +5023,13 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  strcat(source,"]");
  	  statusA[6]= drms_setkey_string(recLev1p->records[0],SOURCES,source); 
  	  statusA[7]= drms_setkey_int(recLev1p->records[0],QUALLEV1S,QUALITYLEV1); 
+ 	  statusA[8]= drms_setkey_int(recLev1p->records[0],TINTNUMS,totalTempIntNum); 
 
 	  TotalStatus=0;
-	  for(i=0;i<8;++i) TotalStatus+=statusA[i];
+	  for(i=0;i<9;++i) TotalStatus+=statusA[i];
 	  if(TotalStatus != 0)
 	    {
-	      for(i=0;i<8;++i) printf(" %d ",statusA[i]);
+	      for(i=0;i<9;++i) printf(" %d ",statusA[i]);
 	      printf("\n");
 	      printf("WARNING: could not set some of the keywords for the level 1p data at target time %s\n",timeBegin2);
 	    }
