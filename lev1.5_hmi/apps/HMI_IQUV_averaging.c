@@ -1012,7 +1012,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.28 2012/11/08 00:41:34 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.29 2012/11/08 01:06:06 couvidat Exp $");
 }
 
 
@@ -4010,6 +4010,7 @@ int DoIt(void)
 	  statusA[8] = drms_setkey_int(recLev1p->records[timeindex],QUALITYS,QUALITY[timeindex]);      //Quality word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
 	  statusA[44]= drms_setkey_int(recLev1p->records[timeindex],QUALLEV1S,QUALITYLEV1[timeindex]); //Quality lev1 word (MUST BE SET FOR EACH WAVELENGTH ITERATION, SO IS OUTSIDE LOOP)
 	  statusA[23]= drms_setkey_int(recLev1p->records[timeindex],TINTNUMS,totalTempIntNum[timeindex]);
+	  if(statusA[8] != 0 || statusA[44] != 0 || statusA[23] != 0)  printf("WARNING: could not set some of the keywords modified by the temporal interpolation subroutine for the level 1p data at target time %s\n",timeBegin2);
 
 	  if(it == 0)
 	    { 
