@@ -247,6 +247,8 @@ int DoIt(void)
   double crln, crlt;
   char outseries[DRMS_MAXSERIESNAMELEN];
   char inseries[DRMS_MAXSERIESNAMELEN];
+  int is_mod;
+  char testseries[DRMS_MAXSERIESNAMELEN];
   char inQuery[DRMS_MAXQUERYLEN];
   char in[DRMS_MAXQUERYLEN];
 
@@ -285,7 +287,7 @@ int DoIt(void)
   double crvaly = 0.0;
   double crota, sina, cosa;
   double pa, deltlong;
-  double center_x_first, center_y_first;  // used for NoTrack option
+  double target_x, target_y;  // used for NoTrack option
   int firstimage = 1;
   int boxtype, loctype;
   char *timekeyname;
@@ -318,12 +320,13 @@ int DoIt(void)
   if (loctype == LOCCARR)
     {
     if (car_rot < 0) DIE("Carrington rotation number must be provided for locunits=carrlong");
-    if (NoTrack) DIE("Can not use locunits=carrlong for no-tracking mode");
+    // if (NoTrack) DIE("Can not use locunits=carrlong for no-tracking mode");
     do_reftime = 0;
     }
   else 
     {
-    if (t_ref < 0) DIE("t_ref must be provided for locunits!=carrlong");
+    if (t_ref < 0)
+      DIE("t_ref must be provided for locunits!=carrlong");
     do_reftime = 1;
     }
 
@@ -385,14 +388,15 @@ int DoIt(void)
 // XXXXXXXXXXX Get box location in Carrington Coords for all location types, also initial center_X, center_y in NoTrack case  XXXXXXXXXXXXXX
   if (do_reftime) // Arc-sec, pixel, or Stonyhurst specification, get ref image information
     { // the image for ref_time is supposed to be present in the series.
+fprintf(stderr,"doing reftime\n");
     char t_ref_text[100];
     sprint_at(t_ref_text, t_ref-7200);
     sprintf(in, "%s[%s/4h][? QUALITY >=0 ?]", inseries, t_ref_text);
     inRS = drms_open_records(drms_env, in, &status);
       if (status || inRS->n == 0) DIE2("No input data found within 2-hours of t_ref",in);
-    int irec, nrecs = inRS->n;
-    TIME tdiff = 10000;
-    for (irec=0; irec<nrecs; irec++) // find record close to t_ref
+    int irec, okrec, nrecs = inRS->n;
+    TIME tdiff = 100000;
+    for (irec=0, okrec=0; irec<nrecs; irec++) // find record close to t_ref
       {
       TIME newdiff;
       inRec = inRS->records[irec];
@@ -400,9 +404,10 @@ int DoIt(void)
         continue;
       if ((newdiff=(fabs(drms_getkey_time(inRec,"T_OBS",NULL) - t_ref))) > tdiff)
         break;
+      okrec = irec;
       tdiff = newdiff;
       }
-    inRec = inRS->records[irec];
+    inRec = inRS->records[okrec];
     this_car_rot = drms_getkey_int(inRec, "CAR_ROT", &status); TEST_PARAM("CAR_ROT");
     crlt_obs = drms_getkey_double(inRec, "CRLT_OBS", &status); TEST_PARAM("CRLT_OBS");
     crln_obs = drms_getkey_double(inRec, "CRLN_OBS", &status); TEST_PARAM("CRLN_OBS");
@@ -433,6 +438,7 @@ int DoIt(void)
     if (loctype == LOCPIXELS || loctype==LOCARCSEC)
       { /* box ref location is in arcsec - find Carrington equivalent */
       // Note x and y and PIX_X and PIX_Y have first pixel at (1,1)
+      // center_x and center_y are center of target box where first pixel is (0,0)
       if (loctype==LOCARCSEC)
         {
         center_x = PIX_X(x,y) - 1;
@@ -452,11 +458,13 @@ int DoIt(void)
           fprintf(stderr, "Starting location is off the solar disk.");
       crln = crln_rad * Rad2Deg;
       crlt = crlt_rad * Rad2Deg;
+fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
       }
     else /* loctype==LOCSTONY */
       {
       crlt = y;
       crln = crln_obs + x;
+      sphere2img(crlt/Rad2Deg, crln/Rad2Deg, crlt_obs_rad, crln_obs_rad, &center_x, &center_y, x0, y0, rsunpix, pa_rad, 0, 0, 0, 0);
       }
     deltlong = crln - crln_obs;
     car_rot = this_car_rot;
@@ -472,6 +480,7 @@ int DoIt(void)
     crlt = y;
     if (crln < 0) DIE("Box longitude must be specified.");
     if (crlt < -990) DIE("box latitude must be specified.");
+    sphere2img(crlt/Rad2Deg, crln/Rad2Deg, crlt_obs_rad, crln_obs_rad, &center_x, &center_y, x0, y0, rsunpix, pa_rad, 0, 0, 0, 0);
     }
   crln_rad = crln * Deg2Rad;
   crlt_rad = crlt * Deg2Rad;
@@ -503,13 +512,21 @@ int DoIt(void)
   inTemplate = drms_template_record(drms_env, inseries, &status);
   if (status || !inTemplate) DIE2("Input series can not be found: ", inseries);
 
+  is_mod = 0;
   if (strcasecmp(outparam, "NOTSPECIFIED") == 0)
     {
     strncpy(outseries, inseries, DRMS_MAXSERIESNAMELEN);
     strncat(outseries, "_mod", DRMS_MAXSERIESNAMELEN);
+    is_mod = 1;
     }
   else
-   strncpy(outseries, outparam, DRMS_MAXSERIESNAMELEN);
+    {
+    strncpy(outseries, outparam, DRMS_MAXSERIESNAMELEN);
+    strncpy(testseries, inseries, DRMS_MAXSERIESNAMELEN);
+    strcat(testseries, "_mod");
+    if (strcmp(testseries, outseries) == 0)
+      is_mod = 1;
+    }
 
   // Now, make sure output series exists and get template record.
   outTemplate = drms_template_record(drms_env, outseries, &status);
@@ -616,6 +633,8 @@ int DoIt(void)
   // extract patches from each record
   for (irec = 0; irec < nrecs; irec ++)
     {
+    char history[4096];
+    *history = '\0';
     inRec = inRS->records[irec];
     if (status || !inRec) DIE("Record read failed.");
     TIME trec = drms_getkey_time(inRec, timekeyname, &status); TEST_PARAM(timekeyname);
@@ -729,6 +748,7 @@ int DoIt(void)
           {
           center_x = PIX_X(trackx,tracky) - 1;
           center_y = PIX_Y(trackx,tracky) - 1;
+          sprintf(history+strlen(history), "Image center tracked as per %s\n", FDSfile);
           }
         else
           sphere2img(crlt_rad, crln_rad, crlt_obs_rad, crln_obs_rad, &center_x, &center_y, x0, y0, rsunpix, pa_rad, 0, 0, 0, 0);
@@ -736,8 +756,10 @@ int DoIt(void)
 
     // center_x and center_y are target locations for the center of the desired patch, pixels from 0 of as-is image.
 
-    int x1 = round(center_x + llx);
-    int y1 = round(center_y + lly);
+    target_x = center_x;
+    target_y = center_y;
+    int x1 = round(target_x + llx);
+    int y1 = round(target_y + lly);
     int x2 = x1 + pixwidth - 1;
     int y2 = y1 + pixheight - 1;
     if (do_register)
@@ -749,6 +771,7 @@ int DoIt(void)
       }
     crpix1 = 1 + x0 - x1;
     crpix2 = 1 + y0 - y1;
+fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
 
     int start1[2] = {x1, y1};
     int end1[2] = {x2, y2};
@@ -848,12 +871,14 @@ int DoIt(void)
       crota -= 180.0;  // why was this missing in hg_patch??
       crpix1 = 1 + x2 - x0;
       crpix2 = 1 + y2 - y0;
+fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
       // adjust internal quantities for after the flip, may be needed by do_register.
       x1 = inAxis[0] - 1 - x2;
       y1 = inAxis[1] - 1 - y2;
-      center_x = inAxis[0] - 1 - center_x;
-      center_y = inAxis[1] - 1 - center_y;
+      target_x = inAxis[0] - 1 - center_x;
+      target_y = inAxis[1] - 1 - center_y;
       // cosa = 1.0; sina = 0.0;
+      strcat(history, "Image rotated 180 degrees.");
       }
 
 /*
@@ -872,8 +897,8 @@ int DoIt(void)
       int wantnewdims[2] = {nx - 2 * register_padding, ny - 2 * register_padding};
       float midx=(nx-1)/2.0, midy = (ny-1)/2.0;
       int dtyp = 3;
-      float dx = (x1 + midx) - center_x;
-      float dy = (y1 + midy) - center_y;
+      float dx = (x1 + midx) - target_x;
+      float dy = (y1 + midy) - target_y;
       image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &(void *)newdata, &newnx, &newny, 1, 0);
       if (newnx != nx || newny != ny)
         fprintf(stderr,"image_magrotate changed dimensions: nx want %d got %d, ny want %d got %d\n",nx,newnx,ny,newny);
@@ -885,8 +910,9 @@ int DoIt(void)
       for (j=0; j<pixheight; j++)
         for (i=0; i< pixwidth; i++)
           data[j*pixwidth + i] = newdata[(j+register_padding)*nx + i+register_padding];
-      crpix1 += dx;
-      crpix2 += dy;
+      sprintf(history+strlen(history), "\nImage registered by shift of (%0.3f,%0.3f) pixels.", dx, dy);
+      crpix1 += dx - register_padding;
+      crpix2 += dy - register_padding;
       }
 
 /*
@@ -925,8 +951,16 @@ int DoIt(void)
     drms_setkey_float(outRec, "XCEN", WX((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
     drms_setkey_float(outRec, "YCEN", WY((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
     set_statistics(outSeg, outArray, 1);
-    outArray->bzero = outSeg->bzero;
-    outArray->bscale = outSeg->bscale;
+    if (is_mod)
+      {
+      outArray->bzero = inSeg->bzero;
+      outArray->bscale = inSeg->bscale;
+      } 
+    else
+      {
+      outArray->bzero = outSeg->bzero;
+      outArray->bscale = outSeg->bscale;
+      }
     if (wantFAKE && FDSfile)
       {
       double r;
@@ -986,6 +1020,8 @@ int DoIt(void)
       drms_fprint_rec_query(log, outRec);
       fprintf(log, "\n");
       }
+    if (*history)
+      drms_appendhistory(outRec, history, 1);
     drms_close_records(outRS, DRMS_INSERT_RECORD);
     drms_free_array(outArray);
     } 
