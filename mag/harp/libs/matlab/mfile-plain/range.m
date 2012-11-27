@@ -34,5 +34,6 @@ if nargin < 2,
   m = [min(A) ; max(A) ];
 else
   m = max(min(A,C),B);
+  m(isnan(A)) = NaN;
 end;
 return;

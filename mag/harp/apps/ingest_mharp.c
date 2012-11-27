@@ -1066,7 +1066,7 @@ int DoIt(void)
   V_printf(1, "", "  Of NH, %d HARPs skipped as too short.\n", Harp_skip1);
   V_printf(1, "", "  Of NH, %d errors found while ingesting HARPs.\n", Harp_err1);
   if (Harp_err1 > 0)
-    V_printf(1, "", "WARNING: %d HARP ingestion errors occurred that were NOT due to missing mags",
+    V_printf(1, "", "WARNING: %d HARP ingestion errors occurred that were NOT due to missing mags.\n",
              Harp_err1);
   
   // NULLs OK here
@@ -1483,6 +1483,7 @@ extrapolate_harp(patch_info_t *patchInfo,    // head of array this HARP's patche
   // printf("\tHarp %d: recs=[%d, %d]\n", harpInfo->id, rec0, rec1);
 
   // put in lat/lon for placeholder ROIs, which always occur between rec0 and rec1
+  omega = patchInfo[rec0].omega / SEC_PER_DAY * CADENCE;
   for (rec = rec0; rec <= rec1; rec++) {
     // set up patchInfo[rec]
     if (patchInfo[rec].valid == Patch_Invalid) {

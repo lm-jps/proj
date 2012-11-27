@@ -1,15 +1,15 @@
-function res=track_hmi_movie_loop(fn, t, smpl, cm, fnTs, Mname)
+function res=track_hmi_movie_loop(fn, t, smpl, fnTs, Mname)
 %track_hmi_movie_loop	make movie from tracker metadata files
 % 
-% res=track_hmi_movie_loop(fn, t, smpl, cm, fnTs, Mname)
+% res=track_hmi_movie_loop(fn, t, smpl, fnTs, Mname)
 % * Make movie of tracking performance.  The output will be a matlab
 % "movie" which goes to a file, or which you can export with 
 % movie2avi if memory permits (see below).
 % * Usage: Controlled by file_loop_cat:
 % [fn,M] = file_loop_cat('fulldisk-instant.cat', ...
-%                        [0 dt 1], @this_file, 4, cm, fnTs, Mname);
+%                        [0 dt 1], @this_file, 4, fnTs, Mname);
 % where 4 gives the spatial reduction (factor of 4 in each direction 
-% yields 1024^2 images for HMI), cm is a colormap (try prism2), and 
+% yields 1024^2 images for HMI), and 
 % fnTs is a pattern for *track* summary mat-files.
 % * The optional Mname is a movie filename which is written as an 
 % AVI file.  If Mname is not given, the movie frames are returned 
@@ -32,7 +32,6 @@ function res=track_hmi_movie_loop(fn, t, smpl, cm, fnTs, Mname)
 %   string fn;    -- a .instant file
 %   real t;       -- time (given by file_loop_cat)
 %   int smpl;
-%   real cm(nc, 3);
 %   string fnTs
 %   opt string Mname = ''
 % 
@@ -53,11 +52,10 @@ FPS = 20; % number of frames per second
 % 
 % Error checking
 % 
-if all(nargin  ~= [5 6]), error ('Bad input arg number'); end;
+if all(nargin  ~= [4 5]), error ('Bad input arg number'); end;
 % if all(nargout ~= [0 1]), error ('Bad output arg number'); end;
-if nargin < 6, Mname = ''; end; % no direct output to movie file
+if nargin < 5, Mname = ''; end; % no direct output to movie file
 if length(smpl) ~= 1, error('Need one number in smpl'); end;
-if size(cm, 2) ~= 3, error('cm is a color map'); end;
 if ~ischar(fnTs),  error('fnTs is a filename');  end;
 if ~ischar(Mname), error('Mname is a filename'); end;
 
@@ -81,6 +79,7 @@ if isnumeric(fn),
       Mavi_name = sprintf(Mname, Mavi_num);
       [junk1,junk2] = mkdir(fileparts(Mavi_name)); % suppress error msgs
       Mavi = avifile(Mavi_name, 'fps', FPS);
+      fprintf('%s: output to %s\n', mfilename, Mavi_name);
     else,
       Mavi = [];
     end;
@@ -196,6 +195,21 @@ NEUTA  = 3;  % boring (dark gray)
 NEUTB  = 4;  % boring (brighter gray)
 FRSTROI= 5;  % first ROI color
 TCOLOR = [LOLITE NEUTA NEUTB HILITE]; % text, dark-to-bright
+
+% categorical color map for movies
+% cm = [1,1,1; 0,0,0; 0.4,0.4,0.4; 0.7,0.7,0.7; prism2(40)]; % old -- not as good
+cm = [1,1,1; 0,0,0; 0.4,0.4,0.4; 0.7,0.7,0.7; colormap_protovis]; % new
+
+% load the font for text
+M = size(ims,1); % it has been downsampled
+if M < 400, 
+  DFONT = text_on_image_font('Menlo.ttf', [], [16 0]);
+  SFONT = text_on_image_font('ProggyClean_font.m', [], [10 0 0 1]);
+else, 
+  DFONT = text_on_image_font('Menlo.ttf', [], [18 0 0 1]);
+  SFONT = text_on_image_font('ProggyClean_font.m', [], [10 0 0 1]);
+end;
+
 Nt_show = size(cm,1)-(LOLITE+2); % # colors remaining
 r2t = [LOLITE NEUTA FRSTROI+rem(bound2tk(:)'-1, Nt_show)]; 
 % inputs to r2t remapper come from znan(...) construction, encoded as:
@@ -263,13 +277,28 @@ end;
 % put on NOAA AR markers 
 im1 = marker_on_image(im1, [NOAAx(NOAAv) NOAAy(NOAAv)],...
                       '+', [15 3], [], HILITE);
+im1 = text_on_image(im1, cellstr(int2str([NOAAar(NOAAv).regionnumber]')), [], HILITE, ...
+                    [NOAAx(NOAAv)-15 ...
+                    2*sign(NOAAy(NOAAv)-M/2).*sqrt(abs(NOAAy(NOAAv)-M/2))+M/2 ...
+                    zeros(nnz(NOAAv),1)-FLIP], SFONT);
 
 % put on the poles, if they're there
-% FIXME: this is temporary!
 [NPx, NPy, NPz] = hmi_latlon2image([90;-90], [0;0], geom);
 NPx = round(NPx/abs(smpl));
 NPy = round(NPy/abs(smpl));
-im1 = marker_on_image(im1, [NPx(NPz>0) NPy(NPz>0)], 'x', [15 3], [], HILITE);
+NPv = (NPz >= 0); % visible on-disk
+NP_txt = {'N'; 'S'};
+NPspc = [-20;10]; % offset text from marker
+im1 = marker_on_image(im1, [NPx(NPv) NPy(NPv)], 'x', [15 3], [], HILITE);
+im1 = text_on_image(im1, NP_txt(NPv), [], HILITE, ...
+                    [NPx(NPv) NPy(NPv)+NPspc(NPv) zeros(nnz(NPv),1)-FLIP], SFONT);
+
+% HARP-number labels -- only the non-placeholder ones
+if nR > 0,
+  harp_lbl_locn = [rgnS(:,1:2)+1 zeros(nR,1)-FLIP];
+  im1 = text_on_image(im1, cellstr(int2str(rgnTid(rgnTag >= 0))), ...
+                      [], HILITE, harp_lbl_locn(rgnTag >= 0,:), SFONT);
+end;
 
 % keyboard
 
@@ -289,12 +318,6 @@ im1 = marker_on_image(im1, [NPx(NPz>0) NPy(NPz>0)], 'x', [15 3], [], HILITE);
 im1 = rot90(im1, FLIP);
 M = size(im1, 1); % scale info
 
-% load the font for text
-if M < 400, 
-  DFONT = text_on_image_font('Menlo.ttf', [], [16 0]);
-else, 
-  DFONT = text_on_image_font('Menlo.ttf', [], [18 0 0 1]);
-end;
 % make space in im1 for overlay
 if     M < 400, pad = [32 96]; 
 elseif M < 800, pad = [ 0 64]; 
@@ -314,18 +337,18 @@ end;
 % frame number overlay
 fnumT = num2str(frame_num, '%06d');
 % initial space makes it play nicer with qt player on mac
-txt = {'SDO/HMI Tracked AR (HARP)', t1code, t2code, ' ', t3code, ' ', fnumT};
+txt = {{'SDO/HMI Tracked AR (HARP)', t1code, t2code, ' ', t3code, ' ', fnumT}};
 imT = text_on_image(imT, txt, [], TCOLOR, [MRGN MRGN], DFONT);
 
 % nR is the number of tracks, accounting for merges
-txt = {...
+txt = {{...
     sprintf('T = %d', nR), ...
     ' ', ...
     sprintf('! = %d (new)',         nnz(rgnAge == 0)), ...
     sprintf('+ = %d (merge)',       nnz(rgnMrg >  0)), ...
     sprintf('~ = %d (use past)',    nnz(rgnTag == 0)), ...
     sprintf('? = %d (placeholder)', nnz(rgnTag <  0)), ...
-      };
+      }};
 % put overlay on
 imT = text_on_image(imT, txt, [], TCOLOR, [1-MRGN MRGN], DFONT);
 
@@ -342,7 +365,8 @@ if nR > 0,
   % now label regions
   rgnID_t = num2str(rgnTid, '%04.0f'); % text format
   rgnID_x = blanks(nR)';
-  if length(botSize) > 0,
+  if 0 == 1 && length(botSize) > 0,
+    % disabled
     rgnID_x(botSize(1))   = 'v'; % smallest
     rgnID_x(botSize(end)) = '^'; % biggest
   end;
@@ -354,7 +378,7 @@ if nR > 0,
   % define text blocks
   TBu = columnize(rgnID_t( UPPER,:), NC_max, 1);
   TBd = columnize(rgnID_t(~UPPER,:), NC_max, 0);
-  imT = text_on_image(imT, TBu, [], TCOLOR, [MRGN   0.97], DFONT);
+  imT = text_on_image(imT, strvcat({'HARPs'; TBu}), [], TCOLOR, [MRGN   0.97], DFONT);
   imT = text_on_image(imT, TBd, [], TCOLOR, [1-MRGN 0.97], DFONT);
   % put on the per-track color key
   pix_per_line = 19; % for DFONT
@@ -363,7 +387,7 @@ if nR > 0,
   nline = nnz(UPPER);
   track_colors = FRSTROI + rem(rgnTid(UPPER)-1, Nt_show);
   track_block = kron(track_colors, ones(pix_per_line, WID));
-  imT(MRGNPIX+[1:(pix_per_line*nline)],end-WID+1:end) = track_block;
+  imT(MRGNPIX+20+[1:(pix_per_line*nline)],end-WID+1:end) = track_block;
   % lower key
   nline = nnz(~UPPER);
   track_colors = FRSTROI + rem(rgnTid(~UPPER)-1, Nt_show);
@@ -372,7 +396,6 @@ if nR > 0,
 end;
 
 % put on NOAA track numbers
-% TODO: sort these
 if nnz(NOAAv) > 0,
   NOAAlat = [NOAAar.latitudehg]; % all lat's
   NOAAtid = [NOAAar.regionnumber]';
@@ -385,7 +408,8 @@ if nnz(NOAAv) > 0,
   [junk,NOAAxup] = sort(NOAAx1, 1, 'descend'); % sort valid + north by x
   NBu = num2str(NOAAtid1(NOAAxup), '%05.0f');
   NBs = num2str(NOAAspt1(NOAAxup), ':%2d');
-  imT = text_on_image(imT, [NBu NBs], [], TCOLOR, [MRGN 0.88], DFONT);
+  imT = text_on_image(imT, strvcat({'NOAA ARs'; [NBu NBs]}), ...
+                      [], TCOLOR, [MRGN 0.88], DFONT);
   % put on southern tags
   NOAAinx = NOAAv & (NOAAlat(:) < 0); % valid and south
   NOAAtid1 = NOAAtid(NOAAinx); % track id's

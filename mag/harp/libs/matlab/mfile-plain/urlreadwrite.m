@@ -2,8 +2,8 @@ function [urlConnection,errorid,errormsg] = urlreadwrite(fcn,urlChar)
 %URLREADWRITE A helper function for URLREAD and URLWRITE.
 
 %   Matthew J. Simoneau, June 2005
-%   Copyright 1984-2005 The MathWorks, Inc.
-%   $Revision: 1.1 $ $Date: 2012/01/19 18:22:49 $
+%   Copyright 1984-2009 The MathWorks, Inc.
+%   $Revision: 1.2 $ $Date: 2012/11/27 19:42:42 $
 
 % Default output arguments.
 urlConnection = [];
@@ -18,13 +18,13 @@ switch protocol
     case 'http'
         try
             handler = sun.net.www.protocol.http.Handler;
-        catch
+        catch exception %#ok
             handler = [];
         end
     case 'https'
         try
             handler = sun.net.www.protocol.https.Handler;
-        catch
+        catch exception %#ok
             handler = [];
         end
     otherwise
@@ -38,24 +38,17 @@ try
     else
         url = java.net.URL([],urlChar,handler);
     end
-catch
+catch exception %#ok
     errorid = ['MATLAB:' fcn ':InvalidUrl'];
     errormsg = 'Either this URL could not be parsed or the protocol is not supported.';
     return
 end
 
-% Determine the proxy.
-proxy = [];
-if ~isempty(java.lang.System.getProperty('http.proxyHost'))
-    try
-        ps = java.net.ProxySelector.getDefault.select(java.net.URI(urlChar));
-        if (ps.size > 0)
-            proxy = ps.get(0);
-        end
-    catch
-        proxy = [];
-    end
-end
+% Get the proxy information using MathWorks facilities for unified proxy
+% preference settings.
+mwtcp = com.mathworks.net.transport.MWTransportClientPropertiesFactory.create();
+proxy = mwtcp.getProxy(); 
+
 
 % Open a connection to the URL.
 if isempty(proxy)

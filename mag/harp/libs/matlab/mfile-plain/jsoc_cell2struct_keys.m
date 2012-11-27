@@ -27,6 +27,7 @@ s = struct([]);
 for k = 1:nk,
   name1 = r{k}.name;
   key1 = name2key(name1);
+  % TODO: make this more robust/predictable by using more than first?
   type1 = deduce_type(r{k}.values{1});
   switch type1,
    case 'double',
@@ -55,7 +56,7 @@ function typ = deduce_type(s)
 
 if length(s) > 4 && strcmp(s(end-3:end), '_TAI'),
   typ = 'time';
-elseif ~isnan(str2double(s))
+elseif strcmp(s, 'MISSING') || ~isnan(str2double(s))
   typ = 'double';
 else
   typ = 'char';

@@ -152,7 +152,9 @@ keylist = sprintf('%s,', keys{:});
 keylist(end) = []; % kill last comma
 
 % get keywords
-series = sprintf('%s[%s]', parent, trec);
+%  note: the camera>0 clause guards against duplicate entries in M_720s
+%  with missing data -- it forces only valid records to be returned.
+series = sprintf('%s[%s][?camera>0?]', parent, trec);
 if do_err_out,
   % do not ask for msg argument -- will error out if WCS is not present
   a = rs_list(series, {'key', keylist});

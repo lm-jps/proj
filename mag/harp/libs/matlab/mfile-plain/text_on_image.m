@@ -1,8 +1,8 @@
-function out = text_on_image(img, txt, icolor, tcolor, pos, font)
+function out = text_on_image(img, txts, icolor, tcolor, pos, font)
 %text_on_image	overlay text onto image
 % 
-% out = text_on_image(img, txt, icolor, tcolor, pos, font)
-% * Overlay text (txt) on image (img).  If img is empty, just the
+% out = text_on_image(img, txts, icolor, tcolor, pos, font)
+% * Overlay text (txts) on image (img).  If img is empty, just the
 % overlay is returned.  Each overlay pixel is a scalar value,
 % so it can serve as an index or a weight on an RGB color.
 % * Both uint8 truecolor images and indexed images are supported, with 
@@ -44,7 +44,7 @@ function out = text_on_image(img, txt, icolor, tcolor, pos, font)
 % 
 % Inputs:
 %   uint8 img(m,n,3) or double img(m,n)
-%   char txt(mt,nt) or cell txt{mt}
+%   char txts(mt,nt) or cell txt{mt} of char()
 %   opt real icolor(3) or (1)
 %      (truecolor: icolor = [0 0 0]. indexed: icolor = [].)
 %   opt real tcolor(3) or (1) or (nc)
@@ -77,7 +77,9 @@ if nargin < 6,
   font = text_on_image_font_old('dejavu24');
 end;
 if nargin < 5 || isempty(pos), pos = [1 1]; end;
-if length(pos) == 2, pos = [pos 0]; end; % plug in final 0
+if size(pos, 2) == 2, 
+  pos = [pos zeros(size(pos,1),1)]; % plug in final 0
+end; 
 if nargin < 4, 
   % (text) truecolor: gray. indexed: "color #2"
   if P == 3, tcolor = 0.7; else, tcolor = 2; end;
@@ -86,8 +88,14 @@ if nargin < 3,
   % (image) truecolor: black.  indexed: "color #1"
   if P == 3, icolor = 0.0; else, icolor = []; end;
 end;
-% convert cell text to string
-if iscell(txt), txt = strvcat(txt); end;
+% convert char txts to one-entry cell
+if ischar(txts), 
+  txt1 = {txts}; txts = txt1; clear txt1; 
+end;
+% convert pos to have one entry per txt
+if length(txts) > 1 && size(pos,1) == 1,
+  pos = repmat(pos, length(txts), 1); % preserves uint/double status
+end;
 % expand scalar colors to length-P
 if P == 3,
   if length(icolor) == 1,
@@ -99,65 +107,85 @@ if P == 3,
 end;
 % some more checking
 if ~isstruct(font), error('Font must be a struct'); end;
-if length(pos) ~= 3, error('Pos must have 2 or 3 elements'); end;
+if length(txts) >= 1 && size(pos, 1) ~= length(txts), 
+  error('pos must be a row, or have one row per txt'); 
+end;
 if length(tcolor) ~= P && P == 3, error('Bad tcolor'); end; %P=1:vector OK
 if length(icolor) ~= P && ~isempty(icolor), error('Bad icolor'); end;
-if ~ischar(txt), error('Text must be a string'); end;
-if all(P ~= [1 3]), error('Need empty, indexed, or RGB image'); end;
+if ~iscell(txts), error('txts must be a string matrix, or a cell'); end;
+if all(P ~= [1 3]), error('Need indexed or RGB image'); end;
+% if all coords are <= 1, assume they are scaled (allow small negatives too)
+scaled_coords = all(all(abs(pos(:,1:2)) <= 1));
 
 %
 % Computation
 % 
+
+[M,N,P] = size(img);
+
+%% Compute dictionary info
 bitmaps = font.bitmaps;
 dict = font.dict;
-
 % bitmap letters are Mb by Nb
 [Mb,Nb,junk] = size(bitmaps);
-[Mt,Nt] = size(txt);
-
-%% Make compute dictionary index for each char in txt
 % find index within dict of the char we will call blank
 blankchar = find(dict == ' ', 1); % first space
 if isempty(blankchar), blankchar = 1; end;
-% distance from txt to dict (Ntxt x Ndict)
-dist = abs(repmat(dict, [Mt*Nt 1]) - repmat(txt(:), [1 length(dict)]));
-[exact,inx] = min(dist, [], 2); % min along dict axis
-% create indexes into dict
-indexes = zeros(size(txt)) + blankchar; % all blank for now
-indexes(exact == 0) = inx(exact == 0); % only replace exact matches
 
-% bitmaps for each letter, stacked along third dim
-letters = bitmaps(:,:,indexes(:));
-% reshape so a multi-line txt can be permuted
-block = reshape(letters, [Mb Nb Mt Nt]);
-% permute and reshape into the text as displayed; rotate as desired
-block = rot90(reshape(permute(block, [1 3 2 4]), [Mb*Mt Nb*Nt]), pos(3));
+%% Loop over text blocks, placing them in the overlay
+overlay = zeros(M, N, 'uint8');
+Ntxt = length(txts);
+for i = 1:Ntxt,
+  % char() converts a cell array of strings to a string matrix
+  txt = char(txts{i});
+  [Mt,Nt] = size(txt);
 
-% if empty image, just return the text
-if isempty(img),
-  out = block;
-  return;
+  %% Find dictionary index for each char in txt
+  % distance from txt to dict (Ntxt x Ndict)
+  dist = abs(repmat(dict, [Mt*Nt 1]) - repmat(txt(:), [1 length(dict)]));
+  [exact,inx] = min(dist, [], 2); % min along dict axis
+  % create indexes into dict
+  indexes = zeros(size(txt)) + blankchar; % all blank for now
+  indexes(exact == 0) = inx(exact == 0); % only replace exact matches
+
+  % bitmaps for each letter, stacked along third dim
+  letters = bitmaps(:,:,indexes(:));
+  % reshape so a multi-line txt can be permuted
+  block = reshape(letters, [Mb Nb Mt Nt]);
+  % permute and reshape into the text as displayed; rotate as desired
+  block = rot90(reshape(permute(block, [1 3 2 4]), [Mb*Mt Nb*Nt]), double(pos(i,3)));
+
+  % determine where to place the block
+  [m,n] = size(block);
+  % FIXME: are we handling fenceposts correctly?
+  if scaled_coords,
+    origin = [(M-m) (N-n)] .* pos(i,1:2);
+  else
+    origin = pos(i,1:2) - 1;
+  end;
+  inx1 = round([1:m] + origin(1));
+  inx2 = round([1:n] + origin(2));
+  % FIXME: clip block, don't error out
+  if any(inx1 < 1) || any(inx1 > M),
+    error('Text block out of range (vertical)');
+  end;
+  if any(inx2 < 1) || any(inx2 > N),
+    error('Text block out of range (horizontal)');
+  end;
+  
+  % place block in overlay
+  overlay(inx1,inx2) = block;
 end;
 
-% place block in img
-[m,n] = size(block);
-[M,N,P] = size(img);
-inx1 = round([1:m] + (M-m)*pos(1));
-inx2 = round([1:n] + (N-n)*pos(2));
-if any(inx1 < 1) || any(inx1 > M),
-  error('Text block out of range (vertical)');
-end;
-if any(inx2 < 1) || any(inx2 > N),
-  error('Text block out of range (horizontal)');
-end;
-
-% set up out1, the text block in the image
+%% Set up the output
 if P == 3,
+  % truecolor case
   % blend icolor with tcolor
-  out1 = uint8(double(img(inx1,inx2,:))       .* repmat(reshape(icolor, [1 1 3]), [m n 1]) + ...
-               double(repmat(block, [1 1 3])) .* repmat(reshape(tcolor, [1 1 3]), [m n 1]));
+  out = uint8(bsxfun(@times, double(img),     reshape(icolor, [1 1 3])) + ...
+              bsxfun(@times, double(overlay), reshape(tcolor, [1 1 3])));
 else,
-  % set up output colors
+  % indexed case
+  % set up output color map
   if length(tcolor) == 1,
     % text in two colors: icolor and tcolor
     if isempty(icolor), 
@@ -169,19 +197,16 @@ else,
     % text in (vector) tcolor
     outcolor = tcolor;
   end;
-  % map range of the entries in block(:) thru outcolor
+  % map range of the entries in overlay(:) thru outcolor
   inx = linspace(0, 255, length(outcolor));
-  out1 = reshape(interp1(inx, outcolor, double(block(:)), 'nearest'), ...
-                 size(block));
-  % if icolor was given, ensure output=icolor where the bitmap == 0
+  out = reshape(interp1(inx, outcolor, double(overlay(:)), 'nearest'), ...
+                size(overlay));
+  % ensure output is unchanged where bitmap == 0
   if ~isempty(icolor),
-    out1(block == 0) = icolor;
+    % case where icolor was given explicitly
+    out(overlay == 0) = icolor;
   else,
-    outB = img(inx1, inx2);
-    out1(block == 0) = outB(block == 0);
+    out(overlay == 0) = img(overlay == 0);
   end;
 end;
-% plug it in
-out = img;
-out(inx1,inx2,:) = out1;
 return;

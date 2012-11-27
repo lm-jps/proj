@@ -14,12 +14,6 @@ if ~exist('mode', 'var'),
   fprintf('Defaulting to mode = %d (display resolution)\n', mode);
 end;
 
-% colormap: white, black, gray, then a series of easily distiguishable colors
-% the text rendering in the moviemaker relies upon the first 3 colors being
-% this way
-cm = prism2(40); 
-cm = [1,1,1; 0,0,0; 0.4,0.4,0.4; 0.7,0.7,0.7; cm];
-
 % inner loop command
 cmd = @track_hmi_movie_loop;
 
@@ -76,18 +70,18 @@ if mode == 1,
   % set up for 1024^2 frames
   clear res;
   Mname = sprintf('/tmp/hmi-patch-%s-all_%%d.avi', key);
-  [fn,res]=file_loop_cat(fnIC, [0 dt 1], cmd, 4, cm, fnTs, Mname);
+  [fn,res]=file_loop_cat(fnIC, [0 dt 1], cmd, 4, fnTs, Mname);
 
 elseif mode == 2,
   % 512^2 frames
   clear res;
   Mname = sprintf('/tmp/hmi-patchS-%s-all_%%d.avi', key);
-  [fn,res]=file_loop_cat(fnIC,[0 dt 1], cmd, 8, cm, fnTs, Mname);
+  [fn,res]=file_loop_cat(fnIC,[0 dt 1], cmd, 8, fnTs, Mname);
 
 elseif mode == 3,
   % 256^2 frames, not stored in a disk file as-we-go, but saved later
   clear M;
-  [fn,M]=file_loop_cat(fnIC,[0 dt 1], cmd, 16, cm, fnTs);
+  [fn,M]=file_loop_cat(fnIC,[0 dt 1], cmd, 16, fnTs);
   movie2avi(M, '/tmp/hmi-patch-SS.avi', 'fps', 8);
 
 end;

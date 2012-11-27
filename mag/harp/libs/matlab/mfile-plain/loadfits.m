@@ -23,7 +23,7 @@ function [image,err] = loadfits(file, block, type)
 % 
 % Error checking
 % 
-if all(nargin  ~= [1:2]), error('Bad input arg number'); end;
+if all(nargin  ~= [1:3]), error('Bad input arg number'); end;
 % if all(nargout ~= [0 1]), error('Bad output arg number'); end;
 if (nargin < 2), block = 1; end;
 if (nargin < 3), type = 'double'; end;
@@ -32,7 +32,7 @@ if (nargin < 3), type = 'double'; end;
 % Computation
 % 
 % preserve nargout, because it affects error indications.
-if nargout > 2,
+if nargout > 1,
   [imp,err] = loadfitsa(file, block, type);
 else,
   imp = loadfitsa(file, block, type);

@@ -659,7 +659,13 @@ for f = 1:nf,
   for r = [1:nr1], 
     off1 = rois1(r).coords - coords1; % offset: old origin - new origin (>=0)
     box1 = size(rois1(r).chip); % just the chip size
-    chip1(off1(1)+1:off1(1)+box1(1),off1(2)+1:off1(2)+box1(2)) = full(rois1(r).chip);
+    % define the box to update
+    inx1 = [off1(1)+1:off1(1)+box1(1)];
+    inx2 = [off1(2)+1:off1(2)+box1(2)];
+    % FIXME: need smarter update to not overwrite good info with zeros
+    chip_now = chip1(inx1,inx2);
+    % chip1(inx1,inx2) = max(chip_now, full(rois1(r).chip)); % (new)
+    chip1(inx1,inx2) = full(rois1(r).chip); % (original - bug)
   end;
   sp(f).chip = chip1; % plug it in
 end;

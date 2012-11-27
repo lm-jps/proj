@@ -38,7 +38,7 @@ function [output,status,req] = urlread_jsoc(urlChar,method,params)
 
 %   Matthew J. Simoneau, 13-Nov-2001
 %   Copyright 1984-2008 The MathWorks, Inc.
-%   $Revision: 1.2 $ $Date: 2012/04/05 16:31:35 $
+%   $Revision: 1.3 $ $Date: 2012/11/27 19:42:42 $
 
 % This function requires Java.
 if ~usejava('jvm')

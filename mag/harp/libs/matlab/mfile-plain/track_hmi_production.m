@@ -199,7 +199,6 @@ if make_movie && length(fn) > 0,
   warning('off','hmi_base:no_noaa_info');
   % set up parameters
   dt = 1; % interval between frames
-  cm = [1,1,1; 0,0,0; 0.4,0.4,0.4; 0.7,0.7,0.7; prism2(40)];
   % master cat file
   fnIC = sprintf(hooks.filename.template, '', '-fd-instant', '', 'cat');
   % track metadata file template
@@ -209,7 +208,7 @@ if make_movie && length(fn) > 0,
   fnAVI = sprintf(hooks.filename.template, 'movie', '-movie.', [tag '_%d'], 'avi');
   % loop which makes the movie
   fprintf('%s: Beginning movie.\n', mfilename);
-  [fn,res]=file_loop_cat(fnIC, [0 dt 1], @track_hmi_movie_loop, 4, cm, fnTs, fnAVI);
+  [fn,res]=file_loop_cat(fnIC, [0 dt 1], @track_hmi_movie_loop, 4, fnTs, fnAVI);
   fprintf('%s: Completed movie.\n', mfilename);
 end;
 

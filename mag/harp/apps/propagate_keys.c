@@ -77,6 +77,7 @@ static const char *mag2mask_keys[] = {
   "DISTCOEF", NULL,
   "ROTCOEF",  NULL,
   "POLCALM",  NULL,
+  "CALVER64", NULL, // new 11/2012
   // "SOURCE",   NULL, // omit, it's huge and you can track back to mgram
   // versioning
   "CODEVER0", NULL,
@@ -160,6 +161,7 @@ static const char *mag2harp_keys[] = {
   "DISTCOEF", NULL,
   "ROTCOEF",  NULL,
   "POLCALM",  NULL,
+  "CALVER64", NULL, // new 11/2012
   // "SOURCE",   NULL, // omit, it's huge and you can track back to mgram
   // versioning
   "CODEVER0", NULL,
