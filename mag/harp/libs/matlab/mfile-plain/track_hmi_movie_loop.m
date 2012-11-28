@@ -190,15 +190,24 @@ MRGNPIX = floor(MRGN*size(ims, 1)); % pixels
 %   offdisk = NaN, ondisk = 0, regions = 1..Nr
 % remapped into new integers made to align with the color map
 HILITE = 1;  % color index for text, overlays, etc. (intended as white)
-LOLITE = 2;  % complementary to above (black)
-NEUTA  = 3;  % boring (dark gray)
-NEUTB  = 4;  % boring (brighter gray)
-FRSTROI= 5;  % first ROI color
-TCOLOR = [LOLITE NEUTA NEUTB HILITE]; % text, dark-to-bright
+CONTRA = 2;  % contrast for text, overlays (yellow)
+LOLITE = 3;  % complementary to above (black)
+NEUTA  = 4;  % boring (dark gray)
+NEUTB  = 5;  % boring (brighter gray)
+FRSTROI= 6;  % first ROI color
+TCOLOR  = [LOLITE NEUTA NEUTB HILITE]; % text, dark-to-bright
+TCOLOR2 = [LOLITE NEUTA NEUTB CONTRA]; % text/alt, dark-to-bright
 
 % categorical color map for movies
 % cm = [1,1,1; 0,0,0; 0.4,0.4,0.4; 0.7,0.7,0.7; prism2(40)]; % old -- not as good
-cm = [1,1,1; 0,0,0; 0.4,0.4,0.4; 0.7,0.7,0.7; colormap_protovis]; % new
+white = [1 1 1];
+cm = [1.0*white; ...
+      1,1,0; ...
+      0.0*white; ...
+      0.4*white; ...
+      0.7*white; ...
+      colormap_protovis];
+cm(end-3,:) = []; % this is too close to yellow (cm(2,:) overlay)
 
 % load the font for text
 M = size(ims,1); % it has been downsampled
@@ -210,7 +219,7 @@ else,
   SFONT = text_on_image_font('ProggyClean_font.m', [], [10 0 0 1]);
 end;
 
-Nt_show = size(cm,1)-(LOLITE+2); % # colors remaining
+Nt_show = size(cm,1) - FRSTROI + 1; % # colors remaining
 r2t = [LOLITE NEUTA FRSTROI+rem(bound2tk(:)'-1, Nt_show)]; 
 % inputs to r2t remapper come from znan(...) construction, encoded as:
 %    offdisk starts as NaN, mapped to 1
@@ -276,8 +285,8 @@ end;
 
 % put on NOAA AR markers 
 im1 = marker_on_image(im1, [NOAAx(NOAAv) NOAAy(NOAAv)],...
-                      '+', [15 3], [], HILITE);
-im1 = text_on_image(im1, cellstr(int2str([NOAAar(NOAAv).regionnumber]')), [], HILITE, ...
+                      '+', [15 3], [], CONTRA);
+im1 = text_on_image(im1, cellstr(int2str([NOAAar(NOAAv).regionnumber]')), [], CONTRA, ...
                     [NOAAx(NOAAv)-15 ...
                     2*sign(NOAAy(NOAAv)-M/2).*sqrt(abs(NOAAy(NOAAv)-M/2))+M/2 ...
                     zeros(nnz(NOAAv),1)-FLIP], SFONT);
@@ -319,6 +328,7 @@ im1 = rot90(im1, FLIP);
 M = size(im1, 1); % scale info
 
 % make space in im1 for overlay
+% NOTE: keeping smaller +32 pad so all tracker movies agree in size
 if     M < 400, pad = [32 96]; 
 elseif M < 800, pad = [ 0 64]; 
 else            pad = [ 0 32];
@@ -387,12 +397,12 @@ if nR > 0,
   nline = nnz(UPPER);
   track_colors = FRSTROI + rem(rgnTid(UPPER)-1, Nt_show);
   track_block = kron(track_colors, ones(pix_per_line, WID));
-  imT(MRGNPIX+20+[1:(pix_per_line*nline)],end-WID+1:end) = track_block;
+  imT(MRGNPIX+pix_per_line+[1:(pix_per_line*nline)],(end-1)-[1:WID]) = track_block;
   % lower key
   nline = nnz(~UPPER);
   track_colors = FRSTROI + rem(rgnTid(~UPPER)-1, Nt_show);
   track_block = kron(track_colors, ones(pix_per_line, WID));
-  imT([end-(pix_per_line*nline)+1:end]-MRGNPIX,end-WID+1:end) = track_block;
+  imT([end-(pix_per_line*nline)+1:end]-MRGNPIX,(end-1)-[1:WID]) = track_block;
 end;
 
 % put on NOAA track numbers
@@ -409,7 +419,7 @@ if nnz(NOAAv) > 0,
   NBu = num2str(NOAAtid1(NOAAxup), '%05.0f');
   NBs = num2str(NOAAspt1(NOAAxup), ':%2d');
   imT = text_on_image(imT, strvcat({'NOAA ARs'; [NBu NBs]}), ...
-                      [], TCOLOR, [MRGN 0.88], DFONT);
+                      [], TCOLOR2, [MRGN 0.88], DFONT);
   % put on southern tags
   NOAAinx = NOAAv & (NOAAlat(:) < 0); % valid and south
   NOAAtid1 = NOAAtid(NOAAinx); % track id's
@@ -418,7 +428,7 @@ if nnz(NOAAv) > 0,
   [junk,NOAAxup] = sort(NOAAx1, 1, 'descend'); % sort valid + south by x
   NBd = num2str(NOAAtid1(NOAAxup), '%05.0f'); % text format
   NBs = num2str(NOAAspt1(NOAAxup), ':%2d');
-  imT = text_on_image(imT, [NBd NBs], [], TCOLOR, [1-MRGN 0.88], DFONT);
+  imT = text_on_image(imT, [NBd NBs], [], TCOLOR2, [1-MRGN 0.88], DFONT);
 end;
 
 
