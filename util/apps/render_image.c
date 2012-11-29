@@ -807,15 +807,31 @@ fprintf(stderr,"\n   missingcolor %d maxcolor %d \n", missingcolor, maxcolor);
                  fprintf(stderr,"set_scaling, min or max is missing and no data values found.\n");
                  return(NULL);
                  }
-// fprintf(stderr,"set_scaling, found new min,max for %d points\n",n);
                }
              if (isnan(*minp)) *minp = min;
              if (isnan(*maxp)) *maxp = max;
              min = *minp;
              max = *maxp;
-	     /*  fprintf(stderr,"debug pt 3: min=%f max=%f\n",min,max); */
              }
-// fprintf(stderr,"set_scaling, now min=%f, max=%f\n",min,max);
+           double use_min, use_max;
+           if (scaling == LOG)
+             {
+             if (min <= 0)
+               min = 1.0e-10;
+             if (max <= 0)
+               max = 1.0e-10;
+             use_min = log10(min);
+             use_max = log10(max);
+             }
+           else if (scaling == SQRT)
+             {
+             if (min < 0)
+               min = 0;
+             if (max < 0)
+               max = 0;
+             use_min = sqrt(min);
+             use_max = sqrt(max);
+             }
            for (idata=0; idata<ndata; idata++)
              {
 	       /*    fprintf(stderr,"debug pt 4: min=%f max=%f\n",min,max);   */
@@ -825,37 +841,23 @@ fprintf(stderr,"\n   missingcolor %d maxcolor %d \n", missingcolor, maxcolor);
                 {
                 if (val <= min) val = min;
                 if (val >= max) val = max;
-                if (val == min || min == max)
+                if (scaling == LOG)
+		  newval = (maxcolor-1)*((log10(val)-use_min)/(use_max-use_min)) + 0.5;
+                else if (scaling == SQRT )
+                    newval = (maxcolor-1)*((sqrt(val)-use_min)/(use_max-use_min)) + 0.5;                         
+                else
                   {
-                  newval = 0; 
-		  /*      fprintf(stderr,"debug pt 5: min=%f max=%f\n",min,max);  */
-		  }
-               else 
-                  newval = maxcolor*(val-min)/(max-min) + 0.5;                   
-                if (scaling == MAXMIN)
-                   newval = maxcolor - newval;
+                  newval = (maxcolor-1)*(val-min)/(max-min) + 0.5;                   
+                  if (scaling == MAXMIN)
+                     newval = maxcolor - newval;
+                  }
                 if (newval >= maxcolor) newval = maxcolor;
                 if (newval < 1) newval = 1;
-		/*	 fprintf(stderr,"debug pt 6 : min=%f max=%f\n",min,max); */
-                if (scaling == LOG  || scaling == SQRT )
-                  {
-		    /*     fprintf(stderr,"debug pt 7: min=%f max=%f\n",min,max);  */
-                    min =*minp=0; 
-                     if (val<= 0) 
-                       newval = 0;
-                     if ( val>0 && scaling == LOG )
-		       newval = (maxcolor*((log10(val))/(log10(*maxp))))+0.5;
-                     if ( val>0 && scaling == SQRT )
-                       newval =(maxcolor*((sqrt(val))/(sqrt(*maxp))))+0.5;                         
-		     /*      fprintf(stderr,"debug pt 8: maxcolor=%d  newval=%d\n",newval);*/
-			
-		   }              
                 }
              else
                 {
-                  newval = missingcolor;
-                  nmiss += 1;
-		  /* fprintf(stderr,"debug pt 10: min=%f max=%f newval=%d\n",min,max,newval); */
+                newval = missingcolor;
+                nmiss += 1;
                 }
              for (color=0; color<colors; color++)
                 {
