@@ -587,7 +587,7 @@ int DoIt (void)
                           0.0,0.0,0.0,
                           0.0,0.0,0.0};
   double bscaleinv[25] = {0.01,0.01,0.01,0.0001,0.01,0.01,
-                          50.0,0.1,0.1,0.001,
+                          50.0,0.1,0.1,0.0001,
                           0.01,0.01,0.01,50.0,0.01,    // std.
                           0.0001,0.0001,0.0001,0.0001, // cor. coef.
                           0.0001,0.0001,0.0001,        // cor. coef. and Chi-sq (on March 29, 2012, Bscale for Chi-sq changed.
@@ -4315,7 +4315,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.11 2012/09/05 19:49:22 kehcheng Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.12 2012/11/29 01:45:43 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
