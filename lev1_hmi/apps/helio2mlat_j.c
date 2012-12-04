@@ -130,37 +130,38 @@ int DoIt(void)
    inrecs = drms_open_recordset(drms_env, inRecQuery, &status);
    if (inrecs)
    {
-      int nRecs = inrecs->n;
-      int iset;
-      int nsets = drms_recordset_getnumss(inrecs);
-      DRMS_Record_t *inrec = NULL;
-      DRMS_Record_t *orec = NULL;
-      DRMS_RecChunking_t cstat = kRecChunking_None;
-
-      if (drms_env->verbose)
-      {
-	 (*printhst)("There are %d datasets.\n", nsets);
-      }
-
-      for (iset = 0; iset < nsets; iset++)
-      {
-	 while ((inrec = drms_recordset_fetchnextinset(drms_env, inrecs, &iset, &status, &cstat)) != NULL)
-	 {
-	    /* create the corresponding output record (which may be 'blank) */
-	    orec = drms_create_record(drms_env, outseries, DRMS_PERMANENT, &status);
-
-	    /* There was some test for VDS_FITS_MERGE - not sure how to check for this in DRMS */
-	    qual = drms_getkey_int(inrec, kQUALITY, &status);
-	    if (status || qual != kQUAL_DATA_AVAILABLE)
-	    {
-	       errlog_staterr(printerr, "bad quality", !status ? qual : status, inseries, inrec->recnum);
-	       CreateBlankRecord(inrec, orec);
-	       continue;
-	    }
-
-	    // mapped_lmax = sds_getkey_int(in_sds, "MAPMMAX");
-	 }
-      }
+       int nRecs = inrecs->n;
+       int iset;
+       int nsets = drms_recordset_getnumss(inrecs);
+       DRMS_Record_t *inrec = NULL;
+       DRMS_Record_t *orec = NULL;
+       DRMS_RecChunking_t cstat = kRecChunking_None;
+       int newchunk;
+       
+       if (drms_env->verbose)
+       {
+           (*printhst)("There are %d datasets.\n", nsets);
+       }
+       
+       for (iset = 0; iset < nsets; iset++)
+       {
+           while ((inrec = drms_recordset_fetchnext(drms_env, inrecs, &status, &cstat, &newchunk)) != NULL)
+           {
+               /* create the corresponding output record (which may be 'blank) */
+               orec = drms_create_record(drms_env, outseries, DRMS_PERMANENT, &status);
+               
+               /* There was some test for VDS_FITS_MERGE - not sure how to check for this in DRMS */
+               qual = drms_getkey_int(inrec, kQUALITY, &status);
+               if (status || qual != kQUAL_DATA_AVAILABLE)
+               {
+                   errlog_staterr(printerr, "bad quality", !status ? qual : status, inseries, inrec->recnum);
+                   CreateBlankRecord(inrec, orec);
+                   continue;
+               }
+               
+               // mapped_lmax = sds_getkey_int(in_sds, "MAPMMAX");
+           }
+       }
    }
 
    char *segnamein = cmdparams_get_str(&cmdparams, kParamSegIn, NULL);
