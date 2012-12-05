@@ -58,6 +58,7 @@ while(<EV>) {
 }
 close(EV);
 close(EVSRC);
+#$cmd = "source $sshfilesource; /usr/bin/rsync --rsh=\"/usr/bin/ssh -v\" --rsync-path=/usr/bin/rsync -avz /home/production/cvs/JSOC d00:/home/production/dcs1_backup";
 $cmd = "source $sshfilesource; /usr/bin/rsync --rsh=/usr/bin/ssh --rsync-path=/usr/bin/rsync -avz /home/production/cvs/JSOC d00:/home/production/dcs1_backup";
 
 print "$cmd\n";
