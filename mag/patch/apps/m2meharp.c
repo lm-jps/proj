@@ -132,11 +132,12 @@ int DoIt(void)
 		sprintf(meQuery, "%s[%s]", meSeriesName, t_rec_str); // printf("%s\n", trec_str);
 		meRS = drms_open_records(drms_env, meQuery, &status);
 		if (status || meRS->n < 1) {
-			SHOW("No ME input data found, skip current record\n");
+//			SHOW("No ME input data found, skip current record\n");
 			free(t_rec_str); free(meQuery);
 			if (meRS) drms_close_records(meRS, DRMS_FREE_RECORD);
 			t_rec_str = NULL; meQuery = NULL;
 			meRS = NULL;
+      DIE("No ME input data found, skip current record\n");		// changed on Dec 17 2012, exit when no ME is available
 			continue;
 		}
 		
