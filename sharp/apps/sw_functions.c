@@ -86,6 +86,8 @@ int computeAbsFlux(float *bz, int *dims, float *absFlux,
 		for (i = 0; i < nx; i++) 
 		{
                   if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
+                  if isnan(bz[j * nx + i]) continue;
+                  //printf("bz[j * nx + i]=%f\n",bz[j * nx + i]);
                   sum += (fabs(bz[j * nx + i]));
                   count_mask++;
 		}	
@@ -117,6 +119,8 @@ int computeBh(float *bx, float *by, float *bz, float *bh, int *dims,
 	  {
 	    for (i = 0; i < nx; i++)
 	      {
+                if isnan(bx[j * nx + i]) continue;
+                if isnan(by[j * nx + i]) continue;
 		bh[j * nx + i] = sqrt( bx[j * nx + i]*bx[j * nx + i] + by[j * nx + i]*by[j * nx + i] );
                 sum += bh[j * nx + i];
                 count_mask++;
@@ -152,6 +156,7 @@ int computeGamma(float *bx, float *by, float *bz, float *bh, int *dims,
 		if (bh[j * nx + i] > 100)
 		  {
                     if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
+                    if isnan(bz[j * nx + i]) continue;
 		    sum += (atan (fabs( bz[j * nx + i] / bh[j * nx + i] ))* (180./PI));
 		    count_mask++;
 		  }
@@ -179,6 +184,9 @@ int computeB_total(float *bx, float *by, float *bz, float *bt, int *dims, int *m
 	  {
 	    for (j = 0; j < ny; j++) 
 	      {
+                if isnan(bx[j * nx + i]) continue;
+                if isnan(by[j * nx + i]) continue;
+                if isnan(bz[j * nx + i]) continue;
 		bt[j * nx + i] = sqrt( bx[j * nx + i]*bx[j * nx + i] + by[j * nx + i]*by[j * nx + i] + bz[j * nx + i]*bz[j * nx + i]);
 	      }	
 	  }
@@ -383,6 +391,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 	  {
 	    for (j = 0; j <= ny-1; j++) 
 	      {
+                if isnan(bz[j * nx + i]) continue;
 		derx_bz[j * nx + i] = (bz[j * nx + i+1] - bz[j * nx + i-1])*0.5;
               }
           }
@@ -392,6 +401,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 	  {
 	    for (j = 1; j <= ny-2; j++) 
 	      {
+                if isnan(bz[j * nx + i]) continue;
                 dery_bz[j * nx + i] = (bz[(j+1) * nx + i] - bz[(j-1) * nx + i])*0.5;
               }
           }
@@ -401,24 +411,28 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
         i=0; 
       	for (j = 0; j <= ny-1; j++) 
           {
+             if isnan(bz[j * nx + i]) continue;
              derx_bz[j * nx + i] = ( (-3*bz[j * nx + i]) + (4*bz[j * nx + (i+1)]) - (bz[j * nx + (i+2)]) )*0.5;
           }
 
         i=nx-1; 
       	for (j = 0; j <= ny-1; j++) 
           {
+             if isnan(bz[j * nx + i]) continue;
              derx_bz[j * nx + i] = ( (3*bz[j * nx + i]) + (-4*bz[j * nx + (i-1)]) - (-bz[j * nx + (i-2)]) )*0.5; 
           }
 
         j=0;
         for (i = 0; i <= nx-1; i++) 
           {
+             if isnan(bz[j * nx + i]) continue;
              dery_bz[j * nx + i] = ( (-3*bz[j*nx + i]) + (4*bz[(j+1) * nx + i]) - (bz[(j+2) * nx + i]) )*0.5; 
           }
 
         j=ny-1;
         for (i = 0; i <= nx-1; i++) 
           {
+             if isnan(bz[j * nx + i]) continue;
              dery_bz[j * nx + i] = ( (3*bz[j * nx + i]) + (-4*bz[(j-1) * nx + i]) - (-bz[(j-2) * nx + i]) )*0.5;
           }
 
@@ -443,6 +457,9 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
             {
                // if ( (derx_bz[j * nx + i]-dery_bz[j * nx + i]) == 0) continue; 
 	       if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
+               if isnan(bz[j * nx + i]) continue;
+               if isnan(derx_bz[j * nx + i]) continue;
+               if isnan(dery_bz[j * nx + i]) continue;
                sum += sqrt( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  ); /* Units of Gauss */
                count_mask++;
             }	
@@ -473,6 +490,7 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 //  (Gauss/pix)(pix/arcsec)(arcsec/meter)(Newton/Gauss*Ampere*meter)(Ampere^2/Newton)(milliAmpere/Ampere), or
 //  (Gauss/pix)(1/CDELT1)(RSUN_OBS/RSUN_REF)(1 T / 10^4 Gauss)(1 / 4*PI*10^-7)( 10^3 milliAmpere/Ampere),
 //  where a Tesla is represented as a Newton/Ampere*meter.
+//
 //  As an order of magnitude estimate, we can assign 0.5 to CDELT1 and 722500m/arcsec to (RSUN_REF/RSUN_OBS).
 //  In that case, we would have the following:
 //  (Gauss/pix)(1/0.5)(1/722500)(10^-4)(4*PI*10^7)(10^3), or
@@ -506,6 +524,7 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
 	  {
 	    for (j = 0; j <= ny-1; j++) 
 	      {
+                 if isnan(by[j * nx + i]) continue;
                  derx[j * nx + i] = (by[j * nx + i+1] - by[j * nx + i-1])*0.5;
               }
           }
@@ -515,6 +534,7 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
 	  {
 	    for (j = 1; j <= ny-2; j++) 
 	      {
+                 if isnan(bx[j * nx + i]) continue;
                  dery[j * nx + i] = (bx[(j+1) * nx + i] - bx[(j-1) * nx + i])*0.5;
               }
           }
@@ -524,53 +544,42 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
         i=0; 
       	for (j = 0; j <= ny-1; j++) 
           {
+             if isnan(by[j * nx + i]) continue;
              derx[j * nx + i] = ( (-3*by[j * nx + i]) + (4*by[j * nx + (i+1)]) - (by[j * nx + (i+2)]) )*0.5;
           }
 
         i=nx-1; 
       	for (j = 0; j <= ny-1; j++) 
           {
+             if isnan(by[j * nx + i]) continue;
              derx[j * nx + i] = ( (3*by[j * nx + i]) + (-4*by[j * nx + (i-1)]) - (-by[j * nx + (i-2)]) )*0.5;
           }
 
         j=0;
         for (i = 0; i <= nx-1; i++) 
           {
+             if isnan(bx[j * nx + i]) continue;
              dery[j * nx + i] = ( (-3*bx[j*nx + i]) + (4*bx[(j+1) * nx + i]) - (bx[(j+2) * nx + i]) )*0.5;
           }
 
         j=ny-1;
         for (i = 0; i <= nx-1; i++) 
           {
+             if isnan(bx[j * nx + i]) continue;
              dery[j * nx + i] = ( (3*bx[j * nx + i]) + (-4*bx[(j-1) * nx + i]) - (-bx[(j-2) * nx + i]) )*0.5;
           }
-
-        /* Just some print statements
-      	for (i = 0; i < nx; i++) 
-	  {
-             for (j = 0; j < ny; j++) 
-	      {
-              printf("j=%d\n",j);
-              printf("i=%d\n",i);
-              printf("dery[j*nx+i]=%f\n",dery[j*nx+i]);
-              printf("derx[j*nx+i]=%f\n",derx[j*nx+i]);
-              printf("bx[j*nx+i]=%f\n",bx[j*nx+i]);
-              printf("by[j*nx+i]=%f\n",by[j*nx+i]);
-              }
-          }
-        */
 
 
       	for (i = 0; i <= nx-1; i++) 
           {
             for (j = 0; j <= ny-1; j++) 
             {
-               // if ( (derx[j * nx + i]-dery[j * nx + i]) == 0) continue;
                if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
+               if isnan(derx[j * nx + i]) continue;
+               if isnan(dery[j * nx + i]) continue;
                curl +=     (derx[j * nx + i]-dery[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
                us_i += fabs(derx[j * nx + i]-dery[j * nx + i])*(1/cdelt1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A  / m^2 */
                jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);                                                          /* jz is in units of Gauss/pix */                                     
-
                count_mask++;
             }	
 	  }
@@ -580,7 +589,7 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
         printf("cdelt1, what is it?=%f\n",cdelt1);
         *mean_jz_ptr     = curl/(count_mask);        /* mean_jz gets populated as MEANJZD */
         printf("count_mask=%d\n",count_mask);
-        *us_i_ptr        = (us_i);                   /* us_i gets populated as MEANJZD */
+        *us_i_ptr        = (us_i);                   /* us_i gets populated as TOTUSJZ */
 	return 0;
 
 }
@@ -700,6 +709,7 @@ int computeSumAbsPerPolarity(float *bz, float *jz, int *dims, float *totaljzptr,
 	    for (j = 0; j < ny; j++) 
 	      {
                 if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
+                if isnan(bz[j * nx + i]) continue;
 		if (bz[j * nx + i] >  0) sum1 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
                 if (bz[j * nx + i] <= 0) sum2 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
        	      }
@@ -740,6 +750,8 @@ int computeFreeEnergy(float *bx, float *by, float *bpx, float *bpy, int *dims,
 	    for (j = 0; j < ny; j++) 
 	      {
                  if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
+                 if isnan(bx[j * nx + i]) continue;
+                 if isnan(by[j * nx + i]) continue;
                  sum += ((    ((bx[j * nx + i])*(bx[j * nx + i]) + (by[j * nx + i])*(by[j * nx + i]) ) -  ((bpx[j * nx + i])*(bpx[j * nx + i]) + (bpy[j * nx + i])*(bpy[j * nx + i]))  )/8.*PI);
                  count_mask++;
 	      }
@@ -777,6 +789,8 @@ int computeShearAngle(float *bx, float *by, float *bz, float *bpx, float *bpy, f
                  if isnan(bpy[j * nx + i]) continue;                
                  if isnan(bpz[j * nx + i]) continue;
                  if isnan(bz[j * nx + i]) continue;
+                 if isnan(bx[j * nx + i]) continue;
+                 if isnan(by[j * nx + i]) continue;
                  /* For mean 3D shear angle, area with shear greater than 45*/
                  dotproduct            = (bpx[j * nx + i])*(bx[j * nx + i]) + (bpy[j * nx + i])*(by[j * nx + i]) + (bpz[j * nx + i])*(bz[j * nx + i]);
                  magnitude_potential   = sqrt((bpx[j * nx + i]*bpx[j * nx + i]) + (bpy[j * nx + i]*bpy[j * nx + i]) + (bpz[j * nx + i]*bpz[j * nx + i]));
