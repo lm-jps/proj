@@ -676,7 +676,7 @@ function ImPatchCheck()
   var isok = 1;
   var args = "im_patch";
   var ImLocOption;
-// alert("ImPatchCheck, RecordCountNeeded="+RecordCountNeeded+", default start,stop="+defaultStartUsed+","+defaultStopUsed);
+alert("ImPatchCheck, RecordCountNeeded="+RecordCountNeeded+", default start,stop="+defaultStartUsed+","+defaultStopUsed);
   if (RecordCountNeeded)
     {
     ImFirstRecord = null;
@@ -684,7 +684,6 @@ function ImPatchCheck()
     if (defaultStartUsed) $("ImTStart").value = "NotSpecified";
     if (defaultStopUsed) $("ImTStop").value = "NotSpecified";
     ExportNewRS();
-    // ImPatchSet();
     return("");
     }
 
@@ -907,15 +906,16 @@ var ImFirstRecord = null;
 var ImLastRecord = null;
 function ImGetRecInfo(n)
   {
-  // Get keywords for a single record.  firstlast will be 1 for first record, -1 for last record.
+  // Get keywords for a single record.  n will be 1 for first record, -1 for last record.
   if (n==1)
     ImFirstRecord = null;
   else
     ImLastRecord = null;
   $("ImRecordSet").innerHTML = RecordSet;
   var timePrime = (firstTimePrime.length > 0 ? firstTimePrime : "T_REC");
+$("TESTMSG").innerHTML = timePrime;
   var keysneeded = timePrime+",CAR_ROT,CRLN_OBS,"+timePrime+"_step";
-// alert("ImGetRecInfo("+n+") called");
+alert("ImGetRecInfo("+n+") called");
   var recinfo;
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var RecordSet = $("ExportRecordSet").value;
@@ -929,6 +929,8 @@ function ImGetRecInfo(n)
       var thisN = ""+n;
       var response = transport.responseText || "no response text";
       var recinfo = response.evalJSON();
+
+$("TESTMSG").innerHTML += " thisN="+thisN;
       if (recinfo.status == 0)
         {
         if (thisN == "1")

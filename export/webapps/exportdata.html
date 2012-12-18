@@ -675,6 +675,7 @@ function ExportNewRS()
   $("CountButton").style.backgroundColor = colorNeutral;
   RecordCountNeeded = 0;
   if (SetRecordLimit()) return; // SetRecordLimit calls GetRSCount()
+  firstTimePrime = "";
   GetDefaultFormat();
   NotifyProcessingCode();
   }
