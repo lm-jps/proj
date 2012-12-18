@@ -1,14 +1,14 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<HTML>
-<HEAD>
-<META HTTP-EQUIV="Content-Type" CONTENT="text/html; CHARSET=iso-8859-1">
-<TITLE>JSOC Lookdata</TITLE>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; CHARSET=iso-8859-1">
+<title>JSOC Lookdata</title>
 
-<SCRIPT TYPE="text/javascript" SRC="js/prototype.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="js/cookies.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="js/prototip.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/amcharts.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/raphael.js"></SCRIPT>
+<script type="text/javascript" src="js/prototype.js"></script>
+<script type="text/javascript" src="js/cookies.js"></script>
+<script type="text/javascript" src="js/prototip.js"></script>
+<script type="text/javascript" src="js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/amcharts.js"></script>
+<script type="text/javascript" src="js/amCharts_2.2/amcharts_2.2.1/amcharts/javascript/raphael.js"></script>
 
 <!-- activewidgets fix box model in firefox/safari/opera -->
 <style type="text/css">
@@ -20,8 +20,8 @@
 
 </style>
 
-<SCRIPT TYPE="text/javascript" SRC="js/ActiveWidgets/runtime/lib/aw.js"></SCRIPT>
-<LINK HREF="js/ActiveWidgets/runtime/styles/system/aw.css" rel="stylesheet">
+<script type="text/javascript" src="js/ActiveWidgets/runtime/lib/aw.js"></script>
+<link href="js/ActiveWidgets/runtime/styles/system/aw.css" rel="stylesheet">
 <!-- add activewidgets image libraries -->
 <link href="js/ActiveWidgets/mini.css" rel="stylesheet"></link>
 
@@ -173,7 +173,7 @@ function definetabs()
         {
         tabs.setId("LookdataTabs");
         tabs.setItemText(tabnames);
-        tabs.setItemValue(tabvalues); // store ids of content DIVs
+        tabs.setItemValue(tabvalues); // store ids of content div
         tabs.setItemCount(6);
         tabs.refresh();
 
@@ -274,7 +274,7 @@ function CleanSeriesInfo()
   $("Series_Info_Place").innerHTML = "";
   $("Series_Name_Place").innerHTML = "";
   $("FirstLastPlace").innerHTML = "";
-  $("SeriesCountPlace").innerHTML = "<I>TBD</I>";
+  $("SeriesCountPlace").innerHTML = "<i>TBD</i>";
   CleanSeriesPick();
   }
 
@@ -309,28 +309,7 @@ function CleanSeriesPick()
   $("SIFkey").value = '';
   $("SIFseg").value = '';
   $("SIFK").value = "0";
-  CleanKeysSelect();
-  }
-
-function CleanKeysSelect()
-  {
-  KeyValsFetched = 0;
-  for (var i=$("KeysSelect").length; i > 0; i--)
-    $("KeysSelect").remove(i-1);
-  for (var i=$("SegsSelect").length; i > 0; i--)
-    $("SegsSelect").remove(i-1);
-  for (var i=$("LinksSelect").length; i > 0; i--)
-    $("LinksSelect").remove(i-1);
-  for (var i=$("GraphKeysSelect").length; i > 0; i--)
-    $("GraphKeysSelect").remove(i-1);
-  $("DisplayPlace").innerHTML = "";
-  $("SegListPlace").innerHTML = "";
-  $("LinkListPlace").innerHTML = "";
-  $("KeyListPlace").innerHTML = "";
-  KeyList =  "";
-  SegList =  "";
-  LinkList =  "";
-  gridmade = 0;
+  CleanDropDownLists();
   CleanOnLoad();
   }
 
@@ -419,7 +398,7 @@ function UserKill(userhandle)
 // if (result.status > 0) $("HandleDiv").innerHTML = $("HandleDiv").innerHTML + " kill failed, status="+result.status;
 // else $("HandleDiv").innerHTML = $("HandleDiv").innerHTML + " kill Ok";
       }
-    , onFailure: function() { alert('Something went wrong...'); }
+    , onFailure: function() { alert('Something went wrong with user kill handle...'); }
     });
   }
 
@@ -440,7 +419,7 @@ function CreateTips()
   if (TipsCreated == 0)
     {
     // The following sample line goes in html code
-    //    <SPAN ID="SampleHelp" class="tip">?</SPAN>
+    //    <span id="SampleHelp" class="tip">?</span>
     // the following line goes here
     //    new Tip("SampleHelp","Help text here.",tipstyle);
     // XXXX HELP XXXX
@@ -462,12 +441,12 @@ function CreateTips()
         "See the JSOC Wiki page 'Overview of JSOC Data Series, DRMS, and SUMS' to learn about the JSOC " +
         "use of these terms.",tipstyle);
 
-    new Tip("SeriesPickHelp", "After pressing the <B>Fetch seriesname list</B> on the left, the " +
+    new Tip("SeriesPickHelp", "After pressing the <b>Fetch seriesname list</b> on the left, the " +
         "selection list here will contain all available data series matching your filter.  " +
         "Simply click on the series that contains the data you are looking for.  The text after the " +
         "seriesname is the series Note provided when the series was first created and should help you " +
         "decide which series you need.  After clicking on the desired seriesname, lookdata will fetch " +
-        "more information about the series and jump to the <B>RecordSet Select</B> tab where you can select " +
+        "more information about the series and jump to the <b>RecordSet Select</b> tab where you can select " +
         "which subset of records to examine and select which keyword or file contents to examine.",tipstyle);
 
     new Tip("QueryBuilderHelp","This checkbox enables input boxes for recordset query clauses.  " +
@@ -596,7 +575,7 @@ function GetSeries()
   $("SeriesButton").style.backgroundColor = PINK;
   $("SeriesButton").disabled = true;
   $("AbortGetSeriesButton").show();
-  $("SeriesCountPlace").innerHTML = "<I>wait...</I>";
+  $("SeriesCountPlace").innerHTML = "<i>wait...</i>";
   GetSeriesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + SHOW_SERIES,
     {
     method: 'get',
@@ -618,7 +597,7 @@ function GetSeries()
       $("AbortGetSeriesButton").hide();
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
-    onFailure: function() { alert('Something went wrong...'); },
+    onFailure: function() { alert('Something went wrong with GetSeries from '+Host+' ...'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
@@ -656,8 +635,8 @@ function PickSeries(mode)
   $("RecSetPlace").innerHTML = SeriesName;
   // Get link to release notes
   ProjectName = SeriesName.match(/[a-zA-Z_]*/);
-  $("ReleaseNotes").innerHTML = "<A HREF='http://jsoc.stanford.edu/doc/data/" + ProjectName +
-                                "/' target='_blank'>for " + ProjectName + "</A>";
+  $("ReleaseNotes").innerHTML = "<a href='http://jsoc.stanford.edu/doc/data/" + ProjectName +
+                                "/' target='_blank'>for " + ProjectName + "</a>";
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
@@ -675,7 +654,8 @@ function PickSeries(mode)
         $("FirstLastPlace").innerHTML = "No Matching Series Found";
         $("SSPlace").innerHTML = "No Series Struct Found";
         $("SSKeysPlace").innerHTML = "";
-        CleanKeysSelect();
+        CleanDropDownLists();
+        CleanOnLoad();
         }
       else
         {
@@ -688,13 +668,14 @@ function PickSeries(mode)
           // Get list of prime keys and index keys and display info
           // Get prime key special info from primekeys array, but
           // get prime keyword type and units, defaults, from matching keywords array element
-          var QueryBoxes = "<TABLE>";
-  	nprimes = SeriesInfo.primekeysinfo.length;
-  	var primes = "No PrimeKeys";
+          var QueryBoxes = "<table>";
+  	  nprimes = SeriesInfo.primekeysinfo.length;
+  	  var primes = "No PrimeKeys";
           if (nprimes == 1 && SeriesInfo.primekeysinfo[0] == null)
             nprimes = 0;
-  	if (nprimes > 0)
-  	  for (i=0; i<nprimes; i++)
+  	  if (nprimes > 0)
+            {
+  	    for (i=0; i<nprimes; i++)
               {
               if (i==0)
   	        primes = SeriesInfo.primekeysinfo[0].name;
@@ -706,159 +687,66 @@ function PickSeries(mode)
                     break;
               var isslotted = SeriesInfo.primekeysinfo[i].slotted;
               QueryBoxes = QueryBoxes + 
-                  "<TR><TD>" + SeriesInfo.primekeysinfo[i].name + "</TD>" + 
-                  "<TD align='right'>" + "[&nbsp;&nbsp;<input id='Prime" + i +
-                  "' type='text' value='' onChange='QueryBuild();' >&nbsp;&nbsp;]</TD>" +
-                  "<TD> (" + SeriesInfo.keywords[k].type + (isslotted ? "-slotted, " + 
-                  SeriesInfo.primekeysinfo[i].step : "") + ")</TD>";
+                  "<tr><td>" + SeriesInfo.primekeysinfo[i].name + "</td>" + 
+                  "<td align='right'>" + "[&nbsp;&nbsp;<input id='Prime" + i +
+                  "' type='text' value='' onChange='QueryBuild();' >&nbsp;&nbsp;]</td>" +
+                  "<td> (" + SeriesInfo.keywords[k].type + (isslotted ? "-slotted, " + 
+                  SeriesInfo.primekeysinfo[i].step : "") + ")</td>";
               if (SeriesInfo.keywords[k].type === "time")
-                  QueryBoxes = QueryBoxes + "<TD> expects " + SeriesInfo.keywords[k].units + "</TD>";
+                  QueryBoxes = QueryBoxes + "<td> expects " + SeriesInfo.keywords[k].units + "</td>";
               else
-                  QueryBoxes = QueryBoxes + "<TD></TD>";
+                  QueryBoxes = QueryBoxes + "<td></td>";
   
-              QueryBoxes = QueryBoxes +  "</TR>";
+              QueryBoxes = QueryBoxes +  "</tr>";
               }
-          QueryBoxes = QueryBoxes +  "<TR><TD>where clause</TD>" + 
-              "<TD align='right'>" + "[?&nbsp;<input id='WhereClause0' type='text' value='' onChange='QueryBuild();' >&nbsp;?]</TD>" +
-              "<TD colspan=2>Uses prime key logic</TD></TR>";
-          QueryBoxes = QueryBoxes +  "<TR><TD>where clause</TD>" + 
-              "<TD align='right'>" + "[!&nbsp;<input id='WhereClause1' type='text' value='' onChange='QueryBuild();' >&nbsp;!]</TD>" +
-              "<TD colspan=2> use disables prime key logic</TD></TR>";
-          QueryBoxes = QueryBoxes + "</TABLE>";
+            }
+          QueryBoxes = QueryBoxes +  "<tr><td>where clause</td>" + 
+            "<td align='right'>" + "[?&nbsp;<input id='WhereClause0' type='text' value='' onChange='QueryBuild();' >&nbsp;?]</td>" +
+            "<td colspan=2>Uses prime key logic</td></tr>";
+          QueryBoxes = QueryBoxes +  "<tr><td>where clause</td>" + 
+            "<td align='right'>" + "[!&nbsp;<input id='WhereClause1' type='text' value='' onChange='QueryBuild();' >&nbsp;!]</td>" +
+            "<td colspan=2> use disables prime key logic</td></tr>";
+          QueryBoxes = QueryBoxes + "</table>";
           $("QueryPlace").innerHTML = QueryBoxes;
           if ($("QueryDivCheck").checked == 1)
-              {
-  	    $("QueryDiv").style.display="block";
-              }
+            {
+	    $("QueryDiv").style.display="block";
+            }
           else
-              {
-  	    $("QueryDiv").style.display="none";
-              }
-  	  var n = SeriesInfo.dbindex.length;
-  	  var dbindex = "No DBindex";
-  	  if (n > 0) dbindex = SeriesInfo.dbindex[0];
-  	  for (i=1; i<n; i++)
-  	    dbindex = dbindex + ", " + SeriesInfo.dbindex[i];
-          $("SSKeysPlace").innerHTML = "PrimeKeys: " + primes + "<BR>" +
-                                         "DBindex: " + dbindex + "<BR>";
+            {
+	    $("QueryDiv").style.display="none";
+            }
+	  var n = SeriesInfo.dbindex.length;
+	  var dbindex = "No DBindex";
+	  if (n > 0) dbindex = SeriesInfo.dbindex[0];
+	    for (i=1; i<n; i++)
+	      dbindex = dbindex + ", " + SeriesInfo.dbindex[i];
+          $("SSKeysPlace").innerHTML = "PrimeKeys: " + primes + "<br>" +
+                                       "DBindex: " + dbindex + "<br>";
           // Add segment information if present
           if (SeriesInfo.segments.length > 0)
-  	    {
+	    {
             if (SeriesInfo.archive > 0)
-              $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
-  	        "Data is archived, online retention " + SeriesInfo.retention + " days<BR>";
-  	    else
-              $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
-  		  "Data NOT archived, online retention " + SeriesInfo.retention + " days<BR>";
-            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "Unitsize: " + SeriesInfo.unitsize + " record" +
-                (SeriesInfo.unitsize > 1 ? "s" : "") + "<BR>";
-  	    }
-  	  else
-            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "No SUMS storage for this series<BR>";
-
-          $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "Owner: " + SeriesInfo.owner + "<BR>"; 
-  
-          // build and display keyword selection scroll box and keyword part of full table
-  	var keywords = "No keywords";
-  	n = SeriesInfo.keywords.length;
-  	if (n > 0)
-  	   {
-  	   insertOption("KeysSelect","**NONE**", "");
-  	   insertOption("KeysSelect","**ALL**", "");
-  	   for (i=0; i<n; i++)
               {
-              if (SeriesInfo.keywords[i].recscope === "segment")
-                {
-                var j;
-                for (j=0; j< SeriesInfo.segments.length; j++)
-                  {
-                  var snow = "" + j;
-                  while (snow.length < 3) { snow = "0" + snow;}
-  	          insertOption("KeysSelect",SeriesInfo.keywords[i].name+"_"+snow, "");
-                  }
-                }
-              else
-  	        insertOption("KeysSelect",SeriesInfo.keywords[i].name, "");
+              $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
+	        "Data is archived, online retention " + SeriesInfo.retention + " days<br>";
               }
-  	   keywords = keywords + "</table><P>";
-  	   insertOption("KeysSelect","*recdir*", "");
-  	   insertOption("KeysSelect","*dirmtime*", "");
-  	   insertOption("KeysSelect","*logdir*", "");
-  	   insertOption("KeysSelect","*recnum*", "");
-  	   insertOption("KeysSelect","*sunum*", "");
-  	   insertOption("KeysSelect","*size*", "");
-  	   insertOption("KeysSelect","*online*", "");
-  	   insertOption("KeysSelect","*retain*", "");
-  	   insertOption("KeysSelect","*archive*", "");
-  
-           var some_links = 0;
-           for (i=0; i<n; i++)
-             {
-             if (SeriesInfo.keywords[i].linkinfo)
-               some_links += 1;
-             }
-           if (some_links)
-  	     keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>linked</TH><TH>type</TH><TH>scope</TH><TH>default</TH><TH>unit</TH><TH>note</TH>"; 
-           else
-  	     keywords = "<table BORDER=1><TR><TH>keyword</TH><TH>type</TH><TH>scope</TH><TH>default</TH><TH>unit</TH><TH>note</TH>"; 
-             for (i=0; i<n; i++)
-                {
-                keywords = keywords + "<TR><TD>" + 
-  		SeriesInfo.keywords[i].name + "</TD><TD>"; 
-                if (some_links)
-                  {
-                  if (SeriesInfo.keywords[i].linkinfo)
-                    keywords += SeriesInfo.keywords[i].linkinfo + "</TD><TD>";
-                  else
-                    keywords += "&nbsp;</TD><TD>";
-                  }
-  		keywords += SeriesInfo.keywords[i].type + "</TD><TD>" +
-  		SeriesInfo.keywords[i].recscope + "</TD><TD>" +
-  		SeriesInfo.keywords[i].defval + "&nbsp;</TD><TD>" +
-  		SeriesInfo.keywords[i].units + "&nbsp;</TD><TD>" +
-  		SeriesInfo.keywords[i].note + "&nbsp;</TD></TR>";
-  	        }
-  	   }
-  
-          // build and display segment selection scroll box and segment part of full table
-  	var segments = "No segments";
-  	n = SeriesInfo.segments.length;
-  	if (n > 0)
-  	   {
-  	   segments = "<table BORDER=1><TR><TD>segment</TD><TD>type</TD><TD>units</TD><TD>dims</TD><TD>protocol</TD><TD>note</TD>";
-  	   insertOption("SegsSelect","**NONE**", "");
-  	   insertOption("SegsSelect","**ALL**", "");
-  	   for (i=0; i<n; i++)
-  	      {
-  	      insertOption("SegsSelect",SeriesInfo.segments[i].name, "");
-  	      segments = segments + "<TR><TD>" + SeriesInfo.segments[i].name + "</TD><TD>" + 
-                SeriesInfo.segments[i].type + "&nbsp;</TD><TD>" +
-                SeriesInfo.segments[i].units + "&nbsp;</TD><TD>" +
-  		SeriesInfo.segments[i].dims + "&nbsp;</TD><TD>" + SeriesInfo.segments[i].protocol +
-                "</TD><TD>" + SeriesInfo.segments[i].note + "&nbsp;</TD></TR>";
-  	      }
-  	   segments = segments + "</table><P>";
-  	   }
-  
-          // build and display link selection scroll box and segment part of full table
-  	var links = "No links";
-  	n = SeriesInfo.links.length;
-  	if (n > 0)
-  	   {
-  	   links = "<table BORDER=1><TR><TD>link</TD><TD>target </TD><TD>kind</TD><TD>note</TD>";
-  	   insertOption("LinksSelect","**NONE**", "");
-  	   insertOption("LinksSelect","**ALL**", "");
-  	   for (i=0; i<n; i++)
-  	      {
-  	      links = links + "<TR><TD>" + SeriesInfo.links[i].name + "</TD><TD>" + SeriesInfo.links[i].target + "</TD><TD>" +
-  		      SeriesInfo.links[i].kind + "</TD><TD>" + SeriesInfo.links[i].note + "&nbsp;</TD></TR>";
-  	      insertOption("LinksSelect",SeriesInfo.links[i].name, "");
-                }
-  	   links = links + "</table><P>";
-  	   }
-  
-  	  // Place structure table on screen
-          $("SSPlace").innerHTML =  keywords + "<BR>" + segments + "<BR>" + links;
+	    else
+              {
+              $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML +
+	        "Data NOT archived, online retention " + SeriesInfo.retention + " days<br>";
+              }
+            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "Unitsize: " + SeriesInfo.unitsize + " record" +
+              (SeriesInfo.unitsize > 1 ? "s" : "") + "<br>";
+	    }
+	  else
+            {
+            $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "No SUMS storage for this series<br>";
+            }
+          $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "Owner: " + SeriesInfo.owner + "<br>"; 
+
+          // build and display keyword selection scroll box and keyword part of full table
+	  makeSeriesContent(0);   // use SeriesInfo order for keyword list.
           // cleanup pending count place
           $("RSCount_Place").innerHTML = "";
           }
@@ -866,11 +754,13 @@ function PickSeries(mode)
 	// Place first and last record info on screen
 	if (SeriesInfo.Interval.MaxRecnum > 0)
           $("FirstLastPlace").innerHTML = "First Record = " + SeriesInfo.Interval.FirstRecord + 
-              "<BR>Last Record = " + SeriesInfo.Interval.LastRecord +
-	      "<BR>First Rec., Last Rec. and largest used recnums: " + SeriesInfo.Interval.FirstRecnum + ", " +
+              "<br>Last Record = " + SeriesInfo.Interval.LastRecord +
+	      "<br>First Rec., Last Rec. and largest used recnums: " + SeriesInfo.Interval.FirstRecnum + ", " +
               SeriesInfo.Interval.LastRecnum + ", " +  SeriesInfo.Interval.MaxRecnum + " resp." ;
 	else
 	  $("FirstLastPlace").innerHTML = "This series contains no records";
+
+        makeDropDownLists();
         // Done displaying detailed information for this series
         }
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
@@ -888,6 +778,227 @@ function PickSeries(mode)
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   // Now jump to the RecordSet tab
   tabs.setSelectedItems([tabrecset]); // load the first page.
+  }
+
+function SortSeriesContent()
+  {
+  if ($("SeriesContentSort").value == "Sort")
+    {
+    makeSeriesContent(1);
+    $("SeriesContentSort").value = "Restore Original Order";
+    }
+  else 
+    {
+    makeSeriesContent(0);
+    $("SeriesContentSort").value = "Sort";
+    }
+  }
+
+// build and display keyword Series Content table
+function makeSeriesContent(doSort)
+  {
+  var n, i, keywords, segments, links;
+  keywords = "No keywords";
+  n = SeriesInfo.keywords.length;
+  if (n > 0)
+    {
+    var some_links = 0;
+    for (i=0; i<n; i++)
+      {
+      if (SeriesInfo.keywords[i].linkinfo)
+        some_links += 1;
+      }
+    if (some_links)
+      keywords = "<table border=1><tr><th>Use</th><th>keyword</th><th>linked</th><th>type</th><th>scope</th><th>default</th><th>unit</th><th>note</th>"; 
+    else
+      keywords = "<table border=1><tr><th>Use</th><th>keyword</th><th>type</th><th>scope</th><th>default</th><th>unit</th><th>note</th>"; 
+    // make order table for sorting
+    var sortOrder = new Array();
+    for (i=0; i<n; i++)
+      sortOrder[i] = {Num:i, Name:SeriesInfo.keywords[i].name};
+    if (doSort)
+      {
+      tmp = sortOrder.sortBy(function(key) {return key.Name;});
+      sortOrder = tmp;
+      }
+
+    for (i=0; i<n; i++)
+      {
+      var I = sortOrder[i].Num;
+      keywords = keywords + "<tr>" + 
+        '<td><input type="checkbox" id="k'+I+'" checked="checked" onChange="updateDropDownLists('+"'k',"+I+');"></td>' +
+        "<td>" + SeriesInfo.keywords[I].name + "</td><td>"; 
+      if (some_links)
+        {
+        if (SeriesInfo.keywords[I].linkinfo)
+          keywords += SeriesInfo.keywords[I].linkinfo + "</td><td>";
+        else
+          keywords += "&nbsp;</td><td>";
+        }
+      keywords += SeriesInfo.keywords[I].type + "</td><td>" +
+      SeriesInfo.keywords[I].recscope + "</td><td>" +
+      SeriesInfo.keywords[I].defval + "&nbsp;</td><td>" +
+      SeriesInfo.keywords[I].units + "&nbsp;</td><td>" +
+      SeriesInfo.keywords[I].note + "&nbsp;</td></tr>";
+      }
+    }
+  
+  // build and display segment selection scroll box and segment part of full table
+  segments = "No segments";
+  n = SeriesInfo.segments.length;
+  if (n > 0)
+    {
+    segments = "<table border=1><tr><td>use for per-<br>segment keywords</td><td>segment num.</td><td>name</td><td>type</td><td>units</td><td>dims</td><td>protocol</td><td>note</td>";
+    for (i=0; i<n; i++)
+      {
+      segments = segments + "<tr>" + 
+        '<td><input type="checkbox" id="s'+i+'" checked="checked" onChange="updateDropDownLists('+"'s',"+i+');"></td>' +
+        "<td>" + i + "</td><td>" + SeriesInfo.segments[i].name + "</td><td>" + 
+      SeriesInfo.segments[i].type + "&nbsp;</td><td>" +
+      SeriesInfo.segments[i].units + "&nbsp;</td><td>" +
+      SeriesInfo.segments[i].dims + "&nbsp;</td><td>" + SeriesInfo.segments[i].protocol +
+      "</td><td>" + SeriesInfo.segments[i].note + "&nbsp;</td></tr>";
+      }
+    segments = segments + "</table><p>";
+    }
+  
+  // build and display link selection scroll box and segment part of full table
+  links = "No links";
+  n = SeriesInfo.links.length;
+  if (n > 0)
+    {
+    links = "<table border=1><tr><td>link</td><td>name</td><td>target </td><td>kind</td><td>note</td>";
+    for (i=0; i<n; i++)
+      {
+      links = links + "<tr>" + 
+        "<td>" + SeriesInfo.links[i].name + "</td><td>" + SeriesInfo.links[i].target + "</td><td>" +
+        SeriesInfo.links[i].kind + "</td><td>" + SeriesInfo.links[i].note + "&nbsp;</td></tr>";
+      }
+    links = links + "</table><p>";
+    }
+  
+  // Place structure table on screen
+  $("SSPlace").innerHTML =  keywords + "<br>" + segments + "<br>" + links;
+  }
+
+// Choose which keywords, segments, links will be included in DropDownLists.
+// AllKeysSelectChange is called by change of checkbox at top of Series Content table.
+
+function AllKeysSelectChange()
+  {
+  var nk = SeriesInfo.keywords.length;
+  var ns = SeriesInfo.segments.length;
+  var nl = SeriesInfo.links.length;
+  var i;
+
+  if ($("AllKeysSelect").checked)
+    {
+    for (i=0; i<nk; i++)
+      $("k"+i).checked = true;
+    for (i=0; i<ns; i++)
+      $("s"+i).checked = true;
+    // for (i=0; i<nl; i++)
+      // $("l"+i).checked = true;
+    }
+  else
+    {
+    for (i=0; i<nk; i++)
+      $("k"+i).checked = false;
+    for (i=0; i<ns; i++)
+      $("s"+i).checked = false;
+    // for (i=0; i<nl; i++)
+      // $("l"+i).checked = false;
+    }
+  makeDropDownLists();
+  }
+
+// updateDropDownLists is called by change of a checkbox in the Series Content table.
+function updateDropDownLists(list,n)
+  {
+  makeDropDownLists();
+  }
+
+function makeDropDownLists()
+  {
+  CleanDropDownLists();
+  var n = SeriesInfo.keywords.length;
+  if (n > 0)
+    {
+    insertOption("KeysSelect","**NONE**", "");
+    insertOption("KeysSelect","**ALL**", "");
+    for (i=0; i<n; i++)
+      {
+      if ($("k"+i).checked == false)
+        continue;
+      if (SeriesInfo.keywords[i].recscope === "segment")
+        {
+        var j;
+        for (j=0; j< SeriesInfo.segments.length; j++)
+          {
+          if ($("s"+j).checked == false)
+            continue;
+          var snow = "" + j;
+          while (snow.length < 3) { snow = "0" + snow;}
+            insertOption("KeysSelect",SeriesInfo.keywords[i].name+"_"+snow, "");
+          }
+        }
+      else
+        insertOption("KeysSelect",SeriesInfo.keywords[i].name, "");
+      }
+    }
+  insertOption("KeysSelect","*recdir*", "");
+  insertOption("KeysSelect","*dirmtime*", "");
+  insertOption("KeysSelect","*logdir*", "");
+  insertOption("KeysSelect","*recnum*", "");
+  insertOption("KeysSelect","*sunum*", "");
+  insertOption("KeysSelect","*size*", "");
+  insertOption("KeysSelect","*online*", "");
+  insertOption("KeysSelect","*retain*", "");
+  insertOption("KeysSelect","*archive*", "");
+
+  n = SeriesInfo.segments.length;
+  if (n > 0)
+    {
+    insertOption("SegsSelect","**NONE**", "");
+    insertOption("SegsSelect","**ALL**", "");
+    for (i=0; i<n; i++)
+      {
+      if ($("s"+i).checked == false)
+        continue;
+      insertOption("SegsSelect",SeriesInfo.segments[i].name, "");
+      }
+    }
+
+  n = SeriesInfo.links.length;
+  if (n > 0)
+    {
+    links = "<table border=1><tr><td>link</td><td>target </td><td>kind</td><td>note</td>";
+    insertOption("LinksSelect","**NONE**", "");
+    insertOption("LinksSelect","**ALL**", "");
+    for (i=0; i<n; i++)
+      insertOption("LinksSelect",SeriesInfo.links[i].name, "");
+    }
+  }
+
+function CleanDropDownLists()
+  {
+  KeyValsFetched = 0;
+  for (var i=$("KeysSelect").length; i > 0; i--)
+    $("KeysSelect").remove(i-1);
+  for (var i=$("SegsSelect").length; i > 0; i--)
+    $("SegsSelect").remove(i-1);
+  for (var i=$("LinksSelect").length; i > 0; i--)
+    $("LinksSelect").remove(i-1);
+  for (var i=$("GraphKeysSelect").length; i > 0; i--)
+    $("GraphKeysSelect").remove(i-1);
+  $("DisplayPlace").innerHTML = "";
+  $("SegListPlace").innerHTML = "";
+  $("LinkListPlace").innerHTML = "";
+  $("KeyListPlace").innerHTML = "";
+  KeyList =  "";
+  SegList =  "";
+  LinkList =  "";
+  gridmade = 0;
   }
 
 // Section 3.0 support - Get record count
@@ -926,7 +1037,6 @@ function AbortRSCount()
     $("RSCount_Place").innerHTML = "Count aborted with "+RequestHandle;
     }
   }
-
 
 function GetRSCount()
   {
@@ -1042,7 +1152,7 @@ function PickKeys()
   var ikey = 0;
   nkeysselected = 0;
   var nkeys = $("KeysSelect").length;
-  var selkeys =  "";
+  var selkeys = "";
   $("KeyListPlace").innerHTML = "";
   $("DisplayPlace").innerHTML = "";
   for (var i=$("GraphKeysSelect").length; i > 0; i--)
@@ -1050,7 +1160,7 @@ function PickKeys()
   for (var i=$("GraphXKeysSelect").length; i > 0; i--)
     $("GraphXKeysSelect").remove(i-1);
   // $("WantRecInfo").checked = 0;
-  KeyList =  "";
+  KeyList = "";
   selkeys = "";
   // check for **NONE**
   if ($("KeysSelect")[0].selected)
@@ -1058,27 +1168,36 @@ function PickKeys()
     nkeysselected = 0;
     selkeys = "**NONE**";
     KeyList = "**NONE**";
+    for (ikey=1; ikey < nkeys; ikey++)
+      {
+      $("KeysSelect")[ikey].selected = false;
+      }
     }
   // check for **ALL**
-  // else if ($("KeysSelect")[1].selected)
-    // {
-    // nkeysselected = nkeys - 2;
-    // selkeys = "**ALL**";
-    // KeyList = "**ALL**";
-    // }
-  else
-   for (ikey=0; ikey < nkeys; ikey++)
+  if ($("KeysSelect")[1].selected)
+    {
+    nkeysselected = 0;
+    for (ikey=2; ikey < nkeys; ikey++)
+      {
+      if ($("KeysSelect")[ikey].text.charAt(0) != '*')
+        $("KeysSelect")[ikey].selected = true;
+      }
+    $("KeysSelect")[1].selected = false;
+    }
+  for (ikey=2; ikey < nkeys; ikey++)
+    {
     if ($("KeysSelect")[ikey].selected)
       {
       if (nkeysselected)
-	{
-	selkeys = selkeys + ", ";
+        {
+        selkeys = selkeys + ", ";
         KeyList = KeyList + ",";
-	}
+        }
       nkeysselected = nkeysselected + 1;
       selkeys = selkeys + $("KeysSelect")[ikey].text;
       KeyList = KeyList + $("KeysSelect")[ikey].text;
       }
+    }
   $("KeyListPlace").innerHTML = nkeysselected + " Keys Chosen:&nbsp;" + selkeys;
   }
 
@@ -1095,7 +1214,7 @@ function PickSegs()
   $("SegListPlace").innerHTML = "";
   $("DisplayPlace").innerHTML = "";
   // $("WantRecInfo").checked = 0;
-  SegList =  "";
+  SegList = "";
   selsegs = "";
   // check for **NONE**
   if ($("SegsSelect")[0].selected)
@@ -1221,7 +1340,7 @@ function GetKeyValues()
   $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
   if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
     {
-    $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<BR>Please fo back to steps 4 and 5."; 
+    $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<br>Please fo back to steps 4 and 5."; 
     tabs.setSelectedItems([tabdisplay]); // show the display page.
     return;
     }
@@ -1259,7 +1378,7 @@ function GetKeyValues()
   if (RecordCount > 10000 && !$("AllowBigQueries").checked)
     {
     $("DisplayPlace").innerHTML = "Requested Recordset is too large for this function, " + RecordCount + 
-	" records.<BR>Please go back to step 3 and choose a smaller recordset.";
+	" records.<br>Please go back to step 3 and choose a smaller recordset.";
     tabs.setSelectedItems([tabdisplay]); // show the display page.
     return;
     }
@@ -1357,7 +1476,7 @@ function GetKeyValues()
 	     for (ikey=0; ikey<nkeys; ikey++)
 	       {
 	       var this_keystr =  RecordData.keywords[ikey].values[irec] + "";
-               var this_keyval = this_keystr.replace(/\n/g,"<B>NL</B>>");
+               var this_keyval = this_keystr.replace(/\n/g,"<b>NL</b>>");
                if ($("wantTruncate").checked && this_keyval.length > 60) this_keyval = this_keyval.slice(0,47) + "...TRUNCATED";
 	       idata = setgriddata(idata, this_keyval);
 	       }
@@ -1445,16 +1564,16 @@ function GetKeyValues()
         GraphDelete();
         insertOption("GraphXKeysSelect","index", "");
         for (ikey=0; ikey < nkeys; ikey++)
-              {
-              insertOption("GraphKeysSelect",RecordData.keywords[ikey].name, "");
-              var jkey; for (jkey=0; jkey < SeriesInfo.keywords.length; jkey++)
-                if (RecordData.keywords[ikey].name == SeriesInfo.keywords[jkey].name)
-                   { // now have access to SeriesInfo for this keyword
-                   if (SeriesInfo.keywords[jkey].type == "time")
-                     insertOption("GraphXKeysSelect",RecordData.keywords[ikey].name, "");
-                   break;
-                   }
-              }
+          {
+          insertOption("GraphKeysSelect",RecordData.keywords[ikey].name, "");
+          var jkey; for (jkey=0; jkey < SeriesInfo.keywords.length; jkey++)
+            if (RecordData.keywords[ikey].name == SeriesInfo.keywords[jkey].name)
+               { // now have access to SeriesInfo for this keyword
+               if (SeriesInfo.keywords[jkey].type == "time")
+                 insertOption("GraphXKeysSelect",RecordData.keywords[ikey].name, "");
+               break;
+               }
+          }
         $("requestTime").innerHTML = ", Query time = " + RecordData.runtime + "s";
         }
       },
@@ -1471,7 +1590,7 @@ function GetShowInfo()
   tabs.setSelectedItems([tabdisplay]); // show the display page.
   if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
     {
-    $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<BR>Please fo back to steps 4 and 5."; 
+    $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<br>Please fo back to steps 4 and 5."; 
     return;
     }
 
@@ -1522,7 +1641,7 @@ function GetShowInfo()
   if (RecordCount > 10000 && !$("AllowBigQueries").checked)
     {
     $("DisplayPlace").innerHTML = "Requested Recordset is too large for this function, " + RecordCount + 
-	" records.<BR>Please go back to step 3 and choose a smaller recordset.";
+	" records.<br>Please go back to step 3 and choose a smaller recordset.";
     tabs.setSelectedItems([tabdisplay]); // show the display page.
     return;
     }
@@ -1563,7 +1682,6 @@ function newwide(thisevent)
   return true;
   }
 
-
 // Graph making code
 //
 // code to get the list of keywords to be graphed
@@ -1579,7 +1697,7 @@ function GraphPickKeys()
   var ikey = 0;
   var nkeys = RecordData.keywords.length;
   var graphKeysSelected = 0;
-  var yDesc = "<TABLE id='graphYTable' border=1><TR><TD>Keyword</TD><TD>Type</TD></TR>";
+  var yDesc = "<table id='graphYTable' border=1><tr><td>Keyword</td><td>Type</td></tr>";
   graphcols = new Array();
   
   for (igraphkey=0; igraphkey < ngraphkeys; igraphkey++)
@@ -1596,12 +1714,12 @@ function GraphPickKeys()
                ntype = SeriesInfo.keywords[jkey].type;
                break;
                }
-          yDesc = yDesc + "<TD>" + RecordData.keywords[ikey].name + "</TD><TD>"+ntype+"</TD></TR>";
+          yDesc = yDesc + "<td>" + RecordData.keywords[ikey].name + "</td><td>"+ntype+"</td></tr>";
           graphAddCol(RecordData.keywords[ikey].name, ikey);
           }
         }
       }
-  $("graphYAxis").innerHTML = yDesc + "</TABLE>";
+  $("graphYAxis").innerHTML = yDesc + "</table>";
   }
 
 function GraphPickXKey()
@@ -1678,13 +1796,13 @@ function saveGraph(node)
 function GraphCreate()
   {
   var n=RecordData.count;
-  var graphDesc = "<TABLE><TR><TD>Graph for:</TD><TD>" + $("RecordSet").value;
+  var graphDesc = "<table><tr><td>Graph for:</td><td>" + $("RecordSet").value;
   if ($("RecordLimit").value != "none")
     graphDesc = graphDesc + ", limit=" + $("RecordLimit").value;
-  graphDesc = graphDesc + "</TD></TR>";
-  graphDesc = graphDesc + "<TR><TD>From:</TD><TD>" + RecordData.recinfo[0].name + "</TD></TR></TR>";
-  graphDesc = graphDesc + "<TR><TD>To:</TD><TD>" + RecordData.recinfo[n-1].name + "</TD></TR></TR>";
-  graphDesc = graphDesc + "</TABLE>";
+  graphDesc = graphDesc + "</td></tr>";
+  graphDesc = graphDesc + "<tr><td>From:</td><td>" + RecordData.recinfo[0].name + "</td></tr></tr>";
+  graphDesc = graphDesc + "<tr><td>To:</td><td>" + RecordData.recinfo[n-1].name + "</td></tr></tr>";
+  graphDesc = graphDesc + "</table>";
   $("graphDescription").innerHTML = graphDesc;
 
   var gcols = graphcols.length;
@@ -1862,13 +1980,13 @@ function ExportRequestStarted()
 
 </HEAD>
 
-<BODY BGCOLOR="#E0F0FF" onLoad="CleanOnLoad();" onresize="newwide(event);" > 
+<body BGCOLOR="#E0F0FF" onLoad="CleanOnLoad();" onresize="newwide(event);" > 
 
-<DIV ID="header">
-  <A HREF = http://jsoc.stanford.edu><img src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
-    style="vertical-align:middle;height:60px;border:0" alt="JSOC logo"></A>
+<div id="header">
+  <a href = http://jsoc.stanford.edu><img src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
+    style="vertical-align:middle;height:60px;border:0" alt="JSOC logo"></a>
   &nbsp;&nbsp;&nbsp;
-  <B><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Explore Info and Export</big></B>
+  <b><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Explore Info and Export</big></b>
   &nbsp;&nbsp;&nbsp;
   &nbsp;&nbsp;&nbsp;
   <input type="button" value="Reset Page" onClick="InitPage();" >
@@ -1881,152 +1999,153 @@ function ExportRequestStarted()
   &nbsp;&nbsp;<span id="AjaxBusy">0</span> Requests Pending
   <span id='systemWorking'>, Loading...</span>
   <span id='requestTime'></span>
-  <!-- <HR> -->
-  <P>
-</DIV> <!-- end DIV header -->
-<DIV id="HandleDiv" style="display:none" >
+  <!-- <hr> -->
+  <p>
+</div> <!-- end div header -->
+<div id="HandleDiv" style="display:none" >
 RequestID
-</DIV>
-<DIV id="JSOC2DIV">
-<P>
-<B>
-<SPAN ID="AboutHelp" class="tip">? About Help</SPAN> 
+</div>
+<div id="JSOC2DIV">
+<p>
+<b>
+<span id="AboutHelp" class="tip">? About Help</span> 
 &nbsp;
 &nbsp;
 &nbsp;
 jsoc.stanford.edu gives access to export series. Consult JSOC staff for access to internal series. 
-</B>
-<P>
-<HR>
-</DIV> <! -- end DIV JSOC2DIV -->
-<SPAN id="LookdataTabs"></SPAN>
-<DIV id="JsocLookdata" style="border: 1px solid #aaa;">
-<DIV id="TabSeriesSelectDiv" style="display:block">
-  <DIV id="SeriesDiv">
-    <TABLE style="width:98%">
-    <TR> <TD  style="width:50%;vertical-align:top;"></TD><TD style="width:50%;vertical-align:top;"></TD></TR>
-    <TR> <TD colspan==2>
-    <SPAN ID="PickSeriesHelp" class="tip">?</SPAN>
-    You may go directly to Step 3 on the above <B>RecordSet Select</B> tab if you know which series you want.
-    </TD></TR>
-    <TR> <TD><B>1. Find list of dataseries</B></TD><TD><B>2. Pick series to use</B></TD></TR>
-    <TR>
-    <TD>
-    <SPAN id="SeriesSelectMessage">
+</b>
+<p>
+<hr>
+</div> <! -- end div JSOC2DIV -->
+<span id="LookdataTabs"></span>
+<div id="JsocLookdata" style="border: 1px solid #aaa;">
+<div id="TabSeriesSelectDiv" style="display:block">
+  <div id="SeriesDiv">
+    <table style="width:98%">
+    <tr> <td  style="width:50%;vertical-align:top;"></td><td style="width:50%;vertical-align:top;"></td></tr>
+    <tr> <td colspan==2>
+    <span id="PickSeriesHelp" class="tip">?</span>
+    You may go directly to Step 3 on the above <b>RecordSet Select</b> tab if you know which series you want.
+    </td></tr>
+    <tr> <td><b>1. Find list of dataseries</b></td><td><b>2. Pick series to use</b></td></tr>
+    <tr>
+    <td>
+    <span id="SeriesSelectMessage">
     Enter a dataseries match pattern to search for seriesnames, or leave blank to select from all series.
     (A very bad idea now that we have about 45,000 seriesnames.)
     A leading "NOT " means exclude names matching the subsequent pattern.
     The default filter excludes namespace "dsds."
-    </SPAN>
-    <P>
+    </span>
+    <p>
     <input id="SeriesFilter" type="text" name="filter" value="NOT ^dsds\." onkeydown="return OnEnterKey(event,GetSeries);" >
-    <SPAN ID="SeriesFilterHelp" class="tip">?</SPAN> Seriesname filter
-    <BR>
+    <span id="SeriesFilterHelp" class="tip">?</span> Seriesname filter
+    <br>
     <input id="SeriesButton" type="button" value="Fetch seriesname list" style="background-color:#FFFF80" onClick="GetSeries();" > 
     <input id="AbortGetSeriesButton" type="button" value="Abort" style="background-color:#FFD0D0" onClick="GetSeriesAbort();" > 
     <br>
-    <span id="SeriesCountPlace" style="background-color:#FFFFFF;width:2em"><I>TBD</I></span>
+    <span id="SeriesCountPlace" style="background-color:#FFFFFF;width:2em"><i>TBD</i></span>
     Series match this selection filter.
-    </TD>
-    <TD>
-    <SPAN ID="SeriesPickHelp" class="tip">?</SPAN> 
+    </td>
+    <td>
+    <span id="SeriesPickHelp" class="tip">?</span> 
     Select data series here.
-    <BR>
+    <br>
     <select id="SeriesSelect" size=8 onclick="PickSeries(0)"> </select>
-    </TD>
-    </TR>
-    </TABLE>
-  </DIV> <!-- /DIV SeriesDiv -->
-</DIV> <!-- /DIV TabSeriesSelectDiv -->
-<DIV id="TabRecSetDiv" style="display:block">
-  <DIV id="MySeriesDiv" >
-    <TABLE style="width:98%">
-      <TR><TD style="width:33%"></TD><TD style="width:33%;"></TD><TD style="width:33%;"></TD></TR>
-      <TR>
-        <TD rowspan=2 style="vertical-align:top;height:60px">
-        <B>Information about selected series</B><BR>
-        <B>Current Series is:</B>
+    </td>
+    </tr>
+    </table>
+  </div> <!-- /div SeriesDiv -->
+</div> <!-- /div TabSeriesSelectDiv -->
+<div id="TabRecSetDiv" style="display:block">
+  <div id="MySeriesDiv" >
+    <table style="width:98%">
+      <tr><td style="width:33%"></td><td style="width:33%;"></td><td style="width:33%;"></td></tr>
+      <tr>
+        <td rowspan=2 style="vertical-align:top;height:60px">
+        <b>Information about selected series</b><br>
+        <b>Current Series is:</b>
         <span id="Series_Name_Place" style="background-color:#FFFFFF"></span>
-        <BR>
+        <br>
         <span id="SSKeysPlace" style="background-color:#FFFFFF;"></span>
-        </TD>
-        <TD colspan=2 style="vertical-align:top">
-        <B>Series Description</B> &nbsp;
+        </td>
+        <td colspan=2 style="vertical-align:top">
+        <b>Series Description</b> &nbsp;
         <input type="button" value="(Refresh)"  onClick="PickSeries(3);" >
         <span id="Series_Info_Place" style="background-color:#FFFFFF"></span>
-        <BR>
-        <B>Release Notes <span id="ReleaseNotes"></span></B>
-        <BR>
-        <B><A target="JSOC Keywords" HREF="http://jsoc.stanford.edu/doc/keywords/JSOC_Keywords_for_metadata.pdf">Keyword Notes</A> (pdf)
-        </TD>
-      </TR>
-      <TR>
-        <TD colspan=2>
+        <br>
+        <b>Release Notes <span id="ReleaseNotes"></span></b>
+        <br>
+        <b><a target="JSOC Keywords" href="http://jsoc.stanford.edu/doc/keywords/JSOC_Keywords_for_metadata.pdf">Keyword Notes</a> (pdf)
+        </td>
+      </tr>
+      <tr>
+        <td colspan=2>
         <span id="FirstLastPlace" style="vertical-align:top;background-color:#FFFFFF"></span>
-        </TD>
-      </TR>
-      <TR>
-        <TD colspan=2  style="vertical-align:top;">
-        <B>3. Select Records and Get Record Count</B><BR>
+        </td>
+      </tr>
+      <tr>
+        <td colspan=2  style="vertical-align:top;">
+        <b>3. Select Records and Get Record Count</b><br>
         Enter RecordSet Specification here for keyword listings and for export.
-        <SPAN ID="RecordSetExample">
+        <span id="RecordSetExample">
         &nbsp; &nbsp;
-        <A HREF=RecordSetHelp.html target="JSOC_Help">Examples</A>
-        </SPAN>
-        <BR>
-        <SPAN ID="QueryBuilderHelp" class="tip">?</SPAN>
+        <a href=RecordSetHelp.html target="JSOC_Help">Examples</a>
+        </span>
+        <br>
+        <span id="QueryBuilderHelp" class="tip">?</span>
         <input type="checkbox" name="" id="QueryDivCheck" onChange="QueryDivCheckToggle();">
         Check box  to show the QueryBuilder.
-        <BR>
+        <br>
         Request may take a while if the recordset is large (more than a few thousand records).
-        <P>
-        <SPAN ID="RecordSetHelp" class="tip">?</SPAN>
+        <p>
+        <span id="RecordSetHelp" class="tip">?</span>
         <input id="RecordSet" type="text" value="" onkeydown="return OnEnterKey(event,GetRSCount);" > 
-        <BR>
-        <DIV id="QueryDiv">
-          <span id="QueryPlace" style="width:10em;background-color:#FFFFFF;"></SPAN></span>
-        </DIV>
-        <P>
+        <br>
+        <div id="QueryDiv">
+          <span id="QueryPlace" style="width:10em;background-color:#FFFFFF;"></span></span>
+        </div>
+        <p>
         &nbsp;&nbsp;
         Record Limit &nbsp;
         <input type="text" value="none" name="" id="RecordLimit" onChange="SetRSLimit();" >
         &nbsp;  Optional, + for from start, - for from end.
-        <P>
+        <p>
         <input type="button" id="GetRSCountButton" value="GetRecordCount"  style="background-color:#FFFF80" onClick="GetRSCount();" >
         <input type="button" id="AbortRSCountButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortRSCount();" >
         Record Count:&nbsp;&nbsp;
         <span id="RSCount_Place" style="width:10em;background-color:#FFFFFF"></span>
-        <P>
-        <input type="checkbox" name="Get Record Query" id="WantRecInfo"> Check to Get Record Query.  <BR>
-        <input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.  <BR>
-        <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info.<BR>
-        <input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).  <BR>
-        <input type="checkbox" name="wantTruncate" id="wantTruncate"> Check to truncate long strings in values display.  <BR>
-        <input type="checkbox" name="UseShowInfo" id="UseShowInfo"> Prepare keyword table in plain text format, e.g. as show_info output, in new window. (No *psuedo* keywords) <BR>
+        <p>
+        <input type="checkbox" name="Get Record Query" id="WantRecInfo"> Check to Get Record Query.  <br>
+        <input type="checkbox" name="AllowBigQueries" id="AllowBigQueries"> Check to Allow Huge Record Queries.  <br>
+        <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info.<br>
+        <input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).  <br>
+        <input type="checkbox" name="wantTruncate" id="wantTruncate"> Check to truncate long strings in values display.  <br>
+        <input type="checkbox" name="UseShowInfo" id="UseShowInfo"> Prepare keyword table in plain text format, e.g. as show_info output, in new window. (No *psuedo* keywords) <br>
         <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
         <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
-        </TD>
-        <TD>
+        </td>
+        <td>
         Select Keywords, Segments, and Links for table of values.
-        <BR>
-        <B>4. Select Keywords</B><BR>
+        <br>
+        <b>4. Select Keywords</b><br>
+        Use Series Content to choose which keywords are visible here.
         <form id="KeysSelectForm" >
           <select id="KeysSelect" size=8 multiple="multiple" onChange="PickKeys();" > </select>
         </form>
-        <B>5. Select Segments</B><BR>
+        <b>5. Select Segments</b><br>
         <form id="SegsSelectForm">
           <select id="SegsSelect" size=8 multiple="multiple" onChange="PickSegs();"> </select>
         </form>
-        <B>6. Select Links</B><BR>
+        <b>6. Select Links</b><br>
         <form id="LinksSelectForm">
           <select id="LinksSelect" size=8 multiple="multiple" onChange="PickLinks();" > </select>
         </form>
-        </TD>
-      </TR>
-    </TABLE>
-  </DIV> <!-- id="MySeriesDiv" -->
-</DIV> <!-- /DIV TabRecSetDiv -->
-<DIV id='ShowInfoFormDiv' style="display:none">
+        </td>
+      </tr>
+    </table>
+  </div> <!-- id="MySeriesDiv" -->
+</div> <!-- /div TabRecSetDiv -->
+<div id='ShowInfoFormDiv' style="display:none">
 <form id='ShowInfoForm' name='ShowInfoForm'
   action=''
   target="_blank"
@@ -2042,98 +2161,102 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
   <input type='hidden' id='SIFA' name='A'  value='0' >
   <input type='hidden' id='SIFP' name='P'  value='0' >
 </form>
-</DIV>
+</div>
 
-<DIV id="TabSeriesStructDiv" style="display:block">
-  <DIV id="SeriesInfoDiv"  style="background-color:#FFFFFF;border:solid;border-width:thin;overflow:scroll;height:75%">
-  <H3><SPAN ID="SeriesContentHelp" class="tip">?</SPAN> List of All Keywords, Links, and Segments</H3>
+<div id="TabSeriesStructDiv" style="display:block">
+  <div id="SeriesInfoDiv"  style="background-color:#FFFFFF;border:solid;border-width:thin;overflow:scroll;height:75%">
+    <h3><span id="SeriesContentHelp" class="tip">?</span> Series Content: List of All Keywords, Links, and Segments</h3>
+    <input type="checkbox" checked="checked" id="AllKeysSelect" onChange="AllKeysSelectChange()">
+      Select or de-select all keywords, and segments for inclusion in drop down final select lists. Per-segment
+      keywords are only included for checked segments.<br> 
+    <input id="SeriesContentSort" type="button" value="Sort" onClick="SortSeriesContent();" > 
     <span id="SSPlace" style="background-color:#FFFFFF;"></span>
-  </DIV>
-</DIV> <!-- /DIV TabSeriesStructDiv -->
-<DIV id="TabDisplayDiv" style="display:block">
-  <DIV id="FullInfoDiv">
-    <B>7. Get Keyword and Segment Values Here</B><BR>
-    <TABLE>
-    <TR><TD> RecordSet Query:</TD><TD> <span id="RecSetPlace" style="background-color:#FFFFFF;"></span></TD></TR>
-    <TR><TD> Keywords to Fetch:</TD><TD><span id="KeyListPlace" style="background-color:#FFFFFF;"></span></TD></TR>
-    <TR><TD> Segments to Fetch:</TD><TD><span id="SegListPlace" style="background-color:#FFFFFF;"></span></TD></TR>
-    <TR><TD> Links to Fetch:</TD><TD> <span id="LinkListPlace" style="background-color:#FFFFFF;"></span></TD></TR>
-    </TABLE>
-	    <P>
-	    <DIV id="FullDisplayInfoDiv" style="background-color:#FFFFFF ;width:98%;">
+  </div>
+</div> <!-- /div TabSeriesStructDiv -->
+<div id="TabDisplayDiv" style="display:block">
+  <div id="FullInfoDiv">
+    <b>7. Get Keyword and Segment Values Here</b><br>
+    <table>
+    <tr><td> RecordSet Query:</td><td> <span id="RecSetPlace" style="background-color:#FFFFFF;"></span></td></tr>
+    <tr><td> Keywords to Fetch:</td><td><span id="KeyListPlace" style="background-color:#FFFFFF;"></span></td></tr>
+    <tr><td> Segments to Fetch:</td><td><span id="SegListPlace" style="background-color:#FFFFFF;"></span></td></tr>
+    <tr><td> Links to Fetch:</td><td> <span id="LinkListPlace" style="background-color:#FFFFFF;"></span></td></tr>
+    </table>
+	    <p>
+	    <div id="FullDisplayInfoDiv" style="background-color:#FFFFFF ;width:98%;">
       <span id="DisplayPlace" style="background-color:#FFFFFF;"></span>
-    </DIV> <!-- /DIV FullDisplayInfoDiv -->
-  </DIV> <!-- /DIV FullInfoDiv -->
-</DIV> <!-- /DIV TabDisplayDiv -->
-<DIV id="TabExportDiv" style="display:block">
-  <DIV> <!-- Section 7, Export link -->
-    <B>8. RecordSet to export:</B>
+    </div> <!-- /div FullDisplayInfoDiv -->
+  </div> <!-- /div FullInfoDiv -->
+</div> <!-- /div TabDisplayDiv -->
+<div id="TabExportDiv" style="display:block">
+  <div> <!-- Section 7, Export link -->
+    <b>8. RecordSet to export:</b>
     <span id="ExportRecordSet" style="background-color:#FFFFFF;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
-    <B> Record Limit:</B>
+    <b> Record Limit:</b>
     <span id="ExportRecordSetLimit" style="background-color:#FFFFFF;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span >
     <input id="ExportRequestButton" type="button" value="Export" onClick="Export_Recordset();" > 
     <!-- <input id="ExportRequestButton" type="button" value="Export" onClick="StartExportRequest();" > -->
     Click to jump to new export page.
     <p>
-    <DIV ID=iframeHideDiv style="display:block;">
+    <div id=iframeHideDiv style="display:block;">
       <iframe id="ExportRequestFrame" onload="ExportRequestStarted();" name="ExportRequestFrame" src="" style="height:0px;width:0px;border:0px solid #fff;">helloiframe</iframe>
-    </DIV>
+    </div>
 
-  </DIV> <!-- /DIV Section 7, Export link -->
-</DIV> <!-- /DIV TabExportDiv -->
-<DIV id="TabPlotDiv">
-  <P>
-  <SPAN id="graphDescription">
+  </div> <!-- /div Section 7, Export link -->
+</div> <!-- /div TabExportDiv -->
+<div id="TabPlotDiv">
+  <p>
+  <span id="graphDescription">
   Graph Selected Data
-  </SPAN>
-  <P>
-  <TABLE>
-  <TR>
-    <TD>
-    <B>Select X axis</B><BR>
-    </TD>
-    <TD>
+  </span>
+  <p>
+  <table>
+  <tr>
+    <td>
+    <b>Select X axis</b><br>
+    </td>
+    <td>
     <form id="GraphXSelectForm">
       <select id="GraphXKeysSelect" value="index" onChange="GraphPickXKey();" > </select>
     </form>
-    </TD>
-    <TD>
+    </td>
+    <td>
     X-axis will be: <span id="graphXAxis">index</span>
-    </TD>
-  </TR>
-  <TR>
-    <TD>
-    <B>Select Keywords</B><BR>
-    </TD>
-    <TD>
+    </td>
+  </tr>
+  <tr>
+    <td>
+    <b>Select Keywords</b><br>
+    </td>
+    <td>
     <form id="GraphSelectForm">
       <select id="GraphKeysSelect" size=8 multiple="multiple" onChange="GraphPickKeys();" > </select>
     </form>
-    </TD>
-    <TD>
+    </td>
+    <td>
     <span id="graphYAxis"></span>
-    </TD>
-  </TR>
-  </TABLE>
+    </td>
+  </tr>
+  </table>
   <input type="button" value="Create Graph"  style="background-color:#FFFF80" onClick="GraphCreate();" >
   <input type="button" value="Delete Graph"  style="background-color:#FFFF80" onClick="GraphDelete();" >
-  <BR>
-  <SPAN id="graphPlace"> <strong>No graph created yet</strong> </SPAN>
-  <DIV ID="amChartDiv" style="display:none; height:600px; background-color:#FFFFFF">
-  </DIV> <!-- amChartDiv -->
-</DVI> <!-- /DIV TabPlotDiv -->
-</DIV> <!-- /DIV Main including all tab divs -->
-<DIV>
+  <br>
+  <span id="graphPlace"> <strong>No graph created yet</strong> </span>
+  <div id="amChartDiv" style="display:none; height:600px; background-color:#FFFFFF">
+  </div> <!-- amChartDiv -->
+</div> <!-- /div TabPlotDiv -->
+</div> <!-- /div Main including all tab divs -->
+<div>
 <img id="graphImage" alt="Right click to save me!">
-</DIV>
+</div>
 <P style="height:1px">
-<DIV id="footer" style="vertical-align:bottom;text-align:center;">
-<HR>
-  <I>Home pages for:</I>
-  <A HREF = "http://jsoc.stanford.edu/"><B>SDO-JSOC</B></A>
-  <B>|</B>
-  <A HREF = "http://sha.stanford.edu/"><B>SHA</B></A>
-</DIV>
-</BODY>
-</HTML>
+<div id="footer" style="vertical-align:bottom;text-align:center;">
+<hr>
+  <i>Home pages for:</i>
+  <a href = "http://jsoc.stanford.edu/"><b>SDO-JSOC</b></a>
+  <b>|</b>
+  <a href = "http://sha.stanford.edu/"><b>SHA</b></a>
+</div>
+</body>
+</html>
 
