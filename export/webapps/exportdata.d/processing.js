@@ -676,7 +676,7 @@ function ImPatchCheck()
   var isok = 1;
   var args = "im_patch";
   var ImLocOption;
-alert("ImPatchCheck, RecordCountNeeded="+RecordCountNeeded+", default start,stop="+defaultStartUsed+","+defaultStopUsed);
+// alert("ImPatchCheck, RecordCountNeeded="+RecordCountNeeded+", default start,stop="+defaultStartUsed+","+defaultStopUsed);
   if (RecordCountNeeded)
     {
     ImFirstRecord = null;
@@ -913,9 +913,9 @@ function ImGetRecInfo(n)
     ImLastRecord = null;
   $("ImRecordSet").innerHTML = RecordSet;
   var timePrime = (firstTimePrime.length > 0 ? firstTimePrime : "T_REC");
-$("TESTMSG").innerHTML = timePrime;
+// $("TESTMSG").innerHTML = timePrime;
   var keysneeded = timePrime+",CAR_ROT,CRLN_OBS,"+timePrime+"_step";
-alert("ImGetRecInfo("+n+") called");
+// alert("ImGetRecInfo("+n+") called");
   var recinfo;
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var RecordSet = $("ExportRecordSet").value;
@@ -930,7 +930,7 @@ alert("ImGetRecInfo("+n+") called");
       var response = transport.responseText || "no response text";
       var recinfo = response.evalJSON();
 
-$("TESTMSG").innerHTML += " thisN="+thisN;
+// $("TESTMSG").innerHTML += " thisN="+thisN;
       if (recinfo.status == 0)
         {
         if (thisN == "1")
