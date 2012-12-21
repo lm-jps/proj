@@ -641,6 +641,7 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
    char *timestr = NULL;
    int status = DRMS_SUCCESS;
    DRMS_RecChunking_t cstat = kRecChunking_None;
+   int nrecs;
 
    if (!cache || !recout)
    {
@@ -652,13 +653,22 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
 
       if (*cache == NULL)
       {
-         drms_recordset_setchunksize(gChunkSize);
-         rs = drms_open_recordset(drmsEnv, series, &status);
-
-         if (status != DRMS_SUCCESS || rs == NULL) 
-         {
-            fprintf(stderr, "drms_open_recordset() failed, query=%s, error=%d.  Aborting.\n", series, error);
-         }
+          drms_recordset_setchunksize(gChunkSize);
+          rs = drms_open_recordset(drmsEnv, series, &status);
+          
+          if (status != DRMS_SUCCESS || rs == NULL) 
+          {
+              fprintf(stderr, "drms_open_recordset() failed, query=%s, error=%d.  Aborting.\n", series, status);
+          }
+          else
+          {
+              nrecs = drms_count_records(drmsEnv, series, &status);
+              
+              if (status != DRMS_SUCCESS)
+              {
+                  fprintf(stderr, "drms_count_records() failed, query=%s, error=%d.  Aborting.\n", series, status);    
+              }
+          }
       }
       /* attempt to find the record that matches tbuf */
       else
@@ -666,7 +676,7 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
          /* retrieve saved rs */
          rs = *((DRMS_RecordSet_t **)hcon_lookup(*cache, "bobmould"));
 
-         if (rs->n > 0)
+         if (nrecs > 0)
          {
             if ((prec = (DRMS_Record_t **)hcon_lookup(*cache, tbuf)) != NULL)
             {
@@ -675,7 +685,7 @@ static int FetchCachedRecord(DRMS_Env_t *drmsEnv,
          }
       }
 
-      if (rs->n > 0)
+      if (nrecs > 0)
       {
          /* Have to loop on ALL chunks if can't find time in cache */
          int morerecs = 1;
