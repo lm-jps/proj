@@ -19,8 +19,9 @@
  *	Version:
  *		v0.0	Jul 02 2012
  *		v0.1	Jul 23 2012
- *    v0.2  Sep 04 2012
+ *		v0.2	Sep 04 2012
  *		v0.3	Dec 18 2012	
+ *		v0.4	Jan 02 2013
  *
  *	Notes:
  *		v0.0
@@ -36,6 +37,9 @@
  *              Added other keywords: HEADER (populated by cvs build version), DATE_B
  *		v0.3
  *		Fixed memory leakage of 0.15G per rec; denoted with "Dec 18"
+ *		v0.4
+ *		Took out convert_inplace(). Was causing all the images to be int
+ 
  *
  *	Example:
  *	sharp "mharp=hmi.Mharp_720s[1404][2012.02.20_10:00]" \
@@ -736,17 +740,17 @@ int mapScaler(DRMS_Record_t *sharpRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 	outSeg = drms_segment_lookup(sharpRec, segName);
 	if (!outSeg) return 1;
 	
-	DRMS_Type_t arrayType = outSeg->info->type;
+//	DRMS_Type_t arrayType = outSeg->info->type;
 	DRMS_Array_t *outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, map, &status);
 	if (status) {if (inArray) drms_free_array(inArray); free(map); return 1;}
 	
 	// convert to needed data type
 	
-	drms_array_convert_inplace(outSeg->info->type, 0, 1, outArray);
+//	drms_array_convert_inplace(outSeg->info->type, 0, 1, outArray);		// Jan 02 2013
 	
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 	outArray->parent_segment = outSeg;
-	outArray->israw = 0;		// always compressed
+//	outArray->israw = 0;		// always compressed
 	outArray->bzero = outSeg->bzero;
 	outArray->bscale = outSeg->bscale;
 	
@@ -822,7 +826,7 @@ int mapVectorB(DRMS_Record_t *sharpRec, DRMS_Record_t *bharpRec, struct mapInfo 
 		outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, data_prt[iSeg], &status);
 		outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 		outArray->parent_segment = outSeg;
-		outArray->israw = 0;
+//		outArray->israw = 0;
 		outArray->bzero = outSeg->bzero;
 		outArray->bscale = outSeg->bscale;
 		status = drms_segment_write(outSeg, outArray, 0);
@@ -874,7 +878,7 @@ int mapVectorBErr(DRMS_Record_t *sharpRec, DRMS_Record_t *bharpRec, struct mapIn
 		outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, data_prt[iSeg], &status);
 		outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
 		outArray->parent_segment = outSeg;
-		outArray->israw = 0;
+//		outArray->israw = 0;
 		outArray->bzero = outSeg->bzero;
 		outArray->bscale = outSeg->bscale;
 		status = drms_segment_write(outSeg, outArray, 0);
@@ -1621,11 +1625,11 @@ int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 	
 	outSeg = drms_segment_lookup(outRec, SegName);
 	if (!outSeg) return 1;
-	drms_array_convert_inplace(outSeg->info->type, 0, 1, cutoutArray);
+//	drms_array_convert_inplace(outSeg->info->type, 0, 1, cutoutArray);	// Jan 02 2013
 	outSeg->axis[0] = cutoutArray->axis[0];
 	outSeg->axis[1] = cutoutArray->axis[1];
 	cutoutArray->parent_segment = outSeg;
-	cutoutArray->israw = 0;		// always compressed
+//	cutoutArray->israw = 0;		// always compressed
     cutoutArray->bzero = outSeg->bzero;
     cutoutArray->bscale = outSeg->bscale;		// Same as inArray's
 	status = drms_segment_write(outSeg, cutoutArray, 0);
@@ -1849,7 +1853,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec)
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
 	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.6 2012/12/18 22:17:25 xudong Exp $");
+	char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.7 2013/01/03 03:53:18 xudong Exp $");
 	//   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
 	status = drms_setkey_string(outRec, "CODEVER7", cvsinfo);
 	
