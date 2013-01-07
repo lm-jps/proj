@@ -1090,7 +1090,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.37 2012/11/08 00:41:21 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.38 2013/01/07 17:47:30 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1339,6 +1339,7 @@ int DoIt(void)
   int COSMICCOUNT=0;
   int initialrun=0;
   int totalTempIntNum;
+  int *CAMERA=NULL;
 
   long long *CALVER32=NULL;
   long long  CALVER64=-11;
@@ -2218,6 +2219,12 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	      printf("Error: memory could not be allocated to CALVER32\n");
 	      return 1;//exit(EXIT_FAILURE);
 	    }
+	  CAMERA = (int *)malloc(nRecs1*sizeof(int)); 
+ 	  if(CAMERA == NULL)
+	    {
+	      printf("Error: memory could not be allocated to CAMERA\n");
+	      return 1;//exit(EXIT_FAILURE);
+	    }
 
 
 
@@ -2350,7 +2357,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	      NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[32]);
 	      if(statusA[32] != DRMS_SUCCESS) NBADPERM[i]=-1;
 	      QUALITYin[i]  = drms_getkey_int(recLev1->records[i] ,QUALITYS          ,&statusA[33]);
-	      if(statusA[33] != DRMS_SUCCESS) KeywordMissing[i]=1;
+	      if(statusA[33] != DRMS_SUCCESS) KeywordMissing[i]=1; //enough to have the record rejected
 	      //WE TEST WHETHER THE DATA SEGMENT IS MISSING
 	      if( (QUALITYin[i] & Q_MISSING_SEGMENT) == Q_MISSING_SEGMENT)
 		{
@@ -2369,7 +2376,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		  printf("Error: CALVER32[%d] is different from CALVER32[0]\n",i);
 		  return 1;
 		}
-
+	      CAMERA[i]  = drms_getkey_int(recLev1->records[i],CAMERAS,&statusA[35]); //Phil required a test on CAMERA on 12/20/2012
+	      if(CAMERA[i] == -2147483648 || statusA[35] != DRMS_SUCCESS) KeywordMissing[i]=1;//missing CAMERA keyword
 
 	      //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	      
@@ -6638,6 +6646,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  free(QUALITYin);
 	  free(QUALITYlev1);
 	  free(EXPTIME);
+	  free(CALVER32);
+	  free(CAMERA);
 	}
     }
 

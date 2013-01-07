@@ -1012,7 +1012,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.29 2012/11/08 01:06:06 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.30 2013/01/07 17:47:52 couvidat Exp $");
 }
 
 
@@ -1268,6 +1268,7 @@ int DoIt(void)
   int   COSMICCOUNT=0;
   int   initialrun=0;
   int  *totalTempIntNum;
+  int  *CAMERA=NULL;
 
   long long *CALVER32=NULL;
 
@@ -1864,6 +1865,12 @@ int DoIt(void)
 	  printf("Error: memory could not be allocated to CALVER32\n");
 	  return 1;//exit(EXIT_FAILURE);
 	}
+      CAMERA = (int *)malloc(nRecs1*sizeof(int)); 
+      if(CAMERA == NULL)
+	{
+	  printf("Error: memory could not be allocated to CAMERA\n");
+	  return 1;//exit(EXIT_FAILURE);
+	}
       
       //reading some keyword values for all the open records (PUT MISSINGKEYWORD OR MISSINGKEYWORDINT IF THE KEYWORD IS MISSING) and
       //create an array IndexFiltergram with the record index of all the filtergrams with the wavelength WavelengthID
@@ -2000,6 +2007,8 @@ int DoIt(void)
 	      printf("Error: CALVER32[%d] is different from CALVER32[0]\n",i);
 	      return 1;
 	    }
+	  CAMERA[i]  = drms_getkey_int(recLev1->records[i],CAMERAS,&statusA[35]); //Phil required a test on CAMERA on 12/20/2012
+	  if(CAMERA[i] == -2147483648 || statusA[35] != DRMS_SUCCESS) KeywordMissing[i]=1;//missing CAMERA keyword
 
 	  //CORRECTION OF R_SUN and CRPIX1 FOR LIMB FINDER ARTIFACTS
 	  /*if(statusA[9] == DRMS_SUCCESS && statusA[16] == DRMS_SUCCESS && statusA[14] == DRMS_SUCCESS && statusA[22] == DRMS_SUCCESS && statusA[21] == DRMS_SUCCESS)
@@ -4295,7 +4304,9 @@ if(nIndexFiltergram != 0)
 	free(HWLTNSET);
 	free(NBADPERM);
 	free(QUALITYin);
-	free(EXPTIME);	  
+	free(EXPTIME);	
+	free(CAMERA);
+	free(CALVER32);    
       }
     
     for(i=0;i<nTime;++i) free(source[i]);
@@ -4365,7 +4376,7 @@ if(nIndexFiltergram != 0)
     free(TOTVALSS);
     free(MISSVALSS);
     free(DATAVALSS);
-    
+
     free_interpol(&const_param);
     status = free_polcal(&pars);
     free(Mask);
