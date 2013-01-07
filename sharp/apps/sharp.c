@@ -749,8 +749,8 @@ int mapScaler(DRMS_Record_t *sharpRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 //	drms_array_convert_inplace(outSeg->info->type, 0, 1, outArray);		// Jan 02 2013
 	
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
-	outArray->parent_segment = outSeg;
-//	outArray->israw = 0;		// always compressed
+//	outArray->parent_segment = outSeg;
+	outArray->israw = 0;		// always compressed
 	outArray->bzero = outSeg->bzero;
 	outArray->bscale = outSeg->bscale;
 	
@@ -825,8 +825,8 @@ int mapVectorB(DRMS_Record_t *sharpRec, DRMS_Record_t *bharpRec, struct mapInfo 
 		outSeg = drms_segment_lookup(sharpRec, segName[iSeg]);
 		outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, data_prt[iSeg], &status);
 		outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
-		outArray->parent_segment = outSeg;
-//		outArray->israw = 0;
+//		outArray->parent_segment = outSeg;
+		outArray->israw = 0;
 		outArray->bzero = outSeg->bzero;
 		outArray->bscale = outSeg->bscale;
 		status = drms_segment_write(outSeg, outArray, 0);
@@ -877,8 +877,8 @@ int mapVectorBErr(DRMS_Record_t *sharpRec, DRMS_Record_t *bharpRec, struct mapIn
 		outSeg = drms_segment_lookup(sharpRec, segName[iSeg]);
 		outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, dims, data_prt[iSeg], &status);
 		outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
-		outArray->parent_segment = outSeg;
-//		outArray->israw = 0;
+//		outArray->parent_segment = outSeg;
+		outArray->israw = 0;
 		outArray->bzero = outSeg->bzero;
 		outArray->bscale = outSeg->bscale;
 		status = drms_segment_write(outSeg, outArray, 0);
@@ -1628,8 +1628,8 @@ int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 //	drms_array_convert_inplace(outSeg->info->type, 0, 1, cutoutArray);	// Jan 02 2013
 	outSeg->axis[0] = cutoutArray->axis[0];
 	outSeg->axis[1] = cutoutArray->axis[1];
-	cutoutArray->parent_segment = outSeg;
-//	cutoutArray->israw = 0;		// always compressed
+//	cutoutArray->parent_segment = outSeg;
+	cutoutArray->israw = 0;		// always compressed
     cutoutArray->bzero = outSeg->bzero;
     cutoutArray->bscale = outSeg->bscale;		// Same as inArray's
 	status = drms_segment_write(outSeg, cutoutArray, 0);
@@ -1853,7 +1853,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec)
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
 	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.7 2013/01/03 03:53:18 xudong Exp $");
+	char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.8 2013/01/07 22:03:47 xudong Exp $");
 	//   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
 	status = drms_setkey_string(outRec, "CODEVER7", cvsinfo);
 	
