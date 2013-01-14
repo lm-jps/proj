@@ -1,6 +1,6 @@
 /*===========================================
 
-   The following 13 functions calculate the following spaceweather indices:
+   The following 14 functions calculate the following spaceweather indices:
 
     USFLUX Total unsigned flux in Maxwells
     MEANGAM Mean inclination angle, gamma, in degrees
@@ -81,13 +81,12 @@ int computeAbsFlux(float *bz, int *dims, float *absFlux,
     *absFlux = 0.0;
     *mean_vf_ptr =0.0;
 
-	for (j = 0; j < ny; j++) 
+	for (i = 0; i < nx; i++) 
 	{
-		for (i = 0; i < nx; i++) 
+		for (j = 0; j < ny; j++) 
 		{
                   if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                   if isnan(bz[j * nx + i]) continue;
-                  //printf("bz[j * nx + i]=%f\n",bz[j * nx + i]);
                   sum += (fabs(bz[j * nx + i]));
                   count_mask++;
 		}	
@@ -115,9 +114,9 @@ int computeBh(float *bx, float *by, float *bz, float *bh, int *dims,
 
     if (nx <= 0 || ny <= 0) return 1;
 
-	for (j = 0; j < ny; j++) 
+	for (i = 0; i < nx; i++) 
 	  {
-	    for (i = 0; i < nx; i++)
+	    for (j = 0; j < ny; j++)
 	      {
                 if isnan(bx[j * nx + i]) continue;
                 if isnan(by[j * nx + i]) continue;
@@ -253,26 +252,13 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
           }
 
 
-        /* Just some print statements
-      	for (i = 0; i < nx; i++) 
-	  {
-             for (j = 0; j < ny; j++) 
-	      {
-              printf("j=%d\n",j);
-              printf("i=%d\n",i);
-              printf("dery_bt[j*nx+i]=%f\n",dery_bt[j*nx+i]);
-              printf("derx_bt[j*nx+i]=%f\n",derx_bt[j*nx+i]); 
-              printf("bt[j*nx+i]=%f\n",bt[j*nx+i]);
-              }
-          }
-        */
-
       	for (i = 0; i <= nx-1; i++) 
           {
             for (j = 0; j <= ny-1; j++) 
             {
-               // if ( (derx_bt[j * nx + i]-dery_bt[j * nx + i]) == 0) continue; 
 	       if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
+               if isnan(derx_bt[j * nx + i]) continue;
+               if isnan(dery_bt[j * nx + i]) continue;
                sum += sqrt( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  ); /* Units of Gauss */
                count_mask++;
             }	
@@ -343,26 +329,13 @@ int computeBhderivative(float *bh, int *dims, float *mean_derivative_bh_ptr, int
           }
 
 
-        /*Just some print statements
-      	for (i = 0; i < nx; i++) 
-	  {
-             for (j = 0; j < ny; j++) 
-	      {
-              printf("j=%d\n",j);
-              printf("i=%d\n",i);
-              printf("dery_bh[j*nx+i]=%f\n",dery_bh[j*nx+i]);
-              printf("derx_bh[j*nx+i]=%f\n",derx_bh[j*nx+i]); 
-              printf("bh[j*nx+i]=%f\n",bh[j*nx+i]);
-              }
-          }
-        */
-
       	for (i = 0; i <= nx-1; i++) 
           {
             for (j = 0; j <= ny-1; j++) 
             {
-               // if ( (derx_bh[j * nx + i]-dery_bh[j * nx + i]) == 0) continue; 
 	       if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
+               if isnan(derx_bh[j * nx + i]) continue;
+               if isnan(dery_bh[j * nx + i]) continue;
                sum += sqrt( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  ); /* Units of Gauss */
                count_mask++;
             }	
@@ -437,20 +410,6 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
           }
 
 
-        /*Just some print statements
-      	for (i = 0; i < nx; i++) 
-	  {
-             for (j = 0; j < ny; j++) 
-	      {
-              printf("j=%d\n",j);
-              printf("i=%d\n",i);
-              printf("dery_bz[j*nx+i]=%f\n",dery_bz[j*nx+i]);
-              printf("derx_bz[j*nx+i]=%f\n",derx_bz[j*nx+i]); 
-              printf("bz[j*nx+i]=%f\n",bz[j*nx+i]);
-              }
-          }
-        */
-
       	for (i = 0; i <= nx-1; i++) 
           {
             for (j = 0; j <= ny-1; j++) 
@@ -470,7 +429,6 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 }
 
 /*===========================================*/
-
 /* Example function 8:  Current Jz = (dBy/dx) - (dBx/dy) */
 
 //  In discretized space like data pixels,
@@ -502,9 +460,9 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 //  =(Gauss/pix)(1/0.5)(10^-4)(4*PI*10^7)(722500)(1000.)
 //  =(Gauss/pix)(1/CDELT1)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)(1000.)
 
-int computeJz(float *bx, float *by, int *dims, float *jz, 
-			  float *mean_jz_ptr, float *us_i_ptr, int *mask, int *bitmask,
-                          float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery)
+int computeJz(float *bx, float *by, int *dims, float *jz,
+			 int *mask, int *bitmask,
+                         float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery)
 
 
 
@@ -514,8 +472,6 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
 	int i, j, count_mask=0;
 
 	if (nx <= 0 || ny <= 0) return 1;
-
-	*mean_jz_ptr = 0.0;
 	float curl=0.0, us_i=0.0,test_perimeter=0.0,mean_curl=0.0;
  
 
@@ -574,16 +530,51 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
           {
             for (j = 0; j <= ny-1; j++) 
             {
+               /* calculate jz at all points */ 
+               jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);                                              /* jz is in units of Gauss/pix */ 
+               count_mask++;
+            }	
+	  }
+
+	return 0;
+}
+
+/*===========================================*/
+
+/* Example function 9:  Compute quantities on smoothed Jz array */
+
+int computeJzsmooth(float *bx, float *by, int *dims, float *jz_smooth, 
+			  float *mean_jz_ptr, float *us_i_ptr, int *mask, int *bitmask,
+                          float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery)
+
+{
+
+	int nx = dims[0], ny = dims[1];
+	int i, j, count_mask=0;
+
+	if (nx <= 0 || ny <= 0) return 1;
+
+	*mean_jz_ptr = 0.0;
+	float curl=0.0, us_i=0.0,test_perimeter=0.0,mean_curl=0.0;
+ 
+ 
+        /* At this point, use the smoothed Jz array with a Gaussian (FWHM of 4 pix and truncation width of 12 pixels) but keep the original array dimensions*/
+      	for (i = 0; i <= nx-1; i++) 
+          {
+            for (j = 0; j <= ny-1; j++) 
+            {
                if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                if isnan(derx[j * nx + i]) continue;
                if isnan(dery[j * nx + i]) continue;
-               curl +=     (derx[j * nx + i]-dery[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
-               us_i += fabs(derx[j * nx + i]-dery[j * nx + i])*(1/cdelt1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A  / m^2 */
-               jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);                                                          /* jz is in units of Gauss/pix */                                     
+               if isnan(jz_smooth[j * nx + i]) continue;
+               //printf("%d,%d,%f\n",i,j,jz_smooth[j * nx + i]);
+               curl +=     (jz_smooth[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
+               us_i += fabs(jz_smooth[j * nx + i])*(1/cdelt1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A  / m^2 */
                count_mask++;
             }	
 	  }
  
+        /* Calculate mean vertical current density (mean_curl) and total unsigned vertical current (us_i) using smoothed Jz array and continue conditions above */
         mean_curl        = (curl/count_mask);
         printf("mean_curl=%f\n",mean_curl);
         printf("cdelt1, what is it?=%f\n",cdelt1);
@@ -594,50 +585,66 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
 
 }
 
-
 /*===========================================*/
-/* Example function 9:  Twist Parameter, alpha */
 
-// The twist parameter, alpha, is defined as alpha = Jz/Bz and the units are in 1/Mm
+/* Example function 10:  Twist Parameter, alpha */
+
+// The twist parameter, alpha, is defined as alpha = Jz/Bz. In this case, the calculation
+// for alpha is calculated in the following way (different from Leka and Barnes' approach):
+   
+       // (sum of all positive Bz + abs(sum of all negative Bz)) = avg Bz
+       // (abs(sum of all Jz at positive Bz) + abs(sum of all Jz at negative Bz)) = avg Jz
+       // avg alpha = avg Jz / avg Bz
+
+// The units of alpha are in 1/Mm
 // The units of Jz are in Gauss/pix; the units of Bz are in Gauss.
 //
 // Therefore, the units of Jz/Bz = (Gauss/pix)(1/Gauss)(pix/arcsec)(arsec/meter)(meter/Mm), or 
 //                               = (Gauss/pix)(1/Gauss)(1/CDELT1)(RSUN_OBS/RSUN_REF)(10^6)
 //                               = 1/Mm
 
-int computeAlpha(float *bz, int *dims, float *jz, float *mean_alpha_ptr, int *mask, int *bitmask, 
+int computeAlpha(float *bz, int *dims, float *jz_smooth, float *mean_alpha_ptr, int *mask, int *bitmask, 
                  float cdelt1, double rsun_ref, double rsun_obs)
+
 {
 	int nx = dims[0], ny = dims[1];
-	int i, j, count_mask=0;
+	int i, j=0;
 
 	if (nx <= 0 || ny <= 0) return 1;
 
 	*mean_alpha_ptr = 0.0;
-	float aa, bb, cc, bznew, alpha2, sum=0.0;
+	float aa, bb, cc, bznew, alpha2, sum1, sum2, sum3, sum4, sum, sum5, sum6=0.0;
 
 	for (i = 1; i < nx-1; i++) 
 	  {
 	    for (j = 1; j < ny-1; j++) 
 	      {
                 if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
-                if isnan(jz[j * nx + i]) continue;
+                if isnan(jz_smooth[j * nx + i]) continue;
                 if isnan(bz[j * nx + i]) continue;
                 if (bz[j * nx + i] == 0.0) continue;
-                sum += (jz[j * nx + i] / bz[j * nx + i])*((1/cdelt1)*(rsun_obs/rsun_ref)*(1000000.)) ; /* the units for (jz/bz) are 1/Mm */
-                count_mask++;
+                if (bz[j * nx + i] >  0) sum1 += ( bz[j * nx + i]);
+                if (bz[j * nx + i] <= 0) sum2 += ( bz[j * nx + i]);
+                if (bz[j * nx + i] >  0) sum3 += ( jz_smooth[j * nx + i]);
+                if (bz[j * nx + i] <= 0) sum4 += ( jz_smooth[j * nx + i]);
+                sum5 += bz[j * nx + i];
 	      }	
 	  }
+        
+        sum = (((fabs(sum3))+(fabs(sum4)))/((fabs(sum2))+sum1))*((1/cdelt1)*(rsun_obs/rsun_ref)*(1000000.)) ; /* the units for (jz/bz) are 1/Mm */
 
-        printf("cdelt1=%f,rsun_ref=%f,rsun_obs=%f\n",cdelt1,rsun_ref,rsun_obs);
-        printf("count_mask=%d\n",count_mask);
-        printf("sum=%f\n",sum);
-	*mean_alpha_ptr = sum/count_mask; /* Units are 1/Mm */
+        /* Determine the sign of alpha */
+        if ((sum5 > 0) && (sum3 >  0)) sum=sum;
+        if ((sum5 > 0) && (sum3 <= 0)) sum=-sum;
+        if ((sum5 < 0) && (sum4 <= 0)) sum=sum;
+        if ((sum5 < 0) && (sum4 >  0)) sum=-sum;
+
+	*mean_alpha_ptr = sum; /* Units are 1/Mm */
 	return 0;
 }
 
 /*===========================================*/
-/* Example function 10:  Helicity (mean current helicty, mean unsigned current helicity, and mean absolute current helicity) */
+/* Example function 11:  Helicity (mean current helicty, mean unsigned current helicity, and mean absolute current helicity) */
 
 //  The current helicity is defined as Bz*Jz and the units are G^2 / m
 //  The units of Jz are in G/pix; the units of Bz are in G.
@@ -646,7 +653,7 @@ int computeAlpha(float *bz, int *dims, float *jz, float *mean_alpha_ptr, int *ma
 //                                                      = G^2 / m.
 
 
-int computeHelicity(float *bz, int *dims, float *jz, float *mean_ih_ptr, float *total_us_ih_ptr, 
+int computeHelicity(float *bz, int *dims, float *jz_smooth, float *mean_ih_ptr, float *total_us_ih_ptr, 
 					float *total_abs_ih_ptr, int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
 
 {
@@ -659,17 +666,17 @@ int computeHelicity(float *bz, int *dims, float *jz, float *mean_ih_ptr, float *
 	*mean_ih_ptr = 0.0;
 	float sum=0.0, sum2=0.0;
 
-	for (j = 0; j < ny; j++) 
+	for (i = 0; i < nx; i++) 
 	{
-		for (i = 0; i < nx; i++) 
+		for (j = 0; j < ny; j++) 
 		{
                 if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
-                if isnan(jz[j * nx + i]) continue;
+                if isnan(jz_smooth[j * nx + i]) continue;
                 if isnan(bz[j * nx + i]) continue;
                 if (bz[j * nx + i] == 0.0) continue;
-                if (jz[j * nx + i] == 0.0) continue;
-                sum  +=     (jz[j * nx + i]*bz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref);
-		sum2 += fabs(jz[j * nx + i]*bz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref);
+                if (jz_smooth[j * nx + i] == 0.0) continue;
+                sum  +=     (jz_smooth[j * nx + i]*bz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref);
+		sum2 += fabs(jz_smooth[j * nx + i]*bz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref);
                 count_mask++;
                 }	
 	 }
@@ -684,7 +691,7 @@ int computeHelicity(float *bz, int *dims, float *jz, float *mean_ih_ptr, float *
 }
 
 /*===========================================*/
-/* Example function 11:  Sum of Absolute Value per polarity  */
+/* Example function 12:  Sum of Absolute Value per polarity  */
 
 //  The Sum of the Absolute Value per polarity is defined as the following:
 //  fabs(sum(jz gt 0)) + fabs(sum(jz lt 0)) and the units are in Amperes.
@@ -692,7 +699,7 @@ int computeHelicity(float *bz, int *dims, float *jz, float *mean_ih_ptr, float *
 //  Jz = (Gauss/pix)(1/CDELT1)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)(RSUN_REF/RSUN_OBS)(RSUN_OBS/RSUN_REF),
 //     = (Gauss/pix)(1/CDELT1)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)
 
-int computeSumAbsPerPolarity(float *bz, float *jz, int *dims, float *totaljzptr, 
+int computeSumAbsPerPolarity(float *bz, float *jz_smooth, int *dims, float *totaljzptr, 
 							 int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
 
 {	
@@ -710,8 +717,8 @@ int computeSumAbsPerPolarity(float *bz, float *jz, int *dims, float *totaljzptr,
 	      {
                 if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                 if isnan(bz[j * nx + i]) continue;
-		if (bz[j * nx + i] >  0) sum1 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
-                if (bz[j * nx + i] <= 0) sum2 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
+		if (bz[j * nx + i] >  0) sum1 += ( jz_smooth[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
+                if (bz[j * nx + i] <= 0) sum2 += ( jz_smooth[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
        	      }
 	  }
 	
@@ -720,7 +727,7 @@ int computeSumAbsPerPolarity(float *bz, float *jz, int *dims, float *totaljzptr,
 }
 
 /*===========================================*/
-/* Example function 12:  Mean photospheric excess magnetic energy and total photospheric excess magnetic energy density */
+/* Example function 13:  Mean photospheric excess magnetic energy and total photospheric excess magnetic energy density */
 // The units for magnetic energy density in cgs are ergs per cubic centimeter. The formula B^2/8*PI integrated over all space, dV
 // automatically yields erg per cubic centimeter for an input B in Gauss.
 //
@@ -763,7 +770,7 @@ int computeFreeEnergy(float *bx, float *by, float *bpx, float *bpy, int *dims,
 }
 
 /*===========================================*/
-/* Example function 13:  Mean 3D shear angle, area with shear greater than 45, mean horizontal shear angle, area with horizontal shear angle greater than 45 */
+/* Example function 14:  Mean 3D shear angle, area with shear greater than 45, mean horizontal shear angle, area with horizontal shear angle greater than 45 */
 
 int computeShearAngle(float *bx, float *by, float *bz, float *bpx, float *bpy, float *bpz, int *dims,
 					  float *meanshear_angleptr, float *area_w_shear_gt_45ptr, 
