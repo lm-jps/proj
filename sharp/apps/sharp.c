@@ -76,7 +76,7 @@
 #include <mkl_lapack.h>
 #include <mkl_vml_functions.h>
 #include <omp.h>
-
+                             
 #define PI              (M_PI)
 #define RADSINDEG		(PI/180.)
 #define RAD2ARCSEC		(648000./M_PI)
@@ -1683,8 +1683,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	// Get emphemeris
 	
 	//float cdelt1_orig = drms_getkey_float(inRec, "CDELT1",   &status);
-	float cdelt1      = drms_getkey_float(inRec, "CDELT1",   &status);
-	float dsun_obs    = drms_getkey_float(inRec, "DSUN_OBS",   &status);
+	float  cdelt1      = drms_getkey_float(inRec, "CDELT1",   &status);
+	float  dsun_obs    = drms_getkey_float(inRec, "DSUN_OBS",   &status);
 	double rsun_ref   = drms_getkey_double(inRec, "RSUN_REF", &status);
 	double rsun_obs   = drms_getkey_double(inRec, "RSUN_OBS", &status);
 	float imcrpix1    = drms_getkey_float(inRec, "IMCRPIX1", &status);
@@ -1704,6 +1704,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float *bh = (float *) (malloc(nxny * sizeof(float)));
 	float *bt = (float *) (malloc(nxny * sizeof(float)));
 	float *jz = (float *) (malloc(nxny * sizeof(float)));
+	float *jz_smooth = (float *) (malloc(nxny * sizeof(float)));
 	float *bpx = (float *) (malloc(nxny * sizeof(float)));
 	float *bpy = (float *) (malloc(nxny * sizeof(float)));
 	float *bpz = (float *) (malloc(nxny * sizeof(float)));
@@ -1715,8 +1716,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float *dery_bh = (float *) (malloc(nxny * sizeof(float)));
 	float *derx_bz = (float *) (malloc(nxny * sizeof(float)));
 	float *dery_bz = (float *) (malloc(nxny * sizeof(float)));
-	
-	// Compute      
+
+	// The Computations   
 	
 	if (computeAbsFlux(bz, dims, &(swKeys_ptr->absFlux), &(swKeys_ptr->mean_vf), 
 					   mask, bitmask, cdelt1, rsun_ref, rsun_obs)){
@@ -1743,20 +1744,25 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	if (computeBzderivative(bz, dims, &(swKeys_ptr->mean_derivative_bz), mask, bitmask, derx_bz, dery_bz))
 		swKeys_ptr->mean_derivative_bz = DRMS_MISSING_FLOAT; // If fail, fill in NaN
 	
+	computeJz(bx, by, dims, jz, mask, bitmask, cdelt1, rsun_ref, rsun_obs, derx, dery);
+
+	struct fresize_struct convolution_array;
+        init_fresize_gaussian(&convolution_array, 4.0f, 12, 1);
+        fresize(&convolution_array, jz, jz_smooth, nx, ny, nx, nx, ny, nx, 0, 0, 0.0f);	
 	
-	
-	if(computeJz(bx, by, dims, jz, &(swKeys_ptr->mean_jz), &(swKeys_ptr->us_i), mask, bitmask, 
-				 cdelt1, rsun_ref, rsun_obs, derx, dery)) {
-		swKeys_ptr->mean_jz = DRMS_MISSING_FLOAT;
+        if(computeJzsmooth(bx, by, dims, jz_smooth, &(swKeys_ptr->mean_jz), &(swKeys_ptr->us_i), mask, bitmask, 
+				 cdelt1, rsun_ref, rsun_obs, derx, dery)) 
+        {
+              	swKeys_ptr->mean_jz = DRMS_MISSING_FLOAT;
 		swKeys_ptr->us_i = DRMS_MISSING_FLOAT;
 	}
+       	printf("swKeys_ptr->mean_jz=%f\n",swKeys_ptr->mean_jz);
+
 	
-	printf("swKeys_ptr->mean_jz=%f\n",swKeys_ptr->mean_jz);
-	
-	if (computeAlpha(bz, dims, jz, &(swKeys_ptr->mean_alpha), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
+	if (computeAlpha(bz, dims, jz_smooth, &(swKeys_ptr->mean_alpha), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
 		swKeys_ptr->mean_alpha = DRMS_MISSING_FLOAT;
 	
-	if (computeHelicity(bz, dims, jz, &(swKeys_ptr->mean_ih), 
+	if (computeHelicity(bz, dims, jz_smooth, &(swKeys_ptr->mean_ih), 
 						&(swKeys_ptr->total_us_ih), &(swKeys_ptr->total_abs_ih), 
 						mask, bitmask, cdelt1, rsun_ref, rsun_obs)) {  
 		swKeys_ptr->mean_ih = DRMS_MISSING_FLOAT; 
@@ -1764,7 +1770,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 		swKeys_ptr->total_abs_ih = DRMS_MISSING_FLOAT;
 	}
 	
-	if (computeSumAbsPerPolarity(bz, jz, dims, &(swKeys_ptr->totaljz), 
+	if (computeSumAbsPerPolarity(bz, jz_smooth, dims, &(swKeys_ptr->totaljz),
 								 mask, bitmask, cdelt1, rsun_ref, rsun_obs))
 		swKeys_ptr->totaljz = DRMS_MISSING_FLOAT;
 	
@@ -1775,7 +1781,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 		swKeys_ptr->meanpot = DRMS_MISSING_FLOAT; // If fail, fill in NaN
 		swKeys_ptr->totpot = DRMS_MISSING_FLOAT;
 	}
-	
+	              
 	if (computeShearAngle(bx, by, bz, bpx, bpy, bpz, dims, 
 						  &(swKeys_ptr->meanshear_angle), &(swKeys_ptr->area_w_shear_gt_45), 
 						  &(swKeys_ptr->meanshear_angleh), &(swKeys_ptr->area_w_shear_gt_45h), 
@@ -1790,17 +1796,18 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	
 	drms_free_array(bitmaskArray);		// Dec 18 2012 Xudong
 	drms_free_array(maskArray);
-	drms_free_array(bxArray);
+	drms_free_array(bxArray);           
 	drms_free_array(byArray);
 	drms_free_array(bzArray);
 	
-	free(bh); free(bt); free(jz);
+	free(bh); free(bt); free(jz); free(jz_smooth);
 	free(bpx); free(bpy); free(bpz);
 	free(derx); free(dery);	
 	free(derx_bt); free(dery_bt);	
 	free(derx_bz); free(dery_bz);	
 	free(derx_bh); free(dery_bh);
 	
+        free_fresize(&convolution_array);
 }
 
 
@@ -1853,7 +1860,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec)
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
 	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.8 2013/01/07 22:03:47 xudong Exp $");
+	char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.9 2013/01/14 19:51:56 xudong Exp $");
 	//   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
 	status = drms_setkey_string(outRec, "CODEVER7", cvsinfo);
 	
