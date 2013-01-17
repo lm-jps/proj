@@ -90,7 +90,6 @@ else
             foreach my $seriesR (@rowarr)
             {
                 $series = $seriesR->[0];
-                $series = "aia.lev0_isp_0011";
                 if (length($exclude) > 0)
                 {
                     if ($series =~ /$exclude/)
@@ -111,16 +110,23 @@ else
                 }
                 
                 $stmnt = "SELECT recnum, sunum FROM $series WHERE recnum >= $firstrec AND recnum <= $lastrec";
+                
                 $rowstab = $dbh->selectall_arrayref($stmnt, undef);
                 $err = !(NoErr($rowstab, \$dbh, $stmnt));
-                
+                    
                 if (!$err)
                 {
                     @rowarrtab = @$rowstab;
                     
+                    if ($#rowarrtab >= 0)
+                    {
+                        # At least one output line - print a header.
+                        print "seriesname\trecnum\tsunum\n";
+                    }
+                    
                     foreach my $rec (@rowarrtab)
                     {
-                        print "$series $rec->[0] $rec->[1]\n";
+                        print "$series\t$rec->[0]\t$rec->[1]\n";
                     }
                 }
                 else
@@ -176,6 +182,10 @@ sub FindRecs
     my($found);     # If 1, then we found a record created during the crash window.
     my($fincrash);  # First record in the crash window.
     my($lincrash);  # Last record in the crash window.
+    my($frecF);     # Upper bound when b-searching for first record in crash window.
+    my($lrecF);     # Lower bound when b-searching for first record in crash window.
+    my($frecL);     # Lower bound when b-searching for last record in crash window.
+    my($lrecL);     # Upper bound when b-searching for last record in crash window.
     my($rows);
     my(@rowarr);
     my(@rv);
@@ -237,21 +247,20 @@ sub FindRecs
         {
             # The first record is in the crash window. This is the first record in the crash window.
             $state = "in";
-            $found = 1;
             $fincrash = $rec;
-            $lrec = $rec;
+            $frecL = $rec; # current rec in crash window; lower bound for b-search.
+            $lrecL = $lrec; # upper bound for b-search.
         }
         else
         {
             ($locL, $rec) = GetLoc($dbh, $stable, $lrec, 0, $min, $max, $bcrash, $ecrash);
             if ($locL eq "I")
-            {                
+            {
                 # The last record is in the crash window. This is the last record in the crash window.
                 $state = "in";
-                $found = 1;
                 $lincrash = $rec;
-                $frec = $rec; # Start with the max record, work backward looking for the first record
-                              # in the crash window.
+                $frecF = $rec; # current rec in crash window; upper bound for b-search.
+                $lrecF = $frec; # lower bound for b-search.                
             }
             else
             {
@@ -270,13 +279,10 @@ sub FindRecs
             }
         }
         
-        print "yaba\n";
-        
         if (!$err)
         {
             while(1)
             {
-                print "rec is $rec, state is $state, frec is $frec, lrec is $lrec\n";
                 if ($state eq "found" || $state eq "notfound")
                 {
                     last;
@@ -314,9 +320,13 @@ sub FindRecs
                         }
                         else
                         {
+                            # $frec is before the crash window, $lrec is after the crash window, and $rec
+                            # is in the crash window.
                             $state = "in";
-                            $frec = $rec; # $rec was created during crash window
-                            $lrec = $rec;
+                            $frecF = $rec;
+                            $lrecF = $frec;
+                            $frecL = $rec;
+                            $lrecL = $lrec;
                         }
                     }
                 }
@@ -326,34 +336,16 @@ sub FindRecs
                     
                     if (!defined($fincrash))
                     {
-                        $rec = $frec; # save previous rec
-                        $frec--;
-                        
-                        ($loc, $frec) = GetLoc($dbh, $stable, $frec, 1, $min, $max, $bcrash, $ecrash);
-                        if ($loc eq "B")
-                        {
-                            $fincrash = $rec; # use saved, previous rec
-                        }
-                        elsif ($frec == $min)
-                        {
-                            $fincrash = $min;
-                        }
+                        # $recL is inside crash window, $frecL is before crash window (or first record
+                        # in crash window)
+                        $fincrash = FindFirstRec($dbh, $stable, $min, $max, $bcrash, $ecrash, $frecF, $lrecF);
                     }
                     
                     if (!defined($lincrash))
-                    {
-                        $rec = $lrec; # save previous rec
-                        $lrec++;
-                        
-                        ($loc, $lrec) = GetLoc($dbh, $stable, $lrec, 0, $min, $max, $bcrash, $ecrash);
-                        if ($loc eq "A")
-                        {
-                            $lincrash = $rec; # use saved, previous rec
-                        }
-                        elsif ($lrec == $max)
-                        {
-                            $lincrash = $lrec;
-                        }
+                    {                        
+                        # $recF is inside crash window, $lrecF is after crash window (or last record in 
+                        # (crash window)
+                        $lincrash = FindLastRec($dbh, $stable, $min, $max, $bcrash, $ecrash, $frecL, $lrecL);
                     }                
                     
                     if (defined($fincrash) && defined($lincrash))
@@ -394,9 +386,13 @@ sub FindRecs
                         }
                         else
                         {
+                            # $frec is before the crash window, $lrec is after the crash window, and $rec
+                            # is in the crash window.
                             $state = "in";
-                            $frec = $rec; # $rec was created during crash window
-                            $lrec = $rec;
+                            $frecF = $rec;
+                            $lrecF = $frec;
+                            $frecL = $rec;
+                            $lrecL = $lrec;
                         }
                     }
                 }            
@@ -559,8 +555,6 @@ sub GetLoc
                 $starttime = $rowarr[0]->[0];
                 $endtime = $rowarr[0]->[1];
                 
-                print "recno is $recno, starttime is $starttime, endtime is $endtime\n";
-                
                 if (($endtime ge $bcrash && $endtime le $ecrash) ||
                     ($starttime ge $bcrash && $starttime le $ecrash) ||
                     ($starttime le $bcrash && $endtime ge $ecrash))
@@ -592,4 +586,185 @@ sub GetLoc
     }
     
     return @rv;
+}
+
+sub FindFirstRec
+{
+    my($dbh,
+       $stable,
+       $min,
+       $max,
+       $bcrash,
+       $ecrash,
+       $recin, # record inside crash window
+       $recout # record before crash window (or first record in crash window)
+      ) = @_;
+    
+    return BSearch($dbh, $stable, $min, $max, $bcrash, $ecrash, $recin, $recout);
+}
+
+sub FindLastRec
+{
+    my($dbh,
+       $stable,
+       $min,
+       $max,
+       $bcrash,
+       $ecrash,
+       $recin, # record inside crash window
+       $recout # record after crash window (or last record in crash window)
+      ) = @_;
+
+    return BSearch($dbh, $stable, $min, $max, $bcrash, $ecrash, $recin, $recout);    
+}
+
+# returns last record in crash window if $recin < $recout, the first record in the crash
+# window if $recin > $recout, and -1 if $recin == $recout.
+sub BSearch
+{
+    my($dbh,
+       $stable,
+       $min,
+       $max,
+       $bcrash,
+       $ecrash,
+       $recin,
+       $recout
+      ) = @_;
+    
+    my($rv);
+    my($down);
+    my($loc);
+    my($rec);
+    
+    if ($recin == $recout)
+    {
+        $rv = -1;
+    }
+    elsif ($recin < $recout)
+    {
+        $down = 0;
+        
+        ($loc, $recout) = GetLoc($dbh, $stable, $recout, 0, $min, $max, $bcrash, $ecrash);
+        
+        if ($loc eq "I")
+        {
+            $rv = -1; # error
+        }
+        else
+        {
+            ($loc, $recin) = GetLoc($dbh, $stable, $recin, 0, $min, $max, $bcrash, $ecrash);
+            
+            if ($loc ne "I")
+            {
+                $rv = -1; # error
+            }
+        }
+    }
+    else
+    {
+        $down = 1;
+        
+        ($loc, $recout) = GetLoc($dbh, $stable, $recout, 1, $min, $max, $bcrash, $ecrash);
+        
+        if ($loc eq "I")
+        {
+            $rv = -1; # error
+        }
+        else
+        {
+            ($loc, $recin) = GetLoc($dbh, $stable, $recin, 1, $min, $max, $bcrash, $ecrash);
+            
+            if ($loc ne "I")
+            {
+                $rv = -1; # error
+            }
+        }
+    }
+
+    while (!defined($rv))
+    {
+        if ($down)
+        {
+            $rec = $recin; # save current rec
+            $recin = $recout + ($recin - $recout) / 2; # new rec
+            
+            ($loc, $recin) = GetLoc($dbh, $stable, $recin, 1, $min, $max, $bcrash, $ecrash);
+            
+            if ($recin == $recout)
+            {
+                # We were not able to find a NEW record between $recin and $recout. Try searching up
+                # from $recin toward $rec (the original $recin).
+                $recin = $recout + ($rec - $recout) / 2; # new rec
+                ($loc, $recin) = GetLoc($dbh, $stable, $recin, 0, $min, $max, $bcrash, $ecrash);
+                
+                if ($recin == $rec)
+                {
+                    # No records between $recin and $rec, so $rec is the last record in the crash window.
+                    $rv = $rec;
+                }
+            }
+            
+            if (!defined($rv))
+            {
+                # We found a record between $recin and $recout, check its location.
+                if ($loc eq "B")
+                {
+                    $recout = $recin;
+                    $recin = $rec;
+                }
+                elsif ($loc ne "I")
+                {
+                    # error
+                    print STDERR "Something went wrong 1.\n";
+                    $rv = -1;
+                }
+                
+                # If $recin is inside the crash window, then we stay in this loop, using the new $recin as the 
+                # upper bound for the next iteration of b-search.
+            }
+        }
+        else
+        {
+            $rec = $recin; # save current rec
+            $recin = $recin + ($recout - $recin) / 2; # new rec
+            
+            ($loc, $recin) = GetLoc($dbh, $stable, $recin, 0, $min, $max, $bcrash, $ecrash);
+            
+            if ($recin == $recout)
+            {
+                # We were not able to find a NEW record between $recin and $recout. Try searching down
+                # from $recin toward $rec (the original $recin).
+                $recin = $rec + ($recout - $rec) / 2; # new rec
+                ($loc, $recin) = GetLoc($dbh, $stable, $recin, 1, $min, $max, $bcrash, $ecrash);
+                
+                if ($recin == $rec)
+                {
+                    # No records between $recin and $rec, so $rec is the last record in the crash window.
+                    $rv = $rec;
+                }
+            }
+            
+            if (!defined($rv))
+            {
+                if ($loc eq "A")
+                {
+                    $recout = $recin;
+                    $recin = $rec;
+                }
+                elsif ($loc ne "I")
+                {
+                    # error
+                    print STDERR "Something went wrong 2.\n";
+                    $rv = -1;
+                }
+                
+                # If $recin is inside the crash window, then we stay in this loop, using the new $recin as the 
+                # lower bound for the next iteration of b-search.
+            }
+        }
+    }
+    
+    
+    return $rv;
 }
