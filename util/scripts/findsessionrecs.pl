@@ -90,6 +90,7 @@ else
             foreach my $seriesR (@rowarr)
             {
                 $series = $seriesR->[0];
+                $series = "aia.lev1_vis_1h";
                 if (length($exclude) > 0)
                 {
                     if ($series =~ /$exclude/)
@@ -684,6 +685,8 @@ sub BSearch
 
     while (!defined($rv))
     {
+        print "recin = $recin, recout = $recout\n";
+        
         if ($down)
         {
             $rec = $recin; # save current rec
