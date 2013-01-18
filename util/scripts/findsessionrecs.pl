@@ -301,7 +301,6 @@ sub FindRecs
         {
             while(1)
             {
-                print "frec $frec, lrec $lrec\n";
                 if ($state eq "found" || $state eq "notfound")
                 {
                     last;
@@ -312,7 +311,7 @@ sub FindRecs
                     $frec = $rec;
                     $rec = $frec + ($lrec - $frec) / 2;
                     
-                    ($loc, $rec) = GetLoc($dbh, $stable, $rec, 1, $min, $max, $bcrash, $ecrash);
+                    ($loc, $rec) = GetLoc($dbh, $stable, $rec, 1, $frec, $lrec, $bcrash, $ecrash);
                     print "here4\n";
                     
                     if ($rec == $frec)
@@ -321,18 +320,13 @@ sub FindRecs
                         # recnum. Try finding a new record by searching in the opposite direction
                         # (toward $max).
                         $rec = $frec + ($lrec - $frec) / 2;
-                        ($loc, $rec) = GetLoc($dbh, $stable, $rec, 0, $min, $max, $bcrash, $ecrash);
+                        ($loc, $rec) = GetLoc($dbh, $stable, $rec, 0, $frec, $lrec, $bcrash, $ecrash);
                     }
                                         print "here3\n";
                     if ($rec == $lrec)
                     {
                         # No records between $frec and $lrec, and we know the $frec is before
                         # the crash window, and $lrec is after. So, there are no records in the crash window.
-                        $state = "notfound";
-                    }
-                    elsif ($rec == $max && $loc eq "B")
-                    {
-                        # There is no record in this series that was created during the crash window.
                         $state = "notfound";
                     }
                     else
@@ -385,7 +379,7 @@ sub FindRecs
                     $lrec = $rec;
                     $rec = $frec + ($lrec - $frec) / 2;
                     
-                    ($loc, $rec) = GetLoc($dbh, $stable, $rec, 0, $min, $max, $bcrash, $ecrash);
+                    ($loc, $rec) = GetLoc($dbh, $stable, $rec, 0, $frec, $lrec, $bcrash, $ecrash);
                     
                     if ($rec == $lrec)
                     {
@@ -393,18 +387,13 @@ sub FindRecs
                         # recnum. Try finding a new record by searching in the opposite direction
                         # (toward $min).
                         $rec = $frec + ($lrec - $frec) / 2;
-                        ($loc, $rec) = GetLoc($dbh, $stable, $rec, 1, $min, $max, $bcrash, $ecrash);
+                        ($loc, $rec) = GetLoc($dbh, $stable, $rec, 1, $frec, $lrec, $bcrash, $ecrash);
                     }
                     
                     if ($rec == $frec)
                     {
                         # No records between $frec and $lrec, and we know the $frec is before
                         # the crash window, and $lrec is after. So, there are no records in the crash window.
-                        $state = "notfound";
-                    }
-                    if ($rec == $min && $loc == "A")
-                    {
-                        # There is no record in this series that was created during the crash window.
                         $state = "notfound";
                     }
                     else
@@ -538,9 +527,6 @@ sub GetLoc
         
         while (1)
         {
-            
-            print "window: $wincls, $winhaf, $winfar\n"; ;
-            
             # Check close window
             @win = CheckWindow($dbh, $stable, $wincls, $winhaf, $down);
             
@@ -559,7 +545,6 @@ sub GetLoc
             
             if ($#win < 0)
             {
-                print "next2\n";
                 # No records outside of $recno - done
                 @rv = ("E", -1);
                 $err = 1;
@@ -567,8 +552,6 @@ sub GetLoc
             }
             elsif ($#win == 0)
             {
-                print "next3\n";
-                print "hereB, $win[0]->[0], $win[0]->[1], $win[0]->[2]\n"; 
                 # One record outside of $recno - done
                 $recno = $win[0]->[0];
                 $sessionid = $win[0]->[1];
@@ -577,9 +560,6 @@ sub GetLoc
             }
             else
             {
-                print "next4 " . scalar(@win) . "\n";
-                
-                
                 # More than one record in the window - cut it in half and go again.
                 # But if there are two adjacent records in the window, then 
                 # make $winhaf = $wincls.
