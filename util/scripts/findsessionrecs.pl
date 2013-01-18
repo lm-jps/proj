@@ -90,7 +90,9 @@ else
             foreach my $seriesR (@rowarr)
             {
                 $series = $seriesR->[0];
-                $series = "aia.lev1_vis_1h";
+                #$series = "aia.lev1_vis_1h";
+                #$series = "aia_test.lev1p5";
+                $series = "su_arta.fds";
                 if (length($exclude) > 0)
                 {
                     if ($series =~ /$exclude/)
@@ -134,6 +136,8 @@ else
                 {
                     $rv = kRetDbQuery;
                 }
+                
+                exit;
             }
         }
         else
@@ -180,6 +184,8 @@ sub FindRecs
     my($locF);      # location of record with minimum recnum.
     my($locL);      # location of record with maximum recnum.
     my($rec);       # Current rec.
+    my($recN);
+    my($recX);
     my($found);     # If 1, then we found a record created during the crash window.
     my($fincrash);  # First record in the crash window.
     my($lincrash);  # Last record in the crash window.
@@ -243,24 +249,35 @@ sub FindRecs
         $lrec = $max;
         
         # The first record may actually not be in the before state, but in the in state or in the after state
-        ($locF, $rec) = GetLoc($dbh, $stable, $frec, 1, $min, $max, $bcrash, $ecrash);
+        ($locF, $recN) = GetLoc($dbh, $stable, $frec, 1, $min, $max, $bcrash, $ecrash);
+        ($locL, $recX) = GetLoc($dbh, $stable, $lrec, 0, $min, $max, $bcrash, $ecrash);
+        
         if ($locF eq "I")
         {
-            # The first record is in the crash window. This is the first record in the crash window.
-            $state = "in";
-            $fincrash = $rec;
-            $frecL = $rec; # current rec in crash window; lower bound for b-search.
-            $lrecL = $lrec; # upper bound for b-search.
+            if ($locL eq "I")
+            {
+                # Both the min and max of the series are in the crash window.
+                $fincrash = $frec;
+                $lincrash = $lrec;
+                $state = "found";
+            }
+            else
+            {
+                # The first record is in the crash window. This is the first record in the crash window.
+                $state = "in";
+                $fincrash = $recN;
+                $frecL = $recN; # current rec in crash window; lower bound for b-search.
+                $lrecL = $lrec; # upper bound for b-search.
+            }
         }
         else
         {
-            ($locL, $rec) = GetLoc($dbh, $stable, $lrec, 0, $min, $max, $bcrash, $ecrash);
             if ($locL eq "I")
             {
                 # The last record is in the crash window. This is the last record in the crash window.
                 $state = "in";
-                $lincrash = $rec;
-                $frecF = $rec; # current rec in crash window; upper bound for b-search.
+                $lincrash = $recX;
+                $frecF = $recX; # current rec in crash window; upper bound for b-search.
                 $lrecF = $frec; # lower bound for b-search.                
             }
             else
@@ -284,16 +301,19 @@ sub FindRecs
         {
             while(1)
             {
+                print "frec $frec, lrec $lrec\n";
                 if ($state eq "found" || $state eq "notfound")
                 {
                     last;
                 }
                 elsif ($state eq "before")
-                {    
+                {
+                    print "here2\n";
                     $frec = $rec;
                     $rec = $frec + ($lrec - $frec) / 2;
                     
                     ($loc, $rec) = GetLoc($dbh, $stable, $rec, 1, $min, $max, $bcrash, $ecrash);
+                    print "here4\n";
                     
                     if ($rec == $frec)
                     {
@@ -303,8 +323,14 @@ sub FindRecs
                         $rec = $frec + ($lrec - $frec) / 2;
                         ($loc, $rec) = GetLoc($dbh, $stable, $rec, 0, $min, $max, $bcrash, $ecrash);
                     }
-                    
-                    if ($rec == $max && $loc eq "B")
+                                        print "here3\n";
+                    if ($rec == $lrec)
+                    {
+                        # No records between $frec and $lrec, and we know the $frec is before
+                        # the crash window, and $lrec is after. So, there are no records in the crash window.
+                        $state = "notfound";
+                    }
+                    elsif ($rec == $max && $loc eq "B")
                     {
                         # There is no record in this series that was created during the crash window.
                         $state = "notfound";
@@ -370,6 +396,12 @@ sub FindRecs
                         ($loc, $rec) = GetLoc($dbh, $stable, $rec, 1, $min, $max, $bcrash, $ecrash);
                     }
                     
+                    if ($rec == $frec)
+                    {
+                        # No records between $frec and $lrec, and we know the $frec is before
+                        # the crash window, and $lrec is after. So, there are no records in the crash window.
+                        $state = "notfound";
+                    }
                     if ($rec == $min && $loc == "A")
                     {
                         # There is no record in this series that was created during the crash window.
@@ -425,8 +457,13 @@ sub FindRecs
 # after the crash window.
 
 # The record-finding algorithm is currently not efficient - there is a linear search for
-# the next valid record number. A b-search could be performed instead.
-
+# the next valid record number. A b-search could be performed instead. The way this would work
+# is that you'd do a query to see if there are ANY records between $recno and $min
+# (if $down == 1), and if so, cut this window in to two equal-size subwindows. Then check the 
+# window closest to $recno. If there are records there, then cut that window in half. If there are 
+# no records in the top-level half window between $recno and ($recno - $min) / 2, then check
+# the half window between ($recno - $min) / 2 and $min. Keep cutting in half till you get
+# a window with one record in it.
 sub GetLoc
 {
     my($dbh, 
@@ -445,6 +482,10 @@ sub GetLoc
     my(@rowarr);
     my($sessionns);
     my($sessionid);
+    my($wincls);
+    my($winfar);
+    my($winhaf);
+    my(@win);
     my(@rv);
     
     # $rec might not be a valid recnum - there was an arithmetic manipulation performed on it below.
@@ -475,62 +516,98 @@ sub GetLoc
     
     $err = 0;
     
-    while (!$err)
+    # First, check to see if $recno is already a valid record. If so, we can avoid b-searching through a lot of
+    # records.
+    @win = CheckWindow($dbh, $stable, $recno, $recno, $down);
+
+    if ($#win < 0)
     {
-        $stmnt = "SELECT sessionid, sessionns FROM $stable WHERE recnum = $recno";
-        $rows = $dbh->selectall_arrayref($stmnt, undef);
-        $err = !(NoErr($rows, \$dbh, $stmnt));
-        
-        if ($err)
+        # Create the initial b-search windows.
+        if ($down)
         {
-            last;
-        }
-        
-        @rowarr = @$rows;
-        
-        if ($#rowarr < 0)
-        {
-            # no such record, try again.
-            if ($down)
-            {
-                if ($recno > $min)
-                {
-                    $recno--;
-                }
-                else
-                {
-                    # There was no record in the series with a recnum smaller than the invalid $recno provided.
-                    @rv = ("E", -1);
-                    $err = 1;
-                }
-            }
-            else
-            {
-                if ($recno < $max)
-                {
-                    $recno++;
-                }
-                else
-                {
-                    # There was no record in the series greater than the invalid $recno provided.
-                    @rv = ("E", -1);
-                    $err = 1;
-                }
-            }
-        }
-        elsif ($#rowarr == 0)
-        {
-            $sessionid = $rowarr[0]->[0];
-            $sessionns = $rowarr[0]->[1];
-            last;
+            $winfar = $min;
+            $wincls = $recno;
+            $winhaf = floor($min + ($recno - $min) / 2);
         }
         else
         {
-            print STDERR "This cannot happen!! There is more than more record with the same recnum.\n";
-            $err = 1;
-            last;
+            $wincls = $recno;
+            $winfar = $max;
+            $winhaf = ceil($recno + ($max - $recno) / 2);
         }
-    } # while loop
+        
+        while (1)
+        {
+            
+            print "window: $wincls, $winhaf, $winfar\n"; ;
+            
+            # Check close window
+            @win = CheckWindow($dbh, $stable, $wincls, $winhaf, $down);
+            
+            if ($#win < 0)
+            {
+                # Check far window
+                @win = CheckWindow($dbh, $stable, $down ? $winhaf - 1 : $winhaf + 1, $winfar, $down);
+                
+                # in case we need to cut this window in half
+                $wincls = $winhaf;
+            }
+            else
+            {
+                $winfar = $winhaf;
+            }
+            
+            if ($#win < 0)
+            {
+                print "next2\n";
+                # No records outside of $recno - done
+                @rv = ("E", -1);
+                $err = 1;
+                last;
+            }
+            elsif ($#win == 0)
+            {
+                print "next3\n";
+                print "hereB, $win[0]->[0], $win[0]->[1], $win[0]->[2]\n"; 
+                # One record outside of $recno - done
+                $recno = $win[0]->[0];
+                $sessionid = $win[0]->[1];
+                $sessionns = $win[0]->[2];
+                last;
+            }
+            else
+            {
+                print "next4 " . scalar(@win) . "\n";
+                
+                
+                # More than one record in the window - cut it in half and go again.
+                # But if there are two adjacent records in the window, then 
+                # make $winhaf = $wincls.
+                #if ($#win == 1 && abs($win[0]->[0] - $win[0]->[0]) == 1)
+                if (abs($wincls - $winfar) == 1)
+                {
+                    $winhaf = $wincls;
+                }
+                else
+                {
+                    if ($down)
+                    {
+                        $winhaf = floor($winfar + ($wincls - $winfar) / 2);
+                    }
+                    else
+                    {
+                        $winhaf = ceil($wincls + ($winfar - $wincls) / 2);
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        # Found $recno in the series. Set $sessionid and $sessionns.
+        $sessionid = $win[0]->[1];
+        $sessionns = $win[0]->[2];
+    }
     
     if (!$err)
     {
@@ -583,6 +660,63 @@ sub GetLoc
                     }
                 }
             }
+        }
+    }
+    
+    return @rv;
+}
+
+sub CheckWindow
+{
+    my($dbh,
+       $stable,
+       $beg,
+       $end,
+       $down) = @_;
+    
+    my($stmnt);
+    my($rows);
+    my(@rowarr);
+    my($err);
+    my(@rv);
+
+    if ($down)
+    {
+        if ($beg < $end)
+        {
+            @rv = [];
+        }
+        else
+        {
+            $stmnt = "SELECT recnum, sessionid, sessionns from $stable WHERE recnum <= $beg AND recnum >= $end";
+        }
+    }
+    else
+    {
+        if ($beg > $end)
+        {
+            @rv = [];
+        }
+        else
+        {
+            $stmnt = "SELECT recnum, sessionid, sessionns from $stable WHERE recnum >= $beg AND recnum <= $end";
+        }
+    }
+
+    $rows = $dbh->selectall_arrayref($stmnt, undef);
+    $err = !(NoErr($rows, \$dbh, $stmnt));
+    
+    if ($err)
+    {
+        @rv = [];
+    }
+    else
+    {   
+        @rowarr = @$rows;
+        
+        foreach my $row (@rowarr)
+        {
+            push(@rv, [$row->[0], $row->[1], $row->[2]]);
         }
     }
     
@@ -685,8 +819,6 @@ sub BSearch
 
     while (!defined($rv))
     {
-        print "recin = $recin, recout = $recout\n";
-        
         if ($down)
         {
             $rec = $recin; # save current rec
