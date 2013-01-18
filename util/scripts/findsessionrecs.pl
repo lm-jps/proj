@@ -90,9 +90,6 @@ else
             foreach my $seriesR (@rowarr)
             {
                 $series = $seriesR->[0];
-                #$series = "aia.lev1_vis_1h";
-                #$series = "aia_test.lev1p5";
-                $series = "su_arta.fds";
                 if (length($exclude) > 0)
                 {
                     if ($series =~ /$exclude/)
@@ -136,8 +133,6 @@ else
                 {
                     $rv = kRetDbQuery;
                 }
-                
-                exit;
             }
         }
         else
@@ -307,12 +302,10 @@ sub FindRecs
                 }
                 elsif ($state eq "before")
                 {
-                    print "here2\n";
                     $frec = $rec;
                     $rec = $frec + ($lrec - $frec) / 2;
                     
                     ($loc, $rec) = GetLoc($dbh, $stable, $rec, 1, $frec, $lrec, $bcrash, $ecrash);
-                    print "here4\n";
                     
                     if ($rec == $frec)
                     {
@@ -322,7 +315,7 @@ sub FindRecs
                         $rec = $frec + ($lrec - $frec) / 2;
                         ($loc, $rec) = GetLoc($dbh, $stable, $rec, 0, $frec, $lrec, $bcrash, $ecrash);
                     }
-                                        print "here3\n";
+                    
                     if ($rec == $lrec)
                     {
                         # No records between $frec and $lrec, and we know the $frec is before
@@ -359,14 +352,14 @@ sub FindRecs
                     {
                         # $recL is inside crash window, $frecL is before crash window (or first record
                         # in crash window)
-                        $fincrash = FindFirstRec($dbh, $stable, $min, $max, $bcrash, $ecrash, $frecF, $lrecF);
+                        $fincrash = FindFirstRec($dbh, $stable, $frec, $lrec, $bcrash, $ecrash, $frecF, $lrecF);
                     }
                     
                     if (!defined($lincrash))
                     {                        
                         # $recF is inside crash window, $lrecF is after crash window (or last record in 
                         # (crash window)
-                        $lincrash = FindLastRec($dbh, $stable, $min, $max, $bcrash, $ecrash, $frecL, $lrecL);
+                        $lincrash = FindLastRec($dbh, $stable, $frec, $lrec, $bcrash, $ecrash, $frecL, $lrecL);
                     }                
                     
                     if (defined($fincrash) && defined($lincrash))
