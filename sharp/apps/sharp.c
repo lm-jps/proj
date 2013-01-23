@@ -22,6 +22,7 @@
  *		v0.2	Sep 04 2012
  *		v0.3	Dec 18 2012	
  *		v0.4	Jan 02 2013
+ *		v0.5	Jam 23 2012
  *
  *	Notes:
  *		v0.0
@@ -39,7 +40,8 @@
  *		Fixed memory leakage of 0.15G per rec; denoted with "Dec 18"
  *		v0.4
  *		Took out convert_inplace(). Was causing all the images to be int
- 
+ *		v0.5
+ *		Corrected ephemeris keywords, added argument mInfo for setKeys()
  *
  *	Example:
  *	sharp "mharp=hmi.Mharp_720s[1404][2012.02.20_10:00]" \
@@ -156,6 +158,10 @@ enum projection {
 	lambert
 };
 
+// WSC code
+char *wcsCode[] = {"CAR", "CAS", "MER", "CEA", "GLS", "TAN", "ARC", "STG",
+	"SIN", "ZEA"};
+
 // Ephemeris
 struct ephemeris {
 	double disk_lonc, disk_latc;
@@ -254,7 +260,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr);
 
 /* Set all keywords, no error checking for now */
-void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec);
+void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo);
 
 // ===================
 
@@ -656,7 +662,7 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	DRMS_Link_t *bHarpLink = hcon_lookup_lower(&sharpRec->links, "BHARP");
 	if (bHarpLink) drms_link_set("BHARP", sharpRec, bharpRec);
 	
-	setKeys(sharpRec, bharpRec);		// Set all other keywords
+	setKeys(sharpRec, bharpRec, &mInfo);		// Set all other keywords
 	drms_copykey(sharpRec, mharpRec, "QUALITY");		// copied from los records
 	
 	// Space weather
@@ -1540,7 +1546,7 @@ int createCutRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	if (bHarpLink) drms_link_set("BHARP", sharpRec, bharpRec);
 	
 	setSWIndex(sharpRec, swKeys_ptr);	// Set space weather indices
-	setKeys(sharpRec, bharpRec);		// Set all other keywords
+	setKeys(sharpRec, bharpRec, NULL);		// Set all other keywords, NULL specifies cutout
 	
 	// Stats
 	
@@ -1842,25 +1848,62 @@ void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
  *
  */
 
-void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec)
+void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 {
 	copy_me_keys(inRec, outRec);
 	copy_patch_keys(inRec, outRec);
 	copy_geo_keys(inRec, outRec);
 	copy_ambig_keys(inRec, outRec);
 	
+	int status = 0;
+	
+	// Change a few geometry keywords for CEA records
+	if (mInfo != NULL) {
+	
+	  drms_setkey_float(outRec, "CRPIX1", mInfo->ncol/2. + 0.5);
+		drms_setkey_float(outRec, "CRPIX2", mInfo->nrow/2. + 0.5);
+		
+		drms_setkey_float(outRec, "CRVAL1", mInfo->xc);
+		drms_setkey_float(outRec, "CRVAL2", mInfo->yc);
+		drms_setkey_float(outRec, "CDELT1", mInfo->xscale);
+		drms_setkey_float(outRec, "CDELT2", mInfo->yscale);
+		drms_setkey_string(outRec, "CUNIT1", "degree");
+		drms_setkey_string(outRec, "CUNIT2", "degree");
+		
+		char key[64];
+		snprintf (key, 64, "CRLN-%s", wcsCode[(int) mInfo->proj]);
+		drms_setkey_string(outRec, "CTYPE1", key);
+		snprintf (key, 64, "CRLT-%s", wcsCode[(int) mInfo->proj]);
+		drms_setkey_string(outRec, "CTYPE2", key);
+		drms_setkey_float(outRec, "CROTA2", 0.0);
+		
+	} else {
+	
+	  float disk_xc = drms_getkey_float(inRec, "IMCRPIX1", &status);
+	  float disk_yc = drms_getkey_float(inRec, "IMCRPIX2", &status);
+	  float x_ll = drms_getkey_float(inRec, "CRPIX1", &status);
+	  float y_ll = drms_getkey_float(inRec, "CRPIX2", &status);
+	  // Defined as disk center's pixel address wrt lower-left of cutout
+	  drms_setkey_float(outRec, "CRPIX1", disk_xc - x_ll + 1.);
+		drms_setkey_float(outRec, "CRPIX2", disk_yc - y_ll + 1.);
+		// Always 0.
+		drms_setkey_float(outRec, "CRVAL1", 0);
+		drms_setkey_float(outRec, "CRVAL2", 0);
+		
+	}
+	
 	char timebuf[1024];
 	float UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
 	double val;
-	int status = DRMS_SUCCESS;
-	
+	status = 0;
+		
 	val = drms_getkey_double(inRec, "DATE",&status); 
 	drms_setkey_double(outRec, "DATE_B", val);
 	sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
 	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.9 2013/01/14 19:51:56 xudong Exp $");
+	char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/sharp/apps/sharp.c,v 1.10 2013/01/23 21:48:26 xudong Exp $");
 	//   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
 	status = drms_setkey_string(outRec, "CODEVER7", cvsinfo);
 	
