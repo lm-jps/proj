@@ -50,12 +50,16 @@
 
 /* Identify packet names */
 #define HK_HMI_PKT_NAME_ISP        "isp"
+#define HK_HSB_IRIS_PKT_NAME_ISP   "isp"
 #define HK_HMI_PKT_NAME_SEQ        "seq"
 #define HK_HMI_PKT_NAME_OBT        "obt"
 #define HK_AIA_PKT_NAME_ISP        "isp"
 #define HK_AIA_PKT_NAME_SEQ        "seq"
 #define HK_AIA_PKT_NAME_OBT        "obt"
 #define HK_SDO_PKT_NAME_ASD        "asd"
+
+/* IRIS ISP Dataset name. (Now defined in SOURCE_ENV_FOR_HK_DECODE source file) */
+//#define IRIS_ISP_DS_NAME           "iris_ground.iris_isp_001"
 
 /* other parameters */
 #define HK_SECONDS_PER_DAY        86400

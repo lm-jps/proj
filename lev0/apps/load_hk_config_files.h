@@ -52,6 +52,7 @@
 #define HK_LR_AIA_SEQ           46
 #define HK_LR_AIA_OBT           50
 #define HK_LR_SDO_ASD           129
+#define HK_HSB_IRIS_ISP		56
 #define HK_HSB_HMI_ISP_1        445
 #define HK_HSB_HMI_ISP_2        475
 #define HK_HSB_HMI_SEQ_1        451
@@ -169,7 +170,7 @@ typedef struct APID_HKPFD_Files_struct
 typedef  struct GTCIDS_Version_Number_struct   
 {
   char file_version_number[MAX_CHAR_VERSION_NUMBER];
-  char hmi_id_version_number[MAX_CHAR_VERSION_NUMBER];
+  char hmi_id_version_number[MAX_CHAR_VERSION_NUMBER]; /* use for IRIS */
   char aia_id_version_number[MAX_CHAR_VERSION_NUMBER];/*Values in GTCIDS map file */
   char ker_id_version_number[MAX_CHAR_VERSION_NUMBER];/*Values in GTCIDS map file */
   char change_date[MAX_SIZE_CHANGE_DATE];
