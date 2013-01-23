@@ -39,6 +39,7 @@
 #define AIAKER_ID_TYPE          "AIAKER"
 #define HMI_ID_TYPE             "HMI"
 #define AIA_ID_TYPE             "AIA"
+#define IRIS_ID_TYPE             "IRIS"
 #define OTHER_ID_TYPE           "SSIM"
 #define MAX_PACKET_ID_TYPE      100
 #define HK_MAX_TLM_NAME         200
