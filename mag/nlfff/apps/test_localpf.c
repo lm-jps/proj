@@ -340,6 +340,7 @@ printf("preproc"); fflush(stdout);
     	drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
         drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
         drms_setkey_double(outRec, "ENERGY", energy);
+        drms_copykey(outRec, inRec, "BIN");
         if (test) {
             drms_copykey(outRec, inRec, "NUM");
         } else {
