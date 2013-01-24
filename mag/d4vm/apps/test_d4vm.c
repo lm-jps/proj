@@ -25,7 +25,7 @@
  *			4. Will have to make sure the stack size is big enough (at least ~70MB)
  *			run "limit s u" to set unlimited
  *			v1.1
- *			Undated according to Jacob's new code
+ *			Updated according to Jacob's new code
  *
  *
  * Example:
@@ -86,12 +86,12 @@ char *module_name = "test_d4vm";	/* Module name */
 
 ModuleArgs_t module_args[] =
 {
-    {ARG_STRING, "in", "su_xudong.d4vmin", "Input data series."},
-    {ARG_STRING, "out", "su_xudong.d4vmout",  "Output data series."},
-    {ARG_INT, "ksz0", "23", "Width of window for convolution, must be odd."},
-    {ARG_INT, "ksz1", "23", "Height of window for convolution, must be odd."},
-    {ARG_DOUBLE, "dx", "348.36", "X scaling."},
-    {ARG_DOUBLE, "dy", "348.36", "Y scaling."},
+    {ARG_STRING, "in", "hmi.sharp_cea_720s", "Input data series."},
+    {ARG_STRING, "out", "su_xudong.d4vm",  "Output data series."},
+    {ARG_INT, "ksz0", "19", "Width of window for convolution, must be odd."},
+    {ARG_INT, "ksz1", "19", "Height of window for convolution, must be odd."},
+    {ARG_DOUBLE, "dx", "364.43", "X scaling."},
+    {ARG_DOUBLE, "dy", "364.43", "Y scaling."},
     {ARG_DOUBLE, "threshold", "0.", "Threshold for resolving aperture problem."},
     {ARG_DOUBLE, "cadence", "240.0", "Minimum stride between two records."},
     {ARG_INT, "VERB", "2", "Level of verbosity: 0=errors/warnings; 1=status; 2=all"},
@@ -112,8 +112,9 @@ int DoIt(void)
     DRMS_Segment_t *outSegV, *outSegDVDx, *outSegDVDy;
     DRMS_Array_t *inArrayX0, *inArrayY0, *inArrayZ0, *inArrayX1, *inArrayY1, *inArrayZ1;
     DRMS_Array_t *outArrayV, *outArrayDVDx, *outArrayDVDy;
-    float *inData0, *inData1, *outDataV, *outDataDVDx, *outDataDVDy;
-
+    float *outDataV, *outDataDVDx, *outDataDVDy;
+    int harpnum;
+    
     float *Bx0, *Bx1, *By0, *By1, *Bz0, *Bz1;				// ancillary
     float *Bx, *Bxx, *Bxy, *By, *Byx, *Byy, *Bz, *Bzx, *Bzy, *Bzt;	// processed
     float *k_th, *k_x, *k_y, *k_xx, *k_yy, *k_xy;			// convolution kernels
@@ -122,8 +123,8 @@ int DoIt(void)
     float *DVxDx, *DVyDx, *DVzDx;
     float *DVxDy, *DVyDy, *DVzDy;
 
-    char *inchecklist[] = {"T_OBS"};		// For now
-    char *outchecklist[] = {"T_OBS", "T_NEXT", "K0", "K1", "THRESH"};
+    char *inchecklist[] = {"T_REC","T_OBS","HARPNUM"};		// For now
+    char *outchecklist[] = {"T_REC", "T_REC1", "K0", "K1", "THRESH","HARPNUM"};
     DRMS_Record_t *inRec_tmp, *outRec_tmp;
     DRMS_Keyword_t *inkeytest, *outkeytest;
 
@@ -167,6 +168,7 @@ int DoIt(void)
     if (inRS->n < 2) DIE("At least 2 records are needed");
     nrecs = inRS->n;
 //printf("nrecs=%d\n", nrecs);
+
     /* Check for essential input keywords */
     inRec_tmp = inRS->records[0];
     for (itest = 0; itest < ARRLENGTH(inchecklist); itest++) {
@@ -191,23 +193,19 @@ int DoIt(void)
     
     /* Read in the first record and save it */
     inRec0 = inRS->records[0];
-    inSeg0 = drms_segment_lookupnum(inRec0, 0);
-    inArrayX0 = drms_segment_read(inSeg0, DRMS_TYPE_FLOAT, &status);
-    if (status) {
-        drms_free_array(inArrayX0);
-        drms_close_records(inRS, DRMS_FREE_RECORD);
-        DIE("No data file found for record 0, stop");
-    }
     t0 = drms_getkey_time(inRec0, "T_OBS", NULL);	// NEED TO CHECK!!!!!
-//printf("t0=%f\n", t0);
-//printf("status=%d\n", status);
+    harpnum = drms_getkey_int(inRec0, "HARPNUM", NULL);
+    
+    inSeg0 = drms_segment_lookup(inRec0, "Bp");
+    inArrayX0 = drms_segment_read(inSeg0, DRMS_TYPE_FLOAT, &status);
     Bx0 = (float *)inArrayX0->data;
     nx = inArrayX0->axis[0]; ny = inArrayX0->axis[1]; nxny = nx * ny;
     outDims[0] = nx; outDims[1] = ny;
-    inSeg0 = drms_segment_lookupnum(inRec0, 1);
+    inSeg0 = drms_segment_lookup(inRec0, "Bt");
     inArrayY0 = drms_segment_read(inSeg0, DRMS_TYPE_FLOAT, &status);
     By0 = (float *)inArrayY0->data;
-    inSeg0 = drms_segment_lookupnum(inRec0, 2);
+    for (int ii = 0; ii < nxny; ii++) By0[ii] *= -1.;
+    inSeg0 = drms_segment_lookup(inRec0, "Br");
     inArrayZ0 = drms_segment_read(inSeg0, DRMS_TYPE_FLOAT, &status);
     Bz0 = (float *)inArrayZ0->data;
 
@@ -216,29 +214,31 @@ int DoIt(void)
     {
         /* Input record and data */
         inRec1 = inRS->records[irec];
-        inSeg1 = drms_segment_lookupnum(inRec1, 0);	// Single segment
-        inArrayX1 = drms_segment_read(inSeg1, DRMS_TYPE_FLOAT, &status);
-        if (status) {
-            printf("No data file found for record %d, skipping it. \n", irec);
-            drms_free_array(inArrayX1);
-            continue;
-        }
         t1 = drms_getkey_time(inRec1, "T_OBS", NULL);	// NEED TO CHECK!!!!!
-//printf("t=%f\n", t1);
-//printf("dt=%f\n",t1-t0);
         dt = t1 - t0;
         if (dt < cadence) {
             printf("Cadence higher then limit, skipping current record. \n");
             drms_free_array(inArrayX1);
             continue;
         }
+        if (harpnum != drms_getkey_time(inRec1, "HARPNUM", NULL)) {
+            printf("HARP number incorrect, skipping current record. \n");
+            drms_free_array(inArrayX1);
+            continue;
+        }
+
+        inSeg1 = drms_segment_lookup(inRec1, "Bp");	// Single segment
+        inArrayX1 = drms_segment_read(inSeg1, DRMS_TYPE_FLOAT, &status);
+//printf("t0=%f, t1=%f\n", t0, t1);
+//printf("dt=%f\n",t1-t0);
         Bx1 = (float *)inArrayX1->data;
         if (inArrayX1->axis[0] != nx || inArrayX1->axis[1] != ny)
             DIE("Wrong data dimension for current record, stop. \n"); 
-        inSeg1 = drms_segment_lookupnum(inRec1, 1);
+        inSeg1 = drms_segment_lookup(inRec1, "Bt");
         inArrayY1 = drms_segment_read(inSeg1, DRMS_TYPE_FLOAT, &status);
         By1 = (float *)inArrayY1->data;
-        inSeg1 = drms_segment_lookupnum(inRec1, 2);
+        for (int ii = 0; ii < nxny; ii++) By1[ii] *= -1.;
+        inSeg1 = drms_segment_lookup(inRec1, "Br");
         inArrayZ1 = drms_segment_read(inSeg1, DRMS_TYPE_FLOAT, &status);
         Bz1 = (float *)inArrayZ1->data;
         
@@ -257,14 +257,10 @@ int DoIt(void)
         outDataDVDx = (float *)outArrayDVDx->data;
         outDataDVDy = (float *)outArrayDVDy->data;
 
-
         /* ======================== */
         /* This is the working part.*/
         /* ======================== */
 
-        // Input
-//        Bx0 = inData0; By0 = inData0 + nxny; Bz0 = inData0 + nxny * 2;
-//        Bx1 = inData1; By1 = inData1 + nxny; Bz1 = inData1 + nxny * 2;
         // Preproc
         Bx = (float *)calloc(sizeof(float), nxny);
         Bxx = (float *)calloc(sizeof(float), nxny);
@@ -299,21 +295,21 @@ int DoIt(void)
         // Generate kernel
         d4vm_kernel_(&dx, &dy, ksize,
                      k_th, k_x, k_y, k_xx, k_yy, k_xy);
-
+//SHOW("113\n");
 
         // Process data
         d4vm_matrix_(a, 
                      Bx, Bxx, Bxy, By, Byx, Byy, Bz, Bzx, Bzy, Bzt,
                      k_th, k_x, k_y, k_xx, k_yy, k_xy,
                      &nx, &ny, ksize);
-
+//SHOW("114\n");
         // Solve matrix
         d4vm_solver_(a, 
                      Vx, Vy, Vz, 
                      DVxDx, DVyDx, DVzDx, 
                      DVxDy, DVyDy, DVzDy, 
                      &nx, &ny, &threshold);
-
+//SHOW("115\n");
 
         /* Output record, create one at a time */
         outRec = drms_create_record(drms_env, outQuery, DRMS_PERMANENT, &status);
@@ -326,13 +322,22 @@ int DoIt(void)
             outSegDVDx->axis[i] = outArrayDVDx->axis[i];
             outSegDVDy->axis[i] = outArrayDVDy->axis[i];
         }
-        outArrayV->parent_segment = outSegV;
-        outArrayDVDx->parent_segment = outSegDVDx;
-        outArrayDVDy->parent_segment = outSegDVDy;
+        outArrayV->israw = 0;
+        outArrayV->bzero = 0.0;
+        outArrayV->bscale = 0.0001;
+        outArrayDVDx->israw = 0;
+        outArrayDVDx->bzero = 0.0;
+        outArrayDVDx->bscale = 0.000001;
+        outArrayDVDy->israw = 0;
+        outArrayDVDy->bzero = 0.0;
+        outArrayDVDy->bscale = 0.000001;
 
         /* Set keywords */
+        drms_copykey(outRec, inRec0, "HARPNUM");
+        drms_copykey(outRec, inRec0, "T_REC");
         drms_copykey(outRec, inRec0, "T_OBS");
-        drms_setkey_time(outRec, "T_NEXT", t1);
+        drms_setkey_time(outRec, "T_REC1", drms_getkey_time(inRec1, "T_REC", NULL));
+        drms_setkey_time(outRec, "T_OBS1", drms_getkey_time(inRec1, "T_OBS", NULL));
         drms_setkey_int(outRec, "K0", ksize[0]);
         drms_setkey_int(outRec, "K1", ksize[1]);
         drms_setkey_double(outRec, "THRESH", threshold);
@@ -359,12 +364,15 @@ int DoIt(void)
         free(a);
         free(k_th); free(k_x); free(k_y);
         free(k_xx); free(k_yy); free(k_xy);
+        
         inRec0 = inRec1;
         inSeg0 = inSeg1;
         inArrayX0 = inArrayX1;
         inArrayY0 = inArrayY1;
         inArrayZ0 = inArrayZ1;
-        inData0 = inData1;
+        Bx0 = Bx1;
+        By0 = By1;
+        Bz0 = Bz1;
         t0 = t1;
         
         /* Time measure */
