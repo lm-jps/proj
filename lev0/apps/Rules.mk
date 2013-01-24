@@ -47,7 +47,7 @@ endif
 #ifeq ($(JSOC_MACHINE), linux_x86_64)
   ifeq ($(COMPILER), icc)
 #    BUILDLEV1_$(d)		:=  build_lev1X build_lev1Y build_lev1 build_lev1_fsn
-    BUILDLEV1_$(d)		:= build_lev1_aia build_lev1_hmi build_lev1_empty
+    BUILDLEV1_$(d)		:= build_lev1_aia build_lev1_hmi build_lev1_empty build_lev1_hmi_test build_lev1_aia_test
   endif
 #endif
 
