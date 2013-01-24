@@ -21,6 +21,7 @@ xingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_conf
 xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
 #yingestlev0_$(d)	:= $(addprefix $(d)/, yingest_lev0)
 LIBHKLEV0_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o )
+LIBHKLEV0IRIS_OBJ	:= $(addprefix $(d)/, decode_hk.o load_hk_config_files_iris.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_iris.o )
 
 printtime_$(d)		:= $(addprefix $(d)/, printtime)
 
@@ -108,6 +109,7 @@ $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)):	$(L
 
 # decode_hk.c and load_hk_config_files.c both use egsehmicomp.h header (but not libesgehmicomp.a)
 $(LIBHKLEV0_OBJ):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/egsehmicomp
+$(LIBHKLEV0IRIS_OBJ):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/egsehmicomp
 $(LIBHKLEV0):		$(LIBHKLEV0_OBJ)
 			$(ARCHIVE)
 			$(SLLIB)
