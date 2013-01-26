@@ -320,8 +320,7 @@ char *module_name = "vfisv FD10 HARP"; // may be kept unchanged
 char *module_name = "vfisv FD10";      // may be kept unchanged
 #endif
 /* Version of VFISV. Typically date of last editing (of Fortran or C-wrapper, whichever later). Given by hand....hmmm */
-//char *version_id  = "2012 Apr. 13";
-char *version_id  = "2012 Jun. 23";
+char *version_id  = "2012 Nov. 28";
 
 /* external subroutine etc. written in Fortran files, essentially all fortran variables are of pointer */
 
@@ -3292,7 +3291,7 @@ This is done inside the FORTRAN code, in invert.f90
 /* comment and history */
     sdummy=" ";
     drms_setkey_string(outRec,"HISTORY",sdummy);
-    sdummy="VFISV ME-inversion optimized for HMI data is found in Sol.Phys.(2010) Borrero et.al. The 10 fitting parameters are eta_0,inclination,azimuth,damping,dop_width,field,vlos_mag,src_continuum,src_grad,alpha_mag";
+    sdummy="VFISV ME-inversion optimized for HMI data is described in Solar Phys. (2011) vol.273 pp.267-293, Borrero et.al. The 10 fitting parameters are eta_0,inclination,azimuth,damping,dop_width,field,vlos_mag,src_continuum,src_grad,alpha_mag";
     drms_setkey_string(outRec,"COMMENT",sdummy);
 
     sdummy="HMI observable";
@@ -4315,7 +4314,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.26 2012/11/29 01:45:33 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.27 2013/01/26 01:41:35 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
