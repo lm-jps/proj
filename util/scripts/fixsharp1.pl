@@ -16,12 +16,14 @@ use constant kRetSuccess     => 0;
 use constant kRetInvalidArgs => 1;
 use constant kRetDbQuery     => 2;
 
+# Required parameters
 use constant kArgDbname      => "dbname";
 use constant kArgDbhost      => "dbhost";
 use constant kArgDbport      => "dbport";
 use constant kArgType1Series => "type1";  # comma-separted list of type-1 series
 use constant kArgType2Series => "type2";  # comma-separted list of type-2 series
 
+# Optional parameters
 use constant kOptDo          => "do";
 
 my($argsinH);
