@@ -1,8 +1,8 @@
-#! $Id: std_flight.w,v 1.2 2012/01/17 16:10:17 production Exp $
+#! $Id: std_flight.w,v 1.3 2013/01/28 17:12:23 production Exp $
 #! $Name:  $
-#! Description: Standard Wavelength Tuning Table
+#! Description: Standard Wavelength tuning table Feb 2013
 
-#ID WT1P  WT2P  WT3P  WT4P	
+#Id WT1P  WT2P  WT3P  WT4P	
   1    0     0     0     0	# wobble_10 table
   2   10     0     0     0	# wobble_10 table
   3   20     0     0     0	# wobble_10 table
@@ -99,9 +99,9 @@
  94    0     0     0   210	# wobble_10 table
  95    0     0     0   220	# wobble_10 table
  96    0     0     0   230	# wobble_10 table
- 97    0     0     0     0	# spare
- 98    0     0     0     0	# spare
- 99    0     0     0     0	# spare
+# 97    0     0     0     0	# spare
+# 98    0     0     0     0	# spare
+# 99    0     0     0     0	# spare
 100    0     0     0     0	# detune27 table
 101    0     0     0    80	# detune27 table
 102    0     0     0   160	# detune27 table
@@ -129,49 +129,49 @@
 124  160   160     0     0	# detune27 table
 125  160   160     0    80	# detune27 table
 126  160   160     0   160	# detune27 table
-127    0     0     0     0	# spare
-128    0     0     0     0	# spare
-129    0     0     0     0	# spare
-130   81   100     0    67	# cotune
-131   84    94     0    55	# cotune
-132   87    88     0    43	# cotune
-133   90    82     0    91	# cotune
-134   93    76     0    79	# cotune
-135   96    70     0    67	# cotune
-136   99   124     0    55	# cotune
-137  102   118     0    43	# cotune
-138  105   112     0    91	# cotune
-139  108   106     0    79	# cotune
-140  111   100     0    67	# cotune
-141  114    94     0    55	# cotune
-142  117    88     0    43	# cotune
-143  120    82     0    91	# cotune
-144  123    76     0    79	# cotune
-145  126    70     0    67	# cotune
-146  129   124     0    55	# cotune
-147  132   118     0    43	# cotune
-148  135   112     0    91	# cotune
-149  138   106     0    79	# cotune
-150   81   100     0    67	# cotune
-151   84    94     0    55	# cotune
-152   87    88     0    43	# cotune
-153   90    82     0    91	# cotune
-154   93    76     0    79	# cotune
-155   96    70     0    67	# cotune
-156   99   124     0    55	# cotune
-157  102   118     0    43	# cotune
-158  105   112     0    91	# cotune
-159  108   106     0    79	# cotune
-160  111   100     0    67	# cotune
-161  114    94     0    55	# cotune
-162  117    88     0    43	# cotune
-163  120    82     0    91	# cotune
-164  123    76     0    79	# cotune
-165  126    70     0    67	# cotune
-166  129   124     0    55	# cotune
-167  132   118     0    43	# cotune
-168  135   112     0    91	# cotune
-169  138   106     0    79	# cotune
+#127    0     0     0     0	# spare
+#128    0     0     0     0	# spare
+#129    0     0     0     0	# spare
+#130   81   100     0    67	# cotune
+#131   84    94     0    55	# cotune
+#132   87    88     0    43	# cotune
+#133   90    82     0    91	# cotune
+#134   93    76     0    79	# cotune
+#135   96    70     0    67	# cotune
+#136   99   124     0    55	# cotune
+#137  102   118     0    43	# cotune
+#138  105   112     0    91	# cotune
+#139  108   106     0    79	# cotune
+#140  111   100     0    67	# cotune
+#141  114    94     0    55	# cotune
+#142  117    88     0    43	# cotune
+#143  120    82     0    91	# cotune
+#144  123    76     0    79	# cotune
+#145  126    70     0    67	# cotune
+#146  129   124     0    55	# cotune
+#147  132   118     0    43	# cotune
+#148  135   112     0    91	# cotune
+#149  138   106     0    79	# cotune
+#150   81   100     0    67	# cotune
+#151   84    94     0    55	# cotune
+#152   87    88     0    43	# cotune
+#153   90    82     0    91	# cotune
+#154   93    76     0    79	# cotune
+#155   96    70     0    67	# cotune
+#156   99   124     0    55	# cotune
+#157  102   118     0    43	# cotune
+#158  105   112     0    91	# cotune
+#159  108   106     0    79	# cotune
+#160  111   100     0    67	# cotune
+#161  114    94     0    55	# cotune
+#162  117    88     0    43	# cotune
+#163  120    82     0    91	# cotune
+#164  123    76     0    79	# cotune
+#165  126    70     0    67	# cotune
+#166  129   124     0    55	# cotune
+#167  132   118     0    43	# cotune
+#168  135   112     0    91	# cotune
+#169  138   106     0    79	# cotune
 201    0    20    20    20	# Wobble+20
 202   10    20    20    20	# Wobble+20
 203   20    20    20    20	# Wobble+20
@@ -268,179 +268,179 @@
 294   20    20    20   210	# Wobble+20
 295   20    20    20   220	# Wobble+20
 296   20    20    20   230	# Wobble+20
-300   44    72     0    53	# Cotune
-301   47    66     0    41	# Cotune
-302   50    60     0    29	# Cotune
-303   53    54     0    77	# Cotune
-304   56    48     0    65	# Cotune
-305   59    42     0    53	# Cotune
-306   62    96     0    41	# Cotune
-307   65    90     0    29	# Cotune
-308   68    84     0    77	# Cotune
-309   71    78     0    65	# Cotune
-310   74    72     0    53	# Cotune
-311   77    66     0    41	# Cotune
-312   80    60     0    29	# Cotune
-313   83    54     0    77	# Cotune
-314   86    48     0    65	# Cotune
-315   89    42     0    53	# Cotune
-316   92    96     0    41	# Cotune
-317   95    90     0    29	# Cotune
-318   98    84     0    77	# Cotune
-319  101    78     0    65	# Cotune
-320   44    72     0    53	# Cotune
-321   47    66     0    41	# Cotune
-322   50    60     0    29	# Cotune
-323   53    54     0    77	# Cotune
-324   56    48     0    65	# Cotune
-325   59    42     0    53	# Cotune
-326   62    96     0    41	# Cotune
-327   65    90     0    29	# Cotune
-328   68    84     0    77	# Cotune
-329   71    78     0    65	# Cotune
-330   74    72     0    53	# Cotune
-331   77    66     0    41	# Cotune
-332   80    60     0    29	# Cotune
-333   83    54     0    77	# Cotune
-334   86    48     0    65	# Cotune
-335   89    42     0    53	# Cotune
-336   92    96     0    41	# Cotune
-337   95    90     0    29	# Cotune
-338   98    84     0    77	# Cotune
-339  101    78     0    65	# Cotune
-340   67    61     0    48	# Cotune_061031
-341   70    55     0    36	# Cotune_061031
-342   73    49     0    24	# Cotune_061031
-343   76    43     0    72	# Cotune_061031
-344   79    37     0    60	# Cotune_061031
-345   82    31     0    48	# Cotune_061031
-346   85    85     0    36	# Cotune_061031
-347   88    79     0    24	# Cotune_061031
-348   91    73     0    72	# Cotune_061031
-349   94    67     0    60	# Cotune_061031
-350   97    61     0    48	# Cotune_061031
-351  100    55     0    36	# Cotune_061031
-352  103    49     0    24	# Cotune_061031
-353  106    43     0    72	# Cotune_061031
-354  109    37     0    60	# Cotune_061031
-355  112    31     0    48	# Cotune_061031
-356  115    85     0    36	# Cotune_061031
-357  118    79     0    24	# Cotune_061031
-358  121    73     0    72	# Cotune_061031
-359  124    67     0    60	# Cotune_061031
-360    7    74     0    64	# Cotune_070116
-361   10    68     0    52	# Cotune_070116
-362   13    62     0    40	# Cotune_070116
-363   16    56     0    88	# Cotune_070116
-364   19    50     0    76	# Cotune_070116
-365   22    44     0    64	# Cotune_070116
-366   25    98     0    52	# Cotune_070116
-367   28    92     0    40	# Cotune_070116
-368   31    86     0    88	# Cotune_070116
-369   34    80     0    76	# Cotune_070116
-370   37    74     0    64	# Cotune_070116
-371   40    68     0    52	# Cotune_070116
-372   43    62     0    40	# Cotune_070116
-373   46    56     0    88	# Cotune_070116
-374   49    50     0    76	# Cotune_070116
-375   52    44     0    64	# Cotune_070116
-376   55    98     0    52	# Cotune_070116
-377   58    92     0    40	# Cotune_070116
-378   61    86     0    88	# Cotune_070116
-379   64    80     0    76	# Cotune_070116
-380    7    53     0    78	# Cotune_070218
-381   10    47     0    66	# Cotune_070218
-382   13    41     0    54	# Cotune_070218
-383   16    35     0   102	# Cotune_070218
-384   19    29     0    90	# Cotune_070218
-385   22    23     0    78	# Cotune_070218
-386   25    77     0    66	# Cotune_070218
-387   28    71     0    54	# Cotune_070218
-388   31    65     0   102	# Cotune_070218
-389   34    59     0    90	# Cotune_070218
-390   37    53     0    78	# Cotune_070218
-391   40    47     0    66	# Cotune_070218
-392   43    41     0    54	# Cotune_070218
-393   46    35     0   102	# Cotune_070218
-394   49    29     0    90	# Cotune_070218
-395   52    23     0    78	# Cotune_070218
-396   55    77     0    66	# Cotune_070218
-397   58    71     0    54	# Cotune_070218
-398   61    65     0   102	# Cotune_070218
-399   64    59     0    90	# Cotune_070218
-400  160   160     0    20	# Extra positions for polarizer test
-401  160   160    80    40	# Extra positions for polarizer test
-402  160   160   160    60	# Extra positions for polarizer test
-403  160   160    40    80	# Extra positions for polarizer test
-404   40    40    40    40	# Motor exercise
-405   80    80    80    80	# Motor exercise
-406  120   120   120   120	# Motor exercise
-407  160   160   160   160	# Motor exercise
-408  200   200   200   200	# Motor exercise
-409    0   160    20   160	# Extra positions for detune31
-410   80   160    40   160	# Extra positions for detune31
-411  160   160    60   160	# Extra positions for detune31
-412   40   160    80   160	# Extra positions for detune31
-420   36    55     0    73	# Cotune_front_529588 (20070830)
-421   39    49     0    61	# Cotune_front_529588 (20070830)
-422   42    43     0    49	# Cotune_front_529588 (20070830)
-423   45    37     0    97	# Cotune_front_529588 (20070830)
-424   48    31     0    85	# Cotune_front_529588 (20070830)
-425   51    25     0    73	# Cotune_front_529588 (20070830)
-426   54    79     0    61	# Cotune_front_529588 (20070830)
-427   57    73     0    49	# Cotune_front_529588 (20070830)
-428   60    67     0    97	# Cotune_front_529588 (20070830)
-429   63    61     0    85	# Cotune_front_529588 (20070830)
-430   66    55     0    73	# Cotune_front_529588 (20070830)
-431   69    49     0    61	# Cotune_front_529588 (20070830)
-432   72    43     0    49	# Cotune_front_529588 (20070830)
-433   75    37     0    97	# Cotune_front_529588 (20070830)
-434   78    31     0    85	# Cotune_front_529588 (20070830)
-435   81    25     0    73	# Cotune_front_529588 (20070830)
-436   84    79     0    61	# Cotune_front_529588 (20070830)
-437   87    73     0    49	# Cotune_front_529588 (20070830)
-438   90    67     0    97	# Cotune_front_529588 (20070830)
-439   93    61     0    85	# Cotune_front_529588 (20070830)
-440    7    59     0    82	# cotune_front_539794 (20070903, Sun)
-441   10    53     0    70	# cotune_front_539794 (20070903, Sun)
-442   13    47     0    58	# cotune_front_539794 (20070903, Sun)
-443   16    41     0   106	# cotune_front_539794 (20070903, Sun)
-444   19    35     0    94	# cotune_front_539794 (20070903, Sun)
-445   22    29     0    82	# cotune_front_539794 (20070903, Sun)
-446   25    83     0    70	# cotune_front_539794 (20070903, Sun)
-447   28    77     0    58	# cotune_front_539794 (20070903, Sun)
-448   31    71     0   106	# cotune_front_539794 (20070903, Sun)
-449   34    65     0    94	# cotune_front_539794 (20070903, Sun)
-450   37    59     0    82	# cotune_front_539794 (20070903, Sun)
-451   40    53     0    70	# cotune_front_539794 (20070903, Sun)
-452   43    47     0    58	# cotune_front_539794 (20070903, Sun)
-453   46    41     0   106	# cotune_front_539794 (20070903, Sun)
-454   49    35     0    94	# cotune_front_539794 (20070903, Sun)
-455   52    29     0    82	# cotune_front_539794 (20070903, Sun)
-456   55    83     0    70	# cotune_front_539794 (20070903, Sun)
-457   58    77     0    58	# cotune_front_539794 (20070903, Sun)
-458   61    71     0   106	# cotune_front_539794 (20070903, Sun)
-459   64    65     0    94	# cotune_front_539794 (20070903, Sun)
-460    7    81     0    66	# cotune_744572 (20071024, air, 30C)
-461   10    75     0    54	# cotune_744572 (20071024, air, 30C)
-462   13    69     0    42	# cotune_744572 (20071024, air, 30C)
-463   16    63     0    90	# cotune_744572 (20071024, air, 30C)
-464   19    57     0    78	# cotune_744572 (20071024, air, 30C)
-465   22    51     0    66	# cotune_744572 (20071024, air, 30C)
-466   25   105     0    54	# cotune_744572 (20071024, air, 30C)
-467   28    99     0    42	# cotune_744572 (20071024, air, 30C)
-468   31    93     0    90	# cotune_744572 (20071024, air, 30C)
-469   34    87     0    78	# cotune_744572 (20071024, air, 30C)
-470   37    81     0    66	# cotune_744572 (20071024, air, 30C)
-471   40    75     0    54	# cotune_744572 (20071024, air, 30C)
-472   43    69     0    42	# cotune_744572 (20071024, air, 30C)
-473   46    63     0    90	# cotune_744572 (20071024, air, 30C)
-474   49    57     0    78	# cotune_744572 (20071024, air, 30C)
-475   52    51     0    66	# cotune_744572 (20071024, air, 30C)
-476   55   105     0    54	# cotune_744572 (20071024, air, 30C)
-477   58    99     0    42	# cotune_744572 (20071024, air, 30C)
-478   61    93     0    90	# cotune_744572 (20071024, air, 30C)
-479   64    87     0    78	# cotune_744572 (20071024, air, 30C)
+#300   44    72     0    53	# Cotune
+#301   47    66     0    41	# Cotune
+#302   50    60     0    29	# Cotune
+#303   53    54     0    77	# Cotune
+#304   56    48     0    65	# Cotune
+#305   59    42     0    53	# Cotune
+#306   62    96     0    41	# Cotune
+#307   65    90     0    29	# Cotune
+#308   68    84     0    77	# Cotune
+#309   71    78     0    65	# Cotune
+#310   74    72     0    53	# Cotune
+#311   77    66     0    41	# Cotune
+#312   80    60     0    29	# Cotune
+#313   83    54     0    77	# Cotune
+#314   86    48     0    65	# Cotune
+#315   89    42     0    53	# Cotune
+#316   92    96     0    41	# Cotune
+#317   95    90     0    29	# Cotune
+#318   98    84     0    77	# Cotune
+#319  101    78     0    65	# Cotune
+#320   44    72     0    53	# Cotune
+#321   47    66     0    41	# Cotune
+#322   50    60     0    29	# Cotune
+#323   53    54     0    77	# Cotune
+#324   56    48     0    65	# Cotune
+#325   59    42     0    53	# Cotune
+#326   62    96     0    41	# Cotune
+#327   65    90     0    29	# Cotune
+#328   68    84     0    77	# Cotune
+#329   71    78     0    65	# Cotune
+#330   74    72     0    53	# Cotune
+#331   77    66     0    41	# Cotune
+#332   80    60     0    29	# Cotune
+#333   83    54     0    77	# Cotune
+#334   86    48     0    65	# Cotune
+#335   89    42     0    53	# Cotune
+#336   92    96     0    41	# Cotune
+#337   95    90     0    29	# Cotune
+#338   98    84     0    77	# Cotune
+#339  101    78     0    65	# Cotune
+#340   67    61     0    48	# Cotune_061031
+#341   70    55     0    36	# Cotune_061031
+#342   73    49     0    24	# Cotune_061031
+#343   76    43     0    72	# Cotune_061031
+#344   79    37     0    60	# Cotune_061031
+#345   82    31     0    48	# Cotune_061031
+#346   85    85     0    36	# Cotune_061031
+#347   88    79     0    24	# Cotune_061031
+#348   91    73     0    72	# Cotune_061031
+#349   94    67     0    60	# Cotune_061031
+#350   97    61     0    48	# Cotune_061031
+#351  100    55     0    36	# Cotune_061031
+#352  103    49     0    24	# Cotune_061031
+#353  106    43     0    72	# Cotune_061031
+#354  109    37     0    60	# Cotune_061031
+#355  112    31     0    48	# Cotune_061031
+#356  115    85     0    36	# Cotune_061031
+#357  118    79     0    24	# Cotune_061031
+#358  121    73     0    72	# Cotune_061031
+#359  124    67     0    60	# Cotune_061031
+#360    7    74     0    64	# Cotune_070116
+#361   10    68     0    52	# Cotune_070116
+#362   13    62     0    40	# Cotune_070116
+#363   16    56     0    88	# Cotune_070116
+#364   19    50     0    76	# Cotune_070116
+#365   22    44     0    64	# Cotune_070116
+#366   25    98     0    52	# Cotune_070116
+#367   28    92     0    40	# Cotune_070116
+#368   31    86     0    88	# Cotune_070116
+#369   34    80     0    76	# Cotune_070116
+#370   37    74     0    64	# Cotune_070116
+#371   40    68     0    52	# Cotune_070116
+#372   43    62     0    40	# Cotune_070116
+#373   46    56     0    88	# Cotune_070116
+#374   49    50     0    76	# Cotune_070116
+#375   52    44     0    64	# Cotune_070116
+#376   55    98     0    52	# Cotune_070116
+#377   58    92     0    40	# Cotune_070116
+#378   61    86     0    88	# Cotune_070116
+#379   64    80     0    76	# Cotune_070116
+#380    7    53     0    78	# Cotune_070218
+#381   10    47     0    66	# Cotune_070218
+#382   13    41     0    54	# Cotune_070218
+#383   16    35     0   102	# Cotune_070218
+#384   19    29     0    90	# Cotune_070218
+#385   22    23     0    78	# Cotune_070218
+#386   25    77     0    66	# Cotune_070218
+#387   28    71     0    54	# Cotune_070218
+#388   31    65     0   102	# Cotune_070218
+#389   34    59     0    90	# Cotune_070218
+#390   37    53     0    78	# Cotune_070218
+#391   40    47     0    66	# Cotune_070218
+#392   43    41     0    54	# Cotune_070218
+#393   46    35     0   102	# Cotune_070218
+#394   49    29     0    90	# Cotune_070218
+#395   52    23     0    78	# Cotune_070218
+#396   55    77     0    66	# Cotune_070218
+#397   58    71     0    54	# Cotune_070218
+#398   61    65     0   102	# Cotune_070218
+#399   64    59     0    90	# Cotune_070218
+#400  160   160     0    20	# Extra positions for polarizer test
+#401  160   160    80    40	# Extra positions for polarizer test
+#402  160   160   160    60	# Extra positions for polarizer test
+#403  160   160    40    80	# Extra positions for polarizer test
+#404   40    40    40    40	# Motor exercise
+#405   80    80    80    80	# Motor exercise
+#406  120   120   120   120	# Motor exercise
+#407  160   160   160   160	# Motor exercise
+#408  200   200   200   200	# Motor exercise
+#409    0   160    20   160	# Extra positions for detune31
+#410   80   160    40   160	# Extra positions for detune31
+#411  160   160    60   160	# Extra positions for detune31
+#412   40   160    80   160	# Extra positions for detune31
+#420   36    55     0    73	# Cotune_front_529588 (20070830)
+#421   39    49     0    61	# Cotune_front_529588 (20070830)
+#422   42    43     0    49	# Cotune_front_529588 (20070830)
+#423   45    37     0    97	# Cotune_front_529588 (20070830)
+#424   48    31     0    85	# Cotune_front_529588 (20070830)
+#425   51    25     0    73	# Cotune_front_529588 (20070830)
+#426   54    79     0    61	# Cotune_front_529588 (20070830)
+#427   57    73     0    49	# Cotune_front_529588 (20070830)
+#428   60    67     0    97	# Cotune_front_529588 (20070830)
+#429   63    61     0    85	# Cotune_front_529588 (20070830)
+#430   66    55     0    73	# Cotune_front_529588 (20070830)
+#431   69    49     0    61	# Cotune_front_529588 (20070830)
+#432   72    43     0    49	# Cotune_front_529588 (20070830)
+#433   75    37     0    97	# Cotune_front_529588 (20070830)
+#434   78    31     0    85	# Cotune_front_529588 (20070830)
+#435   81    25     0    73	# Cotune_front_529588 (20070830)
+#436   84    79     0    61	# Cotune_front_529588 (20070830)
+#437   87    73     0    49	# Cotune_front_529588 (20070830)
+#438   90    67     0    97	# Cotune_front_529588 (20070830)
+#439   93    61     0    85	# Cotune_front_529588 (20070830)
+#440    7    59     0    82	# cotune_front_539794 (20070903, Sun)
+#441   10    53     0    70	# cotune_front_539794 (20070903, Sun)
+#442   13    47     0    58	# cotune_front_539794 (20070903, Sun)
+#443   16    41     0   106	# cotune_front_539794 (20070903, Sun)
+#444   19    35     0    94	# cotune_front_539794 (20070903, Sun)
+#445   22    29     0    82	# cotune_front_539794 (20070903, Sun)
+#446   25    83     0    70	# cotune_front_539794 (20070903, Sun)
+#447   28    77     0    58	# cotune_front_539794 (20070903, Sun)
+#448   31    71     0   106	# cotune_front_539794 (20070903, Sun)
+#449   34    65     0    94	# cotune_front_539794 (20070903, Sun)
+#450   37    59     0    82	# cotune_front_539794 (20070903, Sun)
+#451   40    53     0    70	# cotune_front_539794 (20070903, Sun)
+#452   43    47     0    58	# cotune_front_539794 (20070903, Sun)
+#453   46    41     0   106	# cotune_front_539794 (20070903, Sun)
+#454   49    35     0    94	# cotune_front_539794 (20070903, Sun)
+#455   52    29     0    82	# cotune_front_539794 (20070903, Sun)
+#456   55    83     0    70	# cotune_front_539794 (20070903, Sun)
+#457   58    77     0    58	# cotune_front_539794 (20070903, Sun)
+#458   61    71     0   106	# cotune_front_539794 (20070903, Sun)
+#459   64    65     0    94	# cotune_front_539794 (20070903, Sun)
+#460    7    81     0    66	# cotune_744572 (20071024, air, 30C)
+#461   10    75     0    54	# cotune_744572 (20071024, air, 30C)
+#462   13    69     0    42	# cotune_744572 (20071024, air, 30C)
+#463   16    63     0    90	# cotune_744572 (20071024, air, 30C)
+#464   19    57     0    78	# cotune_744572 (20071024, air, 30C)
+#465   22    51     0    66	# cotune_744572 (20071024, air, 30C)
+#466   25   105     0    54	# cotune_744572 (20071024, air, 30C)
+#467   28    99     0    42	# cotune_744572 (20071024, air, 30C)
+#468   31    93     0    90	# cotune_744572 (20071024, air, 30C)
+#469   34    87     0    78	# cotune_744572 (20071024, air, 30C)
+#470   37    81     0    66	# cotune_744572 (20071024, air, 30C)
+#471   40    75     0    54	# cotune_744572 (20071024, air, 30C)
+#472   43    69     0    42	# cotune_744572 (20071024, air, 30C)
+#473   46    63     0    90	# cotune_744572 (20071024, air, 30C)
+#474   49    57     0    78	# cotune_744572 (20071024, air, 30C)
+#475   52    51     0    66	# cotune_744572 (20071024, air, 30C)
+#476   55   105     0    54	# cotune_744572 (20071024, air, 30C)
+#477   58    99     0    42	# cotune_744572 (20071024, air, 30C)
+#478   61    93     0    90	# cotune_744572 (20071024, air, 30C)
+#479   64    87     0    78	# cotune_744572 (20071024, air, 30C)
 500    6    58     0    82	# Cotune_100324 (on orbit)
 501    9    52     0    70	# Cotune_100324 (on orbit)
 502   12    46     0    58	# Cotune_100324 (on orbit)
@@ -561,3 +561,23 @@
 657   58    71     0    57      # Cotune_120118
 658   61    65     0   105      # Cotune_120118
 659   64    59     0    93      # Cotune_120118
+660    7    52     0    81      # Cotune_130201
+661   10    46     0    69      # Cotune_130201
+662   13    40     0    57      # Cotune_130201
+663   16    34     0   105      # Cotune_130201
+664   19    28     0    93      # Cotune_130201
+665   22    22     0    81      # Cotune_130201
+666   25    76     0    69      # Cotune_130201
+667   28    70     0    57      # Cotune_130201
+668   31    64     0   105      # Cotune_130201
+669   34    58     0    93      # Cotune_130201
+670   37    52     0    81      # Cotune_130201
+671   40    46     0    69      # Cotune_130201
+672   43    40     0    57      # Cotune_130201
+673   46    34     0   105      # Cotune_130201
+674   49    28     0    93      # Cotune_130201
+675   52    22     0    81      # Cotune_130201
+676   55    76     0    69      # Cotune_130201
+677   58    70     0    57      # Cotune_130201
+678   61    64     0   105      # Cotune_130201
+679   64    58     0    93      # Cotune_130201
