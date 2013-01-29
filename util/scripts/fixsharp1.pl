@@ -175,7 +175,7 @@ else
                 }
                 
                 # Update the values of variable keywords CDELT1, CDELT2, CROTA2, CRPIX1, CRPIX2, CRVAL1, CRVAL2
-                $stmnt = "UPDATE $series SET cdelt1 = 0.03, cdelt2 = 0.03, crota2 = 0.0, crpix1 = sg_000_axis000 / 2 + 0.5, crpix2 = sg_000_axis001 / 2 + 0.5, crval1 = crln_obs + (londtmax + londtmin) / 2, crval2 = (latdtmax + latdtmin) / 2";
+                $stmnt = "UPDATE $series SET cdelt1 = 0.03, cdelt2 = 0.03, crota2 = 0.0, crpix1 = sg_000_axis000::real / 2 + 0.5, crpix2 = sg_000_axis001::real / 2 + 0.5, crval1 = crln_obs + (londtmax + londtmin) / 2, crval2 = (latdtmax + latdtmin) / 2";
                 
                 $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
                 if ($rv != &kRetSuccess)
