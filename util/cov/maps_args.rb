@@ -2,22 +2,28 @@
 
 # ruby_args.rb
 #
-# This script generates coverage maps for 
-# the observables, sharp, and fd10 data.
-# 
+# This script generates coverage maps for the observables, sharp, 
+# and fd10 data, moves them to the appropriate subdirectory of 
+# /web/jsoc/htdocs/doc/data/hmi/coverage_maps/.
+#
+# To keep coverage maps in your own directory or in any other directory
+# you will have to manually change the path /web/jsoc/htdocs/doc/data/hmi/coverage_maps/,
+# hardcoded in this script, to another path.
+#
 # Obserables are defined as: hmi.S_720s, hmi.M_720s, hmi.M_45s, hmi.V_45s
 # Sharp are defined as     : hmi.sharp_720s
 # fd10 are defined as      : hmi.ME_720s_fd10 and hmi.ME_720s_nrt
 #
 #  Usage:
 #
-#  > ruby maps_args.rb [/path/to/output/] [type] [YYYY] [MM]
+#  > ruby maps_args.rb [/path/to/directory/with/codes/] [type] [YYYY] [MM]
 #    where [type] equals 'fd10', 'observables', 'sharp', or 'all'
 #    where [YYYY] equals a four-digit year typed as an int
 #    where [MM]   equals a two-digit month typed as an int
-#    where [/path/to/output/] equals the path to the directory
-#          that contains all the output files (the assumption is that
-#          this path is not /web/jsoc/htdocs/doc/data/hmi/coverage_maps/.
+#    where [/path/to/directory/with/codes/] equals the path to the directory
+#          that contains this script and the IDL and csh codes that create the coverage maps
+#          (the assumption is that this path is not 
+#          /web/jsoc/htdocs/doc/data/hmi/coverage_maps/).
 #
 #  E.g. 
 #
@@ -31,11 +37,16 @@ require 'date'
 
 indexes = []
 
+if ARGV.empty?
+ $stderr.puts "See header: usage is ruby maps_args.rb [/path/to/directory/with/idlcodes/] [type] [YYYY] [MM]"
+ exit
+end
+
 puts "Year is " "#{ARGV[2]}"
 puts "Month is " "#{ARGV[3]}"
 
-type = ARGV[1]
-year = ARGV[2].to_i
+type  = ARGV[1]
+year  = ARGV[2].to_i
 month = ARGV[3].to_i
 
 next_month = month + 1
@@ -149,45 +160,16 @@ if type == 'observables' or type == 'all'
   # Move Observables
   `ls *map*.png`
   `mv *map*.png /web/jsoc/htdocs/doc/data/hmi/coverage_maps/observables/`
+
+  # Clean up
+  # Cannibalize all .ps files
+  `rm *.ps`
 end
 
 
 
 if type == 'fd10' or type == 'all'
   # make all the necessary show_info and show_coverage calls
-  #### OBSERVABLES ####
-  # hmi.V_45s
-
-  # figures out the missing data for dopplergrams
-  `/home/jsoc/cvs/JSOC/bin/linux_x86_64/show_coverage -qi ds='hmi.V_45s[][2]' low=#{year}.#{month}.01_00_TAI high=#{next_month < month ? next_year : year}.#{next_month}.01_00_TAI | grep 'MISS' | ./reform_coverage.csh > #{year}_#{month}_miss.txt`
-
-  # figures out the unknown data for the dopplergrams
-  `/home/jsoc/cvs/JSOC/bin/linux_x86_64/show_coverage -qi ds='hmi.V_45s[][2]' low=#{year}.#{month}.01_00_TAI high=#{next_month < month ? next_year : year}.#{next_month}.01_00_TAI | grep 'UNK' | ./reform_coverage.csh > #{year}_#{month}_unk.txt`
-
-  # figures out the missing data under mask for dopplergrams 
-  `/home/jsoc/cvs/JSOC/bin/linux_x86_64/show_coverage -qi ds='hmi.V_45s[][2]' low=#{year}.#{month}.01_00_TAI high=#{next_month < month ? next_year : year}.#{next_month}.01_00_TAI mask=0xffffffff | grep 'MISS' | ./reform_coverage.csh > #{year}_#{month}_miss_mask.txt`
-
-  # hmi.M_45s
-  
-  # figures out the missing data for 45 sec mags
-  `/home/jsoc/cvs/JSOC/bin/linux_x86_64/show_coverage -qi ds='hmi.M_45s[][2]' low=#{year}.#{month}.01_00_TAI high=#{next_month < month ? next_year : year}.#{next_month}.01_00_TAI | grep 'MISS' | ./reform_coverage.csh > #{year}_#{month}_miss_m.txt`
-
-  # figures out the unknown data for 45 sec mags
-  `/home/jsoc/cvs/JSOC/bin/linux_x86_64/show_coverage -qi ds='hmi.M_45s[][2]' low=#{year}.#{month}.01_00_TAI high=#{next_month < month ? next_year : year}.#{next_month}.01_00_TAI | grep 'UNK' | ./reform_coverage.csh > #{year}_#{month}_unk_m.txt`
-
-  # figures out the missing data under mask for 45 sec mags
-  `/home/jsoc/cvs/JSOC/bin/linux_x86_64/show_coverage -qi ds='hmi.M_45s[][2]' low=#{year}.#{month}.01_00_TAI high=#{next_month < month ? next_year : year}.#{next_month}.01_00_TAI mask=0xffffffff | grep 'MISS' | ./reform_coverage.csh > #{year}_#{month}_miss_mask_m.txt`
-
-  # hmi.S_720s 
-
-  # figures out the missing data for 720 sec stokes
-  `/home/jsoc/cvs/JSOC/bin/linux_x86_64/show_coverage -qi ds='hmi.S_720s[][1]' low=#{year}.#{month}.01_00_TAI high=#{next_month < month ? next_year : year}.#{next_month}.01_00_TAI | grep 'MISS' | ./reform_coverage_720.csh > #{year}_#{month}_miss_s720.txt`
-
-  # figures out the unknown data for 720 sec stokes
-  `/home/jsoc/cvs/JSOC/bin/linux_x86_64/show_coverage -qi ds='hmi.S_720s[][1]' low=#{year}.#{month}.01_00_TAI high=#{next_month < month ? next_year : year}.#{next_month}.01_00_TAI | grep 'UNK' | ./reform_coverage_720.csh > #{year}_#{month}_unk_s720.txt`
-
-  # figures out the missing data under mask for 720 sec stokes
-  `/home/jsoc/cvs/JSOC/bin/linux_x86_64/show_coverage -qi ds='hmi.S_720s[][1]' low=#{year}.#{month}.01_00_TAI high=#{next_month < month ? next_year : year}.#{next_month}.01_00_TAI mask=0xffffffff | grep 'MISS' | ./reform_coverage.csh > #{year}_#{month}_miss_mask_s.txt`
 
   # hmi.M_720s
   
@@ -232,6 +214,23 @@ if type == 'fd10' or type == 'all'
   # combine pixels and INVNPRCS for nrt data 
  
   `join -t'	'  #{year}_#{month}_invnprcs.txt_nrt #{year}_#{month}_pixels.txt_nrt > #{year}_#{month}_join_fd10.txt_nrt`
+
+
+  idl = <<-IDLSESSION
+  
+  	  .r observables.pro
+
+	  ; ;;;;;;;;;;;;;;;;;;;;;;
+	  ; MAPS FOR hmi.M_720s
+	  ; ;;;;;;;;;;;;;;;;;;;;;;
+
+	  print, 'Printing Maps for hmi.M_720s'
+	  coveragemap, monthnumber=#{month}, junstart=#{month_start_timestamp}L, junend=#{month_end_timestamp}L, monthname='#{label}', file1='#{year}_#{month}_miss_s720_m.txt', file2='EOI_LOOP_#{year}_#{month}.txt', file3='#{year}_#{month}_miss_mask_s_m.txt',  file5='#{year}_#{month}_unk_s720_m.txt',  outfile='#{year}_#{month}_map_m720s.ps', ds='hmi.M_720s', cad=720L
+
+  IDLSESSION
+
+  `/home3/ssw.new/gen/setup/ssw_idl << endofidlsession #{idl}`
+
  
    idl = <<-IDLSESSION
    
@@ -282,9 +281,17 @@ if type == 'fd10' or type == 'all'
 
   # Move fd10
   `mv *montage*.png /web/jsoc/htdocs/doc/data/hmi/coverage_maps/fd10/`
+    
+  # Clean up
+  # Cannibalize all text files
+  `rm *.txt_nrt`
+
+  # Cannibalize all .ps files
+  `rm *.ps`
+
+  # Cannibalize all remaining .png files
+  `rm *.png`
 end
-
-
 
 if type == 'sharp' or type == 'all'
 
@@ -328,16 +335,12 @@ if type == 'sharp' or type == 'all'
   # Move Sharps
   `ls *sharp.png`
   `mv *sharp.png /web/jsoc/htdocs/doc/data/hmi/coverage_maps/sharp/`
+
+  # Clean up
+  `rm *.ps`
   
 end
 
-# Clean up
+# Final clean up
 # Cannibalize all text files
 `rm *.txt`
-`rm *.txt_nrt`
-
-# Cannibalize all .ps files
-`rm *.ps`
-
-# Cannibalize all remaining .png files
-`rm *.png`
