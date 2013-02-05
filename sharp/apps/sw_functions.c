@@ -543,6 +543,12 @@ int computeJz(float *bx, float *by, int *dims, float *jz,
 
 /* Example function 9:  Compute quantities on smoothed Jz array */
 
+// All of the subsequent functions, including this one, use a smoothed Jz array. The smoothing is performed by Jesper's 
+// fresize routines. These routines are located at /cvs/JSOC/proj/libs/interpolate. A Gaussian with a FWHM of 4 pixels
+// and truncation width of 12 pixels is used to smooth the array; however, a quick analysis shows that the mean values
+// of qualities like Jz and helicity do not change much as a result of smoothing. The smoothed array will, of course,
+// give a lower total Jz as the stron field pixels have been smoothed out to neighboring weaker field pixels.
+
 int computeJzsmooth(float *bx, float *by, int *dims, float *jz_smooth, 
 			  float *mean_jz_ptr, float *us_i_ptr, int *mask, int *bitmask,
                           float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery)
@@ -595,6 +601,15 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz_smooth,
        // (sum of all positive Bz + abs(sum of all negative Bz)) = avg Bz
        // (abs(sum of all Jz at positive Bz) + abs(sum of all Jz at negative Bz)) = avg Jz
        // avg alpha = avg Jz / avg Bz
+
+// The sign is assigned as follows:
+// If the sum of all Bz is greater than 0, then evaluate the sum of Jz at the positive Bz pixels. 
+// If this value is > 0, then alpha is > 0.
+// If this value is < 0, then alpha is <0.
+//
+// If the sum of all Bz is less than 0, then evaluate the sum of Jz at the negative Bz pixels. 
+// If this value is > 0, then alpha is < 0.
+// If this value is < 0, then alpha is > 0.
 
 // The units of alpha are in 1/Mm
 // The units of Jz are in Gauss/pix; the units of Bz are in Gauss.
