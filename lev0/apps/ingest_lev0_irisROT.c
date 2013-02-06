@@ -606,8 +606,8 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       printk("ERROR: Can't open isp record to put keywords in lev0.\n");
       printk("       The ISP was not received prior to the image for fsn %lu\n", fsn);
       printk("       Proceed anyway.\n");
-      printk("drms_status=%d, rsisp=%lu\n",
-		drms_status, rsisp); //!!TEMP
+      printk("drms_status=%d, rsisp=%lu, fsn=%lu, fsnISP=%lu, fsnISP_noop=%lu\n",
+		drms_status, rsisp, fsn, fsnISP, fsnISP_noop); //!!TEMP
     }
     else {
       fsnISP_noop = 0;
@@ -2271,6 +2271,7 @@ int DoIt(void)
             printk("Data flow stopped for %d sec. Closing current image.\n", 
 			nofiletimeout*2);
             RSISP = RSISPTO;	//use the timeout *rs
+            fsnISP = fsnISPX;	//inc last isp
             close_image(rs, segment, segArray, &Image, fsn_prev);
             drms_server_end_transaction(drms_env, 0 , 0); //commit
             drms_server_begin_transaction(drms_env); //start another cycle
