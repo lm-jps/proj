@@ -72,6 +72,8 @@
 #  -s This argument can only be provided if the -o flag is update, tag, or untag. This argument contains 
 #     a comma-separated list of file specifications. The files specified by this list must exist in the
 #     working directory.
+#  -d (optional) The root dir of the workspace CVS tree, which defaults to "JSOC".
+#  -D (optional) The root dir of the repository CVS tree, which defaults to "JSOC".
 
 use XML::Simple;
 use IO::Dir;
@@ -108,7 +110,8 @@ use constant kStrproj => "proj";
 use constant kStrname => "name";
 
 # Assume a localization directory of "localization" right in the root of the CVS tree.
-use constant kRootDir => "JSOC/";
+use constant kDefRootDir => "JSOC/"; # default root dir, overridable by the -d argument
+use constant kDefRepRootDir => "JSOC/"; # default repository root dir, overridable by the -
 use constant kLocDir => "localization/";
 use constant kProjSubdir => "proj";
 use constant kTmpDir => "/tmp/chkout/";
@@ -150,6 +153,8 @@ my(@cmdlspec); # can specify file specifications on the cmd-line.
 my($actcvs); # if the user provided a cmdlspec, then this var holds the cvs command used to update
              # the files specified by $cmdlspec.
 my(@actspec); # The actual file specification that was used to download files from the repository.
+my($rdir);     # root dir (either specified by -d flag, or default root dir of JSOC)
+my($reprdir); # root dir (either specified by -D flag, or default root dir of JSOC)
 
 # Don't allow more than one version of this file to run concurrently to avoid race conditions.
 unless (flock(DATA, LOCK_EX | LOCK_NB)) 
@@ -178,95 +183,108 @@ $version = "";
 $cvstag = "";
 $compatmode = 0;
 $forceco = 0;
+$rdir = &kDefRootDir;
+$reprdir = &kDefRepRootDir;
 
 while ($arg = shift(@ARGV))
 {
-   if ($arg eq "-o")
-   {
-      # download type
-      $arg = shift(@ARGV);
-      if ($arg eq kDlCheckout ||
-          $arg eq kDlExport ||
-          $arg eq kDlUpdate ||
-          $arg eq kDlTag ||
-          $arg eq kDlUntag ||
-          $arg eq kDlPrint ||
-          $arg eq kDlPrintRelease)
-      {
-         $dltype = $arg;
-      }
-      else
-      {
-         print STDERR "Invalid download type - please choose from 'checkout', 'export', 'update', 'tag', 'untag', 'print', or 'printrel'.\n";
-         $err = 1;
-         last;
-      }
-   }
-   elsif ($arg eq "-r")
-   {
-      # revision (version)
-      $arg = shift(@ARGV);
-      $version = $arg;
-   }
-   elsif ($arg eq "-R")
-   {
-      $arg = shift(@ARGV);
-      $pversion = $arg;
-   }
-   elsif ($arg eq "-t")
-   {
-      # CVS tag to set/remove
-      $arg = shift(@ARGV);
-      $cvstag = $arg;
-   }
-   elsif ($arg eq "-l")
-   {
-      $arg = shift(@ARGV);
-      $logfile = $arg;
-   }
-   elsif ($arg eq "-f")
-   {
-      # file set
-      $arg = shift(@ARGV);
-
-      if ($arg eq kCoSdp)
-      {
-         $cotype = kCoSdp;
-      }
-      elsif ($arg eq kCoNetDRMS)
-      {
-         $cotype = kCoNetDRMS;
-      }
-      else
-      {
-         # custom - argument must be a configuration file
-         if (-f $arg)
-         {
-            $cotype = kCoCustom;
-            $cfgfile = $arg;
-         }
-         else
-         {
-            print STDERR "Invalid custom-download configuration file $arg.\n";
+    if ($arg eq "-o")
+    {
+        # download type
+        $arg = shift(@ARGV);
+        if ($arg eq kDlCheckout ||
+            $arg eq kDlExport ||
+            $arg eq kDlUpdate ||
+            $arg eq kDlTag ||
+            $arg eq kDlUntag ||
+            $arg eq kDlPrint ||
+            $arg eq kDlPrintRelease)
+        {
+            $dltype = $arg;
+        }
+        else
+        {
+            print STDERR "Invalid download type - please choose from 'checkout', 'export', 'update', 'tag', 'untag', 'print', or 'printrel'.\n";
             $err = 1;
-         }
-      }
-   }
-   elsif ($arg eq "-F")
-   {
-      $forceco = 1;
-   }
+            last;
+        }
+    }
+    elsif ($arg eq "-r")
+    {
+        # revision (version)
+        $arg = shift(@ARGV);
+        $version = $arg;
+    }
+    elsif ($arg eq "-R")
+    {
+        $arg = shift(@ARGV);
+        $pversion = $arg;
+    }
+    elsif ($arg eq "-t")
+    {
+        # CVS tag to set/remove
+        $arg = shift(@ARGV);
+        $cvstag = $arg;
+    }
+    elsif ($arg eq "-l")
+    {
+        $arg = shift(@ARGV);
+        $logfile = $arg;
+    }
+    elsif ($arg eq "-f")
+    {
+        # file set
+        $arg = shift(@ARGV);
+        
+        if ($arg eq kCoSdp)
+        {
+            $cotype = kCoSdp;
+        }
+        elsif ($arg eq kCoNetDRMS)
+        {
+            $cotype = kCoNetDRMS;
+        }
+        else
+        {
+            # custom - argument must be a configuration file
+            if (-f $arg)
+            {
+                $cotype = kCoCustom;
+                $cfgfile = $arg;
+            }
+            else
+            {
+                print STDERR "Invalid custom-download configuration file $arg.\n";
+                $err = 1;
+            }
+        }
+    }
+    elsif ($arg eq "-F")
+    {
+        $forceco = 1;
+    }
     elsif ($arg eq "-s")
     {
         $arg = shift(@ARGV);
         @cmdlspec = split(/,/, $arg);
+    }
+    elsif ($arg eq "-d")
+    {
+        $arg = shift(@ARGV);
+        $rdir = $arg;
+    }
+    elsif ($arg eq "-D")
+    {
+        $arg = shift(@ARGV);
+        $reprdir = $arg;
     }
 }
 
 if (!$err)
 {
     my($inparent); # if 1, curr dir is the parent of JSOC root dir.
-    my($rootdir);
+    my($crootdir);  # canonical root dir
+    my($creprootdir); # canonical repository root dir (i.e., JSOC)
     
     $inparent = 0;
    if (defined($cfgfile))
@@ -291,21 +309,22 @@ if (!$err)
 
    if ($dltype eq kDlCheckout || $dltype eq kDlExport || $dltype eq kDlUpdate)
    {
-      # Set the state file path.
-      $rootdir = File::Spec->catdir(kRootDir);
-      #my($cdir) = File::Spec->catdir($ENV{'PWD'});
-      my($cdir) = realpath($ENV{'PWD'});
-
-      $stfile = kLocDir . kTypeFile;
-      $stfileold = kSuFlagFile;
-
-      if ($cdir !~ /$rootdir\s*$/)
-      {
-         # Assume that the current directory is the parent of the JSOC code tree.
-         $stfile = kRootDir . $stfile;
-         $stfileold = kRootDir . $stfileold;
-          $inparent = 1;
-      }
+       # Set the state file path.
+       $crootdir = File::Spec->catdir($rdir);
+       $creprootdir = File::Spec->catdir($reprdir);
+       #my($cdir) = File::Spec->catdir($ENV{'PWD'});
+       my($cdir) = realpath($ENV{'PWD'});
+       
+       $stfile = kLocDir . kTypeFile;
+       $stfileold = kSuFlagFile;
+       
+       if ($cdir !~ /$crootdir\s*$/)
+       {
+           # Assume that the current directory is the parent of the JSOC code tree.
+           $stfile = $rdir . $stfile;
+           $stfileold = $rdir . $stfileold;
+           $inparent = 1;
+       }
    }
 
    if ($dltype eq kDlUpdate)
@@ -374,7 +393,7 @@ if (!$err)
            if ($inparent)
            {
                # Prepend each spec with the $rootdir
-               @cmdlspecrel = map({($rootdir . $_)} @cmdlspec);
+               @cmdlspecrel = map({($creprootdir . $_)} @cmdlspec);
            }
            else
            {
@@ -408,22 +427,23 @@ if (!$err)
             }
          }
          elsif ($dltype eq kDlUpdate)
-         {
-            # If the current directory is the root directory of the CVS working directory, then
-            # cd up to the parent directory (DownloadTree assumes the current directory is the
-            # parent of the CVS working directory).
-            my($rootdir) = File::Spec->catdir(kRootDir);
-            #my($cdir) = File::Spec->catdir($ENV{'PWD'});
-            my($cdir) = realpath($ENV{'PWD'});
-
-            print "dlsource.pl: rootdir == $rootdir, cdir == $cdir.\n";
-            if ($cdir =~ /$rootdir\s*$/)
-            {
-               # The current directory is the CVS working directory.
-               $curdir = $ENV{'PWD'};
-                $err = (chdir('..') == 0) ? 1 : 0;
-            }
-         }
+          {
+              # If the current directory is the root directory of the CVS working directory, then
+              # cd up to the parent directory (DownloadTree assumes the current directory is the
+              # parent of the CVS working directory).
+              my($crootdir) = File::Spec->catdir($rdir);
+              my($creprootdir) = File::Spec->catdir($reprdir);
+              #my($cdir) = File::Spec->catdir($ENV{'PWD'});
+              my($cdir) = realpath($ENV{'PWD'});
+              
+              print "dlsource.pl: rootdir == $crootdir, cdir == $cdir.\n";
+              if ($cdir =~ /$crootdir\s*$/)
+              {
+                  # The current directory is the CVS working directory.
+                  $curdir = $ENV{'PWD'};
+                  $err = (chdir('..') == 0) ? 1 : 0;
+              }
+          }
 
          # Do a cvs checkout, export, or update into the current directory
          if (!$err)
@@ -445,16 +465,16 @@ if (!$err)
                # Must remove kSuFlagFile if it was present.
                # compatmode is used only during an update, so the current
                # directory is the parent of the code root directory.
-               if (-e kRootDir . kSuFlagFile)
+               if (-e $rdir . kSuFlagFile)
                {
-                  my($cvscmd) = "cvs update -A " . kRootDir . kSuFlagFile . " " . kRootDir . "jsoc_sync.pl " . kRootDir . "jsoc_update.pl";
+                  my($cvscmd) = "cvs update -A " . $rdir . kSuFlagFile . " " . $rdir . "jsoc_sync.pl " . $rdir . "jsoc_update.pl";
 
                   if (CallCVS($cvscmd, $logfile, undef, 0))
                   {
                      print STDERR "Unable to run $cvscmd.\n";
                      $err = 1;
                   }
-                  elsif (-e kRootDir . kSuFlagFile || -e kRootDir . "jsoc_sync.pl" || -e kRootDir . "jsoc_update.pl")
+                  elsif (-e $rdir . kSuFlagFile || -e $rdir . "jsoc_sync.pl" || -e $rdir . "jsoc_update.pl")
                   {
                      print STDERR "Unable to delete old suflag.txt, jsoc_sync.pl, or jsoc_update.pl\n";
                      $err = 1;
@@ -462,7 +482,7 @@ if (!$err)
                }
             }
          }
-          
+
          if (!$err)
          {
             # Assumes that the cdir is the one containing kRootDir
@@ -472,11 +492,11 @@ if (!$err)
                 my($tmptypefile);
                 my($ierr) = 0;
                 
-                $typefile = &kRootDir . &kLocDir . &kTypeFile;
-                $tmptypefile = &kRootDir . &kLocDir . "." . &kTypeFile . ".tmp";
-                if (!(-d kRootDir . kLocDir))
+                $typefile = $rdir . &kLocDir . &kTypeFile;
+                $tmptypefile = $rdir . &kLocDir . "." . &kTypeFile . ".tmp";
+                if (!(-d $rdir . kLocDir))
                 {
-                    mkpath(kRootDir . kLocDir);
+                    mkpath($rdir . kLocDir);
                 }
                 
                 # Copy original version of TYPEFILE
@@ -556,7 +576,7 @@ if (!$err)
                                 
                                 unless (CallCVSInChunks($actcvs, \@actspec, undef, undef, 1))
                                 {
-                                    unless (GetFileList(&kTmpDir . &kRootDir, "", \@dlist))
+                                    unless (GetFileList(&kTmpDir . $rdir, "", \@dlist))
                                     {
                                         # Combine the list of files in the downloaded tree with the list of
                                         # files in @combined.
@@ -601,7 +621,7 @@ if (!$err)
                     }
                     else
                     {                        
-                        if (PrintFilenames(*TYPEFILE, kRootDir, 1, qr(\/CVS\/)))
+                        if (PrintFilenames(*TYPEFILE, $rdir, 1, qr(\/CVS\/)))
                         {
                             print STDERR "Unable to print file-set file names.\n";
                             $ierr = 1;
@@ -612,7 +632,7 @@ if (!$err)
                 }
                 else
                 {
-                    print STDERR "Unable to open file " . kRootDir . kLocDir . kTypeFile . " for writing.\n";
+                    print STDERR "Unable to open file " . $rdir . kLocDir . kTypeFile . " for writing.\n";
                     $ierr = 1;
                 }
                 
@@ -626,10 +646,10 @@ if (!$err)
                 if (defined($logfile) && -e $logfile)
                 {
                     # cp $logfile kRootDir
-                    if (!copy($logfile, kRootDir))
+                    if (!copy($logfile, $rdir))
                     {
                         # copy failure
-                        print STDERR "Unable to copy log file $logfile to " . kRootDir . ".\n";
+                        print STDERR "Unable to copy log file $logfile to " . $rdir . ".\n";
                         $err = 1;
                     }
                 }
@@ -641,10 +661,10 @@ if (!$err)
                if ($cotype eq kCoSdp || $cotype eq kCoNetDRMS)
                {
                   my($curdirin) = $ENV{'PWD'};
-                  $err = (chdir(kTmpDir . kRootDir) == 0);
+                  $err = (chdir(kTmpDir . $rdir) == 0);
                   if ($err)
                   {
-                     print STDERR "Unable to cd to " . kTmpDir . kRootDir . ".\n";
+                     print STDERR "Unable to cd to " . kTmpDir . $rdir . ".\n";
                   }
                   else
                   {
@@ -672,7 +692,7 @@ if (!$err)
             }
             elsif ($dltype eq kDlPrint || $dltype eq kDlPrintRelease)
             {
-               if (PrintFilenames(*STDOUT, kTmpDir . kRootDir, 0))
+               if (PrintFilenames(*STDOUT, kTmpDir . $rdir, 0))
                {
                   print STDERR "Unable to print file set file names.\n";
                   $err = 1;
@@ -851,7 +871,7 @@ sub BuildFilespec
             # at this directory and add those to the array of file-specs returned to the caller.
             if (!$rv)
             {
-                $compflistH = GetDefinitiveFileSet($cotype, $core, $netonly, $sdponly, $xmldata, $stfspec);
+                $compflistH = GetDefinitiveFileSet($cotype, $core, $netonly, $sdponly, $xmldata, $stfspec, $reprdir, $rdir);
                 
                 foreach my $spec (@$cmdlspec)
                 {
@@ -1105,9 +1125,9 @@ sub DownloadTree
       if ($dltype eq kDlCheckout || $dltype eq kDlExport)
       {
          # If $dltype is kDlCheckout, kDlExport,then there must not be a JSOC subdirectory in the current directory. 
-         if (-e kRootDir)
+         if (-e $rdir)
          {
-            print STDERR "Root directory " . kRootDir . " already exists.\n";
+            print STDERR "Root directory " . $rdir . " already exists.\n";
             $rv = 1;
          }
       }
@@ -1115,9 +1135,9 @@ sub DownloadTree
       {
          # If $dltype is kDlTag,  kDlUntag, kDlPrint, or kDlPrintRelease then it is okay to delete the JSOC subdirectory 
          # because these three operations create a temporary JSOC directory.
-         if (-e kTmpDir . kRootDir)
+         if (-e kTmpDir . $rdir)
          {
-            remove_tree(kTmpDir . kRootDir, {error => \my $errlist});
+            remove_tree(kTmpDir . $rdir, {error => \my $errlist});
             if (@{$errlist})
             {
                print STDERR "Unable to properly remove temporary subdirectory $tmpdir.\n";
@@ -1129,7 +1149,7 @@ sub DownloadTree
       {
           # If $dltype is kDlUpdate, then there MUST be a working directory root.
           # The current directory is the parent of the root directory (if it exists).
-          my($rootdir) = File::Spec->catdir(kRootDir);
+          my($rootdir) = File::Spec->catdir($rdir);
           
           if (!(-d $rootdir))
           {
@@ -1179,8 +1199,8 @@ sub DownloadTree
       {
          $cvscmd = "$cvscmd $forcecostr";
       }
-       
-       @relpaths = map({kRootDir . "$_"} @{$bfspec});           
+
+       @relpaths = map({$reprdir . "$_"} @{$bfspec});           
        
        # Filter out undesired files. $filter contains a black list. DOES NOT APPLY TO update.
       if (defined($filterdir))
@@ -1206,9 +1226,9 @@ sub DownloadTree
             {
                # Get a list of all files from temp dir.
                @specfiles = ();
-               if (GetFileList(kRootDir, "", \@specfiles))
+               if (GetFileList($rdir, "", \@specfiles))
                {
-                  print STDERR "Unable to retrieve list of files rooted at " . kTmpDir . kRootDir . ".\n";
+                  print STDERR "Unable to retrieve list of files rooted at " . kTmpDir . $rdir . ".\n";
                   $rv = 1;
                }
                else
@@ -1216,7 +1236,7 @@ sub DownloadTree
                   # At long last we can filter out the bad guys.
                   foreach $guy (@{$filter})
                   {
-                     $badguys{kRootDir . $guy} = 1;
+                     $badguys{$rdir . $guy} = 1;
                   }
                   
                   # Since badguys might contain directories, not just plain files, we have to 
@@ -1227,7 +1247,7 @@ sub DownloadTree
          }
 
          # Back to the original working directory
-         remove_tree(kTmpDir . kRootDir, {error => \my $errlist});
+         remove_tree(kTmpDir . $rdir, {error => \my $errlist});
          if (@{$errlist})
          {
             print STDERR "Unable to properly remove temporary subdirectory $tmpdir.\n";
@@ -1267,7 +1287,7 @@ sub DownloadTree
                $cvscmd = "$cvscmd $forcecostr";
             }
 
-            @relpaths = map({kRootDir . "$_"} @{$pfspec});
+            @relpaths = map({$reprdir . "$_"} @{$pfspec});
 
             if (defined($filterdir))
             {
@@ -1293,9 +1313,9 @@ sub DownloadTree
                   {
                      # Get a list of all files from temp dir.
                      @specfiles = ();
-                     if (GetFileList(kRootDir, "", \@specfiles))
+                     if (GetFileList($rdir, "", \@specfiles))
                      {
-                        print STDERR "Unable to retrieve list of files rooted at " . kTmpDir . kRootDir . ".\n";
+                        print STDERR "Unable to retrieve list of files rooted at " . kTmpDir . $rdir . ".\n";
                         $rv = 1;
                      }
                      else
@@ -1303,7 +1323,7 @@ sub DownloadTree
                         # At long last we can filter out the bad guys.
                         foreach $guy (@{$filter})
                         {
-                           $badguys{kRootDir . $guy} = 1;
+                           $badguys{$rdir . $guy} = 1;
                         }
                         
                         @relpaths = map({IsBadGuy($_, \%badguys) ? () : $_;} @specfiles);
@@ -1311,7 +1331,7 @@ sub DownloadTree
                   }
                }
 
-               remove_tree(kTmpDir . kRootDir, {error => \my $errlist});
+               remove_tree(kTmpDir . $rdir, {error => \my $errlist});
                if (@{$errlist})
                {
                   print STDERR "Unable to properly remove temporary subdirectory $tmpdir.\n";
@@ -1351,7 +1371,7 @@ sub DownloadTree
         # Unfortunately, we have to call CVS twice - once for base specs and once for proj 
         # specs. Each type of spec will use a different -r flag.
         $cmd = "-n update $rev";
-        
+
         if (length($rev) > 0)
         {
             $cmd = "$cmd $forcecostr";
@@ -1360,11 +1380,11 @@ sub DownloadTree
         # Original file specs.
         if ($#cmdlspec >= 0)
         {
-            @orig = map({kRootDir . "$_"} @{$cmdlspec});
+            @orig = map({$reprdir . "$_"} @{$cmdlspec});
         }
         else
         {
-            @orig = map({kRootDir . "$_"} @{$bfspec});
+            @orig = map({$reprdir . "$_"} @{$bfspec});
         }
         
         if (CallCVSInChunks($cmd, \@orig, undef, \@resp, 1))
@@ -1800,6 +1820,8 @@ sub GetDefinitiveFileSet
     my($stfspec) = $_[5];
     my($version) = $_[6];
     my($pversion) = $_[7];
+    my($reprdir) = $_[8];
+    my($rdir) = $_[9];
     
     my($sdir);
     my(@dlist);
@@ -1845,9 +1867,9 @@ sub GetDefinitiveFileSet
             
             if ($cotype eq &kCoSdp)
             {
-                @wroot = map({kRootDir . "$_"} @{$core});
+                @wroot = map({$reprdir . "$_"} @{$core});
                 push(@allspecs, @wroot);
-                @wroot = map({kRootDir . "$_"} @{$sdponly});
+                @wroot = map({$reprdir . "$_"} @{$sdponly});
                 push(@allspecs, @wroot);
 
                 $cmdlcvs = join(' ', $cmdlcvs, @allspecs);
@@ -1855,9 +1877,9 @@ sub GetDefinitiveFileSet
             }
             else
             {
-                @wroot = map({kRootDir . "$_"} @{$core});
+                @wroot = map({$reprdir . "$_"} @{$core});
                 push(@allspecs, @wroot);
-                @wroot = map({kRootDir . "$_"} @{$sdponly});
+                @wroot = map({$reprdir . "$_"} @{$sdponly});
                 push(@allspecs, @wroot);
 
                 $cmdlcvs = join(' ', $cmdlcvs, @allspecs);
@@ -1874,9 +1896,9 @@ sub GetDefinitiveFileSet
         {
             unless (CallCVS($cmdlcvs, undef, undef, 1))
             {
-                unless (GetFileList(&kTmpDir . &kRootDir, "", \@dlist))
+                unless (GetFileList(&kTmpDir . $rdir, "", \@dlist))
                 {
-                    my($prefdiri) = &kTmpDir . &kRootDir;
+                    my($prefdiri) = &kTmpDir . $rdir;
 
                     foreach my $afile (@dlist)
                     {
