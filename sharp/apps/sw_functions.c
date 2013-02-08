@@ -456,7 +456,6 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 //
 //  The units of total unsigned vertical current (us_i) are simply in A. In this case, we would have the following:
 //  (Gauss/pix)(1/CDELT1)(RSUN_OBS/RSUN_REF)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)(RSUN_REF/RSUN_OBS)(1000.)
-//  =(Gauss/pix)(1/CDELT1)(0.0010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)(1000.)
 //  =(Gauss/pix)(1/0.5)(10^-4)(4*PI*10^7)(722500)(1000.)
 //  =(Gauss/pix)(1/CDELT1)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)(1000.)
 
@@ -574,7 +573,7 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz_smooth,
                if isnan(dery[j * nx + i]) continue;
                if isnan(jz_smooth[j * nx + i]) continue;
                //printf("%d,%d,%f\n",i,j,jz_smooth[j * nx + i]);
-               curl +=     (jz_smooth[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
+               curl +=     (jz_smooth[j * nx + i])*(1/cdelt1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
                us_i += fabs(jz_smooth[j * nx + i])*(1/cdelt1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A  / m^2 */
                count_mask++;
             }	
