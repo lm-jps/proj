@@ -445,8 +445,9 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 //  
 //  To change units from Gauss/pixel to mA/m^2 (the units for Jz in Leka and Barnes, 2003),
 //  one must perform the following unit conversions:
-//  (Gauss/pix)(pix/arcsec)(arcsec/meter)(Newton/Gauss*Ampere*meter)(Ampere^2/Newton)(milliAmpere/Ampere), or
-//  (Gauss/pix)(1/CDELT1)(RSUN_OBS/RSUN_REF)(1 T / 10^4 Gauss)(1 / 4*PI*10^-7)( 10^3 milliAmpere/Ampere),
+//  (Gauss)(1/arcsec)(arcsec/meter)(Newton/Gauss*Ampere*meter)(Ampere^2/Newton)(milliAmpere/Ampere), or
+//  (Gauss)(1/CDELT1)(RSUN_OBS/RSUN_REF)(1 T / 10^4 Gauss)(1 / 4*PI*10^-7)( 10^3 milliAmpere/Ampere), or
+//  (Gauss)(1/CDELT1)(RSUN_OBS/RSUN_REF)(0.00010)(1/MUNAUGHT)(1000.), 
 //  where a Tesla is represented as a Newton/Ampere*meter.
 //
 //  As an order of magnitude estimate, we can assign 0.5 to CDELT1 and 722500m/arcsec to (RSUN_REF/RSUN_OBS).
@@ -455,10 +456,9 @@ int computeBzderivative(float *bz, int *dims, float *mean_derivative_bz_ptr, int
 //  jz * (35.0)
 //
 //  The units of total unsigned vertical current (us_i) are simply in A. In this case, we would have the following:
-//  (Gauss/pix)(1/CDELT1)(RSUN_OBS/RSUN_REF)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)(RSUN_REF/RSUN_OBS)(1000.)
-//  =(Gauss/pix)(1/0.5)(10^-4)(4*PI*10^7)(722500)(1000.)
-//  =(Gauss/pix)(1/CDELT1)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)(1000.)
-
+//  (Gauss/pix)(1/CDELT1)(RSUN_OBS/RSUN_REF)(0.00010)(1/MUNAUGHT)(CDELT1)(CDELT1)(RSUN_REF/RSUN_OBS)(RSUN_REF/RSUN_OBS)
+//  = (Gauss/pix)(0.00010)(1/MUNAUGHT)(CDELT1)(RSUN_REF/RSUN_OBS)
+  
 int computeJz(float *bx, float *by, int *dims, float *jz,
 			 int *mask, int *bitmask,
                          float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery)
@@ -573,8 +573,8 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz_smooth,
                if isnan(dery[j * nx + i]) continue;
                if isnan(jz_smooth[j * nx + i]) continue;
                //printf("%d,%d,%f\n",i,j,jz_smooth[j * nx + i]);
-               curl +=     (jz_smooth[j * nx + i])*(1/cdelt1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
-               us_i += fabs(jz_smooth[j * nx + i])*(1/cdelt1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A  / m^2 */
+               curl +=     (jz_smooth[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
+               us_i += fabs(jz_smooth[j * nx + i])*(cdelt1/1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A */
                count_mask++;
             }	
 	  }
