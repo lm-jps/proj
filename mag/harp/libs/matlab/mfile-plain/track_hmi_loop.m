@@ -662,10 +662,10 @@ for f = 1:nf,
     % define the box to update
     inx1 = [off1(1)+1:off1(1)+box1(1)];
     inx2 = [off1(2)+1:off1(2)+box1(2)];
-    % FIXME: need smarter update to not overwrite good info with zeros
+    % 11/2012: put in smarter update to not overwrite good info with zeros
     chip_now = chip1(inx1,inx2);
-    % chip1(inx1,inx2) = max(chip_now, full(rois1(r).chip)); % (new)
-    chip1(inx1,inx2) = full(rois1(r).chip); % (original - bug)
+    % chip1(inx1,inx2) = full(rois1(r).chip); % (original - bug)
+    chip1(inx1,inx2) = max(chip_now, full(rois1(r).chip)); % (new)
   end;
   sp(f).chip = chip1; % plug it in
 end;
