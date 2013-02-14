@@ -871,7 +871,7 @@ sub BuildFilespec
             # at this directory and add those to the array of file-specs returned to the caller.
             if (!$rv)
             {
-                $compflistH = GetDefinitiveFileSet($cotype, $core, $netonly, $sdponly, $xmldata, $stfspec, $reprdir, $rdir);
+                $compflistH = GetDefinitiveFileSet($cotype, $core, $netonly, $sdponly, $xmldata, $stfspec, $version, $pversion, $reprdir, $rdir);
                 
                 foreach my $spec (@$cmdlspec)
                 {
