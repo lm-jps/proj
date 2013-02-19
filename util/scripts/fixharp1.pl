@@ -24,6 +24,7 @@ my($keyvals);
 my($bmaps);
 my($dataH);
 my($cpkeyH);
+my($cpkeyParentH);
 my($fh);
 my($line);
 my($iline);
@@ -34,6 +35,8 @@ my(@okeys); # Non-prime-key keyword names.
 my(@vals);  # All vals
 my(@pkeyvals); # Prime-key keyword values.
 my($ival);
+my($hack);
+my($fpath);
 my($rv);
 
 $rv = 0; # success
@@ -139,13 +142,29 @@ if (@args)
                 # The first two columns in this file contain the values for the 
                 # prime-key keywords: HARPNUM and T_REC. Make a hash-array layer
                 # for each of these keywords.
+                $fpath = $bmaps;
                 $ival = 0;
                 foreach my $aval (@vals)
                 {
                     if ($ival < $npkeys)
                     {
                         # These are prime-key keyword values.
-                        push(@pkeyvals, $aval);
+                        
+                        # Must hack the HARPNUM keyword - the keys file does not contain the
+                        # exact HARPNUM directory name. For the HARPNUM, it contains an integer,
+                        # but the directory name is a 0-padded string representation of this integer 
+                        # with a total of 5 digits. %05d
+                        if ($ival == 0)
+                        {
+                            $hack = sprintf("%05d", $aval);
+                            push(@pkeyvals, $hack);
+                            $fpath = "$fpath/$hack";
+                        }
+                        else
+                        {
+                            push(@pkeyvals, $aval);
+                            $fpath = "$fpath/$aval";
+                        }
                     }
                     else 
                     {
@@ -158,9 +177,17 @@ if (@args)
                                 $cpkeyH->{$pkeyval} = {};                                
                             }
 
-                            $cpkeyH = $cpkeyH->{$pkeyval};
+                            $cpkeyH = $cpkeyH->{$pkeyval};   
                         }
 
+                        if (!exists($cpkeyH->{"keys"}))
+                        {
+                            $cpkeyH->{"keys"} = {};
+                            $cpkeyParentH = $cpkeyH;
+                        }
+                        
+                        $cpkeyH = $cpkeyH->{"keys"};
+                        
                         # These are non-prime-key keyword values.
                         if (!exists($cpkeyH->{$okeys[$ival - $npkeys]}))
                         {
@@ -176,10 +203,13 @@ if (@args)
                     
                     $ival++;
                 }
+                
+                # Set the filename of the file to ingest.
+                $cpkeyParentH->{"file"} = $fpath;
 
                 @pkeyvals = ();
                 $iline++;
-                
+                                
                 # Call ingestion module with batches of records.
                 if ($iline % &kBatchSize == 0)
                 {
@@ -191,6 +221,7 @@ if (@args)
                     
                     $dataH = {};
                     $cpkeyH = undef;
+                    $cpkeyParentH = undef;
                 }
             } # End while
             
@@ -260,12 +291,15 @@ sub Ingest
     
     $rv = 0;
     
+    print Dumper $dataH;
+    exit;
+    
     $json = to_json($dataH);
     print "$json\n";
     exit;
     
     # Call the generic ingest module
-    $pipe = new drmsPipeRun("geningest");
+    $pipe = new drmsPipeRun("rawingest");
     
     if (defined($pipe))
     {
