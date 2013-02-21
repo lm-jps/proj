@@ -8,11 +8,11 @@
 #ingest_lev0 vc=VC04 indir=/dds/soc2pipe/aia/rexmit
 
 #
-$user = "388";
-if($user ne "388") {
-  print "You must be user production to run\n";
-  exit;
-}
+#$user = "388";
+#if($user ne "388") {
+#  print "You must be user production to run\n";
+#  exit;
+#}
 $host = `hostname`;
 if(!($host =~ /cl1n001/)) {
   print "This can only be run on the cl1n001 pipeline machine.\n";
