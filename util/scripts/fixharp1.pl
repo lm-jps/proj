@@ -11,9 +11,12 @@ use drmsArgs;
 use drmsRunProg;
 
 # Required cmd-line arguments
-use constant kArgKeyNames => "keynames";  # Full path to file containing key names
-use constant kArgKeyVals  => "keyvals";   # Full path to file containing key values
-use constant kArgBitMaps  => "bmaps";     # Path to bit maps
+use constant kArgKeyNames    => "keynames";  # Full path to file containing key names
+use constant kArgKeyVals     => "keyvals";   # Full path to file containing key values
+use constant kArgBitMaps     => "bmaps";     # Path to bit maps
+use constant kArgBitMapFname => "fname";     # Base file name of bit-map files
+use constant kArgSeries      => "series";    # The series into which we are adding records
+use constant kArgSegment     => "segment";   # The segment in series 'series' that will contain data files
 use constant kBatchSize   => 128;
 
 my($argsinH);
@@ -22,6 +25,9 @@ my($kevals);
 my($keynames);
 my($keyvals);
 my($bmaps);
+my($fname);
+my($series);
+my($segment);
 my($dataH);
 my($cpkeyH);
 my($cpkeyParentH);
@@ -44,16 +50,19 @@ $rv = 0; # success
 # Collect arguments
 $argsinH =
 {
-    &kArgKeyNames =>   's',
-    &kArgKeyVals =>    's',
-    &kArgBitMaps =>    's'
+    &kArgKeyNames  =>   's',
+    &kArgKeyVals  =>    's',
+    &kArgBitMaps  =>    's',
+    &kArgBitMapFname => 's',
+    &kArgSeries =>      's',
+    &kArgSegment =>     's'
 };
 
 @args = GetArgs($argsinH);
 
 if (@args)
 {
-    ($keynames, $keyvals, $bmaps) = @args;
+    ($keynames, $keyvals, $bmaps, $fname, $series, $segment) = @args;
     
     # First put the keynames into an array.
     if (open($fh, "<$keynames"))
@@ -205,7 +214,7 @@ if (@args)
                 }
                 
                 # Set the filename of the file to ingest.
-                $cpkeyParentH->{"file"} = $fpath;
+                $cpkeyParentH->{"file"} = "$fpath/$fname";
 
                 @pkeyvals = ();
                 $iline++;
@@ -213,7 +222,7 @@ if (@args)
                 # Call ingestion module with batches of records.
                 if ($iline % &kBatchSize == 0)
                 {
-                    $rv = Ingest($dataH);
+                    $rv = Ingest($series, $segment, $dataH);
                     if ($rv != 0)
                     {
                         last;
@@ -229,7 +238,7 @@ if (@args)
             {
                 if (keys(%$dataH) > 0 && defined($cpkeyH) && keys(%$cpkeyH) > 0)
                 {
-                    $rv = Ingest($dataH);
+                    $rv = Ingest($series, $segment, $dataH);
                 }
             }
             
@@ -272,6 +281,22 @@ sub GetArgs
                 if (defined($arg))
                 {
                     push(@rv, $arg);
+                    $arg = $args->Get(&kArgBitMapFname);
+                    if (defined($arg))
+                    {
+                        push(@rv, $arg);
+                        $arg = $args->Get(&kArgSeries);
+                        if (defined($arg))
+                        {
+                            push(@rv, $arg);
+                            $arg = $args->Get(&kArgSegment);
+                            if (defined($arg))
+                            {
+                                push(@rv, $arg);
+                            }
+                        }
+                        
+                    }
                 }
             }
         }
@@ -282,7 +307,7 @@ sub GetArgs
 
 sub Ingest
 {
-    my($dataH) = @_;
+    my($series, $segment, $dataH) = @_;
     my($json);
     my($pipe);
     my($rsp);
@@ -291,15 +316,12 @@ sub Ingest
     
     $rv = 0;
     
-    print Dumper $dataH;
-    exit;
-    
     $json = to_json($dataH);
-    print "$json\n";
-    exit;
+    # print "$json\n";
+    # exit;
     
     # Call the generic ingest module
-    $pipe = new drmsPipeRun("rawingest");
+    $pipe = new drmsPipeRun("rawingest series=$series segment=$segment");
     
     if (defined($pipe))
     {
@@ -307,6 +329,11 @@ sub Ingest
         $pipe->WritePipe($json);
         $pipe->ClosePipe(1); # close write pipe
         $pipe->ReadPipe(\$rsp);
+        
+        if (defined($rsp) && length($rsp) > 0)
+        {
+            print "rawingest returns:\n$rsp\n";
+        }
         
         # close both read and write pipes (but write was already closed)                    
         if ($pipe->ClosePipe())
