@@ -318,7 +318,7 @@ sub Ingest
     
     $json = to_json($dataH);
     # print "$json\n";
-    # exit;
+    # return $rv;
     
     # Call the generic ingest module
     $pipe = new drmsPipeRun("rawingest series=$series segment=$segment");
