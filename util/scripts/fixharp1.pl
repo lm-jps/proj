@@ -17,10 +17,16 @@ use constant kArgBitMaps     => "bmaps";     # Path to bit maps
 use constant kArgBitMapFname => "fname";     # Base file name of bit-map files
 use constant kArgSeries      => "series";    # The series into which we are adding records
 use constant kArgSegment     => "segment";   # The segment in series 'series' that will contain data files
+
+# Optional cmd-line arguments
+use constant kOptSetDate     => "d";         # Pass to rawingest
+
 use constant kBatchSize   => 128;
 
 my($argsinH);
 my(@args);
+my($optsinH);
+my($opts);
 my($kevals);
 my($keynames);
 my($keyvals);
@@ -28,6 +34,7 @@ my($bmaps);
 my($fname);
 my($series);
 my($segment);
+my($setdate);
 my($dataH);
 my($cpkeyH);
 my($cpkeyParentH);
@@ -60,9 +67,21 @@ $argsinH =
 
 @args = GetArgs($argsinH);
 
+$optsinH =
+{
+    &kOptSetDate  =>   'noval'
+};
+
+$opts = GetOpts($optsinH);
+
 if (@args)
 {
     ($keynames, $keyvals, $bmaps, $fname, $series, $segment) = @args;
+    if (defined($opts))
+    {
+        $setdate = $opts->Get(&kOptSetDate);
+        # $setdate will be undefined if there was no flag supplied on the cmd-line
+    }
     
     # First put the keynames into an array.
     if (open($fh, "<$keynames"))
@@ -222,7 +241,7 @@ if (@args)
                 # Call ingestion module with batches of records.
                 if ($iline % &kBatchSize == 0)
                 {
-                    $rv = Ingest($series, $segment, $dataH);
+                    $rv = Ingest($series, $segment, $setdate, $dataH);
                     if ($rv != 0)
                     {
                         last;
@@ -238,7 +257,7 @@ if (@args)
             {
                 if (keys(%$dataH) > 0 && defined($cpkeyH) && keys(%$cpkeyH) > 0)
                 {
-                    $rv = Ingest($series, $segment, $dataH);
+                    $rv = Ingest($series, $segment, $setdate, $dataH);
                 }
             }
             
@@ -305,9 +324,18 @@ sub GetArgs
     return @rv;
 }
 
+sub GetOpts
+{
+    my($argsinH) = @_;
+    my($rv);
+    
+    $rv = new drmsArgs($optsinH, 0);
+}
+
 sub Ingest
 {
-    my($series, $segment, $dataH) = @_;
+    my($series, $segment, $setdate, $dataH) = @_;
+    my($cmd);
     my($json);
     my($pipe);
     my($rsp);
@@ -319,9 +347,16 @@ sub Ingest
     $json = to_json($dataH);
     # print "$json\n";
     # return $rv;
+    # exit;
     
     # Call the generic ingest module
-    $pipe = new drmsPipeRun("rawingest series=$series segment=$segment");
+    $cmd = "rawingest series=$series segment=$segment";
+    if (defined($setdate) && $setdate)
+    {
+        $cmd = "$cmd -d";
+    }
+
+    $pipe = new drmsPipeRun($cmd);
     
     if (defined($pipe))
     {
