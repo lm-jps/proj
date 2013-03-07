@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/load_hk_config_files.c,v 1.11 2013/03/07 23:14:12 jim Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/load_hk_config_files.c,v 1.12 2013/03/07 23:28:50 arta Exp $"
 /*****************************************************************************
  * Filename: load_hk_config_files.c                                          *
  * Author: Carl Cimilluca                                                    *
@@ -56,14 +56,11 @@
 #include <unistd.h>
 #include <libgen.h>
 #include "drms_types.h" // I have no idea why this is needed
-//#include "egsehmicomp.h" //use #define ERROR_HK_NOSUCHDIR below
-
+#include "egsehmicomp.h"
 #include "printk.h"
 #include "decode_hk.h"
 #include <dirent.h>
 #include "write_hk_to_drms.h"
-
-#define ERROR_HK_NOSUCHDIR                 (-20)
 
 #define LOAD_HK_C
 #include "load_hk_config_files.h"
