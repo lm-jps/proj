@@ -899,7 +899,7 @@ fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
       int dtyp = 3;
       float dx = (x1 + midx) - target_x;
       float dy = (y1 + midy) - target_y;
-      image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &(void *)newdata, &newnx, &newny, 1, 0);
+      image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &newdata, &newnx, &newny, 1, 0);
       if (newnx != nx || newny != ny)
         fprintf(stderr,"image_magrotate changed dimensions: nx want %d got %d, ny want %d got %d\n",nx,newnx,ny,newny);
       crota = 0.0;

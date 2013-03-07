@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/load_hk_config_files_iris.c,v 1.1 2013/01/24 18:39:37 jim Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/load_hk_config_files_iris.c,v 1.2 2013/03/07 23:14:12 jim Exp $"
 /*****************************************************************************
  * Filename: load_hk_config_files.c                                          *
  * Author: Carl Cimilluca                                                    *
@@ -56,7 +56,9 @@
 #include <unistd.h>
 #include <libgen.h>
 #include "drms_types.h" // I have no idea why this is needed
+#define LEV0SLOP 1
 #include "egsehmicomp.h"
+#undef LEV0SLOP
 #include "printk.h"
 #include "decode_hk.h"
 #include <dirent.h>

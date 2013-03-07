@@ -61,6 +61,10 @@ void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
   int iimgcfd3 = HK_getkey_int(isp, "IIMGCFD3");
   int iimgcfd4 = HK_getkey_int(isp, "IIMGCFD4");
   int iimgshce = HK_getkey_int(isp, "IIMGSHCE");
+  //double isppktim = HK_getkey_double(isp, "PACKET_TIME");
+  double isppktim = drms_getkey_time(rec, "PACKET_TIME", &status);
+
+  int use_pktim;
 
   for (i=0; i<6; i++) {
     ifuvot[i] = HK_getkey_int(isp, fuvotkw[i]);
@@ -163,6 +167,7 @@ void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
   //} else {
   //  drms_setkey_string(rec, "IMG_TYPE", "LIGHT");
   //}
+  use_pktim = 0;
   frmtyp = HK_getkey_int(isp, "IIFRMTYP");
   switch (frmtyp) {
     case 0:
@@ -173,6 +178,7 @@ void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
       break;
     case 2:
       drms_setkey_string(rec, "IMG_TYPE", "DARK"); 
+      use_pktim = 1;
       break;
     case 3:
       drms_setkey_string(rec, "IMG_TYPE", "LED"); 
@@ -182,9 +188,11 @@ void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
       break;
     case 5:
       drms_setkey_string(rec, "IMG_TYPE", "SPAT"); 
+      use_pktim = 1;
       break;
     case 6:
       drms_setkey_string(rec, "IMG_TYPE", "VPAT"); 
+      use_pktim = 1;
       break;
     default:
       drms_setkey_string(rec, "IMG_TYPE", "UNKNOWN"); 
@@ -193,14 +201,15 @@ void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
 
   drms_setkey_double(rec, "EXPTIME", exptime);
   drms_setkey_double(rec, "EXPSDEV", expdev);
-  if ((iimgcfd3 == DRMS_MISSING_SHORT) || (iimgcfd4 == DRMS_MISSING_SHORT)) {
+  if ((iimgcfd1 == DRMS_MISSING_SHORT) || (iimgcfd4 == DRMS_MISSING_SHORT)) {
     int_time = DRMS_MISSING_FLOAT; /* no info to calculate integration time */
   } else {
-    int_time = (iimgcfd4 - iimgcfd3)*0.0078125;
+    int_time = (iimgcfd4 - iimgcfd1)*0.0078125;
   }
   drms_setkey_float(rec, "INT_TIME", int_time);
   drms_setkey_string(rec, "INSTRUME", iris_instru[isqisysn]);
-  t_obs = SDO_to_DRMS_time(iimgots, iimgotss) + expoff/2.0;
+  if (use_pktim) t_obs = isppktim;
+  else t_obs = SDO_to_DRMS_time(iimgots, iimgotss) + expoff/2.0;
   drms_setkey_double(rec, "T_OBS", t_obs);
   
   TIME date__obs = t_obs - exptime/2.0;
@@ -208,4 +217,30 @@ void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
   drms_setkey_int(rec, "CAMERA", iris_camera[isqisysn]);
   int aecmode = HK_getkey_int(isp, "AECMODE");
 
+  int cropid = drms_getkey_int(rec, "CROPID", &status);
+  int ifwpos = HK_getkey_int(isp, "IFWPOS");
+  int iifuvfdb = HK_getkey_int(isp, "IIFUVFDB");
+  int iinuvfdb = HK_getkey_int(isp, "IINUVFDB");
+  int iisjifdb = HK_getkey_int(isp, "IISJIFDB");
+
+  switch (isqisysn) {
+    case 0: drms_setkey_short(rec, "IIFDBID", iifuvfdb);
+            drms_setkey_string(rec, "IMG_PATH", "FUV");
+            break;
+    case 1: drms_setkey_short(rec, "IIFDBID", iinuvfdb);
+            if (cropid) drms_setkey_string(rec, "IMG_PATH", "NUV");
+            else drms_setkey_string(rec, "IMG_PATH", "NUV-SJI");
+            break;
+    case 2: drms_setkey_short(rec, "IIFDBID", iisjifdb);
+            if (cropid) switch (ifwpos) {
+              case 1: drms_setkey_string(rec, "IMG_PATH", "SJI_5000W"); break;
+              case 31: drms_setkey_string(rec, "IMG_PATH", "SJI_1330"); break;
+              case 61: drms_setkey_string(rec, "IMG_PATH", "SJI_2796"); break;
+              case 91: drms_setkey_string(rec, "IMG_PATH", "SJI_1400"); break;
+              case 121: drms_setkey_string(rec, "IMG_PATH", "SJI_2832"); break;
+              case 151: drms_setkey_string(rec, "IMG_PATH", "SJI_1600W"); break;
+            }
+            else drms_setkey_string(rec, "IMG_PATH", "NUV-SJI");
+            break;
+  }
 }

@@ -7,32 +7,35 @@ d		:= $(dir)
 LIBHKLEV0		:= $(d)/libhklev0.a
 test0_$(d)		:= $(addprefix $(d)/, test0)
 # wtest_$(d)		:= $(addprefix $(d)/, wtest)
-ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0 decode_dayfile)
-ingestlev0iris_$(d)	:= $(addprefix $(d)/, ingest_lev0_irisROT)
+#ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0 ingest_lev0_test ingest_lev0_iris ingest_lev0_irisDUP ingest_lev0_irisDIM ingest_lev0_irisROT ingest_lev0_irisdc ingest_lev0_iris_NEW ingest_lev0_irisAmes decode_dayfile)
+#ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0_iris ingest_lev0_irisDUP ingest_lev0_irisROT ingest_lev0_irisdc ingest_lev0_irisAmes)
+ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0_irisROT ingest_lev0_irisdc)
+ingestlev0old_$(d)	:= $(addprefix $(d)/, ingest_lev0 decode_dayfile)
+
 #ingestlev1_$(d)		:= $(addprefix $(d)/, build_lev1)
 #ingestlev1X_$(d)	:= $(addprefix $(d)/, build_lev1X)
 #ingestlev1_mgr_$(d)	:= $(addprefix $(d)/, build_lev1_mgr, build_lev1_mgr_fsn, build_lev1_mgrY)
 ingestlev1_mgr_$(d)	:= $(addprefix $(d)/, build_lev1_mgr)
-ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
-ingestlev0iris_obj_$(d)	:= $(addprefix $(d)/, imgdecode_iris.o decode_hk.o  load_hk_config_files_iris.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_iris.o iris_time_setting.o)
-xingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
-#yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_test.o hmi_time_setting_test.o set_HMI_mech_values.o)
+ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode_iris.o decode_hk.o load_hk_config_files_iris.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_iris.o iris_time_setting.o)
+ingestlev0old_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
+
+#xingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode_iris.o decode_hk.o load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_iris.o iris_time_setting.o set_HMI_mech_values.o)
+#yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode_iris.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_test.o hmi_time_setting_test.o set_HMI_mech_values.o)
 #xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0 decode_dayfile)
-xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
+#xingestlev0_$(d)	:= $(addprefix $(d)/, xingest_lev0)
 #yingestlev0_$(d)	:= $(addprefix $(d)/, yingest_lev0)
-LIBHKLEV0_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o )
-LIBHKLEV0IRIS_OBJ	:= $(addprefix $(d)/, decode_hk.o load_hk_config_files_iris.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_iris.o )
+LIBHKLEV0_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files_iris.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_iris.o )
 
 printtime_$(d)		:= $(addprefix $(d)/, printtime)
 
 #yingestlev0_$(d)	:= $(addprefix $(d)/, yingest_lev0 decode_dayfile)
-#yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
+#yingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode_iris.o decode_hk.o  load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 
 #SUMEXE_$(d)	:= $(addprefix $(d)/, ingest_lev0)
 #SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(test0_$(d)) $(wtest_$(d))
 #SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(ingestlev1X_$(d)) $(wtest_$(d))
 #SUMEXE_$(d)     := $(ingestlev0_$(d)) $(xingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(wtest_$(d))
-SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(ingestlev0iris_$(d)) $(xingestlev0_$(d)) $(yingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(printtime_$(d))
+SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(ingestlev0old_$(d)) $(xingestlev0_$(d)) $(yingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(printtime_$(d))
 #SUMEXE_$(d)	:= $(ingestlev0_$(d)) $(ingestlev1_$(d)) $(ingestlev1_mgr_$(d)) $(printtime_$(d))
 CEXE_$(d)       := $(addprefix $(d)/, fix_hmi_config_file_date)
 CEXE		:= $(CEXE) $(CEXE_$(d))
@@ -47,12 +50,12 @@ ifeq ($(JSOC_MACHINE), linux_ia32)
 endif
 
 # Remove from ia32 and gcc builds (since they don't build on ia32 and with gcc)
-#ifeq ($(JSOC_MACHINE), linux_x86_64)
+ifeq ($(JSOC_MACHINE), linux_x86_64)
   ifeq ($(COMPILER), icc)
 #    BUILDLEV1_$(d)		:=  build_lev1X build_lev1Y build_lev1 build_lev1_fsn
-    BUILDLEV1_$(d)		:= build_lev1_aia build_lev1_hmi build_lev1_empty build_lev1_hmi_test build_lev1_aia_test
+    BUILDLEV1_$(d)		:= build_lev1_aia build_lev1_hmi build_lev1_empty
   endif
-#endif
+endif
 
 MODEXE_USEF_$(d)	:= $(addprefix $(d)/, getorbitinfo $(BUILDLEV1_$(d)))
 MODEXE_USEF 	:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
@@ -68,7 +71,7 @@ MODEXEDROBJ	:= $(MODEXEDROBJ) $(MODEXEDR_$(d):%=%.o)
 
 ALLEXE_$(d)	:= $(MODEXE_$(d)) $(MODEXEDR_$(d)) $(MODEXE_USEF_$(d)) $(SUMEXE_$(d)) $(CEXE_$(d))
 #OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) 
-OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(TESTEXE_USEF_$(d):%=%.o) $(ingestlev0_obj_$(d)) $(ingestlev0iris_obj_$(d))
+OBJ_$(d)	:= $(ALLEXE_$(d):%=%.o) $(TESTEXE_USEF_$(d):%=%.o) $(ingestlev0_obj_$(d) $(ingestlev0old_obj_$(d))
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 CLEAN		:= $(CLEAN) \
 		   $(OBJ_$(d)) \
@@ -84,38 +87,51 @@ TGT_LIB		:= $(TGT_LIB) $(LIBHKLEV0)
 S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(TESTEXE_USEF_$(d)) $(MODEXE_SOCK_$(d)))
 
 $(ingestlev0_$(d)):	$(ingestlev0_obj_$(d))
-$(ingestlev0iris_$(d)):	$(ingestlev0iris_obj_$(d))
+$(ingestlev0old_$(d)):	$(ingestlev0old_obj_$(d))
 $(xingestlev0_$(d)):	$(xingestlev0_obj_$(d))
 #$(yingestlev0_$(d)):	$(yingestlev0_obj_$(d))
 
-# Local rules
-$(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(SUMEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq -lpng
-
-
-ifeq ($(COMPILER), icc)
-   MKL     := -static-intel -lmkl_em64t
+ifeq ($(JSOC_MACHINE), linux_ia32)
+  FFTW_$(d) = /home/jsoc/lib/linux-ia32
+endif
+ifeq ($(JSOC_MACHINE), linux_x86_64)
+  FFTW_$(d) = /home/jsoc/lib/linux-x86_64
 endif
 
-$(PEEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq 
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -DLEV0SLOP
+
+# Local rules
+$(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
+$(SUMEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq -lpng  -L$(FFTW_$(d)) -lfftw3 
+
 
 ifeq ($(COMPILER), icc)
-   #ifeq ($(JSOC_MACHINE), linux_x86_64)
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(FFTW3LIBS) $(MKL)
-   #endif
+   ifeq ($(JSOC_MACHINE), linux_x86_64) 
+     MKL     := -static-intel -lmkl_em64t
+   endif
+endif
+
+#$(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng -L/SGE/lib/lx24-amd64/ -ldrmaa -Wl,-rpath,/SGE/lib/lx24-amd64
+
+$(PEEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq 
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include -DLEV0SLOP
+
+#$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/cvs/JSOC/proj/libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include
+
+ifeq ($(COMPILER), icc)
+   ifeq ($(JSOC_MACHINE), linux_x86_64)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MKL)
+   endif
 endif
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)):	$(LIBASTRO) $(LIBINTERP)
 
 # decode_hk.c and load_hk_config_files.c both use egsehmicomp.h header (but not libesgehmicomp.a)
 $(LIBHKLEV0_OBJ):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/egsehmicomp
-$(LIBHKLEV0IRIS_OBJ):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/egsehmicomp
 $(LIBHKLEV0):		$(LIBHKLEV0_OBJ)
 			$(ARCHIVE)
 			$(SLLIB)
 
 $(ingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
-$(ingestlev0iris_$(d)):	LL_TGT := $(LL_TGT) -lpng
+$(ingestlev0old_$(d)):	LL_TGT := $(LL_TGT) -lpng
 $(xingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
 #$(yingestlev0_$(d)):	LL_TGT := $(LL_TGT) -lpng
 $(ingestlev1_$(d)):	LL_TGT := $(LL_TGT)

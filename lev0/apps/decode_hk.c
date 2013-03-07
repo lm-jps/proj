@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk.c,v 1.14 2011/05/03 23:40:42 arta Exp $" 
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk.c,v 1.15 2013/03/07 23:14:12 jim Exp $" 
 /*****************************************************************************
  * Filename: decode_hk.c                                                     *
  * Author: Carl                                                              *
@@ -20,7 +20,9 @@
 #include "decode_hk.h" // defines DRMS_TYPE_* via packets.h
 #include "printk.h"
 #include "write_hk_to_drms.h"
+#define LEV0SLOP 1
 #include "egsehmicomp.h" // defines DRMS_TYPE_*
+#undef LEV0SLOP
 
 // ERRMSG was already defined in a couple of headers to this file (egsehmicomp.h, sum_rpc.h)
 // Change name to DHK_ERRMSG

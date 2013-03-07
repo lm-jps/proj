@@ -58,7 +58,7 @@
 //#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_JAN2010"
 //#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_junk"
 //#define LEV0SERIESNAMEHMI "hmi.lev0f"
-////#define TLMSERIESNAMEHMI "su_production.tlm_test"
+//#define TLMSERIESNAMEHMI "su_production.tlm_test"
 //For test with DDS on Jan 19, 2010
 //#define TLMSERIESNAMEHMI "su_production.tlm_hmi_JAN2010"
 //#define TLMSERIESNAMEHMI "su_production.tlm_hmi_junk"
@@ -88,10 +88,15 @@
 //#define TLMSERIESNAMEAIA "aia.tlm_60d"
 
 //When change to these data series below to save real data.
-#define TLMSERIESNAMEHMI "hmi.tlm"
-#define LEV0SERIESNAMEHMI "hmi.lev0a"
-#define LEV0SERIESNAMEAIA "aia.lev0"
-#define TLMSERIESNAMEAIA "aia.tlm"
+//#define TLMSERIESNAMEHMI "hmi.tlm"
+//#define LEV0SERIESNAMEHMI "hmi.lev0a"
+//#define LEV0SERIESNAMEAIA "aia.lev0"
+//#define TLMSERIESNAMEAIA "aia.tlm"
+
+#define TLMSERIESNAMEHMI "su_production.tlm_test"
+#define LEV0SERIESNAMEHMI "su_production.lev0a"
+#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
+#define LEV0SERIESNAMEAIA "su_production.lev0_aia"
 
 //#define LEV0SERIESNAMEAIA "aia.lev0d"
 //#define TLMSERIESNAMEAIA "aia.tlmd"
