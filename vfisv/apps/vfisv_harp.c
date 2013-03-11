@@ -3381,34 +3381,34 @@ This is done inside the FORTRAN code, in invert.f90
     drms_setkey_double(outRec,"INVKEYD2",ddummy);
     drms_setkey_double(outRec,"INVKEYD3",ddummy);
  /*give keyword (unit, as string) to each segment.... must be same as in jsd, duplicating ... Hmmm*/
-    sdummy="degree";
+    sdummy="deg";
     drms_setkey_string(outRec,"BUNIT_000",sdummy); // incli
     drms_setkey_string(outRec,"BUNIT_001",sdummy); // azimuth
-    sdummy="gauss";
+    sdummy="Mx/cm^2";
     drms_setkey_string(outRec,"BUNIT_002",sdummy); // field strength
     sdummy="cm/s";
     drms_setkey_string(outRec,"BUNIT_003",sdummy); // doppler LoS velocity
     sdummy="mA";
     drms_setkey_string(outRec,"BUNIT_004",sdummy); // dop_width
-    sdummy="adim";
+    sdummy="dimensionless";
     drms_setkey_string(outRec,"BUNIT_005",sdummy); // eta_0
-    sdummy=" "; // "dopper width units" ????
+    sdummy="length units"; // "dopper width units" ????
     drms_setkey_string(outRec,"BUNIT_006",sdummy); // damping
-    sdummy=" "; // "data unit ????"
+    sdummy="DN/s"; // "data unit ????"
     drms_setkey_string(outRec,"BUNIT_007",sdummy); // scr_cont
     drms_setkey_string(outRec,"BUNIT_008",sdummy); // scr_grad
-    sdummy="adim";
+    sdummy="dimensionless";
     drms_setkey_string(outRec,"BUNIT_009",sdummy); // alpha_mag
     sdummy=" ";
     drms_setkey_string(outRec,"BUNIT_010",sdummy); // chi-sq
-    sdummy="degree";
+    sdummy="deg";
     drms_setkey_string(outRec,"BUNIT_011",sdummy); // incli_err
     drms_setkey_string(outRec,"BUNIT_012",sdummy); // azimuth_err
-    sdummy="gauss";
+    sdummy="Mx/cm^2";
     drms_setkey_string(outRec,"BUNIT_013",sdummy); // strength_err
     sdummy="cm/s";
     drms_setkey_string(outRec,"BUNIT_014",sdummy); // doppler Vlos error
-    sdummy="adim";
+    sdummy="dimensionless";
     drms_setkey_string(outRec,"BUNIT_015",sdummy); // alpha_err
     sdummy=" ";
     drms_setkey_string(outRec,"BUNIT_016",sdummy); // field_incl_err
@@ -4314,7 +4314,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.13 2013/01/26 01:41:46 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_harp.c,v 1.14 2013/03/11 23:36:38 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
