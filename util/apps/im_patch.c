@@ -196,7 +196,8 @@ int image_magrotate(void *, int nin, int min, int data_type_input, float theta, 
     float dx, float dy, void **outarray, int *nx, int *ny, int regridtype_input, int stretch_lines);
 
 // experimental make recordset list at cadence
-char *get_input_recset(DRMS_Env_t *env, char *in, TIME cadence, char *timekeyname);
+//  OLD VERSION char *get_input_recset(DRMS_Env_t *env, char *in, TIME cadence, char *timekeyname);
+char *get_input_recset(DRMS_Env_t *drms_env, char *inQuery);
 
 // Macros for WCS transformations.  assume crpix1, crpix2 = CRPIX1, CRPIX2, sina,cosa = sin and cos of CROTA2 resp.
 // and crvalx and crvaly are CRVAL1 and CRVAL2, cdelt = CDELT1 == CDELT2, then
@@ -254,7 +255,7 @@ int DoIt(void)
 
   const char *ingiven = params_get_str(params, "in");
   char *inparam;
-  char *lbracket;
+  char *lbracket, *rbracket;
   char *moreQuery = NULL;
   const char *outparam = params_get_str(params, "out");
   const char *logfile = params_get_str(params, "log");
@@ -374,7 +375,10 @@ int DoIt(void)
           times_source = TIMES_GIVEN;
       }
     else
-      moreQuery = lbracket;
+      {
+      rbracket = index(lbracket, ']');
+      moreQuery = rbracket ? rbracket+1 : lbracket;
+      }
     }
   else
     {
@@ -385,28 +389,42 @@ int DoIt(void)
         times_source = TIMES_GIVEN;
     }
     
-// XXXXXXXXXXX Get box location in Carrington Coords for all location types, also initial center_X, center_y in NoTrack case  XXXXXXXXXXXXXX
+// XXXXX Get box location in Carrington Coords for all location types, also initial center_X, center_y in NoTrack case  XXXXX
   if (do_reftime) // Arc-sec, pixel, or Stonyhurst specification, get ref image information
     { // the image for ref_time is supposed to be present in the series.
 fprintf(stderr,"doing reftime\n");
-    char t_ref_text[100];
-    sprint_at(t_ref_text, t_ref-7200);
-    sprintf(in, "%s[%s/4h][? QUALITY >=0 ?]", inseries, t_ref_text);
-    inRS = drms_open_records(drms_env, in, &status);
-      if (status || inRS->n == 0) DIE2("No input data found within 2-hours of t_ref",in);
-    int irec, okrec, nrecs = inRS->n;
-    TIME tdiff = 100000;
-    for (irec=0, okrec=0; irec<nrecs; irec++) // find record close to t_ref
-      {
-      TIME newdiff;
-      inRec = inRS->records[irec];
-      if (drms_getkey_int(inRec,"QUALITY",NULL) < 0)
-        continue;
-      if ((newdiff=(fabs(drms_getkey_time(inRec,"T_OBS",NULL) - t_ref))) > tdiff)
+    int okrec;
+    char t_ref_pre[100];
+    char t_ref_post[100];
+    TIME search_width = 15;
+    while (search_width < 10000)
+      { 
+      sprint_at(t_ref_pre, t_ref-search_width);
+      sprint_at(t_ref_post, t_ref+search_width);
+      sprintf(in, "%s[%s-%s]%s%s[? QUALITY >=0 ?]", inseries, t_ref_pre, t_ref_post, moreQuery, where);
+fprintf(stderr,"t_ret query is: %s\n",in);
+      inRS = drms_open_records(drms_env, in, &status);
+      if (!status && inRS->n > 0)
+        {
+        int irec, nrecs = inRS->n;
+        TIME tdiff = 100000;
+        for (irec=0, okrec=0; irec<nrecs; irec++) // find record close to t_ref
+          {
+          TIME newdiff;
+          inRec = inRS->records[irec];
+fprintf(stderr,"irec=%d, tdiff=%lf\n",irec,tdiff);
+          if ((newdiff=(fabs(drms_getkey_time(inRec,"T_OBS",NULL) - t_ref))) > tdiff)
+            break;
+          okrec = irec;
+          tdiff = newdiff;
+          }
         break;
-      okrec = irec;
-      tdiff = newdiff;
+        }
+      drms_close_records(inRS, DRMS_FREE_RECORD);
+      search_width *= 2;
       }
+    if (search_width >= 10000)
+      DIE2("No input data found within 2-hours of t_ref",in);
     inRec = inRS->records[okrec];
     this_car_rot = drms_getkey_int(inRec, "CAR_ROT", &status); TEST_PARAM("CAR_ROT");
     crlt_obs = drms_getkey_double(inRec, "CRLT_OBS", &status); TEST_PARAM("CRLT_OBS");
@@ -581,7 +599,7 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
     char t_start_text[100], t_stop_text[100], cadence_text[100];
     if (cadence > t_step)
       {
-      sprintf(cadence_text,"@%fs", cadence);
+      sprintf(cadence_text,"@%0.0fs", cadence);
       if (times_source == TIMES_IMPLICIT) // round start and stop to cadence slots for auto limits
         {
         int nsteps;
@@ -593,32 +611,21 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
       }
     else
       cadence_text[0] = '\0';
-    // strncpy(inseries, inparam, DRMS_MAXSERIESNAMELEN);
     sprint_at(t_start_text, t_start);
     sprint_at(t_stop_text, t_stop);
     sprintf(in, "%s[%s-%s%s]%s%s", inseries, t_start_text, t_stop_text, cadence_text, where, (moreQuery ? moreQuery : ""));
     }
-  // Check for cadence specified and not compact slotted series, replace query if needed
-  if (cmdparams_exists(&cmdparams, "epoch") || cadence > 1.0 &&
-     (strcmp(inseries, "aia.lev1")==0 ||
-      strcmp(inseries, "hmi.lev1")==0 ||
-      strncmp(inseries,"aia.lev1_nrt",12)==0 ||
-      strcmp(inseries, "hmi.lev1_nrt")==0 )) // special case for AIA and HMI lev1 slots
-    {
-    if (lbracket && times_source == TIMES_RECSET) // RecordSet query specified
-      strncpy(in, inparam, DRMS_MAXQUERYLEN);
-    else
+  // Check for specified epoch or cadence specified and not compact slotted series, replace query if needed
+  if (cmdparams_exists(&cmdparams, "epoch") || (cadence > 1.0 &&
+     (strncmp(inseries, "aia.lev1", 8)==0 || strncmp(inseries, "hmi.lev1", 8)==0 )))
+    { // special case for AIA and HMI lev1 slots
+    char *new_in;
+    new_in = get_input_recset(drms_env, in);
+    if (new_in != in)
       {
-      char t_start_text[100], t_stop_text[100], cadence_text[100];
-      sprint_at(t_start_text, t_start);
-      sprint_at(t_stop_text, t_stop);
-      // experimental, AIA is not tseq slots so get vector of times and convert to list of records
-      // rounded to nearest slots.  Must put this list in a temp file since may be big.
-      sprintf(in, "%s[%s-%s]%s%s", inseries, t_start_text, t_stop_text, where , (moreQuery ? moreQuery : ""));
+      strcpy(in, new_in);
+      in_filename = new_in+1;
       }
-    in_filename = get_input_recset(drms_env, in, cadence, timekeyname);
-    if (!in_filename) DIE("Cant make special cadence recordset list file");
-    sprintf(in, "@%s", in_filename);
     }
 
 // XXXXXXXXXXXXX End of get input and output series information
@@ -633,6 +640,7 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
   // extract patches from each record
   for (irec = 0; irec < nrecs; irec ++)
     {
+    double use_bzero, use_bscale;
     char history[4096];
     *history = '\0';
     inRec = inRS->records[irec];
@@ -789,6 +797,7 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
       status = 0;
       outArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start1, end1, &status);
       if (status) DIE("Cant read input record");
+fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, outArray->bscale);
       }
     else
       { // patch partly outside image.
@@ -804,6 +813,9 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
       status = 0;
       inArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start2, end2, &status);
       if (status || !inArray) DIE("Cant read input record");
+fprintf(stderr,"$$$$$$$ inArray bzero, bscale are %f, %f\n",inArray->bzero, inArray->bscale);
+      outArray->bzero = inArray->bzero;
+      outArray->bscale = inArray->bscale;
       int start3[2] = {start2[0]-start1[0],start2[1]-start1[1]}; // fetched slice offset in outarray
       int end3[2] = {end2[0]-end1[0],end2[1]-end1[1]};           // fetched slice offset in outarray
       int n3x = end2[0] - start2[0] + 1;
@@ -814,6 +826,8 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
             *((float *)inArray->data + (y*n3x + x));
       drms_free_array(inArray);
       }
+    use_bzero = outArray->bzero;
+    use_bscale = outArray->bscale;
     // Handle crop if wanted
     if (do_crop)
       {
@@ -899,7 +913,7 @@ fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
       int dtyp = 3;
       float dx = (x1 + midx) - target_x;
       float dy = (y1 + midy) - target_y;
-      image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &newdata, &newnx, &newny, 1, 0);
+      image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &(void *)newdata, &newnx, &newny, 1, 0);
       if (newnx != nx || newny != ny)
         fprintf(stderr,"image_magrotate changed dimensions: nx want %d got %d, ny want %d got %d\n",nx,newnx,ny,newny);
       crota = 0.0;
@@ -913,6 +927,8 @@ fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
       sprintf(history+strlen(history), "\nImage registered by shift of (%0.3f,%0.3f) pixels.", dx, dy);
       crpix1 += dx - register_padding;
       crpix2 += dy - register_padding;
+      outArray->bzero = use_bzero;
+      outArray->bscale = use_bscale;
       }
 
 /*
@@ -951,16 +967,6 @@ fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
     drms_setkey_float(outRec, "XCEN", WX((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
     drms_setkey_float(outRec, "YCEN", WY((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
     set_statistics(outSeg, outArray, 1);
-    if (is_mod)
-      {
-      outArray->bzero = inSeg->bzero;
-      outArray->bscale = inSeg->bscale;
-      } 
-    else
-      {
-      outArray->bzero = outSeg->bzero;
-      outArray->bscale = outSeg->bscale;
-      }
     if (wantFAKE && FDSfile)
       {
       double r;
@@ -1253,106 +1259,174 @@ int sphere2img (double lat, double lon, double latc, double lonc,
   return (hemisphere);
 }
 
-
-// Generate explicit recordset list of closest good record to desired grid
+// In cases known to not have compact slotted series and cadence is specified
+// generate explicit recordset list of closest good record to desired grid
 // First get vector of times and quality
 // Then if vector is not OK, quit.
 // then: make temp file to hold recordset list
-//       start with first time to define desired grid, 
+//       start with first time to define desired grid,
 //       make array of desired times.
 //       make empty array of recnums
 //       search vector for good images nearest desired times
 //       for each found time, write record query
-char *get_input_recset(DRMS_Env_t *drms_env, char *in, TIME cadence, char *timekeyname)
+
+
+#define DIE_get_recset(msg) {fprintf(stderr,"$$$$ %s: %s\n", module_name, msg); return NULL;}
+char *get_input_recset(DRMS_Env_t *drms_env, char *inQuery)
   {
-  TIME epoch = (cmdparams_exists(&cmdparams, "epoch")) ? params_get_time(&cmdparams, "epoch") : 0;
+  static char newInQuery[DRMS_MAXSERIESNAMELEN+2];
+  int epoch_given = cmdparams_exists(&cmdparams, "epoch");
+  TIME epoch, t_epoch;
   DRMS_Array_t *data;
+  DRMS_Record_t *inTemplate;
   TIME t_start, t_stop, t_now, t_want, t_diff, this_t_diff;
-  int status;
+  int status = 1;
   int nrecs, irec;
   int nslots, islot;
   long long *recnums;
-  TIME *t_this, half = cadence/2.0;
+  TIME *t_this, half;
+  TIME cadence;
   double *drecnum, *dquality;
   int quality;
   long long recnum;
   char keylist[DRMS_MAXQUERYLEN];
-  static char filename[100];
+  char filename[DRMS_MAXSERIESNAMELEN];
   char *tmpdir;
   FILE *tmpfile;
-  char *lbracket;
+  char newIn[DRMS_MAXQUERYLEN];
   char seriesname[DRMS_MAXQUERYLEN];
+  char *lbracket;
+  char *at = index(inQuery, '@');
+  int npkeys;
+  char *timekeyname;
+  double t_step;
 
-  sprintf(keylist, "%s,QUALITY,recnum", timekeyname);
-  data = drms_record_getvector(drms_env, in, keylist, DRMS_TYPE_DOUBLE, 0, &status);
-  if (!data || status)
-	{
-	fprintf(stderr, "getkey_vector failed status=%d\n", status);
-	return(NULL);
-	}
-  nrecs = data->axis[1];
-  irec = 0;
-  t_this = (TIME *)data->data;
-  dquality = (double *)data->data + 1*nrecs;
-  drecnum = (double *)data->data + 2*nrecs;
-  if (epoch > 0.0)
-    {
-    int s0 = (t_this[0] - epoch)/cadence;
-    TIME t0 = s0*cadence + epoch;
-    t_start = (t0 < t_this[0] ? t0 + cadence : t0);
-    }
-  else
-    t_start = t_this[0];
-  t_stop = t_this[nrecs-1];
-  nslots = (t_stop - t_start + cadence + half)/cadence;
-  recnums = (long long *)malloc(nslots*sizeof(long long));
-  for (islot=0; islot<nslots; islot++)
-    recnums[islot] = 0;
-  islot = 0;
-  t_want = t_start;
-  t_diff = 1.0e9; 
-  for (irec = 0; irec<nrecs; irec++)
-      {
-      t_now = t_this[irec];
-      quality = (int)dquality[irec] & 0xFFFFFFFF;
-      recnum = (long long)drecnum[irec];
-      this_t_diff = fabs(t_now - t_want);
-      if (quality < 0)
-        continue;
-      if (t_now <= (t_want-half))
-        continue;
-      while (t_now > (t_want+half))
-        {
-        islot++;
-        if (islot >= nslots)
-           break;
-        t_want = t_start + cadence * islot;
-        this_t_diff = fabs(t_now - t_want);
-        t_diff = 1.0e8;
-        }
-      if (this_t_diff <= t_diff)
-        recnums[islot] = recnum;
-      t_diff = fabs(t_now - t_want);
-      }
-  if (islot+1 < nslots)
-    nslots = islot+1;  // take what we got.
-  strcpy(seriesname, in);
+  strcpy(seriesname, inQuery);
   lbracket = index(seriesname,'[');
   if (lbracket) *lbracket = '\0';
-  tmpdir = getenv("TMPDIR");
-  if (!tmpdir) tmpdir = "/tmp";
-  sprintf(filename, "%s/im_patchXXXXXX", tmpdir);
-  mkstemp(filename);
-  tmpfile = fopen(filename,"w");
-  for (islot=0; islot<nslots; islot++)
-    if (recnums[islot])
-      fprintf(tmpfile, "%s[:#%lld]\n", seriesname, recnums[islot]);
-  fclose(tmpfile);
-  free(recnums);
-  drms_free_array(data);
-  return(filename);
-  }
+  inTemplate = drms_template_record(drms_env, seriesname, &status);
+  if (status || !inTemplate) DIE_get_recset("Input series can not be found");
 
+  // Now find the prime time keyword name
+  npkeys = inTemplate->seriesinfo->pidx_num;
+  timekeyname = NULL;
+  if (npkeys > 0)
+    {
+    int i;
+    for (i=0; i<npkeys; i++)
+        {
+        DRMS_Keyword_t *pkey, *skey;
+        pkey = inTemplate->seriesinfo->pidx_keywords[i];
+        if (pkey->info->recscope > 1)
+           pkey = drms_keyword_slotfromindex(pkey);
+        if (pkey->info->type != DRMS_TYPE_TIME)
+          continue;
+        if(i > 0) DIE_get_recset("Input series must have TIME keyword first, for now...");
+        timekeyname = pkey->info->name;
+        t_step = drms_keyword_getdouble(drms_keyword_stepfromslot(pkey), &status);
+        if (status) DIE_get_recset("problem getting t_step");
+        t_epoch = drms_keyword_getdouble(drms_keyword_epochfromslot(pkey), &status);
+        if (status) DIE_get_recset("problem getting t_epoch");
+        }
+    }
+  else
+    DIE_get_recset("Must have time prime key");
+  epoch = epoch_given ? params_get_time(&cmdparams, "epoch") : t_epoch;
+
+  if (at && *at && ((strncmp(inQuery,"aia.lev1[", 9)==0 ||
+                    strncmp(inQuery,"hmi.lev1[", 9)==0 ||
+                    strncmp(inQuery,"aia.lev1_nrt2[",14)==0 ||
+                    strncmp(inQuery,"hmi.lev1_nrt[", 13)==0 ) ||
+                   epoch_given))
+    {
+    char *ip=(char *)inQuery, *op=newIn, *p;
+    long n, mul;
+    while ( *ip && ip<at )
+      *op++ = *ip++;
+    ip++; // skip the '@'
+    n = strtol(ip, &p, 10); // get digits only
+    if (*p == 's') mul = 1;
+    else if (*p == 'm') mul = 60;
+    else if (*p == 'h') mul = 3600;
+    else if (*p == 'd') mul = 86400;
+    else 
+      DIE_get_recset("cant make sense of @xx cadence spec");
+    cadence = n * mul;
+    ip = ++p;  // skip cadence multiplier
+    while ( *ip )
+      *op++ = *ip++;
+    *op = '\0';
+    half = cadence/2.0;
+    sprintf(keylist, "%s,QUALITY,recnum", timekeyname);
+    data = drms_record_getvector(drms_env, newIn, keylist, DRMS_TYPE_DOUBLE, 0, &status);
+    if (!data || status)
+      {
+      fprintf(stderr, "status=%d\n", status);
+      DIE_get_recset("getkey_vector failed\n");
+      }
+    nrecs = data->axis[1];
+    irec = 0;
+    t_this = (TIME *)data->data;
+    dquality = (double *)data->data + 1*nrecs;
+    drecnum = (double *)data->data + 2*nrecs;
+    if (epoch_given)
+      {
+      int s0 = (t_this[0] - epoch)/cadence;
+      TIME t0 = s0*cadence + epoch;
+      t_start = (t0 < t_this[0] ? t0 + cadence : t0);
+      }
+    else
+      t_start = t_this[0];
+    t_stop = t_this[nrecs-1];
+    nslots = (t_stop - t_start + cadence/2)/cadence;
+    recnums = (long long *)malloc(nslots*sizeof(long long));
+    for (islot=0; islot<nslots; islot++)
+      recnums[islot] = 0;
+    islot = 0;
+    t_want = t_start;
+    t_diff = 1.0e9;
+    for (irec = 0; irec<nrecs; irec++)
+        {
+        t_now = t_this[irec];
+        quality = (int)dquality[irec] & 0xFFFFFFFF;
+        recnum = (long long)drecnum[irec];
+        this_t_diff = fabs(t_now - t_want);
+        if (quality < 0)
+          continue;
+        if (t_now <= (t_want-half))
+          continue;
+        while (t_now > (t_want+half))
+          {
+          islot++;
+          if (islot >= nslots)
+             break;
+          t_want = t_start + cadence * islot;
+          this_t_diff = fabs(t_now - t_want);
+          t_diff = 1.0e8;
+          }
+        if (this_t_diff <= t_diff)
+          recnums[islot] = recnum;
+        t_diff = fabs(t_now - t_want);
+        }
+    if (islot+1 < nslots)
+      nslots = islot+1;  // take what we got.
+    tmpdir = getenv("TMPDIR");
+    if (!tmpdir) tmpdir = "/tmp";
+    sprintf(filename, "%s/%sXXXXXX", tmpdir, module_name);
+    mkstemp(filename);
+    tmpfile = fopen(filename,"w");
+    for (islot=0; islot<nslots; islot++)
+      if (recnums[islot])
+        fprintf(tmpfile, "%s[:#%lld]\n", seriesname, recnums[islot]);
+    fclose(tmpfile);
+    free(recnums);
+    drms_free_array(data);
+    sprintf(newInQuery,"@%s", filename);
+    return(newInQuery);
+    }
+  else
+    return(inQuery);
+  }
 
 // FDS file is in format of SDO FDS "transit" files.
 // returns xp, yp, and radius of target all in arcsec
