@@ -1427,7 +1427,7 @@ int DoIt (void)
           if (verbose) printf(" now loading segment : %-20s",segname);
           inSeg = drms_segment_lookup(inRec,segname);
           inArray= drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
-          if (status) DIE("Cant read Dopplergram data !\n");
+          if (status) DIE("Cant read Magnetogram data !\n");
           inData =(float *)inArray->data;
           nnx = inArray->axis[0]; // must be same as cols
           nny = inArray->axis[1]; // must be same as rows
@@ -4315,7 +4315,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.29 2013/03/14 05:03:08 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.30 2013/03/14 05:08:02 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
