@@ -982,6 +982,11 @@ int DoIt (void)
     rn = 0; // inversion code will handle only the first record.
 
     inRec = inRS->records[rn];
+
+/* if no data file actually exist for unknown reasons ........... abort */
+    iquality = drms_getkey_int(inRec,"QUALITY",&status);   // quality index, nice data must have zero-value
+    if (iquality < 0){DIE("No file exist, have gotten wrong info. process terminated.\n");}
+
     inSeg = drms_segment_lookupnum (inRec, 0);
     cols = inSeg->axis[0];
     rows = inSeg->axis[1];
@@ -4315,7 +4320,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.30 2013/03/14 05:08:02 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.31 2013/03/14 23:03:04 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
