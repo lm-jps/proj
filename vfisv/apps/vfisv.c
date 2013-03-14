@@ -887,6 +887,10 @@ int DoIt (void)
         if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
         rn = 0;
         inRec = inRS->records[rn];
+/* if no data file actually exist for unknown reasons ........... abort */
+        iquality = drms_getkey_int(inRec,"QUALITY",&status);
+        if (iquality < 0){DIE("No HARP file exist on disk, process terminated.\n");}
+
         char *Resname[] = {"bitmap"};
         sprintf(segname,"%s",Resname[0]);
         inSeg = drms_segment_lookup(inRec,segname);
@@ -984,8 +988,8 @@ int DoIt (void)
     inRec = inRS->records[rn];
 
 /* if no data file actually exist for unknown reasons ........... abort */
-    iquality = drms_getkey_int(inRec,"QUALITY",&status);   // quality index, nice data must have zero-value
-    if (iquality < 0){DIE("No file exist, have gotten wrong info. process terminated.\n");}
+    iquality = drms_getkey_int(inRec,"QUALITY",&status);
+    if (iquality < 0){DIE("No Stokes file exist on disk, process terminated.\n");}
 
     inSeg = drms_segment_lookupnum (inRec, 0);
     cols = inSeg->axis[0];
@@ -1126,6 +1130,11 @@ int DoIt (void)
         for (rn = 0; rn < rec_ct; rn++)
         {
           inRec = inRS->records[rn];
+
+/* if no data file actually exist for unknown reasons ........... abort */
+          iquality = drms_getkey_int(inRec,"QUALITY",&status);
+          if (iquality < 0){DIE("No HARP file exist on disk, process terminated.\n");}
+
           char *Resname[] = {"bitmap"};
           sprintf(segname,"%s",Resname[0]);
           inSeg = drms_segment_lookup(inRec,segname);
@@ -1304,6 +1313,11 @@ int DoIt (void)
         if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
         rn = 0;
         inRec = inRS->records[rn];
+
+/* if no data file actually exist for unknown reasons ........... abort */
+        iquality = drms_getkey_int(inRec,"QUALITY",&status);
+        if (iquality < 0){DIE("No Doppler file exist on disk, process terminated.\n");}
+
         char *Resname[] = {"Dopplergram"};
         sprintf(segname,"%s",Resname[0]);
         inSeg = drms_segment_lookup(inRec,segname);
@@ -1417,6 +1431,11 @@ int DoIt (void)
         if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
         rn = 0;
         inRec = inRS->records[rn];
+
+/* if no data file actually exist for unknown reasons ........... abort */
+        iquality = drms_getkey_int(inRec,"QUALITY",&status);
+        if (iquality < 0){DIE("No Magnetogram file exist on disk, process terminated.\n");}
+
         char *Resname[] = {"magnetogram"};
         sprintf(segname,"%s",Resname[0]);
         inSeg = drms_segment_lookup(inRec,segname);
@@ -4320,7 +4339,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.31 2013/03/14 23:03:04 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.32 2013/03/14 23:16:15 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
