@@ -320,7 +320,7 @@ char *module_name = "vfisv FD10 HARP"; // may be kept unchanged
 char *module_name = "vfisv FD10";      // may be kept unchanged
 #endif
 /* Version of VFISV. Typically date of last editing (of Fortran or C-wrapper, whichever later). Given by hand....hmmm */
-char *version_id  = "2012 Nov. 28";
+char *version_id  = "2013 Mar. 13";
 
 /* external subroutine etc. written in Fortran files, essentially all fortran variables are of pointer */
 
@@ -1035,6 +1035,7 @@ int DoIt (void)
         }
         /* 4 x {6, 8 or 10} segments, 4k x 4k data points each */
         stokes_array = drms_segment_read (inSeg, DRMS_TYPE_FLOAT, &status);
+        if (status) {DIE("Cant read Stokes data !\n");}
         memcpy (data, stokes_array->data, imgbytes);
         drms_free_array (stokes_array);
         data += imgpix; // another noble use of pointer, by Priya & Rick
@@ -4314,7 +4315,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.28 2013/03/11 23:36:30 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.29 2013/03/14 05:03:08 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 
