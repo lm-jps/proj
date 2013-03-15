@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk_vcdu.c,v 1.11 2011/03/15 20:59:21 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_hk_vcdu.c,v 1.12 2013/03/15 19:52:36 prodtest Exp $"
 /*****************************************************************************
  * Filename: decode_hk_vcdu.c                                                *
  * Author: Carl                                                              *
@@ -33,6 +33,7 @@ int get_status( int lz_status[100], int status_count);
 /*********** extern function prototypes **************/
 extern int free_dayfile_data( HK_Dayfile_Data_t **df_head); 
 extern int free_dayfile_pkt_data( HK_Dayfile_Data_t **df_head); 
+
 /********** High level hk telemetry routines **************/
 
 /* Receive the next VCDU in the telemetry stream. The following
@@ -181,6 +182,7 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
     /******************************************/
     /*** Case of Finding Image Packet-skip  ***/
     /******************************************/
+    case APID_IRIS_SCIENCE:
     case APID_HMI_SCIENCE_1:
     case APID_HMI_SCIENCE_2:
     case APID_AIA_SCIENCE_1:
@@ -192,6 +194,7 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
     /*********************************************/
     /*** Case of Finding HK Time packet-skip  ***/
     /********************************************/
+    case APID_IRIS_TIME:
     case APID_HMI_TIME_1:
     case APID_HMI_TIME_2:
     case APID_AIA_TIME_1:
@@ -212,6 +215,7 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
     case APID_HMI_SEQ_2:
     case APID_AIA_SEQ_1:
     case APID_AIA_SEQ_2:
+    case APID_IRIS_ISP:
 
 #ifdef DEBUG_DECODE_HK_VCDU
     printkerr("DEBUG Message at %s, line %d: Processing hk packet for apid <%d>."
@@ -258,7 +262,6 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
 	}
 	p_hk->next = NULL;
       }
-
       /* write packet to dayfile */
       spfd = save_packet_to_dayfile(hkstart ,ccsds.apid, &dfd) ;
       hk_status=spfd;
@@ -364,8 +367,10 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
   }
   if(*hk_packets &&  hk_status != HK_SUCCESS_SKIP_IMAGE) 
   {
+//printk("Call write_hk_to_drms() in decode_next_hk_vcdu() != HK_SUCCESS_SKIP_IMAGE\n"); //!!TEMP
       /* write Keywords to DRMS in Level 0 Data Series by APID */
-      wd_status = write_hk_to_drms(record, hk_packets);
+     wd_status = write_hk_to_drms(record, hk_packets);
+//printk("write_hk_to_drms() status wd_status=%d\n", wd_status); //!!TEMP
 
       /* check wd_status value */
       if (wd_status == HK_SUCCESS_WROTE_TO_DRMS) 
@@ -376,7 +381,8 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
       else if (wd_status == SUCCESS_HK_SKIP_WTD_REC_EXISTS) 
       {
         /* found record in data series, so skip writing this record to drms again*/
-        lev0_status= SUCCESS_HK_SKIP_WTD_REC_EXISTS;
+        lev0_status= SUCCESS_HK_SKIP_WTD_REC_EXISTS;	//orig Carl stuff
+        //lev0_status= SUCCESS_HK_NEED_TO_CTD; /* treat as successful write */
       }
       else if (wd_status == SUCCESS_HK_SKIP_WTD_REC_TIME_OOR) 
       {
@@ -439,6 +445,7 @@ int decode_next_hk_vcdu(unsigned short vcdu[PACKETWORDS],  CCSDS_Packet_t **hk_p
   {
     /* filters out non-isps and free node that are not isp's */
     foni_status = filter_out_non_isps(hk_packets);  
+    //printk("foni_status = %d\n", foni_status); //!!TEMP
     if(foni_status == 1)
     {
       /*got a ISP node in CCSDS_Packet_t link list so set to value for
@@ -533,7 +540,8 @@ int filter_out_non_isps(CCSDS_Packet_t **ptr)
   {
     
     if (p->apid != APID_HMI_IMSTAT_1 && p->apid != APID_HMI_IMSTAT_2 &&
-        p->apid != APID_AIA_IMSTAT_1 && p->apid != APID_AIA_IMSTAT_2)
+        p->apid != APID_AIA_IMSTAT_1 && p->apid != APID_AIA_IMSTAT_2 &&
+	p->apid != APID_IRIS_ISP)
     {  
       if (p->keywords)
       {
