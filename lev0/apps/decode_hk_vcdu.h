@@ -4,6 +4,11 @@
 #include "drms_statuscodes.h"
 #include "packets.h"
 
+/* Defines for known IRIS apids for packets */
+#define APID_IRIS_SCIENCE              768
+#define APID_IRIS_TIME                 773
+#define APID_IRIS_TEST_DCHRI	       775
+#define APID_IRIS_ISP                   56
 /* Defines for known HMI apids for packets */
 #define APID_HMI_SCIENCE_1              400
 #define APID_HMI_SCIENCE_2              410
