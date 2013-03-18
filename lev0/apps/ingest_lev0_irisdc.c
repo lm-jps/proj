@@ -146,7 +146,7 @@
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 //#define ENVFILE "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
-#define ENVFILE "/home/prodtest/cvs/IRIS/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_IRIS"
+#define ENVFILE "/home/prodtest/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_IRIS"
 #define ENVFILEA "/home/prodtest/cvs/IRIS/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_AMES"
 #define ENVFILE_GND "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
 
