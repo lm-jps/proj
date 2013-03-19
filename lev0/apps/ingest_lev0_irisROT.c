@@ -140,6 +140,7 @@
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 //#define ENVFILE "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
 #define ENVFILE "/home/prodtest/cvs/IRIS/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
+#define ENVFILEA "/home/prodtest/cvs/IRIS/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_AMES"
 #define ENVFILE_GND "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
 
 extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int *Fsn);
@@ -252,6 +253,7 @@ int INVALtime;
 unsigned int fsn = 0;
 unsigned int fsnx = 0;
 unsigned int fsnISP = 0;
+unsigned int fsnISPTOCLOSE = 0;
 unsigned int fsnISPX = 0;
 unsigned int fsnISP_noop = 0;
 unsigned int fsn_prev = 0;
@@ -278,6 +280,7 @@ int total_missing_vcdu;
 int errmsgcnt, fileimgcnt;
 int cntsleeps = 0;
 int nofiletimeout = 0;
+int timeoutclose = 0;		//set if 10 sec t.o. and a close_image was forced
 int paused = 0;
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when ingest_lev0 is called for a restart
@@ -618,8 +621,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       //if(drms_status != DRMS_SUCCESS) {
       //  printk("ERROR: in drms_copykeys() to copy isp keys to lev0. Proceed\n");
       //}
-      if(amesflg) iname = getenv("HK_ISP_IRIS_DSNAME_AMES");
-      else iname = getenv("HK_ISP_IRIS_DSNAME");
+      iname = getenv("HK_ISP_IRIS_DSNAME");
       status = drms_setkey_string(rs, "ISPSNAME", iname);
       iname = drms_getkey_string(rsispr, "PACKET_VERSION_NUMBER",&status);
       status = drms_setkey_string(rs, "ISPPKTVN", iname);
@@ -1886,6 +1888,10 @@ void do_ingest()
         abortit(3);
       }
       cntsleeps = 0;		//we saw a file
+      if(timeoutclose) {
+        timeoutclose = 0;
+        fsnISP = fsnISPTOCLOSE;
+      }
     }
   }
   closedir(dfd);
@@ -2133,7 +2139,10 @@ void setup()
   //set environment variables for hk code
   //create filename and path
   if(grounddata) strcpy(envfile, ENVFILE_GND );
-  else strcpy(envfile, ENVFILE );
+  else {
+    if(amesflg) strcpy(envfile, ENVFILEA);
+    else strcpy(envfile, ENVFILE);
+  }
   //fopen file
   if(!(fp=fopen(envfile, "r"))) {
       printk("***Can't open %s. Check setting is correct\n", envfile);
@@ -2153,14 +2162,8 @@ void setup()
   }
   fclose(fp);
   if(!restartflg) {
-    if(amesflg) {
-      printk("tlmseriesname=%s\nlev0seriesname=%s\nispseriesname=%s\n", 
-		tlmseriesname, lev0seriesname, getenv("HK_ISP_IRIS_DSNAME_AMES"));
-    }
-    else {
-      printk("tlmseriesname=%s\nlev0seriesname=%s\nispseriesname=%s\n", 
+    printk("tlmseriesname=%s\nlev0seriesname=%s\nispseriesname=%s\n", 
 		tlmseriesname, lev0seriesname, getenv("HK_ISP_IRIS_DSNAME"));
-    }
   }
 
   //ingest_lev0_test -CARL
@@ -2270,8 +2273,9 @@ int DoIt(void)
 			nofiletimeout*2);
             printk("Data flow stopped for %d sec. Closing current image.\n", 
 			nofiletimeout*2);
-            RSISP = RSISPTO;	//use the timeout *rs
+            fsnISPTOCLOSE = fsnISP;
             fsnISP = fsnISPX;	//inc last isp
+            timeoutclose = 1;
             close_image(rs, segment, segArray, &Image, fsn_prev);
             drms_server_end_transaction(drms_env, 0 , 0); //commit
             drms_server_begin_transaction(drms_env); //start another cycle
