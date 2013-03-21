@@ -620,7 +620,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     //rsisp = drms_open_records(drms_env, queryext, &drms_status);
     rsisp = RSISP;	//saved rec set pointer for ISP
     //if(drms_status || !rsisp->records) {
-    if(drms_status || !rsisp || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
+    if(!rsisp || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
       printk("ERROR: Can't open isp record to put keywords in lev0.\n");
       printk("       The ISP was not received prior to the image for fsn %lu\n", fsn);
       printk("       Proceed anyway.\n");
@@ -955,7 +955,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       //drms_close_record(rsispr, DRMS_FREE_RECORD);
       drms_close_records(rsisp, DRMS_INSERT_RECORD);
       //printk("!!TEMP set rsisp = 0 in close_image()\n");
-      RSISP = 0;  
+      //RSISP = 0;  
     }
   //Now rotate image counterclokwise 90 degrees
   nnx = img->nx;	//this is always nx > ny 
@@ -2396,6 +2396,7 @@ int DoIt(void)
 			nofiletimeout*2);
             printk("Data flow stopped for %d sec. Closing current image.\n", 
 			nofiletimeout*2);
+            RSISP = RSISPTO;    //use the timeout *rs
             fsnISPTOCLOSE = fsnISP;
             fsnISP = fsnISPX;	//inc last isp
             timeoutclose = 1;
