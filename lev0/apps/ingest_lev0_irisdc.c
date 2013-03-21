@@ -237,7 +237,7 @@ static int gLoop = 1;
 static pthread_mutex_t mutex;
 static struct timeval tv0;
 static td_alarm_t talarm = 0;
-FILE *wdlogfp; //CARL-ingest_lev0_iris
+FILE *wdlogfp = NULL;	//CARL-ingest_lev0_iris
 FILE *h0logfp;		// fp for h0 ouput log for this run 
 static IMG Image, ImageOld;
 static IMG *Img, *ImgO, *ImgC;
@@ -294,6 +294,7 @@ int paused = 0;
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when ingest_lev0 is called for a restart
 int amesflg = 0;		// set when use Ames ds names
+int logflg = 0;			// set if keep wdlogs in /dds
 int abortflg = 0;
 int conterr = 0;
 int sigalrmflg = 0;             // set on signal so prog will know 
@@ -356,6 +357,7 @@ int nice_intro ()
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
 //        "  -g: output to hmi_ground/aia_ground\n"
+        "  -l: keep logs under /dds (usually do for front end only)\n"
         "  -c: continue processing the current fsn after a imgdecode() error\n"
 	"  -r: restart. only used when we restart ourselves periodically\n"
         "  -A: Ames. Use Ames ds e.g. iris_ground.tlm_ames\n"
@@ -372,6 +374,7 @@ int nice_intro ()
   conterr = cmdparams_get_int (&cmdparams, "c", NULL);
   restartflg = cmdparams_get_int (&cmdparams, "r", NULL);
   amesflg = cmdparams_get_int (&cmdparams, "A", NULL);
+  logflg = cmdparams_get_int (&cmdparams, "l", NULL);
   return (0);
 }
 
@@ -2278,26 +2281,28 @@ void setup()
   }
 
   //ingest_lev0_test -CARL
-  sprintf(wdlogname,"%s_%s",WDLOGDIR,pchan);
-  printf("making directory: %s\n", wdlogname);
-  mkdir(wdlogname,0777);
-  sprintf(wdlogname,"%s_%s/%s",WDLOGDIR,pchan,WDLOGFILE);
-  sprintf(oldwdlogname,"%s_%s/%s.old",WDLOGDIR,pchan,WDLOGFILE);
-  rename(wdlogname,oldwdlogname);
-  if((wdlogfp=fopen(wdlogname,"w")) == NULL) 
-  {
-    h0log("Can't open the log file %s\n", wdlogname);
-  }
-  else
-  {
-    fprintf(wdlogfp, "#image file of lev0 ds by hmi_lev0 %s\n", datestr);
-    sprintf(Indir,"%s_%s/%s",WDLOGDIR,pchan,datestr);
-    if(mkdir(Indir,0775))
+  if(logflg) {	//keep wdlog and links to images
+    sprintf(wdlogname,"%s_%s",WDLOGDIR,pchan);
+    printf("making directory: %s\n", wdlogname);
+    mkdir(wdlogname,0777);
+    sprintf(wdlogname,"%s_%s/%s",WDLOGDIR,pchan,WDLOGFILE);
+    sprintf(oldwdlogname,"%s_%s/%s.old",WDLOGDIR,pchan,WDLOGFILE);
+    rename(wdlogname,oldwdlogname);
+    if((wdlogfp=fopen(wdlogname,"w")) == NULL) 
     {
-      h0log("Can't mkdir %s. Proceed without it\n",Indir);
+      h0log("Can't open the log file %s\n", wdlogname);
     }
-  } 
-  //fclose(wdlogfp);
+    else
+    {
+      fprintf(wdlogfp, "#image file of lev0 ds by hmi_lev0 %s\n", datestr);
+      sprintf(Indir,"%s_%s/%s",WDLOGDIR,pchan,datestr);
+      if(mkdir(Indir,0775))
+      {
+        h0log("Can't mkdir %s. Proceed without it\n",Indir);
+      }
+    } 
+    //fclose(wdlogfp);
+  }
 }
 
 // Module main function. 
