@@ -216,6 +216,7 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_FLAG, "h", "0", "help flag"},
   {ARG_FLAG, "r", "0", "restart flag"},
+  {ARG_FLAG, "l", "0", "wdlog flag"},
   {ARG_FLAG, "c", "0", "continue processing the current fsn after a imgdecode() error"},
   {ARG_END}
   //No -g flg for ingest iris {ARG_FLAG, "g", "0", "ground data flag"},
