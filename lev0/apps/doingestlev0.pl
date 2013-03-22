@@ -1,3 +1,4 @@
+OLD. Replaced by proj/lev0/scripts/doingestlev0_[AIA,HMI].pl
 #!/usr/bin/perl 
 #/home/production/cvs/JSOC/proj/lev0/apps/start_lev0.pl
 #Start up the four ingest_lev0 programs and periodically cause them
