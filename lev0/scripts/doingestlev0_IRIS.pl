@@ -56,13 +56,13 @@ while(1) {
     if(!$ifound) {
       $ldate = &labeldate();
       print "$ldate\n";
-      $stopfile = "/usr/local/logs/lev0/VC02_stop";
+      $stopfile = "/usr/local/logs/lev0/VC03_stop";
       #if find a stop file, assume stop_lev0_HMI.pl was called and exit
       if(-e $stopfile) {
-        print "\nAll ingest_lev0 for HMI have been stopped. Exit doingestlev0_HMI.pl\n\n";
+        print "\nAll ingest_lev0 for IRIS have been stopped. Exit doingestlev0_IRIS.pl\n\n";
         exit(0);
       }
-      print "\nAll ingest_lev0 for HMI are stopped. May have crashed!!\n\n";
+      print "\nAll ingest_lev0 for IRIS are stopped. May have crashed!!\n\n";
       exit(0);
       #last;  #!!TEMP this didn't seem to work here ???
       #$i = 720;
@@ -72,21 +72,21 @@ while(1) {
   if($ifound) {
     exit(0);
   }
-  #$cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stop"; #tell ingest to stop
-  #`$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stop"; #tell ingest to stop
+  `$cmd`;
   #$cmd = "touch /usr/local/logs/lev0/@vcnames[1]_stop";
   #`$cmd`;
-  $cmd = "touch /usr/local/logs/lev0/@vcnames[2]_stop";
-  `$cmd`;
-  $cmd = "touch /usr/local/logs/lev0/@vcnames[3]_stop";
-  `$cmd`;
+  #$cmd = "touch /usr/local/logs/lev0/@vcnames[2]_stop";
+  #`$cmd`;
+  #$cmd = "touch /usr/local/logs/lev0/@vcnames[3]_stop";
+  #`$cmd`;
   while(1) {
     $found = 0;
     #wait until they're all stopped
     @ps_prod = `ps -ef | grep ingest_lev0`;
     while($_ = shift(@ps_prod)) {
       #if(/vc VC01/ || /vc VC02/ || /vc VC04/ || /vc VC05/) {
-      if(/vc VC02/ || /vc VC05/) {
+      if(/vc VC03/) {
         $found = 1;
         sleep 1;
         last;
@@ -96,11 +96,11 @@ while(1) {
   }
   sleep(5);			#make sure previous commit to db is done
 
-      #`$rmcmd0`;
-      #$cmd = "ingest_lev0 --loopconn -r vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
-      #if(system($cmd)) {
-      #  print "Failed: $cmd\n";
-      #}
+      `$rmcmd0`;
+      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
+      if(system($cmd)) {
+        print "Failed: $cmd\n";
+      }
       #`$rmcmd1`;
       #$cmd = "ingest_lev0 --loopconn -r vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
       #if(system($cmd)) {
@@ -123,7 +123,7 @@ sub ckingest {
     #see if they're all stopped
     @ps_prod = `ps -ef | grep ingest_lev0`;
     while($_ = shift(@ps_prod)) {
-      if(/vc VC02/ || /vc VC05/) {
+      if(/vc VC03/) {
         $ifound = 1;
         last;
       }
@@ -133,9 +133,9 @@ sub ckingest {
 sub ckstop {
     $ifound = 0;
     #see if stop_lev0_HMI.pl is running
-    @ps_prod = `ps -ef | grep stop_lev0_HMI`;
+    @ps_prod = `ps -ef | grep stop_lev0_IRIS`;
     while($_ = shift(@ps_prod)) {
-      if(/stop_lev0_HMI.pl/) {
+      if(/stop_lev0_IRIS.pl/) {
         $ifound = 1;
         last;
       }
