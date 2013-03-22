@@ -106,16 +106,16 @@ while(1) {
       #if(system($cmd)) {
       #  print "Failed: $cmd\n";
       #}
-      `$rmcmd2`;
-      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
-      if(system($cmd)) {
-        print "Failed: $cmd\n";
-      }
-      `$rmcmd3`;
-      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
-      if(system($cmd)) {
-        print "Failed: $cmd\n";
-      }
+#      `$rmcmd2`;
+#      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
+#      if(system($cmd)) {
+#        print "Failed: $cmd\n";
+#      }
+#      `$rmcmd3`;
+#      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
+#      if(system($cmd)) {
+#        print "Failed: $cmd\n";
+#      }
 }
 
 sub ckingest {
