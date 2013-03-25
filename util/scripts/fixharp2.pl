@@ -104,6 +104,11 @@ if (@args)
                     next;
                 }
                 
+                if ($line =~ /^\#/)
+                {
+                    next;
+                }
+                
                 if ($line =~ /^\s*(\d+)\s+(\d+)\s+(\d+)\s+([\,0-9]+)\s*$/)
                 {
                     $harpnum = $1;
@@ -127,18 +132,18 @@ if (@args)
             
             $fh->close();
         }
-    }
-
-    if ($rv == &kRetSuccess && $doit)
-    {
-        # Commit the db changes.
-        print "Committing changes.\n";
-        $dbh->commit();
-    }
-    else
-    {
-        print "Rolling back changes, error code $rv.\n";
-        $dbh->rollback();
+        
+        if ($rv == &kRetSuccess && $doit)
+        {
+            # Commit the db changes.
+            print "Committing changes.\n";
+            $dbh->commit();
+        }
+        else
+        {
+            print "Rolling back changes, error code $rv.\n";
+            $dbh->rollback();
+        }
     }
 
     exit($rv);
