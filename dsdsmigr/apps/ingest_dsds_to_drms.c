@@ -32,13 +32,10 @@
 
 char *module_name = "opendsrecs";
 
-#define kRecSetIn	"in"
-#define kRecSetOut	"out"
-#define kNameList	"map"
 #define kNOT_SPEC	"Not Specified"
 
 #define DIE(msg)	return(fprintf(stderr,"%s",msg),1)
-#define DIE_status(msg)	return(fprintf(stderr,"%s, status of death=%d",msg,status),1)
+#define DIE_status(msg)	return(fprintf(stderr,"%s, status of death=%d\n",msg,status),1)
 
 #define FDSCALE_DEFAULT (1.97784)
 #define CANT_OPEN_FILE  (730)
@@ -46,18 +43,17 @@ char *module_name = "opendsrecs";
 #define EPHEMERIS_GAP   (2)
 #define TRUNCATED_FIT   (3)
 
-
-
 ModuleArgs_t module_args[] =
 {
-     {ARG_STRING, kRecSetIn, kNOT_SPEC, "Input data series."},
-     {ARG_STRING, kRecSetOut, kNOT_SPEC, "Output data series."},
-     {ARG_STRING, kNameList, kNOT_SPEC, "Name conversion list."},
-     {ARG_STRING, "SCALE_CORRECTIONS", "", "scale correction recordset (1 record)"},
+     {ARG_STRING, "in",  kNOT_SPEC, "Input data series."},
+     {ARG_STRING, "out", kNOT_SPEC, "Output data series."},
+     {ARG_STRING, "map", kNOT_SPEC, "Name conversion list."},
+     {ARG_STRING, "SCALE_CORRECTIONS", kNOT_SPEC, "scale correction recordset (1 record)"},
      {ARG_FLAG, "M", "0", "SkipMissingFiles - no records if DATAFILE is blank."},
      {ARG_FLAG, "v", "0", "verbose - more diagnostics"},
      {ARG_FLAG, "z", "0", "Use DPC_SMPL of '60 second' only"},
      {ARG_FLAG, "p", "0", "Indicate polarization state in POLSTATE keyword"},
+     {ARG_FLAG, "s", "0", "skip check for existence of input datafile, use for series with no segments"},
      {ARG_END}
 };
 
@@ -246,7 +242,7 @@ int keyNameCheck(char *name, char **fromname)
     NameListLookup_t *last;
 
     first_call = 0;
-    actionlistname = strdup(cmdparams_get_str(&cmdparams, kNameList, NULL));
+    actionlistname = strdup(cmdparams_get_str(&cmdparams, "map", NULL));
     if (strcmp(actionlistname, kNOT_SPEC) == 0)
       {
       fprintf(stderr, "Name mapping list must be specified\n");
@@ -305,15 +301,15 @@ int DoIt(void)
    int verbose;
    int qualnodata=0x80000000;
    int nRecs, iRec;
-   int qualstat, dpcflag, polflag;
+   int qualstat, dpcflag, polflag, skipflag;
    double val;
    char *val1;
 # define AU_m (149597870691.0)
    char *inRecQuery, *outRecQuery;
    DRMS_RecordSet_t *inRecSet, *outRecSet; 
    unsigned int quality;
-   inRecQuery = strdup(cmdparams_get_str(&cmdparams, kRecSetIn, NULL));
-   outRecQuery = strdup(cmdparams_get_str(&cmdparams, kRecSetOut, NULL));
+   inRecQuery = strdup(cmdparams_get_str(&cmdparams, "in", NULL));
+   outRecQuery = strdup(cmdparams_get_str(&cmdparams, "out", NULL));
    SkipMissingFiles = cmdparams_get_int(&cmdparams, "M", NULL) != 0;
    verbose = cmdparams_get_int(&cmdparams, "v", NULL) != 0;
    char scfilepath[DRMS_MAXPATHLEN];
@@ -321,9 +317,10 @@ int DoIt(void)
    dpcflag = params_isflagset(&cmdparams, "z");
    polflag = params_isflagset(&cmdparams, "p");
    printf("dpcflag=%d\n",dpcflag);
+   skipflag = params_isflagset(&cmdparams, "s");
 
    if (strcmp(inRecQuery, kNOT_SPEC) == 0 || strcmp(outRecQuery, kNOT_SPEC) == 0)
-      DIE("Both the "kRecSetIn" and "kRecSetOut" dataseries must be specified.\n");
+      DIE("Both the in and out dataseries must be specified.\n");
 
    inRecSet = drms_open_records(drms_env, inRecQuery, &status);
    if (!inRecSet)
@@ -332,27 +329,25 @@ int DoIt(void)
       DIE("No input records found\n");
    printf("%d input records found\n", nRecs);
    char *screcquery = (char *)cmdparams_get_str(&cmdparams, "SCALE_CORRECTIONS", NULL);
-   DRMS_RecordSet_t *screcset = drms_open_records(drms_env, screcquery, &status);
-   if (status != DRMS_SUCCESS || screcset == NULL)
+   if (strcmp(screcquery, kNOT_SPEC) != 0)
    {
-     fprintf(stderr, "ERROR: problem reading scale corrections recordset: query = %s, status = %d\n", screcquery, status);
-     return 1;
+      DRMS_RecordSet_t *screcset = drms_open_records(drms_env, screcquery, &status);
+      if (status != DRMS_SUCCESS || screcset == NULL)
+      {
+         fprintf(stderr, "ERROR: problem reading scale corrections recordset: query = %s, status = %d\n", screcquery, status);
+         return 1;
+      }
+
+      if (screcset->n != 1)
+      {
+         fprintf(stderr, "ERROR: scale corrections recordset contains more than one record: query = %s, nrecs = %d\n", screcquery, screcset->n);
+         return 1;
+      }
+
+      DRMS_Segment_t *scseg = drms_segment_lookupnum(screcset->records[0], 0);
+      drms_segment_filename(scseg,scfilepath);
+      printf("scale corrections filepath = %s\n", scfilepath);
    }
-
-   if (screcset->n != 1)
-   {
-     fprintf(stderr, "ERROR: scale corrections recordset contains more than one record: query = %s, nrecs = %d\n", screcquery, screcset->n);
-     return 1;
-   }
-
-   DRMS_Segment_t *scseg = drms_segment_lookupnum(screcset->records[0], 0);
-   drms_segment_filename(scseg,scfilepath);
-   printf("scale corrections filepath = %s\n", scfilepath);
-
-
-   //DRMS_Segment_t *inseg = drms_segment_lookupnum(inRecSet->records[0], 0);
-   //drms_segment_filename(inseg,infilepath);
-   //printf("incoming filepath = %s\n", infilepath);
 
    for (iRec=0; iRec<nRecs; iRec++)
       {
@@ -377,181 +372,184 @@ int DoIt(void)
       outRec = outRecSet->records[0];
 
       /* assume only one segment */
-	DataFile = drms_getkey_string(inRec,"DATAFILE",&status);
-	if (status && verbose)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
-	char filepath[DRMS_MAXPATHLEN];
-	inSeg = drms_segment_lookupnum(inRec, 0);
-        if (inSeg)
-	  drms_segment_filename(inSeg, filepath);
-        else 
-          filepath[0] = '\0';
-        val = drms_getkey_time(inRec, "T_OBS",&status);
-        val1= drms_getkey_string(inRec,"DPC_SMPL",&status);
+      DataFile = drms_getkey_string(inRec,"DATAFILE",&status);
+      if (status && verbose)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
+      char filepath[DRMS_MAXPATHLEN];
+      inSeg = drms_segment_lookupnum(inRec, 0);
+      if (inSeg)
+         drms_segment_filename(inSeg, filepath);
+      else 
+        filepath[0] = '\0';
+      val = drms_getkey_time(inRec, "T_OBS",&status);
+      val1= drms_getkey_string(inRec,"DPC_SMPL",&status);
 
-        printf("incoming filepath = %s\n", filepath);
+      if (verbose) printf("incoming filepath = %s\n", filepath);
 
     
 /* Check the polarisation status of the data. If the data has the string "_Vm_", then it is circularly polarized*/ 
 
 
-if (polflag && time_is_invalid(val) == 0 )
-{
-
-   char *val2     = drms_getkey_string(inRec,"DATAFILE",&status); 
-   char *val2test = strstr(val2,"_Vm_"); 
-   if (val2test == NULL) drms_setkey_string(outRec,"POLSTATE","LP"); 
-   else drms_setkey_string(outRec,"POLSTATE","CP"); 
-}  
+      if (polflag && time_is_invalid(val) == 0 )
+      {
+         char *val2     = drms_getkey_string(inRec,"DATAFILE",&status); 
+         char *val2test = strstr(val2,"_Vm_"); 
+         if (val2test == NULL) drms_setkey_string(outRec,"POLSTATE","LP"); 
+         else drms_setkey_string(outRec,"POLSTATE","CP"); 
+      }  
 
   // set cvs commit version into keyword HEADER
-   char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.11 2012/09/12 20:42:59 mbobra Exp $");
-   status = drms_setkey_string(outRec, "HEADER", cvsinfo); 
+      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.12 2013/04/04 07:19:26 tplarson Exp $");
+      status = drms_setkey_string(outRec, "HEADER", cvsinfo); 
 
+      if (skipflag)
+         goto skip;
 
-if (dpcflag)
-{
-	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0 && strcmp(val1,"60 second") == 0)
-	   {
-           outSeg = drms_segment_lookupnum(outRec, 0);
-           if (inSeg && outSeg)
+      if (dpcflag)
+      {
+         if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0 && strcmp(val1,"60 second") == 0)
+	 {
+            outSeg = drms_segment_lookupnum(outRec, 0);
+            if (inSeg && outSeg)
             {
-            DRMS_Array_t *data;
+               DRMS_Array_t *data;
             /* read the data ad doubles so allow rescaling on output */
-            data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
-            if (!data)
-                  {
-                     fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
+               data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
+               if (!data)
+               {
+                  fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
                   DIE_status("giveup\n");
-                  }
+               }
             /* use the zero and offset values in the JSD for the new record segment */
-            data->bscale = outSeg->bscale;
-            data->bzero = outSeg->bzero;
-            drms_segment_write(outSeg, data, 0);
-            drms_free_array(data);
-            Record_OK = 1;    
-	    quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
-            quality = quality & (~qualnodata);
-            drms_setkey_int(outRec,"QUALITY",quality);
+               data->bscale = outSeg->bscale;
+               data->bzero = outSeg->bzero;
+               drms_segment_write(outSeg, data, 0);
+               drms_free_array(data);
+               Record_OK = 1;    
+	       quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
+               quality = quality & (~qualnodata);
+               drms_setkey_int(outRec,"QUALITY",quality);
 	    }
-          else
-            DIE("Bad data segment lookup, in or out\n");
-           }
-        else
-	  { /* record is missing, copy t_rec and soho ephemeris keywords anyway*/
-          drms_copykey(outRec, inRec, "T_REC");
-	  drms_copykey(outRec, inRec, "OBS_VW");
-	  drms_copykey(outRec, inRec, "OBS_VR");
-	  drms_copykey(outRec, inRec, "OBS_VN");
-	  sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
-	  drms_setkey_string(outRec, "DATE", timebuf);
-	  val = drms_getkey_double(inRec, "OBS_DIST", &status);
-	  drms_setkey_double(outRec, "DSUN_OBS", val*AU_m);
-	  val = drms_getkey_double(inRec, "OBS_B0", &status);
-	  drms_setkey_double(outRec, "CRLT_OBS", val);	
-	  val = drms_getkey_double(inRec, "OBS_CR", &status);
-	  drms_setkey_double(outRec, "CAR_ROT", val);	
-	  val = drms_getkey_double(inRec, "OBS_R0", &status);
-	  drms_setkey_double(outRec, "RSUN_OBS", val);
-  	  val = drms_getkey_double(inRec, "OBS_L0", &status);
-	  drms_setkey_double(outRec, "CRLN_OBS", val); 
-          drms_setkey_int(outRec, "QUALITY", 0X80000000);
-  	  val = drms_getkey_int(inRec, "DPC", &status);
-	  drms_setkey_int(outRec, "DPC", val);
+            else
+               DIE("Bad data segment lookup, in or out\n");
+         }
+         else
+         { /* record is missing, copy t_rec and soho ephemeris keywords anyway*/
+            drms_copykey(outRec, inRec, "T_REC");
+            drms_copykey(outRec, inRec, "OBS_VW");
+            drms_copykey(outRec, inRec, "OBS_VR");
+            drms_copykey(outRec, inRec, "OBS_VN");
+            sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
+            drms_setkey_string(outRec, "DATE", timebuf);
+            val = drms_getkey_double(inRec, "OBS_DIST", &status);
+            drms_setkey_double(outRec, "DSUN_OBS", val*AU_m);
+            val = drms_getkey_double(inRec, "OBS_B0", &status);
+            drms_setkey_double(outRec, "CRLT_OBS", val);	
+            val = drms_getkey_double(inRec, "OBS_CR", &status);
+            drms_setkey_double(outRec, "CAR_ROT", val);	
+            val = drms_getkey_double(inRec, "OBS_R0", &status);
+            drms_setkey_double(outRec, "RSUN_OBS", val);
+            val = drms_getkey_double(inRec, "OBS_L0", &status);
+            drms_setkey_double(outRec, "CRLN_OBS", val); 
+            drms_setkey_int(outRec, "QUALITY", 0X80000000);
+            val = drms_getkey_int(inRec, "DPC", &status);
+            drms_setkey_int(outRec, "DPC", val);
 
-	  if (drms_keyword_lookup(outRec, "DATAVALS", 0))
-	    drms_setkey_int(outRec, "DATAVALS", 0);
-          if (SkipMissingFiles)
-             {
-             Record_OK = 0;
-             if (verbose) 
-               fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
-             }
-          else
-             Record_OK = 1;
-          drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
-          continue;
-	  }
-}
-else
-{
-	if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0)
-	   {
-           outSeg = drms_segment_lookupnum(outRec, 0);
-           if (inSeg && outSeg)
+            if (drms_keyword_lookup(outRec, "DATAVALS", 0))
+	       drms_setkey_int(outRec, "DATAVALS", 0);
+            if (SkipMissingFiles)
             {
-            DRMS_Array_t *data;
-            /* read the data ad doubles so allow rescaling on output */
-            data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
-            if (!data)
-                  {
-                     fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
+               Record_OK = 0;
+               if (verbose) 
+                  fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
+            }
+            else
+               Record_OK = 1;
+            drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
+            continue;
+         }
+      }
+      else
+      {
+         if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0)
+	 {
+            outSeg = drms_segment_lookupnum(outRec, 0);
+            if (inSeg && outSeg)
+            {
+               DRMS_Array_t *data;
+               /* read the data ad doubles so allow rescaling on output */
+               data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
+               if (!data)
+               {
+                  fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
                   DIE_status("giveup\n");
-                  }
+               }
             /* use the zero and offset values in the JSD for the new record segment */
-            data->bscale = outSeg->bscale;
-            data->bzero = outSeg->bzero;
-            drms_segment_write(outSeg, data, 0);
-            drms_free_array(data);
-            Record_OK = 1;    
-	    quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
-            quality = quality & (~qualnodata);
-            drms_setkey_int(outRec,"QUALITY",quality);
-	    }
-          else
-            DIE("Bad data segment lookup, in or out\n");
-           }
-        else
-	  { /* record is missing, copy t_rec and soho ephemeris keywords anyway*/
-          drms_copykey(outRec, inRec, "T_REC");
-	  drms_copykey(outRec, inRec, "OBS_VW");
-	  drms_copykey(outRec, inRec, "OBS_VR");
-	  drms_copykey(outRec, inRec, "OBS_VN");
-	  sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
-	  drms_setkey_string(outRec, "DATE", timebuf);
-	  val = drms_getkey_double(inRec, "OBS_DIST", &status);
-	  drms_setkey_double(outRec, "DSUN_OBS", val*AU_m);
-	  val = drms_getkey_double(inRec, "OBS_B0", &status);
-	  drms_setkey_double(outRec, "CRLT_OBS", val);	
-	  val = drms_getkey_double(inRec, "OBS_CR", &status);
-	  drms_setkey_double(outRec, "CAR_ROT", val);	
-	  val = drms_getkey_double(inRec, "OBS_R0", &status);
-	  drms_setkey_double(outRec, "RSUN_OBS", val);
-  	  val = drms_getkey_double(inRec, "OBS_L0", &status);
-	  drms_setkey_double(outRec, "CRLN_OBS", val); 
-          drms_setkey_int(outRec, "QUALITY", 0X80000000);
-  	  val = drms_getkey_int(inRec, "DPC", &status);
-	  drms_setkey_int(outRec, "DPC", val);
-	  if (drms_keyword_lookup(outRec, "DATAVALS", 0))
-	    drms_setkey_int(outRec, "DATAVALS", 0);
-          if (SkipMissingFiles)
-             {
-             Record_OK = 0;
-             if (verbose) 
-               fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
-             }
-          else
-             Record_OK = 1;
-          drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
-          continue;
-	  }
+               data->bscale = outSeg->bscale;
+               data->bzero = outSeg->bzero;
+               drms_segment_write(outSeg, data, 0);
+               drms_free_array(data);
+               Record_OK = 1;    
+	       quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
+               quality = quality & (~qualnodata);
+               drms_setkey_int(outRec,"QUALITY",quality);
+            }
+            else
+               DIE("Bad data segment lookup, in or out\n");
+         }
+         else
+         { /* record is missing, copy t_rec and soho ephemeris keywords anyway*/
+            drms_copykey(outRec, inRec, "T_REC");
+            drms_copykey(outRec, inRec, "OBS_VW");
+            drms_copykey(outRec, inRec, "OBS_VR");
+            drms_copykey(outRec, inRec, "OBS_VN");
+            sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
+            drms_setkey_string(outRec, "DATE", timebuf);
+            val = drms_getkey_double(inRec, "OBS_DIST", &status);
+            drms_setkey_double(outRec, "DSUN_OBS", val*AU_m);
+            val = drms_getkey_double(inRec, "OBS_B0", &status);
+            drms_setkey_double(outRec, "CRLT_OBS", val);	
+            val = drms_getkey_double(inRec, "OBS_CR", &status);
+            drms_setkey_double(outRec, "CAR_ROT", val);	
+            val = drms_getkey_double(inRec, "OBS_R0", &status);
+            drms_setkey_double(outRec, "RSUN_OBS", val);
+            val = drms_getkey_double(inRec, "OBS_L0", &status);
+            drms_setkey_double(outRec, "CRLN_OBS", val); 
+            drms_setkey_int(outRec, "QUALITY", 0X80000000);
+            val = drms_getkey_int(inRec, "DPC", &status);
+            drms_setkey_int(outRec, "DPC", val);
+            if (drms_keyword_lookup(outRec, "DATAVALS", 0))
+               drms_setkey_int(outRec, "DATAVALS", 0);
+            if (SkipMissingFiles)
+            {
+               Record_OK = 0;
+               if (verbose) 
+                  fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
+            }
+            else
+               Record_OK = 1;
+            drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
+            continue;
+         }
 
+      }
 
-}
+      skip:
+
       /* loop through all target keywords */
       outKey_last = NULL;
       while (outKey = drms_record_nextkey(outRec, &outKey_last, 1))
 	{
 	char *wantKey, *keyName = outKey->info->name;
         int action = keyNameCheck(keyName, &wantKey);
-        if (!drms_keyword_inclass(outKey, kDRMS_KeyClass_Explicit))
-	    continue;  // skip implicit keywords.
+        if (!drms_keyword_inclass(outKey, kDRMS_KeyClass_Explicit) || outKey->info->recscope == 1)
+	    continue;  // skip implicit and constant keywords.
         switch (action)
           {
 	  case ACT_NOP:
 		break;
 	  case ACT_COPY:
 		{
-		DRMS_Value_t inValue = {DRMS_TYPE_STRING, NULL};
+		DRMS_Value_t inValue = {DRMS_TYPE_STRING, '\0'};
 		inValue = drms_getkey_p(inRec, wantKey, &status);
 		if (status == DRMS_ERROR_UNKNOWNKEYWORD)
 			break;
@@ -685,7 +683,7 @@ else
           default:
                 /* name not in table, just take same name from input series */
                 {
-		DRMS_Value_t inValue = {DRMS_TYPE_STRING, NULL};
+		DRMS_Value_t inValue = {DRMS_TYPE_STRING, '\0'};
                 DRMS_Keyword_t *outKey = drms_keyword_lookup(outRec, keyName, 0);
                 if (drms_keyword_isconstant(outKey))
 			break;
@@ -701,6 +699,8 @@ else
                 }
           }
         }
+
+        drms_setkey_time(outRec, "DATE", time_now());
 
 /* populate the ROLL_TBL keyword */
 
