@@ -316,7 +316,7 @@ int DoIt(void)
    char infilepath[DRMS_MAXPATHLEN];
    dpcflag = params_isflagset(&cmdparams, "z");
    polflag = params_isflagset(&cmdparams, "p");
-   printf("dpcflag=%d\n",dpcflag);
+//   printf("dpcflag=%d\n",dpcflag);
    skipflag = params_isflagset(&cmdparams, "s");
 
    if (strcmp(inRecQuery, kNOT_SPEC) == 0 || strcmp(outRecQuery, kNOT_SPEC) == 0)
@@ -327,7 +327,7 @@ int DoIt(void)
       DIE_status("Input dataseries not found\n");
    if ((nRecs = inRecSet->n) == 0)
       DIE("No input records found\n");
-   printf("%d input records found\n", nRecs);
+   if (verbose) printf("%d input records found\n", nRecs);
    char *screcquery = (char *)cmdparams_get_str(&cmdparams, "SCALE_CORRECTIONS", NULL);
    if (strcmp(screcquery, kNOT_SPEC) != 0)
    {
@@ -371,19 +371,8 @@ int DoIt(void)
 
       outRec = outRecSet->records[0];
 
-      /* assume only one segment */
-      DataFile = drms_getkey_string(inRec,"DATAFILE",&status);
-      if (status && verbose)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
-      char filepath[DRMS_MAXPATHLEN];
-      inSeg = drms_segment_lookupnum(inRec, 0);
-      if (inSeg)
-         drms_segment_filename(inSeg, filepath);
-      else 
-        filepath[0] = '\0';
       val = drms_getkey_time(inRec, "T_OBS",&status);
       val1= drms_getkey_string(inRec,"DPC_SMPL",&status);
-
-      if (verbose) printf("incoming filepath = %s\n", filepath);
 
     
 /* Check the polarisation status of the data. If the data has the string "_Vm_", then it is circularly polarized*/ 
@@ -398,11 +387,22 @@ int DoIt(void)
       }  
 
   // set cvs commit version into keyword HEADER
-      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.12 2013/04/04 07:19:26 tplarson Exp $");
+      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.13 2013/04/05 08:24:25 tplarson Exp $");
       status = drms_setkey_string(outRec, "HEADER", cvsinfo); 
 
       if (skipflag)
          goto skip;
+
+      /* assume only one segment */
+      DataFile = drms_getkey_string(inRec,"DATAFILE",&status);
+      if (status && verbose)fprintf(stderr,"*** Segment Read DATAFILE status=%d\n",status);
+      char filepath[DRMS_MAXPATHLEN];
+      inSeg = drms_segment_lookupnum(inRec, 0);
+      if (inSeg)
+         drms_segment_filename(inSeg, filepath);
+      else 
+        filepath[0] = '\0';
+      if (verbose) printf("incoming filepath = %s\n", filepath);
 
       if (dpcflag)
       {
