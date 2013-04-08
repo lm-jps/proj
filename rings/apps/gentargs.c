@@ -102,10 +102,12 @@
  *
  *  Bugs:
  *    The 60-deg latitude list for 30-deg high B0 discross appears incomplete
- *    The "Stonyhurst" option of printing longitudes relative to CM is only
- *	implemented for the rd+30 grid
- *    A number of the options have not been implemented at all
+ *    The "Stonyhurst" option of printing longitudes relative to CM is not
+ *	implemented for the discross, rdsyn*, and mdi* grids
+ *    The rdx05 and rdx15 options have not been implemented at all
  *    There may be problems parsing regular calendar-clock time strings
+ *    The option for using the geocentric latitude of disc center as the base
+ *	has only been implemented for the timed* grids
  *    There is no check in the -B case that the requested targets do not go
  *	beyond the poles
  *
@@ -118,7 +120,7 @@
 #include "soho_ephem.c"
 						      /*  module identifier  */
 char *module_name = "track_target_list";
-char *version_id = "1.1";
+char *version_id = "1.2";
 
 ModuleArgs_t module_args[] = {
   {ARG_TIME,   "time",  "now-120deg", "midpoint of desired tracking interval"},
@@ -317,32 +319,36 @@ int dense_pack_list (double clon) {
   return 0;
 }
 
-int timed_grid_list (double clon, double clat, float step) {
+int timed_grid_list (double clon, double clat, float step, int stony) {
   float lat, lon, loncm;
   float edge = 2.0 * step;
 
-  for (lat = clat - edge; lat <= clat + edge; lat += step) {
+  for (lat = clat - edge; lat <= clat + edge + 0.1*step; lat += step) {
     for (loncm = -edge; loncm <= edge; loncm += step)
       printf (" %+05.1f", lat);
   }
   printf ("\n");
-  for (lat = clat - edge; lat <= clat + edge; lat += step) {
-    for (loncm = -edge; loncm <= edge; loncm += step) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
+  for (lat = clat - edge; lat <= clat + edge + 0.1*step; lat += step) {
+    for (loncm = -edge; loncm <= edge; loncm += step)
+      if (stony) printf (" %+05.1f", loncm);
+      else {
+      for (loncm = -edge; loncm <= edge; loncm += step) {
+	lon = clon + loncm;
+	while (lon < 0.0) lon += 360.0;
+	while (lon >= 360.0) lon -= 360.0;
+	printf (" %05.1f", lon);
+      }
     }
   }
   printf ("\n");
   return 0;
 }
 
-int timed_grid_list_plus (double clon, double clat) {
+int timed_grid_list_plus (double clon, double clat, int stony) {
   float lat, lon, loncm;
   float step = 24.0, edge = 48.0;
 
-  for (lat = clat - edge; lat <= clat + edge + 0.1; lat += step) {
+  for (lat = clat - edge; lat <= clat + edge + 0.1*step; lat += step) {
     for (loncm = -edge; loncm <= edge; loncm += step)
       printf (" %+05.1f", lat);
   }
@@ -352,13 +358,22 @@ int timed_grid_list_plus (double clon, double clat) {
   printf (" %+05.1f", clat + edge + 20.0);
   printf ("\n");
 
-  for (lat = clat - edge; lat <= clat + edge + 0.1; lat += step) {
+  for (lat = clat - edge; lat <= clat + edge + 0.1*step; lat += step) {
     for (loncm = -edge; loncm <= edge; loncm += step) {
-      lon = clon + loncm;
-      while (lon < 0.0) lon += 360.0;
-      while (lon >= 360.0) lon -= 360.0;
-      printf (" %05.1f", lon);
+      if (stony) printf (" %+05.1f", loncm);
+      else {
+	lon = clon + loncm;
+	while (lon < 0.0) lon += 360.0;
+	while (lon >= 360.0) lon -= 360.0;
+	printf (" %05.1f", lon);
+      }
     }
+  }
+  if (stony) {
+    printf (" %+05.1f %+05.1f %+05.1f %+05.1f", 0.0, -edge - 20.0, edge + 20.0,
+	0.0);
+    printf ("\n");
+    return 0;
   }
   printf (" %05.1f", clon);
   lon = clon - edge - 20.0;
@@ -456,7 +471,8 @@ int hmi30_eq_list (double clon, int stony) {
   float lon, loncm;
 
   if (stony) {
-    for (loncm = -60.0; loncm <= 60.0; loncm += 15.0) printf (" %+05.1f", loncm);
+    for (loncm = -60.0; loncm <= 60.0; loncm += 15.0)
+      printf (" %+05.1f", loncm);
   } else {
     for (loncm = -60.0; loncm <= 60.0; loncm += 15.0) {
       lon = clon + loncm;
@@ -1947,12 +1963,12 @@ int main (int argc, char **argv) {
   if (do_hmi30_pack) return hmi30_pack_list (cl, b0);
   if (do_hmi15_pack) return hmi15_pack_list (cl, b0);
   if (do_hmi5_pack) return hmi5_pack_list (cl, b0);
-  if (do_timed_grid20) return (relB0) ? timed_grid_list (cl, b0, 20.0) :
-      timed_grid_list (cl, 0.0, 20.0);
-  if (do_timed_grid24) return (relB0) ? timed_grid_list (cl, b0, 24.0) :
-      timed_grid_list (cl, 0.0, 24.0);
-  if (do_timed_grid24p) return (relB0) ? timed_grid_list_plus (cl, b0) :
-      timed_grid_list_plus (cl, 0.0);
+  if (do_timed_grid20) return (relB0) ? timed_grid_list (cl, b0, 20.0, stony) :
+      timed_grid_list (cl, 0.0, 20.0, stony);
+  if (do_timed_grid24) return (relB0) ? timed_grid_list (cl, b0, 24.0, stony) :
+      timed_grid_list (cl, 0.0, 24.0, stony);
+  if (do_timed_grid24p) return (relB0) ? timed_grid_list_plus (cl, b0, stony) :
+      timed_grid_list_plus (cl, 0.0, stony);
   if (do_cm30) return hmi30_cm_list ();
   if (do_cm15) return hmi15_cm_list (b0);
   if (do_cm05) return hmi5_cm_list (b0);
@@ -2312,4 +2328,8 @@ for (n = L25_825S; n <= L25_825N; n++) printf ("%5.1f: %d\n", lat25[n], trlat25[
  *		file pointers; likewise generate reduced number of target lists
  *		for case rdsyn05
  *  v 1.1 frozen 2011.11.14
+ *  v 1.2
+ *	13.01.11	Implemented Stonyhurst longitude reporting option for
+ *		grids timed*
+ *  v 1.2 frozen 2013.01.16
  */
