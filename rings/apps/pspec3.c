@@ -61,7 +61,7 @@
 
 char *module_name = "pspec3";
 char *module_desc = "3-d power spectrum";
-char *version_id = "1.0";
+char *version_id = "1.1";
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET, "in", "", "Input data set"},
@@ -240,7 +240,7 @@ int DoIt (void) {
   double dataavg, datavar, powrint, normal, weight;
   double bzero, bscale, scale_range;
   float *data, *xdata;
-  float ftrb, ftib, fval, vmin, vmax;
+  float ftrb, ftib, fval, vmin, vmax, vmin2;
   long long cube, ntot, l, m, n;
   int axes[3];
   int rank, col, cols, row, rows, plane, planes, area;
@@ -663,9 +663,12 @@ int DoIt (void) {
 	        }
 	    }
 	    data[n] = nfac * (ftrb*ftrb + ftib*ftib);
-	    if (n == 0) vmax = vmin = data[n];
+	    if (n == 0) vmax = vmin = vmin2 = data[n];
 	    if (data[n] > vmax) vmax = data[n];
-	    if (data[n] < vmin) vmin = data[n];
+	    if (data[n] < vmin) {
+	      vmin2 = vmin;
+	      vmin = data[n];
+	    }
 	    powrint += data[n];
 	  }
 	}
@@ -690,9 +693,12 @@ int DoIt (void) {
 	        wdata[m]*wdata[m] + wdata[m+1]*wdata[m+1] :
 	        xdata[m]*xdata[m] + xdata[m+1]*xdata[m+1];
 	    data[n] *= normal;
-	    if (n == 0) vmax = vmin = data[n];
+	    if (n == 0) vmax = vmin = vmin2 = data[n];
 	    if (data[n] > vmax) vmax = data[n];
-	    if (data[n] < vmin) vmin = data[n];
+	    if (data[n] < vmin) {
+	      vmin2 = vmin;
+	      vmin = data[n];
+	    }
 	    powrint += data[n];
 	  }
 	}
@@ -706,46 +712,22 @@ int DoIt (void) {
 	  data[cols * hrows + hcols], dataavg);
       printf ("  S(P) = %11.4e (cf. apodized data var. = %11.4e)\n", powrint, datavar);
     }
-/*
-    if ((segs = orec->segments.num_total) < 1) {
-      fprintf (stderr, "Error: no data segments in output data series:\n");
-      fprintf (stderr, "  %s\n", out_series);
-      return cleanup (1, irecs, orec, orig, pspec, dispose);
-    }
-    for (n = 0; n < segs; n++) {
-      oseg = drms_segment_lookupnum (orec, n);
-      if (oseg->info->naxis == 3) break;
-    }
-    if (n >= segs && verbose)
-      printf ("found no segmemt of rank 3, using segment %d\n", n);
-    switch (oseg->info->type) {
-      case DRMS_TYPE_CHAR:
-	scale_range = 250.0;
-	break;
-      case DRMS_TYPE_SHORT:
-	scale_range = 65000.0;
-	break;
-      case DRMS_TYPE_INT:
-	scale_range = 4.2e9;
-	break;
-      case DRMS_TYPE_LONGLONG:
-	scale_range = 1.8e19;
-	break;
-      default:
-	scale_range = 1.0;
-    }
-*/
+
     oseg = drms_segment_lookupnum (orec, osegnum);
     if (verbose) printf ("  values range from %.3e to %.3e\n", vmin, vmax);
     if (log_out) {
+/*
       double target_min = vmax / exp (scale_range);
-      if (vmin < target_min) {
+printf ("vmin = %.4e <? target_min = %.4e / %.4e = %.4e\n", vmin, vmax,
+exp(scale_range), target_min);
+*/
+      if (vmin < 0.1 * vmin2) {
 	fprintf (stderr,
 	    "** Warning: minimum value = %.2e; value = log (%.2e + data)\n",
-	    vmin, target_min);
-	for (n = 0; n < ntot; n++) data[n] = log (target_min + data[n]);
-	vmin = log (target_min + vmin);
-	vmax = log (target_min + vmax);
+	    vmin, vmin2);
+	for (n = 0; n < ntot; n++) data[n] = log (vmin2 + data[n]);
+	vmin = log (vmin2 + vmin);
+	vmax = log (vmin2 + vmax);
       } else {
 	for (n = 0; n < ntot; n++) data[n] = log (data[n]);
 	vmin = log (vmin);
@@ -849,5 +831,8 @@ int DoIt (void) {
  *		Added Ident to list of default propagated keywords; added option
  *	for providing alternate or additional list of keywords for propagation
  *  v 1.0 frozen 2010.08.19
+ *  v 1.1	Removed some old commented out code
+ *	Fixed bug in test for minimum values out of scaling range (zero)
+ *  v 1.1 frozen 2012.12.24
  *
  */
