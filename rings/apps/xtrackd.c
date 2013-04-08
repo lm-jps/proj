@@ -584,4 +584,5 @@ bscale = 1.0;
  *
  *  12.03.06	created this file, based on xxtrackd, stripping out CGI and
  *		export related stuff and old libraries
+ *  v 0.7 frozen 2013.04.08
  */
