@@ -35,6 +35,7 @@
  *	tstop	time	-		End of target tracking interval;
  *				ignored if input specified as data set, or if
  *				tmid and length are specified
+ *	tstep	float	-		Temporal cadence for (track) output
  *	trec_key string	T_REC		Keyname of time type prime keyword for
  *				input data series
  *	tobs_key string	T_OBS		Keyname of time type keyword describing
@@ -43,6 +44,12 @@
  *				observing cadence of input data
  *	qual_key string	Quality		Keyname of int type keyword describing
  *				record quality as bitmask
+ *	pa	float	-		Value of position angle required for
+ *				acceptance
+ *	dpa	float	-		Acceptance window width for position
+ *				angle
+ *	pa_key string	CROTA2		Keyname of float type keyword describing
+ *				position angle of (solar) north on image
  *
  *  Flags
  *	-v	run verbose
@@ -76,31 +83,37 @@
  */
 
 #include <jsoc_main.h>
-
-						      /*  module identifier  */
+						       /*  module identifier  */
 char *module_name = "rdcoverage";
 char *module_desc = "report input data coverage for tracking options";
-char *version_id = "0.8";
+char *version_id = "0.9";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"ds", "", "input data series or dataset"}, 
   {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
   {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
-  {ARG_INT,	"max_miss", "0", "missing values threshold for image rejection"},
+  {ARG_INT,	"max_miss", "0",
+      "missing values threshold for image rejection"},
   {ARG_STRING,	"tmid", "Not Specified", "midpoint of tracking interval"}, 
   {ARG_INT,	"length", "0",
       "target length of tracking interval [input cadence]"}, 
-				      /*  necessitated by bug (ticket #177)  */
+				       /*  necessitated by bug (ticket #177)  */
   {ARG_STRING,	"tstart", "Not Specified", "start of coverage interval"}, 
   {ARG_STRING,	"tstop", "Not Specified", "end of coverage interval"}, 
   {ARG_FLOAT,	"tstep", "Not specified", "temporal cadence for output"},
   {ARG_STRING,	"trec_key", "T_REC", "keyname of (slotted) prime key"}, 
   {ARG_STRING,	"tobs_key", "T_OBS", "keyname for image observation time"}, 
   {ARG_STRING,	"tstp_key", "CADENCE",  "keyname for image observation time"}, 
-  {ARG_STRING,	"qual_key", "Quality",  "keyname for 32-bit image quality field"}, 
+  {ARG_STRING,	"qual_key", "Quality",
+      "keyname for 32-bit image quality field"}, 
   {ARG_STRING,	"clon_key", "CRLN_OBS", "keyname for image central longitude"}, 
   {ARG_STRING,	"clat_key", "CRLT_OBS", "keyname for image central latitude"}, 
-  {ARG_STRING,	"crot_key", "CAR_ROT", "keyname for image Carrington rotation"}, 
+  {ARG_STRING,	"crot_key", "CAR_ROT", "keyname for image Carrington rotation"},
+  {ARG_FLOAT,	"pa", "Not Specified",
+      "centre of acceptable roll angles [deg]"}, 
+  {ARG_FLOAT,	"dpa", "Not Specified",
+      "maximum deviation of acceptable roll angles [deg]"}, 
+  {ARG_STRING,	"pa_key", "CROTA2", "keyname for image position angle"}, 
   {ARG_FLAG,	"v",	"", "verbose mode"}, 
   {}
 };
@@ -233,6 +246,7 @@ int DoIt (void) {
   double tmid_cl, lon_cm;
   double img_xc, img_yc, img_xscl, img_yscl, img_radius, img_pa;
   double kscale;
+  float pa_rec, dpa;
 
   long long nn;
   unsigned int quality;
@@ -243,7 +257,7 @@ int DoIt (void) {
   int col, row, pixct, i, found, n, nr, or;
   int blankvals, no_merid_v, rejects, status;
   int need_cadence, need_ephem;
-  int badpkey, badqual, badfill, badtime, blacklist;
+  int badpkey, badqual, badfill, badtime, badpa, blacklist;
   char rec_query[256];
   char module_ident[64], key[64], tbuf[64], ptbuf[64], ctime_str[16];
   char keyvalstr[DRMS_DEFVAL_MAXLEN];
@@ -256,7 +270,7 @@ int DoIt (void) {
   int check_platform = 0;
   int extrapolate = 1;
   int found_first = 0, found_last = 0;
-						 /*  process command params  */
+						  /*  process command params  */
   char *inset = strdup (params_get_str (params, "ds"));
   char *rejectfile = strdup (params_get_str (params, "reject"));
   unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
@@ -266,6 +280,9 @@ int DoIt (void) {
   char *tstop_str = strdup (params_get_str (params, "tstop"));
   int length = params_get_int (params, "length");
   double tstep = params_get_double (params, "tstep");
+  float pa_nom = params_get_float (params, "pa");
+  float dpa_max = params_get_float (params, "dpa");
+  int check_pa = (isfinite (pa_nom) && dpa_max < 180.0);
 
   char *trec_key = strdup (params_get_str (params, "trec_key"));
   char *tobs_key = strdup (params_get_str (params, "tobs_key"));
@@ -274,16 +291,17 @@ int DoIt (void) {
   char *clon_key = strdup (params_get_str (params, "clon_key"));
   char *clat_key = strdup (params_get_str (params, "clat_key"));
   char *crot_key = strdup (params_get_str (params, "crot_key"));
+  char *pang_key = strdup (params_get_str (params, "pa_key"));
 
   int verbose = params_isflagset (params, "v");
 
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s: JSOC version %s\n", module_ident, jsoc_version);
-	  /*  get lists of latitudes and longitudes defining region centers  */
+	   /*  get lists of latitudes and longitudes defining region centers  */
   need_cadence = isnan (tstep);
 
   if (key_params_from_dspec (inset)) {
-				   /*  input specified as specific data set  */
+				    /*  input specified as specific data set  */
     if (!(ds = drms_open_records (drms_env, inset, &status))) {
       fprintf (stderr, "Error: (%s) unable to open input data set %s\n",
         module_ident, inset);
@@ -303,9 +321,9 @@ int DoIt (void) {
       return 1;
     }
     if (need_cadence) {
-			 /*  output cadence not specified, use data cadence  */
+			  /*  output cadence not specified, use data cadence  */
       if ((keywd = drms_keyword_lookup (irec, tstp_key, 1))) {
-					     /*  cadence should be constant  */
+					      /*  cadence should be constant  */
 	if (keywd->info->recscope != 1) {
 	  fprintf (stderr, "Warning: cadence is variable in input series %s\n",
 	      inset);
@@ -331,9 +349,9 @@ int DoIt (void) {
     segct = drms_record_numsegments (irec);
   } else {
 				/*  only the input data series is named,
-				   get record specifications from arguments  */
-		   /*  get required series info from first record in series  */
-					       /*  platform, cadence, phase  */
+				    get record specifications from arguments  */
+		    /*  get required series info from first record in series  */
+						/*  platform, cadence, phase  */
     snprintf (rec_query, 256, "%s[#^]", inset);
     if (!(ds = drms_open_records (drms_env, rec_query, &status))) {
       fprintf (stderr, "Error: unable to open input data set %s\n", inset);
@@ -347,7 +365,7 @@ int DoIt (void) {
       return 1;
     }
     if ((keywd = drms_keyword_lookup (irec, tstp_key, 1))) {
-					     /*  cadence should be constant  */
+					      /*  cadence should be constant  */
       if (keywd->info->recscope != 1) {
 	fprintf (stderr, "Warning: cadence is variable in input series %s\n",
 	    inset);
@@ -356,7 +374,7 @@ int DoIt (void) {
 	      drms_getkey_double (irec, tstp_key, &status));
       }
     } else {
-			 /*  could infer from slotting info as well, but...  */
+			  /*  could infer from slotting info as well, but...  */
       fprintf (stderr,
           "Error: data cadence keyword %s not in input series %s\n",
 	  tstp_key, inset);
@@ -367,10 +385,10 @@ int DoIt (void) {
     data_cadence = drms_getkey_double (irec, tstp_key, &status);
     t_eps = 0.5 * data_cadence;
     if (need_cadence)
-			 /*  output cadence not specified, use data cadence  */
+			  /*  output cadence not specified, use data cadence  */
       tstep = data_cadence;
     if ((keywd = drms_keyword_lookup (irec, "TELESCOP", 1))) {
-						     /*  should be constant  */
+						      /*  should be constant  */
       if (keywd->info->recscope != 1)
 	fprintf (stderr, "Warning: TELESCOP is variable in input series %s\n",
 	    inset);
@@ -378,7 +396,8 @@ int DoIt (void) {
 	platform = LOC_SDO;
       else if (!strcmp (drms_getkey_string (irec, "TELESCOP", &status), "SOHO"))
 	platform = LOC_SOHO;
-      else if (!strcmp (drms_getkey_string (irec, "TELESCOP", &status), "NSO-GONG")) {
+      else if (!strcmp (drms_getkey_string (irec, "TELESCOP", &status),
+          "NSO-GONG")) {
 	if ((keywd = drms_keyword_lookup (irec, "SITE", 1))) {
 	  if (!strcmp (drms_getkey_string (irec, "SITE", &status), "MR"))
 	    platform = LOC_GONG_MR;
@@ -404,15 +423,16 @@ int DoIt (void) {
       }
     }
     if (platform == LOC_UNKNOWN) {
-      fprintf (stderr, "Warning: observing location unknown, assumed geocenter\n");
+      fprintf (stderr,
+          "Warning: observing location unknown, assumed geocenter\n");
     }
     segct = drms_record_numsegments (irec);
 
     if (strcmp (tmid_str, "Not Specified")) {
 /*  determine start and stop times from length (in units of tstep) and midtime
-				   (which can be CR:CL as well as date_time) */
+				    (which can be CR:CL as well as date_time) */
        if (sscanf (tmid_str, "%d:%lf", &tmid_cr, &tmid_cl) == 2) {
-			  /*  tmid specified as CR:CL : need ephemeris info  */
+			   /*  tmid specified as CR:CL : need ephemeris info  */
 	need_crcl = 0;
 	if (platform == LOC_SDO || platform == LOC_SOHO ||
 	    (platform >= LOC_GONG_MR && platform <= LOC_GONG_ML) ||
@@ -422,7 +442,7 @@ int DoIt (void) {
 	  else
 	    tmid = earth_meridian_crossing (tmid_cl, tmid_cr);
 	  sprint_time (ptbuf, tmid, "", 0);
-			  /*  adjust to phase of input, within data cadence  */
+			   /*  adjust to phase of input, within data cadence  */
 	  tbase = drms_getkey_time (irec, trec_key, &status);
 	  phase = fmod ((tmid - tbase), data_cadence);
 	  tmid -= phase;
@@ -439,7 +459,7 @@ int DoIt (void) {
 	  return 1;
 	}
       } else {
-			      /*  tmid specified as normal date-time string  */
+			       /*  tmid specified as normal date-time string  */
         tmid = sscan_time (tmid_str);
       }
       tbase = drms_getkey_time (irec, trec_key, &status);
@@ -453,13 +473,13 @@ int DoIt (void) {
 	drms_close_records (ds, DRMS_FREE_RECORD);
 	return 1;
       }
-			  /*  adjust stop time to reflect sampling symmetry  */
+			   /*  adjust stop time to reflect sampling symmetry  */
       if ((fabs (phase) < 0.001 * t_eps) && length % 2)
 	tstop += tstep;
       if ((fabs (phase - t_eps) < 0.001 * t_eps) && (length % 2 == 0))
 	tstop += tstep;
     } else {
-	       /*  tstart and tstop specified, determine midtime and length  */
+	        /*  tstart and tstop specified, determine midtime and length  */
       if (sscanf (tstrt_str, "%d:%lf", &tmid_cr, &tmid_cl) == 2) {
 	if (platform == LOC_SOHO)
 	  tstrt = SOHO_meridian_crossing (tmid_cl, tmid_cr);
@@ -524,7 +544,7 @@ int DoIt (void) {
     }
 */
   }
-			    /*  end determination of record set from params  */
+			     /*  end determination of record set from params  */
   if (verbose) {
     sprint_time (ptbuf, tstrt, "", -1);
     sprint_time (tbuf, tstop, "", -1);
@@ -618,9 +638,9 @@ printf ("need ephem from time\n");
 	return 1;
       }
 		/*  estimate midpoint ephemeris by linear interpolation
-					 of closest observations to midtime  */
- /*  This code has not been well tested in crossover of Carrington rotation  */
-    	  /*  assume at most one rotation between first and last estimators  */
+					  of closest observations to midtime  */
+  /*  This code has not been well tested in crossover of Carrington rotation  */
+    	   /*  assume at most one rotation between first and last estimators  */
       fprintf (stderr, "Warning: Carrington ephemeris from time not supported\n");
       if (!found) {
 	tmid_cr = cr_first;
@@ -636,7 +656,7 @@ printf ("need ephem from time\n");
       fprintf (stderr, "         estimating midpoint as %d:%08.4f\n",
 	  tmid_cr, tmid_cl);
 	/*  long extrapolations, and lazy correction for change of rotation
-					number,but only needed for lon_span  */
+					 number,but only needed for lon_span  */
       cr_start = cr_first;
       cm_lon_start = cm_lon_first +
           (cm_lon_last - cm_lon_first) * (tstrt - tfirst) / (tlast - tfirst);
@@ -651,7 +671,7 @@ printf ("need ephem from time\n");
     cr_start++;
     lon_span += 360.0;
   }
-		 /*  support special hack of reading of rejection list file  */
+		  /*  support special hack of reading of rejection list file  */
   rejects = 0;
   if (strcmp (rejectfile, "Not Specified")) {
     FILE *rejectfp = fopen (rejectfile, "r");
@@ -661,16 +681,16 @@ printf ("need ephem from time\n");
   }
 
   found = 0;
-					     /*  loop through input records  */
+					      /*  loop through input records  */
   valid = 0;
   ttrgt = tstrt;
   or = 0;
-  badpkey = badqual = badfill = badtime = blacklist = 0;
+  badpkey = badqual = badfill = badtime = badpa = blacklist = 0;
   for (nr = 0; nr < recct; nr++) {
     irec = ds->records[nr];
     quality = drms_getkey_int (irec, qual_key, &status);
     if ((quality & qmask) && !status) {
-						    /*  partial image, skip  */
+					 /*  unacceptable quality bits, skip  */
       badqual++;
       if (verbose) {
 	drms_keyword_snprintfval (drms_keyword_lookup (irec, trec_key, 1),
@@ -682,7 +702,7 @@ printf ("need ephem from time\n");
     }
     tobs = drms_getkey_time (irec, tobs_key, &status);
     if (time_is_invalid (tobs)) {
-							  /*  no data, skip  */
+						   /*  invalid obstime, skip  */
       badpkey++;
       if (verbose) {
 	drms_keyword_snprintfval (drms_keyword_lookup (irec, trec_key, 1),
@@ -693,7 +713,7 @@ printf ("need ephem from time\n");
     }
     blankvals = drms_getkey_int (irec, "MISSVALS", &status);
     if (blankvals > max_miss && !status) {
-						    /*  partial image, skip  */
+					     /*  too many blank values, skip  */
       badfill++;
       if (verbose) {
 	drms_keyword_snprintfval (drms_keyword_lookup (irec, trec_key, 1),
@@ -704,7 +724,7 @@ printf ("need ephem from time\n");
       continue;
     }
     if (tobs == tlast) {
-					 /*  same time as last record, skip  */
+				       /*  same obstime as last record, skip  */
       badtime++;
       if (verbose) {
 	drms_keyword_snprintfval (drms_keyword_lookup (irec, trec_key, 1),
@@ -717,10 +737,35 @@ printf ("need ephem from time\n");
       }
       continue;
     }
-			     /*  replace with call to solar_ephemeris_info?  */
+    if (check_pa) {
+			      /*  check for non-nominal image rotation angle  */
+      pa_rec = drms_getkey_float (irec, pang_key, &status);
+      if (status) {
+	fprintf (stderr, "Warning: \"%s\" keyword not found\n", pang_key);
+	fprintf (stderr, "         no limits on rotation angle\n");
+	check_pa = 0;
+	dpa_max = 360.0;
+      }
+      if (isfinite (pa_rec)) {
+	dpa = fabs (pa_rec - pa_nom);
+	while (dpa > 180.0) dpa -= 360.0;
+	while (dpa < 0.0) dpa += 360.0;
+	if (dpa > dpa_max) {
+	  badpa++;
+	  if (verbose) {
+	    drms_keyword_snprintfval (drms_keyword_lookup (irec, pang_key, 1),
+		keyvalstr, DRMS_DEFVAL_MAXLEN);
+	    printf ("%s: |%s - %.2f] = %.2f > %.2f\n", keyvalstr, pang_key,
+		pa_nom, dpa, dpa_max);
+	  }
+	  continue;
+	}
+      }
+    }
+			      /*  replace with call to solar_ephemeris_info?  */
     img_lon = drms_getkey_double (irec, clon_key, &status);
     img_lat = drms_getkey_double (irec, clat_key, &status);
-			 /*  check for record quality, reject as applicable  */
+			  /*  check for record quality, reject as applicable  */
     if (rejects) {
       int idrec = drms_getkey_int (irec, "T_REC_index", &status);
       int match = 0;
@@ -741,13 +786,12 @@ printf ("need ephem from time\n");
         continue;
       }
     }
-		      /*  loop through output records, appending time slice  */
-	    /*  extrapolate first image backward to start time if necessary  */
+		       /*  loop through output records, appending time slice  */
+	     /*  extrapolate first image backward to start time if necessary  */
     if (extrapolate) {
       while (ttrgt < tobs) {
-
-	if (verbose) printf ("step %d to be extrapolated from image %s\n", or, tbuf);
-
+	if (verbose) printf ("step %d to be extrapolated from image %s\n",
+	    or, tbuf);
 	or++;
 	if (or >= length) {
 	  fprintf (stderr, "Error: reached output length limit\n");
@@ -760,7 +804,7 @@ printf ("need ephem from time\n");
     }
     if (ttrgt < tobs) {
 	/*  linearly interpolate individual pixels between last valid map
-								and current  */
+								 and current  */
       double f, g;
       int ct, ntot = rgnct * pixct;
       float *val = (float *)malloc (ntot * sizeof (float));
@@ -819,6 +863,9 @@ printf ("need ephem from time\n");
   if (badtime)
     printf ("    %d input records rejected for duplicate values of %s\n",
 	badtime, tobs_key);
+  if (badpa)
+    printf ("    %d input records rejected for PA more than %.2f from %.2f\n",
+	badpa, dpa_max, pa_nom);
   if (blacklist)
     printf ("    %d input records rejected from rejection list\n", blacklist);
   return 0;
@@ -832,5 +879,7 @@ printf ("need ephem from time\n");
  *  v 0.7 frozen 2010.08.19
  *  10.10.28	moved quality flag check ahead of T_OBS check
  *  v 0.8 frozen 2011.02.28
+ *  12.05.23	added pangle selection options as for datavg
+ *  v 0.9 frozen 2012.08.03
  *
  */
