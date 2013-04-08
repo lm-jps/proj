@@ -356,7 +356,7 @@ $GENTG time= $CARTIM grid= rdsyn$TILES > $TLIST
 @ STRIPCT = `wc -l $TLIST | awk '{print $1}'`
 @ STRIPCT /= 2
 @ STRIP = $RESTART
-if ($RESTART) @ RGNCT = `show_info -c ds= $TSER"[$CROT][$CLON]" | awk '{print $1}'`
+@ EXIST = `show_info -bcq ds= $TSER"[$CROT][$CLON]"`
 @ TOTML = 0
 @ TOTEL = 0
 while ($STRIP < $STRIPCT)
@@ -453,7 +453,8 @@ if ($STRIPCT > 1) then
   set TTIME = $TOTEL
   if ($RESTART) set TTIME = $TTIME'*'
 endif
-@ RPCT = `show_info -cq ds= $TSER"[$CROT][$CLON]"`
+@ RPCT = `show_info -bcq ds= $TSER"[$CROT][$CLON]"`
+@ RPCT -= $EXIST
 if ($RPCT != $RGNCT) then
   echo "  WARNING:  only $RPCT tracked cubes written!" >> $MMSG
   echo "  WARNING:  only $RPCT tracked cubes written!" >> $LOGF
@@ -466,6 +467,7 @@ SKIP_TRACK:
 
 @ BEGUN = `date +%s`
 @ RGNCT = `show_info -cq ds= $TSER"[$CROT][$CLON]"`
+@ EXIST = `show_info -bcq ds= $PSER"[$CROT][$CLON]"`
 $PSPEC pspec= $PSER in= $TSER"[$CROT][$CLON]" mask_in= $APODE >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
@@ -474,27 +476,30 @@ if ($status) then
   echo "  ($CARTIM) pspec failure on `hostname` for $CARTIM"  >> $LOGF
   @ STRTSTOP = 0
   goto CLEANUP
-endif
-@ FINIS = `date +%s`
-@ ELAPS = $FINIS - $BEGUN
-@ ELAPS += 30
-@ ELAPS /= 60
-echo "  time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $MMSG
-echo "    spectra in $PSER""[$CROT][$CLON]" >> $MMSG
-echo "  ($CARTIM) time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $LOGF
-set PTIME = $ELAPS
-@ RPCT = `show_info -c ds= $PSER"[$CROT][$CLON]" | awk '{print $1}'`
-if ($RPCT != $RGNCT) then
-  echo "  WARNING:  only $RPCT spectra written!" >> $MMSG
-  echo "  WARNING:  only $RPCT spectra written!" >> $LOGF
-  set PTIME = $PTIME'*'
-  @ STRTSTOP = 0
+else
+  @ FINIS = `date +%s`
+  @ ELAPS = $FINIS - $BEGUN
+  @ ELAPS += 30
+  @ ELAPS /= 60
+  echo "  time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $MMSG
+  echo "    spectra in $PSER""[$CROT][$CLON]" >> $MMSG
+  echo "  ($CARTIM) time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $LOGF
+  set PTIME = $ELAPS
+  @ RPCT = `show_info -bcq ds= $PSER"[$CROT][$CLON]"`
+  @ RPCT -= $EXIST
+  if ($RPCT != $RGNCT) then
+    echo "  WARNING:  only $RPCT spectra written!" >> $MMSG
+    echo "  WARNING:  only $RPCT spectra written!" >> $LOGF
+    set PTIME = $PTIME'*'
+    @ STRTSTOP = 0
+  endif
 endif
 
 SKIP_PSPEC:
 
 @ BEGUN = `date +%s`
 @ RGNCT = `show_info -cq ds= $PSER"[$CROT][$CLON]"`
+@ EXIST = `show_info -bcq ds= $FSER"[$CROT][$CLON]"`
 $RFITF out= $FSER in= $PSER"[$CROT][$CLON]" \
     nmax= $NMAX kstart= "{$KLOW}" kstop= "{$KHIGH}" >>& $RLOG
 if ($status) then
@@ -504,22 +509,24 @@ if ($status) then
   echo "  ($CARTIM) rdfitf failure on `hostname` for $CARTIM"  >> $LOGF
   @ STRTSTOP = 0
   goto CLEANUP
-endif
-@ FINIS = `date +%s`
-@ ELAPS = $FINIS - $BEGUN
-@ ELAPS += 30
-@ ELAPS /= 60
-echo "  time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $MMSG
-echo "    fits in $FSER""[$CROT][$CLON]" >> $MMSG
-echo "  ($CARTIM) time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $LOGF
-set FTIME = $ELAPS
-@ RPCT = `show_info -c ds= $FSER"[$CROT][$CLON]" | awk '{print $1}'`
-if ($RPCT != $RGNCT) then
-  echo "  WARNING:  only $RPCT fit records written!" >> $MMSG
-  echo "  WARNING:  only $RPCT fit records written!" >> $LOGF
-  set FTIME = $FTIME'*'
-  @ STRTSTOP = 0
-  goto SKIP_INVRT
+else
+  @ FINIS = `date +%s`
+  @ ELAPS = $FINIS - $BEGUN
+  @ ELAPS += 30
+  @ ELAPS /= 60
+  echo "  time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $MMSG
+  echo "    fits in $FSER""[$CROT][$CLON]" >> $MMSG
+  echo "  ($CARTIM) time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $LOGF
+  set FTIME = $ELAPS
+  @ RPCT = `show_info -bcq ds= $FSER"[$CROT][$CLON]"`
+  @ RPCT -= $EXIST
+  if ($RPCT != $RGNCT) then
+    echo "  WARNING:  only $RPCT fit records written!" >> $MMSG
+    echo "  WARNING:  only $RPCT fit records written!" >> $LOGF
+    set FTIME = $FTIME'*'
+    @ STRTSTOP = 0
+    goto SKIP_INVRT
+  endif
 endif
 
 SKIP_FITSF:
@@ -528,6 +535,7 @@ if ($SYSE == 5) goto SKIP_INVRT
 
 @ BEGUN = `date +%s`
 @ RGNCT = `show_info -cq ds= $FSER"[$CROT][$CLON]"`
+@ EXIST = `show_info -bcq ds= $FLOW"[$CROT][$CLON]"`
 $RVINV out= $FLOW in= $FSER cr= $CROT clon= $CLON kernel= "$KRNL" \
     num= $RTGCT rb= $RIMIN re= $RIMAX >>& $RLOG
 if ($status) then
@@ -545,12 +553,21 @@ else
   echo "    inversions in $FLOW""[$CROT][$CLON]" >> $MMSG
   echo "  ($CARTIM) time for $RGNCT flow inversions on `hostname`: $ELAPS min" >> $LOGF
   set ITIME = $ELAPS
-  set SDIR = `show_info -pq ds= $FLOW"[$CROT][$CLON]"`
-  @ UXCT = `/bin/ls $SDIR/Ux | wc -l`
-  @ UYCT = `/bin/ls $SDIR/Uy | wc -l`
-  if ($UXCT != $RGNCT || $UYCT != $RGNCT) then
-    echo "  WARNING:  only $UXCT Ux and $UYCT Uy inversions written!" >> $MMSG
-    echo "  WARNING:  only $UXCT Ux and $UYCT Uy inversions written!" >> $LOGF
+  @ RPCT = `show_info -bcq ds= $FLOW"[$CROT][$CLON]"`
+  @ RPCT -= $EXIST
+  if ($RPCT) then
+    set SDIR = `show_info -pq ds= $FLOW"[$CROT][$CLON]"`
+    @ UXCT = `/bin/ls $SDIR/Ux | wc -l`
+    @ UYCT = `/bin/ls $SDIR/Uy | wc -l`
+    if ($UXCT != $RGNCT || $UYCT != $RGNCT) then
+      echo "  WARNING:  only $UXCT Ux and $UYCT Uy inversions written!" >> $MMSG
+      echo "  WARNING:  only $UXCT Ux and $UYCT Uy inversions written!" >> $LOGF
+      set ITIME = $ITIME'*'
+      @ STRTSTOP = 0
+    endif
+  else
+    echo "  WARNING:  no inversion records written!" >> $MMSG
+    echo "  WARNING:  no inversion records written!" >> $LOGF
     set ITIME = $ITIME'*'
     @ STRTSTOP = 0
   endif
@@ -586,6 +603,7 @@ if ($SYSE == 5) then
   @ TOTEL = 0
   @ TOTCT = 0
   @ FAILCT = 0
+  @ EXIST = `show_info -bcq ds= $CSER"[$CROT][$CLON]"`
   foreach LAT (`$GENTG time= $CARTIM grid= rdcm$TILES`)
     set noglob
     set RGNS = (`show_info -iq ds= $PSER"[$CROT][$CLON][][$LAT][]"`)
@@ -634,7 +652,8 @@ if ($SYSE == 5) then
   endif
   echo "    fits in $CSER""[$CROT][$CLON]" >> $MMSG
   set CTIME = $TOTEL
-  @ RPCT = `show_info -c ds= $CSER"[$CROT][$CLON]" | awk '{print $1}'`
+  @ RPCT = `show_info -bcq ds= $CSER"[$CROT][$CLON]"`
+  @ RPCT -= $EXIST
   if ($RPCT != $RGNCT) then
     echo "  WARNING:  only $RPCT fit records written!" >> $MMSG
     echo "  WARNING:  only $RPCT fit records written!" >> $LOGF
@@ -642,6 +661,7 @@ if ($SYSE == 5) then
     @ STRTSTOP = 0
   endif
 else
+  @ EXIST = `show_info -bcq ds= $CSER"[$CROT][$CLON]"`
   set noglob
   if ($SYSE == 30 || $SYSE == 15) then
     set LATS = `$GENTG -c time= $CARTIM grid= rd+$TILES | head -1`
@@ -705,7 +725,8 @@ else
   echo "  ($CARTIM) time for fitting $EXPCT spectra on the cluster: $ELAPS min" >> $LOGF
   set CTIME = $ELAPS
   if ($FAIL) set CTIME = $CTIME'*'
-  @ RPCT = `show_info -c ds= $CSER"[$CROT][$CLON]" | awk '{print $1}'`
+  @ RPCT = `show_info -bcq ds= $CSER"[$CROT][$CLON]"`
+  @ RPCT -= $EXIST
   if ($RPCT != $EXPCT) then
     echo "  WARNING:  only $RPCT fit records written!" >> $MMSG
     echo "  WARNING:  only $RPCT fit records written!" >> $LOGF
