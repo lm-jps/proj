@@ -19,6 +19,7 @@
  *      count	str	valid		Output series segment containing count
  *      mean	str	mean		Output series segment containing mean
  *      power	str	power		Output series segment containing variance
+ *      log	str	Log		Output series segment containing run log
  *      tmid	str	unspecified	midpoint of averaging interval (CR:CL)
  *	length	float	unspecified	length of averaging interval (in deg og
  *			Carrington rotation)
@@ -27,12 +28,20 @@
  *				of quality mask values
  *	qmask	int	0x80000000	Quality mask for data acceptability;
  *				records rejected if (qmask & qkey:value) != 0
+ *	cvok	str	any		64-bit mask of acceptable values for
+ *				calibration veraion of input; default -> all
+ *				values acceptable
+ *	cvno	str	none		64-bit mask of acceptable values for
+ *				calibration veraion of input; default -> no
+ *				values unacceptable
  *	copy	str	+		list of keys to be propagated as-is
  *	average	str	+		list of keys to be averaged
  *	pkey	str	T_OBS		Name of keyword to be used as index
  *			over which input records are selected for averaging
  *	qual_key str	Quality		Key name of uint type keyword describing
  *			data quality
+ *	cvkey	str	CalVer64	Key name of 64-bit mask type keyword
+ *			describing calibration version used
  *	roll_key str	CROTA2		Name of keyword describing roll angle
  *	pa	float	180.0		Centre of acceptable roll angles
  *	dpa	float	1.0		Maximum deviation of acceptable roll
@@ -50,9 +59,6 @@
  *	-o	correct individual images for orbital velocity
  *	-v	run verbose
  *
- *  Status:
- *    Works with reasonable functionality
- *
  *  Bugs:
  *    Propagated keys are copied from the first input record, without checking
  *	for uniqueness
@@ -69,6 +75,11 @@
  *	assumes that the units are degrees
  *    The reported extremal values of mean and power are determined before
  *	possible output scaling; they may be outside the representable range
+ *    Only a single value can be specified for cvok or cvno (which are treated
+ *	as string arguments for local parsing, although in principle they
+ *	should be arrays of ints)
+ *    The protocol of the log segment, if present in the output series, is not
+ *	verified to be generic
  *
  *  Revision history is at the end of the file.
  *
@@ -83,7 +94,7 @@
 #define	DO_SQUARE	(2)
 
 char *module_name = "data average";
-char *version_id = "1.1";
+char *version_id = "1.2";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"in", "", "input data series or dataset"}, 
@@ -96,6 +107,9 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT,	"dpa", "1.0", "maximum deviation of acceptable roll angles"}, 
   {ARG_INT,	"qmask", "0x80000000", "quality bit mask for image rejection"},
   {ARG_STRING,	"reject", "Not Specified", "file containing rejection list"}, 
+  {ARG_STRING,	"cvkey", "CalVer64", "keyname for Calibration Version key"}, 
+  {ARG_STRING,  "cvok", "any", "Acceptable value of cvkey"},
+  {ARG_STRING,  "cvno", "none", "Unacceptable value of cvkey"},
   {ARG_STRING,  "copy",  "+", "comma separated list of keys to propagate"},
   {ARG_STRING,  "average",  "+", "comma separated list of keys to average"},
   {ARG_STRING,	"pkey", "T_OBS",
@@ -105,6 +119,7 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,	"count", "valid", "output data series segment containing count"}, 
   {ARG_STRING,	"mean", "mean", "output data series segment containing mean"}, 
   {ARG_STRING,	"power", "power", "output data series segment containing variance"}, 
+  {ARG_STRING,	"log", "Log", "output data series segment containing run log"}, 
   {ARG_STRING,	"setkey", "Not Specified", "name of special extra key to be set"}, 
   {ARG_DOUBLE,	"setval", "Not Specified",
 	"value of special extra key to be set; if invalid, name of key whose value is to be used"}, 
@@ -117,6 +132,72 @@ ModuleArgs_t module_args[] = {
   {ARG_FLAG,	"v",	"", "verbose mode"}, 
   {ARG_END}
 };
+
+int drms_appendstr_tokey (DRMS_Record_t *rec, const char *key, const char *str,
+    int addline) {
+/*
+ *  This is just a private, slightly simplified version of the static function
+ *    AppendStrKeyInternal() in $DRMS/base/drms/libs/api/drms_keyword.c
+ */
+  DRMS_Keyword_t *keyword = NULL;
+  int rv;
+
+  if (!rec || !str) return DRMS_ERROR_INVALIDDATA;
+  if (!strlen (str)) return 0;
+  keyword = drms_keyword_lookup (rec, key, 0);
+  if (!keyword) return DRMS_ERROR_UNKNOWNKEYWORD;
+  if (keyword->info->islink || drms_keyword_isconstant (keyword) ||
+      drms_keyword_isslotted (keyword))
+    return DRMS_ERROR_KEYWORDREADONLY;
+  if (keyword->info->type != DRMS_TYPE_STRING) return DRMS_ERROR_INVALIDDATA;
+	       /*  append to old string, if it exists, otherwise just assign  */
+  if (keyword->value.string_val) {
+    char *tmp = NULL;
+    if (strlen (keyword->value.string_val)) {
+      size_t strsz = strlen (keyword->value.string_val) + strlen (str) + 2;
+      tmp = malloc(strsz);
+      if (addline)
+	snprintf (tmp, strsz, "%s\n%s", keyword->value.string_val, str);
+      else
+	snprintf (tmp, strsz, "%s%s", keyword->value.string_val, str);
+    } else tmp = strdup (str);
+    free (keyword->value.string_val);
+    keyword->value.string_val = tmp;
+  } else keyword->value.string_val = strdup (str);
+  return 0;
+}
+
+void append_args_tokey (DRMS_Record_t *rec, const char *key) {
+/*
+ *  Appends a list of all calling argument values to the designated
+ *    key (presumably HISTORY or COMMENT)
+ *  This function should be a general utility, maybe move to keystuff.c
+ */
+  ModuleArgs_t *arg = gModArgs;
+  CmdParams_t *params = &cmdparams;
+  int flagct = 0;
+  char *strval;
+  char flaglist[72];
+
+  drms_appendstr_tokey (rec, key, "Module called with following arguments:", 1);
+  while (arg->type != ARG_END) {
+    if (arg->type == ARG_FLAG) {
+      if (params_isflagset (params, arg->name)) {
+        if (!flagct) sprintf (flaglist, "with flags -");
+        strcat (flaglist, arg->name);
+        flagct++;
+      }
+    } else {
+      drms_appendstr_tokey (rec, key, arg->name, 1);
+      drms_appendstr_tokey (rec, key, "= ", 0);
+      strval = strdup (params_get_str (params, arg->name));
+      drms_appendstr_tokey (rec, key, strval, 0);
+    }
+    arg++;
+  }
+  if (flagct) drms_appendstr_tokey (rec, key, flaglist, 1);
+  return;
+}
 	/*  list of keywords to propagate by default (if possible and unique)
 						        from input to output  */
 char *propagate[] = {"TELESCOP", "INSTRUME", "WCSNAME", "WCSAXES"};
@@ -124,6 +205,25 @@ char *propagate[] = {"TELESCOP", "INSTRUME", "WCSNAME", "WCSAXES"};
 						        from input to output  */
 char *average[] = {"OBS_VR", "OBS_VW", "OBS_VN"};
 			  /*  the following belong in external utility files  */
+static long long params_get_mask (CmdParams_t *params, char *arg,
+    long long defval) {
+/*
+ *  This function parses the string associated with the command parameters
+ *    argument "arg" as the hexadecimal representation of an unsigned 64-bit
+ *    integer, which it returns. The string may consist of up to 16 hexadecimal
+ *    characters. (They can optionally be preceded by '0x', but the string is
+ *    treated as a hexadecimal representation regardless.)  If there are any
+ *    extra or illegal characters in the string, the value "defval" is returned.
+ */
+  long long retval;
+  const char *str = params_get_str (params, arg);
+  char *ext;
+
+  retval  = strtoull (str, &ext, 16);
+  if (strlen (ext)) retval = defval;
+  return retval;
+}
+
 static int fgetline (FILE *in, char *line, int max) {
   if (fgets (line, max, in) == NULL) return 0;
   else return (strlen (line));
@@ -368,19 +468,19 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
   return kstat;
 }
 
-void report_pkey_value (DRMS_Record_t *rec, char *key, int recnum) {
+void report_pkey_value (FILE *out, DRMS_Record_t *rec, char *key, int recnum) {
   DRMS_Keyword_t *keyword;
   char buf[128];
 
-  printf ("processing record ");
+  fprintf (out, "record ");
   keyword = drms_keyword_lookup (rec, key, 1);
   if (!keyword) {
-    printf (" %d (unknown value) : ", recnum);
+    fprintf (out, "%d (unknown value) [#%lld]: ", recnum, rec->recnum);
     return;
   }
   drms_keyword_snprintfval (keyword, buf, sizeof (buf));
-  printf ("%s (%d): ", buf, recnum);
-  fflush (stdout);
+  fprintf (out, "%s (%d) [#%lld]: ", buf, recnum, rec->recnum);
+  fflush (out);
 }
 
 int DoIt (void) {
@@ -388,9 +488,11 @@ int DoIt (void) {
   DRMS_RecordSet_t *ids = NULL;
   DRMS_Record_t *irec, *orec = NULL;
   DRMS_Segment_t *iseg, *vseg = NULL, *mseg = NULL, *pseg = NULL;
+  DRMS_Segment_t *logseg = NULL;
   DRMS_Array_t *data_array, *vcts, *mean, *powr;
   DRMS_Keyword_t *keywd;
   TIME tmid, tobs_rec, tobs, tfirst, tlast;
+  FILE *runlog;
   double *v, *vavg, *vvar;
   double *crpix, *crval, *cdelt, *crota, *avgval;
   double *crpixv, *crvalv, *cdeltv, *crotav, *avgvalv;
@@ -401,23 +503,27 @@ int DoIt (void) {
   double crlnobs, crlnval, crlnvalv;
   float clstrt, clmid, clstop;
   float pa_rec, dpa;
-  long long ntot, img_size;
+  long long *cvgolist, *cvnolist, *cvlist;
+  long long ntot, img_size, calver;
   unsigned int quality;
-  int *inaxis, *vval, *reject_list;
+  int *inaxis, *vval, *reject_list, *cvfound;
   int rec, recct, segct, segnum, maxct, imgct;
   int crstrt, crmid, crstop, carrot;
   int checkseg, mscaled, pscaled;
   int kstat, status;
   int log_status;
+  int writelog;
   int n, naxis, wcsaxes;
-  int propct, meanct, add_defaults;
+  int propct, meanct, add_defaults, cvct, cvgoct, cvnoct, cvused, cvmaxct;
   char **copykeylist, **meankeylist;
   char *source, *keystr;
   char recset_query[DRMS_MAXQUERYLEN], keyname[DRMS_MAXKEYNAMELEN];
-  char module_ident[64], tbuf[64], vbuf[128];
+  char calverinfo[DRMS_MAXQUERYLEN];
+  char logfilename[DRMS_MAXPATHLEN];
+  char module_ident[64], tbuf[64], vbuf[128], strbuf[128];
 
   double fp_nan = 0.0 / 0.0;
-  int badqual = 0, blacklist = 0, badpa = 0, rejects = 0;
+  int badqual = 0, blacklist = 0, badpa = 0, badcv = 0, rejects = 0;
   int propkeyct = sizeof (propagate) / sizeof (char *);
   int meankeyct = sizeof (average) / sizeof (char *);
 
@@ -426,11 +532,15 @@ int DoIt (void) {
   char *vsegname = strdup (params_get_str (params, "count"));
   char *msegname = strdup (params_get_str (params, "mean"));
   char *psegname = strdup (params_get_str (params, "power"));
+  char *logsegname = strdup (params_get_str (params, "log"));
   char *tmid_str = strdup (params_get_str (params, "tmid"));
   float intrvl = params_get_float (params, "length");
   float pa_nom = params_get_float (params, "pa");
   float dpa_max = params_get_float (params, "dpa");
   unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
+  long long cvaccept = params_get_mask (params, "cvok", -1);
+  long long cvreject = params_get_mask (params, "cvno", 0);
+  char *calverkey = strdup (params_get_str (params, "cvkey"));
   char *rejectfile = strdup (params_get_str (params, "reject"));
   char *propagate_req = strdup (params_get_str (params, "copy"));
   char *average_req = strdup (params_get_str (params, "average"));
@@ -452,9 +562,25 @@ int DoIt (void) {
   int check_pa = (dpa_max < 180.0);
   int set_extra_key = (strcmp (spec_key, "Not Specified")) ? 1 : 0;
   int use_other_key = isnan (spec_val);
+  int filt_on_calver = (cvreject || ~cvaccept);
 
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s:\n", module_ident);
+			 /*  initialize CalVer lists (single element for now  */
+  cvused = 0;
+  cvmaxct = 64;
+  cvfound = (int *)malloc (cvmaxct * sizeof (int));
+  cvlist = (long long *)malloc (cvmaxct * sizeof (long long));
+  if (filt_on_calver) {
+    cvgoct = 1;
+    cvgolist = (long long *)malloc (cvgoct * sizeof (long long));
+    cvgolist[0] = cvaccept;
+    cvnoct = 1;
+    cvnolist = (long long *)malloc (cvnoct * sizeof (long long));
+    cvnolist[0] = cvreject;
+    if (~cvaccept) cvgoct = 0;
+    if (!cvreject) cvnoct = 0;
+  }
   if (!isfinite (pa_nom)) pa_nom = 180.0;
 						    /*  create output record  */
   if (no_save) {
@@ -530,6 +656,13 @@ int DoIt (void) {
 	"Warning: output series %s does not contain the segment %s\n",
 	out_series, psegname);
     pscaled = 0;
+  }
+  writelog = 0;
+  logseg = drms_segment_lookup (orec, logsegname);
+  if (logseg && dispose == DRMS_INSERT_RECORD) {
+    drms_segment_filename (logseg, logfilename);
+    runlog = fopen (logfilename, "w");
+    if (runlog) writelog = 1;
   }
 
 					     /*  process input specification  */
@@ -616,9 +749,28 @@ int DoIt (void) {
       inset = strdup (recset_query);
       tmid = earth_meridian_crossing (clmid, crmid);
     } else {
-fprintf (stderr, "specification of time target by other than CR:CL not supported\n");
-return 0;
-    }
+			      /*  tmid specified as normal date-time string  */
+      tmid = sscan_time (tmid_str);
+      clmid = fp_nan;
+      crmid = -1;
+       sprintf (recset_query, "%s[?%s between %f and %f?]", source,
+	  primekey, tmid - 0.5 * intrvl, tmid + 0.5 * intrvl);
+      if (!(ids = drms_open_records (drms_env, recset_query, &status))) {
+	fprintf (stderr, "Error: (%s) unable to open input data set %s\n",
+          module_ident, recset_query);
+	fprintf (stderr, "       status = %d\n", status);
+	return 1;
+      }
+      if ((recct = ids->n) < 2) {
+	fprintf (stderr, "Error: (%s) <2 records in selected input set\n",
+	    module_ident);
+	fprintf (stderr, "       %s\n", recset_query);
+	drms_close_records (ids, DRMS_FREE_RECORD);
+	return 1;
+      }
+      free (inset);
+      inset = strdup (recset_query);
+   }
   }
   if (verbose) printf ("processing %d input records\n", recct);
   propct = construct_stringlist (propagate_req, ',', &copykeylist);
@@ -702,6 +854,14 @@ return 0;
       fprintf (stderr, "Warning: required keyword %s not found\n", "OBS_VR");
       fprintf (stderr, "         no correction applied for observer velocity\n");
       remove_obsvel = 0;
+    }
+  }
+  if (filt_on_calver) {
+    keywd = drms_keyword_lookup (irec, calverkey, 1);
+    if (!keywd) {
+      fprintf (stderr, "Warning: required keyword %s not found\n", calverkey);
+      fprintf (stderr, "         no calibration version filtering applied\n");
+      filt_on_calver = 0;
     }
   }
 					   /*  set up WCS keys for averaging  */
@@ -807,6 +967,32 @@ return 0;
     fprintf (stderr, "      output series may not have appropriate structure\n");
     if (!no_save) return 1;
   }
+		 	   /*  write argument list to Comment (or History)  */
+/*
+  if (filt_on_calver) {
+    calverinfo[0] = '\0';
+    if (~cvaccept) {
+      sprintf (calverinfo, "%s values accepted: %016llx", calverkey, cvaccept);
+      if (cvreject) strcat (calverinfo, "\n");
+    }
+    if (cvreject) {
+      sprintf (strbuf, "%s values rejected: %016llx", calverkey, cvreject);
+      strcat (calverinfo, strbuf);
+    }
+  } else
+    sprintf (calverinfo, "%s values accepted: ANY", calverkey);
+*/
+  if ((keywd = drms_keyword_lookup (orec, "COMMENT", 1))) {
+    append_args_tokey (orec, "COMMENT");
+/*
+    drms_appendhistory (orec, calverinfo, 1);
+*/
+  } else if ((keywd = drms_keyword_lookup (orec, "HISTORY", 1))) {
+    append_args_tokey (orec, "HISTORY");
+/*
+    drms_appendhistory (orec, calverinfo, 1);
+*/
+  }
 		  /*  support special hack of reading of rejection list file  */
   rejects = 0;
   if (strcmp (rejectfile, "Not Specified")) {
@@ -821,13 +1007,15 @@ return 0;
 					      /*  loop through input records  */
   for (rec = 0; rec < recct; rec++) {
     irec = ids->records[rec];
-    if (verbose) report_pkey_value (irec, primekey, rec);
+    if (verbose) report_pkey_value (stdout, irec, primekey, rec);
+    if (writelog) report_pkey_value (runlog, irec, primekey, rec);
 
 			  /*  check for record quality, reject as applicable  */
     quality = drms_getkey_int (irec, qual_key, &status);
     if ((quality & qmask) && !status) {
       badqual++;
       if (verbose) printf ("skipped (quality)\n");
+      if (writelog) fprintf (runlog, "skipped (quality)\n");
       continue;
     }
     if (rejects) {
@@ -849,7 +1037,56 @@ return 0;
       if (match) {
         blacklist++;
         if (verbose) printf ("skipped (blacklist)\n");
+        if (writelog) fprintf (runlog, "skipped (blacklist)\n");
         continue;
+      }
+    }
+	      /*  check for record calibration version; reject as applicable  */
+    calver = drms_getkey_longlong (irec, calverkey, &status);
+    if (filt_on_calver) {
+      if (status) {
+		     /*  this probably never happens if the keyword exists  */
+	if (verbose) printf ("skipped\n  (no %s key value)\n", calverkey);
+	if (writelog) fprintf (runlog, "skipped\n  (no %s key value)\n",
+	    calverkey);
+	continue;
+      }
+      for (cvct = 0; cvct < cvgoct; cvct++)
+	if (calver == cvgolist[cvct]) break;
+      if (cvct >= cvgoct) {
+	badcv++;
+	if (verbose)
+	  printf ("skipped\n  (calibration version key %s = %016llx)\n",
+	      calverkey, calver);
+	if (writelog)
+	  fprintf (runlog, "skipped\n  (calibration version key %s = %016llx)\n",
+	      calverkey, calver);
+	continue;
+      }
+      for (cvct = 0; cvct < cvnoct; cvct++) {
+ 	if (calver == cvnolist[cvct]) {
+	  badcv++;
+	  if (verbose)
+	    printf ("skipped\n  (calibration version key %s = %016llx)\n",
+	        calverkey, calver);
+	  if (writelog)
+	    fprintf (runlog, "skipped\n  (calibration version key %s = %016llx)\n",
+	        calverkey, calver);
+	  continue;
+	}
+      }
+    }
+    for (cvct = 0; cvct < cvused; cvct++) {
+      if (calver == cvlist[cvct]) {
+        cvfound[cvct]++;
+        break;
+      }
+    }
+    if (cvct == cvused) {
+      if (cvused < cvmaxct) {
+        cvlist[cvct] = calver;
+	cvfound[cvct] = 1;
+	cvused++;
       }
     }
 			      /*  check for non-nominal image rotation angle  */
@@ -868,6 +1105,7 @@ return 0;
 	if (dpa > dpa_max) {
 	  badpa++;
 	  if (verbose) printf ("skipped (rotated)\n");
+	  if (writelog) fprintf (runlog, "skipped (rotated)\n");
 	  continue;
 	}
       }
@@ -884,6 +1122,7 @@ return 0;
       }
       if (!okay) {
         if (verbose) printf ("skipped (dimension mismatch)\n");
+        if (writelog) fprintf (runlog, "skipped (dimension mismatch)\n");
         continue;
       }
     }
@@ -892,6 +1131,7 @@ return 0;
     if (status) {
       if (data_array) drms_free_array (data_array);
       if (verbose) printf ("skipped (segment read error)\n");
+      if (writelog) fprintf (runlog, "skipped (segment read error)\n");
       else {
 	fprintf (stderr, "Error reading file for record %d: ", rec);
 	keywd = drms_keyword_lookup (irec, primekey, 1);
@@ -914,6 +1154,7 @@ return 0;
 
     tobs_rec = drms_getkey_time (irec, primekey, &status);
     if (status || time_is_invalid (tobs_rec)) {
+      if (writelog) fprintf (runlog, "skipped (time invalid)\n");
       if (verbose) printf ("skipped (time invalid)\n");
       else fprintf (stderr, "error reading %s from record #%d\n", primekey, rec);
       if (data_array) drms_free_array (data_array);
@@ -1007,6 +1248,7 @@ return 0;
       }
     }
     if (verbose) printf ("ok\n");
+    if (writelog) fprintf (runlog, "ok\n");
   }
   if (checkseg) free (inaxis);
   vval = (int *)vcts->data;
@@ -1127,20 +1369,52 @@ return 0;
   if (verbose) {
     printf ("record %s[:#%lld] ", out_series, orec->recnum);
     if (dispose == DRMS_FREE_RECORD) printf ("not ");
-    printf ("written\n");
+    printf ("written\n\n");
+    if (badqual) printf
+	("    %d input records rejected for quality matching %08x\n",
+	badqual, qmask);
+    if (blacklist) printf
+	("    %d input records rejected from rejection list\n", blacklist);
+    if (badpa) printf
+	("    %d input records rejected for roll difference exceeding %.2f\n",
+	badpa, dpa_max);
+    if (badcv) {
+      printf ("    %d input records rejected for calib version matching %016llx\n",
+	  badcv, cvreject);
+      printf ("                     or failing to match %016llx\n", cvaccept);
+    }
+    printf ("%s values used:", calverkey);
+    for (cvct = 0; cvct < cvused; cvct++) {
+      if (cvct) printf (",");
+      printf (" %016llx (%d)", cvlist[cvct], cvfound[cvct]);
+    }
+    printf ("\n");
+  }
+  if (writelog) {
+    if (badqual) fprintf (runlog,
+	"    %d input records rejected for quality matching %08x\n",
+	badqual, qmask);
+    if (blacklist) fprintf (runlog,
+	"    %d input records rejected from rejection list\n", blacklist);
+    if (badpa) fprintf (runlog,
+	"    %d input records rejected for roll difference exceeding %.2f\n",
+	badpa, dpa_max);
+    if (badcv) {
+      fprintf (runlog,
+	  "    %d input records rejected for calib version matching %016llx\n",
+	  badcv, cvreject);
+      fprintf (runlog,
+	  "                     or failing to match %016llx\n", cvaccept);
+    }
+    fprintf (runlog, "%s values used:", calverkey);
+    for (cvct = 0; cvct < cvused; cvct++) {
+      if (cvct) fprintf (runlog, ",");
+      fprintf (runlog, " %016llx (%d)", cvlist[cvct], cvfound[cvct]);
+    }
+    fprintf (runlog, "\n");
+    fclose (runlog);
   }
   drms_close_record (orec, dispose);
-
-  if (verbose) {
-    if (badqual)
-      printf ("    %d input records rejected for quality matching %08x\n",
-	  badqual, qmask);
-    if (blacklist)
-      printf ("    %d input records rejected from rejection list\n", blacklist);
-    if (badpa)
-      printf ("    %d input records rejected for roll difference exceeding %.2f\n",
-	  badpa, dpa_max);
-  }
   return 0;
 }
 
@@ -1203,4 +1477,14 @@ return 0;
  *		option for overriding roll angle keyword; added setkey, setval
  *		options
  *  v 1.1 frozen 12.08.03
+ *	12.09.12	added support for acceptance and/or rejection of
+ *		records with certain values of CalVer64 (or other equivalent
+ *		key)
+ *	12.10.04	added recording of calling params info to comment or
+ *		history keyword
+ *	12.10.16	added writing of verbose output to log segment if
+ *		present, and recording of input recnum's; added logging of
+ *		CalVer64 values used; added support for specification of
+ *		tmid in date_time format
+ *  v 1.2 frozen 13.04.08
  */
