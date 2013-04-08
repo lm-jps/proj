@@ -35,6 +35,12 @@
  *				of quality mask values
  *	qmask	int	0x00000000	Quality mask for data acceptability;
  *				records rejected if (qmask & qkey:value) != 0
+ *	cvok	string	any		64-bit mask of acceptable values for
+ *				calibration veraion of input; default -> all
+ *				values acceptable
+ *	cvno	string	none		64-bit mask of acceptable values for
+ *				calibration veraion of input; default -> no
+ *				values unacceptable
  *	max_miss int	0		Tolerance threshold for number of blank
  *				values in image (assumed to exclude crop)
  *	tmid	string	-		Midpoint of target tracking interval;
@@ -91,7 +97,7 @@
  *		 0.1067  -0.484  -0.361		Snodgrass & Ulrich " (66-87)
  *      merid_v float   0.0		Meridional rate for tracking
  *				urad/sec, +ve northward
- *	bscale	float	0.0		Value scaling parameter for output
+ *	bscale	float	NaN		Value scaling parameter for output
  *	bzero	Float	NaN		value offset parameter for output
  *	trec_key string	T_REC		Keyname of time type prime keyword for
  *				input data series
@@ -109,6 +115,8 @@
  *				apparent solar semidiameter of each image
  *	dsun_key string	DSUN_OBS	Keyname of double type keyword describing
  *				r distance from sun for of each image
+ *	cvkey	 string	CalVer64	Key name of 64-bit mask type keyword
+ *				describing calibration version used
  *      mai	 float*  NaN	MAI (Magnetic Activity Index) value to
  *				set as keyword
  *	ident	string	Not Specified	Identifier string (user defined)
@@ -175,6 +183,9 @@
  *	even though the relevant values are long long, since there is no
  *	long long checking set key function in keystuff
  *    It is assumed that CROTA2 is opposite to the AIPS convention
+ *    Only a single value can be specified for cvok or cvno (which are treated
+ *	as string arguments for local parsing, although in principle they
+ *	should be arrays of ints)
  *
  *  Future Updates
  *	reorganize code, adding functions and simplifying main module;
@@ -193,7 +204,7 @@
 						      /*  module identifier  */
 char *module_name = "mtrack";
 char *module_desc = "track multiple regions from solar image sequences";
-char *version_id = "1.4";
+char *version_id = "1.6";
 
 #define CARR_RATE       (2.86532908457)
 #define RSUNM		(6.96e8)
@@ -235,8 +246,8 @@ ModuleArgs_t module_args[] = {
   {ARG_FLOAT,	"a4", "-0.5037", "solar rotation parameter A4 [urad/sec]"},
   {ARG_FLOAT,	"merid_v", "0.0",
       "solar meridional velocity [urad/sec]; 0.0014368 * rate in m/s"},
-  {ARG_FLOAT,	"bscale", "0.0", "output scaling factor"},
-  {ARG_FLOAT,	"bzero", "Default", "output offset"},
+  {ARG_FLOAT,	"bscale", "Segment Default", "output scaling factor"},
+  {ARG_FLOAT,	"bzero", "Segment Default", "output offset"},
   {ARG_STRING,	"trec_key", "T_REC", "keyname of (slotted) prime key"}, 
   {ARG_STRING,	"tobs_key", "T_OBS", "keyname for image observation time"}, 
   {ARG_STRING,	"tstp_key", "CADENCE",  "keyname for image observation time"}, 
@@ -247,6 +258,9 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,	"rsun_key", "R_SUN", "keyname for image semi-diameter (pixel)"}, 
   {ARG_STRING,	"apsd_key", "RSUN_OBS", "keyname for apparent solar semi-diameter (arcsec)"}, 
   {ARG_STRING,	"dsun_key", "DSUN_OBS", "keyname for observer distance"}, 
+  {ARG_STRING,	"cvkey", "CalVer64", "keyname for Calibration Version key"}, 
+  {ARG_STRING,  "cvok", "any", "Acceptable value of cvkey"},
+  {ARG_STRING,  "cvno", "none", "Unacceptable value of cvkey"},
   {ARG_FLOATS,	"mai", "NaN", "Magnetic Activity Indices"},
   {ARG_STRING,	"ident", "Not Specified", "identifier"}, 
   {ARG_FLAG,	"c",	"", "track at Carrington rate"}, 
@@ -279,6 +293,93 @@ static char *create_prime_key (DRMS_Record_t *rec) {
   int pct = sizeof (prime_keylist) / sizeof (char *);
 
   return create_primekey_from_keylist (rec, prime_keylist, pct);
+}
+			  /*  the following belong in external utility files  */
+long long params_get_mask (CmdParams_t *params, char *arg,
+    long long defval) {
+/*
+ *  This function parses the string associated with the command parameters
+ *    argument "arg" as the hexadecimal representation of an unsigned 64-bit
+ *    integer, which it returns. The string may consist of up to 16 hexadecimal
+ *    characters. (They can optionally be preceded by '0x', but the string is
+ *    treated as a hexadecimal representation regardless.)  If there are any
+ *    extra or illegal characters in the string, the value "defval" is returned.
+ *  There is another copy in datavg.c
+ */
+  long long retval;
+  const char *str = params_get_str (params, arg);
+  char *ext;
+
+  retval  = strtoull (str, &ext, 16);
+  if (strlen (ext)) retval = defval;
+  return retval;
+}
+
+int drms_appendstr_tokey (DRMS_Record_t *rec, const char *key, const char *str,
+    int addline) {
+/*
+ *  This is just a private, slightly simplified version of the static function
+ *    AppendStrKeyInternal() in $DRMS/base/drms/libs/api/drms_keyword.c
+ */
+  DRMS_Keyword_t *keyword = NULL;
+  int rv;
+
+  if (!rec || !str) return DRMS_ERROR_INVALIDDATA;
+  if (!strlen (str)) return 0;
+  keyword = drms_keyword_lookup (rec, key, 0);
+  if (!keyword) return DRMS_ERROR_UNKNOWNKEYWORD;
+  if (keyword->info->islink || drms_keyword_isconstant (keyword) ||
+      drms_keyword_isslotted (keyword))
+    return DRMS_ERROR_KEYWORDREADONLY;
+  if (keyword->info->type != DRMS_TYPE_STRING) return DRMS_ERROR_INVALIDDATA;
+	       /*  append to old string, if it exists, otherwise just assign  */
+  if (keyword->value.string_val) {
+    char *tmp = NULL;
+    if (strlen (keyword->value.string_val)) {
+      size_t strsz = strlen (keyword->value.string_val) + strlen (str) + 2;
+      tmp = malloc(strsz);
+      if (addline)
+	snprintf (tmp, strsz, "%s\n%s", keyword->value.string_val, str);
+      else
+	snprintf (tmp, strsz, "%s%s", keyword->value.string_val, str);
+    } else tmp = strdup (str);
+    free (keyword->value.string_val);
+    keyword->value.string_val = tmp;
+  } else keyword->value.string_val = strdup (str);
+  return 0;
+}
+
+void append_args_tokey (DRMS_Record_t *rec, const char *key) {
+/*
+ *  Appends a list of all calling argument values to the designated
+ *    key (presumably HISTORY or COMMENT)
+ *  This function should be a general utility, maybe move to keystuff.c
+ *    There is another copy in datavg.c
+ */
+  ModuleArgs_t *arg = gModArgs;
+  CmdParams_t *params = &cmdparams;
+  int flagct = 0;
+  char *strval;
+  char flaglist[72];
+
+  drms_appendstr_tokey (rec, key, "Module called with following arguments:", 1);
+  while (arg->type != ARG_END) {
+    if (arg->type == ARG_FLAG) {
+      if (params_isflagset (params, arg->name)) {
+        if (!flagct) sprintf (flaglist, "with flags -");
+        strcat (flaglist, arg->name);
+        flagct++;
+      }
+    } else {
+      drms_appendstr_tokey (rec, key, arg->name, 1);
+      drms_appendstr_tokey (rec, key, "= ", 0);
+      strval = strdup (params_get_str (params, arg->name));
+      drms_appendstr_tokey (rec, key, strval, 0);
+    }
+    arg++;
+  }
+  if (flagct) drms_appendstr_tokey (rec, key, flaglist, 1);
+  return;
 }
 
 /*
@@ -909,12 +1010,13 @@ int DoIt (void) {
       LOC_GONG_TD, LOC_GONG_CT, LOC_GONG_TC, LOC_GONG_BB, LOC_GONG_ML, LOC_SOHO,
       LOC_SDO} platform = LOC_UNKNOWN;
   long long *datavalid, *origvalid;
-  long long nn, nntot;
+  long long *cvgolist, *cvnolist, *cvlist;
+  long long nn, nntot, calver;
   unsigned int quality;
-  int *mnlatct, *muct;
+  int *mnlatct, *muct, *cvfound;
   int *reject_list = NULL;
   int axes[3], slice_start[3], slice_end[3];
-  int recct, rgn, rgnct, segct, valid;
+  int recct, rgn, rgnct, segct, valid, cvct, cvgoct, cvnoct, cvused, cvmaxct;
   int t_cr, tmid_cr, cr_start, cr_stop;
   int cr_first, cr_last;
   int col, row, pixct, dxy, i, found, n, nr, or;
@@ -922,8 +1024,8 @@ int DoIt (void) {
   int x_invrt, y_invrt;
   int need_cadence, need_ephem, need_limb_dist, need_stats;
   int MDI_correct, MDI_correct_distort;
-  int data_scaled;
-  int badpkey, badqual, badfill, badtime, qualcheck;
+  int bscale_override, bzero_override, data_scaled;
+  int badpkey, badqual, badfill, badtime, badcv, blacklist, qualcheck;
   unsigned char *offsun, *ctroffsun;
   char *input, *source, *eoser, *osegname, *pkeyval;
   char logfilename[DRMS_MAXPATHLEN], ctimefmt[DRMS_MAXFORMATLEN];
@@ -935,7 +1037,6 @@ int DoIt (void) {
   int need_ephem_from_time = 0;
   int need_crcl = 1;
   int check_platform = 0;
-  int scaling_override = 0;
   int segnum = 0;
   int extrapolate = 1;
   int found_first = 0, found_last = 0;
@@ -953,6 +1054,9 @@ int DoIt (void) {
   char *rejectfile = strdup (params_get_str (params, "reject"));
   char *seg_name = strdup (params_get_str (params, "segment"));
   unsigned int qmask = cmdparams_get_int64 (params, "qmask", &status);
+  long long cvaccept = params_get_mask (params, "cvok", -1);
+  long long cvreject = params_get_mask (params, "cvno", 0);
+  char *calverkey = strdup (params_get_str (params, "cvkey"));
   int max_miss = params_get_int (params, "max_miss");
   char *tmid_str = strdup (params_get_str (params, "tmid"));
   char *tstrt_str = strdup (params_get_str (params, "tstart"));
@@ -998,12 +1102,28 @@ int DoIt (void) {
       DRMS_INSERT_RECORD;
   int MDI_proc = params_isflagset (params, "M");
   int ut_times = params_isflagset (params, "Z");
+  int filt_on_calver = (cvreject || ~cvaccept);
 
 need_limb_dist = 1;
 
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s: JSOC version %s\n", module_ident, jsoc_version);
   verbose_logs = (dispose == DRMS_INSERT_RECORD) ? verbose : 0;
+
+  cvused = 0;
+  cvmaxct = 64;
+  cvfound = (int *)malloc (cvmaxct * sizeof (int));
+  cvlist = (long long *)malloc (cvmaxct * sizeof (long long));
+  if (filt_on_calver) {
+    cvgoct = 1;
+    cvgolist = (long long *)malloc (cvgoct * sizeof (long long));
+    cvgolist[0] = cvaccept;
+    cvnoct = 1;
+    cvnolist = (long long *)malloc (cvnoct * sizeof (long long));
+    cvnolist[0] = cvreject;
+    if (~cvaccept) cvgoct = 0;
+    if (!cvreject) cvnoct = 0;
+  }
 	  /*  get lists of latitudes and longitudes defining region centers  */
   rgnct = (latct > lonct) ? latct : lonct;
   if (rgnct > 300) {
@@ -1094,14 +1214,15 @@ need_limb_dist = 1;
     fprintf (stderr, "       using \"%s\"\n", osegname);
   }
 	    /*  use output series default segment scaling if not overridden  */
-  scaling_override = 0;
-  if (bscale == 0.0) {
+  bscale_override = 1;
+  if (isnan (bscale) || bscale == 0.0) {
     bscale = record_segment->bscale;
-    scaling_override = 1;
+    bscale_override = 0;
   }
+  bzero_override = 1;
   if (isnan (bzero)) {
     bzero = record_segment->bzero;
-    scaling_override = 1;
+    bzero_override = 0;
   }
 					  /*  check for segment named "Log"  */
   logseg = drms_segment_lookup (orec, "Log");
@@ -1167,6 +1288,15 @@ need_limb_dist = 1;
     eoser = strchr (source, '[');
     if (eoser) *eoser = '\0';
     irec = ids->records[0];
+					     /*  check for required keywords  */
+    if (filt_on_calver) {
+      keywd = drms_keyword_lookup (irec, calverkey, 1);
+      if (!keywd) {
+        fprintf (stderr, "Warning: required keyword %s not found\n", calverkey);
+        fprintf (stderr, "         no calibration version filtering applied\n");
+        filt_on_calver = 0;
+      }
+    }
     status = verify_keys (irec, clon_key, clat_key, &kscale);
     if (status) {
       drms_close_records (ids, DRMS_FREE_RECORD);
@@ -1763,19 +1893,16 @@ need_limb_dist = 1;
       oseg->axis[1] = map_rows;
       oseg->axis[2] = length;
     }
-    if (scaling_override) {
-      oseg->bscale = bscale;
-      oseg->bzero = bzero;
-    }
+    if (bscale_override) oseg->bscale = bscale;
+    if (bzero_override) oseg->bzero = bzero;
   }
 					     /*  loop through input records  */
   valid = 0;
   ttrgt = tstrt;
   or = 0;
-  badpkey = badqual = badfill = badtime = 0;
+  badpkey = badqual = badfill = badtime = badcv = blacklist = 0;
   if (verbose) fflush (stdout);
   for (nr = 0; nr < recct; nr++) {
-fprintf (stderr, "processing record %d of %d\n", nr, recct);
     irec = ids->records[nr];
     tobs = drms_getkey_time (irec, tobs_key, &status);
     if (time_is_invalid (tobs)) {
@@ -1783,8 +1910,6 @@ fprintf (stderr, "processing record %d of %d\n", nr, recct);
       badpkey++;
       continue;
     }
-sprint_time (tbuf, tobs, "Z", 0);
-fprintf (stderr, "t_obs = %s okay\n", tbuf);
     quality = drms_getkey_int (irec, qual_key, &status);
     if (status) qualcheck = 0;
     else if (quality & qmask) {
@@ -1792,25 +1917,20 @@ fprintf (stderr, "t_obs = %s okay\n", tbuf);
       badqual++;
       continue;
     } else qualcheck = 1;
-fprintf (stderr, "quality = %08x okay\n", quality);
     blankvals = drms_getkey_int (irec, "MISSVALS", &status);
     if (blankvals > max_miss && !status) {
 						    /*  partial image, skip  */
       badfill++;
       continue;
     }
-fprintf (stderr, "blankvals = %d okay\n", blankvals);
     if (tobs == tlast) {
 					 /*  same time as last record, skip  */
       badtime++;
       continue;
     }
-fprintf (stderr, "tobs != tlast\n");
 			     /*  replace with call to solar_ephemeris_info?  */
     img_lon = drms_getkey_double (irec, clon_key, &status);
     img_lat = drms_getkey_double (irec, clat_key, &status);
-fprintf (stderr, "img_lon = %.3f\n", img_lon);
-fprintf (stderr, "img_lat = %.3f\n", img_lat);
 			 /*  check for record quality, reject as applicable  */
     if (rejects) {
       int idrec = drms_getkey_int (irec, "T_REC_index", &status);
@@ -1828,19 +1948,54 @@ fprintf (stderr, "img_lat = %.3f\n", img_lat);
 	}
       }
       if (match) {
-/*
-	if (verbose) 
-	  printf ("  rejecting img %d -- in list %s\n", idrec, rejectfile);
-*/
+        blacklist++;
         continue;
       }
     }
-fprintf (stderr, "no rejects\n");
+	      /*  check for record calibration version; reject as applicable  */
+    calver = drms_getkey_longlong (irec, calverkey, &status);
+    if (filt_on_calver) {
+      if (status) {
+		     /*  this probably never happens if the keyword exists  */
+	badcv++;
+	continue;
+      }
+      for (cvct = 0; cvct < cvgoct; cvct++)
+	if (calver == cvgolist[cvct]) break;
+      if (cvct >= cvgoct) {
+	badcv++;
+	continue;
+      }
+      for (cvct = 0; cvct < cvnoct; cvct++) {
+ 	if (calver == cvnolist[cvct]) {
+	  badcv++;
+	  continue;
+	}
+      }
+      for (cvct = 0; cvct < cvnoct; cvct++) {
+ 	if (calver == cvnolist[cvct]) {
+	  badcv++;
+	  continue;
+	}
+      }
+    }
+    for (cvct = 0; cvct < cvused; cvct++) {
+      if (calver == cvlist[cvct]) {
+        cvfound[cvct]++;
+        break;
+      }
+    }
+    if (cvct == cvused) {
+      if (cvused < cvmaxct) {
+        cvlist[cvct] = calver;
+	cvfound[cvct] = 1;
+	cvused++;
+      }
+    }
 			   /*  get needed info from record keys for mapping  */
     status = solar_image_info (irec, &img_xscl, &img_yscl, &img_xc, &img_yc,
 	&img_radius, rsun_key, apsd_key, &img_pa, &ellipse_e, &ellipse_pa,
 	&x_invrt, &y_invrt, &need_ephem, 0);
-fprintf (stderr, "solar_image_info returned %08x\n", status);
     if (status & NO_SEMIDIAMETER) {
       int keystat = 0;
       double dsun_obs = drms_getkey_double (irec, dsun_key, &keystat);
@@ -1866,9 +2021,7 @@ fprintf (stderr, "solar_image_info returned %08x\n", status);
     }
 						  /*  read input data image  */
     record_segment = drms_segment_lookupnum (irec, segnum);
-fprintf (stderr, "reading data segment %d\n", segnum);
     data_array = drms_segment_read (record_segment, DRMS_TYPE_FLOAT, &status);
-fprintf (stderr, "drms_segment_read returned %08x\n", status);
     if (status) {
       if (ut_times) sprint_time (tbuf, tobs, "UTC", 0);
       else sprint_time (tbuf, tobs, "TAI", 0);
@@ -2081,7 +2234,8 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
 
     if (ttrgt == tobs) {
       if (verbose) {
-	printf ("step %d mapped from image %s\n", or, tbuf);
+	printf ("step %d mapped from image %s [#%lld]\n", or, tbuf,
+	    irec->recnum);
 	if (!(or % 64)) fflush (stdout);
       }
       for (rgn = 0; rgn < rgnct; rgn++) {
@@ -2105,7 +2259,8 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
 	  return 1;
 	}
 	if (verbose_logs)
-          fprintf (log[rgn], "step %d mapped from image %s\n", or, tbuf);
+          fprintf (log[rgn], "step %d mapped from image %s [#%lld]\n", or,
+	      tbuf, irec->recnum);
       }
       or++;
       ttrgt += tstep;
@@ -2134,6 +2289,10 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
 	  map_sinlat, offsun, orecs, log, reject_list);
       return 1;
     }
+    if ((keywd = drms_keyword_lookup (orec, "COMMENT", 1)))
+      append_args_tokey (orec, "COMMENT");
+    else if ((keywd = drms_keyword_lookup (orec, "HISTORY", 1)))
+      append_args_tokey (orec, "HISTORY");
   }
   drms_close_records (ids, DRMS_FREE_RECORD);
 					 /*  extend last image if necessary  */
@@ -2151,6 +2310,9 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
     if (badtime) fprintf (stderr,
 	"    %d of %d records rejected for duplicate values of %s\n",
 	badtime, recct, trec_key);
+    if (badcv) fprintf (stderr,
+	"    %d of %d records rejected for unacceptabel values of %s\n",
+	badcv, recct, calverkey);
     drms_close_records (ods, DRMS_FREE_RECORD);
     free_all (clat, clon, mai, delta_rot, maps, last, maplat, maplon,
 	map_sinlat, offsun, orecs, log, reject_list);
@@ -2199,12 +2361,17 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
     if (badqual) printf
 	("    %d input records rejected for quality matching %08x\n",
 	badqual, qmask);
+    if (blacklist) printf
+	("    %d input records rejected from rejection list\n", blacklist);
     if (badfill) printf
 	("    %d input records rejected for missing values exceeding %d\n",
 	badfill, max_miss);
     if (badtime) printf
 	("    %d input records rejected for duplicate values of %s\n",
 	badtime, trec_key);
+    if (badcv) printf
+	("    %d input records rejected for unacceptable values of %s\n",
+	badcv, calverkey);
   }
 				     /*  check for scaled data out of range  */
   if (data_scaled) {
@@ -2317,9 +2484,11 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
     kstat += check_and_set_key_float (orec, "RSunRef", 1.0e-6 * RSUNM);
     if (setmais && isfinite (mai[rgn]))
       kstat += check_and_set_key_float (orec, "MAI", mai[rgn]);
-    if (scaling_override) {
+    if (bscale_override) {
       sprintf (key, "%s_bscale", osegname);
       kstat += check_and_set_key_double (orec, key, bscale);
+    }
+    if (bzero_override) {
       sprintf (key, "%s_bzero", osegname);
       kstat += check_and_set_key_double (orec, key, bzero);
     }
@@ -2354,7 +2523,33 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
 	  map_sinlat, offsun, orecs, log, reject_list);
       return 1;
     }
-    if (verbose_logs) fclose (log[rgn]);
+    if (verbose_logs) {
+      if (badqual) fprintf (log[rgn],
+	  "    %d input records rejected for quality matching %08x\n",
+	  badqual, qmask);
+      if (blacklist) fprintf (log[rgn],
+	  "    %d input records rejected from rejection list\n", blacklist);
+      if (badfill) fprintf (log[rgn],
+	  "    %d  of %d records rejected for missing values exceeding %d\n",
+	  badfill, recct, max_miss);
+      if (badtime) fprintf (log[rgn],
+	  "    %d of %d records rejected for duplicate values of %s\n",
+	  badtime, recct, trec_key);
+      if (badcv) {
+        fprintf (log[rgn],
+	    "    %d input records rejected for calib version matching %016llx\n",
+	    badcv, cvreject);
+	fprintf (log[rgn],
+	    "                     or failing to match %016llx\n", cvaccept);
+      }
+      fprintf (log[rgn], "%s values used:", calverkey);
+      for (cvct = 0; cvct < cvused; cvct++) {
+        if (cvct) fprintf (log[rgn], ",");
+        fprintf (log[rgn], " %016llx (%d)", cvlist[cvct], cvfound[cvct]);
+      }
+      fprintf (log[rgn], "\n");
+      fclose (log[rgn]);
+    }
   }
   drms_close_records (ods, dispose);
   drms_free_array (map_array);
@@ -2471,15 +2666,23 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
  *		Removed unused -G flag, added -Z flag for UT time logging
  *  v 1.3 frozen 2011.11.09
  *    1.4	Require that output CMLon key value >= 0, and > 0 if key is
- *		slotted
+ *	slotted
  *		Allow setting of long long key values as appropriate
  *		Removed needless scope declarations on helper functions
  *		Added argument to call to solar_image_info to (always) specify
  *		CROTA2 keyword as opposite to AIPS convention
  *		Added calculation of mean position angle for region centers
- *		for keyword setting (not tested)
+ *	for keyword setting (not tested)
  *  v 1.4 frozen 2012.04.23
  *    1.5	Fixed bug in bilinear interpolation function (failure to
  *		properly detect out of range)
- *  v 1.5 frozen 2012.08.03
+ *  v 1.5 frozen 2012.10.16
+ *    1.6	Added recording of recnums of mapped images to log
+ *		Added recording of calling params info to comment or history key
+ *		Added support for acceptance and/or rejection of records with
+ *	certain values of CalVer64 (or other equivalent key)
+ *		Added logging of image rejection cause summaries and CalVer64
+ *	values used
+ *		Fixed bscale-bzero overrides
+ *  v 1.6 frozen 2013.04.08
  */
