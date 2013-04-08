@@ -179,7 +179,7 @@ cat $MMSG >> $LOGF
 
 @ BEGUN = `date +%s`
 $DATAVG $FLAG in= $ISER tmid= $CARTIM out= $OSER length= 120 \
-    mask= $QMASK reject= $RJCT \
+    qmask= $QMASK reject= $RJCT pkey= T_REC \
     mscale= $MSCALE mzero = $MZERO pscale= $PSCALE pzero= $PZERO \
     average= $AVGKEYS >>& $RLOG
 if ($status) then
