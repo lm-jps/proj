@@ -26,6 +26,10 @@
  *			be used for analysis
  *	out	DataSeries	hmi_test.tdVtimes_synop
  *					Output data series
+ *      copy	String		"+"	Comma separated list of keys to
+ *			propagate forward; if the list includes "+", all
+ *			keys in the default list of propagation keys, plus
+ *			all prime keys in the input records will be copied
  *
  *  Flags
  *
@@ -76,12 +80,13 @@
  *  Bugs:
  *    Few parameter options; many of the parameters are read from pre-calculated
  *	data in the "pxloc: record. In particular, the input and output array
- *	sizes are hardcoded, but there is no checking of the actual input data
+ *	sizes are hardcoded, but there is no checking of the actual input data.
+ *      It is not clear that the module will work with any but a 512*512*640
+ *	tracked cube
  *    Scaled output not properly supported; no setting of array parameter
  *    FORTRAN Code writes progress/status to stdout
  *    Missing input data are unconditionally set to 0
  *    The value written into CRLT_Mid is geocentric
- *    The MapScale keyword is not set in the output record
  *    No documentation
  *
  *  Revision history is at the end of the file.
@@ -93,7 +98,7 @@
 #include "earth_ephem.c"
 						      /*   module identifier  */
 char *module_name = "travel_times_loop_wGB";
-char *version_id = "0.9.1";
+char *version_id = "0.9.2";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "in",
@@ -101,15 +106,17 @@ ModuleArgs_t module_args[] = {
       "input record set"}, 
   {ARG_STRING, "pxloc", "hmi.tdpixlist[]", "pixel locater record set"}, 
   {ARG_STRING, "out", "hmi_test.tdVtimes_synop", "output series"}, 
+  {ARG_STRING, "copy",  "+",
+      "comma separated list of keys to propagate forward"},
   {ARG_FLAG, "v", "0", "verbose output"},      
   {}
 };
 
        /*  list of keywords to propagate (if possible) from input to output  */
 char *propagate[] = {"CarrRot", "CMLon", "LonHG", "LatHG", "LonCM", "MidTime",
-    "CRPIX1", "CRPIX2", "CRVAL1", "CRVAL2", "CDELT1", "CDELT2",
-    "CTYPE1", "CTYPE2", "CUNIT1", "CUNIT2", "T_START", "T_STOP", "LonSpan",
-    "Coverage", "Duration", "Zonal Trk", "ZonalVel"};
+    "CRVAL1", "CRVAL2", "CTYPE1", "CTYPE2", "CUNIT1", "CUNIT2",
+    "T_START", "T_STOP", "LonSpan", "Coverage", "Duration", "MapProj", "MapPA",
+    "Zonal Trk", "ZonalVel"};
 
 #define NUM_ANNULI_MAX	(20)
 
@@ -132,16 +139,17 @@ int DoIt (void) {
   float *data, *input, *input2, *input3, *output, *output2, *out1, *out2;
   float *annmin, *annmax, *velo, *wid, *coef0, *coef1, *coef2, *coef3, *coef4;
   float coef[5];
-  float newscale;
+  float newctr, newscale;
   long long n, ntot;
   int *num_annuli, *n_start;
   int trck_axis[2];
   int ann, i, j, k, *axes;
-  int len_ploc_file, kstat, outok, ploc_version, status;
+  int len_ploc_file, outok, ploc_version, status;
+  int kstat, key_n, propct, propstd;
   int rec, rgnct, smpl, smpls;
   int need_ephem;
-  char **pix_locat_file;
-  char *errmsg;
+  char **pix_locat_file, **copykeylist;
+  char *genstr, *errmsg;
   char plocfile[DRMS_MAXQUERYLEN];
   char source[DRMS_MAXQUERYLEN], recid[DRMS_MAXQUERYLEN];
   char module_ident[64], keyname[32];
@@ -151,6 +159,7 @@ int DoIt (void) {
   char *plocds = strdup (params_get_str (params, "pxloc"));
   char *trckds = strdup (params_get_str (params, "in"));
   char *outser =  strdup (params_get_str (params, "out"));
+  char *propagate_req = strdup (params_get_str (params, "copy"));
   int verbose = params_isflagset (params, "v");
 
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
@@ -326,8 +335,21 @@ int DoIt (void) {
     res_gabor->bscale = res_gb->bscale = 1.0;
     res_gabor->bzero = res_gb->bzero = 0.0;
 				     /*  copy designated keywords from input  */
+    propct = construct_stringlist (propagate_req, ',', &copykeylist);
     kstat = 0;
-    kstat = propagate_keys (orec, trck, propagate, keyct);
+    propstd = 0;
+					/*  copy specifically requested keys  */
+    for (key_n = 0; key_n < propct; key_n++) {
+      if (strcmp (copykeylist[key_n], "+"))
+        kstat += check_and_copy_key (orec, trck, copykeylist[key_n]);
+      else propstd = 1;
+    }
+    if (propstd) {
+						      /*  copy standard keys  */
+      kstat += propagate_keys (orec, trck, propagate, keyct);
+					   /*  and any additional prime keys  */
+      kstat += copy_prime_keys (orec, trck);
+    }
     if (kstat) {
       fprintf (stderr, "Error writing key value(s) to record in series %s:\n",
 	  outser);
@@ -349,6 +371,24 @@ int DoIt (void) {
     }
 							    /*  set WCS keys  */
     kstat += check_and_set_key_int (orec, "WCSAXES", 2);
+    newctr = drms_getkey_float (trck, "CRPIX1", &status);
+    newctr = mapscale_factor * (newctr - 0.5) + 0.5;
+    kstat += check_and_set_key_float (orec, "CRPIX1", newctr);
+    newctr = drms_getkey_float (trck, "CRPIX2", &status);
+    newctr = mapscale_factor * (newctr - 0.5) + 0.5;
+    kstat += check_and_set_key_float (orec, "CRPIX2", newctr);
+    newscale = drms_getkey_float (trck, "CDELT1", &status);
+    newscale /= mapscale_factor;
+    kstat += check_and_set_key_float (orec, "CDELT1", newscale);
+    newscale = drms_getkey_float (trck, "CDELT2", &status);
+    newscale /= mapscale_factor;
+    kstat += check_and_set_key_float (orec, "CDELT2", newscale);
+    genstr = drms_getkey_string (trck, "WCSNAME", &status);
+    if (!status) {
+	      /*  strip off the trailing '/Time' from a tracked cube WCSNAME  */
+      strtok (genstr, "/");
+      kstat += check_and_set_key_str (orec, "WCSNAME", genstr);
+    }
 					     /*  set segment descriptor keys  */
     kstat += check_and_set_key_str (orec, "TTDiff_1",
 	"mean (outgoing,ingoing)");
@@ -535,5 +575,12 @@ int DoIt (void) {
  *	pxloc data
  *  12.01.13	fixed setting of MapScale key; added setting of annuli info
  *	keys
+ *  v 0.9 frozen 2012.01.14
  *  v 0.91 frozen 2012.08.04
+ *  12.09.28	added option of adding to or overriding standard list of
+ *	keywords from input to output
+ *  13.03.12	corrected setting of  CRPIX1,2 and CDELT1,2 to values consistent
+ *	with pixel locator file (supposedly); added MapProj and MapPA to the
+ *	default list of propagated keywords; added modified propagation of
+ *	WCSNAME value
  */
