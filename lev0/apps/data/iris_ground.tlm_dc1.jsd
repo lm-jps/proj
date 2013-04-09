@@ -1,0 +1,18 @@
+#=====General Series Information=====
+Seriesname:      	iris_ground.tlm_dc1
+Author:          	"Rock Bush"
+Owner:           	prodtest
+Unitsize:        	1
+Archive:         	0
+Retention:       	360
+Tapegroup:       	52
+PrimeKeys:       	filename
+Description:     	"IRIS tlm/qac production test files from dc1"
+
+#=====Links=====
+
+#=====Keywords=====
+Keyword:filename, string, variable, record, " ", "%s", "none", " "
+
+#=====Segments=====
+Data: dir, variable, int, 0, "none", generic, " "
