@@ -315,23 +315,38 @@ endif
 
 SKIP_TRACK:
 
-set LONSET = ($LONS[1] $LONS[2] $LONS[3] $LONS[4] $LONS[5])
-@ BEGUN = `date +%s`
-@ RGNCT = `show_info -cq ds= $TSER"[$TMID]"`
-set LAT = $LATS[1]
 # prepare script for batch processing of travel time fitting
+@ BEGUN = `date +%s`
+$GENTG -c time= $TMID > $TLIST
+set LATS = (`head -1 $TLIST`)
+set LONS = (`tail -1 $TLIST`)
+@ RGNCT = `show_info -cq ds= $TSER"[$TMID]"`
+if ($#LATS != $RGNCT || $#LONS != $RGNCT) then
+  set SUBJ = "$SUBJ incomplete"
+  echo "  inconsistent region count" >> $MMSG
+  echo "  ($CTIME) inconsistent region count" >> $LOGF
+  @ STRTSTOP = 0
+  goto CLEANUP
+endif
+# set noglob
+# set TSERINPS = `show_info -iq ds= $TSER\[$TMID]`
 set FILE = td`echo $CTIME | tr ':' '.'`
 set SCRIPT = $TMPD/$FILE
 echo "#\!/bin/csh -f" > $SCRIPT
 # echo "limit vm 3000M" >> $SCRIPT
 # if there is a limit it should be at least 3500M
+# echo "set noglob" >> $SCRIPT
+# echo 'set TSERINPS =  ('$TSERINPS')' >> $SCRIPT
+# unset noglob
+# echo 'set TSERINP = "$TSERINPS[$SGE_TASK_ID]"' >> $SCRIPT
 echo 'set LATS =  ('"$LATS"')' >> $SCRIPT
 echo 'set LONS =  ('"$LONS"')' >> $SCRIPT
 echo 'set LAT = $LATS[$SGE_TASK_ID]' >> $SCRIPT
 echo 'set LON = $LONS[$SGE_TASK_ID]' >> $SCRIPT
 echo "$TTFIT \" >> $SCRIPT
-echo '  in= '$TSER'"['$TMID'][$LON][$LAT]" \' >> $SCRIPT
-echo "  pxloc= "'"'$PLOC'" \' >> $SCRIPT
+# echo '  in= "$TSERINP" \' >> $SCRIPT
+echo '  in= '$TSER'"['$TMID'][][$LAT][$LON]" \' >> $SCRIPT
+echo '  pxloc= '$PLOC' \' >> $SCRIPT
 echo "  out= $OSER "'>>&' $RLOG >> $SCRIPT
 qsub -sync yes -t 1-$RGNCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
 @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
