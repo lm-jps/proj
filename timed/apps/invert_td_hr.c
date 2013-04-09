@@ -9,6 +9,13 @@
  *  Usage:
  *    invert_td_hr [-v] in= kernels= out=
  *
+ *  Arguments: (type		default         description)
+ *	in	DataSet
+ *      copy	String		"+"	Comma separated list of keys to
+ *			propagate forward; if the list includes "+", all
+ *			keys in the default list of propagation keys, plus
+ *			all prime keys in the input records will be copied
+ *
  *  Bugs:
  *    Output array sizes are hardcoded and fixed; no idea what would happen if
  *	input sizes did not match, nor checking to make sure they do
@@ -53,22 +60,25 @@
 #define KERNTYP_BORN	(2)
                                                       /*   module identifier  */
 char *module_name = "timed_invert";
-char *version_id = "0.8";
+char *version_id = "0.81";
 
 ModuleArgs_t module_args[] = {
-  {ARG_STRING, "in", "hmi_test.tdVtimes_synop[2010.12.12_12:00]",
-      "input data record"},
-  {ARG_STRING, "kernels", "su_rsb.tdgenkern[ray]", "input kernel"},
-  {ARG_STRING, "out", "hmi_test.tdVinvrt_synop", "output series"}, 
-  {ARG_NUME, "fitting", "Gabor", "travel-time fitting method used",
+  {ARG_STRING, "in", "", "input data record"},
+  {ARG_STRING, "kernels", "", "input kernel"},
+  {ARG_STRING, "out", "", "output series"}, 
+  {ARG_NUME, "fitting", "both", "travel-time fitting method used",
       "Gabor, GizonBirch, both"},      
+  {ARG_STRING, "copy",  "+",
+      "comma separated list of keys to propagate forward"},
   {ARG_FLAG, "v", "0", "verbose output"},      
   {}
 };
 
         /*  list of keywords to propagate (if possible) from input to output  */
 char *propagate[] = {"CarrRot", "CMLon", "LonHG", "LatHG", "LonCM", "MidTime",
-    "PxLocVer"};
+    "PxLocVer", "WCSAXES", "WCSNAME", "CTYPE1", "CTYPE2", "CRPIX1", "CRPIX2",
+    "CDELT1", "CDELT2", "CUNIT1", "CUNIT2", "CRVAL1", "CRVAL2",
+    "MapScale", "MapProj", "Map_PA"};
 
 extern void inver_cs_sub_ (float *oi_mn, float *kern_cs, float *cs);
 extern void inver_v_sub_ (float *oi, float *we, float *ns, float *lonc,
@@ -92,7 +102,8 @@ int DoIt (void) {
   int col, cols, row, rows, pln, pln0, pln1, pln2, pln3;
   int i, j, k, n, ntot, rgn, rgnct, outok;
   int pxlocver, kerntyp;
-  int kstat, status;
+  int kstat, key_n, propct, propstd, status;
+  char **copykeylist;
   char *type_segname[] = {"gabor", "GB"};
   char *fitting_key[] = {"Gabor", "GizonBirch", "both"};
   char *sval;
@@ -105,6 +116,7 @@ int DoIt (void) {
   char *ttimds = strdup (params_get_str (params, "in"));
   char *kernds = strdup (params_get_str (params, "kernels"));
   char *outser =  strdup (params_get_str (params, "out"));
+  char *propagate_req = strdup (params_get_str (params, "copy"));
   int fitopt = params_get_int (params, "fitting");
   int verbose = params_isflagset (params, "v");
 
@@ -195,6 +207,7 @@ int DoIt (void) {
     fprintf (stderr, "Error: unable to open input record set %s\n", ttimds);
     drms_close_records (kds, DRMS_FREE_RECORD);
     return 1;
+fprintf (stderr, "input data set is open\n");
   }
   rgnct = ids->n;
   if (rgnct < 1) {
@@ -231,12 +244,12 @@ int DoIt (void) {
 
   outok = 0;
   rgn = 0;
-		     /*  read travel times from input record segment "gabor"  */
+		    /*  read travel times from input record segment "gabor"  */
   for (rgn = 0; rgn < rgnct; rgn++) {
     if (verbose) printf ("processing record %d\n", rgn);
     ttrec = ids->records[rgn];
     drms_sprint_rec_query (source, ttrec);
-		    /*  check PxLocVer, must be consistent with code version  */
+		   /*  check PxLocVer, must be consistent with code version  */
     pxlocver = drms_getkey_int (ttrec, "PxLocVer", &status);
     if (pxlocver < 1 && verbose) {
       printf ("Warning: Pixel locator file used for travel time map in record\n");
@@ -260,7 +273,7 @@ int DoIt (void) {
       continue;
     }
     input = (float *)ttdat->data;
-						 /*  create an output record  */
+						/*  create an output record  */
     orec = drms_create_record (drms_env, outser, DRMS_PERMANENT, &status);
     if (!orec) {
       fprintf (stderr, "Error: unable to create record %d in series %s\n", rgn,
@@ -273,9 +286,9 @@ int DoIt (void) {
     seg_vx = drms_segment_lookup (orec, "vx");
     seg_vy = drms_segment_lookup (orec, "vy");
     seg_vz = drms_segment_lookup (orec, "vz");
-	/*  check the output data series struct (only needs to be done once)  */
+/*  check the output data series struct (only needs to be done once)  */
     if (!outok) {
-				      /*  check for the appropriate segments  */
+				     /*  check for the appropriate segments  */
       if (!seg_cs) {
 	docsinv = 0;
 	if (!dovinv) {
@@ -370,7 +383,20 @@ int DoIt (void) {
 
 			   /*  copy designated keywords from input to output  */
     kstat = 0;
-    kstat = propagate_keys (orec, ttrec, propagate, keyct);
+    propct = construct_stringlist (propagate_req, ',', &copykeylist);
+    propstd = 0;
+					/*  copy specifically requested keys  */
+    for (key_n = 0; key_n < propct; key_n++) {
+      if (strcmp (copykeylist[key_n], "+"))
+        kstat += check_and_copy_key (orec, ttrec, copykeylist[key_n]);
+      else propstd = 1;
+    }
+    if (propstd) {
+						      /*  copy standard keys  */
+      kstat = propagate_keys (orec, ttrec, propagate, keyct);
+					   /*  and any additional prime keys  */
+      kstat += copy_prime_keys (orec, ttrec);
+    }
     kstat += check_and_set_key_str (orec, "Module", module_ident);
     kstat += check_and_set_key_str (orec, "BLD_VERS", jsoc_version);
     kstat += check_and_set_key_time (orec, "Created", CURRENT_SYSTEM_TIME);
@@ -449,8 +475,9 @@ int DoIt (void) {
       drms_close_record (orec, DRMS_FREE_RECORD);
       continue;
     }
-
+// fprintf (stderr, "inserting output record\n");
     drms_close_record (orec, DRMS_INSERT_RECORD);
+// fprintf (stderr, "output record inserted\n");
   }
   return 0;
 }
@@ -480,4 +507,9 @@ int DoIt (void) {
  *		modify attempted inversions accordingly; check for agreement of
  *		ouput segment structure with hard-coded dimensions
  *  v 0.8 frozen 2012.08.04
+ *  12.09.28	added option of adding to or overriding standard list of
+ *		keywords from input to output
+ *		removed defaults for input and output sets, changed default
+ *		fitting method to both
+ *  13.04.08	added WCS keys to propagation list
  */
