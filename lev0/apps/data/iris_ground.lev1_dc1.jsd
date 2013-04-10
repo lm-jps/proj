@@ -6,8 +6,8 @@ Unitsize:               1
 Archive:                0
 Retention:              360
 Tapegroup:              54
-PrimeKeys:              FSN, T_OBS
-DBIndex:                FSN, T_OBS
+PrimeKeys:              T_OBS, FSN
+DBIndex:                T_OBS, FSN
 Description:            "Level 0 prodution test series from dc1 data"
 
 #=====Links=====
@@ -224,7 +224,6 @@ Keyword:IIMGCFD2,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "
 Keyword:IIMGCFD3,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_IMG_CFG_DELAY_3; delay (in ticks) for start of exposure"
 Keyword:IIMGCFD4,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_IMG_CFG_DELAY_4; delay (in ticks) for start of CCD readout"
 
-
 Keyword:IFUVCEXP,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_MC_FUV_CMDED_EXP; FUV shutter commanded exposure in ms ???"
 Keyword:INUVCEXP,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_MC_NUV_CMDED_EXP; NUV shutter commanded exposure in ms ???"
 Keyword:ISJICEXP,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_MC_SJI_CMDED_EXP; SJI shutter commanded exposure in ms ???"
@@ -283,11 +282,8 @@ Keyword:IIHISFSN,    int, variable, record, DRMS_MISSING_VALUE,  "%d", "none", "
 
 Keyword:KEYWDDOC, string, constant, record, "http://www.lmsal.com/irisdocs/irisfitskeywords.pdf", "%s", "none", "IRIS FITS keyword documentation"
 
-Keyword:DATEREF,  int, variable, record, DRMS_MISSING_VALUE, "%d", "none", "ISO-8601 format for t=0 ???"
-Keyword:XPOSURE,  int, variable, record, DRMS_MISSING_VALUE, "%d", "none", "New standard for Total Exposure: Replaces EXPTIME or INT_TIME; ???"
 Keyword:OBS_NUM,  int, variable, record, DRMS_MISSING_VALUE, "%d", "none", "Unique id for observation ???"
 Keyword:PIXLUNIT, int, variable, record, DRMS_MISSING_VALUE, "%d", "none", "Pixel intensity unit ???"
-Keyword:MISSING,  int, variable, record, DRMS_MISSING_VALUE, "%d", "none", "Value set by processing for missing pixels ???"
 
 #=====Segments=====
 Data: image_lev1, vardim, short, 2, 0, 0, "dn", fits, "compress Rice", 0.000000, 1.000000, "lev1 fits image with headers"
