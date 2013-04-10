@@ -562,8 +562,8 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   }
   status = drms_setkey_short(rs, "SUMSPTRL", sumsptrl);
   status = drms_setkey_short(rs, "SUMSPAT", sumspat);
-  //drms_setkey_int(rs, "TAPCODE", img->tap);
-  drms_setkey_int(rs, "TAPCODE", tapcode);  //don't use from the img struct
+  drms_setkey_int(rs, "TAPCODE", img->tap);
+  //drms_setkey_int(rs, "TAPCODE", tapcode);  //don't use from the img struct
   n = (img->N) & 0x1F;
   n = n << 3;
   k = (img->K) & 0x07;
@@ -593,19 +593,19 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_double(rs, "IMGFPT", fpt);
   drms_setkey_double(rs, "DATE", CURRENT_SYSTEM_TIME);
   do_quallev0(rs, img, fsn);		//set the QUALLEV0 keyword
-    /* open ISP for drms series. ispquery saved from write_hk_to_drms_iris.c */
-    //sprintf(queryext, "%s", ispquery);
-    //if(cptr = rindex(queryext, '?')) {
-    //  sprintf(cptr, "AND I_SQ_FRAME_SN = %d ?]", fsn);
-    //  //printf("queryext = %s\n", queryext);  //!!TEMP
-    //}
-    //else {
-    //  printf("!!ERROR on ispquery string!!\n"); //!!TEMP
-    //}
-    //rsisp = drms_open_records(drms_env, queryext, &drms_status);
+  if(!timeoutclose) {
     rsisp = RSISP;	//saved rec set pointer for ISP
-    //if(drms_status || !rsisp->records) {
-    //if(drms_status || !rsisp || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
+  }
+  else { 		//must reopen
+    timeoutclose = 0;
+    /* open ISP for drms series. ispquery saved from write_hk_to_drms_iris.c */
+    sprintf(queryext, "%s[? I_SQ_FRAME_SN=%d ?]", ispquery, fsn);
+    printk("queryext = %s\n", queryext);  //!!TEMP
+    rsisp = drms_open_records(drms_env, queryext, &drms_status);
+  }
+    //rsisp = RSISP;	//saved rec set pointer for ISP
+    ////if(drms_status || !rsisp->records) {
+    ////if(drms_status || !rsisp || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
     if(!rsisp || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
       printk("ERROR: Can't open isp record to put keywords in lev0.\n");
       printk("       The ISP was not received prior to the image for fsn %lu\n", fsn);
@@ -1890,7 +1890,8 @@ void do_ingest()
       }
       cntsleeps = 0;		//we saw a file
       if(timeoutclose) {
-        timeoutclose = 0;
+        //now reset to 0 in close_image()
+        //timeoutclose = 0;
         fsnISP = fsnISPTOCLOSE;
       }
     }
@@ -2277,8 +2278,8 @@ int DoIt(void)
             RSISP = RSISPTO;    //use the timeout *rs
             fsnISPTOCLOSE = fsnISP;
             fsnISP = fsnISPX;	//inc last isp
-            timeoutclose = 1;
             close_image(rs, segment, segArray, &Image, fsn_prev);
+            timeoutclose = 1;
             drms_server_end_transaction(drms_env, 0 , 0); //commit
             drms_server_begin_transaction(drms_env); //start another cycle
             fsn_prev = 0; 	//start over for next file
