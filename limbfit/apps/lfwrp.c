@@ -9,8 +9,8 @@
 			
 	
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V4.03" 
-	#define CODE_DATE 		"Wed May 16 08:53:26 HST 2012" 
+	#define CODE_VERSION 	"V4.05" 
+	#define CODE_DATE 		"Wed Apr  3 19:33:05 HST 2013" 
 	
 	V4.03 from previous:	 only default parameters changed
 */
@@ -351,7 +351,7 @@ int DoIt(void)
 	static char tcam[20];
 	static char tfid[100];
 	static char tdat[50];
-	static char tfil[20];
+	static char tfil[30];
 	static char tbase[128];
 	sprintf(tfil, "[? quality = %s ", qual);
 	int presetval=0;

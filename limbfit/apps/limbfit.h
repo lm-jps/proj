@@ -26,8 +26,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V4.0r3" 
-#define CODE_DATE 		"Wed May 16 08:53:26 HST 2012" 
+#define CODE_VERSION 	"V4.0r5" 
+#define CODE_DATE 		"Wed Apr  3 19:33:05 HST 2013" 
 #define LOGMSG1			"LIMBFIT"
 #define	JSD_NAME		"su_scholl.hmi_lf.jsd"
 
