@@ -15,7 +15,6 @@ Description:     	"IRIS CRS Table parameters"
 #=====Keywords=====
 Keyword:ORIGIN,   string, constant, record, "SDO/JSOC-SDP",      "%s", "none", "ORIGIN Location where file made"
 Keyword:TELESCOP, string, constant, record, "IRIS",              "%s", "none", "IRIS"
-Keyword:BLD_VERS, string, variable, record, DRMS_MISSING_VALUE,  "%s", "none", "Build Version: from jsoc_version.h"
 Keyword:DATE,       time, variable, record, -4712.01.01_11:59:28Z, "0", "ISO", "Date_time of processing; ISO 8601"
 Keyword:IICRSID,   short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "Camera Readout Specification ID"
 Keyword:CRS_DESC, string, variable, record, DRMS_MISSING_VALUE,  "%s", "none", "CRS regions description: comma separated list"
@@ -57,4 +56,5 @@ Keyword:CRS_SC8,   short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "
 Keyword:CRS_EC8,   short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "CRS end column for region 8"
 
 #=====Segments=====
-Data: decrop_table, vardim, short, 2, 0, 0, "", generic, "", 0.000000, 1.000000, "Decrop table associated with CRSID"
+Data: decrop_table, variable, string, 0, "none", generic, "Decrop table associated with CRSID"
+Data: svg_image, variable, string, 0, "none", generic, "svg image of CRS table on CCD"
