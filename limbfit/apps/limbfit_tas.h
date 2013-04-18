@@ -1,6 +1,6 @@
 /* I.Scholl 
-	#define CODE_VERSION 	"V5.01" 
-	#define CODE_DATE 		"Wed Feb  6 08:29:26 HST 2013" 
+	#define CODE_VERSION 	"V5.02" 
+	#define CODE_DATE 		"Tue Mar 26 16:30:08 HST 2013" 
 */
 
 #include <string.h>
@@ -27,8 +27,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit_tas"
-#define CODE_VERSION 	"V5.0r01" 
-#define CODE_DATE 		"Wed Feb  6 08:29:26 HST 2013" 
+#define CODE_VERSION 	"V5r3" 
+#define CODE_DATE 		"Thu Apr  4 10:50:46 HST 2013" 
 #define LOGMSG1			"LIMBFITS"
 #define	JSD_NAME		"scholl_limbfit_tas.jsd"
 
@@ -130,6 +130,7 @@ typedef struct {
 	double		iy;
 	double		ir;
 	//int		sav;
+	unsigned int fsn;
 } LIMBFIT_INPUT;
 
 typedef struct {
@@ -157,17 +158,16 @@ typedef struct {	// output files content
 	float*		fits_ldfs_data; 		// main table / segment
 	float*		fits_fulldfs; 			// extension #2
 	float*		fits_alpha_beta;  	 	// extension #0
-	double*		fits_params;   			// extension #1
+	float		fits_as[6];
+	float		fits_es[6];
 
 	// info to describe extension dimensions
 	int		fits_ldfs_naxis1;		//	ldf_nrow
 	int		fits_ldfs_naxis2;		//	ldf_ncol
 	int		fits_fldfs_nrows;		// 	fldf_nrow
 	int 	fits_fldfs_tfields;		//	fldf_ncol
-	int 	fits_ab_nrows;			//	alpha_beta_nrow
-	int		fits_ab_tfields;		//	alpha_beta_ncol
-	int 	fits_params_nrows;		//	params_nrow
-	int		fits_params_tfields;	//	params_ncol
+	int 	fits_ab_naxis1;			//	alpha_beta_nrow
+	int		fits_ab_naxis2;			//	alpha_beta_ncol
 
 	// processing parameters to save
 	int			ann_wd;
@@ -205,7 +205,7 @@ typedef struct {	// output files content
 
 // C functions
 void	close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out, DRMS_Array_t *data_array); //, FILE *opf);
-int		do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
+int		do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
 					LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios, int *status);
 double	fin_min(double A[], double m, int range, int degf, int debug, FILE *fd);
 int		gaussfit(double y[], double t[],double sigma[], double A[], double erro[], long N, int degf, int debug, FILE *opf);

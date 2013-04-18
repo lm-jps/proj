@@ -9,8 +9,8 @@
 			
 	
 	#define CODE_NAME 		"limbfit_tas"
-	#define CODE_VERSION 	"V5.01" 
-	#define CODE_DATE 		"Wed Feb  6 08:29:26 HST 2013" 
+	#define CODE_VERSION 	"V5.02" 
+	#define CODE_DATE 		"Tue Mar 26 16:30:08 HST 2013" 
 	
 	V4.03 from previous:	 only default parameters changed
 */
@@ -144,8 +144,8 @@ int process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT
 		sprintf(log_msg,"FSN:%u processing",fsn);
 		lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
 		printf("selection: #%u\n",fsn);
-
-		if (do_one_limbfit(fsn,record_in,record_out,lfv,lfr,lfw,&rstatus))
+		lfv->fsn=fsn;
+		if (do_one_limbfit(record_in,record_out,lfv,lfr,lfw,&rstatus))
 		{
 			if (rstatus < 0 && rstatus > -300)
 			{
@@ -241,7 +241,7 @@ int process_all_records_smpl(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUT
 			lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
 			printf("selection: #%u\n",fsn);
 
-			if (do_one_limbfit(fsn,record_in,record_out,lfv,lfr,lfw,&rstatus))
+			if (do_one_limbfit(record_in,record_out,lfv,lfr,lfw,&rstatus))
 			{
 				if (rstatus < 0 && rstatus > -300)
 				{
