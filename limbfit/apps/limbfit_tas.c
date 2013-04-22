@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit_tas"
-	#define CODE_VERSION 	"V5.03" 
-	#define CODE_DATE 		"Thu Apr  4 10:50:46 HST 2013" 
+	#define CODE_VERSION 	"V5.01" 
+	#define CODE_DATE 		"Wed Feb  6 08:29:26 HST 2013" 
 */
 
 #include "limbfit_tas.h"
@@ -153,9 +153,7 @@ r  = (float)naxis_row/2;
 /*                  Call Fortran Code Subrotine limb.f                  */
 /************************************************************************/
 	float *rprf, *lprf, *alph, *beta, *b0, *sb0; //, *beta1, *beta2, *beta3;
-	long ab_nrow=nreg, ab_ncol=2;
-
-	// contains the LDFs AXIS
+	long ab_nrow=nreg, ab_ncol;
 	rprf = (float *) malloc(sizeof(float)*(nprf));
 		if(!rprf) 
 		{
@@ -163,7 +161,7 @@ r  = (float)naxis_row/2;
 			return ERR_MALLOC_FAILED;
 		}
 	float *p_rprf, *pl_rprf;
-	// contains LDFs inc. average ldf
+	
 	lprf = (float *) malloc(sizeof(float)*((nang+1)*nprf));
 		if(!lprf) 
 		{
@@ -306,7 +304,7 @@ r  = (float)naxis_row/2;
 		/************************************************************************/
 		/*                  Compute the Inflection Point                      */
 		/************************************************************************/
-		float *LDF, *D, *t_ip, *p_t_ip;
+		float *LDF, *D;
 		LDF = (float *) malloc(sizeof(float)*(nprf));
 			if(!LDF) 
 			{
@@ -320,42 +318,58 @@ r  = (float)naxis_row/2;
 				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (D)", log_msg_code, results->opf);
 				return ERR_MALLOC_FAILED;
 			}
-	    t_ip 	= (float *) malloc((nang)*sizeof(float));
-			if(!t_ip) 
-			{
-				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_ip)", log_msg_code, results->opf);
-				return ERR_MALLOC_FAILED;
-			}
-		p_t_ip=&t_ip[0];
 
-		double ip, maxim; 
+		double ip, ip1, maxim; 
 		double radius = 0.;
 		int cont, c, ret_gsl;
 		float h;
 			
+		// for saving them in FITS file
+		float *save_ldf, *save_alpha_beta; 
+		double *save_params;
+		long nb_p_as=6, nb_p_es=6, nb_p_radius=1, nb_p_ip=1; 
+		long params_nrow=nang+1, params_ncol=nb_p_as+nb_p_es+nb_p_radius+nb_p_ip;
+		long ldf_nrow=nang+2, ldf_ncol=nprf;  //ii -nbr of ldfs, jj -nbr of points for each ldf
 		//if (iter > 1) ab_ncol=3; else ab_ncol=2;
-		int degf=6;
+		ab_ncol=2;
+		int degf;
 		//if (iter > 2) degf=4; else degf=6; // problem with degf = 4...
+		degf=6;
 		double A[degf];
 		double erro[degf];
 
+	    save_ldf 	= (float *) malloc((ldf_nrow*ldf_ncol)*sizeof(float));
+			if(!save_ldf) 
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_ldf)", log_msg_code, results->opf);
+				return ERR_MALLOC_FAILED;
+			}
+	    save_alpha_beta = (float *) malloc((ab_nrow*ab_ncol)*sizeof(float));
+			if(!save_alpha_beta) 
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_alpha_beta)", log_msg_code, results->opf);
+				return ERR_MALLOC_FAILED;
+			}		
+	    save_params = (double *) malloc((params_nrow*params_ncol)*sizeof(double));  
+			if(!save_params) 
+			{
+				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_params)", log_msg_code, results->opf);
+				return ERR_MALLOC_FAILED;
+			}			
+			
+		long zero_as=0;
+		long zero_es=params_nrow*nb_p_as;
+		long zero_r =params_nrow*(nb_p_as+nb_p_es);
+		long zero_ip=params_nrow*(nb_p_as+nb_p_es+nb_p_radius);
 
 		 /* copy the last pixel of the mean ldf in the prev one to correct a fortran issue */
 		lprf[(nprf*nang)+63]=lprf[(nprf*nang)+62];
-
-		/* -----------------------------------------------------------------------------
-		
-			3 radius:
-				* A[1]	 		= maximum of the Gaussian
-				* radius 		= maximum of the Gaussian + quadratic fit -> R_LFS
-				* ip, t_ip[*]	= inflection point 
-		
-		------------------------------------------------------------------------------- */			
 			
-		for (cont=0; cont<=nang; cont++)
-		{ 
-		 //cont=nang;
+		//for (cont=0; cont<=nang; cont++)
+		{ // only the mean ldf
+		 cont=nang;
 			ret_gsl=0;
+			 ip1=0.;
 			 /* dx */
 			 h=(float)rprf[1]-rprf[0];
 			
@@ -389,81 +403,60 @@ r  = (float)naxis_row/2;
 			 }
 			
 			/* improve the maximum estimation looking at the 2 neibors points */
-			t_ip[cont]=rprf[jj]-h/2.*(D[jj-1]-D[jj+1])/(2*D[jj]-D[jj-1]-D[jj+1]);
+			ip=rprf[jj]-h/2.*(D[jj-1]-D[jj+1])/(2*D[jj]-D[jj-1]-D[jj+1]);
+			
 			if (results->debug)
 			{
 				if (cont==nang)
 				{
-					sprintf(log_msg," Inflection Point 1: %ld %d %8.5f %8.5f", jj, nprf, rprf[jj], t_ip[cont]);
+					sprintf(log_msg," Inflection Point 1: %ld %d %8.5f %8.5f", jj, nprf, rprf[jj], ip);
 					lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, results->opf);
 				}
 			}
-		} // endfor-cont
-		cont--;
-		// now only the mean ldf
-		/* FIT A GAUSSIAN PLUS QUADRATIC FUNCTION */
+			ip1=ip;
+			/* FIT A GAUSSIAN PLUS QUADRATIC FUNCTION */
 
-		/* Select Region */
-		int m_in, m_ex, N;
-		 /* Gaussian + quadratic function */
-		 /* After Launch verify if this number is OK */
-		 /* Should contain the pixels around the 3*FWHM level */
-		m_in=jj-r_size;
-		m_ex=jj+r_size;
-		
-		if (m_in < 0) m_in = 0;
-		if (m_ex > nprf-1) m_ex =nprf-1;
-		N=m_ex-m_in+1;
-
-		/* parameters:- initial guess */
-		A[0]= maxim;
-		A[1]= t_ip[cont];
-		A[2]= 0.5;
-		A[3]= 12*maxim;
-		for (c=0;c<degf;c++) erro[c]=0.;
-	
-		if (N >= degf) 	// degree of freedom 6 parameters, 6 values minimum
-		{
-			double px[N], der[N] , sigma[N];
+			/* Select Region */
+			int m_in, m_ex, N;
+			 /* Gaussian + quadratic function */
+			 /* After Launch verify if this number is OK */
+			 /* Should contain the pixels around the 3*FWHM level */
+			m_in=jj-r_size;
+			m_ex=jj+r_size;
 			
-			jj=-1;
-			for(ii = m_in; ii <= m_ex ; ii++)
-			{
-				   jj++;
-				   px[jj]=rprf[ii];
-				   der[jj]=D[ii];
-				   sigma[jj] = 1.;
-			}
-			//A[4]= der[N-1]-der[0];
-			//if (debug==2) fprintf(opf,"%s DEBUG_INFO in limbfit: #: %d\n",LOGMSG1,cont);
+			if (m_in < 0) m_in = 0;
+			if (m_ex > nprf-1) m_ex =nprf-1;
+			N=m_ex-m_in+1;
 
-			ret_gsl=gaussfit(der, px, sigma, A, erro, N, degf,results->debug,results->opf);
-
-			if (ret_gsl < 0)
+			/* parameters:- initial guess */
+			A[0]= maxim;
+			A[1]= ip;
+			A[2]= 0.5;
+			A[3]= 12*maxim;
+			for (c=0;c<degf;c++) erro[c]=0.;
+		
+			if (N >= degf) 	// degree of freedom 6 parameters, 6 values minimum
 			{
-				if (cont==nang)
+				double px[N], der[N] , sigma[N];
+				
+				jj=-1;
+				for(ii = m_in; ii <= m_ex ; ii++)
 				{
-					sprintf(log_msg," gaussfit failed for the averaged LDF %d err:%d", cont,ret_gsl);
-					lf_logmsg("ERROR", "APP", 0, ret_gsl, log_msg, log_msg_code, results->opf);
-				}
-				for (c=0;c<degf;c++) 
-				{	
-					A[c]=0.;
-					erro[c]=0.;
-				}
-				radius=0.;
-			}
-			else
-			{			
-				/* FIND THE MAXIMUM OF THE GAUSSIAN PLUS QUADRATIC FUNCTION */
-				radius = A[1]; /* Initial Guess */
-				radius = fin_min(A, radius, grange, degf, results->debug,results->opf);
-				if (radius < 0)
+					   jj++;
+					   px[jj]=rprf[ii];
+					   der[jj]=D[ii];
+					   sigma[jj] = 1.;
+			 	}
+				//A[4]= der[N-1]-der[0];
+				//if (debug==2) fprintf(opf,"%s DEBUG_INFO in limbfit: #: %d\n",LOGMSG1,cont);
+
+				ret_gsl=gaussfit(der, px, sigma, A, erro, N, degf,results->debug,results->opf);
+
+				if (ret_gsl < 0)
 				{
-					ret_gsl=(int)radius;
 					if (cont==nang)
 					{
-						sprintf(log_msg," fin_min failed for the averaged LDF %d err:%d", cont, ret_gsl);
+						sprintf(log_msg," gaussfit failed for the averaged LDF %d err:%d", cont,ret_gsl);
 						lf_logmsg("ERROR", "APP", 0, ret_gsl, log_msg, log_msg_code, results->opf);
 					}
 					for (c=0;c<degf;c++) 
@@ -473,22 +466,54 @@ r  = (float)naxis_row/2;
 					}
 					radius=0.;
 				}
+				else
+				{			
+				 	/* FIND THE MAXIMUM OF THE GAUSSIAN PLUS QUADRATIC FUNCTION */
+				 	radius = A[1]; /* Initial Guess */
+				 	radius = fin_min(A, radius, grange, degf, results->debug,results->opf);
+					if (radius < 0)
+					{
+						ret_gsl=(int)radius;
+						if (cont==nang)
+						{
+							sprintf(log_msg," fin_min failed for the averaged LDF %d err:%d", cont, ret_gsl);
+							lf_logmsg("ERROR", "APP", 0, ret_gsl, log_msg, log_msg_code, results->opf);
+						}
+						for (c=0;c<degf;c++) 
+						{	
+							A[c]=0.;
+							erro[c]=0.;
+						}
+						radius=0.;
+					}
+				}
+			} 
+			else 
+			{ 
+				sprintf(log_msg," Inflection point too close to annulus data border %d", cont);
+				lf_logmsg("WARNING", "APP", 0, 0, log_msg, log_msg_code, results->opf);
+				for (c=0;c<degf;c++) erro[c]=0.;
+				radius=ip;
+				save_params[zero_ip+cont]=0.;
 			}
-		} 
-		else 
-		{ 
-			sprintf(log_msg," Inflection point too close to annulus data border %d", cont);
-			lf_logmsg("WARNING", "APP", 0, 0, log_msg, log_msg_code, results->opf);
-			for (c=0;c<degf;c++) erro[c]=0.;
-			// in this case: A[1]=radius=t_ip[last] 
-			radius=t_ip[cont];
-		}
-		// save them
-		for (c=0;c<degf;c++)
-		{
-			results->fits_as[c]=(float)A[c];
-			results->fits_es[c]=(float)erro[c];
-		}
+			// IS: NOT SURE THIS IS AT THE RIGHT PLACE!!! just above before the "else"
+			// save them
+			for (c=0;c<degf;c++)
+			{
+				save_params[zero_as+params_nrow*c+cont]=A[c];
+				save_params[zero_es+params_nrow*c+cont]=erro[c];
+			}
+			if (degf >4) 
+			{
+					save_params[zero_as+params_nrow*c+cont]=0.;
+					save_params[zero_es+params_nrow*c+cont]=0.;			
+					c++;
+					save_params[zero_as+params_nrow*c+cont]=0.;
+					save_params[zero_es+params_nrow*c+cont]=0.;			
+			}
+			save_params[zero_r+cont]=radius;
+			save_params[zero_ip+cont]=ip1;
+		} // endfor-cont
 		if (results->debug)
 		{	
 			sprintf(log_msg," Inflection Point 2: %8.5f %8.5f %8.5f", A[1], erro[1], radius);
@@ -508,8 +533,11 @@ r  = (float)naxis_row/2;
 				lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, results->opf);
 			}
 		}
+
+		//**********************************************************************
+		//						Save LDFs & AB data in a FITS file                      
+		//**********************************************************************
 	
-		//	Full ldfs                     
 		int fldfr=0;	//proc result: 0=ok; 1=failed; 2=cannot be processed; 3=malloc pb; 4=not processed; 
 		int fulldf_nrows, fulldf_ncols=2;
 		int bins1=0, bins2=0;
@@ -553,94 +581,25 @@ r  = (float)naxis_row/2;
 			}
 		}			
 
-
-		/* ---------------------Save LDFs & AB data in a FITS file--------------
-		
-		 LDF = lprf(ldfs) & rprf (axis) come from limbfit.f			
-		
-					 to be read in IDL as: FLOAT     = Array[65, 182]
-
-		  			NAXIS1          FLOAT               65
-   					NAXIS2          FLOAT              182
-		
-			-----------------
-			| axis	 |  fsn |
-			-----------------
-			| lfds	 |  ip  |
-			| ...	 | 	... |
-			| ....	 |  ... |
-			-----------------
-			| avg ldf|  ip  |
-			-----------------
-		
-		--------------------------------------------------------------------- */
-		// for saving them in FITS file
-		float *save_ldf, *save_alpha_beta; 
-		long ldf_nrow=nang+2, ldf_ncol=nprf+1;  //ii -nbr of ldfs, jj -nbr of points for each ldf
-	    save_ldf 	= (float *) malloc((ldf_nrow*ldf_ncol)*sizeof(float));
-			if(!save_ldf) 
-			{
-				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_ldf)", log_msg_code, results->opf);
-				return ERR_MALLOC_FAILED;
-			}
-	    save_alpha_beta = (float *) malloc((ab_nrow*ab_ncol)*sizeof(float));
-			if(!save_alpha_beta) 
-			{
-				lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (save_alpha_beta)", log_msg_code, results->opf);
-				return ERR_MALLOC_FAILED;
-			}		
-
+		// LDF 				// lprf & rprf come from limbfit.f			
 		float *p_sldf=&save_ldf[0];
 		float *pl_sldf=&save_ldf[(ldf_nrow*ldf_ncol)-1];
-		float *plc_sldf;
-
-		// axis
 		p_rprf=&rprf[0];
 		pl_rprf=&rprf[nprf-1];
 		while (p_rprf <= pl_rprf)
 			*(p_sldf++)=*(p_rprf++);
 
-//		*(p_sldf++)=(float)input->fsn;
-		*(p_sldf++)=0.0;
-
-/*old		
-			
-		//ldfs
 		p_lprf=&lprf[0];
-		p_sldf=&save_ldf[ldf_ncol]; //		shouldn't be? pl_lprf=&lprf[ldf_ncol]; ???
+		p_sldf=&save_ldf[ldf_ncol];
 		while (p_sldf <= pl_sldf)
 			*(p_sldf++)=*(p_lprf++);
-*/			
-		int cpt_row=0;
-		p_lprf=&lprf[0];
-		pl_lprf=&lprf[((nang+1)*nprf)-1];
 
-		while (p_lprf <= pl_lprf)
-		{
-			plc_sldf=&lprf[((cpt_row+1)*nprf)-1];
-			while (p_lprf <= plc_sldf)
-				*(p_sldf++)=*(p_lprf++);
-			*(p_sldf++)=*(p_t_ip++);
-			cpt_row++;
-		}
-
-		/* ---------------------------------------------------------------------
-		
-		 AB 		write first alpha then beta
-					to be read in IDL as:  Array[2, 256]
-		
-		  			NAXIS1          FLOAT                2
-   					NAXIS2          FLOAT              256
- 
-		--------------------------------------------------------------------- */
+		// AB 
 		p_alph=pf_alph;
 		p_b0=pf_b0;
 		float *p_save_alpha_beta=&save_alpha_beta[0];
-		while (p_alph <= pl_alph) 
-		{
-			*(p_save_alpha_beta++)=*(p_alph++);
-			*(p_save_alpha_beta++)=*(p_b0++);
-		}
+		while (p_alph <= pl_alph) *(p_save_alpha_beta++)=*(p_alph++);
+		while (p_b0 <= pl_b0) *(p_save_alpha_beta++)=*(p_b0++);
 		/*
 		if (iter>1) 
 		{
@@ -648,7 +607,6 @@ r  = (float)naxis_row/2;
 			while (p_sb0 <= pl_sb0) *(p_save_alpha_beta++)=*(p_sb0++);
 		}
 		*/ 
-
 		// Update Returned Structure when process succeeded                    
 		results->cenx=cmx;
 		results->ceny=cmy;
@@ -659,8 +617,10 @@ r  = (float)naxis_row/2;
 		results->fits_ldfs_naxis2=ldf_nrow;
 		results->fits_fldfs_tfields=fulldf_ncols;
 		results->fits_fldfs_nrows=fulldf_nrows;
-		results->fits_ab_naxis1=ab_ncol;
-		results->fits_ab_naxis2=ab_nrow;
+		results->fits_ab_tfields=ab_ncol;
+		results->fits_ab_nrows=ab_nrow;
+		results->fits_params_tfields=params_ncol;
+		results->fits_params_nrows=params_nrow;
 		results->nb_fbins=bins1;
 		results->ann_wd=w;
 		results->mxszannv=S;
@@ -691,11 +651,11 @@ r  = (float)naxis_row/2;
 	 		}     	
 		}
 		results->fits_ldfs_data=save_ldf; 
+		results->fits_params=save_params; 
 		results->fits_alpha_beta=save_alpha_beta; 
 		if (fldf == 1) results->fits_fulldfs=save_full_ldf; else results->fits_fulldfs=0;
 		free(D);
 		free(LDF);
-		free(t_ip);
 	} // end limb OK
 	else 
 	{
@@ -727,14 +687,12 @@ r  = (float)naxis_row/2;
 		results->fldfr=4;
 	} // end limb failed
 	// IS: do not free those (save_ldf,save_params,save_alpha_beta,save_full_ldf) passed from or to the structure !
-
 	free(rprf);
 	free(alph);
 	free(beta);
 	free(b0);
 	//free(sb0);
-//	free(lprf);
-
+	free(lprf);
 	if (results->debug)
 	{	
 		sprintf(log_msg," >>>>end of limbfit with: %d", ret_code);

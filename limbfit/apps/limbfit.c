@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V4.0r4" 
-	#define CODE_DATE 		"Wed Apr  3 18:33:05 HST 2013" 
+	#define CODE_VERSION 	"V4.0r0" 
+	#define CODE_DATE 		"Tue May  1 13:34:54 PDT 2012" 
 */
 
 #include "limbfit.h"
@@ -330,8 +330,9 @@ float sav_max=0.;
 		long params_nrow=nang+1, params_ncol=nb_p_as+nb_p_es+nb_p_radius+nb_p_ip;
 		long ldf_nrow=nang+2, ldf_ncol=nprf;  //ii -nbr of ldfs, jj -nbr of points for each ldf
 		if (iter > 1) ab_ncol=3; else ab_ncol=2;
-		int degf=6;
+		int degf;
 		//if (iter > 2) degf=4; else degf=6; // problem with degf = 4...
+		degf=6;
 		double A[degf];
 		double erro[degf];
 
@@ -493,11 +494,20 @@ float sav_max=0.;
 				radius=ip;
 				save_params[zero_ip+cont]=0.;
 			}
+			// IS: NOT SURE THIS IS AT THE RIGHT PLACE!!! just above before the "else"
 			// save them
 			for (c=0;c<degf;c++)
 			{
 				save_params[zero_as+params_nrow*c+cont]=A[c];
 				save_params[zero_es+params_nrow*c+cont]=erro[c];
+			}
+			if (degf >4) 
+			{
+					save_params[zero_as+params_nrow*c+cont]=0.;
+					save_params[zero_es+params_nrow*c+cont]=0.;			
+					c++;
+					save_params[zero_as+params_nrow*c+cont]=0.;
+					save_params[zero_es+params_nrow*c+cont]=0.;			
 			}
 			save_params[zero_r+cont]=radius;
 			save_params[zero_ip+cont]=ip1;

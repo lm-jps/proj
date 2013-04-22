@@ -34,11 +34,6 @@
 ;	  Added /single and /double keywords 
 ;	2010.06.11	Keh-Cheng Chu
 ;         Make checksum verification selectable by keyword
-;	2010.12.17	Keh-Cheng Chu
-;         Instead of calling fits_get_img_equivtype() to determine
-;         output data type, always choose float (double) type for 
-;         BITPIX = 8 or 16 (32 or 64) when there is non-default
-;         BSCALE and BZERO.
 ;
 ;-
 
@@ -56,8 +51,7 @@ forcedouble =  keyword_set(double)
 if (forcesingle and forcedouble) then message, $
     'Error: both /single and /double specified!'
 
-;LIB = '/home/kehcheng/idl/fitsio/fitsio.so'
-LIB = '/home/jsoc/idl/fitsio.so'
+LIB = '/home/kehcheng/idl/fitsio/fitsio.so'
 
 extnum = 999l
 dtype = 999l
@@ -79,6 +73,13 @@ if (n_params() eq 2) then begin
 	fn = strmid(filename, 0, s)
 	hd = headfits(fn, exten=extnum)
     endelse
+endif
+
+
+;added to handle zero length fits files RW
+if (naxes[0] eq 0) then begin
+	print,'no data'
+	return,-1
 endif
 
 naxes = naxes[0:naxis-1]

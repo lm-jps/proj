@@ -7,13 +7,13 @@
 			
 	
 	#define results->code_name 		"limbfit_tas"
-	#define CODE_VERSION 			"V5.02" 
-	#define CODE_DATE 				"Tue Mar 26 16:30:08 HST 2013" 
+	#define CODE_VERSION 			"V5.01" 
+	#define CODE_DATE 				"Wed Feb  6 08:29:26 HST 2013" 
 */
 
 #include "limbfit_tas.h"
 
-int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
+int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
 					LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios, int *status)
 {
 	static char *log_msg_code="do_one_limbfit";
@@ -167,6 +167,7 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			}
 			drms_free_array (array1);
 			// ????to check-> NOTE: because of that, from now tbf MUST BE EQUAL to 1
+			
 		//add more KWs
 		//ORIGIN kw ok?			
 		//TIME too?
@@ -189,8 +190,8 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			//if (results->nb_iter==1)
 			//{
 			// attention only one beta (the last one) => to be changed in limbfit.c too
-				naxes[0]=results->fits_ab_naxis1;
-				naxes[1]=results->fits_ab_naxis2;
+				naxes[0]=results->fits_ab_nrows;
+				naxes[1]=results->fits_ab_tfields;
 				DRMS_Array_t *array2=drms_array_create(DRMS_TYPE_FLOAT,2,naxes,results->fits_alpha_beta,&rstatus);			
 				if (rstatus) 
 				{
@@ -213,6 +214,30 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 				}
 				drms_free_array (array2);
 
+			// All Params ---EXT#2-------------------------------------------------------------------------
+				naxes[0]=results->fits_params_nrows;
+				naxes[1]=results->fits_params_tfields;
+				DRMS_Array_t *array3=drms_array_create(DRMS_TYPE_DOUBLE,2,naxes,results->fits_params,&rstatus);			
+				if (rstatus) 
+				{
+					lf_logmsg("ERROR", "DRMS", ERR_DRMS_ARRAY_CREATE,rstatus, "ERR_DRMS_ARRAY_CREATE(params)", log_msg_code, results->opf);
+					return ERR_DRMS_ARRAY_CREATE;
+				}
+				segment_out = drms_segment_lookupnum(record_out, 2); 
+				if (segment_out)
+				{
+					if ( drms_segment_write(segment_out,array3,0) ) 
+					{
+						lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_WRITE,rstatus, "ERR_DRMS_SEGMENT_WRITE(params)", log_msg_code, results->opf);
+						return ERR_DRMS_SEGMENT_WRITE;
+					}	
+				}
+				else
+				{
+					lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_LOOKUPNUM,rstatus, "ERR_DRMS_SEGMENT_LOOKUPNUM(params)", log_msg_code, results->opf);
+					return ERR_DRMS_SEGMENT_LOOKUPNUM;
+				}
+				drms_free_array (array3);
 			
 			if (input->fldf==1)
 			{
@@ -241,7 +266,6 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 				}
 				drms_free_array (array4);
 			}
-
 			//---------------------------------------
 			//		5) close & free
 			//---------------------------------------
@@ -255,12 +279,12 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			free(results->fits_params);
 			if (results->fldfr<3) free(results->fits_fulldfs);
 			*/
-			if (results->debug) printf("done...%u\n",input->fsn);							
+			if (results->debug) printf("done...%u\n",fsn);							
 			lf_logmsg("INFO", "APP", 0, 0, "End writing in the DB", log_msg_code, results->opf);
 		}
 		else 
 		{
-			sprintf(log_msg,"NO LDFS file created (ifail >0) or retcode <0 for fsn# %u", input->fsn);
+			sprintf(log_msg,"NO LDFS file created (ifail >0) or retcode <0 for fsn# %u", fsn);
 			lf_logmsg("WARNING", "APP", ERR_LIMBFIT_FAILED, lf_retcode, log_msg, log_msg_code, results->opf);			
 			write_mini_output(PROCSTAT_NO_LF_FAILED,record_in,record_out,0,results);
 			// is this the right retcode? or should I make a test???
@@ -270,6 +294,7 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			{
 				free(results->fits_ldfs_data);
 				free(results->fits_alpha_beta);
+				free(results->fits_params);
 				if (results->fldfr<3) free(results->fits_fulldfs);
 			}
 			return(0);
@@ -294,6 +319,7 @@ int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *re
 		if (tbf >=1)
 		{
 			free(results->fits_alpha_beta);
+			free(results->fits_params);
 			if (results->fldfr<3) free(results->fits_fulldfs);
 			if (tbf ==2) free(results->fits_ldfs_data);	
 		}
@@ -317,18 +343,6 @@ int	write_lf_keywords(char * errcode, DRMS_Record_t *record_out, LIMBFIT_OUTPUT 
 		drms_setkey_int   (record_out, "ERRO_FIT",	results->error2);
 		drms_setkey_int   (record_out, "NB_FBINS",	results->nb_fbins);
 		drms_setkey_int   (record_out, "FLDFR",		results->fldfr);
-		drms_setkey_float (record_out, "ES0",		results->fits_es[0]);
-		drms_setkey_float (record_out, "ES1",		results->fits_es[1]);
-		drms_setkey_float (record_out, "ES2",		results->fits_es[2]);
-		drms_setkey_float (record_out, "ES3",		results->fits_es[3]);
-		drms_setkey_float (record_out, "ES4",		results->fits_es[4]);
-		drms_setkey_float (record_out, "ES5",		results->fits_es[5]);
-		drms_setkey_float (record_out, "AS0",		results->fits_as[0]);
-		drms_setkey_float (record_out, "AS1",		results->fits_as[1]);
-		drms_setkey_float (record_out, "AS2",		results->fits_as[2]);
-		drms_setkey_float (record_out, "AS3",		results->fits_as[3]);
-		drms_setkey_float (record_out, "AS4",		results->fits_as[4]);
-		drms_setkey_float (record_out, "AS5",		results->fits_as[5]);
 		drms_setkey_double(record_out, "CMEAN",		results->cmean);
 		drms_setkey_int   (record_out, "ANN_WD",	results->ann_wd);
 		drms_setkey_int   (record_out, "MXSZANNV",	results->mxszannv);
