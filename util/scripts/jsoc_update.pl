@@ -25,7 +25,8 @@ use constant kTmpDir    => "/tmp";
 
 my(@machines) = 
 (
-    "n02"
+    "n02",
+    "solar3"
 );
 
 my($optdir);
