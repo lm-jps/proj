@@ -9,7 +9,7 @@ use Sys::Hostname;
 use Cwd qw(realpath chdir); # OMG! Need to override chdir, otherwise $ENV{PWD} is NOT
                             # updated when chdir is called.
 use FindBin qw($Bin);
-use lib "$Bin/../../../base/libs/perl";
+use lib ($Bin, "$Bin/../../../base/libs/perl");
 use drmsArgs;
 
 use constant kSuccess       => 0;
@@ -559,7 +559,7 @@ sub BuildOnMachine
    if (defined($lpath))
    {
       # Should really capture the return code from this ssh cmd.
-      if (open(CMD, "(ssh $mach echo \$JSOC_MACHINE) 2>&1 |"))
+      if (open(CMD, "(ssh $mach " . "\'" . "echo \$JSOC_MACHINE" . "\'" . ") 2>&1 |"))
       {
          $plat = <CMD>;
          chomp($plat);
