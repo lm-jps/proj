@@ -9,6 +9,8 @@ use Sys::Hostname;
 use Cwd qw(realpath chdir); # OMG! Need to override chdir, otherwise $ENV{PWD} is NOT
                             # updated when chdir is called.
 use FindBin qw($Bin);
+use lib "$Bin/../../../base/libs/perl";
+use drmsArgs;
 
 use constant kSuccess       => 0;
 use constant kBadArgs       => 1;
@@ -29,7 +31,10 @@ my(@machines) =
     "solar3"
 );
 
+my($optsinH);
+my($opts);
 my($optdir);
+my($machlist);
 my($cvstree);
 my($jsocroot);
 my($nfsf);
@@ -55,12 +60,21 @@ my($hostnm);
 # ask the caller if they want to build the updated tree on the machine running this
 # script.
 
-unless (GetOptions("dir=s"    => \$optdir
-                  ))
+$optsinH = 
 {
-   Usage();
-   exit(kBadArgs);
+    "dir" => 's',
+    "machs" => 's'
+};
+
+$opts = new drmsArgs($optsinH, 0);
+
+if (!defined($opts))
+{
+    exit(kBadArgs);
 }
+
+$optdir = $opts->Get("dir");
+$machlist = $opts->Get("machs");
 
 # If user did not specify a directory to update, use the one specified by the JSOCROOT
 # env variable, if it exists.
@@ -80,6 +94,13 @@ else
     {
         $cvstree = "$ENV{'PWD'}/$optdir"
     }
+}
+
+if (defined($machlist))
+{
+    my(@mintermed) = split(/,/, $machlist);
+    @machines = map({ ($_ =~ /\s*(\S+)\s*/)[0] } @mintermed);
+    
 }
 
 # Determine if the cvs tree specified exists
@@ -125,7 +146,7 @@ print "CVS JSOC tree being updated ==> $netpath\n";
 
 # Anonymous hash whose keys are machines. For each key, the value is the 
 # path, local to the machine, to the CVS tree being updated.
-my($mpaths) = GetLocalPaths(@machines, $netpath);
+my($mpaths) = GetLocalPaths($netpath, @machines);
 my(@mpkeys) = keys(%$mpaths);
 my($impkey);
 my($line);
@@ -342,12 +363,15 @@ sub ExtractMachPath
             # gigabit for a gigabit network). But all networks are at least Gb now.
             # One physical drive might have a network name whose symbolic name ends
             # in a 'g' on one machine, but not on another. Try to remove the trailing
-            # 'g' before doing a comparison.
+            # 'g' before doing a comparison. The mtab line might also have this trailing
+            # 'g'.
             #
             # $netpath2 - like sunroom:/home0/arta/jsoctrees/JSOC
             my($netpath2) = $netpath;
             
             $netpath2 =~ s/g:/:/;
+            $volume =~ s/g:/:/;
+            
             if ($netpath2 =~ /^$volume(.+)/)
             {
                 return $mount . $1; 
@@ -367,62 +391,52 @@ sub ExtractMachPath
 
 sub GetLocalPaths
 {
-   my(@machines) = $_[0];
-   my($netpath) = $_[1]; # network path to CVS tree
-
-   my($rv);
-   my(@machpath);
-
-   foreach $mach (@machines)
-   {
-       # make a test connection
-       system("(ssh $mach ls) 2>&1 1>/dev/null");
-
-       if ($? != 0)
-       {
-           my(@rsp) = `ssh $mach 2>&1`;          
-           print STDERR "Problem connecting to machine '$mach':\n";
-           print STDERR " @rsp";
-           last;
-       }
-
-      if (open(STATCMD, "(ssh $mach cat /etc/mtab) 2>&1 |"))
-      {
-         my(@remotemtab) = <STATCMD>;
-
-         close(STATCMD);
-
-         # Extract record for $volume.
-         @machpath = map({ ExtractMachPath($netpath, $_); } @remotemtab);
-
-         my($test) = $#machpath;
-
-         if ($#machpath == 0)
-         {
-            # CVS tree lives on $mach at $machpath[0];
-            print "                 Local path ==> $mach:$machpath[0].\n";
-
-            if (!defined($rv))
+    my($netpath) = shift; # network path to CVS tree
+    my(@machines) = @_;
+    
+    my($rv);
+    my(@machpath);
+    
+    foreach $mach (@machines)
+    {
+        # make a test connection
+        if (open(STATCMD, "(ssh $mach cat /etc/mtab) 2>&1 |"))
+        {
+            my(@remotemtab) = <STATCMD>;
+            
+            close(STATCMD);
+            
+            # Extract record for $volume.
+            @machpath = map({ ExtractMachPath($netpath, $_); } @remotemtab);
+            
+            my($test) = $#machpath;
+            
+            if ($#machpath == 0)
             {
-               $rv = {};
+                # CVS tree lives on $mach at $machpath[0];
+                print "                 Local path ==> $mach:$machpath[0].\n";
+                
+                if (!defined($rv))
+                {
+                    $rv = {};
+                }
+                
+                $rv->{$mach} = $machpath[0];
             }
-
-            $rv->{$mach} = $machpath[0];
-         }
-         else
-         {
-            print "CVS tree $netpath is not mounted on $mach; skipping machine.\n";
-            next;
-         }
-      }
-      else
-      {
-         print "Cannot ssh to $mach.\n"; 
-         exit(kCantSSH);
-      }
-   }
-
-   return $rv;
+            else
+            {
+                print "CVS tree $netpath is not mounted on $mach; skipping machine.\n";
+                next;
+            }
+        }
+        else
+        {
+            print "Cannot ssh to $mach.\n"; 
+            exit(kCantSSH);
+        }
+    }
+    
+    return $rv;
 }
 
 sub UpdateTree
