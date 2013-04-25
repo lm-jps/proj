@@ -28,6 +28,10 @@ if(system($rmcmd0)) {
 }
 
 #Now do the initial start of the 2 ingest_lev0
+#@xx = `which ingest_lev0_irisdc`;
+#print "path to ingest_lev0_irisdc = @xx\n";
+#exit;
+
 $cmd0 = "ingest_lev0_irisdc --loopconn  vc=@vcnames[0] indir=/sds/soc2pipe/iris logfile=/usr/local/logs/lev0/@lognames[0] &";
 $log1 = sprintf("/usr/local/logs/lev0/%sX", @lognames[0]);
 
@@ -97,15 +101,15 @@ while(1) {
   sleep(5);			#make sure previous commit to db is done
 
       `$rmcmd0`;
-      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[0] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[0] &";
+      $cmd = "ingest_lev0_irisdc --loopconn -r vc=@vcnames[0] indir=/sds/soc2pipe/iris logfile=/usr/local/logs/lev0/@lognames[0] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
       #`$rmcmd1`;
-      #$cmd = "ingest_lev0 --loopconn -r vc=@vcnames[1] indir=/dds/soc2pipe/aia logfile=/usr/local/logs/lev0/@lognames[1] &";
-      #if(system($cmd)) {
-      #  print "Failed: $cmd\n";
-      #}
+      $cmd = "ingest_lev0_irisdc --loopconn -r vc=@vcnames[0] indir=/sds/soc2pipe/iris/rexmit logfile=/usr/local/logs/lev0/@lognames[0] &";
+      if(system($cmd)) {
+        print "Failed: $cmd\n";
+      }
 #      `$rmcmd2`;
 #      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
 #      if(system($cmd)) {
