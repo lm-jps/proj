@@ -4,6 +4,7 @@
  *
  * This is a stand alone module that processes lev0
  * filtergrams to lev1 by running the build_lev1 module. 
+ * (See "Normal Calls:" below for normal running calls)
  *
  *build_lev1_mgr
  *	mode= recnum or fsn
@@ -40,6 +41,17 @@
  *	- when all jobs are done, build_lev1_mgr will exit
  *
  */ 
+/* Normal Calls:
+ * For hmi call on cl1n002 as user jsocprod:
+ *   build_lev1_mgr mode=recnum instru=hmi dsin=hmi.lev0a dsout=hmi.lev1_nrt 
+ *      brec=0 erec=0
+ * For aia call on cl1n003 as user jsocprod:
+ *   build_lev1_mgr mode=recnum instru=aia dsin=aia.lev0 dsout=aia.lev1_nrt2 
+ *      brec=0 erec=0
+ * For iris call on cl1n001 as user jsocprod:
+ *   build_lev1_mgr mode=recnum instru=iris dsin=iris_ground.lev0_dc1
+ *      dsout=iris_ground.lev1_dc1 brec=0 erec=0
+*/
 
 #include <jsoc.h>
 #include <cmdparams.h>
@@ -60,8 +72,10 @@
 //default in and out data series
 #define LEV0SERIESNAMEHMI "hmi.lev0e"
 #define LEV0SERIESNAMEAIA "aia.lev0e"
+#define LEV0SERIESNAMEIRIS "iris_ground.lev0_dc1"
 #define LEV1SERIESNAMEHMI "su_production.hmi_lev1e"	//temp test case
 #define LEV1SERIESNAMEAIA "su_production.aia_lev1e"	//temp test case
+#define LEV1SERIESNAMEIRIS "iris_ground.lev1_dc1"
 #define DSAIABAD "lm_jps.aia_bad_blobs"			//dsaiabad= arg value to build_lev1 for aia. Eliminated by jim on 03Mar2011
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
@@ -82,7 +96,7 @@ int qsubjob(long long rec1, long long rec2);
 
 // List of default parameter values. 
 ModuleArgs_t module_args[] = { 
-  {ARG_STRING, "instru", "hmi", "instrument. either hmi or aia"},
+  {ARG_STRING, "instru", "hmi" , "instrument. either hmi,aia or iris"},
   {ARG_STRING, "dsin", NOTSPECIFIED, "dataset of lev0 filtergrams"},
   {ARG_STRING, "dsout", NOTSPECIFIED, "dataset of lev1 output"},
   {ARG_STRING, "logfile", NOTSPECIFIED, "optional log file name. Will create one if not given"},
@@ -122,12 +136,13 @@ int qcnt = 0;
 //stream_mode is also quick look mode, i.e. brec=erec=0
 int stream_mode = 0;		//0=qsub build_lev1, 1=fork it locally
 int quicklook = 0;		//can force this flg to be passed to build_lev1
-int hmiaiaflg = 0;		//0=hmi, 1=aia
+//int hmiaiaflg = 0;		//0=hmi, 1=aia
+int instruflg = 0;		//0=hmi, 1=aia, 2=iris
 int modeflg = 0;		//0=fsn, 1=recnum
 int loopcnt = 0;		//force last lev0 records to lev1
 int abortnow = 0;
 char stopfile[80];              // e.g. /usr/local/logs/lev1/build_mgr_stop_hmi
-char hmiaianame[16];		// "hmi" or "aia"
+char hmiaianame[16];		// "hmi" or "aia" or "iris"
 char logname[128];
 char argdsin[128], argdsout[128], arglogfile[128], arginstru[80], argmode[80];
 char argbx[80], argex[80], argnumrec[80], argnumcpu[80], argnumqsub[80];
@@ -147,7 +162,7 @@ int nice_intro ()
     {
     printf ("Runs build_lev1 processes to create lev1 datasets.\n\n");
     printf ("Usage: build_lev1_mgr [-vh]\n"
-        "mode=<recnum|fsn> instru=<hmi|aia> dsin=<lev0> dsout=<lev1>\n"
+        "mode=<recnum|fsn> instru=<hmi|aia|iris> dsin=<lev0> dsout=<lev1>\n"
         "brec=<rec#>|bfsn=<fsn#> erec=<rec#>|efsn=<fsn#>\n"
 	"numcpu=<#> numqsub=<#> logfile=<file>\n"
 	"  -h: help - show this message then exit\n"
@@ -155,11 +170,11 @@ int nice_intro ()
         "mode= recnum: brec and erec have the record # range to process \n"
         "      fsn: bfsn and efsn have the fsn # range to process\n"
         "      For safety, the mode and arg name used must be consistent\n"
-	"instru= instrument. must be 'hmi' or 'aia'\n"
+	"instru= instrument. must be 'hmi' or 'aia' or 'iris'\n"
 	"dsin= data set name of lev0 input\n"
-	"      default hmi=hmi.lev0e   aia=aia.lev0e\n"
+	"      default hmi=hmi.lev0e   aia=aia.lev0e  iris=iris_ground.lev0_dc1\n"
 	"dsout= data set name of lev1 output\n"
-	"      default hmi=su_production.hmi_lev1e   aia=su_production.aia_lev1e\n"
+	"      default hmi=su_production.hmi_lev1e   aia=su_production.aia_lev1e  iris=iris_ground.lev1_dc1\n"
 	"brec= first lev0 rec# to process. 0=Stream Mode if erec also 0\n"
 	"erec= last lev0 rec# to process. 0=Stream Mode if brec also 0\n"
         "bfsn= first fsn# to process. -1=error must be given if fsn mode\n"
@@ -339,12 +354,16 @@ int forkstream(long long recn0, long long maxrecn0, int force)
       return(1);			//!!TBD decide what to do
     }
     else if(pid == 0) {		//this is the beloved child
-      if(hmiaiaflg) {		//call aia or hmi executable
-        //args[0] = "build_lev1_aia --loopconn";
-        args[0] = "build_lev1_aia";
-      } else {
-        //args[0] = "build_lev1_hmi --loopconn";
+      switch(instruflg) {
+      case 0:
         args[0] = "build_lev1_hmi";
+        break;
+      case 1:
+        args[0] = "build_lev1_aia";
+        break;
+      case 2:
+        args[0] = "build_lev1_iris";
+        break;
       }
       sprintf(args1, "mode=%s", mode);
       args[1] = args1;
@@ -392,10 +411,17 @@ int forkstream(long long recn0, long long maxrecn0, int force)
               args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8]);
       //} 
       if(execvp(args[0], args) < 0) {
-        if(hmiaiaflg) 
-          printk("***Can't execvp() build_lev1_aia. errno=%d\n", errno);
-        else
+        switch(instruflg) {
+        case 0:
           printk("***Can't execvp() build_lev1_hmi. errno=%d\n", errno);
+          break;
+        case 1:
+          printk("***Can't execvp() build_lev1_aia. errno=%d\n", errno);
+          break;
+        case 2:
+          printk("***Can't execvp() build_lev1_iris. errno=%d\n", errno);
+          break;
+        }
         exit(1);
       }
     }
@@ -445,13 +471,16 @@ int forkstream(long long recn0, long long maxrecn0, int force)
       return(1);			//!!TBD decide what to do
     }
     else if(pid == 0) {                   //this is the beloved child
-      if(hmiaiaflg) {
-        //args[0] = "build_lev1_aia --loopconn";
-        args[0] = "build_lev1_aia";
-      }
-      else {
-        //args[0] = "build_lev1_hmi --loopconn";
+      switch(instruflg) {
+      case 0:
         args[0] = "build_lev1_hmi";
+        break;
+      case 1:
+        args[0] = "build_lev1_aia";
+        break;
+      case 2:
+        args[0] = "build_lev1_iris";
+        break;
       }
       sprintf(args1, "mode=%s", mode);
       args[1] = args1;
@@ -498,10 +527,17 @@ int forkstream(long long recn0, long long maxrecn0, int force)
               args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8]);
       //}
       if(execvp(args[0], args) < 0) {
-        if(hmiaiaflg)
-          printk("***Can't execvp() build_lev1_aia. errno=%d\n", errno);
-        else
+        switch(instruflg) {
+        case 0:
           printk("***Can't execvp() build_lev1_hmi. errno=%d\n", errno);
+          break;
+        case 1:
+          printk("***Can't execvp() build_lev1_aia. errno=%d\n", errno);
+          break;
+        case 2:
+          printk("***Can't execvp() build_lev1_iris. errno=%d\n", errno);
+          break;
+        }
         exit(1);
       }
     }
@@ -536,31 +572,35 @@ int qsubjob(long long rec1, long long rec2)
   fprintf(qsubfp, "echo \"TMPDIR = $TMPDIR\"\n");
 
   if(modeflg) {		//recnum mode
-    if(hmiaiaflg) {	//aia has an extra arg to build_lev1
-      //fprintf(qsubfp,"build_lev1_aia --loopconn mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-//      fprintf(qsubfp,"build_lev1_aia mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-//	mode, dsin, dsout, rec1, rec2, instru, quicklook, DSAIABAD, QSUBDIR, rec1, rec2); 
-      fprintf(qsubfp,"build_lev1_aia mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
-    }
-    else {
-      //fprintf(qsubfp, "build_lev1_hmi --loopconn mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+    switch(instruflg) {
+    case 0:
       fprintf(qsubfp, "build_lev1_hmi mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
 	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
+      break;
+    case 1:
+      fprintf(qsubfp,"build_lev1_aia mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
+      break;
+    case 2:
+      fprintf(qsubfp,"build_lev1_iris mode=%s dsin=%s dsout=%s brec=%lld erec=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
+      break;
     }
   }
   else {		//fsn mode
-    if(hmiaiaflg) {	//aia has an extra arg to build_lev1X
-      //fprintf(qsubfp,"build_lev1_aia --loopconn mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-//      fprintf(qsubfp,"build_lev1_aia mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d dsaiabad=%s logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-//	mode, dsin, dsout, rec1, rec2, instru, quicklook, DSAIABAD, QSUBDIR, rec1, rec2); 
-      fprintf(qsubfp,"build_lev1_aia mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
-	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
-    }
-    else {
-      //fprintf(qsubfp, "build_lev1_hmi --loopconn mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+    switch(instruflg) {
+    case 0:
       fprintf(qsubfp, "build_lev1_hmi mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
 	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
+      break;
+    case 1:
+      fprintf(qsubfp,"build_lev1_aia mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
+      break;
+    case 2:
+      fprintf(qsubfp,"build_lev1_iris mode=%s dsin=%s dsout=%s bfsn=%lld efsn=%lld instru=%s quicklook=%d logfile=%s/l1q_b%lld_e%lld_$JOB_ID.log\n", 
+	mode, dsin, dsout, rec1, rec2, instru, quicklook, QSUBDIR, rec1, rec2); 
+      break;
     }
   }
 /********************Elim force of stream mode*******************************
@@ -802,11 +842,16 @@ void setup()
   strcat(idstr, string);
   printk("%s", idstr);
   printf("%s", idstr);
-  if(hmiaiaflg) {
-    sprintf(stopfile, "/usr/local/logs/lev1/build_mgr_stop_aia");
-  }
-  else {
+  switch(instruflg) {
+  case 0:
     sprintf(stopfile, "/usr/local/logs/lev1/build_mgr_stop_hmi");
+    break;
+  case 1:
+    sprintf(stopfile, "/usr/local/logs/lev1/build_mgr_stop_aia");
+    break;
+  case 2:
+    sprintf(stopfile, "/usr/local/logs/lev1/build_mgr_stop_iris");
+    break;
   }
   if(stream_mode)
     sprintf(string, "/bin/rm -f %s", stopfile);   //remove any stop file
@@ -864,16 +909,23 @@ int main(int argc, char **argv)
     return (0);
   if(!(username = (char *)getenv("USER"))) username = "nouser"; 
   instru = cmdparams_get_str(&cmdparams, "instru", NULL);
-  if(strcmp(instru, "hmi") && strcmp(instru, "aia")) {
+  if(strcmp(instru, "hmi") && strcmp(instru, "aia") && strcmp(instru, "iris")) {
     printf("instru= %s\n", instru);	 //!!TEMP
-    printf("Error: instru= must be given as 'hmi' or 'aia'\n");
+    printf("Error: instru= must be given as 'hmi' or 'aia' or 'iris'\n");
     return(0);
   }
   if(!strcmp(instru, "aia")) {
-    hmiaiaflg = 1;
+    instruflg = 1;
     sprintf(hmiaianame, "aia");
   }
-  else sprintf(hmiaianame, "hmi");
+  else if(!strcmp(instru, "hmi")) {
+    instruflg = 0;
+    sprintf(hmiaianame, "hmi");
+  }
+  else {
+    instruflg = 2;
+    sprintf(hmiaianame, "iris");
+  }
   mode = cmdparams_get_str(&cmdparams, "mode", NULL);
   if(strcmp(mode, "recnum") && strcmp(mode, "fsn")) {
     printf("Error: mode= must be given as 'recnum' or 'fsn'\n");
@@ -898,7 +950,7 @@ int main(int argc, char **argv)
     printf("numqsub exceeds max of %d\n", MAXQSUBLEV1);
     return(0);
   }
-  if(modeflg) {			//recnum mode
+  if(modeflg) {                 //recnum mode
     if(brec == -1 || erec == -1) {
       fprintf(stderr, "brec and erec must be given. -1 not allowed\n");
       fprintf(stderr, "use brec=0 erec=0 to process in stream mode\n");
@@ -910,14 +962,14 @@ int main(int argc, char **argv)
     }
     if(brec == 0 && erec == 0) {
       //make sure there isn't a stream mode already running
-      sprintf(pcmd, "ls %s/build_lev1_mgr_%s.stream.touch 2>/dev/null", 
-  		LEV1LOG_BASEDIR, hmiaianame);
+      sprintf(pcmd, "ls %s/build_lev1_mgr_%s.stream.touch 2>/dev/null",
+                LEV1LOG_BASEDIR, hmiaianame);
       fin = popen(pcmd, "r");
       while(fgets(line, sizeof line, fin)) {  //get ps return line
         printf("Error: build_lev1_mgr already running.");
         printf(" If not so, do:\n");
-        printf("/bin/rm %s/build_lev1_mgr_%s.stream.touch\n", 
-		LEV1LOG_BASEDIR, hmiaianame);
+        printf("/bin/rm %s/build_lev1_mgr_%s.stream.touch\n",
+                LEV1LOG_BASEDIR, hmiaianame);
         pclose(fin);
         return(0);
       }
@@ -925,11 +977,11 @@ int main(int argc, char **argv)
       sprintf(pcmd, "touch %s/build_lev1_mgr_%s.stream.touch 2>/dev/null",
                   LEV1LOG_BASEDIR, hmiaianame);
       system(pcmd);
-      stream_mode = 1;		//aka quick look mode
-      quicklook = 1;		//and force quicklook to 1
+      stream_mode = 1;          //aka quick look mode
+      quicklook = 1;            //and force quicklook to 1
     }
   }
-  else {			//fsn mode
+  else {                        //fsn mode
     if(bfsn == -1 || efsn == -1) {
       fprintf(stderr, "bfsn and efsn must be given. -1 not allowed\n");
       return(0);
@@ -945,27 +997,29 @@ int main(int argc, char **argv)
   }
   logfile = cmdparams_get_str(&cmdparams, "logfile", NULL);
   if (strcmp(dsin, NOTSPECIFIED) == 0) {
-    if(hmiaiaflg == 0) dsin = LEV0SERIESNAMEHMI;
-    else dsin = LEV0SERIESNAMEAIA;
-  }
-  if (strcmp(dsout, NOTSPECIFIED) == 0) {
-    if(hmiaiaflg == 0) dsout = LEV1SERIESNAMEHMI;
-    else dsout = LEV1SERIESNAMEAIA;
-  }
-  if(hmiaiaflg) {
-    if(strstr(dsin, "hmi") || strstr(dsout, "hmi")) {
-      printf("Warning: You said instru=aia but have 'hmi' in ds name?\n");
-      printf("Do you want to abort this [y/n]? ");
-      if(gets(line) == NULL) { return(0); }
-      if(strcmp(line, "n")) { return(0); }
+    switch(instruflg) {
+    case 0:
+      dsin = LEV0SERIESNAMEHMI;
+      break;
+    case 1:
+      dsin = LEV0SERIESNAMEAIA;
+      break;
+    case 2:
+      dsin = LEV0SERIESNAMEIRIS;
+      break;
     }
   }
-  else {
-    if(strstr(dsin, "aia") || strstr(dsout, "aia")) {
-      printf("Warning: You said instru=hmi but have 'aia' in ds name?\n");
-      printf("Do you want to abort this [y/n]? ");
-      if(gets(line) == NULL) { return(0); }
-      if(strcmp(line, "n")) { return(0); }
+  if (strcmp(dsout, NOTSPECIFIED) == 0) {
+    switch(instruflg) {
+    case 0:
+      dsout = LEV1SERIESNAMEHMI;
+      break;
+    case 1:
+      dsout = LEV1SERIESNAMEAIA;
+      break;
+    case 2:
+      dsout = LEV1SERIESNAMEIRIS;
+      break;
     }
   }
   if (strcmp(logfile, NOTSPECIFIED) == 0) {
