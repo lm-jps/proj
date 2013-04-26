@@ -6,7 +6,7 @@ d		:= $(dir)
 # Local variables
 LIBASTRO	:= $(d)/libastro.a
 
-OBJ_$(d)	:= $(addprefix $(d)/, procFdsData.o interp.o obs2helio.o apodize.o iorbit.o plm1.o heliographic_coords.o) 
+OBJ_$(d)	:= $(addprefix $(d)/, procFdsData.o interp.o iorbit.o heliographic_coords.o) 
 
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 
