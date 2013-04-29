@@ -988,7 +988,8 @@ TEMPSKIP:
   //(For WCS conditions see mail from Rock 10Aug2010 16:40)
   if(!skiplimb && !hmiaiaflg) {		//only call for HMI
     //StartTimer(1);	//!!TEMP
-     lstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,0, dpath);
+     //lstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,0, dpath);
+     lstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,0);
     if(lstatus) {
       printk("ERROR: limb_fit() %d error for fsn=%u\n", lstatus, fsnx);
       //noimage[i] = 1;
