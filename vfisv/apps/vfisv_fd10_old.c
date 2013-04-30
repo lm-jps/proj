@@ -182,10 +182,6 @@
  *            Add lines to host option (-f) to enforce overwriting the existing output data record.
  *        (c) This modification should not affect the output data, which KH confirmed.
  *        (d) Checked-in on June ??.
- *   32) 2013 Mar 27 --
- *        (o) Add a few lines to terminate the run when the record in JSOC exist but no data files on disk...
- *        (a) S.C. added new features to host the time-dependent phase maps.
- *        (b) K.H. added / modified to S.C.'s changes take effect.
  *
  * ------------------------------------------------------------------------------------------------------ */
 
@@ -319,12 +315,12 @@
 
 /* strings for version info. */
 #if HARPATCH == 1
-char *module_name = "vfisv FD10 HARP"; // may be kept unchanged
+char *module_name = "vfisv FD10 HARP with fixed phase map"; // may be kept unchanged
 #else
-char *module_name = "vfisv FD10";      // may be kept unchanged
+char *module_name = "vfisv FD10 with fixed phase map";      // may be kept unchanged
 #endif
 /* Version of VFISV. Typically date of last editing (of Fortran or C-wrapper, whichever later). Given by hand....hmmm */
-char *version_id  = "2013 Apr. 30";
+char *version_id  = "2013 Mar. 13";
 
 /* external subroutine etc. written in Fortran files, essentially all fortran variables are of pointer */
 
@@ -648,7 +644,7 @@ int DoIt (void)
                    double, double [4],double [3],double [4],double [3],double *,double *,double *,
                    int, double ,int ,int ,int ,int);
   int initialize_vfisv_filter(double *,double *,int *,double *,double *,int *,double *,double *,
-                   double *,double *,double *,double *,double *,double *,int *,int *,int *,int *,int *,TIME,int *);
+                   double *,double *,double *,double *,double *,double *,int *,int *,int *,int *,int *);
   double filters[NUM_LAMBDA_FILTERc][NUM_LAMBDAc];
   double *wavelengthd=NULL;
   double *frontwindowd=NULL;
@@ -674,7 +670,6 @@ int DoIt (void)
   int    HCMWB;
   int    HCMNB;
   int    HCMPOL;
-  TIME stokestime;
 /* Phil's set_statistics function */
 #if ADNEWKWD == 1
   int set_statistics(DRMS_Segment_t *, DRMS_Array_t *, int);
@@ -749,13 +744,13 @@ int DoIt (void)
       if ((rec_ct = inRS->n) >  1){fprintf (stderr, "Warning: only first record in selected set processed\n");}
       inRec = inRS->records[0]; // This wrapper assume only the first Stokes be taken care of.
 //      inSeg = drms_segment_lookupnum (inRec, 0);
-      TIME t_recl = drms_getkey_time(inRec,"T_REC",&status);
+      TIME t_rec = drms_getkey_time(inRec,"T_REC",&status);
       drms_close_records(inRS, DRMS_FREE_RECORD); // once close the input Stokes record.
 /* try to open the destination record */
       DRMS_RecordSet_t *inRS2;
       DRMS_Record_t   *inRec2;
       char timestr2[26];
-      sprint_time(timestr2,t_recl,"TAI",0);
+      sprint_time(timestr2,t_rec,"TAI",0);
       char stroutdat[80];
       sprintf(stroutdat,"%s[%s]",outserc,timestr2);
       printf(" destination record : %s ",stroutdat);
@@ -990,7 +985,7 @@ int DoIt (void)
 
     rn = 0; // inversion code will handle only the first record.
 
-    inRec = inRS->records[rn]; // notice this inRec is declared at the top level: no-scope limited.
+    inRec = inRS->records[rn];
 
 /* if no data file actually exist for unknown reasons ........... abort */
     iquality = drms_getkey_int(inRec,"QUALITY",&status);
@@ -2304,10 +2299,9 @@ int DoIt (void)
 /*S.C. filter function */
   int location,column,row,ratio,x0,y0,x1,y1,loc1,loc2,loc3,loc4;
   double xa,xb,ya,yb,X0,Y0,Rsun;
-  int nx2=128,ny2=128; //format of the phase and contrast maps (nx2=number of columns, ny2=number of rows)
+  int nx2=256,ny2=256; //format of the phase and contrast maps (nx2=number of columns, ny2=number of rows)
   int nelemPHASENT  =4*nx2*ny2;
   int nelemCONTRASTT=3*nx2*ny2;
-  int FSNREC; //the FSN_REC of the HMI phasemaps used
   referencenlam=7000;//number of wavelengths for Fe I line profile
   FSR          =(double *)malloc(7             *sizeof(double));
   lineref      =(double *)malloc(referencenlam *sizeof(double));
@@ -2325,15 +2319,11 @@ printf("We should be running initialize_vfisv_filter\n");
 
   if (mpi_rank == 0) /* for DRMS reasons, the DRMS-access be done only by Primary PE */
   {
-    int ierr, status;
-    stokestime = drms_getkey_time(inRec,"T_REC",&status);
-    char timestr[26];
-    sprint_time(timestr,stokestime,"TAI",0);
-    printf("Looking for phasemap for T_REC %s \n",timestr);
+    int ierr;
     ierr = initialize_vfisv_filter(
               wavelengthd,frontwindowd,&nfront,wavelengthbd,blockerbd,
               &nblocker,&centerblocker,phaseNT,phaseT,contrastNT,contrastT,FSR,lineref,wavelengthref,
-              &referencenlam,&HCME1,&HCMWB,&HCMNB,&HCMPOL,stokestime,&FSNREC);
+              &referencenlam,&HCME1,&HCMWB,&HCMNB,&HCMPOL);
   }
 /* sending S.C. filter-profile variables from primary (0th) to other PEs, by means of MPI_Bcast */
 /* first, 8 integers */
@@ -2595,7 +2585,7 @@ printf("We should be running initialize_vfisv_filter\n");
 
       column        =nloc % 4096; // column from 0 to 4095
       row           =nloc / 4096; // row from 0 to 4095
-      ratio         =4096 /  nx2; 
+      ratio         =4096 /  nx2; // should be 16
 } // end of scope limiter
 
       /*-------------------------------------------------------------*/
@@ -3316,12 +3306,9 @@ This is done inside the FORTRAN code, in invert.f90
 { // scope limiter
 
 /* version info., given in this code */
-    char invcodeversion[256];
-    char FSNRECs[50]; //50 is an overkill...
+    char invcodeversion[50];
     sprintf(invcodeversion,"%s %s",module_name,version_id);
-    strcat(invcodeversion,"; uses time-dependent HMI filter phase maps"); //added by Sebastien on March 27, 2013
     drms_setkey_string(outRec,"INVCODEV", invcodeversion);
-    sprintf(FSNRECs,"%d",FSNREC);
 /* version info. and code location, given by CVS version control */
     char *sdummy;
     sdummy= meinversion_version();
@@ -3380,7 +3367,7 @@ This is done inside the FORTRAN code, in invert.f90
     sdummy=" ";
     drms_setkey_string(outRec,"INVFLPRF",sdummy);
     sdummy=" ";
-    drms_setkey_string(outRec,"INVPHMAP",FSNRECs); //modified by Sebastien, on March 27, 2013
+    drms_setkey_string(outRec,"INVPHMAP",sdummy);
 /* some index about inversion outputs */
     drms_setkey_double(outRec,"INVVLAVE",vlos_ave);
     drms_setkey_double(outRec,"INVBLAVE",blos_ave);
@@ -3396,9 +3383,9 @@ This is done inside the FORTRAN code, in invert.f90
 //    iqinversion = 0xffffffff;
     drms_setkey_int   (outRec,"QUALITY",iqinversion);
 //
-    stokestime = drms_getkey_time(inRec,"DATE",&status);
+    TIME stockstime = drms_getkey_time(inRec,"DATE",&status);
     char timestr[26];
-    sprint_time(timestr,stokestime,"UTC",0);
+    sprint_time(timestr,stockstime,"UTC",0);
     drms_setkey_string(outRec,"DATE_S",timestr);
     sprint_time(timestr,CURRENT_SYSTEM_TIME,"UTC",1); // what time it is now
     drms_setkey_string(outRec,"DATE"  ,timestr);
@@ -3827,16 +3814,16 @@ void lininterp1f(double *yinterp, double *xv, double *yv, double *x, double ydef
 /* function to read the files and parameters needed to compute the filter transmission profiles          */
 /*-------------------------------------------------------------------------------------------------------*/
 
-int initialize_vfisv_filter(double *wavelengthd,double *frontwindowd,int *nfront,double *wavelengthbd,double *blockerbd,int *nblocker,double *centerblocker,double *phaseNT,double *phaseT,double *contrastNT,double *contrastT,double *FSR,double *lineref,double *wavelengthref,int *referencenlam,int *HCME1,int *HCMWB,int *HCMNB,int *HCMPOL,TIME t_rec,int *FSNREC)
+int initialize_vfisv_filter(double *wavelengthd,double *frontwindowd,int *nfront,double *wavelengthbd,double *blockerbd,int *nblocker,double *centerblocker,double *phaseNT,double *phaseT,double *contrastNT,double *contrastT,double *FSR,double *lineref,double *wavelengthref,int *referencenlam,int *HCME1,int *HCMWB,int *HCMNB,int *HCMPOL)
 {
 
 printf("INSIDE initialize_vfisv_filter\n");
 
   int status=1;        //status=1 if the code failed, =0 if the code succeeded
-  int nx2=128,ny2=128; //format of the phase and contrast maps
+  int nx2=256,ny2=256; //format of the phase and contrast maps
   int nelemPHASENT  =4*nx2*ny2;
   int nelemCONTRASTT=3*nx2*nx2;
-  int nread,i,ii,jj;
+  int nread,i;
   int status2=0;
   char inRecQuery[256];
   char query[256];
@@ -3846,62 +3833,31 @@ printf("INSIDE initialize_vfisv_filter\n");
   int keyvalue;
   int recofinterest;
   FILE *fp=NULL;
-  int FSNphasemaps=0;
+  int FSNphasemaps=3292550; //WARNING: JUST TEMPORARY, NEED A WAY TO DECIDE WHICH FSN TO USE !!!!!!!!
   int camera=2;             //WARNING: 2 MEANS WE ALWAYS USE THE SIDE CAMERA. CHNAGE THAT TO 3 FOR FRONT CAMERA
 
+  *centerblocker=2.6; //in Angstrom, WARNING: VALUE MIGHT CHANGE
+  *referencenlam=7000;//number of wavelengths for Fe I line profile
+  *nblocker=201;
+  *nfront=401;
 
-  FILE *filePhaseMaps=NULL;  
-  char line[256];
-  float tstart=0.0;
-//  filePhaseMaps=fopen("filePhaseMaps.txt", "r");
-  filePhaseMaps=fopen("/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/filePhaseMaps.txt", "r");
-  if(filePhaseMaps == NULL)
-    {
-      printf("The file filePhaseMaps.txt does not exist\n");
-      return 1;
-    }
+  FSR[0]=0.169; //FSR in Angstroms, NB Michelson WARNING: THESE VALUES MIGHT CHANGE
+  FSR[1]=0.337; //WB Michelson
+  FSR[2]=0.695; //Lyot element E1
+  FSR[3]=1.407; //E2
+  FSR[4]=2.779; //E3
+  FSR[5]=5.682; //E4
+  FSR[6]=11.354;//E5
 
-  while(fgets(line,256,filePhaseMaps) != NULL)
-    {
-      sscanf(line,"%f %d",&tstart,&status2);
-      if(t_rec > tstart) FSNphasemaps=status2;
-    }
-  if(FSNphasemaps == 0)
-    {
-      printf("Could not find a HMI filter phase map in initialize_vfisv_filter\n");
-      return 1;
-    }
-  status2=0;
-  fclose(filePhaseMaps);
+  char filephasesnontunable[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/apps/non_tunable_phases_710660_June09_cal_256_2.bin";  //binary file containing the phases of the 4 non-tunable elements, format A[element][row][column],AVERAGE FRONT + SIDE CAMERA, 1020", CALMODE, 256x256, with the phases of the tunable elements obtained from an average of the laser detunes
+  char filecontrastsnontunable[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/apps/non_tunable_contrasts_710660_June09_cal_256_2.bin"; //name of the binary file containing the contrasts of the 4 non-tunable elements A[element][row][column], AVERAGE FRONT+ SIDE CAMERA, 1020", CALMODE, 256x256
 
-  /* if(t_rec < 1071344880.0)  FSNphasemaps=4875802;
- if(t_rec >= 1071344880.0 && t_rec < 1089657360.0) FSNphasemaps=14171657;//2010.12.13_19:48:00_TAI
- if(t_rec >= 1089657360.0 && t_rec < 1105985745.0) FSNphasemaps=23845068;//2011.07.13_18:36:00_TAI
- if(t_rec >= 1105985745.0 && t_rec < 1142318430.0) FSNphasemaps=32869398;//2012.01.18_18:15:45_TAI
- if(t_rec >= 1142318430.0) FSNphasemaps=51564722;//2013.03.14_06:40:30_TAI */
- 
- *FSNREC=FSNphasemaps; //FSN_REC of the phasemaps used
+  char filecontraststunable[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/apps/tunable_contrasts_710660_June09_cal_256.bin";  //binary file containing the contrasts of the 3 tunable elements A[element][row][column], AVERAGE FRONT + SIDE CAMERA, 1020", CALMODE, 256x256
+  //for these 3 files, there must be values up to a radius = solarradiusmax, and values=zero at larger radii
 
+  char referencesolarline[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/apps/ReferenceFeLine.bin";         //solar line DECONVOLVED of R. Ulrich at disk center and zero velocity, interpolated on a very fine grid with Fourier interpolation, and centered (7000 points, dlam=0.0001 A), binary file, single precision (float)
+  char referencewavelength[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/apps/ReferenceWavelength.bin" ;    //wavelength grid for the solar line, binary file, single precision (float)
 
- *centerblocker=2.7; //in Angstroms
- FSR[0]=0.1689;      //FSR in Angstroms, NB Michelson
- FSR[1]=0.33685;     //WB Michelson
- FSR[2]=0.695;       //Lyot element E1
- FSR[3]=1.417;       //E2
- FSR[4]=2.779;       //E3
- FSR[5]=5.682;       //E4
- FSR[6]=11.354;      //E5
-
- *referencenlam=7000;//number of wavelengths for Fe I line profile
- *nblocker=201;
- *nfront=401;
- 
-  char filephasesnontunable[]="/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/non_tunable_phases_710660_June09_cal_128_2.bin";
-  char filecontrastsnontunable[]="/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/non_tunable_contrasts_710660_June09_cal_128_2.bin";
-  char filecontraststunable[]="/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/tunable_contrasts_710660_June09_cal_128.bin"; 
-
-  char referencesolarline[]="/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/ReferenceFeLine.bin";         //solar line DECONVOLVED of R. Ulrich at disk center and zero velocity, interpolated on a very fine grid with Fourier interpolation, and centered (7000 points, dlam=0.0001 A), binary file, single precision (float)
-  char referencewavelength[]="/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/ReferenceWavelength.bin" ;    //wavelength grid for the solar line, binary file, single precision (float)
 
   //OPENING OF BINARY FILES CONTAINING Fe I LINE PROFILE
   float templineref[*referencenlam];  //reference solar line: solar line of R. Ulrich at disk center, zero velocity, interpolated on a fine grid, and centered
@@ -3991,7 +3947,7 @@ printf("INSIDE initialize_vfisv_filter\n");
 
 
   //OPEN THE DRMS RECORD CONTAINING THE PHASE MAPS OF THE TUNABLE ELEMENTS
-  strcpy(inRecQuery,"hmi.phasemaps_corrected[");
+  strcpy(inRecQuery,"su_couvidat.phasemaps[");
   sprintf(query,"%d",FSNphasemaps);
   strcat(inRecQuery,query);
   strcat(inRecQuery,"]");
@@ -4047,12 +4003,8 @@ printf("INSIDE initialize_vfisv_filter\n");
     }
   tempphase = arrin->data;
 
-  for(i=0;i<nelemCONTRASTT;++i)
-    {
-      ii=i / 3;
-      jj=i % 3;
-      phaseT[i] = (double)tempphase[ii*5+jj]*M_PI/180.; //NB: PHASE MAPS ARE ASSUMED TO BE IN TYPE FLOAT AND IN DEGREES
-    }
+  for(i=0;i<nelemCONTRASTT;++i) phaseT[i] = (double)tempphase[i]*M_PI/180.; //NB: PHASE MAPS ARE ASSUMED TO BE IN TYPE FLOAT AND IN DEGREES
+
 
   *HCMNB=drms_getkey_int(data->records[recofinterest],"HCMNB",&status2);
   if(status2 != DRMS_SUCCESS)
@@ -4137,6 +4089,10 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
   double ydefault2= 0.;                                   //default value for the transmittance of the blocker filter and front window outside the range considered (SHOULD BE 0)
   int i,j;
 
+  //CENTER-TO-LIMB VARIATION OF THE Fe I LINES PROVIDED BY ROGER ULRICH (FWHMS AND LINEDEPTHS OBTAINED BY FITTING A GAUSSIAN)
+  double cost[3]={1.0,0.70710678,0.5};                    //cos(theta) where theta is the angular distance from disk center
+  double minimumCoeffs[2]={0.41922611,0.24190794};        //minimum intensity (Id if I=1-Id*exp() ), assuming the continuum is at 1 (result from a Gaussian fit in the range [-0.055,0.055] Angstroms)
+  double FWHMCoeffs[2]={151.34559,-58.521771};            //FWHM of the solar line in milliAngstrom (result from a Gaussian fit in the range [-0.055,0.055] Angstroms)
   double *HCME1phase=NULL,*HCMWBphase=NULL,*HCMNBphase=NULL;
   double frontwindowint[Num_lambda];
   double blockerint[Num_lambda];
@@ -4196,6 +4152,35 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
   for(j=0;j<Num_lambda;++j) {
         blockerint[j]=blockerint[j]*frontwindowint[j];
 }
+
+
+  //INTERPOLATION OF THE FeI LINEWIDTH AND LINEDEPTH AT DIFFERENT ANGULAR DISTANCES FROM DISK CENTER
+  FWHM=FWHMCoeffs[0]+FWHMCoeffs[1]*distance;
+  minimum=minimumCoeffs[0]+minimumCoeffs[1]*distance;
+  for(i=0;i<referencenlam;++i)
+    {
+      lineprofile2[i] = (1.0-lineref[i])*minimum/(minimumCoeffs[0]+minimumCoeffs[1]); //scaling by the ratio of linedepths
+      lineprofile2[i] =  1.0-lineprofile2[i];
+      wavelength2[i]  = wavelengthref[i]*FWHM/(FWHMCoeffs[0]+FWHMCoeffs[1]);
+    }
+
+
+  //LINEAR INTERPOLATION ONTO THE WAVELENGTH GRID
+  for (i=0;i<Num_lambda;i++)
+    {
+      if((wavelength[i] < wavelength2[0]) || (wavelength[i] > wavelength2[referencenlam-1])) lineprofile[i] = ydefault;
+      else
+        {
+          for(j=1; j<referencenlam; j++)
+            {
+              if(wavelength[i]<=wavelength2[j])
+                {
+                  lineprofile[i] = (wavelength[i]-wavelength2[j-1]) / (wavelength2[j]-wavelength2[j-1]) * (lineprofile2[j]-lineprofile2[j-1]) + lineprofile2[j-1];
+                  break;
+                }
+            }
+        }
+    }
 
 
   //POSITIONS OF THE Num_lambda_filter WAVELENGTHS
@@ -4341,6 +4326,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
     }
 
+
   free(HCMNBphase);
   free(HCMWBphase);
   free(HCME1phase);
@@ -4353,7 +4339,7 @@ int vfisv_filter(int Num_lambda_filter,int Num_lambda,double filters[Num_lambda_
 
 /* ----------------------------- by Sebastien (2), CVS version info. ----------------------------- */
 
-char *meinversion_version(){return strdup("$Id: vfisv.c,v 1.33 2013/04/30 20:25:05 keiji Exp $");}
+char *meinversion_version(){return strdup("$Id: vfisv_fd10_old.c,v 1.1 2013/04/30 20:24:43 keiji Exp $");}
 
 /* Maybe some other Fortran version be included, here OR at bottom of this file. Maybe at bottom. */
 

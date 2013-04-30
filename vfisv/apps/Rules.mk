@@ -7,7 +7,7 @@ d		:= $(dir)
 # Builds on icc/x86_64 only
 #ifeq ($(JSOC_MACHINE), linux_x86_64)
 #ifeq ($(COMPILER), icc)
-VFISV_$(d)	:= $(addprefix $(d)/, vfisv vfisv_harp)
+VFISV_$(d)	:= $(addprefix $(d)/, vfisv vfisv_harp vfisv_fd10_old vfisv_fd10_harp_old)
 #endif
 #endif
 
