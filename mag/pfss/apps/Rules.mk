@@ -16,8 +16,9 @@ MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
 MODEXE_SOCK	:= $(MODEXE_SOCK) $(MODEXE_SOCK_$(d))
 
 # Modules with external libraries
-MODEXE_USEF_$(d)	:= $(addprefix $(d)/, jsynop2gh)
-MODEXE_USEF		:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
+# MODEXE_USEF_$(d)	:= $(addprefix $(d)/,)
+MODEXE_USEF_$(d)	:= 
+# MODEXE_USEF		:= $(MODEXE_USEF) $(MODEXE_USEF_$(d))
 
 #MODEXE_USEF_SOCK_$(d)	:= $(MODEXE_USEF_$(d):%=%_sock)
 #MODEXE_USEF_SOCK	:= $(MODEXE_USEF_SOCK) $(MODEXE_USEF_SOCK_$(d))
