@@ -233,6 +233,7 @@ typedef enum
 static short sumsptrl, sumspat;
 static int printflg = 0;
 static int errskip=0;
+static int retardskip=0;
 static int nx, ny, npix;
 static int gLoop = 1;
 static pthread_mutex_t mutex;
@@ -1105,6 +1106,11 @@ int fsn_change_normal()
   char *cptr;
 
   printk("*FSN has changed from %u to %u\n", fsn_prev, fsnx);
+  if(fsnx < fsn_prev) {
+    retardskip = 1;
+    printk("**FSN retardation. Skip %u until normal increase\n", fsnx);
+  }
+  else retardskip = 0;
   printflg = 0; //!!TEMP
   if(fsn_prev == 0) {	//startup mode. restore any prev image
     errmsgcnt = 0;
@@ -1665,7 +1671,7 @@ if(!printflg) {		//!!TEMP
         }
       }
       // send the sci data to Keh-Cheng. call with pointer to M_PDU_Header 
-      if(errskip) { continue; }		//skip until new fsn
+      if(errskip || retardskip) { continue; }	//skip until new fsn
       ImgC->nx = nx;
       ImgC->ny = ny;
       rstatus = imgdecode_iris((unsigned short *)(cbuf+10), ImgC);
