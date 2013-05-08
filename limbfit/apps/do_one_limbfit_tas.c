@@ -7,8 +7,8 @@
 			
 	
 	#define results->code_name 		"limbfit_tas"
-	#define CODE_VERSION 			"V5.02" 
-	#define CODE_DATE 				"Tue Mar 26 16:30:08 HST 2013" 
+	#define CODE_VERSION 			"V5.04" 
+	#define CODE_DATE 				"Tue May  7 21:27:32 PDT 2013" 
 */
 
 #include "limbfit_tas.h"
@@ -19,7 +19,7 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 	static char *log_msg_code="do_one_limbfit";
 	static char *series_name="limbfit data";
 	results->series_name=series_name;
-	static char *proc_stat=PROCSTAT_OK;
+	//static char *proc_stat=PROCSTAT_OK;
 
  	int lf_retcode;
 	int rstatus;
@@ -183,7 +183,6 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			*/
 			
 			rstatus=0;
-			int i;			
 		
 			// AB ---EXT#1---------------------------------------------------------------------
 			//if (results->nb_iter==1)

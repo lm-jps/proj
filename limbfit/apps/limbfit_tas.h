@@ -1,6 +1,6 @@
 /* I.Scholl 
-	#define CODE_VERSION 	"V5.02" 
-	#define CODE_DATE 		"Tue Mar 26 16:30:08 HST 2013" 
+	#define CODE_VERSION 	"V5.04" 
+	#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
 */
 
 #include <string.h>
@@ -27,8 +27,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit_tas"
-#define CODE_VERSION 	"V5r3" 
-#define CODE_DATE 		"Thu Apr  4 10:50:46 HST 2013" 
+#define CODE_VERSION 	"V5r4" 
+#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
 #define LOGMSG1			"LIMBFITS"
 #define	JSD_NAME		"scholl_limbfit_tas.jsd"
 
@@ -207,7 +207,7 @@ typedef struct {	// output files content
 void	close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out, DRMS_Array_t *data_array); //, FILE *opf);
 int		do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
 					LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios, int *status);
-double	fin_min(double A[], double m, int range, int degf, int debug, FILE *fd);
+double	fin_min(double A[], double m, int range, int debug, FILE *fd);
 int		gaussfit(double y[], double t[],double sigma[], double A[], double erro[], long N, int degf, int debug, FILE *opf);
 void	get_sdate(char *sdate);
 int		indexx(unsigned long n, float *arr, unsigned long *indx);

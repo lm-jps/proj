@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit_tas"
-	#define CODE_VERSION 	"V5.03" 
-	#define CODE_DATE 		"Thu Apr  4 10:50:46 HST 2013" 
+	#define CODE_VERSION 	"V5.04" 
+	#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
 */
 
 #include "limbfit_tas.h"
@@ -100,8 +100,8 @@ r  = (float)naxis_row/2;
 	{
 		ios->is_firstobs=1;
 		float d;
-		float w2p=(double)r+w/2.;
-		float w2m=(double)r-w/2.;
+		float w2p=r+(float)w/2;
+		float w2m=r-(float)w/2;
 		double iimcmy2,jjmcmx;
 		/* Select Points */
 		jk=-1;
@@ -152,7 +152,7 @@ r  = (float)naxis_row/2;
 /************************************************************************/
 /*                  Call Fortran Code Subrotine limb.f                  */
 /************************************************************************/
-	float *rprf, *lprf, *alph, *beta, *b0, *sb0; //, *beta1, *beta2, *beta3;
+	float *rprf, *lprf, *alph, *beta, *b0; //, *sb0, *beta1, *beta2, *beta3;
 	long ab_nrow=nreg, ab_ncol=2;
 
 	// contains the LDFs AXIS
@@ -328,7 +328,7 @@ r  = (float)naxis_row/2;
 			}
 		p_t_ip=&t_ip[0];
 
-		double ip, maxim; 
+		double maxim; 
 		double radius = 0.;
 		int cont, c, ret_gsl;
 		float h;
@@ -389,7 +389,7 @@ r  = (float)naxis_row/2;
 			 }
 			
 			/* improve the maximum estimation looking at the 2 neibors points */
-			t_ip[cont]=rprf[jj]-h/2.*(D[jj-1]-D[jj+1])/(2*D[jj]-D[jj-1]-D[jj+1]);
+			t_ip[cont]=rprf[jj]-(float)h/2*(D[jj-1]-D[jj+1])/(2*D[jj]-D[jj-1]-D[jj+1]);
 			if (results->debug)
 			{
 				if (cont==nang)
@@ -457,7 +457,7 @@ r  = (float)naxis_row/2;
 			{			
 				/* FIND THE MAXIMUM OF THE GAUSSIAN PLUS QUADRATIC FUNCTION */
 				radius = A[1]; /* Initial Guess */
-				radius = fin_min(A, radius, grange, degf, results->debug,results->opf);
+				radius = fin_min(A, radius, grange, results->debug,results->opf);
 				if (radius < 0)
 				{
 					ret_gsl=(int)radius;
@@ -591,7 +591,7 @@ r  = (float)naxis_row/2;
 			}		
 
 		float *p_sldf=&save_ldf[0];
-		float *pl_sldf=&save_ldf[(ldf_nrow*ldf_ncol)-1];
+		//float *pl_sldf=&save_ldf[(ldf_nrow*ldf_ncol)-1];
 		float *plc_sldf;
 
 		// axis
@@ -881,7 +881,7 @@ int gaussfit(double y[], double t[],double sigma[], double A[], double erro[], l
 
 /*--------------------------------------------------------------------------*/
 
-double fin_min(double A[], double m, int range, int degf, int debug, FILE *opf)
+double fin_min(double A[], double m, int range, int debug, FILE *opf)
 /* Calculate the maximum of the quadratic + gaussian function    */
 /*                 using Brent algorithm                         */
 /* Marcelo Emilio (c) v 1.0 Jan 2009                             */

@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V4.0r4" 
-	#define CODE_DATE 		"Wed Apr  3 18:33:05 HST 2013" 
+	#define CODE_VERSION 	"V4.0r6" 
+	#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
 */
 
 #include "limbfit.h"
@@ -101,8 +101,8 @@ float sav_max=0.;
 	{
 		ios->is_firstobs=1;
 		float d;
-		float w2p=(double)r+w/2.;
-		float w2m=(double)r-w/2.;
+		float w2p=(float)r+w/2;
+		float w2m=(float)r-w/2;
 		double iimcmy2,jjmcmx;
 		/* Select Points */
 		jk=-1;
@@ -467,7 +467,7 @@ float sav_max=0.;
 				{			
 				 	/* FIND THE MAXIMUM OF THE GAUSSIAN PLUS QUADRATIC FUNCTION */
 				 	radius = A[1]; /* Initial Guess */
-				 	radius = fin_min(A, radius, grange, degf, results->debug,results->opf);
+				 	radius = fin_min(A, radius, grange, results->debug,results->opf);
 					if (radius < 0)
 					{
 						ret_gsl=(int)radius;
@@ -830,7 +830,7 @@ int gaussfit(double y[], double t[],double sigma[], double A[], double erro[], l
 
 /*--------------------------------------------------------------------------*/
 
-double fin_min(double A[], double m, int range, int degf, int debug, FILE *opf)
+double fin_min(double A[], double m, int range, int debug, FILE *opf)
 /* Calculate the maximum of the quadratic + gaussian function    */
 /*                 using Brent algorithm                         */
 /* Marcelo Emilio (c) v 1.0 Jan 2009                             */

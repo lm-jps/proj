@@ -9,8 +9,8 @@
 			
 	
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V4.05" 
-	#define CODE_DATE 		"Wed Apr  3 19:33:05 HST 2013" 
+	#define CODE_VERSION 	"V4.06" 
+	#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
 	
 	V4.03 from previous:	 only default parameters changed
 */
@@ -25,12 +25,12 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, 	"logdir", "./", "logs directory"},
   {ARG_STRING, 	"tmpdir", "./", "tmp directory"},
   {ARG_STRING, 	"bdate", " ", "begin date"},
-  {ARG_STRING, 	"edate", " ", "end date (not implemented yet"},
+  //{ARG_STRING, 	"edate", " ", "end date (not implemented yet"},
   {ARG_INTS, 	"bfsn", "0", "first lev1 fsn# to process"},
   {ARG_INTS, 	"efsn", "0", "last  lev1 fsn# to process"},
   {ARG_INT, 	"cam", "0", "camera selection: 0: both = default, otherwise: 1 or 2"},
   {ARG_INT, 	"fid", "0", "default=all, otherwise one FID number or mask"},
-  {ARG_INT, 	"smpl", "0", "sampling factor: default=no sampling, otherwise: number/unit eg: 4: 1/4 of the program (1 seq, skip next 3 seqs). this is combined with cam and fid"},
+  //{ARG_INT, 	"smpl", "0", "sampling factor: default=no sampling, otherwise: number/unit eg: 4: 1/4 of the program (1 seq, skip next 3 seqs). this is combined with cam and fid"},
   {ARG_INT, 	"spe", "0", "used to activate only 1 iteration of the FORTRAN code and AHI low for roll analaysis (default=0 normal processing - =1 activate)"},
   {ARG_INT, 	"cc",  "0", "used to activate center calculation instead of using X0/YO_LF (default=0 no center calculation, =1 calculation)"},
   {ARG_INT, 	"iter", "3", "to change the number of iterations of the limb.f code (default=3)"},
@@ -85,7 +85,7 @@ int process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT
 	char log_msg[200];
 	sprintf(log_msg,"doing process for %s -> %s",open_dsname,lfr->dsout);
 	lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
-	static char errcode[20]=PROCSTAT_NOK;
+	//static char errcode[20]=PROCSTAT_NOK;
 	
 	//************************************************************************
 	//  Open DRMS connexion, get the range of data, decide what to do, 
@@ -171,7 +171,7 @@ int process_all_records_smpl(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUT
 	char log_msg[200];
 	sprintf(log_msg,"doing process for %s -> %s",open_dsname,lfr->dsout);
 	lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
-	static char errcode[20]=PROCSTAT_NOK;
+	//static char errcode[20]=PROCSTAT_NOK;
 		
 	DRMS_RecordSet_t *drs_in,*drs_out;
 	DRMS_Record_t *record_in,*record_out;
@@ -197,7 +197,7 @@ int process_all_records_smpl(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUT
 		return(WAR_DRMS_NORECORD);
 	}
 
-	sprintf(log_msg,"---> %ld records",ncnt);
+	sprintf(log_msg,"---> %lld records",ncnt);
 	lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
 
 	//------------------------------------------------------
@@ -286,7 +286,7 @@ int DoIt(void)
 	int  iter	= params_get_int (params, "iter");
 	int  cam 	= params_get_int (params, "cam");
 	int  fid 	= params_get_int (params, "fid");
-	int  smpl 	= params_get_int (params, "smpl");
+	//int  smpl 	= params_get_int (params, "smpl");
 	int  src 	= params_get_int (params, "src");
 	//	int  sav 	= params_get_int (params, "sav");
 	char* dsin 	= params_get_str (params, "dsin");
@@ -298,7 +298,7 @@ int DoIt(void)
 	long long bfsn = params_get_int (params, "bfsn");
 	long long efsn = params_get_int (params, "efsn");
 	char* bdate = params_get_str (params, "bdate");
-	char* edate = params_get_str (params, "edate");
+	//char* edate = params_get_str (params, "edate");
 
 	static char *log_msg_code="DoIt";
 	char log_msg[200];

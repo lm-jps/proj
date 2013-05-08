@@ -1,4 +1,4 @@
-/* I.Scholl "Wed Apr 11 13:17:38 HST 2012" 
+/* I.Scholl "Tue May  7 21:27:32 PDT 2013" 
 */
 
 #include <string.h>
@@ -26,8 +26,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V4.0r5" 
-#define CODE_DATE 		"Wed Apr  3 19:33:05 HST 2013" 
+#define CODE_VERSION 	"V4.0r6" 
+#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
 #define LOGMSG1			"LIMBFIT"
 #define	JSD_NAME		"su_scholl.hmi_lf.jsd"
 
@@ -203,7 +203,7 @@ typedef struct {	// output files content
 void	close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out, DRMS_Array_t *data_array); //, FILE *opf);
 int		do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
 					LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios, int *status);
-double	fin_min(double A[], double m, int range, int degf, int debug, FILE *fd);
+double	fin_min(double A[], double m, int range, int debug, FILE *fd);
 int		gaussfit(double y[], double t[],double sigma[], double A[], double erro[], long N, int degf, int debug, FILE *opf);
 void	get_sdate(char *sdate);
 int		get_set_kw(int typ, char *kw, char *kw_txt, unsigned int fsn, DRMS_Record_t *record_in,
