@@ -928,8 +928,10 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	// We compute minlon & minlat then by
 	// LONDTMIN(t) = LONDTMIN(t0) + (t - t0) * OMEGA_DT
 	
-	float psize = drms_getkey_float(inRec, "SIZE", &status);
-	if (psize != psize) {
+//	float psize = drms_getkey_float(inRec, "SIZE", &status);
+//	if (psize != psize) {
+
+  if (minlon != minlon || maxlon != maxlon) {		// check lons instead of SIZE
 		TIME t0 = drms_getkey_time(inRec, "T_FRST1", &status); if (status) return 1;			// changed from T_FRST to T_FRST1, T_FRST may not exist
 		double omega = drms_getkey_double(inRec, "OMEGA_DT", &status); if (status) return 1;
 		char firstRecQuery[100], t0_str[100];
@@ -1903,7 +1905,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
 	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Id: sharp.c,v 1.12 2013/05/09 19:20:43 xudong Exp $");
+	char *cvsinfo = strdup("$Id: sharp.c,v 1.13 2013/05/09 19:40:54 xudong Exp $");
 	//   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
 	status = drms_setkey_string(outRec, "CODEVER7", cvsinfo);
 	
