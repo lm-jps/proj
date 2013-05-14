@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/write_hk_to_drms_iris.c,v 1.1 2013/01/24 19:02:33 jim Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/write_hk_to_drms_iris.c,v 1.2 2013/05/14 17:07:40 prodtest Exp $"
 /*****************************************************************************
  * Filename: write_hk_to_drms.c                                              *
  * Author: Carl                                                              *
@@ -270,6 +270,7 @@ int write_hk_to_drms(DRMS_Record_t *record, CCSDS_Packet_t **ccsds_pkt)
 
       /* create record in drms */
       RSISP = rs;		//close_image() must use last rs
+      sprintf(ispquery, "%s", query);	//save for opening to get kw for lev0
       rs = drms_create_records( drms_env, 1, query, DRMS_PERMANENT, &status);
       RSISPTO = rs;		//if tlm file timeout must use this rs
       if (status < 0)
@@ -2275,7 +2276,7 @@ int initialize_timecodes_cache(char* ds_name, HK_Keyword_t *kw, int apid)
   }
   /* create full query statement */
   sprintf(nquery,"%s[? PACKET_TIME < $(%s) AND PACKET_TIME >  $(%s) ?]",ds_name,qr2,qr1);
-  sprintf(ispquery, "%s", nquery);	//save for opening to get kw for lev0
+  //sprintf(ispquery, "%s", nquery);	//save for opening to get kw for lev0
   /* open records for drms series */
   rs = drms_open_records(drms_env, nquery, &drms_status);
   if(drms_status) 
