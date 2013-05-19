@@ -23,9 +23,13 @@ extern "C" {
  * early in my mexfiles...
  */
 #ifdef MATLAB_MEX_FILE
-/* indexing abstractions */
-#define MX_COMPAT_32  /* undef for large (>2G) arrays, cf -largeArrayDims
-*/
+/* MX_API_VER: undefined in 7.1, but defined in R2010b */
+#ifndef MX_API_VER
+/* i.e., an old matlab */
+#ifndef MX_COMPAT_32
+#define MX_COMPAT_32  /* undef for large (>2G) arrays, cf -largeArrayDims */
+#endif
+/* 2/2013: the below conflict with later R2010b, shielded by ifdef above */
 #ifdef MX_COMPAT_32
 typedef int mwSize;
 typedef int mwIndex;
@@ -34,6 +38,7 @@ typedef int mwSignedIndex;
 typedef size_t    mwSize;
 typedef size_t    mwIndex;
 typedef ptrdiff_t mwSignedIndex; /* when you need a signed type */
+#endif
 #endif
 #endif
 

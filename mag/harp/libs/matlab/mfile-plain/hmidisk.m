@@ -11,12 +11,14 @@ function varargout=hmidisk(trec,mode)
 % as a matlab datenum (a double), this is converted to a T_REC string 
 % before the JSOC database is queried.
 % * Several output modes are allowed.  
-% * The first is `geom' vs. `disk'.  There are 5 `geom' parameters, 
+% * The first is `geom', `disk', or `wcs'.  There are 5 `geom' parameters, 
 % the position stored in the X0, Y0, and R_SUN keywords, and the tilt
 % angles stored in the SOLAR_B0 and SOLAR_P0 keywords.  Say 'geom' for
-% all 5, or 'disk' for just the first 3.
+% all 5, 'disk' for just the first 3, or 'wcs' for a structure that 
+% contains all the WCS fields.
 % * The second is 'vector' vs. 'scalar'.  If vector is used, a 1x3 or
 % 1x5 vector is returned, else, corresponding scalars are returned.
+% (This need not be given for 'wcs'.)
 % * The last is 'error' vs. 'quiet'.  If 'error' is given, DB query
 % errors cause Matlab errors.  Otherwise, a descriptive message is returned
 % as the fourth or sixth output.  If the message is empty, the query succeeded.
@@ -29,7 +31,7 @@ function varargout=hmidisk(trec,mode)
 % Inputs:
 %   string or real trec;  -- a valid time index
 %   opt string mode = 'geom,vector,error'
-%                         -- {geom, disk} X {vector, scalar} X {error,quiet}
+%                         -- {geom, disk, wcs} X {vector, scalar} X {error,quiet}
 % 
 % Outputs:
 %   real x0
@@ -39,6 +41,8 @@ function varargout=hmidisk(trec,mode)
 %   real p0
 %  -or-
 %   real geom(3) or (5)
+%  -or-
+%   struct wcs
 %  -plus optionally-
 %   string msg
 % 
@@ -59,12 +63,17 @@ if ~isempty(strfind(mode, 'geom')),
   geom_mode = 1;
 elseif ~isempty(strfind(mode, 'disk')),
   geom_mode = 0;
+elseif ~isempty(strfind(mode, 'wcs')),
+  geom_mode = 2;
 else,
-  error('Need valid output mode (geom/disk)');
+  error('Need valid output mode (geom/disk/wcs)');
 end;
 
 % set up output mode
-if ~isempty(strfind(mode, 'vector')),
+if geom_mode == 2,
+  % (not actually used)
+  N_out = 1;
+elseif ~isempty(strfind(mode, 'vector')),
   vec_mode = 1;
   N_out = 1;
 elseif ~isempty(strfind(mode, 'scalar')),
@@ -145,6 +154,7 @@ keys = {'CRVAL1', ... % disc center in arcsec
         'CRPIX2', ...
         'CROTA2', ... % rotation
         'CRLT_OBS', ... % b angle
+        'CRLN_OBS', ... 
         'RSUN_REF', ...
         'DSUN_OBS'};
 
@@ -201,6 +211,13 @@ if iscell(wcs.crota2) || iscell(wcs.crpix1),
   end;
 end;
 
+% can leave this routine now
+if geom_mode == 2,
+  varargout{1} = wcs;
+  return;
+end;
+
+
 % Ephemeris courtesy of Phil's (nested functions) above
 % I have preserved the somewhat over-wrought nature of these
 % functions so that these lines are almost the same as the
@@ -232,7 +249,7 @@ b0 = Vb0;
 p0 = Vp0;
 
 % plug outputs in
-if geom_mode,
+if geom_mode == 1,
   if vec_mode,
     varargout{1} = [x0 y0 r b0 p0];
   else,

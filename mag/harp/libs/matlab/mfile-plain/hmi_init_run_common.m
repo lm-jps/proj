@@ -140,6 +140,12 @@ else,
     fprintf(fp, 'first_frame_trec: %s\n', rgn.firstfile);
     fprintf(fp, 'last_frame_trec: %s\n', rgn.currfile);
     fprintf(fp, 'last_frame_number: %d\n', rgn.imagenum);
+    % t_horizon is a later addition to ROI_rgn
+    if isfield(rgn, 'fn_horizon') && ~isempty(rgn.fn_horizon),
+      fprintf(fp, 'horizon_trec: %s\n', rgn.fn_horizon);
+    else,
+      fprintf(fp, 'horizon_trec: %s\n', rgn.currfile);
+    end;
     fclose(fp);
     %% close off the "new" and "pending" jsoc files
     for filetype_ = JSOC_filetypes,

@@ -1,15 +1,21 @@
-function ars=hmi_noaa_info_interp(t)
+function ars=hmi_noaa_info_interp(t,mode)
 %hmi_noaa_info_interp	interpolate NOAA AR info at datetime t
 % 
-% ars=hmi_noaa_info_interp(t)
+% ars=hmi_noaa_info_interp(t,mode)
 % * Given a matlab datenum t, finds all NOAA AR information at 
 % bracketing times t0 <= t < t1, and returns a list of structs 
 % containing the AR info -- one struct per AR.
 % * In fact, t0 = floor(t), and t1 = t0 + 1 day.
-% * Typically the information will be interpolated.  Discrete
-% quantities (like AR Zurich type) will use nearest-neighbor, 
-% and continuous ones will use linear interpolation from the 
-% bracketing times.
+% * Typically the returned information will be interpolated.  
+% Discrete quantities (like AR Zurich type) will use nearest-
+% neighbor, and continuous ones will use linear interpolation 
+% from the bracketing times.
+% * If mode contains 'extrap', the information can be extrapolated
+% for up to 3 days.  This is used for near-real-time results, and
+% the latest time where information is present is automatically found.
+% In this case, only longitudecm is altered, using a mean solar 
+% rotation of the Carrington rate.  If the result is greater
+% than 100 degrees, it is deleted from the list.
 % * The fields returned are:
 %    t                  -- a datenum
 %    observationtime    -- trec string for t, in TAI
@@ -25,6 +31,7 @@ function ars=hmi_noaa_info_interp(t)
 % 
 % Inputs:
 %   real t;        -- a datenum
+%   opt string mode = ''
 % 
 % Outputs:
 %   struct ars(nr);
@@ -37,8 +44,13 @@ function ars=hmi_noaa_info_interp(t)
 % 
 % Error checking
 % 
-if all(nargin  ~= [1]), error ('Bad input arg number'); end;
+if all(nargin  ~= [1 2]), error ('Bad input arg number'); end;
 % if all(nargout ~= [0 1 2]), error ('Bad output arg number'); end;
+if nargin < 2, mode = ''; end;
+
+% allow extrapolation?
+extrap = ~isempty(strfind(mode, 'extrap'));
+if extrap, mode_raw = 'quiet'; else, mode_raw = ''; end;
 
 %
 % Computation
@@ -50,16 +62,46 @@ t1 = floor(t); % nearest day, rounding down
 trec1 = sprintf(trec_fmt, datestr(t1,   date_fmt));
 trec2 = sprintf(trec_fmt, datestr(t1+1, date_fmt));
 % these indirectly query JSOC
-ars1 = hmi_noaa_info_raw(trec1);
-ars2 = hmi_noaa_info_raw(trec2);
+[ars1,ok1] = hmi_noaa_info_raw(trec1, mode_raw);
+[ars2,ok2] = hmi_noaa_info_raw(trec2, mode_raw);
 
 % allow for empty AR lists
-if isempty(ars1) && isempty(ars2),
-  % no ARs -- not an error
-  % ars = struct([]); % should be an empty struct?
-  ars = hmi_noaa_info_empty();
-  return;
+% FIXME: can/should we weaken this to && rather than || ?
+% extrap_done: are we extrapolating beyond the last T_REC?
+extrap_done = false;
+extrap_max = 3; % max extrap time, in days
+if ~ok1 || ~ok2,
+  % no ARs found
+  if extrap,
+    % chance for extrapolation
+    [arsX,okX] = hmi_noaa_info_raw('$', mode_raw);
+    if okX && length(arsX) > 0, 
+      tX = arsX(1).t;
+    else,
+      tX = NaN;
+    end;
+    if okX && (t > tX) && (t < (tX+extrap_max)),
+      % ok, and t not too far ahead of noaa[$]: extrapolate to t
+      ars1 = noaa_ar_extrap(t, arsX);
+      ars2 = hmi_noaa_info_empty();
+      % unique case where extrapolation is done
+      extrap_done = true;
+    else,
+      % did not work
+      okX = false; 
+    end;
+  else,
+    % not allowed to extrapolate
+    okX = false;
+  end;
+  % possible extrapolation failed too
+  if ~okX,
+    ars = hmi_noaa_info_empty();
+    return;
+  end;
 end;
+
+% keyboard
 
 % fields to interpolate (others are manual, or nearest-neighbor)
 interpolated_fields = {'area', ...
@@ -81,10 +123,16 @@ for i = 1:Nid,
   % one of the below may be empty, but not both
   inx1 = find(ids1 == id);
   inx2 = find(ids2 == id);
-  if isempty(inx1),
+  if extrap_done,
+    % extrapolating: always uses ars1 (see above)
+    % note: the max time gap was set above
+    wt1 = 1; wt2 = 0;
+    ar1 = ars1(inx1);
+    ar2 = ars1(inx1); % fake it
+  elseif isempty(inx1),
     % not in earlier ar list
     wt1 = 0; wt2 = 1;
-    ar1 = ars2(inx2); % fake it (TODO: extrapolate longitudecm?)
+    ar1 = ars2(inx2);
     ar2 = ars2(inx2);
     if abs(t - ar1.t) > 0.25, 
       continue; % too far away to fake
@@ -102,7 +150,7 @@ for i = 1:Nid,
     dt1 = t - ars1(inx1).t; % >= 0
     dt2 = ars2(inx2).t - t; % >= 0
     % allow for dt1 == dt2 == 0, even though it should not happen
-    wt1 = dt2 / (dt1 + dt2 + eps);
+    wt1 = dt2 / max(dt1 + dt2, eps);
     wt2 = 1 - wt1;
     clear dt1 dt2
     ar1 = ars1(inx1);
@@ -128,3 +176,25 @@ for i = 1:Nid,
 end;
 return;
 end
+
+% extrapolate arsX to time t
+%   (expect t ahead of arsX)
+function ars = noaa_ar_extrap(t, arsX)
+
+  ars = arsX; % this almost does it all
+  % eliminate edge condition
+  if length(ars) == 0, return; end;
+  % requires length > 0
+  dt = t - ars(1).t; % in days, typically > 0
+  % update longitudecm, allow for ar-dependent rate
+  for i = 1:length(ars),
+    rate = 360/27.2753; % degrees/day -- using Carrington rotation
+    ars(i).longitudecm = ars(i).longitudecm + (dt * rate);
+  end;
+  % delete ARs that rotated off
+  inx = ([ars.longitudecm] > 100);
+  % note, this does leave field names intact, 
+  % even if it empties the AR list out
+  ars(inx) = [];
+  return
+  end

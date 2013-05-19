@@ -2,11 +2,15 @@ function font=text_on_image_font(fontfile, dict, height, width)
 %text_on_image_font	load font for text_on_image
 % 
 % font=text_on_image_font(fontfile, dict, height, width)
-% * Render letters from dict, using a given TrueType fontfile, into
-% bitmaps and other information that is packed into a structure 
-% `font' which can be handed to text_on_image.
+% * Render letters from dict, using a given fontfile, into bitmaps 
+% and other information that is packed into a structure 
+% `font' which can be handed to text_on_image.  The fontfile can
+% be either a TrueType (.ttf) file, or a file of bitmaps in a 
+% regular Matlab (.m) file, is a runnable m-file producing a structure 
+% output.
 % * The default dict is a large set of printable ascii characters.
-% If dict is given as empty, this default is chosen as well.
+% The dictionary can also be embedded in the m-file. If dict is given 
+% as empty, this default is chosen as well.  
 % * See text_on_image_font_helper for full interpretation of height 
 % and width.  Height is the more important, it is in the form:
 %  height = [char_height allow_space_for_descenders top_pad bottom_pad]
@@ -39,15 +43,17 @@ if nargin == 0,
   return;
 end;
 
+% in case no dict given
+% (taken from "man ascii")
+DEFAULT_DICT = [' !"#$%&''()*+,-./0123456789:;<=>?@' ...
+                'ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~'];
+
 % 
 % Error checking
 % 
 % if all(nargin  ~= [1 2 3]), error ('Bad input arg number'); end
 % if all(nargout ~= [0 1]), error ('Bad output arg number'); end  
-if nargin < 2 || isempty(dict), 
-  dict = [' !"#$%&''()*+,-./0123456789:;<=>?@' ...
-          'ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~'];
-end;
+if nargin < 2, dict = [];     end; % fill in later
 if nargin < 3, height = [32]; end;
 if nargin < 4, width  = [];   end;
 
@@ -73,6 +79,7 @@ clear junk1 junk2
 
 % get the bitmaps and char widths
 if strcmp(font_ext, '.ttf'),
+  if isempty(dict), dict = DEFAULT_DICT; end;
   [bm,cpos] = text_on_image_font_helper(fontpath, dict, height, width);
   bm = permute(bm, [2 1 3]); % flip x and y
 elseif strcmp(font_ext, '.m'),
@@ -80,6 +87,13 @@ elseif strcmp(font_ext, '.m'),
   if ~isstruct(info),
     error('M-file font must load into info structure');
   end
+  if isempty(dict),
+    if isfield(info, 'dict'),
+      dict = info.dict; % allow m-file font to tell us what it has
+    else,
+      dict = DEFAULT_DICT; 
+    end;
+  end;
   % TODO: probably want the font's own height here, from info.x
   [bm,cpos] = text_on_image_font_mfile(info, dict, height, width);
 else,

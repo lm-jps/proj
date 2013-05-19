@@ -52,6 +52,12 @@ if ~exist('mode', 'var'),
   mode = 'frame';
 end;
 
+% set up NRT mode if mask_series contains _nrt
+%   (used internally for WCS and QUALITY)
+if ~isempty(strfind(mask_series, '_nrt')),
+    hmi_property('set', 'nrt_mode', 1);
+end;
+
 % set up hooks -- misc. parameters
 hooks = struct();
 hooks.mode = mode;
@@ -65,6 +71,9 @@ fn_pat = fullfile(dest_dir, 'harp.%s.png');
 
 % ensure output dir exists
 if ~exist(dest_dir, 'dir'), mkdir(dest_dir); end; 
+
+% turn off annoying warnings about NOAA metadata
+warning('off', 'hmi_base:no_noaa_info');
 
 % switches from loading images by http versus filesystem
 % (see jsoc_trec_loop for more)

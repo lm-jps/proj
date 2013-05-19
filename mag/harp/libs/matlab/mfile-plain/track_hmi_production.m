@@ -28,9 +28,15 @@
 %       time history of the tracker; it's wise to transcode this
 %       movie into a more compact file format
 %   params: defaults to empty
-%       contains a set
+%       contains a set of modified tracker parameters
+%   gap_fill: integer, defaults to nan (= no gap filling)
+%       if non-nan, new track ID numbers will be chosen in agreement
+%       with future values, or recycled from previously-unused numbers.
+%       The gap_fill integer, typically zero, is added to ROI_rgn.Ntot,
+%       the track ID counter, at the end of the run, to provide another
+%       way to synch the track IDs of the gap-fill series with existing 
+%       IDs.
 %  
-
 % Inputs:
 %   string mask_series
 %   string dest_dir
@@ -73,6 +79,10 @@ end;
 % make_movie: optional, default to false
 if ~exist('make_movie', 'var'),
   make_movie = false;
+end;
+% gap_fill: optional, default to false
+if ~exist('gap_fill', 'var'),
+  gap_fill = nan;
 end;
 % params: optional, default to none
 if ~exist('params', 'var'),
@@ -162,10 +172,18 @@ hooks.find_roi       = @hmi_find_roi; % uses tracker_params
 hooks.first_track    = first_track;
 hooks.retain_history = retain_history;
 hooks.run_name       = mask_series; % text tag, just for identification
+hooks.gap_fill       = gap_fill; % gap-fill mode, if non-nan (usually nan)
 % filename templates
 hooks.filename.template = fullfile(dest_dir, '/Tracks/%s/track%s%s.%s');
 hooks.filename.tracknum = '%06d';
 hooks.filename.imagenum = '%06d';
+% depending on gap_fill, set up hook to install new track IDs
+if ~isnan(hooks.gap_fill),
+  hooks.update_tid = @hmi_gapfill_update_tid;
+else,
+  hooks.update_tid = @(varargin)(disp('Unexpected negative TID'));
+end;
+
 
 jsoc_ds = {mask_series, mag_series};
 

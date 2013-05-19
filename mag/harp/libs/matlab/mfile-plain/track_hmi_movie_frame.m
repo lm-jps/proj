@@ -2,28 +2,32 @@ function frame=track_hmi_movie_frame(t, geom, mask, harps, bitmaps, smpl)
 %track_hmi_movie_frame	make one frame of a tracker movie
 % 
 % frame=track_hmi_movie_frame(t, mask, harps, bitmaps, smpl)
-% * Make one frame of a harp diagnostic movie.  The output is a single
-% indexed image.  This uses code similar to track_hmi_movie, but is intended
-% to retain only the frame-making parts, leaving the I/O to a separate
-% routine.
-% * Usage: 
-%   = xxx('fulldisk-instant.cat', 
-% 
-% where 4 gives the spatial reduction (factor of 4 in each direction 
-% yields 1024^2 images for HMI), cm is a colormap (try prism2), and 
-% fnTs is a pattern for *track* summary mat-files.
+% * Render one frame of a harp diagnostic movie.  The output is a single
+% indexed image.  This uses code similar to track_hmi_movie, but is 
+% designed to retain only the frame-making parts, leaving the I/O to 
+% a separate driver routine.
+% * This routine was originally intended to be independently callable, 
+% but too much extra information is needed to render the frame.  We need
+% HARP information (harps structure) and data segments (bitmaps cell).
+% Thus, breaking it off helped modularity, but this routine is locked
+% in to its place in the pyramid.
+% * You can, however, call the function with harps and bitmaps empty.
+% * The integer smpl gives spatial downsampling from mask to frame. 
+% For example, smpl=4 implies downsampling by a factor of 4 in each 
+% direction, yielding roughly 1Kx1K images for HMI.
 % 
 % Inputs:
 %   real t;       -- datenum time
+%   real geom(5)  -- a geom
 %   real mask(m,n)
-%   struct harps
+%   struct harps(1) or []
 %   cell bitmaps(nr) of real
 %   int smpl;
 % 
 % Outputs:
 %   int frame(mp,np)
 % 
-% See Also: track_hmi_test
+% See Also: track_hmi_harp_movie_loop, track_hmi_movie
 
 % Written by Michael Turmon (turmon@jpl.nasa.gov) on 03 Oct 2012
 % Copyright (c) 2009.  All rights reserved.  
@@ -61,6 +65,8 @@ rgnTag = double(harps.h_faint == 0); % 1 = normal, 0 = faint...
 rgnTag((harps.h_faint == 1) & isnan(harps.npix)) = -1; % ...-1 = placeholder
 rgnTid = (harps.harpnum)';
 
+SkipEmptyBox = false; % show box around ROI for placeholders?
+
 frame_num = NaN; % unknown
 prior_t = NaN; % unknown
 
@@ -69,8 +75,8 @@ mask = mask(1:smpl:end,1:smpl:end);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %   NOAA Regions
 
-% load NOAA regions
-NOAAar = hmi_noaa_info_interp(t);
+% load NOAA regions -- allow extrapolation
+NOAAar = hmi_noaa_info_interp(t, 'extrap');
 % project into our disk geometry
 [NOAAx, NOAAy, NOAAz] = hmi_latlon2image([NOAAar.latitudehg ]', ...
                                          [NOAAar.longitudecm]', geom);
@@ -164,7 +170,7 @@ if smpl == 1,
   tk1 = [1 1 3 3]; % four hairlines...
   tk2 = tk1 + 1;
   del = [0 1 0 1]; % ...offset by 0, 1, 0, 1
-  flag = 6; % size of merged-region panel
+  flag = 7; % size of merged-region panel
 else,
   % hairlines not offset
   tk1 = [1 3]; % two hairlines
@@ -174,13 +180,13 @@ else,
 end;
 [M,N] = size(im1);
 for r=1:nR,
-  if rgnTag(r) < 0, continue; end; % no enclosing box for placeholder regions
+  if SkipEmptyBox && rgnTag(r) < 0, continue; end; % no enclosing box for placeholder regions
   % throughout, have to clip to range of indexes to prevent trouble
   im1(rgnS(r,1):rgnS(r,3), range(rgnS(r,tk2) + del, 1, N)) = HILITE;
   im1(range(rgnS(r,tk1) + del, 1, M), rgnS(r,2):rgnS(r,4)) = HILITE;
-  if rgnTag(r) < 0,
-    % NB: this case is now skipped directly (above)
-    % dotted box for a placeholder region
+  if rgnTag(r) < 0 || rgnPad(r) ~= 0,
+    % note: this case is sometimes skipped entirely (above)
+    % dotted box for a placeholder or padding region
     im1(rgnS(r,1):2:rgnS(r,3), range(rgnS(r,tk2) + del, 1, N)) = NEUTA;
     im1(range(rgnS(r,tk1) + del, 1, M), rgnS(r,2):2:rgnS(r,4)) = NEUTA;
   elseif rgnTag(r) == 0,
@@ -195,13 +201,18 @@ for r=1:nR,
       range(rgnS(r,2) - [1:flag*double(rgnAge(r)==0)], 1, N)) = HILITE;
 end;
 
-% put on NOAA AR markers 
-im1 = marker_on_image(im1, [NOAAx(NOAAv) NOAAy(NOAAv)], ...
-                      '+', [15 3], [], CONTRA);
-im1 = text_on_image(im1, cellstr(int2str([NOAAar(NOAAv).regionnumber]')), [], CONTRA, ...
+% NOAA AR text labels
+ARROW = 143; % character in SFONT for arrow dingbat
+NOAAtxt = cellstr([int2str([NOAAar(NOAAv).regionnumber]') ...
+                   char(ARROW+double(NOAAy(NOAAv)>(M/2)))]);
+% place NOAA AR labels along equator
+im1 = text_on_image(im1, NOAAtxt, [], CONTRA, ...
                     [NOAAx(NOAAv)-15 ...
                     2*sign(NOAAy(NOAAv)-M/2).*sqrt(abs(NOAAy(NOAAv)-M/2))+M/2 ...
                     zeros(nnz(NOAAv),1)-FLIP], SFONT);
+% place NOAA AR markers on the ARs
+im1 = marker_on_image(im1, [NOAAx(NOAAv) NOAAy(NOAAv)], ...
+                      '+', [15 3], [], CONTRA);
 
 % put on the poles, if they're there
 [NPx, NPy, NPz] = hmi_latlon2image([90;-90], [0;0], geom);
@@ -214,11 +225,14 @@ im1 = marker_on_image(im1, [NPx(NPv) NPy(NPv)], 'x', [15 3], [], HILITE);
 im1 = text_on_image(im1, NP_txt(NPv), [], HILITE, ...
                     [NPx(NPv) NPy(NPv)+NPspc(NPv) zeros(nnz(NPv),1)-FLIP], SFONT);
 
-% HARP-number labels -- only the non-placeholder ones
+% HARP-number labels
 if nR > 0,
   harp_lbl_locn = [rgnS(:,1:2)+1 zeros(nR,1)-FLIP];
-  im1 = text_on_image(im1, cellstr(int2str(rgnTid(rgnTag >= 0))), ...
-                      [], HILITE, harp_lbl_locn(rgnTag >= 0,:), SFONT);
+  % allow to skip labeling the placeholder boxes
+  if SkipEmptyBox, inx = (rgnTag >= 0); else, inx = true(size(rgnTid)); end;
+  im1 = text_on_image(im1, cellstr(int2str(rgnTid(inx))), ...
+                      [], HILITE, harp_lbl_locn(inx,:), SFONT);
+  clear inx
 end;
 
 % keyboard
@@ -269,7 +283,7 @@ imT = text_on_image(imT, txt, [], TCOLOR, [MRGN MRGN], DFONT);
 
 % nR is the number of tracks, accounting for merges
 txt = {{...
-    sprintf('T = %d', nR), ...
+    sprintf('H = %d', nR), ...
     ' ', ...
     sprintf('! = %d (new)',         nnz(rgnAge == 0)), ...
     sprintf('( = %d (pad before)',  nnz(rgnPad <  0)), ...
@@ -279,7 +293,13 @@ txt = {{...
     sprintf('? = %d (placeholder)', nnz(rgnTag <  0)), ...
       }};
 % put overlay on
-imT = text_on_image(imT, txt, [], TCOLOR, [1-MRGN MRGN], DFONT);
+imT = text_on_image(imT, txt, [], TCOLOR, [1-5*MRGN MRGN], DFONT);
+
+% explanatory note
+txt = {{...
+    'HARPs: white boxes with white number; active part colored', ...
+    'NOAA ARs: yellow crosses; numeric label shifted to along equator'}};
+imT = text_on_image(imT, txt, [], TCOLOR, [1-MRGN MRGN], SFONT);
 
 % track number overlay
 NC_max = floor(size(imT, 1) / (2*19)); % max track ID's in one column
@@ -338,8 +358,8 @@ if nnz(NOAAv) > 0,
   NOAAx1   = NOAAx  (NOAAinx); % x-values
   [junk,NOAAxup] = sort(NOAAx1, 1, 'descend'); % sort valid + north by x
   NBu = num2str(NOAAtid1(NOAAxup), '%05.0f');
-  NBs = num2str(NOAAspt1(NOAAxup), ':%2d');
-  imT = text_on_image(imT, strvcat({'NOAA ARs'; [NBu NBs]}), ...
+  % NBs = num2str(NOAAspt1(NOAAxup), ':%2d'); % remove these
+  imT = text_on_image(imT, strvcat({'NOAA ARs'; [NBu]}), ...
                       [], TCOLOR2, [MRGN 0.88], DFONT);
   % put on southern tags
   NOAAinx = NOAAv & (NOAAlat(:) < 0); % valid and south
@@ -347,9 +367,9 @@ if nnz(NOAAv) > 0,
   NOAAspt1 = NOAAspt(NOAAinx); % spot counts
   NOAAx1   = NOAAx  (NOAAinx); % x-values
   [junk,NOAAxup] = sort(NOAAx1, 1, 'descend'); % sort valid + south by x
-  NBd = num2str(NOAAtid1(NOAAxup), '%05.0f'); % text format
-  NBs = num2str(NOAAspt1(NOAAxup), ':%2d');
-  imT = text_on_image(imT, [NBd NBs], [], TCOLOR2, [1-MRGN 0.88], DFONT);
+  NBd = num2str(NOAAtid1(NOAAxup), '%05.0f');
+  % NBs = num2str(NOAAspt1(NOAAxup), ':%2d'); % remove these
+  imT = text_on_image(imT, [NBd], [], TCOLOR2, [1-MRGN 0.88], DFONT);
 end;
 
 frame = imT;

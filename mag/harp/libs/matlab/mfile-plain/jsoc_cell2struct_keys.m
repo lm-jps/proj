@@ -22,6 +22,7 @@ function s = jsoc_cell2struct_keys(r)
 %
 % Computation
 % 
+tai_format = 'yyyy.mm.dd_HH:MM:SS';
 nk = length(r);
 s = struct([]);
 for k = 1:nk,
@@ -33,8 +34,13 @@ for k = 1:nk,
    case 'double',
     s(1).(key1) = str2double(r{k}.values);
    case 'time',
-    block = char(r{k}.values); % convert to matrix to enable indexing
-    s(1).(key1) = datenum(block(:,1:end-4),'yyyy.mm.dd_HH:MM:SS');
+    vals = r{k}.values;
+    val_ok = ~strcmp(vals, 'MISSING');
+    block = char(vals(val_ok)); % convert to matrix to enable indexing
+    t_vals = nan(length(vals), 1); % assume missing
+    % strip _TAI
+    t_vals(val_ok) = datenum(block(:,1:end-4), tai_format);
+    s(1).(key1) = t_vals;
    case 'char',
     s(1).(key1) = r{k}.values;
    otherwise,

@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh
 # (line below is for qsub)
 #$ -S /bin/sh
 # 
@@ -16,7 +16,7 @@
 #
 # usage:
 #   track_hmi_production_driver_stable.sh ...
-#       [ -i N ] [ -r R ] [ -p PARS ] [-m] [-d] mask_series mag_series dest_dir
+#       [ -i N ] [ -r R ] [ -p PARS ] [-m] [-g N] [-d] mask_series mag_series dest_dir
 #
 # where:
 #   mask_series is a mask data series from JSOC (includes T_REC range)
@@ -40,6 +40,15 @@
 #      -p "tau=0.19;final_time=0.5;"  
 #      For experts only.
 #   -m is a flag to generate a movie from the results (default is no movie).
+#   -g says to use gap-filling mode for new tracks, and supplies a 
+#      required argument N.  In this mode, new tracks will be checked
+#      for overlap with future tracks; if so, the track ID will be assigned
+#      to match.  If there is no overlap, new tracks will get an ID that 
+#      was left unused due to earlier merges.  This means new tracks 
+#      during the run will (mostly) not affect numbering of later tracks.  
+#      The argument, typically 0, is a number to add to the track ID
+#      counter (ROI_rgn.Ntot) at the end of the run, in case more help 
+#      is needed to synch the gap-fill count with the desired count.
 #   -d is a flag which signals to use the developer MATLABPATH (~turmon) rather
 #      than the regular production path (~jsoc).
 #
@@ -56,28 +65,36 @@
 # tracking is restarted.
 #
 # Usage:
-#   If tracking was already started, and an earlier run ended on Sept 19 at midnight:
+#   If tracking was already started, and an earlier run ended on 
+# Sept 19 at midnight:
 #
 #  track_hmi_production_driver_stable.sh 'hmi.Marmask_720s[2010.09.20_TAI/24h]' hmi.M_720s /tmp/sept
 #
 # Michael Turmon, JPL, December 2010, June 2011
 
+set -e
 
 progname=`basename $0`
-USAGE="Usage: $progname [ -i N ] [ -r R ] [ -p PARS ] [ -m ] [ -d ] mask_series mag_series dest_dir"
+# under SGE, $0 is set to a nonsense name, so use our best guess instead
+if [ `expr "$progname" : '.*track.*'` == 0 ]; then progname=track_hmi_production_driver; fi
+USAGE="Usage: $progname [-i N] [-r R] [-p PARS] [-m] [-g N] [-d] mask_series mag_series dest_dir"
+# echo the arguments, for repeatability
+echo "${progname}: Invoked as:" "$0" "$@"
 
 # get options
 first_track=0
 retain_history=inf
 make_movie=0
+gap_fill=nan
 developer_path=0
 matlab_ver=r2010b
 params=""
-while getopts "dmp:i:r:v:" o; do
+while getopts "dmg:p:i:r:v:" o; do
     case "$o" in
 	i)    first_track="$OPTARG";;
 	r)    retain_history="$OPTARG";;
 	p)    params="$OPTARG";;
+	g)    gap_fill="$OPTARG";;
 	m)    make_movie=1;;
 	d)    developer_path=1;;
 	v)    matlab_ver="$OPTARG";;
@@ -114,6 +131,15 @@ if [[ $retain_history =~ ^[0-9]+$ || $retain_history =~ ^inf$ ]]; then
     : 
 else 
     echo "$progname: bad retain history integer (got $retain_history)"
+    echo "$USAGE" 1>&2
+    exit 2
+fi
+
+# validate gap_fill is integer (negative OK) or nan
+if [[ $gap_fill =~ ^[+-]?[0-9]+$ || $gap_fill =~ ^nan$ ]]; then 
+    : 
+else 
+    echo "$progname: bad gap-fill integer (got $gap_fill)"
     echo "$USAGE" 1>&2
     exit 2
 fi
@@ -182,6 +208,7 @@ try,
   dest_dir='$dest_dir';
   first_track=$first_track;
   retain_history=$retain_history;
+  gap_fill=$gap_fill;
   make_movie=$make_movie;
   params='$params';
   track_hmi_production;
@@ -194,7 +221,7 @@ end;
 quit;
 EOF
 t1=`date +%s`
-tdiff=`expr $t1 - $t0`
+tdiff=$(( $t1 - $t0 ))
 echo "${progname}: Matlab call took $tdiff seconds."
 
 # put the log file back

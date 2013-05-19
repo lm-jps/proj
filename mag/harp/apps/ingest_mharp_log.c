@@ -126,6 +126,7 @@ static const char *tracker_run_info_keys[] = {
   "TKP_RUNT", "run_time",
   "T_FRST",   "first_frame_trec",
   "T_LAST",   "last_frame_trec",
+  "T_HORIZN",   "horizon_trec", // earliest T_REC for which tracker holds state
   // end sentinel -- required
   NULL, NULL,
 };
@@ -308,13 +309,14 @@ int DoIt(void)
   run_info_t runInfo;
   struct stat buf; // for stat call
 	
+  printf("%s: Beginning.\n", module_name);
   /* Command line parameters */
   rootDir = cmdparams_get_str(&cmdparams, kRootDir, NULL);
-  if (strcmp(rootDir, kNOT_SPEC) == 0) DIE("Root directory must be specified\n");
+  if (strcmp(rootDir, kNOT_SPEC) == 0) DIE("Root directory must be specified");
   outQuery = cmdparams_get_str(&cmdparams, kRecSetOut, NULL);
-  if (strcmp(outQuery, kNOT_SPEC) == 0) DIE("Output series must be specified\n");	
+  if (strcmp(outQuery, kNOT_SPEC) == 0) DIE("Output series must be specified");	
   trec = cmdparams_get_str(&cmdparams, kTRec, NULL);
-  if (strcmp(trec, kNOT_SPEC) == 0) DIE("T_REC must be specified\n");	
+  if (strcmp(trec, kNOT_SPEC) == 0) DIE("T_REC must be specified");
   // optional args
   log      = cmdparams_get_str(&cmdparams, kLogFile,   NULL);
   errlog   = cmdparams_get_str(&cmdparams, kErrFile,   NULL);
@@ -323,19 +325,19 @@ int DoIt(void)
 	
   /* Get and check filenames */
   if (snprintf(logFile, sizeof(logFile), "%s/%s", rootDir, log) >= sizeof(logFile))
-    DIE("Log filename was too long.\n");
+    DIE("Log filename was too long.");
   if (snprintf(errlogFile, sizeof(errlogFile), "%s/%s", rootDir, errlog) >= sizeof(errlogFile))
-    DIE("Error log filename was too long.\n");
+    DIE("Error log filename was too long.");
   if (snprintf(ckpFile, sizeof(ckpFile), "%s/%s", rootDir, ckp) >= sizeof(ckpFile))
-    DIE("Checkpoint filename was too long.\n");
-  printf("%s: Log filename: `%s'\n",        module_name, logFile);
-  printf("%s: Error log filename: `%s'\n",  module_name, errlogFile);
-  printf("%s: Checkpoint filename: `%s'\n", module_name, ckpFile);
+    DIE("Checkpoint filename was too long.");
+  printf("%s:   Log filename: `%s'\n",        module_name, logFile);
+  printf("%s:   Error log filename: `%s'\n",  module_name, errlogFile);
+  printf("%s:   Checkpoint filename: `%s'\n", module_name, ckpFile);
   if (stat(logFile, &buf) < 0 || !S_ISREG(buf.st_mode))
-    DIE("Log file does not exist or is not a regular file.\n");
+    DIE("Log file does not exist or is not a regular file.");
   if (stat(ckpFile, &buf) < 0 || !S_ISREG(buf.st_mode))
-    DIE("Checkpoint file does not exist or is not a regular file.\n");
-  printf("%s: Found log and checkpoint files\n", module_name);
+    DIE("Checkpoint file does not exist or is not a regular file.");
+  printf("%s: Found log and checkpoint files.\n", module_name);
   // error log: OK to be absent
   if (stat(errlogFile, &buf) < 0 || !S_ISREG(buf.st_mode)) {
     errlog_present = 0;
@@ -352,7 +354,7 @@ int DoIt(void)
   /* Get and check the time */
   trec_num = sscan_time((char *) trec);
   if (time_is_invalid(trec_num))
-    DIE("Could not understand T_REC input time\n");
+    DIE("Could not understand T_REC input time");
   sprint_at(trec_buf, trec_num); // round-trip it to TAI
   printf("%s: T_REC = %s\n", module_name, trec_buf);
 
@@ -360,39 +362,39 @@ int DoIt(void)
   outRec = drms_create_record(drms_env, (char *) outQuery, DRMS_PERMANENT, &status);
   if (status) {
     drms_close_record(outRec, DRMS_FREE_RECORD);
-    DIE("Output record not found\n");
+    DIE("Output record not found");
   }
 	
   /* Ingest files */
   // regular log
   outSegLog = drms_segment_lookup(outRec, "Log");
   if (!outSegLog)
-    DIE("Log segment lookup failed.\n");
+    DIE("Log segment lookup failed.");
   if (drms_segment_write_from_file(outSegLog, logFile))
-    DIE("Log file ingestion failed.\n");
+    DIE("Log file ingestion failed.");
   printf("%s: ingested `%s'\n", module_name, logFile);
 
   // error log
   outSegLog = drms_segment_lookup(outRec, "ErrLog");
   if (!outSegLog)
-    DIE("Error log segment lookup failed.\n");
+    DIE("Error log segment lookup failed.");
   if (errlog_present) {
     if (drms_segment_write_from_file(outSegLog, errlogFile))
-      DIE("Error log file ingestion failed (even though error log was present).\n");
+      DIE("Error log file ingestion failed (even though error log was present)");
     printf("%s: ingested `%s'\n", module_name, errlogFile);
     errlog_count = count_errlog_times(errlogFile);
   } else {
     if (drms_segment_write_from_file(outSegLog, "/dev/null"))
-      DIE("Error log file ingestion failed (no error log present -> used /dev/null).\n");
-    printf("%s: No error log, set errors to empty.\n", module_name);
+      DIE("Error log file ingestion failed (no error log present -> used /dev/null)");
+    printf("%s: No error log, set error log file to `/dev/null'.\n", module_name);
     errlog_count = 0;
   }
   // checkpoint
   outSegChkpt = drms_segment_lookup(outRec, "Checkpoint");
   if (!outSegChkpt)
-    DIE("Checkpoint segment lookup failed.\n");
+    DIE("Checkpoint segment lookup failed");
   if (drms_segment_write_from_file(outSegChkpt, ckpFile))
-    DIE("Checkpoint file ingestion failed.\n");
+    DIE("Checkpoint file ingestion failed");
   printf("%s: ingested `%s'\n", module_name, ckpFile);
 
   /* Keywords */

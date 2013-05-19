@@ -87,6 +87,10 @@ end;
 %
 % Computation
 % 
+% update regardless of whether the file is skipped
+if length(ROI_rgn.firstfile) == 0,
+  ROI_rgn.firstfile = fn;
+end;
 % Check that we have not seen this image before
 if ROI_rgn.currtime == s_time,
   % overlap by one -- assume a fencepost issue
@@ -105,9 +109,16 @@ end;
 % image is new: update current progress info
 ROI_rgn.currfile = fn;
 ROI_rgn.currtime = s_time;
-if length(ROI_rgn.firstfile) == 0,
-  ROI_rgn.firstfile = fn;
+% time horizon = earliest time we maintain state about
+inx = ([ROI_t.tid] > 0);
+if isempty(inx),
+  ROI_rgn.fn_horizon = fn; % i.e., now
+else,
+  tai_format = 'yyyy.mm.dd_HH:MM:SS_TAI';
+  get_time = @(roi1)(roi1(1).time); % time field of first ROI
+  ROI_rgn.fn_horizon = datestr(min(cellfun(get_time, ROI_s(inx))), tai_format);
 end;
+clear inx tai_format get_time
 
 % check the QUALITY at the current time
 [q,q_ok,msg] = hooks.load_quality(fn);
@@ -151,7 +162,7 @@ tkp_pixpad = 4;
 % get observation time for catfiles
 s_timeS = [datestr(s_time,10) '/' datestr(s_time,6) ' ' datestr(s_time,13) ];
 % demote the active tracks by one image
-tlist = find(([ROI_t(:).tid] >= 0) & ([ROI_t(:).state] <= 0));
+tlist = find(([ROI_t(:).tid] > 0) & ([ROI_t(:).state] <= 0));
 for t = tlist, ROI_t(t).state = ROI_t(t).state-1; end;
 
 % Identify ROIs in current labeling
@@ -168,7 +179,7 @@ Nr = size(b,1);  % number of new ROIs
 clear b; % we find this again later, don't try to keep track of it now
 rho = zeros(Nt0, Nr); % correspondence matrix (tracks to roi's)
 % list of active track slots within ROI_t
-tlist = find(([ROI_t(:).tid] >= 0) & ([ROI_t(:).state] <= 0)); 
+tlist = find(([ROI_t(:).tid] > 0) & ([ROI_t(:).state] <= 0)); 
 % loop over tracks, determining their correspondence to new ROIs
 Nr_orig = Nr; % just the range of the original ROIs, excluding grandfathers
 tinx = 1; % silly, maintain the iteration number (track index)
@@ -286,11 +297,13 @@ end;
 % 
 % create new tracks as necessary
 % 
+% (create new tracks with regular track IDs unless gap_fill is non-nan)
+if isnan(hooks.gap_fill), NewTrackMode = 1; else, NewTrackMode = -1; end;
 for r = 1:Nr,
   % check for new ROIs
   if pi2(r) == 0,
     % allocate the new track
-    t = tracker_new_track(ROI_rgn.Ntot); % t=new track index, in 1..length(ROI_t)
+    t = tracker_new_track(NewTrackMode); % t=new track index, in 1..length(ROI_t)
     % record in pi2 and tlist for subsequent loops; key condition is:
     % t = track index satisfies: t = tlist(pi2(r))
     pi2(r) = length(tlist) + 1;
@@ -378,12 +391,20 @@ end;
 % 
 % Track maintenance: adjust current state, and write and reset if ROI vanishes
 %
-% note, this loop does not cover any track just created above
 for t = tlist,
   if ((s_time-ROI_t(t).time)>tkp_final_time) && (ROI_t(t).state<tkp_final_num),
     % AR has vanished: close it out
     tracker_close_track(t, hooks, 'final'); % finalized: write summary file
     continue;
+  end;
+  if ROI_t(t).tid < 0,
+    % bogey track, track ID will be replaced by a positive number now
+    if NewTrackMode > 0, error('TID<0 and not gapfill: Should not happen'); end;
+    [tid_new,t_add] = hooks.update_tid(ROI_t(t).tid, [ROI_t(tlist).tid], ...
+                                       s_time, ROI_s{t}(1).stats);
+    fprintf('[Gapfill %s (tinx = %d): %d -> %d]\n', s_timeS, t, ROI_t(t).tid, tid_new);
+    ROI_t(t).tid = tid_new;
+    ROI_rgn.Ntot = ROI_rgn.Ntot + t_add; % see also tracker_new_track
   end;
   if ROI_t(t).state < 0,
     % AR was unmatched by an ROI in current frame
@@ -432,6 +453,7 @@ if 0,
 end;
 return
 
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % Initialization: set up data structures, establish cat-file headers
@@ -462,6 +484,13 @@ if hooks.first_track == 0,
     ROI_rgn.firstfile = ''; % first file examined in this run
     fprintf('Restart: track ID = %d, pending tracks = %d, history_retain = %d\n', ...
             ROI_rgn.Ntot, ROI_rgn.Nt0, hooks.retain_history);
+    % reset negative .tid field of old-style ROI_t structures
+    %   this is for compatibility with old checkpoint files
+    tlist = find([ROI_t(:).tid] < 0);  % tid of -1 formerly meant unused...
+    [ROI_t(tlist).tid] = deal(0);      % ...but now tid of 0 does this
+    if length(tlist) > 0,
+      fprintf('  Note: Reset %d unused track-ids of old-style checkpoint\n', length(tlist));
+    end;
   else,
     % announce we could not restart
     error('Could not find prior-state file "%s", fatal.', fn);
@@ -482,7 +511,7 @@ else,
   ROI_s = {};
   % set up a few empty slots (not really necessary)
   for t = 1:32,
-    tracker_new_track(-1); % -1 => unallocated track
+    tracker_new_track(0); % 0 => null track (empty slot)
   end;
 end;
 % use supplied hook to make headers
@@ -503,11 +532,15 @@ fn = sprintf(hooks.filename.template, 'jsoc', '-post', '', 'mat');
 [junk1,junk2] = mkdir(fileparts(fn)); % ensure the dir exists
 % truncate ROI_s
 ROI_s = hmi_rois_truncate(ROI_s, hooks.retain_history);
+% optionally adjust new-region counter if gap-fill mode is on
+if ~isnan(hooks.gap_fill),
+  ROI_rgn.Ntot = ROI_rgn.Ntot + hooks.gap_fill;
+end;
 % save as -v7.3 because ROI_s can be larger than 2GB after unpacking
 % (v7.0 is the default)
 save(fn, 'ROI_t', 'ROI_s', 'ROI_rgn', '-v7.3');
 % loop over all allocated tracks
-for t = find([ROI_t(:).tid] >= 0),
+for t = find([ROI_t(:).tid] > 0),
   tracker_close_track(t, hooks, 'pending'); % still pending
 end;
 % write file tails, if desired
@@ -520,36 +553,68 @@ return
 %
 % Find/allocate new, empty track
 %
-% input: new track id (int); output: new track index in heap (>=1)
-% if new track id < 0, a completely empty track-mosaic is allocated,
-% with an empty scroll.  it would then be filled in later by a
-% subsequent call; this might be useful for initialization or for
-% flushing of a track
-function t = tracker_new_track(tid)
+% input:
+%   typ: integer, 
+%     +1 => allocate regular new track
+%      0 => make unused slot
+%     -1 => allocate bogey track (tid < 0, to be updated later, gapfilling)
+% output: 
+%   new track index in heap (>=1), a single integer
+% If typ == 0, a completely empty track is allocated, and it is called 
+% "unused".  It would then be filled in by a subsequent call to this routine
+% when a real track is found.  It is used for initialization.
+% If typ == -1, a "bogey" track is allocated.  This is a real track, with
+% negative track id, whose real track id is to be filled in later when its
+% location information is computed, but whose information is valid.  It is
+% used for gap-filling.
+function t = tracker_new_track(typ)
 global ROI_t ROI_s ROI_rgn % state information
 
-% 0: find a slot
-if tid >= 0 & ~isempty(ROI_t),
-  t = find([ROI_t(:).tid] < 0, 1); % take first one (if none, t = [])
+% 0: find a slot "t" in ROI_t
+if typ ~= 0 & ~isempty(ROI_t),
+  % need a slot: take first unused slot (if none, will have t = [])
+  t = find([ROI_t.tid] == 0, 1); 
 else
-  t = []; % only at program initialization, when ROI_t = []
+  % force it to appear like there is no empty track slot
+  t = []; 
 end;
 if isempty(t),
   % make a new slot (includes case when ROI_t = ROI_s = [])
   t = length(ROI_t) + 1; % one more track
 end;
 % 1: update global information (ROI_rgn)
-if tid >= 0, 
+if typ ~= 0, 
+  % find a track ID, NewTid1
+  if typ > 0,
+    % currently used track id's
+    usedTid = [ROI_t([ROI_t.tid] > 0).tid];
+    while true,
+      % after a gap-filling run, it is possible for one of the ROI_t.tid
+      % to leapfrog over Ntot due to a match to a later region; this loop
+      % covers us in this case.  it cannot happen with only regular runs.
+      NewTid = ROI_rgn.Ntot; % take the next Tid
+      ROI_rgn.Ntot = ROI_rgn.Ntot + 1; % regular track: bump the top Tid
+      if ~any(NewTid == usedTid), break; end; % take if no match
+    end;
+  else,
+    NewTid = -ROI_rgn.Ntot; % take the next Tid (but negative)
+    % (bogey track: do not increase top Tid yet: 
+    % only do this conditionally, upon update in main loop)
+  end;
+  % regular or bogey track: increase track counts
   ROI_rgn.Nt0 = ROI_rgn.Nt0 + 1;  % new track will be active
   ROI_rgn.Nt1 = ROI_rgn.Nt1 + 1;  % any new track ups this
-end;
-if tid == ROI_rgn.Ntot, ROI_rgn.Ntot = tid+1; end; % up total #tracks
+else,
+  % an unused track -- track counts remain the same
+  NewTid = 0;
+end; 
 % 2: clear scroll part (ROI_s)
 ROI_s{t} = struct([]);
 % 3: clear track part (ROI_t)
 tracker_clear_track(t);
-ROI_t(t).tid = tid; % this must be set correctly; it indicates used/unused
+ROI_t(t).tid = NewTid; % set tid after clearing track
 return
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -591,7 +656,7 @@ return
 function tracker_clear_track(t)
 global ROI_t ROI_s ROI_rgn % state information
 
-ROI_t(t).tid = -1;    % this must be set correctly; it indicates used/unused
+ROI_t(t).tid = 0;     % this must be set correctly; 0 indicates unused
 % below here, we do not attempt to set up "correct" values
 ROI_t(t).state = 0;   % just-seen or dying
 ROI_t(t).map = [];    % current map indicator

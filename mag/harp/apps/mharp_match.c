@@ -39,6 +39,33 @@ match_ar_print(FILE *fp, char *s, match_info_t *m)
   }
 }
 
+/*
+ * extrapolate match AR info out to time t, by filling in *m 
+ *
+ *   currently unused, but might be useful some day
+ */
+static
+void
+match_ar_extrapolate(TIME t, match_info_t *m0, match_info_t *m)
+{
+  double dt = t - m0->t; // nominally > 0, but < 0 OK
+  const double CARR_RATE = 360.0 / 27.2753; // deg/day
+  const int SECDAY = 3600*24;               // seconds per day
+
+  // 1: (dt [sec]) / SECDAY -> dt [day]
+  // 2: (dt [day]) * (CARR_RATE [deg/day]) -> deg
+  double omega = (dt / SECDAY) * CARR_RATE;
+  // extrapolate discrete quantities this way
+  //   also will preserve continuous quantities --
+  //     m->lat, m->lon, m->lon_wid, m->area
+  memcpy(m, m0, sizeof(*m));
+  // set time explicitly
+  m->t = t;
+  // linear extrapolation at carrington rate
+  m->lon_carr = m0->lon_carr + omega;
+  return;
+}
+
 
 /*
  * interpolate match AR info at time t, by filling in *m 
@@ -244,7 +271,11 @@ match_get_all_info(DRMS_RecordSet_t *rs,
 	  return 1;
 	}
       }
-      Marps[Nid++].id = id1;
+      // initialize the marp_info_t for this MARP
+      Marps[Nid].id = id1;
+      Marps[Nid].rec0 = Marps[Nid].rec1 = 0; // never filled in?
+      Marps[Nid].n_match = 0; // filled in by HARP matcher
+      Nid += 1;
     }
   }
   // set up outputs, return OK

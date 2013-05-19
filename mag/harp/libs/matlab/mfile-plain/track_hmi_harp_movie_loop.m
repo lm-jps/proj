@@ -88,7 +88,7 @@ if isnumeric(trec),
         if ischar(hooks.mp4) && strcmp(hooks.mp4, 'clean'),
           opts.clean = 1; % value is unimportant
         end;
-        status = avi2mp4(fn, opts, 'qscale', 5, 'v', '0');
+        status = avi2mp4(fn, opts, 'qscale', 4, 'v', '0');
         if status ~= 0,
           fprintf('Error: Failed to convert avi to mp4!\n');
         else,

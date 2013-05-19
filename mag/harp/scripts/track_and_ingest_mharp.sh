@@ -1,17 +1,23 @@
-#!/bin/sh -e
+#!/bin/sh
 # (line below is for qsub)
 #$ -S /bin/sh
 #
 # Top-level driver for deriving HARPs from a series of HMI masks (e.g., hmi.Marmask_720s).
 #
-# Invokes HARP finder/tracker and ingests resulting HARPs into a harp data series.  Uses
-# a filesystem directory (dest_dir) transfer results.  Essential aspects of the dest_dir 
-# intermediate results ("checkpoint files") are stored into harp_log_series in case dest_dir 
+# Invokes HARP finder/tracker and ingests resulting HARPs into a harp data series.  
+# Uses a filesystem directory (dest_dir) to transfer results.  Essential aspects of the 
+# dest_dir results ("checkpoint files") are stored into harp_log_series in case dest_dir 
 # is accidentally mangled.
+#
+# Exit status: 0 for no problems, 1 for an incorrect parameter (e.g., time range) that
+# needs to be corrected, 2 for an error part-way through.  If the exit status is 2, you
+# must be sure that the next run includes the same time range as the failed run.  You 
+# must not skip the error-causing time range and continue with subsequent times.
 #
 # Usage:
 #
-#  track_and_ingest_mharp.sh [ -i N ] [ -n ] [ -d ] dest_dir mask_series harp_series harp_log_series
+#  track_and_ingest_mharp.sh [-naefd] [-i N] [-g N] dest_dir ...
+#    mask_series harp_series harp_log_series
 #
 # where:
 #   dest_dir is a staging area in the filesystem
@@ -19,23 +25,43 @@
 #   harp_series is an output data series to put tracks
 #
 # and:
-#   -i introduces an optional argument indicating an initial run with 
-#      new tracks numbered starting from N.  Otherwise, a run that picks
-#      up where an earlier one left off, according to a checkpoint file
-#      in `dest_dir', is assumed.
+#   -i indicatea an initial run, having new tracks numbered starting from 
+#      the argument N.  Otherwise, the run picks up where an earlier one 
+#      left off, according to a checkpoint file in `dest_dir'.
 #      IF GIVEN, `-i N' CLEARS ALL EXISTING RESULTS.
+#   -g says to use gap-filling mode for new tracks, and supplies a 
+#      required argument N.  In this mode, new tracks will be checked
+#      for overlap with future tracks; if so, the track ID will be assigned
+#      to match.  If there is no overlap, new tracks will get an ID that 
+#      was left unused due to earlier merges.  This means new tracks 
+#      during the run will (mostly) not affect numbering of later tracks.  
+#      The argument, typically 0, is a number to add to the track ID
+#      counter (ROI_rgn.Ntot) at the end of the run, in case more help 
+#      is needed to synch the gap-fill count with the desired count.
+#      -g is not currently used with -n.
 #   -n indicates near-real-time (NRT) mode: (1) NRT magnetograms in
 #      hmi.M_720s_nrt are used (otherwise, hmi.M_720s is used).  
 #      (2) Less track history is retained, allowing faster startup and 
 #      more compact checkpoint files.  (3)  Both
-#      finalized and currently-pending tracks are ingested into JSOC.
-#      
+#      finalized and currently-pending tracks are ingested into DRMS.
+#   -a says that currently-pending tracks should be ingested also.
+#      (-a = ingest all tracks).  -n implies -a, but sometimes -a
+#      is useful without -n for testing definitive tracks, to ingest 
+#      even incomplete tracks into DRMS for inspection.
+#   -e means to skip running the tracker, and only do the ingestion of 
+#      tracks in the filesystem (dest_dir) into DRMS.  This can be used
+#      if the ingestion phase was interrupted after tracking was complete,
+#      and you don't want to run the tracker again.  It can also be used to
+#      test ingestion while holding the filesystem constant.
+#      Mnemonic: -e = ingest (eat) only.  Both tracks and logs are ingested.
+#   -f means to force the run, without checking before-hand for gaps in the
+#      relevant Marmask series.  For experts.
 #   -d is a flag which signals to use the developer MATLABPATH (~turmon) rather
-#      than the regular production path (~jsoc).
+#      than the regular production path (~jsoc).  For experts.
 #
 # Note that we require a T_REC to be supplied with mask_series.  
 # 
-# Typical command line:
+# Typical command lines:
 # [definitive]
 #   track_and_ingest_mharp.sh -i 1 /tmp/harp/definitive hmi.Marmask_720s[2011.10.01/10d]
 #     hmi.Mharp_720s hmi.Mharp_log_720s
@@ -47,45 +73,59 @@
 # This routine calls: track_hmi_production_driver_stable.sh, ingest_mharp, ingest_mharp_log
 #
 
-# turmon jul-sep 2011
+# turmon jul-sep 2011, oct 2012, feb 2013
 
 # echo command for debugging
 #set -x
+# exit-on-error: cannot put this in #! line because qsub does not read that line
+set -e
 
 progname=`basename $0`
 # under SGE, $0 is set to a nonsense name, so use our best guess instead
-if [ `expr "$progname" : '.*track.*'` == 0 ]; then progname=track_and_ingest_mharp; fi
-USAGE="Usage: $progname [ -i N ] [ -n ] [ -d ] dest_dir mask_series harp_series harp_log_series"
-TEMPROOT=/tmp/harps-${progname}
-# creates the dir, and returns the dir name
-TEMP_DIR=`mktemp -d $TEMPROOT-XXXXXXXX`
+default_progname=track_and_ingest_mharp.sh
+if [ `expr "$progname" : '.*track.*'` == 0 ]; then progname=$default_progname; fi
+USAGE="Usage: $default_progname [-naefd] [-i N] [-g N] dest_dir mask_series harp_series harp_log_series"
+
+## # tempfile stuff: commented out
+## TEMPROOT=/tmp/harps-${progname}
+## # creates the dir, and returns the dir name
+## TEMP_DIR=`mktemp -d $TEMPROOT-XXXXXXXX`
+## # filenames, e.g. below, must match the deletion pattern in cleanup()
+## TEMPMASK="$TEMP_DIR/mask.list"
+
 # we have not begun tracking yet, so errors are not problematic
-HAVE_BEGUN=0
+#   (after we begin, will set exit status to 2)
+HAVE_BEGUN=0 && EXIT_STATUS=1
 
 # echo the arguments, for repeatability
 echo "${progname}: Invoked as:" "$0" "$@"
+# elapsed time
+time_started=`date +'%s'`
 
-# alas, we require a temp file
-# default to nonzero exit status
-exit_status=1
+# This routine can be entered via implicit exit from script due to a failed command,
+# or via die(), which is invoked explicitly at a few places below.
 function cleanup() {
-    # clean the whole temp dir
-    rm -rf "$TEMP_DIR"
-    exit $exit_status
+    # clean the whole temp dir (commented out)
+    # rm -rf "$TEMP_DIR"
+    exit $EXIT_STATUS
 }
 trap cleanup EXIT
 
-# usage: die LINENO MESSAGE CODE
-# all arguments optional
+# usage: die LINENO MESSAGE
+#   arguments optional
 function die() {
-    echo "${progname}: Error near line ${1:- \?}: ${2:-(no message)}" 1>&2
-    if [ $HAVE_BEGUN = 1 ]; then
-	echo "${progname}: Exiting with error: Filesystem state is OK, but inconsistent."
-	echo "${progname}: Can run again using same T_REC range."
-	echo "${progname}: Can run again using same T_REC range." 1>&2
+    echo "${progname}: Fatal error near line ${1:- \?}: ${2:-(no message)}" 1>&2
+    if [ $HAVE_BEGUN = 0 ]; then
+	echo "${progname}: Exiting with simple error."
+	echo "${progname}: Correct input parameters and re-run."
+	echo "${progname}: Correct input parameters and re-run." 1>&2
+    else
+	echo "${progname}: Exiting with error: Filesystem state is OK (but inconsistent)."
+	echo "${progname}: Can run again, but must use same (or longer) T_REC range."
+	echo "${progname}: Do *not* proceed to a new T_REC range."
+	echo "${progname}: Can run again, but must use same (or longer) T_REC range." 1>&2
+	echo "${progname}: Do *not* proceed to a new T_REC range." 1>&2
     fi
-    # set exit status to $3 if present, else generic nonzero status
-    exit_status=${3:- 1}
     # will trap through cleanup()
     exit
 }
@@ -102,13 +142,23 @@ make_movie=1
 first_track=0
 developer_path=0
 track_opts=""
+ingest_all=0
 nrt_mode=0
-while getopts "hndi:" o; do
+skip_roi=0
+gap_fill=0
+force_run=0
+eat_only=0
+while getopts "hnadfeg:i:" o; do
     case "$o" in
 	i)    first_track="$OPTARG"
 	      track_opts="$track_opts -i $first_track";;
+	g)    skip_roi="$OPTARG"
+	      gap_fill=1;;
 	d)    developer_path=1
 	      track_opts="$track_opts -d";;
+	a)    ingest_all=1;;
+	e)    eat_only=1;;
+	f)    force_run=1;;
 	n)    nrt_mode=1;;
 	[?h]) echo "$USAGE" 1>&2
 	      exit 2;;
@@ -123,11 +173,12 @@ set -f
 # handle setup for NRT versus definitive mode
 if [ "$nrt_mode" -eq 1 ]; then
     # tracker options:
-    # nrt mags
+    # nrt mags + pgrams
     mag_series=hmi.M_720s_nrt
+    pgram_series=hmi.Ic_noLimbDark_720s_nrt
     #   retain only r days of history
     track_opts="$track_opts -r 1"
-    # ingest both new and pending regions
+    # ingest both new and pending regions -- always do pending in this case
     listfiles="track-new.txt,track-pending.txt"
     # ingester options:
     #   ingest only most recent trec; no temporal padding
@@ -137,12 +188,18 @@ if [ "$nrt_mode" -eq 1 ]; then
     do_match=0
 else
     # tracker options:
-    # definitive mags
+    # definitive mags + pgrams
     mag_series=hmi.M_720s
+    pgram_series=hmi.Ic_noLimbDark_720s
     #   retain all history
     track_opts="$track_opts -r inf"
-    # ingest only new regions
-    listfiles="track-new.txt"
+    if [ "$ingest_all" -eq 0 ]; then
+        # ingest only new regions -- usual path
+        listfiles="track-new.txt"
+    else
+        # ingest both new and pending regions -- useful for tests
+        listfiles="track-new.txt,track-pending.txt"
+    fi
     # ingester options:
     #   accept default trec, tpad
     #   filter HARPs having fewer than tmin appearances
@@ -151,10 +208,17 @@ else
     do_match=1
 fi
 
-# movie vs. no movie
+# movie vs. not
 if [ "$make_movie" -eq 1 ]; then
     # -m makes a movie, its absence does not
     track_opts="$track_opts -m"
+fi
+
+# gap-fill vs. not
+if [ "$gap_fill" -eq 1 ]; then
+    # -g N implies gap-filling, its absence implies not
+    #   (note that -g 0 is not the same as no -g at all)
+    track_opts="$track_opts -g $skip_roi"
 fi
 
 # get arguments
@@ -224,21 +288,16 @@ fi
 jsoc_mach=`csh -f -c 'source /home/jsoc/.setJSOCenv && echo $JSOC_MACHINE'`
 PATH="${PATH}:$HOME/cvs/JSOC/bin/$jsoc_mach"
 
-echo "${progname}: show_info is at:" `which show_info`
-echo "${progname}: ingest_mharp is at:" `which ingest_mharp`
-echo "${progname}: tracker driver is at:" `which track_hmi_production_driver_stable.sh`
+echo "${progname}:   show_info is at:" `which show_info`
+echo "${progname}:   ingest_mharp is at:" `which ingest_mharp`
+echo "${progname}:   tracker driver is at:" `which track_hmi_production_driver_stable.sh`
 
-# check that mag_series exists
-cmd="show_info -s $mag_series"
-$cmd > /dev/null
-# check that mask_series exists
-cmd="show_info -s $mask_series"
-$cmd > /dev/null
-# check that harp*series exists
-cmd="show_info -s $harp_series"
-$cmd > /dev/null
-cmd="show_info -s $harp_log_series"
-$cmd > /dev/null
+# check that relevant data series exist
+cmd="show_info -s"
+$cmd "$mag_series"      > /dev/null
+$cmd "$mask_series"     > /dev/null
+$cmd "$harp_series"     > /dev/null
+$cmd "$harp_log_series" > /dev/null
 
 #############################################################
 #
@@ -246,53 +305,128 @@ $cmd > /dev/null
 #
 #############################################################
 
-# filenames must match the deletion pattern in cleanup() above
-# hold mask list
-TEMPMASK="$TEMP_DIR/mask.list"
 # stage data (include T_REC)
 #   (this does not fail if the series is empty)
 echo "${progname}: Staging masks."
-cmd="show_info -q -ip $mask_series"
-$cmd > $TEMPMASK
+cmd="show_info -q -ip"
+$cmd "$mask_series" > /dev/null
 echo "${progname}: Finished staging masks."
 cmd="shell code"
-# mask series can be empty while mag is not, attempt to recover a T_REC in this case
-#  (we need T_REC to ingest the log: no masks means no harps, but there will be a log)
-if [ ! -s $TEMPMASK ]; then
-  echo "${progname}: Looking up T_REC in mags, because masks seem empty."
-  mag_range=`echo "$mask_series" | sed "s/.*\[/${mag_series}[/"`
-  cmd="show_info -q -ip $mag_range"
-  $cmd > $TEMPMASK
-  cmd="shell code"
-fi
+
+# recover a "first" and "last" T_REC, used to ingest the log.
+# use the mag series, not the mask series:
+#   reason 1: mask series can be empty while mag is not (bad mag => no mask)
+#   reason 2: empty mask series means no harps, but still need to ingest the log
+echo "${progname}: Looking up T_REC boundaries in mags."
+mag_range=`echo "$mask_series" | sed "s/[^[]*/${mag_series}/"`
 # find first T_REC, for later (and last for info)
-trec_frst=`awk '{print $1}' $TEMPMASK | head -n 1 | sed -e 's/[^[]*\[//' -e 's/\].*//'`
-trec_last=`awk '{print $1}' $TEMPMASK | tail -n 1 | sed -e 's/[^[]*\[//' -e 's/\].*//'`
-# no longer needed
-rm -f "$TEMPMASK"
+cmd="show_info -q key=T_REC"
+trec_frst=`$cmd "$mag_range" | head -n 1`
+trec_last=`$cmd "$mag_range" | tail -n 1`
+cmd="shell code"
 if [ -z "$trec_frst" ]; then
-  die $LINENO "Could not find a valid first T_REC within $mask_series"
+  die $LINENO "Could not find a valid first T_REC within $mask_series (mags: ${mag_range})"
 fi
 echo "${progname}: Processing from $trec_frst to $trec_last"
+echo "${progname}: Associated T_REC in \`$harp_log_series' will be $trec_frst"
+
+# find the most recent prior ingest using harp_log 
+## set -x
+DAYSBACK=60 # days back in the harp_log's to look for the prior ingest
+CADENCE=120 # 720s images/day
+trec_frst_index=`index_convert "ds=$harp_log_series" "T_REC=$trec_frst"`
+trec_prior0_index=$(( $trec_frst_index - $DAYSBACK * $CADENCE ))
+trec_prior1_index=$(( $trec_frst_index - 1 ))
+trec_prior0=`index_convert "ds=$harp_log_series" "T_REC_index=$trec_prior0_index"`
+trec_prior1=`index_convert "ds=$harp_log_series" "T_REC_index=$trec_prior1_index"`
+trec_prior=`show_info -q "ds=${harp_log_series}[${trec_prior0}-${trec_prior1}]" key=T_REC | tail -n 1`
+# if this is an initial ingest, blank the prior ingest time -- check it later
+if [ $first_track -ne 0 ]; then
+  trec_prior=
+fi
+# if above show_info was empty, it outputs "No records in query ..." -- convert to empty
+if expr "$trec_prior" : ".*No records" > /dev/null ; then 
+  trec_prior=
+fi
+## set +x
+# announce the results
+if [ -z "$trec_prior" ]; then
+  echo "${progname}: Found no prior ingest in \`$harp_log_series' (before ${trec_frst})"
+  prior_dt=
+else
+  echo "${progname}: Most recent prior ingest in \`$harp_log_series' was ${trec_prior}"
+  # T_REC of the last frame in that ingest ("last mask we saw")
+  trec_last_prior=`show_info -q "ds=${harp_log_series}[${trec_prior}]" key=T_LAST`
+  # trec_last_prior_index=`index_convert "ds=$mag_series" "T_REC=$trec_last_prior"`
+  # count how many *good* mags between trec_last_prior and trec_frst-1 (inclusive)
+  #   1: expected (the 1 frame = trec_last_prior: it had a mask, so it had a good mag)
+  #  >1: not OK (intervening valid mags)
+  #   0: not good, but OK (probably overlapping intervals)
+  prior_dt=`show_info -c "ds=${mag_series}[${trec_last_prior}-${trec_prior1}][? QUALITY>=0 ?]" key=T_REC | awk '{print $1}'`
+fi
+
+# ensure there are no un-explained mask gaps
+#   (skip on nrt-mode because it will be too late to fix anyway)
+if [ $nrt_mode = 0 -a $force_run = 0 ]; then
+  echo "${progname}: Ensuring no gaps in masks."
+  # 1: ensure no gap between end of prior run and start of current run
+  #    (except if initial run, or gap-fill)
+  if [ $first_track = 0 -a $gap_fill = 0 ]; then
+    echo "${progname}:   Checking for gaps between ingests."
+    if [ -z "$prior_dt" ]; then
+      die $LINENO "Unable to find a prior ingest in \`$harp_log_series'."
+    fi
+    echo "${progname}:     Prior ingest final frame at ${trec_last_prior}"
+    echo "${progname}:     Current start at ${trec_frst}"
+    if [ "$prior_dt" -gt 1 ]; then
+      die $LINENO "Prior ingest final frame was $prior_dt frames before current start."
+    elif [ "$prior_dt" -lt 1 ]; then
+      echo "${progname}:   Prior ingest end seems ahead of current start."
+      echo "${progname}:   Perhaps overlapping T_REC ranges, which is OK.  Continuing."
+    else
+      echo "${progname}:   Detect no gap between ingests.  Continuing."
+    fi
+  fi
+  # 2: ensure no gaps within masks, due to un-made masks
+  echo "${progname}:   Checking for gaps within the given T_REC range."
+  cmd="track_hmi_check_masks"
+  if ! $cmd xm="$mag_series" xp="$pgram_series" y="$mask_series" ; then
+    die $LINENO "Found a gap in mask series $mask_series.  Fill and re-run."
+  fi
+  cmd="shell code"
+  echo "${progname}: Finished ensuring no gaps in masks."
+else
+  echo "${progname}: Skipping check for gaps in masks."
+fi
+
 
 # after this point, the filesystem may get out of sync because tracker alters $dest_dir
-HAVE_BEGUN=1
+HAVE_BEGUN=1 && EXIT_STATUS=2
 
 # driver invokes matlab to perform tracking
 #  -- if not first run, reads checkpoint from track-prior.mat and writes to track-post.mat
 #  -- note, track_opts is unquoted
-echo "${progname}: Beginning tracking."
-cmd=track_hmi_production_driver_stable.sh 
-$cmd $track_opts "$mask_series" "$mag_series" "$dest_dir"
-cmd="shell code"
-echo "${progname}: Finished tracking."
+if [ $eat_only = 0 ]; then
+  echo "${progname}: Beginning tracking."
+  cmd=track_hmi_production_driver_stable.sh 
+  (   set -x && 
+      $cmd $track_opts "$mask_series" "$mag_series" "$dest_dir" 
+  )
+  cmd="shell code"
+  echo "${progname}: Finished tracking."
+else
+  echo "${progname}: Skipping tracking, ingest-only selected."
+fi
 
 echo "${progname}: Ingesting tracks."
 
 # ingest data
 #  -- note, ingest_opts is unquoted
 cmd=ingest_mharp 
-$cmd $ingest_opts "mag=$mag_series" "root=$dest_dir/Tracks/jsoc" "lists=$listfiles" "out=$harp_series" "mask=$mask_series_only" verb=1
+(   set -x &&
+    $cmd $ingest_opts "mag=$mag_series" "root=$dest_dir/Tracks/jsoc" "lists=$listfiles" \
+	"out=$harp_series" "mask=$mask_series_only" verb=1 
+)
 cmd="shell code"
 # preserve NOAA AR match data
 if [ $do_match = 1 ]; then
@@ -301,25 +435,69 @@ if [ $do_match = 1 ]; then
     # current and new location for NOAA AR match data
     matchdir="$dest_dir/Tracks/jsoc/Match"
     matchold="$dest_dir/Tracks/jsoc/Match-old"
-    # -p also suppresses errors if the dir exists already
-    mkdir -p "$matchold"
-    # ensure nothing is there from an earlier run
-    rm -rf "$matchold/Match-$ext"
-    mv "$matchdir" "$matchold/Match-$ext"
+    if [ -d "$matchdir" ]; then
+        # -p also suppresses errors if the dir exists already
+	mkdir -p "$matchold"
+        # ensure nothing is there from an earlier run
+        rm -rf "$matchold/Match-$ext"
+        mv "$matchdir" "$matchold/Match-$ext"
+    else
+        echo "${progname}: NOAA-match diagnostics \`$matchdir' unsaved because not present."
+        echo "${progname}: (Earlier run was interrupted?)  DRMS unaffected.  Continuing."
+    fi
 fi
 
-# ingest log and checkpoint file
+echo "${progname}: Finished ingesting tracks."
+echo "${progname}: Ingesting log and checkpoint to ${harp_log_series}[${trec_frst}]"
+
+# combine regular logs
+logCbase="track-and-ingest.log"
+logCfile="$dest_dir/Tracks/jsoc/$logCbase"
+log1file="$dest_dir/Tracks/jsoc/track-latest.log"
+log2file="$dest_dir/Tracks/jsoc/ingest-latest.log"
+rm -f "$logCfile"
+touch "$logCfile"
+[ -r "$log1file" ] && cat "$log1file"           >> $logCfile
+echo "========================================" >> $logCfile
+[ -r "$log2file" ] && cat "$log2file"           >> $logCfile
+
+# combine errror logs -- finicky, want it to not exist if there were no errors
+errCbase="track-and-ingest.err"
+errCfile="$dest_dir/Tracks/jsoc/$errCbase"
+err1file="$dest_dir/Tracks/jsoc/track-latest.err"
+err2file="$dest_dir/Tracks/jsoc/ingest-latest.err"
+rm -f "$errCfile"
+if [ -s "$err1file" -o -s "$err2file" ]; then
+    touch "$errCfile"
+    [ -s "$err1file" ] && cat "$err1file"           >> $errCfile
+    echo "========================================" >> $errCfile
+    [ -s "$err2file" ] && cat "$err2file"           >> $errCfile
+fi
+
+# ingest log and checkpoint file 
+#   -- use modified log/err files created above
 cmd=ingest_mharp_log
-$cmd root="$dest_dir/Tracks/jsoc" out="$harp_log_series" trec="$trec_frst"
+(   set -x && 
+    $cmd root="$dest_dir/Tracks/jsoc" log="$logCbase" err="$errCbase" \
+	out="$harp_log_series" trec="$trec_frst" 
+)
 cmd="shell code"
 
-echo "${progname}: Finished ingesting tracks."
+echo "${progname}: Finished ingesting log and checkpoint."
 
 # put newly-generated post-run checkpoint file into next-run checkpoint location
-cp -pf "$dest_dir/Tracks/jsoc/track-post.mat" "$dest_dir/Tracks/jsoc/track-prior.mat"
+# (formerly cp -p, but it was complaining, which went to stderr and gave impression 
+# of actual trouble)
+cp -f "$dest_dir/Tracks/jsoc/track-post.mat" "$dest_dir/Tracks/jsoc/track-prior.mat"
 
-# Exit OK -- will trap thru cleanup()
-echo "${progname}: Done, status OK."
-exit_status=0
+time_ended=`date +'%s'`
+time_taken=$(( $time_ended - $time_started ))
+# Exit OK 
+echo "${progname}: Clock time elapsed = $time_taken seconds"
+echo "${progname}: Status OK."
+echo "${progname}: Done."
+# establish clean exit
+EXIT_STATUS=0
+# traps thru cleanup()
 exit
 

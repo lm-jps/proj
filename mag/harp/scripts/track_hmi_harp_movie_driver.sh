@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh
 # (line below is for qsub)
 #$ -S /bin/sh
 # 
@@ -36,8 +36,15 @@
 #
 # Michael Turmon, JPL, October 2012
 
+set -e
+
 progname=`basename $0`
+# under SGE, $0 is set to a nonsense name, so use our best guess instead
+if [ `expr "$progname" : '.*track.*'` == 0 ]; then progname=track_hmi_harp_movie_driver; fi
 USAGE="Usage: $progname [ -f ] [ -m ] [ -d ] mask_series harp_series dest_dir"
+
+# echo the arguments, for repeatability
+echo "${progname}: Invoked as:" "$0" "$@"
 
 # get options
 make_movie=0
@@ -153,7 +160,7 @@ end;
 quit;
 EOF
 t1=`date +%s`
-tdiff=`expr $t1 - $t0`
+tdiff=$(( $t1 - $t0 ))
 echo "${progname}: Matlab call took $tdiff seconds."
 
 # put the log file back

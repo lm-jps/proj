@@ -51,6 +51,9 @@
  *  out        -- Output HARP data series
  *  mag [hmi.M_720s] -- Input magnetogram data series, alter for NRT
  *  mask       -- Input mask data series, e.g. hmi.Marmask_720s
+ *  href       -- Reference HARP set for box geometry, default none
+ *  t0cut      -- Earliest time allowed to ingest (default: none)
+ *  t1cut      -- Latest time allowed to ingest (default: none)
  *  trec [0]   -- Number of T_RECs to ingest (0=all, 1=latest)
  *  tpad [120] -- Temporal padding (in images, >=0, 120=1 day)
  *  verb [1]   -- Verbosity: 0=errors only; 1, 2, 3 = more
@@ -78,13 +81,15 @@
  *
  *  Written by X. Sun, M. Turmon
  *
- *	History:
+ *  Version history:
  *	v0.0	Feb 08 2011
  *	v0.1	Feb 26 2011
  *	v0.2	Apr 17 2011
  *	v0.5	Jun 28 2011
  *      v0.6    Aug 2011
  *      v0.7    Oct 2011
+ *      v1.0    In production, March 2012
+ *      v1.1    Feb-Apr 2013
  *
  *  Notes:
  *  -- In general, search for FIXME and TODO for loose ends
@@ -114,6 +119,19 @@
  *  -- v0.7
  *     can match against NOAA ARs in a data series, output match info,
  *     read tracker parameters from root dir
+ *  -- v1.0
+ *     released into production
+ *  -- v1.1
+ *     Improved HARP/NOAA matching in case of large HARPs which match several ARs.
+ *     Reorder code to load WCS just once, at start, to identify error conditions
+ *     and farside passage so that metadata like T_FRST will always be correct.
+ *     Add concept of ingestion filtering so that we know what portion of each 
+ *     HARP will be ingested, before starting ingestion, again for metadata 
+ *     correctness.
+ *     Add ability to use an existing HARP series for box-size information,
+ *     rather than using box-sizes in the tracker files.  Reason is to permit
+ *     patching of gaps in HARP series; ingest tracker bitmaps but use existing
+ *     box-sizes for compatibility with already-ingested HARP geometry.
  *
  */
 
@@ -132,14 +150,20 @@
 #include "propagate_keys.c"
 
 
-// global to this file: allow any status printf() to use the verbosity status
+// allow V_printf() to use the verbosity status from anywhere
 static int verbflag;
+// log file pointers (initialized to NULL)
+static FILE *LOGout = NULL;
+static FILE *LOGerr = NULL;
 
 // standard string length
 #define STR_MAX 256
 // this is one more than the max number of list files in the "lists" argument
 #define LIST_MAX 10
 // standard file names
+// log file names (output from this code)
+#define FN_INGEST_STDLOG "ingest-latest.log"
+#define FN_INGEST_STDERR "ingest-latest.err"
 // per-run parameter info
 #define FN_TRACK_PARAM "track-param.txt"
 // per-track coordinate frame info
@@ -170,46 +194,63 @@ static int verbflag;
  *************************************************************
  */
 
+// V_printf: facilitate verbflag output
+//   if flag is > 0, output is to stdout+LOGout, if < 0, to stderr+LOGerr
+//   if flag is 0, no output is made at all
+// If LOGout/LOGerr are NULL, they are skipped.
+// The message is printed in the form:
+//   <module_name>: <preamble><message>  (if preamble is non-NULL)
+//   <message>                           (if preamble is NULL)
+// Usage:
+//   V_printf(verbflag > 0, "\t", "Mask(%d) = %d\n", 2048, mask[2048]);
+void
+V_printf(int flag, char *preamble, char *format, ...) {
+  va_list args;
+  extern char *module_name;
+  extern FILE *LOGout;  // NULL OK to suppress
+  extern FILE *LOGerr;  // NULL OK to suppress
+  FILE *fp = (flag > 0) ? stdout : stderr;
+  FILE *lp = (flag > 0) ? LOGout : LOGerr;
+
+  if (flag != 0) {
+    // print to stream from stdio
+    va_start(args, format);
+    if (preamble)
+      fprintf(fp, "%s: %s", module_name, preamble);
+    vfprintf(fp, format, args); // va_list version of printf
+    fflush(fp);
+    va_end(args);
+    // optionally print to log file
+    if (lp) { 
+      va_start(args, format);
+      if (preamble) 
+	fprintf(lp, "%s: %s", module_name, preamble);
+      vfprintf(lp, format, args);
+      fflush(lp);
+      va_end(args);
+    }
+  } else {
+    va_start(args, format);
+    // (do nothing)
+    va_end(args);
+  }
+}
 // exit with error
 //  (standard trick to swallow the semicolon)
-//  (ensure nonzero exit even if zero status)
-//  (for use *only* in DoIt() routine)
-#define DIE(msg) do { \
+// NOTE: return() comes back from DoIt, so only call within DoIt()
+#define DIE(...) do { \
 	fflush(stdout); \
-        fprintf(stderr, "%s: FATAL: %s. (status=%d)\n", module_name, msg, status); \
-        return(status ? status : 1); \
+        V_printf(-1, "", "FATAL: %s.\n", __VA_ARGS__); \
+	if (LOGout) fclose(LOGout); \
+	if (LOGerr) fclose(LOGerr); \
+        return 1; \
         } while (0)
 // report non-fatal error
 //  (standard trick to swallow the semicolon)
-#define WARN(msg) do { \
+#define WARN(...) do { \
 	fflush(stdout); \
-        fprintf(stderr, "%s: WARNING: %s. Continuing.\n", module_name, msg); \
-	fflush(stderr); \
+        V_printf(-1, "", "WARNING: %s. Continuing.\n", __VA_ARGS__); \
         } while (0)
-// V_printf: facilitate verbflag output
-//   if flag is > 0, output is to stdout, if < 0, to stderr
-//   if flag is 0, no output is made at all
-// The message is printed in the form:
-// <module_name>: <first><message>"
-// Usage:
-// V_printf(VERB > 0, "\t", "Mask(%d) = %d\n", 2048, mask[2048]);
-void
-V_printf(int flag, char *first, char *format, ...) {
-  va_list args;
-  extern char *module_name;
-  FILE *fp = (flag > 0) ? stdout : stderr;
-
-  va_start(args, format);
-  if (flag != 0) {
-    // first is a string, even "" -- print the module name too
-    // otherwise, omit it
-    if (first)
-      fprintf(fp, "%s: %s", module_name, first);
-    vfprintf(fp, format, args);
-    fflush(fp);
-  }
-  va_end(args);
-}
 
 
 #define RADSINDEG       (M_PI/180.0)
@@ -218,17 +259,48 @@ V_printf(int flag, char *first, char *format, ...) {
 // Macros for WCS transformations.  assume crpix1, crpix2 = CRPIX1, CRPIX2, 
 // sina,cosa = sin and cos of CROTA2 resp.
 // and crvalx and crvaly are CRVAL1 and CRVAL2, cdelt = CDELT1 == CDELT2, then
-// PIX_X and PIX_Y are CCD pixel addresses, WX and WY are arc-sec W and N on the Sun from disk center.
+// PIX_X and PIX_Y are CCD pixel addresses, WX and WY are arc-sec W and N on the Sun 
+// from disk center.
+// -- These are copy-and-paste macros from JSOC code --
 #define PIX_X(wx,wy) ((((wx-crvalx)*cosa + (wy-crvaly)*sina)/cdelt)+crpix1)
 #define PIX_Y(wx,wy) ((((wy-crvaly)*cosa - (wx-crvalx)*sina)/cdelt)+crpix2)
 #define WX(pix_x,pix_y) (((pix_x-crpix1)*cosa - (pix_y-crpix2)*sina)*cdelt+crvalx)
 #define WY(pix_x,pix_y) (((pix_y-crpix2)*cosa + (pix_x-crpix1)*sina)*cdelt+crvaly)
+// instantiate local variables from a wcs_t structure
+//   (note, some small changes in variable naming to suit JSOC code)
+#define WCS2LOCALS(wcs) crvalx=(wcs).crval1; \
+		        crvaly=(wcs).crval2; \
+		        crpix1=(wcs).crpix1; \
+		        crpix2=(wcs).crpix2; \
+		        cdelt =(wcs).cdelt1; \
+		        crota2=(wcs).crota2; \
+                        sina=sin(crota2 * RADSINDEG); \
+			cosa=cos(crota2 * RADSINDEG)
 
 /***********************************************************************
  *
  * Declarations
  *
  ***********************************************************************/
+
+/*
+ * WCS, in the same parameterization as in HMI keywords
+ */
+typedef struct {
+  int ok;           // 0 if not OK
+  char missing[32]; // short message indicating missing data, if !ok
+  // types here are double or float according to hmi.M_720s types
+  double rsun_ref; // RSUN_REF || 6.96e8
+  double dsun_obs; // DSUN_OBS
+  float  cdelt1;   // CDELT1
+  float  crval1;   // CRVAL1 -- disc center, arcsec
+  float  crval2;   // CRVAL2
+  float  crpix1;   // CRPIX1 -- center, ccd, orig.
+  float  crpix2;   // CRPIX2
+  float  crota2;   // CROTA2
+  float  crlt_obs; // CRLT_OBS (converted to radians)
+  float  crln_obs; // CRLN_OBS (converted to radians)
+} wcs_t;
 
 /* 
  * Status of a patch_info_t: initialized to "invalid" upon creation
@@ -261,6 +333,29 @@ typedef enum {
   Patch_Tag_Merge  =   2,   // tracks were merged on this frame
 } patch_tag_t;
 
+/*
+ * To-be-ingested status of each patch
+ */
+typedef enum {
+  Patch_Ingest_Eligible = 0, // will ingest
+  Patch_Ingest_Invalid,      // no patch for this harp at this t_rec
+  Patch_Ingest_Gap,          // data gap in mags
+  Patch_Ingest_Missing,      // data missing in masks
+  Patch_Ingest_Omit,         // omit ingesting due to passed options
+  Patch_Ingest_TooShort,     // harp too short, typ. cosmic ray
+  Patch_Ingest_NUM,          // (number of distinct values)
+} patch_ingest_t;
+
+static const char* const 
+Patch_Ingest_Names[Patch_Ingest_NUM] = {
+  "eligible to ingest",
+  "no patch for this harp at this t_rec [ok]",
+  "data gap in mags [ok]",
+  "data missing in masks [likely error]",
+  "omitted ingesting due to supplied options [ok]",
+  "too short, typ. cosmic ray [ok]",
+};
+
 /* 
  * Information for one patch: one HARP at one T_REC
  */
@@ -268,12 +363,14 @@ typedef struct {
   patch_status_t valid;            // see enum above
   int num;                         // HARP id number
   patch_tag_t tag;                 // tag: patch category from frame file
+  patch_ingest_t ingest;           // to-be-ingested status
+  int success;                     // successful ingestion?
   int x0, y0;                      // origin of HARP bitmap in FD image (0-based)
   int fits_nx, fits_ny;		   // HARP bitmap size from frame file
   float lat0, lon0, lat1, lon1;    // bounding box from track-frame.txt
   float omega;	                   // HARP-specific angular rotation (deg/day)
   float stats[RS_num_stats];	   // statistics from track-stats.txt
-  char patchName[STR_MAX];	   // bitmap image file path
+  char *patchName;	           // bitmap image file path -- strdup'd
   char *image;		           // bitmap HARP image itself
   int dims[2];	                   // dimension of above image
   int xmin, xmax, ymin, ymax;	   // calculated bounding box (0-based)
@@ -282,6 +379,8 @@ typedef struct {
 /* 
  * Information for a HARP (spans all patches, that is, all T_REC's)
  */
+// fits string = 68 chars; NOAA ID has 5, comma is 1, so 68/(5+1) = 11 NOAA IDs max
+#define HARP_INFO_MATCH_MAX 11
 typedef struct {
   int id;            // HARP numeric id
   int rec0, rec1;    // HARP was tracked in rec0..rec1 (index into trec array)
@@ -289,18 +388,56 @@ typedef struct {
   int n_missing;     // number of missing-image gaps in rec0..rec1
   int n_patch;       // number of valid patches (Normal+Padding) in rec0..rec1
   int n_patchp;      // number of valid patches (Normal+Padding) in rec0p..rec1p
-  int n_match;       // number of matches (0 for none)
-  int match[5];      // list of matching MARP's (index into MarpInfo array)
+  int n_patch_eligible;// number of patches eligible to ingest
+  int n_patch_ingested;// number of patches successfully ingested
+  int n_patch_err;   // number of patches with ingestion errors
+  int top_match;     // best match (index into MarpInfo array)
+  int n_match;       // number of matches below (0 for none)
+  int match[HARP_INFO_MATCH_MAX];
+                     // list of matching MARP's (index into MarpInfo array)
 } harp_info_t;
 
 /* 
  * Information for a T_REC (spans all HARPs)
  */
+typedef enum {
+  Trec_Data_Unknown = 0, // have not looked at data presence
+  Trec_Data_Gap,         // no mag present (data gap -- assume no mask either)
+  Trec_Data_Missing,     // mag present, but no mask (should be very rare)
+  Trec_Data_OK,          // mag and mask both present
+  Trec_Data_NUM,         // (number of distinct values)
+} trec_data_t;
+
+static const char* const 
+Trec_Data_Names[Trec_Data_NUM] = {
+  "un-inspected [ok: data record not examined]",
+  "no mag present [ok: data gap]",
+  "mag present, but no mask [likely error: missing data]",
+  "mag and mask both present [ok]",
+};
+
 typedef struct {
   TIME t;            // T_REC as a number
   char str[24];      // T_REC as a string
+  trec_data_t data;  // is (mag,mask) data present and readable?
+  wcs_t wcs;         // wcs info, directly from DRMS keywords
   int nharp;         // number of HARP patches to be ingested at this time
 } trec_info_t;
+
+/*
+ * singletons for ingestion results
+ */
+typedef struct {
+  int try_ok;
+  int try_err;
+  int hist[Patch_Ingest_NUM];
+} patch_ingest_tab_t;
+
+typedef struct {
+  int trec_patch_err;
+  int trec_patch_valid;
+  int hist[Trec_Data_NUM];
+} trec_ingest_tab_t;
 
 /*
  * Whole-run info
@@ -317,25 +454,38 @@ typedef struct {
  *
  * (rec0, rec1 not set now)
  */
+// no need for innovation here
 typedef struct {
   int id;            // NOAA AR numeric id
-  int rec0, rec1;    // AR was tracked in rec0..rec1 (index into trec array)
+  int rec0, rec1;    // AR tracked in rec0..rec1 (index into trec array) -- unset!
+  int top_match;     // best match (index into HarpInfo array)
+  int n_match;       // number of times MARP was matched to a HARP
 } marp_info_t;
+
+/*
+ * Used in a decorate-sort-undecorate idiom for qsort to rank matches
+ */
+typedef struct  {
+  int id;         // NOAA AR id
+  int marp_index; // index into array of marp_info's
+  double count;
+  double size;
+} marp_sort_t;
 
 /* 
  * Information for one match-patch: one (NOAA) AR at one T_REC
  */
 typedef struct {
-  patch_status_t valid;      // enum above
-  int id;                    // not needed, but makes life easier
-  TIME t;                    // time
-  float lat, lon;            // center lat/lon (heliographic)
-  float lon_carr;            // carrington longitude
-  float lon_wid;             // width in degrees longitude
-  float area;	             // AR area microhemispheres
-  int spot;                  // spot count
-  char class_mag[STR_MAX];    // magnetic classification (Alpha, etc.)
-  char class_zur[4];         // zurich classification (3 chars)
+  patch_status_t valid;  // enum above
+  int id;                // not needed, but makes life easier
+  TIME t;                // time
+  float lat, lon;        // center lat/lon (heliographic)
+  float lon_carr;        // carrington longitude
+  float lon_wid;         // width in degrees longitude
+  float area;	         // AR area microhemispheres
+  int spot;              // spot count
+  char class_mag[32];    // magnetic classification (Alpha, etc. -- truncated if need be)
+  char class_zur[4];     // zurich classification (3 chars -- truncated otherwise)
 } match_info_t;
 
 static const char *tracker_run_info_keys[] = {
@@ -374,7 +524,7 @@ int load_run_info(const char *rootDir, char **, int *nHarp, int *nRec_all,
 // get HARP ID portion of harp info array
 int load_harp_ids(const char *rootDir, char **, harp_info_t *harpInfo);
 // main info parser/loader
-int load_all_patch_info(const char *rootDir, 
+int load_all_patch_info(const char *rootDir, const char *refHarp,
 			patch_info_t *, harp_info_t *, trec_info_t *, 
 			int nHarp, int, int);
 // Frame file parser, one line per time, return 0 if successful
@@ -386,7 +536,13 @@ int mark_ingested_harp(const char *, run_info_t *, harp_info_t *);
 // print one patch to file
 void patch_print(FILE *fp, char *s, trec_info_t *tI, patch_info_t *pI);
 // set up fields in trec info array
-void set_trec_info(trec_info_t *tRec, TIME t0, int nRec_all, int nRec_pad, double cadence);
+void set_trec_times(trec_info_t *tRec, TIME t0, int nRec_all, int nRec_pad, double cadence);
+// set up has-data field in trec info array
+void set_trec_hasdata(trec_info_t *tRec, char *magQuery, char *maskQuery, int nRec_all);
+// mark patches as ingestable
+void mark_eligible_patches(patch_info_t *, harp_info_t *, trec_info_t  *tRec, 
+			   int nHarp, int nRec_all,  int nRec_eat, 
+			   int rec0cut, int rec1cut, int nRec_min);
 // ingest one entire HARP (all records)
 int ingest_harp(patch_info_t *, harp_info_t *, trec_info_t *trec1, trec_info_t *trec,
 		run_info_t *,
@@ -398,6 +554,9 @@ int ingest_record(patch_info_t *, harp_info_t *, trec_info_t *trec1, trec_info_t
 		  run_info_t *,
 		  marp_info_t *,
 		  DRMS_Record_t *magRec, DRMS_Record_t *maskRec, char *outQuery);
+// tabulate results of ingestion
+int tabulate_patches(patch_ingest_tab_t *, trec_ingest_tab_t *, 
+		     patch_info_t *, harp_info_t *, trec_info_t *, int, int);
 // Update bitmap image
 int update_bitmap(patch_info_t *pInfo, char *maskImg);
 // Keywords
@@ -406,11 +565,15 @@ int set_keys_runinfo(DRMS_Record_t *rec, run_info_t *runInfo);
 int set_keys_stats(DRMS_Record_t *rec, DRMS_Record_t *magRec, DRMS_Record_t *maskRec, 
 		   patch_info_t *, harp_info_t *, trec_info_t *);
 int set_keys_match(DRMS_Record_t *rec, harp_info_t  *hInfo, marp_info_t  *mInfo);
+// convert DRMS "TIME" to integer t_rec offset
+int time_to_recnum(TIME t, TIME t0, int rec0, int nRec);
 // Find pixel bounding box from lat-lon box
-int compute_boundary(patch_info_t *, DRMS_Record_t *);
+int compute_boundary(patch_info_t *, wcs_t);
 // Distance of one point from disk center
-int distance2center(DRMS_Record_t *rec,
-		    double x, double y, double *xDist, double *yDist);
+void distance2center(wcs_t wcs, double x, double y, double *xDist, double *yDist);
+// load drms record, segment, wcs
+char *load_drms_rec_seg(DRMS_RecordSet_t **, DRMS_Record_t **, DRMS_Array_t **, 
+			wcs_t *, char *query, char *trec, char *segname, DRMS_Type_t);
 // Ad-hoc FITS reader
 int load_fits(char *filename, char **image, int *dims);
 
@@ -481,7 +644,7 @@ match_harp_export(const char *rootDir,
   snprintf(root, sizeof(root), "%s/%s", rootDir, "Match");
   if (mkdir(root, 0775) != 0) {
     if (errno == EEXIST) {
-      V_printf(-1, "", "Match dump: `%s' already exists, continuing.\n", root);
+      V_printf(-1, "", "Match dump: `%s' already exists, skipping dump.\n", root);
     } else {
       V_printf(-1, "", "Match dump: could not create `%s'.\n", root);
       perror(root);
@@ -541,7 +704,7 @@ match_harp_export(const char *rootDir,
    *  Synoptic map info
    */ 
   // ar rotation rate in deg/sec -- crude
-  double degsec = 360.0/(27*3600*24); // 360 degrees in 27 days
+  double degsec = 360.0/(27.2753*24*3600); // 360 degrees in one Carrington period
   double t0 = tRec[0].t; // time of origin
   double d_lon;
   const int Harp_smpl = 1;  // keep at 1 to always get singletons
@@ -597,7 +760,6 @@ match_harp_export(const char *rootDir,
     fclose(fp);
     // record MARP only if present
     if (inx1 >= 0) {
-      // TODO: put in a guess for lat
       double lat_wid = 0.0;
       double lon_wid = matchInfo[inx1].lon_wid;
       fprintf(fp2, "%06d,%s,%.2f,%.2f\n", marpInfo[h].id, "marp", lat_wid, lon_wid);
@@ -612,19 +774,21 @@ match_harp_export(const char *rootDir,
 
 /*
  * match harps up with marps by computing distance matrix based on overlap
+ *
+ * this is obsolete.
  */
 static
 int
-match_harp_marp(const char *rootDir,         // place for distance output, or NULL
-		match_info_t *matchInfo, 
-		marp_info_t  *marpInfo,
-		int nMarp, 
-		patch_info_t *patchInfo, 
-		harp_info_t *harpInfo, 
-		trec_info_t *tRec,
-		int nRec_all, 
-		int nRec_min, 
-		int nHarp)
+match_harp_marp_old(const char *rootDir,         // place for distance output, or NULL
+		    match_info_t *matchInfo, 
+		    marp_info_t  *marpInfo,
+		    int nMarp, 
+		    patch_info_t *patchInfo, 
+		    harp_info_t *harpInfo, 
+		    trec_info_t *tRec,
+		    int nRec_all, 
+		    int nRec_min, 
+		    int nHarp)
 {
   int rec;
   int h, m;
@@ -645,7 +809,6 @@ match_harp_marp(const char *rootDir,         // place for distance output, or NU
       d1 = 0;
       wt1 = 0;
       ct1 = 0;
-      // TODO: could just go from rec0 .. rec1
       for (rec = 0; rec < nRec_all; rec++) {
 	Hinx = h*nRec_all+rec;
 	Minx = m*nRec_all+rec;
@@ -699,7 +862,243 @@ match_harp_marp(const char *rootDir,         // place for distance output, or NU
 	       marpInfo[m].id, d_best);
     }
   }
-  // (TBD)
+  free(dist); // forgot this in earlier versions
+  return 0;
+}
+
+/*
+ * match harps up with marps the new way: at each T_REC, find the 
+ * harp-patch that the marp lands in. 
+ *
+ * The algorithm is roughly: 
+ * 
+ */
+/* helper function: at one t_rec, find two harp-marp distances:
+ *   dist1 = L2 distance of marp to patch box (0 if marp is within patch)
+ *   dist2 = L2 distance of marp to patch centroid
+ * If dist1 == 0, can use dist2 to further localize MARP w.r.t. HARP
+ * Can have dist2 as a NaN if the HARP is a placeholder
+ */
+#define max(a,b) (((a)>(b))?(a):(b))
+
+static
+void
+match_harp_marp_distance(match_info_t *matchI, 
+			 patch_info_t *patchI, 
+			 double *dist1, 
+			 double *dist2)
+{
+  double Mlat  = matchI->lat;
+  double Mlon  = matchI->lon;
+  double Hlat  = patchI->stats[RS_ar_area_lat]; // can be NaN
+  double Hlon  = patchI->stats[RS_ar_area_lon];
+  // *not* the patchI->stats[] box; it is tighter than the lat/lon box below
+  double Hlat0 = patchI->lat0;
+  double Hlon0 = patchI->lon0;
+  double Hlat1 = patchI->lat1;
+  double Hlon1 = patchI->lon1;
+
+  // D{lat,lon}{0,1} is distance of MARP from the corresponding lat/lon line
+  // e.g., Dlat0 is the distance of MARP from bottom of HARP box, or 0 if MARP 
+  // is above bottom edge of HARP box.  If Dlat0 == Dlat1 == 0, MARP lands in 
+  // the lat range of the HARP box.  At most one of Dlat0/Dlat1 can be nonzero, 
+  // and similarly for Dlon0/Dlon1.
+  double Dlat0 = max(0, Hlat0 - Mlat); // 0 if M above lat0
+  double Dlon0 = max(0, Hlon0 - Mlon); // 0 if M right of lon0
+  double Dlat1 = max(0, Mlat - Hlat1); // 0 if M below lat1
+  double Dlon1 = max(0, Mlon - Hlon1); // 0 if M left of lon1
+  double Dlat  = Dlat0 + Dlat1; // distance in latitude from MARP to HARP box
+  double Dlon  = Dlon0 + Dlon1; // distance in lngitude from MARP to HARP box
+  // weighted L2 distance of MARP from HARP bbox
+  *dist1 = sqrt(1.00 * Dlat*Dlat + 0.25 * Dlon*Dlon);
+  // weighted L2 distance of MARP from HARP centroid
+  *dist2 = sqrt(1.00 * (Hlat - Mlat)*(Hlat - Mlat) + 
+		0.25 * (Hlon - Mlon)*(Hlon - Mlon)); // weight lon less
+}
+
+// tidy namespace
+#undef max
+
+/*
+ * comparison utilities for qsort() calls in match_harp_marp
+ */
+// decorate-sort-undecorate idiom: sort by size, descending
+static int 
+match_sort_cmp_size(const void *av, const void *bv) {
+  const marp_sort_t *a = (const marp_sort_t *) av;
+  const marp_sort_t *b = (const marp_sort_t *) bv;
+  return b->size - a->size; // flipped sense for descending
+}
+// decorate-sort-undecorate idiom: sort by MARP id, ascending
+static int 
+match_sort_cmp_id(const void *av, const void *bv) {
+  const marp_sort_t *a = (const marp_sort_t *) av;
+  const marp_sort_t *b = (const marp_sort_t *) bv;
+  return a->id - b->id; // regular sense
+}
+
+static
+int
+match_harp_marp(const char *rootDir,     // place for distance output, or NULL
+		match_info_t *matchInfo, 
+		marp_info_t  *marpInfo,
+		int nMarp, 
+		patch_info_t *patchInfo, 
+		harp_info_t *harpInfo, 
+		trec_info_t *tRec,
+		int nRec_all, 
+		int nRec_min,           // unused
+		int nHarp)
+{
+  int rec;
+  int h, m, h_best, n_match;
+  int Hinx, Minx;
+  double d_box, d_box_best;
+  double d_ctr, d_ctr_best;
+  double ct_best;
+  // OLD:
+  // const double d_best_enough = 5.0; // degrees
+  // more strict:
+  const double d_best_enough = 0.5; // degrees
+  double *HMct, *Msize;
+  marp_sort_t match1, *match_list; // hold MARPs matching a given HARP
+
+  if ((HMct = calloc(nMarp*nHarp, sizeof(*HMct))) == NULL) {
+    V_printf(-1, "", "Could not allocate %d x %d match-count matrix\n",
+    	     nMarp, nHarp);
+    return 1;
+  }
+  if ((Msize = calloc(nMarp, sizeof(*Msize))) == NULL) {
+    V_printf(-1, "", "Could not allocate %d-length match-size vector\n",
+    	     nMarp);
+    return 1;
+  }
+  if ((match_list = calloc(nMarp, sizeof(*match_list))) == NULL) {
+    V_printf(-1, "", "Could not allocate %d-length match-sort vector\n",
+    	     nMarp);
+    return 1;
+  }
+  // fill in HMct and Msize
+  for (rec = 0; rec < nRec_all; rec++) {
+    for (m = 0; m < nMarp; m++) {
+      // does marp m exist at this time?
+      Minx = m*nRec_all+rec;
+      if (matchInfo[Minx].valid != Patch_Normal) continue;
+      Msize[m] += (matchInfo[Minx].area > 0) ? matchInfo[Minx].area : 1; // can be <0
+      // find the best HARP match to the MARP
+      //   e.g.: MARP lies in HARP bbox, and bonus: MARP/HARP centers close
+      h_best = -1; // flag for "no match" (e.g., no HARPs present)
+      for (h = 0; h < nHarp; h++) {
+	// does harp h exist at this time?
+	Hinx = h*nRec_all+rec;
+	if (patchInfo[Hinx].valid != Patch_Normal) continue;
+	// d_box: is MARP within HARP?  d_ctr: how close are centers?
+	match_harp_marp_distance(matchInfo+Minx, patchInfo+Hinx, &d_box, &d_ctr);
+	// find best match
+	if ((h_best < 0) || (d_box < d_box_best)) {
+	  d_box_best = d_box;
+	  d_ctr_best = d_ctr;
+	  h_best     = h;
+	} else if (( d_box == d_box_best) && 
+		   ((d_ctr  < d_ctr_best) || isnan(d_ctr_best))) {
+	  d_ctr_best = d_ctr;
+	  h_best     = h;
+	}
+      } // end for h
+      // was there a match, and was it good enough
+      if ((h_best >= 0) &&
+	  (d_box_best < d_best_enough)) {
+	HMct[h_best*nMarp + m]++; // one more matching T_REC
+      }
+    }
+  }
+
+  // clean up poor matches, which are probably erroneous
+  // (note, we do this for a fixed MARP, across all HARPs, because
+  // we expect a MARP to match one HARP.  but, we don't do it for a 
+  // fixed HARP, across MARPs, because we expect HARPs to sometimes
+  // match many MARPs)
+  for (m = 0; m < nMarp; m++) {
+    // find the best HARP match to the MARP
+    // (note: ending with ct_best == 0 is OK)
+    h_best = -1;
+    for (ct_best = 0, h = 0; h < nHarp; h++) {
+      if (HMct[h*nMarp+m] > ct_best) {
+	ct_best = HMct[h*nMarp+m]; // find max ct[]
+	h_best = h;
+      }
+    }
+    marpInfo[m].top_match = h_best; // just keep the best one, not the whole list
+    // zero-out matches worse than ct_best * 0.25 
+    //  (e.g., matched on 80 T_RECs vs. 20 T_RECs)
+    for (h = 0; h < nHarp; h++)
+      if (HMct[h*nMarp+m] < ct_best*0.25)
+	HMct[h*nMarp+m] = 0;
+  }
+  
+  // (optionally write out HMct)
+  // export distance metric, etc. (rootDir == NULL means don't)
+  if (match_harp_export(rootDir, HMct, 
+			matchInfo, marpInfo, nMarp, 
+			patchInfo, harpInfo, tRec, 
+			nRec_all, nRec_min, nHarp) != 0) {
+    V_printf(-1, "", "Failed to export (fopen problem?), continuing.\n");
+  }
+
+  // for each HARP, find all matching MARPs
+  //  (this loop order reverses the above MARP-to-HARP association)
+  for (h = 0; h < nHarp; h++) {
+    for (n_match = m = 0; m < nMarp; m++) {
+      if (HMct[h*nMarp+m] > 0) {
+	// summary of the match
+	match1.marp_index = m; // 0..nMarp-1
+	match1.id         = marpInfo[m].id; // AR number
+	match1.count      = HMct[h*nMarp+m];
+	match1.size       = Msize[m];
+	// insert MARP m in match_list
+	match_list[n_match++] = match1;
+	// add this match to marp summary info
+	marpInfo[m].n_match++;
+      }
+    }
+    // sort matches by size, to find the largest ones
+    qsort(match_list, n_match, sizeof(marp_sort_t), match_sort_cmp_size);
+    if (n_match > 0)
+      harpInfo[h].top_match = match_list[0].marp_index; // 0..nMarp-1
+    else
+      harpInfo[h].top_match = -1; // illegal value -- no match
+    // cap on the number of good matches, according to size
+    if (n_match > HARP_INFO_MATCH_MAX)
+      n_match = HARP_INFO_MATCH_MAX;
+    // re-sort top matches according to MARP id
+    qsort(match_list, n_match, sizeof(marp_sort_t), match_sort_cmp_id);
+    // insert these matches into HARP match-list
+    harpInfo[h].n_match = n_match;
+    for (m = 0; m < n_match; m++) {
+      // match harp h to marp m
+      V_printf(verbflag > 1, "\t", "Matching HARP %d to MARP %d (ct=%.0f,siz=%f)\n",
+	       harpInfo[h].id, 
+	       match_list[m].id,
+	       match_list[m].count, 
+	       match_list[m].size);
+      // don't worry if two harps match the same marp
+      harpInfo[h].match[m] = match_list[m].marp_index; // marp_index in 0..nMarp-1
+    }
+  }
+  // summary info for each MARP
+  char matchStr[20];
+  for (m = 0; m < nMarp; m++) {
+    // the best match to the Marp, as a string
+    snprintf(matchStr, sizeof(matchStr), "[best: %d]", 
+	     (marpInfo[m].top_match >= 0) ? harpInfo[marpInfo[m].top_match].id : -1);
+    // usually 0 or 1 matches, so just print best if it exists
+    V_printf(verbflag > 0, "\t", "Matches found for MARP %d: %d %s\n", 
+	     marpInfo[m].id, marpInfo[m].n_match,
+	     (marpInfo[m].n_match > 0) ? matchStr : "");
+  }
+  free(HMct);
+  free(Msize);
+  free(match_list);
   return 0;
 }
 
@@ -710,7 +1109,7 @@ match_harp_marp(const char *rootDir,         // place for distance output, or NU
  ***********************************************************************/
 
 char *module_name = "ingest_mharp";
-char *hmi_mharp_version = "1.0";  // used for keywords
+char *hmi_mharp_version = "1.1";  // used for keywords
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING, "root",  kNOT_SPEC,   "Input file directory"},
@@ -719,6 +1118,9 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "out",   kNOT_SPEC,   "Output HARP data series"},
   {ARG_STRING, "mag",   "hmi.M_720s","Input magnetogram data series"},
   {ARG_STRING, "mask",  kNOT_SPEC,   "Input mask data series"},
+  {ARG_STRING, "href",  kNOT_SPEC,   "Reference HARP bounding box source (default: none)"},
+  {ARG_STRING, "t0cut", kNOT_SPEC,   "Earliest time allowed to ingest (default: none)"},
+  {ARG_STRING, "t1cut", kNOT_SPEC,   "Latest time allowed to ingest (default: none)"},
   {ARG_INT,    "trec",  "0",         "Number of T_RECs to ingest (0=all, 1=latest)"},
   {ARG_INT,    "tpad",  "120",       "Temporal padding (in images, >=0, 120=1 day)"},
   {ARG_INT,    "tmin",  "1",         "Minimum T_REC's needed to ingest a patch (1=all)"},
@@ -727,41 +1129,17 @@ ModuleArgs_t module_args[] = {
 };
 
 /*
- * Note on per-HARP ingestion status.  Each valid patch, or single HARP at a single
- * time, has exactly one of these ingestion statuses:
- *    missing -- no magnetogram at that time
- *    skipped -- HARP not long enough, chose not to ingest
- *    error -- not enough info to ingest (no mask), or ingestion failed
- *    ok -- ingested OK
- * The total number of valid patches = missing + skipped + error + ok.
- * So, the code below maintains 5 accumulators for these counts.
- *
- * Similarly, each T_REC has exactly one of these statuses:
- *    missing -- no magnetogram at that time
- *    error -- no mask
- *    ok -- found the mask and the mag OK
  *    
  * The nested loops in the ingestion step below follow this form:
  *
  *   for t in T_RECs:
- *     R_valid += 1; H_valid += t.nharps
  *     if magnetogram(t) is unavailable:
- *       // all HARPs at t fail -- not an error
- *       R_missing += 1; H_missing += t.nharps 
- *       continue
+ *       continue // all HARPs at t fail -- not an error
  *     if mask(t) is unavailable:
- *       // all HARPs at t fail -- is an error
- *       R_errs += 1; H_errs += t.nharps 
- *       continue
- *     R_ok += 1
+ *       continue // all HARPs at t fail -- is an error
  *     for h in harps(t):
- *       if h is too short:
- *         H_skipped++  // skipped on purpose
- *         continue
- *       if not ingest(patches(h, t)):
- *         H_errs++     // error for harp h at time t
- *       else:
- *         H_ok++       // all OK
+ *       if ingest(patches(h, t)):
+ *         patch.success = 1;
  */
 
 int DoIt(void)
@@ -771,11 +1149,12 @@ int DoIt(void)
   const char *rootDir;
   int matchStatus;    // 0 -> no match output; +1/-1 -> output; -1 for exit after
   char *outQuery, *maskQuery, *magQuery;
-  char maskRecQuery[STR_MAX], magRecQuery[STR_MAX];
+  const char *refHarp;    // reference HARP bboxes
+  char *t0cutIn, *t1cutIn;
+  char fn_log[STR_MAX], fn_err[STR_MAX];
   // records, segments, arrays
   DRMS_RecordSet_t *inRecSet, *magRecSet, *maskRecSet;
   DRMS_Record_t *inRec, *maskRec, *magRec;
-  DRMS_Segment_t *inSeg, *maskSeg;
   DRMS_Array_t *maskData;
   char *maskImg;
   // harp-list files
@@ -792,25 +1171,23 @@ int DoIt(void)
   match_info_t *matchInfo = NULL;  // patch info of above, like patchInfo
   marp_info_t *marpInfo = NULL;    // per-match-region info (like harpInfo)
   // HARP times, counts, etc.
-  TIME t0, t1;               // times
-  char t0_S[32], t1_S[32];   // time strings
+  TIME t0, t1;               // times bracketing HARPs listed to ingest
+  char t0_S[32], t1_S[32];   // time strings for above
+  TIME t0cut, t1cut;         // limit times for ingestion (eg, subset of [t0,t1])
+  char t0cut_S[32], t1cut_S[32]; // time strings for above
+  int rec0cut, rec1cut;      // T_REC indexes for above
   int nHarp;                 // number of HARPs being ingested
   int nRec;                  // number of T_REC slots in union of *seen* HARPs
   int nRec_pad;              // padding (context) on either *unseen* end of HARP
   int nRec_all;              // total number of T_REC slots = nRec + 2*nRec_pad
   int nRec_eat;              // number of T_REC slots to ingest (eat)
   int nRec_min;              // number of T_REC slots required before ingestion
-  int Rec_valid, Rec_ok;     // count T_RECs
-  int Rec_err, Rec_miss;     // count errors finding mask/mag at T_REC
-  int Harp_ok0,  Harp_ok1;   // count ingested HARPs
-  int Harp_err0, Harp_err1;  // count errors ingesting HARPs
-  int Harp_miss1;            // HARPs not ingested due to missing mag (expected)
-  int Harp_skip1, Harp_skip0;// HARPs not ingested, skipped as too short (expected)
-  int Harp_valid0;           // Valid HARPs at current T_REC
-  int Harp_valid1;           // Valid HARPs across all T_RECs
+  int Harp_try;              // Valid HARPs at current T_REC
+  int Harp_ok, Harp_err;     // ingested OK vs. error
   int rec;                   // record counter
   int i;                     // harp counter
-  int rv, status, inx;       // misc ints
+  int rv, inx;               // misc ints
+  char *err;
   // Time measuring -- ugly, but functional
   double wt0, wt;
   double ut0, ut;
@@ -820,10 +1197,17 @@ int DoIt(void)
   // timings
   wt0 = getwalltime();
   ct0 = getcputime(&ut0, &st0);
-  
-  // Command line parameters
+  // Key command line parameter -- root directory
   rootDir = cmdparams_get_str(&cmdparams, "root", NULL);
   if (strcmp(rootDir, kNOT_SPEC) == 0) DIE("Root directory must be specified");
+  // know root dir, so can open log files
+  snprintf(fn_log, sizeof(fn_log), "%s/%s", rootDir, FN_INGEST_STDLOG);
+  snprintf(fn_err, sizeof(fn_err), "%s/%s", rootDir, FN_INGEST_STDERR);
+  if ((LOGout = fopen(fn_log, "w")) == NULL)
+    DIE("Could not open regular log file `%s' for writing", fn_log);
+  if ((LOGerr = fopen(fn_err, "w")) == NULL)
+    DIE("Could not open error log file `%s' for writing", fn_err);
+  // Remaining command line parameters
   outQuery = (char *) cmdparams_get_str(&cmdparams, "out", NULL);
   if (strcmp(outQuery, kNOT_SPEC) == 0) DIE("Output HARP series must be specified");
   listNamesIn = cmdparams_get_str(&cmdparams, "lists", NULL);
@@ -832,11 +1216,16 @@ int DoIt(void)
   magQuery  = (char *) cmdparams_get_str(&cmdparams, "mag",  NULL);
   maskQuery = (char *) cmdparams_get_str(&cmdparams, "mask", NULL);
   if (strcmp(maskQuery, kNOT_SPEC) == 0) DIE("mask series must be specified");
+  refHarp  = cmdparams_get_str(&cmdparams, "href", NULL);
+  if (strcmp(refHarp, kNOT_SPEC) == 0) refHarp = NULL; // no reference HARPs: OK
   nRec_eat = cmdparams_get_int(&cmdparams, "trec", NULL);
   nRec_pad = cmdparams_get_int(&cmdparams, "tpad", NULL);
   nRec_min = cmdparams_get_int(&cmdparams, "tmin", NULL);
+  // cut times: strings -> numeric times -> normalized strings
+  t0cutIn = (char *) cmdparams_get_str(&cmdparams, "t0cut", NULL);
+  t1cutIn = (char *) cmdparams_get_str(&cmdparams, "t1cut", NULL);
   verbflag = cmdparams_get_int(&cmdparams, "verb", NULL); // an int, not a flag
-  // check numbers for sanity
+  // check pad/ingest counts for sanity
   if (nRec_min <= 0)
     DIE("tmin must be a positive integer");
   if (nRec_eat < 0)
@@ -845,6 +1234,26 @@ int DoIt(void)
     DIE("tpad must be a nonnegative integer");
   if ((nRec_eat > 0) && (nRec_eat <= nRec_pad))
     DIE("number of trec to ingest (trec) must be larger than padding (tpad)");
+  // check and apply logic to cut times
+  if (strcmp(t0cutIn, kNOT_SPEC) == 0) {
+    t0cut = NAN;
+    strcpy(t0cut_S, "no cut-time before");
+  } else {
+    t0cut = sscan_time(t0cutIn);
+    if (time_is_invalid(t0cut)) DIE("Could not parse given t0cut");
+    sprint_time(t0cut_S, t0cut, "TAI", 0);
+  }
+  if (strcmp(t1cutIn, kNOT_SPEC) == 0) {
+    t1cut = NAN;
+    strcpy(t1cut_S, "no cut-time after");
+  } else {
+    t1cut = sscan_time(t1cutIn);
+    if (time_is_invalid(t1cut)) DIE("Could not parse given t1cut");
+    sprint_time(t1cut_S, t1cut, "TAI", 0);
+  }
+  if (t0cut > t1cut) DIE("Need t0cut <= t1cut");
+  if (!isnan(t0cut) || !isnan(t1cut))
+    V_printf(1, "", "Chosen T_REC cut interval: %s - %s\n", t0cut_S, t1cut_S);
   // separate list files into pieces
   listNum = 0;
   listBuf = strdup(listNamesIn); // below, we write \0's into list names, so must dup
@@ -855,7 +1264,14 @@ int DoIt(void)
 	break; // no more room
   if (listNum >= LIST_MAX || listNames[listNum] != NULL)
     DIE("Got too many list files, reduce or recompile");
-  V_printf(verbflag > 0, "", "Got %d list file%s\n", listNum, listNum == 1 ? "" : "s");
+  // summary info for input args
+  V_printf(verbflag > 0, "", "Ingesting from `%s'\n", rootDir);
+  V_printf(verbflag > 0, "", "  Got %d list file%s from `%s'\n", 
+	   listNum, listNum == 1 ? "" : "s", listNamesIn);
+  V_printf(verbflag > 0, "", "Ingesting into `%s'\n", outQuery);
+  V_printf(verbflag > 0, "", "Mask input series `%s'\n", maskQuery);
+  if (refHarp)
+    V_printf(verbflag > 0, "", "Reference harp series is `%s'\n", refHarp);
 
   /*
    * First pass: scan all tracks to get dimensions of patch info
@@ -876,6 +1292,30 @@ int DoIt(void)
 	   nHarp, nRec, nRec_all, nRec_pad);
   V_printf(verbflag > 0, "", "t0 = %s\n", t0_S); 
   V_printf(verbflag > 0, "", "t1 = %s\n", t1_S); 
+  // set up "ingest-most-recent" record numbers (NRT mode)
+  if (nRec_eat == 0) 
+    nRec_eat = nRec_all; // fill in for the shorthand 0
+  if (nRec_eat > nRec_all) {
+    nRec_eat = nRec_all;  // cap the number to be ingested
+    // this is nonfatal, but warn anyway
+    WARN("Specified trec to ingest was larger than total trecs + padding; capping it");
+  }
+  // set up "cut" record numbers (gap-filling mode)
+  if (t0cut < t0 || t0cut > t1) WARN("Specified t0cut outside [t0,t1].");
+  if (t1cut < t0 || t1cut > t1) WARN("Specified t1cut outside [t0,t1].");
+  rec0cut = time_to_recnum(t0cut, t0, nRec_pad, -1); // t0cut is NaN -> rec0cut = -1
+  rec1cut = time_to_recnum(t1cut, t0, nRec_pad, -1); // t1cut is NaN -> rec1cut = -1
+  // cap rec0cut; the complementary case (rec1 < 0) will look like NaN, not worth fixing.
+  if (rec0cut > nRec_all) rec0cut = nRec_all; 
+  // summary -- might use help?
+  if (rec0cut >= 0 || rec1cut >= 0) 
+    // gap-fill
+    V_printf(verbflag > 0, "", "Cut times: rec0cut = %d, rec1cut = %d\n", rec0cut, rec1cut);
+  else 
+    // usual case
+    V_printf(verbflag > 0, "", 
+	     "Compiling %d HARPs over %d distinct T_REC's among %d total T_REC's.\n", 
+	     nHarp, nRec_eat, nRec_all); 
   
   /*
    * Second pass: Insert all HARP information into the master arrays
@@ -886,17 +1326,26 @@ int DoIt(void)
   tRec      = calloc(        nRec_all, sizeof(*tRec));
   if (!tRec || !harpInfo || !patchInfo)
     DIE("Memory allocation failure");
-  // fill in T_REC array
-  V_printf(verbflag > 0, "", "Setting T_REC range list\n");
-  set_trec_info(tRec, t0, nRec_all, nRec_pad, CADENCE);
+  // initialize T_REC array -- basic time info
+  V_printf(verbflag > 0, "", "Setting T_REC times\n");
+  set_trec_times(tRec, t0, nRec_all, nRec_pad, CADENCE);
+  // insert image availability + get WCS
+  V_printf(verbflag > 0, "", "Checking mag/mask availability and WCS across T_REC\n");
+  set_trec_hasdata(tRec, magQuery, maskQuery, nRec_all);
+  
   // load HARP ID array from file
   V_printf(verbflag > 0, "", "Getting HARP id numbers\n");
   if (load_harp_ids(rootDir, listNames, harpInfo) != 0)
     DIE("Error creating HARP id list (bad listfile or format?)");
   // fill in the HARP x T_REC master index
   V_printf(verbflag > 0, "", "Getting detailed HARP info\n");
-  if (load_all_patch_info(rootDir, patchInfo, harpInfo, tRec, nHarp, nRec_all, nRec_pad))
+  if (load_all_patch_info(rootDir, refHarp,
+			  patchInfo, harpInfo, 
+			  tRec, nHarp, nRec_all, nRec_pad))
     DIE("Error fetching HARP info (bad listfiles/format)");
+  // mark patches eligible to ingest; count eligible patches at each T_REC,HARP
+  mark_eligible_patches(patchInfo, harpInfo, tRec, nHarp, 
+			nRec_all, nRec_eat, rec0cut, rec1cut, nRec_min);
   // elapsed time so far
   wt = getwalltime();
   ct = getcputime(&ut, &st);
@@ -915,6 +1364,7 @@ int DoIt(void)
   if (nMarp == 0)
     V_printf(1, "", "No match ARs supplied/found, continuing.\n");
   V_printf(verbflag > 0, "", "Matching %d HARPs to %d Match-regions\n", nHarp, nMarp);
+  // feb 2013: this is the new matcher
   match_harp_marp((matchStatus == 0) ? NULL : rootDir, // NULL -> no output
 		  matchInfo, marpInfo, nMarp, 
 		  patchInfo, harpInfo, tRec, 
@@ -929,114 +1379,73 @@ int DoIt(void)
   // allow exit without ingestion to facilitate match testing
   if (matchStatus < 0) {
     V_printf(-1, "", "Early exit due to given match option (match = %d)\n", matchStatus);
+    // close log files
+    if (LOGout) fclose(LOGout);
+    if (LOGerr) fclose(LOGerr);
     return DRMS_SUCCESS;
   }
 
   /* 
-   * Fourth step: Ingest into JSOC, with outer loop done across T_REC 
+   * Fourth step: Ingest into JSOC, with outer loop done across T_REC
+   *
+   *   (this should be factored out as a separate routine)
    */
-  if (nRec_eat == 0) 
-    nRec_eat = nRec_all; // fill in for the shorthand 0
-  if (nRec_eat > nRec_all) {
-    nRec_eat = nRec_all;  // cap the number to be ingested
-    // this is nonfatal, but warn anyway
-    WARN("Specified trec to ingest was larger than total trecs + padding; capping it");
-  }
-  V_printf(verbflag > 0, "", 
-	   "Ingesting %d HARPs at %d distinct T_REC's among %d total T_REC's.\n", 
-	   nHarp, nRec_eat, nRec_all); 
-  // for more on these counts, see the block comment at the top of the function
-  Rec_valid = Rec_err = Rec_ok = Rec_miss = 0;
-  Harp_valid1 = Harp_ok1 = Harp_err1 = Harp_miss1 = Harp_skip1 = 0;
-  // run the T_REC loop up to nRec_all
-  for (rec = (nRec_all - nRec_eat); rec < nRec_all; rec++) {
+  // T_REC loop covers all times
+  for (rec = 0; rec < nRec_all; rec++) {
+    if (tRec[rec].nharp == 0) {
+      V_printf(verbflag > 0, "\t", "[%3d/%3d] %s: Nothing to ingest.\n", 
+	       rec+1, nRec_all, tRec[rec].str);
+      continue; 
+    }
     V_printf(verbflag > 1, "\t", "Ingesting at %s [%d/%d]\n", tRec[rec].str, rec+1, nRec_all);
-    Rec_valid++;
-    Harp_valid1 += tRec[rec].nharp;  // number of valid HARPs at this time
-    // Open mag record
-    snprintf(magRecQuery, sizeof(magRecQuery), "%s[%s]", magQuery, tRec[rec].str);
-    V_printf(verbflag > 2, "\t\t", "Opening mag %s\n", magRecQuery);
-    status = 0;
-    magRecSet = drms_open_records(drms_env, magRecQuery, &status);
-    if (status != 0 || magRecSet->n == 0) {
-      V_printf(-1, "", "Could not open mag %s -- skipping this T_REC.\n", magRecQuery);
-      Rec_miss++;
-      Harp_miss1 += tRec[rec].nharp; // an "expected" error -- not an ingestion error
+    // Open mag record -- this should succeed
+    V_printf(verbflag > 2, "\t\t", "Opening mag: %s[%s]\n", magQuery, tRec[rec].str);
+    err = load_drms_rec_seg(&magRecSet, &magRec, NULL, NULL,
+			    magQuery, tRec[rec].str, NULL, DRMS_TYPE_RAW);
+    if (err) {
+      V_printf(-1, "", "%s (%s[%s]) -- skipping this T_REC.\n", err, magQuery, tRec[rec].str);
       continue;
     }
-    magRec = magRecSet->records[0];
-    // quality check to identify missing data 
-    int quality = drms_getkey_int(magRec, "QUALITY", &status);
-    if (status != 0 || (quality & 0x80000000)) {
-      V_printf(-1, "", "Missing mag data %s -- skipping this T_REC.\n", magRecQuery);
-      Rec_miss++;
-      Harp_miss1 += tRec[rec].nharp; // an "expected" error -- not an ingestion error
-      continue;
-    }
-    // Open mask record
-    snprintf(maskRecQuery, sizeof(maskRecQuery), "%s[%s]", maskQuery, tRec[rec].str);
-    V_printf(verbflag > 2, "\t\t", "Opening mask %s\n", maskRecQuery);
-    maskRecSet = drms_open_records(drms_env, maskRecQuery, &status);
-    if (status != 0 || maskRecSet->n != 1) {
-      V_printf(-1, "", "Could not open mask %s -- skipping this T_REC.\n", 
-	       maskRecQuery);
-      // this is *not* considered an "expected" error
-      Rec_err++;
-      Harp_err1 += tRec[rec].nharp;  // number of valid HARPs at this time
-      continue;
-    }
-    maskRec = maskRecSet->records[0];
-    maskSeg = drms_segment_lookup(maskRec, "mask");
-    maskData = drms_segment_read(maskSeg, DRMS_TYPE_CHAR, &status); // OK for null arg1
-    if (status) {
-      V_printf(-1, "", "Could not open mask data %s -- skipping this T_REC.\n", 
-	       maskRecQuery);
-      // this is *not* considered an "expected" error
-      Rec_err++;
-      Harp_err1 += tRec[rec].nharp;  // number of valid HARPs at this time
+    // Open mask record + data segment
+    V_printf(verbflag > 2, "\t\t", "Opening mask: %s[%s]\n", maskQuery, tRec[rec].str);
+    err = load_drms_rec_seg(&maskRecSet, &maskRec, &maskData, NULL, 
+			    maskQuery, tRec[rec].str, "mask", DRMS_TYPE_CHAR);
+    if (err) {
+      V_printf(-1, "", "%s (%s[%s]) -- skipping this T_REC.\n", err, maskQuery, tRec[rec].str);
+      drms_close_records(magRecSet, DRMS_FREE_RECORD); magRecSet  = NULL;
       continue;
     }
     maskImg = (char *) maskData->data;
 
-    Rec_ok++; // the T_REC was OK
-    Harp_valid0 = Harp_ok0 = Harp_skip0 = Harp_err0 = 0;
+    Harp_try = Harp_ok = Harp_err = 0;
     for (i = 0; i < nHarp; i++) {
       inx = i*nRec_all + rec;
-      if (patchInfo[inx].valid == Patch_Invalid)
-	continue; // HARP i was not at this T_REC
-      Harp_valid0++;
-      // check: length=1  =>  rec1-rec0+1 = 1  => if() succeeds for nRec_min = 2
-      if ((harpInfo[i].rec1 - harpInfo[i].rec0 + 1) < nRec_min) {
-	// only print the message for regular patches, not padding patches
-        if (patchInfo[inx].valid == Patch_Normal)
-	  V_printf(verbflag > 0, "\t", "  Skipping HARP[%d], too short\n", harpInfo[i].id);
-        Harp_skip0++; // an "expected" error -- don't count as an ingestion error
-        Harp_skip1++;
-	continue; // HARP i too short to ingest
-      }
+      if (patchInfo[inx].valid == Patch_Invalid || patchInfo[inx].ingest != Patch_Ingest_Eligible)
+	continue;
       V_printf(verbflag > 2, "\t\t", "  HARP[%d][%s] begin\n", harpInfo[i].id, tRec[rec].str);
       // ingest the HARP at the current time
+      Harp_try++;
       rv = ingest_harp(patchInfo+inx, harpInfo+i, tRec+rec, 
-		       tRec,     // need *all* time info to set up keys
-		       &runInfo, // run info, also for keys
-		       marpInfo, // matching ARs
-		       magRec, maskRec, maskImg, outQuery);
+		       tRec,             // all time info (index->time map for keys)
+		       &runInfo,         // run info, also for keys
+		       marpInfo,         // matching ARs (index->id map for keys)
+		       magRec, maskRec,  // for keys and data links
+		       maskImg, outQuery);
       if (rv != 0) {
 	V_printf(-1, "", "Error ingesting HARP[%d][%s], skipped\n", harpInfo[i].id, tRec[rec].str);
-	Harp_err0++;
-	Harp_err1++;
+	Harp_err++;
 	continue;
       }
+      Harp_ok++;
+      patchInfo[inx].success = 1; // it is left at zero in all other cases
       V_printf(verbflag > 1, "\t", "  HARP[%d][%s] done\n", harpInfo[i].id, tRec[rec].str);
-      Harp_ok0++;
-      Harp_ok1++;
     }
-    V_printf(verbflag > 0, "\t", "[%d/%d] %s: %d valid = %d OK + %d too short + %d errors\n", 
-	     rec+1, nRec_all, tRec[rec].str, Harp_valid0, Harp_ok0, Harp_skip0, Harp_err0);
+    V_printf(verbflag > 0, "\t", "[%3d/%3d] %s:\t%2d attempted = %2d OK + %2d errors%s\n", 
+	     rec+1, nRec_all, tRec[rec].str, Harp_try, Harp_ok, Harp_err,
+	     Harp_err > 0 ? " ***" : "");
     drms_free_array(maskData);
     drms_close_records(magRecSet,  DRMS_FREE_RECORD); magRecSet  = NULL;
     drms_close_records(maskRecSet, DRMS_FREE_RECORD); maskRecSet = NULL;
-    
   }
   /* 
    * Fifth step: Record ingested HARPs
@@ -1049,26 +1458,67 @@ int DoIt(void)
   }
 
   /* 
-   * Print summary info
+   * Find and print summary info
    */
-  V_printf(1, "", "Ingestion summary: across T_REC:\n");
-  V_printf(1, "", "  Processed %d T_RECs; ingested across NT = %d T_RECs.\n", nRec_all, Rec_valid);
-  V_printf(1, "", "  Of NT, found %d T_RECs with all data present.\n", Rec_ok);
-  V_printf(1, "", "  Of NT, skipped %d due to missing mags (not an error).\n", Rec_miss);
-  V_printf(1, "", "  Of NT, skipped %d due to missing masks (likely an error).\n", Rec_err);
-  if ((Rec_ok + Rec_miss) < Rec_valid)
-    V_printf(1, "", "  Note: Some mask records (%d) were missing (not due to simple data gap).\n",
-             Rec_valid - (Rec_ok + Rec_miss));
-  V_printf(1, "", "Ingestion summary: across all HARP appearances (patches):\n");
-  V_printf(1, "", "  NH = %d HARP appearances were processed over all T_RECs.\n", Harp_valid1);
-  V_printf(1, "", "  Of NH, %d HARP appearances ingested ok.\n", Harp_ok1);
-  V_printf(1, "", "  Of NH, %d patches had a missing mag and were skipped.\n", Harp_miss1);
-  V_printf(1, "", "  Of NH, %d HARPs skipped as too short.\n", Harp_skip1);
-  V_printf(1, "", "  Of NH, %d errors found while ingesting HARPs.\n", Harp_err1);
-  if (Harp_err1 > 0)
-    V_printf(1, "", "WARNING: %d HARP ingestion errors occurred that were NOT due to missing mags.\n",
-             Harp_err1);
+  trec_ingest_tab_t tRec_tab;
+  patch_ingest_tab_t patch_tab;
+  int clean_exit = 1;
+
+  tabulate_patches(&patch_tab, &tRec_tab, patchInfo, harpInfo, tRec, nHarp, nRec_all);
   
+  // summary across HARPs
+  rv = 0;
+  V_printf(1, "", "Ingestion summary -- across HARPs:\n");
+  for (i = 0; i < nHarp; i++) {
+    // this happens for CRs, and if a time cutoff is given
+    if (harpInfo[i].n_patch_eligible == 0) continue;
+    rv = 1;
+    // per-HARP summary
+    V_printf(1, "", "  HARP[%d]: %4d T_RECs eligible = %4d ok + %d errs.\n", 
+	     harpInfo[i].id, harpInfo[i].n_patch_eligible, 
+	     harpInfo[i].n_patch_ingested, harpInfo[i].n_patch_err);
+    // rare case where an ingest was attempted, and failed
+    if (harpInfo[i].n_patch_err > 0)
+      V_printf(-1, "", "WARNING: HARP[%d] had %d ingestion errors in %d eligible T_RECs\n",
+	       harpInfo[i].id, harpInfo[i].n_patch_err, harpInfo[i].n_patch_eligible);
+  }
+  if (rv == 0)
+    V_printf(1, "", "  (No HARPs ingested)\n");
+
+  // summary across T_RECs
+  V_printf(1, "", "Ingestion summary -- across T_RECs:\n");
+  V_printf(1, "", "  Considered NT = %d T_RECs.\n", nRec_all);
+  V_printf(1, "", "  Ingested across %d T_RECs (< NT is OK).\n", tRec_tab.trec_patch_valid);
+  V_printf(1, "", "  Ingest error in %d T_RECs.\n", tRec_tab.trec_patch_err);
+  for (i = 0; i < Trec_Data_NUM; i++) {
+    V_printf(1, "", "    Of NT, %d T_RECs were: %s\n", tRec_tab.hist[i], Trec_Data_Names[i]);
+  }
+  if (tRec_tab.hist[Trec_Data_Missing] > 0) {
+    clean_exit = 0;
+    for (i = -1; i <= 1; i += 2)
+      V_printf(i, "", "WARNING: %d mask records were missing (not due to simple mag gap).\n",
+	       tRec_tab.hist[Trec_Data_Missing]);
+  }
+
+  // summary across patches
+  V_printf(1, "", "Ingestion summary -- across all patches (HARP appearances):\n");
+  V_printf(1, "", "  Processed NP = %d patches over all HARPs and all T_RECs.\n",
+	   nRec_all*nHarp - patch_tab.hist[Patch_Ingest_Invalid]);
+  for (i = 0; i < Patch_Ingest_NUM; i++) {
+    if (i == (int) Patch_Ingest_Invalid) continue; // skip these
+    V_printf(1, "", "    Of NP, %d patches were: %s\n", patch_tab.hist[i], Patch_Ingest_Names[i]);
+  }
+  V_printf(1, "", "  Attempted to ingest NP1 = %d patches over all T_RECs.\n",
+	   patch_tab.hist[Patch_Ingest_Eligible]);
+  V_printf(1, "", "    Of NP1, %d patches were ingested successfully.\n", patch_tab.try_ok);
+  V_printf(1, "", "    Of NP1, %d patches had ingestion errors.\n", patch_tab.try_err);
+  if (patch_tab.try_err > 0) {
+    clean_exit = 0;
+    for (i = -1; i <= 1; i += 2)
+      V_printf(i, "", "WARNING: %d patch ingestion errors were NOT due to missing mags.\n",
+	       patch_tab.try_err);
+  }
+
   // NULLs OK here
   free(marpInfo);
   free(listBuf);
@@ -1081,11 +1531,103 @@ int DoIt(void)
   ct = getcputime(&ut, &st);
   V_printf(1, "", "total time used: %.3f s wall, %.3f s cpu\n",
 	   (wt - wt0)*1e-3, (ct - ct0)*1e-3);
-  V_printf(1, "", "Exiting OK.\n");
+  if (clean_exit) {
+    V_printf(1, "", "Exiting OK.\n");
+  } else {
+    for (i = -1; i <= 1; i += 2)
+      V_printf(i, "", "Exiting with some warnings.\n");
+  }
+  // close log files
+  if (LOGout) fclose(LOGout);
+  if (LOGerr) fclose(LOGerr);
   return DRMS_SUCCESS;
-} 
+}
 
 // end of main routine
+
+/*
+ * tabulate statistics of ingestion success for each patch and t-rec
+ *   returns nonzero if bad code (internal error)
+ */
+static
+int
+tabulate_patches(patch_ingest_tab_t *pTab,
+		 trec_ingest_tab_t  *tTab,
+		 patch_info_t *patchInfo, 
+		 harp_info_t  *harpInfo, 
+		 trec_info_t  *tRec, 
+		 int nHarp,
+		 int nRec_all)
+		 
+{
+  int rec, i, inx;           // counters
+  int something_failed;
+  patch_ingest_t p_code;
+  trec_data_t d_code;
+
+  // zero out accumulators -- cannot assume they were calloc'd
+  pTab->try_ok  = 0;
+  pTab->try_err = 0;
+  bzero(pTab->hist, sizeof(pTab->hist));
+  tTab->trec_patch_err   = 0;
+  tTab->trec_patch_valid = 0;
+  bzero(tTab->hist, sizeof(tTab->hist));
+  for (i = 0; i < nHarp; i++)
+    harpInfo[i].n_patch_eligible   = 
+      harpInfo[i].n_patch_ingested =
+      harpInfo[i].n_patch_err      = 0;
+  // accumulate
+  for (rec = 0; rec < nRec_all; rec++) {
+    /*
+     * histogram of trec[rec].data
+     */
+    d_code = tRec[rec].data;
+    if (d_code < 0 || d_code >= Trec_Data_NUM) {
+      V_printf(-1, "", 
+	       "Internal error: Bad trec code %d at %s in tabulate_patches.\n", 
+	       d_code, tRec[rec].str);
+      return 1;
+    }
+    tTab->hist[(int) d_code]++;
+    /*
+     * inspect all patches at this T_REC
+     */
+    something_failed = 0;
+    for (i = 0; i < nHarp; i++) {
+      inx = i*nRec_all + rec;
+      p_code = patchInfo[inx].ingest;
+      if (p_code < 0 || p_code >= Patch_Ingest_NUM) {
+	V_printf(-1, "", 
+		 "Internal error: Bad patch code %d at %s, harp %d, in tabulate_patches.\n", 
+		 p_code, tRec[rec].str, patchInfo[inx].num);
+	return 1;
+      }
+      // make a histogram
+      pTab->hist[(int) p_code]++;
+      // for the ones we tried to ingest -- tabulate success and failure
+      if (p_code == Patch_Ingest_Eligible) {
+	harpInfo[i].n_patch_eligible++;
+	if (patchInfo[inx].success) {
+	  harpInfo[i].n_patch_ingested++;
+	  pTab->try_ok++;
+	} else {
+	  harpInfo[i].n_patch_err++;
+	  pTab->try_err++;
+	  something_failed = 1;
+	}
+      }
+    } // end for i
+    /*
+     * per-T_REC counts
+     */
+    if (something_failed)
+      tTab->trec_patch_err++;  // some patch failed at T_REC
+    if (tRec[rec].nharp > 0)
+      tTab->trec_patch_valid++; // there was something to ingest at T_REC
+  } // end for rec
+  return 0;
+}
+
 
 
 /***********************************************************************
@@ -1094,28 +1636,435 @@ int DoIt(void)
  *
  ***********************************************************************/
 
+/*
+ * Convert time (drms "TIME") to record number (integer)
+ *   - rounds the record number off
+ *   - optionally clips it to 0..nRec-1 if nRec >= 0
+ *   - the key is that at t0, the record number is rec0
+ *   - NaN time returns (-1) record number
+ */
+static
+int
+time_to_recnum(TIME t, TIME t0, int rec0, int nRec)
+{
+  if (isnan(t)) return -1;
+  double rec_diff = (t - t0) / CADENCE;
+  int rec = rec0 + ((int) rint(rec_diff));
+  // optionally force in-range rec
+  if (nRec >= 0) {
+    if (rec < 0) rec = 0;
+    if (rec >= nRec) rec = nRec-1;
+  }
+  return rec;
+}
+
+/*
+ * get ephemeris into *wcs from a DRMS record
+ *   returns 0 for success, nonzero for failed getkey or NaN in result
+ *   note that all fields in *wcs are named exactly as the corresponding
+ *   keyword, except in lower-case
+ */
+
+static
+int 
+wcs_load(wcs_t *wcs, DRMS_Record_t *rec)
+{
+  int status, retval;
+  const size_t Nmiss = sizeof(wcs->missing);
+
+  // RSUN_REF and DSUN_OBS are doubles in the JSD, rest are floats
+  status = 0;
+  wcs->rsun_ref = drms_getkey_double(rec, "RSUN_REF", &status);
+  if (status) wcs->rsun_ref = 6.96e8;
+  status = 0;
+  wcs->dsun_obs = drms_getkey_double(rec, "DSUN_OBS", &status);
+  wcs->cdelt1   = drms_getkey_float (rec, "CDELT1",   &status);  // arcsec, if dx=dy
+  wcs->crval1   = drms_getkey_float (rec, "CRVAL1",   &status);  // disc center, arcsec
+  wcs->crval2   = drms_getkey_float (rec, "CRVAL2",   &status);
+  wcs->crpix1   = drms_getkey_float (rec, "CRPIX1",   &status);  // center, ccd, orig.
+  wcs->crpix2   = drms_getkey_float (rec, "CRPIX2",   &status);
+  wcs->crota2   = drms_getkey_float (rec, "CROTA2",   &status);
+  wcs->crlt_obs = drms_getkey_float (rec, "CRLT_OBS", &status);
+  wcs->crln_obs = drms_getkey_float (rec, "CRLN_OBS", &status);
+  // assume set valid status...
+  strcpy(wcs->missing, "");
+  retval = 0;
+  // ...and alter as necessary
+  if (status != 0) {
+    snprintf(wcs->missing, Nmiss, "Failed getkey()");
+    retval = 1;
+  } else {
+    if (isnan(wcs->dsun_obs)) snprintf(wcs->missing, Nmiss, "NaN %s", "DSUN_OBS");
+    if (isnan(wcs->cdelt1  )) snprintf(wcs->missing, Nmiss, "NaN %s", "CDELT1");
+    if (isnan(wcs->crval1  )) snprintf(wcs->missing, Nmiss, "NaN %s", "CRVAL1");
+    if (isnan(wcs->crval2  )) snprintf(wcs->missing, Nmiss, "NaN %s", "CRVAL2");
+    if (isnan(wcs->crpix1  )) snprintf(wcs->missing, Nmiss, "NaN %s", "CRPIX1");
+    if (isnan(wcs->crpix2  )) snprintf(wcs->missing, Nmiss, "NaN %s", "CRPIX2");
+    if (isnan(wcs->crota2  )) snprintf(wcs->missing, Nmiss, "NaN %s", "CROTA2");
+    if (isnan(wcs->crlt_obs)) snprintf(wcs->missing, Nmiss, "NaN %s", "CRLT_OBS");
+    if (isnan(wcs->crln_obs)) snprintf(wcs->missing, Nmiss, "NaN %s", "CRLN_OBS");
+    // if any of the above conditions fire, wcs->missing will be non-empty
+    if (strlen(wcs->missing) > 0) 
+      retval = 2;
+  }
+  if (retval) V_printf(1, "wcs_load: ", "WCS fail: %s\n", wcs->missing);
+  return retval;
+}
+
+/*
+ * open drms record, optionally load WCS, look-up segment, load segment
+ *   i.e., general-purpose drms data-getter/checker
+ * Usage: Call, for example, with query = 'hmi.M_720s' and trec = '2012.05.01_TAI'.
+ *
+ * Always: opens the corresponding record set, makes sure it has exactly one 
+ *   matching record, and checks its quality for missing-ness (0x80000000).
+ * Typically returns the RecordSet in *recSetP (it is returned because it must 
+ *   be freed) and the single record in *recP (which becomes invalid once *recSetP 
+ *   is freed).
+ * Option 0a: If recP is NULL, finds but does not return recP.  
+ * Option 0b: If, further to (0a) above, recSetP is NULL, finds but does not 
+ *   return recSetP.
+ * In either option 0 case, the error status is returned, allowing data-present 
+ *   checks.  Note, you don't use 0b without 0a.
+ * Option 1: If wcs is non-null, looks up and fills in wcs_t structure.  If this
+ *   fails or WCS are partly missing, it's an error.
+ * Option 2a: If segname is non-null, looks up the named segment 
+ *   within the record, to verify it is there.  Nothing extra is returned.
+ * Option 2b: If, further to (2a) above, dataP is non-null, loads 
+ *   the segment according to d_typ, storing it in *dataP.  Again, *dataP 
+ *   becomes invalid once *recSetP is freed.  
+ *   The data in the *dataP is in (*dataP)->data.  
+ *   If unneeded, you can let d_typ = DRMS_TYPE_RAW, which is noncommittal.
+ *
+ * Note:
+ *   If you want the data (dataP) or the record (recP), you *have* to get the 
+ *   recSet, because that's what you free.  If you want the WCS, you don't
+ *   need to get the recSet.
+ *   
+ * If success, returns NULL.  If failure, returns a descriptive string, and in this
+ *   case, nothing needs to be freed.  If success, be sure to:
+ *     drms_close_records(*recSetP, DRMS_FREE_RECORD);
+ *   when you are done, if you requested the recSet.
+ */
+
+static
+char *
+load_drms_rec_seg(DRMS_RecordSet_t **recSetP, 
+		  DRMS_Record_t       **recP, 
+		  DRMS_Array_t       **dataP, 
+		  wcs_t *wcs,
+		  // remainder are inputs
+		  char *query, 
+		  char *trec,
+		  char *segname,
+		  DRMS_Type_t d_typ)
+{
+  char rec_query[STR_MAX];
+  char tag[STR_MAX];
+  int  status, return_code;
+  DRMS_RecordSet_t *the_recSet;
+  DRMS_Record_t    *the_rec;
+  DRMS_Array_t     *the_data;
+  DRMS_Segment_t   *the_seg;
+  
+  // exclude mistakes
+  if (!query || !trec)
+    return "Illegal argument to load_drms_rec_seg: need query and trec";
+  if (!recSetP && (recP || dataP)) 
+    return "Illegal argument to load_drms_rec_seg: recSet required here";
+  if (!segname && dataP)
+    return "Illegal argument to load_drms_rec_seg: segname required for data";
+  // null out output pointers as permitted, in case of early exit
+  if (recSetP) *recSetP = NULL;
+  if (recP)    *recP    = NULL;
+  if (dataP)   *dataP   = NULL;
+  if (wcs)     {wcs->ok = 0; strcpy(wcs->missing, ""); } // no message for now
+  // descriptive tag
+  snprintf(tag, sizeof(tag), "%s %s", 
+	   segname ? "and segment" : "(no segment)",
+	   dataP ? "and array" : "");
+  // query for data
+  snprintf(rec_query, sizeof(rec_query), "%s[%s]", query, trec);
+  V_printf(verbflag > 2, "\t\t", "Opening record %s %s\n", rec_query, tag);
+  status = 0;
+  the_recSet = drms_open_records(drms_env, rec_query, &status);
+  if (status != 0) {
+    // (nothing to close)
+    return "Could not open record at this T_REC";
+  }
+  // (below here, we close recSet before error out)
+  if (the_recSet->n != 1) {
+    drms_close_records(the_recSet, DRMS_FREE_RECORD);
+    return "Could not open single record at this T_REC";
+  }
+  the_rec = the_recSet->records[0];
+  // quality check to identify missing data 
+  int quality = drms_getkey_int(the_rec, "QUALITY", &status);
+  if (status != 0 || (quality & 0x80000000)) {
+    drms_close_records(the_recSet, DRMS_FREE_RECORD);
+    return "Missing data at this T_REC (quality)";
+  }
+  // option 1: load WCS
+  if (wcs) {
+    return_code = wcs_load(wcs, the_rec);
+    if (return_code != 0) {
+      drms_close_records(the_recSet, DRMS_FREE_RECORD);
+      return "Missing WCS at this T_REC";
+    }
+  }
+  // option 2a: look up segname
+  if (segname) {
+    the_seg = drms_segment_lookup(the_rec, segname);
+    if (the_seg == NULL) {
+      drms_close_records(the_recSet, DRMS_FREE_RECORD);
+      return "Failed data segment lookup at this T_REC";
+    }
+  }
+  // option 2b: data
+  if (segname && dataP) {
+    // (know the_seg is ok from above)
+    the_data = drms_segment_read(the_seg, d_typ, &status);
+    if (the_data == NULL || status != 0) {
+      drms_close_records(the_recSet, DRMS_FREE_RECORD);
+      return "Failed data segment read at this T_REC";
+    }
+  }
+  // all OK: set up outputs as allowed
+  if (recSetP) *recSetP = the_recSet;
+  if (recP)    *recP    = the_rec;
+  if (dataP)   *dataP   = the_data;
+  // OTOH: close the record set if it was not returned
+  if (!recSetP)
+    drms_close_records(the_recSet, DRMS_FREE_RECORD);
+  return NULL;
+}
+
 /* 
- * Fill in T_REC array
+ * Fill in times in T_REC array
+ *   key is: t0 is the time of tRec[nRec_pad]
  */
 static
 void
-set_trec_info(trec_info_t *tRec, 
-	      TIME t0, 
-	      int nRec_all, int nRec_pad, 
-	      double cadence)
+set_trec_times(trec_info_t *tRec, 
+	       TIME t0, 
+	       int nRec_all, int nRec_pad, 
+	       double cadence)
 {
   TIME t;
   int rec;
 
   for (rec = 0; rec < nRec_all; rec++) {
-    t = t0 + (rec - nRec_pad) * CADENCE;
-    // fill in fields
+    t = t0 + (rec - nRec_pad) * cadence;
+    // fill in time fields
     tRec[rec].t = t;
     sprint_time(tRec[rec].str, t, "TAI", 0);
-    tRec[rec].nharp = 0; // set up later in load_all_patch_info
+    // zero out some other fields
+    tRec[rec].data = Trec_Data_Unknown;
+    tRec[rec].nharp = 0;
   }
 }
 
+
+/*
+ * mark each patch according to whether it is eligible to be ingested; 
+ * then do the same for the tRec's, by looking over all patches at each time.
+ */
+static
+void
+mark_eligible_patches(patch_info_t *patchInfo, 
+		      harp_info_t  *harpInfo, 
+		      trec_info_t  *tRec, 
+		      int nHarp,
+		      int nRec_all, 
+		      int nRec_eat, 
+		      int rec0cut, 
+		      int rec1cut,
+		      int nRec_min)
+
+{
+  int rec, the_rec;
+  int i, hits;
+
+  V_printf(verbflag > 0, "\t", "Patch scan: finding patches eligible for ingest.\n");
+  // mark everything eligible
+  for (i = 0; i < nHarp; i++)
+    for (rec = 0; rec < nRec_all; rec++)
+      patchInfo[i*nRec_all + rec].ingest = Patch_Ingest_Eligible;
+  /* The order of consideration below determines which of several causes
+   * is (later on) listed as "the" cause something was not ingested -- 
+   * in each loop we check if the patch is eligible, and set it to 
+   * ineligible (for whatever reason) if it fails the test.  Schematically:
+   *   if (eligible && fails_foo_test) patch.ingest = ineligible_foo;
+   * Thus, the first reason encountered becomes the winner.  So, the order
+   * of the lines below is carefully chosen.
+   */
+  // "omit" case 1: nRec_eat limitation
+  //    in NRT mode, everything but the last T_REC will be omitted
+  if (nRec_eat < nRec_all)
+    V_printf(verbflag > 0, "\t", "  Implementing trec-to-ingest limitation (e.g., NRT mode)\n");
+  for (i = 0; i < nHarp; i++)
+    for (rec = 0; rec < nRec_all-nRec_eat; rec++)
+      if (patchInfo[i*nRec_all + rec].ingest == Patch_Ingest_Eligible)
+	patchInfo[i*nRec_all + rec].ingest = Patch_Ingest_Omit;
+  // "omit" case 2: t0cut limitation (if t0cut was nan, rec0cut = -1)
+  //    now used in gap-filling
+  if (rec0cut >= 0) {
+    V_printf(verbflag > 0, "\t", "  Implementing t0cut limitation\n");
+    // basically: mark from 0...rec0cut-1 as Omitted
+    for (i = 0; i < nHarp; i++) {
+      // if the padding straddles rec0cut, ingest the pad too
+      // otherwise, omit ingesting at rec0cut as usual
+      if (harpInfo[i].rec0p <= rec0cut && harpInfo[i].rec0 > rec0cut)
+	the_rec = harpInfo[i].rec0p; // omit from 0..(here-1)
+      else {
+	the_rec = rec0cut; // omit from 0..(here-1)
+	if (the_rec > nRec_all) the_rec = nRec_all; // happens if rec0cut is large
+      }
+      for (rec = 0; rec < the_rec; rec++)
+	if (patchInfo[i*nRec_all + rec].ingest == Patch_Ingest_Eligible)
+	  patchInfo[i*nRec_all + rec].ingest = Patch_Ingest_Omit;
+    }
+  }
+  // "omit" case 2: t1cut limitation (if t1cut was nan, rec1cut = -1)
+  if (rec1cut >= 0) {
+    V_printf(verbflag > 0, "\t", "  Implementing t1cut limitation\n");
+    // basically: mark from rec1cut+1..nRec_all-1 as Omitted
+    for (i = 0; i < nHarp; i++) {
+      // if the padding straddles rec1cut, ingest the pad too
+      // otherwise, omit ingesting at rec1cut as usual
+      if (harpInfo[i].rec1p > rec1cut && harpInfo[i].rec1 <= rec1cut)
+	the_rec = harpInfo[i].rec1p+1; // omit from here..top
+      else
+	the_rec = rec1cut+1; // omit from here..top
+      // loop is OK even if the_rec > nRec_all
+      for (rec = the_rec; rec < nRec_all; rec++)
+	if (patchInfo[i*nRec_all + rec].ingest == Patch_Ingest_Eligible)
+	  patchInfo[i*nRec_all + rec].ingest = Patch_Ingest_Omit;
+    }
+  }
+  // mark no-data patches (i.e., no mag or no mask)
+  //  (patch is marked invalid already, so this must appear before 
+  //   invalid section below)
+  //  there are two kinds of data gap/missing conditions
+  //     (1) no-data patch has rec0p <= rec <= rec1p --> list as gap/missing
+  //     (2) no-data, and outside this interval --> list as Patch_Ingest_Invalid, below
+  //  Note that valid == Patch_Invalid signals gap/missing AND outside-interval, so
+  //  looking at Patch_Invalid is not enough
+  for (rec = 0; rec < nRec_all; rec++) {
+    if (tRec[rec].data == Trec_Data_Gap) { 
+      // "gap" => mag missing
+      for (hits = i = 0; i < nHarp; i++) {
+	if ((patchInfo[i*nRec_all + rec].ingest == Patch_Ingest_Eligible) &&
+	    ((rec >= harpInfo[i].rec0p) && (rec <= harpInfo[i].rec1p))) {
+	  patchInfo[i*nRec_all + rec].ingest = Patch_Ingest_Gap;
+	  hits++;
+	}
+      }
+      if (hits > 0)
+	V_printf(verbflag > 0, "\t", "  Skipping %s (with %d HARP%s), no mag.\n", 
+		 tRec[rec].str, hits, hits == 1 ? "" : "s");
+    } else if (tRec[rec].data == Trec_Data_Missing) {
+      // "missing" => mag present, mask missing
+      for (hits = i = 0; i < nHarp; i++) {
+	if ((patchInfo[i*nRec_all + rec].ingest == Patch_Ingest_Eligible) &&
+	    ((rec >= harpInfo[i].rec0p) && (rec <= harpInfo[i].rec1p))) {
+	  patchInfo[i*nRec_all + rec].ingest = Patch_Ingest_Missing;
+	  hits++;
+	}
+      }
+      if (hits > 0)
+	V_printf(verbflag > 0, "\t", "  Skipping %s (with %d HARP%s), no mask.\n", 
+		 tRec[rec].str, hits, hits == 1 ? "" : "s");
+    }
+  }
+  // mark in-valid patches (i.e., HARP did not extend that far)
+  //  - note, padding/placeholder patches are Patch_Padding, not Patch_Invalid
+  //  - needs to be done before CR exclusion, because a CR results in all HARP
+  //    patches being marked ineligible
+  for (rec = 0; rec < nRec_all; rec++)
+    for (i = 0; i < nHarp; i++)
+      if ((patchInfo[i*nRec_all + rec].valid  == Patch_Invalid) &&
+	  (patchInfo[i*nRec_all + rec].ingest == Patch_Ingest_Eligible))
+	patchInfo[i*nRec_all + rec].ingest = Patch_Ingest_Invalid;
+  // mark too-short patches (cosmic rays, mostly)
+  for (i = 0; i < nHarp; i++) {
+    // check: length=1  =>  rec1-rec0+1 = 1  => if() succeeds for nRec_min = 2
+    if ((harpInfo[i].rec1 - harpInfo[i].rec0 + 1) < nRec_min) {
+      V_printf(verbflag > 0, "\t", "  Skipping HARP[%d], too short (CR)\n", harpInfo[i].id);
+      for (rec = 0; rec < nRec_all; rec++)
+	if (patchInfo[i*nRec_all + rec].ingest == Patch_Ingest_Eligible)
+	  patchInfo[i*nRec_all + rec].ingest = Patch_Ingest_TooShort;
+    }
+  }
+  // count Eligible patches in each T_REC, given the above restrictions
+  //   (wait until after ingestion to count per-harp patches)
+  for (rec = 0; rec < nRec_all; rec++) {
+    tRec[rec].nharp = 0;
+    for (i = 0; i < nHarp; i++)
+      if (patchInfo[i*nRec_all + rec].ingest == Patch_Ingest_Eligible) {
+	tRec[rec].nharp++;
+      }
+  }
+  V_printf(verbflag > 0, "\t", "Patch scan: done.\n");
+}
+
+
+/*
+ *  for each T_REC, determine if there is data present; fill in wcs
+ */
+static
+void
+set_trec_hasdata(trec_info_t *tRec, char *magQuery, char *maskQuery, int nRec_all)
+{
+  int rec;
+  wcs_t the_wcs;
+  int Rec_valid, Rec_miss, Rec_err, Rec_ok;
+  char *err;
+
+  V_printf(verbflag > 0, "\t", "T_REC scan: scanning image series for missing data\n");
+  Rec_valid = Rec_miss = Rec_err = Rec_ok = 0;
+  // loop over all records: we need status on everything to set HARP extent (e.g., T_FRST)
+  // for each T_REC (of interest), determine if data is present
+  for (rec = 0; rec < nRec_all; rec++) {
+    Rec_valid++;
+    // check for mag, load WCS
+    err = load_drms_rec_seg(NULL, NULL, NULL, // NULL: do not want recSet or data
+			    &the_wcs,
+			    magQuery, tRec[rec].str, 
+			    NULL, DRMS_TYPE_RAW);
+    if (err) {
+      // mag data missing -- ordinary data gap, not an error, so no stderr output
+      V_printf(1, "\t  ", "%s%s (%s[%s]) -- skipping this T_REC.\n", err, 
+	       (strlen(the_wcs.missing) > 0) ? the_wcs.missing : "",
+	       magQuery, tRec[rec].str);
+      tRec[rec].data = Trec_Data_Gap; // no mag or mag wcs
+      Rec_miss++;
+      continue; 
+    }
+    // check for mask
+    err = load_drms_rec_seg(NULL, NULL, NULL, // NULL: do not want recSet or data
+			    NULL,             // NULL: do not want WCS
+			    maskQuery, tRec[rec].str, 
+			    "mask", DRMS_TYPE_RAW);
+    if (err) {
+      // log to stdout and stderr
+      V_printf( 1, "\t  ", "%s (%s[%s]) -- skipping this T_REC.\n", err, maskQuery, tRec[rec].str);
+      V_printf(-1, "",   "%s (%s[%s]) -- skipping this T_REC.\n", err, maskQuery, tRec[rec].str);
+      tRec[rec].data = Trec_Data_Missing; // mag, but no mask
+      Rec_err++;
+      continue; 
+    }
+    // data present
+    tRec[rec].data = Trec_Data_OK;
+    tRec[rec].wcs = the_wcs;
+    Rec_ok++;
+  }
+  V_printf(verbflag > 0, "\t", "T_REC scan: %d valid = %d OK + %d missing + %d errors\n", 
+	   Rec_valid, Rec_ok, Rec_miss, Rec_err);
+  // missing mask at a T_REC, when mag is present, is an error
+  if (Rec_err > 0)
+    V_printf(-1, "", "Found missing masks in %s at %d T_REC(s).  Continuing.\n", maskQuery, Rec_err);
+}
 
 /*
  * Summarize a patch by printing it -- diagnostic aid
@@ -1260,7 +2209,16 @@ load_run_info(const char *rootDir, char **lists,
   int rv, status;    // error codes
   patch_info_t pInfo;
   TIME t, t0, t1;    // time, and end times
+  int *harp_ids;
+  int nHarp_top = 1024; // size of above array
+  int dupe;
+  int j;
 
+  harp_ids = calloc(nHarp_top, sizeof(*harp_ids));
+  if (harp_ids == NULL) {
+    V_printf(-1, "", "Error: Unable to allocate space for harp-id list\n");
+    return 1;
+  }
   harp_count = 0;
   t0 = sscan_time("2999.12.31_23:59:28Z");  // earliest time seen
   t1 = sscan_time("-4712.01.01_11:59:28Z"); // latest time seen
@@ -1283,7 +2241,26 @@ load_run_info(const char *rootDir, char **lists,
 	status = 1;
 	break;
       } 
-      harp_count++; 
+      // skip if duplicated
+      // makes it O(n^2), but n is small
+      for (dupe = j = 0; !dupe && j < harp_count; j++)
+	if (harp_ids[j] == (int) harp_id)
+	  dupe = 1;
+      // updates count (which is returned) as well as id list (which is not)
+      if (!dupe)
+	harp_ids[harp_count++] = (int) harp_id;
+      else
+	V_printf(verbflag > 1, "  ", "ID count: Skipped dupe HARP #%d (this is ok).\n", 
+		 (int) harp_id);
+      // resize if needed
+      if (harp_count == nHarp_top) {
+	nHarp_top *= 4;
+	if ((harp_ids = realloc(harp_ids, nHarp_top*sizeof(*harp_ids))) == NULL) {
+	  V_printf(-1, "", "Failed realloc of harp ID buffer to size %d\n", nHarp_top);
+	  status = 1;
+	  break;
+	}
+      }
       // HARP was OK, now scan for its time range
       // using implicit string concatenation below to construct format
       snprintf(frameFile, sizeof(frameFile), 
@@ -1315,6 +2292,7 @@ load_run_info(const char *rootDir, char **lists,
     if (status)
       return 1; // Error: fail out after fclose()
   } // end loop over lists
+  free(harp_ids);
 
   // No errors: set up outputs
   // put correct nRec, and a sensible time in, even if there were no HARPs
@@ -1352,7 +2330,8 @@ load_harp_ids(const char *rootDir, char **lists, harp_info_t *harpInfo)
   char *endptr;
   FILE *fp;
   long harp_id; // external HARP ID number
-  int i;        // internal HARP index (starts at 0)
+  int i, j;     // internal HARP index (starts at 0)
+  int dupe;     // duplicate harp ID found?
 	
   i = 0; // retain across list files
   while ((list1 = *lists++) != NULL) {
@@ -1373,11 +2352,84 @@ load_harp_ids(const char *rootDir, char **lists, harp_info_t *harpInfo)
 	fclose(fp);
 	return 1;
       } 
-      harpInfo[i++].id = (int) harp_id;
+      // skip if duplicated
+      // makes it O(n^2), but n is small
+      for (dupe = j = 0; !dupe && j < i; j++)
+	if (harpInfo[j].id == (int) harp_id)
+	  dupe = 1;
+      if (!dupe)
+	harpInfo[i++].id = (int) harp_id;
+      else
+	V_printf(verbflag > 2, "  ", "ID load: Skipped dupe HARP #%d (this is ok)\n", 
+		 (int) harp_id);
     }
     fclose(fp);
   }
   return 0;
+}
+
+/*
+ * load reference bounding box from HARP
+ * tri-valued return code:
+ *    (1) NULL if box was found and is OK,
+ *    (2) "" if no reference box found, or 
+ *    (3) error message if reference box was missing/erroneous
+ */
+static
+char *
+load_harp_reference(const char *refHarp, int harp_id, TIME *t0, 
+		    double *lat0, double *lon0, double *lat1, double *lon1, double *omega)
+{
+  char harpRecQuery[STR_MAX];
+  DRMS_RecordSet_t *harpRecSet;
+  DRMS_Record_t *harpRec;
+  int status = 0;
+  
+  // e.g., hmi.Mharp_720s[1234][^]
+  snprintf(harpRecQuery, sizeof(harpRecQuery), "%s[%d][%s]", refHarp, harp_id, "^");
+  V_printf(verbflag > 2, "\t\t", "Opening HARP %s (box match)\n", harpRecQuery);
+  harpRecSet = drms_open_records(drms_env, harpRecQuery, &status);
+  if (status != 0)
+    return ""; // reference not found: not an error
+  if (harpRecSet->n != 1) 
+    return "Found more than one HARP record";
+  harpRec = harpRecSet->records[0];
+  *lat0  = drms_getkey_double(harpRec, "LATDTMIN", &status);
+  *lon0  = drms_getkey_double(harpRec, "LONDTMIN", &status);
+  *lat1  = drms_getkey_double(harpRec, "LATDTMAX", &status);
+  *lon1  = drms_getkey_double(harpRec, "LONDTMAX", &status);
+  *omega = drms_getkey_double(harpRec, "OMEGA_DT", &status);
+  *t0    = drms_getkey_time  (harpRec, "T_REC",    &status);
+  if (status != 0)
+    return "Could not get HARP keys";
+  if (isnan(*lat0) || isnan(*lon0) || isnan(*lat1) || isnan(*lon1) || isnan(*omega))
+    return "HARP bbox was invalid/missing";
+  if (time_is_invalid(*t0))
+    return "HARP time was invalid/missing";
+  // everything OK
+  return NULL;
+}
+
+
+/*
+ * patch_set_to_harp_reference: set patch bounding box information, given a reference
+ * box and rotational velocity
+ */
+static
+void
+patch_set_to_harp_reference(patch_info_t *pI, TIME t, TIME t0, 
+			    double lat0, double lon0, double lat1, double lon1, double omega)
+{
+  // units: a "TIME" is a double, in seconds
+  TIME dt = t - t0; // always >= 0
+  // units: basic omega is deg/day -- omegaP is deg/sec
+  double omegaP = omega / SEC_PER_DAY;
+
+  pI->lat0 = lat0;
+  pI->lon0 = lon0 + omegaP * dt; 
+  pI->lat1 = lat1;
+  pI->lon1 = lon1 + omegaP * dt; 
+  pI->omega = omega;
 }
 
 
@@ -1388,20 +2440,28 @@ load_harp_ids(const char *rootDir, char **lists, harp_info_t *harpInfo)
 static
 int 
 load_harp_patches(int harp_id,
+		  const char *refHarp,      // if non-null: source for HARP boxes
 		  char *currDir,
 		  char *frameFile,
 		  char *statFile,
 		  patch_info_t *patchInfo,  // head of patches for this HARP
-		  trec_info_t  *tRec,       // head of full tRec array
 		  harp_info_t  *harpInfo,   // info for just this HARP
-		  int nRec_all, int nRec_pad)
+		  trec_info_t  *tRec,       // head of full tRec array
+		  int nRec_all)
 {
+  // reference bounding box info
+  double lat0, lon0, lat1, lon1, omega; // not float, for more digits
+  TIME t0;
+  char t0_S[32];  // time string
+  int ref_ready;
+  // iteration and place-keeping
   FILE *frameFp, *statFp;
   int rec, rec0, rec1;    // first and last rec#, plus counter
   TIME t, t_rec0, t_rec1; // time for rec0, rec1
   patch_info_t pInfo;     // place for one frame's info
   int rv1, rv2, status;   // return values, error status
   int line_num, nPatch;   // counters
+  char the_patchName[STR_MAX];
 
   // open files
   frameFp = fopen(frameFile, "r");
@@ -1418,6 +2478,32 @@ load_harp_patches(int harp_id,
     return 1;
   }
 
+  // attempt to get existing HARP box info, if it was asked for
+  ref_ready = 0;  // assume it was not there
+  if (refHarp) {
+    char *msg;
+    msg = load_harp_reference(refHarp, harp_id, &t0, &lat0, &lon0, &lat1, &lon1, &omega);
+    if (msg == NULL) {
+      ref_ready = 1;  // box found and was OK
+      sprint_time(t0_S, t0, "TAI", 0); // time string
+      V_printf(verbflag > 2, "\t\t", 
+	       "Reference box: %s[%d][%s]: (%.4f,%.4f) to (%.4f,%.4f)\n", 
+	       refHarp, harp_id, t0_S, lat0, lon0, lat1, lon1);
+    } else {
+      strcpy(t0_S, ""); // clear time string
+      if (*msg == '\0')
+	// simple failure to open, not alarming
+	V_printf(verbflag > 2, "\t\t", 
+		 "Could not open reference harp %s[%d] -- no such harp.\n", 
+		 refHarp, harp_id);
+      else
+	// an erroneous box, a little more surprising
+	V_printf(verbflag > 1, "\t\t", 
+		 "Error opening reference harp %s[%d] -- bad box (%s).\n", 
+		 refHarp, harp_id, msg);
+    }
+  }
+
   // read files line-by-line in lockstep
   for (status = 0, nPatch = 1, line_num = 1; 
        status == 0 &&
@@ -1426,8 +2512,13 @@ load_harp_patches(int harp_id,
        nPatch++, line_num++) {
     // generate filename, start from 000001
     // format is embedded using literal string concatenation
-    snprintf(pInfo.patchName, sizeof(pInfo.patchName), 
+    snprintf(the_patchName, sizeof(the_patchName), 
 	     "%s/" FN_TRACK_FITS, currDir, nPatch);
+    if ((pInfo.patchName = strdup(the_patchName)) == NULL) {
+      V_printf(-1, "", "Error: failed strdup (%s), harp %d\n", the_patchName, harp_id);
+      status = 1;
+      continue; // will error out
+    }
     double rec_check = (t - tRec[0].t) / CADENCE;  // should be integral
     rec = (int) rec_check;
     // check for in-range rec
@@ -1443,8 +2534,13 @@ load_harp_patches(int harp_id,
       status = 1;
       continue; // will error out
     }
+    // set bounding box from reference BB, if desired and possible
+    if (ref_ready)
+      patch_set_to_harp_reference(&pInfo, t, t0, lat0, lon0, lat1, lon1, omega);
+
     // insert the patch into its place in the master index
     //  (gaps are allowed and will be left as patch_invalid)
+    //  (this "=" duplicates pInfo into patchInfo)
     patchInfo[rec] = pInfo;
   }
   fclose(frameFp);
@@ -1463,30 +2559,33 @@ load_harp_patches(int harp_id,
 }
 
 /* 
- * Extrapolate one HARP forward and backward in time, interpolates placeholder ROIs
+ * Fill in blanks in patches of one HARP -- padding and placeholders
+ *   (1) interpolates placeholder ROIs into HARP proper
+ *   (2) extrapolates padding on either end of HARP
+ *   Only does (1) and (2) where data is present
  *   returns 0 if successful, nonzero if not
  *   (currently, always successful)
  */ 
 static
 int
-extrapolate_harp(patch_info_t *patchInfo,    // head of array this HARP's patches
-		 harp_info_t *harpInfo,      // this HARP's info
-		 int nRec_all, int nRec_pad)
+set_patch_info_blanks(patch_info_t *patchInfo,    // head of array this HARP's patches
+		      harp_info_t  *harpInfo,     // this HARP's info
+		      trec_info_t  *tRec, 
+		      int nRec_all)
 {
-  int rec;                       // counter
-  int rec0p = harpInfo->rec0p;   // first rec within pad
-  int rec0  = harpInfo->rec0;    // first rec with a real patch
-  int rec1  = harpInfo->rec1;    // last such rec
-  int rec1p = harpInfo->rec1p;   // last rec within pad
-  float omega;            // harp rotation rate
+  int rec, sn;                         // counters
+  const int rec0p = harpInfo->rec0p;   // first rec within pad
+  const int rec0  = harpInfo->rec0;    // first rec with a real patch
+  const int rec1  = harpInfo->rec1;    // last such rec
+  const int rec1p = harpInfo->rec1p;   // last rec within pad
+  const float omega =                  // rotation (deg/frame) -- same for all rec
+    patchInfo[rec0].omega / SEC_PER_DAY * CADENCE;
 
   // printf("\tHarp %d: recs=[%d, %d]\n", harpInfo->id, rec0, rec1);
-
   // put in lat/lon for placeholder ROIs, which always occur between rec0 and rec1
-  omega = patchInfo[rec0].omega / SEC_PER_DAY * CADENCE;
   for (rec = rec0; rec <= rec1; rec++) {
-    // set up patchInfo[rec]
-    if (patchInfo[rec].valid == Patch_Invalid) {
+    // install patchInfo[rec] if we have data, but saved no patch
+    if (tRec[rec].data == Trec_Data_OK && patchInfo[rec].valid == Patch_Invalid) {
       // it will be invalid if it was never initialized
       patchInfo[rec].valid = Patch_Padding;   // placeholder ROI
       patchInfo[rec].tag   = Patch_Tag_Faint; // indicate HARP not observed
@@ -1496,63 +2595,71 @@ extrapolate_harp(patch_info_t *patchInfo,    // head of array this HARP's patche
       patchInfo[rec].lon0  = patchInfo[rec0].lon0 + (rec - rec0)*omega;
       patchInfo[rec].lon1  = patchInfo[rec0].lon1 + (rec - rec0)*omega;
       patchInfo[rec].omega = patchInfo[rec0].omega;
-      strcpy(patchInfo[rec].patchName, ""); // i.e., not a real patch
-      for (int sn = 0; sn < RS_num_stats; sn++)
+      patchInfo[rec].patchName = "";   // not a real patch
+      for (sn = 0; sn < RS_num_stats; sn++)
 	patchInfo[rec].stats[sn] = DRMS_MISSING_FLOAT;
     }
   }
-  // extend backward
-  omega = patchInfo[rec0].omega / SEC_PER_DAY * CADENCE;
+  // extend backward -- base lon offset on rec0
   for (rec = rec0p; rec < rec0; rec++) {
-    // set up patchInfo[rec]
-    patchInfo[rec].valid = Patch_Padding;  // extrapolated
-    patchInfo[rec].tag   = Patch_Tag_None; // no tag
-    patchInfo[rec].num   = patchInfo[rec0].num;
-    patchInfo[rec].lat0  = patchInfo[rec0].lat0;
-    patchInfo[rec].lat1  = patchInfo[rec0].lat1;
-    patchInfo[rec].lon0  = patchInfo[rec0].lon0 + (rec - rec0)*omega;
-    patchInfo[rec].lon1  = patchInfo[rec0].lon1 + (rec - rec0)*omega;
-    patchInfo[rec].omega = patchInfo[rec0].omega;
-    strcpy(patchInfo[rec].patchName, ""); // i.e., not a real patch
-    for (int sn = 0; sn < RS_num_stats; sn++)
-      patchInfo[rec].stats[sn] = DRMS_MISSING_FLOAT;
+    // set up patchInfo[rec] if we have mask/mag data
+    if (tRec[rec].data == Trec_Data_OK) {
+      patchInfo[rec].valid = Patch_Padding;  // extrapolated
+      patchInfo[rec].tag   = Patch_Tag_None; // no tag
+      patchInfo[rec].num   = patchInfo[rec0].num;
+      patchInfo[rec].lat0  = patchInfo[rec0].lat0;
+      patchInfo[rec].lat1  = patchInfo[rec0].lat1;
+      patchInfo[rec].lon0  = patchInfo[rec0].lon0 + (rec - rec0)*omega;
+      patchInfo[rec].lon1  = patchInfo[rec0].lon1 + (rec - rec0)*omega;
+      patchInfo[rec].omega = patchInfo[rec0].omega;
+      patchInfo[rec].patchName = "";   // not a real patch
+      for (sn = 0; sn < RS_num_stats; sn++)
+	patchInfo[rec].stats[sn] = DRMS_MISSING_FLOAT;
+    }
   }
-  // extend forward (count down)
-  omega = patchInfo[rec1].omega / SEC_PER_DAY * CADENCE;
+  // extend forward (count down) -- base lon offset on rec1
   for (rec = rec1p; rec > rec1; rec--) {
-    patchInfo[rec].valid = Patch_Padding;  // extrapolated
-    patchInfo[rec].tag   = Patch_Tag_None; // no tag
-    patchInfo[rec].num   = patchInfo[rec1].num;
-    patchInfo[rec].lat0  = patchInfo[rec1].lat0;
-    patchInfo[rec].lat1  = patchInfo[rec1].lat1;
-    patchInfo[rec].lon0  = patchInfo[rec1].lon0 + (rec - rec1)*omega;
-    patchInfo[rec].lon1  = patchInfo[rec1].lon1 + (rec - rec1)*omega;
-    patchInfo[rec].omega = patchInfo[rec1].omega;
-    strcpy(patchInfo[rec].patchName, "");
-    for (int sn = 0; sn < RS_num_stats; sn++)
-      patchInfo[rec].stats[sn] = DRMS_MISSING_FLOAT;
+    // set up patchInfo[rec] if we have mask/mag data
+    if (tRec[rec].data == Trec_Data_OK) {
+      patchInfo[rec].valid = Patch_Padding;  // extrapolated
+      patchInfo[rec].tag   = Patch_Tag_None; // no tag
+      patchInfo[rec].num   = patchInfo[rec1].num;
+      patchInfo[rec].lat0  = patchInfo[rec1].lat0;
+      patchInfo[rec].lat1  = patchInfo[rec1].lat1;
+      patchInfo[rec].lon0  = patchInfo[rec1].lon0 + (rec - rec1)*omega;
+      patchInfo[rec].lon1  = patchInfo[rec1].lon1 + (rec - rec1)*omega;
+      patchInfo[rec].omega = patchInfo[rec1].omega;
+      patchInfo[rec].patchName = "";   // not a real patch
+      for (sn = 0; sn < RS_num_stats; sn++)
+	patchInfo[rec].stats[sn] = DRMS_MISSING_FLOAT;
+    }
   }
   return 0;  // always OK
 }
 
 
 /* 
- * set up one HARP's boundary info
+ * set up one HARP's temporal extent info: rec0,rec1 and rec0p,rec1p
+ *   the rec0p/rec1p settings are idealized; we refine them later after we account
+ *     for farside geometry
+ *   does not set up the number of valid patches in-between; we do that after
+ *     the farside check
  *   note, HARP id field is already set
  *   returns 0 if successful, nonzero if not
  */ 
 static
 int
-set_harp_info_bdry(patch_info_t *patchInfo, // offset to this HARP's patches
-		   harp_info_t *hInfo,      // offset to this HARP
-		   int nRec_all, 
-		   int nRec_pad)
+set_harp_info_extent(patch_info_t *patchInfo, // offset to this HARP's patches
+		     harp_info_t *hInfo,      // offset to this HARP
+		     trec_info_t *tRec,       // all t_rec's
+		     int nRec_all, 
+		     int nRec_pad)
 {
   int rec;                // T_REC counter
   int rec0,  rec1;        // first and last rec# (normal patches)
   int rec0p, rec1p;       // first and last rec# (padding patches)
 
-  // find range of rec numbers, {rec0..rec1} and {rec0p...rec1p}, for this harp
+  // find range of rec numbers, {rec0...rec1} and {rec0p...rec1p}, for this harp
   rec0 = nRec_all - 1;
   rec1 = 0; 
   for (rec = 0; rec < nRec_all; rec++) {
@@ -1566,11 +2673,18 @@ set_harp_info_bdry(patch_info_t *patchInfo, // offset to this HARP's patches
     V_printf(-1, "", "Error: No patches present in this HARP.\n");
     return 1;
   }
-  // account for padding at front and end
+  // account for padding at front
   rec0p = rec0 - nRec_pad;
   if (rec0p < 0) rec0p = 0;
+  // advance rec0p until it points to a T_REC having data
+  while (tRec[rec0p].data != Trec_Data_OK) 
+    rec0p++;
+  // account for padding at end
   rec1p = rec1 + nRec_pad;
   if (rec1p >= nRec_all) rec1p = nRec_all-1;
+  // drop rec1p until it points to a T_REC having data
+  while (tRec[rec1p].data != Trec_Data_OK) 
+    rec1p--;
   // Cannot count missing patches because extrapolation has not been done yet
   V_printf(verbflag > 2, "\t\t", 
 	   "HARP %d: recs = {%d..%d} recspad = {%d..%d}\n", 
@@ -1582,41 +2696,108 @@ set_harp_info_bdry(patch_info_t *patchInfo, // offset to this HARP's patches
   return 0;
 }
 
+/* 
+ * set up one HARP's pixel-box info: {x,y}{min,max} from existing lat-lon info
+ *
+ *   the pixel-box is used later to make a bitmap to ingest
+ *   additionally, at this time we determine if the HARP is on the far side;
+ *     if so we mark it as invalid, and adjust rec0p/rec1p if the invalid
+ *     times cause a shrinkage of the interval
+ *   rec0/rec1 will never need to be adjusted because they are not on far side
+ */ 
+static
+void
+set_patch_info_pixbox(patch_info_t *patchInfo, // offset to this HARP's patches
+		      harp_info_t *hInfo,      // offset to this HARP
+		      trec_info_t *tRec,       // all t_rec's
+		      int nRec_all)
+{
+  int rec;
+  const int rec0p = hInfo->rec0p;   // first rec within pad
+  const int rec0  = hInfo->rec0;    // first rec with a real patch
+  const int rec1  = hInfo->rec1;    // last such rec
+  const int rec1p = hInfo->rec1p;   // last rec within pad
+  int rv, farside, pad_lo, pad_hi;
+
+  // convert all lat/lon boxes to x/y boxes, collect farside info
+  farside = 0;
+  for (rec = rec0p; rec <= rec1p; rec++) {
+    // Invalid's in this range can occur for missing mag or mask
+    if (patchInfo[rec].valid == Patch_Invalid)
+      continue;
+    // Find x/y boundary of HARP at T_REC using lat0/lon0, lat1/lon1 info
+    //    rv = 0 for OK, 1 for all pix on farside
+    V_printf(verbflag > 2, "\t\t", "HARP[%d][%s]: bbox update\n",
+	     hInfo->id, tRec[rec].str);
+    rv = compute_boundary(&(patchInfo[rec]), tRec[rec].wcs);
+    // check farside case
+    if (rv) {
+      // entire HARP was on farside (should only happen for extrapolated HARPs)
+      farside++;
+      // set to in-valid, to ignore the patch
+      //   note, once this happens, rec0p/rec1p may not point 
+      //   to the true end of the padding -- we correct them below
+      patchInfo[rec].valid = Patch_Invalid;
+    } 
+  }
+
+  // account for (potential) vanishing padding at front
+  //   advance rec until it points to a valid patch 
+  //   (second && should not be needed because patch at rec0 is always valid)
+  pad_lo = 0;
+  for (rec = rec0p; patchInfo[rec].valid == Patch_Invalid && rec < rec0; rec++)
+    pad_lo++;
+  hInfo->rec0p = rec;
+
+  // account for vanishing padding at end
+  //   drop rec until it points to a valid patch
+  pad_hi = 0;
+  for (rec = rec1p; patchInfo[rec].valid == Patch_Invalid && rec > rec1; rec--)
+    pad_hi++;
+  hInfo->rec1p = rec;
+
+  if (pad_lo > 0 || pad_hi > 0)
+    V_printf(verbflag > 2, "\t\t", 
+	     "HARP %d: recspad shrinks to {%d..%d} after finding %d farside patches\n", 
+	     hInfo->id, hInfo->rec0p, hInfo->rec1p, farside);
+}
+
 
 /* 
  * set up one HARP's missing patch info
  *   note, HARP boundary info is already set
+ *   takes data availability in tRec into account
  *   returns 0 if successful, nonzero if not
  */ 
 static
 int
 set_harp_info_miss(patch_info_t *patchInfo, // offset to this HARP's patches
-		   harp_info_t *hInfo,      // offset to this HARP
-		   int nRec_all, 
-		   int nRec_pad)
+		   harp_info_t  *hInfo,     // offset to this HARP
+		   trec_info_t  *tRec,      // not offset, of course
+		   int nRec_all)
 {
-  int rec;                    // T_REC counter
-  int rec0p = hInfo->rec0p;   // first rec within pad
-  int rec0  = hInfo->rec0;    // first rec with a real patch
-  int rec1  = hInfo->rec1;    // last such rec
-  int rec1p = hInfo->rec1p;   // last rec within pad
-  int n_missing;              // number of missing patches
-  int n_patch, n_patchp;      // patch counter
+  int rec;                          // T_REC counter
+  int n_missing;                    // count missing patches
+  int n_patch, n_patchp;            // count present patches
+  const int rec0p = hInfo->rec0p;   // first rec within pad
+  const int rec0  = hInfo->rec0;    // first rec with a real patch
+  const int rec1  = hInfo->rec1;    // last such rec
+  const int rec1p = hInfo->rec1p;   // last rec within pad
 
   // count present and missing T_REC's within the range {rec0..rec1}
   for (n_patch = n_missing = 0, rec = rec0; rec <= rec1; rec++) {
-    if (patchInfo[rec].valid != Patch_Invalid)
+    if (tRec[rec].data == Trec_Data_OK && patchInfo[rec].valid != Patch_Invalid)
       n_patch++;
-    if (patchInfo[rec].valid == Patch_Invalid)
+    if (tRec[rec].data != Trec_Data_OK || patchInfo[rec].valid == Patch_Invalid)
       n_missing++;
   }
   // count all present T_REC's within the range {rec0p..rec1p}
   for (n_patchp = 0, rec = rec0p; rec <= rec1p; rec++)
-    if (patchInfo[rec].valid != Patch_Invalid)
+    if (tRec[rec].data == Trec_Data_OK && patchInfo[rec].valid != Patch_Invalid)
       n_patchp++;
   V_printf(verbflag > 2, "\t\t", 
-	   "HARP %d: #patches = %d, %d  #missing = %d\n", 
-	   hInfo->id, n_patch, n_patchp, n_missing);
+	   "HARP %d: #patches-seen = %d, #missing = %d, #patches-with-padding = %d\n", 
+	   hInfo->id, n_patch, n_missing, n_patchp);
   hInfo->n_missing = n_missing;
   hInfo->n_patch   = n_patch;
   hInfo->n_patchp  = n_patchp;
@@ -1679,6 +2860,7 @@ mark_ingested_harp(const char *rootDir,
 static
 int 
 load_all_patch_info(const char *rootDir, 
+		    const char *refHarp,
 		    patch_info_t *patchInfo, 
 		    harp_info_t  *harpInfo, 
 		    trec_info_t  *tRec, 
@@ -1691,9 +2873,7 @@ load_all_patch_info(const char *rootDir,
   // harp and record info
   int i;                  // harp counter
   int harp_id;            // external harp id number
-  int rec, rec0, rec1;    // first and last rec#, plus counter
-  int inx, inx0, inx1;    // table index for first and last
-  TIME t, t_rec0, t_rec1; // time for rec0, rec1
+  int rec;                // rec# counter
   patch_info_t pInfo;     // place for one frame's info
   int status;             // return values, error status
   
@@ -1708,56 +2888,52 @@ load_all_patch_info(const char *rootDir,
     snprintf(frameFile, sizeof(frameFile), "%s/%s", currDir, FN_TRACK_FRAME);
     snprintf(statFile,  sizeof(statFile),  "%s/%s", currDir, FN_TRACK_STATS);
     // Load all patches for this HARP
-    status = load_harp_patches(harp_id,
-			       currDir, frameFile, statFile,
-			       patchInfo + i*nRec_all, // offset to HARP #i
-			       tRec,                   // not offset
-			       harpInfo + i,           // offset to HARP #i
-			       nRec_all, nRec_pad);
+    status = 
+      load_harp_patches(harp_id,
+			refHarp,
+			currDir, frameFile, statFile,
+			patchInfo + i*nRec_all, // offset to HARP #i
+			harpInfo + i,           // offset to HARP #i
+			tRec,                   // not offset
+			nRec_all);
     if (status != 0) {
       V_printf(-1, "", "Error: Could not load HARP %d (id = %06d).\n", i, harp_id);
       return status;
     }
-    // Put per-harp temporal extent information into harpInfo[i]
-    status = set_harp_info_bdry(patchInfo+nRec_all*i, harpInfo+i, nRec_all, nRec_pad);
+    // Put per-harp temporal extent information into harpInfo[i] -- rec0/rec1, etc.
+    //   rec0p/rec1p are refined later, after we have farside info
+    status = set_harp_info_extent(patchInfo+nRec_all*i, harpInfo+i, tRec, nRec_all, nRec_pad);
     if (status != 0) {
       V_printf(-1, "", "Error: Could not find boundaries: HARP %d (id = %06d).\n", 
 	       i, harp_id);
       return status;
     }
-    // Extrapolate for nRec_pad patches before and after
-    // Interpolates padding for placeholder ROIs in the middle of the HARP
-    // (always succeeds)
-    extrapolate_harp(patchInfo+nRec_all*i,
-		     harpInfo+i,
-		     nRec_all, nRec_pad);
-    // Put per-harp missing-patch information into harpInfo[i]
-    // (after extrapolation)
-    set_harp_info_miss(patchInfo+nRec_all*i, harpInfo+i, nRec_all, nRec_pad);
-  }
-  // set up #valid-harps-at-time count
-  // this count includes padding patches
-  for (rec = 0; rec < nRec_all; rec++) {
-    tRec[rec].nharp = 0;
-    for (i = 0; i < nHarp; i++) {
-      if (patchInfo[i * nRec_all + rec].valid != Patch_Invalid)
-	tRec[rec].nharp++;
-    }
+    // Fill in blank patches according to harp boundary above -- padding and placeholders
+    set_patch_info_blanks(patchInfo+nRec_all*i, harpInfo+i, tRec, nRec_all);
+
+    // Set up pixel bounding box of each patch in the harp
+    //   - uses per-tRec geometry and patch lat/lon bounding box determined above
+    //   - as a side-effect, determines which patches were on far side, sets
+    //     them back to invalid, and shrinks the rec0p/rec1p interval as needed
+    set_patch_info_pixbox(patchInfo+nRec_all*i, harpInfo+i, tRec, nRec_all);
+
+    // Put per-harp missing-patch information into harpInfo[i] -- n_patch, etc.
+    set_harp_info_miss(patchInfo+nRec_all*i, harpInfo+i, tRec, nRec_all);
   }
   // testing
   if (0)
-  for (i = 0; i < 1 && i < nHarp; i++)
-    for (rec = 0; rec < nRec_all; rec++) {
-      if (patchInfo[i * nRec_all + rec].valid) {
-	patch_info_t tmp = patchInfo[i * nRec_all + rec];
-	if (tmp.valid != Patch_Normal) continue;
-	printf("\trec# = %d, x0 = %d, y0 = %d\n", rec, tmp.x0, tmp.y0);
-	printf("\ttrack stats: #pix=%.2f, area1=%.2f, area2=%.2f\n", 
-	       tmp.stats[0], tmp.stats[1], tmp.stats[2]);
-	fflush(stdout);
-	break;
+    for (i = 0; i < 1 && i < nHarp; i++)
+      for (rec = 0; rec < nRec_all; rec++) {
+	if (patchInfo[i * nRec_all + rec].valid) {
+	  patch_info_t tmp = patchInfo[i * nRec_all + rec];
+	  if (tmp.valid != Patch_Normal) continue;
+	  printf("\trec# = %d, x0 = %d, y0 = %d\n", rec, tmp.x0, tmp.y0);
+	  printf("\ttrack stats: #pix=%.2f, area1=%.2f, area2=%.2f\n", 
+		 tmp.stats[0], tmp.stats[1], tmp.stats[2]);
+	  fflush(stdout);
+	  break;
+	}
       }
-    }
   return 0;
 }
 
@@ -1768,7 +2944,9 @@ load_all_patch_info(const char *rootDir,
  * Returns 0 if successful, 1 if not
  * Some aspects of ingestion may fail in minor ways.  This still results
  * in a "success" exit code.  Two examples: failure to insert some keywords,
- * and the HARP rotating off the disk so that nothing is actually ingested.
+ * failure to insert link.
+ * Note, HARP rotating off the disk used to be a minor failure, but we catch
+ * this condition earlier now.
  */
 static
 int 
@@ -1789,6 +2967,10 @@ ingest_harp(patch_info_t *pInfo,     // the patch to ingest, function of (HARP,T
   // 1: Read the bitmap mask of the HARP
   if (pInfo->valid == Patch_Normal) {
     // read fits bitmap
+    if (!pInfo->patchName) {
+      V_printf(-1, "", "Internal error: Bad patchName during ingest %s.\n", outQuery);
+      return 1; // error
+    }
     if (load_fits(pInfo->patchName, &(pInfo->image), pInfo->dims) != 0) {
       V_printf(-1, "", "Patch read failed, could not ingest %s.\n", outQuery);
       return 1; // error
@@ -1809,29 +2991,14 @@ ingest_harp(patch_info_t *pInfo,     // the patch to ingest, function of (HARP,T
     pInfo->image = NULL;
   }
 
-  // 2: Find x/y boundary of HARP at T_REC using lat/lon info
-  //    rv = 0 for OK, 1 for all pix on farside, 2 for error
-  rv = compute_boundary(pInfo, magRec);
-  // handle exceptional cases
-  if (rv == 2) {
-    // no geometry found => cannot ingest => error
-    V_printf(-1, "", "Failed to access geometry keywords in %s\n", outQuery);
-    return 1; // error
-  } else if (rv == 1) {
-    // entire HARP was on farside (should only happen for extrapolated HARPs)
-    //   set to in-valid, to ignore the patch (although it's not used in future)
-    pInfo->valid = Patch_Invalid;
-    return 0; // nothing to ingest, but not an error
-  } 
-
-  // 3: Update HARP outline using the full-disk mask
+  // 2: Update HARP outline using the full-disk mask
   // (this implies a size change to pInfo->image, which is reallocated)
   if (update_bitmap(pInfo, maskImg) != 0) {
     V_printf(-1, "", "Could not compute full HARP mask at %s\n", outQuery);
     return 1; // error
   }
 
-  // 4: Write the HARP at T_REC
+  // 3: Write the HARP at T_REC
   // Also frees pInfo->image
   //    rv = 0 for success, 1 if some errors, 2 if record not inserted
   rv = ingest_record(pInfo, hInfo, tRec1, tRec, runInfo, 
@@ -1840,7 +3007,7 @@ ingest_harp(patch_info_t *pInfo,     // the patch to ingest, function of (HARP,T
     V_printf(-1, "", "Failed to insert %s\n", outQuery);
     return 1;  // failure
   } else if (rv == 1) {
-    // typically keyword errors, not always worth noting
+    // keyword/link errors, not noteworthy
     V_printf(verbflag > 1, "", "Some nonfatal errors with %s\n", outQuery);
   }
   return 0; // OK
@@ -1893,7 +3060,7 @@ update_bitmap(patch_info_t *pInfo, char *maskImg)
     for (i = 0; i < nx; i++)
       pInfo->image[j*nx + i] = maskImg[(j + pInfo->ymin) * NPIX_FULLDISK + 
 				       (i + pInfo->xmin)];
-  V_printf(verbflag > 2, "\t\t", "(nx,ny) = (%d, %d) -> (%d, %d)\n", 
+  V_printf(verbflag > 2, "\t\t    ", "shifting mask (nx,ny) = (%d, %d) -> (%d, %d)\n", 
 	   pInfo->dims[0], pInfo->dims[1], nx, ny);
   // overlay the HARP bitmap, if it was found, onto the mask
   //   (valid == Patch_Padding -> no HARP bitmap)
@@ -1931,7 +3098,7 @@ update_bitmap(patch_info_t *pInfo, char *maskImg)
  *
  * Return codes:
  *   0 = all OK
- *   1 = some trouble, but record was inserted
+ *   1 = some trouble (keyword, link), but record was inserted
  *   2 = fatal, could not insert this record
  *
  * As a side effect, also frees pInfo->image (if it is non-NULL)
@@ -2017,18 +3184,15 @@ ingest_record(patch_info_t *pInfo,
   if (ok != DRMS_SUCCESS) not_ok++;
   ok = drms_setkey_int(outRec, "MISSVALS", totvals-datavals);
   if (ok != DRMS_SUCCESS) not_ok++;
-  if (distance2center(magRec, pInfo->x0, pInfo->y0, &xDist, &yDist) == 0) {
-    ok = drms_setkey_float(outRec, "CRVAL1", xDist);
-    if (ok != DRMS_SUCCESS) not_ok++;
-    ok = drms_setkey_float(outRec, "CRVAL2", yDist);
-    if (ok != DRMS_SUCCESS) not_ok++;
-  } else {
-    V_printf(-1, "", "Could not get mag ephemeris to set up patch WCS\n");
-    status = 1; // is a nonfatal error
-    not_ok += 2;
-  }
+  // use WCS in tRec1 to get new wcs
+  distance2center(tRec1->wcs, pInfo->x0, pInfo->y0, &xDist, &yDist);
+  ok = drms_setkey_float(outRec, "CRVAL1", xDist);
+  if (ok != DRMS_SUCCESS) not_ok++;
+  ok = drms_setkey_float(outRec, "CRVAL2", yDist);
+  if (ok != DRMS_SUCCESS) not_ok++;
+  // summary
   if (not_ok > 0) {
-    V_printf(-1, "\t", "Failed to set up %d patch keys: %s\n", not_ok, tRec1->str);
+    V_printf(-1, "\t\t", "Failed to set up %d patch keys: %s\n", not_ok, tRec1->str);
     // commented out to make a simple key insertion failure not notable
     // status = 1; 
   }
@@ -2169,7 +3333,7 @@ int
 load_fits(char *filename, char **image, int *dims)
 {
   char *data = NULL;     // must init to null
-  fitsfile *fptr;        // fitsio input file pointer
+  fitsfile *fptr = NULL; // fitsio input file pointer
   int fstatus = 0;       // fitsio status variable: all ok now
   int mem_err = 0;       // no allocation error now
   int bitpix;	         // Data type of fits file
@@ -2193,7 +3357,8 @@ load_fits(char *filename, char **image, int *dims)
   if (fstatus != 0) goto done;
   // note, fstatus = 0
  done:
-  fits_close_file(fptr, &fstatus);
+  if (fptr) 
+    fits_close_file(fptr, &fstatus);
   if (fstatus || mem_err) {
     // report the error
     char err_msg[FLEN_STATUS];
@@ -2295,7 +3460,7 @@ set_keys_match(DRMS_Record_t *rec,
   if (nMatch == 0)
     best_match = 0; // no match
   else
-    best_match = mInfo[hInfo->match[0]].id;
+    best_match = mInfo[hInfo->top_match].id;
   ok = drms_setkey_int(rec, "NOAA_AR", best_match);
   if (ok != DRMS_SUCCESS) not_ok++;
   // string of all matches (more than one OK)
@@ -2377,7 +3542,7 @@ set_keys_stats(DRMS_Record_t *rec,
   if (ok != DRMS_SUCCESS) not_ok++;
   ok = drms_setkey_float(rec, "LATDTMAX", pInfo->lat1);
   if (ok != DRMS_SUCCESS) not_ok++;
-  ok = drms_setkey_float(rec, "OMEGA_DT",  pInfo->omega);
+  ok = drms_setkey_float(rec, "OMEGA_DT", pInfo->omega);
   if (ok != DRMS_SUCCESS) not_ok++;
   // insert "stats" keywords
   int sn;
@@ -2413,10 +3578,11 @@ set_keys_stats(DRMS_Record_t *rec,
  * Computes: pInfo->{xmin, xmax, ymin, ymax}
  *
  * return value:
- *   2 if geometry was not found (an error)
  *   1 if all pixels were off-disk (not an error)
  *   0 otherwise
  *
+ * Algorithm: Scan along the edge, sampling in the lat/lon space
+ *   with given resolution, nominally ~ 0.03 degree
  * Not sure if the caller cares about +1 value, but someone should 
  * handle this case.
  * We handle the case where the hi/lo pixel site is not on the 
@@ -2434,45 +3600,29 @@ set_keys_stats(DRMS_Record_t *rec,
 
 static
 int 
-compute_boundary(patch_info_t *pInfo, DRMS_Record_t *rec)
+compute_boundary(patch_info_t *pInfo, wcs_t wcs)
 {
-  // Scan along the edge, sampling in the lat/lon space
-  // with 0.03 degree resolution
-  int status;
   int farside, ondisk;
   double xmin, xmax, ymin, ymax;
   double x, y, lat, lon, lat0, lon0, lat1, lon1, dl;		// loop control
-	
-  // ephemeris
-  status = 0;
-  float rSun_ref = drms_getkey_float(rec, "RSUN_REF", &status);
-  if (status) rSun_ref = 6.96e8;
-  status = 0;
-  double dSun   = drms_getkey_float(rec, "DSUN_OBS", &status);
-  double cdelt  = drms_getkey_float(rec, "CDELT1", &status);  // arcsec, if dx=dy
-  double ang_r  = asin(rSun_ref / dSun); // rSun in radians -- about .26 deg
-  double rsun   = asin(rSun_ref / dSun) * RAD2ARCSEC / cdelt;
-  double crvalx = drms_getkey_float(rec, "CRVAL1", &status);  // disc center, arcsec
-  double crvaly = drms_getkey_float(rec, "CRVAL2", &status);
-  double crpix1 = drms_getkey_float(rec, "CRPIX1", &status);  // center, ccd, orig.
-  double crpix2 = drms_getkey_float(rec, "CRPIX2", &status);
-  double crota2 = drms_getkey_float(rec, "CROTA2", &status);
-  double sina   = sin(crota2 * RADSINDEG); 
-  double cosa   = cos(crota2 * RADSINDEG);
-  double xcen   = PIX_X(0.0,0.0) - 1.0;           // Center of disk, starting at 0
+  /*
+   *  ephemeris
+   */
+  // standard local variables for WCS
+  double crvalx, crvaly, crpix1, crpix2, cdelt, crota2, sina, cosa;
+  WCS2LOCALS(wcs); // initialize the above vars
+  // center of disk, starting at 0 -- these macros use the above variables
+  double xcen   = PIX_X(0.0,0.0) - 1.0;
   double ycen   = PIX_Y(0.0,0.0) - 1.0;
-  double latc   = drms_getkey_float(rec, "CRLT_OBS", &status) * RADSINDEG;
-  double lonc   = drms_getkey_float(rec, "CRLN_OBS", &status) * RADSINDEG;
-  double peff   = - crota2 * RADSINDEG;
+  // extras for img2sphere()/sphere2img()
+  double latc   = wcs.crlt_obs * RADSINDEG;
+  double lonc   = wcs.crln_obs * RADSINDEG;
+  double peff   = - wcs.crota2 * RADSINDEG;
+  double ang_r  = asin(wcs.rsun_ref / wcs.dsun_obs); // rSun in radians -- about .26 deg
+  double rsun   = asin(wcs.rsun_ref / wcs.dsun_obs) * RAD2ARCSEC / wcs.cdelt1;
 	
-  V_printf(verbflag > 2, "\t\t", "cen = (%.2f, %.2f) R=%f. latc=%.2f, lonc=%.2f\n", 
-	   xcen, ycen, rsun, latc/RADSINDEG, lonc/RADSINDEG);
-  // we require all the geometry
-  if (status)
-    return 2;
-  // check for missing keys
-  if (isnan(rsun) || isnan(sina) || isnan(xcen) || isnan(latc))
-    return 2;
+  V_printf(verbflag > 2, "\t\t  ", "cen = (%.2f, %.2f) R=%f latc=%.2f lonc=%.2f\n", 
+	   pInfo->num, xcen, ycen, rsun, latc/RADSINDEG, lonc/RADSINDEG);
 
   // Step 0: The initial lat/lon bounding box in degrees
   lat0 = pInfo->lat0 * RADSINDEG;
@@ -2520,8 +3670,8 @@ compute_boundary(patch_info_t *pInfo, DRMS_Record_t *rec)
     else 
       farside = 1;
   }
-  V_printf(verbflag > 2, "\t\t", 
-	   "BB: (%.2f, %.2f) X (%.2f, %.2f), %s, %s\n", xmin, xmax, ymin, ymax, 
+  V_printf(verbflag > 2, "\t\t  ", 
+	   "BB     : (%.3f, %.3f) X (%.3f, %.3f), %s, %s\n", xmin, xmax, ymin, ymax, 
 	   ondisk  ? "some on-disk pixels" : "no visible pixels", 
 	   farside ? "some farside pixels" : "no farside pixels");
   // off-disk, skip it
@@ -2566,7 +3716,7 @@ compute_boundary(patch_info_t *pInfo, DRMS_Record_t *rec)
       while (lon > lon1) lon -= 2*M_PI;
       if (lat0 <= lat && lat <= lat1 && lon0 <= lon && lon <= lon1) {
 	// this is rare, so announce it
-	V_printf(verbflag > 2, "\t\t", "Note: Extremum found off the box boundary.\n");
+	V_printf(verbflag > 2, "\t\t  ", "Note: Extremum found off the box boundary.\n");
 	// patch up the pixel BB to include the pixel:
 	//  (xpos, ypos) * rsun + (xc,yc)
 	x = xcen + rsun*xpos;
@@ -2577,20 +3727,20 @@ compute_boundary(patch_info_t *pInfo, DRMS_Record_t *rec)
 
   // Step 4: Make pixel BB into an integer box and clip to image size
   // clip to legal range {0..Npix - 1}
-  V_printf(verbflag > 2, "\t\t", "BB pre : (%g, %g) X (%g, %g)\n", 
+  V_printf(verbflag > 2, "\t\t  ", "BB pre : (%.3f, %.3f) X (%.3f, %.3f)\n", 
 	   xmin, xmax, ymin, ymax);
   if (xmin < 0   ) xmin = 0;
   if (xmax >= NPIX_FULLDISK) xmax = NPIX_FULLDISK-1;
   if (ymin < 0   ) ymin = 0;
   if (ymax >= NPIX_FULLDISK) ymax = NPIX_FULLDISK-1;
-  V_printf(verbflag > 2, "\t\t", "BB clip: (%g, %g) X (%g, %g)\n", 
+  V_printf(verbflag > 2, "\t\t  ", "BB clip: (%.3f, %.3f) X (%.3f, %.3f)\n", 
 	   xmin, xmax, ymin, ymax);
   // integer boundaries
   pInfo->xmin = floor(xmin); 
   pInfo->xmax = ceil(xmax);
   pInfo->ymin = floor(ymin); 
   pInfo->ymax = ceil(ymax);
-  V_printf(verbflag > 2, "\t\t", "BB final: (%d, %d) X (%d, %d)\n", 
+  V_printf(verbflag > 2, "\t\t  ", "BB end : (%d, %d) X (%d, %d)\n", 
 	   pInfo->xmin, pInfo->xmax, pInfo->ymin, pInfo->ymax);
   
   return 0;
@@ -2600,37 +3750,25 @@ compute_boundary(patch_info_t *pInfo, DRMS_Record_t *rec)
 #undef UPDATE_RANGE
 
 
-
 /*
  * get distance of points x and y from center to set up WCS
- * Return 0 if successful, 1 if not
- * (Only error condition is missing WCS in "rec" input)
- * x, y start from 0
+ *   x, y start from 0
  */
-
 static
-int 
-distance2center(DRMS_Record_t *rec, double x, double y, double *xDist, double *yDist)
+void
+distance2center(wcs_t wcs, double x, double y, double *xDist, double *yDist)
 {
-  int status = 0;
-
-  float cdelt  = drms_getkey_float(rec, "CDELT1", &status); // in arcsec, assumimg dx=dy
-  float crvalx = drms_getkey_float(rec, "CRVAL1", &status); // center of disc in arcsec
-  float crvaly = drms_getkey_float(rec, "CRVAL2", &status);
-  float crpix1 = drms_getkey_float(rec, "CRPIX1", &status); // disk center, ccd, original
-  float crpix2 = drms_getkey_float(rec, "CRPIX2", &status);
-  float crota2 = drms_getkey_float(rec, "CROTA2", &status);
-  float sina = sin(crota2 * RADSINDEG); 
-  float cosa = cos(crota2 * RADSINDEG);
-  float pix_x = x + 1.0;
-  float pix_y = y + 1.0;
+  // standard local variables for WCS
+  double crvalx, crvaly, crpix1, crpix2, cdelt, crota2, sina, cosa;
+  WCS2LOCALS(wcs); // initialize the above vars from wcs
+  
+  // center location
+  double pix_x = x + 1.0;
+  double pix_y = y + 1.0;
 	
+  // standard macros rely upon some of above "WCS2LOCALS" vars
   *xDist = WX(pix_x,pix_y);
   *yDist = WY(pix_x,pix_y);
 	
   // printf("%f,%f\n", xDist, yDist);
-  if (status != 0 || isnan(sina) || isnan(*xDist))
-    return 1;
-  else
-    return 0;
 }

@@ -33,11 +33,12 @@ function out = text_on_image(img, txts, icolor, tcolor, pos, font)
 % cases, if the overlay is "0", icolor is placed in the output.  If
 % icolor is empty, *the output receives the image value* where the
 % overlay equals 0.  This is the default for indexed images.
-% * The position of the letter bitmaps within the image is given in scaled
-% coordinates by pos(1:2).  Use (1,1) for lower right, (0,0) for upper
-% left, and (0.5,0.5) for centered.  The third component of pos, if
-% given, encodes the rotation.  The most useful value is 1, which gives
-% standard vertical text.
+% * The position of the letter bitmaps within the image is given by 
+% pos(1:2,:).  Scaled coordinates (i.e., (1,1) for lower right, 
+% (0,0) for upper left, and (0.5,0.5) for centered) are assumed, unless
+% some position exceeds 1, in which case pixel coordinates are assumed.
+% * The third component of pos, if given, encodes the rotation.  The 
+% most useful value is 1, which gives standard vertical text.
 % * The font is a font structure which is output from 
 % text_on_image_font, or text_on_image_font_old.  See those routines 
 % for more.
@@ -59,10 +60,6 @@ function out = text_on_image(img, txts, icolor, tcolor, pos, font)
 
 % Written by Michael Turmon (turmon@jpl.nasa.gov) on 25 Sep 09.
 % Copyright (c) 2009.  All rights reserved.
-
-% This is the string we used, taken from `man ascii'.
-% ' !"#$%&''()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~'
-% We only support contiguous dictionaries at the moment.
 
 % 
 % Error checking

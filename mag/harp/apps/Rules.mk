@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, ingest_mharp ingest_mharp_log noaa_loop)
+MODEXE_$(d)	:= $(addprefix $(d)/, ingest_mharp ingest_mharp_log track_hmi_check_masks)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)

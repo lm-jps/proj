@@ -144,9 +144,15 @@ if v(1) ~= '/',
 end;
 % this is the SUMS filename
 file1 = v;
-% load thru http, with optional cache (loadfitsa understands URLs)
-file1 = sprintf('http://jsoc.stanford.edu/%s', file1);
-[im,err1] = loadfitsa_jsoc(file1);
+at_stanford = ~isempty(regexpi(getenv('HOST'),'stanford'));
+if at_stanford,
+  % load as a plain file
+  [im,err1] = loadfitsa(file1);
+else,
+  % load thru http, with optional cache (loadfitsa understands URLs)
+  file1 = sprintf('http://jsoc.stanford.edu/%s', file1);
+  [im,err1] = loadfitsa_jsoc(file1);
+end;
 % Check for an error
 if err1,
   % summarize
