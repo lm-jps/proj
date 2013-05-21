@@ -222,98 +222,47 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
 
 
         /* brute force method of calculating the derivative (no consideration for edges) */
-      	for (i = 3; i <= nx-4; i++) 
+      	for (i = 1; i <= nx-2; i++) 
 	  {
 	    for (j = 0; j <= ny-1; j++) 
 	      {
-                 derx_bt[j * nx + i] = (-bt[j * nx + (i-3)] + 9.0*bt[j * nx + (i-2)] - 45.0*bt[j * nx + (i-1)] + 45*bt[j * nx + (i+1)] - 9.0*bt[j * nx + (i+2)] + bt[j * nx + (i+3)])*(1.0/60.0);
+		derx_bt[j * nx + i] = (bt[j * nx + i+1] - bt[j * nx + i-1])*0.5;
               }
           }
 
         /* brute force method of calculating the derivative (no consideration for edges) */
       	for (i = 0; i <= nx-1; i++) 
 	  {
-	    for (j = 3; j <= ny-4; j++) 
+	    for (j = 1; j <= ny-2; j++) 
 	      {
-                 dery_bt[j * nx + i] = (-bt[(j-3) * nx + i] + 9.0*bt[(j-2) * nx + i] - 45.0*bt[(j-1) * nx + i] + 45*bt[(j+1) * nx + i] - 9.0*bt[(j+2) * nx + i] + bt[(j+3) * nx + i])*(1.0/60.0);
+                dery_bt[j * nx + i] = (bt[(j+1) * nx + i] - bt[(j-1) * nx + i])*0.5;
               }
           }
 
 
-        /* consider the edges: 3 pixels on each edge, for a total of 12 edge formulae below */
+        /* consider the edges */
         i=0; 
       	for (j = 0; j <= ny-1; j++) 
           {
-             derx_bt[j * nx + i] = (-147.0*bt[j * nx + i] + 360.0*bt[j * nx + (i+1)] - 450.0*bt[j * nx + (i+2)] + 400.0*bt[j * nx + (i+3)] - 225.0*bt[j * nx + (i+4)] + 72.0*bt[j * nx + (i+5)] - 10.0*bt[j * nx + (i+6)])*(1.0/60.0);
+             derx_bt[j * nx + i] = ( (-3*bt[j * nx + i]) + (4*bt[j * nx + (i+1)]) - (bt[j * nx + (i+2)]) )*0.5;
           }
 
         i=nx-1; 
       	for (j = 0; j <= ny-1; j++) 
           {
-             derx_bt[j * nx + i] = ( 147.0*bt[j * nx + i] - 360.0*bt[j * nx + (i-1)] + 450.0*bt[j * nx + (i-2)] - 400.0*bt[j * nx + (i-3)] + 225.0*bt[j * nx + (i-4)] - 72.0*bt[j * nx + (i-5)] + 10.0*bt[j * nx + (i-6)])*(1.0/60.0);
+             derx_bt[j * nx + i] = ( (3*bt[j * nx + i]) + (-4*bt[j * nx + (i-1)]) - (-bt[j * nx + (i-2)]) )*0.5; 
           }
-
-
-        i=1; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             derx_bt[j * nx + i] = (-10.0*bt[j * nx + i] - 77.0*bt[j * nx + (i+1)] + 150.0*bt[j * nx + (i+2)] - 100.0*bt[j * nx + (i+3)] + 50.0*bt[j * nx + (i+4)] - 15.0*bt[j * nx + (i+5)] + 2.0*bt[j * nx + (i+6)])*(1.0/60.0);
-          }
-
-        i=nx-2; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             derx_bt[j * nx + i] = ( 10.0*bt[j * nx + i] + 77.0*bt[j * nx + (i-1)] - 150.0*bt[j * nx + (i-2)] + 100.0*bt[j * nx + (i-3)] - 50.0*bt[j * nx + (i-4)] + 15.0*bt[j * nx + (i-5)] - 2.0*bt[j * nx + (i-6)])*(1.0/60.0);
-          }
-
-
-        i=2; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             derx_bt[j * nx + i] = ( 2.0*bt[j * nx + i] - 24.0*bt[j * nx + (i+1)] - 35.0*bt[j * nx + (i+2)] + 80.0*bt[j * nx + (i+3)] - 30.0*bt[j * nx + (i+4)] + 8.0*bt[j * nx + (i+5)] - bt[j * nx + (i+6)])*(1.0/60.0);
-          }
-
-        i=nx-3; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             derx_bt[j * nx + i] = (-2.0*bt[j * nx + i] + 24.0*bt[j * nx + (i-1)] + 35.0*bt[j * nx + (i-2)] - 80.0*bt[j * nx + (i-3)] + 30.0*bt[j * nx + (i-4)] - 8.0*bt[j * nx + (i-5)] + bt[j * nx + (i-6)])*(1.0/60.0);
-          }
-
 
         j=0;
         for (i = 0; i <= nx-1; i++) 
           {
-             dery_bt[j * nx + i] = (-147.0*bt[j * nx + i] + 360.0*bt[(j+1) * nx + i] - 450.0*bt[(j+2) * nx + i] + 400.0*bt[(j+3) * nx + i] - 225.0*bt[(j+4) * nx + i] + 72.0*bt[(j+5) * nx + i] - 10.0*bt[(j+6) * nx + i])*(1.0/60.0);
+             dery_bt[j * nx + i] = ( (-3*bt[j*nx + i]) + (4*bt[(j+1) * nx + i]) - (bt[(j+2) * nx + i]) )*0.5; 
           }
 
         j=ny-1;
         for (i = 0; i <= nx-1; i++) 
           {
-             dery_bt[j * nx + i] = ( 147.0*bt[j * nx + i] - 360.0*bt[(j-1) * nx + i] + 450.0*bt[(j-2) * nx + i] - 400.0*bt[(j-3) * nx + i] + 225.0*bt[(j-4) * nx + i] - 72.0*bt[(j-5) * nx + i] + 10.0*bt[(j-6) * nx + i])*(1.0/60.0);
-          }
-
-        j=1;
-        for (i = 0; i <= nx-2; i++) 
-          {
-             dery_bt[j * nx + i] = (-10.0*bt[j * nx + i] - 77.0*bt[(j+1) * nx + i] + 150.0*bt[(j+2) * nx + i] - 100.0*bt[(j+3) * nx + i] + 50.0*bt[(j+4) * nx + i] - 15.0*bt[(j+5) * nx + i] + 2.0*bt[(j+6) * nx + i])*(1.0/60.0);
-          }
-
-        j=ny-2;
-        for (i = 0; i <= nx-2; i++) 
-          {
-             dery_bt[j * nx + i] = ( 10.0*bt[j * nx + i] + 77.0*bt[(j-1) * nx + i] - 150.0*bt[(j-2) * nx + i] + 100.0*bt[(j-3) * nx + i] - 50.0*bt[(j-4) * nx + i] + 15.0*bt[(j-5) * nx + i] - 2.0*bt[(j-6) * nx + i])*(1.0/60.0);
-          }
-
-        j=2;
-        for (i = 0; i <= nx-3; i++) 
-          {
-             dery_bt[j * nx + i] = ( 2.0*bt[j * nx + i] - 24.0*bt[(j+1) * nx + i] - 35.0*bt[(j+2) * nx + i] + 80.0*bt[(j+3) * nx + i] - 30.0*bt[(j+4) * nx + i] + 8.0*bt[(j+5) * nx + i] - bt[(j+6) * nx + i])*(1.0/60.0);
-          }
-
-        j=ny-3;
-        for (i = 0; i <= nx-3; i++) 
-          {
-             dery_bt[j * nx + i] = (-2.0*bt[j * nx + i] + 24.0*bt[(j-1) * nx + i] + 35.0*bt[(j-2) * nx + i] - 80.0*bt[(j-3) * nx + i] + 30.0*bt[(j-4) * nx + i] - 8.0*bt[(j-5) * nx + i] + bt[(j-6) * nx + i])*(1.0/60.0);
+             dery_bt[j * nx + i] = ( (3*bt[j * nx + i]) + (-4*bt[(j-1) * nx + i]) - (-bt[(j-2) * nx + i]) )*0.5;
           }
 
 
@@ -353,98 +302,47 @@ int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivat
         float sum,err = 0.0;
 
         /* brute force method of calculating the derivative (no consideration for edges) */
-      	for (i = 3; i <= nx-4; i++) 
+      	for (i = 1; i <= nx-2; i++) 
 	  {
 	    for (j = 0; j <= ny-1; j++) 
 	      {
-                 derx_bh[j * nx + i] = (-bh[j * nx + (i-3)] + 9.0*bh[j * nx + (i-2)] - 45.0*bh[j * nx + (i-1)] + 45*bh[j * nx + (i+1)] - 9.0*bh[j * nx + (i+2)] + bh[j * nx + (i+3)])*(1.0/60.0);
+		derx_bh[j * nx + i] = (bh[j * nx + i+1] - bh[j * nx + i-1])*0.5;
               }
           }
 
         /* brute force method of calculating the derivative (no consideration for edges) */
       	for (i = 0; i <= nx-1; i++) 
 	  {
-	    for (j = 3; j <= ny-4; j++) 
+	    for (j = 1; j <= ny-2; j++) 
 	      {
-                 dery_bh[j * nx + i] = (-bh[(j-3) * nx + i] + 9.0*bh[(j-2) * nx + i] - 45.0*bh[(j-1) * nx + i] + 45*bh[(j+1) * nx + i] - 9.0*bh[(j+2) * nx + i] + bh[(j+3) * nx + i])*(1.0/60.0);
+                dery_bh[j * nx + i] = (bh[(j+1) * nx + i] - bh[(j-1) * nx + i])*0.5;
               }
           }
 
 
-        /* consider the edges: 3 pixels on each edge, for a total of 12 edge formulae below */
+        /* consider the edges */
         i=0; 
       	for (j = 0; j <= ny-1; j++) 
           {
-             derx_bh[j * nx + i] = (-147.0*bh[j * nx + i] + 360.0*bh[j * nx + (i+1)] - 450.0*bh[j * nx + (i+2)] + 400.0*bh[j * nx + (i+3)] - 225.0*bh[j * nx + (i+4)] + 72.0*bh[j * nx + (i+5)] - 10.0*bh[j * nx + (i+6)])*(1.0/60.0);
+             derx_bh[j * nx + i] = ( (-3*bh[j * nx + i]) + (4*bh[j * nx + (i+1)]) - (bh[j * nx + (i+2)]) )*0.5;
           }
 
         i=nx-1; 
       	for (j = 0; j <= ny-1; j++) 
           {
-             derx_bh[j * nx + i] = ( 147.0*bh[j * nx + i] - 360.0*bh[j * nx + (i-1)] + 450.0*bh[j * nx + (i-2)] - 400.0*bh[j * nx + (i-3)] + 225.0*bh[j * nx + (i-4)] - 72.0*bh[j * nx + (i-5)] + 10.0*bh[j * nx + (i-6)])*(1.0/60.0);
+             derx_bh[j * nx + i] = ( (3*bh[j * nx + i]) + (-4*bh[j * nx + (i-1)]) - (-bh[j * nx + (i-2)]) )*0.5; 
           }
-
-
-        i=1; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             derx_bh[j * nx + i] = (-10.0*bh[j * nx + i] - 77.0*bh[j * nx + (i+1)] + 150.0*bh[j * nx + (i+2)] - 100.0*bh[j * nx + (i+3)] + 50.0*bh[j * nx + (i+4)] - 15.0*bh[j * nx + (i+5)] + 2.0*bh[j * nx + (i+6)])*(1.0/60.0);
-          }
-
-        i=nx-2; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             derx_bh[j * nx + i] = ( 10.0*bh[j * nx + i] + 77.0*bh[j * nx + (i-1)] - 150.0*bh[j * nx + (i-2)] + 100.0*bh[j * nx + (i-3)] - 50.0*bh[j * nx + (i-4)] + 15.0*bh[j * nx + (i-5)] - 2.0*bh[j * nx + (i-6)])*(1.0/60.0);
-          }
-
-
-        i=2; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             derx_bh[j * nx + i] = ( 2.0*bh[j * nx + i] - 24.0*bh[j * nx + (i+1)] - 35.0*bh[j * nx + (i+2)] + 80.0*bh[j * nx + (i+3)] - 30.0*bh[j * nx + (i+4)] + 8.0*bh[j * nx + (i+5)] - bh[j * nx + (i+6)])*(1.0/60.0);
-          }
-
-        i=nx-3; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             derx_bh[j * nx + i] = (-2.0*bh[j * nx + i] + 24.0*bh[j * nx + (i-1)] + 35.0*bh[j * nx + (i-2)] - 80.0*bh[j * nx + (i-3)] + 30.0*bh[j * nx + (i-4)] - 8.0*bh[j * nx + (i-5)] + bh[j * nx + (i-6)])*(1.0/60.0);
-          }
-
 
         j=0;
         for (i = 0; i <= nx-1; i++) 
           {
-             dery_bh[j * nx + i] = (-147.0*bh[j * nx + i] + 360.0*bh[(j+1) * nx + i] - 450.0*bh[(j+2) * nx + i] + 400.0*bh[(j+3) * nx + i] - 225.0*bh[(j+4) * nx + i] + 72.0*bh[(j+5) * nx + i] - 10.0*bh[(j+6) * nx + i])*(1.0/60.0);
+             dery_bh[j * nx + i] = ( (-3*bh[j*nx + i]) + (4*bh[(j+1) * nx + i]) - (bh[(j+2) * nx + i]) )*0.5; 
           }
 
         j=ny-1;
         for (i = 0; i <= nx-1; i++) 
           {
-             dery_bh[j * nx + i] = ( 147.0*bh[j * nx + i] - 360.0*bh[(j-1) * nx + i] + 450.0*bh[(j-2) * nx + i] - 400.0*bh[(j-3) * nx + i] + 225.0*bh[(j-4) * nx + i] - 72.0*bh[(j-5) * nx + i] + 10.0*bh[(j-6) * nx + i])*(1.0/60.0);
-          }
-
-        j=1;
-        for (i = 0; i <= nx-2; i++) 
-          {
-             dery_bh[j * nx + i] = (-10.0*bh[j * nx + i] - 77.0*bh[(j+1) * nx + i] + 150.0*bh[(j+2) * nx + i] - 100.0*bh[(j+3) * nx + i] + 50.0*bh[(j+4) * nx + i] - 15.0*bh[(j+5) * nx + i] + 2.0*bh[(j+6) * nx + i])*(1.0/60.0);
-          }
-
-        j=ny-2;
-        for (i = 0; i <= nx-2; i++) 
-          {
-             dery_bh[j * nx + i] = ( 10.0*bh[j * nx + i] + 77.0*bh[(j-1) * nx + i] - 150.0*bh[(j-2) * nx + i] + 100.0*bh[(j-3) * nx + i] - 50.0*bh[(j-4) * nx + i] + 15.0*bh[(j-5) * nx + i] - 2.0*bh[(j-6) * nx + i])*(1.0/60.0);
-          }
-
-        j=2;
-        for (i = 0; i <= nx-3; i++) 
-          {
-             dery_bh[j * nx + i] = ( 2.0*bh[j * nx + i] - 24.0*bh[(j+1) * nx + i] - 35.0*bh[(j+2) * nx + i] + 80.0*bh[(j+3) * nx + i] - 30.0*bh[(j+4) * nx + i] + 8.0*bh[(j+5) * nx + i] - bh[(j+6) * nx + i])*(1.0/60.0);
-          }
-
-        j=ny-3;
-        for (i = 0; i <= nx-3; i++) 
-          {
-             dery_bh[j * nx + i] = (-2.0*bh[j * nx + i] + 24.0*bh[(j-1) * nx + i] + 35.0*bh[(j-2) * nx + i] - 80.0*bh[(j-3) * nx + i] + 30.0*bh[(j-4) * nx + i] - 8.0*bh[(j-5) * nx + i] + bh[(j-6) * nx + i])*(1.0/60.0);
+             dery_bh[j * nx + i] = ( (3*bh[j * nx + i]) + (-4*bh[(j-1) * nx + i]) - (-bh[(j-2) * nx + i]) )*0.5;
           }
 
 
@@ -483,114 +381,54 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
 	*mean_derivative_bz_ptr = 0.0;
 	float sum,err = 0.0;
 
-
         /* brute force method of calculating the derivative (no consideration for edges) */
-      	for (i = 3; i <= nx-4; i++) 
+      	for (i = 1; i <= nx-2; i++) 
 	  {
 	    for (j = 0; j <= ny-1; j++) 
 	      {
-                 if isnan(bz[j * nx + i]) continue;
-                 derx_bz[j * nx + i] = (-bz[j * nx + (i-3)] + 9.0*bz[j * nx + (i-2)] - 45.0*bz[j * nx + (i-1)] + 45*bz[j * nx + (i+1)] - 9.0*bz[j * nx + (i+2)] + bz[j * nx + (i+3)])*(1.0/60.0);
+                if isnan(bz[j * nx + i]) continue;
+		derx_bz[j * nx + i] = (bz[j * nx + i+1] - bz[j * nx + i-1])*0.5;
               }
           }
 
         /* brute force method of calculating the derivative (no consideration for edges) */
       	for (i = 0; i <= nx-1; i++) 
 	  {
-	    for (j = 3; j <= ny-4; j++) 
+	    for (j = 1; j <= ny-2; j++) 
 	      {
-                 if isnan(bz[j * nx + i]) continue;
-                 dery_bz[j * nx + i] = (-bz[(j-3) * nx + i] + 9.0*bz[(j-2) * nx + i] - 45.0*bz[(j-1) * nx + i] + 45*bz[(j+1) * nx + i] - 9.0*bz[(j+2) * nx + i] + bz[(j+3) * nx + i])*(1.0/60.0);
+                if isnan(bz[j * nx + i]) continue;
+                dery_bz[j * nx + i] = (bz[(j+1) * nx + i] - bz[(j-1) * nx + i])*0.5;
               }
           }
 
 
-        /* consider the edges: 3 pixels on each edge, for a total of 12 edge formulae below */
+        /* consider the edges */
         i=0; 
       	for (j = 0; j <= ny-1; j++) 
           {
              if isnan(bz[j * nx + i]) continue;
-             derx_bz[j * nx + i] = (-147.0*bz[j * nx + i] + 360.0*bz[j * nx + (i+1)] - 450.0*bz[j * nx + (i+2)] + 400.0*bz[j * nx + (i+3)] - 225.0*bz[j * nx + (i+4)] + 72.0*bz[j * nx + (i+5)] - 10.0*bz[j * nx + (i+6)])*(1.0/60.0);
+             derx_bz[j * nx + i] = ( (-3*bz[j * nx + i]) + (4*bz[j * nx + (i+1)]) - (bz[j * nx + (i+2)]) )*0.5;
           }
 
         i=nx-1; 
       	for (j = 0; j <= ny-1; j++) 
           {
              if isnan(bz[j * nx + i]) continue;
-             derx_bz[j * nx + i] = ( 147.0*bz[j * nx + i] - 360.0*bz[j * nx + (i-1)] + 450.0*bz[j * nx + (i-2)] - 400.0*bz[j * nx + (i-3)] + 225.0*bz[j * nx + (i-4)] - 72.0*bz[j * nx + (i-5)] + 10.0*bz[j * nx + (i-6)])*(1.0/60.0);
+             derx_bz[j * nx + i] = ( (3*bz[j * nx + i]) + (-4*bz[j * nx + (i-1)]) - (-bz[j * nx + (i-2)]) )*0.5; 
           }
-
-
-        i=1; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             if isnan(bz[j * nx + i]) continue;
-             derx_bz[j * nx + i] = (-10.0*bz[j * nx + i] - 77.0*bz[j * nx + (i+1)] + 150.0*bz[j * nx + (i+2)] - 100.0*bz[j * nx + (i+3)] + 50.0*bz[j * nx + (i+4)] - 15.0*bz[j * nx + (i+5)] + 2.0*bz[j * nx + (i+6)])*(1.0/60.0);
-          }
-
-        i=nx-2; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             if isnan(bz[j * nx + i]) continue;
-             derx_bz[j * nx + i] = ( 10.0*bz[j * nx + i] + 77.0*bz[j * nx + (i-1)] - 150.0*bz[j * nx + (i-2)] + 100.0*bz[j * nx + (i-3)] - 50.0*bz[j * nx + (i-4)] + 15.0*bz[j * nx + (i-5)] - 2.0*bz[j * nx + (i-6)])*(1.0/60.0);
-          }
-
-
-        i=2; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             if isnan(bz[j * nx + i]) continue;
-             derx_bz[j * nx + i] = ( 2.0*bz[j * nx + i] - 24.0*bz[j * nx + (i+1)] - 35.0*bz[j * nx + (i+2)] + 80.0*bz[j * nx + (i+3)] - 30.0*bz[j * nx + (i+4)] + 8.0*bz[j * nx + (i+5)] - bz[j * nx + (i+6)])*(1.0/60.0);
-          }
-
-        i=nx-3; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             if isnan(bz[j * nx + i]) continue;
-             derx_bz[j * nx + i] = (-2.0*bz[j * nx + i] + 24.0*bz[j * nx + (i-1)] + 35.0*bz[j * nx + (i-2)] - 80.0*bz[j * nx + (i-3)] + 30.0*bz[j * nx + (i-4)] - 8.0*bz[j * nx + (i-5)] + bz[j * nx + (i-6)])*(1.0/60.0);
-          }
-
 
         j=0;
         for (i = 0; i <= nx-1; i++) 
           {
              if isnan(bz[j * nx + i]) continue;
-             dery_bz[j * nx + i] = (-147.0*bz[j * nx + i] + 360.0*bz[(j+1) * nx + i] - 450.0*bz[(j+2) * nx + i] + 400.0*bz[(j+3) * nx + i] - 225.0*bz[(j+4) * nx + i] + 72.0*bz[(j+5) * nx + i] - 10.0*bz[(j+6) * nx + i])*(1.0/60.0);
+             dery_bz[j * nx + i] = ( (-3*bz[j*nx + i]) + (4*bz[(j+1) * nx + i]) - (bz[(j+2) * nx + i]) )*0.5; 
           }
 
         j=ny-1;
         for (i = 0; i <= nx-1; i++) 
           {
              if isnan(bz[j * nx + i]) continue;
-             dery_bz[j * nx + i] = ( 147.0*bz[j * nx + i] - 360.0*bz[(j-1) * nx + i] + 450.0*bz[(j-2) * nx + i] - 400.0*bz[(j-3) * nx + i] + 225.0*bz[(j-4) * nx + i] - 72.0*bz[(j-5) * nx + i] + 10.0*bz[(j-6) * nx + i])*(1.0/60.0);
-          }
-
-        j=1;
-        for (i = 0; i <= nx-2; i++) 
-          {
-             if isnan(bz[j * nx + i]) continue;
-             dery_bz[j * nx + i] = (-10.0*bz[j * nx + i] - 77.0*bz[(j+1) * nx + i] + 150.0*bz[(j+2) * nx + i] - 100.0*bz[(j+3) * nx + i] + 50.0*bz[(j+4) * nx + i] - 15.0*bz[(j+5) * nx + i] + 2.0*bz[(j+6) * nx + i])*(1.0/60.0);
-          }
-
-        j=ny-2;
-        for (i = 0; i <= nx-2; i++) 
-          {
-             if isnan(bz[j * nx + i]) continue;
-             dery_bz[j * nx + i] = ( 10.0*bz[j * nx + i] + 77.0*bz[(j-1) * nx + i] - 150.0*bz[(j-2) * nx + i] + 100.0*bz[(j-3) * nx + i] - 50.0*bz[(j-4) * nx + i] + 15.0*bz[(j-5) * nx + i] - 2.0*bz[(j-6) * nx + i])*(1.0/60.0);
-          }
-
-        j=2;
-        for (i = 0; i <= nx-3; i++) 
-          {
-             if isnan(bz[j * nx + i]) continue;
-             dery_bz[j * nx + i] = ( 2.0*bz[j * nx + i] - 24.0*bz[(j+1) * nx + i] - 35.0*bz[(j+2) * nx + i] + 80.0*bz[(j+3) * nx + i] - 30.0*bz[(j+4) * nx + i] + 8.0*bz[(j+5) * nx + i] - bz[(j+6) * nx + i])*(1.0/60.0);
-          }
-
-        j=ny-3;
-        for (i = 0; i <= nx-3; i++) 
-          {
-             if isnan(bz[j * nx + i]) continue;
-             dery_bz[j * nx + i] = (-2.0*bz[j * nx + i] + 24.0*bz[(j-1) * nx + i] + 35.0*bz[(j-2) * nx + i] - 80.0*bz[(j-3) * nx + i] + 30.0*bz[(j-4) * nx + i] - 8.0*bz[(j-5) * nx + i] + bz[(j-6) * nx + i])*(1.0/60.0);
+             dery_bz[j * nx + i] = ( (3*bz[j * nx + i]) + (-4*bz[(j-1) * nx + i]) - (-bz[(j-2) * nx + i]) )*0.5;
           }
 
 
@@ -619,7 +457,6 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
 }
 
 /*===========================================*/
-
 /* Example function 8:  Current Jz = (dBy/dx) - (dBx/dy) */
 
 //  In discretized space like data pixels,
@@ -627,20 +464,12 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
 //  the integration of the field Bx and By along
 //  the circumference of the data pixel divided by the area of the pixel.
 //  One form of differencing (a word for the differential operator
-//  in the discretized space) of the curl is expressed as the following,
-//  which utilizes a second-order finite difference method:
-
+//  in the discretized space) of the curl is expressed as 
 //  (dx * (Bx(i,j-1)+Bx(i,j)) / 2
 //  +dy * (By(i+1,j)+By(i,j)) / 2
 //  -dx * (Bx(i,j+1)+Bx(i,j)) / 2
 //  -dy * (By(i-1,j)+By(i,j)) / 2) / (dx * dy) 
 //
-//
-//  However, for the purposes of this calculation, we will use a sixth-order finite difference
-//  method taken from the pencil code:
-//
-//  dBy/dx = (    -By*(i-3,j) + 9By(i-2,j) - 45By(i-1,j) + 45By(i+1,j) - 9By(i+2,j) + By(i+3,j)    )/ 60 
-//  and similarly for dBx/dy.
 //  
 //  To change units from Gauss/pixel to mA/m^2 (the units for Jz in Leka and Barnes, 2003),
 //  one must perform the following unit conversions:
@@ -664,150 +493,86 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
 //	      int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery, float *noisebx, 
 //              float *noiseby, float *noisebz)
 
-
 int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, float *jz, float *jz_err, float *jz_err_squared,
 	      int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery)
 
 
-{
-	int nx = dims[0], ny = dims[1];
-	int i, j, count_mask=0;
-        printf("nx=%d\n",nx);
-        printf("ny=%d\n",ny);
-	if (nx <= 0 || ny <= 0) return 1;
-	float curl=0.0, us_i=0.0,test_perimeter=0.0,mean_curl=0.0;
+{ 
+	int nx = dims[0], ny = dims[1]; 
+	int i, j, count_mask=0; 
+
+	if (nx <= 0 || ny <= 0) return 1; 
+	float curl=0.0, us_i=0.0,test_perimeter=0.0,mean_curl=0.0; 
+
 
         /* Calculate the derivative*/
         /* brute force method of calculating the derivative (no consideration for edges) */
-      	for (i = 3; i <= nx-4; i++) 
+
+
+      	for (i = 1; i <= nx-2; i++) 
 	  {
 	    for (j = 0; j <= ny-1; j++) 
 	      {
                  if isnan(by[j * nx + i]) continue;
-                 derx[j * nx + i] = (-by[j * nx + (i-3)] + 9.0*by[j * nx + (i-2)] - 45.0*by[j * nx + (i-1)] + 45*by[j * nx + (i+1)] - 9.0*by[j * nx + (i+2)] + by[j * nx + (i+3)])*(1.0/60.0);
+                 derx[j * nx + i] = (by[j * nx + i+1] - by[j * nx + i-1])*0.5;
               }
           }
 
-        /* brute force method of calculating the derivative (no consideration for edges) */
       	for (i = 0; i <= nx-1; i++) 
 	  {
-	    for (j = 3; j <= ny-4; j++) 
+	    for (j = 1; j <= ny-2; j++) 
 	      {
                  if isnan(bx[j * nx + i]) continue;
-                 dery[j * nx + i] = (-bx[(j-3) * nx + i] + 9.0*bx[(j-2) * nx + i] - 45.0*bx[(j-1) * nx + i] + 45*bx[(j+1) * nx + i] - 9.0*bx[(j+2) * nx + i] + bx[(j+3) * nx + i])*(1.0/60.0);
+                 dery[j * nx + i] = (bx[(j+1) * nx + i] - bx[(j-1) * nx + i])*0.5;
               }
           }
 
-        /* consider the edges: 3 pixels on each edge, for a total of 12 edge formulae below */
+        // consider the edges
         i=0; 
       	for (j = 0; j <= ny-1; j++) 
           {
              if isnan(by[j * nx + i]) continue;
-             derx[j * nx + i] = (-147.0*by[j * nx + i] + 360.0*by[j * nx + (i+1)] - 450.0*by[j * nx + (i+2)] + 400.0*by[j * nx + (i+3)] - 225.0*by[j * nx + (i+4)] + 72.0*by[j * nx + (i+5)] - 10.0*by[j * nx + (i+6)])*(1.0/60.0);
+             derx[j * nx + i] = ( (-3*by[j * nx + i]) + (4*by[j * nx + (i+1)]) - (by[j * nx + (i+2)]) )*0.5;
           }
 
         i=nx-1; 
       	for (j = 0; j <= ny-1; j++) 
           {
              if isnan(by[j * nx + i]) continue;
-             derx[j * nx + i] = ( 147.0*by[j * nx + i] - 360.0*by[j * nx + (i-1)] + 450.0*by[j * nx + (i-2)] - 400.0*by[j * nx + (i-3)] + 225.0*by[j * nx + (i-4)] - 72.0*by[j * nx + (i-5)] + 10.0*by[j * nx + (i-6)])*(1.0/60.0);
-          }
-
-
-        i=1; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             if isnan(by[j * nx + i]) continue;
-             derx[j * nx + i] = (-10.0*by[j * nx + i] - 77.0*by[j * nx + (i+1)] + 150.0*by[j * nx + (i+2)] - 100.0*by[j * nx + (i+3)] + 50.0*by[j * nx + (i+4)] - 15.0*by[j * nx + (i+5)] + 2.0*by[j * nx + (i+6)])*(1.0/60.0);
-          }
-
-        i=nx-2; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             if isnan(by[j * nx + i]) continue;
-             derx[j * nx + i] = ( 10.0*by[j * nx + i] + 77.0*by[j * nx + (i-1)] - 150.0*by[j * nx + (i-2)] + 100.0*by[j * nx + (i-3)] - 50.0*by[j * nx + (i-4)] + 15.0*by[j * nx + (i-5)] - 2.0*by[j * nx + (i-6)])*(1.0/60.0);
-          }
-
-
-        i=2; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             if isnan(by[j * nx + i]) continue;
-             derx[j * nx + i] = ( 2.0*by[j * nx + i] - 24.0*by[j * nx + (i+1)] - 35.0*by[j * nx + (i+2)] + 80.0*by[j * nx + (i+3)] - 30.0*by[j * nx + (i+4)] + 8.0*by[j * nx + (i+5)] - by[j * nx + (i+6)])*(1.0/60.0);
-          }
-
-        i=nx-3; 
-      	for (j = 0; j <= ny-2; j++) 
-          {
-             if isnan(by[j * nx + i]) continue;
-             derx[j * nx + i] = (-2.0*by[j * nx + i] + 24.0*by[j * nx + (i-1)] + 35.0*by[j * nx + (i-2)] - 80.0*by[j * nx + (i-3)] + 30.0*by[j * nx + (i-4)] - 8.0*by[j * nx + (i-5)] + by[j * nx + (i-6)])*(1.0/60.0);
-          }
-
+             derx[j * nx + i] = ( (3*by[j * nx + i]) + (-4*by[j * nx + (i-1)]) - (-by[j * nx + (i-2)]) )*0.5;
+          } 
 
         j=0;
         for (i = 0; i <= nx-1; i++) 
           {
              if isnan(bx[j * nx + i]) continue;
-             dery[j * nx + i] = (-147.0*bx[j * nx + i] + 360.0*bx[(j+1) * nx + i] - 450.0*bx[(j+2) * nx + i] + 400.0*bx[(j+3) * nx + i] - 225.0*bx[(j+4) * nx + i] + 72.0*bx[(j+5) * nx + i] - 10.0*bx[(j+6) * nx + i])*(1.0/60.0);
+             dery[j * nx + i] = ( (-3*bx[j*nx + i]) + (4*bx[(j+1) * nx + i]) - (bx[(j+2) * nx + i]) )*0.5;
           }
 
         j=ny-1;
         for (i = 0; i <= nx-1; i++) 
           {
              if isnan(bx[j * nx + i]) continue;
-             dery[j * nx + i] = ( 147.0*bx[j * nx + i] - 360.0*bx[(j-1) * nx + i] + 450.0*bx[(j-2) * nx + i] - 400.0*bx[(j-3) * nx + i] + 225.0*bx[(j-4) * nx + i] - 72.0*bx[(j-5) * nx + i] + 10.0*bx[(j-6) * nx + i])*(1.0/60.0);
+             dery[j * nx + i] = ( (3*bx[j * nx + i]) + (-4*bx[(j-1) * nx + i]) - (-bx[(j-2) * nx + i]) )*0.5;
           }
 
-        j=1;
-        for (i = 0; i <= nx-2; i++) 
-          {
-             if isnan(bx[j * nx + i]) continue;
-             dery[j * nx + i] = (-10.0*bx[j * nx + i] - 77.0*bx[(j+1) * nx + i] + 150.0*bx[(j+2) * nx + i] - 100.0*bx[(j+3) * nx + i] + 50.0*bx[(j+4) * nx + i] - 15.0*bx[(j+5) * nx + i] + 2.0*bx[(j+6) * nx + i])*(1.0/60.0);
-          }
-
-        j=ny-2;
-        for (i = 0; i <= nx-2; i++) 
-          {
-             if isnan(bx[j * nx + i]) continue;
-             dery[j * nx + i] = ( 10.0*bx[j * nx + i] + 77.0*bx[(j-1) * nx + i] - 150.0*bx[(j-2) * nx + i] + 100.0*bx[(j-3) * nx + i] - 50.0*bx[(j-4) * nx + i] + 15.0*bx[(j-5) * nx + i] - 2.0*bx[(j-6) * nx + i])*(1.0/60.0);
-          }
-
-        j=2;
-        for (i = 0; i <= nx-3; i++) 
-          {
-             if isnan(bx[j * nx + i]) continue;
-             dery[j * nx + i] = ( 2.0*bx[j * nx + i] - 24.0*bx[(j+1) * nx + i] - 35.0*bx[(j+2) * nx + i] + 80.0*bx[(j+3) * nx + i] - 30.0*bx[(j+4) * nx + i] + 8.0*bx[(j+5) * nx + i] - bx[(j+6) * nx + i])*(1.0/60.0);
-          }
-
-        j=ny-3;
-        for (i = 0; i <= nx-3; i++) 
-          {
-             if isnan(bx[j * nx + i]) continue;
-             dery[j * nx + i] = (-2.0*bx[j * nx + i] + 24.0*bx[(j-1) * nx + i] + 35.0*bx[(j-2) * nx + i] - 80.0*bx[(j-3) * nx + i] + 30.0*bx[(j-4) * nx + i] - 8.0*bx[(j-5) * nx + i] + bx[(j-6) * nx + i])*(1.0/60.0);
-          }
 
       	for (i = 0; i <= nx-1; i++) 
           {
             for (j = 0; j <= ny-1; j++) 
             {
-               /* calculate jz at all points */ 
-               jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);       /* jz is in units of Gauss/pix */ 
+               // calculate jz at all points 
+               jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);       // jz is in units of Gauss/pix  
                
-
-               /* calculate the error in jz at all points */ 
-               jz_err[j * nx + i]=sqrt( (1.0/60.0)*bx_err[(j-3) * nx + i]*(1.0/60.0)*bx_err[(j-3) * nx + i] + (9.0/60.0)*bx_err[(j-2) * nx + i]*(9.0/60.0)*bx_err[(j-2) * nx + i] + (45.0/60.0)*bx_err[(j-1) * nx + i]*(45.0/60.0)*bx_err[(j-1) * nx + i] + 
-                                        (1.0/60.0)*bx_err[(j+3) * nx + i]*(1.0/60.0)*bx_err[(j+3) * nx + i] + (9.0/60.0)*bx_err[(j+2) * nx + i]*(9.0/60.0)*bx_err[(j+2) * nx + i] + (45.0/60.0)*bx_err[(j+1) * nx + i]*(45.0/60.0)*bx_err[(j+1) * nx + i] + 
-                                        (1.0/60.0)*by_err[j * nx + (i-3)]*(1.0/60.0)*by_err[j * nx + (i-3)] + (9.0/60.0)*by_err[j * nx + (i-2)]*(9.0/60.0)*by_err[j * nx + (i-2)] + (45.0/60.0)*by_err[j * nx + (i-1)]*(45.0/60.0)*by_err[j * nx + (i-1)] + 
-                                        (1.0/60.0)*by_err[j * nx + (i+3)]*(1.0/60.0)*by_err[j * nx + (i+3)] + (9.0/60.0)*by_err[j * nx + (i+2)]*(9.0/60.0)*by_err[j * nx + (i+2)] + (45.0/60.0)*by_err[j * nx + (i+1)]*(45.0/60.0)*by_err[j * nx + (i+1)] ); 
-
-               jz_err_squared[j * nx + i]=(jz_err[j * nx + i]*jz_err[j * nx + i]);
-               count_mask++;
+               jz_err[j * nx + i]=0.5*sqrt( (bx_err[(j+1) * nx + i]*bx_err[(j+1) * nx + i]) + (bx_err[(j-1) * nx + i]*bx_err[(j-1) * nx + i]) + 
+                                            (by_err[j * nx + (i+1)]*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i-1)]*by_err[j * nx + (i-1)]) ) ; 
+               jz_err_squared[j * nx + i]=(jz_err[j * nx + i]*jz_err[j * nx + i]); 
+               count_mask++; 
             }	
-            //printf("\n");
-	  }         
+	  }          
 
-	return 0;
-}
+	return 0; 
+} 
 
 /*===========================================*/
 
@@ -1100,8 +865,8 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
 	      }
 	  }
 
-	*meanpotptr    = (sum) / (count_mask);                    /* Units are ergs per cubic centimeter */
-        *meanpot_err_ptr = (sqrt(err)) / (count_mask*8.*PI);      // error in the quantity (sum)/(count_mask)
+	    *meanpotptr    = (sum) / (count_mask);       /* Units are ergs per cubic centimeter */
+        *meanpot_err_ptr = (sqrt(err)) / (count_mask*8.*PI); // error in the quantity (sum)/(count_mask)
         //*mean_derivative_bz_err_ptr = (sqrt(err))/(count_mask); // error in the quantity (sum)/(count_mask)
 
         /* Units of sum are ergs/cm^3, units of factor are cm^2/pix^2; therefore, units of totpotptr are ergs per centimeter */
