@@ -513,7 +513,7 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
 	  {
 	    for (j = 0; j <= ny-1; j++) 
 	      {
-                 //if isnan(by[j * nx + i]) continue;
+                 if isnan(by[j * nx + i]) continue;
                  derx[j * nx + i] = (by[j * nx + i+1] - by[j * nx + i-1])*0.5;
               }
           }
@@ -522,7 +522,7 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
 	  {
 	    for (j = 1; j <= ny-2; j++) 
 	      {
-                 //if isnan(bx[j * nx + i]) continue;
+                 if isnan(bx[j * nx + i]) continue;
                  dery[j * nx + i] = (bx[(j+1) * nx + i] - bx[(j-1) * nx + i])*0.5;
               }
           }
@@ -563,11 +563,6 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
             {
                // calculate jz at all points 
                jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);       // jz is in units of Gauss/pix
-
-               //printf("jz[j * nx + i]=%f,i=%d,j=%d\n,",jz[j * nx + i],i,j); // tmp.txt
-               //printf("i=%d,j=%d,jz[j * nx + i]=%f\n,",i,j,jz[j * nx + i]); // tmp1.txt 
-
-             
                jz_err[j * nx + i]=0.5*sqrt( (bx_err[(j+1) * nx + i]*bx_err[(j+1) * nx + i]) + (bx_err[(j-1) * nx + i]*bx_err[(j-1) * nx + i]) + 
                                             (by_err[j * nx + (i+1)]*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i-1)]*by_err[j * nx + (i-1)]) ) ; 
                jz_err_squared[j * nx + i]=(jz_err[j * nx + i]*jz_err[j * nx + i]); 
@@ -858,7 +853,7 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
 	  }
 
 	*meanpotptr      = (sum/(8.*PI)) / (count_mask);     /* Units are ergs per cubic centimeter */
-        *meanpot_err_ptr = (sqrt(err)) / (count_mask*8.*PI); // error in the quantity (sum)/(count_mask)
+        *meanpot_err_ptr = (sqrt(err))*fabs(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0) / (count_mask*8.*PI); // error in the quantity (sum)/(count_mask)
 
         /* Units of sum are ergs/cm^3, units of factor are cm^2/pix^2; therefore, units of totpotptr are ergs per centimeter */
         *totpotptr       = (sum)/(8.*PI);
