@@ -1,0 +1,29 @@
+#!/usr/bin/perl
+$timeflg = 0;
+while ($ARGV[0] =~ /^-/) {
+  $_ = shift;
+  if (/^-h(.*)/) {
+    #print "Must give an fsn or -t time\n"; exit;
+    print "Usage:\n lev1fsn [-t 2010.09.22_23:59:55.21_UTC] [fsn]\n"; exit;
+  }
+  elsif (/^-t(.*)/) {
+    $timeflg = 1;
+  }
+}
+
+if($#ARGV != 0) { 
+  #print "Must give an fsn or -t time\n"; exit; 
+  print "Usage:\n lev1fsn [-t 2010.09.22_23:59:55.21_UTC] [fsn]\n"; exit
+}
+if(!$timeflg) {
+  $fsn = $ARGV[0];
+  $cmd = "show_info -iq hmi.lev1\[]\[$fsn]";
+}
+else {
+  $time = $ARGV[0];
+  $cmd = "show_info -iq hmi.lev1\[$time]";
+}
+@ans = `$cmd`;
+print "@ans\n";
+
+
