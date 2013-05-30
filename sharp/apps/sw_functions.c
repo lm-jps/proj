@@ -513,7 +513,7 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
 	  {
 	    for (j = 0; j <= ny-1; j++) 
 	      {
-                 if isnan(by[j * nx + i]) continue;
+                 //if isnan(by[j * nx + i]) continue;
                  derx[j * nx + i] = (by[j * nx + i+1] - by[j * nx + i-1])*0.5;
               }
           }
@@ -522,7 +522,7 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
 	  {
 	    for (j = 1; j <= ny-2; j++) 
 	      {
-                 if isnan(bx[j * nx + i]) continue;
+                 //if isnan(bx[j * nx + i]) continue;
                  dery[j * nx + i] = (bx[(j+1) * nx + i] - bx[(j-1) * nx + i])*0.5;
               }
           }
@@ -550,7 +550,7 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
           }
 
         j=ny-1;
-        for (i = 0; i <= nx-1; i++) 
+        for (i = 0; i <= nx-1; i++)  
           {
              if isnan(bx[j * nx + i]) continue;
              dery[j * nx + i] = ( (3*bx[j * nx + i]) + (-4*bx[(j-1) * nx + i]) - (-bx[(j-2) * nx + i]) )*0.5;
@@ -562,8 +562,12 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
             for (j = 0; j <= ny-1; j++) 
             {
                // calculate jz at all points 
-               jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);       // jz is in units of Gauss/pix  
-               
+               jz[j * nx + i] = (derx[j * nx + i]-dery[j * nx + i]);       // jz is in units of Gauss/pix
+
+               //printf("jz[j * nx + i]=%f,i=%d,j=%d\n,",jz[j * nx + i],i,j); // tmp.txt
+               //printf("i=%d,j=%d,jz[j * nx + i]=%f\n,",i,j,jz[j * nx + i]); // tmp1.txt 
+
+             
                jz_err[j * nx + i]=0.5*sqrt( (bx_err[(j+1) * nx + i]*bx_err[(j+1) * nx + i]) + (bx_err[(j-1) * nx + i]*bx_err[(j-1) * nx + i]) + 
                                             (by_err[j * nx + (i+1)]*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i-1)]*by_err[j * nx + (i-1)]) ) ; 
                jz_err_squared[j * nx + i]=(jz_err[j * nx + i]*jz_err[j * nx + i]); 
@@ -577,13 +581,8 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
 /*===========================================*/
 
 
-/* Example function 9:  Compute quantities on smoothed Jz array */
-
-// All of the subsequent functions, including this one, use a smoothed Jz array. The smoothing is performed by Jesper's 
-// fresize routines. These routines are located at /cvs/JSOC/proj/libs/interpolate. A Gaussian with a FWHM of 4 pixels
-// and truncation width of 12 pixels is used to smooth the array; however, a quick analysis shows that the mean values
-// of qualities like Jz and helicity do not change much as a result of smoothing. The smoothed array will, of course,
-// give a lower total Jz as the stron field pixels have been smoothed out to neighboring weaker field pixels.
+/* Example function 9:  Compute quantities on Jz array */
+// Compute mean and total current on Jz array. 
 
 int computeJzsmooth(float *bx, float *by, int *dims, float *jz, float *jz_smooth, float *jz_err, float *jz_rms_err, float *jz_err_squared_smooth,
 		    float *mean_jz_ptr, float *mean_jz_err_ptr, float *us_i_ptr, float *us_i_err_ptr, int *mask, int *bitmask,
@@ -604,22 +603,15 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz, float *jz_smooth
           {
             for (j = 0; j <= ny-1; j++) 
             {
-               //printf("%f ",jz_smooth[j * nx + i]); 
                if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                if isnan(derx[j * nx + i]) continue;
                if isnan(dery[j * nx + i]) continue;
-               //if isnan(jz_smooth[j * nx + i]) continue;
-               //curl +=     (jz_smooth[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
-               //us_i += fabs(jz_smooth[j * nx + i])*(cdelt1/1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A */
-               //jz_rms_err[j * nx + i] = sqrt(jz_err_squared_smooth[j * nx + i]);
-               //err += (jz_rms_err[j * nx + i]*jz_rms_err[j * nx + i]);
                if isnan(jz[j * nx + i]) continue;
                curl +=     (jz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.); /* curl is in units of mA / m^2 */
                us_i += fabs(jz[j * nx + i])*(cdelt1/1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT);         /* us_i is in units of A */
                err  += (jz_err[j * nx + i]*jz_err[j * nx + i]);
                count_mask++;
             }
-            //printf("\n");	
 	  }
  
         /* Calculate mean vertical current density (mean_curl) and total unsigned vertical current (us_i) using smoothed Jz array and continue conditions above */
@@ -828,7 +820,8 @@ int computeSumAbsPerPolarity(float *jz_err, float *bz_err, float *bz, float *jz,
 /*===========================================*/
 /* Example function 13:  Mean photospheric excess magnetic energy and total photospheric excess magnetic energy density */
 // The units for magnetic energy density in cgs are ergs per cubic centimeter. The formula B^2/8*PI integrated over all space, dV
-// automatically yields erg per cubic centimeter for an input B in Gauss.
+// automatically yields erg per cubic centimeter for an input B in Gauss. Note that the 8*PI can come out of the integral; thus, 
+// the integral is over B^2 dV and the 8*PI is divided at the end. 
 //
 // Total magnetic energy is the magnetic energy density times dA, or the area, and the units are thus ergs/cm. To convert
 // ergs per centimeter cubed to ergs per centimeter, simply multiply by the area per pixel in cm:
@@ -858,20 +851,18 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
                  if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                  if isnan(bx[j * nx + i]) continue;
                  if isnan(by[j * nx + i]) continue;
-                 sum += ( ((bpx[j * nx + i] - bx[j * nx + i])*(bpx[j * nx + i] - bx[j * nx + i])) + ((bpy[j * nx + i] - by[j * nx + i])*(bpy[j * nx + i] - by[j * nx + i])) ) / 8.*PI;
+                 sum += ( ((bpx[j * nx + i] - bx[j * nx + i])*(bpx[j * nx + i] - bx[j * nx + i])) + ((bpy[j * nx + i] - by[j * nx + i])*(bpy[j * nx + i] - by[j * nx + i])) )*(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0);
                  err += (4.0*bx[j * nx + i]*bx[j * nx + i]*bx_err[j * nx + i]*bx_err[j * nx + i]) + (4.0*by[j * nx + i]*by[j * nx + i]*by_err[j * nx + i]*by_err[j * nx + i]);
-                 //err += 2.0*bz_err[j * nx + i]*bz_err[j * nx + i];
                  count_mask++;
 	      }
 	  }
 
-	    *meanpotptr    = (sum) / (count_mask);       /* Units are ergs per cubic centimeter */
+	*meanpotptr      = (sum/(8.*PI)) / (count_mask);     /* Units are ergs per cubic centimeter */
         *meanpot_err_ptr = (sqrt(err)) / (count_mask*8.*PI); // error in the quantity (sum)/(count_mask)
-        //*mean_derivative_bz_err_ptr = (sqrt(err))/(count_mask); // error in the quantity (sum)/(count_mask)
 
         /* Units of sum are ergs/cm^3, units of factor are cm^2/pix^2; therefore, units of totpotptr are ergs per centimeter */
-        *totpotptr     = sum*(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0*(1/8.*PI)) ;
-        *totpot_err_ptr  = (sqrt(err))*fabs(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0*(1/8.*PI));
+        *totpotptr       = (sum)/(8.*PI);
+        *totpot_err_ptr  = (sqrt(err))*fabs(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0*(1/(8.*PI)));
 
         printf("MEANPOT=%g\n",*meanpotptr); 
         printf("MEANPOT_err=%g\n",*meanpot_err_ptr);
