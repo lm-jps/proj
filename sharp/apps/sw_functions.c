@@ -837,7 +837,7 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
 	
         *totpotptr=0.0;
 	*meanpotptr=0.0;
-	float sum,err=0.0;
+	float sum,sum1,err=0.0;
 
 	for (i = 0; i < nx; i++) 
 	  {
@@ -846,13 +846,14 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
                  if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                  if isnan(bx[j * nx + i]) continue;
                  if isnan(by[j * nx + i]) continue;
-                 sum += ( ((bpx[j * nx + i] - bx[j * nx + i])*(bpx[j * nx + i] - bx[j * nx + i])) + ((bpy[j * nx + i] - by[j * nx + i])*(bpy[j * nx + i] - by[j * nx + i])) )*(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0);
-                 err += (4.0*bx[j * nx + i]*bx[j * nx + i]*bx_err[j * nx + i]*bx_err[j * nx + i]) + (4.0*by[j * nx + i]*by[j * nx + i]*by_err[j * nx + i]*by_err[j * nx + i]);
+                 sum  += ( ((bpx[j * nx + i] - bx[j * nx + i])*(bpx[j * nx + i] - bx[j * nx + i])) + ((bpy[j * nx + i] - by[j * nx + i])*(bpy[j * nx + i] - by[j * nx + i])) )*(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0);
+                 sum1 += ( ((bpx[j * nx + i] - bx[j * nx + i])*(bpx[j * nx + i] - bx[j * nx + i])) + ((bpy[j * nx + i] - by[j * nx + i])*(bpy[j * nx + i] - by[j * nx + i])) );
+                 err  += (4.0*bx[j * nx + i]*bx[j * nx + i]*bx_err[j * nx + i]*bx_err[j * nx + i]) + (4.0*by[j * nx + i]*by[j * nx + i]*by_err[j * nx + i]*by_err[j * nx + i]);
                  count_mask++;
 	      }
 	  }
 
-	*meanpotptr      = (sum/(8.*PI)) / (count_mask);     /* Units are ergs per cubic centimeter */
+	*meanpotptr      = (sum1/(8.*PI)) / (count_mask);     /* Units are ergs per cubic centimeter */
         *meanpot_err_ptr = (sqrt(err))*fabs(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0) / (count_mask*8.*PI); // error in the quantity (sum)/(count_mask)
 
         /* Units of sum are ergs/cm^3, units of factor are cm^2/pix^2; therefore, units of totpotptr are ergs per centimeter */
