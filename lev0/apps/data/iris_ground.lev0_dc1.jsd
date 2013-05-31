@@ -8,7 +8,7 @@ Retention:       	360
 Tapegroup:       	53
 PrimeKeys:       	FSN
 DBIndex:         	FSN, T_OBS
-Description:     	"Level 0 prodution test series from dc1 data"
+Description:     	"IRIS Level 0 production test series from dc1 data"
 
 #=====Links=====
 
@@ -66,13 +66,15 @@ Keyword:IISQTAP,   short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "
 Keyword:ISQBITID,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_HR_BIT_ID"
 Keyword:ISQCMPID,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_HR_COMP_ID"
 Keyword:IIFRMTYP,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_IMG_FRAME_TYPE"
-Keyword:IIOBSLID,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_IMG_OBSLIST_ID"
-Keyword:IIFRMLID,  short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_IMG_FRMLIST_ID"
-Keyword:IICRSID,   short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_IMG_CRS_ID"
-Keyword:IIFDBID,   short, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "From IIFUVFDB; IINUVFDB; IISJIFDB"
-Keyword:IIFUVFDB,    int, variable, record, DRMS_MISSING_VALUE,  "%d", "none", "I_SQ_FUV_FDBT_ID"
-Keyword:IINUVFDB,    int, variable, record, DRMS_MISSING_VALUE,  "%d", "none", "I_SQ_NUV_FDBT_ID"
-Keyword:IISJIFDB,    int, variable, record, DRMS_MISSING_VALUE,  "%d", "none", "I_SQ_SJI_FDBT_ID"
+Keyword:IICRSID,     int, variable, record, DRMS_MISSING_VALUE, "%hd", "none", "I_IMG_CRS_ID"
+Keyword:IIOBSLID,    int, variable, record, DRMS_MISSING_VALUE,  "%d", "none", "I_IMG_OBSLIST_ID; 16 bit Observing List ID"
+Keyword:IIFRMLID,    int, variable, record, DRMS_MISSING_VALUE,  "%d", "none", "I_IMG_FRMLIST_ID; 16 bit Framelist ID"
+Keyword:ISQOLTID, longlong, variable, record, DRMS_MISSING_VALUE, "%lld", "none", "I_SQ_OLT_ID; 32 bit Observing List ID"
+Keyword:ISQFLTID, longlong, variable, record, DRMS_MISSING_VALUE, "%lld", "none", "I_SQ_FLT_ID; 32 16 bit Framelist ID"
+Keyword:IIFDBID,  longlong, variable, record, DRMS_MISSING_VALUE, "%lld", "none", "From IIFUVFDB; IINUVFDB; IISJIFDB"
+Keyword:IIFUVFDB, longlong, variable, record, DRMS_MISSING_VALUE, "%lld", "none", "I_SQ_FUV_FDBT_ID"
+Keyword:IINUVFDB, longlong, variable, record, DRMS_MISSING_VALUE, "%lld", "none", "I_SQ_NUV_FDBT_ID"
+Keyword:IISJIFDB, longlong, variable, record, DRMS_MISSING_VALUE, "%lld", "none", "I_SQ_SJI_FDBT_ID"
 Keyword:IIOLRPT,     int, variable, record, DRMS_MISSING_VALUE,  "%d", "none", "I_SQ_OLT_REPEAT"
 Keyword:IIOLNRPT,    int, variable, record, DRMS_MISSING_VALUE,  "%d", "none", "I_SQ_OLT_N_REPEAT"
 Keyword:IIFLRPT,     int, variable, record, DRMS_MISSING_VALUE,  "%d", "none", "I_SQ_FLT_REPEAT"
