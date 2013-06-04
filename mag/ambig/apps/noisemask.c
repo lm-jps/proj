@@ -32,7 +32,7 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
     DRMS_RecordSet_t *inRS, *inRSfinal, *outRS;
     DRMS_Record_t *inRec, *inRecfinal, *outRec;
     DRMS_Array_t *inArray, *outArray;
-    char *inQuery="hmi_test.lookup_ChebyCoef_BNoise", *outQuery;
+    char *inQuery="hmi.lookup_ChebyCoef_BNoise", *outQuery;		// updated Jun 04 2013
     char *inRecQuery, *outRecQuery;
     char *inQueryfinal, *vr_start_str, *vr_stop_str;
     char ttemp[64];

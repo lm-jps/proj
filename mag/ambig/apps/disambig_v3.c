@@ -17,6 +17,7 @@
  *			v1.3		Apr 09 2012
  *			v2.0		Jun 04 2012
  *			v3.0		Sep 17 2012
+ *			v3.1		Jun 04 2013
  *
  * Issues:
  *			v1.0
@@ -39,6 +40,9 @@
  *			reinstate ambweak for possible NRT usage
  *			Q: fixed geometry argumenet & probBa freeing
  *			Q: xcen start from 0 for planar geo, 1 for spherical geo?
+ *			v3.1
+ *			Fixed bug in erode/grow
+ *			Updated noise mask series name
  *
  *
  * Example:
@@ -204,7 +208,7 @@ extern void ambig_(int *geometry,
 //====================
 
 char *module_name = "disambig_v3";	/* Module name */
-char *version_id = "2012 Sep 17";  /* Version number */
+char *version_id = "2013 Jun 04";  /* Version number */
 
 #ifdef OLD
 char *segName[] = {"field", "inclination", "azimuth", "alpha_mag", 
@@ -497,7 +501,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.1 2012/11/06 00:03:02 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.2 2013/06/04 18:59:47 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
@@ -1160,15 +1164,11 @@ void erodeAndGrow(DRMS_Record_t *inRec, int *bitmap, int nerode, int ngrow,
 	for (i = 0; i < nxny; i++) {
 		if (bitmap[i] == 0) {
 			j = i + nerode * (nx + 1 + 2 * (i / nx + nerode));
-			erodemap[j - 2 * nerode - nx - 1] = 0;
-			erodemap[j - 2 * nerode - nx] = 0;
-			erodemap[j - 2 * nerode - nx + 1] = 0;
-			erodemap[j - 1] = 0;
-			erodemap[j] = 0;
-			erodemap[j + 1] = 0;
-			erodemap[j + 2 * nerode + nx - 1] = 0;
-			erodemap[j + 2 * nerode + nx] = 0;
-			erodemap[j + 2 * nerode + nx + 1] = 0;
+			for (l = -nerode; l <= nerode; l++) {		// 2013.05.16
+				for (m = -nerode; m <= nerode; m++) {
+					erodemap[j + l + m * (nx + 2 * nerode)] = 0;
+				}
+			}
 		}
 	}
 	
@@ -1208,17 +1208,17 @@ void erodeAndGrow(DRMS_Record_t *inRec, int *bitmap, int nerode, int ngrow,
 
 	// Grow for full disk mode
 	
-	int nxg = nx + 2 * ngrow;
-	int nyg = ny + 2 * ngrow;
-	int nxnyg = (nx + 2 * ngrow) * (ny + 2 * ngrow);
+	int nxg = nxe + 2 * ngrow;
+	int nyg = nye + 2 * ngrow;
+	int nxnyg = nxg * nyg;
 	int *growmap = (int *)calloc(nxnyg, sizeof(int));
 	
 	for (i = 0; i < nxnye; i++) {
 		if (erodemap[i]) {
-			j = i + ngrow * 2 * (i / (nx + 2 * nerode));
-			for (l = 0; l <= 2 * ngrow; l++) {
-				for (m = 0; m <= 2 * ngrow; m++) {
-					growmap[j + l + m * (nx + 2 * (nerode + ngrow))] = 1;
+			j = i + ngrow * (nxe + 1 + 2 * (i / nxe + ngrow));
+			for (l = -ngrow; l <= ngrow; l++) {		// 2013.05.16
+				for (m = -ngrow; m <= ngrow; m++) {
+					growmap[j + l + m * (nxe + 2 * ngrow)] = 1;
 				}
 			}
 		}
@@ -1231,7 +1231,7 @@ void erodeAndGrow(DRMS_Record_t *inRec, int *bitmap, int nerode, int ngrow,
 		tmp_bit = growmap[i + (nerode + ngrow) * (nx + 1 + 2 * (i / nx + nerode + ngrow))];
 		if (tmp_bit && !bitmap[i]) { bitmap[i] = 1; }
 	}
-	
+
 	free(erodemap); free(growmap);
 	
 	//
