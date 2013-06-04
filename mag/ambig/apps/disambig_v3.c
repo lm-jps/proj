@@ -43,6 +43,7 @@
  *			v3.1
  *			Fixed bug in erode/grow
  *			Updated noise mask series name
+ *			Updated geometry keyword
  *
  *
  * Example:
@@ -485,7 +486,7 @@ int DoIt(void)
         drms_setkey_int(outRec, "DOFFSET", offset);
         // Disambiguation
         drms_setkey_int(outRec, "AMBPATCH", harpflag);	// Jun 22 Xudong
-        drms_setkey_int(outRec, "AMBGMTRY", geometry);
+        drms_setkey_int(outRec, "AMBGMTRY", geometry_t);	// Jun 04 2013
         drms_setkey_int(outRec, "AMBWEAK", weak);
         drms_setkey_int(outRec, "AMBNEROD", nerode);
         drms_setkey_int(outRec, "AMBNGROW", ngrow);
@@ -501,7 +502,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.2 2013/06/04 18:59:47 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.3 2013/06/04 19:53:37 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
