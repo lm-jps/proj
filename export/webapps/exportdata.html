@@ -56,10 +56,6 @@ window.onbeforeunload = function ()
   return "Did you really mean to leave exportdata? Use CANCEL to stay here";
   }
 
-// Processing options code section 2 of 7
-//    these quantities moved or will be moved to code in exportdata.d/
-var ProtocolOptionsSet = 0;
-
 function OnEnterKey(evt,action)
   {
   var keynum;
@@ -80,14 +76,18 @@ function NotifyProcessingCode()
   // called when RecordSet is changed.
   // Set flags to alert processing or method options here.
   // variables here will usually be defined in exportdata.d/processing.js
-
-  if (SeriesName === previousSeries)
+  // or exportdata.d/export_request_form.html
+  if (SeriesName == previousSeries)
     SetProcessing(-1);
   else
+    {
     SetProcessing(-2);
+    ProtocolOptionsSet = 0;
+    }
   previousSeries = SeriesName;
   }
 
+// Global vars
 var Host = location.host;
 var Internal = 0;
 var SeriesName;
@@ -98,9 +98,8 @@ var RecordCount;
 var RecordCountNeeded;
 var ExportRecordSetOK;
 var ExportFromFileList;
-var ExportProtocolOK;
-var ExportCompressOK;
 var ExportMethodOK;
+var ExportMethodIsDirect;
 var ExportFilenameFmtOK;
 var ExportProcessingOK;
 var ExportProcessingOptions;
@@ -114,12 +113,24 @@ var state=0;
 var uploadOndoneAction = 0;
 var ExportProcessingArgs = "";
 var ExportMethodValue = "url_quick";
+
+// Protocol global vars
+var ExportCompressOK;
+var ExportProtocolOK;
 var ExportCompressValue = "compress Rice";
 var ExportProtocolValue = "FITS";
-var userWantsAsis = 0;
+var ProtocolOptionsSet = 0;
+var protocol_args
+var ExportProtocolArgs = "";
+var ExportProtocolArgsOK;
+var protocolEnable;
+
+// Misc vars
 var firstTimePrime;
 var expURL;
 var exportdataLoaded = false;
+
+// Colors
 var colorNeutral = "#D4D0C8";
 var colorPreset = "D8D8D8";
 var colorOptionSet = "#FFCC66";
@@ -145,19 +156,26 @@ function initVars()
   RecordLimit = 0;
   ExportRecordSetOK = 1;
   ExportFromFileList = 0;
-  ExportProtocolOK = 1;
-  ExportCompressOK = 1;
   ExportMethodOK = 1;
   ExportMethodIsDirect = 0;
   ExportFilenameFmtOK = 1;
-  ExportProcessingOK = 1;
   ExportUserOK = 1;
   ExportNotifyOK = 2;
   ExportReadyOK = 0;
   TipsEnabled = 1;
   uploadOndoneAction = 0;
-  ExportProcessingArgs = "";
   firstTimePrime = "";
+
+  // Init processing
+  ExportProcessingOK = 1;
+  ExportProcessingArgs = "";
+
+  // Init protocols
+  ExportProtocolOK = 1;
+  ExportCompressOK = 1;
+  ExportProtocolArgs = "";
+  protocolEnable = 0;
+  ProtocolOptionsSet = 0;
 
   if (exportdataLoaded)
     {
@@ -166,6 +184,7 @@ function initVars()
     }
 
   // if (state < 2)
+  // Form init
     {
     $("ExportRequestor").value = "";
     $("ExportNotify").value = "solarmail";
@@ -175,11 +194,18 @@ function initVars()
     $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("ExportRecordSet").value = "";
+    // Processing
+    $("ProcessRow").style.display="none";
+    $("ExportProcessingHidden").value = "no_op";
+    $("ProcessingCheckbox").checked = 0;
+    // Protocols
+    $("ProtocolRow").style.display="none";
     $("ExportProtocol").selectedIndex = 1;
     $("ExportProtocolHidden").value = "FITS";
     $("ExportCompress").value = 0;
-    $("ExportProcessingHidden").value = "no_op";
-    $("ProcessingCheckbox").checked = 0;
+    $("CompressRow").style.display="none";
+    $("ProtocolImageOptions").style.display="none";
+
     $("ExportMethod").selectedIndex = 1;
     $("ExportFilenameFmt").value = "{seriesname}.{recnum:%lld}.{segment}";
     $("ExportButton").value = "Submit Export Request";
@@ -187,9 +213,6 @@ function initVars()
     $("ExportButton").style.backgroundColor = colorRed;
     $("RecordSetRow").style.display="table-row";
     $("RecordCountRow").style.display="table-row";
-    $("ProcessRow").style.display="none";
-    $("ProtocolRow").style.display="none";
-    $("CompressRow").style.display="none";
     $("FilenameFmtRow").style.display="none";
     $("RequestorRow").style.display="none";
     $("NotifyRow").style.display="none";
@@ -313,17 +336,20 @@ function MainTips(tipstyle)
         'There is presently a limit to the memory space allocated for record queries which restricts AIA lev1 ' +
         'requests to about 15,000 records and HMI X_45s or X_720s data to about 32,000 records.  ' +
         'The limit depends on number of keywords in each record.  This limit will be eased in the future.',tipstyle);
-    new Tip('ProcessingHelp','Processing to be done to the data prior to export.  Select from drop-down list for details.',tipstyle);
+    new Tip('ProcessingHelp','Processing to be done to the data prior to export. ' +
+        ' Select from drop-down list for details.',tipstyle);
     new Tip('ProtocolHelp','Data storage protocol for data files to be fetched.  ' +
         '<br>"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
-        '<br>"As-is" leaves the data as it is used inside the JSOC DRMS routines, with the header metadata stored in the database ' +
-        'rather than with the data file.  "As-is" is faster since the data does not need to be rewritten.  In as-is mode the header data is ' +
+        '<br>"As-is" leaves the data as it is used inside the JSOC DRMS routines, ' +
+        'with the header metadata stored in the database rather than with the data file.  ' +
+        '"As-is" is faster since the data does not need to be rewritten.  In as-is mode the header data is ' +
         'provided in a tab-delimited file named {RequestID}.keywords.txt. <br> The "jpeg" option will ' +
         ' yield  jpeg images of the data with a pre-determined scaling and colortable and the <br>"mpg" option will ' +
         ' yield a movie in mp4 format along with the jpeg images that make up the frames in the movie.',tipstyle);
     new Tip('CompressHelp','Compression parameters to be used by the cfitsio library.  ' +
         'Provide up to one comma separated string for each segment name in your export.  ' +
-        'Use "**NONE**" to indicate uncompressed FITS files desired.  If more segments are to be exported than strings are provided, ' +
+        'Use "**NONE**" to indicate uncompressed FITS files desired. ' +
+        'If more segments are to be exported than strings are provided, ' +
         'then the last string will be used repeatedly as needed.  ' +
         'If this parameter is empty, the exported FITS file will have the same compression parameters as the original DRMS ' +
         'series segment as specified in the JSD for that series.  ' +
@@ -347,8 +373,8 @@ function MainTips(tipstyle)
         'with optional layout e.g. default is {#:%05d}. ' +
         'Any keyword in the record may also be used.  Optional layout may be provided after a ":".' +
         'Special format options are available for type TIME keywords: A leading "A" will strip "." and ":" from the time and ' +
-        'a "D" will strip the "." and ":" but will insert "@" around the date components to allow easy scripts to move the exported ' +
-        'files into date structured directory trees. ' +
+        'a "D" will strip the "." and ":" but will insert "@" around the date components to allow easy scripts ' +
+        'to move the exported files into date structured directory trees. ' +
         'It is wise to include enough of the "prime-keys" to make a unique filename.  ' +
         'The default format template is made from series structure.',tipstyle);
     new Tip('RequestorHelp','Optional place for your name, this will be used later when we have a way of saving your ' +
@@ -466,7 +492,7 @@ function insertOption(list,text,note)
 
 function MakeFileUploadRequest()
   {
-  if (CheckExportParams() == 0)
+  if (CheckExportParams(1) == 0)
     return;
   uploadOndoneAction = 1;
 // XXXX fix compression here
@@ -528,7 +554,7 @@ function GetRSCount()
        }
   var firstbracket = posbracket>=0 ? posbracket : posCurlbracket;
   SeriesName = (firstbracket == -1 ? recset : recset.substring(0,firstbracket));
-  recfilt = (posbracket >=0 ? recset.substring(posbracket,posRbracket+1) : "[$]");
+  recfilt = (posbracket >=0 ? recset.substring(posbracket,posRbracket+1) : (RecordLimit == 0 ? "[$]" : ""));
   segfilt = (posCurlbracket >=0 ? recset.substring(posCurlbracket,posCurlRbracket+1) : "");
   $("ExportRecordSet").value = SeriesName + recfilt + segfilt;
   
@@ -561,12 +587,11 @@ function GetRSCount()
       $("ExportButton").value = "Submit Export Request";
       $("ExportButton").style.backgroundColor = colorRed;
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-      var op = "rs_summary";
+      CheckRediness();
       },
     onFailure: function() { alert('Something went wrong...'); },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
-  CheckRediness();
   return(0);
   }
 
@@ -652,7 +677,7 @@ function CreateDataTable(data, valuetable)
         expURL = "ftp://pail.stanford.edu/export" + data.dir + "/" + thisfile;
       else
         expURL = "http://jsoc.stanford.edu" + data.dir + "/" + thisfile;
-      tmp = "<A href='" + expURL + "' target='_blank'>" + thisfile + "<\/A>";
+      tmp = "<a href='" + expURL + "' target='_blank'>" + thisfile + "<\/a>";
       valuetable = valuetable +  "<td>" + tmp + "<\/td><\/tr>";
       }
     }
@@ -752,13 +777,6 @@ function SetExportMethod()
     $("FilenameFmtRow").style.display="table-row";
     $("RequestorRow").style.display="table-row";
     $("NotifyRow").style.display="table-row";
-    if(ExportProtocolValue == "as-is" && userWantsAsis == 0)
-      {
-      ExportProtocolValue = "FITS";
-      $("ExportProtocol").selectedIndex = 1;
-      ExportCompressValue = "compress Rice";
-      $("ExportCompress").selectedIndex = 0;
-      }
     if(ExportProtocolValue == "FITS")
        $("CompressRow").style.display="table-row";
     }
@@ -878,79 +896,77 @@ function SetProcessing(ichecked)
   CheckRediness();
   }
 
-function SetExportProtocol(byWhom)
-  {
+function SetExportProtocol()
+  { // byWhom=0 if user explicit check
   var ExportProtocolIndex = $("ExportProtocol").selectedIndex;
   ExportProtocolValue = $("ExportProtocol").options[ExportProtocolIndex].value;
 
-  if (ExportProtocolValue == "MPEG")
-    {
-    ExportProtocolOK = 4;
-    $("ImagingOptions").style.display="table-row";
-    $("CompressRow").style.display="none";
-    $("ExportProtocolHidden").value = "mpg";
+  if (ExportProtocolValue == "as-is" || ExportProtocolValue == "FITS")
+    { // Handle file protocols
+    if (ExportProtocolValue == "as-is")
+      {
+      ExportProtocolOK = 1;
+      $("CompressRow").style.display="none";
+      $("ExportProtocolHidden").value = "as-is";
+      }
+
+    else if (ExportProtocolValue == "FITS")
+      {
+      ExportProtocolOK = 2;
+      $("CompressRow").style.display="table-row";
+      $("ExportProtocolHidden").value = "FITS";
+      }
+    $("ProtocolImageOptions").style.display="none";
     }
-  else if (ExportProtocolValue == "MP4")
-    {
-    ExportProtocolOK = 4;
-    $("ImagingOptions").style.display="table-row";
-    $("CompressRow").style.display="none";
-    $("ExportProtocolHidden").value = "mp4";
+  else
+    { // Handle image protocols
+    if (ExportProtocolValue == "MPEG")
+      {
+      ExportProtocolOK = 4;
+      $("ProtocolImageOptions").style.display="table-row";
+      $("CompressRow").style.display="none";
+      $("ExportProtocolHidden").value = "mpg";
+      }
+    else if (ExportProtocolValue == "MP4")
+      {
+      ExportProtocolOK = 4;
+      $("ProtocolImageOptions").style.display="table-row";
+      $("CompressRow").style.display="none";
+      $("ExportProtocolHidden").value = "mp4";
+      }
+    else if (ExportProtocolValue == "JPEG")
+      {
+      ExportProtocolOK = 3;
+      $("ProtocolImageOptions").style.display="table-row";
+      $("CompressRow").style.display="none";
+      $("ExportProtocolHidden").value = "jpg";
+      }
+    // ProtocolOptionsSet: 0 if need to set defaults, 1 if defaults, 2 if user changed
+    if (ProtocolOptionsSet == 0)
+      ProtocolImageInit();
+    if (ProtocolOptionsSet > 0)
+      ProtocolImageCheck();
     }
-  else if (ExportProtocolValue == "JPEG")
-    {
-    ExportProtocolOK = 3;
-    $("ImagingOptions").style.display="table-row";
-    $("CompressRow").style.display="none";
-    $("ExportProtocolHidden").value = "jpg";
-    }
-  else if (ExportProtocolValue == "FITS")
-    {
-    if (byWhom == 0) // user set value
-      userWantsAsis = 0;
-    ExportProtocolOK = 2;
-    $("ImagingOptions").style.display="none";
-    $("CompressRow").style.display="table-row";
-    $("ExportProtocolHidden").value = "FITS";
-    }
-  else if (ExportProtocolValue == "as-is")
-    {
-    if (byWhom == 0) // user set value
-      userWantsAsis = 1;
-    ExportProtocolOK = 1;
-    $("ImagingOptions").style.display="none";
-    $("CompressRow").style.display="none";
-    $("ExportProtocolHidden").value = "as-is";
-    }
-  if (ExportProtocolOK == 4 || ExportProtocolOK == 3)
-    if (ProtocolOptionsSet)
-      ProtocolSetMinMax();
-    else
-      ProtocolImageInit(ExportProtocolOK);
   CheckRediness();
   }
 
 function SetExportCompress()
   {
-  var ExportCompressIndex = $("ExportCompress").selectedIndex;
-  ExportCompressValue = $("ExportCompress").options[ExportCompressIndex].value;
   var protocolparam = ExportProtocolValue;
-  if (ExportCompressValue == "compress Rice" &&  protocolparam == "FITS")
-      {
-      var tmp = SeriesName.toUpperCase();
-      if ($("ExportProcessing").selectedIndex == 0 && (tmp == "AIA.LEV1" ||
-            tmp == "AIA.LEV1_EUV_12S" || tmp == "AIA.LEV1_UV_24S" || tmp == "AIA.LEV1_VIS_1H"))
-        protocolparam = "as-is";
-      }
-  for (var i=0; i < SeriesInfo.segments.length; i++)
+  if (protocolparam == "FITS" || protocolparam == "as-is")
     {
-    var segtype = SeriesInfo.segments[i].type;
-    if (ExportCompressValue == "compress Rice" &&  protocolparam == "FITS" && (segtype == "float" || segtype == "double"))
-      protocolparam = protocolparam  + ",**NONE**";
-    else
-      protocolparam = protocolparam  + "," + ExportCompressValue;
+    var ExportCompressIndex = $("ExportCompress").selectedIndex;
+    ExportCompressValue = $("ExportCompress").options[ExportCompressIndex].value;
+    for (var i=0; i < SeriesInfo.segments.length; i++)
+      {
+      var segtype = SeriesInfo.segments[i].type;
+      if (ExportCompressValue == "compress Rice" &&  protocolparam == "FITS" && (segtype == "float" || segtype == "double"))
+        protocolparam = protocolparam  + ",**NONE**";
+      else
+        protocolparam = protocolparam  + "," + ExportCompressValue;
+      }
+    $("ExportProtocolHidden").value = protocolparam;
     }
-  $("ExportProtocolHidden").value = protocolparam;
   ExportCompressOK = 1;
   CheckRediness();
   }
@@ -1022,13 +1038,20 @@ function CheckRediness()
     $("ExportButton").style.backgroundColor = colorRed;
   }
 
-function CheckExportParams()
-  {
+function CheckExportParams(byWhom)
+  { // byWhom=0 for Check Params for Export button, else is internal check
   if (ExportRecordSetOK == 0)
     {
-    $("ExportButtonMsg").innerHTML = "Retry after RecordSet updated.";
-    alert("RecordSet not verified, enter RecordSet then retry export request.");
-    return 0;
+    if (byWhom==0)
+      {
+      GetRSCount();
+      }
+    else
+      {
+      $("ExportButtonMsg").innerHTML = "Retry after RecordSet updated.";
+      alert("RecordSet not verified, enter RecordSet then retry export request.");
+      return 0;
+      }
     }
   SetExportMethod();
   if (ExportMethodOK == 0)
@@ -1051,7 +1074,7 @@ function CheckExportParams()
     alert("Processing details not correct, fix and retry export request.");
     return 0;
     }
-  SetExportProtocol(1);
+  SetExportProtocol(byWhom);
   if (ExportProtocolOK == 0)
     {
     $("ExportButtonMsg").innerHTML = "Retry after entering export protocol";
@@ -1061,6 +1084,10 @@ function CheckExportParams()
   if ((ExportProtocolValue == "FITS" || ExportProtocolValue == "as-is") && ExportMethodValue != "url_quick")
     {
     SetExportCompress();
+    }
+  else if (protocolEnable)
+    {
+    ProtocolImageCheck();
     }
   if ((Internal && ExportNotifyOK != 1) || ExportNotifyOK == 2)
     {
@@ -1086,13 +1113,14 @@ function CheckExportParams()
 // This is the code executed when the user clicks on the "Submit Export Request" button.
 function GetExport()
   {
+  var exportparameters;
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   if (ExportReadyOK == 3)
     {
     alert("Processing request, please wait...");
     return;
     }
-  if (CheckExportParams() == 0)
+  if (CheckExportParams(1) == 0)
     return;
   if (ExportReadyOK == 0)
     {
@@ -1106,7 +1134,7 @@ function GetExport()
     $("ExportButton").style.backgroundColor = colorDarkRed;
     var protocolparam = $("ExportProtocolHidden").value;
     var RecordSet = $("ExportRecordSet").value;
-    var exportparameters = new Hash( {"op" : $("ExportOpID").value,
+    exportparameters = new Hash( {"op" : $("ExportOpID").value,
                  		      "ds" : RecordSet, 
                  		      "process" :  ExportProcessingArgs,
                  		      "requestor" : $("ExportRequestor").value,
@@ -1115,8 +1143,8 @@ function GetExport()
                                       "filenamefmt" : $("ExportFilenameFmt").value,
 			 	      "format" : "json",
                  		      "protocol" : protocolparam });
-// alert(Object.inspect(exportparameters));
     // if (nsegsselected) exportparameters = exportparameters.merge({"seg": SegList});
+    $("ExportParameters").innerHTML = Object.toQueryString(exportparameters);
     }
   else if (ExportReadyOK == 1)
     {
@@ -1459,17 +1487,17 @@ function GetStatus()
           StatusLoc = "ftp://pail.stanford.edu/export" + data.dir + "/";
         else
           StatusLoc = "http://jsoc.stanford.edu" + data.dir + "/";
-        $("StatusLocation").innerHTML = "<A HREF='" + StatusLoc + "' target='_blank'>" + StatusLoc + "<\/A>";
+        $("StatusLocation").innerHTML = "<a href='" + StatusLoc + "' target='_blank'>" + StatusLoc + "<\/a>";
         if (data.method.indexOf("-tar") > 0)
           {
-          $("TarFileLocation").innerHTML = "<A HREF='" + data.tarfile + "'>" + data.tarfile + "<\/A>";
+          $("TarFileLocation").innerHTML = "<a href='" + data.tarfile + "'>" + data.tarfile + "<\/a>";
           $("TarFileLocationRow").style.display = "table-row";
 	  }
         else
           $("TarFileLocationRow").style.display = "none";
         if (data.protocol.indexOf("as-is") >= 0)
           {
-          $("KeywordFileLocation").innerHTML = "<A HREF='" + data.keywords + "' target='_blank'>" + data.keywords + "<\/A>";
+          $("KeywordFileLocation").innerHTML = "<a href='" + data.keywords + "' target='_blank'>" + data.keywords + "<\/a>";
           $("KeywordFileLocationRow").style.display = "table-row";
           }
         else
@@ -1545,6 +1573,10 @@ access the data.
   <iframe id="FileUploadFrame" onload="uploadDone();" src="" style="height:0px;width:0px;border:0px solid #fff;"></iframe>
 </div>
 
+<div style="display:none;">
+jsoc_fetch command:&nbsp;
+<span id="ExportParameters"></span>
+</div>
 
 <div id="SubmitResponseDiv">
 <table>
@@ -1651,7 +1683,7 @@ Use this section to request a renewal/repeat of a prior export for which the dat
 <P style="height:1px">
 <div id="footer" style="vertical-align:bottom;text-align:center;">
 <I>Home page for:</I>
-<A HREF = "http://jsoc.stanford.edu/"><b>SDO-JSOC</b></A>
+<a href = "http://jsoc.stanford.edu/"><b>SDO-JSOC</b></a>
 </div>
 
 <script type="text/javascript">
