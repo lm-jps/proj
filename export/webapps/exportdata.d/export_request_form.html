@@ -51,7 +51,7 @@
       <td>Filename Format</td>
       <td><span id="FilenameFmtHelp" class="tip">?</span></td>
       <td colspan="2">
-        <input id="ExportFilenameFmt" type="text" name="filenamefmt" value="no_op" style="width:30em" onChange="SetFilenameFmt();" />
+        <input id="ExportFilenameFmt" type="text" name="filenamefmt" value="no_op" style="width:30em" onChange="SetFilenameFmt();">
         File name template.
       </td>
     </tr>
@@ -505,8 +505,9 @@
 <tr><td colspan="4"><span id="ProcArgsDisplay"></span></td></tr>
     <!-- End of processing  special code -->
 
-    <!-- Insert from protocols.html -->
+    <!-- Protocols Select -->
     <tr id="ProtocolRow">
+
       <td>Protocol</td>
       <td><span id="ProtocolHelp" class="tip">?</span></td>
       <td><select id="ExportProtocol" name="rawprotocol" style="width:15em"  onChange="SetExportProtocol(0);">
@@ -516,37 +517,10 @@
           <option value="MPEG">MPEG
           <option value="MP4">MP4
         </select> </td>
-      <td>Choose protocol, "FITS", "JPEG", "MPG", "MP4", or "as-is". Note AIA lev1 FITS,compressed is same as "as-is".</td>
+      <td>Choose protocol, "FITS", "JPEG", "MPG", "MP4", or "as-is".</td>
     </tr>
-    <tr id="ImagingOptions">
-      <td>Images</td>
-      <td><span id="ImagesHelp" class="tip">?</span></td>
-      <td colspan="2">
-        <table>
-        <tr>
-          <td>
-            For:&nbsp;
-            <span id="ImageSer" name="ImageSer" ></span>
-          </td>
-          <td>
-            ,&nbsp;ColorTable:&nbsp;
-            <select id="ImageCT" type="text" size=1 name="ImageCT" onChange="ProtocolSetColorTable();" ></select>
-          </td>
-          <td>
-            &nbsp;&nbsp;Min:&nbsp;
-            <input id="ImageMin" type="text" name="ImageMin" value="" onChange="ProtocolSetMinMax();" >
-          </td>
-          <td>
-            &nbsp;&nbsp;Max:&nbsp;
-            <input id="ImageMax" type="text" name="ImageMax" value="" onChange="ProtocolSetMinMax();" >
-            <b>&nbsp;NOTE changes to colortable are not seen yet.</b>
-          </td>
-        </tr>
-        </table>
-      </td>
-    </tr>
-    <!-- End of insert from protocols.html -->
 
+    <!-- File protocol options -->
     <tr id="CompressRow">
       <td>Compression</td>
       <td><span id="CompressHelp" class="tip">?</span></td>
@@ -556,6 +530,49 @@
       <td>Choose compression parameters for each segment., **NONE** for no compression.</td>
     </tr>
   
+    <!-- Image protocol options -->
+    <tr id="ProtocolImageOptions">
+      <td>Choose Image Attributes</td>
+      <td><span id="ImagesHelp" class="tip">?</span></td>
+      <td colspan="2">
+        <table style="border-style:solid">
+          <tr>
+            <td> SeriesName </td> <td> <span id="ImageSer" type="text"  name="ImageSer" ></span> </td>
+          </tr>
+          <tr>
+            <td>ColorTable </td> <td> <select id="ImageCT" type="text" size=1 name="ImageCT" onChange="ProtocolImageUserSet();" ></select> </td>
+          </tr>
+          <tr>
+	    <td>Min </td> <td> <input id="ImageMin" type="text" name="ImageMin" value=" "  onChange="ProtocolImageUserSet();"> </td>
+          </tr>
+          <tr>
+            <td>Max </td> <td> <input id="ImageMax" type="text" name="ImageMax" value=" "  onChange="ProtocolImageUserSet();" > </td>
+          </tr>
+          <tr>
+            <td>Scaling </td> <td> <select id="ImageScl" type="text" name="ImageScl" value=""  onChange="ProtocolImageUserSet();" ></select> </td>
+          </tr>
+          <tr>
+            <td>ImageSize </td>
+            <td>
+              <select id="ImageSize" type="text" name="ImageSize" value=""  onChange="ProtocolImageUserSet();" ;  >
+                <option value="scl_1">(Scale 1): e.g. SDO 4096 x 4096 px</option>
+                <option value="scl_4">(Scale 1/4): e.g. SDO 1024 x 1024 px</option>
+                <option value="scl_8">(Scale 1/8): e.g. SDO 512 x 512 px(Default)</option>
+	        <option value="scl_16">(Scale 1/16): e.g. SDO 256 x 256 px </option>
+              </select>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <input type="button"  style="background-color:#c00; color:#ddd;"  onClick="ProtocolImageDefaults();" value="Reset defaults">
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- END Protocols Select -->
+
     <tr id="RequestorRow">
       <td>Requestor</td>
       <td><span id="RequestorHelp" class="tip">?</span></td>

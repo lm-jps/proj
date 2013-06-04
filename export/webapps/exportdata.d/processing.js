@@ -267,7 +267,7 @@ function ResizeCheck()
 
 var noaaColor;
 var HgTracked = 0;
-var HgSeriesList;
+var HgSeriesList = "EMPTY";
 var HgSeriesSelected = 0;
 
 function HgPatchGetNoaa()
@@ -555,24 +555,27 @@ function HgPatchInit(isActive)
 
 function HgGetSeriesList()
   {
-  var HgPatchSerList = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/show_hgpatch',
+  if (HgSeriesList === "EMPTY")
     {
-    method: 'get',
-    onSuccess: function(transport, json)
+    var HgPatchSerList = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/show_hgpatch',
       {
-      var response = transport.responseText || "no HgPatch series";
-      HgSeriesList = response.evalJSON();
-      for (var i=$("HgSerList").length; i > 0; i--)
-        $("HgSerList").remove(i-1);
-      var n = HgSeriesList.n;
-      if (n < 1) alert("WARNING: No _hgpatch series found.\n"+response);
-      insertOption("HgSerList","Not Selected Yet", "");
-      for (var i=0; i<n; i++)
-         insertOption("HgSerList",HgSeriesList.list[i], "");
-      },
-    onFailure: function() { alert('Failed to get HgPatch Series List'); },
-    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-    });
+      method: 'get',
+      onSuccess: function(transport, json)
+        {
+        var response = transport.responseText || "no HgPatch series";
+        HgSeriesList = response.evalJSON();
+        for (var i=$("HgSerList").length; i > 0; i--)
+          $("HgSerList").remove(i-1);
+        var n = HgSeriesList.n;
+        if (n < 1) alert("WARNING: No _hgpatch series found.\n"+response);
+        insertOption("HgSerList","Not Selected Yet", "");
+        for (var i=0; i<n; i++)
+           insertOption("HgSerList",HgSeriesList.list[i], "");
+        },
+      onFailure: function() { alert('Failed to get HgPatch Series List'); },
+      onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+      });
+    }
   return;
   }
 
