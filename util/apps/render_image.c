@@ -153,7 +153,7 @@ char *module_name = "render_image";
 ModuleArgs_t module_args[] =
 {
      {ARG_STRING, "in", "NOT SPECIFIED",  "Input data series."},
-     {ARG_INT, "in", "0",  "Limit of number of records, 0 for no limin; >0 count from start; <0 count from end"},
+     {ARG_INT, "n", "0",  "Limit of number of records, 0 for no limin; >0 count from start; <0 count from end"},
      {ARG_STRING, "out", "NOT SPECIFIED",  "Output data series or full path of directory or pipe via ppm program."},
      {ARG_STRING, "outname", "NOT SPECIFIED",  "Output quantity name for filenames"},
      {ARG_STRING, "scaling", "MINMAX", "Color table type, minmax, minmax99, minmaxgiven, histeq, ..."},
