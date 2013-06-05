@@ -12,17 +12,18 @@
    @code
    render_image --help
    render_iamge in=<RecordSet> out=<target> | {outname=<ident_for_filename>}  {scaling=<scaletype>}
-                {pallette=<color_table>}  {type=<image_protocol>} {outid=<filename_code>}
+                {palette=<color_table>}  {type=<image_protocol>} {outid=<filename_code>}
                 {tkey=<time_keyword>} {min=<scale_min>} {max=<scale_max>}
                 {scale=<image_size_ratio>} {-c} {-u} {-w} {-x}
    @endcode
 
    @code
      in=Input data series.
+     n=limit limit number of records to n from beginning or -n from end of 'in'
      out=Output data series or full path of directory or pipe via ppm program.
      outname=Output quantity name for filenames.
      scaling=Color table type, minmax, minmax99, minmaxgiven, histeq, ...,, default=MINMAX
-     pallette=Color table, GREY or filename, default=GREY
+     palette=Color table, GREY or filename, default=GREY (bad spelling as pallette still allowed)
      type=Image protocol, png, ppm, ..., default=png
      tkey=keyword name for time, default T_REC
      outid=output identifier, #=record counter, time=time as yyyymmdd_hhmmss, default=#
@@ -81,8 +82,8 @@
    This scaling emphasizes low absolute field strength but still shows detail up to a max of 3000 gauss.  The default
    of 1500 clips umbral fields with the tradeoff of more contrast for plage and network fields.
    @par
-   The color table is specified by the pallette parameter.  The table may be a built in table, at persent the only
-   build-in is "grey".  ("grey", "gray", "GREY", "GRAY" are all allowed).  If not a build-in table name the pallette
+   The color table is specified by the palette parameter.  The table may be a built in table, at persent the only
+   build-in is "grey".  ("grey", "gray", "GREY", "GRAY" are all allowed).  If not a build-in table name the palette
    parameter is expected to be a file path to a table of .sao or .lut types.  These table formats are described in the
    ds9(1) documentation.
    @par
@@ -105,7 +106,7 @@
    @code
    render_image in='hmi.M_45s_nrt'$QRY \
      outname=M \
-     pallette=/home/phil/apps/mag.lut \
+     palette=/home/phil/apps/mag.lut \
      outid=time:13 \
      -c \
      min=-500 \
@@ -152,10 +153,12 @@ char *module_name = "render_image";
 ModuleArgs_t module_args[] =
 {
      {ARG_STRING, "in", "NOT SPECIFIED",  "Input data series."},
+     {ARG_INT, "in", "0",  "Limit of number of records, 0 for no limin; >0 count from start; <0 count from end"},
      {ARG_STRING, "out", "NOT SPECIFIED",  "Output data series or full path of directory or pipe via ppm program."},
      {ARG_STRING, "outname", "NOT SPECIFIED",  "Output quantity name for filenames"},
      {ARG_STRING, "scaling", "MINMAX", "Color table type, minmax, minmax99, minmaxgiven, histeq, ..."},
-     {ARG_STRING, "pallette", "GREY", "Color table, GREY or filename"},
+     {ARG_STRING, "pallette", "none", "Color table, GREY or filename"},
+     {ARG_STRING, "palette", "GREY", "Color table, GREY or filename"},
      {ARG_STRING, "type", "png", "Image protocol, png, ppm, ..."},
      {ARG_STRING, "outid", "#", "output identifier, #=record counter, time=time as yyyymmdd_hhmmss"},
      {ARG_STRING, "tkey", "T_REC", "Time keyword name used if outid==time, defaults to T_REC"},
@@ -202,13 +205,13 @@ typedef struct ObsInfo_struct ObsInfo_t;
 
 void rebinArraySF(DRMS_Array_t *out, DRMS_Array_t *in);
 
-int add_png(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *pallette, int colors, int bytespercolor, double *minp, double *maxp);
+int add_png(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *palette, int colors, int bytespercolor, double *minp, double *maxp);
 
-int add_ppm(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *pallette, int colors, int bytespercolor, double *minp, double *maxp);
+int add_ppm(char *imgPath, DRMS_Array_t *imgArray, int scaletype, int usewhite, char *palette, int colors, int bytespercolor, double *minp, double *maxp);
 
-int make_png(char *imgPath, unsigned char *data, int height, int width, char *pallette, int bytepercolor, int colors);
+int make_png(char *imgPath, unsigned char *data, int height, int width, char *palette, int bytepercolor, int colors);
 
-char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp, char *pallette, int colors, int bytepercolor, int scaling, int usewhite);
+char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp, char *palette, int colors, int bytepercolor, int scaling, int usewhite);
 
 int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
 int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
@@ -234,7 +237,10 @@ int DoIt(void)
   char *outName = (char *)params_get_str(&cmdparams, "outname");
   char *outid = (char *)params_get_str(&cmdparams, "outid");
   char *tkey = (char *)params_get_str(&cmdparams, "tkey");
-  char *pallette = (char *)params_get_str(&cmdparams, "pallette");
+  char *palette = (char *)params_get_str(&cmdparams, "palette");
+  if (strcmp((char *)params_get_str(&cmdparams, "pallette"), "none"))
+    palette = (char *)params_get_str(&cmdparams, "pallette");
+  int limit = params_get_int(&cmdparams, "n");
   int bytespercolor = (params_isflagset(&cmdparams, "x") ? 2 : 1);
   int missingwhite = params_isflagset(&cmdparams, "w");
   int crop = params_isflagset(&cmdparams, "c");
@@ -250,9 +256,9 @@ int DoIt(void)
   int scaletype;
   int srcNx = 0, srcNy = 0;
 
-  if (strcasecmp(pallette, "grey") == 0 || strcasecmp(pallette, "gray") == 0)
+  if (strcasecmp(palette, "grey") == 0 || strcasecmp(palette, "gray") == 0)
     {
-    pallette = "GREY";
+    palette = "GREY";
     colors = 1;
     }
   else
@@ -295,11 +301,15 @@ int DoIt(void)
       scaletype = MAGMINMAXGIVEN;
     }
 
-  inRS = drms_open_records(drms_env, inQuery, &status);
+  if (limit == 0)
+    inRS = drms_open_records(drms_env, inQuery, &status);
+  else
+    inRS = drms_open_nrecords(drms_env, inQuery, limit, &status);
   if (status || inRS->n == 0)
        DIE("No input data found");
   drms_stage_records(inRS, 1, 1);
   nrecs = inRS->n;
+fprintf(stderr,"nrecs=%d\n",nrecs);
 
   if (!outQuery[0])
        DIE("No valid output place specified");
@@ -478,9 +488,9 @@ int DoIt(void)
         }
 
       if (imgtype == PNG)
-        add_png(imgPath, imageArray, scaletype, missingwhite, pallette, colors, bytespercolor, &min, &max);
+        add_png(imgPath, imageArray, scaletype, missingwhite, palette, colors, bytespercolor, &min, &max);
       else if (imgtype == PPM || imgtype == PPMPIPE)
-        add_ppm(imgPath, imageArray, scaletype, missingwhite, pallette, colors, bytespercolor, &min, &max);
+        add_ppm(imgPath, imageArray, scaletype, missingwhite, palette, colors, bytespercolor, &min, &max);
 
       if (tmparray)
         drms_free_array(imageArray);
@@ -501,7 +511,7 @@ fprintf(stderr,"leaving module\n");
       ------------------------------------------------------------
 */ 
 
-int add_ppm(char *imgPath, DRMS_Array_t *imageArray, int scaletype, int usewhite, char *pallette, int colors, int bytespercolor, double *minp, double *maxp)
+int add_ppm(char *imgPath, DRMS_Array_t *imageArray, int scaletype, int usewhite, char *palette, int colors, int bytespercolor, double *minp, double *maxp)
   {
   int i, Nx, Ny;
   unsigned char *imgData = NULL;
@@ -510,7 +520,7 @@ int add_ppm(char *imgPath, DRMS_Array_t *imageArray, int scaletype, int usewhite
   FILE *out;
   char *ppmcode;
 
-  imgData = (unsigned char*)set_scaling(imageArray, minp, maxp, &nmissing, pallette, colors, bytespercolor, scaletype, usewhite);
+  imgData = (unsigned char*)set_scaling(imageArray, minp, maxp, &nmissing, palette, colors, bytespercolor, scaletype, usewhite);
   if (!imgData)
     {
     fprintf(stderr,"scaling failed\n");
@@ -539,14 +549,14 @@ int add_ppm(char *imgPath, DRMS_Array_t *imageArray, int scaletype, int usewhite
   return(0);
   }
 
-int add_png(char *imgPath, DRMS_Array_t *imageArray, int scaletype, int usewhite, char *pallette, int colors, int bytespercolor, double *minp, double *maxp)
+int add_png(char *imgPath, DRMS_Array_t *imageArray, int scaletype, int usewhite, char *palette, int colors, int bytespercolor, double *minp, double *maxp)
   {
   int srcNx, srcNy;
   int status=0;
   unsigned char *imgData = NULL;
   int nmissing;
 
-  imgData = (unsigned char*)set_scaling(imageArray, minp, maxp, &nmissing, pallette, colors, bytespercolor, scaletype, usewhite);
+  imgData = (unsigned char*)set_scaling(imageArray, minp, maxp, &nmissing, palette, colors, bytespercolor, scaletype, usewhite);
 
   if (!imgData)
     {
@@ -556,7 +566,7 @@ int add_png(char *imgPath, DRMS_Array_t *imageArray, int scaletype, int usewhite
 
 // should add text info to .png file with min, max, nmissing, etc.
 
-  if (make_png(imgPath, imgData, imageArray->axis[0], imageArray->axis[1], pallette, bytespercolor, colors) != 0)
+  if (make_png(imgPath, imgData, imageArray->axis[0], imageArray->axis[1], palette, bytespercolor, colors) != 0)
     {
       fprintf(stderr,"png failed, status=%d\n",status);
       free(imgData);
@@ -606,7 +616,7 @@ void rebinArraySF(DRMS_Array_t *out, DRMS_Array_t *in)
 
 // ---------------------------------------------------------------------
 
-unsigned short *init_color_table(char * pallette, int colors, int bytepercolor)
+unsigned short *init_color_table(char * palette, int colors, int bytepercolor)
   {
   int c, i;
   int tablesize = (bytepercolor == 1 ? 256 : 65536);
@@ -616,17 +626,17 @@ unsigned short *init_color_table(char * pallette, int colors, int bytepercolor)
   unsigned short *table = (unsigned short *)malloc(colors*tablesize*sizeof(unsigned short));
 
   if (!table) return NULL;
-  if (strcmp(pallette,"GREY") == 0)
+  if (strcmp(palette,"GREY") == 0)
     for (i=0; i<tablesize; i++)
       for (c = 0; c<colors; c++)
         table[i*colors + c] = i;
 
-  else if (colors == 3 && access(pallette, R_OK) == 0)
+  else if (colors == 3 && access(palette, R_OK) == 0)
     {
-    FILE *ct = fopen(pallette,"r");
+    FILE *ct = fopen(palette,"r");
     void proc_color(FILE *ct, unsigned short *t, int max);
     char buf[256];
-    char *dot = rindex(pallette, '.');
+    char *dot = rindex(palette, '.');
     if (dot && strcmp(dot, ".lut")==0)
         {
         float fr, fg, fb;
@@ -710,14 +720,14 @@ void proc_color(FILE *ct, unsigned short *t, int max)
 
 
 char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, 
-    int *nmissp, char *pallette, int colors, int bytepercolor, int scaling, int usewhite)
+    int *nmissp, char *palette, int colors, int bytepercolor, int scaling, int usewhite)
   {
     int idata, ndata, nmiss = 0;
     float *inData = in->data;
     ndata = in->axis[0] * in->axis[1];
     int tablesize = (bytepercolor == 1 ? 256 : 65536);
     int color;
-    int grey = strcmp(pallette, "GREY") == 0;
+    int grey = strcmp(palette, "GREY") == 0;
     static unsigned short *table = NULL;
     static unsigned short *greytable = NULL;
     static unsigned short *colortable = NULL;
@@ -726,12 +736,12 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp,
     int maxcolor = (bytepercolor == 1 ? 254 : 65534);
     int missingcolor = (usewhite ? maxcolor + 1 : 0);
 
-fprintf(stderr,"set_scaling called, scaling=%d, pallette=%s, min=%f, max=%f",scaling,pallette,*minp,*maxp);
+fprintf(stderr,"set_scaling called, scaling=%d, palette=%s, min=%f, max=%f",scaling,palette,*minp,*maxp);
 fprintf(stderr,"\n   missingcolor %d maxcolor %d \n", missingcolor, maxcolor);
     if (!out)
         return(NULL);
 
-    // get color table unless pallette is GREY and scaling is MINMAX, do grey inline for that case only
+    // get color table unless palette is GREY and scaling is MINMAX, do grey inline for that case only
     // since that combination is used to call set_scaling recursively for histogram generation
     if (grey && scaling == MINMAX && colors == 1)
       {
@@ -747,7 +757,7 @@ fprintf(stderr,"\n   missingcolor %d maxcolor %d \n", missingcolor, maxcolor);
     else
       {
       if (!table)
-        table = init_color_table(pallette, colors, bytepercolor);
+        table = init_color_table(palette, colors, bytepercolor);
       colortable = table;
       }
 
@@ -1006,7 +1016,7 @@ fprintf(stderr,"newmax %f minp %f \n", newmax, *minp);
 
 // ----------------------------------------------------------------------
 int make_png(char *filename, unsigned char *data, 
-           int height, int width, char *pallette, int bytepercolor, int colors)
+           int height, int width, char *palette, int bytepercolor, int colors)
 { 
   int row;
   FILE *fp; // = NULL;
