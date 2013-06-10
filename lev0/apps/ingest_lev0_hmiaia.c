@@ -226,8 +226,8 @@ char lev0seriesname[128];	// e.g. hmi.lev0
 char tlmnamekey[128];		// shortened tlm file name for TLMDSNAM keyword
 char tlmnamekeyfirst[128];	// for TLMDSNAM keyword for 1st file of image
 char oldtlmdsnam[128];		// TLMDSNAM keyword from prev rec in db
-//char dbname[128];
-char *dbname = "aiadb_sums";	//!!TEMP. make dynamic
+char dbname[128];
+char *jdbname;
 char *username;			// from getenv("USER") 
 char *tlmdir;			// tlm dir name passed in 
 char *outdir;			// output dir for .tlm file (can be /dev/null)
@@ -829,7 +829,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
 void abortit(int stat)
 {
   printk("***Abort in progress ...\n");
-  printk("**Exit ingest_lev0 w/ status = %d\n", stat);
+  printk("**Exit ingest_lev0_hmiaia w/ status = %d\n", stat);
   if (h0logfp) fclose(h0logfp);
   exit(stat);
 }
@@ -1851,7 +1851,6 @@ void setup()
       sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIA);
       sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIA);
     }
-    //strcpy(dbname, "aiadb_sums");
   }
   else {
     if(grounddata) {
@@ -1862,7 +1861,6 @@ void setup()
       sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMI);
       sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMI);
     }
-    //strcpy(dbname, "hmidb_sums");
   }
   if(!restartflg) {
     printk("tlmseriesname=%s\nlev0seriesname=%s\n", 
@@ -1945,6 +1943,14 @@ int DoIt(void)
     pipedir = NULL;
   }
   else {
+    if(!(jdbname = (char *)getenv("JSOC_DBNAME"))) {
+      printk("!!ERROR: No JSOC_DBNAME in environment\n");
+      fprintf(stderr, "!!ERROR: No JSOC_DBNAME in environment\n");
+      abortit(1);
+    }
+    else {
+      sprintf(dbname, "%s_sums", jdbname);
+    }
     if(DS_ConnectDB_Q(dbname)) {        //needed by do_pipe2soc()
       printk("**Can't connect to DB %s\n", dbname);
       printk("**ERROR: Will not be able to process .parc files\n");
