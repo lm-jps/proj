@@ -1211,7 +1211,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
     ObsLoc->crval2 = drms_getkey_double(rec, "CRVAL2", &status); CHECK("CRVAL2");
     ObsLoc->cdelt1 = drms_getkey_double(rec, "CDELT1", &status); CHECK("CDELT1");
     ObsLoc->cdelt2 = drms_getkey_double(rec, "CDELT2", &status); CHECK("CDELT1");
-    ObsLoc->crota2 = drms_getkey_double(rec, "CROTA2", &status); CHECK("CROTA2");
+    ObsLoc->crota2 = drms_getkey_double(rec, "CROTA2", &status); if (status) ObsLoc->crota2 = 0.0; // WCS default
     ObsLoc->sina = sin(ObsLoc->crota2*Deg2Rad);
     ObsLoc->cosa = sqrt (1.0 - ObsLoc->sina*ObsLoc->sina);
     ObsLoc->rsun_obs = drms_getkey_double(rec, "RSUN_OBS", &status);

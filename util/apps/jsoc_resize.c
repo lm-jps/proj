@@ -157,7 +157,7 @@ int DoIt ()
   if (strstr(dsinp, "aia")) is_aia = 1;
   inprs = drms_open_records(drms_env, inQuery, &status);
   if (status) DIE("cant open recordset query");
-  if (strcmp(inQuery, dsinp) && *inQuery == '@')
+  if (dsinp != inQuery && *inQuery == '@')
     unlink(inQuery+1);
   drms_stage_records(inprs, 1, 0);
   nrecs = inprs->n;
@@ -238,7 +238,7 @@ int DoIt ()
       mag = fabs(cdelt1 / scale_to);
       cdelt1 /= mag;
       }
-    crota2 = drms_getkey_double(inprec, "CROTA2", &status); if (status) DIE("CROTA2 not found!");
+    crota2 = drms_getkey_double(inprec, "CROTA2", &status); if (status) crota2 = 0.0; // WCS default
    
     nsegs = hcon_size(&inprec->segments);
     for (iseg=0; iseg<1; iseg++)
@@ -516,7 +516,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
     ObsLoc->crval2 = drms_getkey_double(rec, "CRVAL2", &status); CHECK("CRVAL2");
     ObsLoc->cdelt1 = drms_getkey_double(rec, "CDELT1", &status); CHECK("CDELT1");
     ObsLoc->cdelt2 = drms_getkey_double(rec, "CDELT2", &status); CHECK("CDELT1");
-    ObsLoc->crota2 = drms_getkey_double(rec, "CROTA2", &status); CHECK("CROTA2");
+    ObsLoc->crota2 = drms_getkey_double(rec, "CROTA2", &status); if (status) ObsLoc->crota2 = 0.0; // WCS default
     ObsLoc->sina = sin(ObsLoc->crota2*Deg2Rad);
     ObsLoc->cosa = sqrt (1.0 - ObsLoc->sina*ObsLoc->sina);
     ObsLoc->rsun_obs = drms_getkey_double(rec, "RSUN_OBS", &status);
@@ -549,11 +549,14 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
 //       for each found time, write record query
 
 
+#define DIE_get_recset(msg) {fprintf(stderr,"$$$$ %s: %s\n", module_name, msg); return NULL;}
 const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
   {
-  static char newInQuery[102];
-  TIME epoch = (cmdparams_exists(&cmdparams, "epoch")) ? params_get_time(&cmdparams, "epoch") : 0;
+  static char newInQuery[DRMS_MAXSERIESNAMELEN+2];
+  int epoch_given = cmdparams_exists(&cmdparams, "epoch");
+  TIME epoch, t_epoch;
   DRMS_Array_t *data;
+  DRMS_Record_t *inTemplate;
   TIME t_start, t_stop, t_now, t_want, t_diff, this_t_diff;
   int status = 1;
   int nrecs, irec;
@@ -565,17 +568,54 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
   int quality;
   long long recnum;
   char keylist[DRMS_MAXQUERYLEN];
-  static char filename[100];
+  char filename[DRMS_MAXSERIESNAMELEN];
   char *tmpdir;
   FILE *tmpfile;
   char newIn[DRMS_MAXQUERYLEN];
   char seriesname[DRMS_MAXQUERYLEN];
   char *lbracket;
   char *at = index(inQuery, '@');
-  if (at && *at && (strncmp(inQuery,"aia.lev1[", 9)==0 ||
+  int npkeys;
+  char *timekeyname;
+  double t_step;
+
+  strcpy(seriesname, inQuery);
+  lbracket = index(seriesname,'[');
+  if (lbracket) *lbracket = '\0';
+  inTemplate = drms_template_record(drms_env, seriesname, &status);
+  if (status || !inTemplate) DIE_get_recset("Input series can not be found");
+
+  // Now find the prime time keyword name
+  npkeys = inTemplate->seriesinfo->pidx_num;
+  timekeyname = NULL;
+  if (npkeys > 0)
+    {
+    int i;
+    for (i=0; i<npkeys; i++)
+        {
+        DRMS_Keyword_t *pkey, *skey;
+        pkey = inTemplate->seriesinfo->pidx_keywords[i];
+        if (pkey->info->recscope > 1)
+           pkey = drms_keyword_slotfromindex(pkey);
+        if (pkey->info->type != DRMS_TYPE_TIME)
+          continue;
+        if(i > 0) DIE_get_recset("Input series must have TIME keyword first, for now...");
+        timekeyname = pkey->info->name;
+        t_step = drms_keyword_getdouble(drms_keyword_stepfromslot(pkey), &status);
+        if (status) DIE_get_recset("problem getting t_step");
+        t_epoch = drms_keyword_getdouble(drms_keyword_epochfromslot(pkey), &status);
+        if (status) DIE_get_recset("problem getting t_epoch");
+        }
+    }
+  else
+    DIE_get_recset("Must have time prime key");
+  epoch = epoch_given ? params_get_time(&cmdparams, "epoch") : t_epoch;
+
+  if (at && *at && ((strncmp(inQuery,"aia.lev1[", 9)==0 ||
                     strncmp(inQuery,"hmi.lev1[", 9)==0 ||
                     strncmp(inQuery,"aia.lev1_nrt2[",14)==0 ||
-                    strncmp(inQuery,"hmi.lev1_nrt[", 13)==0 ))
+                    strncmp(inQuery,"hmi.lev1_nrt[", 13)==0 ) ||
+                   epoch_given))
     {
     char *ip=(char *)inQuery, *op=newIn, *p;
     long n, mul;
@@ -588,29 +628,26 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
     else if (*p == 'h') mul = 3600;
     else if (*p == 'd') mul = 86400;
     else 
-      {
-      fprintf(stderr,"cant make sense of @xx cadence spec for aia or hmi lev1 data");
-      return(NULL);
-      }
+      DIE_get_recset("cant make sense of @xx cadence spec");
     cadence = n * mul;
     ip = ++p;  // skip cadence multiplier
     while ( *ip )
       *op++ = *ip++;
     *op = '\0';
     half = cadence/2.0;
-    sprintf(keylist, "T_OBS,QUALITY,recnum");
+    sprintf(keylist, "%s,QUALITY,recnum", timekeyname);
     data = drms_record_getvector(drms_env, newIn, keylist, DRMS_TYPE_DOUBLE, 0, &status);
     if (!data || status)
       {
-      fprintf(stderr,"getkey_vector failed status=%d\n", status);
-      return(NULL);
+      fprintf(stderr, "status=%d\n", status);
+      DIE_get_recset("getkey_vector failed\n");
       }
     nrecs = data->axis[1];
     irec = 0;
     t_this = (TIME *)data->data;
     dquality = (double *)data->data + 1*nrecs;
     drecnum = (double *)data->data + 2*nrecs;
-    if (epoch > 0.0)
+    if (epoch_given)
       {
       int s0 = (t_this[0] - epoch)/cadence;
       TIME t0 = s0*cadence + epoch;
@@ -651,12 +688,9 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
         }
     if (islot+1 < nslots)
       nslots = islot+1;  // take what we got.
-    strcpy(seriesname, inQuery);
-    lbracket = index(seriesname,'[');
-    if (lbracket) *lbracket = '\0';
     tmpdir = getenv("TMPDIR");
     if (!tmpdir) tmpdir = "/tmp";
-    sprintf(filename, "%s/hg_patchXXXXXX", tmpdir);
+    sprintf(filename, "%s/%sXXXXXX", tmpdir, module_name);
     mkstemp(filename);
     tmpfile = fopen(filename,"w");
     for (islot=0; islot<nslots; islot++)

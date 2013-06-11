@@ -82,6 +82,8 @@ ModuleArgs_t module_args[] =
      {ARG_FLOAT, "scale", "1.0", "Scale factor."},
      {ARG_FLOAT, "FWHM", "-1.0", "Smoothing Gaussian FWHM for method=gaussian."},
      {ARG_INT, "nvector", "-1.0", "Smoothing Gaussian vector length for method=gaussian."},
+     {ARG_INT, "inseg", "0", "Input segment number"},
+     {ARG_INT, "outseg", "0", "Output segment number"},
      {ARG_STRING, "method", "boxcar", "conversion type, one of: boxcar, gaussian."},
      {ARG_STRING, "requestid", "NA", "RequestID if called as an export processing step."},
      {ARG_END}
@@ -123,6 +125,7 @@ int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
 const char *get_input_recset(DRMS_Env_t *drms_env, const char *in);
 
 ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus);
+ObsInfo_t *GetMinObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus);
 
 int DoIt(void)
   {
@@ -139,6 +142,8 @@ int DoIt(void)
   float fwhm = params_get_float(&cmdparams, "FWHM");
   int crop = params_get_int(&cmdparams, "c");
   int as_is = params_get_int(&cmdparams, "u");
+  int inseg = params_get_int(&cmdparams, "inseg");
+  int outseg = params_get_int(&cmdparams, "outseg");
   int full_header = params_get_int(&cmdparams, "h") || strcmp(requestid, "NA");
   char *in_filename = NULL;
 
@@ -226,7 +231,7 @@ int DoIt(void)
     quality = drms_getkey_int(inRec, "QUALITY", &status);
     if (status || (!status && quality >= 0))
       {
-      inSeg = drms_segment_lookupnum(inRec, 0);
+      inSeg = drms_segment_lookupnum(inRec, inseg);
       inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
       if (status)
         {
@@ -234,9 +239,16 @@ int DoIt(void)
         drms_free_array(inArray);
         continue;
         }
-      ObsLoc = GetObsInfo(inSeg, NULL, &status);
-      if (!as_is) upNcenter(inArray, ObsLoc);
-      if (crop) crop_image(inArray, ObsLoc);
+      if (crop || !as_is)
+        {
+        ObsLoc = GetObsInfo(inSeg, NULL, &status);
+        if (!as_is) upNcenter(inArray, ObsLoc);
+        if (crop) crop_image(inArray, ObsLoc);
+        }
+      else
+        {
+        ObsLoc = GetMinObsInfo(inSeg, NULL, &status);
+        }
   
       int inx, iny, outx, outy, i, j;
       int in_nx = inArray->axis[0];
@@ -303,7 +315,7 @@ int DoIt(void)
   
       // write data file
       outRec = outRS->records[irec];
-      outSeg = drms_segment_lookupnum(outRec, 0);
+      outSeg = drms_segment_lookupnum(outRec, outseg);
 
       // copy all keywords
       drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
@@ -510,7 +522,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
     ObsLoc->crval2 = drms_getkey_double(rec, "CRVAL2", &status); CHECK("CRVAL2");
     ObsLoc->cdelt1 = drms_getkey_double(rec, "CDELT1", &status); CHECK("CDELT1");
     ObsLoc->cdelt2 = drms_getkey_double(rec, "CDELT2", &status); CHECK("CDELT1");
-    ObsLoc->crota2 = drms_getkey_double(rec, "CROTA2", &status); CHECK("CROTA2");
+    ObsLoc->crota2 = drms_getkey_double(rec, "CROTA2", &status); if (status) ObsLoc->crota2 = 0.0; // WCS default
     ObsLoc->sina = sin(ObsLoc->crota2*Deg2Rad);
     ObsLoc->cosa = sqrt (1.0 - ObsLoc->sina*ObsLoc->sina);
     ObsLoc->rsun_obs = drms_getkey_double(rec, "RSUN_OBS", &status);
@@ -523,6 +535,51 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
     ObsLoc->obs_vw = drms_getkey_double(rec, "OBS_VW", &status); CHECK("OBS_VW");
     ObsLoc->obs_vn = drms_getkey_double(rec, "OBS_VN", &status); CHECK("OBS_VN");
     ObsLoc->obs_b0 = drms_getkey_double(rec, "CRLT_OBS", &status); CHECK("CRLT_OBS");
+    ObsLoc->t_obs = t_obs;
+    }
+  *rstatus = 0;
+  return(ObsLoc);
+  }
+
+/* GetMinObsInfo - gets minimum standard WCS keywords for e.g. heliographic mapped data */
+ObsInfo_t *GetMinObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
+  { 
+  TIME t_prev;
+  DRMS_Record_t *rec;
+  TIME t_obs;
+  double dv;
+  ObsInfo_t *ObsLoc;
+  int status;
+
+  if (!seg || !(rec = seg->record))
+    { *rstatus = 1; return(NULL); }
+
+  ObsLoc = (pObsLoc ? pObsLoc : (ObsInfo_t *)malloc(sizeof(ObsInfo_t)));
+  if (!pObsLoc)
+    memset(ObsLoc, 0, sizeof(ObsInfo_t));
+
+  t_prev = ObsLoc->t_obs;
+  t_obs = drms_getkey_time(rec, "T_OBS", &status); CHECK("T_OBS");
+
+  if (t_obs <= 0.0)
+    { *rstatus = 2; return(NULL); }
+
+  if (t_obs != t_prev)
+    {
+    ObsLoc->crpix1 = drms_getkey_double(rec, "CRPIX1", &status); CHECK("CRPIX1");
+    ObsLoc->crpix2 = drms_getkey_double(rec, "CRPIX2", &status); CHECK("CRPIX2");
+    ObsLoc->crval1 = drms_getkey_double(rec, "CRVAL1", &status); CHECK("CRVAL1");
+    ObsLoc->crval2 = drms_getkey_double(rec, "CRVAL2", &status); CHECK("CRVAL2");
+    ObsLoc->cdelt1 = drms_getkey_double(rec, "CDELT1", &status); CHECK("CDELT1");
+    ObsLoc->cdelt2 = drms_getkey_double(rec, "CDELT2", &status); CHECK("CDELT1");
+    ObsLoc->crota2 = drms_getkey_double(rec, "CROTA2", &status); if (status) ObsLoc->crota2 = 0.0; // WCS default
+    ObsLoc->sina = sin(ObsLoc->crota2*Deg2Rad);
+    ObsLoc->cosa = sqrt (1.0 - ObsLoc->sina*ObsLoc->sina);
+    ObsLoc->rsun_obs = drms_getkey_double(rec, "RSUN_OBS", &status);
+    ObsLoc->obs_vr = drms_getkey_double(rec, "OBS_VR", &status);
+    ObsLoc->obs_vw = drms_getkey_double(rec, "OBS_VW", &status);
+    ObsLoc->obs_vn = drms_getkey_double(rec, "OBS_VN", &status);
+    ObsLoc->obs_b0 = drms_getkey_double(rec, "CRLT_OBS", &status);
     ObsLoc->t_obs = t_obs;
     }
   *rstatus = 0;

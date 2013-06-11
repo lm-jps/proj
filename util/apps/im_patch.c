@@ -435,7 +435,7 @@ fprintf(stderr,"irec=%d, tdiff=%lf\n",irec,tdiff);
     y0 = crpix2 - 1;
     crvalx = drms_getkey_double(inRec, "CRVAL1", &status); TEST_PARAM("CRVAL1");
     crvaly = drms_getkey_double(inRec, "CRVAL2", &status); TEST_PARAM("CRVAL2");
-    crota = drms_getkey_double(inRec, "CROTA2", &status); TEST_PARAM("CROTA2");
+    crota = drms_getkey_double(inRec, "CROTA2", &status); if (status) crota = 0.0; // WCS default
     pa = -crota;
     crlt_obs_rad = Deg2Rad * crlt_obs;
     crln_obs_rad = Deg2Rad * crln_obs;
