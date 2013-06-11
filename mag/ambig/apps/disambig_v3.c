@@ -18,6 +18,7 @@
  *			v2.0		Jun 04 2012
  *			v3.0		Sep 17 2012
  *			v3.1		Jun 04 2013
+ *			v3.2		Jun 11 2013
  *
  * Issues:
  *			v1.0
@@ -44,6 +45,8 @@
  *			Fixed bug in erode/grow
  *			Updated noise mask series name
  *			Updated geometry keyword
+ *			v3.2
+ *			Assigned offdisk values in conf_disambig to 0, using bitmap
  *
  *
  * Example:
@@ -209,7 +212,7 @@ extern void ambig_(int *geometry,
 //====================
 
 char *module_name = "disambig_v3";	/* Module name */
-char *version_id = "2013 Jun 04";  /* Version number */
+char *version_id = "2013 Jun 11";  /* Version number */
 
 #ifdef OLD
 char *segName[] = {"field", "inclination", "azimuth", "alpha_mag", 
@@ -502,7 +505,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.3 2013/06/04 19:53:37 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.4 2013/06/11 20:40:32 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
@@ -1312,6 +1315,24 @@ int writeData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 			}
 		}
 	}
+	
+	// Read in bitmap, zero out off-disk pixels in conf_disambig
+	// Jun 11 2013
+	
+	DRMS_Segment_t *inSeg_bitmap = drms_segment_lookup(inRec, "bitmap");
+	DRMS_Array_t *inArray_bitmap = drms_segment_read(inSeg_bitmap, DRMS_TYPE_CHAR, &status);
+	if (status) {
+		printf("Bitmap reading error \n");
+		return 1;
+	}
+	char *bitmap = (char *) inArray_bitmap->data;
+  for (int i = 0; i < nx0; i++) {
+		for (int j = 0; j < ny0; j++) {
+		  idx = i + j * nx0;
+		  if (!bitmap[idx]) confidence[idx] = 0;
+		}
+	}
+	drms_free_array(inArray_bitmap);
 
 	// Copy over quality maps, update if necessary
 	
@@ -1339,7 +1360,6 @@ int writeData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 			idx = i + j * nx0;
 			// Jun 22 Xudong: not updated for now, waiting for final scheme
 			confid_map[idx] = inData_conf[idx];
-			// Jun 22 Xudong: update highest bit for now, should be lowest bit in final version
 			qual_map[idx] = inData_qual[idx];
 #ifdef QUALMAP
 			qual_map[idx] = qual_map[idx] | getAmbCode(confidence[idx]);
