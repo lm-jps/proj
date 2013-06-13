@@ -52,10 +52,10 @@ function InitPage()
   DisplaySim = 0;
   $("ImagesFSN").value = 0;
   $("DetailsFSN").value = 0;
-  $("DetailsCount").value = 10;
+  $("DetailsCount").value = 16;
   $("DetailsMsg").innerHTML = "No Details Requested Yet";
   $("DetailsQuery").innerHTML = "No Details Requested Yet";
-  $("ImagesCount").value = 10;
+  $("ImagesCount").value = 16;
   $("ImagesMsg").innerHTML = "No Images Requested Yet";
   $("ImagesQuery").innerHTML = "No Images Requested Yet";
   $("PickHMI").checked = false;
@@ -237,7 +237,7 @@ function CheckPending()
     }
   }
 
-// Returns difference in minutes between filename time string t and the present time
+// Returns difference in minutes between ISO time string t and the present time
 function TimeSinceFNT(t)
   {
   now = new Date();
@@ -252,7 +252,7 @@ function TimeSinceFNT(t)
   tms = Date.UTC(yr,0,1,hr,min,sec);
   tms = tms + 86400000 * (doy - 1);
   diff = Math.round((nowms - tms)/60000);
-  hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
+  hrs = Math.floor(diff/60);
   mins = diff - 60*hrs;
   return hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m";
   }
@@ -271,7 +271,7 @@ function TimeSinceISO(t)
   tms = tms - 60000*now.getTimezoneOffset();
   diff = Math.round((nowms - tms)/60000);
   DATE_Lag = diff;
-  hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
+  hrs = Math.floor(diff/60);
   mins = diff - 60*hrs;
   return hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m";
   }
@@ -289,7 +289,7 @@ function TimeSinceJSOC(t)
   tms = Date.parse(t1);
   tms = tms - 60000*now.getTimezoneOffset();
   diff = Math.round((nowms - tms)/60000);
-  hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
+  hrs = Math.floor(diff/60);
   mins = diff - 60*hrs;
   return hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m";
   }
@@ -316,12 +316,12 @@ function GetDCSInfo()
       nowms = now.getTime();
       dcslast = data.hmimt * 1000;
       diff = Math.round((nowms - dcslast)/60000);
-      hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
+      hrs = Math.floor(diff/60);
       mins = diff - 60*hrs;
       $("DCS_info").innerHTML =  $("DCS_info").innerHTML + "<B>Last DCS Received HMI</B> file was " +  hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m ago,";
       dcslast = data.aiamt * 1000;
       diff = Math.round((nowms - dcslast)/60000);
-      hrs = (diff >= 0) ? Math.floor(diff/60) : Math.ceil(diff/60);
+      hrs = Math.floor(diff/60);
       mins = diff - 60*hrs;
       $("DCS_info").innerHTML =  $("DCS_info").innerHTML + "  <B>AIA</B> file was " +  hrs.toPaddedString(2) + "h " + mins.toPaddedString(2) + "m ago";
       },
@@ -505,7 +505,7 @@ function GetDetailsTable()
     method: 'get',
     parameters: {"ds":DetailsSeries + "[" + F_FSN + "-" + L_FSN + "]",
 		 "op":"rs_list",
-		 "key":"FSN,T_OBS,DATE,CAMERA,WAVELNTH,EXPTIME,MISSVALS,NERRORS,DATAMIN,DATAMAX,DATAMEAN,DATARMS,*recnum*",
+		 "key":"FSN,T_OBS,DATE,CAMERA,WAVELNTH,EXPTIME,MISSVALS,NPACKETS,DATAMIN,DATAMAX,DATAMEAN,DATARMS",
 		 "seg":"image" },
     onSuccess: function(transport, json)
       {
@@ -519,17 +519,17 @@ function GetDetailsTable()
         {
 	DetailsText = "<table border=1 cellPadding=2 cellSpacing=5 ><tr>" + 
 		"<th>FSN</th>" + "<th>T_OBS</th>" + "<th>DATE</th>" +
-		"<th>CAM</th>" + "<th>WAVE</th>" + "<th>EXPTIME</th>" + "<th>MISSVALS</th>" + "<th>NERRORS</th>" + "<th>MIN</th>" +
-		"<th>MAX</th>" + "<th>MEAN</th>" + "<th>RMS</th>" +
-		"<th>recnum</th>" + "<th>Link</th>" + "<th>Small</th>" +
-		"<th>.png</th>" + "</tr>";
+		"<th>CAM</th>" + "<th>WAVE</th>" + "<th>EXPTIME</th>" + 
+		"<th>MISSVALS</th>" + "<th>NPACKETS</th>" + 
+		"<th>MIN</th>" + "<th>MAX</th>" + "<th>MEAN</th>" + "<th>RMS</th>" +
+		"<th>Link</th>" + "<th>Small</th>" + "<th>.png</th>" + "</tr>";
 	n = data.count;
         if (n > 0)
           {
 	  for (row=n-1; row >= 0; row--)
 	    {
 	    DetailsText = DetailsText + "<tr>"; 
-            for (var key=0; key<11; key++)
+            for (var key=0; key<12; key++)
 		DetailsText = DetailsText + "<td>" + data.keywords[key].values[row] + "</td>";
 	    var path = data.segments[0].values[row];
 	    DetailsText = DetailsText + "<td><a href=" + path + ">Full FITS</a></td>";
@@ -567,13 +567,13 @@ function GetImagesTable()
 
   var F_FSN = $("ImagesFSN").value - 0;
   var L_FSN = (F_FSN - 0) + ($("ImagesCount").value - 1);
-  $("ImagesQuery").innerHTML = "Images for " + ImagesSeries + "[" + F_FSN + "-" + L_FSN + "]";
+  $("ImagesQuery").innerHTML = "<B>Images for " + ImagesSeries + "[" + F_FSN + "-" + L_FSN + "]</B>";
   ImagesReq = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info',
     {
     method: 'get',
     parameters: {"ds":ImagesSeries + "[" + F_FSN + "-" + L_FSN + "]",
 		 "op":"rs_list",
-		 "key":"FSN,*recnum*",
+		 "key":"FSN,T_OBS,CAMERA,WAVELNTH,MISSVALS,NPACKETS,DATAMIN,*recnum*",
 		 "seg":"image" },
     onSuccess: function(transport, json)
       {
@@ -585,25 +585,103 @@ function GetImagesTable()
         }
       else
         {
-	ImagesText = "<table border=1 cellPadding=2 cellSpacing=5 ><tr>" + 
-		"<th>FSN</th><th>Image</th></tr>";
-	n = data.count;
+	ImagesText = "<table border=1 cellPadding=2 cellSpacing=5 >" 
+	n = data.count/4;
         if (n > 0)
 	  {
 	  for (row=n-1; row >= 0; row--)
 	    {
-	    var FSN = data.keywords[0].values[row];
-	    var recnum = data.keywords[1].values[row];
-	    var path = data.segments[0].values[row];
-	    var pathim = path.replace(/.fits/,".png");
-	    var pathsm = path.replace(/.fits/,"_sm.fits");
-	    ImagesText = ImagesText + "<tr><td>FSN = " + FSN + "<br>&nbsp;<br>rec = " + recnum + "</td>" +
-		"<td><a href=" + pathsm + "><img src=" + pathim + "></a></td></tr>";
+	    var FSN0 = data.keywords[0].values[4*row];
+	    var T_OBS0 = data.keywords[1].values[4*row];
+	    var Camera0 = data.keywords[2].values[4*row];
+	    var Wavelnth0 = data.keywords[3].values[4*row];
+	    var MissVals0 = data.keywords[4].values[4*row];
+	    var NPackets0 = data.keywords[5].values[4*row];
+	    var Min_Val0 = data.keywords[6].values[4*row];
+	    var recnum0 = data.keywords[7].values[4*row];
+	    var path0 = data.segments[0].values[4*row];
+	    var pathim0 = path0.replace(/.fits/,".png");
+	    var pathsm0 = path0.replace(/.fits/,"_sm.fits");
+	    var FSN1 = data.keywords[0].values[4*row+1];
+	    var T_OBS1 = data.keywords[1].values[4*row+1];
+	    var Camera1 = data.keywords[2].values[4*row+1];
+	    var Wavelnth1 = data.keywords[3].values[4*row+1];
+	    var MissVals1 = data.keywords[4].values[4*row+1];
+	    var NPackets1 = data.keywords[5].values[4*row+1];
+	    var Min_Val1 = data.keywords[6].values[4*row+1];
+	    var recnum1 = data.keywords[7].values[4*row+1];
+	    var path1 = data.segments[0].values[4*row+1];
+	    var pathim1 = path1.replace(/.fits/,".png");
+	    var pathsm1 = path1.replace(/.fits/,"_sm.fits");
+	    var FSN2 = data.keywords[0].values[4*row+2];
+	    var T_OBS2 = data.keywords[1].values[4*row+2];
+	    var Camera2 = data.keywords[2].values[4*row+2];
+	    var Wavelnth2 = data.keywords[3].values[4*row+2];
+	    var MissVals2 = data.keywords[4].values[4*row+2];
+	    var NPackets2 = data.keywords[5].values[4*row+2];
+	    var Min_Val2 = data.keywords[6].values[4*row+2];
+	    var recnum2 = data.keywords[7].values[4*row+2];
+	    var path2 = data.segments[0].values[4*row+2];
+	    var pathim2 = path2.replace(/.fits/,".png");
+	    var pathsm2 = path2.replace(/.fits/,"_sm.fits");
+	    var FSN3 = data.keywords[0].values[4*row+3];
+	    var T_OBS3 = data.keywords[1].values[4*row+3];
+	    var Camera3 = data.keywords[2].values[4*row+3];
+	    var Wavelnth3 = data.keywords[3].values[4*row+3];
+	    var MissVals3 = data.keywords[4].values[4*row+3];
+	    var NPackets3 = data.keywords[5].values[4*row+3];
+	    var Min_Val3 = data.keywords[6].values[4*row+3];
+	    var recnum3 = data.keywords[7].values[4*row+3];
+	    var path3 = data.segments[0].values[4*row+3];
+	    var pathim3 = path3.replace(/.fits/,".png");
+	    var pathsm3 = path3.replace(/.fits/,"_sm.fits");
+	    ImagesText = ImagesText + 
+			"<tr>" +
+			"<td><a href=" + pathsm0 + "><img src=" + pathim0 + "></a>" +
+			"<center>" + T_OBS0 + 
+			"<br>FSN = " + FSN0 + 
+			"<br>Wavelnth = " + Wavelnth0 + 
+			"<br>Camera = " + Camera0 + 
+			"<br>NPackets = " + NPackets0 + 
+			"<br>MissVals = " + MissVals0 + 
+			"<br>Min_Val = " + Min_Val0 + 
+			"<br>recnum = " + recnum0 + "<br>&nbsp;</center></td>" +
+
+			"<td><a href=" + pathsm1 + "><img src=" + pathim1 + "></a>" +
+			"<center>" + T_OBS1 + 
+			"<br>FSN = " + FSN1 + 
+			"<br>Wavelnth = " + Wavelnth1 + 
+			"<br>Camera = " + Camera1 + 
+			"<br>NPackets = " + NPackets1 + 
+			"<br>MissVals = " + MissVals1 + 
+			"<br>Min_Val = " + Min_Val1 + 
+			"<br>recnum = " + recnum1 + "<br>&nbsp;</center></td>" +
+
+			"<td><a href=" + pathsm2 + "><img src=" + pathim2 + "></a>" +
+			"<center>" + T_OBS2 + 
+			"<br>FSN = " + FSN2 + 
+			"<br>Wavelnth = " + Wavelnth2 + 
+			"<br>Camera = " + Camera2 + 
+			"<br>NPackets = " + NPackets2 + 
+			"<br>MissVals = " + MissVals2 + 
+			"<br>Min_Val = " + Min_Val2 + 
+			"<br>recnum = " + recnum2 + "<br>&nbsp;</center></td>" +
+
+			"<td><a href=" + pathsm3 + "><img src=" + pathim3 + "></a>" +
+			"<center>" + T_OBS3 + 
+			"<br>FSN = " + FSN3 + 
+			"<br>Wavelnth = " + Wavelnth3 + 
+			"<br>Camera = " + Camera3 + 
+			"<br>NPackets = " + NPackets3 + 
+			"<br>MissVals = " + MissVals3 + 
+			"<br>Min_Val = " + Min_Val3 + 
+			"<br>recnum = " + recnum3 + "<br>&nbsp;</center></td>" +
+			"</tr>";
 	    }
 	  ImagesText = ImagesText + "</table>";
 	  $("ImagesTable").innerHTML = ImagesText;
 	  }
-	$("ImagesMsg").innerHTML = n + " records found";
+	$("ImagesMsg").innerHTML = data.count + " records found";
         }
       GetFsnRangeForDisplay();
       },
@@ -1329,4 +1407,3 @@ Cols =&nbsp;<input type="text" id="DisplayCols" name="DisplayCols" value="8" onC
 <HR></DIV>
 </BODY>
 </HTML>
-

@@ -187,7 +187,10 @@ function initVars()
   // Form init
     {
     $("ExportRequestor").value = "";
-    $("ExportNotify").value = "solarmail";
+    if (Internal)
+      $("ExportNotify").value = "solarmail";
+    else
+      $("ExportNotify").value = "";
     $("RequestIdPlace").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -1573,7 +1576,7 @@ access the data.
   <iframe id="FileUploadFrame" onload="uploadDone();" src="" style="height:0px;width:0px;border:0px solid #fff;"></iframe>
 </div>
 
-<div style="display:none;">
+<div >
 jsoc_fetch command:&nbsp;
 <span id="ExportParameters"></span>
 </div>
