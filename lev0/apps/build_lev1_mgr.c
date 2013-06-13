@@ -774,7 +774,8 @@ int do_ingest(int force)
       }
       sscanf(string, "%lld", &maxrecnum0);
       //maxrecnum0 = maxrecnum0 - 25;	//allow time for commit of lev0 
-      maxrecnum0 = maxrecnum0 - 40;	//allow (more) time for commit of lev0 
+      //maxrecnum0 = maxrecnum0 - 40;	//allow (more) time for commit of lev0 
+      maxrecnum0 = maxrecnum0 - 80;	//allow (more) time for commit of lev0 
       lastrecnum0_prev = lastrecnum0_now;
       lastrecnum0_now = maxrecnum0;		//save to see if more come in
       break;
