@@ -9,4 +9,4 @@ fdsseries = fds
 orbvseries = fds_orbit_vectors
 dbuser = production
 dbname = jsoc
-notify = arta@sun.stanford.edu jeneen@sun.stanford.edu rock@sun.stanford.edu thailand@un.stanford.edu
+notify = arta@sun.stanford.edu jeneen@sun.stanford.edu rock@sun.stanford.edu thailand@sun.stanford.edu
