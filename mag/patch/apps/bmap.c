@@ -135,7 +135,7 @@ struct mapInfo {
 	int cutOut, localOpt, globalOpt, fullDisk;
 	int localCart, spheric;
 	int latlon, noDisamb, fillNan;
-	int autoTrack, autoSize, diffTrack;
+	int autoTrack, autoSize, diffTrack, useHarp;
 	int verbose;
 	int ambweak;
 	int doerr, covar, rice;
@@ -275,6 +275,7 @@ ModuleArgs_t module_args[] =
 	{ARG_FLAG, "q", "", "Fill regions outside HARP defined area as NaN"},
 	{ARG_FLAG, "s", "", "Spherical option, flip By as Btheta"},
 	{ARG_FLAG, "d", "", "Enable differential rotation tracking"},
+	{ARG_FLAG, "h", "", "Force direct cutout same as specified HARP, overrides -a, -d, lon/lat, etc."},
 	{ARG_STRING, kDpath, kDpathDef, "path to the source code tree (the JSOC root directory)"},
 	{ARG_INT, "harpnum", "0", "HARP number"},
 	{ARG_END}
@@ -340,6 +341,7 @@ int DoIt(void)
 	mInfo.globalOpt = params_isflagset(&cmdparams, "g");
 	
 	mInfo.autoTrack = params_isflagset(&cmdparams, "a");
+	mInfo.useHarp = params_isflagset(&cmdparams, "h");
 	mInfo.gauss = !(params_isflagset(&cmdparams, "b"));
 	
 	mInfo.diffTrack = params_isflagset(&cmdparams, "d");
@@ -659,6 +661,8 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	if (getEphemeris(inRec, &disk_lonc, &disk_latc, &disk_xc, &disk_yc, &rSun, &asd, &pa))
 		return 1;
 	
+	
+	
 	/*
 	printf("disk_latc=%f, disk_lonc=%f, disk_xc=%f, disk_yc=%f, rSun=%f, asd=%f, pa=%f,\n", 
 		   disk_latc/RADSINDEG, disk_lonc/RADSINDEG, disk_xc, disk_yc, rSun, asd, pa/RADSINDEG);*/
@@ -714,20 +718,31 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	double xi, zeta;		// reference point in CCD pixel
 	
 	if (mInfo->cutOut) {
-		
-		if (sphere2img (latc * RADSINDEG, lonc * RADSINDEG, disk_latc, disk_lonc, &xi, &zeta, 
+	
+	  if (mInfo->useHarp) {
+	  
+	    float x0 = drms_getkey_float(inRec, "CRPIX1", &status) - 1;
+	    float y0 = drms_getkey_float(inRec, "CRPIX2", &status) - 1;
+	    DRMS_Segment_t *inSeg = drms_segment_lookup(inRec, "disambig");
+	    mInfo->xc = x0 + (inSeg->axis[0] - 1.) / 2.;
+	    mInfo->yc = y0 + (inSeg->axis[1] - 1.) / 2.;
+	    
+	  } else {
+	  
+	  	if (sphere2img (latc * RADSINDEG, lonc * RADSINDEG, disk_latc, disk_lonc, &xi, &zeta, 
 						 disk_xc/rSun, disk_yc/rSun, 1.0, pa, 0., 0., 0., 0.))
-			return 1;			// off disk
-		
-		xi *= rSun;
-		zeta *= rSun;
-		
-		if (!mInfo->autoSize) {
-			if (mInfo->ncol % 2 == 0) mInfo->xc = (int) xi + 0.5; else mInfo->xc = round(xi);
-			if (mInfo->nrow % 2 == 0) mInfo->yc = (int) zeta + 0.5; else mInfo->yc = round(zeta);
-		} else {
-			mInfo->xc = round(xi);
-			mInfo->yc = round(zeta);
+			  return 1;			// off disk
+		  xi *= rSun;
+		  zeta *= rSun;
+	  
+		  if (!mInfo->autoSize) {
+			  if (mInfo->ncol % 2 == 0) mInfo->xc = (int) xi + 0.5; else mInfo->xc = round(xi);
+			  if (mInfo->nrow % 2 == 0) mInfo->yc = (int) zeta + 0.5; else mInfo->yc = round(zeta);
+		  } else {
+			  mInfo->xc = round(xi);
+			  mInfo->yc = round(zeta);
+		  }
+		  
 		}
 		
 	} else {
@@ -744,8 +759,13 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 		if (mInfo->cutOut) {
 			
 			DRMS_Segment_t *inSeg = drms_segment_lookup(inRec, "disambig");
-			mInfo->ncol = inSeg->axis[0] / 2 * 2 + 1;
-			mInfo->nrow = inSeg->axis[1] / 2 * 2 + 1;		// full pixel center requires odd dim
+			if (mInfo->useHarp) {
+			  mInfo->ncol = inSeg->axis[0];
+	  		mInfo->nrow = inSeg->axis[1];
+			} else {
+  			mInfo->ncol = inSeg->axis[0] / 2 * 2 + 1;
+	  		mInfo->nrow = inSeg->axis[1] / 2 * 2 + 1;		// full pixel center requires odd dim
+	  	}
 			
 		} else {
 			
@@ -1571,13 +1591,11 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	DRMS_Segment_t *outSeg;
 	DRMS_Array_t *outArray;
   
-  SHOW("here");
-	
 	// write b1 as the 1st segment
 	outSeg = drms_segment_lookupnum(outRec, 0);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b1, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
-	outArray->parent_segment = outSeg;
+//	outArray->parent_segment = outSeg;
   if (mInfo->rice) {
     outArray->israw = 0;
     outArray->bzero = 0;
@@ -1591,7 +1609,7 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outSeg = drms_segment_lookupnum(outRec, 1);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b2, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
-	outArray->parent_segment = outSeg;
+//	outArray->parent_segment = outSeg;
   if (mInfo->rice) {
     outArray->israw = 0;
     outArray->bzero = 0;
@@ -1605,7 +1623,7 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outSeg = drms_segment_lookupnum(outRec, 2);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b3, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
-	outArray->parent_segment = outSeg;
+//	outArray->parent_segment = outSeg;
   if (mInfo->rice) {
     outArray->israw = 0;
     outArray->bzero = 0;
@@ -1614,7 +1632,7 @@ int writeMap(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
-	
+
 	return 0;
 	
 }
@@ -1641,7 +1659,7 @@ int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outSeg = drms_segment_lookupnum(outRec, 3);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b1_err, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
-	outArray->parent_segment = outSeg;
+//	outArray->parent_segment = outSeg;
   if (mInfo->rice) {
     outArray->israw = 0;
     outArray->bzero = 0;
@@ -1655,7 +1673,7 @@ int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outSeg = drms_segment_lookupnum(outRec, 4);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b2_err, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
-	outArray->parent_segment = outSeg;
+//	outArray->parent_segment = outSeg;
   if (mInfo->rice) {
     outArray->israw = 0;
     outArray->bzero = 0;
@@ -1669,7 +1687,7 @@ int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	outSeg = drms_segment_lookupnum(outRec, 5);
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, b3_err, &status);
 	outSeg->axis[0] = outArray->axis[0]; outSeg->axis[1] = outArray->axis[1];
-	outArray->parent_segment = outSeg;
+//	outArray->parent_segment = outSeg;
   if (mInfo->rice) {
     outArray->israw = 0;
     outArray->bzero = 0;
@@ -1678,6 +1696,8 @@ int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	status = drms_segment_write(outSeg, outArray, 0);
 	if (status) return 1;
 	drms_free_array(outArray);
+
+  if (! mInfo->covar || ! cc_fi || ! cc_fa || ! cc_ai) return 0;
   
   // write qual_map
 	outSeg = drms_segment_lookup(outRec, "info_map");
@@ -1697,8 +1717,7 @@ int writeError(DRMS_Record_t *outRec, struct mapInfo *mInfo,
 	if (status) return 1;
 	drms_free_array(outArray);
   
-  if (! mInfo->covar || ! cc_fi || ! cc_fa || ! cc_ai) return 0;
-  
+ 
   // Write correlation coefficient field-inclination
   outSeg = drms_segment_lookup(outRec, "field_inclination_err");
 	outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, cc_fi, &status);
