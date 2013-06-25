@@ -60,6 +60,7 @@ $RXFILEHMI = "/usr/local/logs/soc/RexmitRestart.iris";
 $TRFILEAIA = "/usr/local/logs/soc/TlmReceivedRestart.aia";
 $RXFILEAIA = "/usr/local/logs/soc/RexmitRestart.aia";
 $DIRPIPEFE = "/dds/socdc";	#pipeline front end dir to send data to
+$DIRHK = "/data/hk_hsb_dayfile"; #place to mv .hkt and .xml files
 #$FEHOST = "d00.stanford.edu";   #pipeline front end host name
 $FEHOST = "aia0";   #pipeline front end host name
 $THISHOST = `hostname`;
@@ -899,6 +900,17 @@ sub ls_update
     chomp($name);
     #$lb->insert('end', "$name    $size");
     $lb->insert('end', "$name");
+    #special for IRIS. $DIRDDS2SOC gets .hkt and .xml files
+    if(($pos = rindex($name, ".hkt")) != -1) {
+      $cmd = "mv -f $DIRDDS2SOC/$name $DIRHK";     #mv to speical hk dir
+      `$cmd`;
+      next;
+    }
+    if(($pos = rindex($name, ".xml")) != -1) {
+      $cmd = "mv -f $DIRDDS2SOC/$name $DIRHK";     #mv to speical hk dir
+      `$cmd`;
+      next;
+    }
     push(@filenames, $name);
   }
   shift(@dds2soc_rex_ls);		#elim "total" line in front of ls
