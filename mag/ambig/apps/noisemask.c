@@ -66,8 +66,7 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
     mask = (double *)malloc(sunSize * sunSize * sizeof(double));
 
     inRS = drms_open_records(drms_env, inQuery, &status);
-    if (status || inRS->n == 0)
-       DIE("No input data found");
+     if (status || inRS->n == 0) {printf("No input data found\n"); return (status ? status : -1);}       // Jun 26 2013 xudong, inRS->0 has status=0, not working
     inRec = inRS->records[0];
 
     sprintf(vr_start_str, "%d",  vr_start);
@@ -77,7 +76,8 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
     drms_close_records(inRS, DRMS_FREE_RECORD);
 
     inRSfinal = drms_open_records(drms_env, inQueryfinal, &status);
-    if (status || inRSfinal->n == 0) DIE("No input data found");
+//     printf("status=%d, noise=%d\n", status, (status ? status : -1));
+     if (status || inRSfinal->n == 0) {printf("No input data found\n"); return (status ? status : -1);}       // Jun 26 2013 xudong
     nrecs = inRSfinal->n;
     inRecfinal = inRSfinal->records[0];
     inSeg = drms_segment_lookupnum(inRecfinal, 0);
@@ -97,8 +97,9 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
         inArray = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
         if (status)
            {
-              printf(" No data file found, status=%d\n", status);
+              printf("No input data found\n");
               drms_free_array(inArray);
+              return (status ? status : -1);       // Jun 26 2013 xudong
             }
          double *inData = (double *)inArray->data;
 
@@ -120,9 +121,9 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
             inArray = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
             if (status)
                {
-                  printf(" No data file found, status=%d\n", status);
+                  printf(" No data file found\n");
                   drms_free_array(inArray);
-                  continue;
+                  return (status ? status : -1);       // Jun 26 2013 xudong
                 }
              vr_coef = drms_getkey_float(inRecfinal, "VRCENT", &status);
              weight = 1.0 - fabs(vr_coef - vrcenter)/50.0;

@@ -19,6 +19,7 @@
  *			v3.0		Sep 17 2012
  *			v3.1		Jun 04 2013
  *			v3.2		Jun 11 2013
+ *          v3.3        Jun 26 2013
  *
  * Issues:
  *			v1.0
@@ -47,6 +48,8 @@
  *			Updated geometry keyword
  *			v3.2
  *			Assigned offdisk values in conf_disambig to 0, using bitmap
+ *          v3.3
+ *          Fixed a but in getNoiseMask() and noiseMask.c, now return non-zero value if fails
  *
  *
  * Example:
@@ -212,7 +215,7 @@ extern void ambig_(int *geometry,
 //====================
 
 char *module_name = "disambig_v3";	/* Module name */
-char *version_id = "2013 Jun 11";  /* Version number */
+char *version_id = "2013 Jun 26";  /* Version number */
 
 #ifdef OLD
 char *segName[] = {"field", "inclination", "azimuth", "alpha_mag", 
@@ -505,7 +508,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.4 2013/06/11 20:40:32 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.5 2013/06/26 22:10:07 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
@@ -913,10 +916,10 @@ int getBitmap(DRMS_Record_t *inRec, int *bitmap, float *Bx, float *By, float *Bz
 #else
 	
 	// Get noise estimation and thresholding
-	
+
 	if (*useMask &&
 		!(getNoiseMask(inRec, noiseMask, ll, ur))) {	// get Yang's noise estimate
-		
+        
 		offset_t = offset;		// specified by argument
 		SHOW("Using noise mask estimate\n");
 		
@@ -992,6 +995,11 @@ int getNoiseMask(DRMS_Record_t *inRec, float *noise, int *ll, int *ur)
 	x0 -= 1; y0 -= 1;
 	
 	status = noisemask(tobs, xDim, yDim, x0, y0, r, vr, noise_fd);
+    
+    if (status) {               // Added Jun 26 2013, Xudong
+        free(noise_fd);
+        return status;
+    }
 	
 	// Cutout
 	
