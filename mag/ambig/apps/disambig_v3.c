@@ -142,8 +142,8 @@ int getData(DRMS_Record_t *inRec, float *Bx, float *By, float *Bz, float *dBt,
 // Create bitmap
 
 int getBitmap(DRMS_Record_t *inRec, int *bitmap, float *Bx, float *By, float *Bz,
-			  int geometry, int *useMask, int nrt, int offset, int nerode, int ngrow,
-			  int *ll, int *ur, int *ll0, int *ur0, float bthresh0, float bthresh1);
+			  int geometry, int *useMask, int nrt, int *offset, int nerode, int ngrow,
+			  int *ll, int *ur, int *ll0, int *ur0, float bthresh0, float bthresh1);		// offset changed to pointer Jun 27 Xudong
 
 // Get noise esimation from Yang's code
 
@@ -380,9 +380,11 @@ int DoIt(void)
 		
 		int *bitmap = (int *) (calloc(nxny, sizeof(int)));
 		
+		int offset_t = offset;
+		
 		if (getBitmap(inRec, bitmap, Bx, By, Bz, 
-					  geometry, &useMask_t, nrt, offset, nerode, ngrow,
-					  ll, ur, ll0, ur0, bthresh0, bthresh1)) {
+					  geometry, &useMask_t, nrt, &offset_t, nerode, ngrow,
+					  ll, ur, ll0, ur0, bthresh0, bthresh1)) {			// Offset changed to pointer Jun 27 2013 Xudong
 			free(bitmap);
 			free(Bx); free(By); free(Bz);
 			printf("Creating bitmap failed, image #%d skipped.\n", irec);
@@ -477,19 +479,19 @@ int DoIt(void)
 		// =======================================
 		drms_copykey(outRec, inRec, "T_REC");
     	if (harpflag) drms_copykey(outRec, inRec, "HARPNUM");
-		// Info
-        drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
-        char timebuf[1024];
-        double UNIX_epoch = -220924792.0;	/* 1970.01.01_00:00:00_UTC */
-        sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
-        drms_setkey_string(outRec, "DATE", timebuf);
         // Parameters
         copy_me_keys(inRec, outRec);
         copy_geo_keys(inRec, outRec);
         if (harpflag) copy_patch_keys(inRec, outRec);
         drms_setkey_string(outRec, "BUNIT_026", " ");
         drms_setkey_string(outRec, "BUNIT_027", " ");
-        drms_setkey_int(outRec, "DOFFSET", offset);
+        drms_setkey_int(outRec, "DOFFSET", offset_t);		// Jun 27 Xudong
+		// Info
+        drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
+        char timebuf[1024];
+        double UNIX_epoch = -220924792.0;	/* 1970.01.01_00:00:00_UTC */
+        sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
+        drms_setkey_string(outRec, "DATE", timebuf);
         // Disambiguation
         drms_setkey_int(outRec, "AMBPATCH", harpflag);	// Jun 22 Xudong
         drms_setkey_int(outRec, "AMBGMTRY", geometry_t);	// Jun 04 2013
@@ -508,7 +510,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.5 2013/06/26 22:10:07 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.6 2013/06/27 21:33:11 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
@@ -875,7 +877,7 @@ int getData(DRMS_Record_t *inRec, float *Bx, float *By, float *Bz, float *dBt,
 // Create bitmap
 
 int getBitmap(DRMS_Record_t *inRec, int *bitmap, float *Bx, float *By, float *Bz,
-			  int geometry, int *useMask, int nrt, int offset, int nerode, int ngrow,
+			  int geometry, int *useMask, int nrt, int *offset, int nerode, int ngrow,
 			  int *ll, int *ur, int *ll0, int *ur0, float bthresh0, float bthresh1)
 {
 	
@@ -920,7 +922,7 @@ int getBitmap(DRMS_Record_t *inRec, int *bitmap, float *Bx, float *By, float *Bz
 	if (*useMask &&
 		!(getNoiseMask(inRec, noiseMask, ll, ur))) {	// get Yang's noise estimate
         
-		offset_t = offset;		// specified by argument
+		offset_t = *offset;		// specified by argument
 		SHOW("Using noise mask estimate\n");
 		
 	} else {
@@ -956,6 +958,7 @@ int getBitmap(DRMS_Record_t *inRec, int *bitmap, float *Bx, float *By, float *Bz
 	
 #endif
 	
+	*offset = offset_t;		// Jun 27 Xudong
 	free(noiseMask);
 	
 	//
