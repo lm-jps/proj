@@ -33,5 +33,6 @@ setenv FLUSH_2SEC_COUNT                  5
 #setenv HK_ISP_IRIS_DSNAME                iris_ground.lev0_isp_005
 #setenv HK_ISP_IRIS_DSNAME                iris_ground.lev0_isp_006
 #setenv HK_ISP_IRIS_DSNAME                iris_ground.lev0_isp_007
-setenv HK_ISP_IRIS_DSNAME                iris_ground.isp_dc1
+#setenv HK_ISP_IRIS_DSNAME                iris_ground.isp_dc1
+setenv HK_ISP_IRIS_DSNAME                iris.isp
 
