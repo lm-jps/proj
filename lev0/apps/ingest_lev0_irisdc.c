@@ -109,9 +109,11 @@
 //#define LEV0SERIESNAMEHMI "iris_ground.lev0_lmsal" 
 //#define LEV0SERIESNAMEHMI "iris_ground.lev0_lmsal_dim" 
 //#define LEV0SERIESNAMEHMI "iris_ground.lev0_flip" 
-#define TLMSERIESNAMEHMI  "iris_ground.tlm_dc1" 
+//#define TLMSERIESNAMEHMI  "iris_ground.tlm_dc1" 
+#define TLMSERIESNAMEHMI  "iris.tlm" 
 //#define LEV0SERIESNAMEHMI "iris_ground.lev0_ROT" 
-#define LEV0SERIESNAMEHMI "iris_ground.lev0_dc1" 
+//#define LEV0SERIESNAMEHMI "iris_ground.lev0_dc1" 
+#define LEV0SERIESNAMEHMI "iris.lev0" 
 #define LEV0SERIESNAMEHMIAMES "iris_ground.lev0_ames" 
 #define LEV0SERIESNAMEAIA "su_prodtest.aia_lev0" 
 #define TLMSERIESNAMEAIA  "su_prodtest.aiatlm" 
@@ -354,7 +356,7 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
-    printf ("Usage:\ningest_lev0_iris [-vh] "
+    printf ("Usage:\ningest_lev0_irisdc [-vh] "
 	"vc=<virt chan> indir=</dir> [outdir=</dir>] [pipedir=</dir>] [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
@@ -538,7 +540,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   int drms_status = 0;
   short sval;
   uint32_t missvals;
-  long long cmdx;
+  long long cmdx, lval;
   TIME cmdxd;
   char *cptr, *iname;
   char tlmdsname[128];
@@ -662,10 +664,14 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       //start NEW 03Apr2012
       sval = drms_getkey_short(rsispr, "I_IMG_CRS_ID", &status);
       status = drms_setkey_short(rs, "IICRSID", sval);
-      sval = drms_getkey_short(rsispr, "I_IMG_OBSLIST_ID", &status);
-      status = drms_setkey_short(rs, "IIOBSLID", sval);
-      sval = drms_getkey_short(rsispr, "I_IMG_FRMLIST_ID", &status);
-      status = drms_setkey_short(rs, "IIFRMLID", sval);
+      //sval = drms_getkey_short(rsispr, "I_IMG_OBSLIST_ID", &status);
+      //status = drms_setkey_short(rs, "IIOBSLID", sval);
+      ival = drms_getkey_int(rsispr, "I_IMG_OBSLIST_ID", &status);
+      status = drms_setkey_int(rs, "IIOBSLID", ival);
+      //sval = drms_getkey_short(rsispr, "I_IMG_FRMLIST_ID", &status);
+      //status = drms_setkey_short(rs, "IIFRMLID", sval);
+      ival = drms_getkey_int(rsispr, "I_IMG_FRMLIST_ID", &status);
+      status = drms_setkey_int(rs, "IIFRMLID", ival);
       //sval = drms_getkey_short(rsispr, "I_IMG_SG_FUV_NUV_ID_1", &status);
       //status = drms_setkey_short(rs, "IFDBID1", sval);
       //ival = drms_getkey_int(rsispr, "I_IMG_SJI_ID_2", &status);
@@ -908,12 +914,18 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       status = drms_setkey_int(rs, "IIOLNRPT", ival);
       ival = drms_getkey_int(rsispr, "I_SQ_OLT_REPEAT", &status);
       status = drms_setkey_int(rs, "IIOLRPT", ival);
-      ival = drms_getkey_int(rsispr, "I_SQ_FUV_FDBT_ID", &status);
-      status = drms_setkey_int(rs, "IIFUVFDB", ival);
-      ival = drms_getkey_int(rsispr, "I_SQ_NUV_FDBT_ID", &status);
-      status = drms_setkey_int(rs, "IINUVFDB", ival);
-      ival = drms_getkey_int(rsispr, "I_SQ_SJI_FDBT_ID", &status);
-      status = drms_setkey_int(rs, "IISJIFDB", ival);
+      //ival = drms_getkey_int(rsispr, "I_SQ_FUV_FDBT_ID", &status);
+      //status = drms_setkey_int(rs, "IIFUVFDB", ival);
+      lval = drms_getkey_longlong(rsispr, "I_SQ_FUV_FDBT_ID", &status);
+      status = drms_setkey_longlong(rs, "IIFUVFDB", lval);
+      //ival = drms_getkey_int(rsispr, "I_SQ_NUV_FDBT_ID", &status);
+      //status = drms_setkey_int(rs, "IINUVFDB", ival);
+      lval = drms_getkey_longlong(rsispr, "I_SQ_NUV_FDBT_ID", &status);
+      status = drms_setkey_longlong(rs, "IINUVFDB", lval);
+      //ival = drms_getkey_int(rsispr, "I_SQ_SJI_FDBT_ID", &status);
+      //status = drms_setkey_int(rs, "IISJIFDB", ival);
+      lval = drms_getkey_longlong(rsispr, "I_SQ_SJI_FDBT_ID", &status);
+      status = drms_setkey_longlong(rs, "IISJIFDB", lval);
       ival = drms_getkey_int(rsispr, "I_SQ_FDBT_IDX", &status);
       status = drms_setkey_int(rs, "ISQFDBTI", ival);
       sval = drms_getkey_short(rsispr, "I_SQ_OWT_ID", &status);
@@ -955,6 +967,27 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       status = drms_setkey_int(rs, "ISQORBSE", ival);
       ival = drms_getkey_int(rsispr, "I_SQ_ORB_EQ_SUB", &status);
       status = drms_setkey_int(rs, "ISQORBSU", ival);
+      //NEW 20May2013
+      lval = drms_getkey_longlong(rsispr, "I_SQ_OLT_ID", &status);
+      status = drms_setkey_longlong(rs, "ISQOLTID,", lval);
+      lval = drms_getkey_longlong(rsispr, "I_SQ_FLT_ID", &status);
+      status = drms_setkey_longlong(rs, "ISQFLTID,", lval);
+      //NEW 21May2013
+      int isqisysn      = drms_getkey_int(rsispr, "I_SQ_ISYS_NUM", &status);
+      long long iifuvfdb = drms_getkey_longlong(rsispr, "I_SQ_FUV_FDBT_ID",&status);
+      long long iinuvfdb = drms_getkey_longlong(rsispr, "I_SQ_NUV_FDBT_ID",&status);
+      long long iisjifdb = drms_getkey_longlong(rsispr, "I_SQ_SJI_FDBT_ID",&status);
+      switch (isqisysn) {
+         case 0:
+            drms_setkey_longlong(rs, "IIFDBID", iifuvfdb);
+            break;
+         case 1:
+            drms_setkey_longlong(rs, "IIFDBID", iinuvfdb);
+            break;
+         case 2:
+            drms_setkey_longlong(rs, "IIFDBID", iisjifdb);
+            break;
+       }
 
       //drms_close_record(rsispr, DRMS_FREE_RECORD);
       drms_close_records(rsisp, DRMS_INSERT_RECORD);
