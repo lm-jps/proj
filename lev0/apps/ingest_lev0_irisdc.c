@@ -54,6 +54,7 @@
 #include "quallev0_iris.h"
 
 #define RESTART_CNT 2	//#of tlm files to process before restart
+#define MVDSFDIR "/sds/soc2pipe/iris/dsf/"
 
 //#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
 //#define LEV0SERIESNAMEHMI "su_production.lev0f_test"
@@ -1959,16 +1960,19 @@ void do_ingest()
   for(j=0; j < i; j++) {
     //printk("####QSORT FILES: %s\n", nameptr[j].name); // !!TEMP 
     // NOTE: the dsf files is moved to outdir/dsf e.g. (/dds/soc2pipe/iris/dsf)
-    if(outdir) {
+//!!NOTE: for IRIS always mv the dsf file to /dds/soc2pipe/iris/dsf
+//    if(outdir) {
         if(strstr(nameptr[j].name, ".dsf")) {
-          sprintf(cmd, "/bin/mv -f %s/%s %s/dsf/", tlmdir, nameptr[j].name, outdir);
-          printk("*mv dsf file to %s/dsf/\n", outdir);
+          //sprintf(cmd, "/bin/mv -f %s/%s %s/dsf/", tlmdir, nameptr[j].name, outdir);
+          //printk("*mv dsf file to %s/dsf/\n", outdir);
+          sprintf(cmd, "/bin/mv -f %s/%s %s", tlmdir, nameptr[j].name, MVDSFDIR);
+          printk("*mv dsf file to %s\n", MVDSFDIR);
           printk("%s\n", cmd);
           if(system(cmd)) {
             printk("***Error on: %s\n", cmd);
           }
         }
-    }
+//    }
     if(!strstr(nameptr[j].name, ".qac")) {	// can be .qac or .qacx 
       free(nameptr[j].name);
       continue;
@@ -2459,7 +2463,7 @@ int DoIt(void)
     cntsleeps++;		//#of 2sec sleeps
     if(cntsleeps > 300) {	// >600sec w/o any files
       if(!paused) {
-        send_mail("No files seen for ingest_lev0_iris for %s for 600sec\n", pchan);
+        //send_mail("No files seen for ingest_lev0_iris for %s for 600sec\n", pchan);
         paused = 1;
       }
     }
