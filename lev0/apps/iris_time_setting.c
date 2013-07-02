@@ -228,15 +228,15 @@ void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
   //int cropid = drms_getkey_int(rec, "CROPID", &status); //Not in there yet
   int iicrsid = HK_getkey_int(isp, "IICRSID"); //use instead of cropid
   int ifwpos = HK_getkey_int(isp, "IFWPOS");
-  int iifuvfdb = HK_getkey_int(isp, "IIFUVFDB");
-  int iinuvfdb = HK_getkey_int(isp, "IINUVFDB");
-  int iisjifdb = HK_getkey_int(isp, "IISJIFDB");
+  //int iifuvfdb = HK_getkey_int(isp, "IIFUVFDB");
+  //int iinuvfdb = HK_getkey_int(isp, "IINUVFDB");
+  //int iisjifdb = HK_getkey_int(isp, "IISJIFDB");
 printk("fsnx = %d\n", fsnx);
 printk("iicrsid = %d\n", iicrsid);
 printk("ifwpos = %d\n", ifwpos);
-printk("iifuvfdb = %d\n", iifuvfdb);
-printk("iinuvfdb = %d\n", iinuvfdb);
-printk("iisjifdb = %d\n", iisjifdb);
+//printk("iifuvfdb = %d\n", iifuvfdb);
+//printk("iinuvfdb = %d\n", iinuvfdb);
+//printk("iisjifdb = %d\n", iisjifdb);
 //For debug. Print out entire key list
 //HK_Keyword_t *isptmp;
 //isptmp = isp;
@@ -247,16 +247,16 @@ printk("iisjifdb = %d\n", iisjifdb);
 
   switch (isqisysn) {
     case 0: 
-	    drms_setkey_short(rec, "IIFDBID", iifuvfdb);
+	    //drms_setkey_short(rec, "IIFDBID", iifuvfdb);
             drms_setkey_string(rec, "IMG_PATH", "FUV");
             break;
     case 1: 
-	    drms_setkey_short(rec, "IIFDBID", iinuvfdb);
+	    //drms_setkey_short(rec, "IIFDBID", iinuvfdb);
             if (iicrsid < 4) drms_setkey_string(rec, "IMG_PATH", "NUV-SJI");
             else drms_setkey_string(rec, "IMG_PATH", "NUV");
             break;
     case 2: 
-            drms_setkey_short(rec, "IIFDBID", iisjifdb);
+            //drms_setkey_short(rec, "IIFDBID", iisjifdb);
             if (iicrsid < 4) { drms_setkey_string(rec, "IMG_PATH", "NUV-SJI"); }
             else {
 	      switch (ifwpos) {
