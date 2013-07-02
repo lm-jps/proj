@@ -1,4 +1,0 @@
-#---Cron job to update queue file on jim@solserv with information on STANFORD and GROUND config file updates-#
-#---This is probably turned off on this Lockheed machine because CVS source was frozen and ------------------#
-#---zipped up and not available anymore for script to detect file updates anymore.----------------------------#
-15,45 9-17 * * 1-5 /usr/bin/perl /home/cimilluca/ssf_to_jsoc.pl >/dev/null 2>&1
