@@ -38,7 +38,8 @@
 //default in and out data series
 #define LEV0SERIESNAMEIRIS "iris_ground.lev0_dc1"
 #define LEV1SERIESNAMEIRIS "iris_ground.lev1_dc1"
-#define DSCRSNAME "iris_ground.crs_table"
+//#define DSCRSNAME "iris_ground.crs_table"
+#define DSCRSNAME "iris_ground.window_table"
 #define DSFFNAME "iris_ground.flatfield_test"
 //#define DSFFNAME "su_richard.flatfield"		//temp test case
 //#define DSFFNAMEHMI "su_production.hmi_flatfield"	//temp test case
@@ -400,7 +401,7 @@ int orbit_calc()
 }
 
 //#include "aia_despike.c"
-#include "do_flat.c"
+//#include "do_flat.c"
 #include "get_image_location.c"
 #include "limb_fit_function.c"
 #include "cosmic_ray.c"
@@ -435,7 +436,9 @@ int do_ingest(long long bbrec, long long eerec)
     rset0 = drms_open_records(drms_env, open_dsname, &rstatus); //open lev0
     if(!rset0 || (rset0->n == 0) || rstatus) {
       printk("Can't do drms_open_records(%s)\n", open_dsname);
-      return(1);
+      printf("Can't do drms_open_records(%s)\n", open_dsname);
+      //return(1);
+      return(0);
     }
     drms_stage_records(rset0, 1, 0);
     ncnt = rset0->n;
@@ -570,9 +573,14 @@ int do_ingest(long long bbrec, long long eerec)
         continue;
       }
       l0l1->adata0 = (short *)Array0->data; //free at end
+      l0l1->dat1.adata1A = &data1A; 	    //int out
       l0l1->rs0 = rs0;
       l0l1->recnum0 = recnum0;
       l0l1->fsn = fsnx;
+      l0l1->nx = segment0->axis[0];
+      l0l1->ny = segment0->axis[1];
+      l0l1->datavals = drms_getkey_int(rs0, "DATAVALS", &rstatus);
+      l0l1->missvals = drms_getkey_int(rs0, "MISSVALS", &rstatus);
 
 /*********************************nop for iris*****************************
       if(hmiaiaflg) {			//aia
@@ -612,24 +620,23 @@ int do_ingest(long long bbrec, long long eerec)
         noimage[i] = 1;
         continue;
       }
-      //if(hmiaiaflg) {
-	//!!TEMP use lev0 axis size and memcpy lev0 into lev1
-        //segArray = drms_array_create(DRMS_TYPE_INT,
-        //                               segment->info->naxis,
-        //                               segment0->axis,
-        //                               &data1A,
-        //                               &dstatus);
-        segArray = drms_array_create(DRMS_TYPE_SHORT,
+      if(hmiaiaflg) {
+        segArray = drms_array_create(DRMS_TYPE_INT,
                                        segment->info->naxis,
                                        segment0->axis,
-                                       &data1S,
+                                       &data1A,
                                        &dstatus);
+        //segArray = drms_array_create(DRMS_TYPE_SHORT,
+        //                               segment->info->naxis,
+        //                               segment0->axis,
+        //                               &data1S,
+        //                               &dstatus);
 
-short *adata = (short *)Array0->data;
-short *bdata = &data1S;
-memcpy(bdata, adata, 2*seg0sz); //!!TEMP mv the lev0 in for now
+//short *adata = (short *)Array0->data;
+//short *bdata = &data1S;
+//memcpy(bdata, adata, 2*seg0sz); //!!TEMP mv the lev0 in for now
 
-      //}
+      }
       //else {
       //  segArray = drms_array_create(DRMS_TYPE_FLOAT,
       //                                 segment->info->naxis,
@@ -735,70 +742,73 @@ memcpy(bdata, adata, 2*seg0sz); //!!TEMP mv the lev0 in for now
           drms_setkey_string(rs, "CRS_TYPE", crsstr);
           int crsint = drms_getkey_int(crsrec, "CRS_NREG", &status);
           drms_setkey_int(rs, "CRS_NREG", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SR1", &status);
-          drms_setkey_int(rs, "CRS_SR1", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_ER1", &status);
-          drms_setkey_int(rs, "CRS_ER1", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SC1", &status);
-          drms_setkey_int(rs, "CRS_SC1", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_EC1", &status);
-          drms_setkey_int(rs, "CRS_EC1", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SR2", &status);
-          drms_setkey_int(rs, "CRS_SR2", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_ER2", &status);
-          drms_setkey_int(rs, "CRS_ER2", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SC2", &status);
-          drms_setkey_int(rs, "CRS_SC2", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_EC2", &status);
-          drms_setkey_int(rs, "CRS_EC2", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SR3", &status);
-          drms_setkey_int(rs, "CRS_SR3", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_ER3", &status);
-          drms_setkey_int(rs, "CRS_ER3", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SC3", &status);
-          drms_setkey_int(rs, "CRS_SC3", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_EC3", &status);
-          drms_setkey_int(rs, "CRS_EC3", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SR4", &status);
-          drms_setkey_int(rs, "CRS_SR4", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_ER4", &status);
-          drms_setkey_int(rs, "CRS_ER4", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SC4", &status);
-          drms_setkey_int(rs, "CRS_SC4", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_EC4", &status);
-          drms_setkey_int(rs, "CRS_EC4", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SR5", &status);
-          drms_setkey_int(rs, "CRS_SR5", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_ER5", &status);
-          drms_setkey_int(rs, "CRS_ER5", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SC5", &status);
-          drms_setkey_int(rs, "CRS_SC5", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_EC5", &status);
-          drms_setkey_int(rs, "CRS_EC5", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SR6", &status);
-          drms_setkey_int(rs, "CRS_SR6", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_ER6", &status);
-          drms_setkey_int(rs, "CRS_ER6", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SC6", &status);
-          drms_setkey_int(rs, "CRS_SC6", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_EC6", &status);
-          drms_setkey_int(rs, "CRS_EC6", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SR7", &status);
-          drms_setkey_int(rs, "CRS_SR7", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_ER7", &status);
-          drms_setkey_int(rs, "CRS_ER7", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SC7", &status);
-          drms_setkey_int(rs, "CRS_SC7", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_EC7", &status);
-          drms_setkey_int(rs, "CRS_EC7", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SR8", &status);
-          drms_setkey_int(rs, "CRS_SR8", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_ER8", &status);
-          drms_setkey_int(rs, "CRS_ER8", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_SC8", &status);
-          drms_setkey_int(rs, "CRS_SC8", crsint);
-          crsint = drms_getkey_int(crsrec, "CRS_EC8", &status);
-          drms_setkey_int(rs, "CRS_EC8", crsint);
+          crsint = drms_getkey_int(crsrec, "TSR1", &status);
+          drms_setkey_int(rs, "TSR1", crsint);
+          crsint = drms_getkey_int(crsrec, "TER1", &status);
+          drms_setkey_int(rs, "TER1", crsint);
+          crsint = drms_getkey_int(crsrec, "TSC1", &status);
+          drms_setkey_int(rs, "TSC1", crsint);
+          crsint = drms_getkey_int(crsrec, "TEC1", &status);
+          drms_setkey_int(rs, "TEC1", crsint);
+          crsint = drms_getkey_int(crsrec, "TSR2", &status);
+          drms_setkey_int(rs, "TSR2", crsint);
+          crsint = drms_getkey_int(crsrec, "TER2", &status);
+          drms_setkey_int(rs, "TER2", crsint);
+          crsint = drms_getkey_int(crsrec, "TSC2", &status);
+          drms_setkey_int(rs, "TSC2", crsint);
+          crsint = drms_getkey_int(crsrec, "TEC2", &status);
+          drms_setkey_int(rs, "TEC2", crsint);
+          crsint = drms_getkey_int(crsrec, "TSR3", &status);
+          drms_setkey_int(rs, "TSR3", crsint);
+          crsint = drms_getkey_int(crsrec, "TER3", &status);
+          drms_setkey_int(rs, "TER3", crsint);
+          crsint = drms_getkey_int(crsrec, "TSC3", &status);
+          drms_setkey_int(rs, "TSC3", crsint);
+          crsint = drms_getkey_int(crsrec, "TEC3", &status);
+          drms_setkey_int(rs, "TEC3", crsint);
+          crsint = drms_getkey_int(crsrec, "TSR4", &status);
+          drms_setkey_int(rs, "TSR4", crsint);
+          crsint = drms_getkey_int(crsrec, "TER4", &status);
+          drms_setkey_int(rs, "TER4", crsint);
+          crsint = drms_getkey_int(crsrec, "TSC4", &status);
+          drms_setkey_int(rs, "TSC4", crsint);
+          crsint = drms_getkey_int(crsrec, "TEC4", &status);
+          drms_setkey_int(rs, "TEC4", crsint);
+          crsint = drms_getkey_int(crsrec, "TSR5", &status);
+          drms_setkey_int(rs, "TSR5", crsint);
+          crsint = drms_getkey_int(crsrec, "TER5", &status);
+          drms_setkey_int(rs, "TER5", crsint);
+          crsint = drms_getkey_int(crsrec, "TSC5", &status);
+          drms_setkey_int(rs, "TSC5", crsint);
+          crsint = drms_getkey_int(crsrec, "TEC5", &status);
+          drms_setkey_int(rs, "TEC5", crsint);
+          crsint = drms_getkey_int(crsrec, "TSR6", &status);
+          drms_setkey_int(rs, "TSR6", crsint);
+          crsint = drms_getkey_int(crsrec, "TER6", &status);
+          drms_setkey_int(rs, "TER6", crsint);
+          crsint = drms_getkey_int(crsrec, "TSC6", &status);
+          drms_setkey_int(rs, "TSC6", crsint);
+          crsint = drms_getkey_int(crsrec, "TEC6", &status);
+          drms_setkey_int(rs, "TEC6", crsint);
+          crsint = drms_getkey_int(crsrec, "TSR7", &status);
+          drms_setkey_int(rs, "TSR7", crsint);
+          crsint = drms_getkey_int(crsrec, "TER7", &status);
+          drms_setkey_int(rs, "TER7", crsint);
+          crsint = drms_getkey_int(crsrec, "TSC7", &status);
+          drms_setkey_int(rs, "TSC7", crsint);
+          crsint = drms_getkey_int(crsrec, "TEC7", &status);
+          drms_setkey_int(rs, "TEC7", crsint);
+          crsint = drms_getkey_int(crsrec, "TSR8", &status);
+          drms_setkey_int(rs, "TSR8", crsint);
+          crsint = drms_getkey_int(crsrec, "TER8", &status);
+          drms_setkey_int(rs, "TER8", crsint);
+          crsint = drms_getkey_int(crsrec, "TSC8", &status);
+          drms_setkey_int(rs, "TSC8", crsint);
+          crsint = drms_getkey_int(crsrec, "TEC8", &status);
+          drms_setkey_int(rs, "TEC8", crsint);
+
+          crsint = drms_getkey_int(crsrec, "WIN_FLIP", &status);
+          drms_setkey_int(rs, "WIN_FLIP", crsint); 
           printk("Close: %s\n", open_dsname);
           drms_close_records(crsset, DRMS_FREE_RECORD);
         }
@@ -1017,20 +1027,25 @@ memcpy(bdata, adata, 2*seg0sz); //!!TEMP mv the lev0 in for now
       l0l1->rsff = rsff;
       l0l1->recnum1 = rs->recnum;  
       l0l1->darkflag = 0;
+      l0l1->sumx = drms_getkey_short(rs0, "SUMSPTRL", &rstatus);
+      l0l1->sumy = drms_getkey_short(rs0, "SUMSPAT", &rstatus);
       hshiexp = drms_getkey_int(rs, "HSHIEXP", &rstatus);
       hcamid = drms_getkey_int(rs, "HCAMID", &rstatus);
       if(hmiaiaflg) {
         float sumdc=0.0;
         int idc, numdc=0;
         int aimgshce = drms_getkey_int(rs, "AIMGSHCE", &rstatus);
-        if(aimgshce == 0) l0l1->darkflag = 1;
-        if(rstatus = do_flat_aia(l0l1)) {
-          printk("***ERROR in do_flat_aia() status=%d\n", rstatus);
-          printf("***ERROR in do_flat_aia() status=%d\n", rstatus);
+        //if(aimgshce == 0) l0l1->darkflag = 1;
+        short iifrmtyp = drms_getkey_short(rs0, "IIFRMTYP", &rstatus);
+        if((iifrmtyp == 2) || (iifrmtyp == 5)) l0l1->darkflag = 1;
+        if(rstatus = do_flat_iris(l0l1)) {
+          printk("***ERROR in do_flat_iris() status=%d\n", rstatus);
+          printf("***ERROR in do_flat_iris() status=%d\n", rstatus);
           flatmiss[i] = 1; noimage[i] = 1;
           //return(1);		//!!TBD what to do?
           goto FLATERR;
         }
+/**************Not for IRIS***************************************
         for (idc=2047; idc<4096*4096; idc+=4096) {
           if (data1A[idc] != DRMS_MISSING_INT) {
             sumdc = sumdc + data1A[idc];
@@ -1042,7 +1057,9 @@ memcpy(bdata, adata, 2*seg0sz); //!!TEMP mv the lev0 in for now
           }
         }
         if (numdc) drms_setkey_float(rs, "DATACENT", sumdc/numdc);
+**************Not for IRIS***************************************/
       }
+      /* no hmi else for iris**************************
       else {
         if(hshiexp == 0) l0l1->darkflag = 1;
         //StartTimer(1);	//!!TEMP
@@ -1056,6 +1073,8 @@ memcpy(bdata, adata, 2*seg0sz); //!!TEMP mv the lev0 in for now
         //ftmp = StopTimer(1);
         //printf( "\nTime sec for hmi do_flat() = %f\n\n", ftmp );
       } 
+      * no hmi else for iris**************************/
+
         //sprintf(tmpname, "/tmp/data_lev1.%u", fsnx);
         //fwt = fopen(tmpname, "w");
         //int wsize = 4096 * 4096;
