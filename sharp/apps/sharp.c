@@ -88,10 +88,11 @@
 #define FOURK2    (16777216)
 
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
-
+  
 // Nyqvist rate at disk center is 0.03 degree. Oversample above 0.015 degree
 #define NYQVIST		(0.015)
-
+  
+// Some other things
 #ifndef MIN
 #define MIN(a,b) (((a)<(b)) ? (a) : (b))
 #endif
@@ -118,6 +119,7 @@
 #define NBIN			3
 #define INTERP			0
 #define dpath    "/home/jsoc/cvs/Development/JSOC"
+
 
 /* ========================================================================================================== */
 
@@ -196,7 +198,6 @@ struct mapInfo {
 	struct ephemeris ephem;		// ephemeris info
 	float *xi_out, *zeta_out;	// coordinate on full disk image to sample at
 };
-
 
 /* ========================================================================================================== */
 
@@ -1003,7 +1004,6 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem)
 	float crpix1 = drms_getkey_float(inRec, "IMCRPIX1", &status);
 	float crpix2 = drms_getkey_float(inRec, "IMCRPIX2", &status);
 	float cdelt = drms_getkey_float(inRec, "CDELT1", &status);  // in arcsec, assumimg dx=dy
-	printf("cdelt=%f\n",cdelt);
 	ephem->disk_xc = PIX_X(0.0,0.0) - 1.0;		// Center of disk in pixel, starting at 0
 	ephem->disk_yc = PIX_Y(0.0,0.0) - 1.0;
 	
@@ -1722,19 +1722,19 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float *bx_err = (float *) bx_errArray->data;		// bx_err
 	
 	// Get emphemeris
-	
-	//float cdelt1_orig = drms_getkey_float(inRec, "CDELT1",   &status);
-	float  cdelt1      = drms_getkey_float(inRec, "CDELT1",   &status);
+	float  cdelt1_orig = drms_getkey_float(inRec, "CDELT1",   &status);
 	float  dsun_obs    = drms_getkey_float(inRec, "DSUN_OBS",   &status);
-	double rsun_ref   = drms_getkey_double(inRec, "RSUN_REF", &status);
-	double rsun_obs   = drms_getkey_double(inRec, "RSUN_OBS", &status);
-	float imcrpix1    = drms_getkey_float(inRec, "IMCRPIX1", &status);
-	float imcrpix2    = drms_getkey_float(inRec, "IMCRPIX2", &status);
-	float crpix1      = drms_getkey_float(inRec, "CRPIX1", &status);
-	float crpix2      = drms_getkey_float(inRec, "CRPIX2", &status);
-	
+	double rsun_ref    = drms_getkey_double(inRec, "RSUN_REF", &status);
+	double rsun_obs    = drms_getkey_double(inRec, "RSUN_OBS", &status);
+	float imcrpix1     = drms_getkey_float(inRec, "IMCRPIX1", &status);
+	float imcrpix2     = drms_getkey_float(inRec, "IMCRPIX2", &status);
+	float crpix1       = drms_getkey_float(inRec, "CRPIX1", &status);
+	float crpix2       = drms_getkey_float(inRec, "CRPIX2", &status);
+
+        // convert cdelt1_orig from degrees to arcsec
+        float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
+
 	// Temp arrays
-	
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
 	float *bt      = (float *) (malloc(nxny * sizeof(float)));
 	float *jz      = (float *) (malloc(nxny * sizeof(float)));
@@ -1752,10 +1752,10 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float *dery_bz = (float *) (malloc(nxny * sizeof(float)));
 	float *bt_err  = (float *) (malloc(nxny * sizeof(float)));
 	float *bh_err  = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
 	//spaceweather quantities computed
     
     
@@ -1974,9 +1974,13 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
 	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Id: sharp.c,v 1.15 2013/06/27 01:58:39 xudong Exp $");
-	//   status = drms_setkey_string(outRec, "HEADER", cvsinfo);
-	status = drms_setkey_string(outRec, "CODEVER7", cvsinfo);
+	char *cvsinfo = strdup("$Id: sharp.c,v 1.16 2013/07/04 02:14:14 mbobra Exp $");
+	char *cvsinfo2 = sw_functions_version();
+	char cvsinfoall[2048];
+        strcat(cvsinfoall,cvsinfo);
+        strcat(cvsinfoall,"\n");
+        strcat(cvsinfoall,cvsinfo2);
+	status = drms_setkey_string(outRec, "CODEVER7", cvsinfoall);
 	
 };
 
