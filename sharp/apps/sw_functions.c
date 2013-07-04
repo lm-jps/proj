@@ -73,14 +73,18 @@ int computeAbsFlux(float *bz_err, float *bz, int *dims, float *absFlux,
 
 {
 
-    int nx = dims[0], ny = dims[1];
-    int i, j, count_mask=0;
-    double sum,err=0.0;
-    
-    if (nx <= 0 || ny <= 0) return 1;
-	
+    int nx = dims[0];
+    int ny = dims[1];
+    int i=0;
+    int j=0;
+    int count_mask=0;
+    float sum=0.0;
+    float err=0.0;
     *absFlux = 0.0;
-    *mean_vf_ptr =0.0;
+    *mean_vf_ptr = 0.0;
+
+
+    if (nx <= 0 || ny <= 0) return 1;
 
 	for (i = 0; i < nx; i++) 
 	{
@@ -89,6 +93,7 @@ int computeAbsFlux(float *bz_err, float *bz, int *dims, float *absFlux,
                   if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                   if isnan(bz[j * nx + i]) continue;
                   sum += (fabs(bz[j * nx + i]));
+                  //printf("i,j,bz[j * nx + i]=%d,%d,%f\n",i,j,bz[j * nx + i]);
                   err += bz_err[j * nx + i]*bz_err[j * nx + i];
                   count_mask++;
 		}	
@@ -97,6 +102,9 @@ int computeAbsFlux(float *bz_err, float *bz, int *dims, float *absFlux,
      *mean_vf_ptr     = sum*cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0;
      *mean_vf_err_ptr = (sqrt(err))*fabs(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0); // error in the unsigned flux
      *count_mask_ptr  = count_mask;   
+     printf("cdelt1=%f\n",cdelt1);         
+     printf("rsun_obs=%f\n",rsun_obs);
+     printf("rsun_ref=%f\n",rsun_ref);
      printf("CMASK=%g\n",*count_mask_ptr); 
      printf("USFLUX=%g\n",*mean_vf_ptr);
      printf("sum=%f\n",sum);
@@ -113,8 +121,11 @@ int computeBh(float *bx_err, float *by_err, float *bh_err, float *bx, float *by,
 
 {
 
-    int nx = dims[0], ny = dims[1];
-    int i, j, count_mask=0;
+    int nx = dims[0];
+    int ny = dims[1];
+    int i=0;
+    int j=0; 
+    int count_mask=0;
     float sum=0.0;	
     *mean_hf_ptr = 0.0;
 
@@ -146,14 +157,17 @@ int computeBh(float *bx_err, float *by_err, float *bh_err, float *bx, float *by,
 int computeGamma(float *bz_err, float *bh_err, float *bx, float *by, float *bz, float *bh, int *dims,
                  float *mean_gamma_ptr, float *mean_gamma_err_ptr, int *mask, int *bitmask)
 {
-    int nx = dims[0], ny = dims[1];
-    int i, j, count_mask=0;
+    int nx = dims[0];
+    int ny = dims[1];
+    int i=0;
+    int j=0;
+    int count_mask=0;
+    float sum=0.0;
+    float err=0.0;
+    float err_value=0.0;
+    *mean_gamma_ptr=0.0;
 
     if (nx <= 0 || ny <= 0) return 1;
-	
-    *mean_gamma_ptr=0.0;
-    float sum,err,err_value=0.0;
-
 
 	for (i = 0; i < nx; i++) 
 	  {
@@ -174,7 +188,7 @@ int computeGamma(float *bz_err, float *bh_err, float *bx, float *by, float *bz, 
 	  }
 
      *mean_gamma_ptr = sum/count_mask;
-     *mean_gamma_err_ptr = (sqrt(err*err))/(count_mask*100.); // error in the quantity (sum)/(count_mask)
+     *mean_gamma_err_ptr = (sqrt(err*err))/(count_mask*100.0); // error in the quantity (sum)/(count_mask)
      printf("MEANGAM=%f\n",*mean_gamma_ptr);
      printf("MEANGAM_err=%f\n",*mean_gamma_err_ptr);
      return 0;
@@ -187,8 +201,11 @@ int computeGamma(float *bz_err, float *bh_err, float *bx, float *by, float *bz, 
 int computeB_total(float *bx_err, float *by_err, float *bz_err, float *bt_err, float *bx, float *by, float *bz, float *bt, int *dims, int *mask, int *bitmask)
 {
 
-    int nx = dims[0], ny = dims[1];
-    int i, j, count_mask=0;
+    int nx = dims[0];
+    int ny = dims[1];
+    int i=0;
+    int j=0;
+    int count_mask=0;
 	
     if (nx <= 0 || ny <= 0) return 1;
 
@@ -212,14 +229,16 @@ int computeB_total(float *bx_err, float *by_err, float *bz_err, float *bt_err, f
 int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_ptr, int *mask, int *bitmask, float *derx_bt, float *dery_bt, float *bt_err, float *mean_derivative_btotal_err_ptr)
 {
 
-    int nx = dims[0], ny = dims[1];
-    int i, j, count_mask=0;
+    int nx = dims[0];
+    int ny = dims[1];
+    int i=0;
+    int j=0;
+    int count_mask=0;
+    float sum=0.0; 
+    float err = 0.0;
+    *mean_derivative_btotal_ptr = 0.0;
 
     if (nx <= 0 || ny <= 0) return 1;
-
-    *mean_derivative_btotal_ptr = 0.0;
-    float sum, err = 0.0;
-
 
         /* brute force method of calculating the derivative (no consideration for edges) */
       	for (i = 1; i <= nx-2; i++) 
@@ -293,13 +312,16 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
 int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivative_bh_ptr, float *mean_derivative_bh_err_ptr, int *mask, int *bitmask, float *derx_bh, float *dery_bh)
 {
 
-        int nx = dims[0], ny = dims[1];
-        int i, j, count_mask=0;
+     int nx = dims[0];
+     int ny = dims[1];
+     int i=0;
+     int j=0;
+     int count_mask=0;
+     float sum=0.0;
+     float err =0.0;     
+     *mean_derivative_bh_ptr = 0.0;
 
         if (nx <= 0 || ny <= 0) return 1;
-
-        *mean_derivative_bh_ptr = 0.0;
-        float sum,err = 0.0;
 
         /* brute force method of calculating the derivative (no consideration for edges) */
       	for (i = 1; i <= nx-2; i++) 
@@ -373,13 +395,16 @@ int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivat
 int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivative_bz_ptr, float *mean_derivative_bz_err_ptr, int *mask, int *bitmask, float *derx_bz, float *dery_bz)
 {
 
-	int nx = dims[0], ny = dims[1];
-	int i, j, count_mask=0;
+        int nx = dims[0];
+        int ny = dims[1];
+        int i=0;
+        int j=0;
+        int count_mask=0;
+	float sum = 0.0;
+        float err = 0.0;
+	*mean_derivative_bz_ptr = 0.0;
 
 	if (nx <= 0 || ny <= 0) return 1;
-
-	*mean_derivative_bz_ptr = 0.0;
-	float sum,err = 0.0;
 
         /* brute force method of calculating the derivative (no consideration for edges) */
       	for (i = 1; i <= nx-2; i++) 
@@ -498,16 +523,20 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
 
 
 { 
-	int nx = dims[0], ny = dims[1]; 
-	int i, j, count_mask=0; 
+        int nx = dims[0];
+        int ny = dims[1]; 
+        int i=0;
+        int j=0;
+        int count_mask=0;
+	float curl=0.0;
+        float us_i=0.0;
+        float test_perimeter=0.0;
+        float mean_curl=0.0; 
 
 	if (nx <= 0 || ny <= 0) return 1; 
-	float curl=0.0, us_i=0.0,test_perimeter=0.0,mean_curl=0.0; 
-
 
         /* Calculate the derivative*/
         /* brute force method of calculating the derivative (no consideration for edges) */
-
 
       	for (i = 1; i <= nx-2; i++) 
 	  {
@@ -585,13 +614,18 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz, float *jz_smooth
 
 {
 
-	int nx = dims[0], ny = dims[1];
-	int i, j, count_mask=0;
+        int nx = dims[0];
+        int ny = dims[1];
+        int i=0;
+        int j=0;
+        int count_mask=0;
+	float curl=0.0;
+        float us_i=0.0;
+        float test_perimeter=0.0;
+        float mean_curl=0.0;
+        float err=0.0;
 
 	if (nx <= 0 || ny <= 0) return 1;
-
-	float curl,us_i,test_perimeter,mean_curl,err=0.0;
- 
  
         /* At this point, use the smoothed Jz array with a Gaussian (FWHM of 4 pix and truncation width of 12 pixels) but keep the original array dimensions*/
       	for (i = 0; i <= nx-1; i++) 
@@ -656,29 +690,40 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz, float *jz_smooth
 int computeAlpha(float *jz_err, float *bz_err, float *bz, int *dims, float *jz, float *jz_smooth, float *mean_alpha_ptr, float *mean_alpha_err_ptr, int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
 
 {
-	int nx = dims[0], ny = dims[1];
-	int i, j, count_mask, a,b,c,d=0;
+        int nx = dims[0]; 
+        int ny = dims[1];
+        int i=0;
+        int j=0;
+        int count_mask=0;
+	float a=0.0; 
+	float b=0.0;
+	float c=0.0;
+	float d=0.0;
+	float bznew=0.0;
+	float alpha2=0.0;
+	float sum1=0.0;
+	float sum2=0.0;
+	float sum3=0.0;
+	float sum4=0.0;
+	float sum=0.0;
+	float sum5=0.0;
+	float sum6=0.0;
+	float sum_err=0.0;
 
 	if (nx <= 0 || ny <= 0) return 1;
-
-	float aa, bb, cc, bznew, alpha2, sum1, sum2, sum3, sum4, sum, sum5, sum6, sum_err=0.0;
 
 	for (i = 1; i < nx-1; i++) 
 	  {
 	    for (j = 1; j < ny-1; j++) 
 	      {
                 if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
-                //if isnan(jz_smooth[j * nx + i]) continue;
                 if isnan(jz[j * nx + i]) continue;
                 if isnan(bz[j * nx + i]) continue;
-                //if (jz_smooth[j * nx + i] == 0) continue;
                 if (jz[j * nx + i]     == 0.0) continue;
                 if (bz_err[j * nx + i] == 0.0) continue;
                 if (bz[j * nx + i]     == 0.0) continue;
                 if (bz[j * nx + i] >  0) sum1 += ( bz[j * nx + i] ); a++;
                 if (bz[j * nx + i] <= 0) sum2 += ( bz[j * nx + i] ); b++;
-                //if (bz[j * nx + i] >  0) sum3 += ( jz_smooth[j * nx + i]);
-                //if (bz[j * nx + i] <= 0) sum4 += ( jz_smooth[j * nx + i]);
                 if (bz[j * nx + i] >  0) sum3 += ( jz[j * nx + i] ); c++;
                 if (bz[j * nx + i] <= 0) sum4 += ( jz[j * nx + i] ); d++;
                 sum5    += bz[j * nx + i];
@@ -697,12 +742,9 @@ int computeAlpha(float *jz_err, float *bz_err, float *bz, int *dims, float *jz, 
         if ((sum5 < 0) && (sum4 >  0)) sum=-sum;
 
 	*mean_alpha_ptr = sum; /* Units are 1/Mm */
-        *mean_alpha_err_ptr    = (sqrt(sum_err*sum_err)) / ((a+b+c+d)*100.); // error in the quantity (sum)/(count_mask); factor of 100 comes from converting percent
+        *mean_alpha_err_ptr    = (sqrt(sum_err*sum_err)) / ((a+b+c+d)*100.0); // error in the quantity (sum)/(count_mask); factor of 100 comes from converting percent
 
-        printf("a=%d\n",a);
-        printf("b=%d\n",b);
-        printf("d=%d\n",d);
-        printf("c=%d\n",c);
+
 
         printf("MEANALP=%f\n",*mean_alpha_ptr);
         printf("MEANALP_err=%f\n",*mean_alpha_err_ptr);
@@ -725,12 +767,16 @@ int computeHelicity(float *jz_err, float *jz_rms_err, float *bz_err, float *bz, 
 
 {
 
-	int nx = dims[0], ny = dims[1];
-	int i, j, count_mask=0;
+        int nx = dims[0];
+        int ny = dims[1];
+        int i=0;
+        int j=0;
+        int count_mask=0;
+	float sum=0.0;
+	float sum2=0.0;
+	float sum_err=0.0;
 	
 	if (nx <= 0 || ny <= 0) return 1;
-
-	float sum,sum2,sum_err=0.0;
 
 	for (i = 0; i < nx; i++) 
 	{
@@ -742,7 +788,7 @@ int computeHelicity(float *jz_err, float *jz_rms_err, float *bz_err, float *bz, 
                   if (bz[j * nx + i] == 0.0) continue;
                   if (jz[j * nx + i] == 0.0) continue;
                   sum     +=     (jz[j * nx + i]*bz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref); // contributes to MEANJZH and ABSNJZH
-		  sum2    += fabs(jz[j * nx + i]*bz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref); // contributes to TOTUSJH
+                  sum2    += fabs(jz[j * nx + i]*bz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref); // contributes to TOTUSJH
                   sum_err += sqrt(((jz_err[j * nx + i]*jz_err[j * nx + i])/(jz[j * nx + i]*jz[j * nx + i])) + ((bz_err[j * nx + i]*bz_err[j * nx + i])/(bz[j * nx + i]*bz[j * nx + i]))) * fabs(jz[j * nx + i]*bz[j * nx + i]*(1/cdelt1)*(rsun_obs/rsun_ref));
                   count_mask++;
                 }	
@@ -752,9 +798,9 @@ int computeHelicity(float *jz_err, float *jz_rms_err, float *bz_err, float *bz, 
 	*total_us_ih_ptr      = sum2           ; /* Units are G^2 / m ; keyword is TOTUSJH */
 	*total_abs_ih_ptr     = fabs(sum)      ; /* Units are G^2 / m ; keyword is ABSNJZH */
 
-        *mean_ih_err_ptr      = (sqrt(sum_err*sum_err)) / (count_mask*100.)    ;  // error in the quantity MEANJZH
-        *total_us_ih_err_ptr  = (sqrt(sum_err*sum_err)) / (100.)               ;  // error in the quantity TOTUSJH
-        *total_abs_ih_err_ptr = (sqrt(sum_err*sum_err)) / (100.)               ;  // error in the quantity ABSNJZH
+        *mean_ih_err_ptr      = (sqrt(sum_err*sum_err)) / (count_mask*100.0)    ;  // error in the quantity MEANJZH
+        *total_us_ih_err_ptr  = (sqrt(sum_err*sum_err)) / (100.0)               ;  // error in the quantity TOTUSJH
+        *total_abs_ih_err_ptr = (sqrt(sum_err*sum_err)) / (100.0)               ;  // error in the quantity ABSNJZH
 
         printf("MEANJZH=%f\n",*mean_ih_ptr);
         printf("MEANJZH_err=%f\n",*mean_ih_err_ptr);
@@ -783,13 +829,17 @@ int computeSumAbsPerPolarity(float *jz_err, float *bz_err, float *bz, float *jz,
 							 int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
 
 {	
-	int nx = dims[0], ny = dims[1];
-	int i, j, count_mask=0;
+        int nx = dims[0];
+        int ny = dims[1];
+        int i=0;
+        int j=0;
+        int count_mask=0;
+	float sum1=0.0;
+        float sum2=0.0;
+        float err=0.0;	
+	*totaljzptr=0.0;
 
 	if (nx <= 0 || ny <= 0) return 1;
-	
-	*totaljzptr=0.0;
-	float sum1,sum2,err=0.0;
      
 	for (i = 0; i < nx; i++) 
 	  {
@@ -830,14 +880,18 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
 					  float cdelt1, double rsun_ref, double rsun_obs)
 
 {
-	int nx = dims[0], ny = dims[1];
-	int i, j, count_mask=0;
-	
-	if (nx <= 0 || ny <= 0) return 1;
-	
+        int nx = dims[0];
+        int ny = dims[1];
+        int i=0;
+        int j=0;
+        int count_mask=0;
+	float sum=0.0;
+        float sum1=0.0;
+        float err=0.0;
         *totpotptr=0.0;
 	*meanpotptr=0.0;
-	float sum,sum1,err=0.0;
+
+	if (nx <= 0 || ny <= 0) return 1;
 
 	for (i = 0; i < nx; i++) 
 	  {
@@ -875,14 +929,22 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
 int computeShearAngle(float *bx_err, float *by_err, float *bh_err, float *bx, float *by, float *bz, float *bpx, float *bpy, float *bpz, int *dims,
                       float *meanshear_angleptr, float *meanshear_angle_err_ptr, float *area_w_shear_gt_45ptr, int *mask, int *bitmask)
 {	
-	int nx = dims[0], ny = dims[1];
-	int i, j;
+        int nx = dims[0];
+        int ny = dims[1];
+        int i=0;
+        int j=0;
+        int count_mask=0;
+        float dotproduct = 0.0;
+        float magnitude_potential = 0.0;
+        float magnitude_vector=0.0;
+        float shear_angle=0.0;
+        float err=0.0;
+        float sum = 0.0; 
+        float count=0.0;
+        *area_w_shear_gt_45ptr=0.0;
+	*meanshear_angleptr=0.0;
 	
 	if (nx <= 0 || ny <= 0) return 1;
-	
-        //*area_w_shear_gt_45ptr=0.0;
-	//*meanshear_angleptr=0.0;
-	float dotproduct, magnitude_potential, magnitude_vector, shear_angle,err=0.0, sum = 0.0, count=0.0, count_mask=0.0;
 
 	for (i = 0; i < nx; i++) 
 	  {
@@ -910,7 +972,7 @@ int computeShearAngle(float *bx_err, float *by_err, float *bh_err, float *bx, fl
         /* For mean 3D shear angle, area with shear greater than 45*/
 	*meanshear_angleptr = (sum)/(count);                 /* Units are degrees */
         *meanshear_angle_err_ptr = (sqrt(err*err))/(count);  // error in the quantity (sum)/(count_mask)
-        *area_w_shear_gt_45ptr   = (count_mask/(count))*(100.);/* The area here is a fractional area -- the % of the total area */
+        *area_w_shear_gt_45ptr   = (count_mask/(count))*(100.0);/* The area here is a fractional area -- the % of the total area */
 
         printf("MEANSHR=%f\n",*meanshear_angleptr);
         printf("MEANSHR_err=%f\n",*meanshear_angle_err_ptr);
@@ -1034,4 +1096,10 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 
 /*===========END OF KEIJI'S CODE =========================*/
+
+char *sw_functions_version() // Returns CVS version of sw_functions.c
+{
+  return strdup("$Id: sw_functions.c,v 1.14 2013/07/04 02:16:52 mbobra Exp $");
+}
+
 /* ---------------- end of this file ----------------*/
