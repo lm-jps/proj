@@ -6,10 +6,10 @@ d		:= $(dir)
 # Local variables
 
 # Common utilities
-EXTRADEPS_$(d)		:= $(addprefix $(d)/, fresize.o)
+#EXTRADEPS_$(d)		:= $(addprefix $(d)/, fresize.o)
 
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, sharp)
+MODEXE_$(d)	:= $(addprefix $(d)/, sharp update_sharp_keys)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -41,12 +41,12 @@ $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/interpolate -I$(SRCDIR)/$(d)/../../libs/stats -I$(SRCDIR)/$(d)/src/ $(FMATHLIBSH) -I$(SRCDIR)/lib_third_party/include $(GSLH) $(FFTWH)
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
-$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) $(GSLH)
+#$(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) $(GSLH)
 
 MKL     := -lmkl_em64t
 
 ALL_$(d)	:= $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(MODEXE_USEF_SOCK_$(d))
-$(ALL_$(d)) : $(EXTRADEPS_$(d))
+#$(ALL_$(d)) : $(EXTRADEPS_$(d))
 $(ALL_$(d)) : $(LIBASTRO) $(LIBSTATS) $(LIBINTERP)
 $(ALL_$(d)) : LF_TGT := $(LF_TGT) $(MKL)
 $(ALL_$(d)) : LL_TGT := $(LL_TGT) $(GSLLIBS) $(CFITSIOLIBS) $(MKL)
