@@ -2419,7 +2419,7 @@ int DoIt(void)
       }
       //No need to commit here. the exit will do it
       //printk("restart: drms_server_end_transaction()\n"); 
-      //drms_server_end_transaction(drms_env, 0 , 0); //commit
+      drms_server_end_transaction(drms_env, 0 , 0); //commit
       //NEW 1Jun2010: leave the stopfile. 
       //Must use doingestlev0_HMI(AIA).pl to start ingest_lev0
       //sprintf(callcmd, "/bin/rm -f %s", stopfile);
