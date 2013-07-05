@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/dstats2.c,v 1.3 2011/11/15 20:35:19 kehcheng Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/dstats2.c,v 1.4 2013/07/05 18:35:19 phil Exp $"
 
 #include <stdlib.h>
 #include <math.h>
@@ -22,7 +22,8 @@ int dstats2(int n, double arr[], double *min, double *max, double *medn,
 
     for (i = 0; i < n; ++i) {
 	double t = arr[i];
-	if (isnan(t))
+	int fpclass = fpclassify(t);
+        if (fpclass == FP_NAN || fpclass == FP_INFINITE)
 	    continue;
 	if (dmin > t)
 	    dmin = t;
@@ -52,7 +53,8 @@ int dstats2(int n, double arr[], double *min, double *max, double *medn,
 	double tmp = arr[i];
 	double t = tmp - avg;
 	double tt;
-	if (isnan(tmp))
+	int fpclass = fpclassify(t);
+        if (fpclass == FP_NAN || fpclass == FP_INFINITE)
 	    continue;
 	tt = t * t;
 	s2 += tt;

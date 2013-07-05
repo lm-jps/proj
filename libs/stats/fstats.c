@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/fstats.c,v 1.3 2011/11/15 20:35:19 kehcheng Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/fstats.c,v 1.4 2013/07/05 18:35:19 phil Exp $"
 
 //CODE FROM KEH-CHENG, SLIGHTLY MODIFIED BY SEBASTIEN
 
@@ -88,7 +88,8 @@ int fstats(int n, float arr[], double *min, double *max, double *medn,
 
     for (i = 0; i < n; ++i) {
 	float t = arr[i];
-	if (isnanf(t))
+        int fpclass = fpclassify(t);
+        if (fpclass == FP_NAN || fpclass == FP_INFINITE)
 	    continue;
 	dat[nv++] = t;
 	if (fmin > t)

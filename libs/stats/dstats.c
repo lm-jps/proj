@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/dstats.c,v 1.3 2011/11/15 20:35:19 kehcheng Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/libs/stats/dstats.c,v 1.4 2013/07/05 18:35:19 phil Exp $"
 
 #include <stdlib.h>
 #include <math.h>
@@ -11,6 +11,7 @@
 //       Note2: This function rearranges elements of arr[] on exit.
 //       Note3: For even n, this functions returns element n/2 in the
 //              sorted array.
+//       Note4: +- inf must also be removed.
 
 #define SWAP(a,b) temp=(a);(a)=(b);(b)=temp;
 
@@ -86,7 +87,8 @@ int dstats(int n, double arr[], double *min, double *max, double *medn,
 
     for (i = 0; i < n; ++i) {
 	double t = arr[i];
-	if (isnan(t))
+        int fpclass = fpclassify(t);
+	if (fpclass == FP_NAN || fpclass == FP_INFINITE)
 	    continue;
 	dat[nv++] = t;
 	if (dmin > t)
