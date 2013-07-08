@@ -11,8 +11,13 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
-#include "fstats.c"
-#include "heliographic_coords.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
+//#include "/home0/yliu/cvs/JSOC/proj/libs/astro/heliographic_coords.c"
+#include "/home/wso/src/libastro.d/solephem.c"
+
+#define C1      0.0757644 /* days/degree at 27.27527 */
+#define C2      92353.9357 /* day of 1853:11:09_22h:27m:24s */
+#define RADSINDEG       (PI/180)
 
 /* cmd-line parameters */
 #define kRecSetIn       "in"
@@ -46,14 +51,9 @@
 #define kDIFROT_C              "DIFROT_C"
 #define CR                     "CR"
 #define NBIN                   "NBIN"
+#define QUAL_CHECK      (0xfffefb00)
 
-void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny);
-
-
-//const float kOutScale = 0.1;
-//const int kOutBPP = 16;
 const float kNOISE_EQ = 10.0;
-
 char *module_name = "hmisynoptic";
 
 #define DIE(msg) {fflush(stdout); fprintf(stderr,"%s, status=%d\n", msg, status); return(status);}
@@ -100,6 +100,8 @@ int magStats(float **val, int npts, double sum, int outThreshold, double *avg, f
 void SortMagCols(MagCol_t *mc, int nelem);
 void FreeMagColsData(int start, int end, int incr, int *n, MagCol_t **mc);
 void m_sort(MagCol_t *mc, MagCol_t *mc_cpy, int sz);
+void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny);
+TIME CarringtonTime(int crot, double L);
 
 ModuleArgs_t module_args[] =
 {
@@ -170,7 +172,7 @@ int DoIt(void)
   TIME tdiff, magtime;
   double r,b,l,vr,vn,vw;
   int y,m,d;
-  TIME tmod;
+  TIME tmod, delta_T = 0.0;
   double bearth;
   double carrtime;
   char dsname[50400], key[50400], logfn[50400], synfn[50400], wtfn[50400], losFn[50400];
@@ -183,6 +185,9 @@ int DoIt(void)
   int statNgood;
   int smallstatNgood;
   long long calVer;
+  double eph[30];
+  char historyofthemodule[2048]; // put history info into the data
+  sprintf(historyofthemodule,"Carrington-Time conversion corrected; o2helio.c bug corrected -- July 2013");
 
   struct {
       int recno;
@@ -229,6 +234,11 @@ int DoIt(void)
   int nxtSyncol = -1; /* the first synop column that hasn't been calculated */
   int calcsynret = 0;
   int nbin = 5;
+  delta_T = sscan_time("1977.01.01_00:00:00_TAI") - sscan_time("1601.01.01_00:00:00_UT");
+           // Difference between DRMS_EPOCH_S (1977.01.01_00:00:00_TAI) and WSO_EPOCH_S (1601.01.01_00:00:00_UT)
+           // CarringtonTime converts time and Carrington coordinates based on Phil's code ctimes.c
+           // (/home/wso/src/misc/ctimes.c) which is based on WSO obs. Thus this time difference needs to
+           // be corrected to consist with DRMS time.
 
   cr = cmdparams_get_int(&cmdparams, CR, &status);
   nsig = cmdparams_get_float(&cmdparams, "nsig", &status);
@@ -271,11 +281,15 @@ printf("%d, %d\n", len[0], len[1]);
   bearth = earth_B(tearth); 
 */
 
-  tstart = HeliographicTime(cr, 360.0);
-  tstop = HeliographicTime(cr, 0.0);
-  trot = HeliographicTime(cr, 180.0);
-  tearth = DRMS_MISSING_TIME;
-  bearth = DRMS_MISSING_FLOAT;
+  tstart = CarringtonTime(cr, 360.0);
+  tstop = CarringtonTime(cr, 0.0);
+  trot = CarringtonTime(cr, 180.0);
+
+//  tstart = HeliographicTime(cr, 360.0);
+//  tstop = HeliographicTime(cr, 0.0);
+//  trot = HeliographicTime(cr, 180.0);
+//  tearth = DRMS_MISSING_TIME;
+//  bearth = DRMS_MISSING_FLOAT;
 
   los = (cmdparams_isflagset(&cmdparams, LOSFLAG) != 0);
   force = (cmdparams_isflagset(&cmdparams, FORCEFLAG) != 0);
@@ -317,11 +331,25 @@ for (ds=0; ds < nds; ds++)
         int csKey = 0;
         float csCoeffKey;
         int sensAdjKey;
-//        long long calVer; 
+        TIME trec;
+        char trecstr[100];
         DRMS_Record_t *inRec;
         inRec = inRD->records[ds];
 
         calVer = drms_getkey_longlong(inRec, "CALVER64", &status);
+        trec = drms_getkey_time(inRec, "T_REC", &status);
+        sprint_time(trecstr, trec, "TAI", 0);
+
+// check data quality
+
+        quality = drms_getkey_int(inRec, "QUALITY", &status);
+
+      if (quality & QUAL_CHECK)
+      {
+      printf("SKIP: Bad QUALITY = 0x%08x; T_REC=%s, rejected iRec = %d\n", quality, trecstr, ds);
+      continue;
+      }
+
 /*
         if (checkqual) 
         {
@@ -711,7 +739,9 @@ for (ds = 0; ds < nsynop; ds++)
  }
 
     if (!ended) lastidx = ngood-1;
+    magtime = imrec[(int)(ngood/2)].tobs;
 
+/*
     tdiff = 1e99;
     for (idx=firstidx; idx<=lastidx; ++idx) 
         {
@@ -721,6 +751,7 @@ for (ds = 0; ds < nsynop; ds++)
 	      magtime = imrec[idx].tobs;
             }
         }
+*/
 
 // compute the resized map
 
@@ -803,31 +834,33 @@ for (ds = 0; ds < nsynop; ds++)
         sscanf(tstr, "%d.%d.%d", &y, &m, &d);
         sprintf(tstr, "%04d-%02d-%02d", y, m, d);
         drms_setkey_string(outRec, "DATE", tstr);
-        drms_setkey_string(outRec, "BUNIT", "Mx/cm^2");
+//        drms_setkey_string(outRec, "BUNIT", "Mx/cm^2");
 
 //for image coordinate mapping keywords
 
+        drms_setkey_string(outRec, "HISTORY", historyofthemodule);
         drms_setkey_string(outRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(outRec, "CTYPE2", "CRLT-CEA");
         i=len[0]/2+0.0;
-        drms_setkey_int(outRec, "CRPIX1", i);
+        drms_setkey_double(outRec, "CRPIX1", i);
                 // origin is at the left corner of the first pixel
         l=len[1]/2+0.0;
-        drms_setkey_float(outRec, "CRPIX2", l);
+        drms_setkey_double(outRec, "CRPIX2", l);
                 // origin is at the left corner of the first pixel
-        carrtime = (cr*360.0-360.0/len[0]) - 180.0 + 0.5 * 360.0/len[0];
-        drms_setkey_float(outRec, "CRVAL1", carrtime);
+//        carrtime = (cr*360.0-360.0/len[0]) - 180.0 + 0.5 * 360.0/len[0];
+        carrtime = (cr-1)*360.0 + 180.0 - (double)(0.5 * 360.0/len[0]);
+        drms_setkey_double(outRec, "CRVAL1", carrtime);
         i=0.0;
-        drms_setkey_float(outRec, "CRVAL2", i);
+        drms_setkey_double(outRec, "CRVAL2", i);
         l=-360.0/len[0];
-        drms_setkey_float(outRec, "CDELT1", l);
-        drms_setkey_float(outRec, "CDELT2", 1.0/sinbdivs);
+        drms_setkey_double(outRec, "CDELT1", l);
+        drms_setkey_double(outRec, "CDELT2", 1.0/sinbdivs);
         drms_setkey_string(outRec, "CUNIT1", "degree");
         drms_setkey_string(outRec, "CUNIT2", "Sine Latitude");
         drms_setkey_string(outRec, "WCSNAME", "Carrington Heliographic");
 
 //HMI observables keywords
-        sprint_at(tstr, trot);
+        sprint_at(tstr, trot - delta_T);
 //        drms_setkey_string(outRec, "T_REC", tstr);
         drms_setkey_float(outRec, "CADENCE", 27.2753*24.*60.*60.);
         drms_setkey_float(outRec, "T_REC_step", 27.2753*24.*60.*60.);
@@ -850,20 +883,23 @@ for (ds = 0; ds < nsynop; ds++)
 //Synoptic map keywords
         drms_setkey_string(outRec, "T_OBS", tstr);
         drms_setkey_string(outRec, "T_ROT", tstr);
-        sprint_at(tstr, tstart);
+        sprint_at(tstr, tstart - delta_T);
         drms_setkey_string(outRec, "T_START", tstr);
-        sprint_at(tstr, tstop);
+        sprint_at(tstr, tstop - delta_T);
         drms_setkey_string(outRec, "T_STOP", tstr);
 //        sprint_at(tstr, tearth);
 //        drms_setkey_string(outRec, "T_EARTH", tstr);
         drms_setkey_int(outRec, "CAR_ROT", cr);
         drms_setkey_double(outRec, "CARRTIME", carrtime);
-        HeliographicLocation(trot, &i, &l, &b);
-        drms_setkey_double(outRec, "B0_ROT", b);
-        HeliographicLocation(tstart, &i, &l, &b);
-        drms_setkey_double(outRec, "B0_FRST", b);
-        HeliographicLocation(tstop, &i, &l, &b);
-        drms_setkey_double(outRec, "B0_LAST", b);
+        solephem(trot, eph);
+//        HeliographicLocation(trot, &i, &l, &b);
+        drms_setkey_double(outRec, "B0_ROT", eph[9]/RADSINDEG);
+        solephem(tstart, eph);
+//        HeliographicLocation(tstart, &i, &l, &b);
+        drms_setkey_double(outRec, "B0_FRST", eph[9]/RADSINDEG);
+        solephem(tstop, eph);
+//        HeliographicLocation(tstop, &i, &l, &b);
+        drms_setkey_double(outRec, "B0_LAST", eph[9]/RADSINDEG);
 //        drms_setkey_double(outRec, "EARTH_B0", bearth);
         l=(cr-1)*360.0;
         drms_setkey_double(outRec, "LON_FRST", l);
@@ -875,13 +911,13 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_double(outRec, "W_OFFSET", l);
         drms_setkey_string(outRec, "W_WEIGHT", "Even");
         i=lastidx-firstidx+1;
-        drms_setkey_int(outRec, "MAG_NUM", i);
+        drms_setkey_int(outRec, "IMG_NUM", i);
         sprint_at(tstr, imrec[firstidx].tobs);
-        drms_setkey_string(outRec, "MAG_FRST", tstr);
+        drms_setkey_string(outRec, "IMG_FRST", tstr);
         sprint_at(tstr, imrec[lastidx].tobs);
-        drms_setkey_string(outRec, "MAG_LAST", tstr);
+        drms_setkey_string(outRec, "IMG_LAST", tstr);
         sprint_at(tstr, magtime);
-        drms_setkey_string(outRec, "MAG_ROT", tstr);
+        drms_setkey_string(outRec, "IMG_ROT", tstr);
         drms_setkey_float(outRec, HWNWIDTH, halfWindow);
         drms_setkey_float(outRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(outRec, "NSIGMA", nsig);
@@ -907,29 +943,30 @@ for (ds = 0; ds < nsynop; ds++)
         sscanf(tstr, "%d.%d.%d", &y, &m, &d);
         sprintf(tstr, "%04d-%02d-%02d", y, m, d);
         drms_setkey_string(smallRec, "DATE", tstr);
-        drms_setkey_string(smallRec, "BUNIT", "Mx/cm^2");
+//        drms_setkey_string(smallRec, "BUNIT", "Mx/cm^2");
 
 //for image coordinate mapping keywords
 
+        drms_setkey_string(smallRec, "HISTORY", historyofthemodule);
         drms_setkey_string(smallRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(smallRec, "CTYPE2", "CRLT-CEA");
         i=xout/2+0.0;
-        drms_setkey_int(smallRec, "CRPIX1", i);
+        drms_setkey_double(smallRec, "CRPIX1", i);
         l=yout/2+0.0;
-        drms_setkey_float(smallRec, "CRPIX2", l);
-        carrtime = (cr*360.0-360.0/xout) - 180.0 + 0.5 * 360.0/xout;
-        drms_setkey_float(smallRec, "CRVAL1", carrtime);
+        drms_setkey_double(smallRec, "CRPIX2", l);
+        carrtime = (cr-1)*360.0 + 180.0 - (double)(0.5 * 360.0/xout);
+        drms_setkey_double(smallRec, "CRVAL1", carrtime);
         i=0.0;
-        drms_setkey_float(smallRec, "CRVAL2", i);
+        drms_setkey_double(smallRec, "CRVAL2", i);
         l=-360.0/xout;
-        drms_setkey_float(smallRec, "CDELT1", l);
-        drms_setkey_float(smallRec, "CDELT2", nbin*1.0/sinbdivs);
+        drms_setkey_double(smallRec, "CDELT1", l);
+        drms_setkey_double(smallRec, "CDELT2", nbin*1.0/sinbdivs);
         drms_setkey_string(smallRec, "CUNIT1", "degree");
         drms_setkey_string(smallRec, "CUNIT2", "Sine Latitude");
         drms_setkey_string(smallRec, "WCSNAME", "Carrington Heliographic");
 
 //HMI observables keywords
-        sprint_at(tstr, trot);
+        sprint_at(tstr, trot - delta_T);
 //        drms_setkey_string(smallRec, "T_REC", tstr);
         drms_setkey_float(smallRec, "CADENCE", 27.2753*24.*60.*60.);
         drms_setkey_float(smallRec, "T_REC_step", 27.2753*24.*60.*60.);
@@ -953,21 +990,24 @@ for (ds = 0; ds < nsynop; ds++)
 
         drms_setkey_string(smallRec, "T_OBS", tstr);
         drms_setkey_string(smallRec, "T_ROT", tstr);
-        sprint_at(tstr, tstart);
+        sprint_at(tstr, tstart - delta_T);
         drms_setkey_string(smallRec, "T_START", tstr);
-        sprint_at(tstr, tstop);
+        sprint_at(tstr, tstop - delta_T);
         drms_setkey_string(smallRec, "T_STOP", tstr);
-        sprint_at(tstr, tearth);
-        drms_setkey_string(smallRec, "T_EARTH", tstr);
+//        sprint_at(tstr, tearth);
+//        drms_setkey_string(smallRec, "T_EARTH", tstr);
         drms_setkey_int(smallRec, "CAR_ROT", cr);
         drms_setkey_double(smallRec, "CARRTIME", carrtime);
-        HeliographicLocation(trot, &i, &l, &b);
-        drms_setkey_double(smallRec, "B0_ROT", b);
-        HeliographicLocation(tstart, &i, &l, &b);
-        drms_setkey_double(smallRec, "B0_FRST", b);
-        HeliographicLocation(tstop, &i, &l, &b);
-        drms_setkey_double(smallRec, "B0_LAST", b);
-        drms_setkey_double(smallRec, "EARTH_B0", bearth);
+        solephem(trot, eph);
+//        HeliographicLocation(trot, &i, &l, &b);
+        drms_setkey_double(smallRec, "B0_ROT", eph[9]/RADSINDEG);
+//        HeliographicLocation(tstart, &i, &l, &b);
+        solephem(tstart, eph);
+        drms_setkey_double(smallRec, "B0_FRST", eph[9]/RADSINDEG);
+//        HeliographicLocation(tstop, &i, &l, &b);
+        solephem(tstop, eph);
+        drms_setkey_double(smallRec, "B0_LAST", eph[9]/RADSINDEG);
+//        drms_setkey_double(smallRec, "EARTH_B0", bearth);
         l=(cr-1)*360.0;
         drms_setkey_double(smallRec, "LON_FRST", l);
         l=cr*360.0-360.0/xout;
@@ -978,13 +1018,13 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_double(smallRec, "W_OFFSET", l);
         drms_setkey_string(smallRec, "W_WEIGHT", "Even");
         i=lastidx-firstidx+1;
-        drms_setkey_int(smallRec, "MAG_NUM", i);
+        drms_setkey_int(smallRec, "IMG_NUM", i);
         sprint_at(tstr, imrec[firstidx].tobs);
-        drms_setkey_string(smallRec, "MAG_FRST", tstr);
+        drms_setkey_string(smallRec, "IMG_FRST", tstr);
         sprint_at(tstr, imrec[lastidx].tobs);
-        drms_setkey_string(smallRec, "MAG_LAST", tstr);
+        drms_setkey_string(smallRec, "IMG_LAST", tstr);
         sprint_at(tstr, magtime);
-        drms_setkey_string(smallRec, "MAG_ROT", tstr);
+        drms_setkey_string(smallRec, "IMG_ROT", tstr);
         drms_setkey_float(smallRec, HWNWIDTH, halfWindow);
         drms_setkey_float(smallRec, EQPOINTS, nEquivPtsReq);
         drms_setkey_float(smallRec, "NSIGMA", nsig);
@@ -1151,19 +1191,14 @@ int CalcSynCols(int start,
 	    /* calculate threshold - below this, point values are within noise levels -
 	       we don't want to reject them under any circumstances */
 	    noiseLevel = kNOISE_EQ * noiseS * sensAdj; // noiseLevel not be used so far.
-
-//printf("noiseLevel = %f, sensAdj= %f\n", noiseLevel, sensAdj);
-
 	    if (radialFound) noiseLevel = noiseLevel * MIN(1 / cosrho, maxNoiseAdj);
 
 	    /* copy the vals - will be destructively analyzing them */
 	    statVals = (float *)malloc(sizeof(float) * npts);
-
 	    if (!statVals) printf("MALLOC_FAILED"); 
 	       
 	    memcpy(statVals, val, sizeof(float) * npts);
 	    nStatPts = magStats(&statVals, npts, sum, minOutPts, &avg, &med);
-	   
 	    /* Reject outliers whose values exceeds the noise threshold */
 	    for (j = 0; j < nPtsB4Rej; ++j) 
 	    {		  
@@ -1547,6 +1582,57 @@ void FreeMagColsData(int start, int end, int incr, int *n, MagCol_t **mc)
    }
 }
 
+TIME CarringtonTime(int crot, double L)
+  {
+  double eph[30];
+  double CT, clong=0.0;
+  double err, CTp50m, CTm50m;
+  TIME t;
+  char *stime;
+  char tstr[64];
+  CT = 0.0;
+  static TIME T1853 = 0.0, delta_T = 0.0;
+  T1853 = sscan_time("1853.11.09_22:27:24_UTC");
+
+  delta_T = sscan_time("1977.01.01_00:00:00_TAI") - sscan_time("1601.01.01_00:00:00_UT");
+
+  CT = 360.0 * crot - L;
+  t = (C2 + CT * C1) * SID;
+
+//  t = T1853 + CT * C1 * SID;
+  solephem(t, eph);
+  err = CT - eph[8];
+  solephem(t+6*3600.0, eph);
+  CTp50m = eph[8];
+  solephem(t-6*3600.0, eph);
+  CTm50m = eph[8];
+        // interpolate to correct t
+  t += 12*3600 * (err/(CTp50m - CTm50m));
+  solephem(t, eph);
+  err = CT - eph[8];
+  solephem(t+300.0, eph);
+  CTp50m = eph[8];
+  solephem(t-300.0, eph);
+  CTm50m = eph[8];
+        // interpolate to correct t
+  t += 600 * (err/(CTp50m - CTm50m));
+
+/*
+  sprint_at(tstr, t-delta_T);
+printf("TSTART=%s\n", tstr);
+
+solephem(t, eph); 
+CT = eph[8];
+crot = floor(CT/360.0);
+clong = 360 - (CT - 360*crot);
+crot += 1;
+printf("CT%04d:%06.2f\n", crot, clong);
+        printf("CT=%10.3f, B0=%f\n", CT, eph[9]/RADSINDEG);
+*/
+  return(t);
+  }
+
+
 /*
 double local_earth_meridian_crossing(double L, int cr)
 {
@@ -1584,9 +1670,9 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.6 2012/10/18 17:55:54 xudong Exp $
+$Id: hmisynoptic.c,v 1.7 2013/07/08 17:26:29 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
-$Author: xudong $
+$Author: yliu $
 */
 /* hmisynoptic.c is a version from hmisynop.c that produces
  * a lower resolution map using Jesper's code fresize.c.
@@ -1597,11 +1683,8 @@ $Author: xudong $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
- * Revision 1.6  2012/10/18 17:55:54  xudong
- * *** empty log message ***
- *
- * Revision 1.5  2012/10/18 00:51:01  xudong
- * updated per Yang's request
+ * Revision 1.7  2013/07/08 17:26:29  yliu
+ * Corrected a bug for Carrington-Time conversion; change a few keywords from float to double
  *
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.

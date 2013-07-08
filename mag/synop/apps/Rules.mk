@@ -9,7 +9,7 @@ d		:= $(dir)
 EXTRADEPS_$(d)		:= $(addprefix $(d)/, )
 
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, hmisynop dailysynframe dailysynframe_nrt hmisynoptic)
+MODEXE_$(d)	:= $(addprefix $(d)/, dailysynframe dailysynframe_nrt hmisynoptic mdidailysynframe mdisynop)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -39,6 +39,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../libs/astro -I$(SRCDIR)/$(d)/../../../libs/stats -I$(SRCDIR)/$(d)/src/ $(FFTWH) 
+$(OBJ_$(d)):            CF_TGT := $(CF_TGT) -I/home0/yliu/cvs/JSOC/proj/myproj/apps/include
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
 
 $(EXTRADEPS_$(d)):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)
