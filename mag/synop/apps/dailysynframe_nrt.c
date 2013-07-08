@@ -9,23 +9,22 @@ synframe sdate='2010.08.12' stime='16:00:00' in='su_yang.fd_M12m_remap_los' out=
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "fstats.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
 
 #include <mkl_blas.h>^M
 #include <mkl_service.h>^M
 #include <mkl_lapack.h>^M
 #include <mkl_vml_functions.h>^M
 #include <omp.h>^M
-#include "fresize.c"
-
-void frebin(float *image_in, float *image_out, int nx, int ny, int nbin);
-void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny);
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fresize.c"
 
 char *module_name = "dailysynframe_nrt";
-
 #define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status = %d \n", msg, status); return(status);}
 #define PARAMETER_ERROR(PNAME)
 #define     PI     4.0 * atan(1.0)
+#define QUAL_CHECK      (0xfffefb00)
+
+void frebinbox(float *image_in, float *image_out, int nx, int ny, int nbinx, int nbiny);
 
 ModuleArgs_t module_args[] =
   {
@@ -59,7 +58,7 @@ int DoIt(void)
 
   float clog0;
   float aa, bb, cc, dd, ee;
-  int status = DRMS_SUCCESS, nrecs, irec;
+  int status = DRMS_SUCCESS, nrecs, irec, quality;
   int i, j, crn;
   int xdim_syn, ydim_syn, xmg, ymg;
   char sdatestime[100], sdatetmp[100], timetmp[100], timeprint[100];
@@ -81,6 +80,8 @@ int DoIt(void)
   synQuery = (char *)params_get_str(&cmdparams, "synoptic");
   smallRecQuery = (char *)cmdparams_get_str(&cmdparams, "smallsyn", &status);
   drmethod = (char *)params_get_str(&cmdparams, "drmethod");
+  char historyofthemodule[2048]; // put history info into the data
+  sprintf(historyofthemodule,"o2helio.c bug corrected -- July 2013");
 
      aa = 13.1988; bb = 0.0; cc = 0.0;
   if (strcmp(drmethod, "Meunier") == 0)  //  Meunier
@@ -152,6 +153,14 @@ int DoIt(void)
               drms_free_array(inArray);
               continue;
             }
+        quality = drms_getkey_int(inRecfinal, "QUALITY", &status);
+        if (quality & QUAL_CHECK)
+           {
+             printf("SKIP: error getting keyword %s: iRec = %d, Bad QUALITY = 0x%08x\n",
+            "QUALITY", i, quality);
+            continue;
+           }
+
         recp[count] = i;
         count += 1;
         drms_free_array(inArray);
@@ -211,12 +220,10 @@ double dtmp;
   drms_copykey(smallRD, inRecfinal, "OBS_VW");
   drms_copykey(smallRD, inRecfinal, "OBS_VN");
   drms_copykey(smallRD, inRecfinal, "QUALITY");
-  itmp = drms_getkey_int(inRecfinal, "MAPMMAX", &status);
-  drms_setkey_int(smallRD, "MAPMMAX", itmp/nbin);
+  drms_copykey(smallRD, inRecfinal, "MAPMMAX");
   drms_copykey(smallRD, inRecfinal, "MAPLGMAX");
   drms_copykey(smallRD, inRecfinal, "MAPLGMIN");
-  ftmp = drms_getkey_int(inRecfinal, "SINBDIVS", &status);
-  drms_setkey_float(smallRD, "SINBDIVS", ftmp/(nbin-1));
+  drms_copykey(smallRD, inRecfinal, "SINBDIVS");
   drms_copykey(smallRD, inRecfinal, "MAPBMAX");
   drms_copykey(smallRD, inRecfinal, "MAPRMAX");
   drms_copykey(smallRD, inRecfinal, "LGSHIFT");
@@ -297,9 +304,7 @@ double dtmp;
   int synleftst = ppd * hwd, supleftst = ppd * clog0;
   zgrid(dxsz, ith, 0, 0, 0, phd, thd, lad, cth, sth, csc, scs);
 
-//  snprintf(timetmp, sizeof(timetmp), "%s%s[%d/2]", synQuery, "_nrt", crn-2);
   snprintf(timetmp, sizeof(timetmp), "%s[%d/2]", synQuery, crn-2);
-//  snprintf(timeprint, sizeof(timeprint), "%s%s", synQuery, "_nrt");
   snprintf(timeprint, sizeof(timeprint), "%s", synQuery);
   synQuery = timetmp;
   printf("inputname= %s\n", synQuery);
@@ -410,26 +415,28 @@ printf("synopN=%d\n", nds);
     drms_setkey_float(outRec, "CADENCE", 24.0 * 60.0 * 60.0);
     drms_setkey_float(outRec, "CROTA2", 0.0);
     drms_setkey_string(outRec, "WCSNAME", "Carrington Heliographic");
-    float loncen = xdim_syn/2 + 0.0;
-    drms_setkey_float(outRec, "CRPIX1", loncen);
+    drms_setkey_string(outRec, "HISTORY", historyofthemodule);
+
+    double loncen = xdim_syn/2 + 0.0;
+    drms_setkey_double(outRec, "CRPIX1", loncen);
         // origin is at the left corner of the first pixel
-    float latcen = ydim_syn/2 + 0.0;
-    drms_setkey_float(outRec, "CRPIX2", latcen);
+    double latcen = ydim_syn/2 + 0.0;
+    drms_setkey_double(outRec, "CRPIX2", latcen);
         // origin is at the left corner of the first pixel
-    float lonstep = -360.0/xdim_syn;
-    drms_setkey_float(outRec, "CDELT1", lonstep);
-    float latstep = 2.0/ydim_syn;
-    drms_setkey_float(outRec, "CDELT2", latstep);
-    float lonfirst = 360.0 * crn - clog0 + hwd - 360.0 + 360.0/xdim_syn;
+    double lonstep = -360.0/xdim_syn;
+    drms_setkey_double(outRec, "CDELT1", lonstep);
+    double latstep = 2.0/ydim_syn;
+    drms_setkey_double(outRec, "CDELT2", latstep);
+    double lonfirst = 360.0 * (crn  - 1) - clog0 + hwd;
                          // longitude for the last pixel is counted at the center of the pixel.
-    drms_setkey_float(outRec, "LON_FRST", lonfirst);
-    float lonlast = 360.0 * crn - (clog0 - hwd);
+    drms_setkey_double(outRec, "LON_FRST", lonfirst);
+    double lonlast = 360.0 * crn - clog0 + hwd - 360.0/xdim_syn;
                          // longitude for the first pixel is counted at the center of the pixel.
-    drms_setkey_float(outRec, "LON_LAST", lonlast);
-    float loncenter = lonlast - 180.0 + 0.5 * 360.0/xdim_syn;
-    drms_setkey_float(outRec, "CRVAL1", loncenter);
-    drms_setkey_float(outRec, "CARRTIME", loncenter);
-    drms_setkey_float(outRec, "LON_STEP", lonstep);
+    drms_setkey_double(outRec, "LON_LAST", lonlast);
+    double loncenter = lonfirst + 180.0 - 0.5 * 360.0/xdim_syn;
+    drms_setkey_double(outRec, "CRVAL1", loncenter);
+    drms_setkey_double(outRec, "CARRTIME", loncenter);
+    drms_setkey_double(outRec, "LON_STEP", lonstep);
 
 // synoptic map info
     float hwnwidth = drms_getkey_float(synRec, "HWNWIDTH", &status);
@@ -482,22 +489,24 @@ printf("synopN=%d\n", nds);
     drms_setkey_float(smallRD, "CADENCE", 24.0 * 60.0 * 60.0);
     drms_setkey_float(smallRD, "CROTA2", 0.0);
     drms_setkey_string(smallRD, "WCSNAME", "Carrington Heliographic");
+    drms_setkey_string(smallRD, "HISTORY", historyofthemodule);
+
     loncen = xout/2 + 0.0;
-    drms_setkey_float(smallRD, "CRPIX1", loncen);
+    drms_setkey_double(smallRD, "CRPIX1", loncen);
     latcen = yout/2 + 0.0;
-    drms_setkey_float(smallRD, "CRPIX2", latcen);
+    drms_setkey_double(smallRD, "CRPIX2", latcen);
     lonstep = -360.0/xout;
-    drms_setkey_float(smallRD, "CDELT1", lonstep);
+    drms_setkey_double(smallRD, "CDELT1", lonstep);
     latstep = 2.0/yout;
-    drms_setkey_float(smallRD, "CDELT2", latstep);
-    lonfirst = 360.0 * crn - clog0 + hwd - 360.0 + 360.0/xout;
-    drms_setkey_float(smallRD, "LON_FRST", lonfirst);
-    lonlast = 360.0 * crn - clog0 + hwd;
-    drms_setkey_float(smallRD, "LON_LAST", lonlast);
-    loncenter = lonlast - 180.0 + 0.5 * 360.0/xout;
-    drms_setkey_float(smallRD, "CRVAL1", loncenter);
-    drms_setkey_float(smallRD, "CARRTIME", loncenter);
-    drms_setkey_float(smallRD, "LON_STEP", lonstep);
+    drms_setkey_double(smallRD, "CDELT2", latstep);
+    lonfirst = 360.0 * (crn  - 1) - clog0 + hwd;
+    drms_setkey_double(smallRD, "LON_FRST", lonfirst);
+    lonlast = 360.0 * crn - clog0 + hwd - 360.0/xout;
+    drms_setkey_double(smallRD, "LON_LAST", lonlast);
+    loncenter = lonfirst + 180.0 - 0.5 * 360.0/xout;
+    drms_setkey_double(smallRD, "CRVAL1", loncenter);
+    drms_setkey_double(smallRD, "CARRTIME", loncenter);
+    drms_setkey_double(smallRD, "LON_STEP", lonstep);
 // synoptic map info
     hwnwidth = drms_getkey_float(synRec, "HWNWIDTH", &status);
     drms_setkey_float(smallRD, "HWNWIDTH", hwnwidth);
@@ -540,7 +549,7 @@ printf("synopN=%d\n", nds);
     status = drms_segment_write(smalloutSeg, smalloutArray, 0);
     if (status) DIE("problem writing file");
 
-    free(trec_str);
+    free(trec_str); free(recp); free(aveData);
     drms_free_array(smalloutArray);
     drms_free_array(outArray);
     drms_free_array(supsynArray);
