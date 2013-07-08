@@ -21,8 +21,8 @@
 #include <mkl_lapack.h>
 #include <mkl_vml_functions.h>
 #include <omp.h>
-#include "fresize.c"
-#include "fstats.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fresize.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
 
 #define	DEG2RAD	(M_PI / 180.)
 #define RAD2ARCSEC	(648000. / M_PI)
@@ -116,6 +116,9 @@ int DoIt(void)
     double ct0, ct1, ct;
     wt0 = getwalltime();
     ct0 = getcputime(&ut0, &st0);
+
+    char historyofthemodule[2048]; // put history info into the data
+    sprintf(historyofthemodule,"Smoothing edge-pixel bug corrected -- July 2013");
 
     /* Get parameters */
     inQuery = (char *)params_get_str(&cmdparams, "in");
@@ -252,10 +255,11 @@ printf("processing files number = %d\n", counting);
         drms_copykey(outRec, inRec, "T_REC");
 
         // other keywords
+        drms_setkey_string(outRec, "HISTORY", historyofthemodule);
         drms_copykey(outRec, inRec, "DATE");
         drms_copykey(outRec, inRec, "INSTRUME");
         drms_copykey(outRec, inRec, "CAMERA");
-        drms_copykey(outRec, inRec, "HISTORY");
+//        drms_copykey(outRec, inRec, "HISTORY");
         drms_copykey(outRec, inRec, "COMMENT");
         drms_copykey(outRec, inRec, "BLD_VERS");
 
@@ -276,10 +280,12 @@ printf("processing files number = %d\n", counting);
         drms_setkey_int(outRec, "MISSVALS", i);
 
         fltemp = drms_getkey_float(inRec, "CRPIX1", &status);
-        fltemp = (fltemp - 1.0 + 0.5)/nbin + 0.5;
+//        fltemp = (fltemp - 1.0 + 0.5)/nbin + 0.5;
+        fltemp = outDims[0]/2.0;
         drms_setkey_float(outRec, "CRPIX1", fltemp);
-        fltemp = drms_getkey_float(inRec, "CRPIX2", &status);
-        fltemp = (fltemp - 1.0 + 0.5)/nbin + 0.5;
+        fltemp = drms_getkey_float(inRec, "CRPIX2", &status);        
+//        fltemp = (fltemp - 1.0 + 0.5)/nbin + 0.5;
+        fltemp = outDims[1]/2.0;
         drms_setkey_float(outRec, "CRPIX2", fltemp);
         drms_copykey(outRec, inRec, "CRVAL1");
         drms_copykey(outRec, inRec, "CRVAL2");
