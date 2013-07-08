@@ -2071,6 +2071,11 @@ void do_ingest()
           printk("**ERROR: cp exit status = %d\n", mvstat);
         }
       }
+      sprintf(cmd, "/bin/mv -f %s %s", name, "/sds/reject/iris");
+      printk("%s\n", cmd);
+      if(status = system(cmd)) {
+        printk("**ERROR: on mv\n");
+      }
       printk("**Continue after ERROR on cp of tlm file\n");
       continue;
     }
