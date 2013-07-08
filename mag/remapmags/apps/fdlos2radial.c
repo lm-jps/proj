@@ -50,6 +50,8 @@ int DoIt(void)
     int ds, nds;
     int xsize, ysize;
     char *inRecQuery, *outRecQuery;
+    char tstr[64];
+    int y,m,d;
     DRMS_RecordSet_t *inRD, *outRD;
 
     inRecQuery = (char *)params_get_str(&cmdparams, kRecSetIn);
@@ -90,8 +92,8 @@ int DoIt(void)
 
         inRec = inRD->records[ds];
 
-        dSun = drms_getkey_float(inRec, "DSUN_OBS", &status);
-        rSun_ref = drms_getkey_float(inRec, "RSUN_REF", &status);
+        dSun = drms_getkey_double(inRec, "DSUN_OBS", &status);
+        rSun_ref = drms_getkey_double(inRec, "RSUN_REF", &status);
           if (status) rSun_ref = 6.96e8;
         cdelt = drms_getkey_float(inRec, "CDELT1", &status);  // in arcsec, assumimg dx=dy
         asd = asin(rSun_ref/dSun);
@@ -157,8 +159,12 @@ int DoIt(void)
         outRec = outRD->records[ds];
 
         drms_copykey(outRec, inRec, "T_REC");
+        sprint_ut(tstr, CURRENT_SYSTEM_TIME);
+        sscanf(tstr, "%d.%d.%d", &y, &m, &d);
+        sprintf(tstr, "%04d-%02d-%02d", y, m, d);
+        drms_setkey_string(outRec, "DATE", tstr);
 
-        drms_copykey(outRec, inRec, "DATE");
+//        drms_copykey(outRec, inRec, "DATE");
         drms_copykey(outRec, inRec, "DATE__OBS");
         drms_copykey(outRec, inRec, "INSTRUME");
         drms_copykey(outRec, inRec, "CAMERA");
@@ -218,13 +224,12 @@ int DoIt(void)
 
 /*
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/remapmags/apps/fdlos2radial.c,v $
-$Author: xudong $
+$Author: yliu $
 */
 
 /* $Log: fdlos2radial.c,v $
- * Revision 1.2  2012/10/18 17:37:05  xudong
- * updated per Yang's request
- * CV: ----------------------------------------------------------------------
+ * Revision 1.3  2013/07/08 18:09:01  yliu
+ * corrected a bug
  *
 Purpose: Convert los mags to radial mags by assuming that the field is purely radial.
 % vectortransform in='su_yang.hmi_vector' out='su_yang.hmi_maghelio'
