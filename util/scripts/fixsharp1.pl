@@ -1,5 +1,8 @@
 #!/home/jsoc/bin/linux_x86_64/perl5.12.2
 
+# Run like this:
+# fixsharp1.pl dbname=jsoc dbhost=hmidb dbport=5432 type1=hmi.sharp_720s:/home/mbobra/pros/swharp/cea_fix/output_ccd_definitive.txt,hmi.sharp_720s_nrt:/home/mbobra/pros/swharp/cea_fix/output_ccd_nrt.txt type2=hmi.sharp_cea_720s:/home/mbobra/pros/swharp/cea_fix/output_cea_definitive.txt,hmi.sharp_cea_720s_nrt:/home/mbobra/pros/swharp/cea_fix/output_cea_nrt.txt d=0
+
 use warnings;
 use strict;
 
@@ -20,8 +23,11 @@ use constant kRetDbQuery     => 2;
 use constant kArgDbname      => "dbname";
 use constant kArgDbhost      => "dbhost";
 use constant kArgDbport      => "dbport";
-use constant kArgType1Series => "type1";  # comma-separted list of type-1 series
-use constant kArgType2Series => "type2";  # comma-separted list of type-2 series
+# The next two arguments can optionally specify a file containing a comma-separated list of recnums. The format
+# in that case would look like:
+# typeX=hmi.blah:/path/to/listfile1,hmi.blahblah:/path/to/listfile2,hmi.blahblahblah:/path/to/listfile3
+use constant kArgType1Series => "type1";  # comma-separted list of type-1 series (like hmi.sharp_720s)
+use constant kArgType2Series => "type2";  # comma-separted list of type-2 series (like hmi.sharp_cea_720s)
 
 # Optional parameters
 use constant kOptDo          => "d";
@@ -39,6 +45,12 @@ my($dbh);
 my($doit);
 my(@type1);
 my(@type2);
+my(@type1recnums); 
+my(@type2recnums);
+my($listfile);
+my($fh);
+my($line);
+my($whereclz);
 my($stmnt);
 my($ns);
 my($serieslower);
@@ -88,150 +100,232 @@ else
     if (defined($dbh))
     {
         # Type1 series
-        @type1 = split(qr(,), $args->Get(&kArgType1Series));
+        GetSeries($args, &kArgType1Series, \@type1, \@type1recnums);
         
         foreach my $series (@type1)
         {
             $ns = ($series =~ /^\s*(\S+)\./)[0];
             $serieslower = lc($series);
             
-            # Update the vaues of variable keywords CRPIX1, CRPIX2, CRVAL1, and CRVAL2
-            $stmnt = "UPDATE $series SET crpix1 = imcrpix1 - crpix1 + 1, crpix2 = imcrpix2 - crpix2 + 1, (crval1, crval2) = (0.0, 0.0)";
+            $fh = undef;
+            if (defined($listfile = shift(@type1recnums)))
+            {
+                if (!defined(open($fh, $listfile)))
+                {
+                    $rv = &kRetFileIO;
+                    last;
+                }
+            }
             
-            $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
+            while (1)
+            {
+                if (defined($fh))
+                {
+                    $line = <$fh>;
+                    if (!defined($line))
+                    {
+                        $fh->close();
+                        last; # done with records in THIS series; onto next series.
+                    }
+                    
+                    chomp($line);
+                    $whereclz = " WHERE recnum IN ($line)";
+                }
+                else
+                {
+                    $whereclz = "";
+                }
+                
+                # Update the vaues of variable keywords CRPIX1, CRPIX2, CRVAL1, and CRVAL2
+                $stmnt = "UPDATE $series SET crpix1 = imcrpix1 - crpix1 + 1, crpix2 = imcrpix2 - crpix2 + 1, (crval1, crval2) = (0.0, 0.0)" . $whereclz;
+                
+                $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
+                if ($rv != &kRetSuccess)
+                {
+                    last;
+                }
+                
+                # Update the descriptions of keywords CRPIX1, CRPIX2, CRVAL1, and CRVAL2
+                $stmnt = "UPDATE $ns.drms_keyword SET description = 'X coordinate of disk center with respect to lower-left corner of patch (in pixels)' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crpix1'" . $whereclz;
+                
+                $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
+                if ($rv != &kRetSuccess)
+                {
+                    last;
+                }
+                
+                $stmnt = "UPDATE $ns.drms_keyword SET description = 'Y coordinate of disk center with respect to lower-left corner of patch (in pixels)' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crpix2'" . $whereclz;
+                
+                $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
+                if ($rv != &kRetSuccess)
+                {
+                    last;
+                }
+                
+                $stmnt = "UPDATE $ns.drms_keyword SET description = 'X origin: (0,0) at disk center' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crval1'" . $whereclz;
+                
+                $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
+                if ($rv != &kRetSuccess)
+                {
+                    last;
+                }
+                
+                $stmnt = "UPDATE $ns.drms_keyword SET description = 'Y origin: (0,0) at disk center' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crval2'" . $whereclz;
+                
+                $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
+                
+                if (!defined($fh))
+                {
+                    last;
+                }
+                
+                if ($rv != &kRetSuccess)
+                {
+                    last;
+                }                
+            } # while
+            
             if ($rv != &kRetSuccess)
             {
                 last;
             }
-            
-            # Update the descriptions of keywords CRPIX1, CRPIX2, CRVAL1, and CRVAL2
-            $stmnt = "UPDATE $ns.drms_keyword SET description = 'X coordinate of disk center with respect to lower-left corner of patch (in pixels)' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crpix1'";
-            
-            $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
-            if ($rv != &kRetSuccess)
-            {
-                last;
-            }
-            
-            $stmnt = "UPDATE $ns.drms_keyword SET description = 'Y coordinate of disk center with respect to lower-left corner of patch (in pixels)' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crpix2'";
-            
-            $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
-            if ($rv != &kRetSuccess)
-            {
-                last;
-            }
-            
-            $stmnt = "UPDATE $ns.drms_keyword SET description = 'X origin: (0,0) at disk center' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crval1'";
-            
-            $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
-            if ($rv != &kRetSuccess)
-            {
-                last;
-            }
-            
-            $stmnt = "UPDATE $ns.drms_keyword SET description = 'Y origin: (0,0) at disk center' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crval2'";
-            
-            $rv = ExeStmnt($dbh, $stmnt, $doit, "type1 series update statement: $stmnt\n");
-            if ($rv != &kRetSuccess)
-            {
-                last;
-            }
-        }
+        } # foreach
         
         if ($rv == &kRetSuccess)
         {
             # Type 2 series
-            @type2 = split(qr(,), $args->Get(&kArgType2Series));
+            GetSeries($args, &kArgType2Series, \@type2, \@type2recnums);
             
             foreach my $series (@type2)
             {
                 $ns = ($series =~ /^\s*(\S+)\./)[0];
                 $serieslower = lc($series);
                 
-                # Update the values and descriptions of the constant keywords CTYPE1 and CTYPE2
-                $stmnt = "UPDATE $ns.drms_keyword SET defaultval = 'CRLN-CEA', description = 'CRLN-CEA' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'ctype1'";
+                $fh = undef;
+                if (defined($listfile = shift(@type2recnums)))
+                {
+                    if (!defined(open($fh, $listfile)))
+                    {
+                        $rv = &kRetFileIO;
+                        last;
+                    }
+                }
                 
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                while (1)
+                {
+                    if (defined($fh))
+                    {
+                        $line = <$fh>;
+                        if (!defined($line))
+                        {
+                            $fh->close();
+                            last; # done with records in THIS series; onto next series.
+                        }
+                        
+                        chomp($line);
+                        $whereclz = " WHERE recnum IN ($line)";
+                    }
+                    else
+                    {
+                        $whereclz = "";
+                    }
+                    
+                    # Update the values and descriptions of the constant keywords CTYPE1 and CTYPE2
+                    $stmnt = "UPDATE $ns.drms_keyword SET defaultval = 'CRLN-CEA', description = 'CRLN-CEA' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'ctype1'" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }
+                    
+                    $stmnt = "UPDATE $ns.drms_keyword SET defaultval = 'CRLT-CEA', description = 'CRLT-CEA' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'ctype2'" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }
+                    
+                    # Update the values, units, and descriptions of the constant keywords CUNIT1 and CUNIT2
+                    $stmnt = "UPDATE $ns.drms_keyword SET unit = 'none', defaultval = 'degree', description = 'Degree' WHERE lower(seriesname) = '$serieslower' AND (lower(keywordname) = 'cunit1' OR lower(keywordname) = 'cunit2')" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }
+                    
+                    # Update the values of variable keywords CDELT1, CDELT2, CROTA2, CRPIX1, CRPIX2, CRVAL1, CRVAL2
+                    $stmnt = "UPDATE $series SET cdelt1 = 0.03, cdelt2 = 0.03, crota2 = 0.0, crpix1 = sg_000_axis000::real / 2 + 0.5, crpix2 = sg_000_axis001::real / 2 + 0.5, crval1 = crln_obs + (londtmax + londtmin) / 2, crval2 = (latdtmax + latdtmin) / 2" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }
+                    
+                    # Update the units and descriptions of the keywords CDELT1, CDELT2, CRPIX1, CRPIX2, CRVAL1, CRVAL2
+                    $stmnt = "UPDATE $ns.drms_keyword SET unit = 'degree', description = 'Map scale in X direction' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'cdelt1'" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }
+                    
+                    $stmnt = "UPDATE $ns.drms_keyword SET unit = 'degree', description = 'Map scale in Y direction' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'cdelt2'" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }
+                    
+                    $stmnt = "UPDATE $ns.drms_keyword SET description = 'X coordinate of patch center with respect to lower-left corner (in pixels)' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crpix1'" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }
+                    
+                    $stmnt = "UPDATE $ns.drms_keyword SET description = 'Y coordinate of patch center with respect to lower-left corner (in pixels)' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crpix2'" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }
+                    
+                    $stmnt = "UPDATE $ns.drms_keyword SET unit = 'degree', description = 'Longitude at center of patch' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crval1'" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }
+                    
+                    $stmnt = "UPDATE $ns.drms_keyword SET unit = 'degree', description = 'Latitude at center of patch' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crval2'" . $whereclz;
+                    
+                    $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
+                    
+                    if (!defined($fh))
+                    {
+                        last;
+                    }
+                    
+                    if ($rv != &kRetSuccess)
+                    {
+                        last;
+                    }                    
+                } # while
+                
                 if ($rv != &kRetSuccess)
                 {
                     last;
                 }
-                
-                $stmnt = "UPDATE $ns.drms_keyword SET defaultval = 'CRLT-CEA', description = 'CRLT-CEA' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'ctype2'";
-                
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
-                if ($rv != &kRetSuccess)
-                {
-                    last;
-                }
-                
-                # Update the values, units, and descriptions of the constant keywords CUNIT1 and CUNIT2
-                $stmnt = "UPDATE $ns.drms_keyword SET unit = 'none', defaultval = 'degree', description = 'Degree' WHERE lower(seriesname) = '$serieslower' AND (lower(keywordname) = 'cunit1' OR lower(keywordname) = 'cunit2')";
-                
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
-                if ($rv != &kRetSuccess)
-                {
-                    last;
-                }
-                
-                # Update the values of variable keywords CDELT1, CDELT2, CROTA2, CRPIX1, CRPIX2, CRVAL1, CRVAL2
-                $stmnt = "UPDATE $series SET cdelt1 = 0.03, cdelt2 = 0.03, crota2 = 0.0, crpix1 = sg_000_axis000::real / 2 + 0.5, crpix2 = sg_000_axis001::real / 2 + 0.5, crval1 = crln_obs + (londtmax + londtmin) / 2, crval2 = (latdtmax + latdtmin) / 2";
-                
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
-                if ($rv != &kRetSuccess)
-                {
-                    last;
-                }
-                
-                # Update the units and descriptions of the keywords CDELT1, CDELT2, CRPIX1, CRPIX2, CRVAL1, CRVAL2
-                $stmnt = "UPDATE $ns.drms_keyword SET unit = 'degree', description = 'Map scale in X direction' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'cdelt1'";
-                
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
-                if ($rv != &kRetSuccess)
-                {
-                    last;
-                }
-                
-                $stmnt = "UPDATE $ns.drms_keyword SET unit = 'degree', description = 'Map scale in Y direction' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'cdelt2'";
-                
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
-                if ($rv != &kRetSuccess)
-                {
-                    last;
-                }
-                
-                $stmnt = "UPDATE $ns.drms_keyword SET description = 'X coordinate of patch center with respect to lower-left corner (in pixels)' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crpix1'";
-                
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
-                if ($rv != &kRetSuccess)
-                {
-                    last;
-                }
-                
-                $stmnt = "UPDATE $ns.drms_keyword SET description = 'Y coordinate of patch center with respect to lower-left corner (in pixels)' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crpix2'";
-                
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
-                if ($rv != &kRetSuccess)
-                {
-                    last;
-                }
-                
-                $stmnt = "UPDATE $ns.drms_keyword SET unit = 'degree', description = 'Longitude at center of patch' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crval1'";
-                
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
-                if ($rv != &kRetSuccess)
-                {
-                    last;
-                }
-                
-                $stmnt = "UPDATE $ns.drms_keyword SET unit = 'degree', description = 'Latitude at center of patch' WHERE lower(seriesname) = '$serieslower' AND lower(keywordname) = 'crval2'";
-                
-                $rv = ExeStmnt($dbh, $stmnt, $doit, "type2 series update statement: $stmnt\n");
-                if ($rv != &kRetSuccess)
-                {
-                    last;
-                }
-            }
+            } # foreach
         }
     }
     
@@ -293,4 +387,24 @@ sub ExeStmnt
     }
     
     return $rv;
+}
+
+sub GetSeries
+{
+    my($args, $argname, $slistR, $rlistR) = @_;
+    my(@list);
+    
+    @list = split(qr(,), $args->Get($argname));
+    foreach my $elem (@list)
+    {
+        if ($elem =~ /([^:]+):(.+)/)
+        {
+            push(@$slistR, $1);
+            push(@$rlistR, $2);
+        }
+        else
+        {
+            push(@$slistR, $elem);
+        }
+    }
 }
