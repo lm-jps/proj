@@ -534,7 +534,7 @@ sub read_n_packets($,$,$)
         ### LOG ###
         # check status returned when executing decode_dayfile
         $log =~ m/(ERROR)/ ; #regular exp - look for field
-        if($log eq "" )
+        if(($log eq "") || ($log eq "WARNING:  pgstat wait timeout\n"))
         {
           $failed_processing_flag=0;#set to 0 if had no errors
           if($dflg == 0) {printf("-->Completed executing decode_dayfile with status PASSED at %s UTC\n",get_current_time());}
