@@ -21,8 +21,8 @@
 #include <mkl_lapack.h>
 #include <mkl_vml_functions.h>
 #include <omp.h>
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fresize.c"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
+//#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fresize.c"
+//#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
 
 #define	DEG2RAD	(M_PI / 180.)
 #define RAD2ARCSEC	(648000. / M_PI)
