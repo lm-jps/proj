@@ -588,6 +588,7 @@ function GetSeries()
       var n = SeriesList.n;
       for (var i = 0; i < n; i++)
         {
+if (SeriesList.names[i].name.substr(0,4) != "iris")
 	insertOption("SeriesSelect",SeriesList.names[i].name,SeriesList.names[i].note);
         }
       $("SeriesCountPlace").innerHTML = SeriesList.n ;
