@@ -102,13 +102,13 @@ int computeAbsFlux(float *bz_err, float *bz, int *dims, float *absFlux,
      *mean_vf_ptr     = sum*cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0;
      *mean_vf_err_ptr = (sqrt(err))*fabs(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0); // error in the unsigned flux
      *count_mask_ptr  = count_mask;   
-     printf("cdelt1=%f\n",cdelt1);         
-     printf("rsun_obs=%f\n",rsun_obs);
-     printf("rsun_ref=%f\n",rsun_ref);
-     printf("CMASK=%g\n",*count_mask_ptr); 
-     printf("USFLUX=%g\n",*mean_vf_ptr);
-     printf("sum=%f\n",sum);
-     printf("USFLUX_err=%g\n",*mean_vf_err_ptr); 
+     //printf("cdelt1=%f\n",cdelt1);         
+     //printf("rsun_obs=%f\n",rsun_obs);
+     //printf("rsun_ref=%f\n",rsun_ref);
+     //printf("CMASK=%g\n",*count_mask_ptr); 
+     //printf("USFLUX=%g\n",*mean_vf_ptr);
+     //printf("sum=%f\n",sum);
+     //printf("USFLUX_err=%g\n",*mean_vf_err_ptr); 
      return 0;
 }
 
@@ -188,8 +188,8 @@ int computeGamma(float *bz_err, float *bh_err, float *bx, float *by, float *bz, 
 
      *mean_gamma_ptr = sum/count_mask;
      *mean_gamma_err_ptr = (sqrt(err*err))/(count_mask*100.0); // error in the quantity (sum)/(count_mask)
-     printf("MEANGAM=%f\n",*mean_gamma_ptr);
-     printf("MEANGAM_err=%f\n",*mean_gamma_err_ptr);
+     //printf("MEANGAM=%f\n",*mean_gamma_ptr);
+     //printf("MEANGAM_err=%f\n",*mean_gamma_err_ptr);
      return 0;
 }
 
@@ -299,8 +299,8 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
 
         *mean_derivative_btotal_ptr     = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
         *mean_derivative_btotal_err_ptr = (sqrt(err))/(count_mask); // error in the quantity (sum)/(count_mask)
-        printf("MEANGBT=%f\n",*mean_derivative_btotal_ptr);
-        printf("MEANGBT_err=%f\n",*mean_derivative_btotal_err_ptr);
+        //printf("MEANGBT=%f\n",*mean_derivative_btotal_ptr);
+        //printf("MEANGBT_err=%f\n",*mean_derivative_btotal_err_ptr);
         return 0;
 }
 
@@ -382,8 +382,8 @@ int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivat
 
         *mean_derivative_bh_ptr     = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
         *mean_derivative_bh_err_ptr = (sqrt(err))/(count_mask); // error in the quantity (sum)/(count_mask)
-        printf("MEANGBH=%f\n",*mean_derivative_bh_ptr);
-        printf("MEANGBH_err=%f\n",*mean_derivative_bh_err_ptr);
+        //printf("MEANGBH=%f\n",*mean_derivative_bh_ptr);
+        //printf("MEANGBH_err=%f\n",*mean_derivative_bh_err_ptr);
 
         return 0;
 }
@@ -474,8 +474,8 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
 
 	*mean_derivative_bz_ptr = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
         *mean_derivative_bz_err_ptr = (sqrt(err))/(count_mask); // error in the quantity (sum)/(count_mask)
-        printf("MEANGBZ=%f\n",*mean_derivative_bz_ptr);
-        printf("MEANGBZ_err=%f\n",*mean_derivative_bz_err_ptr);
+        //printf("MEANGBZ=%f\n",*mean_derivative_bz_ptr);
+        //printf("MEANGBZ_err=%f\n",*mean_derivative_bz_err_ptr);
 
 	return 0;
 }
@@ -643,11 +643,11 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz, float *jz_smooth
         *us_i_ptr        = (us_i);                   /* us_i gets populated as TOTUSJZ */
         *us_i_err_ptr    = (sqrt(err))*fabs((cdelt1/1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT)); // error in the quantity TOTUSJZ
 
-        printf("MEANJZD=%f\n",*mean_jz_ptr);
-        printf("MEANJZD_err=%f\n",*mean_jz_err_ptr);
+        //printf("MEANJZD=%f\n",*mean_jz_ptr);
+        //printf("MEANJZD_err=%f\n",*mean_jz_err_ptr);
 
-        printf("TOTUSJZ=%g\n",*us_i_ptr);
-        printf("TOTUSJZ_err=%g\n",*us_i_err_ptr);
+        //printf("TOTUSJZ=%g\n",*us_i_ptr);
+        //printf("TOTUSJZ_err=%g\n",*us_i_err_ptr);
 
 	return 0;
 
@@ -735,8 +735,8 @@ int computeAlpha(float *jz_err, float *bz_err, float *bz, int *dims, float *jz, 
 	*mean_alpha_ptr = sum; /* Units are 1/Mm */
         *mean_alpha_err_ptr    = (sqrt(sum_err*sum_err)) / ((a+b+c+d)*100.0); // error in the quantity (sum)/(count_mask); factor of 100 comes from converting percent
 
-        printf("MEANALP=%f\n",*mean_alpha_ptr);
-        printf("MEANALP_err=%f\n",*mean_alpha_err_ptr);
+        //printf("MEANALP=%f\n",*mean_alpha_ptr);
+        //printf("MEANALP_err=%f\n",*mean_alpha_err_ptr);
 
 	return 0;
 }
@@ -791,14 +791,14 @@ int computeHelicity(float *jz_err, float *jz_rms_err, float *bz_err, float *bz, 
         *total_us_ih_err_ptr  = (sqrt(sum_err*sum_err)) / (100.0)               ;  // error in the quantity TOTUSJH
         *total_abs_ih_err_ptr = (sqrt(sum_err*sum_err)) / (100.0)               ;  // error in the quantity ABSNJZH
 
-        printf("MEANJZH=%f\n",*mean_ih_ptr);
-        printf("MEANJZH_err=%f\n",*mean_ih_err_ptr);
+        //printf("MEANJZH=%f\n",*mean_ih_ptr);
+        //printf("MEANJZH_err=%f\n",*mean_ih_err_ptr);
 
-        printf("TOTUSJH=%f\n",*total_us_ih_ptr);
-        printf("TOTUSJH_err=%f\n",*total_us_ih_err_ptr);
+        //printf("TOTUSJH=%f\n",*total_us_ih_ptr);
+        //printf("TOTUSJH_err=%f\n",*total_us_ih_err_ptr);
 
-        printf("ABSNJZH=%f\n",*total_abs_ih_ptr);
-        printf("ABSNJZH_err=%f\n",*total_abs_ih_err_ptr);
+        //printf("ABSNJZH=%f\n",*total_abs_ih_ptr);
+        //printf("ABSNJZH_err=%f\n",*total_abs_ih_err_ptr);
 
 	return 0;
 }
@@ -845,8 +845,8 @@ int computeSumAbsPerPolarity(float *jz_err, float *bz_err, float *bz, float *jz,
 	
 	*totaljzptr    = fabs(sum1) + fabs(sum2);  /* Units are A */
         *totaljz_err_ptr = sqrt(err)*(1/cdelt1)*fabs((0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs));
-        printf("SAVNCPP=%g\n",*totaljzptr);
-        printf("SAVNCPP_err=%g\n",*totaljz_err_ptr);
+        //printf("SAVNCPP=%g\n",*totaljzptr);
+        //printf("SAVNCPP_err=%g\n",*totaljz_err_ptr);
 
 	return 0;
 }
@@ -903,11 +903,11 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
         *totpotptr       = (sum)/(8.*PI);
         *totpot_err_ptr  = (sqrt(err))*fabs(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0*(1/(8.*PI)));
 
-        printf("MEANPOT=%g\n",*meanpotptr); 
-        printf("MEANPOT_err=%g\n",*meanpot_err_ptr);
+        //printf("MEANPOT=%g\n",*meanpotptr); 
+        //printf("MEANPOT_err=%g\n",*meanpot_err_ptr);
 
-        printf("TOTPOT=%g\n",*totpotptr);
-        printf("TOTPOT_err=%g\n",*totpot_err_ptr);
+        //printf("TOTPOT=%g\n",*totpotptr);
+        //printf("TOTPOT_err=%g\n",*totpot_err_ptr);
 
 	return 0;
 }
@@ -963,8 +963,8 @@ int computeShearAngle(float *bx_err, float *by_err, float *bh_err, float *bx, fl
         *meanshear_angle_err_ptr = (sqrt(err*err))/(count);  // error in the quantity (sum)/(count_mask)
         *area_w_shear_gt_45ptr   = (count_mask/(count))*(100.0);/* The area here is a fractional area -- the % of the total area */
 
-        printf("MEANSHR=%f\n",*meanshear_angleptr);
-        printf("MEANSHR_err=%f\n",*meanshear_angle_err_ptr);
+        //printf("MEANSHR=%f\n",*meanshear_angleptr);
+        //printf("MEANSHR_err=%f\n",*meanshear_angle_err_ptr);
 
 	return 0;
 }
@@ -1088,7 +1088,7 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 char *sw_functions_version() // Returns CVS version of sw_functions.c
 {
-  return strdup("$Id: sw_functions.c,v 1.15 2013/07/08 23:02:22 mbobra Exp $");
+  return strdup("$Id: sw_functions.c,v 1.16 2013/07/18 00:06:57 mbobra Exp $");
 }
 
 /* ---------------- end of this file ----------------*/
