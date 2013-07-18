@@ -32,8 +32,8 @@ $log_dir="/home/jsocprod/hk/logs";
 $ENV{'PATH'}="/usr/local/bin:/bin:/usr/bin:.:$script_dir:$ENV{'DF_DRMS_EXECUTABLES'}";
 
 #set common email arguments
-$from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
-$to_email="jsoc_ops\@sun.stanford.edu";
+$from_email="\"JSOC ANS\" \<jsoc_ans\@sun.Stanford.EDU\>";
+$to_email="jsoc_ans\@sun.stanford.edu";
 
 # check arguments
 &check_agruments();

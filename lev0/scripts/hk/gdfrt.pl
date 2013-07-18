@@ -59,8 +59,8 @@ $uid =~ s/\n//g; #regular exp rm cr
 $logs_dir="$log_dir/old";
 
 #(2)set common email arguments
-$from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
-$to_email="jsoc_ops\@sun.stanford.edu";
+$from_email="\"JSOC ANS\" \<jsoc_ans\@sun.Stanford.EDU\>";
+$to_email="jsoc_ans\@sun.stanford.edu";
 $subject_email_failed_decode_dayfile="JSOC:ERROR:HK Level 0 Real Time Processing failed to decode minute dayfiles.";
 
 #(3) set choices for input dayfile directory

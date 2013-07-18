@@ -88,8 +88,8 @@ if ($source eq "moc")
   $doff_dir=$ENV{'DF_DROPOFF_MOC_FILES'}="/surge40/jsocprod/lev0/hk_moc_dayfile";
 
   # moc common email arguments
-  $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
-  $to_email="jsoc_ops\@sun.stanford.edu";
+  $from_email="\"JSOC AND\" \<jsoc_ans\@sun.Stanford.EDU\>";
+  $to_email="jsoc_ans\@sun.stanford.edu";
   $subject_email_no_files="JSOC:WARNING:Ingesting MOC dayfiles: status:No files loaded today";
   $subject_email_not_sure="JSOC:WARNING:Ingesting MOC dayfiles: status:Possible error ingesting dayfile.";
   $subject_email_no_decode="JSOC:ERROR:Decoding MOC dayfiles into housekeeping data series.";
@@ -110,8 +110,8 @@ elsif ($source eq "rtmon")
   $doff_dir=$ENV{'DF_DROPOFF_RTMON_FILES'}="/surge40/jsocprod/lev0/hk_rtmon_dayfile";
 
   # rtmon common email variables
-  $from_email="\"JSOC OPS\" \<jsoc_ops\@sun.Stanford.EDU\>";
-  $to_email="jsoc_ops\@sun.stanford.edu";
+  $from_email="\"JSOC ANS\" \<jsoc_ans\@sun.Stanford.EDU\>";
+  $to_email="jsoc_ans\@sun.stanford.edu";
   $subject_email_no_files="JSOC:WARNING:Ingesting RTMON dayfiles: status:No files loaded today";
   $subject_email_not_sure="JSOC:WARNING:Ingesting RTMON dayfiles: status:Possible error ingesting dayfile.";
   $subject_email_no_decode="JSOC:ERROR:Decoding RTMON dayfiles into housekeeping data series.";
