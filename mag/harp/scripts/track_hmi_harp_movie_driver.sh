@@ -5,7 +5,7 @@
 # sh driver to run the Matlab HARP-frame finder on data from JSOC
 #
 # usage:
-#   track_hmi_harp_movie_driver.sh [-f] [-m] [-d] mask_series harp_series dest_dir
+#   track_hmi_harp_movie_driver.sh [-fmld] mask_series harp_series dest_dir
 # where:
 #   mask_series is a mask data series from JSOC, with a T_REC qualifier
 #   harp_series is a HARP series where the times above are looked up
@@ -13,6 +13,7 @@
 # and:
 #   -f is a flag to generate individual frames from the results (default is no frames)
 #   -m is a flag to generate a movie from the results (default is no movie)
+#   -l is a flag to save the matlab log file into dest_dir
 #   -d is a flag which signals to use the developer MATLABPATH (~turmon) rather
 #      than the regular production path.
 # One or both of -f or -m should be supplied, otherwise this is a no-op.
@@ -49,12 +50,14 @@ echo "${progname}: Invoked as:" "$0" "$@"
 # get options
 make_movie=0
 make_frame=0
+keep_logfile=0
 developer_path=0
 matlab_ver=r2010b
-while getopts "dmfv:" o; do
+while getopts "dmflv:" o; do
     case "$o" in
 	f)    make_frame=1;;
 	m)    make_movie=1;;
+	l)    keep_logfile=1;;
 	d)    developer_path=1;;
 	v)    matlab_ver="$OPTARG";;
 	[?])  echo "$USAGE" 1>&2
@@ -163,20 +166,24 @@ t1=`date +%s`
 tdiff=$(( $t1 - $t0 ))
 echo "${progname}: Matlab call took $tdiff seconds."
 
-# put the log file back
-tmpnam2="$dest_dir/frame-latest.log"
-mkdir -p `dirname $tmpnam2` # dir present if cmd ran ok, maybe not if error
-mv -f "$tmpnam" "$tmpnam2" 
+# put the log file back, if desired
+if [ $keep_logfile -eq 1 ]; then
+  tmpnam2="$dest_dir/frame-latest.log"
+  mkdir -p `dirname $tmpnam2` # dir present if cmd ran ok, maybe not if error
+  cp -f "$tmpnam" "$tmpnam2" 
+fi
 
 # generate exit status
-if grep -q "^ERROR" "$tmpnam2" ; then
+if grep -q "^ERROR" "$tmpnam" ; then
     # grep above matched an error
     echo "${progname}: Exiting with error." 
     echo "${progname}: Exiting with error." 1>&2
+    rm -f "$tmpnam"
     exit 1
 else
     # no error found
     echo "${progname}: Done."
+    rm -f "$tmpnam"
     exit 0
 fi
 
