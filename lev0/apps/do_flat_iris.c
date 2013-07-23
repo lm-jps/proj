@@ -29,11 +29,11 @@ int do_flat_iris(LEV0LEV1 *info)
     int sx = info->sumx;
     int sy = info->sumy;
     int totalpix = nx * ny;
-    int darksum, ndark, flatsum, nflat;
+    int ndark, nflat;
     int min, max, medn;
     short tmp;
     int itmp;
-    float ftmp;
+    float ftmp,flatsum,darksum;
     double dtmp, s, s2, s3, s4, ss;
     int i, j, k, l;
     int idx, IDX;
@@ -56,18 +56,18 @@ int do_flat_iris(LEV0LEV1 *info)
 		for (l=j*sy; l<(j+1)*sy; ++l) {
 		    for (k=i*sx; k<(i+1)*sx; ++k) {
 			IDX = l*nx*sx + k;
-			if (dark[IDX] == DRMS_MISSING_FLOAT)
+			if (isnan(dark[IDX]))
 			    --ndark;
 			else
 			    darksum += dark[IDX];
-			if (flat[IDX] == DRMS_MISSING_FLOAT)
+			if (isnan(flat[IDX]))
 			    --nflat;
 			else
 			    flatsum += flat[IDX];
 		    }
 		}
 		dark2[idx] = ndark ? darksum/ndark : DRMS_MISSING_FLOAT;
-		flat2[idx] = nflat ? flatsum : DRMS_MISSING_FLOAT;
+		flat2[idx] = nflat ? flatsum/nflat : DRMS_MISSING_FLOAT;
 	    }
 	}
     }
@@ -110,7 +110,7 @@ int do_flat_iris(LEV0LEV1 *info)
 		for (j=0; j<ny/2; ++j) {
 		    memcpy(tmp, &out[j*nx], 4*nx);
 		    memcpy(&out[j*nx], &out[(ny-j-1)*nx], 4*nx);
-		    memcpy(&out[(ny-j-1)*nx, tmp, 4*nx);
+		    memcpy(&out[(ny-j-1)*nx], tmp, 4*nx);
 		}
 	    }
 	    break;
@@ -119,9 +119,9 @@ int do_flat_iris(LEV0LEV1 *info)
 		int tmp2;
 		for (j=0; j<ny; ++j)
 		    for (i=0; i<nx/2; ++i) {
-			tmp2 = out[j*ny+i];
-			out[j*ny+i] = out[j*ny+(nx-1-i)];
-			out[j*ny+(nx-1-i)] = tmp2;
+			tmp2 = out[j*nx+i];
+			out[j*nx+i] = out[j*nx+(nx-1-i)];
+			out[j*nx+(nx-1-i)] = tmp2;
 		    }
 	    }
 	    break;
@@ -131,13 +131,13 @@ int do_flat_iris(LEV0LEV1 *info)
 		for (j=0; j<ny/2; ++j) {
 		    memcpy(tmp, &out[j*nx], 4*nx);
 		    memcpy(&out[j*nx], &out[(ny-j-1)*nx], 4*nx);
-		    memcpy(&out[(ny-j-1)*nx, tmp, 4*nx);
+		    memcpy(&out[(ny-j-1)*nx], tmp, 4*nx);
 		}
 		for (j=0; j<ny; ++j)
 		    for (i=0; i<nx/2; ++i) {
-			tmp2 = out[j*ny+i];
-			out[j*ny+i] = out[j*ny+(nx-1-i)];
-			out[j*ny+(nx-1-i)] = tmp2;
+			tmp2 = out[j*nx+i];
+			out[j*nx+i] = out[j*nx+(nx-1-i)];
+			out[j*nx+(nx-1-i)] = tmp2;
 		    }
 	    }
 	    break;
