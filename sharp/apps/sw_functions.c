@@ -580,20 +580,30 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
              dery[j * nx + i] = ( (3*bx[j * nx + i]) + (-4*bx[(j-1) * nx + i]) - (-bx[(j-2) * nx + i]) )*0.5;
           }
 
-
-      	for (i = 0; i <= nx-1; i++) 
+      	for (i = 1; i <= nx-2; i++) 
           {
-            for (j = 0; j <= ny-1; j++) 
+            for (j = 1; j <= ny-2; j++) 
             {
-               // calculate jz at all points 
+               // calculate jz at all points
+
                jz[j * nx + i]            = (derx[j * nx + i]-dery[j * nx + i]);       // jz is in units of Gauss/pix
+
+               // the next 7 lines can be used with a for loop that goes from i=0;i<=nx-1 and j=0;j<=ny-1.
+               //int i1, j1,i2, j2;
+               //i1 = i + 1 ; if (i1 >nx-1){i1=nx-1;}
+               //j1 = j + 1 ; if (j1 >ny-1){j1=ny-1;}
+               //i2 = i - 1; if (i2 < 0){i2 = 0;}
+               //j2 = j - 1; if (j2 < 0){i2 = 0;}
+               //jz_err[j * nx + i]        = 0.5*sqrt( (bx_err[j1 * nx + i]*bx_err[j1 * nx + i]) + (bx_err[j2 * nx + i]*bx_err[j2 * nx + i]) + 
+               //                                     (by_err[j * nx + i1]*by_err[j * nx + i1]) + (by_err[j * nx + i2]*by_err[j * nx + i2]) ) ;
+
                jz_err[j * nx + i]        = 0.5*sqrt( (bx_err[(j+1) * nx + i]*bx_err[(j+1) * nx + i]) + (bx_err[(j-1) * nx + i]*bx_err[(j-1) * nx + i]) + 
-                                            (by_err[j * nx + (i+1)]*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i-1)]*by_err[j * nx + (i-1)]) ) ; 
+                                                    (by_err[j * nx + (i+1)]*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i-1)]*by_err[j * nx + (i-1)]) ) ; 
                jz_err_squared[j * nx + i]= (jz_err[j * nx + i]*jz_err[j * nx + i]); 
                count_mask++; 
+
             }	
 	  }          
-
 	return 0; 
 } 
 
@@ -1088,7 +1098,7 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 char *sw_functions_version() // Returns CVS version of sw_functions.c
 {
-  return strdup("$Id: sw_functions.c,v 1.16 2013/07/18 00:06:57 mbobra Exp $");
+  return strdup("$Id: sw_functions.c,v 1.17 2013/07/24 02:35:08 mbobra Exp $");
 }
 
 /* ---------------- end of this file ----------------*/
