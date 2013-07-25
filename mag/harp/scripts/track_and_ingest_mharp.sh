@@ -73,7 +73,7 @@
 # This routine calls: track_hmi_production_driver_stable.sh, ingest_mharp, ingest_mharp_log
 #
 
-# turmon jul-sep 2011, oct 2012, feb 2013
+# turmon jul-sep 2011, oct 2012, feb 2013, july 2013
 
 # echo command for debugging
 #set -x
@@ -111,6 +111,9 @@ function cleanup() {
 }
 trap cleanup EXIT
 
+# Trap error exits through this routine
+#   especially important for shell-command exits (trap ... ERR below)
+#
 # usage: die LINENO MESSAGE
 #   arguments optional
 function die() {
@@ -136,6 +139,27 @@ trap 'die $LINENO "Running $cmd"'     ERR
 trap 'die $LINENO "Received SIGHUP"'  SIGHUP
 trap 'die $LINENO "Received SIGINT"'  SIGINT
 trap 'die $LINENO "Received SIGTERM"' SIGTERM
+
+# log_and_run: write command to stdout stream, and then execute it
+#   writes a full command line plus parameters to stdout, and then 
+#   executes it.  Doing this allows repeatability of the subsidiary 
+#   command.  
+#   The log output needs to go to stdout, not stderr, because 
+#   outputs to stderr are reserved for error conditions.  Thus, set -x
+#   will not work (it always goes to stderr).  We could get around that by
+#   forcing the set -x and the subsidiary command into a subshell, and sending
+#   stderr from the subshell to stdout, but this would redirect stderr from the
+#   subsidiary command as well, which is unacceptable.  
+#   Also note: error exit from subshells does not result in exit from 
+#   this script even though -e is set in this script.
+#   Note that the construct here will not work if the command itself contains
+#   redirection.
+function log_and_run() {
+  echo "${progname}: Executing command:" "$@"
+  # "trap ERR" is not inherited in functions, so explicitly call die on failure
+  "$@" || die $LINENO "Running $cmd"
+  echo "${progname}: Returned OK from command $cmd."
+}
 
 # get options -- pass them down to tracker/ingestor
 make_movie=1
@@ -409,9 +433,8 @@ HAVE_BEGUN=1 && EXIT_STATUS=2
 if [ $eat_only = 0 ]; then
   echo "${progname}: Beginning tracking."
   cmd=track_hmi_production_driver_stable.sh 
-  (   set -x && 
-      $cmd $track_opts "$mask_series" "$mag_series" "$dest_dir" 
-  )
+  log_and_run "$cmd" $track_opts "$mask_series" "$mag_series" "$dest_dir" || exit
+  # "$cmd" $track_opts "$mask_series" "$mag_series" "$dest_dir" 
   cmd="shell code"
   echo "${progname}: Finished tracking."
 else
@@ -423,10 +446,9 @@ echo "${progname}: Ingesting tracks."
 # ingest data
 #  -- note, ingest_opts is unquoted
 cmd=ingest_mharp 
-(   set -x &&
-    $cmd $ingest_opts "mag=$mag_series" "root=$dest_dir/Tracks/jsoc" "lists=$listfiles" \
-	"out=$harp_series" "mask=$mask_series_only" verb=1 
-)
+log_and_run "$cmd" $ingest_opts \
+    "mag=$mag_series" "root=$dest_dir/Tracks/jsoc" "lists=$listfiles" \
+    "out=$harp_series" "mask=$mask_series_only" verb=1 
 cmd="shell code"
 # preserve NOAA AR match data
 if [ $do_match = 1 ]; then
@@ -477,10 +499,8 @@ fi
 # ingest log and checkpoint file 
 #   -- use modified log/err files created above
 cmd=ingest_mharp_log
-(   set -x && 
-    $cmd root="$dest_dir/Tracks/jsoc" log="$logCbase" err="$errCbase" \
-	out="$harp_log_series" trec="$trec_frst" 
-)
+log_and_run "$cmd" "root=$dest_dir/Tracks/jsoc" "log=$logCbase" "err=$errCbase" \
+    "out=$harp_log_series" "trec=$trec_frst" 
 cmd="shell code"
 
 echo "${progname}: Finished ingesting log and checkpoint."

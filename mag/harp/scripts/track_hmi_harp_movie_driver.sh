@@ -47,6 +47,25 @@ USAGE="Usage: $progname [ -f ] [ -m ] [ -d ] mask_series harp_series dest_dir"
 # echo the arguments, for repeatability
 echo "${progname}: Invoked as:" "$0" "$@"
 
+# Trap error exits through this routine
+#   especially important for shell-command exits (trap ... ERR below)
+#
+# usage: die LINENO MESSAGE
+#   arguments optional
+function die() {
+    echo "${progname}: Fatal error near line ${1:- \?}: ${2:-(no message)}" 1>&2
+    echo "${progname}: Exiting with error." 1>&2
+    echo "${progname}: Exiting with error."
+    exit 1
+}
+
+# Error message selection upon error exit (NB: ordinary exit does not trap)
+cmd="shell code"
+trap 'die $LINENO "Running $cmd"'     ERR
+trap 'die $LINENO "Received SIGHUP"'  SIGHUP
+trap 'die $LINENO "Received SIGINT"'  SIGINT
+trap 'die $LINENO "Received SIGTERM"' SIGTERM
+
 # get options
 make_movie=0
 make_frame=0
@@ -69,7 +88,7 @@ shift `expr $OPTIND - 1`
 # get arguments
 if [ "$#" -ne 3 ]; then
     echo "$USAGE" 1>&2
-    exit 2
+    die $LINENO "Got $# args, expected 3"
 fi
 
 echo "${progname}: Beginning."
@@ -87,11 +106,13 @@ if [ "$make_movie" -eq 1 ]; then
     mode="$mode,movie"
 fi
 if [ -z "$mode" ]; then
-    echo "${progname}: Need one of -m or -f" 1>&2
-    echo "$USAGE" 1>&2
-    exit 2
+    die $LINENO "Need one (or both) of -m or -f"
 fi
 
+# there is no sh version of .setJSOCenv, so we use this to get JSOC_MACHINE
+if [ -z "$JSOC_MACHINE" ]; then
+  JSOC_MACHINE=`csh -f -c 'source /home/jsoc/.setJSOCenv && echo $JSOC_MACHINE'`
+fi
 # set up matlab path
 if [ "$developer_path" -eq 1 ]; then
     # (this is the code path when -d is given)
@@ -100,12 +121,16 @@ if [ "$developer_path" -eq 1 ]; then
     MATLABPATH=`find $mtHome/matlab/mfile -maxdepth 1 -type d | paste -d : -s -`
 else
     # (this is the default code path)
-    # believe this is the right production path
+    # the production path
     rootD=/home/jsoc/cvs/Development/JSOC
-    # for a time, was using arta's path
-    # rootD=/home/arta/jsoctrees/JSOC
     rootDbin=$rootD/_$JSOC_MACHINE/proj/mag/harp/libs/matlab/mfile-mex
     rootDsrc=$rootD/proj/mag/harp/libs/matlab/mfile-plain
+    if [ ! -d "$rootDbin" ]; then
+	die $LINENO "Bad path to mex shared libs (got $rootDbin)"
+    fi
+    if [ ! -d "$rootDsrc" ]; then
+	die $LINENO "Bad path to matlab scripts (got $rootDsrc)"
+    fi
     # all matlab m-files and shared libraries (.m and .mexFOO) are in these dirs
     MATLABPATH="$rootDbin/fits:$rootDbin/assignment:$rootDbin/hmi-mask-patch:$rootDbin/standalone:$rootDsrc"
 fi
@@ -129,23 +154,25 @@ elif [ "$matlab_ver" = "r2010b" ]; then
     # R2010b = version 7.11 from 2010
     matlab_binary=/usr/local/MATLAB/R2010b/bin/matlab
 else
-    echo "$progname: only recognize matlab version r14 or r2010b"
-    echo "$USAGE" 1>&2
-    exit 2
+    die $LINENO "Only recognize matlab version r14 or r2010b"
+fi
+if [ ! -x "$matlab_binary" ]; then
+    die $LINENO "Bad path to matlab binary (got $matlab_binary)"
 fi
 # needed for R2010b (see above); no harm otherwise
 OSCHECK_ENFORCE_LIMITS=0; export OSCHECK_ENFORCE_LIMITS
 
 # the basic matlab call
 # notes:
-#  the try/catch is good matlab to catch trouble
-#    but, there is no way to return error status from matlab,
+#  the try/catch is good matlab to catch trouble 
+#    (but, "catch ME" is newer than r14sp3)
+#    there is no way to return error status from matlab,
 #    so we resort to looking for lines with ERROR
-#    Thus, to play nice, the script has to start its error messages this
-#    way.
+#    Thus, to play nice, the script must start its error messages this way.
 tmpnam="/tmp/$progname.$$.err"
 rm -f "$tmpnam"
 t0=`date +%s`
+cmd=$matlab_binary
 $matlab_binary -nodesktop -nosplash -nodisplay -logfile "$tmpnam" <<EOF
 % use outer try/catch to catch *all* exceptions
 try,
@@ -154,14 +181,16 @@ try,
   dest_dir='$dest_dir';
   mode='$mode';
   track_hmi_harp_movie_script;
+  fprintf(1, '\\nEXIT_STATUS_OK: clean exit from Matlab.\\n');
 catch ME,
   % ensure these errors start on a new line
-  fprintf(1, '\\nERROR: %s in %s (Line %d)\\n', ME.message, ME.stack(1).name, ME.stack(1).line);
-  fprintf(2, '\\nERROR: %s in %s (Line %d)\\n', ME.message, ME.stack(1).name, ME.stack(1).line);
+  fprintf(1, '\\nERROR: Report follows.\\n%s\\n', getReport(ME));
+  fprintf(2, '\\nERROR: Report follows.\\n%s\\n', getReport(ME));
   rethrow(ME);
 end;
 quit;
 EOF
+cmd="shell code"
 t1=`date +%s`
 tdiff=$(( $t1 - $t0 ))
 echo "${progname}: Matlab call took $tdiff seconds."
@@ -175,15 +204,19 @@ fi
 
 # generate exit status
 if grep -q "^ERROR" "$tmpnam" ; then
-    # grep above matched an error
-    echo "${progname}: Exiting with error." 
-    echo "${progname}: Exiting with error." 1>&2
+    # grep above matched error sentinel
     rm -f "$tmpnam"
-    exit 1
-else
-    # no error found
+    die $LINENO "Error caught in Matlab."
+elif grep -q "^EXIT_STATUS_OK" "$tmpnam" ; then
+    # grep above matched OK sentinel
+    rm -f "$tmpnam"
+    echo "${progname}: Exiting OK." 
     echo "${progname}: Done."
-    rm -f "$tmpnam"
     exit 0
+else
+    # no OK indicator found
+    rm -f "$tmpnam"
+    die $LINENO "Error running Matlab, caught by default." 
 fi
+
 

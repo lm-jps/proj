@@ -70,7 +70,7 @@
 #
 #  track_hmi_production_driver_stable.sh 'hmi.Marmask_720s[2010.09.20_TAI/24h]' hmi.M_720s /tmp/sept
 #
-# Michael Turmon, JPL, December 2010, June 2011
+# Michael Turmon, JPL, December 2010, June 2011, July 2013
 
 set -e
 
@@ -80,6 +80,24 @@ if [ `expr "$progname" : '.*track.*'` == 0 ]; then progname=track_hmi_production
 USAGE="Usage: $progname [-i N] [-r R] [-p PARS] [-m] [-g N] [-d] mask_series mag_series dest_dir"
 # echo the arguments, for repeatability
 echo "${progname}: Invoked as:" "$0" "$@"
+
+# Trap error exits through this routine
+#   especially important for shell-command exits (trap ... ERR below)
+#   usage: die LINENO MESSAGE
+#     (arguments optional)
+function die() {
+    echo "${progname}: Fatal error near line ${1:- \?}: ${2:-(no message)}" 1>&2
+    echo "${progname}: Exiting with error." 1>&2
+    echo "${progname}: Exiting with error."
+    exit 1
+}
+
+# Error message selection upon error exit (NB: ordinary exit does not trap)
+cmd="shell code"
+trap 'die $LINENO "Running $cmd"'     ERR
+trap 'die $LINENO "Received SIGHUP"'  SIGHUP
+trap 'die $LINENO "Received SIGINT"'  SIGINT
+trap 'die $LINENO "Received SIGTERM"' SIGTERM
 
 # get options
 first_track=0
@@ -107,7 +125,7 @@ shift `expr $OPTIND - 1`
 # get arguments
 if [ "$#" -ne 3 ]; then
     echo "$USAGE" 1>&2
-    exit 2
+    die $LINENO "Got $# args, expected 3"
 fi
 
 echo "${progname}: Beginning."
@@ -121,29 +139,27 @@ dest_dir="$3"
 if [[ $first_track =~ ^[0-9]+$ ]]; then 
     : 
 else 
-    echo "$progname: bad first track integer (got $first_track)"
-    echo "$USAGE" 1>&2
-    exit 2
+    die $LINENO "bad first track integer (got $first_track)"
 fi
 
 # validate retain_history is int or inf
 if [[ $retain_history =~ ^[0-9]+$ || $retain_history =~ ^inf$ ]]; then 
     : 
 else 
-    echo "$progname: bad retain history integer (got $retain_history)"
-    echo "$USAGE" 1>&2
-    exit 2
+    die $LINENO "bad retain history integer (got $retain_history)"
 fi
 
 # validate gap_fill is integer (negative OK) or nan
 if [[ $gap_fill =~ ^[+-]?[0-9]+$ || $gap_fill =~ ^nan$ ]]; then 
     : 
 else 
-    echo "$progname: bad gap-fill integer (got $gap_fill)"
-    echo "$USAGE" 1>&2
-    exit 2
+    die $LINENO "bad gap-fill integer (got $gap_fill)"
 fi
 
+# there is no sh version of .setJSOCenv, so we use this to get JSOC_MACHINE
+if [ -z "$JSOC_MACHINE" ]; then
+  JSOC_MACHINE=`csh -f -c 'source /home/jsoc/.setJSOCenv && echo $JSOC_MACHINE'`
+fi
 # set up matlab path
 if [ "$developer_path" -eq 1 ]; then
     # (this is the code path when -d is given)
@@ -152,12 +168,16 @@ if [ "$developer_path" -eq 1 ]; then
     MATLABPATH=`find $mtHome/matlab/mfile -maxdepth 1 -type d | paste -d : -s -`
 else
     # (this is the default code path)
-    # believe this is the right production path
+    # the production path
     rootD=/home/jsoc/cvs/Development/JSOC
-    # for a time, was using arta's path
-    # rootD=/home/arta/jsoctrees/JSOC
     rootDbin=$rootD/_$JSOC_MACHINE/proj/mag/harp/libs/matlab/mfile-mex
     rootDsrc=$rootD/proj/mag/harp/libs/matlab/mfile-plain
+    if [ ! -d "$rootDbin" ]; then
+	die $LINENO "Bad path to mex shared libs (got $rootDbin)"
+    fi
+    if [ ! -d "$rootDsrc" ]; then
+	die $LINENO "Bad path to matlab scripts (got $rootDsrc)"
+    fi
     # all matlab m-files and shared libraries (.m and .mexFOO) are in these dirs
     MATLABPATH="$rootDbin/fits:$rootDbin/assignment:$rootDbin/hmi-mask-patch:$rootDbin/standalone:$rootDsrc"
 fi
@@ -173,7 +193,6 @@ export MATLABPATH
 # OK with our older kernel.  R2010b does a check at startup which
 # issues a prompt to continue or abort.  The prompt can be disabled with
 # the OSCHECK_ENFORCE_LIMITS line.  It still gives a stern warning.
-# R2010b seems not to be on the o.q machines.
 if [ "$matlab_ver" = "r14" ]; then
     ## r14sp3 = version 7.1 from 2005
     matlab_binary=/usr/local/matlabr14sp3/bin/matlab
@@ -181,25 +200,25 @@ elif [ "$matlab_ver" = "r2010b" ]; then
     # R2010b = version 7.11 from 2010
     matlab_binary=/usr/local/MATLAB/R2010b/bin/matlab
 else
-    echo "$progname: only recognize matlab version r14 or r2010b"
-    echo "$USAGE" 1>&2
-    exit 2
+    die $LINENO "Only recognize matlab version r14 or r2010b"
+fi
+if [ ! -x "$matlab_binary" ]; then
+    die $LINENO "Bad path to matlab binary (got $matlab_binary)"
 fi
 # needed for R2010b (see above); no harm otherwise
 OSCHECK_ENFORCE_LIMITS=0; export OSCHECK_ENFORCE_LIMITS
 
 # the basic matlab call
 # notes:
-#  the try/catch is good matlab to catch trouble
-#    but, there is no way to return error status from matlab,
+#  the try/catch is good matlab to catch trouble 
+#    (but, "catch ME" is newer than r14sp3)
+#    there is no way to return error status from matlab,
 #    so we resort to looking for lines with ERROR
-#    Thus, to play nice, the script has to start its error messages this
-#    way.
-#  fprintf(2,...) seems not to print to stderr.
-#  sh builtin echo has trouble passing \n on some platforms
+#    Thus, to play nice, the script must start its error messages this way.
 tmpnam="/tmp/$progname.$$.err"
 rm -f "$tmpnam"
 t0=`date +%s`
+cmd=$matlab_binary
 $matlab_binary -nodesktop -nosplash -nodisplay -logfile "$tmpnam" <<EOF
 % use outer try/catch to catch *all* exceptions
 try,
@@ -212,14 +231,16 @@ try,
   make_movie=$make_movie;
   params='$params';
   track_hmi_production;
+  fprintf(1, '\\nEXIT_STATUS_OK: clean exit from Matlab.\\n');
 catch ME,
   % ensure these errors start on a new line
-  fprintf(1, '\\nERROR: %s in %s (Line %d)\\n', ME.message, ME.stack(1).name, ME.stack(1).line);
-  fprintf(2, '\\nERROR: %s in %s (Line %d)\\n', ME.message, ME.stack(1).name, ME.stack(1).line);
+  fprintf(1, '\\nERROR: Report follows.\\n%s\\n', getReport(ME));
+  fprintf(2, '\\nERROR: Report follows.\\n%s\\n', getReport(ME));
   rethrow(ME);
 end;
 quit;
 EOF
+cmd="shell code"
 t1=`date +%s`
 tdiff=$(( $t1 - $t0 ))
 echo "${progname}: Matlab call took $tdiff seconds."
@@ -227,17 +248,20 @@ echo "${progname}: Matlab call took $tdiff seconds."
 # put the log file back
 tmpnam2="$dest_dir/Tracks/jsoc/track-latest.log"
 mkdir -p `dirname $tmpnam2` # dir present if cmd ran ok, maybe not if error
-mv -f "$tmpnam" "$tmpnam2" 
+rm -f "$tmpnam2"
+mv -f "$tmpnam" "$tmpnam2"
 
 # generate exit status
 if grep -q "^ERROR" "$tmpnam2" ; then
-    # grep above matched an error
-    echo "${progname}: Exiting with error." 
-    echo "${progname}: Exiting with error." 1>&2
-    exit 1
-else
-    # no error found
+    # grep above matched error sentinel
+    die $LINENO "Error caught in Matlab."
+elif grep -q "^EXIT_STATUS_OK" "$tmpnam2" ; then
+    # grep above matched OK sentinel
+    echo "${progname}: Exiting OK."
     echo "${progname}: Done."
     exit 0
+else
+    # no OK indicator found
+    die $LINENO "Error running Matlab, caught by default." 
 fi
 
