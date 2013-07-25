@@ -1,6 +1,5 @@
 /*-----------------------------------------------------------------------------
  * cvs/JSOC/proj/lev0/apps/ingest_lev0_irisdc.c
- * NOTE: This originally came from hmi_lev0.c on hmi0
  *-----------------------------------------------------------------------------
  *
  * This is a module that runs with DRMS and continuously extracts images and HK
@@ -9,20 +8,27 @@
  * given.  It extracts images from the .tlm files an puts them in
  * the DRMS dataset LEV0SERIESNAME and extracts hk data to appropriate hk datasets.
  * (NOTE: Initially uses TLMSERIESNAMEHMI for convenience. But it's for IRIS)
- * The ISP dataset name is given in the file SOURCE_ENV_FOR_HK_DECODE defined by
- * ENVFILE.
+ * The ISP dataset name is given in the file SOURCE_ENV_FOR_HK_DECODE_IRIS 
+ * defined by ENVFILE.
  *
- * Call for working w/JSOC backend (set TLMSERIESNAME and LEV0SERIESNAME to datasets): 
- * ingest_lev0_irisdc vc=VC03 indir=/dds/soc2soc/iris outdir=/dds/soc2pipe/iris pipedir=/dds/pipe2soc/iris [logfile=name]
+ * Call on datacapture front end by socdciris:
+ * ingest_lev0_irisdc -l vc=VC03 indir=/sds/soc2soc/iris outdir=/sds/soc2pipe/iris
+ * pipedir=/sds/pipe2soc/iris logfile=
+ * /usr/local/logs/soc/soc_iris_VC03_prodtest_2013.07.15_16:49:17.log 
+ * JSOC_DBNAME=irisdb JSOC_DBHOST=irisdc
+ *
  * NOTE: If outdir is given, then we do not remove files from it.
- * NOTE: outdir can not be used for running in the backend (cl1n001) so we can rm files.
+ * NOTE: outdir can not be used for running in the backend (cl1n001) so that 
+ * we can rm files.
  *
- * This module is also run on the JSOC backend (typically cl1n001) to get the tlm and
- * lev0 data into the JSOC DB. Here it is called:
- * ingest_lev0_irisdc vc=VC03 indir=/dds/soc2pipe/iris [logfile=name]
+ * This module is also run on the JSOC backend (typically cl1n001) to get the tlm
+ * and lev0 data into the JSOC DB. Here it is called by doingestlev0_IRIS.pl:
+ * ingest_lev0_irisdc vc=VC03 indir=/sds/soc2pipe/iris [logfile=name]
+ * ingest_lev0_irisdc vc=VC03 indir=/sds/soc2pipe/iris/rexmit [logfile=name]
  *
- * The /dds/soc2pipe/iris on the irisdc machine must be NFS'd to the backend machine.
- * NOTE: !!This module is only valid for IRIS.
+ * The /sds/soc2pipe/iris on the irisdc machine must be NFS'd to the backend 
+ * machine.
+ * NOTE: !!This module is only valid for IRIS. IRIS uses hmiaiaflg=0
  *
  */ 
 
@@ -56,86 +62,16 @@
 #define RESTART_CNT 2	//#of tlm files to process before restart
 #define MVDSFDIR "/sds/soc2pipe/iris/dsf/"
 
-//#define LEV0SERIESNAMEHMI "su_production.lev0d_test"
-//#define LEV0SERIESNAMEHMI "su_production.lev0f_test"
-//#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi"
-////#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_test"
-//For test with DDS on Jan 19, 2010
-//#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_JAN2010"
-//#define LEV0SERIESNAMEHMI "su_production.lev0f_hmi_junk"
-//#define LEV0SERIESNAMEHMI "hmi.lev0f"
-////#define TLMSERIESNAMEHMI "su_production.tlm_test"
-//For test with DDS on Jan 19, 2010
-//#define TLMSERIESNAMEHMI "su_production.tlm_hmi_JAN2010"
-//#define TLMSERIESNAMEHMI "su_production.tlm_hmi_junk"
-
-#define LEV0SERIESNAMEHMIGND "hmi_ground.lev0_dds"
-#define TLMSERIESNAMEHMIGND "hmi_ground.tlm_dds"
-//#define TLMSERIESNAMEHMI "hmi.tlm_reingest"
-
-//#define LEV0SERIESNAMEAIA "su_production.lev0d_test_aia"
-//#define LEV0SERIESNAMEAIA "su_production.lev0f_aia"
-////#define LEV0SERIESNAMEAIA "aia.lev0f"
-//For test with DDS on Jan 19, 2010
-//#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_JAN2010"
-//#define LEV0SERIESNAMEAIA "su_production.lev0f_aia_junk"
-////#define TLMSERIESNAMEAIA "su_production.tlm_test_aia"
-//For test with DDS on Jan 19, 2010
-//#define TLMSERIESNAMEAIA "su_production.tlm_aia_JAN2010"
-//#define TLMSERIESNAMEAIA "su_production.tlm_aia_junk"
-
-#define LEV0SERIESNAMEAIAGND "aia_ground.lev0_dds"
-#define TLMSERIESNAMEAIAGND "aia_ground.tlm_dds"
-//#define TLMSERIESNAMEAIA "aia.tlm_reingest"
-
-//#define LEV0SERIESNAMEHMI "hmi.lev0_60d"
-//#define TLMSERIESNAMEHMI "hmi.tlm_60d"
-//#define LEV0SERIESNAMEAIA "aia.lev0_60d"
-//#define TLMSERIESNAMEAIA "aia.tlm_60d"
-
-//When change to these data series below to save real data.
-//#define TLMSERIESNAMEHMI "hmi.tlm"
-//#define LEV0SERIESNAMEHMI "hmi.lev0a"
-//#define LEV0SERIESNAMEAIA "aia.lev0"
-//#define TLMSERIESNAMEAIA "aia.tlm"
-//#define LEV0SERIESNAMEAIA "aia.lev0d"
-
-//#define TLMSERIESNAMEHMI  "su_prodtest.hmitlm" 
-//#define TLMSERIESNAMEHMI  "su_prodtest.iris_tlm_test" 
-//#define TLMSERIESNAMEHMI  "iris_ground.tlm_lmsal" 
+//use the hmi names for iris. And hmiaiaflg=0
 #define TLMSERIESNAMEHMIAMES  "iris_ground.tlm_ames" 
-//#define LEV0SERIESNAMEHMI "su_prodtest.hmilev0a" 
-//#define LEV0SERIESNAMEHMI "su_prodtest.iris_lev0_test" 
-//#define LEV0SERIESNAMEHMI "iris_ground.lev0_test4" 
-//#define LEV0SERIESNAMEHMI "iris_ground.lev0_lmsal" 
-//#define LEV0SERIESNAMEHMI "iris_ground.lev0_lmsal_dim" 
-//#define LEV0SERIESNAMEHMI "iris_ground.lev0_flip" 
-//#define TLMSERIESNAMEHMI  "iris_ground.tlm_dc1" 
 #define TLMSERIESNAMEHMI  "iris.tlm" 
 //#define LEV0SERIESNAMEHMI "iris_ground.lev0_ROT" 
 //#define LEV0SERIESNAMEHMI "iris_ground.lev0_dc1" 
 #define LEV0SERIESNAMEHMI "iris.lev0" 
 #define LEV0SERIESNAMEHMIAMES "iris_ground.lev0_ames" 
-#define LEV0SERIESNAMEAIA "su_prodtest.aia_lev0" 
-#define TLMSERIESNAMEAIA  "su_prodtest.aiatlm" 
 
 #define WDLOGDIR "/dds/logs"
 #define WDLOGFILE "wdlog"
-
-//#define TLMSERIESNAMEAIA "aia.tlmd"
-//#define LEV0SERIESNAMEHMI "hmi.lev0d"
-//#define TLMSERIESNAMEHMI "hmi.tlmd"
-
-//#define LEV0SERIESNAMEAIA "aia.lev0e"
-//#define TLMSERIESNAMEAIA "aia.tlme"
-//#define LEV0SERIESNAMEHMI "hmi.lev0e"
-//#define TLMSERIESNAMEHMI "hmi.tlme"
-
-//Also, change setting in $JSOCROOT/proj/lev0/apps/SOURCE_ENV_HK_DECODE file to:
-//setenv HK_LEV0_BY_APID_DATA_ID_NAME      lev0
-//setenv HK_DF_HSB_DIRECTORY               /tmp21/production/lev0/hk_hsb_dayfile
-//setenv HK_JSVNMAP_DIRECTORY              /home/production/cvs/TBL_JSOC/lev0/hk_jsn_map_file/prod
-
 
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0_iris.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
@@ -148,7 +84,6 @@
 #define TESTVALUE 0xc0b		//first value in test pattern packet
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
 #define NOTSPECIFIED "***NOTSPECIFIED***"
-//#define ENVFILE "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
 #define ENVFILE "/home/prodtest/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_IRIS"
 #define ENVFILEA "/home/prodtest/cvs/IRIS/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_AMES"
 #define ENVFILE_GND "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
@@ -627,12 +562,19 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     rsisp = drms_open_records(drms_env, queryext, &drms_status);
   }
 
+/****!!TEMP noop***************************************************
     if(!rsisp || !rsisp->n || rsisp->n > 2 || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
+***********************************************************************/
+    if(!rsisp || !rsisp->n || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
       printk("ERROR: Can't open isp record to put keywords in lev0.\n");
       printk("       The ISP was not received prior to the image for fsn %lu\n", fsn);
       printk("       Proceed anyway.\n");
       printk("drms_status=%d, rsisp=%lu, fsn=%lu, fsnISP=%lu, fsnISP_noop=%lu\n",
 		drms_status, rsisp, fsn, fsnISP, fsnISP_noop); //!!TEMP
+    }
+    else if(rsisp->n > 2) {
+      printk("ERROR: Got rsisp->n > 2. At end of transmission?\n");
+      printk("       Proceed anyway.\n");
     }
     else {
       fsnISP_noop = 0;
@@ -1150,9 +1092,9 @@ int fsn_change_normal()
     errmsgcnt = 0;
     errskip = 0;
     fsn_prev = fsnx;
-    if(hmiaiaflg)
-      sprintf(reopen_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
-    else
+    //if(hmiaiaflg)
+      //sprintf(reopen_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
+    //else
       sprintf(reopen_dsname, "%s[%u]", LEV0SERIESNAMEHMI, fsnx);
     printk("Open normal prev ds: %s\n", reopen_dsname);
     rset = drms_open_records(drms_env, reopen_dsname, &rstatus);
@@ -1307,9 +1249,9 @@ int fsn_change_rexmit()
   }
   errmsgcnt = 0;
   fsn_prev = fsnx;
-  if(hmiaiaflg) 
-    sprintf(rexmit_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
-  else 
+  //if(hmiaiaflg) 
+    //sprintf(rexmit_dsname, "%s[%u]", LEV0SERIESNAMEAIA, fsnx);
+  //else 
     sprintf(rexmit_dsname, "%s[%u]", LEV0SERIESNAMEHMI, fsnx);
   printk("Open prev ds: %s\n", rexmit_dsname);
   rset = drms_open_records(drms_env, rexmit_dsname, &rstatus); 
@@ -2263,19 +2205,19 @@ void setup()
     }
   }
   if(hmiaiaflg) {
-    if(grounddata) {
-      sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIAGND);
-      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIAGND);
-    }
-    else {
-      sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIA);
-      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIA);
-    }
+    //if(grounddata) {
+    //  sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIAGND);
+    //  sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIAGND);
+    //}
+    //else {
+    //  sprintf(tlmseriesname, "%s", TLMSERIESNAMEAIA);
+    //  sprintf(lev0seriesname, "%s", LEV0SERIESNAMEAIA);
+    //}
   }
   else {
     if(grounddata) {
-      sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMIGND);
-      sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMIGND);
+      //sprintf(tlmseriesname, "%s", TLMSERIESNAMEHMIGND);
+      //sprintf(lev0seriesname, "%s", LEV0SERIESNAMEHMIGND);
     }
     else {
       if(amesflg) {
