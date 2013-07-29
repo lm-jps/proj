@@ -19,7 +19,8 @@
  *			v3.0		Sep 17 2012
  *			v3.1		Jun 04 2013
  *			v3.2		Jun 11 2013
- *          v3.3        Jun 26 2013
+ *      v3.3    Jun 26 2013
+ *			v3.4		Jul 26 2013
  *
  * Issues:
  *			v1.0
@@ -48,8 +49,10 @@
  *			Updated geometry keyword
  *			v3.2
  *			Assigned offdisk values in conf_disambig to 0, using bitmap
- *          v3.3
- *          Fixed a but in getNoiseMask() and noiseMask.c, now return non-zero value if fails
+ *      v3.3
+ *      Fixed a but in getNoiseMask() and noiseMask.c, now return non-zero value if fails
+ *			v3.4
+ *			Take out radial acute and random solution for HARPs, fixed DATE and other keywords in an earlier checkin
  *
  *
  * Example:
@@ -168,7 +171,7 @@ void erodeAndGrow(DRMS_Record_t *inRec, int *bitmap, int nerode, int ngrow,
 
 int writeData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 			  float *Bx, float *probBa, char *ambig_r,
-			  int *ll, int *ur, int *ll0, int *ur0);
+			  int *ll, int *ur, int *ll0, int *ur0, int harpflag);		// Jul 26 2013 XS, added harpflag
 
 // Output auxiliary arrays
 
@@ -215,7 +218,7 @@ extern void ambig_(int *geometry,
 //====================
 
 char *module_name = "disambig_v3";	/* Module name */
-char *version_id = "2013 Jun 26";  /* Version number */
+char *version_id = "2013 Jul 26";  /* Version number */
 
 #ifdef OLD
 char *segName[] = {"field", "inclination", "azimuth", "alpha_mag", 
@@ -395,10 +398,12 @@ int DoIt(void)
 		
 		// Obtain radial acute solution before Bx changes
 		
-		char *ambig_r = (char *) calloc(nxny0, sizeof(char));
-		getRadialAcute(inRec, ambig_r, Bx, By, Bz, ll, ur, ll0, ur0);
-		
-		printf("Radial acute solution determined\n");
+		char *ambig_r = NULL;
+		if (!harpflag) {		// Skipped for HARPs, Jul 26
+		  ambig_r = (char *) calloc(nxny0, sizeof(char));
+  		getRadialAcute(inRec, ambig_r, Bx, By, Bz, ll, ur, ll0, ur0);
+  		printf("Radial acute solution determined\n");
+  	}
 		
 		// This is the working part
 		
@@ -465,7 +470,7 @@ int DoIt(void)
 		
 #else
 		
-		if (writeData(outRec, inRec, Bx, probBa, ambig_r, ll, ur, ll0, ur0)) {
+		if (writeData(outRec, inRec, Bx, probBa, ambig_r, ll, ur, ll0, ur0, harpflag)) {		// Jul 26, added harpflag
 			printf("Output error, record skipped\n");
 			free(Bx); free(By); free(Bz);
 			free(bitmap); free(probBa); free(ambig_r);
@@ -510,7 +515,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.6 2013/06/27 21:33:11 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.7 2013/07/29 18:47:14 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
@@ -554,7 +559,7 @@ int DoIt(void)
 		free(probBa); free(bitmap);
 #endif
 		
-		free(ambig_r);
+		if (harpflag) free(ambig_r);		// Jul 26
 		
 		// Time measure
 		
@@ -1261,7 +1266,7 @@ void erodeAndGrow(DRMS_Record_t *inRec, int *bitmap, int nerode, int ngrow,
 
 int writeData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 			  float *Bx, float *probBa, char *ambig_r,
-			  int *ll, int *ur, int *ll0, int *ur0)
+			  int *ll, int *ur, int *ll0, int *ur0, int harpflag)
 {
 	
 	int status = 0;
@@ -1296,39 +1301,53 @@ int writeData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 		}
 	}
 	
-	// Add random solution as second bit
+	// For HARP, either 7 (111) or 0 (000)
+	// Jul 26 2013, XS
 	
-	char pot, r;
-	srand((unsigned)time(NULL));	// random number generator
-	for (int i = 0; i < nx0; i++) {
-		for (int j = 0; j < ny0; j++) {
-			idx = i + j * nx0;
-			pot = (ambig_flag[idx] % 2);
-			if (confidence[idx] > 61) {		// for weak field only
-				ambig_flag[idx] += pot * 2;
-			} else {
-				r = rand() % 2;
-				ambig_flag[idx] += r * 2;
-			}
-		}
-	}
+	if (harpflag) {
 	
-	// Add radial acute solution as third bit
+	  for (int i = 0; i < nxny0; i++) {
+	    ambig_flag[i] = (ambig_flag[i] > 0) ? 7 : 0;
+	  }
 	
-	for (int i = 0; i < nx0; i++) {
-		for (int j = 0; j < ny0; j++) {
-			idx = i + j * nx0;
-			pot = (ambig_flag[idx] % 2);
-			if (confidence[idx] > 61) {
-				ambig_flag[idx] += pot * 4;
-			} else {
-				ambig_flag[idx] += ambig_r[idx] * 4;
-			}
-		}
-	}
+	} else {
+	
+  	// Add random solution as second bit
+	
+	  char pot, r;
+	  srand((unsigned)time(NULL));	// random number generator
+	  for (int i = 0; i < nx0; i++) {
+		  for (int j = 0; j < ny0; j++) {
+			  idx = i + j * nx0;
+			  pot = (ambig_flag[idx] % 2);
+			  if (confidence[idx] > 61) {		// for weak field only
+			  	ambig_flag[idx] += pot * 2;
+			  } else {
+				  r = rand() % 2;
+				  ambig_flag[idx] += r * 2;
+		  	}
+		  }
+	  }
+	
+	  // Add radial acute solution as third bit
+	
+  	for (int i = 0; i < nx0; i++) {
+		  for (int j = 0; j < ny0; j++) {
+			  idx = i + j * nx0;
+			  pot = (ambig_flag[idx] % 2);
+			  if (confidence[idx] > 61) {
+				  ambig_flag[idx] += pot * 4;
+			  } else {
+				  ambig_flag[idx] += ambig_r[idx] * 4;
+			  }
+		  }
+	  }
+	
+	}		// end full disk
 	
 	// Read in bitmap, zero out off-disk pixels in conf_disambig
 	// Jun 11 2013
+	// Also zero out ambig_flag for off-disk pixels, Jul 26
 	
 	DRMS_Segment_t *inSeg_bitmap = drms_segment_lookup(inRec, "bitmap");
 	DRMS_Array_t *inArray_bitmap = drms_segment_read(inSeg_bitmap, DRMS_TYPE_CHAR, &status);
@@ -1340,7 +1359,10 @@ int writeData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
   for (int i = 0; i < nx0; i++) {
 		for (int j = 0; j < ny0; j++) {
 		  idx = i + j * nx0;
-		  if (!bitmap[idx]) confidence[idx] = 0;
+		  if (!bitmap[idx]) {
+		    confidence[idx] = 0;
+		    ambig_flag[idx] = 0;		// Jul 26
+		  }
 		}
 	}
 	drms_free_array(inArray_bitmap);
