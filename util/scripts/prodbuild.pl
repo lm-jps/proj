@@ -1,4 +1,4 @@
-#!/home/jsoc/bin/linux_x86_64/perl5.12.2
+#!/home/jsoc/bin/linux_x86_64/activeperl
 
 # This script maintains the 'production' set of JSOC binaries, which are located in 
 # /home/jsoc/cvs/Development/JSOC/bin. It works as follows:

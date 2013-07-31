@@ -1,9 +1,11 @@
-#!/home/jsoc/bin/linux_x86_64/perl5.12.2 -w
+#!/home/jsoc/bin/linux_x86_64/activeperl -w
 
 # udsumsforarch.pl jsoc_sums hmidb 5434 production many /home/arta/Projects/SUMS/UpdateSUMSArch/testsm.txt
 
 use DBI;
 use DBD::Pg;
+# ART - This module may not be installed. DO NOT USE CPAN to install modules. Use the ActiveState ppm. Unfortunately,
+# ActiveState does not provide this module.
 use Switch;
 use POSIX qw(strftime);
 use File::Copy "mv";

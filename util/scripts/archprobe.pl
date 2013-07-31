@@ -12,6 +12,8 @@ eval 'exec /home/jsoc/bin/linux_ia64/perl -S $0 "$@"'
 use DBI;
 use DBD::Pg;
 use Time::localtime;
+# ART - This module may not be installed. DO NOT USE CPAN to install modules. Use the ActiveState ppm. Unfortunately,
+# ActiveState does not provide this module.
 use Switch;
 
 use constant kDEBUG => 1;

@@ -1,8 +1,10 @@
-#!/home/jsoc/bin/linux_x86_64/perl5.12.2 -w
+#!/home/jsoc/bin/linux_x86_64/activeperl -w
 
 use DBI;
 use DBD::Pg;
 use Time::localtime;
+# ART - This module may not be installed. DO NOT USE CPAN to install modules. Use the ActiveState ppm. Unfortunately,
+# ActiveState does not provide this module.
 use Switch;
 
 use constant kDEBUG => 0;

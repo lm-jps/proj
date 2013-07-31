@@ -1,4 +1,4 @@
-#!/home/jsoc/bin/linux_x86_64/perl5.12.2 -w
+#!/home/jsoc/bin/linux_x86_64/activeperl -w
 
 use constant kWdPath => "/web/jsoc2/htdocs/sureports";
 use constant kTmpFile => "tmp.txt";

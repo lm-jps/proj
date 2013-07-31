@@ -1,4 +1,4 @@
-#!/home/jsoc/bin/linux_x86_64/perl5.12.2 
+#!/home/jsoc/bin/linux_x86_64/activeperl
 
 # Run like:
 #  ingestIrisFDS.pl data=<data dir> host=<db host> series=<series ingesting into>

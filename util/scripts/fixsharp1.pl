@@ -1,4 +1,4 @@
-#!/home/jsoc/bin/linux_x86_64/perl5.12.2
+#!/home/jsoc/bin/linux_x86_64/activeperl
 
 # Run like this:
 # fixsharp1.pl dbname=jsoc dbhost=hmidb dbport=5432 type1=hmi.sharp_720s:/home/mbobra/pros/swharp/cea_fix/output_ccd_definitive.txt,hmi.sharp_720s_nrt:/home/mbobra/pros/swharp/cea_fix/output_ccd_nrt.txt type2=hmi.sharp_cea_720s:/home/mbobra/pros/swharp/cea_fix/output_cea_definitive.txt,hmi.sharp_cea_720s_nrt:/home/mbobra/pros/swharp/cea_fix/output_cea_nrt.txt d=0

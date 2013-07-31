@@ -1,4 +1,4 @@
-#!/home/jsoc/bin/linux_x86_64/perl5.12.2 -w
+#!/home/jsoc/bin/linux_x86_64/activeperl -w
 
 # makelcindices.pl jsoc hmidb 5432 postgres
 # Must run with a user that is the owner of every table on which an index is to be created, so you
