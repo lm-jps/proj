@@ -1,4 +1,4 @@
-#!/home/jsoc/bin/linux_x86_64/perl5.12.2 
+#!/home/jsoc/bin/linux_x86_64/activeperl
 
 # This script runs ingestdata on IRIS oribit-file data products. It reads the product files
 # and formats the content so that ingestdata can use it. We will typically be ingesting

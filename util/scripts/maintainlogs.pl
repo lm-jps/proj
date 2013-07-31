@@ -1,4 +1,4 @@
-#!/home/jsoc/bin/linux_x86_64/perl5.12.2
+#!/home/jsoc/bin/linux_x86_64/activeperl
 
 # This script can be run on many 'log-sets'. Each log-set contains all log
 # files for a single project, tar'ed or otherwise. All log files in a set reside in a single 
