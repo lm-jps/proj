@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "imagefromchebyshev.c"
+#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/imagefromchebyshev.c"
 
 /* cmd-line parameters */
 #define kRecSetIn       "in"
@@ -17,7 +17,6 @@
 #define kSegIn          "segin"
 #define kSegOut         "segout"
 #define kNOTSPECIFIED   "not specified"
-#define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status=%d\n", msg, status); return(status);}
 
 int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image) 
     double *image;
@@ -32,17 +31,19 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
     DRMS_RecordSet_t *inRS, *inRSfinal, *outRS;
     DRMS_Record_t *inRec, *inRecfinal, *outRec;
     DRMS_Array_t *inArray, *outArray;
-    char *inQuery="hmi.lookup_ChebyCoef_BNoise", *outQuery;		// updated Jun 04 2013
+//    char *inQuery="hmi_test.lookup_ChebyCoef_BNoise", *outQuery;
+    char *inQuery="hmi.lookup_ChebyCoef_BNoise", *outQuery;
     char *inRecQuery, *outRecQuery;
     char *inQueryfinal, *vr_start_str, *vr_stop_str;
     char ttemp[64];
     TIME ChangeTime1, ChangeTime2, ChangeTime3;
     int MaskIndex = 0;
-    int vr_start, vr_stop, order;
+    int vr_start, vr_stop, order = 15;
     float vr_coef, weight;
     double *coef, *mask, xc_shift, yc_shift;
     int i, j, t, s, nrecs, ii, jj, k;
     int sunSize = (int)(2 * (rsun+1));  
+    int ncoef;
 
     strcpy(ttemp, "2010.12.13_19:47:00_TAI");
     ChangeTime1 = sscan_time(ttemp);
@@ -65,8 +66,14 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
     vr_stop_str = (char *)malloc(100 * sizeof(char));
     mask = (double *)malloc(sunSize * sunSize * sizeof(double));
 
+    coef = (double *)malloc(order * order * sizeof(double));
+        for (i = 0; i < order; i++)
+        for (j = 0; j < order; j++) {
+            coef[i * order + j] = 0;
+        }
+
     inRS = drms_open_records(drms_env, inQuery, &status);
-     if (status || inRS->n == 0) {printf("No input data found\n"); return (status ? status : -1);}       // Jun 26 2013 xudong, inRS->0 has status=0, not working
+    if (status || inRS->n == 0) {printf("No input data found\n"); return (status ? status : -1);};
     inRec = inRS->records[0];
 
     sprintf(vr_start_str, "%d",  vr_start);
@@ -76,9 +83,9 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
     drms_close_records(inRS, DRMS_FREE_RECORD);
 
     inRSfinal = drms_open_records(drms_env, inQueryfinal, &status);
-//     printf("status=%d, noise=%d\n", status, (status ? status : -1));
-     if (status || inRSfinal->n == 0) {printf("No input data found\n"); return (status ? status : -1);}       // Jun 26 2013 xudong
+    if (status || inRSfinal->n == 0) {printf("No input data found\n"); return (status ? status : -1);};
     nrecs = inRSfinal->n;
+/*
     inRecfinal = inRSfinal->records[0];
     inSeg = drms_segment_lookupnum(inRecfinal, 0);
     inArray = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
@@ -89,6 +96,7 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
         for (j = 0; j < order; j++) {
             coef[i * order + j] = 0;
         }
+*/
 
     if (nrecs == 1)
       {
@@ -97,23 +105,23 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
         inArray = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
         if (status)
            {
-              printf("No input data found\n");
               drms_free_array(inArray);
-              return (status ? status : -1);       // Jun 26 2013 xudong
+              printf("No data array found\n"); return (status ? status : -1);
             }
          double *inData = (double *)inArray->data;
 
-                for (jj = 0; jj < order; jj++)
-                    {
-                    for (ii = 0; ii < order; ii++)
-                        {
-                          coef[jj * order + ii] = inData[jj * order + ii];
-                        }
-                    }
+         for (jj = 0; jj < order; jj++)
+             {
+             for (ii = 0; ii < order; ii++)
+                 {
+                   coef[jj * order + ii] = inData[jj * order + ii];
+                 }
+             }
       }
 
      if (nrecs >= 2) 
       {
+         ncoef = 0;
          for (i = 0; i < 2; i++)
          {
             inRecfinal = inRSfinal->records[i];
@@ -121,9 +129,10 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
             inArray = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
             if (status)
                {
-                  printf(" No data file found\n");
+                  printf(" No input data array found, status=%d\n", status);
                   drms_free_array(inArray);
-                  return (status ? status : -1);       // Jun 26 2013 xudong
+                  ncoef += 1;
+                  continue;
                 }
              vr_coef = drms_getkey_float(inRecfinal, "VRCENT", &status);
              weight = 1.0 - fabs(vr_coef - vrcenter)/50.0;
@@ -136,17 +145,28 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
                         }
                     }
            }
-         }
+           if (ncoef == 1)
+                {
+                  for (jj = 0; jj < order; jj++)
+                    {
+                    for (ii = 0; ii < order; ii++)
+                        {
+                          coef[jj * order + ii] /= weight;
+                        }
+                    }
+                }
+
+           if (ncoef == 2) {printf("No input data array found\n"); return (-1);}
+        }
 
         xc_shift = (double)xcen - (int)xcen;
         yc_shift = (double)ycen - (int)ycen;
-printf("xc-shift = %f, yc-shift = %f\n", xc_shift, yc_shift);
         imagefromchebyshev(mask, sunSize, sunSize, order, coef, xc_shift, yc_shift);
 
 // paste the mask in the 4096x4096 array
 
         double yDist, xDist, yDist2, xDist2, xDist2PlusyDist2, dToDiskCenter;
-        int jy = 0, yOff, iData, yOffmask, iMask, xdelta, ydelta;
+        int jy, yOff, iData, yOffmask, iMask, xdelta, ydelta;
         for (jy = 0; jy < yDim; jy++)
           {
               int ix = 0;
@@ -173,13 +193,8 @@ printf("xc-shift = %f, yc-shift = %f\n", xc_shift, yc_shift);
                    image[iData] = mask[iMask];    
                 }
           }
-
-//printf(" I'm here \n");
+//printf("status=%d, nrecs=%d, ncoef=%d\n", status, nrecs, ncoef);
     return 0;
 }
 /*
- *  Revision History (all mods by Rick Bogart unless otherwise noted)
- *
- *  v 0.6 08.06.13  R Bogart    first working version
- *
  */
