@@ -3,9 +3,6 @@
 use DBI;
 use DBD::Pg;
 use Time::localtime;
-# ART - This module may not be installed. DO NOT USE CPAN to install modules. Use the ActiveState ppm. Unfortunately,
-# ActiveState does not provide this module.
-use Switch;
 
 use constant kDEBUG => 0;
 
@@ -76,12 +73,18 @@ $dbuser = $ARGV[3];
 
 if ($#ARGV >= 4)
 {
-   switch (lc($ARGV[4]))
-   {
-      case kTypeQueryAgg {$typequery = kTypeQueryAgg; $queryfunc = \&GenQueryA;}
-      case kTypeQueryRaw {$typequery = kTypeQueryRaw; $queryfunc = \&GenQueryB;}
-      else {print "Invalid query type $ARGV[4].\n"; exit(1);}
-   }
+    if (lc($ARGV[4]) eq kTypeQueryAgg)
+    {
+        $typequery = kTypeQueryAgg; $queryfunc = \&GenQueryA;
+    }
+    elsif (lc($ARGV[4]) eq kTypeQueryRaw)
+    {
+        $typequery = kTypeQueryRaw; $queryfunc = \&GenQueryB;
+    }
+    else
+    {
+        print "Invalid query type $ARGV[4].\n"; exit(1);
+    }
 }
 else
 {
@@ -92,12 +95,18 @@ else
 
 if ($#ARGV >= 5)
 {
-   switch (lc($ARGV[5]))
-   {
-      case kTypeOrderSeries {$order = kTypeOrderSeries;}
-      case kTypeOrderGroup {$order = kTypeOrderGroup;}
-      else {print "Invalid order specified $ARGV[5].\n"; exit(1);}
-   }
+    if (lc($ARGV[5]) eq kTypeOrderSeries)
+    {
+        $order = kTypeOrderSeries;
+    }
+    elsif (lc($ARGV[5]) eq kTypeOrderGroup)
+    {
+        $order = kTypeOrderGroup;
+    }
+    else
+    {
+        print "Invalid order specified $ARGV[5].\n"; exit(1);
+    }
 }
 else
 {
@@ -106,24 +115,36 @@ else
 
 if ($#ARGV >= 6)
 {
-   switch (lc($ARGV[6]))
-   {
-      case kMetricAll 
-      {
-         if ($typequery eq kTypeQueryRaw)
-         {
+    if (lc($ARGV[6]) eq kMetricAll)
+    {
+        if ($typequery eq kTypeQueryRaw)
+        {
             print "Metric all cannot be used with an un-aggregated query.\n";
             exit(1);
-         }
-
-         $metric = kMetricAll;
-      }
-      case kMetricDPS {$metric = kMetricDPS;}
-      case kMetricDPM {$metric = kMetricDPM;}
-      case kMetricDPL {$metric = kMetricDPL;}
-      case kMetricAP {$metric = kMetricAP;}
-      else {print "Invalid metric specified $ARGV[6].\n"; exit(1);}
-   }
+        }
+        
+        $metric = kMetricAll;
+    }
+    elsif (lc($ARGV[6]) eq kMetricDPS)
+    {
+        $metric = kMetricDPS;
+    }
+    elsif (lc($ARGV[6]) eq kMetricDPM)
+    {
+        $metric = kMetricDPM;
+    }
+    elsif (lc($ARGV[6]) eq kMetricDPL)
+    {
+        $metric = kMetricDPL;
+    }
+    elsif (lc($ARGV[6]) eq kMetricAP)
+    {
+        $metric = kMetricAP;
+    }
+    else
+    {
+        print "Invalid metric specified $ARGV[6].\n"; exit(1);
+    }
 }
 else
 {
@@ -324,65 +345,58 @@ sub GenQueryB
 
 sub SaveResults
 {
-   my($rrows) = $_[0]; # reference to array
-   my($group) = $_[1]; # scalar
-   my($typequery) = $_[2]; # scalar
-   my($order) = $_[3]; # scalar
-   my($container) = $_[4]; # reference to hash
-
-   my($row);
-   my($ok) = 1;
-
-   switch ($typequery)
-   {
-      case kTypeQueryAgg
-      {
-         # Changed to use a temporary table to hold results. No need to use hash arrays
-         # to hold the data.
-      }
-      case kTypeQueryRaw
-      {
-         # row is series, ds_index, sudir, bytes
-         switch ($order)
-         {
-            case kTypeOrderSeries
+    my($rrows) = $_[0]; # reference to array
+    my($group) = $_[1]; # scalar
+    my($typequery) = $_[2]; # scalar
+    my($order) = $_[3]; # scalar
+    my($container) = $_[4]; # reference to hash
+    
+    my($row);
+    my($ok) = 1;
+    
+    if ($typequery eq kTypeQueryAgg)
+    {
+        # Changed to use a temporary table to hold results. No need to use hash arrays
+        # to hold the data.
+    }
+    elsif ($typequery eq kTypeQueryRaw)
+    {
+        if ($order eq kTypeOrderSeries)
+        {
+            foreach $row (@$rrows)
             {
-               foreach $row (@$rrows)
-               {
-                  if (defined($container->{lc($row->[0])}))
-                  {
-                     push(@{$container->{lc($row->[0])}->{$group}}, [$row->[1], $row->[2], $row->[3]])
-                  } 
-                  else
-                  {
-                     $container->{lc($row->[0])} = {$group => [[$row->[1], $row->[2], $row->[3]]]};
-                  }
-               }
+                if (defined($container->{lc($row->[0])}))
+                {
+                    push(@{$container->{lc($row->[0])}->{$group}}, [$row->[1], $row->[2], $row->[3]])
+                } 
+                else
+                {
+                    $container->{lc($row->[0])} = {$group => [[$row->[1], $row->[2], $row->[3]]]};
+                }
             }
-            case kTypeOrderGroup
+        }
+        elsif ($order eq kTypeOrderGroup)
+        {
+            $container->{$group} = [];
+            
+            foreach $row (@$rrows)
             {
-               $container->{$group} = [];
-
-               foreach $row (@$rrows)
-               {
-                  push(@{$container->{$group}}, [lc($row->[0]), $row->[1], $row->[2], $row->[3]]);
-               }
+                push(@{$container->{$group}}, [lc($row->[0]), $row->[1], $row->[2], $row->[3]]);
             }
-            else
-            {
-               print "Invalid column $order by which to order.\n";
-               $ok = 0;
-            }
-         }
-      }
-      else
-      {
-         print "Invalid query type $typequery.\n";
-         $ok = 0;
-      }
-   } # switch type query
-
-   return $ok;
+        }
+        else
+        {
+            print "Invalid column $order by which to order.\n";
+            $ok = 0;
+        }
+    }
+    else
+    {
+        print "Invalid query type $typequery.\n";
+        $ok = 0;
+    }
+    
+    return $ok;
 }
 
 sub NoErr
@@ -424,50 +438,47 @@ use constant kTypeSortAlphaAsc => 2;
 
 sub CombineHashKeys
 {
-   my($typesort) = $_[0];
-   my($out) = $_[1]; # reference
-   my(@hashes) = @_[2..$#_]; # array of hash references
-   my($ahash);
-   my(@superduper);
-   my(@sorted);
-   my(%seen);
-   my($elem);
-
-   my($ok) = 1;
-
-   foreach $ahash (@hashes)
-   {
-      if (defined($ahash))
-      {
-         push(@superduper, keys(%$ahash));
-      }
-   }
-
-   # sort 
-   switch ($typesort) 
-   {
-      case kTypeSortNumrcAsc
-      {
-         @sorted = sort {$a <=> $b} @superduper;
-      }
-      case kTypeSortAlphaAsc
-      {
-         @sorted = sort {$a cmp $b} @superduper;
-      }
-      else
-      {
-         print "Unsupported sort operation '$typesort'.\n";
-         $ok = 0;
-      }
-   }
-
-   # eliminate duplicates
-   foreach $elem (@sorted)
-   {
-      push(@$out, $elem) unless $seen{$elem}++;
-   }
-
-   return $ok;
+    my($typesort) = $_[0];
+    my($out) = $_[1]; # reference
+    my(@hashes) = @_[2..$#_]; # array of hash references
+    my($ahash);
+    my(@superduper);
+    my(@sorted);
+    my(%seen);
+    my($elem);
+    
+    my($ok) = 1;
+    
+    foreach $ahash (@hashes)
+    {
+        if (defined($ahash))
+        {
+            push(@superduper, keys(%$ahash));
+        }
+    }
+    
+    # sort
+    if ($typesort eq kTypeSortNumrcAsc)
+    {
+        @sorted = sort {$a <=> $b} @superduper;
+    }
+    elsif ($typesort eq kTypeSortAlphaAsc)
+    {
+        @sorted = sort {$a cmp $b} @superduper;
+    }
+    else
+    {
+        print "Unsupported sort operation '$typesort'.\n";
+        $ok = 0;
+    }
+    
+    # eliminate duplicates
+    foreach $elem (@sorted)
+    {
+        push(@$out, $elem) unless $seen{$elem}++;
+    }
+    
+    return $ok;
 }
 
 sub PrintRow
@@ -510,388 +521,380 @@ sub PrintRow
 # rows are re-ordered.
 sub SortAndPrintResults
 {
-   # Each of the elements in each of these hash arrays is a reference to a hash array.
-   # The parent hash array is keyed by series name. Each child hash array is 
-   # keyed by group with byte count values. The parent hash arrays do not necessarily 
-   # have the same set of series.
-   my($delnow) = $_[0];
-   my($delwi100d) = $_[1];
-   my($dellater) = $_[2];
-   my($archivepend) = $_[3];
-   my($typequery) = $_[4];
-   my($order) = $_[5];
-   my($metric) = $_[6];
-   my($delim) = $_[7];
-   my($dbh) = $_[8];
-
-   my(@serieslist);
-   my(@grouplist);
-   my($elem);
-   my($series);
-   my($group);
-   my($line);
-
-   my(@sorted);
-   my($dnow);
-   my($d100);
-   my($dlater);
-   my($ap);
-   my($metricval);
-
-   my(%metricheaders);
-   my(%containers);
-   my(@contkeys);
-   my($contkey);
-
-   my($stmnt);
-   my($rrows);
-   my($row);
-
-   my($ok);
-
-   $ok = 1;
-
-   %containers = (kMetricDPS, $delnow, kMetricDPM, $delwi100d, kMetricDPL, $dellater, kMetricAP, $archivepend);
-   @contkeys = keys(%containers);
-
-   print "__DATA__\n";
-
-   switch ($typequery)
-   {
-      case kTypeQueryAgg
-      {
-         my(%hbytes); # sum(bytes) of the 4 containers for current series.
-
-         %metricheaders = (kMetricDPS, "DP Now (GB)", kMetricDPM, "DP <= 100d (GB)", kMetricDPL, "DP > 100d (GB)", kMetricAP, "AP (GB)");
-
-         switch ($order)
-         {
-            case kTypeOrderSeries
+    # Each of the elements in each of these hash arrays is a reference to a hash array.
+    # The parent hash array is keyed by series name. Each child hash array is 
+    # keyed by group with byte count values. The parent hash arrays do not necessarily 
+    # have the same set of series.
+    my($delnow) = $_[0];
+    my($delwi100d) = $_[1];
+    my($dellater) = $_[2];
+    my($archivepend) = $_[3];
+    my($typequery) = $_[4];
+    my($order) = $_[5];
+    my($metric) = $_[6];
+    my($delim) = $_[7];
+    my($dbh) = $_[8];
+    
+    my(@serieslist);
+    my(@grouplist);
+    my($elem);
+    my($series);
+    my($group);
+    my($line);
+    
+    my(@sorted);
+    my($dnow);
+    my($d100);
+    my($dlater);
+    my($ap);
+    my($metricval);
+    
+    my(%metricheaders);
+    my(%containers);
+    my(@contkeys);
+    my($contkey);
+    
+    my($stmnt);
+    my($rrows);
+    my($row);
+    
+    my($ok);
+    
+    $ok = 1;
+    
+    %containers = (kMetricDPS, $delnow, kMetricDPM, $delwi100d, kMetricDPL, $dellater, kMetricAP, $archivepend);
+    @contkeys = keys(%containers);
+    
+    print "__DATA__\n";
+    
+    if ($typequery eq kTypeQueryAgg)
+    {
+        my(%hbytes); # sum(bytes) of the 4 containers for current series.
+        
+        %metricheaders = (kMetricDPS, "DP Now (GB)", kMetricDPM, "DP <= 100d (GB)", kMetricDPL, "DP > 100d (GB)", kMetricAP, "AP (GB)");
+        
+        if ($order eq kTypeOrderSeries)
+        {
+            # type - agg; order - series
+            if (defined($delim))
             {
-               # type - agg; order - series
-               if (defined($delim))
-               {
-                  if ($metric eq kMetricAll)
-                  {
-                     $line = sprintf("series${delim}group${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
-                  }
-                  else
-                  {
-                     $line = sprintf("series${delim}group${delim}$metricheaders{$metric}");
-                  }
-               }
-               else
-               {
-                  if ($metric eq kMetricAll)
-                  {
-                     $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
-                  }
-                  else
-                  {
-                     $line = sprintf("%-48s%-8s%-24s", "series", "group", $metricheaders{$metric});
-                  }
-               }
-
-               print "$line\n";
-               
-               # Just use the db to do the sorting on the temporary table containing the data.
-               $stmnt = "SELECT series, tgroup, metric, aggbytes FROM " . kTempTable . " ORDER BY lower(series), tgroup";
-
-               if ($ok)
-               {
-                  $rrows = $dbh->selectall_arrayref($stmnt, undef);
-                  $ok = NoErr($rrows, \$dbh, $stmnt);
-               }
-
-               $group = "";
-               $series = "";
-
-               if ($ok)
-               {
-                  %hbytes = ();
-                  
-                  if ($metric eq kMetricAll)
-                  {
-                     if (defined($delim))
-                     {
-                        $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
-                     } 
-                     else
-                     {
-                        $fformat = "%-48s%-8d%-24f%-24f%-24f%-24f";
-                     }
-                  } 
-                  else
-                  {
-                     if (defined($delim))
-                     {
-                        $dformat = "%s${delim}%s${delim}%f";
-                     } 
-                     else
-                     {
-                        $fformat = "%-48s%-8d%-24f";
-                     }
-                  }
-
-                  foreach $row (@$rrows)
-                  {
-                     if ((length($series) > 0 && $series ne $row->[0]) ||
-                         (length($group) > 0 && $group ne $row->[1]))
-                     {
-                        PrintRow($delim, $series, $group, $metric, \%hbytes, \$dformat, \$fformat);
-                        %hbytes = ();
-                     }
-
-                     $series = $row->[0];
-                     $group = $row->[1];
-                     $hbytes{$row->[2]} = $row->[3];
-                  }
-
-                  # Must print last row since only the previous row is printed in the loop above
-                  PrintRow($delim, $series, $group, $metric, \%hbytes, \$dformat, \$fformat);
-               }
-            }
-            case kTypeOrderGroup
-            {
-               # type - agg; order - group
-               if (defined($delim))
-               {
-                  if ($metric eq kMetricAll)
-                  {
-                     $line = sprintf("group${delim}series${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
-                  }
-                  else
-                  {
-                     $line = sprintf("group${delim}series${delim}$metricheaders{$metric}");
-                  }
-               }
-               else
-               {
-                  if ($metric eq kMetricAll)
-                  {
-                     $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
-                  }
-                  else
-                  {
-                     $line = sprintf("%-8s%-48s%-24s", "group", "series", $metricheaders{$metric});
-                  }
-               }
-
-               print "$line\n";
-
-               # Just use the db to do the sorting on the temporary table containing the data.
-               $stmnt = "SELECT tgroup, series, metric, aggbytes FROM " . kTempTable . " ORDER BY tgroup, lower(series)";
-
-               if ($ok)
-               {
-                  $rrows = $dbh->selectall_arrayref($stmnt, undef);
-                  $ok = NoErr($rrows, \$dbh, $stmnt);
-               }
-
-               $group = "";
-               $series = "";
-
-               if ($ok)
-               {
-                  %hbytes = ();
-                  
-                  if ($metric eq kMetricAll)
-                  {
-                     if (defined($delim))
-                     {
-                        $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
-                     }
-                     else
-                     {
-                        $fformat = "%-8d%-48s%-24f%-24f%-24f%-24f";
-                     }
-                  }
-                  else
-                  {
-                     if (defined($delim))
-                     {
-                        $dformat = "%s${delim}%s${delim}%f";
-                     }
-                     else
-                     {
-                        $fformat = "%-8d%-48s%-24f";
-                     }
-                  }
-
-                  foreach $row (@$rrows)
-                  {
-                     if ((length($group) > 0 && $group ne $row->[0]) ||
-                         (length($series) > 0 && $series ne $row->[1]))
-                     {
-                        PrintRow($delim, $group, $series, $metric, \%hbytes, \$dformat, \$fformat);
-                        %hbytes = ();
-                     }
-
-                     $group = $row->[0];
-                     $series = $row->[1];
-                     $hbytes{$row->[2]} = $row->[3];
-                  }
-
-                  # Must print last row since only the previous row is printed in the loop above
-                  PrintRow($delim, $group, $series, $metric, \%hbytes, \$dformat, \$fformat);
-               }
+                if ($metric eq kMetricAll)
+                {
+                    $line = sprintf("series${delim}group${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
+                }
+                else
+                {
+                    $line = sprintf("series${delim}group${delim}$metricheaders{$metric}");
+                }
             }
             else
             {
-               print "Invalid column $order by which to order.\n";
+                if ($metric eq kMetricAll)
+                {
+                    $line = sprintf("%-48s%-8s%-24s%-24s%-24s%-24s", "series", "group", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+                }
+                else
+                {
+                    $line = sprintf("%-48s%-8s%-24s", "series", "group", $metricheaders{$metric});
+                }
             }
-         } # switch $order
-      } # case agg
-      case kTypeQueryRaw
-      {
-         # **** Can only work with a single container at a time when the query type is raw!! Each container uses up a 
-         # huge amount of memory, so this script must be modified to handle a single one specified on the cmd-line.
-         # row is series, ds_index, sudir, bytes
-         my(%topheaders);
-
-         # Only one of the containers should be non-empty - if that is not the case, that is an error
-         if ($metric eq kMetricAll)
-         {
+            
+            print "$line\n";
+            
+            # Just use the db to do the sorting on the temporary table containing the data.
+            $stmnt = "SELECT series, tgroup, metric, aggbytes FROM " . kTempTable . " ORDER BY lower(series), tgroup";
+            
+            if ($ok)
+            {
+                $rrows = $dbh->selectall_arrayref($stmnt, undef);
+                $ok = NoErr($rrows, \$dbh, $stmnt);
+            }
+            
+            $group = "";
+            $series = "";
+            
+            if ($ok)
+            {
+                %hbytes = ();
+                
+                if ($metric eq kMetricAll)
+                {
+                    if (defined($delim))
+                    {
+                        $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
+                    } 
+                    else
+                    {
+                        $fformat = "%-48s%-8d%-24f%-24f%-24f%-24f";
+                    }
+                } 
+                else
+                {
+                    if (defined($delim))
+                    {
+                        $dformat = "%s${delim}%s${delim}%f";
+                    } 
+                    else
+                    {
+                        $fformat = "%-48s%-8d%-24f";
+                    }
+                }
+                
+                foreach $row (@$rrows)
+                {
+                    if ((length($series) > 0 && $series ne $row->[0]) ||
+                        (length($group) > 0 && $group ne $row->[1]))
+                    {
+                        PrintRow($delim, $series, $group, $metric, \%hbytes, \$dformat, \$fformat);
+                        %hbytes = ();
+                    }
+                    
+                    $series = $row->[0];
+                    $group = $row->[1];
+                    $hbytes{$row->[2]} = $row->[3];
+                }
+                
+                # Must print last row since only the previous row is printed in the loop above
+                PrintRow($delim, $series, $group, $metric, \%hbytes, \$dformat, \$fformat);
+            }
+        }
+        elsif ($order eq kTypeOrderGroup)
+        {
+            # type - agg; order - group
+            if (defined($delim))
+            {
+                if ($metric eq kMetricAll)
+                {
+                    $line = sprintf("group${delim}series${delim}$metricheaders{+kMetricDPS}${delim}$metricheaders{+kMetricDPM}${delim}$metricheaders{+kMetricDPL}${delim}$metricheaders{+kMetricAP}");
+                }
+                else
+                {
+                    $line = sprintf("group${delim}series${delim}$metricheaders{$metric}");
+                }
+            }
+            else
+            {
+                if ($metric eq kMetricAll)
+                {
+                    $line = sprintf("%-8s%-48s%-24s%-24s%-24s%-24s", "group", "series", $metricheaders{+kMetricDPS}, $metricheaders{+kMetricDPM}, $metricheaders{+kMetricDPL}, $metricheaders{+kMetricAP});
+                }
+                else
+                {
+                    $line = sprintf("%-8s%-48s%-24s", "group", "series", $metricheaders{$metric});
+                }
+            }
+            
+            print "$line\n";
+            
+            # Just use the db to do the sorting on the temporary table containing the data.
+            $stmnt = "SELECT tgroup, series, metric, aggbytes FROM " . kTempTable . " ORDER BY tgroup, lower(series)";
+            
+            if ($ok)
+            {
+                $rrows = $dbh->selectall_arrayref($stmnt, undef);
+                $ok = NoErr($rrows, \$dbh, $stmnt);
+            }
+            
+            $group = "";
+            $series = "";
+            
+            if ($ok)
+            {
+                %hbytes = ();
+                
+                if ($metric eq kMetricAll)
+                {
+                    if (defined($delim))
+                    {
+                        $dformat = "%s${delim}%s${delim}%f${delim}%f${delim}%f${delim}%f";
+                    }
+                    else
+                    {
+                        $fformat = "%-8d%-48s%-24f%-24f%-24f%-24f";
+                    }
+                }
+                else
+                {
+                    if (defined($delim))
+                    {
+                        $dformat = "%s${delim}%s${delim}%f";
+                    }
+                    else
+                    {
+                        $fformat = "%-8d%-48s%-24f";
+                    }
+                }
+                
+                foreach $row (@$rrows)
+                {
+                    if ((length($group) > 0 && $group ne $row->[0]) ||
+                        (length($series) > 0 && $series ne $row->[1]))
+                    {
+                        PrintRow($delim, $group, $series, $metric, \%hbytes, \$dformat, \$fformat);
+                        %hbytes = ();
+                    }
+                    
+                    $group = $row->[0];
+                    $series = $row->[1];
+                    $hbytes{$row->[2]} = $row->[3];
+                }
+                
+                # Must print last row since only the previous row is printed in the loop above
+                PrintRow($delim, $group, $series, $metric, \%hbytes, \$dformat, \$fformat);
+            }
+        }
+        else
+        {
+            print "Invalid column $order by which to order.\n";
+            
+        } 
+    }
+    elsif ($typequery eq kTypeQueryRaw)
+    {
+        # **** Can only work with a single container at a time when the query type is raw!! Each container uses up a 
+        # huge amount of memory, so this script must be modified to handle a single one specified on the cmd-line.
+        # row is series, ds_index, sudir, bytes
+        my(%topheaders);
+        
+        # Only one of the containers should be non-empty - if that is not the case, that is an error
+        if ($metric eq kMetricAll)
+        {
             print "Cannot generate non-aggregate report for more than one metric.\n";
             $ok = 0;
-         }
-         else
-         {
+        }
+        else
+        {
             %metricheaders = (kMetricDPS, "DP Now (bytes)", kMetricDPM, "DP <= 100d (bytes)", kMetricDPL, "DP > 100d (bytes)", kMetricAP, "AP (bytes)");
             %topheaders = (kMetricDPS, "*** DP Now ***", kMetricDPM, "*** DP <= 100d ***", kMetricDPL, "*** DP > 100d ***", kMetricAP, "*** AP ***");
-
+            
             my($sunum);
             my($sudir);
             my($rowdata);
             
-            switch ($order)
+            if ($order eq kTypeOrderSeries)
             {
-               case kTypeOrderSeries
-               {
-                  # type - raw; order - series
-                  print "$topheaders{$metric}\n";
-                  if (defined($delim))
-                  {
-                     $line = "series${delim}group${delim}sunum${delim}sudir${delim}$metricheaders{$metric}";
-                  }
-                  else
-                  {
-                     $line = sprintf("%-32s%-8s%-16s%-24s%-24s", "series", "group", "sunum", "sudir", $metricheaders{$metric});
-                  }
-
-                  print "$line\n";
-                  
-                  if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $containers{$metric}))
-                  {
-                     foreach $elem (@serieslist)
-                     {
+                # type - raw; order - series
+                print "$topheaders{$metric}\n";
+                if (defined($delim))
+                {
+                    $line = "series${delim}group${delim}sunum${delim}sudir${delim}$metricheaders{$metric}";
+                }
+                else
+                {
+                    $line = sprintf("%-32s%-8s%-16s%-24s%-24s", "series", "group", "sunum", "sudir", $metricheaders{$metric});
+                }
+                
+                print "$line\n";
+                
+                if (CombineHashKeys(kTypeSortAlphaAsc, \@serieslist, $containers{$metric}))
+                {
+                    foreach $elem (@serieslist)
+                    {
                         $series = $elem;
                         @grouplist = ();
                         
                         if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{$metric}->{$series}))
                         {
-                           foreach $group (@grouplist)
-                           {
-                              if (defined($containers{$metric}->{$series}->{$group}))
-                              {
-                                 # $containers{$metric}->{$series}->{$group} is reference to an array with array references
-                                 # as elements. The child arrays have sunum, sudir, and bytes
-                                 # as elements.
-                                 foreach $rowdata (@{$containers{$metric}->{$series}->{$group}})
-                                 {
-                                    # $rowdata is a reference to an array containing sunum, sudir, and bytes
+                            foreach $group (@grouplist)
+                            {
+                                if (defined($containers{$metric}->{$series}->{$group}))
+                                {
+                                    # $containers{$metric}->{$series}->{$group} is reference to an array with array references
+                                    # as elements. The child arrays have sunum, sudir, and bytes
                                     # as elements.
-                                    $sunum = $rowdata->[0];
-                                    $sudir = $rowdata->[1];
-                                    $metricval = $rowdata->[2];
-                                    
-                                    if (defined($delim))
+                                    foreach $rowdata (@{$containers{$metric}->{$series}->{$group}})
                                     {
-                                       $line = sprintf("$series${delim}$group${delim}$sunum${delim}$sudir${delim}%d", $metricval);
+                                        # $rowdata is a reference to an array containing sunum, sudir, and bytes
+                                        # as elements.
+                                        $sunum = $rowdata->[0];
+                                        $sudir = $rowdata->[1];
+                                        $metricval = $rowdata->[2];
+                                        
+                                        if (defined($delim))
+                                        {
+                                            $line = sprintf("$series${delim}$group${delim}$sunum${delim}$sudir${delim}%d", $metricval);
+                                        }
+                                        else
+                                        {
+                                            $line = sprintf("%-32s%-8d%-16s%-24s%-24d", $series, $group, $sunum, $sudir, $metricval);
+                                        }
+                                        
+                                        print "$line\n";
                                     }
-                                    else
-                                    {
-                                       $line = sprintf("%-32s%-8d%-16s%-24s%-24d", $series, $group, $sunum, $sudir, $metricval);
-                                    }
-
-                                    print "$line\n";
-                                 }
-                              }
-                           }
+                                }
+                            }
                         } 
                         else
                         {
-                           print "Problem creating group list - continuing.\n";
+                            print "Problem creating group list - continuing.\n";
                         }
-                     }
-                  } 
-                  else
-                  {
-                     print "Problem creating series list - bailing.\n";
-                  }
-               }
-               case kTypeOrderGroup
-               {
-                  my($sunum);
-                  my($sudir);
-                  my($rowdata);
-                  
-                  print "$topheaders{$metric}\n";
-                  if (defined($delim))
-                  {
-                     $line =  "group${delim}series${delim}sunum${delim}sudir${delim}$metricheaders{$metric}";
-                  }
-                  else
-                  {
-                     $line = sprintf("%-8s%-32s%-16s%-24s%-24s", "group", "series", "sunum", "sudir", $metricheaders{$metric});
-                  }
-
-                  print "$line\n";
-                  
-                  # The data in the containers are ordered by group, series. The tuples are
-                  # (series, ds_index, sudir, bytes). So there is very little work to do here.
-                   @grouplist = ();
-                        
-                  if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{$metric}))
-                  {
-                     foreach $group (@grouplist)
-                     {
+                    }
+                } 
+                else
+                {
+                    print "Problem creating series list - bailing.\n";
+                }
+            }
+            elsif ($order eq kTypeOrderGroup)
+            {
+                my($sunum);
+                my($sudir);
+                my($rowdata);
+                
+                print "$topheaders{$metric}\n";
+                if (defined($delim))
+                {
+                    $line =  "group${delim}series${delim}sunum${delim}sudir${delim}$metricheaders{$metric}";
+                }
+                else
+                {
+                    $line = sprintf("%-8s%-32s%-16s%-24s%-24s", "group", "series", "sunum", "sudir", $metricheaders{$metric});
+                }
+                
+                print "$line\n";
+                
+                # The data in the containers are ordered by group, series. The tuples are
+                # (series, ds_index, sudir, bytes). So there is very little work to do here.
+                @grouplist = ();
+                
+                if (CombineHashKeys(kTypeSortNumrcAsc, \@grouplist, $containers{$metric}))
+                {
+                    foreach $group (@grouplist)
+                    {
                         foreach $rowdata (@{$containers{$metric}->{$group}})
                         {
-                           $series = $rowdata->[0];
-                           $sunum = $rowdata->[1];
-                           $sudir = $rowdata->[2];
-                           $metricval = $rowdata->[3];
-
-                           if (defined($delim))
-                           {
-                              $line = sprintf("$group${delim}$series${delim}$sunum${delim}$sudir${delim}%d", $metricval);
-                           }
-                           else
-                           {
-                              $line = sprintf("%-8d%-32s%-16s%-24s%-24d", $group, $series, $sunum, $sudir, $metricval);
-                           }
-
-                           print "$line\n";
+                            $series = $rowdata->[0];
+                            $sunum = $rowdata->[1];
+                            $sudir = $rowdata->[2];
+                            $metricval = $rowdata->[3];
+                            
+                            if (defined($delim))
+                            {
+                                $line = sprintf("$group${delim}$series${delim}$sunum${delim}$sudir${delim}%d", $metricval);
+                            }
+                            else
+                            {
+                                $line = sprintf("%-8d%-32s%-16s%-24s%-24d", $group, $series, $sunum, $sudir, $metricval);
+                            }
+                            
+                            print "$line\n";
                         }
-                     }
-                  }
-               } 
-               else
-               {
-                  print "Invalid column $order by which to order.\n";
-                  $ok = 0;
-               }
+                    }
+                }
             }
-         }
-      }
-      else
-      {
-         print "Invalid query type $typequery.\n";
-      }
-   } # switch query type
-
-   print "__END__\n";
-   
-   # TODO - print out totals by group
+            else
+            {
+                print "Invalid column $order by which to order.\n";
+                $ok = 0;
+            }
+        }
+    }
+    else
+    {
+        print "Invalid query type $typequery.\n";
+    }
+    
+    print "__END__\n";
+    
+    # TODO - print out totals by group
 }
