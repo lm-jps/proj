@@ -217,7 +217,8 @@ void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
     iimgotss = HK_getkey_int(isp, "ITCSS56"); 
     iimgotss = iimgotss >> 16; 
   }
-  t_obs = SDO_to_DRMS_time(iimgots, iimgotss) + expoff/2.0;
+  //t_obs = SDO_to_DRMS_time(iimgots, iimgotss) + expoff/2.0;
+  t_obs = SDO_to_DRMS_time(iimgots, iimgotss) - exptime/2.0;
   drms_setkey_double(rec, "T_OBS", t_obs);
   
   TIME date__obs = t_obs - exptime/2.0;
