@@ -572,8 +572,8 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       printk("drms_status=%d, rsisp=%lu, fsn=%lu, fsnISP=%lu, fsnISP_noop=%lu\n",
 		drms_status, rsisp, fsn, fsnISP, fsnISP_noop); //!!TEMP
     }
-    else if(rsisp->n > 2) {
-      printk("ERROR: Got rsisp->n > 2. At end of transmission?\n");
+    else if(rsisp->n > 2 || rsisp->n < 0) {
+      printk("ERROR: Got bad drms_open_records() pointer for isp.\n");
       printk("       Proceed anyway.\n");
     }
     else {
