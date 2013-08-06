@@ -7,7 +7,7 @@
 # be ingested one at a time.
 
 # Run like:
-#   ingestIrisOrbit.pl series=su_arta.orbitvectors dfile=/home/arta/Projects/Iris/ingestorbit/data/IRIS_stanford_20130703.V01.txt host=hmidb
+#   ingestIrisOrbit.pl series=su_arta.orbitvectors source=su_arta.irisfds'[2013.07.03_UTC][orbit][1]' dfile=/home/arta/Projects/Iris/ingestorbit/data/IRIS_stanford_20130703.V01.txt host=hmidb
 
 use strict;
 use warnings;
@@ -30,6 +30,8 @@ use constant kRetInvalidDFile  => 5;
 
 # Parameters
 use constant kArgSeries        => "series";
+use constant kArgSource        => "source"; # The record-set specification of the record in the fds series containing the orbit data file whose
+                                            # content will be ingested by this script.
 use constant kArgDfile         => "dfile"; # A PATH to an orbit file to ingest
 use constant kArgDBHost        => "host";
 
@@ -69,6 +71,7 @@ my($rv);
 my($lock);
 my($args);
 my($series);
+my($source);
 my($dfile);
 my($dbhost);
 my($cmd);
@@ -85,6 +88,7 @@ if (defined($lock))
     $args = GetArgs();
     
     $series = $args->Get(&kArgSeries);
+    $source = $args->Get(&kArgSource);
     $dfile = $args->Get(&kArgDfile);
     $dbhost = $args->Get(&kArgDBHost);
     
@@ -228,8 +232,11 @@ if (defined($lock))
                         @sortedKWs = sort({$keywordsH->{$a} <=> $keywordsH->{$b}} @keywords);
                         $sortedKWsStr = join(" ", @sortedKWs);
                         
-                        # Need to send the DRMS Keyword list to ingestdata.
-                        $pipe->WritePipe("$sortedKWsStr\n");
+                        # Need to send the DRMS Keyword list, and the keyword name "source" (the last keyword of the orbit
+                        # series is source. Each value for this keyword contains the record-set specification that identifies 
+                        # the record in the fds series that contains the orbit data used to create the orbit-series record) 
+                        # to ingestdata.
+                        $pipe->WritePipe("$sortedKWsStr source\n");
                     }
                     elsif ($iline == 5)
                     {
@@ -296,7 +303,9 @@ if (defined($lock))
                             $timestr = $timestr . "\.${fracsec}_UTC";
                             
                             # Then append the time zone (which I didn't do with Strptime so I could append the fractional seconds first).
-                            $trueline = "$timestr $therest\n";
+                            # Must also append the record-set specification of the record in the fds series that contains the orbit data 
+                            # used to create the rest of the orbit-series record.
+                            $trueline = "$timestr $therest $source\n";
                         }
                         else
                         {
@@ -354,8 +363,9 @@ sub GetArgs
     # These are required arguments.
     $argsinH =
     {
-        &kArgDfile         => 's',
         &kArgSeries        => 's',
+        &kArgSource        => 's',
+        &kArgDfile         => 's',
         &kArgDBHost        => 's'
     };
     
@@ -522,3 +532,4 @@ Keyword:heizobs, double, variable, record, DRMS_MISSING_VALUE, %f, km, "[HEIZ_OB
 Keyword:geixobs, double, variable, record, DRMS_MISSING_VALUE, %f, km, "[GEIX_OBS] IRIS x position (ECI)"
 Keyword:geiyobs, double, variable, record, DRMS_MISSING_VALUE, %f, km, "[GEIY_OBS] IRIS y position (ECI)"
 Keyword:geizobs, double, variable, record, DRMS_MISSING_VALUE, %f, km, "[GEIZ_OBS] IRIS z position (ECI)"
+Keyword:source, string, variable, record, Unknown, %s, NA, "Record query to identify source file containing orbit data"
