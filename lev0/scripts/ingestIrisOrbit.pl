@@ -514,7 +514,7 @@ Keyword:obsdate_step, time, constant, record, 60.000000, %f, secs, "Slots are 60
 Keyword:date, time, variable, record, DRMS_MISSING_VALUE, 0, ISO, "[DATE] Date of product-file ingestion; ISO 8601"
 Keyword:datestr, string, variable, record, Unknown, %s, NA, "Human-readable date of product-file ingestion"
 Keyword:rsunobs, float, variable, record, DRMS_MISSING_VALUE, %f, arcsec, "[RSUN_OBS] The solar radius"
-Keyword:obsvr, float, variable, record, DRMS_MISSING_VALUE, %f, ks/s, "[OBS_VR] The velocity of the Sun with respect to IRIS"
+Keyword:obsvr, float, variable, record, DRMS_MISSING_VALUE, %f, km/s, "[OBS_VR] The velocity of the Sun with respect to IRIS"
 Keyword:dsunobs, double, variable, record, DRMS_MISSING_VALUE, %f, km, "[DSUN_OBS] IRIS-Sun distance"
 Keyword:heixobs, double, variable, record, DRMS_MISSING_VALUE, %f, km, "[HEIX_OBS] IRIS-Sun x position (ECI)"
 Keyword:heiyobs, double, variable, record, DRMS_MISSING_VALUE, %f, km, "[HEIY_OBS] IRIS-Sun y position (ECI)"

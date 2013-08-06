@@ -3,6 +3,9 @@
 
 #define DEBUG 0
 
+/* These defines are suitable for sdo.fds_orbit_vectors, but not for other series. The 
+ * caller should pass in to the API functions a map (these defines --> series keywords) 
+ * of orbit-series keywords if they differ from these. */
 #define kXGCI "GCIEC_X"
 #define kYGCI "GCIEC_Y"
 #define kZGCI "GCIEC_Z"
@@ -16,7 +19,13 @@
 #define kVYHCI "HCIEC_VY"
 #define kVZHCI "HCIEC_VZ"
 #define kOBSDATE "OBS_DATE"
-#define kOBSDATE_INDEX "OBS_DATE_index"
+
+/* Some other series have these keywords. The union of this set and the one immediately above 
+ * form the set of all known keywords from any orbit series. */
+#define kRSUNOBS "RSUN_OBS"
+#define kOBSVR "OBS_VR"
+#define kDSUNOBS "DSUN_OBS"
+
 #define kMaxRecIdSize 128
 
 #define kCACHEKEYSIZE 64
@@ -54,20 +63,23 @@ typedef enum IORBIT_Slotpos_enum IORBIT_Slotpos_t;
 
 struct IORBIT_Vector_struct
 {
-  long long slot; /* slot number - missing if vector is not for a grid time */
-  double obstime; 
-  double gciX;
-  double gciY;
-  double gciZ;
-  double gciVX;
-  double gciVY;
-  double gciVZ;
-  double hciX;
-  double hciY;
-  double hciZ;
-  double hciVX;
-  double hciVY;
-  double hciVZ;
+    long long slot; /* slot number - missing if vector is not for a grid time */
+    double obstime; 
+    double gciX;
+    double gciY;
+    double gciZ;
+    double gciVX;
+    double gciVY;
+    double gciVZ;
+    double hciX;
+    double hciY;
+    double hciZ;
+    double hciVX;
+    double hciVY;
+    double hciVZ;
+    double rsunobs;
+    double obsvr;
+    double dsunobs;
 };
 
 typedef struct IORBIT_Vector_struct IORBIT_Vector_t;
@@ -80,6 +92,7 @@ static IORBIT_Vector_t *gGridCache = NULL;
 static DRMS_RecordSet_t *gCacheRS = NULL;
 static int gGridNItems = 0;
 static int gGridCurrPos = -1;
+static HContainer_t *gKeyMap = NULL;
 
 /* for !gCacheChuunking case */
 const int gMinAbove = 16; /* min no. of vectors above max tgttime */
@@ -367,6 +380,82 @@ static IORBIT_Vector_t *LookupInCache(double tgttime, IORBIT_Slotpos_t pos)
    return val;
 }
 
+static double GetKey(DRMS_Record_t *rec, const char *keyID)
+{
+    const char *keyname = NULL;
+    
+    keyname = (const char *)hcon_lookup(gKeyMap, keyID);
+    if (keyname)
+    {
+        return drms_getkey_double(rec, keyname, NULL);
+    }
+    else
+    {
+        return DRMS_MISSING_DOUBLE;
+    }
+}
+
+static void PopulateVector(DRMS_Record_t *rec, IORBIT_Vector_t *vec)
+{
+    const char *keyname = NULL;
+    char indxkey[DRMS_MAXKEYNAMELEN] = {0};
+    
+    if (gKeyMap)
+    {
+        /* Orbit-series keyword names are custom. Map to the custom names from the keyword IDs. It is possible that
+         * some of these keywords do not exist in the current orbit series. If so, then the value assigned will 
+         * be missing. */
+        vec->obstime = GetKey(rec, "kOBSDATE");        
+        vec->gciX = GetKey(rec, "kXGCI");
+        vec->gciY = GetKey(rec, "kYGCI");
+        vec->gciZ = GetKey(rec, "kZGCI");
+        vec->gciVX = GetKey(rec, "kVXGCI");
+        vec->gciVY = GetKey(rec, "kVYGCI");
+        vec->gciVZ = GetKey(rec, "kVZGCI");
+        vec->hciX = GetKey(rec, "kXHCI");
+        vec->hciY = GetKey(rec, "kYHCI");
+        vec->hciZ = GetKey(rec, "kZHCI");
+        vec->hciVX = GetKey(rec, "kVXHCI");
+        vec->hciVY = GetKey(rec, "kVYHCI");
+        vec->hciVZ = GetKey(rec, "kVZHCI");
+        vec->rsunobs = GetKey(rec, "kRSUNOBS");
+        vec->obsvr = GetKey(rec, "kOBSVR");
+        vec->dsunobs = GetKey(rec, "kDSUNOBS");
+        
+        keyname = (const char *)hcon_lookup(gKeyMap, "kOBSDATE");
+        if (keyname)
+        {
+            snprintf(indxkey, sizeof(indxkey), "%s_index", keyname);
+        }
+    }
+    else
+    {
+        /* Orbit-series keyword names are standard. Use the defines to locate keyword names. */
+        vec->obstime = drms_getkey_double(rec, kOBSDATE, NULL);
+        vec->gciX = drms_getkey_double(rec, kXGCI, NULL);
+        vec->gciY = drms_getkey_double(rec, kYGCI, NULL);
+        vec->gciZ = drms_getkey_double(rec, kZGCI, NULL);
+        vec->gciVX = drms_getkey_double(rec, kVXGCI, NULL);
+        vec->gciVY = drms_getkey_double(rec, kVYGCI, NULL);
+        vec->gciVZ = drms_getkey_double(rec, kVZGCI, NULL);
+        vec->hciX = drms_getkey_double(rec, kXHCI, NULL);
+        vec->hciY = drms_getkey_double(rec, kYHCI, NULL);
+        vec->hciZ = drms_getkey_double(rec, kZHCI, NULL);
+        vec->hciVX = drms_getkey_double(rec, kVXHCI, NULL);
+        vec->hciVY = drms_getkey_double(rec, kVYHCI, NULL);
+        vec->hciVZ = drms_getkey_double(rec, kVZHCI, NULL);
+        
+        /* These keywords do not exist in the standard orbit series. */
+        vec->rsunobs = DRMS_MISSING_DOUBLE;
+        vec->obsvr = DRMS_MISSING_DOUBLE;
+        vec->dsunobs = DRMS_MISSING_DOUBLE;
+        
+        snprintf(indxkey, sizeof(indxkey), "%s_index", kOBSDATE);
+    }
+    
+    vec->slot = drms_getkey_longlong(rec, indxkey, NULL);
+}
+
 /*
  * srcseries - datseries containing orbit-data information (like sdo.fds_orbit_vectors)
  * optfilter - a record-set query that causes a subset of all orbit data to be used; if NULL
@@ -386,8 +475,6 @@ static int RehydrateCache(DRMS_Env_t *env,
    int ret = 0;
 
    IORBIT_Vector_t *vec;
-   long long obsslot;
-   double obstime;
    DRMS_Record_t *rec = NULL; /* record of orbit data from FDS */
    int iitem = 0;
    char query[256];
@@ -425,29 +512,11 @@ static int RehydrateCache(DRMS_Env_t *env,
                rec = gCacheRS->records[iitem];
                vec = &(gGridCache[iitem]);
 
-               obsslot = drms_getkey_longlong(rec, kOBSDATE_INDEX, NULL);
-               vec->slot = obsslot;
-
-               obstime = drms_getkey_double(rec, kOBSDATE, NULL);
-               vec->obstime = obstime;
-
                /* These are in J2000.0, ecliptic coordinates 
                 *   -gcipos and gcivel are values relative to earth
                 *   -hcipos and hcivel are values relative to the sun
                 */
-               vec->gciX = drms_getkey_double(rec, kXGCI, NULL);
-               vec->gciY = drms_getkey_double(rec, kYGCI, NULL);
-               vec->gciZ = drms_getkey_double(rec, kZGCI, NULL);
-               vec->gciVX = drms_getkey_double(rec, kVXGCI, NULL);
-               vec->gciVY = drms_getkey_double(rec, kVYGCI, NULL);
-               vec->gciVZ = drms_getkey_double(rec, kVZGCI, NULL);
-
-               vec->hciX = drms_getkey_double(rec, kXHCI, NULL);
-               vec->hciY = drms_getkey_double(rec, kYHCI, NULL);
-               vec->hciZ = drms_getkey_double(rec, kZHCI, NULL);
-               vec->hciVX = drms_getkey_double(rec, kVXHCI, NULL);
-               vec->hciVY = drms_getkey_double(rec, kVYHCI, NULL);
-               vec->hciVZ = drms_getkey_double(rec, kVZHCI, NULL);
+                PopulateVector(rec, vec);
             }
          }
       }
@@ -504,29 +573,11 @@ static int RehydrateCache(DRMS_Env_t *env,
 
          vec = &(gGridCache[iitem]);
 
-         obsslot = drms_getkey_longlong(rec, kOBSDATE_INDEX, NULL);
-         vec->slot = obsslot;
-
-         obstime = drms_getkey_double(rec, kOBSDATE, NULL);
-         vec->obstime = obstime;
-
          /* These are in J2000.0, ecliptic coordinates 
           *   -gcipos and gcivel are values relative to earth
           *   -hcipos and hcivel are values relative to the sun
           */
-         vec->gciX = drms_getkey_double(rec, kXGCI, NULL);
-         vec->gciY = drms_getkey_double(rec, kYGCI, NULL);
-         vec->gciZ = drms_getkey_double(rec, kZGCI, NULL);
-         vec->gciVX = drms_getkey_double(rec, kVXGCI, NULL);
-         vec->gciVY = drms_getkey_double(rec, kVYGCI, NULL);
-         vec->gciVZ = drms_getkey_double(rec, kVZGCI, NULL);
-
-         vec->hciX = drms_getkey_double(rec, kXHCI, NULL);
-         vec->hciY = drms_getkey_double(rec, kYHCI, NULL);
-         vec->hciZ = drms_getkey_double(rec, kZHCI, NULL);
-         vec->hciVX = drms_getkey_double(rec, kVXHCI, NULL);
-         vec->hciVY = drms_getkey_double(rec, kVYHCI, NULL);
-         vec->hciVZ = drms_getkey_double(rec, kVZHCI, NULL);
+          PopulateVector(rec, vec);
       }
 
       nitems = iitem - firstitem + nkeep;
@@ -547,12 +598,14 @@ static int RehydrateCache(DRMS_Env_t *env,
  *   So the old cache isn't completed blown away. This is done so that FetchNext()
  *   and FetchPrevious() can find the next and previous items without causing a cache miss. 
  * pos - this parameter indicates the relationship between the tgttime and the grid vector
- *   obstime. If pos == kLT, then the Fetch() requiest looks for a grid vector with an
+ *   obstime. If pos == kLT, then the Fetch() request looks for a grid vector with an
  *   obstime that is LT the tgttime.
  *
  * Fetch() assumes that there will be a vec-grid very close to tgttime, which should be
  * true, unless a user is requesting a tgttime that lies outside the existing
  * vector grid.
+ * 
+ * Fetch() always searches the orbit series in increasing OBS_DATE. 
  */
 static IORBIT_Vector_t *Fetch(DRMS_Env_t *env, 
                               const char *srcseries,
@@ -1029,59 +1082,146 @@ static int iorbit_interpolate(IORBIT_Alg_t alg,
 
               for (ipt = 0; ipt < ntgtpts; ipt++)
               {
-                 if (drms_ismissing_time(tgttimes[ipt]))
-                 {
-                    /* skip missing times */
-                    ((*interp)[ipt]).obstime = DRMS_MISSING_TIME;
-                    continue;
-                 }
+                  if (drms_ismissing_time(tgttimes[ipt]))
+                  {
+                      /* skip missing times */
+                      ((*interp)[ipt]).obstime = DRMS_MISSING_TIME;
+                      continue;
+                  }
+                  
+                  CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[ipt]);
+                  vindex = *((int *)hcon_lookup(indexmap, dhashkey));
+                  
+                  ptlow = gridVecs[vindex - 1].obstime;
+                  ptmid = gridVecs[vindex].obstime;
+                  pthii = gridVecs[vindex + 1].obstime;
+                  veclow = &(gridVecs[vindex - 1]); 
+                  vecmid = &(gridVecs[vindex]); 
+                  vechii = &(gridVecs[vindex + 1]); 
+                  factorlow = (tgttimes[ipt] - ptmid) * (tgttimes[ipt] - pthii) / 
+                  ((ptlow - ptmid) * (ptlow - pthii));
+                  factormid = (tgttimes[ipt] - ptlow) * (tgttimes[ipt] - pthii) / 
+                  ((ptmid - ptlow) * (ptmid - pthii));
+                  factorhii = (tgttimes[ipt] - ptlow) * (tgttimes[ipt] - ptmid) / 
+                  ((pthii - ptlow) * (pthii - ptmid));
+                  
+                  ((*interp)[ipt]).obstime = tgttimes[ipt];
+                  ((*interp)[ipt]).slot = DRMS_MISSING_LONGLONG;
+                  
+                  /* Assume all orbit series have gciX, gciY, gciZ. */
+                  ((*interp)[ipt]).gciX = 
+                  veclow->gciX * factorlow + vecmid->gciX * factormid + vechii->gciX * factorhii;
+                  ((*interp)[ipt]).gciY = 
+                  veclow->gciY * factorlow + vecmid->gciY * factormid + vechii->gciY * factorhii;
+                  ((*interp)[ipt]).gciZ = 
+                  veclow->gciZ * factorlow + vecmid->gciZ * factormid + vechii->gciZ * factorhii;
+                  
+                  /* Not all orbit series have gciVX. */
+                  if (!drms_ismissing_double(veclow->gciVX) && !drms_ismissing_double(vecmid->gciVX) && !drms_ismissing_double(vechii->gciVX))
+                  {
+                      ((*interp)[ipt]).gciVX = 
+                      veclow->gciVX * factorlow + vecmid->gciVX * factormid + vechii->gciVX * factorhii;
+                  }
+                  else
+                  {
+                      ((*interp)[ipt]).gciVX = DRMS_MISSING_DOUBLE;
+                  }
 
-                 CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[ipt]);
-                 vindex = *((int *)hcon_lookup(indexmap, dhashkey));
+                  /* Not all orbit series have gciVY. */
+                  if (!drms_ismissing_double(veclow->gciVY) && !drms_ismissing_double(vecmid->gciVY) && !drms_ismissing_double(vechii->gciVY))
+                  {
+                      ((*interp)[ipt]).gciVY = 
+                      veclow->gciVY * factorlow + vecmid->gciVY * factormid + vechii->gciVY * factorhii;
+                  }
+                  else
+                  {
+                      ((*interp)[ipt]).gciVY = DRMS_MISSING_DOUBLE;
+                  }
+                  
+                  /* Not all orbit series have gciVZ. */
+                  if (!drms_ismissing_double(veclow->gciVZ) && !drms_ismissing_double(vecmid->gciVZ) && !drms_ismissing_double(vechii->gciVZ))
+                  {
+                      ((*interp)[ipt]).gciVZ = 
+                      veclow->gciVZ * factorlow + vecmid->gciVZ * factormid + vechii->gciVZ * factorhii;
+                  }
+                  else
+                  {
+                      ((*interp)[ipt]).gciVZ = DRMS_MISSING_DOUBLE;
+                  }
+                  
+                  /* Assume all orbit series have hciX, hciY, hciZ. */
+                  ((*interp)[ipt]).hciX = 
+                  veclow->hciX * factorlow + vecmid->hciX * factormid + vechii->hciX * factorhii;
+                  ((*interp)[ipt]).hciY = 
+                  veclow->hciY * factorlow + vecmid->hciY * factormid + vechii->hciY * factorhii;
+                  ((*interp)[ipt]).hciZ = 
+                  veclow->hciZ * factorlow + vecmid->hciZ * factormid + vechii->hciZ * factorhii;
+                  
+                  /* Not all orbit series have hciVX. */
+                  if (!drms_ismissing_double(veclow->hciVX) && !drms_ismissing_double(vecmid->hciVX) && !drms_ismissing_double(vechii->hciVX))
+                  {
+                      ((*interp)[ipt]).hciVX = 
+                      veclow->hciVX * factorlow + vecmid->hciVX * factormid + vechii->hciVX * factorhii;
+                  }
+                  else
+                  {
+                      ((*interp)[ipt]).hciVX = DRMS_MISSING_DOUBLE;
+                  }
 
-                 ptlow = gridVecs[vindex - 1].obstime;
-                 ptmid = gridVecs[vindex].obstime;
-                 pthii = gridVecs[vindex + 1].obstime;
-                 veclow = &(gridVecs[vindex - 1]); 
-                 vecmid = &(gridVecs[vindex]); 
-                 vechii = &(gridVecs[vindex + 1]); 
-                 factorlow = (tgttimes[ipt] - ptmid) * (tgttimes[ipt] - pthii) / 
-                   ((ptlow - ptmid) * (ptlow - pthii));
-                 factormid = (tgttimes[ipt] - ptlow) * (tgttimes[ipt] - pthii) / 
-                   ((ptmid - ptlow) * (ptmid - pthii));
-                 factorhii = (tgttimes[ipt] - ptlow) * (tgttimes[ipt] - ptmid) / 
-                   ((pthii - ptlow) * (pthii - ptmid));
-
-                 ((*interp)[ipt]).obstime = tgttimes[ipt];
-                 ((*interp)[ipt]).slot = DRMS_MISSING_LONGLONG;
-
-                 ((*interp)[ipt]).gciX = 
-                   veclow->gciX * factorlow + vecmid->gciX * factormid + vechii->gciX * factorhii;
-                 ((*interp)[ipt]).gciY = 
-                   veclow->gciY * factorlow + vecmid->gciY * factormid + vechii->gciY * factorhii;
-                 ((*interp)[ipt]).gciZ = 
-                   veclow->gciZ * factorlow + vecmid->gciZ * factormid + vechii->gciZ * factorhii;
-
-                 ((*interp)[ipt]).gciVX = 
-                   veclow->gciVX * factorlow + vecmid->gciVX * factormid + vechii->gciVX * factorhii;
-                 ((*interp)[ipt]).gciVY = 
-                   veclow->gciVY * factorlow + vecmid->gciVY * factormid + vechii->gciVY * factorhii;
-                 ((*interp)[ipt]).gciVZ = 
-                   veclow->gciVZ * factorlow + vecmid->gciVZ * factormid + vechii->gciVZ * factorhii;
-
-                 ((*interp)[ipt]).hciX = 
-                   veclow->hciX * factorlow + vecmid->hciX * factormid + vechii->hciX * factorhii;
-                 ((*interp)[ipt]).hciY = 
-                   veclow->hciY * factorlow + vecmid->hciY * factormid + vechii->hciY * factorhii;
-                 ((*interp)[ipt]).hciZ = 
-                   veclow->hciZ * factorlow + vecmid->hciZ * factormid + vechii->hciZ * factorhii;
-
-                 ((*interp)[ipt]).hciVX = 
-                   veclow->hciVX * factorlow + vecmid->hciVX * factormid + vechii->hciVX * factorhii;
-                 ((*interp)[ipt]).hciVY = 
-                   veclow->hciVY * factorlow + vecmid->hciVY * factormid + vechii->hciVY * factorhii;
-                 ((*interp)[ipt]).hciVZ = 
-                   veclow->hciVZ * factorlow + vecmid->hciVZ * factormid + vechii->hciVZ * factorhii;
+                  /* Not all orbit series have hciVY. */
+                  if (!drms_ismissing_double(veclow->hciVY) && !drms_ismissing_double(vecmid->hciVY) && !drms_ismissing_double(vechii->hciVY))
+                  {
+                      ((*interp)[ipt]).hciVY = 
+                      veclow->hciVY * factorlow + vecmid->hciVY * factormid + vechii->hciVY * factorhii;
+                  }
+                  else
+                  {
+                      ((*interp)[ipt]).hciVY = DRMS_MISSING_DOUBLE;
+                  }
+                  
+                  /* Not all orbit series have hciVZ. */
+                  if (!drms_ismissing_double(veclow->hciVZ) && !drms_ismissing_double(vecmid->hciVZ) && !drms_ismissing_double(vechii->hciVZ))
+                  {
+                      ((*interp)[ipt]).hciVZ = 
+                      veclow->hciVZ * factorlow + vecmid->hciVZ * factormid + vechii->hciVZ * factorhii;
+                  }
+                  else
+                  {
+                      ((*interp)[ipt]).hciVZ = DRMS_MISSING_DOUBLE;
+                  }
+                  
+                  /* Not all orbit series have rsunobs. */
+                  if (!drms_ismissing_double(veclow->rsunobs) && !drms_ismissing_double(vecmid->rsunobs) && !drms_ismissing_double(vechii->rsunobs))
+                  {
+                      ((*interp)[ipt]).rsunobs = 
+                      veclow->rsunobs * factorlow + vecmid->rsunobs * factormid + vechii->rsunobs * factorhii;
+                  }
+                  else
+                  {
+                      ((*interp)[ipt]).rsunobs = DRMS_MISSING_DOUBLE;                      
+                  }
+                  
+                  /* Not all orbit series have obsvr. */
+                  if (!drms_ismissing_double(veclow->obsvr) && !drms_ismissing_double(vecmid->obsvr) && !drms_ismissing_double(vechii->obsvr))
+                  {
+                      ((*interp)[ipt]).obsvr = 
+                      veclow->obsvr * factorlow + vecmid->obsvr * factormid + vechii->obsvr * factorhii;
+                  }
+                  else
+                  {
+                      ((*interp)[ipt]).obsvr = DRMS_MISSING_DOUBLE;
+                  }
+                  
+                  /* Not all series have dsunobs. */
+                  if (!drms_ismissing_double(veclow->dsunobs) && !drms_ismissing_double(vecmid->dsunobs) && !drms_ismissing_double(vechii->dsunobs))
+                  {
+                      ((*interp)[ipt]).dsunobs =
+                      veclow->dsunobs * factorlow + vecmid->dsunobs * factormid + vechii->dsunobs * factorhii;
+                  }
+                  else
+                  {
+                      ((*interp)[ipt]).dsunobs = DRMS_MISSING_DOUBLE;                      
+                  }
               }
            }
            break;
@@ -1191,6 +1331,511 @@ void iorbit_carrcoords(TIME t, double obsdist, double b, double hci_long, int *c
    SDOCarringtonCoords(t, obsdist, b, hci_long, crot, L, B);
 }
 
+static int SetUpKeymap(DRMS_Env_t *env, const char *series, HContainer_t *keymap)
+{
+    int err = 0;
+    const char *keyid = NULL;
+    const char *keyname = NULL;
+    HIterator_t *hit = NULL;
+    int dstat = DRMS_SUCCESS;
+    DRMS_Record_t *template = NULL;
+    
+    if (keymap)
+    {
+        /* Iterate through elements, verifying that each key name is one of the expected names, and each value 
+         * is the name of a keyword in the orbit series. */
+        hit = hiter_create(keymap);
+        
+        if (hit)
+        {
+            template = drms_template_record(env, series, &dstat);
+            
+            if (template && dstat == DRMS_SUCCESS)
+            {
+                while ((keyname = hiter_extgetnext(hit, &keyid)) != NULL)
+                {                
+                    if (strcasecmp(keyid, "kXGCI") != 0 &&
+                        strcasecmp(keyid, "kYGCI") != 0 &&
+                        strcasecmp(keyid, "kZGCI") != 0 &&
+                        strcasecmp(keyid, "kVXGCI") != 0 &&
+                        strcasecmp(keyid, "kVYGCI") != 0 &&
+                        strcasecmp(keyid, "kVZGCI") != 0 &&
+                        strcasecmp(keyid, "kXHCI") != 0 &&
+                        strcasecmp(keyid, "kYHCI") != 0 &&
+                        strcasecmp(keyid, "kZHCI") != 0 &&
+                        strcasecmp(keyid, "kVXHCI") != 0 &&
+                        strcasecmp(keyid, "kVYHCI") != 0 &&
+                        strcasecmp(keyid, "kVZHCI") != 0 &&
+                        strcasecmp(keyid, "kOBSDATE") != 0 &&
+                        strcasecmp(keyid, "kRSUNOBS") != 0 &&
+                        strcasecmp(keyid, "kOBSVR") != 0 &&
+                        strcasecmp(keyid, "kDSUNOBS") != 0)
+                    {
+                        fprintf(stderr, "Invalid key ID %s.\n", keyid);
+                        err = 1;
+                        break;
+                    }
+                    
+                    if (!drms_keyword_lookup(template, keyname, 1))
+                    {
+                        fprintf(stderr, "Invalid keyword name %s.\n", keyname);
+                        err = 1;
+                        break;
+                    }
+                    
+                    if (!gKeyMap)
+                    {
+                        gKeyMap = hcon_create(DRMS_MAXKEYNAMELEN, DRMS_MAXKEYNAMELEN, NULL, NULL, NULL, NULL, 0);
+                    }
+                    
+                    if (!gKeyMap)
+                    {
+                        fprintf(stderr, "Out of memory.\n");
+                        err = 1;
+                    }
+                    else
+                    {
+                        hcon_insert(gKeyMap, keyid, keyname);
+                    }
+                }
+                
+                if (err)
+                {
+                    hcon_destroy(&gKeyMap);
+                    gKeyMap = NULL;
+                }
+            }
+            else
+            {
+                fprintf(stderr, "Unable to get template record for series %s.\n", series);
+                err = 1;
+            }
+            
+            hiter_destroy(&hit);
+        }
+        else
+        {
+            fprintf(stderr, "Out of memory.\n");
+            err = 1;
+        }
+    }
+    
+    return err;
+}
+
+LIBASTRO_Error_t iorbit_getinfo_internal(DRMS_Env_t *env, 
+                                         const char *srcseries,
+                                         const char *optfilter, 
+                                         IORBIT_Alg_t alg,
+                                         const double *tgttimes, 
+                                         int nitems, 
+                                         IORBIT_CacheAction_t ctype,
+                                         IORBIT_Info_t **info,
+                                         int calcSolarV)
+{
+    LIBASTRO_Error_t err = kLIBASTRO_Success;
+    int ntimes = 0;
+    double *tgtsorted = NULL;
+    IORBIT_Info_t *retvec = NULL;
+    
+    if (info && nitems > 0)
+    {
+        *info = calloc(nitems, sizeof(IORBIT_Info_t));
+        
+        /* Ensure tgttimes are sorted in increasing value - missing values are removed */
+        ntimes = SortTimes(tgttimes, nitems, &tgtsorted);  
+    }
+    else
+    {
+        err = kLIBASTRO_InvalidArgs;
+    }
+    
+    if (err == kLIBASTRO_Success && ntimes <= 0)
+    {
+        /* All target times are missing, and there are ntimes target times with missing values. */
+        int ivec;
+        
+        for (ivec = 0; ivec < nitems; ivec++)
+        {
+            retvec = &((*info)[ivec]);
+            
+            /* Initialize with missing values */
+            retvec->obstime = DRMS_MISSING_TIME;
+            retvec->hciX = DRMS_MISSING_DOUBLE;
+            retvec->hciY = DRMS_MISSING_DOUBLE;
+            retvec->hciZ = DRMS_MISSING_DOUBLE;
+            retvec->hciVX = DRMS_MISSING_DOUBLE;
+            retvec->hciVY = DRMS_MISSING_DOUBLE;
+            retvec->hciVZ = DRMS_MISSING_DOUBLE;
+            retvec->gciX = DRMS_MISSING_DOUBLE;
+            retvec->gciY = DRMS_MISSING_DOUBLE;
+            retvec->gciZ = DRMS_MISSING_DOUBLE;
+            retvec->gciVX = DRMS_MISSING_DOUBLE;
+            retvec->gciVY = DRMS_MISSING_DOUBLE;
+            retvec->gciVZ = DRMS_MISSING_DOUBLE;
+            retvec->dsun_obs = DRMS_MISSING_DOUBLE;
+            retvec->rsun_obs = DRMS_MISSING_DOUBLE;
+            retvec->obs_vr = DRMS_MISSING_DOUBLE;
+            retvec->obs_vw = DRMS_MISSING_DOUBLE;
+            retvec->obs_vn = DRMS_MISSING_DOUBLE;
+            retvec->crln_obs = DRMS_MISSING_DOUBLE;
+            retvec->crlt_obs = DRMS_MISSING_DOUBLE;
+            retvec->car_rot = DRMS_MISSING_INT;
+            snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s", DRMS_MISSING_STRING);
+        }
+    }
+    else if (err == kLIBASTRO_Success)
+    {
+        LinkedList_t *listvecs = NULL;
+        HContainer_t *indexmap = NULL;
+        IORBIT_Vector_t *vecs = NULL;
+        IORBIT_Vector_t *interp = NULL;
+        
+        double *dsun_obs = NULL;
+        double *hvr = NULL;
+        double *hvw = NULL;
+        double *hvn = NULL;
+        
+        int nbelow = 0;
+        int nabove = 0;
+        char filter[DRMS_MAXQUERYLEN];
+        
+        TIMER_t *tmr = NULL;
+        
+        gCacheChunking = 1;
+        
+        if (ctype == kIORBIT_CacheAction_Flush)
+        {
+            DestroyCache();
+        }
+        else if (ctype == kIORBIT_CacheAction_DontCache)
+        {
+            gCacheChunking = 0;
+            DestroyCache(); /* The cache (which actually doesn't contain a chunk, but instead contains
+                             * all data within the time range specified by the filter) should have been 
+                             * flushed at the end of each call to iorbit_getinfo(). But, just in case
+                             * flush again. */
+            if (optfilter != NULL)
+            {
+                fprintf(stderr, "WARNING: record-query filter '%s' is not applicable when caching is turned off and will not be used.\n", optfilter);
+            }
+            else
+            {
+                /* if !gCacheChunking, then must modify optfilter to restrict search to records that will likely 
+                 * contain all target points, plus extra points on either end. */
+                double min = tgtsorted[0];
+                double max = tgtsorted[ntimes - 1];
+                char mintime[128];
+                char maxtime[128];
+                sprint_time(mintime, min - 3600, "UTC", 0);
+                sprint_time(maxtime, max + 3600, "UTC", 0);
+                
+                snprintf(filter, sizeof(filter), "[%s-%s]", mintime, maxtime);
+                optfilter = filter;
+            }
+        }
+        
+        switch (alg)
+        {
+            case IORBIT_Alg_Linear:
+            {
+                fprintf(stderr, "Unsupported interpolation algorithm '%d'.\n", (int)alg);
+            }
+                break;
+            case IORBIT_Alg_Quadratic:
+            {
+                nbelow = 2;
+                nabove = 1;
+            }
+                break;
+            default:
+                fprintf(stderr, "Unsupported interpolation algorithm '%d'.\n", (int)alg);
+        }
+        
+        /* Use array of time strings to check for presence of gci/hci data in 
+         * grid cache - make some assumptions here 
+         *   1. The caller will ask for times in order.
+         *   2. The user won't request the same target times under normal
+         *      circumstances.
+         *
+         * Given these assumptions, the best way to refresh the cache is to 
+         * go in chronological order, using cached values until a miss happens.
+         * Then at that point, the cache is no longer useful - so wipe it out, get 
+         * another chunk of records from DRMS, and use those values to populate the cache.
+         */
+        
+        /* Get all grid vectors (data from the source series - each vector of information
+         * is associated with an actual observation time.  The information is not
+         * interpolated), in ascending order, such that the first grid vector's abscissa
+         * (observation time) is the largest abscissa smaller than than the 
+         * smallest result abscissa (interpolated time), and the last grid vector's abscissa is 
+         * the smallest abscissa greater than the largest result abscissa. 
+         */
+        
+        if (env->verbose)
+        {
+            /* time obtaining the grid vectors */
+            tmr = CreateTimer();
+        }
+        
+        if (GetGridVectors(env, 
+                           srcseries, /* series containing observed data */
+                           tgtsorted, /* times we want to interpolate to */
+                           ntimes,    /* number of items in tgtsorted */
+                           nbelow,    /* number of grid abscissae below first result abscissa */
+                           kLTE,
+                           nabove,    /* number of grid abscissae above last result abscissa */
+                           kGT,
+                           &listvecs,
+                           NULL,
+                           &indexmap, /* indices into listvecs; each target time is mapped to 
+                                       * an index into listvecs. The resulting vector is the 
+                                       * grid vector that has an obstime that is the largest
+                                       * time smaller than the target time. */
+                           optfilter))
+        {
+            err = kLIBASTRO_InsufficientData;
+        }
+        
+        if (env->verbose)
+        {
+            fprintf(stdout, "GetGridVectors() seconds elapsed: %f\n", GetElapsedTime(tmr));
+            DestroyTimer(&tmr);
+        }
+        
+        if (!err && listvecs && indexmap)
+        {
+            int ivec;
+            ListNode_t *ln = NULL;
+            
+            /* Make an array out of the list of grid vectors */
+            vecs = malloc(sizeof(IORBIT_Vector_t) * listvecs->nitems);
+            list_llreset(listvecs);
+            ivec = 0;
+            
+            while ((ln = list_llnext(listvecs)) != NULL)
+            {
+                vecs[ivec++] = *((IORBIT_Vector_t *)(ln->data));
+            }
+            
+            if (env->verbose)
+            {
+                /* time interpolation */
+                tmr = CreateTimer();
+            }
+            
+            /* This operates on the original set of target times, unlike GetGridVectors. */
+            if (!iorbit_interpolate(alg,
+                                    vecs, /* grid vectors (contains both abscissa and ordinate values) */
+                                    tgttimes, /* result abscissae */
+                                    indexmap, 
+                                    nitems,
+                                    &interp))
+            {
+                double *hb = NULL;
+                double *hl = NULL;
+                int crot;
+                double l0;
+                double b0;
+                char dhashkey[128];
+                int *pvindex = NULL;
+                int vindex;
+                char tbuf[48];
+                
+                if (env->verbose)
+                {
+                    fprintf(stdout, "iorbit_interpolate() seconds elapsed: %f\n", GetElapsedTime(tmr));
+                    DestroyTimer(&tmr);
+                    
+                    /* time solar velocity calculation */
+                    tmr = CreateTimer();
+                }
+                
+                if (calcSolarV)
+                {
+                    if (!CalcSolarVelocities(interp, nitems, &dsun_obs, &hvr, &hvw, &hvn, &hb, &hl))
+                    {
+                        if (env->verbose)
+                        {
+                            fprintf(stdout, "CalcSolarVelocities() seconds elapsed: %f\n", GetElapsedTime(tmr));
+                            DestroyTimer(&tmr);
+                        }
+                        
+                        /* loop through resulting vectors to create output */
+                        for (ivec = 0; ivec < nitems; ivec++)
+                        {
+                            retvec = &((*info)[ivec]);
+                            
+                            /* Carrington coordinates */
+                            SDOCarringtonCoords(interp[ivec].obstime, dsun_obs[ivec], hb[ivec], hl[ivec], &crot, &l0, &b0);
+                            
+                            if (!drms_ismissing_time(interp[ivec].obstime))
+                            {
+                                retvec->obstime = interp[ivec].obstime;
+                                
+                                /* Return all positions and velocity scalars in m and m/s (input is km and km/s). */
+                                retvec->hciX = interp[ivec].hciX * 1000;
+                                retvec->hciY = interp[ivec].hciY * 1000;
+                                retvec->hciZ = interp[ivec].hciZ * 1000;
+                                retvec->hciVX = interp[ivec].hciVX * 1000;
+                                retvec->hciVY = interp[ivec].hciVY * 1000;
+                                retvec->hciVZ = interp[ivec].hciVZ * 1000;
+                                retvec->gciX = interp[ivec].gciX * 1000;
+                                retvec->gciY = interp[ivec].gciY * 1000;
+                                retvec->gciZ = interp[ivec].gciZ * 1000;
+                                retvec->gciVX = interp[ivec].gciVX * 1000;
+                                retvec->gciVY = interp[ivec].gciVY * 1000;
+                                retvec->gciVZ = interp[ivec].gciVZ * 1000;
+                                retvec->dsun_obs = dsun_obs[ivec] * 1000;
+                                retvec->obs_vr = hvr[ivec] * 1000;
+                                retvec->obs_vw = hvw[ivec] * 1000;
+                                retvec->obs_vn = hvn[ivec] * 1000;
+                                retvec->rsun_obs = (retvec->dsun_obs < 0.001 && retvec->dsun_obs > -0.001 ? DRMS_MISSING_DOUBLE : 
+                                                    648000 * asin(kRSUNREF / retvec->dsun_obs) / kPI); 
+                                retvec->crln_obs = l0;
+                                retvec->crlt_obs = b0;
+                                retvec->car_rot = crot;
+                                
+                                /* indexmap contains the indices into vecs array such that hcon_lookup(indexmap, dhashkey), 
+                                 * where dhashkey is the string equivalent of tgttimes[itgt], 
+                                 * returns the index into vecs that yields the vector whose tobs is immediately smaller. */
+                                
+                                /* ok to use ivec - there is one tgttime per vector */
+                                CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[ivec]);
+                                
+                                if ((pvindex = (int *)hcon_lookup(indexmap, dhashkey)) != NULL)
+                                {
+                                    vindex = *pvindex;
+                                    sprint_time(tbuf, vecs[vindex].obstime, "UTC", 0);
+                                    snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s[%s]", srcseries, tbuf);
+                                }
+                                else
+                                {
+                                    fprintf(stderr, "Unable to locate expected target time '%s' in indexmap hash./n", dhashkey);
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    /* No velocities in the orbit series. */
+                    /* loop through resulting vectors to create output */
+                    for (ivec = 0; ivec < nitems; ivec++)
+                    {
+                        retvec = &((*info)[ivec]);
+
+                        retvec->obstime = interp[ivec].obstime;
+
+                        /* Convert km to m. */
+                        retvec->hciX = interp[ivec].hciX * 1000;
+                        retvec->hciY = interp[ivec].hciY * 1000;
+                        retvec->hciZ = interp[ivec].hciZ * 1000;
+                        retvec->hciVX = DRMS_MISSING_DOUBLE;
+                        retvec->hciVY = DRMS_MISSING_DOUBLE;
+                        retvec->hciVZ = DRMS_MISSING_DOUBLE;
+                        retvec->gciX = interp[ivec].gciX * 1000;
+                        retvec->gciY = interp[ivec].gciY * 1000;
+                        retvec->gciZ = interp[ivec].gciZ * 1000;
+                        retvec->gciVX = DRMS_MISSING_DOUBLE;
+                        retvec->gciVY = DRMS_MISSING_DOUBLE;
+                        retvec->gciVZ = DRMS_MISSING_DOUBLE;
+                        retvec->rsun_obs = interp[ivec].rsunobs;
+                        retvec->obs_vr = interp[ivec].obsvr * 1000;
+                        retvec->dsun_obs = interp[ivec].dsunobs * 1000;
+                        retvec->obs_vw = DRMS_MISSING_DOUBLE;
+                        retvec->obs_vn = DRMS_MISSING_DOUBLE;
+                        retvec->crln_obs = DRMS_MISSING_DOUBLE;
+                        retvec->crlt_obs = DRMS_MISSING_DOUBLE;
+                        retvec->car_rot = DRMS_MISSING_INT;
+                        
+                        /* indexmap contains the indices into vecs array such that hcon_lookup(indexmap, dhashkey), 
+                         * where dhashkey is the string equivalent of tgttimes[itgt], 
+                         * returns the index into vecs that yields the vector whose tobs is immediately smaller. */
+                        
+                        /* ok to use ivec - there is one tgttime per vector */
+                        CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[ivec]);
+                        
+                        if ((pvindex = (int *)hcon_lookup(indexmap, dhashkey)) != NULL)
+                        {
+                            vindex = *pvindex;
+                            sprint_time(tbuf, vecs[vindex].obstime, "UTC", 0);
+                            snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s[%s]", srcseries, tbuf);
+                        }
+                        else
+                        {
+                            fprintf(stderr, "Unable to locate expected target time '%s' in indexmap hash./n", dhashkey);
+                        }
+                    }
+                }
+                
+                if (hb)
+                {
+                    free(hb);
+                }
+                
+                if (hl)
+                {
+                    free(hl);
+                }
+            }
+            else
+            {
+                /* error performing interpolation */
+                fprintf(stderr, "Error performing interpolation.\n");
+                err = kLIBASTRO_Interpolation;
+            }
+        }
+        
+        if (dsun_obs)
+        {
+            free(dsun_obs);
+        }
+        
+        if (hvr)
+        {
+            free(hvr);
+        }
+        
+        if (hvw)
+        {
+            free(hvw);
+        }
+        
+        if (hvn)
+        {
+            free(hvn);
+        }
+        
+        if (vecs)
+        {
+            free(vecs);
+        }
+        
+        if (interp)
+        {
+            free(interp);
+        }
+        
+        if (listvecs)
+        {
+            list_llfree(&listvecs);
+        }
+        
+        if (indexmap)
+        {
+            hcon_destroy(&indexmap);
+        }
+    }
+    
+    if (ctype == kIORBIT_CacheAction_DontCache)
+    {
+        DestroyCache();
+    }
+    
+    return err;
+}
+
 /*
  * srcseries - Datseries containing orbit-data information (like sdo.fds_orbit_vectors)
  * alg - interpolation algorithm
@@ -1205,6 +1850,10 @@ void iorbit_carrcoords(TIME t, double obsdist, double b, double hci_long, int *c
  *    for a given observation time.
  * 
  */
+
+/* 
+ * This version of the API function is used for SDO.
+ */
 LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env, 
                                 const char *srcseries,
                                 const char *optfilter, 
@@ -1214,353 +1863,57 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                 IORBIT_CacheAction_t ctype,
                                 IORBIT_Info_t **info)
 {
-   LIBASTRO_Error_t err = kLIBASTRO_Success;
-   int ntimes = 0;
-   double *tgtsorted = NULL;
-   IORBIT_Info_t *retvec = NULL;
+    return iorbit_getinfo_internal(env, srcseries, optfilter, alg, tgttimes, nitems, ctype, info, 1);
+}
 
-   if (info && nitems > 0)
-   {
-     *info = calloc(nitems, sizeof(IORBIT_Info_t));
+/* Added for IRIS. IRIS has no velocity keywords. */
 
-      /* Ensure tgttimes are sorted in increasing value - missing values are removed */
-      ntimes = SortTimes(tgttimes, nitems, &tgtsorted);  
-   }
-   else
-   {
-      err = kLIBASTRO_InvalidArgs;
-   }
-
-   if (err == kLIBASTRO_Success && ntimes <= 0)
-   {
-      /* All target times are missing, and there are nitems target times with missing values. */
-      int ivec;
-
-      for (ivec = 0; ivec < nitems; ivec++)
-      {
-         retvec = &((*info)[ivec]);
-
-         /* Initialize with missing values */
-         retvec->obstime = DRMS_MISSING_TIME;
-         retvec->hciX = DRMS_MISSING_DOUBLE;
-         retvec->hciY = DRMS_MISSING_DOUBLE;
-         retvec->hciZ = DRMS_MISSING_DOUBLE;
-         retvec->hciVX = DRMS_MISSING_DOUBLE;
-         retvec->hciVY = DRMS_MISSING_DOUBLE;
-         retvec->hciVZ = DRMS_MISSING_DOUBLE;
-         retvec->gciX = DRMS_MISSING_DOUBLE;
-         retvec->gciY = DRMS_MISSING_DOUBLE;
-         retvec->gciZ = DRMS_MISSING_DOUBLE;
-         retvec->gciVX = DRMS_MISSING_DOUBLE;
-         retvec->gciVY = DRMS_MISSING_DOUBLE;
-         retvec->gciVZ = DRMS_MISSING_DOUBLE;
-         retvec->dsun_obs = DRMS_MISSING_DOUBLE;
-         retvec->rsun_obs = DRMS_MISSING_DOUBLE;
-         retvec->obs_vr = DRMS_MISSING_DOUBLE;
-         retvec->obs_vw = DRMS_MISSING_DOUBLE;
-         retvec->obs_vn = DRMS_MISSING_DOUBLE;
-         retvec->crln_obs = DRMS_MISSING_DOUBLE;
-         retvec->crlt_obs = DRMS_MISSING_DOUBLE;
-         retvec->car_rot = DRMS_MISSING_INT;
-         snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s", DRMS_MISSING_STRING);
-      }
-   }
-   else if (err == kLIBASTRO_Success)
-   {
-      LinkedList_t *listvecs = NULL;
-      HContainer_t *indexmap = NULL;
-      IORBIT_Vector_t *vecs = NULL;
-      IORBIT_Vector_t *interp = NULL;
-
-      double *dsun_obs = NULL;
-      double *hvr = NULL;
-      double *hvw = NULL;
-      double *hvn = NULL;
-
-      int nbelow = 0;
-      int nabove = 0;
-      char filter[DRMS_MAXQUERYLEN];
-
-      TIMER_t *tmr = NULL;
-
-      gCacheChunking = 1;
-
-      if (ctype == kIORBIT_CacheAction_Flush)
-      {
-         DestroyCache();
-      }
-      else if (ctype == kIORBIT_CacheAction_DontCache)
-      {
-         gCacheChunking = 0;
-         DestroyCache(); /* The cache (which actually doesn't contain a chunk, but instead contains
-                          * all data within the time range specified by the filter) should have been 
-                          * flushed at the end of each call to iorbit_getinfo(). But, just in case
-                          * flush again. */
-         if (optfilter != NULL)
-         {
-            fprintf(stderr, "WARNING: record-query filter '%s' is not applicable when caching is turned off and will not be used.\n", optfilter);
-         }
-         else
-         {
-            /* if !gCacheChunking, then must modify optfilter to restrict search to records that will likely 
-             * contain all target points, plus extra points on either end. */
-            double min = tgtsorted[0];
-            double max = tgtsorted[ntimes - 1];
-            char mintime[128];
-            char maxtime[128];
-            sprint_time(mintime, min - 3600, "UTC", 0);
-            sprint_time(maxtime, max + 3600, "UTC", 0);
-
-            snprintf(filter, sizeof(filter), "[%s-%s]", mintime, maxtime);
-            optfilter = filter;
-         }
-      }
-
-      switch (alg)
-      {
-         case IORBIT_Alg_Linear:
-         {
-            fprintf(stderr, "Unsupported interpolation algorithm '%d'.\n", (int)alg);
-         }
-         break;
-         case IORBIT_Alg_Quadratic:
-         {
-            nbelow = 2;
-            nabove = 1;
-         }
-         break;
-         default:
-           fprintf(stderr, "Unsupported interpolation algorithm '%d'.\n", (int)alg);
-      }
-
-      /* Use array of time strings to check for presence of gci/hci data in 
-       * grid cache - make some assumptions here 
-       *   1. The caller will ask for times in order.
-       *   2. The user won't request the same target times under normal
-       *      circumstances.
-       *
-       * Given these assumptions, the best way to refresh the cache is to 
-       * go in chronological order, using cached values until a miss happens.
-       * Then at that point, the cache is no longer useful - so wipe it out, get 
-       * another chunk of records from DRMS, and use those values to populate the cache.
-       */
-
-      /* Get all grid vectors (data from the source series - each vector of information
-       * is associated with an actual observation time.  The information is not
-       * interpolated), in ascending order, such that the first grid vector's abscissa
-       * (observation time) is the largest abscissa smaller than than the 
-       * smallest result abscissa (interpolated time), and the last grid vector's abscissa is 
-       * the smallest abscissa greater than the largest result abscissa. 
-       */
-
-      if (env->verbose)
-      {
-         /* time obtaining the grid vectors */
-         tmr = CreateTimer();
-      }
-
-      if (GetGridVectors(env, 
-                         srcseries, /* series containing observed data */
-                         tgtsorted, /* times we want to interpolate to */
-                         ntimes,
-                         nbelow, /* number of grid abscissae below first result abscissa */
-                         kLTE,
-                         nabove, /* number of grid abscissae above last result abscissa */
-                         kGT,
-                         &listvecs,
-                         NULL,
-                         &indexmap, /* indices into listvecs; each target time is mapped to 
-                                     * an index into listvecs. The resulting vector is the 
-                                     * grid vector that has an obstime that is the largest
-                                     * time smaller than the target time. */
-                         optfilter))
-      {
-         err = kLIBASTRO_InsufficientData;
-      }
-
-      if (env->verbose)
-      {
-         fprintf(stdout, "GetGridVectors() seconds elapsed: %f\n", GetElapsedTime(tmr));
-         DestroyTimer(&tmr);
-      }
-
-      if (!err && listvecs && indexmap)
-      {
-         int ivec;
-         ListNode_t *ln = NULL;
-
-         /* Make an array out of the list of grid vectors */
-         vecs = malloc(sizeof(IORBIT_Vector_t) * listvecs->nitems);
-         list_llreset(listvecs);
-         ivec = 0;
-
-         while ((ln = list_llnext(listvecs)) != NULL)
-         {
-            vecs[ivec++] = *((IORBIT_Vector_t *)(ln->data));
-         }
-
-         if (env->verbose)
-         {
-            /* time interpolation */
-            tmr = CreateTimer();
-         }
-
-         /* This operates on the original set of target times, unlike GetGridVectors. */
-         if (!iorbit_interpolate(alg,
-                                 vecs, /* grid vectors (contains both abscissa and ordinate values) */
-                                 tgttimes, /* result abscissae */
-                                 indexmap, 
-                                 nitems,
-                                 &interp))
-         {
-            double *hb = NULL;
-            double *hl = NULL;
-            int crot;
-            double l0;
-            double b0;
-            char dhashkey[128];
-            int *pvindex = NULL;
-            int vindex;
-            char tbuf[48];
-
-            if (env->verbose)
-            {
-               fprintf(stdout, "iorbit_interpolate() seconds elapsed: %f\n", GetElapsedTime(tmr));
-               DestroyTimer(&tmr);
-               
-               /* time solar velocity calculation */
-               tmr = CreateTimer();
-            }
-
-            if (!CalcSolarVelocities(interp, nitems, &dsun_obs, &hvr, &hvw, &hvn, &hb, &hl))
-            {
-               if (env->verbose)
-               {
-                  fprintf(stdout, "CalcSolarVelocities() seconds elapsed: %f\n", GetElapsedTime(tmr));
-                  DestroyTimer(&tmr);
-               }
-
-               /* loop through resulting vectors to create output */
-               for (ivec = 0; ivec < nitems; ivec++)
-               {
-                  retvec = &((*info)[ivec]);
-
-                  /* Carrington coordinates */
-                  SDOCarringtonCoords(interp[ivec].obstime, dsun_obs[ivec], hb[ivec], hl[ivec], &crot, &l0, &b0);
-
-                  if (!drms_ismissing_time(interp[ivec].obstime))
-                  {
-                     retvec->obstime = interp[ivec].obstime;
-
-                     /* Return all positions and velocity scalars in m and m/s (input is km and km/s). */
-                     retvec->hciX = interp[ivec].hciX * 1000;
-                     retvec->hciY = interp[ivec].hciY * 1000;
-                     retvec->hciZ = interp[ivec].hciZ * 1000;
-                     retvec->hciVX = interp[ivec].hciVX * 1000;
-                     retvec->hciVY = interp[ivec].hciVY * 1000;
-                     retvec->hciVZ = interp[ivec].hciVZ * 1000;
-                     retvec->gciX = interp[ivec].gciX * 1000;
-                     retvec->gciY = interp[ivec].gciY * 1000;
-                     retvec->gciZ = interp[ivec].gciZ * 1000;
-                     retvec->gciVX = interp[ivec].gciVX * 1000;
-                     retvec->gciVY = interp[ivec].gciVY * 1000;
-                     retvec->gciVZ = interp[ivec].gciVZ * 1000;
-                     retvec->dsun_obs = dsun_obs[ivec] * 1000;
-                     retvec->obs_vr = hvr[ivec] * 1000;
-                     retvec->obs_vw = hvw[ivec] * 1000;
-                     retvec->obs_vn = hvn[ivec] * 1000;
-                     retvec->rsun_obs = (retvec->dsun_obs < 0.001 && retvec->dsun_obs > -0.001 ? DRMS_MISSING_DOUBLE : 
-                                         648000 * asin(kRSUNREF / retvec->dsun_obs) / kPI); 
-                     retvec->crln_obs = l0;
-                     retvec->crlt_obs = b0;
-                     retvec->car_rot = crot;
-
-                     /* indexmap contains the indices into vecs array that such that hcon_lookup(indexmap, dhashkey), 
-                      * where dhashkey is the string equivalent of tgttimes[itgt], 
-                      * returns the index into vecs that yields the vector whose tobs is immediately smaller. */
-
-                     /* ok to use ivec - there is one tgttime per vector */
-                     CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[ivec]);
-
-                     if ((pvindex = (int *)hcon_lookup(indexmap, dhashkey)) != NULL)
-                     {
-                        vindex = *pvindex;
-                        sprint_time(tbuf, vecs[vindex].obstime, "UTC", 0);
-                        snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s[%s]", srcseries, tbuf);
-                     }
-                     else
-                     {
-                        fprintf(stderr, "Unable to locate expected target time '%s' in indexmap hash./n", dhashkey);
-                     }
-                  }
-               }
-            }
-
-            if (hb)
-            {
-               free(hb);
-            }
-
-            if (hl)
-            {
-               free(hl);
-            }
-         }
-         else
-         {
-            /* error performing interpolation */
-            fprintf(stderr, "Error performing interpolation.\n");
-            err = kLIBASTRO_Interpolation;
-         }
-      }
-
-      if (dsun_obs)
-      {
-         free(dsun_obs);
-      }
-
-      if (hvr)
-      {
-         free(hvr);
-      }
-
-      if (hvw)
-      {
-         free(hvw);
-      }
-
-      if (hvn)
-      {
-         free(hvn);
-      }
-
-      if (vecs)
-      {
-         free(vecs);
-      }
-
-      if (interp)
-      {
-         free(interp);
-      }
-
-      if (listvecs)
-      {
-         list_llfree(&listvecs);
-      }
-
-      if (indexmap)
-      {
-         hcon_destroy(&indexmap);
-      }
-   }
-
-   if (ctype == kIORBIT_CacheAction_DontCache)
-   {
-      DestroyCache();
-   }
-
-   return err;
+/* 
+ * For IRIS, the velocities (hciVX, hciVY, hciVZ, gciVX, gciVY, gciVZ) are not used. The values
+ * for these quantities will set to missing.
+ *
+ * To use this API function, the caller must set-up a HContainer_t that maps the following strings
+ * 
+ * kXGCI 
+ * kYGCI
+ * kZGCI
+ * kVXGCI
+ * kVYGCI
+ * kVZGCI
+ * kXHCI
+ * kYHCI
+ * kZHCI
+ * kVXHCI
+ * kVYHCI
+ * kVZHCI
+ * kRSUNOBS
+ * kOBSVR
+ * kDSUNOBS
+ * kOBSDATE
+ *
+ * to the corresponding series keywords names. Some series may not have one or more corresponding keywords.
+ * For those keywords, either set the keyword name to the empty string, or omit the map entry altogether. If 
+ * keymap is NULL or the container it points to is empty, then the resulting behavior is identical to
+ * calling iorbit_getinfo().
+ */
+LIBASTRO_Error_t iorbit_getinfo_ext(DRMS_Env_t *env, 
+                                    const char *srcseries,
+                                    const char *optfilter, 
+                                    IORBIT_Alg_t alg,
+                                    const double *tgttimes, 
+                                    int nitems, 
+                                    IORBIT_CacheAction_t ctype,
+                                    IORBIT_Info_t **info,
+                                    HContainer_t *keymap)
+{    
+    if (SetUpKeymap(env, srcseries, keymap))
+    {
+        /* The only real error would be if the caller provided a map that contained an entry with 
+         * an unknown keyname, or a value that is not a keyword name.*/
+        return kLIBASTRO_InvalidArgs;
+    }
+    
+    return iorbit_getinfo_internal(env, srcseries, optfilter, alg, tgttimes, nitems, ctype, info, 0);
 }
 
 void iorbit_cleanup()

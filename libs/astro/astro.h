@@ -17,19 +17,20 @@ typedef enum
 
 typedef enum
 {
-   kLIBASTRO_Success = 0,
-   kLIBASTRO_BadDimensionality,
-   kLIBASTRO_BadData,
-   kLIBASTRO_CouldntCreateData,
-   kLIBASTRO_DimensionMismatch,
-   kLIBASTRO_CantDoOddNumLats,
-   kLIBASTRO_UnsupportedInterp,
-   kLIBASTRO_UnsupportedMCOR,
-   kLIBASTRO_UnsupportedVCOR,
-   kLIBASTRO_InconsistentConstraints,
-   kLIBASTRO_InvalidArgs,
-   kLIBASTRO_Interpolation,
-   kLIBASTRO_InsufficientData
+    kLIBASTRO_Success = 0,
+    kLIBASTRO_BadDimensionality,
+    kLIBASTRO_BadData,
+    kLIBASTRO_CouldntCreateData,
+    kLIBASTRO_DimensionMismatch,
+    kLIBASTRO_CantDoOddNumLats,
+    kLIBASTRO_UnsupportedInterp,
+    kLIBASTRO_UnsupportedMCOR,
+    kLIBASTRO_UnsupportedVCOR,
+    kLIBASTRO_InconsistentConstraints,
+    kLIBASTRO_InvalidArgs,
+    kLIBASTRO_Interpolation,
+    kLIBASTRO_InsufficientData,
+    kLIBASTRO_OutOfMemory
 } LIBASTRO_Error_t;
 
 
@@ -99,6 +100,15 @@ LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env,
                                 int nitems, 
                                 IORBIT_CacheAction_t ctype,
                                 IORBIT_Info_t **info);
+LIBASTRO_Error_t iorbit_getinfo_ext(DRMS_Env_t *env, 
+                                    const char *srcseries,
+                                    const char *optfilter, 
+                                    IORBIT_Alg_t alg,
+                                    const double *tgttimes, 
+                                    int nitems, 
+                                    IORBIT_CacheAction_t ctype,
+                                    IORBIT_Info_t **info,
+                                    HContainer_t *keymap);
 void iorbit_cleanup();
 
 void HeliographicLocation(TIME t, int *crot, double *L, double *B);
