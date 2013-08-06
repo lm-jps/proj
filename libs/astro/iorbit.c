@@ -181,30 +181,42 @@ static int CmpTimes(const void *a, const void *b)
 */
 static int SortTimes(const double *unsorted, int nitems, double **sorted)
 {
-   double *sortedint = malloc(nitems * sizeof(double));
-   memcpy(sortedint, unsorted, nitems * sizeof(double));
-   qsort(sortedint, nitems, sizeof(double), CmpTimes);
-   int itime = 0;
-   int nret = 0;
-
-   if (sorted)
-   {
-      while (drms_ismissing_time(sortedint[itime]) && itime < nitems)
-      {
-         itime++;
-      }
-
-      /* itime is index of first valid time */
-      if (itime < nitems)
-      {
-         /* at least one valid time */
-         nret = nitems - itime;
-         *sorted = malloc(nret * sizeof(double));
-         memcpy(*sorted, &(sortedint[itime]), nret * sizeof(double));
-      }
-   }
-
-   return nret;
+    int nret = 0;
+    double *sortedint = malloc(nitems * sizeof(double));
+    int itime;
+    
+    if (sortedint)
+    {
+        memcpy(sortedint, unsorted, nitems * sizeof(double));
+        qsort(sortedint, nitems, sizeof(double), CmpTimes);
+        
+        if (sorted)
+        {
+            itime = 0;
+            while (drms_ismissing_time(sortedint[itime]) && itime < nitems)
+            {
+                itime++;
+            }
+            
+            /* itime is index of first valid time */
+            if (itime < nitems)
+            {
+                /* at least one valid time */
+                nret = nitems - itime;
+                *sorted = malloc(nret * sizeof(double));
+                memcpy(*sorted, &(sortedint[itime]), nret * sizeof(double));
+            }
+        }
+        
+        free(sortedint);
+        sortedint = NULL;
+    }
+    else
+    {
+        fprintf(stderr, "SortTime() - out of memory.\n");
+    }
+    
+    return nret;
 }
 
 /* return the relationship of slottime to tgttime */
@@ -1596,6 +1608,9 @@ LIBASTRO_Error_t iorbit_getinfo_internal(DRMS_Env_t *env,
         {
             err = kLIBASTRO_InsufficientData;
         }
+        
+        /* tgtsorted no longer needed */
+        free(tgtsorted);
         
         if (env->verbose)
         {

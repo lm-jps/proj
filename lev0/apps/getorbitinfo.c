@@ -224,6 +224,8 @@ int DoIt(void)
                                        kIORBIT_CacheAction_DontCache,
                                        &info,
                                        keymap);
+               
+               hcon_destroy(&keymap);
            }
            else
            {
