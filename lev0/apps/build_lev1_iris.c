@@ -613,6 +613,10 @@ int do_ingest(long long bbrec, long long eerec)
         continue;
       }
       printf("\npath to lev1 = %s\n", rs1_path);	//!!TEMP
+      if(rstatus = iris_isp2wcs(rs0, rs)) {
+        printk("**ERROR: iris_isp2wcs() status = %d\n", rstatus);
+        printk("Press on...\n");
+      }
       dstatus = drms_setkey_int(rs, "FSN", fsnx);
       //dstatus = drms_setkey_string(rs, "LEV0SERIES", lev0name); //no such keyword
       if(!(segment = drms_segment_lookup(rs, "image_lev1"))) {
@@ -808,6 +812,7 @@ int do_ingest(long long bbrec, long long eerec)
           drms_setkey_int(rs, "TEC8", crsint);
 
           crsint = drms_getkey_int(crsrec, "WIN_FLIP", &status);
+          l0l1->winflip = crsint;
           drms_setkey_int(rs, "WIN_FLIP", crsint); 
           printk("Close: %s\n", open_dsname);
           drms_close_records(crsset, DRMS_FREE_RECORD);
@@ -1124,7 +1129,7 @@ int do_ingest(long long bbrec, long long eerec)
 /**************************No DARK for IRIS?**********************************/
 
       if(!hmiaiaflg) {			//only call for hmi
-/*****************************Noop cosmic_rays call for now*********************************
+/*****************************Noop cosmic_rays call for now********************
         //StartTimer(1);	//!!TEMP
         dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
 				array_cosmic, &n_cosmic, 4096, 4096);
@@ -1200,6 +1205,9 @@ TEMPSKIP:
     }
   }
   lstatus = 1;				//default bad limb_fit
+
+  goto WCSEND;		//skip all WCS stuff for IRIS
+
   //WCS calculations for condition 1
   //(For WCS conditions see mail from Rock 10Aug2010 16:40)
   if(!skiplimb && !hmiaiaflg) {		//only call for HMI
