@@ -210,7 +210,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.2 2013/08/06 23:26:42 arta Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.3 2013/08/07 00:04:46 arta Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -612,7 +612,7 @@ int DoIt(void)
         free(jz_err_squared); free(jz_rms_err);
 	free(cvsinfoall);
  
-return 1;     
+return 0;    
 }	// DoIt
 
 
