@@ -294,12 +294,6 @@ int keyNameCheck(char *name, char **fromname)
 
 int DoIt(void) 
    {
-       int waka;
-       
-       if (waka)
-       {
-           printf("eat me\n");
-       }
    int errbufstat=setvbuf(stderr, NULL, _IONBF, BUFSIZ);
    int outbufstat=setvbuf(stdout, NULL, _IONBF, BUFSIZ);
    int status = DRMS_SUCCESS;
@@ -393,7 +387,7 @@ int DoIt(void)
       }  
 
   // set cvs commit version into keyword HEADER
-      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.14 2013/08/06 23:26:41 arta Exp $");
+      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.15 2013/08/07 00:06:36 arta Exp $");
       status = drms_setkey_string(outRec, "HEADER", cvsinfo); 
 
       if (skipflag)
