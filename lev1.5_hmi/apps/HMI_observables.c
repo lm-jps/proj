@@ -172,7 +172,11 @@ char *module_name= "HMI_observables"; //name of the module
 #define DARK_FRONT  1                 //FRONT CAMERA
 
 #define Q_ACS_ECLP 0x2000             //eclipse keyword for the lev1 data
+#define Q_ACS_ISSLOOP 0x20000         //ISS loop OPEN for lev1
+#define Q_ACS_NOLIMB 0x10             //limbfinder error for lev1
 #define Q_MISSING_SEGMENT 0x80000000  //missing image segment for lev1 record 
+#define Q_ACS_LUNARTRANSIT 0x400000   //lunar transit
+#define Q_ACS_THERMALRECOVERY 0x800000//therma recovery after eclipses
 #define CALVER_DEFAULT 0              //both default and missing values of CALVER64
 #define CALVER_SMOOTH  0x100          //bitmask for CALVER64 to indicate the use of smooth look-up tables
 #define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction
@@ -209,7 +213,7 @@ char *module_name= "HMI_observables"; //name of the module
 #define QUAL_NOCOSMICRAY             (0x400)                //some cosmic-ray hit lists could not be read for the level 1 filtergrams
 #define QUAL_ECLIPSE                 (0x100)                //at least one lev1 record was taken during an eclipse
 #define QUAL_LARGEFTSID              (0x40)                 //HFTSACID of target filtergram > 4000, which adds noise to observables
-
+#define QUAL_POORQUALITY             (0x20)                 //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
 
 //DRMS FAILURE (AN OBSERVABLE COULD, A PRIORI, BE CREATED, BUT THERE WAS A MOMENTARY FAILURE OF THE DRMS)
 //#define QUAL_NOLEV1D                 (0x20)                 //could not create lev1d records
@@ -1090,7 +1094,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.38 2013/01/07 17:47:30 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.39 2013/08/12 18:15:13 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1152,6 +1156,7 @@ int DoIt(void)
   if(inLinearity == 1) strcat(COMMENT,"; linearity=1");
   if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
   if(inSmoothTables == 1) strcat(COMMENT,"; smooth=1");
+  strcat(COMMENT,"; propagate eclipse bit from level 1");
 
   struct init_files initfiles;
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
@@ -1773,10 +1778,10 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
     }
   else                                                               //Final data
     {
-      if(DataCadence == 22.5)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d22");
+      if(DataCadence == 22.5)  strcpy(HMISeriesLev1d,"hmi_test.HMISeriesLev1d22");
       if(DataCadence == 45.0)  strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d45");
-      if(DataCadence == 60.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d60");
-      if(DataCadence == 75.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d75");
+      if(DataCadence == 60.0)  strcpy(HMISeriesLev1d,"hmi_test.HMISeriesLev1d60");
+      if(DataCadence == 75.0)  strcpy(HMISeriesLev1d,"hmi_test.HMISeriesLev1d75");
       if(DataCadence == 90.0)  strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d90");
       if(DataCadence == 120.0) strcpy(HMISeriesLev1d,"su_couvidat.HMISeriesLev1d120");
       if(DataCadence == 135.0) strcpy(HMISeriesLev1d,"hmi.HMISeriesLev1d135");
@@ -1833,7 +1838,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
     {	
       if(DataCadence == 45.0)
 	{						             
-	  strcpy(HMISeriesLev15a,"hmi.V_45s"  );              
+	  strcpy(HMISeriesLev15a,"hmi.V_45s");              
 	  strcpy(HMISeriesLev15b,"hmi.M_45s" );              
 	  strcpy(HMISeriesLev15c,"hmi.Ld_45s" );              
 	  strcpy(HMISeriesLev15d,"hmi.Lw_45s" );              
@@ -1849,11 +1854,11 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	}
       if(DataCadence == 60.0)
 	{						             
-	  strcpy(HMISeriesLev15a,"hmi.V_60s");              
-	  strcpy(HMISeriesLev15b,"hmi.M_60s");              
-	  strcpy(HMISeriesLev15c,"hmi.Ld_60s");              
-	  strcpy(HMISeriesLev15d,"hmi.Lw_60s");              
-	  strcpy(HMISeriesLev15e,"hmi.Ic_60s");
+	  strcpy(HMISeriesLev15a,"hmi_test.V_60s");              
+	  strcpy(HMISeriesLev15b,"hmi_test.M_60s");              
+	  strcpy(HMISeriesLev15c,"hmi_test.Ld_60s");              
+	  strcpy(HMISeriesLev15d,"hmi_test.Lw_60s");              
+	  strcpy(HMISeriesLev15e,"hmi_test.Ic_60s");
 	}
       if(DataCadence == 75.0)
 	{
@@ -1894,10 +1899,10 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
     }
   else                                                              //Final data
     {
-      if(DataCadence == 22.5) strcpy(HMISeriesLev1pb,"su_couvidat.HMISeriesLev1pb22");
+      if(DataCadence == 22.5) strcpy(HMISeriesLev1pb,"hmi_test.HMISeriesLev1pb22");
       if(DataCadence == 45.0) strcpy(HMISeriesLev1pb,"hmi.HMISeriesLev1pb45");
-      if(DataCadence == 60.0) strcpy(HMISeriesLev1pb,"su_couvidat.HMISeriesLev1pb60");
-      if(DataCadence == 75.0) strcpy(HMISeriesLev1pb,"su_couvidat.HMISeriesLev1pb75");
+      if(DataCadence == 60.0) strcpy(HMISeriesLev1pb,"hmi_test.HMISeriesLev1pb60");
+      if(DataCadence == 75.0) strcpy(HMISeriesLev1pb,"hmi_test.HMISeriesLev1pb75");
     }
 
   //initialization of Level 1pa (I,Q,U, and V) data series names (NB: THESE SERIES ARE ARCHIVED FOR QuickLook == 0)
@@ -2293,12 +2298,13 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 
 	      X0LF = (float)drms_getkey_double(recLev1->records[i],X0LFS, &status);
 	      Y0LF = (float)drms_getkey_double(recLev1->records[i],Y0LFS, &status2);
-	      if(status != DRMS_SUCCESS || status2 != DRMS_SUCCESS || isnan(X0LF) || isnan(Y0LF))
+	      if(status != DRMS_SUCCESS || status2 != DRMS_SUCCESS || isnan(X0LF) || isnan(Y0LF)) //returns NaN during eclipses
 		{
 		  statusA[14]=1;
 		  statusA[15]=1;
 		  X0[i]=sqrt(-1);
 		  Y0[i]=sqrt(-1);
+		  KeywordMissing[i]=1;
 		}
 
 	      //if(isnan(Y0[i])) statusA[15] = 0;//we can still use the filtergram even if CRPIX2 is crap (this filtergram will just be discarded later if needed)
@@ -2337,12 +2343,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	      KeywordMissing[i]=0;//no keyword is nissing, a priori
 	      CRLNOBS[i]    = (float)drms_getkey_double(recLev1->records[i] ,CRLNOBSS,&statusA[26]);
 	      if(isnan(CRLNOBS[i])) statusA[26] = 1;
-	      //HGLNOBS[i]    = (float)drms_getkey_double(recLev1->records[i] ,HGLNOBSS,&statusA[27]);
-	      //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-	      //HGLNOBS[i]=0.0;
 	      statusA[27]=0;
-	      //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-	      //if(isnan(HGLNOBS[i])) statusA[27] = 1;
 	      HWLTID[i]     = drms_getkey_int(recLev1->records[i] ,HWLTIDS           ,&statusA[28]);
 	      HPLTID[i]     = drms_getkey_int(recLev1->records[i] ,HPLTIDS           ,&statusA[29]);
 	      HWLTNSET[i]    = (char *)malloc(7*sizeof(char *));                                  //6 because HWLTNSET is either OPEN or CLOSED, i.e. 6 characters + \0 
@@ -2351,7 +2352,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		  printf("Error: memory could not be allocated to HWLTNSET[%d]\n",i);
 		  return 1;//exit(EXIT_FAILURE);
 		}
-	      HWLTNSET[i]   = drms_getkey_string(recLev1->records[i] ,HWLTNSETS      ,&statusA[30]);
+	      HWLTNSET[i]   = drms_getkey_string(recLev1->records[i] ,HWLTNSETS      ,&statusA[30]); //status of ISS loop: open or close
 	      EXPTIME[i]    = (float)drms_getkey_double(recLev1->records[i],"EXPTIME",&statusA[31]);
 
 	      NBADPERM[i]   = drms_getkey_int(recLev1->records[i] ,NBADPERMS         ,&statusA[32]);
@@ -2402,7 +2403,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 
 	      //WE TEST WHETHER ANY IMPORTANT KEYWORD ARE MISSING
 	      TotalStatus=0;
-	      for(ii=0;ii<=31;++ii) TotalStatus+=statusA[ii];
+	      for(ii=0;ii<=13;++ii) TotalStatus+=statusA[ii]; //we avoid the keywords X0_LF and Y0_LF because they are NaNs during eclipse
+	      for(ii=16;ii<=31;++ii) TotalStatus+=statusA[ii];
 	      if(TotalStatus != 0 || !strcmp(IMGTYPE[i],"DARK"))
 		{
 		  printf("Error: the level 1 filtergram index %d is missing at least one keyword\n",i);
@@ -2433,7 +2435,6 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		  OBSVN[i]      = MISSINGKEYWORD;
 		  CARROT[i]     = MISSINGKEYWORDINT;
 		  CRLNOBS[i]    = MISSINGKEYWORD;
-		  //HGLNOBS[i]    = MISSINGKEYWORD;
 		  HWLTID[i]     = MISSINGKEYWORD;
 		  strcpy(HWLTNSET[i],"NONE");
 		  EXPTIME[i]    = MISSINGKEYWORD;
@@ -2455,17 +2456,25 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  printf("TIME ELAPSED TO READ THE KEYWORDS OF ALL LEVEL 1 RECORDS: %f\n",t1-t0);
 
 	  nIndexFiltergram=k;
-	  if(nIndexFiltergram == 0) //no filtergram was found with the target wavelength in the opened records
+	  if(nIndexFiltergram == 0) //no filtergram was found with the target wavelength in the open records
 	    {
 	      printf("Error: no filtergram was found with the wavelength %d in the requested level 1 records %s\n",WavelengthID,HMISeriesLev1);
 	      //return 1;//exit(EXIT_FAILURE);
-	    }	  
+	    }
+	  else printf("number of target filtergrams: %d \n",nIndexFiltergram);	  
 	  
 	} 
       else
 	{
-	  printf("Error: unable to open the requested level 1 records %s\n",HMISeriesLev1);
-	  return 1;//exit(EXIT_FAILURE);
+	  if(status == DRMS_SUCCESS && (recLev1 == NULL || recLev1->n == 0)) //we want empty observables records to be created even if there is no lev1
+	    {
+	      printf("Warning: no level 1 records in the time interval requested %s\n",HMISeriesLev1);
+	    }
+	  if(status != DRMS_SUCCESS)
+	    {
+	      printf("Error: unable to open the requested level 1 records %s\n",HMISeriesLev1);
+	      return 1;//exit(EXIT_FAILURE);
+	    }
 	}    
 
     }
@@ -2672,6 +2681,37 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	    }
 	  TargetWavelength= i-1;                //index of the filtergram with WavelengthID and that is closest to the target time: now called the TARGET FILTERGRAM
 	  temp            = IndexFiltergram[TargetWavelength]; //index of the target filtergram
+
+
+	  if(TargetTime > 1145850460.469931 && TargetTime < 1146422026.006866) //CORRESPONDING TO THE REBOOT OF HMI AND THE 6 DAYS FOLLOWING THIS REBOOT WITH BAD TUNING IN April 2013
+	    {
+	      printf("Warning: target time is within 6 days of the accidental reboot of HMI on April 24, 2013\n");
+	      QUALITY = QUALITY | QUAL_POORQUALITY;
+	    }
+
+
+	  //TO DEAL WITH ECLIPSES (ONLY FOR TARGET FILTERGRAM)
+	  if((QUALITYin[temp] & Q_ACS_ISSLOOP) == Q_ACS_ISSLOOP)
+	    {
+	      QUALITY = QUALITY | QUAL_ISSTARGET ;
+	      QUALITY = QUALITY | QUAL_POORQUALITY;
+	    }
+	  if((QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP)
+	    {
+	      QUALITY = QUALITY | QUAL_ECLIPSE;
+	      QUALITY = QUALITY | QUAL_POORQUALITY;
+	    }
+	  if((QUALITYin[temp] & Q_ACS_NOLIMB) == Q_ACS_NOLIMB) QUALITY = QUALITY | QUAL_LIMBFITISSUE; 
+	  if((QUALITYin[temp] & Q_ACS_LUNARTRANSIT) == Q_ACS_LUNARTRANSIT) QUALITY = QUALITY | QUAL_POORQUALITY;
+	  if((QUALITYin[temp] & Q_ACS_THERMALRECOVERY) == Q_ACS_THERMALRECOVERY) QUALITY = QUALITY | QUAL_POORQUALITY;
+          if(isnan(X0[temp]) || isnan(Y0[temp])) //X0_LF=NAN and Y0_LF=NAN during eclipses
+	    {
+	      printf("Error: target filtergram FSN[%d] does not have valid X0_LF and/or Y0_LF keywords\n",FSN[temp]);
+	      QUALITY = QUALITY | QUAL_LIMBFITISSUE;
+	      QUALITY = QUALITY | QUAL_TARGETFILTERGRAMMISSING;
+	      if(Lev15Wanted) CreateEmptyRecord=1; goto NextTargetTime;
+	    }
+
 
 	  if(SegmentRead[temp] == 0)            //data segment of the target filtergram not already in memory
 	    {
@@ -2915,7 +2955,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 
 	  if(KeywordMissing[j] == 1 || KeywordMissing[i] == 1)
 	    {
-	      printf("Error: some keywords are missing/corrupted to interpolate OBS_VR, OBS_VW, OBS_VN, CRLN_OBS, CROTA2, and CAR_ROT at target time %s\n",timeBegin2);
+	      printf("Error: some keywords are missing/corrupted to interpolate OBS_VR, OBS_VW, OBS_VN, CRLN_OBS, CROTA2, and CAR_ROT at target time %s \n",timeBegin2);
 	      if(SegmentRead[temp])
 		{
 		  drms_free_array(Segments[temp]);
@@ -4189,7 +4229,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		      else KeyInterp[ii].camera=1;
 		      if(!strcmp(HWLTNSET[temp],"OPEN")) QUALITY = QUALITY | QUAL_ISSTARGET;
 		      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY = QUALITY | QUAL_ECLIPSE;
-		      KeyInterp[ii].rsun=RSUNAVG;//RSUN[temp]; WARNING: DIFFERENTIAL RESIZING TURNED OFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		      KeyInterp[ii].rsun=RSUNAVG;// WARNING: DIFFERENTIAL RESIZING TURNED OFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		      if(combine == 1) KeyInterp[ii].rsun=RSUN[temp]; //MAKE SURE WE CORRECT FOR THE RADIUS WHEN WE COMBINE BOTH CAMERAS!
 		      printf("actual solar radius of image in = %f\n",RSUN[temp]);
 		      KeyInterp[ii].xx0=X0[temp];
 		      KeyInterp[ii].yy0=Y0[temp];
@@ -4263,8 +4304,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 
 		  if(ActualTempIntNum >= ThresholdPol)
 		    {
-		      for(ii=0;ii<ActualTempIntNum;++ii) printf("KEYWORDS IN: %f %f %f %f %f %f %f %d\n",KeyInterp[ii].rsun,KeyInterp[ii].xx0,KeyInterp[ii].yy0,KeyInterp[ii].dist,KeyInterp[ii].b0,KeyInterp[ii].p0,KeyInterp[ii].time,KeyInterp[ii].focus);
-		      printf("KEYWORDS OUT: %f %f %f %f %f %f %f %d\n",KeyInterpOut.rsun,KeyInterpOut.xx0,KeyInterpOut.yy0,KeyInterpOut.dist,KeyInterpOut.b0,KeyInterpOut.p0,KeyInterpOut.time,KeyInterpOut.focus);
+		      for(ii=0;ii<ActualTempIntNum;++ii) printf("KEYWORDS IN: %f %f %f %f %f %f %f %d %d\n",KeyInterp[ii].rsun,KeyInterp[ii].xx0,KeyInterp[ii].yy0,KeyInterp[ii].dist,KeyInterp[ii].b0,KeyInterp[ii].p0,KeyInterp[ii].time,KeyInterp[ii].focus, KeyInterp[ii].camera);
+		      printf("KEYWORDS OUT: %f %f %f %f %f %f %f %d %d\n",KeyInterpOut.rsun,KeyInterpOut.xx0,KeyInterpOut.yy0,KeyInterpOut.dist,KeyInterpOut.b0,KeyInterpOut.p0,KeyInterpOut.time,KeyInterpOut.focus,KeyInterpOut.camera);
 		      
 		      t0=dsecnd();
 		      strcpy(dpath2,dpath);
@@ -5910,6 +5951,13 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  DopplerParameters.coeff2=coeff[2];
 	  DopplerParameters.coeff3=coeff[3];
 	  DopplerParameters.QuickLook=QuickLook;
+	  //override these parameters if the observables sequence has 10 wavelength positions
+	  if(framelistSize/2 == 10 || framelistSize/2 == 8)
+	    {
+	      ntest=1399; //must match what is in lookup.c
+	      DopplerParameters.maxVtest=ntest*2;
+	      DopplerParameters.ntest=ntest;
+	    }
 
 	  t0=dsecnd();
 
