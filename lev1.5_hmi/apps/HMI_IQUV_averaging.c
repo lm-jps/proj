@@ -166,7 +166,11 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define DARK_FRONT  1   //FRONT CAMERA
 
 #define Q_ACS_ECLP 0x2000             //eclipse keyword for the lev1 data
+#define Q_ACS_ISSLOOP 0x20000         //ISS loop OPEN for lev1
+#define Q_ACS_NOLIMB 0x10             //limbfinder error for lev1
 #define Q_MISSING_SEGMENT 0x80000000  //missing image segment for lev1 record 
+#define Q_ACS_LUNARTRANSIT 0x400000   //lunar transit
+#define Q_ACS_THERMALRECOVERY 0x800000//therma recovery after eclipses
 
 #define CALVER_DEFAULT 0 // both the default and missing value of CALVER64
 #define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction
@@ -201,6 +205,8 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define QUAL_NOCOSMICRAY             (0x400)                //some cosmic-ray hit lists could not be read for the level 1 filtergrams
 #define QUAL_ECLIPSE                 (0x200)                //at least one lev1 record was taken during an eclipse
 #define QUAL_LARGEFTSID              (0x100)                //HFTSACID of target filtergram > 4000, which adds noise to observables
+#define QUAL_POORQUALITY             (0x20)                 //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
+
 
 
 //DRMS FAILURE (AN OBSERVABLE COULD, A PRIORI, BE CREATED, BUT THERE WAS A MOMENTARY FAILURE OF THE DRMS)
@@ -1012,7 +1018,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.30 2013/01/07 17:47:52 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.31 2013/08/12 21:13:03 couvidat Exp $");
 }
 
 
@@ -1076,8 +1082,9 @@ int DoIt(void)
   char COMMENT[MaxNString];
   strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
-  if(inLinearity == 1) strcat(COMMENT,"; linearity=1;");
-  if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1;");
+  if(inLinearity == 1) strcat(COMMENT,"; linearity=1");
+  if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
+  strcat(COMMENT,"; propagate eclipse bit from level 1");
 
   struct init_files initfiles;
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
@@ -1934,6 +1941,7 @@ int DoIt(void)
 	      statusA[15]=1;
 	      X0[i]=sqrt(-1);
 	      Y0[i]=sqrt(-1);
+	      KeywordMissing[i]=1;
 	    }
 
 
@@ -2026,7 +2034,8 @@ int DoIt(void)
 	  
 	  //Now we test whether any keyword is missing and we act accordingly
 	  TotalStatus=0;
-	  for(ii=0;ii<=31;++ii) TotalStatus+=statusA[ii];
+	  for(ii=0;ii<=13;++ii) TotalStatus+=statusA[ii]; //we avoid the keywords X0_LF and Y0_LF because they are NaNs during eclipse
+	  for(ii=16;ii<=31;++ii) TotalStatus+=statusA[ii];
 	  if(TotalStatus != 0 || !strcmp(IMGTYPE[i],"DARK") )  //at least one keyword is missing or the image is a dark frame
 	    {
 	      printf("Error: the level 1 filtergram index %d is missing at least one keyword, or is a dark frame\n",i);
@@ -2086,8 +2095,15 @@ int DoIt(void)
     }
   else
     {
-      printf("Error: unable to open the requested level 1 records %s\n",HMISeriesLev1);
-      return 1;//exit(EXIT_FAILURE);
+      if(status == DRMS_SUCCESS && (recLev1 == NULL || recLev1->n == 0)) //we want empty observables records to be created even if there is no lev1
+	{
+	  printf("Warning: no level 1 records in the time interval requested %s\n",HMISeriesLev1);
+	}
+      if(status != DRMS_SUCCESS)
+	{
+	  printf("Error: unable to open the requested level 1 records %s\n",HMISeriesLev1);
+	  return 1;//exit(EXIT_FAILURE);
+	}
     }    
   
   
@@ -2761,13 +2777,21 @@ int DoIt(void)
 	      printf("CURRENT POLARIZATION INDEX = %d\n",it2);
 	      printf("--------------------------------\n");
 	      printf("QUALITY KEYWORD VALUE: %d\n",QUALITY[timeindex]);
-	      
+
+	      if(recLev1->n == 0) // so that empty records are created even if there is no Lev1 available
+		{
+		  CreateEmptyRecord=1;
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_TARGETFILTERGRAMMISSING;
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_NODATA;
+		  goto NextTargetTime;
+		}
+
 	      //We look for the filtergram with the wavelength WavelengthID that is closest to the target time
 	      //*************************************************************************************
 	      
 	      temptime = 100000000.0;                                            //in seconds;
 	      i=0;
-	      while(fabs(internTOBS[IndexFiltergram[i]]-TargetTime) <= temptime) //while the time difference decreases
+              while(fabs(internTOBS[IndexFiltergram[i]]-TargetTime) <= temptime) //while the time difference decreases
 		{                                                                //when it increases, we know we reached the minimum
 		  //IndexFiltergram contains the index of all the filtergrams with the wavelength it and the polarization it2
 		  temptime=fabs(internTOBS[IndexFiltergram[i]]-TargetTime);
@@ -2782,6 +2806,35 @@ int DoIt(void)
 		}
 	      TargetWavelength= i-1;                //index of the filtergram with wavelength it that is closest to the target time: now called the CURRENT TARGET FILTERGRAM
 	      temp            = IndexFiltergram[TargetWavelength]; //index of the current target filtergram
+
+
+	      if(TargetTime > 1145850460.469931 && TargetTime < 1146422026.006866) //CORRESPONDING TO THE REBOOT OF HMI AND THE 6 DAYS FOLLOWING THIS REBOOT WITH BAD TUNING IN April 2013
+		{
+		  printf("Warning: target time is within 6 days of the accidental reboot of HMI on April 24, 2013\n");
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
+		}
+
+      	      //TO DEAL WITH ECLIPSES (ONLY FOR TARGET FILTERGRAM)
+	      if((QUALITYin[temp] & Q_ACS_ISSLOOP) == Q_ACS_ISSLOOP)
+		{
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET ;
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
+		}
+	      if((QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP)
+		{
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
+		}
+	      if((QUALITYin[temp] & Q_ACS_NOLIMB) == Q_ACS_NOLIMB) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_LIMBFITISSUE; 
+	      if((QUALITYin[temp] & Q_ACS_LUNARTRANSIT) == Q_ACS_LUNARTRANSIT) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
+	      if((QUALITYin[temp] & Q_ACS_THERMALRECOVERY) == Q_ACS_THERMALRECOVERY) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
+ 	      if(isnan(X0[temp]) || isnan(Y0[temp])) //X0_LF=NAN and Y0_LF=NAN during eclipses
+		{
+		  printf("Error: target filtergram FSN[%d] does not have valid X0_LF and/or Y0_LF keywords\n",FSN[temp]);
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_LIMBFITISSUE; 
+		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_TARGETFILTERGRAMMISSING;
+		  CreateEmptyRecord=1; goto NextTargetTime;
+		}
 
 	      TargetHFLID     =   HFLID[temp];      //some keyword values for the current target wavelength
 	      if(TargetHFLID >= 4000) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_LARGEFTSID;
