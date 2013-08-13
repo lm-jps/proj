@@ -22,7 +22,8 @@
  *		v0.2	Sep 04 2012
  *		v0.3	Dec 18 2012
  *		v0.4	Jan 02 2013
- *      v0.5    Jan 23 2012
+ *    v0.5  Jan 23 2013
+ *		v0.6	Aug 12 2013
  *
  *	Notes:
  *		v0.0
@@ -40,8 +41,11 @@
  *		Fixed memory leakage of 0.15G per rec; denoted with "Dec 18"
  *		v0.4
  *		Took out convert_inplace(). Was causing all the images to be int
- *      v0.5
- *      Corrected ephemeris keywords, added argument mInfo for setKeys()
+ *    v0.5
+ *    Corrected ephemeris keywords, added argument mInfo for setKeys()
+ *		v0.6
+ *		Changes in remapping of bitmap and conf_disambig, now near neighbor without anti-aliasing
+ *		
  *
  *	Example:
  *	sharp "mharp=hmi.Mharp_720s[1404][2012.02.20_10:00]" \
@@ -239,7 +243,7 @@ int getEphemeris(DRMS_Record_t *inRec, struct ephemeris *ephem);
 void findCoord(struct mapInfo *mInfo);
 
 /* Mapping function */
-int performSampling(float *outData, float *inData, struct mapInfo *mInfo);
+int performSampling(float *outData, float *inData, struct mapInfo *mInfo, int interpOpt);
 
 /* Performing local vector transformation */
 void vectorTransform(float *bx_map, float *by_map, float *bz_map, struct mapInfo *mInfo);
@@ -322,7 +326,6 @@ char *CEASegs[] = {"magnetogram", "bitmap", "Dopplergram", "continuum", "disambi
 /* ========================================================================================================== */
 
 char *module_name = "sharp";
-char *version_id = "2013 Jun 26";  /* Version number */
 int seed;
 
 ModuleArgs_t module_args[] =
@@ -599,7 +602,8 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	mInfo.proj = (enum projection) cyleqa;		// projection method
 	mInfo.xscale = XSCALE;
 	mInfo.yscale = YSCALE;
-	mInfo.nbin = NBIN;
+	
+  int ncol0, nrow0;		// oversampled map size
 	
 	// Get ephemeris
 	
@@ -615,10 +619,41 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 		return 1;
 	}
 	
+	// ========================================
+	// Do this for all bitmaps, Aug 12 2013 XS
+	// ========================================
+	
+  mInfo.nbin = 1;			// for bitmaps. suppress anti-aliasing
+	ncol0 = mInfo.ncol;
+	nrow0 = mInfo.nrow;
+	
+	mInfo.xi_out = (float *) (malloc(ncol0 * nrow0 * sizeof(float)));
+	mInfo.zeta_out = (float *) (malloc(ncol0 * nrow0 * sizeof(float)));
+	
+	findCoord(&mInfo);		// compute it here so it could be shared by the following 4 functions
+	
+	if (mapScaler(sharpRec, mharpRec, mharpRec, &mInfo, "bitmap")) {
+		SHOW("CEA: mapping bitmap error\n");
+		return 1;
+	}
+	printf("Bitmap mapping done.\n");
+	
+  if (mapScaler(sharpRec, bharpRec, mharpRec, &mInfo, "conf_disambig")) {
+		SHOW("CEA: mapping conf_disambig error\n");
+		return 1;
+	}
+	printf("Conf disambig mapping done.\n");
+	
+  free(mInfo.xi_out);
+	free(mInfo.zeta_out);
+	
+	// ========================================
+	// Do this again for floats, Aug 12 2013 XS
+	// ========================================
 	// Create xi_out, zeta_out array in mInfo:
 	// Coordinates to sample in original full disk image
 	
-	int ncol0, nrow0;		// oversampled map size
+	mInfo.nbin = NBIN;
 	ncol0 = mInfo.ncol * mInfo.nbin + (mInfo.nbin / 2) * 2;	// pad with nbin/2 on edge to avoid NAN
 	nrow0 = mInfo.nrow * mInfo.nbin + (mInfo.nbin / 2) * 2;
 	
@@ -633,11 +668,8 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 		SHOW("CEA: mapping magnetogram error\n");
 		return 1;
 	}
-	if (mapScaler(sharpRec, mharpRec, mharpRec, &mInfo, "bitmap")) {
-		SHOW("CEA: mapping bitmap error\n");
-		return 1;
-	}
 	printf("Magnetogram mapping done.\n");
+		
 	if (mapScaler(sharpRec, dopRec, mharpRec, &mInfo, "Dopplergram")) {
 		SHOW("CEA: mapping dopplergram error\n");
 		return 1;
@@ -650,12 +682,6 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	}
 	printf("Intensitygram mapping done.\n");
 	
-	if (mapScaler(sharpRec, bharpRec, mharpRec, &mInfo, "conf_disambig")) {
-		SHOW("CEA: mapping conf_disambig error\n");
-		return 1;
-	}
-	printf("Conf disambig mapping done.\n");
-    
 	// Mapping vector B
 	
 	if (mapVectorB(sharpRec, bharpRec, &mInfo)) {
@@ -724,6 +750,7 @@ int mapScaler(DRMS_Record_t *sharpRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 	int status = 0;
 	int nx = mInfo->ncol, ny = mInfo->nrow, nxny = nx * ny;
 	int dims[2] = {nx, ny};
+	int interpOpt = INTERP;		// Aug 12 XS, default, overridden below for bitmaps and conf_disambig
 	
 	// Input full disk array
 	
@@ -738,6 +765,7 @@ int mapScaler(DRMS_Record_t *sharpRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 	float *inData;
 	int xsz = inArray->axis[0], ysz = inArray->axis[1];
 	if ((xsz != FOURK) || (ysz != FOURK)) {		// for bitmap, make tmp full disk
+		interpOpt = 3;		// Aug 12 XS, near neighbor
 		float *inData0 = (float *) inArray->data;
 		inData = (float *) (calloc(FOURK2, sizeof(float)));
 		int x0 = (int) drms_getkey_float(harpRec, "CRPIX1", &status) - 1;
@@ -757,7 +785,7 @@ int mapScaler(DRMS_Record_t *sharpRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 	// Mapping
 	
 	float *map = (float *) (malloc(nxny * sizeof(float)));
-	if (performSampling(map, inData, mInfo))
+	if (performSampling(map, inData, mInfo, interpOpt))		// Add interpOpt for different types, Aug 12 XS
 	{if (inArray) drms_free_array(inArray); free(map); return 1;}
 	
 	// Write out
@@ -820,15 +848,15 @@ int mapVectorB(DRMS_Record_t *sharpRec, DRMS_Record_t *bharpRec, struct mapInfo 
 	float *bx_map = NULL, *by_map = NULL, *bz_map = NULL;	// intermediate maps, in CCD bxyz representation
 	
 	bx_map = (float *) (malloc(nxny * sizeof(float)));
-	if (performSampling(bx_map, bx_img, mInfo))
+	if (performSampling(bx_map, bx_img, mInfo, INTERP))
 	{free(bx_img); free(by_img); free(bz_img); free(bx_map); return 1;}
 	
 	by_map = (float *) (malloc(nxny * sizeof(float)));
-	if (performSampling(by_map, by_img, mInfo))
+	if (performSampling(by_map, by_img, mInfo, INTERP))
 	{free(bx_img); free(by_img); free(bz_img); free(bz_map); return 1;}
 	
 	bz_map = (float *) (malloc(nxny * sizeof(float)));
-	if (performSampling(bz_map, bz_img, mInfo))
+	if (performSampling(bz_map, bz_img, mInfo, INTERP))
 	{free(bx_img); free(by_img); free(bz_img); free(bz_map); return 1;}
 	
 	free(bx_img); free(by_img); free(bz_img);
@@ -1107,15 +1135,22 @@ void findCoord(struct mapInfo *mInfo)
  *
  */
 
-int performSampling(float *outData, float *inData, struct mapInfo *mInfo)
+int performSampling(float *outData, float *inData, struct mapInfo *mInfo, int interpOpt)
 {
 	
 	int status = 0;
+	int ind_map;
 	
 	int ncol0 = mInfo->ncol * mInfo->nbin + (mInfo->nbin / 2) * 2;	// pad with nbin/2 on edge to avoid NAN
 	int nrow0 = mInfo->nrow * mInfo->nbin + (mInfo->nbin / 2) * 2;
 	
-	float *outData0 = (float *) (malloc(ncol0 * nrow0 * sizeof(float)));
+	// Changed Aug 12 2013, XS, for bitmaps
+	float *outData0;
+	if (interpOpt == 3 && mInfo->nbin == 1) {
+	  outData0 = outData;
+	} else {
+	  outData0 = (float *) (malloc(ncol0 * nrow0 * sizeof(float)));
+	}
 	
 	float *xi_out = mInfo->xi_out;
 	float *zeta_out = mInfo->zeta_out;
@@ -1123,7 +1158,7 @@ int performSampling(float *outData, float *inData, struct mapInfo *mInfo)
 	// Interpolation
 	
 	struct fint_struct pars;
-	int interpOpt = INTERP;		// Use Wiener by default, 6 order, 1 constraint
+	// Aug 12 2013, passed in as argument now
 	
 	switch (interpOpt) {
 		case 0:			// Wiener, 6 order, 1 constraint
@@ -1135,17 +1170,33 @@ int performSampling(float *outData, float *inData, struct mapInfo *mInfo)
 		case 2:			// Bilinear
 			init_finterpolate_linear(&pars, 1.);
 			break;
+		case 3:			// Near neighbor
+		  break;
 		default:
 			return 1;
 	}
 	
-	finterpolate(&pars, inData, xi_out, zeta_out, outData0,
+	printf("interpOpt = %d, nbin = %d ", interpOpt, mInfo->nbin);
+	if (interpOpt == 3) {			// Aug 6 2013, Xudong
+	  	for (int row0 = 0; row0 < nrow0; row0++) {
+				for (int col0 = 0; col0 < ncol0; col0++) {
+					ind_map = row0 * ncol0 + col0;
+					outData0[ind_map] = nnb(inData, FOURK, FOURK, xi_out[ind_map], zeta_out[ind_map]);
+				}
+			}
+	} else {
+  	finterpolate(&pars, inData, xi_out, zeta_out, outData0,
 				 FOURK, FOURK, FOURK, ncol0, nrow0, ncol0, DRMS_MISSING_FLOAT);
+	}
 	
 	// Rebinning, smoothing
 	
-	frebin(outData0, outData, ncol0, nrow0, mInfo->nbin, 1);		// Gaussian
-	free(outData0);		// Dec 18 2012
+	if (interpOpt == 3 && mInfo->nbin == 1) {
+	  return 0;
+	} else {
+  	frebin(outData0, outData, ncol0, nrow0, mInfo->nbin, 1);		// Gaussian
+	  free(outData0);		// Dec 18 2012
+	}
 	
 	//
 	
@@ -1974,7 +2025,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
 	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Id: sharp.c,v 1.16 2013/07/04 02:14:14 mbobra Exp $");
+	char *cvsinfo = strdup("$Id: sharp.c,v 1.17 2013/08/13 01:35:07 xudong Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char cvsinfoall[2048];
         strcat(cvsinfoall,cvsinfo);
@@ -2021,4 +2072,3 @@ void frebin (float *image_in, float *image_out, int nx, int ny, int nbin, int ga
 	fresize(&fresizes, image_in, image_out, nx, ny, nlead, nxout, nyout, nxout, xoff, yoff, DRMS_MISSING_FLOAT);
 	
 }
-
