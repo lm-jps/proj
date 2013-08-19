@@ -169,8 +169,8 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define Q_ACS_ISSLOOP 0x20000         //ISS loop OPEN for lev1
 #define Q_ACS_NOLIMB 0x10             //limbfinder error for lev1
 #define Q_MISSING_SEGMENT 0x80000000  //missing image segment for lev1 record 
-#define Q_ACS_LUNARTRANSIT 0x400000   //lunar transit
-#define Q_ACS_THERMALRECOVERY 0x800000//therma recovery after eclipses
+#define Q_ACS_LUNARTRANSIT 0x800000   //lunar transit
+#define Q_ACS_THERMALRECOVERY 0x400000//therma recovery after eclipses
 
 #define CALVER_DEFAULT 0 // both the default and missing value of CALVER64
 #define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction
@@ -1018,7 +1018,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.31 2013/08/12 21:13:03 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.32 2013/08/19 17:53:19 couvidat Exp $");
 }
 
 

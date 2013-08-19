@@ -175,8 +175,8 @@ char *module_name= "HMI_observables"; //name of the module
 #define Q_ACS_ISSLOOP 0x20000         //ISS loop OPEN for lev1
 #define Q_ACS_NOLIMB 0x10             //limbfinder error for lev1
 #define Q_MISSING_SEGMENT 0x80000000  //missing image segment for lev1 record 
-#define Q_ACS_LUNARTRANSIT 0x400000   //lunar transit
-#define Q_ACS_THERMALRECOVERY 0x800000//therma recovery after eclipses
+#define Q_ACS_LUNARTRANSIT 0x800000   //lunar transit
+#define Q_ACS_THERMALRECOVERY 0x400000//thermal recovery after eclipses
 #define CALVER_DEFAULT 0              //both default and missing values of CALVER64
 #define CALVER_SMOOTH  0x100          //bitmask for CALVER64 to indicate the use of smooth look-up tables
 #define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction
@@ -1094,7 +1094,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.39 2013/08/12 18:15:13 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.40 2013/08/19 17:53:01 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
