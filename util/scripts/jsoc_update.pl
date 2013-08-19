@@ -290,47 +290,50 @@ sub GetNFSInfo
 # Find the network drive that contains the JSOC tree.
 sub ProcessMtabInfo
 {
-   my($infor) = $_[0];
-   my($devno) = $_[1]; # number of the device containing the JSOC tree
-   my($line) = $_[2];
-
-   my($vol);
-   my($mount);
-   my($type);
-   my($st);
-   my($mtabdevno);
-
-   chomp($line);
-
-   # 1 - NFS volume (machine:volume)
-   # 2 - mount point
-   # 3 - partition type
-   if ($line =~ /\s*(\S+)\s*(\S+)\s*(\S+)/)
-   {
-      $vol = $1;
-      $mount = $2;
-      $type = $3;
-
-      # Look up the device number for this line
-      $st = stat($mount);
-      $mtabdevno = (S_ISBLK($st->mode)) ? $st->rdev : $st->dev;
-
-      if ($devno == $mtabdevno && $type =~ /nfs/i)
-      {
-         # match - we have the device on which the CVS tree resides, and that device
-         # is NFS-mounted.
-         if (!(defined($$infor)))
-         {
-            # New empty hash.
-            $$infor = {};
-         }
-         
-         # Save the network drive that contains the JSOC tree (and where it is mounted on
-         # the current machine).
-         $$infor->{'vol'} = $vol;
-         $$infor->{'mount'} = $mount;
-      }
-   }
+    my($infor) = $_[0];
+    my($devno) = $_[1]; # number of the device containing the JSOC tree
+    my($line) = $_[2];
+    
+    my($vol);
+    my($mount);
+    my($type);
+    my($st);
+    my($mtabdevno);
+    
+    chomp($line);
+    
+    # 1 - NFS volume (machine:volume)
+    # 2 - mount point
+    # 3 - partition type
+    if ($line =~ /\s*(\S+)\s*(\S+)\s*(\S+)/)
+    {
+        $vol = $1;
+        $mount = $2;
+        $type = $3;
+        
+        # Look up the device number for this line
+        $st = stat($mount);
+        if (defined($st))
+        {
+            $mtabdevno = (S_ISBLK($st->mode)) ? $st->rdev : $st->dev;
+            
+            if ($devno == $mtabdevno && $type =~ /nfs/i)
+            {
+                # match - we have the device on which the CVS tree resides, and that device
+                # is NFS-mounted.
+                if (!(defined($$infor)))
+                {
+                    # New empty hash.
+                    $$infor = {};
+                }
+                
+                # Save the network drive that contains the JSOC tree (and where it is mounted on
+                # the current machine).
+                $$infor->{'vol'} = $vol;
+                $$infor->{'mount'} = $mount;
+            }
+        }
+    }
 }
 
 # $line is the remote machine's (e.g., n02) mtab line.
