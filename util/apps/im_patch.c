@@ -924,6 +924,14 @@ fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
       for (j=0; j<pixheight; j++)
         for (i=0; i< pixwidth; i++)
           data[j*pixwidth + i] = newdata[(j+register_padding)*nx + i+register_padding];
+      
+      /* This was being leaked - over 4MB per call. */
+      if (newdata)
+      {
+          free(newdata);
+          newdata = NULL;
+      }
+          
       sprintf(history+strlen(history), "\nImage registered by shift of (%0.3f,%0.3f) pixels.", dx, dy);
       crpix1 += dx - register_padding;
       crpix2 += dy - register_padding;
