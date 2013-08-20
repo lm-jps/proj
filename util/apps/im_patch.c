@@ -301,6 +301,7 @@ int DoIt(void)
   double track_radius;
   double crpix1_0, crpix2_0;
   int register_padding = 5; // later this should be based on crota2 and box size.
+  char *tmpstr = NULL;
 
   FILE *log = NULL;
 
@@ -442,10 +443,31 @@ fprintf(stderr,"irec=%d, tdiff=%lf\n",irec,tdiff);
     pa_rad = Deg2Rad * pa;
     sina = sin(crota*Deg2Rad);
     cosa = cos(crota*Deg2Rad);
-    ctype1 = strdup(drms_getkey_string(inRec, "CTYPE1", &status)); TEST_PARAM("CTYPE1");
+    tmpstr = drms_getkey_string(inRec, "CTYPE1", &status);
+    ctype1 = strdup(tmpstr); TEST_PARAM("CTYPE1");
+    if (tmpstr)
+    {
+       free(tmpstr);
+    }
       if (strcmp(ctype1, "HPLN-TAN") != 0) DIE2("CTYPE1 not HPLN-TAN as required, is: ", ctype1);
-    ctype2 = strdup(drms_getkey_string(inRec, "CTYPE2", &status)); TEST_PARAM("CTYPE2");
+      if (ctype1)
+      {
+         free(ctype1);
+         ctype1 = NULL;
+      }
+      tmpstr = drms_getkey_string(inRec, "CTYPE2", &status);
+    ctype2 = strdup(tmpstr); TEST_PARAM("CTYPE2");
+    if (tmpstr)
+    {
+       free(tmpstr);
+    }
+
       if (strcmp(ctype2, "HPLT-TAN") != 0) DIE2("CTYPE2 not HPLT-TAN as required, is: ", ctype2);
+      if (ctype2)
+      {
+         free(ctype2);
+         ctype2 = NULL;
+      }
     rsun_ref = drms_getkey_double(inRec, "RSUN_REF", &status);
       if (status) rsun_ref = 6.96e8;
     dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &status); TEST_PARAM("DSUN_OBS");
@@ -615,6 +637,13 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
     sprint_at(t_stop_text, t_stop);
     sprintf(in, "%s[%s-%s%s]%s%s", inseries, t_start_text, t_stop_text, cadence_text, where, (moreQuery ? moreQuery : ""));
     }
+
+  if (inparam)
+  {
+     free(inparam);
+     inparam = NULL;
+  }
+
   // Check for specified epoch or cadence specified and not compact slotted series, replace query if needed
   if (cmdparams_exists(&cmdparams, "epoch") || (cadence > 1.0 &&
      (strncmp(inseries, "aia.lev1", 8)==0 || strncmp(inseries, "hmi.lev1", 8)==0 )))
@@ -701,10 +730,32 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
 
       if (loctype==LOCCARR)
         {
-        ctype1 = strdup(drms_getkey_string(inRec, "CTYPE1", &status)); TEST_PARAM("CTYPE1");
+           tmpstr = drms_getkey_string(inRec, "CTYPE1", &status);
+        ctype1 = strdup(tmpstr); TEST_PARAM("CTYPE1");
+        if (tmpstr)
+        {
+           free(tmpstr);
+        }
+
+        tmpstr = drms_getkey_string(inRec, "CTYPE2", &status);
         if (strcmp(ctype1, "HPLN-TAN") != 0) DIE2("CTYPE1 not HPLN-TAN as required, is: ", ctype1);
-        ctype2 = strdup(drms_getkey_string(inRec, "CTYPE2", &status)); TEST_PARAM("CTYPE2");
+        if (ctype1)
+        {
+           free(ctype1);
+           ctype1 = NULL;
+        }
+        ctype2 = strdup(tmpstr); TEST_PARAM("CTYPE2");
+        if (tmpstr)
+        {
+           free(tmpstr);
+        }
+
         if (strcmp(ctype2, "HPLT-TAN") != 0) DIE2("CTYPE2 not HPLT-TAN as required, is: ", ctype2);
+        if (ctype2)
+        {
+           free(ctype2);
+           ctype2 = NULL;
+        }
         rsun_ref = drms_getkey_double(inRec, "RSUN_REF", &status);
         if (status) rsun_ref = 6.96e8;
         dsun_obs = drms_getkey_double(inRec, "DSUN_OBS", &status); TEST_PARAM("DSUN_OBS");
