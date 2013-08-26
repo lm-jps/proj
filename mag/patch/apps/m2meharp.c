@@ -189,14 +189,9 @@ int DoIt(void)
 				drms_setlink_static(meHarpRec, "MDATA", meRec->recnum);
 			}
 			
+
 			/* Keywords */
-			
-			drms_setkey_string(meHarpRec, "BLD_VERS", jsoc_version);
-			char timebuf[1024];
-			float UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
-			sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
-			drms_setkey_string(meHarpRec, "DATE", timebuf);
-			// Prime key
+            // Prime key
 			drms_copykey(meHarpRec, meRec, "T_REC");
 			drms_copykey(meHarpRec, mHarpRec, "HARPNUM");
 			drms_copykey(meHarpRec, meRec, "RUNNUM");
@@ -204,6 +199,12 @@ int DoIt(void)
 			copy_me_keys(meRec, meHarpRec);
 			copy_patch_keys(mHarpRec, meHarpRec);
 			copy_geo_keys(mHarpRec, meHarpRec);
+            // Set time
+			drms_setkey_string(meHarpRec, "BLD_VERS", jsoc_version);
+			char timebuf[1024];
+			float UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+			sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
+			drms_setkey_string(meHarpRec, "DATE", timebuf);
 			// Misc
 			drms_setkey_string(meHarpRec, "BUNIT_025", " ");
 			drms_setkey_float(meHarpRec, "CRPIX1", 
