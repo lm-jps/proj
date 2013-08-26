@@ -1660,28 +1660,17 @@ void do_ingest()
       continue;
     }
     if(outdir) {
-      sprintf(cmd, "cp -p %s %s", name, outdir);
-      printk("*cp qac file to %s\n", outdir);
-      printk("%s\n", cmd);
-      if(system(cmd)) {
-        printk("***Error on: %s\n", cmd);
-      }
       sprintf(cmd, "cp -p %s %s", tlmfile, outdir);
       printk("*cp tlm file to %s\n", outdir);
       printk("%s\n", cmd);
       if(system(cmd)) {
         printk("***Error on: %s\n", cmd);
       }
-    }
-    sprintf(cmd, "/bin/mv %s %s", name, path);
-    printk("*mv qac to %s\n", path);
-    printk("%s\n", cmd);
-    if(status = system(cmd)) {
-      printk("**ERROR: %d errno=%d on: %s\n", status, errno, cmd);
-      if(WIFEXITED(status)) {
-        if(mvstat = WEXITSTATUS(status)) {  //status ret by mv
-          printk("**ERROR: mv exit status = %d\n", mvstat);
-        }
+      sprintf(cmd, "cp -p %s %s", name, outdir);
+      printk("*cp qac file to %s\n", outdir);
+      printk("%s\n", cmd);
+      if(system(cmd)) {
+        printk("***Error on: %s\n", cmd);
       }
     }
     sprintf(cmd, "/bin/mv %s %s", tlmfile, path);
@@ -1695,6 +1684,19 @@ void do_ingest()
         }
       }
       printk("**Continue after ERROR on mv of tlm file\n");
+      continue;
+    }
+    sprintf(cmd, "/bin/mv %s %s", name, path);
+    printk("*mv qac to %s\n", path);
+    printk("%s\n", cmd);
+    if(status = system(cmd)) {
+      printk("**ERROR: %d errno=%d on: %s\n", status, errno, cmd);
+      if(WIFEXITED(status)) {
+        if(mvstat = WEXITSTATUS(status)) {  //status ret by mv
+          printk("**ERROR: mv exit status = %d\n", mvstat);
+        }
+      }
+      printk("**Continue after ERROR on mv of qac file\n");
       continue;
     }
     if((status = drms_close_record(rs_tlm, DRMS_INSERT_RECORD))) {
