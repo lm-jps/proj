@@ -135,6 +135,10 @@ function RebinCheck()
     
   if ($("RebinRotate").checked)
     {
+    rv = rv + ",u=0";
+    }
+  else
+    {
     rv = rv + ",u=1";
     }
     
@@ -259,327 +263,6 @@ function ResizeCheck()
   }
 
 // End Resize
-
-//
-// Process HgPatch
-//
-
-
-var noaaColor;
-var HgTracked = 0;
-var HgSeriesList = "EMPTY";
-var HgSeriesSelected = 0;
-
-function HgPatchGetNoaa()
-  {
-  if ($("HgNOAA").value.strip().empty()) $("HgNOAA").value = "NotSpecified";
-  if ($("HgNOAA").value != "NotSpecified")
-    {
-    var noaaNum = 1 * $("HgNOAA").value;
-    if (noaaNum < 7000) 
-      {
-      noaaNum = noaaNum + 10000; // OK for times after 1996 Jan.
-      $("HgNOAA").value = noaaNum + "";
-      }
-    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-    new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_jsoc2',
-      {
-      method: 'get',
-      parameters: {"op" : "rs_list", "ds": "su_rsb.NOAA_ActiveRegions[][" + noaaNum + "]", "key": "ObservationTime,LatitudeHG,LongitudeCM" },
-      onSuccess: function(transport, json)
-        {
-        var response = transport.responseText || "no response text";
-        var NOAA_rslist = response.evalJSON();
-        try {if (NOAA_rslist.status > 0 || NOAA_rslist.count == 0) throw "noRecords";}
-        catch(err) { $("HgNOAA").value = noaaNum + " " + err; return; }
-        var minLong = 999, minLat, minTime;
-        var irec, nrecs = NOAA_rslist.count;
-        var thisTime, thisLong, thisLat;
-        for (irec=0; irec<nrecs; irec++)
-          {
-          thisTime = NOAA_rslist.keywords[0].values[irec];
-          thisLat = NOAA_rslist.keywords[1].values[irec];
-          thisLong = NOAA_rslist.keywords[2].values[irec];
-          if (Math.abs(thisLong) < Math.abs(minLong))
-            {
-            minLong = thisLong;
-            minLat = thisLat;
-            minTime = thisTime;
-            }
-          }
-        try
-          {
-          if (minLong == 999) throw "noRegion";
-          $("HgLocType").selectedIndex = 0;
-          $("HgTRef").value = minTime;
-          $("HgX").value = minLong + "";
-          $("HgY").value = minLat + "";
-	  $("HgNOAA").style.backgroundColor=colorOptionSet;
-          noaaColor = colorPreset;
-          $("HgLocType").style.backgroundColor = noaaColor;
-          $("HgTRef").style.backgroundColor = noaaColor;
-          $("HgX").style.backgroundColor = noaaColor;
-          $("HgY").style.backgroundColor = noaaColor;
-	  // CheckHgPatch();
-          }
-        catch(err) { $("HgNOAA").value = noaaNum + " " + err; return; }
-        },
-      onFailure: function()
-        {
-        alert('Something went wrong with NOAA num data request');
-        $("HgNOAA").value = "Not Found";
-        },
-      onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-      });
-    }
-  }
-  
-function HgPatchCheck()
-  {
-  var isok = 0;
-  var args = "hg_patch";
-  var HgLocOption;
-  CheckHgRecordSet(0);
-  if ($("HgTrack").checked) // checked for tracking, default
-    {
-    args += ",t=0";
-    HgTracked = 1;
-    }
-  else
-    {
-    args += ",t=1";
-    $("HgTRef").value = $("HgTStart").value;
-    HgTracked = 0;
-    }
-  if ($("HgTStart").value.strip().empty()) $("HgTStart").value = "NotSpecified";
-  if ($("HgTStart").value == "NotSpecified")
-    {
-    $("HgTStart").style.backgroundColor=colorWhite;
-    isok = 1;
-    }
-  else
-    {
-    $("HgTStart").style.backgroundColor=colorWhite;
-    args += ",t_start=" + $("HgTStart").value;
-    isok += 1;
-    }
-  if ($("HgTStop").value.strip().empty()) $("HgTStop").value = "NotSpecified";
-  if ($("HgTStop").value == "NotSpecified")
-    {
-    $("HgTStop").style.backgroundColor=colorWhite;
-    isok = 1;
-    }
-  else
-    {
-    $("HgTStop").style.backgroundColor=colorWhite;
-    args += ",t_stop=" + $("HgTStop").value;
-    isok += 1;
-    }
-  if ($("HgTDelta").value.strip().empty()) $("HgTDelta").value = "NotSpecified";
-  if ($("HgTDelta").value == "NotSpecified")
-    {
-    $("HgTDelta").style.backgroundColor=colorWhite;
-    isok = 1;
-    }
-  else
-    {
-    $("HgTDelta").style.backgroundColor=colorWhite;
-    args += ",cadence=" + $("HgTDelta").value;
-    isok += 1;
-    }
-
-  $("HgLocType").style.backgroundColor=noaaColor;
-  HgLocOption = $("HgLocType").selectedIndex;
-  args += ",locunits=" + $("HgLocType").options[HgLocOption].value;
-  $("HgBoxType").style.backgroundColor=colorWhite;
-  args += ",boxunits=" + $("HgBoxType").options[$("HgBoxType").selectedIndex].value;
-
-  if ($("HgLocType").options[HgLocOption].value == "carrlong" && HgTracked == 1)
-    {
-    $("HgCarrLi").style.display = "table-row";
-    $("HgTRefLi").style.display = "none";
-    $("HgTRef").value == "NotSpecified";
-    }
-  else
-    {
-    $("HgCarrLi").style.display = "none";
-    $("HgTRefLi").style.display = "table-row";
-    $("HgCarrot").value == "NotSpecified";
-    }
-
-  if ($("HgCarrot").value.strip().empty()) $("HgCarrot").value = "NotSpecified";
-  if ($("HgCarrot").value == "NotSpecified" )
-    {
-    $("HgCarrot").style.backgroundColor=colorRed;
-    isok = 0;
-    }
-  else
-    {
-    $("HgCarrot").style.backgroundColor=colorWhite;
-    args += ",car_rot=" + $("HgCarrot").value;
-    isok += 1;
-    }
-  if ($("HgTRef").value.strip().empty()) $("HgTRef").value = "NotSpecified";
-  if ($("HgTRef").value == "NotSpecified")
-    {
-    $("HgTRef").style.backgroundColor=colorRed;
-    isok = 0;
-    }
-  else
-    {
-    $("HgTRef").style.backgroundColor=noaaColor;
-    args += ",t_ref=" + $("HgTRef").value;
-    isok += 1;
-    }
-  if ($("HgX").value.strip().empty()) $("HgX").value = "NotSpecified";
-  if ($("HgX").value == "NotSpecified")
-    {
-    $("HgX").style.backgroundColor=colorRed;
-    isok = 0;
-    }
-  else
-    {
-    $("HgX").style.backgroundColor=noaaColor;
-    args += ",x=" + $("HgX").value;
-    isok += 1;
-    }
-  if ($("HgY").value.strip().empty()) $("HgY").value = "NotSpecified";
-  if ($("HgY").value == "NotSpecified")
-    {
-    $("HgY").style.backgroundColor=colorRed;
-    isok = 0;
-    }
-  else
-    {
-    $("HgY").style.backgroundColor=noaaColor;
-    args += ",y=" + $("HgY").value;
-    isok += 1;
-    }
-  if ($("HgWide").value.strip().empty()) $("HgWide").value = "NotSpecified";
-  if ($("HgWide").value == "NotSpecified")
-    {
-    $("HgWide").style.backgroundColor=colorRed;
-    isok = 0;
-    }
-  else
-    {
-    $("HgWide").style.backgroundColor=colorWhite;
-    args += ",width=" + $("HgWide").value;
-    isok += 1;
-    }
-  if ($("HgHigh").value.strip().empty()) $("HgHigh").value = "NotSpecified";
-  if ($("HgHigh").value == "NotSpecified")
-    {
-    $("HgHigh").style.backgroundColor=colorRed;
-    isok = 0;
-    }
-  else
-    {
-    $("HgHigh").style.backgroundColor=colorWhite;
-    args += ",height=" + $("HgHigh").value;
-    isok += 1;
-    }
-
-  return (isok ? args : "");
-  }
-
-// Special action to modify input RecordSet if no records spec present
-// Also gets list of available series.
-
-function HgSeriesSelect()
-  {
-  HgSeriesSelected = 1;
-  CheckHgRecordSet(1);
-  //if (CheckHgRecordSet())
-  //ExportNewRS();
-  }
-
-function CheckHgRecordSet(clicked) // If HG Patch selected, convert empty record selector to last record.
-  {
-  var posbracket = $("ExportRecordSet").value.indexOf("[");
-  var currentSeries = $("ExportRecordSet").value.substring(0,posbracket);
-  var currentSpec = (posbracket < 0 ? "[$]" : $("ExportRecordSet").value.substring(posbracket));
-  var selectedSeries;
-  var n = $("HgSerList").length;
-  if (HgSeriesSelected)
-    selectedSeries = $("HgSerList").selectedIndex;
-  else
-    {
-    for (selectedSeries=1; selectedSeries<n; selectedSeries++)
-      if (currentSeries == $("HgSerList").options[selectedSeries].value) break;
-    }
-  if ((clicked && selectedSeries == 0) || selectedSeries == n)
-    {
-    HgSeriesSelected = 0;
-    $("HgSerList").options[0].style.backgroundColor = "Red";
-    alert("Please select valid XXX hg_patch available series from list.");
-    return(0);
-    }
-  HgSeriesSelected = 1;
-  $("HgSerList").selectedIndex = selectedSeries;
-  currentSeries = $("HgSerList").options[selectedSeries].value;
-  $("ExportRecordSet").value = currentSeries + currentSpec;
-  if (posbracket < 0)
-    {
-    ExportNewRS();
-    return(0);
-    }
-  return(1);
-  }
-
-// Set display defaults
-
-function HgPatchInit(isActive)
-  {
-  if (!isActive)
-    {
-    noaaColor = colorWhite;
-    var requireColor = colorRed;
-    $("ProcessHgPatch").style.display="none";
-    $("HgTrack").checked = true;
-    $("HgNOAA").style.backgroundColor=colorWhite; $("HgNOAA").value = "NotSpecified";
-    $("HgTStart").value = "NotSpecified";
-    $("HgTStop").value = "NotSpecified";
-    $("HgTDelta").value = "NotSpecified";
-    $("HgTRef").style.backgroundColor = requireColor; $("HgTRef").value = "NotSpecified";
-    $("HgCarrot").style.backgroundColor = requireColor; $("HgCarrot").value = "NotSpecified";
-    $("HgX").style.backgroundColor = requireColor; $("HgX").value = "NotSpecified";
-    $("HgY").style.backgroundColor = requireColor; $("HgY").value = "NotSpecified";
-    $("HgWide").style.backgroundColor = requireColor; $("HgWide").value = "NotSpecified";
-    $("HgHigh").style.backgroundColor = requireColor; $("HgHigh").value = "NotSpecified";
-    HgGetSeriesList();
-    HgTracked = 1;
-    }
-  HgSeriesSelected = 0;
-  }
-
-function HgGetSeriesList()
-  {
-  if (HgSeriesList === "EMPTY")
-    {
-    var HgPatchSerList = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/show_hgpatch',
-      {
-      method: 'get',
-      onSuccess: function(transport, json)
-        {
-        var response = transport.responseText || "no HgPatch series";
-        HgSeriesList = response.evalJSON();
-        for (var i=$("HgSerList").length; i > 0; i--)
-          $("HgSerList").remove(i-1);
-        var n = HgSeriesList.n;
-        if (n < 1) alert("WARNING: No _hgpatch series found.\n"+response);
-        insertOption("HgSerList","Not Selected Yet", "");
-        for (var i=0; i<n; i++)
-           insertOption("HgSerList",HgSeriesList.list[i], "");
-        },
-      onFailure: function() { alert('Failed to get HgPatch Series List'); },
-      onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-      });
-    }
-  return;
-  }
-
-// End of HG Patch code
 
 //
 // Process ImPatch
@@ -998,74 +681,288 @@ function ImPatchInit(isActive)
 // Maproj - map projections
 //
 
-
 // get NOAA AR info
-function MapProgGetNoaa()
+
+var NOAA_TRef = "";
+function MaprojGetNoaa()
   {
-  if ($("MpNOAA").value.strip().empty()) $("MpNOAA").value = "NotSpecified";
-  if ($("MpNOAA").value != "NotSpecified")
+  if ($("MaprojNOAA").value.strip().empty()) $("MaprojNOAA").value = "NotSpecified";
+  if ($("MaprojNOAA").value != "NotSpecified")
     {
-    var noaaNum = 1 * $("MpNOAA").value;
+    var noaaNum = 1 * $("MaprojNOAA").value;
     if (noaaNum < 7000) 
       {
       noaaNum = noaaNum + 10000; // OK for times after 1996 Jan.
-      $("MpNOAA").value = noaaNum + "";
+      $("MaprojNOAA").value = noaaNum + "";
       }
     $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
     new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_info_jsoc2',
       {
       method: 'get',
-      parameters: {"op" : "rs_list", "ds": "su_rsb.NOAA_ActiveRegions[][" + noaaNum + "]", "key": "ObservationTime,LatitudeHG,LongitudeCM,LongitudeHG,LongitudinalExtent" },
+      parameters: {"op" : "rs_list", "ds": "su_rsb.NOAA_ActiveRegions[][" + $("MaprojNOAA").value + "]", "key": "ObservationTime,LatitudeHG,LongitudeCM,LongitudeHG,LongitudinalExtent" },
       onSuccess: function(transport, json)
         {
         var response = transport.responseText || "no response text";
         var NOAA_rslist = response.evalJSON();
-        try {if (NOAA_rslist.status > 0 || NOAA_rslist.count == 0) throw "noRecords";}
-        catch(err) { $("MpNOAA").value = noaaNum + " " + err; return; }
-        var minLong = 999, minRec=-1;
-        var extentLon = 0;
-        var irec, nrecs = NOAA_rslist.count;
-        var thisTime, thisLong, thisLongHG,thisLat,thisExtent;
-        for (irec=0; irec<nrecs; irec++)
+        if (NOAA_rslist.status == 0 && NOAA_rslist.count > 0) 
           {
-          // thisTime = NOAA_rslist.keywords[0].values[irec];
-          // thisLat = NOAA_rslist.keywords[1].values[irec];
-          thisLong = NOAA_rslist.keywords[2].values[irec];
-          // thisLongHg = NOAA_rslist.keywords[3].values[irec];
-          // thisExtent = NOAA_rslist.keywords[4].values[irec];
-          if (Math.abs(thisLong) < Math.abs(minLong))
+          var minLong = 999, minRec=-1;
+          var irec, nrecs = NOAA_rslist.count;
+          var thisLong;
+          for (irec=0; irec<nrecs; irec++)
             {
-            minLong = thisLong;
-            minRec = irec;
+            thisLong = NOAA_rslist.keywords[2].values[irec];
+            if (Math.abs(thisLong) < Math.abs(minLong))
+              {
+              minLong = thisLong;
+              minRec = irec;
+              }
+            }
+          if (minLong == 999)
+            {
+            $("MaprojNOAA").value = noaaNum + "Region not found"; 
+            }
+          else
+            {
+            NOAA_TRef =  NOAA_rslist.keywords[0].values[minRec];
+            $("MaprojTRef").innerHTML = "at " + NOAA_TRef;
+            $("MaprojX").value = NOAA_rslist.keywords[3].values[minRec];
+            $("MaprojY").value = NOAA_rslist.keywords[1].values[minRec];
+	    $("MaprojNOAA").style.backgroundColor=colorOptionSet;
+            noaaColor = colorPreset;
+            $("MaprojX").style.backgroundColor = noaaColor;
+            $("MaprojY").style.backgroundColor = noaaColor;
+	    // CheckMaproj();
             }
           }
-        try
+        else
           {
-          if (minLong == 999) throw "noRegion";
-          // $("MpLocType").selectedIndex = 0;
-          $("MpTRef").value =  NOAA_rslist.keywords[0].values[irec];
-          $("MpX").value = NOAA_rslist.keywords[3].values[irec];
-          $("MpY").value = NOAA_rslist.keywords[1].values[irec];
-          $("MpWidth").value = 2*NOAA_rslist.keywords[1].values[irec];
-	  $("MpNOAA").style.backgroundColor=colorOptionSet;
-          noaaColor = colorPreset;
-          //$("MpLocType").style.backgroundColor = noaaColor;
-          $("MpTRef").style.backgroundColor = noaaColor;
-          $("MpX").style.backgroundColor = noaaColor;
-          $("MpY").style.backgroundColor = noaaColor;
-	  // CheckMpPatch();
+          $("MaprojNOAA").value = noaaNum + "Region not found"; 
           }
-        catch(err) { $("MpNOAA").value = noaaNum + " " + err; return; }
         },
       onFailure: function()
         {
         alert('Something went wrong with NOAA num data request');
-        $("MpNOAA").value = "Not Found";
+        $("MaprojNOAA").value = "Not Found";
         },
       onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
       });
     }
   }
+
+function MaprojSet(param)
+  {
+  // Get first and last record info
+  if (param == 1) defaultStartUsed = 0;
+  if (param == 2) defaultStopUsed = 0;
+  var needCheck = 1;
+  if (!MaprojFirstRecord)
+    {
+    needCheck = 0;
+    MaprojGetRecInfo(1);
+    }
+  if (!MaprojLastRecord)
+    {
+    needCheck = 0;
+    MaprojGetRecInfo(-1);
+    }
+  if (needCheck)
+    MaprojCheck();
+  }
+
+var defaultStartUsed = 1;
+var defaultStopUsed = 1;
+function MaprojCheck()
+  {
+  var isok = 1;
+  var args = "Maproj";
+  var MaprojLocOption;
+// alert("MaprojCheck, RecordCountNeeded="+RecordCountNeeded+", default start,stop="+defaultStartUsed+","+defaultStopUsed);
+  if (RecordCountNeeded)
+    {
+    ExportNewRS();
+    return("");
+    }
+
+  args += ",map=" + $("MaprojProj").value;
+  if ($("MaprojProj").selectedIndex == 1)
+    {
+    $("MaprojReflatLine").style.display="table-row";
+    }
+  else
+    {
+    $("MaprojReflatLine").style.display="none";
+    }
+ 
+  if ($("MaprojGrid").value != "none")
+    {
+    args += ",grid=" + $("MaprojGrid").value;
+    }
+
+  if (MaprojFirstRecord)
+    {
+    // var DegPerArcsec = (180.0/(696.0*3.14159))*(149640.0/(180.0*3600.0/3.14159)  // deg/Mm * Mm/arcsec 
+    var DegPerArcsec = 215/3600.0;  // deg/RsunRadian  * AURadian/arcsec
+    var DegPerPixel = new Number(MaprojFirstRecord.keywords[4].values[0] * DegPerArcsec);
+    $("MaprojMaxScale").innerHTML = DegPerPixel.toPrecision(3);
+    $("MaprojMaxScale").style.backgroundColor=colorWhite;
+    if ($("MaprojScale").value == "NotSpecified") $("MaprojScale").value = $("MaprojMaxScale").innerHTML;
+    }
+
+  if ($("MaprojX").value.strip().empty()) $("MaprojX").value = "NotSpecified";
+  if ($("MaprojX").value == "NotSpecified")
+    {
+    isok = 0;
+    $("MaprojX").style.backgroundColor=colorRed;
+    }
+  else
+    {
+    $("MaprojX").style.backgroundColor=noaaColor;
+    args += ",clon=" + $("MaprojX").value;
+    }
+
+  if ($("MaprojY").value.strip().empty()) $("MaprojY").value = "NotSpecified";
+  if ($("MaprojY").value == "NotSpecified")
+    {
+    $("MaprojY").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("MaprojY").style.backgroundColor=noaaColor;
+    args += ",clat=" + $("MaprojY").value;
+    }
+
+  if ($("MaprojScale").value.strip().empty()) $("MaprojScale").value = "NotSpecified";
+  if ($("MaprojScale").value == "NotSpecified")
+    {
+    $("MaprojScale").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("MaprojScale").style.backgroundColor=colorWhite;
+    args += ",scale=" + $("MaprojScale").value;
+    }
+
+  if ($("MaprojWide").value.strip().empty()) $("MaprojWide").value = "NotSpecified";
+  if ($("MaprojWide").value == "NotSpecified")
+    {
+    $("MaprojWide").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("MaprojWide").style.backgroundColor=colorWhite;
+    args += ",cols=" + $("MaprojWide").value;
+    }
+
+  if ($("MaprojHigh").value.strip().empty())
+    $("MaprojHigh").value = "NotSpecified";
+  if ($("MaprojHigh").value == "NotSpecified")
+    {
+    $("MaprojHigh").style.backgroundColor=colorRed;
+    isok = 0;
+    }
+  else
+    {
+    $("MaprojHigh").style.backgroundColor=colorWhite;
+    args += ",rows=" + $("MaprojHigh").value;
+    }
+
+  if (isok)
+    {
+    $("MaprojVerify").innerHTML = "OK to submit";
+    $("MaprojVerify").style.backgroundColor = colorWhite;
+    }
+  else
+    {
+    $("MaprojVerify").innerHTML = "Not Ready";
+    $("MaprojVerify").style.backgroundColor = colorRed;
+    }
+  return (isok ? args : "");
+  }
+
+var MaprojFirstRecord = null;
+var MaprojLastRecord = null;
+function MaprojGetRecInfo(n)
+  {
+  // Get keywords for a single record.  n will be 1 for first record, -1 for last record.
+  if (n==1)
+    MaprojFirstRecord = null;
+  else
+    MaprojLastRecord = null;
+  var timePrime = (firstTimePrime.length > 0 ? firstTimePrime : "T_REC");
+// $("TESTMSG").innerHTML = timePrime;
+  var keysneeded = timePrime+",CAR_ROT,CRLN_OBS,"+timePrime+"_step,CDELT1,CTYPE1";
+// alert("MaprojGetRecInfo("+n+") called");
+  var recinfo;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  var RecordSet = $("ExportRecordSet").value;
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
+    {
+    method: 'get',
+    parameters: {"ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded },
+
+    onSuccess: function(transport, json)
+      {
+      var thisN = ""+n;
+      var response = transport.responseText || "no response text";
+      var recinfo = response.evalJSON();
+
+// $("TESTMSG").innerHTML += " thisN="+thisN;
+      if (recinfo.status == 0)
+        {
+        if (thisN == "1")
+          {
+          MaprojFirstRecord = recinfo;
+          if (MaprojLastRecord)
+            MaprojCheck();
+          }
+        if (thisN == "-1")
+          {
+          MaprojLastRecord = recinfo;
+          if (MaprojFirstRecord)
+            MaprojCheck();
+          }
+        }
+      else
+        alert("failed to get record info for n="+thisN+" of " + RecordSet);
+      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+      },
+    onFailure: function() { alert('Something went wrong...'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+  }
+
+// Set display defaults
+
+function MaprojInit(isActive)
+  {
+  if (!isActive)
+    {
+    noaaColor = colorWhite;
+    var requireColor = colorRed;
+    $("ProcessMaproj").style.display="none";
+    $("MaprojReflatLine").style.display="none";
+    $("MaprojNOAA").style.backgroundColor=colorWhite; $("MaprojNOAA").value = "NotSpecified";
+    $("MaprojScale").style.backgroundColor = requireColor; $("MaprojScale").value = "NotSpecified";
+    $("MaprojX").style.backgroundColor = requireColor; $("MaprojX").value = "NotSpecified";
+    $("MaprojY").style.backgroundColor = requireColor; $("MaprojY").value = "NotSpecified";
+    $("MaprojWide").style.backgroundColor = requireColor; $("MaprojWide").value = "NotSpecified";
+    $("MaprojHigh").style.backgroundColor = requireColor; $("MaprojHigh").value = "NotSpecified";
+    MaprojFirstRecord = null;
+    MaprojLastRecord = null;
+    defaultStartUsed = 1;
+    defaultStopUsed = 1;
+    }
+  else
+    {
+    MaprojSet(0);
+    }
+  }
+
+// End of MapProj code
 
 //
 // Processing details for all options
@@ -1127,18 +1024,6 @@ function ProcessingInit()
 
   iOpt++;
   ProcessingOptionsHTML += 
-    '<input type="checkbox" checked="false" value="hg_patch" id="OptionHgPatch" onChange="SetProcessing('+iOpt+');" /> ' +
-    'hg_patch - Extract sub-frame (old version, switch to im_patch)<br>';
-  ExpOpt = new Object();
-  ExpOpt.id = "OptionHgPatch";
-  ExpOpt.rowid = "ProcessHgPatch";
-  ExpOpt.Init = HgPatchInit;
-  ExpOpt.Check = HgPatchCheck;
-  ExpOpt.Set = null;
-  ExportProcessingOptions[iOpt] = ExpOpt;
-
-  iOpt++;
-  ProcessingOptionsHTML += 
     '<input type="checkbox" checked="false" value="im_patch" id="OptionImPatch" onChange="SetProcessing('+iOpt+');" /> ' +
     'im_patch - Extract sub-frame<br>';
   ExpOpt = new Object();
@@ -1146,6 +1031,18 @@ function ProcessingInit()
   ExpOpt.rowid = "ProcessImPatch";
   ExpOpt.Init = ImPatchInit;
   ExpOpt.Check = ImPatchCheck;
+  ExpOpt.Set = null;
+  ExportProcessingOptions[iOpt] = ExpOpt;
+
+  iOpt++;
+  ProcessingOptionsHTML += 
+    '<input type="checkbox" checked="false" value="maproj" id="OptionMaproj" onChange="SetProcessing('+iOpt+');" /> ' +
+    'maproj - Extract a sub-frame and remap to a chosen projection.<br>';
+  ExpOpt = new Object();
+  ExpOpt.id = "OptionMaproj";
+  ExpOpt.rowid = "ProcessMaproj";
+  ExpOpt.Init = MaprojInit;
+  ExpOpt.Check = MaprojCheck;
   ExpOpt.Set = null;
   ExportProcessingOptions[iOpt] = ExpOpt;
 

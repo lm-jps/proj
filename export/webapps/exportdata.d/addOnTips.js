@@ -6,9 +6,9 @@
 
 function AddOnTips(tipstyle, Tip)
   {
-  new Tip("HgPatchHelp","Extract patch in heliographic coordinates, trac across the disk, " +
+  new Tip("MaprojHelp","Extract patch in heliographic coordinates, trac across the disk, " +
       "provide Carrington location and size of patch in degrees or ref time and location.",tipstyle);
-  new Tip("HgNoaaTip","Enter 4- or 5-digit NOAA AR number to preload location type, reference time, " +
+  new Tip("MaprojNoaaTip","Enter 4- or 5-digit NOAA AR number to preload location type, reference time, " +
       "and location for the NOAA AR region.  Will find entry in NOAA region table that is closest to CM.",tipstyle);
   new Tip("ImPatchHelp","Extract patch in heliographic coordinates, trac across the disk, " +
       "provide Carrington location and size of patch in degrees or ref time and location.",tipstyle);

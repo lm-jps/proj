@@ -203,146 +203,6 @@
     </tr>
     <!-- END REBIN -->
 
-    <!-- BEGIN HG_PATCH -->
-    <tr id="ProcessHgPatch">
-      <td>&nbsp;&nbsp;&nbsp;&nbsp;HG_Patch</td> 
-      <td><span id="HgPatchHelp" class="tip">?</span></td> 
-      <td colspan="2">
-        <table style="border-style:solid" >
-        <tr>
-        <td colspan="3">
-        <b>WARNING - Explicit Record Limit does not work for hg_patch processing</b>
-        </td>
-        </tr>
-        <tr>
-        <td colspan="3">
-          Specify patch to extract and track.  The default is to track the patch from East limb to West limb. 
-          T_START and/or T_STOP can limit the tracking as can a recodrset specification. 
-          If only the seriesname is given, the query will be made for the last record only, [$],
-          to prevent the export tools from doing a full check on the series. 
-          In this special case, the final record of the series will not actually be used unless it is in the bounds of
-          T_START and T_STOP and is a time with the patch on the disk.
-          <p> 
-          The patch icenter locationa(x,y) can be specified in Carrington Rot, Lat, and Longitude or with a reference time and location in arcsec,
-          or degrees from CM and equator or in pixels from the lower left of the image (1,1) before any implied rotation or center offset. 
-          One of T_REF or CAR_ROT is required to locate the patch in time. 
-          Width and Height are used to specify the size of the box.
-          The units of width and height must be specified and can be pixels, arcsec, or degrees. 
-          The pixel size is computed from these box sizes when they are at disk center.
-        </td>
-        </tr>
-        <tr>
-           <td width=20>Series</td>
-           <td>
-           <select id="HgSerList" type="text" size=1 style="width:20em;background-color:#FFFFFF" onChange="HgSeriesSelect();"></select>
-           </td>
-           <td>&nbsp;</td>
-        </tr> 
-        <tr>
-           <td>Options</td>
-           <td colspan="2">
-           Tracking:&nbsp;
-           <input id="HgTrack" type="checkbox" name="HgTrack" onChange="HgPatchCheck();">
-           &nbsp;
-           &nbsp;
-           &nbsp;
-           &nbsp;
-           <span id="HgNoaaTip" class="tip">?</span>
-           NOAA AR number:&nbsp;
-             <input id="HgNOAA" type="text" style="width:8em;background-color:#FFFFFF" value="NotSpecified" onChange="HgPatchGetNoaa();">
-          </td>
-        </tr>
-        <tr>
-           <td>T_START </td>
-           <td>
-           <input id="HgTStart" type="text" name="HgTStart" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="HgPatchCheck();">
-           </td>
-           <td rowspan=2>&nbsp;Note - T_START and T_STOP are not used if the RecordSet is specified explicitly above.  Use '[$]' if you
-              want to use T_START, T_STOP, and/or CADENCE to specify the coverage you want.</td>
-        </tr>
-        <tr>
-           <td>T_STOP </td>
-           <td>
-           <input id="HgTStop" type="text" name="HgTStop" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="HgPatchCheck();">
-           </td>
-        </tr>
-        <tr>
-           <td>CADENCE</td> 
-           <td>
-           <input id="HgTDelta" type="text" name="HgTDelta" style="width:12em;background-color:#FFFFFF" value="NotSpecified" onChange="HgPatchCheck();">
-           </td>
-           <td>&nbsp;Note - CADENCE is not used if the RecordSet is specified explicitly in the '[...]' notation.</td>
-        </tr>
-        <tr>
-           <td>LocUnits</td>
-           <td>
-           <select id="HgLocType" type="text" name="HgLocType" style="width:20em;background-color:#FFFFFF" value="stony" onChange="HgPatchCheck();">
-             <option value="stony">Stonyhurst degrees 
-             <option value="arcsec">arcsec from center 
-             <option value="pixels">pixels from (1,1) 
-    	 <option value="carrlong">Carrington LatLon 
-    	 </select>
-           </td>
-           <td>&nbsp;</td>
-        </tr> 
-        <tr id="HgTRefLi">
-           <td>T_REF</td>
-           <td>
-           <input id="HgTRef" type="text" name="HgTRef" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="HgPatchCheck();">
-           </td>
-           <td>&nbsp;</td>
-        </tr>
-        <tr id="HgCarrLi">
-           <td>CAR_ROT </td>
-           <td>
-           <input id="HgCarrot" type="text" name="HgCarrot" style="width:20em;background-color:#D88080" value="NotSpecified" onChange="HgPatchCheck();">
-           </td>
-           <td>&nbsp;</td>
-        </tr>
-        <tr>
-           <td>X</td>
-           <td>
-           <input id="HgX" type="text" name="HgX" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="HgPatchCheck();">
-           </td>
-           <td>&nbsp;</td>
-        </tr>
-        <tr>
-           <td>Y</td>
-           <td>
-           <input id="HgY" type="text" name="HgY" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="HgPatchCheck();">
-           </td>
-           <td>&nbsp;</td>
-        </tr>
-        <tr>
-           <td>BoxUnits</td>
-           <td>
-           <select id="HgBoxType" type="text" name="HgBoxType" style="width:20em;background-color:#FFFFFF" value="pixels" onChange="HgPatchCheck();">
-             <option value="pixels">pixels 
-             <option value="degrees">degrees 
-             <option value="arcsec">arcsec 
-             </select>
-           </td>
-           <td>&nbsp;</td>
-        </tr>
-        <tr>
-           <td>Width </td>
-           <td>
-           <input id="HgWide" type="text" name="HgWide" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="HgPatchCheck();">
-           </td>
-           <td>&nbsp;</td>
-        </tr>
-        <tr>
-          <td>Height </td>
-          <td>
-          <input id="HgHigh" type="text" name="HgHigh" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="HgPatchCheck();">
-          </td>
-           <td>&nbsp;</td>
-        </tr>
-        </table>
-      </td> 
-    </tr>
-    <!-- END HG_PATCH -->
-
     <!-- BEGIN IM_PATCH -->
     <tr id="ProcessImPatch">
       <td>&nbsp;&nbsp;&nbsp;&nbsp;IM_Patch</td> 
@@ -501,6 +361,117 @@
       </td> 
     </tr>
     <!-- END IM_PATCH -->
+
+    <!-- BEGIN MAPROJ -->
+    <tr id="ProcessMaproj">
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;Maproj</td> 
+      <td><span id="MaprojHelp" class="tip">?</span></td> 
+      <td colspan="2">
+        <table style="border-style:solid" >
+        <tr>
+        <td colspan="3">
+          Projected Patch Extract - used to export sub-frames from a sequence of images.
+          The extracted patches are remapped to the rquested projection.
+          The patch will be tracked at the Carrington rate.
+          <br>
+          The location of the extracted sub-frame must be specified in Carrington latitude and longitude.
+          <br>
+          The recordset should be specified fully.  For the time being, for AIA at lower cadence use
+          one of the time slotted series: aia.lev1_euv_12s, aia.lev1_uv_24s, or aia.lev1_vis_1h 
+        </td>
+        </tr>
+        <tr>
+           <td>Options</td>
+           <td colspan="2">
+           Visible grid spacing in degrees, &nbsp;
+           <input id="MaprojGrid" type="text" name="MaprojGrid" style="width:4em" value="none" onChange="MaprojCheck();">
+           &nbsp;
+           &nbsp;
+           NOAA AR number:&nbsp;
+           <span id="MaprojNoaaTip" class="tip">?</span>
+           <input id="MaprojNOAA" type="text" style="width:6em;background-color:#FFFFFF" 
+              value="NotSpecified" onChange="MaprojGetNoaa();">
+           <span id="MaprojTRef"></span>
+          </td>
+        </tr>
+        <tr>
+           <td>CLong</td>
+           <td colspan="2">
+           &nbsp;<span id="MaprojXHelp" class="tip">?</span>
+           <input id="MaprojX" type="text" name="MaprojX" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="MaprojCheck();">
+           &nbsp; Carrington longitude of patch center.
+           </td>
+        </tr>
+        <tr>
+           <td>CLat</td>
+           <td colspan="2">
+           &nbsp;<span id="MaprojYHelp" class="tip">?</span>
+           <input id="MaprojY" type="text" name="MaprojY" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="MaprojCheck();">
+           &nbsp; Latitude of patch center.
+           </td>
+        </tr>
+        <tr>
+           <td>MapProjection</td>
+           <td colspan="2">
+           &nbsp;<span id="MaprojProjHelp" class="tip">?</span>
+           <select id="MaprojProj" type="text" name="MaprojProj" style="width:20em;background-color:#FFFFFF" value="carree" onChange="MaprojCheck();">
+             <option value="carree">Plate Carree - simple latitude vs longitude map
+             <option value="cyleqa">Cylindrical equal area - sine latitude vs longitude (MapScale for longitude)
+             <option value="orthographic">Orthographic - disk as observed from infinity (MapScale valid at disk center)
+             <option value="Postel">Postel's - azimuthal equidistant projection (Mapscale valid on radial lines from map center)
+             </select>
+           </td>
+        </tr>
+        <tr id="MaprojReflatLine">
+           <td>CEA RefLatitude</td>
+           <td colspan="2">
+           &nbsp;<span id="MaprojConform" class="tip">?</span>
+           <select id="MaprojConformLat" type="text" name="MaprojConformLat" style="width:20em;background-color:#FFFFFF" value="Lambert" onChange="MaprojCheck();">
+	   <option value="Lambert">Lambert CEA == Conformal at equator, ratio for whole sphere is width=pi*height.
+	   </select>
+           </td>
+        </tr>
+        <tr>
+           <td>MapScale</td>
+           <td colspan="2">
+           &nbsp;<span id="MaprojScaleHelp" class="tip">?</span>
+           <input id="MaprojScale" type="text" name="MaprojScale" style="width:20em;background-color:#FFFFFF" value="NotSpecified" onChange="MaprojCheck();">
+           &nbsp; Scale in degrees per pixel after mapping. Choose <= 
+           <span id="MaprojMaxScale"></span>
+           </td>
+        </tr>
+        <tr>
+           <td>Width </td>
+           <td colspan="2">
+           &nbsp;<span id="MaprojWideHelp" class="tip">?</span>
+           <input id="MaprojWide" type="text" name="MaprojWide" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="MaprojCheck();">
+           &nbsp; Width of extracted patch in pixels.
+           </td>
+        </tr>
+        <tr>
+          <td>Height </td>
+          <td colspan="2">
+           &nbsp;<span id="MaprojHighHelp" class="tip">?</span>
+          <input id="MaprojHigh" type="text" name="MaprojHigh" style="width:12em;background-color:#D88080" value="NotSpecified"  onChange="MaprojCheck();">
+           &nbsp; Height of extracted patch in pixels.
+          </td>
+        </tr>
+        <tr>
+          <td>Verify </td>
+          <td colspan="2">
+           &nbsp;<span id="MaprojVerifyHelp" class="tip">?</span>
+          <input type="button" style="width:12em" value="Check params" onClick="MaprojCheck();">
+          &nbsp;
+          <span id="MaprojVerify" style="width:12em;background-color:#D88080">Not Ready</span>
+          </td>
+        </tr>
+        <tr> <td colspan="2">
+          <span id="TESTMSG" style="width:12em;background-color:#D88080"></span>
+        </td> </tr>
+        </table>
+      </td> 
+    </tr>
+    <!-- END MAPROJ -->
 
 <tr><td colspan="4"><span id="ProcArgsDisplay"></span></td></tr>
     <!-- End of processing  special code -->
