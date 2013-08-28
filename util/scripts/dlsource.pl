@@ -1090,7 +1090,7 @@ sub DownloadTree
 
    if (!$rv)
    {
-      if (length($version) > 0)
+      if (defined($version) && length($version) > 0)
       {
          $rev = "-r $version";
       } 
@@ -1104,7 +1104,7 @@ sub DownloadTree
          $rev = "";
       }
 
-      if (length($pversion) > 0)
+      if (defined($pversion) && length($pversion) > 0)
       {
          $prev = "-r $pversion";
       } 
