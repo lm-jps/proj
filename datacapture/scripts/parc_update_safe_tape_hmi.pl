@@ -65,7 +65,7 @@ sub labeldate {
 $DB = "hmidb_sums";
 $PGPORT = 5434;
 $DIR_PARC = "/dds/pipe2soc/hmi";
-$DIR_PARC = "/dds/pipe2soc/hmi/err";  #!!!TEMP for testing
+#$DIR_PARC = "/dds/pipe2soc/hmi/err";  #!!!TEMP for testing
 $HOSTDB = `hostname -s`;
 chomp($HOSTDB);
 
