@@ -64,8 +64,8 @@ sub labeldate {
 #run on a backup host if the dcs1x is down, so give db name. 
 $DB = "aiadb_sums";
 $PGPORT = 5434;
-#$DIR_PARC = "/dds/pipe2soc/aia";
-$DIR_PARC = "/dds/pipe2soc/aia/err"; #!!TEMP for testing
+$DIR_PARC = "/dds/pipe2soc/aia";
+#$DIR_PARC = "/dds/pipe2soc/aia/err"; #!!TEMP for testing
 $HOSTDB = `hostname -s`;
 chomp($HOSTDB);
 
