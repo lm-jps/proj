@@ -133,11 +133,9 @@
  *	-Z	log times in UT (default is TAI)
  *
  *  Notes:
- *    This module is a DRMS-based version of fastrack, which it is intended
- *	to replace.
+ *    This module is a DRMS-based version of fastrack, which it has replaced
  *
  *  Bugs:
- *    The option for removal of solar rotation is not implemented
  *    The code does not check that the output data segments match those of
  *	the output series when the segment protocol is variable
  *    Checks for validity of tstart and tstop parameters are unreliable, due
@@ -204,7 +202,7 @@
 						      /*  module identifier  */
 char *module_name = "mtrack";
 char *module_desc = "track multiple regions from solar image sequences";
-char *version_id = "1.6";
+char *version_id = "1.7";
 
 #define CARR_RATE       (2.86532908457)
 #define RSUNM		(6.96e8)
@@ -458,7 +456,6 @@ int ephemeris_params (DRMS_Record_t *img, double *vr, double *vw, double *vn) {
   if (kstat) *vr = *vw = *vn = 0.0;
   return kstat;
 }
-
 /*
  *  Adjust all values for various components of relative line-of-sight
  *    velocity at center of map (does not require image geometry, only
@@ -492,6 +489,40 @@ void adjust_for_observer_velocity (float *map, int mapct, float *mapclat,
     for (n = 0; n < pixct; n++) map[n + mset] -= vobs;
     mset += pixct;
   }
+}
+/*
+ *  Adjust all values for line-of-sight components of standard solar rotational
+ *    velocity at center of map (does not require image geometry, only the
+ *    target heliographic coordinates)
+ */
+static void adjust_for_solar_rotation (float *map, int mapct, float *mapclat,
+    float *mapclon, int pixct, double latc, double lonc) {
+  static double a0 = -0.02893, a2 = -0.3441, a4 = -0.5037;
+  static double RSunMm = 1.0e-6 * RSUNM;
+  double vrot, uonlos;
+  double chi, clon, coslat, sinlat, sin2lat, sinth, x, y;
+  double coslatc = cos (latc), sinlatc = sin (latc);
+  int m, n, mset = 0;
+
+  for (m = 0; m < mapct; m++) {
+    coslat = cos (mapclat[m]);
+    sinlat = sin (mapclat[m]);
+    sin2lat = sinlat * sinlat;
+    clon = mapclon[m] - lonc;
+    x = coslat * sin (clon);
+    y = sin (mapclat[m]) * coslatc - sinlatc * coslat * cos (clon);
+    chi = atan2 (x, y);
+    sinth = hypot (x, y);
+		     /*  Line-of-sight component of zonal surface component  */
+    uonlos = (coslat > 1.e-8) ? sinth * coslatc * sin (chi) / coslat : 0.0;
+    vrot = (a0 + CARR_RATE) *  RSunMm * coslat * uonlos;
+    vrot += a2 *  RSunMm * coslat * uonlos * sin2lat;
+    vrot += a4 *  RSunMm * coslat * uonlos * sin2lat * sin2lat;
+
+    for (n = 0; n < pixct; n++) map[n + mset] -= vrot;
+    mset += pixct;
+  }
+  return;
 }
 
 int set_stat_keys (DRMS_Record_t *rec, long long ntot, long long valid,
@@ -1595,11 +1626,13 @@ need_limb_dist = 1;
   found = 0;
   for (nr = 0; nr < recct; nr++) {
     tobs = drms_getkey_time (ids->records[nr], tobs_key, &status);
+    if (time_is_invalid (tobs)) continue;
     if (fabs (tobs - tmid) < cadence) {
       irec = ids->records[nr];
       if (need_crcl) {
         tmid_cl = drms_getkey_double (irec, clon_key, &status);
         tmid_cr = drms_getkey_int (irec, crot_key, &status);
+	if (isnan (tmid_cl) || tmid_cr < 0) continue;
       }
       found = 1;
     }
@@ -2177,6 +2210,10 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
       adjust_for_observer_velocity (maps, rgnct, clat, clon, pixct,
 	  img_lat, img_lon, obsvr, obsvw, obsvn, apsd, 0);
     }
+			 /*  remove solar rotation signal from Doppler data  */
+    if (remove_rotation) adjust_for_solar_rotation (maps, rgnct, clat, clon,
+	pixct, img_lat, img_lon);
+
     if (ttrgt < tobs) {
 	/*  linearly interpolate individual pixels between last valid map
 								and current  */
@@ -2685,4 +2722,10 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
  *	values used
  *		Fixed bscale-bzero overrides
  *  v 1.6 frozen 2013.04.08
+ *    1.7	Added optional removal of solar rotation Doppler signal from
+ *	input (2013.06.03)
+ *    		Fixed bug in determination of midpoint elements when keying
+ *	from date/time and using T_REC as tobs_key and when elements missing
+ *	for the midpoint input record (2013.08.30)
+ *  v 1.7 frozen 2013.09.04
  */
