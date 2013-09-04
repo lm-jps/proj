@@ -2,7 +2,7 @@
 
 # Run like:
 #  ingestIrisFDS.pl data=<data dir> host=<db host> series=<series ingesting into>
-#  ingestIrisFDS.pl data=/home/arta/iris/testdata/fds host=hmidb port=5432 series=su_arta.irisfds orbseries=su_arta.orbitvectors
+#  ingestIrisFDS.pl data=/home/arta/iris/testdata/fds host=hmidb port=5432 user=arta series=su_arta.irisfds orbseries=su_arta.orbitvectors
 use strict;
 use warnings;
 use Data::Dumper;
@@ -19,7 +19,9 @@ use constant kArgDataDir         => "data";      # Path to the data files to ing
 use constant kArgSeries          => "series";    # Series into which the data files are to be ingested.
 use constant kArgDBHost          => "host";      # The database host that contains the series to ingest into.
 use constant kArgDBPort          => "port";      # The port on the database host to which the db connection is made.
+use constant kArgDBUser          => "user";    # The DB user whose account will be logged into.
 use constant kArgOrbSeries       => "orbseries"; # The orbit series (this script will ingest orbit files into the orbit series).
+
 
 # Return codes
 use constant kRetSuccess         => 0;
@@ -157,7 +159,7 @@ if (defined($lock))
                     @jsd = <DATA>;
                     $jsdstr = join("", @jsd);
                     
-                    if (CreateSeries($jsdstr, $args->Get(&kArgSeries)))
+                    if (CreateSeries($jsdstr, $args->Get(&kArgSeries), $args->Get(&kArgDBHost), $args->Get(&kArgDBUser)))
                     {
                         print STDERR "Unable to create series " . $args->Get(&kArgSeries) . ".\n";
                         $rv = &kRetCreateSeries;
@@ -180,7 +182,7 @@ if (defined($lock))
             
             if ($rv == &kRetSuccess)
             {
-                $cmd = "set_info -c ds=" . $args->Get(&kArgSeries) . " " . &kKeyObsDate . "=$obsdate " . &kKeyProduct . "=$prod " . &kKeyVersion . "=$version " . &kKeyProcDate . "=$procdate " . &kKeyProcDateStr . "=$procdate " . &kSegProdFile . "=" . $args->Get(&kArgDataDir) . "/$filename JSOC_DBHOST=" . $args->Get(&kArgDBHost) . " " . &kKeyIngested . "=N";
+                $cmd = "set_info -c ds=" . $args->Get(&kArgSeries) . " " . &kKeyObsDate . "=$obsdate " . &kKeyProduct . "=$prod " . &kKeyVersion . "=$version " . &kKeyProcDate . "=$procdate " . &kKeyProcDateStr . "=$procdate " . &kSegProdFile . "=" . $args->Get(&kArgDataDir) . "/$filename JSOC_DBHOST=" . $args->Get(&kArgDBHost) . " " . &kKeyIngested . "=N JSOC_DBUSER=" . $args->Get(&kArgDBUser);
 
                 # Duplicate STDERR
                 open(STDERRDUP, ">&STDERR");
@@ -209,7 +211,7 @@ if (defined($lock))
                     
                     if ($prod eq &kProdOrbit)
                     {
-                        $cmd = "$Bin/ingestIrisOrbit.pl series=" . $args->Get(&kArgOrbSeries) . " source=" . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version] dfile=" . $args->Get(&kArgDataDir) . "/$filename host=" . $args->Get(&kArgDBHost);                         
+                        $cmd = "$Bin/ingestIrisOrbit.pl series=" . $args->Get(&kArgOrbSeries) . " source=" . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version] dfile=" . $args->Get(&kArgDataDir) . "/$filename host=" . $args->Get(&kArgDBHost) . " user=" . $args->Get(&kArgDBUser);
                     }
                     
                     if (defined($cmd))
@@ -274,7 +276,7 @@ if (defined($lock))
                                 print "Updating " . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version] to reflect successful ingestion...\n";
 
                                 $cmd = "UPDATE " . $args->Get(&kArgSeries) . " SET " . &kKeyIngested . "='Y' WHERE " . &kKeyObsDateIndex . "=$slotnum AND " . &kKeyProduct . "='$prod' AND " . &kKeyVersion . "=$version";
-                                $cmd = "psql -h " . $args->Get(&kArgDBHost) . " -p " . $args->Get(&kArgDBPort) . " jsoc -c \"$cmd\"";
+                                $cmd = "psql -h " . $args->Get(&kArgDBHost) . " -p " . $args->Get(&kArgDBPort) . " -U " . $args->Get(&kArgDBUser) . " jsoc -c \"$cmd\"";
                                 
                                 # Duplicate STDERR
                                 if (drmsSysRun::RunCmd("$cmd 1>/dev/null 2>&1") != 0)
@@ -318,6 +320,7 @@ sub GetArgs
         &kArgSeries        => 's',
         &kArgDBHost        => 's',
         &kArgDBPort        => 's',
+        &kArgDBUser        => 's',
         &kArgOrbSeries     => 's'
     };
     
@@ -388,7 +391,7 @@ sub SeriesExists
 
 sub CreateSeries
 {
-    my($jsdstr, $sname) = @_;
+    my($jsdstr, $sname, $dbhost, $dbuser) = @_;
     my($pipe);
     my($rsp);
     my($rv);
@@ -410,7 +413,7 @@ sub CreateSeries
         if (length($jsdstr) > 0)
         {
             # Create a bidirectional-pipe so we can pass the jsd to create_series via stdin.
-            $pipe = new drmsPipeRun("create_series -i");
+            $pipe = new drmsPipeRun("create_series -i JSOC_DBHOST=$dbhost JSOC_DBUSER=$dbuser");
 
             if (defined($pipe))
             {

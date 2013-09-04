@@ -32,8 +32,9 @@ use constant kRetInvalidDFile  => 5;
 use constant kArgSeries        => "series";
 use constant kArgSource        => "source"; # The record-set specification of the record in the fds series containing the orbit data file whose
                                             # content will be ingested by this script.
-use constant kArgDfile         => "dfile"; # A PATH to an orbit file to ingest
-use constant kArgDBHost        => "host";
+use constant kArgDfile         => "dfile";  # A PATH to an orbit file to ingest
+use constant kArgDBHost        => "host";   # DB host
+use constant kArgDBUser        => "user";   # DB user
 
 # Data file header values
 use constant kHdObsDate        => "Time  (UTCG)";
@@ -74,6 +75,7 @@ my($series);
 my($source);
 my($dfile);
 my($dbhost);
+my($dbuser);
 my($cmd);
 my(@filelist);
 my($pipe);
@@ -91,6 +93,7 @@ if (defined($lock))
     $source = $args->Get(&kArgSource);
     $dfile = $args->Get(&kArgDfile);
     $dbhost = $args->Get(&kArgDBHost);
+    $dbuser = $args->Get(&kArgDBUser);
     
     if (!SeriesExists($series, $dbhost))
     {
@@ -101,7 +104,7 @@ if (defined($lock))
         @jsd = <DATA>;
         $jsdstr = join("", @jsd);
 
-        if (CreateSeries($jsdstr, $args->Get(&kArgSeries)))
+        if (CreateSeries($jsdstr, $series, $dbhost, $dbuser))
         {
             print STDERR "Unable to create series $series.\n";
             $rv = &kRetCreateSeries;
@@ -149,7 +152,7 @@ if (defined($lock))
         InsertHeader($headersH, $headersA, &kHdGeiZObs, &kKwGeizObs);
         InsertHeader($headersH, $headersA, &kHdDSunObs, &kKwDsunObs);
         
-        $cmd = "ingestdata series=$series";
+        $cmd = "ingestdata series=$series JSOC_DBHOST=$dbhost JSOC_DBUSER=$dbuser";
         # Test this puppy out.
         # $cmd = "cat";
         
@@ -366,7 +369,8 @@ sub GetArgs
         &kArgSeries        => 's',
         &kArgSource        => 's',
         &kArgDfile         => 's',
-        &kArgDBHost        => 's'
+        &kArgDBHost        => 's',
+        &kArgDBUser        => 's'
     };
     
     return new drmsArgs($argsinH, 1);
@@ -405,7 +409,7 @@ sub SeriesExists
 
 sub CreateSeries
 {
-    my($jsdstr, $sname) = @_;
+    my($jsdstr, $sname, $dbhost, $dbuser) = @_;
     my($pipe);
     my($rsp);
     my($rv);
@@ -427,7 +431,7 @@ sub CreateSeries
         if (length($jsdstr) > 0)
         {
             # Create a bidirectional-pipe so we can pass the jsd to create_series via stdin.
-            $pipe = new drmsPipeRun("create_series -i");
+            $pipe = new drmsPipeRun("create_series -i JSOC_DBHOST=$dbhost JSOC_DBUSER=$dbuser");
             
             if (defined($pipe))
             {
