@@ -40,7 +40,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" $(FFTWH)
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I/home/jsoc/include -DCDIR="\"$(SRCDIR)/$(d)\""
 
 ifeq ($(JSOC_MACHINE), linux_ia32)
   FFTW_$(d) = /home/jsoc/lib/linux-ia32
@@ -49,7 +49,7 @@ ifeq ($(JSOC_MACHINE), linux_x86_64)
   FFTW_$(d) = /home/jsoc/lib/linux-x86_64
 endif
 
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):     LL_TGT := $(LL_TGT) -L$(FFTW_LIBS) -lfftw3 -lfftw3f
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) -L$(FFTW_LIBS) -lfftw3 -lfftw3f
 
 ifeq ($(JSOC_MACHINE), linux_x86_64)
 $(RDVINV_$(d)):				$(OBJ_OLAXY_$(d))
