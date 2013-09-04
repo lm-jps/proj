@@ -376,7 +376,7 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   char *hwltnset, *cdark;
   char *hseqerr, *aistate;
   char wave_str[16];
-  int status, hsqfgsn, asqfsn;
+  int status, hsqfgsn, asqfsn, hgp1rgst;
   float percentd;
   uint32_t missvals, datav;
   uint32_t hcf1encd, hcf2encd, hps1encd, hps2encd, hps3encd; 
@@ -465,6 +465,12 @@ if(!hmiaiaflg) {		//HMI specific qual bits
   hwl4pos = drms_getkey_int(rs, "HWL4POS", &status);
   if(!((hwl4pos == hwt4encd) || (hwl4pos == (hwt4encd+1) % 240)))
     quallev0 = quallev0 | Q_HWT4ENCD;
+  //New 14Aug2013. Set Q_GPREGBIT0/1 
+  hgp1rgst = drms_getkey_int(rs, "HGP1RGST", &status);
+  if(hgp1rgst != DRMS_MISSING_INT) {
+    hgp1rgst = (hgp1rgst << 28) & 0x30000000;
+    quallev0 = quallev0 | hgp1rgst;
+  }
 }
 else {				//AIA specific qual bits
   asqfsn = drms_getkey_int(rs, "ASQFSN", &status);
