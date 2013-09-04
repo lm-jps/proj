@@ -264,11 +264,11 @@ void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int f
       qual_select = (quallev0 >> 28) & 0x3;
       switch(qual_select) {
       case 1:
-        if(!strcmp(pchar, "CLOSED"))
-          quallev1 = quallev1 | Q_THERM_RECOV;
+        quallev1 = quallev1 | Q_THERM_RECOV;
         break;
       case 2:
-        quallev1 = quallev1 | Q_THERM_RECOV;
+        if(!strcmp(pchar, "CLOSED"))
+          quallev1 = quallev1 | Q_THERM_RECOV;
         break;
       case 3:
         quallev1 = quallev1 | Q_LUNAR_TRAN;
