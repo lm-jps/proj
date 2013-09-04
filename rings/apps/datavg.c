@@ -588,7 +588,7 @@ int DoIt (void) {
     if (status) {
       fprintf (stderr, "Warning: drms_create_record returned %d for data series:\n",
 	  status);
-      fprintf (stderr, "  %s\nKeyword setting will not be checked", out_series);
+      fprintf (stderr, "  %s\nKeyword setting will not be checked\n", out_series);
     }
   } else {
     orec = drms_create_record (drms_env, out_series, DRMS_PERMANENT, &status);
