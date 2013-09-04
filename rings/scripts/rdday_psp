@@ -75,7 +75,10 @@ if ($TEST) then
     echo Error: unable to read file $TSTOPT for test options
     exit
   endif
+# parse testoptions file for possible substitution of modules
   set NMSP = hmi_test
+  grep -q "^COVER =" $TSTOPT
+  if ($status == 0) set COVER = `grep "^COVER =" $TSTOPT | awk '{print $3}'`
   grep -q "^TRACK =" $TSTOPT
   if ($status == 0) set TRACK = `grep "^TRACK =" $TSTOPT | awk '{print $3}'`
   grep -q "^PSPEC =" $TSTOPT
@@ -184,7 +187,12 @@ set GSER = yale_cb.guess_table
 set GUESS = $GSER"[1]"
 set KSER = hmi.HSKernels
 
+# auxiliary files
+set NOTE = ~rick/hmi/notify
+set RJCT = ~rick/hmi/qual/reject.V
+
 if ($TEST) then
+# parse testoptions file for possible substitution of I/O series and files
   grep -q "^ISER =" $TSTOPT
   if ($status == 0) set ISER = `grep "^ISER =" $TSTOPT | awk '{print $3}'`
   grep -q "^MSER =" $TSTOPT
@@ -195,9 +203,12 @@ if ($TEST) then
   if ($status == 0) set GSER = `grep "^GSER =" $TSTOPT | awk '{print $3}'`
   grep -q "^KSER =" $TSTOPT
   if ($status == 0) set KSER = `grep "^KSER =" $TSTOPT | awk '{print $3}'`
-endif
-
-if ($TEST) then
+  grep -q "^RJCT =" $TSTOPT
+  if ($status == 0) then
+    set RJCT = `grep "^RJCT =" $TSTOPT | awk '{print $3}'`
+    if ($RJCT == "") set RJCT = "Not Specified"
+  endif
+# but override these if starting in the middle of the script
   if ($SKIPTRK) set TSER = hmi.$BASE\track$SUFX
   if ($SKIPSPC) set PSER = hmi.$BASE\pspec$SUFX
   if ($SKIPFIT) set FSER = hmi.$BASE\fitsf$SUFX
@@ -215,13 +226,7 @@ end
 
 set KRNL = $KSER"[cm_opal78]"
 
-# auxiliary files
-set HOSTNAME = `hostname`
-set HOSTID = `basename $HOSTNAME .Stanford.EDU`
-set PROCID = $HOSTID\_$$
-set NOTE = ~rick/hmi/notify
-set RJCT = ~rick/hmi/qual/reject.V
-
+# determine root location of scratch and temp directory files
 set TMPFSLOC = ~rick/hmi/tmpfs
 if (-r $TMPFSLOC) then
   set TMPFS = `egrep ^/tmp $TMPFSLOC`
@@ -236,6 +241,10 @@ else
   set TEMP = /tmp
   set SCRT = /tmp
 endif
+
+set HOSTNAME = `hostname`
+set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set PROCID = $HOSTID\_$$
 
 set TMPB = $TEMP/$PLID$SUFX
 if ($TEST) set TMPB = $TMPB.$TW
@@ -631,6 +640,7 @@ if ($SYSE == 5) then
       @ FAILCT++
       echo "  $FAIL rdfitc failures on cluster at Latitude `printf %+05.1f $LAT`" >> $MMSG
       echo "  ($CARTIM) $FAIL rdfitc failures on cluster at Latitude `printf %+05.1f $LAT`" >> $LOGF
+      mv $SCRIPT $SCRIPT$LAT
     endif
     @ FINIS = `date +%s`
     @ ELAPS = $FINIS - $BEGUN
@@ -649,8 +659,11 @@ if ($SYSE == 5) then
   else
     echo "  total time for fitting $RGNCT regions on the cluster: $TOTEL min" >> $MMSG
     echo "  ($CARTIM) total time for fitting $RGNCT regions on the cluster: $TOTEL min" >> $LOGF
+    rm $RLOG+*
+    rm $RLOG-*
   endif
   echo "    fits in $CSER""[$CROT][$CLON]" >> $MMSG
+  if (-e $SCRIPT) rm $SCRIPT
   set CTIME = $TOTEL
   @ RPCT = `show_info -bcq ds= $CSER"[$CROT][$CLON]"`
   @ RPCT -= $EXIST
@@ -715,6 +728,9 @@ else
     echo "  qsub script is $SCRIPT" >> $MMSG
     echo "  qsub script is $SCRIPT" >> $LOGF
     @ STRTSTOP = 0
+  else
+    rm $SCRIPT
+    rm $RLOG.*
   endif
   @ FINIS = `date +%s`
   @ ELAPS = $FINIS - $BEGUN
@@ -735,7 +751,6 @@ else
     set SUBJ = "HMI ring-diagram $TW processing for $CARTIM incomplete"
   endif
 endif
-if (!($FAIL)) rm $SCRIPT
 goto CLEANUP
 
 INTERRUPT:
