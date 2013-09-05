@@ -33,6 +33,9 @@
 #define Q_AIA_FOOR 0x100000	//AIA focus out of range
 #define Q_AIA_REGF 0x200000	//AIA register flag
 
+#define Q_THERM_RECOV 0x400000	//HMI thermal recovery
+#define Q_LUNAR_TRAN 0x800000	//HMI lunar transit
+
 #define Q_NRT	  0x40000000	//near real time mode (formerly quicklook)
 #define Q_MISSALL 0x80000000    //Image not available. high bit
 
