@@ -1977,7 +1977,7 @@ int DoIt(void)
   setup();
   while(wflg) {
     do_ingest();                // loop to get files from the input dir 
-    if(pipedir) do_pipe2soc();  // get .parc file from backend & update db
+    //if(pipedir) do_pipe2soc();  // get .parc file from backend & update db
     if((stat(stopfile, &stbuf) == 0) || abortflg) {
       printk("Abort or Found file: %s. Terminate.\n", stopfile);
       if(abortflg) send_mail("Abort for ingest_lev0 for %s\n", pchan);
