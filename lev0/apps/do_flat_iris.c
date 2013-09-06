@@ -192,6 +192,46 @@ int do_flat_iris(LEV0LEV1 *info)
 		    (dtmp*dtmp) - 3;
 	    }
 	}
+
+        {                       // copied verbatim from do_flat_aia()
+            int n=0, nsatpix=0, sum=0, dp[8];
+            DRMS_Record_t *rs = info->rs1;
+            dp[0] =  1; dp[1] = 10; dp[2] = 25; dp[3] = 75;
+            dp[4] = 90; dp[5] = 95; dp[6] = 98; dp[7] = 99;
+            for (i=min; i<=max; ++i) {
+                sum += hist[i];
+                if (sum > dp[n]*datavals/100) switch (n) {
+                    case 0:
+                        drms_setkey_float(rs, "DATAP01", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*datavals/100) n++;
+                    case 1:
+                        drms_setkey_float(rs, "DATAP10", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*datavals/100) n++;
+                    case 2:
+                        drms_setkey_float(rs, "DATAP25", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*datavals/100) n++;
+                    case 3:
+                        drms_setkey_float(rs, "DATAP75", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*datavals/100) n++;
+                    case 4:
+                        drms_setkey_float(rs, "DATAP90", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*datavals/100) n++;
+                    case 5:
+                        drms_setkey_float(rs, "DATAP95", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*datavals/100) n++;
+                    case 6:
+                        drms_setkey_float(rs, "DATAP98", 1.0 + i + MINOUT);
+                        if (sum > dp[n+1]*datavals/100) n++;
+                    case 7:
+                        drms_setkey_float(rs, "DATAP99", 1.0 + i + MINOUT);
+                        n++;
+                        break;
+                }
+                if (i>max) n++;
+                if (i > (15000 - MINOUT)) nsatpix += hist[i];
+            }
+            drms_setkey_int(rs, "NSATPIX", nsatpix);
+        }
     }
     return 0;
 }
