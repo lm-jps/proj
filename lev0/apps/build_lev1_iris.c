@@ -40,7 +40,9 @@
 #define LEV1SERIESNAMEIRIS "iris_ground.lev1_dc1"
 //#define DSCRSNAME "iris_ground.crs_table"
 #define DSCRSNAME "iris_ground.window_table"
-#define DSFFNAME "iris_ground.flatfield_test"
+#define DSFFNAME "iris.flatfield_prelim"
+//#define DSFFNAME "iris_ground.flatfield_test"
+
 //#define DSFFNAME "su_richard.flatfield"		//temp test case
 //#define DSFFNAMEHMI "su_production.hmi_flatfield"	//temp test case
 //#define DSFFNAMEHMI "hmi.flatfield"
@@ -113,8 +115,9 @@ static char path[DRMS_MAXPATHLEN], bad_pix_path[DRMS_MAXPATHLEN];
 static char bad_aia_path[DRMS_MAXPATHLEN];
 static char rs1_path[DRMS_MAXPATHLEN];
 static struct timeval first[NUMTIMERS], second[NUMTIMERS];
-static char *orbseries = "sdo.fds_orbit_vectors";
-//static char *orbseries = "sdo_ground.fds_orbit_vectors";
+//static char *orbseries = "sdo.fds_orbit_vectors";
+//static char *orbseries = "su_arta.orbitvectors";
+static char *orbseries = "iris.orbit_vectors";
 
 static int nspikes, respike, fid, aiftsid, *oldvalues, *spikelocs, *newvalues;
 static int hcftid, aiagp6;
@@ -513,6 +516,51 @@ int do_ingest(long long bbrec, long long eerec)
       return(1);		//abort. new 2/22/2011
     }
 ****************************************************************************/
+    //New from Art's stuff 07Aug2013
+    HContainer_t *keymap = NULL;
+
+    keymap = hcon_create(DRMS_MAXKEYNAMELEN, DRMS_MAXKEYNAMELEN, NULL, NULL, NULL, NULL, 0);
+
+    if (!keymap)
+    {
+        IOstatus = kLIBASTRO_OutOfMemory;
+    }
+    else {
+        hcon_insert(keymap, "kXGCI", "geixobs");
+        hcon_insert(keymap, "kYGCI", "geiyobs");
+        hcon_insert(keymap, "kZGCI", "geizobs");
+        hcon_insert(keymap, "kXHCI", "heixobs");
+        hcon_insert(keymap, "kYHCI", "heiyobs");
+        hcon_insert(keymap, "kZHCI", "heizobs");
+        hcon_insert(keymap, "kRSUNOBS", "rsunobs");
+        hcon_insert(keymap, "kOBSVR", "obsvr");
+        hcon_insert(keymap, "kDSUNOBS", "dsunobs");
+        hcon_insert(keymap, "kOBSDATE", "obsdate");
+
+        IOstatus = iorbit_getinfo_ext(drms_env,
+                                orbseries,
+                                NULL,
+                                IORBIT_Alg_Quadratic,
+                                tobs,
+                                ncnt,
+                                kIORBIT_CacheAction_DontCache,
+                                &IOinfo,
+                                keymap);
+        hcon_destroy(&keymap);
+    }
+    if(IOstatus != kLIBASTRO_Success) {
+      if(IOstatus == kLIBASTRO_InsufficientData) {
+        printk("***ERROR in iorbit_getinfo_ext: kLIBASTRO_InsufficientData\n");
+      }
+      else {
+       printk("***ERROR in iorbit_getinfo_ext() status=%d\n", IOstatus);
+      }
+      for(j=0; j < ncnt; j++) {  //set qual bits
+        orbmiss[j] = 1;
+      }
+      return(1);                //abort. new 2/22/2011
+    }
+
     rset1 = drms_create_records(drms_env, ncnt, dsout, DRMS_PERMANENT,&dstatus);
     if(dstatus) {
       printk("**ERROR: Can't create records for %s\n", dsout);
@@ -676,24 +724,16 @@ int do_ingest(long long bbrec, long long eerec)
       }
       if(IOinfo) {
         IOdata = IOinfo[i];
-           drms_setkey_double(rs, "HAEX_OBS", IOdata.hciX);
-           drms_setkey_double(rs, "HAEY_OBS", IOdata.hciY);
-           drms_setkey_double(rs, "HAEZ_OBS", IOdata.hciZ);
-           drms_setkey_double(rs, "GAEX_OBS", IOdata.gciX);
-           drms_setkey_double(rs, "GAEY_OBS", IOdata.gciY);
-           drms_setkey_double(rs, "GAEZ_OBS", IOdata.gciZ);
-           //drms_setkey_float(rs, "DSUN_OBS", (float)IOdata.dsun_obs);
+           drms_setkey_double(rs, "RSUN_OBS", IOdata.rsun_obs);
            drms_setkey_double(rs, "DSUN_OBS", IOdata.dsun_obs);
            drms_setkey_double(rs, "OBS_VR", IOdata.obs_vr);
-           drms_setkey_double(rs, "OBS_VW", IOdata.obs_vw);
-           drms_setkey_double(rs, "OBS_VN", IOdata.obs_vn);
-           drms_setkey_double(rs, "RSUN_OBS", IOdata.rsun_obs);
-           drms_setkey_float(rs, "CRLN_OBS", (float)IOdata.crln_obs);
-           drms_setkey_float(rs, "CRLT_OBS", (float)IOdata.crlt_obs);
-           drms_setkey_float(rs, "HGLT_OBS", (float)IOdata.crlt_obs);//!!TEMP
-           drms_setkey_float(rs, "HGLN_OBS", 0.0);//!!TEMP
-           drms_setkey_int(rs, "CAR_ROT", (int)IOdata.car_rot);
-           drms_setkey_string(rs, "ORB_REC", IOdata.orb_rec);
+           drms_setkey_double(rs, "GEIX_OBS", IOdata.gciX);
+           drms_setkey_double(rs, "GEIY_OBS", IOdata.gciY);
+           drms_setkey_double(rs, "GEIZ_OBS", IOdata.gciZ);
+           drms_setkey_double(rs, "HEIX_OBS", IOdata.hciX);
+           drms_setkey_double(rs, "HEIY_OBS", IOdata.hciY);
+           drms_setkey_double(rs, "HEIZ_OBS", IOdata.hciZ);
+           drms_setkey_string(rs, "ORB_REC", IOdata.orb_rec); 
       }
       drms_setkey_float(rs, "X0_MP", imageloc[i].x);
       drms_setkey_float(rs, "Y0_MP", imageloc[i].y);
