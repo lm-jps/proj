@@ -262,23 +262,32 @@ printk("ifwpos = %d\n", ifwpos);
             else {
 	      switch (ifwpos) {
               case 1: 
+              case 2: 
 	            drms_setkey_string(rec, "IMG_PATH", "SJI_5000W"); 
 	            break;
               case 31: 
+              case 32: 
 	            drms_setkey_string(rec, "IMG_PATH", "SJI_1330"); 
 	            break;
               case 61: 
+              case 62: 
 	            drms_setkey_string(rec, "IMG_PATH", "SJI_2796"); 
 	            break;
               case 91: 
+              case 92: 
 	            drms_setkey_string(rec, "IMG_PATH", "SJI_1400"); 
 	            break;
               case 121: 
+              case 122: 
 	            drms_setkey_string(rec, "IMG_PATH", "SJI_2832"); 
 	            break;
               case 151: 
+              case 152: 
 	            drms_setkey_string(rec, "IMG_PATH", "SJI_1600W"); 
 	            break;
+              default:
+	            drms_setkey_string(rec, "IMG_PATH", "SJI_UNKNOWN"); 
+                    break;
               }
             }
             break;

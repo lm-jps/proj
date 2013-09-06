@@ -38,8 +38,13 @@ typedef struct {
   double datakurt;
   double oscnmean;
   double oscnrms;
-  int datavals;
-  int missvals;
+  int datavals;		//on input=lev0 vals, output lev1 vals
+  int missvals;		//on input=lev0 vals, output lev1 vals
+  short sumx;		//from lev0 kw SUMSPTRL
+  short sumy;		//from lev0 kw SUMSPAT
+  int nx;		//from lev0 segment->axis[0]
+  int ny;		//from lev0 segment->axis[1]
+  int winflip;
 } LEV0LEV1;
 
 #endif

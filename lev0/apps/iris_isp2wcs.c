@@ -513,5 +513,8 @@ if (drms_setkey_float(rs1,"CRVAL1A",crval1a)) return SETKEY_ERROR_7;
 if (drms_setkey_float(rs1,"CRVAL2A",crval2a)) return SETKEY_ERROR_7;
 if (drms_setkey_float(rs1,"CRVAL3A",crval3a)) return SETKEY_ERROR_7; 
 if (drms_setkey_float(rs1,"SAT_ROT",scroll)) return SETKEY_ERROR_8; 
+if (drms_setkey_float(rs1,"XCEN",xcen)) return SETKEY_ERROR_9;
+if (drms_setkey_float(rs1,"YCEN",ycen)) return SETKEY_ERROR_9;
+
 	return 0;
 }
