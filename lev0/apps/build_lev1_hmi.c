@@ -1186,10 +1186,10 @@ WCSEND:
         drms_setkey_float(rs, "R_SUN", rsun);
         drms_setkey_float(rs, "CRPIX1", crpix1);
         drms_setkey_float(rs, "CRPIX2", crpix2);
-        drms_setkey_int(rs, "HFCORRVR", 2);
+        //drms_setkey_int(rs, "HFCORRVR", 2);
       }
       else {
-        drms_setkey_int(rs, "HFCORRVR", 0);
+        //drms_setkey_int(rs, "HFCORRVR", 0);
         printk("ERROR: heightformation() returned error for FID=%d\n", fid);
       }
     }
