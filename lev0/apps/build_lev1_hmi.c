@@ -1193,6 +1193,7 @@ WCSEND:
         printk("ERROR: heightformation() returned error for FID=%d\n", fid);
       }
     }
+    drms_setkey_int(rs, "CALVER32", 0x12); //Put back in on 09Sep2013
 
   //if(hmiaiaflg) {                       //aia
   //  int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
