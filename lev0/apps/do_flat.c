@@ -1,4 +1,5 @@
-#define HIMGCFGFILE "/home/production/img_cnfg_ids"
+//#define HIMGCFGFILE "/home/production/img_cnfg_ids"
+#define HIMGCFGFILE "/home/jsoc/cvs/Development/JSOC/proj/tables/img_cnfg_ids"
 
 #define XXX_CANT_OPEN_HIMGCFGFILE -1
 #define XXX_CORRUPT_HIMGCFGFILE -2
