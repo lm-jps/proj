@@ -30,6 +30,7 @@ typedef enum
     kLIBASTRO_InvalidArgs,
     kLIBASTRO_Interpolation,
     kLIBASTRO_InsufficientData,
+    kLIBASTRO_Internal,
     kLIBASTRO_OutOfMemory
 } LIBASTRO_Error_t;
 

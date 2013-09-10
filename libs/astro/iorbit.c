@@ -1726,7 +1726,9 @@ LIBASTRO_Error_t iorbit_getinfo_internal(DRMS_Env_t *env,
                                 }
                                 else
                                 {
-                                    fprintf(stderr, "Unable to locate expected target time '%s' in indexmap hash./n", dhashkey);
+                                    fprintf(stderr, "Unable to locate expected target time '%s' in indexmap hash.\n", dhashkey);
+                                    err = kLIBASTRO_Internal;
+                                    break;
                                 }
                             }
                         }
@@ -1741,45 +1743,64 @@ LIBASTRO_Error_t iorbit_getinfo_internal(DRMS_Env_t *env,
                         retvec = &((*info)[ivec]);
 
                         retvec->obstime = interp[ivec].obstime;
-
-                        /* Convert km to m. */
-                        retvec->hciX = interp[ivec].hciX * 1000;
-                        retvec->hciY = interp[ivec].hciY * 1000;
-                        retvec->hciZ = interp[ivec].hciZ * 1000;
+                        
+                        /* Set all velocity fields to missing - no velocity information in this branch. */
                         retvec->hciVX = DRMS_MISSING_DOUBLE;
                         retvec->hciVY = DRMS_MISSING_DOUBLE;
                         retvec->hciVZ = DRMS_MISSING_DOUBLE;
-                        retvec->gciX = interp[ivec].gciX * 1000;
-                        retvec->gciY = interp[ivec].gciY * 1000;
-                        retvec->gciZ = interp[ivec].gciZ * 1000;
                         retvec->gciVX = DRMS_MISSING_DOUBLE;
                         retvec->gciVY = DRMS_MISSING_DOUBLE;
                         retvec->gciVZ = DRMS_MISSING_DOUBLE;
-                        retvec->rsun_obs = interp[ivec].rsunobs;
-                        retvec->obs_vr = interp[ivec].obsvr * 1000;
-                        retvec->dsun_obs = interp[ivec].dsunobs * 1000;
                         retvec->obs_vw = DRMS_MISSING_DOUBLE;
                         retvec->obs_vn = DRMS_MISSING_DOUBLE;
                         retvec->crln_obs = DRMS_MISSING_DOUBLE;
                         retvec->crlt_obs = DRMS_MISSING_DOUBLE;
                         retvec->car_rot = DRMS_MISSING_INT;
                         
-                        /* indexmap contains the indices into vecs array such that hcon_lookup(indexmap, dhashkey), 
-                         * where dhashkey is the string equivalent of tgttimes[itgt], 
-                         * returns the index into vecs that yields the vector whose tobs is immediately smaller. */
-                        
-                        /* ok to use ivec - there is one tgttime per vector */
-                        CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[ivec]);
-                        
-                        if ((pvindex = (int *)hcon_lookup(indexmap, dhashkey)) != NULL)
+                        if (drms_ismissing_time(retvec->obstime))
                         {
-                            vindex = *pvindex;
-                            sprint_time(tbuf, vecs[vindex].obstime, "UTC", 0);
-                            snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s[%s]", srcseries, tbuf);
+                            retvec->hciX = DRMS_MISSING_DOUBLE;
+                            retvec->hciY = DRMS_MISSING_DOUBLE;
+                            retvec->hciZ = DRMS_MISSING_DOUBLE;
+                            retvec->gciX = DRMS_MISSING_DOUBLE;
+                            retvec->gciY = DRMS_MISSING_DOUBLE;
+                            retvec->gciZ = DRMS_MISSING_DOUBLE;
+                            retvec->rsun_obs = DRMS_MISSING_DOUBLE;
+                            retvec->obs_vr = DRMS_MISSING_DOUBLE;
+                            retvec->dsun_obs = DRMS_MISSING_DOUBLE;
                         }
                         else
                         {
-                            fprintf(stderr, "Unable to locate expected target time '%s' in indexmap hash./n", dhashkey);
+                            /* Convert km to m. */
+                            retvec->hciX = interp[ivec].hciX * 1000;
+                            retvec->hciY = interp[ivec].hciY * 1000;
+                            retvec->hciZ = interp[ivec].hciZ * 1000;
+                            retvec->gciX = interp[ivec].gciX * 1000;
+                            retvec->gciY = interp[ivec].gciY * 1000;
+                            retvec->gciZ = interp[ivec].gciZ * 1000;
+                            retvec->rsun_obs = interp[ivec].rsunobs;
+                            retvec->obs_vr = interp[ivec].obsvr * 1000;
+                            retvec->dsun_obs = interp[ivec].dsunobs * 1000;
+                            
+                            /* indexmap contains the indices into vecs array such that hcon_lookup(indexmap, dhashkey), 
+                             * where dhashkey is the string equivalent of tgttimes[itgt], 
+                             * returns the index into vecs that yields the vector whose tobs is immediately smaller. */
+                            
+                            /* ok to use ivec - there is one tgttime per vector */
+                            CreateDHashKey(dhashkey, sizeof(dhashkey), tgttimes[ivec]);
+                            
+                            if ((pvindex = (int *)hcon_lookup(indexmap, dhashkey)) != NULL)
+                            {
+                                vindex = *pvindex;
+                                sprint_time(tbuf, vecs[vindex].obstime, "UTC", 0);
+                                snprintf(retvec->orb_rec, sizeof(retvec->orb_rec), "%s[%s]", srcseries, tbuf);
+                            }
+                            else
+                            {
+                                fprintf(stderr, "Unable to locate expected target time '%s' in indexmap hash.\n", dhashkey);
+                                err = kLIBASTRO_Internal;
+                                break;
+                            }
                         }
                     }
                 }
