@@ -663,7 +663,11 @@ int do_ingest(long long bbrec, long long eerec)
       printf("\npath to lev1 = %s\n", rs1_path);	//!!TEMP
       if(rstatus = iris_isp2wcs(rs0, rs)) {
         printk("**ERROR: iris_isp2wcs() status = %d\n", rstatus);
-        printk("Press on...\n");
+        printk("Press on after error at fsn=%u...\n", fsnx);
+        printf("**ERROR: at fsn %u\n", fsnx);
+        continue;
+        //printf("**ERROR: Abort on fsn = %u\n", fsnx);
+        //return(1);
       }
       dstatus = drms_setkey_int(rs, "FSN", fsnx);
       //dstatus = drms_setkey_string(rs, "LEV0SERIES", lev0name); //no such keyword
