@@ -562,19 +562,20 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     rsisp = drms_open_records(drms_env, queryext, &drms_status);
   }
 
-/****!!TEMP noop***************************************************
-    if(!rsisp || !rsisp->n || rsisp->n > 2 || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
-***********************************************************************/
     if(!rsisp || !rsisp->n || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
       printk("ERROR: Can't open isp record to put keywords in lev0.\n");
       printk("       The ISP was not received prior to the image for fsn %lu\n", fsn);
-      printk("       Proceed anyway.\n");
+      printk("       Look for 'seq num out of sequence' error in log\n");
       printk("drms_status=%d, rsisp=%lu, fsn=%lu, fsnISP=%lu, fsnISP_noop=%lu\n",
 		drms_status, rsisp, fsn, fsnISP, fsnISP_noop); //!!TEMP
+      printk("       **ERROR: Can't close_image() for fsn = %u\n", fsn);
+      return;		//New. abort. 11Sep2013
     }
     else if(rsisp->n > 2 || rsisp->n < 0) {
-      printk("ERROR: Got bad drms_open_records() pointer for isp.\n");
-      printk("       Proceed anyway.\n");
+      printk("ERROR: Got bad drms_open_records() pointer for isp. fsn=%lu\n", fsn);
+      printk("       Look for 'seq num out of sequence' error in log\n");
+      printk("       **ERROR: Can't close_image() fsn=%u\n", fsn);
+      return;		//New. abort. 11Sep2013
     }
     else {
       fsnISP_noop = 0;
@@ -950,6 +951,11 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   //status = drms_segment_write(seg, array, 0);
   if (status) {
     printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
+    printk("ABORT: close_image(). No drms_close_record() done\n");
+    array->data = NULL;        // must do before free 
+    if(array) drms_free_array(array);
+    img->initialized = 0;		//indicate image is ready for use again
+    return;				//Abort. New 11Sep2013
   }
   add_small_array(rs, array, 8, 16); //add Phil's png and small fits
 
