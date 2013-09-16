@@ -2,7 +2,7 @@
 
 # Run like:
 #  ingestIrisFDS.pl data=<data dir> host=<db host> series=<series ingesting into>
-#  ingestIrisFDS.pl data=/home/arta/iris/testdata/fds host=hmidb port=5432 user=arta series=su_arta.irisfds orbseries=su_arta.orbitvectors
+#  ingestIrisFDS.pl data=/surge40/jsocprod/iris/orbit host=hmidb port=5432 user=production series=iris.fds orbseries=iris.orbit_vectors saahlzseries=iris.saa_hlz
 use strict;
 use warnings;
 use Data::Dumper;
@@ -15,40 +15,46 @@ use drmsArgs;
 use drmsRunProg;
 
 # Arguments
-use constant kArgDataDir         => "data";      # Path to the data files to ingest.
-use constant kArgSeries          => "series";    # Series into which the data files are to be ingested.
-use constant kArgDBHost          => "host";      # The database host that contains the series to ingest into.
-use constant kArgDBPort          => "port";      # The port on the database host to which the db connection is made.
-use constant kArgDBUser          => "user";    # The DB user whose account will be logged into.
-use constant kArgOrbSeries       => "orbseries"; # The orbit series (this script will ingest orbit files into the orbit series).
+use constant kArgDataDir          => "data";         # Path to the data files to ingest.
+use constant kArgSeries           => "series";       # Series into which the data files are to be ingested.
+use constant kArgDBHost           => "host";         # The database host that contains the series to ingest into.
+use constant kArgDBPort           => "port";         # The port on the database host to which the db connection is made.
+use constant kArgDBUser           => "user";         # The DB user whose account will be logged into.
+use constant kArgOrbSeries        => "orbseries";    # The orbit series (this script will ingest orbit files into this series).
+use constant kArgSAAHLZSeries     => "saahlzseries"; # The SAA_HLZ series (this script will ingest SAA_HLA files into this series).
 
 
 # Return codes
-use constant kRetSuccess         => 0;
-use constant kRetNoLock          => 1;
-use constant kRetInvalidFilename => 2;
-use constant kRetIngestPSQL      => 3;
-use constant kRetCreateSeries    => 4;
-use constant kRetTimeConvert     => 5;
+use constant kRetSuccess          => 0;
+use constant kRetInvalidFilename  => 1;
+use constant kRetCreateSeries     => 2;
+use constant kRetShowInfo         => 3;
+use constant kRetSetInfo          => 4;
+use constant kRetIngestIrisOrbit  => 5;
+use constant kRetIngestIrisSAAHLZ => 6;
+use constant kRetTimeConvert      => 7;
+use constant kRetIngestPSQL       => 8;
+use constant kRetNoLock           => 9;
+use constant kRetShowInfo         => 10;
 
 # Product names
-use constant kProdOrbit          => "orbit";
-use constant kProdHLZSAA         => "hlzsaa";
+use constant kProdOrbit           => "orbit";
+use constant kProdHLZSAA          => "hlzsaa";
 
 # Keyword names
-use constant kKeyObsDate         => "obsdate";
-use constant kKeyObsDateIndex    => "obsdate_index";
-use constant kKeyProduct         => "product";
-use constant kKeyVersion         => "version";
-use constant kKeyProcDate        => "date";
-use constant kKeyProcDateStr     => "datestr";
-use constant kKeyIngested        => "ingested";
+use constant kKeyObsDate          => "obsdate";
+use constant kKeyObsDateIndex     => "obsdate_index";
+use constant kKeyProduct          => "product";
+use constant kKeyVersion          => "version";
+use constant kKeyProcDate         => "date";
+use constant kKeyProcDateStr      => "datestr";
+use constant kKeyIngested         => "ingested";
 
 # Segment names
-use constant kSegProdFile        => "prodfile";
+use constant kSegProdFile         => "prodfile";
 
 # Other constants
-use constant kLockFile           => "/home/jsoc/locks/ingestIrisFds.txt";
+use constant kLockFile            => "/home/jsoc/locks/ingestIrisFds.txt";
 
 my($lock);
 my($args);
@@ -60,6 +66,8 @@ my($prod);
 my($version);
 my($procdate);
 my($cmd);
+my($pipe);
+my($rsp);
 my($rv);
 
 $lock = new drmsNetLocks(&kLockFile);
@@ -182,113 +190,164 @@ if (defined($lock))
             
             if ($rv == &kRetSuccess)
             {
-                $cmd = "set_info -c ds=" . $args->Get(&kArgSeries) . " " . &kKeyObsDate . "=$obsdate " . &kKeyProduct . "=$prod " . &kKeyVersion . "=$version " . &kKeyProcDate . "=$procdate " . &kKeyProcDateStr . "=$procdate " . &kSegProdFile . "=" . $args->Get(&kArgDataDir) . "/$filename JSOC_DBHOST=" . $args->Get(&kArgDBHost) . " " . &kKeyIngested . "=N JSOC_DBUSER=" . $args->Get(&kArgDBUser);
-
-                # Duplicate STDERR
-                open(STDERRDUP, ">&STDERR");
-                # Redirect STDERR
-                open(STDERR, ">/dev/null");
-                if (drmsSysRun::RunCmd("$cmd 1 > /dev/null 2>&1") != 0)
+                my($ingested);
+                
+                # Call show_info to see if this file has been ingested already.
+                $cmd = "show_info -q key=" . &kKeyIngested . " JSOC_DBHOST=" . $args->Get(&kArgDBHost) . " JSOC_DBUSER=" . $args->Get(&kArgDBUser) . " ds=" . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version]";
+                
+                # Open read pipe.
+                $pipe = new drmsPipeRun($cmd, 0);
+                
+                if (defined($pipe))
                 {
-                    # Error calling set_info
-                    print STDOUT "Unable to call set_info successfully. Cmd was $cmd.\n";
-                    $rv = &kRetSetInfo;
+                    $pipe->ReadPipe(\$rsp);
                     
-                    close(STDERR);
-                    # Restore STDERR
-                    open(STDERR, ">&STDERRDUP");
-                    close(STDERRDUP);
+                    # close read pipe
+                    if ($pipe->ClosePipe())
+                    {
+                        print STDERR "Failure reading from pipe.\n";
+                        $rv = &kRetShowInfo;
+                    }
+                    else
+                    {
+                        chomp($rsp);
+                        $ingested = ($rsp =~ /\s*y\s*/i);
+                        if ($ingested)
+                        {
+                            print STDOUT "Already ingested, skipping.\n";
+                        }
+                    }
                 }
                 else
                 {
-                    close(STDERR);
-                    # Restore STDERR
-                    open(STDERR, ">&STDERRDUP");
-                    close(STDERRDUP);
+                    print STDERR "Unable to call show_info.\n";
+                    $rv = kRetShowInfo;
+                }
+                
+                if ($rv == &kRetSuccess && !$ingested)
+                {
+                    # Before ingesting the file, check the FDS series to see if it has already been ingested.
+                    $cmd = "set_info -c ds=" . $args->Get(&kArgSeries) . " " . &kKeyObsDate . "=$obsdate " . &kKeyProduct . "=$prod " . &kKeyVersion . "=$version " . &kKeyProcDate . "=$procdate " . &kKeyProcDateStr . "=$procdate " . &kSegProdFile . "=" . $args->Get(&kArgDataDir) . "/$filename JSOC_DBHOST=" . $args->Get(&kArgDBHost) . " " . &kKeyIngested . "=N JSOC_DBUSER=" . $args->Get(&kArgDBUser);
                     
-                    # Now ingest the file contents into their product-specific series.
-                    undef($cmd);
+                    # Duplicate STDERR
+                    open(STDERRDUP, ">&STDERR");
+                    # Redirect STDERR
+                    open(STDERR, ">/dev/null");
                     
-                    if ($prod eq &kProdOrbit)
+                    $rsp = drmsSysRun::RunCmd("$cmd 1 > /dev/null 2>&1");
+                    if ($rsp != 0)
                     {
-                        $cmd = "$Bin/ingestIrisOrbit.pl series=" . $args->Get(&kArgOrbSeries) . " source=" . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version] dfile=" . $args->Get(&kArgDataDir) . "/$filename host=" . $args->Get(&kArgDBHost) . " user=" . $args->Get(&kArgDBUser);
-                    }
-                    
-                    if (defined($cmd))
-                    {
-                        # Duplicate STDERR
-                        open(STDERRDUP, ">&STDERR");
-                        # Redirect STDERR
-                        open(STDERR, ">/dev/null");
+                        # Error calling set_info
+                        print STDOUT "Unable to call set_info successfully. Cmd was $cmd.\n";
+                        $rv = &kRetSetInfo;
                         
-                        if (drmsSysRun::RunCmd("$cmd 1 > /dev/null 2>&1") != 0)
+                        close(STDERR);
+                        # Restore STDERR
+                        open(STDERR, ">&STDERRDUP");
+                        close(STDERRDUP);
+                    }
+                    else
+                    {
+                        close(STDERR);
+                        # Restore STDERR
+                        open(STDERR, ">&STDERRDUP");
+                        close(STDERRDUP);
+                        
+                        # Now ingest the file contents into their product-specific series.
+                        undef($cmd);
+                        
+                        if ($prod eq &kProdOrbit)
                         {
-                            # Error calling ingestIrisOrbit.pl
-                            print STDOUT "Unable to call ingestIrisOrbit.pl successfully. Cmd was $cmd.\n";
-                            $rv = &kRetIngestIrisOrbit;
-                            
-                            close(STDERR);
-                            # Restore STDERR
-                            open(STDERR, ">&STDERRDUP");
-                            close(STDERRDUP);
+                            $cmd = "$Bin/ingestIrisOrbit.pl series=" . $args->Get(&kArgOrbSeries) . " source=" . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version] dfile=" . $args->Get(&kArgDataDir) . "/$filename host=" . $args->Get(&kArgDBHost) . " user=" . $args->Get(&kArgDBUser);
                         }
-                        else
+                        elsif ($prod eq &kProdHLZSAA)
                         {
-                            close(STDERR);
-                            # Restore STDERR
-                            open(STDERR, ">&STDERRDUP");
-                            close(STDERRDUP);
+                            $cmd = "$Bin/ingestIrisSAAHLZ.pl series=" . $args->Get(&kArgSAAHLZSeries) . " source=" . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version] dfile=" . $args->Get(&kArgDataDir) . "/$filename host=" . $args->Get(&kArgDBHost) . " user=" . $args->Get(&kArgDBUser);
+                        }
+                        
+                        if (defined($cmd))
+                        {
+                            # Duplicate STDERR
+                            open(STDERRDUP, ">&STDERR");
+                            # Redirect STDERR
+                            open(STDERR, ">/dev/null");
                             
-                            # Now update the FDS series to show that the data product for this record has been successfully ingested.
-                            # $obsdate is a timestring, but we need to search on the int (obsdata_index). Gotta call something
-                            # to convert a time string to a index-keyword value (can't use a time value - it must be a time-index value).
-                            my($pipe);
-                            my($slotnum);
-                            my($rsp);
-                            
-                            # Open read pipe.
-                            $pipe = new drmsPipeRun("timeslot series=" . $args->Get(&kArgSeries) . " tkey=" . &kKeyObsDate . " tval=$obsdate", 0);
-                            
-                            if (defined($pipe))
+                            $rsp = drmsSysRun::RunCmd("$cmd 1 > /dev/null 2>&1");
+                            if ($rsp != 0)
                             {
-                                $pipe->ReadPipe(\$rsp);
+                                # Error calling ingestion program.
+                                if ($prod eq &kProdOrbit)
+                                {
+                                    print STDOUT "Unable to call ingestIrisOrbit.pl successfully. Cmd was $cmd.\n";
+                                    $rv = &kRetIngestIrisOrbit;
+                                }
+                                elsif ($prod eq &kProdHLZSAA)
+                                {
+                                    print STDOUT "Unable to call ingestIrisSAAHLZ.pl successfully. Cmd was $cmd.\n";
+                                    $rv = &kRetIngestIrisSAAHLZ;
+                                }
                                 
-                                # close read pipe
-                                if ($pipe->ClosePipe())
-                                {
-                                    print STDERR "Failure reading from pipe.\n";
-                                    $rv = kRetTimeConvert;
-                                }
-                                else
-                                {
-                                    chomp($rsp);
-                                    $slotnum = $rsp;
-                                }
+                                close(STDERR);
+                                # Restore STDERR
+                                open(STDERR, ">&STDERRDUP");
+                                close(STDERRDUP);
                             }
                             else
                             {
-                                print STDERR "Unable to call timeslot.\n";
-                                $rv = kRetTimeConvert;
-                            }
-                            
-                            if ($rv == &kRetSuccess)
-                            {
-                                print "Updating " . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version] to reflect successful ingestion...\n";
-
-                                $cmd = "UPDATE " . $args->Get(&kArgSeries) . " SET " . &kKeyIngested . "='Y' WHERE " . &kKeyObsDateIndex . "=$slotnum AND " . &kKeyProduct . "='$prod' AND " . &kKeyVersion . "=$version";
-                                $cmd = "psql -h " . $args->Get(&kArgDBHost) . " -p " . $args->Get(&kArgDBPort) . " -U " . $args->Get(&kArgDBUser) . " jsoc -c \"$cmd\"";
+                                close(STDERR);
+                                # Restore STDERR
+                                open(STDERR, ">&STDERRDUP");
+                                close(STDERRDUP);
                                 
-                                # Duplicate STDERR
-                                if (drmsSysRun::RunCmd("$cmd 1>/dev/null 2>&1") != 0)
+                                # Now update the FDS series to show that the data product for this record has been successfully ingested.
+                                # $obsdate is a timestring, but we need to search on the int (obsdata_index). Gotta call something
+                                # to convert a time string to a index-keyword value (can't use a time value - it must be a time-index value).
+                                my($slotnum);
+                                
+                                # Open read pipe.
+                                $pipe = new drmsPipeRun("timeslot series=" . $args->Get(&kArgSeries) . " tkey=" . &kKeyObsDate . " tval=$obsdate", 0);
+                                
+                                if (defined($pipe))
                                 {
-                                    # Error calling psql
-                                    print STDOUT "Unable to call psql successfully. Cmd was $cmd.\n";
-                                    $rv = &kRetIngestPSQL;
+                                    $pipe->ReadPipe(\$rsp);
+                                    
+                                    # close read pipe
+                                    if ($pipe->ClosePipe())
+                                    {
+                                        print STDERR "Failure reading from pipe.\n";
+                                        $rv = kRetTimeConvert;
+                                    }
+                                    else
+                                    {
+                                        chomp($rsp);
+                                        $slotnum = $rsp;
+                                    }
+                                }
+                                else
+                                {
+                                    print STDERR "Unable to call timeslot.\n";
+                                    $rv = kRetTimeConvert;
+                                }
+                                
+                                if ($rv == &kRetSuccess)
+                                {
+                                    print "Updating " . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version] to reflect successful ingestion...\n";
+                                    
+                                    $cmd = "UPDATE " . $args->Get(&kArgSeries) . " SET " . &kKeyIngested . "='Y' WHERE " . &kKeyObsDateIndex . "=$slotnum AND " . &kKeyProduct . "='$prod' AND " . &kKeyVersion . "=$version";
+                                    $cmd = "psql -h " . $args->Get(&kArgDBHost) . " -p " . $args->Get(&kArgDBPort) . " -U " . $args->Get(&kArgDBUser) . " jsoc -c \"$cmd\"";
+                                    
+                                    # Duplicate STDERR
+                                    if (drmsSysRun::RunCmd("$cmd 1>/dev/null 2>&1") != 0)
+                                    {
+                                        # Error calling psql
+                                        print STDOUT "Unable to call psql successfully. Cmd was $cmd.\n";
+                                        $rv = &kRetIngestPSQL;
+                                    }
                                 }
                             }
                         }
                     }
-                }
+                } # Product file not ingested.
             }
             
             $numFiles++;
@@ -321,7 +380,8 @@ sub GetArgs
         &kArgDBHost        => 's',
         &kArgDBPort        => 's',
         &kArgDBUser        => 's',
-        &kArgOrbSeries     => 's'
+        &kArgOrbSeries     => 's',
+        &kArgSAAHLZSeries  => 's'
     };
     
     return new drmsArgs($argsinH, 1);
@@ -464,7 +524,7 @@ Keyword:obsdate_step, time, constant, record, 1.000000, %f, day, "Slots are 1 da
 Keyword:product, string, variable, record, Unidentified, %s, NA, "FDS data product"
 Keyword:version, int, variable, record, DRMS_MISSING_VALUE, %d, NA, "Version of data file"
 # DRMS has some bug in it where you cannot use data type char to hold a character; so be wastesful and use text.
-Keyword:ingested, string, variable, record, DRMS_MISSING_VALUE, %c, NA, "Y/N - file contents have/have not been ingested"
+Keyword:ingested, string, variable, record, N, %c, NA, "Y/N - file contents have/have not been ingested"
 Keyword:date, time, variable, record, DRMS_MISSING_VALUE, 0, ISO, "Date of product-file ingestion; ISO 8601"
 Keyword:datestr, string, variable, record, Unknown, %s, NA, "Human-readable date of product-file ingestion"
 
