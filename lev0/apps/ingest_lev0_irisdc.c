@@ -569,12 +569,14 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       printk("drms_status=%d, rsisp=%lu, fsn=%lu, fsnISP=%lu, fsnISP_noop=%lu\n",
 		drms_status, rsisp, fsn, fsnISP, fsnISP_noop); //!!TEMP
       printk("       **ERROR: Can't close_image() for fsn = %u\n", fsn);
+      img->initialized = 0;	//image is ready for use again. New 16Sep2013
       return;		//New. abort. 11Sep2013
     }
     else if(rsisp->n > 2 || rsisp->n < 0) {
       printk("ERROR: Got bad drms_open_records() pointer for isp. fsn=%lu\n", fsn);
       printk("       Look for 'seq num out of sequence' error in log\n");
       printk("       **ERROR: Can't close_image() fsn=%u\n", fsn);
+      img->initialized = 0;	//image is ready for use again. New 16Sep2013
       return;		//New. abort. 11Sep2013
     }
     else {
@@ -1245,9 +1247,15 @@ int fsn_change_rexmit()
 
   if(fsn_prev != 0) {   // close image of prev fsn if not 0 
     if(rsc) {		//make sure have created record
-      close_image(rsc, segmentc, oldArray, ImgO, fsn_prev);
-      imagecnt++;
-      fileimgcnt++;
+      if(errskip) {     //prev fsn had error. don't try to close
+          errskip = 0;
+          printk("*Skip Closing image for fsn = %u\n", fsn_prev);
+      }
+      else {
+        close_image(rsc, segmentc, oldArray, ImgO, fsn_prev);
+        imagecnt++;
+        fileimgcnt++;
+      }
     }
     else {
       printk("**ERROR: Null record ptr for an rexmit image fsn=%u\n",fsn_prev);
