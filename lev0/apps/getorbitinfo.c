@@ -29,7 +29,7 @@ ModuleArgs_t module_args[] =
   {ARG_STRING, kTGTTIMES, "problem", "File containing array of internal times (doubles) for which orbit information is to be returned. "},
   {ARG_STRING, kGRIDTIMES, "unspecified", "Record-set query that specifies grid-vector internal times."},
   {ARG_FLAG, kTESTINTERP, "", "Test interpolation routine."},
-  {ARG_FLAG, kNOVELOCITY, "", "The orbit series has no velocity keywores (like iris.orbitvectors)"},
+  {ARG_FLAG, kNOVELOCITY, "", "The orbit series has no velocity keywords (like iris.orbitvectors)"},
   {ARG_END}
 };
 
