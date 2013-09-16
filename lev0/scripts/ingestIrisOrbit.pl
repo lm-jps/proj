@@ -286,7 +286,6 @@ if (defined($lock))
                                 
                                 if (!defined($dt))
                                 {
-                                    print "herea\n";
                                     print STDERR "Invalid date format.\n";
                                     $rv = &kRetInvalidDFile;
                                     last;
@@ -519,7 +518,7 @@ Archive:                0
 Retention:              10
 Tapegroup:              1
 PrimeKeys:              obsdate
-Description:            "This series contains ingested, IRIS FDS product files."
+Description:            "This series contains IRIS FDS orbit data."
 
 #=====Keywords=====
 Keyword:obsdate, time, ts_eq, record, DRMS_MISSING_VALUE, 0, UTC, "[OBS_DATE] Date of prediction"
