@@ -45,81 +45,89 @@
 
 #define RADEG (180.0/M_PI)
 
-int iris_isp2wcs(DRMS_Record_t *rs0, DRMS_Record_t *rs1)
+int iris_isp2wcs(DRMS_Record_t *rs0, DRMS_Record_t *rs1, double scroll)
 {
     int i, status;
 
 // Set database values
-//version           =     0
-int version = 1;
+
+int version   = 2;
 double
-al_fu1            =    -0.060,
-al_fu2            =    -0.450,
-al_nuv            =    -0.320,
-be_fsj            =    -0.210,
-be_fu1            =    -1.470,
-be_fu2            =    -1.960,
-be_nsj            =     0.310,
-be_nuv            =     1.280,
-cdlt1_f1          =     0.01298,
-cdlt1_f2          =     0.01272,
-cdlt1_nu          =     0.02546,
-cdlt2_f1          =     0.1665,
-cdlt2_f2          =     0.1665,
-cdlt2_nu          =     0.1665,
-cdlt_fsj          =     0.1656,
-cdlt_nsj          =    0.16840,
-cpx1_133          =  531.0,
-cpx1_140          =  531.0,
-cpx1_279          =  501.0,
-cpx1_283          =  501.0,
-cpx1_fsi          =  501.0,
-cpx1_fu1          = 1388.0,
-cpx1_fu2          = 3460.0,
-cpx1_mir          =  531.0,
-cpx1_nuv          = 1555.0,
-cpx2_133          =  521.0,
-cpx2_140          =  521.0,
-cpx2_279          =  509.0,
-cpx2_283          =  509.0,
-cpx2_fsi          =  509.0,
-cpx2_fu1          =  481.0,
-cpx2_fu2          =  508.0,
-cpx2_mir          =  521.0,
-cpx2_nuv          =  520.0,
-cvl1_fu1          = 1349.24,
-cvl1_fu2          = 1398.0,
-cvl1_nuv          = 2796.0,
-focus_regcal      = -100.0,
-focus_xregr1      =   -0.0514701,
-focus_xregr2      =    0.000248873,
-focus_yregr1      =    0.0739689,
-focus_yregr2      =   -0.0004751,
-pzt_off_homea     = -250.0,
-pzt_off_homeb     = -250.0,
-pzt_off_homec     = -250.0,
-pzt_off_pixel     =    0.168400,
-pzt_off_sjixa     =    0.001300,
-pzt_off_sjixb     =   -0.149290,
-pzt_off_sjixc     =    0.147830,
-pzt_off_sjiya     =   -0.172030,
-pzt_off_sjiyb     =    0.08709,
-pzt_off_sjiyc     =    0.08687,
-pzt_x_sign        =    1.0,
-pzt_y_sign        =    1.0,
-sji_ccd_roll_bias =   -0.310,
-slit_roll_bias    =    0.0,
-slit_rot          =    0.0,
-wm1_rmax          =  634.8,
-wm2_rmax          =  628.5,
-wm_focus_cal      = -100.0,
-wm_m1v            =  217.875,
-wm_offset2        =  113.570,
-wm_roll_bias      =    0.0,
-wm_xoff           =   103.0,
-wm_x_sign         =   -1.0,
-wm_yoff           = -92.0,
-wm_y_sign         =    1.0;
+al_fu1            =         -0.05000,
+al_fu2            =         -0.43700,
+al_nuv            =         -0.31800,
+be_133            =         -0.20000,
+be_140            =         -0.22400,
+be_279            =          0.27400,
+be_283            =          0.28600,
+be_fsi            =          0.28000,
+be_mir            =         -0.21000,
+be_fu1            =         -1.5000,
+be_fu2            =         -1.9700,
+be_nuv            =          1.2600,
+cdlt1_f1          =          0.01298,
+cdlt1_f2          =          0.01272,
+cdlt1_nu          =          0.02546,
+cdlt2_f1          =          0.16632,
+cdlt2_f2          =          0.16632,
+cdlt2_nu          =          0.16637,
+cdlt_133          =          0.16560,
+cdlt_140          =          0.16560,
+cdlt_279          =          0.16790,
+cdlt_283          =          0.16790,
+cdlt_fsi          =          0.16790,
+cdlt_mir          =          0.16560,
+cpx1_133          =        537.30,
+cpx1_140          =        529.32,
+cpx1_279          =        504.69,
+cpx1_283          =        506.47,
+cpx1_fsi          =        505.20,
+cpx1_fu1          =        219.50,
+cpx1_fu2          =        3807.3,
+cpx1_mir          =        534.00,
+cpx1_nuv          =        659.30,
+cpx2_133          =        524.03,
+cpx2_140          =        510.46,
+cpx2_279          =        502.91,
+cpx2_283          =        502.22,
+cpx2_fsi          =        504.70,
+cpx2_fu1          =        487.92,
+cpx2_fu2          =        518.21,
+cpx2_mir          =        516.70,
+cpx2_nuv          =        530.35,
+cvl1_fu1          =       1334.53,
+cvl1_fu2          =       1402.77,
+cvl1_nuv          =       2798.65,
+focus_regcal      =       -100.00,
+focus_xregr1      =         -0.0514701,
+focus_xregr2      =          0.000248873,
+focus_yregr1      =          0.0739689,
+focus_yregr2      =         -0.00047510,
+pzt_off_homea     =       -250.00,
+pzt_off_homeb     =       -250.00,
+pzt_off_homec     =       -250.00,
+pzt_off_pixel     =          0.16790,
+pzt_off_sjixa     =          0.001300,
+pzt_off_sjixb     =         -0.14929,
+pzt_off_sjixc     =          0.14783,
+pzt_off_sjiya     =         -0.17203,
+pzt_off_sjiyb     =          0.08709,
+pzt_off_sjiyc     =          0.08687,
+pzt_x_sign        =          1.0000,
+pzt_y_sign        =          1.0000,
+sji_ccd_roll_bias =         -0.28600,
+slit_roll_bias    =          0.64600,
+slit_rot          =          0.64600,
+wm1_rmax          =        634.80,
+wm2_rmax          =        628.50,
+wm_focus_cal      =       -100.00,
+wm_m1v            =        217.875,
+wm_offset2        =        113.57,
+wm_roll_bias      =          0.0000,
+wm_x_sign         =         -1.000,
+wm_xoff           =        103.00,
+wm_y_sign         =          1.000,
+wm_yoff           =        -92.000;
 
 //Regression coefficients for NUV SJI X & Y motion of laser spot on
 //image in pixels vs focus motor position in steps,
@@ -141,6 +149,8 @@ char *instrume, *img_path, *iissloop;
 int isqpzta, isqpztb, isqpztc;
 short iwbpzta, iwbpztb, iwbpztc, igtpoffx, igtpoffy;
 float ifmpos, iwm1cpos, iwm2cpos;
+short sum1, sum2; 
+float off1, off2;
 
 instrume = drms_getkey_string(rs0, "INSTRUME", &status);
 if (status) return GETKEY_ERROR_1;
@@ -170,14 +180,21 @@ iwm1cpos = drms_getkey_float(rs0, "IWM1CPOS", &status);
 if (status) return GETKEY_ERROR_13;
 iwm2cpos = drms_getkey_float(rs0, "IWM2CPOS", &status);
 if (status) return GETKEY_ERROR_14;
+sum1 = drms_getkey_short(rs0, "SUMSPTRL", &status);
+if (status) return GETKEY_ERROR_15;
+sum2 = drms_getkey_short(rs0, "SUMSPAT", &status);
+if (status) return GETKEY_ERROR_16;
+off1 = (sum1-1.0)/(sum1*2.0);
+off2 = (sum2-1.0)/(sum2*2.0);
+
 
 //  *****************************************************************
 
 // Set spacecraft roll
 //if n_elements(scroll) ne 1 then scroll = 0.0
-double scroll = 0.0;
 double roll_angle = scroll;
-double garad = (slit_rot - scroll) * RADEG;
+//double garad = (slit_rot - scroll) * RADEG;
+double garad = (-1.0*slit_rot - scroll)/RADEG; 
 
 //  *****************************************************************
 
@@ -284,14 +301,14 @@ naxis2 = segment0->axis[1];
 
 if (strncmp(instrume,"FUV",3) == 0) {
     wcsaxes = 3;
-    crpix1  = cpx1_fu1;
-    crpix2  = cpx2_fu1;
+    crpix1  = cpx1_fu1/sum1 + off1;
+    crpix2  = cpx2_fu1/sum2 + off2;
     //crpix3 = 1.0;
     crval1  = cvl1_fu1;
     crval2  = crvalxy[1];
     crval3  = crvalxy[0];
-    cdelt1  = cdlt1_f1;
-    cdelt2  = cdlt2_f1;
+    cdelt1  = cdlt1_f1*sum1;
+    cdelt2  = cdlt2_f1*sum2;
     cdelt3  = cdelt2;
     ctype1  = "WAVE";
     ctype2  = "HPLT-TAN";
@@ -303,19 +320,19 @@ if (strncmp(instrume,"FUV",3) == 0) {
     alrad1 = al_fu1 / RADEG;
     ab1cos  =  cos(alrad1-berad1);
     pc1_1   =  cos(berad1) / ab1cos;
-    pc1_2   = -sin(berad1) / ab1cos;
-    pc2_1   =  cos(garad) * sin(alrad1) / ab1cos;
+    pc1_2   = -sin(berad1) / ab1cos * sum2/sum1;
+    pc2_1   =  cos(garad) * sin(alrad1) / ab1cos * sum1/sum2;
     pc2_2   =  cos(garad) * cos(alrad1) / ab1cos;
-    pc3_1   = -sin(garad) * sin(alrad1) / ab1cos;
+    pc3_1   = -sin(garad) * sin(alrad1) / ab1cos * sum1/sum2;
     pc3_2   = -sin(garad) * cos(alrad1) / ab1cos;
-    crpix1a = cpx1_fu2;
-    crpix2a = cpx2_fu2;
+    crpix1a = cpx1_fu2/sum1 + off1;
+    crpix2a = cpx2_fu2/sum2 + off2;
     //crpix3a = 1.0;
     crval1a = cvl1_fu2;
     crval2a = crval2;
     crval3a = crval3;
-    cdelt1a = cdlt1_f2;
-    cdelt2a = cdlt2_f2;
+    cdelt1a = cdlt1_f2*sum1;
+    cdelt2a = cdlt2_f2*sum2;
     cdelt3a = cdelt2a;
     ctype1a = ctype1;
     ctype2a = ctype2;
@@ -327,10 +344,10 @@ if (strncmp(instrume,"FUV",3) == 0) {
     alrad2 = al_fu2 / RADEG;
     ab2cos  =  cos(alrad2-berad2);
     pc1_1a  =  cos(berad2) / ab2cos;
-    pc1_2a  = -sin(berad2) / ab2cos;
-    pc2_1a  =  cos(garad) * sin(alrad2) / ab2cos;
+    pc1_2a  = -sin(berad2) / ab2cos * sum2/sum1;
+    pc2_1a  =  cos(garad) * sin(alrad2) / ab2cos * sum1/sum2;
     pc2_2a  =  cos(garad) * cos(alrad2) / ab2cos;
-    pc3_1a  = -sin(garad) * sin(alrad2) / ab2cos;
+    pc3_1a  = -sin(garad) * sin(alrad2) / ab2cos * sum1/sum2;
     pc3_2a  = -sin(garad) * cos(alrad2) / ab2cos;
     xcen = crval3 + cdelt3*(pc3_1*((naxis1+1)/2. - crpix1) + pc3_2*((naxis2+1)/2. - crpix2));
     ycen = crval2 + cdelt2*(pc2_1*((naxis1+1)/2. - crpix1) + pc2_2*((naxis2+1)/2. - crpix2));
@@ -340,14 +357,14 @@ if (strncmp(instrume,"FUV",3) == 0) {
     wcsaxes = 3;
     berad = be_nuv / RADEG;
     alrad = al_nuv / RADEG;
-    crpix1  = cpx1_nuv;
-    crpix2  = cpx2_nuv;
+    crpix1  = cpx1_nuv/sum1 + off1;
+    crpix2  = cpx2_nuv/sum2 + off2;
     //crpix3  = 1.0;
     crval1  = cvl1_nuv;
     crval2  = crvalxy[1];
     crval3  = crvalxy[0];
-    cdelt1  = cdlt1_nu;
-    cdelt2  = cdlt2_nu;
+    cdelt1  = cdlt1_nu*sum1;
+    cdelt2  = cdlt2_nu*sum2;
     cdelt3  = cdelt2;
     ctype1  = "WAVE";
     ctype2  = "HPLT-TAN";
@@ -356,10 +373,10 @@ if (strncmp(instrume,"FUV",3) == 0) {
     cunit2  = "arcsec";
     cunit3  = cunit2;
     pc1_1   =  cos(berad) / cos(alrad-berad);
-    pc1_2   = -sin(berad) / cos(alrad-berad);
-    pc2_1   =  cos(garad) * sin(alrad) / cos(alrad-berad);
+    pc1_2   = -sin(berad) / cos(alrad-berad) * sum2/sum1;
+    pc2_1   =  cos(garad) * sin(alrad) / cos(alrad-berad) * sum1/sum2;
     pc2_2   =  cos(garad) * cos(alrad) / cos(alrad-berad);
-    pc3_1   = -sin(garad) * sin(alrad) / cos(alrad-berad);
+    pc3_1   = -sin(garad) * sin(alrad) / cos(alrad-berad) * sum1/sum2;
     pc3_2   = -sin(garad) * cos(alrad) / cos(alrad-berad);
     crpix1a = crpix1;
     crpix2a = crpix2;
@@ -388,45 +405,59 @@ if (strncmp(instrume,"FUV",3) == 0) {
     //specsys1= "HELIOCEN";    // or 'SOURCE  ' if corrected for solar rot
 } else if (strncmp(instrume,"SJI", 3)==0) {
     if(strncmp(img_path,"SJI_5000W",9)==0) {
-        berad = be_nsj / RADEG;
-        cdelt = cdlt_nsj;
+        // berad = be_nsj / RADEG;
+        // cdelt = cdlt_nsj;
+        berad = be_fsi / RADEG;
+        cdelt = cdlt_fsi;
         crpix1 = cpx1_fsi;
         crpix2 = cpx2_fsi;
     } else if(strncmp(img_path,"SJI_1330",8) == 0) {
-        berad = be_fsj / RADEG;
-        cdelt = cdlt_fsj;
+        // berad = be_fsj / RADEG;
+        // cdelt = cdlt_fsj;
+        berad = be_133 / RADEG;
+        cdelt = cdlt_133;
         crpix1 = cpx1_133;
         crpix2 = cpx2_133;
     } else if(strncmp(img_path,"SJI_2796",8) == 0) {
-        berad = be_nsj / RADEG;
-        cdelt = cdlt_nsj;
+        // berad = be_nsj / RADEG;
+        // cdelt = cdlt_nsj;
+        berad = be_279 / RADEG;
+        cdelt = cdlt_279;
         crpix1 = cpx1_279;
         crpix2 = cpx2_279;
     } else if(strncmp(img_path,"SJI_1400",8) == 0) {
-        berad = be_fsj / RADEG;
-        cdelt = cdlt_fsj;
+        // berad = be_fsj / RADEG;
+        // cdelt = cdlt_fsj;
+        berad = be_140 / RADEG;
+        cdelt = cdlt_140;
         crpix1 = cpx1_140;
         crpix2 = cpx2_140;
     } else if(strncmp(img_path,"SJI_2832",8) == 0) {
-        berad = be_nsj / RADEG;
-        cdelt = cdlt_nsj;
+        // berad = be_nsj / RADEG;
+        // cdelt = cdlt_nsj;
+        berad = be_283 / RADEG;
+        cdelt = cdlt_283;
         crpix1 = cpx1_283;
         crpix2 = cpx2_283;
     } else if(strncmp(img_path,"SJI_1600W",9) == 0) {
-        berad = be_fsj / RADEG;
-        cdelt = cdlt_fsj;
+        // berad = be_fsj / RADEG;
+        // cdelt = cdlt_fsj;
+        berad = be_mir / RADEG;
+        cdelt = cdlt_mir;
         crpix1 = cpx1_mir;
         crpix2 = cpx2_mir;
     } else
 	return BAD_IMG_PATH;
     wcsaxes = 2;
+    crpix1 = crpix1/sum1 + off1;
+    crpix2 = crpix2/sum2 + off2;
     crval1  = crvalxy[0];
     crval2  = crvalxy[1];
     //crpix3 = 0.0;
    // crpix3a = 0.0;
     crval3  = 0.0;
-    cdelt1  = cdelt;
-    cdelt2  = cdelt;
+    cdelt1  = cdelt*sum1;
+    cdelt2  = cdelt*sum2;
     cdelt3  = 0.0;
     ctype1  = "HPLN-TAN";
     ctype2  = "HPLT-TAN";
@@ -435,8 +466,8 @@ if (strncmp(instrume,"FUV",3) == 0) {
     cunit2  = "arcsec";
     cunit3  = "none";
     pc1_1   =  cos(berad+garad);
-    pc1_2   = -sin(berad+garad);
-    pc2_1   =  sin(berad+garad);
+    pc1_2   = -sin(berad+garad) * sum2/sum1;
+    pc2_1   =  sin(berad+garad) * sum1/sum2;
     pc2_2   =  cos(berad+garad);
     pc3_1   = 0.0;
     pc3_2   = 0.0;
