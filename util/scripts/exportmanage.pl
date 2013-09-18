@@ -270,7 +270,7 @@ while (1)
       # jsoc_export_manage died in response to an unhandled signal
       my($sig) = $? & 127;
        
-       QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "Unhandled signal: $sig.\n");
+       QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "DB Host: $dbhost", "Unhandled signal: $sig.\n");
    } 
    elsif (($? >> 8) != 0)
    {
