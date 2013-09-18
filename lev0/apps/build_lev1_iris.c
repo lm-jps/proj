@@ -141,7 +141,6 @@ double tgttimes[NUMRECLEV1];
 long long brec, erec, bfsn, efsn; //begin and end lev0 rec/fsn. must be same data type
 long long bnumx, enumx;		  //has either the brec/erec of bfsn/efsn pair accord to mode
 int verbose;
-int hmiaiaflg = 1;		//0=hmi, 1=aia 
 int modeflg = 0;		//0=fsn, 1=recnum
 int imagecnt = 0;		// num of images since last commit 
 int restartflg = 0;		// set when build_lev1 is called for a restart
@@ -231,30 +230,6 @@ void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int f
       quallev1 = quallev1 | Q_IMG_TYPE;
     }
   }
-/****************************Ck for IRIS******Ck w/Rock**********************
-  if(hmiaiaflg) {		  //aia
-    pchar = drms_getkey_string(rs0, "AISTATE", &rstatus);
-    if(aiftsid >= 0xc000) quallev1 = quallev1 | Q_CAL_IMG;
-    if((aifcps <= -20) ||(aifcps >=100)) quallev1 = quallev1 | Q_AIA_FOOR;
-    if(aiagp6 != 0) quallev1 = quallev1 | Q_AIA_REGF;
-  }
-  else {			  //hmi
-    pchar = drms_getkey_string(rs0, "HWLTNSET", &rstatus);
-    if((fid >= 1) && (fid <=9999)) {
-      quallev1 = quallev1 | Q_CAL_IMG;		//cal image
-    } 
-    if(hcftid == CAL_HCFTID) quallev1 = quallev1 | Q_CALM_IMG; //hmi cal mode
-  }
-  if(rstatus) {
-    printk("ERROR: in drms_getkey_string(HWLTNSET or AISTATE) fsn=%u\n", fsn);
-  }
-  else {
-    if(!strcmp(pchar, "OPEN")) {    //ISS loop open
-      quallev1 = quallev1 | Q_LOOP_OPEN;
-    }
-  }
-****************************Ck for IRIS**************************************/
-
   if(quicklook) {
     quallev1 = quallev1 | Q_NRT;
   }
@@ -426,8 +401,9 @@ int do_ingest(long long bbrec, long long eerec)
   int *spikedata, status, axes[2], nbytes;
   uint32_t missvals, totvals;
   long long recnum0, recnum1, recnumff;
-  char recrange[128], lev0name[128], flatrec[128];
+  char recrange[128], lev0name[128], flatrec[128], temprec[128], pointrec[128];
   //char tmpname[80];
+  double scroll;
 
   if(modeflg) sprintf(recrange, ":#%lld-#%lld", bbrec, eerec);
   else sprintf(recrange, "%lld-%lld", bbrec, eerec);
@@ -435,7 +411,7 @@ int do_ingest(long long bbrec, long long eerec)
   printk("open_dsname = %s\n", open_dsname);
   printk("#levnum recnum fsn\n");
 
-    if(hmiaiaflg) t_obs0 = 0;
+    t_obs0 = 0;
     rset0 = drms_open_records(drms_env, open_dsname, &rstatus); //open lev0
     if(!rset0 || (rset0->n == 0) || rstatus) {
       printk("Can't do drms_open_records(%s)\n", open_dsname);
@@ -481,41 +457,6 @@ int do_ingest(long long bbrec, long long eerec)
        tobs[i] = DRMS_MISSING_TIME;
       }
     }
-/*****************!!TEMP NOOP get_pointing and iorbit_getinfo****************
-    if(rstatus = get_pointing_info(drms_env, tobs, ncnt, &ptinfo)) {
-      printk("**ERROR: get_pointing_info() status = %d  fsn tobs ASD:\n", 
-		rstatus);
-      for(j=0; j < ncnt; j++) {	 //!!TEMP debuf stuff
-        printk("%u %10.5f ", fsnarray[j], tobs[j]);
-        if(ptinfo) {
-          ptdata = ptinfo[j];
-          printk("%s\n", ptdata.asd_rec);
-        }
-        asdmiss[j] = 1;		//set for QUALITY for ea image
-      }
-      //return(1);		//!!No,press on- changed 2/22/2011
-    }
-    if ((IOstatus = iorbit_getinfo(drms_env,
-                       orbseries,
-                       NULL,
-                       IORBIT_Alg_Quadratic,
-                       tobs,
-                       ncnt,
-                       kIORBIT_CacheAction_DontCache,
-                       &IOinfo)) != kLIBASTRO_Success)
-    {
-      if(IOstatus == kLIBASTRO_InsufficientData) {
-        printk("***ERROR in iorbit_getinfo: kLIBASTRO_InsufficientData\n");
-      }
-      else { 
-       printk("***ERROR in iorbit_getinfo() status=%d\n", IOstatus);
-      }
-      for(j=0; j < ncnt; j++) {	 //set qual bits
-        orbmiss[j] = 1;
-      }
-      return(1);		//abort. new 2/22/2011
-    }
-****************************************************************************/
     //New from Art's stuff 07Aug2013
     HContainer_t *keymap = NULL;
 
@@ -569,35 +510,6 @@ int do_ingest(long long bbrec, long long eerec)
       }
       return(1);	//new 2/22/2011
     }
-    //Now fill in info for call to Carl's get_image_location()
-/***************************************************************************
-    for(i=0; i < ncnt; i++) {
-      rs0 = &rptr[i];
-      imageloc[i].tobs = tobs[i];
-      imageloc[i].camera = drms_getkey_int(rs0, "CAMERA", &rstatus);
-      if(rstatus) {
-        printk("ERROR: in drms_getkey_int(CAMERA) fsn=%u\n", fsnarray[i]);
-      }
-      imageloc[i].wavelength = drms_getkey_int(rs0, "WAVELNTH", &rstatus);
-      if(rstatus) {
-        printk("ERROR: in drms_getkey_int(WAVELNTH) fsn=%u\n", fsnarray[i]);
-      }
-      snprintf(imageloc[i].telescope, 10, "%s", 
-		drms_getkey_string(rs0, "TELESCOP", &rstatus));
-      if(rstatus) {
-        printk("ERROR: in drms_getkey_string(TELESCOP) fsn=%u\n", fsnarray[i]);
-      }
-    }
-    p_imageloc = imageloc;
-    rstatus = get_image_location(drms_env, ncnt, &p_imageloc);
-    if(rstatus) {		//error
-      printk("ERROR: get_image_location() returns status=%d\n", rstatus);
-      for(j=0; j < ncnt; j++) {	 //set qual bits
-        mpdmiss[i] = 0;
-      }
-      return(1);
-    }
-***************************************************************************/
 
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
       //StartTimer(2);	//!!TEMP
@@ -630,30 +542,56 @@ int do_ingest(long long bbrec, long long eerec)
       l0l1->datavals = drms_getkey_int(rs0, "DATAVALS", &rstatus);
       l0l1->missvals = drms_getkey_int(rs0, "MISSVALS", &rstatus);
 
-/*********************************nop for iris*****************************
-      if(hmiaiaflg) {			//aia
-        l0l1->dat1.adata1A = &data1A;
-        //l0l1->himgcfid = drms_getkey_int(rs0, "AIFDBID", &rstatus);
-	l0l1->himgcfid = 90;	//!!TEMP force uncropped, no overscan
-        aiftsid = drms_getkey_int(rs0, "AIFTSID", &rstatus);
-        aifcps = drms_getkey_short(rs0, "AIFCPS", &rstatus);
-        aiagp6 = drms_getkey_int(rs0, "AIAGP6", &rstatus);
-      }
-      else {
-        l0l1->dat1.adata1 = &data1;
-        l0l1->himgcfid = drms_getkey_int(rs0, "HIMGCFID", &rstatus);
-      }
-      if(rstatus) {
-        printk("Can't do drms_getkey_int(HIMGCFID) for fsn %u\n", fsnx);
-        //!!TEMP continue on for testing of AIA lev1
-        l0l1->himgcfid = 104; //!!TEMP force a value for now
-        //return(1); 	//return until we learn
-        //continue;	//maybe cleanup and continue here
-      }
-*********************************nop for iris*****************************/
-
       sprintf(open_dsname, "%s[%u]", dsout, fsnx);
       rs = rset1->records[i]; 
+
+      // 
+      // find closest iris.pointing_data record and set scroll
+      //
+      {
+	  DRMS_RecordSet_t *rset;
+	  DRMS_Record_t *rt;
+	  int st;
+	  TIME t_obs, time_qbi;
+	  float aeulrbrx, aeulrbry, aeulrbrz, acg_roll, ophase;
+	  t_obs = drms_getkey_time(rs0, "t_obs", &st);
+	  if (st)
+	      t_obs = DRMS_MISSING_TIME;
+	  sprintf(open_dsname, "iris.pointing_data[? date_obs > %f and date_obs <= %f ?]", t_obs-5, t_obs+5); 
+          printf("%s\n", open_dsname);
+	  rset = drms_open_records(drms_env, open_dsname, &st);
+	  if (!rset || !rset->n || st) {
+	      printk("Error in drms_open_records(%s); setting scroll to zero\n", open_dsname);
+	      scroll = 0.0;
+	  } else {
+	      // There should be only one record returned
+	      rt = rset->records[0];
+              sprintf(pointrec, "iris.pointing_data[:#%lld]", rt->recnum);
+              if(dstatus = drms_setkey_string(rs, "POINTREC", pointrec)) {
+                printk("**ERROR on drms_setkey_string() for %s\n", pointrec);
+              }
+	      time_qbi = drms_getkey_time(rt, "TIME_QBI", &st);
+	      aeulrbrx = drms_getkey_float(rt, "A_EULERBR_X", &st);
+	      aeulrbry = drms_getkey_float(rt, "A_EULERBR_Y",  &st);
+	      aeulrbrz = drms_getkey_float(rt, "A_EULERBR_Z", &st);
+	      acg_roll = drms_getkey_float(rt, "A_CG_ROLL_ANGLE", &st);
+	      ophase   = drms_getkey_float(rt, "OPHASE", &st);
+
+	      drms_setkey_time(rs, "TIME_QBI", time_qbi);
+	      drms_setkey_float(rs, "AEULRBRX", aeulrbrx);
+	      drms_setkey_float(rs, "AEULRBRY", aeulrbry);
+	      drms_setkey_float(rs, "AEULRBRZ", aeulrbrz);
+	      drms_setkey_float(rs, "SAT_ROT", aeulrbrz);
+	      drms_setkey_float(rs, "ACG_ROLL", acg_roll);
+	      drms_setkey_float(rs, "OPHASE",   ophase);
+
+	      scroll = aeulrbrz;
+	  }
+
+	  if (rset)
+	      drms_close_records(rset, DRMS_FREE_RECORD);
+      }
+      
       drms_record_directory(rs, rs1_path, 0);
       if(!*rs1_path) {
         printk("***ERROR: No path to segment for %s\n", open_dsname);
@@ -661,7 +599,7 @@ int do_ingest(long long bbrec, long long eerec)
         continue;
       }
       printf("\npath to lev1 = %s\n", rs1_path);	//!!TEMP
-      if(rstatus = iris_isp2wcs(rs0, rs)) {
+      if(rstatus = iris_isp2wcs(rs0, rs, scroll)) {
         printk("**ERROR: iris_isp2wcs() status = %d\n", rstatus);
         printk("Press on after error at fsn=%u...\n", fsnx);
         printf("**ERROR: at fsn %u\n", fsnx);
@@ -676,30 +614,15 @@ int do_ingest(long long bbrec, long long eerec)
         noimage[i] = 1;
         continue;
       }
-      if(hmiaiaflg) {
         segArray = drms_array_create(DRMS_TYPE_INT,
                                        segment->info->naxis,
                                        segment0->axis,
                                        &data1A,
                                        &dstatus);
-        //segArray = drms_array_create(DRMS_TYPE_SHORT,
-        //                               segment->info->naxis,
-        //                               segment0->axis,
-        //                               &data1S,
-        //                               &dstatus);
-
 //short *adata = (short *)Array0->data;
 //short *bdata = &data1S;
 //memcpy(bdata, adata, 2*seg0sz); //!!TEMP mv the lev0 in for now
 
-      }
-      //else {
-      //  segArray = drms_array_create(DRMS_TYPE_FLOAT,
-      //                                 segment->info->naxis,
-      //                                 segment->axis,
-      //                                 &data1,
-      //                                 &dstatus);
-      //}
       //transer the lev0 keywords
       rstatus = drms_copykeys(rs, rs0, 0, kDRMS_KeyClass_Explicit);
       if(rstatus != DRMS_SUCCESS) {
@@ -863,21 +786,35 @@ int do_ingest(long long bbrec, long long eerec)
         }
       }
 
-/**************************skip for iris***************************************
-      if(hmiaiaflg && !quicklook) {
-        float tempccd, tempgt, tempsmir, tempfpad;
+/****NEW from Rock 10Sep2013************************************************/
+      if(!quicklook) {
+/*  ITF1CCD1  CCD1_FUV1_OPERATING                                    */
+/*  ITF2CCD2  CCD2_FUV2_OPERATING                                    */
+/*  ITNUCCD3  CCD3_NUV_OPERATING                                     */
+/*  ITSJCCD4  CCD4_SJI_OPERATING                                     */
+/*  BT06CBPX  CEB_ON_THE_POSX_AXIS                                   */
+/*  BT07CBNX  CEB_ON_THE_NEGX_AXIS                                   */
+/*  BT15IEB   ELECTRONICS_BOX                                        */
+/*  IT08GTWM  GUIDE_TELESCOPE_WEDGE_HC_MOTOR_TS08                    */
+/*  IT14SPPX  SPECTROGRAPH_OPTICS_PACKAGE_HOZ5_CONTROL_TS14 (pos_x)  */
+/*  IT16SPNX  SPECTROGRAPH_OPTICS_PACKAGE_HOZ7_CONTROL_TS16 (neg_x)  */
+
+        float itf1ccd1, itf2ccd2, itnuccd3, itsjccd4;
+        float bt06cbpx, bt07cbnx, bt15ieb, it08gtwm;
+        float it14sppx, it16spnx;
+
+        char *dstemp = "iris.temperatures_60s";
         if(fabs(tobs[i] - t_obs0) > 300.0) {
-          char *dstemp = "aia.temperature_summary_300s";
-          char *selstr = "select max(t_start) from ";
-          char *whrstr = "where t_start <= ";
+          char *selstr = "select max(date_obs) from ";
+          char *whrstr = "where date_obs <= ";
           int nr;
           if(rs_t) {
             drms_close_records(rs_t, DRMS_FREE_RECORD);
             rs_t = NULL;
           }
-          sprintf(open_dsname, "%s[? t_start=(%s %s %s %f) ?]",
+          sprintf(open_dsname, "%s[? date_obs=(%s %s %s %f) ?]",
                   dstemp, selstr, dstemp, whrstr, tobs[i]);
-          //printf(" %s\n", open_dsname);
+          printf(" %s\n", open_dsname);
           rt = NULL;
           rs_t = drms_open_records(drms_env, open_dsname, &rstatus);
           if(rstatus) printk("Can not open temperature series.\n");
@@ -889,113 +826,36 @@ int do_ingest(long long bbrec, long long eerec)
           t_obs0 = tobs[i];
         }
         if (rt) {
-          switch (camera) {
-            int st;
-            case 1:
-              tempccd  = drms_getkey_float(rt, "TC01_T1_CCD1_MEAN", &st);
-              tempgt   = drms_getkey_float(rt, "T08_G1_1_MEAN", &st);
-              tempsmir = drms_getkey_float(rt, "T02_T1_SMIR_MEAN", &st);
-              tempfpad = drms_getkey_float(rt, "T01_T1_FADP_MEAN", &st);
-              break;
-            case 2:
-              tempccd  = drms_getkey_float(rt, "TC03_T2_CCD1_MEAN", &st);
-              tempgt   = drms_getkey_float(rt, "T21_G2_1_MEAN", &st);
-              tempsmir = drms_getkey_float(rt, "T15_T2_SMIR_MEAN", &st);
-              tempfpad = drms_getkey_float(rt, "T14_T2_FADP_MEAN", &st);
-              break;
-            case 3:
-              tempccd  = drms_getkey_float(rt, "TC05_T3_CCD1_MEAN", &st);
-              tempgt   = drms_getkey_float(rt, "T34_G3_1_MEAN", &st);
-              tempsmir = drms_getkey_float(rt, "T28_T3_SMIR_MEAN", &st);
-              tempfpad = drms_getkey_float(rt, "T27_T3_FADP_MEAN", &st);
-              break;
-            case 4:
-              tempccd  = drms_getkey_float(rt, "TC07_T4_CCD1_MEAN", &st);
-              tempgt   = drms_getkey_float(rt, "T47_G4_1_MEAN", &st);
-              tempsmir = drms_getkey_float(rt, "T41_T4_SMIR_MEAN", &st);
-              tempfpad = drms_getkey_float(rt, "T40_T4_FADP_MEAN", &st);
-              break;
+          int st;
+          sprintf(temprec, "%s[:#%lld]", dstemp, rt->recnum);
+          if(dstatus = drms_setkey_string(rs, "TEMP_REC", temprec)) {
+            printk("**ERROR on drms_setkey_string() for %s\n", temprec);
           }
-          drms_setkey_float(rs, "TEMPCCD", tempccd);
-          drms_setkey_float(rs, "TEMPGT", tempgt);
-          drms_setkey_float(rs, "TEMPCEB", tempgt);
-          drms_setkey_float(rs, "TEMPSMIR", tempsmir);
-          drms_setkey_float(rs, "TEMPFPAD", tempfpad);
-          drms_setkey_float(rs, "TEMPPMIR", tempfpad);
+          itf1ccd1 = drms_getkey_float(rt, "ITF1CCD1", &st);
+          itf2ccd2 = drms_getkey_float(rt, "ITF2CCD2", &st);
+          itnuccd3 = drms_getkey_float(rt, "ITNUCCD3", &st);
+          itsjccd4 = drms_getkey_float(rt, "ITSJCCD4", &st);
+          bt06cbpx = drms_getkey_float(rt, "BT06CBPX", &st);
+          bt07cbnx = drms_getkey_float(rt, "BT07CBNX", &st);
+          bt15ieb  = drms_getkey_float(rt, "BT15IEB",  &st);
+          it08gtwm = drms_getkey_float(rt, "IT08GTWM", &st);
+          it14sppx = drms_getkey_float(rt, "IT14SPPX", &st);
+          it16spnx = drms_getkey_float(rt, "IT16SPNX", &st);
+
+          drms_setkey_float(rs, "ITF1CCD1", itf1ccd1);
+          drms_setkey_float(rs, "ITF2CCD2", itf2ccd2);
+          drms_setkey_float(rs, "ITNUCCD3", itnuccd3);
+          drms_setkey_float(rs, "ITSJCCD4", itsjccd4);
+          drms_setkey_float(rs, "BT06CBPX", bt06cbpx);
+          drms_setkey_float(rs, "BT07CBNX", bt07cbnx);
+          drms_setkey_float(rs, "BT15IEB",  bt15ieb);
+          drms_setkey_float(rs, "IT08GTWM", it08gtwm);
+          drms_setkey_float(rs, "IT14SPPX", it14sppx);
+          drms_setkey_float(rs, "IT16SPNX", it16spnx);
         }
       }
-**************************skip for iris***************************************/
+/****END NEW from Rock 10Sep2013************************************************/
 
-/**************************skip for iris***************************************
-      if(hmiaiaflg) {
-        int nr, st, ver_num;
-        float dt, eperdn, dnperpht, eff_area, eff_wl, factor, p1, p2, p3;
-        TIME t_start;
-        char *dsresp = "aia.response";
-        char *selstr = "select max(t_start) from ";
-        char *whrstr = "where t_start <= ";
-        //char *wavstr = drms_getkey_string(rs0, "WAVE_STR", &rstatus);
-        char *imgpath = drms_getkey_string(rs0, "IMG_PATH", &rstatus);
-        if(rs_resp) {
-//          drms_close_records(rs_resp, DRMS_FREE_RECORD);
-          rs_resp = NULL;
-        }
-        sprintf(open_dsname, "%s[][%s][? t_start=(%s %s %s %f) ?]",
-                dsresp, imgpath, selstr, dsresp, whrstr, tobs[i]);
-        rresp = NULL;
-        rs_resp = drms_open_records(drms_env, open_dsname, &rstatus);
-        if(rstatus) printk("Can not open aia.response series.\n");
-        else {
-          nr = rs_resp->n;
-          rresp = rs_resp->records[0];
-        }
-        if(rresp) {
-          eperdn = drms_getkey_float(rresp, "EPERDN", &st);
-          drms_setkey_float(rs, "DN_GAIN", eperdn);
-          dnperpht = drms_getkey_float(rresp, "DNPERPHT", &st);
-          drms_setkey_float(rs, "DNPERPHT", dnperpht);
-          eff_wl = drms_getkey_float(rresp, "EFF_WVLN", &st);
-          drms_setkey_float(rs, "EFF_WVLN", eff_wl);
-          p1 = drms_getkey_float(rresp, "EFFA_P1", &st);
-          p2 = drms_getkey_float(rresp, "EFFA_P2", &st);
-          p3 = drms_getkey_float(rresp, "EFFA_P3", &st);
-          t_start = drms_getkey_float(rresp, "T_START", &st);
-          dt = (float) (tobs[i] - t_start)/86400.0;
-          factor = ((p3*dt + p2)*dt + p1)*dt + 1.0;
-          eff_area = drms_getkey_float(rresp, "EFF_AREA", &st);
-          eff_area = eff_area*factor;
-          drms_setkey_float(rs, "EFF_AREA", eff_area);
-          ver_num = drms_getkey_int(rresp, "VER_NUM", &st);
-          drms_setkey_int(rs, "DN_GN_V", ver_num);
-          drms_setkey_int(rs, "EFF_AR_V", ver_num);
-        }
-      }
-**************************skip for iris***************************************/
-
-//!!for iris
-//goto IRISSKIP;
-
-      //Now figure out what flat field to use
-//     if(drms_ismissing_time(tobs[i])) {
-//        printk("DRMS_MISSING_TIME for fsn=%u. Continue...\n", fsnx);
-//        noimage[i] = 1;
-//        goto TEMPSKIP;
-//      }
-
-//for iris
-//goto FLATERR;
-
-    if(!hmiaiaflg) {		//HMI
-      if(quicklook) {
-        sprintf(open_dsname, "%s[? t_start=(select max(t_start) from %s where t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d) and CAMERA=%d ?]",
-      		dsffname, dsffname, tobs[i], tobs[i], camera, camera);
-      }
-      else {
-        sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and CAMERA=%d and flatfield_version >= 1 ?]",
-      	dsffname, tobs[i], tobs[i], camera);
-      }
-    }
-    else {			//AIA
       //char *wavstr = drms_getkey_string(rs0, "WAVE_STR", &rstatus);
       char *imgpath = drms_getkey_string(rs0, "IMG_PATH", &rstatus);
       if(rstatus) {
@@ -1010,7 +870,6 @@ int do_ingest(long long bbrec, long long eerec)
         sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and IMG_PATH='%s' ?]",
       	dsffname, tobs[i], tobs[i], imgpath);
       }
-    }
       printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
       printk("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
       rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF 
@@ -1080,7 +939,6 @@ int do_ingest(long long bbrec, long long eerec)
       l0l1->sumy = drms_getkey_short(rs0, "SUMSPAT", &rstatus);
       hshiexp = drms_getkey_int(rs, "HSHIEXP", &rstatus);
       hcamid = drms_getkey_int(rs, "HCAMID", &rstatus);
-      if(hmiaiaflg) {
         float sumdc=0.0;
         int idc, numdc=0;
         int aimgshce = drms_getkey_int(rs, "AIMGSHCE", &rstatus);
@@ -1094,35 +952,6 @@ int do_ingest(long long bbrec, long long eerec)
           //return(1);		//!!TBD what to do?
           goto FLATERR;
         }
-/**************Not for IRIS***************************************
-        for (idc=2047; idc<4096*4096; idc+=4096) {
-          if (data1A[idc] != DRMS_MISSING_INT) {
-            sumdc = sumdc + data1A[idc];
-            numdc++;
-          }
-          if (data1A[idc+1] != DRMS_MISSING_INT) {
-            sumdc = sumdc + data1A[idc+1];
-            numdc++;
-          }
-        }
-        if (numdc) drms_setkey_float(rs, "DATACENT", sumdc/numdc);
-**************Not for IRIS***************************************/
-      }
-      /* no hmi else for iris**************************
-      else {
-        if(hshiexp == 0) l0l1->darkflag = 1;
-        //StartTimer(1);	//!!TEMP
-        if(rstatus = do_flat(l0l1)) {
-          printk("***ERROR in do_flat() status=%d\n", rstatus);
-          printf("***ERROR in do_flat() status=%d\n", rstatus);
-          flatmiss[i] = 1; noimage[i] = 1;
-          //return(1);		//!!TBD what to do?
-          goto FLATERR;
-        }
-        //ftmp = StopTimer(1);
-        //printf( "\nTime sec for hmi do_flat() = %f\n\n", ftmp );
-      } 
-      * no hmi else for iris**************************/
 
         //sprintf(tmpname, "/tmp/data_lev1.%u", fsnx);
         //fwt = fopen(tmpname, "w");
@@ -1154,7 +983,7 @@ int do_ingest(long long bbrec, long long eerec)
            missflg[i] = missflg[i] | Q_1_MISS3;
         if(l0l1->datavals == 0) 
            missflg[i] = missflg[i] | Q_MISSALL; //high bit, no data
-        if(hmiaiaflg && nspikes) {
+        if(nspikes) {
           if (spikeseg = drms_segment_lookup(rs,"spikes") ) {
             nbytes = nspikes*sizeof(int);
             axes[0] = nspikes;
@@ -1172,41 +1001,6 @@ int do_ingest(long long bbrec, long long eerec)
 
 /**************************No DARK for IRIS?**********************************/
 
-      if(!hmiaiaflg) {			//only call for hmi
-/*****************************Noop cosmic_rays call for now********************
-        //StartTimer(1);	//!!TEMP
-        dstatus = cosmic_rays(rs, l0l1->dat1.adata1, l0l1->adatabad, nbad,
-				array_cosmic, &n_cosmic, 4096, 4096);
-        //ftmp = StopTimer(1);
-        //printf( "\nTime sec for cosmic_rays() = %f\n\n", ftmp );
-        if(dstatus) {
-          printk("ERROR: cosmic_rays() error=%d\n", dstatus);
-          noimage[i] = 1;
-        }
-        else {
-          drms_setkey_int(rs, "NBADPERM", nbad);
-          drms_setkey_int(rs, "NBADTOT", n_cosmic);
-        }
-        if(nbad != n_cosmic) {	//pretend the bad pix list is like spike
-          nbytes = n_cosmic*sizeof(int);
-          axes[0] = n_cosmic;
-          spikedata = (int *)malloc(nbytes);
-          ArraySpike = drms_array_create(DRMS_TYPE_INT, 1, axes,
-                       (void *)spikedata, &status);
-          memcpy((void *)spikedata, (void *)array_cosmic, nbytes);
-          status = drms_segment_write(badoutpixseg, ArraySpike, 0);
-          drms_free_array(ArraySpike);
-        }
-        else {
-          dstatus = drms_segment_write(badoutpixseg, ArrayBad, 0);
-        }
-        if (dstatus) {
-          printk("ERROR: drms_segment_write error=%d for lev1 bad_pixel_list\n",
-			 dstatus);
-          noimage[i] = 1;
-        }
-**********************************************************************/
-      }
 FLATERR:
       drms_close_records(rsetff, DRMS_FREE_RECORD);
       free(ArrayDark->data);
@@ -1214,20 +1008,6 @@ FLATERR:
       free(ArrayBad->data);
 
 TEMPSKIP:
-      if(!hmiaiaflg) {
-        segArray->type = DRMS_TYPE_FLOAT;
-        segArray->bscale = 1.0; 
-        segArray->bzero = 0.0; 
-        dstatus = drms_segment_write(segment, segArray, 0);
-        if (dstatus) {
-          printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
-          noimage[i] = 1;
-        }
-        recnum1 = rs->recnum;
-        printk("*1 %u %u\n", recnum1, fsnx);
-        free(Array0->data);
-      }
- 
   x0_lf = DRMS_MISSING_DOUBLE;
   y0_lf = DRMS_MISSING_DOUBLE;
   rsun_lf = DRMS_MISSING_DOUBLE;
@@ -1249,201 +1029,9 @@ TEMPSKIP:
     }
   }
   lstatus = 1;				//default bad limb_fit
-
-  goto WCSEND;		//skip all WCS stuff for IRIS
-
-  //WCS calculations for condition 1
-  //(For WCS conditions see mail from Rock 10Aug2010 16:40)
-  if(!skiplimb && !hmiaiaflg) {		//only call for HMI
-    //StartTimer(1);	//!!TEMP
-    lstatus = limb_fit(rs,l0l1->dat1.adata1,&rsun_lf,&x0_lf,&y0_lf,4096,4096,0);
-    if(lstatus) {
-      printk("ERROR: limb_fit() %d error for fsn=%u\n", lstatus, fsnx);
-      //noimage[i] = 1;
-      limbmiss[i] = 1;
-    }
-    else {		//limb_fit() returns good values
-      //ftmp = StopTimer(1);
-      //printf( "\nTime sec for limb_fit() = %f\n\n", ftmp );
-      //printf("Calling WCS condition 1\n"); //!!TEMP
-      drms_setkey_float(rs, "RSUN_LF", (float)rsun_lf);
-      drms_setkey_float(rs, "R_SUN", (float)rsun_lf);
-      drms_setkey_float(rs, "X0_LF", (float)x0_lf);
-      drms_setkey_float(rs, "Y0_LF", (float)y0_lf);
-      drms_setkey_float(rs, "CRVAL1", 0.0);
-      drms_setkey_float(rs, "CRVAL2", 0.0);
-      drms_setkey_string(rs, "CTYPE1", "HPLN-TAN");
-      drms_setkey_string(rs, "CTYPE2", "HPLT-TAN");
-      drms_setkey_string(rs, "CUNIT1", "arcsec");
-      drms_setkey_string(rs, "CUNIT2", "arcsec");
-      cdelt1 = (float)IOdata.rsun_obs/rsun_lf;
-      drms_setkey_float(rs, "CDELT1", cdelt1);
-      drms_setkey_float(rs, "CDELT2", cdelt1);
-      crpix1 = (float)x0_lf + 1;  //set up for correction by heightformation()
-      crpix2 = (float)y0_lf + 1;
-      drms_setkey_float(rs, "CRPIX1", crpix1);
-      drms_setkey_float(rs, "CRPIX2", crpix2);
-      rsun = (float)rsun_lf;
-      crota2 = imageloc[i].instrot + ptdata.sat_rot;
-      drms_setkey_float(rs, "CROTA2", crota2);
-      goto WCSEND;
-    }
-  }
-  //WCS calculations for condition 2
-  //(As a first pass, this is following Rock's notes and can be simplified)
-  int cond2 = 0;
-  if(!strcmp(ptdata.acs_mode, "SCIENCE") || !strcmp(ptdata.acs_mode, DRMS_MISSING_STRING)) {
-    //if(quicklook) {
-      if(!skiplimb && !hmiaiaflg) {	//hmi, not dark or cal
-        cond2 = 1;
-      }
-      if(hmiaiaflg) {
-        cond2 = 1;
-        if(hshiexp == 0) {
-          if(hcamid == 0 || hcamid == 1) {	//it's aia dark
-            cond2 = 0;
-          }
-        }
-      }
-      if(cond2) {			//this is WCS condition 2
-/**********************************
-        if(!hmiaiaflg) {
-          cond2 = 0;
-          if((rsun_lf == DRMS_MISSING_DOUBLE) || (x0_lf == DRMS_MISSING_DOUBLE) || (y0_lf == DRMS_MISSING_DOUBLE)) {
-            cond2 = 1;
-          }
-        }
-**************************************/
-        if(cond2) {
-          printf("Calling WCS condition 2\n"); //!!TEMP
-          rsun = (float)IOdata.rsun_obs/imageloc[i].imscale;
-          drms_setkey_float(rs, "R_SUN", rsun);
-          drms_setkey_string(rs, "CTYPE1", "HPLN-TAN");
-          drms_setkey_string(rs, "CTYPE2", "HPLT-TAN");
-          drms_setkey_float(rs, "CRVAL1", 0.0);
-          drms_setkey_float(rs, "CRVAL2", 0.0);
-          drms_setkey_string(rs, "CUNIT1", "arcsec");
-          drms_setkey_string(rs, "CUNIT2", "arcsec");
-          cdelt1 = (float)imageloc[i].imscale;
-          drms_setkey_float(rs, "CDELT1", cdelt1);
-          drms_setkey_float(rs, "CDELT2", cdelt1);
-          crpix1 = imageloc[i].x + 1;
-          crpix2 = imageloc[i].y + 1;
-          drms_setkey_float(rs, "CRPIX1", crpix1);
-          drms_setkey_float(rs, "CRPIX2", crpix2);
-          crota2 = imageloc[i].instrot + ptdata.sat_rot;
-          drms_setkey_float(rs, "CROTA2", crota2);
-          goto WCSEND;
-        }
-      }
-    //}
-  } 
-  //WCS calculations for condition 3
-  int cond3 = 0;
-  if(strcmp(ptdata.acs_mode, "SCIENCE")) {  //not is sci pointing mode
-    if(!hmiaiaflg && !skiplimb && lstatus) { //hmi,limb fit NG, not dark or cal
-      cond3 = 1;
-    }
-    else {
-      if(hmiaiaflg) {
-        cond3 = 1;
-        if(hshiexp == 0) {
-          if(hcamid == 0 || hcamid == 1) {	//it's aia dark
-            cond3 = 0;
-          }
-        }
-      }
-    }
-  }
-/******extraneous already lstatus means limb fit ng
-  if(cond3) {
-    if(!hmiaiaflg) {
-      cond3 = 0;
-      if((rsun_lf == DRMS_MISSING_DOUBLE) || (x0_lf == DRMS_MISSING_DOUBLE) || (y0_lf == DRMS_MISSING_DOUBLE)) {
-        cond3 = 1;
-      }
-    }
-  }
-**************************************/
-  if(cond3) {
-    printf("Calling WCS condition 3\n"); //!!TEMP
-    rsun = (float)IOdata.rsun_obs/imageloc[i].imscale;
-    drms_setkey_float(rs, "R_SUN", rsun);
-    drms_setkey_string(rs, "CTYPE1", "HPLN-TAN");
-    drms_setkey_string(rs, "CTYPE2", "HPLT-TAN");
-    drms_setkey_string(rs, "CUNIT1", "arcsec");
-    drms_setkey_string(rs, "CUNIT2", "arcsec");
-    drms_setkey_float(rs, "CRVAL1", 0.0);
-    drms_setkey_float(rs, "CRVAL2", 0.0);
-    cdelt1 = (float)imageloc[i].imscale;
-    drms_setkey_float(rs, "CDELT1", cdelt1);
-    drms_setkey_float(rs, "CDELT2", cdelt1);
-    //below missing - SC_Y/Z_INRT_BIAS/IMSCL_MP + 1
-    if(hmiaiaflg) {	//aia
-      crpix1 = imageloc[i].x + (ptdata.sat_y0 - imageloc[i].yinrtb)/imageloc[i].imscale + 1;
-      crpix2 = imageloc[i].y + (ptdata.sat_z0 - imageloc[i].zinrtb)/imageloc[i].imscale + 1;
-    }
-    else {		//hmi
-      crpix1 = imageloc[i].x - (ptdata.sat_y0 - imageloc[i].yinrtb)/imageloc[i].imscale + 1;
-      crpix2 = imageloc[i].y - (ptdata.sat_z0 - imageloc[i].zinrtb)/imageloc[i].imscale + 1;
-    }
-    drms_setkey_float(rs, "CRPIX1", crpix1);
-    drms_setkey_float(rs, "CRPIX2", crpix2);
-    crota2 = imageloc[i].instrot + ptdata.sat_rot;
-    drms_setkey_float(rs, "CROTA2", crota2);
-    goto WCSEND;
-  }
-  //WCS calculations for condition 4
-  int cond4 = 0;
-  if(!hmiaiaflg && skiplimb) {	//hmi, dark or cal
-    cond4 = 1;
-  }
-  else {
-    if(hshiexp == 0) {
-      if(hcamid == 0 || hcamid == 1) {	//it's aia dark
-        cond4 = 1;
-      }
-    }
-  }
-  if(cond4) {
-    printf("Calling WCS condition 4\n"); //!!TEMP
-    rsun = DRMS_MISSING_FLOAT;
-    drms_setkey_float(rs, "R_SUN", rsun);
-    drms_setkey_string(rs, "CTYPE1", "RAW");
-    drms_setkey_string(rs, "CTYPE2", "RAW");
-    drms_setkey_string(rs, "CUNIT1", DRMS_MISSING_STRING);
-    drms_setkey_string(rs, "CUNIT2", DRMS_MISSING_STRING);
-    drms_setkey_float(rs, "CRVAL1", DRMS_MISSING_FLOAT);
-    drms_setkey_float(rs, "CRVAL2", DRMS_MISSING_FLOAT);
-    cdelt1 = DRMS_MISSING_FLOAT;
-    drms_setkey_float(rs, "CDELT1", cdelt1);
-    drms_setkey_float(rs, "CDELT2", cdelt1);
-    crpix1 = DRMS_MISSING_FLOAT;
-    crpix2 = DRMS_MISSING_FLOAT;
-    drms_setkey_float(rs, "CRPIX1", crpix1);
-    drms_setkey_float(rs, "CRPIX2", crpix2);
-    crota2 = imageloc[i].instrot + ptdata.sat_rot;
-    drms_setkey_float(rs, "CROTA2", crota2);
-    goto WCSEND;
-  }
+  //goto WCSEND;		//skip all WCS stuff for IRIS
 
 WCSEND:
-    if(!hmiaiaflg && !lstatus) {	//only do for hmi and good limb fit
-      //Now call Sebastien's heightformation() fuction (email 08/09/10 17:50)
-      //21Sep2010 change -crota2 to crota2 and HFCORRVR to 2
-      if(!(dstatus = heightformation(fid, IOdata.obs_vr, &cdelt1, &rsun, &crpix1, &crpix2, crota2))) {
-        drms_setkey_float(rs, "CDELT1", cdelt1);
-        drms_setkey_float(rs, "CDELT2", cdelt1);
-        drms_setkey_float(rs, "R_SUN", rsun);
-        drms_setkey_float(rs, "CRPIX1", crpix1);
-        drms_setkey_float(rs, "CRPIX2", crpix2);
-        drms_setkey_int(rs, "HFCORRVR", 2);
-      }
-      else {
-        drms_setkey_int(rs, "HFCORRVR", 0);
-        printk("ERROR: heightformation() returned error for FID=%d\n", fid);
-      }
-    }
 
   //if(hmiaiaflg) {                       //aia
   //  int wl = drms_getkey_int(rs, "WAVELNTH", &rstatus);
@@ -1454,11 +1042,11 @@ WCSEND:
   //printf( "\nTime sec in inside loop for fsn=%u : %f\n\n", fsnx, ftmp );
 
 IRISSKIP:
-    if(hmiaiaflg) {
       dstatus = drms_segment_writewithkeys(segment, segArray, 0);
       //dstatus = drms_segment_write(segment, segArray, 0);
       if (dstatus) {
-        printk("ERROR: drms_segment_write error=%d for fsn=%u\n", dstatus,fsnx);
+        printk("ERROR: drms_segment_write error=%d for fsn=%u\n",
+dstatus,fsnx);
         noimage[i] = 1;
       }
       recnum1 = rs->recnum;
@@ -1467,9 +1055,7 @@ IRISSKIP:
 //      if (rs_t) drms_close_records(rs_t, DRMS_FREE_RECORD);
       if (rs_resp) drms_close_records(rs_resp, DRMS_FREE_RECORD);
       rs_resp = NULL;
-    }
   }				//END do for all the sorted lev0 records
-
 
   drms_close_records(rset0, DRMS_FREE_RECORD);   //close lev0 records
   drms_close_records(rset1, DRMS_INSERT_RECORD); //close lev1 records
@@ -1611,27 +1197,6 @@ int DoIt(void)
   }
   sprintf(dsffname, "%s", DSFFNAME);
 
-/*****************************!!TBD remove eventually***************************
-  if(hmiaiaflg) {
-    if (strcmp(dsff, NOTSPECIFIED)) sprintf(dsffname, "%s", dsff);
-    else sprintf(dsffname, "%s", DSFFNAMEAIA);
-    if(strstr(dsin, "hmi") || strstr(dsout, "hmi")) {
-      printf("Warning: You said instru=aia but have 'hmi' in ds name?\n");
-      printf("Do you want to abort this [y/n]? ");
-      if(gets(line) == NULL) { return(0); }
-      if(strcmp(line, "n")) { return(0); }
-    }
-  }
-  else {
-    sprintf(dsffname, "%s", DSFFNAMEHMI);
-    if(strstr(dsin, "aia") || strstr(dsout, "aia")) {
-      printf("Warning: You said instru=hmi but have 'aia' in ds name?\n");
-      printf("Do you want to abort this [y/n]? ");
-      if(gets(line) == NULL) { return(0); }
-      if(strcmp(line, "n")) { return(0); }
-    }
-  }
-*****************************!!TBD remove eventually***************************/
   if (strcmp(logfile, NOTSPECIFIED) == 0) {
     sprintf(logname, H1LOGFILE, gettimetag());
   }
