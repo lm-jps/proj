@@ -379,8 +379,8 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
     {
     // rotate image by 180 degrees by a flip flip
     float val;
-    int half = nx / 2;
-    int odd = nx & 1;
+    int half = ny / 2;
+    int odd = ny & 1;
     if (odd) half++;
     for (iy=0; iy<half; iy++)
       {
