@@ -367,6 +367,7 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   int nx, ny, ix, iy, i, j, xoff, yoff, max_off;
   double rot, x0, y0, mid;
   float *data;
+  float *data2;
   if (!arr || !ObsLoc)
     return(1);
   data = arr->data;
@@ -410,41 +411,27 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
       strncasecmp(arr->parent_segment->record->seriesinfo->seriesname, "aia", 3) &&
       abs(xoff) < max_off && abs(yoff) < max_off) 
     {
-    if (abs(xoff) >= 1)
+    if (abs(xoff) >= 1 || abs(yoff) >= 1)
       {
+      data2 = malloc(4*nx*ny);
       for (iy=0; iy<ny; iy++)
         {
-        float valarr[nx];
+        int jy = iy + yoff;
         for (ix=0; ix<nx; ix++)
           {
           int jx = ix + xoff;
-          if (jx < nx && jx >= 0)
-            valarr[ix] = data[iy*nx + jx];
+          int idx = jy*nx + jx;
+          int idx2 = iy*nx + ix;
+          if (jx<0 || jx>=nx || jy<0 || jy>=ny)
+            data2[idx2] = DRMS_MISSING_FLOAT;
           else
-            valarr[ix] = DRMS_MISSING_FLOAT;
+            data2[idx2] = data[idx];
           }
-        for (ix=0; ix<nx; ix++)
-          data[iy*nx + ix] = valarr[ix];
         }
       x0 -= xoff;
-      }
-    if (abs(yoff) >= 1)
-      {
-      for (ix=0; ix<nx; ix++)
-        {
-        float valarr[ny];
-        for (iy=0; iy<ny; iy++)
-          {
-          int jy = iy + yoff;
-          if (jy < ny && jy >= 0)
-            valarr[iy] = data[jy*nx + ix];
-          else
-            valarr[iy] = DRMS_MISSING_FLOAT;
-          }
-        for (iy=0; iy<ny; iy++)
-          data[iy*nx + ix] = valarr[iy];
-        }
       y0 -= yoff;
+      free(data);
+      arr->data = data2;
       }
     }
   // update center location
