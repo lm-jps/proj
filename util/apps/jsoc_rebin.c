@@ -365,7 +365,7 @@ int DoIt(void)
 int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   {
   int nx, ny, ix, iy, i, j, xoff, yoff, max_off;
-  double rot, x0, y0, mid;
+  double rot, x0, y0, midx, midy;
   float *data;
   float *data2;
   if (!arr || !ObsLoc)
@@ -375,7 +375,8 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   ny = arr->axis[1];
   x0 = ObsLoc->crpix1 - 1;
   y0 = ObsLoc->crpix2 - 1;
-  mid = (nx-1.0)/2.0;
+  midx = (nx-1.0)/2.0;
+  midy = (ny-1.0)/2.0;
   if ((rot = fabs(ObsLoc->crota2)) > 179 && rot < 181)
     {
     // rotate image by 180 degrees by a flip flip
@@ -401,8 +402,8 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
     ObsLoc->crota2 = rot;
     }
   // Center to nearest pixel - if OK to do so
-  xoff = round(x0 - mid);
-  yoff = round(y0 - mid);
+  xoff = round(x0 - midx);
+  yoff = round(y0 - midy);
   max_off = 20.0 / ObsLoc->cdelt1;
   if (arr->parent_segment &&
       arr->parent_segment->record &&
