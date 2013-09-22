@@ -359,8 +359,9 @@ int DoIt ()
 int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   {
   int nx, ny, ix, iy, i, j, xoff, yoff, max_off;
-  double rot, x0, y0, mid;
+  double rot, x0, y0, midx, midy;
   float *data;
+  float *data2;
   if (!arr || !ObsLoc)
     return(1);
   data = arr->data;
@@ -368,13 +369,14 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
   ny = arr->axis[1];
   x0 = ObsLoc->crpix1 - 1;
   y0 = ObsLoc->crpix2 - 1;
-  mid = (nx-1.0)/2.0;
+  midx = (nx-1.0)/2.0;
+  midy = (ny-1.0)/2.0;
   if ((rot = fabs(ObsLoc->crota2)) > 179 && rot < 181)
     {
     // rotate image by 180 degrees by a flip flip
     float val;
-    int half = nx / 2;
-    int odd = nx & 1;
+    int half = ny / 2;
+    int odd = ny & 1;
     if (odd) half++;
     for (iy=0; iy<half; iy++)
       {
@@ -394,8 +396,8 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
     ObsLoc->crota2 = rot;
     }
   // Center to nearest pixel - if OK to do so
-  xoff = round(x0 - mid);
-  yoff = round(y0 - mid);
+  xoff = round(x0 - midx);
+  yoff = round(y0 - midy);
   max_off = 20.0 / ObsLoc->cdelt1;
   if (arr->parent_segment &&
       arr->parent_segment->record &&
@@ -404,41 +406,27 @@ int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc)
       strncasecmp(arr->parent_segment->record->seriesinfo->seriesname, "aia", 3) &&
       abs(xoff) < max_off && abs(yoff) < max_off) 
     {
-    if (abs(xoff) >= 1)
+    if (abs(xoff) >= 1 || abs(yoff) >= 1)
       {
+      data2 = malloc(4*nx*ny);
       for (iy=0; iy<ny; iy++)
         {
-        float valarr[nx];
+	int jy = iy + yoff;
         for (ix=0; ix<nx; ix++)
           {
           int jx = ix + xoff;
-          if (jx < nx && jx >= 0)
-            valarr[ix] = data[iy*nx + jx];
+	  int idx = jy*nx + jx;
+	  int idx2 = iy*nx + ix;
+	  if (jx<0 || jx>=nx || jy<0 || jy>=ny)
+	    data2[idx2] = DRMS_MISSING_FLOAT;
           else
-            valarr[ix] = DRMS_MISSING_FLOAT;
+            data2[idx2] = data[idx];
           }
-        for (ix=0; ix<nx; ix++)
-          data[iy*nx + ix] = valarr[ix];
         }
       x0 -= xoff;
-      }
-    if (abs(yoff) >= 1)
-      {
-      for (ix=0; ix<nx; ix++)
-        {
-        float valarr[ny];
-        for (iy=0; iy<ny; iy++)
-          {
-          int jy = iy + yoff;
-          if (jy < ny && jy >= 0)
-            valarr[iy] = data[jy*nx + ix];
-          else
-            valarr[iy] = DRMS_MISSING_FLOAT;
-          }
-        for (iy=0; iy<ny; iy++)
-          data[iy*nx + ix] = valarr[iy];
-        }
       y0 -= yoff;
+      free(data);
+      arr->data = data2;
       }
     }
   // update center location
