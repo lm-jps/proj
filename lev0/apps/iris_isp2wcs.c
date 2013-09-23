@@ -123,7 +123,7 @@ wm2_rmax          =        628.50,
 wm_focus_cal      =       -100.00,
 wm_m1v            =        217.875,
 wm_offset2        =        113.57,
-wm_roll_bias      =          0.0000,
+wm_roll_bias      =         -0.646,
 wm_x_sign         =         -1.000,
 wm_xoff           =        103.00,
 wm_y_sign         =          1.000,
@@ -230,28 +230,29 @@ focusx = focus_temp[0]*focus_xregr[0]+focus_temp[1]*focus_xregr[1] - wm_focus_ca
 focusy = focus_temp[0]*focus_yregr[0]+focus_temp[1]*focus_yregr[1] - wm_focus_cal_y;
 
 // minus sign because solar coord change = -motion of image
-ccdx = ccdx - focusx*pzt_off_pixel;
-ccdy = ccdy - focusy*pzt_off_pixel;
+double ccdx2, ccdy2;
+ccdx2 = ccdx - focusx*pzt_off_pixel;
+ccdy2 = ccdy - focusy*pzt_off_pixel;
 
 // rotate these to solar X, Y at roll = 0
 double sth, cth;
 sth = sin((slit_roll_bias+sji_ccd_roll_bias)/RADEG);
 cth = cos((slit_roll_bias+sji_ccd_roll_bias)/RADEG);
-ccdx =  ccdx*cth + ccdy*sth;
-ccdy = -ccdx*sth + ccdy*cth;
+ccdx =  ccdx2*cth + ccdy2*sth;
+ccdy = -ccdx2*sth + ccdy2*cth;
 
 // add wedge motor image shifts from formulae in iris_wedge2solar_tl
 double fac = 2.*M_PI/240.;
 double th1 =  fac*(iwm1cpos-wm_m1v);
 double th2 =  fac*(iwm2cpos-wm_m1v+120.-wm_offset2);
-double xwm = wm_x_sign*(wm1_rmax*sin(th1) + wm2_rmax*sin(th2));
-double ywm = wm_y_sign*(wm1_rmax*cos(th1) + wm2_rmax*cos(th2));
+double xwm2 = wm_x_sign*(wm1_rmax*sin(th1) + wm2_rmax*sin(th2));
+double ywm2 = wm_y_sign*(wm1_rmax*cos(th1) + wm2_rmax*cos(th2));
 
 // rotate by roll bias wrt solar North at roll=0 degrees
 sth = sin((slit_roll_bias + wm_roll_bias)/RADEG);
 cth = cos((slit_roll_bias + wm_roll_bias)/RADEG);
-xwm =  xwm*cth + ywm*sth;
-ywm = -xwm*sth + ywm*cth;
+double xwm =  xwm2*cth + ywm2*sth;
+double ywm = -xwm2*sth + ywm2*cth;
 
 // add the center of the WM coordinate system:  note this is in solar
 // X & Y, not in the wedge motor or GT diode or CCD X & Y
@@ -259,8 +260,8 @@ xwm = xwm + wm_xoff;
 ywm = ywm + wm_yoff;
 
 // co-add both contributions
-double x = xwm + ccdx;
-double y = ywm + ccdy;
+double x2 = xwm + ccdx;
+double y2 = ywm + ccdy;
 
 // add GT bias offsets in ACS packets, only if ISS loop is not closed
 // if loop is closed, then PZTs will zero this (assuming they have
@@ -271,15 +272,15 @@ double y = ywm + ccdy;
 
 if (strncmp(iissloop,"CLOSED",6)) {
 // minus sign because solar coord change = -motion of image
-    x = x - igtpoffx*0.01;
-    y = y - igtpoffy*0.01;
+    x2 = x2 - igtpoffx*0.01;
+    y2 = y2 - igtpoffy*0.01;
 }
 
 // Now rotate everything to non-zero roll angle
 double sroll = sin(roll_angle/RADEG);
 double croll = cos(roll_angle/RADEG);
-x =  x*croll + y*sroll;
-y = -x*sroll + y*croll;
+double x =  x2*croll + y2*sroll;
+double y = -x2*sroll + y2*croll;
 
 double crvalxy[] = {x,y};
 
