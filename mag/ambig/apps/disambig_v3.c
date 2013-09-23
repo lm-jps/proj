@@ -515,7 +515,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.7 2013/07/29 18:47:14 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.8 2013/09/23 19:39:24 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask) {
@@ -1348,24 +1348,43 @@ int writeData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 	// Read in bitmap, zero out off-disk pixels in conf_disambig
 	// Jun 11 2013
 	// Also zero out ambig_flag for off-disk pixels, Jul 26
+	// Sep 23: Full disk has no bitmap, fixed
 	
-	DRMS_Segment_t *inSeg_bitmap = drms_segment_lookup(inRec, "bitmap");
-	DRMS_Array_t *inArray_bitmap = drms_segment_read(inSeg_bitmap, DRMS_TYPE_CHAR, &status);
-	if (status) {
-		printf("Bitmap reading error \n");
-		return 1;
-	}
-	char *bitmap = (char *) inArray_bitmap->data;
-  for (int i = 0; i < nx0; i++) {
-		for (int j = 0; j < ny0; j++) {
-		  idx = i + j * nx0;
-		  if (!bitmap[idx]) {
-		    confidence[idx] = 0;
-		    ambig_flag[idx] = 0;		// Jul 26
-		  }
+	if (harpflag) {
+  	DRMS_Segment_t *inSeg_bitmap = drms_segment_lookup(inRec, "bitmap");
+		DRMS_Array_t *inArray_bitmap = drms_segment_read(inSeg_bitmap, DRMS_TYPE_CHAR, &status);
+		if (status) {
+			printf("Bitmap reading error \n");
+			return 1;
+		}
+		char *bitmap = (char *) inArray_bitmap->data;
+  	for (int i = 0; i < nx0; i++) {
+			for (int j = 0; j < ny0; j++) {
+		  	idx = i + j * nx0;
+		  	if (!bitmap[idx]) {
+		   		confidence[idx] = 0;
+		   		ambig_flag[idx] = 0;		// Jul 26
+		  	}
+			}
+		}
+		drms_free_array(inArray_bitmap);
+	} else {						// Sep 23
+		float x0 = drms_getkey_float(inRec, "CRPIX1", &status) - 1.;
+		float y0 = drms_getkey_float(inRec, "CRPIX2", &status) - 1.;
+		float rsun_obs = drms_getkey_float(inRec, "RSUN_OBS", &status);
+		float dx = drms_getkey_float(inRec, "CDELT1", &status);
+		float r = rsun_obs / dx;
+		printf("x0=%f, y0=%f, r=%f, nx0=%d, ny0=%d\n", x0, y0, r, nx0, ny0);
+		for (int i = 0; i < nx0; i++) {
+			for (int j = 0; j < ny0; j++) {
+		  	idx = i + j * nx0;
+		  	if (hypot((i - x0), (j - y0)) > r) {
+		  	  confidence[idx] = 0;
+		   		ambig_flag[idx] = 0;
+		  	}
+			}
 		}
 	}
-	drms_free_array(inArray_bitmap);
 
 	// Copy over quality maps, update if necessary
 	
