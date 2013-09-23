@@ -1530,6 +1530,7 @@ void do_ingest()
         abortit(3);
       }
       if(!strstr(dp->d_name, ".dsf")) cntsleeps = 0;	//we saw a file
+      if((stat(stopfile, &stbuf) == 0) || abortflg) { break; } //signal to stop
     }
   }
   closedir(dfd);
