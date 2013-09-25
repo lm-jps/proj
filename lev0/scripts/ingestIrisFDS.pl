@@ -8,6 +8,7 @@ use warnings;
 use Data::Dumper;
 use IO::Dir;
 use POSIX qw(strftime);
+use Fcntl qw(:mode);
 use FindBin qw($Bin);
 use lib "$Bin/../../../base/libs/perl";
 use drmsLocks;
@@ -35,7 +36,6 @@ use constant kRetIngestIrisSAAHLZ => 6;
 use constant kRetTimeConvert      => 7;
 use constant kRetIngestPSQL       => 8;
 use constant kRetNoLock           => 9;
-use constant kRetShowInfo         => 10;
 
 # Product names
 use constant kProdOrbit           => "orbit";
@@ -74,6 +74,9 @@ $lock = new drmsNetLocks(&kLockFile);
 
 if (defined($lock))
 {
+    # make the lock file world writeable (let anybody run this script)
+    chmod(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, &kLockFile);
+
     # Read-in command-line arguments.
     $rv = &kRetSuccess;
     $args = GetArgs();

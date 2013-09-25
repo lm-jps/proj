@@ -14,6 +14,7 @@ use warnings;
 use Data::Dumper;
 use IO::Dir;
 use DateTime::Format::Strptime;
+use Fcntl qw(:mode);
 use FindBin qw($Bin);
 use lib "$Bin/../../../base/libs/perl";
 use drmsLocks;
@@ -85,6 +86,9 @@ $lock = new drmsNetLocks(&kLockFile);
 
 if (defined($lock))
 {
+    # make the lock file world writeable (let anybody run this script)
+    chmod(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, &kLockFile);
+
     # Read-in command-line arguments.
     $rv = &kRetSuccess;
     $args = GetArgs();
