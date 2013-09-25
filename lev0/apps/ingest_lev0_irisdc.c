@@ -1485,7 +1485,7 @@ int get_tlm(char *file, int rexmit, int higherver)
     if(vcdu_24_cnt_next != vcdu_24_cnt) {
       printk("*VCDU 24bit seq num out of sequence. exp: %u  rec: %u\n", 
 	    vcdu_24_cnt_next, vcdu_24_cnt);
-      seqerror = 1;
+      if(vcdu_24_cnt_next != 0) seqerror = 1;
       if(vcdu_24_cnt_next > vcdu_24_cnt) {
         printk("*NOTE: VCDU 24 bit counter retarded\n"); //cntr does go thru 0
         printk("*NOTE: gap report will be inaccurate (tbd)\n");
@@ -1505,7 +1505,7 @@ int get_tlm(char *file, int rexmit, int higherver)
     if(vcdu_seq_num_next != vcdu_seq_num) {
       printk("*IM_PDU seq num out of sequence. exp: %lld  rec: %lld\n", 
 	    vcdu_seq_num_next, vcdu_seq_num);
-      seqerror = 1;
+      if(vcdu_seq_num_next != 0) seqerror = 1;
       if(vcdu_seq_num_next > vcdu_seq_num) {
         printk("*NOTE: IM_PDU 42 bit counter retarded\n");
         printk("*NOTE: gap report will be inaccurate\n");
