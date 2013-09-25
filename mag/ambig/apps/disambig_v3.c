@@ -111,7 +111,7 @@
 //#define OLD 1			// Old version of ambig_()
 //#define OLDBITMAP 1	// Old bitmap
 //#define WRITEBITMAP 1		// Output bitmap, etc. for test purpose
-#define NO_DISAMBIG 1
+//#define NO_DISAMBIG 1
 
 int getAmbCode (char prob)
 {
@@ -516,7 +516,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.9 2013/09/25 20:56:42 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.10 2013/09/25 21:02:16 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask_t) {            // Sep 25, changed to useMask_t, NOISEMASK
