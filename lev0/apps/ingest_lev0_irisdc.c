@@ -171,6 +171,7 @@ typedef enum
 static short sumsptrl, sumspat;
 static int printflg = 0;
 static int errskip=0;
+static int seqerror = 0;
 static int retardskip=0;
 static int nx, ny, npix;
 static int gLoop = 1;
@@ -488,6 +489,11 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     return;
   }
   printk("*Closing image for fsn = %u\n", fsn);
+  if(seqerror) {
+    printk("**Sequence error during fsn %u. No closed image\n", fsn);
+    seqerror = 0;
+    return;
+  }
   if(imgstat_iris(img, &stat)) {
     printk("**Error on imgstat_iris() for fsn = %u\n", fsn);
   }
@@ -519,7 +525,6 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     printk("ERROR on setkey_int for LUTID\n");
   }
   status = drms_setkey_short(rs, "SUMSPTRL", sumsptrl);
-  //printk("##keyword sumsptrl keyword set = %d fsn=%u\n", sumsptrl,fsn);
   status = drms_setkey_short(rs, "SUMSPAT", sumspat);
   drms_setkey_int(rs, "TAPCODE", img->tap);
   //drms_setkey_int(rs, "TAPCODE", tapcode);  //don't use from the img struct
@@ -1480,6 +1485,7 @@ int get_tlm(char *file, int rexmit, int higherver)
     if(vcdu_24_cnt_next != vcdu_24_cnt) {
       printk("*VCDU 24bit seq num out of sequence. exp: %u  rec: %u\n", 
 	    vcdu_24_cnt_next, vcdu_24_cnt);
+      seqerror = 1;
       if(vcdu_24_cnt_next > vcdu_24_cnt) {
         printk("*NOTE: VCDU 24 bit counter retarded\n"); //cntr does go thru 0
         printk("*NOTE: gap report will be inaccurate (tbd)\n");
@@ -1499,6 +1505,7 @@ int get_tlm(char *file, int rexmit, int higherver)
     if(vcdu_seq_num_next != vcdu_seq_num) {
       printk("*IM_PDU seq num out of sequence. exp: %lld  rec: %lld\n", 
 	    vcdu_seq_num_next, vcdu_seq_num);
+      seqerror = 1;
       if(vcdu_seq_num_next > vcdu_seq_num) {
         printk("*NOTE: IM_PDU 42 bit counter retarded\n");
         printk("*NOTE: gap report will be inaccurate\n");
@@ -1561,8 +1568,6 @@ int get_tlm(char *file, int rexmit, int higherver)
       nxbits = (unsigned int)(cnt1 >> 4) & 0x0f;
       nybits = (unsigned int)cnt1 & 0x0f;
       sumsptrl = (short)nybits;	//for keyword SUMSPTRL (reversed)
-      //printk("##sumsptrl=%d from cbuf+36 >>4 & 0x0f\n", sumsptrl);
-
       sumspat = (short)nxbits;		//for keyword SUMSPAT (reversed)
       //printk("cnt1 = %0x  nxbits/nybits = %d/%d\n", cnt1, nxbits, nybits);
       //nxbits = 0;		//force them to 0 for now !!TEMP
