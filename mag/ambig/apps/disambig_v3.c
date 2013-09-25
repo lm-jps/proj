@@ -111,7 +111,7 @@
 //#define OLD 1			// Old version of ambig_()
 //#define OLDBITMAP 1	// Old bitmap
 //#define WRITEBITMAP 1		// Output bitmap, etc. for test purpose
-//#define NO_DISAMBIG 1
+#define NO_DISAMBIG 1
 
 int getAmbCode (char prob)
 {
@@ -146,11 +146,11 @@ int getData(DRMS_Record_t *inRec, float *Bx, float *By, float *Bz, float *dBt,
 
 int getBitmap(DRMS_Record_t *inRec, int *bitmap, float *Bx, float *By, float *Bz,
 			  int geometry, int *useMask, int nrt, int *offset, int nerode, int ngrow,
-			  int *ll, int *ur, int *ll0, int *ur0, float bthresh0, float bthresh1);		// offset changed to pointer Jun 27 Xudong
+			  int *ll, int *ur, int *ll0, int *ur0, float bthresh0, float bthresh1, char *maskQuery);		// offset changed to pointer Jun 27 Xudong
 
 // Get noise esimation from Yang's code
 
-int getNoiseMask(DRMS_Record_t *inRec, float *noiseMask, int *ll, int *ur);
+int getNoiseMask(DRMS_Record_t *inRec, float *noiseMask, int *ll, int *ur, char *maskQuery);
 
 // Get noise esimation using a linear threshold
 
@@ -384,10 +384,11 @@ int DoIt(void)
 		int *bitmap = (int *) (calloc(nxny, sizeof(int)));
 		
 		int offset_t = offset;
-		
+		char maskQuery[100];        // query name for noise mask, sep 23
+        
 		if (getBitmap(inRec, bitmap, Bx, By, Bz, 
 					  geometry, &useMask_t, nrt, &offset_t, nerode, ngrow,
-					  ll, ur, ll0, ur0, bthresh0, bthresh1)) {			// Offset changed to pointer Jun 27 2013 Xudong
+					  ll, ur, ll0, ur0, bthresh0, bthresh1, maskQuery)) {			// Offset changed to pointer Jun 27 2013 Xudong
 			free(bitmap);
 			free(Bx); free(By); free(Bz);
 			printf("Creating bitmap failed, image #%d skipped.\n", irec);
@@ -515,27 +516,18 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.8 2013/09/23 19:39:24 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.9 2013/09/25 20:56:42 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
-		if (useMask) {
-			drms_setkey_int(outRec, "USEMASK", 1);
-			drms_setkey_int(outRec, "C_NOISE", offset);		// offset
+		if (useMask_t) {            // Sep 25, changed to useMask_t, NOISEMASK
+			drms_setkey_int(outRec, "NOISEMASK", 1);
+            drms_setkey_string(outRec, "MASKINFO", maskQuery);
 		} else {
-			drms_setkey_int(outRec, "USEMASK", 0);
-			drms_setkey_int(outRec, "C_NOISE", offset);
+			drms_setkey_int(outRec, "NOISEMASK", 0);
+            drms_setkey_string(outRec, "MASKINFO", "Linear");
 		}
 		// For debug
 		drms_setkey_string(outRec, "CODENAME", module_name);
-#ifdef OLDBITMAP
-    drms_setkey_string(outRec, "BM_VERS", " ");
-#else
-		if (useMask_t) {
-			drms_setkey_string(outRec, "BM_VERS", "MASK");
-		} else {
-			drms_setkey_string(outRec, "BM_VERS", "LIN");
-		}
-#endif
 
 		// =======================================
 		
@@ -883,7 +875,7 @@ int getData(DRMS_Record_t *inRec, float *Bx, float *By, float *Bz, float *dBt,
 
 int getBitmap(DRMS_Record_t *inRec, int *bitmap, float *Bx, float *By, float *Bz,
 			  int geometry, int *useMask, int nrt, int *offset, int nerode, int ngrow,
-			  int *ll, int *ur, int *ll0, int *ur0, float bthresh0, float bthresh1)
+			  int *ll, int *ur, int *ll0, int *ur0, float bthresh0, float bthresh1, char *maskQuery)
 {
 	
 	int status = 0;
@@ -925,7 +917,7 @@ int getBitmap(DRMS_Record_t *inRec, int *bitmap, float *Bx, float *By, float *Bz
 	// Get noise estimation and thresholding
 
 	if (*useMask &&
-		!(getNoiseMask(inRec, noiseMask, ll, ur))) {	// get Yang's noise estimate
+		!(getNoiseMask(inRec, noiseMask, ll, ur, maskQuery))) {	// get Yang's noise estimate
         
 		offset_t = *offset;		// specified by argument
 		SHOW("Using noise mask estimate\n");
@@ -976,7 +968,7 @@ int getBitmap(DRMS_Record_t *inRec, int *bitmap, float *Bx, float *By, float *Bz
 
 // Get noise esimation from Yang's code
 
-int getNoiseMask(DRMS_Record_t *inRec, float *noise, int *ll, int *ur)
+int getNoiseMask(DRMS_Record_t *inRec, float *noise, int *ll, int *ur, char *maskQuery)
 {
 	
 	int status = 0;
@@ -1002,7 +994,7 @@ int getNoiseMask(DRMS_Record_t *inRec, float *noise, int *ll, int *ur)
 	}
 	x0 -= 1; y0 -= 1;
 	
-	status = noisemask(tobs, xDim, yDim, x0, y0, r, vr, noise_fd);
+	status = noisemask(tobs, xDim, yDim, x0, y0, r, vr, noise_fd, maskQuery);
     
     if (status) {               // Added Jun 26 2013, Xudong
         free(noise_fd);

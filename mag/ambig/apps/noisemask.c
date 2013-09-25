@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/imagefromchebyshev.c"
+#include "imagefromchebyshev.c"
 
 /* cmd-line parameters */
 #define kRecSetIn       "in"
@@ -18,12 +18,13 @@
 #define kSegOut         "segout"
 #define kNOTSPECIFIED   "not specified"
 
-int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image) 
+int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image, maskQuery)
     double *image;
     int xDim, yDim;
     float xcen, ycen, rsun;
     float vrcenter;
     TIME tobs;
+    char *maskQuery;        // Sep 25
  {
     CmdParams_t *params = &cmdparams;
     int valid, status = 0;
@@ -79,6 +80,7 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
     sprintf(vr_start_str, "%d",  vr_start);
     sprintf(vr_stop_str, "%d",  vr_stop);
     sprintf(inQueryfinal, "%s[%s-%s][%d]", inRec->seriesinfo->seriesname, vr_start_str, vr_stop_str, MaskIndex);
+     sprintf(maskQuery, "%s", inQueryfinal);
     printf("%s\n", inQueryfinal);
     drms_close_records(inRS, DRMS_FREE_RECORD);
 
@@ -194,6 +196,10 @@ int noisemask(tobs, xDim, yDim, xcen, ycen, rsun, vrcenter, image)
                 }
           }
 //printf("status=%d, nrecs=%d, ncoef=%d\n", status, nrecs, ncoef);
+     
+     // Sep 23
+     free(inQueryfinal); free(vr_start_str); free(vr_stop_str); free(mask);
+     
     return 0;
 }
 /*
