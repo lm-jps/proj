@@ -171,6 +171,7 @@ typedef enum
 static short sumsptrl, sumspat;
 static int printflg = 0;
 static int errskip=0;
+static int seqerror = 0;
 static int retardskip=0;
 static int nx, ny, npix;
 static int gLoop = 1;
@@ -292,7 +293,7 @@ int nice_intro ()
   int usage = cmdparams_get_int (&cmdparams, "h", NULL);
   if (usage)
     {
-    printf ("Usage:\ningest_lev0_irisdc [-vh] "
+    printf ("Usage:\ningest_lev0_irisdc_jim [-vh] "
 	"vc=<virt chan> indir=</dir> [outdir=</dir>] [pipedir=</dir>] [logfile=<file>]\n"
 	"  -h: help - show this message then exit\n"
 	"  -v: verbose\n"
@@ -488,6 +489,11 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     return;
   }
   printk("*Closing image for fsn = %u\n", fsn);
+  if(seqerror) {
+    printk("**Sequence error during fsn %u. No closed image\n", fsn);
+    seqerror = 0;
+    return;
+  }
   if(imgstat_iris(img, &stat)) {
     printk("**Error on imgstat_iris() for fsn = %u\n", fsn);
   }
@@ -551,32 +557,44 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   drms_setkey_double(rs, "IMGFPT", fpt);
   drms_setkey_double(rs, "DATE", CURRENT_SYSTEM_TIME);
   do_quallev0(rs, img, fsn);		//set the QUALLEV0 keyword
+  sprintf(queryext, "%s[%d]", ispquery, fsn);
   if(!timeoutclose) {
     rsisp = RSISP;      //saved rec set pointer for ISP
   }
   else {                //must reopen
     timeoutclose = 0;
     /* open ISP for drms series. ispquery saved from write_hk_to_drms_iris.c */
-    sprintf(queryext, "%s[? I_SQ_FRAME_SN=%d ?]", ispquery, fsn);
-    printk("queryext = %s\n", queryext);  //!!TEMP
-    rsisp = drms_open_records(drms_env, queryext, &drms_status);
+    //sprintf(queryext, "%s[? I_SQ_FRAME_SN=%d ?]", ispquery, fsn);
+    //printk("queryext = %s\n", queryext);  //!!TEMP
+    //rsisp = drms_open_records(drms_env, queryext, &drms_status);
+    rsisp = NULL;	//force reopen
   }
 
-/****!!TEMP noop***************************************************
-    if(!rsisp || !rsisp->n || rsisp->n > 2 || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
-***********************************************************************/
     if(!rsisp || !rsisp->n || !rsisp->records || (fsn != fsnISP && !fsnISP_noop)) {
-      printk("ERROR: Can't open isp record to put keywords in lev0.\n");
-      printk("       The ISP was not received prior to the image for fsn %lu\n", fsn);
-      printk("       Proceed anyway.\n");
-      printk("drms_status=%d, rsisp=%lu, fsn=%lu, fsnISP=%lu, fsnISP_noop=%lu\n",
+      printk("Open ISP %s\n", queryext);
+      rsisp = drms_open_records(drms_env, queryext, &drms_status);
+      if(!rsisp || !rsisp->n || !rsisp->records ) {
+        printk("ERROR: Can't open isp record to put keywords in lev0.\n");
+        printk("       The ISP was not received prior to the image for fsn %lu\n", fsn);
+        printk("       Look for 'seq num out of sequence' error in log\n");
+        printk("drms_status=%d, rsisp=%lu, fsn=%lu, fsnISP=%lu, fsnISP_noop=%lu\n",
 		drms_status, rsisp, fsn, fsnISP, fsnISP_noop); //!!TEMP
+        printk("       **ERROR: Can't close_image() for fsn = %u\n", fsn);
+        img->initialized = 0;		//indicate image is ready for use again
+        return;		//New. abort. 11Sep2013
+      }
     }
-    else if(rsisp->n > 2) {
-      printk("ERROR: Got rsisp->n > 2. At end of transmission?\n");
-      printk("       Proceed anyway.\n");
+    else if(rsisp->n > 2 || rsisp->n < 0) {
+      printk("Open ISP %s\n", queryext);
+      rsisp = drms_open_records(drms_env, queryext, &drms_status);
+      if(!rsisp || !rsisp->n || !rsisp->records ) {
+        printk("ERROR: Got bad drms_open_records() pointer for isp. fsn=%lu\n", fsn);
+        printk("       Look for 'seq num out of sequence' error in log\n");
+        printk("       **ERROR: Can't close_image() fsn=%u\n", fsn);
+        img->initialized = 0;		//indicate image is ready for use again
+        return;		//New. abort. 11Sep2013
+      }
     }
-    else {
       fsnISP_noop = 0;
       rsispr = rsisp->records[0];
       //NOTE: Can't use drms_copykeys() because source is long keywords
@@ -936,7 +954,6 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       drms_close_records(rsisp, DRMS_INSERT_RECORD);
       //printk("!!TEMP set rsisp = 0 in close_image()\n");
       //RSISP = 0;  
-    }
   //Now rotate image counterclokwise 90 degrees
   nnx = img->nx;	//this is always nx > ny 
   nny = img->ny;
@@ -950,6 +967,11 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   //status = drms_segment_write(seg, array, 0);
   if (status) {
     printk("ERROR: drms_segment_write error=%d for fsn=%u\n", status, fsn);
+    printk("ABORT: close_image(). No drms_close_record() done\n");
+    array->data = NULL;        // must do before free 
+    if(array) drms_free_array(array);
+    img->initialized = 0;		//indicate image is ready for use again
+    return;				//Abort. New 11Sep2013
   }
   add_small_array(rs, array, 8, 16); //add Phil's png and small fits
 
@@ -1239,9 +1261,15 @@ int fsn_change_rexmit()
 
   if(fsn_prev != 0) {   // close image of prev fsn if not 0 
     if(rsc) {		//make sure have created record
-      close_image(rsc, segmentc, oldArray, ImgO, fsn_prev);
-      imagecnt++;
-      fileimgcnt++;
+      if(errskip) {     //prev fsn had error. don't try to close
+          errskip = 0;
+          printk("*Skip Closing image for fsn = %u\n", fsn_prev);
+      }
+      else {
+        close_image(rsc, segmentc, oldArray, ImgO, fsn_prev);
+        imagecnt++;
+        fileimgcnt++;
+      }
     }
     else {
       printk("**ERROR: Null record ptr for an rexmit image fsn=%u\n",fsn_prev);
@@ -1465,6 +1493,7 @@ int get_tlm(char *file, int rexmit, int higherver)
     if(vcdu_24_cnt_next != vcdu_24_cnt) {
       printk("*VCDU 24bit seq num out of sequence. exp: %u  rec: %u\n", 
 	    vcdu_24_cnt_next, vcdu_24_cnt);
+      seqerror = 1;
       if(vcdu_24_cnt_next > vcdu_24_cnt) {
         printk("*NOTE: VCDU 24 bit counter retarded\n"); //cntr does go thru 0
         printk("*NOTE: gap report will be inaccurate (tbd)\n");
@@ -1484,6 +1513,7 @@ int get_tlm(char *file, int rexmit, int higherver)
     if(vcdu_seq_num_next != vcdu_seq_num) {
       printk("*IM_PDU seq num out of sequence. exp: %lld  rec: %lld\n", 
 	    vcdu_seq_num_next, vcdu_seq_num);
+      seqerror = 1;
       if(vcdu_seq_num_next > vcdu_seq_num) {
         printk("*NOTE: IM_PDU 42 bit counter retarded\n");
         printk("*NOTE: gap report will be inaccurate\n");
@@ -2168,9 +2198,9 @@ void setup()
   getcwd(cwdbuf, 126);
   sprintf(idstr, "Cwd: %s\nCall: ", cwdbuf);
   if(grounddata)
-    sprintf(string, "ingest_lev0_irisdc -g started as pid=%d user=%s\n", getpid(), username);
+    sprintf(string, "ingest_lev0_irisdc_jim -g started as pid=%d user=%s\n", getpid(), username);
   else
-    sprintf(string, "ingest_lev0_irisdc [-A] started as pid=%d user=%s\n", getpid(), username);
+    sprintf(string, "ingest_lev0_irisdc_jim [-A] started as pid=%d user=%s\n", getpid(), username);
   strcat(idstr, string);
   printk("*%s", idstr);
   if(restartflg) printk("-r ");
