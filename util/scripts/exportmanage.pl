@@ -4,15 +4,15 @@
 #  ssh jsoc@j0
 #  cd /home/jsoc/exports
 #  rm keep_running
-#  exportmanage.pl -jsocdev &
+#  exportmanage.pl -jsocdev procser=jsoc.export_procs &
 # To start the web version for jsoc.stanford.edu repeat the above but do:
 #  rm keep_running_web
-#  exportmanage.pl -jsocweb &
+#  exportmanage.pl -jsocweb procser=jsoc.export_procs&
 # At some point, I'll add the production version of the script, which
 #  would then be run as "exportmanage.pl -jsocpro &"
 # To start the debug test version for jsoc2 do:
 #  rm keep_running_test
-#  exportmanage.pl -jsoctest &
+#  exportmanage.pl -jsoctest procser=jsoc.export_procs &
 
 # To test the entire export workflow:
 #  1. Run export manage like so:
@@ -270,7 +270,7 @@ while (1)
       # jsoc_export_manage died in response to an unhandled signal
       my($sig) = $? & 127;
        
-       QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "DB Host: $dbhost", "Unhandled signal: $sig.\n");
+       QueueMessage($msgq, &kMsgType1, "Export Daemon Execution Failure!!", &kMailMessage2, "DB Host: $dbhost\n", "Unhandled signal: $sig.\n");
    } 
    elsif (($? >> 8) != 0)
    {
