@@ -4,7 +4,7 @@
 
 extern int INVALtime;
 //extern unsigned int cropid;
-extern unsigned int fsnx;
+//extern unsigned int fsnx;
 
 static int HK_getkey_int(HK_Keyword_t *isp, char *key)
 {
@@ -232,7 +232,7 @@ void HMI_compute_exposure_times(DRMS_Record_t *rec, HK_Keyword_t *isp, int flg)
   //int iifuvfdb = HK_getkey_int(isp, "IIFUVFDB");
   //int iinuvfdb = HK_getkey_int(isp, "IINUVFDB");
   //int iisjifdb = HK_getkey_int(isp, "IISJIFDB");
-printk("fsnx = %d\n", fsnx);
+//printk("fsnx = %d\n", fsnx);
 printk("iicrsid = %d\n", iicrsid);
 printk("ifwpos = %d\n", ifwpos);
 //printk("iifuvfdb = %d\n", iifuvfdb);
