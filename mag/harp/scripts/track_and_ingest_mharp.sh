@@ -16,7 +16,7 @@
 #
 # Usage:
 #
-#  track_and_ingest_mharp.sh [-naefd] [-i N] [-g N] dest_dir ...
+#  track_and_ingest_mharp.sh [-nMaefd] [-i N] [-g N] dest_dir ...
 #    mask_series harp_series harp_log_series
 #
 # where:
@@ -44,6 +44,9 @@
 #      (2) Less track history is retained, allowing faster startup and 
 #      more compact checkpoint files.  (3)  Both
 #      finalized and currently-pending tracks are ingested into DRMS.
+#   -M indicates MDI mode: (1) MDI magnetograms in mdi.fd_M_96m_lev182
+#      are used; (2) force-run (-f) and developer paths (-d) implied;
+#      (3) Some tracker parameters change.
 #   -a says that currently-pending tracks should be ingested also.
 #      (-a = ingest all tracks).  -n implies -a, but sometimes -a
 #      is useful without -n for testing definitive tracks, to ingest 
@@ -84,7 +87,7 @@ progname=`basename $0`
 # under SGE, $0 is set to a nonsense name, so use our best guess instead
 default_progname=track_and_ingest_mharp.sh
 if [ `expr "$progname" : '.*track.*'` == 0 ]; then progname=$default_progname; fi
-USAGE="Usage: $default_progname [-naefd] [-i N] [-g N] dest_dir mask_series harp_series harp_log_series"
+USAGE="Usage: $default_progname [-nMaefd] [-i N] [-g N] dest_dir mask_series harp_series harp_log_series"
 
 ## # tempfile stuff: commented out
 ## TEMPROOT=/tmp/harps-${progname}
@@ -168,24 +171,28 @@ developer_path=0
 track_opts=""
 ingest_all=0
 nrt_mode=0
+mdi_mode=0
 skip_roi=0
 gap_fill=0
 force_run=0
 eat_only=0
-while getopts "hnadfeg:i:" o; do
+while getopts "hnMadfeg:i:" o; do
     case "$o" in
-	i)    first_track="$OPTARG"
-	      track_opts="$track_opts -i $first_track";;
-	g)    skip_roi="$OPTARG"
-	      gap_fill=1;;
-	d)    developer_path=1
-	      track_opts="$track_opts -d";;
-	a)    ingest_all=1;;
-	e)    eat_only=1;;
-	f)    force_run=1;;
-	n)    nrt_mode=1;;
-	[?h]) echo "$USAGE" 1>&2
-	      exit 2;;
+	i)  first_track="$OPTARG"
+	    track_opts="$track_opts -i $first_track";;
+	g)  skip_roi="$OPTARG"
+	    gap_fill=1;;
+	d)  developer_path=1
+	    track_opts="$track_opts -d";;
+	a)  ingest_all=1;;
+	e)  eat_only=1;;
+	f)  force_run=1;;
+	n)  mdi_mode=0
+	    nrt_mode=1;;
+	M)  nrt_mode=0
+	    mdi_mode=1;;
+     [?h])  echo "$USAGE" 1>&2
+	    exit 2;;
     esac
 done
 shift `expr $OPTIND - 1`
@@ -210,8 +217,39 @@ if [ "$nrt_mode" -eq 1 ]; then
     #   do not output match information
     ingest_opts="trec=1 tpad=0 tmin=1 match=0"
     do_match=0
+elif [ "$mdi_mode" -eq 1 ]; then
+    # MDI tracker options:
+    #   definitive mags + pgrams
+    mag_series=mdi.fd_M_96m_lev182
+    pgram_series=mdi.fd_M_96m_lev182 # unused in presence of force_run=1
+    #   (set up mdi-specific tracker params this way)
+    # track_opts="$track_opts -p XXX"
+    #   mdi-specific tracker parameters
+    track_opts="$track_opts -s mdi_track_setup"
+    #   don't check for gaps
+    force_run=1
+    #   developer paths
+    developer_path=1
+    track_opts="$track_opts -d"
+    #   retain all history
+    track_opts="$track_opts -r inf"
+    if [ "$ingest_all" -eq 0 ]; then
+        # ingest only new regions -- usual path
+        listfiles="track-new.txt"
+    else
+        # ingest both new and pending regions -- useful for tests
+        listfiles="track-new.txt,track-pending.txt"
+    fi
+    # ingester options:
+    #   accept default trec
+    #   set tpad to 1 day (15 images)
+    #   set cadence to 96 minutes (5760s)
+    #   filter M-TARPs having fewer than tmin appearances
+    #   do output match information
+    ingest_opts="tmin=3 tpad=15 cadence=5760 match=1"
+    do_match=1
 else
-    # tracker options:
+    # regular HMI tracker options:
     # definitive mags + pgrams
     mag_series=hmi.M_720s
     pgram_series=hmi.Ic_noLimbDark_720s
@@ -433,7 +471,7 @@ HAVE_BEGUN=1 && EXIT_STATUS=2
 if [ $eat_only = 0 ]; then
   echo "${progname}: Beginning tracking."
   cmd=track_hmi_production_driver_stable.sh 
-  log_and_run "$cmd" $track_opts "$mask_series" "$mag_series" "$dest_dir" || exit
+  log_and_run "$cmd" $track_opts "$mask_series" "$mag_series" "$dest_dir"
   # "$cmd" $track_opts "$mask_series" "$mag_series" "$dest_dir" 
   cmd="shell code"
   echo "${progname}: Finished tracking."
