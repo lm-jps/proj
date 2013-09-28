@@ -16,7 +16,7 @@
 #
 # usage:
 #   track_hmi_production_driver_stable.sh ...
-#       [ -i N ] [ -r R ] [ -p PARS ] [-m] [-g N] [-d] mask_series mag_series dest_dir
+#      [ -md ] [-i N] [-r R] [-p PARS] [-s SETUP] [-g N] mask_series mag_series dest_dir
 #
 # where:
 #   mask_series is a mask data series from JSOC (includes T_REC range)
@@ -39,6 +39,9 @@
 #      names from `tracker_params' in track_hmi_production.m, for example:
 #      -p "tau=0.19;final_time=0.5;"  
 #      For experts only.
+#   -s introduces an argument allowing setup for a particular instrument, by
+#      asking the tracker to run a function SETUP that resets tracker parameters.
+#      Default results in standard HMI parameters.
 #   -m is a flag to generate a movie from the results (default is no movie).
 #   -g says to use gap-filling mode for new tracks, and supplies a 
 #      required argument N.  In this mode, new tracks will be checked
@@ -77,7 +80,7 @@ set -e
 progname=`basename $0`
 # under SGE, $0 is set to a nonsense name, so use our best guess instead
 if [ `expr "$progname" : '.*track.*'` == 0 ]; then progname=track_hmi_production_driver; fi
-USAGE="Usage: $progname [-i N] [-r R] [-p PARS] [-m] [-g N] [-d] mask_series mag_series dest_dir"
+USAGE="Usage: $progname [-md] [-i N] [-r R] [-s SETUP] [-p PARS] [-g N] mask_series mag_series dest_dir"
 # echo the arguments, for repeatability
 echo "${progname}: Invoked as:" "$0" "$@"
 
@@ -107,11 +110,13 @@ gap_fill=nan
 developer_path=0
 matlab_ver=r2010b
 params=""
-while getopts "dmg:p:i:r:v:" o; do
+setup=""
+while getopts "dmg:p:s:i:r:v:" o; do
     case "$o" in
 	i)    first_track="$OPTARG";;
 	r)    retain_history="$OPTARG";;
 	p)    params="$OPTARG";;
+	s)    setup="$OPTARG";;
 	g)    gap_fill="$OPTARG";;
 	m)    make_movie=1;;
 	d)    developer_path=1;;
@@ -229,6 +234,7 @@ try,
   retain_history=$retain_history;
   gap_fill=$gap_fill;
   make_movie=$make_movie;
+  setup='$setup';
   params='$params';
   track_hmi_production;
   fprintf(1, '\\nEXIT_STATUS_OK: clean exit from Matlab.\\n');
