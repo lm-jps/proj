@@ -130,7 +130,7 @@ static double seg_model_ar_M_Ic_noLD_V1_720s[] = {
   0.0161017226,    0.0000000000, 0.9657853719, 165305.443351000, 0.4012304623,  0.0000000000};
 static double seg_model_alpha_M_Ic_noLD_V1_720s[] = {0, -4.0};
 
-// in development for Ic_noLimbDark_720s, October 2011
+// production model for Ic_noLimbDark_720s, October 2011
 // scaled from original M_IC_noLD_720s model by 1.3 along M coordinate
 // latter had been already, in turn:
 // scaled from M_Ic_720s models above by 13500 along Ic coordinate
@@ -145,6 +145,22 @@ static double seg_model_ar_M_Ic_noLD_720s[] = {
   0.1186993629, -252.2891539415, 1.0089880054,  11694.129910200, 0.8242070161,  3.2148263398,
   0.0161017226,    0.0000000000, 0.9657853719, 279366.199263190, 0.4012304623,  0.0000000000};
 static double seg_model_alpha_M_Ic_noLD_720s[] = {0, -4.0};
+
+// in development for masks for the mdi resident archive, August 2013.
+// scaled from hmi-production M_IC_noLD_720s model (just above) by 1.4 along M coordinate,
+//   in accordance with Table 1 in the Liu et al., 2012, HMI/MDI calibration paper.  
+//   (This 1.4x is in addition to the 1.3x used by the model we used as a starting point.)
+static double seg_model_qs_mdi_fdM_II_96m[] = {
+  0.6767003790, 0.0000000000, 0.9867689225,  456.00425823949, 0.7329523679, 0.0000000000,
+  0.3051652496, 0.0000000000, 1.0246812160,  709.49394125661, 0.7013849462, 0.0000000000,
+  0.0181343713, 0.0000000000, 0.9852468761,15620.84945506467, 0.8106604708, 0.0000000000};
+static double seg_model_ar_mdi_fdM_II_96m[] = {
+  0.3732497758, -972.18362650136, 0.9978206222, 291343.55821297632, 0.7733031552, -2.94343443702,
+  0.3732497758,  972.18362650136, 0.9978206222, 291343.55821297632, 0.7733031552,  2.94343443702,
+  0.1186993629,  353.20481551810, 1.0089880054,  22920.49462399200, 0.8242070161, -4.50075687572,
+  0.1186993629, -353.20481551810, 1.0089880054,  22920.49462399200, 0.8242070161,  4.50075687572,
+  0.0161017226,    0.00000000000, 0.9657853719, 547557.75055585231, 0.4012304623,  0.00000000000};
+static double seg_model_alpha_mdi_fdM_II_96m[] = {0, -4.0};
 
 
 /*
@@ -236,6 +252,26 @@ seg_model_M_Ic_noLD_720s = {
   }
 };
 
+static seg_modelset_t 
+seg_model_mdi_fd_M_II_96m = {
+  SEG_BUILTIN_PREFIX "/mdi.fd_M_II_96m.production",
+  "Model using su_turmon.mdi_II_96m and mdi.fd_M_96m_lev182",
+  "1 from 2013.09.01",
+  2, 
+  2, "var,diag-then-upper", // always like this
+  seg_model_alpha_mdi_fdM_II_96m,
+  {
+    // this is a list of seg_onemodel_t structures
+    {"quiet Sun", 
+     sizeof(seg_model_qs_mdi_fdM_II_96m)/SEG_MODEL_ONEROW, 
+     seg_model_qs_mdi_fdM_II_96m}, 
+    {"active region", 
+     sizeof(seg_model_ar_mdi_fdM_II_96m)/SEG_MODEL_ONEROW, 
+     seg_model_ar_mdi_fdM_II_96m}
+  }
+};
+
+
 // keep the namespace clean
 #undef SEG_MODEL_ONEROW
 
@@ -247,6 +283,7 @@ seg_models_known[] = {
   &seg_model_M_Ic_720s, 
   &seg_model_M_Ic_noLD_V1_720s,  // unused in production
   &seg_model_M_Ic_noLD_720s, 
+  &seg_model_mdi_fd_M_II_96m,    // draft model for mdi
   NULL}; // MUST be null-terminated
 
 
