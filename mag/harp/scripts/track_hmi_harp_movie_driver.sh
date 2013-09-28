@@ -2,47 +2,61 @@
 # (line below is for qsub)
 #$ -S /bin/sh
 # 
-# sh driver to run the Matlab HARP-frame finder on data from JSOC
+# sh driver: make quick-look movie from HARP data in DRMS
+#
+# This user-callable script produces a quick-look movie, or individual movie 
+# frames, from a HARP data series in DRMS.  It is a wrapper around a Matlab script.
 #
 # usage:
-#   track_hmi_harp_movie_driver.sh [-fmld] mask_series harp_series dest_dir
+#   track_hmi_harp_movie_driver.sh [-fmldEM] [-h QUAL] mask_series harp_series dest_dir
 # where:
 #   mask_series is a mask data series from JSOC, with a T_REC qualifier
 #   harp_series is a HARP series where the times above are looked up
 #   dest_dir is a destination directory for file and state input and output
 # and:
-#   -f is a flag to generate individual frames from the results (default is no frames)
-#   -m is a flag to generate a movie from the results (default is no movie)
-#   -l is a flag to save the matlab log file into dest_dir
-#   -d is a flag which signals to use the developer MATLABPATH (~turmon) rather
-#      than the regular production path.
-# One or both of -f or -m should be supplied, otherwise this is a no-op.
+#   -f = generate individual frames from the results (default is no frames).
+#   -m = generate a movie from the results (default is no movie).
+#   -l = save the matlab log file into dest_dir.
+#   -d = use the developer MATLABPATH (~turmon) and not the production path.
+#   -E = use query engine for metadata requests
+#   -M = invoke MDI mode.
+#   -h QUAL = qualify HARPs-to-plot at each T_REC with this SQL clause.
+# One or both of -f or -m must be supplied, otherwise this is a no-op.
 #
-# * Both masks and corresponding HARPs are needed.  Times are defined using the
-# mask series, and the HARPs at those times are looked up in the HARP series.  
-# Thus, the HARP series is NOT qualified by HARP number or time.
-# * Thus, the mask_series is typically of the form: 
-#     any_series[any_range] 
-# for example,
+# * Both masks and corresponding HARPs are needed.  The mask is used for times
+# disk geometry, and as a source for a background mask.  The time range is
+# defined using the mask series, and the HARPs at those times are looked 
+# up in the HARP series.  Thus, the HARP series is NOT qualified by HARP 
+# number or time (but see -h for ways to qualify the HARP series).
+# * The mask_series sets the T_REC range, so it is typically qualified, like:
 #     hmi.Marmask_720s[2011.01.01_TAI/7d]
-# The mask series sets the time range.
 # * The harp series used is typically either hmi.Mharp_720s or hmi.Mharp_720s_nrt, 
-# depending on whether NRT masks were specified or not.  For testing, other series
-# may be used.
+# depending on whether NRT masks were specified or not.  Other series may be used.
+# * The -h QUAL option introduces a SQL boolean phrase which is applied at each 
+# T_REC and restricts the HARPs to be plotted.  For example:
+#   -h 'HARPNUM>2000'
+# implies only the indicated HARPs are to be plotted.  Or,
+#   -h 'TKP_RUNT="20130906T163937"'
+# restricts plotting to only those HARPs ingested in the indicated run.  The keys
+# are taken from `harp_series'.  QUAL is used like this:
+#   harp_series[][T_REC][?QUAL?]
+# * -M sets mdi-mode.  This means a different source of disk geometry, frame rate,
+# and resulution are used.
 # * If dest_dir does not exist, it will be created.
 # * Sample usage:
 #
 #  track_hmi_harp_movie_driver.sh -f -m \
 #     'hmi.Marmask_720s[2010.09.20_12:00_TAI/1h]' hmi.Mharp_720s /tmp/sept20
 #
-# Michael Turmon, JPL, October 2012
+
+# Michael Turmon, JPL, October 2012, September 2013
 
 set -e
 
 progname=`basename $0`
 # under SGE, $0 is set to a nonsense name, so use our best guess instead
 if [ `expr "$progname" : '.*track.*'` == 0 ]; then progname=track_hmi_harp_movie_driver; fi
-USAGE="Usage: $progname [ -f ] [ -m ] [ -d ] mask_series harp_series dest_dir"
+USAGE="Usage: $progname [-fmldM] [-h QUAL] mask_series harp_series dest_dir"
 
 # echo the arguments, for repeatability
 echo "${progname}: Invoked as:" "$0" "$@"
@@ -72,12 +86,18 @@ make_frame=0
 keep_logfile=0
 developer_path=0
 matlab_ver=r2010b
-while getopts "dmflv:" o; do
+mdi_mode=0
+harp_selector=
+query_engine=0
+while getopts "dEMmflh:v:" o; do
     case "$o" in
 	f)    make_frame=1;;
 	m)    make_movie=1;;
 	l)    keep_logfile=1;;
 	d)    developer_path=1;;
+	M)    mdi_mode=1;;
+	E)    query_engine=1;;
+	h)    harp_selector="$OPTARG";;
 	v)    matlab_ver="$OPTARG";;
 	[?])  echo "$USAGE" 1>&2
 	      exit 2;;
@@ -108,11 +128,24 @@ fi
 if [ -z "$mode" ]; then
     die $LINENO "Need one (or both) of -m or -f"
 fi
+# query-engine
+if [ "$query_engine" -eq 1 ]; then
+    mode="$mode,engine"
+fi
+# set up setup-function
+setup=""
+if [ "$mdi_mode" -eq 1 ]; then
+    setup="mdi_track_movie_setup"
+fi
 
 # there is no sh version of .setJSOCenv, so we use this to get JSOC_MACHINE
 if [ -z "$JSOC_MACHINE" ]; then
   JSOC_MACHINE=`csh -f -c 'source /home/jsoc/.setJSOCenv && echo $JSOC_MACHINE'`
 fi
+# need path so Matlab can shell out and get jsoc_info, etc., for metadata
+PATH="${PATH}:$HOME/cvs/JSOC/bin/$JSOC_MACHINE"
+echo "${progname}:   jsoc_info is at:" `which jsoc_info`
+
 # set up matlab path
 if [ "$developer_path" -eq 1 ]; then
     # (this is the code path when -d is given)
@@ -161,6 +194,9 @@ if [ ! -x "$matlab_binary" ]; then
 fi
 # needed for R2010b (see above); no harm otherwise
 OSCHECK_ENFORCE_LIMITS=0; export OSCHECK_ENFORCE_LIMITS
+# make /bin/sh be the shell used for system(), over-riding user SHELL env.
+#MATLAB_SHELL=/bin/sh; export MATLAB_SHELL
+MATLAB_SHELL=/bin/tcsh; export MATLAB_SHELL
 
 # the basic matlab call
 # notes:
@@ -180,6 +216,8 @@ try,
   harp_series='$harp_series';
   dest_dir='$dest_dir';
   mode='$mode';
+  setup='$setup';
+  harp_selector='$harp_selector';
   track_hmi_harp_movie_script;
   fprintf(1, '\\nEXIT_STATUS_OK: clean exit from Matlab.\\n');
 catch ME,
