@@ -1,19 +1,19 @@
-function res=track_hmi_harp_movie_loop(trec, s_time, im, ds_harp, smpl, fn_pat, hooks)
+function res=track_hmi_harp_movie_loop(trec, s_time, im, ds_harp, fn_pat, hooks)
 %track_hmi_harp_movie_loop	make quick-look image from mask and HARP
 %
-% res=track_hmi_harp_movie_loop(trec, s_time, im, ds_harp, smpl, fn_pat, hooks)
+% res=track_hmi_harp_movie_loop(trec, s_time, im, ds_harp, fn_pat, hooks)
 % * Make a single frame, and/or accumulate a movie, for a single T_REC and
 % image, probably within a larger series.
 % * jsoc_trec_loop should control this function.  The first three
 % arguments are supplied automatically when invoked by jsoc_trec_loop.
-% * Input fn is a T_REC value corresponding to a mask image. (fn is
-% used to get image metadata.)
+% * Input trec is the T_REC corresponding to a mask image -- it is
+% used to get image metadata, and query for HARPs.
 % * Usage: Call the image-map function
 %  jsoc_trec_loop('hmi.Marmask_720s[2010.07.01/1d]', [-1 1 1],...
-%                 'track_hmi_harp_movie_loop', hooks);
+%                 'track_hmi_harp_movie_loop', ds_harp, fn_pat, hooks);
 % Using skip=[-1 1 1] here indicates we want the masks loaded
-% fully, don't want to skip any masks, and want begin/end hook
-% calls made to this function by jsoc_trec_loop.
+% fully, don't want to temporally subsample masks, and want begin/end hook
+% calls made to this function by jsoc_trec_loop (this is non-optional).
 % * If skip(1) is negative, the image-loader will use http to get the
 % images; if positive, it will look in the filesystem.  See 
 % jsoc_trec_loop and jsoc_imload.
@@ -24,7 +24,6 @@ function res=track_hmi_harp_movie_loop(trec, s_time, im, ds_harp, smpl, fn_pat, 
 %   real s_time;   -- matlab time number
 %   real im(m,n);  -- the contents of fn
 %   string ds_harp
-%   int smpl
 %   string fn_pat
 %   struct hooks
 % 
@@ -43,7 +42,7 @@ persistent Movie
 % Error checking
 % 
 
-% if all(nargin  ~= [4]), error ('Bad input arg number'); end;
+if all(nargin  ~= [6]), error ('Bad input arg number'); end;
 % if all(nargout ~= [0 1]), error ('Bad output arg number'); end;
 
 % write frame?
@@ -54,6 +53,10 @@ write_movie = ~isempty(strfind(hooks.mode, 'movie'));
 if isfield(hooks, 'tag'), tag = hooks.tag; else tag = 'no_tag'; end;
 % FPS?
 if isfield(hooks, 'fps'), fps = hooks.fps; else, fps = 12; end;
+% sub_sample?
+if ~isfield(hooks, 'sub_sample'), hooks.sub_sample = 1; end;
+% harp qualifier?
+if ~isfield(hooks, 'harp_select'), hooks.harp_select = ''; end;
 
 % 
 % Setup/teardown
@@ -129,14 +132,20 @@ params = {'key', ...
           'HARPNUM,CRPIX1,CRPIX2,CRSIZE1,CRSIZE2,H_MERGE,H_FAINT,NPIX,T_FRST1,T_LAST1'};
 
 % image metadata
-geom = hmidisk(trec);
-if any(isnan(geom)), 
-  res = 'NaN in geometry from hmidisk';  % this will skip it
-  return; 
+[geom,msg] = hooks.load_meta(trec);
+if ~isempty(msg),
+  res = msg;
+  return;   % this will skip it
 end;
 
+% harp selector, if provided
+if isempty(hooks.harp_selector),
+  selector = '';
+else,
+  selector = sprintf('[?%s?]', hooks.harp_selector);
+end;
 % get HARP numbers and HARP metadata
-[res,msg] = rs_list([ ds_harp '[][' trec ']' ], params);
+[res,msg] = rs_list(sprintf('%s[][%s]%s', ds_harp, trec, selector), params);
 if ~isempty(msg),
   res = msg; % skip frame, and indicate error
   return;
@@ -162,7 +171,8 @@ for inx = 1:Nharp,
     bitmaps{inx} = im1;
 end;
 
-frame = track_hmi_movie_frame(s_time, geom, im, harps, bitmaps, smpl);
+frame = track_hmi_movie_frame(s_time, geom, im, harps, bitmaps, ...
+                              hooks.sub_sample, hooks.labels);
 
 % write frame if desired
 if write_frame,

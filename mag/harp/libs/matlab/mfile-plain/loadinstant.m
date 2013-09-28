@@ -1,5 +1,5 @@
 function [im,rgn,rgnC,rgnT,cats,rgnR,fns]=loadinstant(fn, keys, skip)
-%loadinstant	load components of a StarTool instant file
+%loadinstant	load components of a '.instant' file
 % 
 % [im,rgn,rgnC,rgnT,cats,rgnR,fns]=loadinstant(fn, keys, skip)
 % * loads the named components of an instant file.  Loosely, such a file
@@ -50,13 +50,13 @@ function [im,rgn,rgnC,rgnT,cats,rgnR,fns]=loadinstant(fn, keys, skip)
 %  opt int skip = 1;  -- loadfits
 % 
 % Outputs:
-%  real im(m,n,nD);
-%  real rgn(nR,4);
-%  real rgnC(nR,4);
-%  real rgnT(nR);
-%  string cats(nI);
-%  string rgnR(nR);
-%  
+%  real im(m,n,nD)
+%  real rgn(nR,4)
+%  real rgnC(nR,4)
+%  real rgnT(nR)
+%  string cats(nI)
+%  string rgnR(nR)
+%  cell fns of string
 % 
 % See Also:  
 
@@ -75,6 +75,14 @@ if (nargin < 3), skip = 1; end; % 1 => loadfits, no subsampling
 %
 % Computation
 % 
+% strip "virtual" .name suffix from keys
+if isnumeric(keys),
+  keys_actual = ''; % does not matter, but need a string
+  keys_name = []; % unused
+else,
+  keys_actual = strrep(keys, '.name', '');
+  keys_name = ~cellfun(@isempty, strfind(keys, '.name')); % 1 if .name
+end;
 % must initialize outputs in case no match occurs
 im = []; rgn = []; rgnC = zeros(0,4); rgnT = []; cats = []; rgnR = {};
 keys_found = {}; % image types found so far
@@ -88,15 +96,15 @@ lin = fgetl_nocomment(fp);
 while ischar(lin),
   [key1,lin] = strtok(lin); % first component
   key1fn = strtok(lin); % second component
+  match_num = find(strcmp(keys_actual, key1), 1, 'first');
   % enable the read if this key is wanted
-  % formerly was: strncmp(keys, key1, 3)
-  if isnumeric(keys) | (length(key1) >= 3 & any(strcmp(keys, key1))),
+  if isnumeric(keys) || ~isempty(match_num),
     if strcmp(key1, 'region'),
       % this is the regions file: only take the first one
       if isempty(rgn_fn),
 	rgn_fn = key1fn;
       end;
-    elseif ~isempty(strfind(key1, '.name')),
+    elseif length(keys_name) > 0 && keys_name(match_num),
       % just report the name in this case
       fns{end+1} = key1fn;
     else

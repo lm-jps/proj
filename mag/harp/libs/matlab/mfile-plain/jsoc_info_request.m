@@ -62,6 +62,13 @@ function [res,msg] = jsoc_info_request(op, ds, params, method, retries)
 % Written by Michael Turmon (turmon@jpl.nasa.gov) on 25 Oct 2011.
 % Copyright (c) 2011.  All rights reserved.
 
+persistent op_count op_time;
+if isempty(op_count), op_count = 0; end;
+if isempty(op_time), op_time = 0; end;
+op_count = op_count + 1;
+%fprintf('[JIR %s: ops = %d, time = %.3f]\n', ds, op_count, op_time);
+start_time = tic; % record start time
+
 % parameter defaults
 % abs() = between-try delay in s, [] for no retries, <0 for announcement
 %  (set to announce for long delays)
@@ -91,15 +98,18 @@ if ~isnumeric(retries) || (~isvector(retries) && ~isempty(retries)),
   error('if supplied, retries must be a numeric vector, or empty');
 end;
 
-% service endpoints for shell AND web
-base_service = 'jsoc_info';
-shell_service = base_service;
-web_service = ['cgi-bin/ajax/' base_service];
+% service endpoints for shell, server, AND web
+base_endpoint = 'jsoc_info';
+shell_endpoint = base_endpoint;
+web_endpoint = ['cgi-bin/ajax/' base_endpoint];
+server_endpoint = 'query_engine';
 
-% parameter defaults
-if strfind(method, 'shell'),
+% if method provided, use it for "host"; if not, use hmi_property
+if ~isempty(strfind(method, 'shell')),
   host = 'shell';
-elseif strfind(method, 'web'),
+elseif ~isempty(strfind(method, 'server')),
+  host = 'server';
+elseif ~isempty(strfind(method, 'web')),
   % default host for generic 'web' -- use property manager's default
   % (expect: 'http://hmiteam:hmiteam@jsoc2.stanford.edu')
   host = hmi_property('get', 'jsoc_host', 'default');
@@ -107,7 +117,6 @@ else,
   % not explicitly given -- use property manager
   host = hmi_property('get', 'jsoc_host');
 end;
-use_shell = strcmp(host, 'shell');
 
 % verbosity -- default to quiet
 verbose = ~isempty(strfind(method, 'verbose'));
@@ -133,20 +142,28 @@ for ntry = 1:max_try,
   %   if success, json_content contains the json
   %   if not, json_content contains a descriptive message, if any
   %   req contains the access command used
-  if ~use_shell,
-    endpoint = sprintf('%s/%s', host, web_service);
+  if ~isempty(strfind(host, 'web')),
+    endpoint = sprintf('%s/%s', host, web_endpoint);
     [json_content,status,req] = urlread_jsoc(endpoint, 'get', all_params);
     if status == 0, json_content = ['urlread_jsoc failed: ' json_content]; end;
-  else,
+  elseif ~isempty(strfind(host, 'shell')),
+    % fprintf('j_i_r: shelling out\n')
     % note, to conform with semantics above, status = 1 for success
-    [json_content,status,req] = shell_jsoc(shell_service, all_params);
+    [json_content,status,req] = shell_jsoc(shell_endpoint, all_params);
+  elseif ~isempty(strfind(host, 'server')),
+    % fprintf('j_i_r: using server\n')
+    % note, to conform with semantics above, status = 1 for success
+    [json_content,status,req] = server_jsoc(all_params);
   end;
   if verbose && ntry == 1,
     fprintf('%s: request was: %s\n', mfilename, req);
   end;
   % if request failed, set up error message; res already empty
-  if status == 0, 
+  if status == 0,
     msg = sprintf(EFMT, 'JSOC request failed', req, json_content);
+  elseif isempty(msg) && isempty(json_content), 
+    msg = sprintf(EFMT, 'JSOC request failed', req, '(empty json response)');
+    status = -1;
   end;
   % if request returned OK, parse the JSON response
   if isempty(msg),
@@ -200,6 +217,7 @@ end;
 if ~isempty(msg) && do_err_out,
   error(msg);
 end;
+op_time = op_time + toc(start_time);
 return
 end
 
@@ -210,15 +228,15 @@ end
 %
 function [json_content,status,req] = shell_jsoc(cmd, pars)
 
-% cons up arg list
-args = '';
+% single-quote the args to preserve [, ], $, etc.
+single_quote = '''';
+% append arg list to base cmd
+req = cmd;
 for i = 1:2:length(pars),
-  key = shell_encode(pars{i});
-  val = shell_encode(pars{i+1});
-  args = [args ' ' key '=' val];
+  req = [req ' ' pars{i} '=' single_quote pars{i+1} single_quote];
 end
-% record command to be run
-req = sprintf('%s %s', cmd, args);
+
+% fprintf('%s: req = <%s>\n', mfilename, req);
 
 % shell out to a system command, e.g. jsoc_info
 [shell_status,stdout] = system(req);
@@ -245,14 +263,4 @@ end;
 return
 end
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-% shell_encode: escape shell metacharacters, esp. []
-%
-function s2 = shell_encode(s1)
-
-s2 = regexprep(s1, '([\[\]{}])','\\$1');
-return
-end
 

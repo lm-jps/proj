@@ -86,6 +86,8 @@ if P == 3,
     mcolor = mcolor + zeros(1,P);
   end;
 end;
+% trivial case
+if isempty(pos), out = img; return; end;
 % some more checking
 if size(pos,2) ~= 2, error('pos must have (x,y) tuples'); end;
 if ~ischar(m), error('Marker must be a string'); end;

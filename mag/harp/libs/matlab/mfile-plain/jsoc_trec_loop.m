@@ -381,7 +381,8 @@ for i = 1:length(segnames),
   ds1  = dsnames{i};
   seg1 = segnames{i};
   % get the series info (detailed version)
-  s = series_struct(ds1, 'web_access');
+  % s = series_struct(ds1, 'web_access');
+  s = series_struct(ds1);
   if s.status > 0,
     trec_spec = sprintf('Series %s appears invalid to series_struct', ds1);
     return;

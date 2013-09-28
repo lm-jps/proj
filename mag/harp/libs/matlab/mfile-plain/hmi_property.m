@@ -49,6 +49,8 @@ if isempty(getenv('HOST')),
   setenv('HOST', hn);
 end;
   
+at_stanford = ~isempty(regexpi(getenv('HOST'), 'stanford'));
+
 % standard default settings
 % retries: abs() = between-try delay in s, [] for no retries, <0 for announcement
 %  (set to announce for long delays)
@@ -56,8 +58,12 @@ end;
 %   if system('hostname|grep -qi Stanford') == 0, shell, else web; end
 hmi_default = struct();
 hmi_default.nrt_mode = 0;
-hmi_default.at_stanford = ~isempty(regexpi(getenv('HOST'), 'stanford'));
-hmi_default.jsoc_host = 'http://hmiteam:hmiteam@jsoc2.stanford.edu';
+hmi_default.at_stanford = at_stanford;
+if at_stanford,
+  hmi_default.jsoc_host = 'shell';
+else
+  hmi_default.jsoc_host = 'http://hmiteam:hmiteam@jsoc2.stanford.edu';
+end;
 hmi_default.jsoc_retries = [0.1 10 -60 -60 -60]; 
 
 % if not ever initialized, take the default

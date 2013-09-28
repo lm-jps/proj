@@ -120,6 +120,10 @@ scaled_coords = all(all(abs(pos(:,1:2)) <= 1));
 
 [M,N,P] = size(img);
 
+% text alignment: implemented, but no interface
+align1 = 1;
+align2 = 1;
+
 %% Compute dictionary info
 bitmaps = font.bitmaps;
 dict = font.dict;
@@ -160,18 +164,27 @@ for i = 1:Ntxt,
   else
     origin = pos(i,1:2) - 1;
   end;
-  inx1 = round([1:m] + origin(1));
-  inx2 = round([1:n] + origin(2));
-  % FIXME: clip block, don't error out
-  if any(inx1 < 1) || any(inx1 > M),
-    error('Text block out of range (vertical)');
+  if align1 == 0,
+    offset1 = m/2; % centered
+  elseif align1 == -1,
+    offset1 = -m;
+  else,
+    offset1 = 0;
   end;
-  if any(inx2 < 1) || any(inx2 > N),
-    error('Text block out of range (horizontal)');
+  if align2 == 0,
+    offset2 = n/2; % centered
+  elseif align2 == -1,
+    offset2 = -n;
+  else,
+    offset2 = 0;
   end;
-  
+  inx1 = round([1:m] + origin(1) + offset1);
+  inx2 = round([1:n] + origin(2) + offset2);
+  % allow for clipping of the block
+  inrange1 = (inx1 > 0) & (inx1 <= M);
+  inrange2 = (inx2 > 0) & (inx2 <= N);
   % place block in overlay
-  overlay(inx1,inx2) = block;
+  overlay(inx1(inrange1),inx2(inrange2)) = block(inrange1,inrange2);
 end;
 
 %% Set up the output

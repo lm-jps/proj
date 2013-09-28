@@ -1,7 +1,7 @@
-function res=track_hmi_movie_loop(fn, t, smpl, fnTs, Mname)
+function res=track_hmi_movie_loop(fn, t, param)
 %track_hmi_movie_loop	make movie from tracker metadata files
 % 
-% res=track_hmi_movie_loop(fn, t, smpl, fnTs, Mname)
+% res=track_hmi_movie_loop(fn, t, param)
 % * Make movie of tracking performance.  The output will be a matlab
 % "movie" which goes to a file, or which you can export with 
 % movie2avi if memory permits (see below).
@@ -11,6 +11,10 @@ function res=track_hmi_movie_loop(fn, t, smpl, fnTs, Mname)
 % where 4 gives the spatial reduction (factor of 4 in each direction 
 % yields 1024^2 images for HMI), and 
 % fnTs is a pattern for *track* summary mat-files.
+% * An assortment of parameters are put into param.  They include:
+%   int smpl;
+%   string fnTs
+%   opt string Mname = ''
 % * The optional Mname is a movie filename which is written as an 
 % AVI file.  If Mname is not given, the movie frames are returned 
 % in res.  This is unworkable for long movies, so if Mname is given,
@@ -29,16 +33,14 @@ function res=track_hmi_movie_loop(fn, t, smpl, fnTs, Mname)
 % because that function just yields up .instant files.
 % 
 % Inputs:
-%   string fn;    -- a .instant file
-%   real t;       -- time (given by file_loop_cat)
-%   int smpl;
-%   string fnTs
-%   opt string Mname = ''
+%   string fn     -- a .instant file
+%   real t        -- time (given by file_loop_cat)
+%   struct param
 % 
 % Outputs:
 %   int res; -- a getframe object, or the number of regions found
 % 
-% See Also: track_hmi_test
+% See Also: track_hmi_production, track_hmi_movie_loop
 
 % Written by Michael Turmon (turmon@jpl.nasa.gov) on 03 Nov 2009
 % Copyright (c) 2009.  All rights reserved.  
@@ -47,38 +49,54 @@ function res=track_hmi_movie_loop(fn, t, smpl, fnTs, Mname)
 % prior_t: time of prior image
 % Tinfo, FTinx, FTpatch: track/frame info extracted from .mat metadata
 persistent Mavi Mavi_num prior_t Tinfo FTinx FTpatch
-FPS = 20; % number of frames per second
 
 % 
 % Error checking
 % 
-if all(nargin  ~= [4 5]), error ('Bad input arg number'); end;
+if all(nargin  ~= [3]), error ('Bad input arg number'); end;
 % if all(nargout ~= [0 1]), error ('Bad output arg number'); end;
-if nargin < 5, Mname = ''; end; % no direct output to movie file
-if length(smpl) ~= 1, error('Need one number in smpl'); end;
-if ~ischar(fnTs),  error('fnTs is a filename');  end;
-if ~ischar(Mname), error('Mname is a filename'); end;
+
+% some fields in "param" are required
+if ~isfield(param, 'file_track_mat'),
+  error('Need a per-track mat-file template');
+end;
+if ~isfield(param, 'file_movie'),
+  error('Need a movie-file output template');
+end;
+% defaults for fields of "param"
+if ~isfield(param, 'string_title'), 
+  param.string_title = 'Tracker Diagnostic';
+end;
+if ~isfield(param, 'string_arname'), 
+  param.string_arname = 'ARs';
+end;
+if ~isfield(param, 'frame_dims'),
+  param.frame_dims = 1024;
+end;
+if ~isfield(param, 'frames_per_sec'),
+  param.frames_per_sec = 12;
+end;
 
 %
 % Initialization
 % 
-% read fnTs files only once (map from times -> track number)
+% read track metadata files only once (map from times -> track number)
 if isnumeric(fn),
   res = []; % unused, but better if it's there
   if fn < 0, 
     % set up prior time
     prior_t = -Inf; % junk, for now
     % load track data
-    [Tinfo,FTinx,FTpatch] = track_summary(fnTs);
+    [Tinfo,FTinx,FTpatch] = track_summary(param.file_track_mat);
     % open streaming movie file
     Mavi_num = 1;
-    if ~isempty(Mname),
-      if length(strfind(Mname, '%d')) ~= 1,
-        error('Mname must contain a %%d pattern');
+    if ~isempty(param.file_movie),
+      if length(strfind(param.file_movie, '%d')) ~= 1,
+        error('file_movie param must contain a %%d pattern');
       end;
-      Mavi_name = sprintf(Mname, Mavi_num);
+      Mavi_name = sprintf(param.file_movie, Mavi_num);
       [junk1,junk2] = mkdir(fileparts(Mavi_name)); % suppress error msgs
-      Mavi = avifile(Mavi_name, 'fps', FPS);
+      Mavi = avifile(Mavi_name, 'fps', param.frames_per_sec);
       fprintf('%s: output to %s\n', mfilename, Mavi_name);
     else,
       Mavi = [];
@@ -121,7 +139,7 @@ if ~isempty(Mavi),
   % 1 byte per pixel, so count pixels
   avi_length = Mavi.TotalFrames * Mavi.Width * Mavi.Height;
   if avi_length > 1.9 * 2^30,
-    disp(sprintf('(avi#%d done)', Mavi_num));
+    disp(sprintf('(movie#%d done)', Mavi_num));
     Mavi_name = Mavi.Filename;
     Mavi = close(Mavi);
     % convert to mp4
@@ -130,7 +148,7 @@ if ~isempty(Mavi),
       fprintf('Error: failed to convert AVI to MP4 (%s)\n', Mavi_name);
     end;
     Mavi_num = Mavi_num + 1;
-    Mavi = avifile(sprintf(Mname, Mavi_num), 'fps', FPS);
+    Mavi = avifile(sprintf(param.file_movie, Mavi_num), 'fps', param.frames_per_sec);
   end;
   clear avi_length
 end;
@@ -152,15 +170,22 @@ frame_num = str2double(p2(p2_pos(end)+1:end));
 clear p1 p2 p3
 
 % load the images un-transposed
-%   note: presently not using metadata; we read it all in at once
-%   below, it is OK not to get boundary0
 keys = {'segment', 'boundary', 'boundary0', 'metadata.name'};
-[ims,JJ1,JJ2,JJ3,JJ4,JJ5,fns] = loadinstant(fn, keys, -smpl);
+% first, load one to set the scale
+ims = loadinstant(fn, keys(1), -1);
+% smpl = downsampling
+SMPL = max(1, round(max(size(ims)) / param.frame_dims));
+% below, it is OK not to get boundary0
+[ims,JJ1,JJ2,JJ3,JJ4,JJ5,fns] = loadinstant(fn, keys, -SMPL);
 clear JJ*
 
 % get the geometry for this frame
 %  (formerly used Tinfo{t}.geom, but fails if no tracks in a frame)
-geom = hmidisk(t);
+%  then used: hmidisk(t), but this is hmi-specific
+%  then used: param.load_meta(t), but this requires outside setup
+JJ = load(fns{end}); % full-disk metadata
+geom = JJ.s_geom;
+clear JJ
 
 % get the regions for this frame
 [rgn,rgnTid,rgnAge,rgnMrg,rgnTag,bound2tk] = ...
@@ -177,9 +202,9 @@ NOAAar = hmi_noaa_info_interp(t);
 % project into our disk geometry
 [NOAAx, NOAAy, NOAAz] = hmi_latlon2image([NOAAar.latitudehg ]', ...
                                          [NOAAar.longitudecm]', geom);
-NOAAx = round(NOAAx/abs(smpl));
-NOAAy = round(NOAAy/abs(smpl));
-NOAAz = round(NOAAz/abs(smpl));
+NOAAx = round(NOAAx/abs(SMPL));
+NOAAy = round(NOAAy/abs(SMPL));
+NOAAz = round(NOAAz/abs(SMPL));
 NOAAv = (NOAAz > 0); % on-disk filter
 
 % margins
@@ -248,8 +273,8 @@ im1(ims(:,:,1) == 2) = LOLITE;
 
 % 3: box around each region
 % Note: region corners are in the ims() coordinates, unflipped/untransposed
-rgnS = floor((rgn-1) / smpl) + 1;
-if smpl == 1,
+rgnS = floor((rgn-1) / SMPL) + 1;
+if false,
   % L-R and T-B hairlines offset 0 and 1
   tk1 = [1 1 3 3]; % four hairlines...
   tk2 = tk1 + 1;
@@ -293,8 +318,8 @@ im1 = text_on_image(im1, cellstr(int2str([NOAAar(NOAAv).regionnumber]')), [], CO
 
 % put on the poles, if they're there
 [NPx, NPy, NPz] = hmi_latlon2image([90;-90], [0;0], geom);
-NPx = round(NPx/abs(smpl));
-NPy = round(NPy/abs(smpl));
+NPx = round(NPx/abs(SMPL));
+NPy = round(NPy/abs(SMPL));
 NPv = (NPz >= 0); % visible on-disk
 NP_txt = {'N'; 'S'};
 NPspc = [-20;10]; % offset text from marker
@@ -330,8 +355,8 @@ M = size(im1, 1); % scale info
 % make space in im1 for overlay
 % NOTE: keeping smaller +32 pad so all tracker movies agree in size
 if     M < 400, pad = [32 96]; 
-elseif M < 800, pad = [ 0 64]; 
-else            pad = [ 0 32];
+elseif M < 800, pad = [ 0 96]; 
+else            pad = [ 0 96];
 end;
 % imT is the image-with-text
 imT = [zeros(M, pad(1))+LOLITE im1 zeros(M, pad(2))+LOLITE];
@@ -347,7 +372,7 @@ end;
 % frame number overlay
 fnumT = num2str(frame_num, '%06d');
 % initial space makes it play nicer with qt player on mac
-txt = {{'SDO/HMI Tracked AR (HARP)', t1code, t2code, ' ', t3code, ' ', fnumT}};
+txt = {{param.string_title, t1code, t2code, ' ', t3code, ' ', fnumT}};
 imT = text_on_image(imT, txt, [], TCOLOR, [MRGN MRGN], DFONT);
 
 % nR is the number of tracks, accounting for merges
@@ -388,7 +413,7 @@ if nR > 0,
   % define text blocks
   TBu = columnize(rgnID_t( UPPER,:), NC_max, 1);
   TBd = columnize(rgnID_t(~UPPER,:), NC_max, 0);
-  imT = text_on_image(imT, strvcat({'HARPs'; TBu}), [], TCOLOR, [MRGN   0.97], DFONT);
+  imT = text_on_image(imT, strvcat({param.string_arname; TBu}), [], TCOLOR, [MRGN   0.97], DFONT);
   imT = text_on_image(imT, TBd, [], TCOLOR, [1-MRGN 0.97], DFONT);
   % put on the per-track color key
   pix_per_line = 19; % for DFONT

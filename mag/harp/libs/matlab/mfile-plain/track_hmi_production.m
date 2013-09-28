@@ -27,8 +27,13 @@
 %       if true or nonzero, compiles a large .avi movie of the
 %       time history of the tracker; it's wise to transcode this
 %       movie into a more compact file format
+%   setup: defaults to empty
+%       a function taking and returning three arguments, allowing modification
+%       of tracker_params, hooks, and movie_params, in that order, for 
+%       instrument or data product customization.
 %   params: defaults to empty
-%       contains a set of modified tracker parameters
+%       contains a semicolon-separated list of modified tracker parameters.
+%       if both setup and params are given, params is done after setup.
 %   gap_fill: integer, defaults to nan (= no gap filling)
 %       if non-nan, new track ID numbers will be chosen in agreement
 %       with future values, or recycled from previously-unused numbers.
@@ -84,6 +89,14 @@ end;
 if ~exist('gap_fill', 'var'),
   gap_fill = nan;
 end;
+% setup function: optional, default to none
+if exist('setup', 'var') && ~isempty(setup),
+  if ~exist(setup, 'file'), error('Supplied setup function (%s) not present', setup); end;
+  param_setup = str2func(setup); % turn into a function handle
+else,
+  setup = '';
+  param_setup = @(tp1,h1,mp1)deal(tp1,h1,mp1); % dummy that copies three args thru
+end;
 % params: optional, default to none
 if ~exist('params', 'var'),
   params = '';
@@ -110,6 +123,25 @@ if first_track > 0,
   system(sprintf('rm -rf %s/Tracks', dest_dir));
 end;
 
+%% establish a text tag for this run
+% (tag is a metacharacter-free encoding of the run name)
+run_tag = mask_series;
+% re-encode the tag to remove any weird chars (/ is the main issue)
+% RE is of form: [^xyz] where xyz are good
+% note - has to be the last char because it's a [] metacharacter
+% note - we use system() on this string, so it has to have NO metacharacters
+not_goodchar = '[^\w@+=%.,-]';
+run_tag = regexprep(run_tag, not_goodchar, '_');
+% kill multiple _'s
+run_tag = regexprep(run_tag, '_+', '_');
+% kill _ at end, if any
+run_tag = regexprep(run_tag, '_$', '');
+
+
+%
+% Tracker setup
+%
+
 % tracker internal parameters
 % turmon dec 2010 -- these are rescaled from the standard MDI 
 % choices, and are the same as those used in various HMI test runs.
@@ -127,8 +159,45 @@ tracker_params1.maprate = 15*log(2); % gives wt, weight for old map
                                      % wt = exp(-maprate * dt [days])
                                      % 30 log(2): wt = 1/2 @ dt = 4*720sec
 
-% allow modification of tracker_params1 through passed-in `params'
-% find statements like: key1=val1;key2=val2;key3=val3
+% handlers for utilities, abstracted from the tracker itself
+hooks1.load_meta      = @(t)(hmidisk(t, 'geom,vector,quiet'));
+hooks1.load_quality   = @hmiquality;
+hooks1.save_track     = @hmi_save_track_production;
+hooks1.init_run       = @hmi_init_run_production;
+hooks1.loop_hook      = 'hmi_loop_hook_local'; % a script, not a function
+hooks1.find_roi       = @hmi_find_roi; % uses tracker_params
+hooks1.first_track    = first_track;
+hooks1.retain_history = retain_history;
+hooks1.run_name       = mask_series; % text tag, just for identification
+hooks1.gap_fill       = gap_fill; % gap-fill mode, if non-nan (usually nan)
+% filename templates
+hooks1.filename.template = fullfile(dest_dir, '/Tracks/%s/track%s%s.%s');
+hooks1.filename.tracknum = '%06d';
+hooks1.filename.imagenum = '%06d';
+% depending on gap_fill, set up hook to install new track IDs
+if ~isnan(hooks1.gap_fill),
+  hooks1.update_tid = @hmi_gapfill_update_tid;
+else,
+  hooks1.update_tid = @(varargin)(disp('Unexpected negative TID'));
+end;
+
+% movie-maker parameter, loaded with standard HMI arguments
+% movie_params1.load_meta = hooks1.load_meta;
+movie_params1.string_title = 'SDO/HMI Tracker Diagnostic';
+movie_params1.string_arname = 'HARPs';
+% track metadata file template
+movie_params1.file_track_mat = sprintf(hooks1.filename.template, 'mask', '-mask.%s', '', 'mat');
+% movie output file template
+movie_params1.file_movie     = sprintf(hooks1.filename.template, 'movie', '-movie.', [run_tag '_%d'], 'avi');
+movie_params1.frame_dims = 1024; % target movie dimens
+movie_params1.frames_per_sec = 20;
+
+% allow the params to be transformed
+if ~isempty(setup), fprintf('%s: Running setup: %s\n', mfilename, setup); end;
+[tracker_params,hooks,movie_params] = param_setup(tracker_params1, hooks1, movie_params1);
+
+% allow modification of tracker_params through passed-in `params'
+%   find statements like: key1=val1;key2=val2;key3=val3
 paramsep = unique([0 strfind(params, ';') length(params)+1]);
 for i = 1:length(paramsep)-1,
   param1 = params(paramsep(i)+1:paramsep(i+1)-1);
@@ -143,7 +212,7 @@ for i = 1:length(paramsep)-1,
   if isempty(val),
     error('Did not find key=val in param %s from %s', param1, params);
   end;
-  if ~isfield(tracker_params1, key),
+  if ~isfield(tracker_params, key),
     error('Did not find known key %s in param %s from params %s', key, param1, params);
   end;
   value = str2double(val);
@@ -152,38 +221,19 @@ for i = 1:length(paramsep)-1,
     error('Could not convert "%s" in param "%s" to double', val, param1)
   end;
   % at long last
-  tracker_params1.(key) = value;
+  tracker_params.(key) = value;
 end;
 clear paramsep i param1 inx1 key val
 
 if length(params) > 0,
   fprintf('%s: Modified tracker_params according to params:\n', mfilename);
-  disp(tracker_params1);
+  disp(tracker_params);
 end;
 
-% handlers for utilities, abstracted from the tracker itself
-hooks.load_meta      = @(t)(hmidisk(t, 'geom,vector,quiet'));
-hooks.load_quality   = @hmiquality;
-hooks.save_track     = @hmi_save_track_production;
-hooks.init_run       = @hmi_init_run_production;
-hooks.loop_hook      = 'hmi_loop_hook_local'; % a script, not a function
-hooks.tracker_params = tracker_params1;
-hooks.find_roi       = @hmi_find_roi; % uses tracker_params
-hooks.first_track    = first_track;
-hooks.retain_history = retain_history;
-hooks.run_name       = mask_series; % text tag, just for identification
-hooks.gap_fill       = gap_fill; % gap-fill mode, if non-nan (usually nan)
-% filename templates
-hooks.filename.template = fullfile(dest_dir, '/Tracks/%s/track%s%s.%s');
-hooks.filename.tracknum = '%06d';
-hooks.filename.imagenum = '%06d';
-% depending on gap_fill, set up hook to install new track IDs
-if ~isnan(hooks.gap_fill),
-  hooks.update_tid = @hmi_gapfill_update_tid;
-else,
-  hooks.update_tid = @(varargin)(disp('Unexpected negative TID'));
-end;
+% NB: the tracker params are passed in via "hooks"
+hooks.tracker_params = tracker_params;
 
+%% (end of parameter setup)
 
 jsoc_ds = {mask_series, mag_series};
 
@@ -199,34 +249,28 @@ else,
   smpl = -1; % http
 end;
 
-% run the tracker
+%% Run the tracker
 fprintf('%s: Beginning tracking.\n', mfilename);
 [fn,res,fnfail,fnlog]=jsoc_trec_loop(jsoc_ds, [smpl 1 1], 'track_hmi_loop', hooks);
 
 % preserve log file and failures, if any
-% (tag is a metacharacter-free encoding of the run name)
-tag = track_hmi_postrun_files(fullfile(dest_dir, 'Tracks', 'jsoc'), ...
-                              hooks.run_name, fnlog, fnfail);
+track_hmi_postrun_files(fullfile(dest_dir, 'Tracks', 'jsoc'), ...
+                        hooks.run_name, fnlog, fnfail);
 
 fprintf('%s: Completed tracking.\n', mfilename);
 
-% optionally make a movie from above run
+%% Make a movie
 
 if make_movie && length(fn) > 0,
   % turn off annoying warnings about NOAA metadata
   warning('off','hmi_base:no_noaa_info');
-  % set up parameters
-  dt = 1; % interval between frames
+  % interval between frames
+  dt = 1; 
   % master cat file
   fnIC = sprintf(hooks.filename.template, '', '-fd-instant', '', 'cat');
-  % track metadata file template
-  fnTs = sprintf(hooks.filename.template, 'mask', '-mask.%s', '', 'mat');
-  % movie name
-  % (make it run-specific)
-  fnAVI = sprintf(hooks.filename.template, 'movie', '-movie.', [tag '_%d'], 'avi');
   % loop which makes the movie
   fprintf('%s: Beginning movie.\n', mfilename);
-  [fn,res]=file_loop_cat(fnIC, [0 dt 1], @track_hmi_movie_loop, 4, fnTs, fnAVI);
+  [fn,res] = file_loop_cat(fnIC, [0 dt 1], @track_hmi_movie_loop, movie_params);
   fprintf('%s: Completed movie.\n', mfilename);
 end;
 
