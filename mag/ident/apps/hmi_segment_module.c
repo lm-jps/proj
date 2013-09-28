@@ -146,6 +146,33 @@ static double getcputime(double *utime, double *stime)
  */
 
 /*
+ * what flavor of keywords do we use 
+ *    determined using `TELESCOP' KW
+ *    currently just HMI vs. MDI 
+ *    (note, INSTRUME is not present in synoptic MDI mags)
+ */
+static
+char *
+get_instrument_mode(DRMS_Record_t *xmRec)
+{
+  char * const default_mode = "HMI";
+  int status = 0;
+  char *kw;
+
+  kw = drms_getkey_string(xmRec, "TELESCOP", &status);
+  if (status == 0) {
+    // get the instrument, and normalize it to a standard set
+    if (strcasestr(kw, "SDO") || strcasestr(kw, "HMI"))
+      return "HMI";
+    else if (strcasestr(kw, "SOHO") || strcasestr(kw, "MDI"))
+      return "MDI";
+    else
+      return default_mode;
+  } 
+  return default_mode;
+}
+
+/*
  * printkey_vector
  * helper function: sprintf's a vector mxArray into a string
  * str of length n chars.  Uses snprintf to avoid overflow.
@@ -165,7 +192,7 @@ printkey_vector(char *str, int n, const mxArray *a)
 }
 
 static int
-setkey_code_info(DRMS_Record_t *outRec)
+setkey_code_info(char *mode, DRMS_Record_t *outRec)
 {
   extern char *hmi_segment_version; // defined below
   char keystr[80]; // plausible FITS keyword length
@@ -177,7 +204,10 @@ setkey_code_info(DRMS_Record_t *outRec)
   ok = drms_setkey_string(outRec, "ARMCODEV", keystr);
   if (ok != DRMS_SUCCESS) not_ok++;
   // url points to descriptive text in wiki
-  ok = drms_setkey_string(outRec, "ARMDOCU", "http://jsoc.stanford.edu/jsocwiki/ARmaskDataSeries");
+  ok = drms_setkey_string(outRec, "ARMDOCU", 
+			  (strcmp(mode, "HMI") == 0) ?
+			  "http://jsoc.stanford.edu/jsocwiki/ARmaskDataSeries" :
+			  "http://jsoc.stanford.edu/jsocwiki/MDI_ARmaskDataSeries");
   if (ok != DRMS_SUCCESS) not_ok++;
 
   return not_ok;
@@ -449,6 +479,7 @@ int DoIt(void)
   double rSun, x0, y0, p0, beta;
   TIME t_rec;
   char time_buf[64]; // time string for t_rec
+  char *inst_mode;   // instrument determines keywords added
   // wcs info
   float crvalx, crvaly, cdelt, crpix1, crpix2, crota2, crlt, sina, cosa;
   double rsun_ref, dsun_obs;
@@ -800,6 +831,7 @@ int DoIt(void)
     /*
      * Save keywords
      */
+    inst_mode = get_instrument_mode(xmRec); // use HMI vs. MDI keywords
     // mask quality keywords
     status = setkey_mask_qual(yRec, 
 			      (int) mxGetScalar(plhs[MXT_Hseg_ARG_nclean]), 
@@ -819,7 +851,7 @@ int DoIt(void)
       WARN("Class with `active' not found.  Failed to insert mask stats keys");
     }
     // Magnetogram keys, including geometry, time, code versions
-    status = propagate_keys_mag2mask(xmRec, yRec);
+    status = propagate_keys_mag2mask(inst_mode, xmRec, yRec);
     if (status < 0) {
       WARN("Mag -> Mask key propagation failed, internal error, should not happen");
     } else if (status > 0) {
@@ -828,7 +860,7 @@ int DoIt(void)
       WARN(errmsg);
     }
     // Intensitygram keys, for now just flat-field
-    status = propagate_keys_intensity2mask(xpRec, yRec);
+    status = propagate_keys_intensity2mask(inst_mode, xpRec, yRec);
     if (status < 0) {
       WARN("Ic -> Mask key propagation failed, internal error, should not happen");
     } else if (status > 0) {
@@ -851,7 +883,7 @@ int DoIt(void)
       WARN(errmsg);
     }
     // Code info keywords
-    status = setkey_code_info(yRec);
+    status = setkey_code_info(inst_mode, yRec);
     if (status > 0) {
       snprintf(errmsg, sizeof(errmsg), 
 	       "Code info keyword insertion failed for %d keys", status);
