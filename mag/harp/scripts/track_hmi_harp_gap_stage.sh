@@ -171,21 +171,21 @@ harp_log=hmi.Mharp_log_720s
 dummy_log=su_turmon.Mharp_logv5_720s
 
 # t00 = last frame seen before gap
-t00=`show_info -q ds="$harp_log[][?TKP_RUNC=${run_no}?]" key=T_LAST`
+t00=`show_info -q ds="${harp_log}[][?TKP_RUNC=${run_no}?]" key=T_LAST`
 t00_index=`index_convert ds=$mag T_REC=$t00`
 # t0 = t00 + delta = first frame within the gap
 t0_index=`expr $t00_index + 1`
 t0=`index_convert ds=$mag T_REC_index=$t0_index`
 
 # t11 = first frame seen after gap
-t11=`show_info -q ds="$harp_log[][?TKP_RUNC=${run_nu}?]" key=T_FRST`
+t11=`show_info -q ds="${harp_log}[][?TKP_RUNC=${run_nu}?]" key=T_FRST | tail -1`
 t11_index=`index_convert ds=$mag T_REC=$t11`
 # t1 = t11 - delta = final frame within the gap
 t1_index=`expr $t11_index - 1`
 t1=`index_convert ds=$mag T_REC_index=$t1_index`
 
 # tmax: final end-time of the gap (last detection)
-tmax=`show_info -q ds="$harp[][${t00}-${t11}]" key=T_LAST1 | sort | tail -1`
+tmax=`show_info -q ds="${harp}[][${t00}-${t11}]" key=T_LAST1 | sort | tail -1`
 
 # gap length in slots
 gap_length=$(( $t1_index - $t0_index + 1 ))
