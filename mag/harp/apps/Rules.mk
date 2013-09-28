@@ -5,7 +5,7 @@ d		:= $(dir)
 
 # Local variables
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, ingest_mharp ingest_mharp_log track_hmi_check_masks)
+MODEXE_$(d)	:= $(addprefix $(d)/, ingest_mharp ingest_mharp_log track_hmi_check_masks query_engine)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
@@ -25,13 +25,15 @@ S_$(d)		:= $(notdir $(EXE_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" $(CFITSIOH)
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" $(CFITSIOH) -I$(SRCDIR)/$(d)/../../libs/json
 
 # NOTE: Add dependent libraries with the -I compiler flag, and make the module depend
 #   on that library
 #$(OBJ_$(d)):				CF_TGT := -I$(SRCDIR)/$(d)/../../libs/somelib
 #$(OBJ_$(d)):	CF_TGT := -I$(SRCDIR)/$(d)/../../libs/somelib
 # $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBSOMELIB)
+
+$(EXE_$(d)):  $(LIBJSON)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
