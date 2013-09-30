@@ -1117,6 +1117,7 @@ int fsn_change_normal()
       return(1);          // !!!TBD
     }
     if(!rset || (rset->n == 0) || rstatus) {
+startnew:
       printk("No prev ds\n");     // start a new image
       fsn_normal_new_image();
     }
@@ -1129,7 +1130,8 @@ int fsn_change_normal()
       rs = drms_clone_record(rs_old, DRMS_PERMANENT, DRMS_COPY_SEGMENTS, &rstatus);
       if(rstatus || !rs) {
         printk("Can't do drms_clone_record()\n");
-        return(1);		// !!!TBD ck 
+        goto startnew;		//new 30Sep2013
+        //return(1);		// !!!TBD ck 
       }
       drms_close_records(rset, DRMS_FREE_RECORD);
       rstatus = drms_setkey_int(rs, "FSN", fsnx);
