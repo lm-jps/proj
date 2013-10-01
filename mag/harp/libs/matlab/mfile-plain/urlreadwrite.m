@@ -3,7 +3,7 @@ function [urlConnection,errorid,errormsg] = urlreadwrite(fcn,urlChar)
 
 %   Matthew J. Simoneau, June 2005
 %   Copyright 1984-2009 The MathWorks, Inc.
-%   $Revision: 1.3 $ $Date: 2013/09/28 18:03:20 $
+%   $Revision: 1.4 $ $Date: 2013/10/01 02:17:29 $
 
 % Default output arguments.
 urlConnection = [];

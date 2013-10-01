@@ -114,7 +114,7 @@ warning('off', 'hmi_base:no_noaa_info');
 
 % use query engine?
 if ~isempty(strfind(mode, 'engine')),
-  hmi_property('set', 'jsoc_host', 'server');
+  hmi_property('set', 'jsoc_method', 'server');
 end;
 
 % switches from loading images by http versus filesystem
@@ -136,7 +136,7 @@ fprintf('%s: Completed frames.\n', mfilename);
 
 % shut down query engine
 if ~isempty(strfind(mode, 'engine')),
-  server_jsoc({'op', 'exit'});
+  server_jsoc('', {'op', 'exit'});
 end;
 
 fprintf('%s: Done.\n', mfilename);

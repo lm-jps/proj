@@ -1,18 +1,20 @@
-function [json_msg,status,req] = server_jsoc(params)
+function [json_msg,status,req] = server_jsoc(addr, params)
 %server_jsoc	query drms server for drms metadata
 %
-% [json_msg,status,req] = server_jsoc(params)
-% * Return the results of calling the query_engine server with
-% the given parameters encoded as a cell array of strings: 
+% [json_msg,status,req] = server_jsoc(addr, params)
+% * Return the results of calling the query_engine server at 
+% "addr" with the given parameters encoded as a cell array of 
+% strings: 
 %    params = {name1, value1, name2, value2,...}.
 % Example names are 'ds' (data series) and 'op' (operation).
 % * The JSON response string is json_msg, which must be decoded
 % by the caller.  The request sent to the server is req.
-% * Status string is empty for success, contains a message if error.
+% * Status is 1 for success, 0 for failure.  If failure, the 
+% explanation is in json_msg.
 % * A server is started if needed, with its outputs to a log
 % file supplied by this routine.  Be sure to stop the server
 % before exit with either:
-%   >> server_jsoc({'op', 'exit'});
+%   >> server_jsoc('', {'op', 'exit'});
 % or, from the shell:
 %   % kill <server_pid>
 % * Queries can be made locally against a remote server.  Start
@@ -27,16 +29,17 @@ function [json_msg,status,req] = server_jsoc(params)
 % proxy through solarport being set up in .ssh/config.
 %
 % Examples: 
-%   server_jsoc({'op', 'rs_summary', 'ds', 'hmi.M_720s'})
-%   server_jsoc({'ds', 'hmi.M_720s[$]', 'key', 'T_REC,T_OBS'})
+%   server_jsoc('', {'op', 'rs_summary', 'ds', 'hmi.M_720s'})
+%   server_jsoc('', {'ds', 'hmi.M_720s[$]', 'key', 'T_REC,T_OBS'})
 % The second example omits the op because rs_list is the default.
 % 
 % Inputs:
+%   opt string addr = '0:localhost:0'
 %   cell params{1,2*NP} of string
 % 
 % Outputs:
 %   string json_msg
-%   string status -- empty if OK
+%   int status -- 1 if OK
 %   opt string req
 %    
 % See Also:
@@ -59,6 +62,7 @@ import java.io.*;
 % 
 % Error checking
 % 
+if ~ischar(addr), error('addr needs to be empty, or an address'); end;
 % (error out if called incorrectly)
 if ~iscell(params) || rem(length(params), 2) ~= 0,
   error('params must be a cell array of even length');
@@ -66,19 +70,19 @@ end;
 if ~all(cellfun(@ischar, params)),
   error('params must be a cell array of strings');
 end;  
-% could set this as an input parameter
-host = '';
-if isempty(host),
-  host = 'localhost';
+% allow this abbreviation
+if isempty(addr),
+  addr = '0:localhost:0';
 end;
+C = textscan(addr, '%d %s %d', 'Delimiter', ':');
+if length(C) ~= 3, error('addr must be like port:host:port'); end;
+[portLocal,host,portRemote] = deal(C{:});
+% (we don't have logic supporting local and remote ports, so
+% ignore them for now.)
+
 % if host is local, we can start one ourselves
 host_is_local = strcmp(host, 'localhost');
   
-
-% default values for outputs
-status = 'Unknown error';
-json_msg = '';
-
 % cons argument list, which is also an output
 req = '';
 sep = '';
@@ -97,6 +101,8 @@ if length(params) > 0 && strcmp(params{1}, 'port'),
     port = str2double(params{2});
   end;
   fprintf('%s: Using port = %d\n', mfilename, port);
+  status = 1; % OK
+  json_msg = '';
   return;
 end;
 
@@ -104,7 +110,7 @@ end;
 if host_is_local && port == 0,
   key = sprintf('%s-%06d-%03d', ...
                 getenv('LOGNAME'), floor(1e6*rem(now,1)), fix(1000*rand));
-  % FIXME: logfile, stderr, stdout
+  % logfile, stderr, stdout
   port_fn = sprintf('/tmp/query-%s.port', key);
   log_fn  = sprintf('/tmp/query-%s.log',  key);
   err_fn  = sprintf('/tmp/query-%s.err',  key); % persistent!
@@ -142,7 +148,8 @@ if host_is_local && port == 0,
 end
 if port == 0,
   fprintf('%s: Could not start query engine\n', mfilename);
-  status = 'Could not start query engine';
+  json_msg = 'Could not start query engine';
+  status = 0; % error
   return;
 end;
 
@@ -176,7 +183,7 @@ try,
   reply = native2unicode(typecast(byteArrayOutputStream.toByteArray','uint8'),'UTF-8');
     
   input_socket.close;
-  status = ''; % OK
+  status = 1; % OK
 catch,
   % perhaps make this catch more restrictive?
   if ~isempty(input_socket)
@@ -184,12 +191,12 @@ catch,
   end
   s = lasterror;
   fprintf('%s: socket exception: %s\n', mfilename, s.message);
-  status = sprintf('Socket error: %.20s', s.message); % not OK
+  json_msg = sprintf('Socket error: %.20s', s.message); % not OK
 end;
 
 % if we ran the exit operator, or experienced an error 
 % (such as a socket error), record the port as not connected
-if ~isempty(status) || length(strfind(req, 'op=exit')) > 0,
+if status == 0 || length(strfind(req, 'op=exit')) > 0,
   port = 0;
   if ~isempty(err_fn),
     d = dir(err_fn);
@@ -212,6 +219,7 @@ if (length(reply) >= len_header) &&  ...
   % this idiom avoids errors if json_content == json_header
   json_msg(1:len_header) = [];
 end;
+status = 1; % OK
 return
 end
 

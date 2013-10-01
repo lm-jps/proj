@@ -13,13 +13,16 @@ function res=hmi_property(mode, key, val)
 % * The function behaves as if 'reset' was called once at the beginning
 % of a session.
 % * Currently supports:
-%     key = 'nrt_mode'  --  val = 0 or 1
-%                           default = 0
-%     key = 'jsoc_host' --  val = hostname for jsoc_info_request,
-%                           or the string 'shell' for non-AJAX use
-%                           default = 'http://hmiteam:hmiteam@jsoc2.stanford.edu'
-%     key = 'at_stanford' -- val = 0 or 1
-%                           default determined by inspecting hostname
+%     key = 'nrt_mode'     --  val = 0 or 1
+%                              default = 0
+%     key = 'jsoc_method'  --  val = web, shell, or server
+%                              default = web
+%     key = 'jsoc_address' --  val = '(default)'  (the literal string)
+%                              This value allows jsoc_info_request to choose
+%                              the correct service.  For fine-grained tweaking,
+%                              set up your own value.
+%     key = 'at_stanford'  --  val = 0 or 1
+%                              default determined by inspecting hostname
 % * Note, keys have to be usable as Matlab `struct' field names.
 %    
 % Inputs:
@@ -51,19 +54,31 @@ end;
   
 at_stanford = ~isempty(regexpi(getenv('HOST'), 'stanford'));
 
-% standard default settings
-% retries: abs() = between-try delay in s, [] for no retries, <0 for announcement
-%  (set to announce for long delays)
-% note, jsoc_host could use hostname to switch to 'shell', e.g.:
-%   if system('hostname|grep -qi Stanford') == 0, shell, else web; end
+%% Set up default property values
+%
 hmi_default = struct();
+% can toggle nrt_mode externally to use NRT metadata
 hmi_default.nrt_mode = 0;
+% strategy with jsoc access is to put an easy top-level switch 
+% here (values: shell/web/remote), and to put the specific 
+% access points into jsoc_info_request.  Using "default" as the
+% host value selects that method.  However, you can still use a
+% custom value for the host through this routine.
 hmi_default.at_stanford = at_stanford;
 if at_stanford,
-  hmi_default.jsoc_host = 'shell';
+  % (turns out shell is slower, even at Stanford, so use web)
+  % hmi_default.jsoc_method = 'shell';
+  hmi_default.jsoc_method = 'web';
+  hmi_default.jsoc_address = '(default)';
 else
-  hmi_default.jsoc_host = 'http://hmiteam:hmiteam@jsoc2.stanford.edu';
+  hmi_default.jsoc_method = 'web';
+  hmi_default.jsoc_address = '(default)';
 end;
+% retry list: 
+%    one retry is made for each entry,
+%    [] for no retries, 
+%    abs() = between-try delay in s, 
+%    < 0 for announcement (now, is set to announce for long delays)
 hmi_default.jsoc_retries = [0.1 10 -60 -60 -60]; 
 
 % if not ever initialized, take the default
@@ -80,11 +95,14 @@ if all(nargout ~= [0 1]), error ('Bad output arg number'); end;
 %
 % Computation
 % 
+res = []; % ensure something is set
+%% Allow to get or set specific properties
+%
 if strcmp(mode, 'reset'),
-  % reset-all
+  %% reset-all
   hmi_props = hmi_default;
 elseif strcmp(mode, 'get'),
-  % getter
+  %% getter
   if ~isfield(hmi_props, key),
     error('Property %s has not been set', key);
   elseif nargin > 2 && strcmp(val, 'default'),
@@ -95,7 +113,7 @@ elseif strcmp(mode, 'get'),
     res = hmi_props.(key);
   end;
 elseif strcmp(mode, 'set'),
-  % setter
+  %% setter
   if ~isfield(hmi_props, key),
     error('Property %s was not initialized', key);
   elseif strcmp(val, 'default'),

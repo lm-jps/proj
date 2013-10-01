@@ -11,11 +11,16 @@ function [res,msg] = jsoc_info_request(op, ds, params, method, retries)
 % queries to JSOC can be funneled.
 % * By setting up the right params, this routine can return lists of 
 % keywords, or segments, or links, or any combination thereof.
-% * If method contains 'web' (the default) the CGI gateway at 
-% jsoc2.stanford.edu speaking JSON over http will be used.  
-% This works remotely.  If method contains 'shell', the system 
-% jsoc_info command will be run and its output intercepted.
-% Otherwise, the jsoc_host set up by hmi_property will be used.
+% * Three metadata sources are allowed.  If method contains:
+%   - 'web', the CGI gateway at jsoc2.stanford.edu speaking JSON 
+%   over http will be used.  This works remotely.
+%   - 'server', the query_engine server module will be used.  A local
+%   server will be started automatically.  This is much faster for 
+%   query-intensive work.
+%   - 'shell', the system jsoc_info command will be run and its output 
+%   intercepted.
+%   - Otherwise, the 'jsoc_method' set up by hmi_property will be used.
+%   It currently defaults to 'web'.
 % * If method contains 'verbose' (not the default), a printed summary
 % of the request is shown.
 % * There are three sorts of exit condition:
@@ -48,7 +53,7 @@ function [res,msg] = jsoc_info_request(op, ds, params, method, retries)
 %   string op
 %   string ds
 %   opt cell query{1,2*NP} of string = {}
-%   opt string method from hmi_property('get','jsoc_host');
+%   opt string method = hmi_property('get','jsoc_method');
 %   opt retries = hmi_property('get', 'jsoc_retries');
 % 
 % Outputs:
@@ -69,17 +74,18 @@ op_count = op_count + 1;
 %fprintf('[JIR %s: ops = %d, time = %.3f]\n', ds, op_count, op_time);
 start_time = tic; % record start time
 
-% parameter defaults
-% abs() = between-try delay in s, [] for no retries, <0 for announcement
-%  (set to announce for long delays)
-default_retries = hmi_property('get', 'jsoc_retries');
-
 % 
 % Error checking
 % 
 if nargin < 2 || nargin > 5,
   error('Need 2 ... 5 input arguments');
 end
+
+% default retries value
+% abs() = between-try delay in s, [] for no retries, <0 for announcement
+%  (set to announce for long delays)
+default_retries = hmi_property('get', 'jsoc_retries');
+
 % input defaults
 if nargin < 3, params = {}; end;
 if nargin < 4, method = ''; end;
@@ -98,24 +104,57 @@ if ~isnumeric(retries) || (~isvector(retries) && ~isempty(retries)),
   error('if supplied, retries must be a numeric vector, or empty');
 end;
 
-% service endpoints for shell, server, AND web
-base_endpoint = 'jsoc_info';
-shell_endpoint = base_endpoint;
-web_endpoint = ['cgi-bin/ajax/' base_endpoint];
-server_endpoint = 'query_engine';
+%
+% Computation
+% 
 
-% if method provided, use it for "host"; if not, use hmi_property
+% service endpoints for shell, server, AND web
+address_shell  = 'jsoc_info';
+address_web    = 'http://hmiteam:hmiteam@jsoc2.stanford.edu/cgi-bin/ajax/jsoc_info';
+address_server = '0:localhost:0/query_engine';
+
+%% Determine the metadata source
+
+% if method provided, use it; if not, use hmi_property
+imethod = '';
 if ~isempty(strfind(method, 'shell')),
-  host = 'shell';
+  imethod = 'shell';
 elseif ~isempty(strfind(method, 'server')),
-  host = 'server';
+  imethod = 'server';
 elseif ~isempty(strfind(method, 'web')),
-  % default host for generic 'web' -- use property manager's default
-  % (expect: 'http://hmiteam:hmiteam@jsoc2.stanford.edu')
-  host = hmi_property('get', 'jsoc_host', 'default');
+  imethod = 'web';
 else,
   % not explicitly given -- use property manager
-  host = hmi_property('get', 'jsoc_host');
+  imethod = hmi_property('get', 'jsoc_method');
+end;
+
+% get default service address (function of method chosen)
+if strcmp(imethod, 'shell'),
+  addr_d = address_shell;
+elseif strcmp(imethod, 'server'),
+  addr_d = address_server;
+elseif strcmp(imethod, 'web'),
+  addr_d = address_web;
+else,
+  error('Unrecognized access method');
+end;
+
+% allow over-ride of service address (if given explicitly)
+if ~isempty(strfind(method, 'address')),
+  % for now, there is no syntax for this, so punt
+  addr_x = 'provided_explicitly';
+else,
+  % this can be set this manually, but is typically 'default'
+  addr_x = hmi_property('get', 'jsoc_address');
+end;
+
+% choose service address we will actually use
+if ~isempty(strfind(addr_x, 'default')),
+  % use the service-specific default found above
+  address = addr_d;
+else,
+  % use the explicitly-suppied address
+  address = addr_x;
 end;
 
 % verbosity -- default to quiet
@@ -124,11 +163,11 @@ verbose = ~isempty(strfind(method, 'verbose'));
 % allow error() exit if true
 do_err_out = (nargout < 2);
 
-%
-% Computation
-% 
 all_params = {'op', op, 'ds', ds, params{:}};
-% uniform format for error messages
+
+%% Loop to get data
+
+% uniform format for error messages below
 % takes 3 string args: short error message, request, longer message (or empty)
 EFMT = sprintf('%s: Error at %s: %%s.  Request:\n%%s\n%%s', mfilename, datestr(now));
 
@@ -138,22 +177,22 @@ for ntry = 1:max_try,
   msg = ''; % no error message => OK
   res = []; % ensure there is no existing res
   % semantics of url/shell accessors:
-  %   status = 1 implies success
-  %   if success, json_content contains the json
-  %   if not, json_content contains a descriptive message, if any
   %   req contains the access command used
-  if ~isempty(strfind(host, 'web')),
-    endpoint = sprintf('%s/%s', host, web_endpoint);
-    [json_content,status,req] = urlread_jsoc(endpoint, 'get', all_params);
+  %   status = 1 is success
+  %     if success, json_content contains the json response
+  %   status = 0 is failure
+  %     if failure, json_content contains a descriptive message (if any)
+  if ~isempty(strfind(imethod, 'web')),
+    [json_content,status,req] = urlread_jsoc(address, 'get', all_params);
     if status == 0, json_content = ['urlread_jsoc failed: ' json_content]; end;
-  elseif ~isempty(strfind(host, 'shell')),
-    % fprintf('j_i_r: shelling out\n')
-    % note, to conform with semantics above, status = 1 for success
-    [json_content,status,req] = shell_jsoc(shell_endpoint, all_params);
-  elseif ~isempty(strfind(host, 'server')),
-    % fprintf('j_i_r: using server\n')
-    % note, to conform with semantics above, status = 1 for success
-    [json_content,status,req] = server_jsoc(all_params);
+  elseif ~isempty(strfind(imethod, 'shell')),
+    % fprintf('%s: shelling out\n', mfilename);
+    % note: status = 1 for success
+    [json_content,status,req] = shell_jsoc(address, all_params);
+  elseif ~isempty(strfind(imethod, 'server')),
+    % fprintf('%s: using server\n', mfilename);
+    % note: status = 1 for success
+    [json_content,status,req] = server_jsoc(address, all_params);
   end;
   if verbose && ntry == 1,
     fprintf('%s: request was: %s\n', mfilename, req);
@@ -161,11 +200,13 @@ for ntry = 1:max_try,
   % if request failed, set up error message; res already empty
   if status == 0,
     msg = sprintf(EFMT, 'JSOC request failed', req, json_content);
-  elseif isempty(msg) && isempty(json_content), 
+  elseif isempty(json_content), 
+    % empty json_content often happens for failed server connection
+    %   (json_content == '' will error-out parse_json, so isolate it here)
+    status = 0;
     msg = sprintf(EFMT, 'JSOC request failed', req, '(empty json response)');
-    status = -1;
   end;
-  % if request returned OK, parse the JSON response
+  % if request is ok, i.e., no error message, parse the JSON response
   if isempty(msg),
     % this sets up res
     [res,msg1] = parse_json(json_content);
@@ -178,7 +219,7 @@ for ntry = 1:max_try,
     end;
   end;
   % if OK, check the status wrapped in JSON (status type is double)
-  % status decoder ring: 
+  % res.status decoder ring: 
   %   0 if OK, 1 if series not found, -1 if the backend process was terminated
   % hence, do not retry if status = 1
   if isempty(msg),
