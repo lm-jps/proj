@@ -846,6 +846,7 @@ int computeSumAbsPerPolarity(float *jz_err, float *bz_err, float *bz, float *jz,
 	      {
                 if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                 if isnan(bz[j * nx + i]) continue;
+                if isnan(jz[j * nx + i]) continue;
 		if (bz[j * nx + i] >  0) sum1 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
                 if (bz[j * nx + i] <= 0) sum2 += ( jz[j * nx + i])*(1/cdelt1)*(0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs);
                 err += (jz_err[j * nx + i]*jz_err[j * nx + i]);
@@ -1098,7 +1099,7 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 char *sw_functions_version() // Returns CVS version of sw_functions.c
 {
-  return strdup("$Id: sw_functions.c,v 1.17 2013/07/24 02:35:08 mbobra Exp $");
+  return strdup("$Id: sw_functions.c,v 1.18 2013/10/01 01:57:44 mbobra Exp $");
 }
 
 /* ---------------- end of this file ----------------*/
