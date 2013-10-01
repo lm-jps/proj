@@ -125,7 +125,7 @@ while(1) {
 sub ckingest {
     $ifound = 0;
     #see if they're all stopped
-    @ps_prod = `ps -ef | grep ingest_lev0`;
+    @ps_prod = `ps -ef | grep ingest_lev0_iris`;
     while($_ = shift(@ps_prod)) {
       if(/vc VC03/) {
         $ifound = 1;
