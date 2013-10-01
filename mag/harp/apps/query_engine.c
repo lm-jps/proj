@@ -255,11 +255,24 @@ char *drms_record_getlogdir(DRMS_Record_t *rec)
       su = malloc(sizeof(DRMS_StorageUnit_t));
       su->sunum = atoll(qres->field[0][0]);
       drms_env->retention = DRMS_LOG_RETENTION;
+      // FIXME: 
+      // In server mode (i.e., "make query_engine_sock"), the build
+      // fails.  arta 30 sep 2013 suggests:
+      //   "For drms_su_getsudir() use drms_getunit() (which checks 
+      //    the DRMS_CLIENT macro internally)."
+      // But this replacement has a different signature.  Punt for now,
+      // it is not used anyway.
+#ifdef DRMS_CLIENT
       status = drms_su_getsudir(drms_env, su, retrieve);
+      char *or_else = "Log offline";
+#else
+      status = 1; // act as if it failed
+      char *or_else = "Logdir unimplemented";
+#endif
       if (!status)
         logpath = strdup(su->sudir);
       else
-        logpath = strdup("Log offline");
+        logpath = strdup(or_else);
       free(su);
       drms_env->retention = save_retention;
       }
@@ -1417,7 +1430,13 @@ DoIt(void)
   CleanerData_t cleaner;
   cleaner.cb = (pFn_Cleaner_t) &OnSIGINT;
   cleaner.data = (void *) &server_bag;
+  /* FIXME: From arta 30 sep 2013:
+     For the cleaner code, you use drms_client_registercleaner() if the macro DRMS_CLIENT is defined, and use drms_server_registercleaner otherwise (not all functions have a nice wrapper that chooses the correct version of API function). */
+#ifdef DRMS_CLIENT
+  drms_client_registercleaner(drms_env, &cleaner);
+#else
   drms_server_registercleaner(drms_env, &cleaner);
+#endif
 
   // binds the port
   msg = server_setup(port_given, port_fn, log_fn, &server_bag);
