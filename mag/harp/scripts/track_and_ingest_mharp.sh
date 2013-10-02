@@ -424,7 +424,15 @@ else
   #   1: expected (the 1 frame = trec_last_prior: it had a mask, so it had a good mag)
   #  >1: not OK (intervening valid mags)
   #   0: not good, but OK (probably overlapping intervals)
-  prior_dt=`show_info -c "ds=${mag_series}[${trec_last_prior}-${trec_prior1}][? QUALITY>=0 ?]" key=T_REC | awk '{print $1}'`
+  # (if T_LAST was not present, the show_info below would be given a non-time 
+  # value, which will cause errors, so special-case this)
+  if [[ "$trec_last_prior" =~ ".*_TAI" ]]; then
+    prior_dt=`show_info -c "ds=${mag_series}[${trec_last_prior}-${trec_prior1}][? QUALITY>=0 ?]" key=T_REC | awk '{print $1}'`
+  else
+    # for now, just a warning (will error-out if used later)
+    echo "${progname}: Found no last-frame-ingested in \`$harp_log_series' at ${trec_prior}"
+    prior_dt=
+  fi
 fi
 
 # ensure there are no un-explained mask gaps
