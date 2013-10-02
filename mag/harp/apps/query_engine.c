@@ -263,7 +263,7 @@ char *drms_record_getlogdir(DRMS_Record_t *rec)
       // But this replacement has a different signature.  Punt for now,
       // it is not used anyway.
 #ifdef DRMS_CLIENT
-      status = drms_su_getsudir(drms_env, su, retrieve);
+      status = 1; // Copy what was done for the server.
       char *or_else = "Log offline";
 #else
       status = 1; // act as if it failed
