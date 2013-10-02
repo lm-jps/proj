@@ -5,7 +5,6 @@ d		:= $(dir)
 
 # Local variables
 LIBHKLEV0		:= $(d)/libhklev0.a
-LIBHKLEV1		:= $(d)/libhklev1.a
 test0_$(d)		:= $(addprefix $(d)/, test0)
 # wtest_$(d)		:= $(addprefix $(d)/, wtest)
 #ingestlev0_$(d)		:= $(addprefix $(d)/, ingest_lev0 ingest_lev0_test ingest_lev0_iris ingest_lev0_irisDUP ingest_lev0_irisDIM ingest_lev0_irisROT ingest_lev0_irisdc ingest_lev0_iris_NEW ingest_lev0_irisAmes decode_dayfile)
@@ -26,9 +25,7 @@ ingestlev0orig_obj_$(d) := $(addprefix $(d)/, imgdecode.o decode_hk.o load_hk_co
 #yingestlev0_$(d)	:= $(addprefix $(d)/, yingest_lev0)
 #LIBHKLEV0_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files_iris.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_iris.o )
 
-LIBHKLEV0_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files_iris.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_iris.o load_hk_config_files.o write_hk_to_drms.o )
-
-LIBHKLEV1_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files_iris.o decode_hk_vcdu.o save_packet_to_dayfile.o load_hk_config_files.o write_hk_to_drms.o )
+LIBHKLEV0_OBJ		:= $(addprefix $(d)/, decode_hk.o load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o)
 
 buildlev1iris_obj_$(d) 	:= $(addprefix $(d)/, do_flat_iris.o iris_isp2wcs.o)
 
@@ -87,11 +84,10 @@ CLEAN		:= $(CLEAN) \
 		   $(TESTEXE_USEF_$(d)) \
 		   $(MODEXE_SOCK_$(d))\
 		   $(LIBHKLEV0)\
-		   $(LIBHKLEV1)\
 		   $(DEP_$(d))
 
 TGT_BIN	        := $(TGT_BIN) $(ALLEXE_$(d)) $(MODEXE_SOCK_$(d)) 
-TGT_LIB		:= $(TGT_LIB) $(LIBHKLEV0) $(LIBHKLEV1)
+TGT_LIB		:= $(TGT_LIB) $(LIBHKLEV0) 
 
 S_$(d)		:= $(notdir $(ALLEXE_$(d)) $(TESTEXE_USEF_$(d)) $(MODEXE_SOCK_$(d)))
 
@@ -123,7 +119,7 @@ endif
 #$(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng -L/SGE/lib/lx24-amd64/ -ldrmaa -Wl,-rpath,/SGE/lib/lx24-amd64
 
 $(PEEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq 
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include -DLEV0SLOP
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/egsehmicomp -I/home/jsoc/include -DLEV0SLOP
 
 #$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/cvs/JSOC/proj/libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include
 
@@ -137,10 +133,6 @@ $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)):	$(L
 # decode_hk.c and load_hk_config_files.c both use egsehmicomp.h header (but not libesgehmicomp.a)
 $(LIBHKLEV0_OBJ):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/egsehmicomp
 $(LIBHKLEV0):		$(LIBHKLEV0_OBJ)
-			$(ARCHIVE)
-			$(SLLIB)
-$(LIBHKLEV1_OBJ):	CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/egsehmicomp
-$(LIBHKLEV1):		$(LIBHKLEV1_OBJ)
 			$(ARCHIVE)
 			$(SLLIB)
 

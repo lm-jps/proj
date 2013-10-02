@@ -27,7 +27,7 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := -I$(SRCDIR)/$(d)/../../../proj/lev0/apps
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\""
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBHKLEV1)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	$(LIBHKLEV0)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
