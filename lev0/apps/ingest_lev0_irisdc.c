@@ -207,6 +207,7 @@ unsigned int fsnISPTOCLOSE = 0;
 unsigned int fsnISPX = 0;
 unsigned int fsnISP_noop = 0;
 unsigned int fsn_prev = 0;
+unsigned int ispfound = 0;
 unsigned int fsn_pre_rexmit = 0;
 unsigned int fid = 0;
 unsigned int tapcode = 0;
@@ -492,6 +493,10 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
   if(seqerror) {
     printk("**Sequence error during fsn %u. No closed image\n", fsn);
     seqerror = 0;
+    return;
+  }
+  if(ispfound != fsn) {
+    printk("**No ISP found for fsn %u. No closed image\n", fsn);
     return;
   }
   if(imgstat_iris(img, &stat)) {
@@ -1122,6 +1127,7 @@ startnew:
       fsn_normal_new_image();
     }
     else {
+      ispfound = fsnx;          //assume isp already in ds found
       Img->initialized = 1;
       Img->reopened = 1;
       Img->fsn = fsnx;
@@ -1316,6 +1322,7 @@ startnew:
     }
   }
   else {
+    ispfound = fsnx;            //assume isp already in ds found
     ImgO->initialized = 1;
     ImgO->reopened = 1;
     ImgO->fsn = fsnx;
@@ -1755,6 +1762,7 @@ if(!printflg) {		//!!TEMP
       switch (decode_status) {
         case SUCCESS_HK_NEED_TO_WTD_CTD:
           printk("*ISP found for fsn = %u\n", Fsn);
+          ispfound = fsnISPX;
           fsnISP = fsnISPX; 
           fsnISPX = Fsn;
           fsnx = Fsn;
