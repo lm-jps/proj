@@ -1920,6 +1920,10 @@ void do_ingest()
     }
   }
   closedir(dfd);
+  if(i == 0) {
+    free(nameptr);
+    return;
+  }
   qsort(nameptr, i, sizeof(NAMESORT), &compare_names);
   nofiletimeout = atoi(getenv("FLUSH_2SEC_COUNT"));
 
