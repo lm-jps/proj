@@ -527,7 +527,7 @@ Keyword:obsdate_step, time, constant, record, 1.000000, %f, day, "Slots are 1 da
 Keyword:product, string, variable, record, Unidentified, %s, NA, "FDS data product"
 Keyword:version, int, variable, record, DRMS_MISSING_VALUE, %d, NA, "Version of data file"
 # DRMS has some bug in it where you cannot use data type char to hold a character; so be wastesful and use text.
-Keyword:ingested, string, variable, record, N, %c, NA, "Y/N - file contents have/have not been ingested"
+Keyword:ingested, string, variable, record, N, %s, NA, "Y/N - file contents have/have not been ingested"
 Keyword:date, time, variable, record, DRMS_MISSING_VALUE, 0, ISO, "Date of product-file ingestion; ISO 8601"
 Keyword:datestr, string, variable, record, Unknown, %s, NA, "Human-readable date of product-file ingestion"
 
