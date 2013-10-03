@@ -23,6 +23,7 @@ use constant kArgDBPort           => "port";         # The port on the database 
 use constant kArgDBUser           => "user";         # The DB user whose account will be logged into.
 use constant kArgOrbSeries        => "orbseries";    # The orbit series (this script will ingest orbit files into this series).
 use constant kArgSAAHLZSeries     => "saahlzseries"; # The SAA_HLZ series (this script will ingest SAA_HLA files into this series).
+use constant kArgForce            => "force";        # Perform an ingest, even if the product file has already been ingested.
 
 
 # Return codes
@@ -193,38 +194,41 @@ if (defined($lock))
             
             if ($rv == &kRetSuccess)
             {
-                my($ingested);
+                my($ingested) = 0;
                 
-                # Call show_info to see if this file has been ingested already.
-                $cmd = "show_info -q key=" . &kKeyIngested . " JSOC_DBHOST=" . $args->Get(&kArgDBHost) . " JSOC_DBUSER=" . $args->Get(&kArgDBUser) . " ds=" . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version]";
-                
-                # Open read pipe.
-                $pipe = new drmsPipeRun($cmd, 0);
-                
-                if (defined($pipe))
+                if (!$args->Get(&kArgForce))
                 {
-                    $pipe->ReadPipe(\$rsp);
+                    # Call show_info to see if this file has been ingested already.
+                    $cmd = "show_info -q key=" . &kKeyIngested . " JSOC_DBHOST=" . $args->Get(&kArgDBHost) . " JSOC_DBUSER=" . $args->Get(&kArgDBUser) . " ds=" . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version]";
                     
-                    # close read pipe
-                    if ($pipe->ClosePipe())
+                    # Open read pipe.
+                    $pipe = new drmsPipeRun($cmd, 0);
+                    
+                    if (defined($pipe))
                     {
-                        print STDERR "Failure reading from pipe.\n";
-                        $rv = &kRetShowInfo;
+                        $pipe->ReadPipe(\$rsp);
+                        
+                        # close read pipe
+                        if ($pipe->ClosePipe())
+                        {
+                            print STDERR "Failure reading from pipe.\n";
+                            $rv = &kRetShowInfo;
+                        }
+                        else
+                        {
+                            chomp($rsp);
+                            $ingested = ($rsp =~ /\s*y\s*/i);
+                            if ($ingested)
+                            {
+                                print STDOUT "Already ingested, skipping.\n";
+                            }
+                        }
                     }
                     else
                     {
-                        chomp($rsp);
-                        $ingested = ($rsp =~ /\s*y\s*/i);
-                        if ($ingested)
-                        {
-                            print STDOUT "Already ingested, skipping.\n";
-                        }
+                        print STDERR "Unable to call show_info.\n";
+                        $rv = kRetShowInfo;
                     }
-                }
-                else
-                {
-                    print STDERR "Unable to call show_info.\n";
-                    $rv = kRetShowInfo;
                 }
                 
                 if ($rv == &kRetSuccess && !$ingested)
@@ -384,7 +388,8 @@ sub GetArgs
         &kArgDBPort        => 's',
         &kArgDBUser        => 's',
         &kArgOrbSeries     => 's',
-        &kArgSAAHLZSeries  => 's'
+        &kArgSAAHLZSeries  => 's',
+        &kArgForce         => 'noval'
     };
     
     return new drmsArgs($argsinH, 1);
