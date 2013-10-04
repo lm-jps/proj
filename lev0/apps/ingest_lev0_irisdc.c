@@ -2431,11 +2431,13 @@ int DoIt(void)
             RSISP = RSISPTO;    //use the timeout *rs
             fsnISPTOCLOSE = fsnISP;
             fsnISP = fsnISPX;	//inc last isp
+            ispfound = fsnISPX;
             close_image(rs, segment, segArray, &Image, fsn_prev);
             timeoutclose = 1;
             drms_server_end_transaction(drms_env, 0 , 0); //commit
             drms_server_begin_transaction(drms_env); //start another cycle
             fsn_prev = 0; 	//start over for next file
+            rs = NULL;
           }
         }
         else {
