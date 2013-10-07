@@ -208,6 +208,7 @@ unsigned int fsnISPX = 0;
 unsigned int fsnISP_noop = 0;
 unsigned int fsn_prev = 0;
 unsigned int ispfound = 0;
+unsigned int ispfoundreopen = 0;
 unsigned int fsn_pre_rexmit = 0;
 unsigned int fid = 0;
 unsigned int tapcode = 0;
@@ -495,10 +496,13 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     seqerror = 0;
     return;
   }
-  if(ispfound != fsn) {
-    printk("**No ISP found for fsn %u. No closed image\n", fsn);
-    return;
+  if(ispfoundreopen != fsn) {  //Not a reopen at the start of a tlm file
+    if(ispfound != fsn) {
+      printk("**No ISP found for fsn %u. No closed image\n", fsn);
+      return;
+    }
   }
+  else ispfoundreopen = 0;
   if(imgstat_iris(img, &stat)) {
     printk("**Error on imgstat_iris() for fsn = %u\n", fsn);
   }
@@ -1127,7 +1131,7 @@ startnew:
       fsn_normal_new_image();
     }
     else {
-      ispfound = fsnx;          //assume isp already in ds found
+      ispfoundreopen = fsnx;          //assume isp already in ds found
       Img->initialized = 1;
       Img->reopened = 1;
       Img->fsn = fsnx;
@@ -1323,6 +1327,7 @@ startnew:
   }
   else {
     ispfound = fsnx;            //assume isp already in ds found
+    ispfoundreopen = fsnx;
     ImgO->initialized = 1;
     ImgO->reopened = 1;
     ImgO->fsn = fsnx;
