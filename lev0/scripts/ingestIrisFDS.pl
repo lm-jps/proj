@@ -59,6 +59,7 @@ use constant kLockFile            => "/home/jsoc/locks/ingestIrisFds.txt";
 
 my($lock);
 my($args);
+my($opts);
 my(@dfiles);
 my($numFiles);
 my($prefix);
@@ -81,8 +82,9 @@ if (defined($lock))
     # Read-in command-line arguments.
     $rv = &kRetSuccess;
     $args = GetArgs();
+    $opts = GetOpts();
     
-    if (defined($args))
+    if (defined($args) && defined($opts))
     {
         @dfiles = GetFileList($args->Get(&kArgDataDir));
         
@@ -96,7 +98,7 @@ if (defined($lock))
                 last;
             }
             
-            print STDOUT "Analyzing file $filename...\n";
+            print STDOUT "Analyzing file '$filename' ...\n";
             
             # Extract prefix (which tells us which product the file is a part of), observation date, and file version
             # from the filename.
@@ -117,20 +119,20 @@ if (defined($lock))
                     }
                     else
                     {
-                        $rv = &kRetInvalidFilename;
-                        print STDERR "File name $filename does not conform to a recognized format.\n";
+                        print STDERR "File name '$filename' does not conform to a recognized format; skipping.\n";
+                        next;
                     }
                 }
                 else
                 {
-                    $rv = &kRetInvalidFilename;
-                    print STDERR "File name $filename does not conform to a recognized format.\n";
+                    print STDERR "File name '$filename' does not conform to a recognized format; skipping.\n";
+                    next;
                 }
             }
             else
             {
-                $rv = &kRetInvalidFilename;
-                print STDERR "File name $filename does not conform to a recognized format.\n";
+                print STDERR "File name '$filename' does not conform to a recognized format; skipping\n";
+                next;
             }
             
             if ($rv == &kRetSuccess)
@@ -146,8 +148,8 @@ if (defined($lock))
                 
                 if (!defined($prod) || $prefix !~ /IRIS/ || ($prefix !~ /orbit/ && $prefix !~ /HLZ_SAA/ && $prefix !~ /stanford/))
                 {
-                    $rv = &kRetInvalidFilename;
-                    print STDERR "File name $filename does not conform to a recognized format.\n";
+                    print STDERR "File name $filename does not conform to a recognized format; skipping.\n";
+                    next;
                 }
             }
             
@@ -196,8 +198,8 @@ if (defined($lock))
             {
                 my($ingested) = 0;
                 
-                if (!$args->Get(&kArgForce))
-                {
+                if (!$opts->Get(&kArgForce))
+                {                    
                     # Call show_info to see if this file has been ingested already.
                     $cmd = "show_info -q key=" . &kKeyIngested . " JSOC_DBHOST=" . $args->Get(&kArgDBHost) . " JSOC_DBUSER=" . $args->Get(&kArgDBUser) . " ds=" . $args->Get(&kArgSeries) . "[$obsdate][$prod][$version]";
                     
@@ -388,11 +390,24 @@ sub GetArgs
         &kArgDBPort        => 's',
         &kArgDBUser        => 's',
         &kArgOrbSeries     => 's',
-        &kArgSAAHLZSeries  => 's',
-        &kArgForce         => 'noval'
+        &kArgSAAHLZSeries  => 's'
+        
     };
     
     return new drmsArgs($argsinH, 1);
+}
+
+sub GetOpts
+{
+    my($optsinH);
+    
+    # These are optional arguments.
+    $optsinH =
+    {
+        &kArgForce         => 'noval'
+    };
+    
+    return new drmsArgs($optsinH, 0);
 }
 
 sub GetFileList
