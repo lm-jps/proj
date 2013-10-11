@@ -22,6 +22,8 @@
 #define Q_MISS1 0x200	//missvals > 0.01*totalvals
 #define Q_MISS2 0x400	//missvals > 0.05*totalvals
 #define Q_MISS3 0x800	//missvals > 0.25*totalvals
+#define Q_CAM_ANOM 0x8000   //Camera Anomaly - Entered by hand - Hao QUALITY=0x00008000
+
 //HMI sepecific
 #define Q_DARK  0x10000 //dark image (bit 16)
 //#define Q_SEQERR 0x10000	//sequencer error HSEQERR  != 'SUCCESS'
