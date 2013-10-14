@@ -180,7 +180,8 @@ char *module_name= "HMI_observables"; //name of the module
 #define CALVER_DEFAULT 0              //both default and missing values of CALVER64
 #define CALVER_SMOOTH  0x100          //bitmask for CALVER64 to indicate the use of smooth look-up tables
 #define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction
-#define CALVER_ROTATIONAL 0x10000      //bitmask for CALVER64 to indicate the use of rotational flat fields 
+#define CALVER_ROTATIONAL 0x10000     //bitmask for CALVER64 to indicate the use of rotational flat fields 
+#define Q_CAMERA_ANOMALY 0x00000080   //camera issue with HMI (e.g. DATAMIN=0): resulting images might be usable, but most likely bad
 
 //definitions for the QUALITY keyword for the lev1.5 records
 
@@ -1094,7 +1095,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.40 2013/08/19 17:53:01 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.41 2013/10/14 16:20:53 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -2690,7 +2691,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	    }
 
 
-	  //TO DEAL WITH ECLIPSES (ONLY FOR TARGET FILTERGRAM)
+	  //TO DEAL WITH ECLIPSES AND A CAMERA ANOMALY
 	  if((QUALITYin[temp] & Q_ACS_ISSLOOP) == Q_ACS_ISSLOOP)
 	    {
 	      QUALITY = QUALITY | QUAL_ISSTARGET ;
@@ -2704,6 +2705,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  if((QUALITYin[temp] & Q_ACS_NOLIMB) == Q_ACS_NOLIMB) QUALITY = QUALITY | QUAL_LIMBFITISSUE; 
 	  if((QUALITYin[temp] & Q_ACS_LUNARTRANSIT) == Q_ACS_LUNARTRANSIT) QUALITY = QUALITY | QUAL_POORQUALITY;
 	  if((QUALITYin[temp] & Q_ACS_THERMALRECOVERY) == Q_ACS_THERMALRECOVERY) QUALITY = QUALITY | QUAL_POORQUALITY;
+	  if((QUALITYin[temp] & Q_CAMERA_ANOMALY) == Q_CAMERA_ANOMALY) QUALITY = QUALITY | QUAL_POORQUALITY;
           if(isnan(X0[temp]) || isnan(Y0[temp])) //X0_LF=NAN and Y0_LF=NAN during eclipses
 	    {
 	      printf("Error: target filtergram FSN[%d] does not have valid X0_LF and/or Y0_LF keywords\n",FSN[temp]);
@@ -4228,7 +4230,10 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		      if(HCAMID[temp] == LIGHT_FRONT) KeyInterp[ii].camera=0; //WARNING: the convention of Richard's subroutine is that 0=front camera, 1=side camera
 		      else KeyInterp[ii].camera=1;
 		      if(!strcmp(HWLTNSET[temp],"OPEN")) QUALITY = QUALITY | QUAL_ISSTARGET;
-		      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY = QUALITY | QUAL_ECLIPSE;
+		      if((QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY = QUALITY | QUAL_ECLIPSE;
+		      if((QUALITYin[temp] & Q_ACS_LUNARTRANSIT) == Q_ACS_LUNARTRANSIT) QUALITY = QUALITY | QUAL_POORQUALITY;
+		      if((QUALITYin[temp] & Q_ACS_THERMALRECOVERY) == Q_ACS_THERMALRECOVERY) QUALITY = QUALITY | QUAL_POORQUALITY;
+		      if((QUALITYin[temp] & Q_CAMERA_ANOMALY) == Q_CAMERA_ANOMALY) QUALITY = QUALITY | QUAL_POORQUALITY;
 		      KeyInterp[ii].rsun=RSUNAVG;// WARNING: DIFFERENTIAL RESIZING TURNED OFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		      if(combine == 1) KeyInterp[ii].rsun=RSUN[temp]; //MAKE SURE WE CORRECT FOR THE RADIUS WHEN WE COMBINE BOTH CAMERAS!
 		      printf("actual solar radius of image in = %f\n",RSUN[temp]);
@@ -4246,8 +4251,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		      else strcat(source,"#");
 		      strcat(source,recnums);
 
-		      QUALITYLEV1 = QUALITYLEV1 | QUALITYin[temp]; //logical OR on the bits of the QUALITY keyword of the lev 1 data
-		      QUALITY     = QUALITY     | QUALITYlev1[temp]; //we test the QUALITYlev1 keyword of the lev1 used, to make sure bad gapfill or cosmic-ray hit removals are propagated
+		      QUALITYLEV1 = QUALITYLEV1 | QUALITYin[temp];   //logical OR on the bits of the QUALITY keyword of the lev 1 data
+		      QUALITY     = QUALITY     | QUALITYlev1[temp]; //we test the QUALITYlev1 keyword of the lev1 used, to make sure bad gapfill or cosmic-ray hit removals are propagated (SEEMS USELESS!!!)
 
 		      ii+=1;
 		    } //ii should be equal to ActualTempIntNum

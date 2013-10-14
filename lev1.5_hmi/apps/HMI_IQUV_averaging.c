@@ -171,6 +171,7 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define Q_MISSING_SEGMENT 0x80000000  //missing image segment for lev1 record 
 #define Q_ACS_LUNARTRANSIT 0x800000   //lunar transit
 #define Q_ACS_THERMALRECOVERY 0x400000//therma recovery after eclipses
+#define Q_CAMERA_ANOMALY 0x00000080   //camera issue with HMI (e.g. DATAMIN=0): resulting images might be usable, but most likely bad
 
 #define CALVER_DEFAULT 0 // both the default and missing value of CALVER64
 #define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction
@@ -1018,7 +1019,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.32 2013/08/19 17:53:19 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.33 2013/10/14 16:21:11 couvidat Exp $");
 }
 
 
@@ -2814,7 +2815,7 @@ int DoIt(void)
 		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
 		}
 
-      	      //TO DEAL WITH ECLIPSES (ONLY FOR TARGET FILTERGRAM)
+      	      //TO DEAL WITH ECLIPSES AND CAMERA ANOMALY
 	      if((QUALITYin[temp] & Q_ACS_ISSLOOP) == Q_ACS_ISSLOOP)
 		{
 		  QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET ;
@@ -2828,6 +2829,7 @@ int DoIt(void)
 	      if((QUALITYin[temp] & Q_ACS_NOLIMB) == Q_ACS_NOLIMB) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_LIMBFITISSUE; 
 	      if((QUALITYin[temp] & Q_ACS_LUNARTRANSIT) == Q_ACS_LUNARTRANSIT) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
 	      if((QUALITYin[temp] & Q_ACS_THERMALRECOVERY) == Q_ACS_THERMALRECOVERY) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
+	      if((QUALITYin[temp] & Q_CAMERA_ANOMALY) == Q_CAMERA_ANOMALY) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
  	      if(isnan(X0[temp]) || isnan(Y0[temp])) //X0_LF=NAN and Y0_LF=NAN during eclipses
 		{
 		  printf("Error: target filtergram FSN[%d] does not have valid X0_LF and/or Y0_LF keywords\n",FSN[temp]);
@@ -2850,7 +2852,6 @@ int DoIt(void)
 	      TargetCFINDEX   = CFINDEX[temp];
 	      strcpy(TargetISS,HWLTNSET[temp]);
 	      if(!strcmp(TargetISS,"OPEN")) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET;
-	      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
 	
 
 	      //***************************************************************************
@@ -3885,7 +3886,10 @@ int DoIt(void)
 		      if(HCAMID[temp] == LIGHT_FRONT) KeyInterp[ii].camera=0; //WARNING: the convention of Richard's subroutine is that 0=front camera, 1=side camera
 		      else KeyInterp[ii].camera=1;
 		      if(!strcmp(HWLTNSET[temp],"OPEN")) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ISSTARGET;
-		      if( (QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
+		      if((QUALITYin[temp] & Q_ACS_ECLP) == Q_ACS_ECLP) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_ECLIPSE;
+		      if((QUALITYin[temp] & Q_ACS_LUNARTRANSIT) == Q_ACS_LUNARTRANSIT) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
+		      if((QUALITYin[temp] & Q_ACS_THERMALRECOVERY) == Q_ACS_THERMALRECOVERY) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
+		      if((QUALITYin[temp] & Q_CAMERA_ANOMALY) == Q_CAMERA_ANOMALY) QUALITY[timeindex] = QUALITY[timeindex] | QUAL_POORQUALITY;
 		      KeyInterp[ii].rsun=RSUNAVG[timeindex];//RSUN[temp]; WARNING: DIFFERENTIAL RESIZING TURNED OFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		      KeyInterp[ii].xx0=X0[temp];
 		      KeyInterp[ii].yy0=Y0[temp];
