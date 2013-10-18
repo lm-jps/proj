@@ -220,6 +220,35 @@ static int SortTimes(const double *unsorted, int nitems, double **sorted)
     return nret;
 }
 
+/* Like SortTimes, but don't strip missing values. */
+static int SortTimesB(const double *unsorted, int nitems, double **sorted)
+{
+    int nret = 0;
+    double *sortedint = malloc(nitems * sizeof(double));
+    
+    if (sortedint)
+    {
+        memcpy(sortedint, unsorted, nitems * sizeof(double));
+        qsort(sortedint, nitems, sizeof(double), CmpTimes);
+        
+        if (sorted)
+        {
+            nret = nitems;
+            *sorted = malloc(nret * sizeof(double));
+            memcpy(*sorted, sortedint, nret * sizeof(double));
+        }
+        
+        free(sortedint);
+        sortedint = NULL;
+    }
+    else
+    {
+        fprintf(stderr, "SortTime() - out of memory.\n");
+    }
+    
+    return nret;
+}
+
 /* return the relationship of slottime to tgttime */
 static IORBIT_Slotpos_t GetSlotPos(double slottime, double tgttime)
 { 
@@ -1959,11 +1988,12 @@ LIBASTRO_Error_t iorbit_getSaaHlzInfo(DRMS_Env_t *env, const char *series, const
     LIBASTRO_Error_t err = kLIBASTRO_Success;
     int ntimes = 0;
     double *tgtsorted = NULL;
+    int ipt;
     
     if (info && nitems > 0)
     {        
         /* Ensure tgttimes are sorted in increasing value - missing values are removed */
-        ntimes = SortTimes(tgttimes, nitems, &tgtsorted);  
+        ntimes = SortTimesB(tgttimes, nitems, &tgtsorted);        
     }
     else
     {
@@ -1972,17 +2002,11 @@ LIBASTRO_Error_t iorbit_getSaaHlzInfo(DRMS_Env_t *env, const char *series, const
     
     *info = NULL;
     
-    if (err == kLIBASTRO_Success && ntimes <= 0)
-    {
-        /* All target times are missing, and there are ntimes target times with missing values. */       
-        
-    }
-    else if (err == kLIBASTRO_Success)
+    if (err == kLIBASTRO_Success)
     {
         /* drms_dmsv will create a db prepared statement, then it will */
         char stmnt[8192];
         DB_Binary_Result_t **res = NULL;
-        int ipt;
         void **values = NULL;
         unsigned int nargs;
         DB_Type_t dbtypes[2];
@@ -2053,49 +2077,41 @@ LIBASTRO_Error_t iorbit_getSaaHlzInfo(DRMS_Env_t *env, const char *series, const
                 snprintf(timeStr, sizeof(timeStr), "%lf", tgtsorted[ipt]);
                 nrows = res[ipt]->num_rows;
                 
-                if (nrows > 0)
-                {                       
-                    /* Create a list for each SAA-HLZ keyword for each target time. */
-                    
-                    /* eventtype */
-                    listEventType = list_llcreate(IORBIT_SAAHLZINFO_KW_EVENT_TYPE_VALUE_LEN, NULL);
-                    
-                    /* others */
-
-                    if (!listEventType)
-                    {
-                        /* Out of memory. */
-                        err = kLIBASTRO_OutOfMemory;
-                        break;
-                    }
-
-                    /* Create colToList map */
-                    colToList = hcon_create(sizeof(LinkedList_t *), IORBIT_SAAHLZINFO_TIME_KEY_LEN, (void (*)(const void *))list_llfree, NULL, NULL, NULL, 0);
-                    if (!colToList)
-                    {
-                       /* Out of memory. */
-                       err = kLIBASTRO_OutOfMemory;
-                       break;
-                    }
-                    
-                    /* Loop over matching records in the SAA-HLZ table. */
-                    for (irow = 0; irow < nrows; irow++)
-                    {
-                        /* eventtype (column 0) */
-                        db_binary_field_getstr(res[ipt], irow, 0, sizeof(eventTypeStr), eventTypeStr);
-                        list_llinserttail(listEventType, eventTypeStr);
-                        
-                        /* other keywords (columns > 0) */
-                    }
-
-                    /* Insert all lists into colToList map (one element per column/list). */
-                    hcon_insert(colToList, IORBIT_SAAHLZINFO_KW_EVENT_TYPE, &listEventType);
-                }
-                else
+                /* Create a list for each SAA-HLZ keyword for each target time. */
+                
+                /* eventtype */
+                listEventType = list_llcreate(IORBIT_SAAHLZINFO_KW_EVENT_TYPE_VALUE_LEN, NULL);
+                
+                /* others */
+                
+                if (!listEventType)
                 {
-                    /* There were NO rows in the SAA-HLZ series that matched the target time. Don't 
-                     * do anything special - an empty list will signify no matching rows. */
+                    /* Out of memory. */
+                    err = kLIBASTRO_OutOfMemory;
+                    break;
                 }
+                
+                /* Create colToList map */
+                colToList = hcon_create(sizeof(LinkedList_t *), IORBIT_SAAHLZINFO_TIME_KEY_LEN, (void (*)(const void *))list_llfree, NULL, NULL, NULL, 0);
+                if (!colToList)
+                {
+                    /* Out of memory. */
+                    err = kLIBASTRO_OutOfMemory;
+                    break;
+                }
+                
+                /* Loop over matching records in the SAA-HLZ table. */
+                for (irow = 0; irow < nrows; irow++)
+                {
+                    /* eventtype (column 0) */
+                    db_binary_field_getstr(res[ipt], irow, 0, sizeof(eventTypeStr), eventTypeStr);
+                    list_llinserttail(listEventType, eventTypeStr);
+                    
+                    /* other keywords (columns > 0) */
+                }
+                
+                /* Insert all lists into colToList map (one element per column/list). */
+                hcon_insert(colToList, IORBIT_SAAHLZINFO_KW_EVENT_TYPE, &listEventType);
                 
                 /* Insert lists into return-value container. */
                 hcon_insert(*info, timeStr, &colToList);

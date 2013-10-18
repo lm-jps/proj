@@ -26,6 +26,7 @@
 #include <astro.h>
 #include <fresize.h>
 #include <gapfill.h>
+#include "list.h"
 #include </home/jsoc/include/fftw3.h> 
 //#include "fftw3.h" 
 #include "imgdecode.h"
@@ -56,6 +57,9 @@
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define LOGTEST 0
 #define CAL_HCFTID 17		//image is cal mode 
+
+// SAA-HLZ
+#define SAA_HLZ_SERIES "iris.saa_hlz"
 
 int compare_rptr(const void *a, const void *b);
 static TIME SDO_to_DRMS_time(int sdo_s, int sdo_ss);
@@ -125,6 +129,7 @@ static short aifcps;
 double aiascale = 1.0;
 
 IORBIT_Info_t *IOinfo = NULL;
+
 IORBIT_Info_t IOdata;
 LIBASTRO_Error_t IOstatus;
 unsigned int fsnarray[NUMRECLEV1];
@@ -378,6 +383,117 @@ int orbit_calc()
   return(0);
 }
 
+static int GetSaaHlz(DRMS_Env_t *env, DRMS_RecordSet_t *rs, double *tgttimes, int ntimes, int (*myprintkerr)(const char *fmt, ...))
+{
+    IORBIT_SaaHlzInfo_t *saahlzinfo = NULL;
+    int itime;
+    LinkedList_t *list = NULL;
+    LinkedList_t **pList = NULL;
+    ListNode_t *node = NULL;
+    char *eventType = NULL;
+    int nhlz;
+    int shlz;
+    int saa;
+    HContainer_t *colToList = NULL;
+    HContainer_t **pColToList = NULL;
+    char timeStr[IORBIT_SAAHLZINFO_TIME_KEY_LEN];
+    LIBASTRO_Error_t rv;
+    int ret = 0;
+    
+    rv = iorbit_getSaaHlzInfo(env, SAA_HLZ_SERIES, tgttimes, ntimes, &saahlzinfo);
+    
+    if (rv == kLIBASTRO_Success)
+    {
+        for (itime = 0; itime < ntimes; itime++)
+        {
+            nhlz = 0;
+            shlz = 0;
+            saa = 0;
+            
+            snprintf(timeStr, sizeof(timeStr), "%lf", tgttimes[itime]);
+            
+            if ((pColToList = hcon_lookup(saahlzinfo, timeStr)) != NULL)
+            {
+                colToList = *pColToList;
+                
+                if ((pList = hcon_lookup(colToList, IORBIT_SAAHLZINFO_KW_EVENT_TYPE)) != NULL)
+                {
+                    list = *pList;
+                    list_llreset(list);
+                    
+                    while((node = list_llnext(list)) != NULL)
+                    {
+                        eventType = (char *)node->data;
+                        
+                        if (strcasecmp(eventType, "NHLZ") == 0)
+                        {
+                            nhlz = 1;
+                        }
+                        else if (strcasecmp(eventType, "SHLZ") == 0)
+                        {
+                            shlz = 1;
+                        }
+                        else if (strcasecmp(eventType, "SAA") == 0)
+                        {
+                            saa = 1;
+                        }
+                    }
+                    
+                    /* Set SAA-HLZ keywords */
+                    if (nhlz && shlz)
+                    {
+                        /* ERROR - set HLZ to 0. */
+                        printkerr("ERROR - For tobs %lf, both event types NHLZ and SHLZ exist.\n", tgttimes[itime]);
+                        drms_setkey_int(rs->records[itime], "HLZ", 0);
+                    }
+                    else if (nhlz)
+                    {
+                        printf("  Setting HLZ to 1.\n");
+                        drms_setkey_int(rs->records[itime], "HLZ", 1);
+                    }
+                    else if (shlz)
+                    {
+                        printf("  Setting HLZ to 2.\n");
+                        drms_setkey_int(rs->records[itime], "HLZ", 2);
+                    }
+                    else 
+                    {
+                        drms_setkey_int(rs->records[itime], "HLZ", 0);                    
+                    }
+                    
+                    if (saa)
+                    {
+                        drms_setkey_int(rs->records[itime], "SAA", 1);
+                    }
+                    else
+                    {
+                        drms_setkey_int(rs->records[itime], "SAA", 0);
+                    }
+                }
+                else
+                {
+                    myprintkerr("ERROR - SAA-HLZ info for keyword %s unexecpectedly missing.\n", IORBIT_SAAHLZINFO_KW_EVENT_TYPE);
+                    ret = 1;
+                }
+            }
+            else
+            {
+                myprintkerr("ERROR - SAA-HLZ info for tobs %lf unexecpectedly missing.\n", tgttimes[itime]);
+                ret = 1;
+            }
+        }
+        
+        iorbit_cleanSaaHlzInfo(&saahlzinfo);
+    }
+    else
+    {
+        myprintkerr("ERROR - Couldn't query db properly.\n");
+        ret = 1;
+    }
+    
+    return ret;
+}
+
 //#include "aia_despike.c"
 //#include "do_flat.c"
 #include "get_image_location.c"
@@ -501,7 +617,9 @@ int do_ingest(long long bbrec, long long eerec)
       }
       return(1);                //abort. new 2/22/2011
     }
-
+    
+    /* IOStatus == kLIBASTRO_Success */
+    
     rset1 = drms_create_records(drms_env, ncnt, dsout, DRMS_PERMANENT,&dstatus);
     if(dstatus) {
       printk("**ERROR: Can't create records for %s\n", dsout);
@@ -510,6 +628,19 @@ int do_ingest(long long bbrec, long long eerec)
       }
       return(1);	//new 2/22/2011
     }
+    
+    /*****************************************************************/
+    /* Obtain SAA-HLZ information, and set the SAA and HLZ keywords. */
+    
+    if (GetSaaHlz(drms_env, rset1->records, tobs, ncnt, printkerr))
+    {
+        printk("***Error - Unable to fetch SAA-HLZ information.\n");
+        return 1;
+    }
+    
+    /* End SAA-HLZ                                                   */
+    /*****************************************************************/
+    
 
     for(i=0; i < ncnt; i++) { 	//do for all the sorted lev0 records
       //StartTimer(2);	//!!TEMP
@@ -662,6 +793,13 @@ int do_ingest(long long bbrec, long long eerec)
            drms_setkey_double(rs, "HEIZ_OBS", IOdata.hciZ);
            drms_setkey_string(rs, "ORB_REC", IOdata.orb_rec); 
       }
+        
+        
+
+        
+        
+                
+        
       drms_setkey_float(rs, "X0_MP", imageloc[i].x);
       drms_setkey_float(rs, "Y0_MP", imageloc[i].y);
       drms_setkey_float(rs, "INST_ROT", imageloc[i].instrot);

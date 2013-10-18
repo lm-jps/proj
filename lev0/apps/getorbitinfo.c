@@ -261,65 +261,65 @@ int DoIt(void)
                    nhlz = 0;
                    shlz = 0;
                    saa = 0;
-
+                   
                    snprintf(timeStr, sizeof(timeStr), "%lf", tgttimes[itime]);
                    
                    if ((pColToList = hcon_lookup(saahlzinfo, timeStr)) != NULL)
                    {
-                      colToList = *pColToList;
-
-                      if ((pList = hcon_lookup(colToList, IORBIT_SAAHLZINFO_KW_EVENT_TYPE)) != NULL)
-                      {
-                         list = *pList;
-                         list_llreset(list);
-                         
-                         while((node = list_llnext(list)) != NULL)
-                         {
-                            eventType = (char *)node->data;
-                            
-                            if (strcasecmp(eventType, "NHLZ") == 0)
-                            {
-                               nhlz = 1;
-                            }
-                            else if (strcasecmp(eventType, "SHLZ") == 0)
-                            {
-                               shlz = 1;
-                            }
-                            else if (strcasecmp(eventType, "SAA") == 0)
-                            {
-                               saa = 1;
-                            }
-                         }
-                      }
-                      
-                      printf("For time %lf:\n", tgttimes[itime]);
-                      
-                      if (nhlz && shlz)
-                      {
-                         /* ERROR - set HLZ to 0. */
-                         printf("  ERROR - setting HLZ to 0.\n");
-                      }
-                      else if (nhlz)
-                      {
-                         printf("  Setting HLZ to 1.\n");
-                      }
-                      else if (shlz)
-                      {
-                         printf("  Setting HLZ to 2.\n");
-                      }
-                      else 
-                      {
-                         printf("  Setting HLZ to 0.\n");
-                      }
-                      
-                      if (saa)
-                      {
-                         printf("  Setting SAA to 1.\n");
-                      }
-                      else
-                      {
-                         printf("  Setting SAA to 0.\n");                   
-                      }
+                       colToList = *pColToList;
+                       
+                       if ((pList = hcon_lookup(colToList, IORBIT_SAAHLZINFO_KW_EVENT_TYPE)) != NULL)
+                       {
+                           list = *pList;
+                           list_llreset(list);
+                           
+                           while((node = list_llnext(list)) != NULL)
+                           {
+                               eventType = (char *)node->data;
+                               
+                               if (strcasecmp(eventType, "NHLZ") == 0)
+                               {
+                                   nhlz = 1;
+                               }
+                               else if (strcasecmp(eventType, "SHLZ") == 0)
+                               {
+                                   shlz = 1;
+                               }
+                               else if (strcasecmp(eventType, "SAA") == 0)
+                               {
+                                   saa = 1;
+                               }
+                           }
+                           
+                           printf("For time %lf:\n", tgttimes[itime]);
+                           
+                           if (nhlz && shlz)
+                           {
+                               /* ERROR - set HLZ to 0. */
+                               printf("  ERROR - setting HLZ to 0.\n");
+                           }
+                           else if (nhlz)
+                           {
+                               printf("  Setting HLZ to 1.\n");
+                           }
+                           else if (shlz)
+                           {
+                               printf("  Setting HLZ to 2.\n");
+                           }
+                           else 
+                           {
+                               printf("  Setting HLZ to 0.\n");
+                           }
+                           
+                           if (saa)
+                           {
+                               printf("  Setting SAA to 1.\n");
+                           }
+                           else
+                           {
+                               printf("  Setting SAA to 0.\n");                   
+                           }
+                       }
                    }
                }
                
@@ -330,7 +330,7 @@ int DoIt(void)
                printf("Couldn't query db properly.\n");
                status = kSDOORB_failure;
            }
-
+           
            return status;
        }
        else
