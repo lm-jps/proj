@@ -632,7 +632,7 @@ int do_ingest(long long bbrec, long long eerec)
     /*****************************************************************/
     /* Obtain SAA-HLZ information, and set the SAA and HLZ keywords. */
     
-    if (GetSaaHlz(drms_env, rset1->records, tobs, ncnt, printkerr))
+    if (GetSaaHlz(drms_env, rset1, tobs, ncnt, printkerr))
     {
         printk("***Error - Unable to fetch SAA-HLZ information.\n");
         return 1;
