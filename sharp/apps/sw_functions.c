@@ -63,10 +63,6 @@
 //  =(Gauss/pix^2)(0.5 arcsec/pix)^2(722500m/arcsec)^2(100cm/m)^2
 //  =(1.30501e15)Gauss*cm^2
 
-//  The disambig mask value selects only the pixels with values of 5 or 7 -- that is,
-//  5: pixels for which the radial acute disambiguation solution was chosen
-//  7: pixels for which the radial acute and NRWA disambiguation agree
-
 int computeAbsFlux(float *bz_err, float *bz, int *dims, float *absFlux, 
                    float *mean_vf_ptr, float *mean_vf_err_ptr, float *count_mask_ptr, int *mask,  
                    int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
@@ -179,7 +175,7 @@ int computeGamma(float *bz_err, float *bh_err, float *bx, float *by, float *bz, 
                     if isnan(bz_err[j * nx + i]) continue;
                     if isnan(bh_err[j * nx + i]) continue;
                     if (bz[j * nx + i] == 0) continue;
-                    sum += (atan(fabs(bz[j * nx + i]/bh[j * nx + i] )))*(180./PI);
+                    sum += fabs(atan(bh[j * nx + i]/fabs(bz[j * nx + i])))*(180./PI);
                     err += (( sqrt ( ((bz_err[j * nx + i]*bz_err[j * nx + i])/(bz[j * nx + i]*bz[j * nx + i])) + ((bh_err[j * nx + i]*bh_err[j * nx + i])/(bh[j * nx + i]*bh[j * nx + i])))  * fabs(bz[j * nx + i]/bh[j * nx + i]) ) / (1 + (bz[j * nx + i]/bh[j * nx + i])*(bz[j * nx + i]/bh[j * nx + i]))) *(180./PI);
                     count_mask++;
 		  }
@@ -587,18 +583,8 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
                // calculate jz at all points
 
                jz[j * nx + i]            = (derx[j * nx + i]-dery[j * nx + i]);       // jz is in units of Gauss/pix
-
-               // the next 7 lines can be used with a for loop that goes from i=0;i<=nx-1 and j=0;j<=ny-1.
-               //int i1, j1,i2, j2;
-               //i1 = i + 1 ; if (i1 >nx-1){i1=nx-1;}
-               //j1 = j + 1 ; if (j1 >ny-1){j1=ny-1;}
-               //i2 = i - 1; if (i2 < 0){i2 = 0;}
-               //j2 = j - 1; if (j2 < 0){i2 = 0;}
-               //jz_err[j * nx + i]        = 0.5*sqrt( (bx_err[j1 * nx + i]*bx_err[j1 * nx + i]) + (bx_err[j2 * nx + i]*bx_err[j2 * nx + i]) + 
-               //                                     (by_err[j * nx + i1]*by_err[j * nx + i1]) + (by_err[j * nx + i2]*by_err[j * nx + i2]) ) ;
-
                jz_err[j * nx + i]        = 0.5*sqrt( (bx_err[(j+1) * nx + i]*bx_err[(j+1) * nx + i]) + (bx_err[(j-1) * nx + i]*bx_err[(j-1) * nx + i]) + 
-                                                    (by_err[j * nx + (i+1)]*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i-1)]*by_err[j * nx + (i-1)]) ) ; 
+                                                     (by_err[j * nx + (i+1)]*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i-1)]*by_err[j * nx + (i-1)]) ) ; 
                jz_err_squared[j * nx + i]= (jz_err[j * nx + i]*jz_err[j * nx + i]); 
                count_mask++; 
 
@@ -668,20 +654,11 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz, float *jz_smooth
 /* Example function 10:  Twist Parameter, alpha */
 
 // The twist parameter, alpha, is defined as alpha = Jz/Bz. In this case, the calculation
-// for alpha is calculated in the following way (different from Leka and Barnes' approach):
+// for alpha is weighted by Bz (following Hagino et al., http://adsabs.harvard.edu/abs/2004PASJ...56..831H):
    
-       // (sum of all positive Bz + abs(sum of all negative Bz)) = avg Bz
-       // (abs(sum of all Jz at positive Bz) + abs(sum of all Jz at negative Bz)) = avg Jz
-       // avg alpha = avg Jz / avg Bz
-
-// The sign is assigned as follows:
-// If the sum of all Bz is greater than 0, then evaluate the sum of Jz at the positive Bz pixels. 
-// If this value is > 0, then alpha is > 0.
-// If this value is < 0, then alpha is <0.
-//
-// If the sum of all Bz is less than 0, then evaluate the sum of Jz at the negative Bz pixels. 
-// If this value is > 0, then alpha is < 0.
-// If this value is < 0, then alpha is > 0.
+       // numerator   = sum of all Jz*Bz
+       // denominator = sum of Bz*Bz
+       // alpha       = numerator/denominator
 
 // The units of alpha are in 1/Mm
 // The units of Jz are in Gauss/pix; the units of Bz are in Gauss.
@@ -693,60 +670,50 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz, float *jz_smooth
 int computeAlpha(float *jz_err, float *bz_err, float *bz, int *dims, float *jz, float *jz_smooth, float *mean_alpha_ptr, float *mean_alpha_err_ptr, int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs)
 
 {
-        int nx = dims[0]; 
-        int ny = dims[1];
-        int i = 0;
-        int j = 0;
-        int count_mask = 0;
-	double a = 0.0; 
-	double b = 0.0;
-	double c = 0.0;
-	double d = 0.0;
-	double sum1 = 0.0;
-	double sum2 = 0.0;
-        double sum3 = 0.0;
-	double sum4 = 0.0;
-	double sum = 0.0;
-	double sum5 = 0.0;
-	double sum6 = 0.0;
-	double sum_err = 0.0;
+        int nx                     = dims[0]; 
+        int ny                     = dims[1];
+        int i                      = 0;
+        int j                      = 0;
+	double alpha_total         = 0.0;
+        double C                   = ((1/cdelt1)*(rsun_obs/rsun_ref)*(1000000.));
+        double total               = 0.0;
+        double A                   = 0.0;
+        double B                   = 0.0;
 
 	if (nx <= 0 || ny <= 0) return 1;
+	for (i = 1; i < nx-1; i++) 
+	  {
+	    for (j = 1; j < ny-1; j++) 
+	      {
+                if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
+                if isnan(jz[j * nx + i])   continue;
+                if isnan(bz[j * nx + i])   continue;
+                if (jz[j * nx + i] == 0.0) continue;
+                if (bz[j * nx + i] == 0.0) continue;
+                //if (jz_err[j * nx + i] > abs(jz[j * nx + i]) ) continue;
+                //if (bz_err[j * nx + i] > abs(bz[j * nx + i]) ) continue;
+                A += jz[j*nx+i]*bz[j*nx+i];
+                B += bz[j*nx+i]*bz[j*nx+i];
+              }
+            }
 
 	for (i = 1; i < nx-1; i++) 
 	  {
 	    for (j = 1; j < ny-1; j++) 
 	      {
                 if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
-                if isnan(jz[j * nx + i]) continue;
-                if isnan(bz[j * nx + i]) continue;
-                if (jz[j * nx + i]     == 0.0) continue;
-                if (bz_err[j * nx + i] == 0.0) continue;
-                if (bz[j * nx + i]     == 0.0) continue;
-                if (bz[j * nx + i] >  0) sum1 += ( bz[j * nx + i] ); a++;
-                if (bz[j * nx + i] <= 0) sum2 += ( bz[j * nx + i] ); b++;
-                if (bz[j * nx + i] >  0) sum3 += ( jz[j * nx + i] ); c++;
-                if (bz[j * nx + i] <= 0) sum4 += ( jz[j * nx + i] ); d++;
-                sum5    += bz[j * nx + i];
-                /* sum_err is a fractional uncertainty */
-                sum_err += sqrt(((jz_err[j * nx + i]*jz_err[j * nx + i])/(jz[j * nx + i]*jz[j * nx + i])) + ((bz_err[j * nx + i]*bz_err[j * nx + i])/(bz[j * nx + i]*bz[j * nx + i]))) * fabs( ( (jz[j * nx + i]) / (bz[j * nx + i]) ) *(1/cdelt1)*(rsun_obs/rsun_ref)*(1000000.)); 
-                count_mask++;
-	      }	
+                if isnan(jz[j * nx + i])   continue;
+                if isnan(bz[j * nx + i])   continue;
+                if (jz[j * nx + i] == 0.0) continue;
+                if (bz[j * nx + i] == 0.0) continue;
+                total += bz[j*nx+i]*bz[j*nx+i]*jz_err[j*nx+i]*jz_err[j*nx+i] + (jz[j*nx+i]-2*bz[j*nx+i]*A/B)*(jz[j*nx+i]-2*bz[j*nx+i]*A/B)*bz_err[j*nx+i]*bz_err[j*nx+i];
+ 	      }	
 	  }
-        
-        sum     = (((fabs(sum3))+(fabs(sum4)))/((fabs(sum2))+sum1))*((1/cdelt1)*(rsun_obs/rsun_ref)*(1000000.)); /* the units for (jz/bz) are 1/Mm */
-        
-        /* Determine the sign of alpha */
-        if ((sum5 > 0) && (sum3 >  0)) sum=sum;
-        if ((sum5 > 0) && (sum3 <= 0)) sum=-sum;
-        if ((sum5 < 0) && (sum4 <= 0)) sum=sum;
-        if ((sum5 < 0) && (sum4 >  0)) sum=-sum;
 
-	*mean_alpha_ptr = sum; /* Units are 1/Mm */
-        *mean_alpha_err_ptr    = (sqrt(sum_err*sum_err)) / ((a+b+c+d)*100.0); // error in the quantity (sum)/(count_mask); factor of 100 comes from converting percent
-
-        //printf("MEANALP=%f\n",*mean_alpha_ptr);
-        //printf("MEANALP_err=%f\n",*mean_alpha_err_ptr);
+        /* Determine the absolute value of alpha. The units for alpha are 1/Mm */
+        alpha_total              = ((A/B)*C); 
+        *mean_alpha_ptr          = alpha_total;
+        *mean_alpha_err_ptr      = (C/B)*(sqrt(total));
 
 	return 0;
 }
@@ -1099,7 +1066,7 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 char *sw_functions_version() // Returns CVS version of sw_functions.c
 {
-  return strdup("$Id: sw_functions.c,v 1.18 2013/10/01 01:57:44 mbobra Exp $");
+  return strdup("$Id: sw_functions.c,v 1.19 2013/10/18 23:36:02 mbobra Exp $");
 }
 
 /* ---------------- end of this file ----------------*/
