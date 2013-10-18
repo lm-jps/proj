@@ -31,7 +31,8 @@ typedef enum
     kLIBASTRO_Interpolation,
     kLIBASTRO_InsufficientData,
     kLIBASTRO_Internal,
-    kLIBASTRO_OutOfMemory
+    kLIBASTRO_OutOfMemory,
+    kLIBASTRO_DbStatement
 } LIBASTRO_Error_t;
 
 
@@ -91,6 +92,15 @@ struct IORBIT_Info_struct
 
 typedef struct IORBIT_Info_struct IORBIT_Info_t;
 
+/* SAA-HLZ */
+#define IORBIT_SAAHLZINFO_TIME_KEY_LEN             64
+#define IORBIT_SAAHLZINFO_KW_EVENT_TYPE            "eventType"
+#define IORBIT_SAAHLZINFO_KW_LEN                   32
+#define IORBIT_SAAHLZINFO_KW_EVENT_TYPE_VALUE_LEN  8
+
+typedef HContainer_t IORBIT_SaaHlzInfo_t;
+
+
 LIBASTRO_Error_t iorbit_test(DRMS_Env_t *env, const char *orbseries);
 void iorbit_carrcoords(TIME t, double obsdist, double b, double hci_long, int *crot, double *L, double *B);
 LIBASTRO_Error_t iorbit_getinfo(DRMS_Env_t *env, 
@@ -110,7 +120,14 @@ LIBASTRO_Error_t iorbit_getinfo_ext(DRMS_Env_t *env,
                                     IORBIT_CacheAction_t ctype,
                                     IORBIT_Info_t **info,
                                     HContainer_t *keymap);
+LIBASTRO_Error_t iorbit_getSaaHlzInfo(DRMS_Env_t *env, 
+                                      const char *series, 
+                                      const double *tgttimes, 
+                                      int nitems, 
+                                      IORBIT_SaaHlzInfo_t **info);
+
 void iorbit_cleanup();
+void iorbit_cleanSaaHlzInfo(IORBIT_SaaHlzInfo_t **info);
 
 void HeliographicLocation(TIME t, int *crot, double *L, double *B);
 TIME HeliographicTime(int crot, double L);

@@ -12,6 +12,7 @@
 #define kGRIDTIMES "grid"
 #define kTESTINTERP "i"
 #define kNOVELOCITY "n"
+#define kSAAHLZ "s"
 
 #define kOBSDATE "OBS_DATE"
 #define kHCIX "HCIEC_X"
@@ -23,14 +24,15 @@
 
 ModuleArgs_t module_args[] =
 {
-  {ARG_STRING, kORBSERIES, "sdo.fds_orbit_vectors", "Series containing orbit position and velocity vectors; it testing, then contains record-set query."},
-  {ARG_STRING, kINTERPALG, "linear", "Supported algorithm to use when interpolating between grid times."},
-  {ARG_DOUBLES, kTGTTIMESARR, "0.0", "Array of internal times (doubles) for which orbit information is to be returned. "},
-  {ARG_STRING, kTGTTIMES, "problem", "File containing array of internal times (doubles) for which orbit information is to be returned. "},
-  {ARG_STRING, kGRIDTIMES, "unspecified", "Record-set query that specifies grid-vector internal times."},
-  {ARG_FLAG, kTESTINTERP, "", "Test interpolation routine."},
-  {ARG_FLAG, kNOVELOCITY, "", "The orbit series has no velocity keywords (like iris.orbitvectors)"},
-  {ARG_END}
+    {ARG_STRING, kORBSERIES, "sdo.fds_orbit_vectors", "Series containing orbit position and velocity vectors; it testing, then contains record-set query."},
+    {ARG_STRING, kINTERPALG, "linear", "Supported algorithm to use when interpolating between grid times."},
+    {ARG_DOUBLES, kTGTTIMESARR, "0.0", "Array of internal times (doubles) for which orbit information is to be returned. "},
+    {ARG_STRING, kTGTTIMES, "problem", "File containing array of internal times (doubles) for which orbit information is to be returned. "},
+    {ARG_STRING, kGRIDTIMES, "unspecified", "Record-set query that specifies grid-vector internal times."},
+    {ARG_FLAG, kTESTINTERP, "", "Test interpolation routine."},
+    {ARG_FLAG, kNOVELOCITY, "", "The orbit series has no velocity keywords (like iris.orbitvectors)"},
+    {ARG_FLAG, kSAAHLZ, "", "Test the SAA-HLZ stuff out."},    
+    {ARG_END}
 };
 
 char *module_name = "getorbitinfo";
@@ -56,11 +58,13 @@ int DoIt(void)
    int ntimes = 0;
    int testinterp;
     int novelocity;
+    int saahlz;
    TIMER_t *tmr = NULL;
 
    orbseries = cmdparams_get_str(&cmdparams, kORBSERIES, NULL);
    testinterp = cmdparams_isflagset(&cmdparams, kTESTINTERP);
     novelocity = cmdparams_isflagset(&cmdparams, kNOVELOCITY);
+    saahlz = cmdparams_isflagset(&cmdparams, kSAAHLZ);
 
    alg = cmdparams_get_str(&cmdparams, kINTERPALG, NULL);
 
@@ -232,6 +236,103 @@ int DoIt(void)
                rv = kLIBASTRO_OutOfMemory;
            }
        }
+       else if (saahlz)
+       {
+           /* Test out the SAA-HLZ stuff. */
+           IORBIT_SaaHlzInfo_t *saahlzinfo = NULL;
+           int itime;
+           LinkedList_t *list = NULL;
+           LinkedList_t **pList = NULL;
+           ListNode_t *node = NULL;
+           char *eventType = NULL;
+           int nhlz;
+           int shlz;
+           int saa;
+           HContainer_t *colToList = NULL;
+           HContainer_t **pColToList = NULL;
+           char timeStr[IORBIT_SAAHLZINFO_TIME_KEY_LEN];
+           
+           rv = iorbit_getSaaHlzInfo(drms_env, "iris.saa_hlz", tgttimes, ntimes, &saahlzinfo);
+           
+           if (rv == kLIBASTRO_Success)
+           {
+               for (itime = 0; itime < ntimes; itime++)
+               {
+                   nhlz = 0;
+                   shlz = 0;
+                   saa = 0;
+
+                   snprintf(timeStr, sizeof(timeStr), "%lf", tgttimes[itime]);
+                   
+                   if ((pColToList = hcon_lookup(saahlzinfo, timeStr)) != NULL)
+                   {
+                      colToList = *pColToList;
+
+                      if ((pList = hcon_lookup(colToList, IORBIT_SAAHLZINFO_KW_EVENT_TYPE)) != NULL)
+                      {
+                         list = *pList;
+                         list_llreset(list);
+                         
+                         while((node = list_llnext(list)) != NULL)
+                         {
+                            eventType = (char *)node->data;
+                            
+                            if (strcasecmp(eventType, "NHLZ") == 0)
+                            {
+                               nhlz = 1;
+                            }
+                            else if (strcasecmp(eventType, "SHLZ") == 0)
+                            {
+                               shlz = 1;
+                            }
+                            else if (strcasecmp(eventType, "SAA") == 0)
+                            {
+                               saa = 1;
+                            }
+                         }
+                      }
+                      
+                      printf("For time %lf:\n", tgttimes[itime]);
+                      
+                      if (nhlz && shlz)
+                      {
+                         /* ERROR - set HLZ to 0. */
+                         printf("  ERROR - setting HLZ to 0.\n");
+                      }
+                      else if (nhlz)
+                      {
+                         printf("  Setting HLZ to 1.\n");
+                      }
+                      else if (shlz)
+                      {
+                         printf("  Setting HLZ to 2.\n");
+                      }
+                      else 
+                      {
+                         printf("  Setting HLZ to 0.\n");
+                      }
+                      
+                      if (saa)
+                      {
+                         printf("  Setting SAA to 1.\n");
+                      }
+                      else
+                      {
+                         printf("  Setting SAA to 0.\n");                   
+                      }
+                   }
+               }
+               
+               iorbit_cleanSaaHlzInfo(&saahlzinfo);
+           }
+           else
+           {
+               printf("Couldn't query db properly.\n");
+               status = kSDOORB_failure;
+           }
+
+           return status;
+       }
        else
        {
            rv = iorbit_getinfo(drms_env, 
@@ -241,7 +342,7 @@ int DoIt(void)
                           tgttimes, 
                           ntimes, 
                           kIORBIT_CacheAction_DontCache,
-                               &info);
+                          &info);
        }
 
       if (rv != kLIBASTRO_Success)

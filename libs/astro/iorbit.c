@@ -1,5 +1,6 @@
 #include "astro.h"
 #include "jsoc_main.h"
+#include "list.h"
 
 #define DEBUG 0
 
@@ -1952,8 +1953,177 @@ LIBASTRO_Error_t iorbit_getinfo_ext(DRMS_Env_t *env,
     return iorbit_getinfo_internal(env, srcseries, optfilter, alg, tgttimes, nitems, ctype, info, 0);
 }
 
+/* */
+LIBASTRO_Error_t iorbit_getSaaHlzInfo(DRMS_Env_t *env, const char *series, const double *tgttimes, int nitems, IORBIT_SaaHlzInfo_t **info)
+{
+    LIBASTRO_Error_t err = kLIBASTRO_Success;
+    int ntimes = 0;
+    double *tgtsorted = NULL;
+    
+    if (info && nitems > 0)
+    {        
+        /* Ensure tgttimes are sorted in increasing value - missing values are removed */
+        ntimes = SortTimes(tgttimes, nitems, &tgtsorted);  
+    }
+    else
+    {
+        err = kLIBASTRO_InvalidArgs;
+    }
+    
+    *info = NULL;
+    
+    if (err == kLIBASTRO_Success && ntimes <= 0)
+    {
+        /* All target times are missing, and there are ntimes target times with missing values. */       
+        
+    }
+    else if (err == kLIBASTRO_Success)
+    {
+        /* drms_dmsv will create a db prepared statement, then it will */
+        char stmnt[8192];
+        DB_Binary_Result_t **res = NULL;
+        int ipt;
+        void **values = NULL;
+        unsigned int nargs;
+        DB_Type_t dbtypes[2];
+        
+        snprintf(stmnt, sizeof(stmnt), "SELECT eventtype FROM %s WHERE recnum in (SELECT max(recnum) FROM %s WHERE ? >= starttime AND ? <= stoptime GROUP BY starttime,stoptime)", series, series);
+        
+        nargs = 2;
+        values = calloc(1, nargs * sizeof(void *));
+        
+        if (!values)
+        {
+            err = kLIBASTRO_OutOfMemory;
+        }
+        
+        if (!err)
+        {
+            values[0] = calloc(1, ntimes * sizeof(double));
+            if (!values[0])
+            {
+                err = kLIBASTRO_OutOfMemory;
+            }
+        }
+        
+        if (!err)
+        {
+            values[1] = values[0]; /* Since we're passing the same column of target times twice to iorbit, cheat and make 
+                                    * the second column point to the first. */
+            
+            dbtypes[0] = DB_DOUBLE;
+            dbtypes[1] = DB_DOUBLE;
+            
+            for (ipt = 0; ipt < ntimes; ipt++)
+            {
+                ((double *)(values[0]))[ipt] = tgtsorted[ipt];
+            }
+        }
+        
+        if (!err)
+        {
+            if ((res = drms_query_bin_ntuple(env->session, stmnt, ntimes, nargs, dbtypes, values)) == NULL)
+            {
+                err = kLIBASTRO_DbStatement;
+            }
+        }
+        
+        if (!err)
+        {
+            /* Fill-up return container. */
+            *info = hcon_create(sizeof(HContainer_t *), IORBIT_SAAHLZINFO_TIME_KEY_LEN, (void (*)(const void *))hcon_destroy, NULL, NULL, NULL, 0);
+            if (!*info)
+            {
+                err = kLIBASTRO_OutOfMemory;
+            }
+        }
+        
+        if (!err)
+        {
+            int nrows;
+            int irow;
+            char eventTypeStr[IORBIT_SAAHLZINFO_KW_EVENT_TYPE_VALUE_LEN];
+            HContainer_t *colToList = NULL; /* Maps column (e.g., eventtype) to list. */
+            LinkedList_t *listEventType = NULL;
+            char timeStr[IORBIT_SAAHLZINFO_TIME_KEY_LEN];
+            
+            /* Loop over target times. */
+            for (ipt = 0; ipt < ntimes; ipt++)
+            {
+                snprintf(timeStr, sizeof(timeStr), "%lf", tgtsorted[ipt]);
+                nrows = res[ipt]->num_rows;
+                
+                if (nrows > 0)
+                {                       
+                    /* Create a list for each SAA-HLZ keyword for each target time. */
+                    
+                    /* eventtype */
+                    listEventType = list_llcreate(IORBIT_SAAHLZINFO_KW_EVENT_TYPE_VALUE_LEN, NULL);
+                    
+                    /* others */
+
+                    if (!listEventType)
+                    {
+                        /* Out of memory. */
+                        err = kLIBASTRO_OutOfMemory;
+                        break;
+                    }
+
+                    /* Create colToList map */
+                    colToList = hcon_create(sizeof(LinkedList_t *), IORBIT_SAAHLZINFO_TIME_KEY_LEN, (void (*)(const void *))list_llfree, NULL, NULL, NULL, 0);
+                    if (!colToList)
+                    {
+                       /* Out of memory. */
+                       err = kLIBASTRO_OutOfMemory;
+                       break;
+                    }
+                    
+                    /* Loop over matching records in the SAA-HLZ table. */
+                    for (irow = 0; irow < nrows; irow++)
+                    {
+                        /* eventtype (column 0) */
+                        db_binary_field_getstr(res[ipt], irow, 0, sizeof(eventTypeStr), eventTypeStr);
+                        list_llinserttail(listEventType, eventTypeStr);
+                        
+                        /* other keywords (columns > 0) */
+                    }
+
+                    /* Insert all lists into colToList map (one element per column/list). */
+                    hcon_insert(colToList, IORBIT_SAAHLZINFO_KW_EVENT_TYPE, &listEventType);
+                }
+                else
+                {
+                    /* There were NO rows in the SAA-HLZ series that matched the target time. Don't 
+                     * do anything special - an empty list will signify no matching rows. */
+                }
+                
+                /* Insert lists into return-value container. */
+                hcon_insert(*info, timeStr, &colToList);
+            }
+        }
+        
+        free(values[0]);
+        free(values);
+        db_free_binary_result_tuple(&res, ntimes);
+    }
+    
+    /* tgtsorted no longer needed */
+    free(tgtsorted);
+    
+    return err;
+}
+
+
 void iorbit_cleanup()
 {
    DestroyCache();
+}
+
+void iorbit_cleanSaaHlzInfo(IORBIT_SaaHlzInfo_t **info)
+{
+    if (info && *info)
+    {
+        hcon_destroy(info);
+    }
 }
 
