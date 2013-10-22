@@ -310,6 +310,10 @@ int DoIt(void)
             outData[out_nx*outy + outx] = (nn > 0 ? total/weight : DRMS_MISSING_FLOAT); 
             }
         }
+
+      // Use the input array as the best guess for scale and zero
+      outArray->bzero = inArray->bzero;
+      outArray->bscale = inArray->bscale;
   
       drms_free_array(inArray);
   
@@ -336,11 +340,38 @@ int DoIt(void)
         drms_setkey_string(outRec, "RequestID", requestid);
 
       // get info for array from input segment
-      outArray->bzero = inSeg->bzero;
-      outArray->bscale = inSeg->bscale;
       outArray->parent_segment = outSeg;
   
+      drms_setkey_int(outRec, "TOTVALS", out_nx*out_ny);
       set_statistics(outSeg, outArray, 1);
+
+      // If binning is reduction more than factor of 2 enable more precision
+      double new_max = fabs(drms_getkey_double(outRec, "DATAMAX", 0));
+      double new_min = fabs(drms_getkey_double(outRec, "DATAMIN", 0));
+      double new_maxmin = (new_max > new_min ? new_max : new_min);
+      double new_scale = outArray->bscale * fscale;
+
+      if (fscale < 0.7)
+        {
+        if (outSeg->info->type == DRMS_TYPE_SHORT)
+          {
+          outArray->bscale = new_scale;
+          if (new_maxmin / fscale >= SHRT_MAX)
+            outSeg->info->type == DRMS_TYPE_INT;
+          }
+        else if (outSeg->info->type == DRMS_TYPE_INT)
+          {
+          outArray->bscale = new_scale;
+          if (new_maxmin / fscale >= LONG_MAX)
+            {
+            outSeg->info->type == DRMS_TYPE_FLOAT;
+            strcpy(outSeg->cparms, "");
+            outArray->bscale = 1.0;
+            outArray->bzero = 0.0;
+            }
+          }
+        }
+
       if (full_header)
         status = drms_segment_writewithkeys(outSeg, outArray, 0);
       else
