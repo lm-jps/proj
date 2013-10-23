@@ -348,23 +348,23 @@ int DoIt(void)
       // If binning is reduction more than factor of 2 enable more precision
       double new_max = fabs(drms_getkey_double(outRec, "DATAMAX", 0));
       double new_min = fabs(drms_getkey_double(outRec, "DATAMIN", 0));
-      double new_maxmin = (new_max > new_min ? new_max : new_min);
       double new_scale = outArray->bscale * fscale;
 
       if (fscale < 0.7)
         {
+        outArray->bscale = new_scale;
+        double testmin = (new_min - outArray->bzero) / fscale;
+        double testmax = (new_max - outArray->bzero) / fscale;
         if (outSeg->info->type == DRMS_TYPE_SHORT)
           {
-          outArray->bscale = new_scale;
-          if (new_maxmin / fscale >= SHRT_MAX)
-            outSeg->info->type == DRMS_TYPE_INT;
+          if ( testmin > SHRT_MAX || testmin < SHRT_MIN || testmax > SHRT_MAX || testmax < SHRT_MIN)
+            outSeg->info->type = DRMS_TYPE_INT;
           }
-        else if (outSeg->info->type == DRMS_TYPE_INT)
+        if (outSeg->info->type == DRMS_TYPE_INT)
           {
-          outArray->bscale = new_scale;
-          if (new_maxmin / fscale >= LONG_MAX)
+          if ( testmin > LONG_MAX || testmin < LONG_MIN || testmax > LONG_MAX || testmax < LONG_MIN)
             {
-            outSeg->info->type == DRMS_TYPE_FLOAT;
+            outSeg->info->type = DRMS_TYPE_FLOAT;
             strcpy(outSeg->cparms, "");
             outArray->bscale = 1.0;
             outArray->bzero = 0.0;
