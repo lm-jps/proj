@@ -97,8 +97,8 @@ static DRMS_Segment_t *segment, *segment0;
 static DRMS_Segment_t *segmentff;
 static DRMS_Segment_t *darkseg;
 static DRMS_Segment_t *badseg;
-static DRMS_Segment_t *badoutpixseg;
-static DRMS_Segment_t *spikeseg;
+//static DRMS_Segment_t *badoutpixseg;
+//static DRMS_Segment_t *spikeseg;
 static DRMS_Array_t *segArray;
 static DRMS_RecordSet_t *crsset;
 static DRMS_RecordSet_t *rset0, *rset1, *rsetff, *rsbad_aia, *rs_t=NULL,
@@ -184,15 +184,15 @@ typedef struct {
 
 
 
-int get_nspikes() { return nspikes; }
-int get_respike(void) { return respike; }
-int *get_spikelocs() { return spikelocs; }
-int *get_oldvalues() { return oldvalues; }
-int *get_newvalues() { return newvalues; }
-void set_nspikes(int new_nspikes) { nspikes = new_nspikes; }
-void set_spikelocs(int *new_spikelocs) { spikelocs = new_spikelocs; }
-void set_oldvalues(int *new_oldvalues) { oldvalues = new_oldvalues; }
-void set_newvalues(int *new_newvalues) { newvalues = new_newvalues; }
+//int get_nspikes() { return nspikes; }
+//int get_respike(void) { return respike; }
+//int *get_spikelocs() { return spikelocs; }
+//int *get_oldvalues() { return oldvalues; }
+//int *get_newvalues() { return newvalues; }
+//void set_nspikes(int new_nspikes) { nspikes = new_nspikes; }
+//void set_spikelocs(int *new_spikelocs) { spikelocs = new_spikelocs; }
+//void set_oldvalues(int *new_oldvalues) { oldvalues = new_oldvalues; }
+//void set_newvalues(int *new_newvalues) { newvalues = new_newvalues; }
 
 //Set the QUALITY keyword for lev1
 void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int fsn)
@@ -680,6 +680,7 @@ int do_ingest(long long bbrec, long long eerec)
       // find closest iris.pointing_data record and set scroll
       //
       {
+        if(!quicklook) {
 	  DRMS_RecordSet_t *rset;
 	  DRMS_Record_t *rt;
 	  int st;
@@ -721,6 +722,7 @@ int do_ingest(long long bbrec, long long eerec)
 
 	  if (rset)
 	      drms_close_records(rset, DRMS_FREE_RECORD);
+        }
       }
       
       drms_record_directory(rs, rs1_path, 0);
@@ -764,6 +766,22 @@ int do_ingest(long long bbrec, long long eerec)
       qualint = drms_getkey_int(rs0, "QUALITY", &rstatus);
       drms_setkey_int(rs, "QUALLEV0", qualint);
       fid = drms_getkey_int(rs0, "FID", &rstatus);
+
+      short isqisysn = drms_getkey_short(rs0, "ISQISYSN", &rstatus);  
+      int iimgots1 = drms_getkey_int(rs0, "IIMGOTS1", &rstatus);
+      int iimgots2 = drms_getkey_int(rs0, "IIMGOTS2", &rstatus);
+      int iimgots3 = drms_getkey_int(rs0, "IIMGOTS3", &rstatus); 
+      switch (isqisysn) {
+          case 0:
+            drms_setkey_int(rs, "IIMGOTS", iimgots1);
+            break;
+          case 1:
+            drms_setkey_int(rs, "IIMGOTS", iimgots2);
+            break;
+          case 2:
+            drms_setkey_int(rs, "IIMGOTS", iimgots3);
+            break;
+      } 
 
       drms_setkey_time(rs, "T_OBS", tobs[i]);
       printk("t_obs for lev0 = %10.5f fsn=%u\n", tobs[i], fsnarray[i]);  //!!TEMP
@@ -1008,8 +1026,8 @@ int do_ingest(long long bbrec, long long eerec)
         sprintf(open_dsname, "%s[? t_start <= %10.5f and t_stop > %10.5f and IMG_PATH='%s' ?]",
       	dsffname, tobs[i], tobs[i], imgpath);
       }
-      printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
-      printk("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
+      //printf("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
+      //printk("!!TEMP Flat field query: %s\n", open_dsname); //!!TEMP
       rsetff = drms_open_records(drms_env, open_dsname, &rstatus); //open FF 
       if(!rsetff || (rsetff->n == 0) || rstatus) {
         printk("Can't do drms_open_records(%s)\n", open_dsname);
@@ -1065,10 +1083,10 @@ int do_ingest(long long bbrec, long long eerec)
         return(1);
       }
       l0l1->adatabad = (int *)ArrayBad->data; //free at end
-        if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel"))) {
-          printk("No drms_segment_lookup(rs, bad_pixel) for lev1\n");
-          return(1);
-        }
+      //if(!(badoutpixseg = drms_segment_lookup(rs, "bad_pixel"))) {
+      //    printk("No drms_segment_lookup(rs, bad_pixel) for lev1\n");
+      //    return(1);
+      //}
       l0l1->rs1 = rs;
       l0l1->rsff = rsff;
       l0l1->recnum1 = rs->recnum;  
@@ -1121,21 +1139,21 @@ int do_ingest(long long bbrec, long long eerec)
            missflg[i] = missflg[i] | Q_1_MISS3;
         if(l0l1->datavals == 0) 
            missflg[i] = missflg[i] | Q_MISSALL; //high bit, no data
-        if(nspikes) {
-          if (spikeseg = drms_segment_lookup(rs,"spikes") ) {
-            nbytes = nspikes*sizeof(int);
-            axes[0] = nspikes;
-            axes[1] = 3;
-            spikedata = (int *) malloc (3*nspikes*sizeof(int));
-            ArraySpike = drms_array_create(DRMS_TYPE_INT, 2, axes,
-                       (void *) spikedata, &status);
-            memcpy((void *)spikedata, (void *)spikelocs, nbytes);
-            memcpy((void *)(spikedata+nspikes), (void *)oldvalues, nbytes);
-            memcpy((void *)(spikedata+2*nspikes), (void *)newvalues, nbytes);
-            status = drms_segment_write(spikeseg, ArraySpike, 0);
-            drms_free_array(ArraySpike);
-          } // else { printf("spikes segment not found\n"); }
-        }
+        //if(nspikes) {
+        //  if (spikeseg = drms_segment_lookup(rs,"spikes") ) {
+        //    nbytes = nspikes*sizeof(int);
+        //    axes[0] = nspikes;
+        //    axes[1] = 3;
+        //    spikedata = (int *) malloc (3*nspikes*sizeof(int));
+        //    ArraySpike = drms_array_create(DRMS_TYPE_INT, 2, axes,
+        //               (void *) spikedata, &status);
+        //    memcpy((void *)spikedata, (void *)spikelocs, nbytes);
+        //    memcpy((void *)(spikedata+nspikes), (void *)oldvalues, nbytes);
+        //    memcpy((void *)(spikedata+2*nspikes), (void *)newvalues, nbytes);
+        //    status = drms_segment_write(spikeseg, ArraySpike, 0);
+        //    drms_free_array(ArraySpike);
+        //  } // else { printf("spikes segment not found\n"); }
+        //}
 
 /**************************No DARK for IRIS?**********************************/
 
