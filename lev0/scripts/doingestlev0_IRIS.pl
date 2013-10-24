@@ -76,20 +76,16 @@ while(1) {
   if($ifound) {
     exit(0);
   }
+
+next;	#NEW 23Oct2013 Don't stop and restart the ingest_lev0_iris
+
   $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stop"; #tell ingest to stop
   `$cmd`;
-  #$cmd = "touch /usr/local/logs/lev0/@vcnames[1]_stop";
-  #`$cmd`;
-  #$cmd = "touch /usr/local/logs/lev0/@vcnames[2]_stop";
-  #`$cmd`;
-  #$cmd = "touch /usr/local/logs/lev0/@vcnames[3]_stop";
-  #`$cmd`;
   while(1) {
     $found = 0;
     #wait until they're all stopped
     @ps_prod = `ps -ef | grep ingest_lev0`;
     while($_ = shift(@ps_prod)) {
-      #if(/vc VC01/ || /vc VC02/ || /vc VC04/ || /vc VC05/) {
       if(/vc VC03/) {
         $found = 1;
         sleep 1;
@@ -105,21 +101,10 @@ while(1) {
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
-      #`$rmcmd1`;
       $cmd = "ingest_lev0_irisdc --loopconn -r vc=@vcnames[0] indir=/sds/soc2pipe/iris/rexmit logfile=/usr/local/logs/lev0/@lognames[0] &";
       if(system($cmd)) {
         print "Failed: $cmd\n";
       }
-#      `$rmcmd2`;
-#      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[2] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[2] &";
-#      if(system($cmd)) {
-#        print "Failed: $cmd\n";
-#      }
-#      `$rmcmd3`;
-#      $cmd = "ingest_lev0 --loopconn -r vc=@vcnames[3] indir=/dds/soc2pipe/hmi logfile=/usr/local/logs/lev0/@lognames[3] &";
-#      if(system($cmd)) {
-#        print "Failed: $cmd\n";
-#      }
 }
 
 sub ckingest {
