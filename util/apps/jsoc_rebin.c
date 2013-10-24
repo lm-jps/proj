@@ -350,7 +350,8 @@ int DoIt(void)
       double new_min = fabs(drms_getkey_double(outRec, "DATAMIN", 0));
       double new_scale = outArray->bscale * fscale;
 
-      if (fscale < 0.7)
+// NOTE TEMP REMOVAL OF FIX
+      if (0 && fscale < 0.7)
         {
         outArray->bscale = new_scale;
         double testmin = (new_min - outArray->bzero) / fscale;
