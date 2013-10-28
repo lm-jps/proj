@@ -41,11 +41,11 @@ print "$cmd1\n";
 if(system($cmd1)) {
   print "Failed: $cmd1\n";
 }
-$cmd = "iris_lev0_ck.pl &"; 
-print "$cmd\n";
-if(system($cmd)) {
-  print "Failed: $cmd\n";
-}
+#$cmd = "iris_lev0_ck.pl &"; 
+#print "$cmd\n";
+#if(system($cmd)) {
+#  print "Failed: $cmd\n";
+#}
 sleep(2);
 
 print "\nTo cleanly stop all ingest_lev0_irisdc and commit any open images, call:\n";
