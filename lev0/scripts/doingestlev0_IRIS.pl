@@ -73,8 +73,7 @@ while(1) {
       }
       print "\nOne or both ingest_lev0_irisdc are stopped. Going to restart...\n\n";
       if(!$foundiris) {
-        $cmd = "ingest_lev0_irisdc --loopconn -r vc=VC03 indir=/sds/soc2pipe/iris
-logfile=/usr/local/logs/lev0/VC03_$ldate.log &";
+        $cmd = "ingest_lev0_irisdc --loopconn -r vc=VC03 indir=/sds/soc2pipe/iris logfile=/usr/local/logs/lev0/VC03_$ldate.log &";
         if(system($cmd)) {
           print "Failed: $cmd\n";
           exit(0);
@@ -82,8 +81,7 @@ logfile=/usr/local/logs/lev0/VC03_$ldate.log &";
         print "Restart:\n$cmd\n";
       }
       if(!$foundirisrexmit) {
-        $cmd = "ingest_lev0_irisdc --loopconn -r vc=VC03
-indir=/sds/soc2pipe/iris/rexmit logfile=/usr/local/logs/lev0/VC03_$ldate.logX &";
+        $cmd = "ingest_lev0_irisdc --loopconn -r vc=VC03 indir=/sds/soc2pipe/iris/rexmit logfile=/usr/local/logs/lev0/VC03_$ldate.logX &";
         if(system($cmd)) {
           print "Failed: $cmd\n";
           exit(0);
