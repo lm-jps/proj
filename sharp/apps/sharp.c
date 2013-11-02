@@ -1898,7 +1898,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         swKeys_ptr->totpot_err         = DRMS_MISSING_FLOAT;
 	}
     
-	if (computeShearAngle(bx_err, by_err, bh_err, bx, by, bz, bpx, bpy, bpz, dims,
+	if (computeShearAngle(bx_err, by_err, bz_err, bx, by, bz, bpx, bpy, bpz, dims,
 						  &(swKeys_ptr->meanshear_angle), &(swKeys_ptr->meanshear_angle_err), &(swKeys_ptr->area_w_shear_gt_45),
 						  mask, bitmask)) {
 		swKeys_ptr->meanshear_angle    = DRMS_MISSING_FLOAT; // If fail, fill in NaN
@@ -2025,7 +2025,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
 	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Id: sharp.c,v 1.17 2013/08/13 01:35:07 xudong Exp $");
+	char *cvsinfo = strdup("$Id: sharp.c,v 1.18 2013/11/02 20:31:08 mbobra Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char cvsinfoall[2048];
         strcat(cvsinfoall,cvsinfo);
