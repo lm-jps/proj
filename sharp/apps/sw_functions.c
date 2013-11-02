@@ -20,10 +20,12 @@
 
    The indices are calculated on the pixels in which the conf_disambig segment is greater than 70 and
    pixels in which the bitmap segment is greater than 30. These ranges are selected because the CCD 
-   coordinate bitmaps are interpolated.
+   coordinate bitmaps are interpolated for certain data (at the time of this CVS submit, all data
+   prior to 2013.08.21_17:24:00_TAI contain interpolated bitmaps; data post-2013.08.21_17:24:00_TAI
+   contain nearest-neighbor bitmaps).
 
    In the CCD coordinates, this means that we are selecting the pixels that equal 90 in conf_disambig
-   and the pixels that equal 33 or 44 in bitmap. Here are the definitions of the pixel values:
+   and the pixels that equal 33 or 34 in bitmap. Here are the definitions of the pixel values:
 
    For conf_disambig:
    50 : not all solutions agree (weak field method applied)
@@ -37,8 +39,9 @@
    33 : weak field inside smooth bounding curve
    34 : strong field inside smooth bounding curve
 
-   Written by Monica Bobra 15 August 2012 
+   Written by Monica Bobra 15 August 2012
    Potential Field code (appended) written by Keiji Hayashi
+   Error analysis modification 21 October 2013
 
 ===========================================*/
 #include <math.h>
@@ -60,8 +63,7 @@
 //  To convert G to G*cm^2, simply multiply by the number of square centimeters per pixel.
 //  As an order of magnitude estimate, we can assign 0.5 to CDELT1 and 722500m/arcsec to (RSUN_REF/RSUN_OBS).
 //  (Gauss/pix^2)(CDELT1)^2(RSUN_REF/RSUN_OBS)^2(100.cm/m)^2
-//  =(Gauss/pix^2)(0.5 arcsec/pix)^2(722500m/arcsec)^2(100cm/m)^2
-//  =(1.30501e15)Gauss*cm^2
+//  =Gauss*cm^2
 
 int computeAbsFlux(float *bz_err, float *bz, int *dims, float *absFlux, 
                    float *mean_vf_ptr, float *mean_vf_err_ptr, float *count_mask_ptr, int *mask,  
@@ -89,7 +91,6 @@ int computeAbsFlux(float *bz_err, float *bz, int *dims, float *absFlux,
                   if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                   if isnan(bz[j * nx + i]) continue;
                   sum += (fabs(bz[j * nx + i]));
-                  //printf("i,j,bz[j * nx + i]=%d,%d,%f\n",i,j,bz[j * nx + i]);
                   err += bz_err[j * nx + i]*bz_err[j * nx + i];
                   count_mask++;
 		}	
@@ -98,13 +99,6 @@ int computeAbsFlux(float *bz_err, float *bz, int *dims, float *absFlux,
      *mean_vf_ptr     = sum*cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0;
      *mean_vf_err_ptr = (sqrt(err))*fabs(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0); // error in the unsigned flux
      *count_mask_ptr  = count_mask;   
-     //printf("cdelt1=%f\n",cdelt1);         
-     //printf("rsun_obs=%f\n",rsun_obs);
-     //printf("rsun_ref=%f\n",rsun_ref);
-     //printf("CMASK=%g\n",*count_mask_ptr); 
-     //printf("USFLUX=%g\n",*mean_vf_ptr);
-     //printf("sum=%f\n",sum);
-     //printf("USFLUX_err=%g\n",*mean_vf_err_ptr); 
      return 0;
 }
 
@@ -130,13 +124,23 @@ int computeBh(float *bx_err, float *by_err, float *bh_err, float *bx, float *by,
 	for (i = 0; i < nx; i++) 
 	  {
 	    for (j = 0; j < ny; j++)
-	      {
-                if isnan(bx[j * nx + i]) continue;
-                if isnan(by[j * nx + i]) continue;
-		bh[j * nx + i] = sqrt( bx[j * nx + i]*bx[j * nx + i] + by[j * nx + i]*by[j * nx + i] );
-                sum += bh[j * nx + i];
-                bh_err[j * nx + i]=sqrt( bx[j * nx + i]*bx[j * nx + i]*bx_err[j * nx + i]*bx_err[j * nx + i] + by[j * nx + i]*by[j * nx + i]*by_err[j * nx + i]*by_err[j * nx + i])/ bh[j * nx + i];
-                count_mask++;
+	      {  
+                 if isnan(bx[j * nx + i])
+                 {  
+                    bh[j * nx + i] = NAN;
+                    bh_err[j * nx + i] = NAN;
+                    continue;
+                 }
+                 if isnan(by[j * nx + i])
+                 {  
+                    bh[j * nx + i] = NAN;
+                    bh_err[j * nx + i] = NAN;
+                    continue;
+                 }
+		 bh[j * nx + i] = sqrt( bx[j * nx + i]*bx[j * nx + i] + by[j * nx + i]*by[j * nx + i] );
+                 sum += bh[j * nx + i];
+                 bh_err[j * nx + i]=sqrt( bx[j * nx + i]*bx[j * nx + i]*bx_err[j * nx + i]*bx_err[j * nx + i] + by[j * nx + i]*by[j * nx + i]*by_err[j * nx + i]*by_err[j * nx + i])/ bh[j * nx + i];
+                 count_mask++;
 	      }	
 	  }
      
@@ -148,7 +152,9 @@ int computeBh(float *bx_err, float *by_err, float *bh_err, float *bx, float *by,
 /*===========================================*/
 /* Example function 3: Calculate Gamma in units of degrees */
 // Native units of atan(x) are in radians; to convert from radians to degrees, multiply by (180./PI)
-// Redo calculation in radians for error analysis (since derivatives are only true in units of radians). 
+// 
+// Error analysis calculations are done in radians (since derivatives are only true in units of radians),
+// and multiplied by (180./PI) at the end for consistency in units.
 
 int computeGamma(float *bz_err, float *bh_err, float *bx, float *by, float *bz, float *bh, int *dims,
                  float *mean_gamma_ptr, float *mean_gamma_err_ptr, int *mask, int *bitmask)
@@ -173,17 +179,20 @@ int computeGamma(float *bz_err, float *bh_err, float *bx, float *by, float *bz, 
                     if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                     if isnan(bz[j * nx + i]) continue;
                     if isnan(bz_err[j * nx + i]) continue;
-                    if isnan(bh_err[j * nx + i]) continue;
+                    if isnan(bh_err[j * nx + i]) continue;                    
+                    if isnan(bh[j * nx + i]) continue;
                     if (bz[j * nx + i] == 0) continue;
                     sum += fabs(atan(bh[j * nx + i]/fabs(bz[j * nx + i])))*(180./PI);
-                    err += (( sqrt ( ((bz_err[j * nx + i]*bz_err[j * nx + i])/(bz[j * nx + i]*bz[j * nx + i])) + ((bh_err[j * nx + i]*bh_err[j * nx + i])/(bh[j * nx + i]*bh[j * nx + i])))  * fabs(bz[j * nx + i]/bh[j * nx + i]) ) / (1 + (bz[j * nx + i]/bh[j * nx + i])*(bz[j * nx + i]/bh[j * nx + i]))) *(180./PI);
+                    err += (1/(1+((bh[j * nx + i]*bh[j * nx + i])/(bz[j * nx + i]*bz[j * nx + i]))))*(1/(1+((bh[j * nx + i]*bh[j * nx + i])/(bz[j * nx + i]*bz[j * nx + i])))) *
+                           ( ((bh_err[j * nx + i]*bh_err[j * nx + i])/(bz[j * nx + i]*bz[j * nx + i])) + 
+                             ((bh[j * nx + i]*bh[j * nx + i]*bz_err[j * nx + i]*bz_err[j * nx + i])/(bz[j * nx + i]*bz[j * nx + i]*bz[j * nx + i]*bz[j * nx + i])) );
                     count_mask++;
 		  }
 	      }
 	  }
 
      *mean_gamma_ptr = sum/count_mask;
-     *mean_gamma_err_ptr = (sqrt(err*err))/(count_mask*100.0); // error in the quantity (sum)/(count_mask)
+     *mean_gamma_err_ptr = (sqrt(err)/(count_mask))*(180./PI);
      //printf("MEANGAM=%f\n",*mean_gamma_ptr);
      //printf("MEANGAM_err=%f\n",*mean_gamma_err_ptr);
      return 0;
@@ -208,11 +217,26 @@ int computeB_total(float *bx_err, float *by_err, float *bz_err, float *bt_err, f
 	  {
 	    for (j = 0; j < ny; j++) 
 	      {
-                if isnan(bx[j * nx + i]) continue;
-                if isnan(by[j * nx + i]) continue;
-                if isnan(bz[j * nx + i]) continue;
-		bt[j * nx + i] = sqrt( bx[j * nx + i]*bx[j * nx + i] + by[j * nx + i]*by[j * nx + i] + bz[j * nx + i]*bz[j * nx + i]);
-                bt_err[j * nx + i]=sqrt(bx[j * nx + i]*bx[j * nx + i]*bx_err[j * nx + i]*bx_err[j * nx + i] + by[j * nx + i]*by[j * nx + i]*by_err[j * nx + i]*by_err[j * nx + i] + bz[j * nx + i]*bz[j * nx + i]*bz_err[j * nx + i]*bz_err[j * nx + i] )/bt[j * nx + i];
+                 if isnan(bx[j * nx + i])
+                 {  
+                    bt[j * nx + i] = NAN;
+                    bt_err[j * nx + i] = NAN;
+                    continue;
+                 }
+                 if isnan(by[j * nx + i])
+                 {  
+                    bt[j * nx + i] = NAN;
+                    bt_err[j * nx + i] = NAN;
+                    continue;
+                 }
+                 if isnan(bz[j * nx + i])
+                 {
+                    bt[j * nx + i] = NAN;
+                    bt_err[j * nx + i] = NAN;
+                    continue;
+                 }
+ 	  	 bt[j * nx + i] = sqrt( bx[j * nx + i]*bx[j * nx + i] + by[j * nx + i]*by[j * nx + i] + bz[j * nx + i]*bz[j * nx + i]);
+                 bt_err[j * nx + i]=sqrt(bx[j * nx + i]*bx[j * nx + i]*bx_err[j * nx + i]*bx_err[j * nx + i] + by[j * nx + i]*by[j * nx + i]*by_err[j * nx + i]*by_err[j * nx + i] +  bz[j * nx + i]*bz[j * nx + i]*bz_err[j * nx + i]*bz_err[j * nx + i] ) / bt[j * nx + i];
 	      }	
 	  }
      return 0;
@@ -280,23 +304,27 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
           }
 
 
-      	for (i = 0; i <= nx-1; i++) 
+      	for (i = 1; i <= nx-2; i++) 
           {
-            for (j = 0; j <= ny-1; j++) 
+            for (j = 1; j <= ny-2; j++) 
             {
 	       if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                if isnan(derx_bt[j * nx + i]) continue;
                if isnan(dery_bt[j * nx + i]) continue;
+               if isnan(bt[j * nx + i])      continue;
+               if isnan(bt_err[j * nx + i])  continue;
                sum += sqrt( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  ); /* Units of Gauss */
-               err += (2.0)*bt_err[j * nx + i]*bt_err[j * nx + i];
+               err += (((bt[(j+1) * nx + i]-bt[(j-1) * nx + i])*(bt[(j+1) * nx + i]-bt[(j-1) * nx + i])) * (bt_err[(j+1) * nx + i]*bt_err[(j+1) * nx + i] + bt_err[(j-1) * nx + i]*bt_err[(j-1) * nx + i])) / (16.0*( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  ))+
+                      (((bt[j * nx + (i+1)]-bt[j * nx + (i-1)])*(bt[j * nx + (i+1)]-bt[j * nx + (i-1)])) * (bt_err[j * nx + (i+1)]*bt_err[j * nx + (i+1)] + bt_err[j * nx + (i-1)]*bt_err[j * nx + (i-1)])) / (16.0*( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  )) ;
                count_mask++;
             }	
 	  }
 
-        *mean_derivative_btotal_ptr     = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
-        *mean_derivative_btotal_err_ptr = (sqrt(err))/(count_mask); // error in the quantity (sum)/(count_mask)
+        *mean_derivative_btotal_ptr     = (sum)/(count_mask); 
+        *mean_derivative_btotal_err_ptr = (sqrt(err))/(count_mask); 
         //printf("MEANGBT=%f\n",*mean_derivative_btotal_ptr);
         //printf("MEANGBT_err=%f\n",*mean_derivative_btotal_err_ptr);
+
         return 0;
 }
 
@@ -371,7 +399,8 @@ int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivat
                if isnan(derx_bh[j * nx + i]) continue;
                if isnan(dery_bh[j * nx + i]) continue;
                sum += sqrt( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  ); /* Units of Gauss */
-               err += (2.0)*bh_err[j * nx + i]*bh_err[j * nx + i];
+               err += (((bh[(j+1) * nx + i]-bh[(j-1) * nx + i])*(bh[(j+1) * nx + i]-bh[(j-1) * nx + i])) * (bh_err[(j+1) * nx + i]*bh_err[(j+1) * nx + i] + bh_err[(j-1) * nx + i]*bh_err[(j-1) * nx + i])) / (16.0*( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  ))+
+                      (((bh[j * nx + (i+1)]-bh[j * nx + (i-1)])*(bh[j * nx + (i+1)]-bh[j * nx + (i-1)])) * (bh_err[j * nx + (i+1)]*bh_err[j * nx + (i+1)] + bh_err[j * nx + (i-1)]*bh_err[j * nx + (i-1)])) / (16.0*( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  )) ;
                count_mask++;
             }	
 	  }
@@ -463,7 +492,8 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
                if isnan(derx_bz[j * nx + i]) continue;
                if isnan(dery_bz[j * nx + i]) continue;
                sum += sqrt( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  ); /* Units of Gauss */
-               err += 2.0*bz_err[j * nx + i]*bz_err[j * nx + i];
+               err += (((bz[(j+1) * nx + i]-bz[(j-1) * nx + i])*(bz[(j+1) * nx + i]-bz[(j-1) * nx + i])) * (bz_err[(j+1) * nx + i]*bz_err[(j+1) * nx + i] + bz_err[(j-1) * nx + i]*bz_err[(j-1) * nx + i])) / (16.0*( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  ))+
+                      (((bz[j * nx + (i+1)]-bz[j * nx + (i-1)])*(bz[j * nx + (i+1)]-bz[j * nx + (i-1)])) * (bz_err[j * nx + (i+1)]*bz_err[j * nx + (i+1)] + bz_err[j * nx + (i-1)]*bz_err[j * nx + (i-1)])) / (16.0*( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  )) ;
                count_mask++;
             }	
 	  }
@@ -595,7 +625,6 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
 
 /*===========================================*/
 
-
 /* Example function 9:  Compute quantities on Jz array */
 // Compute mean and total current on Jz array. 
 
@@ -634,10 +663,10 @@ int computeJzsmooth(float *bx, float *by, int *dims, float *jz, float *jz_smooth
  
         /* Calculate mean vertical current density (mean_jz) and total unsigned vertical current (us_i) using smoothed Jz array and continue conditions above */
         *mean_jz_ptr     = curl/(count_mask);        /* mean_jz gets populated as MEANJZD */
-        *mean_jz_err_ptr = (sqrt(err))*fabs(((rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.))/(count_mask)); // error in the quantity MEANJZD
+        *mean_jz_err_ptr = (sqrt(err)/count_mask)*((1/cdelt1)*(rsun_obs/rsun_ref)*(0.00010)*(1/MUNAUGHT)*(1000.)); // error in the quantity MEANJZD
 
         *us_i_ptr        = (us_i);                   /* us_i gets populated as TOTUSJZ */
-        *us_i_err_ptr    = (sqrt(err))*fabs((cdelt1/1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT)); // error in the quantity TOTUSJZ
+        *us_i_err_ptr    = (sqrt(err))*((cdelt1/1)*(rsun_ref/rsun_obs)*(0.00010)*(1/MUNAUGHT)); // error in the quantity TOTUSJZ
 
         //printf("MEANJZD=%f\n",*mean_jz_ptr);
         //printf("MEANJZD_err=%f\n",*mean_jz_err_ptr);
@@ -690,8 +719,6 @@ int computeAlpha(float *jz_err, float *bz_err, float *bz, int *dims, float *jz, 
                 if isnan(bz[j * nx + i])   continue;
                 if (jz[j * nx + i] == 0.0) continue;
                 if (bz[j * nx + i] == 0.0) continue;
-                //if (jz_err[j * nx + i] > abs(jz[j * nx + i]) ) continue;
-                //if (bz_err[j * nx + i] > abs(bz[j * nx + i]) ) continue;
                 A += jz[j*nx+i]*bz[j*nx+i];
                 B += bz[j*nx+i]*bz[j*nx+i];
               }
@@ -733,14 +760,14 @@ int computeHelicity(float *jz_err, float *jz_rms_err, float *bz_err, float *bz, 
 
 {
 
-        int nx = dims[0];
-        int ny = dims[1];
-        int i = 0;
-        int j = 0;
+        int nx         = dims[0];
+        int ny         = dims[1];
+        int i          = 0;
+        int j          = 0;
         int count_mask = 0;
-	double sum = 0.0;
-	double sum2 = 0.0;
-	double sum_err = 0.0;
+	double sum     = 0.0;
+	double sum2    = 0.0;
+	double err     = 0.0;
 	
 	if (nx <= 0 || ny <= 0) return 1;
 
@@ -749,13 +776,15 @@ int computeHelicity(float *jz_err, float *jz_rms_err, float *bz_err, float *bz, 
 		for (j = 0; j < ny; j++) 
 		{
                   if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
-                  if isnan(jz[j * nx + i]) continue;
-                  if isnan(bz[j * nx + i]) continue;
-                  if (bz[j * nx + i] == 0.0) continue;
-                  if (jz[j * nx + i] == 0.0) continue;
+                  if isnan(jz[j * nx + i])     continue;
+                  if isnan(bz[j * nx + i])     continue;
+                  if isnan(jz_err[j * nx + i]) continue;
+                  if isnan(bz_err[j * nx + i]) continue;
+                  if (bz[j * nx + i] == 0.0)   continue;
+                  if (jz[j * nx + i] == 0.0)   continue;
                   sum     +=     (jz[j * nx + i]*bz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref); // contributes to MEANJZH and ABSNJZH
                   sum2    += fabs(jz[j * nx + i]*bz[j * nx + i])*(1/cdelt1)*(rsun_obs/rsun_ref); // contributes to TOTUSJH
-                  sum_err += sqrt(((jz_err[j * nx + i]*jz_err[j * nx + i])/(jz[j * nx + i]*jz[j * nx + i])) + ((bz_err[j * nx + i]*bz_err[j * nx + i])/(bz[j * nx + i]*bz[j * nx + i]))) * fabs(jz[j * nx + i]*bz[j * nx + i]*(1/cdelt1)*(rsun_obs/rsun_ref));
+                  err     += (jz_err[j * nx + i]*jz_err[j * nx + i]*bz[j * nx + i]*bz[j * nx + i]) + (bz_err[j * nx + i]*bz_err[j * nx + i]*jz[j * nx + i]*jz[j * nx + i]);
                   count_mask++;
                 }	
 	 }
@@ -764,18 +793,18 @@ int computeHelicity(float *jz_err, float *jz_rms_err, float *bz_err, float *bz, 
 	*total_us_ih_ptr      = sum2           ; /* Units are G^2 / m ; keyword is TOTUSJH */
 	*total_abs_ih_ptr     = fabs(sum)      ; /* Units are G^2 / m ; keyword is ABSNJZH */
 
-        *mean_ih_err_ptr      = (sqrt(sum_err*sum_err)) / (count_mask*100.0)    ;  // error in the quantity MEANJZH
-        *total_us_ih_err_ptr  = (sqrt(sum_err*sum_err)) / (100.0)               ;  // error in the quantity TOTUSJH
-        *total_abs_ih_err_ptr = (sqrt(sum_err*sum_err)) / (100.0)               ;  // error in the quantity ABSNJZH
+        *mean_ih_err_ptr      = (sqrt(err)/count_mask)*(1/cdelt1)*(rsun_obs/rsun_ref) ; // error in the quantity MEANJZH
+        *total_us_ih_err_ptr  = (sqrt(err))*(1/cdelt1)*(rsun_obs/rsun_ref) ;            // error in the quantity TOTUSJH
+        *total_abs_ih_err_ptr = (sqrt(err))*(1/cdelt1)*(rsun_obs/rsun_ref) ;            // error in the quantity ABSNJZH
 
-        //printf("MEANJZH=%f\n",*mean_ih_ptr);
-        //printf("MEANJZH_err=%f\n",*mean_ih_err_ptr);
+        printf("MEANJZH=%f\n",*mean_ih_ptr);
+        printf("MEANJZH_err=%f\n",*mean_ih_err_ptr);
 
-        //printf("TOTUSJH=%f\n",*total_us_ih_ptr);
-        //printf("TOTUSJH_err=%f\n",*total_us_ih_err_ptr);
+        printf("TOTUSJH=%f\n",*total_us_ih_ptr);
+        printf("TOTUSJH_err=%f\n",*total_us_ih_err_ptr);
 
-        //printf("ABSNJZH=%f\n",*total_abs_ih_ptr);
-        //printf("ABSNJZH_err=%f\n",*total_abs_ih_err_ptr);
+        printf("ABSNJZH=%f\n",*total_abs_ih_ptr);
+        printf("ABSNJZH_err=%f\n",*total_abs_ih_err_ptr);
 
 	return 0;
 }
@@ -867,15 +896,17 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
                  if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
                  if isnan(bx[j * nx + i]) continue;
                  if isnan(by[j * nx + i]) continue;
-                 sum  += ( ((bpx[j * nx + i] - bx[j * nx + i])*(bpx[j * nx + i] - bx[j * nx + i])) + ((bpy[j * nx + i] - by[j * nx + i])*(bpy[j * nx + i] - by[j * nx + i])) )*(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0);
-                 sum1 += ( ((bpx[j * nx + i] - bx[j * nx + i])*(bpx[j * nx + i] - bx[j * nx + i])) + ((bpy[j * nx + i] - by[j * nx + i])*(bpy[j * nx + i] - by[j * nx + i])) );
-                 err  += (4.0*bx[j * nx + i]*bx[j * nx + i]*bx_err[j * nx + i]*bx_err[j * nx + i]) + (4.0*by[j * nx + i]*by[j * nx + i]*by_err[j * nx + i]*by_err[j * nx + i]);
+                 sum  += ( ((bx[j * nx + i] - bpx[j * nx + i])*(bx[j * nx + i] - bpx[j * nx + i])) + ((by[j * nx + i] - bpy[j * nx + i])*(by[j * nx + i] - bpy[j * nx + i])) )*(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0);
+                 sum1 += (  ((bx[j * nx + i] - bpx[j * nx + i])*(bx[j * nx + i] - bpx[j * nx + i])) + ((by[j * nx + i] - bpy[j * nx + i])*(by[j * nx + i] - bpy[j * nx + i])) );
+                 err  += 4.0*(bx[j * nx + i] - bpx[j * nx + i])*(bx[j * nx + i] - bpx[j * nx + i])*(bx_err[j * nx + i]*bx_err[j * nx + i]) + 
+                         4.0*(by[j * nx + i] - bpy[j * nx + i])*(by[j * nx + i] - bpy[j * nx + i])*(by_err[j * nx + i]*by_err[j * nx + i]);
                  count_mask++;
 	      }
 	  }
 
-	*meanpotptr      = (sum1/(8.*PI)) / (count_mask);     /* Units are ergs per cubic centimeter */
-        *meanpot_err_ptr = (sqrt(err))*fabs(cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0) / (count_mask*8.*PI); // error in the quantity (sum)/(count_mask)
+        /* Units of meanpotptr are ergs per centimeter */
+	*meanpotptr      = (sum1) / (count_mask*8.*PI) ;     /* Units are ergs per cubic centimeter */
+        *meanpot_err_ptr = (sqrt(err)) / (count_mask*8.*PI); // error in the quantity (sum)/(count_mask)
 
         /* Units of sum are ergs/cm^3, units of factor are cm^2/pix^2; therefore, units of totpotptr are ergs per centimeter */
         *totpotptr       = (sum)/(8.*PI);
@@ -893,7 +924,7 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
 /*===========================================*/
 /* Example function 14:  Mean 3D shear angle, area with shear greater than 45, mean horizontal shear angle, area with horizontal shear angle greater than 45 */
 
-int computeShearAngle(float *bx_err, float *by_err, float *bh_err, float *bx, float *by, float *bz, float *bpx, float *bpy, float *bpz, int *dims,
+int computeShearAngle(float *bx_err, float *by_err, float *bz_err, float *bx, float *by, float *bz, float *bpx, float *bpy, float *bpz, int *dims,
                       float *meanshear_angleptr, float *meanshear_angle_err_ptr, float *area_w_shear_gt_45ptr, int *mask, int *bitmask)
 {	
         int nx = dims[0];
@@ -905,9 +936,13 @@ int computeShearAngle(float *bx_err, float *by_err, float *bh_err, float *bx, fl
         double magnitude_potential = 0.0;
         double magnitude_vector = 0.0;
         double shear_angle = 0.0;
+        double denominator = 0.0;
         double err = 0.0;
         double sum = 0.0; 
         double count = 0.0;
+        double term1 = 0.0;
+        double term2 = 0.0;
+        double term3 = 0.0;
         *area_w_shear_gt_45ptr = 0.0;
 	*meanshear_angleptr = 0.0;
 	
@@ -924,25 +959,45 @@ int computeShearAngle(float *bx_err, float *by_err, float *bh_err, float *bx, fl
                  if isnan(bz[j * nx + i]) continue;
                  if isnan(bx[j * nx + i]) continue;
                  if isnan(by[j * nx + i]) continue;
-                 /* For mean 3D shear angle, area with shear greater than 45*/
+                 /* For mean 3D shear angle, percentage with shear greater than 45*/
                  dotproduct            = (bpx[j * nx + i])*(bx[j * nx + i]) + (bpy[j * nx + i])*(by[j * nx + i]) + (bpz[j * nx + i])*(bz[j * nx + i]);
                  magnitude_potential   = sqrt( (bpx[j * nx + i]*bpx[j * nx + i]) + (bpy[j * nx + i]*bpy[j * nx + i]) + (bpz[j * nx + i]*bpz[j * nx + i]));
                  magnitude_vector      = sqrt( (bx[j * nx + i]*bx[j * nx + i])   + (by[j * nx + i]*by[j * nx + i])   + (bz[j * nx + i]*bz[j * nx + i]) );
                  shear_angle           = acos(dotproduct/(magnitude_potential*magnitude_vector))*(180./PI);
+                 sum                   += shear_angle ;
                  count ++;
-                 sum += shear_angle ;
-                 err += -(1./(1.- sqrt(bx_err[j * nx + i]*bx_err[j * nx + i]+by_err[j * nx + i]*by_err[j * nx + i]+bh_err[j * nx + i]*bh_err[j * nx + i])));            
                  if (shear_angle > 45) count_mask ++;
+
+                 /* For the error analysis*/
+                 // terms 1,2, and 3 are not squared
+                 term1 = -by[j * nx + i]*by[j * nx + i]*bpx[j * nx + i] + bx[j * nx + i]*by[j * nx + i]*bpy[j * nx + i] + bz[j * nx + i]*(bx[j * nx + i]*bpz[j * nx + i] - bz[j * nx + i]*bpx[j * nx + i]);
+                 term2 =  bx[j * nx + i]*bx[j * nx + i]*bpy[j * nx + i] - bx[j * nx + i]*by[j * nx + i]*bpx[j * nx + i] + bz[j * nx + i]*(bz[j * nx + i]*bpy[j * nx + i] - by[j * nx + i]*bpz[j * nx + i]);
+                 term3 =  bx[j * nx + i]*bx[j * nx + i]*bpz[j * nx + i] - bx[j * nx + i]*bz[j * nx + i]*bpx[j * nx + i] + by[j * nx + i]*(by[j * nx + i]*bpz[j * nx + i] - bz[j * nx + i]*bpy[j * nx + i]);
+                  
+                 // denominator is squared
+                 denominator = (bx[j * nx + i]*bx[j * nx + i] + by[j * nx + i]*by[j * nx + i] + bz[j * nx + i]*bz[j * nx + i]) * 
+                               (bx[j * nx + i]*bx[j * nx + i] + by[j * nx + i]*by[j * nx + i] + bz[j * nx + i]*bz[j * nx + i]) * 
+                               (bx[j * nx + i]*bx[j * nx + i] + by[j * nx + i]*by[j * nx + i] + bz[j * nx + i]*bz[j * nx + i]) * 
+                               (bpx[j * nx + i]*bpx[j * nx + i] + bpy[j * nx + i]*bpy[j * nx + i] * bpz[j * nx + i]*bpz[j * nx + i]) *
+                               ( 1-( ((bx[j * nx + i]*bpx[j * nx + i] + by[j * nx + i]*bpy[j * nx + i] + bz[j * nx + i]*bpz[j * nx + i])  * 
+                                      (bx[j * nx + i]*bpx[j * nx + i] + by[j * nx + i]*bpy[j * nx + i] + bz[j * nx + i]*bpz[j * nx + i])) / 
+                                     ((bx[j * nx + i]*bx[j * nx + i]  + by[j * nx + i]*by[j * nx + i]  + bz[j * nx + i]*bz[j * nx + i]) * (bpx[j * nx + i]*bpx[j * nx + i] + bpy[j * nx + i]*bpy[j * nx + i] + bpz[j * nx + i]*bpz[j * nx + i]))  ));
+
+                 err += ((term1*term1*bx_err[j * nx + i]*bx_err[j * nx + i])/(denominator)) + 
+                        ((term2*term2*by_err[j * nx + i]*by_err[j * nx + i])/(denominator)) + 
+                        ((term3*term3*bz_err[j * nx + i]*bz_err[j * nx + i])/(denominator)) ;
 	      }
 	  }
 	
         /* For mean 3D shear angle, area with shear greater than 45*/
 	*meanshear_angleptr = (sum)/(count);                 /* Units are degrees */
-        *meanshear_angle_err_ptr = (sqrt(err*err))/(count);  // error in the quantity (sum)/(count_mask)
-        *area_w_shear_gt_45ptr   = (count_mask/(count))*(100.0);/* The area here is a fractional area -- the % of the total area */
+        *meanshear_angle_err_ptr = ((sqrt(err))/(count))*(180./PI);  
 
-        //printf("MEANSHR=%f\n",*meanshear_angleptr);
-        //printf("MEANSHR_err=%f\n",*meanshear_angle_err_ptr);
+        /* The area here is a fractional area -- the % of the total area. This has no error associated with it. */
+        *area_w_shear_gt_45ptr   = (count_mask/(count))*(100.0);
+
+        printf("MEANSHR=%f\n",*meanshear_angleptr);
+        printf("MEANSHR_err=%f\n",*meanshear_angle_err_ptr);
 
 	return 0;
 }
@@ -1066,7 +1121,7 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 char *sw_functions_version() // Returns CVS version of sw_functions.c
 {
-  return strdup("$Id: sw_functions.c,v 1.19 2013/10/18 23:36:02 mbobra Exp $");
+  return strdup("$Id: sw_functions.c,v 1.20 2013/11/02 19:53:05 mbobra Exp $");
 }
 
 /* ---------------- end of this file ----------------*/
