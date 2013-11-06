@@ -9,8 +9,8 @@
 			
 	
 	#define CODE_NAME 		"limbfit"
-	#define CODE_VERSION 	"V4.06" 
-	#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
+	#define CODE_VERSION 	"V4.08" 
+	#define CODE_DATE 		"Wed Nov  6 09:42:51 HST 2013" 
 	
 	V4.03 from previous:	 only default parameters changed
 */
@@ -139,7 +139,7 @@ int process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			drms_close_records(drs_out, DRMS_INSERT_RECORD);
 			drms_close_records(drs_in, DRMS_FREE_RECORD);
-			return(0);   
+			return(rstatus);   
 		}
 		sprintf(log_msg,"FSN:%u processing",fsn);
 		lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
@@ -235,7 +235,7 @@ int process_all_records_smpl(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUT
 				*status=ERR_DRMS_READ_MISSING_KW;   
 				drms_close_records(drs_out, DRMS_INSERT_RECORD);
 				drms_close_records(drs_in, DRMS_FREE_RECORD);
-				return(0);   
+				return(rstatus);   
 			}
 			sprintf(log_msg,"FSN:%u processing",fsn);
 			lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
@@ -311,17 +311,17 @@ int DoIt(void)
 	if ((bfsn == 0 || efsn == 0) && strcmp(bdate," ")==0)
     {
 		fprintf(stderr, "bfsn and efsn must be given for fsn mode or begin date must be specified. \n");
-		return(0);
+		return(ERR_EXIT);
     }
 	if(strcmp(bdate," ")==0 && bfsn > efsn) 
     {
 		fprintf(stderr, "bfsn must be <= efsn\n");
-		return(0);
+		return(ERR_EXIT);
     }
     if(cam < 0 || cam > 2) 
     {
 		fprintf(stderr, "cam must be equal to 0, 1, or 2\n");
-		return(0);
+		return(ERR_EXIT);
     }
 	if(src == 0) 
 		sprintf(qual,"0");
@@ -339,11 +339,11 @@ int DoIt(void)
 	get_sdate(sdate);
 
 	FILE *opf;
-	sprintf(flogname, "%slimbfit_%s_%lld_%lld.log",log_dir,sdate,bfsn,efsn);
+	sprintf(flogname, "%s/limbfit_%s_%lld_%lld.log",log_dir,sdate,bfsn,efsn);
 	if((opf=fopen(flogname, "w")) == NULL)
 	{
 		fprintf(stderr, "**Can't open the log file %s\n", flogname);
-		return(0);
+		return(ERR_EXIT);
 	}
 	lf_logmsg("INFO", "APP", 0, 0, "Begin... ", log_msg_code, opf);
 
@@ -408,7 +408,7 @@ int DoIt(void)
 	if(!anls) 
 	{
 		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (anls)", log_msg_code, opf);
-		return ERR_MALLOC_FAILED;
+		return(ERR_EXIT);
 	}
 
 	//------------------------------------------------------
@@ -475,14 +475,14 @@ int DoIt(void)
 			lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
 			if(process_n_records_fsn(open_dsname, lfv, lfr, lfw, &result)) 
 			{ 
-				if (result < 0 && result > -300)
+				if (result < 0 && result > -400)
 				{
 					lf_logmsg("ERROR", "ABORT", result, 0, "", log_msg_code, opf);
 					fprintf(opf,"lfwrp abort\nSee log: %s\n", flogname); 
 					fprintf(opf,"lfwrp: Restart it as %s[][%lld-%lld]%s\n", dsin,frec,efsn,tbase); 
 					//send_mail("build_lev1 abort\nSee log: %s\n", logname); 
 					fclose(opf);
-					return(0);
+					return(ERR_EXIT);
 				}
 			}
 			sprintf(log_msg,"close %s", open_dsname);
@@ -500,13 +500,13 @@ int DoIt(void)
 		lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
 		if(process_all_records_smpl(open_dsname, lfv, lfr, lfw, &result)) 
 			{ 
-				if (result < 0 && result > -300)
+				if (result < 0 && result > -400)
 				{
 					lf_logmsg("ERROR", "ABORT", result, 0, "", log_msg_code, opf);
 					fprintf(opf,"lfwrp abort\nSee log: %s\n", flogname); 
 					//send_mail("build_lev1 abort\nSee log: %s\n", logname); 
 					fclose(opf);
-					return(0);
+					return(ERR_EXIT);
 				}
 			}
 	}

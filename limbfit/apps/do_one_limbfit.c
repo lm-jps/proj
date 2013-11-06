@@ -7,8 +7,8 @@
 			
 	
 	#define results->code_name 		"limbfit"
-	#define results->code_version 	"V4.0r6" 
-	#define results->code_date 		"Tue May  7 21:27:32 PDT 2013" 
+	#define results->code_version 	"V4.0r8" 
+	#define results->code_date 		"Wed Nov  6 09:42:51 HST 2013" 
 */
 
 #include "limbfit.h"
@@ -245,7 +245,7 @@ int do_one_limbfit(unsigned int fsn, DRMS_Record_t *record_in,DRMS_Record_t *rec
 
 			long nelements, firstrow, firstelem;
 			static char filenameout[128];
-			sprintf(filenameout,"%s%u_full.fits",results->tmp_dir,fsn);
+			sprintf(filenameout,"%s/%u_full.fits",results->tmp_dir,fsn);
 		
 			firstrow=1;
 			firstelem=1;

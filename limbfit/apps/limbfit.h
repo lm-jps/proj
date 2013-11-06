@@ -1,4 +1,4 @@
-/* I.Scholl "Tue May  7 21:27:32 PDT 2013" 
+/* I.Scholl "Wed Nov  6 09:42:51 HST 2013" 
 */
 
 #include <string.h>
@@ -26,8 +26,8 @@
 #include "expfit.h"
 
 #define CODE_NAME 		"limbfit"
-#define CODE_VERSION 	"V4.0r6" 
-#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
+#define CODE_VERSION 	"V4.0r8" 
+#define CODE_DATE 		"Wed Nov  6 09:42:51 HST 2013" 
 #define LOGMSG1			"LIMBFIT"
 #define	JSD_NAME		"su_scholl.hmi_lf.jsd"
 
@@ -44,11 +44,13 @@ drms_create_records
 drms_array_create
 drms_segment_write
 drms_segment_write_from_file
-drms_set_key_string for the final status of the current processed record (because if I can't write the final status of the processing even the record will be in a incoherent state...)
+drms_set_key_string for the final status of the current processed record:
+	 (because if I can't write the final status of the processing even the record will be in a incoherent state...)
 */
 //---------------------------------------------------ERRORS
 //GENERAL FAILURES -> ABORT
-#define ERR_USAGE 							-1
+#define ERR_EXIT							1
+#define ERR_USAGE 							-2
 #define ERR_MALLOC_FAILED 					-11
 #define ERR_SPECIAL							-100
 #define ERR_DRMS_WRITE 						-200
