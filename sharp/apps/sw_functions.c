@@ -1027,9 +1027,9 @@ int computeShearAngle(float *bx_err, float *by_err, float *bz_err, float *bx, fl
         /* The area here is a fractional area -- the % of the total area. This has no error associated with it. */
         *area_w_shear_gt_45ptr   = (count_mask/(count))*(100.0);
 
-        printf("MEANSHR=%f\n",*meanshear_angleptr);
-        printf("MEANSHR_err=%f\n",*meanshear_angle_err_ptr);
-        printf("SHRGT45=%f\n",*area_w_shear_gt_45ptr);
+        //printf("MEANSHR=%f\n",*meanshear_angleptr);
+        //printf("MEANSHR_err=%f\n",*meanshear_angle_err_ptr);
+        //printf("SHRGT45=%f\n",*area_w_shear_gt_45ptr);
 
 	return 0;
 }
@@ -1153,7 +1153,7 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 char *sw_functions_version() // Returns CVS version of sw_functions.c
 {
-  return strdup("$Id: sw_functions.c,v 1.21 2013/11/11 23:18:40 mbobra Exp $");
+  return strdup("$Id: sw_functions.c,v 1.22 2013/11/11 23:21:21 mbobra Exp $");
 }
 
 /* ---------------- end of this file ----------------*/
