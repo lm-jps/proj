@@ -1095,7 +1095,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.41 2013/10/14 16:20:53 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.42 2013/11/12 00:16:32 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -2365,6 +2365,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		{
 		  statusA[33]=1;
 		  SegmentRead[i]= -1;
+		  KeywordMissing[i]=1;
 		}
 
 	      CALVER32[i]   = (long long)drms_getkey_int(recLev1->records[i] ,CALVER32S,&statusA[34]);
@@ -5003,6 +5004,7 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 		  ps1[i]=drms_getkey_int(recLev1d->records[ii],HPL1POSS,&statusA[0]); //WARNING: MODIFIY TO ACCOUNT FOR POTENTIAL ERRORS
 		  ps2[i]=drms_getkey_int(recLev1d->records[ii],HPL2POSS,&statusA[1]);
 		  ps3[i]=drms_getkey_int(recLev1d->records[ii],HPL3POSS,&statusA[2]);
+		  printf("Polarization settings: %d %d %d %f %f %d %d\n",ps1[i],ps2[i],ps3[i],TSEL,TFRONT,npolout,PolarizationType);
 		  if( (statusA[0]+statusA[1]+statusA[2]) != 0)
 		    {
 		      printf("Error: unable to read one or several keyword(s) in level 1d data\n");

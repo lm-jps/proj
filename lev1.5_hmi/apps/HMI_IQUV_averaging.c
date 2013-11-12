@@ -1019,7 +1019,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.33 2013/10/14 16:21:11 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.34 2013/11/12 00:16:45 couvidat Exp $");
 }
 
 
@@ -2003,6 +2003,7 @@ int DoIt(void)
 	    {
 	      statusA[33]=1;
 	      SegmentRead[i]= -1;
+	      KeywordMissing[i]=1;
 	    }
 	  
 	  CALVER32[i]   = (long long)drms_getkey_int(recLev1->records[i] ,CALVER32S    ,&statusA[34]);
