@@ -1693,7 +1693,7 @@ int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 		double *azimuth = (double *) cutoutArray->data;
 		char *disamb = (char *) disambArray->data;
 		for (int n = 0; n < nxny; n++) {
-			if (disamb[n]) azimuth[n] += 180.;
+			if (disamb[n] % 2) azimuth[n] += 180.;      // Nov 12 2013 Fixed!!!
 		}
 		drms_free_array(disambArray);
 	}
@@ -2025,7 +2025,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
 	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Id: sharp.c,v 1.18 2013/11/02 20:31:08 mbobra Exp $");
+	char *cvsinfo = strdup("$Id: sharp.c,v 1.19 2013/11/13 05:09:30 xudong Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char cvsinfoall[2048];
         strcat(cvsinfoall,cvsinfo);
