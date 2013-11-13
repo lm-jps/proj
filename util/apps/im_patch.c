@@ -402,8 +402,8 @@ fprintf(stderr,"doing reftime\n");
       { 
       sprint_at(t_ref_pre, t_ref-search_width);
       sprint_at(t_ref_post, t_ref+search_width);
-      sprintf(in, "%s[%s-%s]%s%s[? QUALITY >=0 ?]", inseries, t_ref_pre, t_ref_post, moreQuery, where);
-fprintf(stderr,"t_ret query is: %s\n",in);
+      sprintf(in, "%s[%s-%s][? QUALITY >= 0 ?]%s%s", inseries, t_ref_pre, t_ref_post, moreQuery, where);
+fprintf(stderr,"t_ref query is: %s\n",in);
       inRS = drms_open_records(drms_env, in, &status);
       if (!status && inRS->n > 0)
         {

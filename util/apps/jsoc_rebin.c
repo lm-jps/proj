@@ -345,34 +345,6 @@ int DoIt(void)
       drms_setkey_int(outRec, "TOTVALS", out_nx*out_ny);
       set_statistics(outSeg, outArray, 1);
 
-      // If binning is reduction more than factor of 2 enable more precision
-      double new_max = fabs(drms_getkey_double(outRec, "DATAMAX", 0));
-      double new_min = fabs(drms_getkey_double(outRec, "DATAMIN", 0));
-      double new_scale = outArray->bscale * fscale;
-
-// NOTE TEMP REMOVAL OF FIX
-      if (0 && fscale < 0.7)
-        {
-        outArray->bscale = new_scale;
-        double testmin = (new_min - outArray->bzero) / fscale;
-        double testmax = (new_max - outArray->bzero) / fscale;
-        if (outSeg->info->type == DRMS_TYPE_SHORT)
-          {
-          if ( testmin > SHRT_MAX || testmin < SHRT_MIN || testmax > SHRT_MAX || testmax < SHRT_MIN)
-            outSeg->info->type = DRMS_TYPE_INT;
-          }
-        if (outSeg->info->type == DRMS_TYPE_INT)
-          {
-          if ( testmin > LONG_MAX || testmin < LONG_MIN || testmax > LONG_MAX || testmax < LONG_MIN)
-            {
-            outSeg->info->type = DRMS_TYPE_FLOAT;
-            strcpy(outSeg->cparms, "");
-            outArray->bscale = 1.0;
-            outArray->bzero = 0.0;
-            }
-          }
-        }
-
       if (full_header)
         status = drms_segment_writewithkeys(outSeg, outArray, 0);
       else
