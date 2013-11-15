@@ -164,10 +164,13 @@ unless (flock(DATA, LOCK_EX | LOCK_NB))
 }
 
 @core = qw(base/cfortran.h base/foundation.h base/jsoc.h base/jsoc_version.h base/mypng.h base/Rules.mk base/export base/drms base/libs base/sums base/util localize.py configure doc make_basic.mk Makefile make_jsoc.pl README Rules.mk target.mk build);
+@coreDel = qw(configproj.pl customizemake.pl moreconfigure.pl getmachtype.pl);
 
 @netonly = qw(config.local.template config.local.map gen_sumcf.csh seed_sums.c netdrms_setup.pl proj/example proj/myproj proj/cookbook);
+@netDel = qw(gen_init.csh getuid.c);
 
 @sdponly = qw(base/local proj configsdp.txt CM);
+@sdpDel = qw(customizedefs.pl config.local.sutemplate);
 
 # My botched attempt to remove tape files from NetDRMS sites that will never use our tape code
 #@netfilter = qw(base/drms/doc base/drms/libs/api/test base/sums/libs/api/perl base/sums/libs/api/tape.h base/sums/libs/pg/SUMLIB_DS_DataRequest_Tst.pgc base/sums/libs/pg/SUMLIB_NC_PaRequest_AP_60d.pgc base/sums/libs/pg/SUMLIB_TapeClose.pgc base/sums/libs/pg/SUMLIB_TapeFindGroup.pgc base/sums/libs/pg/SUMLIB_TapeUpdate.pgc base/sums/apps/main.c base/sums/apps/main2.c base/sums/apps/main3.c base/sums/apps/main4.c base/sums/apps/main5.c base/sums/apps/robotn_svc.c base/sums/apps/sum_forker.c base/sums/apps/sum_test.c base/sums/apps/sum_test.pl base/sums/apps/tapearc.c base/sums/apps/tapearc0.c base/sums/apps/tapearc1.c base/sums/apps/tapearc2.c base/sums/apps/tapearc3.c base/sums/apps/tapearc4.c base/sums/apps/tapearc5.c base/sums/apps/tapearc6.c base/sums/apps/tapearc7.c base/sums/apps/tapearc8.c base/sums/apps/tapearcinfo.c base/sums/apps/tapearcX.c base/sums/apps/tape_inventory.c base/sums/apps/tapeonoff.c base/sums/apps/tape_svc.c base/sums/apps/tape_svc_proc.c base/sums/apps/tapeutil.c base/sums/apps/xsum_svc.c base/sums/apps/xsum_svc_proc.c base/sums/apps/xtape_svc.c base/sums/scripts/build_parc_file.pl base/sums/scripts/find_dir_sum_partn_alloc_dc base/sums/scripts/fixportm.pl base/sums/scripts/get_dcs_times.csh base/sums/scripts/GRAD_BLUE_LINE.gif base/sums/scripts/lev1_def_gui base/sums/scripts/lev1_def_gui_aia base/sums/scripts/lev1_def_gui_called base/sums/scripts/lev1_def_gui_called_PZT_FSN base/sums/scripts/lev1_def_gui_hmi base/sums/scripts/rsync_scr111.pl base/sums/scripts/SDO_Badge.gif base/sums/scripts/SDO_HSB_CCSDS_Data_Structures.gif base/sums/scripts/ssh_rsync.source base/sums/scripts/sum_bad_permissions.pl base/sums/scripts/sumck base/sums/scripts/sumck_j1 base/sums/scripts/sumck_j1M base/sums/scripts/sumck_n02_jim base/sums/scripts/sumlookgroup.pl base/sums/scripts/sumlook.pl base/sums/scripts/sum_start base/sums/scripts/sum_start_d00_jim base/sums/scripts/sum_start_d02 base/sums/scripts/sum_start_d02_auto base/sums/scripts/sum_start_dc base/sums/scripts/sum_start_j1 base/sums/scripts/sum_start_j1_auto base/sums/scripts/sum_start_j1_auto.MULTI base/sums/scripts/sum_start_j1.MULTI base/sums/scripts/sum_start_n02_jim base/sums/scripts/sum_start_n02_jim_auto base/sums/scripts/sum_start_xim.MULTI base/sums/scripts/sum_stop base/sums/scripts/sum_stop_d00_jim base/sums/scripts/sum_stop_d02 base/sums/scripts/sum_stop_d02_auto base/sums/scripts/sum_stop_d02_tape base/sums/scripts/sum_stop_dc base/sums/scripts/sum_stop_j1 base/sums/scripts/sum_stop_j1_auto base/sums/scripts/sum_stop_j1_auto.MULTI base/sums/scripts/sum_stop_j1.MULTI base/sums/scripts/sum_stop_n02_jim base/sums/scripts/sum_stop_n02_jim_auto base/sums/scripts/sum_stop_xim.MULTI base/sums/scripts/sum_tape_catchup_update.pl base/sums/scripts/sum_tape_insert.pl base/sums/scripts/sum_tape_insert_t50.pl base/sums/scripts/sum_tape_insert_t950.pl base/sums/scripts/t120_reachive.pl base/sums/scripts/t120stageall.pl base/sums/scripts/t120view base/sums/scripts/t50view base/sums/scripts/t950view base/sums/scripts/tapearc_do base/sums/scripts/tapearc_do_dcs1 base/sums/scripts/tape_do_0.pl base/sums/scripts/tape_do_1.pl base/sums/scripts/tape_do_2.pl base/sums/scripts/tape_do_3.pl base/sums/scripts/tape_do_4.pl base/sums/scripts/tape_do_7.pl base/sums/scripts/tape_do_8.pl base/sums/scripts/tape_do_archive.pl base/sums/scripts/tape_do.pl base/sums/scripts/tapeid.list base/sums/scripts/tapeid_t50.list base/sums/scripts/tape_verify.pl base/sums/scripts/test base/sums/scripts/tmp.pl doc/dcs2_convert_to_0_or_1.txt doc/dcs3_name_change.txt doc/dcs_warmstandby.txt doc/dsc0_just_rebooted.txt doc/HK_Level0_Debug_Guide.odt doc/HK_Level0_Debug_Guide.pdf doc/whattodo_aia_lev1.txt doc/whattodo_dcs.txt doc/whattodolev0.txt doc/whattodo_start_stop_lev1_0_sums.txt);
@@ -401,7 +404,7 @@ if (!$err)
            }
        }
        
-      if (BuildFilespec($cotype, $dltype, $stfspec, $xmldata, \@core, \@netonly, \@sdponly, \@filespec, \@bfilespec, \@pfilespec, \@cmdlspecrel))
+      if (BuildFilespec($cotype, $dltype, $stfspec, $xmldata, \@core, \@netonly, \@sdponly, \@filespec, \@bfilespec, \@pfilespec, \@cmdlspecrel, \@coreDel, \@netDel, \@sdpDel))
       {
          print STDERR "Unable to build filespec.\n";
          $err = 1;
@@ -829,6 +832,9 @@ sub BuildFilespec
    my($pfsout) = $_[9];
    my($cmdlspec) = $_[10]; # Altenate file spec - use in place of $core, $netonly, and $sdponly.
                             # Can be used only for an update, tag, or untag download type.
+   my($coreDel) = $_[11];
+   my($netDel) = $_[12];
+   my($sdpDel) = $_[13];
     
    my($rv);
    my($strproj) = &kStrproj;
@@ -927,16 +933,36 @@ sub BuildFilespec
         }
         else
         {
+            # If doing an update, add to the file set the list of deleted files. This will
+            # result in removal of files in the sandbox that have already been removed from
+            # the repository. This only matters for files directory in the root directory.
+            # Files is subdirectories will be processed via a cvs update of the subdirectory.
             if ($cotype eq kCoNetDRMS)
             {
                 push(@$fsout, @$core);
+                if ($dltype eq kDlUpdate)
+                {
+                    push(@$fsout, @$coreDel);
+                }
                 push(@$fsout, @$netonly);
+                if ($dltype eq kDlUpdate)
+                {
+                    push(@$fsout, @$netDel);
+                }
                 push(@$bfsout, @$fsout);
             }
             elsif ($cotype eq kCoSdp)
             {
                 push(@$fsout, @$core);
+                if ($dltype eq kDlUpdate)
+                {
+                    push(@$fsout, @$coreDel);
+                }
                 push(@$fsout, @$sdponly);
+                if ($dltype eq kDlUpdate)
+                {
+                    push(@$fsout, @$sdpDel);
+                }
                 push(@$bfsout, @$fsout);
             }
             elsif ($cotype eq kCoCustom)
@@ -1639,6 +1665,7 @@ sub CallCVS
    }
     elsif (defined($rsp))
     {
+        print "Running $cmd.\n";
         if (open(PIPE, "$cmd 2>&1 |"))
         {
             @$rsp = <PIPE>;
