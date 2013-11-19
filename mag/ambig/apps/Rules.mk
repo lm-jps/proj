@@ -42,7 +42,7 @@ S_$(d) := $(notdir $(MODEXE_USEF_$(d)))
 
 # making object/executable with Rules file and extra options
 $(OBJ_$(d)): $(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)): CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../libs/astro -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJ_$(d)): CF_TGT := $(CF_TGT) -I$(SRCDIR)/$(d)/../../../libs/astro -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../../libs/stats
 
 $(WRAPPEDF_$(d)): FF_TGT := $(FF_TGT) $(MYCMPFLG)
 $(MODEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MYLNKFLG)
