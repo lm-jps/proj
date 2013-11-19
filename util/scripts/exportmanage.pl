@@ -47,6 +47,9 @@ use warnings;
 
 use FileHandle;
 use Fcntl ':flock';
+use FindBin qw($RealBin);
+use lib "$RealBin/../../../localization";
+use drmsparams;
 
 use constant kExportDir => "/home/jsoc/exports";
 # use constant kMailList => "arta\@sun.stanford.edu jeneen\@sun.stanford.edu phil\@sun.stanford.edu";
@@ -65,21 +68,23 @@ use constant kMsgQSendInterval => 120; # 2 minutes between mailing of messages
 use constant kLogFlagInt => "Int";
 use constant kLogFlagExt => "Ext";
 
+my($config) = new drmsparams;
+
 my($kINTERNALFLAG) = "/home/jsoc/exports/keep_running";
 my($kWEBFLAG) = "/home/jsoc/exports/keep_running_web";
 my($kTESTFLAG) = "/home/jsoc/exports/keep_running_test";
 #
 my($kJSOCDEV_ROOT) = "/home/jsoc/cvs/Development/JSOC";
 my($kJSOCDEV_DBUSER) = "production";
-my($kJSOCDEV_DBNAME) = "jsoc";
-my($kJSOCDEV_DBHOST) = "hmidb";
+my($kJSOCDEV_DBNAME) = $config->get(DBNAME);
+my($kJSOCDEV_DBHOST) = $config->get(SERVER);
 my($kJSOCDEV_MANAGE) = "jsoc_export_manage";
 use constant kProcInfoSeriesDev => "jsoc.export_procs";
 #
 my($kJSOCPRO_ROOT) = "/home/jsoc/cvs/JSOC";
 my($kJSOCPRO_DBUSER) = "production";
-my($kJSOCPRO_DBNAME) = "jsoc";
-my($kJSOCPRO_DBHOST) = "hmidb";
+my($kJSOCPRO_DBNAME) = $config->get(DBNAME);
+my($kJSOCPRO_DBHOST) = $config->get(SERVER);
 my($kJSOCPRO_MANAGE) = "jsoc_export_manage";
 use constant kProcInfoSeriesPro => "jsoc.export_procs";
 #
@@ -92,16 +97,16 @@ use constant kProcInfoSeriesWeb => "jsoc.export_procs";
 #
 my($kJSOCTEST_ROOT) = "/home/jsoc/cvs/Development/JSOC";
 my($kJSOCTEST_DBUSER) = "phil";
-my($kJSOCTEST_DBNAME) = "jsoc";
-my($kJSOCTEST_DBHOST) = "hmidb";
+my($kJSOCTEST_DBNAME) = $config->get(DBNAME);
+my($kJSOCTEST_DBHOST) = $config->get(SERVER);
 my($kJSOCTEST_MANAGE) = "jsoc_export_manage_test";
 use constant kProcInfoSeriesTst => "jsoc.export_procs";
 
 my($runningflag) = $kINTERNALFLAG;
 my($arg);
 my($root);
-my($dbhost) = "hmidb";
-my($dbname) = "jsoc";
+my($dbhost) = $config->get(SERVER);
+my($dbname) = $config->get(DBNAME);
 my($dbuser) = "production";
 my($binpath);
 my($manage) = "jsoc_export_manage";
