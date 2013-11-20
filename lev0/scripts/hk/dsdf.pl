@@ -60,7 +60,7 @@
 $source=check_agruments($ARGV[0]);
 
 # (2)setup common  variables
-$ENV{'SUMSERVER'}="j1.Stanford.edu";
+$ENV{'SUMSERVER'}="k1";
 $ENV{'JSOC_DBUSER'}="production";
 $hm="/home/jsoc/cvs/Development";
 $exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/JSOC/bin/linux_x86_64";

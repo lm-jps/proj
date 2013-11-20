@@ -73,7 +73,7 @@ else
 my $dflg=$ENV{'SAVE_DF_DEBUG'}="0";
 
 # common setting for all environments(6)
-$ENV{'SUMSERVER'}="j1.Stanford.edu";
+$ENV{'SUMSERVER'}="k1";
 $hm=$ENV{'HOME'};
 $ENV{'MAILTO'}="";
 $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";

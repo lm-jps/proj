@@ -34,7 +34,7 @@
 
   #set environment variables specific for this script
   #common setting for all environments
-  $ENV{'SUMSERVER'}="j1.Stanford.edu";
+  $ENV{'SUMSERVER'}="k1";
   $hm="/home/jsoc/cvs/Development";
   $ENV{'MAILTO'}="";
   $exec_dir=$ENV{'DF_DRMS_EXECUTABLES'}="$hm/JSOC/bin/linux_x86_64";

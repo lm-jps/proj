@@ -35,7 +35,7 @@
 ##############################################################################
 
 #(1)common setting for all environmnents
-$ENV{'SUMSERVER'}="j1.Stanford.edu";
+$ENV{'SUMSERVER'}="k1";
 $hm=$ENV{'HOME'};
 $ENV{'MAILTO'}="";
 $exec_dir=$ENV{'DF_EXEC_PATH'}="$hm/cvs/JSOC/bin/linux_x86_64";
