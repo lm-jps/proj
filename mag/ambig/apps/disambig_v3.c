@@ -72,6 +72,7 @@
 #include "cartography.c"
 #include "noisemask.c"
 #include "timing.c"
+#include "fstats.h"
 
 #define PI	(M_PI)
 #define	DTOR	(PI / 180.)
@@ -179,6 +180,14 @@ int writeAuxData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 				 float *Bx, float *By, float *Bz, float *probBa, float *dBt, int *bitmap,
 				 int *ll, int *ur);
 
+// Set Bunit for all segs
+
+void set_Bunit(DRMS_Record_t *outRec);
+
+// Set stats for all segs
+
+void set_stats(DRMS_Record_t *outRec);
+
 // ============================================
 
 /* ##### Prototypes for external Fortran functions ##### */
@@ -218,7 +227,7 @@ extern void ambig_(int *geometry,
 //====================
 
 char *module_name = "disambig_v3";	/* Module name */
-char *version_id = "2013 Jul 26";  /* Version number */
+char *version_id = "2013 Nov 18";  /* Version number */
 
 #ifdef OLD
 char *segName[] = {"field", "inclination", "azimuth", "alpha_mag", 
@@ -227,6 +236,18 @@ char *segName[] = {"field", "inclination", "azimuth", "alpha_mag",
 #else
 char *segName[] = {"field", "inclination", "azimuth", "alpha_mag"};
 #endif
+
+// Output segments
+char *BSegName[] = {"inclination", "azimuth", "disambig", "field", "vlos_mag", "dop_width",
+    "eta_0", "damping", "src_continuum", "src_grad", "alpha_mag", "chisq", "conv_flag",
+    "inclination_err", "azimuth_err", "field_err", "vlos_err", "alpha_err",
+    "field_inclination_err", "field_az_err", "inclin_azimuth_err", "field_alpha_err", "inclination_alpha_err",
+    "azimuth_alpha_err", "conf_disambig", "info_map", "confid_map", "bitmap"};		// bitmap for Bharp only
+char *Bunit[] = {"degree", "degree", " ", "Mx/cm^2", "cm/s", "mA",
+    " ", "length units", "DN/s", "DN/s", " ", " ", " ",
+    "degree", "degree", "Mx/cm^2", "cm/s", " ",
+    " ", " ", " ", " ", " ", " ", " ", " ", " ", " "};		// 28 in total
+
 
 ModuleArgs_t module_args[] =
 {
@@ -456,6 +477,7 @@ int DoIt(void)
 		
 		// Output, one record each time
 		
+		printf("Creating output record...\n");
 		DRMS_Record_t *outRec = drms_create_record(drms_env, outQuery, DRMS_PERMANENT, &status);
 		if (status) {		// if failed
 			printf("Creating output record failed, image #%d skipped.\n", irec);
@@ -480,17 +502,38 @@ int DoIt(void)
 		
 #endif
 		
+		// =======================================
+		
+		// Link, moved before keywords so set_Bunit could loop segments (Nov 19 2013)
+		
+		DRMS_Link_t *link = NULL;
+		if (harpflag) {
+            link = hcon_lookup_lower(&outRec->links, "PATCH");
+            if (link) drms_link_set("PATCH", outRec, inRec);
+        } else {
+            link = hcon_lookup_lower(&outRec->links, "MDATA");
+            if (link) drms_link_set("MDATA", outRec, inRec);
+        }
+
 		// Keywords
 		
 		// =======================================
+		printf("Set keywords\n");
 		drms_copykey(outRec, inRec, "T_REC");
     	if (harpflag) drms_copykey(outRec, inRec, "HARPNUM");
         // Parameters
         copy_me_keys(inRec, outRec);
         copy_geo_keys(inRec, outRec);
-        if (harpflag) copy_patch_keys(inRec, outRec);
-        drms_setkey_string(outRec, "BUNIT_026", " ");
-        drms_setkey_string(outRec, "BUNIT_027", " ");
+        set_Bunit(outRec);		// Nov 18 2013 Xudong
+        drms_copykey(outRec, inRec, "QUALITY");
+        if (harpflag) {
+        	copy_patch_keys(inRec, outRec);
+        } else {			// full disk
+	        drms_setkey_time(outRec, "DATE_ME", drms_getkey_time(inRec, "DATE", &status));	// Nov 18 2013 Xudong
+            drms_setkey_int(outRec, "QUAL_ME", drms_getkey_int(inRec, "QUALITY", &status));	// Nov 18 2013 Xudong
+            // Stats for full disk only, for HARPs, done at SHARP
+            set_stats(outRec);		// Nov 18 2013 Xudong
+      	}
         drms_setkey_int(outRec, "DOFFSET", offset_t);		// Jun 27 Xudong
 		// Info
         drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
@@ -516,7 +559,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.10 2013/09/25 21:02:16 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.11 2013/11/20 23:06:06 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask_t) {            // Sep 25, changed to useMask_t, NOISEMASK
@@ -528,20 +571,8 @@ int DoIt(void)
 		}
 		// For debug
 		drms_setkey_string(outRec, "CODENAME", module_name);
-
-		// =======================================
 		
-		// Link
-		
-		DRMS_Link_t *link = NULL;
-		if (harpflag) {
-            link = hcon_lookup_lower(&outRec->links, "PATCH");
-            if (link) drms_link_set("PATCH", outRec, inRec);
-        } else {
-            link = hcon_lookup_lower(&outRec->links, "MDATA");
-            if (link) drms_link_set("MDATA", outRec, inRec);
-        }
-		
+		// ===========================
 		// Clean up
 		
 		drms_close_record(outRec, DRMS_INSERT_RECORD);
@@ -561,7 +592,6 @@ int DoIt(void)
             printf("record %d done, %.2f ms wall time, %.2f ms cpu time\n", 
                    irec, wt - wt1, ct - ct1);
         }
-		
 		
 	} // irec
 	
@@ -1528,3 +1558,62 @@ int writeAuxData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 	return 0;
 	
 }
+
+// ======================================================================
+
+// Set Bunit for all segs
+
+void set_Bunit(DRMS_Record_t *outRec)
+{
+
+  int nBunit = ARRLENGTH(BSegName);
+  int nSeg = (outRec->segments).num_total;
+  
+  // Loop through all segs
+  for (int iSeg = 0; iSeg < nSeg; iSeg++) {
+  	DRMS_Segment_t *outSeg = drms_segment_lookupnum(outRec, iSeg);
+  	char *segName = outSeg->info->name;
+	// Find the corresponding
+  	int iBunit;
+  	for (iBunit = 0; iBunit < nBunit; iBunit++) {
+  		if (strcmp(segName, BSegName[iBunit]) == 0) break;
+  	}
+	printf("%d %s %s %s\n", iSeg, segName, BSegName[iBunit], Bunit[iBunit]);
+  	// Set Bunit
+		char bunit_xxx[20];
+  	sprintf(bunit_xxx, "BUNIT_%03d", iSeg);
+		drms_setkey_string(outRec, bunit_xxx, Bunit[iBunit]);
+  }
+
+	return;
+
+}
+
+// ======================================================================
+
+// Set stats for all segs
+
+void set_stats(DRMS_Record_t *outRec)
+{
+
+	int status = 0;
+	int nSeg = (outRec->segments).num_total;
+  
+  // Loop through all segs
+    for (int iSeg = 0; iSeg < nSeg; iSeg++) {
+        DRMS_Segment_t *outSeg = drms_segment_lookupnum(outRec, iSeg);
+        DRMS_Array_t *outArray = drms_segment_read(outSeg, DRMS_TYPE_FLOAT, &status);
+        if (!status) {
+            outSeg->record = outRec;        // Hack suggested by Phil
+            outSeg->info->segnum = iSeg;
+            printf("%d, %d, %s\n", iSeg, outSeg->info->segnum, outSeg->info->name);
+            status = set_statistics(outSeg, outArray, 1);
+            printf("status=%d\n", status);
+            drms_free_array(outArray);
+        }
+    }
+
+	return;
+
+}
+
