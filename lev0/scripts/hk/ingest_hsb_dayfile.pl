@@ -26,7 +26,7 @@
   $ENV{'DF_INGEST_HSB_DEBUG'}="0";
 
   #common setting for all environments
-  $ENV{'SUMSERVER'}="k1";
+  $ENV{'SUMSERVER'}="j1.Stanford.edu";
   $hm=$ENV{'HOME'};
   $ENV{'MAILTO'}="";
   $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";

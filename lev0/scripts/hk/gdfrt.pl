@@ -42,7 +42,7 @@
 ##############################################################################
 
 #(1)common setting for all environmnents
-$ENV{'SUMSERVER'}="k1";
+$ENV{'SUMSERVER'}="j1.Stanford.edu";
 #$hm=$ENV{'HOME'};
 $hm="/home/jsoc/cvs/Development";
 $ENV{'MAILTO'}="";

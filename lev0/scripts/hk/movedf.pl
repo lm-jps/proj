@@ -51,7 +51,7 @@ $subject_email_not_sure="JSOC:WARNING:Ingesting MOC dayfiles: status:Possible er
 
 #common setting for all environments
 #$ENV{'SUMSERVER'}="d02.Stanford.EDU";
-$ENV{'SUMSERVER'}="k1";
+$ENV{'SUMSERVER'}="j1.Stanford.edu";
 $hm=$ENV{'HOME'};
 $ENV{'MAILTO'}="";
 $ENV{'DF_DRMS_EXECUTABLES'}="$hm/cvs/JSOC/bin/linux_x86_64";
