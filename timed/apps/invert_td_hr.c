@@ -512,4 +512,5 @@ fprintf (stderr, "input data set is open\n");
  *		removed defaults for input and output sets, changed default
  *		fitting method to both
  *  13.04.08	added WCS keys to propagation list
+ *  v 0.81 frozen 2013.04.08
  */
