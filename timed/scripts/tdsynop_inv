@@ -99,6 +99,10 @@ set PSER = hmi.tdpixlist
 set BCKG = hmi.V_avg120
 set KSER = hmi.TDKernels
 
+# auxiliary files
+set NOTE = ~rick/hmi/notify
+set RJCT = ~rick/hmi/qual/reject.V
+
 if ($TEST) then
   grep -q "^ISER =" $TSTOPT
   if ($status == 0) set ISER = `grep "^ISER =" $TSTOPT | awk '{print $3}'`
@@ -114,6 +118,11 @@ if ($TEST) then
   if ($status == 0) set OSER = `grep "^OSER =" $TSTOPT | awk '{print $3}'`
   grep -q "^RSER =" $TSTOPT
   if ($status == 0) set RSER = `grep "^RSER =" $TSTOPT | awk '{print $3}'`
+  grep -q "^RJCT =" $TSTOPT
+  if ($status == 0) then
+    set RJCT = `grep "^RJCT =" $TSTOPT | awk '{print $3}'`
+    if ($RJCT == "") set RJCT = "Not Specified"
+  endif
 endif
 
 #  check that input and product series exist
@@ -144,12 +153,7 @@ set TMID = $YR.`printf %02d $MO`.`printf %02d $DA`_`printf %02d $HH`:00_TAI
 @ YY = $YR % 100
 set CTIME = `printf %02d $YY``printf %02d $MO``printf %02d $DA`:`printf %02d $HH`
 
-# auxiliary files
-set HOSTNAME = `hostname`
-set HOSTID = `basename $HOSTNAME .Stanford.EDU`
-set PROCID = $HOSTID\_$$
-set NOTE = ~rick/rings/notify
-set RJCT = ~rick/hmi/qual/reject.V
+# determine root location of scratch and temp directory files
 set TMPFSLOC = ~rick/hmi/tmpfs
 if (-r $TMPFSLOC) then
   set TMPFS = `egrep ^/tmp $TMPFSLOC`
@@ -163,6 +167,11 @@ else
   set TEMP = /tmp
   set SCRT = /tmp
 endif
+
+set HOSTNAME = `hostname`
+set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set PROCID = $HOSTID\_$$
+
 set TMPB = $TEMP/$PLID$SUFX
 if ($TEST) set TMPB = $TMPB.$TW
 if (!(-d $TMPB)) mkdir $TMPB
@@ -375,6 +384,7 @@ if (!($FAIL)) rm $SCRIPT
 
 SKIP_TIMES:
 
+setenv OMP_NUM_THREADS 1
 @ BEGUN = `date +%s`
 foreach KTYP (Raypath Born)
   set KSET = $KSER"[$KTYP][1100]"
