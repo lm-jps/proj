@@ -46,7 +46,6 @@ subroutine minimise_energy(CalcE,CalcDE_reconfig)
 
    nxny=dnx*dny
    nxnynz=nxny
-   neq=neq*nxnynz
    neq_init=100*nxnynz
 
    nxjump=dnx/jump
@@ -54,7 +53,7 @@ subroutine minimise_energy(CalcE,CalcDE_reconfig)
    nyjump=dny/jump
    if (nyjump.lt.1) nyjump=1
    neq_init=neq_init/(nxjump*nyjump)
-   neq=neq/(nxjump*nyjump)
+   neq=neq*(nxnynz/(nxjump*nyjump))
    ia_prev=-1
    ja_prev=-1
 !
@@ -165,6 +164,11 @@ subroutine minimise_energy(CalcE,CalcDE_reconfig)
 !
       if ((nsucc.eq.0).or.(t.lt.tstop).or.(nconv.ge.nconv_min)) idone=1
    enddo
+   if(iverb.ge.1) then
+      call CalcE(E)
+      write (*,*) 'Final energy = ', E
+      write (*,*) 'Temperature = ', t
+   endif
 
    deallocate(tvar,DivB,Jz,ivec,jvec)
    if(allocated(ddt1)) deallocate(ddt1)
