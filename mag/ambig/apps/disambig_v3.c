@@ -559,7 +559,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.11 2013/11/20 23:06:06 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.12 2013/12/04 20:29:40 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask_t) {            // Sep 25, changed to useMask_t, NOISEMASK
@@ -1578,7 +1578,7 @@ void set_Bunit(DRMS_Record_t *outRec)
   	for (iBunit = 0; iBunit < nBunit; iBunit++) {
   		if (strcmp(segName, BSegName[iBunit]) == 0) break;
   	}
-	printf("%d %s %s %s\n", iSeg, segName, BSegName[iBunit], Bunit[iBunit]);
+//	printf("%d %s %s %s\n", iSeg, segName, BSegName[iBunit], Bunit[iBunit]);
   	// Set Bunit
 		char bunit_xxx[20];
   	sprintf(bunit_xxx, "BUNIT_%03d", iSeg);
@@ -1606,9 +1606,9 @@ void set_stats(DRMS_Record_t *outRec)
         if (!status) {
             outSeg->record = outRec;        // Hack suggested by Phil
             outSeg->info->segnum = iSeg;
-            printf("%d, %d, %s\n", iSeg, outSeg->info->segnum, outSeg->info->name);
+ //           printf("%d, %d, %s\n", iSeg, outSeg->info->segnum, outSeg->info->name);
             status = set_statistics(outSeg, outArray, 1);
-            printf("status=%d\n", status);
+ //           printf("status=%d\n", status);
             drms_free_array(outArray);
         }
     }
