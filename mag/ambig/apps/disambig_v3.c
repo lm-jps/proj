@@ -68,6 +68,7 @@
 #include <math.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <unistd.h>
 #include "copy_me_keys.c"
 #include "cartography.c"
 #include "noisemask.c"
@@ -105,8 +106,15 @@
 #define ambCode2 0x0003 // 011, weak annealed
 #define ambCode3 0x0007 // 111, strong annealed
 
+// Quality bits
+#define QUAL_ISSTARGET	(0x00004000)  //the ISS loop was OPEN for one or several filtergrams used to produce the observable
+#define QUAL_POORQUALITY	(0x20)        //poor quality: careful when using these observables due to eclipse, or lunar transit, or thermal recovery, or open ISS, or other issues...
+
 // switches
 #define QUALMAP 1		// QUALMAP not updated if 0
+
+// threshold for mean total field, above which the data is noisy
+#define NOISYB	(140.)
 
 // Switches
 //#define OLD 1			// Old version of ambig_()
@@ -188,6 +196,28 @@ void set_Bunit(DRMS_Record_t *outRec);
 
 void set_stats(DRMS_Record_t *outRec);
 
+// Lock file for logs, Dec 06 2013 from Art
+
+static int AcquireLock(int fd)
+{
+   int ret = -1;
+   int natt = 0;
+
+   // Time-out after 10 seconds
+   while ((ret = lockf(fd, F_TLOCK, 0)) != 0 && natt < 10)
+   {
+      sleep(1);
+      natt++;
+   }
+
+   return (ret == 0);
+}
+
+static void ReleaseLock(int fd)
+{
+   lockf(fd, F_ULOCK, 0);
+}
+
 // ============================================
 
 /* ##### Prototypes for external Fortran functions ##### */
@@ -227,7 +257,7 @@ extern void ambig_(int *geometry,
 //====================
 
 char *module_name = "disambig_v3";	/* Module name */
-char *version_id = "2013 Nov 18";  /* Version number */
+char *version_id = "2013 Dec 06";  /* Version number */
 
 #ifdef OLD
 char *segName[] = {"field", "inclination", "azimuth", "alpha_mag", 
@@ -272,6 +302,8 @@ ModuleArgs_t module_args[] =
     {ARG_FLOAT, "AMBLMBDA", "1.", "Weighting factor between div. and vert. current density."},
     {ARG_FLOAT, "AMBTFCT0", "2.", "Input factor to scale initial temperature (tfac0>0)."},
     {ARG_FLOAT, "AMBTFCTR", "0.990", "Input factor to reduce temperature (0<tfactr<1)."},
+    {ARG_STRING, "errlog", "/home/jsoc/disambig_errlog.txt", "Error log for skipped full disk disambiguation"},		// Dec 06 2013 XS
+    {ARG_FLAG, "r", "", "Flag to suppress quality checking and error log"},
     {ARG_END}
 };
 
@@ -320,7 +352,12 @@ int DoIt(void)
     float lambda = params_get_float(&cmdparams, "AMBLMBDA");
     float tfac0 = params_get_float(&cmdparams, "AMBTFCT0");
     float tfactr = params_get_float(&cmdparams, "AMBTFCTR");
+
+	// quality checking and error log for FD, Dec 06 2013
+	int noQualCheck = params_isflagset(&cmdparams, "r");
+	const char *errLog = (char *)params_get_str(&cmdparams, "errlog");
 	
+
 	// Check parameters
 	
 	if (nap > npad) {nap = npad; SHOW("nap set to npad\n");}
@@ -359,6 +396,42 @@ int DoIt(void)
 		int harpflag = (harpnum == DRMS_MISSING_INT) ? 0 : 1;		// full disk vs harp
 		int useMask_t = useMask;		// using reconstructed mask image
 		int geometry_t = geometry;
+		char t_rec_str[100];
+		sprint_time(t_rec_str, t_rec, "TAI", 0);
+		
+		// For full disk, check quality and decide wheter to skip + error log, Dec 06
+		
+		int skipRec = 0;
+		if (!noQualCheck && !harpflag) {
+			int qual = drms_getkey_int(inRec, "QUALITY", &status);
+			float meanB = drms_getkey_float(inRec, "DATAMEAN_002", &status);
+			if ((qual & QUAL_POORQUALITY) || (qual & QUAL_ISSTARGET) || (qual && (fabs(meanB) > NOISYB))) {		// bad FD data
+				printf("T_REC=%s, QUALITY=0x%x, DATAMEAN_002=%f\n", t_rec_str, qual, meanB);
+				skipRec = 1;
+				int lockfd = open(errLog, O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG);
+				if (lockfd >= 0) {
+					if (AcquireLock(lockfd)) {
+						// How to write??
+						FILE *fp;
+						fp = fopen(errLog, "a");
+						if (fp) {
+					//		sleep(20);			// tested for lock
+							fprintf(fp, "T_REC=%s, QUALITY=0x%x, DATAMEAN_002=%f\n", t_rec_str, qual, meanB);
+							fclose(fp);
+						} else {
+							fprintf(stderr, "Unable to write into %s.\n", errLog);
+						}
+						ReleaseLock(lockfd);
+					} else {
+						fprintf(stderr, "Unable to acquire lock on %s.\n", errLog);
+					}
+					close(lockfd);
+				} else {
+					fprintf(stderr, "Unable to open lock file for writing: %s.\n", errLog);
+				}
+			}		// check qual
+		}
+		if (skipRec) continue;		// if bad quality AND fail to open error log, skip anyway
 		
 		// Get geometry
 				
@@ -559,7 +632,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.12 2013/12/04 20:29:40 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.13 2013/12/09 18:06:20 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask_t) {            // Sep 25, changed to useMask_t, NOISEMASK
