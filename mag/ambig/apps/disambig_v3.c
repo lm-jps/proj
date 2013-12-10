@@ -302,7 +302,7 @@ ModuleArgs_t module_args[] =
     {ARG_FLOAT, "AMBLMBDA", "1.", "Weighting factor between div. and vert. current density."},
     {ARG_FLOAT, "AMBTFCT0", "2.", "Input factor to scale initial temperature (tfac0>0)."},
     {ARG_FLOAT, "AMBTFCTR", "0.990", "Input factor to reduce temperature (0<tfactr<1)."},
-    {ARG_STRING, "errlog", "/home/jsoc/disambig_errlog.txt", "Error log for skipped full disk disambiguation"},		// Dec 06 2013 XS
+    {ARG_STRING, "errlog", "/home/jsoc/locks/disambig_errlog.txt", "Error log for skipped full disk disambiguation"},		// Dec 06 2013 XS // Dec 10 AA
     {ARG_FLAG, "r", "", "Flag to suppress quality checking and error log"},
     {ARG_END}
 };
@@ -355,7 +355,7 @@ int DoIt(void)
 
 	// quality checking and error log for FD, Dec 06 2013
 	int noQualCheck = params_isflagset(&cmdparams, "r");
-	const char *errLog = (char *)params_get_str(&cmdparams, "errlog");
+	const char *errLog = params_get_str(&cmdparams, "errlog");
 	
 
 	// Check parameters
@@ -408,28 +408,28 @@ int DoIt(void)
 			if ((qual & QUAL_POORQUALITY) || (qual & QUAL_ISSTARGET) || (qual && (fabs(meanB) > NOISYB))) {		// bad FD data
 				printf("T_REC=%s, QUALITY=0x%x, DATAMEAN_002=%f\n", t_rec_str, qual, meanB);
 				skipRec = 1;
-				int lockfd = open(errLog, O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG);
+				int lockfd = open(errLog, O_WRONLY | O_CREAT | O_APPEND, S_IRWXU | S_IRWXG);
 				if (lockfd >= 0) {
 					if (AcquireLock(lockfd)) {
-						// How to write??
-						FILE *fp;
-						fp = fopen(errLog, "a");
-						if (fp) {
-					//		sleep(20);			// tested for lock
-							fprintf(fp, "T_REC=%s, QUALITY=0x%x, DATAMEAN_002=%f\n", t_rec_str, qual, meanB);
-							fclose(fp);
-						} else {
-							fprintf(stderr, "Unable to write into %s.\n", errLog);
-						}
-						ReleaseLock(lockfd);
-					} else {
-						fprintf(stderr, "Unable to acquire lock on %s.\n", errLog);
-					}
-					close(lockfd);
-				} else {
-					fprintf(stderr, "Unable to open lock file for writing: %s.\n", errLog);
-				}
-			}		// check qual
+                        FILE *fp = NULL;
+                        
+                        if (fp = fdopen(lockfd, "a")) {
+                            fprintf(fp, "T_REC=%s, QUALITY=0x%x, DATAMEAN_002=%f\n", t_rec_str, qual, meanB);
+                            ReleaseLock(lockfd);
+                            fclose(fp); /* closes the lockfd file descriptor */
+                        }
+                        else {
+                            close(lockfd); /* closes the lockfd file descriptor */
+                            fprintf(stderr, "Unable to write into %s.\n", errLog);
+                        }
+                    } else {
+                        close(lockfd); /* closes the lockfd file descriptor */
+                        fprintf(stderr, "Unable to acquire lock on %s.\n", errLog);
+                    }
+                } else {
+                    fprintf(stderr, "Unable to open lock file for appending to: %s.\n", errLog);
+                }
+            }		// check qual
 		}
 		if (skipRec) continue;		// if bad quality AND fail to open error log, skip anyway
 		
@@ -632,7 +632,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.13 2013/12/09 18:06:20 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.14 2013/12/10 22:51:52 arta Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask_t) {            // Sep 25, changed to useMask_t, NOISEMASK
