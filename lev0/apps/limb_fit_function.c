@@ -211,7 +211,8 @@ void free_mem(struct mempointer *memory);
       if (rcount > 0)
    	{
 	 
-	  status_gap=init_fill(gapfill_method, gapfill_regular, gapfill_order,gapfill_order2,gapfill_order2,&fills, NULL, NULL);
+	  status_gap=init_fill(gapfill_method, gapfill_regular,
+gapfill_order,gapfill_order2,gapfill_order2,&fills, NULL, "/home/jsoc/cvs/Development/JSOC");
 	  if (status_gap == 0){fgap_fill(&fills,imcp,nx,nx,nx,mask_p,cnorm,ierror); free_fill(&fills);} else {status_res=2; printf("gapfill not successful 2 \n"); free_fill(&fills); free_mem(&memory); return status_res;}
 	}
 
