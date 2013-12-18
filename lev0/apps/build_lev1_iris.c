@@ -687,8 +687,10 @@ int do_ingest(long long bbrec, long long eerec)
 	  TIME t_obs, time_qbi;
 	  float aeulrbrx, aeulrbry, aeulrbrz, acg_roll, ophase;
 	  t_obs = drms_getkey_time(rs0, "t_obs", &st);
-	  if (st)
+	  if (st) {
 	      t_obs = DRMS_MISSING_TIME;
+          }
+          else {
 	  sprintf(open_dsname, "iris.pointing_data[? date_obs > %f and date_obs <= %f ?]", t_obs-5, t_obs+5); 
           printf("%s\n", open_dsname);
 	  rset = drms_open_records(drms_env, open_dsname, &st);
@@ -722,6 +724,7 @@ int do_ingest(long long bbrec, long long eerec)
 
 	  if (rset)
 	      drms_close_records(rset, DRMS_FREE_RECORD);
+          }
         }
       }
       
@@ -1011,6 +1014,47 @@ int do_ingest(long long bbrec, long long eerec)
         }
       }
 /****END NEW from Rock 10Sep2013************************************************/
+
+      //For quicklook, find closest iris.timeline record & set scroll 26Nov2013
+      if(quicklook) {
+          DRMS_RecordSet_t *rset;
+          DRMS_Record_t *rt;
+          int st;
+          TIME t_obs, roll_start;
+          float roll_deg;
+          t_obs = drms_getkey_time(rs0, "t_obs", &st);
+        if (st) {
+           t_obs = DRMS_MISSING_TIME;
+        }
+        else {
+          sprintf(open_dsname, "iris.timeline_roll[? roll_start > %f and roll_start <= %f ?]", t_obs-86401, t_obs+1);
+          printf("%s\n", open_dsname);
+          rset = drms_open_records(drms_env, open_dsname, &st);
+
+          if (!rset || !rset->n || st) {
+              printk("Error in drms_open_records(%s); setting scroll to zero\n", open_dsname);
+              scroll = 0.0;
+
+          } else {
+              // Pick last record
+              //rt = rset->records[0];
+              rt = rset->records[(rset->n)-1];
+              sprintf(pointrec, "iris.timeline_roll[:#%lld]", rt->recnum);
+              if(dstatus = drms_setkey_string(rs, "POINTREC", pointrec)) {
+                printk("**ERROR on drms_setkey_string() for %s\n", pointrec);
+              }
+              roll_start = drms_getkey_time(rt, "ROLL_START", &st);
+              roll_deg = drms_getkey_float(rt, "DEGREES", &st);
+
+              drms_setkey_float(rs, "SAT_ROT", roll_deg);
+
+              scroll = roll_deg;
+          }
+
+          if (rset)
+              drms_close_records(rset, DRMS_FREE_RECORD);
+        }
+      }
 
       //char *wavstr = drms_getkey_string(rs0, "WAVE_STR", &rstatus);
       char *imgpath = drms_getkey_string(rs0, "IMG_PATH", &rstatus);
