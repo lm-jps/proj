@@ -71,9 +71,13 @@
 #include <unistd.h>
 #include "copy_me_keys.c"
 #include "cartography.c"
-#include "noisemask.c"
 #include "timing.c"
 #include "fstats.h"
+
+//#include "noisemask.c"
+// New noisemask Dec 16 2013
+#include "noisemaskimag4twindow.c"
+#include "obstime2maskid.c"
 
 #define PI	(M_PI)
 #define	DTOR	(PI / 180.)
@@ -385,7 +389,7 @@ int DoIt(void)
         if (verbflag) {
             wt1 = getwalltime();
             ct1 = getcputime(&ut1, &st1);
-            printf("processing record %d...\n", irec);
+            printf("processing record %d of %d...\n", irec, nrecs);
         }
 		
 		// Input record, prime keys, code modes
@@ -398,6 +402,10 @@ int DoIt(void)
 		int geometry_t = geometry;
 		char t_rec_str[100];
 		sprint_time(t_rec_str, t_rec, "TAI", 0);
+		
+		if (verbflag) {
+			printf("T_REC=%s\n", t_rec_str);
+		}
 		
 		// For full disk, check quality and decide wheter to skip + error log, Dec 06
 		
@@ -632,7 +640,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.14 2013/12/10 22:51:52 arta Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.15 2013/12/19 19:47:42 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask_t) {            // Sep 25, changed to useMask_t, NOISEMASK
@@ -1097,7 +1105,11 @@ int getNoiseMask(DRMS_Record_t *inRec, float *noise, int *ll, int *ur, char *mas
 	}
 	x0 -= 1; y0 -= 1;
 	
-	status = noisemask(tobs, xDim, yDim, x0, y0, r, vr, noise_fd, maskQuery);
+//	status = noisemask(tobs, xDim, yDim, x0, y0, r, vr, noise_fd, maskQuery);
+
+		// New masks from Yang, Dec 16 2013
+		int maskid = obstime2maskid(tobs);
+		status = noisemaskimag4twindow(xDim, yDim, x0, y0, r, vr, maskid, noise_fd, maskQuery);
     
     if (status) {               // Added Jun 26 2013, Xudong
         free(noise_fd);
