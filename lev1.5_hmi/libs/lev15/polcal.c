@@ -142,8 +142,8 @@ int init_polcal(
   pars->phi3_0=(double *)(MKL_malloc(nin*nin*sizeof(double),malign));
 
   
-//fileptr = fopen ("/scr21/schou/pars_090416/fit.bin", "r");
-  fileptr = fopen ("/scr21/schou/pars_100611/fit.bin", "r");
+//fileptr = fopen ("/scr21/schou/pars_100611/fit.bin", "r");
+  fileptr = fopen ("/home/schou/hmi/anapol/pars_131222/fit.bin", "r");
   if (fileptr==NULL) {
     printf("File not found in init_polcal.\n");
     return 1;
@@ -709,6 +709,6 @@ shared(nlead,output,helpq,helpu,nx,ny)
 
 char *polcal_version() // Returns CVS version of polcal.c
 {
-  return strdup("$Id: polcal.c,v 1.4 2010/09/23 20:57:27 schou Exp $");
+  return strdup("$Id: polcal.c,v 1.5 2013/12/22 22:54:08 couvidat Exp $");
 }
 
