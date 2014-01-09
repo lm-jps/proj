@@ -160,3 +160,5 @@ int Dopplergram_test2(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framel
 int Dopplergram_Jesper(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSize,DRMS_Array_t *Lookuptable,float Rsun,float X0,float Y0,struct parameterDoppler DopplerParameters,int MISSVALS[5],int *SATVALS, float cdelt1, TIME TargetTime);
 
 int Dopplergram_duvall(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSize,DRMS_Array_t *Lookuptable,float Rsun,float X0,float Y0,struct parameterDoppler DopplerParameters,int MISSVALS[5],int *SATVALS, float cdelt1, TIME TargetTime);
+
+int Dopplergram_largercrop(DRMS_Array_t **arrLev1p,DRMS_Array_t **arrLev15,int framelistSize,DRMS_Array_t *Lookuptable,float Rsun,float X0,float Y0,struct parameterDoppler DopplerParameters,int MISSVALS[5],int *SATVALS, float cdelt1, TIME TargetTime);
