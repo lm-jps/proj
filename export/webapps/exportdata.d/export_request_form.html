@@ -44,7 +44,7 @@
     <tr id="MethodRow">
       <td>Method</td>
       <td><span id="MethodHelp" class="tip">?</span></td>
-      <td><select id="ExportMethod" type="text" name="method" style="width:15em" onChange="SetExportMethod();" >
+      <td><select id="ExportMethod" type="text" name="method" style="width:15em" onChange="SetExportMethod(0);" >
         <option value="url_direct">url_direct
         <option value="url_quick">url_quick
         <option value="url">url
@@ -59,7 +59,7 @@
       <td>Filename Format</td>
       <td><span id="FilenameFmtHelp" class="tip">?</span></td>
       <td colspan="2">
-        <input id="ExportFilenameFmt" type="text" name="filenamefmt" value="no_op" style="width:30em" onChange="SetFilenameFmt();">
+        <input id="ExportFilenameFmt" type="text" name="filenamefmt" value="no_op" style="width:30em" onChange="SetExportFilenameFmt();">
         File name template.
       </td>
     </tr>
@@ -570,14 +570,14 @@
     <tr id="RequestorRow">
       <td>Requestor</td>
       <td><span id="RequestorHelp" class="tip">?</span></td>
-      <td><input id="ExportRequestor" type="text" name="requestor" value="" onChange="CheckExportParams(1);" ></td>
+      <td><input id="ExportRequestor" type="text" name="requestor" value="" onChange="CheckExportParams();" ></td>
       <td><span id="RequestorMessage">Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</span></td>
     </tr>
   
     <tr id="NotifyRow">
       <td>Notify</td>
       <td><span id="NotifyHelp" class="tip">?</span></td>
-      <td><input id="ExportNotify" type="text" name="notify" value="" onChange="CheckExportParams(1);" ></td>
+      <td><input id="ExportNotify" type="text" name="notify" value="" onChange="CheckExportParams();" ></td>
       <td>
         Provide your email address for notification.
         If Requestor is your SolarMail name you may use "solarmail" here.
@@ -587,7 +587,7 @@
     <tr>
       <td colspan="4">
       <span id="CheckParamHelp" class="tip">?</span>&nbsp;
-        <input id="ExportCheckButton" type="button" value="Check Params for Export" onClick="CheckExportParams(0);">
+        <input id="ExportCheckButton" type="button" value="Check Params for Export" onClick="CheckExportParams();">
         <span id="ExportCheckMsg" style="color:red;background-color:#FFFFFF">&nbsp;</span>
       </td>
     </tr>
@@ -620,7 +620,7 @@
     <tr>
       <td colspan="4">
         <span id="FetchCheckboxHelp" class="tip">?</span>&nbsp;
-        <input id="ShowQueryCheckbox" type="checkbox" checked="0"> check to show export params.&nbsp;
+        <input id="ShowQueryCheckbox" type="checkbox" checked="0" onChange="ExportShowQuery();"> check to show export params.&nbsp;
         <span id="ExportParameters"></span>
     </tr>
   </table>

@@ -361,6 +361,11 @@ function ImPatchSet(param)
     ImPatchCheck();
   }
 
+// ImResetParams values:
+//  0 set in ImPatchCheck
+//  1 set onload
+//  2 set by Reset params button
+//  3 set by Update RecrodSet Times button
 var defaultStartUsed = 1;
 var defaultStopUsed = 1;
 function ImPatchCheck()
@@ -370,23 +375,24 @@ function ImPatchCheck()
     ImPatchInit(0);
     ImPatchSet(0);
     }
-  else if (ImResetParams==3)
+  else if (ImResetParams==3 || $("ImRecordSet").innerHTML !== $("ExportRecordSet").value)
     {
     ImFirstRecord = null;
     ImLastRecord = null;
+    $("ImTDelta").value = "NotSpecified";
     ImResetParams = 0;
     ImPatchSet(0);
     }
   var isok = 1;
   var args = "im_patch";
   var ImLocOption;
-// alert("ImPatchCheck, RecordCountNeeded="+RecordCountNeeded+", default start,stop="+defaultStartUsed+","+defaultStopUsed);
   if (RecordCountNeeded)
     {
     ImFirstRecord = null;
     ImLastRecord = null;
     if (defaultStartUsed) $("ImTStart").value = "NotSpecified";
     if (defaultStopUsed) $("ImTStop").value = "NotSpecified";
+    ExportProcessingOK = 0;
     ExportNewRS();
     return("");
     }
@@ -618,9 +624,7 @@ function ImGetRecInfo(n)
   else
     ImLastRecord = null;
   var timePrime = (firstTimePrime.length > 0 ? firstTimePrime : "T_REC");
-// $("TESTMSG").innerHTML = timePrime;
   var keysneeded = timePrime+",CAR_ROT,CRLN_OBS,"+timePrime+"_step";
-// alert("ImGetRecInfo("+n+") called");
   var recinfo;
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var RecordSet = $("ExportRecordSet").value;
@@ -636,7 +640,6 @@ function ImGetRecInfo(n)
       var response = transport.responseText || "no response text";
       var recinfo = response.evalJSON();
 
-// $("TESTMSG").innerHTML += " thisN="+thisN;
       if (recinfo.status == 0)
         {
         if (thisN == "1")

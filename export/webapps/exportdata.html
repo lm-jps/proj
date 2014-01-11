@@ -98,6 +98,7 @@ var RequestID;
 var RecordLimit;
 var RecordCount = -1;
 var RecordCountNeeded;
+var ExportQueryOK;
 var ExportRecordSetOK;
 var ExportRedinessStatus;
 var ExportFromFileList;
@@ -160,6 +161,7 @@ function initVars()
   RecordCountNeeded = 1;
   RecordLimit = 0;
   ExportRecordSetOK = 0;
+  ExportQueryOK = 0;
   ExportRedinessStatus = 0;
   ExportFromFileList = 0;
   ExportMethodOK = 1;
@@ -458,6 +460,7 @@ function ToggleHelp()
 
 function FileUploadCleanup()
   {
+  ExportQueryOK = 0;
   $("ExportRecordSet").value = "";
   ExportRecordSetOK = 0;
   ExportFromFileList = 0;
@@ -473,6 +476,7 @@ function FileUploadCleanup()
   
 function FileUploadWanted()
   {
+  ExportQueryOK = 0;
   if (ExportFromFileList == 0)
     {
     $("ExportRecordSet").value = "*file*";
@@ -578,6 +582,7 @@ function GetSeriesList(filter)
 
 function GetRSCount()
   {
+  ExportQueryOK = 0;
   var recset = $("ExportRecordSet").value;
   var recfilt, segfilt;
   var posbracket = recset.indexOf("[");
@@ -732,6 +737,7 @@ function ExportNop()
 
 function ExportRSChanged()
   {
+  ExportQueryOK = 0;
   RecordCountNeeded = 1;
   $("CountButton").style.backgroundColor = colorYellow;
   CheckRediness();
@@ -739,6 +745,7 @@ function ExportRSChanged()
 
 function ExportNewRS()
   {
+  ExportQueryOK = 0;
   $("CountButton").style.backgroundColor = colorNeutral;
   RecordCountNeeded = 0;
   if (SetRecordLimit())
@@ -778,6 +785,8 @@ function SetRecordLimit()
 function SetExportMethod(byWhom)
   {
   // byWhom = 0 for user click, else 1
+  if (byWhom == 0)
+    ExportQueryOK = 0;
   var ExportMethodIndex = $("ExportMethod").selectedIndex;
   ExportMethodValue = $("ExportMethod").options[ExportMethodIndex].value;
   if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
@@ -837,6 +846,7 @@ function SetExportMethod(byWhom)
 
 function SetExportFilenameFmt()
   {
+  ExportQueryOK = 0;
   if ($("ExportFilenameFmt").value.length != 0)
     ExportFilenameFmtOK = 1;
   else
@@ -849,6 +859,7 @@ function SetExportFilenameFmt()
 
 function ProcessingEnabled()
   {
+  ExportQueryOK = 0;
   if ($("ProcessingCheckboxHide").checked)
     $("ProcessingCheckbox").checked = false;
   if ($("ProcessingCheckbox").checked)
@@ -879,6 +890,7 @@ function ProcessingEnabled()
 
 function SetProcessing(ichecked)
   { // 0 if no procesing enabled,  -1 if same seriesname, -2 if changed
+  ExportQueryOK = 0;
   if (ichecked > 0) $(ExportProcessingOptions[0].id).checked = false;
   ExportProcessingOK = 0;
   // Add recordLimit FIRST always.
@@ -942,18 +954,19 @@ function SetProcessing(ichecked)
     SetProcessing(0);
     }
         
+  $("ExportProcessingHidden").value = ExportProcessingArgs;
   if (isok)
     ExportProcessingOK = 1;
   else
     ExportProcessingOK = 0;
-  $("ExportProcessingHidden").value = ExportProcessingArgs;
-// $("ProcArgsDisplay").innerHTML = ExportProcessingArgs;
   CheckRediness();
   }
 
 function SetExportProtocol(byWhom)
   { 
   // byWhom = 0 for user click, else 1
+  if (byWhom == 0)
+    ExportQueryOK = 0;
   var ExportProtocolIndex = $("ExportProtocol").selectedIndex;
   ExportProtocolValue = $("ExportProtocol").options[ExportProtocolIndex].value;
 
@@ -1013,6 +1026,7 @@ function SetExportProtocol(byWhom)
 
 function SetExportCompress()
   {
+  ExportQueryOK = 0;
   var protocolparam = ExportProtocolValue;
   if (protocolparam == "FITS" || protocolparam == "as-is")
     {
@@ -1040,7 +1054,8 @@ function SetExportCompress()
   }
 
 function SetExportUser()
-  {
+  {  
+  ExportQueryOK = 0;
   if ($("ExportRequestor").value.length != 0)
     {
     Cookie.setData("user", $("ExportRequestor").value);
@@ -1054,7 +1069,8 @@ function SetExportUser()
   }
 
 function SetExportNotify()
-  {
+  {   
+  ExportQueryOK = 0;
   if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
     {
     ExportNotifyOK = 1;
@@ -1100,9 +1116,20 @@ function SetExportNotify()
   CheckRediness();
   }
 
+function ExportShowQuery()
+  {
+  if ($("ShowQueryCheckbox").checked)
+    {
+    var paramString = decodeURIComponent(Object.toQueryString(exportparameters));
+    $("ExportParameters").innerHTML = paramString.replace(/&/g,"&amp;");
+     }
+  else
+    $("ExportParameters").innerHTML = "";
+  }
+
 function CheckRediness()
   {
-  var status = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportUserOK * ExportNotifyOK;
+  var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportUserOK * ExportNotifyOK;
   if (status)
     {
     $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
@@ -1183,7 +1210,7 @@ function CheckExportParams()
       }
     break;
     }
-  var isOK = CheckRediness();
+  var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportUserOK * ExportNotifyOK;
   if (isOK)
     {
     var protocolparam = $("ExportProtocolHidden").value;
@@ -1198,20 +1225,16 @@ function CheckExportParams()
 			 	      "format" : "json",
                  		      "protocol" : protocolparam });
 
-
-    if ($("ShowQueryCheckbox").checked)
-      {
-      var paramString = decodeURIComponent(Object.toQueryString(exportparameters));
-      $("ExportParameters").innerHTML = paramString.replace(/&/g,"&amp;");
-      }
-    else
-      $("ExportParameters").innerHTML = "";
+    ExportShowQuery();
+    ExportQueryOK = 1;
     }
   else
     {
     exportparameters = NULL;
     $("ExportParameters").innerHTML = "";
+    ExportQueryOK = 0;
     }
+  var isOK = CheckRediness();
   return isOK;
   }
 
