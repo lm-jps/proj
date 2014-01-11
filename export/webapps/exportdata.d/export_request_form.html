@@ -16,8 +16,16 @@
     </tr>
   
     <tr id="RecordSetRow">
-      <td style="width:10em" >RecordSet</td><td><span id="RecordSetHelp" class="tip">?</span></td><td colspan="2">
-        <input id="ExportRecordSet" type="text" name="ds" value="" onChange="ExportRSChanged();" onkeydown="return OnEnterKey(event,ExportNewRS);"> </td>
+      <td style="width:10em" >RecordSet</td>
+      <td><span id="RecordSetHelp" class="tip">?</span></td>
+      <td colspan="2">
+        <input id="ExportRecordSet" type="text" name="ds" value="" onChange="ExportRSChanged();"
+           onkeydown="return OnEnterKey(event,ExportNewRS);">
+        &nbsp;
+        <span id="CallLookdataHelp" class="tip">?</span>
+        &nbsp;
+        <input id="LookdataButton" type="button" value="Lookdata" onClick="CallLookdata();" >
+       </td>
     </tr>
   
     <tr id="RecordLimitRow">
@@ -71,6 +79,7 @@
           <input id="ProcessingCheckbox" type="checkbox" checked="0" onChange="ProcessingEnabled();" >
           &nbsp; Enable Processing
         </span>
+        <span id="ProcessingWaitMessage" style="display:none">Select RecordSet before selecting processing</span>
         <span id="ExportProcessing" style="display:none" ></span>
       </td>
     </tr>
@@ -225,7 +234,10 @@
         <tr>
         <td colspan="3">
         RecordSet:&nbsp;
-        <span id="ImRecordSet"></span>
+        <span id="ImRecordSet" style="background-color:#FFFFFF"></span>
+        <span id="ImPatchResetHelp" class="tip">?</span>
+        <input type="button" style="width:10em" value="Reset params" onClick="ImResetParams=2;ImPatchCheck();">
+        <input type="button" style="width:14em" value="Update RecordSet Times" onClick="ImResetParams=3;ImPatchCheck();">
         </td>
         </tr>
         <tr>
@@ -508,30 +520,41 @@
       <td colspan="2">
         <table style="border-style:solid">
           <tr>
-            <td> SeriesName </td> <td> <span id="ImageSer" type="text"  name="ImageSer" ></span> </td>
+            <td> SeriesName </td>
+            <td><span id="ImageSer" type="text"  name="ImageSer" ></span></td>
+            <td></td>
           </tr>
           <tr>
-            <td>ColorTable </td> <td> <select id="ImageCT" type="text" size=1 name="ImageCT" onChange="ProtocolImageUserSet();" ></select> </td>
+            <td>ColorTable </td>
+            <td><select id="ImageCT" type="text" size=1 name="ImageCT" onChange="ProtocolImageUserSet(1);" ></select></td>
+            <td>e.g. for <span id="ImageCTTxt" type="text">{series}</span></td>
           </tr>
           <tr>
-	    <td>Min </td> <td> <input id="ImageMin" type="text" name="ImageMin" value=" "  onChange="ProtocolImageUserSet();"> </td>
+	    <td>Min</td>
+            <td><input id="ImageMin" type="text" name="ImageMin" value=" "  onChange="ProtocolImageUserSet(0);"></td>
+            <td><span id="ImageMinTxt" type="text"></span></td>
           </tr>
           <tr>
-            <td>Max </td> <td> <input id="ImageMax" type="text" name="ImageMax" value=" "  onChange="ProtocolImageUserSet();" > </td>
+            <td>Max</td>
+            <td><input id="ImageMax" type="text" name="ImageMax" value=" "  onChange="ProtocolImageUserSet(0);" ></td>
+            <td><span id="ImageMaxTxt" type="text"></span></td>
           </tr>
           <tr>
-            <td>Scaling </td> <td> <select id="ImageScl" type="text" name="ImageScl" value=""  onChange="ProtocolImageUserSet();" ></select> </td>
+            <td>Scaling</td>
+            <td><select id="ImageScl" type="text" name="ImageScl" value=""  onChange="ProtocolImageUserSet(0);" ></select></td>
+            <td><span id="ImageSclTxt" type="text"></span></td>
           </tr>
           <tr>
             <td>ImageSize </td>
             <td>
-              <select id="ImageSize" type="text" name="ImageSize" value=""  onChange="ProtocolImageUserSet();" ;  >
+              <select id="ImageSize" type="text" name="ImageSize" value=""  onChange="ProtocolImageUserSet(0);" ;  >
                 <option value="scl_1">(Scale 1): e.g. SDO 4096 x 4096 px</option>
                 <option value="scl_4">(Scale 1/4): e.g. SDO 1024 x 1024 px</option>
                 <option value="scl_8">(Scale 1/8): e.g. SDO 512 x 512 px(Default)</option>
 	        <option value="scl_16">(Scale 1/16): e.g. SDO 256 x 256 px </option>
               </select>
             </td>
+            <td></td>
           </tr>
           <tr>
             <td>
@@ -547,22 +570,34 @@
     <tr id="RequestorRow">
       <td>Requestor</td>
       <td><span id="RequestorHelp" class="tip">?</span></td>
-      <td><input id="ExportRequestor" type="text" name="requestor" value="" onChange="ExportNop();" ></td>
+      <td><input id="ExportRequestor" type="text" name="requestor" value="" onChange="CheckExportParams(1);" ></td>
       <td><span id="RequestorMessage">Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</span></td>
     </tr>
   
     <tr id="NotifyRow">
       <td>Notify</td>
       <td><span id="NotifyHelp" class="tip">?</span></td>
-      <td><input id="ExportNotify" type="text" name="notify" value="" onChange="ExportNop();" ></td>
-      <td>Provide your email address for notification.  May be omitted for online delivery.</td>
+      <td><input id="ExportNotify" type="text" name="notify" value="" onChange="CheckExportParams(1);" ></td>
+      <td>
+        Provide your email address for notification.
+        If Requestor is your SolarMail name you may use "solarmail" here.
+      </td>
     </tr>
   
-    <tr><td colspan="4"><input id="ExportCheckButton" type="button" value="Check Params for Export" onClick="CheckExportParams();"></td></tr>
+    <tr>
+      <td colspan="4">
+      <span id="CheckParamHelp" class="tip">?</span>&nbsp;
+        <input id="ExportCheckButton" type="button" value="Check Params for Export" onClick="CheckExportParams(0);">
+        <span id="ExportCheckMsg" style="color:red;background-color:#FFFFFF">&nbsp;</span>
+      </td>
+    </tr>
+
     <tr id="AjaxExportRequestRow">
       <td colspan="4">
-        <input id="ExportButton" type="button" value="Submit Export Request" style="background-color:#D8D8D8" onClick="GetExport();" >
-      <span id="ExportButtonMsg">Please only click once for export request.</span >
+        <span id="SubmitHelp" class="tip">?</span>&nbsp;
+        <input id="ExportButton" type="button" value="Submit Export Request"
+             style="background-color:#D8D8D8" onClick="GetExport();" >
+        <span id="ExportButtonMsg">Please only click once for export request.</span >
       </td>
     </tr>
   
@@ -580,6 +615,13 @@
       <td>&nbsp;</td>
       <td><span id="FileUploadInfo"></span></td>
       <td></td>
+    </tr>
+
+    <tr>
+      <td colspan="4">
+        <span id="FetchCheckboxHelp" class="tip">?</span>&nbsp;
+        <input id="ShowQueryCheckbox" type="checkbox" checked="0"> check to show export params.&nbsp;
+        <span id="ExportParameters"></span>
     </tr>
   </table>
 </form>

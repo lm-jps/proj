@@ -1602,7 +1602,7 @@ function GetShowInfo()
   $("SIFkey").value = '';
   $("SIFseg").value = '';
   $("SIFK").value = "0";
-  $("SIFds").value = $("RecordSet").value;
+  $("SIFds").value = encodeURIComponent($("RecordSet").value);
 
   if ($("WantRecInfo").checked) $("SIFi").value = "1";
   if (MaxRecs != 0) $("SIFn").value = MaxRecs;

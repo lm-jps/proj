@@ -53,6 +53,8 @@ function AiaScaleCheck()
     isok = 0;
     alert("Error - aia_scale can only be used for series aia.lev1");
     }
+  ExportProcessingOK = isok;
+  CheckRediness();
   return (isok ? args : "");
   }
 
@@ -175,6 +177,8 @@ function RebinCheck()
     rv = rv + ",method=boxcar";
     }
     
+  ExportProcessingOK = isok;
+  CheckRediness();
   return (isok ? rv : "");
   }
 
@@ -259,6 +263,8 @@ function ResizeCheck()
     rv = rv + ",c=1";
     }
     
+  ExportProcessingOK = isok;
+  CheckRediness();
   return (isok ? rv : "");
   }
 
@@ -359,6 +365,18 @@ var defaultStartUsed = 1;
 var defaultStopUsed = 1;
 function ImPatchCheck()
   {
+  if (ImResetParams==2)
+    {
+    ImPatchInit(0);
+    ImPatchSet(0);
+    }
+  else if (ImResetParams==3)
+    {
+    ImFirstRecord = null;
+    ImLastRecord = null;
+    ImResetParams = 0;
+    ImPatchSet(0);
+    }
   var isok = 1;
   var args = "im_patch";
   var ImLocOption;
@@ -585,6 +603,8 @@ function ImPatchCheck()
     $("ImVerify").innerHTML = "Not Ready";
     $("ImVerify").style.backgroundColor = colorRed;
     }
+  ExportProcessingOK = isok;
+  CheckRediness();
   return (isok ? args : "");
   }
 
@@ -597,7 +617,6 @@ function ImGetRecInfo(n)
     ImFirstRecord = null;
   else
     ImLastRecord = null;
-  $("ImRecordSet").innerHTML = RecordSet;
   var timePrime = (firstTimePrime.length > 0 ? firstTimePrime : "T_REC");
 // $("TESTMSG").innerHTML = timePrime;
   var keysneeded = timePrime+",CAR_ROT,CRLN_OBS,"+timePrime+"_step";
@@ -605,6 +624,7 @@ function ImGetRecInfo(n)
   var recinfo;
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   var RecordSet = $("ExportRecordSet").value;
+  $("ImRecordSet").innerHTML = RecordSet;
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
@@ -633,7 +653,7 @@ function ImGetRecInfo(n)
           }
         }
       else
-        alert("failed to get record info for n="+thisN+" of " + RecordSet);
+        alert("ImPatch failed to get record info for n="+thisN+" of " + RecordSet);
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
     onFailure: function() { alert('Something went wrong...'); },
@@ -643,13 +663,15 @@ function ImGetRecInfo(n)
 
 // Set display defaults
 
+var ImResetParams = 1;
 function ImPatchInit(isActive)
   {
-  if (!isActive)
+  if (isActive == 0 && ImResetParams>0)
     {
     noaaColor = colorWhite;
     var requireColor = colorRed;
-    $("ProcessImPatch").style.display="none";
+    if (ImResetParams==1)
+        $("ProcessImPatch").style.display="none";
     $("ImTrack").checked = true;
     $("ImRegister").checked = false;
     $("ImCrop").checked = false;
@@ -668,6 +690,8 @@ function ImPatchInit(isActive)
     ImLastRecord = null;
     defaultStartUsed = 1;
     defaultStopUsed = 1;
+    if (RecordCountNeeded == 1 || ImResetParams==2)
+      ImResetParams = 0;
     }
   else
     {
@@ -880,6 +904,8 @@ function MaprojCheck()
     $("MaprojVerify").innerHTML = "Not Ready";
     $("MaprojVerify").style.backgroundColor = colorRed;
     }
+  ExportProcessingOK = isok;
+  CheckRediness();
   return (isok ? args : "");
   }
 
@@ -927,7 +953,7 @@ function MaprojGetRecInfo(n)
           }
         }
       else
-        alert("failed to get record info for n="+thisN+" of " + RecordSet);
+        alert("Maproj failed to get record info for n="+thisN+" of " + RecordSet);
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       },
     onFailure: function() { alert('Something went wrong...'); },

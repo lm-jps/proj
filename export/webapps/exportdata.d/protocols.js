@@ -152,8 +152,24 @@ function ProtocolOptionsInit()
   }
 
 
-function ProtocolImageUserSet()
+function ProtocolImageUserSet(opt)
   {
+  if (opt == 1)
+    {
+    var optindex = $("ImageCT").selectedIndex;
+    var optname = $("ImageCT").options[optindex].value;
+    for (var i=0; i < ColorInfo.count; i++)
+      {
+      if (ColorInfo.keywords[2].values[i] == optname)
+        {          
+        $("ImageCTTxt").innerHTML = ColorInfo.keywords[0].values[i];
+        $("ImageMinTxt").innerHTML = ColorInfo.keywords[3].values[i];                 
+        $("ImageMaxTxt").innerHTML = ColorInfo.keywords[4].values[i];
+        $("ImageSclTxt").innerHTML = ColorInfo.keywords[5].values[i];
+        break;
+        }
+      }
+    }
   ProtocolOptionsSet = 2;
   }
 

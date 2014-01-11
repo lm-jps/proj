@@ -24,10 +24,12 @@ document.write('<base id="basepath" href="'+exportdata+'/"><\/base>');
 // var SHOW_SERIES = "show_series_test";
 // var JSOC_INFO = "jsoc_info_test";
 // var JSOC_FETCH = "jsoc_fetch_test";
+// var LOOKDATA = "lookdata2";
 
 var SHOW_SERIES = "show_series";
 var JSOC_INFO = "jsoc_info";
 var JSOC_FETCH = "jsoc_fetch";
+var LOOKDATA = "lookdata";
 
 </script>
 <!-- Add html for processing and protocol options  -->
@@ -94,9 +96,10 @@ var SeriesName;
 var SeriesInfo;
 var RequestID;
 var RecordLimit;
-var RecordCount;
+var RecordCount = -1;
 var RecordCountNeeded;
 var ExportRecordSetOK;
+var ExportRedinessStatus;
 var ExportFromFileList;
 var ExportMethodOK;
 var ExportMethodIsDirect;
@@ -113,11 +116,12 @@ var state=0;
 var uploadOndoneAction = 0;
 var ExportProcessingArgs = "";
 var ExportMethodValue = "url_quick";
+var exportparameters;
 
 // Protocol global vars
 var ExportCompressOK;
 var ExportProtocolOK;
-var ExportCompressValue = "compress Rice";
+var ExportCompressValue = "";
 var ExportProtocolValue = "FITS";
 var ProtocolOptionsSet = 0;
 var protocol_args
@@ -135,6 +139,7 @@ var colorNeutral = "#D4D0C8";
 var colorPreset = "D8D8D8";
 var colorOptionSet = "#FFCC66";
 var colorPink = "#FFD8D8";
+var colorDarkPink = "#FFB0B0";
 var colorRed = "#D88080";
 var colorDarkRed = "#FF8080";
 var colorWhite = "#FFFFFF";
@@ -154,14 +159,15 @@ function initVars()
   RecordCount = 0;
   RecordCountNeeded = 1;
   RecordLimit = 0;
-  ExportRecordSetOK = 1;
+  ExportRecordSetOK = 0;
+  ExportRedinessStatus = 0;
   ExportFromFileList = 0;
   ExportMethodOK = 1;
   ExportMethodIsDirect = 0;
   ExportFilenameFmtOK = 1;
-  ExportUserOK = 1;
+  ExportUserOK = 0;
   ExportNotifyOK = 2;
-  ExportReadyOK = 0;
+  ExportReadyOK = 2;
   TipsEnabled = 1;
   uploadOndoneAction = 0;
   firstTimePrime = "";
@@ -209,7 +215,7 @@ function initVars()
     $("CompressRow").style.display="none";
     $("ProtocolImageOptions").style.display="none";
 
-    $("ExportMethod").selectedIndex = 1;
+    $("ExportMethod").selectedIndex = 2;
     $("ExportFilenameFmt").value = "{seriesname}.{recnum:%lld}.{segment}";
     $("ExportButton").value = "Submit Export Request";
     $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
@@ -225,6 +231,8 @@ function initVars()
     $("ReExportDiv").style.display = "none";
     $("TarFileLocationRow").style.display = "none";
     $("KeywordFileLocationRow").style.display = "none";
+    $("ShowQueryCheckbox").checked = 0;
+    SetExportMethod(1);
     }
   FileUploadCleanup();
   }
@@ -332,6 +340,8 @@ function MainTips(tipstyle)
         'See http://jsoc.stanford.edu/jsocwiki/AllAboutJsocNames.',tipstyle);
     new Tip('RecordSetHelp','RecordSet to be exported. May be imported on call and/or may be entered directly here. ' +
         'May be filled in by series select in Im_patch processing option.',tipstyle);
+    new Tip('CallLookdataHelp','Start lookdata.html in a different tab/window with RecordSet given.  ' +
+        'If a JSOC Lookdata window already exists, the first one will be replaced by this call.',tipstyle);
     new Tip('RecordLimitHelp','RecordSet record limit. Max number of records to export.  Modifies RecordSet. ' +
         'Value should be "none" or a number. Number > 0 counts from start of RecordSet.  Negative number counts ' +
         'from high end of RecordSet.  0 means no limit',tipstyle);
@@ -339,24 +349,6 @@ function MainTips(tipstyle)
         'There is presently a limit to the memory space allocated for record queries which restricts AIA lev1 ' +
         'requests to about 15,000 records and HMI X_45s or X_720s data to about 32,000 records.  ' +
         'The limit depends on number of keywords in each record.  This limit will be eased in the future.',tipstyle);
-    new Tip('ProcessingHelp','Processing to be done to the data prior to export. ' +
-        ' Select from drop-down list for details.',tipstyle);
-    new Tip('ProtocolHelp','Data storage protocol for data files to be fetched.  ' +
-        '<br>"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
-        '<br>"As-is" leaves the data as it is used inside the JSOC DRMS routines, ' +
-        'with the header metadata stored in the database rather than with the data file.  ' +
-        '"As-is" is faster since the data does not need to be rewritten.  In as-is mode the header data is ' +
-        'provided in a tab-delimited file named {RequestID}.keywords.txt. <br> The "jpeg" option will ' +
-        ' yield  jpeg images of the data with a pre-determined scaling and colortable and the <br>"mpg" option will ' +
-        ' yield a movie in mp4 format along with the jpeg images that make up the frames in the movie.',tipstyle);
-    new Tip('CompressHelp','Compression parameters to be used by the cfitsio library.  ' +
-        'Provide up to one comma separated string for each segment name in your export.  ' +
-        'Use "**NONE**" to indicate uncompressed FITS files desired. ' +
-        'If more segments are to be exported than strings are provided, ' +
-        'then the last string will be used repeatedly as needed.  ' +
-        'If this parameter is empty, the exported FITS file will have the same compression parameters as the original DRMS ' +
-        'series segment as specified in the JSD for that series.  ' +
-        'Advice: use **NONE** to ensure uncompressed.  See lookdata.html for the "cparms_sg###" keyword for the default.',tipstyle);
     new Tip('MethodHelp','Handshake method to be used in the process of doing the export and to fetch the data files. ' +
         '"url-quick" is the fastest but can only be used if the data is online and will be exported "as-is". ' +
         '"url-direct" is has the constraints of url_quick with the limit of one file per request but it will ' +
@@ -380,11 +372,39 @@ function MainTips(tipstyle)
         'to move the exported files into date structured directory trees. ' +
         'It is wise to include enough of the "prime-keys" to make a unique filename.  ' +
         'The default format template is made from series structure.',tipstyle);
+    new Tip('ProcessingHelp','Processing to be done to the data prior to export. ' +
+        ' Select from drop-down list for details.',tipstyle);
+    new Tip('ProtocolHelp','Data storage protocol for data files to be fetched.  ' +
+        '<br>"Fits" causes the data to be converted to full fits files with header information filled from the DRMS records.  ' +
+        '<br>"As-is" leaves the data as it is used inside the JSOC DRMS system, ' +
+        'with the header metadata stored in the database rather than with the data file.  ' +
+        '"As-is" is faster since the data does not need to be rewritten.  In as-is mode the header data is ' +
+        'provided in a tab-delimited file named {RequestID}.keywords.txt. <br> The "jpeg" option will ' +
+        ' yield  jpeg images of the data and the <br>"mpg" or "mp4" options will ' +
+        ' yield a movie along with the jpeg images that make up the frames in the movie.<br> ' +
+        'Default colortables and scaling for protocols making images are provided but may be altered.',tipstyle);
+    new Tip('CompressHelp','Compression parameters to be used by the cfitsio library.  ' +
+        'One comma separated string for each segment name in your export will be generated. ' +
+        'Use "**NONE**" to indicate uncompressed FITS files desired. ' +
+        'Note that e.g. AIA data can be more than 5 times larger if not compressed.  Do not request uncompressed ' +
+        'exports for more than a few files.',tipstyle);
     new Tip('RequestorHelp','Optional place for your name, this will be used later when we have a way of saving your ' +
-        'preferred export options.',tipstyle);
-    new Tip('NotifyHelp','Optional email address to be used to notify you when the export is complete and ready to be ' +
-        'fetched using the RequestID.',tipstyle);
+        'preferred export options.  This value will be saved in a Cookie if allowed.',tipstyle);
+    new Tip('NotifyHelp','Email address to be used to notify you when the export is complete and ready to be ' +
+        'fetched using the RequestID. NOTE - an email address is required for exports from jsoc2.',tipstyle);
     new Tip('SendFileHelp','This action will submit the export request with the RecordSet specified in the upload file.',tipstyle);
+    new Tip('CheckParamHelp','This button is required to verify all fields used to specify the export request ' +
+        'have been filled in in a consistent way.  If all is OK, the Submit button will be enabled.  A new Check ' +
+        'button press is required before each export request.',tipstyle);
+    new Tip('SubmitHelp','This button does the actual export request submission.  After a submit request the button ' +
+        'action is changed to a Status Request which can be used to get the response from JSOC.  For all but url-direct and ' +
+        'url-quick methods a RequestID tag will be returned a few seconds after a submit request.  ' +
+        'This tag will be used to identify ' +
+        'your export request inside JSOC and may be used at a later time to request the processing status and to ' +
+        'obtain a link to your data.',tipstyle);
+    new Tip('FetchCheckboxHelp','When this box is checked, the URL string that will be sent to the JSOC jsoc_fetch ' +
+        'command will be shown when the "Check Params for Export" button is pressed.  This string can be used to ' +
+        'help you develop script driven exports and to see how exportdata functions.',tipstyle);
     }
   };
 
@@ -521,6 +541,23 @@ function FinishFileUpload()
   uploadOndoneAction = 0;
   }
 
+function CallLookdata()
+  { 
+  var recset = $("ExportRecordSet").value;
+  var posbracket = recset.indexOf("[");
+  var posRbracket = recset.lastIndexOf("]");
+  var posCurlbracket = recset.indexOf("{");
+  var firstbracket = posbracket>=0 ? posbracket : posCurlbracket;
+  var seriesname = (firstbracket == -1 ? recset : recset.substring(0,firstbracket));
+  var recfilt = (posbracket >=0 ? recset.substring(posbracket,posRbracket+1) : "");
+  var recordcount = RecordCount + "";
+  var lookdataargs="ds="+seriesname;
+  if (recfilt.length > 0 || RecordCount > 0)
+    lookdataargs += "&rs=" + recfilt + "&n=" + recordcount;
+  LookdataWindow=window.open("http://" + Host + "/ajax/" + LOOKDATA + ".html?" + encodeURIComponent(lookdataargs), "JSOC Lookdata");
+  LookdataWindow.window.focus();
+  }
+
 function GetSeriesList(filter)
   {
   var SeriesList;
@@ -578,18 +615,19 @@ function GetRSCount()
         {
 	RecordCount = 0;
         $("RSCountPlace").innerHTML = "No RecordSet Count Found";
+        ExportRecordSetOK = 0;
         }
       else
 	{ 
 	RecordCount = data.count;
 	$("RSCountPlace").innerHTML = data.count;
+        ExportRecordSetOK = 1;
 	}
-      ExportReadyOK = 0;
-      ExportRecordSetOK = 1;
-      $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
-      $("ExportButton").value = "Submit Export Request";
-      $("ExportButton").style.backgroundColor = colorRed;
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+      //if ($("ProcessingCheckbox").checked == false)
+        //{
+        //$("ProcessingWaitMessage").style.display = "none"; 
+        //}
       CheckRediness();
       },
     onFailure: function() { alert('Something went wrong...'); },
@@ -696,16 +734,19 @@ function ExportRSChanged()
   {
   RecordCountNeeded = 1;
   $("CountButton").style.backgroundColor = colorYellow;
+  CheckRediness();
   }
 
 function ExportNewRS()
   {
   $("CountButton").style.backgroundColor = colorNeutral;
   RecordCountNeeded = 0;
-  if (SetRecordLimit()) return; // SetRecordLimit calls GetRSCount()
+  if (SetRecordLimit())
+    return; // SetRecordLimit calls GetRSCount(), non-zero on RS syntax error
   firstTimePrime = "";
   GetDefaultFormat();
   NotifyProcessingCode();
+  CheckRediness();
   }
 
 function SetRecordLimit()
@@ -734,8 +775,9 @@ function SetRecordLimit()
   return(GetRSCount());
   }
 
-function SetExportMethod()
+function SetExportMethod(byWhom)
   {
+  // byWhom = 0 for user click, else 1
   var ExportMethodIndex = $("ExportMethod").selectedIndex;
   ExportMethodValue = $("ExportMethod").options[ExportMethodIndex].value;
   if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
@@ -763,8 +805,8 @@ function SetExportMethod()
     $("FilenameFmtRow").style.display="none";
     ExportProtocolValue = "as-is";
     $("ExportProtocol").selectedIndex = 0;
-    ExportCompressValue = "**NONE**";
-    $("ExportCompress").selectedIndex = 1;
+    ExportCompressValue = "";
+    // $("ExportCompress").selectedIndex = 1;
     $("CompressRow").style.display="none";
     $("RequestorRow").style.display="none";
     $("NotifyRow").style.display="none";
@@ -782,6 +824,8 @@ function SetExportMethod()
     $("NotifyRow").style.display="table-row";
     if(ExportProtocolValue == "FITS")
        $("CompressRow").style.display="table-row";
+    if (byWhom == 0)
+      $("ExportCompress").selectedIndex = 0;
     }
   else
     {
@@ -809,6 +853,13 @@ function ProcessingEnabled()
     $("ProcessingCheckbox").checked = false;
   if ($("ProcessingCheckbox").checked)
     {
+    if ($("ExportRecordSet").value == "" || $("ExportRecordSet").value == "[$]")
+      {
+      $("ProcessingWaitMessage").style.display = "table-row";
+      $("ProcessingCheckbox").checked = false;
+      return;
+      }
+    $("ProcessingWaitMessage").style.display = "none";
     $("ProcessingCheckbox").checked = true;
     $("ProcessingCheckboxHide").checked = false;
     $("ProcessingShowCheckbox").style.display = "none";
@@ -816,6 +867,7 @@ function ProcessingEnabled()
     }
   else
     {
+    $("ProcessingWaitMessage").style.display = "none";
     $("ProcessingCheckbox").checked = false;
     $("ProcessingCheckboxHide").checked = false;
     $(ExportProcessingOptions[0].id).checked = true;
@@ -826,7 +878,7 @@ function ProcessingEnabled()
   }
 
 function SetProcessing(ichecked)
-  {
+  { // 0 if no procesing enabled,  -1 if same seriesname, -2 if changed
   if (ichecked > 0) $(ExportProcessingOptions[0].id).checked = false;
   ExportProcessingOK = 0;
   // Add recordLimit FIRST always.
@@ -863,7 +915,6 @@ function SetProcessing(ichecked)
           }
         else
           {
-// alert("ExpOpt.Init(1) called for iProc="+iProc);
           ExpOpt.Init(1);
           $(ExpOpt.rowid).style.display="table-row";
           var args = ExpOpt.Check();
@@ -871,12 +922,11 @@ function SetProcessing(ichecked)
             {
             ExportProcessingArgs += "|"+args;
             }
-          else
-            {
-            ExportProcessingArgs += "|--ERROR>>"+args+"<<";
-    // alert("Error in processing parameters for "+$(ExpOpt.id).value);
-            isok = 0;
-            }
+          // else
+            // {
+            // ExportProcessingArgs += "|--ERROR>>"+args+"<<";
+            // isok = 0;
+            // }
           }
         }
       else
@@ -894,13 +944,16 @@ function SetProcessing(ichecked)
         
   if (isok)
     ExportProcessingOK = 1;
+  else
+    ExportProcessingOK = 0;
   $("ExportProcessingHidden").value = ExportProcessingArgs;
 // $("ProcArgsDisplay").innerHTML = ExportProcessingArgs;
   CheckRediness();
   }
 
-function SetExportProtocol()
-  { // byWhom=0 if user explicit check
+function SetExportProtocol(byWhom)
+  { 
+  // byWhom = 0 for user click, else 1
   var ExportProtocolIndex = $("ExportProtocol").selectedIndex;
   ExportProtocolValue = $("ExportProtocol").options[ExportProtocolIndex].value;
 
@@ -911,6 +964,7 @@ function SetExportProtocol()
       ExportProtocolOK = 1;
       $("CompressRow").style.display="none";
       $("ExportProtocolHidden").value = "as-is";
+      ExportCompressValue = "";
       }
 
     else if (ExportProtocolValue == "FITS")
@@ -918,6 +972,10 @@ function SetExportProtocol()
       ExportProtocolOK = 2;
       $("CompressRow").style.display="table-row";
       $("ExportProtocolHidden").value = "FITS";
+      if (byWhom == 0)
+        $("ExportCompress").selectedIndex = 0;
+      var ExportCompressIndex = $("ExportCompress").selectedIndex;
+      ExportCompressValue = $("ExportCompress").options[ExportCompressIndex].value;
       }
     $("ProtocolImageOptions").style.display="none";
     }
@@ -958,19 +1016,26 @@ function SetExportCompress()
   var protocolparam = ExportProtocolValue;
   if (protocolparam == "FITS" || protocolparam == "as-is")
     {
-    var ExportCompressIndex = $("ExportCompress").selectedIndex;
-    ExportCompressValue = $("ExportCompress").options[ExportCompressIndex].value;
-    for (var i=0; i < SeriesInfo.segments.length; i++)
+    if (ExportRecordSetOK)
       {
-      var segtype = SeriesInfo.segments[i].type;
-      if (ExportCompressValue == "compress Rice" &&  protocolparam == "FITS" && (segtype == "float" || segtype == "double"))
-        protocolparam = protocolparam  + ",**NONE**";
-      else
-        protocolparam = protocolparam  + "," + ExportCompressValue;
+      var ExportCompressIndex = $("ExportCompress").selectedIndex;
+      ExportCompressValue = $("ExportCompress").options[ExportCompressIndex].value;
+      for (var i=0; i < SeriesInfo.segments.length; i++)
+        {
+        var segtype = SeriesInfo.segments[i].type;
+        if (ExportCompressValue == "compress Rice" &&  protocolparam == "FITS" && (segtype == "float" || segtype == "double"))
+          protocolparam = protocolparam  + ",**NONE**";
+        else if (protocolparam == "FITS")
+          protocolparam = protocolparam  + "," + ExportCompressValue;
+        }
+      $("ExportProtocolHidden").value = protocolparam;
+      ExportCompressOK = 1;
       }
-    $("ExportProtocolHidden").value = protocolparam;
+    else
+      {
+      ExportCompressOK = 0;
+      }
     }
-  ExportCompressOK = 1;
   CheckRediness();
   }
 
@@ -985,7 +1050,7 @@ function SetExportUser()
     {
     ExportUserOK = 0;
     }
-  CheckRediness();
+  SetExportNotify();
   }
 
 function SetExportNotify()
@@ -996,11 +1061,16 @@ function SetExportNotify()
     return;
     }
   var tmp1 = $("ExportNotify").value.toUpperCase();
-  if (tmp1.length == 0)
+  var notify_void = tmp1.length == 0;
+  if (Internal && notify_void)
     {
     ExportNotifyOK = 0;
-    $("ExportNotify").value = "NO";
     return;
+    }
+  if (notify_void)
+    {
+    ExportNotifyOK = 0;
+    $("ExportNotify").value = "NONE";
     }
   if ( tmp1 ==  "SOLARMAIL" )
     {
@@ -1011,8 +1081,13 @@ function SetExportNotify()
       ExportNotifyOK = 0;
       }
     }
-  else if ( tmp1 == "NONE" || tmp1 == "NO")
-    ExportNotifyOK = 3;
+  else if (tmp1 == "NONE" || tmp1 == "NO")
+    {
+    if (Internal)
+      ExportNotifyOK = 0;
+    else
+      ExportNotifyOK = 3;
+    }
   else
     {
     if ($("ExportNotify").value.indexOf("@") < 0)
@@ -1027,114 +1102,90 @@ function SetExportNotify()
 
 function CheckRediness()
   {
-  var status = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK;
-  if ((Internal && ExportNotifyOK != 1) || ExportNotifyOK == 2)
+  var status = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportUserOK * ExportNotifyOK;
+  if (status)
     {
-    if (ExportUserOK == 0 && ExportMethodValue != "url_quick")
-      status = 0;
+    $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
+    $("ExportButton").value = "Submit Export Request";
+    $("ExportButton").style.backgroundColor = colorGreen;
+    $("ExportCheckMsg").innerHTML = "";
+    $("ExportCheckButton").style.backgroundColor = colorGreen;
     }
   else
-    status *= ExportNotifyOK; 
-  if (status)
-    $("ExportButton").style.backgroundColor = colorGreen;
-  else
+    {
+    $("ExportCheckButton").style.backgroundColor = colorYellow;
+    $("ExportButton").value = "Not Ready To Submit";
     $("ExportButton").style.backgroundColor = colorRed;
+    }
+  ExportRedinessStatus = status;
+  return(status);
   }
 
-function CheckExportParams(byWhom)
-  { // byWhom=0 for Check Params for Export button, else is internal check
-  if (ExportRecordSetOK == 0)
+function CheckExportParams()
+  {
+  while (1) // use with break instead of goto done.
     {
-    if (byWhom==0)
+    if (ExportRecordSetOK == 0)
       {
       GetRSCount();
+      $("ExportCheckMsg").innerHTML = "RecordSet not verified, enter RecordSet then retry export request.";
+      break;
       }
-    else
+    SetExportMethod(1);
+    if (ExportMethodOK == 0)
       {
-      $("ExportButtonMsg").innerHTML = "Retry after RecordSet updated.";
-      alert("RecordSet not verified, enter RecordSet then retry export request.");
-      return 0;
+      $("ExportCheckMsg").innerHTML = "Method not given, Enter export method then retry export request.";
+      break;
       }
-    }
-  SetExportMethod();
-  if (ExportMethodOK == 0)
-    {
-    $("ExportButtonMsg").innerHTML = "Retry after entering export method";
-    alert("Method not given, Enter export method then retry export request.");
-    return 0;
-    }
-  SetExportFilenameFmt();
-  if (ExportFilenameFmtOK == 0)
-    {
-    $("ExportButtonMsg").innerHTML = "Retry after entering export method";
-    alert("FilenameFmt not given, Enter FilenameFmt then retry export request.");
-    return 0;
-    }
-  SetProcessing(-1);
-  if (ExportProcessingOK == 0)
-    {
-    $("ExportButtonMsg").innerHTML = "Retry after entering processing specs";
-    alert("Processing details not correct, fix and retry export request.");
-    return 0;
-    }
-  SetExportProtocol(byWhom);
-  if (ExportProtocolOK == 0)
-    {
-    $("ExportButtonMsg").innerHTML = "Retry after entering export protocol";
-    alert("Protocol not given, Enter export protocol then retry export request.");
-    return 0;
-    }
-  if ((ExportProtocolValue == "FITS" || ExportProtocolValue == "as-is") && ExportMethodValue != "url_quick")
-    {
-    SetExportCompress();
-    }
-  else if (protocolEnable)
-    {
-    ProtocolImageCheck();
-    }
-  if ((Internal && ExportNotifyOK != 1) || ExportNotifyOK == 2)
-    {
-    SetExportUser();
-    if (ExportUserOK == 0 && ExportMethodValue != "url_quick")
+    SetExportFilenameFmt();
+    if (ExportFilenameFmtOK == 0)
       {
-      $("ExportButtonMsg").innerHTML = "Retry after entering your identification in Requestor field";
-      alert("Requestor not given, Enter name you will use in Requestor field then retry export request.  This field in required if Notify is 'solarmail'");
-      return 0;
+      $("ExportCheckMsg").innerHTML = "FilenameFmt not given, Enter FilenameFmt then retry export request.";
+      break;
       }
-    }
+    SetProcessing(-1);
+    if (ExportProcessingOK == 0)
+      {
+      $("ExportCheckMsg").innerHTML = "Processing details not correct, fix and retry export request.";
+      break;
+      }
+    SetExportProtocol(1);
+    if (ExportProtocolOK == 0)
+      {
+      $("ExportCheckMsg").innerHTML = "Protocol not given, Enter export protocol then retry export request.";
+      break;
+      }
+    if ((ExportProtocolValue == "FITS" || ExportProtocolValue == "as-is") && ExportMethodValue != "url_quick")
+      {
+      SetExportCompress();
+      }
+    else if (protocolEnable)
+      {
+      ProtocolImageCheck();
+      }
+    // SetExportNotify();
+    if ((Internal && ExportNotifyOK != 1) || ExportNotifyOK == 2)
+      {
+      SetExportUser();
+      if (ExportUserOK == 0 && ExportMethodValue != "url_quick")
+        {
+        // $("ExportButtonMsg").innerHTML = "Retry after entering your identification in Requestor field";
+        $("ExportCheckMsg").innerHTML = "Requestor not given, Enter name you will use in Requestor field then retry export request.  This field in required if Notify is 'solarmail'";
+        break;
+        }
+      }
     SetExportNotify();
     if (ExportNotifyOK == 0)
       {
-      $("ExportButtonMsg").innerHTML = "Retry after entering your complete e-mail address or 'NO' or 'solarmail' in Notify field";
-      alert("Notify email not given or confirmed, Enter 'solarmail' or 'no' or email address then retry export request.");
-      return 0;
+      // $("ExportButtonMsg").innerHTML = "Retry after entering your complete e-mail address or 'NO' or 'solarmail' in Notify field";
+      $("ExportCheckMsg").innerHTML = "Notify email not given or confirmed, Enter 'solarmail' or 'no' or email address then retry export request.";
+      break;
       }
-  $("ExportButton").style.backgroundColor = colorGreen;
-  return 1;
-  }
-
-// This is the code executed when the user clicks on the "Submit Export Request" button.
-function GetExport()
-  {
-  var exportparameters;
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  if (ExportReadyOK == 3)
-    {
-    alert("Processing request, please wait...");
-    return;
+    break;
     }
-  if (CheckExportParams(1) == 0)
-    return;
-  if (ExportReadyOK == 0)
+  var isOK = CheckRediness();
+  if (isOK)
     {
-    ExportReadyOK = 3;
-    state = 2;
-    Cookie.setData("state",state);
-    $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-    $("ExportLocation").innerHTML = "";
-    $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
-    $("ExportButton").value = "Processing ...";
-    $("ExportButton").style.backgroundColor = colorDarkRed;
     var protocolparam = $("ExportProtocolHidden").value;
     var RecordSet = $("ExportRecordSet").value;
     exportparameters = new Hash( {"op" : $("ExportOpID").value,
@@ -1146,19 +1197,75 @@ function GetExport()
                                       "filenamefmt" : $("ExportFilenameFmt").value,
 			 	      "format" : "json",
                  		      "protocol" : protocolparam });
-    // if (nsegsselected) exportparameters = exportparameters.merge({"seg": SegList});
-    $("ExportParameters").innerHTML = Object.toQueryString(exportparameters);
+
+
+    if ($("ShowQueryCheckbox").checked)
+      {
+      var paramString = decodeURIComponent(Object.toQueryString(exportparameters));
+      $("ExportParameters").innerHTML = paramString.replace(/&/g,"&amp;");
+      }
+    else
+      $("ExportParameters").innerHTML = "";
+    }
+  else
+    {
+    exportparameters = NULL;
+    $("ExportParameters").innerHTML = "";
+    }
+  return isOK;
+  }
+
+function GetExport() // This is the code executed when the user clicks on the "Submit Export Request" button.
+  {
+  // ExportReadyOK values
+  // use this for state inside GetExport only, use ExportRedinessStatus to determine OK to proceed
+  //  0 ready to begin export process
+  //  1 ready for status request
+  //  2 export complete, OK or failure.
+  //  3 Process started, waiting response
+
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  if (ExportReadyOK == 3)
+    {
+    alert("Processing request, please wait...");
+    return;
+    }
+  if (ExportRedinessStatus) 
+    {
+    ExportRedinessStatus = 0;
+    ExportReadyOK = 3;
+    state = 2;
+    Cookie.setData("state",state);
+    $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+    $("ExportLocation").innerHTML = "";
+    $("ExportButtonMsg").innerHTML = "Export request submitted, please wait...";
+    $("ExportButton").value = "Processing ...";
+    $("ExportButton").style.backgroundColor = colorDarkRed;
+    $("ExportCheckButton").style.backgroundColor = colorYellow;
+    // var protocolparam = $("ExportProtocolHidden").value;
+    // var RecordSet = $("ExportRecordSet").value;
+    // exportparameters = new Hash( {"op" : $("ExportOpID").value,
+                 		      // "ds" : RecordSet, 
+                 		      // "process" :  ExportProcessingArgs,
+                 		      // "requestor" : $("ExportRequestor").value,
+                 		      // "notify" : $("ExportNotify").value,
+                                      // "method" : ExportMethodValue,
+                                      // "filenamefmt" : $("ExportFilenameFmt").value,
+			 	      // "format" : "json",
+                 		      // "protocol" : protocolparam });
+    // // if (nsegsselected) exportparameters = exportparameters.merge({"seg": SegList});
+    // $("ExportParameters").innerHTML = decodeURIComponent(Object.toQueryString(exportparameters));
     }
   else if (ExportReadyOK == 1)
     {
     var requestidtmp = $("RequestIdPlace").innerHTML;
-    var exportparameters = new Hash( {"op" : "exp_status","requestid":requestidtmp});
+    exportparameters = new Hash( {"op" : "exp_status","requestid":requestidtmp});
     }
   else // ExportReadyOK == 2
     {
     // $("ExportRecordSet").value = "";
-    ExportRecordSetOK = 0;
-    alert("Export Request Complete, Please change RecordSet to make another request");
+    ExportRedinessStatus = 0;
+    $("ExportCheckMsg").innerHTML = "Export Request Complete, Please check updated export params before making another export request";
     return;
     }
 
@@ -1177,9 +1284,9 @@ function GetExport()
     onFailure: function()
       {
       $("ExportButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
-      ExportReadyOK = 0;
       $("ExportButton").value = "FAILURE ...";
-      $("ExportButton").style.backgroundColor = "#FFB0B0";
+      $("ExportButton").style.backgroundColor = colorDarkPink;
+      ExportReadyOK = 2;
       alert('Something went wrong...');
       },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
@@ -1199,7 +1306,7 @@ function GetReExport()
   $("ReExportButtonMsg").innerHTML = "Export request submitted, please wait...";
   $("ReExportButton").value = "Processing ...";
   $("ReExportButton").style.backgroundColor = colorPink;
-  var exportparameters = new Hash( {"op" : "exp_repeat",
+  exportparameters = new Hash( {"op" : "exp_repeat",
                  		    "requestid" : $("ReRequestID").value,
 			 	    "format" : "json",
                  		    "notify" : $("ReExportNotify").value });
@@ -1218,9 +1325,9 @@ function GetReExport()
     onFailure: function()
       {
       $("ReExportButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
-      ExportReadyOK = 0;
+      ExportReadyOK = 2;
       $("ReExportButton").value = "FAILURE ...";
-      $("ReExportButton").style.backgroundColor = "#FFB0B0";
+      $("ReExportButton").style.backgroundColor = colorDarkPink;
       alert('Something went wrong...');
       },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
@@ -1236,8 +1343,8 @@ function ProcessExportResponse(response)
   Cookie.setData("state",state);
   if (data.status == 6)
     {
-    alert("RequestID not found, status=6, error=" + data.error + "<br>Try again in a few seconds, may just be not ready to respond");
-    ExportReadyOK = 0;
+    $("ExportCheckMsg").innerHTML = "RequestID not found, status=6, error=" + data.error + "<br>Try again in a few seconds, may just be not ready to respond";
+    ExportReadyOK = 3; // keep waiting
     $("ExportButton").value = "Retry";
     $("ExportButtonMsg").innerHTML = data.error;
     $("RequestIdPlace").innerHTML = "";
@@ -1246,8 +1353,8 @@ function ProcessExportResponse(response)
     }
   else if (data.status == 5)
     {
-    alert("Requested RequestID is too old, data no longer online, error=" + data.error) ;
-    ExportReadyOK = 0;
+    $("ExportCheckMsg").innerHTML = "Requested RequestID is too old, data no longer online, error=" + data.error;
+    ExportReadyOK = 2;
     $("ExportButton").value = "Export timeout";
     $("ExportButtonMsg").innerHTML = data.error;
     $("RequestIdPlace").innerHTML = "";
@@ -1258,9 +1365,9 @@ function ProcessExportResponse(response)
     }
   else if (data.status == 4)
     {
-    alert("Requested RecordSet not found or specification error, status=4, error=" + data.error +
-      "<br>The export program failed.<br>" + "JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog");
-    ExportReadyOK = 0;
+    $("ExportCheckMsg").innerHTML = "Requested RecordSet not found or specification error, status=4, error=" + data.error +
+      "<br>The export program failed.<br>" + "JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog";
+    ExportReadyOK = 2;
     $("ExportButton").value = "Bad RecordSet";
     $("ExportButtonMsg").innerHTML = data.error;
     $("RequestIdPlace").innerHTML = "";
@@ -1271,9 +1378,9 @@ function ProcessExportResponse(response)
     }
   else if (data.status == 3)
     {
-    alert("Requested RecordSet is too large for chosen export method.  Please contact the JSOC for help.");
+    $("ExportCheckMsg").innerHTML = "Requested RecordSet is too large for chosen export method.  Please contact the JSOC for help.";
     $("ExportButtonMsg").innerHTML = "Export Too Large";
-    ExportReadyOK = 0;
+    ExportReadyOK = 2;
     $("ExportButton").value = "FAILURE ...";
     $("ExportButton").style.backgroundColor = "#D8D8D8";
     RequestID = data.requestid;
@@ -1292,7 +1399,7 @@ function ProcessExportResponse(response)
       $("StatusButtonMsg").innerHTML = "Export request is being processed";
     else  // status==2
       $("StatusButtonMsg").innerHTML = "Export request waiting for processing";
-    ExportReadyOK = 1;
+    ExportReadyOK = 1; // now allow check for status
     $("ExportButton").value = "Request Export Status";
     $("ExportButton").style.backgroundColor = "#D8D8D8";
     //  XXXX FIX $("ExportStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
@@ -1413,7 +1520,7 @@ function GetStatus()
       Cookie.setData("state",state);
       if (data.status == 6)
         {
-        alert("RequestID not found, status=6, error=" + data.error + "<br>Try again in a few seconds, may just be not ready to respond");
+        $("StatusButtonMsg").innerHTML = "RequestID not found, status=6, error=" + data.error + "<br>Try again in a few seconds, may just be not ready to respond";
         StatusReadyOK = 0;
         $("StatusButton").value = "Bad RecordSet";
         $("StatusButtonMsg").innerHTML = data.error + ", processing perhaps not started yet or bad RequestID";
@@ -1425,8 +1532,8 @@ function GetStatus()
         }
       else if (data.status == 5)
         {
-        alert("Requested RequestID is too old, data no longer online, error=" + data.error);
-        ExportReadyOK = 0;
+        $("StatusButtonMsg").innerHTML = "Requested RequestID is too old, data no longer online, error=" + data.error;
+        ExportReadyOK = 2;
         $("ExportButton").value = "Export timeout";
         $("ExportButtonMsg").innerHTML = data.error;
         $("RequestIdPlace").innerHTML = "";
@@ -1437,9 +1544,10 @@ function GetStatus()
         }
       else if (data.status == 4)
         {
-        alert("Requested RecordSet not found or specification error, status=4, error=" + data.error + "<br>The export program failed.<br>" +
-		"JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog");
+        $("StatusButtonMsg").innerHTML = "Requested RecordSet not found or specification error, status=4, error=" + data.error + "<br>The export program failed.<br>" +
+		"JSOC support see: jsoc/exports/tmp/" + data.requestid + ".runlog";
         StatusReadyOK = 0;
+        ExportReadyOK = 2;
         $("StatusButton").value = "Bad RecordSet";
         $("StatusButtonMsg").innerHTML = data.error;
         $("StatusValue").innerHTML = "Requested RecordSet returned error status=4";
@@ -1448,10 +1556,11 @@ function GetStatus()
         }
       else if (data.status == 3)
         {
-        alert("Requested RecordSet is too large for chosen export method.  Please contact the JSOC for help.");
+        $("StatusButtonMsg").innerHTML = "Requested RecordSet is too large for chosen export method.  Please contact the JSOC for help.";
         $("StatusButtonMsg").innerHTML = "Export Too Large";
         $("StatusButton").value = "FAILURE ...";
         $("StatusButton").style.backgroundColor = "#D8D8D8";
+        ExportReadyOK = 2;
         $("StatusStatus").innerHTML = "Needs Intervention, size=" + data.size + "MB, contact: " + data.contact;
         $("RequestIdPlace").innerHTML = data.requestid;
         $("StatusValue").innerHTML = "Requested RecordSet returned error status=3";
@@ -1467,6 +1576,7 @@ function GetStatus()
           $("StatusButtonMsg").innerHTML = "Export request is being processed";
         else  // status==2
           $("StatusButtonMsg").innerHTML = "Export request waiting for processing";
+        ExportReadyOK = 2;
         $("StatusButton").value = "Submit Status Request";
         $("StatusButton").style.backgroundColor = "#D8D8D8";
         // XXXXX FIX $("StatusStatus").innerHTML = "Processing, size=" + data.size + "MB, estimate " + data.wait + " seconds remaining";
@@ -1479,6 +1589,7 @@ function GetStatus()
         }
       else // status == 0
         {
+        ExportReadyOK = 2;
         var valuetable = "";
         $("StatusButtonMsg").innerHTML = "Please only click once for status request.";
         $("StatusButton").value = "Submit Status Request";
@@ -1523,8 +1634,9 @@ function GetStatus()
       {
       $("StatusButtonMsg").innerHTML = "Export Failure, Problem at JSOC facility.";
       $("StatusButton").value = "FAILURE ...";
-      $("StatusButton").style.backgroundColor = "#FFB0B0";
+      $("StatusButton").style.backgroundColor = colorDarkPink;
       alert('Something went wrong...');
+      ExportReadyOK = 2;
       },
     onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
@@ -1574,11 +1686,6 @@ access the data.
 
 <div id="iframeHideDiv" style="display:none;">
   <iframe id="FileUploadFrame" onload="uploadDone();" src="" style="height:0px;width:0px;border:0px solid #fff;"></iframe>
-</div>
-
-<div >
-jsoc_fetch command:&nbsp;
-<span id="ExportParameters"></span>
 </div>
 
 <div id="SubmitResponseDiv">
@@ -1668,7 +1775,10 @@ Use this section to request a renewal/repeat of a prior export for which the dat
   <tr id="ReNotifyRow">
     <td>Notify</td>
     <td><input id="ReExportNotify" type="text" name="Renotify" value="" onChange="ExportNop();" ></td>
-    <td colspan="2">Provide your email address for notification.  May be omitted for online delivery.</td>
+    <td colspan="2">
+      Provide your email address for notification.
+      If Requestor is your SolarMail name you may use "solarmail" here.
+    </td>
   </tr>
   
   <tr id="AjaxReExportRequestRow">
@@ -1694,7 +1804,7 @@ var unescaped_html = unescape(escaped_html);
 $("ExportRequestForm").innerHTML = unescaped_html;
 ProcessingInit();
 ProcessingEnabled();
-exportdataLoaded = true;
+exportdataLoaded=true;
 </script>
 
 </body>
