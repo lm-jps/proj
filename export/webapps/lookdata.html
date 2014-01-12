@@ -126,6 +126,7 @@ var SeriesKeySegInfo = "";
 var nprimes = 0;
 var KeyList = "";
 var SegList = "";
+var keySortOrder;
 var nkeysselected = 0;
 var nsegsselected = 0;
 var RecordCount = 0;
@@ -141,6 +142,8 @@ var FirstLoad = 1;
 var GetSeriesObject;
 var GetRSCountObject;
 var GetValuesObject;
+var FirstTimePrime;
+var RecordSetGiven="";
 var valuegrid;
 var valuegridlabel;
 var gridmade = 0;
@@ -267,6 +270,8 @@ function CleanSeriesInfo()
   $("RecordLimit").value = "none";
   SeriesName = "";
   $("RecordSet").value = "";
+  RecordSetGiven = "";
+  $("RecordSetComment").innerHTML = "";
   $("SeriesButton").disabled = false;
   $("FetchKeyValsButton").disabled = true;
   $("FetchKeyValsButton").value = "Fetch Keyword Values for RecordSet";
@@ -290,6 +295,7 @@ function CleanSeriesPick()
   $("SSPlace").innerHTML = "";
   $("RSCount_Place").innerHTML = "";
   RecordCount = 0;
+  FirstTimePrime = -1;
   nkeysselected = 0;
   nsegsselected = 0;
   nlinksselected = 0;
@@ -317,12 +323,12 @@ function CleanOnLoad()
   {
   var args_given = 0;
   var lookdata_args;
+  var args;
   Host = location.host;
   if (FirstLoad == 1)
     {
     if (Host == 'jsoc.stanford.edu')
       {
-      // alert(Host + " does not have full access, please use jsoc2.stanford.edu");
       $("JSOC2DIV").style.display="block";
       $("SeriesSelectMessage").innerHTML = 'Enter a dataseries match pattern to search for seriesnames, ' +
 	      ' or leave blank to select from all series.';
@@ -333,18 +339,16 @@ function CleanOnLoad()
       $("SeriesFilter").value = "NOT ^dsds\\.";
       $("JSOC2DIV").style.display="none";
       }
+
+    // preload seriesname and recordset if given
     lookdata_args = location.search;
     lookdata_args = decodeURIComponent(lookdata_args);
     lookdata_args = lookdata_args.substr(1);
-    var args = lookdata_args.toQueryParams();
-    if (args.ds == undefined)
-	{
-        }
-      else
-        {
-        $("SeriesFilter").value = args.ds;
-        args_given = 1;
-        }
+    args = lookdata_args.toQueryParams();
+    if (args.ds != undefined)
+       args_given = 1;
+
+    // Get SessionHandle to allow user aborts
     new Ajax.Request('http://' + Host + '/cgi-bin/ajax/jsoc_WebRequestID',
       {
       method: 'get',
@@ -358,6 +362,10 @@ function CleanOnLoad()
       });
     FirstLoad = 0;
     }
+
+  // UserKill(RequestHandle);
+  RequestHandle = "";
+
   definetabs();
   Element.hide('systemWorking');
   $("AbortGetSeriesButton").hide();
@@ -373,14 +381,24 @@ function CleanOnLoad()
   $("TabsOnOffButton").value = "Disable Tabs";
   $("NannyOnOffButton").value = "Disable Nanny";
   newwide();
-  if (args_given)
+
+  // take action if args in URL
+  if (args_given > 0)
     {
-    // GetSeries(); // cant call, since race with PickSeries
-    SeriesName = $("SeriesFilter").value;
-    PickSeries(1);
+    $("SeriesFilter").value = args.ds;
+    if (args.rs == undefined)
+      {
+      SeriesName = $("SeriesFilter").value;
+      PickSeries(1);
+      }
+    else
+      {
+      $("RecordSet").value = args.ds + args.rs;
+      if (args.n != undefined)
+        $("RecordLimit").value = args.n;
+      GetRSCount();
+      }
     }
-  // UserKill(RequestHandle);
-  RequestHandle = "";
   }
 
 function UserKill(userhandle)
@@ -629,6 +647,7 @@ function PickSeries(mode)
   if (mode == 0 || mode == 1)
     {
     $("RecordSet").value = SeriesName;
+    RecordSetGiven = $("RecordSet").value;
     $("QueryPlace").innerHTML = "";
     }
   $("Series_Name_Place").innerHTML = SeriesName;
@@ -636,7 +655,7 @@ function PickSeries(mode)
   // Get link to release notes
   ProjectName = SeriesName.match(/[a-zA-Z_]*/);
   $("ReleaseNotes").innerHTML = "<a href='http://jsoc.stanford.edu/doc/data/" + ProjectName +
-                                "/' target='_blank'>for " + ProjectName + "</a>";
+                                "/' target='_blank'>" + ProjectName + "</a>";
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
@@ -671,6 +690,7 @@ function PickSeries(mode)
           var QueryBoxes = "<table>";
   	  nprimes = SeriesInfo.primekeysinfo.length;
   	  var primes = "No PrimeKeys";
+          FirstTimePrime = -1;
           if (nprimes == 1 && SeriesInfo.primekeysinfo[0] == null)
             nprimes = 0;
   	  if (nprimes > 0)
@@ -693,7 +713,11 @@ function PickSeries(mode)
                   "<td> (" + SeriesInfo.keywords[k].type + (isslotted ? "-slotted, " + 
                   SeriesInfo.primekeysinfo[i].step : "") + ")</td>";
               if (SeriesInfo.keywords[k].type === "time")
+                  {
                   QueryBoxes = QueryBoxes + "<td> expects " + SeriesInfo.keywords[k].units + "</td>";
+                  if (FirstTimePrime < 0)
+                    FirstTimePrime = (isslotted ? i : -1);  // SeriesInfo.keywords[k] contains info of first slotted time prime key.
+                  }
               else
                   QueryBoxes = QueryBoxes + "<td></td>";
   
@@ -702,10 +726,10 @@ function PickSeries(mode)
             }
           QueryBoxes = QueryBoxes +  "<tr><td>where clause</td>" + 
             "<td align='right'>" + "[?&nbsp;<input id='WhereClause0' type='text' value='' onChange='QueryBuild();' >&nbsp;?]</td>" +
-            "<td colspan=2>Uses prime key logic</td></tr>";
+            "<td colspan=2>Use to get only most recent version of selected records.</td></tr>";
           QueryBoxes = QueryBoxes +  "<tr><td>where clause</td>" + 
             "<td align='right'>" + "[!&nbsp;<input id='WhereClause1' type='text' value='' onChange='QueryBuild();' >&nbsp;!]</td>" +
-            "<td colspan=2> use disables prime key logic</td></tr>";
+            "<td colspan=2> Use for all versions of selected records.</td></tr>";
           QueryBoxes = QueryBoxes + "</table>";
           $("QueryPlace").innerHTML = QueryBoxes;
           if ($("QueryDivCheck").checked == 1)
@@ -746,7 +770,7 @@ function PickSeries(mode)
           $("SSKeysPlace").innerHTML = $("SSKeysPlace").innerHTML + "Owner: " + SeriesInfo.owner + "<br>"; 
 
           // build and display keyword selection scroll box and keyword part of full table
-	  makeSeriesContent(0);   // use SeriesInfo order for keyword list.
+	  makeSeriesContent(0);   // use SeriesInfo order for initial keyword list.
           // cleanup pending count place
           $("RSCount_Place").innerHTML = "";
           }
@@ -760,7 +784,6 @@ function PickSeries(mode)
 	else
 	  $("FirstLastPlace").innerHTML = "This series contains no records";
 
-        makeDropDownLists();
         // Done displaying detailed information for this series
         }
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
@@ -813,18 +836,18 @@ function makeSeriesContent(doSort)
     else
       keywords = "<table border=1><tr><th>Use</th><th>keyword</th><th>type</th><th>scope</th><th>default</th><th>unit</th><th>note</th>"; 
     // make order table for sorting
-    var sortOrder = new Array();
+    keySortOrder = new Array();
     for (i=0; i<n; i++)
-      sortOrder[i] = {Num:i, Name:SeriesInfo.keywords[i].name};
+      keySortOrder[i] = {Num:i, Name:SeriesInfo.keywords[i].name};
     if (doSort)
       {
-      tmp = sortOrder.sortBy(function(key) {return key.Name;});
-      sortOrder = tmp;
+      tmpsort = keySortOrder.sortBy(function(key) {return key.Name;});
+      keySortOrder = tmpsort;
       }
 
     for (i=0; i<n; i++)
       {
-      var I = sortOrder[i].Num;
+      var I = keySortOrder[i].Num;
       keywords = keywords + "<tr>" + 
         '<td><input type="checkbox" id="k'+I+'" checked="checked" onChange="updateDropDownLists('+"'k',"+I+');"></td>' +
         "<td>" + SeriesInfo.keywords[I].name + "</td><td>"; 
@@ -879,6 +902,8 @@ function makeSeriesContent(doSort)
   
   // Place structure table on screen
   $("SSPlace").innerHTML =  keywords + "<br>" + segments + "<br>" + links;
+  $("AllKeysSelect").checked = true;
+  makeDropDownLists();
   }
 
 // Choose which keywords, segments, links will be included in DropDownLists.
@@ -915,6 +940,7 @@ function AllKeysSelectChange()
 // updateDropDownLists is called by change of a checkbox in the Series Content table.
 function updateDropDownLists(list,n)
   {
+  // for now just rebuild the entire list each change
   makeDropDownLists();
   }
 
@@ -922,15 +948,17 @@ function makeDropDownLists()
   {
   CleanDropDownLists();
   var n = SeriesInfo.keywords.length;
+  var i;
   if (n > 0)
     {
     insertOption("KeysSelect","**NONE**", "");
     insertOption("KeysSelect","**ALL**", "");
     for (i=0; i<n; i++)
       {
-      if ($("k"+i).checked == false)
+      var I = keySortOrder[i].Num;
+      if ($("k"+I).checked == false)
         continue;
-      if (SeriesInfo.keywords[i].recscope === "segment")
+      if (SeriesInfo.keywords[I].recscope === "segment")
         {
         var j;
         for (j=0; j< SeriesInfo.segments.length; j++)
@@ -939,11 +967,11 @@ function makeDropDownLists()
             continue;
           var snow = "" + j;
           while (snow.length < 3) { snow = "0" + snow;}
-            insertOption("KeysSelect",SeriesInfo.keywords[i].name+"_"+snow, "");
+            insertOption("KeysSelect",SeriesInfo.keywords[I].name+"_"+snow, "");
           }
         }
       else
-        insertOption("KeysSelect",SeriesInfo.keywords[i].name, "");
+        insertOption("KeysSelect",SeriesInfo.keywords[I].name, "");
       }
     }
   insertOption("KeysSelect","*recdir*", "");
@@ -1007,15 +1035,7 @@ function CleanDropDownLists()
 
 function SetRSLimit()
   {
-  if ($("RecordLimit").value === "none")
-    MaxRecs = 0;
-  else if (Number($("RecordLimit").value)) 
-    MaxRecs = Number($("RecordLimit").value);
-  else
-    {
-    $("RecordLimit").value = "none";
-    MaxRecs = 0;
-    }
+  $("RecordSet").value = RecordSetGiven;
   GetRSCount();
   }
 
@@ -1038,10 +1058,45 @@ function AbortRSCount()
     }
   }
 
+function time_convert(direction, val)
+  {
+  // NOTE this does not deal with TAI correctly so the returned time will be c. 30 seconds wrong
+  // DO NOT USE WHEN TIME MUST BE ACCURATE
+  if (direction === 's')
+    { // seconds to ascii time, seconds since 1977.01.01_TAI
+    var yyyy, mo, dd, hh, mm, ss;
+    var epoch = Date.parse("1976/12/31 23:59:45");
+    var d = new Date();
+    d.setTime(val*1000 + epoch);
+    yyyy = d.getFullYear() + '';
+    mo = d.getMonth() + 1;  mo = mo + ''; if (mo.length == 1) mo = '0' + mo;
+    dd = d.getDate();       dd = dd + ''; if (dd.length == 1) dd = '0' + dd;
+    hh = d.getHours();      hh = hh + ''; if (hh.length == 1) hh = '0' + hh;
+    mm = d.getMinutes();    mm = mm + ''; if (mm.length == 1) mm = '0' + mm;
+    ss = d.getUTCSeconds(); ss = ss + ''; if (ss.length == 1) ss = '0' + ss;
+    return(yyyy+'.'+mo+'.'+dd+'_'+hh+':'+mm+':'+ss+'_UTC');
+    }
+  else
+    { // ascii time to seconds, JSOC or ISO
+    // example 2008.06.23_00:58:42.95_TAI or 2008
+    var t0, t1, tms, epoch;
+    t0 = new String(val);
+    t1 = t0.replace(/\./g,"/");
+    t0 = t1.replace(/-/g,"/");
+    t1 = t0.replace(/_/," ");
+    t0 = t1.replace(/T/," ");
+    t1 = t0.substring(0,19);
+    tms = Date.parse(t1);
+    epoch = Date.parse("1976/12/31 23:59:45");
+    return((tms - epoch)/1000);
+    }
+  }
+
 function GetRSCount()
   {
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-// concatenate parts here, display in fixed string
+  RecordSetGiven = $("RecordSet").value;
+  $("RecordSetComment").innerHTML = "";
   var posbracket = $("RecordSet").value.indexOf("[");
   var posRbracket = $("RecordSet").value.indexOf("]");
   var thisSeriesName;
@@ -1066,7 +1121,16 @@ function GetRSCount()
     return;
     }
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  if (SeriesInfo.Interval.MaxRecnum > RecnumQueryLimit)
+  if ($("RecordLimit").value === "none")
+    MaxRecs = 0;
+  else if (Number($("RecordLimit").value)) 
+    MaxRecs = Number($("RecordLimit").value);
+  else
+    {
+    $("RecordLimit").value = "none";
+    MaxRecs = 0;
+    }
+  if (SeriesInfo.Interval.MaxRecnum > RecnumQueryLimit && MaxRecs == 0)
     {
     posbracket = $("RecordSet").value.indexOf("[");
     posRbracket = $("RecordSet").value.lastIndexOf("]");
@@ -1075,7 +1139,39 @@ function GetRSCount()
       alert("This series, "+thisSeriesName+", has many records, you must specify an explicit " +
             "clause or clauses in [...] to limit the number of records. Defaulting to [$]");
       $("RecordSet").value = thisSeriesName + '[$]';
-      // return;
+     // return; 
+      }
+    }
+  // check for count only and add time range to support the counting 
+  // do not bother if used recnums < 500,000.
+  $("RecordSetComment").innerHTML = "";
+  if (SeriesInfo.Interval.MaxRecnum > 500000 && MaxRecs != 0 && 
+    (posRbracket == posbracket+1 || (posbracket == -1 && posRbracket == -1))) 
+    {
+    if (FirstTimePrime == 0 && Math.abs(MaxRecs) < 10000)
+      {
+      var t_step = 1.0 * SeriesInfo.primekeysinfo[FirstTimePrime].step;
+      var t_span = 100 * Math.abs(MaxRecs) * t_step;
+      var t_base = (MaxRecs > 0 ? SeriesInfo.Interval.FirstRecord : SeriesInfo.Interval.LastRecord) + "";
+      var rBracket =  t_base.indexOf("]");
+      var lBracket =  t_base.indexOf("[");
+      var t_base_prefix = t_base.substring(0,lBracket+1);
+      var t_base_time = t_base.substring(lBracket+1,rBracket);
+      var t_base_suffix = t_base.substr(rBracket);
+      t_base_suffix = ']';
+      if (MaxRecs < 0)
+        {
+        var t_time_t, t_time;
+        t_time_t = time_convert("t",t_base_time);
+        t_time_t = t_time_t - t_span;
+        t_time = time_convert("s",t_time_t);
+        }
+      else
+        {
+        t_time = t_base_time;
+        }
+      $("RecordSet").value = t_base_prefix + t_time + '/' + t_span + 's' + t_base_suffix;
+      $("RecordSetComment").innerHTML = "<B>For large series with no limiting clause, the RecordSet spec has been<br>modified for quick count from either end.</B><br>";
       }
     }
 // $("GetRSCountButton").value = "Kill Count?";
@@ -1169,22 +1265,17 @@ function PickKeys()
     selkeys = "**NONE**";
     KeyList = "**NONE**";
     for (ikey=1; ikey < nkeys; ikey++)
-      {
       $("KeysSelect")[ikey].selected = false;
-      }
     }
   // check for **ALL**
   if ($("KeysSelect")[1].selected)
     {
-    nkeysselected = 0;
-    for (ikey=2; ikey < nkeys; ikey++)
-      {
-      if ($("KeysSelect")[ikey].text.charAt(0) != '*')
-        $("KeysSelect")[ikey].selected = true;
-      }
-    $("KeysSelect")[1].selected = false;
+    nkeysselected = 1;
+    selkeys = "**ALL**";
+    KeyList = "**ALL**";
+    $("KeysSelect")[0].selected = false;
     }
-  for (ikey=2; ikey < nkeys; ikey++)
+  else for (ikey=2; ikey < nkeys; ikey++)
     {
     if ($("KeysSelect")[ikey].selected)
       {
@@ -1590,7 +1681,7 @@ function GetShowInfo()
   tabs.setSelectedItems([tabdisplay]); // show the display page.
   if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
     {
-    $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<br>Please fo back to steps 4 and 5."; 
+    $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<br>Please go back to steps 4 and 5."; 
     return;
     }
 
@@ -1602,7 +1693,8 @@ function GetShowInfo()
   $("SIFkey").value = '';
   $("SIFseg").value = '';
   $("SIFK").value = "0";
-  $("SIFds").value = encodeURIComponent($("RecordSet").value);
+  $("SIFds").value = $("RecordSet").value;
+  // $("SIFds").value = encodeURIComponent($("RecordSet").value);
 
   if ($("WantRecInfo").checked) $("SIFi").value = "1";
   if (MaxRecs != 0) $("SIFn").value = MaxRecs;
@@ -2073,7 +2165,9 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
         <input type="button" value="(Refresh)"  onClick="PickSeries(3);" >
         <span id="Series_Info_Place" style="background-color:#FFFFFF"></span>
         <br>
-        <b>Release Notes <span id="ReleaseNotes"></span></b>
+        <b>Release Notes</b> for<b>&nbsp;<a href="http://jsoc.stanford.edu/doc/exports/exportdata_lookdata_release_notes.txt"
+             target="_blank">Lookdata</a></b>, and for 
+        <b><span id="ReleaseNotes"></span></b>
         <br>
         <b><a target="JSOC Keywords" href="http://jsoc.stanford.edu/doc/keywords/JSOC_Keywords_for_metadata.pdf">Keyword Notes</a> (pdf)
         </td>
@@ -2101,6 +2195,7 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
         <span id="RecordSetHelp" class="tip">?</span>
         <input id="RecordSet" type="text" value="" onkeydown="return OnEnterKey(event,GetRSCount);" > 
         <br>
+        <span id="RecordSetComment"></span>
         <div id="QueryDiv">
           <span id="QueryPlace" style="width:10em;background-color:#FFFFFF;"></span></span>
         </div>
