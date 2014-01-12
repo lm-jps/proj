@@ -294,6 +294,8 @@ function OnLoadInit()
   var needcount = 0;
   Cookie.init({name:exportdata, expires:5});
   initVars();
+  if (Internal)
+    $("header_logo").href="http://jsoc2.stanford.edu";
   state = 0;
   Cookie.setData("state",state);
   args = getargs();
@@ -1671,8 +1673,8 @@ function GetStatus()
 </head>
 <body bgcolor="#E0F0FF" onload="OnLoadInit();" >
 <div id="header">
-<img src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
-  style="vertical-align:middle;height:60" alt="JSOC logo">
+  <a href ="http://jsoc.stanford.edu" id="header_logo"><img src="http://hmi.stanford.edu/images/web/JSOC_120.gif"
+    style="vertical-align:middle;height:60px;border:0" alt="JSOC logo"></a>
 &nbsp;&nbsp;&nbsp;
 <b><big style="vertical-align:middle">&nbsp;&nbsp;JSOC Data Export</big></b>
 &nbsp;&nbsp;&nbsp;
