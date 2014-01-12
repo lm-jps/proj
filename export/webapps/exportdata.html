@@ -295,7 +295,10 @@ function OnLoadInit()
   Cookie.init({name:exportdata, expires:5});
   initVars();
   if (Internal)
+    {
     $("header_logo").href="http://jsoc2.stanford.edu";
+    $("footer_link").href="http://jsoc2.stanford.edu";
+    }
   state = 0;
   Cookie.setData("state",state);
   args = getargs();
@@ -1823,7 +1826,7 @@ Use this section to request a renewal/repeat of a prior export for which the dat
 <P style="height:1px">
 <div id="footer" style="vertical-align:bottom;text-align:center;">
 <I>Home page for:</I>
-<a href = "http://jsoc.stanford.edu/"><b>SDO-JSOC</b></a>
+<a href = "http://jsoc.stanford.edu/" id="footer_link"><b>SDO-JSOC</b></a>
 </div>
 
 <script type="text/javascript">
