@@ -125,9 +125,11 @@ var SeriesName = "";
 var SeriesKeySegInfo = "";
 var nprimes = 0;
 var KeyList = "";
+var ShowKeyList = "";
 var SegList = "";
 var keySortOrder;
 var nkeysselected = 0;
+var nshowkeysselected = 0;
 var nsegsselected = 0;
 var RecordCount = 0;
 var askedCount = 0;
@@ -290,6 +292,7 @@ function CleanSeriesPick()
   $("LinkListPlace").innerHTML = "All Links";
   $("DisplayPlace").innerHTML = "";
   KeyList = "";
+  ShowKeyList = "";
   SegList = "";
   $("SSKeysPlace").innerHTML = "";
   $("SSPlace").innerHTML = "";
@@ -297,6 +300,7 @@ function CleanSeriesPick()
   RecordCount = 0;
   FirstTimePrime = -1;
   nkeysselected = 0;
+  nshowkeysselected = 0;
   nsegsselected = 0;
   nlinksselected = 0;
   askedCount = 0;
@@ -312,6 +316,12 @@ function CleanSeriesPick()
   $("SIFa").value = "0";
   $("SIFA").value = "0";
   $("SIFP").value = "0";
+  $("SIFr").value = "0";
+  $("SIFS").value = "0";
+  $("SIFz").value = "0";
+  $("SIFo").value = "0";
+  $("SIFR").value = "0";
+  $("SIFx").value = "0";
   $("SIFkey").value = '';
   $("SIFseg").value = '';
   $("SIFK").value = "0";
@@ -1024,6 +1034,7 @@ function CleanDropDownLists()
   $("LinkListPlace").innerHTML = "";
   $("KeyListPlace").innerHTML = "";
   KeyList =  "";
+  ShowKeyList =  "";
   SegList =  "";
   LinkList =  "";
   gridmade = 0;
@@ -1247,6 +1258,7 @@ function PickKeys()
   {
   var ikey = 0;
   nkeysselected = 0;
+  nshowkeysselected = 0;
   var nkeys = $("KeysSelect").length;
   var selkeys = "";
   $("KeyListPlace").innerHTML = "";
@@ -1257,11 +1269,13 @@ function PickKeys()
     $("GraphXKeysSelect").remove(i-1);
   // $("WantRecInfo").checked = 0;
   KeyList = "";
+  ShowKeyList = "";
   selkeys = "";
   // check for **NONE**
   if ($("KeysSelect")[0].selected)
     {
     nkeysselected = 0;
+    nshowkeysselected = 0;
     selkeys = "**NONE**";
     KeyList = "**NONE**";
     for (ikey=1; ikey < nkeys; ikey++)
@@ -1287,6 +1301,30 @@ function PickKeys()
       nkeysselected = nkeysselected + 1;
       selkeys = selkeys + $("KeysSelect")[ikey].text;
       KeyList = KeyList + $("KeysSelect")[ikey].text;
+      if (nshowkeysselected)
+        ShowKeyList = ShowKeyList + ",";
+      nshowkeysselected++;
+      var tmpkey = $("KeysSelect")[ikey].text;
+      if (tmpkey === "*recdir*")
+        $("SIFP").value = "1";
+      else if (tmpkey === "*dirmtime*")
+        nshowkeysselected--; // not available in show_info
+      else if (tmpkey === "*logdir*")
+        nshowkeysselected--; // not available in show_info
+      else if (tmpkey === "*recnum*")
+        $("SIFr").value = "1";
+      else if (tmpkey === "*sunum*")
+        $("SIFS").value = "1";
+      else if (tmpkey === "*size*")
+        $("SIFz").value = "1";
+      else if (tmpkey === "*online*")
+        $("SIFo").value = "1";
+      else if (tmpkey === "*retain*")
+        $("SIFR").value = "1";
+      else if (tmpkey === "*archive*")
+        $("SIFx").value = "1";
+      else
+        ShowKeyList = ShowKeyList + $("KeysSelect")[ikey].text;
       }
     }
   $("KeyListPlace").innerHTML = nkeysselected + " Keys Chosen:&nbsp;" + selkeys;
@@ -1679,7 +1717,7 @@ function GetShowInfo()
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
   $("DisplayPlace").innerHTML = "Requesting Recordset Key Values ...";
   tabs.setSelectedItems([tabdisplay]); // show the display page.
-  if (nkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
+  if (nshowkeysselected < 1 && nsegsselected < 1 && nlinksselected < 1 && $("WantRecInfo").checked == 0)
     {
     $("DisplayPlace").innerHTML = "No keywords and NO segments requested.<br>Please go back to steps 4 and 5."; 
     return;
@@ -1689,7 +1727,6 @@ function GetShowInfo()
   $("SIFn").value = "0";
   $("SIFa").value = "0";
   $("SIFA").value = "0";
-  $("SIFP").value = "0";
   $("SIFkey").value = '';
   $("SIFseg").value = '';
   $("SIFK").value = "0";
@@ -1705,8 +1742,8 @@ function GetShowInfo()
     }
   if ($("KeysSelect")[1].selected)
       $("SIFa").value = 1;
-  else if (nkeysselected) 
-      $("SIFkey").value = KeyList;
+  else if (nshowkeysselected) 
+      $("SIFkey").value = ShowKeyList;
   if (nsegsselected)
     {
     if ($("SegsSelect")[1].selected)
@@ -2215,7 +2252,8 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
         <input type="checkbox" name="WantFullSegInfo" id="WantFullSegInfo"> Check to show full segment info.<br>
         <input type="checkbox" name="MakeLocalFileLinks" id="MakeLocalFileLinks"> Check to make local file links (only at JSOC).  <br>
         <input type="checkbox" name="wantTruncate" id="wantTruncate"> Check to truncate long strings in values display.  <br>
-        <input type="checkbox" name="UseShowInfo" id="UseShowInfo"> Prepare keyword table in plain text format, e.g. as show_info output, in new window. (No *psuedo* keywords) <br>
+        <input type="checkbox" name="UseShowInfo" id="UseShowInfo">
+           Prepare keyword table in plain text format, e.g. as show_info output, in new window. (No *dirmtime* or *logdir* keywords) <br>
         <input type="button" id="FetchKeyValsButton" value="Fetch Keyword Values for RecordSet" style="background-color:#FFFF80" onClick="GetKeyValues();" >
         <input type="button" id="AbortKeyValsButton" value="Abort" style="background-color:#FFD0D0" onClick="AbortGetKeyValues();" >
         </td>
@@ -2243,7 +2281,7 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
 <div id='ShowInfoFormDiv' style="display:none">
 <form id='ShowInfoForm' name='ShowInfoForm'
   action=''
-  target="_blank"
+  target="Lookdata_ShowInfo"
   method='get'>
   <input type='hidden' id='SIFds' name='ds'  value='' >
   <input type='hidden' id='SIFkey' name='key'  value='' >
@@ -2255,6 +2293,12 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
   <input type='hidden' id='SIFa' name='a'  value='0' >
   <input type='hidden' id='SIFA' name='A'  value='0' >
   <input type='hidden' id='SIFP' name='P'  value='0' >
+  <input type='hidden' id='SIFr' name='r'  value='0' >
+  <input type='hidden' id='SIFS' name='S'  value='0' >
+  <input type='hidden' id='SIFz' name='z'  value='0' >
+  <input type='hidden' id='SIFo' name='o'  value='0' >
+  <input type='hidden' id='SIFR' name='R'  value='0' >
+  <input type='hidden' id='SIFx' name='x'  value='0' >
 </form>
 </div>
 
