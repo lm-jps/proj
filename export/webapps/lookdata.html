@@ -1282,6 +1282,22 @@ function PickKeys()
       $("KeysSelect")[ikey].selected = false;
     }
   // check for **ALL**
+
+  $("SIFi").value = "0";
+  $("SIFn").value = "0";
+  $("SIFa").value = "0";
+  $("SIFA").value = "0";
+  $("SIFP").value = "0";
+  $("SIFr").value = "0";
+  $("SIFS").value = "0";
+  $("SIFz").value = "0";
+  $("SIFo").value = "0";
+  $("SIFR").value = "0";
+  $("SIFx").value = "0";
+  $("SIFkey").value = '';
+  $("SIFseg").value = '';
+  $("SIFK").value = "0";
+
   if ($("KeysSelect")[1].selected)
     {
     nkeysselected = 1;
@@ -2281,7 +2297,7 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
 <div id='ShowInfoFormDiv' style="display:none">
 <form id='ShowInfoForm' name='ShowInfoForm'
   action=''
-  target="Lookdata_ShowInfo"
+  target="_blank"
   method='get'>
   <input type='hidden' id='SIFds' name='ds'  value='' >
   <input type='hidden' id='SIFkey' name='key'  value='' >
