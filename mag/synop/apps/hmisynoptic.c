@@ -280,9 +280,15 @@ printf("%d, %d\n", len[0], len[1]);
   tearth = local_earth_meridian_crossing(180.0, cr); 
   bearth = earth_B(tearth); 
 */
+/*
+  tstart = CarringtonTime(cr, 360.0);
+  tstop = CarringtonTime(cr, 1.0 * synstep); // synoptic chart is built from right to left (see synstart and synend above).
+                                             // thus the leftmost pixel has a coordinate of synstep but *not* zero).
+  trot = CarringtonTime(cr, 180.0);
+*/
 
   tstart = CarringtonTime(cr, 360.0);
-  tstop = CarringtonTime(cr, 0.0);
+  tstop = CarringtonTime(cr, 0.0); 
   trot = CarringtonTime(cr, 180.0);
 
 //  tstart = HeliographicTime(cr, 360.0);
@@ -531,7 +537,7 @@ for (ds=0; ds < nds; ds++)
                    imrec[idx].mapct = mapct;
                    imrec[idx].mapCM = mapCM;
                    imrec[idx].ds = ds;
-                   strcpy(t_obs, drms_getkey_string(inRec, "T_OBS", &status));
+                   strcpy(t_obs, drms_getkey_string(inRec, "T_REC", &status));
                    imrec[idx].tobs = sscan_time(t_obs);
                    imrec[idx].tmin = MAX(mapCM - halfWindow, mapct + center - imrec[idx].mapdev);
                    imrec[idx].tmax = MIN(mapCM + halfWindow, mapct + center + imrec[idx].mapdev);
@@ -841,14 +847,20 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_string(outRec, "HISTORY", historyofthemodule);
         drms_setkey_string(outRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(outRec, "CTYPE2", "CRLT-CEA");
-        i=len[0]/2+0.0;
+//        i=len[0]/2+0.5;
+        i=len[0]-(len[0]/2+1.0)+1.0;
+                 // 1. CRVAL is defined as 180 degree longitude. 
+                 // 2. Carrington longitude goes from right to the left.
+                 // 3. The counting begins with 1 but *not* 0. 
+                 // 4. The pixel of interest is (len[0]/2+1.0) if counting starts from right to left.
+                 // 5. Flipping to left to right, this pixel is len[0]-(len[0]/2+1.0)+1.0.
         drms_setkey_double(outRec, "CRPIX1", i);
-                // origin is at the left corner of the first pixel
-        l=len[1]/2+0.0;
+                // origin is at the center of the first pixel. The counting is 1.
+        l=(len[1]+1.0)/2; // The counting begins with 1 but *not* 0.
         drms_setkey_double(outRec, "CRPIX2", l);
-                // origin is at the left corner of the first pixel
-//        carrtime = (cr*360.0-360.0/len[0]) - 180.0 + 0.5 * 360.0/len[0];
-        carrtime = (cr-1)*360.0 + 180.0 - (double)(0.5 * 360.0/len[0]);
+                // origin is at center of the first pixel.
+//        carrtime = (cr-1)*360.0 + 180.0 - (double)(0.5 * 360.0/len[0]);
+        carrtime = (cr-1)*360.0 + 180.0; // CARRTIME is defined as 180 degree longitude.
         drms_setkey_double(outRec, "CRVAL1", carrtime);
         i=0.0;
         drms_setkey_double(outRec, "CRVAL2", i);
@@ -860,7 +872,7 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_string(outRec, "WCSNAME", "Carrington Heliographic");
 
 //HMI observables keywords
-        sprint_at(tstr, trot - delta_T);
+        sprint_at(tstr, trot - delta_T); // time at 180 degree longitude
 //        drms_setkey_string(outRec, "T_REC", tstr);
         drms_setkey_float(outRec, "CADENCE", 27.2753*24.*60.*60.);
         drms_setkey_float(outRec, "T_REC_step", 27.2753*24.*60.*60.);
@@ -946,18 +958,24 @@ for (ds = 0; ds < nsynop; ds++)
 //        drms_setkey_string(smallRec, "BUNIT", "Mx/cm^2");
 
 //for image coordinate mapping keywords
-
+        
         drms_setkey_string(smallRec, "HISTORY", historyofthemodule);
         drms_setkey_string(smallRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(smallRec, "CTYPE2", "CRLT-CEA");
-        i=xout/2+0.0;
-        drms_setkey_double(smallRec, "CRPIX1", i);
-        l=yout/2+0.0;
-        drms_setkey_double(smallRec, "CRPIX2", l);
-        carrtime = (cr-1)*360.0 + 180.0 - (double)(0.5 * 360.0/xout);
+//        i=xout/2+0.5;
+        double tmp;
+        tmp=xout - ((180.0-((nbin+1)/2.0-1.0)*(360.0/len[0]))/(360.0/xout)+1.0) + 1.0;
+           // The initial pixel coordinate is ((nbin+1)/2.0-1.0)*(360.0/len[0]) because of the boxcar average.
+           // In this case, the first pixel in small map is rebinned from pixels 1,2,3,4,5 in the large map.
+           // Carrington longitude counts from right to the left.
+        drms_setkey_double(smallRec, "CRPIX1", tmp);
+        tmp=(yout+1.0)/2;
+        drms_setkey_double(smallRec, "CRPIX2", tmp);
+//        carrtime = (cr-1)*360.0 + 180.0 - (double)(0.5 * 360.0/xout);
+        carrtime = (cr-1)*360.0 + 180.0;
         drms_setkey_double(smallRec, "CRVAL1", carrtime);
-        i=0.0;
-        drms_setkey_double(smallRec, "CRVAL2", i);
+        tmp=0.0;
+        drms_setkey_double(smallRec, "CRVAL2", tmp);
         l=-360.0/xout;
         drms_setkey_double(smallRec, "CDELT1", l);
         drms_setkey_double(smallRec, "CDELT2", nbin*1.0/sinbdivs);
@@ -1008,9 +1026,9 @@ for (ds = 0; ds < nsynop; ds++)
         solephem(tstop, eph);
         drms_setkey_double(smallRec, "B0_LAST", eph[9]/RADSINDEG);
 //        drms_setkey_double(smallRec, "EARTH_B0", bearth);
-        l=(cr-1)*360.0;
+        l=(cr-1)*360.0+((nbin+1)/2.0-1.0)*(360.0/len[0]);
         drms_setkey_double(smallRec, "LON_FRST", l);
-        l=cr*360.0-360.0/xout;
+        l=cr*360.0-360.0/len[0]-((nbin+1)/2.0-1.0)*(360.0/len[0]);
         drms_setkey_double(smallRec, "LON_LAST", l);
         l=-360.0/xout;
         drms_setkey_double(smallRec, "LON_STEP", l);
@@ -1670,7 +1688,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.7 2013/07/08 17:26:29 yliu Exp $
+$Id: hmisynoptic.c,v 1.8 2014/01/14 17:33:16 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: yliu $
 */
@@ -1683,8 +1701,8 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
- * Revision 1.7  2013/07/08 17:26:29  yliu
- * Corrected a bug for Carrington-Time conversion; change a few keywords from float to double
+ * Revision 1.8  2014/01/14 17:33:16  yliu
+ * Correcting computations of Keywords CRPIX1, CRPIX2, CRVAL1, and CRVAL2
  *
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.
