@@ -174,7 +174,8 @@ char *module_name    = "HMI_IQUV_averaging"; //name of the module
 #define Q_CAMERA_ANOMALY 0x00000080   //camera issue with HMI (e.g. DATAMIN=0): resulting images might be usable, but most likely bad
 
 #define CALVER_DEFAULT 0 // both the default and missing value of CALVER64
-#define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction
+//#define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED BEFORE JANUARY 15, 2014
+#define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000      //bitmask for CALVER64 to indicate the use of rotational flat fields 
 
  //definitions for the QUALITY keyword for the lev1.5 records
@@ -1019,7 +1020,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.34 2013/11/12 00:16:45 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.35 2014/01/14 22:51:47 couvidat Exp $");
 }
 
 
@@ -1083,7 +1084,7 @@ int DoIt(void)
   char COMMENT[MaxNString];
   strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
-  if(inLinearity == 1) strcat(COMMENT,"; linearity=1");
+  if(inLinearity == 1) strcat(COMMENT,"; linearity=1 with coefficients updated on 2014/01/15");
   if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
   strcat(COMMENT,"; propagate eclipse bit from level 1");
 
@@ -1449,11 +1450,19 @@ int DoIt(void)
   double *keyF=NULL;
   double TSTARTFLAT=0.0, TSTOPFLAT=0.0;
 
+  //VALUES USED PRIOR TO JANUARY 15, 2014:
   //to remove non-linearity of cameras (values from sun_lin.pro, from hmi_ground.lev0[1420880-1420945])
   //NON LINEARITY OF SIDE CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
-  double nonlins[]={-8.2799134,0.017660396,-3.7157499e-06,9.0137137e-11};
+  //double nonlins[]={-8.2799134,0.017660396,-3.7157499e-06,9.0137137e-11};
   //NON LINEARITY OF FRONT CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
-  double nonlinf[]={-11.081771,0.017383740,-2.7165221e-06,6.9233459e-11}; 
+  //double nonlinf[]={-11.081771,0.017383740,-2.7165221e-06,6.9233459e-11}; 
+
+  //VALUES USED AFTER JANUARY 15, 2014:
+  //to remove non-linearity of cameras (values from sun_lin.pro, median values of several non-linearity sequences) CALVER64 UPDATED!!!!
+  //NON LINEARITY OF SIDE CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
+  double nonlins[]={0.0,0.025409177,-4.0088672e-06,1.0615198e-10};
+  //NON LINEARITY OF FRONT CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
+  double nonlinf[]={0.0,0.020677687,-3.1873243e-06,8.7536678e-11}; 
 
   //char Lev1pSegName[24][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2","V2","I3","Q3","U3","V3","I4","Q4","U4","V4","I5","Q5","U5","V5"};   //names of the segments of the level 1 p records
   char Lev1pSegName[40][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2","V2","I3","Q3","U3","V3","I4","Q4","U4","V4","I5","Q5","U5","V5","I6","Q6","U6","V6","I7","Q7","U7","V7","I8","Q8","U8","V8","I9","Q9","U9","V9"};   //names of the segments of the level 1 p records !!!!!! WARNING DIFFERENT FOR THE DIFFERENT NUMBERS OF POSSIBLE WAVELENGTHS !!!!!
@@ -1565,7 +1574,8 @@ int DoIt(void)
 
    if(QuickLook == 1)                                                //Quick-look data
      { 
-       if(AverageTime == 720.0) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
+       if(AverageTime == 720.0 && (DataCadence == 90.0 || DataCadence == 135.0)) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
+       if(AverageTime == 720.0 && (DataCadence == 120.0 || DataCadence == 150.0)) strcpy(HMISeriesLev1p,"hmi.S2_720s_nrt");
        else
 	 {
 	   printf("No output series exists for your command-line parameters\n");

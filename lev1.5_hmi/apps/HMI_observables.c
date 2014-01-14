@@ -161,6 +161,7 @@ char *module_name= "HMI_observables"; //name of the module
 #define SmoothTables   "smooth"       //Use smooth look-up tables for the MDI-like algorithm?
 #define RotationalFlat "rotational"   //force the use of rotational flat fields?
 #define Linearity      "linearity"    //force the correction for non-linearity of cameras
+#define Unusual        "unusual"      //unusual sequences (more than 6 wavelengths)? yes=1, no=0. Use only when trying to produce side camera observables
 
 #define minval(x,y) (((x) < (y)) ? (x) : (y))
 #define maxval(x,y) (((x) < (y)) ? (y) : (x))
@@ -179,7 +180,8 @@ char *module_name= "HMI_observables"; //name of the module
 #define Q_ACS_THERMALRECOVERY 0x400000//thermal recovery after eclipses
 #define CALVER_DEFAULT 0              //both default and missing values of CALVER64
 #define CALVER_SMOOTH  0x100          //bitmask for CALVER64 to indicate the use of smooth look-up tables
-#define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction
+//#define CALVER_LINEARITY 0x1000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED BEFORE JANUARY 15, 2014
+#define CALVER_LINEARITY 0x2000       //bitmask for CALVER64 to indicate the use of non-linearity correction //VALUE USED AFTER JANUARY 15, 2014
 #define CALVER_ROTATIONAL 0x10000     //bitmask for CALVER64 to indicate the use of rotational flat fields 
 #define Q_CAMERA_ANOMALY 0x00000080   //camera issue with HMI (e.g. DATAMIN=0): resulting images might be usable, but most likely bad
 
@@ -241,6 +243,7 @@ ModuleArgs_t module_args[] =
      {ARG_INT   , RotationalFlat, "0", "Use rotational flat fields? yes=1, no=0 (default)"},
      {ARG_STRING, "dpath", "/home/jsoc/cvs/Development/JSOC/proj/lev1.5_hmi/apps/",  "directory where the source code is located"},
      {ARG_INT   , Linearity, "0", "Correct for non-linearity of cameras? yes=1, no=0 (default)"},
+     {ARG_INT   , Unusual, "0", "unusual sequences (more than 6 wavelengths)? yes=1, no=0. Use only when trying to produce side camera observables"},
      {ARG_END}
 };
 
@@ -1095,7 +1098,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.42 2013/11/12 00:16:32 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.43 2014/01/14 22:51:34 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1134,6 +1137,7 @@ int DoIt(void)
   int   inRotationalFlat   = cmdparams_get_int(&cmdparams,RotationalFlat,  NULL);      //Use rotational flat fields? yes=1, no=0 (default)
   char *dpath              = cmdparams_get_str(&cmdparams,"dpath",         NULL);      //directory where the source code is located
   int   inLinearity        = cmdparams_get_int(&cmdparams,Linearity,       NULL);      //Correct for non-linearity of cameras? yes=1, no=0 (default)
+  int   unusual            = cmdparams_get_int(&cmdparams,Unusual,         NULL);      //unusual sequences? yes=1, no=0. Use only when trying to produce side camera observables
 
   //THE FOLLOWING VARIABLES SHOULD BE SET AUTOMATICALLY BY OTHER PROGRAMS.
   char *CODEVERSION =NULL;                                                             //version of the l.o.s. observable code
@@ -1154,10 +1158,10 @@ int DoIt(void)
   char COMMENT[MaxNString];
   strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
-  if(inLinearity == 1) strcat(COMMENT,"; linearity=1");
+  if(inLinearity == 1) strcat(COMMENT,"; linearity=1 with coefficients updated on 2014/01/15");
   if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
   if(inSmoothTables == 1) strcat(COMMENT,"; smooth=1");
-  strcat(COMMENT,"; propagate eclipse bit from level 1");
+  strcat(COMMENT,"; propagate eclipse bit from level 1; use of larger crop radius look-up tables");
 
   struct init_files initfiles;
   //char DISTCOEFFILEF[]="/home/couvidat/cvs/JSOC/proj/lev1.5_hmi/libs/lev15/dist1.bin";
@@ -1221,7 +1225,8 @@ int DoIt(void)
   char  HMISeriesLev15d[MaxNString];                                 //name of the level 1.5 data series FOR LINEWIDTH
   char  HMISeriesLev15e[MaxNString];                                 //name of the level 1.5 data series FOR CONTINUUM
   char  HMISeriesLookup[MaxNString];                                 //name of the series containing the look-up tables for the MDI-like algorithm
-  if(inSmoothTables == 1)  strcpy(HMISeriesLookup,"hmi.lookup_corrected"); else strcpy(HMISeriesLookup,"hmi.lookup");
+  if(inSmoothTables == 1)  strcpy(HMISeriesLookup,"hmi.lookup_corrected_expanded"); else strcpy(HMISeriesLookup,"hmi.lookup_expanded"); //crop radius of tables increased on January 15, 2014
+  //if(inSmoothTables == 1)  strcpy(HMISeriesLookup,"hmi.lookup_corrected"); else strcpy(HMISeriesLookup,"hmi.lookup");
   printf("Series used for the look-up tables: %s\n",HMISeriesLookup);
 
   char  CosmicRaySeries[MaxNString]= "hmi.cosmic_rays";              //name of the series containing the cosmic-ray hits
@@ -1577,11 +1582,22 @@ int DoIt(void)
   double *keyF=NULL;
   double TSTARTFLAT=0.0, TSTOPFLAT=0.0;
 
+  //VALUES USED PRIOR TO JANUARY 15, 2014:
   //to remove non-linearity of cameras (values from sun_lin.pro, from hmi_ground.lev0[1420880-1420945])
   //NON LINEARITY OF SIDE CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
-  double nonlins[]={-8.2799134,0.017660396,-3.7157499e-06,9.0137137e-11};
+  //double nonlins[]={-8.2799134,0.017660396,-3.7157499e-06,9.0137137e-11};
   //NON LINEARITY OF FRONT CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
-  double nonlinf[]={-11.081771,0.017383740,-2.7165221e-06,6.9233459e-11}; 
+  //double nonlinf[]={-11.081771,0.017383740,-2.7165221e-06,6.9233459e-11}; 
+
+  //VALUES USED AFTER JANUARY 15, 2014:
+  //to remove non-linearity of cameras (values from sun_lin.pro, median values of several non-linearity sequences) CALVER64 UPDATED!!!!
+  //NON LINEARITY OF SIDE CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
+  double nonlins[]={0.0,0.025409177,-4.0088672e-06,1.0615198e-10};
+  //NON LINEARITY OF FRONT CAMERA, AVERAGE VALUES FOR THE 4 QUADRANTS
+  double nonlinf[]={0.0,0.020677687,-3.1873243e-06,8.7536678e-11}; 
+
+
+
 
   //char Lev1pSegName[36][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2","V2","I3","Q3","U3","V3","I4","Q4","U4","V4","I5","Q5","U5","V5","LCP0","RCP0","LCP1","RCP1","LCP2","RCP2","LCP3","RCP3","LCP4","RCP4","LCP5","RCP5"};                                                 //names of the segments of the level 1 p records
                                                                      //[0:23] are the segments for IQUV data, [24:35] are the segments for LCP+RCP data
@@ -1826,13 +1842,21 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  strcpy(HMISeriesLev15d,"hmi_test.Lw_75s_nrt" );              
 	  strcpy(HMISeriesLev15e,"hmi_test.Ic_75s_nrt" );
 	}
-      if(DataCadence == 720.0)
+      if(DataCadence == 720.0 && unusual == 0) //observables sequence with 6 wavelength
 	{						             
 	  strcpy(HMISeriesLev15a,"hmi.V_720s_nrt");              
 	  strcpy(HMISeriesLev15b,"hmi.M_720s_nrt");              
 	  strcpy(HMISeriesLev15c,"hmi.Ld_720s_nrt");              
 	  strcpy(HMISeriesLev15d,"hmi.Lw_720s_nrt");              
 	  strcpy(HMISeriesLev15e,"hmi.Ic_720s_nrt");
+	}
+      if(DataCadence == 720.0 && unusual == 1)//special sequence with more than 6 wavelengths
+	{						             
+	  strcpy(HMISeriesLev15a,"hmi.V2_720s_nrt");              
+	  strcpy(HMISeriesLev15b,"hmi.M2_720s_nrt");              
+	  strcpy(HMISeriesLev15c,"hmi.Ld2_720s_nrt");              
+	  strcpy(HMISeriesLev15d,"hmi.Lw2_720s_nrt");              
+	  strcpy(HMISeriesLev15e,"hmi.Ic2_720s_nrt");
 	}
     }							             
   else                                                              //Final data
@@ -1877,13 +1901,21 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  strcpy(HMISeriesLev15d,"hmi.Lw_135s");              
 	  strcpy(HMISeriesLev15e,"hmi.Ic_135s");
 	}
-      if(DataCadence == 720.0)
+      if(DataCadence == 720.0 && unusual == 0)
 	{						             
 	  strcpy(HMISeriesLev15a,"hmi.V_720s"  );              
 	  strcpy(HMISeriesLev15b,"hmi.M_720s" );              
 	  strcpy(HMISeriesLev15c,"hmi.Ld_720s" );              
 	  strcpy(HMISeriesLev15d,"hmi.Lw_720s" );              
 	  strcpy(HMISeriesLev15e,"hmi.Ic_720s" );
+	}
+      if(DataCadence == 720.0 && unusual == 1)
+	{						             
+	  strcpy(HMISeriesLev15a,"hmi.V2_720s"  );              
+	  strcpy(HMISeriesLev15b,"hmi.M2_720s" );              
+	  strcpy(HMISeriesLev15c,"hmi.Ld2_720s" );              
+	  strcpy(HMISeriesLev15d,"hmi.Lw2_720s" );              
+	  strcpy(HMISeriesLev15e,"hmi.Ic2_720s" );
 	}
     }
 
@@ -1916,7 +1948,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       if( DataCadence == 120.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa120Q");
       if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135Q");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150Q");
-      if( DataCadence == 720.0) strcpy(HMISeriesLev1pa,"hmi.S_720s_nrt");
+      if( DataCadence == 720.0 && unusual == 0) strcpy(HMISeriesLev1pa,"hmi.S_720s_nrt");
+      if( DataCadence == 720.0 && unusual == 1) strcpy(HMISeriesLev1pa,"hmi.S2_720s_nrt");
     }
   else                                                              //Final data
     {
@@ -1925,7 +1958,8 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
       if( DataCadence == 120.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa120");
       if( DataCadence == 135.0) strcpy(HMISeriesLev1pa,"hmi.HMISeriesLev1pa135");
       if( DataCadence == 150.0) strcpy(HMISeriesLev1pa,"su_couvidat.HMISeriesLev1pa150");
-      if( DataCadence == 720.0) strcpy(HMISeriesLev1pa,"hmi.S_720s");
+      if( DataCadence == 720.0 && unusual == 0) strcpy(HMISeriesLev1pa,"hmi.S_720s");
+      if( DataCadence == 720.0 && unusual == 1) strcpy(HMISeriesLev1pa,"hmi.S2_720s");
     }
 
 
@@ -5959,16 +5993,16 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	  DopplerParameters.coeff3=coeff[3];
 	  DopplerParameters.QuickLook=QuickLook;
 	  //override these parameters if the observables sequence has 10 wavelength positions
-	  if(framelistSize/2 == 10 || framelistSize/2 == 8)
+	  if(framelistSize/2 == 10 || framelistSize/2 == 8 || framelistSize/2 == 20) //the last one if 4 polarization at 10 wavelength, side camera in modA
 	    {
-	      ntest=1399; //must match what is in lookup.c
+	      ntest=1333; //must match what is in lookup.c
 	      DopplerParameters.maxVtest=ntest*2;
 	      DopplerParameters.ntest=ntest;
 	    }
 
 	  t0=dsecnd();
 
-	  Dopplergram(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,MISSVALS,&SATVALS,cdelt1,TargetTime); //ASSUMES arrLev1p ARE IN THE ORDER I0 LCP, I0 RCP, I1 LCP, I1 RCP, I2 LCP, I2 RCP, I3 LCP, I3 RCP, I4 LCP, I4 RCP, AND I5 LCP, I5 RCP
+	  Dopplergram_largercrop(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,MISSVALS,&SATVALS,cdelt1,TargetTime); //ASSUMES arrLev1p ARE IN THE ORDER I0 LCP, I0 RCP, I1 LCP, I1 RCP, I2 LCP, I2 RCP, I3 LCP, I3 RCP, I4 LCP, I4 RCP, AND I5 LCP, I5 RCP
 	  //else Dopplergram2(arrLev1p,arrLev15,nSegs1p,arrintable,RSUNint,X0AVG,Y0AVG,DopplerParameters,MISSVALS,&SATVALS,cdelt1); //uses bi-cubic interpolation
 	  t1=dsecnd();
 	  printf("TIME ELAPSED IN DOPPLERGRAM(): %f\n",t1-t0);
