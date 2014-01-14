@@ -168,7 +168,7 @@ function initVars()
   ExportMethodIsDirect = 0;
   ExportFilenameFmtOK = 1;
   ExportUserOK = 0;
-  ExportNotifyOK = 2;
+  ExportNotifyOK = 0;
   ExportReadyOK = 2;
   TipsEnabled = 1;
   uploadOndoneAction = 0;
@@ -1061,13 +1061,15 @@ function SetExportCompress()
 function SetExportUser()
   {  
   ExportQueryOK = 0;
-  if ($("ExportRequestor").value.length != 0)
+  var tmp1 = $("ExportRequestor").value.toUpperCase();
+  if (tmp1.length != 0 && tmp1 !== "NONE")
     {
     Cookie.setData("user", $("ExportRequestor").value);
     ExportUserOK = 1;
     }
   else
     {
+    $("ExportRequestor").value = "none";
     ExportUserOK = 0;
     }
   SetExportNotify();
@@ -1075,32 +1077,37 @@ function SetExportUser()
 
 function SetExportNotify()
   {   
+  // ExportNotifyOK values:
+  //  0 - not OK to proceed
+  //  1 - OK to proceed for internal or external real email
+  //  2 - OK, email is SolarMail and Requestor not empty.
+  //  3 - OK, quick or external with no email to be sent
   ExportQueryOK = 0;
+  var tmp1 = $("ExportNotify").value.toUpperCase();
   if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
     {
-    ExportNotifyOK = 1;
-    return;
+    ExportNotifyOK = 3;
+    $("ExportNotify").value = "none";
     }
-  var tmp1 = $("ExportNotify").value.toUpperCase();
-  var notify_void = tmp1.length == 0;
-  if (Internal && notify_void)
+  else if (tmp1.length == 0)
     {
-    ExportNotifyOK = 0;
-    return;
-    }
-  if (notify_void)
-    {
-    ExportNotifyOK = 0;
-    $("ExportNotify").value = "NONE";
-    }
-  if ( tmp1 ==  "SOLARMAIL" )
-    {
-    ExportNotifyOK = 2;
-    if ($("ExportRequestor").value.length <= 0)
+    if (Internal)
       {
-      ExportUserOK = 0;
       ExportNotifyOK = 0;
+      $("ExportNotify").value = "solarmail";
       }
+    else
+      {
+      ExportNotifyOK = 3;
+      $("ExportNotify").value = "none";
+      }
+    }
+  else if ( tmp1 ===  "SOLARMAIL" )
+    {
+    if (ExportUserOK)
+      ExportNotifyOK = 2;
+    else
+      ExportNotifyOK = 0;
     }
   else if (tmp1 == "NONE" || tmp1 == "NO")
     {
@@ -1109,15 +1116,10 @@ function SetExportNotify()
     else
       ExportNotifyOK = 3;
     }
+  else if ($("ExportNotify").value.indexOf("@") < 0)
+    ExportNotifyOK = 0;
   else
-    {
-    if ($("ExportNotify").value.indexOf("@") < 0)
-      { 
-      ExportNotifyOK = 0;
-      }
-    else
-      ExportNotifyOK = 1;
-    }
+    ExportNotifyOK = 1;
   CheckRediness();
   }
 
@@ -1134,7 +1136,7 @@ function ExportShowQuery()
 
 function CheckRediness()
   {
-  var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportUserOK * ExportNotifyOK;
+  var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportNotifyOK;
   if (status)
     {
     $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
@@ -1195,27 +1197,21 @@ function CheckExportParams()
       {
       ProtocolImageCheck();
       }
-    // SetExportNotify();
-    if ((Internal && ExportNotifyOK != 1) || ExportNotifyOK == 2)
-      {
-      SetExportUser();
-      if (ExportUserOK == 0 && ExportMethodValue != "url_quick")
-        {
-        // $("ExportButtonMsg").innerHTML = "Retry after entering your identification in Requestor field";
-        $("ExportCheckMsg").innerHTML = "Requestor not given, Enter name you will use in Requestor field then retry export request.  This field in required if Notify is 'solarmail'";
-        break;
-        }
-      }
-    SetExportNotify();
+    SetExportUser();  // SetExportUser calls SetExportNotify
     if (ExportNotifyOK == 0)
       {
-      // $("ExportButtonMsg").innerHTML = "Retry after entering your complete e-mail address or 'NO' or 'solarmail' in Notify field";
-      $("ExportCheckMsg").innerHTML = "Notify email not given or confirmed, Enter 'solarmail' or 'no' or email address then retry export request.";
+      if (ExportUserOK == 0)
+        $("ExportCheckMsg").innerHTML = "Requestor not given, Enter name you will use in Requestor field then retry export request.  This field in required if Notify is 'solarmail'";
+      else if (Internal)
+          $("ExportCheckMsg").innerHTML = "Notify email required for jsoc2, enter 'solarmail' or email address then retry export request.";
+      else
+          $("ExportCheckMsg").innerHTML = "Notify email not given.  Enter 'none' or 'solarmail' or email address then retry export request.";
       break;
       }
     break;
     }
-  var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportUserOK * ExportNotifyOK;
+
+  var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportNotifyOK;
   if (isOK)
     {
     var protocolparam = $("ExportProtocolHidden").value;
