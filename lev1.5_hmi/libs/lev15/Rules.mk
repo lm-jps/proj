@@ -6,7 +6,11 @@ d		:= $(dir)
 LIBLEV15	:= $(d)/liblev15.a
 
 
-OBJ_$(d)	:= $(addprefix $(d)/, interpol_code.o polcal.o Dopplergram.o Dopplergram2.o fstats.o fstats2.o dstats.o dstats2.o Dopplergram_test.o Dopplergram_test2.o Dopplergram_duvall.o Dopplergram_Jesper.o Dopplergram_largercrop.o)
+# OBJ_$(d)	:= $(addprefix $(d)/, interpol_code.o polcal.o Dopplergram.o Dopplergram2.o fstats.o fstats2.o dstats.o dstats2.o Dopplergram_test.o Dopplergram_test2.o Dopplergram_duvall.o Dopplergram_Jesper.o Dopplergram_largercrop.o)
+
+# Fix broken build?
+#  -ART 2014/01/15
+OBJ_$(d)	:= $(addprefix $(d)/, interpol_code.o polcal.o Dopplergram.o Dopplergram2.o fstats.o fstats2.o dstats.o dstats2.o Dopplergram_largercrop.o)
 
 DEP_$(d)	:= $(OBJ_$(d):%=%.d)
 
