@@ -1020,7 +1020,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.35 2014/01/14 22:51:47 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.36 2014/01/15 21:44:48 couvidat Exp $");
 }
 
 
@@ -1575,11 +1575,14 @@ int DoIt(void)
    if(QuickLook == 1)                                                //Quick-look data
      { 
        if(AverageTime == 720.0 && (DataCadence == 90.0 || DataCadence == 135.0)) strcpy(HMISeriesLev1p,"hmi.S_720s_nrt");
-       if(AverageTime == 720.0 && (DataCadence == 120.0 || DataCadence == 150.0)) strcpy(HMISeriesLev1p,"hmi.S2_720s_nrt");
        else
-	 {
-	   printf("No output series exists for your command-line parameters\n");
-	   return 1;//exit(EXIT_FAILURE);
+	 { 
+	   if(AverageTime == 720.0 && (DataCadence == 120.0 || DataCadence == 150.0)) strcpy(HMISeriesLev1p,"hmi.S2_720s_nrt");
+	   else
+	     {
+	       printf("No output series exists for your command-line parameters %f %f %s\n",AverageTime,DataCadence,HMISeriesLev1p);
+	       return 1;//exit(EXIT_FAILURE);
+	     }
 	 }
        //if(AverageTime == 360.0) strcpy(HMISeriesLev1p,"hmi.S_360s_nrt");
        //if(AverageTime == 5760.0)strcpy(HMISeriesLev1p,"hmi.S_5760s_nrt");
