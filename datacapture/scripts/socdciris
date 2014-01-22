@@ -2526,6 +2526,7 @@ sub Sched_ingest {
             #exec "valgrind --leak-check=full ingest_lev0_irisdc vc=$vc_in indir=$DIRSOC2PIPE logfile=$log2";
             $cmd = "lev0ck_irisdc &";
             print "Start: $cmd\n";
+            print LOG "Start: $cmd\n";
             `$cmd`;
           }
 #      else {
