@@ -1,0 +1,60 @@
+#!/usr/bin/perl 
+#/home/prodtest/cvs/JSOC/proj/datacapture/scripts/lev0ck_irisdc
+#This run periodically on irisdc and sees if ingest_lev0_irisdc is 
+#still running. If not it will restart it.
+#This is started by socdciris.
+#
+$| = 1;                 #flush output as we go
+$HOST = "irisdc";
+$SENDMAILTO = "jim\@sun.stanford.edu,jeneen\@sun.stanford,hao\@sun.stanford.edu";
+#$SENDMAILTO = "jsoc_users";
+
+$user = $ENV{'USER'};
+if($user ne "prodtest") {
+  print "You must be user prodtest to run\n";
+  exit;
+}
+$host = `hostname`;
+chomp($host);
+if($host ne $HOST) {
+  print "This can only be run on $HOST.\n";
+  exit;
+}
+sleep(10);	#delay on startup
+($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+$sec2 = sprintf("%02d", $sec);
+$min2 = sprintf("%02d", $min);
+$hour2 = sprintf("%02d", $hour);
+$mday2 = sprintf("%02d", $mday);
+$mon2 = sprintf("%02d", $mon+1);
+$year2 = sprintf("%02d", $year);
+$date = (1900 + $year).".".$mon2.".$mday2"._.$hour2.":$min2".":$sec2";
+print "lev0ck_irisdc at $date\n\n";
+
+while(1) {
+  @ps_prod = `ps -ef | grep ingest_lev0_irisdc_jim`;
+  $found = 0;
+  while($_ = shift(@ps_prod)) {
+    if(/^prodtest/) {
+      if(/VC03/) {
+        $found = 1;
+        break;
+      }
+    }
+  }
+  if($found) {
+    sleep(90);
+  }
+  else {
+    $mail = "Mail -s \"No ingest_lev0_irisdc on $HOST Not Found\"";
+    $cmd = "echo \"No ingest_lev0_irisdc on $HOST. Will restart one...\" | $mail $SENDMAILTO";
+    print "$cmd\n";
+    system($cmd);
+    #now restart the ingest_lev0_irisdc
+    $cmd = "ingest_lev0_irisdc -l vc=VC03 indir=/sds/soc2soc/iris outdir=/sds/soc2pipe/iris pipedir=/sds/pipe2soc/iris logfile=/usr/local/logs/soc/soc_iris_VC03_prodtest_$date.log JSOC_DBNAME=irisdb JSOC_DBHOST=irisdc";
+    print "$cmd\n";
+    #system($cmd);
+    exit(1); #!!TEMP
+    sleep(20);
+  }
+}
