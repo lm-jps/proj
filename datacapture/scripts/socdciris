@@ -2518,16 +2518,16 @@ sub Sched_ingest {
           #This is the parent. The child's pid is in $pid00
           print LOG "          \n"; 	#!!don't lose first few chars on line??
           print LOG "fork ingest processing pid=$pid00 for $tlmfile.\n";
+          $cmd = "lev0ck_irisdc &";
+          print "Start: $cmd\n";
+          print LOG "Start: $cmd\n";
+          `$cmd`;
         } elsif (defined $pid00) {     # $pid00 is zero here if defined. run ingest
           if($INSTANCE == 0) {	  #hmi
             print "Starting ingest_lev0_irisdc -l vc=$vc_in indir=$DIRSOC2SOC outdir=$DIRSOC2PIPE pipedir=$DIRPIPE2SOC logfile=$log2 JSOC_DBNAME=irisdb JSOC_DBHOST=irisdc\n";
             print LOG "Starting ingest_lev0_irisdc -l vc=$vc_in indir=$DIRSOC2SOC outdir=$DIRSOC2PIPE pipedir=$DIRPIPE2SOC logfile=$log2 JSOC_DBNAME=irisdb JSOC_DBHOST=irisdc\n";
             exec "ingest_lev0_irisdc -l vc=$vc_in indir=$DIRSOC2SOC outdir=$DIRSOC2PIPE pipedir=$DIRPIPE2SOC logfile=$log2 JSOC_DBNAME=irisdb JSOC_DBHOST=irisdc";
             #exec "valgrind --leak-check=full ingest_lev0_irisdc vc=$vc_in indir=$DIRSOC2PIPE logfile=$log2";
-            $cmd = "lev0ck_irisdc &";
-            print "Start: $cmd\n";
-            print LOG "Start: $cmd\n";
-            `$cmd`;
           }
 #      else {
 #        print "Starting ingest_tlm -pVC04 $DIRSOC2SOC $DIRSOC2PIPE $DIRPIPE2SOC $log2\n";
