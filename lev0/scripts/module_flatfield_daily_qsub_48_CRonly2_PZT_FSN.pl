@@ -27,7 +27,7 @@ sub usage {
 $OUTDS = "hmi.cosmic_rays";
 $IN1 = "hmi.lev1";
 $IN2 = "hmi.lev1_nrt";
-$QDIR = "/scr21/production/qsub/flat"; #dir for qsub scripts
+$QDIR = "/surge40/jsocprod/qsub/flat"; #dir for qsub scripts
 $PID = getppid;
 $host = `hostname -s`;
 chomp($host);
