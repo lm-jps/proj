@@ -16,7 +16,7 @@ $HOSTDB = "hmidb";      #host where DB runs
 $PGPORT=5432;
 $ENV{'JSOC_DBUSER'}="production";
 $user = $ENV{'USER'};
-$QSUBDIR = "/scr21/production/qsub/flat";
+$QSUBDIR = "/surge40/jsocprod/qsub/flat";
 
 
 #if($host ne "n02") {
