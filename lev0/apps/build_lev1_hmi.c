@@ -986,6 +986,7 @@ TEMPSKIP:
   //calmode: HCFTID=17
   //dark: HSHIEXP=0 and HCAMID=0 or 1
   int skiplimb = 0;
+  //int skiplimb = 1;  //!!!TEMP for Thanksgiving comet
   hcftid = drms_getkey_int(rs, "HCFTID", &rstatus);
   if(hcftid == CAL_HCFTID) {	//don't call limb_fit()
     printk("Cal mode image fsn=%u\n", fsnx);
