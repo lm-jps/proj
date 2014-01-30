@@ -15,7 +15,7 @@
 #include <math.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-
+  
 #include <mkl_blas.h>
 #include <mkl_service.h>
 #include <mkl_lapack.h>
@@ -105,7 +105,7 @@ int DoIt(void)
     int verbflag;
     int outDims[2];
     int n0, n1, xout, yout;
-    TIME t_rec;
+    TIME t_rec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */;
 
     double statMin, statMax, statMedn, statMean, statSig, statSkew, statKurt;
     int statNgood;
@@ -257,16 +257,16 @@ printf("processing files number = %d\n", counting);
 
         // other keywords
         drms_setkey_string(outRec, "HISTORY", historyofthemodule);
-        drms_copykey(outRec, inRec, "DATE");
+        tnow = (double)time(NULL);
+        tnow += UNIX_epoch;
+        drms_setkey_time(outRec, "DATE", tnow);
         drms_copykey(outRec, inRec, "INSTRUME");
         drms_copykey(outRec, inRec, "CAMERA");
-//        drms_copykey(outRec, inRec, "HISTORY");
         drms_copykey(outRec, inRec, "COMMENT");
         drms_copykey(outRec, inRec, "BLD_VERS");
 
         drms_copykey(outRec, inRec, "QUALITY");
         drms_copykey(outRec, inRec, "CADENCE");
-//        drms_copykey(outRec, inRec, "T_REC_step");
         drms_setkey_double(outRec, "DATAMIN", statMin);
         drms_setkey_double(outRec, "DATAMAX", statMax);
         drms_setkey_double(outRec, "DATAMEDN", statMedn);
@@ -281,12 +281,10 @@ printf("processing files number = %d\n", counting);
         drms_setkey_int(outRec, "MISSVALS", i);
 
         fltemp = drms_getkey_float(inRec, "CRPIX1", &status);
-//        fltemp = (fltemp - 1.0 + 0.5)/nbin + 0.5;
-        fltemp = outDims[0]/2.0;
+        fltemp = (outDims[0]+1.0)/2.0;
         drms_setkey_float(outRec, "CRPIX1", fltemp);
         fltemp = drms_getkey_float(inRec, "CRPIX2", &status);        
-//        fltemp = (fltemp - 1.0 + 0.5)/nbin + 0.5;
-        fltemp = outDims[1]/2.0;
+        fltemp = (outDims[1]+1.0)/2.0;
         drms_setkey_float(outRec, "CRPIX2", fltemp);
         drms_copykey(outRec, inRec, "CRVAL1");
         drms_copykey(outRec, inRec, "CRVAL2");
