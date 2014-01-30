@@ -80,7 +80,7 @@
 
 #define LEV1LOG_BASEDIR "/usr/local/logs/lev1"
 #define H1LOGFILE "/usr/local/logs/lev1/build_lev1_mgr_%s.%s.log" 
-#define QSUBDIR "/scr21/production/qsub/tmp"
+#define QSUBDIR "/surge40/jsocprod/qsub/tmp"
 #define NUMTIMERS 8		//number of seperate timers avail
 #define MAXCPULEV1 32		//max# of forks can do at a time for stream mode
 #define DEFAULTCPULEV1 "8"	//default# of forks can do at a time 
@@ -775,7 +775,7 @@ int do_ingest(int force)
       sscanf(string, "%lld", &maxrecnum0);
       //maxrecnum0 = maxrecnum0 - 25;	//allow time for commit of lev0 
       //maxrecnum0 = maxrecnum0 - 40;	//allow (more) time for commit of lev0 
-      if(instruflg == 2) maxrecnum0 = maxrecnum0 - 120; //allow (more) time for iris
+      if(instruflg == 2) maxrecnum0 = maxrecnum0 - 150; //allow (more) time for iris
       else maxrecnum0 = maxrecnum0 - 80;	//allow (more) time for commit of lev0 
       lastrecnum0_prev = lastrecnum0_now;
       lastrecnum0_now = maxrecnum0;		//save to see if more come in
