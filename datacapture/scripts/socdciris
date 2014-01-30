@@ -2518,10 +2518,6 @@ sub Sched_ingest {
           #This is the parent. The child's pid is in $pid00
           print LOG "          \n"; 	#!!don't lose first few chars on line??
           print LOG "fork ingest processing pid=$pid00 for $tlmfile.\n";
-          $cmd = "lev0ck_irisdc &";
-          print "Start: $cmd\n";
-          print LOG "Start: $cmd\n";
-          `$cmd`;
         } elsif (defined $pid00) {     # $pid00 is zero here if defined. run ingest
           if($INSTANCE == 0) {	  #hmi
             print "Starting ingest_lev0_irisdc -l vc=$vc_in indir=$DIRSOC2SOC outdir=$DIRSOC2PIPE pipedir=$DIRPIPE2SOC logfile=$log2 JSOC_DBNAME=irisdb JSOC_DBHOST=irisdc\n";
@@ -2541,24 +2537,23 @@ sub Sched_ingest {
           &Exit_sub;
         }
       }
-#04Sep08 No longer need soc_pipe_scp. The $DIRSOC2PIPE is now NFS on the
-#backend pipeline machine (cl1n001 for now).
-#  if($pid000 == -1) {
-#    if($pid000 = fork) {
-#      #This is the parent. The child's pid is in $pid000
-#      print LOG "          \n"; 	#!!don't lose first few chars on line??
-#      print LOG "fork ingest processing pid=$pid000 for $tlmfile.\n";
-#    } elsif (defined $pid000) {   # $pid000 is zero here if defined.
-#        print "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
-#        print LOG "Starting soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec\n";
-#        exec "soc_pipe_scp $DIRSOC2PIPE $DIRPIPEFE $FEHOST $tlmsec";
-#    }  else {
-#      #fork error
-#      print "!!Abort: Can't fork: $!\n";
-#      #exit(1);
-#      &Exit_sub;
-#    }
-#  }
+  if($pid000 == -1) {
+    if($pid000 = fork) {
+      #This is the parent. The child's pid is in $pid000
+      print LOG "          \n"; 	#!!don't lose first few chars on line??
+      print LOG "fork ingest processing pid=$pid000 for lev0ck_irisdc.\n";
+    } elsif (defined $pid000) {   # $pid000 is zero here if defined.
+        print "Starting lev0ck_irisdc\n";
+        print LOG "Starting lev0ck_irisdc\n";
+        exec "lev0ck_irisdc";
+    }  else {
+      #fork error
+      print "!!Abort: Can't fork: $!\n";
+      print LOG "!!Abort: Can't fork: $!\n";
+      #exit(1);
+      &Exit_sub;
+    }
+  }
 }
 
 #Called from the Display log button on the top level pages.
@@ -2768,6 +2763,12 @@ sub Exit_sub {
       if(/ingest_lev0_irisdc /) {
         ($a, $psid, $c) = split(/\s+/, $_);
         $process = "ingest_lev0_irisdc";
+        print "Killing $process with kill -9 $psid\n";
+        `kill -9 $psid`;
+      }
+      if(/lev0ck_irisdc /) {
+        ($a, $psid, $c) = split(/\s+/, $_);
+        $process = "lev0ck_irisdc";
         print "Killing $process with kill -9 $psid\n";
         `kill -9 $psid`;
       }
