@@ -76,15 +76,15 @@ my($kTESTFLAG) = "/home/jsoc/exports/keep_running_test";
 #
 my($kJSOCDEV_ROOT) = "/home/jsoc/cvs/Development/JSOC";
 my($kJSOCDEV_DBUSER) = "production";
-my($kJSOCDEV_DBNAME) = $config->get(DBNAME);
-my($kJSOCDEV_DBHOST) = $config->get(SERVER);
+my($kJSOCDEV_DBNAME) = $config->get('DBNAME');
+my($kJSOCDEV_DBHOST) = $config->get('SERVER');
 my($kJSOCDEV_MANAGE) = "jsoc_export_manage";
 use constant kProcInfoSeriesDev => "jsoc.export_procs";
 #
 my($kJSOCPRO_ROOT) = "/home/jsoc/cvs/JSOC";
 my($kJSOCPRO_DBUSER) = "production";
-my($kJSOCPRO_DBNAME) = $config->get(DBNAME);
-my($kJSOCPRO_DBHOST) = $config->get(SERVER);
+my($kJSOCPRO_DBNAME) = $config->get('DBNAME');
+my($kJSOCPRO_DBHOST) = $config->get('SERVER');
 my($kJSOCPRO_MANAGE) = "jsoc_export_manage";
 use constant kProcInfoSeriesPro => "jsoc.export_procs";
 #
@@ -97,16 +97,16 @@ use constant kProcInfoSeriesWeb => "jsoc.export_procs";
 #
 my($kJSOCTEST_ROOT) = "/home/jsoc/cvs/Development/JSOC";
 my($kJSOCTEST_DBUSER) = "phil";
-my($kJSOCTEST_DBNAME) = $config->get(DBNAME);
-my($kJSOCTEST_DBHOST) = $config->get(SERVER);
+my($kJSOCTEST_DBNAME) = $config->get('DBNAME');
+my($kJSOCTEST_DBHOST) = $config->get('SERVER');
 my($kJSOCTEST_MANAGE) = "jsoc_export_manage_test";
 use constant kProcInfoSeriesTst => "jsoc.export_procs";
 
 my($runningflag) = $kINTERNALFLAG;
 my($arg);
 my($root);
-my($dbhost) = $config->get(SERVER);
-my($dbname) = $config->get(DBNAME);
+my($dbhost) = $config->get('SERVER');
+my($dbname) = $config->get('DBNAME');
 my($dbuser) = "production";
 my($binpath);
 my($manage) = "jsoc_export_manage";
