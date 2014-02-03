@@ -86,7 +86,7 @@
 						       /*  module identifier  */
 char *module_name = "rdcoverage";
 char *module_desc = "report input data coverage for tracking options";
-char *version_id = "0.9";
+char *version_id = "1.0";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"ds", "", "input data series or dataset"}, 
@@ -239,11 +239,9 @@ int DoIt (void) {
   DRMS_Record_t *irec;
   DRMS_Keyword_t *keywd;
   TIME trec, tobs, tmid, tbase, tfirst, tlast, ttrgt, tstrt, tstop;
-  double carr_lon, cm_lon_start, cm_lon_stop, lon_span;
-  double cm_lon_first, cm_lon_last;
-  double cadence, data_cadence, coverage, t_eps, phase;
+  double data_cadence, coverage, t_eps, phase;
   double lat, lon, img_lat, img_lon;
-  double tmid_cl, lon_cm;
+  double tmid_cl;
   double img_xc, img_yc, img_xscl, img_yscl, img_radius, img_pa;
   double kscale;
   float pa_rec, dpa;
@@ -252,11 +250,10 @@ int DoIt (void) {
   unsigned int quality;
   int *reject_list;
   int recct, rgn, rgnct, segct, valid;
-  int tmid_cr, cr_start, cr_stop;
-  int cr_first, cr_last;
+  int tmid_cr;
   int col, row, pixct, i, found, n, nr, or;
   int blankvals, no_merid_v, rejects, status;
-  int need_cadence, need_ephem;
+  int need_cadence;
   int badpkey, badqual, badfill, badtime, badpa, blacklist;
   char rec_query[256];
   char module_ident[64], key[64], tbuf[64], ptbuf[64], ctime_str[16];
@@ -265,8 +262,6 @@ int DoIt (void) {
       LOC_GONG_TD, LOC_GONG_CT, LOC_GONG_TC, LOC_GONG_BB, LOC_GONG_ML, LOC_SOHO,
       LOC_SDO} platform = LOC_UNKNOWN;
 
-  int need_ephem_from_time = 0;
-  int need_crcl = 1;
   int check_platform = 0;
   int extrapolate = 1;
   int found_first = 0, found_last = 0;
@@ -348,10 +343,10 @@ int DoIt (void) {
     tmid = 0.5 * (tstrt + tstop);
     segct = drms_record_numsegments (irec);
   } else {
-				/*  only the input data series is named,
-				    get record specifications from arguments  */
-		    /*  get required series info from first record in series  */
-						/*  platform, cadence, phase  */
+			/*  only the input data series is named:
+				get record specifications from arguments  */
+		/*  get required series info from first record in series  */
+					    /*  platform, cadence, phase  */
     snprintf (rec_query, 256, "%s[#^]", inset);
     if (!(ds = drms_open_records (drms_env, rec_query, &status))) {
       fprintf (stderr, "Error: unable to open input data set %s\n", inset);
@@ -429,11 +424,10 @@ int DoIt (void) {
     segct = drms_record_numsegments (irec);
 
     if (strcmp (tmid_str, "Not Specified")) {
-/*  determine start and stop times from length (in units of tstep) and midtime
-				    (which can be CR:CL as well as date_time) */
+	/*  determine start and stop times from length (in units of tstep)
+		       and midtime (which can be CR:CL as well as date_time)  */
        if (sscanf (tmid_str, "%d:%lf", &tmid_cr, &tmid_cl) == 2) {
 			   /*  tmid specified as CR:CL : need ephemeris info  */
-	need_crcl = 0;
 	if (platform == LOC_SDO || platform == LOC_SOHO ||
 	    (platform >= LOC_GONG_MR && platform <= LOC_GONG_ML) ||
 	    platform == LOC_UNKNOWN) {
@@ -473,13 +467,13 @@ int DoIt (void) {
 	drms_close_records (ds, DRMS_FREE_RECORD);
 	return 1;
       }
-			   /*  adjust stop time to reflect sampling symmetry  */
+			  /*  adjust stop time to reflect sampling symmetry  */
       if ((fabs (phase) < 0.001 * t_eps) && length % 2)
 	tstop += tstep;
       if ((fabs (phase - t_eps) < 0.001 * t_eps) && (length % 2 == 0))
 	tstop += tstep;
     } else {
-	        /*  tstart and tstop specified, determine midtime and length  */
+			   /*  tstart and tstop specified, determine length  */
       if (sscanf (tstrt_str, "%d:%lf", &tmid_cr, &tmid_cl) == 2) {
 	if (platform == LOC_SOHO)
 	  tstrt = SOHO_meridian_crossing (tmid_cl, tmid_cr);
@@ -492,7 +486,6 @@ int DoIt (void) {
 	else
 	  tstop = earth_meridian_crossing (tmid_cl, tmid_cr);
       } else tstop = sscan_time (tstop_str);
-      tmid = 0.5 * (tstrt + tstop);
       length = (tstop - tstrt + 1.01 * tstep) / tstep;
     }
     drms_close_records (ds, DRMS_FREE_RECORD);
@@ -510,39 +503,6 @@ int DoIt (void) {
       drms_close_records (ds, DRMS_FREE_RECORD);
       return 0;
     }
-/*
-    if (strcmp (tmid_str, "Not Specified")) {
-      if (!(ds = select_dataset_from_time_interval (inset, tmid_str, length * tstep))){
-	fprintf (stderr, "Error, unable to open dataset from series %s\n",
-	  inset);
-	return 1;
-      }
-      if ((recct = ds->n) < 2) {
-	printf ("<2 records in selected input set\n");
-	drms_close_records (ds, DRMS_FREE_RECORD);
-	return 0;
-      }
-    } else {
-      if (!strcmp (tstrt_str, "Not Specified") ||
-	  !strcmp (tstop_str, "Not Specified")) {
-	fprintf (stderr,
-	    "Error: either a specific data record set must be selected as input\n");
-	fprintf (stderr, "       or (tmid and length) or (tstart and tstop) must be\n");
-	fprintf (stderr, "       specified\n");
-	return 1;
-      }
-      if (!(ds = select_dataset_from_time_range (inset, tstrt_str, tstop_str))) {
-	fprintf (stderr, "Error, unable to open dataset from series %s\n",
-	    inset);
-	return 1;
-      }
-      if ((recct = ds->n) < 2) {
-	printf ("<2 records in selected input set\n");
-	drms_close_records (ds, DRMS_FREE_RECORD);
-	return 0;
-      }
-    }
-*/
   }
 			     /*  end determination of record set from params  */
   if (verbose) {
@@ -553,124 +513,9 @@ int DoIt (void) {
     printf ("         %d data records\n", recct);
   }
 
-  cadence = data_cadence;
-  tobs = drms_getkey_time (ds->records[0], tobs_key, &status);
-  if (fabs (tobs - tstrt) < cadence) {
-    tfirst = tobs;
-    irec = ds->records[0];
-    cm_lon_first = cm_lon_start = drms_getkey_double (irec, clon_key, &status);
-    cr_first = cr_start = drms_getkey_int (irec, crot_key, &status);
-    found_first = 1;
-  } else need_ephem_from_time = 1;
+  /*  At this point, we have an input record set, tstrt, tstop, and tstep,
+  				all that is needed for the checking loop  */
 
-  tobs = drms_getkey_time (ds->records[recct - 1], tobs_key, &status);
-  if (fabs (tobs - tstop) < cadence) {
-    tlast = tobs;
-    irec = ds->records[recct - 1];
-    cm_lon_last = cm_lon_stop = drms_getkey_double (irec, clon_key, &status);
-    cr_last = cr_stop = drms_getkey_int (irec, crot_key, &status);
-    found_last = 1;
-  } else need_ephem_from_time = 1;
-
-  found = 0;
-  for (nr = 0; nr < recct; nr++) {
-    tobs = drms_getkey_time (ds->records[nr], tobs_key, &status);
-    if (fabs (tobs - tmid) < cadence) {
-      irec = ds->records[nr];
-      if (need_crcl) {
-        tmid_cl = drms_getkey_double (irec, clon_key, &status);
-        tmid_cr = drms_getkey_int (irec, crot_key, &status);
-      }
-      found = 1;
-    }
-    if (!found_first && !time_is_invalid (tobs)) {
-      irec = ds->records[nr];
-      cm_lon_first = drms_getkey_double (irec, clon_key, &status);
-      cr_first = drms_getkey_int (irec, crot_key, &status);
-      tfirst = tobs;
-      found_first = 1;
-    }
-  }
-  if (!found_last) {
-    for (nr = recct - 1; nr; nr--) {
-      if (!time_is_invalid (tobs)) {
-	if (tobs < tmid) {
-	  cm_lon_last = tmid_cl;
-	  cr_last = tmid_cr;
-	} else {
-	  irec = ds->records[nr];
-	  cm_lon_last = drms_getkey_double (irec, clon_key, &status);
-	  cr_last = drms_getkey_int (irec, crot_key, &status);
-	}
-	tlast = tobs;
-	found_last = 1;
-	break;
-      }
-    }
-  }
-  if (!found) need_ephem_from_time = 1;
-
-  if (need_ephem_from_time) {
-    double rsun, vr, vn, vw;
-    TIME table_mod_time;
-    if (platform == LOC_SDO) {
-      earth_ephemeris (tstrt, &rsun, &img_lat, &cm_lon_start, &vr, &vn, &vw);
-      cr_start = carrington_rots (tstrt, 1);
-      earth_ephemeris (tmid, &rsun, &img_lat, &tmid_cl, &vr, &vn, &vw);
-      tmid_cr = carrington_rots (tmid, 1);
-      earth_ephemeris (tstop, &rsun, &img_lat, &cm_lon_stop, &vr, &vn, &vw);
-      cr_stop = carrington_rots (tstop, 1);
-    } else if (platform == LOC_SOHO) {
-      soho_ephemeris (tstrt, &rsun, &img_lat, &cm_lon_start, &vr, &vn, &vw,
-	  &table_mod_time);
-      cr_start = carrington_rots (tstrt, 1);
-      soho_ephemeris (tmid, &rsun, &img_lat, &tmid_cl, &vr, &vn, &vw,
-	  &table_mod_time);
-      tmid_cr = carrington_rots (tmid, 1);
-      soho_ephemeris (tstop, &rsun, &img_lat, &cm_lon_stop, &vr, &vn, &vw,
-	  &table_mod_time);
-      cr_stop = carrington_rots (tstop, 1);
-    } else {
-printf ("need ephem from time\n");
-      if (!found_first || !found_last) {
-        fprintf (stderr, "Error: Carrington ephemeris from time not supported\n");
-        fprintf (stderr, "         and no valid times in data for estimation!\n");
-	return 1;
-      }
-		/*  estimate midpoint ephemeris by linear interpolation
-					  of closest observations to midtime  */
-  /*  This code has not been well tested in crossover of Carrington rotation  */
-    	   /*  assume at most one rotation between first and last estimators  */
-      fprintf (stderr, "Warning: Carrington ephemeris from time not supported\n");
-      if (!found) {
-	tmid_cr = cr_first;
-	if (cr_last != cr_first) cm_lon_last -= 360.0;
-	tmid_cl = cm_lon_first +
-            (cm_lon_last - cm_lon_first) * (tmid - tfirst) / (tlast - tfirst);
-    	      /*  assume at most one rotation between first and last estimators  */
-	if (tmid_cl < 0.0) {
-	  tmid_cr++;
-	  tmid_cl += 360.0;
-	}
-      }
-      fprintf (stderr, "         estimating midpoint as %d:%08.4f\n",
-	  tmid_cr, tmid_cl);
-	/*  long extrapolations, and lazy correction for change of rotation
-					 number,but only needed for lon_span  */
-      cr_start = cr_first;
-      cm_lon_start = cm_lon_first +
-          (cm_lon_last - cm_lon_first) * (tstrt - tfirst) / (tlast - tfirst);
-      cr_stop = cr_last;
-      cm_lon_stop = cm_lon_first +
-          (cm_lon_last - cm_lon_first) * (tstop - tfirst) / (tlast - tfirst);
-      if (cm_lon_stop > cm_lon_start) cr_stop++;
-    }
-  }
-  lon_span = cm_lon_start - cm_lon_stop;
-  while (cr_start < cr_stop) {
-    cr_start++;
-    lon_span += 360.0;
-  }
 		  /*  support special hack of reading of rejection list file  */
   rejects = 0;
   if (strcmp (rejectfile, "Not Specified")) {
@@ -881,5 +726,8 @@ printf ("need ephem from time\n");
  *  v 0.8 frozen 2011.02.28
  *  12.05.23	added pangle selection options as for datavg
  *  v 0.9 frozen 2012.08.03
+ *  13.06.10	general cleanup of unnecessary and sometimes interfering
+ *		code for determining ephemeris from time
+ *  v 1.0 frozen 2013.11.21
  *
  */
