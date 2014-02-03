@@ -31,19 +31,20 @@ use constant kTempTable => "sumsstat";
 
 my($err);
 
-my($dbname);    # name of the db instance to connect to
-my($dbhost);    # name of the db host on which the db instance resides
-my($dbport);    # port on $dbhost through which connections are made
-my($dbuser);    # database user name (to connect with)
-my($typequery); # type of query to perform (aggregate bytes over series, groups, or 
-                # don't aggregate)
-my($order);     # series - order by series, then group, or group, order by group, then series
-my($metric);    # while column of data to produce (delete pending short, delete pending medium, delete pending long,
-                # archive pending)
-my($delim);     # separator between output columns (fixed-width columns if not supplied)
+my($dbname);      # name of the db instance to connect to
+my($dbhost);      # name of the db host on which the db instance resides
+my($dbport);      # port on $dbhost through which connections are made
+my($dbuser);      # database user name (to connect with)
+my($typequery);   # type of query to perform (aggregate bytes over series, groups, or
+                  # don't aggregate)
+my($order);       # series - order by series, then group, or group, order by group, then series
+my($metric);      # while column of data to produce (delete pending short, delete pending medium, delete pending long,
+                  # archive pending)
+my($delim);       # separator between output columns (fixed-width columns if not supplied)
+my(@forceGroup);  # produce results for these groups only (a comma-separated list of groups)
 
-my($dsn);       # database connection arguments
-my($dbh);       # database handle
+my($dsn);         # database connection arguments
+my($dbh);         # database handle
 my($stmnt);
 my($row);
 my($rowb);
@@ -164,6 +165,12 @@ if ($#ARGV >= 7)
    $delim = substr($ARGV[7], 0, 1);
 }
 
+@forceGroup = ();
+if ($#ARGV >= 8)
+{
+    @forceGroup = split(qr(,), $ARGV[8]);
+}
+
 $err = 0; 
 
 # connect to the database
@@ -177,13 +184,39 @@ $dbh = DBI->connect($dsn, $dbuser, ''); # will need to put pass in .pg_pass
 
 if (defined($dbh))
 {
+    my(@allGroups);
+    
    print "success!\n";
 
    # Loop over storage groups
-   $stmnt = "SELECT group_id FROM sum_partn_alloc GROUP BY group_id ORDER BY group_id";
-   $rrows = $dbh->selectall_arrayref($stmnt, undef);
-   $err = !(NoErr($rrows, \$dbh, $stmnt));
-
+    
+    # If the forceGroup option is specified, then generate results for only the tape groups listed in @forceGroup. Otherwise
+    # query the db to obtain a list of all groups. It is possible that the caller will specify a group that doesn't exist.
+    if (@forceGroup > 0)
+    {
+        push(@allGroups, @forceGroup);
+    }
+    else
+    {
+        # db query to fetch a list of all groups
+        $stmnt = "SELECT group_id FROM sum_partn_alloc GROUP BY group_id ORDER BY group_id";
+        $rrows = $dbh->selectall_arrayref($stmnt, undef);
+        $err = !(NoErr($rrows, \$dbh, $stmnt));
+        
+        if (!$err)
+        {
+            foreach $row (@$rrows)
+            {
+                push(@allGroups, $row->[0]);
+            }
+        }
+        else
+        {
+            print "failure!!!!\n";
+            $err = 1;
+        }
+    }
+    
    if (!$err)
    {
       my($timenow) = time();
@@ -210,10 +243,8 @@ if (defined($dbh))
       # $rrows is a reference to an array; the array is an array of refereces to an array, so $row
       # is a reference to an array that has just one element (since the SELECT statement has just
       # one column). This element is the namespace name.
-      foreach $row (@$rrows)
+      foreach my $group (@allGroups)
       {
-         $group = $row->[0];
-
          if (kDEBUG)
          {
             $group = 1;
