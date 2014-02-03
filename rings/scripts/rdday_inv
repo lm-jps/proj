@@ -228,15 +228,12 @@ set KRNL = $KSER"[cm_opal78]"
 
 # determine root location of scratch and temp directory files
 set TMPFSLOC = ~rick/hmi/tmpfs
-if (-r $TMPFSLOC) then
-  set TMPFS = `egrep ^/tmp $TMPFSLOC`
-  set TEMP = $TMPFS/`whoami`
-  if (!(-d $TEMP)) mkdir $TEMP
-  if (!(-w $TEMP)) set TEMP = /tmp
-  set SCRFS = `egrep ^/scr $TMPFSLOC`
-  set SCRT = $SCRFS/`whoami`
-  if (!(-d $SCRT)) mkdir $SCRT
-  if (!(-w $SCRT)) set SCRT = /tmp
+set TMPARSE = ~rick/bin/tmplocs
+set ALTDIR = ~rick/hmi
+if (-x $TMPARSE) then
+  set XXLOCS = (`$TMPARSE $TMPFSLOC $ALTDIR`)
+  set TEMP = $XXLOCS[1]
+  set SCRT = $XXLOCS[2]
 else
   set TEMP = /tmp
   set SCRT = /tmp
@@ -269,6 +266,17 @@ if (!(-d $QRES)) mkdir $QRES
 set NOW = `date +%Y.%m.%d_%T`
 set STARTED = $NOW
 onintr INTERRUPT
+
+# check gatekeeper for permission to proceed
+set TURN = ~rick/hmi/pikewatch
+set PIKE = ~rick/hmi/pike
+if ($TEST) then
+  set RES = (`$TURN $PIKE -test`)
+else
+  set RES = (`$TURN $PIKE`)
+endif
+@ NOGO = $RES[1]
+if ($NOGO) goto TURNOUT
 
 limit vm ${PLIM}M
 
@@ -474,6 +482,15 @@ echo "    tracked data in $TSER""[$CROT][$CLON]" >> $MMSG
 
 SKIP_TRACK:
 
+# check gatekeeper for permission to proceed
+if ($TEST) then
+  set RES = (`$TURN $PIKE -test`)
+else
+  set RES = (`$TURN $PIKE`)
+endif
+@ NOGO = $RES[1]
+if ($NOGO) goto TURNOUT
+
 @ BEGUN = `date +%s`
 @ RGNCT = `show_info -cq ds= $TSER"[$CROT][$CLON]"`
 @ EXIST = `show_info -bcq ds= $PSER"[$CROT][$CLON]"`
@@ -505,6 +522,15 @@ else
 endif
 
 SKIP_PSPEC:
+
+# check gatekeeper for permission to proceed
+if ($TEST) then
+  set RES = (`$TURN $PIKE -test`)
+else
+  set RES = (`$TURN $PIKE`)
+endif
+@ NOGO = $RES[1]
+if ($NOGO) goto TURNOUT
 
 @ BEGUN = `date +%s`
 @ RGNCT = `show_info -cq ds= $PSER"[$CROT][$CLON]"`
@@ -541,6 +567,15 @@ endif
 SKIP_FITSF:
 
 if ($SYSE == 5) goto SKIP_INVRT
+
+# check gatekeeper for permission to proceed
+if ($TEST) then
+  set RES = (`$TURN $PIKE -test`)
+else
+  set RES = (`$TURN $PIKE`)
+endif
+@ NOGO = $RES[1]
+if ($NOGO) goto TURNOUT
 
 @ BEGUN = `date +%s`
 @ RGNCT = `show_info -cq ds= $FSER"[$CROT][$CLON]"`
@@ -584,6 +619,15 @@ endif
 # if ($SYSE == 5) goto CLEANUP
 
 SKIP_INVRT:
+
+# check gatekeeper for permission to proceed
+if ($TEST) then
+  set RES = (`$TURN $PIKE -test`)
+else
+  set RES = (`$TURN $PIKE`)
+endif
+@ NOGO = $RES[1]
+if ($NOGO) goto TURNOUT
 
 @ RGNCT = `show_info -cq ds= $PSER"[$CROT][$CLON]" | awk '{print $1}'`
 # prepare scripts for batch processing of fitting
@@ -753,6 +797,31 @@ else
 endif
 goto CLEANUP
 
+TURNOUT:
+set NOW = `date +%Y.%m.%d_%T`
+set SUBJ = "HMI ring-diagram $TW processing for $CARTIM aborted"
+set TYPE = misc
+echo "-> $NOW Script $PROG aborted! <-" >> $MMSG
+echo "$CARTIM $SYSE  $STARTED  aborted" >> $TIMES
+echo "$CARTIM	$TTIME	$PTIME	$FTIME	$ITIME	$CTIME	aborted" >> $DTIME
+if ($NOGO < 0) then
+  echo "   watcher script $TURN called with invalid argument" >> $MMSG
+  echo "   or file $PIKE has invalid format" >> $MMSG
+else
+  @ HRCT = $NOGO / 3600
+  @ NOGO -= $HRCT * 3600
+  @ MNCT = $NOGO / 60
+  @ NOGO -= $MNCT * 60
+  echo -n "   file $PIKE contains NoGo signal for $HRCT" >> $MMSG
+  echo `printf :%02d:%02d $MNCT $NOGO` >> $MMSG
+  if ($#RES > 1) then
+    echo "   Reason: $RES[2-]" >> $MMSG
+  endif
+endif
+set RGNCT = '?'
+@ STRTSTOP = 0
+goto CLEANUP
+
 INTERRUPT:
 set SUBJ = "HMI ring-diagram $TW processing for $CARTIM interrupted"
 set TYPE = misc
@@ -777,7 +846,7 @@ else
   echo -n "# " >> $TIMES
 endif
 echo "$CARTIM $TILES  $STARTED  $HREL`printf :%02d $MNEL`" >> $TIMES
-echo "$CARTIM\t""$TTIME\t$PTIME\t$FTIME\t$CTIME\t$ITIME" >> $DTIME
+echo "$CARTIM	$TTIME	$PTIME	$FTIME	$CTIME	$ITIME" >> $DTIME
 echo "$NOW finish $CARTIM $SYSE-deg ($RGNCT regions)" >> $MMSG
 if ($STRTSTOP) echo "  End-to-end latency = $HREL`printf :%02d $MNEL`" >> $MMSG
 echo $SUBJ > $MSGS/subj.$PROCID
