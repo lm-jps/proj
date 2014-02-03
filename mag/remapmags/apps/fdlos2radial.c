@@ -98,8 +98,10 @@ int DoIt(void)
         cdelt = drms_getkey_float(inRec, "CDELT1", &status);  // in arcsec, assumimg dx=dy
         asd = asin(rSun_ref/dSun);
         rSun = asin(rSun_ref / dSun) * RAD2ARCSEC / cdelt;
-        xCenter = drms_getkey_float(inRec, "CRPIX1", &status);
-        yCenter = drms_getkey_float(inRec, "CRPIX2", &status);
+        xCenter = drms_getkey_float(inRec, "CRPIX1", &status) - 1.0;
+                // CRPIX1 starts 1.0 but *not* 0.0. C-code starts 0.0.
+        yCenter = drms_getkey_float(inRec, "CRPIX2", &status) - 1.0;
+                // CRPIX2 starts 1.0 but *not* 0.0. C-code starts 0.0.
         bRadial = (float *) malloc(xDim * yDim * sizeof(float));
 
         inSeg = drms_segment_lookupnum(inRec, 0);
@@ -228,8 +230,8 @@ $Author: yliu $
 */
 
 /* $Log: fdlos2radial.c,v $
- * Revision 1.3  2013/07/08 18:09:01  yliu
- * corrected a bug
+ * Revision 1.4  2014/02/03 23:55:57  yliu
+ * corrected a bug that mis-interprets CRPIX1-2
  *
 Purpose: Convert los mags to radial mags by assuming that the field is purely radial.
 % vectortransform in='su_yang.hmi_vector' out='su_yang.hmi_maghelio'
