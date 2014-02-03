@@ -96,15 +96,12 @@ set HOSTID = `basename $HOSTNAME .Stanford.EDU`
 set PROCID = $HOSTID\_$$
 set NOTE = ~rick/rings/notify
 set TMPFSLOC = ~rick/hmi/tmpfs
-if (-r $TMPFSLOC) then
-  set TMPFS = `egrep ^/tmp $TMPFSLOC`
-  set TEMP = $TMPFS/`whoami`
-  if (!(-d $TEMP)) mkdir $TEMP
-  if (!(-w $TEMP)) set TEMP = /tmp
-  set SCRFS = `egrep ^/scr $TMPFSLOC`
-  set SCRT = $SCRFS/`whoami`
-  if (!(-d $SCRT)) mkdir $SCRT
-  if (!(-w $SCRT)) set SCRT = /tmp
+set TMPARSE = ~rick/bin/tmplocs
+set ALTDIR = ~rick/hmi
+if (-x $TMPARSE) then
+  set XXLOCS = (`$TMPARSE $TMPFSLOC $ALTDIR`)
+  set TEMP = $XXLOCS[1]
+  set SCRT = $XXLOCS[2]
 else
   set TEMP = /tmp
   set SCRT = /tmp
