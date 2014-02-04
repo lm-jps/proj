@@ -9,7 +9,7 @@ d		:= $(dir)
 EXTRADEPS_$(d)		:= $(addprefix $(d)/, )
 
 # NOTE: Add the base of the module's filename below (next to mymod)
-MODEXE_$(d)	:= $(addprefix $(d)/, dailysynframe dailysynframe_nrt hmisynoptic mdidailysynframe mdisynop)
+MODEXE_$(d)	:= $(addprefix $(d)/, dailysynframe dailysynframe_nrt hmisynoptic mdidailysynframe mdisynop brblossynoptic)
 MODEXE		:= $(MODEXE) $(MODEXE_$(d))
 
 MODEXE_SOCK_$(d):= $(MODEXE_$(d):%=%_sock)
