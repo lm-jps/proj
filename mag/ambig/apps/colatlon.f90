@@ -37,7 +37,7 @@ subroutine colatlon()
             xx=(float(i)*dxi-xcen)/radius
 
 ! --> Check this pixel is on the disk.
-            if(xx*xx+y2.lt.0.999) then
+            if(xx*xx+y2.lt.1.) then
                t(i,j)=asin(xx/sqrt(1.-y2))
                sint(i,j)=xx/sqrt(1.-y2)
                cost(i,j)=sqrt(1.-sint(i,j)**2)
