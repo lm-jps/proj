@@ -187,7 +187,11 @@ int DoIt(void)
   long long calVer;
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
-  sprintf(historyofthemodule,"Carrington-Time conversion corrected; o2helio.c bug corrected -- July 2013");
+    // set cvs commit version into keyword HEADER
+  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.9 2014/02/06 23:08:09 yliu Exp $");
+  cvsinfo = (char *)malloc(2048 * sizeof(char));
+//  char cvsinfo[2048];
+  sprintf(historyofthemodule,"Carrington-Time conversion corrected; o2helio.c bug corrected; CRPIX, CRVAL corrected -- Jan. 2014");
 
   struct {
       int recno;
@@ -845,6 +849,8 @@ for (ds = 0; ds < nsynop; ds++)
 //for image coordinate mapping keywords
 
         drms_setkey_string(outRec, "HISTORY", historyofthemodule);
+        drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
+        status = drms_setkey_string(outRec, "CODEVER", cvsinfo);
         drms_setkey_string(outRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(outRec, "CTYPE2", "CRLT-CEA");
 //        i=len[0]/2+0.5;
@@ -874,8 +880,8 @@ for (ds = 0; ds < nsynop; ds++)
 //HMI observables keywords
         sprint_at(tstr, trot - delta_T); // time at 180 degree longitude
 //        drms_setkey_string(outRec, "T_REC", tstr);
-        drms_setkey_float(outRec, "CADENCE", 27.2753*24.*60.*60.);
-        drms_setkey_float(outRec, "T_REC_step", 27.2753*24.*60.*60.);
+//        drms_setkey_float(outRec, "CADENCE", 27.2753*24.*60.*60.);
+//        drms_setkey_float(outRec, "T_REC_step", 27.2753*24.*60.*60.);
 
 // image statistics
 
@@ -960,6 +966,8 @@ for (ds = 0; ds < nsynop; ds++)
 //for image coordinate mapping keywords
         
         drms_setkey_string(smallRec, "HISTORY", historyofthemodule);
+        drms_setkey_string(smallRec, "BLD_VERS", jsoc_version);
+        status = drms_setkey_string(smallRec, "CODEVER", cvsinfo);
         drms_setkey_string(smallRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(smallRec, "CTYPE2", "CRLT-CEA");
 //        i=xout/2+0.5;
@@ -986,8 +994,8 @@ for (ds = 0; ds < nsynop; ds++)
 //HMI observables keywords
         sprint_at(tstr, trot - delta_T);
 //        drms_setkey_string(smallRec, "T_REC", tstr);
-        drms_setkey_float(smallRec, "CADENCE", 27.2753*24.*60.*60.);
-        drms_setkey_float(smallRec, "T_REC_step", 27.2753*24.*60.*60.);
+//        drms_setkey_float(smallRec, "CADENCE", 27.2753*24.*60.*60.);
+//        drms_setkey_float(smallRec, "T_REC_step", 27.2753*24.*60.*60.);
 
 // image statistics
 
@@ -1688,7 +1696,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.8 2014/01/14 17:33:16 yliu Exp $
+$Id: hmisynoptic.c,v 1.9 2014/02/06 23:08:09 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: yliu $
 */
@@ -1701,8 +1709,8 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
- * Revision 1.8  2014/01/14 17:33:16  yliu
- * Correcting computations of Keywords CRPIX1, CRPIX2, CRVAL1, and CRVAL2
+ * Revision 1.9  2014/02/06 23:08:09  yliu
+ * Add several keywords, set module version.
  *
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.
