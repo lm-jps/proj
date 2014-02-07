@@ -188,10 +188,10 @@ int DoIt(void)
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
     // set cvs commit version into keyword HEADER
-  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.9 2014/02/06 23:08:09 yliu Exp $");
+  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.10 2014/02/07 00:53:45 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
 //  char cvsinfo[2048];
-  sprintf(historyofthemodule,"Carrington-Time conversion corrected; o2helio.c bug corrected; CRPIX, CRVAL corrected -- Jan. 2014");
+  sprintf(historyofthemodule,"Module version added -- Feb 2014; Carrington-Time conversion corrected; o2helio.c bug corrected; CRPIX, CRVAL corrected -- Jan. 2014");
 
   struct {
       int recno;
@@ -1696,7 +1696,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.9 2014/02/06 23:08:09 yliu Exp $
+$Id: hmisynoptic.c,v 1.10 2014/02/07 00:53:45 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: yliu $
 */
@@ -1709,8 +1709,8 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
- * Revision 1.9  2014/02/06 23:08:09  yliu
- * Add several keywords, set module version.
+ * Revision 1.10  2014/02/07 00:53:45  yliu
+ * Correcting computations of Keywords CRPIX1, CRPIX2, CRVAL1, and CRVAL2
  *
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.
