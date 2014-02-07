@@ -449,6 +449,7 @@ sub UpdateTree
    my($rv) = 0;
    my(@statchk);
    my($rsp);
+    my(@splitRes);
 
    print "####### Downloading repository changes ######\n";
 
@@ -456,10 +457,25 @@ sub UpdateTree
    $cmd = "$Bin/jsoc_sync.pl -l" . kUpdateLog; # use the jsoc_sync.pl relative to this script
    print "## Updating source files in $cvstree (calling '$cmd').\n";
    $rsp = qx($cmd 2>&1);
-   print "## $rsp";
+    
+    if ($? >> 8)
+    {
+        # Error calling jsoc_sync.pl.
+        print STDERR "## Failure calling jsoc_sync.pl\n";
+    }
+    
+    @splitRes = split(qr/\n/, $rsp);
+    $rsp = "";
+    foreach my $line (@splitRes)
+    {
+        $rsp = $rsp . "## $line\n";
+    }
+    
+   print "$rsp";
    print "##\n";
 
-   if (open(UDL, "<" . kUpdateLog))
+    # Log is in parent directory.
+   if (open(UDL, "<" . "../" . kUpdateLog))
    {
       my(@content) = <UDL>;
       my(@conflicts) = grep({ ($_ =~ /^\s*C/) ? $_ : () } @content);
@@ -511,7 +527,7 @@ sub UpdateTree
    else
    {
       # Couldn't open update log - bail.
-      print "## Could not open update log file " . kUpdateLog . ".\n";
+      print "## Could not open update log file ../" . kUpdateLog . ".\n";
       $rv = 1;
    }
 
