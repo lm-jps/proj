@@ -1,4 +1,4 @@
- /* static char rcsid[] = "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/mdisynop.c,v 1.1 2013/07/08 17:36:04 yliu Exp $"; */
+ /* static char rcsid[] = "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/mdisynop.c,v 1.2 2014/02/10 21:25:07 yliu Exp $"; */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,8 +10,6 @@
 #include "astro.h" 
 #include "drms_dsdsapi.h"
 #include "soi_ephem.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
-//#include "/home0/yliu/cvs/JSOC/proj/libs/astro/heliographic_coords.c"
 #include "/home/wso/src/libastro.d/solephem.c"
 
 #define C1      0.0757644 /* days/degree at 27.27527 */
@@ -1565,14 +1563,17 @@ double earth_B(TIME t)
 
 */
 /*
-$Id: mdisynop.c,v 1.1 2013/07/08 17:36:04 yliu Exp $
+$Id: mdisynop.c,v 1.2 2014/02/10 21:25:07 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/mdisynop.c,v $
 $Author: yliu $
 */
 /* $Log: mdisynop.c,v $
- * Revision 1.1  2013/07/08 17:36:04  yliu
- * new module for producing synoptic charts for MDI line-of-sight mags
+ * Revision 1.2  2014/02/10 21:25:07  yliu
+ * Remove several include-lines Feb. 10, 2014
  *
+/* Revision 1.1  2013/07/08 17:36:04  yliu
+/* new module for producing synoptic charts for MDI line-of-sight mags
+/*
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.
  *

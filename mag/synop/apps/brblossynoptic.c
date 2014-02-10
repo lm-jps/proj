@@ -11,8 +11,6 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
-//#include "/home0/yliu/cvs/JSOC/proj/libs/astro/heliographic_coords.c"
 #include "/home/wso/src/libastro.d/solephem.c"
 
 #define C1      0.0757644 /* days/degree at 27.27527 */
@@ -1845,7 +1843,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: brblossynoptic.c,v 1.1 2014/02/04 00:46:58 yliu Exp $
+$Id: brblossynoptic.c,v 1.2 2014/02/10 21:24:34 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/brblossynoptic.c,v $
 $Author: yliu $
 */
@@ -1858,6 +1856,9 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: brblossynoptic.c,v $
+ * Revision 1.2  2014/02/10 21:24:34  yliu
+ * Remove several include-lines Feb. 10, 2014
+ *
  * Revision 1.1  2014/02/04 00:46:58  yliu
  * New module to produce both Br and Blos synoptic charts
  *

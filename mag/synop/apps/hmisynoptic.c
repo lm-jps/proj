@@ -11,8 +11,6 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
-//#include "/home0/yliu/cvs/JSOC/proj/libs/astro/heliographic_coords.c"
 #include "/home/wso/src/libastro.d/solephem.c"
 
 #define C1      0.0757644 /* days/degree at 27.27527 */
@@ -188,7 +186,7 @@ int DoIt(void)
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
     // set cvs commit version into keyword HEADER
-  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.10 2014/02/07 00:53:45 yliu Exp $");
+  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.11 2014/02/10 21:24:11 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
 //  char cvsinfo[2048];
   sprintf(historyofthemodule,"Module version added -- Feb 2014; Carrington-Time conversion corrected; o2helio.c bug corrected; CRPIX, CRVAL corrected -- Jan. 2014");
@@ -1696,7 +1694,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.10 2014/02/07 00:53:45 yliu Exp $
+$Id: hmisynoptic.c,v 1.11 2014/02/10 21:24:11 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: yliu $
 */
@@ -1709,6 +1707,9 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
+ * Revision 1.11  2014/02/10 21:24:11  yliu
+ * Remove several include-lines Feb. 10, 2014
+ *
  * Revision 1.10  2014/02/07 00:53:45  yliu
  * Correcting computations of Keywords CRPIX1, CRPIX2, CRVAL1, and CRVAL2
  *

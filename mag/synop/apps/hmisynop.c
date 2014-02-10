@@ -13,12 +13,7 @@
 #include "drms_dsdsapi.h"
 #include "fstats.h"
 #include "heliographic_coords.c"
-
-//#include "/home0/yliu/cvs/JSOC/proj/rings/apps/soho_ephem.c"
-//#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/sun_ephemeris_update.c"
-
-// #define MIN(a,b) (((a)<(b)) ? (a) : (b))
-// #define MAX(a,b) (((a)>(b)) ? (a) : (b))
+#include "/home/wso/src/libastro.d/solephem.c"
 
 /* cmd-line parameters */
 #define kRecSetIn       "in"
@@ -1395,14 +1390,17 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynop.c,v 1.2 2011/11/20 01:27:32 xudong Exp $
+$Id: hmisynop.c,v 1.3 2014/02/10 21:24:47 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynop.c,v $
-$Author: xudong $
+$Author: yliu $
 */
 /* $Log: hmisynop.c,v $
- * Revision 1.2  2011/11/20 01:27:32  xudong
- * updated fstats.h
+ * Revision 1.3  2014/02/10 21:24:47  yliu
+ * Remove several include-lines Feb. 10, 2014
  *
+/* Revision 1.2  2011/11/20 01:27:32  xudong
+/* updated fstats.h
+/*
 /* Revision 1.1  2011/04/15 01:44:09  xudong
 /* for yang
 /*

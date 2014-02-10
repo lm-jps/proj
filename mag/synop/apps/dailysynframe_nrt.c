@@ -9,14 +9,12 @@ synframe sdate='2010.08.12' stime='16:00:00' in='su_yang.fd_M12m_remap_los' out=
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
-
-#include <mkl_blas.h>^M
-#include <mkl_service.h>^M
-#include <mkl_lapack.h>^M
-#include <mkl_vml_functions.h>^M
-#include <omp.h>^M
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fresize.c"
+#include <mkl_blas.h>
+#include <mkl_service.h>
+#include <mkl_lapack.h>
+#include <mkl_vml_functions.h>
+#include <omp.h>
+#include "fresize.c"
 
 char *module_name = "dailysynframe_nrt";
 #define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status = %d \n", msg, status); return(status);}
