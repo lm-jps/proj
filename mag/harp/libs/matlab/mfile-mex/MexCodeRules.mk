@@ -49,9 +49,10 @@ COMPILE.cmex = $(CMEX) -c $(CMEXFLAGS) $(CMEXPPFLAGS)
 %.$(MEXEXT): %.c Doc/%_docstring.h
 	$(LINK.cmex) $(OUTPUT_OPTION) $<
 
-$(OUTDIR)/$(CSDIR)/%.$(MEXEXT): %.$(MEXEXT)
-	@ echo I cannot believe this kind of works!
-
+# For some reason, make needs a recipe in this rule. I used to have an echo command here. Now I have whitespace and a semicolon, which does nothing.
+# But this is necessary to get this working - I have no idea why. If you don't have a recipe, then the dependency part is ignored...for some
+# reason.
+$(OUTDIR)/$(CSDIR)/%.$(MEXEXT): %.$(MEXEXT) ;
 # end this works
 
 # This doesn't work
