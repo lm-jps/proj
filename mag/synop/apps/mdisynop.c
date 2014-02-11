@@ -1,4 +1,4 @@
- /* static char rcsid[] = "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/mdisynop.c,v 1.2 2014/02/10 21:25:07 yliu Exp $"; */
+ /* static char rcsid[] = "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/mdisynop.c,v 1.3 2014/02/11 00:25:56 arta Exp $"; */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +11,7 @@
 #include "drms_dsdsapi.h"
 #include "soi_ephem.h"
 #include "/home/wso/src/libastro.d/solephem.c"
+#include "fstats.h"
 
 #define C1      0.0757644 /* days/degree at 27.27527 */
 #define C2      92353.9357 /* day of 1853:11:09_22h:27m:24s */
@@ -1563,14 +1564,17 @@ double earth_B(TIME t)
 
 */
 /*
-$Id: mdisynop.c,v 1.2 2014/02/10 21:25:07 yliu Exp $
+$Id: mdisynop.c,v 1.3 2014/02/11 00:25:56 arta Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/mdisynop.c,v $
-$Author: yliu $
+$Author: arta $
 */
 /* $Log: mdisynop.c,v $
- * Revision 1.2  2014/02/10 21:25:07  yliu
- * Remove several include-lines Feb. 10, 2014
+ * Revision 1.3  2014/02/11 00:25:56  arta
+ * Fix use of the stats library.
  *
+/* Revision 1.2  2014/02/10 21:25:07  yliu
+/* Remove several include-lines Feb. 10, 2014
+/*
 /* Revision 1.1  2013/07/08 17:36:04  yliu
 /* new module for producing synoptic charts for MDI line-of-sight mags
 /*

@@ -12,7 +12,7 @@
 #include "astro.h" 
 #include "drms_dsdsapi.h"
 #include "/home/wso/src/libastro.d/solephem.c"
-#include "fstats.c"
+#include "fstats.h"
 
 #define C1      0.0757644 /* days/degree at 27.27527 */
 #define C2      92353.9357 /* day of 1853:11:09_22h:27m:24s */
@@ -187,7 +187,7 @@ int DoIt(void)
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
     // set cvs commit version into keyword HEADER
-  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.12 2014/02/10 23:27:56 yliu Exp $");
+  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.13 2014/02/11 00:25:56 arta Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
 //  char cvsinfo[2048];
   sprintf(historyofthemodule,"Module version added -- Feb 2014; Carrington-Time conversion corrected; o2helio.c bug corrected; CRPIX, CRVAL corrected -- Jan. 2014");
@@ -1695,9 +1695,9 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.12 2014/02/10 23:27:56 yliu Exp $
+$Id: hmisynoptic.c,v 1.13 2014/02/11 00:25:56 arta Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
-$Author: yliu $
+$Author: arta $
 */
 /* hmisynoptic.c is a version from hmisynop.c that produces
  * a lower resolution map using Jesper's code fresize.c.
@@ -1708,6 +1708,9 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
+ * Revision 1.13  2014/02/11 00:25:56  arta
+ * Fix use of the stats library.
+ *
  * Revision 1.12  2014/02/10 23:27:56  yliu
  * Remove several include-lines Feb. 10, 2014
  *

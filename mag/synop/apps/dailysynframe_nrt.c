@@ -15,6 +15,7 @@ synframe sdate='2010.08.12' stime='16:00:00' in='su_yang.fd_M12m_remap_los' out=
 #include <mkl_vml_functions.h>
 #include <omp.h>
 #include "fresize.c"
+#include "fstats.h"
 
 char *module_name = "dailysynframe_nrt";
 #define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status = %d \n", msg, status); return(status);}

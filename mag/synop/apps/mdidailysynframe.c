@@ -9,7 +9,7 @@ mdidailysynframe in='su_yang.mdi_Blmap[1997.05.01_12:00:00_TAI/24h]' out='su_yan
 #include <stdlib.h>
 #include <time.h>
 #include "jsoc_main.h"
-#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
+#include "fstats.h"
 
 char *module_name = "mdidailysynframe";
 
