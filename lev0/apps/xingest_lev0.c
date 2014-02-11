@@ -88,17 +88,12 @@
 //#define TLMSERIESNAMEAIA "aia.tlm_60d"
 
 //When change to these data series below to save real data.
-#define TLMSERIESNAMEHMI "hmi.tlm"
-#define LEV0SERIESNAMEHMI "hmi.lev0a"
+//#define TLMSERIESNAMEHMI "hmi.tlm"
+#define TLMSERIESNAMEHMI "su_production.tlm"
+//#define LEV0SERIESNAMEHMI "hmi.lev0a"
+#define LEV0SERIESNAMEHMI "su_production.lev0a"
 #define LEV0SERIESNAMEAIA "aia.lev0"
 #define TLMSERIESNAMEAIA "aia.tlm"
-
-//for xingest_lev0 testing:
-#define TLMSERIESNAMEHMI "su_production.tlm_test"
-#define LEV0SERIESNAMEHMI "su_production.lev0a"
-#define LEV0SERIESNAMEAIA "su_production.tlm_test_aia"
-#define TLMSERIESNAMEAIA "su_production.lev0_aia"
-
 
 //#define LEV0SERIESNAMEAIA "aia.lev0d"
 //#define TLMSERIESNAMEAIA "aia.tlmd"
@@ -126,8 +121,8 @@
 #define TESTVALUE 0xc0b		//first value in test pattern packet
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
 #define NOTSPECIFIED "***NOTSPECIFIED***"
-#define ENVFILE "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
-#define ENVFILE_GND "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
+#define ENVFILE "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
+#define ENVFILE_GND "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
 
 extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int *Fsn);
 extern int write_hk_to_drms();
@@ -206,6 +201,7 @@ int abortflg = 0;
 int sigalrmflg = 0;             // set on signal so prog will know 
 int ignoresigalrmflg = 0;       // set after a close_image()
 int firstfound = 0;		// set if see any file after startup
+int rexmitmode = 0;		// set if this process is doing /rexmit dir
 int ALRMSEC = 60;               // must get 2 in a row for no image timeout
 int sleep_interval = 2;		// #of sec to sleep after do_ingest() calls
 char logname[128];
@@ -382,7 +378,7 @@ void do_quallev0(DRMS_Record_t *rs, IMG *img, int fsn)
   char *hwltnset, *cdark;
   char *hseqerr, *aistate;
   char wave_str[16];
-  int status, hsqfgsn, asqfsn;
+  int status, hsqfgsn, asqfsn, hgp1rgst;
   float percentd;
   uint32_t missvals, datav;
   uint32_t hcf1encd, hcf2encd, hps1encd, hps2encd, hps3encd; 
@@ -471,6 +467,12 @@ if(!hmiaiaflg) {		//HMI specific qual bits
   hwl4pos = drms_getkey_int(rs, "HWL4POS", &status);
   if(!((hwl4pos == hwt4encd) || (hwl4pos == (hwt4encd+1) % 240)))
     quallev0 = quallev0 | Q_HWT4ENCD;
+  //New 14Aug2013 
+  hgp1rgst = drms_getkey_int(rs, "HGP1RGST", &status);
+  if(hgp1rgst != DRMS_MISSING_INT) {
+    hgp1rgst = (hgp1rgst << 28) & 0x30000000;
+    quallev0 = quallev0 | hgp1rgst;
+  }
 }
 else {				//AIA specific qual bits
   asqfsn = drms_getkey_int(rs, "ASQFSN", &status);
@@ -1529,7 +1531,7 @@ void do_ingest()
         printf("***Fatal error. Too many (%d) files in %s\n", MAXFILES, tlmdir);
         abortit(3);
       }
-      cntsleeps = 0;		//we saw a file
+      if(!strstr(dp->d_name, ".dsf")) cntsleeps = 0;	//we saw a file
     }
   }
   closedir(dfd);
@@ -1720,9 +1722,17 @@ void setup()
     printk("%s %s %s\n", argvc, argindir, arglogfile);
   }
   strcpy(pchan, vc);		// virtual channel primary 
-  sprintf(stopfile, "/usr/local/logs/lev0/%s_stop", pchan);
-  sprintf(string, "/bin/rm -f %s", stopfile);	//remove any stop file
-  system(string);
+  if(rexmitmode)		//new 'stopX' 11/2/2012
+    sprintf(stopfile, "/usr/local/logs/lev0/%s_stopX", pchan);
+  else
+    sprintf(stopfile, "/usr/local/logs/lev0/%s_stop", pchan);
+  //Dont rm stopfile any more (1/6/2012). 
+  //With the new rexmit dir there is a second
+  //ingest_lev0 running on a VC and it needs the stop file too.
+  //The stop file is removed when ingest_lev0 is started by
+  //doingestlev0_[HMI,AIA].pl
+  //sprintf(string, "/bin/rm -f %s", stopfile);	//remove any stop file
+  //system(string);
   for(i=0; ; i++) {		// ck for valid and get redundant chan 
     if(!strcmp(p_r_chan_pairs[i].pchan, pchan)) {
       strcpy(rchan, p_r_chan_pairs[i].rchan);
@@ -1819,6 +1829,7 @@ int DoIt(void)
   tlmdir = cmdparams_get_str(&cmdparams, "indir", NULL);
   outdir = cmdparams_get_str(&cmdparams, "outdir", NULL);
   logfile = cmdparams_get_str(&cmdparams, "logfile", NULL);
+  if(strstr(tlmdir, "rexmit")) { rexmitmode = 1; }
   if (strcmp(vc, NOTSPECIFIED) == 0) {
     fprintf(stderr, "'vc' virt channel must be specified.  Abort\n");
     return(1);
@@ -1897,7 +1908,10 @@ int DoIt(void)
       //Must use doingestlev0_HMI(AIA).pl to start ingest_lev0
       //sprintf(callcmd, "/bin/rm -f %s", stopfile);
       //system(callcmd);
-      sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exit", pchan);
+      if(rexmitmode)		//new 11/02/21012
+        sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exitX", pchan);
+      else
+        sprintf(callcmd, "touch /usr/local/logs/lev0/%s_exit", pchan);
       system(callcmd);		//let the world know we're gone
       wflg = 0; //leave DoIt()
       continue;
@@ -1906,13 +1920,17 @@ int DoIt(void)
     if(cntsleeps == 0) {	//file was seen
       if(paused) {		//send resume data flow msg
         paused = 0;
-        send_mail("tlm files seen again for ingest_lev0 for %s\n", pchan);
+        if(!rexmitmode) {
+          send_mail("tlm files seen again for ingest_lev0 for %s\n", pchan);
+        }
       }
     }
     cntsleeps++;		//#of 2sec sleeps w/o any files in do_ingest()
     if(cntsleeps > 300) {	// >600sec w/o any files
       if(!paused) {
-        send_mail("No files seen for ingest_lev0 for %s for 600sec\n", pchan);
+        if(!rexmitmode) {
+          send_mail("No files seen for ingest_lev0 for %s for 600sec\n", pchan);
+        }
         paused = 1;
       }
     }
