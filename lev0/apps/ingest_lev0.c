@@ -119,8 +119,8 @@
 #define TESTVALUE 0xc0b		//first value in test pattern packet
 #define MAXERRMSGCNT 10		//max # of err msg before skip the tlm file
 #define NOTSPECIFIED "***NOTSPECIFIED***"
-#define ENVFILE "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
-#define ENVFILE_GND "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
+#define ENVFILE "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE"
+#define ENVFILE_GND "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
 
 extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int *Fsn);
 extern int write_hk_to_drms();

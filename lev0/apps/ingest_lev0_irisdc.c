@@ -86,7 +86,7 @@
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define ENVFILE "/home/prodtest/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_IRIS"
 #define ENVFILEA "/home/prodtest/cvs/IRIS/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_AMES"
-#define ENVFILE_GND "/home2/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
+#define ENVFILE_GND "/home/production/cvs/JSOC/proj/lev0/apps/SOURCE_ENV_FOR_HK_DECODE_GROUND"
 
 extern int decode_next_hk_vcdu(unsigned short *tbuf, CCSDS_Packet_t **hk, unsigned int *Fsn);
 extern int write_hk_to_drms();

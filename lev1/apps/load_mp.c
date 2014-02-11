@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_mp.c,v 1.4 2011/03/15 21:41:57 carl Exp $" 
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_mp.c,v 1.5 2014/02/11 00:40:00 production Exp $" 
 /*############################################################################
 # Name:        load_mp.c - Loads image location, leg, iss status data in     #
 #                          master pointing drms series.                      #
@@ -125,7 +125,7 @@
 #define HKLMP_VAR_T_START              1
 #define HKLMP_NO_IMAGE_LOC_FILE        100
 /*#define ENVFILE  "/home/production/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_M3SD" */
-/*#define ENVFILE    "/home3/carl/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_M3SD"*/
+/*#define ENVFILE    "/home/carl/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_M3SD"*/
 #define ENVFILE    "/home/production/cvs/JSOC/proj/lev1/apps/SOURCE_ENV_FOR_LOAD_MP"
 
 /******************** includes ******************************************/
