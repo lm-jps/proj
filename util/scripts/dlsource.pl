@@ -166,7 +166,7 @@ unless (flock(DATA, LOCK_EX | LOCK_NB))
 @core = qw(base/cfortran.h base/foundation.h base/jsoc.h base/jsoc_version.h base/mypng.h base/Rules.mk base/export base/drms base/libs base/sums base/util localize.py configure doc make_basic.mk Makefile make_jsoc.pl README Rules.mk target.mk build CM);
 @coreDel = qw(configproj.pl customizemake.pl moreconfigure.pl getmachtype.pl);
 
-@netonly = qw(config.local.template config.local.map gen_sumcf.csh seed_sums.c netdrms_setup.pl proj/example proj/myproj proj/cookbook);
+@netonly = qw(config.local.template config.local.map seed_sums.c netdrms_setup.pl proj/example proj/myproj proj/cookbook);
 @netDel = qw(gen_init.csh getuid.c);
 
 @sdponly = qw(base/local proj configsdp.txt);
