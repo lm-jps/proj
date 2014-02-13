@@ -640,7 +640,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.15 2013/12/19 19:47:42 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.16 2014/02/13 04:33:43 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask_t) {            // Sep 25, changed to useMask_t, NOISEMASK
@@ -1427,7 +1427,7 @@ int writeData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 		  for (int j = 0; j < ny0; j++) {
 			  idx = i + j * nx0;
 			  pot = (ambig_flag[idx] % 2);
-			  if (confidence[idx] > 61) {		// for weak field only
+			  if (confidence[idx] > 51) {		// for weak field only; changed to 51 Feb 12 2014
 			  	ambig_flag[idx] += pot * 2;
 			  } else {
 				  r = rand() % 2;
@@ -1442,7 +1442,7 @@ int writeData(DRMS_Record_t *outRec, DRMS_Record_t *inRec,
 		  for (int j = 0; j < ny0; j++) {
 			  idx = i + j * nx0;
 			  pot = (ambig_flag[idx] % 2);
-			  if (confidence[idx] > 61) {
+			  if (confidence[idx] > 51) {	// changed to 51 Feb 12 2014
 				  ambig_flag[idx] += pot * 4;
 			  } else {
 				  ambig_flag[idx] += ambig_r[idx] * 4;
