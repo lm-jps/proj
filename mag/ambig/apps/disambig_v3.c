@@ -21,6 +21,7 @@
  *			v3.2		Jun 11 2013
  *      v3.3    Jun 26 2013
  *			v3.4		Jul 26 2013
+ *			v3.5		Feb 13 2014
  *
  * Issues:
  *			v1.0
@@ -53,6 +54,8 @@
  *      Fixed a but in getNoiseMask() and noiseMask.c, now return non-zero value if fails
  *			v3.4
  *			Take out radial acute and random solution for HARPs, fixed DATE and other keywords in an earlier checkin
+ *			v3.5
+ *			Changed threshold to 51, add ngrow=0 for patch
  *
  *
  * Example:
@@ -398,6 +401,7 @@ int DoIt(void)
 		TIME t_rec = drms_getkey_time(inRec, "T_REC", &status);
 		int harpnum = drms_getkey_int(inRec, "HARPNUM", &status);	// HARP number
 		int harpflag = (harpnum == DRMS_MISSING_INT) ? 0 : 1;		// full disk vs harp
+		if (harpflag) ngrow = 0;		// Feb 13 2014, No growth for harp
 		int useMask_t = useMask;		// using reconstructed mask image
 		int geometry_t = geometry;
 		char t_rec_str[100];
@@ -640,7 +644,7 @@ int DoIt(void)
         drms_setkey_float(outRec, "AMBTFCT0", tfac0);
         drms_setkey_float(outRec, "AMBTFCTR", tfactr);
         // Code version
-		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.16 2014/02/13 04:33:43 xudong Exp $");
+		drms_setkey_string(outRec, "CODEVER5", "$Id: disambig_v3.c,v 1.17 2014/02/13 23:27:54 xudong Exp $");
 		drms_setkey_string(outRec, "AMBCODEV", ambcodev);
 		// Maskinfo
 		if (useMask_t) {            // Sep 25, changed to useMask_t, NOISEMASK
