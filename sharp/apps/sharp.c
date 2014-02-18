@@ -1,31 +1,32 @@
 /*
  *  sharp.c
  *
- *	This module creates the pipeline space weather harps
- *	It is a hard-coded strip-down version of bmap.c
- *	It takes the Mharp and Bharp series and crete the following quantities
- *  Series 1: Sharp_CEA
- *	  CEA remapped magnetogram, bitmap, continuum, doppler (same size in map coordinate, need manual spec?)
- *	  CEA remapped vector field (Br, Bt, Bp) (same as above)
- *    Space weather indices based on vector cutouts (step 2)
- *  Series 2: Sharp_cutout:
- *	  cutouts of magnetogram, bitmap, continuum, doppler (HARP defined, various sizes in CCD pixels)
- *	  cutouts of all vector data segments (same as above)
- *	Series 3: Other remaps
+ *	This module creates the pipeline Space Weather Active Region Patches (SHARPs).
+ *	It is a hard-coded strip-down version of bmap.c.
+ *	It takes the Mharp and Bharp series and create the following quantities:
+ *
+ *      Series 1: Sharp_CEA
+ *	          CEA remapped magnetogram, bitmap, continuum, doppler (same size in map coordinate, need manual spec?)
+ *	          CEA remapped vector field (Br, Bt, Bp) (same as above)
+ *                Space weather indices based on vector cutouts (step 2)
+ *
+ *      Series 2: Sharp_cutout:
+ *	          cutouts of magnetogram, bitmap, continuum, doppler (HARP defined, various sizes in CCD pixels)
+ *	          cutouts of all vector data segments (same as above)
  *
  *	Author:
  *		Xudong Sun; Monica Bobra
  *
  *	Version:
- *		v0.0	Jul 02 2012
- *		v0.1	Jul 23 2012
- *		v0.2	Sep 04 2012
- *		v0.3	Dec 18 2012
- *		v0.4	Jan 02 2013
- *      v0.5    Jan 23 2013
- *		v0.6	Aug 12 2013
- *      v0.7    Jan 02 2014
- *		v0.8	Feb 12 2014
+ *              v0.0 Jul 02 2012
+ *              v0.1 Jul 23 2012
+ *              v0.2 Sep 04 2012
+ *              v0.3 Dec 18 2012
+ *              v0.4 Jan 02 2013
+ *              v0.5 Jan 23 2013
+ *              v0.6 Aug 12 2013
+ *              v0.7 Jan 02 2014
+ *              v0.8 Feb 12 2014
  *
  *	Notes:
  *		v0.0
@@ -43,33 +44,29 @@
  *		Fixed memory leakage of 0.15G per rec; denoted with "Dec 18"
  *		v0.4
  *		Took out convert_inplace(). Was causing all the images to be int
- *      v0.5
- *      Corrected ephemeris keywords, added argument mInfo for setKeys()
+ *              v0.5
+ *              Corrected ephemeris keywords, added argument mInfo for setKeys()
  *		v0.6
  *		Changes in remapping of bitmap and conf_disambig, now near neighbor without anti-aliasing
- *      v0.7
- *      Added full disk as "b"
- *      Global flag fullDisk is set if "b" is set
- *      Utilize BharpRS and BharpRec all around
- *      Pass mharpRec to set_keys() too in case of full disk
- *      Fixed Bunit (removed from copy_me_keys(), added loops for Bunits in set_keys() here)
- *      Error for CEA still does account for disambiguation yet
+ *              v0.7
+ *              Added full disk as "b"
+ *              Global flag fullDisk is set if "b" is set
+ *              Utilize BharpRS and BharpRec all around
+ *              Pass mharpRec to set_keys() too in case of full disk
+ *              Fixed Bunit (removed from copy_me_keys(), added loops for Bunits in set_keys() here)
+ *              Error for CEA still does account for disambiguation yet
  *		v0.8
  *		Added disambig to azimuth during error propagation
  *		Changed usage for disambig: bit 2 (radial acute) for full disk, bit 0 for patch
  *		Fixed disambig cutout for patch: 0 for even, 7 for odd
  *		
  *
- *	Example:
-  B (full disk disambiguation)
- sharp "mharp=hmi.Mharp_720s[1832][2012.07.12_15:24]" "b=hmi_test.B_720s[2012.07.12_15:24]" "dop=hmi.V_720s[2012.07.12_15:24]" "cont=hmi.Ic_720s[2012.07.12_15:24]" "sharp_cea=su_xudong.sharp_cea_720s" "sharp_cut=su_xudong.sharp_720s"
- BHARP (patch disambiguation)
- sharp "mharp=hmi.Mharp_720s[1832][2012.07.12_15:24]" "bharp=hmi.Bharp_720s[1832][2012.07.12_15:24]" "dop=hmi.V_720s[2012.07.12_15:24]" "cont=hmi.Ic_720s[2012.07.12_15:24]" "sharp_cea=su_xudong.sharp_cea_720s" "sharp_cut=su_xudong.sharp_720s"
- *
- *	For comparison:
- *	bmap "in=hmi_test.Bharp_720s_fd10[1404][2012.02.20_10:00]" \
- "out=hmi_test.B_720s_CEA" -s -a "map=cyleqa"
- *
+ *	Example Calls:
+ *      [I]   B (full disk disambiguation)
+ *      > sharp "mharp=hmi.Mharp_720s[1832][2012.07.12_15:24]" "b=hmi_test.B_720s[2012.07.12_15:24]" "dop=hmi.V_720s[2012.07.12_15:24]" "cont=hmi.Ic_720s[2012.07.12_15:24]" "sharp_cea=su_xudong.sharp_cea_720s" "sharp_cut=su_xudong.sharp_720s"
+ *      [II]  BHARP (patch disambiguation)
+ *      > sharp "mharp=hmi.Mharp_720s[1832][2012.07.12_15:24]" "bharp=hmi.Bharp_720s[1832][2012.07.12_15:24]" "dop=hmi.V_720s[2012.07.12_15:24]" "cont=hmi.Ic_720s[2012.07.12_15:24]" "sharp_cea=su_xudong.sharp_cea_720s" "sharp_cut=su_xudong.sharp_720s"
+  *
  *
  */
 
@@ -142,8 +139,8 @@
 
 // Space weather keywords
 struct swIndex {
-	float mean_vf;
-    float count_mask;
+        float mean_vf;
+        float count_mask;
 	float absFlux;
 	float mean_hf;
 	float mean_gamma;
@@ -153,31 +150,32 @@ struct swIndex {
 	float mean_jz;
 	float us_i;
 	float mean_alpha;
-	float mean_ih;
-	float total_us_ih;
-	float total_abs_ih;
-	float totaljz;
-	float totpot;
-	float meanpot;
-	float area_w_shear_gt_45;
-	float meanshear_angle;
-	float area_w_shear_gt_45h;
-	float meanshear_angleh;
-    float mean_derivative_btotal_err;
-    float mean_vf_err;
-    float mean_gamma_err;
-    float mean_derivative_bh_err;
-    float mean_derivative_bz_err;
-    float mean_jz_err;
-    float us_i_err;
-    float mean_alpha_err;
-    float mean_ih_err;
-    float total_us_ih_err;
-    float total_abs_ih_err;
-    float totaljz_err;
-    float meanpot_err;
-    float totpot_err;
-    float meanshear_angle_err;
+        float mean_ih;
+        float total_us_ih;
+        float total_abs_ih;
+        float totaljz;
+        float totpot;
+        float meanpot;
+        float area_w_shear_gt_45;
+        float meanshear_angle;
+        float area_w_shear_gt_45h;
+        float meanshear_angleh;
+        float mean_derivative_btotal_err;
+        float mean_vf_err;
+        float mean_gamma_err;
+        float mean_derivative_bh_err;
+        float mean_derivative_bz_err;
+        float mean_jz_err;
+        float us_i_err;
+        float mean_alpha_err;
+        float mean_ih_err;
+        float total_us_ih_err;
+        float total_abs_ih_err;
+        float totaljz_err;
+        float meanpot_err;
+        float totpot_err;
+        float meanshear_angle_err;
+        float Rparam;
 };
 
 // Mapping method
@@ -1885,6 +1883,11 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	DRMS_Segment_t *bzSeg = drms_segment_lookup(inRec, BR_SEG_CEA);
 	DRMS_Array_t *bzArray = drms_segment_read(bzSeg, DRMS_TYPE_FLOAT, &status);
 	float *bz = (float *) bzArray->data;		// bz
+
+        //Use magnetogram map to compute R
+        DRMS_Segment_t *losSeg = drms_segment_lookup(inRec, "magnetogram");
+        DRMS_Array_t *losArray = drms_segment_read(losSeg, DRMS_TYPE_FLOAT, &status);
+        float *los = (float *) losArray->data;          // los
     
 	DRMS_Segment_t *bz_errSeg = drms_segment_lookup(inRec, BR_ERR_SEG_CEA);
 	DRMS_Array_t *bz_errArray = drms_segment_read(bz_errSeg, DRMS_TYPE_FLOAT, &status);
@@ -1911,6 +1914,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 
         // convert cdelt1_orig from degrees to arcsec
         float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
+        int nx1 = nx*cdelt1/2;
+        int ny1 = ny*cdelt1/2;
 
 	// Temp arrays
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
@@ -1934,9 +1939,17 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
         float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
-	//spaceweather quantities computed
+
+        // malloc some arrays for the R parameter calculation
+        float *rim = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1p0 = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1n0 = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1p = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1n = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1 = (float *)malloc(nx1*ny1*sizeof(float));
+        float *pmap = (float *)malloc(nx1*ny1*sizeof(float));
     
-    
+	//spaceweather quantities computed    
 	if (computeAbsFlux(bz_err, bz , dims, &(swKeys_ptr->absFlux), &(swKeys_ptr->mean_vf),  &(swKeys_ptr->mean_vf_err),
                        &(swKeys_ptr->count_mask), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
     {
@@ -2032,6 +2045,13 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 		swKeys_ptr->area_w_shear_gt_45 = DRMS_MISSING_FLOAT;
         swKeys_ptr->meanshear_angle_err= DRMS_MISSING_FLOAT;
 	}
+
+	if (computeR(bz_err, los , dims, &(swKeys_ptr->Rparam), cdelt1, rim, p1p0, p1n0,
+                     p1p, p1n, p1, pmap, nx1, ny1))
+        {
+		swKeys_ptr->Rparam = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
+	}
+
 	
 	// Clean up the arrays
 	
@@ -2048,8 +2068,17 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	free(derx_bz); free(dery_bz);
 	free(derx_bh); free(dery_bh);
 	free(bt_err); free(bh_err);  free(jz_err);
-    free(jz_err_squared); free(jz_rms_err);
-    free(jz_err_squared_smooth);
+        free(jz_err_squared); free(jz_rms_err);
+        free(jz_err_squared_smooth);
+
+        free(rim);
+        free(p1p0);
+        free(p1n0);
+        free(p1p);
+        free(p1n);
+        free(p1);
+        free(pmap);
+
 }
 
 /*
@@ -2075,22 +2104,23 @@ void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
 	drms_setkey_float(outRec, "TOTPOT",  swKeys_ptr->totpot);
 	drms_setkey_float(outRec, "MEANSHR", swKeys_ptr->meanshear_angle);
 	drms_setkey_float(outRec, "SHRGT45", swKeys_ptr->area_w_shear_gt_45);
-    drms_setkey_float(outRec, "CMASK",   swKeys_ptr->count_mask);
-    drms_setkey_float(outRec, "ERRBT",   swKeys_ptr->mean_derivative_btotal_err);
-    drms_setkey_float(outRec, "ERRVF",   swKeys_ptr->mean_vf_err);
-    drms_setkey_float(outRec, "ERRGAM",  swKeys_ptr->mean_gamma_err);
-    drms_setkey_float(outRec, "ERRBH",   swKeys_ptr->mean_derivative_bh_err);
-    drms_setkey_float(outRec, "ERRBZ",   swKeys_ptr->mean_derivative_bz_err);
-    drms_setkey_float(outRec, "ERRJZ",   swKeys_ptr->mean_jz_err);
-    drms_setkey_float(outRec, "ERRUSI",  swKeys_ptr->us_i_err);
-    drms_setkey_float(outRec, "ERRALP",  swKeys_ptr->mean_alpha_err);
-    drms_setkey_float(outRec, "ERRMIH",  swKeys_ptr->mean_ih_err);
-    drms_setkey_float(outRec, "ERRTUI",  swKeys_ptr->total_us_ih_err);
-    drms_setkey_float(outRec, "ERRTAI",  swKeys_ptr->total_abs_ih_err);
-    drms_setkey_float(outRec, "ERRJHT",  swKeys_ptr->totaljz_err);
-    drms_setkey_float(outRec, "ERRMPOT", swKeys_ptr->meanpot_err);
-    drms_setkey_float(outRec, "ERRTPOT", swKeys_ptr->totpot_err);
-    drms_setkey_float(outRec, "ERRMSHA", swKeys_ptr->meanshear_angle_err);
+        drms_setkey_float(outRec, "CMASK",   swKeys_ptr->count_mask);
+        drms_setkey_float(outRec, "ERRBT",   swKeys_ptr->mean_derivative_btotal_err);
+        drms_setkey_float(outRec, "ERRVF",   swKeys_ptr->mean_vf_err);
+        drms_setkey_float(outRec, "ERRGAM",  swKeys_ptr->mean_gamma_err);
+        drms_setkey_float(outRec, "ERRBH",   swKeys_ptr->mean_derivative_bh_err);
+        drms_setkey_float(outRec, "ERRBZ",   swKeys_ptr->mean_derivative_bz_err);
+        drms_setkey_float(outRec, "ERRJZ",   swKeys_ptr->mean_jz_err);
+        drms_setkey_float(outRec, "ERRUSI",  swKeys_ptr->us_i_err);
+        drms_setkey_float(outRec, "ERRALP",  swKeys_ptr->mean_alpha_err);
+        drms_setkey_float(outRec, "ERRMIH",  swKeys_ptr->mean_ih_err);
+        drms_setkey_float(outRec, "ERRTUI",  swKeys_ptr->total_us_ih_err);
+        drms_setkey_float(outRec, "ERRTAI",  swKeys_ptr->total_abs_ih_err);
+        drms_setkey_float(outRec, "ERRJHT",  swKeys_ptr->totaljz_err);
+        drms_setkey_float(outRec, "ERRMPOT", swKeys_ptr->meanpot_err);
+        drms_setkey_float(outRec, "ERRTPOT", swKeys_ptr->totpot_err);
+        drms_setkey_float(outRec, "ERRMSHA", swKeys_ptr->meanshear_angle_err);
+        drms_setkey_float(outRec, "R_VALUE", swKeys_ptr->Rparam);
 };
 
 /*
@@ -2175,24 +2205,23 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
 
 		
 	}
+
+       TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+       tnow = (double)time(NULL);
+       tnow += UNIX_epoch;
 	
-	char timebuf[1024];
-	float UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
-	double val;
+       val = drms_getkey_time(bharpRec, "DATE", &status);
+       drms_setkey_time(outRec, "DATE_B", val);
+       drms_setkey_time(outRec, "DATE", tnow);
 	
-	val = drms_getkey_double(bharpRec, "DATE", &status);
-	drms_setkey_double(outRec, "DATE_B", val);
-	sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
-	drms_setkey_string(outRec, "DATE", timebuf);
-	
-	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Id: sharp.c,v 1.20 2014/02/13 04:41:06 xudong Exp $");
-	char *cvsinfo2 = sw_functions_version();
-	char cvsinfoall[2048];
-    strcat(cvsinfoall,cvsinfo);
-    strcat(cvsinfoall,"\n");
-    strcat(cvsinfoall,cvsinfo2);
-	status = drms_setkey_string(outRec, "CODEVER7", cvsinfoall);
+       // set cvs commit version into keyword HEADER
+       char *cvsinfo  = strdup("$Id: sharp.c,v 1.21 2014/02/18 23:35:31 mbobra Exp $");
+       char *cvsinfo2 = sw_functions_version();
+       char cvsinfoall[2048];
+       strcat(cvsinfoall,cvsinfo);
+       strcat(cvsinfoall,"\n");
+       strcat(cvsinfoall,cvsinfo2);
+       status = drms_setkey_string(outRec, "CODEVER7", cvsinfoall);
 	
 };
 
