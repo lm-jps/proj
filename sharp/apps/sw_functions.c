@@ -1058,7 +1058,7 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
     init_fresize_gaussian(&fresgauss,sigma,20,1);
 
     // make sure convolution kernel is smaller than or equal to array size 
-    if ((nx || ny) < 41.) return -1;
+     if ( (nx  < 41.) || (ny < 41.) ) return -1;
 
     fsample(los, rim, nx, ny, nx, nx1, ny1, nx1, scale, 0, 0, 0.0);
     for (i = 0; i < nx1; i++) 
@@ -1233,7 +1233,7 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 char *sw_functions_version() // Returns CVS version of sw_functions.c
 {
-  return strdup("$Id: sw_functions.c,v 1.24 2014/02/18 23:18:07 mbobra Exp $");
+  return strdup("$Id: sw_functions.c,v 1.25 2014/02/18 23:35:03 mbobra Exp $");
 }
 
 /* ---------------- end of this file ----------------*/
