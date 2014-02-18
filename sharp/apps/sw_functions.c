@@ -1054,13 +1054,11 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
 
     init_fresize_boxcar(&fresboxcar,1,1);
      
-    // setup convolution kernel
-    //init_fresize_gaussian(&fresgauss,sigma,4,1); 
+    // set up convolution kernel
     init_fresize_gaussian(&fresgauss,sigma,20,1);
 
-    if ((nx || ny) < 40.) return -1;
-
-    //float *test = (float *)malloc(nx1*ny1*sizeof(float));
+    // make sure convolution kernel is smaller than or equal to array size 
+    if ((nx || ny) < 41.) return -1;
 
     fsample(los, rim, nx, ny, nx, nx1, ny1, nx1, scale, 0, 0, 0.0);
     for (i = 0; i < nx1; i++) 
@@ -1109,8 +1107,6 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
       *Rparam = 0.0;
     else
       *Rparam = log10(sum);
-
-printf("Rparam=%f",*Rparam);
 
     free_fresize(&fresboxcar);
     free_fresize(&fresgauss);
@@ -1237,7 +1233,7 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 char *sw_functions_version() // Returns CVS version of sw_functions.c
 {
-  return strdup("$Id: sw_functions.c,v 1.23 2014/02/18 19:50:19 mbobra Exp $");
+  return strdup("$Id: sw_functions.c,v 1.24 2014/02/18 23:18:07 mbobra Exp $");
 }
 
 /* ---------------- end of this file ----------------*/
