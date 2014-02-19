@@ -1034,86 +1034,6 @@ int computeShearAngle(float *bx_err, float *by_err, float *bz_err, float *bx, fl
 	return 0;
 }
 
-/*===========================================*/
-int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1, 
-             float *rim, float *p1p0, float *p1n0, float *p1p, float *p1n, float *p1,
-             float *pmap, int nx1, int ny1)
-{
-
-    int nx = dims[0];
-    int ny = dims[1];
-    int i = 0;
-    int j = 0;
-    int index;
-    double sum = 0.0;
-    double err = 0.0;
-    *Rparam = 0.0;
-    struct fresize_struct fresboxcar, fresgauss;
-    int scale = round(2.0/cdelt1);
-    float sigma = 10.0/2.3548;
-
-    init_fresize_boxcar(&fresboxcar,1,1);
-     
-    // set up convolution kernel
-    init_fresize_gaussian(&fresgauss,sigma,20,1);
-
-    // make sure convolution kernel is smaller than or equal to array size 
-     if ( (nx  < 41.) || (ny < 41.) ) return -1;
-
-    fsample(los, rim, nx, ny, nx, nx1, ny1, nx1, scale, 0, 0, 0.0);
-    for (i = 0; i < nx1; i++) 
-    {  
-      for (j = 0; j < ny1; j++) 
-      {
-        index = j * nx1 + i;
-        if (rim[index] > 150)
-          p1p0[index]=1.0;
-        else
-          p1p0[index]=0.0;
-        if (rim[index] < -150)
-          p1n0[index]=1.0;
-        else
-          p1n0[index]=0.0;
-      }	
-    }
-
-    fresize(&fresboxcar, p1p0, p1p, nx1, ny1, nx1, nx1, ny1, nx1, 0, 0, 0.0);
-    fresize(&fresboxcar, p1n0, p1n, nx1, ny1, nx1, nx1, ny1, nx1, 0, 0, 0.0);
-
-    for (i = 0; i < nx1; i++) 
-    {  
-      for (j = 0; j < ny1; j++) 
-      {
-        index = j * nx1 + i;
-        if (p1p[index] > 0 && p1n[index] > 0)
-          p1[index]=1.0;
-        else
-          p1[index]=0.0;
-      }	
-    }
-
-    fresize(&fresgauss, p1, pmap, nx1, ny1, nx1, nx1, ny1, nx1, 0, 0, 0.0);
-
-    for (i = 0; i < nx1; i++) 
-    {  
-      for (j = 0; j < ny1; j++) 
-      {
-        index = j * nx1 + i;
-        sum += pmap[index]*abs(rim[index]);
-      }	
-    }
-
-    if (sum < 1.0)
-      *Rparam = 0.0;
-    else
-      *Rparam = log10(sum);
-
-    free_fresize(&fresboxcar);
-    free_fresize(&fresgauss);
-
-    return 0;
-}
-
 
 /*==================KEIJI'S CODE =========================*/
 
@@ -1233,7 +1153,7 @@ void greenpot(float *bx, float *by, float *bz, int nnx, int nny)
 
 char *sw_functions_version() // Returns CVS version of sw_functions.c
 {
-  return strdup("$Id: sw_functions.c,v 1.25 2014/02/18 23:35:03 mbobra Exp $");
+  return strdup("$Id: sw_functions.c,v 1.26 2014/02/19 14:59:25 arta Exp $");
 }
 
 /* ---------------- end of this file ----------------*/

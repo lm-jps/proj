@@ -22,11 +22,10 @@
  *	AUTHOR     : Monica Bobra
  *
  *	Version    :   v0.0	Jun 14 2013
- *                     v0.1     Feb 11 2014 Added different input and output series
  *
  *	EXAMPLE    :
- *      update_sharp_keys sharpseriesin=hmi.sharp_720s sharpceaseriesin=hmi.sharp_cea_720s //
- *      HARPNUM=1 sharpseriesout=hmi.sharp_720s sharpceaseriesout=hmi.sharp_cea_720s keylist=USFLUX,TOTPOT
+ *      update_sharp_keys sharpseries=hmi.sharp_720s sharpceaseries=hmi.sharp_cea_720s //
+ *      HARPNUM=1 keylist=USFLUX,TOTPOT
  *
  */
 
@@ -61,14 +60,12 @@
 #define SHOW(msg) {printf("%s", msg); fflush(stdout);}
 
 char *module_name = "update_sharp_keys";  /* Module name */
-char *version_id  = "2014 Feb 12";        /* Version number */
+char *version_id  = "2013 Jun 14";        /* Version number */
 
 ModuleArgs_t module_args[] =
 {
-	{ARG_STRING, "sharpseriesin",     NULL, "Input Sharp dataseries"},
-	{ARG_STRING, "sharpceaseriesin",  NULL, "Input Sharp CEA dataseries"},
-	{ARG_STRING, "sharpseriesout",     NULL, "Output Sharp dataseries"},
-	{ARG_STRING, "sharpceaseriesout",  NULL, "Output Sharp CEA dataseries"},
+	{ARG_STRING, "sharpseries",     NULL, "Input/output Sharp dataseries"},
+	{ARG_STRING, "sharpceaseries",  NULL, "Input/output Sharp CEA dataseries"},
 	{ARG_INT,    "HARPNUM",         NULL, "HARP number"},
 	{ARG_STRING, "keylist",         NULL, "comma separated list of keywords to update"},
 	{ARG_END}
@@ -119,64 +116,37 @@ int DoIt(void)
         float totaljz_err;
         float meanpot_err;
         float totpot_err;
-        float Rparam;
         float meanshear_angle_err;
-	char *sharpseriesin = (char *) params_get_str(&cmdparams, "sharpseriesin");
-	char *sharpceaseriesin = (char *) params_get_str(&cmdparams, "sharpceaseriesin");
-	char *sharpseriesout = (char *) params_get_str(&cmdparams, "sharpseriesout");
-	char *sharpceaseriesout = (char *) params_get_str(&cmdparams, "sharpceaseriesout");
-
-        int sameflag = strcmp(sharpseriesin, sharpseriesout) == 0;
-        int testflag = strcmp(sharpceaseriesin, sharpceaseriesout) == 0;
-        if (testflag != sameflag)
-          DIE("Either both outputs must be the same as their inputs, or both be different.");
+	char *sharpseries = (char *) params_get_str(&cmdparams, "sharpseries");
+	char *sharpceaseries = (char *) params_get_str(&cmdparams, "sharpceaseries");
 
 	int harpnum = params_get_int(&cmdparams, "HARPNUM");
-
 	char sharpquery[256];
 	char sharpceaquery[256];
-	printf("sameflag = %d\n", sameflag);
-	printf("testflag = %d\n", testflag);
-	sprintf(sharpceaquery, "%s[%d]\n", sharpceaseriesin,harpnum);
-	printf(sharpceaquery, "%s[%d]\n", sharpceaseriesin,harpnum);
 
-	sprintf(sharpquery, "%s[%d]\n", sharpseriesin,harpnum);
-	sprintf(sharpquery, "%s[%d]\n", sharpseriesin,harpnum);
+	sprintf(sharpceaquery, "%s[%d]\n", sharpceaseries,harpnum);
+	printf(sharpceaquery, "%s[%d]\n", sharpceaseries,harpnum);
 
-	DRMS_RecordSet_t *sharpinrecset= drms_open_records(drms_env, sharpquery, &status);
+	sprintf(sharpquery, "%s[%d]\n", sharpseries,harpnum);
+	printf(sharpquery, "%s[%d]\n", sharpseries,harpnum);
+
+	DRMS_RecordSet_t *sharpinrecset = drms_open_records(drms_env, sharpquery, &status);
 	if (status != DRMS_SUCCESS)
 		DIE("Problem opening sharp recordset.");
-	nrecs=sharpinrecset->n;
-	if (nrecs == 0)
+	if (sharpinrecset->n == 0)
 		DIE("Sharp recordset contains no records.");
-        printf("nrecs=%d\n",nrecs);
+	DRMS_RecordSet_t *sharpoutrecset = drms_clone_records(sharpinrecset, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
+	if (status != DRMS_SUCCESS)
+		DIE("Problem cloning sharp records.");
 
 	DRMS_RecordSet_t *sharpceainrecset = drms_open_records(drms_env, sharpceaquery, &status);
 	if (status != DRMS_SUCCESS)
 		DIE("Problem opening sharp cea recordset.");
-	if (sharpceainrecset->n != nrecs)
-		DIE("Sharp cea recordset differs from sharp recordset.");
-
-        DRMS_RecordSet_t *sharpoutrecset, *sharpceaoutrecset;
-        if (sameflag)
-        {
-	sharpoutrecset = drms_clone_records(sharpinrecset, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
-	if (status != DRMS_SUCCESS)
-		DIE("Problem cloning sharp records.");
-	sharpceaoutrecset = drms_clone_records(sharpceainrecset, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
+	if (sharpceainrecset->n == 0)
+		DIE("Sharp cea recordset contains no records.");
+	DRMS_RecordSet_t *sharpceaoutrecset = drms_clone_records(sharpceainrecset, DRMS_PERMANENT, DRMS_SHARE_SEGMENTS, &status);
 	if (status != DRMS_SUCCESS)
 		DIE("Problem cloning sharp cea records.");
-        }
-        else
-        {
-	sharpoutrecset = drms_create_records(drms_env, nrecs, sharpseriesout, DRMS_PERMANENT, &status);
-	if (status != DRMS_SUCCESS)
-		DIE("Problem creating sharp records.");
-	sharpceaoutrecset = drms_create_records(drms_env, nrecs, sharpceaseriesout, DRMS_PERMANENT, &status);
-	if (status != DRMS_SUCCESS)
-		DIE("Problem creating sharp cea records.");
-        }
-
 
 	char *keylist = (char *) params_get_str(&cmdparams, "keylist");
 
@@ -197,7 +167,6 @@ int DoIt(void)
         int meanpotflag = (strstr(keylist,"MEANPOT") != NULL);
         int meanshrflag = (strstr(keylist,"MEANSHR") != NULL);
         int shrgt45flag = (strstr(keylist,"SHRGT45") != NULL);
-        int r_valueflag = (strstr(keylist,"R_VALUE") != NULL);
 	DRMS_Record_t *sharpinrec = sharpinrecset->records[0];
 	DRMS_Record_t *sharpceainrec = sharpceainrecset->records[0];
 	DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
@@ -205,7 +174,7 @@ int DoIt(void)
 	int ny = inseg->axis[1];
 	int nxny = nx * ny;
 	int dims[2] = {nx, ny};
- 
+
 	// Temp arrays 	
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
 	float *bt      = (float *) (malloc(nxny * sizeof(float)));
@@ -234,12 +203,14 @@ int DoIt(void)
 	double rsun_ref, rsun_obs;
 
         // outrecords 
-	DRMS_Record_t *sharpoutrec, *sharpceaoutrec, *testrec;
+	DRMS_Record_t *sharpoutrec, *sharpceaoutrec;
+	nrecs=sharpoutrecset->n;
+        printf("nrecs=%d\n",nrecs);
 
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.4 2014/02/18 19:49:12 mbobra Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.5 2014/02/19 14:59:25 arta Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -258,104 +229,70 @@ int DoIt(void)
 	strcat(historyofthemodule,"\n");
         strcat(historyofthemodule,history0);
  
- 
-        // grab one record such that we can malloc the R-parameter calculation arrays outside of the loop
-        // assume scale = round(2./cdelt1) does not change for any given HARP
-        testrec  = sharpceainrecset->records[nrecs/2];
-        dsun_obs = drms_getkey_float(testrec, "DSUN_OBS",   &status); 
-        rsun_ref = drms_getkey_double(testrec, "RSUN_REF", &status);
-        cdelt1_orig = drms_getkey_float(testrec, "CDELT1",   &status);
-        cdelt1      = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
-        int nx1 = nx*cdelt1/2;
-        int ny1 = ny*cdelt1/2;
-
-        // malloc some arrays for the R parameter calculation
-        float *rim = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1p0 = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1n0 = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1p = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1n = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1 = (float *)malloc(nx1*ny1*sizeof(float));
-        float *pmap = (float *)malloc(nx1*ny1*sizeof(float));
-
+        // no longer need inrecs
+ 	drms_close_records(sharpinrecset, DRMS_FREE_RECORD);
+	drms_close_records(sharpceainrecset, DRMS_FREE_RECORD);
+        
 	for (irec=0;irec<nrecs;irec++)
 	{
    	   // Get emphemeris
-  	   sharpinrec = sharpinrecset->records[irec];
-  	   sharpceainrec = sharpceainrecset->records[irec];
-	   cdelt1_orig = drms_getkey_float(sharpceainrec, "CDELT1",   &status);
-	   dsun_obs    = drms_getkey_float(sharpinrec, "DSUN_OBS",   &status);
-	   rsun_ref    = drms_getkey_double(sharpinrec, "RSUN_REF", &status);
-	   rsun_obs    = drms_getkey_double(sharpinrec, "RSUN_OBS", &status);
-	   imcrpix1    = drms_getkey_float(sharpinrec, "IMCRPIX1", &status);
-	   imcrpix2    = drms_getkey_float(sharpinrec, "IMCRPIX2", &status);
-	   crpix1      = drms_getkey_float(sharpinrec, "CRPIX1", &status);
-	   crpix2      = drms_getkey_float(sharpinrec, "CRPIX2", &status);
-
   	   sharpoutrec = sharpoutrecset->records[irec];
   	   sharpceaoutrec = sharpceaoutrecset->records[irec];
-           if (!sameflag)
-           {
-             drms_copykeys(sharpoutrec, sharpinrec, 0, kDRMS_KeyClass_Explicit);
-             drms_copykeys(sharpceaoutrec, sharpceainrec, 0, kDRMS_KeyClass_Explicit);
-           }
+	   cdelt1_orig = drms_getkey_float(sharpceaoutrec, "CDELT1",   &status);
+	   dsun_obs    = drms_getkey_float(sharpoutrec, "DSUN_OBS",   &status);
+	   rsun_ref    = drms_getkey_double(sharpoutrec, "RSUN_REF", &status);
+	   rsun_obs    = drms_getkey_double(sharpoutrec, "RSUN_OBS", &status);
+	   imcrpix1    = drms_getkey_float(sharpoutrec, "IMCRPIX1", &status);
+	   imcrpix2    = drms_getkey_float(sharpoutrec, "IMCRPIX2", &status);
+	   crpix1      = drms_getkey_float(sharpoutrec, "CRPIX1", &status);
+	   crpix2      = drms_getkey_float(sharpoutrec, "CRPIX2", &status);
+           cdelt1      = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
 
-           TIME trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
-           tnow = (double)time(NULL);
-           tnow += UNIX_epoch;
-
-	   // set CODEVER7 and HISTORY and DATE
+	   // set CODEVER7 and HISTORY
 	   drms_setkey_string(sharpoutrec, "CODEVER7", cvsinfoall);
            drms_setkey_string(sharpoutrec,"HISTORY",historyofthemodule);           
 	   drms_setkey_string(sharpceaoutrec, "CODEVER7", cvsinfoall);
            drms_setkey_string(sharpceaoutrec,"HISTORY",historyofthemodule);
-           drms_setkey_time(sharpoutrec,"DATE",tnow);  
-           drms_setkey_time(sharpceaoutrec,"DATE",tnow);
 
 	   // Get bx, by, bz, mask	
 	   // Use HARP (Turmon) bitmap as a threshold on spaceweather quantities
-	   DRMS_Segment_t *bitmaskSeg = drms_segment_lookup(sharpceainrec, "bitmap");
+	   DRMS_Segment_t *bitmaskSeg = drms_segment_lookup(sharpceaoutrec, "bitmap");
 	   DRMS_Array_t *bitmaskArray = drms_segment_read(bitmaskSeg, DRMS_TYPE_INT, &status);
 	   int *bitmask = (int *) bitmaskArray->data;	 // get the previously made mask array	
 
 	   //Use conf_disambig map as a threshold on spaceweather quantities 
-	   DRMS_Segment_t *maskSeg = drms_segment_lookup(sharpceainrec, "conf_disambig");       
+	   DRMS_Segment_t *maskSeg = drms_segment_lookup(sharpceaoutrec, "conf_disambig");       
 	   DRMS_Array_t *maskArray = drms_segment_read(maskSeg, DRMS_TYPE_INT, &status);	
            if (status != DRMS_SUCCESS)
               DIE("No CONF_DISAMBIG segment.");
 	   int *mask = (int *) maskArray->data;		// get the previously made mask array	
 
- 	   //Use magnetogram map to compute R
-	   DRMS_Segment_t *losSeg = drms_segment_lookup(sharpceainrec, "magnetogram");
-	   DRMS_Array_t *losArray = drms_segment_read(losSeg, DRMS_TYPE_FLOAT, &status);
-	   float *los = (float *) losArray->data;		// los
-
-	   DRMS_Segment_t *bxSeg = drms_segment_lookup(sharpceainrec, "Bp");
+	   DRMS_Segment_t *bxSeg = drms_segment_lookup(sharpceaoutrec, "Bp");
 	   DRMS_Array_t *bxArray = drms_segment_read(bxSeg, DRMS_TYPE_FLOAT, &status);
 	   float *bx = (float *) bxArray->data;		// bx
 	
-	   DRMS_Segment_t *bySeg = drms_segment_lookup(sharpceainrec, "Bt");
+	   DRMS_Segment_t *bySeg = drms_segment_lookup(sharpceaoutrec, "Bt");
 	   DRMS_Array_t *byArray = drms_segment_read(bySeg, DRMS_TYPE_FLOAT, &status);
 	   float *by = (float *) byArray->data;		// by
 	   for (int i = 0; i < nxny; i++) by[i] *= -1;
 	
-	   DRMS_Segment_t *bzSeg = drms_segment_lookup(sharpceainrec, "Br");
+	   DRMS_Segment_t *bzSeg = drms_segment_lookup(sharpceaoutrec, "Br");
 	   DRMS_Array_t *bzArray = drms_segment_read(bzSeg, DRMS_TYPE_FLOAT, &status);
 	   float *bz = (float *) bzArray->data;		// bz
 
-   	   DRMS_Segment_t *bz_errSeg = drms_segment_lookup(sharpceainrec, "Br_err");
+   	   DRMS_Segment_t *bz_errSeg = drms_segment_lookup(sharpceaoutrec, "Br_err");
 	   DRMS_Array_t *bz_errArray = drms_segment_read(bz_errSeg, DRMS_TYPE_FLOAT, &status);
 	   float *bz_err = (float *) bz_errArray->data;		// bz_err
 
-	   DRMS_Segment_t *by_errSeg = drms_segment_lookup(sharpceainrec, "Bt_err");
+	   DRMS_Segment_t *by_errSeg = drms_segment_lookup(sharpceaoutrec, "Bt_err");
 	   DRMS_Array_t *by_errArray = drms_segment_read(by_errSeg, DRMS_TYPE_FLOAT, &status);
 	   float *by_err = (float *) by_errArray->data;		// by_err
 
-	   DRMS_Segment_t *bx_errSeg = drms_segment_lookup(sharpceainrec, "Bp_err");
+	   DRMS_Segment_t *bx_errSeg = drms_segment_lookup(sharpceaoutrec, "Bp_err");
 	   DRMS_Array_t *bx_errArray = drms_segment_read(bx_errSeg, DRMS_TYPE_FLOAT, &status);
 	   float *bx_err = (float *) bx_errArray->data;		// bx_err
 
-           /***** USFLUX, Example Function 1 *************************************/ 
+           /***** USFLUX, Example Function 1 ************************************sdfdsf*/ 
 	   if (meanvfflag)
 	   {
               // Compute unsigned flux 
@@ -375,22 +312,7 @@ int DoIt(void)
            drms_setkey_float(sharpceaoutrec, "CMASK",   count_mask); 	
            drms_setkey_float(sharpceaoutrec, "ERRVF",   mean_vf_err);
            }
-
-            /***** RPARAM, Example Function 14 *************************************/ 
-	   if (r_valueflag)
-	   {
-
-              if (computeR(bz_err, los , dims, &Rparam, cdelt1, rim, p1p0, p1n0,
-                     p1p, p1n, p1, pmap, nx1, ny1))
-              {
-		 Rparam            = DRMS_MISSING_FLOAT;
-	      }
-
-           drms_setkey_float(sharpoutrec, "R_VALUE",  Rparam);
-           drms_setkey_float(sharpceaoutrec, "R_VALUE", Rparam);
-
-           }
-  
+   
            /***** MEANPOT and TOTPOT, Example Function 13  (Requires Keiji's code) **/
        
    	   if (totpotflag || meanpotflag)
@@ -674,11 +596,7 @@ int DoIt(void)
 	   drms_free_array(bx_errArray);           
 	   drms_free_array(by_errArray);
 	   drms_free_array(bz_errArray);
-	   drms_free_array(losArray);
 	} //endfor
-
- 	drms_close_records(sharpinrecset, DRMS_FREE_RECORD);
-	drms_close_records(sharpceainrecset, DRMS_FREE_RECORD);
 
 	drms_close_records(sharpoutrecset, DRMS_INSERT_RECORD);
 	drms_close_records(sharpceaoutrecset, DRMS_INSERT_RECORD);
@@ -693,15 +611,7 @@ int DoIt(void)
 	free(bt_err); free(bh_err);  free(jz_err); 
         free(jz_err_squared); free(jz_rms_err);
 	free(cvsinfoall);
-        free(rim);
-        free(p1p0);
-        free(p1n0);
-        free(p1p);
-        free(p1n);
-        free(p1);
-        free(pmap);
-
-
+ 
 return 0;    
 }	// DoIt
 
