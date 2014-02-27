@@ -2766,11 +2766,13 @@ sub Exit_sub {
         print "Killing $process with kill -9 $psid\n";
         `kill -9 $psid`;
       }
-      if(/lev0ck_irisdc /) {
+      if(/lev0ck_irisdc/) {
+        if(/perl /) {
         ($a, $psid, $c) = split(/\s+/, $_);
         $process = "lev0ck_irisdc";
         print "Killing $process with kill -9 $psid\n";
         `kill -9 $psid`;
+        }
       }
     }
   }
