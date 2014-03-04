@@ -11,6 +11,8 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
+#include "fstats.c"
+//#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
 #include "/home/wso/src/libastro.d/solephem.c"
 
 #define C1      0.0757644 /* days/degree at 27.27527 */
@@ -185,6 +187,8 @@ int DoIt(void)
   long long calVer;
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
+  char *cvsinfo = strdup("$Id: brblossynoptic.c,v 1.3 2014/03/04 20:11:05 yliu Exp $");
+  cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"Carrington-Time conversion corrected; o2helio.c bug corrected -- July 2013");
 
   struct {
@@ -970,6 +974,9 @@ for (ds = 0; ds < nsynop; ds++)
         drms_setkey_string(outRec, "HISTORY", historyofthemodule);
         drms_setkey_string(outRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(outRec, "CTYPE2", "CRLT-CEA");
+        drms_setkey_string(outRec, "BLD_VERS", jsoc_version);
+        status = drms_setkey_string(outRec, "CODEVER", cvsinfo);
+
 //        i=len[0]/2+0.5;
         i=len[0]-(len[0]/2+1.0)+1.0;
                  // 1. CRVAL is defined as 180 degree longitude. 
@@ -997,7 +1004,7 @@ for (ds = 0; ds < nsynop; ds++)
 //HMI observables keywords
         sprint_at(tstr, trot - delta_T); // time at 180 degree longitude
 //        drms_setkey_string(outRec, "T_REC", tstr);
-        drms_setkey_float(outRec, "CADENCE", 27.2753*24.*60.*60.);
+//        drms_setkey_float(outRec, "CADENCE", 27.2753*24.*60.*60.);
         drms_setkey_float(outRec, "T_REC_step", 27.2753*24.*60.*60.);
 
 // image statistics
@@ -1102,6 +1109,9 @@ printf("keywords wring half-way done\n");
         drms_setkey_string(smallRec, "HISTORY", historyofthemodule);
         drms_setkey_string(smallRec, "CTYPE1", "CRLN-CEA");
         drms_setkey_string(smallRec, "CTYPE2", "CRLT-CEA");
+        drms_setkey_string(smallRec, "BLD_VERS", jsoc_version);
+        status = drms_setkey_string(smallRec, "CODEVER", cvsinfo);
+
 //        i=xout/2+0.5;
         double tmp;
         tmp=xout - ((180.0-((nbin+1)/2.0-1.0)*(360.0/len[0]))/(360.0/xout)+1.0) + 1.0;
@@ -1119,14 +1129,14 @@ printf("keywords wring half-way done\n");
         l=-360.0/xout;
         drms_setkey_double(smallRec, "CDELT1", l);
         drms_setkey_double(smallRec, "CDELT2", nbin*1.0/sinbdivs);
-        drms_setkey_string(smallRec, "CUNIT1", "degree");
+        drms_setkey_string(smallRec, "CUNIT1", "Degree");
         drms_setkey_string(smallRec, "CUNIT2", "Sine Latitude");
         drms_setkey_string(smallRec, "WCSNAME", "Carrington Heliographic");
 
 //HMI observables keywords
         sprint_at(tstr, trot - delta_T);
 //        drms_setkey_string(smallRec, "T_REC", tstr);
-        drms_setkey_float(smallRec, "CADENCE", 27.2753*24.*60.*60.);
+//        drms_setkey_float(smallRec, "CADENCE", 27.2753*24.*60.*60.);
         drms_setkey_float(smallRec, "T_REC_step", 27.2753*24.*60.*60.);
 
 // image statistics
@@ -1843,7 +1853,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: brblossynoptic.c,v 1.2 2014/02/10 21:24:34 yliu Exp $
+$Id: brblossynoptic.c,v 1.3 2014/03/04 20:11:05 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/brblossynoptic.c,v $
 $Author: yliu $
 */
@@ -1856,11 +1866,8 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: brblossynoptic.c,v $
- * Revision 1.2  2014/02/10 21:24:34  yliu
- * Remove several include-lines Feb. 10, 2014
- *
- * Revision 1.1  2014/02/04 00:46:58  yliu
- * New module to produce both Br and Blos synoptic charts
+ * Revision 1.3  2014/03/04 20:11:05  yliu
+ * added BLD_VER and CODEVER
  *
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.
