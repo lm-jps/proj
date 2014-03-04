@@ -187,8 +187,8 @@ int DoIt(void)
   long long calVer;
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: brblossynoptic.c,v 1.3 2014/03/04 20:11:05 yliu Exp $");
-  cvsinfo = (char *)malloc(2048 * sizeof(char));
+  char *cvsinfo = strdup("$Id: brblossynoptic.c,v 1.4 2014/03/04 22:59:38 yliu Exp $");
+//  cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"Carrington-Time conversion corrected; o2helio.c bug corrected -- July 2013");
 
   struct {
@@ -1853,7 +1853,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: brblossynoptic.c,v 1.3 2014/03/04 20:11:05 yliu Exp $
+$Id: brblossynoptic.c,v 1.4 2014/03/04 22:59:38 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/brblossynoptic.c,v $
 $Author: yliu $
 */
@@ -1866,6 +1866,9 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: brblossynoptic.c,v $
+ * Revision 1.4  2014/03/04 22:59:38  yliu
+ * added BLD_VER and CODEVER
+ *
  * Revision 1.3  2014/03/04 20:11:05  yliu
  * added BLD_VER and CODEVER
  *
