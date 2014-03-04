@@ -187,10 +187,15 @@ int DoIt(void)
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
     // set cvs commit version into keyword HEADER
-  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.13 2014/02/11 00:25:56 arta Exp $");
+<<<<<<< hmisynoptic.c
+  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.14 2014/03/04 23:44:04 yliu Exp $");
+//  cvsinfo = (char *)malloc(2048 * sizeof(char));
+=======
+  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.14 2014/03/04 23:44:04 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
+>>>>>>> 1.13
 //  char cvsinfo[2048];
-  sprintf(historyofthemodule,"Module version added -- Feb 2014; Carrington-Time conversion corrected; o2helio.c bug corrected; CRPIX, CRVAL corrected -- Jan. 2014");
+  sprintf(historyofthemodule,"Module version added -- March 2014; Carrington-Time conversion corrected; o2helio.c bug corrected; CRPIX, CRVAL corrected -- Jan. 2014");
 
   struct {
       int recno;
@@ -1695,9 +1700,9 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.13 2014/02/11 00:25:56 arta Exp $
+$Id: hmisynoptic.c,v 1.14 2014/03/04 23:44:04 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
-$Author: arta $
+$Author: yliu $
 */
 /* hmisynoptic.c is a version from hmisynop.c that produces
  * a lower resolution map using Jesper's code fresize.c.
@@ -1708,6 +1713,9 @@ $Author: arta $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
+ * Revision 1.14  2014/03/04 23:44:04  yliu
+ * added BLD_VER and CODEVER
+ *
  * Revision 1.13  2014/02/11 00:25:56  arta
  * Fix use of the stats library.
  *
