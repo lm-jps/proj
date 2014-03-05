@@ -1,29 +1,33 @@
 /*
  *  sharp.c
  *
- *	This module creates the pipeline space weather harps
- *	It is a hard-coded strip-down version of bmap.c
- *	It takes the Mharp and Bharp series and crete the following quantities
- *  Series 1: Sharp_CEA
- *	  CEA remapped magnetogram, bitmap, continuum, doppler (same size in map coordinate, need manual spec?)
- *	  CEA remapped vector field (Br, Bt, Bp) (same as above)
- *    Space weather indices based on vector cutouts (step 2)
- *  Series 2: Sharp_cutout:
- *	  cutouts of magnetogram, bitmap, continuum, doppler (HARP defined, various sizes in CCD pixels)
- *	  cutouts of all vector data segments (same as above)
- *	Series 3: Other remaps
+ *	This module creates the pipeline Space Weather Active Region Patches (SHARPs).
+ *	It is a hard-coded strip-down version of bmap.c.
+ *	It takes the Mharp and Bharp series and create the following quantities:
+ *
+ *      Series 1: Sharp_CEA
+ *	          CEA remapped magnetogram, bitmap, continuum, doppler (same size in map coordinate, need manual spec?)
+ *	          CEA remapped vector field (Br, Bt, Bp) (same as above)
+ *                Space weather indices based on vector cutouts (step 2)
+ *
+ *      Series 2: Sharp_cutout:
+ *	          cutouts of magnetogram, bitmap, continuum, doppler (HARP defined, various sizes in CCD pixels)
+ *	          cutouts of all vector data segments (same as above)
  *
  *	Author:
  *		Xudong Sun; Monica Bobra
  *
  *	Version:
- *		v0.0	Jul 02 2012
- *		v0.1	Jul 23 2012
- *		v0.2	Sep 04 2012
- *		v0.3	Dec 18 2012
- *		v0.4	Jan 02 2013
- *    v0.5  Jan 23 2013
- *		v0.6	Aug 12 2013
+ *              v0.0 Jul 02 2012
+ *              v0.1 Jul 23 2012
+ *              v0.2 Sep 04 2012
+ *              v0.3 Dec 18 2012
+ *              v0.4 Jan 02 2013
+ *              v0.5 Jan 23 2013
+ *              v0.6 Aug 12 2013
+ *              v0.7 Jan 02 2014
+ *              v0.8 Feb 12 2014
+ *				v0.9 Mar 04 2014
  *
  *	Notes:
  *		v0.0
@@ -41,21 +45,31 @@
  *		Fixed memory leakage of 0.15G per rec; denoted with "Dec 18"
  *		v0.4
  *		Took out convert_inplace(). Was causing all the images to be int
- *    v0.5
- *    Corrected ephemeris keywords, added argument mInfo for setKeys()
+ *              v0.5
+ *              Corrected ephemeris keywords, added argument mInfo for setKeys()
  *		v0.6
  *		Changes in remapping of bitmap and conf_disambig, now near neighbor without anti-aliasing
- *		
+ *              v0.7
+ *              Added full disk as "b"
+ *              Global flag fullDisk is set if "b" is set
+ *              Utilize BharpRS and BharpRec all around
+ *              Pass mharpRec to set_keys() too in case of full disk
+ *              Fixed Bunit (removed from copy_me_keys(), added loops for Bunits in set_keys() here)
+ *              Error for CEA still does account for disambiguation yet
+ *		v0.8
+ *		Added disambig to azimuth during error propagation
+ *		Changed usage for disambig: bit 2 (radial acute) for full disk, bit 0 for patch
+ *		Fixed disambig cutout for patch: 0 for even, 7 for odd
+ *		v0.9
+ *		Fixed unit
+ *		Check whether in PATCH of FD mode, so the error propagation uses disambiguated azimuth or not
  *
- *	Example:
- *	sharp "mharp=hmi.Mharp_720s[1404][2012.02.20_10:00]" \
- "bharp=hmi_test.Bharp_720s_fd10[1404][2012.02.20_10:00]" \
- "dop=hmi.V_720s[2012.02.20_10:00]" \
- "cont=hmi.Ic_720s[2012.02.20_10:00]" \
- "sharp_cea=su_xudong.Sharp_CEA" "sharp_cut=su_xudong.Sharp_Cut"
- *	For comparison:
- *	bmap "in=hmi_test.Bharp_720s_fd10[1404][2012.02.20_10:00]" \
- "out=hmi_test.B_720s_CEA" -s -a "map=cyleqa"
+ *
+ *	Example Calls:
+ *      [I]   B (full disk disambiguation)
+ *      > sharp "mharp=hmi.Mharp_720s[1832][2012.07.12_15:24]" "b=hmi_test.B_720s[2012.07.12_15:24]" "dop=hmi.V_720s[2012.07.12_15:24]" "cont=hmi.Ic_720s[2012.07.12_15:24]" "sharp_cea=su_xudong.sharp_cea_720s" "sharp_cut=su_xudong.sharp_720s"
+ *      [II]  BHARP (patch disambiguation)
+ *      > sharp "mharp=hmi.Mharp_720s[1832][2012.07.12_15:24]" "bharp=hmi.Bharp_720s[1832][2012.07.12_15:24]" "dop=hmi.V_720s[2012.07.12_15:24]" "cont=hmi.Ic_720s[2012.07.12_15:24]" "sharp_cea=su_xudong.sharp_cea_720s" "sharp_cut=su_xudong.sharp_720s"
  *
  *
  */
@@ -92,10 +106,10 @@
 #define FOURK2    (16777216)
 
 #define ARRLENGTH(ARR) (sizeof(ARR) / sizeof(ARR[0]))
-  
+
 // Nyqvist rate at disk center is 0.03 degree. Oversample above 0.015 degree
 #define NYQVIST		(0.015)
-  
+
 // Some other things
 #ifndef MIN
 #define MIN(a,b) (((a)<(b)) ? (a) : (b))
@@ -129,7 +143,7 @@
 
 // Space weather keywords
 struct swIndex {
-	float mean_vf;
+    float mean_vf;
     float count_mask;
 	float absFlux;
 	float mean_hf;
@@ -140,16 +154,16 @@ struct swIndex {
 	float mean_jz;
 	float us_i;
 	float mean_alpha;
-	float mean_ih;
-	float total_us_ih;
-	float total_abs_ih;
-	float totaljz;
-	float totpot;
-	float meanpot;
-	float area_w_shear_gt_45;
-	float meanshear_angle;
-	float area_w_shear_gt_45h;
-	float meanshear_angleh;
+    float mean_ih;
+    float total_us_ih;
+    float total_abs_ih;
+    float totaljz;
+    float totpot;
+    float meanpot;
+    float area_w_shear_gt_45;
+    float meanshear_angle;
+    float area_w_shear_gt_45h;
+    float meanshear_angleh;
     float mean_derivative_btotal_err;
     float mean_vf_err;
     float mean_gamma_err;
@@ -165,6 +179,7 @@ struct swIndex {
     float meanpot_err;
     float totpot_err;
     float meanshear_angle_err;
+    float Rparam;
 };
 
 // Mapping method
@@ -280,7 +295,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr);
 
 /* Set all keywords, no error checking for now */
-void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo);
+// Changed Dec 30 XS
+void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec, struct mapInfo *mInfo);
 
 // ===================
 
@@ -320,35 +336,52 @@ char *CutSegs[] = {"magnetogram", "bitmap", "Dopplergram", "continuum",
 	"field_inclination_err", "field_az_err", "inclin_azimuth_err",
 	"field_alpha_err","inclination_alpha_err", "azimuth_alpha_err",
 	"disambig", "conf_disambig"};
-char *CEASegs[] = {"magnetogram", "bitmap", "Dopplergram", "continuum", "disambig",
-	BR_SEG_CEA, BT_SEG_CEA, BP_SEG_CEA, BR_ERR_SEG_CEA, BT_ERR_SEG_CEA, BP_ERR_SEG_CEA};
+char *CEASegs[] = {"magnetogram", "bitmap", "Dopplergram", "continuum",
+	BR_SEG_CEA, BT_SEG_CEA, BP_SEG_CEA, BR_ERR_SEG_CEA, BT_ERR_SEG_CEA, BP_ERR_SEG_CEA, "conf_disambig"};
+// For Bunits, added Dec 30 XS
+char *CutBunits[] = {"Mx/cm^2", " ", "cm/s", "DN/s",
+    "degree", "degree", "Mx/cm^2", "cm/s", "mA", " ",
+    "length units", "DN/s", "DN/s", " ", " ",
+    " ",
+    " ", " ",
+    "degree", "degree", "Mx/cm^2", "cm/s", " ",
+    " ", " ", " ",
+    " ", " ", " ",
+    " ", " "};
+char *CEABunits[] = {"Mx/cm^2", " ", "cm/s", "DN/s",
+    "Mx/cm^2", "Mx/cm^2", "Mx/cm^2", "Mx/cm^2", "Mx/cm^2", "Mx/cm^2", " "};      // Mar 4 2014 XS
 
 /* ========================================================================================================== */
 
 char *module_name = "sharp";
 int seed;
 
+int fullDisk;       // full disk mode
+int amb4err;      // Use azimuth disambiguation for error propagation, default is 0 for patch and 1 for FD
+
 ModuleArgs_t module_args[] =
 {
 	{ARG_STRING, "mharp", kNotSpecified, "Input Mharp series."},
 	{ARG_STRING, "bharp", kNotSpecified, "Input Bharp series."},
+    {ARG_STRING, "b", kNotSpecified, "Input B series, if set, overrides bharp."},
 	{ARG_STRING, "dop", kNotSpecified, "Input Doppler series."},
 	{ARG_STRING, "cont", kNotSpecified, "Input Continuum series."},
 	{ARG_STRING, "sharp_cea", kNotSpecified, "Output Sharp CEA series."},
 	{ARG_STRING, "sharp_cut", kNotSpecified, "Output Sharp cutout series."},
     {ARG_INT,    "seed", "987654", "Seed for the random number generator."},
+    {ARG_INT,   "f_amb4err", "0", "Force using disambiguation in error propagation"},     // Mar 4 2014 XS
 	{ARG_END}
 };
 
 int DoIt(void)
 {
-    int errbufstat=setvbuf(stderr, NULL, _IONBF, BUFSIZ);
-    int outbufstat=setvbuf(stdout, NULL, _IONBF, BUFSIZ);
+    int errbufstat = setvbuf(stderr, NULL, _IONBF, BUFSIZ);
+    int outbufstat = setvbuf(stdout, NULL, _IONBF, BUFSIZ);
     
 	int status = DRMS_SUCCESS;
 	int nrecs, irec;
 	
-	char *mharpQuery, *bharpQuery;
+	char *mharpQuery, *bharpQuery, *bQuery;
 	char *dopQuery, *contQuery;
 	char *sharpCeaQuery, *sharpCutQuery;
 	
@@ -359,17 +392,39 @@ int DoIt(void)
     
 	mharpQuery = (char *) params_get_str(&cmdparams, "mharp");
 	bharpQuery = (char *) params_get_str(&cmdparams, "bharp");
+    bQuery = (char *) params_get_str(&cmdparams, "b");
 	dopQuery = (char *) params_get_str(&cmdparams, "dop");
 	contQuery = (char *) params_get_str(&cmdparams, "cont");
 	sharpCeaQuery = (char *) params_get_str(&cmdparams, "sharp_cea");
 	sharpCutQuery = (char *) params_get_str(&cmdparams, "sharp_cut");
     
     seed = params_get_int(&cmdparams, "seed");
+    int f_amb4err = params_get_int(&cmdparams, "f_amb4err");
 	
 	/* Get input data, check everything */
 	
-	if (getInputRS(&mharpRS, &bharpRS, mharpQuery, bharpQuery))
-		DIE("Input harp data error.");
+    // Full disk mode if "b" is set
+    if (strcmp(bQuery, kNotSpecified)) {
+        fullDisk = 1;
+        bharpQuery = bQuery;
+        //        SHOW(bharpQuery); SHOW("\n");
+        SHOW("Full disk mode\n");
+    } else {
+        fullDisk = 0;
+        SHOW("Harp mode\n");
+    }
+    
+    // Mar 4 2014
+    if (f_amb4err == 0) {         // no forcing, 0 for patch and 1 for FD
+        amb4err = fullDisk ? 1 : 0;
+    } else {
+        amb4err = 1;
+    }
+    printf("amb4err=%d\n", amb4err);
+    
+    // Bharp point to B if full disk
+    if (getInputRS(&mharpRS, &bharpRS, mharpQuery, bharpQuery))
+        DIE("Input harp data error.");
 	nrecs = mharpRS->n;
 	
 	if (getInputRS_aux(&dopRS, dopQuery, mharpRS))
@@ -387,14 +442,24 @@ int DoIt(void)
 		/* Records in work */
 		
 		DRMS_Record_t *mharpRec = NULL, *bharpRec = NULL;
+        
 		mharpRec = mharpRS->records[irec];
-		bharpRec = bharpRS->records[irec];
-		
-		TIME trec = drms_getkey_time(mharpRec, "T_REC", &status);
-		
+        
+        TIME trec = drms_getkey_time(mharpRec, "T_REC", &status);
+        
+		if (!fullDisk) {
+            bharpRec = bharpRS->records[irec];
+        } else {
+            if (getInputRec_aux(&bharpRec, bharpRS, trec)) {     // Bharp point to full disk B
+                printf("Fetching B failed, image #%d skipped.\n", irec);
+                continue;
+            }
+        }
+        
 		struct swIndex swKeys;
 		
 		DRMS_Record_t *dopRec = NULL, *contRec = NULL;
+        
 		if (getInputRec_aux(&dopRec, dopRS, trec)) {
 			printf("Fetching Doppler failed, image #%d skipped.\n", irec);
 			continue;
@@ -473,10 +538,13 @@ int getInputRS(DRMS_RecordSet_t **mharpRS_ptr, DRMS_RecordSet_t **bharpRS_ptr,
 	*mharpRS_ptr = drms_open_records(drms_env, mharpQuery, &status);
     if (status || (*mharpRS_ptr)->n == 0) return 1;
 	
-	*bharpRS_ptr = drms_open_records(drms_env, bharpQuery, &status);
-    if (status || (*bharpRS_ptr)->n == 0) return 1;
-	
-	if (compareHarp((*mharpRS_ptr), (*bharpRS_ptr))) return 1;
+	if (fullDisk) {
+        if (getInputRS_aux(bharpRS_ptr, bharpQuery, *mharpRS_ptr)) return 1;
+    } else {
+        *bharpRS_ptr = drms_open_records(drms_env, bharpQuery, &status);
+        if (status || (*bharpRS_ptr)->n == 0) return 1;
+        if (compareHarp((*mharpRS_ptr), (*bharpRS_ptr))) return 1;
+    }
 	
 	return 0;
 	
@@ -603,7 +671,7 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	mInfo.xscale = XSCALE;
 	mInfo.yscale = YSCALE;
 	
-  int ncol0, nrow0;		// oversampled map size
+    int ncol0, nrow0;		// oversampled map size
 	
 	// Get ephemeris
 	
@@ -623,7 +691,7 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	// Do this for all bitmaps, Aug 12 2013 XS
 	// ========================================
 	
-  mInfo.nbin = 1;			// for bitmaps. suppress anti-aliasing
+    mInfo.nbin = 1;			// for bitmaps. suppress anti-aliasing
 	ncol0 = mInfo.ncol;
 	nrow0 = mInfo.nrow;
 	
@@ -638,13 +706,13 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	}
 	printf("Bitmap mapping done.\n");
 	
-  if (mapScaler(sharpRec, bharpRec, mharpRec, &mInfo, "conf_disambig")) {
+    if (mapScaler(sharpRec, bharpRec, mharpRec, &mInfo, "conf_disambig")) {
 		SHOW("CEA: mapping conf_disambig error\n");
 		return 1;
 	}
 	printf("Conf disambig mapping done.\n");
 	
-  free(mInfo.xi_out);
+    free(mInfo.xi_out);
 	free(mInfo.zeta_out);
 	
 	// ========================================
@@ -669,7 +737,7 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 		return 1;
 	}
 	printf("Magnetogram mapping done.\n");
-		
+    
 	if (mapScaler(sharpRec, dopRec, mharpRec, &mInfo, "Dopplergram")) {
 		SHOW("CEA: mapping dopplergram error\n");
 		return 1;
@@ -703,12 +771,17 @@ int createCeaRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	drms_copykey(sharpRec, mharpRec, "T_REC");
 	drms_copykey(sharpRec, mharpRec, "HARPNUM");
 	
+    if (fullDisk) {
+        DRMS_Link_t *bLink = hcon_lookup_lower(&sharpRec->links, "B");
+        if (bLink) drms_link_set("B", sharpRec, bharpRec);
+    } else {
+        DRMS_Link_t *bHarpLink = hcon_lookup_lower(&sharpRec->links, "BHARP");
+        if (bHarpLink) drms_link_set("BHARP", sharpRec, bharpRec);
+    }
 	DRMS_Link_t *mHarpLink = hcon_lookup_lower(&sharpRec->links, "MHARP");
 	if (mHarpLink) drms_link_set("MHARP", sharpRec, mharpRec);
-	DRMS_Link_t *bHarpLink = hcon_lookup_lower(&sharpRec->links, "BHARP");
-	if (bHarpLink) drms_link_set("BHARP", sharpRec, bharpRec);
 	
-	 setKeys(sharpRec, bharpRec, &mInfo);            // Set all other keywords
+    setKeys(sharpRec, mharpRec, bharpRec, &mInfo);            // Set all other keywords
 	drms_copykey(sharpRec, mharpRec, "QUALITY");		// copied from los records
 	
 	// Space weather
@@ -762,10 +835,15 @@ int mapScaler(DRMS_Record_t *sharpRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 	inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
 	if (!inArray) return 1;
 	
+    if (!strcmp(segName, "conf_disambig") || !strcmp(segName, "bitmap")) {
+        // Moved out so it works for FD conf_disambig as well
+        // Jan 2 2014 XS
+        interpOpt = 3;		// Aug 12 XS, near neighbor
+    }
+    
 	float *inData;
 	int xsz = inArray->axis[0], ysz = inArray->axis[1];
 	if ((xsz != FOURK) || (ysz != FOURK)) {		// for bitmap, make tmp full disk
-		interpOpt = 3;		// Aug 12 XS, near neighbor
 		float *inData0 = (float *) inArray->data;
 		inData = (float *) (calloc(FOURK2, sizeof(float)));
 		int x0 = (int) drms_getkey_float(harpRec, "CRPIX1", &status) - 1;
@@ -1147,9 +1225,9 @@ int performSampling(float *outData, float *inData, struct mapInfo *mInfo, int in
 	// Changed Aug 12 2013, XS, for bitmaps
 	float *outData0;
 	if (interpOpt == 3 && mInfo->nbin == 1) {
-	  outData0 = outData;
+        outData0 = outData;
 	} else {
-	  outData0 = (float *) (malloc(ncol0 * nrow0 * sizeof(float)));
+        outData0 = (float *) (malloc(ncol0 * nrow0 * sizeof(float)));
 	}
 	
 	float *xi_out = mInfo->xi_out;
@@ -1171,7 +1249,7 @@ int performSampling(float *outData, float *inData, struct mapInfo *mInfo, int in
 			init_finterpolate_linear(&pars, 1.);
 			break;
 		case 3:			// Near neighbor
-		  break;
+            break;
 		default:
 			return 1;
 	}
@@ -1179,23 +1257,23 @@ int performSampling(float *outData, float *inData, struct mapInfo *mInfo, int in
 	printf("interpOpt = %d, nbin = %d ", interpOpt, mInfo->nbin);
 	if (interpOpt == 3) {			// Aug 6 2013, Xudong
 	  	for (int row0 = 0; row0 < nrow0; row0++) {
-				for (int col0 = 0; col0 < ncol0; col0++) {
-					ind_map = row0 * ncol0 + col0;
-					outData0[ind_map] = nnb(inData, FOURK, FOURK, xi_out[ind_map], zeta_out[ind_map]);
-				}
-			}
+            for (int col0 = 0; col0 < ncol0; col0++) {
+                ind_map = row0 * ncol0 + col0;
+                outData0[ind_map] = nnb(inData, FOURK, FOURK, xi_out[ind_map], zeta_out[ind_map]);
+            }
+        }
 	} else {
-  	finterpolate(&pars, inData, xi_out, zeta_out, outData0,
-				 FOURK, FOURK, FOURK, ncol0, nrow0, ncol0, DRMS_MISSING_FLOAT);
+        finterpolate(&pars, inData, xi_out, zeta_out, outData0,
+                     FOURK, FOURK, FOURK, ncol0, nrow0, ncol0, DRMS_MISSING_FLOAT);
 	}
 	
 	// Rebinning, smoothing
 	
 	if (interpOpt == 3 && mInfo->nbin == 1) {
-	  return 0;
+        return 0;
 	} else {
-  	frebin(outData0, outData, ncol0, nrow0, mInfo->nbin, 1);		// Gaussian
-	  free(outData0);		// Dec 18 2012
+        frebin(outData0, outData, ncol0, nrow0, mInfo->nbin, 1);		// Gaussian
+        free(outData0);		// Dec 18 2012
 	}
 	
 	//
@@ -1434,16 +1512,21 @@ int readVectorB(DRMS_Record_t *inRec, float *bx_img, float *by_img, float *bz_im
 	
 	int llx, lly;		// lower-left corner
 	int bmx, bmy;		// bitmap size
-	
-	llx = (int)(drms_getkey_float(inRec, "CRPIX1", &status)) - 1;
-	lly = (int)(drms_getkey_float(inRec, "CRPIX2", &status)) - 1;
-	
-	bmx = inArray_ambig->axis[0];
-	bmy = inArray_ambig->axis[1];
+    
+    if (fullDisk) {
+        llx = lly = 0;
+        bmx = bmy = FOURK;
+    } else {
+        llx = (int)(drms_getkey_float(inRec, "CRPIX1", &status)) - 1;
+        lly = (int)(drms_getkey_float(inRec, "CRPIX2", &status)) - 1;
+        bmx = inArray_ambig->axis[0];
+        bmy = inArray_ambig->axis[1];
+    }
 	
 	int kx, ky, kOff;
 	int ix = 0, jy = 0, yOff = 0, iData = 0;
 	int xDim = FOURK, yDim = FOURK;
+	int amb = 0;
 	
 	for (jy = 0; jy < yDim; jy++)
 	{
@@ -1466,7 +1549,10 @@ int readVectorB(DRMS_Record_t *inRec, float *bx_img, float *by_img, float *bz_im
 				continue;
 			} else {
 				kOff = ky * bmx + kx;
-				if (ambig[kOff] % 2) {		// 180
+                //				if (ambig[kOff] % 2) {		// 180
+				// Feb 12 2014, use bit #2 for full disk, lowest bit for patch
+				if (fullDisk) { amb = (ambig[kOff] / 4) % 2; } else { amb = ambig[kOff] % 2; }
+				if (amb) {				// Feb 12 2014, use bit #2
 					bx_img[iData] *= -1.; by_img[iData] *= -1.;
 				}
 			}
@@ -1506,6 +1592,7 @@ int readVectorBErr(DRMS_Record_t *inRec,
 	DRMS_Array_t *inArrays[9];
 	
 	// Read full disk images
+    // Do we need disambig? Dec 30 XS
 	
 	for (int iSeg = 0; iSeg < 9; iSeg++) {
 		
@@ -1519,6 +1606,46 @@ int readVectorBErr(DRMS_Record_t *inRec,
 	float *errbT0 = data_ptr[3], *errbI0 = data_ptr[4], *errbA0 = data_ptr[5];
 	float *errbTbI0 = data_ptr[6], *errbTbA0 = data_ptr[7], *errbIbA0 = data_ptr[8];
 	
+	// Add disambig, Feb 12 2014
+	
+	DRMS_Segment_t *inSeg;
+    DRMS_Array_t *inArray_ambig;
+    
+    if (amb4err) {              // Mar 4 2014
+    
+        inSeg = drms_segment_lookup(inRec, "disambig");
+        inArray_ambig = drms_segment_read(inSeg, DRMS_TYPE_CHAR, &status);
+        if (status) return 1;
+        char *ambig = (char *)inArray_ambig->data;
+        
+        int llx, lly;		// lower-left corner
+        int bmx, bmy;		// bitmap size
+        
+        if (fullDisk) {
+            llx = lly = 0;
+            bmx = bmy = FOURK;
+        } else {
+            llx = (int)(drms_getkey_float(inRec, "CRPIX1", &status)) - 1;
+            lly = (int)(drms_getkey_float(inRec, "CRPIX2", &status)) - 1;
+            bmx = inArray_ambig->axis[0];
+            bmy = inArray_ambig->axis[1];
+        }
+        
+        int idx, idx_a;
+        int amb;
+        
+        for (int j = 0; j < bmy; j++) {
+            for (int i = 0; i < bmx; i++) {
+                idx_a = j * bmx + i;
+                idx = (j + lly) * FOURK + (i + llx);
+                // Feb 12 2014, use bit #2 for full disk, lowest bit for patch
+                if (fullDisk) { amb = (ambig[idx_a] / 4) % 2; } else { amb = ambig[idx_a] % 2; }
+                if (amb) { bA0[idx] += 180.; }
+            }
+        }
+        
+    }
+    
 	// Convert errors to variances, correlation coefficients to covariances
 	
 	for (int i = 0; i < FOURK2; i++) {
@@ -1527,7 +1654,7 @@ int readVectorBErr(DRMS_Record_t *inRec,
 		if (fabs(errbA0[i]) > 180.) errbA0[i] = 180.;
 		
 		bT[i] = bT0[i];
-		bI[i] = bI0[i];
+		bI[i] = bI0[i];		// in deg, coverted in errorprop
 		bA[i] = bA0[i];
 		
 		errbT[i] = errbT0[i] * errbT0[i];
@@ -1543,6 +1670,7 @@ int readVectorBErr(DRMS_Record_t *inRec,
 	//
 	
 	for (int iSeg = 0; iSeg < 9; iSeg++) drms_free_array(inArrays[iSeg]);
+	if (amb4err) drms_free_array(inArray_ambig);		// Feb 12; Mar 04 2014
 	
 	return 0;
 	
@@ -1618,7 +1746,7 @@ int createCutRecord(DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec,
 	if (bHarpLink) drms_link_set("BHARP", sharpRec, bharpRec);
 	
 	setSWIndex(sharpRec, swKeys_ptr);	// Set space weather indices
-	setKeys(sharpRec, bharpRec, NULL);              // Set all other keywords, NULL specifies cutout
+	setKeys(sharpRec, mharpRec, bharpRec, NULL);              // Set all other keywords, NULL specifies cutout
 	
 	// Stats
 	
@@ -1675,25 +1803,44 @@ int writeCutout(DRMS_Record_t *outRec, DRMS_Record_t *inRec, DRMS_Record_t *harp
 		return 1;
 	}
 	
+	// Feb 12 2014, fool-proof, for patch, change everything to 0 or 7!!!
+	// This is a fix for disambiguation before Aug 2013
+	
+	if (!strcmp(SegName, "disambig") && !fullDisk) {
+		double *disamb = (double *) (cutoutArray->data);
+		for (int i = 0; i < nxny; i++) {
+			if (((int)disamb[i]) % 2) { disamb[i] = 7; } else { disamb[i] = 0; }
+		}
+	}
+	
 	/* Adding disambiguation resolution to cutout azimuth? */
 	
 #if DISAMB_AZI
+	int amb;
 	if (!strcmp(SegName, "azimuth")) {
 		DRMS_Segment_t *disambSeg = NULL;
 		disambSeg = drms_segment_lookup(inRec, "disambig");
 		if (!disambSeg) {drms_free_array(cutoutArray); return 1;}
 		DRMS_Array_t *disambArray;
-		if (disambSeg->axis[0] == nx && disambSeg->axis[1] == ny) {
-			disambArray = drms_segment_read(disambSeg, DRMS_TYPE_CHAR, &status);
-			if (status) {drms_free_array(cutoutArray); return 1;}
-		} else {
-            drms_free_array(cutoutArray);
-			return 1;
-		}
+        if (fullDisk) { // Jan 2 2014 XS
+            disambArray = drms_segment_readslice(disambSeg, DRMS_TYPE_CHAR, ll, ur, &status);
+            if (status) return 1;
+        } else {
+            if (disambSeg->axis[0] == nx && disambSeg->axis[1] == ny) {
+                disambArray = drms_segment_read(disambSeg, DRMS_TYPE_CHAR, &status);
+                if (status) {drms_free_array(cutoutArray); return 1;}
+            } else {
+                drms_free_array(cutoutArray);
+                return 1;
+            }
+        }
 		double *azimuth = (double *) cutoutArray->data;
 		char *disamb = (char *) disambArray->data;
 		for (int n = 0; n < nxny; n++) {
-			if (disamb[n] % 2) azimuth[n] += 180.;      // Nov 12 2013 Fixed!!!
+            //			if (disamb[n] % 2) azimuth[n] += 180.;      // Nov 12 2013 Fixed!!!
+			// Feb 12 2014, use bit #2 for full disk, lowest bit for patch
+			if (fullDisk) { amb = (disamb[n] / 4) % 2; } else { amb = disamb[n] % 2; }
+			if (amb) azimuth[n] += 180.;
 		}
 		drms_free_array(disambArray);
 	}
@@ -1759,6 +1906,11 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	DRMS_Array_t *bzArray = drms_segment_read(bzSeg, DRMS_TYPE_FLOAT, &status);
 	float *bz = (float *) bzArray->data;		// bz
     
+    //Use magnetogram map to compute R
+    DRMS_Segment_t *losSeg = drms_segment_lookup(inRec, "magnetogram");
+    DRMS_Array_t *losArray = drms_segment_read(losSeg, DRMS_TYPE_FLOAT, &status);
+    float *los = (float *) losArray->data;          // los
+    
 	DRMS_Segment_t *bz_errSeg = drms_segment_lookup(inRec, BR_ERR_SEG_CEA);
 	DRMS_Array_t *bz_errArray = drms_segment_read(bz_errSeg, DRMS_TYPE_FLOAT, &status);
 	float *bz_err = (float *) bz_errArray->data;		// bz_err
@@ -1781,10 +1933,12 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float imcrpix2     = drms_getkey_float(inRec, "IMCRPIX2", &status);
 	float crpix1       = drms_getkey_float(inRec, "CRPIX1", &status);
 	float crpix2       = drms_getkey_float(inRec, "CRPIX2", &status);
-
-        // convert cdelt1_orig from degrees to arcsec
-        float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
-
+    
+    // convert cdelt1_orig from degrees to arcsec
+    float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
+    int nx1 = nx*cdelt1/2;
+    int ny1 = ny*cdelt1/2;
+    
 	// Temp arrays
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
 	float *bt      = (float *) (malloc(nxny * sizeof(float)));
@@ -1803,13 +1957,21 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float *dery_bz = (float *) (malloc(nxny * sizeof(float)));
 	float *bt_err  = (float *) (malloc(nxny * sizeof(float)));
 	float *bh_err  = (float *) (malloc(nxny * sizeof(float)));
-        float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
-        float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
-        float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
-        float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
+    float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
+    float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
+    float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
+    float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
+    
+    // malloc some arrays for the R parameter calculation
+    float *rim = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1p0 = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1n0 = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1p = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1n = (float *)malloc(nx1*ny1*sizeof(float));
+    float *p1 = (float *)malloc(nx1*ny1*sizeof(float));
+    float *pmap = (float *)malloc(nx1*ny1*sizeof(float));
+    
 	//spaceweather quantities computed
-    
-    
 	if (computeAbsFlux(bz_err, bz , dims, &(swKeys_ptr->absFlux), &(swKeys_ptr->mean_vf),  &(swKeys_ptr->mean_vf_err),
                        &(swKeys_ptr->count_mask), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
     {
@@ -1905,6 +2067,13 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 		swKeys_ptr->area_w_shear_gt_45 = DRMS_MISSING_FLOAT;
         swKeys_ptr->meanshear_angle_err= DRMS_MISSING_FLOAT;
 	}
+    
+	if (computeR(bz_err, los , dims, &(swKeys_ptr->Rparam), cdelt1, rim, p1p0, p1n0,
+                 p1p, p1n, p1, pmap, nx1, ny1))
+    {
+		swKeys_ptr->Rparam = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
+	}
+    
 	
 	// Clean up the arrays
 	
@@ -1923,6 +2092,15 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	free(bt_err); free(bh_err);  free(jz_err);
     free(jz_err_squared); free(jz_rms_err);
     free(jz_err_squared_smooth);
+    
+    free(rim);
+    free(p1p0);
+    free(p1n0);
+    free(p1p);
+    free(p1n);
+    free(p1);
+    free(pmap);
+    
 }
 
 /*
@@ -1964,6 +2142,7 @@ void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
     drms_setkey_float(outRec, "ERRMPOT", swKeys_ptr->meanpot_err);
     drms_setkey_float(outRec, "ERRTPOT", swKeys_ptr->totpot_err);
     drms_setkey_float(outRec, "ERRMSHA", swKeys_ptr->meanshear_angle_err);
+    drms_setkey_float(outRec, "R_VALUE", swKeys_ptr->Rparam);
 };
 
 /*
@@ -1971,17 +2150,18 @@ void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
  *
  */
 
-void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
+void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bharpRec, struct mapInfo *mInfo)
 {
-	copy_me_keys(inRec, outRec);
-	copy_patch_keys(inRec, outRec);
-	copy_geo_keys(inRec, outRec);
-	copy_ambig_keys(inRec, outRec);
-
+    
+	copy_me_keys(bharpRec, outRec);
+	copy_patch_keys(mharpRec, outRec);      // Dec 30
+	copy_geo_keys(mharpRec, outRec);        // Dec 30
+	copy_ambig_keys(bharpRec, outRec);
+    
     int status = 0;
 	
-	// Change a few geometry keywords for CEA records
-	if (mInfo != NULL) {
+	// Change a few geometry keywords for CEA & cutout records
+	if (mInfo != NULL) {        // CEA
         
         drms_setkey_float(outRec, "CRPIX1", mInfo->ncol/2. + 0.5);
 		drms_setkey_float(outRec, "CRPIX2", mInfo->nrow/2. + 0.5);
@@ -1999,44 +2179,74 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec, struct mapInfo *mInfo)
 		snprintf (key, 64, "CRLT-%s", wcsCode[(int) mInfo->proj]);
 		drms_setkey_string(outRec, "CTYPE2", key);
 		drms_setkey_float(outRec, "CROTA2", 0.0);
-		
-	} else {
         
-        float disk_xc = drms_getkey_float(inRec, "IMCRPIX1", &status);
-        float disk_yc = drms_getkey_float(inRec, "IMCRPIX2", &status);
-        float x_ll = drms_getkey_float(inRec, "CRPIX1", &status);
-        float y_ll = drms_getkey_float(inRec, "CRPIX2", &status);
+        // Jan 2 2014 XS
+        int nSeg = ARRLENGTH(CEASegs);
+        for (int iSeg = 0; iSeg < nSeg; iSeg++) {
+            DRMS_Segment_t *outSeg = NULL;
+            outSeg = drms_segment_lookup(outRec, CEASegs[iSeg]);
+            if (!outSeg) continue;
+            // Set Bunit
+            char bunit_xxx[20];
+            sprintf(bunit_xxx, "BUNIT_%03d", iSeg);
+            //printf("%s, %s\n", bunit_xxx, CEABunits[iSeg]);
+            drms_setkey_string(outRec, bunit_xxx, CEABunits[iSeg]);
+        }
+		
+	} else {        // Cutout
+        
+        float disk_xc, disk_yc;
+        if (fullDisk) {
+            disk_xc = drms_getkey_float(bharpRec, "CRPIX1", &status);
+            disk_yc = drms_getkey_float(bharpRec, "CRPIX2", &status);
+        } else {
+            disk_xc = drms_getkey_float(mharpRec, "IMCRPIX1", &status);
+            disk_yc = drms_getkey_float(mharpRec, "IMCRPIX2", &status);
+        }
+        float x_ll = drms_getkey_float(mharpRec, "CRPIX1", &status);
+        float y_ll = drms_getkey_float(mharpRec, "CRPIX2", &status);
         // Defined as disk center's pixel address wrt lower-left of cutout
         drms_setkey_float(outRec, "CRPIX1", disk_xc - x_ll + 1.);
 		drms_setkey_float(outRec, "CRPIX2", disk_yc - y_ll + 1.);
 		// Always 0.
 		drms_setkey_float(outRec, "CRVAL1", 0);
 		drms_setkey_float(outRec, "CRVAL2", 0);
+        
+        // Jan 2 2014 XS
+        int nSeg = ARRLENGTH(CutSegs);
+        for (int iSeg = 0; iSeg < nSeg; iSeg++) {
+            DRMS_Segment_t *outSeg = NULL;
+            outSeg = drms_segment_lookup(outRec, CutSegs[iSeg]);
+            if (!outSeg) continue;
+            // Set Bunit
+            char bunit_xxx[20];
+            sprintf(bunit_xxx, "BUNIT_%03d", iSeg);
+            //printf("%s, %s\n", bunit_xxx, CutBunits[iSeg]);
+            drms_setkey_string(outRec, bunit_xxx, CutBunits[iSeg]);
+        }
+        
 		
 	}
+    
+    TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+    tnow = (double)time(NULL);
+    tnow += UNIX_epoch;
 	
-	char timebuf[1024];
-	float UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
-	double val;
+    val = drms_getkey_time(bharpRec, "DATE", &status);
+    drms_setkey_time(outRec, "DATE_B", val);
+    drms_setkey_time(outRec, "DATE", tnow);
 	
-	val = drms_getkey_double(inRec, "DATE",&status);
-	drms_setkey_double(outRec, "DATE_B", val);
-	sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
-	drms_setkey_string(outRec, "DATE", timebuf);
-	
-	// set cvs commit version into keyword HEADER
-	char *cvsinfo = strdup("$Id: sharp.c,v 1.22 2014/02/19 14:59:25 arta Exp $");
-	char *cvsinfo2 = sw_functions_version();
-	char cvsinfoall[2048];
-        strcat(cvsinfoall,cvsinfo);
-        strcat(cvsinfoall,"\n");
-        strcat(cvsinfoall,cvsinfo2);
-	status = drms_setkey_string(outRec, "CODEVER7", cvsinfoall);
+    // set cvs commit version into keyword HEADER
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.23 2014/03/05 19:39:32 xudong Exp $");
+    char *cvsinfo2 = sw_functions_version();
+    char cvsinfoall[2048];
+    strcat(cvsinfoall,cvsinfo);
+    strcat(cvsinfoall,"\n");
+    strcat(cvsinfoall,cvsinfo2);
+    status = drms_setkey_string(outRec, "CODEVER7", cvsinfoall);
 	
 };
 
-//
-//
 
 /* ############# Nearest neighbour interpolation ############### */
 
