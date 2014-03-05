@@ -11,6 +11,8 @@
 #include "jsoc_main.h"
 #include "astro.h" 
 #include "drms_dsdsapi.h"
+//#include "/home0/yliu/cvs/JSOC/proj/myproj/apps/src/fstats.c"
+//#include "/home0/yliu/cvs/JSOC/proj/libs/astro/heliographic_coords.c"
 #include "/home/wso/src/libastro.d/solephem.c"
 #include "fstats.h"
 
@@ -187,15 +189,10 @@ int DoIt(void)
   double eph[30];
   char historyofthemodule[2048]; // put history info into the data
     // set cvs commit version into keyword HEADER
-<<<<<<< hmisynoptic.c
-  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.14 2014/03/04 23:44:04 yliu Exp $");
+  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.15 2014/03/05 15:30:20 yliu Exp $");
 //  cvsinfo = (char *)malloc(2048 * sizeof(char));
-=======
-  char *cvsinfo = strdup("$Id: hmisynoptic.c,v 1.14 2014/03/04 23:44:04 yliu Exp $");
-  cvsinfo = (char *)malloc(2048 * sizeof(char));
->>>>>>> 1.13
 //  char cvsinfo[2048];
-  sprintf(historyofthemodule,"Module version added -- March 2014; Carrington-Time conversion corrected; o2helio.c bug corrected; CRPIX, CRVAL corrected -- Jan. 2014");
+  sprintf(historyofthemodule,"Module version added -- Feb 2014; Carrington-Time conversion corrected; o2helio.c bug corrected; CRPIX, CRVAL corrected -- Jan. 2014");
 
   struct {
       int recno;
@@ -1700,7 +1697,7 @@ double earth_B(TIME t)
 */
 
 /*
-$Id: hmisynoptic.c,v 1.14 2014/03/04 23:44:04 yliu Exp $
+$Id: hmisynoptic.c,v 1.15 2014/03/05 15:30:20 yliu Exp $
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/synop/apps/hmisynoptic.c,v $
 $Author: yliu $
 */
@@ -1713,20 +1710,8 @@ $Author: yliu $
  * revision 2010/03/01   Yang
  *            
  * $Log: hmisynoptic.c,v $
- * Revision 1.14  2014/03/04 23:44:04  yliu
+ * Revision 1.15  2014/03/05 15:30:20  yliu
  * added BLD_VER and CODEVER
- *
- * Revision 1.13  2014/02/11 00:25:56  arta
- * Fix use of the stats library.
- *
- * Revision 1.12  2014/02/10 23:27:56  yliu
- * Remove several include-lines Feb. 10, 2014
- *
- * Revision 1.11  2014/02/10 21:24:11  yliu
- * Remove several include-lines Feb. 10, 2014
- *
- * Revision 1.10  2014/02/07 00:53:45  yliu
- * Correcting computations of Keywords CRPIX1, CRPIX2, CRVAL1, and CRVAL2
  *
  * Revision 1.24  2007/10/26 17:51:39  arta
  * Fix bug where for loop limit was changed within loop.
