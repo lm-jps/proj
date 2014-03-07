@@ -1432,8 +1432,8 @@ int getBErr(float *bx_err, float *by_err, float *bz_err,
 			if (sphere2img (lat, lon, disk_latc, disk_lonc, &xi, &zeta,
 							disk_xc, disk_yc, 1.0, pa, 0., 0., 0., 0.)) {
 				bx_err[ind_map] = DRMS_MISSING_FLOAT;
-				bx_err[ind_map] = DRMS_MISSING_FLOAT;
-				bx_err[ind_map] = DRMS_MISSING_FLOAT;
+				by_err[ind_map] = DRMS_MISSING_FLOAT;
+				bz_err[ind_map] = DRMS_MISSING_FLOAT;       // Mar 7
 				continue;
 			}
 			
@@ -2060,6 +2060,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         swKeys_ptr->totpot_err         = DRMS_MISSING_FLOAT;
 	}
     
+    
 	if (computeShearAngle(bx_err, by_err, bz_err, bx, by, bz, bpx, bpy, bpz, dims,
 						  &(swKeys_ptr->meanshear_angle), &(swKeys_ptr->meanshear_angle_err), &(swKeys_ptr->area_w_shear_gt_45),
 						  mask, bitmask)) {
@@ -2068,12 +2069,13 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         swKeys_ptr->meanshear_angle_err= DRMS_MISSING_FLOAT;
 	}
     
+    /*
 	if (computeR(bz_err, los , dims, &(swKeys_ptr->Rparam), cdelt1, rim, p1p0, p1n0,
                  p1p, p1n, p1, pmap, nx1, ny1))
     {
 		swKeys_ptr->Rparam = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
 	}
-    
+    */
 	
 	// Clean up the arrays
 	
@@ -2082,6 +2084,10 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	drms_free_array(bxArray);
 	drms_free_array(byArray);
 	drms_free_array(bzArray);
+    drms_free_array(losArray);          // Mar 7
+    drms_free_array(bx_errArray);
+	drms_free_array(by_errArray);
+	drms_free_array(bz_errArray);
 	
 	free(bh); free(bt); free(jz); free(jz_smooth);
 	free(bpx); free(bpy); free(bpz);
@@ -2237,7 +2243,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.23 2014/03/05 19:39:32 xudong Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.24 2014/03/07 21:15:54 xudong Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
