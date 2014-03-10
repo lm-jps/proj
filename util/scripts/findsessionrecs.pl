@@ -1,4 +1,10 @@
-#!/home/jsoc/bin/linux_x86_64/activeperl 
+#!/home/jsoc/bin/linux_x86_64/activeperl
+
+# For each series in the specified namespaces, the script iterates through all records in the series and determines
+# whether each one was created within the crash window. For each record, the sessionid is used to find the relevant
+# record in the drms_session table. Then the starttime and endtime values are compared to the bcrash and ecrash
+# values. If the record was created during the crash window, then it gets reported in a list of records that were
+# created during the crash window.
 
 use warnings;
 use strict;
@@ -13,27 +19,42 @@ use drmsArgs;
 use constant kRetSuccess => 0;
 use constant kRetInvalidArgs => 1;
 use constant kRetDbQuery => 2;
+use constant kRetFileIO => 3;
 
 use constant kArgDbname => "dbname";
 use constant kArgDbhost => "dbhost";
 use constant kArgDbport => "dbport";
 use constant kArgExclude => "exclude"; # A list of namespaces that contain series to exclude from examination.
+use constant kArgInclude => "include";
+use constant kArgSeries => "series"; # A list of series to examine. Overrides the exclude and include parameters.
 use constant kArgBcrash => "bcrash";
 use constant kArgEcrash => "ecrash";
+use constant kArgFileOut => "out";
 
 my($argsinH);
+my($optsinH);
 my($args);
+my($opts);
 my($dbname);
 my($dbhost);
 my($dbport);
+my($excludeList);
+my(@excludedNs);
 my($exclude);
+my($ignoreExcInc);
 my($bcrash);
+my($includeList);
+my(@includedNs);
+my($seriesList);
+my(@series);
 my($ecrash);
+my($fileout);
+my($fh);
 my($dbuser);
 my($dsn);
 my($dbh);
-my($seriesR);
-my($series);
+my($nspace);
+my($table);
 my($stmnt);
 my($rows);
 my(@rowarr);
@@ -54,12 +75,20 @@ $argsinH =
     &kArgExclude => 's', # make this required so that people don't accidentally request processing of
                          # 43K series!
     &kArgBcrash => 's',
-    &kArgEcrash => 's'
+    &kArgEcrash => 's',
+    &kArgFileOut => 's'
+};
+
+$optsinH =
+{
+    &kArgInclude => 's', # Inlcude applies after Exclude has filtered-out series.
+    &kArgSeries => 's'   # If provided, then process these series only, and ignore the exclude/include flags.
 };
 
 $args = new drmsArgs($argsinH, 1);
+$opts = new drmsArgs($optsinH, 0);
 
-if (!defined($args))
+if (!defined($args) || !defined($opts))
 {
     $rv = &kRetInvalidArgs;
 }
@@ -68,48 +97,119 @@ else
     $dbname = $args->Get(&kArgDbname);
     $dbhost = $args->Get(&kArgDbhost);
     $dbport = $args->Get(&kArgDbport);
-    $exclude = $args->Get(&kArgExclude);
+    $excludeList = $args->Get(&kArgExclude);
+    $includeList = $opts->Get(&kArgInclude);
+    $seriesList = $opts->Get(&kArgSeries);
     $bcrash = $args->Get(&kArgBcrash);
     $ecrash = $args->Get(&kArgEcrash);
+    $fileout = $args->Get(&kArgFileOut);
     $dbuser = $ENV{USER};
     
-    $dsn = "dbi:Pg:dbname=$dbname;host=$dbhost;port=$dbport";
-    $dbh = DBI->connect($dsn, $dbuser, ''); # will need to put pass in .pg_pass
+    @excludedNs = split(/,|\s+/, $excludeList);
+    if (defined($includeList))
+    {
+        @includedNs = split(/,|\s+/, $includeList);
+    }
     
-    if (defined($dbh))
+    if (defined($seriesList))
+    {
+        @series = split(/,|\s+/, $seriesList);
+    }
+    
+    if (open($fh, ">$fileout"))
+    {
+        $dsn = "dbi:Pg:dbname=$dbname;host=$dbhost;port=$dbport";
+        $dbh = DBI->connect($dsn, $dbuser, ''); # will need to put pass in .pg_pass
+    }
+    else
+    {
+        print STDERR "Unable to open output file '$fileout' for writing.\n";
+        $rv = &kRetFileIO;
+    }
+    
+    if (!$rv && defined($dbh))
     {
         # Get a list of all series we want to investigate
-        $stmnt = "SELECT seriesname FROM drms_series()";
-        $rows = $dbh->selectall_arrayref($stmnt, undef);
-        $err = !(NoErr($rows, \$dbh, $stmnt));
+        $err = 0;
+        $ignoreExcInc = 0;
+        
+        if ($#series < 0)
+        {
+            # No series specified on command line. Search through namespaces.
+            $stmnt = "SELECT seriesname FROM drms_series()";
+            $rows = $dbh->selectall_arrayref($stmnt, undef);
+            $err = !(NoErr($rows, \$dbh, $stmnt));
+            if (!$err)
+            {
+                @rowarr = @$rows;
+                @series = map({$_->[0]} @rowarr);
+            }
+        }
+        else
+        {
+            $ignoreExcInc = 1;
+        }
 
         if (!$err)
         {
-            @rowarr = @$rows;
-            
-            foreach my $seriesR (@rowarr)
+            foreach my $aseries (@series)
             {
-                $series = $seriesR->[0];
-                if (length($exclude) > 0)
+                ($nspace, $table) = ($aseries =~ /(\S+)\.(\S+)/);
+
+                $exclude = 0;
+                
+                if ($ignoreExcInc)
                 {
-                    if ($series =~ /$exclude/)
+                    # Ignore @excludledNs and @includedNs. Process all series in @series.
+                }
+                else
+                {
+                    if ($#excludedNs >= 0)
                     {
-                        print STDERR "skipping series $series - it was excluded.\n";
-                        next;
+                        foreach my $iexc (@excludedNs)
+                        {
+                            if ($nspace =~ /$iexc/)
+                            {
+                                $exclude = 1;
+                                last;
+                            }
+                        }
+                    }
+                    
+                    if (!$exclude)
+                    {
+                        if ($#includedNs >= 0)
+                        {
+                            $exclude = 1;
+                            foreach my $iinc (@includedNs)
+                            {
+                                if ($nspace =~ /$iinc/)
+                                {
+                                    $exclude = 0;
+                                    last;
+                                }
+                            }
+                        }
                     }
                 }
-                
-                print STDERR "Processing series $series...\n";
-                ($firstrec, $lastrec) = FindRecs($dbh, $series);
+
+                if ($exclude)
+                {
+                    print STDERR "skipping series $aseries - it was excluded.\n";
+                    next;
+                }
+
+                print STDERR "Processing series $aseries...\n";
+                ($firstrec, $lastrec) = FindRecs($dbh, $aseries, $bcrash, $ecrash);
                 
                 if ($firstrec == -1 || $lastrec == -1)
                 {
                     # No records in series - onto next series.
-                    print STDERR "skipping series $series - there were no records created during the crash window.\n";
+                    print STDERR "skipping series $aseries - there were no records created during the crash window.\n";
                     next;
                 }
                 
-                $stmnt = "SELECT recnum, sunum FROM $series WHERE recnum >= $firstrec AND recnum <= $lastrec";
+                $stmnt = "SELECT recnum, sunum FROM $aseries WHERE recnum >= $firstrec AND recnum <= $lastrec";
                 
                 $rowstab = $dbh->selectall_arrayref($stmnt, undef);
                 $err = !(NoErr($rowstab, \$dbh, $stmnt));
@@ -122,23 +222,30 @@ else
                     {
                         # At least one output line - print a header.
                         print "seriesname\trecnum\tsunum\n";
+                        print $fh "seriesname\trecnum\tsunum\n";
                     }
                     
                     foreach my $rec (@rowarrtab)
                     {
-                        print "$series\t$rec->[0]\t$rec->[1]\n";
+                        print "$aseries\t$rec->[0]\t$rec->[1]\n";
+                        print $fh "$aseries\t$rec->[0]\t$rec->[1]\n";
                     }
                 }
                 else
                 {
                     $rv = kRetDbQuery;
                 }
-            }
+            } # series loop
         }
         else
         {
             $rv = kRetDbQuery;
         }
+    }
+
+    if (defined($fh))
+    {
+        $fh->close();
     }
     
     exit $rv;
@@ -166,8 +273,10 @@ sub NoErr
 
 sub FindRecs
 {
-    my($dbh) = $_[0];
-    my($series) = $_[1];
+    my($dbh,
+       $series,
+       $bcrash,
+       $ecrash) = @_;
     my($stable);
     my($stmnt);
     my($state) = "before";
@@ -639,6 +748,8 @@ sub GetLoc
     return @rv;
 }
 
+# Returns (recnum, sessionid, sessionns) tuples for all records specified by the range [$beg-$end]. If $down == 1, then
+# the range is [$end-$beg].
 sub CheckWindow
 {
     my($dbh,
