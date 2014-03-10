@@ -26,6 +26,10 @@ CLEAN		:= $(CLEAN) $(OBJ_$(d)) $(OBJF_$(d)) $(MODEXE_$(d)) $(FEXE_$(d)) $(DEP_$(
 
 ## list of exec. binary to be created?
 TGT_BIN	        := $(TGT_BIN) $(MODEXE_$(d)) $(FEXE_$(d))
+
+.PHONY: $(S_$(d)) mhd_64cr
+mhd_64cr : $(MODEXE_$(d)) $(FEXE_$(d)) 
+
 ## shortcut target list
 S_$(d)		:= $(notdir $(MODEXE_$(d))) $(notdir $(FEXE_$(d)))
 
