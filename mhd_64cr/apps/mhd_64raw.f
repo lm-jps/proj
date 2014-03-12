@@ -92,7 +92,7 @@
        real    dtfact           ! CFL num.
 * choice of boundary treatment
        integer ichrsurf
-       parameter(ichrsurf = 1) ! this may appear at other parts.
+       parameter(ichrsurf = 0) ! this may appear at other parts.
 * counting etc.
        real    dt, dt0, mhdtime
        integer ncal, nref, nt, ntb
