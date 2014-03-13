@@ -75,8 +75,7 @@
 
 #define H0LOGFILE "/usr/local/logs/lev0/ingest_lev0_iris.%s.%s.%s.log"
 #define PKTSZ 1788		//size of VCDU pkt
-//#define DEFAULTDB "irisdb_sums" //the default db to connect to
-#define DEFAULTDB "jsoc_sums" //the default db to connect to
+#define DEFAULTDB "irisdb_sums" //the default db to connect to
 #define MAXFILES 65535		//max # of file can handle in tlmdir
 #define NUMTIMERS 8		//number of seperate timers avail
 //#define IMAGE_NUM_COMMIT 12	//number of complete images until commit
@@ -209,6 +208,7 @@ unsigned int fsnISPX = 0;
 unsigned int fsnISP_noop = 0;
 unsigned int fsn_prev = 0;
 unsigned int ispfound = 0;
+unsigned int ispfoundreopen = 0;
 unsigned int fsn_pre_rexmit = 0;
 unsigned int fid = 0;
 unsigned int tapcode = 0;
@@ -496,10 +496,13 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
     seqerror = 0;
     return;
   }
-  if(ispfound != fsn) {
-    printk("**No ISP found for fsn %u. No closed image\n", fsn);
-    return;
+  if(ispfoundreopen != fsn) {  //Not a reopen at the start of a tlm file
+    if(ispfound != fsn) {
+      printk("**No ISP found for fsn %u. No closed image\n", fsn);
+      return;
+    }
   }
+  else ispfoundreopen = 0;  
   if(imgstat_iris(img, &stat)) {
     printk("**Error on imgstat_iris() for fsn = %u\n", fsn);
   }
@@ -579,7 +582,7 @@ void close_image(DRMS_Record_t *rs, DRMS_Segment_t *seg, DRMS_Array_t *array,
       printk("       The ISP was not received prior to the image for fsn %lu\n", fsn);
       printk("       Look for 'seq num out of sequence' error in log\n");
       printk("drms_status=%d, rsisp=%lu, fsn=%lu, fsnISP=%lu, fsnISP_noop=%lu\n",
-                drms_status, rsisp, fsn, fsnISP, fsnISP_noop); //!!TEMP
+        drms_status, rsisp, fsn, fsnISP, fsnISP_noop); //!!TEMP
       printk("       **ERROR: Can't close_image() for fsn = %u\n", fsn);
       img->initialized = 0;     //image is ready for use again. New 16Sep2013
       return;           //New. abort. 11Sep2013
@@ -1128,7 +1131,7 @@ startnew:
       fsn_normal_new_image();
     }
     else {
-      ispfound = fsnx;		//assume isp already in ds found
+      ispfoundreopen = fsnx;		//assume isp already in ds found
       Img->initialized = 1;
       Img->reopened = 1;
       Img->fsn = fsnx;
@@ -1324,6 +1327,7 @@ startnew:
   }
   else {
     ispfound = fsnx;		//assume isp already in ds found
+    ispfoundreopen = fsnx;
     ImgO->initialized = 1;
     ImgO->reopened = 1;
     ImgO->fsn = fsnx;
@@ -1657,6 +1661,8 @@ if(!printflg) {		//!!TEMP
       }
       if(rexmit || higherver) {
         if(fsnx != fsn_prev) {          // the fsn has changed
+          imgdecode_iris_init_hack(ImgO);	//!!NEW 3/13/2014 Jim
+          imgdecode_iris_init_hack(Img);	//!!NEW 3/13/2014 Jim
           if(fsn_change_rexmit()) {	//handle old & new images
             printk("***FATAL ERROR in fsn_change_rexmit()\n");
             return(1);
@@ -1668,6 +1674,8 @@ if(!printflg) {		//!!TEMP
       }
       else {			// continuing normal stream
         if(fsnx != fsn_prev) {          // the fsn has changed 
+          imgdecode_iris_init_hack(ImgO);	//!!NEW 3/13/2014 Jim
+          imgdecode_iris_init_hack(Img);	//!!NEW 3/13/2014 Jim
           if(fsnx < fsn_prev) {		//the prev isp is not for this image
             printk("**WARNING: ISP out of order with image data\n");
             RSISP = 0;			//indicate to close_image() no isp
@@ -2432,11 +2440,13 @@ int DoIt(void)
             RSISP = RSISPTO;    //use the timeout *rs
             fsnISPTOCLOSE = fsnISP;
             fsnISP = fsnISPX;	//inc last isp
+            ispfound = fsnISPX;
             close_image(rs, segment, segArray, &Image, fsn_prev);
             timeoutclose = 1;
             drms_server_end_transaction(drms_env, 0 , 0); //commit
             drms_server_begin_transaction(drms_env); //start another cycle
             fsn_prev = 0; 	//start over for next file
+            rs = NULL;
           }
         }
         else {
