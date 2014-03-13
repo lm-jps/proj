@@ -25,7 +25,7 @@ set lrecord=1
 
 ## some variables for jsoc_export_as_fits. Notice codes in this script assume Br (or Mr) be input.  
 set inseries="hmi.BrBlossynop_720s"
-set insegmnt="Blos"
+set insegmnt="Br"
 set outseries="hmi.MHDcorona"
 
 ## this script may assume two sub-directories "waste" and "done" exist.
