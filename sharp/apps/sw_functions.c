@@ -1057,9 +1057,6 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
     // set up convolution kernel
     init_fresize_gaussian(&fresgauss,sigma,20,1);
     
-    // make sure convolution kernel is smaller than or equal to array size
-    if ( (nx  < 41.) || (ny < 41.) ) return -1;
-    
     fsample(los, rim, nx, ny, nx, nx1, ny1, nx1, scale, 0, 0, 0.0);
     for (i = 0; i < nx1; i++)
     {
