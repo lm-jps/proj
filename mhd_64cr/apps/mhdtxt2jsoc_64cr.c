@@ -36,7 +36,7 @@ ModuleArgs_t module_args[] =
      {ARG_STRING, "in", "d3equidist.txt", "Input text file."},
      {ARG_STRING, "out", "hmi.MHDcorona_daily_nrt", "Target DRMS data series."},
 #if NEWMAP == 1
-     {ARG_STRING, "synomap", "hmi.BrBlossynop_720s_nrt", "synoptic map series as string"},
+     {ARG_STRING, "synomap", "hmi.BrBlosdailysynframe_720s_nrt", "synoptic map series as string"},
 #else
      {ARG_STRING, "synomap", "hmi.Mrdailysynframe_720s_nrt",  "synoptic map series as string"},
 #endif
@@ -348,6 +348,6 @@ int DoIt(void)
 
 /* ----- */
 
-char *mhdcorona_version(){return strdup("$Id: mhdtxt2jsoc_64cr.c,v 1.1 2014/03/10 19:59:32 arta Exp $");}
+char *mhdcorona_version(){return strdup("$Id: mhdtxt2jsoc_64cr.c,v 1.2 2014/03/13 18:59:30 keiji Exp $");}
 
 /* ----------- end of this file ----------- */
