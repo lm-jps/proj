@@ -615,11 +615,19 @@ int fsample(
   int imin,imax,jmin,jmax;
   float *imp;
 
-// Find first and last indices for which resulting input point is within image
+// Find first ([ij]min) and last ([ij]max) indices in output image
+// for which resulting input point is within image
   if (xoff >= 0) imin=0; else imin=((-xoff+nsub-1)/nsub);
   if (xoff <= 0) imax=nxout-1; else imax=minval(((nxin-xoff-1)/nsub),nxout-1);
   if (yoff >= 0) jmin=0; else jmin=((-yoff+nsub-1)/nsub);
   if (yoff <= 0) jmax=nyout-1; else jmax=minval(((nyin-yoff-1)/nsub),nyout-1);
+
+// Also ensure that indices are within output array
+
+  imin=maxval(0,minval(imin,nxout-1));
+  imax=maxval(0,minval(imax,nxout-1));
+  jmin=maxval(0,minval(jmin,nyout-1));
+  jmax=maxval(0,minval(jmax,nyout-1));
 
   imp=image_in+yoff*nleadin+xoff;
 
@@ -690,11 +698,19 @@ int fbin(
   float *imp,*impi;
   float sum;
 
-// Find first and last indices for which resulting input point is within image
+// Find first ([ij]min) and last ([ij]max) indices in output image
+// for which resulting input point is within image
   if (xoff >= 0) imin=0; else imin=((-xoff+nsub-1)/nsub);
   if (xoff <= 0) imax=nxout-1; else imax=minval(((nxin-xoff-nsub)/nsub),nxout-1);
   if (yoff >= 0) jmin=0; else jmin=((-yoff+nsub-1)/nsub);
   if (yoff <= 0) jmax=nyout-1; else jmax=minval(((nyin-yoff-nsub)/nsub),nyout-1);
+
+// Also ensure that indices are within output array
+
+  imin=maxval(0,minval(imin,nxout-1));
+  imax=maxval(0,minval(imax,nxout-1));
+  jmin=maxval(0,minval(jmin,nyout-1));
+  jmax=maxval(0,minval(jmax,nyout-1));
 
   imp=image_in+yoff*nleadin+xoff;
 
@@ -788,7 +804,8 @@ int f1d(
   kerx=pars->kerx;
   kery=pars->kery;
 
-// Find first and last indices for which resulting input point is within image
+// Find first ([ij]min) and last ([ij]max) indices in output image
+// for which resulting input point is within image
   xoffl=xoff-hwidth;
   xoffh=xoff+hwidth;
   if (xoffl >= 0) imin=0; else imin=((-xoffl+nsub-1)/nsub);
@@ -798,6 +815,13 @@ int f1d(
   yoffh=yoff+hwidth;
   if (yoffl >= 0) jmin=0; else jmin=((-yoffl+nsub-1)/nsub);
   if (yoffh <= 0) jmax=nyout-1; else jmax=minval(((nyin-yoffh-1)/nsub),nyout-1);
+
+// Also ensure that indices are within output array
+
+  imin=maxval(0,minval(imin,nxout-1));
+  imax=maxval(0,minval(imax,nxout-1));
+  jmin=maxval(0,minval(jmin,nyout-1));
+  jmax=maxval(0,minval(jmax,nyout-1));
 
 // Get work array big enough to hold convolution in x
   nwork=nxout*nyin;
@@ -829,44 +853,18 @@ shared(nxin,nyin,nleadin,nxout,nyout,nleadout,nsub)
           sum=sum+kerx[i1]*inpi[i1];
         }
         work[j*nleadout+i]=sum;
-// This works but is slower
-//      work[j*nleadout+i]=sdot(&n2,kerx,&ione,inpj+i*nsub,&ione);
       }
-// This clever trick gives error message
-//sgemv(transpose,&n2,&n1,&fone,inpj+imin*nsub,&nsub,kerx,&ione,&fzero,work+j*nleadout+imin,&ione);
     }
-
-/*
-// This also works but is slower
-#pragma omp for
-for (j=0;j<nyin;j=j+nchunk) {
-  for (i=imin; i<=imax; i++) {
-    sgemv(transpose,&n2,&nchunk,&fone,image_in+j*nleadin+xoffl+i*nsub,&nleadin,kerx,&ione,&fzero,work+j*nleadout+i,&nleadout);
-}
-*/
 
 // Then convolve in y
 
-/*
-// Brute force code
-#pragma omp for
-    for (j=jmin; j<=jmax; j++) {
-      inpj=work+(yoffl+j*nsub)*nleadout;
-      for (i=imin; i<=imax; i++) {
-        sum=0.0f;
-        for (j1=0; j1<=2*hwidth; j1++) {
-          sum=sum+inpj[j1*nleadout+i]*kery[j1];
-        }
-        image_out[j*nleadout+i]=sum;
-      }
-    }
-*/
-
 // Code using sgemv
+    if (n1 > 0) {
 #pragma omp for
-    for (j=jmin; j<=jmax; j++) {
-      inpj=work+(yoffl+j*nsub)*nleadout;
-      sgemv(normal,&n1,&n2,&fone,inpj+imin,&nleadout,kery,&ione,&fzero,image_out+j*nleadout+imin,&ione);
+      for (j=jmin; j<=jmax; j++) {
+        inpj=work+(yoffl+j*nsub)*nleadout;
+        sgemv(normal,&n1,&n2,&fone,inpj+imin,&nleadout,kery,&ione,&fzero,image_out+j*nleadout+imin,&ione);
+      }
     }
 
 // Fill below valid region
@@ -950,7 +948,8 @@ int f1d_fft(
   nxinp=pars->nxinp;
   nyinp=pars->nyinp;
 
-// Find first and last indices for which resulting input point is within image
+// Find first ([ij]min) and last ([ij]max) indices in output image
+// for which resulting input point is within image
   xoffl=xoff-hwidth;
   xoffh=xoff+hwidth;
   if (xoffl >= 0) imin=0; else imin=((-xoffl+nsub-1)/nsub);
@@ -960,6 +959,13 @@ int f1d_fft(
   yoffh=yoff+hwidth;
   if (yoffl >= 0) jmin=0; else jmin=((-yoffl+nsub-1)/nsub);
   if (yoffh <= 0) jmax=nyout-1; else jmax=minval(((nyin-yoffh-1)/nsub),nyout-1);
+
+// Also ensure that indices are within output array
+
+  imin=maxval(0,minval(imin,nxout-1));
+  imax=maxval(0,minval(imax,nxout-1));
+  jmin=maxval(0,minval(jmin,nyout-1));
+  jmax=maxval(0,minval(jmax,nyout-1));
 
 // Get work array big enough to hold convolution in x
   nwork=nxout*nyin;
@@ -991,39 +997,6 @@ int f1d_fft(
   t1=dsecnd()-t1;
 
 // Then convolve in y
-
-/*
-// Brute force algorithm
-  t2=dsecnd();
-//#pragma omp for
-    for (i=imin; i<=imax; i++) {
-      for (j=0;j<nyin;j++) helpin[j]=work[j*nleadout+i];
-      fftwf_execute(pars->plan1y);
-      for (j=0; j<nyinp; j++) helpc[j]=fkernely[j]*helpc[j];
-      fftwf_execute(pars->plan2y);
-      for (j=jmin; j<=jmax; j++) image_out[j*nleadout+i]=helpout[j*nsub+yoff];
-    }
-  t2=dsecnd()-t2;
-
-// Block the output array.
-  t3=dsecnd();
-//#pragma omp for
-  for (i1=imin;i1<=imax;i1=i1+nchunk) {
-    for (i=i1; i<=minval(i1+nchunk-1,imax); i++) {
-      for (j=0;j<nyin;j++) helpin[j]=work[j*nleadout+i];
-      fftwf_execute(pars->plan1y);
-      for (j=0; j<nyinp; j++) helpc[j]=fkernely[j]*helpc[j];
-      fftwf_execute(pars->plan2y);
-      for (j=jmin; j<=jmax; j++) owork[j+(i-i1)*nyout]=helpout[j*nsub+yoff];
-    }
-    for (j=jmin; j<=jmax; j++) {
-      for (i=i1; i<=minval(i1+nchunk-1,imax); i++) {
-        image_out[j*nleadout+i]=owork[j+(i-i1)*nyout];
-      }
-    }
-  }
-  t3=dsecnd()-t3;
-*/
 
 // Block both the input output arrays.
   t4=dsecnd();
@@ -1123,7 +1096,8 @@ int f2d(
   ker=pars->ker;
   fwidth=2*hwidth+1;
 
-// Find first and last indices for which resulting input point is within image
+// Find first ([ij]min) and last ([ij]max) indices in output image
+// for which resulting input point is within image
   xoffl=xoff-hwidth;
   xoffh=xoff+hwidth;
   if (xoffl >= 0) imin=0; else imin=((-xoffl+nsub-1)/nsub);
@@ -1134,6 +1108,12 @@ int f2d(
   if (yoffl >= 0) jmin=0; else jmin=((-yoffl+nsub-1)/nsub);
   if (yoffh <= 0) jmax=nyout-1; else jmax=minval(((nyin-yoffh-1)/nsub),nyout-1);
 
+// Also ensure that indices are within output array
+
+  imin=maxval(0,minval(imin,nxout-1));
+  imax=maxval(0,minval(imax,nxout-1));
+  jmin=maxval(0,minval(jmin,nyout-1));
+  jmax=maxval(0,minval(jmax,nyout-1));
 
   /*t1=dsecnd();*/
  
@@ -1233,7 +1213,8 @@ int f2d_mat(
   ker=pars->ker;
   fwidth=2*hwidth+1;
 
-// Find first and last indices for which resulting input point is within image
+// Find first ([ij]min) and last ([ij]max) indices in output image
+// for which resulting input point is within image
   xoffl=xoff-hwidth;
   xoffh=xoff+hwidth;
   if (xoffl >= 0) imin=0; else imin=((-xoffl+nsub-1)/nsub);
@@ -1244,10 +1225,15 @@ int f2d_mat(
   if (yoffl >= 0) jmin=0; else jmin=((-yoffl+nsub-1)/nsub);
   if (yoffh <= 0) jmax=nyout-1; else jmax=minval(((nyin-yoffh-1)/nsub),nyout-1);
 
+// Also ensure that indices are within output array
+
+  imin=maxval(0,minval(imin,nxout-1));
+  imax=maxval(0,minval(imax,nxout-1));
+  jmin=maxval(0,minval(jmin,nyout-1));
+  jmax=maxval(0,minval(jmax,nyout-1));
 
   /*t1=dsecnd();*/
  
-/*n1=jmax-jmin+1;*/
 n2=nleadin*nsub;
 nchunk=64;
 
@@ -1377,7 +1363,8 @@ int f2d_fft(
 
 // Copy data to output array
 
-// Find first and last indices for which resulting input point is within image
+// Find first ([ij]min) and last ([ij]max) indices in output image
+// for which resulting input point is within image
   xoffl=xoff-hwidth;
   xoffh=xoff+hwidth;
   if (xoffl >= 0) imin=0; else imin=((-xoffl+nsub-1)/nsub);
@@ -1387,6 +1374,13 @@ int f2d_fft(
   yoffh=yoff+hwidth;
   if (yoffl >= 0) jmin=0; else jmin=((-yoffl+nsub-1)/nsub);
   if (yoffh <= 0) jmax=nyout-1; else jmax=minval(((nyin-yoffh-1)/nsub),nyout-1);
+
+// Also ensure that indices are within output array
+
+  imin=maxval(0,minval(imin,nxout-1));
+  imax=maxval(0,minval(imax,nxout-1));
+  jmin=maxval(0,minval(jmin,nyout-1));
+  jmax=maxval(0,minval(jmax,nyout-1));
 
   for (j=jmin; j<=jmax; j++) {
     j1=(j*nsub+yoff)*nxin+xoff;
