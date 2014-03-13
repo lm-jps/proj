@@ -2069,13 +2069,12 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         swKeys_ptr->meanshear_angle_err= DRMS_MISSING_FLOAT;
 	}
     
-    /*
 	if (computeR(bz_err, los , dims, &(swKeys_ptr->Rparam), cdelt1, rim, p1p0, p1n0,
                  p1p, p1n, p1, pmap, nx1, ny1))
-    {
+        {
 		swKeys_ptr->Rparam = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
 	}
-    */
+
 	
 	// Clean up the arrays
 	
@@ -2084,8 +2083,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	drms_free_array(bxArray);
 	drms_free_array(byArray);
 	drms_free_array(bzArray);
-    drms_free_array(losArray);          // Mar 7
-    drms_free_array(bx_errArray);
+        drms_free_array(losArray);          // Mar 7
+        drms_free_array(bx_errArray);
 	drms_free_array(by_errArray);
 	drms_free_array(bz_errArray);
 	
@@ -2096,16 +2095,16 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	free(derx_bz); free(dery_bz);
 	free(derx_bh); free(dery_bh);
 	free(bt_err); free(bh_err);  free(jz_err);
-    free(jz_err_squared); free(jz_rms_err);
-    free(jz_err_squared_smooth);
-    
-    free(rim);
-    free(p1p0);
-    free(p1n0);
-    free(p1p);
-    free(p1n);
-    free(p1);
-    free(pmap);
+        free(jz_err_squared); free(jz_rms_err);
+        free(jz_err_squared_smooth);
+     
+        free(rim);
+        free(p1p0);
+        free(p1n0);
+        free(p1p);
+        free(p1n);
+        free(p1);
+        free(pmap);
     
 }
 
@@ -2116,22 +2115,22 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 
 void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
 {
-	drms_setkey_float(outRec, "USFLUX",  swKeys_ptr->mean_vf);
-	drms_setkey_float(outRec, "MEANGAM", swKeys_ptr->mean_gamma);
-	drms_setkey_float(outRec, "MEANGBT", swKeys_ptr->mean_derivative_btotal);
-	drms_setkey_float(outRec, "MEANGBH", swKeys_ptr->mean_derivative_bh);
-	drms_setkey_float(outRec, "MEANGBZ", swKeys_ptr->mean_derivative_bz);
-	drms_setkey_float(outRec, "MEANJZD", swKeys_ptr->mean_jz);
-	drms_setkey_float(outRec, "TOTUSJZ", swKeys_ptr->us_i);
-	drms_setkey_float(outRec, "MEANALP", swKeys_ptr->mean_alpha);
-	drms_setkey_float(outRec, "MEANJZH", swKeys_ptr->mean_ih);
-	drms_setkey_float(outRec, "TOTUSJH", swKeys_ptr->total_us_ih);
-	drms_setkey_float(outRec, "ABSNJZH", swKeys_ptr->total_abs_ih);
-	drms_setkey_float(outRec, "SAVNCPP", swKeys_ptr->totaljz);
-	drms_setkey_float(outRec, "MEANPOT", swKeys_ptr->meanpot);
-	drms_setkey_float(outRec, "TOTPOT",  swKeys_ptr->totpot);
-	drms_setkey_float(outRec, "MEANSHR", swKeys_ptr->meanshear_angle);
-	drms_setkey_float(outRec, "SHRGT45", swKeys_ptr->area_w_shear_gt_45);
+    drms_setkey_float(outRec, "USFLUX",  swKeys_ptr->mean_vf);
+    drms_setkey_float(outRec, "MEANGAM", swKeys_ptr->mean_gamma);
+    drms_setkey_float(outRec, "MEANGBT", swKeys_ptr->mean_derivative_btotal);
+    drms_setkey_float(outRec, "MEANGBH", swKeys_ptr->mean_derivative_bh);
+    drms_setkey_float(outRec, "MEANGBZ", swKeys_ptr->mean_derivative_bz);
+    drms_setkey_float(outRec, "MEANJZD", swKeys_ptr->mean_jz);
+    drms_setkey_float(outRec, "TOTUSJZ", swKeys_ptr->us_i);
+    drms_setkey_float(outRec, "MEANALP", swKeys_ptr->mean_alpha);
+    drms_setkey_float(outRec, "MEANJZH", swKeys_ptr->mean_ih);
+    drms_setkey_float(outRec, "TOTUSJH", swKeys_ptr->total_us_ih);
+    drms_setkey_float(outRec, "ABSNJZH", swKeys_ptr->total_abs_ih);
+    drms_setkey_float(outRec, "SAVNCPP", swKeys_ptr->totaljz);
+    drms_setkey_float(outRec, "MEANPOT", swKeys_ptr->meanpot);
+    drms_setkey_float(outRec, "TOTPOT",  swKeys_ptr->totpot);
+    drms_setkey_float(outRec, "MEANSHR", swKeys_ptr->meanshear_angle);
+    drms_setkey_float(outRec, "SHRGT45", swKeys_ptr->area_w_shear_gt_45);
     drms_setkey_float(outRec, "CMASK",   swKeys_ptr->count_mask);
     drms_setkey_float(outRec, "ERRBT",   swKeys_ptr->mean_derivative_btotal_err);
     drms_setkey_float(outRec, "ERRVF",   swKeys_ptr->mean_vf_err);
@@ -2243,7 +2242,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.24 2014/03/07 21:15:54 xudong Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.25 2014/03/13 18:46:09 mbobra Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
