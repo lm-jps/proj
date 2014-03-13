@@ -1661,6 +1661,8 @@ if(!printflg) {		//!!TEMP
       }
       if(rexmit || higherver) {
         if(fsnx != fsn_prev) {          // the fsn has changed
+          imgdecode_iris_init_hack(ImgO);       //!!NEW 3/13/2014 Jim
+          imgdecode_iris_init_hack(Img);        //!!NEW 3/13/2014 Jim
           if(fsn_change_rexmit()) {	//handle old & new images
             printk("***FATAL ERROR in fsn_change_rexmit()\n");
             return(1);
@@ -1672,6 +1674,8 @@ if(!printflg) {		//!!TEMP
       }
       else {			// continuing normal stream
         if(fsnx != fsn_prev) {          // the fsn has changed 
+          imgdecode_iris_init_hack(ImgO);       //!!NEW 3/13/2014 Jim
+          imgdecode_iris_init_hack(Img);        //!!NEW 3/13/2014 Jim
           if(fsnx < fsn_prev) {		//the prev isp is not for this image
             printk("**WARNING: ISP out of order with image data\n");
             RSISP = 0;			//indicate to close_image() no isp
