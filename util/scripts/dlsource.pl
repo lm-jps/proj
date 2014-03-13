@@ -559,7 +559,7 @@ if (!$err)
                                 # no need to check this call, because the chdir() cmd is being checked.
                                 mkpath(kTmpDir);
                             }
-                            
+
                             $sdir = $ENV{'PWD'};
                             if (chdir(kTmpDir) == 0)
                             {
@@ -576,7 +576,7 @@ if (!$err)
                                 {                                    
                                     $actcvs =~ s/export\s/export -r HEAD /;
                                 }
-                                
+
                                 unless (CallCVSInChunks($actcvs, \@actspec, undef, undef, 1))
                                 {
                                     unless (GetFileList(&kTmpDir . $rdir, "", \@dlist))
@@ -849,18 +849,7 @@ sub BuildFilespec
             my($compflistH);
             my(@fset);
             
-            # Ensure that files represented by the specs in $cmdlspec exist in the current workspace.
-            foreach my $spec (@$cmdlspec)
-            {
-                if (!(-e $spec))
-                {
-                    print STDERR "Invalid cmd-line file specification $spec.\n";
-                    $rv = 1;
-                    last;
-                }
-            }
-            
-            # Should also ensure that files specified on the cmd-line are actually part of the current 
+            # Ensure that files specified on the cmd-line are actually part of the current 
             # check-out type (net, sdp, or custom). To obtain the list of the current check-out set, 
             # we need to check out everything in the appropriate definitive file spec (as an export).
             
@@ -1294,7 +1283,7 @@ sub DownloadTree
        {
            @$actualspec = @relpaths;
        }
-       
+
        if (CallCVSInChunks($cmd, \@relpaths, $log, undef, 0))
       {
          print STDERR "Unable to $dltype repository files.\n";
@@ -1442,7 +1431,7 @@ sub DownloadTree
                 }
             }
         }
-        
+
         if (!$rv)
         {
             my(@filestoud);
@@ -1461,7 +1450,7 @@ sub DownloadTree
             
             my($removecmd) = $cmd;
             $removecmd =~ s/-n//;
-            
+
             if (CallCVSInChunks($removecmd, \@filestoud, $log, undef, 0))
             {
                 print STDERR "Unable to locate sandbox files that were deleted from the repository.\n";
@@ -1651,21 +1640,20 @@ sub GetFileList
 
 sub CallCVS
 {
-   my($cmd) = $_[0];
-   my($log) = $_[1];
+    my($cmd) = $_[0];
+    my($log) = $_[1];
     my($rsp) = $_[2];
     my($silent) = $_[3];
-
-   my($rv) = 0;
-   my($callstat);
-
-   if (defined($log) && length($log) > 0)
-   {
-      system("$cmd 1>$log 2>&1");
-   }
+    
+    my($rv) = 0;
+    my($callstat);
+    
+    if (defined($log) && length($log) > 0)
+    {
+        system("$cmd 1>$log 2>&1");
+    }
     elsif (defined($rsp))
     {
-        print "Running $cmd.\n";
         if (open(PIPE, "$cmd 2>&1 |"))
         {
             @$rsp = <PIPE>;
@@ -1676,37 +1664,37 @@ sub CallCVS
             print STDERR "Could not run '$cmd'\n";
             $rv = 1;
         }
-
+        
     }
-   elsif ($silent)
-   {
-      system("$cmd 1>/dev/null 2>&1");
-   }
+    elsif ($silent)
+    {
+        system("$cmd 1>/dev/null 2>&1");
+    }
     else
     {
         system($cmd);
     }
-
-   $callstat = $?;
-
-   if ($callstat == -1)
-   {
-      print STDERR "Failed to execute '$cmd'.\n";
-      $rv = 1;
-   } 
-   elsif ($callstat & 127)
-   {
-      print STDERR "cvs command terminated abnormally.\n";
-      $rv = 1;
-   } 
-   elsif ($callstat >> 8 != 0)
-   {
-      $callstat = $callstat >> 8;
-      print STDERR "cvs command ran unsuccessfully, status == $callstat.\n";
-      $rv = 1;
-   }
-
-   return $rv;
+    
+    $callstat = $?;
+    
+    if ($callstat == -1)
+    {
+        print STDERR "Failed to execute '$cmd'.\n";
+        $rv = 1;
+    }
+    elsif ($callstat & 127)
+    {
+        print STDERR "cvs command terminated abnormally.\n";
+        $rv = 1;
+    }
+    elsif ($callstat >> 8 != 0)
+    {
+        $callstat = $callstat >> 8;
+        print STDERR "cvs command ran unsuccessfully, status == $callstat.\n";
+        $rv = 1;
+    }
+    
+    return $rv;
 }
 
 sub CallCVSInChunks
@@ -1718,20 +1706,52 @@ sub CallCVSInChunks
     my($silent) = $_[4];
     
     my(@chunk);
+    my(@checkout);
     my($fullcmd);
     my($rv);
     
     $rv = 0;
-    
+
     # Submit with kMaxFileSpecs file specs at most.
     foreach my $aspec (@$specs)
     {
+        # %@$&*(~ CVS! If $aspec is part of a path that does not exist in the current working directory, 
+        # CVS will choke if the CVS command is not a checkout command. The work-around in this case is to run
+        # cvs checkout -A first. But you cannot run this command on a directory, no that would be too easy.
+        # If you do that CVS will checkout all files in the directory. We have to instead checkout a file in 
+        # the directory that we want to really have in the working directory after CallCVSInChunks completes.
+        # That will result in the checkout of just the file we want to download and the creation of the path 
+        # leading to the file. 
+        #
+        # So, if $aspec is a file that doesn't exist, first run cvs checkout -A on that file. 
+
+        if (!(-e $aspec))
+        {
+            push(@checkout, $aspec);
+        }
+
         push(@chunk, $aspec);
         
         if ($#chunk == &kMaxFileSpecs - 1)
         {
-            $fullcmd = join(' ', "cvs", $cmd, @chunk);
+            # Checkout files that do not exist first.
+            if ($#checkout >= 0)
+            {
+                $fullcmd = join(' ', "cvs checkout -A", @checkout);
+                if (CallCVS($fullcmd, $log, $rsp, $silent))
+                {
+                    $rv = 1;
+                    last;
+                }
 
+                # Must remove the files just checked out or else the next call to cvs might fail. But
+                # do not remove the temp dir we just downloaded files into.
+                remove_tree(&kTmpDir, {keep_root => 1});
+                
+                @checkout = ();
+            }
+
+            $fullcmd = join(' ', "cvs", $cmd, @chunk);
             if (CallCVS($fullcmd, $log, $rsp, $silent))
             {
                 $rv = 1;
@@ -1742,10 +1762,24 @@ sub CallCVSInChunks
         }
     }
     
-    if ($#chunk >= 0)
+    if (!$rv && $#chunk >= 0)
     {
-        $fullcmd = join(' ', "cvs", $cmd, @chunk);
+        if ($#checkout >= 0)
+        {
+            $fullcmd = join(' ', "cvs checkout -A", @checkout);
+            if (CallCVS($fullcmd, $log, $rsp, $silent))
+            {
+                $rv = 1;
+            }
 
+            # Must remove the files just checked out or else the next call to cvs might fail. But
+            # do not remove the temp dir we just downloaded files into.
+            remove_tree(&kTmpDir, {keep_root => 1});
+            
+            @checkout = ();
+        }
+
+        $fullcmd = join(' ', "cvs", $cmd, @chunk);
         if (CallCVS($fullcmd, $log, $rsp, $silent))
         {
             $rv = 1;
@@ -1753,7 +1787,7 @@ sub CallCVSInChunks
      
         @chunk = ();
     }
-    
+ 
     return $rv;
 }
 
