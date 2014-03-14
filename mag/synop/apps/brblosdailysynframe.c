@@ -55,7 +55,7 @@ int DoIt(void)
   DRMS_Array_t *inArray, *inArrayfinal;
   TIME t_rec, t_rec0;
   TIME halfw = 7200.0; //half window = 2.0 hours
-  char *t_window = "240m"; //hard-coded T-window
+  char *t_window = "240"; //hard-coded T-window; 240 -minutes
   char *inQueryfinal, *trec_str = NULL, *smallRecQuery;
   float crlt, crln;
 
@@ -84,8 +84,8 @@ int DoIt(void)
   drmethod = (char *)params_get_str(&cmdparams, "drmethod");
 
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: brblosdailysynframe.c,v 1.2 2014/03/04 23:00:05 yliu Exp $");
-//  cvsinfo = (char *)malloc(2048 * sizeof(char));
+  char *cvsinfo = strdup("$Id: brblosdailysynframe.c,v 1.3 2014/03/14 17:01:18 yliu Exp $");
+  cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"o2helio.c bug corrected -- July 2013");
 
      aa = 13.1988; bb = 0.0; cc = 0.0;
@@ -213,7 +213,7 @@ int DoIt(void)
   drms_copykey(outRec, inRecfinal, "DIFROT_B");
   drms_copykey(outRec, inRecfinal, "DIFROT_C");
   drms_copykey(outRec, inRecfinal, "INSTRUME");
-  drms_copykey(outRec, inRecfinal, "BLD_VERS");
+//  drms_copykey(outRec, inRecfinal, "BLD_VERS");
   drms_copykey(outRec, inRecfinal, "CALVER64");
 
 //  smalloutRec;
@@ -242,7 +242,7 @@ double dtmp;
   drms_copykey(smalloutRec, inRecfinal, "DIFROT_B");
   drms_copykey(smalloutRec, inRecfinal, "DIFROT_C");
   drms_copykey(smalloutRec, inRecfinal, "INSTRUME");
-  drms_copykey(smalloutRec, inRecfinal, "BLD_VERS");
+//  drms_copykey(smalloutRec, inRecfinal, "BLD_VERS");
   drms_copykey(smalloutRec, inRecfinal, "CALVER64");
   drms_free_array(inArray);
 
