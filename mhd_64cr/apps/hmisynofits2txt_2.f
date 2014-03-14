@@ -157,10 +157,10 @@
 
 * gauss -> micro T
        do j = 0, jwso-1
-        zz =   (float(j)+0.5) / float(jwso)
+        zz =   1.0 - 2.0 * (float(j)+0.5) / float(jwso)
         sinlat = sqrt(1.0 - zz*zz)
         do k = 0, iwso-1
-         magwso(k,j) =  magwso(k,j) * 100.0 / sinlat ! here convert Br to Blos, with radial assumption. Later Blos converted to Br.
+         magwso(k,j) =  magwso(k,j) * 100.0 * sinlat ! here convert Br to Blos, with radial assumption. Later Blos converted to Br.
          if (magwso(k,j) .GE.  9999.0) magwso(k,j) = 9999.0
          if (magwso(k,j) .LE. -9999.0) magwso(k,j) =-9999.0
         enddo
