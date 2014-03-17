@@ -54,7 +54,7 @@ int DoIt(void)
   DRMS_Array_t *inArray, *inArrayfinal;
   TIME t_rec, t_rec0;
   TIME halfw = 7200.0; //half window = 2.0 hours
-  char *t_window = "240"; //hard-coded T-window, 240-minute window
+  char *t_window = "240m"; //hard-coded T-window, 240-minute window
   char *inQueryfinal, *trec_str = NULL, *smallRecQuery;
   float crlt, crln;
 
@@ -84,7 +84,7 @@ int DoIt(void)
   drmethod = (char *)params_get_str(&cmdparams, "drmethod");
 
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: brblosdailysynframe_nrt.c,v 1.3 2014/03/14 17:02:45 yliu Exp $");
+  char *cvsinfo = strdup("$Id: brblosdailysynframe_nrt.c,v 1.4 2014/03/17 19:05:29 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"o2helio.c bug corrected, CRVAL, CRPIX corrected -- Feb. 2014");
 
