@@ -105,7 +105,7 @@ int check_outpath(int yr, int mo, int da, int hr, char *outpathbase)
 int DoIt ()
 {
   int irec, iseg, length[2], nrecs, nsegs, status=0, iwvl, ni=0, fsn, good_rec;
-  int yr, mo, da, hr, mn, sc;
+  int yr, mo, da, hr, mn, sc, ss, iris=0;
   int wvls[10] = { 171, 193, 335, 304, 1700, 211, 131, 94, 1600, 4500 };
   char *dsinp, *outpathbase, *date_obs, outfilename[512], *outcparms=NULL, *wu;
   char c1, c2, c3, *prefix, *suffix, *imtype, ds[3];
@@ -123,6 +123,7 @@ int DoIt ()
   segment =  cmdparams_get_int(&cmdparams, "segment", NULL);
   suffix = strdup(cmdparams_get_str(&cmdparams, "suffix", NULL));
   if (strcmp(dsinp, NOT_SPECIFIED)==0) DIE("in argument is required");
+  if (!strncasecmp(prefix, "iris", 4)) iris = 1;
 
   inprs = drms_open_records(drms_env, dsinp, &status);
   if (status) DIE("cant open recordset query");
@@ -155,8 +156,8 @@ int DoIt ()
         date_obs = drms_getkey_string(inprec, "T_OBS", &status);
         good_rec = 1;
         if ((t_obs<0.0) || (fsn == 0x1c001c00)) good_rec = 0;
-        sscanf(date_obs, "%d%c%d%c%d%c%d:%d:%d",
-                        &yr, &c1, &mo, &c2, &da, &c3, &hr, &mn, &sc);
+        sscanf(date_obs, "%d%c%d%c%d%c%d:%d:%d.%2d",
+                        &yr, &c1, &mo, &c2, &da, &c3, &hr, &mn, &sc, &ss);
         if (check_outpath(yr, mo, da, hr, outpathbase))DIE("Cant write to out");
         if (do_1segment && !iseg) inpsegname = "";
         imtype = drms_getkey_string(inprec, "IMG_TYPE", &status);
@@ -164,14 +165,25 @@ int DoIt ()
         else strcpy(ds, "d");
         sprintf(outpath, "%s/%4.4d/%2.2d/%2.2d/H%2.2d00",
                 outpathbase, yr, mo, da, hr);
+        if (iris) {
+          int i;
+          suffix = drms_getkey_string(inprec, "INSTRUME", &status);
+          for (i=0; i<strlen(suffix); i++) suffix[i] = tolower(suffix[i]);
+        }
         if (strcmp(suffix, NOT_SPECIFIED)==0) {
           sprintf(outfilename,
             "%s/%s%4.4d%2.2d%2.2d_%2.2d%2.2d%2.2d_%4.4d%s%s.fits",
             outpath, prefix, yr, mo, da, hr, mn, sc, iwvl, inpsegname, ds);
         } else {
-          sprintf(outfilename,
+          if (iris) {
+            sprintf(outfilename,
+            "%s/%s%4.4d%2.2d%2.2d_%2.2d%2.2d%2.2d%2.2d_%s%s%s.fits", outpath,
+            prefix, yr, mo, da, hr, mn, sc, ss, suffix, inpsegname, ds);
+          } else {
+            sprintf(outfilename,
             "%s/%s%4.4d%2.2d%2.2d_%2.2d%2.2d%2.2d_%s%s%s.fits",
             outpath, prefix, yr, mo, da, hr, mn, sc, suffix, inpsegname, ds);
+          }
         }
         if ((stat(outfilename, &sbuf) || !skip) && good_rec) {
           if (do_compress) outcparms = "compress";
