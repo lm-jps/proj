@@ -1716,18 +1716,22 @@ sub CallCVSInChunks
     foreach my $aspec (@$specs)
     {
         # %@$&*(~ CVS! If $aspec is part of a path that does not exist in the current working directory, 
-        # CVS will choke if the CVS command is not a checkout command. The work-around in this case is to run
+        # CVS will choke if the CVS command is not a checkout or export command. The work-around in this case is to run
         # cvs checkout -A first. But you cannot run this command on a directory, no that would be too easy.
         # If you do that CVS will checkout all files in the directory. We have to instead checkout a file in 
         # the directory that we want to really have in the working directory after CallCVSInChunks completes.
         # That will result in the checkout of just the file we want to download and the creation of the path 
         # leading to the file. 
         #
-        # So, if $aspec is a file that doesn't exist, first run cvs checkout -A on that file. 
+        # So, if $aspec is a file that doesn't exist, first run cvs checkout -A on that file. But only do this
+        # if $cmd is not checkout or export!
 
-        if (!(-e $aspec))
+        if ($cmd !~ /^\s*checkout/ && $cmd !~ /^\s*co/ && $cmd !~ /^export/)
         {
-            push(@checkout, $aspec);
+            if (!(-e $aspec))
+            {
+                push(@checkout, $aspec);
+            }
         }
 
         push(@chunk, $aspec);
