@@ -2232,6 +2232,13 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
         
 		
 	}
+	
+	// Mar 19 XS
+	if (fullDisk) {
+		drms_setkey_int(outRec, "AMBPATCH", 0);
+	} else {
+		drms_setkey_int(outRec, "AMBPATCH", 1);
+	}
     
     TIME val, trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
     tnow = (double)time(NULL);
@@ -2242,7 +2249,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.25 2014/03/13 18:46:09 mbobra Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.26 2014/03/19 20:37:18 xudong Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
