@@ -74,7 +74,7 @@ int DoIt(void)
 	int nrecs, irec;
     
     char *inQuery, *outQuery;
-    DRMS_RecordSet_t *inRS = NULL;
+    DRMS_RecordSet_t *inRS = NULL, *outRS = NULL;       // Mar 20 2014
     
     /* Get parameters */
     
@@ -92,6 +92,13 @@ int DoIt(void)
     inRS = drms_open_records(drms_env, inQuery, &status);
     if (status || inRS->n == 0) DIE("No input data found");
     nrecs = inRS->n;
+    
+    /* Output data */
+
+    outRS = drms_create_records(drms_env, nrecs, outQuery, DRMS_PERMANENT, &status);
+    if (status) {
+        DIE("Output error");
+    }
     
     /* Loop through each record */
 	
@@ -113,11 +120,7 @@ int DoIt(void)
         
         /* Output record */
         
-        DRMS_Record_t *outRec = drms_create_record(drms_env, outQuery, DRMS_PERMANENT, &status);
-        if (status) {
-            SHOW("Output error, skip current record\n");
-			continue;
-		}
+        DRMS_Record_t *outRec = outRS->records[irec];
         
         /* Input arrays */
         
@@ -302,7 +305,6 @@ int DoIt(void)
         
         /* Clean up */
         
-        drms_close_record(outRec, DRMS_INSERT_RECORD);
         drms_free_array(fxArray); drms_free_array(fyArray); drms_free_array(fzArray);
         drms_free_array(maskArray);
         drms_free_array(bxArray); drms_free_array(byArray); drms_free_array(bzArray);
@@ -310,6 +312,7 @@ int DoIt(void)
 
     }   // irec
     
+    drms_close_records(outRS, DRMS_INSERT_RECORD);
     drms_close_records(inRS, DRMS_FREE_RECORD);
     
     return DRMS_SUCCESS;
@@ -343,7 +346,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec)
 	sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
-    char *cvsinfo = strdup("$Id: lorentz.c,v 1.1 2014/03/12 23:54:53 xudong Exp $");
+    char *cvsinfo = strdup("$Id: lorentz.c,v 1.2 2014/03/21 00:21:05 xudong Exp $");
     drms_setkey_string(outRec, "LOR_VERS", cvsinfo);        // Mar 12
 	
 };
