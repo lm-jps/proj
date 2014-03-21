@@ -26,6 +26,8 @@ CLEAN		:= $(CLEAN) \
 
 S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
+TGT_BIN         := $(TGT_BIN) $(EXE_$(d)) $(MODEXE_SOCK_$(d))
+
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
 $(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH) $(GSLH) -DCDIR="\"$(SRCDIR)/$(d)\""
