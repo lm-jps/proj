@@ -2425,7 +2425,7 @@ int DoIt(void)
     if(cntsleeps == 0) {	//file was seen by do_ingest()
       if(paused) {		//send resume data flow msg
         paused = 0;
-        send_mail("tlm files seen again for ingest_lev0_iris for %s\n", pchan);
+        //send_mail("tlm files seen again for ingest_lev0_iris for %s\n", pchan);
       }
     }
     else {			//cntsleeps = #of 2sec intervals w/o new file
