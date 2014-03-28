@@ -775,7 +775,7 @@ int do_ingest(int force)
       sscanf(string, "%lld", &maxrecnum0);
       //maxrecnum0 = maxrecnum0 - 25;	//allow time for commit of lev0 
       //maxrecnum0 = maxrecnum0 - 40;	//allow (more) time for commit of lev0 
-      if(instruflg == 2) maxrecnum0 = maxrecnum0 - 150; //allow (more) time for iris
+      if(instruflg == 2) maxrecnum0 = maxrecnum0 - 200; //allow (more) time for iris
       else maxrecnum0 = maxrecnum0 - 80;	//allow (more) time for commit of lev0 
       lastrecnum0_prev = lastrecnum0_now;
       lastrecnum0_now = maxrecnum0;		//save to see if more come in
@@ -855,9 +855,10 @@ void setup()
     sprintf(stopfile, "/usr/local/logs/lev1/build_mgr_stop_iris");
     break;
   }
-  if(stream_mode)
+  if(stream_mode) {
     sprintf(string, "/bin/rm -f %s", stopfile);   //remove any stop file
-  system(string);
+    system(string);
+  }
   sprintf(argmode, "mode=%s", mode);
   sprintf(arginstru, "instru=%s", instru);
   sprintf(argdsin, "dsin=%s", dsin);
