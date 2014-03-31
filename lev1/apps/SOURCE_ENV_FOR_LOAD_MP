@@ -1,9 +1,0 @@
-setenv  HK_CONFIG_DIRECTORY                  /home/production/cvs/TBL_JSOC/lev0/hk_config_file/
-setenv  HK_GTCIDS_FILE                       gtcids.txt
-setenv  HK_SHCIDS_DIRECTORY                  /home/production/cvs/TBL_JSOC/lev0/sdo_hk_config_file/
-setenv  HK_SHCIDS_FILE                       shcids.txt
-setenv  HK_LMP_MP_SERIESNAME                 sdo.master_pointing
-setenv  HK_LMP_HMI_ISS_SERIESNAME            hmi.iss_status
-setenv  HK_LMP_HMI_LEG_SERIESNAME            hmi.leg_status
-setenv  HK_LMP_AIA_ISS12_SERIESNAME          aia.iss_1_2_status
-setenv  HK_LMP_AIA_ISS34_SERIESNAME          aia.iss_3_4_status
