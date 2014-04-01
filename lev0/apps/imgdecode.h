@@ -94,6 +94,6 @@ int imgstat(IMG *img, STAT *stat);
 // Patch 1: crop table corruption Dec 2011 - Jan 2012
 #define NEED_PATCH1(fsn) (!(fsn%2) && (fsn<=33190636) && (fsn>=32249884))
 // Patch 2: camera 1 lookup table corruption 30 March 2014 
-#define NEED_PATCH2(fsn) (!(fsn%2) && (fsn<=70405129) && (fsn>=70397305))
+#define NEED_PATCH2(fsn) ((fsn%2) && (fsn<=70405129) && (fsn>=70397305))
 
 #endif
