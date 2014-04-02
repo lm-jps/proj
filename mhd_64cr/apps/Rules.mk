@@ -13,7 +13,7 @@ FEXED_$(d) 	:= $(addprefix $(d)/, mhd_64raw mhd_64pc5 hmitxt2wso mhd2equidist_64
 FEXES		:= $(FEXES_$(d))
 FEXED		:= $(FEXED_$(d))
 FEXE_$(d) 	:= $(FEXES_$(d)) $(FEXED_$(d))
-FEXE		:= $(FEXE_$(d))
+FEXE		:= $(FEXE) $(FEXE_$(d))
 
 ## list of exec., objective, and dependency file, and clean-up list
 # EXE_$(d)        := $(MODEXE_$(d))
