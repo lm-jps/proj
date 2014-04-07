@@ -56,6 +56,7 @@
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define LOGTEST 0
 #define CAL_HCFTID 17		//image is cal mode 
+#define STOP_FILE "/usr/local/logs/lev1/build_mgr_stop_aia"
 
 #define kDpath    "dpath"
 #define kDpathDef "/home/jsoc/cvs/Development/JSOC"
@@ -89,6 +90,7 @@ CmdParams_t cmdparams;
 char *module_name = "build_lev1_aia";
 
 FILE *h1logfp;		// fp for h1 ouput log for this run 
+static struct stat stbuf;
 //static IMG Image0, Image1;
 //static IMG *Img0 = &Image0;
 //static IMG *Img1 = &Image1;
@@ -1525,6 +1527,12 @@ int DoIt(void)
       printf("build_lev1_aia abort\nSee log: %s\n", logname); 
       send_mail("build_lev1_aia abort\nSee log: %s\n", logname); 
       return(0);
+    }
+    if(modeflg) {               //only do for recnum mode
+      if(stat(STOP_FILE, &stbuf) == 0) {
+        printf("Stop file %s seen. Exit build_lev1_aia.\n", STOP_FILE);
+        break;
+      }
     }
   }
   printf("build_lev1_aia done last fsn=%u\n", fsnx); 
