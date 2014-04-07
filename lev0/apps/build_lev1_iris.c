@@ -57,6 +57,7 @@
 #define NOTSPECIFIED "***NOTSPECIFIED***"
 #define LOGTEST 0
 #define CAL_HCFTID 17		//image is cal mode 
+#define STOP_FILE "/usr/local/logs/lev1/build_mgr_stop_iris"
 
 // SAA-HLZ
 #define SAA_HLZ_SERIES "iris.saa_hlz"
@@ -86,6 +87,7 @@ CmdParams_t cmdparams;
 char *module_name = "build_lev1_iris_NEW";
 
 FILE *h1logfp;		// fp for h1 ouput log for this run 
+static struct stat stbuf;
 static LEV0LEV1 lev0lev1;
 static LEV0LEV1 *l0l1 = &lev0lev1;
 //static CCSDS_Packet_t *Hk;
@@ -1424,6 +1426,12 @@ int DoIt(void)
       printf("build_lev1_iris abort\nSee log: %s\n", logname); 
       send_mail("build_lev1_iris abort\nSee log: %s\n", logname); 
       return(0);
+    }
+    if(modeflg) {               //only do for recnum mode
+      if(stat(STOP_FILE, &stbuf) == 0) {
+        printf("Stop file %s seen. Exit build_lev1_iris.\n", STOP_FILE);
+        break;
+      }
     }
   }
   printf("build_lev1_iris done last fsn=%u\n", fsnx); 
