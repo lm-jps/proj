@@ -3,9 +3,13 @@
   print "I'm stopping all the ingest_lev0 AIA processes...\n";
   $cmd = "touch /usr/local/logs/lev0/VC01_stop"; #tell ingest to stop
   `$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/VC01_stopX"; #tell ingest to stop
+  `$cmd`;
   #$cmd = "touch /usr/local/logs/lev0/VC02_stop";
   #`$cmd`;
   $cmd = "touch /usr/local/logs/lev0/VC04_stop";
+  `$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/VC04_stopX";
   `$cmd`;
   #$cmd = "touch /usr/local/logs/lev0/VC05_stop";
   #`$cmd`;

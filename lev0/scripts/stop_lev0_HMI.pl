@@ -5,9 +5,13 @@
   #`$cmd`;
   $cmd = "touch /usr/local/logs/lev0/VC02_stop";
   `$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/VC02_stopX";
+  `$cmd`;
   #$cmd = "touch /usr/local/logs/lev0/VC04_stop";
   #`$cmd`;
   $cmd = "touch /usr/local/logs/lev0/VC05_stop";
+  `$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/VC05_stopX";
   `$cmd`;
   while(1) {
     $cfound = 0;
