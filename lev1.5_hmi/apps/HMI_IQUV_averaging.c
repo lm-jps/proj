@@ -1020,7 +1020,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.36 2014/01/15 21:44:48 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.37 2014/04/16 18:21:29 couvidat Exp $");
 }
 
 
@@ -1082,7 +1082,7 @@ int DoIt(void)
   char HISTORY[MaxNString];                                                            //history of the data
 
   char COMMENT[MaxNString];
-  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; dpath="); //comment about what the observables code is doing
+  strcpy(COMMENT,"De-rotation: ON; Un-distortion: ON; Re-centering: ON; Re-sizing: OFF; correction for cosmic-ray hits; RSUNerr=0.8 pixels; dpath="); //comment about what the observables code is doing
   strcat(COMMENT,dpath);
   if(inLinearity == 1) strcat(COMMENT,"; linearity=1 with coefficients updated on 2014/01/15");
   if(inRotationalFlat == 1) strcat(COMMENT,"; rotational=1");
@@ -1306,7 +1306,7 @@ int DoIt(void)
   float *CRLNOBS=NULL;
   //float *HGLNOBS=NULL;
   float *CDELT1=NULL;                                                //image scale in the x direction (in arcseconds)
-  float RSUNerr=0.6;                                                //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
+  float RSUNerr=0.8;//0.6;                                                //maximum change tolerated on RSUN=1.82*RSUNerr, maximum change tolerated on CRPIX1 and CRPIX2=RSUNerr, from image to image,in pixels
   float diffXfs= 6.14124;                                            //difference between CRPIX1 of front and side cameras in pixels (!!! WARNING !!!! SHOULD NOT BE A CONSTANT: VARIES WITH ORBITAL VELOCITY)
   float diffYfs=-4.28992;                                            //difference between CRPIX2 of front and side cameras in pixels (!!! WARNING !!!! SHOULD NOT BE A CONSTANT: VARIES WITH ORBITAL VELOCITY)
   float correction,correction2;
