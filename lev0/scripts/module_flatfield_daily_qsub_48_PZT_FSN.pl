@@ -18,7 +18,7 @@ sub usage {
 
 $IN1 = "hmi.lev1";  #use to be hmi.lev1_nrt
 $IN2 = "hmi.lev1";  #use to be hmi.lev1c_nrt
-$QDIR = "/scr21/production/qsub/flat"; #dir for qsub scripts
+$QDIR = "/surge40/jsocprod/qsub/flat"; #dir for qsub scripts
 $PID = getppid;
 $host = `hostname -s`;
 chomp($host);
