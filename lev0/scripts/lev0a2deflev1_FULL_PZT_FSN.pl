@@ -49,7 +49,7 @@ sub usage {
   exit(0);
 }
 
-$QDIR = "/scr21/production/qsub/flat"; #dir for qsub scripts
+$QDIR = "/surge40/jsocprod/qsub/flat"; #dir for qsub scripts
 $LOGDIR = "/usr/local/logs/lev1_def";
 $PID = getppid;
 $host = `hostname -s`;
