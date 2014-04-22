@@ -1042,15 +1042,19 @@ int main(int argc, char **argv)
     if(abortnow) break;
     sleep(30);		//wait for more lev0 to appear
     if(lastrecnum0_now == lastrecnum0_prev) {  //no new lev0 in
-      if(loopcnt++ == 15) {  //force any left over lev0 records to lev1
-        printk("Timeout: force any left over lev0 to lev1\n");
-        if(do_ingest(1)) {        // process the last lev0 records
-          printk("**ERROR: in do_ingest() for %s\n", open_dsname);
-        }
-        loopcnt = 0;
-      }
+      //elim thie force feature. was need for devel for Lockheed testing
+      //but it causes our chunking by 12 to get off and get too big
+      //such that we can try to process some lev0 that's not commited yet
+      //if(loopcnt++ == 15) {  //force any left over lev0 records to lev1
+      //  printk("Timeout: force any left over lev0 to lev1\n");
+      //  if(do_ingest(1)) {        // process the last lev0 records
+      //    printk("**ERROR: in do_ingest() for %s\n", open_dsname);
+      //  }
+      //  loopcnt = 0;
+      //}
+      sleep(30); //just wait longer
     }
-    else loopcnt = 0;
+    //else loopcnt = 0;
     //wflg = 0;
   }
   sprintf(pcmd, "/bin/rm %s/build_lev1_mgr_%s.stream.touch 2>/dev/null",
