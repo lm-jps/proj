@@ -14,7 +14,7 @@ ingestlev0orig_$(d)	:= $(addprefix $(d)/, ingest_lev0 decode_dayfile)
 #ingestlev1_$(d)		:= $(addprefix $(d)/, build_lev1)
 #ingestlev1X_$(d)	:= $(addprefix $(d)/, build_lev1X)
 #ingestlev1_mgr_$(d)	:= $(addprefix $(d)/, build_lev1_mgr, build_lev1_mgr_fsn, build_lev1_mgrY)
-ingestlev1_mgr_$(d)	:= $(addprefix $(d)/, build_lev1_mgr)
+ingestlev1_mgr_$(d)	:= $(addprefix $(d)/, build_lev1_mgr, build_lev1_mgr_jim)
 ingestlev0_obj_$(d)	:= $(addprefix $(d)/, imgdecode_iris.o decode_hk.o load_hk_config_files_iris.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms_iris.o iris_time_setting.o)
 ingestlev0orig_obj_$(d) := $(addprefix $(d)/, imgdecode.o decode_hk.o load_hk_config_files.o decode_hk_vcdu.o save_packet_to_dayfile.o write_hk_to_drms.o hmi_time_setting.o set_HMI_mech_values.o)
 
