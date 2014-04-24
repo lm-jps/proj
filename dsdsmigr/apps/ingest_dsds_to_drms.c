@@ -303,7 +303,7 @@ int DoIt(void)
    int nRecs, iRec;
    int qualstat, dpcflag, polflag, skipflag;
    double val;
-   char *val1;
+   char *val1 = NULL;
 # define AU_m (149597870691.0)
    char *inRecQuery, *outRecQuery;
    DRMS_RecordSet_t *inRecSet, *outRecSet; 
@@ -314,6 +314,9 @@ int DoIt(void)
    verbose = cmdparams_get_int(&cmdparams, "v", NULL) != 0;
    char scfilepath[DRMS_MAXPATHLEN];
    char infilepath[DRMS_MAXPATHLEN];
+       
+       DRMS_RecordSet_t *screcset = NULL;
+       
    dpcflag = params_isflagset(&cmdparams, "z");
    polflag = params_isflagset(&cmdparams, "p");
 //   printf("dpcflag=%d\n",dpcflag);
@@ -331,7 +334,7 @@ int DoIt(void)
    char *screcquery = (char *)cmdparams_get_str(&cmdparams, "SCALE_CORRECTIONS", NULL);
    if (strcmp(screcquery, kNOT_SPEC) != 0)
    {
-      DRMS_RecordSet_t *screcset = drms_open_records(drms_env, screcquery, &status);
+      screcset = drms_open_records(drms_env, screcquery, &status);
       if (status != DRMS_SUCCESS || screcset == NULL)
       {
          fprintf(stderr, "ERROR: problem reading scale corrections recordset: query = %s, status = %d\n", screcquery, status);
@@ -383,12 +386,23 @@ int DoIt(void)
          char *val2     = drms_getkey_string(inRec,"DATAFILE",&status); 
          char *val2test = strstr(val2,"_Vm_"); 
          if (val2test == NULL) drms_setkey_string(outRec,"POLSTATE","LP"); 
-         else drms_setkey_string(outRec,"POLSTATE","CP"); 
-      }  
+         else drms_setkey_string(outRec,"POLSTATE","CP");
+          
+          if (val2)
+          {
+              free(val2);
+              val2 = NULL;
+          }
+      }
 
   // set cvs commit version into keyword HEADER
-      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.15 2013/08/07 00:06:36 arta Exp $");
-      status = drms_setkey_string(outRec, "HEADER", cvsinfo); 
+      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.16 2014/04/24 23:56:17 arta Exp $");
+      status = drms_setkey_string(outRec, "HEADER", cvsinfo);
+      if (cvsinfo)
+      {
+          free(cvsinfo);
+          cvsinfo = NULL;
+      }
 
       if (skipflag)
          goto skip;
@@ -459,14 +473,40 @@ int DoIt(void)
             if (SkipMissingFiles)
             {
                Record_OK = 0;
-               if (verbose) 
-                  fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
+               if (verbose)
+               {
+                   char *strtodel = drms_getkey_string(outRec,"T_REC",NULL);
+                   if (strtodel)
+                   {
+                       fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, strtodel);
+                       free(strtodel);
+                       strtodel = NULL;
+                   }
+               }
             }
             else
                Record_OK = 1;
             drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
+             
+             if (DataFile)
+             {
+                 free(DataFile);
+                 DataFile = NULL;
+             }
             continue;
          }
+          
+          if (DataFile)
+          {
+              free(DataFile);
+              DataFile = NULL;
+          }
+          
+          if (val1)
+          {
+              free(val1);
+              val1 = NULL;
+          }
       }
       else
       {
@@ -522,15 +562,34 @@ int DoIt(void)
             if (SkipMissingFiles)
             {
                Record_OK = 0;
-               if (verbose) 
-                  fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, drms_getkey_string(outRec,"T_REC",NULL));
+               if (verbose)
+               {
+                   char *strtodel = drms_getkey_string(outRec,"T_REC",NULL);
+                   if (strtodel)
+                   {
+                       fprintf(stderr,"DSDS Record %d has no datafile, T_REC=%s, set missing.\n", iRec, strtodel);
+                       free(strtodel);
+                       strtodel = NULL;
+                   }
+               }
             }
             else
                Record_OK = 1;
             drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
+             
+             if (DataFile)
+             {
+                 free(DataFile);
+                 DataFile = NULL;
+             }
             continue;
          }
 
+          if (DataFile)
+          {
+              free(DataFile);
+              DataFile = NULL;
+          }
       }
 
       skip:
@@ -699,6 +758,11 @@ int DoIt(void)
                 }
           }
         }
+          
+          if (outKey_last)
+          {
+              hiter_destroy(&outKey_last);
+          }
 
         drms_setkey_time(outRec, "DATE", time_now());
 
@@ -718,7 +782,13 @@ if ( status == DRMS_SUCCESS)
 	if (!strcmp("/CM/tables/ephemeris/mdi_roll.ascii", rolltbls)) 
   		rollrecstring="mdi.roll_table_ascii";
         drms_setkey_string(outRec, "ROLL_TBL", rollrecstring);
-	}			
+	}
+          
+if (rolltbls)
+{
+    free(rolltbls);
+    rolltbls = NULL;
+}
 
 /* populate the CALTBLS keyword */
 
@@ -784,7 +854,13 @@ if (!strcmp("/home/soi/CM/tables/calib/dop/orig/tune_6/", caltbls))
 if (!strcmp("NONE", caltbls))
   calrecstring="NONE";
 
-drms_setkey_string(outRec, "CALTBLS", calrecstring); 
+drms_setkey_string(outRec, "CALTBLS", calrecstring);
+    
+    if (caltbls)
+    {
+        free(caltbls);
+        caltbls = NULL;
+    }
 }
 		
       /* loop through all target links */
@@ -794,6 +870,11 @@ drms_setkey_string(outRec, "CALTBLS", calrecstring);
         //}
       drms_close_records(outRecSet,(Record_OK ? DRMS_INSERT_RECORD : DRMS_FREE_RECORD));
       }
+       
+       /* Close no-longer needed record set. 
+        * -ART
+        */
+       drms_close_records(screcset, DRMS_FREE_RECORD);
    drms_close_records(inRecSet,DRMS_FREE_RECORD);
    return(DRMS_SUCCESS);
    }
