@@ -1398,6 +1398,8 @@ int DoIt(void)
    *   (this should be factored out as a separate routine)
    */
   // T_REC loop covers all times
+    // This double loop (over records, then HARPs) allocates memory for images (patchInfo[i].image).
+    // These images are not used outside this loop.
   for (rec = 0; rec < nRec_all; rec++) {
     if (tRec[rec].nharp == 0) {
       V_printf(verbflag > 0, "\t", "[%3d/%3d] %s: Nothing to ingest.\n", 
@@ -1455,7 +1457,7 @@ int DoIt(void)
     drms_free_array(maskData);
     drms_close_records(magRecSet,  DRMS_FREE_RECORD); magRecSet  = NULL;
     drms_close_records(maskRecSet, DRMS_FREE_RECORD); maskRecSet = NULL;
-  }
+  } // end double loop over records and HARPs.
   /* 
    * Fifth step: Record ingested HARPs
    */
@@ -1531,6 +1533,17 @@ int DoIt(void)
   // NULLs OK here
   free(marpInfo);
   free(listBuf);
+    
+  // Free alloc'd strings.
+  for (i = 0; i < nHarp * nRec_all; i++)
+  {
+      if (patchInfo[i].patchName)
+      {
+          free(patchInfo[i].patchName);
+          patchInfo[i].patchName = NULL;
+      }
+  }
+    
   free(patchInfo);
   free(tRec);
   free(harpInfo);
@@ -1842,6 +1855,7 @@ load_drms_rec_seg(DRMS_RecordSet_t **recSetP,
   if (recSetP) *recSetP = the_recSet;
   if (recP)    *recP    = the_rec;
   if (dataP)   *dataP   = the_data;
+   
   // OTOH: close the record set if it was not returned
   if (!recSetP)
     drms_close_records(the_recSet, DRMS_FREE_RECORD);
@@ -2069,16 +2083,23 @@ set_trec_hasdata(trec_info_t *tRec, char *magQuery, char *maskQuery, int *npix, 
     if (npix_fulldisk == 0) {
       // find full-disk image dims -- we know the mask and mag are OK
       DRMS_RecordSet_t *mRecSet;
-      DRMS_Array_t     *mArray;
+      DRMS_Array_t     *mArray = NULL;
       err = load_drms_rec_seg(&mRecSet, NULL,     // need recSet
 			      &mArray,  NULL,     // do not want WCS
 			      maskQuery, tRec[rec].str, 
 			      "mask", DRMS_TYPE_RAW);
       // (do not expect errors, since the query just succeeded above)
-      if (!err) {
-	npix_fulldisk = mArray->axis[0];
-	drms_close_records(mRecSet, DRMS_FREE_RECORD);
-      }
+        if (!err) {
+            npix_fulldisk = mArray->axis[0];
+            // Free the mArray.
+            if (mArray)
+            {
+                drms_free_array(mArray);
+                mArray = NULL;
+            }
+            
+            drms_close_records(mRecSet, DRMS_FREE_RECORD);
+        }
     }
     // data present
     tRec[rec].data = Trec_Data_OK;
@@ -2633,7 +2654,14 @@ set_patch_info_blanks(patch_info_t *patchInfo,    // head of array this HARP's p
       patchInfo[rec].lon0  = patchInfo[rec0].lon0 + (rec - rec0)*omega;
       patchInfo[rec].lon1  = patchInfo[rec0].lon1 + (rec - rec0)*omega;
       patchInfo[rec].omega = patchInfo[rec0].omega;
-      patchInfo[rec].patchName = "";   // not a real patch
+      // Don't make a pointer to static memory - previously this was malloc'd.
+      // patchInfo[rec].patchName = "";   // not a real patch
+      if (patchInfo[rec].patchName)
+      {
+          free(patchInfo[rec].patchName);
+          patchInfo[rec].patchName = calloc(1, sizeof(char));   // not a real patch
+      }
+
       for (sn = 0; sn < RS_num_stats; sn++)
 	patchInfo[rec].stats[sn] = DRMS_MISSING_FLOAT;
     }
@@ -2650,7 +2678,14 @@ set_patch_info_blanks(patch_info_t *patchInfo,    // head of array this HARP's p
       patchInfo[rec].lon0  = patchInfo[rec0].lon0 + (rec - rec0)*omega;
       patchInfo[rec].lon1  = patchInfo[rec0].lon1 + (rec - rec0)*omega;
       patchInfo[rec].omega = patchInfo[rec0].omega;
-      patchInfo[rec].patchName = "";   // not a real patch
+      // Don't make a pointer to static memory - previously this was malloc'd.
+      // patchInfo[rec].patchName = "";   // not a real patch
+      if (patchInfo[rec].patchName)
+      {
+          free(patchInfo[rec].patchName);
+          patchInfo[rec].patchName = calloc(1, sizeof(char));   // not a real patch
+      }
+        
       for (sn = 0; sn < RS_num_stats; sn++)
 	patchInfo[rec].stats[sn] = DRMS_MISSING_FLOAT;
     }
@@ -2667,7 +2702,14 @@ set_patch_info_blanks(patch_info_t *patchInfo,    // head of array this HARP's p
       patchInfo[rec].lon0  = patchInfo[rec1].lon0 + (rec - rec1)*omega;
       patchInfo[rec].lon1  = patchInfo[rec1].lon1 + (rec - rec1)*omega;
       patchInfo[rec].omega = patchInfo[rec1].omega;
-      patchInfo[rec].patchName = "";   // not a real patch
+        
+      // Don't make a pointer to static memory - previously this was malloc'd.
+      // patchInfo[rec].patchName = "";   // not a real patch
+      if (patchInfo[rec].patchName)
+      {
+          free(patchInfo[rec].patchName);
+          patchInfo[rec].patchName = calloc(1, sizeof(char));   // not a real patch
+      }
       for (sn = 0; sn < RS_num_stats; sn++)
 	patchInfo[rec].stats[sn] = DRMS_MISSING_FLOAT;
     }
@@ -3053,6 +3095,7 @@ ingest_harp(patch_info_t *pInfo,     // the patch to ingest, function of (HARP,T
     // keyword/link errors, not noteworthy
     V_printf(verbflag > 1, "", "Some nonfatal errors with %s\n", outQuery);
   }
+
   return 0; // OK
 }
 
@@ -3176,20 +3219,35 @@ ingest_record(patch_info_t *pInfo,
   outRec = drms_create_record(drms_env, outQuery, DRMS_PERMANENT, &rv);
   if (rv) {
     V_printf(-1, "", "Could not create record for patch bitmap.\n");
+    // 2 is not fatal. Free image.
+    if (pInfo->image)
+    {
+        free(pInfo->image);
+        pInfo->image = NULL;
+    }
     return 2;
   }
   outSeg = drms_segment_lookup(outRec, "bitmap");
   if (!outSeg) {
     V_printf(-1, "", "Could not find bitmap segment in patch.\n");
     drms_close_record(outRec, DRMS_FREE_RECORD);
+    // 2 is not fatal. Free image.
+    if (pInfo->image)
+    {
+        free(pInfo->image);
+        pInfo->image = NULL;
+    }
     return 2;
   }
   // pInfo->image will be freed when the DRMS array is freed, below
   outData = drms_array_create(DRMS_TYPE_CHAR, 2, pInfo->dims, pInfo->image, &rv);
   if (rv) {
     V_printf(-1, "", "Could not create array for patch bitmap segment.\n");
-    if (outData) 
-      drms_free_array(outData);
+    if (outData)
+    {
+        drms_free_array(outData); // Frees pInfo->image.
+        pInfo->image = NULL; // drms_free_array() doesn't set the pointer to NULL.
+    }
     return 2; // fatal
   }
   // link outData into outSeg
@@ -3263,6 +3321,7 @@ ingest_record(patch_info_t *pInfo,
     return 2;  // fatal
   }
   drms_free_array(outData);  // frees pInfo->image
+  pInfo->image = NULL; // drms_free_array() doesn't set the pointer to NULL.
   drms_close_record(outRec, DRMS_INSERT_RECORD);
   return status;  // OK
 }
