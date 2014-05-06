@@ -21,6 +21,7 @@ synframe sdate='2010.08.12' stime='16:00:00' in='su_yang.fd_M12m_remap_los' out=
 */
 
 char *module_name = "brblosdailysynframe_nrt";
+
 #define DIE(msg) {fflush(stdout); fprintf(stderr, "%s, status = %d \n", msg, status); return(status);}
 #define PARAMETER_ERROR(PNAME)
 #define     PI     4.0 * atan(1.0)
@@ -84,7 +85,7 @@ int DoIt(void)
   drmethod = (char *)params_get_str(&cmdparams, "drmethod");
 
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: brblosdailysynframe_nrt.c,v 1.4 2014/03/17 19:05:29 yliu Exp $");
+  char *cvsinfo = strdup("$Id: brblosdailysynframe_nrt.c,v 1.5 2014/05/06 00:06:10 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"o2helio.c bug corrected, CRVAL, CRPIX corrected -- Feb. 2014");
 
@@ -259,6 +260,7 @@ double dtmp;
   int hwd = xx1;       // in degree
   int ii, jj;
   int smallDims[2], xout, yout;
+  double lonppixel = 360.0/xdim_syn; // degree per pixel
   TIME tobs_total = 0.0, tobs_ave;
   xx1 *= ppd;          // in pixels
   xbeg *= ppd;
@@ -274,7 +276,7 @@ double dtmp;
         float *inData = (float *)inArray->data;
         int crnn = drms_getkey_int(inRecfinal, "CAR_ROT", &status);
         float clogn = drms_getkey_float(inRecfinal, "CRVAL1", &status);
-        int xshift = (int)(ppd * ((clogn - clog0) - 360.0 * (crnn - crn)));
+        int xshift = (rint)(ppd * ((clogn - clog0) - 360.0 * (crnn - crn)));
         TIME Tobs = drms_getkey_time(inRecfinal, "T_OBS", &status);
         tobs_total += Tobs;
 
@@ -307,10 +309,11 @@ double dtmp;
   DRMS_Segment_t *synSeg;
   DRMS_Array_t *synArray, *supsynArray, *outArray, *smalloutArray;
   float *synData, *supsynData, *outDataBr, *outDataBlos, *smalloutDataBr, *smalloutDataBlos;
-
-//  float *synData, *supsynData, *outData, *smalloutData;
   int i1, j1;
-  int synleftst = ppd * hwd, supleftst = ppd * clog0;
+  int synleftst = ppd * hwd;
+  double supleftst = ppd * (clog0 - lonppixel); // the leftmost pixel of Carrington
+                                                                    // chart starts lon = lonppixel. 
+
   zgrid(dxsz, ith, 0, 0, 0, phd, thd, lad, cth, sth, csc, scs);
 
   snprintf(timetmp, sizeof(timetmp), "%s[%d/2]", synQuery, crn-2);
@@ -378,6 +381,7 @@ printf("synopN=%d\n", nds);
                    // end of the combination: the super synoptic map--supsynData
 
                    // start to generate the right portion of synchronic map
+/*
                    // the differential rotation is taken into account.
    for (j = 0; j < ydim_syn/2; j++)
      {
@@ -399,12 +403,23 @@ printf("synopN=%d\n", nds);
         }
       }
 
+*/
 
-    int magleft = ppd * (90 - hwd);
+   for (j = 0; j < ydim_syn; j++)
+     {
+        for (i = synleftst; i < xdim_syn; i++)
+        {
+             float lon = i - synleftst;
+             int lonpixel = (rint)(supleftst + lon);
+             outDataBr[j*xdim_syn + i] = supsynData[j * supxDim + lonpixel];
+        }
+      }
+
+    int magleft = (rint)(ppd * (90 - hwd));
     for (j = 0; j < ydim_syn; j++)
-        for (i = 0; i < 2*synleftst; i++)
+        for (i = 0; i < 2*synleftst + 1; i++)
             {
-                outDataBr[j * xdim_syn + i] = aveData[j * inDims[0] + (int)magleft + i];
+                outDataBr[j * xdim_syn + i] = aveData[j * inDims[0] + magleft + i];
             }
 
   frebinbox(outDataBr, smalloutDataBr, xdim_syn, ydim_syn, nbin, nbin-1);
@@ -554,10 +569,12 @@ printf("synopN=%d\n", nds);
     drms_setkey_double(outRec, "CDELT1", lonstep);
     double latstep = 2.0/ydim_syn;
     drms_setkey_double(outRec, "CDELT2", latstep);
-    double lonfirst = 360.0 * (crn  - 1) - clog0 + hwd;
+//    double lonfirst = 360.0 * (crn  - 1) - clog0 + hwd;
+    double lonfirst = 360.0 * (crn  - 1) - clog0 + hwd + 360.0/xdim_syn;
                          // longitude for the last pixel is counted at the center of the pixel.
     drms_setkey_double(outRec, "LON_FRST", lonfirst);
-    double lonlast = 360.0 * crn - clog0 + hwd - 360.0/xdim_syn;
+//    double lonlast = 360.0 * crn - clog0 + hwd - 360.0/xdim_syn;
+    double lonlast = 360.0 * crn - clog0 + hwd;
                          // longitude for the first pixel is counted at the center of the pixel.
     drms_setkey_double(outRec, "LON_LAST", lonlast);
 //    double loncenter = lonfirst + 180.0 - 0.5 * 360.0/xdim_syn;
@@ -633,12 +650,14 @@ printf("synopN=%d\n", nds);
     drms_setkey_double(smallRD, "CDELT1", lonstep);
     latstep = 2.0/yout;
     drms_setkey_double(smallRD, "CDELT2", latstep);
-    lonfirst = 360.0 * (crn  - 1) - clog0 + hwd + ((nbin+1)/2.0-1.0)*(360.0/xdim_syn);
+//    lonfirst = 360.0 * (crn  - 1) - clog0 + hwd + ((nbin+1)/2.0-1.0)*(360.0/xdim_syn);
+    lonfirst = 360.0 * (crn  - 1) - clog0 + hwd + 360.0/xdim_syn + ((nbin+1)/2.0-1.0)*(360.0/xdim_syn);
     drms_setkey_double(smallRD, "LON_FRST", lonfirst);
-    lonlast = 360.0 * crn - clog0 + hwd - 360.0/xdim_syn - ((nbin+1)/2.0-1.0)*(360.0/xdim_syn);
+//    lonlast = 360.0 * crn - clog0 + hwd - 360.0/xdim_syn - ((nbin+1)/2.0-1.0)*(360.0/xdim_syn);
+    lonlast = 360.0 * crn - clog0 + hwd - ((nbin+1)/2.0-1.0)*(360.0/xdim_syn);
     drms_setkey_double(smallRD, "LON_LAST", lonlast);
 //    loncenter = lonfirst + 180.0 - 0.5 * 360.0/xout;
-    loncenter = 360.0 * (crn  - 1) - clog0 + hwd + 180.0;
+    loncenter = 360.0 * (crn - 1) - clog0 + hwd + 360.0/xdim_syn + 180.0;
                          //    loncenter is defined as the 180 degree longitude.
                          //    loncenter needs to be comparible to CRPIX1
     drms_setkey_double(smallRD, "CRVAL1", loncenter);
