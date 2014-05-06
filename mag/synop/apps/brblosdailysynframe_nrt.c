@@ -85,7 +85,7 @@ int DoIt(void)
   drmethod = (char *)params_get_str(&cmdparams, "drmethod");
 
   char historyofthemodule[2048]; // put history info into the data
-  char *cvsinfo = strdup("$Id: brblosdailysynframe_nrt.c,v 1.6 2014/05/06 00:09:51 yliu Exp $");
+  char *cvsinfo = strdup("$Id: brblosdailysynframe_nrt.c,v 1.7 2014/05/06 00:12:52 yliu Exp $");
   cvsinfo = (char *)malloc(2048 * sizeof(char));
   sprintf(historyofthemodule,"o2helio.c bug corrected, CRVAL, CRPIX corrected -- Feb. 2014");
 
