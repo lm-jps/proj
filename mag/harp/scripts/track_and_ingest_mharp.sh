@@ -348,7 +348,7 @@ fi
 # for show_info, ingestor, and log-ingestor
 # there is no sh version of .setJSOCenv, so we use this to get JSOC_MACHINE
 jsoc_mach=`csh -f -c 'source /home/jsoc/.setJSOCenv && echo $JSOC_MACHINE'`
-PATH="${PATH}:$HOME/cvs/JSOC/bin/$jsoc_mach"
+PATH="${PATH}:$HOME/cvs/JSOC/bin/$jsoc_mach:/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/"
 
 echo "${progname}:   show_info is at:" `which show_info`
 echo "${progname}:   ingest_mharp is at:" `which ingest_mharp`
