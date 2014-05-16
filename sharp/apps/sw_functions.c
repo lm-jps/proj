@@ -17,6 +17,7 @@
  MEANPOT Mean photospheric excess magnetic energy density in ergs per cubic centimeter
  TOTPOT Total photospheric magnetic energy density in ergs per cubic centimeter
  MEANSHR Mean shear angle (measured using Btotal) in degrees
+ R_VALUE Karel Schrijver's R parameter
  
  The indices are calculated on the pixels in which the conf_disambig segment is greater than 70 and
  pixels in which the bitmap segment is greater than 30. These ranges are selected because the CCD
@@ -1035,11 +1036,20 @@ int computeShearAngle(float *bx_err, float *by_err, float *bz_err, float *bx, fl
 }
 
 /*===========================================*/
+/* Example function 15: R parameter as defined in Schrijver, 2007 */
+//
+// Note that there is a restriction on the function fsample()
+// If the following occurs:
+//      nx_out > floor((ny_in-1)/scale + 1) 
+//      ny_out > floor((ny_in-1)/scale + 1),
+// where n*_out are the dimensions of the output array and n*_in 
+// are the dimensions of the input array, fsample() will usually result 
+// in a segfault (though not always, depending on how the segfault was accessed.) 
+
 int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
              float *rim, float *p1p0, float *p1n0, float *p1p, float *p1n, float *p1,
              float *pmap, int nx1, int ny1)
-{
-    
+{ 
     int nx = dims[0];
     int ny = dims[1];
     int i = 0;
@@ -1056,8 +1066,9 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
     
     // set up convolution kernel
     init_fresize_gaussian(&fresgauss,sigma,20,1);
-    
+
     fsample(los, rim, nx, ny, nx, nx1, ny1, nx1, scale, 0, 0, 0.0);
+
     for (i = 0; i < nx1; i++)
     {
         for (j = 0; j < ny1; j++)
@@ -1073,7 +1084,7 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
                 p1n0[index]=0.0;
         }
     }
-    
+              
     fresize(&fresboxcar, p1p0, p1p, nx1, ny1, nx1, nx1, ny1, nx1, 0, 0, 0.0);
     fresize(&fresboxcar, p1n0, p1n, nx1, ny1, nx1, nx1, ny1, nx1, 0, 0, 0.0);
     
