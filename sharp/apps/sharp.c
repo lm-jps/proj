@@ -13,7 +13,7 @@
  *      Series 2: Sharp_cutout:
  *	          cutouts of magnetogram, bitmap, continuum, doppler (HARP defined, various sizes in CCD pixels)
  *	          cutouts of all vector data segments (same as above)
- *
+ *           
  *	Author:
  *		Xudong Sun; Monica Bobra
  *
@@ -1934,10 +1934,18 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float crpix1       = drms_getkey_float(inRec, "CRPIX1", &status);
 	float crpix2       = drms_getkey_float(inRec, "CRPIX2", &status);
     
-    // convert cdelt1_orig from degrees to arcsec
-    float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
-    int nx1 = nx*cdelt1/2;
-    int ny1 = ny*cdelt1/2;
+        // convert cdelt1_orig from degrees to arcsec
+        float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
+
+        // define some values for the R calculation 
+        int scale = round(2.0/cdelt1);
+        int nx1 = nx/scale;
+        int ny1 = ny/scale;
+
+	if (nx1 > floor((nx-1)/scale + 1) )
+		DIE("X-dimension of output array in fsample() is too large.");
+	if (ny1 > floor((ny-1)/scale + 1) )
+		DIE("Y-dimension of output array in fsample() is too large.");
     
 	// Temp arrays
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
@@ -2250,7 +2258,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.27 2014/03/19 20:46:26 xudong Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.28 2014/05/16 21:56:11 mbobra Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
