@@ -106,15 +106,16 @@ int DoIt(void)
     order = cmdparams_get_int(&cmdparams, "ORDER", &status);
 
     nds = (int)((vrstop - vrstart)/vrstep) + 1;
-    outRD = drms_create_records(drms_env, nds, outRecQuery, DRMS_PERMANENT, &status);
-    if (status) DIE("Output recordset not created");
+//    outRD = drms_create_records(drms_env, nds, outRecQuery, DRMS_PERMANENT, &status);
+//    if (status) DIE("Output recordset not created");
 
   for (ds = 0; ds < nds; ds++)
   {
     float *bPixel, *datacube, *bField, *bMask;
     double *coef;
     int idx = 0;
-    outRec = outRD->records[ds];
+    float crpix1, crpix2, crval1, crval2, cdelt1, cdelt2, crota2;
+//    outRec = outRD->records[ds];
     vr_center = vrstart + ds * vrstep; 
     vr_left = vr_center - vrstep;
     vr_right = vr_center + vrstep;
@@ -147,7 +148,8 @@ printf("n=%d\n", nnds);
                 printf("phase ID = %s\n", phasemapid_str);
 
                 t_rec = drms_getkey_time(inRec, "T_REC", &status);
-                drms_setkey_time(outRec, "T_REC_O", t_rec);
+
+/*                drms_setkey_time(outRec, "T_REC_O", t_rec);
                 drms_copykey(outRec, inRec, "INVPHMAP");
                 drms_copykey(outRec, inRec, "INSTRUME");
                 drms_copykey(outRec, inRec, "CAMERA");
@@ -155,23 +157,24 @@ printf("n=%d\n", nnds);
                 drms_copykey(outRec, inRec, "COMMENT");
                 drms_copykey(outRec, inRec, "BLD_VERS");
                 float tmp;
-                tmp = drms_getkey_float(inRec, "CRPIX1", &status);
-                drms_setkey_float(outRec, "CRPIX1_O", tmp);
-                tmp = drms_getkey_float(inRec, "CRPIX2", &status);
-                drms_setkey_float(outRec, "CRPIX2_O", tmp);
-                tmp = drms_getkey_float(inRec, "CRVAL1", &status);
-                drms_setkey_float(outRec, "CRVAL1_O", tmp);
-                tmp = drms_getkey_float(inRec, "CRVAL2", &status);
-                drms_setkey_float(outRec, "CRVAL2_O", tmp);
-                tmp = drms_getkey_float(inRec, "CDELT1", &status);
-                drms_setkey_float(outRec, "CDELT1_O", tmp);
-                tmp = drms_getkey_float(inRec, "CDELT2", &status);
-                drms_setkey_float(outRec, "CDELT2_O", tmp);
-                tmp = drms_getkey_float(inRec, "CROTA2", &status);
-                drms_setkey_float(outRec, "CROTA2_O", tmp);
-                drms_setkey_double(outRec, "DSUN_ORI", dSun);
-                drms_setkey_double(outRec, "RSUN_ORI", rSun);
-                drms_setkey_int(outRec, "VRCENT", (int)(vr_center));
+*/
+                crpix1 = drms_getkey_float(inRec, "CRPIX1", &status);
+//                drms_setkey_float(outRec, "CRPIX1_O", tmp);
+                crpix2 = drms_getkey_float(inRec, "CRPIX2", &status);
+//                drms_setkey_float(outRec, "CRPIX2_O", tmp);
+                crval1 = drms_getkey_float(inRec, "CRVAL1", &status);
+//                drms_setkey_float(outRec, "CRVAL1_O", tmp);
+                crval2 = drms_getkey_float(inRec, "CRVAL2", &status);
+//                drms_setkey_float(outRec, "CRVAL2_O", tmp);
+                cdelt1 = drms_getkey_float(inRec, "CDELT1", &status);
+//                drms_setkey_float(outRec, "CDELT1_O", tmp);
+                cdelt2 = drms_getkey_float(inRec, "CDELT2", &status);
+//                drms_setkey_float(outRec, "CDELT2_O", tmp);
+                crota2 = drms_getkey_float(inRec, "CROTA2", &status);
+//                drms_setkey_float(outRec, "CROTA2_O", tmp);
+//                drms_setkey_double(outRec, "DSUN_ORI", dSun);
+//                drms_setkey_double(outRec, "RSUN_ORI", rSun);
+//                drms_setkey_int(outRec, "VRCENT", (int)(vr_center));
               }
 
             t_rec = drms_getkey_time(inRec, "T_REC", &status);
@@ -281,6 +284,31 @@ printf("ngood=%d\n", ngood);
     fitimage_float(outResize, mm, nn, order, 1, coef);
 
 // write the output
+
+        outRD = drms_create_records(drms_env, 1, outRecQuery, DRMS_PERMANENT, &status);
+        if (status) DIE("Output recordset not created");
+        outRec = outRD->records[0];
+        drms_setkey_time(outRec, "T_REC_O", t_rec);
+
+/*
+                drms_copykey(outRec, inRec, "INVPHMAP");
+                drms_copykey(outRec, inRec, "INSTRUME");
+                drms_copykey(outRec, inRec, "CAMERA");
+                drms_copykey(outRec, inRec, "HISTORY");
+                drms_copykey(outRec, inRec, "COMMENT");
+*/
+
+                drms_setkey_float(outRec, "CRPIX1_O", crpix1);
+                drms_setkey_float(outRec, "CRPIX2_O", crpix2);
+                drms_setkey_float(outRec, "CRVAL1_O", crval1);
+                drms_setkey_float(outRec, "CRVAL2_O", crval2);
+                drms_setkey_float(outRec, "CDELT1_O", cdelt1);
+                drms_setkey_float(outRec, "CDELT2_O", cdelt2);
+                drms_setkey_float(outRec, "CROTA2_O", crota2);
+                drms_setkey_double(outRec, "DSUN_ORI", dSun);
+                drms_setkey_double(outRec, "RSUN_ORI", rSun);
+                drms_setkey_int(outRec, "VRCENT", (int)(vr_center));
+
         outDims[0] = order; outDims[1] = order;      
         outSeg = drms_segment_lookupnum(outRec, 0);
         outArray = drms_array_create(DRMS_TYPE_DOUBLE, 2, outDims, coef, &status);
@@ -297,10 +325,11 @@ printf("ngood=%d\n", ngood);
         drms_setkey_string(outRec, "DATE", tstr);
         drms_free_array(outArray);
         free(outResize); free(outData); free(bPixel); free(datacube);
+        drms_close_records(outRD, DRMS_INSERT_RECORD);
     }
   drms_close_records(inRD, DRMS_FREE_RECORD);
   }
-  drms_close_records(outRD, DRMS_INSERT_RECORD);  
+//  drms_close_records(outRD, DRMS_INSERT_RECORD);  
   return 0;
 }
 
@@ -330,6 +359,6 @@ float median(int n, float x[]) {
 
 /*
 $Source: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/mag/ambig/apps/noisemaskcoef4twindow.c,v $
-$Author: xudong $
+$Author: yliu $
 */
 
