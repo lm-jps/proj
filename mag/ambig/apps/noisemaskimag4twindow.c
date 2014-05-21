@@ -10,7 +10,10 @@
 #include "imagefromchebyshev.c"
 
 // Dec 16 Xudong
-#define kMaskInquery	"hmi.lookup_ChebyCoef_TWindow"
+// #define kMaskInquery	"hmi.lookup_ChebyCoef_TWindow"
+
+// May 21 2014 Xudong
+#define kMaskInquery	"hmi.lookup_ChebyCoef_BNoise"
 
 int noisemaskimag4twindow(xDim, yDim, xcen, ycen, rsun, vrcenter, maskid, image, maskQuery) 
     double *image;
