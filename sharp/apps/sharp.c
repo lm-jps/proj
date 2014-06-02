@@ -1,5 +1,5 @@
 /*
- *  sharp.c
+ *  sharp.c   
  *
  *	This module creates the pipeline Space Weather Active Region Patches (SHARPs).
  *	It is a hard-coded strip-down version of bmap.c.
@@ -145,15 +145,15 @@
 struct swIndex {
     float mean_vf;
     float count_mask;
-	float absFlux;
-	float mean_hf;
-	float mean_gamma;
-	float mean_derivative_btotal;
-	float mean_derivative_bh;
-	float mean_derivative_bz;
-	float mean_jz;
-	float us_i;
-	float mean_alpha;
+    float absFlux;
+    float mean_hf;
+    float mean_gamma;
+    float mean_derivative_btotal;
+    float mean_derivative_bh;
+    float mean_derivative_bz;
+    float mean_jz;
+    float us_i;
+    float mean_alpha;
     float mean_ih;
     float total_us_ih;
     float total_abs_ih;
@@ -1906,10 +1906,10 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	DRMS_Array_t *bzArray = drms_segment_read(bzSeg, DRMS_TYPE_FLOAT, &status);
 	float *bz = (float *) bzArray->data;		// bz
     
-    //Use magnetogram map to compute R
-    DRMS_Segment_t *losSeg = drms_segment_lookup(inRec, "magnetogram");
-    DRMS_Array_t *losArray = drms_segment_read(losSeg, DRMS_TYPE_FLOAT, &status);
-    float *los = (float *) losArray->data;          // los
+       //Use magnetogram map to compute R
+       DRMS_Segment_t *losSeg = drms_segment_lookup(inRec, "magnetogram");
+       DRMS_Array_t *losArray = drms_segment_read(losSeg, DRMS_TYPE_FLOAT, &status);
+       float *los = (float *) losArray->data;          // los
     
 	DRMS_Segment_t *bz_errSeg = drms_segment_lookup(inRec, BR_ERR_SEG_CEA);
 	DRMS_Array_t *bz_errArray = drms_segment_read(bz_errSeg, DRMS_TYPE_FLOAT, &status);
@@ -1937,15 +1937,12 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         // convert cdelt1_orig from degrees to arcsec
         float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
 
-        // define some values for the R calculation 
-        int scale = round(2.0/cdelt1);
-        int nx1 = nx/scale;
-        int ny1 = ny/scale;
 
-	if (nx1 > floor((nx-1)/scale + 1) )
-		DIE("X-dimension of output array in fsample() is too large.");
-	if (ny1 > floor((ny-1)/scale + 1) )
-		DIE("Y-dimension of output array in fsample() is too large.");
+
+	//if (nx1 > floor((nx-1)/scale + 1) )
+	//	DIE("X-dimension of output array in fsample() is too large.");
+	//if (ny1 > floor((ny-1)/scale + 1) )
+	//	DIE("Y-dimension of output array in fsample() is too large.");
     
 	// Temp arrays
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
@@ -1965,28 +1962,35 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	float *dery_bz = (float *) (malloc(nxny * sizeof(float)));
 	float *bt_err  = (float *) (malloc(nxny * sizeof(float)));
 	float *bh_err  = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
-    float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
-    
-    // malloc some arrays for the R parameter calculation
-    float *rim = (float *)malloc(nx1*ny1*sizeof(float));
-    float *p1p0 = (float *)malloc(nx1*ny1*sizeof(float));
-    float *p1n0 = (float *)malloc(nx1*ny1*sizeof(float));
-    float *p1p = (float *)malloc(nx1*ny1*sizeof(float));
-    float *p1n = (float *)malloc(nx1*ny1*sizeof(float));
-    float *p1 = (float *)malloc(nx1*ny1*sizeof(float));
-    float *pmap = (float *)malloc(nx1*ny1*sizeof(float));
+        float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
+     
+        // define some values for the R calculation 
+        int scale = round(2.0/cdelt1);
+        int nx1 = nx/scale;
+        int ny1 = ny/scale;
+        int nxp = nx1+40;
+        int nyp = ny1+40;
+        float *rim     = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1p0    = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1n0    = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1p     = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1n     = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1      = (float *)malloc(nx1*ny1*sizeof(float));
+        float *pmap    = (float *)malloc(nxp*nyp*sizeof(float));
+        float *p1pad   = (float *)malloc(nxp*nyp*sizeof(float));
+        float *pmapn   = (float *)malloc(nx1*ny1*sizeof(float));
     
 	//spaceweather quantities computed
 	if (computeAbsFlux(bz_err, bz , dims, &(swKeys_ptr->absFlux), &(swKeys_ptr->mean_vf),  &(swKeys_ptr->mean_vf_err),
-                       &(swKeys_ptr->count_mask), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
-    {
+                           &(swKeys_ptr->count_mask), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
+        {
 		swKeys_ptr->absFlux = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
 		swKeys_ptr->mean_vf = DRMS_MISSING_FLOAT;
-        swKeys_ptr->mean_vf_err = DRMS_MISSING_FLOAT;
-        swKeys_ptr->count_mask  = DRMS_MISSING_INT;
+                swKeys_ptr->mean_vf_err = DRMS_MISSING_FLOAT;
+                swKeys_ptr->count_mask  = DRMS_MISSING_INT;
 	}
     
 	for (int i = 0; i < nxny; i++) bpz[i] = bz[i];
@@ -1996,92 +2000,98 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
     
 	if (computeGamma(bz_err, bh_err, bx, by, bz, bh, dims, &(swKeys_ptr->mean_gamma), &(swKeys_ptr->mean_gamma_err),mask, bitmask))
 	{
-        swKeys_ptr->mean_gamma     =  DRMS_MISSING_FLOAT;
-        swKeys_ptr->mean_gamma_err =  DRMS_MISSING_FLOAT;
-    }
+                swKeys_ptr->mean_gamma     =  DRMS_MISSING_FLOAT;
+                swKeys_ptr->mean_gamma_err =  DRMS_MISSING_FLOAT;
+        }
 	
 	computeB_total(bx_err, by_err, bz_err, bt_err, bx, by, bz, bt, dims, mask, bitmask);
 	
-	if (computeBtotalderivative(bt, dims, &(swKeys_ptr->mean_derivative_btotal), mask, bitmask, derx_bt, dery_bt, bt_err, &(swKeys_ptr->mean_derivative_btotal_err)))
-    {
+	if (computeBtotalderivative(bt, dims, &(swKeys_ptr->mean_derivative_btotal), mask, bitmask, derx_bt, 
+                                    dery_bt, bt_err, &(swKeys_ptr->mean_derivative_btotal_err)))
+        {
 		swKeys_ptr->mean_derivative_btotal = DRMS_MISSING_FLOAT;
 		swKeys_ptr->mean_derivative_btotal_err = DRMS_MISSING_FLOAT;
-    }
+        }
 	
-	if (computeBhderivative(bh, bh_err, dims, &(swKeys_ptr->mean_derivative_bh), &(swKeys_ptr->mean_derivative_bh_err), mask, bitmask, derx_bh, dery_bh))
-    {
+	if (computeBhderivative(bh, bh_err, dims, &(swKeys_ptr->mean_derivative_bh), 
+                                &(swKeys_ptr->mean_derivative_bh_err), mask, bitmask, derx_bh, dery_bh))
+        {
 		swKeys_ptr->mean_derivative_bh = DRMS_MISSING_FLOAT;
-        swKeys_ptr->mean_derivative_bh_err = DRMS_MISSING_FLOAT;
+                swKeys_ptr->mean_derivative_bh_err = DRMS_MISSING_FLOAT;
 	}
     
-	if (computeBzderivative(bz, bz_err, dims, &(swKeys_ptr->mean_derivative_bz), &(swKeys_ptr->mean_derivative_bz_err), mask, bitmask, derx_bz, dery_bz))
-    {
+	if (computeBzderivative(bz, bz_err, dims, &(swKeys_ptr->mean_derivative_bz), &(swKeys_ptr->mean_derivative_bz_err), 
+                                mask, bitmask, derx_bz, dery_bz))
+        {
 		swKeys_ptr->mean_derivative_bz = DRMS_MISSING_FLOAT; // If fail, fill in NaN
-        swKeys_ptr->mean_derivative_bz_err = DRMS_MISSING_FLOAT;
-    }
+                swKeys_ptr->mean_derivative_bz_err = DRMS_MISSING_FLOAT;
+        }
 	
 	computeJz(bx_err, by_err, bx, by, dims, jz, jz_err, jz_err_squared, mask, bitmask, cdelt1, rsun_ref, rsun_obs,
               derx, dery);
     
     
-    if(computeJzsmooth(bx, by, dims, jz, jz_smooth, jz_err, jz_rms_err, jz_err_squared_smooth, &(swKeys_ptr->mean_jz),
+        if(computeJzsmooth(bx, by, dims, jz, jz_smooth, jz_err, jz_rms_err, jz_err_squared_smooth, &(swKeys_ptr->mean_jz),
                        &(swKeys_ptr->mean_jz_err), &(swKeys_ptr->us_i), &(swKeys_ptr->us_i_err), mask, bitmask, cdelt1,
                        rsun_ref, rsun_obs, derx, dery))
-    {
-        swKeys_ptr->mean_jz            = DRMS_MISSING_FLOAT;
+        {
+                swKeys_ptr->mean_jz            = DRMS_MISSING_FLOAT;
 		swKeys_ptr->us_i               = DRMS_MISSING_FLOAT;
-        swKeys_ptr->mean_jz_err        = DRMS_MISSING_FLOAT;
-        swKeys_ptr->us_i_err           = DRMS_MISSING_FLOAT;
+                swKeys_ptr->mean_jz_err        = DRMS_MISSING_FLOAT;
+                swKeys_ptr->us_i_err           = DRMS_MISSING_FLOAT;
 	}
     
-	if (computeAlpha(jz_err, bz_err, bz, dims, jz, jz_smooth, &(swKeys_ptr->mean_alpha), &(swKeys_ptr->mean_alpha_err), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
-    {
+	if (computeAlpha(jz_err, bz_err, bz, dims, jz, jz_smooth, &(swKeys_ptr->mean_alpha), &(swKeys_ptr->mean_alpha_err), 
+                         mask, bitmask, cdelt1, rsun_ref, rsun_obs))
+        {
 		swKeys_ptr->mean_alpha         = DRMS_MISSING_FLOAT;
-        swKeys_ptr->mean_alpha_err     = DRMS_MISSING_FLOAT;
-    }
+                swKeys_ptr->mean_alpha_err     = DRMS_MISSING_FLOAT;
+        }
 	
-	if (computeHelicity(jz_err, jz_rms_err, bz_err, bz, dims, jz, &(swKeys_ptr->mean_ih), &(swKeys_ptr->mean_ih_err), &(swKeys_ptr->total_us_ih), &(swKeys_ptr->total_abs_ih),
-                        &(swKeys_ptr->total_us_ih_err), &(swKeys_ptr->total_abs_ih_err), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
-    {
+	if (computeHelicity(jz_err, jz_rms_err, bz_err, bz, dims, jz, &(swKeys_ptr->mean_ih), &(swKeys_ptr->mean_ih_err), 
+                            &(swKeys_ptr->total_us_ih), &(swKeys_ptr->total_abs_ih),
+                            &(swKeys_ptr->total_us_ih_err), &(swKeys_ptr->total_abs_ih_err), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
+        {
 		swKeys_ptr->mean_ih            = DRMS_MISSING_FLOAT;
 		swKeys_ptr->total_us_ih        = DRMS_MISSING_FLOAT;
   		swKeys_ptr->total_abs_ih       = DRMS_MISSING_FLOAT;
-        swKeys_ptr->mean_ih_err        = DRMS_MISSING_FLOAT;
-        swKeys_ptr->total_us_ih_err    = DRMS_MISSING_FLOAT;
-        swKeys_ptr->total_abs_ih_err   = DRMS_MISSING_FLOAT;
+                swKeys_ptr->mean_ih_err        = DRMS_MISSING_FLOAT;
+                swKeys_ptr->total_us_ih_err    = DRMS_MISSING_FLOAT;
+                swKeys_ptr->total_abs_ih_err   = DRMS_MISSING_FLOAT;
 	}
     
 	if (computeSumAbsPerPolarity(jz_err, bz_err, bz, jz, dims, &(swKeys_ptr->totaljz), &(swKeys_ptr->totaljz_err),
-								 mask, bitmask, cdelt1, rsun_ref, rsun_obs))
-    {
+				     mask, bitmask, cdelt1, rsun_ref, rsun_obs))
+        {  
 		swKeys_ptr->totaljz            = DRMS_MISSING_FLOAT;
-        swKeys_ptr->totaljz_err        = DRMS_MISSING_FLOAT;
+                swKeys_ptr->totaljz_err        = DRMS_MISSING_FLOAT;
 	}
 	
 	if (computeFreeEnergy(bx_err, by_err, bx, by, bpx, bpy, dims,
-						  &(swKeys_ptr->meanpot), &(swKeys_ptr->meanpot_err), &(swKeys_ptr->totpot), &(swKeys_ptr->totpot_err),
-						  mask, bitmask, cdelt1, rsun_ref, rsun_obs))
-    {
+			      &(swKeys_ptr->meanpot), &(swKeys_ptr->meanpot_err), &(swKeys_ptr->totpot), &(swKeys_ptr->totpot_err),
+			      mask, bitmask, cdelt1, rsun_ref, rsun_obs))
+        {
 		swKeys_ptr->meanpot            = DRMS_MISSING_FLOAT; // If fail, fill in NaN
 		swKeys_ptr->totpot             = DRMS_MISSING_FLOAT;
-        swKeys_ptr->meanpot_err        = DRMS_MISSING_FLOAT;
-        swKeys_ptr->totpot_err         = DRMS_MISSING_FLOAT;
+                swKeys_ptr->meanpot_err        = DRMS_MISSING_FLOAT;
+                swKeys_ptr->totpot_err         = DRMS_MISSING_FLOAT;
 	}
     
     
 	if (computeShearAngle(bx_err, by_err, bz_err, bx, by, bz, bpx, bpy, bpz, dims,
-						  &(swKeys_ptr->meanshear_angle), &(swKeys_ptr->meanshear_angle_err), &(swKeys_ptr->area_w_shear_gt_45),
-						  mask, bitmask)) {
+			      &(swKeys_ptr->meanshear_angle), &(swKeys_ptr->meanshear_angle_err), &(swKeys_ptr->area_w_shear_gt_45),
+			      mask, bitmask)) 
+	{
 		swKeys_ptr->meanshear_angle    = DRMS_MISSING_FLOAT; // If fail, fill in NaN
 		swKeys_ptr->area_w_shear_gt_45 = DRMS_MISSING_FLOAT;
-        swKeys_ptr->meanshear_angle_err= DRMS_MISSING_FLOAT;
+                swKeys_ptr->meanshear_angle_err= DRMS_MISSING_FLOAT;
 	}
     
 	if (computeR(bz_err, los , dims, &(swKeys_ptr->Rparam), cdelt1, rim, p1p0, p1n0,
-                 p1p, p1n, p1, pmap, nx1, ny1))
+                     p1p, p1n, p1, pmap, nx1, ny1, scale, p1pad, nxp, nyp, pmapn))
         {
 		swKeys_ptr->Rparam = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
-	}
+        }
 
 	
 	// Clean up the arrays
@@ -2091,7 +2101,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	drms_free_array(bxArray);
 	drms_free_array(byArray);
 	drms_free_array(bzArray);
-        drms_free_array(losArray);          // Mar 7
+        drms_free_array(losArray);              // Mar 7
         drms_free_array(bx_errArray);
 	drms_free_array(by_errArray);
 	drms_free_array(bz_errArray);
@@ -2113,7 +2123,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         free(p1n);
         free(p1);
         free(pmap);
-    
+        free(p1pad);
+        free(pmapn);
 }
 
 /*
@@ -2258,7 +2269,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.28 2014/05/16 21:56:11 mbobra Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.29 2014/06/02 19:47:10 mbobra Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
@@ -2283,6 +2294,7 @@ float nnb (float *f, int nx, int ny, double x, double y)
 	return f[j * nx + i];
 	
 }
+
 
 /* ################## Wrapper for Jesper's rebin code ################## */
 

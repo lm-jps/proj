@@ -239,7 +239,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.6 2014/05/16 21:56:33 mbobra Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.7 2014/06/02 19:47:26 mbobra Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -268,6 +268,8 @@ int DoIt(void)
         int scale = round(2.0/cdelt1);
         int nx1 = nx/scale;
         int ny1 = ny/scale;
+        int nxp = nx1+40;
+        int nyp = ny1+40;
 
 	if (nx1 > floor((nx-1)/scale + 1) )
 		DIE("X-dimension of output array in fsample() is too large.");
@@ -275,27 +277,29 @@ int DoIt(void)
 		DIE("Y-dimension of output array in fsample() is too large.");
  
         // malloc some arrays for the R parameter calculation
-        float *rim = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1p0 = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1n0 = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1p = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1n = (float *)malloc(nx1*ny1*sizeof(float));
-        float *p1 = (float *)malloc(nx1*ny1*sizeof(float));
-        float *pmap = (float *)malloc(nx1*ny1*sizeof(float));
-
+        float *rim     = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1p0    = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1n0    = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1p     = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1n     = (float *)malloc(nx1*ny1*sizeof(float));
+        float *p1      = (float *)malloc(nx1*ny1*sizeof(float));
+        float *pmap    = (float *)malloc(nxp*nyp*sizeof(float));
+        float *p1pad   = (float *)malloc(nxp*nyp*sizeof(float));
+        float *pmapn   = (float *)malloc(nx1*ny1*sizeof(float));
+    
 	for (irec=0;irec<nrecs;irec++)
 	{
    	   // Get emphemeris
-  	   sharpinrec = sharpinrecset->records[irec];
+  	   sharpinrec    = sharpinrecset->records[irec];
   	   sharpceainrec = sharpceainrecset->records[irec];
-	   cdelt1_orig = drms_getkey_float(sharpceainrec, "CDELT1",   &status);
-	   dsun_obs    = drms_getkey_float(sharpinrec, "DSUN_OBS",   &status);
-	   rsun_ref    = drms_getkey_double(sharpinrec, "RSUN_REF", &status);
-	   rsun_obs    = drms_getkey_double(sharpinrec, "RSUN_OBS", &status);
-	   imcrpix1    = drms_getkey_float(sharpinrec, "IMCRPIX1", &status);
-	   imcrpix2    = drms_getkey_float(sharpinrec, "IMCRPIX2", &status);
-	   crpix1      = drms_getkey_float(sharpinrec, "CRPIX1", &status);
-	   crpix2      = drms_getkey_float(sharpinrec, "CRPIX2", &status);
+	   cdelt1_orig   = drms_getkey_float(sharpceainrec, "CDELT1",   &status);
+	   dsun_obs      = drms_getkey_float(sharpinrec, "DSUN_OBS",   &status);
+	   rsun_ref      = drms_getkey_double(sharpinrec, "RSUN_REF", &status);
+	   rsun_obs      = drms_getkey_double(sharpinrec, "RSUN_OBS", &status);
+	   imcrpix1      = drms_getkey_float(sharpinrec, "IMCRPIX1", &status);
+	   imcrpix2      = drms_getkey_float(sharpinrec, "IMCRPIX2", &status);
+	   crpix1        = drms_getkey_float(sharpinrec, "CRPIX1", &status);
+	   crpix2        = drms_getkey_float(sharpinrec, "CRPIX2", &status);
 
   	   sharpoutrec = sharpoutrecset->records[irec];
   	   sharpceaoutrec = sharpceaoutrecset->records[irec];
@@ -385,7 +389,8 @@ int DoIt(void)
 	   if (r_valueflag)
 	   {
               if (computeR(bz_err, los , dims, &Rparam, cdelt1, rim, p1p0, p1n0,
-                     p1p, p1n, p1, pmap, nx1, ny1))
+                           p1p, p1n, p1, pmap, nx1, ny1, scale, p1pad, nxp, nyp, pmapn))
+
               {
 		 Rparam            = DRMS_MISSING_FLOAT;
 	      }
@@ -697,6 +702,7 @@ int DoIt(void)
 	free(bt_err); free(bh_err);  free(jz_err); 
         free(jz_err_squared); free(jz_rms_err);
 	free(cvsinfoall);
+
         free(rim);
         free(p1p0);
         free(p1n0);
@@ -704,7 +710,8 @@ int DoIt(void)
         free(p1n);
         free(p1);
         free(pmap);
-
+        free(p1pad);
+        free(pmapn);
 
 return 0;    
 }	// DoIt
