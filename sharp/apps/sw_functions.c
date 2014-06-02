@@ -1048,27 +1048,33 @@ int computeShearAngle(float *bx_err, float *by_err, float *bz_err, float *bx, fl
 
 int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
              float *rim, float *p1p0, float *p1n0, float *p1p, float *p1n, float *p1,
-             float *pmap, int nx1, int ny1)
+             float *pmap, int nx1, int ny1, 
+             int scale, float *p1pad, int nxp, int nyp, float *pmapn)
+
 { 
     int nx = dims[0];
     int ny = dims[1];
     int i = 0;
     int j = 0;
-    int index;
+    int index, index1;
     double sum = 0.0;
     double err = 0.0;
     *Rparam = 0.0;
     struct fresize_struct fresboxcar, fresgauss;
-    int scale = round(2.0/cdelt1);
+    struct fint_struct fints;
     float sigma = 10.0/2.3548;
     
+    // set up convolution kernels
     init_fresize_boxcar(&fresboxcar,1,1);
-    
-    // set up convolution kernel
     init_fresize_gaussian(&fresgauss,sigma,20,1);
 
+    // =============== [STEP 1] =============== 
+    // bin the line-of-sight magnetogram down by a factor of scale 
     fsample(los, rim, nx, ny, nx, nx1, ny1, nx1, scale, 0, 0, 0.0);
 
+    // =============== [STEP 2] =============== 
+    // identify positive and negative pixels greater than +/- 150 gauss
+    // and label those pixels with a 1.0 in arrays p1p0 and p1n0
     for (i = 0; i < nx1; i++)
     {
         for (j = 0; j < ny1; j++)
@@ -1084,30 +1090,77 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
                 p1n0[index]=0.0;
         }
     }
-              
+
+    // =============== [STEP 3] =============== 
+    // smooth each of the negative and positive pixel bitmaps      
     fresize(&fresboxcar, p1p0, p1p, nx1, ny1, nx1, nx1, ny1, nx1, 0, 0, 0.0);
     fresize(&fresboxcar, p1n0, p1n, nx1, ny1, nx1, nx1, ny1, nx1, 0, 0, 0.0);
-    
+
+    // =============== [STEP 4] =============== 
+    // find the pixels for which p1p and p1n are both equal to 1. 
+    // this defines the polarity inversion line
     for (i = 0; i < nx1; i++)
     {
         for (j = 0; j < ny1; j++)
         {
             index = j * nx1 + i;
-            if (p1p[index] > 0 && p1n[index] > 0)
+            if ((p1p[index] > 0.0) && (p1n[index] > 0.0))
                 p1[index]=1.0;
             else
                 p1[index]=0.0;
         }
     }
-    
-    fresize(&fresgauss, p1, pmap, nx1, ny1, nx1, nx1, ny1, nx1, 0, 0, 0.0);
-    
+
+    // pad p1 with zeroes so that the gaussian colvolution in step 5
+    // does not cut off data within hwidth of the edge
+   
+    // step i: zero p1pad
+    for (i = 0; i < nxp; i++)
+    {
+        for (j = 0; j < nyp; j++)
+        {
+            index = j * nxp + i;
+            p1pad[index]=0.0;
+        }
+    }
+
+    // step ii: place p1 at the center of p1pad
+    for (i = 0; i < nx1; i++)
+    {
+       for (j = 0; j < ny1; j++)
+       {
+            index  = j * nx1 + i; 
+            index1 = (j+20) * nxp + (i+20);
+            p1pad[index1]=p1[index];
+        }
+    }
+
+    // =============== [STEP 5] =============== 
+    // convolve the polarity inversion line map with a gaussian
+    // to identify the region near the plarity inversion line
+    // the resultant array is called pmap
+    fresize(&fresgauss, p1pad, pmap, nxp, nyp, nxp, nxp, nyp, nxp, 0, 0, 0.0);
+
+
+   // select out the nx1 x ny1 non-padded array  within pmap
+    for (i = 0; i < nx1; i++)
+    {
+       for (j = 0; j < ny1; j++)
+       {
+            index  = j * nx1 + i; 
+            index1 = (j+20) * nxp + (i+20);
+            pmapn[index]=pmap[index1];
+        }
+    }
+
+    // =============== [STEP 6] =============== 
+    // the R parameter is calculated
     for (i = 0; i < nx1; i++)
     {
         for (j = 0; j < ny1; j++)
         {
             index = j * nx1 + i;
-            sum += pmap[index]*abs(rim[index]);
+            sum += pmapn[index]*abs(rim[index]);
         }
     }
     
@@ -1115,13 +1168,13 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
         *Rparam = 0.0;
     else
         *Rparam = log10(sum);
-    
+
     free_fresize(&fresboxcar);
     free_fresize(&fresgauss);
-    
-    return 0;
-}
 
+    return 0;
+
+}
 
 /*==================KEIJI'S CODE =========================*/
 
