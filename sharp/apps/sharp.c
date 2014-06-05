@@ -180,6 +180,13 @@ struct swIndex {
     float totpot_err;
     float meanshear_angle_err;
     float Rparam;
+    float totfx;
+    float totfy;
+    float totfz;
+    float totbsq;
+    float epsx;
+    float epsy;
+    float epsz;
 };
 
 // Mapping method
@@ -1937,8 +1944,6 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         // convert cdelt1_orig from degrees to arcsec
         float cdelt1       = (atan((rsun_ref*cdelt1_orig*RADSINDEG)/(dsun_obs)))*(1/RADSINDEG)*(3600.);
 
-
-
 	//if (nx1 > floor((nx-1)/scale + 1) )
 	//	DIE("X-dimension of output array in fsample() is too large.");
 	//if (ny1 > floor((ny-1)/scale + 1) )
@@ -1982,7 +1987,13 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         float *pmap    = (float *)malloc(nxp*nyp*sizeof(float));
         float *p1pad   = (float *)malloc(nxp*nyp*sizeof(float));
         float *pmapn   = (float *)malloc(nx1*ny1*sizeof(float));
+
+        // define some arrays for the lorentz force calculation
+        float *fx = (float *) (malloc(nxny * sizeof(float)));
+        float *fy = (float *) (malloc(nxny * sizeof(float)));
+        float *fz = (float *) (malloc(nxny * sizeof(float)));
     
+
 	//spaceweather quantities computed
 	if (computeAbsFlux(bz_err, bz , dims, &(swKeys_ptr->absFlux), &(swKeys_ptr->mean_vf),  &(swKeys_ptr->mean_vf_err),
                            &(swKeys_ptr->count_mask), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
@@ -2093,6 +2104,20 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 		swKeys_ptr->Rparam = DRMS_MISSING_FLOAT;		// If fail, fill in NaN
         }
 
+    
+	if (computeLorentz(bx, by, bz, fx, fy, fz, dims, &(swKeys_ptr->totfx), &(swKeys_ptr->totfy), &(swKeys_ptr->totfz), &(swKeys_ptr->totbsq),
+           &(swKeys_ptr->epsx), &(swKeys_ptr->epsy), &(swKeys_ptr->epsz), mask, bitmask, cdelt1, rsun_ref, rsun_obs))
+        {  
+		swKeys_ptr->totfx             = DRMS_MISSING_FLOAT;
+                swKeys_ptr->totfy             = DRMS_MISSING_FLOAT;
+		swKeys_ptr->totfz             = DRMS_MISSING_FLOAT;
+		swKeys_ptr->totbsq            = DRMS_MISSING_FLOAT;
+                swKeys_ptr->epsx              = DRMS_MISSING_FLOAT;
+		swKeys_ptr->epsy              = DRMS_MISSING_FLOAT;
+                swKeys_ptr->epsz              = DRMS_MISSING_FLOAT;
+
+	}
+
 	
 	// Clean up the arrays
 	
@@ -2115,7 +2140,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	free(bt_err); free(bh_err);  free(jz_err);
         free(jz_err_squared); free(jz_rms_err);
         free(jz_err_squared_smooth);
-     
+
+        // free the arrays that are related to the r calculation     
         free(rim);
         free(p1p0);
         free(p1n0);
@@ -2125,6 +2151,9 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         free(pmap);
         free(p1pad);
         free(pmapn);
+
+        // free the arrays that are related to the lorentz calculation
+        free(fx); free(fy); free(fz);
 }
 
 /*
@@ -2167,6 +2196,13 @@ void setSWIndex(DRMS_Record_t *outRec, struct swIndex *swKeys_ptr)
     drms_setkey_float(outRec, "ERRTPOT", swKeys_ptr->totpot_err);
     drms_setkey_float(outRec, "ERRMSHA", swKeys_ptr->meanshear_angle_err);
     drms_setkey_float(outRec, "R_VALUE", swKeys_ptr->Rparam);
+    drms_setkey_float(outRec, "TOTFX",   swKeys_ptr->totfx);
+    drms_setkey_float(outRec, "TOTFY",   swKeys_ptr->totfy);
+    drms_setkey_float(outRec, "TOTFZ",   swKeys_ptr->totfz);
+    drms_setkey_float(outRec, "TOTBSQ",  swKeys_ptr->totbsq);
+    drms_setkey_float(outRec, "EPSX",    swKeys_ptr->epsx);
+    drms_setkey_float(outRec, "EPSY",    swKeys_ptr->epsy);
+    drms_setkey_float(outRec, "EPSZ",    swKeys_ptr->epsz);
 };
 
 /*
@@ -2269,7 +2305,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.29 2014/06/02 19:47:10 mbobra Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.30 2014/06/05 21:27:19 mbobra Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
