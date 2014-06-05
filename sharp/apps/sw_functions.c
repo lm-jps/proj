@@ -900,17 +900,17 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
     int i = 0;
     int j = 0;
     int count_mask = 0;
-	double sum = 0.0;
+    double sum = 0.0;
     double sum1 = 0.0;
     double err = 0.0;
     *totpotptr = 0.0;
-	*meanpotptr = 0.0;
+    *meanpotptr = 0.0;
     
-	if (nx <= 0 || ny <= 0) return 1;
+    if (nx <= 0 || ny <= 0) return 1;
     
-	for (i = 0; i < nx; i++)
+    for (i = 0; i < nx; i++)
     {
-	    for (j = 0; j < ny; j++)
+	for (j = 0; j < ny; j++)
         {
             if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
             if isnan(bx[j * nx + i]) continue;
@@ -937,7 +937,7 @@ int computeFreeEnergy(float *bx_err, float *by_err, float *bx, float *by, float 
     //printf("TOTPOT=%g\n",*totpotptr);
     //printf("TOTPOT_err=%g\n",*totpot_err_ptr);
     
-	return 0;
+    return 0;
 }
 
 /*===========================================*/
@@ -968,13 +968,13 @@ int computeShearAngle(float *bx_err, float *by_err, float *bz_err, float *bx, fl
     double part2 = 0.0;
     double part3 = 0.0;
     *area_w_shear_gt_45ptr = 0.0;
-	*meanshear_angleptr = 0.0;
+    *meanshear_angleptr = 0.0;
 	
-	if (nx <= 0 || ny <= 0) return 1;
+    if (nx <= 0 || ny <= 0) return 1;
     
-	for (i = 0; i < nx; i++)
+    for (i = 0; i < nx; i++)
     {
-	    for (j = 0; j < ny; j++)
+	for (j = 0; j < ny; j++)
         {
             if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
             if isnan(bpx[j * nx + i]) continue;
@@ -1174,6 +1174,62 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
 
     return 0;
 
+}
+
+/*===========================================*/
+/* Example function 16: Lorentz force as defined in Fisher, 2012 */
+// 
+// This calculation is adapted from Xudong's code
+// at /proj/cgem/lorentz/apps/lorentz.c 
+
+int computeLorentz(float *bx,  float *by, float *bz, float *fx, float *fy, float *fz, int *dims, 
+                   float *totfx_ptr, float *totfy_ptr, float *totfz_ptr, float *totbsq_ptr,
+                   float *epsx_ptr, float *epsy_ptr, float *epsz_ptr, int *mask, int *bitmask,
+                   float cdelt1, double rsun_ref, double rsun_obs)
+
+{ 
+
+    int nx = dims[0];
+    int ny = dims[1];
+    int nxny = nx*ny;
+    int j = 0;
+    int index;
+    double totfx = 0, totfy = 0, totfz = 0;
+    double bsq = 0, totbsq = 0;
+    double epsx = 0, epsy = 0, epsz = 0;
+    double area = cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0;
+    double k_h = -1.0 * area / (4. * PI) / 1.0e20;
+    double k_z = area / (8. * PI) / 1.0e20;
+
+    /* Multiplier */
+    float vectorMulti[] = {1.,-1.,1.};
+
+    if (nx <= 0 || ny <= 0) return 1;        
+
+    for (int i = 0; i < nxny; i++) 
+    {  
+       if ( mask[i] < 70 || bitmask[i] < 30 ) continue;
+       if isnan(bx[i]) continue;
+       if isnan(by[i]) continue;
+       if isnan(bz[i]) continue;
+       fx[i]  = (bx[i] * vectorMulti[0]) * (bz[i] * vectorMulti[2]) * k_h;
+       fy[i]  = (by[i] * vectorMulti[1]) * (bz[i] * vectorMulti[2]) * k_h;
+       fz[i]  = (bx[i] * bx[i] + by[i] * by[i] - bz[i] * bz[i]) * k_z;
+       bsq    = bx[i] * bx[i] + by[i] * by[i] + bz[i] * bz[i];
+       totfx  += fx[i]; totfy += fy[i]; totfz += fz[i];
+       totbsq += bsq;
+    }
+   
+    *totfx_ptr  = totfx;
+    *totfy_ptr  = totfy;
+    *totfz_ptr  = totfz;    
+    *totbsq_ptr = totbsq;  
+    *epsx_ptr   = (totfx / k_h) / totbsq;
+    *epsy_ptr   = (totfy / k_h) / totbsq;
+    *epsz_ptr   = (totfz / k_z) / totbsq;
+
+    return 0;
+ 
 }
 
 /*==================KEIJI'S CODE =========================*/

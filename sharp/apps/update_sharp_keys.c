@@ -121,6 +121,14 @@ int DoIt(void)
         float totpot_err;
         float Rparam;
         float meanshear_angle_err;
+        float totfx;
+        float totfy;
+        float totfz;
+        float totbsq;
+        float epsx;
+        float epsy;
+        float epsz;
+
 	char *sharpseriesin = (char *) params_get_str(&cmdparams, "sharpseriesin");
 	char *sharpceaseriesin = (char *) params_get_str(&cmdparams, "sharpceaseriesin");
 	char *sharpseriesout = (char *) params_get_str(&cmdparams, "sharpseriesout");
@@ -198,6 +206,14 @@ int DoIt(void)
         int meanshrflag = (strstr(keylist,"MEANSHR") != NULL);
         int shrgt45flag = (strstr(keylist,"SHRGT45") != NULL);
         int r_valueflag = (strstr(keylist,"R_VALUE") != NULL);
+        int totbsqflag  = (strstr(keylist,"TOTBSQ")  != NULL);
+        int totfxflag   = (strstr(keylist,"TOTFX")   != NULL);
+        int totfyflag   = (strstr(keylist,"TOTFY")   != NULL);
+        int totfzflag   = (strstr(keylist,"TOTFZ")   != NULL);
+        int epsxflag    = (strstr(keylist,"EPSX")    != NULL);
+        int epsyflag    = (strstr(keylist,"EPSY")    != NULL);
+        int epszflag    = (strstr(keylist,"EPSZ")    != NULL);
+
 	DRMS_Record_t *sharpinrec = sharpinrecset->records[0];
 	DRMS_Record_t *sharpceainrec = sharpceainrecset->records[0];
 	DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
@@ -239,7 +255,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.7 2014/06/02 19:47:26 mbobra Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.8 2014/06/05 21:27:32 mbobra Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -286,6 +302,12 @@ int DoIt(void)
         float *pmap    = (float *)malloc(nxp*nyp*sizeof(float));
         float *p1pad   = (float *)malloc(nxp*nyp*sizeof(float));
         float *pmapn   = (float *)malloc(nx1*ny1*sizeof(float));
+
+        // define some arrays for the lorentz force calculation
+        float *fx = (float *) (malloc(nxny * sizeof(float)));
+        float *fy = (float *) (malloc(nxny * sizeof(float)));
+        float *fz = (float *) (malloc(nxny * sizeof(float)));
+    
     
 	for (irec=0;irec<nrecs;irec++)
 	{
@@ -673,6 +695,44 @@ int DoIt(void)
               drms_setkey_float(sharpceaoutrec, "ERRMSHA", meanshear_angle_err); 	  
            }
 
+          /***** TOTFX, TOTFY, TOTFX, TOTBSQ, EPSX, EPSY, EPSZ , Example Function 16 (Lorentz forces) **********/
+
+           if (totfxflag || totfyflag || totfzflag || totbsqflag || epsxflag || epsyflag || epszflag)
+           {
+
+                // Compute Lorentz forces
+        	if (computeLorentz(bx, by, bz, fx, fy, fz, dims, &totfx, &totfy, &totfz, &totbsq,
+                    &epsx, &epsy, &epsz, mask, bitmask, cdelt1, rsun_ref, rsun_obs))
+                {  
+		   totfx             = DRMS_MISSING_FLOAT;
+                   totfy             = DRMS_MISSING_FLOAT;
+		   totfz             = DRMS_MISSING_FLOAT;
+		   totbsq            = DRMS_MISSING_FLOAT;
+                   epsx              = DRMS_MISSING_FLOAT;
+		   epsy              = DRMS_MISSING_FLOAT;
+                   epsz              = DRMS_MISSING_FLOAT;
+         	}
+
+              // Set sharp keys 	
+              drms_setkey_float(sharpoutrec, "TOTFX", totfx); 
+              drms_setkey_float(sharpoutrec, "TOTFY", totfy); 	
+              drms_setkey_float(sharpoutrec, "TOTFZ", totfz); 	
+              drms_setkey_float(sharpoutrec, "TOTBSQ",totbsq); 
+              drms_setkey_float(sharpoutrec, "EPSX",  epsx); 	
+              drms_setkey_float(sharpoutrec, "EPSY",  epsy); 	
+              drms_setkey_float(sharpoutrec, "EPSZ",  epsz); 	
+
+              // Set sharp cea keys 
+              drms_setkey_float(sharpceaoutrec, "TOTFX", totfx); 
+              drms_setkey_float(sharpceaoutrec, "TOTFY", totfy); 	
+              drms_setkey_float(sharpceaoutrec, "TOTFZ", totfz); 	
+              drms_setkey_float(sharpceaoutrec, "TOTBSQ",totbsq); 
+              drms_setkey_float(sharpceaoutrec, "EPSX",  epsx); 	
+              drms_setkey_float(sharpceaoutrec, "EPSY",  epsy); 	
+              drms_setkey_float(sharpceaoutrec, "EPSZ",  epsz); 	
+              
+           }
+
            /******************************* END FLAGS **********************************/
 
 	   drms_free_array(bitmaskArray);		
@@ -712,6 +772,9 @@ int DoIt(void)
         free(pmap);
         free(p1pad);
         free(pmapn);
+
+        // free the arrays that are related to the lorentz calculation
+        free(fx); free(fy); free(fz);
 
 return 0;    
 }	// DoIt
