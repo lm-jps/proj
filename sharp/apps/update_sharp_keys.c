@@ -18,6 +18,7 @@
  *                   -- DRMS SHARP CEA series
  *                   -- HARPNUM
  *                   -- comma separated list of keywords to recalculate
+ *                   -- DEBUG flag (use like this debug=debug)
  *
  *	AUTHOR     : Monica Bobra
  *
@@ -26,7 +27,7 @@
  *
  *	EXAMPLE    :
  *      update_sharp_keys sharpseriesin=hmi.sharp_720s sharpceaseriesin=hmi.sharp_cea_720s //
- *      HARPNUM=1 sharpseriesout=hmi.sharp_720s sharpceaseriesout=hmi.sharp_cea_720s keylist=USFLUX,TOTPOT
+ *      HARPNUM=1 sharpseriesout=hmi.sharp_720s sharpceaseriesout=hmi.sharp_cea_720s keylist=USFLUX,TOTPOT debug=debug
  *
  */
 
@@ -65,12 +66,13 @@ char *version_id  = "2014 Feb 12";        /* Version number */
 
 ModuleArgs_t module_args[] =
 {
-	{ARG_STRING, "sharpseriesin",     NULL, "Input Sharp dataseries"},
-	{ARG_STRING, "sharpceaseriesin",  NULL, "Input Sharp CEA dataseries"},
+	{ARG_STRING, "sharpseriesin",      NULL, "Input Sharp dataseries"},
+	{ARG_STRING, "sharpceaseriesin",   NULL, "Input Sharp CEA dataseries"},
 	{ARG_STRING, "sharpseriesout",     NULL, "Output Sharp dataseries"},
 	{ARG_STRING, "sharpceaseriesout",  NULL, "Output Sharp CEA dataseries"},
-	{ARG_INT,    "HARPNUM",         NULL, "HARP number"},
-	{ARG_STRING, "keylist",         NULL, "comma separated list of keywords to update"},
+	{ARG_INT,    "HARPNUM",            NULL, "HARP number"},
+	{ARG_STRING, "keylist",            NULL, "comma separated list of keywords to update"},
+	{ARG_STRING, "debug",              NULL, "debug mode functionality. use like this: debug=debug"},
 	{ARG_END}
 };
 
@@ -143,8 +145,6 @@ int DoIt(void)
 
 	char sharpquery[256];
 	char sharpceaquery[256];
-	printf("sameflag = %d\n", sameflag);
-	printf("testflag = %d\n", testflag);
 	sprintf(sharpceaquery, "%s[%d]\n", sharpceaseriesin,harpnum);
 	printf(sharpceaquery, "%s[%d]\n", sharpceaseriesin,harpnum);
 
@@ -187,6 +187,7 @@ int DoIt(void)
 
 
 	char *keylist = (char *) params_get_str(&cmdparams, "keylist");
+	char *debug   = (char *) params_get_str(&cmdparams, "debug");
 
         // Flags to indicate which keyword will be recalculated
 	int meanvfflag  = (strstr(keylist,"USFLUX")  != NULL);  // generalize so that lowercase is acceptable
@@ -213,6 +214,7 @@ int DoIt(void)
         int epsxflag    = (strstr(keylist,"EPSX")    != NULL);
         int epsyflag    = (strstr(keylist,"EPSY")    != NULL);
         int epszflag    = (strstr(keylist,"EPSZ")    != NULL);
+        int debugflag   = (strstr(debug,"debug")     != NULL);
 
 	DRMS_Record_t *sharpinrec = sharpinrecset->records[0];
 	DRMS_Record_t *sharpceainrec = sharpceainrecset->records[0];
@@ -255,7 +257,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.8 2014/06/05 21:27:32 mbobra Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.9 2014/06/06 19:04:51 mbobra Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -334,6 +336,11 @@ int DoIt(void)
            TIME trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
            tnow = (double)time(NULL);
            tnow += UNIX_epoch;
+
+           if (debugflag)
+           {
+              printf("i=%d\n",irec);
+           }
 
 	   // set CODEVER7 and HISTORY and DATE
 	   drms_setkey_string(sharpoutrec, "CODEVER7", cvsinfoall);
@@ -775,6 +782,6 @@ int DoIt(void)
 
         // free the arrays that are related to the lorentz calculation
         free(fx); free(fy); free(fz);
-
+	printf("Success=%d\n",sameflag);
 return 0;    
 }	// DoIt
