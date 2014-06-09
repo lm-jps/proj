@@ -12,6 +12,12 @@
  *      of update_sharp_keys.c. HISTORY will include a human-readable sentence about which
  *      keywords were updated. 
  * 
+ *      N.B.: This module calculates the keyword specified in keylist and then does a 
+ *      drms_copykeys() to copy over all the remaining keywords. However, if [1] a keyword
+ *      does not exist in the .jsd files of the input series, and [2] said keyword X is not
+ *      specified in keylist, then [3] drms_copykeys() will copy DRMS_MISSING_VALUE into 
+ *      keyword X for all the output series.
+ *
  *      This module does not produce segments.
  *
  *      INPUTS     : -- DRMS SHARP series
@@ -223,6 +229,10 @@ int DoIt(void)
 	int ny = inseg->axis[1];
 	int nxny = nx * ny;
 	int dims[2] = {nx, ny};
+	//int nx = (inseg->axis[0])+1;
+	//int ny = (inseg->axis[1])+1;
+	//int nxny = nx * ny;
+	//int dims[2] = {nx, ny};
  
 	// Temp arrays 	
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
@@ -257,7 +267,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.9 2014/06/06 19:04:51 mbobra Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.10 2014/06/09 21:07:41 mbobra Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -289,10 +299,11 @@ int DoIt(void)
         int nxp = nx1+40;
         int nyp = ny1+40;
 
+        // check to make sure that the dimensions passed into fsample() are adequate
 	if (nx1 > floor((nx-1)/scale + 1) )
 		DIE("X-dimension of output array in fsample() is too large.");
 	if (ny1 > floor((ny-1)/scale + 1) )
-		DIE("Y-dimension of output array in fsample() is too large.");
+        	DIE("Y-dimension of output array in fsample() is too large.");
  
         // malloc some arrays for the R parameter calculation
         float *rim     = (float *)malloc(nx1*ny1*sizeof(float));
@@ -310,9 +321,18 @@ int DoIt(void)
         float *fy = (float *) (malloc(nxny * sizeof(float)));
         float *fz = (float *) (malloc(nxny * sizeof(float)));
     
-    
 	for (irec=0;irec<nrecs;irec++)
 	{
+
+	   DRMS_Record_t *sharpceainrec = sharpceainrecset->records[irec];
+	   DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
+	   int nxtest = inseg->axis[0];
+	   int nytest = inseg->axis[1];
+
+           // Check to make sure that nx x ny are constant for this harpnum
+	   if (nx != nxtest || ny!= nytest)
+		   DIE("CEA series does not have constant dimensions for this HARPNUM.");
+
    	   // Get emphemeris
   	   sharpinrec    = sharpinrecset->records[irec];
   	   sharpceainrec = sharpceainrecset->records[irec];
@@ -742,6 +762,7 @@ int DoIt(void)
 
            /******************************* END FLAGS **********************************/
 
+
 	   drms_free_array(bitmaskArray);		
 	   drms_free_array(maskArray);
 	   drms_free_array(bxArray);           
@@ -751,6 +772,7 @@ int DoIt(void)
 	   drms_free_array(by_errArray);
 	   drms_free_array(bz_errArray);
 	   drms_free_array(losArray);
+
 	} //endfor
 
  	drms_close_records(sharpinrecset, DRMS_FREE_RECORD);
@@ -758,7 +780,7 @@ int DoIt(void)
 
 	drms_close_records(sharpoutrecset, DRMS_INSERT_RECORD);
 	drms_close_records(sharpceaoutrecset, DRMS_INSERT_RECORD);
-   
+
         //used for select calculations
 	free(bh); free(bt); free(jz); 
 	free(bpx); free(bpy); free(bpz); 
