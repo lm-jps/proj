@@ -1049,11 +1049,12 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	float disk_lonc = drms_getkey_float(inRec, "CRLN_OBS", &status);
 	
 	/* Center coord */
+    // Changed into double Jun 16 2014 XS
 	
-	float minlon = drms_getkey_float(inRec, "LONDTMIN", &status); if (status) return 1;		// Stonyhurst lon
-	float maxlon = drms_getkey_float(inRec, "LONDTMAX", &status); if (status) return 1;
-	float minlat = drms_getkey_float(inRec, "LATDTMIN", &status); if (status) return 1;
-	float maxlat = drms_getkey_float(inRec, "LATDTMAX", &status); if (status) return 1;
+	double minlon = drms_getkey_double(inRec, "LONDTMIN", &status); if (status) return 1;		// Stonyhurst lon
+	double maxlon = drms_getkey_double(inRec, "LONDTMAX", &status); if (status) return 1;
+	double minlat = drms_getkey_double(inRec, "LATDTMIN", &status); if (status) return 1;
+	double maxlat = drms_getkey_double(inRec, "LATDTMAX", &status); if (status) return 1;
 	
 	// A bug fixer for HARP (per M. Turmon)
 	// When AR is below threshold, "LONDTMIN", "LONDTMAX" will be wrong
@@ -1084,9 +1085,10 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	mInfo->yc = (maxlat + minlat) / 2.;
 	
 	/* Size */
+    // Rounded to 1.d3 precision first. Jun 16 2014 XS
 	
-	mInfo->ncol = round((maxlon - minlon) / mInfo->xscale);
-	mInfo->nrow = round((maxlat - minlat) / mInfo->yscale);
+	mInfo->ncol = round(round((maxlon - minlon) * 1.e3) / 1.e3 / mInfo->xscale);
+	mInfo->nrow = round(round((maxlat - minlat) * 1.e3) / 1.e3 / mInfo->yscale);
 	
 	return 0;
 	
@@ -2305,7 +2307,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.30 2014/06/05 21:27:19 mbobra Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.31 2014/06/16 04:45:18 xudong Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
