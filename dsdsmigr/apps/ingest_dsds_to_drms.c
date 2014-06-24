@@ -15,7 +15,7 @@
  *  OUTPUT PARAMETERS: OUT = <drms series>
  * 
  *  FLAGS: M =
- *         v =   
+ *         v =
  *         z =
  *         p = 
  *
@@ -29,7 +29,6 @@
 #include "printk.h"
 #include <time.h>
 #include <math.h>
-#include "limbfuncs.c"
 
 char *module_name = "opendsrecs";
 
@@ -55,7 +54,6 @@ ModuleArgs_t module_args[] =
      {ARG_FLAG, "z", "0", "Use DPC_SMPL of '60 second' only"},
      {ARG_FLAG, "p", "0", "Indicate polarization state in POLSTATE keyword"},
      {ARG_FLAG, "s", "0", "skip check for existence of input datafile, use for series with no segments"},
-     {ARG_FLAG, "l", "0", "use this with the limb figure data ONLY"},
      {ARG_END}
 };
 
@@ -261,7 +259,7 @@ int keyNameCheck(char *name, char **fromname)
     while (fgets(line, 1024, flist))
       {
       if (line[0] == '#')
-        continue;                 
+        continue;
       else if (sscanf(line,"%s %s %s\n", drms_name, dsds_name, action_name)==3)
         {
         int iname;
@@ -303,7 +301,7 @@ int DoIt(void)
    int verbose;
    int qualnodata=0x80000000;
    int nRecs, iRec;
-   int qualstat, dpcflag, polflag, skipflag, limbflag;
+   int qualstat, dpcflag, polflag, skipflag;
    double val;
    char *val1 = NULL;
 # define AU_m (149597870691.0)
@@ -323,7 +321,7 @@ int DoIt(void)
    polflag = params_isflagset(&cmdparams, "p");
 //   printf("dpcflag=%d\n",dpcflag);
    skipflag = params_isflagset(&cmdparams, "s");
-   limbflag = params_isflagset(&cmdparams, "l");
+
    if (strcmp(inRecQuery, kNOT_SPEC) == 0 || strcmp(outRecQuery, kNOT_SPEC) == 0)
       DIE("Both the in and out dataseries must be specified.\n");
 
@@ -359,7 +357,7 @@ int DoIt(void)
       char *DataFile;
       char timebuf[1024];
       float UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
-      float now,cropmin,cropmax;
+      float now;
       float result;
       //double result;
       int Record_OK = 1;
@@ -378,7 +376,7 @@ int DoIt(void)
 
       val = drms_getkey_time(inRec, "T_OBS",&status);
       val1= drms_getkey_string(inRec,"DPC_SMPL",&status);
-  
+
     
 /* Check the polarisation status of the data. If the data has the string "_Vm_", then it is circularly polarized*/ 
 
@@ -398,7 +396,7 @@ int DoIt(void)
       }
 
   // set cvs commit version into keyword HEADER
-      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.17 2014/06/23 20:05:52 mbobra Exp $");
+      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.16 2014/04/24 23:56:17 arta Exp $");
       status = drms_setkey_string(outRec, "HEADER", cvsinfo);
       if (cvsinfo)
       {
@@ -427,34 +425,23 @@ int DoIt(void)
             outSeg = drms_segment_lookupnum(outRec, 0);
             if (inSeg && outSeg)
             {
-                if (limbflag)
-                {
-                   status = embed_limbpixels(filepath,outRec,&cropmin,&cropmax); 
-                   drms_setkey_double(outRec, "CROPMIN", cropmin);
-                   drms_setkey_double(outRec, "CROPMAX", cropmax);
-                   if (status != 0)                                          
-                   DIE("Problem in function embed_limbpixels. \n");              
-                }
-                else
-                {
-                   DRMS_Array_t *data;
-                /* read the data ad doubles so allow rescaling on output */
-                   data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
-                   if (!data)
-                   {
-                      fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
-                      DIE_status("giveup\n");
-                   }
-                /* use the zero and offset values in the JSD for the new record segment */
-                   data->bscale = outSeg->bscale;
-                   data->bzero = outSeg->bzero;
-                   drms_segment_write(outSeg, data, 0);
-                   drms_free_array(data);
-                }
-              Record_OK = 1;    
-	      quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
-              quality = quality & (~qualnodata);
-              drms_setkey_int(outRec,"QUALITY",quality);
+               DRMS_Array_t *data;
+            /* read the data ad doubles so allow rescaling on output */
+               data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
+               if (!data)
+               {
+                  fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
+                  DIE_status("giveup\n");
+               }
+            /* use the zero and offset values in the JSD for the new record segment */
+               data->bscale = outSeg->bscale;
+               data->bzero = outSeg->bzero;
+               drms_segment_write(outSeg, data, 0);
+               drms_free_array(data);
+               Record_OK = 1;    
+	       quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
+               quality = quality & (~qualnodata);
+               drms_setkey_int(outRec,"QUALITY",quality);
 	    }
             else
                DIE("Bad data segment lookup, in or out\n");
@@ -526,34 +513,21 @@ int DoIt(void)
          if (*DataFile && access(filepath, R_OK | F_OK)  == 0 && time_is_invalid(val) == 0)
 	 {
             outSeg = drms_segment_lookupnum(outRec, 0);
-            if (inSeg && outSeg)   
+            if (inSeg && outSeg)
             {
-               if (limbflag)
-                {
-                   status = embed_limbpixels(filepath,outRec,&cropmin,&cropmax);
-                   drms_setkey_double(outRec, "CROPMIN", cropmin);
-                   drms_setkey_double(outRec, "CROPMAX", cropmax);
-                   if (status != 0) 
-                   DIE("Problem in function embed_limbpixels. \n"); 
-              }
-                else
-                {
-                   DRMS_Array_t *data;
-                   /* read the data ad doubles so allow rescaling on output */
-                   //data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
-                   data = drms_segment_read(inSeg, DRMS_TYPE_SHORT, &status);
-                   if (!data)
-                   {
-                      fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
-                      DIE_status("giveup\n");
-                   }
-                   /* use the zero and offset values in the JSD for the new record segment */
-                   data->bscale = outSeg->bscale;
-                   data->bzero  = outSeg->bzero;
-                   //printf("cropmin from outside the function =%d\n",cropmin);
-                   drms_segment_write(outSeg, data, 0);
-                   drms_free_array(data);
-                }
+               DRMS_Array_t *data;
+               /* read the data ad doubles so allow rescaling on output */
+               data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
+               if (!data)
+               {
+                  fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
+                  DIE_status("giveup\n");
+               }
+            /* use the zero and offset values in the JSD for the new record segment */
+               data->bscale = outSeg->bscale;
+               data->bzero = outSeg->bzero;
+               drms_segment_write(outSeg, data, 0);
+               drms_free_array(data);
                Record_OK = 1;    
 	       quality = drms_getkey_int(inRec, "QUALITY", &qualstat);
                quality = quality & (~qualnodata);

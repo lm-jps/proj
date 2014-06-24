@@ -716,7 +716,6 @@ fprintf(stderr,"at do reftime, center_x=%f\n", center_x);
     sina = sin(crota*Deg2Rad);
     cosa = cos(crota*Deg2Rad);
 
-fprintf(stderr,"T_OBS=%s, crpix1=%f, crpix2=%f\n", drms_getkey_string(inRec,"T_OBS", NULL), crpix1, crpix2);
 
 //  XXXXXXXXXXXXXXXXX get coordinate mapping info using keywords from first record
     if (firstimage)
@@ -809,13 +808,12 @@ fprintf(stderr,"T_OBS=%s, crpix1=%f, crpix2=%f\n", drms_getkey_string(inRec,"T_O
           center_x = PIX_X(trackx,tracky) - 1;
           center_y = PIX_Y(trackx,tracky) - 1;
           sprintf(history+strlen(history), "Image center tracked as per %s\n", FDSfile);
-fprintf(stderr,"center_x=%f,center_y=%f\n",center_x,center_y);
           }
         else
           sphere2img(crlt_rad, crln_rad, crlt_obs_rad, crln_obs_rad, &center_x, &center_y, x0, y0, rsunpix, pa_rad, 0, 0, 0, 0);
         }
+
     // center_x and center_y are target locations for the center of the desired patch, pixels from 0 of as-is image.
-    // note HMI has not been flipped at this point
 
     target_x = center_x;
     target_y = center_y;
@@ -843,7 +841,6 @@ fprintf(stderr,"at box define, crpix1=%f, x0=%f, x1=%d\n",crpix1,x0,x1);
 
     if (x1 >= inAxis[0] || y1 >= inAxis[1] || x2 < 0 || y2 < 0)
       {  // patch completely outside image
-fprintf(stderr, "patch completely outside image, x1=%d, y1=%d, x2=%d, y2=%d\n",x1,y1,x2,y2); 
       continue;
       }
     else if (x1>=0 && y1>=0 && x2<inAxis[0] && y2<inAxis[1])
@@ -867,7 +864,7 @@ fprintf(stderr,"$$$$$$$ outArray bzero, bscale are %f, %f\n", outArray->bzero, o
       status = 0;
       inArray = drms_segment_readslice(inSeg, DRMS_TYPE_FLOAT, start2, end2, &status);
       if (status || !inArray) DIE("Cant read input record");
-//fprintf(stderr,"$$$$$$$ inArray bzero, bscale are %f, %f\n",inArray->bzero, inArray->bscale);
+fprintf(stderr,"$$$$$$$ inArray bzero, bscale are %f, %f\n",inArray->bzero, inArray->bscale);
       outArray->bzero = inArray->bzero;
       outArray->bscale = inArray->bscale;
       int start3[2] = {start2[0]-start1[0],start2[1]-start1[1]}; // fetched slice offset in outarray
@@ -947,7 +944,6 @@ fprintf(stderr,"after rotate, crpix1=%f\n",crpix1);
       target_y = inAxis[1] - 1 - center_y;
       // cosa = 1.0; sina = 0.0;
       strcat(history, "Image rotated 180 degrees.");
-fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target_x,y1,target_y);
       }
 
 /*
@@ -968,8 +964,7 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
       int dtyp = 3;
       float dx = (x1 + midx) - target_x;
       float dy = (y1 + midy) - target_y;
-      if (status=image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &(void *)newdata, &newnx, &newny, 1, 0))
-        DIE("XXXX Failure in call to image_magrotate.  Either malloc error or nx or ny too large. Must quit.\n");
+      image_magrotate((void *)data, nx, ny, dtyp, crota, 1.0, dx, dy, &(void *)newdata, &newnx, &newny, 1, 0);
       if (newnx != nx || newny != ny)
         fprintf(stderr,"image_magrotate changed dimensions: nx want %d got %d, ny want %d got %d\n",nx,newnx,ny,newny);
       crota = 0.0;
@@ -1031,7 +1026,6 @@ fprintf(stderr,"after flip x1=%d, target_x=%lf, y1=%d, target_y=%lf\n",x1,target
     drms_setkey_float(outRec, "XCEN", WX((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
     drms_setkey_float(outRec, "YCEN", WY((outArray->axis[0]+1)/2, (outArray->axis[1]+1)/2));
     set_statistics(outSeg, outArray, 1);
-fprintf(stderr,"DATA_MIN=%f, DATA_MAX=%f\n",drms_getkey_float(outRec,"DATA_MIN",NULL),drms_getkey_float(outRec,"DATA_MAX",NULL));
     if (wantFAKE && FDSfile)
       {
       double r;
@@ -1502,7 +1496,7 @@ int get_tracking_xy(char *FDSfile, TIME want, double *xp, double *yp, double *ra
   TIME now0;
   FILE *data = fopen(FDSfile,"r");
   double lambda, phi, x, y, dist, obj_radius;
-  double frac, x0, y0, obj_radius0;
+  double x0, y0, obj_radius0;
   char object[100], now_txt[100];
   if (!data)
     return(1);
@@ -1516,16 +1510,14 @@ int get_tracking_xy(char *FDSfile, TIME want, double *xp, double *yp, double *ra
     {
     int yyyy, doy, hh, mm, ss;
     int m,d;
-    int dim[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    int dim[] = {31,29,31,30,31,30,31,31,30,31,30,31};
     double distance;
     TIME now;
     // fix doordinate system to match HMI view
-// not for ISON
-//    x = -x;
-//    y = -y;
+    x = -x;
+    y = -y;
     // extract time
     sscanf(now_txt,"%4d%3d.%2d%2d%2d", &yyyy, &doy, &hh, &mm, &ss);
-    if (yyyy % 4 == 0) dim[1] = 29; else dim[1] = 28;
     for (m=1; m<=12; m++)
       {
       if (doy > dim[m-1])
@@ -1549,18 +1541,9 @@ int get_tracking_xy(char *FDSfile, TIME want, double *xp, double *yp, double *ra
       {
       if (fabs(now-want) >= fabs(now0-want))
         {
+        x = x0;
+        y = y0;
         obj_radius = obj_radius0;
-        if (now == want)
-          {
-          x = x0;
-          y = y0;
-          }
-        else
-          {
-          frac = (want-now0)/(now-now0); 
-          x = x0 + (x-x0)*frac;
-          y = y0 + (y-y0)*frac;
-          }
         }
       break;
       }
