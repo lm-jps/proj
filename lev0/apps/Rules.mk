@@ -54,7 +54,7 @@ ifeq ($(JSOC_MACHINE), linux_ia32)
 endif
 
 # Remove from ia32 and gcc builds (since they don't build on ia32 and with gcc)
-ifeq ($(JSOC_MACHINE), linux_x86_64)
+ifneq ($(JSOC_MACHINE), linux_ia32)
   ifeq ($(COMPILER), icc)
 #    BUILDLEV1_$(d)		:=  build_lev1X build_lev1Y build_lev1 build_lev1_fsn
     BUILDLEV1IRIS_$(d)		:= $(addprefix $(d)/, build_lev1_iris build_lev1_iris_test)
@@ -104,6 +104,9 @@ endif
 ifeq ($(JSOC_MACHINE), linux_x86_64)
   FFTW_$(d) = /home/jsoc/lib/linux-x86_64
 endif
+ifeq ($(JSOC_MACHINE), linux_avx)
+  FFTW_$(d) = /home/jsoc/lib/linux-avx
+endif
 
 
 # Local rules
@@ -112,7 +115,7 @@ $(SUMEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq -lpng  -L$(FFTW_$(d)) -lfftw3
 
 
 ifeq ($(COMPILER), icc)
-   ifeq ($(JSOC_MACHINE), linux_x86_64) 
+   ifneq ($(JSOC_MACHINE), linux_ia32) 
      MKL     := -static-intel -lmkl_em64t
    endif
 endif
@@ -125,7 +128,7 @@ $(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/.
 #$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/cvs/JSOC/proj/libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include
 
 ifeq ($(COMPILER), icc)
-   ifeq ($(JSOC_MACHINE), linux_x86_64)
+   ifneq ($(JSOC_MACHINE), linux_ia32)
 $(MODEXE_$(d)) $(MODEXE_SOCK_$(d)) $(MODEXE_USEF_$(d)) $(TESTEXE_USEF_$(d)): LL_TGT := $(LL_TGT) $(MKL)
    endif
 endif
