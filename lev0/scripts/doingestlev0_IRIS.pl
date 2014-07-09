@@ -10,8 +10,8 @@ if($user ne "jsocprod") {
   exit;
 }
 $host = `hostname -s`;
-if(!($host =~ /cl1n001/)) {
-  print "This can only be run on the cl1n001 pipeline machine.\n";
+if(!($host =~ /cl2n01[78]/)) {
+  print "This can only be run on the cl2n017/8 pipeline machine.\n";
   exit;
 }
 #@vcnames = ("VC01", "VC04", "VC02", "VC05"); #primary channels
@@ -19,7 +19,7 @@ if(!($host =~ /cl1n001/)) {
 $ldate = &labeldate();
 @lognames = ("VC03_$ldate.log");
 
-$rmcmd0 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[0]_stop /usr/local/logs/lev0/@vcnames[0]_exit";
+$rmcmd0 = "/bin/rm -f /usr/local/logs/lev0/@vcnames[0]_stop /usr/local/logs/lev0/@vcnames[0]_stopX /usr/local/logs/lev0/@vcnames[0]_exit /usr/local/logs/lev0/@vcnames[0]_exitX";
 
 #clean up the signal files
 print "$rmcmd0\n";
@@ -55,41 +55,58 @@ print "stop_lev0_IRIS.pl\n";  #!!!TBD
 #$SIG{INT} = 'IGNORE';
 
 while(1) {
-  for($i=0; $i < 720; $i++) {  #run this for 3600 seconds
+  for($i=0; $i < 4320; $i++) {  #run this for 6hrs
     sleep 5;
     &ckingest;		#see if any ingest_lev0 are still running
-    if(!$foundiris || !$foundirisrexmit) {
+    if(!$foundiris && !$foundirisrexmit) {  #nothing running
       $ldate = &labeldate();
       print "$ldate\n";
-      &ckstop;          #see if stop_lev0_IRIS.pl is running then do nothing
-      if($ifound) {
-        exit(0);
-      }
       $stopfile = "/usr/local/logs/lev0/VC03_stop";
-      #if find a stop file, assume was told to stop. Do nothing.
+      #if find a stop file, assume stop_lev0_IRIS.pl was called and exit
       if(-e $stopfile) {
-        print "\nAll ingest_lev0 for IRIS have been stopped by request.\n\n";
+        print "\nAll ingest_lev0 for IRIS have been stopped. Exit
+doingestlev0_IRIS.pl\n\n";
         exit(0);
       }
-      print "\nOne or both ingest_lev0_irisdc are stopped. Going to restart...\n\n";
-      if(!$foundiris) {
-        $cmd = "ingest_lev0_irisdc --loopconn -r vc=VC03 indir=/sds/soc2pipe/iris logfile=/usr/local/logs/lev0/VC03_$ldate.log &";
-        if(system($cmd)) {
-          print "Failed: $cmd\n";
-          exit(0);
-        }
-        print "Restart:\n$cmd\n";
-      }
-      if(!$foundirisrexmit) {
-        $cmd = "ingest_lev0_irisdc --loopconn -r vc=VC03 indir=/sds/soc2pipe/iris/rexmit logfile=/usr/local/logs/lev0/VC03_$ldate.logX &";
-        if(system($cmd)) {
-          print "Failed: $cmd\n";
-          exit(0);
-        }
-        print "Restart:\n$cmd\n";
-      }
+      print "\nAll ingest_lev0 for IRIS are stopped. May have crashed!!\n\n";
+      exit(0);
+      #last;  #!!TEMP this didn't seem to work here ???
+      #$i = 720;
     }
   }
+  &ckstop;          #see if stop_lev0_IRIS.pl is running then do nothing
+  if($ifound) {
+    exit(0);
+  }
+  $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stop";
+  `$cmd`;
+  $cmd = "touch /usr/local/logs/lev0/@vcnames[0]_stopX";
+  `$cmd`;
+  while(1) {
+    $found = 0;
+    #wait until they're all stopped
+    @ps_prod = `ps -ef | grep ingest_lev0_irisdc`;
+    while($_ = shift(@ps_prod)) {
+      if(/vc VC03/) {
+        $found = 1;
+        sleep 1;
+        last;
+      }
+    }
+    if(!$found) { last; }
+  }
+  sleep(5);                     #make sure previous commit to db is done
+      `$rmcmd0`;
+      $cmd = "ingest_lev0_irisdc --loopconn -r vc=@vcnames[0] indir=/sds/soc2pipe/iris logfile=/usr/local/logs/lev0/VC03_$ldate.log &";
+      if(system($cmd)) {
+        print "Failed: $cmd\n";
+      }
+      print "Restart:\n$cmd\n";
+      $cmd = "ingest_lev0_irisdc --loopconn -r vc=@vcnames[0] indir=/sds/soc2pipe/iris/rexmit logfile=/usr/local/logs/lev0/VC03_$ldate.logX &";
+      if(system($cmd)) {
+        print "Failed: $cmd\n";
+      }
+      print "Restart:\n$cmd\n";
 }
 
 sub ckingest {
@@ -108,7 +125,7 @@ sub ckingest {
 
 sub ckstop {
     $ifound = 0;
-    #see if stop_lev0_HMI.pl is running
+    #see if stop_lev0_IRIS.pl is running
     @ps_prod = `ps -ef | grep stop_lev0_IRIS`;
     while($_ = shift(@ps_prod)) {
       if(/stop_lev0_IRIS.pl/) {
