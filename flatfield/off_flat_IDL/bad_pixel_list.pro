@@ -19,7 +19,8 @@ camstr=["side","front"]
 
 
 
-spawn, 'show_info -q ds="hmi.offpoint_flatfield['+string(cam,format='(i1.1)')+']['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d]['+string(focus,format='(i2.2)')+']" -P', result
+;spawn, 'show_info -q ds="hmi.offpoint_flatfield['+string(cam,format='(i1.1)')+']['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d]['+string(focus,format='(i2.2)')+']" -P', result
+spawn, 'show_info -q ds="hmi.inspect_offpoint_ff['+string(cam,format='(i1.1)')+']['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d]['+string(focus,format='(i2.2)')+']" -P', result
 if n_elements(result) ne 1 then begin & print, "no proper flatfield update for this day" & return & endif
 
 
@@ -27,7 +28,8 @@ if n_elements(result) ne 1 then begin & print, "no proper flatfield update for t
 ff=fitsio_read_image(result[0]+'/offpoint_flatfield.fits')
 
 
-spawn, 'show_info -q ds="hmi.offpoint_flatfield['+string(cam,format='(i1.1)')+']['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d]['+string(focus,format='(i2.2)')+']" key=T_OBS', result
+;spawn, 'show_info -q ds="hmi.offpoint_flatfield['+string(cam,format='(i1.1)')+']['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d]['+string(focus,format='(i2.2)')+']" key=T_OBS', result
+spawn, 'show_info -q ds="hmi.inspect_offpoint_ff['+string(cam,format='(i1.1)')+']['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d]['+string(focus,format='(i2.2)')+']" key=T_OBS', result
 time_stamp=result[0]
 
 
