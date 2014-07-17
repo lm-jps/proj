@@ -3,18 +3,16 @@ pro make_dark, year, month, day, cam, ftsid, time_stamp, darks, write=write
 
 
 spawn, 'show_info -q ds="hmi.lev1_nrt['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d][?HFTSACID = '+strcompress(string(ftsid),/rem)+'?]" key=FSN', result
-
 n=n_elements(result)
 
 if n le 1 then begin
 print, "use lev1"
 spawn, 'show_info -q ds="hmi.lev1['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d][?HFTSACID = '+strcompress(string(ftsid),/rem)+'?]" key=FSN', result
+
 series="hmi.lev1"
 endif else begin
 series="hmi.lev1_nrt"
 endelse
-
-
 
 
 fsn_min=long(result[0])
@@ -40,6 +38,7 @@ darkinds=fsn_ds-fsn_min
 
 if not keyword_set(time_stamp) then begin
 spawn, 'show_info -q ds="'+series+'['+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+'/1d][?HFTSACID = '+strcompress(string(ftsid),/rem)+'?][?HCAMID='+string(cam-1,format='(i1.1)')+'?]" key=T_OBS', result_tm
+
 time_stamp=result_tm[n_elements(result_tm)-1]
 endif
 
@@ -72,7 +71,7 @@ close,1
 
 
 
-string_side='write_dark instrument="HMI" file_dark="dark_'+camstr[cam-1]+'_'+strcompress(string(fsn[0]), /rem)+'.bin"  series_dark="hmi.dark" camera='+string(cam,format='(i1.1)')+' t_obs="'+time_stamp+'" fsn_list_dark='+strcompress(string(fsn[darkinds[0]]), /rem)+','+strcompress(string(fsn[darkinds[ndk_s-1]]),/rem)+' nx=4096 ny=4096'
+string_side='write_dark instrument="HMI" file_dark="dark_'+camstr[cam-1]+'_'+strcompress(string(fsn[0]), /rem)+'.bin"  series_dark="hmi.inspect_dark" camera='+string(cam,format='(i1.1)')+' t_obs="'+time_stamp+'" fsn_list_dark='+strcompress(string(fsn[darkinds[0]]), /rem)+','+strcompress(string(fsn[darkinds[ndk_s-1]]),/rem)+' nx=4096 ny=4096'
 
 
 openw,1,'ingest_command_dark_'+camstr[cam-1]+'_'+strcompress(string(fsn[0]), /rem)+'.csh'
