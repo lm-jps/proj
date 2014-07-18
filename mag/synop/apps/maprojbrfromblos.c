@@ -346,7 +346,7 @@ void convertblos2br(DRMS_Array_t *img, float xcen, float ycen, float rsun_obs) {
                    xDist2 = xDist * xDist;
                    xDist2PlusyDist2 = xDist2 + yDist2;
                    dToDiskCenter = sqrt(xDist2PlusyDist2);
-                   bLos[iData] = DRMS_MISSING_FLOAT;
+//                   bLos[iData] = DRMS_MISSING_FLOAT;
                    if (dToDiskCenter >= rsun_obs) continue;
                    if (isnan(bLos[iData])) continue;
 
