@@ -182,7 +182,7 @@ char *set_scaling(DRMS_Array_t *in, double *minp, double *maxp, int *nmissp,
 	    break;
         newmin = *minp + ((double)ihist/(double)nhist) * (*maxp - *minp);
         total = 0;
-	for (ihist=nhist; ihist>=0; total += hist[ihist--])
+	for (ihist=nhist; ihist>0; total += hist[--ihist])
 	  if (total >= want)
 	    break;
         newmax = *minp + ((double)ihist/(double)nhist) * (*maxp - *minp);
