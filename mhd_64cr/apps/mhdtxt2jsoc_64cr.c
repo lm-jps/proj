@@ -11,7 +11,7 @@
 /* 1 = moderate resolution with definitive CR map, others=NRT low-resol.*/
 #define NONDAILY 1
 /* 1 = new map series having two segment, or not. */
-#define NEWMAP 1
+#define NEWMAP 0
 
 int set_statistics(DRMS_Segment_t *, DRMS_Array_t *, int);
 
@@ -348,6 +348,6 @@ int DoIt(void)
 
 /* ----- */
 
-char *mhdcorona_version(){return strdup("$Id: mhdtxt2jsoc_64cr.c,v 1.2 2014/03/13 18:59:30 keiji Exp $");}
+char *mhdcorona_version(){return strdup("$Id: mhdtxt2jsoc_64cr.c,v 1.3 2014/08/01 02:12:38 keiji Exp $");}
 
 /* ----------- end of this file ----------- */
