@@ -7,6 +7,7 @@
 <input type='hidden' id='ExportOpID' name='op'  value='exp_request' >
 <input type='hidden' id="ExportProtocolHidden" name='protocol' value='as-is' >
 <input type='hidden' id="ExportProcessingHidden" name='process' value='no_op' >
+<input type='hidden' id="ExportSizeRatio" name='sizeratio' value='1.0' >
 
   <table>
     <tr>
@@ -156,62 +157,6 @@
 	</tr>
     <!-- END RESIZE -->
 
-    <!-- BEGIN REBIN -->
-    <tr id="ProcessRebin" style="display:none">
-      <td>&nbsp;&nbsp;&nbsp;&nbsp;Rebin</td>
-      <td><span id="RebinHelp" class="tip">?</span></td>
-      <td colspan="2">
-        <table style="border-style:solid">
-          <tr>
-            <td>Please specify rebin options:</td>
-          </tr>
-          <tr>
-            <td>
-              <select id="RebinMethod" size=1 name="RebinMethod" style="width:12em;background-color:#FFFFFF"
-                onChange="RebinSet('method')">
-                 <option value="boxcar">boxcar</option>
-                 <option value="gaussian">gaussian</option>
-              </select> Re-binning method to use.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <input id="RebinScale" type="text" name="RebinScale" style="width:12em;background-color:#FFFFFF" value="1.0"
-               onChange="RebinSet('scale')" />
-              Scaling factor to apply to image, < 1.0 for smaller images.
-            </td>
-          </tr>
-          <tr id="RebinFWHMRow">
-            <td>
-              <input id="RebinFWHM" type="text" name="RebinFWHM" style="width:12em;background-color:#D88080" value="-1.0"
-                onChange="RebinSet('fwhm')" />
-              Width in pixels of smoothing Gaussian function (FWHM).
-            </td>
-          </tr>
-          <tr id="RebinNvectorRow">
-            <td>
-              <input id="RebinNvector" type="text" name="RebinNvector" style="width:12em;background-color:#D88080" value="-1.0"
-                onChange="RebinSet('nvector')" />
-              Length in pixels of smoothing Gaussian function.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <input id="RebinCrop" type="checkbox" name="RebinCrop" onChange="RebinSet('crop')" />
-              Crop pixels that are greater than rsun_obs units from the center of the image.
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <input id="RebinRotate" type="checkbox" name="RebinRotate" value="roton" onChange="RebinSet('rotate')" />
-              Rotate image by 180 degrees if needed for north up.
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-    <!-- END REBIN -->
-
     <!-- BEGIN IM_PATCH -->
     <tr id="ProcessImPatch">
       <td>&nbsp;&nbsp;&nbsp;&nbsp;IM_Patch</td> 
@@ -305,7 +250,7 @@
            &nbsp; Reference time for X,Y to define center of extract patch.
            </td>
         </tr>
-        <tr id="ImCarrLi">
+        <tr id="ImCarrLo">
            <td>CAR_ROT </td>
            <td colspan="2">
            &nbsp;<span id="ImCARROTHelp" class="tip">?</span>
@@ -412,6 +357,7 @@
            &nbsp;<span id="MaprojXHelp" class="tip">?</span>
            <input id="MaprojX" type="text" name="MaprojX" style="width:12em;background-color:#D88080" value="NotSpecified" onChange="MaprojCheck();">
            &nbsp; Carrington longitude of patch center.
+           &nbsp; <input id="MaprojLnObs" type="checkbox" checked="0" onChange="MaprojCheck();"> Check for disk center longitude. 
            </td>
         </tr>
         <tr>
@@ -484,6 +430,62 @@
       </td> 
     </tr>
     <!-- END MAPROJ -->
+
+    <!-- BEGIN REBIN -->
+    <tr id="ProcessRebin" style="display:none">
+      <td>&nbsp;&nbsp;&nbsp;&nbsp;Rebin</td>
+      <td><span id="RebinHelp" class="tip">?</span></td>
+      <td colspan="2">
+        <table style="border-style:solid">
+          <tr>
+            <td>Please specify rebin options:</td>
+          </tr>
+          <tr>
+            <td>
+              <select id="RebinMethod" size=1 name="RebinMethod" style="width:12em;background-color:#FFFFFF"
+                onChange="RebinSet('method')">
+                 <option value="boxcar">boxcar</option>
+                 <option value="gaussian">gaussian</option>
+              </select> Re-binning method to use.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <input id="RebinScale" type="text" name="RebinScale" style="width:12em;background-color:#FFFFFF" value="1.0"
+               onChange="RebinSet('scale')" />
+              Scaling factor to apply to image, < 1.0 for smaller images.
+            </td>
+          </tr>
+          <tr id="RebinFWHMRow">
+            <td>
+              <input id="RebinFWHM" type="text" name="RebinFWHM" style="width:12em;background-color:#D88080" value="-1.0"
+                onChange="RebinSet('fwhm')" />
+              Width in pixels of smoothing Gaussian function (FWHM).
+            </td>
+          </tr>
+          <tr id="RebinNvectorRow">
+            <td>
+              <input id="RebinNvector" type="text" name="RebinNvector" style="width:12em;background-color:#D88080" value="-1.0"
+                onChange="RebinSet('nvector')" />
+              Length in pixels of smoothing Gaussian function.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <input id="RebinCrop" type="checkbox" name="RebinCrop" onChange="RebinSet('crop')" />
+              Crop pixels that are greater than rsun_obs units from the center of the image.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <input id="RebinRotate" type="checkbox" name="RebinRotate" value="roton" onChange="RebinSet('rotate')" />
+              Rotate image by 180 degrees if needed for north up.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <!-- END REBIN -->
 
 <tr><td colspan="4"><span id="ProcArgsDisplay"></span></td></tr>
     <!-- End of processing  special code -->
@@ -588,7 +590,7 @@
       <td colspan="4">
       <span id="CheckParamHelp" class="tip">?</span>&nbsp;
         <input id="ExportCheckButton" type="button" value="Check Params for Export" onClick="CheckExportParams();">
-        <span id="ExportCheckMsg" style="color:red;background-color:#FFFFFF">&nbsp;</span>
+        <span id="ExportCheckMsg" style="color:red;background-color:#FFFFFF">&nbsp;This check is required</span>
       </td>
     </tr>
 

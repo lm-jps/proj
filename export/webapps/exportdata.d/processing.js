@@ -16,6 +16,8 @@
 //                this string will start with the process name, e.g. "hg_patch" and contains all needed command line
 //                params with comma delimiters.  Flags should be e.g. "c=1" rather than "-c".
 //                Returns the string if all is OK, or "" if user action is still required.
+//                The Check function must update the SizeRatio global var with the size ratio resulting
+//                from the chosen processing.
 //  XxxxSet(xx) - Optional, may be used in the onChange or onClick events to accept user input,
 //                or the XxxxCheckX function may be used for this purpose.
 //  Other functions may be defined as needed and may be invoked in the XxxxSet() function where this processing type
@@ -24,9 +26,84 @@
 //  Finally, make entries in ProcessingInit() at the end of this file.
 //                
 
+// Global vars for multiple processing options
+
+var processingFirstRecord = null;
+var processingLastRecord = null;
+var defaultStartUsed = 1;
+var defaultStopUsed = 1;
+var keyTIME = 0;
+var keySTEP = 1;
+var keyCARROT = 2;
+var keyCRLN = 3;
+var keyCRLT = 4;
+var keyCDELT = 5;
+var keyCTYPE = 6;
+var segDims = 2;
+
+var keyNoaaTime = 0;
+var keyNoaaLat = 1;
+var keyNoaaLon = 2;
+var keyNoaaLonX = 3;
+
+// Support functions for multiple processing options
+
+function processingGetRecInfo(DoCheck, n)
+  {
+  // Get keywords for a single record.  n will be 1 for first record, -1 for last record.
+  if (n==1)
+    processingFirstRecord = null;
+  else
+    processingLastRecord = null;
+  var timePrime = (firstTimePrime.length > 0 ? firstTimePrime : "T_REC");
+  var keysneeded = timePrime+","+timePrime+"_step,CAR_ROT,CRLN_OBS,CRLT_OBS,CDELT1,CTYPE1";
+  var segsneeded = firstRealSegment;
+  var recinfo;
+  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+  var RecordSet = $("ExportRecordSet").value;
+  $("ImRecordSet").innerHTML = RecordSet;
+  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
+    {
+    method: 'get',
+    parameters: {"ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded, "seg" : segsneeded },
+
+    onSuccess: function(transport, json)
+      {
+      var thisN = ""+n;
+      var response = transport.responseText || "no response text";
+      var recinfo = response.evalJSON();
+
+      if (recinfo.status == 0)
+        {
+        if (thisN == "1")
+          {
+          processingFirstRecord = recinfo;
+          if (processingLastRecord)
+            DoCheck();
+          }
+        if (thisN == "-1")
+          {
+          processingLastRecord = recinfo;
+          if (processingFirstRecord)
+            DoCheck();
+          }
+        }
+      else
+        alert("Processing setup code failed to get record info for n="+thisN+" of " + RecordSet);
+      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
+      },
+    onFailure: function() { alert('Something went wrong...'); },
+    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
+    });
+  }
+
+// Processing Options Code
+
 //
 // Processing details for AIA normalized Scaling
 //
+
+var AiaScaleOption;
 
 function AiaScaleSet()
   {
@@ -42,6 +119,7 @@ function AiaScaleInit(isActive)
 
 function AiaScaleCheck()
   {
+  var AiaScaleSizeRatio = 1.0;
   var isok = 1;
   var args = "aia_scale";
   if (SeriesName === 'aia.lev1')
@@ -53,6 +131,8 @@ function AiaScaleCheck()
     isok = 0;
     alert("Error - aia_scale can only be used for series aia.lev1");
     }
+
+  ExportProcessingOptions[AiaScaleOption].Size = AiaScaleSizeRatio;
   ExportProcessingOK = isok;
   CheckRediness();
   return (isok ? args : "");
@@ -63,6 +143,8 @@ function AiaScaleCheck()
 //
 // Processing details for rebin using jsoc_rebin
 //
+
+var RebinOption;
 
 function RebinInit(isActive)
   {
@@ -127,6 +209,7 @@ function RebinSet(control)
 
 function RebinCheck()
   {
+  var RebinSizeRatio = 1.0;
   var rv = "rebin";
   var isok = 1;
     
@@ -149,6 +232,7 @@ function RebinCheck()
     if ($("RebinScale").value <= 0)
       isok = 0;
     rv = rv + ",scale=" + $("RebinScale").value;
+    RebinSizeRatio = parseFloat($("RebinScale").value);
     }
     
   if ($("RebinMethod").selectedIndex == 1)
@@ -177,6 +261,7 @@ function RebinCheck()
     rv = rv + ",method=boxcar";
     }
     
+  ExportProcessingOptions[RebinOption].Size = RebinSizeRatio*RebinSizeRatio;
   ExportProcessingOK = isok;
   CheckRediness();
   return (isok ? rv : "");
@@ -187,6 +272,8 @@ function RebinCheck()
 //
 // Processing details for rebin using jsoc_resize
 //
+
+var ResizeOption;
 
 function ResizeInit(isActive)
   {
@@ -223,11 +310,13 @@ function ResizeSet(control)
     $("ResizeCdelt").style.backgroundColor = colorWhite;
     }
   // no specific action needed for "method", "register_to", "crop", or "replicate" 
+  processingGetRecInfo(ResizeCheck, 1);
   ResizeCheck();
   }
 
 function ResizeCheck()
   {
+  var ResizeSizeRatio = 1.0;
   var rv = "resize";
   var isok = 1;
     
@@ -254,6 +343,8 @@ function ResizeCheck()
     rv = rv + ",scale_to=" + $("ResizeCdelt").value;
     if ($("ResizeCdelt").value <= 0)
       isok = 0;
+    if (processingFirstRecord)
+      ResizeSizeRatio = processingFirstRecord.keywords[keyCDELT].values[0] / parseFloat($("ResizeCdelt").value);
     }
   else
     rv = rv + ",rescale=0";
@@ -263,6 +354,7 @@ function ResizeCheck()
     rv = rv + ",c=1";
     }
     
+  ExportProcessingOptions[ResizeOption].Size = ResizeSizeRatio;
   ExportProcessingOK = isok;
   CheckRediness();
   return (isok ? rv : "");
@@ -274,8 +366,11 @@ function ResizeCheck()
 // Process ImPatch
 //
 
+var ImPatchOption;
 var noaaColor;
 var ImTracked = 0;
+var newDimX = 0;
+var newDimY = 0;
 
 function ImPatchGetNoaa()
   {
@@ -304,9 +399,9 @@ function ImPatchGetNoaa()
         var thisTime, thisLong, thisLat;
         for (irec=0; irec<nrecs; irec++)
           {
-          thisTime = NOAA_rslist.keywords[0].values[irec];
-          thisLat = NOAA_rslist.keywords[1].values[irec];
-          thisLong = NOAA_rslist.keywords[2].values[irec];
+          thisTime = NOAA_rslist.keywords[keyNoaaTime].values[irec];
+          thisLat = NOAA_rslist.keywords[keyNoaaLat].values[irec];
+          thisLong = NOAA_rslist.keywords[keyNoaaLon].values[irec];
           if (Math.abs(thisLong) < Math.abs(minLong))
             {
             minLong = thisLong;
@@ -347,15 +442,15 @@ function ImPatchSet(param)
   if (param == 1) defaultStartUsed = 0;
   if (param == 2) defaultStopUsed = 0;
   var needCheck = 1;
-  if (!ImFirstRecord)
+  if (!processingFirstRecord)
     {
     needCheck = 0;
-    ImGetRecInfo(1);
+    processingGetRecInfo(ImPatchCheck, 1);
     }
-  if (!ImLastRecord)
+  if (!processingLastRecord)
     {
     needCheck = 0;
-    ImGetRecInfo(-1);
+    processingGetRecInfo(ImPatchCheck, -1);
     }
   if (needCheck)
     ImPatchCheck();
@@ -366,8 +461,6 @@ function ImPatchSet(param)
 //  1 set onload
 //  2 set by Reset params button
 //  3 set by Update RecrodSet Times button
-var defaultStartUsed = 1;
-var defaultStopUsed = 1;
 function ImPatchCheck()
   {
   if (ImResetParams==2)
@@ -377,8 +470,8 @@ function ImPatchCheck()
     }
   else if (ImResetParams==3 || $("ImRecordSet").innerHTML !== $("ExportRecordSet").value)
     {
-    ImFirstRecord = null;
-    ImLastRecord = null;
+    processingFirstRecord = null;
+    processingLastRecord = null;
     $("ImTDelta").value = "NotSpecified";
     ImResetParams = 0;
     ImPatchSet(0);
@@ -386,10 +479,11 @@ function ImPatchCheck()
   var isok = 1;
   var args = "im_patch";
   var ImLocOption;
+  var ImPatchSizeRatio = 1.0;
   if (RecordCountNeeded)
     {
-    ImFirstRecord = null;
-    ImLastRecord = null;
+    processingFirstRecord = null;
+    processingLastRecord = null;
     if (defaultStartUsed) $("ImTStart").value = "NotSpecified";
     if (defaultStopUsed) $("ImTStop").value = "NotSpecified";
     ExportProcessingOK = 0;
@@ -401,8 +495,8 @@ function ImPatchCheck()
      $("ImTStart").value = "NotSpecified";
   if ($("ImTStart").value == "NotSpecified")
     {
-    if (ImFirstRecord)
-      $("ImTStart").value = ImFirstRecord.keywords[0].values[0];
+    if (processingFirstRecord)
+      $("ImTStart").value = processingFirstRecord.keywords[keyTIME].values[0];
     }
   if ($("ImTStart").value == "NotSpecified")
     {
@@ -426,8 +520,8 @@ function ImPatchCheck()
     $("ImTStop").value = "NotSpecified";
   if ($("ImTStop").value == "NotSpecified")
     {
-    if (ImLastRecord)
-      $("ImTStop").value = ImLastRecord.keywords[0].values[0];
+    if (processingLastRecord)
+      $("ImTStop").value = processingLastRecord.keywords[keyTIME].values[0];
     }
   if ($("ImTStop").value == "NotSpecified")
     {
@@ -470,7 +564,7 @@ function ImPatchCheck()
     args += ",c=0";
 
   if ($("ImTDelta").value.strip().empty()) $("ImTDelta").value = "NotSpecified";
-  if ($("ImTDelta").value == "NotSpecified" && ImFirstRecord)
+  if ($("ImTDelta").value == "NotSpecified" && processingFirstRecord)
     {
     var recset = $("ExportRecordSet").value;
     var posAt = recset.indexOf("@");
@@ -481,7 +575,7 @@ function ImPatchCheck()
       $("ImTDelta").value = cads[0].substring(1);
       }
     else
-      $("ImTDelta").value = ImFirstRecord.keywords[3].values[0] + "s";
+      $("ImTDelta").value = processingFirstRecord.keywords[keySTEP].values[0] + "s";
     }
   if ($("ImTDelta").value == "NotSpecified")
     {
@@ -502,13 +596,13 @@ function ImPatchCheck()
 
   if ($("ImLocType").selectedIndex == 3 && ImTracked == 1)
     {
-    $("ImCarrLi").style.display = "table-row";
+    $("ImCarrLo").style.display = "table-row";
     $("ImTRefLi").style.display = "none";
     $("ImTRef").value == "NotSpecified";
     }
   else
     {
-    $("ImCarrLi").style.display = "none";
+    $("ImCarrLo").style.display = "none";
     $("ImTRefLi").style.display = "table-row";
     $("ImCarrot").value == "NotSpecified";
     }
@@ -532,8 +626,8 @@ function ImPatchCheck()
   if ($("ImCarrot").value.strip().empty()) $("ImCarrot").value = "NotSpecified";
   if ($("ImLocType").selectedIndex == 3)
     {
-    if ($("ImCarrot").value == "NotSpecified" && ImFirstRecord)
-      $("ImCarrot").value = ImFirstRecord.keywords[1].values[0];
+    if ($("ImCarrot").value == "NotSpecified" && processingFirstRecord)
+      $("ImCarrot").value = processingFirstRecord.keywords[keyCARROT].values[0];
     if ($("ImCarrot").value == "NotSpecified" )
       {
       isok = 0;
@@ -549,8 +643,8 @@ function ImPatchCheck()
   if ($("ImX").value.strip().empty()) $("ImX").value = "NotSpecified";
   if ($("ImLocType").selectedIndex == 3)
     {
-    if ($("ImX").value == "NotSpecified" && ImFirstRecord)
-      $("ImX").value = ImFirstRecord.keywords[2].values[0];
+    if ($("ImX").value == "NotSpecified" && processingFirstRecord)
+      $("ImX").value = processingFirstRecord.keywords[keyCRLN].values[0];
     }
   if ($("ImX").value == "NotSpecified")
     {
@@ -585,6 +679,7 @@ function ImPatchCheck()
     {
     $("ImWide").style.backgroundColor=colorWhite;
     args += ",width=" + $("ImWide").value;
+    newDimX = $("ImWide").value * 1;
     }
 
   if ($("ImHigh").value.strip().empty()) $("ImHigh").value = "NotSpecified";
@@ -597,6 +692,7 @@ function ImPatchCheck()
     {
     $("ImHigh").style.backgroundColor=colorWhite;
     args += ",height=" + $("ImHigh").value;
+    newDimY = $("ImHigh").value * 1;
     }
 
   if (isok)
@@ -609,60 +705,21 @@ function ImPatchCheck()
     $("ImVerify").innerHTML = "Not Ready";
     $("ImVerify").style.backgroundColor = colorRed;
     }
+// XXXXXXX need to set sizeratio based on high and wide, can use keyCDELT if needed
+
+  if (processingFirstRecord)
+    {
+    var dims = processingFirstRecord.segments[0].dims[0];
+    var oldDimX = dims.substring(0,dims.indexOf("x"));
+    var oldDimY = dims.substring(dims.indexOf("x")+1);
+    ImPatchSizeRatio = (newDimX * newDimY) / (oldDimX * oldDimY);
+    }
+  ExportProcessingOptions[ImPatchOption].Size = ImPatchSizeRatio;
   ExportProcessingOK = isok;
   CheckRediness();
   return (isok ? args : "");
   }
 
-var ImFirstRecord = null;
-var ImLastRecord = null;
-function ImGetRecInfo(n)
-  {
-  // Get keywords for a single record.  n will be 1 for first record, -1 for last record.
-  if (n==1)
-    ImFirstRecord = null;
-  else
-    ImLastRecord = null;
-  var timePrime = (firstTimePrime.length > 0 ? firstTimePrime : "T_REC");
-  var keysneeded = timePrime+",CAR_ROT,CRLN_OBS,"+timePrime+"_step";
-  var recinfo;
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  var RecordSet = $("ExportRecordSet").value;
-  $("ImRecordSet").innerHTML = RecordSet;
-  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
-    {
-    method: 'get',
-    parameters: {"ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded },
-
-    onSuccess: function(transport, json)
-      {
-      var thisN = ""+n;
-      var response = transport.responseText || "no response text";
-      var recinfo = response.evalJSON();
-
-      if (recinfo.status == 0)
-        {
-        if (thisN == "1")
-          {
-          ImFirstRecord = recinfo;
-          if (ImLastRecord)
-            ImPatchCheck();
-          }
-        if (thisN == "-1")
-          {
-          ImLastRecord = recinfo;
-          if (ImFirstRecord)
-            ImPatchCheck();
-          }
-        }
-      else
-        alert("ImPatch failed to get record info for n="+thisN+" of " + RecordSet);
-      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-      },
-    onFailure: function() { alert('Something went wrong...'); },
-    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-    });
-  }
 
 // Set display defaults
 
@@ -689,8 +746,8 @@ function ImPatchInit(isActive)
     $("ImWide").style.backgroundColor = requireColor; $("ImWide").value = "NotSpecified";
     $("ImHigh").style.backgroundColor = requireColor; $("ImHigh").value = "NotSpecified";
     ImTracked = 1;
-    ImFirstRecord = null;
-    ImLastRecord = null;
+    processingFirstRecord = null;
+    processingLastRecord = null;
     defaultStartUsed = 1;
     defaultStopUsed = 1;
     if (RecordCountNeeded == 1 || ImResetParams==2)
@@ -707,6 +764,10 @@ function ImPatchInit(isActive)
 //
 // Maproj - map projections
 //
+
+var MaprojOption;
+var newDimX = 0;
+var newDimY = 0;
 
 // get NOAA AR info
 
@@ -738,7 +799,7 @@ function MaprojGetNoaa()
           var thisLong;
           for (irec=0; irec<nrecs; irec++)
             {
-            thisLong = NOAA_rslist.keywords[2].values[irec];
+            thisLong = NOAA_rslist.keywords[keyNoaaLon].values[irec];
             if (Math.abs(thisLong) < Math.abs(minLong))
               {
               minLong = thisLong;
@@ -751,10 +812,10 @@ function MaprojGetNoaa()
             }
           else
             {
-            NOAA_TRef =  NOAA_rslist.keywords[0].values[minRec];
+            NOAA_TRef =  NOAA_rslist.keywords[keyNoaaTime].values[minRec];
             $("MaprojTRef").innerHTML = "at " + NOAA_TRef;
-            $("MaprojX").value = NOAA_rslist.keywords[3].values[minRec];
-            $("MaprojY").value = NOAA_rslist.keywords[1].values[minRec];
+            $("MaprojX").value = NOAA_rslist.keywords[keyNoaaLonX].values[minRec];
+            $("MaprojY").value = NOAA_rslist.keywords[keyNoaaLat].values[minRec];
 	    $("MaprojNOAA").style.backgroundColor=colorOptionSet;
             noaaColor = colorPreset;
             $("MaprojX").style.backgroundColor = noaaColor;
@@ -783,24 +844,23 @@ function MaprojSet(param)
   if (param == 1) defaultStartUsed = 0;
   if (param == 2) defaultStopUsed = 0;
   var needCheck = 1;
-  if (!MaprojFirstRecord)
+  if (!processingFirstRecord)
     {
     needCheck = 0;
-    MaprojGetRecInfo(1);
+    processingGetRecInfo(MaprojCheck, 1);
     }
-  if (!MaprojLastRecord)
+  if (!processingLastRecord)
     {
     needCheck = 0;
-    MaprojGetRecInfo(-1);
+    processingGetRecInfo(MaprojCheck, -1);
     }
   if (needCheck)
     MaprojCheck();
   }
 
-var defaultStartUsed = 1;
-var defaultStopUsed = 1;
 function MaprojCheck()
   {
+  var MaprojSizeRatio = 1.0;
   var isok = 1;
   var args = "Maproj";
   var MaprojLocOption;
@@ -826,16 +886,17 @@ function MaprojCheck()
     args += ",grid=" + $("MaprojGrid").value;
     }
 
-  if (MaprojFirstRecord)
+  if (processingFirstRecord)
     {
     // var DegPerArcsec = (180.0/(696.0*3.14159))*(149640.0/(180.0*3600.0/3.14159)  // deg/Mm * Mm/arcsec 
     var DegPerArcsec = 215/3600.0;  // deg/RsunRadian  * AURadian/arcsec
-    var DegPerPixel = new Number(MaprojFirstRecord.keywords[4].values[0] * DegPerArcsec);
+    var DegPerPixel = new Number(processingFirstRecord.keywords[keyCDELT].values[0] * DegPerArcsec);
     $("MaprojMaxScale").innerHTML = DegPerPixel.toPrecision(3);
     $("MaprojMaxScale").style.backgroundColor=colorWhite;
     if ($("MaprojScale").value == "NotSpecified") $("MaprojScale").value = $("MaprojMaxScale").innerHTML;
     }
 
+  if ($("MaprojLnObs").checked) $("MaprojX").value = processingFirstRecord.keywords[keyCRLN].values[0];
   if ($("MaprojX").value.strip().empty()) $("MaprojX").value = "NotSpecified";
   if ($("MaprojX").value == "NotSpecified")
     {
@@ -882,6 +943,7 @@ function MaprojCheck()
     {
     $("MaprojWide").style.backgroundColor=colorWhite;
     args += ",cols=" + $("MaprojWide").value;
+    newDimX = $("MaprojWide").value * 1;
     }
 
   if ($("MaprojHigh").value.strip().empty())
@@ -895,6 +957,7 @@ function MaprojCheck()
     {
     $("MaprojHigh").style.backgroundColor=colorWhite;
     args += ",rows=" + $("MaprojHigh").value;
+    newDimY = $("MaprojHigh").value * 1;
     }
 
   if (isok)
@@ -907,61 +970,20 @@ function MaprojCheck()
     $("MaprojVerify").innerHTML = "Not Ready";
     $("MaprojVerify").style.backgroundColor = colorRed;
     }
+
+  if (processingFirstRecord)
+    {
+    var dims = processingFirstRecord.segments[0].dims[0];
+    var oldDimX = dims.substring(0,dims.indexOf("x"));
+    var oldDimY = dims.substring(dims.indexOf("x")+1);
+    MaprojSizeRatio = (newDimX * newDimY) / (oldDimX * oldDimY);
+// alert("newDimX="+newDimX+" newDimY="+newDimY+" oldDimX="+oldDimX+" oldDimY="+oldDimY+" MaprojSizeRatio="+MaprojSizeRatio+" prevSizeRatio="+SizeRatio);
+    }
+
+  ExportProcessingOptions[MaprojOption].Size = MaprojSizeRatio;
   ExportProcessingOK = isok;
   CheckRediness();
   return (isok ? args : "");
-  }
-
-var MaprojFirstRecord = null;
-var MaprojLastRecord = null;
-function MaprojGetRecInfo(n)
-  {
-  // Get keywords for a single record.  n will be 1 for first record, -1 for last record.
-  if (n==1)
-    MaprojFirstRecord = null;
-  else
-    MaprojLastRecord = null;
-  var timePrime = (firstTimePrime.length > 0 ? firstTimePrime : "T_REC");
-// $("TESTMSG").innerHTML = timePrime;
-  var keysneeded = timePrime+",CAR_ROT,CRLN_OBS,"+timePrime+"_step,CDELT1,CTYPE1";
-// alert("MaprojGetRecInfo("+n+") called");
-  var recinfo;
-  $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  var RecordSet = $("ExportRecordSet").value;
-  new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
-    {
-    method: 'get',
-    parameters: {"ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded },
-
-    onSuccess: function(transport, json)
-      {
-      var thisN = ""+n;
-      var response = transport.responseText || "no response text";
-      var recinfo = response.evalJSON();
-
-// $("TESTMSG").innerHTML += " thisN="+thisN;
-      if (recinfo.status == 0)
-        {
-        if (thisN == "1")
-          {
-          MaprojFirstRecord = recinfo;
-          if (MaprojLastRecord)
-            MaprojCheck();
-          }
-        if (thisN == "-1")
-          {
-          MaprojLastRecord = recinfo;
-          if (MaprojFirstRecord)
-            MaprojCheck();
-          }
-        }
-      else
-        alert("Maproj failed to get record info for n="+thisN+" of " + RecordSet);
-      $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-      },
-    onFailure: function() { alert('Something went wrong...'); },
-    onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-    });
   }
 
 // Set display defaults
@@ -977,11 +999,12 @@ function MaprojInit(isActive)
     $("MaprojNOAA").style.backgroundColor=colorWhite; $("MaprojNOAA").value = "NotSpecified";
     $("MaprojScale").style.backgroundColor = requireColor; $("MaprojScale").value = "NotSpecified";
     $("MaprojX").style.backgroundColor = requireColor; $("MaprojX").value = "NotSpecified";
+    $("MaprojLnObs").checked = 0;
     $("MaprojY").style.backgroundColor = requireColor; $("MaprojY").value = "NotSpecified";
     $("MaprojWide").style.backgroundColor = requireColor; $("MaprojWide").value = "NotSpecified";
     $("MaprojHigh").style.backgroundColor = requireColor; $("MaprojHigh").value = "NotSpecified";
-    MaprojFirstRecord = null;
-    MaprojLastRecord = null;
+    processingFirstRecord = null;
+    processingLastRecord = null;
     defaultStartUsed = 1;
     defaultStopUsed = 1;
     }
@@ -1013,6 +1036,7 @@ function ProcessingInit()
   ExpOpt = new Object();
   ExpOpt.id="OptionNone";
   ExpOpt.rowid = "ExpSel_none";
+  ExpOpt.Size = 1.0;
   ExportProcessingOptions[iOpt] = ExpOpt;
 
   iOpt++;
@@ -1025,7 +1049,9 @@ function ProcessingInit()
   ExpOpt.Init = AiaScaleInit;
   ExpOpt.Check = AiaScaleCheck;
   ExpOpt.Set = AiaScaleSet;
+  ExpOpt.Size = 1.0;
   ExportProcessingOptions[iOpt] = ExpOpt;
+  AiaScaleOption = iOpt;
 
   iOpt++;
   ProcessingOptionsHTML += 
@@ -1037,19 +1063,9 @@ function ProcessingInit()
   ExpOpt.Init = ResizeInit;
   ExpOpt.Check = ResizeCheck;
   ExpOpt.Set = ResizeSet;
+  ExpOpt.Size = 1.0;
   ExportProcessingOptions[iOpt] = ExpOpt;
-
-  iOpt++;
-  ProcessingOptionsHTML += 
-    '<input type="checkbox" checked="false" value="rebin" id="OptionRebin" onChange="SetProcessing('+iOpt+');" /> ' +
-    'rebin - Rebin with boxcar or gaussian smoothing<br>';
-  ExpOpt = new Object();
-  ExpOpt.id = "OptionRebin";
-  ExpOpt.rowid = "ProcessRebin";
-  ExpOpt.Init = RebinInit;
-  ExpOpt.Check = RebinCheck;
-  ExpOpt.Set = RebinSet;
-  ExportProcessingOptions[iOpt] = ExpOpt;
+  ResizeOption = iOpt;
 
   iOpt++;
   ProcessingOptionsHTML += 
@@ -1061,7 +1077,9 @@ function ProcessingInit()
   ExpOpt.Init = ImPatchInit;
   ExpOpt.Check = ImPatchCheck;
   ExpOpt.Set = null;
+  ExpOpt.Size = 1.0;
   ExportProcessingOptions[iOpt] = ExpOpt;
+  ImPatchOption = iOpt;
 
   iOpt++;
   ProcessingOptionsHTML += 
@@ -1073,7 +1091,23 @@ function ProcessingInit()
   ExpOpt.Init = MaprojInit;
   ExpOpt.Check = MaprojCheck;
   ExpOpt.Set = null;
+  ExpOpt.Size = 1.0;
   ExportProcessingOptions[iOpt] = ExpOpt;
+  MaprojOption = iOpt;
+
+  iOpt++;
+  ProcessingOptionsHTML += 
+    '<input type="checkbox" checked="false" value="rebin" id="OptionRebin" onChange="SetProcessing('+iOpt+');" /> ' +
+    'rebin - Rebin with boxcar or gaussian smoothing<br>';
+  ExpOpt = new Object();
+  ExpOpt.id = "OptionRebin";
+  ExpOpt.rowid = "ProcessRebin";
+  ExpOpt.Init = RebinInit;
+  ExpOpt.Check = RebinCheck;
+  ExpOpt.Set = RebinSet;
+  ExpOpt.Size = 1.0;
+  ExportProcessingOptions[iOpt] = ExpOpt;
+  RebinOption = iOpt;
 
   $("ExportProcessing").innerHTML = ProcessingOptionsHTML;
 
