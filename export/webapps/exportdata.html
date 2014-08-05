@@ -40,6 +40,9 @@ var LOOKDATA = "lookdata";
 <script type="text/javascript" src="exportdata.d/processing.js"></script>
 <script type="text/javascript" src="exportdata.d/protocols.js"></script>
 
+<!-- Add list of seriesnames for which processing on export is not suportted -->
+<script type="text/javascript" src="exportdata.d/no_processing.js"></script>
+
 <style type="text/css">
 
 #body { margin:0; padding:0; }
@@ -94,6 +97,7 @@ var Host = location.host;
 var Internal = 0;
 var SeriesName;
 var SeriesInfo;
+var firstRealSegment;
 var RequestID;
 var RecordLimit;
 var RecordCount = -1;
@@ -116,6 +120,7 @@ var args;
 var state=0;
 var uploadOndoneAction = 0;
 var ExportProcessingArgs = "";
+var ProcessingAllowed = 1;
 var ExportMethodValue = "url_quick";
 var exportparameters;
 
@@ -173,6 +178,7 @@ function initVars()
   TipsEnabled = 1;
   uploadOndoneAction = 0;
   firstTimePrime = "";
+  ProcessingAllowed = 1;
 
   // Init processing
   ExportProcessingOK = 1;
@@ -213,7 +219,7 @@ function initVars()
     $("ProtocolRow").style.display="none";
     $("ExportProtocol").selectedIndex = 1;
     $("ExportProtocolHidden").value = "FITS";
-    $("ExportCompress").value = 0;
+    $("ExportCompress").selectedIndex = 0;
     $("CompressRow").style.display="none";
     $("ProtocolImageOptions").style.display="none";
 
@@ -463,6 +469,22 @@ function ToggleHelp()
     }
   }
 
+// Check list of seriesnames for which processing options are not available for SeriesName spec given
+function CheckNoProcessingList()
+  {
+  var n = NoProcessingList.length;
+// alert("NoProcessingList length = "+n+" SeriesName="+SeriesName);
+  var i;
+  var result = 1;
+  var prior = ProcessingAllowed;
+  for (i=0; i<n; i++)
+    if (SeriesName == NoProcessingList[i])
+      result = 0;
+  ProcessingAllowed = result;
+  if (ProcessingAllowed != prior)
+    ProcessingEnabled();
+  }
+
 function FileUploadCleanup()
   {
   ExportQueryOK = 0;
@@ -585,6 +607,7 @@ function GetSeriesList(filter)
   return(SeriesList);
   }
 
+var RSCountActiveMSg = "Getting count - wait...";
 function GetRSCount()
   {
   ExportQueryOK = 0;
@@ -609,7 +632,7 @@ function GetRSCount()
   $("ExportRecordSet").value = SeriesName + recfilt + segfilt;
   
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  $("RSCountPlace").innerHTML = "Getting count - wait...";
+  $("RSCountPlace").innerHTML = RSCountActiveMSg;
   RecordCount = -1;
   var RecordSet = $("ExportRecordSet").value;
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
@@ -696,6 +719,17 @@ function GetDefaultFormat()
 	  newfmt = newfmt + "{segment}";
           $("ExportFilenameFmt").value = newfmt;
           }
+        firstRealSegment = "";
+        var nsegs = SeriesInfo.segments.length;
+        for (var iseg=0; iseg<nsegs; iseg++)
+          {
+          var thisProtocol = SeriesInfo.segments[iseg].protocol;
+          if (thisProtocol === "fits")
+            {
+            firstRealSegment = SeriesInfo.segments[iseg].name;
+            break;
+            }
+          }
 	}
       else
         alert("failed to get series info for " + RecordSet + "\nEnter correct RecordSet or proceed to processing options");
@@ -745,7 +779,8 @@ function ExportRSChanged()
   ExportQueryOK = 0;
   RecordCountNeeded = 1;
   $("CountButton").style.backgroundColor = colorYellow;
-  CheckRediness();
+  // CheckRediness();
+  ExportNewRS(); // to fix opeator not pressing enter or count.
   }
 
 function ExportNewRS()
@@ -757,6 +792,7 @@ function ExportNewRS()
     return; // SetRecordLimit calls GetRSCount(), non-zero on RS syntax error
   firstTimePrime = "";
   GetDefaultFormat();
+  CheckNoProcessingList();
   NotifyProcessingCode();
   CheckRediness();
   }
@@ -883,19 +919,35 @@ function ProcessingEnabled()
     }
   else
     {
-    $("ProcessingWaitMessage").style.display = "none";
     $("ProcessingCheckbox").checked = false;
-    $("ProcessingCheckboxHide").checked = false;
     $(ExportProcessingOptions[0].id).checked = true;
-    SetProcessing(0);
-    $("ProcessingShowCheckbox").style.display = "table-row";
     $("ExportProcessing").style.display = "none";
+    if (ProcessingAllowed == 0)
+      {
+      $("ProcessingWaitMessage").style.display = "table-row";
+      $("ProcessingWaitMessage").innerHTML = "Processing not available for series " + SeriesName;
+      $("ProcessingCheckboxHide").checked = true;
+      $("ProcessingShowCheckbox").style.display = "none";
+      }
+    else
+      {
+      $("ProcessingWaitMessage").style.display = "none";
+      $("ProcessingCheckboxHide").checked = false;
+      $("ProcessingShowCheckbox").style.display = "table-row";
+      }
+    SetProcessing(0);
     }
   }
+
+var SizeRatio;
 
 function SetProcessing(ichecked)
   { // 0 if no procesing enabled,  -1 if same seriesname, -2 if changed
   ExportQueryOK = 0;
+  if (ProcessingAllowed == 0)
+    {
+    $(ExportProcessingOptions[0].id).checked = true;
+    }
   if (ichecked > 0) $(ExportProcessingOptions[0].id).checked = false;
   ExportProcessingOK = 0;
   // Add recordLimit FIRST always.
@@ -904,6 +956,7 @@ function SetProcessing(ichecked)
   var nchecked = 0;
   var iProc = 0;
   var nProcs = ExportProcessingOptions.length;
+  SizeRatio = 1.0;
   if ($(ExportProcessingOptions[0].id).checked) // no_op case must be first
     {
     nchecked++;
@@ -938,6 +991,7 @@ function SetProcessing(ichecked)
           if (args.length > 0)
             {
             ExportProcessingArgs += "|"+args;
+            SizeRatio *= ExpOpt.Size;
             }
           // else
             // {
@@ -958,6 +1012,7 @@ function SetProcessing(ichecked)
     $(ExportProcessingOptions[0].id).checked = true;
     SetProcessing(0);
     }
+  $("ExportSizeRatio").value = SizeRatio;
         
   $("ExportProcessingHidden").value = ExportProcessingArgs;
   if (isok)
@@ -1157,8 +1212,15 @@ function CheckRediness()
 
 function CheckExportParams()
   {
+  if ($("RSCountPlace").innerHTML == RSCountActiveMSg)
+    {
+    $("ExportCheckButton").style.backgroundColor = colorYellow;
+    $("ExportCheckMsg").innerHTML = "Still counting records, wait a second then retry";
+    return(0);
+    }
   while (1) // use with break instead of goto done.
     {
+//XXXXX
     if (ExportRecordSetOK == 0)
       {
       GetRSCount();
@@ -1218,6 +1280,7 @@ function CheckExportParams()
     var RecordSet = $("ExportRecordSet").value;
     exportparameters = new Hash( {"op" : $("ExportOpID").value,
                  		      "ds" : RecordSet, 
+                                      "sizeratio" : $("ExportSizeRatio").value,
                  		      "process" :  ExportProcessingArgs,
                  		      "requestor" : $("ExportRequestor").value,
                  		      "notify" : $("ExportNotify").value,
@@ -1231,7 +1294,7 @@ function CheckExportParams()
     }
   else
     {
-    exportparameters = NULL;
+    exportparameters = null;
     $("ExportParameters").innerHTML = "";
     ExportQueryOK = 0;
     }
