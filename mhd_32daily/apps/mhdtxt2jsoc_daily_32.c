@@ -176,8 +176,10 @@ int DoIt(void)
 
 #if NEWMAP == 1
   mapcver=drms_getkey_string(inRec,"CODEVER",&status);
-  mapbldv=drms_getkey_string(inRec,"BLD_VERS",&status);
+#else
+  mapcver=drms_getkey_string(inRec,"BLD_VERS",&status);
 #endif
+  mapbldv=drms_getkey_string(inRec,"BLD_VERS",&status);
 
 /* now making output record at designated series */
   printf(" Now open and create output at series %s\n",outstr);
@@ -348,6 +350,6 @@ int DoIt(void)
 
 /* ----- */
 
-char *mhdcorona_version(){return strdup("$Id: mhdtxt2jsoc_daily_32.c,v 1.2 2014/08/01 02:13:06 keiji Exp $");}
+char *mhdcorona_version(){return strdup("$Id: mhdtxt2jsoc_daily_32.c,v 1.3 2014/08/08 01:28:29 keiji Exp $");}
 
 /* ----------- end of this file ----------- */
