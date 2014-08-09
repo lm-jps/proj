@@ -174,11 +174,14 @@ int DoIt(void)
   carrot = drms_getkey_int(inRec,"CAR_ROT",&status);
   printf(" CAR_ROT                 : %d\n",carrot);
 
+/*
 #if NEWMAP == 1
   mapcver=drms_getkey_string(inRec,"CODEVER",&status);
 #else
   mapcver=drms_getkey_string(inRec,"BLD_VERS",&status);
 #endif
+*/
+  mapcver=drms_getkey_string(inRec,"CODEVER",&status);
   mapbldv=drms_getkey_string(inRec,"BLD_VERS",&status);
 
 /* now making output record at designated series */
@@ -350,6 +353,6 @@ int DoIt(void)
 
 /* ----- */
 
-char *mhdcorona_version(){return strdup("$Id: mhdtxt2jsoc_daily_32.c,v 1.3 2014/08/08 01:28:29 keiji Exp $");}
+char *mhdcorona_version(){return strdup("$Id: mhdtxt2jsoc_daily_32.c,v 1.4 2014/08/09 01:52:40 keiji Exp $");}
 
 /* ----------- end of this file ----------- */
