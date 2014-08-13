@@ -34,7 +34,7 @@ COMMON = $(OUTDIR)/$(CSDIR)/../../mex
 # put in by some mex scripts, can add -std=gnu89 at end of CMEXPPFLAGS.
 #
 # JSOC_ROOT/ dependences are for cfitsio libraries and includes
-CMEXPPFLAGS += 'CFLAGS=-I$(COMMON)/src/util $$CFLAGS' -I$(JSOC_ROOT)/include
+CMEXPPFLAGS += 'CFLAGS=-I$(COMMON)/src/util $$CFLAGS' $(CFITSIOH)
 CMEXLDFLAGS = -L$(COMMON)/src/util -L$(COMMON)/src/mex2c -L$(JSOC_ROOT)/lib/$(JSOC_MACHINE) $(LIBSUSED)
 LIBSUSED = -lmexrng -lmextoolsMW -lmex2matl 
 MEX2C_LIBS = -lmexrng -lmextools -lm  # cf LIBSUSED, for mex2c only
