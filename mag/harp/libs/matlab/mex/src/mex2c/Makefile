@@ -41,7 +41,7 @@ INCLUDE = mex.h
 
 # includes (need other package dirs)
 #CPPFLAGS += -I$(JSOC_ROOT)/include -I../util
-CPPFLAGS += -I$(JSOC_ROOT)/include -I$(OUTDIR)/$(CSDIR)/../util
+CPPFLAGS += $(CFITSIOH) -I$(OUTDIR)/$(CSDIR)/../util
 
 # default target
 all:$(LIBRARY)

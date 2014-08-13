@@ -58,7 +58,7 @@ S1MEX2C_$(d)		:= $(addprefix $(CSDIRMEX2C)/, $(SMEX2C_$(d)))
 # Instead of trying to come up with a path relative to where you think make is, just 
 # avoid relative paths altogether.
 $(LIBMEX2C) $(LIBMEX2MATL):
-	$(MAKE) -C $(WORKINGDIR)/$(CSDIRMEX2C) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRMEX2C) MEXEXT=$(MEXEXT) $@
+	$(MAKE) -C $(WORKINGDIR)/$(CSDIRMEX2C) OUTDIR=$(OUTDIR) CSDIR=$(CSDIRMEX2C) MEXEXT=$(MEXEXT) CFITSIOH=$(CFITSIOH) $@
 
 .PHONY:	$(SMEX2C_$(d))
 $(SMEX2C_$(d)):	%:	$(OUTDIR)/$(CSDIRMEX2C)/%
