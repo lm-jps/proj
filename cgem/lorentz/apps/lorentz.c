@@ -1,4 +1,4 @@
-/*
+ /*
  *  sharp.c
  *
  *	This module computes the Lorentz force from vector field maps
@@ -346,7 +346,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *inRec)
 	sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
 	drms_setkey_string(outRec, "DATE", timebuf);
 	
-    char *cvsinfo = strdup("$Id: lorentz.c,v 1.2 2014/03/21 00:21:05 xudong Exp $");
+    char *cvsinfo = strdup("$Id: lorentz.c,v 1.3 2014/08/13 19:13:56 arta Exp $");
     drms_setkey_string(outRec, "LOR_VERS", cvsinfo);        // Mar 12
 	
 };

@@ -98,20 +98,9 @@ $(xingestlev0_$(d)):	$(xingestlev0_obj_$(d))
 #$(yingestlev0_$(d)):	$(yingestlev0_obj_$(d))
 $(BUILDLEV1IRIS_$(d)):	$(buildlev1iris_obj_$(d))
 
-ifeq ($(JSOC_MACHINE), linux_ia32)
-  FFTW_$(d) = /home/jsoc/lib/linux-ia32
-endif
-ifeq ($(JSOC_MACHINE), linux_x86_64)
-  FFTW_$(d) = /home/jsoc/lib/linux-x86_64
-endif
-ifeq ($(JSOC_MACHINE), linux_avx)
-  FFTW_$(d) = /home/jsoc/lib/linux-avx
-endif
-
-
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(SUMEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq -lpng  -L$(FFTW_$(d)) -lfftw3 
+$(SUMEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq -lpng $(FFTW3LIBS)
 
 
 ifeq ($(COMPILER), icc)
@@ -123,7 +112,7 @@ endif
 #$(SUMEXE_$(d)):		LL_TGT := -L/home/production/cvs/jsoc/lib/saved/$(JSOC_MACHINE) -lhmicomp_egse -lecpg -lpq -lpng -L/SGE/lib/lx24-amd64/ -ldrmaa -Wl,-rpath,/SGE/lib/lx24-amd64
 
 $(PEEXE_$(d)):		LL_TGT := $(PGL) -lecpg -lpq 
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/egsehmicomp -I/home/jsoc/include -DLEV0SLOP
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I$(SRCDIR)/$(d)/../../libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I$(SRCDIR)/$(d)/../../libs/egsehmicomp $(FFTWH) -DLEV0SLOP
 
 #$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -DCDIR="\"$(SRCDIR)/$(d)\"" -I/home/jsoc/cvs/JSOC/proj/libs/interpolate/ -I$(SRCDIR)/$(d)/../../libs/astro -I/home/jsoc/include
 

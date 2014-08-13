@@ -28,9 +28,9 @@ S_$(d)		:= $(notdir $(EXE_$(d)) $(MODEXE_SOCK_$(d)))
 
 # Local rules
 $(OBJ_$(d)):		$(SRCDIR)/$(d)/Rules.mk
-$(OBJ_$(d)):		CF_TGT := $(CF_TGT) -I/home/jsoc/include -DCDIR="\"$(SRCDIR)/$(d)\""
+$(OBJ_$(d)):		CF_TGT := $(CF_TGT) $(FFTWH)
 
-$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) -L$(FFTW_$(d)) $(FFTW3LIBS) $(FFTW3FLIBS)
+$(MODEXE_$(d)) $(MODEXE_SOCK_$(d)):	LL_TGT := $(LL_TGT) $(FFTW3LIBS) $(FFTW3FLIBS)
 
 # Shortcuts
 .PHONY:	$(S_$(d))
