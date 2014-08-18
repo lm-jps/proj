@@ -205,7 +205,7 @@ void set_newvalues(int *new_newvalues) { newvalues = new_newvalues; }
 void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int fsn)
 {
   int quallev1 = 0;
-  int rstatus;
+  int rstatus, quallev0;;
   char *pchar;
 
   quallev1 = missflg[inx];
@@ -267,6 +267,13 @@ void do_quallev1(DRMS_Record_t *rs0, DRMS_Record_t *rs1, int inx, unsigned int f
   if(quicklook) {
     quallev1 = quallev1 | Q_NRT;
   }
+
+  //for camera minimum value error
+  quallev0 = drms_getkey_int(rs0, "QUALITY", &rstatus);
+  if ( (quallev0 & 0x8000) != 0) {
+   quallev1 = quallev1 | Q_CAM_ANOM1;
+  }
+
   drms_setkey_int(rs1, "QUALITY", quallev1);
   drms_setkey_string(rs1, "BLD_VERS", bld_vers); //build vers to every record
 }
