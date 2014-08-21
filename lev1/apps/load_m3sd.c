@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.9 2011/03/15 21:04:41 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev1/apps/load_m3sd.c,v 1.10 2014/08/21 23:56:01 arta Exp $"
 /*############################################################################
 # Name:        load_m3sd.c - load mean max min and sd in series              #
 # Description: Load Minimum, Maximum, Mean and Standard Deviation keyword    #
@@ -143,6 +143,20 @@
 #include "packets.h"
 #include "decode_hk.h"
 #include "printk.h"
+
+static char datestr[32];
+
+char *do_datestr() {
+   time_t tval;
+   struct tm *t_ptr;
+
+   tval = time(NULL);
+   t_ptr = localtime(&tval);
+   sprintf(datestr, "%d.%02d.%02d_%02d:%02d:%02d",
+           (t_ptr->tm_year+1900), (t_ptr->tm_mon+1),
+           t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
+   return(datestr);
+}
 
 /*  @{ */
 /************* modules definitions **************************************/
