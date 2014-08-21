@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_dayfile.c,v 1.24 2011/03/15 21:01:16 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/decode_dayfile.c,v 1.25 2014/08/21 23:43:39 arta Exp $"
 /*############################################################################
 # Name:        decode_dayfile.c - Decode Dayfiles                            #
 # Description: Decode dayfile decodes hk packet by sending hk packets to     #
@@ -260,7 +260,19 @@ enum project{pjnHMI,pjnAIA,pjnSDO};
 
 /* @} */
 
-
+static char datestr[32];
+
+char *do_datestr() {
+   time_t tval;
+   struct tm *t_ptr;
+
+   tval = time(NULL);
+   t_ptr = localtime(&tval);
+   sprintf(datestr, "%d.%02d.%02d_%02d:%02d:%02d",
+           (t_ptr->tm_year+1900), (t_ptr->tm_mon+1),
+           t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
+   return(datestr);
+}
 
 /*************************************************************************
  * Nice Intro                                                            *
