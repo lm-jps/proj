@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/save_packet_to_dayfile.c,v 1.15 2011/03/15 20:57:53 carl Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/save_packet_to_dayfile.c,v 1.16 2014/08/21 21:34:37 prodtest Exp $"
 /*****************************************************************************
  * Filename: save_packet_to_dayfile.c                                        *
  * Author: Carl                                                              *
@@ -18,6 +18,8 @@
 #include "timeio.h"
 #include <dirent.h>
 #include "printk.h"
+
+extern char *do_datestr();
 
 /*************  function prototypes ******************/
 int check_filename_apid(char *fn, int apid); 
@@ -373,10 +375,10 @@ int write_packet_to_dayfile(HK_Dayfile_Data_t **df_head)
     file_ptr = fopen( filename ,"a");
     if(!file_ptr) 
     {
-      printkerr("ERROR at %s, line %d: Could not open file at:"
+      printkerr("ERROR at %s, line %d %s: Could not open file at:"
                 "<%s>. Check have permission  "
                 "to write to directory or check if directory exists. \n",
-                __FILE__,__LINE__, filename);
+                __FILE__,__LINE__, do_datestr(), filename);
       return ( ERROR_HK_FAILED_OPEN_DAYFILE);
     }
 
