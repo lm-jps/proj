@@ -1,4 +1,4 @@
-#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/save_packet_to_dayfile.c,v 1.16 2014/08/21 21:34:37 prodtest Exp $"
+#ident "$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/lev0/apps/save_packet_to_dayfile.c,v 1.17 2014/08/27 19:20:38 prodtest Exp $"
 /*****************************************************************************
  * Filename: save_packet_to_dayfile.c                                        *
  * Author: Carl                                                              *
@@ -18,8 +18,7 @@
 #include "timeio.h"
 #include <dirent.h>
 #include "printk.h"
-
-extern char *do_datestr();
+#include <errno.h>
 
 /*************  function prototypes ******************/
 int check_filename_apid(char *fn, int apid); 
@@ -43,6 +42,20 @@ int  write_packet_to_dayfile(HK_Dayfile_Data_t **df_head);
 /*********** extern function prototypes **************/
 static  TIME  SDO_to_DRMS_time(int sdo_s, int sdo_ss);
 extern void sprint_time (char *at, TIME t, char *zone, int precision);
+
+//Return date string like:  2008.07.14_08:29:31
+char *do_date() {
+  time_t tval;
+  struct tm *t_ptr;
+  char datestring[32];
+
+  tval = time(NULL);
+  t_ptr = localtime(&tval);
+  sprintf(datestring, "%d.%02d.%02d_%02d:%02d:%02d",
+          (t_ptr->tm_year+1900), (t_ptr->tm_mon+1),
+          t_ptr->tm_mday, t_ptr->tm_hour, t_ptr->tm_min, t_ptr->tm_sec);
+  return(datestring);
+}
 
 
 /*********************** save_hkpkt_dayfile ************************/
@@ -375,10 +388,10 @@ int write_packet_to_dayfile(HK_Dayfile_Data_t **df_head)
     file_ptr = fopen( filename ,"a");
     if(!file_ptr) 
     {
-      printkerr("ERROR at %s, line %d %s: Could not open file at:"
+      printkerr("ERROR errno=%d at %s, line %d %s: Could not open file at:"
                 "<%s>. Check have permission  "
                 "to write to directory or check if directory exists. \n",
-                __FILE__,__LINE__, do_datestr(), filename);
+                errno, __FILE__,__LINE__, do_date(), filename);
       return ( ERROR_HK_FAILED_OPEN_DAYFILE);
     }
 
