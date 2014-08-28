@@ -671,6 +671,39 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
     {
     char *ip=(char *)inQuery, *op=newIn, *p;
     long n, mul;
+        
+    char *segSpec = NULL;
+    const char *psl = NULL;
+    char *pbracket = NULL;
+        
+    psl = strchr(inQuery, '{');
+    if (psl)
+    {
+        segSpec = strdup(psl + 1);
+        
+        if (!segSpec)
+        {
+            fprintf(stderr, "No memory.\n");
+            return NULL;
+        }
+        
+        pbracket = strchr(segSpec, '}');
+        
+        if (!pbracket)
+        {
+            fprintf(stderr, "Invalid segment specification.\n");
+            return NULL;
+        }
+        
+        *pbracket = '\0';
+        
+        if (!*segSpec)
+        {
+            fprintf(stderr, "Invalid segment specification.\n");
+            return NULL;
+        }
+    }
+        
     while ( *ip && ip<at )
       *op++ = *ip++;
     ip++; // skip the '@'
@@ -753,7 +786,22 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
     tmpfile = fopen(filename,"w");
     for (islot=0; islot<nslots; islot++)
       if (recnums[islot])
-        fprintf(tmpfile, "%s[:#%lld]\n", seriesname, recnums[islot]);
+      {
+          if (!segSpec)
+          {
+              fprintf(tmpfile, "%s[:#%lld]\n", seriesname, recnums[islot]);
+          }
+          else
+          {
+              fprintf(tmpfile, "%s[:#%lld]{%s}\n", seriesname, recnums[islot], segSpec);
+          }
+      }
+        
+    if (segSpec)
+        {
+        free(segSpec);
+        }
+        
     fclose(tmpfile);
     free(recnums);
     drms_free_array(data);
