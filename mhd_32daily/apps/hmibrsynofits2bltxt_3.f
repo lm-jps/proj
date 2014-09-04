@@ -27,10 +27,8 @@
 * read renamed MDI/EOF file
        write(*,*) 'Input FITS name (HMI synoptic)'
        read(*,*) fitsname
-*       fitsname = 'newhmi.fits'
 
        call readhmisynop(fitsname,hmimag,llongio)
-*       call readhmisynop(fitsname,ftshead,hmimag,llongio)
 
        ncar  = int(llongio/360.0) + 2
        llongi=llongio-int(llongio/360.0)*360.0
@@ -38,8 +36,7 @@
 
        open(unit=11,file='carr.txt',status='unknown')
        write(11,*) ncar !              carrington rot.num
-       write(11,*) 360 - slongi + 60 ! carrington long.
-*       write(11,*) 360 - slongi + 40
+       write(11,*) 360 - slongi + 60 ! carrington long. non-NRT
        close(11)
 *       write(*,*) llongi, slongi
 
@@ -70,12 +67,12 @@
          nn = 0
          do j2 =  js, je
          do k2 =  is, ie
-           k3 = k*(ieof / iwso)+k2
-           j3 = j*(jeof / jwso)+j2
+           k3 = (float(k)-0.5)*(ieof / iwso)+k2 ! half-grid shift
+           j3 =              j*(jeof / jwso)+j2
            if (k3 .GE. ieof) k3 = k3 - ieof
            if (k3 .LT.    0) k3 = k3 + ieof
            bb = hmimag(k3,j3)
-           if ((bb .GE. -5000.0) .AND. (bb .LE. 5000.0)) then ! exclude NaN
+           if ((bb .GE. -3000.0) .AND. (bb .LE. 3000.0)) then ! exclude NaN and some abnormal pixles
              aa = aa + bb
              nn = nn + 1
            endif
@@ -88,72 +85,6 @@
          endif
        enddo
        enddo
-
-** now loading polar maps from Xudong & Yang's works
-*       fitsname = 'hmipole.fits'
-*       call readpole(fitsname,bpoles)
-** suppose 3600x63x2, convert to Br to Blos, for convenience
-*       do j = 0,   62  ! MIND j runs northward in the original map
-*       do k = 0, 3599
-*         zz =   (float(477+j)+0.5) / 540.0    ! suppose original be 3600x1080
-*         sinlat = sqrt(1.0 - zz*zz)
-*         bpoles(k,j,0) =  bpoles(k,j,0) * sinlat  ! north
-*         zz = - (float(539-j)+0.5) / 540.0    ! suppose original be 3600x1080
-*         sinlat = sqrt(1.0 - zz*zz)
-*         bpoles(k,j,1) =  bpoles(k,j,1) * sinlat  ! south
-*       enddo
-*       enddo
-** cancell 1.8 factor.....
-*       do i = 0, 1
-*       do j = 0,   62  ! MIND j runs northward in the original map
-*       do k = 0, 3599
-*         bpoles(k,j,i) = bpoles(k,j,i) / 1.8
-*       enddo
-*       enddo
-*       enddo
-* average.... to make WSO-like map
-*       do k = 0, 71
-*         aa = 0.0
-*         bb = 0.0
-*         cc = 0.0
-*         dd = 0.0
-*         do k2 = -25, 24
-*           k3 = k*50 - k2
-*           if (k3 .LT.    1) k3 = k3 + 3600
-*           if (k3 .GT. 3600) k3 = k3 - 3600
-*           do j2 =  0, 30
-*             aa = aa + bpoles(k3,j2,1)
-*           enddo
-*           do j2 = 31, 62
-*             bb = bb + bpoles(k3,j2,1)
-*           enddo
-*           do j2 =  0, 31
-*             cc = cc + bpoles(k3,j2,0)
-*           enddo
-*           do j2 = 32, 62
-*             dd = dd + bpoles(k3,j2,0)
-*           enddo
-*         enddo
-*         brs2(k,0) = aa / 50.0 / 31.0 ! southernmost
-*         brs2(k,1) = bb / 50.0 / 32.0 ! southern 2nd bin
-*         brn2(k,1) = cc / 50.0 / 32.0 ! northern 2nd bin
-*         brn2(k,0) = dd / 50.0 / 31.0 ! northernmost
-*       enddo
-** replace polar-most two bins at each poles
-*       do k = 0, iwso-1
-*         magwso(k, 0) = brs2(k,0) ! southernmost
-*         magwso(k, 1) = brs2(k,1)
-*         magwso(k,28) = brn2(k,1)
-*         magwso(k,29) = brn2(k,0) ! northernmost
-*       enddo
-
-* probably ..... adequate..... upper limit of 20 gauss
-*       do j = 0, jwso-1
-*       do k = 0, iwso-1
-*         if (magwso(k,j) .GT.  20.0) magwso(k,j) = 20.0
-*         if (magwso(k,j) .LT. -20.0) magwso(k,j) =-20.0
-*       enddo
-*       enddo
 
 * gauss -> micro T
        do j = 0, jwso-1
@@ -203,9 +134,7 @@
 *
 
 ****  --------------------------------------------------------
-* This subroutine was originally at
-*       http://orion.math.iastate.edu/burkardt/g_src/fitsio/cookbook.f90
-* then modified in part by myself
+* read synoptic map
 ****  --------------------------------------------------------
 *
        subroutine readhmisynop(fitsname,hmimag,llongio)
@@ -282,19 +211,6 @@
        enddo
        enddo
 
-* read out with buffer
-*       do while (npixels .GT. 0)
-*         nbuffer=min(100,npixels)
-*         call ftgpve(iunit,group,firstpix,nbuffer,
-*     &               nullval,buffer,anynull,istatus)
-*         do i=1,nbuffer
-*           datamin=min(datamin,buffer(i))
-*           datamax=max(datamax,buffer(i))
-*         enddo
-*         npixels=npixels-nbuffer
-*         firstpix=firstpix+nbuffer
-*       enddo
-
        print *,'Min and max values in the image are:',datamin,datamax
 * close the file and free the unit number
        call ftclos(iunit, istatus)
@@ -306,6 +222,8 @@
        end
 
 *
+**  ---------------
+*    reading polar field data, currently not used: as of 2014 Feb.
 **  ---------------
 *
        subroutine readpole(fitsname,bpoles)
