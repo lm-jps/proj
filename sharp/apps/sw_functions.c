@@ -832,7 +832,7 @@ int computeHelicity(float *jz_err, float *jz_rms_err, float *bz_err, float *bz, 
 /* Example function 12:  Sum of Absolute Value per polarity  */
 
 //  The Sum of the Absolute Value per polarity is defined as the following:
-//  fabs(sum(jz gt 0)) + fabs(sum(jz lt 0)) and the units are in Amperes.
+//  fabs(sum(jz gt 0)) + fabs(sum(jz lt 0)) and the units are in Amperes per arcsecond.
 //  The units of jz are in G/pix. In this case, we would have the following:
 //  Jz = (Gauss/pix)(1/CDELT1)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)(RSUN_REF/RSUN_OBS)(RSUN_OBS/RSUN_REF),
 //     = (Gauss/pix)(1/CDELT1)(0.00010)(1/MUNAUGHT)(RSUN_REF/RSUN_OBS)
@@ -848,7 +848,7 @@ int computeSumAbsPerPolarity(float *jz_err, float *bz_err, float *bz, float *jz,
     int i=0;
     int j=0;
     int count_mask=0;
-	double sum1=0.0;
+    double sum1=0.0;
     double sum2=0.0;
     double err=0.0;
 	*totaljzptr=0.0;
@@ -869,7 +869,7 @@ int computeSumAbsPerPolarity(float *jz_err, float *bz_err, float *bz, float *jz,
         }
     }
 	
-	*totaljzptr    = fabs(sum1) + fabs(sum2);  /* Units are A */
+    *totaljzptr    = fabs(sum1) + fabs(sum2);  /* Units are Amperes per arcsecond */
     *totaljz_err_ptr = sqrt(err)*(1/cdelt1)*fabs((0.00010)*(1/MUNAUGHT)*(rsun_ref/rsun_obs));
     //printf("SAVNCPP=%g\n",*totaljzptr);
     //printf("SAVNCPP_err=%g\n",*totaljz_err_ptr);
@@ -1160,6 +1160,8 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
         for (j = 0; j < ny1; j++)
         {
             index = j * nx1 + i;
+            if isnan(pmapn[index]) continue;
+            if isnan(rim[index]) continue;
             sum += pmapn[index]*abs(rim[index]);
         }
     }
@@ -1168,6 +1170,8 @@ int computeR(float *bz_err, float *los, int *dims, float *Rparam, float cdelt1,
         *Rparam = 0.0;
     else
         *Rparam = log10(sum);
+
+    //printf("R_VALUE=%f\n",*Rparam);
 
     free_fresize(&fresboxcar);
     free_fresize(&fresgauss);
@@ -1201,9 +1205,6 @@ int computeLorentz(float *bx,  float *by, float *bz, float *fx, float *fy, float
     double k_h = -1.0 * area / (4. * PI) / 1.0e20;
     double k_z = area / (8. * PI) / 1.0e20;
 
-    /* Multiplier */
-    float vectorMulti[] = {1.,-1.,1.};
-
     if (nx <= 0 || ny <= 0) return 1;        
 
     for (int i = 0; i < nxny; i++) 
@@ -1212,8 +1213,8 @@ int computeLorentz(float *bx,  float *by, float *bz, float *fx, float *fy, float
        if isnan(bx[i]) continue;
        if isnan(by[i]) continue;
        if isnan(bz[i]) continue;
-       fx[i]  = (bx[i] * vectorMulti[0]) * (bz[i] * vectorMulti[2]) * k_h;
-       fy[i]  = (by[i] * vectorMulti[1]) * (bz[i] * vectorMulti[2]) * k_h;
+       fx[i]  = bx[i] * bz[i] * k_h;
+       fy[i]  = by[i] * bz[i] * k_h;
        fz[i]  = (bx[i] * bx[i] + by[i] * by[i] - bz[i] * bz[i]) * k_z;
        bsq    = bx[i] * bx[i] + by[i] * by[i] + bz[i] * bz[i];
        totfx  += fx[i]; totfy += fy[i]; totfz += fz[i];
@@ -1227,6 +1228,8 @@ int computeLorentz(float *bx,  float *by, float *bz, float *fx, float *fy, float
     *epsx_ptr   = (totfx / k_h) / totbsq;
     *epsy_ptr   = (totfy / k_h) / totbsq;
     *epsz_ptr   = (totfz / k_z) / totbsq;
+
+    //printf("TOTBSQ=%f\n",*totbsq_ptr);
 
     return 0;
  
