@@ -6,12 +6,12 @@
 			calls: limbfit() and reformat output data to be rewritten in the DB
 			
 	
-	#define results->code_name 		"limbfit_tas"
-	#define CODE_VERSION 			"V5.04" 
-	#define CODE_DATE 				"Tue May  7 21:27:32 PDT 2013" 
+	#define results->code_name 		"limbfit_ann"
+	#define CODE_VERSION 			"V1.00" 
+	#define CODE_DATE 				"Mon Sep 15 15:14:19 PDT 2014" 
 */
 
-#include "limbfit_tas.h"
+#include "limbfit_ann.h"
 
 int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
 					LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios, int *status)
@@ -41,7 +41,7 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 		return(ERR_DRMS_READ_MISSING_DATA);   
 	}
 	segment_in = drms_segment_lookupnum(record_in, 0);
-	img = drms_segment_read(segment_in, DRMS_TYPE_FLOAT, &rstatus);
+	img = drms_segment_read(segment_in, DRMS_TYPE_INT, &rstatus);
 	if(!img) {
 		sprintf(log_msg,"Can't do drms_segment_read() status=%d", rstatus);
 		lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_DATA, 0, log_msg, log_msg_code, results->opf);
@@ -84,9 +84,9 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			write_mini_output(PROCSTAT_NO_LF_XYR_LF_MISSING,record_in,record_out,0,results);
 			return(ERR_DRMS_READ_MISSING_XYR_LF);   
 		}
-		input->img_sz0=img->axis[0];
-		input->img_sz1=img->axis[1];
-		input->data=img->data;
+//		input->img_sz0=img->axis[0];
+//		input->img_sz1=img->axis[1];
+//		input->data=img->data;
 
 		if (results->debug) 
 		{
@@ -98,10 +98,123 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
 		}
 /* add annulus code here! */
+//int 	w		 = ANNULUS_WIDTH;
+long 	S		 = MAX_SIZE_ANN_VARS;
+int		naxis_row=img->axis[0];
+int		naxis_col=img->axis[1];
 
-		lf_retcode=limbfit(input,results,ios);
+/************************************************************************/
+/*                        set parameters                               */
+/************************************************************************/
+long npixels=naxis_row*naxis_col;
+long ii, jj, jk;//, i,j; 
+ float cmx, cmy,r;//, guess_cx, guess_cy, guess_r;
+// int nitr=0, ncut=0;
+// 
+//r  = (float)naxis_row/2;
+long nanval=EQNANVAL;	
+/* Initial guess estimate of center position from Richard's code*/
+// 
+
+int *data=img->data;
+
+/*
+int* out_img = (int *) malloc(sizeof(int)*(naxis_row)*(naxis_col));
+
+//init
+	for(ii = 0; ii < naxis_row; ii++)
+	{
+ 			for(jj = 0; jj < naxis_col; jj++) 
+			{
+					out_img[ii,jj]=data[ii,jj];
+			}
+			
+	}		
+
+*/
+
+/************************************************************************/
+/*                        Make annulus data                             */
+/************************************************************************/
+int nbc=3;
+double iimcmy2,jjmcmx;
+float d,w2p,w2m;
+jk=-1;
+
+//float *p_anls=ios->pf_anls;		
+// 
+ 	if (ios->is_firstobs == 0) // = if fixed size
+ 	{
+		cmx=2048.;
+		cmy=2048.;
+ 		w2p=1985.;
+ 		w2m=1825.;
+		r=(w2p+w2m)/2;
+ 	}
+ 	else // = variable size
+ 	{
+		cmx=(float)input->ix;
+		cmy=(float)input->iy;
+		r=(float)input->ir;
+ 		w2p=r+40.;
+ 		w2m=r-40.;
+ 	}
+ 	/* Select Points */
+	for(ii = 0; ii < naxis_row; ii++)
+	{
+ 			iimcmy2=(ii-cmy)*(ii-cmy);
+ 			for(jj = 0; jj < naxis_col; jj++) 
+ 			{ 
+ 				jjmcmx=jj-cmx;
+ 				d=(float)sqrt(iimcmy2+(jjmcmx)*(jjmcmx));
+ 				if (d<w2m || d>w2p)
+ 				{
+ 					jk++;
+// 					*(p_anls++)=(float)jj;
+// 					*(p_anls++)=(float)ii;
+// 					*(p_anls++)=data[ii*naxis_col+jj];					 
+					//img->data[ii*naxis_col+jj]=nanval;
+					data[ii*naxis_col+jj]=nanval;
+					//out_img[ii*naxis_col+jj]=nanval;
+
+ 				}
+ 			}
+	}
+
+// 		ios->anls_nbpix=jk;
+// 		ios->pl_anls=p_anls-1;
+// 	
+ 		//if (results->debug)
+ 		//{
+ 			long t_is=(4096*4096)-jk;
+ 			sprintf(log_msg," total ann points = %ld (total points changed: jk = %ld), r = %f, w2m = %f, w2p = %f, ", t_is,jk,r,w2m,w2p);
+ 			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, results->opf);
+ 		//}
+ 		if ((jk*3) >= S) 
+ 		{
+ 			lf_logmsg("ERROR", "APP", ERR_SIZE_ANN_TOO_BIG, 0,"nbc>S", log_msg_code, results->opf);
+ 			return ERR_SIZE_ANN_TOO_BIG;
+ 		}
+// 	}
+// 	else 
+// 	{
+// 		jk=ios->anls_nbpix;
+// 		ii=0;
+// 		p_anls=p_anls+2;
+// 		while(p_anls<=ios->pl_anls) 
+// 		{
+// 			*(p_anls)=data[(int)ios->anls[nbc*ii+1]*naxis_col+(int)ios->anls[nbc*ii]];
+// 			ii++;
+// 			p_anls=p_anls+3;
+// 		}		
+// 	}
+
+
+/* end annulus */
+
+//		lf_retcode=limbfit(input,results,ios);
 		
-		drms_free_array(img);
+//		drms_free_array(img);
 
 		if (results->debug) 
 		{
@@ -111,8 +224,8 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
 			sprintf(log_msg,"R %f", results->radius);
 			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
-			sprintf(log_msg,"Returned code %d", lf_retcode);
-			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
+			//sprintf(log_msg,"Returned code %d", lf_retcode);
+			//lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
 			sprintf(log_msg,"err1 %d", results->error1);
 			lf_logmsg("DEBUG", "INFO", 0, 0, log_msg, log_msg_code, results->opf);
 			sprintf(log_msg,"err2 %d", results->error2);
@@ -123,10 +236,10 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 		// ERR_LIMBFIT_FIT_FAILED => all
 		// ERR_LIMBFIT_FAILED => mini
 
-		if (input->fldf==0) results->fldfr=4;
+//		if (input->fldf==0) results->fldfr=4;
 
-		if (lf_retcode >= 0 || lf_retcode == ERR_LIMBFIT_FIT_FAILED)
-		{	
+//		if (lf_retcode >= 0 || lf_retcode == ERR_LIMBFIT_FIT_FAILED)
+//		{	
 			if (results->debug) printf("write in the db\n");
 			//**********************************************************************
 			//	Write into the DB
@@ -139,18 +252,20 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			drms_keyword_setdate(record_out); 
 			write_lf_keywords(VOID,record_out, results,0);
 
-			// write the segments 
+			// write the segment
 			*status=0;
 			rstatus=0;
 
 			int naxes[2];
+
+			naxes[0]=naxis_row;
+			naxes[1]=naxis_col;
 			
-			naxes[0]=results->fits_ldfs_naxis1;
-			naxes[1]=results->fits_ldfs_naxis2;
-			DRMS_Array_t *array1=drms_array_create(DRMS_TYPE_FLOAT,2,naxes,results->fits_ldfs_data,&rstatus);			
+			DRMS_Array_t *array1=drms_array_create(DRMS_TYPE_INT,2,naxes,data,&rstatus);			
+			//DRMS_Array_t *array1=drms_array_create(DRMS_TYPE_INT,2,naxes,out_img,&rstatus);			
 			if (rstatus) 
 			{
-				lf_logmsg("ERROR", "DRMS", ERR_DRMS_ARRAY_CREATE,rstatus, "ERR_DRMS_ARRAY_CREATE(ldfs)", log_msg_code, results->opf);
+				lf_logmsg("ERROR", "DRMS", ERR_DRMS_ARRAY_CREATE,rstatus, "ERR_DRMS_ARRAY_CREATE(annulus)", log_msg_code, results->opf);
 				return ERR_DRMS_ARRAY_CREATE;
 			}
 			segment_out = drms_segment_lookupnum(record_out, 0); 
@@ -158,90 +273,21 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			{
 				if ( drms_segment_write(segment_out,array1,0) ) 
 				{
-					lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_WRITE,rstatus, "ERR_DRMS_SEGMENT_WRITE(ldfs)", log_msg_code, results->opf);
+					lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_WRITE,rstatus, "ERR_DRMS_SEGMENT_WRITE(annulus)", log_msg_code, results->opf);
 					return ERR_DRMS_SEGMENT_WRITE;
 				}	
 			}
 			else
 			{
-				lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_LOOKUPNUM,rstatus, "ERR_DRMS_SEGMENT_LOOKUPNUM(ldfs)", log_msg_code, results->opf);
+				lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_LOOKUPNUM,rstatus, "ERR_DRMS_SEGMENT_LOOKUPNUM(annulus)", log_msg_code, results->opf);
 				return ERR_DRMS_SEGMENT_LOOKUPNUM;
 			}
 			drms_free_array (array1);
-			// ????to check-> NOTE: because of that, from now tbf MUST BE EQUAL to 1
-		//add more KWs
-		//ORIGIN kw ok?			
-		//TIME too?
-			/*
-			TIME tobs;
-			static char s_tobs[50];
-			tobs = drms_getkey_time(record_in, "DATE__OBS", &rstatus);
-			sprint_time(s_tobs, tobs, "UTC", 0);
-			drms_setkey_string(record_out, "DATE__OBS",	&s_tobs);
+			drms_free_array(img);
 
-			tobs = drms_getkey_time(record_in, "T_OBS", &rstatus);
-			sprint_time(s_tobs, tobs, "UTC", 0);
-			drms_setkey_string(record_out, "T_OBS",	s_tobs);
-			*/
 			
 			rstatus=0;
 		
-			// AB ---EXT#1---------------------------------------------------------------------
-			//if (results->nb_iter==1)
-			//{
-			// attention only one beta (the last one) => to be changed in limbfit.c too
-				naxes[0]=results->fits_ab_naxis1;
-				naxes[1]=results->fits_ab_naxis2;
-				DRMS_Array_t *array2=drms_array_create(DRMS_TYPE_FLOAT,2,naxes,results->fits_alpha_beta,&rstatus);			
-				if (rstatus) 
-				{
-					lf_logmsg("ERROR", "DRMS", ERR_DRMS_ARRAY_CREATE,rstatus, "ERR_DRMS_ARRAY_CREATE(ab)", log_msg_code, results->opf);
-					return ERR_DRMS_ARRAY_CREATE;
-				}
-				segment_out = drms_segment_lookupnum(record_out, 1); 
-				if (segment_out)
-				{
-					if ( drms_segment_write(segment_out,array2,0) ) 
-					{
-					lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_WRITE,rstatus, "ERR_DRMS_SEGMENT_WRITE(ab)", log_msg_code, results->opf);
-					return ERR_DRMS_SEGMENT_WRITE;
-					}	
-				}
-				else
-				{
-					lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_LOOKUPNUM,rstatus, "ERR_DRMS_SEGMENT_LOOKUPNUM(ab)", log_msg_code, results->opf);
-					return ERR_DRMS_SEGMENT_LOOKUPNUM;
-				}
-				drms_free_array (array2);
-
-			
-			if (input->fldf==1)
-			{
-				// Full LDF ---EXT#3-------------------------------------------------------------------------
-				naxes[0]=results->fits_fldfs_nrows;
-				naxes[1]=results->fits_fldfs_tfields;
-				DRMS_Array_t *array4=drms_array_create(DRMS_TYPE_FLOAT,2,naxes,results->fits_fulldfs,&rstatus);			
-				if (rstatus) 
-				{
-					lf_logmsg("ERROR", "DRMS", ERR_DRMS_ARRAY_CREATE,rstatus, "ERR_DRMS_ARRAY_CREATE(fullldfs)", log_msg_code, results->opf);
-					return ERR_DRMS_ARRAY_CREATE;
-				}
-				segment_out = drms_segment_lookupnum(record_out, 3); 
-				if (segment_out)
-				{
-					if ( drms_segment_write(segment_out,array4,0) ) 
-					{
-						lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_WRITE,rstatus, "ERR_DRMS_SEGMENT_WRITE(fullldfs)", log_msg_code, results->opf);
-						return ERR_DRMS_SEGMENT_WRITE;
-					}	
-				}
-				else
-				{
-					lf_logmsg("ERROR", "DRMS", ERR_DRMS_SEGMENT_LOOKUPNUM,rstatus, "ERR_DRMS_SEGMENT_LOOKUPNUM(fullldfs)", log_msg_code, results->opf);
-					return ERR_DRMS_SEGMENT_LOOKUPNUM;
-				}
-				drms_free_array (array4);
-			}
 
 			//---------------------------------------
 			//		5) close & free
@@ -258,23 +304,6 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			*/
 			if (results->debug) printf("done...%u\n",input->fsn);							
 			lf_logmsg("INFO", "APP", 0, 0, "End writing in the DB", log_msg_code, results->opf);
-		}
-		else 
-		{
-			sprintf(log_msg,"NO LDFS file created (ifail >0) or retcode <0 for fsn# %u", input->fsn);
-			lf_logmsg("WARNING", "APP", ERR_LIMBFIT_FAILED, lf_retcode, log_msg, log_msg_code, results->opf);			
-			write_mini_output(PROCSTAT_NO_LF_FAILED,record_in,record_out,0,results);
-			// is this the right retcode? or should I make a test???
-			
-			// free 
-			if (results->error1 == 0)
-			{
-				free(results->fits_ldfs_data);
-				free(results->fits_alpha_beta);
-				if (results->fldfr<3) free(results->fits_fulldfs);
-			}
-			return(0);
-		}
 	}
 
 return 0;

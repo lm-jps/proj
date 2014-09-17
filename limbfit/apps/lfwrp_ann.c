@@ -276,13 +276,7 @@ int DoIt(void)
 	lfr->tmp_dir=tmp_dir;
 	lfr->dsout=dsout;
 	lfr->debug=debug;
-	lfr->cc=cc;
 	
-	lfv->cc=cc;
-	lfv->spe=spe;
-	lfv->iter=iter;
-	lfv->fldf=fldf;
-	//lfv->sav=sav;
 	
 	lfw->anls=anls;
 	lfw->is_firstobs=0;
@@ -312,8 +306,8 @@ int DoIt(void)
 			sprintf(recrange, "%lld-%lld", frec, lrec);
 			sprintf(open_dsname, "%s[][%s]%s", dsin, recrange,tbase);	
 			
-			sprintf(log_msg,"open %s -> %s (logdir: %s, tmpdir: %s, cam: %d, spe: %d, cc: %d, iter: %d, comment: %s , debug: %d)",
-									open_dsname,dsout,log_dir,tmp_dir,cam,spe,cc,iter,comment,debug);
+			sprintf(log_msg,"open %s -> %s (logdir: %s, tmpdir: %s, cam: %d, comment: %s , debug: %d)",
+									open_dsname,dsout,log_dir,tmp_dir,cam,comment,debug);
 	
 			lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
 			if(process_n_records_fsn(open_dsname, lfv, lfr, lfw, &result)) 

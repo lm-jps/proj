@@ -105,6 +105,6 @@ Keyword:RSUN_OBS, double, variable, record, nan, "%f", "arcsec", "Apparent radiu
 Keyword:HFTSACID, int, variable, record, -2147483648, "%d", "none", "HMI_SEQ_FTS_ID_ACTIVE"
 #Keyword:HWLTID, int, variable, record, -2147483648, "%d", "none", "HMI_SEQ_ID_WLT"
 #Keyword:HCFTID, int, variable, record, -2147483648, "%d", "none", "HMI_SEQ_ID_FOCUS"
-
+Keyword:QUALLEV0, int, variable, record, 0x80000000, "0x%08x", "none", "Level 0 Quality word"
 #=====Segments=====
 Data: image_annulus, variable, int, 2, 4096, 4096, "dn", fits, "compress Rice", 0.000000, 1.000000, "lev1 limb annulus image fits file"
