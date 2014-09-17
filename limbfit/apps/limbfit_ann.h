@@ -95,6 +95,7 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define GUESS_RANGE 8						//
 #define NB_ITER 2							//
 #define BAD_PIXEL_VALUE -2147483648.0
+#define EQNANVAL -2147483648
 //#define	SKIPGC 1							// skip the guess estimation, use X0/YO_LF
 //#define	IFAC 0								// skip the center calculation, use X0/YO_LF
 #define	AHI 70000.0							// 
