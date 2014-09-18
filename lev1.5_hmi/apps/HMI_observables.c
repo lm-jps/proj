@@ -1098,7 +1098,7 @@ int heightformation(int FID, double OBSVR, float *CDELT1, float *RSUN, float *CR
 
 char *observables_version() // Returns CVS version of Observables
 {
-  return strdup("$Id: HMI_observables.c,v 1.43 2014/01/14 22:51:34 couvidat Exp $");
+  return strdup("$Id: HMI_observables.c,v 1.44 2014/09/18 16:22:06 couvidat Exp $");
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -1911,11 +1911,11 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	}
       if(DataCadence == 720.0 && unusual == 1)
 	{						             
-	  strcpy(HMISeriesLev15a,"hmi.V2_720s"  );              
-	  strcpy(HMISeriesLev15b,"hmi.M2_720s" );              
-	  strcpy(HMISeriesLev15c,"hmi.Ld2_720s" );              
-	  strcpy(HMISeriesLev15d,"hmi.Lw2_720s" );              
-	  strcpy(HMISeriesLev15e,"hmi.Ic2_720s" );
+	  strcpy(HMISeriesLev15a,"hmi_test.V2_720s"  );              
+	  strcpy(HMISeriesLev15b,"hmi_test.M2_720s" );              
+	  strcpy(HMISeriesLev15c,"hmi_test.Ld2_720s" );              
+	  strcpy(HMISeriesLev15d,"hmi_test.Lw2_720s" );              
+	  strcpy(HMISeriesLev15e,"hmi_test.Ic2_720s" );
 	}
     }
 
@@ -2502,15 +2502,10 @@ char Lev1pSegName[60][5]={"I0","Q0","U0","V0","I1","Q1","U1","V1","I2","Q2","U2"
 	} 
       else
 	{
-	  if(status == DRMS_SUCCESS && (recLev1 == NULL || recLev1->n == 0)) //we want empty observables records to be created even if there is no lev1
-	    {
-	      printf("Warning: no level 1 records in the time interval requested %s\n",HMISeriesLev1);
-	    }
-	  if(status != DRMS_SUCCESS)
-	    {
-	      printf("Error: unable to open the requested level 1 records %s\n",HMISeriesLev1);
-	      return 1;//exit(EXIT_FAILURE);
-	    }
+	  //if there are no level 1 records in the time interval specified by the user, the code exits with an error message
+	  //no fake level 1.5 records are created
+	  printf("Error: no level 1 records in the time interval requested %s\n",HMISeriesLev1);
+	  return 1;//exit(EXIT_FAILURE);
 	}    
 
     }

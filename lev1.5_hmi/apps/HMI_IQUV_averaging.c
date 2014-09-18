@@ -1020,7 +1020,7 @@ int MaskCreation(unsigned char *Mask, int nx, int ny, DRMS_Array_t  *BadPixels, 
 
 char *iquv_version() // Returns CVS version of IQUV averaging
 {
-  return strdup("$Id: HMI_IQUV_averaging.c,v 1.37 2014/04/16 18:21:29 couvidat Exp $");
+  return strdup("$Id: HMI_IQUV_averaging.c,v 1.38 2014/09/18 16:22:24 couvidat Exp $");
 }
 
 
@@ -2110,15 +2110,10 @@ int DoIt(void)
     }
   else
     {
-      if(status == DRMS_SUCCESS && (recLev1 == NULL || recLev1->n == 0)) //we want empty observables records to be created even if there is no lev1
-	{
-	  printf("Warning: no level 1 records in the time interval requested %s\n",HMISeriesLev1);
-	}
-      if(status != DRMS_SUCCESS)
-	{
-	  printf("Error: unable to open the requested level 1 records %s\n",HMISeriesLev1);
-	  return 1;//exit(EXIT_FAILURE);
-	}
+      //if there are no level 1 records in the time interval specified by the user, the code exits with an error message
+      //no fake level 1.5 records are created
+      printf("Error: no level 1 records in the time interval requested %s\n",HMISeriesLev1);
+      return 1;//exit(EXIT_FAILURE)    
     }    
   
   
