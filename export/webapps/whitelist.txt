@@ -1,11 +1,5 @@
-hmi.V_sht_72d
-hmi.V_sht_gaps_72d
-hmi.V_sht_gf_72d
-hmi.V_sht_gf_gaps_72d
 hmi.V_sht_gf_gaps_retile
 hmi.V_sht_gf_retile
-hmi.V_sht_modes
-hmi.V_sht_modes_archive
 hmi.V_sht_pow
 hmi.V_sht_secs
-hmi.V_sht_secs_72d
+
