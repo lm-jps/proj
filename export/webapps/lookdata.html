@@ -727,10 +727,7 @@ WlSeriesInfo.prototype.getServer = function(args)
     var filter = [];
     var intSeries = []; // A list of internal series.
     
-    if (WlSeriesInfo.intSeries[spec] == undefined)
-    {
-        WlSeriesInfo.intSeries[spec] = [];
-    }
+    WlSeriesInfo.intSeries[spec] = [];
     
     for (var iseries = 0; iseries < snames.length; iseries++)
     {
@@ -743,6 +740,8 @@ WlSeriesInfo.prototype.getServer = function(args)
         else if (WlSeriesInfo.info[sname].server == 'hmidb')
         {
             intSeries[intSeries.length] = sname;
+            // Add cached internal series to list of internal series for this spec.
+            WlSeriesInfo.intSeries[spec][WlSeriesInfo.intSeries[spec].length] = sname;
         }
     }
     
@@ -752,7 +751,6 @@ WlSeriesInfo.prototype.getServer = function(args)
         {
             var spec = args[0];
             var snames = args[1];
-            var newIntSeries = []; // Newly discovered by latest getInfo() call. intSeries contains previously discovered too.
             
             for (var iseries = 0; iseries < snames.length; iseries++)
             {
@@ -760,19 +758,12 @@ WlSeriesInfo.prototype.getServer = function(args)
                 
                 if (WlSeriesInfo.info[sname].server == 'hmidb')
                 {
+                    // Newly discovered internal series.
                     // If at least one of the series needs series info from the internal database, then we need
                     // to use jsoc2 for the following jsoc_fetch request.
                     intSeries[intSeries.length] = sname;
-                    newIntSeries[newIntSeries.length] = sname;
+                    WlSeriesInfo.intSeries[spec][WlSeriesInfo.intSeries[spec].length] = sname;
                 }
-            }
-            
-            // We may have discovered new internal series. If so, add them to this spec's list of internal series.
-            for (var iseries = 0; iseries < newIntSeries.length; iseries++)
-            {
-                var sname = newIntSeries[iseries].toLowerCase();
-                
-                WlSeriesInfo.intSeries[spec][WlSeriesInfo.intSeries[spec].length] = sname;
             }
             
             // Also must call the callback passed to the getServer() function. Hopefully JS realizes these are defined outside
@@ -830,7 +821,7 @@ WlSeriesInfo.prototype.extractSnames = function(args)
             {
                 alert("Invalid record-set specification: '" + spec + "'.")
             }
-
+                     
             callbackArgs.args = [spec, snames];
             callbackObj[callbackObjMeth](callbackArgs);
         },
