@@ -1,5 +1,2 @@
-hmi.V_sht_gf_gaps_retile
-hmi.V_sht_gf_retile
-hmi.V_sht_pow
-hmi.V_sht_secs
-
+hmi.TDKernels
+hmi.tdpixlist
