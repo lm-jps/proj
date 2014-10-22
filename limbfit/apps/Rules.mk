@@ -8,11 +8,15 @@ MODEXE_USEF_$(d)	:= $(addprefix $(d)/, lfwrp)
 SUPPOBJ_$(d)		:= $(addprefix $(d)/, limbfit.o do_one_limbfit.o limb.o)
 
 MODEXE_USEF_TAS_$(d)    := $(addprefix $(d)/, lfwrp_tas)
-MODEXE_USEF_TAS512_$(d)         := $(addprefix $(d)/, lfwrp_tas512)
-MODEXE_USEF_TAS1024_$(d)        := $(addprefix $(d)/, lfwrp_tas1024)
+# MODEXE_USEF_TAS512_$(d)         := $(addprefix $(d)/, lfwrp_tas512)
+MODEXE_USEF_TAS512_$(d)         := 
+# MODEXE_USEF_TAS1024_$(d)        := $(addprefix $(d)/, lfwrp_tas1024)
+MODEXE_USEF_TAS1024_$(d)        := 
 SUPPOBJ_TAS_$(d)        := $(addprefix $(d)/, limbfit_tas.o do_one_limbfit_tas.o limb.o)
-SUPPOBJ_TAS512_$(d)	:= $(addprefix $(d)/, limb_ab512.o)
-SUPPOBJ_TAS1024_$(d)	:= $(addprefix $(d)/, limb_ab1024.o)
+# SUPPOBJ_TAS512_$(d)	:= $(addprefix $(d)/, limb_ab512.o)
+SUPPOBJ_TAS512_$(d)	:= 
+# SUPPOBJ_TAS1024_$(d)	:= $(addprefix $(d)/, limb_ab1024.o)
+SUPPOBJ_TAS1024_$(d)	:= 
 
 MODEXE_ANN_$(d)    	:= $(addprefix $(d)/, lfwrp_ann)
 SUPPOBJ_ANN_$(d)        := $(addprefix $(d)/, do_one_limbfit_ann.o)
