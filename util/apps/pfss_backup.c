@@ -13,6 +13,8 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING, "date_end", NOTSPECIFIED, "date to end (not saved)"},
   {ARG_STRING, "spath", "/archive/pfss/kitrun48/surffield-serial", ""},
   {ARG_STRING, "bpath", "/archive/pfss/kitrun48/Bfield-serial", ""},
+  {ARG_STRING, "sbase", "%s/kitrun048_%5.5d.sav", "surface base file name"},
+  {ARG_STRING, "bbase", "%s/Bfield_%5.5d.sav", "B field base file name"},
   {ARG_FLAG, "h", "0", "Print usage message and quit"},
   {ARG_FLAG, "v", "0", "verbose flag"},
   {ARG_END}
@@ -41,7 +43,11 @@ int nice_intro(int help)
         "ser_beg=<first serial number to backup>\n"
         "ser_end=<serial number to stop> (not backup)\n"
         "date_beg=<first date to backup>\n"
-        "date_end=<date to stop> (not backup)\n");
+        "date_end=<date to stop> (not backup)\n"
+        "spath=<base path to surface field files>\n"
+        "bpath=<base path to B field files>\n"
+        "sbase=<surface field base file name>\n"
+        "bbase=<B field field base file name>\n");
     return(1);
   }
   return(0);
@@ -49,7 +55,7 @@ int nice_intro(int help)
 
 int DoIt ()
 {
-  char *date_beg, *date_end, *ds, *spath, *bpath;
+  char *date_beg, *date_end, *ds, *spath, *bpath, *sbase, *bbase;
   char sname[512], bname[512], now_str[64];
   int ser_beg, ser_end, ser_num, status=0;
   int s_ok, b_ok, sp_ok, bp_ok; /* yr, mo, da, hr, mn; */
@@ -65,6 +71,10 @@ int DoIt ()
   ds = strdup(cmdparams_get_str(&cmdparams, "ds", NULL));
   spath = strdup(cmdparams_get_str(&cmdparams, "spath", NULL));
   bpath = strdup(cmdparams_get_str(&cmdparams, "bpath", NULL));
+  sbase = strdup(cmdparams_get_str(&cmdparams, "sbase", NULL));
+  bbase = strdup(cmdparams_get_str(&cmdparams, "bbase", NULL));
+if (verbose) fprintf(stdout, "'%s'\n'%s'\n", spath, bpath);
+if (verbose) fprintf(stdout, "'%s'\n'%s'\n", sbase, bbase);
   if (ser_beg < 0) {
     time_t tr_b, tr_e;
     date_beg = strdup(cmdparams_get_str(&cmdparams, "date_beg", NULL));
@@ -74,36 +84,39 @@ int DoIt ()
     tr_e = sscan_time(date_end) - UNIX_EPOCH + 218;
     ser_end = (tr_e - 836179440)/21600;
     if (verbose) {
-      printf("trec: %ld %ld,ser_beg, end: %d, %d\n",tr_b,tr_e,ser_beg,ser_end);
+      fprintf(stderr, "trec: %ld %ld,ser_beg, end: %d, %d\n",tr_b,tr_e,ser_beg,ser_end);
     }
   }
   if (stat(spath, &sbuf)) {
     sp_ok = 0;
     fprintf(stderr, "Can not stat %s\n", spath);
+//    return(1);
   } else sp_ok = 1;
   if (stat(bpath, &sbuf)) {
     bp_ok = 0;
     fprintf(stderr, "Can not stat %s\n", bpath);
+//    return(1);
   } else bp_ok = 1;
 
+//sleep(60);
   for (ser_num = ser_beg; ser_num < ser_end; ser_num++) {
     trec = 21600*ser_num + 836179440 - 8;
     if (verbose) {
-      printf("trec: %ld,ser_beg, end: %d, %d\n", trec, ser_beg, ser_end);
+      fprintf(stderr, "trec: %ld,ser_beg, end: %d, %d\n", trec, ser_beg, ser_end);
     }
     gmtime_r(&trec, &tm_rec);
-    snprintf(sname, 512, "%s/kitrun048_%5.5d.sav", spath, ser_num);
-    snprintf(bname, 512, "%s/Bfield_%5.5d.sav", bpath, ser_num);
+    snprintf(sname, 512, sbase, spath, ser_num);
+    snprintf(bname, 512, bbase, bpath, ser_num);
     outrec = drms_create_record(drms_env, ds, DRMS_PERMANENT, &status);
     if (status) DIE("Can't create output record");
 //  drms_setkey_time(outrec, "model_date", (double) (trec + UNIX_EPOCH));
     sprint_time_ISO(now_str, trec + UNIX_EPOCH);
     drms_setkey_string(outrec, "model_date", now_str);
-    if (verbose) printf("model_datei: %s\n", now_str);
+    if (verbose) fprintf(stderr, "model_date: %s\n", now_str);
     drms_setkey_int(outrec, "serial", ser_num);
     if (stat(sname, &sbuf)) {
       s_ok = 0;
-      if (sp_ok) fprintf(stderr, "Can not stat %s\n", sname);
+      if (s_ok) fprintf(stderr, "Can not stat %s\n", sname);
     } else {
       s_ok = 1;
 //    drms_setkey_time(outrec,"s_calc_date",(double)(sbuf.st_mtime+UNIX_EPOCH));
@@ -112,7 +125,7 @@ int DoIt ()
     }
     if (stat(bname, &sbuf)) {
       b_ok = 0;
-      if (bp_ok) fprintf(stderr, "Can not stat %s\n", bname);
+      if (b_ok) fprintf(stderr, "Can not stat %s\n", bname);
     } else {
       b_ok = 1;
 //    drms_setkey_time(outrec,"b_calc_date",(double)(sbuf.st_mtime+UNIX_EPOCH));
