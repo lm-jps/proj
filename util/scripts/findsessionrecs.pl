@@ -1,5 +1,10 @@
 #!/home/jsoc/bin/linux_x86_64/activeperl
 
+# NOTE - THIS WAS MY FIRST ATTEMPT AT GETTING THIS TO WORK IN THE FACE OF HAVING REMOVED EARLY drms_session LOGS. THE
+# QUERIES IN CacheRecs() RUN TOO SLOWLY THOUGH. THERE IS NO WAY TO JOIN THE SERIES TABLES WITH THE drms_session TABLES
+# IN A WAY THAT RUNS QUICK ENOUGH. FOR ONE TABLE WITH 100M RECORDS, I LET THE SECOND QUERY RUN ABOUT 14 HOURS BEFORE
+# TERMINATING IT.
+
 # For each series in the specified namespaces, the script iterates through all records in the series and determines
 # whether each one was created within the crash window. For each record, the sessionid is used to find the relevant
 # record in the drms_session table. Then the starttime and endtime values are compared to the bcrash and ecrash
@@ -12,6 +17,8 @@ use strict;
 use POSIX qw(ceil floor);
 use DBI;
 use DBD::Pg;
+use Data::Dumper;
+use DateTime::Format::Strptime;
 use FindBin qw($Bin);
 use lib ("$Bin/../../../base/libs/perl");
 use drmsArgs;
@@ -30,6 +37,9 @@ use constant kArgSeries => "series"; # A list of series to examine. Overrides th
 use constant kArgBcrash => "bcrash";
 use constant kArgEcrash => "ecrash";
 use constant kArgFileOut => "out";
+
+# Globals
+my($gRecCache) = {};
 
 my($argsinH);
 my($optsinH);
@@ -138,7 +148,8 @@ else
             # No series specified on command line. Search through namespaces.
             $stmnt = "SELECT seriesname FROM drms_series()";
             $rows = $dbh->selectall_arrayref($stmnt, undef);
-            $err = !(NoErr($rows, \$dbh, $stmnt));
+            $err = (NoErr($rows, \$dbh, $stmnt) == 1) ? 0 : 1;
+
             if (!$err)
             {
                 @rowarr = @$rows;
@@ -152,6 +163,8 @@ else
 
         if (!$err)
         {
+            my($seriesRecs);
+            
             foreach my $aseries (@series)
             {
                 ($nspace, $table) = ($aseries =~ /(\S+)\.(\S+)/);
@@ -198,42 +211,38 @@ else
                     print STDERR "skipping series $aseries - it was excluded.\n";
                     next;
                 }
+                
+                if (lc($aseries) eq "hmi.lev1_nrt" || lc($aseries) eq "aia.lev1_nrt")
+                {
+                    print STDERR "skipping series $aseries - db queries are too slow on it.\n";
+                    next;
+                }
 
                 print STDERR "Processing series $aseries...\n";
-                ($firstrec, $lastrec) = FindRecs($dbh, $aseries, $bcrash, $ecrash);
+                $seriesRecs = FindRecs($dbh, $aseries, $bcrash, $ecrash);
+                exit;
                 
-                if ($firstrec == -1 || $lastrec == -1)
+                # Clear record cache so we do not use up memory.
+                PurgeRecs($aseries);
+                
+                if (!defined($seriesRecs))
                 {
                     # No records in series - onto next series.
                     print STDERR "skipping series $aseries - there were no records created during the crash window.\n";
                     next;
                 }
-                
-                $stmnt = "SELECT recnum, sunum FROM $aseries WHERE recnum >= $firstrec AND recnum <= $lastrec";
-                
-                $rowstab = $dbh->selectall_arrayref($stmnt, undef);
-                $err = !(NoErr($rowstab, \$dbh, $stmnt));
-                    
-                if (!$err)
+
+                if (scalar(@$seriesRecs) > 0)
                 {
-                    @rowarrtab = @$rowstab;
-                    
-                    if ($#rowarrtab >= 0)
-                    {
-                        # At least one output line - print a header.
-                        print "seriesname\trecnum\tsunum\n";
-                        print $fh "seriesname\trecnum\tsunum\n";
-                    }
-                    
-                    foreach my $rec (@rowarrtab)
-                    {
-                        print "$aseries\t$rec->[0]\t$rec->[1]\n";
-                        print $fh "$aseries\t$rec->[0]\t$rec->[1]\n";
-                    }
+                    # At least one output line - print a header.
+                    print "seriesname\trecnum\tsunum\n";
+                    print $fh "seriesname\trecnum\tsunum\n";
                 }
-                else
+                
+                foreach my $rec (@$seriesRecs)
                 {
-                    $rv = kRetDbQuery;
+                    print "$aseries\t$rec->[0]\t$rec->[1]\n";
+                    print $fh "$aseries\t$rec->[0]\t$rec->[1]\n";
                 }
             } # series loop
         }
@@ -271,6 +280,184 @@ sub NoErr
     return $ok;
 }
 
+sub GetSessionInfo
+{
+    my($dbh, $table, $recno) = @_;
+    my($stmnt);
+    my($rows);
+    my(@rowarr);
+    my($err);
+    my(@rv);
+    
+    # Get ns and session id from series table.
+    $stmnt = "SELECT sessionns, sessionid from $table WHERE recnum = $recno";
+    $rows = $dbh->selectall_arrayref($stmnt, undef);
+    $err = (NoErr($rows, \$dbh, $stmnt) == 1) ? 0 : 1;
+    
+    if (!$err)
+    {
+        @rowarr = @$rows;
+        
+        if ($#rowarr != 0)
+        {
+            $err = 1;
+        }
+        else
+        {
+            @rv = ($rowarr[0]->[0], $rowarr[0]->[1]);
+        }
+    }
+    
+    return @rv;
+}
+
+sub HasSession
+{
+    my($dbh, $table, $recno) = @_;
+
+    my($stmnt);
+    my($rows);
+    my(@rowarr);
+    my($ns);
+    my($sessionid);
+    my($err);
+    my($rv);
+
+    $err = 0;
+
+    # We do NOT want to cache any of these records. We are testing DRMS records identified by b-searching so we are hopping around
+    # lots of records. Anything we cached would be repreatedly flushed. Plus caching takes a long time.
+    ($ns, $sessionid) = GetSessionInfo($dbh, $table, $recno);
+    
+    if (defined($ns) && defined($sessionid))
+    {
+        # See if a session exists for this series' record.
+        $stmnt = "SELECT sessionid FROM $ns\.drms_session WHERE sessionid = $sessionid";
+        
+        $rows = $dbh->selectall_arrayref($stmnt, undef);
+        $err = (NoErr($rows, \$dbh, $stmnt) == 1) ? 0 : 1;
+        
+        if (!$err)
+        {
+            @rowarr = @$rows;
+            
+            if ($#rowarr == 0)
+            {
+                $rv = 1;
+            }
+            else
+            {
+                $rv = 0;
+            }
+        }
+    }
+
+    return $rv;
+}
+
+sub GetTimes
+{
+    my($dbh, $table, $recno, $nsIn, $sessionidIn) = @_;
+    
+    my($stmnt);
+    my($rows);
+    my(@rowarr);
+    my($ns);
+    my($sessionid);
+    my($err);
+    my(@rv);
+    
+    $err = 0;
+    
+    # We do NOT want to cache any of these records. We are testing DRMS records identified by b-searching so we are hopping around
+    # lots of records. Anything we cached would be repreatedly flushed. Plus caching takes a long time.
+    if (defined($nsIn) && defined($sessionidIn))
+    {
+        $ns = $nsIn;
+        $sessionid = $sessionidIn;
+    }
+    else
+    {
+        ($ns, $sessionid) = GetSessionInfo($dbh, $table, $recno);
+    }
+    
+    if (defined($ns) && defined($sessionid))
+    {
+        # See if a session exists for this series' record.
+        $stmnt = "SELECT starttime, endtime FROM $ns\.drms_session WHERE sessionid = $sessionid";
+        
+        $rows = $dbh->selectall_arrayref($stmnt, undef);
+        $err = (NoErr($rows, \$dbh, $stmnt) == 1) ? 0 : 1;
+        
+        if (!$err)
+        {
+            @rowarr = @$rows;
+            
+            if ($#rowarr == 0)
+            {
+                @rv = ($rowarr[0]->[0], $rowarr[0]->[1]);
+            }
+        }
+    }
+    
+    return @rv;
+}
+
+# Given a $recno, find the next valid (recno exists in series table) in the direction specified by $down. The search will not find
+# any record below/above $bound.
+sub GetValidRec
+{
+    my($dbh,
+    $series,
+    $recno,
+    $down,
+    $bound) = @_;
+    
+    my($rv);
+    my($rows);
+    my(@rowarr);
+    my($err);
+    
+    $err = 0;
+
+    if ($down)
+    {
+        $stmnt = "SELECT recnum FROM " . $series . " WHERE recnum >= " . $bound . " AND recnum <= " . $recno . " ORDER BY recnum DESC LIMIT 1";
+    }
+    else
+    {
+        $stmnt = "SELECT recnum FROM " . $series . " WHERE recnum >= " . $recno . " AND recnum <= " . $bound . " ORDER BY recnum ASC LIMIT 1";
+    }
+
+    $rows = $dbh->selectall_arrayref($stmnt, undef);
+    $err = (NoErr($rows, \$dbh, $stmnt) == 0);
+
+    if (!$err)
+    {
+        @rowarr = @$rows;
+
+        if ($#rowarr != 0)
+        {
+            $err = 1;
+        }
+        else
+        {
+            $rv = $rowarr[0]->[0];
+        }
+    }
+    
+    return $rv;
+}
+
+# Returns an array of records (series, recnum, sunum). The first element in this array if the first record in the
+# crash window, and the last element is the last record in this crash window. The array elements are sorted by
+# recnum.
+
+# Now that we are deleting old drms_session logs, we need to skip DRMS records that have no drms_session rows. It is not
+# possible to evaluate all DRMS records, in a timely manner, to determine if they have drms_session rows or not. But
+# we can b-search and find the first DRMS record that has a drms_session row. Use the first such DRMS record as the
+# value for min.
+
 sub FindRecs
 {
     my($dbh,
@@ -279,7 +466,8 @@ sub FindRecs
        $ecrash) = @_;
     my($stable);
     my($stmnt);
-    my($state) = "before";
+    my($state) = "before"; # in - either first or last series record in crash window.
+                           #
     my($min);       # first record in series.
     my($max);       # last record in series.
     my($frec);      # Lower bound for b-searching.
@@ -290,7 +478,6 @@ sub FindRecs
     my($rec);       # Current rec.
     my($recN);
     my($recX);
-    my($found);     # If 1, then we found a record created during the crash window.
     my($fincrash);  # First record in the crash window.
     my($lincrash);  # Last record in the crash window.
     my($frecF);     # Upper bound when b-searching for first record in crash window.
@@ -299,14 +486,21 @@ sub FindRecs
     my($lrecL);     # Upper bound when b-searching for last record in crash window.
     my($rows);
     my(@rowarr);
-    my(@rv);
+    my($rv);
     my($err);
     
     $stable = lc($series);
+    
+    # Hack something that works
+    $series = "hmi.lev1";
+    $stable = "hmi.lev1";
+    
     $stmnt = "SELECT recnum FROM $stable WHERE recnum = (SELECT min(recnum) FROM $stable)";
     $rows = $dbh->selectall_arrayref($stmnt, undef);
-    $err = !(NoErr($rows, \$dbh, $stmnt));
-    
+
+    # Stupid perl.
+    $err = (NoErr($rows, \$dbh, $stmnt) == 1) ? 0 : 1;
+
     if (!$err)
     {
         @rowarr = @$rows;
@@ -328,8 +522,8 @@ sub FindRecs
         $stmnt = "SELECT recnum FROM $stable WHERE recnum = (SELECT max(recnum) FROM $stable)";
         
         $rows = $dbh->selectall_arrayref($stmnt, undef);
-        $err = !(NoErr($rows, \$dbh, $stmnt));
-        
+        $err = (NoErr($rows, \$dbh, $stmnt) == 1) ? 0 : 1;
+
         if (!$err)
         {
             @rowarr = @$rows;
@@ -345,64 +539,210 @@ sub FindRecs
                 $max = $rowarr[0]->[0];
             }
         }
+
+        # We assume that the last record in the series has a session record. If this is not the case, then skip this series.
+        if (!HasSession($dbh, $stable, $max))
+        {
+            $err = 1;
+        }
     }
     
     if (!$err)
-    {   
-        $frec = $min;
-        $lrec = $max;
+    {
+        # Given $min and $max, find the first record in the series that has a drms_session record. We will consider records
+        # before this to not exist. B-search for the first record with a drms_session record. Start with $min.
+        my($tryRec);
+        my($oldTryRec); # From the previous iteration.
+        my($validRec);
+        my($hasSession);
+        my($lbound);
+        my($ubound);
         
-        # The first record may actually not be in the before state, but in the in state or in the after state
-        ($locF, $recN) = GetLoc($dbh, $stable, $frec, 1, $min, $max, $bcrash, $ecrash);
-        ($locL, $recX) = GetLoc($dbh, $stable, $lrec, 0, $min, $max, $bcrash, $ecrash);
+        $frec = undef;
         
-        if ($locF eq "I")
+        $tryRec = $min;
+        $lbound = $min;
+        $ubound = $max;
+        
+        while (1)
         {
-            if ($locL eq "I")
+            $hasSession = HasSession($dbh, $stable, $tryRec);
+            
+            if (!defined($hasSession))
             {
-                # Both the min and max of the series are in the crash window.
-                $fincrash = $frec;
-                $lincrash = $lrec;
-                $state = "found";
+                $err = 1;
+                last;
             }
-            else
+
+            if ($hasSession)
             {
-                # The first record is in the crash window. This is the first record in the crash window.
-                $state = "in";
-                $fincrash = $recN;
-                $frecL = $recN; # current rec in crash window; lower bound for b-search.
-                $lrecL = $lrec; # upper bound for b-search.
-            }
-        }
-        else
-        {
-            if ($locL eq "I")
-            {
-                # The last record is in the crash window. This is the last record in the crash window.
-                $state = "in";
-                $lincrash = $recX;
-                $frecF = $recX; # current rec in crash window; upper bound for b-search.
-                $lrecF = $frec; # lower bound for b-search.                
-            }
-            else
-            {
-                # Neither min nor max is in the crash window.
-                if ($locF eq "B")
+                print "$tryRec has session\n";
+                # If $tryRec doesn't change between iterations, then there are no more records to try and we
+                # did not find any records that have a session.
+                
+                if (defined($oldTryRec) && $tryRec == $oldTryRec)
                 {
-                    $state = "before";
-                    $rec = $min;
+                    $err = 1;
+                    last;
+                }
+                
+                # If there is no record immediately below $tryRec, then $tryRec is the first DRMS record
+                # with a drms_session row.
+                if ($tryRec == $min)
+                {
+                    $frec = $tryRec;
+                    last;
+                }
+
+                # If the record immediately below $tryRec does not have a drms_session row, then $tryRec is the first DRMS record
+                # with a drms_session row.
+                $validRec = GetValidRec($dbh, $stable, $tryRec - 1, 1, $lbound);
+
+                if (defined($validRec))
+                {
+                    $hasSession = HasSession($dbh, $stable, $validRec);
+
+                    if (defined($hasSession))
+                    {
+                        if (!$hasSession)
+                        {
+                            $frec = $tryRec;
+                            last;
+                        }
+                    }
+                    else
+                    {
+                        $err = 1;
+                        last;
+                    }
                 }
                 else
                 {
-                    # frec is after the crash window - NOTHING TO RETURN (the series is completely
-                    # outside the crash window).
+                    # If there is no record immediately below $tryRec, then $tryRec is the first DRMS record
+                    # with a drms_session row.
+                    $frec = $tryRec;
+                    last;
+                }
+
+                $ubound = $tryRec;
+                $validRec = GetValidRec($dbh, $stable, $tryRec - floor(($ubound - $lbound) / 2), 1, $lbound);
+
+                if (!defined($validRec))
+                {
                     $err = 1;
+                    last;
+                }
+                else
+                {
+                    $oldTryRec = $tryRec;
+                    $tryRec = $validRec;
+                }
+            }
+            else
+            {
+                print "$tryRec does NOT have session\n";
+                $lbound = $tryRec;
+                
+                # GetValidRec() will find the next earlier record (it may not have a drms_session log).
+                $validRec = GetValidRec($dbh, $stable, $tryRec + floor(($ubound - $lbound) / 2), 1, $lbound);
+
+                if (!defined($validRec))
+                {
+                    $err = 1;
+                    last;
+                }
+                else
+                {
+                    $oldTryRec = $tryRec;
+                    $tryRec = $validRec;
+                }
+            }
+        }
+        
+        print "ok, frec is $frec for $stable\n";
+    }
+    
+    if (!$err)
+    {
+        $lrec = $max;
+        
+        # The first record may actually not be in the before state, but in the in state or in the after state.
+        
+        # Because we remove old session records, some records of the series may have no session record. We cannot
+        # use those records to gauge whether or not a range of records is in the crash window. Treat such records
+        # as invalid or missing records. In general, we remove only old session records. If the first record of a series
+        # has no session record, then try a later record (move toward the LAST record in the series.).
+        
+        # Starting at the first record in the series ($frec), find the first valid record heading in the
+        # direction of the LAST record in the series ($max). We actually already know that $frec is a valid record.
+        ($locF, $recN) = GetLoc($dbh, $stable, $frec, 0, $frec, $lrec, $bcrash, $ecrash);
+
+        print "frec should be $frec, $locF, $recN\n";
+        
+        if ($locF eq "E" || $recN == -1)
+        {
+            # No valid records in the series. This is the same as there being no records created during crash window.
+            $state = "notfound";
+        }
+        else
+        {
+            # Starting at the last record in the series ($lrec), find the first valid record heading in the
+            # direction of the FIRST record in the series ($min).
+            ($locL, $recX) = GetLoc($dbh, $stable, $lrec, 1, $frec, $lrec, $bcrash, $ecrash);
+
+            print "last valid rec $lrec, $locL, $recX\n";
+            
+            if ($locF eq "I")
+            {
+                if ($locL eq "I")
+                {
+                    # Both the min and max of the series are in the crash window.
+                    $fincrash = $frec;
+                    $lincrash = $lrec;
+                    $state = "found";
+                }
+                else
+                {
+                    # The first record is in the crash window. This is the first record in the crash window.
+                    $state = "in";
+                    $fincrash = $recN;
+                    $frecL = $recN; # current rec in crash window; lower bound for b-search.
+                    $lrecL = $lrec; # upper bound for b-search.
+                }
+            }
+            else
+            {
+                if ($locL eq "I")
+                {
+                    # The last record is in the crash window. This is the last record in the crash window.
+                    print "we are not here\n";
+                    $state = "in";
+                    $lincrash = $recX;
+                    $frecF = $recX; # current rec in crash window; upper bound for b-search.
+                    $lrecF = $frec; # lower bound for b-search.
+                }
+                else
+                {
+                    # Neither min nor max is in the crash window.
+                    if ($locF eq "B")
+                    {
+                        $state = "before";
+                        $rec = $frec;
+                    }
+                    else
+                    {
+                        # frec is after the crash window - NOTHING TO RETURN (the series is completely
+                        # outside the crash window - it is after the crash window).
+                        $state = "notfound";
+                    }
                 }
             }
         }
         
         if (!$err)
         {
+
+            print "before loop - state is $state\n";
             while(1)
             {
                 if ($state eq "found" || $state eq "notfound")
@@ -415,7 +755,7 @@ sub FindRecs
                     $rec = $frec + ($lrec - $frec) / 2;
                     
                     ($loc, $rec) = GetLoc($dbh, $stable, $rec, 1, $frec, $lrec, $bcrash, $ecrash);
-                    
+                        print "loc is $loc, rec is $rec\n";
                     if ($rec == $frec)
                     {
                         # Was not able to find a NEW record with a record number ge to the original
@@ -423,12 +763,14 @@ sub FindRecs
                         # (toward $max).
                         $rec = $frec + ($lrec - $frec) / 2;
                         ($loc, $rec) = GetLoc($dbh, $stable, $rec, 0, $frec, $lrec, $bcrash, $ecrash);
+                        print "loc is $loc, rec is $rec\n";
                     }
                     
                     if ($rec == $lrec)
                     {
                         # No records between $frec and $lrec, and we know the $frec is before
                         # the crash window, and $lrec is after. So, there are no records in the crash window.
+                        print "maybe? rec is $rec, lrec is $lrec\n";
                         $state = "notfound";
                     }
                     else
@@ -445,6 +787,7 @@ sub FindRecs
                         {
                             # $frec is before the crash window, $lrec is after the crash window, and $rec
                             # is in the crash window.
+                            print "gotta be here\n";
                             $state = "in";
                             $frecF = $rec;
                             $lrecF = $frec;
@@ -455,19 +798,20 @@ sub FindRecs
                 }
                 elsif ($state eq "in")
                 {
-                    $found = 1;
-                    
+                    print "shit i dunno\n";
                     if (!defined($fincrash))
                     {
-                        # $recL is inside crash window, $frecL is before crash window (or first record
-                        # in crash window)
+                        # $frecF is inside crash window, $lrecF is after crash window (or last record in
+                        # crash window).
+
+                        print "Finding first in crash window: $frecF in crash, $lrecF is before crash.\n";
                         $fincrash = FindFirstRec($dbh, $stable, $frec, $lrec, $bcrash, $ecrash, $frecF, $lrecF);
                     }
                     
                     if (!defined($lincrash))
                     {                        
-                        # $recF is inside crash window, $lrecF is after crash window (or last record in 
-                        # (crash window)
+                        # $recL is inside crash window, $frecL is before crash window (or first record
+                        # in crash window). $
                         $lincrash = FindLastRec($dbh, $stable, $frec, $lrec, $bcrash, $ecrash, $frecL, $lrecL);
                     }                
                     
@@ -482,7 +826,7 @@ sub FindRecs
                     $rec = $frec + ($lrec - $frec) / 2;
                     
                     ($loc, $rec) = GetLoc($dbh, $stable, $rec, 0, $frec, $lrec, $bcrash, $ecrash);
-                    
+                        print "loc is $loc, rec is $rec\n";                    
                     if ($rec == $lrec)
                     {
                         # Was not able to find a NEW record with a record number le to the original
@@ -490,6 +834,7 @@ sub FindRecs
                         # (toward $min).
                         $rec = $frec + ($lrec - $frec) / 2;
                         ($loc, $rec) = GetLoc($dbh, $stable, $rec, 1, $frec, $lrec, $bcrash, $ecrash);
+                        print "loc is $loc, rec is $rec\n";
                     }
                     
                     if ($rec == $frec)
@@ -512,6 +857,7 @@ sub FindRecs
                         {
                             # $frec is before the crash window, $lrec is after the crash window, and $rec
                             # is in the crash window.
+                            print "actually, we are here frecF is $rec, lrecF is $frec\n";
                             $state = "in";
                             $frecF = $rec;
                             $lrecF = $frec;
@@ -524,14 +870,17 @@ sub FindRecs
         }
     }
     
-    if ($err || $state ne "found")
+    print "err is $err, state is $state\n";
+    
+    if (!$err && $state eq "found")
     {
-        return (-1, -1);
+        # We have the first record in the crash window, and the last. Now we need to get all the records between those two record,
+        # including those two records, from the cache.
+        print "first in crash $fincrash, last in crash $lincrash\n";
+        $rv = GetCachedRecs($series, $fincrash, $lincrash);
     }
-    else
-    {
-        return ($fincrash, $lincrash);
-    }
+    
+    return $rv
 }
 
 # Given a record number as input, determine whether that record could have been created
@@ -571,8 +920,6 @@ sub GetLoc
     my($endtime);
     my($rows);
     my(@rowarr);
-    my($sessionns);
-    my($sessionid);
     my($wincls);
     my($winfar);
     my($winhaf);
@@ -584,6 +931,9 @@ sub GetLoc
     # till we find a valid recnum. If $state is after, then round up and start adding 1 till we
     # find a valid recnum. If $state is in, then subtract 1 from $frec till we find a valid recnum, and
     # add 1 to $lrec till we find a valid recnum.
+    
+    # Initialize return value.
+    @rv = ("E", -1);
     
     # First, get a valid record, and fetch its sessionid.    
     if ($down)
@@ -609,8 +959,8 @@ sub GetLoc
     
     # First, check to see if $recno is already a valid record. If so, we can avoid b-searching through a lot of
     # records.
-    @win = CheckWindow($dbh, $stable, $recno, $recno, $down);
-
+    @win = CheckWindow($dbh, $stable, $recno, $recno);
+    
     if ($#win < 0)
     {
         # Create the initial b-search windows.
@@ -630,12 +980,29 @@ sub GetLoc
         while (1)
         {
             # Check close window
-            @win = CheckWindow($dbh, $stable, $wincls, $winhaf, $down);
+            if ($down)
+            {
+                @win = CheckWindow($dbh, $stable, $winhaf, $wincls);
+            }
+            else
+            {
+                @win = CheckWindow($dbh, $stable, $wincls, $winhaf);
+            }
             
             if ($#win < 0)
             {
                 # Check far window
-                @win = CheckWindow($dbh, $stable, $down ? $winhaf - 1 : $winhaf + 1, $winfar, $down);
+                if ($down)
+                {
+                    @win = CheckWindow($dbh, $stable, $winfar, $winhaf -1);
+                }
+                else
+                {
+                    my($add) = $winhaf + 1;
+                    print "this one - " . $add . "," . $winfar . "\n";
+                    @win = CheckWindow($dbh, $stable, $winhaf + 1, $winfar);
+                    print "done this one - num recs " . scalar(@win) . "\n";
+                }
                 
                 # in case we need to cut this window in half
                 $wincls = $winhaf;
@@ -656,8 +1023,7 @@ sub GetLoc
             {
                 # One record outside of $recno - done
                 $recno = $win[0]->[0];
-                $sessionid = $win[0]->[1];
-                $sessionns = $win[0]->[2];
+                ($starttime, $endtime) = GetTimes($dbh, $stable, $win[0]->[0], $win[0]->[1], $win[0]->[2]);
                 last;
             }
             else
@@ -687,120 +1053,209 @@ sub GetLoc
     else
     {
         # Found $recno in the series. Set $sessionid and $sessionns.
-        $sessionid = $win[0]->[1];
-        $sessionns = $win[0]->[2];
+        ($starttime, $endtime) = GetTimes($dbh, $stable, $win[0]->[0], $win[0]->[1], $win[0]->[2]);
     }
     
     if (!$err)
     {
-        # The record is IN the crash window if either the endtime of the record's session is in the 
-        # crash window, or the starttime of the record's session is in the crash window. So, fetch
-        # the endtime and the starttime.
-        $stmnt = "SELECT starttime, endtime FROM $sessionns.drms_session WHERE sessionid = $sessionid";
-        
-        $rows = $dbh->selectall_arrayref($stmnt, undef);
-        $err = !(NoErr($rows, \$dbh, $stmnt));
-        
-        if (!$err)
+        # We have a recno now.
+        @rv = ("E", $recno);
+    }
+    
+    if (!$err)
+    {
+        if (defined($starttime) && defined($endtime))
         {
-            @rowarr = @$rows;
-            
-            if ($#rowarr != 0)
+            my($strp);
+
+            $strp = DateTime::Format::Strptime->new(pattern => '%Y-%m-%d %T');
+
+            $starttime = $strp->parse_datetime($starttime);
+            $endtime = $strp->parse_datetime($endtime);
+            $bcrash = $strp->parse_datetime($bcrash);
+            $ecrash = $strp->parse_datetime($ecrash);
+
+            # The record is IN the crash window if either the endtime of the record's session is in the
+            # crash window, or the starttime of the record's session is in the crash window.
+            # one row
+            print "recno is $recno, start is $starttime, end is $endtime\n";
+            if (($endtime ge $bcrash && $endtime le $ecrash) ||
+                ($starttime ge $bcrash && $starttime le $ecrash) ||
+                ($starttime le $bcrash && $endtime ge $ecrash))
             {
-                print STDERR "Unexpected number of rows.\n";
-                $err = 1;
+                # Rec was created IN the crash window.
+                @rv = ("I", $recno);
+            }
+            elsif ($endtime lt $bcrash)
+            {
+                # Rec was created BEFORE the crash window.
+                print "are wer really here $recno, $endtime, $bcrash\n";
+                @rv = ("B", $recno);
             }
             else
             {
-                $starttime = $rowarr[0]->[0];
-                $endtime = $rowarr[0]->[1];
-                
-                if (($endtime ge $bcrash && $endtime le $ecrash) ||
-                    ($starttime ge $bcrash && $starttime le $ecrash) ||
-                    ($starttime le $bcrash && $endtime ge $ecrash))
+                if ($starttime gt $endtime)
                 {
-                    # Rec was created IN the crash window.
-                    @rv = ("I", $recno);
-                }
-                elsif ($endtime lt $bcrash)
-                {
-                    # Rec was created BEFORE the crash window.
-                    @rv = ("B", $recno);
+                    # This shouldn't happen!
+                    print STDERR "This cannot conceivably happen: starttime $starttime, endtime $endtime\n";
+                    $err = 1;
                 }
                 else
                 {
-                    if ($starttime gt $endtime)
-                    {
-                        # This shouldn't happen!
-                        print STDERR "This cannot conceivably happen: starttime $starttime, endtime $endtime\n";
-                        $err = 1;
-                    }
-                    else
-                    {
-                        # Rec was created AFTER the crash window.
-                        @rv = ("A", $recno);
-                    }
+                    # Rec was created AFTER the crash window.
+                    @rv = ("A", $recno);
                 }
             }
+        }
+        else
+        {
+            # The record probably wasn't created properly. An error of "E" will be returned.
         }
     }
     
     return @rv;
 }
 
-# Returns (recnum, sessionid, sessionns) tuples for all records specified by the range [$beg-$end]. If $down == 1, then
-# the range is [$end-$beg].
+sub CacheRecs
+{
+    my($dbh,
+       $series,
+       $firstRec,
+       $lastRec) = @_;
+    
+    if ($firstRec <= $lastRec)
+    {
+        my($stmnt);
+        my($rows);
+        my(@rowarr);
+        
+        $stmnt = "SELECT recnum, sunum, sessionns, sessionid from $series WHERE recnum <= $firstRec AND recnum >= $lastRec";
+        $rows = $dbh->selectall_arrayref($stmnt, undef);
+        
+        if (NoErr($rows, \$dbh, $stmnt))
+        {
+            @rowarr = @$rows;
+            foreach my $row (@rowarr)
+            {
+                $gRecCache->{$series}->{$row->[0]} = [$row->[0], $row->[1], $row->[2], $row->[3]];
+            }
+        }
+        
+        # Create records for invalid/missing records in [$firstRec, $lastRec] too.
+        for (my $iRec = $firstRec; $iRec <= $lastRec; $iRec++)
+        {
+            if (!exists($gRecCache->{$series}->{$iRec}))
+            {
+                $gRecCache->{$series}->{$iRec} = [];
+            }
+        }
+    }
+}
+
+sub PurgeRecs
+{
+    my($series) = @_;
+    
+    if (exists($gRecCache->{$series}))
+    {
+        delete($gRecCache->{$series});
+    }
+}
+
+# Returns a reference to an array of valid series records (series, recnum, sunum) with recnums in [$firstRec, $lastRec]. If any record in [$firstRec, $lastRec]
+# is not cached, then an error is returned (an undefined array reference).
+sub GetCachedRecs
+{
+    my($series, $firstRec, $lastRec) = @_;
+    
+    my($rv);
+    my($rec);
+    
+    if (exists($gRecCache->{$series}))
+    {
+        for (my $iRec = $firstRec; $iRec <= $lastRec; $iRec++)
+        {
+            $rec = $gRecCache->{$series}->{$iRec};
+            if (scalar(@$rec) > 0)
+            {
+                if (!defined($rv))
+                {
+                    $rv = [];
+                }
+                
+                # If scalar(@$rec) == 0, then there is no valid record for that recnum.
+                push(@$rv, $series, $rec->[0], $rec->[1])
+            }
+        }
+    }
+    
+    return $rv;
+}
+
+# Returns (recnum, sessionns, sessionid) tuples for all valid records specified by the range [$beg-$end]. To make space in the db,
+# old session records get manually deleted from time to time. But in this function, it is assumed that the recnums provided
+# are for records that all have session records.
 sub CheckWindow
 {
     my($dbh,
        $stable,
        $beg,
-       $end,
-       $down) = @_;
+       $end) = @_;
     
+    my($firstRec);
+    my($lastRec);
     my($stmnt);
     my($rows);
     my(@rowarr);
     my($err);
+    my($subarr);
     my(@rv);
-
-    if ($down)
-    {
-        if ($beg < $end)
-        {
-            @rv = [];
-        }
-        else
-        {
-            $stmnt = "SELECT recnum, sessionid, sessionns from $stable WHERE recnum <= $beg AND recnum >= $end";
-        }
-    }
-    else
-    {
-        if ($beg > $end)
-        {
-            @rv = [];
-        }
-        else
-        {
-            $stmnt = "SELECT recnum, sessionid, sessionns from $stable WHERE recnum >= $beg AND recnum <= $end";
-        }
-    }
-
-    $rows = $dbh->selectall_arrayref($stmnt, undef);
-    $err = !(NoErr($rows, \$dbh, $stmnt));
     
-    if ($err)
+    
+    # Cache (download from db) all valid records [$beg, $end] that have not been cached.
+    $firstRec = undef;
+    $lastRec = undef;
+    
+    for (my $iRec = $beg; $iRec <= $end; $iRec++)
     {
-        @rv = [];
-    }
-    else
-    {   
-        @rowarr = @$rows;
-        
-        foreach my $row (@rowarr)
+        if (exists($gRecCache->{$stable}->{$iRec}))
         {
-            push(@rv, [$row->[0], $row->[1], $row->[2]]);
+            if (defined($firstRec))
+            {
+                $lastRec = $iRec - 1; # if $firstRec is defined, then $iRec >= 1
+                CacheRecs($dbh, $stable, $firstRec, $lastRec);
+                $firstRec = undef;
+                $lastRec = undef;
+            }
+        }
+        else
+        {
+            if (!defined($firstRec))
+            {
+                $firstRec = $iRec;
+            }
+        }
+    }
+    
+    # Might be one more block of records to cache.
+    if (defined($firstRec))
+    {
+        $lastRec = $end;
+        CacheRecs($dbh, $stable, $firstRec, $lastRec);
+        $firstRec = undef;
+        $lastRec = undef;
+    }
+
+    # All records [$beg, $end] have been cached. For all invalid or missing records I, scalar(@{$gRecCache->{$stable}->{I}}) == 0.
+    for (my $iRec = $beg; $iRec <= $end; $iRec++)
+    {
+        if (scalar(@{$gRecCache->{$stable}->{$iRec}}) != 0)
+        {
+            # ACK!!! Cannot push an array into an array! If you try, push() will append each element in the subarray into the
+            # parent array. Instead, make the subarray a reference, and push the reference into the parent array.
+            # We are pushing [recnum, sessionns, sessionid] into the returned array.
+            $subarr = [$gRecCache->{$stable}->{$iRec}->[0], $gRecCache->{$stable}->{$iRec}->[2], $gRecCache->{$stable}->{$iRec}->[3]];
+            push(@rv, $subarr);
         }
     }
     
