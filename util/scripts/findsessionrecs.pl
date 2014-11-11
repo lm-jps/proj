@@ -238,7 +238,7 @@ else
                 {
                     print "$rec->[0]\t$rec->[1]\t$rec->[2]\n";
                     print $fh "$rec->[0]\t$rec->[1]\t$rec->[2]\n";
-                }                
+                }
             } # series loop
         }
         else
@@ -556,6 +556,14 @@ sub FindRecs
         
         while (1)
         {
+            # If $tryRec doesn't change between iterations, then there are no more records to try and we
+            # did not find any records that have a session.
+            if (defined($oldTryRec) && $tryRec == $oldTryRec)
+            {
+                $err = 1;
+                last;
+            }
+            
             $hasSession = HasSession($dbh, $stable, $tryRec);
             
             if (!defined($hasSession))
@@ -566,23 +574,6 @@ sub FindRecs
 
             if ($hasSession)
             {
-                # If $tryRec doesn't change between iterations, then there are no more records to try and we
-                # did not find any records that have a session.
-                
-                if (defined($oldTryRec) && $tryRec == $oldTryRec)
-                {
-                    $err = 1;
-                    last;
-                }
-                
-                # If there is no record immediately below $tryRec, then $tryRec is the first DRMS record
-                # with a drms_session row.
-                if ($tryRec == $min)
-                {
-                    $frec = $tryRec;
-                    last;
-                }
-
                 # If the record immediately below $tryRec does not have a drms_session row, then $tryRec is the first DRMS record
                 # with a drms_session row.
                 $validRec = GetValidRec($dbh, $stable, $tryRec - 1, 1, $lbound);
@@ -614,6 +605,7 @@ sub FindRecs
                 }
 
                 $ubound = $tryRec;
+                # GetValidRec() will find the next EARLIER record (it may not have a drms_session log).
                 $validRec = GetValidRec($dbh, $stable, $tryRec - floor(($ubound - $lbound) / 2), 1, $lbound);
 
                 if (!defined($validRec))
@@ -631,9 +623,9 @@ sub FindRecs
             {
                 $lbound = $tryRec;
                 
-                # GetValidRec() will find the next earlier record (it may not have a drms_session log).
-                $validRec = GetValidRec($dbh, $stable, $tryRec + floor(($ubound - $lbound) / 2), 1, $lbound);
-
+                # GetValidRec() will find the next LATER record (it may not have a drms_session log).
+                $validRec = GetValidRec($dbh, $stable, $tryRec + floor(($ubound - $lbound) / 2), 0, $ubound);
+                
                 if (!defined($validRec))
                 {
                     $err = 1;
@@ -1113,7 +1105,7 @@ sub CacheRecs
         my(@rowarr);
         
         $stmnt = "SELECT recnum, sunum, sessionns, sessionid from $series WHERE recnum >= $firstRec AND recnum <= $lastRec";
-        print "$stmnt\n";
+
         $rows = $dbh->selectall_arrayref($stmnt, undef);
         
         if (NoErr($rows, \$dbh, $stmnt))
