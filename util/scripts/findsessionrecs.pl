@@ -215,6 +215,13 @@ else
                 }
                 
                 print STDERR "Processing series $aseries...\n";
+                
+                if (lc($aseries) eq 'hmi.cosmic_rays')
+                {
+                    print STDERR "skipping series $aseries - it is too big to analyze.\n";
+                    next;
+                }
+                
                 $seriesRecs = FindRecs($dbh, $aseries, $bcrash, $ecrash);
                 
                 # Clear record cache so we do not use up memory.
@@ -1105,7 +1112,6 @@ sub CacheRecs
         my(@rowarr);
         
         $stmnt = "SELECT recnum, sunum, sessionns, sessionid from $series WHERE recnum >= $firstRec AND recnum <= $lastRec";
-
         $rows = $dbh->selectall_arrayref($stmnt, undef);
         
         if (NoErr($rows, \$dbh, $stmnt))
