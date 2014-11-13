@@ -626,7 +626,7 @@ int qsubjob(long long rec1, long long rec2)
   }
 ****************************************************************************/
   fclose(qsubfp);
-  sprintf(qsubcmd, "qsub -o %s -e %s -q p.q %s", 
+  sprintf(qsubcmd, "qsub2 -o %s -e %s -q p.q %s", 
 		QSUBDIR, QSUBDIR, qlogname);		//note: uses p.q
   //sprintf(qsubcmd, "qsub -o %s -e %s -q j.q %s", 
   //		QSUBDIR, QSUBDIR, qlogname);
@@ -677,7 +677,7 @@ int qsubmode(long long frec, long long lrec)
   //sprintf(qsubcmd, "qstat -u production | grep \"qsub_prod_%d\"", mypid);
   //the grep string is from qlogname set in qsubjob()
   //sprintf(qsubcmd, "qstat -u production | grep \"p_%d_\"", mypid);
-  sprintf(qsubcmd, "qstat -u %s | grep \"p_%d_\"", username, mypid);
+  sprintf(qsubcmd, "qstat2 -u %s | grep \"p_%d_\"", username, mypid);
   while(1) {
     //printf("\ncmd: %s\n", qsubcmd);	//!!TEMP
     if(!(fin = popen(qsubcmd, "r"))) {
@@ -689,7 +689,7 @@ int qsubmode(long long frec, long long lrec)
     while(fgets(string, sizeof string, fin)) {  //get qstat return line
       //sscanf(string, "%s %u", astr, &jid);	// get job_id 
       sscanf(string, "%u", &jid);		// get job_id 
-      printf("job id from qstat = %u\n", jid);
+      printf("job id from qstat2 = %u\n", jid);
       qstatjid[k++] = jid;
       found = 1;
     }
