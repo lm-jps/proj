@@ -1181,8 +1181,9 @@ function SetExportMethod(byWhom)
     $("FilenameFmtRow").style.display="table-row";
     $("RequestorRow").style.display="table-row";
     $("NotifyRow").style.display="table-row";
-    if(ExportProtocolValue == "FITS")
-       $("CompressRow").style.display="table-row";
+    // PHS turn off compression option
+    // if(ExportProtocolValue == "FITS")
+       // $("CompressRow").style.display="table-row";
     if (byWhom == 0)
       $("ExportCompress").selectedIndex = 0;
     }
@@ -1352,7 +1353,8 @@ function SetExportProtocol(byWhom)
     else if (ExportProtocolValue == "FITS")
       {
       ExportProtocolOK = 2;
-      $("CompressRow").style.display="table-row";
+      // PHS hide compression option row
+      // $("CompressRow").style.display="table-row";
       $("ExportProtocolHidden").value = "FITS";
       if (byWhom == 0)
         $("ExportCompress").selectedIndex = 0;
@@ -1409,7 +1411,9 @@ function SetExportCompress()
         if (ExportCompressValue == "compress Rice" &&  protocolparam == "FITS" && (segtype == "float" || segtype == "double"))
           protocolparam = protocolparam  + ",**NONE**";
         else if (protocolparam == "FITS")
-          protocolparam = protocolparam  + "," + ExportCompressValue;
+          // PHS do not allow uncompressed.  13 Nov 2014
+          // protocolparam = protocolparam  + "," + ExportCompressValue;
+          protocolparam = protocolparam  + "," + "compress Rice";
         }
       $("ExportProtocolHidden").value = protocolparam;
       ExportCompressOK = 1;
