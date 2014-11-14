@@ -213,10 +213,11 @@ function initVars()
   // Form init
     {
     $("ExportRequestor").value = "";
-    if (Internal)
+    // always ask email, default solarmail
+    // if (Internal)
       $("ExportNotify").value = "solarmail";
-    else
-      $("ExportNotify").value = "";
+    // else
+      // $("ExportNotify").value = "";
     $("RequestIdPlace").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -340,8 +341,9 @@ function OnLoadInit()
     GetRSCount();
     GetDefaultFormat();
     }
-  if (Internal)
-    $("RequestorMessage").innerHTML = "Provide an identifier for you, e.g. your SolarMail name. Required for jsoc2";
+  // if (Internal)
+   //  $("RequestorMessage").innerHTML = "Provide an identifier for you, e.g. your SolarMail name. Required for jsoc2";
+    $("RequestorMessage").innerHTML = "If Notify is 'solarmail' provide your SolarMail name else your name or leave blank.";
   // HELP tips enable
   if (exportdataLoaded)
     ProcessingEnabled();
@@ -856,6 +858,11 @@ function GetRSCount()
        }
   var firstbracket = posbracket>=0 ? posbracket : posCurlbracket;
   SeriesName = (firstbracket == -1 ? recset : recset.substring(0,firstbracket));
+  if (SeriesName.length < 3)
+    {
+    $("RSCountPlace").innerHTML = "ERROR - missing SeriesName";
+    return(1);
+    }
   recfilt = (posbracket >=0 ? recset.substring(posbracket,posRbracket+1) : (RecordLimit == 0 ? "[$]" : ""));
   segfilt = (posCurlbracket >=0 ? recset.substring(posCurlbracket,posCurlRbracket+1) : "");
   $("ExportRecordSet").value = SeriesName + recfilt + segfilt;
@@ -1459,16 +1466,17 @@ function SetExportNotify()
     }
   else if (tmp1.length == 0)
     {
-    if (Internal)
-      {
+    // as of 14 Nov 2014 ask for passwords for all exports
+    // if (Internal)
+    // {
       ExportNotifyOK = 0;
       $("ExportNotify").value = "solarmail";
-      }
-    else
-      {
-      ExportNotifyOK = 3;
-      $("ExportNotify").value = "none";
-      }
+    // }
+    // else
+      // {
+      // ExportNotifyOK = 3;
+      // $("ExportNotify").value = "none";
+      // }
     }
   else if ( tmp1 ===  "SOLARMAIL" )
     {
@@ -1479,10 +1487,10 @@ function SetExportNotify()
     }
   else if (tmp1 == "NONE" || tmp1 == "NO")
     {
-    if (Internal)
+    // if (Internal)
       ExportNotifyOK = 0;
-    else
-      ExportNotifyOK = 3;
+    // else
+      // ExportNotifyOK = 3;
     }
   else if ($("ExportNotify").value.indexOf("@") < 0)
     ExportNotifyOK = 0;
@@ -1577,10 +1585,13 @@ function CheckExportParams()
       {
       if (ExportUserOK == 0)
         $("ExportCheckMsg").innerHTML = "Requestor not given, Enter name you will use in Requestor field then retry export request.  This field in required if Notify is 'solarmail'";
-      else if (Internal)
-          $("ExportCheckMsg").innerHTML = "Notify email required for jsoc2, enter 'solarmail' or email address then retry export request.";
+      // as of 14 Nov email requested for all exports
+      // else if (Internal)
       else
-          $("ExportCheckMsg").innerHTML = "Notify email not given.  Enter 'none' or 'solarmail' or email address then retry export request.";
+          // $("ExportCheckMsg").innerHTML = "Notify email required for jsoc2, enter 'solarmail' or email address then retry export request.";
+        $("ExportCheckMsg").innerHTML = "Notify email address required, enter 'solarmail' or email address then retry export request.";
+      // else
+          // $("ExportCheckMsg").innerHTML = "Notify email not given.  Enter 'none' or 'solarmail' or email address then retry export request.";
       break;
       }
     break;
