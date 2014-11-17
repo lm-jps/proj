@@ -358,15 +358,15 @@ int DoIt ()
         if (inparr) drms_free_array(inparr);
         if (outarr) drms_free_array(outarr);
         }
-
-      drms_close_record(outrec, DRMS_INSERT_RECORD);
       } /* end segment loop */
 
       if (segIter)
       {
          hiter_destroy(&segIter);
       }
-    }
+
+      drms_close_record(outrec, DRMS_INSERT_RECORD);
+    } /* end record loop */
   return 0;
 }
 
