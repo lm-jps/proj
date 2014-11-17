@@ -240,16 +240,39 @@ int DoIt ()
       }
     crota2 = drms_getkey_double(inprec, "CROTA2", &status); if (status) crota2 = 0.0; // WCS default
    
-    nsegs = hcon_size(&inprec->segments);
-    for (iseg=0; iseg<1; iseg++)
-      {
+    /* Segment loop. */
+    HIterator_t *segIter = NULL;
+    DRMS_Segment_t *orig = NULL;
+     
+    /* inpseg could be a linked segment, but we need to obtain the segment struct for the original series. 
+     * There is no pointer from the linked segment to the original segment. And we do not have the name or 
+     * number of the original segment. Or we didn't, so I made drms_record_nextseg2(). */ 
+    while ((inpseg = drms_record_nextseg2(inprec, &segIter, 1, &orig)) != NULL)
+    {
+       /* CAVEAT: There is no check to see if the segment on which this code is operating is a suitable
+        * segment for this module to process. For example, there is the assumption that the segment
+        * being processed has two dimensions. Rejecting incompatible segments is something to implement
+        * in the future. */
       void *output_array = NULL;
       int i, ix, iy, n, m, dtyp, nx, ny, npix;
-      inpseg = drms_segment_lookupnum(inprec, iseg);
-      if (0 == iseg) // XXXXXX WARNING - for now only does first segment
-        {
+
+      {
         inparr = drms_segment_read(inpseg, DRMS_TYPE_FLOAT, &status); if (status) DIE("drms_segment_read failed!");
-        outseg = drms_segment_lookupnum(outrec, iseg); if (!outseg) DIE("Cant get output segment");
+
+        /* The original intent was for the output series' segments to parallel the input series' segments.
+         * However, the names were allowed to vary. So the segment descriptions match, and they are in the
+         * same order. However, the names given to these descriptions might vary. Therefore, we need to
+         * look-up output segments by segment number, not name.
+         *
+         * Use the segment number of the input segment (the original input segment, in case a link was followed).
+         */
+        outseg = drms_segment_lookupnum(outrec, orig->info->segnum);
+         
+        if (!outseg)
+        {
+           DIE("Cant get output segment");
+        }
+
         int outdims[2];
         dtyp = 3;
         n = inparr->axis[0];
@@ -335,12 +358,13 @@ int DoIt ()
         if (inparr) drms_free_array(inparr);
         if (outarr) drms_free_array(outarr);
         }
-      else
-        {
-        if (verbose)
-          fprintf(stderr,"WARNING - only first segment will be processed.\n");
-        }
+
       drms_close_record(outrec, DRMS_INSERT_RECORD);
+      } /* end segment loop */
+
+      if (segIter)
+      {
+         hiter_destroy(&segIter);
       }
     }
   return 0;
