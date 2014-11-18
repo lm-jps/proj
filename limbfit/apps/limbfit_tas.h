@@ -1,6 +1,6 @@
 /* I.Scholl 
-	#define CODE_VERSION 	"V5.05" 
-	#define CODE_DATE 		"Wed Nov  6 09:42:51 HST 2013" 
+	#define CODE_VERSION 	"V6.0" 
+	#define CODE_DATE 		"Mon Sep 29 15:40:38 HST 2014" 
 */
 
 #include <string.h>
@@ -26,11 +26,25 @@
 #include "expmax.h"
 #include "expfit.h"
 
-#define CODE_NAME 		"limbfit_tas"
-#define CODE_VERSION 	"V5r5" 
-#define CODE_DATE 		"Wed Nov  6 09:42:51 HST 2013" 
-#define LOGMSG1			"LIMBFITS"
-#define	JSD_NAME		"scholl_limbfit_tas.jsd"
+#ifdef AB512
+	#define CODE_NAME 		"limbfit_tas2(ab512)"
+	#define CODE_VERSION 	"V6r0" 
+	#define CODE_DATE 		"Sun Nov 16 08:21:53 JST 2014" 
+	#define LOGMSG1			"LIMBFITS"
+	#define	JSD_NAME		"scholl_limbfit_tas.jsd"
+#elif AB1024
+	#define CODE_NAME 		"limbfit_tas2(ab1024)"
+	#define CODE_VERSION 	"V6r0" 
+	#define CODE_DATE 		"Sun Nov 16 08:21:53 JST 2014" 
+	#define LOGMSG1			"LIMBFITS"
+	#define	JSD_NAME		"scholl_limbfit_tas.jsd"
+#else
+	#define CODE_NAME 		"limbfit_tas"
+	#define CODE_VERSION 	"V6r0" 
+	#define CODE_DATE 		"Mon Sep 29 15:40:38 HST 2014" 
+	#define LOGMSG1			"LIMBFITS"
+	#define	JSD_NAME		"scholl_limbfit_tas.jsd"
+#endif
 
 //#define dsin	"hmi.lev1c_nrt[]"
 //#define dsout	"su_scholl.limbfit"
@@ -98,7 +112,13 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define MAX_SIZE_ANN_VARS 8000000			// ! must be the same value than JPT in fortran code !
 #define NUM_LDF 180							// n/jang=NUM_LDF+1
 #define NUM_RADIAL_BINS 64					// n/jprf
-#define NUM_AB_BINS 256						// n/jreg
+#ifdef AB512
+	#define NUM_AB_BINS 512					// n/jreg
+#elif AB1024
+	#define NUM_AB_BINS 1024					// n/jreg
+#else
+	#define NUM_AB_BINS 256					// n/jreg
+#endif
 #define LO_LIMIT 32.0						// ! the sum of these 2 must be equal to ANNULUS_WIDTH 
 #define UP_LIMIT 32.0						// 
 #define INC_X -4.0							// 
@@ -130,6 +150,7 @@ typedef struct {
 	double		ix;
 	double		iy;
 	double		ir;
+	int			src;
 	//int		sav;
 	unsigned int fsn;
 } LIMBFIT_INPUT;
@@ -220,7 +241,7 @@ int		mk_fldfs(float cmx, float cmy, double radius, int naxis_row, int naxis_col,
 int		process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, LIMBFIT_IO_PUT *lfw, int *status);
 int		process_all_records_smpl(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, LIMBFIT_IO_PUT *lfw, int *status);
 int		write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,int tbf, LIMBFIT_OUTPUT *lfr);
-int		write_lf_keywords(char * errcode, DRMS_Record_t *record_out, LIMBFIT_OUTPUT *results, int pass);
+int		write_lf_keywords(char * errcode, DRMS_Record_t *record_out, LIMBFIT_OUTPUT *results, int pass, int src);
 void	sav_b0(float *pf_sb0, float *pl_sb0, float *pf_b0);
 void	sum_b0(float *beta, float *pf_b0, float *pl_b0);
 int		sort(unsigned long n, float *arr);
