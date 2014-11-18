@@ -275,13 +275,6 @@ return(0);
 
 int DoIt(void)
 {
-#ifdef AB512
-printf("512\n");
-#elif AB1024
-printf("1024\n");
-#else
-printf("256\n");
-#endif
 	// get arguments
 	
 	CmdParams_t *params = &cmdparams;
