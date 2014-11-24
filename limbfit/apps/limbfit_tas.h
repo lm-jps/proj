@@ -26,13 +26,13 @@
 #include "expmax.h"
 #include "expfit.h"
 
-#ifdef AB512
+#if defined(AB512) && AB512
 #define CODE_NAME 		"limbfit_tas2(ab512)"
 #define CODE_VERSION 	"V6r0" 
 #define CODE_DATE 		"Sun Nov 16 08:21:53 JST 2014" 
 #define LOGMSG1			"LIMBFITS"
 #define	JSD_NAME		"scholl_limbfit_tas_ab512.jsd"
-#elif AB1024
+#elif defined(AB1024) && AB1024
 #define CODE_NAME 		"limbfit_tas2(ab1024)"
 #define CODE_VERSION 	"V6r0" 
 #define CODE_DATE 		"Sun Nov 16 08:21:53 JST 2014" 
@@ -112,9 +112,9 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define MAX_SIZE_ANN_VARS 8000000			// ! must be the same value than JPT in fortran code !
 #define NUM_LDF 180							// n/jang=NUM_LDF+1
 #define NUM_RADIAL_BINS 64					// n/jprf
-#ifdef AB512
+#if defined(AB512) && AB512
 #define NUM_AB_BINS 512					// n/jreg
-#elif AB1024
+#elif defined(AB1024) && AB1024
 #define NUM_AB_BINS 1024					// n/jreg
 #else
 #define NUM_AB_BINS 256					// n/jreg

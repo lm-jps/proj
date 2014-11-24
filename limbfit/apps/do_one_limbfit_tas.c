@@ -7,8 +7,8 @@
 			
 	
 	#define results->code_name 		"limbfit_tas"
-	#define CODE_VERSION 			"V5.04" 
-	#define CODE_DATE 				"Tue May  7 21:27:32 PDT 2013" 
+	#define CODE_VERSION 			"V6.0" 
+	#define CODE_DATE 				"Mon Sep 29 15:40:38 HST 2014" 
 */
 
 #include "limbfit_tas.h"
@@ -135,7 +135,7 @@ int do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out,
 			drms_copykeys(record_out, record_in, 1, kDRMS_KeyClass_Explicit); 		
 			// change DATE to our proc_date, do not keep level 1 DATE:
 			drms_keyword_setdate(record_out); 
-			write_lf_keywords(VOID,record_out, results,0);
+			write_lf_keywords(VOID,record_out, results,0, input->src);
 
 			// write the segments 
 			*status=0;
@@ -289,7 +289,7 @@ int	write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *re
 		// change DATE to our proc_date, do not keep level 1 DATE:
 		drms_keyword_setdate(record_out); 
 
-		write_lf_keywords(errcode,record_out, results,1);
+		write_lf_keywords(errcode,record_out, results,1,0);
 		if (tbf >=1)
 		{
 			free(results->fits_alpha_beta);
@@ -300,7 +300,7 @@ return(0);
 }
 
 int	write_lf_keywords(char * errcode, DRMS_Record_t *record_out, LIMBFIT_OUTPUT *results, 
-				int pass)
+				int pass, int src)
 {
 // need to test status...
 		drms_setkey_string(record_out, "SERIESCN",  results->series_name);
@@ -328,7 +328,8 @@ int	write_lf_keywords(char * errcode, DRMS_Record_t *record_out, LIMBFIT_OUTPUT 
 		drms_setkey_float (record_out, "AS3",		results->fits_as[3]);
 		drms_setkey_float (record_out, "AS4",		results->fits_as[4]);
 		drms_setkey_float (record_out, "AS5",		results->fits_as[5]);
-		drms_setkey_double(record_out, "CMEAN",		results->cmean);
+		if (src<2)
+			drms_setkey_double(record_out, "CMEAN",		results->cmean);
 		drms_setkey_int   (record_out, "ANN_WD",	results->ann_wd);
 		drms_setkey_int   (record_out, "MXSZANNV",	results->mxszannv);
 		drms_setkey_int   (record_out, "NB_LDF",	results->nb_ldf);
