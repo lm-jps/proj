@@ -964,7 +964,7 @@ function GetDefaultFormat()
     // will do a check to make sure that an external user isn't attempting to use the internal db for series that are not
     // whitelisted.
     var script = null;
-    var arguments = {"ds" : RecordSet, "op" : "series_struct" };
+    var arguments = {"ds" : RecordSet, "op" : "series_struct", "l" : 1 };
     
     if (intSeries.length > 0)
     {
