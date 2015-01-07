@@ -78,7 +78,7 @@ typedef struct ObsInfo_struct ObsInfo_t;
 void rebinArraySF(DRMS_Array_t *out, DRMS_Array_t *in);
 int upNcenter(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
 int crop_image(DRMS_Array_t *arr, ObsInfo_t *ObsLoc);
-const char *get_input_recset(DRMS_Env_t *drms_env, const char *in);
+const char *get_input_recset(DRMS_Env_t *drms_env, const char *in, DRMS_Record_t **template);
 
 ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus);
 
@@ -118,6 +118,7 @@ int DoIt ()
   float crpix1, crpix2, cdelt1, cdelt2, crota2, x0, y0;
   float mag = 1.0, dx, dy;
   DRMS_Record_t *inprec, *outrec;
+  DRMS_Record_t *template = NULL;
   DRMS_RecordSet_t *inprs;
   DRMS_Keyword_t *inpkey = NULL, *outkey = NULL;
   DRMS_Array_t *inparr=NULL, *outarr=NULL;
@@ -142,7 +143,7 @@ int DoIt ()
     }
   else
     dsout = strdup(dsout);
-  inQuery = get_input_recset(drms_env, dsinp);
+  inQuery = get_input_recset(drms_env, dsinp, &template);
   // int despike = cmdparams_get_int(&cmdparams, "despike", NULL);
   int rescale = cmdparams_get_int(&cmdparams, "rescale", NULL);
   double scale_to = cmdparams_get_double(&cmdparams, "scale_to", NULL);
@@ -165,208 +166,238 @@ int DoIt ()
   float usedx = 0;
   float usedy = 0;
   float usemag = 1.0;
-  for (irec=0; irec<nrecs; irec++)
-    {
-    int quality;
-    TIME t_rec, t_obs;
-    ObsInfo_t *ObsLoc;
-    char inQuery[DRMS_MAXQUERYLEN];
-
-    inprec = inprs->records[irec];
-    t_obs = drms_getkey_time(inprec, "T_OBS", &status); if (status) DIE("T_OBS not found!");
-    if (t_obs < 0)
-      continue;
-    if (is_aia)
+    
+    int iSet;
+    int iSubRec;
+    int nSubRecs = 0;
+    
+    
+  /* We need the record-set specfication for each record, so loop by recordset subset. */
+  for (iSet = 0, irec = 0; iSet < inprs->ss_n; iSet++)
+  {
+      int hasSeglist = 0;
+      
+      /* For each record, we need to know if the segments it contains came from a record-set specification that had a segment list.
+       * To do that, we have to search for '{' in the specification that resolved to this record. So we need to spec for this record,
+       * which is in inprs->ss_queries[iSet]. */
+      if (strchr(inprs->ss_queries[iSet], '{'))
       {
-      int qualmask = 0x800100f0;
-      int quallev0;
-      quallev0 = drms_getkey_int(inprec, "QUALLEV0", &status); if (status) DIE("QUALLEV0 not found!");
-      if (quallev0 & qualmask)
-        continue;
+          hasSeglist = 1;
       }
-    quality = drms_getkey_int(inprec, "QUALITY", &status);
-    if (verbose)
-      fprintf(stderr,"rec %d of %d, quality=%X\n",irec,nrecs,quality);
-    if (quality < 0)
-      continue;
-
-    outrec = drms_create_record(drms_env, (char*)dsout, DRMS_PERMANENT, &status);
-      if (status) DIE("cant create recordset");
-    status = drms_copykeys(outrec, inprec, 0, kDRMS_KeyClass_Explicit);
-      if (status) DIE("Error in drms_copykeys()");
-    if (strcmp(requestid, NOT_SPECIFIED) != 0)
-      drms_setkey_string(outrec, "requestid", requestid);
-    drms_setkey_time(outrec, "DATE", CURRENT_SYSTEM_TIME);
-    drms_sprint_rec_query(inQuery, inprec);
-    drms_setkey_string(outrec, "SOURCE", inQuery);
-
-    if (is_aia)
+      
+      nSubRecs = drms_recordset_getssnrecs(inprs, iSet, &status);
+      
+      for (iSubRec = 0; iSubRec < nSubRecs; iSubRec++, irec++)
       {
-      if (!drms_keyword_lookup(inprec, "T_REC", 1) && drms_keyword_lookup(outrec, "T_REC", 1))
-        {
-        double tr_step;
-        long long tr_index;
-        TIME tr_epoch;
-        if ( 0 == drms_setkey_time(outrec, "T_REC", t_obs))
+          int quality;
+          TIME t_rec, t_obs;
+          ObsInfo_t *ObsLoc;
+          char inQuery[DRMS_MAXQUERYLEN];
+
+          inprec = inprs->records[(inprs->ss_starts)[iSet] + iSubRec];
+          
+          t_obs = drms_getkey_time(inprec, "T_OBS", &status); if (status) DIE("T_OBS not found!");
+          if (t_obs < 0)
+              continue;
+          if (is_aia)
           {
-          tr_index = drms_getkey_longlong(outrec, "T_REC_index", &status); if (status) DIE("T_REC_index not found!");
-          tr_step =  drms_getkey_double(outrec, "T_REC_step", &status); if (status) DIE("T_REC_step not found!");
-          tr_epoch = drms_getkey_time(outrec, "T_REC_epoch", &status); if (status) DIE("T_REC_epoch not found!");
-          t_rec = tr_epoch + tr_index*tr_step;
-          drms_setkey_time(outrec, "T_REC", t_rec);
+              int qualmask = 0x800100f0;
+              int quallev0;
+              quallev0 = drms_getkey_int(inprec, "QUALLEV0", &status); if (status) DIE("QUALLEV0 not found!");
+              if (quallev0 & qualmask)
+                  continue;
           }
-        }
-      if (!drms_keyword_lookup(inprec, "GAEX_OBS", 1))
-        drms_setkey_double(outrec, "GAEX_OBS", drms_getkey_double(inprec, "GCIEC_X", NULL));
-      if (!drms_keyword_lookup(inprec, "GAEY_OBS", 1))
-        drms_setkey_double(outrec, "GAEY_OBS", drms_getkey_double(inprec, "GCIEC_Y", NULL));
-      if (!drms_keyword_lookup(inprec, "GAEZ_OBS", 1))
-        drms_setkey_double(outrec, "GAEZ_OBS", drms_getkey_double(inprec, "GCIEC_Z", NULL));
-      if (!drms_keyword_lookup(inprec, "HAEX_OBS", 1))
-        drms_setkey_double(outrec, "HAEX_OBS", drms_getkey_double(inprec, "HCIEC_X", NULL));
-      if (!drms_keyword_lookup(inprec, "HAEY_OBS", 1))
-        drms_setkey_double(outrec, "HAEY_OBS", drms_getkey_double(inprec, "HCIEC_Y", NULL));
-      if (!drms_keyword_lookup(inprec, "HAEZ_OBS", 1))
-        drms_setkey_double(outrec, "HAEZ_OBS", drms_getkey_double(inprec, "HCIEC_Z", NULL));
+          quality = drms_getkey_int(inprec, "QUALITY", &status);
+          if (verbose)
+              fprintf(stderr,"rec %d of %d, quality=%X\n",irec,nrecs,quality);
+          if (quality < 0)
+              continue;
+          
+          outrec = drms_create_record(drms_env, (char*)dsout, DRMS_PERMANENT, &status);
+          if (status) DIE("cant create recordset");
+          status = drms_copykeys(outrec, inprec, 0, kDRMS_KeyClass_Explicit);
+          if (status) DIE("Error in drms_copykeys()");
+          if (strcmp(requestid, NOT_SPECIFIED) != 0)
+              drms_setkey_string(outrec, "requestid", requestid);
+          drms_setkey_time(outrec, "DATE", CURRENT_SYSTEM_TIME);
+          drms_sprint_rec_query(inQuery, inprec);
+          drms_setkey_string(outrec, "SOURCE", inQuery);
+          
+          if (is_aia)
+          {
+              if (!drms_keyword_lookup(inprec, "T_REC", 1) && drms_keyword_lookup(outrec, "T_REC", 1))
+              {
+                  double tr_step;
+                  long long tr_index;
+                  TIME tr_epoch;
+                  if ( 0 == drms_setkey_time(outrec, "T_REC", t_obs))
+                  {
+                      tr_index = drms_getkey_longlong(outrec, "T_REC_index", &status); if (status) DIE("T_REC_index not found!");
+                      tr_step =  drms_getkey_double(outrec, "T_REC_step", &status); if (status) DIE("T_REC_step not found!");
+                      tr_epoch = drms_getkey_time(outrec, "T_REC_epoch", &status); if (status) DIE("T_REC_epoch not found!");
+                      t_rec = tr_epoch + tr_index*tr_step;
+                      drms_setkey_time(outrec, "T_REC", t_rec);
+                  }
+              }
+              if (!drms_keyword_lookup(inprec, "GAEX_OBS", 1))
+                  drms_setkey_double(outrec, "GAEX_OBS", drms_getkey_double(inprec, "GCIEC_X", NULL));
+              if (!drms_keyword_lookup(inprec, "GAEY_OBS", 1))
+                  drms_setkey_double(outrec, "GAEY_OBS", drms_getkey_double(inprec, "GCIEC_Y", NULL));
+              if (!drms_keyword_lookup(inprec, "GAEZ_OBS", 1))
+                  drms_setkey_double(outrec, "GAEZ_OBS", drms_getkey_double(inprec, "GCIEC_Z", NULL));
+              if (!drms_keyword_lookup(inprec, "HAEX_OBS", 1))
+                  drms_setkey_double(outrec, "HAEX_OBS", drms_getkey_double(inprec, "HCIEC_X", NULL));
+              if (!drms_keyword_lookup(inprec, "HAEY_OBS", 1))
+                  drms_setkey_double(outrec, "HAEY_OBS", drms_getkey_double(inprec, "HCIEC_Y", NULL));
+              if (!drms_keyword_lookup(inprec, "HAEZ_OBS", 1))
+                  drms_setkey_double(outrec, "HAEZ_OBS", drms_getkey_double(inprec, "HCIEC_Z", NULL));
+          }
+          
+          crpix1 = drms_getkey_double(inprec, "CRPIX1", &status); if (status) DIE("CRPIX1 not found!");
+          crpix2 = drms_getkey_double(inprec, "CRPIX2", &status); if (status) DIE("CRPIX2 not found!");
+          cdelt1 = drms_getkey_double(inprec, "CDELT1", &status); if (status) DIE("CDELT1 not found!");
+          if (rescale)
+          {
+              mag = fabs(cdelt1 / scale_to);
+              cdelt1 /= mag;
+          }
+          crota2 = drms_getkey_double(inprec, "CROTA2", &status); if (status) crota2 = 0.0; // WCS default
+          
+          /* Segment loop. */
+          HIterator_t *segIter = NULL;
+          DRMS_Segment_t *orig = NULL;
+          
+          /* inpseg could be a linked segment, but we need to obtain the segment struct for the original series.
+           * There is no pointer from the linked segment to the original segment. And we do not have the name or
+           * number of the original segment. Or we didn't, so I made drms_record_nextseg2(). */
+          while ((inpseg = drms_record_nextseg2(inprec, &segIter, 1, &orig)) != NULL)
+          {
+              /* CAVEAT: There is no check to see if the segment on which this code is operating is a suitable
+               * segment for this module to process. For example, there is the assumption that the segment
+               * being processed has two dimensions. Rejecting incompatible segments is something to implement
+               * in the future. */
+              void *output_array = NULL;
+              int i, ix, iy, n, m, dtyp, nx, ny, npix;
+              
+              {
+                  inparr = drms_segment_read(inpseg, DRMS_TYPE_FLOAT, &status); if (status) DIE("drms_segment_read failed!");
+                  
+                  /* The original intent was for the output series' segments to parallel the input series' segments.
+                   * However, the names were allowed to vary. So the segment descriptions match, and they are in the
+                   * same order. However, the names given to these descriptions might vary. Therefore, we need to
+                   * look-up output segments by segment number, not name.
+                   *
+                   * Use the segment number of the input segment (the original input segment, in case a link was followed).
+                   */
+                  outseg = drms_segment_lookupnum(outrec, orig->info->segnum);
+                  
+                  if (!outseg)
+                  {
+                      DIE("Cant get output segment");
+                  }
+                  
+                  int outdims[2];
+                  dtyp = 3;
+                  n = inparr->axis[0];
+                  m = inparr->axis[1];
+                  
+                  if (is_aia) // set outer rows and cols to 0
+                  {
+                      float *fval;
+                      fval = inparr->data;
+                      for (ix = 0; ix<n; ix++)
+                      {
+                          fval[ix] = 0.0;
+                          fval[(m - 1)*n + ix] = 0.0;
+                      }
+                      for (iy = 0; iy<m; iy++)
+                      {
+                          fval[iy*n] = 0.0;
+                          fval[iy*n + n - 1] = 0.0;
+                      }
+                  }
+                  else
+                  {
+                      ObsLoc = GetObsInfo(inpseg, NULL, &status);
+                      upNcenter(inparr, ObsLoc);
+                      if (do_crop)
+                          crop_image(inparr, ObsLoc);
+                      crota2 = ObsLoc->crota2;
+                      crpix1 = ObsLoc->crpix1;
+                      crpix2 = ObsLoc->crpix2;
+                  }
+                  
+                  if (center_to == 0)
+                  {
+                      usedx = (n + 1.0)/2.0;  // center for corner is (1,1) as is crpix
+                      usedy = (m + 1.0)/2.0;
+                  }
+                  else // center_to > 0
+                  {
+                      if (irec == 0 || center_to == 2)
+                      {
+                          usedx = crpix1;
+                          usedy = crpix2;
+                          usemag = cdelt1;
+                      }
+                      mag = cdelt1/usemag;
+                      cdelt1 = usemag;
+                  }
+                  dx = crpix1 - usedx;
+                  dy = crpix2 - usedy;
+                  status = image_magrotate( (float *)inparr->data, n, m, dtyp, crota2,
+                                           mag, dx, dy, &output_array, &nx, &ny, regridtype, do_stretchmarks);
+                  if (verbose)
+                  {
+                      fprintf(stderr,"image_magrotate called with: "
+                              "data=%p, n=%d, m=%d, dtyp=%d, crota2=%f, mag=%f, dx=%f, dy=%f, regridtype=%d, do_stretch=%d\n",
+                              (float *)inparr->data, n, m, dtyp, crota2, mag, dx, dy,regridtype, do_stretchmarks);
+                      fprintf(stderr,"image_magrotate returned: "
+                              "into out=%p, nx=%d, ny=%d, status=%d\n",  output_array, nx, ny, status);
+                  }
+                  sprintf(comment,"resize: scale_to=%f, mag=%f, dx=%f, dy=%f, regridtype=%d, do_stretch=%d, center_to=%s",
+                          scale_to, mag, dx, dy,regridtype, do_stretchmarks,
+                          (center_to==0 ? "solar disk" : (center_to==1 ? "First frame" : "No change")));
+                  drms_appendcomment(outrec, comment, 0);
+                  if (status) DIE("image_magrotate failed!");
+                  outdims[0] = nx;
+                  outdims[1] = ny;
+                  outarr = drms_array_create(inparr->type, 2, outdims, output_array, &status);
+                  if (status) DIE("drms_array_create failed!");
+                  
+                  drms_setkey_float(outrec, "CROTA2", 0.0);
+                  drms_setkey_float(outrec, "CRPIX1", (nx + 1.0)*0.5);
+                  drms_setkey_float(outrec, "CRPIX2", (ny + 1.0)*0.5);
+                  drms_setkey_float(outrec, "CDELT1", cdelt1);
+                  drms_setkey_float(outrec, "CDELT2", cdelt1);
+                  set_statistics(outseg, outarr, 1);
+                  // get info for array from segment
+                  outarr->bzero = outseg->bzero;
+                  outarr->bscale = outseg->bscale;
+                  if (requestid == NOT_SPECIFIED)
+                      drms_segment_write(outseg, outarr, 0);
+                  else
+                      drms_segment_writewithkeys(outseg, outarr, 0);
+                  if (inparr) drms_free_array(inparr);
+                  if (outarr) drms_free_array(outarr);
+              }
+              
+              /* If the user did not provide a segment specifier (which means that all segment structs are in the rec->segments container,
+               * and there was no seglist), then process only the first segment. */
+              if (drms_record_numsegments(inprec) == drms_record_numsegments(template) && !hasSeglist)
+              {
+                  break;
+              }
+          } /* end segment loop */
+          
+          if (segIter)
+          {
+              hiter_destroy(&segIter);
+          }
+          
+          drms_close_record(outrec, DRMS_INSERT_RECORD);
       }
-
-    crpix1 = drms_getkey_double(inprec, "CRPIX1", &status); if (status) DIE("CRPIX1 not found!");
-    crpix2 = drms_getkey_double(inprec, "CRPIX2", &status); if (status) DIE("CRPIX2 not found!");
-    cdelt1 = drms_getkey_double(inprec, "CDELT1", &status); if (status) DIE("CDELT1 not found!");
-    if (rescale)
-      {
-      mag = fabs(cdelt1 / scale_to);
-      cdelt1 /= mag;
-      }
-    crota2 = drms_getkey_double(inprec, "CROTA2", &status); if (status) crota2 = 0.0; // WCS default
-   
-    /* Segment loop. */
-    HIterator_t *segIter = NULL;
-    DRMS_Segment_t *orig = NULL;
-     
-    /* inpseg could be a linked segment, but we need to obtain the segment struct for the original series. 
-     * There is no pointer from the linked segment to the original segment. And we do not have the name or 
-     * number of the original segment. Or we didn't, so I made drms_record_nextseg2(). */ 
-    while ((inpseg = drms_record_nextseg2(inprec, &segIter, 1, &orig)) != NULL)
-    {
-       /* CAVEAT: There is no check to see if the segment on which this code is operating is a suitable
-        * segment for this module to process. For example, there is the assumption that the segment
-        * being processed has two dimensions. Rejecting incompatible segments is something to implement
-        * in the future. */
-      void *output_array = NULL;
-      int i, ix, iy, n, m, dtyp, nx, ny, npix;
-
-      {
-        inparr = drms_segment_read(inpseg, DRMS_TYPE_FLOAT, &status); if (status) DIE("drms_segment_read failed!");
-
-        /* The original intent was for the output series' segments to parallel the input series' segments.
-         * However, the names were allowed to vary. So the segment descriptions match, and they are in the
-         * same order. However, the names given to these descriptions might vary. Therefore, we need to
-         * look-up output segments by segment number, not name.
-         *
-         * Use the segment number of the input segment (the original input segment, in case a link was followed).
-         */
-        outseg = drms_segment_lookupnum(outrec, orig->info->segnum);
-         
-        if (!outseg)
-        {
-           DIE("Cant get output segment");
-        }
-
-        int outdims[2];
-        dtyp = 3;
-        n = inparr->axis[0];
-        m = inparr->axis[1];
- 
-        if (is_aia) // set outer rows and cols to 0
-          {
-          float *fval;
-          fval = inparr->data;
-          for (ix = 0; ix<n; ix++)
-            {
-            fval[ix] = 0.0;
-            fval[(m - 1)*n + ix] = 0.0;
-            }
-          for (iy = 0; iy<m; iy++)
-            {
-            fval[iy*n] = 0.0;
-            fval[iy*n + n - 1] = 0.0;
-            }
-          }
-        else
-          {
-          ObsLoc = GetObsInfo(inpseg, NULL, &status);
-          upNcenter(inparr, ObsLoc);
-          if (do_crop)
-            crop_image(inparr, ObsLoc);
-          crota2 = ObsLoc->crota2;
-          crpix1 = ObsLoc->crpix1;
-          crpix2 = ObsLoc->crpix2;
-          }
-
-        if (center_to == 0)
-          {
-          usedx = (n + 1.0)/2.0;  // center for corner is (1,1) as is crpix
-          usedy = (m + 1.0)/2.0;
-          }
-        else // center_to > 0
-          {
-          if (irec == 0 || center_to == 2)
-            {
-            usedx = crpix1;
-            usedy = crpix2;
-            usemag = cdelt1;
-            }
-          mag = cdelt1/usemag;
-          cdelt1 = usemag;
-          }
-        dx = crpix1 - usedx;
-        dy = crpix2 - usedy;
-        status = image_magrotate( (float *)inparr->data, n, m, dtyp, crota2,
-                 mag, dx, dy, &output_array, &nx, &ny, regridtype, do_stretchmarks);
-        if (verbose)
-          {
-          fprintf(stderr,"image_magrotate called with: "
-            "data=%p, n=%d, m=%d, dtyp=%d, crota2=%f, mag=%f, dx=%f, dy=%f, regridtype=%d, do_stretch=%d\n",
-            (float *)inparr->data, n, m, dtyp, crota2, mag, dx, dy,regridtype, do_stretchmarks);
-          fprintf(stderr,"image_magrotate returned: "
-            "into out=%p, nx=%d, ny=%d, status=%d\n",  output_array, nx, ny, status);
-          }
-        sprintf(comment,"resize: scale_to=%f, mag=%f, dx=%f, dy=%f, regridtype=%d, do_stretch=%d, center_to=%s",
-          scale_to, mag, dx, dy,regridtype, do_stretchmarks,
-          (center_to==0 ? "solar disk" : (center_to==1 ? "First frame" : "No change")));
-        drms_appendcomment(outrec, comment, 0);
-        if (status) DIE("image_magrotate failed!");
-        outdims[0] = nx;
-        outdims[1] = ny;
-        outarr = drms_array_create(inparr->type, 2, outdims, output_array, &status);
-        if (status) DIE("drms_array_create failed!");
-
-        drms_setkey_float(outrec, "CROTA2", 0.0);
-        drms_setkey_float(outrec, "CRPIX1", (nx + 1.0)*0.5);
-        drms_setkey_float(outrec, "CRPIX2", (ny + 1.0)*0.5);
-        drms_setkey_float(outrec, "CDELT1", cdelt1);
-        drms_setkey_float(outrec, "CDELT2", cdelt1);
-        set_statistics(outseg, outarr, 1);
-        // get info for array from segment
-        outarr->bzero = outseg->bzero;
-        outarr->bscale = outseg->bscale;
-        if (requestid == NOT_SPECIFIED)
-          drms_segment_write(outseg, outarr, 0);
-        else
-          drms_segment_writewithkeys(outseg, outarr, 0);
-        if (inparr) drms_free_array(inparr);
-        if (outarr) drms_free_array(outarr);
-        }
-      } /* end segment loop */
-
-      if (segIter)
-      {
-         hiter_destroy(&segIter);
-      }
-
-      drms_close_record(outrec, DRMS_INSERT_RECORD);
-    } /* end record loop */
+  } /* end record loop */
   return 0;
 }
 
@@ -562,7 +593,7 @@ ObsInfo_t *GetObsInfo(DRMS_Segment_t *seg, ObsInfo_t *pObsLoc, int *rstatus)
 
 
 #define DIE_get_recset(msg) {fprintf(stderr,"$$$$ %s: %s\n", module_name, msg); return NULL;}
-const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
+const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery, DRMS_Record_t **template)
   {
   static char newInQuery[DRMS_MAXSERIESNAMELEN+2];
   int epoch_given = cmdparams_exists(&cmdparams, "epoch");
@@ -595,6 +626,10 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
   lbracket = index(seriesname,'[');
   if (lbracket) *lbracket = '\0';
   inTemplate = drms_template_record(drms_env, seriesname, &status);
+  if (template)
+  {
+      *template = inTemplate;
+  }
   if (status || !inTemplate) DIE_get_recset("Input series can not be found");
 
   // Now find the prime time keyword name
