@@ -394,7 +394,8 @@ echo "${progname}: Associated T_REC in \`$harp_log_series' will be $trec_frst"
 
 # find the most recent prior ingest using harp_log 
 ## set -x
-DAYSBACK=60 # days back in the harp_log's to look for the prior ingest
+#DAYSBACK=60 # days back in the harp_log's to look for the prior ingest
+DAYSBACK=90
 CADENCE=120 # 720s images/day
 trec_frst_index=`index_convert "ds=$harp_log_series" "T_REC=$trec_frst"`
 trec_prior0_index=$(( $trec_frst_index - $DAYSBACK * $CADENCE ))
