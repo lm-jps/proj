@@ -23,8 +23,17 @@ $QSUBDIR = "/surge40/jsocprod/qsub/flat";
 #  print "Error: This must be run on n02\n";
 #  exit;
 #}
-$ENV{'JSOC_MACHINE'} = "linux_x86_64";
-$JSOC_MACHINE = "linux_x86_64";
+#$ENV{'JSOC_MACHINE'} = "linux_x86_64";
+#$JSOC_MACHINE = "linux_x86_64";
+
+if ($host =~ 'cl1n001') {
+  $ENV{'JSOC_MACHINE'} = "linux_x86_64";
+  $JSOC_MACHINE = linux_x86_64;
+} else {
+  $ENV{'JSOC_MACHINE'} = "linux_avx";
+  $JSOC_MACHINE = "linux_avx";
+}
+
 $ENV{'PATH'} = "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE:/home/jsoc/cvs/Development/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:/home/production/STAGING/bin/_linux4:";
 
 $ENV{'SGE_ROOT'} = "/SGE";

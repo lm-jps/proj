@@ -24,8 +24,18 @@ $LOGDIR = "/usr/local/logs/lev1_def";
 @dayofyr_mo = (1,32,60,91,121,152,182,213,244,274,305,335);
 @dayofyrl_mo = (1,32,61,92,122,153,183,214,245,275,306,336);
 $specialtime= 0;
-$ENV{'JSOC_MACHINE'} = "linux_x86_64";
-$JSOC_MACHINE = "linux_x86_64";
+
+$host = `hostname -s`;
+chomp($host);
+print "host = $host\n";
+if ($host =~ 'cl1n001') {
+  $ENV{'JSOC_MACHINE'} = "linux_x86_64";
+  $JSOC_MACHINE = linux_x86_64;
+} else {
+  $ENV{'JSOC_MACHINE'} = "linux_avx";
+  $JSOC_MACHINE = "linux_avx";
+}
+
 $ENV{'PATH'} = "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE:/home/jsoc/cvs/Development/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
 
 $ENV{'SGE_ROOT'} = "/SGE";
@@ -86,19 +96,19 @@ if($firstfsn > $lastfsn) {
 
 print LOG "Started on $orddayUTC to process day $dodayUTC\n";
 #make time format for module_flatfield_daily_qsub_PZT_FSN.pl call
-$msec = `/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/time_convert time=$dodayUTC`;
-$moddate = `/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/time_convert s=$msec`;
+$msec = `time_convert time=$dodayUTC`;
+$moddate = `time_convert s=$msec`;
 $pos = index($moddate, '_');
 $mdate = substr($moddate, 0, $pos);
 
 $localhost = `hostname -s`;
 chomp($localhost);
-if(!grep(/$localhost/, @allowhost)) {
-  print "Can only be run on host with dcs[0,1] mounts: @allowhost\n";
-  print LOG "Can only be run on host with dcs[0,1] mounts: @allowhost\n";
-  close(LOG);
-  exit(0);
-}
+#if(!grep(/$localhost/, @allowhost)) {
+#  print "Can only be run on host with dcs[0,1] mounts: @allowhost\n";
+#  print LOG "Can only be run on host with dcs[0,1] mounts: @allowhost\n";
+#  close(LOG);
+#  exit(0);
+#}
 $pos1 = index($dodayUTC, '.');
 $pos2 = index($dodayUTC, '_');
 $yr1 = substr($dodayUTC, 0, $pos1);
@@ -114,14 +124,14 @@ if($hmiaiaflg) {
   $xmitfile1 = "$XmitFlgDirHMI/xday/Xmit_All.$dodayUTC";
   $xmitfile2 = "$XmitFlgDirHMI/xday/Xmit_All.$yrday1";
 }
-if(-e $nogo) {
-  print "The no-go file exist: $nogo\n";
-  print LOG "The no-go file exist: $nogo\n";
-  print "Cannot proceed with making rotational flat\n";
-  print LOG "Cannot proceed with making rotational flat\n";
-  close(LOG);
-  exit(0);
-}
+#if(-e $nogo) {
+#  print "The no-go file exist: $nogo\n";
+#  print LOG "The no-go file exist: $nogo\n";
+#  print "Cannot proceed with making rotational flat\n";
+#  print LOG "Cannot proceed with making rotational flat\n";
+#  close(LOG);
+#  exit(0);
+#}
 print "Checking for $xmitfile1\n";
 print LOG "Checking for $xmitfile1\n";
 print "or $xmitfile2\n";

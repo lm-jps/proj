@@ -55,8 +55,9 @@ print "stop_lev0_IRIS.pl\n";  #!!!TBD
 #$SIG{INT} = 'IGNORE';
 
 while(1) {
-  for($i=0; $i < 4320; $i++) {  #run this for 6hrs
-    sleep 5;
+  #for($i=0; $i < 4320; $i++) {  #run this for 6hrs
+  for($i=0; $i < 720; $i++) {  #run this for 3600 seconds like HMI/AIA - Hao
+  sleep 5;
     &ckingest;		#see if any ingest_lev0 are still running
     if(!$foundiris && !$foundirisrexmit) {  #nothing running
       $ldate = &labeldate();

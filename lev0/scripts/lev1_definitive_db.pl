@@ -80,7 +80,7 @@ $OVERRIDE = 0;
 $QUIET = 0;
 $| = 1;
 
-@allowhost = ("cl1n001", "cl1n002", "cl1n003"); #hosts w/dcs[0,1] mounts
+#@allowhost = ("cl1n001", "cl1n002", "cl1n003"); #hosts w/dcs[0,1] mounts
 @wavestr = ("131_OPEN", "131_THICK", "131_THIN", "1600", "1700", "171_THICK", "171_THIN", "193_OPEN", "193_THICK", "193_THIN", "211_OPEN", "211_THICK", "211_THIN", "304_OPEN", "304_THICK", "304_THIN", "335_OPEN", "335_THICK", "335_THIN", "4500", "94_OPEN", "94_THICK", "94_THIN");
 
 
@@ -100,10 +100,10 @@ if($ENV{'USER'} ne "jsocprod") {
 }
 $host = `hostname -s`;
 chomp($host);
-if(!grep(/$host/, @allowhost)) {
-  print "Can only be run on host with dcs[0,1] mounts: @allowhost\n";
-  exit(0);
-}
+#if(!grep(/$host/, @allowhost)) {
+#  print "Can only be run on host with dcs[0,1] mounts: @allowhost\n";
+#  exit(0);
+#}
 
 while ($ARGV[0] =~ /^-/) {
   $_ = shift;

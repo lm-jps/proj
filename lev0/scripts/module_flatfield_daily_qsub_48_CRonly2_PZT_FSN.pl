@@ -32,13 +32,20 @@ $PID = getppid;
 $host = `hostname -s`;
 chomp($host);
 print "host = $host\n";
-#cl1n001 is a linux_x86_64
-#if($host ne "cl1n001") {
-#  print "Error: This must be run on cl1n001\n";
-#  exit;
-#}
-$ENV{'JSOC_MACHINE'} = "linux_x86_64";
-$JSOC_MACHINE = "linux_x86_64";
+
+if ($host !~ 'cl1n001|solar3') {
+  print "Error: This must be run on cl1n001 or solar3\n";
+  exit;
+}
+
+if ($host =~ 'cl1n001') {
+  $ENV{'JSOC_MACHINE'} = "linux_x86_64";
+  $JSOC_MACHINE = linux_x86_64;
+} else {
+  $ENV{'JSOC_MACHINE'} = "linux_avx";
+  $JSOC_MACHINE = "linux_avx";
+}
+
 $ENV{'PATH'} = "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE:/home/jsoc/cvs/Development/JSOC/scripts:/bin:/usr/bin:/SGE/bin/lx24-amd64:";
 
 $ENV{'SGE_ROOT'} = "/SGE";
@@ -48,7 +55,7 @@ $path = $ENV{'PATH'};
 #print "path = $path\n";  #!!!TEMP
 $mach = $ENV{'JSOC_MACHINE'};
 #print "JSOC_MACHINE = $mach\n";  #!!!TEMP
-$ENV{'OMP_NUM_THREADS'} = 8;
+$ENV{'OMP_NUM_THREADS'} = 1;
 
 #$BINDIR = "/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64";
 
@@ -134,8 +141,8 @@ $j = 0;
     open(L0, ">$file") || die "Can't open: $file $!\n";
     print L0 "#!/bin/csh\n";
     print L0 "echo \"TMPDIR = \$TMPDIR\"\n";
-    print L0 "echo \"setenv OMP_NUM_THREADS 8\"\n";
-    print L0 "setenv OMP_NUM_THREADS 8\n";
+    print L0 "echo \"setenv OMP_NUM_THREADS 1\"\n";
+    print L0 "setenv OMP_NUM_THREADS 1\n";
     $cmd = @cmds[$j++];
     if(!$cmd) {
       $k = 48;		#all done
@@ -147,7 +154,7 @@ $j = 0;
     close(L0);
     #$file = "/home/jsoc/cvs/Development/JSOC/proj/lev0/scripts/date.str"; #!!!TEMP
     #$qsubcmd = sprintf("qsub -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
-    $qsubcmd = sprintf("qsub -o %s -e %s -q j8.q %s", $QDIR, $QDIR, $file);
+    $qsubcmd = sprintf("qsub2 -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
     print "$qsubcmd\n";
     $x = `$qsubcmd`;
     print "$x";
@@ -158,7 +165,7 @@ $j = 0;
 NOMORE:
   while(1) {
     sleep(60);
-    @stat = `qstat -u jsocprod`;
+    @stat = `qstat2 -u jsocprod`;
     #print "@stat\n";
     shift(@stat); shift(@stat);	#header lines
     $done = 1;
@@ -240,7 +247,7 @@ for($l=0; $l<12; $l++) {	#12 sets of 2 processes
     close(L0);
     #$qsubcmd = sprintf("qsub -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
     #$qsubcmd = sprintf("qsub -o %s -e %s -q j8.q,o8.q %s", $QDIR, $QDIR, $file);
-    $qsubcmd = sprintf("qsub -o %s -e %s -q j.q %s", $QDIR, $QDIR, $file);
+    $qsubcmd = sprintf("qsub2 -o %s -e %s -q p.q %s", $QDIR, $QDIR, $file);
     print "$qsubcmd\n";
     $x = `$qsubcmd`;
     print "$x";
@@ -251,7 +258,7 @@ for($l=0; $l<12; $l++) {	#12 sets of 2 processes
 NOMOREP:
   while(1) {
     sleep(45);
-    @stat = `qstat -u jsocprod`;
+    @stat = `qstat2 -u jsocprod`;
     #print "@stat\n";
     shift(@stat); shift(@stat);	#header lines
     $done = 1;
