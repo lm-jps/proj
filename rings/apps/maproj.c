@@ -6,13 +6,15 @@
  *  Map a set of input solar images into a set of output maps
  *
  *  Parameters:	(type	default		description)
- *	in	DataSet TBD		Input dataset
+ *	in	DataSet -		Input dataset
  *				A set of images of all or part of the
  *				solar disc in a "plate" coordinate system
  *				(helioprojective geometry).
- *      out     DataSer TBD		Output data series name
- *	clat	double	0.0		Map central heliographic latitude
- *	clon	double	0.0		Map central heliographic longitude
+ *      out     DataSer -		Output data series name
+ *	clat	double	NaN		Map central heliographic latitude
+ *				(defaults to lat of [first] image center)
+ *	clon	double	NaN		Map central heliographic longitude
+ *				(defaults to lon of [first] image center)
  *      scale   double	0.0		Scale of map (heliographic degrees /
  *				pixel) at location appropriate for mapping
  *				option; a 0 value implies autoscaling to best
@@ -38,7 +40,9 @@
  *				positive position angle represents a clockwise
  *				displacement of the north axis.
  *	bscale	float	0.0		Value scaling parameter for output
+ *				defaults to output series default
  *	bzero	float	NaN		Value offset parameter for output
+ *				defaults to output series default
  *	clon_key string	CRLN_OBS	Keyname of float type keyword describing
  *				centre Carrington longitude of each input image
  *	clat_key string	CRLT_OBS	Keyname of float type keyword describing
@@ -51,10 +55,13 @@
  *				r distance from sun for of each image
  *
  *  Flags
- *	-c	center map9s) at image center(s)
+ *	-c	center map(s) at image center(s)
  *	-s	interpret clon as Stonyhurst rather than Carrington longitude
  *	-v	run verbose
  *	-M	correct for MDI distortion
+ *	-R	convert scalar values assuming that they are the line-of-sight
+ *		components of radial vectors (i.e. multiply by secant of
+ *		center-to-limb angle)
  *
  *  Bugs:
  *    Basic functionality is present, but with several fixed and inappropriate
@@ -100,13 +107,13 @@
 						       /*  module identifier  */
 char *module_name = "maproj";
 char *module_desc = "mapping from solar images";
-char *version_id = "0.9";
+char *version_id = "1.0";
 
 ModuleArgs_t module_args[] = {
   {ARG_DATASET,	"in", "", "input data set"}, 
   {ARG_DATASERIES, "out", "", "output data series"}, 
-  {ARG_DOUBLE,	"clat", "0.0", "heliographic latitude of map center [deg]"},
-  {ARG_DOUBLE,	"clon", "0.0", "Carrington longitude of map center [deg]"},
+  {ARG_DOUBLE,	"clat", "Not Specified", "heliographic latitude of map center [deg]"},
+  {ARG_DOUBLE,	"clon", "Not Specified", "Carrington longitude of map center [deg]"},
   {ARG_DOUBLE,	"scale", "Not specified", "map scale at center [deg/pxl]"},
   {ARG_NUME, "map", "orthographic", "map projection",
       "carree, Cassini, Mercator, cyleqa, sineqa, gnomonic, Postel, stereographic, orthographic, Lambert"},
@@ -124,9 +131,13 @@ ModuleArgs_t module_args[] = {
   {ARG_STRING,	"rsun_key", "R_SUN", "keyname for image semi-diameter (pixel)"}, 
   {ARG_STRING,	"apsd_key", "RSUN_OBS", "keyname for apparent solar semi-diameter (arcsec)"}, 
   {ARG_STRING,	"dsun_key", "DSUN_OBS", "keyname for observer distance"}, 
+  {ARG_STRING,	"RequestID", "none", "RequestID for jsoc export management"},
   {ARG_FLAG,	"c",	"", "center map at center of image"}, 
   {ARG_FLAG,	"s",	"", "clon is Stonyhurst longitude"}, 
   {ARG_FLAG,	"v",	"", "verbose mode"}, 
+  {ARG_FLAG,	"M",	"", "correct for MDI distortion"},
+  {ARG_FLAG,	"R",	"",
+      "convert scalars assuming line-of-sight components of radial vectors"}, 
   {}
 };
 
@@ -239,7 +250,7 @@ void perform_mapping (DRMS_Array_t *img, float *map,
     int pixct, unsigned char *offsun, double latc, double lonc,
     double xc, double yc, double radius, double pa, double ellipse_e,
     double ellipse_pa, int x_invrt, int y_invrt, int interpolator,
-    int MDI_correct_distort) {
+    int cvlostor, int MDI_correct_distort) {
 /*
  *  Perform the mappings from the target heliographic coordinate sets
  *    appropriate to each output cube into the image coordinates (as
@@ -250,6 +261,7 @@ void perform_mapping (DRMS_Array_t *img, float *map,
   double r, cos_cang, xr, yr;
   double cos_lat, sin_lat, lon, cos_lat_lon;
   double xx, yy;
+  double cosrho, sinrho;
   float interpval;
   int n;
 
@@ -291,6 +303,11 @@ void perform_mapping (DRMS_Array_t *img, float *map,
     if (plate_cols > plate_rows) yy -= 1.0 - plate_rows / plate_width;
     if (plate_rows > plate_cols) xx -= 1.0 - plate_cols / plate_width;
     interpval = array_imaginterp (img, xx, yy, interpolator);
+    if (cvlostor) {
+      sinrho = sqrt (xr * xr + yr * yr);
+      cosrho = sqrt (1.0 - sinrho * sinrho);
+      interpval /= cosrho;
+    }
 				  /*  Correction for MDI distortion and tip  */
        /*  should be replaced by call to MDI_correct_plateloc when verified  */
     if (MDI_correct_distort) {
@@ -339,7 +356,7 @@ int DoIt (void) {
   int img, imgct, pixct, segct;
   int isegnum, osegnum;
   int found, kstat, status;
-  int need_ephem;
+  int need_ephem, need_lat, need_lon;
   int x_invrt, y_invrt;
   int n, col, row;
   int MDI_correct, MDI_correct_distort;
@@ -350,7 +367,6 @@ int DoIt (void) {
 
   double raddeg = M_PI / 180.0;
   double degrad = 1.0 / raddeg;
-  int scaling_override = 0;
   char *mapname[] = {"PlateCarree", "Cassini-Soldner", "Mercator",
       "LambertCylindrical", "Sanson-Flamsteed", "gnomonic", "Postel",
       "stereographic", "orthographic", "LambertAzimuthal"};
@@ -379,11 +395,13 @@ int DoIt (void) {
   char *rsun_key = strdup (params_get_str (params, "rsun_key"));
   char *apsd_key = strdup (params_get_str (params, "apsd_key"));
   char *dsun_key = strdup (params_get_str (params, "dsun_key"));
+  char *RequestID = strdup (params_get_str (params, "RequestID"));
   int center = params_isflagset (params, "c");
   int stonyhurst = params_isflagset (params, "s");
   int verbose = params_isflagset (params, "v");
   int overlay = (isfinite (grid_spacing));
   int MDI_proc = params_isflagset (params, "M");
+  int cvlostor = params_isflagset (params, "R");
 
   snprintf (module_ident, 64, "%s v %s", module_name, version_id);
   if (verbose) printf ("%s: JSOC version %s\n", module_ident, jsoc_version);
@@ -400,6 +418,8 @@ int DoIt (void) {
     fprintf (stderr, "       scale parameter must be set.\n");
     return 1;
   }
+  need_lat = center || isnan (clat);
+  need_lon = center || isnan (clon);
   MDI_correct = MDI_correct_distort = MDI_proc;
   cos_phi = cos (map_pa);
   sin_phi = sin (map_pa);
@@ -511,19 +531,34 @@ int DoIt (void) {
   offsun = (unsigned char *)malloc (pixct * sizeof (char));
   if (overlay) ongrid = (unsigned char *)malloc (pixct * sizeof (char));
 	     /*  use output series default segment scaling if not overridden  */
-  scaling_override = 0;
   if (bscale == 0.0) {
     bscale = oseg->bscale;
-    scaling_override = 1;
     if (verbose) printf ("bscale set to output default: %g\n", bscale);
   }
   if (isnan (bzero)) {
     bzero = oseg->bzero;
-    scaling_override = 1;
     if (verbose) printf ("bzero set to output default: %g\n", bzero);
   }
   map->bscale = bscale;
   map->bzero = bzero;
+  if (need_lat || need_lon) {
+    if (need_lon) {
+      img_lon = drms_getkey_double (irec, clon_key, &status);
+      if (status || isnan (img_lon)) fprintf (stderr,
+	  "Error: no valid value for key %s in first input record\n", clon_key);
+      else if (!center) need_lon = 0;
+      clon = img_lon * raddeg;
+    }
+    if (need_lat) {
+      img_lat = drms_getkey_double (irec, clat_key, &status);
+      if (status || isnan (img_lat)) fprintf (stderr,
+	  "Error: no valid value for key %s in first input record\n", clat_key);
+      else if (!center) need_lat = 0;
+      clat = img_lat * raddeg;
+    }
+    if (verbose) printf ("map(s) centred at latitude %+.2f, longitude %.2f\n",
+	clat / raddeg, clon/raddeg);
+  }
      /*  Calculate heliographic coordinates corresponding to map location(s)  */
   for (n=0, row=0, y=y0; row < map_rows; row++, y += ystp) {
     for (col=0, x=x0; col < map_cols; col++, x += xstp, n++) {
@@ -547,10 +582,30 @@ int DoIt (void) {
     drms_sprint_rec_query (source, irec);
     iseg = drms_segment_lookupnum (irec, isegnum);
     image = drms_segment_read (iseg, DRMS_TYPE_FLOAT, &status);
-			   /*  get needed info from record keys for mapping  */
-			     /*  replace with call to solar_ephemeris_info?  */
+			    /*  get needed info from record keys for mapping  */
+			      /*  replace with call to solar_ephemeris_info?  */
     img_lon = drms_getkey_double (irec, clon_key, &status);
     img_lat = drms_getkey_double (irec, clat_key, &status);
+    if (img && (need_lon || need_lat)) {
+      if (need_lon) clon = img_lon * raddeg;
+      if (need_lat) clat = img_lat * raddeg;
+      if (verbose) printf ("map centred at latitude %+.2f, longitude %.2f\n",
+	clat / raddeg, clon/raddeg);
+   /*  Recalculate heliographic coordinates corresponding to map location(s)  */
+      for (n=0, row=0, y=y0; row < map_rows; row++, y += ystp) {
+	for (col=0, x=x0; col < map_cols; col++, x += xstp, n++) {
+	  xrot = x * cos_phi - y * sin_phi;
+	  yrot = y * cos_phi + x * sin_phi;
+	  offsun[n] = plane2sphere (xrot, yrot, clat, clon, &lat, &lon, proj);
+	  maplat[n] = lat;
+	  maplon[n] = lon;
+	  map_coslat[n] = cos (lat);
+	  map_sinlat[n] = sin (lat);
+	  if (overlay) ongrid[n] =
+	      near_grid_line (maplon[n], maplat[n], grid_spacing, grid_width);
+	}
+      }
+    }
 
     status = solar_image_info (irec, &img_xscl, &img_yscl, &img_xc, &img_yc,
 	&img_radius, rsun_key, apsd_key, &img_pa, &ellipse_e, &ellipse_pa,
@@ -560,7 +615,18 @@ int DoIt (void) {
       double dsun_obs = drms_getkey_double (irec, dsun_key, &keystat);
       if (keystat) {
 	fprintf (stderr, "Error: one or more essential keywords or values missing; skipped\n");
-	fprintf (stderr, "solar_image_info() returned %08x\n", status);
+	fprintf (stderr, "solar_image_info() returned %08x :\n", status);
+	if (status & NO_DATA_DICT)
+	  fprintf (stderr, "  internal data dictionary for platform\n");
+	if (status & NO_SEMIDIAMETER) fprintf (stderr, "  semidiameter\n");
+	if (status & NO_XSCALE) fprintf (stderr, "  x-scale\n");
+	if (status & NO_YSCALE) fprintf (stderr, "  y-scale\n");
+	if (status & NO_XCENTERLOC) fprintf (stderr, "  x-center\n");
+	if (status & NO_YCENTERLOC) fprintf (stderr, "  y-center\n");
+	if (status & NO_HELIO_LATC) fprintf (stderr, "  disc-center latitude\n");
+	if (status & NO_HELIO_LONC) fprintf (stderr, "  disc-center longitude\n");
+	if (status & NO_XUNITS) fprintf (stderr, "  x units\n");
+	if (status & NO_YUNITS) fprintf (stderr, "  y units\n");
 	continue;
       }
 			       /*  set image radius from scale and distance  */
@@ -573,8 +639,19 @@ int DoIt (void) {
       fprintf (stderr, "Warning: one or more keywords expected constant are variable\n");
     } else if (status) {
       fprintf (stderr, "Error: one or more essential keywords or values missing; skipped\n");
-      fprintf (stderr, "solar_image_info() returned %08x\n", status);
-      continue;
+      fprintf (stderr, "solar_image_info() returned %08x :\n", status);
+      if (status & NO_DATA_DICT)
+	fprintf (stderr, "  internal data dictionary for platform\n");
+      if (status & NO_SEMIDIAMETER) fprintf (stderr, "  semidiameter\n");
+      if (status & NO_XSCALE) fprintf (stderr, "  x-scale\n");
+      if (status & NO_YSCALE) fprintf (stderr, "  y-scale\n");
+      if (status & NO_XCENTERLOC) fprintf (stderr, "  x-center\n");
+      if (status & NO_YCENTERLOC) fprintf (stderr, "  y-center\n");
+      if (status & NO_HELIO_LATC) fprintf (stderr, "  disc-center latitude\n");
+      if (status & NO_HELIO_LONC) fprintf (stderr, "  disc-center longitude\n");
+      if (status & NO_XUNITS) fprintf (stderr, "  x units\n");
+      if (status & NO_YUNITS) fprintf (stderr, "  y units\n");
+     continue;
     }
     if (MDI_correct) {
       mtrack_MDI_correct_imgctr (&img_xc, &img_yc, img_radius);
@@ -591,7 +668,8 @@ img_lat *= raddeg;
  						     /*  perform the mapping  */
     perform_mapping (image, data, maplat, maplon, map_coslat, map_sinlat,
         pixct, offsun, img_lat, img_lon, img_xc, img_yc, img_radius, img_pa,
-	ellipse_e, ellipse_pa, x_invrt, y_invrt, intrpopt, MDI_correct_distort);
+	ellipse_e, ellipse_pa, x_invrt, y_invrt, intrpopt, cvlostor,
+	MDI_correct_distort);
     if (overlay) {
       for (n = 0; n < pixct; n++) 
         if (ongrid[n]) data[n] = (isfinite (data[n])) ? bblank : wblank;
@@ -604,7 +682,7 @@ img_lat *= raddeg;
       fprintf (stderr, "      series may not have appropriate structure\n");
       return 1;
     }
-    drms_copykeys (orec, irec, 0, kDRMS_KeyClass_All);
+    drms_copykeys (orec, irec, 0, kDRMS_KeyClass_Explicit);
 					    /*  set output record key values  */
     kstat = 0;
     kstat += check_and_set_key_str   (orec, "WCSNAME", "Carrington Heliographic");
@@ -640,12 +718,16 @@ img_lat *= raddeg;
     kstat += check_and_set_key_float (orec, "Map_PA", map_pa / raddeg);
     kstat += check_and_set_key_float (orec, "RSunRef", 1.0e-6 * RSUNM);
     kstat += check_and_set_key_str   (orec, "Interp", interpname[intrpopt]);
+    kstat += check_and_set_key_short (orec, "MDICorr", MDI_proc);
+    kstat += check_and_set_key_short (orec, "LoS2Rad", cvlostor);
 
     kstat += check_and_set_key_str   (orec, "Module", module_ident);
     kstat += check_and_set_key_str   (orec, "BLD_VERS", jsoc_version);
     kstat += check_and_set_key_time  (orec, "Created", CURRENT_SYSTEM_TIME);
+    kstat += check_and_set_key_time  (orec, "DATE", CURRENT_SYSTEM_TIME);
     kstat += check_and_set_key_str   (orec, "Source", source);
     kstat += check_and_set_key_str   (orec, "Input", input);
+    kstat += check_and_set_key_str   (orec, "RequestID", RequestID);
 
     if (kstat) {
       fprintf (stderr, "Error writing key value(s) to record %d in series %s\n",
@@ -672,5 +754,20 @@ img_lat *= raddeg;
  *  12.01.17	added option for removal of MDI distortion
  *  12.03.07	added promiscuous copy to target keys before careful setting
  *  v 0.9 frozen 12.08.03
+ *  13.02.01	removed unused variable
+ *  13.04.23	added detail for failures when geometry keywords missing
+ *  14.03.27	added option for copying of selected keywords from input to
+ *		output
+ *  14.08.01	made clat and clon optional arguments, with default being
+ *		centering at image center coordinates (or just the unspecified
+ *		coordinate) of first image; implemented option for centering
+ *		maps at center of each image; added setting of DATE (same as
+ *		Created); added option for converting scalar values assuming
+ *		that they are the line-of-sight components of radial vectors;
+ *		Added optional string argument RequestID
+ *  14.11.17	changed copykeys to avoid copying implicit indexing keys
+ *		added setting of optional keywords LoS2Rad and MDICorr depending
+ *		on flag values
+ *  v 1.0 frozen 15.01.13
  *
  */
