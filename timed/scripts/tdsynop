@@ -155,21 +155,18 @@ set CTIME = `printf %02d $YY``printf %02d $MO``printf %02d $DA`:`printf %02d $HH
 
 # determine root location of scratch and temp directory files
 set TMPFSLOC = ~rick/hmi/tmpfs
-if (-r $TMPFSLOC) then
-  set TMPFS = `egrep ^/tmp $TMPFSLOC`
-  set TEMP = $TMPFS/`whoami`
-  if (!(-w $TEMP)) set TEMP = /tmp
-  set SCRFS = `egrep ^/scr $TMPFSLOC`
-  set SCRT = $SCRFS/`whoami`
-  if (!(-d $SCRT)) mkdir $SCRT
-  if (!(-w $SCRT)) set SCRT = /tmp
+set TMPARSE = ~rick/bin/tmplocs
+set ALTDIR = ~rick/hmi
+if (-x $TMPARSE) then
+  set XXLOCS = (`$TMPARSE $TMPFSLOC $ALTDIR`)
+  set TEMP = $XXLOCS[1]
+  set SCRT = $XXLOCS[2]
 else
   set TEMP = /tmp
   set SCRT = /tmp
 endif
 
-set HOSTNAME = `hostname`
-set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set HOSTID = `hostname | awk -F. '{print $1}'`
 set PROCID = $HOSTID\_$$
 
 set TMPB = $TEMP/$PLID$SUFX
@@ -180,7 +177,7 @@ if (!(-d $TMPD)) mkdir $TMPD
 set MSGS = $TEMP/msgs
 if (!(-d $MSGS)) mkdir $MSGS
 set SCRB = $SCRT/$PLID
-if ($TEST) set SCRB = $SCRB\_test
+if ($TEST) set SCRB = $SCRB.$TW
 if (!(-d $SCRB)) mkdir $SCRB
 set LOGF = $SCRB/runlog$SUFX
 set RLOG = $TMPB/$CTIME
@@ -196,14 +193,18 @@ set NOW = `date +%Y.%m.%d_%T`
 set STARTED = $NOW
 onintr INTERRUPT
 
-set TTIME = '*'
-set PTIME = '*'
-set VTIME = '*'
-@ STRTSTOP = 1
-if ($STRTSTOP) @ PBEGIN = `date +%s`
+# check gatekeeper for permission to proceed
+set TURN = ~rick/hmi/pikewatch
+set PIKE = ~rick/hmi/pike
+if ($TEST) then
+  set RES = (`$TURN $PIKE -test`)
+else
+  set RES = (`$TURN $PIKE`)
+endif
+@ NOGO = $RES[1]
+if ($NOGO) goto TURNOUT
 
 # check coverage
-
 $COVER ds= $ISER tmid= $TMID length= $LNGTH \
     max_miss= $MMISS qmask= $QMASK reject= $RJCT > $TLIST
 @ LINES = `wc -l $TLIST |  awk '{print $1}'`
@@ -218,6 +219,12 @@ else
 endif
 set CVRG = 0.$CVG
 if ($CVG >= 1000) set CVRG = 1.000
+
+set TTIME = '*'
+set PTIME = '*'
+set VTIME = '*'
+@ STRTSTOP = 1
+if ($STRTSTOP) @ PBEGIN = `date +%s`
 
 # set up logging, notification
 set SUBJ = "HMI time-distance $TW processing for $CTIME"
@@ -324,6 +331,15 @@ endif
 
 SKIP_TRACK:
 
+# check gatekeeper for permission to proceed
+if ($TEST) then
+  set RES = (`$TURN $PIKE -test`)
+else
+  set RES = (`$TURN $PIKE`)
+endif
+@ NOGO = $RES[1]
+if ($NOGO) goto TURNOUT
+
 # prepare script for batch processing of travel time fitting
 @ BEGUN = `date +%s`
 $GENTG -c time= $TMID > $TLIST
@@ -384,6 +400,15 @@ if (!($FAIL)) rm $SCRIPT
 
 SKIP_TIMES:
 
+# check gatekeeper for permission to proceed
+if ($TEST) then
+  set RES = (`$TURN $PIKE -test`)
+else
+  set RES = (`$TURN $PIKE`)
+endif
+@ NOGO = $RES[1]
+if ($NOGO) goto TURNOUT
+
 setenv OMP_NUM_THREADS 1
 @ BEGUN = `date +%s`
 foreach KTYP (Raypath Born)
@@ -410,14 +435,37 @@ echo "  ($CTIME) time for inverting $RPCT regions on `hostname`: $ELAPS min"  >>
 set VTIME = $ELAPS
 goto CLEANUP
 
+TURNOUT:
+set NOW = `date +%Y.%m.%d_%T`
+set SUBJ = "$SUBJ aborted"
+set TYPE = misc
+echo "-> $NOW Script $PROG aborted! <-" >> $MMSG
+echo "$CTIME $STARTED  aborted" >> $TIMES
+echo "$CTIME	$TTIME	$PTIME	$VTIME aborted" >> $DTIME
+if ($NOGO < 0) then
+  echo "   watcher script $TURN called with invalid argument" >> $MMSG
+  echo "   or file $PIKE has invalid format" >> $MMSG
+else
+  @ HRCT = $NOGO / 3600
+  @ NOGO -= $HRCT * 3600
+  @ MNCT = $NOGO / 60
+  @ NOGO -= $MNCT * 60
+  echo -n "   file $PIKE contains NoGo signal for $HRCT" >> $MMSG
+  echo `printf :%02d:%02d $MNCT $NOGO` >> $MMSG
+  if ($#RES > 1) then
+    echo "   Reason: $RES[2-]" >> $MMSG
+  endif
+endif
+set RGNCT = '?'
+@ STRTSTOP = 0
+goto CLEANUP
+
 INTERRUPT:
 set SUBJ = "$SUBJ interrupted"
 set TYPE = misc
 echo "-> Script "$PROG" or module aborted! <-" >> $MMSG
 echo "$CTIME $STARTED  aborted" >> $TIMES
-set noglob
-echo $CTIME"\t"$TTIME"\t"$PTIME"\t"$VTIME"\t"aborted >> $DTIME
-unset noglob
+echo "$CTIME	$TTIME	$PTIME	$VTIME	aborted" >> $DTIME
 set RGNCT = '?'
 @ STRTSTOP = 0
 
@@ -436,9 +484,7 @@ else
   echo -n "# " >> $TIMES
 endif
 echo "$CTIME $STARTED  $HREL`printf :%02d $MNEL`" >> $TIMES
-set noglob
-echo $CTIME"\t"$TTIME"\t"$PTIME"\t"$VTIME >> $DTIME
-unset noglob
+echo "$CTIME	$TTIME	$PTIME	$VTIME" >> $DTIME
 echo "$NOW finish $CTIME" >> $MMSG
 if ($STRTSTOP) then
   echo "  End-to-end latency = $HREL`printf :%02d $MNEL`" >> $MMSG
