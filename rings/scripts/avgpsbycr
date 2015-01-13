@@ -91,8 +91,7 @@ set MZERO = -11.5
 set QUEUE = $QUEUES[$NT]
 
 # auxiliary files
-set HOSTNAME = `hostname`
-set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set HOSTID = `hostname | awk -F. '{print $1}'`
 set PROCID = $HOSTID\_$$
 set NOTE = ~rick/rings/notify
 set TMPFSLOC = ~rick/hmi/tmpfs
@@ -106,14 +105,18 @@ else
   set TEMP = /tmp
   set SCRT = /tmp
 endif
-set SCRB = $SCRT/misc
+set SCRB = $SCRT/rdVavgps$TILES
+if ($TEST) set SCRB = $SCRB.$TW
 if (!(-d $SCRB)) mkdir $SCRB
 set LOGF = $SCRB/runlog.avgpsbycr
 set TMPB = $TEMP/rdVavgps$TILES
+if ($TEST) set TMPB = $TMPB.$TW
 if (!(-d $TMPB)) mkdir $TMPB
 set MSGS = $TEMP/msgs
+if (!(-d $MSGS)) mkdir $MSGS
 set MMSG = $MSGS/msg.$PROCID
 set RLOG = $TMPB/$CROT
+if (-e $RLOG)  mv $RLOG $RLOG.bck
 set TMPD = $TMPB/scripts
 if (!(-d $TMPD)) mkdir $TMPD
 set QRES = $TEMP/qres
@@ -181,11 +184,11 @@ foreach TLAT ($TLATS)
   @ TOTEL += $ELAPS
   @ ELAPS += 30
   @ ELAPS /= 60
-  echo "  time for averaging $EXPCT spectra on the cluster: $ELAPS min" >> $MMSG
+  echo "  time for averaging $EXPCT sets of spectra on the cluster: $ELAPS min" >> $MMSG
 end
 @ TOTEL += 30
 @ TOTEL /= 60
-echo "Total time for averaging $TOTCT spectra on the cluster: $TOTEL min" >> $MMSG
+echo "Total time for averaging $TOTCT sets of spectra on the cluster: $TOTEL min" >> $MMSG
 echo "    averaged spectra in $AVGS""[$CROT]" >> $MMSG
 
 CLEANUP:
