@@ -1,13 +1,16 @@
 #!/bin/csh -f
 # script to run multiple instances of trackings plus analyses in the
 #   time-distance synoptic series for a set of given time centers
-# The invoked scripts should be run every 8 hours
+# The invoked scripts should be run every 8 hours to maintain cadence with
+#   observations
 
 set TW
+set TFLG
 @ TEST = 0	# set to 1 for production in namespace hmi_test
 if ("$1" =~ '-test') then
   @ TEST = 1
   set TW = test
+  set TFLG = -test
   shift
 endif
 
@@ -27,6 +30,7 @@ if ($#argv > 1) then
 endif
 @ SLEEP *= 60
 
+set PROG = `basename $0`
 set NOTIFY = `whoami`
 
 set SCRIPT = tdsynop
@@ -53,18 +57,15 @@ end
 set QUEUE = j.q
 
 # auxiliary files
-set HOSTNAME = `hostname`
-set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set HOSTID = `hostname | awk -F. '{print $1}'`
 set PROCID = $HOSTID\_$$
 set TMPFSLOC = ~rick/hmi/tmpfs
-if (-r $TMPFSLOC) then
-  set TMPFS = `egrep ^/tmp $TMPFSLOC`
-  set TEMP = $TMPFS/`whoami`
-  if (!(-w $TEMP)) set TEMP = /tmp
-  set SCRFS = `egrep ^/scr $TMPFSLOC`
-  set SCRT = $SCRFS/`whoami`
-  if (!(-d $SCRT)) mkdir $SCRT
-  if (!(-w $SCRT)) set SCRT = /tmp
+set TMPARSE = ~rick/bin/tmplocs
+set ALTDIR = ~rick/hmi
+if (-x $TMPARSE) then
+  set XXLOCS = (`$TMPARSE $TMPFSLOC $ALTDIR`)
+  set TEMP = $XXLOCS[1]
+  set SCRT = $XXLOCS[2]
 else
   set TEMP = /tmp
   set SCRT = /tmp
@@ -76,6 +77,40 @@ set MMSG = $MSGS/msg.$PROCID
 set QRES = $TEMP/qres
 if (!(-d $QRES)) mkdir $QRES
 
+
+# check gatekeeper for permission to proceed
+set TURN = ~rick/hmi/pikewatch
+set PIKE = ~rick/hmi/pike
+if ($TEST) then
+  set RES = (`$TURN $PIKE -test`)
+else
+  set RES = (`$TURN $PIKE`)
+endif
+@ NOGO = $RES[1]
+if ($NOGO) then
+  set NOW = `date +%Y.%m.%d_%T`
+  echo "HMI ring-diagrams $TW pipeline aborted" > $MSGS/subj.$PROCID
+  echo "-> $NOW Script $PROG aborted! <-" >> $MMSG
+  if ($NOGO < 0) then
+    echo "   watcher script $TURN called with invalid argument" >> $MMSG
+    echo "   or file $PIKE has invalid format" >> $MMSG
+  else
+    @ HRCT = $NOGO / 3600
+    @ NOGO -= $HRCT * 3600
+    @ MNCT = $NOGO / 60
+    @ NOGO -= $MNCT * 60
+    echo -n "   file $PIKE contains NoGo signal for $HRCT" >> $MMSG
+    echo `printf :%02d:%02d $MNCT $NOGO` >> $MMSG
+    if ($#RES > 1) then
+      echo "   Reason: $RES[2-]" >> $MMSG
+    endif
+  endif
+
+  echo `whoami` > $MSGS/list.$PROCID
+  echo $SUBJ > $MSGS/subj.$PROCID
+  exit
+endif
+
 @ YYMMDD = $YYMMDD0
 set MOLEN = (31 28 31 30 31 30 31 31 30 31 30 31)
 @ YR = $YYMMDD / 10000
@@ -83,6 +118,15 @@ if ($YR % 4 == 0) set MOLEN = (31 29 31 30 31 30 31 31 30 31 30 31)
 
 while ($YYMMDD <= $YYMMDD1)
   foreach HR (04 12 20)
+# check gatekeeper for permission to proceed
+    if ($TEST) then
+      set RES = (`$TURN $PIKE -test`)
+    else
+      set RES = (`$TURN $PIKE`)
+    endif
+    @ NOGO = $RES[1]
+    if ($NOGO) goto TURNOUT
+
     set NOW = `date +%Y.%m.%d_%T`
     set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG $YYMMDD $HR`
     if ($#QINFO) then
@@ -115,7 +159,32 @@ while ($YYMMDD <= $YYMMDD1)
   @ YYMMDD = $YR`printf %02d $MO``printf %02d $DA`
 end
 
-echo -n "Final script $SCRIPT $YYMMDDL $HR submitted " > $MMSG
-date '+%e %b %H:%M' >> $MMSG
+if ($?YYMMDDL) then
+  echo -n "Final script $SCRIPT $YYMMDDL $HR submitted " >> $MMSG
+  date '+%e %b %H:%M' >> $MMSG
+endif
 echo "HMI time-distance $TW pipeline run" > $MSGS/subj.$PROCID
 echo "$NOTIFY" > $MSGS/list.$PROCID
+exit
+
+TURNOUT:
+
+echo "-> Script $PROG aborted! <-" >> $MMSG
+echo -n "Final script $SCRIPT submitted " >> $MMSG
+date '+%e %b %H:%M' >> $MMSG
+tail -1 $RLOG >> $MMSG
+if ($NOGO < 0) then
+  echo "   watcher script $TURN called with invalid argument" >> $MMSG
+  echo "   or file $PIKE has invalid format" >> $MMSG
+else
+  @ HRCT = $NOGO / 3600
+  @ NOGO -= $HRCT * 3600
+  @ MNCT = $NOGO / 60
+  @ NOGO -= $MNCT * 60
+  echo -n "   file $PIKE contains NoGo signal for $HRCT" >> $MMSG
+  echo `printf :%02d:%02d $MNCT $NOGO` >> $MMSG
+  if ($#RES > 1) then
+    echo "   Reason: $RES[2-]" >> $MMSG
+  endif
+endif
+
