@@ -3,11 +3,13 @@
  *
  *  library of miscellaneous utility functions for dealing with DRMS record keys
  *
+ *  append_args_tokey ()
  *  append_keyval_to_primekeyval ()
  *  check_and_copy_key ()
  *  check_and_setkey_TYPE ()
  *  copy_prime_keys ()
  *  create_primekey_from_keylist ()
+ *  drms_appendstr_tokey ()
  *  drms_wcs_timestep ()
  *  propagate_keys ()
  *
@@ -304,6 +306,71 @@ int check_and_copy_key (DRMS_Record_t *new, DRMS_Record_t *old,
 	  drms_type2str (newkey->info->type), key);
       return 1;
   }
+}
+
+int drms_appendstr_tokey (DRMS_Record_t *rec, const char *key, const char *str,
+    int addline) {
+/*
+ *  This is just a private, slightly simplified version of the static function
+ *    AppendStrKeyInternal() in $DRMS/base/drms/libs/api/drms_keyword.c
+ */
+  DRMS_Keyword_t *keyword = NULL;
+  int rv;
+
+  if (!rec || !str) return DRMS_ERROR_INVALIDDATA;
+  if (!strlen (str)) return 0;
+  keyword = drms_keyword_lookup (rec, key, 0);
+  if (!keyword) return DRMS_ERROR_UNKNOWNKEYWORD;
+  if (keyword->info->islink || drms_keyword_isconstant (keyword) ||
+      drms_keyword_isslotted (keyword))
+    return DRMS_ERROR_KEYWORDREADONLY;
+  if (keyword->info->type != DRMS_TYPE_STRING) return DRMS_ERROR_INVALIDDATA;
+	       /*  append to old string, if it exists, otherwise just assign  */
+  if (keyword->value.string_val) {
+    char *tmp = NULL;
+    if (strlen (keyword->value.string_val)) {
+      size_t strsz = strlen (keyword->value.string_val) + strlen (str) + 2;
+      tmp = malloc(strsz);
+      if (addline)
+	snprintf (tmp, strsz, "%s\n%s", keyword->value.string_val, str);
+      else
+	snprintf (tmp, strsz, "%s%s", keyword->value.string_val, str);
+    } else tmp = strdup (str);
+    free (keyword->value.string_val);
+    keyword->value.string_val = tmp;
+  } else keyword->value.string_val = strdup (str);
+  return 0;
+}
+
+void append_args_tokey (DRMS_Record_t *rec, const char *key) {
+/*
+ *  Appends a list of all calling argument values to the designated
+ *    key (presumably HISTORY or COMMENT)
+ */
+  ModuleArgs_t *arg = gModArgs;
+  CmdParams_t *params = &cmdparams;
+  int flagct = 0;
+  char *strval;
+  char flaglist[72];
+
+  drms_appendstr_tokey (rec, key, "Module called with following arguments:", 1);
+  while (arg->type != ARG_END) {
+    if (arg->type == ARG_FLAG) {
+      if (params_isflagset (params, arg->name)) {
+        if (!flagct) sprintf (flaglist, "with flags -");
+        strcat (flaglist, arg->name);
+        flagct++;
+      }
+    } else {
+      drms_appendstr_tokey (rec, key, arg->name, 1);
+      drms_appendstr_tokey (rec, key, "= ", 0);
+      strval = strdup (params_get_str (params, arg->name));
+      drms_appendstr_tokey (rec, key, strval, 0);
+    }
+    arg++;
+  }
+  if (flagct) drms_appendstr_tokey (rec, key, flaglist, 1);
+  return;
 }
 
 /*
