@@ -202,7 +202,7 @@
 						      /*  module identifier  */
 char *module_name = "mtrack";
 char *module_desc = "track multiple regions from solar image sequences";
-char *version_id = "1.7";
+char *version_id = "1.8";
 
 #define CARR_RATE       (2.86532908457)
 #define RSUNM		(6.96e8)
@@ -311,73 +311,6 @@ long long params_get_mask (CmdParams_t *params, char *arg,
   retval  = strtoull (str, &ext, 16);
   if (strlen (ext)) retval = defval;
   return retval;
-}
-
-int drms_appendstr_tokey (DRMS_Record_t *rec, const char *key, const char *str,
-    int addline) {
-/*
- *  This is just a private, slightly simplified version of the static function
- *    AppendStrKeyInternal() in $DRMS/base/drms/libs/api/drms_keyword.c
- */
-  DRMS_Keyword_t *keyword = NULL;
-  int rv;
-
-  if (!rec || !str) return DRMS_ERROR_INVALIDDATA;
-  if (!strlen (str)) return 0;
-  keyword = drms_keyword_lookup (rec, key, 0);
-  if (!keyword) return DRMS_ERROR_UNKNOWNKEYWORD;
-  if (keyword->info->islink || drms_keyword_isconstant (keyword) ||
-      drms_keyword_isslotted (keyword))
-    return DRMS_ERROR_KEYWORDREADONLY;
-  if (keyword->info->type != DRMS_TYPE_STRING) return DRMS_ERROR_INVALIDDATA;
-	       /*  append to old string, if it exists, otherwise just assign  */
-  if (keyword->value.string_val) {
-    char *tmp = NULL;
-    if (strlen (keyword->value.string_val)) {
-      size_t strsz = strlen (keyword->value.string_val) + strlen (str) + 2;
-      tmp = malloc(strsz);
-      if (addline)
-	snprintf (tmp, strsz, "%s\n%s", keyword->value.string_val, str);
-      else
-	snprintf (tmp, strsz, "%s%s", keyword->value.string_val, str);
-    } else tmp = strdup (str);
-    free (keyword->value.string_val);
-    keyword->value.string_val = tmp;
-  } else keyword->value.string_val = strdup (str);
-  return 0;
-}
-
-void append_args_tokey (DRMS_Record_t *rec, const char *key) {
-/*
- *  Appends a list of all calling argument values to the designated
- *    key (presumably HISTORY or COMMENT)
- *  This function should be a general utility, maybe move to keystuff.c
- *    There is another copy in datavg.c
- */
-  ModuleArgs_t *arg = gModArgs;
-  CmdParams_t *params = &cmdparams;
-  int flagct = 0;
-  char *strval;
-  char flaglist[72];
-
-  drms_appendstr_tokey (rec, key, "Module called with following arguments:", 1);
-  while (arg->type != ARG_END) {
-    if (arg->type == ARG_FLAG) {
-      if (params_isflagset (params, arg->name)) {
-        if (!flagct) sprintf (flaglist, "with flags -");
-        strcat (flaglist, arg->name);
-        flagct++;
-      }
-    } else {
-      drms_appendstr_tokey (rec, key, arg->name, 1);
-      drms_appendstr_tokey (rec, key, "= ", 0);
-      strval = strdup (params_get_str (params, arg->name));
-      drms_appendstr_tokey (rec, key, strval, 0);
-    }
-    arg++;
-  }
-  if (flagct) drms_appendstr_tokey (rec, key, flaglist, 1);
-  return;
 }
 
 /*
@@ -2209,6 +2142,20 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
       apsd = img_xscl * img_radius * raddeg / 3600.0;
       adjust_for_observer_velocity (maps, rgnct, clat, clon, pixct,
 	  img_lat, img_lon, obsvr, obsvw, obsvn, apsd, 0);
+/*
+{
+double v, rgnavg = 0.0;
+int vct = 0;
+for (n = 0; n < pixct; n++) {
+  v = maps[n];
+  if (isfinite (v)) {
+    rgnavg += v;
+    vct++;
+  }
+}
+printf ("%4d: %f %f %.3f %.3f\n", nr, img_xc, img_yc, obsvr, rgnavg / vct);
+}
+*/
     }
 			 /*  remove solar rotation signal from Doppler data  */
     if (remove_rotation) adjust_for_solar_rotation (maps, rgnct, clat, clon,
@@ -2728,4 +2675,8 @@ fprintf (stderr, "Data range in image[%d]: [%.2f, %.2f]\n", nr, minval, maxval);
  *	from date/time and using T_REC as tobs_key and when elements missing
  *	for the midpoint input record (2013.08.30)
  *  v 1.7 frozen 2013.09.04
- */
+ *    1.8	Removed functions drms_appendstr_tokey() and append_args_tokey()
+ *	(now in keystuff) (2014.10.19)
+ *  v 1.8 frozen 20The following ring-diagram pipeline modules and scripts were updated15.01.13
+ */		   (proj/rings):
+
