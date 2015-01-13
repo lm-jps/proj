@@ -80,6 +80,11 @@
  *	should be arrays of ints)
  *    The protocol of the log segment, if present in the output series, is not
  *	verified to be generic
+ *    The values of the primekey in the input set, as specified by pkey, are
+ *	automatically averaged into a corresponding key (and D_key) in the
+ *	output data set. If the default value of T_OBS is overridden, must
+ *	provide appropriate keys in output series if desired; alternatively,
+ *	T_OBS should be added to average list.
  *
  *  Revision history is at the end of the file.
  *
@@ -94,7 +99,7 @@
 #define	DO_SQUARE	(2)
 
 char *module_name = "data average";
-char *version_id = "1.2";
+char *version_id = "1.4";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"in", "", "input data series or dataset"}, 
@@ -133,77 +138,12 @@ ModuleArgs_t module_args[] = {
   {ARG_END}
 };
 
-int drms_appendstr_tokey (DRMS_Record_t *rec, const char *key, const char *str,
-    int addline) {
-/*
- *  This is just a private, slightly simplified version of the static function
- *    AppendStrKeyInternal() in $DRMS/base/drms/libs/api/drms_keyword.c
- */
-  DRMS_Keyword_t *keyword = NULL;
-  int rv;
-
-  if (!rec || !str) return DRMS_ERROR_INVALIDDATA;
-  if (!strlen (str)) return 0;
-  keyword = drms_keyword_lookup (rec, key, 0);
-  if (!keyword) return DRMS_ERROR_UNKNOWNKEYWORD;
-  if (keyword->info->islink || drms_keyword_isconstant (keyword) ||
-      drms_keyword_isslotted (keyword))
-    return DRMS_ERROR_KEYWORDREADONLY;
-  if (keyword->info->type != DRMS_TYPE_STRING) return DRMS_ERROR_INVALIDDATA;
-	       /*  append to old string, if it exists, otherwise just assign  */
-  if (keyword->value.string_val) {
-    char *tmp = NULL;
-    if (strlen (keyword->value.string_val)) {
-      size_t strsz = strlen (keyword->value.string_val) + strlen (str) + 2;
-      tmp = malloc(strsz);
-      if (addline)
-	snprintf (tmp, strsz, "%s\n%s", keyword->value.string_val, str);
-      else
-	snprintf (tmp, strsz, "%s%s", keyword->value.string_val, str);
-    } else tmp = strdup (str);
-    free (keyword->value.string_val);
-    keyword->value.string_val = tmp;
-  } else keyword->value.string_val = strdup (str);
-  return 0;
-}
-
-void append_args_tokey (DRMS_Record_t *rec, const char *key) {
-/*
- *  Appends a list of all calling argument values to the designated
- *    key (presumably HISTORY or COMMENT)
- *  This function should be a general utility, maybe move to keystuff.c
- */
-  ModuleArgs_t *arg = gModArgs;
-  CmdParams_t *params = &cmdparams;
-  int flagct = 0;
-  char *strval;
-  char flaglist[72];
-
-  drms_appendstr_tokey (rec, key, "Module called with following arguments:", 1);
-  while (arg->type != ARG_END) {
-    if (arg->type == ARG_FLAG) {
-      if (params_isflagset (params, arg->name)) {
-        if (!flagct) sprintf (flaglist, "with flags -");
-        strcat (flaglist, arg->name);
-        flagct++;
-      }
-    } else {
-      drms_appendstr_tokey (rec, key, arg->name, 1);
-      drms_appendstr_tokey (rec, key, "= ", 0);
-      strval = strdup (params_get_str (params, arg->name));
-      drms_appendstr_tokey (rec, key, strval, 0);
-    }
-    arg++;
-  }
-  if (flagct) drms_appendstr_tokey (rec, key, flaglist, 1);
-  return;
-}
 	/*  list of keywords to propagate by default (if possible and unique)
 						        from input to output  */
 char *propagate[] = {"TELESCOP", "INSTRUME", "WCSNAME", "WCSAXES"};
 		 /*  list of keywords to average by default (if possible)
 						        from input to output  */
-char *average[] = {"OBS_VR", "OBS_VW", "OBS_VN"};
+char *average[] = {"T_OBS", "OBS_VR", "OBS_VW", "OBS_VN"};
 			  /*  the following belong in external utility files  */
 static long long params_get_mask (CmdParams_t *params, char *arg,
     long long defval) {
@@ -491,13 +431,13 @@ int DoIt (void) {
   DRMS_Segment_t *logseg = NULL;
   DRMS_Array_t *data_array, *vcts, *mean, *powr;
   DRMS_Keyword_t *keywd;
-  TIME tmid, tobs_rec, tobs, tfirst, tlast;
+  TIME tmid, tobs_rec, /* tobs, */ tfirst, tlast;
   FILE *runlog;
   double *v, *vavg, *vvar;
   double *crpix, *crval, *cdelt, *crota, *avgval;
   double *crpixv, *crvalv, *cdeltv, *crotav, *avgvalv;
   double crpix_rec, crval_rec, cdelt_rec, crota_rec, avg_rec;
-  double tobsv, vobs;
+  double /* tobsv, */ vobs;
   double log_base;
   double mrepmin, mrepmax, prepmin, prepmax;
   double crlnobs, crlnval, crlnvalv;
@@ -787,14 +727,20 @@ int DoIt (void) {
     if (add_defaults) {
       int newct = propct + propkeyct - 1;
       copykeylist = (char **)realloc (copykeylist, newct * sizeof (char **));
-      for (n = 1; n < propkeyct; n++)
+      for (n = 1; n < propkeyct; n++) {
 	copykeylist[n + propct - 1] = propagate[n];
+      }
       propct = newct;
     }
   }
-  if (verbose) {
-    printf ("propagating values for %d key(s):\n", propct);
-    for (n = 0; n < propct; n++) printf ("  %s\n", copykeylist[n]);
+  if (verbose && propct) {
+    printf ("propagating values for up to %d key(s):\n", propct);
+    for (n = 0; n < propct; n++) {
+      if (drms_keyword_lookup (orec, copykeylist[n], 0))
+	printf ("  %s\n", copykeylist[n]);
+      else
+	printf ("  %s (not in output series)\n", copykeylist[n]);
+    }
   }
 
   meanct = construct_stringlist (average_req, ',', &meankeylist);
@@ -817,8 +763,16 @@ int DoIt (void) {
     }
   }
   if (verbose) {
-    printf ("averaging values for %d key(s):\n", meanct);
-    for (n = 0; n < meanct; n++) printf ("  %s\n", meankeylist[n]);
+    printf ("averaging values for up to %d key(s):\n", meanct);
+    for (n = 0; n < meanct; n++) {
+      if (drms_keyword_lookup (orec, meankeylist[n], 0)) {
+	printf ("  %s\n", meankeylist[n]);
+	sprintf (keyname, "D_%s", meankeylist[n]);
+	if (!drms_keyword_lookup (orec, keyname, 0))
+	  printf ("    Warning: %s not in output series\n", keyname);
+      } else
+	printf ("  %s (not in output series)\n", meankeylist[n]);
+    }
   }
   avgval = (double *)calloc (meanct, sizeof (double));
   avgvalv = (double *)calloc (meanct, sizeof (double));
@@ -1002,7 +956,9 @@ int DoIt (void) {
 	"Warning: could not open rejection list %s; ignored\n", rejectfile);
   }
 					  /*  initialize keys to be averaged  */
+/*
   tobs = tobsv = 0;
+*/
   imgct = 0;
 					      /*  loop through input records  */
   for (rec = 0; rec < recct; rec++) {
@@ -1140,14 +1096,6 @@ int DoIt (void) {
 	  drms_keyword_snprintfval (keywd, vbuf, sizeof (vbuf));
 	  fprintf (stderr, "%s\n", vbuf);
 	}
-/*
-	tobs_rec = drms_getkey_time (irec, primekey, &status);
-	if (status) fprintf (stderr, "unknown time\n");
-	else {
-	  sprint_time (tbuf, tobs_rec, "TAI", 0);
-	  fprintf (stderr, "%s\n", tbuf);
-	}
-*/
       }
       continue;
     }
@@ -1162,8 +1110,10 @@ int DoIt (void) {
     }
     if (!imgct) tfirst = tobs_rec;
     tlast = tobs_rec;
+/*
     tobs += tobs_rec;
     tobsv += tobs_rec * tobs_rec;
+*/
     imgct++;
 
     v = (double *)data_array->data;
@@ -1288,12 +1238,14 @@ int DoIt (void) {
   if (imgct) {
     kstat += check_and_set_key_time  (orec, "T_FIRST", tfirst);
     kstat += check_and_set_key_time  (orec, "T_LAST", tlast);
+/*
     tobs /= imgct;
     kstat += check_and_set_key_time  (orec, primekey, tobs);
     tobsv /= imgct;
     tobsv -= tobs * tobs;
     sprintf (keyname, "D_%s", primekey);
     kstat += check_and_set_key_time  (orec, keyname, sqrt (tobsv));
+*/
     for (n = 0; n < wcsaxes; n++) {
       crpix[n] /= imgct;
       sprintf (keyname, "CRPIX%d", n + 1);
@@ -1487,4 +1439,11 @@ int DoIt (void) {
  *		CalVer64 values used; added support for specification of
  *		tmid in date_time format
  *  v 1.2 frozen 13.04.08
+ *	14.03.01	added T_OBS to default list of keys to be averaged;
+ *		added verbose warnings of missing output keys for propagation
+ *		or averaging; removed automatic averaging of prime key
+ *  v 1.3 frozen 14.07.07
+ *	14.10.09	Removed functions drms_appendstr_tokey() and
+ *		append_args_tokey() (now in keystuff)
+ *  v 1.4 frozen 15.01.13
  */
