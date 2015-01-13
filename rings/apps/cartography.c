@@ -13,6 +13,8 @@
  *				location
  *      sphere2plane		Map from heliographic/geographic coordinates
  *				to map location
+ *	name2proj		Convert name to key value of projection
+ *	proj2name		Convert projection key value to name
  *
  *  Responsible:  Rick Bogart                   RBogart@solar.Stanford.EDU
  *
@@ -28,6 +30,8 @@
  *      int xinvrt, int yinvrt);
  *    int sphere2plane (double lat, double lon, double latc, double lonc,
  *	double *x, double *y, int projection);
+ *    int name2proj (char *proj_name);
+ *    char *proj2name (int projection);
  *
  *  Bugs:
  *    It is assumed that the function atan2() returns the correct value
@@ -271,6 +275,7 @@ int plane2sphere (double x, double y, double latc, double lonc,
       test = cosphi * sin (x/cosphi) / coslat;
       *lon = asin (test) + lonc;
       if (fabs (x) > M_PI * cosphi) return (-1);
+/*
       if (fabs (x) > M_PI_2) {
         status = 1;
         while (x > M_PI_2) {
@@ -280,6 +285,17 @@ int plane2sphere (double x, double y, double latc, double lonc,
         while (x < -M_PI_2) {
           *lon = -M_PI - *lon;
 	  x += M_PI;
+        }
+*/
+      if (fabs (x) > M_PI_2 * cosphi) {
+        status = 1;
+        while (x > M_PI_2 * cosphi) {
+          *lon = M_PI - *lon;
+	  x -= M_PI * cosphi;
+        }
+        while (x < -M_PI_2 * cosphi) {
+          *lon = -M_PI - *lon;
+	  x += M_PI * cosphi;
         }
       }
 /*
@@ -378,7 +394,7 @@ int sphere2img (double lat, double lon, double latc, double lonc,
  *      ecc         Eccentricity of the fit ellipse presumed due to image
  *                    distortion (no distortion in direction of major axis)
  *      chi         Position angle of the major axis of the fit ellipse, 
- *                    measure eastward from north,  relative to the north
+ *                    measure eastward from north, relative to the north
  *                    direction on the plate, in radians (ignored if ecc = 0)
  *      xinvrt}     Flag parameters: if not equal to 0, the respective
  *      yinvrt}       coordinates on the image x and y are inverted
@@ -545,6 +561,69 @@ int sphere2plane (double lat, double lon, double latc, double lonc,
   return hemisphere;
 }
 
+/**********************************************************************
+ * Projection names package -- contains a structure 
+ * with the conversion between names and numeric constants
+ * for the different projections.  Also two subroutines to walk back and
+ * forth.  The projection names are case inseNSiTIVe.
+ * 
+ * The first table entry is the default value for the projection
+ * if an unknown string is entered.
+ */
+static struct projnames {
+  int projection;
+  char *name;
+  char *lowname;
+  int uniq;
+} projnames[]= {
+  {ORTHOGRAPHIC, "orthographic", "orthographic"},
+  {STEREOGRAPHIC, "stereographic", "stereographic"},
+  {POSTEL,	"Postel\'s",	"postels"},
+  {GNOMONIC,	"Gnomonic",	"gnomonic"},
+  {LAMBERT,	"Lambert",	"lambert"},
+  {CYLEQA,	"cyleqa",	"cyleqa"},
+  {SINEQA,	"sineqa",	"sineqa"},
+  {MERCATOR,	"Mercator",	"mercator"},
+  {RECTANGULAR,	"plate carree",	"plate carree"},
+  {CASSINI,	"Cassini\'s",	"cassinis"},
+  {-1, "", ""}
+};
+
+int name2proj (char *map_name) {
+  char *s0, *s, *t;
+  struct projnames *proj;
+
+  if (!map_name) return -1;
+
+  s0 = s = (char *)(malloc (strlen (map_name) + 1));		    /*  sic  */
+  strcpy (s, map_name);
+  for (t = s; *t; t++) *t = tolower (*t);
+				   /*  trim leading and trailing whitespace  */
+  for(; isspace (*s); s++);
+  for (t = s; *t && !isspace (*t); t++);
+  *t = '\0';
+							 /*  check for name  */
+  for (proj=projnames; *(proj->name); proj++) {
+    if (!strcmp (proj->lowname, s)) {
+      free (s0);
+      return proj->projection;
+    }
+  }
+
+  free (s0);
+  return projnames->projection;
+}
+
+
+char *proj2name(int proj_in) {
+  struct projnames *proj;
+  for (proj=projnames; *(proj->name); proj++) {
+    if (proj->projection == proj_in) return proj->name;
+  }
+  return "UNKNOWN";
+}
+
+
 /*
  *  Revision History
  *  v 0.9  94.08.03     Rick Bogart     created this file
@@ -590,4 +669,8 @@ int sphere2plane (double lat, double lon, double latc, double lonc,
  *	DRMS modules and standalone code; removed optimum_scale(), pow2scale(),
  *	name2proj(), proj2name()
  *  09.12.02	R Bogart	fixed two icc11 compiler warnings
+ *  14.02.06	"		fixed over-limb sinusoidal equal-area mapping
+ *	bug for plane2sphere (not thoroughly tested)
+ *  14.08.01	"		restored name2proj(), proj2name() from original
+ *	source (but removing "Aerial")
  */
