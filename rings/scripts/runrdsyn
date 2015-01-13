@@ -50,6 +50,7 @@ set QMASK = 0x80004000
 set COVER = rdcover
 set SCRIPT = rdday
 set AVG120 = avg120
+set QSUB = qsub
 
 set QUEUE = j.q
 
@@ -64,6 +65,10 @@ if ($TEST) then
   set ARG = -test
   grep -q "^COVER =" $TSTOPT
   if ($status == 0) set COVER = `grep "^COVER =" $TSTOPT | awk '{print $3}'`
+  grep -q "^QUEUE =" $TSTOPT
+  if ($status == 0) set QUEUE = `grep "^QUEUE =" $TSTOPT | awk '{print $3}'`
+  grep -q "^QSUB =" $TSTOPT
+  if ($status == 0) set QSUB = `grep "^QSUB =" $TSTOPT | awk '{print $3}'`
 else
   set NMSP = hmi
   set ARG
@@ -95,8 +100,7 @@ endif
 # auxiliary files
 set RJCT = ~rick/hmi/qual/reject.V
 
-set HOSTNAME = `hostname`
-set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set HOSTID = `hostname | awk -F. '{print $1}'`
 set PROCID = $HOSTID\_$$
 set TMPFSLOC = ~rick/hmi/tmpfs
 set TMPARSE = ~rick/bin/tmplocs
@@ -201,7 +205,7 @@ while ($CROT <= $CR1)
     endif
     if ($BCKCT < 1) then
       echo "Data average record $BCK does not exist: processing" >> $RLOG
-      qsub -q $QUEUE -e $QRES -o $QRES -sync y $AVG120 $ARG -v $CR60 $CL60
+      $QSUB -q $QUEUE -e $QRES -o $QRES -sync y $AVG120 $ARG -v $CR60 $CL60
       if ($status) then
 	set NOW = `date +%Y.%m.%d_%T`
 	echo "$NOW Data averaging for background subtraction failed" >> $RLOG
@@ -240,10 +244,9 @@ while ($CROT <= $CR1)
     endif
     @ NOGO = $RES[1]
     if ($NOGO) goto TURNOUT
-
     @ RUNNING++
     set NOW = `date +%Y.%m.%d_%T`
-    set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 5 $CROT $CLON`
+    set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 5 $CROT $CLON`
     if ($#QINFO) then
       set QPID = `echo $QINFO | awk '{print $3}'`
       echo $NOW $SCRIPT $ARG 5 $CROT $CLON submitted to $QUEUE as job $QPID >> $RLOG
@@ -280,7 +283,7 @@ while ($CROT <= $CR1)
 
       @ RUNNING++
       set NOW = `date +%Y.%m.%d_%T`
-      set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 15 $CROT $CLON`
+      set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 15 $CROT $CLON`
       if ($#QINFO) then
 	set QPID = `echo $QINFO | awk '{print $3}'`
 	echo $NOW $SCRIPT $ARG 15 $CROT $CLON submitted to $QUEUE as job $QPID >> $RLOG
@@ -318,7 +321,7 @@ while ($CROT <= $CR1)
 
       @ RUNNING++
       set NOW = `date +%Y.%m.%d_%T`
-      set QINFO = `qsub -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 30 $CROT $CLON`
+      set QINFO = `$QSUB -q $QUEUE -e $QRES -o $QRES $SCRIPT $ARG 30 $CROT $CLON`
       if ($#QINFO) then
 	set QPID = `echo $QINFO | awk '{print $3}'`
 	echo $NOW $SCRIPT $ARG 30 $CROT $CLON submitted to $QUEUE as job $QPID >> $RLOG
@@ -330,7 +333,10 @@ while ($CROT <= $CR1)
     endif
   endif
   @ CLON -= 5
-  if ($CLON <= 0) @ CROT++
+  if ($CLON <= 0) then
+    @ CROT++
+    @ CLON += 360
+  endif
   if ($RUNNING) then
     if ($CROT < $CR1) then
       sleep $SLEEP
@@ -338,7 +344,6 @@ while ($CROT <= $CR1)
       sleep $SLEEP
     endif
   endif
-  if ($CLON <= 0) @ CLON += 360
 end
 
 echo -n "Final script $SCRIPT submitted " >> $MMSG
