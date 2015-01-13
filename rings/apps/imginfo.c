@@ -69,10 +69,11 @@ static double lookup (DRMS_Record_t *rec, ParamDef key, int *status) {
 
 static char *lookup_str (DRMS_Record_t *rec, ParamDef key, int *status) {
   DRMS_Keyword_t *keywd;
-  char *value;;
+  int lstat;
+  char *value;
 
-  value = drms_getkey_string (rec, key.name, status);
-  if (*status) *status |= key.statusbit;
+  value = drms_getkey_string (rec, key.name, &lstat);
+  if (lstat) *status |= key.statusbit;
 					     /*  cadence should be constant  */
   if ((keywd = drms_keyword_lookup (rec, key.name, 1))) {
     if (keywd->info->recscope != 1) *status |= KEYSCOPE_VARIABLE;
@@ -92,17 +93,19 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
  *	solar disc
  *    ctry  (virtual) fractional pixel row of the center of the
  *	solar disc
- *    NO latc  heliographic latitude of disc center, in radians
- *    NO lonc  heliographic longitude of disc center, in radians
  *    apsd  apparent semi-diameter (semimajor-axis) of the solar disc, in
  *	pixel units
- *    pang  position angle of solar north relative to image vertical
- *	([0,0] -> [0,1]), measured westward (clockwise), in radians
+ *    pang  position angle of solar north relative to image vertical (y-axis,
+ *	[0,0] -> [0,1]), measured westward (clockwise), in radians
  *    eecc  eccentricity of best-fit ellipse describing limb
  *    eang  position angle of best-fit ellipse describing limb, relative
- *	to ?, in radians
+ *	to direction of solar north, measured westward (clockwise), in radians
  *    xinv  0 if image is direct, 1 if flipped by columns
  *    yinv  0 if image is direct, 1 if flipped by rows
+ *  If AIPS_convention is true (!=0), it is assumed that the input keywords
+ *    representing position and ellipse angles are measured westward
+ *    (clockwise) relative to their nominal axes; otherwise they are measured
+ *    eastward (counter-clockwise) relative to their nominal axes.
  *  NO!
  *  The following data types are supported: SOHO-MDI, GONG+, Mt. Wilson MOF,
  *    SOHO-EIT, TRACE, BBSO Ha
@@ -213,7 +216,8 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
 	sprintf (param[ESMA].name, "S_MAJOR");
 	sprintf (param[ESMI].name, "S_MINOR");
 	sprintf (param[EANG].name, "S_ANGLE");
-	param[EANG].scale = raddeg;
+	param[EANG].scale = -raddeg;
+	if (AIPS_convention) param[EANG].scale *= -1;
     }
   }
   lasthdr = hdrtype;
@@ -267,5 +271,6 @@ static int solar_image_info (DRMS_Record_t *img, double *xscl, double *yscl,
  *		(solar WCS) convention rather than the AIPS convention for
  *		CROTA2; added argument AIPS_convention to solar_image_info to
  *		be set if the CROTA2 keyword conforms to the AIPS convention
+ *  14.10.04		added AIPS-convention correction for ellipse angle
  */
 
