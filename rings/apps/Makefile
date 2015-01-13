@@ -27,7 +27,7 @@ FPLS =	$(addprefix $(DEST)/, $(MODS)) $(addprefix $(DEST)/, $(PROG)) \
 
 all:	$(MODS) $(PROG) rdfitf rdvinv
 
-FC = ifort11
+#FC = ifort11
 F90F = -c -O3
 
 .SECONDEXPANSION:
@@ -41,7 +41,7 @@ $(MODS):	$$@.o
 	$(RM) $@.o
 
 rdfitf:		$$@.o $(FOBJ)
-	$(FC)  -nofor-main -openmp -o $(DEST)/$@ $? $(FOBJ) $(DLIBS) -lmkl_em64t
+	$(FC)  -nofor-main -openmp -o $(DEST)/$@ $? $(DLIBS) -lmkl_em64t
 	$(RM) $?
 
 rdsinv:		$$@.o h1h2.o
