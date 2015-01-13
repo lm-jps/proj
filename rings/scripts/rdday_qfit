@@ -66,6 +66,7 @@ set PSPEC = pspec3
 set RFITF = rdfitf
 set RFITC = rdfitc
 set RVINV = rdvinv
+set QSUB = qsub
 
 set QUEUE = j.q
 
@@ -89,6 +90,10 @@ if ($TEST) then
   if ($status == 0) set RFITC = `grep "^RFITC =" $TSTOPT | awk '{print $3}'`
   grep -q "^RVINV =" $TSTOPT
   if ($status == 0) set RVINV = `grep "^RVINV =" $TSTOPT | awk '{print $3}'`
+  grep -q "^QUEUE =" $TSTOPT
+  if ($status == 0) set QUEUE = `grep "^QUEUE =" $TSTOPT | awk '{print $3}'`
+  grep -q "^QSUB =" $TSTOPT
+  if ($status == 0) set QSUB = `grep "^QSUB =" $TSTOPT | awk '{print $3}'`
 else
   set NMSP = hmi
 endif
@@ -239,8 +244,7 @@ else
   set SCRT = /tmp
 endif
 
-set HOSTNAME = `hostname`
-set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set HOSTID = `hostname | awk -F. '{print $1}'`
 set PROCID = $HOSTID\_$$
 
 set TMPB = $TEMP/$PLID$SUFX
@@ -249,7 +253,7 @@ if (!(-d $TMPB)) mkdir $TMPB
 set MSGS = $TEMP/msgs
 if (!(-d $MSGS)) mkdir $MSGS
 set SCRB = $SCRT/$PLID
-if ($TEST) set SCRB = $SCRB\_test
+if ($TEST) set SCRB = $SCRB.$TW
 if (!(-d $SCRB)) mkdir $SCRB
 set TMPD = $TMPB/$CROT
 if (!(-d $TMPD)) mkdir $TMPD
@@ -428,7 +432,7 @@ while ($STRIP < $STRIPCT)
   @ ELAPS += 30
   @ ELAPS /= 60
   if ($STRIPCT == 1) then
-    echo "  time for MAI calc for $EXPCT regions on `hostname`: $ELAPS min" >> $MMSG
+    echo "  time for MAI calc for $EXPCT regions on $HOSTID : $ELAPS min" >> $MMSG
   endif
 
   @ BEGUN = `date +%s`
@@ -439,9 +443,9 @@ while ($STRIP < $STRIPCT)
       lat= "{$LATLIST}" lon= "{$LONLIST}" mai= "{$MAILIST}" >>& $RLOG
   if ($status) then
     set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
-    echo "  tracking failure on `hostname`"  >> $MMSG
+    echo "  tracking failure on $HOSTID"  >> $MMSG
     echo "  run log is on $RLOG"  >> $MMSG
-    echo "  tracking failure on `hostname` for $CARTIM ($TYPE)"  >> $LOGF
+    echo "  tracking failure on $HOSTID for $CARTIM ($TYPE)"  >> $LOGF
     @ RGNCT -= $EXPCT
     @ STRTSTOP = 0
     goto CLEANUP
@@ -452,21 +456,21 @@ while ($STRIP < $STRIPCT)
   @ ELAPS += 30
   @ ELAPS /= 60
   if ($STRIPCT == 1) then
-    echo "  time for tracking $EXPCT regions on `hostname`: $ELAPS min" >> $MMSG
+    echo "  time for tracking $EXPCT regions on $HOSTID : $ELAPS min" >> $MMSG
     set TTIME = $ELAPS
   endif
-  echo "  ($CARTIM) time for tracking $EXPCT regions on `hostname` ($STRIP / $STRIPCT): $ELAPS min" >> $LOGF
+  echo "  ($CARTIM) time for tracking $EXPCT regions on $HOSTID ($STRIP / $STRIPCT): $ELAPS min" >> $LOGF
 end
 
 if ($STRIPCT > 1) then
   @ TOTML += 30
   @ TOTML /= 60
-  echo "  total time for MAI calc for $RGNCT regions on `hostname`: $TOTML min" >> $MMSG
-  echo "  ($CARTIM) total time for MAI calc $RGNCT regions on `hostname`: $TOTML min" >> $LOGF
+  echo "  total time for MAI calc for $RGNCT regions on $HOSTID : $TOTML min" >> $MMSG
+  echo "  ($CARTIM) total time for MAI calc $RGNCT regions on $HOSTID : $TOTML min" >> $LOGF
   @ TOTEL += 30
   @ TOTEL /= 60
-  echo "  total time for tracking $RGNCT regions on `hostname`: $TOTEL min" >> $MMSG
-  echo "  ($CARTIM) total time for tracking $RGNCT regions on `hostname`: $TOTEL min" >> $LOGF
+  echo "  total time for tracking $RGNCT regions on $HOSTID : $TOTEL min" >> $MMSG
+  echo "  ($CARTIM) total time for tracking $RGNCT regions on $HOSTID : $TOTEL min" >> $LOGF
   set TTIME = $TOTEL
   if ($RESTART) set TTIME = $TTIME'*'
 endif
@@ -497,9 +501,9 @@ if ($NOGO) goto TURNOUT
 $PSPEC pspec= $PSER in= $TSER"[$CROT][$CLON]" mask_in= $APODE >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
-  echo "  pspec failure on `hostname`"  >> $MMSG
+  echo "  pspec failure on $HOSTID"  >> $MMSG
   echo "  run log is on $RLOG"  >> $MMSG
-  echo "  ($CARTIM) pspec failure on `hostname` for $CARTIM"  >> $LOGF
+  echo "  ($CARTIM) pspec failure on $HOSTID for $CARTIM"  >> $LOGF
   @ STRTSTOP = 0
   goto CLEANUP
 else
@@ -507,9 +511,9 @@ else
   @ ELAPS = $FINIS - $BEGUN
   @ ELAPS += 30
   @ ELAPS /= 60
-  echo "  time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $MMSG
+  echo "  time for $RGNCT power spectra on $HOSTID : $ELAPS min" >> $MMSG
   echo "    spectra in $PSER""[$CROT][$CLON]" >> $MMSG
-  echo "  ($CARTIM) time for $RGNCT power spectra on `hostname`: $ELAPS min" >> $LOGF
+  echo "  ($CARTIM) time for $RGNCT power spectra on $HOSTID : $ELAPS min" >> $LOGF
   set PTIME = $ELAPS
   @ RPCT = `show_info -bcq ds= $PSER"[$CROT][$CLON]"`
   @ RPCT -= $EXIST
@@ -539,9 +543,9 @@ $RFITF out= $FSER in= $PSER"[$CROT][$CLON]" \
     nmax= $NMAX kstart= "{$KLOW}" kstop= "{$KHIGH}" >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
-  echo "  rdfitf failure on `hostname`"  >> $MMSG
+  echo "  rdfitf failure on $HOSTID"  >> $MMSG
   echo "  run log is on $RLOG"  >> $MMSG
-  echo "  ($CARTIM) rdfitf failure on `hostname` for $CARTIM"  >> $LOGF
+  echo "  ($CARTIM) rdfitf failure on $HOSTID for $CARTIM"  >> $LOGF
   @ STRTSTOP = 0
   goto CLEANUP
 else
@@ -549,9 +553,9 @@ else
   @ ELAPS = $FINIS - $BEGUN
   @ ELAPS += 30
   @ ELAPS /= 60
-  echo "  time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $MMSG
+  echo "  time for quick fitting $RGNCT spectra on $HOSTID : $ELAPS min" >> $MMSG
   echo "    fits in $FSER""[$CROT][$CLON]" >> $MMSG
-  echo "  ($CARTIM) time for quick fitting $RGNCT spectra on `hostname`: $ELAPS min" >> $LOGF
+  echo "  ($CARTIM) time for quick fitting $RGNCT spectra on $HOSTID : $ELAPS min" >> $LOGF
   set FTIME = $ELAPS
   @ RPCT = `show_info -bcq ds= $FSER"[$CROT][$CLON]"`
   @ RPCT -= $EXIST
@@ -584,18 +588,18 @@ $RVINV out= $FLOW in= $FSER cr= $CROT clon= $CLON kernel= "$KRNL" \
     num= $RTGCT rb= $RIMIN re= $RIMAX >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $SYSE-deg ring-diagram $TW processing for $CARTIM incomplete"
-  echo "  rdvinv failure on `hostname`"  >> $MMSG
+  echo "  rdvinv failure on $HOSTID"  >> $MMSG
   echo "  run log is on $RLOG"  >> $MMSG
-  echo "  ($CARTIM) rdvinv failure on `hostname` for $CARTIM"  >> $LOGF
+  echo "  ($CARTIM) rdvinv failure on $HOSTID for $CARTIM"  >> $LOGF
   @ STRTSTOP = 0
 else
   @ FINIS = `date +%s`
   @ ELAPS = $FINIS - $BEGUN
   @ ELAPS += 30
   @ ELAPS /= 60
-  echo "  time for $RGNCT flow inversions on `hostname`: $ELAPS min" >> $MMSG
+  echo "  time for $RGNCT flow inversions on $HOSTID : $ELAPS min" >> $MMSG
   echo "    inversions in $FLOW""[$CROT][$CLON]" >> $MMSG
-  echo "  ($CARTIM) time for $RGNCT flow inversions on `hostname`: $ELAPS min" >> $LOGF
+  echo "  ($CARTIM) time for $RGNCT flow inversions on $HOSTID : $ELAPS min" >> $LOGF
   set ITIME = $ELAPS
   @ RPCT = `show_info -bcq ds= $FLOW"[$CROT][$CLON]"`
   @ RPCT -= $EXIST
@@ -676,7 +680,7 @@ if ($SYSE == 5) then
     echo "  guessfile= $GUESSFIL \" >> $SCRIPT
     echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
     @ BEGUN = `date +%s`
-    qsub -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
+    $QSUB -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
     @ QJOK = 0
     if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
     @ FAIL = $TOTCT - $QJOK
@@ -700,6 +704,7 @@ if ($SYSE == 5) then
     echo "  total time for fitting $FITSDONE regions on the cluster: $TOTEL min" >> $MMSG
     echo "  ($CARTIM) total time for fitting $FITSDONE regions on the cluster: $TOTEL min" >> $LOGF
     @ STRTSTOP = 0
+    goto CLEANUP
   else
     echo "  total time for fitting $RGNCT regions on the cluster: $TOTEL min" >> $MMSG
     echo "  ($CARTIM) total time for fitting $RGNCT regions on the cluster: $TOTEL min" >> $LOGF
@@ -720,48 +725,28 @@ if ($SYSE == 5) then
 else
   @ EXIST = `show_info -bcq ds= $CSER"[$CROT][$CLON]"`
   set noglob
-  if ($SYSE == 30 || $SYSE == 15) then
-    set LATS = `$GENTG -c time= $CARTIM grid= rd+$TILES | head -1`
-    set LONS = `$GENTG -c time= $CARTIM grid= rd+$TILES | tail -1`
-    unset noglob
-    @ EXPCT = $#LATS
-    @ QJOK = 0
-    if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
-    @ EXPCT += $QJOK
-    echo "#\!/bin/csh -f" > $SCRIPT
-    echo "limit vm $VMEM"M >> $SCRIPT
-    echo set noglob >> $SCRIPT
-    echo 'set LATS =  ('"$LATS"')' >> $SCRIPT
-    echo 'set LONS =  ('"$LONS"')' >> $SCRIPT
-    echo 'set LAT = $LATS[$SGE_TASK_ID]' >> $SCRIPT
-    echo 'set LON = $LONS[$SGE_TASK_ID]' >> $SCRIPT
-    echo 'set RRLOG = '$RLOG.'$SGE_TASK_ID' >> $SCRIPT
-    echo 'set RGN = `show_info -iq ds= '$PSER'"['$CROT']['$CLON'][][$LAT][$LON]"`' >> $SCRIPT
-    echo "$RFITC \" >> $SCRIPT
-    echo "  out= $CSER \" >> $SCRIPT
-    echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-    echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
-  else
-# this branch of the script is never reached
-    set RGNS = (`show_info -iq ds= $PSER"[$CROT][$CLON][][][0]"`)
-    unset noglob
-    @ EXPCT = $#RGNS
-    @ QJOK = 0
-    if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
-    @ EXPCT += $QJOK
-    echo "#\!/bin/csh -f" > $SCRIPT
-    echo "limit vm $VMEM"M >> $SCRIPT
-    echo set noglob >> $SCRIPT
-    echo 'set RGNS =  ('"$RGNS"')' >> $SCRIPT
-    echo 'set RRLOG = '$RLOG.'$SGE_TASK_ID' >> $SCRIPT
-    echo 'set RGN = $RGNS[$SGE_TASK_ID]' >> $SCRIPT
-    echo "$RFITC \" >> $SCRIPT
-    echo "  out= $CSER \" >> $SCRIPT
-    echo "  guessfile= $GUESSFIL \" >> $SCRIPT
-    echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
-  endif
+  set LATS = `$GENTG -c time= $CARTIM grid= rd+$TILES | head -1`
+  set LONS = `$GENTG -c time= $CARTIM grid= rd+$TILES | tail -1`
+  unset noglob
+  @ EXPCT = $#LATS
+  @ QJOK = 0
+  if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
+  @ EXPCT += $QJOK
+  echo "#\!/bin/csh -f" > $SCRIPT
+  echo "limit vm $VMEM"M >> $SCRIPT
+  echo set noglob >> $SCRIPT
+  echo 'set LATS =  ('"$LATS"')' >> $SCRIPT
+  echo 'set LONS =  ('"$LONS"')' >> $SCRIPT
+  echo 'set LAT = $LATS[$SGE_TASK_ID]' >> $SCRIPT
+  echo 'set LON = $LONS[$SGE_TASK_ID]' >> $SCRIPT
+  echo 'set RRLOG = '$RLOG.'$SGE_TASK_ID' >> $SCRIPT
+  echo 'set RGN = `show_info -iq ds= '$PSER'"['$CROT']['$CLON'][][$LAT][$LON]"`' >> $SCRIPT
+  echo "$RFITC \" >> $SCRIPT
+  echo "  out= $CSER \" >> $SCRIPT
+  echo "  guessfile= $GUESSFIL \" >> $SCRIPT
+  echo '  in= "$RGN" >>& $RRLOG' >> $SCRIPT
   @ BEGUN = `date +%s`
-  qsub -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
+  $QSUB -sync yes -t 1-$EXPCT -q $QUEUE -e $QRES -o $QRES $SCRIPT >>& $RLOG
   @ QJOK = 0
   if (-e $RLOG) @ QJOK = `grep "exited with exit code 0." $RLOG | wc -l`
   @ FAIL = $EXPCT - $QJOK
