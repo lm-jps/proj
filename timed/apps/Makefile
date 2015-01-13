@@ -5,15 +5,15 @@
 # MAKEROOT = $(DRMS)/proj/cookbook/Makevars
 include $(MAKEROOT)/Makevars_$(JPLAT).mk
 
-FC = ifort11
-LDCMD = $(FC) -nofor_main -no-ipo 
+DEST =	../bin/$(JPLAT)
+
+FC =	ifort11
+LDCMD = $(FC) -nofor_main -no-ipo -openmp
 
 INCL = -I$(DRMS)/base/include
 LIBD = -L$(DRMS)/lib/$(JPLAT) -L/home/jsoc/lib/$(JPLAT)
 
-DLIBS = $(LIBD) -ldrms -lpq -lz -lcfitsio -lfftw3f -lmkl_em64t -lguide -lpthread
-
-DEST = ../bin/$(JPLAT)
+DLIBS = $(LIBD) -ldrms -lpq -lz -lcfitsio -lfftw3f -lmkl_em64t -lpthread
 
 NVOBJ =	mcd_cs_hmi_sub.o mcd_v_hmi_sub.o
 
@@ -36,7 +36,7 @@ travel_times:	$$@.o $(TTOBJ)
 	$(RM) $?
 
 clean:
-	$(RM)  *.o
+	$(RM) *.o
 	$(RM) $(FPLS)
 
 .c.o:
