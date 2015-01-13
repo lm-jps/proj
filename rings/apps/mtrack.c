@@ -2677,6 +2677,6 @@ printf ("%4d: %f %f %.3f %.3f\n", nr, img_xc, img_yc, obsvr, rgnavg / vct);
  *  v 1.7 frozen 2013.09.04
  *    1.8	Removed functions drms_appendstr_tokey() and append_args_tokey()
  *	(now in keystuff) (2014.10.19)
- *  v 1.8 frozen 20The following ring-diagram pipeline modules and scripts were updated15.01.13
- */		   (proj/rings):
+ *  v 1.8 frozen 2015.01.13
+ */
 
