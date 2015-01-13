@@ -141,11 +141,10 @@ set PROG = `basename $0`
 
 set TYPE = misc
 
-set AVGKEYS = "DSUN_OBS,CRLT_OBS,RSUN_OBS,+"
+set AVGKEYS = "T_OBS,DSUN_OBS,CRLT_OBS,RSUN_OBS,OBS_VR,OBS_VW,OBS_VN"
 
 # auxiliary files
-set HOSTNAME = `hostname`
-set HOSTID = `basename $HOSTNAME .Stanford.EDU`
+set HOSTID = `hostname | awk -F. '{print $1}'`
 set PROCID = $HOSTID\_$$
 set NOTE = ~rick/rings/notify
 set TMPFSLOC = ~rick/hmi/tmpfs
@@ -247,7 +246,7 @@ cat $MMSG >> $LOGF
 @ BEGUN = `date +%s`
 $DATAVG $FLAG in= $ISER tmid= $CARTIM out= $OSER length= 120 \
     qmask= $QMASK reject= $RJCT pkey= T_REC \
-    mscale= $MSCALE mzero = $MZERO pscale= $PSCALE pzero= $PZERO \
+    mscale= $MSCALE mzero= $MZERO pscale= $PSCALE pzero= $PZERO \
     average= $AVGKEYS >>& $RLOG
 if ($status) then
   set SUBJ = "HMI $TW $OBS averaging for $CARTIM incomplete"
