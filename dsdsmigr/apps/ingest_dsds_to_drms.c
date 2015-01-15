@@ -398,7 +398,7 @@ int DoIt(void)
       }
 
   // set cvs commit version into keyword HEADER
-      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.17 2014/06/23 20:05:52 mbobra Exp $");
+      char *cvsinfo = strdup("$Header: /home/akoufos/Development/Testing/jsoc-4-repos-0914/JSOC-mirror/JSOC/proj/dsdsmigr/apps/ingest_dsds_to_drms.c,v 1.18 2015/01/15 23:00:19 mbobra Exp $");
       status = drms_setkey_string(outRec, "HEADER", cvsinfo);
       if (cvsinfo)
       {
@@ -540,8 +540,8 @@ int DoIt(void)
                 {
                    DRMS_Array_t *data;
                    /* read the data ad doubles so allow rescaling on output */
-                   //data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
-                   data = drms_segment_read(inSeg, DRMS_TYPE_SHORT, &status);
+                   data = drms_segment_read(inSeg, DRMS_TYPE_DOUBLE, &status);
+                   //data = drms_segment_read(inSeg, DRMS_TYPE_SHORT, &status);
                    if (!data)
                    {
                       fprintf(stderr, "Bad data record %lld, status=%d\n",inRec->recnum, status);
