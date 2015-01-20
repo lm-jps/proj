@@ -73,7 +73,7 @@ void close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out,DRMS_Arra
 // Get N records, decide or not to process them
 //************************************************************************
 
-int process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, LIMBFIT_IO_PUT *lfw, int *status)    
+int process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, int *status)    
 {
 	static char *log_msg_code="process_n_records";
 	char log_msg[200];
@@ -129,7 +129,7 @@ int process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT
 		fsn = drms_getkey_int(record_in, "FSN", &rstatus);       
 		if(rstatus) {
 			lf_logmsg("ERROR", "DRMS", ERR_DRMS_READ_MISSING_KW, rstatus, "drms_getkey_string(FSN)", log_msg_code, lfr->opf);			
-			write_mini_output(PROCSTAT_NO_LF_DB_READ_PB,record_in,record_out,0,lfr);
+			write_mini_output(PROCSTAT_NO_LA_DB_READ_PB,record_in,record_out,0,lfr);
 			*status=ERR_DRMS_READ_MISSING_KW;   
 			drms_close_records(drs_out, DRMS_INSERT_RECORD);
 			drms_close_records(drs_in, DRMS_FREE_RECORD);
@@ -139,7 +139,7 @@ int process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT
 		lf_logmsg("INFO", "APP", 0,0, log_msg, log_msg_code, lfr->opf);			
 		printf("selection: #%u\n",fsn);
 		lfv->fsn=fsn;
-		if (do_one_limbfit(record_in,record_out,lfv,lfr,lfw,&rstatus))
+		if (do_one_limbfit(record_in,record_out,lfv,lfr,&rstatus))
 		{
 			if (rstatus < 0 && rstatus > -300)
 			{
@@ -235,7 +235,6 @@ int DoIt(void)
 	//prepa base name
 	static char tcam[20];
 	static char tfid[100];
-	static char tdat[50];
 	static char tfil[20];
 	static char tbase[128];
 	sprintf(tfil, "[? quality = %s ", qual);
@@ -245,26 +244,22 @@ int DoIt(void)
 	sprintf(tbase, "%s%s%s ?]", tfil,tcam,tfid);	
 
 	//------------------------------------------------------
-	// prepare an annulus coordinate for the whole session 
-	//      which will be initialized with the first image
-	//------------------------------------------------------
-	
-	float * anls = (float *) malloc(sizeof(float)*(MAX_SIZE_ANN_VARS*3));
-	if(!anls) 
-	{
-		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (anls)", log_msg_code, opf);
-		return(ERR_EXIT);
-	}
-
-	//------------------------------------------------------
 	// initialize global structures
 	//------------------------------------------------------
 	static LIMBFIT_INPUT limbfit_vars ;
 	static LIMBFIT_INPUT *lfv = &limbfit_vars;
 	static LIMBFIT_OUTPUT limbfit_res ;
 	static LIMBFIT_OUTPUT *lfr = &limbfit_res;
-	static LIMBFIT_IO_PUT limbfit_ios ;
-	static LIMBFIT_IO_PUT *lfw = &limbfit_ios;
+	
+	int * mask = (int *) malloc(sizeof(int)*IMG_SIZE);
+	if(!mask) 
+	{
+		lf_logmsg("ERROR", "APP", ERR_MALLOC_FAILED, 0,"malloc failed (mask)", log_msg_code, opf);
+		return(ERR_EXIT);
+	}
+	lfv->mask=mask;	
+	lfv->pf_mask=&mask[0];	
+	lfv->pl_mask=&mask[IMG_SIZE-1];
 
 	lfr->code_name=CODE_NAME;
 	lfr->code_version=CODE_VERSION;
@@ -275,13 +270,73 @@ int DoIt(void)
 	lfr->opf=opf;
 	lfr->tmp_dir=tmp_dir;
 	lfr->dsout=dsout;
-	lfr->debug=debug;
+	lfr->debug=debug;	
+	lfr->cenx=CENTX;
+	lfr->ceny=CENTY;
+	lfr->r_max=R_MAX;
+	lfr->r_min=R_MIN;
+
+	// calcul mask
+		double iimcmy2,jjmcmx;
+		float d,r,cmx,cmy,w2p,w2m;
+		long tmask_one=0;
+		long tmask_zero=0;
+		long ii, jj;
+
+		// 	if fixed size
+		cmx=CENTX;
+		cmy=CENTY;
+		w2p=R_MAX;
+		w2m=R_MIN;
+		r=(w2p+w2m)/2;
+		
+		/* 	if variable size
+			{
+				cmx=(float)input->ix;
+				cmy=(float)input->iy;
+				r=(float)input->ir;
+				w2p=r+40.;
+				w2m=r-40.;
+			}
+		*/
 	
-	
-	lfw->anls=anls;
-	lfw->is_firstobs=0;
-	lfw->anls_nbpix=0;
-	lfw->pf_anls=&anls[0];	
+	//	if (input->is_firstobs == 0) 
+	//	{
+	//		input->is_firstobs=1;
+
+//		w2p <= ann d <= w2m		
+
+//		float w2p=r+(float)w/2;
+//		float w2m=r-(float)w/2;
+//		if (d<=w2p && d>=w2m) :  ann=w2m<=d<=w2p
+//		if (d<w2m || d>w2p)	:	 not annulus
+
+
+
+			/* Select Points to create the mask*/
+			for(ii = 0; ii < NAXIS_ROW; ii++)
+			{
+				iimcmy2=(ii-cmy)*(ii-cmy);
+				for(jj = 0; jj < NAXIS_COL; jj++) 
+				{ 
+					jjmcmx=jj-cmx;
+					d=(float)sqrt(iimcmy2+(jjmcmx)*(jjmcmx));
+					if (d<w2m || d>w2p)
+					{
+						lfv->mask[ii*NAXIS_COL+jj]=0;
+						tmask_zero++;
+					}
+					else
+					{
+						lfv->mask[ii*NAXIS_COL+jj]=1;
+						tmask_one++;
+					}
+				}
+			}
+			sprintf(log_msg,"Create Mask: total ann points = %ld /total points zeroed = %ld / r = %f, w2m = %f, w2p = %f, ", tmask_one,tmask_zero,r,w2m,w2p);
+			lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, lfr->opf);
+// add some print info to check the size of the INT!!!!
+	//	}
 
 	//------------------------------------------------------
 	// run it!
@@ -310,7 +365,7 @@ int DoIt(void)
 									open_dsname,dsout,log_dir,tmp_dir,cam,comment,debug);
 	
 			lf_logmsg("INFO", "APP", 0, 0, log_msg, log_msg_code, opf);
-			if(process_n_records_fsn(open_dsname, lfv, lfr, lfw, &result)) 
+			if(process_n_records_fsn(open_dsname, lfv, lfr, &result)) 
 			{ 
 				if (result < 0 && result > -400)
 				{
@@ -327,8 +382,7 @@ int DoIt(void)
 			drms_server_end_transaction(drms_env,0,0);
 			drms_server_begin_transaction(drms_env);
 		}
-
-	free(anls);
+	free(mask);
 	lf_logmsg("INFO", "APP", 0, 0, "Batch End... ", log_msg_code, opf);
 	fclose(opf);
 	printf("Batch end\n");

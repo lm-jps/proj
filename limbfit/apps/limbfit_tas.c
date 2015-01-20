@@ -282,27 +282,30 @@ r  = (float)naxis_row/2;
 		/************************************************************************/
 		/*          Compute the mean of the center of the image                 */
 		/************************************************************************/
-		double cmean,ctot=0.0;
-		long nbp=0;
-		float limx_m=cmx-250;
-		float limx_p=cmx+250;
-		float limy_m=cmy-250;
-		float limy_p=cmy+250;
-		for (i=limx_m;i<limx_p;i++)
+		double cmean;
+		if (input->src <2)
 		{
-			for (j=limy_m;j<limy_p;j++)
+			double ctot=0.0;
+			long nbp=0;
+			float limx_m=cmx-250;
+			float limx_p=cmx+250;
+			float limy_m=cmy-250;
+			float limy_p=cmy+250;
+			for (i=limx_m;i<limx_p;i++)
 			{
-				ctot=ctot+data[i*naxis_col+j]; 
-				nbp++;
+				for (j=limy_m;j<limy_p;j++)
+				{
+					ctot=ctot+data[i*naxis_col+j]; 
+					nbp++;
+				}
+			}
+			cmean=ctot/nbp;
+			if (results->debug)
+			{
+				sprintf(log_msg," cmean = %6.4f (ctot= %6.4f , nbp=%ld)", cmean,ctot,nbp);
+				lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, results->opf);
 			}
 		}
-		cmean=ctot/nbp;
-		if (results->debug)
-		{
-			sprintf(log_msg," cmean = %6.4f (ctot= %6.4f , nbp=%ld)", cmean,ctot,nbp);
-			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, results->opf);
-		}
-
 		/************************************************************************/
 		/*                  Compute the Inflection Point                      */
 		/************************************************************************/

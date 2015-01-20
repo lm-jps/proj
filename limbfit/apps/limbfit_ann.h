@@ -55,127 +55,55 @@ drms_set_key_string for the final status of the current processed record (becaus
 #define ERR_DRMS_WRITE_KW 					-300
 #define ERR_DRMS_READ_MISSING_DATA 			-301
 #define ERR_DRMS_READ_MISSING_KW 			-302
-#define ERR_DRMS_READ_MISSING_XYR_LF		-303
+#define ERR_DRMS_READ_MISSING_XYR_LA		-303
 #define ERR_NR_STACK_TOO_SMALL 				-352
 
 //LIMBFIT FAILED -> write errors
-#define ERR_LIMBFIT_FAILED 					-501
-#define ERR_LIMBFIT_FIT_FAILED 				-502 // error on exit from Marcelo's fitting routines
-#define ERR_LIMBFIT_FLDF_FAILED				-503
+#define ERR_LIMBANN_FAILED 					-501
 #define ERR_DISK_OUTSIDE_IMAGE 				-511
 #define ERR_SIZE_ANN_TOO_BIG 				-512
-#define ERR_GSL_FINMIN_SET_FAILED 			-541
-#define ERR_GSL_FINMIN_NOMIN_FAILED			-542
-#define ERR_GSL_FINMIN_PRO_FAILED 			-543
-#define ERR_GSL_GAUSSFIT_SET_FAILED 		-551
-#define ERR_GSL_GAUSSFIT_FDFSOLVER_FAILED 	-552
 
 //----------------------------- Processing status codes per record
 #define PROCSTAT_OK						"OK"
 #define PROCSTAT_NOK					"NOK"
-#define PROCSTAT_NO_LF_FAILED			"LF_FAILED"
-#define PROCSTAT_NO_LF_MISSVALS 		"NO_LF_MISSVALS"
-#define PROCSTAT_NO_LF_DARKIMG 			"NO_LF_DARKIMG"
-#define PROCSTAT_NO_LF_OPENLOOP 		"NO_LF_OPENLOOP"
-#define PROCSTAT_NO_LF_DB_READ_PB 		"NO_LF_DB_READ_PB"
-#define PROCSTAT_NO_LF_XYR_LF_MISSING 	"NO_LF_XYR_LF_MISSING"
-#define PROCSTAT_NO_LF_DB_WRITE_PB 		"NO_LF_DB_WRITE_PB"
+#define PROCSTAT_NO_LA_FAILED			"LF_FAILED"
+#define PROCSTAT_NO_LA_MISSVALS 		"NO_LA_MISSVALS"
+#define PROCSTAT_NO_LA_DARKIMG 			"NO_LA_DARKIMG"
+#define PROCSTAT_NO_LA_OPENLOOP 		"NO_LA_OPENLOOP"
+#define PROCSTAT_NO_LA_DB_READ_PB 		"NO_LA_DB_READ_PB"
+#define PROCSTAT_NO_LA_XYR_LF_MISSING 	"NO_LA_XYR_LF_MISSING"
+#define PROCSTAT_NO_LA_DB_WRITE_PB 		"NO_LA_DB_WRITE_PB"
 
 //---------------------------------- LIMBFIT PARAMETERS
-#define ANNULUS_WIDTH 200					// 
-#define MAX_SIZE_ANN_VARS 8000000			// ! must be the same value than JPT in fortran code !
-#define NUM_LDF 180							// n/jang=NUM_LDF+1
-#define NUM_RADIAL_BINS 64					// n/jprf
-#define NUM_AB_BINS 256						// n/jreg
-#define LO_LIMIT 32.0						// ! the sum of these 2 must be equal to ANNULUS_WIDTH 
-#define UP_LIMIT 32.0						// 
-#define INC_X -4.0							// 
-#define INC_Y -4.0							// 
-#define NUM_FITPNTS 9						// 2*NUM_FITPNTS<NUM_RADIAL_BINS
-#define GUESS_RANGE 8						//
-#define NB_ITER 2							//
-#define BAD_PIXEL_VALUE -2147483648.0
-#define EQNANVAL -2147483648
-//#define	SKIPGC 1							// skip the guess estimation, use X0/YO_LF
-//#define	IFAC 0								// skip the center calculation, use X0/YO_LF
-#define	AHI 70000.0							// 
-
-// alternate parameters for low LDF threshold - needed for roll analysis
-#define	AHI2 	  30000.0
-#define LO_LIMIT2 24.0	
-#define UP_LIMIT2 24.0
-#define NB_ITER2  1
-
+#define EQNANVAL -2147483648	// NAN equivalent
+#define IMG_SIZE 16777216		// = 4096*4096
+#define CENTX 2048.0
+#define CENTY 2048.0
+#define R_MAX 1985.0
+#define R_MIN 1825.0
+#define NAXIS_ROW 4096
+#define NAXIS_COL 4096
 //------------------------------------------------------
 
-typedef struct {
-	float		*data;			// image to analyze
-	int			img_sz0;
-	int			img_sz1;
-	int			cc;
-	int			spe;
-	int			iter;
-	int			fldf;
+typedef struct { // input content
+	int		*mask;	// mask image
+	int		*pf_mask;		//
+	int		*pl_mask;		//
+	unsigned int fsn;
 	double		ix;
 	double		iy;
-	double		ir;
-	//int		sav;
-	unsigned int fsn;
 } LIMBFIT_INPUT;
-
-typedef struct {
-	float 		*anls;			// annulus passed from one image to the next
-	long		anls_nbpix;		// <=> jk
-	float		*pf_anls;		//
-	float		*pl_anls;		//
-	int			is_firstobs;	// 0=yes, 1=no
-} LIMBFIT_IO_PUT;
 
 typedef struct {	// output files content
 		
 	// general keywords
-	int			numext;
+	float		cmean;
+	int			quality;
 	float		cenx;
 	float		ceny;
-	double		radius;
-	double		cmean;
-	float		max_limb;
-	int			quality;
-	int			error1;
-	int			error2;
-		
-	// result data
-	float*		fits_ldfs_data; 		// main table / segment
-	float*		fits_fulldfs; 			// extension #2
-	float*		fits_alpha_beta;  	 	// extension #0
-	float		fits_as[6];
-	float		fits_es[6];
-
-	// info to describe extension dimensions
-	int		fits_ldfs_naxis1;		//	ldf_nrow
-	int		fits_ldfs_naxis2;		//	ldf_ncol
-	int		fits_fldfs_nrows;		// 	fldf_nrow
-	int 	fits_fldfs_tfields;		//	fldf_ncol
-	int 	fits_ab_naxis1;			//	alpha_beta_nrow
-	int		fits_ab_naxis2;			//	alpha_beta_ncol
-
-	// processing parameters to save
-	int			ann_wd;
-	long		mxszannv;
-	int			nb_ldf;
-	int			nb_rdb;
-	int			nb_abb;
-	double		up_limit;
-	double		lo_limit;
-	double		inc_x;
-	double		inc_y;
-	int			nfitpnts;
-	int			nb_iter;
-	int			cc;
-	double		ahi;
-	int 		nb_fbins;
-	int			fldfr;
-	
+	float		r_min;
+	float		r_max;
+			
 	// extra for error management
 	char*		dsin;
 	char*		comment;
@@ -196,12 +124,11 @@ typedef struct {	// output files content
 // C functions
 void	close_on_error(DRMS_Record_t *record_in,DRMS_Record_t *record_out, DRMS_Array_t *data_array); //, FILE *opf);
 int		do_one_limbfit(DRMS_Record_t *record_in,DRMS_Record_t *record_out, 
-					LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios, int *status);
+					LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, int *status);
 void	get_sdate(char *sdate);
 void	lf_logmsg(char * type1, char * type2, int return_code, int status, char *message, char *code_name, FILE *opf);
-int		limbfit_ann(LIMBFIT_INPUT *input, LIMBFIT_OUTPUT *results, LIMBFIT_IO_PUT *ios);
-int		process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, LIMBFIT_IO_PUT *lfw, int *status);
-int		process_all_records_smpl(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, LIMBFIT_IO_PUT *lfw, int *status);
+int		process_n_records_fsn(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, int *status);
+int		process_all_records_smpl(char * open_dsname, LIMBFIT_INPUT *lfv, LIMBFIT_OUTPUT *lfr, int *status);
 int		write_mini_output(char * errcode, DRMS_Record_t *record_in,DRMS_Record_t *record_out,int tbf, LIMBFIT_OUTPUT *lfr);
 int		write_lf_keywords(char * errcode, DRMS_Record_t *record_out, LIMBFIT_OUTPUT *results, int pass);
 
