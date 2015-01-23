@@ -1,29 +1,46 @@
+function email_initVars()
+  {
+  ExportNotifyOK = 0;
+  ExportNotifyTimeLeft = 0;
+  ExportNotifyTimeDelta = 2000;
+  ExportNotifyValid = -9;
+  cookieState = 0;
+  }
 
 // Global vars
 var JSOC_CHECK_EMAIL = "checkAddress.sh";
 var MAX_NOTIFY_TIMER = 180;
-var Host = location.host;
 var ExportEmail = "not set"; // current email to test
-var Internal = 0;
-var ExportUserOK;
-var ExportNotifyOK;
 var ExportNotifyValid;
 var ExportNotifyTimer;
 var ExportNotifyTimeLeft;  // Max seconds before giveup
 var ExportNotifyTimeDelta; // milliseconds between checking
 var cookieState; 
 
-// Colors
-var colorNeutral = "#D4D0C8";
-var colorPreset = "D8D8D8";
-var colorOptionSet = "#FFCC66";
-var colorPink = "#FFD8D8";
-var colorDarkPink = "#FFB0B0";
-var colorRed = "#D88080";
-var colorDarkRed = "#FF8080";
-var colorWhite = "#FFFFFF";
-var colorGreen = "#80FF80";
-var colorYellow = "#FFF8DC";
+function email_getargs()
+  {
+  cookieState = Cookie.getData("emailOK");
+  if (cookieState == "undefined")
+    cookieState=0;
+  $("ExportRequestor").value = Cookie.getData("user");
+  $("ExportNotify").value = Cookie.getData("notify");
+  if ($("ExportRequestor").value == "undefined")
+    $("ExportRequestor").value = "";
+  if ($("ExportRequestor").value == "undefined")
+    $("ExportRequestor").value = "solarmail";
+  if (cookieState == 2)
+    {
+    ExportNotifyOK = 1;
+    $("StatusMsg").innerHTML = "Your Cookie indicates your email address is registered. You may change it if desired.";
+    }
+  else
+    {
+    cookieState=1;
+    Cookie.setData("emailOK",cookieState);
+    Cookie.setData("user", $("ExportRequestor").value);
+    Cookie.setData("notify", $("ExportNotify").value);
+    }
+  }
 
 function startEmailCheck()
   { // This is called when the submit button is pressed.
