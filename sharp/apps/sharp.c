@@ -1973,6 +1973,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
         float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
+	float *err_term1  = (float *) (malloc(nxny * sizeof(float)));
+	float *err_term2  = (float *) (malloc(nxny * sizeof(float)));
      
         // define some values for the R calculation 
         int scale = round(2.0/cdelt1);
@@ -2041,7 +2043,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         }
 	
 	computeJz(bx_err, by_err, bx, by, dims, jz, jz_err, jz_err_squared, mask, bitmask, cdelt1, rsun_ref, rsun_obs,
-              derx, dery);
+                  derx, dery, err_term1, err_term2);
     
     
         if(computeJzsmooth(bx, by, dims, jz, jz_smooth, jz_err, jz_rms_err, jz_err_squared_smooth, &(swKeys_ptr->mean_jz),
@@ -2307,7 +2309,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.31 2014/06/16 04:45:18 xudong Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.32 2015/01/23 19:21:09 mbobra Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
