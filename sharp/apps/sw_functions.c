@@ -558,12 +558,12 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
 
 
 // Comment out random number generator, which can only run on solar3
-//int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, float *jz, float *jz_err, float *jz_err_squared,
+// int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, float *jz, float *jz_err, float *jz_err_squared,
 //	      int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery, float *noisebx,
 //              float *noiseby, float *noisebz)
 
 int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, float *jz, float *jz_err, float *jz_err_squared,
-              int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery)
+              int *mask, int *bitmask, float cdelt1, double rsun_ref, double rsun_obs,float *derx, float *dery, float *err_term1, float *err_term2)
 
 
 {
@@ -583,7 +583,8 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
 	    for (j = 0; j <= ny-1; j++)
         {
             if isnan(by[j * nx + i]) continue;
-            derx[j * nx + i] = (by[j * nx + i+1] - by[j * nx + i-1])*0.5;
+            derx[j * nx + i]      = (by[j * nx + i+1] - by[j * nx + i-1])*0.5;
+            err_term1[j * nx + i] = (by_err[j * nx + i+1])*(by_err[j * nx + i+1]) + (by_err[j * nx + i-1])*(by_err[j * nx + i-1]);
         }
     }
     
@@ -592,56 +593,60 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
 	    for (j = 1; j <= ny-2; j++)
         {
             if isnan(bx[j * nx + i]) continue;
-            dery[j * nx + i] = (bx[(j+1) * nx + i] - bx[(j-1) * nx + i])*0.5;
+            dery[j * nx + i]      = (bx[(j+1) * nx + i] - bx[(j-1) * nx + i])*0.5;
+            err_term2[j * nx + i] = (bx_err[(j+1) * nx + i])*(bx_err[(j+1) * nx + i]) + (bx_err[(j-1) * nx + i])*(bx_err[(j-1) * nx + i]);
         }
     }
-    
+
     // consider the edges
     i=0;
     for (j = 0; j <= ny-1; j++)
     {
         if isnan(by[j * nx + i]) continue;
-        derx[j * nx + i] = ( (-3*by[j * nx + i]) + (4*by[j * nx + (i+1)]) - (by[j * nx + (i+2)]) )*0.5;
+        derx[j * nx + i]      = ( (-3*by[j * nx + i]) + (4*by[j * nx + (i+1)]) - (by[j * nx + (i+2)]) )*0.5;
+        err_term1[j * nx + i] = ( (3*by_err[j * nx + i])*(3*by_err[j * nx + i]) + (4*by_err[j * nx + (i+1)])*(4*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i+2)])*(by_err[j * nx + (i+2)]) );
     }
     
     i=nx-1;
     for (j = 0; j <= ny-1; j++)
     {
         if isnan(by[j * nx + i]) continue;
-        derx[j * nx + i] = ( (3*by[j * nx + i]) + (-4*by[j * nx + (i-1)]) - (-by[j * nx + (i-2)]) )*0.5;
+        derx[j * nx + i]      = ( (3*by[j * nx + i]) + (-4*by[j * nx + (i-1)]) - (-by[j * nx + (i-2)]) )*0.5;
+        err_term1[j * nx + i] = ( (3*by_err[j * nx + i])*(3*by_err[j * nx + i]) + (4*by_err[j * nx + (i+1)])*(4*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i+2)])*(by_err[j * nx + (i+2)]) );
     }
     
     j=0;
     for (i = 0; i <= nx-1; i++)
     {
         if isnan(bx[j * nx + i]) continue;
-        dery[j * nx + i] = ( (-3*bx[j*nx + i]) + (4*bx[(j+1) * nx + i]) - (bx[(j+2) * nx + i]) )*0.5;
+        dery[j * nx + i]      = ( (-3*bx[j*nx + i]) + (4*bx[(j+1) * nx + i]) - (bx[(j+2) * nx + i]) )*0.5;
+        err_term2[j * nx + i] = ( (3*bx_err[j*nx + i])*(3*bx_err[j*nx + i]) + (4*bx_err[(j+1) * nx + i])*(4*bx_err[(j+1) * nx + i]) + (bx_err[(j+2) * nx + i])*(bx_err[(j+2) * nx + i]) );
     }
     
     j=ny-1;
     for (i = 0; i <= nx-1; i++)
     {
         if isnan(bx[j * nx + i]) continue;
-        dery[j * nx + i] = ( (3*bx[j * nx + i]) + (-4*bx[(j-1) * nx + i]) - (-bx[(j-2) * nx + i]) )*0.5;
+        dery[j * nx + i]      = ( (3*bx[j * nx + i]) + (-4*bx[(j-1) * nx + i]) - (-bx[(j-2) * nx + i]) )*0.5;
+        err_term2[j * nx + i] = ( (3*bx_err[j*nx + i])*(3*bx_err[j*nx + i]) + (4*bx_err[(j+1) * nx + i])*(4*bx_err[(j+1) * nx + i]) + (bx_err[(j+2) * nx + i])*(bx_err[(j+2) * nx + i]) );
+
     }
+
     
-    for (i = 1; i <= nx-2; i++)
+    for (i = 0; i <= nx-1; i++)
     {
-        for (j = 1; j <= ny-2; j++)
+        for (j = 0; j <= ny-1; j++)
         {
-            // calculate jz at all points
-            
+            // calculate jz at all points         
             jz[j * nx + i]            = (derx[j * nx + i]-dery[j * nx + i]);       // jz is in units of Gauss/pix
-            jz_err[j * nx + i]        = 0.5*sqrt( (bx_err[(j+1) * nx + i]*bx_err[(j+1) * nx + i]) + (bx_err[(j-1) * nx + i]*bx_err[(j-1) * nx + i]) +
-                                                 (by_err[j * nx + (i+1)]*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i-1)]*by_err[j * nx + (i-1)]) ) ;
+            jz_err[j * nx + i]        = 0.5*sqrt( err_term1[j * nx + i] + err_term2[j * nx + i] ) ;
             jz_err_squared[j * nx + i]= (jz_err[j * nx + i]*jz_err[j * nx + i]);
-            count_mask++;
-            
+            count_mask++;            
         }
     }
 	return 0;
 }
-
+ 
 /*===========================================*/
 
 /* Example function 9:  Compute quantities on Jz array */
@@ -851,13 +856,13 @@ int computeSumAbsPerPolarity(float *jz_err, float *bz_err, float *bz, float *jz,
     double sum1=0.0;
     double sum2=0.0;
     double err=0.0;
-	*totaljzptr=0.0;
+    *totaljzptr=0.0;
     
-	if (nx <= 0 || ny <= 0) return 1;
+    if (nx <= 0 || ny <= 0) return 1;
     
-	for (i = 0; i < nx; i++)
+    for (i = 0; i < nx; i++)
     {
-	    for (j = 0; j < ny; j++)
+	 for (j = 0; j < ny; j++)
         {
             if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
             if isnan(bz[j * nx + i]) continue;
@@ -874,7 +879,7 @@ int computeSumAbsPerPolarity(float *jz_err, float *bz_err, float *bz, float *jz,
     //printf("SAVNCPP=%g\n",*totaljzptr);
     //printf("SAVNCPP_err=%g\n",*totaljz_err_ptr);
     
-	return 0;
+    return 0;
 }
 
 /*===========================================*/
