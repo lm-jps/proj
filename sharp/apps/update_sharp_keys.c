@@ -222,17 +222,18 @@ int DoIt(void)
         int epszflag    = (strstr(keylist,"EPSZ")    != NULL);
         int debugflag   = (strstr(debug,"debug")     != NULL);
 
-	DRMS_Record_t *sharpinrec = sharpinrecset->records[0];
-	DRMS_Record_t *sharpceainrec = sharpceainrecset->records[0];
+    
+	for (irec=0;irec<nrecs;irec++)
+	{
+
+
+	DRMS_Record_t *sharpinrec = sharpinrecset->records[irec];
+	DRMS_Record_t *sharpceainrec = sharpceainrecset->records[irec];
 	DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
 	int nx = inseg->axis[0];
 	int ny = inseg->axis[1];
 	int nxny = nx * ny;
 	int dims[2] = {nx, ny};
-	//int nx = (inseg->axis[0])+1;
-	//int ny = (inseg->axis[1])+1;
-	//int nxny = nx * ny;
-	//int dims[2] = {nx, ny};
  
 	// Temp arrays 	
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
@@ -256,6 +257,8 @@ int DoIt(void)
         float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
 	float *jz_smooth = (float *) (malloc(nxny * sizeof(float)));
+	float *err_term1  = (float *) (malloc(nxny * sizeof(float)));
+	float *err_term2  = (float *) (malloc(nxny * sizeof(float)));
 
         // ephemeris variables
 	float  cdelt1_orig, cdelt1, dsun_obs, imcrpix1, imcrpix2, crpix1, crpix2;
@@ -267,7 +270,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.10 2014/06/09 21:07:41 mbobra Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.11 2015/01/25 18:30:34 mbobra Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -321,18 +324,6 @@ int DoIt(void)
         float *fy = (float *) (malloc(nxny * sizeof(float)));
         float *fz = (float *) (malloc(nxny * sizeof(float)));
     
-	for (irec=0;irec<nrecs;irec++)
-	{
-
-	   DRMS_Record_t *sharpceainrec = sharpceainrecset->records[irec];
-	   DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
-	   int nxtest = inseg->axis[0];
-	   int nytest = inseg->axis[1];
-
-           // Check to make sure that nx x ny are constant for this harpnum
-	   if (nx != nxtest || ny!= nytest)
-		   DIE("CEA series does not have constant dimensions for this HARPNUM.");
-
    	   // Get emphemeris
   	   sharpinrec    = sharpinrecset->records[irec];
   	   sharpceainrec = sharpceainrecset->records[irec];
@@ -353,7 +344,7 @@ int DoIt(void)
              drms_copykeys(sharpceaoutrec, sharpceainrec, 0, kDRMS_KeyClass_Explicit);
            }
 
-           TIME trec, tnow, UNIX_epoch = -220924792.000; /* 1970.01.01_00:00:00_UTC */
+           TIME trec, tnow; /* 1970.01.01_00:00:00_UTC */
            tnow = (double)time(NULL);
            tnow += UNIX_epoch;
 
@@ -577,7 +568,7 @@ int DoIt(void)
            {
               // First, compute Jz on all pixels
 	      computeJz(bx_err, by_err, bx, by, dims, jz, jz_err, jz_err_squared, mask, bitmask, cdelt1, rsun_ref, rsun_obs, 
-                     derx, dery);
+                     derx, dery, err_term1, err_term2);
    
               // Then take the sums of the appropriate pixels
               if(computeJzsmooth(bx, by, dims, jz, jz_smooth, jz_err, jz_rms_err, jz_err_squared_smooth, &mean_jz,
@@ -611,7 +602,7 @@ int DoIt(void)
            {
               // First, compute Jz on all pixels
    	      computeJz(bx_err, by_err, bx, by, dims, jz, jz_err, jz_err_squared, mask, bitmask, cdelt1, rsun_ref, rsun_obs, 
-                        derx, dery);
+                        derx, dery, err_term1, err_term2);
 
               // Then compute alpha quantities on select pixels
 	      if (computeAlpha(jz_err, bz_err, bz, dims, jz, jz_smooth, &mean_alpha, &mean_alpha_err, 
@@ -637,7 +628,7 @@ int DoIt(void)
            {
               // First, compute Jz on all pixels
     	      computeJz(bx_err, by_err, bx, by, dims, jz, jz_err, jz_err_squared, mask, bitmask, cdelt1, rsun_ref, rsun_obs, 
-                        derx, dery);
+                        derx, dery, err_term1, err_term2);
 
               // Then compute helicity quantities on select pixels
            if (computeHelicity(jz_err, jz_rms_err, bz_err, bz, dims, jz, &mean_ih, &mean_ih_err, &total_us_ih, 
@@ -674,7 +665,7 @@ int DoIt(void)
            {
               // First, compute Jz on all pixels
   	      computeJz(bx_err, by_err, bx, by, dims, jz, jz_err, jz_err_squared, mask, bitmask, cdelt1, rsun_ref, rsun_obs, 
-                        derx, dery);
+                        derx, dery, err_term1, err_term2);
 
               // Then compute sums of Jz on select pixels
   	      if (computeSumAbsPerPolarity(jz_err, bz_err, bz, jz, dims, &totaljz, &totaljz_err, 
@@ -773,14 +764,8 @@ int DoIt(void)
 	   drms_free_array(bz_errArray);
 	   drms_free_array(losArray);
 
-	} //endfor
-
- 	drms_close_records(sharpinrecset, DRMS_FREE_RECORD);
-	drms_close_records(sharpceainrecset, DRMS_FREE_RECORD);
-
-	drms_close_records(sharpoutrecset, DRMS_INSERT_RECORD);
-	drms_close_records(sharpceaoutrecset, DRMS_INSERT_RECORD);
-
+        // free the arrays that are related to the lorentz calculation
+        free(fx); free(fy); free(fz);
         //used for select calculations
 	free(bh); free(bt); free(jz); 
 	free(bpx); free(bpy); free(bpz); 
@@ -801,9 +786,18 @@ int DoIt(void)
         free(pmap);
         free(p1pad);
         free(pmapn);
+        free(err_term2);
+        free(err_term1);
 
-        // free the arrays that are related to the lorentz calculation
-        free(fx); free(fy); free(fz);
+
+	} //endfor
+
+ 	drms_close_records(sharpinrecset, DRMS_FREE_RECORD);
+	drms_close_records(sharpceainrecset, DRMS_FREE_RECORD);
+
+	drms_close_records(sharpoutrecset, DRMS_INSERT_RECORD);
+	drms_close_records(sharpceaoutrecset, DRMS_INSERT_RECORD);
+
 	printf("Success=%d\n",sameflag);
 return 0;    
 }	// DoIt
