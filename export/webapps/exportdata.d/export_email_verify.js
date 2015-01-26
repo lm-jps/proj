@@ -31,7 +31,7 @@ function email_getargs()
   if (cookieState == 2)
     {
     ExportNotifyOK = 1;
-    $("StatusMsg").innerHTML = "Your Cookie indicates your email address is registered. You may change it if desired.";
+    $("ExportCheckMsg").innerHTML = "Your Cookie indicates your email address is registered. You may change it if desired.";
     }
   else
     {
@@ -178,7 +178,7 @@ function CheckNotifyValidity()
 
   cookieState=1;
   Cookie.setData("emailOK",cookieState);
-  $("StatusMsg").innerHTML = 'Notify address "' + ExportEmail + '" is now being checked.';
+  $("ExportCheckMsg").innerHTML = 'Notify address "' + ExportEmail + '" is now being checked.';
   if (ExportNotifyValid == 1) // If already verified, done.
     {
     ExportNotifyOK = 1;
@@ -208,7 +208,7 @@ function CheckNotifyValidity()
   var paramObj = {"address" : ExportEmail, "checkonly" : checkOnly};
   exportparameters = new Hash(paramObj);
   
-  $("StatusMsg").innerHTML = "&nbsp;";
+  $("ExportCheckMsg").innerHTML = "&nbsp;";
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_CHECK_EMAIL,
     {
     method: 'post',
@@ -225,14 +225,14 @@ function CheckNotifyValidity()
         if (status == 1) // check initiated OK
           {
           ExportNotifyValid = 0;
-          $("StatusMsg").innerHTML = parseInfo.msg;
+          $("ExportCheckMsg").innerHTML = parseInfo.msg;
           }
         else if (status == 2) // address is valid
           {
           clearInterval(ExportNotifyTimer);
           ExportNotifyValid = 1;
           ExportNotifyOK = 1;
-          $("StatusMsg").innerHTML = parseInfo.msg;
+          $("ExportCheckMsg").innerHTML = parseInfo.msg;
           cookieState=2;
           Cookie.setData("emailOK",cookieState);
           Cookie.setData("user", $("ExportRequestor").value);
@@ -245,19 +245,19 @@ function CheckNotifyValidity()
             clearInterval(ExportNotifyTimer);
             ExportNotifyValid = -1;
             ExportNotifyOK = 5;
-            $("StatusMsg").innerHTML = "Timeout - A reply was not received in the allowed time.  Try again with a correct Notify address.";
+            $("ExportCheckMsg").innerHTML = "Timeout - A reply was not received in the allowed time.  Try again with a correct Notify address.";
             }
           else
             {
             if (ExportNotifyOK != 4)
               { // User abort of checking due to change of box contents.
               clearInterval(ExportNotifyTimer);
-              $("StatusMsg").innerHTML = "Current attempt cancelled by typing, try again when ready.";
+              $("ExportCheckMsg").innerHTML = "Current attempt cancelled by typing, try again when ready.";
               }
             else
               { // keep waiting, check each ExportNotifyTimeDelta seconds
               ExportNotifyValid = 0;
-              $("StatusMsg").innerHTML = ExportNotifyTimeLeft + " seconds remaining, still waiting for your email reply.";
+              $("ExportCheckMsg").innerHTML = ExportNotifyTimeLeft + " seconds remaining, still waiting for your email reply.";
               }
             }
           }
@@ -265,17 +265,17 @@ function CheckNotifyValidity()
           {
           ExportNotifyValid = -2; // immediate failure
           clearInterval(ExportNotifyTimer);
-          $("StatusMsg").innerHTML = 'Notify address provided, "' + ExportEmail + '" is not a valid address, correct and retry.';
+          $("ExportCheckMsg").innerHTML = 'Notify address provided, "' + ExportEmail + '" is not a valid address, correct and retry.';
           if (status == 4)
             {
-            $("StatusMsg").innerHTML += '<br>A prior attempt timed-out before email Reply';
+            $("ExportCheckMsg").innerHTML += '<br>A prior attempt timed-out before email Reply';
             }
           }
         }
       else
         {
          clearInterval(ExportNotifyTimer);
-        $("StatusMsg").innerHTML = "Current attempt cancelled by typing, try again when ready.";
+        $("ExportCheckMsg").innerHTML = "Current attempt cancelled by typing, try again when ready.";
         }
       },
       onFailure: function() { alert('oops, our code is broken'); }
