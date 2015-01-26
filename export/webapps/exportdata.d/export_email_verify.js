@@ -167,6 +167,7 @@ function SetExportNotify()
 function NotifyTimer()
   {
   ExportNotifyTimeLeft -= ExportNotifyTimeDelta/1000;
+alert("ExportNotifyOK="+ExportNotifyOK+" time left="+ExportNotifyTimeLeft");
   CheckNotifyValidity();
   }
 
@@ -227,7 +228,6 @@ function CheckNotifyValidity()
   var paramObj = {"address" : ExportEmail, "checkonly" : checkOnly};
   exportparameters = new Hash(paramObj);
   
-  // $("ExportCheckMsg").innerHTML = "&nbsp;";
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_CHECK_EMAIL,
     {
     method: 'post',
