@@ -192,7 +192,7 @@ function CheckNotifyValidity()
 
   if (ExportNotifyOK == 5)
     {
-    alert("ERROR - Notify address " + ExportEmail + " not verified within " + MAX_NOTIFY_TIME + " seconds, try again or correct email address then try again.");
+    $("ExportCheckMsg").innerHTML = "Notify address " + ExportEmail + " not verified within " + MAX_NOTIFY_TIMER + " seconds, try again or correct email address then try again.";
     ExportNotifyOK = 0;
     clearInterval(ExportNotifyTimer);
     return;
@@ -264,7 +264,7 @@ function CheckNotifyValidity()
             else
               { // keep waiting, check each ExportNotifyTimeDelta seconds
               ExportNotifyValid = 0;
-              $("ExportCheckMsg").innerHTML = ExportNotifyTimeLeft + " seconds remaining, still waiting for your email reply.";
+              $("ExportCheckMsg").innerHTML = ExportNotifyTimeLeft + " seconds remaining, still waiting for your email reply from "+EXPORTMAIL;
               }
             }
           }
