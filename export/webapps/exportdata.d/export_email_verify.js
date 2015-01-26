@@ -183,6 +183,16 @@ function CheckNotifyValidity()
   cookieState=1;
   Cookie.setData("emailOK",cookieState);
   $("ExportCheckMsg").innerHTML = 'Notify address "' + ExportEmail + '" is now being checked.';
+
+  if (ExportNotifyOK == 0)
+    {
+    $("ExportCheckMsg").innerHTML = ExportEmail + " not verified within, fix or try again.";
+    ExportNotifyOK = 0;
+    clearInterval(ExportNotifyTimer);
+    $("ExportNotifyMsg").innerHTML = "";
+    return;
+    }
+
   if (ExportNotifyValid == 1) // If already verified, done.
     {
     ExportNotifyOK = 1;
