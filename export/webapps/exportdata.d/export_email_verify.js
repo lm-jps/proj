@@ -230,6 +230,7 @@ function CheckNotifyValidity()
           {
           ExportNotifyValid = 0;
           $("ExportCheckMsg").innerHTML = parseInfo.msg;
+          $("ExportNotifyMsg").innerHTML = "";
           }
         else if (status == 2) // address is valid
           {
@@ -237,6 +238,7 @@ function CheckNotifyValidity()
           ExportNotifyValid = 1;
           ExportNotifyOK = 1;
           $("ExportCheckMsg").innerHTML = parseInfo.msg;
+          $("ExportNotifyMsg").innerHTML = "OK";
           cookieState=2;
           Cookie.setData("emailOK",cookieState);
           Cookie.setData("user", $("ExportRequestor").value);
@@ -244,6 +246,7 @@ function CheckNotifyValidity()
           }
         else if (status == 3)
           {
+          $("ExportNotifyMsg").innerHTML = "";
           if (ExportNotifyTimeLeft <= 0)
             { // timer expired, address check failed.
             clearInterval(ExportNotifyTimer);
@@ -269,6 +272,7 @@ function CheckNotifyValidity()
           {
           ExportNotifyValid = -2; // immediate failure
           clearInterval(ExportNotifyTimer);
+          $("ExportNotifyMsg").innerHTML = "";
           $("ExportCheckMsg").innerHTML = 'Notify address provided, "' + ExportEmail + '" is not a valid address, correct and retry.';
           if (status == 4)
             {
@@ -278,7 +282,8 @@ function CheckNotifyValidity()
         }
       else
         {
-         clearInterval(ExportNotifyTimer);
+        clearInterval(ExportNotifyTimer);
+        $("ExportNotifyMsg").innerHTML = "";
         $("ExportCheckMsg").innerHTML = "Current attempt cancelled by typing, try again when ready.";
         }
       },
