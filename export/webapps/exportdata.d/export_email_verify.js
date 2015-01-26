@@ -185,29 +185,30 @@ function CheckNotifyValidity()
   Cookie.setData("emailOK",cookieState);
   $("ExportCheckMsg").innerHTML = 'Notify address "' + ExportEmail + '" is now being checked.';
 
+  if (ExportNotifyOK != 4)
+    {
+    clearInterval(ExportNotifyTimer);
+    }
+
   if (ExportNotifyOK == 0)
     {
     $("ExportCheckMsg").innerHTML = ExportEmail + " not verified within, fix or try again.";
-    ExportNotifyOK = 0;
-    clearInterval(ExportNotifyTimer);
     $("ExportNotifyMsg").innerHTML = "";
     return;
     }
 
   if (ExportNotifyValid == 1) // If already verified, done.
     {
-    ExportNotifyOK = 1;
     $("ExportNotifyMsg").innerHTML = "OK";
-    clearInterval(ExportNotifyTimer);
+    ExportNotifyOK = 1;
     return;
     }
 
   if (ExportNotifyOK == 5)
     {
     $("ExportCheckMsg").innerHTML = "Notify address " + ExportEmail + " not verified within " + MAX_NOTIFY_TIMER + " seconds, try again or correct email address then try again.";
-    ExportNotifyOK = 0;
-    clearInterval(ExportNotifyTimer);
     $("ExportNotifyMsg").innerHTML = "";
+    ExportNotifyOK = 0;
     return;
     }
 
@@ -226,7 +227,7 @@ function CheckNotifyValidity()
   var paramObj = {"address" : ExportEmail, "checkonly" : checkOnly};
   exportparameters = new Hash(paramObj);
   
-  $("ExportCheckMsg").innerHTML = "&nbsp;";
+  // $("ExportCheckMsg").innerHTML = "&nbsp;";
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_CHECK_EMAIL,
     {
     method: 'post',
@@ -285,6 +286,7 @@ function CheckNotifyValidity()
         else
           {
           ExportNotifyValid = -2; // immediate failure
+          ExportNotifyOK = 0;
           clearInterval(ExportNotifyTimer);
           $("ExportNotifyMsg").innerHTML = "";
           $("ExportCheckMsg").innerHTML = 'Notify address provided, "' + ExportEmail + '" is not a valid address, correct and retry.';
@@ -297,6 +299,7 @@ function CheckNotifyValidity()
       else
         {
         clearInterval(ExportNotifyTimer);
+        ExportNotifyOK = 0;
         $("ExportNotifyMsg").innerHTML = "";
         $("ExportCheckMsg").innerHTML = "Current attempt cancelled by typing, try again when ready.";
         }
