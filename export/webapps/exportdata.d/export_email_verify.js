@@ -31,7 +31,7 @@ function email_getargs()
   if (cookieState == 2)
     {
     ExportNotifyOK = 1;
-    $("ExportCheckMsg").innerHTML = "Your Cookie indicates your email address is registered. You may change it if desired.";
+    $("ExportNotifyMsg").innerHTML = "Your Cookie indicates your email address is registered. You may change it if desired.";
     }
   else
     {
