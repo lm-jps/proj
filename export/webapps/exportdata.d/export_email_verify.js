@@ -241,6 +241,7 @@ function CheckNotifyValidity()
         var response = transport.responseText || null;
         var parseInfo = response.evalJSON();
         var status = parseInfo.status;
+alert("status="+status+" validity="+ExportNotifyValid);
         if (status == 1) // check initiated OK
           {
           ExportNotifyValid = 0;
