@@ -54,10 +54,14 @@ function startEmailCheck()
 
   if (ExportNotifyOK == 0)
     {
-    $("ExportButtonMsg").innerHTML = "Notify field must be set before submit.";
-    return;
+    SetExportUser();
+    if (ExportNotifyOK == 0)
+      {
+      $("ExportButtonMsg").innerHTML = "Notify field must be set before submit.";
+      return;
+      }
     }
-  else if (ExportNotifyOK == 1)
+  if (ExportNotifyOK == 1)
     {
     $("ExportButtonMsg").innerHTML = 'The current address, "' + ExportEmail + '", has been verified OK.  You are done.';
     return;
