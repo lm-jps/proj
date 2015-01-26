@@ -186,6 +186,7 @@ function CheckNotifyValidity()
   if (ExportNotifyValid == 1) // If already verified, done.
     {
     ExportNotifyOK = 1;
+    $("ExportNotifyMsg").innerHTML = "OK";
     clearInterval(ExportNotifyTimer);
     return;
     }
@@ -195,12 +196,14 @@ function CheckNotifyValidity()
     $("ExportCheckMsg").innerHTML = "Notify address " + ExportEmail + " not verified within " + MAX_NOTIFY_TIMER + " seconds, try again or correct email address then try again.";
     ExportNotifyOK = 0;
     clearInterval(ExportNotifyTimer);
+    $("ExportNotifyMsg").innerHTML = "";
     return;
     }
 
   if (ExportNotifyOK == 2)  // New check of validity required
     {
     checkOnly = 0;
+    $("ExportNotifyMsg").innerHTML = "";
     ExportNotifyTimeLeft = MAX_NOTIFY_TIMER;
     ExportNotifyTimer = setInterval(function () {NotifyTimer()}, ExportNotifyTimeDelta);
     // timer will run until valid email found or time limit expired or user changes email address
