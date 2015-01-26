@@ -76,7 +76,7 @@ function startEmailCheck()
     $("ExportCheckMsg").innerHTML = 'Submitted address, "' + ExportEmail + '", is not a valid email address format, fix and try again.';
     return;
     } 
-// alert("so far so good, ExportNotifyOK = " + ExportNotifyOK);
+alert("so far so good, ExportNotifyOK = " + ExportNotifyOK);
     $("ExportCheckMsg").innerHTML = 'Submitted address is: "' + ExportEmail + '".';
   ExportNotifyOK = CheckNotifyValidity();
   }
@@ -90,7 +90,6 @@ function SetExportUser()
     {
     ExportNotifyOK = 0;
     // Previous verify submit still in progress.
-    // Any return from it will be ignored now, so re-enable the submit button.
     }
   ExportUserOK = 0;
   EXPORTUSER = $("ExportRequestor").value.toUpperCase();
@@ -156,6 +155,7 @@ function SetExportNotify()
   else if ($("ExportNotify").value.indexOf("@") > 0 && 
            $("ExportNotify").value.indexOf("@") == ($("ExportNotify").value.lastIndexOf("@")))
     {
+    $("ExportNotifyMsg").innerHTML = "Checking";
     ExportNotifyOK = 2;
     }
   else
@@ -179,6 +179,7 @@ function CheckNotifyValidity()
   // If validity check completed OK then return OK
 
   var checkOnly = 1; // default
+  $("ExportNotifyMsg").innerHTML = "";
 
   cookieState=1;
   Cookie.setData("emailOK",cookieState);
