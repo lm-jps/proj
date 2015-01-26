@@ -43,41 +43,41 @@ function email_getargs()
   }
 
 function startEmailCheck()
-  { // This is called when the submit button is pressed.
+  { // This is called when the check params button is pressed.
     // if not ready, complain and do nothing.
   if ( $("ExportNotify").value.toUpperCase() ===  "SOLARMAIL" )
     ExportEmail = $("ExportRequestor").value + "@spd.aas.org";
   else
     ExportEmail = $("ExportNotify").value;
 
-  $("ExportButtonMsg").innerHTML = "Ready to verify email, press Submit to start.";
+  $("ExportCheckMsg").innerHTML = "Ready to verify email, press Check Params.";
 
   if (ExportNotifyOK == 0)
     {
     SetExportUser();
     if (ExportNotifyOK == 0)
       {
-      $("ExportButtonMsg").innerHTML = "Notify field must be set before submit.";
+      $("ExportCheckMsg").innerHTML = "Notify field must be set before submit.";
       return;
       }
     }
   if (ExportNotifyOK == 1)
     {
-    $("ExportButtonMsg").innerHTML = 'The current address, "' + ExportEmail + '", has been verified OK.  You are done.';
+    $("ExportCheckMsg").innerHTML = 'The current address, "' + ExportEmail + '", has been verified OK.  You are done.';
     return;
     }
   else if (ExportNotifyOK == 4)
     {
-    $("ExportButtonMsg").innerHTML = "Still waiting for reply to our email, wait or change Notify or Requester fields.";
+    $("ExportCheckMsg").innerHTML = "Still waiting for reply to our email, wait or change Notify or Requester fields.";
     return;
     } 
   else if (ExportNotifyOK == 5)
     {
-    $("ExportButtonMsg").innerHTML = 'Submitted address, "' + ExportEmail + '", is not a valid email address format, fix and try again.';
+    $("ExportCheckMsg").innerHTML = 'Submitted address, "' + ExportEmail + '", is not a valid email address format, fix and try again.';
     return;
     } 
 // alert("so far so good, ExportNotifyOK = " + ExportNotifyOK);
-    $("ExportButtonMsg").innerHTML = 'Submitted address is: "' + ExportEmail + '".';
+    $("ExportCheckMsg").innerHTML = 'Submitted address is: "' + ExportEmail + '".';
   ExportNotifyOK = CheckNotifyValidity();
   }
 
