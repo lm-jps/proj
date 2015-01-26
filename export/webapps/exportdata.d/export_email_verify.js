@@ -167,7 +167,7 @@ function SetExportNotify()
 function NotifyTimer()
   {
   ExportNotifyTimeLeft -= ExportNotifyTimeDelta/1000;
-alert("ExportNotifyOK="+ExportNotifyOK+" time left="+ExportNotifyTimeLeft");
+alert("ExportNotifyOK="+ExportNotifyOK+" time left="+ExportNotifyTimeLeft);
   CheckNotifyValidity();
   }
 
