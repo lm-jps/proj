@@ -16,8 +16,8 @@
 #
 # Usage:
 #
-#  track_and_ingest_mharp.sh [-nMaefd] [-i N] [-g N] dest_dir ...
-#    mask_series harp_series harp_log_series
+#  track_and_ingest_mharp.sh [-nMaefd] [-i N] [-g N] [-s series] [-I opt] ...
+#    dest_dir mask_series harp_series harp_log_series
 #
 # where:
 #   dest_dir is a staging area in the filesystem
@@ -25,7 +25,7 @@
 #   harp_series is an output data series to put tracks
 #
 # and:
-#   -i indicatea an initial run, having new tracks numbered starting from 
+#   -i indicates an initial run, having new tracks numbered starting from 
 #      the argument N.  Otherwise, the run picks up where an earlier one 
 #      left off, according to a checkpoint file in `dest_dir'.
 #      IF GIVEN, `-i N' CLEARS ALL EXISTING RESULTS.
@@ -39,6 +39,10 @@
 #      counter (ROI_rgn.Ntot) at the end of the run, in case more help 
 #      is needed to synch the gap-fill count with the desired count.
 #      -g is not currently used with -n.
+#   -s allows naming an already-existing data series for sunspot masks,
+#      as distinct from magnetic-activity masks.  This series is not
+#      used for tracking, but its masks are folded in during ingestion.
+#      Currently used for MDI.
 #   -n indicates near-real-time (NRT) mode: (1) NRT magnetograms in
 #      hmi.M_720s_nrt are used (otherwise, hmi.M_720s is used).  
 #      (2) Less track history is retained, allowing faster startup and 
@@ -57,6 +61,12 @@
 #      and you don't want to run the tracker again.  It can also be used to
 #      test ingestion while holding the filesystem constant.
 #      Mnemonic: -e = ingest (eat) only.  Both tracks and logs are ingested.
+#   -I means to take the argument to the option as an extra argument to
+#      mharp_ingest.  For example, use this to introduce a t0cut option.
+#      Multiple -I options are OK.
+#   -m means to NOT make the standard tracker-diagnostic movie.  Default is to 
+#      make it after the regular tracker run.  Skipping this step makes the 
+#      overall run faster.
 #   -f means to force the run, without checking before-hand for gaps in the
 #      relevant Marmask series.  For experts.
 #   -d is a flag which signals to use the developer MATLABPATH (~turmon) rather
@@ -87,7 +97,7 @@ progname=`basename $0`
 # under SGE, $0 is set to a nonsense name, so use our best guess instead
 default_progname=track_and_ingest_mharp.sh
 if [ `expr "$progname" : '.*track.*'` == 0 ]; then progname=$default_progname; fi
-USAGE="Usage: $default_progname [-nMaefd] [-i N] [-g N] dest_dir mask_series harp_series harp_log_series"
+USAGE="Usage: $default_progname [-nMaefd] [-i N] [-g N] [-s series] dest_dir mask_series harp_series harp_log_series"
 
 ## # tempfile stuff: commented out
 ## TEMPROOT=/tmp/harps-${progname}
@@ -169,6 +179,7 @@ make_movie=1
 first_track=0
 developer_path=0
 track_opts=""
+ingest_opts=""
 ingest_all=0
 nrt_mode=0
 mdi_mode=0
@@ -176,15 +187,22 @@ skip_roi=0
 gap_fill=0
 force_run=0
 eat_only=0
-while getopts "hnMadfeg:i:" o; do
+spot_series=""
+spot_ingest=0
+while getopts "hnMEmadfeg:i:s:I:" o; do
     case "$o" in
 	i)  first_track="$OPTARG"
 	    track_opts="$track_opts -i $first_track";;
 	g)  skip_roi="$OPTARG"
 	    gap_fill=1;;
+	s)  spot_series="$OPTARG"
+	    spot_ingest=1;;
+	I)  ingest_opts="$ingest_opts $OPTARG";;
 	d)  developer_path=1
 	    track_opts="$track_opts -d";;
 	a)  ingest_all=1;;
+	m)  make_movie=0;;
+	E)  track_opts="$track_opts -E";;
 	e)  eat_only=1;;
 	f)  force_run=1;;
 	n)  mdi_mode=0
@@ -215,7 +233,7 @@ if [ "$nrt_mode" -eq 1 ]; then
     #   ingest only most recent trec; no temporal padding
     #   do not filter HARPs based on number of appearances (tmin=1)
     #   do not output match information
-    ingest_opts="trec=1 tpad=0 tmin=1 match=0"
+    ingest_opts="$ingest_opts trec=1 tpad=0 tmin=1 match=0"
     do_match=0
 elif [ "$mdi_mode" -eq 1 ]; then
     # MDI tracker options:
@@ -240,13 +258,16 @@ elif [ "$mdi_mode" -eq 1 ]; then
         # ingest both new and pending regions -- useful for tests
         listfiles="track-new.txt,track-pending.txt"
     fi
+    if [ "$spot_ingest" -eq 0 ]; then
+	echo "${progname}: Using MDI mode with no spot-mask series."
+    fi
     # ingester options:
     #   accept default trec
     #   set tpad to 1 day (15 images)
     #   set cadence to 96 minutes (5760s)
     #   filter M-TARPs having fewer than tmin appearances
     #   do output match information
-    ingest_opts="tmin=3 tpad=15 cadence=5760 match=1"
+    ingest_opts="$ingest_opts tmin=3 tpad=15 cadence=5760 match=1"
     do_match=1
 else
     # regular HMI tracker options:
@@ -266,7 +287,7 @@ else
     #   accept default trec, tpad
     #   filter HARPs having fewer than tmin appearances
     #   do output match information
-    ingest_opts="tmin=3 match=1"
+    ingest_opts="$ingest_opts tmin=3 match=1"
     do_match=1
 fi
 
@@ -283,8 +304,15 @@ if [ "$gap_fill" -eq 1 ]; then
     track_opts="$track_opts -g $skip_roi"
 fi
 
+# spot-ingest
+if [ "$spot_ingest" -eq 1 ]; then
+    # add spot= argument to ingestion; assume it's made already
+    ingest_opts="$ingest_opts spot=$spot_series"
+fi
+
 # get arguments
 if [ "$#" -ne 4 ]; then
+    echo "${progname}: Bad number of arguments" 1>&2
     echo "$USAGE" 1>&2
     exit 2
 fi
@@ -296,6 +324,8 @@ harp_log_series="$4"
 
 # input data series, without T_REC qualifier
 mask_series_only=`echo $mask_series | sed 's/\[.*$//'`
+# T_REC qualifier
+trec_tag=`echo $mask_series | sed 's/.*\[\(.*\)\]/\1/' | sed 's/_TAI//' | tr ':@/*?' '___xx'`
 
 # SGE/OpenMP setup
 SGE_ROOT=/SGE;     export SGE_ROOT
@@ -311,6 +341,11 @@ elif [ "X$uname" = Xx86_64 ]; then
     PATH="${PATH}:$SGE_ROOT/bin/lx24-ia64"
 else
     die $LINENO "Could not find system '$uname' to set up SGE"
+fi
+
+# if under SGE, alter the name so we can see what is happening
+if [ "$SGE_O_LOGNAME" -a "$JOB_ID" ]; then
+  qalter -N "t+i_${trec_tag}" $JOB_ID
 fi
 
 #############################################################
@@ -348,7 +383,7 @@ fi
 # for show_info, ingestor, and log-ingestor
 # there is no sh version of .setJSOCenv, so we use this to get JSOC_MACHINE
 jsoc_mach=`csh -f -c 'source /home/jsoc/.setJSOCenv && echo $JSOC_MACHINE'`
-PATH="${PATH}:$HOME/cvs/JSOC/bin/$jsoc_mach:/home/jsoc/cvs/Development/JSOC/bin/linux_x86_64/"
+PATH="${PATH}:$HOME/cvs/JSOC/bin/$jsoc_mach"
 
 echo "${progname}:   show_info is at:" `which show_info`
 echo "${progname}:   ingest_mharp is at:" `which ingest_mharp`
@@ -360,6 +395,10 @@ $cmd "$mag_series"      > /dev/null
 $cmd "$mask_series"     > /dev/null
 $cmd "$harp_series"     > /dev/null
 $cmd "$harp_log_series" > /dev/null
+if [ "$spot_ingest" -eq 1 ]; then
+    $cmd "$spot_series" > /dev/null
+fi
+
 
 #############################################################
 #
@@ -394,8 +433,7 @@ echo "${progname}: Associated T_REC in \`$harp_log_series' will be $trec_frst"
 
 # find the most recent prior ingest using harp_log 
 ## set -x
-#DAYSBACK=60 # days back in the harp_log's to look for the prior ingest
-DAYSBACK=90
+DAYSBACK=60 # days back in the harp_log's to look for the prior ingest
 CADENCE=120 # 720s images/day
 trec_frst_index=`index_convert "ds=$harp_log_series" "T_REC=$trec_frst"`
 trec_prior0_index=$(( $trec_frst_index - $DAYSBACK * $CADENCE ))
@@ -427,7 +465,7 @@ else
   #   0: not good, but OK (probably overlapping intervals)
   # (if T_LAST was not present, the show_info below would be given a non-time 
   # value, which will cause errors, so special-case this)
-  if [[ "$trec_last_prior" =~ ".*_TAI" ]]; then
+  if [[ "$trec_last_prior" =~ _TAI ]]; then
     prior_dt=`show_info -c "ds=${mag_series}[${trec_last_prior}-${trec_prior1}][? QUALITY>=0 ?]" key=T_REC | awk '{print $1}'`
   else
     # for now, just a warning (will error-out if used later)
