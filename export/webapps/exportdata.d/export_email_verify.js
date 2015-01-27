@@ -170,6 +170,7 @@ function SetExportNotify()
 function NotifyTimer()
   {
   ExportNotifyTimeLeft -= ExportNotifyTimeDelta/1000;
+$("ExportStatus").innerHTML="ExportNotifyOK=+ExportNotifyOK+" timer="+ExportNotifyTimeLeft;
   CheckNotifyValidity();
   }
 
@@ -263,6 +264,7 @@ function CheckNotifyValidity()
         else if (status == 3)
           {
           $("ExportNotifyMsg").innerHTML = "";
+$("ExportLocation").innerHTML = "status==3, notify="+ExportNotifyOK;
           if (ExportNotifyTimeLeft <= 0)
             { // timer expired, address check failed.
             clearInterval(ExportNotifyTimer);
@@ -279,6 +281,7 @@ function CheckNotifyValidity()
               }
             else
               { // keep waiting, check each ExportNotifyTimeDelta seconds
+$("ExportLocation").innerHTML = "status==3, notify="+ExportNotifyOK+" setting missing message";
               ExportNotifyValid = 0;
               $("ExportCheckMsg").innerHTML = ExportNotifyTimeLeft + " seconds remaining, still waiting for your email reply from "+EXPORTMAIL;
               }
