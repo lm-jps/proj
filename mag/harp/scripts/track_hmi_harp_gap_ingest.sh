@@ -64,19 +64,22 @@ fi
 ## PATH STUFF BEGINS
 # (need developer_path set for this)
 # SGE/OpenMP setup
-SGE_ROOT=/SGE;     export SGE_ROOT
+#SGE_ROOT=/SGE;     export SGE_ROOT
 OMP_NUM_THREADS=1; export OMP_NUM_THREADS
 KMP_BLOCKTIME=10;  export KMP_BLOCKTIME
-uname=`uname -m`
-if [ "X$uname" = Xi686 ]; then
-    PATH="${PATH}:$SGE_ROOT/bin/lx24-x86"
-elif [ "X$uname" = Xx86_64 ]; then
-    PATH="${PATH}:$SGE_ROOT/bin/lx24-amd64"
-elif [ "X$uname" = Xx86_64 ]; then
-    PATH="${PATH}:$SGE_ROOT/bin/lx24-ia64"
-else
-    echo "Could not find system '$uname' to set up SGE" 1>&2; exit 2
-fi
+
+PATH="${PATH}:$SGE_ROOT/bin/$SGE_ARCH"
+
+#uname=`uname -m`
+#if [ "X$uname" = Xi686 ]; then
+#    PATH="${PATH}:$SGE_ROOT/bin/lx24-x86"
+#elif [ "X$uname" = Xx86_64 ]; then
+#    PATH="${PATH}:$SGE_ROOT/bin/lx24-amd64"
+#elif [ "X$uname" = Xx86_64 ]; then
+#    PATH="${PATH}:$SGE_ROOT/bin/lx24-ia64"
+#else
+#    echo "Could not find system '$uname' to set up SGE" 1>&2; exit 2
+#fi
 # ensure track_hmi_production_driver_stable.sh is in PATH
 if [ "$developer_path" -eq 1 ]; then
   # put script dir of developer into path
