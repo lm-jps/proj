@@ -76,7 +76,6 @@ function startEmailCheck()
     $("ExportCheckMsg").innerHTML = 'Submitted address, "' + ExportEmail + '", is not a valid email address format, fix and try again.';
     return;
     } 
-alert("so far so good, ExportNotifyOK = " + ExportNotifyOK);
     $("ExportCheckMsg").innerHTML = 'Submitted address is: "' + ExportEmail + '".';
   ExportNotifyOK = CheckNotifyValidity();
   }
@@ -167,7 +166,6 @@ function SetExportNotify()
 function NotifyTimer()
   {
   ExportNotifyTimeLeft -= ExportNotifyTimeDelta/1000;
-alert("ExportNotifyOK="+ExportNotifyOK+" time left="+ExportNotifyTimeLeft);
   CheckNotifyValidity();
   }
 
@@ -241,7 +239,6 @@ function CheckNotifyValidity()
         var response = transport.responseText || null;
         var parseInfo = response.evalJSON();
         var status = parseInfo.status;
-alert("status="+status+" validity="+ExportNotifyValid);
         if (status == 1) // check initiated OK
           {
           ExportNotifyValid = 0;
