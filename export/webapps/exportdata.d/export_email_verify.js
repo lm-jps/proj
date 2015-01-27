@@ -170,7 +170,7 @@ function SetExportNotify()
 function NotifyTimer()
   {
   ExportNotifyTimeLeft -= ExportNotifyTimeDelta/1000;
-$("ExportStatus").innerHTML="ExportNotifyOK=+ExportNotifyOK+" timer="+ExportNotifyTimeLeft;
+$("ExportStatus").innerHTML="ExportNotifyOK="+ExportNotifyOK+" timer="+ExportNotifyTimeLeft;
   CheckNotifyValidity();
   }
 
