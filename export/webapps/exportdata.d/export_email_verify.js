@@ -170,7 +170,6 @@ function SetExportNotify()
 function NotifyTimer()
   {
   ExportNotifyTimeLeft -= ExportNotifyTimeDelta/1000;
-$("ExportStatus").innerHTML="ExportNotifyOK="+ExportNotifyOK+" timer="+ExportNotifyTimeLeft;
   CheckNotifyValidity();
   }
 
@@ -280,12 +279,11 @@ function CheckNotifyValidity()
               }
             else
               { // keep waiting, check each ExportNotifyTimeDelta seconds
-$("ExportLocation").innerHTML = "status==3, notify="+ExportNotifyOK+" setting missing message timer="+ExportNotifyTimeLeft;
               ExportNotifyValid = 0;
-              $("ExportCheckMsg").innerHTML = ExportNotifyTimeLeft + " seconds remaining, still waiting for your email reply from "+EXPORTMAIL;
+              $("ExportCheckMsg").innerHTML = ExportNotifyTimeLeft + " seconds remaining, still waiting for your email reply from "+ExportEmail;
               }
-            }
-          }
+	    }
+	  }
         else
           {
           ExportNotifyValid = -2; // immediate failure
@@ -295,8 +293,8 @@ $("ExportLocation").innerHTML = "status==3, notify="+ExportNotifyOK+" setting mi
           $("ExportCheckMsg").innerHTML = 'Notify address provided, "' + ExportEmail + '" is not a valid address, correct and retry.';
           if (status == 4)
             {
-            $("ExportCheckMsg").innerHTML += '<br>A prior attempt timed-out before email Reply';
-            }
+		    $("ExportCheckMsg").innerHTML += '<br>A prior attempt timed-out before email Reply';
+	    }
           }
         }
       else
