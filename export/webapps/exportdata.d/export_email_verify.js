@@ -152,7 +152,7 @@ function SetExportNotify()
     ExportNotifyOK = 0;
     }
   else if (EXPORTNOTIFY.indexOf("@") > 0 && 
-           EXPORTNOTIFY.indexOf("@") == EXPORTNOTIFY.lastIndexOf("@")))
+           EXPORTNOTIFY.indexOf("@") == EXPORTNOTIFY.lastIndexOf("@"))
     {
     $("ExportNotifyMsg").innerHTML = "Checking";
     ExportNotifyOK = 2;
