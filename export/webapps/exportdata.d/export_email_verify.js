@@ -11,6 +11,8 @@ function email_initVars()
 var JSOC_CHECK_EMAIL = "checkAddress.sh";
 var MAX_NOTIFY_TIMER = 180;
 var ExportEmail = "not set"; // current email to test
+var EXPORTUSER;
+var EXPORTNOTIFY;
 var ExportNotifyValid;
 var ExportNotifyTimer;
 var ExportNotifyTimeLeft;  // Max seconds before giveup
@@ -81,8 +83,6 @@ function startEmailCheck()
   }
 
 // SetExportUser is called from change in either the Requester or Notify input text boxes.
-var EXPORTUSER;
-var EXPORTNOTIFY;
 function SetExportUser()
   {  
   if (ExportNotifyOK == 4)
@@ -151,8 +151,8 @@ function SetExportNotify()
     {
     ExportNotifyOK = 0;
     }
-  else if ($("ExportNotify").value.indexOf("@") > 0 && 
-           $("ExportNotify").value.indexOf("@") == ($("ExportNotify").value.lastIndexOf("@")))
+  else if (EXPORTNOTIFY.indexOf("@") > 0 && 
+           EXPORTNOTIFY.indexOf("@") == EXPORTNOTIFY.lastIndexOf("@")))
     {
     $("ExportNotifyMsg").innerHTML = "Checking";
     ExportNotifyOK = 2;
@@ -161,6 +161,10 @@ function SetExportNotify()
     {
     ExportNotifyOK = 0; // this case eliminates two '@' in Notify 
     }
+  if ( EXPORTNOTIFY ===  "SOLARMAIL" )
+    ExportEmail = $("ExportRequestor").value + "@spd.aas.org";
+  else
+    ExportEmail = $("ExportNotify").value;
   }
 
 function NotifyTimer()
@@ -182,7 +186,6 @@ function CheckNotifyValidity()
 
   cookieState=1;
   Cookie.setData("emailOK",cookieState);
-  $("ExportCheckMsg").innerHTML = 'Notify address "' + ExportEmail + '" is now being checked.';
 
   if (ExportNotifyOK != 4)
     {
