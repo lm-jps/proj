@@ -328,7 +328,7 @@ mask_series_only=`echo $mask_series | sed 's/\[.*$//'`
 trec_tag=`echo $mask_series | sed 's/.*\[\(.*\)\]/\1/' | sed 's/_TAI//' | tr ':@/*?' '___xx'`
 
 # SGE/OpenMP setup
-#SGE_ROOT=/SGE;     export SGE_ROOT
+SGE_ROOT=/SGE2;     export SGE_ROOT
 OMP_NUM_THREADS=1; export OMP_NUM_THREADS
 KMP_BLOCKTIME=10;  export KMP_BLOCKTIME
 
