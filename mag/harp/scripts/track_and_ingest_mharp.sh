@@ -328,24 +328,31 @@ mask_series_only=`echo $mask_series | sed 's/\[.*$//'`
 trec_tag=`echo $mask_series | sed 's/.*\[\(.*\)\]/\1/' | sed 's/_TAI//' | tr ':@/*?' '___xx'`
 
 # SGE/OpenMP setup
-SGE_ROOT=/SGE;     export SGE_ROOT
+#SGE_ROOT=/SGE;     export SGE_ROOT
 OMP_NUM_THREADS=1; export OMP_NUM_THREADS
 KMP_BLOCKTIME=10;  export KMP_BLOCKTIME
 
-uname=`uname -m`
-if [ "X$uname" = Xi686 ]; then
-    PATH="${PATH}:$SGE_ROOT/bin/lx24-x86"
-elif [ "X$uname" = Xx86_64 ]; then
-    PATH="${PATH}:$SGE_ROOT/bin/lx24-amd64"
-elif [ "X$uname" = Xx86_64 ]; then
-    PATH="${PATH}:$SGE_ROOT/bin/lx24-ia64"
-else
-    die $LINENO "Could not find system '$uname' to set up SGE"
+PATH="${PATH}:$SGE_ROOT/bin/$SGE_ARCH"
+
+#uname=`uname -m`
+#if [ "X$uname" = Xi686 ]; then
+#    PATH="${PATH}:$SGE_ROOT/bin/lx24-x86"
+#elif [ "X$uname" = Xx86_64 ]; then
+#    PATH="${PATH}:$SGE_ROOT/bin/lx24-amd64"
+#elif [ "X$uname" = Xx86_64 ]; then
+#    PATH="${PATH}:$SGE_ROOT/bin/lx24-ia64"
+#else
+#    die $LINENO "Could not find system '$uname' to set up SGE"
+#fi
+
+# if under SGE, alter the name so we can see what is happening
+if [ "$SGE_O_LOGNAME" -a "$JOB_ID" ]; then
+  $SGE_ROOT/bin/$SGE_ARCH/qalter -N "t+i_${trec_tag}" $JOB_ID
 fi
 
 # if under SGE, alter the name so we can see what is happening
 if [ "$SGE_O_LOGNAME" -a "$JOB_ID" ]; then
-  qalter -N "t+i_${trec_tag}" $JOB_ID
+  $SGE_ROOT/bin/$SGE_ARCH/qalter -N "t+i_${trec_tag}" $JOB_ID
 fi
 
 #############################################################
