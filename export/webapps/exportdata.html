@@ -32,12 +32,12 @@ serverMap["jsoc2"] = "hmidb";
 serverMap["jsoc2.stanford.edu"] = "hmidb";
 
 // var JSOC_INFO = "jsoc_info_test";
-// var JSOC_FETCH = "jsoc_fetch_test";
+var JSOC_FETCH = "jsoc_fetch_test";
 // var LOOKDATA = "lookdata2";
 
 var JSOC_INFO = "jsoc_info";
 var JSOC_INFO_X = "jsoc_info_x";
-var JSOC_FETCH = "jsoc_fetch";
+// var JSOC_FETCH = "jsoc_fetch";
 var JSOC_FETCH_X = "jsoc_fetch_x";
 var LOOKDATA = "lookdata";
 var PARSE_RECSET = 'drms_parserecset';
@@ -54,6 +54,9 @@ var SHOW_WLSERIES = 'show_wlseries';
 
 <!-- Add list of seriesnames for which processing on export is not suportted -->
 <script type="text/javascript" src="exportdata.d/no_processing.js"></script>
+
+<!-- Add export email checking code. -->
+<script type="text/javascript" src="exportdata.d/export_email_verify.js"></script>
 
 <style type="text/css">
 
@@ -160,7 +163,9 @@ var colorPink = "#FFD8D8";
 var colorDarkPink = "#FFB0B0";
 var colorRed = "#D88080";
 var colorDarkRed = "#FF8080";
+var colorRealRed = "#FF0000";
 var colorWhite = "#FFFFFF";
+var colorBlack = "#000000";
 var colorGreen = "#80FF80";
 var colorYellow = "#FFF8DC";
 
@@ -213,17 +218,15 @@ function initVars()
   // Form init
     {
     $("ExportRequestor").value = "";
-    // always ask email, default solarmail
-    // if (Internal)
-      $("ExportNotify").value = "solarmail";
-    // else
-      // $("ExportNotify").value = "";
+    $("ExportNotify").value = "solarmail";
     $("RequestIdPlace").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("TarFileLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("ExportStatus").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("StatusDataLocation").innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
     $("ExportRecordSet").value = "";
+    $("ExportCheckMsg").innerHTML = "";
+    $("ExportCheckMsg").style.color = colorRealRed;
     // Processing
     $("ProcessRow").style.display="none";
     $("ExportProcessingHidden").value = "no_op";
@@ -255,15 +258,13 @@ function initVars()
     $("ShowQueryCheckbox").checked = 0;
     SetExportMethod(1);
     }
+  email_initVars();
   FileUploadCleanup();
   }
 
 function getargs()
   {
   state = Cookie.getData("state");
-  $("ExportRequestor").value = Cookie.getData("user");
-  if ($("ExportRequestor").value == "undefined")
-    $("ExportRequestor").value = "";
   if (state == 1)
     {
     var exportargs = Cookie.data["search"];
@@ -303,15 +304,15 @@ function getargs()
     state=1;
     Cookie.setData("state",state);
     Cookie.setData("search",location.search);
-    Cookie.setData("user", $("ExportRequestor").value);
     }
+  email_getargs();
   return args;
   }
 
 function OnLoadInit()
   {
   var needcount = 0;
-  Cookie.init({name:exportdata, expires:5});
+  Cookie.init({name:exportdata, expires:14});
   initVars();
   if (Internal)
     {
@@ -341,10 +342,6 @@ function OnLoadInit()
     GetRSCount();
     GetDefaultFormat();
     }
-  // if (Internal)
-   //  $("RequestorMessage").innerHTML = "Provide an identifier for you, e.g. your SolarMail name. Required for jsoc2";
-    $("RequestorMessage").innerHTML = "If Notify is 'solarmail' provide your SolarMail name else your name or leave blank.";
-  // HELP tips enable
   if (exportdataLoaded)
     ProcessingEnabled();
   CreateTips();
@@ -560,7 +557,7 @@ function insertOption(list,text,note)
 
 function MakeFileUploadRequest()
   {
-  if (CheckExportParams(1) == 0)
+  if (CheckExportParams() == 0)
     return;
   uploadOndoneAction = 1;
 // XXXX fix compression here
@@ -1433,71 +1430,7 @@ function SetExportCompress()
   CheckRediness();
   }
 
-function SetExportUser()
-  {  
-  ExportQueryOK = 0;
-  var tmp1 = $("ExportRequestor").value.toUpperCase();
-  if (tmp1.length != 0 && tmp1 !== "NONE")
-    {
-    Cookie.setData("user", $("ExportRequestor").value);
-    ExportUserOK = 1;
-    }
-  else
-    {
-    $("ExportRequestor").value = "none";
-    ExportUserOK = 0;
-    }
-  SetExportNotify();
-  }
-
-function SetExportNotify()
-  {   
-  // ExportNotifyOK values:
-  //  0 - not OK to proceed
-  //  1 - OK to proceed for internal or external real email
-  //  2 - OK, email is SolarMail and Requestor not empty.
-  //  3 - OK, quick or external with no email to be sent
-  ExportQueryOK = 0;
-  var tmp1 = $("ExportNotify").value.toUpperCase();
-  if (ExportMethodValue == "url_direct" || ExportMethodValue == "url_quick")
-    {
-    ExportNotifyOK = 3;
-    $("ExportNotify").value = "none";
-    }
-  else if (tmp1.length == 0)
-    {
-    // as of 14 Nov 2014 ask for passwords for all exports
-    // if (Internal)
-    // {
-      ExportNotifyOK = 0;
-      $("ExportNotify").value = "solarmail";
-    // }
-    // else
-      // {
-      // ExportNotifyOK = 3;
-      // $("ExportNotify").value = "none";
-      // }
-    }
-  else if ( tmp1 ===  "SOLARMAIL" )
-    {
-    if (ExportUserOK)
-      ExportNotifyOK = 2;
-    else
-      ExportNotifyOK = 0;
-    }
-  else if (tmp1 == "NONE" || tmp1 == "NO")
-    {
-    // if (Internal)
-      ExportNotifyOK = 0;
-    // else
-      // ExportNotifyOK = 3;
-    }
-  else if ($("ExportNotify").value.indexOf("@") < 0)
-    ExportNotifyOK = 0;
-  else
-    ExportNotifyOK = 1;
-  CheckRediness();
-  }
+// Notify and Requestor checking is now in the email registration js script.
 
 function ExportShowQuery()
   {
@@ -1512,17 +1445,19 @@ function ExportShowQuery()
 
 function CheckRediness()
   {
-  var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportNotifyOK;
+  var status = ExportQueryOK * ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * (ExportNotifyOK==1);
   if (status)
     {
     $("ExportButtonMsg").innerHTML = "Please only click once for export request.";
     $("ExportButton").value = "Submit Export Request";
     $("ExportButton").style.backgroundColor = colorGreen;
-    $("ExportCheckMsg").innerHTML = "";
+    $("ExportCheckMsg").style.color = colorBlack;
+    $("ExportCheckMsg").innerHTML = "OK to proceed";
     $("ExportCheckButton").style.backgroundColor = colorGreen;
     }
   else
     {
+    $("ExportCheckMsg").style.color = colorRealRed;
     $("ExportCheckButton").style.backgroundColor = colorYellow;
     $("ExportButton").value = "Not Ready To Submit";
     $("ExportButton").style.backgroundColor = colorRed;
@@ -1541,7 +1476,6 @@ function CheckExportParams()
     }
   while (1) // use with break instead of goto done.
     {
-//XXXXX
     if (ExportRecordSetOK == 0)
       {
       GetRSCount();
@@ -1580,24 +1514,16 @@ function CheckExportParams()
       {
       ProtocolImageCheck();
       }
-    SetExportUser();  // SetExportUser calls SetExportNotify
-    if (ExportNotifyOK == 0)
+    if (ExportNotifyOK == 0 || ExportNotifyOK == 2)
       {
-      if (ExportUserOK == 0)
-        $("ExportCheckMsg").innerHTML = "Requestor not given, Enter name you will use in Requestor field then retry export request.  This field in required if Notify is 'solarmail'";
-      // as of 14 Nov email requested for all exports
-      // else if (Internal)
-      else
-          // $("ExportCheckMsg").innerHTML = "Notify email required for jsoc2, enter 'solarmail' or email address then retry export request.";
-        $("ExportCheckMsg").innerHTML = "Notify email address required, enter 'solarmail' or email address then retry export request.";
-      // else
-          // $("ExportCheckMsg").innerHTML = "Notify email not given.  Enter 'none' or 'solarmail' or email address then retry export request.";
+      startEmailCheck();
       break;
       }
+    $("ExportCheckMsg").innerHTML = "OK to proceed";
     break;
     }
 
-  var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * ExportNotifyOK;
+  var isOK = ExportRecordSetOK * ExportMethodOK * ExportFilenameFmtOK * ExportProcessingOK * ExportProtocolOK * (ExportNotifyOK==1);
   if (isOK)
     {
     var protocolparam = $("ExportProtocolHidden").value;
@@ -1690,7 +1616,7 @@ function GetExport() // This is the code executed when the user clicks on the "S
         var arguments = args.args[0];
         var intSeries = args.args[1];
         var script = null;
-        
+
         if (intSeries.length > 0)
         {
             // The user is on the external website, but they are about to initiate a new export request on the internal system.
@@ -1710,6 +1636,7 @@ function GetExport() // This is the code executed when the user clicks on the "S
         // Add a new argument that will direct jsoc_fetch to insert an 'X' into the request ID. The 'X' denotes a export
         // made from the external site, but which is performed as an internal-site insert because the request contains
         // references to one or more internals series.
+// alert('req parms ' + JSON.stringify(arguments));
         
         new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + script,
         {
@@ -1785,7 +1712,7 @@ function GetReExport()
       
       if (!isExtOrigin)
       {
-          alert("RequestID ending with '_IN' belongs to jsoc2.stanford.edu, use proper RequestID or swtich to jsoc2.stanford.edu.");
+// alert("RequestID ending with '_IN' belongs to jsoc2.stanford.edu, use proper RequestID or swtich to jsoc2.stanford.edu.");
           return;
       }
       
@@ -1793,7 +1720,7 @@ function GetReExport()
   }
   else if (!is_IN && Host == "jsoc2.stanford.edu")
   {
-      alert("RequestID without '_IN' belongs to jsoc.stanford.edu, use proper RequestID or switch to jsoc.stanford.edu.");
+// alert("RequestID without '_IN' belongs to jsoc.stanford.edu, use proper RequestID or switch to jsoc.stanford.edu.");
       return;
   }
 
@@ -1827,8 +1754,10 @@ function ProcessExportResponse(response)
   var data = response.evalJSON();
   state = 3;
   Cookie.setData("state",state);
+
   if (data.status == 6)
     {
+    // email address was not registered, or export_manage not yet found request. 
     $("ExportCheckMsg").innerHTML = "RequestID not found, status=6, error=" + data.error + "<br>Try again in a few seconds, may just be not ready to respond";
     ExportReadyOK = 3; // keep waiting
     $("ExportButton").value = "Retry";
@@ -1914,7 +1843,7 @@ function ProcessExportResponse(response)
     $("ExportButton").value = "Submit Export Request";
     $("ExportButton").style.backgroundColor = "#D8D8D8";
     RequestID = data.requestid;
-    alert('req id is ' + RequestID);
+// alert('req id is ' + RequestID);
     if (RequestID.length == 0) RequestID = "N.A.";
     $("RequestIdPlace").innerHTML = RequestID;
     $("ExportStatus").innerHTML = "Data Ready, size=" + data.size + "MB";
@@ -1990,18 +1919,18 @@ function GetStatus()
       var isExtOrigin = ($("StatusRequestID").value.search("_X_IN") > 0);
       
       if (!isExtOrigin)
-      {
-          alert("RequestID ending with '_IN' belongs to jsoc2.stanford.edu, use proper RequestID or swtich to jsoc2.stanford.edu.");
-          return;
-      }
+        {
+        alert("RequestID ending with '_IN' belongs to jsoc2.stanford.edu, use proper RequestID or swtich to jsoc2.stanford.edu.");
+        return;
+        }
       
       script = JSOC_FETCH_X
   }
   else if (!is_IN && Host == "jsoc2.stanford.edu")
-  {
-      alert("RequestID without '_IN' belongs to jsoc.stanford.edu, use proper RequestID or switch to jsoc.stanford.edu.");
-      return;
-  }
+    {
+    alert("RequestID without '_IN' belongs to jsoc.stanford.edu, use proper RequestID or switch to jsoc.stanford.edu.");
+    return;
+    }
   
   var arguments = {"op" : "exp_status", "requestid" : $("StatusRequestID").value};
 
