@@ -1014,7 +1014,7 @@ void derotation(float radius, float cent_x, float cent_y, float dist, float p0, 
    int nlead=nx;
 
 
-#pragma omp parallel for private(i,j,xyp,inr,phie,ind,ikf,beta,xyz,slat,omeg,sxyz,sxyp,sxy)
+#pragma omp parallel for private(i,j,xyp,inr,phie,ind,ikf,beta,xyz,slat,omeg,sxyz,sxyp,sxy,xy)
    for (j=0; j<ny; ++j){
       for (i=0; i<nx; ++i){
    
@@ -1132,7 +1132,7 @@ float intsincos(unsigned int n, unsigned int m)
 
 char *interpol_version() // Returns CVS version
 {
-  return strdup("$Id: interpol_code.c,v 1.3 2012/10/23 23:49:48 kehcheng Exp $");
+  return strdup("$Id: interpol_code.c,v 1.4 2015/01/31 18:01:02 kehcheng Exp $");
 }
 
 
