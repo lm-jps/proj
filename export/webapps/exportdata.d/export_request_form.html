@@ -568,22 +568,25 @@
     </tr>
 
     <!-- END Protocols Select -->
-
-    <tr id="RequestorRow">
-      <td>Requestor</td>
-      <td><span id="RequestorHelp" class="tip">?</span></td>
-      <td><input id="ExportRequestor" type="text" name="requestor" value="" onChange="CheckExportParams();" ></td>
-      <td><span id="RequestorMessage">Provide an identifier for you, e.g. your SolarMail name. May be omitted for online delivery.</span></td>
-    </tr>
   
     <tr id="NotifyRow">
       <td>Notify</td>
       <td><span id="NotifyHelp" class="tip">?</span></td>
-      <td><input id="ExportNotify" type="text" name="notify" value="" onChange="CheckExportParams();" ></td>
+      <td>
+        <input id="ExportNotify" type="text" name="notify" value="" onChange="SetExportUser();" >
+        <span id="ExportNotifyMsg">&nbsp;</span>
+      </td>
       <td>
         Provide your email address for notification.
         If Requestor is your SolarMail name you may use "solarmail" here.
       </td>
+    </tr>
+
+    <tr id="RequestorRow">
+      <td>Requestor</td>
+      <td><span id="RequestorHelp" class="tip">?</span></td>
+      <td><input id="ExportRequestor" type="text" name="requestor" value="" onChange="SetExportUser();" ></td>
+      <td><span id="RequestorMessage">Provide an identifier for you. Optional if not using SolarMail.</span></td>
     </tr>
   
     <tr>
