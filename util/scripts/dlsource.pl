@@ -81,9 +81,13 @@ use File::Copy;
 use File::Basename;
 use File::Path qw(mkpath remove_tree);
 use File::Spec;
-use Fcntl ':flock';
 use Cwd qw(chdir getcwd realpath); # need to override chdir so that $ENV{'PWD'} is changed when chdir is called.
 use Data::Dumper;
+use FindBin qw($Bin);
+use lib "$Bin/../../../base/libs/perl";
+use drmsLocks;
+
+use constant kLockFile     => "/home/jsoc/locks/prodbuildlck.txt";
 
 use constant kMakeDiv => "__MAKE__";
 use constant kProjDiv => "__PROJ__";
@@ -156,8 +160,11 @@ my(@actspec); # The actual file specification that was used to download files fr
 my($rdir);     # root dir (either specified by -d flag, or default root dir of JSOC)
 my($reprdir); # root dir (either specified by -D flag, or default root dir of JSOC)
 
+
 # Don't allow more than one version of this file to run concurrently to avoid race conditions.
-unless (flock(DATA, LOCK_EX | LOCK_NB)) 
+$lock = new drmsNetLocks(&kLockFile);
+
+if (!defined($lock))
 {
    print "$0 is already running. Exiting.\n";
    exit(1);
@@ -729,8 +736,6 @@ if (!$err)
       }
    }
 }
-
-flock(DATA, LOCK_UN);
 
 exit($err);
 
@@ -2072,4 +2077,5 @@ sub CollectFiles
 
 
 __DATA__
-
+I think we need data here in avx.
+__END__
