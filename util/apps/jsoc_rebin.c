@@ -146,6 +146,7 @@ int DoIt(void)
   int outseg = params_get_int(&cmdparams, "outseg");
   int full_header = params_get_int(&cmdparams, "h") || strcmp(requestid, "NA");
   char *in_filename = NULL;
+  DRMS_Record_t *template = NULL;
 
   int iscale, ivec, vec_half;
   double *vector;
@@ -216,193 +217,235 @@ int DoIt(void)
   outRS = drms_create_records(drms_env, nrecs, (char *)outSeries, DRMS_PERMANENT, &status);
   if (status)
     DIE("Output recordset not created");
+      
+  int iSet;
+  int iSubRec;
+  int nSubRecs = 0;
 
-  for (irec=0; irec<nrecs; irec++)
-    {
-    ObsInfo_t *ObsLoc;
-    DRMS_Record_t *outRec, *inRec;
-    DRMS_Segment_t *outSeg, *inSeg;
-        DRMS_Segment_t *orig = NULL;
-    DRMS_Array_t *inArray, *outArray;
-    float *inData, *outData;
-    float val;
-    int quality=0;
- 
-    inRec = inRS->records[irec];
-    quality = drms_getkey_int(inRec, "QUALITY", &status);
-    if (status || (!status && quality >= 0))
+  /* We need the record-set specfication for each record, so loop by recordset subset. */
+  for (iSet = 0, irec = 0; iSet < inRS->ss_n; iSet++)
+  {
+      int hasSeglist = 0;
+      
+      /* For each record, we need to know if the segments it contains came from a record-set specification that had a segment list.
+       * To do that, we have to search for '{' in the specification that resolved to this record. So we need the spec for this record,
+       * which is in inRS->ss_queries[iSet]. */
+      if (strchr(inRS->ss_queries[iSet], '{'))
       {
-          /* Segment loop. */
-          HIterator_t *segIter = NULL;
+          hasSeglist = 1;
+      }
+      
+      nSubRecs = drms_recordset_getssnrecs(inRS, iSet, &status);
+      
+      for (iSubRec = 0; iSubRec < nSubRecs; iSubRec++, irec++)
+      {
+          ObsInfo_t *ObsLoc;
+          DRMS_Record_t *outRec, *inRec;
+          DRMS_Segment_t *outSeg, *inSeg;
+          DRMS_Segment_t *orig = NULL;
+          DRMS_Array_t *inArray, *outArray;
+          float *inData, *outData;
+          float val;
+          int quality=0;
           
-          while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
+          inRec = inRS->records[(inRS->ss_starts)[iSet] + iSubRec];
+          
+          quality = drms_getkey_int(inRec, "QUALITY", &status);
+          if (status || (!status && quality >= 0))
           {
-              /* CAVEAT: There is no check to see if the segment on which this code is operating is a suitable 
-               * segment for this module to process. For example, there is the assumption that the segment 
-               * being processed has two dimensions. Rejecting incompatible segments is something to implement
-               * in the future. */
-              if (inseg >= 0)
+              /* Segment loop. */
+              HIterator_t *segIter = NULL;
+              
+              while ((inSeg = drms_record_nextseg2(inRec, &segIter, 1, &orig)) != NULL)
               {
-                  /* This module was called with the inseg argument (which is the input series' segment number). 
-                   * Process only that segment. But inSeg could be a linked segment, so we have to obtain the
-                   * segment struct in the original series. There is no pointer from the linked segment to
-                   * the original segment. And we do not have the name or number of the original segment. Or we
-                   * didn't, so I made drms_record_nextseg2(). */
-                  if (orig->info->segnum != inseg)
+                  /* CAVEAT: There is no check to see if the segment on which this code is operating is a suitable
+                   * segment for this module to process. For example, there is the assumption that the segment
+                   * being processed has two dimensions. Rejecting incompatible segments is something to implement
+                   * in the future. */
+                  if (inseg >= 0)
                   {
-                      /* Skip this segment. It isn't the one the caller has requested. */
+                      /* This module was called with the inseg argument (which is the input series' segment number).
+                       * Process only that segment. But inSeg could be a linked segment, so we have to obtain the
+                       * segment struct in the original series. There is no pointer from the linked segment to
+                       * the original segment. And we do not have the name or number of the original segment. Or we
+                       * didn't, so I made drms_record_nextseg2(). */
+                      if (orig->info->segnum != inseg)
+                      {
+                          /* Skip this segment. It isn't the one the caller has requested. */
+                          continue;
+                      }
+                  }
+                  
+                  inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
+                  if (status)
+                  {
+                      printf(" No data file found but QUALITY not bad, status=%d\n", status);
+                      drms_free_array(inArray);
                       continue;
                   }
-              }
-              
-              inArray = drms_segment_read(inSeg, DRMS_TYPE_FLOAT, &status);
-              if (status)
-              {
-                  printf(" No data file found but QUALITY not bad, status=%d\n", status);
-                  drms_free_array(inArray);
-                  continue;
-              }
-              if (crop || !as_is)
-              {
-                  ObsLoc = GetObsInfo(inSeg, NULL, &status);
-                  if (!as_is) upNcenter(inArray, ObsLoc);
-                  if (crop) crop_image(inArray, ObsLoc);
-              }
-              else
-              {
-                  ObsLoc = GetMinObsInfo(inSeg, NULL, &status);
-              }
-              
-              int inx, iny, outx, outy, i, j;
-              int in_nx = inArray->axis[0];
-              int in_ny = inArray->axis[1];
-              int out_nx = in_nx * fscale + 0.5;
-              int out_ny = in_ny * fscale + 0.5;
-              int outDims[2] = {out_nx, out_ny};
-              inData = (float *)inArray->data;
-              outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, NULL, &status);
-              outData = (float *)outArray->data;
-              
-              if (fscale > 1.0)
-              {
-                  int out_go = (iscale-1)/2.0 + 0.5;
-                  for (iny = 0; iny < in_ny; iny += 1)
-                      for (inx = 0; inx < in_nx; inx += 1)
-                      {
-                          val = inData[in_nx*iny + inx];
-                          for (j = 0; j < nvector; j += 1)
+                  if (crop || !as_is)
+                  {
+                      ObsLoc = GetObsInfo(inSeg, NULL, &status);
+                      if (!as_is) upNcenter(inArray, ObsLoc);
+                      if (crop) crop_image(inArray, ObsLoc);
+                  }
+                  else
+                  {
+                      ObsLoc = GetMinObsInfo(inSeg, NULL, &status);
+                  }
+                  
+                  int inx, iny, outx, outy, i, j;
+                  int in_nx = inArray->axis[0];
+                  int in_ny = inArray->axis[1];
+                  int out_nx = in_nx * fscale + 0.5;
+                  int out_ny = in_ny * fscale + 0.5;
+                  int outDims[2] = {out_nx, out_ny};
+                  inData = (float *)inArray->data;
+                  outArray = drms_array_create(DRMS_TYPE_FLOAT, 2, outDims, NULL, &status);
+                  outData = (float *)outArray->data;
+                  
+                  if (fscale > 1.0)
+                  {
+                      int out_go = (iscale-1)/2.0 + 0.5;
+                      for (iny = 0; iny < in_ny; iny += 1)
+                          for (inx = 0; inx < in_nx; inx += 1)
                           {
-                              outy = iny*iscale + out_go + j - vec_half;
-                              for (i = 0; i < nvector; i += 1)
+                              val = inData[in_nx*iny + inx];
+                              for (j = 0; j < nvector; j += 1)
                               {
-                                  outx = inx*iscale + out_go + i - vec_half;
-                                  if (outx >= 0 && outx < out_nx && outy >= 0 && outy < out_ny)
-                                      outData[out_nx*outy + outx] = val;
-                              }
-                          }
-                      }
-              }
-              else
-              {
-                  int in_go = (iscale-1)/2.0 + 0.5;
-                  for (outy = 0; outy < out_ny; outy += 1)
-                      for (outx = 0; outx < out_nx; outx += 1)
-                      {
-                          double total = 0.0;
-                          double weight = 0.0;
-                          int nn = 0;
-                          for (j = 0; j < nvector; j += 1)
-                          {
-                              iny = outy*iscale + in_go + j - vec_half;
-                              for (i = 0; i < nvector; i += 1)
-                              {
-                                  inx = outx*iscale + in_go + i - vec_half;
-                                  if (inx >= 0 && inx < in_nx && iny >=0 && iny < in_ny)
+                                  outy = iny*iscale + out_go + j - vec_half;
+                                  for (i = 0; i < nvector; i += 1)
                                   {
-                                      val = inData[in_nx*(iny) + inx];
-                                      if (!drms_ismissing_float(val))
-                                      {
-                                          double w = vector[i]*vector[j];
-                                          total += w*val;
-                                          weight += w;
-                                          nn++;
-                                      }
+                                      outx = inx*iscale + out_go + i - vec_half;
+                                      if (outx >= 0 && outx < out_nx && outy >= 0 && outy < out_ny)
+                                          outData[out_nx*outy + outx] = val;
                                   }
                               }
                           }
-                          outData[out_nx*outy + outx] = (nn > 0 ? total/weight : DRMS_MISSING_FLOAT);
-                      }
-              }
+                  }
+                  else
+                  {
+                      int in_go = (iscale-1)/2.0 + 0.5;
+                      for (outy = 0; outy < out_ny; outy += 1)
+                          for (outx = 0; outx < out_nx; outx += 1)
+                          {
+                              double total = 0.0;
+                              double weight = 0.0;
+                              int nn = 0;
+                              for (j = 0; j < nvector; j += 1)
+                              {
+                                  iny = outy*iscale + in_go + j - vec_half;
+                                  for (i = 0; i < nvector; i += 1)
+                                  {
+                                      inx = outx*iscale + in_go + i - vec_half;
+                                      if (inx >= 0 && inx < in_nx && iny >=0 && iny < in_ny)
+                                      {
+                                          val = inData[in_nx*(iny) + inx];
+                                          if (!drms_ismissing_float(val))
+                                          {
+                                              double w = vector[i]*vector[j];
+                                              total += w*val;
+                                              weight += w;
+                                              nn++;
+                                          }
+                                      }
+                                  }
+                              }
+                              outData[out_nx*outy + outx] = (nn > 0 ? total/weight : DRMS_MISSING_FLOAT);
+                          }
+                  }
+                  
+                  // Use the input array as the best guess for scale and zero
+                  outArray->bzero = inArray->bzero;
+                  outArray->bscale = inArray->bscale;
+                  
+                  drms_free_array(inArray);
+                  
+                  // write data file
+                  outRec = outRS->records[irec];
+                  
+                  /* The original intent was for the output series' segments to parallel the input series' segments.
+                   * However, the names were allowed to vary. So the segment descriptions match, and they are in the
+                   * same order. However, the names given to these descriptions might vary. Therefore, we need to
+                   * look-up output segments by segment number, not name.
+                   *
+                   * If outseg was provided in the arguments, use that. Otherwise, use the segment number of the input
+                   * segment (the original input segment, in case a link was followed).
+                   */
+                  outSeg = drms_segment_lookupnum(outRec, (outseg >= 0) ? outseg : orig->info->segnum);
+                  
+                  if (!outSeg)
+                  {
+                      DIE("Unable to look-up output segment.");
+                  }
+                  
+                  // copy all keywords
+                  drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
+                  
+                  // Now fixup coordinate keywords
+                  // Only CRPIX1,2 and CDELT1,2 and CROTA2 should need repair.
+                  drms_setkey_double(outRec, "CDELT1", ObsLoc->cdelt1/fscale);
+                  drms_setkey_double(outRec, "CDELT2", ObsLoc->cdelt2/fscale);
+                  drms_setkey_double(outRec, "CRPIX1", (ObsLoc->crpix1-0.5) * fscale + 0.5);
+                  drms_setkey_double(outRec, "CRPIX2", (ObsLoc->crpix2-0.5) * fscale + 0.5);
+                  drms_setkey_double(outRec, "CROTA2", ObsLoc->crota2);
+                  
+                  if (strcasecmp(method, "gaussian")==0)
+                      drms_setkey_double(outRec, "FWHM", fwhm);
+                  drms_appendhistory(outRec, history, 1);
+                  drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
+                  if (strcmp(requestid, "NA") != 0)
+                      drms_setkey_string(outRec, "RequestID", requestid);
+                  
+                  // get info for array from input segment
+                  outArray->parent_segment = outSeg;
+                  
+                  drms_setkey_int(outRec, "TOTVALS", out_nx*out_ny);
+                  set_statistics(outSeg, outArray, 1);
+                  
+                  if (full_header)
+                      status = drms_segment_writewithkeys(outSeg, outArray, 0);
+                  else
+                      status = drms_segment_write(outSeg, outArray, 0);
+                  if (status)
+                      DIE("problem writing file");
+                  drms_free_array(outArray);
+                  
+                  if (inseg >= 0)
+                  {
+                      /* The caller requested the processing of a single segment. Exit loop. */
+                      break;
+                  }
+                  
+                  /* If the user did not provide a segment specifier (which means that all segment structs are in the rec->segments container,
+                   * and there was no seglist), then process only the first segment. */
+                  if (inRec->seriesinfo && *inRec->seriesinfo->seriesname)
+                  {
+                     template = drms_template_record(drms_env, inRec->seriesinfo->seriesname, &status);
+                  }
+                  else
+                  {
+                     template = NULL;
+                  }
+
+                  if (status || !template)
+                  {
+                      DIE("Cannot obtain DRMS-record template.");
+                  }
+
+                  if (drms_record_numsegments(inRec) == drms_record_numsegments(template) && !hasSeglist)
+                  {
+                      break;
+                  }
+              } // end of segment loop
               
-              // Use the input array as the best guess for scale and zero
-              outArray->bzero = inArray->bzero;
-              outArray->bscale = inArray->bscale;
-              
-              drms_free_array(inArray);
-              
-              // write data file
-              outRec = outRS->records[irec];
-              
-              /* The original intent was for the output series' segments to parallel the input series' segments. 
-               * However, the names were allowed to vary. So the segment descriptions match, and they are in the
-               * same order. However, the names given to these descriptions might vary. Therefore, we need to 
-               * look-up output segments by segment number, not name. 
-               *
-               * If outseg was provided in the arguments, use that. Otherwise, use the segment number of the input
-               * segment (the original input segment, in case a link was followed).
-               */
-              outSeg = drms_segment_lookupnum(outRec, (outseg >= 0) ? outseg : orig->info->segnum);
-              
-              if (!outSeg)
+              if (segIter)
               {
-                  DIE("Unable to look-up output segment.");
+                  hiter_destroy(&segIter);
               }
-              
-              // copy all keywords
-              drms_copykeys(outRec, inRec, 0, kDRMS_KeyClass_Explicit);
-              
-              // Now fixup coordinate keywords
-              // Only CRPIX1,2 and CDELT1,2 and CROTA2 should need repair.
-              drms_setkey_double(outRec, "CDELT1", ObsLoc->cdelt1/fscale);
-              drms_setkey_double(outRec, "CDELT2", ObsLoc->cdelt2/fscale);
-              drms_setkey_double(outRec, "CRPIX1", (ObsLoc->crpix1-0.5) * fscale + 0.5);
-              drms_setkey_double(outRec, "CRPIX2", (ObsLoc->crpix2-0.5) * fscale + 0.5);
-              drms_setkey_double(outRec, "CROTA2", ObsLoc->crota2);
-              
-              if (strcasecmp(method, "gaussian")==0)
-                  drms_setkey_double(outRec, "FWHM", fwhm);
-              drms_appendhistory(outRec, history, 1);
-              drms_setkey_time(outRec, "DATE", CURRENT_SYSTEM_TIME);
-              if (strcmp(requestid, "NA") != 0)
-                  drms_setkey_string(outRec, "RequestID", requestid);
-              
-              // get info for array from input segment
-              outArray->parent_segment = outSeg;
-              
-              drms_setkey_int(outRec, "TOTVALS", out_nx*out_ny);
-              set_statistics(outSeg, outArray, 1);
-              
-              if (full_header)
-                  status = drms_segment_writewithkeys(outSeg, outArray, 0);
-              else
-                  status = drms_segment_write(outSeg, outArray, 0);
-              if (status)
-                  DIE("problem writing file");
-              drms_free_array(outArray);
-              
-              if (inseg >= 0)
-              {
-                  /* The caller requested the processing of a single segment. Exit loop. */
-                  break;
-              }
-          } // end of segment loop
-          
-          if (segIter)
-          {
-              hiter_destroy(&segIter);
-          }
-      } // record quality check
-    } //end of "irec" loop
+          } // record quality check
+      }
+  } //end of "irec" loop
 
   drms_close_records(inRS, DRMS_FREE_RECORD);
   drms_close_records(outRS, DRMS_INSERT_RECORD);
@@ -664,6 +707,7 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
   char seriesname[DRMS_MAXQUERYLEN];
   char *lbracket;
   char *at = index(inQuery, '@');
+      
   if (at && *at && (strncmp(inQuery,"aia.lev1[", 9)==0 ||
                     strncmp(inQuery,"hmi.lev1[", 9)==0 ||
                     strncmp(inQuery,"aia.lev1_nrt2[",14)==0 ||
@@ -779,6 +823,7 @@ const char *get_input_recset(DRMS_Env_t *drms_env, const char *inQuery)
     strcpy(seriesname, inQuery);
     lbracket = index(seriesname,'[');
     if (lbracket) *lbracket = '\0';
+    
     tmpdir = getenv("TMPDIR");
     if (!tmpdir) tmpdir = "/tmp";
     sprintf(filename, "%s/hg_patchXXXXXX", tmpdir);
