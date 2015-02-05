@@ -1,7 +1,3 @@
-;drk: 4096 x 4096 x 2
-
-
-
 pro flat_inorbit, year, month, day, cam, focus,ftsid,flatfield,time_stamp=time_stamp,drk=drk, write=write
 ; arguments
 ;mandatory input:
@@ -94,9 +90,9 @@ fsn_list=lonarr(1)
 flatfield=fltarr(4096,4096,nfoc)
 
 print, 'get reference flat'
-spawn, 'show_info -q ds="hmi.offpoint_flatfield['+string(cam, format='(i1.1)')+'][2010.03.01-'+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+']" -p', result
+spawn, 'show_info -q ds="hmi.offpoint_flatfield['+string(cam, format='(i1.1)')+'][2010.05.01-'+string(year, format='(i4.4)')+'.'+string(month, format='(i2.2)')+'.'+string(day, format='(i2.2)')+']" -p', result
 ff=fitsio_read_image(result[n_elements(result)-1]+'/offpoint_flatfield.fits')
-
+print, result
 
 
 
@@ -278,9 +274,11 @@ writeu,1,im
 close,1
 
 print, 'calculate flatfield'
-print, "/home/jeneen/cvs/JSOC/bin/linux_x86_64/flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
+;print, "/home/jeneen/cvs/JSOC/bin/linux_x86_64/flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
+print, "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE/flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
 
-spawn, "/home/jeneen/cvs/JSOC/bin/linux_x86_64/flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
+;spawn, "/home/jeneen/cvs/JSOC/bin/linux_x86_64/flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
+spawn, "/home/jsoc/cvs/Development/JSOC/bin/$JSOC_MACHINE/flatfield_iter_int 4096 "+string(nl, format='(i2.2)')+" "+string(cam, format='(i1.1)')+" 110 "+string(fix(radius/2048.0*100.0), format='(i2.2)')
 
 print, 'read flatfield'
 
