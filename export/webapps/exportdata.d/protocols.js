@@ -16,7 +16,7 @@ function ProtocolGetImageDefaults()
   {
   // For now this gets ONLY the value of WAVELNTH for the first record in the export recordset
   $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-  $("RSCountPlace").innerHTML = "Getting count - wait...";
+  // $("RSCountPlace").innerHTML = "Getting count - wait...";
   WaveLength = 0;
   var RecordSet = $("ExportRecordSet").value;
   var SampleRecord;
