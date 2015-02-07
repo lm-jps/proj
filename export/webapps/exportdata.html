@@ -32,12 +32,12 @@ serverMap["jsoc2"] = "hmidb";
 serverMap["jsoc2.stanford.edu"] = "hmidb";
 
 // var JSOC_INFO = "jsoc_info_test";
-var JSOC_FETCH = "jsoc_fetch_test";
+// var JSOC_FETCH = "jsoc_fetch_test";
 // var LOOKDATA = "lookdata2";
 
 var JSOC_INFO = "jsoc_info";
 var JSOC_INFO_X = "jsoc_info_x";
-// var JSOC_FETCH = "jsoc_fetch";
+var JSOC_FETCH = "jsoc_fetch";
 var JSOC_FETCH_X = "jsoc_fetch_x";
 var LOOKDATA = "lookdata";
 var PARSE_RECSET = 'drms_parserecset';
@@ -961,9 +961,11 @@ function GetDefaultFormat()
     // will do a check to make sure that an external user isn't attempting to use the internal db for series that are not
     // whitelisted.
     var script = null;
-    var arguments = {"ds" : RecordSet, "op" : "series_struct", "l" : 1 };
+// var arguments = {"ds" : RecordSet, "op" : "series_struct", "l" : 1 };
+var arguments = {"ds" : RecordSet, "op" : "series_struct"};
     
-    if (intSeries.length > 0)
+// if (intSeries.length > 0)
+if (0 && intSeries.length > 0)
     {
         arguments.series = intSeries.join();
         script = JSOC_INFO_X; // Uses internal db.
@@ -1262,7 +1264,7 @@ function SetProcessing(ichecked)
     {
     $(ExportProcessingOptions[0].id).checked = true;
     }
-  if (ichecked > 0) $(ExportProcessingOptions[0].id).checked = false;
+  if (ichecked > 0) $(ExportProcessingOptions[0].id).checked = false; // this will apparently never happen
   ExportProcessingOK = 0;
   // Add recordLimit FIRST always.
   ExportProcessingArgs = "n=" + RecordLimit;
