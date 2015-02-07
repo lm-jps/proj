@@ -460,7 +460,8 @@ function ImPatchSet(param)
 //  0 set in ImPatchCheck
 //  1 set onload
 //  2 set by Reset params button
-//  3 set by Update RecrodSet Times button
+//  3 set by Update RecordSet Times button
+
 function ImPatchCheck()
   {
   if (ImResetParams==2)
@@ -864,7 +865,6 @@ function MaprojCheck()
   var isok = 1;
   var args = "Maproj";
   var MaprojLocOption;
-// alert("MaprojCheck, RecordCountNeeded="+RecordCountNeeded+", default start,stop="+defaultStartUsed+","+defaultStopUsed);
   if (RecordCountNeeded)
     {
     ExportNewRS();
@@ -977,7 +977,6 @@ function MaprojCheck()
     var oldDimX = dims.substring(0,dims.indexOf("x"));
     var oldDimY = dims.substring(dims.indexOf("x")+1);
     MaprojSizeRatio = (newDimX * newDimY) / (oldDimX * oldDimY);
-// alert("newDimX="+newDimX+" newDimY="+newDimY+" oldDimX="+oldDimX+" oldDimY="+oldDimY+" MaprojSizeRatio="+MaprojSizeRatio+" prevSizeRatio="+SizeRatio);
     }
 
   ExportProcessingOptions[MaprojOption].Size = MaprojSizeRatio;
