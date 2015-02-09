@@ -83,8 +83,8 @@ use File::Path qw(mkpath remove_tree);
 use File::Spec;
 use Cwd qw(chdir getcwd realpath); # need to override chdir so that $ENV{'PWD'} is changed when chdir is called.
 use Data::Dumper;
-use FindBin qw($Bin);
-use lib "$Bin/../../../base/libs/perl";
+use FindBin qw($RealBin);
+use lib "$RealBin/../../../base/libs/perl";
 use drmsLocks;
 
 use constant kLockFile     => "/home/jsoc/locks/prodbuildlck.txt";
