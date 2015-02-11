@@ -65,7 +65,7 @@ function processingGetRecInfo(DoCheck, n)
   new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + JSOC_INFO,
     {
     method: 'get',
-    parameters: {"ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded, "seg" : segsneeded },
+    parameters: {"ds" : RecordSet, "op" : "rs_list", "n" : n, "key" : keysneeded, "seg" : segsneeded, "l" : 1 },
 
     onSuccess: function(transport, json)
       {
