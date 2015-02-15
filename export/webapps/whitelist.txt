@@ -1,4 +1,0 @@
-hmi.TDKernels
-hmi.tdpixlist
-su_tplarson.corr_vw_V_sht_modes
-hmi.MHDcorona_daily_nrt
