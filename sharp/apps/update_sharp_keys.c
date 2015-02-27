@@ -259,7 +259,13 @@ int DoIt(void)
 	float *jz_smooth = (float *) (malloc(nxny * sizeof(float)));
 	float *err_term1  = (float *) (malloc(nxny * sizeof(float)));
 	float *err_term2  = (float *) (malloc(nxny * sizeof(float)));
-
+	float *err_termA   = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termB   = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termAt  = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termBt  = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termAh  = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termBh  = (float *) (calloc(nxny, sizeof(float)));
+  
         // ephemeris variables
 	float  cdelt1_orig, cdelt1, dsun_obs, imcrpix1, imcrpix2, crpix1, crpix2;
 	double rsun_ref, rsun_obs;
@@ -270,7 +276,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.11 2015/01/25 18:30:34 mbobra Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.12 2015/02/27 19:50:51 mbobra Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -504,7 +510,7 @@ int DoIt(void)
 
               // Then take the derivative of Bt
 	      if (computeBtotalderivative(bt, dims, &mean_derivative_btotal, mask, bitmask, derx_bt, dery_bt, bt_err, 
-                                          &mean_derivative_btotal_err))
+                                          &mean_derivative_btotal_err, err_termAt, err_termBt))
               {
 	         mean_derivative_btotal     = DRMS_MISSING_FLOAT;
 	         mean_derivative_btotal_err = DRMS_MISSING_FLOAT;
@@ -527,7 +533,7 @@ int DoIt(void)
    	      computeBh(bx_err, by_err, bh_err, bx, by, bz, bh, dims, &mean_hf, mask, bitmask);
 
               // Then take the derivative of Bh
-	      if (computeBhderivative(bh, bh_err, dims, &mean_derivative_bh, &mean_derivative_bh_err, mask, bitmask, derx_bh, dery_bh))
+	      if (computeBhderivative(bh, bh_err, dims, &mean_derivative_bh, &mean_derivative_bh_err, mask, bitmask, derx_bh, dery_bh, err_termAh, err_termBh))
               {
 	         mean_derivative_bh       = DRMS_MISSING_FLOAT;
                  mean_derivative_bh_err   = DRMS_MISSING_FLOAT;
@@ -547,7 +553,7 @@ int DoIt(void)
            if (meangbzflag)
            {
               // Compute Bz derivative
-              if (computeBzderivative(bz, bz_err, dims, &mean_derivative_bz, &mean_derivative_bz_err, mask, bitmask, derx_bz, dery_bz))
+              if (computeBzderivative(bz, bz_err, dims, &mean_derivative_bz, &mean_derivative_bz_err, mask, bitmask, derx_bz, dery_bz, err_termA, err_termB))
               {
 	         mean_derivative_bz     = DRMS_MISSING_FLOAT; 
                  mean_derivative_bz_err = DRMS_MISSING_FLOAT; 
@@ -786,9 +792,16 @@ int DoIt(void)
         free(pmap);
         free(p1pad);
         free(pmapn);
+
+        // free the arrays that are related to the numerical derivatives
         free(err_term2);
         free(err_term1);
-
+        free(err_termB);
+        free(err_termA);
+        free(err_termBt);
+        free(err_termAt);
+        free(err_termBh);
+        free(err_termAh);
 
 	} //endfor
 

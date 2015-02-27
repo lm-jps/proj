@@ -87,14 +87,14 @@ int computeAbsFlux(float *bz_err, float *bz, int *dims, float *absFlux,
     
 	for (i = 0; i < nx; i++)
 	{
-		for (j = 0; j < ny; j++)
-		{
+	   for (j = 0; j < ny; j++)
+	   {
             if ( mask[j * nx + i] < 70 || bitmask[j * nx + i] < 30 ) continue;
             if isnan(bz[j * nx + i]) continue;
             sum += (fabs(bz[j * nx + i]));
             err += bz_err[j * nx + i]*bz_err[j * nx + i];
             count_mask++;
-		}
+	   }
 	}
     
     *mean_vf_ptr     = sum*cdelt1*cdelt1*(rsun_ref/rsun_obs)*(rsun_ref/rsun_obs)*100.0*100.0;
@@ -246,7 +246,7 @@ int computeB_total(float *bx_err, float *by_err, float *bz_err, float *bt_err, f
 /*===========================================*/
 /* Example function 5:  Derivative of B_Total SQRT( (dBt/dx)^2 + (dBt/dy)^2 ) */
 
-int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_ptr, int *mask, int *bitmask, float *derx_bt, float *dery_bt, float *bt_err, float *mean_derivative_btotal_err_ptr)
+int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_ptr, int *mask, int *bitmask, float *derx_bt, float *dery_bt, float *bt_err, float *mean_derivative_btotal_err_ptr, float *err_termAt, float *err_termBt)
 {
     
     int nx = dims[0];
@@ -263,18 +263,20 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
     /* brute force method of calculating the derivative (no consideration for edges) */
     for (i = 1; i <= nx-2; i++)
     {
-	    for (j = 0; j <= ny-1; j++)
+	for (j = 0; j <= ny-1; j++)
         {
-            derx_bt[j * nx + i] = (bt[j * nx + i+1] - bt[j * nx + i-1])*0.5;
+           derx_bt[j * nx + i] = (bt[j * nx + i+1] - bt[j * nx + i-1])*0.5;
+           err_termAt[j * nx + i] = (((bt[j * nx + (i+1)]-bt[j * nx + (i-1)])*(bt[j * nx + (i+1)]-bt[j * nx + (i-1)])) * (bt_err[j * nx + (i+1)]*bt_err[j * nx + (i+1)] + bt_err[j * nx + (i-1)]*bt_err[j * nx + (i-1)])) ;
         }
     }
     
     /* brute force method of calculating the derivative (no consideration for edges) */
     for (i = 0; i <= nx-1; i++)
     {
-	    for (j = 1; j <= ny-2; j++)
+	for (j = 1; j <= ny-2; j++)
         {
-            dery_bt[j * nx + i] = (bt[(j+1) * nx + i] - bt[(j-1) * nx + i])*0.5;
+           dery_bt[j * nx + i] = (bt[(j+1) * nx + i] - bt[(j-1) * nx + i])*0.5;
+           err_termBt[j * nx + i] = (((bt[(j+1) * nx + i]-bt[(j-1) * nx + i])*(bt[(j+1) * nx + i]-bt[(j-1) * nx + i])) * (bt_err[(j+1) * nx + i]*bt_err[(j+1) * nx + i] + bt_err[(j-1) * nx + i]*bt_err[(j-1) * nx + i])) ;
         }
     }
     
@@ -303,8 +305,8 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
     {
         dery_bt[j * nx + i] = ( (3*bt[j * nx + i]) + (-4*bt[(j-1) * nx + i]) - (-bt[(j-2) * nx + i]) )*0.5;
     }
-    
-    
+
+    // Calculate the sum only
     for (i = 1; i <= nx-2; i++)
     {
         for (j = 1; j <= ny-2; j++)
@@ -320,8 +322,8 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
             if isnan(derx_bt[j * nx + i]) continue;
             if isnan(dery_bt[j * nx + i]) continue;
             sum += sqrt( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  ); /* Units of Gauss */
-            err += (((bt[(j+1) * nx + i]-bt[(j-1) * nx + i])*(bt[(j+1) * nx + i]-bt[(j-1) * nx + i])) * (bt_err[(j+1) * nx + i]*bt_err[(j+1) * nx + i] + bt_err[(j-1) * nx + i]*bt_err[(j-1) * nx + i])) / (16.0*( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  ))+
-            (((bt[j * nx + (i+1)]-bt[j * nx + (i-1)])*(bt[j * nx + (i+1)]-bt[j * nx + (i-1)])) * (bt_err[j * nx + (i+1)]*bt_err[j * nx + (i+1)] + bt_err[j * nx + (i-1)]*bt_err[j * nx + (i-1)])) / (16.0*( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  )) ;
+            err += err_termBt[j * nx + i] / (16.0*( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  ))+
+                   err_termAt[j * nx + i] / (16.0*( derx_bt[j * nx + i]*derx_bt[j * nx + i]  + dery_bt[j * nx + i]*dery_bt[j * nx + i]  )) ;
             count_mask++;
         }
     }
@@ -338,7 +340,7 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
 /*===========================================*/
 /* Example function 6:  Derivative of Bh SQRT( (dBh/dx)^2 + (dBh/dy)^2 ) */
 
-int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivative_bh_ptr, float *mean_derivative_bh_err_ptr, int *mask, int *bitmask, float *derx_bh, float *dery_bh)
+int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivative_bh_ptr, float *mean_derivative_bh_err_ptr, int *mask, int *bitmask, float *derx_bh, float *dery_bh, float *err_termAh, float *err_termBh)
 {
     
     int nx = dims[0];
@@ -355,19 +357,21 @@ int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivat
     /* brute force method of calculating the derivative (no consideration for edges) */
     for (i = 1; i <= nx-2; i++)
     {
-	    for (j = 0; j <= ny-1; j++)
+	for (j = 0; j <= ny-1; j++)
         {
-            derx_bh[j * nx + i] = (bh[j * nx + i+1] - bh[j * nx + i-1])*0.5;
+           derx_bh[j * nx + i] = (bh[j * nx + i+1] - bh[j * nx + i-1])*0.5;
+           err_termAh[j * nx + i] = (((bh[j * nx + (i+1)]-bh[j * nx + (i-1)])*(bh[j * nx + (i+1)]-bh[j * nx + (i-1)])) * (bh_err[j * nx + (i+1)]*bh_err[j * nx + (i+1)] + bh_err[j * nx + (i-1)]*bh_err[j * nx + (i-1)]));
         }
     }
     
     /* brute force method of calculating the derivative (no consideration for edges) */
     for (i = 0; i <= nx-1; i++)
     {
-	    for (j = 1; j <= ny-2; j++)
-        {
-            dery_bh[j * nx + i] = (bh[(j+1) * nx + i] - bh[(j-1) * nx + i])*0.5;
-        }
+       for (j = 1; j <= ny-2; j++)
+       {
+          dery_bh[j * nx + i] = (bh[(j+1) * nx + i] - bh[(j-1) * nx + i])*0.5;
+          err_termBh[j * nx + i] = (((bh[ (j+1) * nx + i]-bh[(j-1) * nx + i])*(bh[(j+1) * nx + i]-bh[(j-1) * nx + i])) * (bh_err[(j+1) * nx + i]*bh_err[(j+1) * nx + i] + bh_err[(j-1) * nx + i]*bh_err[(j-1) * nx + i]));
+       }
     }
     
     
@@ -412,8 +416,8 @@ int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivat
             if isnan(derx_bh[j * nx + i]) continue;
             if isnan(dery_bh[j * nx + i]) continue;
             sum += sqrt( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  ); /* Units of Gauss */
-            err += (((bh[(j+1) * nx + i]-bh[(j-1) * nx + i])*(bh[(j+1) * nx + i]-bh[(j-1) * nx + i])) * (bh_err[(j+1) * nx + i]*bh_err[(j+1) * nx + i] + bh_err[(j-1) * nx + i]*bh_err[(j-1) * nx + i])) / (16.0*( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  ))+
-            (((bh[j * nx + (i+1)]-bh[j * nx + (i-1)])*(bh[j * nx + (i+1)]-bh[j * nx + (i-1)])) * (bh_err[j * nx + (i+1)]*bh_err[j * nx + (i+1)] + bh_err[j * nx + (i-1)]*bh_err[j * nx + (i-1)])) / (16.0*( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  )) ;
+            err += err_termBh[j * nx + i] / (16.0*( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  ))+
+                   err_termAh[j * nx + i] / (16.0*( derx_bh[j * nx + i]*derx_bh[j * nx + i]  + dery_bh[j * nx + i]*dery_bh[j * nx + i]  )) ;
             count_mask++;
         }
     }
@@ -429,7 +433,7 @@ int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivat
 /*===========================================*/
 /* Example function 7:  Derivative of B_vertical SQRT( (dBz/dx)^2 + (dBz/dy)^2 ) */
 
-int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivative_bz_ptr, float *mean_derivative_bz_err_ptr, int *mask, int *bitmask, float *derx_bz, float *dery_bz)
+int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivative_bz_ptr, float *mean_derivative_bz_err_ptr, int *mask, int *bitmask, float *derx_bz, float *dery_bz, float *err_termA, float *err_termB)
 {
     
     int nx = dims[0];
@@ -437,59 +441,56 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
     int i = 0;
     int j = 0;
     int count_mask = 0;
-	double sum = 0.0;
+    double sum = 0.0;
     double err = 0.0;
-	*mean_derivative_bz_ptr = 0.0;
+    *mean_derivative_bz_ptr = 0.0;
     
-	if (nx <= 0 || ny <= 0) return 1;
+    if (nx <= 0 || ny <= 0) return 1;
     
     /* brute force method of calculating the derivative (no consideration for edges) */
     for (i = 1; i <= nx-2; i++)
     {
-	    for (j = 0; j <= ny-1; j++)
+	for (j = 0; j <= ny-1; j++)
         {
-            if isnan(bz[j * nx + i]) continue;
-            derx_bz[j * nx + i] = (bz[j * nx + i+1] - bz[j * nx + i-1])*0.5;
+           derx_bz[j * nx + i] = (bz[j * nx + i+1] - bz[j * nx + i-1])*0.5;
+           err_termA[j * nx + i] = (((bz[j * nx + (i+1)]-bz[j * nx + (i-1)])*(bz[j * nx + (i+1)]-bz[j * nx + (i-1)])) * (bz_err[j * nx + (i+1)]*bz_err[j * nx + (i+1)] + bz_err[j * nx + (i-1)]*bz_err[j * nx + (i-1)]));
         }
     }
     
     /* brute force method of calculating the derivative (no consideration for edges) */
     for (i = 0; i <= nx-1; i++)
     {
-	    for (j = 1; j <= ny-2; j++)
+        for (j = 1; j <= ny-2; j++)
         {
-            if isnan(bz[j * nx + i]) continue;
-            dery_bz[j * nx + i] = (bz[(j+1) * nx + i] - bz[(j-1) * nx + i])*0.5;
+           dery_bz[j * nx + i] = (bz[(j+1) * nx + i] - bz[(j-1) * nx + i])*0.5;
+           err_termB[j * nx + i] = (((bz[(j+1) * nx + i]-bz[(j-1) * nx + i])*(bz[(j+1) * nx + i]-bz[(j-1) * nx + i])) * (bz_err[(j+1) * nx + i]*bz_err[(j+1) * nx + i] + bz_err[(j-1) * nx + i]*bz_err[(j-1) * nx + i]));
         }
     }
     
-    
-    /* consider the edges */
+    /* consider the edges for the arrays that contribute to the variable "sum" in the computation below.
+    ignore the edges for err_termA and err_term B as those arrays have been initialized to zero. 
+    this is okay because the error term will ultimately not include the edge pixels as they are selected out by the mask and bitmask arrays.*/
     i=0;
     for (j = 0; j <= ny-1; j++)
     {
-        if isnan(bz[j * nx + i]) continue;
         derx_bz[j * nx + i] = ( (-3*bz[j * nx + i]) + (4*bz[j * nx + (i+1)]) - (bz[j * nx + (i+2)]) )*0.5;
     }
     
     i=nx-1;
     for (j = 0; j <= ny-1; j++)
     {
-        if isnan(bz[j * nx + i]) continue;
         derx_bz[j * nx + i] = ( (3*bz[j * nx + i]) + (-4*bz[j * nx + (i-1)]) - (-bz[j * nx + (i-2)]) )*0.5;
     }
     
     j=0;
     for (i = 0; i <= nx-1; i++)
     {
-        if isnan(bz[j * nx + i]) continue;
         dery_bz[j * nx + i] = ( (-3*bz[j*nx + i]) + (4*bz[(j+1) * nx + i]) - (bz[(j+2) * nx + i]) )*0.5;
     }
     
     j=ny-1;
     for (i = 0; i <= nx-1; i++)
     {
-        if isnan(bz[j * nx + i]) continue;
         dery_bz[j * nx + i] = ( (3*bz[j * nx + i]) + (-4*bz[(j-1) * nx + i]) - (-bz[(j-2) * nx + i]) )*0.5;
     }
     
@@ -508,16 +509,14 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
             if isnan(bz_err[j * nx + i])  continue;
             if isnan(derx_bz[j * nx + i]) continue;
             if isnan(dery_bz[j * nx + i]) continue;
-            sum += sqrt( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  ); /* Units of Gauss */
-            err += (((bz[(j+1) * nx + i]-bz[(j-1) * nx + i])*(bz[(j+1) * nx + i]-bz[(j-1) * nx + i])) * (bz_err[(j+1) * nx + i]*bz_err[(j+1) * nx + i] + bz_err[(j-1) * nx + i]*bz_err[(j-1) * nx + i])) /
-            (16.0*( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  )) +
-            (((bz[j * nx + (i+1)]-bz[j * nx + (i-1)])*(bz[j * nx + (i+1)]-bz[j * nx + (i-1)])) * (bz_err[j * nx + (i+1)]*bz_err[j * nx + (i+1)] + bz_err[j * nx + (i-1)]*bz_err[j * nx + (i-1)])) /
-            (16.0*( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  )) ;
+            sum += sqrt( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i] ); /* Units of Gauss */
+            err += err_termB[j * nx + i] / (16.0*( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  )) +
+                   err_termA[j * nx + i] / (16.0*( derx_bz[j * nx + i]*derx_bz[j * nx + i]  + dery_bz[j * nx + i]*dery_bz[j * nx + i]  )) ;
             count_mask++;
         }
     }
     
-	*mean_derivative_bz_ptr = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
+    *mean_derivative_bz_ptr = (sum)/(count_mask); // would be divided by ((nx-2)*(ny-2)) if shape of count_mask = shape of magnetogram
     *mean_derivative_bz_err_ptr = (sqrt(err))/(count_mask); // error in the quantity (sum)/(count_mask)
     //printf("MEANGBZ=%f\n",*mean_derivative_bz_ptr);
     //printf("MEANGBZ_err=%f\n",*mean_derivative_bz_err_ptr);
@@ -580,21 +579,19 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
     
     for (i = 1; i <= nx-2; i++)
     {
-	    for (j = 0; j <= ny-1; j++)
+	for (j = 0; j <= ny-1; j++)
         {
-            if isnan(by[j * nx + i]) continue;
-            derx[j * nx + i]      = (by[j * nx + i+1] - by[j * nx + i-1])*0.5;
-            err_term1[j * nx + i] = (by_err[j * nx + i+1])*(by_err[j * nx + i+1]) + (by_err[j * nx + i-1])*(by_err[j * nx + i-1]);
+           derx[j * nx + i]      = (by[j * nx + i+1] - by[j * nx + i-1])*0.5;
+           err_term1[j * nx + i] = (by_err[j * nx + i+1])*(by_err[j * nx + i+1]) + (by_err[j * nx + i-1])*(by_err[j * nx + i-1]);
         }
     }
     
     for (i = 0; i <= nx-1; i++)
     {
-	    for (j = 1; j <= ny-2; j++)
+	for (j = 1; j <= ny-2; j++)
         {
-            if isnan(bx[j * nx + i]) continue;
-            dery[j * nx + i]      = (bx[(j+1) * nx + i] - bx[(j-1) * nx + i])*0.5;
-            err_term2[j * nx + i] = (bx_err[(j+1) * nx + i])*(bx_err[(j+1) * nx + i]) + (bx_err[(j-1) * nx + i])*(bx_err[(j-1) * nx + i]);
+           dery[j * nx + i]      = (bx[(j+1) * nx + i] - bx[(j-1) * nx + i])*0.5;
+           err_term2[j * nx + i] = (bx_err[(j+1) * nx + i])*(bx_err[(j+1) * nx + i]) + (bx_err[(j-1) * nx + i])*(bx_err[(j-1) * nx + i]);
         }
     }
 
@@ -602,7 +599,6 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
     i=0;
     for (j = 0; j <= ny-1; j++)
     {
-        if isnan(by[j * nx + i]) continue;
         derx[j * nx + i]      = ( (-3*by[j * nx + i]) + (4*by[j * nx + (i+1)]) - (by[j * nx + (i+2)]) )*0.5;
         err_term1[j * nx + i] = ( (3*by_err[j * nx + i])*(3*by_err[j * nx + i]) + (4*by_err[j * nx + (i+1)])*(4*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i+2)])*(by_err[j * nx + (i+2)]) );
     }
@@ -610,7 +606,6 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
     i=nx-1;
     for (j = 0; j <= ny-1; j++)
     {
-        if isnan(by[j * nx + i]) continue;
         derx[j * nx + i]      = ( (3*by[j * nx + i]) + (-4*by[j * nx + (i-1)]) - (-by[j * nx + (i-2)]) )*0.5;
         err_term1[j * nx + i] = ( (3*by_err[j * nx + i])*(3*by_err[j * nx + i]) + (4*by_err[j * nx + (i+1)])*(4*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i+2)])*(by_err[j * nx + (i+2)]) );
     }
@@ -618,7 +613,6 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
     j=0;
     for (i = 0; i <= nx-1; i++)
     {
-        if isnan(bx[j * nx + i]) continue;
         dery[j * nx + i]      = ( (-3*bx[j*nx + i]) + (4*bx[(j+1) * nx + i]) - (bx[(j+2) * nx + i]) )*0.5;
         err_term2[j * nx + i] = ( (3*bx_err[j*nx + i])*(3*bx_err[j*nx + i]) + (4*bx_err[(j+1) * nx + i])*(4*bx_err[(j+1) * nx + i]) + (bx_err[(j+2) * nx + i])*(bx_err[(j+2) * nx + i]) );
     }
@@ -626,7 +620,6 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
     j=ny-1;
     for (i = 0; i <= nx-1; i++)
     {
-        if isnan(bx[j * nx + i]) continue;
         dery[j * nx + i]      = ( (3*bx[j * nx + i]) + (-4*bx[(j-1) * nx + i]) - (-bx[(j-2) * nx + i]) )*0.5;
         err_term2[j * nx + i] = ( (3*bx_err[j*nx + i])*(3*bx_err[j*nx + i]) + (4*bx_err[(j+1) * nx + i])*(4*bx_err[(j+1) * nx + i]) + (bx_err[(j+2) * nx + i])*(bx_err[(j+2) * nx + i]) );
 

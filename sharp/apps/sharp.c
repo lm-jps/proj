@@ -1972,11 +1972,17 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         float *jz_err  = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
-        float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
-	float *err_term1  = (float *) (malloc(nxny * sizeof(float)));
-	float *err_term2  = (float *) (malloc(nxny * sizeof(float)));
+        float *jz_rms_err  = (float *) (malloc(nxny * sizeof(float)));
+	float *err_term1   = (float *) (malloc(nxny * sizeof(float)));
+	float *err_term2   = (float *) (malloc(nxny * sizeof(float)));
+	float *err_termA   = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termB   = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termAt  = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termBt  = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termAh  = (float *) (calloc(nxny, sizeof(float)));
+	float *err_termBh  = (float *) (calloc(nxny, sizeof(float)));
      
-        // define some values for the R calculation 
+        // define some values for the R calculation
         int scale = round(2.0/cdelt1);
         int nx1 = nx/scale;
         int ny1 = ny/scale;
@@ -2022,21 +2028,21 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	computeB_total(bx_err, by_err, bz_err, bt_err, bx, by, bz, bt, dims, mask, bitmask);
 	
 	if (computeBtotalderivative(bt, dims, &(swKeys_ptr->mean_derivative_btotal), mask, bitmask, derx_bt, 
-                                    dery_bt, bt_err, &(swKeys_ptr->mean_derivative_btotal_err)))
+                                    dery_bt, bt_err, &(swKeys_ptr->mean_derivative_btotal_err), err_termAt, err_termBt))
         {
 		swKeys_ptr->mean_derivative_btotal = DRMS_MISSING_FLOAT;
 		swKeys_ptr->mean_derivative_btotal_err = DRMS_MISSING_FLOAT;
         }
 	
 	if (computeBhderivative(bh, bh_err, dims, &(swKeys_ptr->mean_derivative_bh), 
-                                &(swKeys_ptr->mean_derivative_bh_err), mask, bitmask, derx_bh, dery_bh))
+                                &(swKeys_ptr->mean_derivative_bh_err), mask, bitmask, derx_bh, dery_bh, err_termAh, err_termBh))
         {
 		swKeys_ptr->mean_derivative_bh = DRMS_MISSING_FLOAT;
                 swKeys_ptr->mean_derivative_bh_err = DRMS_MISSING_FLOAT;
 	}
     
 	if (computeBzderivative(bz, bz_err, dims, &(swKeys_ptr->mean_derivative_bz), &(swKeys_ptr->mean_derivative_bz_err), 
-                                mask, bitmask, derx_bz, dery_bz))
+                                mask, bitmask, derx_bz, dery_bz, err_termA, err_termB))
         {
 		swKeys_ptr->mean_derivative_bz = DRMS_MISSING_FLOAT; // If fail, fill in NaN
                 swKeys_ptr->mean_derivative_bz_err = DRMS_MISSING_FLOAT;
@@ -2121,7 +2127,6 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
                 swKeys_ptr->epsz              = DRMS_MISSING_FLOAT;
 
 	}
-
 	
 	// Clean up the arrays
 	
@@ -2144,8 +2149,16 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	free(bt_err); free(bh_err);  free(jz_err);
         free(jz_err_squared); free(jz_rms_err);
         free(jz_err_squared_smooth);
+
+        // free the arrays that are related to the numerical derivatives
         free(err_term2);
         free(err_term1);
+        free(err_termB);
+        free(err_termA);
+        free(err_termBt);
+        free(err_termAt);
+        free(err_termBh);
+        free(err_termAh);
 
         // free the arrays that are related to the r calculation     
         free(rim);
@@ -2311,7 +2324,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.33 2015/01/25 18:28:41 mbobra Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.34 2015/02/27 19:50:37 mbobra Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
