@@ -280,8 +280,9 @@ int computeBtotalderivative(float *bt, int *dims, float *mean_derivative_btotal_
         }
     }
     
-    
-    /* consider the edges */
+    /* consider the edges for the arrays that contribute to the variable "sum" in the computation below.
+    ignore the edges for the error terms as those arrays have been initialized to zero. 
+    this is okay because the error term will ultimately not include the edge pixels as they are selected out by the mask and bitmask arrays.*/
     i=0;
     for (j = 0; j <= ny-1; j++)
     {
@@ -374,8 +375,9 @@ int computeBhderivative(float *bh, float *bh_err, int *dims, float *mean_derivat
        }
     }
     
-    
-    /* consider the edges */
+    /* consider the edges for the arrays that contribute to the variable "sum" in the computation below.
+    ignore the edges for the error terms as those arrays have been initialized to zero. 
+    this is okay because the error term will ultimately not include the edge pixels as they are selected out by the mask and bitmask arrays.*/
     i=0;
     for (j = 0; j <= ny-1; j++)
     {
@@ -468,7 +470,7 @@ int computeBzderivative(float *bz, float *bz_err, int *dims, float *mean_derivat
     }
     
     /* consider the edges for the arrays that contribute to the variable "sum" in the computation below.
-    ignore the edges for err_termA and err_term B as those arrays have been initialized to zero. 
+    ignore the edges for the error terms as those arrays have been initialized to zero. 
     this is okay because the error term will ultimately not include the edge pixels as they are selected out by the mask and bitmask arrays.*/
     i=0;
     for (j = 0; j <= ny-1; j++)
@@ -595,34 +597,32 @@ int computeJz(float *bx_err, float *by_err, float *bx, float *by, int *dims, flo
         }
     }
 
-    // consider the edges
+    /* consider the edges for the arrays that contribute to the variable "sum" in the computation below.
+    ignore the edges for the error terms as those arrays have been initialized to zero. 
+    this is okay because the error term will ultimately not include the edge pixels as they are selected out by the mask and bitmask arrays.*/
+
     i=0;
     for (j = 0; j <= ny-1; j++)
     {
         derx[j * nx + i]      = ( (-3*by[j * nx + i]) + (4*by[j * nx + (i+1)]) - (by[j * nx + (i+2)]) )*0.5;
-        err_term1[j * nx + i] = ( (3*by_err[j * nx + i])*(3*by_err[j * nx + i]) + (4*by_err[j * nx + (i+1)])*(4*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i+2)])*(by_err[j * nx + (i+2)]) );
     }
     
     i=nx-1;
     for (j = 0; j <= ny-1; j++)
     {
         derx[j * nx + i]      = ( (3*by[j * nx + i]) + (-4*by[j * nx + (i-1)]) - (-by[j * nx + (i-2)]) )*0.5;
-        err_term1[j * nx + i] = ( (3*by_err[j * nx + i])*(3*by_err[j * nx + i]) + (4*by_err[j * nx + (i+1)])*(4*by_err[j * nx + (i+1)]) + (by_err[j * nx + (i+2)])*(by_err[j * nx + (i+2)]) );
     }
     
     j=0;
     for (i = 0; i <= nx-1; i++)
     {
         dery[j * nx + i]      = ( (-3*bx[j*nx + i]) + (4*bx[(j+1) * nx + i]) - (bx[(j+2) * nx + i]) )*0.5;
-        err_term2[j * nx + i] = ( (3*bx_err[j*nx + i])*(3*bx_err[j*nx + i]) + (4*bx_err[(j+1) * nx + i])*(4*bx_err[(j+1) * nx + i]) + (bx_err[(j+2) * nx + i])*(bx_err[(j+2) * nx + i]) );
     }
     
     j=ny-1;
     for (i = 0; i <= nx-1; i++)
     {
         dery[j * nx + i]      = ( (3*bx[j * nx + i]) + (-4*bx[(j-1) * nx + i]) - (-bx[(j-2) * nx + i]) )*0.5;
-        err_term2[j * nx + i] = ( (3*bx_err[j*nx + i])*(3*bx_err[j*nx + i]) + (4*bx_err[(j+1) * nx + i])*(4*bx_err[(j+1) * nx + i]) + (bx_err[(j+2) * nx + i])*(bx_err[(j+2) * nx + i]) );
-
     }
 
     

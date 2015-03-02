@@ -1973,8 +1973,8 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
         float *jz_err_squared = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
         float *jz_rms_err  = (float *) (malloc(nxny * sizeof(float)));
-	float *err_term1   = (float *) (malloc(nxny * sizeof(float)));
-	float *err_term2   = (float *) (malloc(nxny * sizeof(float)));
+	float *err_term1   = (float *) (calloc(nxny, sizeof(float)));
+	float *err_term2   = (float *) (calloc(nxny, sizeof(float)));
 	float *err_termA   = (float *) (calloc(nxny, sizeof(float)));
 	float *err_termB   = (float *) (calloc(nxny, sizeof(float)));
 	float *err_termAt  = (float *) (calloc(nxny, sizeof(float)));
@@ -2324,7 +2324,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.34 2015/02/27 19:50:37 mbobra Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.35 2015/03/02 21:41:15 mbobra Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);

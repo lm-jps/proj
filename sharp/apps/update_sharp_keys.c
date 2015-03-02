@@ -257,8 +257,8 @@ int DoIt(void)
         float *jz_rms_err = (float *) (malloc(nxny * sizeof(float)));
         float *jz_err_squared_smooth = (float *) (malloc(nxny * sizeof(float)));
 	float *jz_smooth = (float *) (malloc(nxny * sizeof(float)));
-	float *err_term1  = (float *) (malloc(nxny * sizeof(float)));
-	float *err_term2  = (float *) (malloc(nxny * sizeof(float)));
+	float *err_term1   = (float *) (calloc(nxny, sizeof(float)));
+	float *err_term2   = (float *) (calloc(nxny, sizeof(float)));
 	float *err_termA   = (float *) (calloc(nxny, sizeof(float)));
 	float *err_termB   = (float *) (calloc(nxny, sizeof(float)));
 	float *err_termAt  = (float *) (calloc(nxny, sizeof(float)));
@@ -276,7 +276,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.12 2015/02/27 19:50:51 mbobra Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.13 2015/03/02 21:41:01 mbobra Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
