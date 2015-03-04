@@ -2149,6 +2149,7 @@ void computeSWIndex(struct swIndex *swKeys_ptr, DRMS_Record_t *inRec, struct map
 	free(bt_err); free(bh_err);  free(jz_err);
         free(jz_err_squared); free(jz_rms_err);
         free(jz_err_squared_smooth);
+        free(jz_smooth); 
 
         // free the arrays that are related to the numerical derivatives
         free(err_term2);
@@ -2324,7 +2325,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.35 2015/03/02 21:41:15 mbobra Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.36 2015/03/04 04:45:25 mbobra Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
