@@ -1,7 +1,7 @@
 c------------------------------------------------------------------------------------------------
 c	#define CODE_NAME 		"limbfit"
-c	#define CODE_VERSION 	"V4.0r0" 
-c	#define CODE_DATE 		"Tue May  1 13:34:54 PDT 2012" 
+c	#define CODE_VERSION 	"V5.2r0" 
+c	#define CODE_DATE 		"Tue Mar 26 16:30:08 HST 2013" 
 c------------------------------------------------------------------------------------------------
 c Revision 1.0  2009/01/08  17:20:00  Marcelo Emilio
 c changed assumed-size array declaration from "real xxx(1)" to "real xxx(3)"
@@ -289,6 +289,7 @@ c "cut" is "lmt".  Note: if cut > lmt, the code continues without action.
 
 40	continue
 c Find the min and max radii
+	print*,("at 40")
 	rmax=0.0
 	rmin=100000.0
 	do 42 i=1,npts 
@@ -323,6 +324,7 @@ c Loop to cut points deviating from the Chebyschev fit.
 	cut=0		! loop counter
 	ncut=0		! total points cut
 60      continue
+	print*,("at 60")
 
 c Find min and max radii
 	rmax=0.0
@@ -353,7 +355,8 @@ c-	print*,"-",alo,ahi,tpi,dreg,cmx,cmy,nrem
 	   if((a.le.alo).or.(a.gt.ahi)) goto 80
 	   nrem=nrem+1
 	   r=((an(1,i)-cmx)**2+(an(2,i)-cmy)**2)**0.5
-c  this added to preshift limb distortion to get cleaner mean LDF (IS: maximum distorsion = 2 pixels)
+c  this added to preshift limb distortion to get cleaner mean LDF 
+c  (IS: maximum distorsion = 2 pixels)
 	   theta=atan2((an(2,i)-cmy),(an(1,i)-cmx))
 	   if(theta.lt.0.0) theta=theta+tpi
 	   ind=int(theta/dreg+1.0)
