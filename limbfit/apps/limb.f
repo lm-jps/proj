@@ -289,7 +289,6 @@ c "cut" is "lmt".  Note: if cut > lmt, the code continues without action.
 
 40	continue
 c Find the min and max radii
-	print*,("at 40")
 	rmax=0.0
 	rmin=100000.0
 	do 42 i=1,npts 
@@ -324,7 +323,6 @@ c Loop to cut points deviating from the Chebyschev fit.
 	cut=0		! loop counter
 	ncut=0		! total points cut
 60      continue
-	print*,("at 60")
 
 c Find min and max radii
 	rmax=0.0

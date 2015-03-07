@@ -1,6 +1,6 @@
 /* I.Scholl 
-	#define CODE_VERSION 	"V6.0" 
-	#define CODE_DATE 		"Mon Sep 29 15:40:38 HST 2014" 
+	#define CODE_VERSION 	"V6.1" 
+	#define CODE_DATE 		"Fri Mar  6 22:30:42 PST 2015" 
 */
 
 #include <string.h>
@@ -26,23 +26,17 @@
 #include "expmax.h"
 #include "expfit.h"
 
+#define CODE_VERSION 	"V6r1" 
+#define CODE_DATE 		"Fri Mar  6 22:30:42 PST 2015" 
+#define LOGMSG1			"LIMBFITS"
 #if defined(AB512) && AB512
 #define CODE_NAME 		"limbfit_tas2(ab512)"
-#define CODE_VERSION 	"V6r0" 
-#define CODE_DATE 		"Sun Nov 16 08:21:53 JST 2014" 
-#define LOGMSG1			"LIMBFITS"
 #define	JSD_NAME		"scholl_limbfit_tas_ab512.jsd"
 #elif defined(AB1024) && AB1024
 #define CODE_NAME 		"limbfit_tas2(ab1024)"
-#define CODE_VERSION 	"V6r0" 
-#define CODE_DATE 		"Sun Nov 16 08:21:53 JST 2014" 
-#define LOGMSG1			"LIMBFITS"
 #define	JSD_NAME		"scholl_limbfit_tas_ab1024.jsd"
 #else
 #define CODE_NAME 		"limbfit_tas"
-#define CODE_VERSION 	"V6r0" 
-#define CODE_DATE 		"Mon Sep 29 15:40:38 HST 2014" 
-#define LOGMSG1			"LIMBFITS"
 #define	JSD_NAME		"scholl_limbfit_tas.jsd"
 #endif
 
@@ -247,6 +241,6 @@ void	sum_b0(float *beta, float *pf_b0, float *pl_b0);
 int		sort(unsigned long n, float *arr);
 
 // fortran subroutine
-void	limb_(float *anls, long *jk, float *cmx, float *cmy, float *r, int *nitr, int *ncut,
+void	limb_(float *anls, int *jk, float *cmx, float *cmy, float *r, int *nitr, int *ncut,
 				float* rprf, float* lprf, float *rsi, float *rso, float *dx, float *dy, 
 				float* alph, float* beta, int *ifail, float* b0, int *centyp, float *lahi); 

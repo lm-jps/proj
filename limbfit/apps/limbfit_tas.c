@@ -6,8 +6,8 @@
 
 
 	#define CODE_NAME 		"limbfit_tas"
-	#define CODE_VERSION 	"V5.04" 
-	#define CODE_DATE 		"Tue May  7 21:27:32 PDT 2013" 
+	#define CODE_VERSION 	"V6.01" 
+	#define CODE_DATE 		"Fri Mar  6 22:30:42 PST 2015" 
 */
 
 #include "limbfit_tas.h"
@@ -46,7 +46,7 @@ if (results->debug) lf_logmsg("DEBUG", "APP", 0, 0, "", log_msg_code, results->o
 int 	ret_code = 0;
 
 int 	w		 = ANNULUS_WIDTH;
-long 	S		 = MAX_SIZE_ANN_VARS;
+int 	S		 = MAX_SIZE_ANN_VARS;
 int 	nang	 = NUM_LDF; //180
 int 	nprf	 = NUM_RADIAL_BINS; //64
 int 	nreg	 = NUM_AB_BINS;
@@ -78,7 +78,8 @@ if (input->spe==1)
 /*                        set parameters                               */
 /************************************************************************/
 long npixels=naxis_row*naxis_col;
-long ii, jj, jk, i,j; 
+long ii, jj, i,j;
+int jk; 
 float cmx, cmy,r;//, guess_cx, guess_cy, guess_r;
 int nitr=0, ncut=0;
 
@@ -104,7 +105,7 @@ r  = (float)naxis_row/2;
 		float w2m=r-(float)w/2;
 		double iimcmy2,jjmcmx;
 		/* Select Points */
-		jk=-1;
+		jk=0;//-1;
 		
 		for(ii = 0; ii < naxis_row; ii++)
 		{
@@ -127,7 +128,7 @@ r  = (float)naxis_row/2;
 	
 		if (results->debug)
 		{
-			sprintf(log_msg," jk = %ld", jk);
+			sprintf(log_msg," jk = %d", jk);
 			lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, results->opf);
 		}
 		if ((jk*3) >= S) 
@@ -246,17 +247,43 @@ r  = (float)naxis_row/2;
 
 			if (results->debug)
 			{
-				sprintf(log_msg,"entering limb# %d", it);
+				sprintf(log_msg,"entering limb# %d /%d iters to do)", it,iter);
 				lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, results->opf);
 			}
 		ifail=0;
+/*
+	printf("before: %d,%f,%f,%f,%f,%f,\n",centyp,lahi,rsi,rso,dx,dy);
+	printf("--:%d,%d,%d,%f,%f,%f,\n",ifail,ncut,nitr,cmx,cmy,r);
+	printf("--:%d,%d\n",S,jk);
+	printf(">>: %f,%f,%f,%f\n",rprf[0],rprf[63],lprf[0],lprf[11583]);
+	printf(">00>: %f,%f,%f\n",ios->anls[0],ios->anls[1],ios->anls[2]);
+	printf(">lp>: %f,%f,%f\n",ios->anls[7289973],ios->anls[7289974],ios->anls[7289975]);
+	printf(">lv>: %f\n",*(ios->pl_anls));
+	printf(">-2>: %f,%f,%f\n",ios->anls[7289967],ios->anls[7289968],ios->anls[7289969]);
+	printf(">-1>: %f,%f,%f\n",ios->anls[7289970],ios->anls[7289971],ios->anls[7289972]);
+	printf(">+1>: %f,%f,%f\n",ios->anls[7289976],ios->anls[7289977],ios->anls[7289978]);
+	printf(">>: %f,%f,%f,%f,%f,%f\n",alph[0],alph[255],beta[0],beta[255],b0[0],b0[255]);
+*/
 		limb_(&ios->anls[0],&jk, &cmx, &cmy, &r, &nitr, &ncut, &rprf[0], &lprf[0],  &rsi, &rso, 
-			&dx, &dy, &alph[0], &beta[0], &ifail, &b0[0], &centyp, &lahi); 
+				&dx, &dy, &alph[0], &beta[0], &ifail, &b0[0], &centyp, &lahi); 
 			if (results->debug)
 			{
 				sprintf(log_msg,"exiting limb ifail= %d", ifail);
 				lf_logmsg("DEBUG", "APP", 0, 0, log_msg, log_msg_code, results->opf);
 			}
+/*
+	printf("after: %d,%f,%f,%f,%f,%f,\n",centyp,lahi,rsi,rso,dx,dy);
+	printf("--:%d,%d,%d,%f,%f,%f,\n",ifail,ncut,nitr,cmx,cmy,r);
+	printf("--:%d,%d\n",S,jk);
+	printf(">>: %f,%f,%f,%f\n",rprf[0],rprf[63],lprf[0],lprf[11583]);
+	printf(">00>: %f,%f,%f\n",ios->anls[0],ios->anls[1],ios->anls[2]);
+	printf(">lp>: %f,%f,%f\n",ios->anls[7289973],ios->anls[7289974],ios->anls[7289975]);
+	printf(">lv>: %f\n",*(ios->pl_anls));
+	printf(">-2>: %f,%f,%f\n",ios->anls[7289967],ios->anls[7289968],ios->anls[7289969]);
+	printf(">-1>: %f,%f,%f\n",ios->anls[7289970],ios->anls[7289971],ios->anls[7289972]);
+	printf(">+1>: %f,%f,%f\n",ios->anls[7289976],ios->anls[7289977],ios->anls[7289978]);
+	printf(">>: %f,%f,%f,%f,%f,%f\n",alph[0],alph[255],beta[0],beta[255],b0[0],b0[255]);
+*/
 		if(ifail==0)	
 		{
 			centyp=1;
