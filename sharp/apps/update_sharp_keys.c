@@ -222,19 +222,14 @@ int DoIt(void)
         int epszflag    = (strstr(keylist,"EPSZ")    != NULL);
         int debugflag   = (strstr(debug,"debug")     != NULL);
 
-    
-	for (irec=0;irec<nrecs;irec++)
-	{
-
-
-	DRMS_Record_t *sharpinrec = sharpinrecset->records[irec];
-	DRMS_Record_t *sharpceainrec = sharpceainrecset->records[irec];
+	DRMS_Record_t *sharpinrec = sharpinrecset->records[0];
+	DRMS_Record_t *sharpceainrec = sharpceainrecset->records[0];
 	DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
 	int nx = inseg->axis[0];
 	int ny = inseg->axis[1];
 	int nxny = nx * ny;
 	int dims[2] = {nx, ny};
- 
+
 	// Temp arrays 	
 	float *bh      = (float *) (malloc(nxny * sizeof(float)));
 	float *bt      = (float *) (malloc(nxny * sizeof(float)));
@@ -259,13 +254,17 @@ int DoIt(void)
 	float *jz_smooth = (float *) (malloc(nxny * sizeof(float)));
 	float *err_term1   = (float *) (calloc(nxny, sizeof(float)));
 	float *err_term2   = (float *) (calloc(nxny, sizeof(float)));
-	float *err_termA   = (float *) (calloc(nxny, sizeof(float)));
-	float *err_termB   = (float *) (calloc(nxny, sizeof(float)));
-	float *err_termAt  = (float *) (calloc(nxny, sizeof(float)));
-	float *err_termBt  = (float *) (calloc(nxny, sizeof(float)));
-	float *err_termAh  = (float *) (calloc(nxny, sizeof(float)));
-	float *err_termBh  = (float *) (calloc(nxny, sizeof(float)));
-  
+        float *fx = (float *) (malloc(nxny * sizeof(float)));
+        float *fy = (float *) (malloc(nxny * sizeof(float)));
+        float *fz = (float *) (malloc(nxny * sizeof(float)));
+
+	for (irec=0;irec<nrecs;irec++)
+	{
+
+        //DRMS_Record_t *sharpinrec = sharpinrecset->records[irec];
+	DRMS_Record_t *sharpceainrec = sharpceainrecset->records[irec];
+	DRMS_Segment_t *inseg = drms_segment_lookup(sharpceainrec, "Br");
+ 
         // ephemeris variables
 	float  cdelt1_orig, cdelt1, dsun_obs, imcrpix1, imcrpix2, crpix1, crpix2;
 	double rsun_ref, rsun_obs;
@@ -276,7 +275,7 @@ int DoIt(void)
         // prepare to set CODEVER7 (CVS Version of the SHARP module)
 	char *cvsinfo0;
 	char *history0;
-	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.14 2015/03/04 04:45:11 mbobra Exp $");
+	char *cvsinfo1 = strdup("$Id: update_sharp_keys.c,v 1.15 2015/03/11 22:18:05 mbobra Exp $");
 	char *cvsinfo2 = sw_functions_version();
 	char *cvsinfoall = (char *)malloc(2048);
         char historyofthemodule[2048];
@@ -290,7 +289,7 @@ int DoIt(void)
 	float UNIX_epoch = -220924792.000; 	
 	sprint_time(timebuf, (double)time(NULL) + UNIX_epoch, "ISO", 0);
         sprintf(historyofthemodule,"The following keywords were re-computed on %s: %s.",timebuf,keylist); 
-	printf("historyofthemodule=%s\n",historyofthemodule);
+	//printf("historyofthemodule=%s\n",historyofthemodule);
 	history0    = drms_getkey_string(sharpinrec, "HISTORY", &status);
 	strcat(historyofthemodule,"\n");
         strcat(historyofthemodule,history0);
@@ -324,11 +323,6 @@ int DoIt(void)
         float *pmap    = (float *)malloc(nxp*nyp*sizeof(float));
         float *p1pad   = (float *)malloc(nxp*nyp*sizeof(float));
         float *pmapn   = (float *)malloc(nx1*ny1*sizeof(float));
-
-        // define some arrays for the lorentz force calculation
-        float *fx = (float *) (malloc(nxny * sizeof(float)));
-        float *fy = (float *) (malloc(nxny * sizeof(float)));
-        float *fz = (float *) (malloc(nxny * sizeof(float)));
     
    	   // Get emphemeris
   	   sharpinrec    = sharpinrecset->records[irec];
@@ -510,7 +504,7 @@ int DoIt(void)
 
               // Then take the derivative of Bt
 	      if (computeBtotalderivative(bt, dims, &mean_derivative_btotal, mask, bitmask, derx_bt, dery_bt, bt_err, 
-                                          &mean_derivative_btotal_err, err_termAt, err_termBt))
+                                          &mean_derivative_btotal_err, err_term1, err_term2))
               {
 	         mean_derivative_btotal     = DRMS_MISSING_FLOAT;
 	         mean_derivative_btotal_err = DRMS_MISSING_FLOAT;
@@ -533,7 +527,7 @@ int DoIt(void)
    	      computeBh(bx_err, by_err, bh_err, bx, by, bz, bh, dims, &mean_hf, mask, bitmask);
 
               // Then take the derivative of Bh
-	      if (computeBhderivative(bh, bh_err, dims, &mean_derivative_bh, &mean_derivative_bh_err, mask, bitmask, derx_bh, dery_bh, err_termAh, err_termBh))
+	      if (computeBhderivative(bh, bh_err, dims, &mean_derivative_bh, &mean_derivative_bh_err, mask, bitmask, derx_bh, dery_bh, err_term1, err_term2))
               {
 	         mean_derivative_bh       = DRMS_MISSING_FLOAT;
                  mean_derivative_bh_err   = DRMS_MISSING_FLOAT;
@@ -553,7 +547,7 @@ int DoIt(void)
            if (meangbzflag)
            {
               // Compute Bz derivative
-              if (computeBzderivative(bz, bz_err, dims, &mean_derivative_bz, &mean_derivative_bz_err, mask, bitmask, derx_bz, dery_bz, err_termA, err_termB))
+              if (computeBzderivative(bz, bz_err, dims, &mean_derivative_bz, &mean_derivative_bz_err, mask, bitmask, derx_bz, dery_bz, err_term1, err_term2))
               {
 	         mean_derivative_bz     = DRMS_MISSING_FLOAT; 
                  mean_derivative_bz_err = DRMS_MISSING_FLOAT; 
@@ -759,31 +753,16 @@ int DoIt(void)
 
            /******************************* END FLAGS **********************************/
 
-
-	   drms_free_array(bitmaskArray);		
-	   drms_free_array(maskArray);
-	   drms_free_array(bxArray);           
-	   drms_free_array(byArray);
-	   drms_free_array(bzArray);
-	   drms_free_array(bx_errArray);           
-	   drms_free_array(by_errArray);
-	   drms_free_array(bz_errArray);
-	   drms_free_array(losArray);
-
-        // free the arrays that are related to the lorentz calculation
-        free(fx); free(fy); free(fz);
-        //used for select calculations
-	free(bh); free(bt); free(jz); 
-	free(bpx); free(bpy); free(bpz); 
-	free(derx); free(dery);	 
-	free(derx_bt); free(dery_bt); 	
-	free(derx_bz); free(dery_bz);	 
-	free(derx_bh); free(dery_bh); 
-	free(bt_err); free(bh_err);  free(jz_err); 
-        free(jz_err_squared); free(jz_rms_err);
+	drms_free_array(bitmaskArray);		
+	drms_free_array(maskArray);
+	drms_free_array(bxArray);           
+	drms_free_array(byArray);
+	drms_free_array(bzArray);
+	drms_free_array(bx_errArray);           
+	drms_free_array(by_errArray);
+	drms_free_array(bz_errArray);
+	drms_free_array(losArray);
 	free(cvsinfoall);
-        free(jz_err_squared_smooth);
-        free(jz_smooth);
 
         free(rim);
         free(p1p0);
@@ -792,21 +771,24 @@ int DoIt(void)
         free(p1n);
         free(p1);
         free(pmap);
-        free(p1pad);
+        free(p1pad); 
         free(pmapn);
-
-        // free the arrays that are related to the numerical derivatives
-        free(err_term2);
-        free(err_term1);
-        free(err_termB);
-        free(err_termA);
-        free(err_termBt);
-        free(err_termAt);
-        free(err_termBh);
-        free(err_termAh);
 
 	} //endfor
 
+        free(fx); free(fy); free(fz);
+	free(bh); free(bt); free(jz); 
+	free(bpx); free(bpy); free(bpz); 
+	free(derx); free(dery);	 
+	free(derx_bt); free(dery_bt); 	
+	free(derx_bz); free(dery_bz);	 
+	free(derx_bh); free(dery_bh); 
+	free(bt_err); free(bh_err);  free(jz_err); 
+        free(jz_err_squared); free(jz_rms_err);
+        free(jz_err_squared_smooth);
+        free(jz_smooth);
+        free(err_term2); 
+        free(err_term1); 
  	drms_close_records(sharpinrecset, DRMS_FREE_RECORD);
 	drms_close_records(sharpceainrecset, DRMS_FREE_RECORD);
 
@@ -814,5 +796,7 @@ int DoIt(void)
 	drms_close_records(sharpceaoutrecset, DRMS_INSERT_RECORD);
 
 	printf("Success=%d\n",sameflag);
+
 return 0;    
+
 }	// DoIt
