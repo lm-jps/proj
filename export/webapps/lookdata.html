@@ -343,6 +343,7 @@ function CleanSeriesPick()
   $("SIFx").value = "0";
   $("SIFkey").value = '';
   $("SIFseg").value = '';
+  $("SIFdbhost").value = '';
   $("SIFK").value = "0";
   CleanDropDownLists();
   CleanOnLoad();
@@ -1457,6 +1458,7 @@ function PickKeys()
   $("SIFx").value = "0";
   $("SIFkey").value = '';
   $("SIFseg").value = '';
+  $("SIFdbhost").value = '';
   $("SIFK").value = "0";
 
   if ($("KeysSelect")[1].selected)
@@ -1931,6 +1933,7 @@ function GetShowInfo()
   $("SIFA").value = "0";
   $("SIFkey").value = '';
   $("SIFseg").value = '';
+  $("SIFdbhost").value = '';
   $("SIFK").value = "0";
   $("SIFds").value = $("RecordSet").value;
   // $("SIFds").value = encodeURIComponent($("RecordSet").value);
@@ -1998,6 +2001,7 @@ function GetShowInfo()
         }
         else
         {
+			$("SIFdbhost").value = EXTERNAL_SERVER;
             showinfoCGI = SHOWEXTINFO;
         }
 
@@ -2511,6 +2515,7 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
   <input type='hidden' id='SIFds' name='ds'  value='' >
   <input type='hidden' id='SIFkey' name='key'  value='' >
   <input type='hidden' id='SIFseg' name='seg'  value='' >
+  <input type='hidden' id='SIFdbhost' name='dbhost'  value='' >
   <input type='hidden' id='SIFt' name='t'  value='1' >
   <input type='hidden' id='SIFi' name='i'  value='0' >
   <input type='hidden' id='SIFK' name='K'  value='0' >
