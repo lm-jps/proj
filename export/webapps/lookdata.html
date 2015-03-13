@@ -99,27 +99,34 @@ span.tip { background-color:yellow }
 // we need to copy code from exportdata.html to here that sets the base directory that is used
 // when loading files with the <script> tag. Then we need to put the common file in that
 // base directory, and we need to read it here. But for now, just hard-code this needed map.
+var INTERNAL_SERVER = 'hmidb'
+var EXTERNAL_SERVER = 'hmidb2'
+var INTERNAL_WEBSERVER = 'jsoc2'
+var EXTERNAL_WEBSERVER = 'jsoc'
+var STANFORD_DOMAIN = 'stanford.edu'
+
 var serverMap = new Array();
-serverMap["jsoc"] = "hmidb2";
-serverMap["jsoc.stanford.edu"] = "hmidb2";
-serverMap["jsoc2"] = "hmidb";
-serverMap["jsoc2.stanford.edu"] = "hmidb";
+serverMap[EXTERNAL_WEBSERVER] = EXTERNAL_SERVER;
+serverMap[EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN] = EXTERNAL_SERVER;
+serverMap[INTERNAL_WEBSERVER] = INTERNAL_SERVER;
+serverMap[INTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN] = INTERNAL_SERVER;
+
+var webserverMap = new Array();
+webserverMap[EXTERNAL_SERVER] = EXTERNAL_WEBSERVER
+webserverMap[INTERNAL_SERVER] = INTERNAL_WEBSERVER
 
 // Set CGI-BIN targets
 
-// var JSOC_INFO = "jsoc_info_test";
-// var SHOW_INFO = "show_info_test";
-// var EXPORTDATA = "exportdata2";
-// var USER_KILL = "jsoc_userkill_test";
-
-var SHOW_WLSERIES = "show_wlseries";
-var JSOC_INFO = "jsoc_info";
-var JSOC_INFO_X = "jsoc_info_x";
-var SHOW_INFO = "show_info";
-var SHOW_INFO_X = "show_info_x";
+var SHOWEXTSERIES = 'showextseries';
+var SHOWINTSERIES = 'showintseries';
+var JSOCEXTINFO = 'jsocextinfo';
+var JSOC_INFO = 'jsoc_info';
+var SHOWEXTINFO = 'showextinfo';
+var SHOW_INFO = 'show_info';
 var PARSE_RECSET = 'drms_parserecset';
 var EXPORTDATA = "exportdata";
 var USER_KILL = "jsoc_userkill";
+var CHECK_EXP_DB_SERVER = 'checkexpdbserver';
 
 // Protect page from accidental BACK button
 window.onbeforeunload = function ()
@@ -334,7 +341,6 @@ function CleanSeriesPick()
   $("SIFo").value = "0";
   $("SIFR").value = "0";
   $("SIFx").value = "0";
-  $("SIFseries").value = '';
   $("SIFkey").value = '';
   $("SIFseg").value = '';
   $("SIFK").value = "0";
@@ -620,11 +626,24 @@ function GetSeries()
 
   // Map the host name (e.g., "jsoc2.stanford.edu") to the seriesname server (e.g., "hmidb").
   var seriesnameServer = serverMap[Host.toLowerCase()]
+  var args = {};
+  var showseriesCGI = "";
 
-  GetSeriesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + SHOW_WLSERIES,
+  if (seriesnameServer == INTERNAL_SERVER)
+  {
+      args = {"filter" : $("SeriesFilter").value, "info" : 1};
+      showseriesCGI = SHOWINTSERIES;
+  }
+  else
+  {
+      args = {"dbhost" : seriesnameServer, "filter" : $("SeriesFilter").value, "info" : 1};
+      showseriesCGI = SHOWEXTSERIES;
+  }
+
+  GetSeriesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + showseriesCGI,
     {
     method: 'get',
-    parameters: {"server" : seriesnameServer, "filter" : $("SeriesFilter").value },
+    parameters: args,
     onSuccess: function(transport, json)
       {
       var response = transport.responseText || "no response text";
@@ -635,7 +654,7 @@ function GetSeries()
       for (var iarr = 0; iarr < seriesArr.length; iarr++)
       {
         var sname = Object.keys(seriesArr[iarr])[0];
-	insertOption("SeriesSelect", sname, seriesArr[iarr][sname].description)
+        insertOption("SeriesSelect", sname, seriesArr[iarr][sname].description)
       }
 
       $("SeriesCountPlace").innerHTML = seriesArr.length;
@@ -656,139 +675,22 @@ function WlSeriesInfo()
 {
 }
 
-WlSeriesInfo.info = {};
-WlSeriesInfo.intSeries = {}; // hash of record-set specifications to internal series
-
-// filter is an array of regexps, where each regexp identifies a set of series.
-// If you want to find all series that contain the string 'su_arta' or 'su_jim',
-// then pass in a filter of ['su_arta', 'su_jim']. This function will convert
-// this to 'su_arta|su_jim' then use that when querying the database.
-WlSeriesInfo.prototype.getInfo = function(args)
-{
-    var filter = args.args[0];
-    var callback = args.cbfn; // updateServersFn
-    var callbackArgs = args.cbargs;
-    
-    var filterStr = filter.join('|');
-    var url = 'http://' + Host + '/cgi-bin/ajax/' + SHOW_WLSERIES;
-    
-    // Map the host name (e.g., "jsoc2.stanford.edu") to the seriesname server (e.g., "hmidb").
-    var seriesnameServer = serverMap[Host.toLowerCase()];
-    
-    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-    
-    new Ajax.Request(url,
-    {
-        method: 'get',
-        parameters: { "server" : seriesnameServer, "filter" : filterStr },
-        onSuccess: function(transport, json)
-        {
-            $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-                         
-            var response = transport.responseText || null;
-            var seriesInfo = response.evalJSON();
-            var seriesArr = seriesInfo.seriesList
-
-            if (seriesArr.length == 0)
-            {
-                alert("There are no series that match '" + filterStr + "' accessible from " + Host + '.');
-            }
-            else
-            {
-                for (var iarr = 0; iarr < seriesArr.length; iarr++)
-                {
-                    var snameMixed = Object.keys(seriesArr[iarr])[0];
-                    var sname = snameMixed.toLowerCase();
-                         
-                    if (WlSeriesInfo.info[sname] == undefined)
-                    {
-                        WlSeriesInfo.info[sname] = {};
-                    }
-
-                    WlSeriesInfo.info[sname].server = seriesArr[iarr][snameMixed].infoDB;
-                }
-
-                callback(callbackArgs);
-            }
-        },
-        onFailure: function() { alert('Unable to get information for series regexp ' + "'" + filterStr + "'."); },
-        onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
-    });
-
-    $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-};
-
-WlSeriesInfo.prototype.getServer = function(args)
-{
-    var spec = args.args[0]; // a string
-    var snames = args.args[1]; // a list
-    var callback = args.cbfn; // jsoc_fetch
-    var callbackArgs = args.cbargs;
-    var filter = [];
-    var intSeries = []; // A list of internal series.
-    
-    WlSeriesInfo.intSeries[spec] = [];
-    
-    for (var iseries = 0; iseries < snames.length; iseries++)
-    {
-        var sname = snames[iseries].toLowerCase();
-        
-        if (WlSeriesInfo.info[sname] == undefined)
-        {
-            filter[filter.length] = sname; // lower case
-        }
-        else if (WlSeriesInfo.info[sname].server == 'hmidb')
-        {
-            intSeries[intSeries.length] = sname;
-            // Add cached internal series to list of internal series for this spec.
-            WlSeriesInfo.intSeries[spec][WlSeriesInfo.intSeries[spec].length] = sname;
-        }
-    }
-    
-    if (filter.length > 0)
-    {
-        var updateServersFn = function(args)
-        {
-            var spec = args[0];
-            var snames = args[1];
-            
-            for (var iseries = 0; iseries < snames.length; iseries++)
-            {
-                var sname = snames[iseries].toLowerCase();
-                
-                if (WlSeriesInfo.info[sname].server == 'hmidb')
-                {
-                    // Newly discovered internal series.
-                    // If at least one of the series needs series info from the internal database, then we need
-                    // to use jsoc2 for the following jsoc_fetch request.
-                    intSeries[intSeries.length] = sname;
-                    WlSeriesInfo.intSeries[spec][WlSeriesInfo.intSeries[spec].length] = sname;
-                }
-            }
-            
-            // Also must call the callback passed to the getServer() function. Hopefully JS realizes these are defined outside
-            // this function.
-            callbackArgs.args[callbackArgs.args.length] = intSeries; // Append host; the jsoc_fetch arguments are the 0th argument already.
-            callback(callbackArgs);
-        };
-        
-        getInfoFnArgs = {};
-        getInfoFnArgs.cbfn = updateServersFn;
-        getInfoFnArgs.cbargs = [spec, filter];
-        getInfoFnArgs.args = [filter];
-        
-        this.getInfo(getInfoFnArgs);
-    }
-    else
-    {
-        // Do not need to call show_wlseries. We just need to pass the list of internal series to jsoc_fetch.
-        callbackArgs.args[callbackArgs.args.length] = intSeries; // Append host; the jsoc_fetch arguments are the 0th argument already.
-        callback(callbackArgs);
-    }
-};
-
 // Parse record-set specification (spec) to get a list of all series names in the spec. This function sends that list to the WlSeriesInfo.getServer() method.
 // THAT method finds out which database server contains the DRMS series information.
+// To use extract names, do this. 
+// This callback assumes that you want to call the getServer method in the 'this' object (an instance of the WlSeriesInfo class).
+// So if you want to call extractSnames from outside of the 'this' object, you have to create a wrapper in WlSeriesInfo, then
+// instantiate it (outside of 'this') with var wlInfo = new WlSeriesInfo(), then call the wrapper wlInfo.wrapper(args).
+// So put the following into WlSeriesInfo.prototype.wrapper:
+// var getServerFnArgs = {};
+// getServerFnArgs.cbfn = callback;
+// getServerFnArgs.cbargs = callbackArgs;
+// var extractSnamesFnArgs = {};
+// extractSnamesFnArgs.cbfnobj = this;
+// extractSnamesFnArgs.cbfnobjmeth = 'getServer';
+// extractSnamesFnArgs.cbargs = getServerFnArgs;
+// extractSnamesFnArgs.args = [spec];
+// this.extractSnames(extractSnamesFnArgs);
 WlSeriesInfo.prototype.extractSnames = function(args)
 {
     var spec = args.args[0];
@@ -823,59 +725,13 @@ WlSeriesInfo.prototype.extractSnames = function(args)
             }
                      
             callbackArgs.args = [spec, snames];
-            callbackObj[callbackObjMeth](callbackArgs);
+            callbackObj[callbackObjMeth](callbackArgs); // getServer
         },
         onFailure: function() { alert('Unable to parse record-set specficiation ' + "'" + spec + "'."); },
         onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
     });
 
     $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
-};
-
-// Get the db host that we should use for this spec. If this page is on the external site, but we are accessing a sanctioned internal
-// series, then we need to use the internal db server (hmidb). spec could (eventually) have more than one series in it. If that is
-// the case, then if at least one series requires the internal db server, use that one. All external series are available from the
-// internal db server at this point.
-WlSeriesInfo.prototype.determineHost = function(args)
-{
-    var spec = args.args[0];
-    var callerid = args.args[1];
-    var callback = args.cbfn; // jsoc_fetch
-    var callbackArgs = args.cbargs;
-    
-    // Gotta figure out which host to use.
-    if (Host.match(/^\s*jsoc2/))
-    {
-        // This is the internal page. Just use [] for the list of intSeries (not used when the user is on the internal web site).
-        callbackArgs.args[callbackArgs.args.length] = [];
-        callback(callbackArgs);
-    }
-    else
-    {
-        if (WlSeriesInfo.intSeries[spec])
-        {
-            // We know the internal series for this specification.
-            intSeries = WlSeriesInfo.intSeries[spec];
-            callbackArgs.args[callbackArgs.args.length] = intSeries;
-            callback(callbackArgs);
-        }
-        else
-        {
-            // jsoc.stanford.edu is the external website. We need to figure out
-            // if the user is accessing internal series that are sanctioned for use externally.
-            var getServerFnArgs = {};
-            getServerFnArgs.cbfn = args.cbfn;
-            getServerFnArgs.cbargs = args.cbargs;
-            
-            var extractSnamesFnArgs = {};
-            extractSnamesFnArgs.cbfnobj = this;
-            extractSnamesFnArgs.cbfnobjmeth = 'getServer';
-            extractSnamesFnArgs.cbargs = getServerFnArgs;
-            extractSnamesFnArgs.args = [spec];
-            
-            this.extractSnames(extractSnamesFnArgs);
-        }
-    }
 };
 
 
@@ -900,6 +756,8 @@ function PickSeries(mode)
   if (mode == 0)
     {
     CurrentSeries = $("SeriesSelect").selectedIndex;
+    // SeriesName is definitely a series, not a record-set specification. It was assigned the value of one series from the output
+    // of show_info.
     SeriesName = $("SeriesSelect").options[CurrentSeries].value;
     }
   if (mode == 0 || mode == 1)
@@ -916,28 +774,28 @@ function PickSeries(mode)
                                 "/' target='_blank'>" + ProjectName + "</a>";
   $("FirstLastPlace").innerHTML = "... Fetching Series Information ...";
   
-    var doInfoReqFn = function(args)
+    var doInfoReqFn = function()
     {
-        var intSeries = args.args[0]; // A list
-        var script = null;
-        var arguments = {"ds" : SeriesName, "op" : "series_struct", "o" : "1" };
-        
-        if (intSeries.length > 0)
+        var arguments = null;
+        var jsocinfoCGI = null;
+
+        // If this is the external host, then use jsocinfointext. This CGI will choose the correct db server to handle the series.
+        // If this is the internal host, thne use jsoc_info, which will use the internal db server.
+        if (serverMap[Host.toLowerCase()] == INTERNAL_SERVER)
         {
-            arguments.series = intSeries.join();
-            script = JSOC_INFO_X; // Uses internal db.
+            jsocinfoCGI = JSOC_INFO;
+            arguments = {"ds" : SeriesName, "op" : "series_struct", "o" : "1" };
         }
         else
         {
-            script = JSOC_INFO;
+            jsocinfoCGI = JSOCEXTINFO;
+            arguments = {"dbhost" : EXTERNAL_SERVER, "ds" : SeriesName, "op" : "series_struct", "o" : "1" };
         }
-        
-        new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + script,
+
+        new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + jsocinfoCGI,
         {
             method: 'get',
-                         
             parameters: arguments,
-
             onSuccess: function(transport, json)
             {
                 $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
@@ -1081,9 +939,7 @@ function PickSeries(mode)
                     $("GetRSCountButton").style.backgroundColor = GREEN;
                 }
             },
-            
             onFailure: function() { alert('Something went wrong with series structure request'); },
-            
             onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
         });
       };
@@ -1091,20 +947,9 @@ function PickSeries(mode)
       $("AjaxBusy").innerHTML = Ajax.activeRequestCount;
       // Now jump to the RecordSet tab
       tabs.setSelectedItems([tabrecset]); // load the first page.
-      
-      var wlInfo = new WlSeriesInfo();
-      
-      var doInfoReqFnArgs = {};
-      doInfoReqFnArgs.args = [];
-      doInfoReqFnArgs.cbfn = null;
-      doInfoReqFnArgs.cbargs = null;
-      
-      var determineHostFnArgs = {};
-      determineHostFnArgs.args = [SeriesName, 'PickSeries'];
-      determineHostFnArgs.cbfn = doInfoReqFn;
-      determineHostFnArgs.cbargs = doInfoReqFnArgs;
-      
-      wlInfo.determineHost(determineHostFnArgs);
+
+      // Just call the function. It will determine if it should use the internal or external version of the CGI.
+      doInfoReqFn();
   }
 
 function SortSeriesContent()
@@ -1490,27 +1335,28 @@ function GetRSCount()
   RequestHandle = SessionHandle + "_" + StartTime.getTime();
 // $("HandleDiv").innerHTML = RequestHandle;
 
-    var doInfoReqFn = function(args)
+    var doInfoReqFn = function()
     {
-        var intSeries = args.args[0]; // A list
-        var script = null;
-        var arguments = {"ds" : $("RecordSet").value, "op" : "rs_summary", "n" : MaxRecs, "userhandle" : RequestHandle };
-        
-        if (intSeries.length > 0)
+        var arguments = null;
+        var jsocinfoCGI = null;
+
+        // If this is the external host, then use jsocinfointext. This CGI will choose the correct db server to handle the series.
+        // If this is the internal host, thne use jsoc_info, which will use the internal db server.
+        if (serverMap[Host.toLowerCase()] == INTERNAL_SERVER)
         {
-            arguments.series = intSeries.join();
-            script = JSOC_INFO_X; // Uses internal db.
+            jsocinfoCGI = JSOC_INFO;
+            arguments = {"ds" : $("RecordSet").value, "op" : "rs_summary", "n" : MaxRecs, "userhandle" : RequestHandle };
         }
         else
         {
-            script = JSOC_INFO;
+            jsocinfoCGI = JSOCEXTINFO;
+            arguments = {"dbhost" : EXTERNAL_SERVER, "ds" : $("RecordSet").value, "op" : "rs_summary", "n" : MaxRecs, "userhandle" : RequestHandle };
         }
 
-      GetRSCountObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + script,
+        GetRSCountObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + jsocinfoCGI,
         {
         method: 'get',
         parameters: arguments,
-
         onSuccess: function(transport, json)
           {
           var response = transport.responseText || "no response text";
@@ -1546,19 +1392,8 @@ function GetRSCount()
         });
     };
     
-    var wlInfo = new WlSeriesInfo();
-    
-    var doInfoReqFnArgs = {};
-    doInfoReqFnArgs.args = [];
-    doInfoReqFnArgs.cbfn = null;
-    doInfoReqFnArgs.cbargs = null;
-    
-    var determineHostFnArgs = {};
-    determineHostFnArgs.args = [$("RecordSet").value, 'GetRSCount'];
-    determineHostFnArgs.cbfn = doInfoReqFn;
-    determineHostFnArgs.cbargs = doInfoReqFnArgs;
-    
-    wlInfo.determineHost(determineHostFnArgs);
+    // Just call the function. It will determine if it should use the internal or external version of the CGI.
+    doInfoReqFn();
   }
 
 // QueryBuild is called when where clause specs are added to build a recordset spec
@@ -1620,7 +1455,6 @@ function PickKeys()
   $("SIFo").value = "0";
   $("SIFR").value = "0";
   $("SIFx").value = "0";
-  $("SIFseries").value = '';
   $("SIFkey").value = '';
   $("SIFseg").value = '';
   $("SIFK").value = "0";
@@ -1864,27 +1698,29 @@ function GetKeyValues()
   getparameters.update({"userhandle": RequestHandle});
   $("requestTime").innerHTML = "";
   
-  var doInfoReqFn = function(args)
+  var doInfoReqFn = function()
   {
-      var intSeries = args.args[0]; // A list
-      var script = null;
-      var arguments = getparameters.toObject();
-      
-      if (intSeries.length > 0)
+      var arguments = null;
+      var jsocinfoCGI = null;
+
+      // If this is the external host, then use jsocinfointext. This CGI will choose the correct db server to handle the series.
+      // If this is the internal host, thne use jsoc_info, which will use the internal db server.
+      if (serverMap[Host.toLowerCase()] == INTERNAL_SERVER)
       {
-          arguments.series = intSeries.join();
-          script = JSOC_INFO_X; // Uses internal db.
+          arguments = getparameters.toObject();
+          jsocinfoCGI = JSOC_INFO;
       }
       else
       {
-          script = JSOC_INFO;
+          getparameters.update({"dbhost" : EXTERNAL_SERVER});
+          arguments = getparameters.toObject();
+          jsocinfoCGI = JSOCEXTINFO;
       }
-  
-      GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + script,
+
+      GetValuesObject = new Ajax.Request('http://' + Host + '/cgi-bin/ajax/' + jsocinfoCGI,
         {
         method: 'get',
         parameters: arguments,
-
         onSuccess: function(transport, json)
           {
           RequestHandle = "";
@@ -2070,20 +1906,9 @@ function GetKeyValues()
         onComplete: function() { $("AjaxBusy").innerHTML = Ajax.activeRequestCount; }
         });
   };
-  
-  var wlInfo = new WlSeriesInfo();
-  
-  var doInfoReqFnArgs = {};
-  doInfoReqFnArgs.args = [];
-  doInfoReqFnArgs.cbfn = null;
-  doInfoReqFnArgs.cbargs = null;
-  
-  var determineHostFnArgs = {};
-  determineHostFnArgs.args = [$("RecordSet").value, 'GetRSCount'];
-  determineHostFnArgs.cbfn = doInfoReqFn;
-  determineHostFnArgs.cbargs = doInfoReqFnArgs;
-  
-  wlInfo.determineHost(determineHostFnArgs);
+
+  // Just call the function. It will determine if it should use the internal or external version of the CGI.  
+  doInfoReqFn();
   }
 
 function GetShowInfo()
@@ -2161,23 +1986,22 @@ function GetShowInfo()
 // YES, will do it that way.
 // urlencode the param list and concatenate to next line into showargs
 
-    var doInfoReqFn = function(args)
+    var doInfoReqFn = function()
     {
-        var intSeries = args.args[0]; // A list
-        var script = null;
-     
-        if (intSeries.length > 0)
+        var showinfoCGI = null;
+
+        // If this is the external host, then use showextinfo. This CGI will choose the correct db server to handle the series.
+        // If this is the internal host, then use show_info, which will use the internal db server.
+        if (serverMap[Host.toLowerCase()] == INTERNAL_SERVER)
         {
-            $("SIFseries").value = intSeries.join();
-            script = SHOW_INFO_X; // Uses internal db.
+            showinfoCGI = SHOW_INFO;
         }
         else
         {
-            // Hopefully the $("SIFseries") argument doesn't interfere with the original show_info.
-            script = SHOW_INFO;
+            showinfoCGI = SHOWEXTINFO;
         }
-        
-        $("ShowInfoForm").action = 'http://' + Host + '/cgi-bin/ajax/' + script;
+
+        $("ShowInfoForm").action = 'http://' + Host + '/cgi-bin/ajax/' + showinfoCGI;
         $("ShowInfoForm").submit();
    };
     
@@ -2188,19 +2012,8 @@ function GetShowInfo()
     $("DisplayPlace").innerHTML = "Key values will be returned in a new window.";
     tabs.setSelectedItems([tabdisplay]); // show the display page.
     
-    var wlInfo = new WlSeriesInfo();
-    
-    var doInfoReqFnArgs = {};
-    doInfoReqFnArgs.args = [];
-    doInfoReqFnArgs.cbfn = null;
-    doInfoReqFnArgs.cbargs = null;
-    
-    var determineHostFnArgs = {};
-    determineHostFnArgs.args = [$("RecordSet").value, 'GetShowInfo'];
-    determineHostFnArgs.cbfn = doInfoReqFn;
-    determineHostFnArgs.cbargs = doInfoReqFnArgs;
-    
-    wlInfo.determineHost(determineHostFnArgs);
+  // Just call the function. It will determine if it should use the internal or external version of the CGI.
+  doInfoReqFn();
   }
 
 function newwide(thisevent)
@@ -2698,7 +2511,6 @@ jsoc.stanford.edu gives access to export series. Consult JSOC staff for access t
   <input type='hidden' id='SIFds' name='ds'  value='' >
   <input type='hidden' id='SIFkey' name='key'  value='' >
   <input type='hidden' id='SIFseg' name='seg'  value='' >
-  <input type='hidden' id='SIFseries' name='series'  value='' >
   <input type='hidden' id='SIFt' name='t'  value='1' >
   <input type='hidden' id='SIFi' name='i'  value='0' >
   <input type='hidden' id='SIFK' name='K'  value='0' >
