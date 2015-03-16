@@ -111,12 +111,7 @@ serverMap[EXTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN] = EXTERNAL_SERVER;
 serverMap[INTERNAL_WEBSERVER] = INTERNAL_SERVER;
 serverMap[INTERNAL_WEBSERVER + '.' + STANFORD_DOMAIN] = INTERNAL_SERVER;
 
-var webserverMap = new Array();
-webserverMap[EXTERNAL_SERVER] = EXTERNAL_WEBSERVER
-webserverMap[INTERNAL_SERVER] = INTERNAL_WEBSERVER
-
 // Set CGI-BIN targets
-
 var SHOWEXTSERIES = 'showextseries';
 var SHOWINTSERIES = 'showintseries';
 var JSOCEXTINFO = 'jsocextinfo';
@@ -126,7 +121,6 @@ var SHOW_INFO = 'show_info';
 var PARSE_RECSET = 'drms_parserecset';
 var EXPORTDATA = "exportdata";
 var USER_KILL = "jsoc_userkill";
-var CHECK_EXP_DB_SERVER = 'checkexpdbserver';
 
 // Protect page from accidental BACK button
 window.onbeforeunload = function ()
@@ -781,7 +775,7 @@ function PickSeries(mode)
         var jsocinfoCGI = null;
 
         // If this is the external host, then use jsocinfointext. This CGI will choose the correct db server to handle the series.
-        // If this is the internal host, thne use jsoc_info, which will use the internal db server.
+        // If this is the internal host, then use jsoc_info, which will use the internal db server.
         if (serverMap[Host.toLowerCase()] == INTERNAL_SERVER)
         {
             jsocinfoCGI = JSOC_INFO;
