@@ -1419,7 +1419,7 @@ function GetExport() // This is the code executed when the user clicks on the "S
 		else
 		{
 			jsocfetchCGI = JSOCEXTFETCH;
-			exportparameters.update({ "dbhost" : EXTERNAL_SERVER, "p" : 1 });
+			exportparameters.update({ "dbhost" : EXTERNAL_SERVER });
 		}
     
 		arguments = exportparameters.toObject();
