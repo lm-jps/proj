@@ -110,6 +110,9 @@
 // Nyqvist rate at disk center is 0.03 degree. Oversample above 0.015 degree
 #define NYQVIST		(0.015)
 
+// Maximum variation of LONDTMAX-LONDTMIN
+#define MAXLONDIFF	(1.2e-4)
+
 // Some other things
 #ifndef MIN
 #define MIN(a,b) (((a)<(b)) ? (a) : (b))
@@ -1086,9 +1089,23 @@ int findPosition(DRMS_Record_t *inRec, struct mapInfo *mInfo)
 	
 	/* Size */
     // Rounded to 1.d3 precision first. Jun 16 2014 XS
+    // The previous fix does not work. LONDTMAX-LONDTMIN varies from frame to frame
+    // Need to find out the maximum possible difference, MAXLONDIFF (1.2e-4)
+    // Now, ncol = (maxlon-minlon)/xscale, if the decimal part is outside 0.5 \pm (MAXLONDIFF/xscale)
+    // proceed as it is. else, all use floor on ncol
 	
-	mInfo->ncol = round(round((maxlon - minlon) * 1.e3) / 1.e3 / mInfo->xscale);
-	mInfo->nrow = round(round((maxlat - minlat) * 1.e3) / 1.e3 / mInfo->yscale);
+	float dpix = (MAXLONDIFF / mInfo->xscale) * 1.5;		// "danger zone"
+	float ncol = (maxlon - minlon) / mInfo->xscale;
+	float d_ncol = fabs(ncol - floor(ncol) - 0.5);			// distance to 0.5
+	if (d_ncol < dpix) {
+		mInfo->ncol = floor(ncol);
+	} else {
+		mInfo->ncol = round(ncol);
+	}
+
+	mInfo->nrow = round((maxlat - minlat) / mInfo->yscale);
+	
+	printf("xcol=%f, ncol=%d, nrow=%d\n", ncol, mInfo->ncol, mInfo->nrow);
 	
 	return 0;
 	
@@ -2324,7 +2341,7 @@ void setKeys(DRMS_Record_t *outRec, DRMS_Record_t *mharpRec, DRMS_Record_t *bhar
     drms_setkey_time(outRec, "DATE", tnow);
 	
     // set cvs commit version into keyword HEADER
-    char *cvsinfo  = strdup("$Id: sharp.c,v 1.37 2015/03/11 21:46:52 mbobra Exp $");
+    char *cvsinfo  = strdup("$Id: sharp.c,v 1.38 2015/03/18 00:28:26 xudong Exp $");
     char *cvsinfo2 = sw_functions_version();
     char cvsinfoall[2048];
     strcat(cvsinfoall,cvsinfo);
