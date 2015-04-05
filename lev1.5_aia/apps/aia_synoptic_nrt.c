@@ -336,9 +336,20 @@ int DoIt ()
     fprintf(fimg_time, "NRT  http://jsoc.stanford.edu/data/aia/synoptic/nrt/");
     fprintf(fimg_time, "%d/%2.2d/%2.2d/H%2.2d00/AIA%d%2.2d%2.2d_%2.2d%2.2d00\n"
            , oy, om, od, oh, oy, om, od, oh, on);
-    fprintf(fimg_time, "\n");
     fclose(fimg_time);
   } else fprintf(stderr, "Can't open image_times file.\n");
+  sprintf(outpath, "/home/jps/nrt_start", outpathbase);
+  if (fimg_time = fopen(outpath, "r")) {
+    char first_time[128];
+    fgets(first_time, 128, fimg_time);
+    fclose(fimg_time);
+    sprintf(outpath, "%s/image_times.json", outpathbase);
+    if (fimg_time = fopen(outpath, "w")) {
+      fprintf(fimg_time, "%s\"last\":\"%d%2.2d%2.2d_%2.2d%2.2d00\"}\n",
+              first_time, oy, om, od, oh, on);
+      fclose(fimg_time);
+    } else fprintf(stderr, "Can't open image_times.json file.\n");
+  } else fprintf(stderr, "Can't open start time file.\n");
 
   return 0;
 }
