@@ -62,6 +62,7 @@ void sprint_time_ISO (char *tstring, TIME t)
 int DoIt ()
 {
   int got_all_wl=0,iwl, irec, iseg, nrecs, nsegs, status, n_used=1, wl;
+  int file, drms, oy, om, od, oh, on;
   const int wls[10] = { 94, 131, 171, 193, 211, 304, 335, 1600, 1700, 4500 };
   char c1, c2, c3, *date_str, *dsinp, *dsout, now_str[100], *outpathbase=NULL;
   char linkname[512], outpath[512], outfilename[512], *outcparms="compress";
@@ -69,7 +70,8 @@ int DoIt ()
   float mag = 1.0, dx, dy;
   double gaex_obs, gaey_obs, gaez_obs, haex_obs, haey_obs, haez_obs, tr_step;
   long long tr_index;
-  TIME t_obs, t_rec, tr_epoch;
+  FILE *fimg_time;
+  TIME t_obs, t_rec, tr_epoch, t0=0;
   DRMS_Record_t *inprec, *outrec;
   DRMS_RecordSet_t *inprs;
   DRMS_Keyword_t *inpkey = NULL, *outkey = NULL;
@@ -106,6 +108,10 @@ int DoIt ()
     date_str = drms_getkey_string(inprec, "T_OBS", &status);
     sscanf(date_str, "%d%c%d%c%d%c%d:%d:%d",
            &yr, &c1, &mo, &c2, &da, &c3, &hr, &mn, &sc);
+    if (t_obs > t0) {
+      oy = yr; om = mo; od = da; oh = hr; on = mn;
+      t0 = t_obs;
+    }
     wl = drms_getkey_int(inprec, "WAVELNTH", &status);
     if (status) DIE("WAVELNTH not found!");
     outrec = drms_create_record(drms_env, dsout, DRMS_PERMANENT, &status);
@@ -207,6 +213,15 @@ int DoIt ()
     if (outarr) drms_free_array(outarr);
     drms_close_record(outrec, DRMS_FREE_RECORD);
   }
+  sprintf(outfilename, "%s/image_times", outpathbase);
+  if (fimg_time = fopen(outfilename, "w")) {
+    fprintf(fimg_time, "Time     %d%2.2d%2.2d_%2.2d%2.2d00\n", 
+            oy, om, od, oh, on);
+    fprintf(fimg_time,
+      "mostrecent  http://jsoc.stanford.edu/data/aia/synoptic/mostrecent/");
+    fprintf(fimg_time, "AIAsynoptic\n");
+    fclose(fimg_time);
+  } else fprintf(stderr, "Can't open image_times file.\n");
 
   return 0;
 }
