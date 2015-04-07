@@ -103,13 +103,14 @@ int check_outpath(int yr, int mo, int da, int hr, char *outpathbase)
 int DoIt ()
 {
   int irec, iseg, nrecs, nsegs, status, n_used=1, wl, explim, fsn, quality;
-  int file, drms, cmdexp, nogood;
+  int file, drms, cmdexp, nogood, oy, om, od, oh, on;
   char c1, c2, c3, *date_str, *dsinp, *dsout, now_str[100], *outpathbase=NULL;
   char querystr[512], outpath[512], outfilename[512], *outcparms="compress";
   float crpix1, crpix2, cdelt1, cdelt2, crota2, x0, y0;
   float mag = 1.0, dx, dy;
   double gaex_obs, gaey_obs, gaez_obs, haex_obs, haey_obs, haez_obs, tr_step;
   long long tr_index;
+  FILE *fimg_time;
   TIME t_obs, t_rec, tr_epoch, t_obs_alt;
   DRMS_Record_t *inprec, *outrec;
   DRMS_RecordSet_t *inprs, *aecrs;
@@ -283,6 +284,7 @@ printf("%s\n", querystr);
           sprintf(outfilename,
              "%s/AIA%4.4d%2.2d%2.2d_%2.2d%2.2d_%4.4d.fits",
              outpath, yr, mo, da, hr, mn, wl);
+          oy = yr; om = mo; od = da; oh = hr; on = mn;
           if (stat(outfilename, &sbuf)) {
             outcparms = "compress";
             if (DRMS_SUCCESS != fitsexport_export_tofile(outseg, outcparms,
@@ -297,6 +299,22 @@ printf("%s\n", querystr);
     if (drms) drms_close_record(outrec, DRMS_INSERT_RECORD);
     else drms_close_record(outrec, DRMS_FREE_RECORD);
   }
+  if (wl > 1500) return 0;
+  sprintf(outpath, "%s/image_times", outpathbase);
+  if (fimg_time = fopen(outpath, "w")) {
+    fprintf(fimg_time, "Time     %d%2.2d%2.2d_%2.2d%2.2d00\n",
+                                 oy, om,   od,  oh, on);
+    fprintf(fimg_time, "synoptic  http://jsoc.stanford.edu/data/aia/synoptic/");
+    fprintf(fimg_time, "%d/%2.2d/%2.2d/H%2.2d00/AIA%d%2.2d%2.2d_%2.2d%2.2d00\n"
+           , oy, om, od, oh, oy, om, od, oh, on);
+    fclose(fimg_time);
+  } else fprintf(stderr, "Can't open image_times file.\n");
+  sprintf(outpath, "%s/image_times.json", outpathbase);
+  if (fimg_time = fopen(outpath, "w")) {
+    fprintf(fimg_time, "{\"first\":\"20100513_000000\",\"last\":\"");
+    fprintf(fimg_time, "%d%2.2d%2.2d_%2.2d%2.2d00\"}\n", oy, om, od, oh, on);
+    fclose(fimg_time);
+  } else fprintf(stderr, "Can't open image_times.json file.\n");
 
   return 0;
 }
