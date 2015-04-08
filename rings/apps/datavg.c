@@ -60,6 +60,9 @@
  *	-v	run verbose
  *
  *  Bugs:
+ *    Although drms_segment_write() errors are flagged in stderr, they do
+ *	not force an abort; consequently it is possible to have records
+ *	created with incomplete SUMS data, or no SUMS data at all.
  *    Propagated keys are copied from the first input record, without checking
  *	for uniqueness
  *    If the input dataset is specified in the in string, the keywords for
@@ -99,7 +102,7 @@
 #define	DO_SQUARE	(2)
 
 char *module_name = "data average";
-char *version_id = "1.4";
+char *version_id = "1.5";
 
 ModuleArgs_t module_args[] = {
   {ARG_STRING,	"in", "", "input data series or dataset"}, 
@@ -222,10 +225,10 @@ static int key_params_from_dspec (const char *dspec) {
 }
 
 int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
-    DRMS_Array_t *powr, int ntot, int mscaled, int pscaled, double mrepmin,
-    double mrepmax, double prepmin, double prepmax, int verbose) {
+    DRMS_Array_t *powr, long long ntot, int mscaled, int pscaled,
+    double mrepmin, double mrepmax, double prepmin, double prepmax, int verbose) {
   double *vavg = (double *)mean->data;
-  double *vvar = (double *)powr->data;
+  double *vvar = (powr) ? (double *)powr->data : NULL;
   int *vval = (int *)vcts->data;
   double mnvmin, mnvmax, pwrmin, pwrmax, norm, norm2, scale, sig, var;
   double sumv1, sump1, sum2, sum3, sum4;
@@ -256,29 +259,31 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
       mnvmax = vavg[n];
       vmaxloc = n;
     }
-    if (vvar[n] < pwrmin) {
-      pwrmin = vvar[n];
-      pminloc = n;
-    }
-    if (vvar[n] > pwrmax) {
-      pwrmax = vvar[n];
-      pmaxloc = n;
-    }
     if (isfinite (vavg[n])) {
       sumv0++;
       sumv1 += vavg[n];
-    }
-    if (isfinite (vvar[n])) {
-      sump0++;
-      sump1 += vvar[n];
     }
     if (mscaled) {
       if (vavg[n] < mrepmin)  morloct++;
       if (vavg[n] > mrepmax)  morhict++;
     }
-    if (pscaled) {
-      if (vvar[n] < prepmin)  porloct++;
-      if (vvar[n] > prepmax)  porhict++;
+    if (vvar) {
+      if (vvar[n] < pwrmin) {
+	pwrmin = vvar[n];
+	pminloc = n;
+      }
+      if (vvar[n] > pwrmax) {
+	pwrmax = vvar[n];
+	pmaxloc = n;
+      }
+      if (isfinite (vvar[n])) {
+	sump0++;
+	sump1 += vvar[n];
+      }
+      if (pscaled) {
+	if (vvar[n] < prepmin)  porloct++;
+	if (vvar[n] > prepmax)  porhict++;
+      }
     }
   }
   
@@ -286,8 +291,10 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
   kstat += check_and_set_key_int (rec, "CountMAX", valmax);
   kstat += check_and_set_key_double (rec, "MeanMIN", mnvmin);
   kstat += check_and_set_key_double (rec, "MeanMAX", mnvmax);
-  kstat += check_and_set_key_double (rec, "PowrMIN", pwrmin);
-  kstat += check_and_set_key_double (rec, "PowrMAX", pwrmax);
+  if (vvar) {
+    kstat += check_and_set_key_double (rec, "PowrMIN", pwrmin);
+    kstat += check_and_set_key_double (rec, "PowrMAX", pwrmax);
+  }
 
   if (sumv0) {
     scale = 1.0 / sumv0;
@@ -361,23 +368,25 @@ int set_stats_keys (DRMS_Record_t *rec, DRMS_Array_t *vcts, DRMS_Array_t *mean,
     }
     printf ("]\n");
 
-    printf ("         minimum power = %.4e @ %d [", pwrmin, pminloc);
-    rmnd = pminloc;
-    for (n = 0; n < rank; n++) {
-      if (n) printf (", ");
-      printf ("%d", rmnd %  mean->axis[n]);
-      rmnd /= mean->axis[n];
-    }
-    printf ("]\n");
+    if (vvar) {
+      printf ("         minimum power = %.4e @ %d [", pwrmin, pminloc);
+      rmnd = pminloc;
+      for (n = 0; n < rank; n++) {
+	if (n) printf (", ");
+	printf ("%d", rmnd %  mean->axis[n]);
+	rmnd /= mean->axis[n];
+      }
+      printf ("]\n");
 
-    printf ("         maximum power = %.4e @ %d [", pwrmax, pmaxloc);
-    rmnd = pmaxloc;
-    for (n = 0; n < rank; n++) {
-      if (n) printf (", ");
-      printf ("%d", rmnd %  mean->axis[n]);
-      rmnd /= mean->axis[n];
+      printf ("         maximum power = %.4e @ %d [", pwrmax, pmaxloc);
+      rmnd = pmaxloc;
+      for (n = 0; n < rank; n++) {
+	if (n) printf (", ");
+	printf ("%d", rmnd %  mean->axis[n]);
+	rmnd /= mean->axis[n];
+      }
+      printf ("]\n");
     }
-    printf ("]\n");
   }
 
   if (mscaled || pscaled) {
@@ -444,7 +453,7 @@ int DoIt (void) {
   float clstrt, clmid, clstop;
   float pa_rec, dpa;
   long long *cvgolist, *cvnolist, *cvlist;
-  long long ntot, img_size, calver;
+  long long ntot, calver;
   unsigned int quality;
   int *inaxis, *vval, *reject_list, *cvfound;
   int rec, recct, segct, segnum, maxct, imgct;
@@ -464,6 +473,7 @@ int DoIt (void) {
 
   double fp_nan = 0.0 / 0.0;
   int badqual = 0, blacklist = 0, badpa = 0, badcv = 0, rejects = 0;
+  int needpowr = 1;
   int propkeyct = sizeof (propagate) / sizeof (char *);
   int meankeyct = sizeof (average) / sizeof (char *);
 
@@ -522,6 +532,9 @@ int DoIt (void) {
     if (!cvreject) cvnoct = 0;
   }
   if (!isfinite (pa_nom)) pa_nom = 180.0;
+					      /*  additional initializations  */
+  prepmin = mrepmin = 1.0 / 0.0;
+  prepmax = mrepmax = - mrepmin;
 						    /*  create output record  */
   if (no_save) {
     orec = drms_create_record (drms_env, out_series, DRMS_TRANSIENT, &status);
@@ -595,7 +608,7 @@ int DoIt (void) {
     fprintf (stderr,
 	"Warning: output series %s does not contain the segment %s\n",
 	out_series, psegname);
-    pscaled = 0;
+    needpowr = pscaled = 0;
   }
   writelog = 0;
   logseg = drms_segment_lookup (orec, logsegname);
@@ -626,7 +639,7 @@ int DoIt (void) {
       source[n] = '\0';
       break;
     }
-    clmid = fp_nan;
+    tmid = clmid = fp_nan;
     crmid = -1;
   } else {
 				/*  only the input data series is named,
@@ -832,13 +845,29 @@ int DoIt (void) {
                        /*  create new data maps for each of three statistics  */
   vval = (int *)calloc (ntot, sizeof (int));
   vavg = (double *)calloc (ntot, sizeof (double));
-  vvar = (double *)calloc (ntot, sizeof (double));
+  if (needpowr) {
+    vvar = (double *)calloc (ntot, sizeof (double));
+    if (!vvar) {
+      fprintf (stderr,
+	  "Error: unable to allocate %lld bytes required for output arrays\n",
+	  ntot * (sizeof (int) + 2 * sizeof (double)));
+      drms_close_records (ids, DRMS_FREE_RECORD);
+      return 1;
+    }
+  }
+  if (!vval || !vavg) {
+    fprintf (stderr,
+	"Error: unable to allocate %lld bytes required for output arrays\n",
+	ntot * (sizeof (int) + sizeof (double)));
+    drms_close_records (ids, DRMS_FREE_RECORD);
+    return 1;
+  }
   vcts = drms_array_create (DRMS_TYPE_INT, naxis, iseg->axis, (void *)vval,
       &status);
   mean = drms_array_create (DRMS_TYPE_DOUBLE, naxis, iseg->axis, (void *)vavg,
       &status);
-  powr = drms_array_create (DRMS_TYPE_DOUBLE, naxis, iseg->axis, (void *)vvar,
-      &status);
+  if (needpowr) powr = drms_array_create (DRMS_TYPE_DOUBLE, naxis, iseg->axis,
+      (void *)vvar, &status);
 		/*  set the output scaling factors to be segment defaults
 				    if not overridden as argument parameters  */
   if (mseg) {
@@ -848,12 +877,14 @@ int DoIt (void) {
     mean->bscale = (isnan (mscale) || mscale == 0.0) ? 1.0 : mscale;
     mean->bzero = (isnan (mzero)) ?  0.0 : mzero;
   }
-  if (pseg) {
-    powr->bscale = (isnan (pscale) || pscale == 0.0) ? pseg->bscale : pscale;
-    powr->bzero = (isnan (pzero)) ?  pseg->bzero : pzero;;
-  } else {
-    powr->bscale = (isnan (pscale) || pscale == 0.0) ? 1.0 : pscale;
-    powr->bzero = (isnan (pzero)) ?  0.0 : pzero;;
+  if (needpowr) {
+    if (pseg) {
+      powr->bscale = (isnan (pscale) || pscale == 0.0) ? pseg->bscale : pscale;
+      powr->bzero = (isnan (pzero)) ?  pseg->bzero : pzero;;
+    } else {
+      powr->bscale = (isnan (pscale) || pscale == 0.0) ? 1.0 : pscale;
+      powr->bzero = (isnan (pzero)) ?  0.0 : pzero;;
+    }
   }
 	       /*  determine range of representable values for scaled output  */
   if (mscaled) {
@@ -880,7 +911,6 @@ int DoIt (void) {
     prepmax += powr->bzero;
     prepmin += powr->bzero;
   }
-  img_size = ntot;
 
   if (recct > maxct) {
     double bscale = 1.0;
@@ -960,6 +990,7 @@ int DoIt (void) {
   tobs = tobsv = 0;
 */
   imgct = 0;
+  crlnval = crlnvalv = 0.0;
 					      /*  loop through input records  */
   for (rec = 0; rec < recct; rec++) {
     irec = ids->records[rec];
@@ -1119,7 +1150,7 @@ int DoIt (void) {
     v = (double *)data_array->data;
     vval = (int *)vcts->data;
     vavg = (double *)mean->data;
-    vvar = (double *)powr->data;
+    if (needpowr) vvar = (double *)powr->data;
     vobs = (remove_obsvel) ? drms_getkey_double (irec, "OBS_VR", &status) : 0.0;
 				     /*  exponentiate logarithm as necessary  */
     log_base = drms_getkey_double (irec, "LOG_BASE", &status);
@@ -1130,21 +1161,38 @@ int DoIt (void) {
     } else log_status = 0;
 						      /*  process valid data  */
     n = ntot;
-    while (n--) {
-      if (isfinite (*v)) {
-	(*vval)++;
-	*v -= vobs;
+    if (needpowr) {
+      while (n--) {
+	if (isfinite (*v)) {
+	  (*vval)++;
+	  *v -= vobs;
 /*
 	if (function == DO_ABSVAL) *v = fabs (*v);
 	if (function == DO_SQUARE) *v *= *v;
 */
-        *vavg += *v;
-        *vvar += *v * *v;
+          *vavg += *v;
+          *vvar += *v * *v;
+        }
+	v++;
+	vval++;
+	vavg++;
+	vvar++;
       }
-      v++;
-      vval++;
-      vavg++;
-      vvar++;
+    } else {
+      while (n--) {
+	if (isfinite (*v)) {
+	  (*vval)++;
+	  *v -= vobs;
+/*
+	if (function == DO_ABSVAL) *v = fabs (*v);
+	if (function == DO_SQUARE) *v *= *v;
+*/
+          *vavg += *v;
+        }
+	v++;
+	vval++;
+	vavg++;
+      }
     }
     drms_free_array (data_array);
 					      /*  get WCS keys for averaging  */
@@ -1203,19 +1251,30 @@ int DoIt (void) {
   if (checkseg) free (inaxis);
   vval = (int *)vcts->data;
   vavg = (double *)mean->data;
-  vvar = (double *)powr->data;
-  for (n = 0; n < ntot; n++) {
-    if (vval[n]) {
-      vavg[n] /= vval[n];
-      vvar[n] /= vval[n];
-      vvar[n] -= vavg[n] * vavg[n];
-    } else vavg[n] = vvar[n] = fp_nan;
+  if (needpowr) {
+    vvar = (double *)powr->data;
+    for (n = 0; n < ntot; n++) {
+      if (vval[n]) {
+	vavg[n] /= vval[n];
+	vvar[n] /= vval[n];
+	vvar[n] -= vavg[n] * vavg[n];
+      } else vavg[n] = vvar[n] = fp_nan;
+    }
+  } else {
+    for (n = 0; n < ntot; n++) {
+      if (vval[n]) vavg[n] /= vval[n];
+      else vavg[n] = fp_nan;
+    }
   }
   if (log_status) {
     double scale = 1.0 / log_base;
-    for (n = 0; n < ntot; n++) {
-      vavg[n] = scale * log (vavg[n]);
-      vvar[n] = scale * log (vvar[n]);
+    if (needpowr) {
+      for (n = 0; n < ntot; n++) {
+	vavg[n] = scale * log (vavg[n]);
+	vvar[n] = scale * log (vvar[n]);
+      }
+    } else {
+      for (n = 0; n < ntot; n++) vavg[n] = scale * log (vavg[n]);
     }
   }
   if (vseg)
@@ -1443,7 +1502,10 @@ int DoIt (void) {
  *		added verbose warnings of missing output keys for propagation
  *		or averaging; removed automatic averaging of prime key
  *  v 1.3 frozen 14.07.07
- *	14.10.09	Removed functions drms_appendstr_tokey() and
+ *	14.10.09	removed functions drms_appendstr_tokey() and
  *		append_args_tokey() (now in keystuff)
  *  v 1.4 frozen 15.01.13
+ *	15.02.24	added initializations of several variables; made
+ *		calculation of power values conditional on presence of the
+ *		appropriate segment in the output record
  */
